@@ -397,7 +397,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_resource_unit_option_list resource_unit_option
 %type <node> tenant_option zone_list resource_pool_list
 %type <node> with_column_group column_group_list column_group_element
-%type <node> opt_partition_option partition_option hash_partition_option key_partition_option opt_use_partition use_partition range_partition_option subpartition_option opt_range_partition_list opt_range_subpartition_list range_partition_list range_subpartition_list range_partition_element range_subpartition_element range_partition_expr range_expr_list range_expr opt_part_id sample_clause opt_block seed sample_percent opt_sample_scope modify_partition_info modify_tg_partition_info opt_partition_range_or_list auto_partition_option auto_range_type partition_size auto_partition_type use_flashback partition_options partition_num
+%type <node> opt_range_partition_info opt_auto_split_tablet_size_option auto_split_tablet_size_option opt_partition_option partition_option hash_partition_option key_partition_option opt_use_partition use_partition range_partition_option subpartition_option opt_range_partition_list opt_range_subpartition_list range_partition_list range_subpartition_list range_partition_element range_subpartition_element range_partition_expr range_expr_list range_expr opt_part_id sample_clause opt_block seed sample_percent opt_sample_scope modify_partition_info modify_tg_partition_info opt_partition_range_or_list auto_partition_option auto_range_type partition_size auto_partition_type use_flashback partition_options partition_num
 %type <node> subpartition_template_option subpartition_individual_option opt_hash_partition_list hash_partition_list hash_partition_element opt_hash_subpartition_list hash_subpartition_list hash_subpartition_element opt_subpartition_list opt_engine_option
 %type <node> date_unit date_params timestamp_params
 %type <node> drop_table_stmt table_list drop_view_stmt table_or_tables
@@ -7878,19 +7878,72 @@ PARTITION BY KEY '(' column_name_list ')' partition_options %prec LOWER_PARENS
 ;
 
 range_partition_option:
-PARTITION BY RANGE '(' expr ')' partition_options opt_range_partition_list
+PARTITION BY RANGE '(' ')' opt_partitions opt_auto_split_tablet_size_option
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RANGE_COLUMNS_PARTITION, 7, NULL, NULL, NULL, $6, NULL, NULL, $7);
+}
+|
+PARTITION BY RANGE '(' expr ')' partition_options opt_range_partition_info
 {
   ParseNode *params = NULL;
   malloc_non_terminal_node(params, result->malloc_pool_, T_EXPR_LIST, 1, $5);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_RANGE_PARTITION, 5, params, $8, $7->children_[0], $7->children_[1], NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RANGE_PARTITION, 7, params, $8->children_[1], $7->children_[0], $7->children_[1], NULL, NULL, $8->children_[0]);
   dup_expr_string($$, result, @5.first_column, @5.last_column);
 }
-| PARTITION BY RANGE COLUMNS '(' column_name_list ')' partition_options opt_range_partition_list
+|
+PARTITION BY RANGE COLUMNS '(' column_name_list ')' partition_options opt_range_partition_info
 {
   ParseNode *params = NULL;
   merge_nodes(params, result, T_EXPR_LIST, $6);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_RANGE_COLUMNS_PARTITION, 5, params, $9, $8->children_[0], $8->children_[1], NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RANGE_COLUMNS_PARTITION, 7, params, $9->children_[1], $8->children_[0], $8->children_[1], NULL, NULL, $9->children_[0]);
   dup_expr_string($$, result, @6.first_column, @6.last_column);
+}
+;
+
+opt_auto_split_tablet_size_option:
+/* EMPTY */
+{
+  $$ = NULL;
+}
+|
+auto_split_tablet_size_option
+{
+  $$ = $1;
+}
+;
+
+auto_split_tablet_size_option:
+SIZE '(' STRING_VALUE ')'
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_AUTO_SPLIT_TABLET_SIZE);
+  $$->str_value_ = $3->str_value_;
+  $$->str_len_ = $3->str_len_;
+}
+;
+
+opt_range_partition_info:
+%prec LOWER_PARENS /* EMPTY */
+{
+   malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, NULL, NULL);
+}
+|
+auto_split_tablet_size_option '(' range_partition_list ')'
+{
+  ParseNode *partition_list = NULL;
+  merge_nodes(partition_list, result, T_PARTITION_LIST, $3);
+
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, partition_list);
+}
+| %prec LOWER_PARENS auto_split_tablet_size_option
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, NULL);
+}
+|'(' range_partition_list ')'
+{
+  ParseNode *partition_list = NULL;
+  merge_nodes(partition_list, result, T_PARTITION_LIST, $2);
+
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, NULL, partition_list);
 }
 ;
 

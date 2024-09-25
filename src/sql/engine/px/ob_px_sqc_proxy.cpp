@@ -365,25 +365,6 @@ int ObPxSQCProxy::get_part_ch_map(ObPxPartChInfo &map, int64_t timeout_ts)
   return ret;
 }
 
-int ObPxSQCProxy::report_task_finish_status(int64_t task_idx, int rc)
-{
-  int ret = OB_SUCCESS;
-  auto &tasks = sqc_ctx_.get_tasks();
-  if (task_idx < 0 || task_idx >= tasks.count()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid task idx", K(task_idx), K(tasks.count()), K(ret));
-  } else {
-    ObPxTask &task = tasks.at(task_idx);
-    if (task.has_result()) {
-      ret = OB_ENTRY_EXIST;
-      LOG_WARN("task finish status already set", K(task), K(task_idx), K(rc), K(ret));
-    } else {
-      task.set_result(rc);
-    }
-  }
-  return ret;
-}
-
 // only can be called by root thread
 int ObPxSQCProxy::check_task_finish_status(int64_t timeout_ts)
 {
@@ -398,7 +379,7 @@ int ObPxSQCProxy::check_task_finish_status(int64_t timeout_ts)
     all_tasks_finish = true;
     ARRAY_FOREACH(tasks, idx) {
       ObPxTask &task = tasks.at(idx);
-      if (!task.has_result()) {
+      if (false == task.is_task_state_set(SQC_TASK_EXIT)) {
         all_tasks_finish = false;
         break;
       }

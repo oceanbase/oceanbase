@@ -179,7 +179,8 @@ public:
       return *this;
     }
 
-    TO_STRING_KV(K_(tablet_id), K_(column_group_idx), "table_type", get_table_type_name(table_type_), K_(scn_range));
+    TO_STRING_KV(K_(tablet_id), K_(column_group_idx), "table_type", get_table_type_name(table_type_),
+        K_(scn_range));
 
   public:
     common::ObTabletID tablet_id_;

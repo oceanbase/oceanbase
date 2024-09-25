@@ -802,8 +802,7 @@ int ObLSRestoreTaskMgr::check_tablet_is_deleted_(
     } else {
       LOG_WARN("failed to get latest tablet status", K(ret), KPC(tablet));
     }
-  } else if (ObTabletStatus::DELETED == data.tablet_status_
-             || ObTabletStatus::TRANSFER_OUT_DELETED == data.tablet_status_) {
+  } else if (data.tablet_status_.is_deleted_for_gc()) {
     is_deleted = true;
   }
   return ret;

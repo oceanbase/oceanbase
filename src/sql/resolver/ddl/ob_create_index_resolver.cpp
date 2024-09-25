@@ -471,7 +471,7 @@ int ObCreateIndexResolver::resolve_index_option_node(
     if (has_index_using_type_) {
       crt_idx_stmt->set_index_using_type(index_using_type_);
     }
-    if (OB_FAIL(set_table_option_to_stmt(is_partitioned))) {
+    if (OB_FAIL(set_table_option_to_stmt(tbl_schema->get_table_id(), is_partitioned))) {
       LOG_WARN("fail to set table option to stmt", K(ret));
     } else if (tbl_schema->is_partitioned_table()
         && INDEX_TYPE_SPATIAL_GLOBAL == crt_idx_stmt->get_create_index_arg().index_type_) {
@@ -785,11 +785,14 @@ int ObCreateIndexResolver::add_sort_column(const ObColumnSortItem &sort_column)
   return ret;
 }
 
-int ObCreateIndexResolver::set_table_option_to_stmt(bool is_partitioned)
+int ObCreateIndexResolver::set_table_option_to_stmt(const uint64_t data_table_id, bool is_partitioned)
 {
   int ret = OB_SUCCESS;
   ObCreateIndexStmt *create_index_stmt = static_cast<ObCreateIndexStmt*>(stmt_);
-  if (OB_ISNULL(create_index_stmt) || OB_ISNULL(session_info_)) {
+  if (OB_UNLIKELY(OB_INVALID_ID == data_table_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(data_table_id));
+  } else if (OB_ISNULL(create_index_stmt) || OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("create_index_stmt can not be null", K(ret));
   } else if (is_oracle_temp_table_ && GLOBAL_INDEX == index_scope_) {
@@ -807,6 +810,11 @@ int ObCreateIndexResolver::set_table_option_to_stmt(bool is_partitioned)
       // MySQL default index mode is local,
       // and Oracle default index mode is global
       global_ = is_partitioned || lib::is_oracle_mode();
+      if (!global_) {
+        if (OB_FAIL(get_suggest_index_scope(index_arg.tenant_id_, data_table_id, index_arg, index_keyname_, global_))) {
+          LOG_WARN("get suggest index type failed", K(ret), K(index_arg));
+        }
+      }
     } else {
       global_ = (GLOBAL_INDEX == index_scope_);
     }

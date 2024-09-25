@@ -60,7 +60,7 @@ public:
   };
   struct RLockGuardWithTimeout
   {
-    [[nodiscard]] explicit RLockGuardWithTimeout(TCRWLock &lock, const int64_t abs_timeout_us, int &ret): lock_(lock), need_unlock_(true)
+    [[nodiscard]] explicit RLockGuardWithTimeout(const TCRWLock &lock, const int64_t abs_timeout_us, int &ret): lock_(const_cast<TCRWLock&>(lock)), need_unlock_(true)
     {
       if (OB_FAIL(lock_.rdlock(abs_timeout_us))) {
         need_unlock_ = false;
@@ -78,6 +78,7 @@ public:
     TCRWLock &lock_;
     bool need_unlock_;
   };
+
   struct WLockGuard
   {
     [[nodiscard]] explicit WLockGuard(TCRWLock& lock): lock_(lock) { lock_.wrlock(); }
@@ -86,7 +87,7 @@ public:
   };
   struct WLockGuardWithTimeout
   {
-    [[nodiscard]] explicit WLockGuardWithTimeout(TCRWLock &lock, const int64_t abs_timeout_us, int &ret): lock_(lock), need_unlock_(true)
+    [[nodiscard]] explicit WLockGuardWithTimeout(const TCRWLock &lock, const int64_t abs_timeout_us, int &ret): lock_(const_cast<TCRWLock&>(lock)), need_unlock_(true)
     {
       if (OB_FAIL(lock_.wrlock(abs_timeout_us))) {
         need_unlock_ = false;

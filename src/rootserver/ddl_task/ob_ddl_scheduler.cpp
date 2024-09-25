@@ -40,6 +40,7 @@
 #include "share/scheduler/ob_sys_task_stat.h"
 #include "share/ob_ddl_sim_point.h"
 #include "share/restore/ob_import_util.h"
+#include "share/scheduler/ob_partition_auto_split_helper.h"
 
 namespace oceanbase
 {
@@ -359,10 +360,12 @@ int ObDDLTaskQueue::update_task_ret_code(const ObDDLTaskID &task_id, const int r
     LOG_WARN("ddl_task is null", K(ret));
   } else {
     const ObTabletID unused_tablet_id;
+    const ObAddr unused_addr;
     const int64_t unused_snapshot_version = 0;
     const int64_t unused_execution_id = 0;
     const ObDDLTaskInfo unused_task_info;
-    ret = table_redefinition_task->update_complete_sstable_job_status(unused_tablet_id, unused_snapshot_version,
+    ret = table_redefinition_task->update_complete_sstable_job_status(
+        unused_tablet_id, unused_addr, unused_snapshot_version,
         unused_execution_id, ret_code, unused_task_info);
   }
   return ret;
@@ -665,10 +668,12 @@ int ObUpdateSSTableCompleteStatusCallback::update_redef_task_info(ObTableRedefin
 {
   int ret = OB_SUCCESS;
   const ObTabletID unused_tablet_id;
+  const ObAddr unused_addr;
   const int64_t unused_snapshot_version = 0;
   const int64_t unused_execution_id = 0;
   const ObDDLTaskInfo unused_task_info;
-  ret = redef_task.update_complete_sstable_job_status(unused_tablet_id, unused_snapshot_version,
+  ret = redef_task.update_complete_sstable_job_status(
+      unused_tablet_id, unused_addr, unused_snapshot_version,
       unused_execution_id, ret_code_, unused_task_info);
   return ret;
 }
@@ -976,6 +981,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
   const obrpc::ObAlterTableArg *alter_table_arg = nullptr;
   const obrpc::ObCreateIndexArg *create_index_arg = nullptr;
   const obrpc::ObDropIndexArg *drop_index_arg = nullptr;
+  const obrpc::ObPartitionSplitArg *partition_split_arg = nullptr;
   const obrpc::ObRebuildIndexArg *rebuild_index_arg = nullptr;
   const obrpc::ObMViewCompleteRefreshArg *mview_complete_refresh_arg = nullptr;
   ObRootService *root_service = GCTX.root_service_;
@@ -1115,6 +1121,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
       case DDL_ALTER_COLUMN_GROUP:
       case DDL_MVIEW_COMPLETE_REFRESH:
       case DDL_MODIFY_AUTO_INCREMENT_WITH_REDEFINITION:
+      case DDL_PARTITION_SPLIT_RECOVERY_TABLE_REDEFINITION:
         if (OB_FAIL(create_table_redefinition_task(proxy,
                                                    param.type_,
                                                    param.src_table_schema_,
@@ -1243,6 +1250,22 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
           LOG_WARN("fail to create modify autoinc task", K(ret));
         }
         break;
+      case DDL_AUTO_SPLIT_BY_RANGE:
+      case DDL_AUTO_SPLIT_NON_RANGE:
+      case DDL_MANUAL_SPLIT_BY_RANGE:
+      case DDL_MANUAL_SPLIT_NON_RANGE:
+        partition_split_arg = static_cast<const obrpc::ObPartitionSplitArg *>(param.ddl_arg_);
+        if (OB_FAIL(create_partition_split_task(proxy,
+                                                param.src_table_schema_,
+                                                param.parallelism_,
+                                                param.parent_task_id_,
+                                                param.task_id_,
+                                                partition_split_arg,
+                                                *param.allocator_,
+                                                task_record))) {
+          LOG_WARN("fail to create partition split task", K(ret));
+        }
+        break;
       case DDL_DROP_DATABASE:
       case DDL_DROP_TABLE:
       case DDL_TRUNCATE_TABLE:
@@ -1357,6 +1380,109 @@ int ObDDLScheduler::prepare_alter_table_arg(const ObPrepareAlterTableArgParam &p
     LOG_WARN("failed to add member TABLE_NAME for alter table schema", K(ret), K(alter_table_arg));
   } else {
     LOG_DEBUG("alter table arg preparation complete!", K(ret), K(*alter_table_schema));
+  }
+  return ret;
+}
+
+int ObDDLScheduler::cache_auto_split_task(const obrpc::ObAutoSplitTabletBatchArg &arg,
+                                          obrpc::ObAutoSplitTabletBatchRes &res)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(arg));
+  } else {
+    ObRsAutoSplitScheduler &split_task_scheduler = ObRsAutoSplitScheduler::get_instance();
+    ObArray<ObAutoSplitTask> task_array;
+    ObAutoSplitTask task;
+    const ObSArray<obrpc::ObAutoSplitTabletArg> &single_arg_array = arg.args_;
+    res.suggested_next_valid_time_ = OB_INVALID_TIMESTAMP;
+    res.rets_.reuse();
+    for (int64_t i = 0; OB_SUCC(ret) && i < single_arg_array.size(); ++i) {
+      const obrpc::ObAutoSplitTabletArg &single_arg = single_arg_array.at(i);
+      task.reset();
+      task.auto_split_tablet_size_ = single_arg.auto_split_tablet_size_;
+      task.ls_id_ = single_arg.ls_id_;
+      task.tablet_id_ = single_arg.tablet_id_;
+      task.tenant_id_ = single_arg.tenant_id_;
+      task.used_disk_space_ = single_arg.used_disk_space_;
+      task.retry_times_ = 0;
+      if (OB_FAIL(task_array.push_back(task))) {
+        LOG_WARN("fail to push back task", K(ret) ,K(task), K(task_array));
+      } else if (OB_FAIL(res.rets_.push_back(OB_SUCCESS))) {
+        LOG_WARN("fail to push back ret", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(split_task_scheduler.push_tasks(task_array))) {
+        LOG_WARN("fail to push tasks into auto_split_task_tree_", K(ret), K(task_array));
+      } else {
+        int64_t cur_time = ObTimeUtility::current_time();
+        bool is_busy = split_task_scheduler.is_busy();
+        res.suggested_next_valid_time_ = cur_time + (is_busy ? ObServerAutoSplitScheduler::OB_SERVER_DELAYED_TIME : 0);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLScheduler::schedule_auto_split_task()
+{
+  int ret = OB_SUCCESS;
+  ObRsAutoSplitScheduler &split_task_scheduler = ObRsAutoSplitScheduler::get_instance();
+  ObArray<ObAutoSplitTask> task_array;
+  if (OB_FAIL(split_task_scheduler.pop_tasks(task_array))) {
+    LOG_WARN("fail to pop tasks from auto_split_task_tree");
+  } else if (task_array.count() == 0) {
+    //do nothing
+  } else {
+    ObAutoSplitArgBuilder split_helper;
+    ObArray<ObAutoSplitTask> failed_task;
+    obrpc::ObAlterTableRes unused_res;
+    common::ObMalloc allocator(common::ObMemAttr(OB_SERVER_TENANT_ID, "split_sched"));
+    for (int64_t i = 0; OB_SUCC(ret) && i < task_array.count(); ++i) {
+      int tmp_ret = OB_SUCCESS;
+      unused_res.reset();
+      ObAutoSplitTask &task = task_array.at(i);
+      void *buf = nullptr;
+      obrpc::ObAlterTableArg *single_arg = nullptr;
+      bool is_ls_migrating = false;
+      if (OB_FAIL(ObRsAutoSplitScheduler::check_ls_migrating(task.tenant_id_, task.tablet_id_, is_ls_migrating))) {
+        LOG_WARN("check ls migrating failed", K(ret), K(task));
+      } else if (is_ls_migrating) {
+        LOG_TRACE("ls migrating, delay auto split", K(task));
+      } else if (OB_ISNULL(buf = allocator.alloc(sizeof(obrpc::ObAlterTableArg)))) {
+        //ignore ret
+        tmp_ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(tmp_ret), K(task));
+      } else if (FALSE_IT(single_arg = new (buf) obrpc::ObAlterTableArg())) {
+      } else if (OB_TMP_FAIL(split_helper.build_arg(task.tenant_id_, task.ls_id_, task.tablet_id_,
+          task.auto_split_tablet_size_, task.used_disk_space_, *single_arg))) {
+        LOG_WARN("fail to build arg", K(tmp_ret), K(task));
+      } else if (!single_arg->is_auto_split_partition()) {
+        //do nothing
+      } else if (single_arg->alter_table_schema_.is_global_index_table()
+          && OB_TMP_FAIL(root_service_->get_common_rpc_proxy().to(GCTX.self_addr()).timeout(GCONF._ob_ddl_timeout).split_global_index_tablet(*single_arg))) {
+        LOG_WARN("split global index failed", K(tmp_ret), K(single_arg));
+      } else if (!single_arg->alter_table_schema_.is_global_index_table()
+          && OB_TMP_FAIL(root_service_->get_common_rpc_proxy().to(GCTX.self_addr()).timeout(GCONF._ob_ddl_timeout).alter_table(*single_arg, unused_res))) {
+        LOG_WARN("alter table failed", K(tmp_ret), K(single_arg), K(unused_res));
+      }
+      if (OB_TMP_FAIL(tmp_ret) && split_task_scheduler.can_retry(task, tmp_ret)) {
+        failed_task.reuse();
+        task.increment_retry_times();
+        if (OB_TMP_FAIL(failed_task.push_back(task))) {
+          LOG_WARN("fail to push back into failed task", K(tmp_ret), K(task));
+        } else if (OB_TMP_FAIL(split_task_scheduler.push_tasks(failed_task))) {
+          LOG_WARN("fail to push tasks", K(tmp_ret), K(failed_task));
+        }
+      }
+      if (OB_NOT_NULL(single_arg)) {
+        single_arg->~ObAlterTableArg();
+        allocator.free(single_arg);
+        single_arg = nullptr;
+      }
+    }
   }
   return ret;
 }
@@ -2021,7 +2147,7 @@ int ObDDLScheduler::create_constraint_task(
   } else if (OB_UNLIKELY(nullptr == table_schema || OB_INVALID_ID == constraint_id || schema_version <= 0
                          || nullptr == arg || !arg->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(table_schema), K(constraint_id), K(schema_version), K(arg));
+    LOG_WARN("invalid argument", K(ret), KPC(table_schema), K(constraint_id), K(schema_version), K(arg));
   } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service_->get_sql_proxy(), table_schema->get_tenant_id(), task_id))) {
     LOG_WARN("fetch new task id failed", K(ret));
   } else if (OB_FAIL(constraint_task.init(task_id, table_schema, constraint_id, ddl_type, schema_version, *arg, consumer_group_id, sub_task_trace_id, parent_task_id))) {
@@ -2246,6 +2372,44 @@ int ObDDLScheduler::create_ddl_retry_task(
   return ret;
 }
 
+int ObDDLScheduler::create_partition_split_task(
+    common::ObISQLClient &proxy,
+    const share::schema::ObTableSchema *table_schema,
+    const int64_t parallelism,
+    const int64_t parent_task_id,
+    const int64_t task_id,
+    const obrpc::ObPartitionSplitArg *partition_split_arg,
+    ObIAllocator &allocator,
+    ObDDLTaskRecord &task_record)
+{
+  int ret = OB_SUCCESS;
+  SMART_VAR(ObPartitionSplitTask, split_task) {
+    if (OB_UNLIKELY(!is_inited_)) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("not init", K(ret));
+    } else if (OB_ISNULL(partition_split_arg) || OB_ISNULL(table_schema) || OB_UNLIKELY(0 == task_id)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), K(task_id), KPC(partition_split_arg), KPC(table_schema));
+    } else if (OB_FAIL(split_task.init(table_schema->get_tenant_id(),
+                                      task_id,
+                                      table_schema->get_table_id(),
+                                      table_schema->get_schema_version(),
+                                      parallelism,
+                                      *partition_split_arg,
+                                      table_schema->get_tablet_size(),
+                                      parent_task_id))) {
+      LOG_WARN("init global index task failed", K(ret), KPC(table_schema));
+    } else if (OB_FAIL(split_task.set_trace_id(*ObCurTraceId::get_trace_id()))) {
+      LOG_WARN("set trace id failed", K(ret));
+    } else if (OB_FAIL(insert_task_record(proxy, split_task, allocator, task_record))) {
+      LOG_WARN("fail to insert task record", K(ret));
+    }
+
+    LOG_INFO("ddl_scheduler create partition split task finished", K(ret), K(split_task));
+  }
+  return ret;
+}
+
 int ObDDLScheduler::create_recover_restore_table_task(
     common::ObISQLClient &proxy,
     const share::ObDDLType &type,
@@ -2340,6 +2504,7 @@ int ObDDLScheduler::recover_task()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
+    schedule_auto_split_task(); //ignore schedule auto split task error
     ObSqlString sql_string;
     ObArray<ObDDLTaskRecord> task_records;
     ObArray<uint64_t> primary_tenant_ids;
@@ -2498,6 +2663,7 @@ int ObDDLScheduler::schedule_ddl_task(const ObDDLTaskRecord &record)
       case DDL_ALTER_COLUMN_GROUP:
       case DDL_MVIEW_COMPLETE_REFRESH:
       case DDL_MODIFY_AUTO_INCREMENT_WITH_REDEFINITION:
+      case DDL_PARTITION_SPLIT_RECOVERY_TABLE_REDEFINITION:
         ret = schedule_table_redefinition_task(record);
         break;
       case DDL_CREATE_MVIEW:
@@ -2526,6 +2692,14 @@ int ObDDLScheduler::schedule_ddl_task(const ObDDLTaskRecord &record)
       case DDL_TRUNCATE_PARTITION:
       case DDL_TRUNCATE_SUB_PARTITION:
         ret = schedule_ddl_retry_task(record);
+        break;
+      case DDL_AUTO_SPLIT_BY_RANGE:
+      case DDL_AUTO_SPLIT_NON_RANGE:
+      case DDL_MANUAL_SPLIT_BY_RANGE:
+      case DDL_MANUAL_SPLIT_NON_RANGE:
+        if (OB_FAIL(schedule_partition_split_task(record))) {
+          LOG_WARN("schedule partition split task failed", K(ret));
+        }
         break;
       case DDL_TABLE_RESTORE:
         ret = schedule_recover_restore_table_task(record);
@@ -2801,6 +2975,40 @@ int ObDDLScheduler::schedule_ddl_retry_task(const ObDDLTaskRecord &task_record)
     ddl_retry_task->~ObDDLRetryTask();
     allocator_.free(ddl_retry_task);
     ddl_retry_task = nullptr;
+  }
+  return ret;
+}
+
+int ObDDLScheduler::schedule_partition_split_task(
+    const ObDDLTaskRecord &task_record)
+{
+  int ret = OB_SUCCESS;
+  ObPartitionSplitTask *split_task = nullptr;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(alloc_ddl_task(split_task))) {
+    LOG_WARN("alloc ddl task failed", K(ret));
+  } else {
+    if (OB_FAIL(split_task->init(task_record))) {
+      LOG_WARN("init partition split task failed", K(ret), K(task_record));
+    } else if (OB_FAIL(split_task->set_trace_id(task_record.trace_id_))) {
+      LOG_WARN("set trace id failed", K(ret));
+    } else if (OB_FAIL(inner_schedule_ddl_task(split_task, task_record))) {
+      if (OB_ENTRY_EXIST != ret) {
+        LOG_WARN("inner schedule task failed", K(ret), K(*split_task));
+      }
+    } else {
+      LOG_INFO("scheduler partition split task successfully", K(*split_task));
+    }
+  }
+  if (OB_FAIL(ret) && nullptr != split_task) {
+    split_task->~ObPartitionSplitTask();
+    allocator_.free(split_task);
+    split_task = nullptr;
+  }
+  if (OB_ENTRY_EXIST == ret) {
+    ret = OB_SUCCESS;
   }
   return ret;
 }
@@ -3222,6 +3430,7 @@ int ObDDLScheduler::on_column_checksum_calc_reply(
 
 int ObDDLScheduler::on_sstable_complement_job_reply(
     const common::ObTabletID &tablet_id,
+    const ObAddr &svr,
     const ObDDLTaskKey &task_key,
     const int64_t snapshot_version,
     const int64_t execution_id,
@@ -3249,18 +3458,18 @@ int ObDDLScheduler::on_sstable_complement_job_reply(
     if (OB_FAIL(modify_redef_task(task_id, callback))) {
       LOG_WARN("fail to modify redef task", K(ret), K(task_id));
     }
-  } else if (OB_FAIL(task_queue_.modify_task(task_key, [&tablet_id, &snapshot_version, &execution_id, &ret_code, &addition_info](ObDDLTask &task) -> int {
+  } else if (OB_FAIL(task_queue_.modify_task(task_key, [&tablet_id, &svr, &snapshot_version, &execution_id, &ret_code, &addition_info](ObDDLTask &task) -> int {
         int ret = OB_SUCCESS;
         const int64_t task_type = task.get_task_type();
         switch (task_type) {
           case ObDDLType::DDL_CREATE_INDEX:
           case ObDDLType::DDL_CREATE_PARTITIONED_LOCAL_INDEX:
-            if (OB_FAIL(static_cast<ObIndexBuildTask *>(&task)->update_complete_sstable_job_status(tablet_id, snapshot_version, execution_id, ret_code, addition_info))) {
+            if (OB_FAIL(static_cast<ObIndexBuildTask *>(&task)->update_complete_sstable_job_status(tablet_id, svr, snapshot_version, execution_id, ret_code, addition_info))) {
               LOG_WARN("update complete sstable job status failed", K(ret));
             }
             break;
           case ObDDLType::DDL_DROP_PRIMARY_KEY:
-            if (OB_FAIL(static_cast<ObDropPrimaryKeyTask *>(&task)->update_complete_sstable_job_status(tablet_id, snapshot_version, execution_id, ret_code, addition_info))) {
+            if (OB_FAIL(static_cast<ObDropPrimaryKeyTask *>(&task)->update_complete_sstable_job_status(tablet_id, svr, snapshot_version, execution_id, ret_code, addition_info))) {
               LOG_WARN("update complete sstable job status", K(ret));
             }
             break;
@@ -3273,12 +3482,13 @@ int ObDDLScheduler::on_sstable_complement_job_reply(
           case ObDDLType::DDL_ALTER_COLUMN_GROUP:
           case ObDDLType::DDL_MVIEW_COMPLETE_REFRESH:
           case ObDDLType::DDL_MODIFY_AUTO_INCREMENT_WITH_REDEFINITION:
-            if (OB_FAIL(static_cast<ObTableRedefinitionTask *>(&task)->update_complete_sstable_job_status(tablet_id, snapshot_version, execution_id, ret_code, addition_info))) {
+          case ObDDLType::DDL_PARTITION_SPLIT_RECOVERY_TABLE_REDEFINITION:
+            if (OB_FAIL(static_cast<ObTableRedefinitionTask *>(&task)->update_complete_sstable_job_status(tablet_id, svr, snapshot_version, execution_id, ret_code, addition_info))) {
               LOG_WARN("update complete sstable job status", K(ret));
             }
             break;
           case ObDDLType::DDL_TABLE_RESTORE:
-            if (OB_FAIL(static_cast<ObRecoverRestoreTableTask *>(&task)->update_complete_sstable_job_status(tablet_id, snapshot_version, execution_id, ret_code, addition_info))) {
+            if (OB_FAIL(static_cast<ObRecoverRestoreTableTask *>(&task)->update_complete_sstable_job_status(tablet_id, svr, snapshot_version, execution_id, ret_code, addition_info))) {
               LOG_WARN("update complete sstable job status", K(ret));
             }
             break;
@@ -3292,12 +3502,24 @@ int ObDDLScheduler::on_sstable_complement_job_reply(
           case ObDDLType::DDL_DROP_COLUMN:
           case ObDDLType::DDL_ADD_COLUMN_OFFLINE:
           case ObDDLType::DDL_COLUMN_REDEFINITION:
-            if (OB_FAIL(static_cast<ObColumnRedefinitionTask *>(&task)->update_complete_sstable_job_status(tablet_id, snapshot_version, execution_id, ret_code, addition_info))) {
+            if (OB_FAIL(static_cast<ObColumnRedefinitionTask *>(&task)->update_complete_sstable_job_status(tablet_id, svr, snapshot_version, execution_id, ret_code, addition_info))) {
               LOG_WARN("update complete sstable job status", K(ret), K(tablet_id), K(snapshot_version), K(ret_code));
             }
             break;
+          case DDL_AUTO_SPLIT_BY_RANGE:
+          case DDL_AUTO_SPLIT_NON_RANGE:
+          case DDL_MANUAL_SPLIT_BY_RANGE:
+          case DDL_MANUAL_SPLIT_NON_RANGE:
+            if (OB_FAIL(static_cast<ObPartitionSplitTask *>(&task)->update_complete_sstable_job_status(tablet_id,
+                                                                                                       svr,
+                                                                                                       execution_id,
+                                                                                                       ret_code,
+                                                                                                       addition_info))) {
+              LOG_WARN("update partition split task tastus", K(ret));
+            }
+            break;
           case ObDDLType::DDL_DROP_VEC_INDEX:
-           if (OB_FAIL(static_cast<ObDropVecIndexTask *>(&task)->update_drop_lob_meta_row_job_status(tablet_id, snapshot_version, execution_id, ret_code, addition_info))) {
+           if (OB_FAIL(static_cast<ObDropVecIndexTask *>(&task)->update_drop_lob_meta_row_job_status(tablet_id, svr, snapshot_version, execution_id, ret_code, addition_info))) {
               LOG_WARN("update complete sstable job status", K(ret), K(tablet_id), K(snapshot_version), K(ret_code));
             }
             break;

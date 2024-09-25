@@ -28,6 +28,7 @@
 #include "sql/resolver/ddl/ob_flashback_stmt.h"
 #include "observer/ob_server.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "storage/ob_partition_pre_split.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -56,6 +57,8 @@ int ObCreateIndexExecutor::execute(ObExecContext &ctx, ObCreateIndexStmt &stmt)
   obrpc::ObAlterTableRes res;
   ObString first_stmt;
   bool is_sync_ddl_user = false;
+  ObSArray<ObIndexArg *> index_arg_list;
+  ObPartitionPreSplit pre_split;
   ObArenaAllocator allocator("CreateIndexExec");
 
   if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
@@ -83,6 +86,11 @@ int ObCreateIndexExecutor::execute(ObExecContext &ctx, ObCreateIndexStmt &stmt)
   } else if (FALSE_IT(create_index_arg.is_inner_ = my_session->is_inner())) {
   } else if (FALSE_IT(create_index_arg.parallelism_ = stmt.get_parallelism())) {
   } else if (FALSE_IT(create_index_arg.consumer_group_id_ = THIS_WORKER.get_group_id())) {
+  } else if (OB_FAIL(index_arg_list.push_back(&create_index_arg))) {
+    LOG_WARN("fail to push back create index arg", K(ret));
+  } else if (OB_FAIL(pre_split.get_global_index_pre_split_schema_if_need(
+      create_index_arg.tenant_id_, create_index_arg.session_id_, create_index_arg.database_name_, create_index_arg.table_name_, index_arg_list))) {
+    LOG_WARN("fail to get pre split query range", K(ret));
   } else if (OB_FAIL(common_rpc_proxy->create_index(create_index_arg, res))) {    //send the signal of creating index to rs
     LOG_WARN("rpc proxy create index failed", K(create_index_arg),
              "dst", common_rpc_proxy->get_server(), K(ret));

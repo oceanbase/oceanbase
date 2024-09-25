@@ -21,6 +21,7 @@
 #include "storage/access/ob_dml_param.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tablet/ob_tablet_binding_helper.h"
+#include "storage/tablet/ob_tablet_split_mds_helper.h"
 #include "storage/ob_value_row_iterator.h"
 #include "storage/memtable/ob_memtable_context.h"
 
@@ -50,6 +51,7 @@ ObDMLRunningCtx::ObDMLRunningCtx(
     is_old_row_valid_for_lob_(false),
     is_need_check_old_row_(is_need_row_datum_utils),
     is_udf_(false),
+    lob_dml_ctx_(),
     schema_guard_(share::schema::ObSchemaMgrItem::MOD_RELATIVE_TABLE),
     is_need_row_datum_utils_(is_need_row_datum_utils),
     is_inited_(false)
@@ -144,13 +146,18 @@ int ObDMLRunningCtx::prepare_relative_table(
     const SCN &read_snapshot)
 {
   int ret = OB_SUCCESS;
+  bool need_get_src_split_tables = false;
   if (OB_FAIL(relative_table_.init(&schema, tablet_handle.get_obj()->get_tablet_meta().tablet_id_,
       schema.is_storage_index_table() && !schema.can_read_index()))) {
     LOG_WARN("fail to init relative_table_", K(ret), K(tablet_handle), K(schema.get_index_status()));
   } else if (OB_FAIL(relative_table_.tablet_iter_.set_tablet_handle(tablet_handle))) {
     LOG_WARN("fail to set tablet handle to iter", K(ret), K(relative_table_.tablet_iter_));
   } else if (OB_FAIL(relative_table_.tablet_iter_.refresh_read_tables_from_tablet(
-      read_snapshot.get_val_for_tx(), relative_table_.allow_not_ready()))) {
+      read_snapshot.get_val_for_tx(),
+      relative_table_.allow_not_ready(),
+      false/*major_sstable_only*/,
+      true/*need_split_src_table*/,
+      false/*need_split_dst_table*/))) {
     LOG_WARN("failed to get relative table read tables", K(ret));
   }
   return ret;
@@ -292,6 +299,24 @@ int ObDMLRunningCtx::check_schema_version(
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_SCHEMA_ERROR;
     LOG_WARN("failed to get schema", K(ret));
+  } else if (table_schema->is_auto_partitioned_table()) {
+    // Online partition split allows dml with old schema to continue executing,
+    // so checkings must be done case by case.
+    if (table_version > table_schema->get_schema_version()) {
+      ret = OB_SCHEMA_EAGAIN;
+      LOG_WARN("table version mismatch", K(ret), K(table_id), K(table_version), K(table_schema->get_schema_version()));
+    } else if (table_version < table_schema->get_schema_version()) {
+      // 1. check for wait trans end's check_schema_version_elapsed
+      int64_t data_max_schema_version = 0;
+      if (OB_FAIL(tablet_handle.get_obj()->get_max_schema_version(data_max_schema_version))) {
+        LOG_WARN("failed to get max schema version", K(ret));
+      } else if (table_version < data_max_schema_version) {
+        ret = OB_SCHEMA_EAGAIN;
+        LOG_WARN("table version mismatch", K(ret), K(table_id), K(table_version), K(data_max_schema_version), K(table_schema->get_schema_version()));
+      } else {
+        FLOG_INFO("allow table version mismatch", K(table_id), K(table_version), K(data_max_schema_version), K(table_schema->get_schema_version()));
+      }
+    }
   } else if (table_version != table_schema->get_schema_version()) {
     ret = OB_SCHEMA_EAGAIN;
     LOG_WARN("table version mismatch", K(ret), K(table_id), K(table_version), K(table_schema->get_schema_version()));

@@ -253,7 +253,8 @@ DEF_TO_STRING(ObDMLBaseParam)
        K_(branch_id),
        K_(direct_insert_task_id),
        K_(check_schema_version),
-       K_(ddl_task_id));
+       K_(ddl_task_id),
+       KPC_(data_row_for_lob));
   J_OBJ_END();
   return pos;
 }

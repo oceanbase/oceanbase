@@ -111,12 +111,12 @@ public:
       const int ret_code);
   int update_complete_sstable_job_status(
       const common::ObTabletID &tablet_id,
+      const ObAddr &addr,
       const int64_t snapshot_version,
       const int64_t execution_id,
       const int ret_code,
       const ObDDLTaskInfo &addition_info);
   virtual int process() override;
-  virtual int cleanup_impl() override;
   virtual bool is_valid() const override;
   virtual int collect_longops_stat(share::ObLongopsValue &value) override;
   virtual int serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const override;
@@ -136,6 +136,7 @@ private:
   int enable_index();
   int clean_on_failed();
   int succ();
+  virtual int cleanup_impl() override;
   int hold_snapshot(const int64_t snapshot);
   int release_snapshot(const int64_t snapshot);
   int update_index_status_in_schema(

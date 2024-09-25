@@ -443,8 +443,7 @@ int TestCompactionPolicy::mock_tablet(
     LOG_WARN("failed to init storage schema", KR(ret), K(table_schema));
   } else if (FALSE_IT(need_generate_cs_replica_cg_array = ls_handle.get_ls()->is_cs_replica() && create_tablet_schema.is_row_store() && create_tablet_schema.is_user_data_table())) {
   } else if (OB_FAIL(tablet->init_for_first_time_creation(allocator, ls_id, tablet_id, tablet_id,
-      SCN::min_scn(), snapshot_version, create_tablet_schema, need_empty_major_table,
-      false/*micro_index_clustered*/, need_generate_cs_replica_cg_array, false/*has_cs_replica*/, ls_handle.get_ls()->get_freezer()))) {
+      SCN::min_scn(), snapshot_version, create_tablet_schema, need_empty_major_table, SCN::invalid_scn(), false/*micro_index_clustered*/, need_generate_cs_replica_cg_array, false/*has_cs_replica*/, ls_handle.get_ls()->get_freezer()))) {
     LOG_WARN("failed to init tablet", K(ret), K(ls_id), K(tablet_id), K(snapshot_version),
               K(table_schema), K(compat_mode));
   } else {

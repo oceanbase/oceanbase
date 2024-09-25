@@ -365,6 +365,13 @@ int ObPushdownFilterConstructor::is_white_mode(const ObRawExpr* raw_expr, bool &
         break;
     }
   }
+  // for auto split local index query filter
+  if (OB_SUCC(ret)) {
+    if (raw_expr->has_flag(IS_AUTO_PART_EXPR)) {
+      is_white = false;
+      LOG_DEBUG("has flag: is_auto_part_expr, dont go white filter");
+    }
+  }
   return ret;
 }
 
@@ -376,6 +383,7 @@ int ObPushdownFilterConstructor::create_black_filter_node(
   ObExpr *expr = nullptr;
   ObSEArray<ObRawExpr *, 4> column_exprs;
   ObPushdownBlackFilterNode *black_filter_node = nullptr;
+
   if (OB_ISNULL(raw_expr)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid null raw expr", K(ret));
@@ -1156,6 +1164,7 @@ int ObPushdownFilterExecutor::init_filter_param(
     const bool need_padding)
 {
   int ret = OB_SUCCESS;
+
   const ObIArray<uint64_t> &col_ids = get_col_ids();
   const int64_t col_count = col_ids.count();
   if (is_filter_node()) {
@@ -1227,7 +1236,6 @@ int ObPushdownFilterExecutor::init_filter_param(
       }
     }
   }
-
   if (OB_SUCC(ret)) {
     n_cols_ = col_count;
   }

@@ -330,6 +330,33 @@ public:
   ObTableScanIterator *scan_iter_;
 };
 
+class ObInRowLobDataSpliter
+{
+public:
+  ObInRowLobDataSpliter(ObArray<ObLobMetaInfo> &lob_meta_list):
+    cs_type_(ObCollationType::CS_TYPE_INVALID),
+    chunk_size_(0),
+    inrow_data_(),
+    byte_pos_(0),
+    char_pos_(0),
+    lob_meta_list_(lob_meta_list)
+  {}
+
+  int split(ObCollationType cs_type, const int64_t chunk_size, const ObString &inrow_data);
+  int64_t byte_pos() const { return byte_pos_; }
+  int64_t char_pos() const { return char_pos_; }
+
+protected:
+  int get_next_row(ObLobMetaInfo &info);
+
+private:
+  ObCollationType cs_type_;
+  int64_t chunk_size_;
+  ObString inrow_data_;
+  int64_t byte_pos_;
+  int64_t char_pos_;
+  ObArray<ObLobMetaInfo> &lob_meta_list_;
+};
 
 } // storage
 } // oceanbase

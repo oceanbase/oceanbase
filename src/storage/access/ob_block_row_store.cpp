@@ -20,6 +20,8 @@
 #include "storage/blocksstable/ob_micro_block_reader.h"
 #include "storage/blocksstable/ob_micro_block_row_scanner.h"
 #include "storage/access/ob_table_access_context.h"
+#include "share/ob_partition_split_query.h"
+#include "storage/ob_storage_struct.h"
 
 namespace oceanbase
 {
@@ -83,7 +85,6 @@ int ObBlockRowStore::init(const ObTableAccessParam &param, common::hash::ObHashS
     is_inited_ = true;
     iter_param_ = &param.iter_param_;
   }
-
   if (IS_NOT_INIT) {
     reset();
   }

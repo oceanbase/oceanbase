@@ -98,16 +98,16 @@ int ObRawExprInfoExtractor::visit(ObQueryRefRawExpr &expr)
 int ObRawExprInfoExtractor::visit(ObExecParamRawExpr &expr)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr.get_ref_expr())) {
+  if (!expr.is_eval_by_storage() && OB_ISNULL(expr.get_ref_expr())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed ");
+    LOG_WARN("failed", K(ret), K(expr.is_eval_by_storage()));
   } else if (OB_FAIL(expr.add_flag(IS_CONST))) {
     LOG_WARN("failed to add is const", K(ret));
   } else if (OB_FAIL(expr.add_flag(IS_DYNAMIC_PARAM))) {
     LOG_WARN("failed to add is exec param", K(ret));
   } else if (expr.is_onetime() && OB_FAIL(expr.add_flag(IS_ONETIME))) {
     LOG_WARN("failed to add is onetime", K(ret));
-  } else if (expr.get_ref_expr()->has_enum_set_column()) {
+  } else if (!expr.is_eval_by_storage() && expr.get_ref_expr()->has_enum_set_column()) {
     OZ(expr.add_flag(CNT_ENUM_OR_SET));
     OZ(expr.set_enum_set_values(expr.get_ref_expr()->get_enum_set_values()));
   }
@@ -144,12 +144,16 @@ int ObRawExprInfoExtractor::clear_info(ObRawExpr &expr)
   ObExprInfo &expr_info = expr.get_expr_info();
   bool is_implicit_cast = expr_info.has_member(IS_OP_OPERAND_IMPLICIT_CAST);
   bool is_self_param = expr_info.has_member(IS_UDT_UDF_SELF_PARAM);
+  bool is_auto_part_expr = expr_info.has_member(IS_AUTO_PART_EXPR);
   expr_info.reset();
   if (is_implicit_cast) {
     OZ(expr_info.add_member(IS_OP_OPERAND_IMPLICIT_CAST));
   }
   if (is_self_param) {
     OZ(expr_info.add_member(IS_UDT_UDF_SELF_PARAM));
+  }
+  if (is_auto_part_expr) {
+    OZ(expr_info.add_member(IS_AUTO_PART_EXPR));
   }
   return ret;
 }

@@ -6847,7 +6847,29 @@ def_table_schema(
 
 
 # 481 : __all_import_stmt_exec_history
-# 482 : __all_tablet_reorganize_history
+
+def_table_schema(
+    owner = 'hanxuan.gzh',
+    table_name = '__all_tablet_reorganize_history',
+    table_id      = '482',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = [],
+    rowkey_columns = [
+        ('tenant_id', 'int'),
+        ('ls_id', 'int'),
+        ('src_tablet_id', 'int'),
+        ('dest_tablet_id', 'int'),
+    ],
+    is_cluster_private = False,
+    in_tenant_space = True,
+
+    normal_columns = [
+      ('type', 'int'),
+      ('create_time', 'timestamp'),
+      ('finish_time', 'timestamp'),
+    ],
+)
+
 def_table_schema(
   owner = 'zhixing.yh',
   table_name    = '__all_storage_ha_error_diagnose_history',
@@ -14807,7 +14829,10 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_name = '__all_virtual_user_proxy_role_info_history',
   keywords = all_def_keywords['__all_user_proxy_role_info_history']))
 
-# 12478: __all_virtual_tablet_reorganize_history
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12478',
+  table_name = '__all_virtual_tablet_reorganize_history',
+  keywords = all_def_keywords['__all_tablet_reorganize_history']))
 
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12479',
@@ -16085,7 +16110,11 @@ def_table_schema(
                     cast(NULL as unsigned) as CHECKSUM,
                     cast(NULL as char(255)) as CREATE_OPTIONS,
                     cast(case when a.table_type = 4 then 'VIEW'
-                             else a.comment end as char(2048)) as TABLE_COMMENT
+                             else a.comment end as char(2048)) as TABLE_COMMENT,
+                    cast(case when a.auto_part = 1 then 'TRUE'
+                              else 'FALSE' end as char(16)) as AUTO_SPLIT,
+                    cast(case when a.auto_part = 1 then a.auto_part_size
+                              else 0 end as unsigned) as AUTO_SPLIT_TABLET_SIZE
                     from
                     (
                     select cast(0 as signed) as tenant_id,
@@ -16097,7 +16126,9 @@ def_table_schema(
                            usec_to_time(d.schema_version) as gmt_create,
                            usec_to_time(c.schema_version) as gmt_modified,
                            c.comment,
-                           c.store_format
+                           c.store_format,
+                           c.auto_part,
+                           c.auto_part_size
                     from oceanbase.__all_virtual_core_all_table c
                     join oceanbase.__all_virtual_core_all_table d
                       on c.tenant_id = d.tenant_id and d.table_name = '__all_core_table'
@@ -16112,7 +16143,9 @@ def_table_schema(
                            gmt_create,
                            gmt_modified,
                            comment,
-                           store_format
+                           store_format,
+                           auto_part,
+                           auto_part_size
                     from oceanbase.__all_table where table_mode >> 12 & 15 in (0,1)) a
                     join oceanbase.__all_database b
                     on a.database_id = b.database_id
@@ -21232,7 +21265,7 @@ def_table_schema(
       , 0 AS NAMESPACE
       ,NULL AS EDITION_NAME
       FROM OCEANBASE.__ALL_VIRTUAL_TABLE T JOIN OCEANBASE.__ALL_VIRTUAL_PART P ON T.TABLE_ID = P.TABLE_ID
-      WHERE T.TENANT_ID = P.TENANT_ID AND T.TABLE_MODE >> 12 & 15 in (0,1)
+      WHERE T.TENANT_ID = P.TENANT_ID AND T.TABLE_MODE >> 12 & 15 in (0,1) AND P.PARTITION_TYPE = 0
 
       UNION ALL
 
@@ -21258,6 +21291,8 @@ def_table_schema(
       FROM OCEANBASE.__ALL_VIRTUAL_TABLE T, OCEANBASE.__ALL_VIRTUAL_PART P,OCEANBASE.__ALL_VIRTUAL_SUB_PART SUBP
       WHERE T.TABLE_ID =P.TABLE_ID AND P.TABLE_ID=SUBP.TABLE_ID AND P.PART_ID =SUBP.PART_ID
       AND T.TENANT_ID = P.TENANT_ID AND P.TENANT_ID = SUBP.TENANT_ID AND T.TABLE_MODE >> 12 & 15 in (0,1)
+      AND P.PARTITION_TYPE = 0
+      AND SUBP.PARTITION_TYPE = 0
 
       UNION ALL
 
@@ -21599,7 +21634,9 @@ SELECT
   CAST(NULL AS CHAR(3)) AS HAS_SENSITIVE_COLUMN,
   CAST(NULL AS CHAR(3)) AS ADMIT_NULL,
   CAST(NULL AS CHAR(3)) AS DATA_LINK_DML_ENABLED,
-  CAST(NULL AS CHAR(8)) AS LOGICAL_REPLICATION
+  CAST(NULL AS CHAR(8)) AS LOGICAL_REPLICATION,
+  CAST(CASE WHEN T.AUTO_PART = 1 THEN 'TRUE' ELSE 'FALSE' END AS CHAR(16)) AS AUTO_SPLIT,
+  CAST(CASE WHEN T.AUTO_PART = 1 THEN T.AUTO_PART_SIZE ELSE 0 END AS SIGNED) AS AUTO_SPLIT_TABLET_SIZE
 FROM
   (SELECT
      TENANT_ID,
@@ -21620,7 +21657,9 @@ FROM
      PCTFREE,
      PART_LEVEL,
      TABLE_TYPE,
-     TABLESPACE_ID
+     TABLESPACE_ID,
+     AUTO_PART,
+     AUTO_PART_SIZE
    FROM
      OCEANBASE.__ALL_VIRTUAL_CORE_ALL_TABLE
 
@@ -21634,7 +21673,9 @@ FROM
      PCTFREE,
      PART_LEVEL,
      TABLE_TYPE,
-     TABLESPACE_ID
+     TABLESPACE_ID,
+     AUTO_PART,
+     AUTO_PART_SIZE
    FROM OCEANBASE.__ALL_VIRTUAL_TABLE
    WHERE TABLE_MODE >> 12 & 15 in (0,1)) T
   ON
@@ -22403,6 +22444,7 @@ def_table_schema(
                    LIST_VAL,
                    COMPRESS_FUNC_NAME,
                    TABLESPACE_ID,
+                   PARTITION_TYPE,
                    ROW_NUMBER() OVER (
                      PARTITION BY TENANT_ID, TABLE_ID
                      ORDER BY PART_IDX, PART_ID ASC
@@ -22413,6 +22455,7 @@ def_table_schema(
       LEFT JOIN OCEANBASE.__ALL_VIRTUAL_TENANT_TABLESPACE TP
       ON TP.TABLESPACE_ID = PART.TABLESPACE_ID AND TP.TENANT_ID = PART.TENANT_ID
 
+      WHERE PART.PARTITION_TYPE = 0
 """.replace("\n", " ")
 )
 
@@ -22511,6 +22554,7 @@ def_table_schema(
                TABLE_ID,
                PART_ID,
                PART_NAME,
+               PARTITION_TYPE,
                ROW_NUMBER() OVER (
                  PARTITION BY TENANT_ID, TABLE_ID
                  ORDER BY PART_IDX, PART_ID ASC
@@ -22525,6 +22569,7 @@ def_table_schema(
                LIST_VAL,
                COMPRESS_FUNC_NAME,
                TABLESPACE_ID,
+               PARTITION_TYPE,
                ROW_NUMBER() OVER (
                  PARTITION BY TENANT_ID, TABLE_ID, PART_ID
                  ORDER BY SUB_PART_IDX, SUB_PART_ID ASC
@@ -22532,7 +22577,9 @@ def_table_schema(
              FROM OCEANBASE.__ALL_VIRTUAL_SUB_PART) S_PART
        WHERE P_PART.PART_ID = S_PART.PART_ID
              AND P_PART.TABLE_ID = S_PART.TABLE_ID
-             AND P_PART.TENANT_ID = S_PART.TENANT_ID) PART
+             AND P_PART.TENANT_ID = S_PART.TENANT_ID
+             AND P_PART.PARTITION_TYPE = 0
+             AND S_PART.PARTITION_TYPE = 0) PART
       ON DB_TB.TABLE_ID = PART.TABLE_ID AND DB_TB.TENANT_ID = PART.TENANT_ID
 
       LEFT JOIN
@@ -22968,6 +23015,7 @@ def_table_schema(
                  HIGH_BOUND_VAL,
                  LIST_VAL,
                  COMPRESS_FUNC_NAME,
+                 PARTITION_TYPE,
                  ROW_NUMBER() OVER (
                    PARTITION BY TENANT_ID, TABLE_ID
                    ORDER BY PART_IDX, PART_ID ASC
@@ -22975,6 +23023,7 @@ def_table_schema(
           FROM OCEANBASE.__ALL_VIRTUAL_PART) PART
     ON I.TENANT_ID = PART.TENANT_ID
        AND I.TABLE_ID = PART.TABLE_ID
+    WHERE PART.PARTITION_TYPE = 0
 """.replace("\n", " ")
 )
 
@@ -23059,6 +23108,7 @@ def_table_schema(
              TABLE_ID,
              PART_ID,
              PART_NAME,
+             PARTITION_TYPE,
              ROW_NUMBER() OVER (
                PARTITION BY TENANT_ID, TABLE_ID
                ORDER BY PART_IDX, PART_ID ASC
@@ -23072,6 +23122,7 @@ def_table_schema(
              HIGH_BOUND_VAL,
              LIST_VAL,
              COMPRESS_FUNC_NAME,
+             PARTITION_TYPE,
              ROW_NUMBER() OVER (
                PARTITION BY TENANT_ID, TABLE_ID, PART_ID
                ORDER BY SUB_PART_IDX, SUB_PART_ID ASC
@@ -23079,7 +23130,9 @@ def_table_schema(
            FROM OCEANBASE.__ALL_VIRTUAL_SUB_PART) S_PART
      WHERE P_PART.PART_ID = S_PART.PART_ID AND
            P_PART.TABLE_ID = S_PART.TABLE_ID
-           AND P_PART.TENANT_ID = S_PART.TENANT_ID) PART
+           AND P_PART.TENANT_ID = S_PART.TENANT_ID
+           AND P_PART.PARTITION_TYPE = 0
+           AND S_PART.PARTITION_TYPE = 0) PART
     ON I.TABLE_ID = PART.TABLE_ID AND I.TENANT_ID = PART.TENANT_ID
 """.replace("\n", " ")
 )
@@ -23264,6 +23317,7 @@ def_table_schema(
       ,NULL AS EDITION_NAME
       FROM OCEANBASE.__ALL_TABLE T JOIN OCEANBASE.__ALL_PART P ON T.TABLE_ID = P.TABLE_ID
       WHERE T.TENANT_ID = 0 AND T.TENANT_ID = P.TENANT_ID AND T.TABLE_MODE >> 12 & 15 in (0,1)
+      AND P.PARTITION_TYPE = 0
 
       UNION ALL
 
@@ -23289,6 +23343,7 @@ def_table_schema(
       FROM OCEANBASE.__ALL_TABLE T, OCEANBASE.__ALL_PART P,OCEANBASE.__ALL_SUB_PART SUBP
       WHERE T.TABLE_ID =P.TABLE_ID AND P.TABLE_ID=SUBP.TABLE_ID AND P.PART_ID =SUBP.PART_ID
       AND T.TENANT_ID = 0 AND T.TENANT_ID = P.TENANT_ID AND P.TENANT_ID = SUBP.TENANT_ID AND T.TABLE_MODE >> 12 & 15 in (0,1)
+      AND SUBP.PARTITION_TYPE = 0 AND P.PARTITION_TYPE = 0
 
       UNION ALL
 
@@ -23811,6 +23866,7 @@ def_table_schema(
                    LIST_VAL,
                    COMPRESS_FUNC_NAME,
                    TABLESPACE_ID,
+                   PARTITION_TYPE,
                    ROW_NUMBER() OVER (
                      PARTITION BY TENANT_ID, TABLE_ID
                      ORDER BY PART_IDX, PART_ID ASC
@@ -23822,6 +23878,7 @@ def_table_schema(
       ON TP.TABLESPACE_ID = PART.TABLESPACE_ID AND TP.TENANT_ID = PART.TENANT_ID
 
       WHERE DB_TB.TENANT_ID = 0
+            AND PART.PARTITION_TYPE = 0
 """.replace("\n", " ")
 )
 
@@ -23920,6 +23977,7 @@ def_table_schema(
                TABLE_ID,
                PART_ID,
                PART_NAME,
+               PARTITION_TYPE,
                ROW_NUMBER() OVER (
                  PARTITION BY TENANT_ID, TABLE_ID
                  ORDER BY PART_IDX, PART_ID ASC
@@ -23934,6 +23992,7 @@ def_table_schema(
                LIST_VAL,
                COMPRESS_FUNC_NAME,
                TABLESPACE_ID,
+               PARTITION_TYPE,
                ROW_NUMBER() OVER (
                  PARTITION BY TENANT_ID, TABLE_ID, PART_ID
                  ORDER BY SUB_PART_IDX, SUB_PART_ID ASC
@@ -23941,7 +24000,9 @@ def_table_schema(
              FROM OCEANBASE.__ALL_SUB_PART) S_PART
        WHERE P_PART.PART_ID = S_PART.PART_ID AND
              P_PART.TABLE_ID = S_PART.TABLE_ID
-             AND P_PART.TENANT_ID = S_PART.TENANT_ID) PART
+             AND P_PART.TENANT_ID = S_PART.TENANT_ID
+             AND P_PART.PARTITION_TYPE = 0
+             AND S_PART.PARTITION_TYPE = 0) PART
       ON DB_TB.TABLE_ID = PART.TABLE_ID AND DB_TB.TENANT_ID = PART.TENANT_ID
 
       LEFT JOIN
@@ -24253,6 +24314,7 @@ def_table_schema(
                  HIGH_BOUND_VAL,
                  LIST_VAL,
                  COMPRESS_FUNC_NAME,
+                 PARTITION_TYPE,
                  ROW_NUMBER() OVER (
                    PARTITION BY TENANT_ID, TABLE_ID
                    ORDER BY PART_IDX, PART_ID ASC
@@ -24262,7 +24324,8 @@ def_table_schema(
        AND I.TABLE_ID = PART.TABLE_ID
 
     WHERE I.TENANT_ID = 0
-    AND I.TABLE_MODE >> 12 & 15 in (0,1)
+        AND I.TABLE_MODE >> 12 & 15 in (0,1)
+        AND PART.PARTITION_TYPE = 0
 """.replace("\n", " ")
 )
 
@@ -24346,6 +24409,7 @@ def_table_schema(
              TABLE_ID,
              PART_ID,
              PART_NAME,
+             PARTITION_TYPE,
              ROW_NUMBER() OVER (
                PARTITION BY TENANT_ID, TABLE_ID
                ORDER BY PART_IDX, PART_ID ASC
@@ -24359,6 +24423,7 @@ def_table_schema(
              HIGH_BOUND_VAL,
              LIST_VAL,
              COMPRESS_FUNC_NAME,
+             PARTITION_TYPE,
              ROW_NUMBER() OVER (
                PARTITION BY TENANT_ID, TABLE_ID, PART_ID
                ORDER BY SUB_PART_IDX, SUB_PART_ID ASC
@@ -24366,7 +24431,9 @@ def_table_schema(
            FROM OCEANBASE.__ALL_SUB_PART) S_PART
      WHERE P_PART.PART_ID = S_PART.PART_ID AND
            P_PART.TABLE_ID = S_PART.TABLE_ID
-           AND P_PART.TENANT_ID = S_PART.TENANT_ID) PART
+           AND P_PART.TENANT_ID = S_PART.TENANT_ID
+           AND P_PART.PARTITION_TYPE = 0
+           AND S_PART.PARTITION_TYPE = 0) PART
     ON I.TABLE_ID = PART.TABLE_ID AND I.TENANT_ID = PART.TENANT_ID
     WHERE I.TENANT_ID = 0
     AND I.TABLE_MODE >> 12 & 15 in (0,1)
@@ -25635,7 +25702,8 @@ def_table_schema(
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
         WHERE T.TABLE_TYPE IN (0,2,3,6,14,15)
-        AND T.TABLE_MODE >> 12 & 15 in (0,1)
+              AND T.TABLE_MODE >> 12 & 15 in (0,1)
+              AND (P.PARTITION_TYPE = 0 OR P.PARTITION_TYPE IS NULL)
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -25659,7 +25727,9 @@ def_table_schema(
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
         WHERE T.TABLE_TYPE IN (0,2,3,6,14,15)
-        AND T.TABLE_MODE >> 12 & 15 in (0,1)
+              AND T.TABLE_MODE >> 12 & 15 in (0,1)
+              AND (P.PARTITION_TYPE = 0 OR P.PARTITION_TYPE IS NULL)
+              AND (SP.PARTITION_TYPE = 0 OR SP.PARTITION_TYPE IS NULL)
     ) V
     JOIN
         oceanbase.__all_database DB
@@ -25804,6 +25874,7 @@ WHERE
   c.is_hidden = 0
   AND t.table_type in (0,3,6,14)
   AND t.table_mode >> 12 & 15 in (0,1)
+  AND part.partition_type = 0
 """.replace("\n", " ")
 )
 
@@ -25862,6 +25933,7 @@ WHERE
   c.is_hidden = 0
   AND t.table_type in (0,3,6,14)
   AND t.table_mode >> 12 & 15 in (0,1)
+  AND subpart.partition_type = 0
 """.replace("\n", " ")
 )
 
@@ -25961,6 +26033,7 @@ def_table_schema(
     c.is_hidden = 0
     AND t.table_type in (0,3,6,14)
     AND t.table_mode >> 12 & 15 in (0,1)
+    AND part.partition_type = 0
   """.replace("\n", " ")
 )
 
@@ -26008,6 +26081,7 @@ def_table_schema(
     c.is_hidden = 0
     AND t.table_type in (0,3,6,14)
     AND t.table_mode >> 12 & 15 in (0,1)
+    AND subpart.partition_type = 0
   """.replace("\n", " ")
 )
 
@@ -26200,7 +26274,9 @@ def_table_schema(
             oceanbase.__all_part P
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
-        WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
+        WHERE T.TABLE_TYPE = 5
+              AND P.PARTITION_TYPE = 0
+              AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -26224,7 +26300,10 @@ def_table_schema(
             ON T.TENANT_ID = SP.TENANT_ID
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
-        WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
+        WHERE T.TABLE_TYPE = 5
+              AND P.PARTITION_TYPE = 0
+              AND SP.PARTITION_TYPE = 0
+              AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
     ) V
     JOIN oceanbase.__all_table T
          ON T.TABLE_ID = V.DATA_TABLE_ID
@@ -28973,6 +29052,7 @@ FROM (
       FROM OCEANBASE.__ALL_TABLE T JOIN OCEANBASE.__ALL_PART P
            ON T.TABLE_ID = P.TABLE_ID AND T.TENANT_ID = P.TENANT_ID
       WHERE T.PART_LEVEL = 1 AND T.TENANT_ID = 0
+            AND P.PARTITION_TYPE = 0
 
       UNION ALL
 
@@ -28993,6 +29073,8 @@ FROM (
       WHERE T.TABLE_ID =P.TABLE_ID AND P.TABLE_ID=Q.TABLE_ID AND P.PART_ID = Q.PART_ID
       AND T.TENANT_ID = P.TENANT_ID AND P.TENANT_ID = Q.TENANT_ID AND T.PART_LEVEL = 2
       AND T.TENANT_ID = 0
+      AND P.PARTITION_TYPE = 0
+      AND Q.PARTITION_TYPE = 0
     ) A
     JOIN OCEANBASE.DBA_OB_TABLET_TO_LS B ON A.TABLET_ID = B.TABLET_ID
     JOIN OCEANBASE.DBA_OB_LS_LOCATIONS C ON B.LS_ID = C.LS_ID
@@ -29115,7 +29197,7 @@ FROM (
       TABLEGROUP_ID
       FROM OCEANBASE.__ALL_VIRTUAL_TABLE T JOIN OCEANBASE.__ALL_VIRTUAL_PART P ON T.TABLE_ID = P.TABLE_ID
       WHERE T.TENANT_ID = P.TENANT_ID AND T.PART_LEVEL = 1
-
+            AND P.PARTITION_TYPE = 0
       UNION ALL
 
       SELECT
@@ -29135,6 +29217,7 @@ FROM (
       FROM OCEANBASE.__ALL_VIRTUAL_TABLE T, OCEANBASE.__ALL_VIRTUAL_PART P,OCEANBASE.__ALL_VIRTUAL_SUB_PART Q
       WHERE T.TABLE_ID =P.TABLE_ID AND P.TABLE_ID=Q.TABLE_ID AND P.PART_ID =Q.PART_ID
       AND T.TENANT_ID = P.TENANT_ID AND P.TENANT_ID = Q.TENANT_ID AND T.PART_LEVEL = 2
+      AND P.PARTITION_TYPE = 0 AND Q.PARTITION_TYPE = 0
     ) A
     JOIN OCEANBASE.CDB_OB_TABLET_TO_LS B ON A.TABLET_ID = B.TABLET_ID AND A.TENANT_ID = B.TENANT_ID
     JOIN OCEANBASE.CDB_OB_LS_LOCATIONS C ON B.LS_ID = C.LS_ID AND A.TENANT_ID = C.TENANT_ID
@@ -30969,6 +31052,7 @@ FROM
         TABLESPACE_ID,
         GMT_CREATE,
         COMMENT,
+        PARTITION_TYPE,
         PART_IDX,
         ROW_NUMBER() OVER(PARTITION BY TENANT_ID,TABLE_ID ORDER BY PART_IDX) AS PART_POSITION
       FROM OCEANBASE.__ALL_PART
@@ -30985,6 +31069,7 @@ FROM
         TABLESPACE_ID,
         GMT_CREATE,
         COMMENT,
+        PARTITION_TYPE,
         SUB_PART_IDX,
         ROW_NUMBER() OVER(PARTITION BY TENANT_ID,TABLE_ID,PART_ID ORDER BY SUB_PART_IDX) AS SUB_PART_POSITION
     FROM OCEANBASE.__ALL_SUB_PART
@@ -31006,6 +31091,8 @@ FROM
                 IDX_STAT.DATA_TABLE_ID = T.TABLE_ID AND
                 CASE T.PART_LEVEL WHEN 0 THEN 1 WHEN 1 THEN P.PART_IDX = IDX_STAT.PART_IDX WHEN 2 THEN P.PART_IDX = IDX_STAT.PART_IDX AND SP.SUB_PART_IDX = IDX_STAT.SUB_PART_IDX END
 WHERE T.TABLE_TYPE IN (3,6,8,9,14,15)
+      AND (P.PARTITION_TYPE = 0 OR P.PARTITION_TYPE is NULL)
+      AND (SP.PARTITION_TYPE = 0 OR SP.PARTITION_TYPE is NULL)
   """.replace("\n", " "),
 
 )
@@ -37907,6 +37994,7 @@ def_table_schema(
       ,NULL AS EDITION_NAME
       FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T JOIN SYS.ALL_VIRTUAL_PART_REAL_AGENT P ON T.TABLE_ID = P.TABLE_ID
       WHERE T.TENANT_ID = EFFECTIVE_TENANT_ID() AND P.TENANT_ID = EFFECTIVE_TENANT_ID() AND T.TABLE_TYPE != 12 AND T.TABLE_TYPE != 13
+      AND P.PARTITION_TYPE = 0
       AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
       UNION ALL
 
@@ -37933,6 +38021,7 @@ def_table_schema(
       WHERE T.TABLE_ID =P.TABLE_ID AND P.TABLE_ID=SUBP.TABLE_ID AND P.PART_ID =SUBP.PART_ID
       AND T.TENANT_ID = EFFECTIVE_TENANT_ID() AND P.TENANT_ID = EFFECTIVE_TENANT_ID() AND SUBP.TENANT_ID = EFFECTIVE_TENANT_ID()
       AND T.TABLE_TYPE != 12 AND T.TABLE_TYPE != 13 AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
+      AND SUBP.PARTITION_TYPE = 0 AND P.PARTITION_TYPE = 0
 
       UNION ALL
 
@@ -38405,6 +38494,7 @@ def_table_schema(
       ,NULL AS EDITION_NAME
       FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T JOIN SYS.ALL_VIRTUAL_PART_REAL_AGENT P ON T.TABLE_ID = P.TABLE_ID
       WHERE T.TENANT_ID = EFFECTIVE_TENANT_ID() AND P.TENANT_ID = EFFECTIVE_TENANT_ID() AND T.TABLE_TYPE != 12 AND T.TABLE_TYPE != 13 AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
+      AND P.PARTITION_TYPE = 0
 
       UNION ALL
 
@@ -38432,6 +38522,7 @@ def_table_schema(
       WHERE T.TABLE_ID =P.TABLE_ID AND P.TABLE_ID=SUBP.TABLE_ID AND P.PART_ID =SUBP.PART_ID
       AND T.TENANT_ID = EFFECTIVE_TENANT_ID() AND P.TENANT_ID = EFFECTIVE_TENANT_ID() AND SUBP.TENANT_ID = EFFECTIVE_TENANT_ID()
       AND T.TABLE_TYPE != 12 AND T.TABLE_TYPE != 13 AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
+      AND SUBP.PARTITION_TYPE = 0 AND P.PARTITION_TYPE = 0
 
       UNION ALL
 
@@ -38913,6 +39004,7 @@ def_table_schema(
       ,NULL AS EDITION_NAME
       FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T JOIN SYS.ALL_VIRTUAL_PART_REAL_AGENT P ON T.TABLE_ID = P.TABLE_ID
       WHERE T.TENANT_ID = EFFECTIVE_TENANT_ID() AND P.TENANT_ID = EFFECTIVE_TENANT_ID() AND T.TABLE_TYPE != 12 AND T.TABLE_TYPE != 13 AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
+      AND P.PARTITION_TYPE = 0
 
       UNION ALL
 
@@ -38939,6 +39031,7 @@ def_table_schema(
       WHERE T.TABLE_ID =P.TABLE_ID AND P.TABLE_ID=SUBP.TABLE_ID AND P.PART_ID =SUBP.PART_ID
       AND T.TENANT_ID = EFFECTIVE_TENANT_ID() AND P.TENANT_ID = EFFECTIVE_TENANT_ID() AND SUBP.TENANT_ID = EFFECTIVE_TENANT_ID()
       AND T.TABLE_TYPE != 12 AND T.TABLE_TYPE != 13 AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
+      AND SUBP.PARTITION_TYPE = 0 AND P.PARTITION_TYPE = 0
 
       UNION ALL
 
@@ -41502,7 +41595,9 @@ SELECT
   CAST(NULL AS VARCHAR2(3)) AS HAS_SENSITIVE_COLUMN,
   CAST(NULL AS VARCHAR2(3)) AS ADMIT_NULL,
   CAST(NULL AS VARCHAR2(3)) AS DATA_LINK_DML_ENABLED,
-  CAST(NULL AS VARCHAR2(8)) AS LOGICAL_REPLICATION
+  CAST(NULL AS VARCHAR2(8)) AS LOGICAL_REPLICATION,
+  CAST(CASE WHEN T.AUTO_PART = 1 THEN 'TRUE' ELSE 'FALSE' END AS VARCHAR2(16)) AS AUTO_SPLIT,
+  CAST(CASE WHEN T.AUTO_PART = 1 THEN T.AUTO_PART_SIZE ELSE 0 END AS VARCHAR2(128)) AS AUTO_SPLIT_TABLET_SIZE
 FROM
   (SELECT
      TENANT_ID,
@@ -41524,7 +41619,9 @@ FROM
      "PCTFREE",
      PART_LEVEL,
      TABLE_TYPE,
-     TABLESPACE_ID
+     TABLESPACE_ID,
+     AUTO_PART,
+     AUTO_PART_SIZE
    FROM
      SYS.ALL_VIRTUAL_CORE_ALL_TABLE
 
@@ -41538,7 +41635,9 @@ FROM
      "PCTFREE",
      PART_LEVEL,
      TABLE_TYPE,
-     TABLESPACE_ID
+     TABLESPACE_ID,
+     AUTO_PART,
+     AUTO_PART_SIZE
    FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
    AND bitand((TABLE_MODE / 4096), 15) IN (0,1)
@@ -41676,7 +41775,9 @@ SELECT
   CAST(NULL AS VARCHAR2(3)) AS HAS_SENSITIVE_COLUMN,
   CAST(NULL AS VARCHAR2(3)) AS ADMIT_NULL,
   CAST(NULL AS VARCHAR2(3)) AS DATA_LINK_DML_ENABLED,
-  CAST(NULL AS VARCHAR2(8)) AS LOGICAL_REPLICATION
+  CAST(NULL AS VARCHAR2(8)) AS LOGICAL_REPLICATION,
+  CAST(CASE WHEN T.AUTO_PART = 1 THEN 'TRUE' ELSE 'FALSE' END AS VARCHAR2(16)) AS AUTO_SPLIT,
+  CAST(CASE WHEN T.AUTO_PART = 1 THEN T.AUTO_PART_SIZE ELSE 0 END AS VARCHAR2(128)) AS AUTO_SPLIT_TABLET_SIZE
 FROM
   (SELECT
      TENANT_ID,
@@ -41698,7 +41799,9 @@ FROM
      "PCTFREE",
      PART_LEVEL,
      TABLE_TYPE,
-     TABLESPACE_ID
+     TABLESPACE_ID,
+     AUTO_PART,
+     AUTO_PART_SIZE
    FROM
      SYS.ALL_VIRTUAL_CORE_ALL_TABLE
 
@@ -41712,7 +41815,9 @@ FROM
      "PCTFREE",
      PART_LEVEL,
      TABLE_TYPE,
-     TABLESPACE_ID
+     TABLESPACE_ID,
+     AUTO_PART,
+     AUTO_PART_SIZE
    FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
    WHERE TENANT_ID = EFFECTIVE_TENANT_ID() AND TABLE_TYPE != 12 AND TABLE_TYPE != 13
    AND bitand((TABLE_MODE / 4096), 15) IN (0,1)
@@ -41847,7 +41952,9 @@ SELECT
   CAST(NULL AS VARCHAR2(3)) AS HAS_SENSITIVE_COLUMN,
   CAST(NULL AS VARCHAR2(3)) AS ADMIT_NULL,
   CAST(NULL AS VARCHAR2(3)) AS DATA_LINK_DML_ENABLED,
-  CAST(NULL AS VARCHAR2(8)) AS LOGICAL_REPLICATION
+  CAST(NULL AS VARCHAR2(8)) AS LOGICAL_REPLICATION,
+  CAST(CASE WHEN T.AUTO_PART = 1 THEN 'TRUE' ELSE 'FALSE' END AS VARCHAR2(16)) AS AUTO_SPLIT,
+  CAST(CASE WHEN T.AUTO_PART = 1 THEN T.AUTO_PART_SIZE ELSE 0 END AS VARCHAR2(128)) AS AUTO_SPLIT_TABLET_SIZE
 FROM
   (SELECT
      TENANT_ID,
@@ -41869,7 +41976,9 @@ FROM
      "PCTFREE",
      PART_LEVEL,
      TABLE_TYPE,
-     TABLESPACE_ID
+     TABLESPACE_ID,
+     AUTO_PART,
+     AUTO_PART_SIZE
    FROM
      SYS.ALL_VIRTUAL_CORE_ALL_TABLE
 
@@ -41883,7 +41992,9 @@ FROM
      "PCTFREE",
      PART_LEVEL,
      TABLE_TYPE,
-     TABLESPACE_ID
+     TABLESPACE_ID,
+     AUTO_PART,
+     AUTO_PART_SIZE
    FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
    WHERE TENANT_ID = EFFECTIVE_TENANT_ID() AND TABLE_TYPE != 12 AND TABLE_TYPE != 13
    AND bitand((TABLE_MODE / 4096), 15) IN (0,1)
@@ -42988,6 +43099,7 @@ def_table_schema(
           WHERE T.PART_LEVEL = 1
                 AND T.TABLE_TYPE IN (0, 3, 5, 8, 9)
                 AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
+                AND P.PARTITION_TYPE = 0
 
       UNION ALL
 
@@ -43023,6 +43135,7 @@ def_table_schema(
           WHERE T.PART_LEVEL = 2
                 AND T.TABLE_TYPE IN (0, 3, 5, 8, 9)
                 AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
+                AND SUBP.PARTITION_TYPE = 0 AND P.PARTITION_TYPE = 0
     )A WHERE DATABASE_ID=USERENV('SCHEMAID')
 """.replace("\n", " ")
 )
@@ -43147,6 +43260,7 @@ def_table_schema(
           WHERE T.PART_LEVEL = 1
                 AND T.TABLE_TYPE IN (0, 3, 5, 8, 9)
                 AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
+                AND P.PARTITION_TYPE = 0
 
       UNION ALL
 
@@ -43182,6 +43296,7 @@ def_table_schema(
           WHERE T.PART_LEVEL = 2
                 AND T.TABLE_TYPE IN (0, 3, 5, 8, 9)
                 AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
+                AND SUBP.PARTITION_TYPE =0 AND P.PARTITION_TYPE = 0
     )A JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT B
       ON A.DATABASE_ID = B.DATABASE_ID
       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -45875,6 +45990,7 @@ def_table_schema(
                    LIST_VAL,
                    COMPRESS_FUNC_NAME,
                    TABLESPACE_ID,
+                   PARTITION_TYPE,
                    ROW_NUMBER() OVER (
                      PARTITION BY TENANT_ID, TABLE_ID
                      ORDER BY PART_IDX, PART_ID ASC
@@ -45887,6 +46003,7 @@ def_table_schema(
       ON TP.TABLESPACE_ID = PART.TABLESPACE_ID AND TP.TENANT_ID = PART.TENANT_ID
 
       WHERE DB_TB.TENANT_ID = EFFECTIVE_TENANT_ID()
+            AND PART.PARTITION_TYPE = 0
 """.replace("\n", " ")
 )
 
@@ -45988,6 +46105,7 @@ def_table_schema(
                TABLE_ID,
                PART_ID,
                PART_NAME,
+               PARTITION_TYPE,
                ROW_NUMBER() OVER (
                  PARTITION BY TENANT_ID, TABLE_ID
                  ORDER BY PART_IDX, PART_ID ASC
@@ -46002,6 +46120,7 @@ def_table_schema(
                LIST_VAL,
                COMPRESS_FUNC_NAME,
                TABLESPACE_ID,
+               PARTITION_TYPE,
                ROW_NUMBER() OVER (
                  PARTITION BY TENANT_ID, TABLE_ID, PART_ID
                  ORDER BY SUB_PART_IDX, SUB_PART_ID ASC
@@ -46009,7 +46128,9 @@ def_table_schema(
              FROM SYS.ALL_VIRTUAL_SUB_PART_REAL_AGENT) S_PART
        WHERE P_PART.PART_ID = S_PART.PART_ID AND
              P_PART.TABLE_ID = S_PART.TABLE_ID
-             AND P_PART.TENANT_ID = S_PART.TENANT_ID) PART
+             AND P_PART.TENANT_ID = S_PART.TENANT_ID
+             AND P_PART.PARTITION_TYPE = 0
+             AND S_PART.PARTITION_TYPE = 0) PART
       ON DB_TB.TABLE_ID = PART.TABLE_ID AND DB_TB.TENANT_ID = PART.TENANT_ID
 
       LEFT JOIN
@@ -46472,6 +46593,7 @@ def_table_schema(
                    LIST_VAL,
                    COMPRESS_FUNC_NAME,
                    TABLESPACE_ID,
+                   PARTITION_TYPE,
                    ROW_NUMBER() OVER (
                      PARTITION BY TENANT_ID, TABLE_ID
                      ORDER BY PART_IDX, PART_ID ASC
@@ -46484,6 +46606,7 @@ def_table_schema(
       ON TP.TABLESPACE_ID = PART.TABLESPACE_ID AND TP.TENANT_ID = PART.TENANT_ID
 
       WHERE DB_TB.TENANT_ID = EFFECTIVE_TENANT_ID()
+            AND PART.PARTITION_TYPE = 0
 """.replace("\n", " ")
 )
 
@@ -46597,6 +46720,7 @@ def_table_schema(
                    LIST_VAL,
                    COMPRESS_FUNC_NAME,
                    TABLESPACE_ID,
+                   PARTITION_TYPE,
                    ROW_NUMBER() OVER (
                      PARTITION BY TENANT_ID, TABLE_ID
                      ORDER BY PART_IDX, PART_ID ASC
@@ -46609,6 +46733,7 @@ def_table_schema(
       ON TP.TABLESPACE_ID = PART.TABLESPACE_ID AND TP.TENANT_ID = PART.TENANT_ID
 
       WHERE DB_TB.TENANT_ID = EFFECTIVE_TENANT_ID()
+            AND PART.PARTITION_TYPE = 0
 """.replace("\n", " ")
 )
 
@@ -46708,6 +46833,7 @@ def_table_schema(
                TABLE_ID,
                PART_ID,
                PART_NAME,
+               PARTITION_TYPE,
                ROW_NUMBER() OVER (
                  PARTITION BY TENANT_ID, TABLE_ID
                  ORDER BY PART_IDX, PART_ID ASC
@@ -46722,6 +46848,7 @@ def_table_schema(
                LIST_VAL,
                COMPRESS_FUNC_NAME,
                TABLESPACE_ID,
+               PARTITION_TYPE,
                ROW_NUMBER() OVER (
                  PARTITION BY TENANT_ID, TABLE_ID, PART_ID
                  ORDER BY SUB_PART_IDX, SUB_PART_ID ASC
@@ -46729,7 +46856,9 @@ def_table_schema(
              FROM SYS.ALL_VIRTUAL_SUB_PART_REAL_AGENT) S_PART
        WHERE P_PART.PART_ID = S_PART.PART_ID AND
              P_PART.TABLE_ID = S_PART.TABLE_ID
-             AND P_PART.TENANT_ID = S_PART.TENANT_ID) PART
+             AND P_PART.TENANT_ID = S_PART.TENANT_ID
+             AND P_PART.PARTITION_TYPE = 0
+             AND S_PART.PARTITION_TYPE = 0) PART
       ON DB_TB.TABLE_ID = PART.TABLE_ID AND DB_TB.TENANT_ID = PART.TENANT_ID
 
       LEFT JOIN
@@ -46836,6 +46965,7 @@ def_table_schema(
                TABLE_ID,
                PART_ID,
                PART_NAME,
+               PARTITION_TYPE,
                ROW_NUMBER() OVER (
                  PARTITION BY TENANT_ID, TABLE_ID
                  ORDER BY PART_IDX, PART_ID ASC
@@ -46850,6 +46980,7 @@ def_table_schema(
                LIST_VAL,
                COMPRESS_FUNC_NAME,
                TABLESPACE_ID,
+               PARTITION_TYPE,
                ROW_NUMBER() OVER (
                  PARTITION BY TENANT_ID, TABLE_ID, PART_ID
                  ORDER BY SUB_PART_IDX, SUB_PART_ID ASC
@@ -46857,7 +46988,9 @@ def_table_schema(
              FROM SYS.ALL_VIRTUAL_SUB_PART_REAL_AGENT) S_PART
        WHERE P_PART.PART_ID = S_PART.PART_ID AND
              P_PART.TABLE_ID = S_PART.TABLE_ID
-             AND P_PART.TENANT_ID = S_PART.TENANT_ID) PART
+             AND P_PART.TENANT_ID = S_PART.TENANT_ID
+             AND P_PART.PARTITION_TYPE = 0
+             AND S_PART.PARTITION_TYPE = 0) PART
       ON DB_TB.TABLE_ID = PART.TABLE_ID AND DB_TB.TENANT_ID = PART.TENANT_ID
 
       LEFT JOIN
@@ -49010,6 +49143,7 @@ def_table_schema(
                  HIGH_BOUND_VAL,
                  LIST_VAL,
                  COMPRESS_FUNC_NAME,
+                 PARTITION_TYPE,
                  ROW_NUMBER() OVER (
                    PARTITION BY TENANT_ID, TABLE_ID
                    ORDER BY PART_IDX, PART_ID ASC
@@ -49019,6 +49153,7 @@ def_table_schema(
        AND I.TABLE_ID = PART.TABLE_ID
 
     WHERE I.TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND PART.PARTITION_TYPE = 0
 """.replace("\n", " ")
 )
 
@@ -49106,6 +49241,7 @@ def_table_schema(
                  HIGH_BOUND_VAL,
                  LIST_VAL,
                  COMPRESS_FUNC_NAME,
+                 PARTITION_TYPE,
                  ROW_NUMBER() OVER (
                    PARTITION BY TENANT_ID, TABLE_ID
                    ORDER BY PART_IDX, PART_ID ASC
@@ -49115,6 +49251,7 @@ def_table_schema(
        AND I.TABLE_ID = PART.TABLE_ID
 
     WHERE I.TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND PART.PARTITION_TYPE = 0
 """.replace("\n", " ")
 )
 
@@ -49203,6 +49340,7 @@ def_table_schema(
                  HIGH_BOUND_VAL,
                  LIST_VAL,
                  COMPRESS_FUNC_NAME,
+                 PARTITION_TYPE,
                  ROW_NUMBER() OVER (
                    PARTITION BY TENANT_ID, TABLE_ID
                    ORDER BY PART_IDX, PART_ID ASC
@@ -49212,6 +49350,7 @@ def_table_schema(
        AND I.TABLE_ID = PART.TABLE_ID
 
     WHERE I.TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND PART.PARTITION_TYPE = 0
 """.replace("\n", " ")
 )
 
@@ -49298,6 +49437,7 @@ def_table_schema(
              TABLE_ID,
              PART_ID,
              PART_NAME,
+             PARTITION_TYPE,
              ROW_NUMBER() OVER (
                PARTITION BY TENANT_ID, TABLE_ID
                ORDER BY PART_IDX, PART_ID ASC
@@ -49311,6 +49451,7 @@ def_table_schema(
              HIGH_BOUND_VAL,
              LIST_VAL,
              COMPRESS_FUNC_NAME,
+             PARTITION_TYPE,
              ROW_NUMBER() OVER (
                PARTITION BY TENANT_ID, TABLE_ID, PART_ID
                ORDER BY SUB_PART_IDX, SUB_PART_ID ASC
@@ -49318,7 +49459,9 @@ def_table_schema(
            FROM SYS.ALL_VIRTUAL_SUB_PART_REAL_AGENT) S_PART
      WHERE P_PART.PART_ID = S_PART.PART_ID AND
            P_PART.TABLE_ID = S_PART.TABLE_ID
-           AND P_PART.TENANT_ID = S_PART.TENANT_ID) PART
+           AND P_PART.TENANT_ID = S_PART.TENANT_ID
+           AND P_PART.PARTITION_TYPE = 0
+           AND S_PART.PARTITION_TYPE = 0) PART
     ON I.TABLE_ID = PART.TABLE_ID AND I.TENANT_ID = PART.TENANT_ID
     WHERE I.TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " ")
@@ -49403,6 +49546,7 @@ def_table_schema(
              TABLE_ID,
              PART_ID,
              PART_NAME,
+             PARTITION_TYPE,
              ROW_NUMBER() OVER (
                PARTITION BY TENANT_ID, TABLE_ID
                ORDER BY PART_IDX, PART_ID ASC
@@ -49416,6 +49560,7 @@ def_table_schema(
              HIGH_BOUND_VAL,
              LIST_VAL,
              COMPRESS_FUNC_NAME,
+             PARTITION_TYPE,
              ROW_NUMBER() OVER (
                PARTITION BY TENANT_ID, TABLE_ID, PART_ID
                ORDER BY SUB_PART_IDX, SUB_PART_ID ASC
@@ -49423,7 +49568,9 @@ def_table_schema(
            FROM SYS.ALL_VIRTUAL_SUB_PART_REAL_AGENT) S_PART
      WHERE P_PART.PART_ID = S_PART.PART_ID AND
            P_PART.TABLE_ID = S_PART.TABLE_ID
-           AND P_PART.TENANT_ID = S_PART.TENANT_ID) PART
+           AND P_PART.TENANT_ID = S_PART.TENANT_ID
+           AND P_PART.PARTITION_TYPE = 0
+           AND S_PART.PARTITION_TYPE = 0) PART
     ON I.TABLE_ID = PART.TABLE_ID AND I.TENANT_ID = PART.TENANT_ID
     WHERE I.TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " ")
@@ -49506,6 +49653,7 @@ def_table_schema(
              TABLE_ID,
              PART_ID,
              PART_NAME,
+             PARTITION_TYPE,
              ROW_NUMBER() OVER (
                PARTITION BY TENANT_ID, TABLE_ID
                ORDER BY PART_IDX, PART_ID ASC
@@ -49519,6 +49667,7 @@ def_table_schema(
              HIGH_BOUND_VAL,
              LIST_VAL,
              COMPRESS_FUNC_NAME,
+             PARTITION_TYPE,
              ROW_NUMBER() OVER (
                PARTITION BY TENANT_ID, TABLE_ID, PART_ID
                ORDER BY SUB_PART_IDX, SUB_PART_ID ASC
@@ -49526,7 +49675,9 @@ def_table_schema(
            FROM SYS.ALL_VIRTUAL_SUB_PART_REAL_AGENT) S_PART
      WHERE P_PART.PART_ID = S_PART.PART_ID AND
            P_PART.TABLE_ID = S_PART.TABLE_ID
-           AND P_PART.TENANT_ID = S_PART.TENANT_ID) PART
+           AND P_PART.TENANT_ID = S_PART.TENANT_ID
+           AND P_PART.PARTITION_TYPE = 0
+           AND S_PART.PARTITION_TYPE = 0) PART
     ON I.TABLE_ID = PART.TABLE_ID AND I.TENANT_ID = PART.TENANT_ID
     WHERE I.TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " ")
@@ -52796,7 +52947,9 @@ def_table_schema(
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
             AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
-        WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
+        WHERE T.TABLE_TYPE = 5
+              AND P.PARTITION_TYPE = 0
+              AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -52821,7 +52974,10 @@ def_table_schema(
             ON T.TENANT_ID = SP.TENANT_ID
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
-        WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
+        WHERE T.TABLE_TYPE = 5
+              AND P.PARTITION_TYPE = 0
+              AND SP.PARTITION_TYPE = 0
+              AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
     ) V
     JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
          ON T.TABLE_ID = V.DATA_TABLE_ID
@@ -52934,7 +53090,9 @@ def_table_schema(
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
             AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
-        WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
+        WHERE T.TABLE_TYPE = 5
+              AND P.PARTITION_TYPE = 0
+              AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -52959,7 +53117,10 @@ def_table_schema(
             ON T.TENANT_ID = SP.TENANT_ID
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
-        WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
+        WHERE T.TABLE_TYPE = 5
+              AND P.PARTITION_TYPE = 0
+              AND SP.PARTITION_TYPE = 0
+              AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
     ) V
     JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
          ON T.TABLE_ID = V.DATA_TABLE_ID
@@ -53052,7 +53213,9 @@ def_table_schema(
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
             AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
-        WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22) AND T.DATABASE_ID = USERENV('SCHEMAID')
+        WHERE T.TABLE_TYPE = 5 AND T.DATABASE_ID = USERENV('SCHEMAID')
+              AND P.PARTITION_TYPE = 0
+              AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -53077,7 +53240,10 @@ def_table_schema(
             ON T.TENANT_ID = SP.TENANT_ID
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
-        WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22) AND T.DATABASE_ID = USERENV('SCHEMAID')
+        WHERE T.TABLE_TYPE = 5 AND T.DATABASE_ID = USERENV('SCHEMAID')
+              AND P.PARTITION_TYPE = 0
+              AND SP.PARTITION_TYPE = 0
+              AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
     ) V
     JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
          ON T.TABLE_ID = V.DATA_TABLE_ID
@@ -60703,6 +60869,7 @@ WHERE
   c.is_hidden = 0
   AND t.table_type in (0,2,3,8,9,14)
   AND bitand((t.TABLE_MODE / 4096), 15) IN (0,1)
+  AND part.partition_type = 0
 """.replace("\n", " ")
 )
 
@@ -60765,6 +60932,7 @@ WHERE
   c.is_hidden = 0
   AND t.table_type in (0,2,3,8,9,14)
   AND bitand((t.TABLE_MODE / 4096), 15) IN (0,1)
+  AND part.partition_type = 0
 """.replace("\n", " ")
 )
 
@@ -60822,6 +60990,7 @@ WHERE
   AND t.table_type in (0,2,3,8,9,14)
   AND t.database_id = USERENV('SCHEMAID')
   AND bitand((t.TABLE_MODE / 4096), 15) IN (0,1)
+  AND part.partition_type = 0
 """.replace("\n", " ")
 )
 
@@ -60886,6 +61055,7 @@ WHERE
   c.is_hidden = 0
   AND t.table_type in (0,2,3,8,9,14)
   AND bitand((t.TABLE_MODE / 4096), 15) IN (0,1)
+  AND subpart.partition_type = 0
 """.replace("\n", " ")
 )
 
@@ -60948,6 +61118,7 @@ WHERE
   c.is_hidden = 0
   AND t.table_type in (0,2,3,8,9,14)
   AND bitand((t.TABLE_MODE / 4096), 15) IN (0,1)
+  AND subpart.partition_type = 0
 """.replace("\n", " ")
 )
 
@@ -61005,6 +61176,7 @@ WHERE
   AND t.table_type in (0,2,3,8,9,14)
   AND t.database_id = USERENV('SCHEMAID')
   AND bitand((t.TABLE_MODE / 4096), 15) IN (0,1)
+  AND subpart.partition_type = 0
 """.replace("\n", " ")
 )
 
@@ -61213,6 +61385,7 @@ WHERE
   c.is_hidden = 0
   AND t.table_type in (0,2,3,8,9,14)
   AND bitand((t.TABLE_MODE / 4096), 15) IN (0,1)
+  AND part.partition_type = 0
 """.replace("\n", " ")
 )
 
@@ -61264,6 +61437,7 @@ WHERE
   c.is_hidden = 0
   AND t.table_type in (0,2,3,8,9,14)
   AND bitand((t.TABLE_MODE / 4096), 15) IN (0,1)
+  AND part.partition_type = 0
 """.replace("\n", " ")
 )
 def_table_schema(
@@ -61308,6 +61482,7 @@ WHERE
   AND t.table_type in (0,2,3,8,9,14)
   AND t.database_id = USERENV('SCHEMAID')
   AND bitand((t.TABLE_MODE / 4096), 15) IN (0,1)
+  AND part.partition_type = 0
 """.replace("\n", " ")
 )
 
@@ -61361,6 +61536,7 @@ WHERE
   c.is_hidden = 0
   AND t.table_type in (0,2,3,8,9,14)
   AND bitand((t.TABLE_MODE / 4096), 15) IN (0,1)
+  AND subpart.partition_type = 0
 """.replace("\n", " ")
 )
 
@@ -61412,6 +61588,7 @@ WHERE
   c.is_hidden = 0
   AND t.table_type in (0,2,3,8,9,14)
   AND bitand((t.TABLE_MODE / 4096), 15) IN (0,1)
+  AND subpart.partition_type = 0
 """.replace("\n", " ")
 )
 
@@ -61457,6 +61634,7 @@ WHERE
   AND t.table_type in (0,2,3,8,9,14)
   AND t.database_id = USERENV('SCHEMAID')
   AND bitand((t.TABLE_MODE / 4096), 15) IN (0,1)
+  AND subpart.partition_type = 0
 """.replace("\n", " ")
 )
 
@@ -61548,7 +61726,8 @@ def_table_schema(
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
         WHERE T.TABLE_TYPE IN (0,2,3,8,9,14,15)
-            AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
+              AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
+              AND P.PARTITION_TYPE = 0
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -61573,6 +61752,8 @@ def_table_schema(
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
         WHERE T.TABLE_TYPE IN (0,2,3,8,9,14,15)
+              AND P.PARTITION_TYPE = 0
+              AND SP.PARTITION_TYPE = 0
     ) V
     JOIN
         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
@@ -61679,6 +61860,7 @@ def_table_schema(
             AND T.TABLE_ID = P.TABLE_ID
         WHERE T.TABLE_TYPE IN (0,2,3,8,9,14,15)
             AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
+            AND P.PARTITION_TYPE = 0
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -61703,6 +61885,8 @@ def_table_schema(
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
         WHERE T.TABLE_TYPE IN (0,2,3,8,9,14,15)
+              AND P.PARTITION_TYPE = 0
+              AND SP.PARTITION_TYPE = 0
     ) V
     JOIN
         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT db
@@ -61794,6 +61978,7 @@ def_table_schema(
         WHERE T.TABLE_TYPE IN (0,2,3,8,9,14,15)
             AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
             AND t.database_id = USERENV('SCHEMAID')
+            AND P.PARTITION_TYPE = 0
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -61819,6 +62004,8 @@ def_table_schema(
             AND P.PART_ID = SP.PART_ID
         WHERE T.TABLE_TYPE IN (0,2,3,8,9,14,15)
             AND t.database_id = USERENV('SCHEMAID')
+            AND P.PARTITION_TYPE = 0
+            AND SP.PARTITION_TYPE = 0
     ) V
     LEFT JOIN
         SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT STAT
@@ -64184,6 +64371,7 @@ FROM (
       FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T JOIN SYS.ALL_VIRTUAL_PART_REAL_AGENT P
            ON T.TABLE_ID = P.TABLE_ID AND T.TENANT_ID = P.TENANT_ID
       WHERE T.PART_LEVEL = 1 AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
+            AND P.PARTITION_TYPE = 0
 
       UNION ALL
 
@@ -64205,6 +64393,8 @@ FROM (
            JOIN SYS.ALL_VIRTUAL_PART_REAL_AGENT P ON P.PART_ID =Q.PART_ID AND Q.TENANT_ID = P.TENANT_ID
            JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T ON T.TABLE_ID =P.TABLE_ID AND T.TENANT_ID = Q.TENANT_ID
       WHERE T.PART_LEVEL = 2 AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
+            AND Q.PARTITION_TYPE = 0
+            AND P.PARTITION_TYPE = 0
     ) A
     JOIN SYS.DBA_OB_TABLET_TO_LS B ON A.TABLET_ID = B.TABLET_ID
     JOIN SYS.DBA_OB_LS_LOCATIONS C ON B.LS_ID = C.LS_ID
@@ -67059,7 +67249,13 @@ def_sys_index_table(
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   keywords = all_def_keywords['__all_dbms_lock_allocated'])
 
-# 101092: __all_tablet_reorganize_history
+def_sys_index_table(
+  index_name = 'idx_tablet_his_table_id_src',
+  index_table_id = 101092,
+  index_columns = ['tenant_id', 'src_tablet_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tablet_reorganize_history'])
 
 def_sys_index_table(
   index_name = 'idx_kv_ttl_task_table_id',
@@ -67214,6 +67410,14 @@ def_sys_index_table(
 #       * # 100001: idx_data_table_id
 #       * # 100001: __all_table
 ################################################################################
+
+def_sys_index_table(
+  index_name = 'idx_tablet_his_table_id_dest',
+  index_table_id = 101104,
+  index_columns = ['tenant_id', 'dest_tablet_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tablet_reorganize_history'])
 
 ################################################################################
 # Oracle Agent table Index

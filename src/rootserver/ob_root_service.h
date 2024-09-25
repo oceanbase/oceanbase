@@ -516,6 +516,8 @@ public:
   int abort_redef_table(const obrpc::ObAbortRedefTableArg &arg);
   int update_ddl_task_active_time(const obrpc::ObUpdateDDLTaskActiveTimeArg &arg);
   int create_hidden_table(const obrpc::ObCreateHiddenTableArg &arg, obrpc::ObCreateHiddenTableRes &res);
+  int send_auto_split_tablet_task_request(const obrpc::ObAutoSplitTabletBatchArg &arg, obrpc::ObAutoSplitTabletBatchRes &res);
+  int split_global_index_tablet(const obrpc::ObAlterTableArg &arg);
   /**
    * For recover restore table ddl, data insert into the target table is selected from another tenant.
    * The function is used to create a hidden target table without any change on the source table,
@@ -545,6 +547,10 @@ public:
   int rebuild_index(const obrpc::ObRebuildIndexArg &arg, obrpc::ObAlterTableRes &res);
   int rebuild_vec_index(const obrpc::ObRebuildIndexArg &arg, obrpc::ObAlterTableRes &res);
   int clone_tenant(const obrpc::ObCloneTenantArg &arg, obrpc::ObCloneTenantRes &res);
+
+  // the interface only for gc splitted source tablet
+  int clean_splitted_tablet(const obrpc::ObCleanSplittedTabletArg &arg);
+
   //the interface only for switchover: execute skip check enable_ddl
   int flashback_index(const obrpc::ObFlashBackIndexArg &arg);
   int purge_index(const obrpc::ObPurgeIndexArg &arg);

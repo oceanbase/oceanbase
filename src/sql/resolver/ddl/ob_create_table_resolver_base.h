@@ -32,8 +32,7 @@ public:
   virtual ~ObCreateTableResolverBase();
 
 protected:
-  int resolve_auto_partition(const ParseNode *partition_node);
-  //resolve partitoin option only used in ObCreateTableResolver now.
+  //resolve partition option only used in ObCreateTableResolver now.
   int resolve_partition_option(ParseNode *node,
                                share::schema::ObTableSchema &table_schema,
                                const bool is_partition_option_node_with_opt);

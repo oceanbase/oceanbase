@@ -304,7 +304,7 @@ private:
   int prepare_tablet_id_reader_(ObILSTabletIdReader *&reader);
   int get_all_tablet_id_list_(ObILSTabletIdReader *reader, common::ObIArray<common::ObTabletID> &tablet_list);
   int seperate_tablet_id_list_(const common::ObIArray<common::ObTabletID> &tablet_id_list,
-      common::ObIArray<common::ObTabletID> &sys_tablet_list, common::ObIArray<common::ObTabletID> &data_tablet_id_list);
+      common::ObArray<common::ObTabletID> &sys_tablet_list, common::ObArray<common::ObTabletID> &data_tablet_id_list);
   int inner_do_next_(common::ObTabletID &tablet_id);
   int check_need_skip_(const common::ObTabletID &tablet_id, bool &need_skip);
   int check_need_skip_major_(const common::ObTabletID &tablet_id, bool &need_skip);

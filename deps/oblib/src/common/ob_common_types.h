@@ -87,6 +87,7 @@ struct ObQueryFlag
   static const uint64_t OBSF_MASK_IS_MDS_QUERY = (0x1UL << OBSF_BIT_IS_MDS_QUERY) - 1;
   static const uint64_t OBSF_MASK_IS_SELECT_FOLLOWER = (0x1UL << OBSF_BIT_IS_SELECT_FOLLOWER) - 1;
   static const uint64_t OBSF_MASK_ENABLE_LOB_PREFETCH = (0x1UL << OBSF_BIT_ENABLE_LOB_PREFETCH) - 1;
+  static const uint64_t OBSF_MASK_IS_DIRECT_SCAN = (0x1UL << OBSF_BIT_IS_BARE_ROW_SCAN) - 1;
 
 
   enum ScanOrder
@@ -242,6 +243,7 @@ struct ObQueryFlag
   inline bool is_for_foreign_key_check() const { return for_foreign_key_check_; }
   inline bool is_sstable_cut() const { return is_sstable_cut_; }
   inline bool is_skip_read_lob() const { return skip_read_lob_; }
+  inline bool is_bare_row_scan() const {return is_bare_row_scan_; }
   inline bool is_mds_query() const { return is_mds_query_; }
   inline void set_is_select_follower() { is_select_follower_ = true; }
   inline bool is_select_follower() const { return is_select_follower_; }
@@ -279,6 +281,7 @@ struct ObQueryFlag
                "is_sstable_cut", is_sstable_cut_,
                "skip_read_lob", skip_read_lob_,
                "is_lookup_for_4377", is_lookup_for_4377_,
+               "is_bare_row_scan", is_bare_row_scan_,
                "enable_rich_format", enable_rich_format_,
                "is_for_foreign_key_check", for_foreign_key_check_,
                "is_mds_query", is_mds_query_,

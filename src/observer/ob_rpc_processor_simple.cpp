@@ -556,7 +556,7 @@ int ObRpcCheckandCancelDDLComplementDagP::process()
   int ret = OB_SUCCESS;
   if (OB_ISNULL(gctx_.ob_service_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("invalid argument", K(ret), K(gctx_.ob_service_));
+    LOG_ERROR("invalid arguments", K(ret), KP(gctx_.ob_service_));
   } else {
     bool is_dag_exist = true;
     ret = gctx_.ob_service_->check_and_cancel_ddl_complement_data_dag(arg_, is_dag_exist);
@@ -575,6 +575,56 @@ int ObRpcCheckandCancelDeleteLobMetaRowDagP::process()
     bool is_dag_exist = true;
     ret = gctx_.ob_service_->check_and_cancel_delete_lob_meta_row_dag(arg_, is_dag_exist);
     result_ = is_dag_exist;
+  }
+  return ret;
+}
+
+int ObRpcBuildSplitTabletDataStartRequestP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid arguments", K(ret), KP(gctx_.ob_service_));
+  } else {
+    ret = gctx_.ob_service_->build_split_tablet_data_start_request(arg_, result_);
+  }
+  return ret;
+}
+
+int ObRpcBuildSplitTabletDataFinishRequestP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid arguments", K(ret), KP(gctx_.ob_service_));
+  } else {
+    ret = gctx_.ob_service_->build_split_tablet_data_finish_request(arg_, result_);
+  }
+  return ret;
+}
+
+int ObRpcFreezeSplitSrcTabletP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid arguments", K(ret), KP(gctx_.ob_service_));
+  } else {
+    const int64_t abs_timeout_us = nullptr == rpc_pkt_ ? 0 : get_receive_timestamp() + rpc_pkt_->get_timeout();
+    ret = gctx_.ob_service_->freeze_split_src_tablet(arg_, result_, abs_timeout_us);
+  }
+  return ret;
+}
+
+int ObRpcFetchSplitTabletInfoP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid arguments", K(ret), KP(gctx_.ob_service_));
+  } else {
+    const int64_t abs_timeout_us = nullptr == rpc_pkt_ ? 0 : get_receive_timestamp() + rpc_pkt_->get_timeout();
+    ret = gctx_.ob_service_->fetch_split_tablet_info(arg_, result_, abs_timeout_us);
   }
   return ret;
 }
@@ -745,6 +795,42 @@ int ObRpcCheckSchemaVersionElapsedP::process()
     LOG_ERROR("invalid argument", K(ret), K(gctx_.ob_service_));
   } else {
     ret = gctx_.ob_service_->check_schema_version_elapsed(arg_, result_);
+  }
+  return ret;
+}
+
+int ObRpcCheckMemtableCntP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(ret), K(gctx_.ob_service_));
+  } else {
+    ret = gctx_.ob_service_->check_memtable_cnt(arg_, result_);
+  }
+  return ret;
+}
+
+int ObRpcCheckMediumCompactionInfoListP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(ret), K(gctx_.ob_service_));
+  } else {
+    ret = gctx_.ob_service_->check_medium_compaction_info_list_cnt(arg_, result_);
+  }
+  return ret;
+}
+
+int ObRpcPrepareTabletSplitTaskRangesP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(ret), K(gctx_.ob_service_));
+  } else {
+    ret = gctx_.ob_service_->prepare_tablet_split_task_ranges(arg_, result_);
   }
   return ret;
 }
@@ -2312,6 +2398,19 @@ int ObRpcBatchGetTabletBindingP::process()
   } else {
     const int64_t abs_timeout_us = get_send_timestamp() + rpc_pkt_->get_timeout();
     ret = ObTabletBindingMdsHelper::batch_get_tablet_binding(abs_timeout_us, arg_, result_);
+  }
+  return ret;
+}
+
+int ObRpcBatchGetTabletSplitP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(rpc_pkt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid rpc pkt", K(ret));
+  } else {
+    const int64_t abs_timeout_us = get_send_timestamp() + rpc_pkt_->get_timeout();
+    ret = ObTabletSplitMdsHelper::batch_get_tablet_split(abs_timeout_us, arg_, result_);
   }
   return ret;
 }

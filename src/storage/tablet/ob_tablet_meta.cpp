@@ -87,6 +87,7 @@ int ObTabletMeta::init(
     const lib::Worker::CompatMode compat_mode,
     const ObTabletTableStoreFlag &table_store_flag,
     const int64_t create_schema_version,
+    const share::SCN &clog_checkpoint_scn,
     const bool micro_index_clustered,
     const bool has_cs_replica)
 {
@@ -103,7 +104,7 @@ int ObTabletMeta::init(
       || OB_UNLIKELY(lib::Worker::CompatMode::INVALID == compat_mode)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(ls_id), K(tablet_id), K(data_tablet_id),
-        K(create_scn), K(snapshot_version), K(compat_mode));
+        K(create_scn), K(snapshot_version), K(clog_checkpoint_scn), K(compat_mode));
   } else if (OB_FAIL(ha_status_.init_status())) {
     LOG_WARN("failed to init ha status", K(ret));
   } else if (OB_FAIL(transfer_info_.init())) {
@@ -117,7 +118,7 @@ int ObTabletMeta::init(
     create_schema_version_ = create_schema_version;
     micro_index_clustered_ = micro_index_clustered;
     start_scn_ = INIT_CLOG_CHECKPOINT_SCN;
-    clog_checkpoint_scn_ = INIT_CLOG_CHECKPOINT_SCN;
+    clog_checkpoint_scn_ = clog_checkpoint_scn.is_valid() ? clog_checkpoint_scn : INIT_CLOG_CHECKPOINT_SCN;
     ddl_checkpoint_scn_ = INIT_CLOG_CHECKPOINT_SCN;
     compat_mode_ = compat_mode;
     snapshot_version_ = snapshot_version;
@@ -1048,7 +1049,7 @@ ObMigrationTabletParam::ObMigrationTabletParam()
     storage_schema_(),
     medium_info_list_(),
     extra_medium_info_(),
-    last_persisted_committed_tablet_status_(ObTabletStatus::MAX, ObTabletMdsUserDataType::MAX_TYPE),
+    last_persisted_committed_tablet_status_(ObTabletStatus::MAX, ObTabletMdsUserDataType::MAX_TYPE, ObTransVersion::INVALID_TRANS_VERSION),
     table_store_flag_(),
     ddl_start_scn_(SCN::min_scn()),
     ddl_snapshot_version_(OB_INVALID_TIMESTAMP),

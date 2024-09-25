@@ -57,6 +57,7 @@ int ObCheckConstraintValidationTask::process()
   const ObDatabaseSchema *database_schema = nullptr;
   int tmp_ret = OB_SUCCESS;
   ObTabletID unused_tablet_id;
+  ObAddr unused_addr;
   ObDDLTaskKey task_key(tenant_id_, target_object_id_, schema_version_);
   if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id_, schema_guard))) {
     LOG_WARN("get tenant schema guard failed", K(ret), K(tenant_id_));
@@ -160,7 +161,7 @@ int ObCheckConstraintValidationTask::process()
     }
   }
   ObDDLTaskInfo info;
-  if (OB_SUCCESS != (tmp_ret = root_service->get_ddl_scheduler().on_sstable_complement_job_reply(unused_tablet_id, task_key, 1L/*unused snapshot version*/, 1L/*unused execution id*/, ret, info))) {
+  if (OB_SUCCESS != (tmp_ret = root_service->get_ddl_scheduler().on_sstable_complement_job_reply(unused_tablet_id, unused_addr, task_key, 1L/*unused snapshot version*/, 1L/*unused execution id*/, ret, info))) {
     LOG_WARN("fail to finish check constraint task", K(ret), K(tmp_ret));
   }
   char table_id_buffer[256];
@@ -215,13 +216,14 @@ int ObForeignKeyConstraintValidationTask::process()
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
   } else {
     ObTabletID unused_tablet_id;
+    ObAddr unused_addr;
     ObDDLTaskKey task_key(tenant_id_, foregin_key_id_, schema_version_);
     ObDDLTaskInfo info;
     int tmp_ret = OB_SUCCESS;
     if (OB_FAIL(check_fk_by_send_sql())) {
       LOG_WARN("failed to check fk", K(ret));
     }
-    if (OB_SUCCESS != (tmp_ret = root_service->get_ddl_scheduler().on_sstable_complement_job_reply(unused_tablet_id, task_key, 1L/*unused snapshot version*/, 1L/*unused execution id*/, ret, info))) {
+    if (OB_SUCCESS != (tmp_ret = root_service->get_ddl_scheduler().on_sstable_complement_job_reply(unused_tablet_id, unused_addr, task_key, 1L/*unused snapshot version*/, 1L/*unused execution id*/, ret, info))) {
       LOG_WARN("fail to finish check constraint task", K(ret));
     }
     LOG_INFO("execute check foreign key task finish", K(ret), "ddl_event_info", ObDDLEventInfo(), K(task_key), K(data_table_id_), K(foregin_key_id_));

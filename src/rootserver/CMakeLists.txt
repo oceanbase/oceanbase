@@ -101,6 +101,7 @@ ob_set_subtarget(ob_rootserver common
   ob_lob_meta_builder.cpp
   ob_ls_recovery_stat_handler.cpp
   ob_shrink_expand_resource_pool_checker.cpp
+  ob_split_partition_helper.cpp
   ob_transfer_partition_command.cpp
   ob_partition_exchange.cpp
   ob_service_name_command.cpp
@@ -131,6 +132,7 @@ ob_set_subtarget(ob_rootserver ddl_task
   ddl_task/ob_fts_index_build_task.cpp
   ddl_task/ob_modify_autoinc_task.cpp
   ddl_task/ob_table_redefinition_task.cpp
+  ddl_task/ob_partition_split_task.cpp
   ddl_task/ob_recover_restore_table_task.cpp
   ddl_task/ob_ddl_tablet_scheduler.cpp
   ddl_task/ob_rebuild_index_task.cpp

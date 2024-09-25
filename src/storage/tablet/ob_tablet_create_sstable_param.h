@@ -89,6 +89,7 @@ public:
   // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
   // This is used to create remote sstable
   int init_for_remote(const blocksstable::ObMigrationSSTableParam &migration_param);
+
   int init_for_mds(const compaction::ObBasicTabletMergeCtx &ctx,
                    const blocksstable::ObSSTableMergeRes &res,
                    const ObStorageSchema &mds_schema);

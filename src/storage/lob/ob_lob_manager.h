@@ -24,6 +24,9 @@ namespace oceanbase
 namespace storage
 {
 
+class ObLobDiskLocatorBuilder;
+class ObLobDataInsertTask;
+
 struct ObLobCtx
 {
   ObLobCtx() : lob_meta_mngr_(nullptr), lob_piece_mngr_(nullptr) {}
@@ -353,6 +356,11 @@ public:
 
   inline bool can_write_inrow(uint64_t len, int64_t inrow_threshold) { return len <= inrow_threshold; }
 
+  int insert(ObLobAccessParam& param, const ObLobLocatorV2 &src_data_locator, ObArray<ObLobMetaInfo> &lob_meta_list);
+  int prepare_insert_task(
+      ObLobAccessParam& param,
+      bool &is_outrow,
+      ObLobDataInsertTask &task);
   static void transform_lob_id(uint64_t src, uint64_t &dst);
 
 private:
@@ -443,6 +451,11 @@ private:
       ObLobQueryResult &result,
       ObString &write_data_buffer);
 
+  int prepare_outrow_locator(ObLobAccessParam& param, ObLobDataInsertTask &task);
+  int prepare_char_len(ObLobAccessParam& param, ObLobDiskLocatorBuilder &locator_builder, ObLobDataInsertTask &task);
+  int prepare_lob_id(ObLobAccessParam& param, ObLobDiskLocatorBuilder &locator_builder);
+  int alloc_lob_id(ObLobAccessParam& param, ObLobId &lob_id);
+  int prepare_seq_no(ObLobAccessParam& param, ObLobDiskLocatorBuilder &locator_builder, ObLobDataInsertTask &task);
 private:
   static const int64_t DEFAULT_LOB_META_BUCKET_CNT = 1543;
   const uint64_t tenant_id_;

@@ -430,6 +430,8 @@ public:
   static int unique_idx_covered_partition_columns(const share::schema::ObTableSchema &table_schema,
                                                   const common::ObIArray<uint64_t> &index_columns,
                                                   const common::ObPartitionKeyInfo &partition_info);
+  static int unique_idx_covered_presetting_partition_columns(const share::schema::ObTableSchema &table_schema,
+                                                             const common::ObIArray<uint64_t> &index_columns);
 
   static int get_collation_type_of_names(const ObSQLSessionInfo *session_info,
                                          const ObNameTypeClass type_class,
@@ -588,6 +590,7 @@ public:
   static bool is_valid_partition_column_type(const common::ObObjType type,
                                              const share::schema::ObPartitionFuncType part_type,
                                              const bool is_check_value);
+  static bool is_partition_range_column_type(const common::ObObjType type);
   static bool is_valid_oracle_partition_data_type(const common::ObObjType type, const bool check_value);
   static bool is_valid_oracle_interval_data_type(
       const common::ObObjType type,

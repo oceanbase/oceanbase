@@ -674,6 +674,27 @@ inline const ObString &ob_match_against_mode_str(const ObMatchAgainstMode mode)
   }
 }
 
+static bool is_fixed_length_storage(ObObjType type) {
+  bool is_fixed = true;
+  ObObjTypeClass tc = ob_obj_type_class(type);
+  OB_ASSERT(tc >= ObNullTC && tc < ObMaxTC);
+  if (ObNumberTC == tc
+      || ObExtendTC == tc
+      || ObTextTC == tc
+      || ObEnumSetInnerTC == tc
+      || ObRawTC == tc
+      || ObRowIDTC == tc
+      || ObLobTC == tc
+      || ObJsonTC == tc
+      || ObGeometryTC == tc
+      || ObUserDefinedSQLTC == tc
+      || ObDecimalIntTC == tc
+      || ObRoaringBitmapTC == tc) {
+    is_fixed = false;
+  }
+  return is_fixed;
+}
+
 static bool is_fixed_length(ObObjType type) {
   bool is_fixed = true;
   ObObjTypeClass tc = ob_obj_type_class(type);

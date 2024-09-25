@@ -10047,6 +10047,57 @@ int ObSchemaGetterGuard::check_global_index_exist(const uint64_t tenant_id, cons
   return ret;
 }
 
+// TODO YIREN, remove it when MDS prepare.
+int ObSchemaGetterGuard::get_range_part_high_bound(
+    const ObTableSchema &table_schema,
+    const common::ObTabletID &tablet_id,
+    ObIAllocator &allocator,
+    common::ObRowkey &high_bound)
+{
+  int ret = OB_SUCCESS;
+  high_bound.reset();
+  if (OB_UNLIKELY(!table_schema.is_valid() || !tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(tablet_id), K(table_schema));
+  } else if (OB_UNLIKELY((PARTITION_LEVEL_ONE == table_schema.get_part_level()
+        && !is_range_part(table_schema.get_part_option().get_part_func_type()))
+    || (PARTITION_LEVEL_TWO == table_schema.get_part_level()
+        && !is_range_part(table_schema.get_sub_part_option().get_part_func_type())))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(table_schema));
+  } else if (OB_UNLIKELY(get_tenant_id() != table_schema.get_tenant_id())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("tenant_id is not match with schema_guard", K(ret), K(tenant_id_), "tenant_id", table_schema.get_tenant_id());
+  } else if (!table_schema.has_tablet()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("this table do not have tablet", K(ret), K(table_schema));
+  } else {
+    ObPartitionSchemaIter::Info part_info;
+    ObPartitionSchemaIter iter(table_schema, ObCheckPartitionMode::CHECK_PARTITION_MODE_ALL);
+    while (OB_SUCC(ret) && (OB_SUCC(iter.next_partition_info(part_info)))) {
+      if (OB_ISNULL(part_info.partition_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("the part_info.partition_ is nullptr", K(ret), K(part_info));
+      } else if (part_info.partition_->get_tablet_id() == tablet_id) {
+        const common::ObRowkey &part_high_bound = part_info.partition_->get_high_bound_val();
+        if (OB_UNLIKELY(!part_high_bound.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected err", K(ret));
+        } else if (OB_FAIL(part_high_bound.deep_copy(high_bound, allocator))) {
+          LOG_WARN("deep copy failed", K(ret), K(part_high_bound));
+        } else {
+          break;
+        }
+      }
+    }
+    if (OB_SUCC(ret) && !high_bound.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected err", K(ret), K(tablet_id), K(table_schema));
+    }
+  }
+  return ret;
+}
+
 int ObSchemaGetterGuard::deep_copy_index_name_map(
     common::ObIAllocator &allocator,
     ObIndexNameMap &index_name_cache)

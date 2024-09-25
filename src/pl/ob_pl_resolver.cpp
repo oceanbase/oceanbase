@@ -14189,7 +14189,7 @@ int ObPLResolver::resolve_routine(ObObjAccessIdent &access_ident,
     ObObjAccessIdx access_idx;
     if (expr_params.count() != 2 && expr_params.count() != 3) {
       ret = OB_ERR_WRONG_TYPE_FOR_VAR;
-      LOG_WARN("PLS-00306: wrong number or types of arguments in call to 'RAISE_APPLICATION_ERROR'", K(ret));;
+      LOG_WARN("PLS-00306: wrong number or types of arguments in call to 'RAISE_APPLICATION_ERROR'", K(ret));
       LOG_USER_ERROR(OB_ERR_WRONG_TYPE_FOR_VAR, routine_name.length(), routine_name.ptr());
     } else {
       ObPLDataType invalid_pl_data_type;

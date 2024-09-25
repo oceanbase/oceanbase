@@ -76,7 +76,7 @@ public:
       parent_seq_no_(), seq_no_st_(), used_seq_cnt_(0), total_seq_cnt_(0), checksum_(0), update_len_(0),
       op_type_(ObLobDataOutRowCtx::OpType::SQL), is_fill_zero_(false), from_rpc_(false),
       inrow_read_nocopy_(false), inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD), schema_chunk_size_(OB_DEFAULT_LOB_CHUNK_SIZE),
-      access_ctx_(nullptr), is_store_char_len_(true), lob_id_geneator_(nullptr), remote_query_ctx_(nullptr)
+      access_ctx_(nullptr), is_store_char_len_(true), lob_id_geneator_(nullptr), remote_query_ctx_(nullptr), data_row_(nullptr)
   {}
   ~ObLobAccessParam();
 
@@ -93,6 +93,7 @@ public:
   int set_lob_locator(common::ObLobLocatorV2 *lob_locator);
   int is_timeout();
   bool is_char() { return coll_type_ != common::ObCollationType::CS_TYPE_BINARY; }
+  bool is_blob() { return coll_type_ == common::ObCollationType::CS_TYPE_BINARY; }
 
   // chunk size can be changed online.
   // that means lob data that has been writed may have different chunk size with schema
@@ -116,7 +117,7 @@ public:
     K_(coll_type), K_(scan_backward), K_(offset), K_(len), K_(parent_seq_no), K_(seq_no_st), K_(used_seq_cnt), K_(total_seq_cnt), K_(checksum),
     K_(update_len), K_(op_type), K_(is_fill_zero), K_(from_rpc), K_(snapshot), K_(tx_id), K_(read_latest),
     K_(inrow_read_nocopy), K_(schema_chunk_size), K_(inrow_threshold), K_(is_store_char_len), KP_(remote_query_ctx),
-    KP_(access_ctx), KPC_(lob_id_geneator));
+    KP_(access_ctx), KPC_(lob_id_geneator), KPC_(data_row));
 
 private:
   ObIAllocator *tmp_allocator_;
@@ -176,6 +177,7 @@ public:
   share::ObTabletCacheInterval *lob_id_geneator_;
   // remote query ctx
   void *remote_query_ctx_;
+  const blocksstable::ObDatumRow *data_row_; // for tablet split
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLobAccessParam);

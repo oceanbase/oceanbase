@@ -1083,6 +1083,10 @@ public:
       const uint64_t column_id,
       bool &is_key);
 
+  int get_range_part_high_bound(const ObTableSchema &table_schema,
+                                const common::ObTabletID &tablet_id,
+                                ObIAllocator &allocator,
+                                common::ObRowkey &high_bound);
   int deep_copy_index_name_map(common::ObIAllocator &allocator,
                                ObIndexNameMap &index_name_cache);
   #define GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DECLARE(SCHEMA, SCHEMA_TYPE)     \

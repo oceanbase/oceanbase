@@ -328,6 +328,7 @@ public:
   bool operator==(const common::ObNewRow &other) const;
 
   int is_datums_changed(const ObDatumRow &other, bool &is_changed) const;
+  int copy_attributes_except_datums(const ObDatumRow &other);
   OB_INLINE int64_t get_capacity() const { return datum_buffer_.get_capacity(); }
   OB_INLINE int64_t get_column_count() const { return count_; }
   OB_INLINE int64_t get_scan_idx() const { return scan_index_; }

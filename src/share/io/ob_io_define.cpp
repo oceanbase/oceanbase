@@ -1114,6 +1114,11 @@ void ObIORequest::reset() //only for test, not dec resut_ref
 {
   int ret = OB_SUCCESS;
   retry_count_ = 0;
+  // only read need destroy here
+  // TODO(yanfeng): works now, need refactor
+  if (fd_.is_backup_block_file() && nullptr != io_result_ && io_result_->flag_.is_read()) {
+    backup::ObLSBackupFactory::free(static_cast<backup::ObBackupWrapperIODevice *>(fd_.device_handle_));
+  }
   if (nullptr != control_block_ && nullptr != fd_.device_handle_) {
     fd_.device_handle_->free_iocb(control_block_);
     control_block_ = nullptr;
@@ -1403,7 +1408,9 @@ int ObIORequest::prepare(char *next_buffer, int64_t next_size, int64_t next_offs
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("io result is null", K(ret));
   } else {
-    if (io_result_->flag_.is_read()) {
+    if (fd_.is_backup_block_file()) {
+      // ignore
+    } else if (io_result_->flag_.is_read()) {
       if (OB_FAIL(fd_.device_handle_->io_prepare_pread(
               fd_,
               io_buf,

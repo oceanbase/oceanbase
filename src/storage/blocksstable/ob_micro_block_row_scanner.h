@@ -206,6 +206,25 @@ protected:
   storage::ObBlockRowStore *block_row_store_;
 };
 
+// tablet split ddl task scan bared row without multi-merge.
+class ObMicroBlockRowDirectScanner final : public ObIMicroBlockRowScanner
+{
+public:
+  ObMicroBlockRowDirectScanner(common::ObIAllocator &allocator)
+    : ObIMicroBlockRowScanner(allocator)
+  {}
+  virtual ~ObMicroBlockRowDirectScanner() {}
+  virtual int init(
+      const storage::ObTableIterParam &param,
+      storage::ObTableAccessContext &context,
+      const blocksstable::ObSSTable *sstable) override final;
+  virtual int open(
+      const MacroBlockId &macro_id,
+      const ObMicroBlockData &block_data,
+      const bool is_left_border,
+      const bool is_right_border) override final;
+};
+
 // major sstable micro block scanner for query and merge
 class ObMicroBlockRowScanner : public ObIMicroBlockRowScanner
 {

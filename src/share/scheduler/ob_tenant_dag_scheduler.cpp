@@ -3180,30 +3180,6 @@ int ObDagPrioScheduler::diagnose_compaction_dags()
   return ret;
 }
 
-int ObDagPrioScheduler::get_complement_data_dag_progress(const ObIDag &dag,
-    int64_t &row_scanned,
-    int64_t &row_inserted)
-{
-  int ret = OB_SUCCESS;
-  ObMutexGuard guard(prio_lock_);
-  ObIDag *stored_dag = nullptr;
-  if (dag.get_type() != ObDagType::DAG_TYPE_DDL) {
-    ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "invalid arugment", K(ret), K(dag));
-  } else if (OB_FAIL(dag_map_.get_refactored(&dag, stored_dag))) {
-    if (OB_HASH_NOT_EXIST != ret) {
-      LOG_WARN("failed to get from dag map", K(ret));
-    }
-  } else if (OB_ISNULL(stored_dag)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("dag is null", K(ret));
-  } else {
-    row_scanned = static_cast<ObComplementDataDag*>(stored_dag)->get_context().row_scanned_;
-    row_inserted = static_cast<ObComplementDataDag*>(stored_dag)->get_context().row_inserted_;
-  }
-  return ret;
-}
-
 int ObDagPrioScheduler::deal_with_finish_task(
     ObITask &task,
     ObTenantDagWorker &worker,
@@ -5079,23 +5055,6 @@ int ObTenantDagScheduler::cancel_dag_net(const ObDagId &dag_id)
     LOG_WARN("fail to cancel dag net", K(ret), K(dag_id));
   } else {
     notify();
-  }
-  return ret;
-}
-
-int ObTenantDagScheduler::get_complement_data_dag_progress(const ObIDag *dag,
-                                                           int64_t &row_scanned,
-                                                           int64_t &row_inserted)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    COMMON_LOG(WARN, "ObDagScheduler is not inited", K(ret));
-  } else if (OB_ISNULL(dag) || dag->get_type() != ObDagType::DAG_TYPE_DDL) {
-    ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "invalid arugment", K(ret), KP(dag));
-  } else if (OB_FAIL(prio_sche_[dag->get_priority()].get_complement_data_dag_progress(*dag, row_scanned, row_inserted))) {
-    COMMON_LOG(WARN, "fail to get complement data dag progress", K(ret), KPC(dag));
   }
   return ret;
 }

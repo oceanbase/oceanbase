@@ -374,7 +374,7 @@ int ObTableLoadInstance::lock_table_in_tx()
   while (OB_SUCC(ret) && !lock_succeed) {
     if (OB_FAIL(execute_ctx_->check_status())) {
       LOG_WARN("failed to check status", KR(ret));
-    } else if (OB_FAIL(table_lock_service->lock_table(*tx_desc, stmt_ctx_.tx_param_, lock_table_arg))) {
+    } else if (OB_FAIL(table_lock_service->lock(*tx_desc, stmt_ctx_.tx_param_, lock_table_arg))) {
       if (OB_EAGAIN == ret) {
         ob_usleep(sleep_time);
         ret = OB_SUCCESS;

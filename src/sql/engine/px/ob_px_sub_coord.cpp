@@ -140,34 +140,28 @@ int ObPxSubCoord::try_start_tasks(int64_t &dispatch_worker_count, bool is_fast_s
 
 void ObPxSubCoord::notify_dispatched_task_exit(int64_t dispatched_worker_count)
 {
-  (void) thread_worker_factory_.join();
+  (void)thread_worker_factory_.join();
   auto &tasks = sqc_ctx_.get_tasks();
-  bool is_interrupted = false;
-  for (int64_t idx = 0;
-       idx < dispatched_worker_count && dispatched_worker_count <= tasks.count() && !is_interrupted;
+  for (int64_t idx = 0; idx < dispatched_worker_count && dispatched_worker_count <= tasks.count();
        ++idx) {
     int tick = 1;
     ObPxTask &task = tasks.at(idx);
-    while (false == task.is_task_state_set(SQC_TASK_EXIT) && !is_interrupted) {
+    while (false == task.is_task_state_set(SQC_TASK_EXIT)) {
       // 每秒给当前 sqc 中未完成的 tasks 发送一次中断
       // 首次发中断的时间为 100ms 时。定这个时间是为了
       // cover px pool 调度 task 的延迟
       if (tick % 1000 == 100) {
         ObPxSqcMeta &sqc = sqc_arg_.sqc_;
-        (void) ObInterruptUtil::interrupt_tasks(sqc, OB_GOT_SIGNAL_ABORTING);
+        (void)ObInterruptUtil::interrupt_tasks(sqc, OB_GOT_SIGNAL_ABORTING);
       }
       // 如果 10s 还没有退出，则打印一条日志。按照设计，不会出现这种情况
       if (tick++ % 10000 == 0) {
-        is_interrupted = IS_INTERRUPTED();
-        LOG_INFO("waiting for task exit", K(idx), K(dispatched_worker_count), K(tick), K(is_interrupted));
+        LOG_INFO("waiting for task exit", K(idx), K(dispatched_worker_count), K(tick));
       }
       ob_usleep(1000);
     }
-    LOG_TRACE("task exit",
-              K(idx), K(tasks.count()), K(dispatched_worker_count),
-              "dfo_id", task.dfo_id_,
-              "sqc_id", task.sqc_id_,
-              "task_id", task.task_id_);
+    LOG_TRACE("task exit", K(idx), K(tasks.count()), K(dispatched_worker_count), "dfo_id",
+              task.dfo_id_, "sqc_id", task.sqc_id_, "task_id", task.task_id_);
   }
 }
 
@@ -929,7 +923,7 @@ int ObPxSubCoord::start_ddl()
 
       ObTabletDirectLoadInsertParam direct_load_param;
       direct_load_param.is_replay_ = false;
-      direct_load_param.common_param_.direct_load_type_ = ddl_ctrl_.direct_load_type_;;
+      direct_load_param.common_param_.direct_load_type_ = ddl_ctrl_.direct_load_type_;
       direct_load_param.common_param_.data_format_version_ = data_format_version;
       direct_load_param.common_param_.read_snapshot_ = snapshot_version;
       direct_load_param.runtime_only_param_.exec_ctx_ = exec_ctx;

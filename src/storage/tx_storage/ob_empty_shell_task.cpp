@@ -115,6 +115,8 @@ int ObTabletEmptyShellHandler::init(ObLS *ls)
   } else if (OB_ISNULL(ls)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", KR(ret));
+  } else if (OB_FAIL(ddl_empty_shell_checker_.init(ls))) {
+    STORAGE_LOG(WARN, "create ddl tablet checker failed", K(ret));
   } else {
     ls_ = ls;
     is_inited_ = true;
@@ -202,6 +204,8 @@ int ObTabletEmptyShellHandler::update_tablets_to_empty_shell(ObLS *ls, const com
     const ObTabletID &tablet_id = tablet_ids.at(i);
     if (OB_FAIL(ls->get_tablet_svr()->update_tablet_to_empty_shell(tablet_id))) {
       STORAGE_LOG(WARN, "failed to update tablet to shell", K(ret), K(ls->get_ls_id()), K(tablet_id));
+    } else if (OB_FAIL(ddl_empty_shell_checker_.erase_tablet_record(tablet_id))) {
+      STORAGE_LOG(WARN, "erase ddl tablet record failed", K(ret));
     } else {
     #ifdef ERRSIM
       const uint64_t tenant_id = MTL_ID();
@@ -231,8 +235,7 @@ int ObTabletEmptyShellHandler::check_tablet_deleted_(ObTablet *tablet, bool &is_
     } else {
       STORAGE_LOG(WARN, "failed to get latest tablet status", K(ret), KP(tablet));
     }
-  } else if (ObTabletStatus::DELETED == data.tablet_status_
-             || ObTabletStatus::TRANSFER_OUT_DELETED == data.tablet_status_) {
+  } else if (data.tablet_status_.is_deleted_for_gc()) {
     is_deleted = true;
     STORAGE_LOG(INFO, "get tablet for deleting", "ls_id", ls_->get_ls_id(), "tablet_id", tablet->get_tablet_meta().tablet_id_, K(data));
   }
@@ -293,6 +296,8 @@ int ObTabletEmptyShellHandler::check_tablet_empty_shell_(
   } else if (ObTabletStatus::TRANSFER_OUT_DELETED == tablet_status
       && OB_FAIL(check_transfer_out_deleted_tablet_(tablet, user_data, not_depend_on, need_retry))) {
     STORAGE_LOG(WARN, "failed to check transfer out deleted tablet", K(ret), K(readable_scn), K(user_data));
+  } else if (!not_depend_on && OB_FAIL(ddl_empty_shell_checker_.check_split_src_deleted_tablet(tablet, user_data, not_depend_on, need_retry))) {
+    STORAGE_LOG(WARN, "failed to check split source deleted tablet", K(ret), K(readable_scn), K(user_data));
   } else if (ObTabletStatus::DELETED == tablet_status || not_depend_on) {
     if (user_data.delete_commit_scn_.is_valid() && user_data.delete_commit_scn_ <= readable_scn) {
       can = true;

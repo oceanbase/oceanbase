@@ -417,6 +417,7 @@ int ObMdsTableMiniMerger::generate_mds_mini_sstable(
     ObTableHandleV2 &table_handle)
 {
   int ret = OB_SUCCESS;
+  TIMEGUARD_INIT(STORAGE, 20_ms);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
@@ -428,9 +429,9 @@ int ObMdsTableMiniMerger::generate_mds_mini_sstable(
         STORAGE_LOG(WARN, "Failed to add macro blocks", K(ret));
       } else if (OB_FAIL(sstable_builder_.close(res))) {
         LOG_WARN("fail to close sstable builder", K(ret), K(sstable_builder_));
-      } else if (OB_FAIL(param.init_for_mds(*ctx_, res, *storage_schema_))) {
+      } else if (CLICK_FAIL(param.init_for_mds(*ctx_, res, *storage_schema_))) {
         LOG_WARN("fail to create sstable param for mds", K(ret));
-      } else if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable(param, allocator, table_handle))) {
+      } else if (CLICK_FAIL(ObTabletCreateDeleteHelper::create_sstable(param, allocator, table_handle))) {
         LOG_WARN("fail to create sstable", K(ret), K(param));
         CTX_SET_DIAGNOSE_LOCATION(*ctx_);
       } else {

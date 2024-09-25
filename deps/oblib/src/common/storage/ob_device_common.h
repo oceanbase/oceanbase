@@ -180,7 +180,7 @@ struct ObStorageIdMod
 
   static const ObStorageIdMod get_default_id_mod()
   {
-    static const ObStorageIdMod storage_id_mod(0, ObStorageUsedMod::STORAGE_USED_OTHER);;
+    static const ObStorageIdMod storage_id_mod(0, ObStorageUsedMod::STORAGE_USED_OTHER);
     return storage_id_mod;
   }
 

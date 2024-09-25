@@ -424,6 +424,11 @@ public:
                                          ObExchangeInfo &right_exch_info);
   void set_insert_stmt(const ObInsertStmt *insert_stmt) { insert_stmt_ = insert_stmt; }
   const ObInsertStmt *get_insert_stmt() const { return insert_stmt_; }
+  int get_part_exprs(uint64_t table_id,
+                     uint64_t ref_table_id,
+                     share::schema::ObPartitionLevel &part_level,
+                     ObRawExpr *&part_expr,
+                     ObRawExpr *&subpart_expr);
   void set_nonrecursive_plan_for_fake_cte(ObSelectLogPlan *plan) { nonrecursive_plan_for_fake_cte_ = plan; }
   ObSelectLogPlan *get_nonrecursive_plan_for_fake_cte() { return nonrecursive_plan_for_fake_cte_; }
 
@@ -1704,12 +1709,6 @@ protected:
 
   int get_cache_calc_part_id_expr(int64_t table_id, int64_t ref_table_id,
       CalcPartIdType calc_type, ObRawExpr* &expr);
-
-  int get_part_exprs(uint64_t table_id,
-                    uint64_t ref_table_id,
-                    share::schema::ObPartitionLevel &part_level,
-                    ObRawExpr *&part_expr,
-                    ObRawExpr *&subpart_expr);
 
   int create_hash_sortkey(const int64_t part_cnt,
                           const common::ObIArray<OrderItem> &order_keys,

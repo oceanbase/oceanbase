@@ -198,6 +198,8 @@ public:
   int set_tablet_attr(const ObTabletAttr &attr);
   bool is_old_version_chain_empty() const { return OB_ISNULL(old_version_chain_); }
   bool is_attr_valid() const { return attr_.is_valid(); }
+  int64_t get_auto_part_size() const;
+  void set_auto_part_size(const int64_t auto_part_size);
 private:
   int scan_all_tablets_on_chain(const ObFunction<int(ObTablet &)> &op);// must be called under t3m bucket lock's protection
   int wash_obj();
@@ -221,7 +223,8 @@ private:
   mds::ObMdsTableHandler mds_table_handler_;// 48B
   ObTablet *old_version_chain_; // 8B
   ObTabletAttr attr_; // 32B // protected by rw lock of tablet_map_
-  DISALLOW_COPY_AND_ASSIGN(ObTabletPointer); // 352B
+  int64_t auto_part_size_; // 8B
+  DISALLOW_COPY_AND_ASSIGN(ObTabletPointer); // 360B
 };
 
 struct ObTabletResidentInfo final

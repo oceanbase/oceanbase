@@ -485,6 +485,33 @@ int ObComplementDataDag::init(const ObDDLBuildSingleReplicaRequestArg &arg)
   return ret;
 }
 
+int ObComplementDataDag::calc_total_row_count()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("has not been inited ", K(ret));
+  } else if (OB_UNLIKELY(!param_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(param_));
+  } else if (context_.physical_row_count_ != 0) {
+    ret =  OB_INIT_TWICE;
+    LOG_WARN("has calculated the row_count", K(ret), K(context_.physical_row_count_));
+  } else if (param_.orig_tenant_id_ != param_.dest_tenant_id_) {
+    // FIXME(YIREN), How to calc the row count of the source tablet for restore table.
+    // RPC?
+  } else if (OB_FAIL(ObDDLUtil::get_tablet_physical_row_cnt(
+                                  param_.orig_ls_id_,
+                                  param_.orig_tablet_id_,
+                                  true, // calc_sstable = true
+                                  true, // calc_memtable = true
+                                  context_.physical_row_count_))) {
+    LOG_WARN("failed to calc row count", K(ret), K(param_), K(context_));
+  }
+  return ret;
+}
+
 int ObComplementDataDag::create_first_task()
 {
   int ret = OB_SUCCESS;
@@ -633,8 +660,8 @@ int ObComplementDataDag::report_replica_build_status()
     arg.dest_schema_version_ = param_.dest_schema_version_;
     arg.task_id_ = param_.task_id_;
     arg.execution_id_ = param_.execution_id_;
-    arg.row_scanned_ = context_.row_scanned_;
     arg.row_inserted_ = context_.row_inserted_;
+    arg.physical_row_count_ = context_.physical_row_count_;
     arg.server_addr_ = GCTX.self_addr();
     FLOG_INFO("send replica build status response to RS", K(ret), K(context_), K(arg));
     if (OB_FAIL(ret)) {
@@ -766,6 +793,8 @@ int ObComplementPrepareTask::process()
   } else if (FALSE_IT(dag = static_cast<ObComplementDataDag *>(tmp_dag))) {
   } else if (OB_FAIL(dag->prepare_context())) {
     LOG_WARN("prepare complement context failed", K(ret));
+  } else if (OB_FAIL(dag->calc_total_row_count())) { // only calc row count once time for a task
+    LOG_WARN("failed to calc task row count", K(ret));
   } else if (context_->is_major_sstable_exist_) {
     FLOG_INFO("major sstable exists, all task should finish", K(ret), K(*param_));
   } else if (OB_FAIL(context_->write_start_log(*param_))) {
@@ -1092,8 +1121,7 @@ int ObComplementWriteTask::do_local_scan()
       LOG_WARN("ddl sim failure", K(ret), KPC(param_));
     } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_read_tables(param_->orig_tablet_id_,
         ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US,
-        param_->snapshot_version_, param_->snapshot_version_,
-        iterator, allow_not_ready))) {
+        param_->snapshot_version_, param_->snapshot_version_, iterator, allow_not_ready, false/*need_split_src_table*/, false/*need_split_dst_table*/))) {
       if (OB_REPLICA_NOT_READABLE == ret) {
         ret = OB_EAGAIN;
       } else {

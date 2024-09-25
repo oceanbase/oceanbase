@@ -380,6 +380,7 @@ struct ObWholeDataStoreDesc
     const bool need_submit_io = true);
   int gen_index_store_desc(const ObDataStoreDesc &data_desc);
   int assign(const ObDataStoreDesc &desc);
+  int assign(const ObWholeDataStoreDesc &desc);
   ObStaticDataStoreDesc &get_static_desc() { return static_desc_; }
   ObColDataStoreDesc &get_col_desc() {return col_desc_; }
   ObDataStoreDesc &get_desc() { return desc_; }

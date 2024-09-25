@@ -51,6 +51,7 @@ class ObIMicroBlockRowScanner;
 namespace sql
 {
 class ObRawExpr;
+class ObPseudoColumnRawExpr;
 class ObOpRawExpr;
 class ObExprOperatorCtx;
 class ObStaticEngineCG;

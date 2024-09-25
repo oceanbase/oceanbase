@@ -2430,14 +2430,16 @@ class ObExecParamRawExpr : public ObConstRawExpr
 public:
   ObExecParamRawExpr() :
     ObConstRawExpr(),
-    ref_same_dblink_(false)
+    ref_same_dblink_(false),
+    eval_by_storage_(false)
   {
     set_expr_class(ObIRawExpr::EXPR_EXEC_PARAM);
   }
 
   ObExecParamRawExpr(common::ObIAllocator &alloc)
     : ObConstRawExpr(alloc),
-      ref_same_dblink_(false)
+      ref_same_dblink_(false),
+      eval_by_storage_(false)
   {
     set_expr_class(ObIRawExpr::EXPR_EXEC_PARAM);
   }
@@ -2458,6 +2460,8 @@ public:
   bool is_onetime() const { return is_onetime_; }
   bool is_ref_same_dblink() const { return ref_same_dblink_; }
   void set_ref_same_dblink(bool ref_same_dblink) { ref_same_dblink_ = ref_same_dblink; }
+  bool is_eval_by_storage() const { return eval_by_storage_; }
+  void set_eval_by_storage(bool eval_by_storage) { eval_by_storage_ = eval_by_storage; }
   int assign(const ObRawExpr &other) override;
   int inner_deep_copy(ObIRawExprCopier &copier) override;
   virtual int replace_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
@@ -2478,6 +2482,7 @@ private:
   ObRawExpr *outer_expr_;
   bool is_onetime_;
   bool ref_same_dblink_;
+  bool eval_by_storage_;
 };
 
 class ObQueryRefRawExpr : public ObRawExpr

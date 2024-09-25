@@ -317,6 +317,11 @@ public:
       share::SCN &commit_scn,
       bool &is_remote_write,
       uint32_t &lock_tid);
+  template <typename T>
+  static int write_auto_split_log(const share::ObLSID &ls_id,
+                                  const ObDDLClogType &clog_type,
+                                  const logservice::ObReplayBarrierType &replay_barrier_type,
+                                  const T &log);
   int write_commit_log_with_retry(
       const bool allow_remote_write,
       const ObITable::TableKey &table_key,

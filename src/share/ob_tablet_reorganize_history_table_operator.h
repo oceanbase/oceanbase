@@ -118,13 +118,21 @@ public:
   static int insert(
       ObISQLClient &sql_proxy,
       const ObTabletReorganizeRecord &record);
+  static int batch_insert(
+      ObISQLClient &sql_proxy,
+      const uint64_t tenant_id,
+      const obrpc::ObPartitionSplitArg &split_arg,
+      const int64 start_time,
+      const int64 finish_time);
 
 private:
   static int inner_batch_insert_(
       ObISQLClient &sql_proxy,
       const uint64_t tenant_id,
       const ObTabletID &tablet_id,
-      const ObSArray<ObTabletID> &dest_tablet_ids);
+      const ObSArray<ObTabletID> &dest_tablet_ids,
+      const int64 start_time,
+      const int64 finish_time);
 }; // class ObTabletReorganizeHistoryTableOperator
 
 } // namespace share

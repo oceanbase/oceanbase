@@ -605,6 +605,7 @@ public:
   static int all_import_table_job_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_import_table_task_schema(share::schema::ObTableSchema &table_schema);
   static int all_import_table_task_history_schema(share::schema::ObTableSchema &table_schema);
+  static int all_tablet_reorganize_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_storage_ha_error_diagnose_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_storage_ha_perf_diagnose_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_clone_job_schema(share::schema::ObTableSchema &table_schema);
@@ -1092,6 +1093,7 @@ public:
   static int all_virtual_user_proxy_info_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_user_proxy_role_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_user_proxy_role_info_history_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_tablet_reorganize_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_res_mgr_directive_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_service_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tenant_resource_limit_schema(share::schema::ObTableSchema &table_schema);
@@ -2634,6 +2636,7 @@ public:
   static int all_import_table_job_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_import_table_task_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_import_table_task_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_tablet_reorganize_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_storage_ha_error_diagnose_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_storage_ha_perf_diagnose_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_clone_job_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
@@ -2941,6 +2944,7 @@ public:
   static int all_import_table_job_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_import_table_task_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_import_table_task_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_tablet_reorganize_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_storage_ha_error_diagnose_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_storage_ha_perf_diagnose_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_clone_job_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
@@ -3162,6 +3166,7 @@ public:
   static int all_tenant_snapshot_idx_tenant_snapshot_name_schema(share::schema::ObTableSchema &table_schema);
   static int all_dbms_lock_allocated_idx_dbms_lock_allocated_lockhandle_schema(share::schema::ObTableSchema &table_schema);
   static int all_dbms_lock_allocated_idx_dbms_lock_allocated_expiration_schema(share::schema::ObTableSchema &table_schema);
+  static int all_tablet_reorganize_history_idx_tablet_his_table_id_src_schema(share::schema::ObTableSchema &table_schema);
   static int all_kv_ttl_task_idx_kv_ttl_task_table_id_schema(share::schema::ObTableSchema &table_schema);
   static int all_kv_ttl_task_history_idx_kv_ttl_task_history_upd_time_schema(share::schema::ObTableSchema &table_schema);
   static int all_mview_refresh_run_stats_idx_mview_refresh_run_stats_num_mvs_current_schema(share::schema::ObTableSchema &table_schema);
@@ -3173,6 +3178,7 @@ public:
   static int all_user_proxy_info_idx_user_proxy_info_proxy_user_id_schema(share::schema::ObTableSchema &table_schema);
   static int all_user_proxy_info_history_idx_user_proxy_info_proxy_user_id_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_user_proxy_role_info_history_idx_user_proxy_role_info_proxy_user_id_history_schema(share::schema::ObTableSchema &table_schema);
+  static int all_tablet_reorganize_history_idx_tablet_his_table_id_dest_schema(share::schema::ObTableSchema &table_schema);
   static int all_scheduler_job_run_detail_v2_idx_scheduler_job_run_detail_v2_time_schema(share::schema::ObTableSchema &table_schema);
   static int all_scheduler_job_run_detail_v2_idx_scheduler_job_run_detail_v2_job_class_time_schema(share::schema::ObTableSchema &table_schema);
 
@@ -3467,6 +3473,7 @@ const schema_create_func sys_table_schema_creators [] = {
   ObInnerTableSchema::all_import_table_job_history_schema,
   ObInnerTableSchema::all_import_table_task_schema,
   ObInnerTableSchema::all_import_table_task_history_schema,
+  ObInnerTableSchema::all_tablet_reorganize_history_schema,
   ObInnerTableSchema::all_storage_ha_error_diagnose_history_schema,
   ObInnerTableSchema::all_storage_ha_perf_diagnose_history_schema,
   ObInnerTableSchema::all_clone_job_schema,
@@ -3957,6 +3964,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_user_proxy_info_history_schema,
   ObInnerTableSchema::all_virtual_user_proxy_role_info_schema,
   ObInnerTableSchema::all_virtual_user_proxy_role_info_history_schema,
+  ObInnerTableSchema::all_virtual_tablet_reorganize_history_schema,
   ObInnerTableSchema::all_virtual_res_mgr_directive_schema,
   ObInnerTableSchema::all_virtual_service_schema,
   ObInnerTableSchema::all_virtual_tenant_resource_limit_schema,
@@ -5422,6 +5430,7 @@ const schema_create_func sys_index_table_schema_creators [] = {
   ObInnerTableSchema::all_tenant_snapshot_idx_tenant_snapshot_name_schema,
   ObInnerTableSchema::all_dbms_lock_allocated_idx_dbms_lock_allocated_lockhandle_schema,
   ObInnerTableSchema::all_dbms_lock_allocated_idx_dbms_lock_allocated_expiration_schema,
+  ObInnerTableSchema::all_tablet_reorganize_history_idx_tablet_his_table_id_src_schema,
   ObInnerTableSchema::all_kv_ttl_task_idx_kv_ttl_task_table_id_schema,
   ObInnerTableSchema::all_kv_ttl_task_history_idx_kv_ttl_task_history_upd_time_schema,
   ObInnerTableSchema::all_mview_refresh_run_stats_idx_mview_refresh_run_stats_num_mvs_current_schema,
@@ -5435,6 +5444,7 @@ const schema_create_func sys_index_table_schema_creators [] = {
   ObInnerTableSchema::all_user_proxy_role_info_history_idx_user_proxy_role_info_proxy_user_id_history_schema,
   ObInnerTableSchema::all_scheduler_job_run_detail_v2_idx_scheduler_job_run_detail_v2_time_schema,
   ObInnerTableSchema::all_scheduler_job_run_detail_v2_idx_scheduler_job_run_detail_v2_job_class_time_schema,
+  ObInnerTableSchema::all_tablet_reorganize_history_idx_tablet_his_table_id_dest_schema,
   NULL,};
 
 const schema_create_func information_schema_table_schema_creators[] = {
@@ -5699,6 +5709,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_IMPORT_TABLE_JOB_HISTORY_TID,
   OB_ALL_IMPORT_TABLE_TASK_TID,
   OB_ALL_IMPORT_TABLE_TASK_HISTORY_TID,
+  OB_ALL_TABLET_REORGANIZE_HISTORY_TID,
   OB_ALL_CLONE_JOB_TID,
   OB_ALL_CLONE_JOB_HISTORY_TID,
   OB_ALL_ROUTINE_PRIVILEGE_TID,
@@ -7194,6 +7205,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_TENANT_SNAPSHOT_IDX_TENANT_SNAPSHOT_NAME_TID,
   OB_ALL_DBMS_LOCK_ALLOCATED_IDX_DBMS_LOCK_ALLOCATED_LOCKHANDLE_TID,
   OB_ALL_DBMS_LOCK_ALLOCATED_IDX_DBMS_LOCK_ALLOCATED_EXPIRATION_TID,
+  OB_ALL_TABLET_REORGANIZE_HISTORY_IDX_TABLET_HIS_TABLE_ID_SRC_TID,
   OB_ALL_KV_TTL_TASK_IDX_KV_TTL_TASK_TABLE_ID_TID,
   OB_ALL_KV_TTL_TASK_HISTORY_IDX_KV_TTL_TASK_HISTORY_UPD_TIME_TID,
   OB_ALL_MVIEW_REFRESH_RUN_STATS_IDX_MVIEW_REFRESH_RUN_STATS_NUM_MVS_CURRENT_TID,
@@ -7207,6 +7219,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_IDX_USER_PROXY_ROLE_INFO_PROXY_USER_ID_HISTORY_TID,
   OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_IDX_SCHEDULER_JOB_RUN_DETAIL_V2_TIME_TID,
   OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_IDX_SCHEDULER_JOB_RUN_DETAIL_V2_JOB_CLASS_TIME_TID,
+  OB_ALL_TABLET_REORGANIZE_HISTORY_IDX_TABLET_HIS_TABLE_ID_DEST_TID,
   OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_DATA_TABLE_ID_REAL_AGENT_TID,
   OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_DB_TB_NAME_REAL_AGENT_TID,
   OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_TB_NAME_REAL_AGENT_TID,
@@ -7536,6 +7549,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_IMPORT_TABLE_JOB_HISTORY_AUX_LOB_META_TID,
   OB_ALL_IMPORT_TABLE_TASK_AUX_LOB_META_TID,
   OB_ALL_IMPORT_TABLE_TASK_HISTORY_AUX_LOB_META_TID,
+  OB_ALL_TABLET_REORGANIZE_HISTORY_AUX_LOB_META_TID,
   OB_ALL_CLONE_JOB_AUX_LOB_META_TID,
   OB_ALL_CLONE_JOB_HISTORY_AUX_LOB_META_TID,
   OB_ALL_ROUTINE_PRIVILEGE_AUX_LOB_META_TID,
@@ -7817,6 +7831,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_IMPORT_TABLE_JOB_HISTORY_AUX_LOB_PIECE_TID,
   OB_ALL_IMPORT_TABLE_TASK_AUX_LOB_PIECE_TID,
   OB_ALL_IMPORT_TABLE_TASK_HISTORY_AUX_LOB_PIECE_TID,
+  OB_ALL_TABLET_REORGANIZE_HISTORY_AUX_LOB_PIECE_TID,
   OB_ALL_CLONE_JOB_AUX_LOB_PIECE_TID,
   OB_ALL_CLONE_JOB_HISTORY_AUX_LOB_PIECE_TID,
   OB_ALL_ROUTINE_PRIVILEGE_AUX_LOB_PIECE_TID,
@@ -8426,6 +8441,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_IMPORT_TABLE_JOB_HISTORY_TNAME,
   OB_ALL_IMPORT_TABLE_TASK_TNAME,
   OB_ALL_IMPORT_TABLE_TASK_HISTORY_TNAME,
+  OB_ALL_TABLET_REORGANIZE_HISTORY_TNAME,
   OB_ALL_CLONE_JOB_TNAME,
   OB_ALL_CLONE_JOB_HISTORY_TNAME,
   OB_ALL_ROUTINE_PRIVILEGE_TNAME,
@@ -9921,6 +9937,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_TENANT_SNAPSHOT_IDX_TENANT_SNAPSHOT_NAME_TNAME,
   OB_ALL_DBMS_LOCK_ALLOCATED_IDX_DBMS_LOCK_ALLOCATED_LOCKHANDLE_TNAME,
   OB_ALL_DBMS_LOCK_ALLOCATED_IDX_DBMS_LOCK_ALLOCATED_EXPIRATION_TNAME,
+  OB_ALL_TABLET_REORGANIZE_HISTORY_IDX_TABLET_HIS_TABLE_ID_SRC_TNAME,
   OB_ALL_KV_TTL_TASK_IDX_KV_TTL_TASK_TABLE_ID_TNAME,
   OB_ALL_KV_TTL_TASK_HISTORY_IDX_KV_TTL_TASK_HISTORY_UPD_TIME_TNAME,
   OB_ALL_MVIEW_REFRESH_RUN_STATS_IDX_MVIEW_REFRESH_RUN_STATS_NUM_MVS_CURRENT_TNAME,
@@ -9934,6 +9951,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_IDX_USER_PROXY_ROLE_INFO_PROXY_USER_ID_HISTORY_TNAME,
   OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_IDX_SCHEDULER_JOB_RUN_DETAIL_V2_TIME_TNAME,
   OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_IDX_SCHEDULER_JOB_RUN_DETAIL_V2_JOB_CLASS_TIME_TNAME,
+  OB_ALL_TABLET_REORGANIZE_HISTORY_IDX_TABLET_HIS_TABLE_ID_DEST_TNAME,
   OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_DATA_TABLE_ID_REAL_AGENT_TNAME,
   OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_DB_TB_NAME_REAL_AGENT_TNAME,
   OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_TB_NAME_REAL_AGENT_TNAME,
@@ -10263,6 +10281,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_IMPORT_TABLE_JOB_HISTORY_AUX_LOB_META_TNAME,
   OB_ALL_IMPORT_TABLE_TASK_AUX_LOB_META_TNAME,
   OB_ALL_IMPORT_TABLE_TASK_HISTORY_AUX_LOB_META_TNAME,
+  OB_ALL_TABLET_REORGANIZE_HISTORY_AUX_LOB_META_TNAME,
   OB_ALL_CLONE_JOB_AUX_LOB_META_TNAME,
   OB_ALL_CLONE_JOB_HISTORY_AUX_LOB_META_TNAME,
   OB_ALL_ROUTINE_PRIVILEGE_AUX_LOB_META_TNAME,
@@ -10544,6 +10563,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_IMPORT_TABLE_JOB_HISTORY_AUX_LOB_PIECE_TNAME,
   OB_ALL_IMPORT_TABLE_TASK_AUX_LOB_PIECE_TNAME,
   OB_ALL_IMPORT_TABLE_TASK_HISTORY_AUX_LOB_PIECE_TNAME,
+  OB_ALL_TABLET_REORGANIZE_HISTORY_AUX_LOB_PIECE_TNAME,
   OB_ALL_CLONE_JOB_AUX_LOB_PIECE_TNAME,
   OB_ALL_CLONE_JOB_HISTORY_AUX_LOB_PIECE_TNAME,
   OB_ALL_ROUTINE_PRIVILEGE_AUX_LOB_PIECE_TNAME,
@@ -13324,6 +13344,14 @@ LOBMapping const lob_aux_table_mappings [] = {
   },
 
   {
+    OB_ALL_TABLET_REORGANIZE_HISTORY_TID,
+    OB_ALL_TABLET_REORGANIZE_HISTORY_AUX_LOB_META_TID,
+    OB_ALL_TABLET_REORGANIZE_HISTORY_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_tablet_reorganize_history_aux_lob_meta_schema,
+    ObInnerTableSchema::all_tablet_reorganize_history_aux_lob_piece_schema
+  },
+
+  {
     OB_ALL_STORAGE_HA_ERROR_DIAGNOSE_HISTORY_TID,
     OB_ALL_STORAGE_HA_ERROR_DIAGNOSE_HISTORY_AUX_LOB_META_TID,
     OB_ALL_STORAGE_HA_ERROR_DIAGNOSE_HISTORY_AUX_LOB_PIECE_TID,
@@ -13600,12 +13628,12 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 }
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
-const int64_t OB_SYS_TABLE_COUNT = 304;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 851;
+const int64_t OB_SYS_TABLE_COUNT = 305;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 852;
 const int64_t OB_SYS_VIEW_COUNT = 965;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 2125;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 2127;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2128;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2130;
 
 } // end namespace share
 } // end namespace oceanbase

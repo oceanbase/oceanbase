@@ -339,7 +339,7 @@ private:
 
   // make sure clog checkpoint scn of the returned tablet is >= consistent_scn.
   int get_tablet_handle_(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObTabletID &tablet_id,
-      ObBackupTabletHandleRef *&tablet_ref);
+      ObBackupTabletHandleRef *&tablet_ref, bool &is_split_dst);
   int inner_get_tablet_handle_without_memtables_(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObTabletID &tablet_id,
       ObBackupTabletHandleRef *&tablet_ref);
   int get_consistent_scn_(share::SCN &consistent_scn) const;
@@ -371,6 +371,7 @@ private:
   bool is_same_type_(const storage::ObITable::TableKey &lhs, const storage::ObITable::TableKey &rhs);
   int add_tablet_item_(const common::ObTabletID &tablet_id, const bool has_ss_ddl, const storage::ObITable::TableKey &table_key);
   int remove_duplicates_(common::ObIArray<ObBackupProviderItem> &array);
+  int check_tablet_status_(const storage::ObTabletHandle &tablet_handle, bool &is_normal, bool &is_split_dst);
   int get_tablet_status_(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, ObTabletStatus &status);
   int check_tx_data_can_explain_user_data_(const storage::ObTabletHandle &tablet_handle, bool &can_explain);
   int get_tenant_meta_index_turn_id_(int64_t &turn_id);

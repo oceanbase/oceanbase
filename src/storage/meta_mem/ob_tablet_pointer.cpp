@@ -53,10 +53,11 @@ ObTabletPointer::ObTabletPointer()
     mds_lock_(),
     mds_table_handler_(),
     old_version_chain_(nullptr),
-    attr_()
+    attr_(),
+    auto_part_size_(OB_INVALID_SIZE)
 {
 #if defined(__x86_64__) && !defined(ENABLE_OBJ_LEAK_CHECK)
-  static_assert(sizeof(ObTabletPointer) == 352, "The size of ObTabletPointer will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+  static_assert(sizeof(ObTabletPointer) == 360, "The size of ObTabletPointer will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
 #endif
 }
 
@@ -72,7 +73,9 @@ ObTabletPointer::ObTabletPointer(
     flying_(false),
     ddl_kv_mgr_lock_(),
     mds_table_handler_(),
-    old_version_chain_(nullptr)
+    old_version_chain_(nullptr),
+    attr_(),
+    auto_part_size_(OB_INVALID_SIZE)
 {
 }
 
@@ -95,6 +98,7 @@ void ObTabletPointer::reset()
   reset_obj();
   phy_addr_.reset();
   ls_handle_.reset();
+  auto_part_size_ = OB_INVALID_SIZE;
   flying_ = false;
 }
 
@@ -734,6 +738,16 @@ int ObTabletPointer::set_tablet_attr(const ObTabletAttr &attr)
     attr_ = attr;
   }
   return ret;
+}
+
+int64_t ObTabletPointer::get_auto_part_size() const
+{
+  return ATOMIC_LOAD(&auto_part_size_);
+}
+
+void ObTabletPointer::set_auto_part_size(const int64_t auto_part_size)
+{
+  ATOMIC_STORE(&auto_part_size_, auto_part_size);
 }
 
 int64_t ObITabletFilterOp::total_skip_cnt_ = 0;

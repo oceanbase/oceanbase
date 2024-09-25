@@ -267,7 +267,7 @@ int mvt_agg_result::transform_json_column(ObObj &json)
               default:
                 // ignore other type, do nothing
                 ignore_type = true;
-                break;;
+                break;
             }
             if (OB_SUCC(ret) && !ignore_type) {
               tile_value.value_ = value;

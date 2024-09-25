@@ -337,6 +337,7 @@ DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_RECOVER_RESTORE_TABLE_DDL, ObRpcRecoverRes
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_PARALLEL_CREATE_TABLE, ObRpcParallelCreateTableP, parallel_create_table(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_ALTER_TABLE, ObRpcAlterTableP, alter_table(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_EXCHANGE_PARTITION, ObRpcExchangePartitionP, exchange_partition(arg_, result_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_SPLIT_GLOBAL_INDEX_TABLET, ObSplitGlobalIndexTabletTaskP, split_global_index_tablet(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_TABLE, ObRpcDropTableP, drop_table(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_RENAME_TABLE, ObRpcRenameTableP, rename_table(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_TRUNCATE_TABLE, ObRpcTruncateTableP, truncate_table(arg_, result_));
@@ -500,6 +501,8 @@ DEFINE_RS_RPC_PROCESSOR(obrpc::OB_REQUEST_TIME_ZONE_INFO, ObRpcRequestTimeZoneIn
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_RS_UPDATE_STAT_CACHE, ObRpcUpdateStatCacheP, update_stat_cache(arg_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_CALC_COLUMN_CHECKSUM_RESPONSE, ObRpcCalcColumnChecksumResponseP, calc_column_checksum_repsonse(arg_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_DDL_BUILD_SINGLE_REPLICA_RESPONSE, ObRpcDDLBuildSingleReplicaResponseP, build_ddl_single_replica_response(arg_));
+DEFINE_RS_RPC_PROCESSOR(obrpc::OB_CLEAN_SPLITTED_TABLET, ObRpcCleanSplittedTabletP, clean_splitted_tablet(arg_));
+DEFINE_RS_RPC_PROCESSOR(obrpc::OB_AUTO_SPLIT_TABLET_TASK_REQUEST, ObAutoSplitTabletTaskP, send_auto_split_tablet_task_request(arg_,result_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_CANCEL_DDL_TASK, ObRpcCancelDDLTaskP, cancel_ddl_task(arg_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_FORCE_CREATE_SYS_TABLE, ObForceCreateSysTableP, force_create_sys_table(arg_));
 class ObForceSetLocalityP : public ObRootServerRPCProcessor<obrpc::OB_FORCE_SET_LOCALITY>

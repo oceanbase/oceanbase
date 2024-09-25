@@ -183,6 +183,7 @@ public:
 public:
   uint64_t table_id_;
   common::ObTabletID tablet_id_;
+  share::ObLSID ls_id_;
   uint32_t cg_idx_;
   const ObITableReadInfo *read_info_;
   const ObITableReadInfo *rowkey_read_info_;

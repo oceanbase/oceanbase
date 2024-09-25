@@ -839,6 +839,9 @@ public:
       const ObTabletID &tablet_id,
       int64_t &part_id,
       int64_t &subpart_id) const;
+  int get_hidden_part_id_by_tablet_id(
+      const ObTabletID &tablet_id,
+      int64_t &part_id) const;
   /**
    * first_level_part_id represent the first level part id of subpartition,
    * otherwise its value is OB_INVALID_ID
@@ -1302,6 +1305,7 @@ public:
   int reorder_column(const ObString &column_name, const bool is_first, const ObString &prev_column_name, const ObString &next_column_name);
   int add_aux_vp_tid(const uint64_t aux_vp_tid);
   int add_partition_key(const common::ObString &column_name);
+  int add_partition_key(const uint64_t column_id);
   int add_subpartition_key(const common::ObString &column_name);
   int add_zone(const common::ObString &zone);
   int set_view_definition(const common::ObString &view_definition);
@@ -1317,6 +1321,10 @@ public:
   int delete_constraint(const common::ObString &constraint_name);
   // Copy all constraint information in src_schema
   int assign_constraint(const ObTableSchema &other);
+  int assign_partition_schema_without_auto_part_attr(const ObTableSchema &other);
+  int enable_auto_partition(const int64_t auto_part_size);
+  int detect_part_func_type(ObPartitionFuncType &part_func_type);
+  void forbid_auto_partition();
   void clear_constraint();
   int set_ttl_definition(const common::ObString &ttl_definition) { return deep_copy_str(ttl_definition, ttl_definition_); }
   int set_kv_attributes(const common::ObString &kv_attributes) { return deep_copy_str(kv_attributes, kv_attributes_); }
@@ -1646,8 +1654,17 @@ public:
 
   virtual int alloc_partition(const ObPartition *&partition);
   virtual int alloc_partition(const ObSubPartition *&subpartition);
+  int check_enable_split_partition(bool is_auto_partitioning) const;
+  int check_validity_for_auto_partition() const;
+  int check_can_do_manual_split_partition() const;
+  ObPartitionLevel get_target_part_level_for_auto_partitioned_table() const;
+  int get_part_func_expr_str(ObString &part_func_expr, common::ObIAllocator &allocator,
+                             const bool using_auto_partitioned_mode) const;
+  int get_presetting_partition_keys(common::ObIArray<uint64_t> &partition_key_ids) const;
+  int get_partition_keys_by_part_func_expr(common::ObString &part_func_expr_str, common::ObIArray<uint64_t> &partition_key_ids) const;
+  int extract_actual_index_rowkey_columns_name(ObIArray<ObString> &rowkey_columns_name) const;
+  int is_presetting_partition_key(const uint64_t partition_key_id, bool &is_presetting_partition_key) const;
   int check_primary_key_cover_partition_column();
-  int check_auto_partition_valid();
   int check_rowkey_cover_partition_keys(const common::ObPartitionKeyInfo &part_key);
   int check_index_table_cover_partition_keys(const common::ObPartitionKeyInfo &part_key) const;
   int check_create_index_on_hidden_primary_key(const ObTableSchema &index_table) const;
@@ -1657,7 +1674,21 @@ public:
 
   virtual int calc_part_func_expr_num(int64_t &part_func_expr_num) const;
   virtual int calc_subpart_func_expr_num(int64_t &subpart_func_expr_num) const;
-  int is_partition_key(uint64_t column_id, bool &result) const;
+
+  // checking the column is partition key or subpartition key.
+  // if the ignore_presetting_key == true, the following functions are equal to that of ObColumnSchemaV2,
+  // otherwise, they will check whether the column is presetting key.
+  int is_tbl_partition_key(const uint64_t column_id, bool &result,
+                           const bool ignore_presetting_key=true) const;
+  int is_tbl_partition_key(const share::schema::ObColumnSchemaV2 &orig_column_schema,
+                           bool& result,
+                           const bool ignore_presetting_key=true) const;
+  int is_partition_key(const share::schema::ObColumnSchemaV2 &orig_column_schema,
+                       bool& result,
+                       const bool ignore_presetting_key=true) const;
+  int is_subpartition_key(const share::schema::ObColumnSchemaV2 &orig_column_schema,
+                          bool& result,
+                          const bool ignore_presetting_key=true) const;
   inline void reset_simple_index_infos() { simple_index_infos_.reset(); }
   inline const common::ObIArray<ObAuxTableMetaInfo> &get_simple_index_infos() const
   {
@@ -1721,14 +1752,13 @@ public:
   int get_all_cg_type_column_group(const ObColumnGroupSchema *&column_group) const;
   int get_each_column_group(ObIArray<ObColumnGroupSchema*> &each_cgs) const;
   int is_partition_key_match_rowkey_prefix(bool &is_prefix) const;
+  int is_presetting_partition_key_match_rowkey_prefix(bool &is_prefix) const;
   int get_column_group_index(const share::schema::ObColumnParam &param,
                              const bool need_calculate_cg_idx,
                              int32_t &cg_idx) const;
   int is_column_group_exist(const common::ObString &cg_name, bool &exist) const;
 
   int get_all_column_ids(ObIArray<uint64_t> &column_ids) const;
-  int generate_partition_key_from_rowkey(const common::ObRowkey &rowkey,
-                                         common::ObRowkey &hign_bound_value) const;
   virtual int init_column_meta_array(
       common::ObIArray<blocksstable::ObSSTableColumnMeta> &meta_array) const override;
   int check_column_can_be_altered_online(const ObColumnSchemaV2 *src_schema,
@@ -1922,6 +1952,7 @@ private:
       const common::hash::ObHashMap<uint64_t, uint64_t> &column_id_map,
       ObRowkeyInfo &rowkey_info);
   int alter_view_column_internal(ObColumnSchemaV2 &column_schema);
+  int add_partition_key_(ObColumnSchemaV2 &column);
   int get_base_rowkey_column_group_index(int32_t &cg_idx) const;
   int calc_column_group_index_(const uint64_t column_id, int32_t &cg_idx) const;
 
@@ -2102,9 +2133,7 @@ inline bool ObSimpleTableSchemaV2::is_global_unique_index_table(const ObIndexTyp
 inline bool ObSimpleTableSchemaV2::is_local_unique_index_table() const
 {
   //
-  return INDEX_TYPE_UNIQUE_LOCAL == index_type_
-      || INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE == index_type_
-      || INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL == index_type_;
+  return share::schema::is_local_unique_index_table(index_type_);
 }
 
 inline bool ObSimpleTableSchemaV2::is_global_local_index_table() const

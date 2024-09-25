@@ -125,6 +125,12 @@ bool is_lock_mode_valid(const ObTableLockMode lock_mode)
 }
 
 static inline
+bool is_need_lock_tablet_mode(const ObTableLockMode &lock_mode)
+{
+  return SHARE == lock_mode || SHARE_ROW_EXCLUSIVE == lock_mode || EXCLUSIVE == lock_mode;
+}
+
+static inline
 int get_index_by_lock_mode(const ObTableLockMode &lock_mode)
 {
   int index = -1;
@@ -180,7 +186,7 @@ enum ObTableLockOpType : char
 {
   UNKNOWN_TYPE = 0,
   IN_TRANS_DML_LOCK = 1,  // will be unlock if we do callback
-  OUT_TRANS_LOCK = 2, // will be unlock use OUT_TRANS_UNLOCK
+  OUT_TRANS_LOCK = 2,     // will be unlock use OUT_TRANS_UNLOCK
   OUT_TRANS_UNLOCK = 3,
   IN_TRANS_COMMON_LOCK = 4,
   TABLET_SPLIT = 5,
@@ -437,6 +443,8 @@ int get_lock_id(const uint64_t table_id,
                 ObLockID &lock_id);
 int get_lock_id(const common::ObTabletID &tablet,
                 ObLockID &lock_id);
+int get_lock_id(const ObIArray<ObTabletID> &tablets,
+                ObIArray<ObLockID> &lock_ids);
 // typedef share::ObCommonID ObTableLockOwnerID;
 
 enum class ObLockOwnerType : unsigned char {

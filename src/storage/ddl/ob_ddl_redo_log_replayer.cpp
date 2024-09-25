@@ -133,6 +133,25 @@ int ObDDLRedoLogReplayer::replay_finish(const ObDDLFinishLog &log, const SCN &sc
 }
 #endif
 
+int ObDDLRedoLogReplayer::replay_split_start(const ObTabletSplitStartLog &log, const share::SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  ObSplitStartReplayExecutor replay_executor;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDDLRedoLogReplayer has not been inited", K(ret));
+  } else if (OB_FAIL(replay_executor.init(ls_, log, scn))) {
+    LOG_WARN("failed to init ddl commit log replay executor", K(ret));
+  } else if (OB_FAIL(replay_executor.execute(scn, ls_->get_ls_id(), log.basic_info_.source_tablet_id_))) {
+    if (OB_NO_NEED_UPDATE == ret || OB_TASK_EXPIRED == ret) {
+      ret = OB_SUCCESS;
+    } else if (OB_EAGAIN != ret) {
+      LOG_WARN("failed to replay split start log", K(ret), K(scn), K(log), K(ls_->get_ls_id()));
+    }
+  }
+  return ret;
+}
+
 int ObDDLRedoLogReplayer::replay_inc_start(const ObDDLIncStartLog &log, const share::SCN &scn)
 {
   int ret = OB_SUCCESS;
@@ -152,6 +171,46 @@ int ObDDLRedoLogReplayer::replay_inc_start(const ObDDLIncStartLog &log, const sh
     }
   }
 
+  return ret;
+}
+
+int ObDDLRedoLogReplayer::replay_split_finish(const ObTabletSplitFinishLog &log, const share::SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  ObSplitFinishReplayExecutor replay_executor;
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDDLRedoLogReplayer has not been inited", K(ret));
+  } else if (OB_FAIL(replay_executor.init(ls_, log, scn))) {
+    LOG_WARN("failed to init ddl commit log replay executor", K(ret));
+  } else if (OB_FAIL(replay_executor.execute(scn, ls_->get_ls_id(), log.basic_info_.source_tablet_id_))) {
+    if (OB_NO_NEED_UPDATE == ret || OB_TASK_EXPIRED == ret) {
+      ret = OB_SUCCESS;
+    } else if (OB_EAGAIN != ret) {
+      LOG_WARN("failed to replay split finish log", K(ret), K(scn), K(log), K(ls_->get_ls_id()));
+    }
+  }
+  return ret;
+}
+
+int ObDDLRedoLogReplayer::replay_tablet_freeze(const ObTabletFreezeLog &log, const share::SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  ObTabletFreezeReplayExecutor replay_executor;
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDDLRedoLogReplayer has not been inited", K(ret));
+  } else if (OB_FAIL(replay_executor.init(ls_, log, scn))) {
+    LOG_WARN("failed to init tablet freeze log replay executor", K(ret));
+  } else if (OB_FAIL(replay_executor.execute(scn, ls_->get_ls_id(), log.tablet_id_))) {
+    if (OB_NO_NEED_UPDATE == ret || OB_TASK_EXPIRED == ret) {
+      ret = OB_SUCCESS;
+    } else if (OB_EAGAIN != ret) {
+      LOG_WARN("failed to replay tablet freeze log", K(ret), K(scn), K(log), K(ls_->get_ls_id()));
+    }
+  }
   return ret;
 }
 

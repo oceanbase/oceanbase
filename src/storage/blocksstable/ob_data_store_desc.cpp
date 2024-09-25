@@ -870,6 +870,15 @@ int ObWholeDataStoreDesc::assign(const ObDataStoreDesc &desc)
   return ret;
 }
 
+int ObWholeDataStoreDesc::assign(const ObWholeDataStoreDesc &desc)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(assign(desc.desc_))) {
+    STORAGE_LOG(WARN, "failed to assign desc", KR(ret), K(desc));
+  }
+  return ret;
+}
+
 int ObWholeDataStoreDesc::init(
     const ObStaticDataStoreDesc &static_desc,
     const ObMergeSchema &merge_schema,

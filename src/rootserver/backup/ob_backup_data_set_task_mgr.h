@@ -14,6 +14,7 @@
 #define OCEANBASE_SHARE_OB_BACKUP_DATA_SET_TASK_MGR_H_
 
 #include "ob_backup_data_scheduler.h"
+#include "share/backup/ob_backup_tablet_reorganize_helper.h"
 
 namespace oceanbase
 {
@@ -99,6 +100,10 @@ private:
   int do_get_change_turn_tablets_(const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks, 
       const common::hash::ObHashSet<ObBackupSkipTabletAttr> &skip_tablets,
       ObIArray<storage::ObBackupDataTabletToLSInfo> &tablet_to_ls);
+  int decide_tablet_final_ls_(const share::ObBackupSkipTabletAttr &skip_tablet,
+                              common::hash::ObHashMap<share::ObLSID, common::ObArray<ObTabletReorganizeInfo>> &tablet_reorganize_ls_map,
+                              common::ObArray<common::ObTabletID> &descendent_list,
+                              share::ObLSID &final_ls_id);
   int deduplicate_array_(const common::ObIArray<common::ObTabletID> &tablet_ids,
       common::ObIArray<common::ObTabletID> &deduplicated_ids);
   int construct_cur_ls_set_(const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks, 

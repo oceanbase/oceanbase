@@ -2527,9 +2527,6 @@ int ObSyncIOChannel::do_sync_io(ObIORequest &req)
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported io mode", K(ret), K(req));
   }
-  if (OB_NOT_NULL(req.io_result_)) {
-    req.io_result_->time_log_.return_ts_ = ObTimeUtility::fast_current_time();
-  }
   if (OB_SUCC(ret)) {
     req.io_result_->complete_size_ = io_size;
     if (req.can_callback()) {

@@ -4729,7 +4729,7 @@ int ObJsonBin::get_value(int index, ObJsonBin &value) const
   uint64_t value_offset = 0;
   uint8_t value_type = 0;
   if (OB_FAIL(get_value_entry(index, value_offset, value_type))) {
-    LOG_WARN("get_value_entry fail", K(ret), K(index));;
+    LOG_WARN("get_value_entry fail", K(ret), K(index));
   } else if (OB_JSON_TYPE_IS_INLINE(value_type)) {
       offset += pos_;
   } else if (is_forward_v0(value_type)) {

@@ -60,7 +60,7 @@ class ObTabletCreateDeleteMdsUserData
 public:
   ObTabletCreateDeleteMdsUserData();
   ~ObTabletCreateDeleteMdsUserData() = default;
-  ObTabletCreateDeleteMdsUserData(const ObTabletStatus::Status &status, const ObTabletMdsUserDataType type);
+  ObTabletCreateDeleteMdsUserData(const ObTabletStatus::Status &status, const ObTabletMdsUserDataType &type, const int64_t create_commit_version);
   ObTabletCreateDeleteMdsUserData(const ObTabletCreateDeleteMdsUserData &) = delete;
   ObTabletCreateDeleteMdsUserData &operator=(const ObTabletCreateDeleteMdsUserData &) = delete;
 public:
@@ -79,7 +79,8 @@ public:
   TO_STRING_KV(K_(tablet_status), K_(transfer_scn),
       K_(transfer_ls_id), K_(data_type),
       K_(create_commit_scn), K_(create_commit_version),
-      K_(delete_commit_scn), K_(delete_commit_version), K_(transfer_out_commit_version));
+      K_(delete_commit_scn), K_(delete_commit_version),
+      K_(transfer_out_commit_version), K_(start_split_commit_version));
 private:
   void start_transfer_out_on_redo_(const share::SCN &redo_scn);
   void finish_transfer_in_on_redo_(const share::SCN &redo_scn);
@@ -89,6 +90,10 @@ private:
   void delete_tablet_on_commit_(const share::SCN &commit_version, const share::SCN &commit_scn);
   void finish_transfer_out_on_commit_(const share::SCN &commit_version, const share::SCN &commit_scn);
   void start_transfer_out_on_commit_(const share::SCN &commit_version);
+
+  void start_split_src_on_commit_(const share::SCN &commit_version);
+  void start_split_dst_on_commit_(const share::SCN &commit_version);
+  void finish_split_src_on_commit_(const share::SCN &commit_version, const share::SCN &commit_scn);
 public:
   ObTabletStatus tablet_status_;
   share::SCN transfer_scn_;
@@ -101,6 +106,7 @@ public:
   share::SCN delete_commit_scn_; // delete tx commit log scn
   int64_t delete_commit_version_; // delete tx commit trans version
   int64_t transfer_out_commit_version_; //transfer out commit trans version
+  int64_t start_split_commit_version_; // start split commit trans version TODO(lihongqin.lhq): master占位
 };
 
 inline bool ObTabletCreateDeleteMdsUserData::is_valid() const

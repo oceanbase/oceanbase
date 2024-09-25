@@ -411,6 +411,33 @@ int ObAdminParserLogEntry::parse_ddl_log_()
         }
         break;
       }
+      case ObDDLClogType::DDL_TABLET_SPLIT_START_LOG: {
+        ObTabletSplitStartLog log;
+        if (OB_FAIL(log.deserialize(buf_, buf_len_, pos_))) {
+          LOG_WARN("deserialize tablet split start log failed", K(ret), KP(buf_), K(buf_len_), K(pos_));
+        } else {
+          fprintf(stdout, " ###<ObTabletSplitStartLog>: %s\n", to_cstring(log));
+        }
+        break;
+      }
+      case ObDDLClogType::DDL_TABLET_SPLIT_FINISH_LOG: {
+        ObTabletSplitFinishLog log;
+        if (OB_FAIL(log.deserialize(buf_, buf_len_, pos_))) {
+          LOG_WARN("deserialize tablet split finish log failed", K(ret), KP(buf_), K(buf_len_), K(pos_));
+        } else {
+          fprintf(stdout, " ###<ObTabletSplitFinishLog>: %s\n", to_cstring(log));
+        }
+        break;
+      }
+      case ObDDLClogType::DDL_TABLET_FREEZE_LOG: {
+        ObTabletFreezeLog log;
+        if (OB_FAIL(log.deserialize(buf_, buf_len_, pos_))) {
+          LOG_WARN("deserialize tablet freeze log failed", K(ret), KP(buf_), K(buf_len_), K(pos_));
+        } else {
+          fprintf(stdout, " ###<ObTabletFreezeLog>: %s\n", to_cstring(log));
+        }
+        break;
+      }
       default: {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("Unknown log type", K(ret), K(type));

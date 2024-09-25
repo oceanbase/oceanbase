@@ -116,7 +116,7 @@ void ObITransCallback::after_append_cb(const bool is_replay)
   (void)after_append(is_replay);
 }
 
-int ObITransCallback::log_submitted_cb(const SCN scn, ObIMemtable *&last_mt)
+int ObITransCallback::log_submitted_cb(const SCN scn, storage::ObIMemtable *&last_mt)
 {
   int ret = OB_SUCCESS;
   if (need_submit_log_) {
@@ -799,7 +799,7 @@ int ObTransCallbackMgr::get_log_guard(const transaction::ObTxSEQ &write_seq,
     } else if (FALSE_IT(pending_too_large = list->pending_log_too_large(GCONF._private_buffer_size * 10))) {
     } else if (!check_list_has_min_epoch_(list_idx, my_epoch, pending_too_large, min_epoch, min_epoch_idx)) {
       ret = OB_EAGAIN;
-      ObIMemtable *to_log_memtable = list->get_log_cursor()->get_memtable();
+      storage::ObIMemtable *to_log_memtable = list->get_log_cursor()->get_memtable();
       if (TC_REACH_TIME_INTERVAL(1_s)) {
         TRANS_LOG(WARN, "has smaller epoch unlogged", KPC(this),
                   K(list_idx), K(write_seq), K(my_epoch), K(min_epoch), K(min_epoch_idx), KP(to_log_memtable));
@@ -1101,7 +1101,7 @@ inline bool check_dup_tablet_(ObITransCallback *callback_ptr)
 int ObTransCallbackMgr::log_submitted(const ObCallbackScopeArray &callbacks, share::SCN scn, int &submitted)
 {
   int ret = OB_SUCCESS;
-  ObIMemtable *last_mt = NULL;
+  storage::ObIMemtable *last_mt = NULL;
   ARRAY_FOREACH(callbacks, i) {
     ObCallbackScope scope = callbacks.at(i);
     if (!scope.is_empty()) {
@@ -1445,7 +1445,7 @@ void ObMvccRowCallback::after_append(const bool is_replay)
   // do nothing
 }
 
-int ObMvccRowCallback::log_submitted(const SCN scn, ObIMemtable *&last_mt)
+int ObMvccRowCallback::log_submitted(const SCN scn, storage::ObIMemtable *&last_mt)
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(memtable_)) {
@@ -1509,7 +1509,7 @@ int ObMvccRowCallback::del()
   }
 
   if (need_submit_log_) {
-    ObIMemtable *last_mt = NULL;
+    storage::ObIMemtable *last_mt = NULL;
     log_submitted(share::SCN(), last_mt);
   }
 
@@ -1531,12 +1531,12 @@ const common::ObTabletID &ObMvccRowCallback::get_tablet_id() const
   return memtable_->get_key().get_tablet_id();
 }
 
-bool ObMvccRowCallback::on_memtable(const ObIMemtable * const memtable)
+bool ObMvccRowCallback::on_memtable(const storage::ObIMemtable * const memtable)
 {
   return memtable == memtable_;
 }
 
-ObIMemtable *ObMvccRowCallback::get_memtable() const
+storage::ObIMemtable *ObMvccRowCallback::get_memtable() const
 {
   return memtable_;
 };

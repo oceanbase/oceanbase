@@ -39,6 +39,7 @@ public:
                   trans_(trans),
                   ls_id_array_(),
                   inited_(false) {}
+
   virtual ~ObTableCreator();
   int init(const bool need_tablet_cnt_check);
   int execute();

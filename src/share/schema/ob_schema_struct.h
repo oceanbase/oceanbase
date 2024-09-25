@@ -351,6 +351,8 @@ enum ObIndexType
   INDEX_TYPE_MAX = 30,
 };
 
+bool is_support_split_index_type(const ObIndexType index_type);
+
 // using type for index
 enum ObIndexUsingType
 {
@@ -800,6 +802,13 @@ inline bool index_has_tablet(const ObIndexType &index_type)
         || is_fts_index(index_type)
         || is_multivalue_index(index_type)
         || is_vec_index(index_type);
+}
+
+inline static bool is_local_unique_index_table(const ObIndexType index_type)
+{
+  return INDEX_TYPE_UNIQUE_LOCAL == index_type
+      || INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE == index_type
+      || INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL == index_type;
 }
 
 struct ObTenantTableId
@@ -2005,9 +2014,14 @@ public:
   { return share::schema::is_key_part(part_func_type_); }
   inline bool is_list_part() const
   { return share::schema::is_list_part(part_func_type_); }
-  inline bool is_auto_range_part() const
+  inline bool is_valid_split_part_type() const
   {
-    return auto_part_ && is_range_part();
+    return is_range_part() && !is_interval_part();
+  }
+  inline bool is_valid_split_part_type(const ObPartitionFuncType part_func_type) const
+  {
+    return share::schema::is_range_part(part_func_type) &&
+           !share::schema::is_interval_part(part_func_type);
   }
 
   //set methods
@@ -2030,6 +2044,9 @@ public:
   inline ObPartitionFuncType get_sub_part_func_type() const { return part_func_type_; }
   const common::ObString &get_intervel_start_str() const { return interval_start_; }
   const common::ObString &get_part_intervel_str() const { return part_interval_; }
+  inline bool get_auto_part() const {
+    return auto_part_;
+  }
   inline int64_t get_auto_part_size() const {
     return auto_part_size_;
   }
@@ -2040,8 +2057,22 @@ public:
   int64_t assign(const ObPartitionOption & src_part);
   int64_t get_convert_size() const ;
   virtual bool is_valid() const;
+  inline bool is_valid_auto_part_size() const {
+    return auto_part_size_ >= MIN_AUTO_PART_SIZE;
+  }
+  void assign_auto_partition_attr(const ObPartitionOption & src);
+  int enable_auto_partition(const int64_t auto_part_size);
+  int enable_auto_partition(const int64_t auto_part_size, const ObPartitionFuncType part_func_type);
+  void forbid_auto_partition(const bool is_partitioned_table);
+  bool is_enable_auto_part() const { return auto_part_ &&  auto_part_size_ >= MIN_AUTO_PART_SIZE; }
   TO_STRING_KV(K_(part_func_type), K_(part_func_expr), K_(part_num),
                K_(auto_part), K_(auto_part_size));
+private:
+  int enable_auto_partition_(const int64_t auto_part_size);
+
+public:
+  static const int64_t MIN_AUTO_PART_SIZE = 128LL * 1024 * 1024; // 128M
+
 private:
   ObPartitionFuncType part_func_type_;
   common::ObString part_func_expr_;
@@ -2049,8 +2080,8 @@ private:
   int64_t part_num_;
   common::ObString interval_start_; //interval start value
   common::ObString part_interval_; // interval partition step
-  bool auto_part_;// Whether it is automatic partition
-  int64_t auto_part_size_;// Automatic partition size, 0 is auto
+  bool auto_part_;// Whether it is auto-partitioned table
+  int64_t auto_part_size_;// Automatic partition size
 };
 
 // For any questions about the role of this structure, please contact @jiage
@@ -2225,6 +2256,13 @@ public:
   int64_t get_tablespace_id() const
   { return tablespace_id_; }
 
+  void set_split_source_tablet_id(const ObTabletID split_source_tablet_id)
+  { split_source_tablet_id_ = split_source_tablet_id; }
+  void set_split_source_tablet_id(const uint64_t split_source_tablet_id)
+  { split_source_tablet_id_ = split_source_tablet_id; }
+  ObTabletID get_split_source_tablet_id() const
+  { return split_source_tablet_id_; }
+
   int assign(const ObBasePartition & src_part);
 
   // This interface is not strictly semantically less than, please note
@@ -2267,6 +2305,8 @@ public:
   virtual bool is_normal_partition() const = 0;
   virtual bool is_hidden_partition() const { return share::schema::is_hidden_partition(partition_type_); }
 
+  bool is_in_splitting() const { return partition_type_ == PARTITION_TYPE_SPLIT_SOURCE; }
+
   // convert character set.
   int convert_character_for_range_columns_part(const ObCollationType &to_collation);
   int convert_character_for_list_columns_part(const ObCollationType &to_collation);
@@ -2277,7 +2317,7 @@ public:
   { return external_location_; }
   VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(table_id), K_(part_id), K_(name), K_(low_bound_val),
                        K_(high_bound_val), K_(list_row_values), K_(part_idx),
-                       K_(is_empty_partition_name), K_(tablet_id), K_(external_location));
+                       K_(is_empty_partition_name), K_(tablet_id), K_(external_location), K_(split_source_tablet_id));
 protected:
   uint64_t tenant_id_;
   uint64_t table_id_;
@@ -2305,7 +2345,9 @@ protected:
   PartitionType partition_type_;
   common::ObRowkey low_bound_val_;
   ObTabletID tablet_id_;
+
   common::ObString external_location_;
+  // Attention:
   // split_source_tablet_id_ will not be persisted in inner_table.
   // it is only used when attempting to split partition.
   ObTabletID split_source_tablet_id_;
@@ -2565,8 +2607,9 @@ public:
   inline bool is_list_part() const { return part_option_.is_list_part(); }
   inline bool is_list_subpart() const { return sub_part_option_.is_list_part(); }
 
-  inline bool is_auto_partitioned_table() const { return part_option_.is_auto_range_part();}
-
+  inline bool is_valid_split_part_type() const { return part_option_.is_valid_split_part_type();}
+  inline bool is_auto_partitioned_table() const { return part_option_.get_auto_part() &&
+                                                         part_option_.is_valid_auto_part_size(); }
   inline const ObPartitionOption &get_part_option() const { return part_option_; }
   inline ObPartitionOption &get_part_option() { return part_option_; }
   inline const ObPartitionOption &get_sub_part_option() const { return sub_part_option_; }
@@ -2640,6 +2683,7 @@ public:
   /* ----------------------------------*/
   inline void set_partition_schema_version(const int64_t schema_version) { partition_schema_version_ = schema_version; }
   inline int64_t get_partition_schema_version() const { return partition_schema_version_; }
+
   virtual bool is_hidden_schema() const = 0;
   virtual bool is_normal_schema() const = 0;
 
@@ -2653,6 +2697,11 @@ public:
     partition_array_capacity_ = 0;
     partition_num_ = 0;
     partition_array_ = NULL;
+  }
+  void reset_hidden_partition_array() {
+    hidden_partition_array_capacity_ = 0;
+    hidden_partition_num_ = 0;
+    hidden_partition_array_ = NULL;
   }
 
   int64_t get_hidden_partition_num() const { return hidden_partition_num_; }
@@ -2671,9 +2720,10 @@ public:
 
   inline void set_partition_status(const ObPartitionStatus partition_status) { partition_status_ = partition_status; }
   inline ObPartitionStatus get_partition_status() const { return partition_status_; }
-  bool is_in_splitting() const { return  partition_status_ == PARTITION_STATUS_LOGICAL_SPLITTING
-                                         || partition_status_ == PARTITION_STATUS_PHYSICAL_SPLITTING; }
+  bool is_in_splitting() const;
+  // deprecated
   bool is_in_logical_split () const { return partition_status_ == PARTITION_STATUS_LOGICAL_SPLITTING; }
+  // deprecated
   bool is_in_physical_split() const { return partition_status_ == PARTITION_STATUS_PHYSICAL_SPLITTING; }
   //other methods
   virtual void reset();
@@ -2777,7 +2827,7 @@ protected:
   /* template subpartition define end*/
   // Record the split schema, initialized to 0, not cleared after splitting, the bottom layer needs to be used
   int64_t partition_schema_version_;
-  ObPartitionStatus partition_status_;
+  ObPartitionStatus partition_status_;  // deprecated
   /*
    * Here is the different values for sub_part_template_flags_:
    * 1) 0: sub_part_template is not defined.

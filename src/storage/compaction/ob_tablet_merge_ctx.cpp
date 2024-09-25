@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 #include "storage/compaction/ob_tablet_merge_ctx.h"
+#include "share/schema/ob_tenant_schema_service.h"
 #include "storage/blocksstable/index_block/ob_index_block_builder.h"
 #include "storage/ob_storage_schema.h"
 #include "storage/tablet/ob_tablet_create_delete_helper.h"

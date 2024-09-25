@@ -154,6 +154,30 @@ private:
   ObLobMetaScanResult result_;
 };
 
+class ObLobSimplePersistInsertIter : public ObLobPersistWriteIter
+{
+public:
+  ObLobSimplePersistInsertIter(ObLobAccessParam *param, ObIAllocator *allocator, ObArray<ObLobMetaInfo> &lob_meta_list):
+    allocator_(allocator),
+    seq_id_(allocator),
+    lob_meta_list_(lob_meta_list),
+    pos_(0)
+  {
+    param_ = param;
+  }
+
+  int init();
+
+  virtual int get_next_row(blocksstable::ObDatumRow *&row);
+  virtual void reset() {}
+
+private:
+  ObIAllocator *allocator_;
+  ObLobSeqId seq_id_;
+  ObArray<ObLobMetaInfo> &lob_meta_list_;
+  int pos_;
+  blocksstable::ObDatumRow new_row_;
+};
 
 } // storage
 } // oceanbase

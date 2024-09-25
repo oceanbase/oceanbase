@@ -929,7 +929,7 @@ int ObBackupRetryCtx::check_and_sort_retry_list_(
   }
   if (OB_SUCC(ret)) {
     BackupRetryCmp cmp;
-    std::sort(retry_list.begin(), retry_list.end(), cmp);
+    lib::ob_sort(retry_list.begin(), retry_list.end(), cmp);
   }
   return ret;
 }
@@ -1171,7 +1171,7 @@ int ObBackupRetryCtx::inner_recover_need_reuse_macro_block_(
     }
   }
   if (OB_SUCC(ret)) {
-    std::sort(reused_pair_list_.begin(), reused_pair_list_.end());
+    lib::ob_sort(reused_pair_list_.begin(), reused_pair_list_.end());
   }
   return ret;
 }
@@ -1299,7 +1299,7 @@ int ObLSBackupCtx::open(
     } else {
       ObBackupMacroBlockIdPairComparator compare;
       // TODO(yanfeng): consider the list size in extreme conditions
-      std::sort(backup_retry_ctx_.reused_pair_list_.begin(),
+      lib::ob_sort(backup_retry_ctx_.reused_pair_list_.begin(),
                 backup_retry_ctx_.reused_pair_list_.end(),
                 compare);
       is_inited_ = true;
@@ -1567,8 +1567,7 @@ int ObLSBackupCtx::get_all_tablet_id_list_(
 }
 
 int ObLSBackupCtx::seperate_tablet_id_list_(const common::ObIArray<common::ObTabletID> &tablet_id_list,
-    common::ObIArray<common::ObTabletID> &sys_tablet_id_list,
-    common::ObIArray<common::ObTabletID> &data_tablet_id_list)
+    common::ObArray<common::ObTabletID> &sys_tablet_id_list, common::ObArray<common::ObTabletID> &data_tablet_id_list)
 {
   int ret = OB_SUCCESS;
   sys_tablet_id_list.reset();
@@ -1584,6 +1583,10 @@ int ObLSBackupCtx::seperate_tablet_id_list_(const common::ObIArray<common::ObTab
         LOG_WARN("failed to push back", K(ret), K(tablet_id));
       }
     }
+  }
+  if (OB_SUCC(ret)) {
+    lib::ob_sort(sys_tablet_id_list.begin(), sys_tablet_id_list.end());
+    lib::ob_sort(data_tablet_id_list.begin(), data_tablet_id_list.end());
   }
   return ret;
 }

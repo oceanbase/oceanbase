@@ -175,6 +175,8 @@ TABLE_COLLATION	varchar(32)	NO
 CHECKSUM	bigint(0) unsigned	NO			
 CREATE_OPTIONS	varchar(255)	NO			
 TABLE_COMMENT	text	NO			
+AUTO_SPLIT	varchar(16)	NO			
+AUTO_SPLIT_TABLET_SIZE	bigint(20) unsigned	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.TABLES limit 1);
 cnt
 1
@@ -2889,6 +2891,8 @@ HAS_SENSITIVE_COLUMN	varchar(3)	NO
 ADMIT_NULL	varchar(3)	NO			
 DATA_LINK_DML_ENABLED	varchar(3)	NO			
 LOGICAL_REPLICATION	varchar(8)	NO			
+AUTO_SPLIT	varchar(16)	NO			
+AUTO_SPLIT_TABLET_SIZE	bigint(20)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_TABLES limit 1);
 cnt
 1

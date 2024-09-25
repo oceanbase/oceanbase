@@ -81,6 +81,8 @@ DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_DDL_KV_MERGE, ObDagPrio::DAG_PRIO_DDL_HIGH, 
     true, 3, {"ls_id", "tablet_id", "rec_scn"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_DDL_DEL_LOB_META, ObDagPrio::DAG_PRIO_DDL, ObSysTaskType::DDL_TASK, "DDL_DEL_LOB_META", "DROP_VEC_INDEX",
     true, 7, {"ls_id", "source_tablet_id", "dest_tablet_id", "data_table_id", "target_table_id", "schema_version", "snapshot_version"})
+DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_TABLET_SPLIT, ObDagPrio::DAG_PRIO_DDL, ObSysTaskType::DDL_TABLET_SPLIT, "DDL_TABLET_SPLIT", "DDL",
+    true, 2, {"ls_id", "source_tablet_id"})
 
 // DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_MIGRATE, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::MIGRATION_TASK, "MIGRATE", "MIGRATE")
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_INITIAL_COMPLETE_MIGRATION, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::MIGRATION_TASK, "INITIAL_COMPLETE_MIGRATION", "MIGRATE",

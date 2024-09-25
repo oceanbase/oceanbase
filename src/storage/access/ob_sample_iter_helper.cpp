@@ -29,7 +29,7 @@ int ObGetSampleIterHelper::check_scan_range_count(bool &res, ObIArray<ObDatumRan
     if (!get_table_param_.tablet_iter_.table_iter()->is_valid() &&
         OB_FAIL(get_table_param_.tablet_iter_.refresh_read_tables_from_tablet(
             main_table_ctx_.store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx(),
-            false /*allow_not_ready*/))) {
+            false/*allow_not_ready*/, false/*major_sstable_only*/, true/*need_split_src_table*/, false/*need_split_dst_table*/))) {
       STORAGE_LOG(WARN, "Fail to read tables", K(ret));
     } else if (OB_FAIL(can_retire_to_memtable_row_sample_(retire_to_memtable_row_sample, sample_ranges))) {
       STORAGE_LOG(WARN, "Fail to try to retire to row sample", K(ret));

@@ -2756,7 +2756,7 @@ int ObStorageHATabletBuilderUtil::inner_update_tablet_table_store_with_minor_(
 
     if (OB_FAIL(update_table_store_param.tables_handle_.assign(tables_handle))) {
       LOG_WARN("failed to assign tables handle", K(ret), K(tables_handle));
-    } else if (OB_FAIL(ls->build_ha_tablet_new_table_store(tablet_id, update_table_store_param))) {
+    } else if (OB_FAIL(ls->build_tablet_with_batch_tables(tablet_id, update_table_store_param))) {
       LOG_WARN("failed to build ha tablet new table store", K(ret), K(tablet_id), KPC(tablet), KPC(src_tablet_meta), K(update_table_store_param));
     }
   }

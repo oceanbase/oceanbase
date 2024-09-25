@@ -166,6 +166,7 @@ private:
   int prepare_piece_table_param(
       const ObLobAccessParam &param,
       ObTableScanParam &scan_param);
+  int fetch_lob_id_for_split_src(const ObLobAccessParam& param, const ObTabletID &lob_tablet_id, uint64_t &lob_id);
   int prepare_lob_tablet_id(ObLobAccessParam& param);
   int set_dml_seq_no(ObLobAccessParam &param);
 

@@ -17,6 +17,7 @@
 #include "encoding/ob_micro_block_encoder.h"
 #include "lib/compress/ob_compressor.h"
 #include "lib/container/ob_array_wrap.h"
+#include "index_block/ob_index_block_row_struct.h"
 #include "index_block/ob_index_block_aggregator.h"
 #include "ob_block_manager.h"
 #include "ob_macro_block_checker.h"

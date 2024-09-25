@@ -1943,6 +1943,18 @@ DEF_TIME(_ha_rpc_timeout, OB_TENANT_PARAMETER, "0", "[0,120s]",
 DEF_BOOL(_enable_trace_tablet_leak, OB_TENANT_PARAMETER, "False",
         "enable t3m tablet leak checker. The default value is False",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
+DEF_BOOL(enable_auto_split, OB_TENANT_PARAMETER, "False",
+         "if the auto-partition clause is not used"
+         "this config judge whether to enable auto-partition for creating table.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(auto_split_tablet_size, OB_TENANT_PARAMETER, "128M", "[128M,)",
+        "when create an auto-partitioned table in \"create table\" syntax or "
+        "modify a table as an auto-partitioned table in \"alter table\" syntax,"
+        "if the splitting threshold of tablet size is not setted,"
+        "this config will be setted as the threshold of the table."
+        "Note that the modification of this config will not affect the created auto-partitioned table."
+        "Range: [128M, +∞)",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_inlist_rewrite_threshold, OB_TENANT_PARAMETER, "2147483647", "[1, 2147483647]"
         "specifies transform how much const params in IN list to values table",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -2153,6 +2165,10 @@ DEF_STR_WITH_CHECKER(sql_plan_management_mode, OB_TENANT_PARAMETER, "Disable",
                      "\"Disable\" represent disable spm (default value)."
                      "\"OnlineEvolve\" represent evolve plan online.",
                      ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+ERRSIM_DEF_TIME(errsim_delay_gc_interval, OB_CLUSTER_PARAMETER, "30m", "[0,)",
+        "delay gc interval in errsim mode"
+         "Range: [0, +∞)",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 // regexp engine
 DEF_STR_WITH_CHECKER(_regex_engine, OB_TENANT_PARAMETER, "ICU",
                      common::ObConfigRegexpEngineChecker,

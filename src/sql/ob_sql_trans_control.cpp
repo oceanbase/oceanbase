@@ -1586,9 +1586,9 @@ int ObSqlTransControl::lock_table(ObExecContext &exec_ctx,
     arg.timeout_us_ = lock_timeout_us;
     arg.is_from_sql_ = true;
 
-    OZ (lock_service->lock_table(*session->get_tx_desc(),
-                                tx_param,
-                                arg),
+    OZ (lock_service->lock(*session->get_tx_desc(),
+                           tx_param,
+                           arg),
         tx_param, table_id, lock_mode, lock_timeout_us);
   } else {
     ObLockPartitionRequest arg;

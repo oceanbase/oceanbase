@@ -22,6 +22,7 @@
 #include "rootserver/ob_root_service.h"
 #include "rootserver/ddl_task/ob_ddl_redefinition_task.h"
 #include "storage/tablelock/ob_table_lock_service.h"
+#include "storage/ob_partition_pre_split.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -152,6 +153,7 @@ int ObColumnRedefinitionTask::init(const ObDDLTaskRecord &task_record)
 
 // update sstable complement status for all leaders
 int ObColumnRedefinitionTask::update_complete_sstable_job_status(const common::ObTabletID &tablet_id,
+                                                                 const ObAddr &addr,
                                                                  const int64_t snapshot_version,
                                                                  const int64_t execution_id,
                                                                  const int ret_code,
@@ -167,14 +169,16 @@ int ObColumnRedefinitionTask::update_complete_sstable_job_status(const common::O
     // by pass, may be network delay
   } else if (snapshot_version != snapshot_version_) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("snapshot version not match", K(ret), K(snapshot_version), K(snapshot_version_));
+    LOG_WARN("snapshot version not match", K(ret), K(addr), K(snapshot_version), K(snapshot_version_));
   } else if (execution_id < execution_id_) {
-    LOG_INFO("receive a mismatch execution result, ignore", K(ret_code), K(execution_id), K(execution_id_));
-  } else if (OB_FAIL(replica_builder_.set_partition_task_status(tablet_id,
-                                                                ret_code,
-                                                                addition_info.row_scanned_,
-                                                                addition_info.row_inserted_))) {
-    LOG_WARN("fail to set partition task status", K(ret));
+    LOG_INFO("receive a mismatch execution result, ignore", K(addr), K(ret_code), K(execution_id), K(execution_id_));
+  } else if (OB_FAIL(replica_builder_.update_build_progress(tablet_id,
+                                                            addr,
+                                                            ret_code,
+                                                            addition_info.row_scanned_,
+                                                            addition_info.row_inserted_,
+                                                            addition_info.physical_row_count_))) {
+    LOG_WARN("fail to set update replica build progress", K(ret), K(addr));
   }
   return ret;
 }
@@ -227,10 +231,11 @@ int ObColumnRedefinitionTask::copy_table_indexes()
           }
           LOG_INFO("indexes schema are already built", K(index_ids));
         } else {
-          // if there is no indexes in new tables, we need to rebuild indexes in new table
           int64_t rpc_timeout = 0;
           int64_t all_tablet_count = 0;
-          if (OB_FAIL(get_orig_all_index_tablet_count(schema_guard, all_tablet_count))) {
+          if (OB_FAIL(generate_rebuild_index_arg_list(tenant_id_, object_id_, schema_guard, alter_table_arg_))) { // for pre split index
+            LOG_WARN("fail to generate rebuild index arg list", K(ret), K(tenant_id_), K(object_id_));
+          } else if (OB_FAIL(get_orig_all_index_tablet_count(schema_guard, all_tablet_count))) {
             LOG_WARN("get all tablet count failed", K(ret));
           } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(all_tablet_count, rpc_timeout))) {
             LOG_WARN("get ddl rpc timeout failed", K(ret));
@@ -721,17 +726,32 @@ int ObColumnRedefinitionTask::collect_longops_stat(ObLongopsValue &value)
       break;
     }
     case ObDDLTaskStatus::REDEFINITION: {
-      int64_t row_scanned = 0;
       int64_t row_inserted = 0;
-      if (OB_FAIL(replica_builder_.get_progress(row_scanned, row_inserted))) {
+      int64_t physical_row_count_ = 0;
+      double percent = 0.0;
+      bool initializing = false;
+      {
+        TCRLockGuard guard(lock_);
+        initializing = !is_sstable_complete_task_submitted_;
+      }
+      if (initializing) {
+        if (OB_FAIL(databuff_printf(stat_info_.message_,
+                                    MAX_LONG_OPS_MESSAGE_LENGTH,
+                                    pos,
+                                    "STATUS: REPLICA BUILD, PARALLELISM: %ld, INITIALIZING",
+                                    ObDDLUtil::get_real_parallelism(parallelism_, false/*is mv refresh*/)))) {
+          LOG_WARN("failed to print", K(ret));
+        }
+      } else if (OB_FAIL(replica_builder_.get_progress(row_inserted, physical_row_count_, percent))) {
         LOG_WARN("failed to gather redefinition stats", K(ret));
       } else if (OB_FAIL(databuff_printf(stat_info_.message_,
                                   MAX_LONG_OPS_MESSAGE_LENGTH,
                                   pos,
-                                  "STATUS: REPLICA BUILD, PARALLELISM: %ld, ROW_SCANNED: %ld, ROW_INSERTED: %ld",
+                                  "STATUS: REPLICA BUILD, PARALLELISM: %ld, ESTIMATED_TOTAL_ROWS: %ld, ROW_PROCESSED: %ld, PROGRESS: %0.2lf%%",
                                   ObDDLUtil::get_real_parallelism(parallelism_, false/*is mv refresh*/),
-                                  row_scanned,
-                                  row_inserted))) {
+                                  physical_row_count_,
+                                  row_inserted,
+                                  percent))) {
         LOG_WARN("failed to print", K(ret));
       }
       break;

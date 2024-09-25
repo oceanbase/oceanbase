@@ -1974,6 +1974,7 @@ int ObExecParamRawExpr::assign(const ObRawExpr &other)
       outer_expr_ = tmp.outer_expr_;
       is_onetime_ = tmp.is_onetime_;
       ref_same_dblink_ = tmp.ref_same_dblink_;
+      eval_by_storage_ = tmp.eval_by_storage_;
     }
   }
   return ret;
@@ -2041,7 +2042,11 @@ int ObExecParamRawExpr::get_name_internal(char *buf,
                                           ExplainType type) const
 {
   int ret = OB_SUCCESS;
-  if (EXPLAIN_DBLINK_STMT != type) {
+  if (eval_by_storage_) {
+    if (OB_FAIL(BUF_PRINTF("?"))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    }
+  } else if (EXPLAIN_DBLINK_STMT != type) {
     if (OB_FAIL(ObConstRawExpr::get_name_internal(buf, buf_len, pos, type))) {
       LOG_WARN("failed to print const raw expr", K(ret));
     }
@@ -2062,7 +2067,8 @@ int64_t ObExecParamRawExpr::to_string(char *buf, const int64_t buf_len) const
        N_EXPR_INFO, info_,
        N_VALUE, value_,
        K_(outer_expr),
-       K_(is_onetime));
+       K_(is_onetime),
+       K_(eval_by_storage));
   J_OBJ_END();
   return pos;
 }

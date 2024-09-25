@@ -17,6 +17,7 @@
 #include "lib/worker.h"
 #include "lib/container/ob_iarray.h"
 #include "storage/tx/ob_trans_define.h"
+#include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
 #include "storage/ob_storage_schema.h"
 
 namespace oceanbase
@@ -157,13 +158,15 @@ private:
   static int get_ls(
       const share::ObLSID &ls_id,
       ObLSHandle &ls_handle);
-  static int set_tablet_normal_status(
+  static int set_tablet_status(
       ObLSTabletService *ls_tablet_service,
       ObTabletHandle &tablet_handle,
       const bool for_replay,
       const share::SCN &scn,
       mds::BufferCtx &ctx,
-      const bool for_old_mds);
+      const bool for_old_mds,
+      const storage::ObTabletMdsUserDataType &create_type,
+      const int64_t create_commit_version);
   static void handle_ret_for_replay(int &ret);
   static int convert_schemas(obrpc::ObBatchCreateTabletArg &arg);
   static int check_and_get_create_tablet_schema_info(

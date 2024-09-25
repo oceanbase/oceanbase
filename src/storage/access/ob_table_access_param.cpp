@@ -17,6 +17,7 @@
 #include "storage/ob_relative_table.h"
 #include "storage/tablet/ob_tablet.h"
 #include "share/schema/ob_table_dml_param.h"
+#include "sql/engine/expr/ob_expr.h"
 
 namespace oceanbase
 {
@@ -24,10 +25,10 @@ using namespace common;
 using namespace blocksstable;
 namespace storage
 {
-
 ObTableIterParam::ObTableIterParam()
     : table_id_(0),
       tablet_id_(),
+      ls_id_(),
       read_info_(nullptr),
       rowkey_read_info_(nullptr),
       tablet_handle_(nullptr),
@@ -77,6 +78,7 @@ void ObTableIterParam::reset()
 {
   table_id_ = 0;
   tablet_id_.reset();
+  ls_id_.reset();
   read_info_ = nullptr;
   rowkey_read_info_ = nullptr;
   tablet_handle_ = nullptr;
@@ -319,6 +321,7 @@ int ObTableAccessParam::init(
       iter_param_.table_scan_opt_.storage_rowsets_size_ = 1;
     }
     iter_param_.pushdown_filter_ = scan_param.pd_storage_filters_;
+    iter_param_.ls_id_ = scan_param.ls_id_;
     iter_param_.is_column_replica_table_ = table_param.is_column_replica_table();
      // disable blockscan if scan order is KeepOrder(for iterator iterator and table api)
      // disable blockscan if use index skip scan as no large range to scan

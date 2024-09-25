@@ -98,6 +98,14 @@ public:
       const share::ObLSID &ls_id,
       transaction::ObTxDesc &tx_desc,
       const transaction::tablelock::ObLockParam &param);
+  // replace lock of obj
+  // @param [in] ls_id, this replace lock operation will be processed at which logstream.
+  // @param [in] tx_desc, the trans context.
+  // @param [in] lock_param, contain all the parameters of previous lock, and lock_owner / lock_mode of new lock
+  int replace_obj_lock(
+      const share::ObLSID &ls_id,
+      transaction::ObTxDesc &tx_desc,
+      const transaction::tablelock::ObReplaceLockParam &lock_param);
   // ObITabletScan interface
   virtual int table_scan(
       ObVTableScanParam &vparam,

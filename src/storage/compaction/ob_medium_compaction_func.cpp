@@ -877,7 +877,7 @@ int ObMediumCompactionScheduleFunc::init_co_major_merge_type(
   } else if (FALSE_IT(co_sstable = static_cast<ObCOSSTableV2 *>(first_sstable))) {
   } else if (OB_FAIL(iter.set_tablet_handle(tablet_handle_))) {
     LOG_WARN("failed to set tablet handle", K(ret), K(iter), K(tablet_handle_));
-  } else if (OB_FAIL(iter.get_read_tables_from_tablet(medium_info.medium_snapshot_, false/*allow_no_ready_read*/, false/*major_sstable_only*/, tables))) {
+  } else if (OB_FAIL(iter.get_read_tables_from_tablet(medium_info.medium_snapshot_, false/*allow_no_ready_read*/, false/*major_sstable_only*/, false/*need_split_src_table*/, false/*need_split_dst_table*/, tables))) {
     LOG_WARN("failed to get read tables for estimate row cnt", K(ret), K(medium_info), K(iter));
   } else if (OB_FAIL(ObCOMajorMergePolicy::decide_co_major_merge_type(
           *co_sstable,

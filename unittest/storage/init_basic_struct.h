@@ -85,6 +85,7 @@ int __attribute__((weak)) gen_create_tablet_arg(const int64_t tenant_id,
   obrpc::ObCreateTabletInfo tablet_info;
   ObArray<common::ObTabletID> index_tablet_ids;
   ObArray<int64_t> index_tablet_schema_idxs;
+  ObArray<int64_t> create_commit_versions;
   uint64_t table_id = 12345;
   arg.reset();
   share::schema::ObTableSchema table_schema_obj;
@@ -114,6 +115,7 @@ int __attribute__((weak)) gen_create_tablet_arg(const int64_t tenant_id,
           index_tablet_schema_idxs,
           lib::Worker::CompatMode::MYSQL,
           false,
+          create_commit_versions,
           false /*has_cs_replica*/))) {
     STORAGE_LOG(WARN, "failed to init tablet info", KR(ret), K(index_tablet_ids),
         K(tablet_id), K(index_tablet_schema_idxs));

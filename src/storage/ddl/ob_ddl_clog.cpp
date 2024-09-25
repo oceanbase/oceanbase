@@ -590,5 +590,133 @@ int ObDDLFinishClogCb::on_failure()
 }
 #endif
 
+ObTabletSplitInfo::ObTabletSplitInfo()
+  : rowkey_allocator_("SplitRangeClog"),
+    table_id_(OB_INVALID_ID), lob_table_id_(OB_INVALID_ID),
+    schema_version_(0), task_id_(0),
+    source_tablet_id_(), dest_tablets_id_(),
+    compaction_scn_(0), data_format_version_(0), consumer_group_id_(0),
+    can_reuse_macro_block_(false),
+    lob_col_idxs_(), parallel_datum_rowkey_list_()
+{
 }
+
+int ObTabletSplitInfo::assign(const ObTabletSplitInfo &info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!info.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(info));
+  } else if (OB_FAIL(dest_tablets_id_.assign(info.dest_tablets_id_))) {
+    LOG_WARN("assign failed", K(ret));
+  } else if (OB_FAIL(parallel_datum_rowkey_list_.assign(info.parallel_datum_rowkey_list_))) {
+    // shallow copy enough.
+    LOG_WARN("assign failed", K(ret));
+  } else if (OB_FAIL(lob_col_idxs_.assign(info.lob_col_idxs_))) {
+    LOG_WARN("assign failed", K(ret));
+  } else {
+    table_id_            = info.table_id_;
+    lob_table_id_        = info.lob_table_id_;
+    schema_version_      = info.schema_version_;
+    task_id_             = info.task_id_;
+    source_tablet_id_    = info.source_tablet_id_;
+    compaction_scn_      = info.compaction_scn_;
+    data_format_version_ = info.data_format_version_;
+    consumer_group_id_   = info.consumer_group_id_;
+    can_reuse_macro_block_ = info.can_reuse_macro_block_;
+  }
+  return ret;
 }
+
+bool ObTabletSplitInfo::is_valid() const
+{
+  bool is_valid = OB_INVALID_ID != table_id_
+      && schema_version_ > 0 && task_id_ > 0
+      && source_tablet_id_.is_valid() && dest_tablets_id_.count() > 0
+      && compaction_scn_ > 0
+      && data_format_version_ > 0 && consumer_group_id_ >= 0
+      && parallel_datum_rowkey_list_.count() > 0;
+  if (!lob_col_idxs_.empty()) {
+    is_valid = is_valid && (OB_INVALID_ID != lob_table_id_);
+  }
+  return is_valid;
+}
+
+int ObTabletSplitStartLog::assign(const ObTabletSplitStartLog &log)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!log.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(log));
+  } else if (OB_FAIL(basic_info_.assign(log.basic_info_))) {
+    LOG_WARN("assign failed", K(ret), K(log));
+  }
+  return ret;
+}
+
+int ObTabletSplitFinishLog::assign(const ObTabletSplitFinishLog &log)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!log.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(log));
+  } else if (OB_FAIL(basic_info_.assign(log.basic_info_))) {
+    LOG_WARN("assign failed", K(ret), K(log));
+  }
+  return ret;
+}
+
+int ObTabletFreezeLog::assign(const ObTabletFreezeLog &log)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!log.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(log));
+  } else {
+    tablet_id_ = log.tablet_id_;
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE(ObTabletSplitInfo)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE, table_id_, lob_table_id_, schema_version_,
+    task_id_, source_tablet_id_, dest_tablets_id_,
+    compaction_scn_, data_format_version_, consumer_group_id_,
+    can_reuse_macro_block_, split_sstable_type_, lob_col_idxs_,
+    parallel_datum_rowkey_list_);
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObTabletSplitInfo)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_DECODE, table_id_, lob_table_id_, schema_version_,
+    task_id_, source_tablet_id_, dest_tablets_id_,
+    compaction_scn_, data_format_version_, consumer_group_id_,
+    can_reuse_macro_block_, split_sstable_type_, lob_col_idxs_);
+  if (FAILEDx(ObSplitUtil::deserializ_parallel_datum_rowkey(
+      rowkey_allocator_, buf, data_len, pos, parallel_datum_rowkey_list_))) {
+    LOG_WARN("deserialzie parallel info failed", K(ret));
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObTabletSplitInfo)
+{
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN, table_id_, lob_table_id_, schema_version_,
+    task_id_, source_tablet_id_, dest_tablets_id_,
+    compaction_scn_, data_format_version_, consumer_group_id_,
+    can_reuse_macro_block_, split_sstable_type_, lob_col_idxs_,
+    parallel_datum_rowkey_list_);
+  return len;
+}
+
+OB_SERIALIZE_MEMBER(ObTabletSplitStartLog, basic_info_);
+OB_SERIALIZE_MEMBER(ObTabletSplitFinishLog, basic_info_);
+OB_SERIALIZE_MEMBER(ObTabletFreezeLog, tablet_id_);
+
+} // namespace storage
+} // namespace oceanbase

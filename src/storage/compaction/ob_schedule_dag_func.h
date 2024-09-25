@@ -28,8 +28,17 @@ namespace mds
 class ObMdsTableMergeDagParam;
 }
 struct ObDDLTableMergeDagParam;
+struct ObTabletSplitParam;
+struct ObLobSplitParam;
+class ObTabletSplitDag;
+class ObTabletLobSplitDag;
+class ObComplementDataDag;
 }
 
+namespace share
+{
+class ObTenantDagScheduler;
+}
 namespace compaction
 {
 struct ObTabletMergeDagParam;
@@ -54,8 +63,22 @@ public:
   static int schedule_ddl_table_merge_dag(
       storage::ObDDLTableMergeDagParam &param,
       const bool is_emergency = false);
+  static int schedule_tablet_split_dag(
+      storage::ObTabletSplitParam &param,
+      const bool is_emergency = false);
+  static int schedule_and_get_tablet_split_dag(
+      storage::ObTabletSplitParam &param,
+      storage::ObTabletSplitDag *&dag,
+      const bool is_emergency = false);
+  static int schedule_lob_tablet_split_dag(
+      storage::ObLobSplitParam &param,
+      const bool is_emergency = false);
   static int schedule_tablet_co_merge_dag_net(
       ObCOMergeDagParam &param);
+  static int schedule_and_get_lob_tablet_split_dag(
+      storage::ObLobSplitParam &param,
+      storage::ObTabletLobSplitDag *&dag,
+      const bool is_emergency = false);
   static int schedule_mds_table_merge_dag(
       storage::mds::ObMdsTableMergeDagParam &param,
       const bool is_emergency = false);

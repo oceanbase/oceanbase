@@ -277,6 +277,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 478	__all_import_table_job_history	0	201001	1
 479	__all_import_table_task	0	201001	1
 480	__all_import_table_task_history	0	201001	1
+482	__all_tablet_reorganize_history	0	201001	1
 483	__all_storage_ha_error_diagnose_history	0	201001	1
 484	__all_storage_ha_perf_diagnose_history	0	201001	1
 485	__all_clone_job	0	201001	1
@@ -764,6 +765,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12475	__all_virtual_user_proxy_info_history	2	201001	1
 12476	__all_virtual_user_proxy_role_info	2	201001	1
 12477	__all_virtual_user_proxy_role_info_history	2	201001	1
+12478	__all_virtual_tablet_reorganize_history	2	201001	1
 12479	__all_virtual_res_mgr_directive	2	201001	1
 12480	__all_virtual_service	2	201001	1
 12481	__all_virtual_tenant_resource_limit	2	201001	1

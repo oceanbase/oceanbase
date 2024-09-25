@@ -2028,6 +2028,16 @@ int ObPrefetchBackupInfoTask::process()
     DEBUG_SYNC(BEFORE_BACKUP_PREFETCH_TASK);
   }
 #endif
+
+  if (backup_data_type_.is_user_backup() && !param_.ls_id_.is_sys_ls()) {
+    SERVER_EVENT_SYNC_ADD("backup", "before_backup_prefetch_task",
+                          "tenant_id", MTL_ID(),
+                          "ls_id", param_.ls_id_.id(),
+                          "turn_id", param_.turn_id_,
+                          "retry_id", param_.retry_id_);
+    DEBUG_SYNC(BEFORE_PREFETCH_BACKUP_INFO_TASK);
+  }
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("prefetch backup info task is not inited", K(ret));
@@ -3293,10 +3303,20 @@ int ObLSBackupDataTask::do_backup_tablet_meta_(const ObTabletMetaReaderType read
       backup_stat_.finish_tablet_count_ += 1;
       ls_backup_ctx_->stat_mgr_.add_tablet_meta(backup_data_type_, tablet_id);
       ls_backup_ctx_->stat_mgr_.add_bytes(backup_data_type_, meta_index.length_);
+#ifdef ERRSIM
+      SERVER_EVENT_SYNC_ADD("backup", "backup_tablet_meta",
+                            "ls_id", param_.ls_id_.id(),
+                            "tablet_id", tablet_id.id());
+#endif
     } else if (BACKUP_SSTABLE_META == meta_type) {
       backup_stat_.finish_sstable_count_ += 1;
       ls_backup_ctx_->stat_mgr_.add_sstable_meta(backup_data_type_, tablet_id);
       ls_backup_ctx_->stat_mgr_.add_bytes(backup_data_type_, meta_index.length_);
+#ifdef ERRSIM
+      SERVER_EVENT_SYNC_ADD("backup", "backup_sstable_meta",
+                            "ls_id", param_.ls_id_.id(),
+                            "tablet_id", tablet_id.id());
+#endif
     }
   }
   if (OB_NOT_NULL(reader)) {

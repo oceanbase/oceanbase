@@ -632,18 +632,25 @@ public:
   //                         const ObTableLockOp &lock_op,
   //                         ObTxIDSet &conflict_tx_set);
   DELEGATE_WITH_RET(lock_table_, check_lock_conflict, int);
-  // lock a object
+  // lock an object
   // @param[in] ctx, store ctx for trans.
   // @param[in] param, contain the lock id, lock type and so on.
   // int lock(ObStoreCtx &ctx,
   //          const transaction::tablelock::ObLockParam &param);
   DELEGATE_WITH_RET(lock_table_, lock, int);
-  // unlock a object
+  // unlock an object
   // @param[in] ctx, store ctx for trans.
   // @param[in] param, contain the lock id, lock type and so on.
   // int unlock(ObStoreCtx &ctx,
   //            const transaction::tablelock::ObLockParam &param);
   DELEGATE_WITH_RET(lock_table_, unlock, int);
+  // replace the lock of an object
+  // @param[in] ctx, store ctx for trans.
+  // @param[in] param, contain the lock id, lock type and so on of the previous lock, and new owner_id,
+  // lock_mode of new lock
+  // int replace(ObStoreCtx &ctx,
+  //             const transaction::tablelock::ObReplaceLockParam &param);
+  DELEGATE_WITH_RET(lock_table_, replace_lock, int);
   // admin remove a lock op
   // @param[in] op_info, contain the lock id, lock type and so on.
   // void admin_remove_lock_op(const ObTableLockOp &op_info);
@@ -983,7 +990,7 @@ public:
       const int64_t ls_rebuild_seq,
       const ObTabletHandle &old_tablet_handle,
       const ObIArray<storage::ObITable *> &tables);
-  int build_ha_tablet_new_table_store(
+  int build_tablet_with_batch_tables(
       const ObTabletID &tablet_id,
       const ObBatchUpdateTableStoreParam &param);
   int build_new_tablet_from_mds_table(

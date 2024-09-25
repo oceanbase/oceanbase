@@ -269,7 +269,7 @@ int ObBackupLinkedBlockItemReader::get_next_item(ObBackupLinkedItem &link_item)
   bool need_fetch_new = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ObBackupLinkedBlockItemReader has not been inited", K(ret));;
+    LOG_WARN("ObBackupLinkedBlockItemReader has not been inited", K(ret));
   } else if (!has_prev_ && item_idx_ >= block_item_list_.count()) {
     ret = OB_ITER_END;
     LOG_WARN("ObBackupLinkedBlockItemReader has reach end", K_(has_prev), K_(item_idx), "count", block_item_list_.count());

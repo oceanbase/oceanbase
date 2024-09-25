@@ -287,7 +287,8 @@ int ObStorageHAUtils::check_tablet_is_deleted(
       LOG_WARN("failed to get latest tablet status", K(ret), KPC(tablet));
     }
   } else if (ObTabletStatus::DELETED == data.tablet_status_
-             || ObTabletStatus::TRANSFER_OUT_DELETED == data.tablet_status_) {
+             || ObTabletStatus::TRANSFER_OUT_DELETED == data.tablet_status_
+             || ObTabletStatus::SPLIT_SRC_DELETED == data.tablet_status_) {
     is_deleted = true;
   }
   return ret;

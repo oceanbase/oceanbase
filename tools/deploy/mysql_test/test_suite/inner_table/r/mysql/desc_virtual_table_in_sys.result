@@ -9727,6 +9727,18 @@ is_deleted	bigint(20)	NO		NULL
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_user_proxy_role_info_history;
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_tablet_reorganize_history;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+ls_id	bigint(20)	NO	PRI	NULL	
+src_tablet_id	bigint(20)	NO	PRI	NULL	
+dest_tablet_id	bigint(20)	NO	PRI	NULL	
+type	bigint(20)	NO		NULL	
+create_time	timestamp(6)	NO		NULL	
+finish_time	timestamp(6)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tablet_reorganize_history;
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_res_mgr_directive;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	

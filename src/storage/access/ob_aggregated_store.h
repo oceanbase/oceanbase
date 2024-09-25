@@ -15,6 +15,7 @@
 
 #include "sql/engine/expr/ob_expr.h"
 #include "ob_block_batched_row_store.h"
+#include "storage/blocksstable/ob_datum_row.h"
 #include "storage/access/ob_pushdown_aggregate.h"
 #include "storage/blocksstable/index_block/ob_index_block_row_struct.h"
 

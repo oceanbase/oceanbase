@@ -1169,5 +1169,55 @@ int ObLobMetaSingleGetter::get_next_row(ObString &seq_id, ObLobMetaInfo &info)
   return ret;
 }
 
+int ObInRowLobDataSpliter::split(ObCollationType cs_type, const int64_t chunk_size, const ObString &inrow_data)
+{
+  int ret = OB_SUCCESS;
+  cs_type_ = cs_type;
+  chunk_size_ = chunk_size;
+  inrow_data_ = inrow_data;
+  ObLobMetaInfo info;
+  while(OB_SUCC(ret) && OB_SUCC(get_next_row(info))) {
+    if (OB_FAIL(lob_meta_list_.push_back(info))) {
+      LOG_WARN("push back fail", K(ret), "count", lob_meta_list_.count());
+    }
+  }
+  if (OB_ITER_END == ret) {
+    ret = OB_SUCCESS;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (byte_pos() != inrow_data.length()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("byte len is not match", K(ret), "inrow_data_length", inrow_data.length(), "spilter_byte_pos", byte_pos());
+  }
+  return ret;
+}
+
+int ObInRowLobDataSpliter::get_next_row(ObLobMetaInfo &info)
+{
+  int ret = OB_SUCCESS;
+  int64_t char_len = 0;
+  int64_t byte_len = 0;
+  if (byte_pos_ == inrow_data_.length()) {
+    ret = OB_ITER_END;
+  } else if (byte_pos_ > inrow_data_.length()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("byte_pos is larger than data length", K(ret), K(byte_pos_), "data_length", inrow_data_.length());
+  } else {
+    byte_len = ObCharset::max_bytes_charpos(cs_type_, inrow_data_.ptr() + byte_pos_, inrow_data_.length() - byte_pos_, chunk_size_, char_len);
+    if (byte_len <= 0 || char_len <= 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("no data can be return when has remain data", K(ret), K(byte_pos_), "data_length", inrow_data_.length());
+    } else {
+      info.byte_len_ = byte_len;
+      info.char_len_ = char_len;
+      info.piece_id_ = ObLobMetaUtil::LOB_META_INLINE_PIECE_ID;
+      info.lob_data_.assign_ptr(inrow_data_.ptr() + byte_pos_, byte_len);
+      byte_pos_ += byte_len;
+      char_pos_ += char_len;
+    }
+  }
+  return ret;
+}
+
 }
 }

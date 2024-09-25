@@ -554,7 +554,7 @@ struct ObLobDataOutRowCtx
     ERASE,
     EMPTY_SQL, // lob col not change in full sql update, out row ctx is empty
     DIFF,
-    EXT_INFO_LOG,
+    EXT_INFO_LOG,  // only used in new row value
     VALID_OLD_VALUE_EXT_INFO_LOG,
     VALID_OLD_VALUE,
     DIFF_V2, // add lob id in ext info log, so deprecated old, use new diff type

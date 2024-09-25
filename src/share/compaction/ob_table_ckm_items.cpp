@@ -11,6 +11,7 @@
 #include "share/compaction/ob_table_ckm_items.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "rootserver/freeze/ob_major_merge_progress_util.h"
+#include "share/resource_manager/ob_cgroup_ctrl.h"
 namespace oceanbase
 {
 using namespace oceanbase::common;
@@ -287,7 +288,38 @@ int ObTableCkmItems::build_for_s2(
 }
 #endif
 
+// For partition split ddl, the scenario will generate major sstables with more columns expectedly.
+// 1. multi parts compact with columns cnt A.
+// 2. online add column, and columns cnt will change to B.
+// 3. some parts split, and the destination parts will generate major sstables with columns cnt B.
+// 4. RS compaction validation will find different columns cnt between different parts.
+int ObTableCkmItems::check_tail_column_checksums_legal(
+    const bool is_data_table,
+    const ObIArray<int64_t> &base_column_checksums,
+    const ObIArray<int64_t> &check_column_checksums)
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(check_column_checksums.count() == base_column_checksums.count())) {
+    // do nothing.
+  } else if (OB_UNLIKELY(!is_data_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column checksums cnt between differnt parts should be equal on non-data table", K(ret), K(base_column_checksums), K(check_column_checksums));
+  } else if (OB_UNLIKELY(check_column_checksums.count() < base_column_checksums.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column checksums cnt is relatively small", K(ret), K(base_column_checksums), K(check_column_checksums));
+  } else {
+    for (int64_t idx = base_column_checksums.count(); OB_SUCC(ret) && idx < check_column_checksums.count(); idx++) {
+      if (OB_UNLIKELY(0 != check_column_checksums.at(idx))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("extra tail columns' checksum should be empty", K(ret), K(idx), K(base_column_checksums), K(check_column_checksums));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTableCkmItems::build_column_ckm_sum_array(
+  const bool is_data_table,
   const SCN &compaction_scn,
   const share::schema::ObTableSchema &table_schema,
   int64_t &row_cnt)
@@ -315,8 +347,13 @@ int ObTableCkmItems::build_column_ckm_sum_array(
       if (OB_FAIL(ckm_items_.get(tablet_id, cur_item))) {
         LOG_WARN("failed to get ckm item", KR(ret), K(tablet_id), K(pair_idx), K(tablet_pairs_));
       } else if (OB_UNLIKELY(cur_item->column_meta_.column_checksums_.count() != column_checksums_cnt)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("column ckm count is unexpected", KR(ret), K(cur_item), K(column_checksums_cnt));
+        // Why the first ckm_item can be selected as the based one?
+        // Any partition alter operation will result in an increase in tablet_id, and ckm_items_ is generated order by the tablet_id.
+        // The smallest tablet_id means that the schema held by this partition is older.
+        if (OB_FAIL(check_tail_column_checksums_legal(is_data_table,
+            ckm_items_.at(0).column_meta_.column_checksums_, cur_item->column_meta_.column_checksums_))) {
+          LOG_WARN("check tail column checksum legal failed", K(ret), K(column_checksums_cnt), K(cur_item), "base_item", ckm_items_.at(0));
+        }
       } else if (cur_item->compaction_scn_ == compaction_scn) {
         const ObTabletReplicaReportColumnMeta &cur_column_meta = cur_item->column_meta_;
         if (pre_tablet_id == OB_INVALID_ID) { // first ckm item
@@ -382,9 +419,9 @@ int ObTableCkmItems::validate_column_ckm_sum(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("data table and index table should not validate column checksum", KR(ret), KPC(data_table_schema),
       KPC(index_table_schema));
-  } else if (OB_FAIL(data_ckm.build_column_ckm_sum_array(compaction_scn, *data_table_schema, data_row_cnt))) {
+  } else if (OB_FAIL(data_ckm.build_column_ckm_sum_array(true/*is_data_table*/, compaction_scn, *data_table_schema, data_row_cnt))) {
     LOG_WARN("failed to build column ckm sum map for data table", KR(ret));
-  } else if (OB_FAIL(index_ckm.build_column_ckm_sum_array(compaction_scn, *index_table_schema, index_row_cnt))) {
+  } else if (OB_FAIL(index_ckm.build_column_ckm_sum_array(false/*is_data_table*/, compaction_scn, *index_table_schema, index_row_cnt))) {
     LOG_WARN("failed to build column ckm sum map for index table", KR(ret));
   } else if (OB_UNLIKELY(data_row_cnt != index_row_cnt)) {
     ret = OB_CHECKSUM_ERROR;

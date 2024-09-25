@@ -15,6 +15,7 @@
 #include "storage/compaction/ob_partition_merger.h"
 #include "share/rc/ob_tenant_base.h"
 #include "lib/stat/ob_session_stat.h"
+#include "storage/blocksstable/index_block/ob_index_block_builder.h"
 #include "storage/tablet/ob_tablet_common.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/compaction/ob_partition_merge_progress.h"
@@ -965,8 +966,8 @@ int ObTabletMergeFinishTask::report_checkpoint_diagnose_info(ObTabletMergeCtx &c
               merge_history.running_info_.merge_start_time_, merge_history.running_info_.merge_finish_time_,
               merge_history.block_info_.occupy_size_, merge_history.static_info_.concurrent_cnt_));
       } else {
-        ObIMemtable *memtable = nullptr;
-        memtable = static_cast<ObIMemtable*>(table);
+        storage::ObIMemtable *memtable = nullptr;
+        memtable = static_cast<storage::ObIMemtable*>(table);
         REPORT_CHECKPOINT_DIAGNOSE_INFO(update_merge_info_for_checkpoint_unit, memtable)
       }
     }

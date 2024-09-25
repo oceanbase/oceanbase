@@ -69,6 +69,7 @@ public:
       const lib::Worker::CompatMode compat_mode,
       const ObTabletTableStoreFlag &table_store_flag,
       const int64_t create_schema_version,
+      const share::SCN &clog_checkpoint_scn,
       const bool micro_index_clustered,
       const bool has_cs_replica);
   int init(

@@ -50,8 +50,8 @@ class ObTableScanIterator : public common::ObNewRowIterator
 public:
   ObTableScanIterator();
   virtual ~ObTableScanIterator();
-  int init(ObTableScanParam &scan_param, const ObTabletHandle &tablet_handle);
-  int switch_param(ObTableScanParam &scan_param, const ObTabletHandle &tablet_handle);
+  int init(ObTableScanParam &scan_param, const ObTabletHandle &tablet_handle, const bool need_split_dst_table = true);
+  int switch_param(ObTableScanParam &scan_param, const ObTabletHandle &tablet_handle, const bool need_split_dst_table = true);
   int get_next_row(blocksstable::ObDatumRow *&row);
   virtual int get_next_row(common::ObNewRow *&row) override;
   virtual int get_next_row() override { blocksstable::ObDatumRow *r = nullptr; return get_next_row(r); }

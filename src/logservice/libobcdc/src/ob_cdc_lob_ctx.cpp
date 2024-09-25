@@ -104,6 +104,9 @@ void ObLobDataGetCtx::reset(
   } else if (lob_data_out_row_ctx->is_diff()) {
     type_ = ObLobDataGetTaskType::EXT_INFO_LOG;
     LOG_DEBUG("lob_data_out_row_ctx is diff", K(column_id), KPC(new_lob_data_), KPC(lob_data_out_row_ctx));
+  } else if (ObLobDataOutRowCtx::OpType::EXT_INFO_LOG == lob_data_out_row_ctx->op_) {
+    type_ = ObLobDataGetTaskType::EXT_INFO_LOG;
+    LOG_DEBUG("lob_data_out_row_ctx is outrow ext", K(column_id), KPC(new_lob_data_), KPC(lob_data_out_row_ctx));
   }
 }
 

@@ -1013,6 +1013,7 @@ int ObLS::register_common_service()
   REGISTER_TO_LOGSERVICE(MEDIUM_COMPACTION_LOG_BASE_TYPE, &medium_compaction_clog_handler_);
   REGISTER_TO_LOGSERVICE(TRANSFER_HANDLER_LOG_BASE_TYPE, &transfer_handler_);
   REGISTER_TO_LOGSERVICE(LS_BLOCK_TX_SERVICE_LOG_BASE_TYPE, &block_tx_service_);
+  REGISTER_TO_LOGSERVICE(TABLE_LOCK_LOG_BASE_TYPE, &lock_table_);
 #ifdef OB_BUILD_SHARED_STORAGE
   if (GCTX.is_shared_storage_mode()) {
     REGISTER_TO_LOGSERVICE(SHARED_STORAGE_PRE_WARM_LOG_BASE_TYPE, &ls_prewarm_handler_);
@@ -1146,6 +1147,7 @@ void ObLS::unregister_common_service_()
   UNREGISTER_FROM_LOGSERVICE(MEDIUM_COMPACTION_LOG_BASE_TYPE, &medium_compaction_clog_handler_);
   UNREGISTER_FROM_LOGSERVICE(TRANSFER_HANDLER_LOG_BASE_TYPE, &transfer_handler_);
   UNREGISTER_FROM_LOGSERVICE(LS_BLOCK_TX_SERVICE_LOG_BASE_TYPE, &block_tx_service_);
+  UNREGISTER_FROM_LOGSERVICE(TABLE_LOCK_LOG_BASE_TYPE, &lock_table_);
 #ifdef OB_BUILD_SHARED_STORAGE
   if (GCTX.is_shared_storage_mode()) {
     UNREGISTER_FROM_LOGSERVICE(SHARED_STORAGE_PRE_WARM_LOG_BASE_TYPE, &ls_prewarm_handler_);
@@ -1780,7 +1782,7 @@ int ObLS::update_tablet_table_store(
   return ret;
 }
 
-int ObLS::build_ha_tablet_new_table_store(
+int ObLS::build_tablet_with_batch_tables(
     const ObTabletID &tablet_id,
     const ObBatchUpdateTableStoreParam &param)
 {
@@ -1798,7 +1800,7 @@ int ObLS::build_ha_tablet_new_table_store(
     ret = OB_EAGAIN;
     LOG_WARN("build ha tablet new table store rebuild seq not same, need retry",
         K(ret), K(ls_id), K(tablet_id), K(rebuild_seq), K(param));
-  } else if (OB_FAIL(ls_tablet_svr_.build_ha_tablet_new_table_store(tablet_id, param))) {
+  } else if (OB_FAIL(ls_tablet_svr_.build_tablet_with_batch_tables(tablet_id, param))) {
     LOG_WARN("failed to update tablet table store", K(ret), K(ls_id), K(tablet_id), K(param));
   }
   return ret;
@@ -1967,17 +1969,14 @@ int ObLS::replay_get_tablet(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), K(tablet_id), K(scn));
   } else if (tablet->is_empty_shell()) {
-    ObTabletStatus::Status tablet_status = ObTabletStatus::MAX;
     if (OB_FAIL(tablet->get_latest_tablet_status(data, is_committed))) {
       LOG_WARN("failed to get latest tablet status", K(ret), KPC(tablet));
     } else if (!is_committed) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet is empty shell but user data is uncommitted, unexpected", K(ret), KPC(tablet));
-    } else if (FALSE_IT(tablet_status = data.get_tablet_status())) {
-    } else if (ObTabletStatus::DELETED != tablet_status
-        && ObTabletStatus::TRANSFER_OUT_DELETED != tablet_status) {
+    } else if (OB_UNLIKELY(!data.tablet_status_.is_deleted_for_gc())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tablet is empty shell but user data is unexpected", K(ret), KPC(tablet));
+      LOG_WARN("tablet is empty shell but user data is unexpected", K(ret), K(data), KPC(tablet));
     } else {
       ret = OB_OBSOLETE_CLOG_NEED_SKIP;
       LOG_INFO("tablet is already deleted, need skip", KR(ret), K(ls_id), K(tablet_id), K(scn));
@@ -1993,7 +1992,8 @@ int ObLS::replay_get_tablet(
       }
     } else if (!is_committed) {
       if ((ObTabletStatus::NORMAL == data.tablet_status_ && data.create_commit_version_ == ObTransVersion::INVALID_TRANS_VERSION)
-          || ObTabletStatus::TRANSFER_IN == data.tablet_status_) {
+          || ObTabletStatus::TRANSFER_IN == data.tablet_status_
+          || ObTabletStatus::SPLIT_DST == data.tablet_status_) {
         ret = OB_EAGAIN;
         LOG_INFO("latest transaction has not committed yet, should retry", KR(ret), K(ls_id), K(tablet_id),
             K(scn), "clog_checkpoint_scn", tablet->get_clog_checkpoint_scn(), K(data));

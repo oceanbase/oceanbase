@@ -169,7 +169,9 @@ int ObBackupUtils::fetch_major_sstables_(const storage::ObTabletHandle &tablet_h
   major_sstable_array_ptr = &tablet_table_store.get_major_sstables();
   ObITable *last_major_sstable_ptr = NULL;
   bool with_major_sstable = true;
+  const compaction::ObMediumCompactionInfoList *medium_info_list = nullptr;
   ObSSTableWrapper major_wrapper;
+  ObArenaAllocator tmp_allocator("GetMediumList", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
 
   if (OB_FAIL(check_tablet_with_major_sstable(tablet_handle, with_major_sstable))) {
     LOG_WARN("failed to check tablet with major sstable", K(ret));
@@ -178,6 +180,13 @@ int ObBackupUtils::fetch_major_sstables_(const storage::ObTabletHandle &tablet_h
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("last major sstable should not be null", K(ret), K(tablet_handle));
     }
+  } else if (OB_FAIL(tablet_handle.get_obj()->read_medium_info_list(tmp_allocator, medium_info_list))) {
+    LOG_WARN("failed to load medium info list", K(ret));
+  } else if (medium_info_list->get_last_compaction_scn() > 0
+      && medium_info_list->get_last_compaction_scn() != last_major_sstable_ptr->get_snapshot_version()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("medium list is invalid for last major sstable", K(ret), KPC(medium_info_list),
+        KPC(last_major_sstable_ptr), K(tablet_handle));
   } else if (last_major_sstable_ptr->is_co_sstable()) {
     if (OB_FAIL(static_cast<ObCOSSTableV2 *>(last_major_sstable_ptr)->get_all_tables(sstable_array))) {
       LOG_WARN("failed to get all cg tables from co table", K(ret), KPC(last_major_sstable_ptr));
@@ -1782,23 +1791,31 @@ int ObBackupTabletProvider::prepare_tablet_(const uint64_t tenant_id, const shar
   bool can_explain = false;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   bool need_skip_tablet = false;
+  bool is_split_dst = false;
   if (OB_ISNULL(ls_backup_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls backup ctx should not be null", K(ret));
   } else if (!tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(tablet_id));
-  } else if (OB_FAIL(get_tablet_handle_(tenant_id, ls_id, tablet_id, tablet_ref))) {
+  } else if (OB_FAIL(get_tablet_handle_(tenant_id, ls_id, tablet_id, tablet_ref, is_split_dst))) {
     if (OB_TABLET_NOT_EXIST == ret) {
       LOG_WARN("failed to get tablet handle", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
       ret = OB_SUCCESS;
       ObBackupSkippedType skipped_type(ObBackupSkippedType::MAX_TYPE);
       bool need_report_skip = false;
       share::ObLSID split_ls_id;
-      if (OB_FAIL(get_tablet_skipped_type_(param_.tenant_id_, ls_id, tablet_id, skipped_type, split_ls_id))) {
-        LOG_WARN("failed to get tablet skipped type", K(ret), K(param_), K(ls_id), K(tablet_id));
-      } else if (OB_FAIL(check_need_report_tablet_skipped_(split_ls_id, tablet_id, skipped_type, need_report_skip))) {
-        LOG_WARN("failed to check need report tablet skipped", K(ret));
+      if (!is_split_dst) {
+        if (OB_FAIL(get_tablet_skipped_type_(param_.tenant_id_, ls_id, tablet_id, skipped_type, split_ls_id))) {
+          LOG_WARN("failed to get tablet skipped type", K(ret), K(param_), K(ls_id), K(tablet_id));
+        } else if (OB_FAIL(check_need_report_tablet_skipped_(split_ls_id, tablet_id, skipped_type, need_report_skip))) {
+          LOG_WARN("failed to check need report tablet skipped", K(ret));
+        }
+      } else {
+        need_report_skip = true;
+        skipped_type = ObBackupSkippedType(ObBackupSkippedType::REORGANIZED);
+      }
+      if (OB_FAIL(ret)) {
       } else if (!need_report_skip) {
         LOG_INFO("skip report tablet skipped", K(ret), K(tablet_id), K(skipped_type), K_(param));
       } else if (OB_FAIL(report_tablet_skipped_(tablet_id, skipped_type, backup_data_type))) {
@@ -1809,10 +1826,6 @@ int ObBackupTabletProvider::prepare_tablet_(const uint64_t tenant_id, const shar
     } else {
       LOG_WARN("failed to get tablet handle", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
     }
-  } else if (OB_FAIL(check_tablet_split_status_(tenant_id, tablet_id, need_skip_tablet))) {
-    LOG_WARN("failed to check tablet split status", K(ret), K(tenant_id), K(tablet_id));
-  } else if (need_skip_tablet) {
-    LOG_INFO("tablet skipped", K(tenant_id), K(tablet_id));
   } else if (OB_FAIL(check_tx_data_can_explain_user_data_(tablet_ref->tablet_handle_, can_explain))) {
     LOG_WARN("failed to check tx data can explain user data", K(ret), K(ls_id), K(tablet_id));
   } else if (!can_explain) {
@@ -1963,9 +1976,10 @@ int ObBackupTabletProvider::get_consistent_scn_(share::SCN &consistent_scn) cons
 }
 
 int ObBackupTabletProvider::get_tablet_handle_(const uint64_t tenant_id, const share::ObLSID &ls_id,
-    const common::ObTabletID &tablet_id, ObBackupTabletHandleRef *&tablet_ref)
+    const common::ObTabletID &tablet_id, ObBackupTabletHandleRef *&tablet_ref, bool &is_split_dst)
 {
   int ret = OB_SUCCESS;
+  is_split_dst = false;
   tablet_ref = NULL;
   bool hold_tablet_success = false;
   if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || !tablet_id.is_valid()) {
@@ -1990,8 +2004,12 @@ int ObBackupTabletProvider::get_tablet_handle_(const uint64_t tenant_id, const s
             LOG_WARN("backup get tablet handle timeout", K(ret), K(ls_id), K(tablet_id));
           } else if (OB_FAIL(get_tablet_status_(ls_id, tablet_id, status))) {
             LOG_WARN("failed to check tablet is normal", K(ret), K(tenant_id), K(ls_id), K(rebuild_seq));
-          } else if (ObTabletStatus::NORMAL != status) {
-            LOG_WARN("tablet status is not normal", K(tenant_id), K(ls_id), K(tablet_id));
+          } else if (ObTabletStatus::SPLIT_DST == status) {
+            is_split_dst = true;
+            ret = OB_TABLET_NOT_EXIST;
+            LOG_WARN("tablet is split dst when double check tablet status", K(ret), K(tenant_id), K(ls_id), K(tablet_id), K(status));
+          } else if (ObTabletStatus::NORMAL != status && ObTabletStatus::SPLIT_SRC != status) {
+            LOG_WARN("tablet status is not normal", K(tenant_id), K(ls_id), K(tablet_id), K(status));
             usleep(100 * 1000); // wait 100ms
           } else if (OB_FAIL(inner_get_tablet_handle_without_memtables_(tenant_id, ls_id, tablet_id, tablet_ref))) { // read readble commited, only get NORMAL and TRANSFER IN tablet.
             LOG_WARN("failed to inner get tablet handle without memtables", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
@@ -2007,8 +2025,9 @@ int ObBackupTabletProvider::get_tablet_handle_(const uint64_t tenant_id, const s
             usleep(100 * 1000); // wait 100ms
           } else if (OB_FAIL(get_tablet_status_(ls_id, tablet_id, status))) {
             LOG_WARN("failed to check tablet is normal", K(ret), K(tenant_id), K(ls_id), K(rebuild_seq));
-          } else if (ObTabletStatus::NORMAL != status) {
-            if (ObTabletStatus::TRANSFER_OUT == status || ObTabletStatus::TRANSFER_OUT_DELETED == status || ObTabletStatus::DELETED == status) {
+          } else if (ObTabletStatus::NORMAL != status && ObTabletStatus::SPLIT_SRC != status) {
+            if (ObTabletStatus::TRANSFER_OUT == status || ObTabletStatus::TRANSFER_OUT_DELETED == status || ObTabletStatus::DELETED == status
+                || ObTabletStatus::SPLIT_SRC_DELETED == status) {
               ret = OB_TABLET_NOT_EXIST;
               LOG_WARN("tablet is deleted when double check tablet status", K(ret), K(tenant_id), K(ls_id), K(tablet_id), K(status));
             } else {
@@ -2086,7 +2105,7 @@ int ObBackupTabletProvider::get_tablet_skipped_type_(const uint64_t tenant_id, c
       *sql_proxy_, tenant_id, tablet_id, split_ls_id, tablet_reorganized))) {
     LOG_WARN("failed to check tablet has reorganized", K(ret), K(tenant_id), K(tablet_id));
   } else if (tablet_reorganized) {
-    // do nothing
+    LOG_INFO("tablet reorganized", K(tablet_id), K(split_ls_id));
   } else if (OB_FAIL(ObLSBackupOperator::get_tablet_to_ls_info(
       *sql_proxy_, tenant_id, tablet_id, tablet_count, tmp_ls_id))) {
     LOG_WARN("failed to get tablet to ls info", K(ret), K(tenant_id), K(tablet_id));
@@ -2120,7 +2139,7 @@ int ObBackupTabletProvider::get_tablet_skipped_type_(const uint64_t tenant_id, c
         }
       } else {
         skipped_type = ObBackupSkippedType(ObBackupSkippedType::TRANSFER);
-        LOG_INFO("tablet transfered, need change turn", K(ls_id));
+        LOG_INFO("tablet transfered, need change turn", K(ls_id), K(tablet_id));
       }
     } else {
       ret = OB_ERR_UNEXPECTED;
@@ -2134,34 +2153,43 @@ int ObBackupTabletProvider::check_need_report_tablet_skipped_(const share::ObLSI
     const common::ObTabletID &tablet_id, const share::ObBackupSkippedType &skipped_type, bool &need_report_skip)
 {
   int ret = OB_SUCCESS;
-  need_report_skip = ObBackupSkippedType::DELETED == skipped_type.get_type()
-                  || ObBackupSkippedType::TRANSFER == skipped_type.get_type();
-  // TODO(yanfeng): need auto_split branch merge
-  // if (ObBackupSkippedType::REORGANIZED != skipped_type.get_type()) {
-  //   need_report_skip = false;
-  // } else {
-  //   ObArray<ReorganizeTabletPair> tablet_pairs;
-  //   if (OB_FAIL(ObTabletReorganizeHistoryTableOperator::get_split_tablet_pairs_by_src(
-  //       *sql_proxy_, param_.tenant_id_, ls_id, tablet_id, tablet_pairs))) {
-  //     LOG_WARN("failed to get split tablet pairs", K(ret));
-  //   } else {
-  //     ObArray<ObTabletID> *tablet_id_ptr = &ls_backup_ctx_->data_tablet_id_list_;
-  //     ARRAY_FOREACH_X(tablet_pairs, i, cnt, OB_SUCC(ret)) {
-  //       const ReorganizeTabletPair &pair = tablet_pairs.at(i);
-  //       bool exist = false;
-  //       ARRAY_FOREACH_X(*tablet_id_ptr, j, cnt, OB_SUCC(ret)) {
-  //         if (tablet_id_ptr->at(j) == pair.dest_tablet_id_) {
-  //           exist = true;
-  //           break;
-  //         }
-  //       }
-  //       if (!exist) {
-  //         need_report_skip = true;
-  //         break;
-  //       }
-  //     }
-  //   }
-  // }
+  need_report_skip = false;
+  if (ObBackupSkippedType::DELETED == skipped_type.get_type()
+      || ObBackupSkippedType::TRANSFER == skipped_type.get_type()) {
+    need_report_skip = true;
+  } else {
+    ObArray<ReorganizeTabletPair> tablet_pairs;
+    // TODO(yanfeng): a tablet can be max split into 64K tablet(oracle mode) or 8K tablet(mysql mode)
+    // so the time complexity here is K * log N, where K is the max tablet split num, the N is the total tablet count
+    // consider using two pointer search algorithm to optimize the search logic
+    if (OB_FAIL(ObTabletReorganizeHistoryTableOperator::get_split_tablet_pairs_by_src(
+        *sql_proxy_, param_.tenant_id_, ls_id, tablet_id, tablet_pairs))) {
+      LOG_WARN("failed to get split tablet pairs", K(ret));
+    } else {
+      ObArray<ObTabletID> *tablet_id_ptr = &ls_backup_ctx_->data_tablet_id_list_;
+      ARRAY_FOREACH_X(tablet_pairs, i, cnt, OB_SUCC(ret)) {
+        const ReorganizeTabletPair &pair = tablet_pairs.at(i);
+        bool exist = false;
+        typedef common::ObArray<ObTabletID>::iterator Iter;
+        Iter iter = std::lower_bound(tablet_id_ptr->begin(), tablet_id_ptr->end(), pair.dest_tablet_id_);
+        if (iter != tablet_id_ptr->end()) {
+          if (*iter != pair.dest_tablet_id_) {
+            exist = false;
+          } else {
+            exist = true;
+          }
+        } else {
+          exist = false;
+        }
+
+        if (!exist) {
+          need_report_skip = true;
+          break;
+        }
+      }
+      LOG_INFO("need report skip", K(ls_id), K(tablet_id), K(need_report_skip), K(tablet_pairs), KPC(tablet_id_ptr));
+    }
+  }
   return ret;
 }
 
@@ -2497,45 +2525,44 @@ int ObBackupTabletProvider::check_tablet_split_status_(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   need_skip_tablet = false;
-  // TODO(yanfeng): wait auto_split branch merge
-  // ReorganizeTabletPair pair;
-  // if (OB_FAIL(ObTabletReorganizeHistoryTableOperator::get_split_tablet_pairs_by_dest(
-  //     *sql_proxy_, tenant_id, tablet_id, pair))) {
-  //   if (OB_ENTRY_NOT_EXIST == ret) {
-  //     ret = OB_SUCCESS;
-  //   } else {
-  //     LOG_WARN("failed to get split tablet pair by dest", K(ret), K(tablet_id));
-  //   }
-  // } else {
-  //   const common::ObTabletID &src_tablet_id = pair.src_tablet_id_;
-  //   bool has_skipped = false;
-  //   if (OB_FAIL(ObLSBackupOperator::check_tablet_skipped_by_reorganize(*sql_proxy_, tenant_id, src_tablet_id, has_skipped))) {
-  //     LOG_WARN("failed to check tablet skipped by reorganize", K(ret), K(src_tablet_id));
-  //   } else if (has_skipped) {
-  //     LOG_INFO("skip check tablet split status", K(ret), K(pair));
-  //   } else {
-  //     ObArray<ObTabletID> *tablet_id_ptr = &ls_backup_ctx_->data_tablet_id_list_;
-  //     bool src_exist = false;
-  //     ARRAY_FOREACH_X(*tablet_id_ptr, i, cnt, OB_SUCC(ret)) {
-  //       if (tablet_id_ptr->at(i) == src_tablet_id) {
-  //         src_exist = true;
-  //         break;
-  //       }
-  //     }
-  //     LOG_INFO("tablet not skipped", K(*tablet_id_ptr), K(src_tablet_id), K(src_exist));
-  //     if (OB_SUCC(ret) && src_exist) {
-  //       ObBackupSkippedType skipped_type(ObBackupSkippedType::REORGANIZED);
-  //       ObBackupDataType backup_data_type;
-  //       backup_data_type.set_major_data_backup();
-  //       if (OB_FAIL(report_tablet_skipped_(tablet_id, skipped_type, backup_data_type))) {
-  //         LOG_WARN("failed to report tablet skipped", K(ret));
-  //       } else {
-  //         need_skip_tablet = true;
-  //         LOG_INFO("report skip tablet", K(tablet_id), K(skipped_type));
-  //       }
-  //     }
-  //   }
-  // }
+  ReorganizeTabletPair pair;
+  if (OB_FAIL(ObTabletReorganizeHistoryTableOperator::get_split_tablet_pairs_by_dest(
+      *sql_proxy_, tenant_id, tablet_id, pair))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get split tablet pair by dest", K(ret), K(tablet_id));
+    }
+  } else {
+    const common::ObTabletID &src_tablet_id = pair.src_tablet_id_;
+    bool has_skipped = false;
+    if (OB_FAIL(ObLSBackupOperator::check_tablet_skipped_by_reorganize(*sql_proxy_, tenant_id, src_tablet_id, has_skipped))) {
+      LOG_WARN("failed to check tablet skipped by reorganize", K(ret), K(src_tablet_id));
+    } else if (has_skipped) {
+      LOG_INFO("skip check tablet split status", K(ret), K(pair));
+    } else {
+      ObArray<ObTabletID> *tablet_id_ptr = &ls_backup_ctx_->data_tablet_id_list_;
+      bool src_exist = false;
+      ARRAY_FOREACH_X(*tablet_id_ptr, i, cnt, OB_SUCC(ret)) {
+        if (tablet_id_ptr->at(i) == src_tablet_id) {
+          src_exist = true;
+          break;
+        }
+      }
+      LOG_INFO("tablet not skipped", K(*tablet_id_ptr), K(src_tablet_id), K(src_exist));
+      if (OB_SUCC(ret) && src_exist) {
+        ObBackupSkippedType skipped_type(ObBackupSkippedType::REORGANIZED);
+        ObBackupDataType backup_data_type;
+        backup_data_type.set_user_data_backup();
+        if (OB_FAIL(report_tablet_skipped_(tablet_id, skipped_type, backup_data_type))) {
+          LOG_WARN("failed to report tablet skipped", K(ret));
+        } else {
+          need_skip_tablet = true;
+          LOG_INFO("report skip tablet", K(tablet_id), K(skipped_type));
+        }
+      }
+    }
+  }
   return ret;
 }
 
@@ -2656,7 +2683,7 @@ int ObBackupTabletProvider::get_tablet_status_(
   } else if (!ls_handle.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls_handle is in_valid", K(ret), K(ls_handle));
-  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_tablet(tablet_id, tablet_handle, 0 /*timeout*/, storage::ObMDSGetTabletMode::READ_READABLE_COMMITED))) {
+  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_tablet(tablet_id, tablet_handle, 0 /*timeout*/, storage::ObMDSGetTabletMode::READ_ALL_COMMITED))) {
     LOG_WARN("failed to get tablet", K(ret), K(tablet_id), K(tablet_handle));
   } else if (!tablet_handle.is_valid()) {
     ret = OB_ERR_UNEXPECTED;

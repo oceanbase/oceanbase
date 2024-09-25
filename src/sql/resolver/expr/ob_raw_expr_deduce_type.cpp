@@ -139,7 +139,9 @@ int ObRawExprDeduceType::visit(ObPlQueryRefRawExpr &expr)
 int ObRawExprDeduceType::visit(ObExecParamRawExpr &expr)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr.get_ref_expr())) {
+  if (expr.is_eval_by_storage()) {
+    // do nothing
+  } else if (OB_ISNULL(expr.get_ref_expr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ref expr is null", K(ret));
   } else if (OB_FAIL(expr.get_ref_expr()->postorder_accept(*this))) {

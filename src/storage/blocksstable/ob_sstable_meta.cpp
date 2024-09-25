@@ -1228,6 +1228,7 @@ int ObMigrationSSTableParam::deserialize_(const char *buf, const int64_t data_le
   return ret;
 }
 
+
 DEFINE_GET_SERIALIZE_SIZE(ObMigrationSSTableParam)
 {
   int64_t len = 0;

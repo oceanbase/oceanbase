@@ -18,6 +18,7 @@
 #include "share/scn.h"
 #include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
+#include "storage/tx_storage/ob_empty_shell_object_checker.h"
 #include "share/ob_tenant_info_proxy.h"
 
 namespace oceanbase
@@ -37,12 +38,14 @@ public:
     : ls_(NULL),
       is_trigger_(true),
       stopped_(false),
+      ddl_empty_shell_checker_(),
       is_inited_(false)
   {}
   ~ObTabletEmptyShellHandler() { reset(); }
   void reset()
   {
     ls_ = NULL;
+    ddl_empty_shell_checker_.reset();
     is_inited_ = false;
   }
   int init(storage::ObLS *ls);
@@ -80,6 +83,7 @@ private:
   storage::ObLS *ls_;
   bool is_trigger_;
   bool stopped_;
+  ObDDLEmptyShellChecker ddl_empty_shell_checker_; // to record the tag deleted time of the ddl tablet.
   bool is_inited_;
 };
 

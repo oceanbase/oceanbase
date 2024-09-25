@@ -140,7 +140,7 @@ TEST_F(TestLockTableCallback, callback)
   bool lock_exist = false;
   uint64_t lock_mode_cnt_in_same_trans[TABLE_LOCK_MODE_COUNT] = {0, 0, 0, 0, 0};
   const bool for_replay = false;
-  ObIMemtable *memtable = nullptr;
+  storage::ObIMemtable *memtable = nullptr;
   ObOBJLockCallback *cb = nullptr;
   // 1. UNNSED CALLBACK TYPE
   LOG_INFO("TestLockTableCallback::callback 1.");

@@ -243,6 +243,7 @@ class ObIndexUsageInfoMgr;
 class ObStorageIOUsageRepoter;
 class ObResourceLimitCalculator;
 class ObPluginVectorIndexService;
+class ObAutoSplitTaskCache;
 namespace schema
 {
   class ObTenantSchemaService;
@@ -424,6 +425,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       common::ObRbMemMgr*,                           \
       share::ObPluginVectorIndexService*,            \
       storage::ObTenantRestoreInfoMgr*,              \
+      share::ObAutoSplitTaskCache*    ,              \
       sql::ObAuditLogger*,                           \
       sql::ObAuditLogUpdater*,                       \
       table::ObTableGroupCommitMgr*,                 \

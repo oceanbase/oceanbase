@@ -184,9 +184,12 @@ TEST_F(ObLockTableBeforeRestartTest, test_commit_log)
   checkpoint_executor = ls->get_checkpoint_executor();
   ASSERT_NE(nullptr, checkpoint_executor);
 
-  lock_memtable = dynamic_cast<ObLockMemtable *>(dynamic_cast<ObLSTxService *>(checkpoint_executor
-             ->handlers_[logservice::TRANS_SERVICE_LOG_BASE_TYPE])
-                 ->common_checkpoints_[ObCommonCheckpointType::LOCK_MEMTABLE_TYPE]);
+  // lock_memtable = dynamic_cast<ObLockMemtable *>(dynamic_cast<ObLSTxService *>(checkpoint_executor
+  //            ->handlers_[logservice::TRANS_SERVICE_LOG_BASE_TYPE])
+  //                ->common_checkpoints_[ObCommonCheckpointType::LOCK_MEMTABLE_TYPE]);
+  ObTableHandleV2 table_handle;
+  ASSERT_EQ(OB_SUCCESS, ls->lock_table_.get_lock_memtable(table_handle));
+  ASSERT_EQ(OB_SUCCESS, table_handle.get_lock_memtable(lock_memtable));
 
   lock_memtable->obj_lock_map_.print();
   LOG_INFO("ObLockTableBeforeRestartTest::test_commit_log 1.2 wait tablelock committed");
@@ -310,10 +313,15 @@ TEST_F(ObLockTableAfterRestartTest, test_recover_lock_table)
   select_existed_data(lock_scn, ls_checkpoint_scn);
 
   // check lock_memtable scn
-  ObLockMemtable *lock_memtable
-    = dynamic_cast<ObLockMemtable *>(dynamic_cast<ObLSTxService *>(checkpoint_executor
-            ->handlers_[logservice::TRANS_SERVICE_LOG_BASE_TYPE])
-            ->common_checkpoints_[ObCommonCheckpointType::LOCK_MEMTABLE_TYPE]);
+  // ObLockMemtable *lock_memtable
+  //   = dynamic_cast<ObLockMemtable *>(dynamic_cast<ObLSTxService *>(checkpoint_executor
+  //           ->handlers_[logservice::TRANS_SERVICE_LOG_BASE_TYPE])
+  //           ->common_checkpoints_[ObCommonCheckpointType::LOCK_MEMTABLE_TYPE]);
+  ObTableHandleV2 table_handle;
+  ObLockMemtable *lock_memtable;
+  ASSERT_EQ(OB_SUCCESS, ls->lock_table_.get_lock_memtable(table_handle));
+  ASSERT_EQ(OB_SUCCESS, table_handle.get_lock_memtable(lock_memtable));
+
   lock_memtable->obj_lock_map_.print();
   ASSERT_EQ(lock_memtable->get_rec_scn(), lock_scn);
   ASSERT_EQ(lock_memtable->max_committed_scn_, lock_scn);

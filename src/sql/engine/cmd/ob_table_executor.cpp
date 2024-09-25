@@ -57,6 +57,8 @@
 #include "share/ob_debug_sync.h"
 #include "share/schema/ob_schema_utils.h"
 #include "storage/mview/cmd/ob_mview_executor_util.h"
+#include "storage/ob_partition_pre_split.h"
+
 namespace oceanbase
 {
 using namespace common;
@@ -868,8 +870,16 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
         || obrpc::ObAlterTableArg::INTERVAL_TO_RANGE == alter_table_arg.alter_part_type_) {
       alter_table_arg.is_alter_partitions_ = true;
     }
+    ObPartitionPreSplit pre_split;
+    AlterTableSchema &alter_table_schema = const_cast<AlterTableSchema &>(alter_table_arg.alter_table_schema_);
     if (OB_FAIL(populate_based_schema_obj_info_(alter_table_arg))) {
       LOG_WARN("fail to populate based schema obj info", KR(ret));
+    } else if (OB_FAIL(pre_split.get_global_index_pre_split_schema_if_need(alter_table_schema.get_tenant_id(),
+                                                            alter_table_arg.session_id_,
+                                                            alter_table_schema.get_origin_database_name(),
+                                                            alter_table_schema.get_origin_table_name(),
+                                                            alter_table_arg.index_arg_list_))) {
+      LOG_WARN("fail to get pre split query range", K(ret), K(alter_table_arg));
     } else if (OB_FAIL(common_rpc_proxy->alter_table(alter_table_arg, res))) {
       LOG_WARN("rpc proxy alter table failed", KR(ret), "dst", common_rpc_proxy->get_server(), K(alter_table_arg));
     } else {
@@ -1237,13 +1247,19 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
     }
 
     if (OB_SUCC(ret)) {
+      bool is_support_cancel = true;
+      if (obrpc::ObAlterTableArg::REORGANIZE_PARTITION == alter_table_arg.alter_part_type_ ||
+                  obrpc::ObAlterTableArg::SPLIT_PARTITION == alter_table_arg.alter_part_type_ ||
+                  obrpc::ObAlterTableArg::AUTO_SPLIT_PARTITION == alter_table_arg.alter_part_type_) {
+        is_support_cancel = false;
+      }
       const bool need_wait_ddl_finish = is_double_table_long_running_ddl(res.ddl_type_)
                                      || is_simple_table_long_running_ddl(res.ddl_type_);
       if (OB_SUCC(ret) && need_wait_ddl_finish) {
         int64_t affected_rows = 0;
         if (OB_FAIL(refresh_schema_for_table(alter_table_arg.exec_tenant_id_))) {
           LOG_WARN("refresh_schema_for_table failed", K(ret));
-        } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(tenant_id, res.task_id_, res.ddl_need_retry_at_executor_, my_session, common_rpc_proxy))) {
+        } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(tenant_id, res.task_id_, res.ddl_need_retry_at_executor_, my_session, common_rpc_proxy, is_support_cancel))) {
           LOG_WARN("fail to wait ddl finish", K(ret), K(tenant_id), K(res));
         }
       }
@@ -1804,17 +1820,38 @@ int ObAlterTableExecutor::check_alter_partition(ObExecContext &ctx,
   int ret = OB_SUCCESS;
   AlterTableSchema &table_schema = const_cast<AlterTableSchema &>(arg.alter_table_schema_);
 
-  if (arg.is_alter_partitions_) {
-    if (obrpc::ObAlterTableArg::PARTITIONED_TABLE == arg.alter_part_type_
-        || obrpc::ObAlterTableArg::REORGANIZE_PARTITION == arg.alter_part_type_
-        || obrpc::ObAlterTableArg::SPLIT_PARTITION == arg.alter_part_type_) {
+  if (arg.is_alter_partitions_ || arg.alter_auto_partition_attr_) {
+    if (arg.is_manual_split_partition()) {
+      // if user does not define the last partition, part_num will be partition_num - 1,
+      // which means it is unnecessary that casting the expr value to last partition.
+      // after casting partition value, we need to correct part_num
+      int64_t part_num = table_schema.get_part_option().get_part_num();
       ObPartition **partition_array = table_schema.get_part_array();
-      int64_t realy_part_num = OB_INVALID_PARTITION_ID;
-      if (obrpc::ObAlterTableArg::SPLIT_PARTITION == arg.alter_part_type_) {
-        realy_part_num = table_schema.get_part_option().get_part_num();
-      } else {
-        realy_part_num = table_schema.get_partition_num();
+      if (part_num != table_schema.get_partition_num() &&
+          part_num != table_schema.get_partition_num() - 1) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid part num", K(ret), K(part_num), K(table_schema.get_partition_num()));
+      } else if (table_schema.is_valid_split_part_type()) {
+        if (OB_FAIL(ObPartitionExecutorUtils::set_range_part_high_bound(ctx,
+                                                                        stmt::T_CREATE_TABLE,
+                                                                        table_schema,
+                                                                        stmt,
+                                                                        false /*is_subpart*/))) {
+          LOG_WARN("partition_array is NULL", K(ret));
+        }
+      } else { // split partition only support range partition now
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("only support range part", K(ret), K(arg.alter_part_type_),
+                 "partition type", table_schema.get_part_option().get_part_func_type());
       }
+
+      if (OB_FAIL(ret)) {
+      } else if (obrpc::ObAlterTableArg::SPLIT_PARTITION == arg.alter_part_type_) {
+        table_schema.get_part_option().set_part_num(table_schema.get_partition_num());
+      }
+    } else if (obrpc::ObAlterTableArg::PARTITIONED_TABLE == arg.alter_part_type_) {
+      ObPartition **partition_array = table_schema.get_part_array();
+      int64_t realy_part_num = table_schema.get_partition_num();
       if (table_schema.is_range_part()) {
         if (OB_FAIL(ObPartitionExecutorUtils::set_range_part_high_bound(ctx,
                                                                         stmt::T_CREATE_TABLE,
@@ -1837,14 +1874,6 @@ int ObAlterTableExecutor::check_alter_partition(ObExecContext &ctx,
                                                                            stmt.get_part_values_exprs()))) {
           LOG_WARN("partition_array is NULL", K(ret));
         }
-      } else if (obrpc::ObAlterTableArg::PARTITIONED_TABLE != arg.alter_part_type_) {
-        ret = OB_ERR_ONLY_ON_RANGE_LIST_PARTITION;
-        LOG_WARN("only support range or list part", K(ret), K(arg.alter_part_type_),
-                 "partition type", table_schema.get_part_option().get_part_func_type());
-      }
-      if (OB_FAIL(ret)) {
-      } else if (obrpc::ObAlterTableArg::SPLIT_PARTITION == arg.alter_part_type_) {
-        const_cast<AlterTableSchema&>(table_schema).get_part_option().set_part_num(table_schema.get_partition_num());
       }
     } else if (obrpc::ObAlterTableArg::REPARTITION_TABLE == arg.alter_part_type_) {
       if (table_schema.is_range_part() || table_schema.is_list_part()

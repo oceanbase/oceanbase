@@ -401,6 +401,7 @@ int ObTableCreator::generate_create_tablet_arg_(
   ObTabletID data_tablet_id;
   ObTabletCreatorArg create_tablet_arg;
   common::ObArray<ObTabletID> tablet_id_array;
+  common::ObArray<int64_t> no_create_commit_versions;
   ObTabletID tablet_id;
   ObBasePartition *data_part = NULL;
   ObBasePartition *part = NULL;
@@ -462,6 +463,7 @@ int ObTableCreator::generate_create_tablet_arg_(
                      is_create_bind_hidden_tablets,
                      tenant_data_version,
                      need_create_empty_majors,
+                     no_create_commit_versions,
                      is_cs_replica_global_visible))) {
     LOG_WARN("fail to init create tablet arg", KR(ret), K(schemas), K(is_create_bind_hidden_tablets));
   } else if (OB_FAIL(tablet_creator_.add_create_tablet_arg(create_tablet_arg))) {

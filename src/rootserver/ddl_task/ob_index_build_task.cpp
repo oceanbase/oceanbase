@@ -81,6 +81,7 @@ int ObIndexSSTableBuildTask::process()
   const ObSysVariableSchema *sys_variable_schema = NULL;
   bool oracle_mode = false;
   ObTabletID unused_tablet_id;
+  ObAddr unused_addr;
   const ObTableSchema *data_schema = nullptr;
   const ObTableSchema *index_schema = nullptr;
   bool need_padding = false;
@@ -196,9 +197,9 @@ int ObIndexSSTableBuildTask::process()
     }
   }
   ObDDLTaskKey task_key(tenant_id_, dest_table_id_, schema_version_);
-  int tmp_ret = 0;
-  tmp_ret = root_service_->get_ddl_scheduler().on_sstable_complement_job_reply(
-  unused_tablet_id, task_key, snapshot_version_, execution_id_, ret, addition_info_);
+  ObDDLTaskInfo info;
+  int tmp_ret = root_service_->get_ddl_scheduler().on_sstable_complement_job_reply(
+      unused_tablet_id, unused_addr, task_key, snapshot_version_, execution_id_, ret, addition_info_);
   if (OB_SUCCESS != tmp_ret) {
     LOG_WARN("report build finish failed", K(ret), K(tmp_ret));
     ret = OB_SUCCESS == ret ? tmp_ret : ret;
@@ -851,7 +852,8 @@ int ObIndexBuildTask::reap_old_replica_build_task(bool &need_exec_new_inner_sql)
         LOG_WARN("failed to check and wait old complement task", K(ret));
       }
     } else if (!need_exec_new_inner_sql) {
-      if (OB_FAIL(update_complete_sstable_job_status(unused_tablet_id, snapshot_version_, old_execution_id, old_ret_code, unused_addition_info))) {
+      ObAddr unused_addr;
+      if (OB_FAIL(update_complete_sstable_job_status(unused_tablet_id, unused_addr, snapshot_version_, old_execution_id, old_ret_code, unused_addition_info))) {
         LOG_INFO("succ to wait and complete old task finished!", K(ret));
       }
     }
@@ -1387,6 +1389,7 @@ int ObIndexBuildTask::update_column_checksum_calc_status(
 
 int ObIndexBuildTask::update_complete_sstable_job_status(
     const common::ObTabletID &tablet_id,
+    const ObAddr &addr,
     const int64_t snapshot_version,
     const int64_t execution_id,
     const int ret_code,
@@ -1399,7 +1402,7 @@ int ObIndexBuildTask::update_complete_sstable_job_status(
     LOG_WARN("not init", K(ret));
   } else if (OB_UNLIKELY(snapshot_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(snapshot_version), K(ret_code));
+    LOG_WARN("invalid argument", K(ret), K(snapshot_version), K(addr), K(ret_code));
   } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, UPDATE_COMPLETE_SSTABLE_FAILED))) {
     LOG_WARN("ddl sim failure", K(tenant_id_), K(task_id_));
   } else if (ObDDLTaskStatus::REDEFINITION != task_status_) {
@@ -1407,7 +1410,7 @@ int ObIndexBuildTask::update_complete_sstable_job_status(
     LOG_INFO("not waiting data complete, may finished", K(task_status_));
   } else if (snapshot_version != snapshot_version_) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("snapshot version not match", K(ret), K(snapshot_version), K(snapshot_version_));
+    LOG_WARN("snapshot version not match", K(ret), K(addr), K(snapshot_version), K(snapshot_version_));
   } else {
     if (is_create_partitioned_local_index()) {
       if (OB_UNLIKELY(addition_info.partition_ids_.count() < 1 || !addition_info.ls_id_.is_valid() || !addition_info.ls_leader_addr_.is_valid())) {
@@ -1426,9 +1429,9 @@ int ObIndexBuildTask::update_complete_sstable_job_status(
       complete_sstable_job_ret_code_ = ret_code;
       sstable_complete_ts_ = ObTimeUtility::current_time();
       execution_id_ = execution_id;
-      LOG_INFO("update complete sstable job return code", K(ret), K(target_object_id_), K(tablet_id), K(snapshot_version), K(ret_code), K(execution_id_), K(addition_info));
     }
   }
+  LOG_INFO("update complete sstable job return code", K(ret), K(addr), K(target_object_id_), K(tablet_id), K(snapshot_version), K(ret_code), K(execution_id_));
   return ret;
 }
 

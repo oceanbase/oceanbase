@@ -56,24 +56,10 @@ private:
   class ObTableLockCtx
   {
   public:
-    ObTableLockCtx(const ObTableLockTaskType task_type,
-                   const int64_t origin_timeout_us,
-                   const int64_t timeout_us);
-    ObTableLockCtx(const ObTableLockTaskType task_type,
-                   const uint64_t table_id,
-                   const int64_t origin_timeout_us,
-                   const int64_t timeout_us);
-    ObTableLockCtx(const ObTableLockTaskType task_type,
-                   const uint64_t table_id,
-                   const uint64_t partition_id_,
-                   const int64_t origin_timeout_us,
-                   const int64_t timeout_us);
-    ObTableLockCtx(const ObTableLockTaskType task_type,
-                   const uint64_t table_id,
-                   const share::ObLSID &ls_id,
-                   const int64_t origin_timeout_us,
-                   const int64_t timeout_us);
+    ObTableLockCtx();
     ~ObTableLockCtx() {}
+    int set_by_lock_req(const ObLockRequest &arg, const bool is_replace_task = false);
+    int set_by_lock_req_common_part(const ObLockRequest &arg);
     int set_tablet_id(const common::ObIArray<common::ObTabletID> &tablet_ids);
     int set_tablet_id(const common::ObTabletID &tablet_id);
     int set_lock_id(const common::ObIArray<ObLockID> &lock_ids);
@@ -94,22 +80,10 @@ private:
     bool is_stmt_savepoint_valid() { return stmt_savepoint_.is_valid(); }
     void reset_stmt_savepoint() { stmt_savepoint_.reset(); }
     ObTableLockOpType get_lock_op_type() const { return lock_op_type_; }
-    bool is_unlock_task() const
-    {
-      return (UNLOCK_TABLE == task_type_ ||
-              UNLOCK_PARTITION == task_type_ ||
-              UNLOCK_SUBPARTITION == task_type_ ||
-              UNLOCK_TABLET == task_type_ ||
-              UNLOCK_OBJECT == task_type_ ||
-              UNLOCK_ALONE_TABLET == task_type_);
-    }
-    bool is_tablet_lock_task() const
-    {
-      return (LOCK_TABLET == task_type_ ||
-              UNLOCK_TABLET == task_type_ ||
-              LOCK_ALONE_TABLET == task_type_ ||
-              UNLOCK_ALONE_TABLET == task_type_);
-    }
+    bool is_unlock_task() const { return tablelock::is_unlock_task(task_type_); }
+    bool is_replace_task() const { return tablelock::is_replace_lock_task(task_type_); }
+    bool is_tablet_lock_task() const { return tablelock::is_tablet_lock_task(task_type_); }
+
   public:
     ObTableLockTaskType task_type_; // current lock request type
     bool is_in_trans_;
@@ -135,6 +109,10 @@ private:
                                               // the current_savepoint_ created.
     common::ObTabletIDArray tablet_list_;     // all the tablets need to be locked/unlocked
     ObLockIDArray obj_list_;
+
+    ObTableLockMode lock_mode_;
+    ObTableLockOwnerID lock_owner_;
+
     // TODO: yanyuan.cxf we need better performance.
     // share::ObLSArray ls_list_; // related ls list
     int64_t schema_version_;             // the schema version of the table to be locked
@@ -145,14 +123,29 @@ private:
     // use to kill the whole lock table stmt.
     transaction::ObTxSEQ stmt_savepoint_;
 
-    TO_STRING_KV(K(is_in_trans_), K(table_id_), K(partition_id_),
+    TO_STRING_KV(K(task_type_), K(is_in_trans_), K(table_id_), K(partition_id_),
                  K(tablet_list_), K(obj_list_), K(lock_op_type_),
                  K(origin_timeout_us_), K(timeout_us_),
                  K(abs_timeout_ts_), KPC(tx_desc_), K(tx_param_),
                  K(current_savepoint_), K(need_rollback_ls_),
+                 K(lock_mode_), K(lock_owner_),
                  K(schema_version_), K(tx_is_killed_),
                  K(is_from_sql_), K(ret_code_before_end_stmt_or_tx_), K(stmt_savepoint_));
   };
+
+  class ObReplaceTableLockCtx : public ObTableLockCtx
+  {
+  public:
+    ObReplaceTableLockCtx() : ObTableLockCtx(), new_lock_mode_(NO_LOCK), new_lock_owner_() {}
+    ~ObReplaceTableLockCtx() {}
+    int get_lock_param(const ObLockID &lock_id, ObReplaceLockParam &lock_param) const;
+    INHERIT_TO_STRING_KV("ObTableLockCtx", ObTableLockCtx, K_(new_lock_mode), K_(new_lock_owner));
+
+  public:
+    ObTableLockMode new_lock_mode_;
+    ObTableLockOwnerID new_lock_owner_;
+  };
+
   class ObRetryCtx
   {
   public:
@@ -262,75 +255,22 @@ public:
                     const int64_t timeout_us = 0);
 
   // ---------------------------- interface for IN_TRANS/OUT_TRANS lock ------------------------------/
-  // arg.op_type_ specified the behavior after trans commit or abort:
-  // lock will be unlocked if it is IN_TRANS_COMMON_LOCK,
-  // lock will be left if it is OUT_TRANS_LOCK and the trans is commited and we need
-  // another trans to unlock the lock.
-  // lock the table level lock and all the tablet level lock of this table.
-  int lock_table(ObTxDesc &tx_desc,
-                 const ObTxParam &tx_param,
-                 const ObLockTableRequest &arg);
-  // arg.op_type_ should be OUT_TRANS_UNLOCK:
-  // unlock the table level lock and all the tablet level lock of this table.
-  int unlock_table(ObTxDesc &tx_desc,
-                   const ObTxParam &tx_param,
-                   const ObUnLockTableRequest &arg);
-  // arg.op_type_ specified the behavior after trans commit or abort:
-  // lock will be unlocked if it is IN_TRANS_COMMON_LOCK,
-  // lock will be left if it is OUT_TRANS_LOCK and the trans is commited and we need
-  // another trans to unlock the lock.
-  // lock the tablet level lock and all RX or RS at table level lock.
-  int lock_tablet(ObTxDesc &tx_desc,
-                  const ObTxParam &tx_param,
-                  const ObLockTabletRequest &arg);
-  int lock_tablet(ObTxDesc &tx_desc,
-                  const ObTxParam &tx_param,
-                  const ObLockTabletsRequest &arg);
-  // arg.op_type_ should be OUT_TRANS_UNLOCK:
-  // unlock the table level lock and the tablet level lock.
-  int unlock_tablet(ObTxDesc &tx_desc,
-                    const ObTxParam &tx_param,
-                    const ObUnLockTabletRequest &arg);
-  int unlock_tablet(ObTxDesc &tx_desc,
-                    const ObTxParam &tx_param,
-                    const ObUnLockTabletsRequest &arg);
-  int lock_tablet(ObTxDesc &tx_desc,
-                  const ObTxParam &tx_param,
-                  const ObLockAloneTabletRequest &arg);
-  // arg.op_type_ should be OUT_TRANS_UNLOCK:
-  // unlock the table level lock and the tablet level lock.
-  int unlock_tablet(ObTxDesc &tx_desc,
-                    const ObTxParam &tx_param,
-                    const ObUnLockAloneTabletRequest &arg);
   int lock_partition_or_subpartition(ObTxDesc &tx_desc,
                                      const ObTxParam &tx_param,
-                                     const ObLockPartitionRequest &arg);
-  int lock_partition(ObTxDesc &tx_desc,
-                     const ObTxParam &tx_param,
-                     const ObLockPartitionRequest &arg);
-  int unlock_partition(ObTxDesc &tx_desc,
-                       const ObTxParam &tx_param,
-                       const ObUnLockPartitionRequest &arg);
-  int lock_subpartition(ObTxDesc &tx_desc,
-                        const ObTxParam &tx_param,
-                        const ObLockPartitionRequest &arg);
-  int unlock_subpartition(ObTxDesc &tx_desc,
-                          const ObTxParam &tx_param,
-                          const ObUnLockPartitionRequest &arg);
-  int lock_obj(ObTxDesc &tx_desc,
-               const ObTxParam &tx_param,
-               const ObLockObjRequest &arg);
-  int unlock_obj(ObTxDesc &tx_desc,
-                 const ObTxParam &tx_param,
-                 const ObUnLockObjRequest &arg);
-  int lock_obj(ObTxDesc &tx_desc,
-               const ObTxParam &tx_param,
-               const ObLockObjsRequest &arg);
-  int unlock_obj(ObTxDesc &tx_desc,
-                 const ObTxParam &tx_param,
-                 const ObUnLockObjsRequest &arg);
+                                     ObLockPartitionRequest &arg);
+  int lock(ObTxDesc &tx_desc,
+           const ObTxParam &tx_param,
+           const ObLockRequest &arg);
+  int unlock(ObTxDesc &tx_desc,
+             const ObTxParam &tx_param,
+             const ObUnLockRequest &arg);
+  // NOTICE: has the same restrictions as the lock interface mentioned above.
+  int replace_lock(ObTxDesc &tx_desc,
+                   const ObTxParam &tx_param,
+                   const ObReplaceLockRequest &replace_req);
   int garbage_collect_right_now();
   int get_obj_lock_garbage_collector(ObOBJLockGarbageCollector *&obj_lock_garbage_collector);
+
 private:
   int check_cluster_version_after_(const uint64_t version);
   int check_data_version_after_(const uint64_t version);
@@ -346,18 +286,10 @@ private:
   bool is_lock_conflict_ret_code_(const int ret) const;
   bool is_timeout_ret_code_(const int ret) const;
   bool is_can_retry_err_(const int ret) const;
-  int process_lock_task_(ObTableLockCtx &ctx,
-                         const ObTableLockMode lock_mode,
-                         const ObTableLockOwnerID lock_owner);
-  int process_obj_lock_task_(ObTableLockCtx &ctx,
-                             const ObTableLockMode lock_mode,
-                             const ObTableLockOwnerID lock_owner);
-  int process_table_lock_task_(ObTableLockCtx &ctx,
-                               const ObTableLockMode lock_mode,
-                               const ObTableLockOwnerID lock_owner);
+  int process_lock_task_(ObTableLockCtx &ctx);
+  int process_obj_lock_task_(ObTableLockCtx &ctx);
+  int process_table_lock_task_(ObTableLockCtx &ctx);
   int process_tablet_lock_task_(ObTableLockCtx &ctx,
-                                const ObTableLockMode lock_mode,
-                                const ObTableLockOwnerID lock_owner,
                                 const ObSimpleTableSchemaV2 *table_schema);
   int start_tx_(ObTableLockCtx &ctx);
   int end_tx_(ObTableLockCtx &ctx, const bool is_rollback);
@@ -368,8 +300,7 @@ private:
   int check_op_allowed_(const uint64_t table_id,
                         const ObSimpleTableSchemaV2 *table_schema,
                         bool &is_allowed);
-  int get_process_tablets_(const ObTableLockMode lock_mode,
-                           const ObSimpleTableSchemaV2 *table_schema,
+  int get_process_tablets_(const ObSimpleTableSchemaV2 *table_schema,
                            ObTableLockCtx &ctx);
   int get_ls_lock_map_(ObTableLockCtx &ctx,
                        const common::ObTabletIDArray &tablets,
@@ -398,38 +329,33 @@ private:
                      ObAddr &addr);
   int pack_request_(ObTableLockCtx &ctx,
                     const ObTableLockTaskType task_type,
-                    const ObTableLockMode &lock_mode,
-                    const ObTableLockOwnerID &lock_owner,
                     const ObLockID &lock_id,
                     const share::ObLSID &ls_id,
                     ObAddr &addr,
                     ObTableLockTaskRequest &request);
   int pack_batch_request_(ObTableLockCtx &ctx,
                           const ObTableLockTaskType task_type,
-                          const ObTableLockMode &lock_mode,
-                          const ObTableLockOwnerID &lock_owner,
                           const share::ObLSID &ls_id,
                           const ObLockIDArray &lock_ids,
-                          ObLockTaskBatchRequest &request);
+                          ObLockTaskBatchRequest<ObLockParam> &request);
+  int pack_batch_request_(ObTableLockCtx &ctx,
+                          const ObTableLockTaskType task_type,
+                          const share::ObLSID &ls_id,
+                          const ObLockIDArray &lock_ids,
+                          ObLockTaskBatchRequest<ObReplaceLockParam> &request);
   template<class RpcProxy>
   int parallel_rpc_handle_(RpcProxy &proxy_batch,
                            ObTableLockCtx &ctx,
                            const LockMap &lock_map,
-                           const ObLSLockMap &ls_lock_map,
-                           const ObTableLockMode lock_mode,
-                           const ObTableLockOwnerID lock_owner);
+                           const ObLSLockMap &ls_lock_map);
   template<class RpcProxy>
   int batch_rpc_handle_(RpcProxy &proxy_batch,
                         ObTableLockCtx &ctx,
-                        const ObLSLockMap &lock_map,
-                        const ObTableLockMode lock_mode,
-                        const ObTableLockOwnerID lock_owner);
+                        const ObLSLockMap &lock_map);
   template<class RpcProxy>
   int batch_rpc_handle_(RpcProxy &proxy_batch,
                         ObTableLockCtx &ctx,
                         const ObLSLockMap &ls_lock_map,
-                        const ObTableLockMode lock_mode,
-                        const ObTableLockOwnerID lock_owner,
                         bool &can_retry,
                         ObLSLockMap &retry_ls_lock_map);
   template<class RpcProxy>
@@ -441,48 +367,49 @@ private:
   template<class RpcProxy>
   int parallel_batch_rpc_handle_(RpcProxy &proxy_batch,
                                  ObTableLockCtx &ctx,
-                                 const ObTableLockTaskType lock_task_type,
-                                 const ObLSLockMap &ls_lock_map,
-                                 const ObTableLockMode lock_mode,
-                                 const ObTableLockOwnerID lock_owner);
+                                 const ObLSLockMap &ls_lock_map);
   template<class RpcProxy>
   int parallel_batch_rpc_handle_(RpcProxy &proxy_batch,
                                  ObTableLockCtx &ctx,
-                                 const ObTableLockTaskType lock_task_type,
                                  const ObLSLockMap &ls_lock_map,
-                                 const ObTableLockMode lock_mode,
-                                 const ObTableLockOwnerID lock_owner,
                                  bool &can_retry,
                                  ObLSLockMap &retry_ls_lock_map);
   template<class RpcProxy>
   int parallel_send_rpc_task_(RpcProxy &proxy_batch,
                               ObTableLockCtx &ctx,
-                              const ObTableLockTaskType lock_task_type,
                               const ObLSLockMap &ls_lock_map,
-                              const ObTableLockMode lock_mode,
-                              const ObTableLockOwnerID lock_owner,
                               ObRetryCtx &retry_ctx);
   template<class RpcProxy>
   int send_one_rpc_task_(RpcProxy &proxy_batch,
                          ObTableLockCtx &ctx,
                          const share::ObLSID &ls_id,
                          const ObLockIDArray &lock_ids,
-                         const ObTableLockMode lock_mode,
-                         const ObTableLockOwnerID lock_owner,
                          ObRetryCtx &retry_ctx);
   template<class RpcProxy>
   int send_rpc_task_(RpcProxy &proxy_batch,
                      ObTableLockCtx &ctx,
                      const share::ObLSID &ls_id,
                      const ObLockIDArray &lock_ids,
-                     const ObTableLockMode lock_mode,
-                     const ObTableLockOwnerID lock_owner,
                      ObRetryCtx &retry_ctx);
   template<class RpcProxy, class LockRequest>
   int rpc_call_(RpcProxy &proxy_batch,
                 const ObAddr &addr,
                 const int64_t timeout_us,
                 const LockRequest &request);
+  template<class RpcProxy>
+  int pack_and_call_rpc_(RpcProxy &proxy_batch,
+                         ObTableLockCtx &ctx,
+                         const share::ObLSID &ls_id,
+                         const ObLockIDArray &lock_ids,
+                         const ObAddr &addr,
+                         ObRetryCtx &retry_ctx);
+  template<>
+  int pack_and_call_rpc_(obrpc::ObBatchReplaceLockProxy &proxy_batch,
+                         ObTableLockCtx &ctx,
+                         const share::ObLSID &ls_id,
+                         const ObLockIDArray &lock_ids,
+                         const ObAddr &addr,
+                         ObRetryCtx &retry_ctx);
   int get_retry_lock_ids_(const ObLockIDArray &lock_ids,
                           const int64_t start_pos,
                           ObLockIDArray &retry_lock_ids);
@@ -500,57 +427,34 @@ private:
                              ObTableLockCtx &ctx);
   int inner_process_obj_lock_(ObTableLockCtx &ctx,
                               const LockMap &lock_map,
-                              const ObLSLockMap &ls_lock_map,
-                              const ObTableLockMode lock_mode,
-                              const ObTableLockOwnerID lock_owner);
+                              const ObLSLockMap &ls_lock_map);
   int inner_process_obj_lock_old_version_(ObTableLockCtx &ctx,
                                           const LockMap &lock_map,
-                                          const ObLSLockMap &ls_lock_map,
-                                          const ObTableLockMode lock_mode,
-                                          const ObTableLockOwnerID lock_owner);
+                                          const ObLSLockMap &ls_lock_map);
   int inner_process_obj_lock_batch_(ObTableLockCtx &ctx,
-                                    const ObLSLockMap &ls_lock_map,
-                                    const ObTableLockMode lock_mode,
-                                    const ObTableLockOwnerID lock_owner);
+                                    const ObLSLockMap &ls_lock_map);
   int process_obj_lock_(ObTableLockCtx &ctx,
                         const share::ObLSID &ls_id,
-                        const ObLockID &lock_id,
-                        const ObTableLockMode lock_mode,
-                        const ObTableLockOwnerID lock_owner);
+                        const ObLockID &lock_id);
   int process_obj_lock_(ObTableLockCtx &ctx,
                         const share::ObLSID &ls_id,
-                        const common::ObIArray<ObLockID> &lock_ids,
-                        const ObTableLockMode lock_mode,
-                        const ObTableLockOwnerID lock_owner);
+                        const common::ObIArray<ObLockID> &lock_ids);
   static bool is_part_table_lock_(const ObTableLockTaskType task_type);
   int get_table_lock_mode_(const ObTableLockTaskType task_type,
                            const ObTableLockMode part_lock_mode,
                            ObTableLockMode &table_lock_mode);
-  int process_table_lock_(ObTableLockCtx &ctx,
-                          const ObTableLockMode lock_mode,
-                          const ObTableLockOwnerID lock_owner);
-  int process_table_tablet_lock_(ObTableLockCtx &ctx,
-                                 const ObTableLockMode lock_mode,
-                                 const ObTableLockOwnerID lock_owner,
-                                 const LockMap &lock_map,
-                                 const ObLSLockMap &ls_lock_map);
+  int process_table_lock_(ObTableLockCtx &ctx);
+  int process_table_tablet_lock_(ObTableLockCtx &ctx, const LockMap &lock_map, const ObLSLockMap &ls_lock_map);
   // only useful in LOCK_TABLE/LOCK_PARTITION
   int pre_check_lock_(ObTableLockCtx &ctx,
-                      const ObTableLockMode lock_mode,
-                      const ObTableLockOwnerID lock_owner,
                       const ObLSLockMap &ls_lock_map);
   int batch_pre_check_lock_(ObTableLockCtx &ctx,
-                            const ObTableLockMode lock_mode,
-                            const ObTableLockOwnerID lock_owner,
                             const ObLSLockMap &ls_lock_map);
   int pre_check_lock_old_version_(ObTableLockCtx &ctx,
-                                  const ObTableLockMode lock_mode,
-                                  const ObTableLockOwnerID lock_owner,
                                   const ObLSLockMap &ls_lock_map);
   // used by deadlock detector.
   int deal_with_deadlock_(ObTableLockCtx &ctx);
   int get_table_partition_level_(const ObTableID table_id, ObPartitionLevel &part_level);
-
   DISALLOW_COPY_AND_ASSIGN(ObTableLockService);
 private:
   // TODO: yanyuan.cxf use parallel rpc and modify this to 5s.

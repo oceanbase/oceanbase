@@ -820,6 +820,21 @@ int ObIMicroBlockRowScanner::filter_pushdown_filter(
   return ret;
 }
 
+////////////////////////////////// ObMicroBlockRowDirectScanner ////////////////////////////////////////////
+int ObMicroBlockRowDirectScanner::init(
+    const storage::ObTableIterParam &param,
+    storage::ObTableAccessContext &context,
+    const blocksstable::ObSSTable *sstable)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObIMicroBlockRowScanner::init(param, context, sstable))) {
+    LOG_WARN("base init failed", K(ret));
+  } else {
+    is_inited_ = true;
+  }
+  return ret;
+}
+
 int ObIMicroBlockRowScanner::filter_micro_block_in_blockscan(sql::PushdownFilterInfo &pd_filter_info)
 {
   int ret = OB_SUCCESS;
@@ -850,6 +865,24 @@ int ObIMicroBlockRowScanner::filter_micro_block_in_blockscan(sql::PushdownFilter
     } else if (OB_FAIL(pd_filter_info.filter_->execute(nullptr, pd_filter_info, this, param_->vectorized_enabled_ && block_row_store_->is_empty()))) {
       LOG_WARN("Fail to filter", K(ret), KPC(pd_filter_info.filter_));
     }
+  }
+  return ret;
+}
+
+int ObMicroBlockRowDirectScanner::open(
+    const MacroBlockId &macro_id,
+    const ObMicroBlockData &block_data,
+    const bool is_left_border,
+    const bool is_right_border)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObIMicroBlockRowScanner::open(macro_id, block_data, is_left_border, is_right_border))) {
+    LOG_WARN("base open failed", K(ret));
+  } else if (OB_FAIL(set_base_scan_param(is_left_border, is_right_border))) {
+    LOG_WARN("failed to set base scan param", K(ret), K_(macro_id), K(is_left_border), K(is_right_border));
+  } else if (OB_NOT_NULL(block_row_store_) && block_row_store_->is_valid()) {
+    // Storage pushdown filter is valid and reuse
+    block_row_store_->reset_blockscan();
   }
   return ret;
 }

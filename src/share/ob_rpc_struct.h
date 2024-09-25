@@ -60,6 +60,8 @@
 #include "storage/ddl/ob_ddl_struct.h"
 #include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
 #include "storage/tablet/ob_tablet_binding_mds_user_data.h"
+#include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
+#include "storage/tablet/ob_tablet_split_mds_user_data.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_multi_data_source.h"
 #include "share/unit/ob_unit_info.h" //ObUnit*
@@ -2325,6 +2327,19 @@ public:
         || alter_table_schema_.alter_option_bitset_.has_member(PROGRESSIVE_MERGE_NUM)
         || alter_table_schema_.alter_option_bitset_.has_member(ENCRYPTION);
   }
+  bool is_split_partition() const {
+    return is_manual_split_partition() ||
+           is_auto_split_partition();
+  }
+
+  bool is_manual_split_partition() const {
+    return alter_part_type_ == REORGANIZE_PARTITION ||
+           alter_part_type_ == SPLIT_PARTITION;
+  }
+
+  bool is_auto_split_partition() const {
+    return alter_part_type_ == AUTO_SPLIT_PARTITION;
+  }
   ObAlterTableArg &operator=(const ObAlterTableArg &other) = delete;
   ObAlterTableArg(const ObAlterTableArg &other) = delete;
   virtual bool is_allow_when_disable_ddl() const;
@@ -2371,6 +2386,7 @@ public:
                K_(mview_refresh_info),
                K_(alter_algorithm),
                K_(alter_auto_partition_attr),
+               K_(rebuild_index_arg_list),
                K_(client_session_id),
                K_(client_session_create_ts),
                K_(lock_priority),
@@ -2929,6 +2945,233 @@ public:
 };
 
 typedef ObCreateIndexArg ObAlterPrimaryArg;
+
+struct ObPartitionSplitArg : public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObPartitionSplitArg()
+    : ObDDLArg(),
+      src_tablet_id_(common::ObTabletID::INVALID_TABLET_ID),
+      dest_tablet_ids_(),
+      local_index_table_ids_(),
+      local_index_schema_versions_(),
+      src_local_index_tablet_ids_(),
+      dest_local_index_tablet_ids_(),
+      lob_table_ids_(),
+      lob_schema_versions_(),
+      src_lob_tablet_ids_(),
+      dest_lob_tablet_ids_(),
+      task_type_(share::ObDDLType::DDL_INVALID)
+  {}
+  virtual ~ObPartitionSplitArg() {}
+  bool is_valid() const
+  {
+    return src_tablet_id_.is_valid()
+           && local_index_table_ids_.count() == src_local_index_tablet_ids_.count()
+           && local_index_schema_versions_.count() == src_local_index_tablet_ids_.count()
+           && src_local_index_tablet_ids_.count() == dest_local_index_tablet_ids_.count()
+           && lob_table_ids_.count() == src_lob_tablet_ids_.count()
+           && lob_schema_versions_.count() == src_lob_tablet_ids_.count()
+           && src_lob_tablet_ids_.count() == dest_lob_tablet_ids_.count()
+           && task_type_ > share::ObDDLType::DDL_INVALID
+           && task_type_ < share::ObDDLType::DDL_MAX;
+  }
+  int assign(const ObPartitionSplitArg &other);
+  void reset()
+  {
+    dest_tablet_ids_.reset();
+    src_tablet_id_ = common::ObTabletID::INVALID_TABLET_ID;
+    local_index_table_ids_.reset();
+    local_index_schema_versions_.reset();
+    src_local_index_tablet_ids_.reset();
+    dest_local_index_tablet_ids_.reset();
+    lob_table_ids_.reset();
+    lob_schema_versions_.reset();
+    src_lob_tablet_ids_.reset();
+    dest_lob_tablet_ids_.reset();
+    task_type_ = share::ObDDLType::DDL_INVALID;
+    ObDDLArg::reset();
+  }
+  INHERIT_TO_STRING_KV("ObDDLArg", ObDDLArg,
+      K(src_tablet_id_), K(dest_tablet_ids_), K(local_index_table_ids_),
+      K(local_index_schema_versions_), K(src_local_index_tablet_ids_),
+      K(dest_local_index_tablet_ids_), K(lob_table_ids_), K(lob_schema_versions_),
+      K(src_lob_tablet_ids_), K(dest_lob_tablet_ids_),
+      K(task_type_));
+public:
+  ObTabletID src_tablet_id_;
+  ObSArray<ObTabletID> dest_tablet_ids_;
+  ObSArray<uint64_t> local_index_table_ids_;
+  ObSArray<uint64_t> local_index_schema_versions_;
+  ObSArray<ObTabletID> src_local_index_tablet_ids_;
+  ObSArray<ObSArray<ObTabletID>> dest_local_index_tablet_ids_;
+  ObSArray<uint64_t> lob_table_ids_;
+  ObSArray<uint64_t> lob_schema_versions_;
+  ObSArray<ObTabletID> src_lob_tablet_ids_;
+  ObSArray<ObSArray<ObTabletID>> dest_lob_tablet_ids_;
+  share::ObDDLType task_type_;
+};
+
+struct ObCleanSplittedTabletArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCleanSplittedTabletArg()
+    : tenant_id_(common::OB_INVALID_ID),
+      table_id_(common::OB_INVALID_ID),
+      task_id_(0),
+      local_index_table_ids_(),
+      lob_table_ids_(),
+      src_table_tablet_id_(),
+      dest_tablet_ids_(),
+      src_local_index_tablet_ids_(),
+      dest_local_index_tablet_ids_(),
+      src_lob_tablet_ids_(),
+      dest_lob_tablet_ids_(),
+      is_auto_split_(false)
+  {}
+  ~ObCleanSplittedTabletArg() = default;
+  int assign(const ObCleanSplittedTabletArg &other);
+  bool is_valid() const
+  {
+    bool valid = tenant_id_ != OB_INVALID_ID &&
+                 table_id_ != OB_INVALID_ID &&
+                 task_id_ != 0 &&
+                 src_table_tablet_id_.is_valid() &&
+                 local_index_table_ids_.count() == src_local_index_tablet_ids_.count() &&
+                 lob_table_ids_.count() == src_lob_tablet_ids_.count() &&
+                 src_local_index_tablet_ids_.count() == dest_local_index_tablet_ids_.count() &&
+                 src_lob_tablet_ids_.count() == dest_lob_tablet_ids_.count();
+    for (int64_t i = 0; valid && i < local_index_table_ids_.count(); i++) {
+      valid = local_index_table_ids_.at(i) != OB_INVALID_ID &&
+              src_local_index_tablet_ids_.at(i).is_valid();
+    }
+    for (int64_t i = 0; valid && i < lob_table_ids_.count(); i++) {
+      valid = lob_table_ids_.at(i) != OB_INVALID_ID &&
+              src_lob_tablet_ids_.at(i).is_valid();
+    }
+    return valid;
+  }
+  void reset()
+  {
+    tenant_id_ = OB_INVALID_ID;
+    table_id_ = OB_INVALID_ID;
+    task_id_ = 0;
+    local_index_table_ids_.reset();
+    lob_table_ids_.reset();
+    src_table_tablet_id_ = common::ObTabletID::INVALID_TABLET_ID;
+    dest_tablet_ids_.reset();
+    src_local_index_tablet_ids_.reset();
+    dest_local_index_tablet_ids_.reset();
+    src_lob_tablet_ids_.reset();
+    dest_lob_tablet_ids_.reset();
+    is_auto_split_ = false;
+  }
+  TO_STRING_KV(K_(tenant_id),
+               K_(table_id),
+               K_(task_id),
+               K_(local_index_table_ids),
+               K_(lob_table_ids),
+               K_(src_table_tablet_id),
+               K_(dest_tablet_ids),
+               K_(src_local_index_tablet_ids),
+               K_(dest_local_index_tablet_ids),
+               K_(src_lob_tablet_ids),
+               K_(dest_lob_tablet_ids),
+               K_(is_auto_split));
+public:
+  uint64_t tenant_id_;
+  uint64_t table_id_;
+  int64_t task_id_;
+  ObSArray<uint64_t> local_index_table_ids_;
+  ObSArray<uint64_t> lob_table_ids_;
+  ObTabletID src_table_tablet_id_;
+  ObSArray<ObTabletID> dest_tablet_ids_;
+  ObSArray<ObTabletID> src_local_index_tablet_ids_;
+  ObSArray<ObSArray<ObTabletID>> dest_local_index_tablet_ids_;
+  ObSArray<ObTabletID> src_lob_tablet_ids_;
+  ObSArray<ObSArray<ObTabletID>> dest_lob_tablet_ids_;
+
+  bool is_auto_split_;
+};
+
+struct ObCheckMemtableCntArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCheckMemtableCntArg()
+    : tenant_id_(OB_INVALID_TENANT_ID),
+      ls_id_(),
+      tablet_id_(common::ObTabletID::INVALID_TABLET_ID)
+  {}
+  ~ObCheckMemtableCntArg() {}
+  bool is_valid() const
+  {
+    return OB_INVALID_ID != tenant_id_ &&
+           ls_id_.is_valid() &&
+           tablet_id_.is_valid();
+  }
+  int assign(const ObCheckMemtableCntArg &other);
+  TO_STRING_KV(K(tenant_id_), K(ls_id_), K(tablet_id_));
+public:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  ObTabletID tablet_id_;
+};
+
+struct ObCheckMemtableCntResult final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCheckMemtableCntResult()
+    : memtable_cnt_(-1) {}
+  ~ObCheckMemtableCntResult() {}
+  int assign(const ObCheckMemtableCntResult &other);
+  TO_STRING_KV(K_(memtable_cnt));
+public:
+  int64_t memtable_cnt_;
+};
+
+struct ObCheckMediumCompactionInfoListArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCheckMediumCompactionInfoListArg()
+    : tenant_id_(OB_INVALID_TENANT_ID),
+      ls_id_(),
+      tablet_id_(common::ObTabletID::INVALID_TABLET_ID)
+  {}
+  ~ObCheckMediumCompactionInfoListArg() {}
+  bool is_valid() const
+  {
+    return OB_INVALID_ID != tenant_id_ &&
+           ls_id_.is_valid() &&
+           tablet_id_.is_valid();
+  }
+  int assign(const ObCheckMediumCompactionInfoListArg &other);
+  TO_STRING_KV(K(tenant_id_), K(ls_id_), K(tablet_id_));
+public:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  ObTabletID tablet_id_;
+};
+
+struct ObCheckMediumCompactionInfoListResult final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCheckMediumCompactionInfoListResult()
+    : info_list_cnt_(-1),
+      primary_compaction_scn_(-1)
+  {}
+  ~ObCheckMediumCompactionInfoListResult() {}
+  int assign(const ObCheckMediumCompactionInfoListResult &other);
+  TO_STRING_KV(K(info_list_cnt_), K_(primary_compaction_scn));
+public:
+  int64_t info_list_cnt_;
+  int64_t primary_compaction_scn_;
+};
 
 struct ObCreateMLogArg : public ObDDLArg
 {
@@ -4078,6 +4321,7 @@ public:
            const common::ObIArray<int64_t> &table_schema_index,
            const lib::Worker::CompatMode &mode,
            const bool is_create_bind_hidden_tablets,
+           const ObIArray<int64_t> &create_commit_versions,
            const bool has_cs_replica);
   common::ObTabletID get_data_tablet_id() const { return data_tablet_id_; }
   int64_t get_tablet_count() const { return tablet_ids_.count(); }
@@ -10276,27 +10520,25 @@ struct ObDDLBuildSingleReplicaRequestArg final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObDDLBuildSingleReplicaRequestArg() : tenant_id_(OB_INVALID_ID), ls_id_(), source_tablet_id_(), dest_tablet_id_(),
-                                        source_table_id_(OB_INVALID_ID), dest_schema_id_(OB_INVALID_ID),
-                                        schema_version_(0), snapshot_version_(0), ddl_type_(0), task_id_(0), parallelism_(0), execution_id_(-1), tablet_task_id_(0),
-                                        data_format_version_(0), consumer_group_id_(0), dest_tenant_id_(OB_INVALID_ID), dest_ls_id_(), dest_schema_version_(0),
-                                        compaction_scn_(0), can_reuse_macro_block_(false), split_sstable_type_(share::ObSplitSSTableType::SPLIT_BOTH),
-                                        lob_col_idxs_(), parallel_datum_rowkey_list_()
+  ObDDLBuildSingleReplicaRequestArg() :
+      rowkey_allocator_("SplitRangeRPC"),
+      tenant_id_(OB_INVALID_ID), ls_id_(), source_tablet_id_(), dest_tablet_id_(),
+      source_table_id_(OB_INVALID_ID), dest_schema_id_(OB_INVALID_ID),
+      schema_version_(0), snapshot_version_(0), ddl_type_(0), task_id_(0), parallelism_(0), execution_id_(-1), tablet_task_id_(0),
+      data_format_version_(0), consumer_group_id_(0), dest_tenant_id_(OB_INVALID_ID), dest_ls_id_(), dest_schema_version_(0),
+      compaction_scn_(0), can_reuse_macro_block_(false), split_sstable_type_(share::ObSplitSSTableType::SPLIT_BOTH),
+      lob_col_idxs_(), parallel_datum_rowkey_list_()
   {}
-  bool is_valid() const {
-    return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid() && source_tablet_id_.is_valid() && dest_tablet_id_.is_valid()
-           && OB_INVALID_ID != source_table_id_ && OB_INVALID_ID != dest_schema_id_ && schema_version_ > 0
-           && snapshot_version_ > 0 && dest_schema_version_ > 0 && task_id_ > 0 && parallelism_ > 0 && tablet_task_id_ > 0
-           && data_format_version_ > 0 && consumer_group_id_ >= 0;
-  }
+  bool is_valid() const;
   int assign(const ObDDLBuildSingleReplicaRequestArg &other);
-  TO_STRING_KV(K_(tenant_id), K_(dest_tenant_id), K_(ls_id), K_(dest_ls_id), K_(source_tablet_id),
-    K_(dest_tablet_id), K_(source_table_id), K_(dest_schema_id), K_(schema_version), K_(dest_schema_version),
-    K_(snapshot_version), K_(task_id), K_(parallelism), K_(execution_id), K_(tablet_task_id), K_(data_format_version),
-    K_(consumer_group_id),
-    K_(compaction_scn), K_(can_reuse_macro_block), K_(split_sstable_type),
-    K_(lob_col_idxs), K_(parallel_datum_rowkey_list));
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(source_tablet_id), K_(dest_tablet_id),
+    K_(source_table_id), K_(dest_schema_id), K_(schema_version), K_(snapshot_version), K_(ddl_type),
+    K_(task_id), K_(parallelism), K_(execution_id), K_(tablet_task_id), K_(data_format_version),
+    K_(consumer_group_id), K_(dest_tenant_id), K_(dest_ls_id), K_(dest_schema_version),
+    K_(compaction_scn), K_(can_reuse_macro_block), K_(split_sstable_type), K_(lob_col_idxs),
+    K_(parallel_datum_rowkey_list));
 public:
+  common::ObArenaAllocator rowkey_allocator_; // alloc buf for datum rowkey.
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   ObTabletID source_tablet_id_;
@@ -10363,11 +10605,21 @@ public:
       physical_row_count_(0)
   {}
   ~ObDDLBuildSingleReplicaResponseArg() = default;
-  bool is_valid() const { return OB_INVALID_ID != tenant_id_ && OB_INVALID_ID != dest_tenant_id_
-                          && ls_id_.is_valid() && dest_ls_id_.is_valid() && tablet_id_.is_valid()
-                          && OB_INVALID_ID != source_table_id_ && OB_INVALID_ID != dest_schema_id_
-                          && snapshot_version_ > 0 && schema_version_ > 0 && dest_schema_version_ > 0
-                          && task_id_ > 0 && execution_id_ >= 0; }
+  bool is_valid() const {
+    return OB_INVALID_ID != tenant_id_ &&
+           OB_INVALID_ID != dest_tenant_id_ &&
+           ls_id_.is_valid() &&
+           dest_ls_id_.is_valid() &&
+           tablet_id_.is_valid() &&
+           OB_INVALID_ID != source_table_id_ &&
+           OB_INVALID_ID != dest_schema_id_ &&
+           snapshot_version_ > 0 &&
+           schema_version_ > 0 &&
+           dest_schema_version_ > 0 &&
+           task_id_ > 0 &&
+           execution_id_ >= 0 &&
+           server_addr_.is_valid();
+  }
   int assign(const ObDDLBuildSingleReplicaResponseArg &other);
   TO_STRING_KV(K_(tenant_id), K_(dest_tenant_id), K_(ls_id), K_(dest_ls_id),
                K_(tablet_id), K_(source_table_id), K_(dest_schema_id), K_(ret_code),
@@ -10392,6 +10644,262 @@ public:
   common::ObAddr server_addr_;
   int64_t physical_row_count_;
 };
+
+// === RPC for tablet split start. ===
+struct ObPrepareSplitRangesArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObPrepareSplitRangesArg()
+    : ls_id_(),
+      tablet_id_(),
+      user_parallelism_(0),
+      schema_tablet_size_(0)
+  {}
+  ~ObPrepareSplitRangesArg() {}
+  bool is_valid() const
+  {
+    return ls_id_.is_valid() && tablet_id_.is_valid();
+  }
+  TO_STRING_KV(K(ls_id_), K(tablet_id_), K_(user_parallelism), K_(schema_tablet_size));
+public:
+  share::ObLSID ls_id_;
+  ObTabletID tablet_id_;
+  int64_t user_parallelism_;
+  int64_t schema_tablet_size_;
+DISALLOW_COPY_AND_ASSIGN(ObPrepareSplitRangesArg);
+};
+
+struct ObPrepareSplitRangesRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObPrepareSplitRangesRes()
+    : rowkey_allocator_("SplitRangeRPC"),
+      parallel_datum_rowkey_list_()
+  {}
+  ~ObPrepareSplitRangesRes() = default;
+  TO_STRING_KV(K_(parallel_datum_rowkey_list));
+public:
+  common::ObArenaAllocator rowkey_allocator_; // alloc buf for datum rowkey.
+  common::ObSArray<blocksstable::ObDatumRowkey> parallel_datum_rowkey_list_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObPrepareSplitRangesRes);
+};
+
+struct ObTabletSplitArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTabletSplitArg()
+    : rowkey_allocator_("SplitRangeRPC"),
+      ls_id_(), table_id_(OB_INVALID_ID), lob_table_id_(OB_INVALID_ID),
+      schema_version_(0), task_id_(0), source_tablet_id_(),
+      dest_tablets_id_(), compaction_scn_(0), data_format_version_(0),
+      consumer_group_id_(0), can_reuse_macro_block_(false), split_sstable_type_(share::ObSplitSSTableType::SPLIT_BOTH),
+      lob_col_idxs_(), parallel_datum_rowkey_list_()
+  {}
+  ~ObTabletSplitArg() = default;
+  bool is_valid() const;
+  int assign(const ObTabletSplitArg &other);
+  TO_STRING_KV(K_(ls_id), K_(table_id), K_(lob_table_id),
+               K_(schema_version), K_(task_id), K_(source_tablet_id),
+               K_(dest_tablets_id), K_(compaction_scn), K_(data_format_version),
+               K_(consumer_group_id), K_(can_reuse_macro_block), K_(split_sstable_type),
+               K_(lob_col_idxs), K_(parallel_datum_rowkey_list));
+public:
+  common::ObArenaAllocator rowkey_allocator_; // alloc buf for datum rowkey.
+  share::ObLSID ls_id_;
+  uint64_t table_id_; // scan rows needed.
+  uint64_t lob_table_id_; // scan rows needed.
+  int64_t schema_version_; // report replica build status needed.
+  int64_t task_id_; // report replica build status needed.
+  common::ObTabletID source_tablet_id_;
+  common::ObSArray<common::ObTabletID> dest_tablets_id_;
+  int64_t compaction_scn_;
+  int64_t data_format_version_;
+  uint64_t consumer_group_id_;
+  bool can_reuse_macro_block_;
+  share::ObSplitSSTableType split_sstable_type_;
+  common::ObSEArray<uint64_t, 16> lob_col_idxs_;
+  common::ObSArray<blocksstable::ObDatumRowkey> parallel_datum_rowkey_list_;
+};
+
+struct ObTabletSplitStartArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTabletSplitStartArg()
+    : split_info_array_()
+    {}
+  ~ObTabletSplitStartArg() = default;
+  bool is_valid() const;
+  int assign(const ObTabletSplitStartArg &other);
+  TO_STRING_KV(K_(split_info_array));
+public:
+  common::ObSArray<ObTabletSplitArg> split_info_array_;
+};
+
+struct ObTabletSplitStartResult final
+{
+    OB_UNIS_VERSION(1);
+public:
+  ObTabletSplitStartResult()
+    : ret_codes_()
+  {}
+  ~ObTabletSplitStartResult() = default;
+  int assign(const ObTabletSplitStartResult &other);
+  TO_STRING_KV(K_(ret_codes));
+public:
+  common::ObSArray<int> ret_codes_;
+};
+
+struct ObTabletSplitFinishArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTabletSplitFinishArg()
+    : split_info_array_()
+    {}
+  ~ObTabletSplitFinishArg() = default;
+  bool is_valid() const;
+  int assign(const ObTabletSplitFinishArg &other);
+  TO_STRING_KV(K_(split_info_array));
+public:
+  common::ObSArray<ObTabletSplitArg> split_info_array_;
+};
+
+struct ObTabletSplitFinishResult final
+{
+    OB_UNIS_VERSION(1);
+public:
+  ObTabletSplitFinishResult()
+    : ret_codes_()
+  {}
+  ~ObTabletSplitFinishResult() = default;
+  int assign(const ObTabletSplitFinishResult &other);
+  TO_STRING_KV(K_(ret_codes));
+public:
+  common::ObSArray<int> ret_codes_;
+  uint64_t dest_tenant_id_;
+  share::ObLSID dest_ls_id_;
+  int64_t dest_schema_version_;
+  common::ObAddr server_addr_;
+};
+
+struct ObFreezeSplitSrcTabletArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObFreezeSplitSrcTabletArg() : tenant_id_(OB_INVALID_TENANT_ID), ls_id_(), tablet_ids_() {}
+  ~ObFreezeSplitSrcTabletArg() = default;
+  bool is_valid() const { return tenant_id_ != OB_INVALID_TENANT_ID && ls_id_.is_valid() && !tablet_ids_.empty(); }
+  int assign(const ObFreezeSplitSrcTabletArg &other);
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_ids));
+public:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  common::ObSArray<ObTabletID> tablet_ids_;
+};
+
+struct ObFreezeSplitSrcTabletRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObFreezeSplitSrcTabletRes() : data_end_scn_() {}
+  ~ObFreezeSplitSrcTabletRes() = default;
+  bool is_valid() const { return data_end_scn_.is_valid_and_not_min(); }
+  int assign(const ObFreezeSplitSrcTabletRes &other);
+  TO_STRING_KV(K_(data_end_scn));
+public:
+  share::SCN data_end_scn_;
+};
+
+struct ObAutoSplitTabletArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObAutoSplitTabletArg()
+    : ls_id_(), tablet_id_(), tenant_id_(OB_INVALID),
+      auto_split_tablet_size_(OB_INVALID_SIZE), used_disk_space_(OB_INVALID_SIZE)
+    {}
+  ~ObAutoSplitTabletArg() = default;
+  int assign(const ObAutoSplitTabletArg &other);
+  bool is_valid() const
+  {
+    return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid() && tablet_id_.is_valid()
+        && OB_INVALID_SIZE != auto_split_tablet_size_ && OB_INVALID_SIZE != used_disk_space_;
+  };
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(auto_split_tablet_size), K_(used_disk_space));
+public:
+  share::ObLSID ls_id_;
+  ObTabletID tablet_id_;
+  uint64_t tenant_id_;
+  int64_t auto_split_tablet_size_;
+  int64_t used_disk_space_;
+};
+
+struct ObAutoSplitTabletBatchArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObAutoSplitTabletBatchArg()
+    : args_()
+    {}
+  ~ObAutoSplitTabletBatchArg() = default;
+  int assign(const ObAutoSplitTabletBatchArg &other);
+  bool is_valid() const;
+  TO_STRING_KV(K_(args));
+public:
+  ObSArray<ObAutoSplitTabletArg> args_;
+};
+
+struct ObAutoSplitTabletBatchRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObAutoSplitTabletBatchRes()
+    : rets_(), suggested_next_valid_time_(OB_INVALID_TIMESTAMP)
+    {}
+  ~ObAutoSplitTabletBatchRes() = default;
+  int assign(const ObAutoSplitTabletBatchRes &other);
+  bool is_valid() const;
+  TO_STRING_KV(K_(rets), K_(suggested_next_valid_time));
+public:
+  ObSArray<int64_t> rets_;
+  int64_t suggested_next_valid_time_;
+};
+
+struct ObFetchSplitTabletInfoArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObFetchSplitTabletInfoArg() : tenant_id_(OB_INVALID_TENANT_ID), ls_id_(), tablet_ids_() {}
+  ~ObFetchSplitTabletInfoArg() = default;
+  bool is_valid() const { return tenant_id_ != OB_INVALID_TENANT_ID && ls_id_.is_valid() && !tablet_ids_.empty(); }
+  int assign(const ObFetchSplitTabletInfoArg &other);
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_ids));
+public:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  common::ObSArray<ObTabletID> tablet_ids_;
+};
+
+struct ObFetchSplitTabletInfoRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObFetchSplitTabletInfoRes() : create_commit_versions_() {}
+  ~ObFetchSplitTabletInfoRes() = default;
+  bool is_valid() const { return !create_commit_versions_.empty(); }
+  int assign(const ObFetchSplitTabletInfoRes &other);
+  TO_STRING_KV(K_(create_commit_versions));
+public:
+  common::ObSArray<int64_t> create_commit_versions_;
+};
+
+
+// === RPC for tablet split end. ===
 
 struct ObLogReqLoadProxyRequest
 {
@@ -10776,7 +11284,7 @@ public:
   ~ObGetSSMicroBlockMetaArg() {}
   bool is_valid() const
   {
-    return  OB_INVALID_TENANT_ID != tenant_id_ && micro_key_.is_valid();;
+    return  OB_INVALID_TENANT_ID != tenant_id_ && micro_key_.is_valid();
   }
   TO_STRING_KV(K_(tenant_id), K_(micro_key));
 public:
@@ -11520,6 +12028,40 @@ public:
   TO_STRING_KV(K_(binding_datas));
 public:
   common::ObSArray<ObTabletBindingMdsUserData> binding_datas_;
+};
+
+struct ObBatchGetTabletSplitArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObBatchGetTabletSplitArg()
+    : tenant_id_(OB_INVALID_ID), ls_id_(), tablet_ids_(), check_committed_(false)
+  {}
+  ~ObBatchGetTabletSplitArg() {}
+public:
+  int assign(const ObBatchGetTabletSplitArg &other);
+  bool is_valid() const { return tenant_id_ != OB_INVALID_ID && ls_id_.is_valid() && tablet_ids_.count() > 0; }
+  int init(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObIArray<common::ObTabletID> &tablet_ids, const bool check_committed);
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_ids), K_(check_committed));
+public:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  common::ObSArray<common::ObTabletID> tablet_ids_;
+  bool check_committed_;
+};
+
+struct ObBatchGetTabletSplitRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObBatchGetTabletSplitRes() : split_datas_() {}
+  ~ObBatchGetTabletSplitRes() {}
+public:
+  int assign(const ObBatchGetTabletSplitRes &other);
+  bool is_valid() const { return split_datas_.count() > 0; }
+  TO_STRING_KV(K_(split_datas));
+public:
+  common::ObSArray<ObTabletSplitMdsUserData> split_datas_;
 };
 
 struct ObFetchLocationResult

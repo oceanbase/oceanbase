@@ -40,6 +40,7 @@ audit_log_strategy
 audit_sys_operations
 audit_trail
 autoinc_cache_refresh_interval
+auto_split_tablet_size
 backup_data_file_size
 balancer_idle_time
 balancer_log_interval
@@ -90,6 +91,7 @@ disk_io_thread_count
 dtl_buffer_size
 dump_data_dictionary_to_log_interval
 enable_async_syslog
+enable_auto_split
 enable_cgroup
 enable_crazy_medium_compaction
 enable_dblink

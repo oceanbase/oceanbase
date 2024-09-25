@@ -231,6 +231,42 @@ int ObLobPersistDeleteIter::get_next_row(blocksstable::ObDatumRow *&row)
   return ret;
 }
 
+int ObLobSimplePersistInsertIter::init()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(new_row_.init(ObLobMetaUtil::LOB_META_COLUMN_CNT))) {
+    LOG_WARN("init new datum row failed", K(ret));
+  }
+  return ret;
+}
+
+int ObLobSimplePersistInsertIter::get_next_row(blocksstable::ObDatumRow *&row)
+{
+  int ret = OB_SUCCESS;
+  if (pos_ >= lob_meta_list_.count()) {
+    ret = OB_ITER_END;
+  } else {
+    ObLobMetaInfo &info = lob_meta_list_[pos_];
+    ObString cur_seq_id;
+    if (OB_FAIL(seq_id_.get_next_seq_id(cur_seq_id))) {
+      LOG_WARN("get_next_seq_id fail", K(ret));
+    } else if (OB_FALSE_IT(info.lob_id_ = param_->lob_data_->id_)) {
+    } else if (OB_FALSE_IT(info.seq_id_ = cur_seq_id)) {
+    } else if (OB_FAIL(update_seq_no())) {
+      LOG_WARN("update_seq_no fail", K(ret));
+    } else if (OB_FAIL(ObLobManager::update_out_ctx(*param_, nullptr, info))) { // new row
+      LOG_WARN("failed update checksum.", K(ret));
+    } else if (OB_FAIL(inc_lob_size(info))) {
+      LOG_WARN("inc_lob_size fail", K(ret));
+    } else {
+      ++pos_;
+      ObPersistentLobApator::set_lob_meta_row(new_row_, info);
+      row = &new_row_;
+      LOG_TRACE("row", K(info));
+    }
+  }
+  return ret;
+}
 
 } // storage
 } // oceanbase
