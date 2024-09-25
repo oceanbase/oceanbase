@@ -1294,7 +1294,7 @@ int ObCreateViewResolver::add_column_infos(const uint64_t tenant_id,
     if ((!column_list.empty() && OB_UNLIKELY(column_list.count() != select_items.count()))
         || (!table_schema.is_sys_view() && !comment_list.empty()
              && OB_UNLIKELY(comment_list.count() != select_items.count()))) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_ERR_VIEW_INVALID;
       LOG_WARN("get wrong column count", K(ret), K(column_list.count()), K(comment_list.count()),
                                            K(select_items.count()), K(table_schema), K(select_stmt));
     }
