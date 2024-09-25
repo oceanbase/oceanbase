@@ -689,7 +689,7 @@ ObPluginVectorIndexService::~ObPluginVectorIndexService()
 void ObPluginVectorIndexService::destroy()
 {
   if (IS_INIT) {
-    LOG_INFO("destroy vector index load task timer", K_(tenant_id));
+    FLOG_INFO("destroy vector index service", K_(tenant_id));
     is_inited_ = false;
     has_start_ = false;
     tenant_id_ = OB_INVALID_TENANT_ID;
