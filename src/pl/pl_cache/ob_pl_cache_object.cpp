@@ -26,7 +26,7 @@ OB_SERIALIZE_MEMBER(ObPlParamInfo,
                     scale_,
                     type_,
                     ext_real_type_,
-                    is_oracle_empty_string_,
+                    is_oracle_null_value_,  // FARM COMPAT WHITELIST
                     col_type_,
                     pl_type_,
                     udt_id_);
@@ -54,8 +54,8 @@ int ObPLCacheObject::set_params_info(const ParamStore &params, bool is_anonymous
     param_info.flag_ = params.at(i).get_param_flag();
     param_info.type_ = params.at(i).get_param_meta().get_type();
     param_info.col_type_ = params.at(i).get_collation_type();
-    if (sql::ObSQLUtils::is_oracle_empty_string(params.at(i))) {
-      param_info.is_oracle_empty_string_ = true;
+    if (sql::ObSQLUtils::is_oracle_null_with_normal_type(params.at(i))) {
+      param_info.is_oracle_null_value_ = true;
     }
     if (params.at(i).get_param_meta().get_type() != params.at(i).get_type()) {
       LOG_TRACE("differ in set_params_info",

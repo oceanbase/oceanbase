@@ -2272,7 +2272,8 @@ int ObTransformUtils::is_expr_not_null(ObNotNullContext &ctx,
     bool is_null = false;
     if (OB_FAIL(is_const_expr_not_null(ctx, expr, is_not_null, is_null))) {
       LOG_WARN("failed to check calculable expr not null", K(ret));
-    } else if (is_not_null && NULL != constraints &&
+    } else if (is_not_null && !expr->is_const_raw_expr() &&
+               NULL != constraints &&
                OB_FAIL(constraints->push_back(const_cast<ObRawExpr*>(expr)))) {
       LOG_WARN("failed to push back constraint expr", K(ret));
     }
@@ -2352,7 +2353,7 @@ int ObTransformUtils::is_const_expr_not_null(ObNotNullContext &ctx,
     LOG_WARN("failed to calc const or calculable expr", K(ret));
   } 
   
-  if (OB_SUCC(ret) && got_result) {
+  if (OB_SUCC(ret) && got_result && !result.is_ext()) {
     if (result.is_null() || (lib::is_oracle_mode() && result.is_null_oracle())) {
       is_not_null = false;
       is_null = true;

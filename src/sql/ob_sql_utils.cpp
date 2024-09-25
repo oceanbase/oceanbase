@@ -4770,6 +4770,11 @@ bool ObSQLUtils::is_oracle_empty_string(const ObObjParam &param)
                               || ObNCharType == param.get_param_meta().get_type()));
 }
 
+bool ObSQLUtils::is_oracle_null_with_normal_type(const ObObjParam &param)
+{
+  return (param.is_null() && param.get_param_meta().get_type() != ObNullType);
+}
+
 bool ObSQLUtils::is_one_part_table_can_skip_part_calc(const ObTableSchema &schema)
 {
   bool can_skip = false;
@@ -4933,54 +4938,68 @@ int ObPreCalcExprConstraint::assign(const ObPreCalcExprConstraint &other, common
   return ret;
 }
 
-int ObPreCalcExprConstraint::check_is_match(const ObObjParam &obj_param, bool &is_match) const
+int ObPreCalcExprConstraint::check_is_match(ObDatumObjParam &datum_param,
+                                            ObExecContext &exec_ctx,
+                                            bool &is_match) const
 {
   int ret = OB_SUCCESS;
-  switch (expect_result_) {
-    case PRE_CALC_RESULT_NULL:
-      is_match = obj_param.is_null();
-      break;
-    case PRE_CALC_RESULT_NOT_NULL:
-      is_match = !obj_param.is_null();
-      break;
-    case PRE_CALC_RESULT_TRUE:
-      is_match = obj_param.get_bool();
-      break;
-    case PRE_CALC_RESULT_FALSE:
-      is_match = !obj_param.get_bool();
-      break;
-    case PRE_CALC_PRECISE:
-    case PRE_CALC_NOT_PRECISE: {
-      //default escape
-      //@todu JueHui: make escape value can be parameterized
-      char escape = '\\';
-      bool is_precise = false;
-      bool expect_precise = PRE_CALC_PRECISE == expect_result_;
-      if (OB_FAIL(ObQueryRange::is_precise_like_range(obj_param, escape, is_precise))) {
-        LOG_WARN("failed to check precise constraint.", K(ret));
-      } else {
-        is_match = is_precise == expect_precise;
+  ObObjParam obj_param;
+  ObDatum &datum = datum_param.datum_;
+  bool is_udt_type = false;
+  bool is_udt_null = false;
+  if (OB_FAIL(datum_param.to_objparam(obj_param, &exec_ctx.get_allocator()))) {
+    LOG_WARN("failed to obj param", K(ret));
+  } else if (OB_FALSE_IT(is_udt_type = lib::is_oracle_mode() && obj_param.get_param_meta().is_ext())) {
+  } else if (is_udt_type && OB_FAIL(pl::ObPLDataType::datum_is_null(&datum, is_udt_type, is_udt_null))) {
+    LOG_WARN("check complex value is null not support");
+  } else {
+    bool is_udt_type = lib::is_oracle_mode() && obj_param.get_param_meta().is_ext();
+    switch (expect_result_) {
+      case PRE_CALC_RESULT_NULL:
+        is_match = is_udt_type ? is_udt_null : obj_param.is_null();
+        break;
+      case PRE_CALC_RESULT_NOT_NULL:
+        is_match = is_udt_type ? !is_udt_null : !obj_param.is_null();
+        break;
+      case PRE_CALC_RESULT_TRUE:
+        is_match = obj_param.get_bool();
+        break;
+      case PRE_CALC_RESULT_FALSE:
+        is_match = !obj_param.get_bool();
+        break;
+      case PRE_CALC_PRECISE:
+      case PRE_CALC_NOT_PRECISE: {
+        //default escape
+        //@todu JueHui: make escape value can be parameterized
+        char escape = '\\';
+        bool is_precise = false;
+        bool expect_precise = PRE_CALC_PRECISE == expect_result_;
+        if (OB_FAIL(ObQueryRange::is_precise_like_range(obj_param, escape, is_precise))) {
+          LOG_WARN("failed to check precise constraint.", K(ret));
+        } else {
+          is_match = is_precise == expect_precise;
+        }
+        break;
+      }
+      case PRE_CALC_RESULT_NO_WILDCARD: {
+        ObString pattern_val = obj_param.get_string();
+        if (obj_param.is_lob()) {
+          is_match = false;
+        } else if (!pattern_val.empty()) {
+          is_match = OB_ISNULL(pattern_val.find('%')) &&
+                    OB_ISNULL(pattern_val.find('_')) &&
+                    OB_ISNULL(pattern_val.find('\\'));
+        } else {
+          is_match = true;
+        }
       }
       break;
-    }
-    case PRE_CALC_RESULT_NO_WILDCARD: {
-      ObString pattern_val = obj_param.get_string();
-      if (obj_param.is_lob()) {
-        is_match = false;
-      } else if (!pattern_val.empty()) {
-        is_match = OB_ISNULL(pattern_val.find('%')) &&
-                  OB_ISNULL(pattern_val.find('_')) &&
-                  OB_ISNULL(pattern_val.find('\\'));
-      } else {
-        is_match = true;
-      }
-    }
-    break;
-    default:
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected expect res type", K_(expect_result), K(ret));
-      break;
-  } // switch end
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected expect res type", K_(expect_result), K(ret));
+        break;
+    } // switch end
+  }
   return ret;
 }
 
@@ -5001,10 +5020,15 @@ int ObRowidConstraint::assign(const ObPreCalcExprConstraint &other, common::ObIA
   return ret;
 }
 
-int ObRowidConstraint::check_is_match(const ObObjParam &obj_param, bool &is_match) const
+int ObRowidConstraint::check_is_match(ObDatumObjParam &datum_param,
+                                      ObExecContext &exec_ctx,
+                                      bool &is_match) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!obj_param.is_urowid())) {
+  ObObjParam obj_param;
+  if (OB_FAIL(datum_param.to_objparam(obj_param, &exec_ctx.get_allocator()))) {
+    LOG_WARN("failed to obj param", K(ret));
+  } else if (OB_UNLIKELY(!obj_param.is_urowid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected rowid param", K(obj_param), K(ret));
   } else {

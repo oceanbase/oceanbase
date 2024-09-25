@@ -531,7 +531,7 @@ int ObTransformSimplifyExpr::extract_null_expr(ObRawExpr *expr,
                                                           got_result,
                                                           *ctx_->allocator_))) {
       LOG_WARN("failed to calc const or calculable expr", K(ret));
-    } else if (got_result && 
+    } else if (got_result && !result.is_ext() &&
                (result.is_null() || (lib::is_oracle_mode() && result.is_null_oracle())))  {
       if (OB_FAIL(null_expr_lists.push_back(expr))) {
         LOG_WARN("failed to push back expr", K(ret));
@@ -1440,7 +1440,7 @@ int ObTransformSimplifyExpr::do_remove_dummy_nvl(ObDMLStmt *stmt,
                                                                 got_result,
                                                                 *ctx_->allocator_))) {
             LOG_WARN("failed to calc const or caculable expr", K(ret));
-          } else if (got_result && (result.is_null()
+          } else if (got_result && !result.is_ext() && (result.is_null()
                      || (lib::is_oracle_mode() && result.is_null_oracle()))) {
             // NVL(NULL, child_1) -> child_1
             ObExprConstraint expr_cons(child_0, PreCalcExprExpectResult::PRE_CALC_RESULT_NULL);

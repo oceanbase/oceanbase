@@ -275,10 +275,10 @@ int ObPlanSet::match_param_info(const ObParamInfo &param_info,
         LOG_TRACE("ext match param info", K(data_type), K(param_info), K(is_same), K(ret));
       }
       LOG_DEBUG("ext match param info", K(data_type), K(param_info), K(is_same), K(ret));
-    } else if (param_info.is_oracle_empty_string_ && !param.is_null()) { //普通字符串不匹配空串的计划
+    } else if (param_info.is_oracle_null_value_ && !param.is_null()) {
       is_same = false;
-    } else if (ObSQLUtils::is_oracle_empty_string(param)
-               &&!param_info.is_oracle_empty_string_) { //空串不匹配普通字符串的计划
+    } else if (ObSQLUtils::is_oracle_null_with_normal_type(param)
+               &&!param_info.is_oracle_null_value_) { //Typed nulls can only match plans with the same type of nulls.
       is_same = false;
     } else if (param_info.flag_.is_boolean_ != param.is_boolean()) { //bool type not match int type
       is_same = false;
