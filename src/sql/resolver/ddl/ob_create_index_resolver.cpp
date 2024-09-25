@@ -217,7 +217,19 @@ int ObCreateIndexResolver::resolve_index_column_node(
       } else {
         sort_item.prefix_len_ = 0;
       }
-
+      // not support fts or vec index in same table
+      if (OB_SUCC(ret)) {
+        bool has_fts_index = false;
+        bool has_vec_index = false;
+        if (OB_FAIL(ObVectorIndexUtil::check_table_has_vector_of_fts_index(
+            *tbl_schema, *(schema_checker_->get_schema_guard()), has_fts_index, has_vec_index))) {
+          LOG_WARN("fail to check table has vec of fts index", K(ret));
+        } else if ((index_keyname_ == FTS_KEY && has_vec_index) || (index_keyname_ == VEC_KEY && has_fts_index)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("vector and fts index in same main table is not support", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector and fts index in same main table");
+        }
+      }
       if (OB_FAIL(ret)) {
         // do nothing
       } else if (index_keyname_ == FTS_KEY) {

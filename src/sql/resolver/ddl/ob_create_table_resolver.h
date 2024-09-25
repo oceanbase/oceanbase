@@ -154,6 +154,8 @@ private:
 
   uint64_t cur_udt_set_id_;
   common::ObSEArray<uint64_t, 4> vec_index_col_ids_;
+  bool has_vec_index_;
+  bool has_fts_index_;
 };
 
 } // end namespace sql

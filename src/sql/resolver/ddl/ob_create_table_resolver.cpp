@@ -63,7 +63,9 @@ ObCreateTableResolver::ObCreateTableResolver(ObResolverParams &params)
       index_arg_(),
       current_index_name_set_(),
       cur_udt_set_id_(0),
-      vec_index_col_ids_()
+      vec_index_col_ids_(),
+      has_vec_index_(false),
+      has_fts_index_(false)
 {
 }
 
@@ -2618,6 +2620,8 @@ int ObCreateTableResolver::resolve_index(
     SQL_RESV_LOG(WARN, "invalid argument.", K(ret), K(node->children_));
   } else {
     vec_index_col_ids_.reset();
+    has_vec_index_ = false;
+    has_fts_index_ = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < index_node_position_list.size(); ++i) {
       reset();
       index_attributes_set_ = OB_DEFAULT_INDEX_ATTRIBUTES_SET;
@@ -2693,11 +2697,16 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
         bool cnt_func_index_mysql = false;
         bool is_multi_value_index = false;
         const bool is_vec_index = (index_keyname_ == INDEX_KEYNAME::VEC_KEY);
+        const bool is_fts_index = (index_keyname_ == INDEX_KEYNAME::FTS_KEY);
         if (OB_FAIL(ret)) {
         } else if (is_vec_index && index_column_list_node->num_child_ >= 2) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("multi column of vector index is not support yet", K(ret), K(index_column_list_node->num_child_));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "multi vector index column is");
+        } else if ((is_vec_index && has_fts_index_) || (is_fts_index && has_vec_index_)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("vector index and fts coexist in main table is not support yet", K(ret), K(index_column_list_node->num_child_));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector index and fts coexist in main table is");
         }
         for (int32_t i = 0; OB_SUCC(ret) && i < index_column_list_node->num_child_; ++i) {
           ObString &column_name = sort_item.column_name_;
@@ -3114,6 +3123,8 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
               LOG_WARN("failed to append vec args", K(ret));
             } else if (OB_FAIL(vec_index_col_ids_.push_back(vec_index_col_id))) {
               LOG_WARN("fail to push back vec index col id", K(ret));
+            } else {
+              has_vec_index_ = true;
             }
           } else if (is_fts_index(index_arg_.index_type_)) {
             if (OB_FAIL(ObDDLResolver::append_fts_args(resolve_result,
@@ -3123,6 +3134,8 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
                                                        index_arg_list,
                                                        allocator_))) {
               LOG_WARN("failed to append fts args", K(ret));
+            } else {
+              has_fts_index_ = true;
             }
           } else if (is_multivalue_index(index_arg_.index_type_)) {
             if (OB_FAIL(ObDDLResolver::append_multivalue_args(resolve_result,
