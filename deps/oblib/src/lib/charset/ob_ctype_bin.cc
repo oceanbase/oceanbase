@@ -343,14 +343,14 @@ loop:
   }
   return 0;
 }
-void ob_hash_sort_8bit_bin(const ObCharsetInfo *cs __attribute__((unused)),
+void ob_hash_sort_8bit_bin(const ObCharsetInfo *cs,
               const uchar *key, size_t len, ulong *nr1, ulong *nr2, const bool calc_end_space, hash_algo hash_algo)
 {
   const uchar *pos = key;
   key += len;
   //trailing space to make 'A ' == 'A'
   if (!calc_end_space) {
-    key = skip_trailing_space(pos, len, 0);
+    key = cs->cset->skip_trailing_space(cs, pos, len);
   }
   if (NULL == hash_algo)
   {
@@ -413,7 +413,8 @@ static ObCharsetHandler ob_charset_handler=
   ob_strntoull_8bit,
   ob_strntod_8bit,
   ob_strntoull10rnd_8bit,
-  ob_scan_8bit
+  ob_scan_8bit,
+  skip_trailing_space
 };
 
 ObCollationHandler ob_collation_8bit_bin_handler =

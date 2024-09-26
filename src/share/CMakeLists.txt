@@ -30,8 +30,23 @@ ob_set_subtarget(ob_share ALONE
   vector/expr_cmp_func_parts/expr_cmp_func_part_13.cpp
   vector/expr_cmp_func_parts/expr_cmp_func_part_14.cpp
   vector/expr_cmp_func_parts/expr_cmp_func_part_15.cpp
-
   aggregate/approx_count_distinct_synopsis.cpp
+  datum/ob_datum_funcs_compilation_0.cpp
+  datum/ob_datum_funcs_compilation_1.cpp
+  datum/ob_datum_funcs_compilation_2.cpp
+  datum/ob_datum_funcs_compilation_3.cpp
+  datum/ob_datum_funcs_compilation_4.cpp
+  datum/ob_datum_funcs_compilation_5.cpp
+  datum/ob_datum_funcs_compilation_6.cpp
+  datum/ob_datum_funcs_compilation_7.cpp
+  datum/ob_datum_funcs_compilation_8.cpp
+  datum/ob_datum_funcs_compilation_9.cpp
+  datum/ob_datum_funcs_compilation_10.cpp
+  datum/ob_datum_funcs_compilation_11.cpp
+  datum/ob_datum_funcs_compilation_12.cpp
+  datum/ob_datum_funcs_compilation_13.cpp
+  datum/ob_datum_funcs_compilation_14.cpp
+  datum/ob_datum_funcs_compilation_15.cpp
 )
 
 file(GLOB SCHEMA_CPPS "inner_table/ob_inner_table_schema.*.cpp")

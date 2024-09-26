@@ -307,7 +307,7 @@ int ObDASDomainUtils::generate_spatial_index_rows(
   int ret = OB_SUCCESS;
   if (OB_ISNULL(helper)
       || OB_UNLIKELY(ObCollationType::CS_TYPE_INVALID == type
-                  || ObCollationType::CS_TYPE_EXTENDED_MARK < type)
+                  || ObCollationType::CS_TYPE_PINYIN_BEGIN_MARK <= type)
       || OB_UNLIKELY(!words_count.created())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KPC(helper), K(type), K(words_count.created()));

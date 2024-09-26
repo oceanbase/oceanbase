@@ -35,6 +35,10 @@ ob_set_subtarget(oblib_lib charset
   charset/uca900_zh2_tbls.cc
   charset/uca900_zh3_tbls.cc
   charset/ob_charset.cpp
+  charset/ob_ctype_sjis.cc
+  charset/ob_ctype_big5.cc
+  charset/ob_ctype_hkscs.cc
+  charset/ob_ctype_extra.cc
 )
 
 ob_set_subtarget(oblib_lib common

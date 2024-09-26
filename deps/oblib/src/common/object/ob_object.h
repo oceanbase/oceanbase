@@ -303,15 +303,15 @@ public:
   OB_INLINE bool is_decimal_int() const { return type_ == static_cast<uint8_t>(ObDecimalIntType); }
   OB_INLINE bool is_varchar() const
   {
-    return ((type_ == static_cast<uint8_t>(ObVarcharType)) && (CS_TYPE_BINARY != cs_type_));
+    return ((type_ == static_cast<uint8_t>(ObVarcharType)) && (CS_TYPE_BINARY != get_collation_type()));
   }
   OB_INLINE bool is_char() const
   {
-    return ((type_ == static_cast<uint8_t>(ObCharType)) && (CS_TYPE_BINARY != cs_type_));
+    return ((type_ == static_cast<uint8_t>(ObCharType)) && (CS_TYPE_BINARY != get_collation_type()));
   }
   OB_INLINE bool is_varbinary() const
   {
-    return (type_ == static_cast<uint8_t>(ObVarcharType) && CS_TYPE_BINARY == cs_type_);
+    return (type_ == static_cast<uint8_t>(ObVarcharType) && CS_TYPE_BINARY == get_collation_type());
   }
   static bool is_binary(const ObObjType type, const ObCollationType cs_type)
   {
@@ -319,11 +319,11 @@ public:
   }
   OB_INLINE bool is_binary() const
   {
-    return is_binary(static_cast<ObObjType>(type_), static_cast<ObCollationType>(cs_type_));
+    return is_binary(static_cast<ObObjType>(type_), get_collation_type());
   }
   OB_INLINE bool is_cs_collation_free() const
   {
-    return cs_type_ == CS_TYPE_UTF8MB4_GENERAL_CI || cs_type_ == CS_TYPE_UTF8MB4_BIN;
+    return get_collation_type() == CS_TYPE_UTF8MB4_GENERAL_CI || get_collation_type() == CS_TYPE_UTF8MB4_BIN;
   }
   OB_INLINE bool is_hex_string() const { return type_ == static_cast<uint8_t>(ObHexStringType); }
   OB_INLINE bool is_raw() const { return type_ == static_cast<uint8_t>(ObRawType); }
@@ -337,23 +337,23 @@ public:
     || type_ == static_cast<uint8_t>(ObSetType); }
   OB_INLINE bool is_text() const
   {
-    return (ob_is_text_tc(get_type()) && CS_TYPE_BINARY != cs_type_);
+    return (ob_is_text_tc(get_type()) && CS_TYPE_BINARY != get_collation_type());
   }
   /*OB_INLINE bool is_oracle_clob() const
   {
-    return (lib::is_oracle_mode() && ObLongTextType == get_type() && CS_TYPE_BINARY != cs_type_);
+    return (lib::is_oracle_mode() && ObLongTextType == get_type() && CS_TYPE_BINARY != get_collation_type());
   }*/
   OB_INLINE bool is_clob() const
   {
-    return (lib::is_oracle_mode() && ObLongTextType == get_type() && CS_TYPE_BINARY != cs_type_);
+    return (lib::is_oracle_mode() && ObLongTextType == get_type() && CS_TYPE_BINARY != get_collation_type());
   }
   /*OB_INLINE bool is_oracle_blob() const
   {
-    return (lib::is_oracle_mode() && ObLongTextType == get_type() && CS_TYPE_BINARY == cs_type_);
+    return (lib::is_oracle_mode() && ObLongTextType == get_type() && CS_TYPE_BINARY == get_collation_type());
   }*/
   OB_INLINE bool is_blob() const
   {
-    return (ob_is_text_tc(get_type()) && CS_TYPE_BINARY == cs_type_);
+    return (ob_is_text_tc(get_type()) && CS_TYPE_BINARY == get_collation_type());
   }
   OB_INLINE bool is_lob_storage() const
   { return ob_is_large_text(get_type())
@@ -416,24 +416,46 @@ public:
   OB_INLINE bool is_oracle_decimal() const { return ObNumberType == type_ || ObFloatType == type_ || ObDoubleType == type_ || ObDecimalIntType == type_; }
 
   OB_INLINE bool is_urowid() const { return ObURowIDType == type_; }
-  OB_INLINE bool is_blob_locator() const { return (ObLobType == type_ && CS_TYPE_BINARY == cs_type_); }
-  OB_INLINE bool is_clob_locator() const { return (ObLobType == type_ && CS_TYPE_BINARY != cs_type_); }
+  OB_INLINE bool is_blob_locator() const { return (ObLobType == type_ && CS_TYPE_BINARY == get_collation_type()); }
+  OB_INLINE bool is_clob_locator() const { return (ObLobType == type_ && CS_TYPE_BINARY != get_collation_type()); }
   OB_INLINE bool is_lob_locator() const { return ObLobType == type_; }
 
   OB_INLINE bool is_interval_type() const { return is_interval_ds() || is_interval_ym(); }
   OB_INLINE bool is_oracle_temporal_type() const { return is_datetime() || is_otimestamp_type() || is_interval_type(); }
 
-  OB_INLINE void set_collation_level(ObCollationLevel cs_level) { cs_level_ = cs_level; }
-  OB_INLINE void set_collation_type(ObCollationType cs_type) { cs_type_ = cs_type; }
-  OB_INLINE ObCollationType get_collation_type() {
-    // ObUserDefinedSQLType reused cs_type as part of sub schema id, therefore always return CS_TYPE_BINARY
-    return (is_user_defined_sql_type() || is_collection_sql_type()) ? CS_TYPE_BINARY : static_cast<ObCollationType>(cs_type_);
+  OB_INLINE void set_cs_level(uint8_t cs_level) {
+    cs_level_ = cs_level;
   }
+  OB_INLINE uint8_t get_cs_level() {
+    return cs_level_;
+  }
+  OB_INLINE void set_cs_type(uint8_t cs_type) {
+    cs_type_ = cs_type;
+  }
+  OB_INLINE uint8_t get_cs_type() {
+    return cs_type_;
+  }
+
+  OB_INLINE void set_collation_level(ObCollationLevel cs_level) {
+    cs_level_ = (cs_level_ & 0xF0) | (cs_level & 0xF);
+  }
+  OB_INLINE void set_collation_type(ObCollationType cs_type) {
+    cs_type_ = (cs_type & 0xFF);
+    cs_level_ = (cs_level_ & 0xF) | ((cs_type & 0xF00) >> 4);
+  }
+  OB_INLINE ObCollationType get_collation_type() {
+    return (is_user_defined_sql_type() || is_collection_sql_type()) ? CS_TYPE_BINARY:
+              static_cast<ObCollationType>((uint16_t)cs_type_ | (((uint16_t)cs_level_ & 0xF0) << 4));
+  }
+
   OB_INLINE void set_default_collation_type() { set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset())); }
-  OB_INLINE ObCollationLevel get_collation_level() const { return static_cast<ObCollationLevel>(cs_level_); }
+  OB_INLINE ObCollationLevel get_collation_level() const {
+    return static_cast<ObCollationLevel>(cs_level_ & 0x0F);
+  }
   OB_INLINE ObCollationType get_collation_type() const {
     // ObUserDefinedSQLType reused cs_type as part of sub schema id, therefore always return CS_TYPE_BINARY
-    return (is_user_defined_sql_type() || is_collection_sql_type()) ? CS_TYPE_BINARY : static_cast<ObCollationType>(cs_type_);
+    return (is_user_defined_sql_type() || is_collection_sql_type()) ? CS_TYPE_BINARY :
+                static_cast<ObCollationType>((uint16_t)cs_type_ | (((uint16_t)cs_level_ & 0xF0) << 4) );
   }
   OB_INLINE ObCharsetType get_charset_type() const {
     return ObCharset::charset_type_by_coll(get_collation_type());

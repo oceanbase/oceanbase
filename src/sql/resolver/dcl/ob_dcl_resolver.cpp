@@ -410,15 +410,22 @@ int ObDCLResolver::resolve_user_list_node(ParseNode *user_node,
     LOG_WARN("The child of user node should not be NULL", K(ret));
   } else {
     ParseNode *user_hostname_node = user_node;
+
     user_name = ObString (user_hostname_node->children_[0]->str_len_, user_hostname_node->children_[0]->str_value_);
-    if (NULL == user_hostname_node->children_[1]) {
+    if (user_hostname_node->children_[0]->type_ != T_IDENT && OB_FAIL(ObSQLUtils::convert_sql_text_to_schema_for_storing(
+                     *allocator_, session_info_->get_dtc_params(), user_name))) {
+      LOG_WARN("fail to convert user name to utf8", K(ret), K(user_name),
+                KPHEX(user_name.ptr(), user_name.length()));
+    } else if (NULL == user_hostname_node->children_[1]) {
       host_name.assign_ptr(OB_DEFAULT_HOST_NAME, static_cast<int32_t>(STRLEN(OB_DEFAULT_HOST_NAME)));
     } else {
       host_name.assign_ptr(user_hostname_node->children_[1]->str_value_,
                            static_cast<int32_t>(user_hostname_node->children_[1]->str_len_));
     }
-    if (OB_FAIL(schema_checker_->get_user_info(params_.session_info_->get_effective_tenant_id(),
-                                               user_name, host_name, user_info))) {
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to get user name", K(ret), K(user_name));
+    } else if (OB_FAIL(schema_checker_->get_user_info(params_.session_info_->get_effective_tenant_id(),
+                                                      user_name, host_name, user_info))) {
       LOG_WARN("failed to get user info", K(ret), K(user_name));
       if (OB_USER_NOT_EXIST == ret) {
         // 跳过, RS统一处理, 兼容MySQL行为

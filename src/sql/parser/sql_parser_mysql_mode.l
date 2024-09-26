@@ -121,6 +121,12 @@ _ASCII                       { REPUT_TOKEN_NEG_SIGN(_ASCII); }
 _TIS620                       { REPUT_TOKEN_NEG_SIGN(_TIS620); }
 _BINARY                       { REPUT_TOKEN_NEG_SIGN(_BINARY); }
 _UTF16                        { REPUT_TOKEN_NEG_SIGN(_UTF16); }
+_UTF16LE                      { REPUT_TOKEN_NEG_SIGN(_UTF16LE); }
+_SJIS                         { REPUT_TOKEN_NEG_SIGN(_SJIS); }
+_BIG5                         { REPUT_TOKEN_NEG_SIGN(_BIG5); }
+_HKSCS                      { REPUT_TOKEN_NEG_SIGN(_HKSCS); }
+_HKSCS31                     { REPUT_TOKEN_NEG_SIGN(_HKSCS31); }
+_DEC8                        { REPUT_TOKEN_NEG_SIGN(_DEC8); }
 NOT {
   int32_t token_ret = NOT; /*fast parameterize don't care NOT or NOT2*/
   if (!(IS_FAST_PARAMETERIZE)) {

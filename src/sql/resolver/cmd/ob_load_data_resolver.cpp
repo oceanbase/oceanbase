@@ -272,9 +272,12 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
       load_args.file_cs_type_ = CS_TYPE_UTF8MB4_BIN;
     }
     if (OB_SUCC(ret)) {
-      if (ObCharset::charset_type_by_coll(load_args.file_cs_type_) == CHARSET_UTF16) {
+      int64_t mbminlen = 0;
+      if (OB_FAIL(common::ObCharset::get_mbminlen_by_coll(load_args.file_cs_type_, mbminlen))) {
+        LOG_WARN("unexpected error ", K(ret));
+      } else if (mbminlen > 1) {
         ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "utf16 encoded files are");
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "compatible with ascii files are");
       }
     }
   }

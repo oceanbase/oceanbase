@@ -220,7 +220,7 @@ struct VecTCHashCalc<VEC_TC_LOB, HashMethod, hash_v2>
           const uchar *key = reinterpret_cast<const uchar *>(char_data);
           const uchar *pos = key;
           int length = char_len;
-          key = skip_trailing_space(key, char_len, 0);
+          key = skip_trailing_space(&ob_charset_utf8mb4_bin, key, char_len);
           length = (int)(key - pos);
           res = HashMethod::hash((void*)pos, length, seed);
         }
@@ -419,7 +419,7 @@ struct VecTCHashCalc<VEC_TC_STRING, HashMethod, hash_v2> {
         const uchar *key = reinterpret_cast<const uchar *>(data);
         const uchar *pos = key;
         int length = len;
-        key = skip_trailing_space(key, len, 0);
+        key = skip_trailing_space(&ob_charset_utf8mb4_bin, key, len);
         length = (int)(key - pos);
         res = HashMethod::hash((void*)pos, length, seed);
       }

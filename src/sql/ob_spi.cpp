@@ -969,7 +969,7 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
       } else {
         ObString res = result->get_string();
         OZ (ObCharsetUtils::remove_char_endspace(  // this function only adjust res.data_length_
-            res, ObCharset::charset_type_by_coll(result->get_collation_type())));
+            res, ObCharset::get_charset(result->get_collation_type())));
         OX (result->val_len_ = res.length());
       }
     } else {

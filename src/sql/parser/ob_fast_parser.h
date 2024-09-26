@@ -399,6 +399,11 @@ protected:
 	// ([\\\xef\][\\\xbc\][\\\x89])
 	int64_t is_utf8_multi_byte_right_parenthesis(const char *str, const int64_t start_pos);
 	// {GB_1}{GB_2}
+	int64_t is_hk_char(const int64_t pos);
+	int64_t is_hk_multi_byte_space(const char *str, const int64_t start_pos);
+	int64_t is_hk_multi_byte_comma(const char *str, const int64_t start_pos);
+	int64_t is_hk_multi_byte_left_parenthesis(const char *str, const int64_t start_pos);
+	int64_t is_hk_multi_byte_right_parenthesis(const char *str, const int64_t start_pos);
 	int64_t is_gbk_char(const int64_t pos);
 	// ([\\\xa1][\\\xa1])
 	int64_t is_gbk_multi_byte_space(const char *str, const int64_t start_pos);
@@ -438,12 +443,28 @@ protected:
 		return is_valid_char(ch) &&
 		static_cast<uint8_t>(ch) >= 0x81 && static_cast<uint8_t>(ch) <= 0xfe;
 	}
+	// [\x81-\xfe]
+	inline bool is_hk1(char ch)
+	{
+		return is_valid_char(ch) &&
+		static_cast<uint8_t>(ch) >= 0x81 && static_cast<uint8_t>(ch) <= 0xfe;
+	}
+
 	// [\x40-\xfe]
 	inline bool is_gb2(char ch)
 	{
 		return is_valid_char(ch) &&
 		static_cast<uint8_t>(ch) >= 0x40 && static_cast<uint8_t>(ch) <= 0xfe;
 	}
+
+	// [\x81-\xfe]
+	inline bool is_hk2(char ch)
+	{
+		return is_valid_char(ch) &&
+		((static_cast<uint8_t>(ch) >= 0x40 && static_cast<uint8_t>(ch) <= 0x7e)
+		|| (static_cast<uint8_t>(ch) >= 0xa1 && static_cast<uint8_t>(ch) <= 0xfe));
+	}
+
 	inline bool notascii(char ch)
 	{
 		return 	is_valid_char(ch) &&

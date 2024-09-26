@@ -238,7 +238,7 @@ int ObFTParseHelper::segment(
   } else if (OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator ptr is nullptr", K(ret), KP_(allocator), K_(is_inited));
-  } else if (OB_UNLIKELY(CS_TYPE_INVALID == type || type >= CS_TYPE_EXTENDED_MARK)) {
+  } else if (OB_UNLIKELY(CS_TYPE_INVALID == type || type >= CS_TYPE_PINYIN_BEGIN_MARK)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(type));
   } else if (OB_ISNULL(cs = common::ObCharset::get_charset(type))) {

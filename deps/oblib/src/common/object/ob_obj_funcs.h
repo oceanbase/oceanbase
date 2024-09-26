@@ -1297,7 +1297,7 @@ inline int obj_print_plain_str<ObHexStringType>(const ObObj &obj, char *buffer,
     PRINT_META();                                                       \
     BUF_PRINTO(ob_obj_type_str(obj.get_type()));                        \
     J_COLON();                                                          \
-    if (obj.is_binary() || src_type == CHARSET_UTF16) {                 \
+    if (obj.is_binary() || src_type == CHARSET_UTF16 || src_type == CHARSET_UTF16LE) {      \
       hex_print(obj.get_string_ptr(), obj.get_string_len(), buf, buf_len, pos); \
     } else {                                                            \
       BUF_PRINTO(obj.get_varchar());                                    \
