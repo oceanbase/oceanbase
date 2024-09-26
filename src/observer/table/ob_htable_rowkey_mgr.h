@@ -52,7 +52,7 @@ public:
   const static int MAX_HROWKEY_QUEUE_SIZE = 10240;
 public:
   HRowkeyQueue() = default;
-  ~HRowkeyQueue() = default;
+  ~HRowkeyQueue() { destroy(); }
   int push(HRowkeyQueueNode *node);
   int pop(HRowkeyQueueNode *&node);
   int init();
