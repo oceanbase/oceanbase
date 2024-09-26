@@ -3325,10 +3325,38 @@ int ObPLResolver::resolve_dblink_row_type_with_synonym(ObPLResolveCtx &resolve_c
   uint64_t syn_id = OB_INVALID_ID;
   ObString empty_str;
   int64_t cnt = access_idxs.count();
-  int64_t syn_idx = cnt - (is_row_type ? 1 : 2);
+  int64_t syn_idx = -1;
+  ObSqlString full_name;
+  for (int64_t i = 0; OB_SUCC(ret) && i < access_idxs.count(); i++) {
+    if (ObObjAccessIdx::IS_DBLINK_PKG_NS == access_idxs.at(i).access_type_) {
+      syn_idx = i;
+    }
+    OZ (full_name.append_fmt((i == 0 ? "%.*s" : ".%.*s"),
+                              access_idxs.at(i).var_name_.length(),
+                              access_idxs.at(i).var_name_.ptr()));
+  }
   OZ (checker.init(resolve_ctx.schema_guard_, resolve_ctx.session_info_.get_sessid()));
-  OV (is_row_type ? cnt >= 1 : cnt >= 2, OB_ERR_UNEXPECTED, K(is_row_type), K(cnt));
   OX (syn_id = static_cast<uint64_t>(access_idxs.at(syn_idx).var_index_));
+  OV (OB_INVALID_ID != syn_id, OB_ERR_UNEXPECTED, syn_id, syn_idx);
+  if (OB_FAIL(ret)) {
+  } else if (is_row_type) {
+    if (cnt < 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cnt is error", K(ret), K(cnt));
+    } else if (syn_idx < (access_idxs.count() - 1)) {
+      ret = OB_ERR_WRONG_ROWTYPE;
+      LOG_USER_ERROR(OB_ERR_WRONG_ROWTYPE, full_name.string().length(), full_name.string().ptr());
+    }
+  } else {
+    if (syn_idx >= (access_idxs.count() - 1)) {
+      ret = OB_ERR_TYPE_DECL_ILLEGAL;
+      LOG_USER_ERROR(OB_ERR_TYPE_DECL_ILLEGAL,
+                     full_name.string().length(), full_name.string().ptr());
+    } else if (cnt < 2) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("access idx count error", K(ret), K(cnt));
+    }
+  }
   OZ (ObPLDblinkUtil::separate_name_from_synonym(checker, resolve_ctx.allocator_,
                                                  resolve_ctx.session_info_.get_effective_tenant_id(),
                                                  resolve_ctx.session_info_.get_database_name(),
@@ -3397,15 +3425,21 @@ int ObPLResolver::resolve_dblink_row_type(const ObString &db_name,
         OX (pl_type.set_type_from_orgin(pl_type.get_type_from()));
         OX (pl_type.set_type_from(PL_TYPE_ATTR_ROWTYPE));
       } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < record_type->get_member_count(); i++) {
+        bool find = false;
+        for (int64_t i = 0; OB_SUCC(ret) && !find && i < record_type->get_member_count(); i++) {
           const ObString *mem_name = record_type->get_record_member_name(i);
           CK (OB_NOT_NULL(mem_name));
           if (OB_SUCC(ret) && 0 == mem_name->case_compare(col_name)) {
+            find = true;
             CK (OB_NOT_NULL(record_type->get_record_member_type(i)));
             OX (pl_type = *(record_type->get_record_member_type(i)));
             break;
           }
         } // end for
+        if (!find) {
+          ret = OB_ERR_COMPONENT_UNDECLARED;
+          LOG_USER_ERROR(OB_ERR_COMPONENT_UNDECLARED, col_name.length(), col_name.ptr());
+        }
       } // end if
     }
   }
