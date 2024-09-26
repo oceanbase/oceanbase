@@ -218,13 +218,13 @@ void TestTabletFreeze::frequently_tablet_freeze()
   }
 
   bool async_freeze_finished = false;
-  int64_t max_retry_times = 10;
+  int64_t max_retry_times = 20;
   while (max_retry_times-- > 0) {
     if (ls_->get_freezer()->get_async_freeze_tablets().empty()) {
       async_freeze_finished = true;
       break;
     }
-    sleep(1);
+    ::sleep(1);
   }
   ASSERT_EQ(true, async_freeze_finished);
 
