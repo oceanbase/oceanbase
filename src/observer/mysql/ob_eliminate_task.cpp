@@ -212,7 +212,7 @@ void ObEliminateTask::runTimerTask()
       allocator->set_total_limit(config_mem_limit_);
     }
     int64_t end_time = ObTimeUtility::current_time();
-    LOG_INFO("sql audit evict task end",
+    LOG_TRACE("sql audit evict task end",
              K(request_manager_->get_tenant_id()),
              K(evict_high_mem_level),
              K(evict_high_size_level),
