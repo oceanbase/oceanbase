@@ -53,6 +53,8 @@ int ObXAService::generate_xid(const ObTransID &tx_id, ObXATransID &new_xid)
     TRANS_LOG(WARN, "unexpected gtrid length", K(ret), K(base_len));
   } else {
     ObString gtrid_string;
+    const char *gtrid_full_format = "%s,%s";
+    char gtrid_full_str[ObXATransID::MAX_GTRID_LENGTH] = {0};
     if (GCONF.self_addr_.using_ipv4()) {
       char ip_port[MAX_IP_PORT_LENGTH];
       int ip_str_length = 0;
@@ -60,8 +62,6 @@ int ObXAService::generate_xid(const ObTransID &tx_id, ObXATransID &new_xid)
       if (OB_FAIL(GCONF.self_addr_.addr_to_buffer(ip_port, MAX_IP_PORT_LENGTH, ip_str_length))) {
         TRANS_LOG(WARN, "convert server to string failed", K(ret), K(tx_id));
       } else {
-        const char *gtrid_full_format = "%s,%s";
-        char gtrid_full_str[ObXATransID::MAX_GTRID_LENGTH] = {0};
         int full_len = snprintf(gtrid_full_str, ObXATransID::MAX_GTRID_LENGTH, gtrid_full_format,
                                 gtrid_base_str, ip_port);
         if (ObXATransID::MAX_GTRID_LENGTH <= full_len || 0 > full_len) {
