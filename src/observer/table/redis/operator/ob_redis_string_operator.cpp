@@ -40,6 +40,8 @@ int StringCommandOperator::build_rowkey_entity(int64_t db, const ObString &key, 
                  obj_ptr = static_cast<ObObj *>(redis_ctx_.allocator_.alloc(sizeof(ObObj) * STRING_ROWKEY_SIZE)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory for ObObj", K(ret));
+  } else if (OB_FAIL(ObRedisCtx::reset_objects(obj_ptr, STRING_ROWKEY_SIZE))) {
+    LOG_WARN("fail to init object", K(ret));
   } else {
     obj_ptr[0].set_int(db);
     obj_ptr[1].set_varbinary(key);

@@ -881,10 +881,14 @@ int CommandOperator::build_del_query(int64_t db, const ObString &key, ObTableQue
                     static_cast<ObObj *>(op_temp_allocator_.alloc(sizeof(ObObj) * ObRedisUtil::COMPLEX_ROWKEY_NUM)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory for ObObj", K(ret));
+  } else if (OB_FAIL(ObRedisCtx::reset_objects(start_ptr, ObRedisUtil::COMPLEX_ROWKEY_NUM))) {
+    LOG_WARN("fail to init object", K(ret));
   } else if (OB_ISNULL(end_ptr = static_cast<ObObj *>(
                            op_temp_allocator_.alloc(sizeof(ObObj) * ObRedisUtil::COMPLEX_ROWKEY_NUM)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory for ObObj", K(ret));
+  } else if (OB_FAIL(ObRedisCtx::reset_objects(end_ptr, ObRedisUtil::COMPLEX_ROWKEY_NUM))) {
+    LOG_WARN("fail to init object", K(ret));
   } else if (OB_FAIL(rkey.encode(rkey_str))) {
     LOG_WARN("fail to encode rkey", K(ret), K(rkey));
   } else if (OB_FAIL(rkey.encode_next_prefix(next_rkey_str))) {

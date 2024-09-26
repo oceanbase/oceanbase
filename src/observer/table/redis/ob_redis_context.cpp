@@ -182,6 +182,8 @@ int ObRedisCtx::init_cmd_ctx(int db, const ObString &table_name, const ObIArray<
       obj_ptr = static_cast<ObObj *>(tmp_allocator.alloc(sizeof(ObObj) * 2)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory for ObObj", K(ret));
+  } else if (OB_FAIL(reset_objects(obj_ptr, 2))) {
+    LOG_WARN("fail to init object", K(ret));
   } else {
     obj_ptr[0].set_int(db);
     ObRowkey rowkey(obj_ptr, 2);
@@ -264,6 +266,27 @@ int ObRedisCtx::try_get_table_info(ObRedisTableInfo *&tb_info)
   } else if (OB_FAIL(cmd_ctx_->get_info(cur_table_idx_, tb_info))) {
     LOG_WARN("fail to get info", K(ret), K(cur_table_idx_));
   }
+  return ret;
+}
+
+int ObRedisCtx::reset_objects(common::ObObj *objs, int64_t obj_cnt)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(objs)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("invalid null objs", K(ret), K(obj_cnt));
+  } else if (obj_cnt == 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("obj_cnt is zero", K(ret));
+  } else {
+    ObObj *ptr = objs;
+    for (int64_t i = 0; i < obj_cnt; i++) {
+      ptr = new (ptr) ObObj();
+      ptr++;
+    }
+  }
+
   return ret;
 }
 

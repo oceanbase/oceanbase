@@ -330,10 +330,14 @@ int ZSetCommandOperator::get_rank_in_same_score(
                     static_cast<ObObj *>(op_temp_allocator_.alloc(sizeof(ObObj) * 3)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory for ObObj", K(ret));
+  } else if (OB_FAIL(ObRedisCtx::reset_objects(start_ptr, 3))) {
+    LOG_WARN("fail to init object", K(ret));
   } else if (OB_ISNULL(end_ptr = static_cast<ObObj *>(
                            op_temp_allocator_.alloc(sizeof(ObObj) * 3)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory for ObObj", K(ret));
+  } else if (OB_FAIL(ObRedisCtx::reset_objects(end_ptr, 3))) {
+    LOG_WARN("fail to init object", K(ret));
   } else if (OB_FAIL(rkey.encode(rkey_str))) {
     LOG_WARN("fail to encode rkey", K(ret), K(rkey));
   } else {
@@ -568,10 +572,14 @@ int ZSetCommandOperator::build_rank_scan_query(ObIAllocator &allocator, int64_t 
                     static_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * SCORE_INDEX_COL_NUM)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory for ObObj", K(ret));
+  } else if (OB_FAIL(ObRedisCtx::reset_objects(start_ptr, SCORE_INDEX_COL_NUM))) {
+    LOG_WARN("fail to init object", K(ret));
   } else if (OB_ISNULL(end_ptr = static_cast<ObObj *>(
                            allocator.alloc(sizeof(ObObj) * SCORE_INDEX_COL_NUM)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory for ObObj", K(ret));
+  } else if (OB_FAIL(ObRedisCtx::reset_objects(end_ptr, SCORE_INDEX_COL_NUM))) {
+    LOG_WARN("fail to init object", K(ret));
   } else {
     // index: <db, vk, score>
     start_ptr[0].set_int(zrange_ctx.db_);
@@ -740,10 +748,14 @@ int ZSetCommandOperator::build_score_scan_query(ObIAllocator &allocator,
                     static_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * SCORE_INDEX_COL_NUM)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory for ObObj", K(ret));
+  } else if (OB_FAIL(ObRedisCtx::reset_objects(start_ptr, SCORE_INDEX_COL_NUM))) {
+    LOG_WARN("fail to init object", K(ret));
   } else if (OB_ISNULL(end_ptr = static_cast<ObObj *>(
                            allocator.alloc(sizeof(ObObj) * SCORE_INDEX_COL_NUM)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory for ObObj", K(ret));
+  } else if (OB_FAIL(ObRedisCtx::reset_objects(end_ptr, SCORE_INDEX_COL_NUM))) {
+    LOG_WARN("fail to init object", K(ret));
   } else {
     // index: db, key, score
     start_ptr[0].set_int(zrange_ctx.db_);

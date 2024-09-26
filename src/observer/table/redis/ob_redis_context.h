@@ -125,6 +125,7 @@ public:
   OB_INLINE bool is_cmd_support_group() const { return is_cmd_support_group_; }
   OB_INLINE void set_is_enable_group_op(bool is_enable_group_op) { is_enable_group_op_ = is_enable_group_op; }
   OB_INLINE bool is_enable_group_op() const { return is_enable_group_op_; }
+  static int reset_objects(common::ObObj *objs, int64_t obj_cnt);
 private:
   int get_tablet_id(const ObRowkey &rowkey,
                     const ObSimpleTableSchemaV2 &simple_table_schema,

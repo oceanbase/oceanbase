@@ -58,6 +58,22 @@ int ObTableOpWrapper::process_op_with_spec(ObTableCtx &tb_ctx,
     if (tb_ctx.return_affected_entity() && op_result.get_affected_rows() > 0 &&
         OB_FAIL(process_affected_entity(tb_ctx, *spec, op_result))) {
       LOG_WARN("fail to process affected entity", K(ret), K(tb_ctx));
+    } else if (!tb_ctx.is_htable() && ObTableOperationType::Type::INSERT_OR_UPDATE == tb_ctx.get_opertion_type()) {
+      // not duplicated then do insert, duplicated do update
+      if (tb_ctx.is_ttl_table()) {
+        op_result.set_insertup_do_insert(!static_cast<ObTableApiTTLExecutor *>(executor)->is_insert_duplicated());
+      } else {
+        op_result.set_insertup_do_insert(!static_cast<ObTableApiInsertUpExecutor *>(executor)->is_insert_duplicated());
+        op_result.set_insertup_do_put(static_cast<ObTableApiInsertUpExecutor *>(executor)->is_use_put());
+        if (tb_ctx.is_redis_ttl_table() && op_result.get_is_insertup_do_update()) {
+          const ObNewRow *old_row = nullptr;
+          if (OB_FAIL(static_cast<ObTableApiInsertUpExecutor *>(executor)->get_old_row(old_row))) {
+            LOG_WARN("fail to get old row", K(ret));
+          } else {
+            op_result.set_insertup_old_row(old_row);
+          }
+        }
+      }
     }
   }
 
@@ -69,23 +85,6 @@ int ObTableOpWrapper::process_op_with_spec(ObTableCtx &tb_ctx,
 
   op_result.set_err(ret);
   op_result.set_type(tb_ctx.get_opertion_type());
-  if (!tb_ctx.is_htable() && ObTableOperationType::Type::INSERT_OR_UPDATE == tb_ctx.get_opertion_type()) {
-    // not duplicated then do insert, duplicated do update
-    if (tb_ctx.is_ttl_table()) {
-      op_result.set_insertup_do_insert(!static_cast<ObTableApiTTLExecutor*>(executor)->is_insert_duplicated());
-    } else {
-      op_result.set_insertup_do_insert(!static_cast<ObTableApiInsertUpExecutor*>(executor)->is_insert_duplicated());
-      op_result.set_insertup_do_put(static_cast<ObTableApiInsertUpExecutor*>(executor)->is_use_put());
-      if (tb_ctx.is_redis_ttl_table() && op_result.get_is_insertup_do_update()) {
-        const ObNewRow *old_row = nullptr;
-        if (OB_FAIL(static_cast<ObTableApiInsertUpExecutor*>(executor)->get_old_row(old_row))) {
-          LOG_WARN("fail to get old row", K(ret));
-        } else {
-          op_result.set_insertup_old_row(old_row);
-        }
-      }
-    }
-  }
   spec->destroy_executor(executor);
   return ret;
 }

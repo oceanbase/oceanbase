@@ -559,13 +559,13 @@ int ObTableApiInsertUpExecutor::get_old_row(const ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
 
-  int64_t column_nums = tb_ctx_.get_column_info_array().count();
+  int64_t column_nums = conflict_checker_.checker_ctdef_.table_column_exprs_.count();
   ObNewRow *tmp_row = nullptr;
   char *row_buf = nullptr;
   ObObj *cells = nullptr;
-  if (OB_ISNULL(old_row_)) {
+  if (OB_ISNULL(old_row_) || OB_ISNULL(old_row_->cells()) || old_row_->cnt_ != column_nums) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("old_row_ is null", K(ret));
+    LOG_WARN("old_row_ is null", K(ret), KPC(old_row_));
   } else if (OB_ISNULL(row_buf = static_cast<char *>(tb_ctx_.get_allocator().alloc(sizeof(ObNewRow))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc ObNewRow buffer", K(ret));

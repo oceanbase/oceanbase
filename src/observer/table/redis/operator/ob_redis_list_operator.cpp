@@ -36,6 +36,8 @@ int ListCommandOperator::build_list_type_rowkey(ObIAllocator &allocator,
               static_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * ObRedisUtil::LIST_ROWKEY_NUM)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory for ObObj", K(ret));
+  } else if (OB_FAIL(ObRedisCtx::reset_objects(obj_ptr, ObRedisUtil::LIST_ROWKEY_NUM))) {
+    LOG_WARN("fail to init object", K(ret));
   } else {
     obj_ptr[0].set_int(db);
     obj_ptr[1].set_varbinary(key);
@@ -497,6 +499,8 @@ int ListCommandOperator::build_rowkey(
           obj_ptr = static_cast<ObObj *>(op_temp_allocator_.alloc(sizeof(ObObj) * ObRedisUtil::LIST_ROWKEY_NUM)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("ArgNodeContent cast to string invalid value", K(ret));
+  } else if (OB_FAIL(ObRedisCtx::reset_objects(obj_ptr, ObRedisUtil::LIST_ROWKEY_NUM))) {
+    LOG_WARN("fail to init object", K(ret));
   } else {
     obj_ptr[0].set_int(db);
     obj_ptr[1].set_varbinary(key);

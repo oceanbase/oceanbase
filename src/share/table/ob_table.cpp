@@ -1009,6 +1009,7 @@ void ObTableResult::set_errno(int err) {
 ObTableOperationResult::ObTableOperationResult()
     :operation_type_(ObTableOperationType::GET),
      entity_(NULL),
+     insertup_old_row_(nullptr),
      affected_rows_(0),
      flags_(0)
 {}
@@ -1020,6 +1021,7 @@ void ObTableOperationResult::reset()
   entity_->reset();
   affected_rows_ = 0;
   flags_ = 0;
+  insertup_old_row_ = nullptr;
 }
 
 int ObTableOperationResult::get_entity(const ObITableEntity *&entity) const

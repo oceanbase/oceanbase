@@ -52,6 +52,7 @@ public:
         insert_up_spec_(spec),
         insert_up_rtdefs_(),
         insert_row_(nullptr),
+        old_row_(nullptr),
         insert_rows_(0),
         upd_changed_rows_(0),
         upd_rtctx_(eval_ctx_, exec_ctx_, get_fake_modify_op()),
