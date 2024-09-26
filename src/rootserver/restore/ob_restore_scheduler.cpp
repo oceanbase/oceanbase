@@ -1137,7 +1137,20 @@ int ObRestoreScheduler::restore_init_ls(const share::ObPhysicalRestoreJob &job_i
       }
     }
   }
-  if (OB_SUCC(ret)) {
+
+#ifdef ERRSIM
+    ret = OB_E(EventTable::EN_RESTORE_CREATE_LS_FAILED) OB_SUCCESS;
+#endif
+
+  TenantRestoreStatus tenant_restore_status;
+  if (OB_FAIL(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(check_all_ls_restore_to_consistent_scn_finish_(tenant_id_, tenant_restore_status))) {
+      LOG_WARN("failed to check all ls restore to consistent scn finish", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret) || is_tenant_restore_failed(tenant_restore_status)) {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = try_update_job_status(*sql_proxy_, ret, job_info))) {
       tmp_ret = OB_SUCC(ret) ? tmp_ret : ret;
