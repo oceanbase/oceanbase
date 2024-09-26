@@ -320,7 +320,6 @@ int TestDmlCommon::mock_access_service(
     ObAccessService *svc = MTL(ObAccessService*);
     // do copy
     mock_svc->is_inited_ = svc->is_inited_;
-    mock_svc->tenant_id_ = svc->tenant_id_;
     mock_svc->ls_svr_ = svc->ls_svr_;
     mock_svc->tablet_service_ = tablet_service;
 
