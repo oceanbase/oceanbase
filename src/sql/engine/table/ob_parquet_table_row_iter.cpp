@@ -1323,6 +1323,8 @@ int ObParquetTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
         if (OB_SUCC(ret)) {
           DataLoader loader(eval_ctx, file_column_exprs_.at(i), column_readers_.at(i).get(),
                             def_levels_buf_, rep_levels_buf_, capacity, read_count);
+          MEMSET(def_levels_buf_.get_data(), 0, sizeof(def_levels_buf_.at(0)) * eval_ctx.max_batch_size_);
+          MEMSET(rep_levels_buf_.get_data(), 0, sizeof(rep_levels_buf_.at(0)) * eval_ctx.max_batch_size_);
           OZ (file_column_exprs_.at(i)->init_vector_for_write(
                 eval_ctx, file_column_exprs_.at(i)->get_default_res_format(), eval_ctx.max_batch_size_));
           OZ (loader.load_data_for_col(load_funcs_.at(i)));

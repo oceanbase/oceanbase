@@ -707,7 +707,9 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
 
       if (OB_SUCC(ret) && table_schema.is_external_table() && !table_schema.is_user_specified_partition_for_external_table()) {
         //auto refresh after create external table
-        OZ (ObExternalTableFileManager::get_instance().update_inner_table_file_list(ctx, tenant_id, res.table_id_, file_urls, file_sizes));
+        ObArray<uint64_t> updated_part_ids; //not used
+        bool has_partition_changed = false; //not used
+        OZ (ObExternalTableFileManager::get_instance().update_inner_table_file_list(ctx, tenant_id, res.table_id_, file_urls, file_sizes, updated_part_ids, has_partition_changed));
       }
     } else {
       if (table_schema.is_external_table()) {
@@ -1045,13 +1047,14 @@ int ObAlterTableExecutor::execute_alter_external_table(ObExecContext &ctx, ObAlt
 
       //TODO [External Table] opt performance
       ObSEArray<ObAddr, 8> all_servers;
+      ObSEArray<uint64_t, 64> updated_part_ids;
+      bool has_partition_changed = false;
       OZ (GCTX.location_service_->external_table_get(stmt.get_tenant_id(), arg.alter_table_schema_.get_table_id(), all_servers));
       OZ (ObExternalTableFileManager::get_instance().update_inner_table_file_list(ctx, stmt.get_tenant_id(),
-                  arg.alter_table_schema_.get_table_id(), file_urls, file_sizes));
-      for (int64_t i = 0; OB_SUCC(ret) && i < arg.alter_table_schema_.get_partition_num(); i++) {
-        CK (OB_NOT_NULL(arg.alter_table_schema_.get_part_array()[i]));
+                  arg.alter_table_schema_.get_table_id(), file_urls, file_sizes, updated_part_ids, has_partition_changed));
+      for (int64_t i = 0; OB_SUCC(ret) && i < updated_part_ids.count(); i++) {
         OZ (ObExternalTableFileManager::get_instance().flush_external_file_cache(stmt.get_tenant_id(),
-                  arg.alter_table_schema_.get_table_id(), arg.alter_table_schema_.get_part_array()[i]->get_part_id(), all_servers));
+                  arg.alter_table_schema_.get_table_id(), updated_part_ids.at(i), all_servers));
       }
       break;
     }
@@ -1196,11 +1199,14 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
                                                 is_sync_ddl_user))) {
             LOG_WARN("Failed to alter table rpc v2", K(ret));
           } else if (alter_table_arg.alter_table_schema_.is_external_table()) {
-
+            ObSEArray<uint64_t, 1> updated_part_ids;
+            bool has_partition_changed = false;
             if (alter_table_arg.alter_part_type_ == ObAlterTableArg::ADD_PARTITION) {
               if (res.res_arg_array_.size() > 0) {
                 int64_t part_id = res.res_arg_array_.at(0).part_object_id_;
-                OZ (ObExternalTableFileManager::get_instance().update_inner_table_file_list(ctx, tenant_id, alter_table_arg.alter_table_schema_.get_table_id(), file_urls, file_sizes, part_id));
+                OZ (ObExternalTableFileManager::get_instance().update_inner_table_file_list(
+                  ctx, tenant_id, alter_table_arg.alter_table_schema_.get_table_id(),
+                  file_urls, file_sizes, updated_part_ids, has_partition_changed, part_id));
               } else {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("unexpected error", K(ret));
@@ -1209,7 +1215,9 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
               if (res.res_arg_array_.size() > 0) {
                 int64_t part_id = res.res_arg_array_.at(0).part_object_id_;
                 ObSEArray<ObAddr, 8> all_servers;
-                OZ (ObExternalTableFileManager::get_instance().update_inner_table_file_list(ctx, tenant_id, alter_table_arg.alter_table_schema_.get_table_id(), file_urls, file_sizes, part_id));
+                OZ (ObExternalTableFileManager::get_instance().update_inner_table_file_list(
+                  ctx, tenant_id, alter_table_arg.alter_table_schema_.get_table_id(),
+                  file_urls, file_sizes, updated_part_ids, has_partition_changed, part_id));
                 OZ (GCTX.location_service_->external_table_get(tenant_id, alter_table_arg.alter_table_schema_.get_table_id(), all_servers));
                 OZ (ObExternalTableFileManager::get_instance().flush_external_file_cache(tenant_id, alter_table_arg.alter_table_schema_.get_table_id(), part_id, all_servers));
               } else {

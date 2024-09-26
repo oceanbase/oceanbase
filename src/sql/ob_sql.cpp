@@ -4960,13 +4960,21 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
       }
     }
     if (OB_SUCC(ret) && NULL != phy_plan) {
+      bool has_partition_changed = false;
       CK (pc_ctx.exec_ctx_.get_sql_ctx()->schema_guard_ != NULL);
       for (int64_t i = 0; OB_SUCC(ret) && i < phy_plan->get_immediate_refresh_external_table_ids().count(); i++) {
         int64_t object_id = phy_plan->get_immediate_refresh_external_table_ids().at(i);
+        bool has_partition_changed_temp = false;
         OZ (ObExternalTableFileManager::get_instance().refresh_external_table(session.get_effective_tenant_id(),
                                                                               object_id,
                                                                               *pc_ctx.exec_ctx_.get_sql_ctx()->schema_guard_,
-                                                                              pc_ctx.exec_ctx_));
+                                                                              pc_ctx.exec_ctx_,
+                                                                              has_partition_changed_temp));
+        has_partition_changed |= has_partition_changed_temp;
+      }
+      if (OB_SUCC(ret) && has_partition_changed) {
+        ret = OB_SCHEMA_EAGAIN;
+        LOG_TRACE("has external table partition change");
       }
     }
   } else {

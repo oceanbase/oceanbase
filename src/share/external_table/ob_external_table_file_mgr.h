@@ -147,8 +147,10 @@ public:
   int update_inner_table_file_list(sql::ObExecContext &exec_ctx,
                                   const uint64_t tenant_id,
                                   const uint64_t table_id,
-                                  ObIArray<ObString> &file_urls,
-                                  ObIArray<int64_t> &file_sizes,
+                                  common::ObIArray<common::ObString> &file_urls,
+                                  common::ObIArray<int64_t> &file_sizes,
+                                  common::ObIArray<uint64_t> &updated_part_ids,
+                                  bool &has_partition_changed,
                                   const uint64_t part_id = -1);
 
   int get_all_records_from_inner_table(ObIAllocator &allocator,
@@ -185,11 +187,13 @@ public:
   int refresh_external_table(const uint64_t tenant_id,
                             const uint64_t table_id,
                             ObSchemaGetterGuard &schema_guard,
-                            ObExecContext &exec_ctx);
+                            ObExecContext &exec_ctx,
+                            bool &has_partition_changed);
 
   int refresh_external_table(const uint64_t tenant_id,
                               const ObTableSchema *table_schema,
-                              ObExecContext &exec_ctx);
+                              ObExecContext &exec_ctx,
+                              bool &has_partition_changed);
 
   int auto_refresh_external_table(ObExecContext &exec_ctx, const int64_t interval);
 private:
@@ -200,14 +204,17 @@ private:
       const uint64_t tenant_id,
       const uint64_t table_id,
       const uint64_t partition_id,
-      const ObIArray<ObExternalFileInfoTmp> &file_infos);
+      const common::ObIArray<ObExternalFileInfoTmp> &file_infos,
+      common::ObIArray<uint64_t> &updated_part_ids);
 
   int update_inner_table_files_list_by_table(
     sql::ObExecContext &exec_ctx,
     ObMySQLTransaction &trans,
     const uint64_t tenant_id,
     const uint64_t table_id,
-    const ObIArray<ObExternalFileInfoTmp> &file_infos);
+    const common::ObIArray<ObExternalFileInfoTmp> &file_infos,
+    common::ObIArray<uint64_t> &updated_part_ids,
+    bool &has_partition_changed);
 
   bool is_cache_value_timeout(const ObExternalTableFiles &ext_files) {
     return ObTimeUtil::current_time() - ext_files.create_ts_ > CACHE_EXPIRE_TIME;
