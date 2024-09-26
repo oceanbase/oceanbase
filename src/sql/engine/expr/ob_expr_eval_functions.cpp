@@ -1265,7 +1265,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprVectorNegativeIPDistance::calc_negative_inner_product,        /* 757 */
   ObExprTokenize::eval_tokenize,                                      /* 758 */
   NULL, // ObExprEnhancedAesEncrypt::eval_aes_encrypt                 /* 759 */
-  NULL, // ObExprEnhancedAesEncrypt::eval_aes_decrypt                 /* 760 */
+  NULL, // ObExprEnhancedAesDecrypt::eval_aes_decrypt                 /* 760 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
