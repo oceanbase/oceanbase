@@ -998,6 +998,7 @@ public:
   {
     reset();
   }
+  ~ObDupTableLogOperator() { reset(); }
   void reuse();
   void reset();
 
