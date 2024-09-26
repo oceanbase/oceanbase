@@ -1857,6 +1857,10 @@ int ObMySQLProcStatement::execute_proc()
       }
     }
   }
+  if (NULL != res) {
+    mysql_free_result(res);
+    res = NULL;
+  }
   int tmp_ret = OB_SUCCESS;
   if (OB_SUCCESS != (tmp_ret = close())) {
     LOG_WARN("close proc stmt failed", K(ret));
