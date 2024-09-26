@@ -780,9 +780,12 @@ void ObIORequest::cancel()
         LOG_WARN("fail to guard condition", K(ret));
       } else if (is_finished_){
         // do nothing
+      } else if (this->get_flag().is_sync()) {
+        is_canceled_ = true;
+        // sync io req do not support cancel
       } else {
         is_canceled_ = true;
-        if (time_log_.submit_ts_ > 0 && 0 == time_log_.return_ts_) {
+        if (time_log_.submit_ts_ > 0 && 0 == time_log_.return_ts_ && channel_ != nullptr) {
           channel_->cancel(*this);
         }
       }
