@@ -22,6 +22,7 @@
 #include "storage/backup/ob_backup_data_store.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/tablet/ob_tablet.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
 
 namespace oceanbase
 {
@@ -2900,6 +2901,8 @@ int ObTabletFinishRestoreTask::process()
     LOG_WARN("failed to veryfy table store", K(ret), KPC(tablet_restore_ctx_));
   } else if (OB_FAIL(update_restore_status_())) {
     LOG_WARN("failed to update restore status", K(ret), KPC(tablet_restore_ctx_));
+  } else if (is_need_report_ls_finish_bytes_()) {
+    report_ls_finish_bytes_();
   }
 
   if (OB_SUCCESS != (tmp_ret = record_server_event_())) {
@@ -2910,6 +2913,39 @@ int ObTabletFinishRestoreTask::process()
     if (OB_SUCCESS != (tmp_ret = ObStorageHADagUtils::deal_with_fo(ret, this->get_dag()))) {
       LOG_WARN("failed to deal with fo", K(ret), K(tmp_ret), KPC(tablet_restore_ctx_));
     }
+  }
+  return ret;
+}
+
+bool ObTabletFinishRestoreTask::is_need_report_ls_finish_bytes_()
+{
+  bool b_ret = false;
+  if (GCTX.is_shared_storage_mode()) {
+    b_ret = ObTabletRestoreAction::is_restore_major(tablet_restore_ctx_->action_);
+  } else {
+    b_ret = ObTabletRestoreAction::is_restore_replace_remote_sstable(tablet_restore_ctx_->action_);
+  }
+  return b_ret;
+}
+
+int ObTabletFinishRestoreTask::report_ls_finish_bytes_()
+{
+  int ret =  OB_SUCCESS;
+  ObLSRestoreJobPersistKey ls_key;
+  ls_key.tenant_id_ = tablet_restore_ctx_->tenant_id_;
+  ls_key.job_id_ =  tablet_restore_ctx_->restore_base_info_->job_id_;
+  ls_key.ls_id_ = tablet_restore_ctx_->ls_id_;
+  ls_key.addr_ = GCTX.self_addr();
+  int64_t tablet_size = 0;
+  share::ObRestorePersistHelper helper;
+
+  if (OB_FAIL(ObStorageHAUtils::get_tablet_size_in_bytes(
+              ls_key.ls_id_, tablet_restore_ctx_->tablet_id_, tablet_size))) {
+    LOG_WARN("fail to get tablet size in bytes", K(ret), KPC(tablet_restore_ctx_));
+  } else if (OB_FAIL(helper.init(ls_key.tenant_id_, share::OBCG_STORAGE))) {
+    LOG_WARN("fail to init restore table helper", K(ret), "tenant_id", ls_key.tenant_id_);
+  } else if (OB_FAIL(helper.increase_ls_finish_bytes_by(*GCTX.sql_proxy_, ls_key, tablet_size))) {
+    LOG_WARN("fail to inc ls finish bytes", K(ret), K(ls_key), K(tablet_size));
   }
   return ret;
 }

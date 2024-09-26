@@ -496,7 +496,7 @@ int ObRestoreScheduler::fill_restore_statistics(const share::ObPhysicalRestoreJo
     } else {
       restore_progress_info.ls_count_ = ls_info.ls_attr_array_.count();
       restore_progress_info.tablet_count_ = 0;
-      restore_progress_info.total_bytes_ = backup_set_info.backup_set_file_.stats_.output_bytes_;
+      restore_progress_info.total_bytes_ = 0;
     }
   }
   if (OB_SUCC(ret)) {
@@ -1619,6 +1619,8 @@ int ObRestoreScheduler::stat_restore_progress_(
   ObArray<share::ObLSRestoreProgressPersistInfo> progress_array;
   int64_t total_tablet_cnt = 0;
   int64_t finished_tablet_cnt = 0;
+  int64_t total_bytes = 0;
+  int64_t finished_bytes = 0;
   ObRestoreJobPersistKey job_key;
   ObRestoreProgressPersistInfo restore_progress;
   job_key.tenant_id_ = tenant_id_;
@@ -1639,6 +1641,8 @@ int ObRestoreScheduler::stat_restore_progress_(
     int64_t ls_replica_cnt = 0;
     int64_t total_tablet_replica_cnt = 0;
     int64_t finish_tablet_replica_cnt = 0;
+    int64_t total_replica_bytes = 0;
+    int64_t finish_replica_bytes = 0;
     if (OB_FAIL(lst_operator_->get(GCONF.cluster_id,
                                    tenant_id_,
                                    ls_progress.key_.ls_id_,
@@ -1659,7 +1663,6 @@ int ObRestoreScheduler::stat_restore_progress_(
       if (cur.key_.ls_id_ != ls_progress.key_.ls_id_) {
         break;
       }
-
       const ObLSReplica *replica = nullptr;
       if (OB_ISNULL(leader_replica)) {
         // the ls was deleted.
@@ -1667,6 +1670,8 @@ int ObRestoreScheduler::stat_restore_progress_(
         total_tablet_replica_cnt += cur.tablet_count_;
         // treat tablets on deleted ls as all finished.
         finish_tablet_replica_cnt += cur.tablet_count_;
+        total_replica_bytes += cur.total_bytes_;
+        finish_replica_bytes += cur.total_bytes_;
       } else if (OB_FAIL(ls_info.find(cur.key_.addr_, replica))) {
         // the replica was not in member list, ignore the progress.
         if (OB_ENTRY_NOT_EXIST == ret) {
@@ -1678,6 +1683,8 @@ int ObRestoreScheduler::stat_restore_progress_(
         ++ls_replica_cnt;
         total_tablet_replica_cnt += cur.tablet_count_;
         finish_tablet_replica_cnt += cur.finish_tablet_count_;
+        total_replica_bytes += cur.total_bytes_;
+        finish_replica_bytes += cur.finish_bytes_;
       } else if (replica->get_in_learner_list()) {
         // filter learner replicas with flag
         common::ObMember learner_in_learner_list;
@@ -1689,6 +1696,8 @@ int ObRestoreScheduler::stat_restore_progress_(
           ++ls_replica_cnt;
           total_tablet_replica_cnt += cur.tablet_count_;
           finish_tablet_replica_cnt += cur.finish_tablet_count_;
+          total_replica_bytes += cur.total_bytes_;
+          finish_replica_bytes += cur.finish_bytes_;
         }
       }
     }
@@ -1696,26 +1705,65 @@ int ObRestoreScheduler::stat_restore_progress_(
     if (ls_replica_cnt > 0) {
       total_tablet_cnt += total_tablet_replica_cnt / ls_replica_cnt;
       finished_tablet_cnt += finish_tablet_replica_cnt / ls_replica_cnt;
+      total_bytes += total_replica_bytes / ls_replica_cnt;
+      finished_bytes += finish_replica_bytes / ls_replica_cnt;
     }
   }
 
   if (is_restore_stat_start) {
     finished_tablet_cnt = 0;
+    finished_bytes = 0;
   } else if (is_restore_finish) {
     total_tablet_cnt = restore_progress.tablet_count_;
     // correct result, force finished_tablet_cnt equal to total_tablet_cnt.
     finished_tablet_cnt = total_tablet_cnt;
+    // initial value of total bytes may not set until is_restore_finish
+    total_bytes = restore_progress.total_bytes_ > 0 ? restore_progress.total_bytes_ : total_bytes;
+    finished_bytes = total_bytes;
   } else {
     total_tablet_cnt = restore_progress.tablet_count_;
+    //intial value of total_bytes in not set when is_restore_stat_start
+    total_bytes = restore_progress.total_bytes_ > 0 ? restore_progress.total_bytes_ : total_bytes;
     if (finished_tablet_cnt >= total_tablet_cnt) {
       LOG_INFO("finished_tablet_cnt is bigger than total_tablet_cnt.", K(job_key), K(total_tablet_cnt), K(finished_tablet_cnt));
       // If something wrong with the restore stat, let it keep to 99%.
       finished_tablet_cnt = total_tablet_cnt - 1;
+      finished_bytes = total_bytes / 100 * 99;
     }
   }
-  if (FAILEDx(helper.update_restore_process(proxy, job_key, total_tablet_cnt, finished_tablet_cnt))) {
-    LOG_WARN("fail to update restore progress", K(ret), K(job_key), K(total_tablet_cnt), K(finished_tablet_cnt));
+  TenantRestoreStatus tenant_restore_status;
+  if (FAILEDx(helper.update_restore_progress_by_tablet_cnt(proxy, job_key, total_tablet_cnt, finished_tablet_cnt))) {
+    LOG_WARN("fail to update restore progress by tablet cnt", K(ret), K(job_key), K(total_tablet_cnt), K(finished_tablet_cnt));
+  } else if (OB_FAIL(update_restore_progress_by_bytes_(job_info, total_bytes, finished_bytes))) {
+    LOG_WARN("fail to update restore progress by bytes", K(ret), K(job_key), K(total_bytes), K(finished_bytes));
   }
+  return ret;
+}
+
+int ObRestoreScheduler::update_restore_progress_by_bytes_(
+  const ObPhysicalRestoreJob &job, const int64_t total_bytes, const int64_t finish_bytes)
+{
+  int ret = OB_SUCCESS;
+  ObPhysicalRestoreTableOperator restore_op;
+  ObRestoreJobPersistKey job_key;
+  share::ObRestorePersistHelper helper;
+  bool all_finish = false;
+  job_key.tenant_id_ = tenant_id_;
+  job_key.job_id_ = job.get_job_id();
+
+  if (job.get_restore_type().is_quick_restore()) {
+    //quick restore do not display bytes proress
+  } else if (OB_FAIL(restore_op.init(sql_proxy_, tenant_id_, share::OBCG_STORAGE /*group_id*/))) {
+    LOG_WARN("fail to init", K(ret), K(tenant_id_));
+  } else if (OB_FAIL(restore_op.check_all_ls_finish_quick_restore(all_finish))) {
+    LOG_WARN("fail to check all ls finish quick restore", K(ret), K(job));
+  } else if (!all_finish) { //skip
+  } else if (OB_FAIL(helper.init(tenant_id_, share::OBCG_STORAGE))) {
+    LOG_WARN("fail to init restore table helper", K(ret), K_(tenant_id));
+  } else if (OB_FAIL(helper.update_restore_progress_by_bytes(*sql_proxy_, job_key, total_bytes, finish_bytes))) {
+    LOG_WARN("fail to update restore progress by bytes", K(ret), K(job_key), K(total_bytes), K(finish_bytes));
+  }
+
   return ret;
 }
 

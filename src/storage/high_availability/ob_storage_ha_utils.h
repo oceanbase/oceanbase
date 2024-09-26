@@ -81,6 +81,7 @@ public:
   static int append_tablet_list(
       const common::ObIArray<ObLogicTabletID> &logic_tablet_id_array,
       common::ObIArray<ObTabletID> &tablet_id_array);
+  static int get_tablet_size_in_bytes(const ObLSID &ls_id, const ObTabletID &tablet_id, int64_t &tablet_size);
 private:
   static int check_merge_error_(const uint64_t tenant_id, common::ObISQLClient &sql_client);
   static int fetch_src_tablet_meta_info_(const uint64_t tenant_id, const common::ObTabletID &tablet_id,

@@ -175,6 +175,10 @@ public:
   {
     return status_ >= RESTORE_START && status_ < WAIT_RESTORE_TO_CONSISTENT_SCN;
   }
+  bool is_before_restore_major_data() const
+  {
+    return status_ >= RESTORE_START && status_ < RESTORE_MAJOR_DATA;
+  }
   bool check_allow_read() const
   {
     return NONE == status_ || QUICK_RESTORE_FINISH == status_;

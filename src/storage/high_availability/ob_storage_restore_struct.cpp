@@ -24,7 +24,8 @@ namespace storage
 {
 /******************ObRestoreBaseInfo*********************/
 ObRestoreBaseInfo::ObRestoreBaseInfo()
-  : restore_scn_(),
+  : job_id_(0),
+    restore_scn_(),
     backup_cluster_version_(0),
     backup_data_version_(0),
     backup_compatible_(ObBackupSetFileDesc::MAX_COMPATIBLE_VERSION),
@@ -35,6 +36,7 @@ ObRestoreBaseInfo::ObRestoreBaseInfo()
 
 void ObRestoreBaseInfo::reset()
 {
+  job_id_ = 0;
   restore_scn_.reset();
   backup_cluster_version_ = 0;
   backup_data_version_ = 0;
@@ -45,7 +47,8 @@ void ObRestoreBaseInfo::reset()
 
 bool ObRestoreBaseInfo::is_valid() const
 {
-  return restore_scn_.is_valid()
+  return job_id_ > 0
+      && restore_scn_.is_valid()
       && backup_cluster_version_ > 0
       && backup_data_version_ > 0
       && backup_dest_.is_valid()
@@ -63,6 +66,7 @@ int ObRestoreBaseInfo::assign(const ObRestoreBaseInfo &restore_base_info)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("assign restore info get invalid argument", K(ret), K(restore_base_info));
   } else {
+    job_id_ = restore_base_info.job_id_;
     restore_scn_ = restore_base_info.restore_scn_;
     backup_cluster_version_ = restore_base_info.backup_cluster_version_;
     backup_data_version_ = restore_base_info.backup_data_version_;
@@ -85,6 +89,7 @@ int ObRestoreBaseInfo::copy_from(const ObTenantRestoreCtx &restore_arg)
     LOG_WARN("restore_arg get invalid argument", K(ret), K(restore_arg));
   } else {
     idx = restore_arg.get_backup_set_list().count() - 1;
+    job_id_ = restore_arg.get_job_id();
     restore_scn_ = restore_arg.get_restore_scn();
     backup_cluster_version_ = restore_arg.get_backup_cluster_version();
     backup_data_version_ = restore_arg.get_backup_data_version();

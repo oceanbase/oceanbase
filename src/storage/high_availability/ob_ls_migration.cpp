@@ -1667,6 +1667,9 @@ int ObStartMigrationTask::fill_restore_arg_if_needed_()
     } else if (!restore_status.is_before_restore_to_consistent_scn()
                && OB_FAIL(helper.get_ls_total_tablet_cnt(*sql_proxy_, dest_ls_key, ls_restore_progress.tablet_count_))) {
       LOG_WARN("fail to get total tablet cnt", K(ret), K(dest_ls_key), K(restore_status));
+    } else if (!restore_status.is_before_restore_major_data()
+               && OB_FAIL(helper.get_ls_total_bytes(*sql_proxy_, dest_ls_key, ls_restore_progress.total_bytes_))) {
+      LOG_WARN("fail to get total bytes", K(ret), K(dest_ls_key), K(restore_status));
     } else if (OB_FAIL(helper.insert_initial_ls_restore_progress(*sql_proxy_, ls_restore_progress))) {
       LOG_WARN("fail to insert initial restore progress", K(ret), K(ls_restore_progress));
     } else {

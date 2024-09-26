@@ -462,6 +462,8 @@ private:
   int verify_table_store_();
   int update_restore_status_();
   int record_server_event_();
+  int report_ls_finish_bytes_();
+  bool is_need_report_ls_finish_bytes_();
 
 private:
   bool is_inited_;

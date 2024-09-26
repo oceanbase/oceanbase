@@ -53,6 +53,7 @@ struct ObRestoreBaseInfo
       int64_t &dest_id) const;
   int get_last_backup_set_desc(share::ObBackupSetDesc &backup_set_desc) const;
   VIRTUAL_TO_STRING_KV(
+      K_(job_id),
       K_(restore_scn),
       K_(backup_cluster_version),
       K_(backup_data_version),
@@ -60,6 +61,7 @@ struct ObRestoreBaseInfo
       K_(backup_dest),
       K_(backup_set_list));
 
+  int64_t job_id_;
   share::SCN restore_scn_;
   uint64_t backup_cluster_version_;
   uint64_t backup_data_version_;
