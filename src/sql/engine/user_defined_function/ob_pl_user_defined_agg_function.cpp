@@ -542,7 +542,7 @@ int ObPlAggUdfFunction::process_get_pl_agg_udf_result(ObObjParam &pl_obj,
       if (OB_FAIL(ObSQLUtils::get_default_cast_mode(session_info_, cast_mode))) {
         LOG_WARN("failed to get default cast mode", K(ret));
       } else {
-        ObCastCtx cast_ctx(allocator_, NULL, cast_mode, ObCharset::get_system_collation(), NULL);
+        ObCastCtx cast_ctx(allocator_, NULL, cast_mode, result_type_.get_collation_type(), NULL);
         if (OB_FAIL(ObObjCaster::to_type(result_type_.get_type(), cast_ctx, src_obj, result))) {
           LOG_WARN("failed to cast type", K(ret));
         } else {
