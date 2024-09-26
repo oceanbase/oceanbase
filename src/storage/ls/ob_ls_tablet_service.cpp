@@ -72,7 +72,6 @@
 #include "storage/slog/ob_storage_log_replayer.h"
 #include "storage/slog/ob_storage_log_struct.h"
 #include "storage/slog/ob_storage_logger.h"
-#include "share/ob_lob_access_utils.h"
 #include "storage/lob/ob_lob_tablet_dml.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "observer/table_load/ob_table_load_coordinator.h"

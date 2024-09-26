@@ -713,22 +713,6 @@ private:
       ObDMLRunningCtx &run_ctx,
       blocksstable::ObDatumRow *rows,
       ObRowsInfo &rows_info);
-  static int insert_lob_col(
-      ObDMLRunningCtx &run_ctx,
-      const ObNewRow &data_row,
-      const ObColDesc &column,
-      blocksstable::ObStorageDatum &datum,
-      ObLobAccessParam *del_param,
-      ObLobCommon *lob_common);
-  static int insert_lob_tablet_row(
-      ObTabletHandle &data_tablet,
-      ObDMLRunningCtx &run_ctx,
-      blocksstable::ObDatumRow &datum_row);
-  static int insert_lob_tablet_rows(
-      ObTabletHandle &data_tablet,
-      ObDMLRunningCtx &run_ctx,
-      blocksstable::ObDatumRow *rows,
-      int64_t row_count);
   static int insert_vector_index_rows(
       ObTabletHandle &data_tablet,
       ObDMLRunningCtx &run_ctx,

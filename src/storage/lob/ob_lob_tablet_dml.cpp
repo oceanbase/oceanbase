@@ -63,11 +63,11 @@ int ObLobTabletDmlHelper::build_common_lob_param_for_dml(
   if (OB_FAIL(set_lob_storage_params(run_ctx, column, lob_param))) {
     LOG_WARN("set_lob_storage_params fail", K(ret), K(column));
   } else if (OB_FAIL(lob_param.snapshot_.assign(run_ctx.dml_param_.snapshot_))) {
-     LOG_WARN("assign snapshot fail", K(ret));
+    LOG_WARN("assign snapshot fail", K(ret), K(run_ctx.dml_param_.snapshot_));
   } else if (lob_param.snapshot_.is_none_read()) {
     // NOTE:
-    //     // lob_insert need table_scan, the snapshot already generated in
-    //         // run_ctx.store_ctx, use it as an LS ReadSnapshot
+    // lob_insert need table_scan, the snapshot already generated in
+    // run_ctx.store_ctx, use it as an LS ReadSnapshot
     lob_param.snapshot_.init_ls_read(run_ctx.store_ctx_.ls_id_,
                                       run_ctx.store_ctx_.mvcc_acc_ctx_.snapshot_);
   }
@@ -307,6 +307,7 @@ int ObLobTabletDmlHelper::delete_lob_col(
         LOG_WARN("calc byte size is negative.", K(ret), K(data), K(lob_param));
       // use byte size to delete all
       } else if (OB_FALSE_IT(lob_param.len_ = lob_param.byte_size_)) {
+      } else if (OB_FALSE_IT(lob_param.need_read_latest_ = true)) {
       } else if (OB_FAIL(lob_mngr->erase(lob_param))) {
         LOG_WARN("[STORAGE_LOB]lob erase failed.", K(ret), K(lob_param));
       }

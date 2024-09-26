@@ -314,6 +314,13 @@ DEF_TO_STRING(ObLobLocatorV2)
             J_KV(K(*retry_info));
             J_COMMA();
           }
+          if (buf_len > pos && extern_header->flags_.has_read_snapshot_
+              && size_ >= offset + sizeof(ObMemLobReadSnapshot)) {
+            ObMemLobReadSnapshot *read_snapshot = reinterpret_cast<ObMemLobReadSnapshot *>(ptr_ + offset);
+            offset += sizeof(ObMemLobReadSnapshot) + read_snapshot->size_;
+            J_KV(K(*read_snapshot));
+            J_COMMA();
+          }
           if (buf_len > pos) {
             ObString rowkey_str(MIN(extern_header->rowkey_size_, buf_len - pos), ptr_ + offset);
             offset += extern_header->rowkey_size_;
@@ -349,6 +356,7 @@ DEF_TO_STRING(ObLobLocatorV2)
 uint32_t ObLobLocatorV2::calc_locator_full_len(const ObMemLobExternFlags &flags,
                                                uint32_t rowkey_size,
                                                uint32_t disk_lob_full_size,
+                                               uint32_t read_snapshot_size,
                                                bool is_simple)
 {
   uint32_t loc_len = MEM_LOB_COMMON_HEADER_LEN;
@@ -363,6 +371,9 @@ uint32_t ObLobLocatorV2::calc_locator_full_len(const ObMemLobExternFlags &flags,
     }
     if (flags.has_retry_info_) {
       loc_len += MEM_LOB_EXTERN_RETRYINFO_LEN;
+    }
+    if (flags.has_read_snapshot_) {
+      loc_len += sizeof(ObMemLobReadSnapshot) + read_snapshot_size;
     }
     loc_len += MEM_LOB_ADDR_LEN; //ToDo:@gehao server address.
     loc_len += rowkey_size;
@@ -387,6 +398,7 @@ int ObLobLocatorV2::fill(ObMemLobType type,
                          const ObLobCommon *disk_loc,
                          uint32_t disk_lob_full_size,
                          uint32_t disk_lob_header_size,
+                         uint32_t read_snapshot_size,
                          bool is_simple)
 {
   validate_has_lob_header(has_lob_header_);
@@ -447,6 +459,13 @@ int ObLobLocatorV2::fill(ObMemLobType type,
         if (flags.has_retry_info_) {
           offset += MEM_LOB_EXTERN_RETRYINFO_LEN;
           *extern_len += MEM_LOB_EXTERN_RETRYINFO_LEN;
+        }
+
+        if (flags.has_read_snapshot_) {
+          ObMemLobReadSnapshot *read_snapshot = reinterpret_cast<ObMemLobReadSnapshot *>(ptr_ + offset);
+          read_snapshot->size_ = read_snapshot_size;
+          offset += sizeof(ObMemLobReadSnapshot) + read_snapshot_size;
+          *extern_len += sizeof(ObMemLobReadSnapshot) + read_snapshot_size;
         }
 
         if ((offset + rowkey_str.length()) && OB_UNLIKELY(offset > size_)) {
@@ -793,6 +812,35 @@ int ObLobLocatorV2::get_retry_info(ObMemLobRetryInfo *&retry_info) const
   return ret;
 }
 
+int ObLobLocatorV2::get_read_snapshot_data(ObString &read_snapshot_data) const
+{
+  int ret =  OB_SUCCESS;
+  ObMemLobExternHeader *extern_header = NULL;
+  if (OB_SUCC(get_extern_header(extern_header))) {
+    char *cur_pos = extern_header->data_ + MEM_LOB_EXTERN_SIZE_LEN;
+    if (extern_header->flags_.has_tx_info_) {
+      cur_pos += MEM_LOB_EXTERN_TXINFO_LEN;
+    }
+    if (extern_header->flags_.has_location_info_) {
+      cur_pos += MEM_LOB_EXTERN_LOCATIONINFO_LEN;
+    }
+    if (extern_header->flags_.has_retry_info_) {
+      cur_pos += MEM_LOB_EXTERN_RETRYINFO_LEN;
+    }
+
+    if (extern_header->flags_.has_read_snapshot_) {
+      ObMemLobReadSnapshot *read_snapshot = reinterpret_cast<ObMemLobReadSnapshot *>(cur_pos);
+      if (read_snapshot->size_ > 0) {
+        read_snapshot_data.assign_ptr(read_snapshot->data_, read_snapshot->size_);
+      }
+    } else {
+      ret = OB_ERR_NULL_VALUE;
+      COMMON_LOG(WARN, "Lob: does not have tx read snapshot", K(this), K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObLobLocatorV2::get_real_locator_len(int64_t &real_len) const
 {
   int ret = OB_SUCCESS;
@@ -963,6 +1011,34 @@ int ObLobLocatorV2::set_retry_info(const ObMemLobRetryInfo &retry_info)
   ObMemLobRetryInfo *retry_info_ptr = NULL;
   if (OB_SUCC(get_retry_info(retry_info_ptr))) {
     *retry_info_ptr = retry_info;
+  }
+  return ret;
+}
+
+int ObLobLocatorV2::set_read_snapshot_data(const ObString &read_snapshot_data)
+{
+  validate_has_lob_header(has_lob_header_);
+  int ret = OB_SUCCESS;
+  ObMemLobExternHeader *extern_header = NULL;
+  if (OB_SUCC(get_extern_header(extern_header))) {
+    char *cur_pos = extern_header->data_ + MEM_LOB_EXTERN_SIZE_LEN;
+    if (extern_header->flags_.has_tx_info_) {
+      cur_pos += MEM_LOB_EXTERN_TXINFO_LEN;
+    }
+    if (extern_header->flags_.has_location_info_) {
+      cur_pos += MEM_LOB_EXTERN_LOCATIONINFO_LEN;
+    }
+    if (extern_header->flags_.has_retry_info_) {
+      cur_pos += MEM_LOB_EXTERN_RETRYINFO_LEN;
+    }
+
+    if (extern_header->flags_.has_read_snapshot_) {
+      ObMemLobReadSnapshot *read_snapshot = reinterpret_cast<ObMemLobReadSnapshot *>(cur_pos);
+      read_snapshot->size_ = read_snapshot_data.length();
+      if (read_snapshot_data.length() > 0) {
+        MEMCPY(read_snapshot->data_, read_snapshot_data.ptr(), read_snapshot_data.length());
+      }
+    }
   }
   return ret;
 }

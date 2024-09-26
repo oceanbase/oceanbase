@@ -913,6 +913,13 @@ ob_set_subtarget(ob_storage lob
   lob/ob_lob_persistent_reader.cpp
   lob/ob_lob_persistent_iterator.cpp
   lob/ob_lob_write_buffer.cpp
+  lob/ob_lob_cursor.cpp
+  lob/ob_lob_location.cpp
+  lob/ob_lob_remote.cpp
+  lob/ob_lob_iterator.cpp
+  lob/ob_lob_handler.cpp
+  lob/ob_lob_meta_manager.cpp
+  lob/ob_lob_retry.cpp
   lob/ob_lob_tablet_dml.cpp
   lob/ob_lob_locator_struct.cpp
 )

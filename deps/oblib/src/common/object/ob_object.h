@@ -828,11 +828,11 @@ struct ObMemLobCommon
 struct ObMemLobExternFlags
 {
   ObMemLobExternFlags() :
-    has_tx_info_(1), has_location_info_(1), has_retry_info_(1), reserved_(0)
+    has_tx_info_(0), has_location_info_(1), has_retry_info_(1), has_read_snapshot_(1), reserved_(0)
   {}
 
   ObMemLobExternFlags(bool enable) :
-    has_tx_info_(enable), has_location_info_(enable), has_retry_info_(enable), reserved_(0)
+    has_tx_info_(0), has_location_info_(enable), has_retry_info_(enable), has_read_snapshot_(enable), reserved_(0)
   {}
 
   ObMemLobExternFlags(const ObMemLobExternFlags &flags) { *this = flags; }
@@ -847,12 +847,13 @@ struct ObMemLobExternFlags
     return (*(reinterpret_cast<uint16_t *>(this)) = 0);
   }
 
-  TO_STRING_KV(K_(has_tx_info), K_(has_location_info), K_(has_retry_info), K_(reserved));
+  TO_STRING_KV(K_(has_tx_info), K_(has_location_info), K_(has_retry_info), K_(has_read_snapshot), K_(reserved));
 
   uint16_t has_tx_info_ : 1; // Indicate whether tx info exists
   uint16_t has_location_info_ : 1; // Indicate whether has cid exists (reserved)
   uint16_t has_retry_info_ : 1; // Indicate whether has retry info exists
-  uint16_t reserved_ : 13;
+  uint16_t has_read_snapshot_ : 1; // Indicate whether has ObTxReadSnapshot
+  uint16_t reserved_ : 12;
 };
 
 // Memory Locator V2, Extern Header:
@@ -904,6 +905,16 @@ struct ObMemLobTxInfo
   int64_t snapshot_version_;
   int64_t snapshot_tx_id_;
   int64_t snapshot_seq_;
+  char data_[0];
+};
+
+struct ObMemLobReadSnapshot
+{
+  ObMemLobReadSnapshot(): version_(0), size_(0) {}
+
+  TO_STRING_KV(K_(version), K_(size));
+  uint32_t version_ : 4;
+  uint32_t size_ : 28;
   char data_[0];
 };
 
@@ -962,7 +973,7 @@ public:
   static const int64_t DISK_LOB_OUTROW_FULL_SIZE = sizeof(ObLobCommon) + sizeof(ObLobData) + sizeof(ObLobDataOutRowCtx) + sizeof(uint64_t);
 
   ObLobLocatorV2() : ptr_(NULL), size_(0), has_lob_header_(true) {}
-  ObLobLocatorV2(char *loc_ptr, uint32_t loc_size, uint32_t has_lob_header = true) :
+  ObLobLocatorV2(char *loc_ptr, uint32_t loc_size, bool has_lob_header = true) :
     ptr_(loc_ptr), size_(loc_size), has_lob_header_(has_lob_header)
   {
     if (loc_ptr == NULL || loc_size == 0) {
@@ -970,7 +981,7 @@ public:
       validate_has_lob_header(has_lob_header_);
     }
   }
-  ObLobLocatorV2(ObString &lob_str, uint32_t has_lob_header = true) :
+  ObLobLocatorV2(ObString &lob_str, bool has_lob_header = true) :
     ptr_(lob_str.ptr()), size_(lob_str.length()), has_lob_header_(has_lob_header)
   {
     if (lob_str.empty()) {
@@ -978,7 +989,7 @@ public:
       validate_has_lob_header(has_lob_header_);
     }
   }
-  ObLobLocatorV2(const ObString &lob_str, uint32_t has_lob_header = true) :
+  ObLobLocatorV2(const ObString &lob_str, bool has_lob_header = true) :
     ptr_(const_cast<char *>(lob_str.ptr())), size_(lob_str.length()), has_lob_header_(has_lob_header)
   {
     if (lob_str.empty()) {
@@ -1041,14 +1052,14 @@ public:
   }
 
   // remove if not used
-  void assign_ptr(const ObMemLobCommon *lobv2, uint32 len, uint32_t has_lob_header = true)
+  void assign_ptr(const ObMemLobCommon *lobv2, uint32 len, bool has_lob_header = true)
   {
     ptr_ = reinterpret_cast<char *>(const_cast<ObMemLobCommon *>(lobv2));
     size_ = len;
     has_lob_header_ = has_lob_header;
   }
 
-  void assign_buffer(char *loc_buff, uint32 len, uint32_t has_lob_header = true)
+  void assign_buffer(char *loc_buff, uint32 len, bool has_lob_header = true)
   {
     ptr_ = loc_buff;
     size_ = len;
@@ -1059,6 +1070,7 @@ public:
   static uint32_t calc_locator_full_len(const ObMemLobExternFlags &flags,
                                         uint32_t rowkey_size,
                                         uint32_t disk_lob_full_size,
+                                        uint32_t read_snapshot_size,
                                         bool is_simple);
 
   // interfaces for write
@@ -1069,6 +1081,7 @@ public:
            const ObLobCommon *disk_loc,
            uint32_t disk_lob_full_size,
            uint32_t disk_lob_header_size,
+           uint32_t read_snapshot_size,
            bool is_simple);
 
   int copy(const ObLobLocatorV2* src_locator) const;
@@ -1078,6 +1091,7 @@ public:
   int set_tx_info(const ObMemLobTxInfo &tx_info);
   int set_location_info(const ObMemLobLocationInfo &location_info);
   int set_retry_info(const ObMemLobRetryInfo &retry_info);
+  int set_read_snapshot_data(const ObString &data);
 
   // interfaces for read
   // Notice: all the following functions should be called after is_valid() or fill()
@@ -1093,6 +1107,7 @@ public:
   int get_tx_info(ObMemLobTxInfo *&tx_info) const;
   int get_location_info(ObMemLobLocationInfo *&location_info) const;
   int get_retry_info(ObMemLobRetryInfo *&retry_info) const;
+  int get_read_snapshot_data(ObString &data) const;
   int get_real_locator_len(int64_t &real_len) const;
   int get_chunk_size(int64_t &chunk_size) const;
 
