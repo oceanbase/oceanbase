@@ -240,60 +240,6 @@ private:
       int64_t &read_log_time,
       int64_t &decode_log_entry_time,
       logfetcher::TransStatInfo &tsi);
-  int fetch_miss_log_direct_(
-      const ObIArray<obrpc::ObCdcLSFetchMissLogReq::MissLogParam> &miss_log_array,
-      const int64_t timeout,
-      FetchLogSRpc &fetch_log_srpc,
-      LSFetchCtx &ls_fetch_ctx);
-  int fetch_miss_log_(
-      FetchLogSRpc &fetch_srpc,
-      IObLogRpc &rpc,
-      LSFetchCtx &ctx,
-      const ObIArray<obrpc::ObCdcLSFetchMissLogReq::MissLogParam> &miss_log_array,
-      const common::ObAddr &svr,
-      const int64_t timeout);
-  // handle if found misslog while read_log_
-  //
-  // @param [in] log_entry         LogEntry
-  // @param [in] missing_info      MissingLogInfo
-  // @param [in] tsi               TransStatInfo
-  // @param [out] fail_reason      KickOutReason
-  //
-  // @retval OB_SUCCESS                   success
-  // @retval OB_NEED_RETRY                RPC failed, need retry
-  // @retval other error code             fail
-  int handle_log_miss_(
-      palf::LogEntry &log_entry,
-      IObCDCPartTransResolver::MissingLogInfo &missing_info,
-      logfetcher::TransStatInfo &tsi,
-      volatile bool &stop_flag,
-      KickOutReason &fail_reason);
-  int handle_miss_record_or_state_log_(
-      FetchLogSRpc &fetch_log_srpc,
-      IObCDCPartTransResolver::MissingLogInfo &missing_info,
-      logfetcher::TransStatInfo &tsi,
-      volatile bool &stop_flag,
-      KickOutReason &fail_reason);
-  int handle_miss_redo_log_(
-      FetchLogSRpc &fetch_log_srpc,
-      IObCDCPartTransResolver::MissingLogInfo &missing_info,
-      logfetcher::TransStatInfo &tsi,
-      volatile bool &stop_flag,
-      KickOutReason &fail_reason);
-  // split all miss_logs by batch
-  int build_batch_misslog_lsn_arr_(
-      const int64_t fetched_log_idx,
-      IObCDCPartTransResolver::MissingLogInfo &missing_log_info,
-      ObIArray<obrpc::ObCdcLSFetchMissLogReq::MissLogParam> &batched_misslog_lsn_arr);
-  // read batched misslog
-  int read_batch_misslog_(
-      const obrpc::ObCdcLSFetchLogResp &resp,
-      int64_t &fetched_missing_log_cnt,
-      logfetcher::TransStatInfo &tsi,
-      IObCDCPartTransResolver::MissingLogInfo &missing_info);
-  int alloc_fetch_log_srpc_(FetchLogSRpc *&fetch_log_srpc);
-  void free_fetch_log_srpc_(FetchLogSRpc *fetch_log_srpc);
-  // TODO @bohou handle missing log end
 
   KickOutReason get_feedback_reason_(const Feedback &feedback) const;
   int check_feedback_(

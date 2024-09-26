@@ -448,9 +448,6 @@ int ObCdcService::get_or_create_client_ls_ctx(const obrpc::ObCdcRpcId &client_id
           }
         } else if (FetchLogProtocolType::RawLogDataProto == proto_type) {
           ctx->set_proto_type(proto_type);
-        } else {
-          ret = OB_INVALID_ARGUMENT;
-          EXTLOG_LOG(WARN, "get invalid proto_type", K(proto_type), K(ls_id), K(client_id));
         }
       } else {
         EXTLOG_LOG(ERROR, "get client ls ctx from ctx map failed", KR(ret));
