@@ -61,6 +61,7 @@ add_executable(ob_admin
 
   io_device/ob_admin_test_io_device_executor.h
   io_device/ob_admin_test_io_device_executor.cpp
+  io_device/ob_admin_test_object_storage_interface.cpp
 
   #trx_tool/ob_admin_trx_executor.h
   #trx_tool/ob_admin_trx_executor.cpp
@@ -131,6 +132,7 @@ add_executable(ob_admin
 
   io_device/ob_admin_test_io_device_executor.h
   io_device/ob_admin_test_io_device_executor.cpp
+  io_device/ob_admin_test_object_storage_interface.cpp
 
   #trx_tool/ob_admin_trx_executor.h
   #trx_tool/ob_admin_trx_executor.cpp
