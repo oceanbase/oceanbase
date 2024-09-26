@@ -3661,6 +3661,7 @@ int ObDbmsStats::init_column_stat_params(ObIAllocator &allocator,
       col_param.set_size_manual();
       col_param.bucket_num_ = -1;
       col_param.column_attribute_ = 0;
+      col_param.column_usage_flag_ = 0;
       if (lib::is_oracle_mode() && col->get_meta_type().is_varbinary_or_binary()) {
         //oracle don't have this type. but agent table will have this type, such as "SYS"."ALL_VIRTUAL_COLUMN_REAL_AGENT"
       } else {
