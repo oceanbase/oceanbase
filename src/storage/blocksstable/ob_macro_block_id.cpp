@@ -125,7 +125,7 @@ int64_t MacroBlockId::to_string(char *buf, const int64_t buf_len) const
     databuff_printf(buf, buf_len, pos,
         "[2nd=%lu]"
         "[3rd=%lu]"
-        "[trans_seq=%lu, sec_part=%lu]}",
+        "[4th=(trans_seq=%lu,sec_id=%lu)]}",
         (uint64_t) second_id_,
         (uint64_t) third_id_,
         (int64_t) macro_transfer_seq_,
