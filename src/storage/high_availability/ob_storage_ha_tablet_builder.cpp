@@ -1196,6 +1196,8 @@ int ObStorageHATabletsBuilder::hold_local_complete_tablet_sstable_(
     LOG_WARN("hold local complete tablet sstable get invalid argument", K(ret));
   } else if (tablet->get_tablet_meta().tablet_id_.is_ls_inner_tablet()) {
     LOG_INFO("ls inner tablet do not reuse any sstable", K(ret), KPC(tablet));
+  } else if (!tablet->get_tablet_meta().ha_status_.is_restore_status_full()) {
+    LOG_INFO("tablet is in restore, do not reuse any sstable", K(ret), KPC(tablet));
   } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
     //TODO(muwei.ym) ls inner tablet now do not reuse any sstable, will reuse in 4.3
