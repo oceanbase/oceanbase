@@ -36,7 +36,7 @@ devdeps-roaringbitmap-croaring-3.0.0-42024042816.el8.x86_64.rpm
 devdeps-apache-arrow-9.0.0-172024052218.el8.x86_64.rpm
 devdeps-hyperscan-5.4.2-242024090219.el8.x86_64.rpm
 devdeps-apache-orc-1.8.3-392024091317.el8.x86_64.rpm
-devdeps-vsag-1.0.0-102024082710.el8.x86_64.rpm
+devdeps-vsag-1.0.0-212024092509.el8.x86_64.rpm
 devdeps-cloud-qpl-1.1.0-272023061419.el8.x86_64.rpm
 
 [tools]

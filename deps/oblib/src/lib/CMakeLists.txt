@@ -431,7 +431,7 @@ if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
     libdiskann.a
     libopenblas.a
     libgfortran_static.a
-    libquadmath.a
+    libquadmath_static.a
     libgomp_static.a
     libroaring.a
   )

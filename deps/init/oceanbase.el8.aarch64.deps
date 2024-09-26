@@ -34,7 +34,7 @@ devdeps-protobuf-c-1.4.1-100000072023102410.el8.aarch64.rpm
 devdeps-roaringbitmap-croaring-3.0.0-42024042816.el8.aarch64.rpm
 devdeps-apache-arrow-9.0.0-322024052923.el8.aarch64.rpm
 devdeps-apache-orc-1.8.3-392024091317.el8.aarch64.rpm
-devdeps-vsag-1.0.0-102024082710.el8.aarch64.rpm
+devdeps-vsag-1.0.0-212024092509.el8.aarch64.rpm
 
 [tools]
 obdevtools-binutils-2.30-12022100413.el8.aarch64.rpm
