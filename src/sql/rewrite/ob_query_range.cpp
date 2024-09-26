@@ -8376,8 +8376,6 @@ int ObQueryRange::get_like_range(const ObObj &pattern,
   void *max_str_buf = NULL;
   int32_t col_len = out_key_part.pos_.column_type_.get_accuracy().get_length();
   ObCollationType cs_type = out_key_part.pos_.column_type_.get_collation_type();
-  int32_t pattern_prefix_len = 0;
-  int32_t range_str_len = 0;
   size_t min_str_len = 0;
   size_t max_str_len = 0;
   ObObj pattern_buf_obj;
@@ -8428,7 +8426,6 @@ int ObQueryRange::get_like_range(const ObObj &pattern,
     } else if (escape_str.empty()) {
       escape_str.assign_ptr("\\", 1);
     } else { /* do nothing */ }
-
     if (OB_FAIL(ret)) {
       // do nothing;
     } else if (OB_FAIL(ObCharset::get_mbmaxlen_by_coll(cs_type, mbmaxlen))) {
@@ -8440,26 +8437,13 @@ int ObQueryRange::get_like_range(const ObObj &pattern,
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("failed to check escape length", K(escape_str), K(escape_str.length()));
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ESCAPE");
-    } else if (OB_FAIL(get_pattern_prefix_len(cs_type,
-                                              escape_str,
-                                              pattern_str,
-                                              pattern_prefix_len))) {
-      LOG_WARN("failed to get pattern prefix len", K(ret), K(pattern_str), K(escape_str));
-    }
+    } else { }
 
     if (OB_SUCC(ret)) {
-      // For a pattern like 'aaa%' that ends with `%`, we will extract a precise range with some special handling:
-      // We need to fill the end key of the like range with the maximum character
-      // up to the target column's length to match the semantics of `%`.
-      // However, when the target column length is less than the effective prefix length of the pattern,
-      // the pattern gets truncated, resulting in an imprecise range and incorrect results.
-      // So, we need to ensure that the effective prefix of the pattern is not truncated
-      // to guarantee that the range is always precise.
-      range_str_len = max(pattern_prefix_len, col_len);
       //convert character counts to len in bytes
-      range_str_len = static_cast<int32_t>(range_str_len * mbmaxlen);
-      min_str_len = range_str_len;
-      max_str_len = range_str_len;
+      col_len = static_cast<int32_t>(col_len * mbmaxlen);
+      min_str_len = col_len;
+      max_str_len = col_len;
       if (OB_ISNULL(min_str_buf = allocator_.alloc(min_str_len))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("alloc memory failed", K(min_str_len));
@@ -9609,45 +9593,6 @@ int ObQueryRange::is_precise_like_range(const ObObjParam &pattern, char escape, 
     }
   }
 
-  return ret;
-}
-
-int ObQueryRange::get_pattern_prefix_len(const ObCollationType &cs_type,
-                                         const ObString &escape_str,
-                                         const ObString &pattern_str,
-                                         int32_t &pattern_prefix_len)
-{
-  int ret = OB_SUCCESS;
-  int64_t mbmaxlen = 1;
-  pattern_prefix_len = 0;
-  if (OB_NOT_NULL(pattern_str.ptr()) && OB_NOT_NULL(escape_str.ptr()) && escape_str.length() == 1 &&
-      cs_type != CS_TYPE_INVALID && cs_type < CS_TYPE_MAX) {
-    if (OB_FAIL(ObCharset::get_mbmaxlen_by_coll(cs_type, mbmaxlen))) {
-      LOG_WARN("fail to get mbmaxlen", K(ret), K(cs_type));
-    } else {
-      ObArenaAllocator allocator;
-      size_t pattern_len = pattern_str.length();
-      pattern_len = static_cast<int32_t>(pattern_len * mbmaxlen);
-      size_t min_str_len = pattern_len;
-      size_t max_str_len = pattern_len;
-      char *min_str_buf = NULL;
-      char *max_str_buf = NULL;
-      if (OB_ISNULL(min_str_buf = (char *)allocator.alloc(min_str_len))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("no enough memory", K(ret), K(pattern_len));
-      } else if (OB_ISNULL(max_str_buf = (char *)allocator.alloc(max_str_len))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("no enough memory", K(ret), K(pattern_len));
-      } else if (OB_FAIL(ObCharset::like_range(cs_type, pattern_str, *(escape_str.ptr()),
-                                       min_str_buf, &min_str_len,
-                                       max_str_buf, &max_str_len))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to retrive like range", K(ret));
-      } else {
-        pattern_prefix_len = ObCharset::strlen_char(cs_type, min_str_buf, strlen(min_str_buf));
-      }
-    }
-  }
   return ret;
 }
 
