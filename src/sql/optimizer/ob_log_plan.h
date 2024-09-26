@@ -493,9 +493,9 @@ public:
     void clear_ignore_hint()  { ignore_hint_ = false; }
     inline bool allow_basic() const { return ignore_hint_ || (!force_partition_wise_ && !force_dist_hash_); }
     inline bool allow_dist_hash() const { return ignore_hint_ || (!force_basic_ && !force_partition_wise_); }
-    inline bool allow_partition_wise(bool parallel_more_than_part_cnt) const
+    inline bool allow_partition_wise(bool enable_partition_wise_plan) const
     {
-      bool disable_by_rule = parallel_more_than_part_cnt && optimizer_features_enable_version_ > COMPAT_VERSION_4_3_2;
+      bool disable_by_rule = !enable_partition_wise_plan && optimizer_features_enable_version_ > COMPAT_VERSION_4_3_2;
       return ignore_hint_ ? !disable_by_rule
                           : (disable_by_rule ? force_partition_wise_ : (!force_basic_ && !force_dist_hash_));
     }

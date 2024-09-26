@@ -259,7 +259,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     correlation_type_(ObEstCorrelationType::MAX),
     use_column_store_replica_(false),
     push_join_pred_into_view_enabled_(true),
-    table_access_policy_(ObTableAccessPolicy::AUTO)
+    table_access_policy_(ObTableAccessPolicy::AUTO),
+    partition_wise_plan_enabled_(true)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -638,6 +639,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_has_multiple_link_stmt(bool v) { has_multiple_link_stmt_ = v; }
   inline bool is_hash_join_enabled() const { return hash_join_enabled_; }
   inline void set_hash_join_enabled(bool enabled) { hash_join_enabled_ = enabled; }
+  inline bool is_partition_wise_plan_enabled() const { return partition_wise_plan_enabled_; }
+  inline void set_partition_wise_plan_enabled(bool enabled) { partition_wise_plan_enabled_ = enabled; }
   inline bool is_merge_join_enabled() const { return optimizer_sortmerge_join_enabled_; }
   inline void set_merge_join_enabled(bool enabled) { optimizer_sortmerge_join_enabled_ = enabled; }
   inline bool is_nested_join_enabled() const { return nested_loop_join_enabled_; }
@@ -760,6 +763,7 @@ private:
   bool use_column_store_replica_;
   bool push_join_pred_into_view_enabled_;
   ObTableAccessPolicy table_access_policy_;
+  bool partition_wise_plan_enabled_;
 };
 }
 }

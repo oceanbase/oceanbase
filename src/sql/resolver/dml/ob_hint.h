@@ -176,11 +176,12 @@ struct ObOptParamHint
     DEF(RUNTIME_FILTER_TYPE,)                       \
     DEF(BLOOM_FILTER_RATIO,)                        \
     DEF(CORRELATION_FOR_CARDINALITY_ESTIMATION,)    \
-    DEF(CARDINALITY_ESTIMATION_MODEL,) \
+    DEF(CARDINALITY_ESTIMATION_MODEL,)              \
     DEF(_PUSH_JOIN_PREDICATE,)                      \
-    DEF(RANGE_INDEX_DIVE_LIMIT,) \
-    DEF(PARTITION_INDEX_DIVE_LIMIT,) \
+    DEF(RANGE_INDEX_DIVE_LIMIT,)                    \
+    DEF(PARTITION_INDEX_DIVE_LIMIT,)                \
     DEF(OB_TABLE_ACCESS_POLICY,)                    \
+    DEF(PARTITION_WISE_PLAN_ENABLED,)               \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 

@@ -12587,6 +12587,11 @@ int ObJoinOrder::get_valid_path_info_from_hint(const ObRelIds &table_set,
     } else if (log_hint.is_outline_data_) {
       // outline data has no pq distributed hint
       path_info.distributed_methods_ &= DIST_BASIC_METHOD;
+    } else if (!get_plan()->get_optimizer_context().is_partition_wise_plan_enabled()) {
+      path_info.distributed_methods_ &= ~DIST_PARTITION_NONE;
+      path_info.distributed_methods_ &= ~DIST_NONE_PARTITION;
+      path_info.distributed_methods_ &= ~DIST_PARTITION_WISE;
+      path_info.distributed_methods_ &= ~DIST_EXT_PARTITION_WISE;
     }
 
     if (NULL != log_join_hint && both_access && !ignore_dist_hint
@@ -12676,6 +12681,12 @@ int ObJoinOrder::get_valid_path_info(const ObJoinOrder &left_tree,
                                        DIST_EXT_PARTITION_WISE | DIST_BASIC_METHOD |
                                        DIST_NONE_ALL | DIST_ALL_NONE |
                                        DIST_RANDOM_ALL;
+      if (!get_plan()->get_optimizer_context().is_partition_wise_plan_enabled()) {
+        path_info.distributed_methods_ &= ~DIST_PARTITION_NONE;
+        path_info.distributed_methods_ &= ~DIST_NONE_PARTITION;
+        path_info.distributed_methods_ &= ~DIST_PARTITION_WISE;
+        path_info.distributed_methods_ &= ~DIST_EXT_PARTITION_WISE;
+      }
     }
     if (!ignore_hint
         && OB_FAIL(get_valid_path_info_from_hint(right_tree.get_tables(), both_access,

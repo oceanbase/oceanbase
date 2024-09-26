@@ -5305,7 +5305,7 @@ int ObLogPlan::create_scala_group_plan(const ObIArray<ObAggFunRawExpr*> &aggr_it
                                                                      is_partition_wise))) {
     LOG_WARN("failed to check if sharding compatible with distinct expr", K(ret));
   } else if (groupby_helper.can_three_stage_pushdown_ &&
-             !(is_partition_wise && groupby_helper.allow_partition_wise(top->is_parallel_more_than_part_cnt()))) {
+             (!is_partition_wise || !get_optimizer_context().is_partition_wise_plan_enabled()) ) {
     OPT_TRACE("generate three stage group plan");
     if (NULL == groupby_helper.aggr_code_expr_ &&
         OB_FAIL(prepare_three_stage_info(dummy_exprs, dummy_exprs, groupby_helper))) {
@@ -7966,7 +7966,11 @@ int ObLogPlan::get_valid_subplan_filter_dist_method(ObIArray<ObLogPlan*> &subpla
 
     if (OB_SUCC(ret) && !ignore_hint) {
       const bool implicit_hint_allowed = (subplans.count() == get_stmt()->get_subquery_expr_size());
-      dist_methods &= get_log_plan_hint().get_valid_pq_subquery_dist_algo(sub_qb_names, implicit_hint_allowed);
+      dist_methods &= get_log_plan_hint().get_valid_pq_subquery_dist_algo(sub_qb_names,
+                                                                          implicit_hint_allowed);
+    } else if (ignore_hint && !get_optimizer_context().is_partition_wise_plan_enabled()) {
+      dist_methods &= ~DIST_PARTITION_WISE;
+      dist_methods &= ~DIST_PARTITION_NONE;
     }
 
     if (OB_FAIL(ret)) {
