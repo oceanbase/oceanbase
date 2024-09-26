@@ -1994,13 +1994,11 @@ int ObJoinOrder::add_access_filters(AccessPath *path,
   const ObDMLStmt *stmt = NULL;
   const ObIArray<ObRawExpr *> &restrict_infos = helper.filters_;
   ObSEArray<uint64_t, 4> range_col_ids;
-  ObSEArray<ObRawExpr *, 4> unprecise_exprs;
+  ObSEArray<ObRawExpr *, 4> dummy;
   ObSEArray<ObRawExpr *, 4> remove_dup;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt()) || OB_ISNULL(path)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("NULL pointer error", K(get_plan()), K(stmt), K(path), K(ret));
-  } else if (OB_NOT_NULL(unprecise_range_exprs) && OB_FAIL(unprecise_exprs.assign(*unprecise_range_exprs))) {
-    LOG_WARN("failed to assign unprecise_range_exprs", K(ret));
   } else {
     for (int i = 0; OB_SUCC(ret) && i < range_cols.count(); i++) {
       if (OB_FAIL(range_col_ids.push_back(range_cols.at(i).column_id_))) {
@@ -2016,14 +2014,18 @@ int ObJoinOrder::add_access_filters(AccessPath *path,
                                                 get_plan()->get_equal_sets())) {
           found = true;
           bool extract_unprecise_range = false;
+          // old query range unprecise check
           if (OB_FAIL(can_extract_unprecise_range(path->table_id_,
                                                   deduced_expr_info.deduced_expr_,
                                                   range_col_ids,
-                                                  unprecise_exprs,
+                                                  dummy,
                                                   extract_unprecise_range))) {
             LOG_WARN("failed to check can extract unprecise range", K(ret));
-          } else if (extract_unprecise_range || (OB_NOT_NULL(range_exprs) &&
-                     ObOptimizerUtil::find_equal_expr(*range_exprs, restrict_infos.at(i)))) {
+          } else if (extract_unprecise_range ||
+                     (OB_NOT_NULL(range_exprs) &&
+                     ObOptimizerUtil::find_equal_expr(*range_exprs, restrict_infos.at(i))) ||
+                     (OB_NOT_NULL(unprecise_range_exprs) &&
+                     ObOptimizerUtil::find_equal_expr(*unprecise_range_exprs, restrict_infos.at(i)))) {
             if (OB_FAIL(path->filter_.push_back(restrict_infos.at(i)))) {
               LOG_WARN("push back error", K(ret));
             } else if (OB_FAIL(append(helper.const_param_constraints_, deduced_expr_info.const_param_constraints_))) {
