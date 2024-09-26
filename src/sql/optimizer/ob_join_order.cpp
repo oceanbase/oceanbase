@@ -9626,6 +9626,11 @@ int ObJoinOrder::generate_aj_paths(const EqualSets &equal_sets,
               LOG_WARN("failed to get server list from hj right sharding", K(ret));
             } else if (!is_equal) {
               continue;
+            } else if (OB_FAIL(ObShardingInfo::is_physically_equal_serverlist(hj_right_path->server_list_,
+                  nlj_right_path->server_list_, is_equal))) {
+              LOG_WARN("failed to judge physically equal serverlist", K(ret));
+            } else if (!is_equal) {
+              continue;
             }
             int64_t nlj_dist_method = nlj_dist_methods.at(idx);
             LOG_TRACE("succeed to get distributed adaptive join method", K(hj_dist_method), K(nlj_dist_method));
