@@ -7465,6 +7465,8 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
     phy_plan.set_minimal_worker_count(log_plan.get_optimizer_context().get_minimal_worker_count());
     phy_plan.set_is_batched_multi_stmt(log_plan.get_optimizer_context().is_batched_multi_stmt());
     phy_plan.set_need_consistent_snapshot(log_plan.need_consistent_read());
+    phy_plan.set_is_inner_sql(my_session->is_inner());
+    phy_plan.set_is_batch_params_execute(sql_ctx->is_batch_params_execute());
     // only if all servers's version >= CLUSTER_VERSION_4_2_0_0
     if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_0_0) {
       phy_plan.set_enable_px_fast_reclaim(GCONF._enable_px_fast_reclaim);

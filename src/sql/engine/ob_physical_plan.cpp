@@ -138,6 +138,8 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     das_dop_(0),
     disable_auto_memory_mgr_(false),
     insertup_can_do_gts_opt_(false),
+    is_inner_sql_(false),
+    is_batch_params_execute_(false),
     all_local_session_vars_(&allocator_),
     udf_has_dml_stmt_(false),
     can_set_feedback_info_(true),
@@ -240,6 +242,8 @@ void ObPhysicalPlan::reset()
   use_rich_format_ = false;
   udf_has_dml_stmt_ = false;
   insertup_can_do_gts_opt_ = false;
+  is_inner_sql_ = false;
+  is_batch_params_execute_ = false;
   disable_auto_memory_mgr_ = false;
   can_set_feedback_info_.store(true);
   dml_table_ids_.reset();

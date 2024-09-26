@@ -448,11 +448,20 @@ public:
   inline bool is_plain_insert() const { return is_plain_insert_; }
   inline bool get_insertup_can_do_gts_opt() const {return insertup_can_do_gts_opt_; }
   inline void set_insertup_can_do_gts_opt(bool v) { insertup_can_do_gts_opt_ = v; }
+  inline void set_is_inner_sql(bool v) { is_inner_sql_ = v; }
+  inline void set_is_batch_params_execute(bool v) { is_batch_params_execute_ = v; }
   inline bool is_dml_write_stmt() const { return ObStmt::is_dml_write_stmt(stmt_type_); }
   inline bool should_add_baseline() const {
     return (ObStmt::is_dml_stmt(stmt_type_)
             && (stmt::T_INSERT != stmt_type_ || is_insert_select_)
-            && (stmt::T_REPLACE != stmt_type_ || is_insert_select_));
+            && (stmt::T_REPLACE != stmt_type_ || is_insert_select_)
+            // TODO:@yibo inner sql 先不用SPM? pl里面的执行的SQL也是inner sql,
+            && !is_inner_sql_
+            && !is_batch_params_execute_
+            // TODO:@yibo batch multi stmt relay get_plan to init some structure. But spm may not enter
+            // get_plan. Now we disable spm when batch multi stmt exists.
+            && !is_remote_plan()
+            && is_dep_base_table());
   }
   inline bool is_plain_select() const
   {
@@ -699,7 +708,8 @@ public:
   int64_t das_dop_;
   bool disable_auto_memory_mgr_;
   bool insertup_can_do_gts_opt_;
-
+  bool is_inner_sql_;
+  bool is_batch_params_execute_;
 private:
   common::ObFixedArray<ObLocalSessionVar, common::ObIAllocator> all_local_session_vars_;
 public:
