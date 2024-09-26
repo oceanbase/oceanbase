@@ -69,11 +69,25 @@ public:
  int update_ls_recovery(storage::ObLS *ls, common::ObMySQLProxy *sql_proxy);
 
  static int get_readable_scn(const share::ObLSID &id, share::SCN &read_scn);
+ /*
+  * Description: The function reports the SYS_LS ls_recovery_stat , based on this report, further reports tenant_info.
+  * It ensures that when there are multi-source transactions,
+  * the sync_scn in tenant_info is always equal to the sync_scn of SYS_LS, so that during failover, there is no need to refer to the sync_scn of SYS_LS.
+  * param[in] ls_recovery_stat: sys_ls
+  * param[in] tenant_role:for doubule check, can not report while switchover
+  * param[in] update_readable_scn: only update readable_scn
+  * param[in] check_sync_valid: need to check sync_scn of sys_ls is equal to sync_scn of tenant_info. for check
+  * param[in] trans
+  * */
  static int update_sys_ls_recovery_stat_and_tenant_info(share::ObLSRecoveryStat &ls_recovery_stat,
       const share::ObTenantRole &tenant_role,
       const bool update_readable_scn,
+      const bool check_sync_valid,
       common::ObMySQLTransaction &trans);
- static int update_tenant_info_in_trans(const share::ObAllTenantInfo &old_tenant_info, common::ObMySQLTransaction &trans);
+ //while check_sync_valid is true, sys_scn of new_tenant_info must equal to sys_ls_sync_scn
+ static int update_tenant_info_in_trans(const share::ObAllTenantInfo &old_tenant_info,
+     const bool check_sync_valid, const share::SCN &sys_ls_sync_scn,
+     common::ObMySQLTransaction &trans);
 private:
   static int get_sync_point_(const share::ObLSID &id, share::SCN &scn, share::SCN &read_scn);
   int update_ls_recovery_stat_();

@@ -94,6 +94,19 @@ enum class RestoreSyncStatus {
   MAX_RESTORE_SYNC_STATUS
 };
 
+RestoreSyncStatus str_to_restore_sync_status(const ObString &str);
+//在创建网络备租户的时候，需要等待租户变成NORMAL状态才给用户返回成功。
+//租户变成Normal状态需要系统日志流可读，但是在这个等待过程中，日志流同步
+//可能遇到一些错误，这些错误会导致不能继续拉日志了，所以在遇到这些错误的时候
+//直接返回客户端失败，不需要等待超时
+//这些状态都是认为可以继续等待租户变成NORMAL的状态
+inline bool is_valid_restore_status_for_creating_standby(const RestoreSyncStatus &status)
+{
+  return RestoreSyncStatus::RESTORE_SYNC_NORMAL == status
+         || RestoreSyncStatus::RESTORE_SYNC_STANDBY_NEED_UPGRADE == status
+         || RestoreSyncStatus::RESTORE_SYNC_WAITING_LS_CREATED == status
+         || RestoreSyncStatus::RESTORE_SYNC_PRIMARY_IS_DROPPED == status;
+}
 struct RestoreStatusInfo
 {
 public:

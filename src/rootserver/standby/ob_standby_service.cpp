@@ -34,6 +34,7 @@
 #include "storage/tx/ob_timestamp_service.h"  // ObTimestampService
 #include "storage/high_availability/ob_transfer_lock_utils.h" // ObMemberListLockUtils
 #include "common/ob_tenant_data_version_mgr.h"
+#include "logservice/restoreservice/ob_log_restore_handler.h"//RestoreSyncStatus
 
 namespace oceanbase
 {
@@ -1026,15 +1027,19 @@ int ObStandbyService::check_ls_restore_status_(const uint64_t tenant_id)
         int64_t ls_id = 0;
         ObString sync_status_str;
         SCN sync_scn;
+        logservice::RestoreSyncStatus restore_status;
         uint64_t sync_scn_val = OB_INVALID_SCN_VAL;
         EXTRACT_INT_FIELD_MYSQL(*result.get_result(), "LS_ID", ls_id, int64_t);
         EXTRACT_VARCHAR_FIELD_MYSQL(*result.get_result(), "SYNC_STATUS", sync_status_str);
         EXTRACT_UINT_FIELD_MYSQL(*result.get_result(), "SYNC_SCN", sync_scn_val, uint64_t);
 
+        restore_status = logservice::str_to_restore_sync_status(sync_status_str);
         if (OB_FAIL(ret)) {
           LOG_WARN("failed to get result", KR(ret), K(tenant_id), K(sql));
         } else if (OB_FAIL(sync_scn.convert_for_inner_table_field(sync_scn_val))) {
           LOG_WARN("failed to convert_for_inner_table_field", KR(ret), K(sync_scn_val));
+        } else if (is_valid_restore_status_for_creating_standby(restore_status)) {
+          LOG_INFO("is valid restore status", K(restore_status), K(sync_scn_val));
         } else {
           LOG_WARN("get LS restore status", KR(ret), K(tenant_id), K(ls_id), K(sync_status_str), K(sync_scn), K(sql));
           ret = OB_CREATE_STANDBY_TENANT_FAILED;
