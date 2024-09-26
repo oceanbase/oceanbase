@@ -902,6 +902,7 @@ LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);
   ObTxSEQ inc_and_get_tx_seq(int16_t branch) const;
   ObTxSEQ get_tx_seq(int64_t seq_abs = 0) const;
   ObTxSEQ get_min_tx_seq() const;
+  int clear_state_for_autocommit_retry();
   int64_t get_seq_base() const { return seq_base_; }
   int64_t inc_and_get_continuous_lock_conflict_cnt() { return ATOMIC_AAF(&continuous_lock_conflict_cnt_, 1); }
   void reset_continuous_lock_conflict_cnt() { return ATOMIC_STORE(&continuous_lock_conflict_cnt_, 0); }

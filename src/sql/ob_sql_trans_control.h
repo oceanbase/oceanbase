@@ -321,6 +321,10 @@ public:
   // called when response client to decide whether need allow free route and whether state need to be returned
   static int calc_txn_free_route(ObSQLSessionInfo &session, transaction::ObTxnFreeRouteCtx &txn_free_route_ctx);
   static int check_free_route_tx_alive(ObSQLSessionInfo &session, transaction::ObTxnFreeRouteCtx &txn_free_rotue_ctx);
+
+  // when lock conflict, stmt will do retry, we do not rollback current transaction
+  // but clean the transaction level snapshot it exist
+  static int reset_trans_for_autocommit_lock_conflict(ObExecContext &exec_ctx);
   static transaction::ObTxCleanPolicy
   decide_stmt_rollback_tx_clean_policy_(const int error_code, const bool will_retry);
 };

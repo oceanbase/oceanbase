@@ -1957,6 +1957,23 @@ int64_t ObTxDesc::get_coord_epoch() const
   return epoch;
 }
 
+// 1. clear transaction level snapshot
+// 2. clear savepoints
+int ObTxDesc::clear_state_for_autocommit_retry()
+{
+  ObSpinLockGuard guard(lock_);
+  if (tx_id_.is_valid()) {
+    savepoints_.reset();
+    if (isolation_ == ObTxIsolationLevel::RR || isolation_ == ObTxIsolationLevel::SERIAL) {
+      snapshot_version_.reset();
+      snapshot_scn_.reset();
+      snapshot_uncertain_bound_ = 0;
+      TRANS_LOG(TRACE, "", KPC(this));
+    }
+  }
+  return OB_SUCCESS;
+}
+
 int ObTxDesc::add_modified_tables(const ObIArray<uint64_t> &dml_table_ids)
 {
   int ret = OB_SUCCESS;
