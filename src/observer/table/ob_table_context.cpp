@@ -335,24 +335,17 @@ int ObTableCtx::inner_init_common(const ObTabletID &arg_tablet_id,
     LOG_WARN("fail to get tenant schema", K(ret), K_(tenant_id));
   } else if (FALSE_IT(init_physical_plan_ctx(timeout_ts, tenant_schema_version_))) {
     LOG_WARN("fail to init physical plan ctx", K(ret));
-  } else if (!arg_tablet_id.is_valid()) {
-    if (is_scan_) { // 扫描场景使用table_schema上的tablet id,客户端已经做了路由分发
-      if (simple_table_schema_->is_partitioned_table()) { // 不支持分区表
-        // classify whether the request is valid will do in function 'init_scan'
-        tablet_id = ObTabletID::INVALID_TABLET_ID;
-      } else {
-        tablet_id = simple_table_schema_->get_tablet_id();
-      }
-    } else { // dml场景使用rowkey计算出tablet id
-      if (!simple_table_schema_->is_partitioned_table()) {
-        tablet_id = simple_table_schema_->get_tablet_id();
-      } else {
-        // trigger client to refresh table entry
-        // maybe drop a non-partitioned table and create a
-        // partitioned table with same name
-        ret = OB_SCHEMA_ERROR;
-        LOG_WARN("partitioned table should pass right tablet id from client", K(ret));
-      }
+  } else if (!arg_tablet_id.is_valid() && !is_scan_) {
+    // for scan scene, we will process it in init_scan when tablet_id is invalid
+    // because we need to know if use index and index_type
+    if (!simple_table_schema_->is_partitioned_table()) {
+      tablet_id = simple_table_schema_->get_tablet_id();
+    } else {
+      // trigger client to refresh table entry
+      // maybe drop a non-partitioned table and create a
+      // partitioned table with same name
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("partitioned table should pass right tablet id from client", K(ret));
     }
   }
 
@@ -934,15 +927,23 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
                               query.get_filter_string().length() > 0;
   limit_ = is_query_with_filter || is_ttl_table() ? -1 : query.get_limit(); // query with filter or ttl table can't pushdown limit
   offset_ = is_ttl_table() ? 0 : query.get_offset();
-  // init is_index_scan_
-  if (index_name.empty() || 0 == index_name.case_compare(ObIndexHint::PRIMARY_KEY)) { // scan with primary key
-    index_table_id_ = ref_table_id_;
-    if (!index_tablet_id_.is_valid()) {
+  if (!tablet_id_.is_valid()) {
+    if (simple_table_schema_->is_partitioned_table()) {
       // trigger client to refresh table entry
       // maybe drop a non-partitioned table and create a
       // partitioned table with same name
       ret = OB_SCHEMA_ERROR;
       LOG_WARN("partitioned table should pass right tablet id from client", K(ret));
+    } else {
+      tablet_id_ = simple_table_schema_->get_tablet_id();
+    }
+  }
+  // init is_index_scan_
+  if (OB_FAIL(ret)) {
+  } else if (index_name.empty() || 0 == index_name.case_compare(ObIndexHint::PRIMARY_KEY)) { // scan with primary key
+    index_table_id_ = ref_table_id_;
+    if (!index_tablet_id_.is_valid()) {
+      index_tablet_id_ = tablet_id_;
     }
     is_index_back_ = false;
   } else {

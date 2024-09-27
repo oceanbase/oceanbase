@@ -226,6 +226,7 @@ int ObTableApiModifyExecutor::calc_tablet_loc(ObExpr *calc_part_id_expr,
                                               ObDASTabletLoc *&tablet_loc)
 {
   int ret = OB_SUCCESS;
+  tablet_loc = nullptr;
   if (OB_NOT_NULL(calc_part_id_expr)) {
     ObObjectID partition_id = OB_INVALID_ID;
     ObTabletID tablet_id;
@@ -240,6 +241,20 @@ int ObTableApiModifyExecutor::calc_tablet_loc(ObExpr *calc_part_id_expr,
   } else {
     if (OB_FAIL(calc_local_tablet_loc(tablet_loc))) {
       LOG_WARN("fail to calc local tablet loc", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(tablet_loc)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet loc is NULL", K(ret), K(table_loc), KP(calc_part_id_expr));
+  } else {
+    transaction::ObTxReadSnapshot &snapshot = exec_ctx_.get_das_ctx().get_snapshot();
+    bool is_ls_snapshot = snapshot.is_ls_snapshot();
+    if (is_ls_snapshot) {
+      if (tablet_loc->ls_id_ != snapshot.snapshot_lsid_) {
+        ret = OB_SNAPSHOT_DISCARDED;
+        LOG_WARN("snapshot_ls_id is not equal tablet_loc ls_id", K(snapshot.snapshot_lsid_), KPC(tablet_loc));
+      }
     }
   }
 
