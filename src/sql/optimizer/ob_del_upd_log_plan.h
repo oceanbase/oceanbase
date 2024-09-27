@@ -243,6 +243,7 @@ public:
   int get_pdml_parallel_degree(const int64_t target_part_cnt, int64_t &dop) const;
   bool get_can_use_parallel_das_dml() const { return use_parallel_das_dml_; }
   int64_t get_max_dml_parallel() { return max_dml_parallel_; }
+  virtual int perform_vector_assign_expr_replacement(ObDelUpdStmt *stmt);
 
 protected:
   virtual int generate_normal_raw_plan() override;
@@ -250,6 +251,12 @@ protected:
   int allocate_optimizer_stats_gathering_as_top(ObLogicalOperator *&old_top,
                                                 OSGShareInfo &info,
                                                 OSG_TYPE type);
+  int replace_alias_ref_expr(ObRawExpr *&expr, bool &replace_happened);
+
+  int candi_allocate_subplan_filter_for_assignments(ObIArray<ObRawExpr*> &assign_exprs);
+  int extract_assignment_subqueries(ObRawExpr *expr,
+                                    ObIArray<ObRawExpr*> &normal_query_refs,
+                                    ObIArray<ObRawExpr*> &alias_query_refs);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDelUpdLogPlan);
 
