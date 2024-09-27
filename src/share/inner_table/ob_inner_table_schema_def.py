@@ -15159,6 +15159,8 @@ def_table_schema(
 )
 
 # 12506: __all_virtual_ncomp_dll_v2
+# 12507: __all_virtual_logstore_service_status
+# 12508: __all_virtual_logstore_service_info
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -37970,6 +37972,12 @@ def_table_schema(
   FROM oceanbase.__all_virtual_temp_file
 """.replace("\n", " ")
 )
+
+# 21624 GV$OB_LOGSTORE_SERVICE_STATUS
+# 21625 V$OB_LOGSTORE_SERVICE_STATUS
+# 21626 GV$OB_LOGSTORE_SERVICE_INFO
+# 21627 V$OB_LOGSTORE_SERVICE_INFO
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
@@ -58493,7 +58501,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -66643,6 +66650,10 @@ def_table_schema(
 """.replace("\n", " "),
 )
 
+# 28265 GV$OB_LOGSTORE_SERVICE_STATUS
+# 28266 V$OB_LOGSTORE_SERVICE_STATUS
+# 28267 GV$OB_LOGSTORE_SERVICE_INFO
+# 28268 V$OB_LOGSTORE_SERVICE_INFO
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
