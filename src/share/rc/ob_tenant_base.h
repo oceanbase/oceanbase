@@ -294,7 +294,6 @@ using ObPartTransCtxObjPool = common::ObServerObjectPool<transaction::ObPartTran
 using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage::ObTableScanIterator>;
 #define MTL_MEMBERS                                  \
   MTL_LIST(                                          \
-      share::ObTenantDagScheduler*,                  \
       blocksstable::ObDecodeResourcePool*,           \
       omt::ObSharedTimer*,                           \
       oceanbase::sql::ObTenantSQLSessionMgr*,        \
@@ -380,6 +379,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       compaction::ObTenantMediumChecker*,            \
       storage::ObTenantCompactionMemPool*,           \
       TenantCompactionObjMgr                         \
+      share::ObTenantDagScheduler*,                  \
       storage::ObStorageHAService*,                  \
       storage::ObTenantFreezeInfoMgr*,               \
       TenantLSMergeScheduler                         \
