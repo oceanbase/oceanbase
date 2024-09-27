@@ -1867,6 +1867,9 @@ public:
   static int gv_ob_nic_info_schema(share::schema::ObTableSchema &table_schema);
   static int dba_scheduler_job_run_details_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_scheduler_job_run_details_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_ob_server_space_usage_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_ob_space_usage_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_ob_table_space_usage_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_ss_local_cache_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_ss_local_cache_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_kv_group_commit_status_schema(share::schema::ObTableSchema &table_schema);
@@ -4835,6 +4838,9 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::gv_ob_nic_info_schema,
   ObInnerTableSchema::dba_scheduler_job_run_details_schema,
   ObInnerTableSchema::cdb_scheduler_job_run_details_schema,
+  ObInnerTableSchema::cdb_ob_server_space_usage_schema,
+  ObInnerTableSchema::cdb_ob_space_usage_schema,
+  ObInnerTableSchema::cdb_ob_table_space_usage_schema,
   ObInnerTableSchema::gv_ob_ss_local_cache_schema,
   ObInnerTableSchema::v_ob_ss_local_cache_schema,
   ObInnerTableSchema::gv_ob_kv_group_commit_status_schema,
@@ -13630,10 +13636,10 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 305;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 852;
-const int64_t OB_SYS_VIEW_COUNT = 965;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 2127;
+const int64_t OB_SYS_VIEW_COUNT = 968;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 2130;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2130;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2133;
 
 } // end namespace share
 } // end namespace oceanbase

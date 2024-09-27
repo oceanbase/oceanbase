@@ -37382,14 +37382,224 @@ SELECT
 """.replace("\n", " ")
 )
 
-#
-# 21591 - 21596 placeholder by gaishun.gs
 # 21591: DBA_OB_SERVER_SPACE_USAGE
-# 21592: CDB_OB_SERVER_SPACE_USAGE
+
+def_table_schema(
+  owner = 'gaishun.gs',
+  table_name      = 'CDB_OB_SERVER_SPACE_USAGE',
+  table_id        = '21592',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+    select
+      CASE
+        WHEN atnt.tenant_name LIKE 'META$%' THEN REPLACE(atnt.tenant_name, 'META$', '')
+        ELSE atnt.tenant_id
+      END AS TENANT_ID,
+      CASE
+        WHEN atnt.tenant_name LIKE 'META$%' THEN
+          (SELECT t.tenant_name
+          FROM oceanbase.__all_tenant t
+          WHERE t.tenant_id = REPLACE(atnt.tenant_name, 'META$', ''))
+        ELSE atnt.tenant_name
+      END AS TENANT_NAME,
+      asu.svr_ip as SERVER_IP,
+      asu.svr_port as SERVER_PORT,
+      CASE
+        WHEN asu.file_type IN ('tenant tmp data')
+                          THEN 'Tmp Data'
+        WHEN asu.file_type IN ('tenant clog data')
+                          THEN 'Clog Data'
+        WHEN asu.file_type IN ('tenant meta data')
+                          THEN 'Meta Data'
+        WHEN asu.file_type IN ('tenant slog data')
+                          THEN 'Slog Data'
+      END AS SPACE_TYPE,
+      sum(asu.data_size) as DATA_BYTES,
+      sum(asu.used_size) as USAGE_BYTES
+    from oceanbase.__all_space_usage asu
+    INNER JOIN oceanbase.__all_tenant atnt
+      ON    atnt.tenant_id = asu.tenant_id
+        AND asu.file_type in ('tenant tmp data',
+                              'tenant clog data',
+                              'tenant meta data',
+                              'tenant slog data')
+    group by TENANT_ID, SERVER_IP, SERVER_PORT, SPACE_TYPE
+    UNION
+    select
+      CASE
+        WHEN atnt.tenant_name LIKE 'META$%' THEN REPLACE(atnt.tenant_name, 'META$', '')
+        ELSE atnt.tenant_id
+      END AS TENANT_ID,
+      CASE
+        WHEN atnt.tenant_name LIKE 'META$%' THEN
+          (SELECT t.tenant_name
+          FROM oceanbase.__all_tenant t
+          WHERE t.tenant_id = REPLACE(atnt.tenant_name, 'META$', ''))
+        ELSE atnt.tenant_name
+      END AS TENANT_NAME,
+      avtps.svr_ip as SERVER_IP,
+      avtps.svr_port as SERVER_PORT,
+      'Index Data' as SPACE_TYPE,
+      sum(avtps.occupy_size) as DATA_BYTES,
+      sum(avtps.required_size) as USAGE_BYTES
+    from
+    oceanbase.__all_virtual_tablet_pointer_status avtps
+    INNER JOIN oceanbase.__all_virtual_tablet_to_ls avttl
+      ON      avttl.tenant_id = avtps.tenant_id
+        AND 	avttl.tablet_id = avtps.tablet_id
+    INNER JOIN oceanbase.__all_tenant atnt
+      ON      atnt.tenant_id = avttl.tenant_id
+    INNER JOIN oceanbase.__all_virtual_table avt
+      ON      avt.table_type = 5
+        AND 	avt.table_id = avttl.table_id
+    INNER JOIN oceanbase.__all_virtual_ls_meta_table avlmt
+      ON      avtps.tenant_id = avlmt.tenant_id
+        AND  avtps.ls_id = avlmt.ls_id
+        AND  avtps.svr_ip = avlmt.svr_ip
+        AND  avtps.svr_port = avlmt.svr_port
+        AND  avlmt.role = 1
+    group by TENANT_ID, SERVER_IP, SERVER_PORT, SPACE_TYPE
+    UNION
+    select
+      CASE
+        WHEN atnt.tenant_name LIKE 'META$%' THEN REPLACE(atnt.tenant_name, 'META$', '')
+        ELSE atnt.tenant_id
+      END AS TENANT_ID,
+      CASE
+        WHEN atnt.tenant_name LIKE 'META$%' THEN
+          (SELECT t.tenant_name
+          FROM oceanbase.__all_tenant t
+          WHERE t.tenant_id = REPLACE(atnt.tenant_name, 'META$', ''))
+        ELSE atnt.tenant_name
+      END AS TENANT_NAME,
+      avtps.svr_ip as SERVER_IP,
+      avtps.svr_port as SERVER_PORT,
+      'Table Data' as SPACE_TYPE,
+      sum(avtps.occupy_size) as DATA_BYTES,
+      sum(avtps.required_size) as USAGE_BYTES
+    from
+    oceanbase.__all_virtual_tablet_pointer_status avtps
+    INNER JOIN oceanbase.__all_virtual_tablet_to_ls avttl
+      ON      avttl.tenant_id = avtps.tenant_id
+        AND 	avttl.tablet_id = avtps.tablet_id
+    INNER JOIN oceanbase.__all_tenant atnt
+      ON      atnt.tenant_id = avttl.tenant_id
+    INNER JOIN oceanbase.__all_virtual_table avt
+      ON      avt.table_id = avttl.table_id
+        AND  avt.table_type in (3, 12, 13)
+    INNER JOIN oceanbase.__all_virtual_ls_meta_table avlmt
+      ON      avtps.tenant_id = avlmt.tenant_id
+        AND  avtps.ls_id = avlmt.ls_id
+        AND  avtps.svr_ip = avlmt.svr_ip
+        AND  avtps.svr_port = avlmt.svr_port
+        AND  avlmt.role = 1
+    group by TENANT_ID, SERVER_IP, SERVER_PORT, SPACE_TYPE
+    order by TENANT_ID, SERVER_IP, SERVER_PORT, SPACE_TYPE;
+""".replace("\n", " ")
+)
+
 # 21593: DBA_OB_SPACE_USAGE
-# 21594: CDB_OB_SPACE_USAGE
+
+def_table_schema(
+  owner = 'gaishun.gs',
+  table_name      = 'CDB_OB_SPACE_USAGE',
+  table_id        = '21594',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+    SELECT
+      CASE
+        WHEN atnt.tenant_name LIKE 'META$%' THEN REPLACE(atnt.tenant_name, 'META$', '')
+        ELSE atnt.tenant_id
+      END AS TENANT_ID,
+      CASE
+        WHEN atnt.tenant_name LIKE 'META$%' THEN
+          (SELECT t.tenant_name
+          FROM oceanbase.__all_tenant t
+          WHERE t.tenant_id = REPLACE(atnt.tenant_name, 'META$', ''))
+        ELSE atnt.tenant_name
+      END AS TENANT_NAME,
+      azs.endpoint AS ENDPOINT,
+      azs.path AS PATH,
+      CASE
+        WHEN asu.file_type IN ('tenant local data',
+                              'tenant tmp data')
+                          THEN 'Local Data'
+        WHEN asu.file_type IN ('tenant shared_major data')
+                          THEN 'Shared Data'
+        WHEN asu.file_type IN ('tenant clog data')
+                          THEN 'Clog Data'
+      END AS SPACE_TYPE,
+      SUM(asu.used_size) AS USAGE_BYTES
+    FROM oceanbase.__all_tenant atnt
+    LEFT JOIN oceanbase.__all_zone_storage azs
+      ON LOCATE(azs.zone, atnt.primary_zone) > 0
+        OR atnt.primary_zone = 'RANDOM'
+    INNER JOIN oceanbase.__all_space_usage asu
+      ON atnt.tenant_id = asu.tenant_id
+    where asu.file_type in ('tenant shared_major data',
+                            'tenant local data',
+                            'tenant clog data',
+                            'tenant tmp data')
+    GROUP BY tenant_id, space_type
+    ORDER BY tenant_id
+""".replace("\n", " ")
+)
+
 # 21595: DBA_OB_TABLE_SPACE_USAGE
-# 21596: CDB_OB_TABLE_SPACE_USAGE
+
+def_table_schema(
+  owner = 'gaishun.gs',
+  table_name      = 'CDB_OB_TABLE_SPACE_USAGE',
+  table_id        = '21596',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+    select
+      CASE
+        WHEN atnt.tenant_name LIKE 'META$%' THEN REPLACE(atnt.tenant_name, 'META$', '')
+        ELSE atnt.tenant_id
+      END AS TENANT_ID,
+      avttl.table_id as TABLE_ID,
+      CASE
+        WHEN atnt.tenant_name LIKE 'META$%' THEN
+          (SELECT t.tenant_name
+          FROM oceanbase.__all_tenant t
+          WHERE t.tenant_id = REPLACE(atnt.tenant_name, 'META$', ''))
+        ELSE atnt.tenant_name
+      END AS TENANT_NAME,
+      ad.database_name as DATABASE_NAME,
+      avt.table_name as TABLE_NAME,
+      sum(avtps.occupy_size) as OCCUPY_SIZE,
+      sum(avtps.required_size) as REQUIRED_SIZE
+    from
+    oceanbase.__all_virtual_tablet_pointer_status avtps
+    INNER JOIN oceanbase.__all_virtual_tablet_to_ls avttl
+      ON      avttl.tenant_id = avtps.tenant_id
+        AND 	avttl.tablet_id = avtps.tablet_id
+    INNER JOIN oceanbase.__all_tenant atnt
+      ON      atnt.tenant_id = avttl.tenant_id
+    INNER JOIN oceanbase.__all_virtual_table avt
+      ON      avt.table_id = avttl.table_id
+    INNER JOIN oceanbase.__all_database ad
+      ON      ad.database_id = avt.database_id
+    INNER JOIN oceanbase.__all_virtual_ls_meta_table avlmt
+      ON      avtps.tenant_id = avlmt.tenant_id
+        AND  avtps.ls_id = avlmt.ls_id
+        AND  avtps.svr_ip = avlmt.svr_ip
+        AND  avtps.svr_port = avlmt.svr_port
+        AND  avlmt.role = 1
+    group by tenant_id, table_id
+    order by tenant_id, table_id
+""".replace("\n", " ")
+)
 
 
 def_table_schema(
@@ -66243,7 +66453,7 @@ left join
 """.replace("\n", " ")
 )
 #
-# 28235 - 28237 placeholder by gaishun.gs for oracle
+# 28235 - 28237 placeholder by gaishun.gs for SPACE_USAGE_VIEW of oracle
 # 28235: DBA_OB_SERVER_SPACE_USAGE
 # 28236: DBA_OB_SPACE_USAGE
 # 28237: DBA_OB_TABLE_SPACE_USAGE
