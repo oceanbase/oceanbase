@@ -144,7 +144,7 @@ int ObPartitionMerger::open_macro_writer(ObMergeParameter &merge_param)
     }
 
     if (OB_ISNULL(macro_writer_)) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "Failed to allocate memory for macro writer", K(ret), K(merge_param));
     } else if (OB_FAIL(macro_writer_->open(data_store_desc_, macro_start_seq))) {
       STORAGE_LOG(WARN, "Failed to open macro block writer", K(ret));
