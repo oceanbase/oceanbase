@@ -69,7 +69,8 @@ public:
       blocksstable::ObIMicroBlockReader *reader,
       const int32_t *row_ids,
       const int64_t row_count,
-      const bool projected) override;
+      const bool projected,
+      const bool all_count_agg) override;
   int can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info, bool &can_agg) override;
   int fill_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg) override;
   int collect_result();
@@ -102,6 +103,19 @@ public:
   TO_STRING_KV(K_(col_offset), K_(col_index), K_(need_access_data),
                K_(need_get_row_ids), K_(agg_type_flag),
                K_(agg_cells), KPC_(col_param), KPC_(project_expr));
+private:
+  // If count pushdown to decoder, the decoder_allocator_ will be reused,
+  // which can not guarantee the validity of projected data.
+  // In column store, only if that there is single count() on one column
+  // or other aggregations already pushdown to decoder can we pushdown count to decoder.
+  // In row store, only all count() in one sql can pushdown count to decoder.
+  OB_INLINE bool can_pushdown_decoder(ObAggCellVec &agg_cell,
+                                      const bool can_pushdown_count,
+                                      const bool projected)
+  {
+    return PD_COUNT != agg_cell.get_type()
+           || (can_pushdown_count && (agg_type_flag_.only_count() || !projected));
+  }
 public:
   ObSEArray<ObAggCellVec*, 1> agg_cells_;
   ObColumnParam* col_param_;
@@ -141,7 +155,7 @@ public:
   int collect_aggregated_result() override;
   int get_agg_group(const sql::ObExpr *expr, ObAggGroupVec *&agg_group);
   INHERIT_TO_STRING_KV("ObVectorStore", ObVectorStore, K_(pd_agg_ctx), K_(agg_groups),
-                        K_(need_access_data), K_(need_get_row_ids));
+                        K_(need_access_data), K_(need_get_row_ids), K_(can_pushdown_count));
 private:
   void release_agg_group();
   int init_agg_groups(const ObTableAccessParam &param);
@@ -161,6 +175,7 @@ private:
   // need_access_data is false => need_get_row_ids_ may be true/false.
   bool need_access_data_;
   bool need_get_row_ids_;
+  bool can_pushdown_count_;
   DISALLOW_COPY_AND_ASSIGN(ObAggregatedStoreVec);
 };
 

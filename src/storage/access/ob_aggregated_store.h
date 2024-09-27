@@ -48,7 +48,8 @@ public:
       blocksstable::ObIMicroBlockReader *reader,
       const int32_t *row_ids,
       const int64_t row_count,
-      const bool projected) override;
+      const bool projected,
+      const bool can_pushdown_count) override;
   int eval(blocksstable::ObStorageDatum &datum, const int64_t row_count) override;
   int fill_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg) override;
   OB_INLINE bool is_vec() const override { return false; }

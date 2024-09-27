@@ -961,7 +961,8 @@ int ObIMicroBlockRowScanner::get_aggregate_result(
   } else if (OB_UNLIKELY(nullptr == row_ids || row_cap < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid arguments", K(ret), KP(row_ids), K(row_cap));
-  } else if (OB_FAIL(agg_group.eval_batch(param_, context_, col_idx, reader_, row_ids, row_cap, projected))) {
+  } else if (OB_FAIL(agg_group.eval_batch(param_, context_, col_idx, reader_,
+                        row_ids, row_cap, projected, true/*can_pushdown_count*/))) {
     LOG_WARN("Fail to eval batch rows", K(ret));
   }
   return ret;

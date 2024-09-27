@@ -94,9 +94,10 @@ int ObCGAggCells::eval_batch(
     blocksstable::ObIMicroBlockReader *reader,
     const int32_t *row_ids,
     const int64_t row_count,
-    const bool projected)
+    const bool projected,
+    const bool can_pushdown_count)
 {
-  UNUSED(projected);
+  UNUSEDx(projected, can_pushdown_count);
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < agg_cells_.count(); ++i) {
     if (agg_cells_.at(i)->finished()) {

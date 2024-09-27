@@ -74,14 +74,15 @@ int ObAggGroupVec::eval_batch(
     blocksstable::ObIMicroBlockReader *reader,
     const int32_t *row_ids,
     const int64_t row_count,
-    const bool projected)
+    const bool projected,
+    const bool can_pushdown_count)
 {
   UNUSEDx(iter_param, context, col_idx);
   int ret = OB_SUCCESS;
   blocksstable::ObIMicroBlockReader *real_reader = nullptr;
   for (int64_t i = 0; OB_SUCC(ret) && i < agg_cells_.count(); ++i) {
     ObAggCellVec *agg_cell = agg_cells_.at(i);
-    real_reader = PD_COUNT == agg_cell->get_type() && !agg_type_flag_.only_count() && projected ? nullptr : reader;
+    real_reader = can_pushdown_decoder(*agg_cell, can_pushdown_count, projected) ? reader : nullptr;
     if (OB_FAIL(agg_cell->eval_batch(real_reader, col_offset_, row_ids, row_count))) {
       LOG_WARN("Failed to aggregate batch rows", K(ret), K(row_count));
     }
@@ -162,7 +163,8 @@ ObAggregatedStoreVec::ObAggregatedStoreVec(
         pd_agg_factory_(*context.stmt_allocator_),
         allocator_(*context.stmt_allocator_),
         need_access_data_(false),
-        need_get_row_ids_(false)
+        need_get_row_ids_(false),
+        can_pushdown_count_(false)
 {
   is_vec2_ = true;
 }
@@ -182,6 +184,7 @@ void ObAggregatedStoreVec::reset()
   }
   need_access_data_ = false;
   need_get_row_ids_ = false;
+  can_pushdown_count_ = false;
 }
 
 void ObAggregatedStoreVec::release_agg_group()
@@ -262,6 +265,7 @@ int ObAggregatedStoreVec::init_agg_groups(const ObTableAccessParam &param)
   int32_t pre_offset = -1;
   const ObIArray<ObColOffsetMap> &cols_offset_map = pd_agg_ctx_.cols_offset_map_;
   const ObIArray<ObAggrInfo> &agg_infos = pd_agg_ctx_.agg_infos_;
+  can_pushdown_count_ = true;
   for (int64_t i = 0; OB_SUCC(ret) && i < cols_offset_map.count(); ++i) {
     const int32_t col_offset = cols_offset_map.at(i).col_offset_;
     const int64_t agg_idx = cols_offset_map.at(i).agg_idx_;
@@ -283,8 +287,13 @@ int ObAggregatedStoreVec::init_agg_groups(const ObTableAccessParam &param)
       if (OB_ISNULL(agg_expr)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("Unexpected null agg expr", K(ret));
-      } else if (T_FUN_COUNT == agg_expr->type_ || T_FUN_SUM_OPNSIZE == agg_expr->type_) {
+      } else if (T_FUN_COUNT == agg_expr->type_) {
         if (OB_COUNT_AGG_PD_COLUMN_ID != col_offset) {
+          exclude_null = col_param->is_nullable_for_write();
+        }
+      } else {
+        can_pushdown_count_ = false;
+        if (T_FUN_SUM_OPNSIZE == agg_expr->type_) { // not support now
           exclude_null = col_param->is_nullable_for_write();
         }
       }
@@ -333,6 +342,7 @@ int ObAggregatedStoreVec::check_agg_store_valid()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Invalid aggregate store status", K(ret), K(i), KPC(agg_group));
     } else if (!agg_group->need_access_data_
+               && (!agg_group->need_get_row_ids_ || can_pushdown_count_)
                && OB_FAIL(col_mask_set_.set_refactored(agg_group->col_offset_, 0 /*deduplicated*/))) {
       LOG_WARN("Failed to add column offset", K(ret), K(i), KPC(agg_group));
     } else {
@@ -405,7 +415,7 @@ int ObAggregatedStoreVec::fill_rows(
     if (OB_FAIL(reader->get_row_count(micro_row_count))) {
       LOG_WARN("Failed to get micro row count", K(ret));
     } else if (!need_access_data_) {
-      if (need_get_row_ids_ || micro_row_count != covered_row_count) {
+      if (need_get_row_ids_ || !can_pushdown_count_ || micro_row_count != covered_row_count) {
         if (OB_FAIL(get_row_ids(reader, begin_index, end_index, count_, false, res))) {
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
             LOG_WARN("Failed to get row ids", K(ret), K(begin_index), K(end_index));
@@ -476,8 +486,10 @@ int ObAggregatedStoreVec::do_aggregate(blocksstable::ObIMicroBlockReader *reader
                                         reader,
                                         row_ids_,
                                         count_,
-                                        true))) {
-        LOG_WARN("Failed to eval batch", K(ret), KPC(agg_group), K_(need_access_data), K_(need_get_row_ids));
+                                        true,
+                                        can_pushdown_count_))) {
+        LOG_WARN("Failed to eval batch", K(ret), KPC(agg_group),
+          K_(need_access_data), K_(need_get_row_ids), K_(can_pushdown_count));
       }
     }
     if (OB_SUCC(ret)) {

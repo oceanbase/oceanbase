@@ -168,7 +168,7 @@ int ObVirtualCGScanner::get_next_rows(uint64_t &count, const uint64_t capacity)
     }
   } else {
     if (OB_FAIL(agg_group_->eval_batch(iter_param_, access_ctx_, 0/*col_idx*/, nullptr/*reader*/,
-                                       nullptr/*row_ids*/, current_group_size_, false))) {
+                                       nullptr/*row_ids*/, current_group_size_, false, true/*can_pushdown_count*/))) {
       LOG_WARN("Fail to eval batch rows", K(ret));
     } else {
       count = current_group_size_;

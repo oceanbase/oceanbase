@@ -191,7 +191,7 @@ void ObPushdownAggContext::reset()
   cols_offset_map_.reset();
   agg_ctx_.destroy();
   if (OB_NOT_NULL(rows_)) {
-    allocator_.free(rows_);
+    row_allocator_.free(rows_);
   }
   row_meta_.reset();
   agg_row_num_ = 0;

@@ -122,7 +122,8 @@ int ObCGAggregatedScanner::get_next_rows(uint64_t &count, const uint64_t capacit
                                        nullptr/*reader*/,
                                        nullptr/*row_ids*/,
                                        cur_processed_row_count_,
-                                       false))) {
+                                       false,
+                                       true/*can_pushdown_count*/))) {
       LOG_WARN("Fail to eval batch rows", K(ret));
     } else {
       ret = OB_ITER_END;
