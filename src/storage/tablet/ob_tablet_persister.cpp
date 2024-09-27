@@ -1345,8 +1345,7 @@ int ObTabletPersister::fetch_and_persist_large_co_sstable(
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (sstable_persist_ctx.cg_sstable_cnt_ != cg_sstables.count() ||
-                 sstable_persist_ctx.cg_sstable_cnt_ != cg_write_infos.count()) {
+      } else if (cg_sstables.count() != cg_write_infos.count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unmatched cg_sstable_count and write_infos", KR(ret), K(sstable_persist_ctx), K(cg_sstables.count()), K(cg_write_infos.count()));
       } else if (0 < cg_write_infos.count()
