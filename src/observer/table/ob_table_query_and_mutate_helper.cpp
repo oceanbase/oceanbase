@@ -162,72 +162,91 @@ int QueryAndMutateHelper::init_scan_tb_ctx(ObTableApiCacheGuard &cache_guard)
   return ret;
 }
 
-int QueryAndMutateHelper::execute_htable_delete()
+int QueryAndMutateHelper::execute_htable_delete(const ObTableOperation &table_operation, ObTableCtx *&tb_ctx)
 {
   int ret = OB_SUCCESS;
-  const ObTableBatchOperation &mutations = query_and_mutate_.get_mutations();
-  const ObTableOperation &op = mutations.at(0);
-
-  SMART_VAR(ObTableCtx, tb_ctx, allocator_) {
-    ObTableApiSpec *spec = nullptr;
-    ObTableApiExecutor *executor = nullptr;
-    observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
-    ObTableApiCacheGuard cache_guard;
-
-    if (OB_FAIL(init_tb_ctx(tb_ctx,
-                            ObTableOperationType::Type::DEL,
-                            op.entity()))) {
-      LOG_WARN("fail to init table ctx", K(ret));
-    } else if (OB_FAIL(ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_DELETE>(tb_ctx, cache_guard, spec))) {
-      LOG_WARN("fail to get spec from cache", K(ret));
-    } else if (OB_FAIL(spec->create_executor(tb_ctx, executor))) {
-      LOG_WARN("fail to generate executor", K(ret), K(tb_ctx));
-    } else if (OB_FAIL(tb_ctx.init_trans(get_trans_desc(), get_tx_snapshot()))) {
-      LOG_WARN("fail to init trans", K(ret), K(tb_ctx));
-    } else {
-      ObHTableDeleteExecutor delete_executor(tb_ctx, static_cast<ObTableApiDeleteExecutor *>(executor), audit_ctx_);
-      if (OB_FAIL(delete_executor.open())) {
-        LOG_WARN("fail to open htable delete executor", K(ret));
-      } else if (OB_FAIL(delete_executor.get_next_row())) {
-        LOG_WARN("fail to call htable delete get_next_row", K(ret));
-      }
-
-      int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = delete_executor.close())) {
-        LOG_WARN("fail to close htable delete executor", K(tmp_ret));
-        ret = COVER_SUCC(tmp_ret);
-      }
-    }
-
-    if (OB_NOT_NULL(spec)) {
-      spec->destroy_executor(executor);
-      tb_ctx.set_expr_info(nullptr);
+  OB_TABLE_START_AUDIT(credential_,
+                      *sess_guard_,
+                      simple_table_schema_->get_table_name_str(),
+                      &audit_ctx_, table_operation);
+  const ObITableEntity &entity = table_operation.entity();
+  observer::ObReqTimeGuard req_timeinfo_guard;  // 引用cache资源必须加ObReqTimeGuard
+  ObTableApiCacheGuard cache_guard;
+  ObTableApiExecutor *executor = nullptr;
+  ObTableApiSpec *spec = nullptr;
+  if (OB_ISNULL(tb_ctx)) {
+    if (OB_ISNULL(tb_ctx = OB_NEWx(ObTableCtx, (&allocator_), allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to create mutate table ctx", K(ret));
     }
   }
+  if (OB_SUCC(ret)) {
+    if (!tb_ctx->is_init()) {
+      if (OB_FAIL(init_tb_ctx(*tb_ctx, ObTableOperationType::Type::DEL, entity))) {
+        LOG_WARN("fail to init table ctx", K(ret));
+      } else if (OB_FAIL(tb_ctx->init_trans(get_trans_desc(), get_tx_snapshot()))) {
+        LOG_WARN("fail to init trans", K(ret), K(tb_ctx));
+      }
+    } else {
+      tb_ctx->set_entity(&entity);
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_DELETE>(*tb_ctx, cache_guard, spec))) {
+        LOG_WARN("fail to get spec from cache", K(ret));
+      } else if (OB_FAIL(spec->create_executor(*tb_ctx, executor))) {
+        LOG_WARN("fail to generate executor", K(ret), K(tb_ctx));
+      } else {
+        ObHTableDeleteExecutor delete_executor(*tb_ctx, static_cast<ObTableApiDeleteExecutor *>(executor), audit_ctx_);
+        if (OB_FAIL(delete_executor.open())) {
+          LOG_WARN("fail to open htable delete executor", K(ret));
+        } else if (OB_FAIL(delete_executor.get_next_row_by_entity())) {
+          LOG_WARN("fail to call htable delete get_next_row", K(ret));
+        }
 
+        int tmp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (tmp_ret = delete_executor.close())) {
+          LOG_WARN("fail to close htable delete executor", K(tmp_ret));
+          ret = COVER_SUCC(tmp_ret);
+        }
+      }
+    }
+    if (OB_NOT_NULL(spec)) {
+      spec->destroy_executor(executor);
+    }
+  }
+  OB_TABLE_END_AUDIT(ret_code, ret,
+                     snapshot, get_tx_snapshot(),
+                     stmt_type, StmtType::T_KV_DELETE);
   return ret;
 }
 
-int QueryAndMutateHelper::execute_htable_put()
+int QueryAndMutateHelper::execute_htable_put(const ObTableOperation &table_operation, ObTableCtx *&tb_ctx)
 {
   int ret = OB_SUCCESS;
-  const ObTableBatchOperation &mutations = query_and_mutate_.get_mutations();
-  int64_t N = mutations.count();
-  ObTableAuditMultiOp multi_op(ObTableOperationType::Type::PUT, mutations.get_table_operations());
   OB_TABLE_START_AUDIT(credential_,
-                       *sess_guard_,
-                       simple_table_schema_->get_table_name_str(),
-                       &audit_ctx_, multi_op);
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < N; i++) {
-    const ObTableOperation &op = mutations.at(i);
-    SMART_VAR(ObTableCtx, tb_ctx, allocator_) {
-      ObTableOperationResult op_result;
-      if (OB_FAIL(init_tb_ctx(tb_ctx, ObTableOperationType::Type::INSERT_OR_UPDATE, op.entity()))) {
+                      *sess_guard_,
+                      simple_table_schema_->get_table_name_str(),
+                      &audit_ctx_, table_operation);
+  const ObITableEntity &entity = table_operation.entity();
+  if (OB_ISNULL(tb_ctx)) {
+    if (OB_ISNULL(tb_ctx = OB_NEWx(ObTableCtx, (&allocator_), allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to create mutate table ctx", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (!tb_ctx->is_init()) {
+      if (OB_FAIL(init_tb_ctx(*tb_ctx, ObTableOperationType::Type::INSERT_OR_UPDATE, entity))) {
         LOG_WARN("fail to init table ctx", K(ret));
-      } else if (OB_FAIL(tb_ctx.init_trans(get_trans_desc(), get_tx_snapshot()))) {
+      } else if (OB_FAIL(tb_ctx->init_trans(get_trans_desc(), get_tx_snapshot()))) {
         LOG_WARN("fail to init trans", K(ret), K(tb_ctx));
-      } else if (OB_FAIL(ObTableOpWrapper::process_insert_up_op(tb_ctx, op_result))) {
+      }
+    } else {
+      tb_ctx->set_entity(&entity);
+    }
+    if (OB_SUCC(ret)) {
+      ObTableOperationResult op_result;
+      if (OB_FAIL(ObTableOpWrapper::process_insert_up_op(*tb_ctx, op_result))) {
         LOG_WARN("fail to process insert up op", K(ret));
       }
     }
@@ -235,7 +254,7 @@ int QueryAndMutateHelper::execute_htable_put()
 
   OB_TABLE_END_AUDIT(ret_code, ret,
                      snapshot, get_tx_snapshot(),
-                     stmt_type, StmtType::T_KV_MULTI_PUT);
+                     stmt_type, StmtType::T_KV_PUT);
   return ret;
 }
 
@@ -629,29 +648,40 @@ int QueryAndMutateHelper::execute_htable_mutation(ObTableQueryResultIterator *re
                        has_table_scan, true,
                        filter, (OB_ISNULL(result_iterator) ? nullptr : result_iterator->get_filter()));
     if (OB_SUCC(ret) && check_passed) {
-      switch(mutation.type()) {
-        case ObTableOperationType::DEL: { // checkAndDelete
-          if (OB_FAIL(execute_htable_delete())) {
-            LOG_WARN("fail to execute hatable delete", K(ret));
-          } else {
-            set_result_affected_rows(1);
+      uint64_t N = mutations.count();
+      ObTableCtx *put_tb_ctx = nullptr;
+      ObTableCtx *del_tb_ctx = nullptr;
+      for (int i = 0; i < N && OB_SUCC(ret); i++) {
+        const ObTableOperation &op = mutations.at(i);
+        switch (op.type()) {
+          case ObTableOperationType::DEL: {  // checkAndDelete
+            if (OB_FAIL(execute_htable_delete(op, del_tb_ctx))) {
+              LOG_WARN("fail to execute hatable delete", K(ret), K(op), K(del_tb_ctx));
+            }
+            break;
           }
-          break;
-        }
-        case ObTableOperationType::INSERT_OR_UPDATE:  { // checkAndPut
-          if (OB_FAIL(execute_htable_put())) {
-            LOG_WARN("fail to execute hatable put", K(ret));
-          } else {
-            set_result_affected_rows(1);
+          case ObTableOperationType::INSERT_OR_UPDATE: {  // checkAndPut
+            if (OB_FAIL(execute_htable_put(op, put_tb_ctx))) {
+              LOG_WARN("fail to execute hatable insert", K(ret), K(op), K(del_tb_ctx));
+            }
+            break;
           }
-          break;
+          default: {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "mutation type");
+            LOG_WARN("not supported mutation type", K(ret), "type", op.type(), "index", i);
+            break;
+          }
         }
-        default: {
-          ret = OB_NOT_SUPPORTED;
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "mutation type");
-          LOG_WARN("not supported mutation type", K(ret), "type", mutation.type());
-          break;
-        }
+      }
+      if (OB_SUCC(ret)) {
+        set_result_affected_rows(1);
+      }
+      if (OB_NOT_NULL(put_tb_ctx)) {
+        put_tb_ctx->~ObTableCtx();
+      }
+      if (OB_NOT_NULL(del_tb_ctx)) {
+        del_tb_ctx->~ObTableCtx();
       }
     }
   }

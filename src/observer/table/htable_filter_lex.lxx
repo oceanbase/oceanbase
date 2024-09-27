@@ -15,7 +15,7 @@ using namespace oceanbase::common;
 %x IN_STRING
 
 ID ([A-Za-z0-9$_]*)
-INT          [0-9]+
+INT          [-+]?[0-9]+
 SQUOTE '
 
 %%
@@ -89,7 +89,12 @@ ValueFilter { return ValueFilter; }
 QualifierFilter { return QualifierFilter; }
 SingleColumnValueFilter { return SingleColumnValueFilter; }
 PageFilter { return PageFilter; }
+RandomRowFilter { return RandomRowFilter; }
 ColumnPaginationFilter { return ColumnPaginationFilter; }
+ColumnPrefixFilter { return ColumnPrefixFilter; }
+FirstKeyOnlyFilter { return FirstKeyOnlyFilter; }
+KeyOnlyFilter { return KeyOnlyFilter; }
+TimestampsFilter { return TimestampsFilter; }
 ColumnCountGetFilter { return ColumnCountGetFilter; }
 CheckAndMutateFilter { return CheckAndMutateFilter; }
 PrefixFilter { return PrefixFilter; }

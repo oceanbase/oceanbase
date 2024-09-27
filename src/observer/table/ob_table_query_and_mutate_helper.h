@@ -122,7 +122,9 @@ private:
                      const ObObj &value);
   int get_old_row(table::ObTableApiSpec &scan_spec, ObNewRow *&row);
   int execute_htable_delete();
+  int execute_htable_delete(const ObTableOperation &table_operation, ObTableCtx *&tb_ctx);
   int execute_htable_put();
+  int execute_htable_put(const ObTableOperation &table_operation, ObTableCtx *&tb_ctx);
   int execute_htable_increment(table::ObTableApiSpec &scan_spec);
   int execute_htable_insert(const table::ObITableEntity &new_entity);
   int execute_htable_mutation(table::ObTableQueryResultIterator *result_iterator);

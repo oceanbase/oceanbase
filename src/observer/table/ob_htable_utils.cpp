@@ -21,14 +21,18 @@ using namespace oceanbase::table;
 using namespace oceanbase::share::schema;
 
 ObHTableCellEntity::ObHTableCellEntity(common::ObNewRow *ob_row)
-    :ob_row_(ob_row)
+    : ob_row_(ob_row),
+      type_(Type::NORMAL)
+{}
+
+ObHTableCellEntity::ObHTableCellEntity(common::ObNewRow *ob_row, Type type)
+    : ob_row_(ob_row),
+      type_(type)
 {}
 
 ObHTableCellEntity::ObHTableCellEntity()
-    :ob_row_(NULL)
-{}
-
-ObHTableCellEntity::~ObHTableCellEntity()
+    : ob_row_(NULL),
+      type_(Type::NORMAL)
 {}
 
 ObString ObHTableCellEntity::get_rowkey() const
@@ -223,60 +227,134 @@ ObString ObHTableCellEntity3::get_value() const
 }
 
 ////////////////////////////////////////////////////////////////
-int ObHTableUtils::create_last_cell_on_row_col(common::ObArenaAllocator &allocator,
-                                               const ObHTableCell &cell, ObHTableCell *&new_cell)
+int ObHTableUtils::create_last_cell_on_row_col(
+    common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell)
 {
   int ret = OB_SUCCESS;
   ObString rowkey_clone;
   ObString qualifier_clone;
+  ObObj *last_cell = nullptr;
+  ObNewRow *ob_row = nullptr;
   if (OB_FAIL(ob_write_string(allocator, cell.get_rowkey(), rowkey_clone))) {
     LOG_WARN("failed to clone rowkey", K(ret));
   } else if (OB_FAIL(ob_write_string(allocator, cell.get_qualifier(), qualifier_clone))) {
     LOG_WARN("failed to clone qualifier", K(ret));
+  } else if (OB_ISNULL(last_cell = static_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * 3)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory for start_obj failed", K(ret));
   } else {
-    new_cell = OB_NEWx(ObHTableLastOnRowColCell, (&allocator), rowkey_clone, qualifier_clone);
-    if (NULL == new_cell) {
-      LOG_WARN("no memory", K(ret));
+    last_cell[ObHTableConstants::COL_IDX_K].set_varbinary(rowkey_clone);
+    last_cell[ObHTableConstants::COL_IDX_Q].set_varbinary(qualifier_clone);
+    last_cell[ObHTableConstants::COL_IDX_T].set_max_value();
+    if (OB_ISNULL(ob_row = OB_NEWx(ObNewRow, (&allocator), last_cell, 3))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocator last NewRow on column.", K(ret));
+    } else if (OB_ISNULL(new_cell = OB_NEWx(ObHTableCellEntity, (&allocator), ob_row, ObHTableCell::Type::LAST_ON_COL))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocator last entity on column.", K(ret));
     }
   }
   return ret;
 }
 
-int ObHTableUtils::create_first_cell_on_row_col(common::ObArenaAllocator &allocator,
-                                                const ObHTableCell &cell,
-                                                const common::ObString &qualifier,
-                                                ObHTableCell *&new_cell)
+int ObHTableUtils::create_first_cell_on_row_col(common::ObIAllocator &allocator, const ObHTableCell &cell,
+    const common::ObString &qualifier, ObHTableCell *&new_cell)
 {
   int ret = OB_SUCCESS;
   ObString rowkey_clone;
   ObString qualifier_clone;
+  ObObj *first_cell = nullptr;
+  ObNewRow *ob_row = nullptr;
   if (OB_FAIL(ob_write_string(allocator, cell.get_rowkey(), rowkey_clone))) {
     LOG_WARN("failed to clone rowkey", K(ret));
   } else if (OB_FAIL(ob_write_string(allocator, qualifier, qualifier_clone))) {
     LOG_WARN("failed to clone qualifier", K(ret));
+  } else if (OB_ISNULL(first_cell = static_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * 3)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory for start_obj failed", K(ret));
   } else {
-    new_cell = OB_NEWx(ObHTableFirstOnRowColCell, (&allocator), rowkey_clone, qualifier_clone);
-    if (NULL == new_cell) {
-      LOG_WARN("no memory", K(ret));
+    first_cell[ObHTableConstants::COL_IDX_K].set_varbinary(rowkey_clone);
+    first_cell[ObHTableConstants::COL_IDX_Q].set_varbinary(qualifier_clone);
+    first_cell[ObHTableConstants::COL_IDX_T].set_min_value();
+    if (OB_ISNULL(ob_row = OB_NEWx(ObNewRow, (&allocator), first_cell, 3))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocator first NewRow on column.", K(ret));
+    } else if (OB_ISNULL(new_cell = OB_NEWx(ObHTableCellEntity, (&allocator), ob_row, ObHTableCell::Type::FIRST_ON_COL))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocator first entity on column.", K(ret));
     }
   }
   return ret;
 }
 
-int ObHTableUtils::create_last_cell_on_row(common::ObArenaAllocator &allocator,
-                                           const ObHTableCell &cell, ObHTableCell *&new_cell)
+int ObHTableUtils::create_last_cell_on_row(
+    common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell)
+{
+  int ret = OB_SUCCESS;
+  ObString rowkey_clone;
+  ObObj *last_cell = nullptr;
+  ObNewRow *ob_row = nullptr;
+  if (OB_FAIL(ob_write_string(allocator, cell.get_rowkey(), rowkey_clone))) {
+    LOG_WARN("failed to clone rowkey", K(ret));
+  } else if (OB_ISNULL(last_cell = static_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * 3)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory for start_obj failed", K(ret));
+  } else {
+    last_cell[ObHTableConstants::COL_IDX_K].set_varbinary(rowkey_clone);
+    last_cell[ObHTableConstants::COL_IDX_Q].set_max_value();
+    last_cell[ObHTableConstants::COL_IDX_T].set_max_value();
+    if (OB_ISNULL(ob_row = OB_NEWx(ObNewRow, (&allocator), last_cell, 3))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocator last NewRow on row.", K(ret));
+    } else if (OB_ISNULL(new_cell = OB_NEWx(ObHTableCellEntity, (&allocator), ob_row, ObHTableCell::Type::LAST_ON_ROW))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocator last entity on row.", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObHTableUtils::create_first_cell_on_row_col_ts(common::ObArenaAllocator &allocator,
+                                                const ObHTableCell &cell,
+                                                const int64_t timestamp,
+                                                ObHTableCell *&new_cell)
 {
   int ret = OB_SUCCESS;
   ObString rowkey_clone;
   if (OB_FAIL(ob_write_string(allocator, cell.get_rowkey(), rowkey_clone))) {
     LOG_WARN("failed to clone rowkey", K(ret));
   } else {
-    new_cell = OB_NEWx(ObHTableLastOnRowCell, (&allocator), rowkey_clone);
+    new_cell = OB_NEWx(ObHTableFirstOnRowColTSCell, (&allocator), rowkey_clone, timestamp);
     if (NULL == new_cell) {
-      LOG_WARN("no memory", K(ret));
       ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("no memory", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObHTableUtils::create_first_cell_on_row(
+    common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell)
+{
+  int ret = OB_SUCCESS;
+  ObString rowkey_clone;
+  ObObj *first_cell = nullptr;
+  ObNewRow *ob_row = nullptr;
+  if (OB_FAIL(ob_write_string(allocator, cell.get_rowkey(), rowkey_clone))) {
+    LOG_WARN("failed to clone rowkey", K(ret));
+  } else if (OB_ISNULL(first_cell = static_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * 3)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory for start_obj failed", K(ret));
+  } else {
+    first_cell[ObHTableConstants::COL_IDX_K].set_varbinary(rowkey_clone);
+    first_cell[ObHTableConstants::COL_IDX_Q].set_min_value();
+    first_cell[ObHTableConstants::COL_IDX_T].set_min_value();
+    if (OB_ISNULL(ob_row = OB_NEWx(ObNewRow, (&allocator), first_cell, 3))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocator last NewRow on row.", K(ret));
+    } else if (OB_ISNULL(new_cell = OB_NEWx(ObHTableCellEntity, (&allocator), ob_row, ObHTableCell::Type::FIRST_ON_ROW))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocator last entity on row.", K(ret));
     }
   }
   return ret;
@@ -303,31 +381,32 @@ int ObHTableUtils::compare_cell(const ObHTableCell &cell1, const ObHTableCell &c
       // compare qualifiers
       ObString qualifier1 = cell1.get_qualifier();
       ObString qualifier2 = cell2.get_qualifier();
-      if (common::ObQueryFlag::Reverse == scan_order){
-        cmp_ret = qualifier2.compare(qualifier1);
-      } else {
-        cmp_ret = qualifier1.compare(qualifier2);
-      }
+      cmp_ret = qualifier1.compare(qualifier2);
       if (0 == cmp_ret) {
-        // compare timestamps in ascending order (the value of timestamp is negative)
-        int64_t ts1 = cell1.get_timestamp();
-        int64_t ts2 = cell2.get_timestamp();
-        if (ts1 == ts2) {
-          // one of the cells could be ObHTableFirstOnRowCell or ObHTableFirstOnRowColCell
-          if (common::ObQueryFlag::Reverse == scan_order) { 
-            cmp_ret = static_cast<int>(cell2.get_type()) - static_cast<int>(cell1.get_type());
+        // one of the cells could be ObHTableFirstOnRowColCell or ObHTableLastOnRowColCell
+        cmp_ret = static_cast<int>(cell1.get_type()) - static_cast<int>(cell2.get_type());
+        if (0 == cmp_ret) {
+          // compare timestamps in ascending order (the value of timestamp is negative)
+          int64_t ts1 = cell1.get_timestamp();
+          int64_t ts2 = cell2.get_timestamp();
+          if (ts1 == ts2) {
+          } else if (ts1 < ts2) {
+            cmp_ret = -1;
           } else {
-            cmp_ret = static_cast<int>(cell1.get_type()) - static_cast<int>(cell2.get_type());
+            cmp_ret = 1;
           }
-        } else if (ts1 < ts2) {
-          cmp_ret = -1;
-        } else {
-          cmp_ret = 1;
         }
       }
     }
   }
   return cmp_ret;
+}
+
+int ObHTableUtils::compare_cell(const ObHTableCell &cell1, const ObHTableCell &cell2, bool is_reversed)
+{
+  common::ObQueryFlag::ScanOrder scan_order =
+    is_reversed? common::ObQueryFlag::ScanOrder::Reverse : common::ObQueryFlag::ScanOrder::Forward;
+  return compare_cell(cell1, cell2, scan_order);
 }
 
 int ObHTableUtils::compare_qualifier(const common::ObString &cq1, const common::ObString &cq2)
@@ -468,5 +547,52 @@ int ObHTableUtils::check_htable_schema(const ObTableSchema &table_schema)
     LOG_WARN("the fourth column should be V", K(ret), K(value_schema->get_column_name()));
   }
 
+  return ret;
+}
+
+int ObHTableUtils::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos, const char *name)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is bull", KR(ret));
+  } else {
+    int64_t n = snprintf(buf + pos, buf_len - pos, "%s", name);
+    if (n < 0 || n > buf_len - pos) {
+      ret = OB_BUF_NOT_ENOUGH;
+      LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+    } else {
+      pos += n;
+    }
+  }
+
+  return ret;
+}
+
+int ObHTableUtils::get_hbase_scanner_timeout(uint64_t tenant_id)
+{
+  int value = HBASE_SCANNER_TIMEOUT_DEFAULT_VALUE;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    value = tenant_config->kv_hbase_client_scanner_timeout_period;
+  }
+  return value;
+}
+
+int ObHTableUtils::generate_hbase_bytes(ObIAllocator& allocator, int32_t len, char*& val)
+{
+  int ret = OB_SUCCESS;
+  val = static_cast<char*>(allocator.alloc(sizeof(len)));
+  if (val == nullptr) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("no memory", K(ret));
+  } else {
+    // Hbase use big endian.
+    for (int i = 3; i >= 0; i--) {
+      val[i] = static_cast<int8_t>(len);
+      len >>= sizeof(char) * 8;
+    }
+  }
   return ret;
 }

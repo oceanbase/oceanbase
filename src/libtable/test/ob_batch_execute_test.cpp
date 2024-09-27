@@ -2645,8 +2645,8 @@ TEST_F(TestBatchExecute, htable_scan_reverse)
   ASSERT_EQ(OB_SUCCESS, query.add_select_column(V));
   ObObj pk_objs_start[3];
   pk_objs_start[0].set_varbinary(ObString::make_string("row50"));
-  pk_objs_start[1].set_min_value();
-  pk_objs_start[2].set_min_value();
+  pk_objs_start[1].set_max_value();
+  pk_objs_start[2].set_max_value();
   ObObj pk_objs_end[3];
   pk_objs_end[0].set_varbinary(ObString::make_string("row59"));
   pk_objs_end[1].set_max_value();

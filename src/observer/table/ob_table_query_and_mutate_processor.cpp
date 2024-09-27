@@ -169,11 +169,11 @@ int ObTableQueryAndMutateP::try_process()
 
   if (OB_FAIL(init_schema_info(arg_.table_name_))) {
     LOG_WARN("fail to init schema info", K(ret), K(arg_.table_name_));
-  } else if (OB_FAIL(get_tablet_id(arg_.tablet_id_, arg_.table_id_, tablet_id_))) {
+  } else if (OB_FAIL(get_tablet_id(simple_table_schema_, arg_.tablet_id_, arg_.table_id_, tablet_id_))) {
     LOG_WARN("fail to get tablet id", K(ret), K(arg_.table_id_));
   } else if (OB_FAIL(get_ls_id(tablet_id_, ls_id))) {
     LOG_WARN("fail to get ls id", K(ret), K_(tablet_id));
-  } else if (OB_FAIL(check_table_has_global_index(exist_global_index))) {
+  } else if (OB_FAIL(check_table_has_global_index(exist_global_index, schema_cache_guard_))) {
     LOG_WARN("fail to check global index", K(ret), K_(table_id));
   } else if (is_hkv && OB_FAIL(HTABLE_LOCK_MGR->acquire_handle(lock_handle))) {
     LOG_WARN("fail to get htable lock handle", K(ret));

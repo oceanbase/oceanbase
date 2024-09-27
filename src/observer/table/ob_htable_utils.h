@@ -57,22 +57,47 @@ class ObHTableCellEntity: public ObHTableCell
 {
 public:
   explicit ObHTableCellEntity(common::ObNewRow *ob_row);
+  ObHTableCellEntity(common::ObNewRow *ob_row, Type type);
   ObHTableCellEntity();
-  virtual ~ObHTableCellEntity();
+  virtual ~ObHTableCellEntity()
+  {
+    if (OB_NOT_NULL(ob_row_)) {
+      ob_row_->~ObNewRow();
+    }
+  };
 
   void set_ob_row(common::ObNewRow *ob_row) { ob_row_ = ob_row; }
   int deep_copy_ob_row(const common::ObNewRow *ob_row, common::ObArenaAllocator &allocator);
   virtual void reset(common::ObArenaAllocator &allocator);
-  const common::ObNewRow* get_ob_row() const { return ob_row_; }
+  virtual common::ObNewRow* get_ob_row() { return ob_row_; }
+  virtual const common::ObNewRow* get_ob_row() const { return ob_row_; }
 
   virtual common::ObString get_rowkey() const override;
   virtual common::ObString get_qualifier() const override;
   virtual int64_t get_timestamp() const override;
   virtual common::ObString get_value() const override;
-  virtual Type get_type() const { return Type::NORMAL; }
+
+  void set_value(ObString value) const;
+  virtual Type get_type() const { return type_; }
 private:
   common::ObNewRow *ob_row_;
+  Type type_;
   DISALLOW_COPY_AND_ASSIGN(ObHTableCellEntity);
+};
+
+class KeyOnlyCell : public ObHTableCellEntity {
+public:
+  KeyOnlyCell(const ObHTableCell& cell,bool len_as_val ) : cell_(cell), len_as_val_(len_as_val)
+  {}
+  ~KeyOnlyCell() {}
+  virtual common::ObString get_rowkey() const override { return cell_.get_rowkey(); };
+  virtual common::ObString get_qualifier() const override { return cell_.get_qualifier(); };
+  virtual int64_t get_timestamp() const override {return cell_.get_timestamp(); };
+  virtual common::ObString get_value() const override;
+  virtual Type get_type() const override { return cell_.get_type(); }
+private:
+  const ObHTableCell& cell_;
+  bool len_as_val_;
 };
 
 class ObHTableEmptyCell: public ObHTableCell
@@ -118,6 +143,22 @@ public:
 private:
   common::ObString qualifier_;
   DISALLOW_COPY_AND_ASSIGN(ObHTableFirstOnRowColCell);
+};
+
+class ObHTableFirstOnRowColTSCell: public ObHTableFirstOnRowCell
+{
+public:
+  ObHTableFirstOnRowColTSCell(const common::ObString &rowkey, const int64_t timestamp)
+      :ObHTableFirstOnRowCell(rowkey),
+       timestamp_(timestamp)
+  {}
+  virtual ~ObHTableFirstOnRowColTSCell() {}
+
+  virtual int64_t get_timestamp() const override { return timestamp_; }
+  virtual Type get_type() const { return Type::FIRST_ON_COL; }
+private:
+  int64_t timestamp_;
+  DISALLOW_COPY_AND_ASSIGN(ObHTableFirstOnRowColTSCell);
 };
 
 class ObHTableLastOnRowCell: public ObHTableEmptyCell
@@ -295,16 +336,21 @@ class ObHTableUtils
 {
 public:
   /// Create a Cell that is larger than all other possible Cells for the given Cell's rk:cf:q
-  static int create_last_cell_on_row_col(common::ObArenaAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell);
+  static int create_last_cell_on_row_col(common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell);
   /// Create a Cell that is smaller than all other possible Cells for the given Cell's rk:cf and passed qualifier.
-  static int create_first_cell_on_row_col(common::ObArenaAllocator &allocator, const ObHTableCell &cell, const common::ObString &qualifier, ObHTableCell *&new_cell);
+  static int create_first_cell_on_row_col(common::ObIAllocator &allocator, const ObHTableCell &cell, const common::ObString &qualifier, ObHTableCell *&new_cell);
+  /// Create a Cell that is smaller than all other possible Cells for the given Cell's rk:ts and passed timestamp.
+  static int create_first_cell_on_row_col_ts(common::ObArenaAllocator &allocator, const ObHTableCell &cell, const int64_t timestamp, ObHTableCell *&new_cell);
   /// Create a Cell that is larger than all other possible Cells for the given Cell's row.
-  static int create_last_cell_on_row(common::ObArenaAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell);
+  static int create_last_cell_on_row(common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell);
+  /// Create a Cell that is smaller than all other possible Cells for the given Cell's row.
+  static int create_first_cell_on_row(common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell);
 
   static int compare_qualifier(const common::ObString &cq1, const common::ObString &cq2);
   static int compare_rowkey(const common::ObString &rk1, const common::ObString &rk2);
   static int compare_rowkey(const ObHTableCell &cell1, const ObHTableCell &cell2);
   static int compare_cell(const ObHTableCell &cell1, const ObHTableCell &cell2, common::ObQueryFlag::ScanOrder &scan_order);
+  static int compare_cell(const ObHTableCell &cell1, const ObHTableCell &cell2, bool is_reversed);
   static int64_t current_time_millis() { return common::ObTimeUtility::current_time() / 1000; }
   static int java_bytes_to_int64(const ObString &bytes, int64_t &val);
   static int int64_to_java_bytes(int64_t val, char bytes[8]);
@@ -320,9 +366,16 @@ public:
   {
     return entity_type == ObTableEntityType::ET_HKV && table_name.find('$') == nullptr;
   }
+
+  static int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos, const char *name);
+  static int kv_hbase_client_scanner_timeout_period(uint64_t tenant_id);
+  static int get_kv_hbase_client_scanner_timeout_period(uint64_t tenant_id);
+  static int get_hbase_scanner_timeout(uint64_t tenant_id);
+  static int generate_hbase_bytes(ObIAllocator& allocator, int32_t len, char*& val);
 private:
   ObHTableUtils() = delete;
   ~ObHTableUtils() = delete;
+  static const int HBASE_SCANNER_TIMEOUT_DEFAULT_VALUE = 60000;
 };
 
 } // end namespace table

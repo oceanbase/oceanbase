@@ -142,14 +142,19 @@ public:
   }
   virtual ~ObTableQueryResultIterator() {}
   virtual int get_next_result(ObTableQueryResult *&one_result) = 0;
+  virtual int get_next_result(table::ObTableQueryIterableResult *&one_result) = 0;
   virtual bool has_more_result() const = 0;
-  virtual void set_one_result(ObTableQueryResult *result){ UNUSED(result); }
+  virtual void set_one_result(ObTableQueryResult *result) { UNUSED(result); }
   virtual void set_scan_result(table::ObTableApiScanRowIterator *scan_result) = 0;
   virtual ObTableQueryResult *get_one_result() { return nullptr; }
   virtual void set_query(const ObTableQuery *query) { query_ = query; };
   virtual void set_query_async() { is_query_async_ = true; }
   virtual void set_filter(hfilter::Filter *filter) { filter_ = filter; }
   virtual hfilter::Filter *get_filter() const { return filter_; }
+
+  TO_STRING_KV(KP_(query),
+              K_(is_query_async),
+              KP_(filter));
 protected:
   const ObTableQuery *query_;
   bool is_query_async_;
@@ -179,6 +184,7 @@ public:
   }
   virtual ~ObNormalTableQueryResultIterator() {}
   virtual int get_next_result(table::ObTableQueryResult *&one_result) override;
+
   virtual bool has_more_result() const override;
   virtual void set_scan_result(table::ObTableApiScanRowIterator *scan_result) override
   {
@@ -193,6 +199,9 @@ public:
   bool is_aggregate_query() { return agg_calculator_.is_exist(); }
   inline void set_limit(int32_t limit) { limit_ = limit; }
   inline void set_offset(int32_t offset) { offset_ = offset; }
+private:
+  virtual int get_next_result(ObTableQueryIterableResult*& one_result) override { return OB_NOT_SUPPORTED; }
+
 private:
   table::ObTableQueryResult *one_result_;
   common::ObNewRow *last_row_;
@@ -243,6 +252,7 @@ public:
   int init_full_column_name(const ObIArray<ObString>& col_arr);
 private:
   int check_limit_param();
+  virtual int get_next_result(ObTableQueryIterableResult *&next_result) override { return OB_NOT_SUPPORTED; }
 private:
   table::ObTableQueryResult *one_result_;
   table::ObTableApiScanRowIterator *scan_result_;

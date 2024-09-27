@@ -120,11 +120,13 @@ public:
 public:
   int open();
   int get_next_row();
+  int get_next_row_by_entity();
   int close();
   int64_t get_affected_rows() { return affected_rows_; }
 
 private:
-  int build_range(ObTableQuery &query);
+  int build_range(const ObITableEntity &entity, ObTableQuery &query);
+  int build_select_column(ObTableQuery &query);
   int query_and_delete(const ObTableQuery &query);
   int delete_rows(ObTableQueryResult &result);
   int generate_filter(const ObITableEntity &entity,

@@ -1329,6 +1329,8 @@ int ObTableQuery::deep_copy(ObIAllocator &allocator, ObTableQuery &dst) const
     LOG_WARN("fail to deep copy index name", K(ret), K_(index_name));
   } else if (OB_FAIL(htable_filter_.deep_copy(allocator, dst.htable_filter_))) {
     LOG_WARN("fail to deep copy htable filter", K(ret), K_(htable_filter));
+  } else if (OB_FAIL(ob_params_.deep_copy(allocator, dst.ob_params_))){
+    LOG_WARN("fail to deep copy htable filter", K(ret), K_(ob_params));
   } else {
     dst.deserialize_allocator_ = deserialize_allocator_;
     dst.limit_ = limit_;
@@ -1478,7 +1480,8 @@ OB_UNIS_DEF_SERIALIZE(ObTableQuery,
                       max_result_size_,
                       htable_filter_,
                       scan_range_columns_,
-                      aggregations_);
+                      aggregations_,
+                      ob_params_);
 
 OB_UNIS_DEF_SERIALIZE_SIZE(ObTableQuery,
                            key_ranges_,
@@ -1492,7 +1495,8 @@ OB_UNIS_DEF_SERIALIZE_SIZE(ObTableQuery,
                            max_result_size_,
                            htable_filter_,
                            scan_range_columns_,
-                           aggregations_);
+                           aggregations_,
+                           ob_params_);
 
 OB_DEF_DESERIALIZE(ObTableQuery,)
 {
@@ -1520,6 +1524,8 @@ OB_DEF_DESERIALIZE(ObTableQuery,)
           LOG_WARN("fail to deep copy range", K(ret));
         } else if (OB_FAIL(key_ranges_.push_back(key_range))) {
           LOG_WARN("fail to add key range to array", K(ret));
+        } else {
+          ob_params_.set_allocator(deserialize_allocator_);
         }
       }
     }
@@ -1536,7 +1542,8 @@ OB_DEF_DESERIALIZE(ObTableQuery,)
                 max_result_size_,
                 htable_filter_,
                 scan_range_columns_,
-                aggregations_
+                aggregations_,
+                ob_params_
                 );
   }
   return ret;
@@ -2004,10 +2011,42 @@ int ObTableQueryResult::alloc_buf_if_need(const int64_t need_size)
   return ret;
 }
 
+int ObTableQueryResult::process_lob_storage(ObNewRow &new_row) {
+  int ret = OB_SUCCESS;
+  ObObj *lob_cells = nullptr;
+  const int64_t lob_storage_count = get_lob_storage_count(new_row);
+  if (lob_storage_count != 0) {
+    if (OB_ISNULL(lob_cells = static_cast<ObObj*>(allocator_.alloc(sizeof(ObObj) * lob_storage_count)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc cells buffer", K(ret), K(lob_storage_count));
+    }
+    for (int i = 0, lob_cell_idx = 0; OB_SUCC(ret) && i < new_row.get_count(); ++i) {
+      const ObObj &cell = new_row.get_cell(i);
+      ObObjType type = cell.get_type();
+      if (is_lob_storage(type)) {
+        ObString real_data;
+        if (cell.has_lob_header()) {
+          if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(&allocator_, cell, real_data))) {
+            LOG_WARN("fail to read real string date", K(ret), K(cell));
+          } else if (lob_cell_idx >= lob_storage_count) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected index count", K(ret), K(lob_cell_idx), K(lob_storage_count));
+          } else {
+            lob_cells[lob_cell_idx].set_lob_value(type, real_data.ptr(), real_data.length());
+            lob_cells[lob_cell_idx].set_collation_type(cell.get_collation_type());
+            new_row.get_cell(i) = lob_cells[lob_cell_idx]; // switch lob cell
+            lob_cell_idx++;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTableQueryResult::add_row(const ObNewRow &row)
 {
   int ret = OB_SUCCESS;
-
   // 1. check properties count and row count
   const int64_t N = row.get_count();
   if (0 != properties_names_.count()
@@ -2018,35 +2057,9 @@ int ObTableQueryResult::add_row(const ObNewRow &row)
   } else {
     // 2. construct new row
     ObNewRow new_row = row;
-    ObObj *lob_cells = nullptr;
-    const int64_t lob_storage_count = get_lob_storage_count(new_row);
-    if (lob_storage_count != 0) {
-      if (OB_ISNULL(lob_cells = static_cast<ObObj*>(allocator_.alloc(sizeof(ObObj) * lob_storage_count)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to alloc cells buffer", K(ret), K(lob_storage_count));
-      }
-      for (int i = 0, lob_cell_idx = 0; OB_SUCC(ret) && i < N; ++i) {
-        const ObObj &cell = new_row.get_cell(i);
-        ObObjType type = cell.get_type();
-        if (is_lob_storage(type)) {
-          ObString real_data;
-          if (cell.has_lob_header()) {
-            if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(&allocator_, cell, real_data))) {
-              LOG_WARN("fail to read real string date", K(ret), K(cell));
-            } else if (lob_cell_idx >= lob_storage_count) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected index count", K(ret), K(lob_cell_idx), K(lob_storage_count));
-            } else {
-              lob_cells[lob_cell_idx].set_lob_value(type, real_data.ptr(), real_data.length());
-              lob_cells[lob_cell_idx].set_collation_type(cell.get_collation_type());
-              new_row.get_cell(i) = lob_cells[lob_cell_idx]; // switch lob cell
-              lob_cell_idx++;
-            }
-          }
-        }
-      }
+    if (OB_FAIL(process_lob_storage(new_row))) {
+      LOG_WARN("process lob storage fail", K(ret));
     }
-
     // 3. alloc serialize size
     int64_t size = new_row.get_serialize_size();
     if (OB_FAIL(ret)) {
@@ -2215,6 +2228,149 @@ OB_DEF_DESERIALIZE(ObTableQueryResult)
   }
   return ret;
 }
+
+ObTableQueryIterableResult::ObTableQueryIterableResult()
+  : allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    current_(0),
+    row_count_(0)
+  {
+  }
+
+
+int ObTableQueryIterableResult::add_all_row(ObTableQueryIterableResult &other) {
+  int ret = OB_SUCCESS;
+  ObNewRow row;
+  while (OB_SUCC(ret) && OB_SUCC(other.get_row(row))) {
+    ObNewRow copy_row;
+    if (OB_FAIL(ob_write_row(allocator_, row, copy_row))) {
+      LOG_WARN("fail to copy_row ", K(ret), K(row));
+    } else if (OB_FAIL(rows_.push_back(copy_row))) {
+      LOG_WARN("fail to push_back to rows", K(ret));
+    } else {
+      row_count_++;
+    }
+  }
+  if (ret == OB_ARRAY_OUT_OF_RANGE) {
+    ret = OB_SUCCESS;
+  } else {
+    LOG_WARN("add_all_row get error", K(ret));
+  }
+  return ret;
+}
+
+int ObTableQueryIterableResult::get_row(ObNewRow& row) {
+  int ret = 0;
+  if (OB_FAIL(rows_.at(current_, row))) {
+    if (ret == OB_ARRAY_OUT_OF_RANGE) {
+      rows_.reset();
+      allocator_.reset();
+      current_ = 0;
+    } else {
+      LOG_WARN("fail to get row", K(ret), K(rows_));
+    }
+  } else {
+    current_++;
+  }
+  return ret;
+}
+
+int ObTableQueryIterableResult::append_family(const ObNewRow &row, ObString family_name)
+{
+  int ret = OB_SUCCESS;
+  // qualifier obj
+  ObNewRow &row_op = const_cast<ObNewRow &>(row);
+  ObObj &qualifier = row_op.get_cell(ObHTableConstants::COL_IDX_Q);
+  // get length and create buffer
+  int64_t sep_pos = family_name.length() + 1;
+  int64_t buf_size = sep_pos + qualifier.get_data_length();
+  char *buf = nullptr;
+  if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(buf_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc family and qualifier buffer", K(ret));
+  } else {
+    MEMCPY(buf, family_name.ptr(), family_name.length());
+    buf[family_name.length()] = '\0';
+    MEMCPY(buf + sep_pos, qualifier.get_data_ptr(), qualifier.get_data_length());
+    ObString family_qualifier(buf_size, buf);
+    qualifier.set_varbinary(family_qualifier);
+  }
+  return ret;
+}
+
+int ObTableQueryIterableResult::add_row(const common::ObNewRow &row, ObString family_name) {
+  int ret = OB_SUCCESS;
+
+  // 1. check properties count and row count
+  const int64_t N = row.get_count();
+  // 2. construct new row
+  ObNewRow new_row = row;
+  ObObj *lob_cells = nullptr;
+  const int64_t lob_storage_count = get_lob_storage_count(new_row);
+  if (lob_storage_count != 0) {
+    if (OB_ISNULL(lob_cells = static_cast<ObObj*>(allocator_.alloc(sizeof(ObObj) * lob_storage_count)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc cells buffer", K(ret), K(lob_storage_count));
+    }
+    for (int i = 0, lob_cell_idx = 0; OB_SUCC(ret) && i < N; ++i) {
+      const ObObj &cell = new_row.get_cell(i);
+      ObObjType type = cell.get_type();
+      if (is_lob_storage(type)) {
+        ObString real_data;
+        if (cell.has_lob_header()) {
+          if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(&allocator_, cell, real_data))) {
+            LOG_WARN("fail to read real string date", K(ret), K(cell));
+          } else if (lob_cell_idx >= lob_storage_count) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected index count", K(ret), K(lob_cell_idx), K(lob_storage_count));
+          } else {
+            lob_cells[lob_cell_idx].set_lob_value(type, real_data.ptr(), real_data.length());
+            lob_cells[lob_cell_idx].set_collation_type(cell.get_collation_type());
+            new_row.get_cell(i) = lob_cells[lob_cell_idx]; // switch lob cell
+            lob_cell_idx++;
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObNewRow copy_row;
+    if (OB_FAIL(ob_write_row(allocator_, new_row, copy_row))) {
+      LOG_WARN("fail to copy row", K(ret), K(new_row));
+    } else if (OB_FAIL(append_family(copy_row, family_name))) {
+      LOG_WARN("fail to append family to row", K(ret), K(copy_row));
+    } else if (OB_FAIL(rows_.push_back(copy_row))) {
+      LOG_WARN("fail to push back to array", K(ret));
+    } else {
+      row_count_++;
+    }
+  }
+
+  return ret;
+}
+
+int ObTableQueryIterableResult::add_row(const common::ObIArray<ObObj> &row)
+{
+  int ret = OB_SUCCESS;
+  const int64_t cnt = row.count();
+  ObNewRow new_row(row.get_data(), cnt);
+  if (OB_FAIL(rows_.push_back(std::ref(new_row)))) {
+    LOG_WARN("fail to push back to rows", K(ret));
+  } else {
+    ++row_count_;
+  }
+  return ret;
+}
+
+bool ObTableQueryIterableResult::reach_batch_size_or_result_size(const int32_t batch_count, const int64_t max_result_size)
+{
+  bool reach_size = false;
+  if (batch_count > 0 && this->get_row_count() >= batch_count) {
+    LOG_DEBUG("reach batch limit", K(batch_count));
+    reach_size = true;
+  }
+  return reach_size;
+}
+
 
 ////////////////////////////////////////////////////////////////
 uint64_t ObTableQueryAndMutate::get_checksum()
@@ -3116,4 +3272,103 @@ DEF_TO_STRING(ObTableBitMap)
 
   J_OBJ_END();
   return pos;
+}
+
+OB_SERIALIZE_MEMBER_SIMPLE(ObHBaseParams,
+                           caching_,
+                           call_timeout_,
+                           flag_);
+
+int ObHBaseParams::deep_copy(ObKVParamsBase *hbase_params) const
+{
+  int ret = OB_SUCCESS;
+  if (hbase_params == nullptr || hbase_params->get_param_type() != ParamType::HBase) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected hbase adress", K(ret), KPC(hbase_params));
+  } else {
+    ObHBaseParams *param = static_cast<ObHBaseParams*>(hbase_params);
+    param->caching_ = caching_;
+    param->call_timeout_ = call_timeout_;
+    param->is_cache_block_ = is_cache_block_;
+    param->allow_partial_results_ = allow_partial_results_;
+    param->check_existence_only_ = check_existence_only_;
+  }
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObKVParams)
+{
+  int ret = OB_SUCCESS;
+  if (pos < data_len) {
+    int8_t param_type = -1;
+    LST_DO_CODE(OB_UNIS_DECODE, param_type);
+    if (OB_SUCC(ret)) {
+      if (param_type == static_cast<int8_t>(ParamType::HBase)) {
+        if (OB_FAIL(alloc_ob_params(ParamType::HBase, ob_params_))) {
+          RPC_WARN("alloc ob_params_ memory failed", K(ret));
+        }
+      } else if (param_type == static_cast<int8_t>(ParamType::Redis)) {
+        if (OB_FAIL(alloc_ob_params(ParamType::Redis, ob_params_))) {
+          RPC_WARN("alloc ob_params_ memory failed", K(ret));
+        }
+      } else {
+        ret = OB_NOT_SUPPORTED;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ob_params_->deserialize(buf, data_len, pos))) {
+        RPC_WARN("ob_params deserialize fail");
+      }
+    }
+
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE(ObKVParams)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(ob_params_)) {
+    LST_DO_CODE(OB_UNIS_ENCODE, ob_params_->get_param_type(), *ob_params_);
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObKVParams)
+{
+  int64_t len = 0;
+  if (OB_NOT_NULL(ob_params_)) {
+    LST_DO_CODE(OB_UNIS_ADD_LEN, ob_params_->get_param_type(), *ob_params_);
+  }
+  return len;
+}
+
+int ObKVParams::deep_copy(ObIAllocator &allocator, ObKVParams &ob_params) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(ob_params_)) {
+    ob_params.set_allocator(&allocator);
+    if (OB_FAIL(ob_params.alloc_ob_params(ob_params_->get_param_type(), ob_params.ob_params_))) {
+      LOG_WARN("alloc ob params error", K(ob_params_->get_param_type()), K(ret));
+    } else if (OB_FAIL(ob_params_->deep_copy(ob_params.ob_params_))) {
+      LOG_WARN("ob_params_ deep_copy error", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObKVParams::init_ob_params_for_hfilter(const ObHBaseParams*& params) const
+{
+  int ret = OB_SUCCESS;
+  if (ob_params_->get_param_type() != ParamType::HBase) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected ob_params_ adress", K(ob_params_));
+  } else {
+    params = static_cast<ObHBaseParams*>(ob_params_);
+    if (params == nullptr) {
+      ret = OB_BAD_NULL_ERROR;
+      LOG_WARN("unexpected nullptr after static_cast");
+    }
+  }
+  return ret;
 }

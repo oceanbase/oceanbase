@@ -341,6 +341,7 @@ int ObRpcProcessorBase::do_response(const Response &rsp)
         packet->set_pop_process_start_diff(req_->get_pop_process_start_diff());
         packet->set_process_start_end_diff(req_->get_process_start_end_diff());
         packet->set_process_end_response_diff(req_->get_process_end_response_diff());
+        packet->set_timeout(timeout_);
         if (rsp.is_stream_) {
           if (!rsp.is_stream_last_) {
             packet->set_stream_next();

@@ -414,18 +414,44 @@ int ObHTableDeleteExecutor::get_next_row()
   if (OB_ISNULL(ops)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("batch operation is null", K(ret));
-  } else if (OB_FAIL(build_range(query))) {
-    LOG_WARN("fail to build query range", K(ret));
+  } else if (OB_FAIL(build_select_column(query))) {
+    LOG_WARN("fail to build select column", K(ret));
   } else {
     ObHTableFilter &filter = query.htable_filter();
     for (int64_t i = 0; OB_SUCC(ret) && i < ops->count(); i++) {
       const ObTableOperation &op = ops->at(i);
-      if (OB_FAIL(generate_filter(op.entity(), filter))) {
+      if (OB_FAIL(build_range(op.entity(), query))) {
+        LOG_WARN("fail to build range", K(ret), K(op.entity()));
+      } else if (OB_FAIL(generate_filter(op.entity(), filter))) {
         LOG_WARN("fail to generate htable filter", K(ret), K(op.entity()));
       } else if (OB_FAIL(query_and_delete(query))) {
         LOG_WARN("fail to query and delete", K(ret), K(query));
       }
     }
+  }
+  return ret;
+}
+
+int ObHTableDeleteExecutor::get_next_row_by_entity()
+{
+  int ret = OB_SUCCESS;
+  const ObITableEntity *entity = tb_ctx_.get_entity();
+  ObTableQuery query;
+  if (OB_ISNULL(entity)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("entity of operation is null", K(ret));
+  } else if (OB_FAIL(build_select_column(query))) {
+    LOG_WARN("fail to build query range", K(ret));
+  } else {
+    ObHTableFilter &filter = query.htable_filter();
+    if (OB_FAIL(build_range(*entity, query))) {
+      LOG_WARN("fail to build range", K(ret), K(entity));
+    } else if (OB_FAIL(generate_filter(*entity, filter))) {
+      LOG_WARN("fail to generate htable filter", K(ret), K(entity));
+    } else if (OB_FAIL(query_and_delete(query))) {
+      LOG_WARN("fail to query and delete", K(ret), K(query));
+    }
+
   }
   return ret;
 }
@@ -442,15 +468,11 @@ int ObHTableDeleteExecutor::close()
   return ret;
 }
 
-int ObHTableDeleteExecutor::build_range(ObTableQuery &query)
+int ObHTableDeleteExecutor::build_range(const ObITableEntity &entity, ObTableQuery &query)
 {
   int ret = OB_SUCCESS;
   common::ObIArray<common::ObNewRange> &key_ranges = tb_ctx_.get_key_ranges();
-  const common::ObIArray<table::ObTableOperation> *batch_op = tb_ctx_.get_batch_operation();
-  const ObTableOperation &del_op = batch_op->at(0);
-  const ObITableEntity &entity = del_op.entity();
-  ObHTableCellEntity3 htable_cell(&entity);
-  ObString row = htable_cell.get_rowkey();
+  key_ranges.reset();
   // generate scan range
   if (OB_FAIL(query.add_select_column(ObHTableConstants::ROWKEY_CNAME_STR))) {
     LOG_WARN("fail to add K", K(ret));
@@ -461,24 +483,53 @@ int ObHTableDeleteExecutor::build_range(ObTableQuery &query)
   } else if (OB_FAIL(query.add_select_column(ObHTableConstants::VALUE_CNAME_STR))) {
     LOG_WARN("fail to add V", K(ret));
   } else {
-    query.set_batch(1);  // mutate for each row
-    query.set_max_result_size(-1);
-  }
-  ObNewRange range;
-  pk_objs_start_[0].set_varbinary(row);
-  pk_objs_start_[1].set_min_value();
-  pk_objs_start_[2].set_min_value();
-  pk_objs_end_[0].set_varbinary(row);
-  pk_objs_end_[1].set_max_value();
-  pk_objs_end_[2].set_max_value();
-  range.start_key_.assign(pk_objs_start_, 3);
-  range.end_key_.assign(pk_objs_end_, 3);
-  range.border_flag_.set_inclusive_start();
-  range.border_flag_.set_inclusive_end();
+    ObHTableCellEntity3 htable_cell(&entity);
+    ObString row =  htable_cell.get_rowkey();
+    if (htable_cell.last_get_is_null()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("K is null", K(ret), K(entity));
+    } else {
+      ObString qualifier = htable_cell.get_qualifier();
+      ObNewRange range;
+      pk_objs_start_[0].set_varbinary(row);
+      pk_objs_start_[2].set_min_value();
+      pk_objs_end_[0].set_varbinary(row);
+      pk_objs_end_[2].set_max_value();
+      // delete column family when qualifier is null
+      if (htable_cell.last_get_is_null()) {
+        pk_objs_start_[1].set_min_value();
+        pk_objs_end_[1].set_max_value();
+      } else {
+        pk_objs_start_[1].set_varbinary(qualifier);
+        pk_objs_end_[1].set_varbinary(qualifier);
+      }
+      range.start_key_.assign(pk_objs_start_, 3);
+      range.end_key_.assign(pk_objs_end_, 3);
+      range.border_flag_.set_inclusive_start();
+      range.border_flag_.set_inclusive_end();
 
-  if (OB_SUCC(ret) && OB_FAIL(key_ranges.push_back(range))) {
-    LOG_WARN("fail to push back hdelete scan range", K(ret), K(key_ranges));
+      if (OB_FAIL(key_ranges.push_back(range))) {
+        LOG_WARN("fail to push back hdelete scan range", K(ret), K(key_ranges));
+      }
+    }
   }
+
+  return ret;
+}
+
+int ObHTableDeleteExecutor::build_select_column(ObTableQuery &query)
+{
+  int ret = OB_SUCCESS;
+  // generate select column
+  if (OB_FAIL(query.add_select_column(ObHTableConstants::ROWKEY_CNAME_STR))) {
+    LOG_WARN("fail to add K", K(ret));
+  } else if (OB_FAIL(query.add_select_column(ObHTableConstants::CQ_CNAME_STR))) {
+    LOG_WARN("fail to add Q", K(ret));
+  } else if (OB_FAIL(query.add_select_column(ObHTableConstants::VERSION_CNAME_STR))) {
+    LOG_WARN("fail to add T", K(ret));
+  } else if (OB_FAIL(query.add_select_column(ObHTableConstants::VALUE_CNAME_STR))) {
+    LOG_WARN("fail to add V", K(ret));
+  } else {}
 
   return ret;
 }
@@ -582,7 +633,7 @@ int ObHTableDeleteExecutor::delete_rows(ObTableQueryResult &result)
 }
 
 int ObHTableDeleteExecutor::generate_filter(const ObITableEntity &entity,
-                                              ObHTableFilter &filter)
+                                            ObHTableFilter &filter)
 {
   int ret = OB_SUCCESS;
   ObHTableCellEntity3 htable_cell(&entity);
