@@ -59,6 +59,7 @@ void ObPsCache::destroy()
     DESTROY_CONTEXT(mem_context_);
     mem_context_ = NULL;
   }
+  tg_id_ = -1;
 }
 
 ObPsCache::~ObPsCache()
