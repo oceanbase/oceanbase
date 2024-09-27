@@ -1320,6 +1320,17 @@ int ObStorageSchema::get_column_group_index(
   return ret;
 }
 
+bool ObStorageSchema::is_cs_replica_compat() const
+{
+  bool bret = false;
+  if (column_group_array_.count() <= 1) {
+    // row store
+  } else {
+    bret = column_group_array_.at(0).is_rowkey_column_group();
+  }
+  return bret;
+}
+
 int ObStorageSchema::deserialize_column_group_array(ObIAllocator &allocator,
                                                     const char *buf,
                                                     const int64_t data_len,

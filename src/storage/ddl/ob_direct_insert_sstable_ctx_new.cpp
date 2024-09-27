@@ -2427,7 +2427,7 @@ int ObTabletFullDirectLoadMgr::update(
     if (OB_ISNULL(sqc_build_ctx_.storage_schema_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null storage schema", K(ret));
-    } else if (OB_FAIL(ObCODDLUtil::need_column_group_store(*sqc_build_ctx_.storage_schema_, is_column_group_store))) {
+    } else if (OB_FAIL(check_need_replay_column_store(*sqc_build_ctx_.storage_schema_, build_param.common_param_.direct_load_type_, is_column_group_store))) {
       LOG_WARN("fail to get schema is column group store", K(ret));
     } else if (is_column_group_store && !replay_normal_in_cs_replica) {
       table_key_.table_type_ = ObITable::COLUMN_ORIENTED_SSTABLE;
@@ -3224,7 +3224,7 @@ int ObTabletFullDirectLoadMgr::init_ddl_table_store(
     LOG_WARN("get tablet handle failed", K(ret), K(ls_id_), K(tablet_id_));
   } else if (OB_FAIL(tablet_handle.get_obj()->load_storage_schema(tmp_arena, storage_schema))) {
     LOG_WARN("failed to load storage schema", K(ret), K(tablet_handle));
-  } else if (OB_FAIL(ObCODDLUtil::need_column_group_store(*storage_schema, is_column_group_store))) {
+  } else if (OB_FAIL(check_need_replay_column_store(*storage_schema, direct_load_type_, is_column_group_store))) {
     LOG_WARN("fail to check schema is column group store", K(ret));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -3296,13 +3296,10 @@ int ObTabletFullDirectLoadMgr::init_ddl_table_store(
         }
       }
     }
-    bool is_column_group_store = false;
     if (OB_FAIL(ret)) {
     } else if (FALSE_IT(param.sstable_ = static_cast<ObSSTable *>(sstable_handle.get_table()))) {
     } else if (OB_FAIL(ls_handle.get_ls()->update_tablet_table_store(tablet_id_, param, new_tablet_handle))) {
       LOG_WARN("failed to update tablet table store", K(ret), K(ls_id_), K(tablet_id_), K(param));
-    } else if (OB_FAIL(ObCODDLUtil::need_column_group_store(*storage_schema, is_column_group_store))) {
-      LOG_WARN("failed to check storage schema is column group store", K(ret));
     } else {
       LOG_INFO("update tablet success", K(ls_id_), K(tablet_id_),
           "is_column_store", is_column_group_store, K(ddl_param),
@@ -3378,6 +3375,24 @@ int ObTabletFullDirectLoadMgr::pre_process_cs_replica(
     LOG_WARN("tablet handle is invalid or nullptr", K(ret), K(tablet_handle), KP(tablet));
   } else if (OB_FAIL(tablet->pre_process_cs_replica(direct_load_type_, replay_normal_in_cs_replica))) {
     LOG_WARN("failed to pre process cs replica", K(ret), K(ls_id_), K(tablet_id));
+  }
+  return ret;
+}
+
+int ObTabletFullDirectLoadMgr::check_need_replay_column_store(
+    const ObStorageSchema &storage_schema,
+    const ObDirectLoadType &direct_load_type,
+    bool &need_replay_column_store)
+{
+  int ret = OB_SUCCESS;
+  need_replay_column_store = false;
+  if (OB_FAIL(ObCODDLUtil::need_column_group_store(storage_schema, need_replay_column_store))) {
+    LOG_WARN("failed to check need replay column store", K(ret), K(storage_schema));
+  } else if (!is_ddl_direct_load(direct_load_type) && need_replay_column_store) {
+    // if table is row store in F-replica and local ls is cs replica, storage schema in tablet will be column store.
+    // but full direct load will not write column store redo log.
+    // so when full direct load, is storage schema is column store and cs replica compat, need replay row store.
+    need_replay_column_store = !storage_schema.is_cs_replica_compat();
   }
   return ret;
 }
