@@ -803,5 +803,38 @@ inline int ObITabletMdsInterface::check_transfer_in_redo_written(bool &written)
   #undef PRINT_WRAPPER
 }
 
+template<typename OP>
+int ObITabletMdsInterface::get_latest_autoinc_seq(OP &&op, bool &is_committed) const
+{
+  #define PRINT_WRAPPER KR(ret)
+  MDS_TG(10_ms);
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!check_is_inited_())) {
+    ret = OB_NOT_INIT;
+    MDS_LOG_GET(WARN, "not inited");
+  } else {
+    const ObTabletMeta &tablet_meta = get_tablet_meta_();
+    const bool has_transfer_table = tablet_meta.has_transfer_table();
+    ObITabletMdsInterface *src = nullptr;
+    ObTabletHandle src_tablet_handle;
+    if (has_transfer_table) {
+      const share::ObLSID &src_ls_id = tablet_meta.transfer_info_.ls_id_;
+      const common::ObTabletID &tablet_id = tablet_meta.tablet_id_;
+      if (CLICK_FAIL(get_tablet_handle_and_base_ptr(src_ls_id, tablet_id, src_tablet_handle, src))) {
+        MDS_LOG(WARN, "fail to get src tablet handle", K(ret), K(src_ls_id), K(tablet_id));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (CLICK_FAIL((cross_ls_get_latest<ObTabletAutoincSeq>(src, op, is_committed)))) {
+      if (OB_EMPTY_RESULT != ret) {
+        MDS_LOG_GET(WARN, "fail to cross ls get latest", K(lbt()));
+      }
+    }
+  }
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
 }
 }

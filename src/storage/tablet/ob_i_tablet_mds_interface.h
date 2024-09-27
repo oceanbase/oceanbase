@@ -59,6 +59,8 @@ public:
   int get_ddl_data(const share::SCN &snapshot,
                    ObTabletBindingMdsUserData &data,
                    const int64_t timeout = ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US) const;
+  template<typename OP>
+  int get_latest_autoinc_seq(OP &&op, bool &is_committed) const;
   int get_autoinc_seq(ObIAllocator &allocator,
                       const share::SCN &snapshot,
                       share::ObTabletAutoincSeq &data,
