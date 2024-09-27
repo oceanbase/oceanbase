@@ -471,7 +471,7 @@ int ObExprLike::check_pattern_valid(const T &pattern,
                   K(pattern_val), K(ret));
     }
     if (OB_SUCC(ret) && NULL != like_ctx) {
-      record_last_check<is_static_engine>(*like_ctx, pattern_val,
+      ret = record_last_check<is_static_engine>(*like_ctx, pattern_val,
                                           escape_val, &exec_ctx->get_allocator());
     }
   }
@@ -862,11 +862,12 @@ int ObExprLike::cg_expr(ObExprCGCtx &op_cg_ctx,
 }
 
 template <bool is_static_engine>
-void ObExprLike::record_last_check(ObExprLikeContext &like_ctx,
+int ObExprLike::record_last_check(ObExprLikeContext &like_ctx,
                                   const ObString pattern_val,
                                   const ObString escape_val,
                                   ObIAllocator *buf_alloc)
 {
+  int ret = OB_SUCCESS;
   if (is_static_engine) {
     const uint32_t init_len = 16;
     like_ctx.same_as_last = false;
@@ -880,23 +881,36 @@ void ObExprLike::record_last_check(ObExprLikeContext &like_ctx,
       }
       like_ctx.last_pattern_ = (char*) (buf_alloc->alloc(sizeof(char) *
                                         like_ctx.pattern_buf_len_));
-    }
-    MEMCPY(like_ctx.last_pattern_, pattern_val.ptr(), pattern_val.length());
-    like_ctx.last_escape_len_ = escape_val.length();
-    if (escape_val.length() > like_ctx.escape_buf_len_) {
-      if(0 == like_ctx.escape_buf_len_) {
-        like_ctx.escape_buf_len_ = init_len;
+      if (OB_ISNULL(like_ctx.last_pattern_)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc memory failed", K(ret));
       }
-      while (escape_val.length() > like_ctx.escape_buf_len_) {
-        like_ctx.escape_buf_len_ *= 2;
-      }
-      like_ctx.last_escape_ = (char*) (buf_alloc->alloc(sizeof(char) *
-                                        like_ctx.escape_buf_len_));
     }
-    MEMCPY(like_ctx.last_escape_, escape_val.ptr(), escape_val.length());
+    if (OB_SUCC(ret)) {
+      MEMCPY(like_ctx.last_pattern_, pattern_val.ptr(), pattern_val.length());
+      like_ctx.last_escape_len_ = escape_val.length();
+      if (escape_val.length() > like_ctx.escape_buf_len_) {
+        if(0 == like_ctx.escape_buf_len_) {
+          like_ctx.escape_buf_len_ = init_len;
+        }
+        while (escape_val.length() > like_ctx.escape_buf_len_) {
+          like_ctx.escape_buf_len_ *= 2;
+        }
+        like_ctx.last_escape_ = (char*) (buf_alloc->alloc(sizeof(char) *
+                                          like_ctx.escape_buf_len_));
+        if (OB_ISNULL(like_ctx.last_escape_)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("alloc memory failed", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        MEMCPY(like_ctx.last_escape_, escape_val.ptr(), escape_val.length());
+      }
+    }
   } else {
     like_ctx.set_checked();
   }
+  return ret;
 }
 
 template <bool is_static_engine>
@@ -969,7 +983,7 @@ int ObExprLike::like_varchar_inner(const ObExpr &expr, ObEvalCtx &ctx,  ObDatum 
                                             text_val, pattern_val, escape_val);
           }
           if (OB_SUCC(ret) && !is_oracle_mode()) {
-            record_last_check<true>(*like_ctx, pattern_val, escape_val,
+            ret = record_last_check<true>(*like_ctx, pattern_val, escape_val,
                               &ctx.exec_ctx_.get_allocator());
           }
         } else if (like_ctx->is_instr_mode()) {//instr mode
@@ -1365,7 +1379,7 @@ int ObExprLike::like_text_vectorized_inner(const ObExpr &expr, ObEvalCtx &ctx,
           escape_val, escape_coll, *like_ctx))) {
         LOG_WARN("failed to set instr info", K(ret), K(pattern_val));
       } else if (!is_oracle_mode()) {
-        record_last_check<true>(*like_ctx, pattern_val, escape_val,
+        ret = record_last_check<true>(*like_ctx, pattern_val, escape_val,
                           &ctx.exec_ctx_.get_allocator());
       }
     }
