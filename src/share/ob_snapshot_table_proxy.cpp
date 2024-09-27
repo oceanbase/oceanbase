@@ -41,7 +41,8 @@ const char *ObSnapshotInfo::ObSnapShotTypeStr[] = {
     "SNAPSHOT_FOR_CREATE_INDEX",
     "SNAPSHOT_FOR_MULTI_VERSION",
     "SNAPSHOT_FOR_RESTORE_POINT",
-    "SNAPSHOT_FOR_BACKUP_POINT", };
+    "SNAPSHOT_FOR_BACKUP_POINT",
+    "SNAPSHOT_FOR_MAJOR_REFRESH_MV" };
 
 ObSnapshotInfo::ObSnapshotInfo()
 {

@@ -91,6 +91,7 @@
 #include "storage/shared_storage/micro_cache/ob_ss_arc_info.h"
 #endif
 #include "storage/tablelock/ob_table_lock_common.h"       //ObTableLockPriority
+#include "storage/mview/ob_major_mv_merge_info.h"       //ObMajorMVMergeInfo
 
 namespace oceanbase
 {
@@ -3754,7 +3755,8 @@ public:
                     create_scn_(),
                     compat_mode_(lib::Worker::CompatMode::INVALID),
                     create_ls_type_(EMPTY_LS),
-                    palf_base_info_() {}
+                    palf_base_info_(),
+                    major_mv_merge_info_() {}
   ~ObCreateLSArg() {}
   bool is_valid() const;
   void reset();
@@ -3818,6 +3820,7 @@ private:
   lib::Worker::CompatMode compat_mode_;
   CreateLSType create_ls_type_;
   palf::PalfBaseInfo palf_base_info_;
+  storage::ObMajorMVMergeInfo major_mv_merge_info_;
 private:
    DISALLOW_COPY_AND_ASSIGN(ObCreateLSArg);
 };

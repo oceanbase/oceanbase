@@ -222,6 +222,7 @@ struct ObColumnHeader
     HAS_EXTEND_VALUE = 0x2,
     BIT_PACKING = 0x4,
     LAST_VAR_FIELD = 0x8,
+    IS_TRANS_VERSION = 0x10,
     MAX_ATTRIBUTE,
   };
   static constexpr int8_t OB_COLUMN_HEADER_V1 = 0;

@@ -574,12 +574,13 @@ public:
   int assign(const ObBackupSSTableMeta &backup_sstable_meta);
 
   TO_STRING_KV(K_(tablet_id), K_(sstable_meta), K_(logic_id_list),
-      K_(entry_block_addr_for_other_block), K_(total_other_block_count));
+      K_(entry_block_addr_for_other_block), K_(total_other_block_count), K_(is_major_compaction_mview_dep));
   common::ObTabletID tablet_id_;
   blocksstable::ObMigrationSSTableParam sstable_meta_;
   common::ObSArray<blocksstable::ObLogicMacroBlockId> logic_id_list_;
   ObBackupLinkedBlockAddr entry_block_addr_for_other_block_;
   int64_t total_other_block_count_;
+  bool is_major_compaction_mview_dep_; // placeholder for feature collect_mv
 };
 
 struct ObBackupMacroBlockIDPair final {

@@ -30,6 +30,7 @@ enum ObMVRefreshableType
     OB_MV_FAST_REFRESH_SIMPLE_MAV, // fast refresh for single table MAV
     OB_MV_FAST_REFRESH_SIMPLE_MJV, // fast refresh for inner join MJV
     OB_MV_FAST_REFRESH_SIMPLE_JOIN_MAV, // fast refresh for inner join MAV
+    OB_MV_FAST_REFRESH_MAJOR_REFRESH_MJV, // fast refresh for major compaction mv
   };
 
 struct FastRefreshableNotes

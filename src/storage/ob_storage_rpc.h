@@ -550,12 +550,14 @@ public:
   int assign(const ObTransferTabletInfoArg &other);
   void reset();
 
-  TO_STRING_KV(K_(tenant_id), K_(src_ls_id), K_(dest_ls_id), K_(tablet_list), K_(data_version));
+  TO_STRING_KV(K_(tenant_id), K_(src_ls_id), K_(dest_ls_id),
+       K_(tablet_list), K_(data_version), K_(new_mv_merge_scn));
   uint64_t tenant_id_;
   share::ObLSID src_ls_id_;
   share::ObLSID dest_ls_id_;
   common::ObSArray<share::ObTransferTabletInfo> tablet_list_;
   uint64_t data_version_;
+  share::SCN new_mv_merge_scn_; // placeholder for feature collect_mv
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransferTabletInfoArg);
 };

@@ -9483,6 +9483,7 @@ void ObCreateLSArg::reset()
   compat_mode_ = lib::Worker::CompatMode::INVALID;
   create_ls_type_ = EMPTY_LS;
   palf_base_info_.reset();
+  major_mv_merge_info_.reset();
 }
 
 int ObCreateLSArg::assign(const ObCreateLSArg &arg)
@@ -9499,6 +9500,7 @@ int ObCreateLSArg::assign(const ObCreateLSArg &arg)
     compat_mode_ = arg.compat_mode_;
     create_ls_type_ = arg.create_ls_type_;
     palf_base_info_ = arg.palf_base_info_;
+    major_mv_merge_info_ = arg.major_mv_merge_info_;
   }
   return ret;
 }
@@ -9547,7 +9549,7 @@ DEF_TO_STRING(ObCreateLSArg)
 }
 
 OB_SERIALIZE_MEMBER(ObCreateLSArg, tenant_id_, id_, replica_type_, replica_property_, tenant_info_,
-create_scn_, compat_mode_, create_ls_type_, palf_base_info_);
+create_scn_, compat_mode_, create_ls_type_, palf_base_info_, major_mv_merge_info_);
 
 #ifdef OB_BUILD_ARBITRATION
 bool ObCreateArbArg::is_valid() const
