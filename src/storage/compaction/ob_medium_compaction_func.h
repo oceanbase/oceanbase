@@ -74,6 +74,7 @@ public:
       const ObMediumCompactionInfoList &medium_list,
       const int64_t major_frozen_snapshot,
       const int64_t last_major_snapshot,
+      const bool is_mv_refresh_tablet,
       ObMediumCompactionInfo::ObCompactionType &compaction_type,
       int64_t &schedule_scn);
   static int is_election_leader(const share::ObLSID &ls_id, bool &ls_election_leader);

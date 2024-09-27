@@ -3769,7 +3769,8 @@ public:
            const share::SCN &create_scn,
            const lib::Worker::CompatMode &mode,
            const bool create_with_palf,
-           const palf::PalfBaseInfo &palf_base_info);
+           const palf::PalfBaseInfo &palf_base_info,
+           const storage::ObMajorMVMergeInfo &major_mv_merge_info);
   int64_t get_tenant_id() const
   {
     return tenant_id_;
@@ -3807,6 +3808,10 @@ public:
   bool need_create_inner_tablets() const
   {
     return CREATE_WITH_PALF != create_ls_type_;
+  }
+  const storage::ObMajorMVMergeInfo& get_major_mv_merge_info() const
+  {
+    return major_mv_merge_info_;
   }
   DECLARE_TO_STRING;
 
@@ -13204,6 +13209,92 @@ public:
   TO_STRING_KV(K_(server_health_status));
 private:
   share::ObServerHealthStatus server_health_status_;
+};
+
+struct ObCollectMvMergeInfoArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCollectMvMergeInfoArg() : ls_id_(),
+                              tenant_id_(OB_INVALID_TENANT_ID),
+                              check_leader_(false),
+                              need_update_(false)
+  {}
+  ~ObCollectMvMergeInfoArg() {}
+  bool is_valid() const { return ls_id_.is_valid() && tenant_id_ != OB_INVALID_TENANT_ID; }
+  int assign(const ObCollectMvMergeInfoArg &other);
+  int init(const share::ObLSID &ls_id,
+           const uint64_t tenant_id,
+           const bool check_leader = false,
+           const bool need_update = false);
+  const share::ObLSID &get_ls_id() const { return ls_id_; }
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  bool need_check_leader() const { return check_leader_; }
+  bool need_update() const { return need_update_; }
+  TO_STRING_KV(K_(ls_id), K_(tenant_id),
+               K_(check_leader), K_(need_update));
+private:
+  share::ObLSID ls_id_;
+  uint64_t tenant_id_;
+  bool check_leader_;
+  bool need_update_;
+};
+
+struct ObCollectMvMergeInfoResult final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCollectMvMergeInfoResult() : mv_merge_info_(),
+                                 ret_(OB_SUCCESS) {}
+  ~ObCollectMvMergeInfoResult() {}
+  bool is_valid() const { return mv_merge_info_.is_valid(); }
+  int assign(const ObCollectMvMergeInfoResult &other);
+  int init(const ObMajorMVMergeInfo &mv_merge_info, const int err_ret);
+  int64_t get_ret() const { return ret_; }
+  const share::SCN &get_publish_mv_merge_scn() const { return mv_merge_info_.major_mv_merge_scn_publish_; }
+  const share::SCN get_mv_merge_scn() const { return mv_merge_info_.major_mv_merge_scn_; }
+  const storage::ObMajorMVMergeInfo &get_mv_merge_info() const { return mv_merge_info_; }
+  TO_STRING_KV(K_(mv_merge_info), K_(ret));
+private:
+  storage::ObMajorMVMergeInfo mv_merge_info_;
+  int ret_;
+};
+
+struct ObFetchStableMemberListArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObFetchStableMemberListArg(): ls_id_(),
+                                tenant_id_(OB_INVALID_TENANT_ID) {}
+  ~ObFetchStableMemberListArg() {}
+  bool is_valid() const { return ls_id_.is_valid() && tenant_id_ != OB_INVALID_TENANT_ID; }
+  int assign(const ObFetchStableMemberListArg &other);
+  void reset() { ls_id_.reset(); tenant_id_ = OB_INVALID_TENANT_ID; }
+  int init(const share::ObLSID &ls_id, const uint64_t tenant_id);
+  const share::ObLSID &get_ls_id() const { return ls_id_; }
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  TO_STRING_KV(K_(ls_id), K_(tenant_id));
+private:
+  share::ObLSID ls_id_;
+  uint64_t tenant_id_;
+};
+
+struct ObFetchStableMemberListInfo final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObFetchStableMemberListInfo() : member_list_(), config_version_() {}
+  ~ObFetchStableMemberListInfo() {}
+  bool is_valid() const { return member_list_.is_valid() && config_version_.is_valid(); }
+  int assign(const ObFetchStableMemberListInfo &other);
+  void reset() { member_list_.reset(); }
+  int init(const common::ObMemberList &member_list, const palf::LogConfigVersion &config_version);
+  const common::ObMemberList &get_member_list() const { return member_list_; }
+  const palf::LogConfigVersion &get_config_version() const { return config_version_; }
+  TO_STRING_KV(K_(member_list));
+private:
+  common::ObMemberList member_list_;
+  palf::LogConfigVersion config_version_;
 };
 
 struct ObRefreshServiceNameArg

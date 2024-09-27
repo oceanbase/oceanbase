@@ -242,7 +242,7 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
         LOG_USER_ERROR(OB_OP_NOT_ALLOW, "alter table localiy and tablegroup at the same time");
       } else if (OB_FAIL(set_table_options())) {
         SQL_RESV_LOG(WARN, "failed to set table options.", K(ret));
-      } else if ((table_schema_->has_mlog_table() || table_schema_->is_mlog_table())
+      } else if ((table_schema_->required_by_mview_refresh() || table_schema_->is_mlog_table())
           && OB_FAIL(ObResolverUtils::check_allowed_alter_operations_for_mlog(
               alter_table_stmt->get_tenant_id(),
               alter_table_stmt->get_alter_table_arg(),
@@ -406,7 +406,7 @@ int ObAlterTableResolver::set_table_options()
     alter_table_schema.set_read_only(read_only_);
     alter_table_schema.set_row_store_type(row_store_type_);
     alter_table_schema.set_store_format(store_format_);
-    alter_table_schema.set_duplicate_scope(duplicate_scope_);
+    alter_table_schema.set_duplicate_attribute(duplicate_scope_, duplicate_read_consistency_);
     alter_table_schema.set_enable_row_movement(enable_row_movement_);
     alter_table_schema.set_storage_format_version(storage_format_version_);
     alter_table_schema.set_table_mode_struct(table_mode_);

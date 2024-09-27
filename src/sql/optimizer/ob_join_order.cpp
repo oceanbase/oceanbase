@@ -1697,7 +1697,7 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
       bool force_use_nlj = false;
       force_use_nlj = (OB_SUCCESS != (OB_E(EventTable::EN_GENERATE_PLAN_WITH_NLJ) OB_SUCCESS));
       create_das_path = true;
-      create_basic_path = force_use_nlj ? false : true;
+      create_basic_path = (force_use_nlj || table_meta_info_.is_broadcast_table_) ? false : true;
     } else if (index_info_entry->is_index_global() && ObGlobalHint::UNSET_PARALLEL == explicit_dop) {
       // for global index use auto dop, create das path and basic path, after get auto dop result, prune unnecessary path
       create_das_path = true;
@@ -13326,6 +13326,7 @@ int ObJoinOrder::compute_table_meta_info(const uint64_t table_id,
     table_meta_info_.part_count_ =
         table_partition_info_->get_phy_tbl_location_info().get_phy_part_loc_info_list().count();
     table_meta_info_.schema_version_ = table_schema->get_schema_version();
+    table_meta_info_.is_broadcast_table_ = table_schema->is_broadcast_table();
     LOG_TRACE("after compute table meta info", K(table_meta_info_));
   }
   if (OB_SUCC(ret)) {

@@ -226,7 +226,7 @@ void ObReadInfoStruct::reset()
   is_oracle_mode_ = false;
   allocator_ = nullptr;
   schema_column_count_ = 0;
-  compat_version_ = READ_INFO_VERSION_V2;
+  compat_version_ = READ_INFO_VERSION_V3;
   reserved_ = 0;
   schema_rowkey_cnt_ = 0;
   rowkey_cnt_ = 0;
@@ -302,8 +302,10 @@ int ObReadInfoStruct::init_compat_version()
     LOG_WARN("fail to get data version", K(ret));
   } else if (compat_version < DATA_VERSION_4_3_0_0) {
     compat_version_ = READ_INFO_VERSION_V1;
-  } else {
+  } else if (compat_version < DATA_VERSION_4_3_4_0) {
     compat_version_ = READ_INFO_VERSION_V2;
+  } else {
+    compat_version_ = READ_INFO_VERSION_V3;
   }
   return ret;
 }
@@ -315,6 +317,7 @@ ObTableReadInfo::ObTableReadInfo()
   : ObReadInfoStruct(false/*rowkey_mode*/),
     trans_col_index_(OB_INVALID_INDEX),
     group_idx_col_index_(OB_INVALID_INDEX),
+    mview_old_new_col_index_(OB_INVALID_INDEX),
     seq_read_column_count_(0),
     max_col_index_(-1),
     cols_param_(),
@@ -467,6 +470,9 @@ void ObTableReadInfo::inner_gene_cols_index_by_col_descs(
       } else if (common::OB_HIDDEN_GROUP_IDX_COLUMN_ID == cols_desc.at(i).col_id_) {
         group_idx_col_index_ = i;
         col_index = -1;
+      } else if (common::OB_MAJOR_REFRESH_MVIEW_OLD_NEW_COLUMN_ID == cols_desc.at(i).col_id_) {
+         mview_old_new_col_index_ = i;
+         col_index = -1;
       } else {
         col_index = -1;
       }
@@ -526,6 +532,7 @@ void ObTableReadInfo::reset()
   ObReadInfoStruct::reset();
   trans_col_index_ = OB_INVALID_INDEX;
   group_idx_col_index_ = OB_INVALID_INDEX;
+  mview_old_new_col_index_ = OB_INVALID_INDEX;
   seq_read_column_count_ = 0;
   max_col_index_ = -1;
   cols_param_.reset();
@@ -574,6 +581,11 @@ int ObTableReadInfo::serialize(
 
   if (OB_SUCC(ret) && compat_version_ >= READ_INFO_VERSION_V2) {
     LST_DO_CODE(OB_UNIS_ENCODE, cg_idxs_, cols_extend_, has_all_column_group_);
+  }
+  if (OB_SUCC(ret) && compat_version_ >= READ_INFO_VERSION_V3) {
+    if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, mview_old_new_col_index_))) {
+      LOG_WARN("Fail to encode mview old new col index", K(ret));
+    }
   }
   return ret;
 }
@@ -652,6 +664,15 @@ int ObTableReadInfo::deserialize(
       has_all_column_group_ = true;
     }
   }
+  if (OB_SUCC(ret)) {
+    if (compat_version_ >= READ_INFO_VERSION_V3) {
+      if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &mview_old_new_col_index_))) {
+        LOG_WARN("Fail to decode mview old new col index", K(ret));
+      }
+    } else {
+      mview_old_new_col_index_ = OB_INVALID_INDEX;
+    }
+  }
 
   if (OB_SUCC(ret) && cols_desc_.count() > 0) {
     const bool is_cg_sstable = ObCGReadInfo::is_cg_sstable(schema_rowkey_cnt_, schema_column_count_);
@@ -709,6 +730,9 @@ int64_t ObTableReadInfo::get_serialize_size() const
   if (OB_SUCC(ret) && compat_version_ >= READ_INFO_VERSION_V2) {
     LST_DO_CODE(OB_UNIS_ADD_LEN, cg_idxs_, cols_extend_, has_all_column_group_);
   }
+  if (OB_SUCC(ret) && compat_version_ >= READ_INFO_VERSION_V3) {
+    len += serialization::encoded_length_vi64(mview_old_new_col_index_);
+  }
   return len;
 }
 
@@ -722,6 +746,8 @@ int64_t ObTableReadInfo::to_string(char *buf, const int64_t buf_len) const
         K_(schema_rowkey_cnt),
         K_(rowkey_cnt),
         K_(trans_col_index),
+        K_(mview_old_new_col_index),
+        K_(group_idx_col_index),
         K_(seq_read_column_count),
         K_(max_col_index),
         K_(is_oracle_mode),

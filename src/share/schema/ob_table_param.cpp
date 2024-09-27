@@ -1040,10 +1040,14 @@ int ObTableParam::construct_columns_and_projector(
       } else if (OB_UNLIKELY(common::OB_HIDDEN_TRANS_VERSION_COLUMN_ID == column_id) ||
                  common::OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID == column_id ||
                  common::OB_HIDDEN_LOGICAL_ROWID_COLUMN_ID == column_id ||
+                  common::OB_MAJOR_REFRESH_MVIEW_OLD_NEW_COLUMN_ID == column_id ||
                  common::OB_HIDDEN_GROUP_IDX_COLUMN_ID == column_id) {
         ObObjMeta meta_type;
         if (common::OB_HIDDEN_LOGICAL_ROWID_COLUMN_ID == column_id) {
           meta_type.set_urowid();
+        } else if (common::OB_MAJOR_REFRESH_MVIEW_OLD_NEW_COLUMN_ID == column_id) {
+          meta_type.set_varchar();
+          meta_type.set_collation_type(ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI);
         } else {
           meta_type.set_int();
         }

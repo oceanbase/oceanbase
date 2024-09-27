@@ -136,6 +136,15 @@ private:
   int close_sstable_index_builder_(blocksstable::ObSSTableIndexBuilder *index_builder,
       ObIODevice *device_handle, blocksstable::ObSSTableMergeRes &merge_res);
 
+public:
+  int insert_place_holder_macro_index(const blocksstable::ObLogicMacroBlockId &logic_id);
+  int update_logic_id_to_macro_index(const blocksstable::ObLogicMacroBlockId &logic_id, const ObBackupMacroBlockIndex &index);
+  int check_place_holder_macro_index_exist(const blocksstable::ObLogicMacroBlockId &logic_id, bool &exist);
+  int check_real_macro_index_exist(const blocksstable::ObLogicMacroBlockId &logic_id, bool &exist, ObBackupMacroBlockIndex &index);
+
+private:
+  static const int64_t BUCKET_NUM = 10000;
+
 private:
   bool is_inited_;
   lib::ObMutex mutex_;
@@ -144,6 +153,7 @@ private:
   common::ObArray<blocksstable::ObSSTableIndexBuilder *> builders_;
   common::ObArray<blocksstable::ObSSTableMergeRes> merge_results_;
   common::ObArray<bool> sstable_ready_list_;
+  common::hash::ObHashMap<blocksstable::ObLogicMacroBlockId, ObBackupMacroBlockIndex> local_reuse_map_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupTabletSSTableIndexBuilderMgr);
 };
 

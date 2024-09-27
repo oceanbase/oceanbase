@@ -2524,17 +2524,12 @@ public:
       share::schema::ObSchemaGetterGuard &schema_guard,
       const common::ObIArray<rootserver::ObReplicaAddr> &replica_addrs,
       common::ObZone &first_primary_zone) const = 0;
-  virtual int check_is_duplicated(
-      share::schema::ObSchemaGetterGuard &guard,
-      bool &is_duplicated) const = 0;
   virtual uint64_t get_tablegroup_id() const = 0;
   virtual void set_tablegroup_id(const uint64_t tg_id) = 0;
   virtual int get_paxos_replica_num(
       share::schema::ObSchemaGetterGuard &schema_guard,
       int64_t &num) const = 0;
   virtual share::ObDuplicateScope get_duplicate_scope() const = 0;
-  virtual void set_duplicate_scope(const share::ObDuplicateScope duplicate_scope) = 0;
-  virtual void set_duplicate_scope(const int64_t duplicate_scope) = 0;
   inline virtual int64_t get_part_func_expr_num() const { return 0; }
   inline virtual void set_part_func_expr_num(const int64_t part_func_expr_num) { UNUSED(part_func_expr_num); }
   inline virtual int64_t get_sub_part_func_expr_num() const { return 0; }
@@ -2922,9 +2917,6 @@ public:
       share::schema::ObSchemaGetterGuard &schema_guard,
       const common::ObIArray<rootserver::ObReplicaAddr> &replica_addrs,
       common::ObZone &first_primary_zone) const override;
-  virtual int check_is_duplicated(
-      share::schema::ObSchemaGetterGuard &guard,
-      bool &is_duplicated) const override;
   virtual int get_primary_zone_inherit(
       share::schema::ObSchemaGetterGuard &schema_guard,
       share::schema::ObPrimaryZone &primary_zone) const override;
@@ -2944,8 +2936,6 @@ public:
       int64_t &num) const;
   //partition related
   virtual share::ObDuplicateScope get_duplicate_scope() const override { return share::ObDuplicateScope::DUPLICATE_SCOPE_NONE; }
-  virtual void set_duplicate_scope(const share::ObDuplicateScope duplicate_scope) override { UNUSED(duplicate_scope); }
-  virtual void set_duplicate_scope(const int64_t duplicate_scope) override { UNUSED(duplicate_scope); }
   inline virtual bool is_user_partition_table() const override
   {
     return PARTITION_LEVEL_ONE == get_part_level()
@@ -3540,6 +3530,7 @@ enum struct ObMVRefreshMode : int64_t
   DEMAND = 1,
   COMMIT = 2,
   STATEMENT = 3,
+  MAJOR_COMPACTION = 4,
   MAX
 };
 

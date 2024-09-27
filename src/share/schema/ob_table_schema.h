@@ -291,6 +291,18 @@ enum ObDDLIgnoreSyncCdcFlag
   DONT_SYNC_LOG_FOR_CDC = 1,
 };
 
+enum ObMVMajorRefreshFlag
+{
+  IS_NOT_MV_MAJOR_REFRESH = 0,
+  IS_MV_MAJOR_REFRESH = 1
+};
+
+enum ObTableReferencedByFastLSMMVFlag
+{
+  IS_NOT_REFERENCED_BY_FAST_LSM_MV = 0,
+  IS_REFERENCED_BY_FAST_LSM_MV = 1
+};
+
 struct ObTableMode {
   OB_UNIS_VERSION_V(1);
 private:
@@ -322,9 +334,7 @@ private:
   static const int32_t TM_MV_ON_QUERY_COMPUTATION_BITS = 1;
   static const int32_t TM_DDL_IGNORE_SYNC_CDC_OFFSET = 29;
   static const int32_t TM_DDL_IGNORE_SYNC_CDC_BITS = 1;
-  static const int32_t TM_MV_MAJOR_REFRESH_OFFSET = 30;
-  static const int32_t TM_MV_MAJOR_REFRESH_BITS = 1;
-  static const int32_t TM_RESERVED = 1;
+  static const int32_t TM_RESERVED = 2;
 
   static const uint32_t MODE_FLAG_MASK = (1U << TM_MODE_FLAG_BITS) - 1;
   static const uint32_t PK_MODE_MASK = (1U << TM_PK_MODE_BITS) - 1;
@@ -437,9 +447,53 @@ public:
       uint32_t mv_enable_query_rewrite_flag_ : TM_MV_ENABLE_QUERY_REWRITE_BITS;
       uint32_t mv_on_query_computation_flag_ : TM_MV_ON_QUERY_COMPUTATION_BITS;
       uint32_t ddl_table_ignore_sync_cdc_flag_ : TM_DDL_IGNORE_SYNC_CDC_BITS;
-      uint32_t reserved_ :TM_RESERVED;
+      uint32_t reserved_ : TM_RESERVED;
     };
   };
+};
+
+struct ObMvMode {
+  OB_UNIS_VERSION_V(1);
+private:
+  static const int32_t MM_MV_MAJOR_REFRESH_OFFSET = 0;
+  static const int32_t MM_MV_MAJOR_REFRESH_BITS = 1;
+  static const uint32_t MM_MV_MAJOR_REFRESH_MASK = (1U << MM_MV_MAJOR_REFRESH_BITS) - 1;
+  static const int32_t MM_TABLE_REFERENCED_BY_FAST_LSM_MV_OFFSET = 1;
+  static const int32_t MM_TABLE_REFERENCED_BY_FAST_LSM_MV_BITS = 1;
+  static const uint32_t MM_TABLE_REFERENCED_BY_FAST_LSM_MV_MASK =
+      (1U << MM_TABLE_REFERENCED_BY_FAST_LSM_MV_BITS) - 1;
+  static const int32_t MM_RESERVED = 62;
+public:
+  ObMvMode() { reset(); }
+  virtual ~ObMvMode() { reset(); }
+  void reset() { mode_ = 0; }
+  bool operator==(const ObMvMode &other) const { return mode_ == other.mode_; }
+  int assign(const ObMvMode &other);
+  ObMvMode &operator=(const ObMvMode &other);
+  bool is_valid() const;
+  static ObMVMajorRefreshFlag get_mv_major_refresh_flag(int64_t mv_mode)
+  {
+    return (ObMVMajorRefreshFlag)((mv_mode >> MM_MV_MAJOR_REFRESH_OFFSET) &
+                                  MM_MV_MAJOR_REFRESH_MASK);
+  }
+  static ObTableReferencedByFastLSMMVFlag get_table_referenced_by_fast_lsm_mv_flag(int64_t mv_mode)
+  {
+    return (ObTableReferencedByFastLSMMVFlag)(
+        (mv_mode >> MM_TABLE_REFERENCED_BY_FAST_LSM_MV_OFFSET) &
+        MM_TABLE_REFERENCED_BY_FAST_LSM_MV_MASK);
+  }
+  union
+  {
+    int64_t mode_;
+    struct
+    {
+      uint64_t mv_major_refresh_flag_ : MM_MV_MAJOR_REFRESH_BITS;
+      uint64_t table_referenced_by_fast_lsm_mv_flag_ : MM_TABLE_REFERENCED_BY_FAST_LSM_MV_BITS;
+      uint64_t reserved_ : MM_RESERVED;
+    };
+  };
+  TO_STRING_KV("mv_major_refresh_flag", mv_major_refresh_flag_,
+               "table_referenced_by_fast_lsm_mv_flag", table_referenced_by_fast_lsm_mv_flag_);
 };
 
 struct ObBackUpTableModeOp
@@ -652,6 +706,11 @@ public:
     UNUSED(skip_idx_attrs);
     return common::OB_NOT_SUPPORTED;
   }
+  virtual int get_mv_mode_struct(ObMvMode &mv_mode) const
+  {
+    UNUSED(mv_mode);
+    return common::OB_NOT_SUPPORTED;
+  }
   DECLARE_PURE_VIRTUAL_TO_STRING;
   const static int64_t INVAID_RET = -1;
   static common::ObString EMPTY_STRING;
@@ -816,9 +875,6 @@ public:
   virtual int get_paxos_replica_num(
       share::schema::ObSchemaGetterGuard &guard,
       int64_t &num) const override;
-  virtual int check_is_duplicated(
-      share::schema::ObSchemaGetterGuard &guard,
-      bool &is_duplicated) const override;
   virtual int get_first_primary_zone_inherit(
       share::schema::ObSchemaGetterGuard &schema_guard,
       const common::ObIArray<rootserver::ObReplicaAddr> &replica_addrs,
@@ -1047,12 +1103,22 @@ public:
   inline bool is_partitioned_table() const { return PARTITION_LEVEL_ONE == get_part_level() || PARTITION_LEVEL_TWO == get_part_level(); }
   virtual ObPartitionLevel get_part_level() const override;
   virtual share::ObDuplicateScope get_duplicate_scope() const override { return duplicate_scope_; }
-  inline bool is_duplicate_table() const { return duplicate_scope_ != ObDuplicateScope::DUPLICATE_SCOPE_NONE; }
-  virtual void set_duplicate_scope(const share::ObDuplicateScope duplicate_scope) override { duplicate_scope_ = duplicate_scope; }
-  virtual void set_duplicate_scope(const int64_t duplicate_scope) override { duplicate_scope_ = static_cast<share::ObDuplicateScope>(duplicate_scope); }
-
+  inline void set_duplicate_attribute(const share::ObDuplicateScope duplicate_scope,
+                                      const share::ObDuplicateReadConsistency duplicate_read_consistency) {
+    duplicate_scope_ = duplicate_scope;
+    duplicate_read_consistency_ = duplicate_read_consistency;
+  }
   inline void set_duplicate_read_consistency(const share::ObDuplicateReadConsistency duplicate_read_consistency) { duplicate_read_consistency_ = duplicate_read_consistency; }
   inline share::ObDuplicateReadConsistency get_duplicate_read_consistency() const { return duplicate_read_consistency_; }
+
+  inline bool is_duplicate_table() const {
+    return duplicate_scope_ == ObDuplicateScope::DUPLICATE_SCOPE_CLUSTER
+           && duplicate_read_consistency_ == ObDuplicateReadConsistency::STRONG;
+  }
+  inline bool is_broadcast_table() const {
+    return duplicate_scope_ == ObDuplicateScope::DUPLICATE_SCOPE_CLUSTER
+           && duplicate_read_consistency_ == ObDuplicateReadConsistency::WEAK;
+  }
   // for encrypt
   int set_encryption_str(const common::ObString &str) { return deep_copy_str(str, encryption_); }
   virtual const common::ObString &get_encryption_str() const override { return encryption_; }
@@ -1845,6 +1911,7 @@ public:
   int64_t get_lob_columns_count() const;
   bool has_lob_aux_table() const { return (aux_lob_meta_tid_ != OB_INVALID_ID && aux_lob_piece_tid_ != OB_INVALID_ID); }
   bool has_mlog_table() const { return (OB_INVALID_ID != mlog_tid_); }
+  bool required_by_mview_refresh() const { return has_mlog_table() || table_referenced_by_fast_lsm_mv(); }
   inline void add_table_flag(uint64_t flag) { table_flags_ |= flag; }
   inline void del_table_flag(uint64_t flag) { table_flags_ &= ~flag; }
   inline void add_or_del_table_flag(uint64_t flag, bool is_add)
@@ -1875,6 +1942,30 @@ public:
   uint64_t get_mlog_tid() const { return mlog_tid_; }
   inline sql::ObLocalSessionVar &get_local_session_var() { return local_session_vars_; }
   inline const sql::ObLocalSessionVar &get_local_session_var() const { return local_session_vars_; }
+  inline void set_mv_mode(const int64_t mv_mode) { mv_mode_.mode_ = mv_mode; }
+  inline int64_t get_mv_mode() const { return mv_mode_.mode_; }
+  virtual int get_mv_mode_struct(ObMvMode &mv_mode) const override
+  {
+    mv_mode = mv_mode_;
+    return OB_SUCCESS;
+  }
+  inline bool mv_major_refresh() const
+  {
+    return IS_MV_MAJOR_REFRESH == (enum ObMVMajorRefreshFlag)mv_mode_.mv_major_refresh_flag_;
+  }
+  inline void set_mv_major_refresh(const ObMVMajorRefreshFlag flag)
+  {
+    mv_mode_.mv_major_refresh_flag_ = flag;
+  }
+  inline bool table_referenced_by_fast_lsm_mv() const
+  {
+    return IS_REFERENCED_BY_FAST_LSM_MV ==
+           (enum ObTableReferencedByFastLSMMVFlag)mv_mode_.table_referenced_by_fast_lsm_mv_flag_;
+  }
+  inline void set_table_referenced_by_fast_lsm_mv(const ObTableReferencedByFastLSMMVFlag flag)
+  {
+    mv_mode_.table_referenced_by_fast_lsm_mv_flag_ = flag;
+  }
   DECLARE_VIRTUAL_TO_STRING;
 
 protected:
@@ -2084,6 +2175,7 @@ protected:
   common::ObString index_params_;
   // exec_env
   common::ObString exec_env_;
+  ObMvMode mv_mode_;
 };
 
 class ObPrintableTableSchema final : public ObTableSchema

@@ -1751,8 +1751,12 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
   bool is_oracle_mode = false;
   const bool is_index_tbl = table_schema.is_index_table();
   const uint64_t tenant_id = table_schema.get_tenant_id();
+  uint64_t data_version = OB_INVALID_VERSION;
+
   if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("fail to check oracle mode", KR(ret), K(table_schema));
+  }  else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("get min data_version failed", K(ret), K(tenant_id));
   }
   if (OB_SUCCESS == ret && !table_schema.is_external_table() && !is_index_tbl && !is_for_table_status
       && !is_no_field_options(sql_mode) && !is_no_table_options(sql_mode)) {
@@ -1982,6 +1986,13 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
     if (table_schema.get_duplicate_scope() == ObDuplicateScope::DUPLICATE_SCOPE_CLUSTER) {
       if (OB_FAIL(databuff_printf(buf, buf_len, pos, "DUPLICATE_SCOPE = 'CLUSTER' "))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print table duplicate scope", K(ret));
+      } else if (data_version < DATA_VERSION_4_3_4_0) {
+        SHARE_SCHEMA_LOG(INFO, "data version is less than 4.3.4, not show duplicate_read_consistency option", K(ret));
+      } else if (ObDuplicateReadConsistencyChecker::is_valid_duplicate_read_consistency(table_schema.get_duplicate_read_consistency())) {
+        if (OB_FAIL(databuff_printf(buf, buf_len, pos, "DUPLICATE_READ_CONSISTENCY = '%s' ",
+                                    ObDuplicateReadConsistencyChecker::get_duplicate_read_consistency_str(table_schema.get_duplicate_read_consistency())))) {
+          SHARE_SCHEMA_LOG(WARN, "fail to print table duplicate read consistency", K(ret));
+        }
       }
     }
   }

@@ -159,6 +159,9 @@ public:
   OB_INLINE bool use_index_skip_scan() const {
     return (1 == ss_key_ranges_.count()) && (!ss_key_ranges_.at(0).is_whole_range());
   }
+  OB_INLINE bool is_mview_query() const {
+    return nullptr != op_filters_ && scan_flag_.is_mr_mview_query();
+  }
   void destroy() override
   {
     if (OB_UNLIKELY(ss_key_ranges_.get_capacity() > OB_DEFAULT_RANGE_COUNT)) {

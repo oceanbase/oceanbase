@@ -648,7 +648,10 @@ const char *const OB_MLOG_ROWID_COLUMN_NAME = "M_ROW$$";
 
 const uint64_t OB_MAX_TMP_COLUMN_ID = OB_ALL_MAX_COLUMN_ID
                                       - OB_END_RESERVED_COLUMN_ID_NUM;
-const int32_t OB_COUNT_AGG_PD_COLUMN_ID = INT32_MAX - 1;
+// pseudo column id used in special table scan
+const uint64_t OB_COUNT_AGG_PD_COLUMN_ID = INT32_MAX - 1;
+const uint64_t OB_MAJOR_REFRESH_MVIEW_OLD_NEW_COLUMN_ID = INT32_MAX - 2;
+
 const int64_t OB_MAX_AUTOINC_SEQ_VALUE = (1L << 40) - 1; // max value for 40bit
 
 const char *const OB_UPDATE_MSG_FMT = "Rows matched: %ld  Changed: %ld  Warnings: %ld";
@@ -2032,6 +2035,8 @@ const int64_t MAX_CONSTRAINT_NAME_LEN = 128;
 const char *const OB_LOG_ROW_VALUE_PARTIAL_LOB = "partial_lob";
 const char *const OB_LOG_ROW_VALUE_PARTIAL_JSON = "partial_json";
 const char *const OB_LOG_ROW_VALUE_PARTIAL_ALL = "partial_all";
+// default duplicate read consistency is strong
+const int64_t OB_DEFAULT_DUPLICATE_READ_CONSISTENCY = 0;
 // json partial update expr flag
 enum ObJsonPartialUpdateFlag
 {

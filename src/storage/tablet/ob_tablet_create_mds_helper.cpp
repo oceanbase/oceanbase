@@ -602,7 +602,7 @@ int ObTabletCreateMdsHelper::convert_schemas(
         LOG_WARN("failed to allocate storage schema", KR(ret), K(table_schema));
       } else if (FALSE_IT(create_tablet_schema = new (create_tablet_schema_ptr)ObCreateTabletSchema())) {
       } else if (OB_FAIL(create_tablet_schema->init(arg.allocator_, table_schema, compat_mode,
-           false/*skip_column_info*/, ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_V3))) {
+           false/*skip_column_info*/, ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_LATEST))) {
         LOG_WARN("failed to init storage schema", KR(ret), K(table_schema));
       } else if (OB_FAIL(arg.create_tablet_schemas_.push_back(create_tablet_schema))) {
         LOG_WARN("failed to push back table schema", KR(ret), K(create_tablet_schema));

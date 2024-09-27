@@ -346,7 +346,7 @@ int ObLockTable::create_tablet(const lib::Worker::CompatMode compat_mode, const 
   } else if (OB_FAIL(get_table_schema_(tenant_id, table_schema))) {
     LOG_WARN("get lock table schema failed", K(ret));
   } else if (OB_FAIL(create_tablet_schema.init(arena_allocator, table_schema, compat_mode,
-        false/*skip_column_info*/, ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_V3))) {
+        false/*skip_column_info*/, ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_LATEST))) {
     LOG_WARN("failed to init storage schema", KR(ret), K(table_schema));
   } else if (OB_FAIL(parent_->create_ls_inner_tablet(ls_id,
                                                      LS_LOCK_TABLET,

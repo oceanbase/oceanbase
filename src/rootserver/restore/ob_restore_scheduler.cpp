@@ -42,6 +42,10 @@
 #include "share/ob_master_key_getter.h"
 #endif
 #include "share/backup/ob_backup_connectivity.h"
+#include "share/ob_global_stat_proxy.h" // ObGlobalStatProxy
+#include "rootserver/mview/ob_mview_timer_task.h"
+#include "rootserver/mview/ob_collect_mv_merge_info_task.h"
+#include "rootserver/mview/ob_mview_push_refresh_scn_task.h"
 
 namespace oceanbase
 {
@@ -970,12 +974,13 @@ int ObRestoreScheduler::restore_upgrade(const ObPhysicalRestoreJob &job_info)
     LOG_WARN("invalid tenant id", KR(ret), K(tenant_id_));
   } else if (OB_FAIL(restore_service_->check_stop())) {
     LOG_WARN("restore scheduler stopped", KR(ret));
+  } else if (OB_FAIL(wait_restore_safe_mview_merge_info_())) {
+    LOG_WARN("fail to wait restore safe mview merge info, need retry",
+              K(ret), K(job_info));
   } else {
-    if (OB_SUCC(ret)) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = try_update_job_status(*sql_proxy_, ret, job_info))) {
-        LOG_WARN("fail to update job status", K(ret), K(tmp_ret), K(job_info));
-      }
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = try_update_job_status(*sql_proxy_, ret, job_info))) {
+      LOG_WARN("fail to update job status", K(ret), K(tmp_ret), K(job_info));
     }
   }
   LOG_INFO("[RESTORE] upgrade pre finish", KR(ret), K(job_info));
@@ -1829,5 +1834,102 @@ int ObRestoreScheduler::update_tenant_restore_data_mode_(const uint64_t tenant_i
   return ret;
 }
 
+int ObRestoreScheduler::try_collect_ls_mv_merge_scn_(const share::SCN &major_mv_merge_scn)
+{
+  int ret = OB_SUCCESS;
+  ObLSAttrArray ls_attr_array;
+  const uint64_t user_tenant_id = gen_user_tenant_id(MTL_ID());
+  share::ObLSAttrOperator ls_attr_operator(user_tenant_id, sql_proxy_);
+  if (!is_valid_tenant_id(user_tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id!", K(ret), K(user_tenant_id));
+  } else if (OB_FAIL(ls_attr_operator.get_all_ls_by_order(ls_attr_array))) {
+    LOG_WARN("fail to get all ls", KR(ret));
+  } else {
+    share::SCN min_merge_scn(share::SCN::max_scn());
+    share::SCN merge_scn;
+    ARRAY_FOREACH(ls_attr_array, i) {
+      const ObLSAttr &ls_attr = ls_attr_array.at(i);
+      if (ls_attr.get_ls_id().is_sys_ls()) {
+        // skip sys ls
+      } else if (OB_FAIL(ObCollectMvMergeInfoTask::
+                         collect_ls_member_merge_info(user_tenant_id, ls_attr.get_ls_id(), merge_scn))) {
+        LOG_WARN("fail to collect ls member merge scn", KR(ret), K(ls_attr), K(user_tenant_id));
+      } else if (min_merge_scn > merge_scn) {
+        min_merge_scn = merge_scn;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (min_merge_scn >= major_mv_merge_scn) {
+        // do nothing
+      } else {
+        ret = OB_EAGAIN;
+        LOG_WARN("ls member merge scn is less than lastest merge_scn",
+                  K(ret), K(min_merge_scn), K(tenant_id_), K(major_mv_merge_scn));
+      }
+    }
+  }
+  return ret;
+}
+
+ERRSIM_POINT_DEF(ERRSIM_WAIT_RESTORE_SAFE_MVIEW);
+// step 1 get major tenant mv merge scn
+// step 2 gWAIT_RESTORE_SFAFE_MVIEWs
+// step 3 check major mv merge scn is geater than tenant mv merge scn
+// step 4 safe check
+int ObRestoreScheduler::wait_restore_safe_mview_merge_info_()
+{
+  int ret = OB_SUCCESS;
+
+  bool need_schedule = false;
+  share::SCN mv_lastest_merge_scn(share::SCN::min_scn());
+#ifdef ERRSIM
+  ret = ERRSIM_WAIT_RESTORE_SAFE_MVIEW ? : OB_SUCCESS;
+  if (OB_FAIL(ret)) {
+    LOG_INFO("error sim to wait in restore upgrade status",  K(ret), K(tenant_id_));
+  }
+#endif
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error! sql proxy is null!", K(ret), K(sql_proxy_));
+  } else if (OB_FAIL(ObMViewTimerTask::
+             need_schedule_major_refresh_mv_task(tenant_id_, need_schedule))) {
+    LOG_WARN("failed to check need schedule", KR(ret), K(tenant_id_));
+  } else if (!need_schedule) {
+    // do nothing
+  } else {
+    share::SCN major_mv_merge_scn(share::SCN::min_scn());
+    ObGlobalStatProxy global_proxy(*sql_proxy_, tenant_id_);
+    if (OB_FAIL(OB_FAIL(ObCollectMvMergeInfoTask::
+                        get_min_mv_tablet_major_compaction_scn(mv_lastest_merge_scn)))) {
+      LOG_WARN("fail to mv tablet merge scn", K(ret), K(tenant_id_));
+    } else if (OB_FAIL(global_proxy.get_major_refresh_mv_merge_scn(false, /*for update*/
+                                                                   major_mv_merge_scn))) {
+      LOG_WARN("fail to get major_refresh_mv_merge_scn", K(ret), K(tenant_id_));
+    } else if (OB_FAIL(ObMViewTimerTask::check_mview_last_refresh_scn(tenant_id_,
+                                                                      major_mv_merge_scn))) {
+      LOG_WARN("fail to check mview last refesh scn", K(ret), K(tenant_id_), K(major_mv_merge_scn));
+    }
+    if (OB_SUCC(ret)) {
+      if (mv_lastest_merge_scn < major_mv_merge_scn) {
+        ret = OB_EAGAIN;
+        LOG_INFO("major_refresh_mv_merge_scn is not greater than tenant mv merge scn",
+                 K(ret), K(tenant_id_), K(mv_lastest_merge_scn), K(major_mv_merge_scn));
+      } else {
+        LOG_INFO("major_merge_scn is greater than tenant_mv_merge_scn, pass check",
+                 K(ret), K(tenant_id_), K(mv_lastest_merge_scn), K(major_mv_merge_scn));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(try_collect_ls_mv_merge_scn_(major_mv_merge_scn))) {
+        LOG_WARN("fail to collect ls mv merge scn", K(ret), K(major_mv_merge_scn));
+      } else if (FALSE_IT(void(ObMViewPushRefreshScnTask::
+                               check_major_mv_refresh_scn_safety(tenant_id_)))) {
+      }
+    }
+  }
+  return ret;
+}
 } // end namespace rootserver
 } // end namespace oceanbase

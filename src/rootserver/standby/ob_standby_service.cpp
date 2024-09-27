@@ -34,6 +34,7 @@
 #include "storage/tx/ob_timestamp_service.h"  // ObTimestampService
 #include "storage/high_availability/ob_transfer_lock_utils.h" // ObMemberListLockUtils
 #include "common/ob_tenant_data_version_mgr.h"
+#include "share/schema/ob_mview_info.h"
 #include "logservice/restoreservice/ob_log_restore_handler.h"//RestoreSyncStatus
 
 namespace oceanbase
@@ -448,6 +449,7 @@ int ObStandbyService::do_recover_tenant(
   ObTenantStatus tenant_status = TENANT_STATUS_MAX;
   ObLSRecoveryStatOperator ls_recovery_operator;
   ObLSRecoveryStat sys_ls_recovery;
+  bool is_contains_new_mv_tenant = false;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("inner stat error", KR(ret), K_(inited));
   } else if (!obrpc::ObRecoverTenantArg::is_valid(recover_type, recovery_until_scn)
@@ -462,6 +464,15 @@ int ObStandbyService::do_recover_tenant(
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
   } else if (OB_FAIL(get_tenant_status(tenant_id, tenant_status))) {
     LOG_WARN("failed to get tenant status", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_version))) {
+    LOG_WARN("failed to get tenant min version", KR(ret), K(tenant_id));
+  } else if (tenant_version >= DATA_VERSION_4_3_4_0
+              && OB_FAIL(ObMViewInfo::contains_major_refresh_mview_in_creation(*sql_proxy_, tenant_id, is_contains_new_mv_tenant))) {
+    LOG_WARN("failed to contains_major_refresh_mview_in_creation", KR(ret), K(tenant_id), K(tenant_version));
+  } else if (is_contains_new_mv_tenant) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("there is new mv in this tenant", K(tenant_id));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "there is new mv in this tenant, recover is");
   } else if (OB_FAIL(trans.start(sql_proxy_, exec_tenant_id))) {
     LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id), K(tenant_id));
   } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, &trans, true, tenant_info))) {

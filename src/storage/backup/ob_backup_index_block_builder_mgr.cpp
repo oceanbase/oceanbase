@@ -602,6 +602,8 @@ int ObBackupTabletSSTableIndexBuilderMgr::init(const uint64_t tenant_id, const c
       LOG_WARN("failed to reserve merge res", K(ret));
     } else if (OB_FAIL(sstable_ready_list_.prepare_allocate(table_key_array.count()))) {
       LOG_WARN("failed to reserve merge res", K(ret));
+    } else if (OB_FAIL(local_reuse_map_.create(BUCKET_NUM, ObModIds::BACKUP))) {
+      LOG_WARN("failed to create local reuse map", K(ret));
     } else {
       ARRAY_FOREACH(sstable_ready_list_, idx) {
         sstable_ready_list_.at(idx) = false;
@@ -942,6 +944,86 @@ int ObBackupTabletSSTableIndexBuilderMgr::close_sstable_index_builder_(
                                           device_handle))) {
     LOG_WARN("failed to close sstable index builder", K(ret));
   }
+  return ret;
+}
+
+int ObBackupTabletSSTableIndexBuilderMgr::insert_place_holder_macro_index(
+    const blocksstable::ObLogicMacroBlockId &logic_id)
+{
+  int ret = OB_SUCCESS;
+  ObMutexGuard guard(mutex_);
+  ObBackupMacroBlockIndex tmp_index;
+  int32_t hash_ret = local_reuse_map_.get_refactored(logic_id, tmp_index);
+  if (OB_HASH_NOT_EXIST != hash_ret) {
+    LOG_WARN("macro index already exist, do nothing", K(ret), K(logic_id));
+  } else {
+    ObBackupMacroBlockIndex macro_index;
+    macro_index.reset();
+    if (OB_FAIL(local_reuse_map_.set_refactored(logic_id, macro_index))) {
+      LOG_WARN("failed to set macro index", K(ret), K(logic_id), K(macro_index));
+    } else {
+      LOG_INFO("insert place holder macro index", K(logic_id));
+    }
+  }
+  return ret;
+}
+
+int ObBackupTabletSSTableIndexBuilderMgr::update_logic_id_to_macro_index(
+    const blocksstable::ObLogicMacroBlockId &logic_id, const ObBackupMacroBlockIndex &macro_index)
+{
+  int ret = OB_SUCCESS;
+  ObMutexGuard guard(mutex_);
+  ObBackupMacroBlockIndex tmp_index;
+  int32_t hash_ret = local_reuse_map_.get_refactored(logic_id, tmp_index);
+  if (!logic_id.is_valid() || !macro_index.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(logic_id), K(macro_index));
+  } else {
+    if (OB_HASH_NOT_EXIST == hash_ret) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("previous logic id do not exist", K(ret), K(hash_ret), K(logic_id));
+    } else if (OB_FAIL(local_reuse_map_.set_refactored(logic_id, macro_index, 1))) {
+      LOG_WARN("failed to set macro index", K(ret));
+    } else {
+      LOG_INFO("update logic id to macro index", K(logic_id), K(macro_index));
+    }
+  }
+  return ret;
+}
+
+int ObBackupTabletSSTableIndexBuilderMgr::check_place_holder_macro_index_exist(
+    const blocksstable::ObLogicMacroBlockId &logic_id, bool &exist)
+{
+  int ret = OB_SUCCESS;
+  exist = false;
+  ObMutexGuard guard(mutex_);
+  ObBackupMacroBlockIndex tmp_index;
+  int32_t hash_ret = local_reuse_map_.get_refactored(logic_id, tmp_index);
+  if (OB_HASH_NOT_EXIST == hash_ret) {
+    exist = false;
+  } else if (!tmp_index.is_valid()) {
+    exist = true;
+  }
+  return ret;
+}
+
+int ObBackupTabletSSTableIndexBuilderMgr::check_real_macro_index_exist(
+    const blocksstable::ObLogicMacroBlockId &logic_id, bool &exist, ObBackupMacroBlockIndex &index)
+{
+  int ret = OB_SUCCESS;
+  exist = false;
+  ObMutexGuard guard(mutex_);
+  ObBackupMacroBlockIndex tmp_index;
+  int32_t hash_ret = local_reuse_map_.get_refactored(logic_id, tmp_index);
+  if (OB_HASH_NOT_EXIST == hash_ret) {
+    exist = false;
+  } else if (!tmp_index.is_valid()) {
+    exist = false;
+  } else {
+    exist = true;
+    index = tmp_index;
+  }
+  LOG_INFO("check macro index exist", K(logic_id), K(exist), K(index));
   return ret;
 }
 

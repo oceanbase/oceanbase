@@ -645,7 +645,7 @@ int ObTabletMetaBackupReader::get_meta_data(blocksstable::ObBufferReader &buffer
 
 ObSSTableMetaBackupReader::ObSSTableMetaBackupReader()
   : ObITabletMetaBackupReader(), cond_(), sstable_array_(), buffer_writer_("BackupReader"), table_store_wrapper_(),
-    linked_writer_(NULL)
+    linked_writer_(NULL), is_major_compaction_mview_dep_(false)
 {}
 
 ObSSTableMetaBackupReader::~ObSSTableMetaBackupReader()
@@ -670,15 +670,19 @@ int ObSSTableMetaBackupReader::init(const common::ObTabletID &tablet_id,
     tablet_handle_ = &tablet_handle;
     linked_writer_ = linked_writer;
     ObTablet &tablet = *tablet_handle_->get_obj();
+    bool is_major_compaction_mview_dep = false;
     if (OB_FAIL(tablet.fetch_table_store(table_store_wrapper_))) {
       LOG_WARN("failed to fetch table store from tablet", K(ret));
+    } else if (OB_FAIL(ls_backup_ctx.check_is_major_compaction_mview_dep_tablet(tablet_id, is_major_compaction_mview_dep))) {
+      LOG_WARN("failed to check is mview dep tablet", K(ret), K(tablet_id));
     } else if (OB_FAIL(ObBackupUtils::get_sstables_by_data_type(
-        tablet_handle, backup_data_type, *table_store_wrapper_.get_member(), sstable_array_))) {
+        tablet_handle, backup_data_type, *table_store_wrapper_.get_member(), is_major_compaction_mview_dep, sstable_array_))) {
       LOG_WARN("failed to get sstables by data type", K(ret), K(tablet_handle));
     } else {
       builder_mgr_ = &index_block_builder_mgr;
       ls_backup_ctx_ = &ls_backup_ctx;
       device_handle_ = device_handle;
+      is_major_compaction_mview_dep_ = is_major_compaction_mview_dep;
       is_inited_ = true;
     }
   }
@@ -708,6 +712,7 @@ int ObSSTableMetaBackupReader::get_meta_data(blocksstable::ObBufferReader &buffe
         ObTablet *tablet = tablet_handle_->get_obj();
         ObBackupSSTableMeta backup_sstable_meta;
         backup_sstable_meta.tablet_id_ = tablet_id_;
+        backup_sstable_meta.is_major_compaction_mview_dep_ = is_major_compaction_mview_dep_;
         blocksstable::ObSSTableMergeRes *merge_res = NULL;
         if (GCTX.is_shared_storage_mode() && table_key.is_ddl_dump_sstable()) {
           if (FAILEDx(get_macro_block_id_list_(*sstable_ptr, backup_sstable_meta))) {

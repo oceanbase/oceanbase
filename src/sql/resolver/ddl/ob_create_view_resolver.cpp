@@ -417,11 +417,6 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
                                                                    mv_ainfo->container_table_schema_,
                                                                    csts))) {
         LOG_WARN("fail do resolve for materialized view", K(ret));
-      } else if (OB_FAIL(resolve_mv_options(select_stmt,
-                                            parse_tree.children_[MVIEW_NODE],
-                                            mv_ainfo->mv_refresh_info_,
-                                            table_schema))) {
-        LOG_WARN("fail to resolve mv options", K(ret));
       } else if (OB_FAIL(load_mview_dep_session_vars(*session_info_, select_stmt, table_schema.get_local_session_var()))) {
         LOG_WARN("fail to load mview dep session variables", K(ret));
       } else if (!tenant_config.is_valid()) {
@@ -431,6 +426,12 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
                  && OB_FAIL(resolve_column_group_helper(parse_tree.children_[COLUMN_GROUP_NODE],
                     mv_ainfo->container_table_schema_))) {
         LOG_WARN("fail to resolve column group", KR(ret));
+      } else if (OB_FAIL(resolve_mv_options(select_stmt,
+                                            parse_tree.children_[MVIEW_NODE],
+                                            mv_ainfo->mv_refresh_info_,
+                                            table_schema,
+                                            mv_ainfo->container_table_schema_))) {
+        LOG_WARN("fail to resolve mv options", K(ret));
       }
       if (OB_SUCC(ret)) {
         if (OB_FAIL(resolve_hints(parse_tree.children_[HINT_NODE], *stmt, mv_ainfo->container_table_schema_))) {
@@ -1296,7 +1297,8 @@ int ObCreateViewResolver::create_alias_names_auto(
 int ObCreateViewResolver::resolve_mv_options(const ObSelectStmt *stmt,
                                              ParseNode *options_node,
                                              ObMVRefreshInfo &refresh_info,
-                                             ObTableSchema &table_schema)
+                                             ObTableSchema &table_schema,
+                                             ObTableSchema &container_table_schema)
 {
   int ret = OB_SUCCESS;
   refresh_info.refresh_method_ = ObMVRefreshMethod::FORCE; //default method is force
@@ -1318,20 +1320,34 @@ int ObCreateViewResolver::resolve_mv_options(const ObSelectStmt *stmt,
       table_schema.set_mv_enable_query_rewrite(ObMVEnableQueryRewriteFlag::IS_MV_ENABLE_QUERY_REWRITE);
     }
   }
-  if (OB_FAIL(ret)) {
-  } else if ((table_schema.mv_on_query_computation() || ObMVRefreshMethod::FAST == refresh_info.refresh_method_)
-             && OB_FAIL(ObMVChecker::check_mv_fast_refresh_valid(stmt, params_.stmt_factory_,
-                                                                 params_.expr_factory_,
-                                                                 params_.session_info_))) {
-    // When creating an MV, which can not be fast refreshed, with both fast refresh
-    // and on query computation, we should return CAN_NOT_ON_QUERY_COMPUTE
-    if (table_schema.mv_on_query_computation() && OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH == ret) {
-      ret = OB_ERR_MVIEW_CAN_NOT_ON_QUERY_COMPUTE;
+  if (OB_SUCC(ret)) {
+    if ((table_schema.mv_on_query_computation() ||
+                ObMVRefreshMethod::FAST == refresh_info.refresh_method_)) {
+      ObMVRefreshableType refresh_type = OB_MV_REFRESH_INVALID;
+      if (OB_FAIL(ObMVChecker::check_mv_fast_refresh_type(
+              stmt, params_.stmt_factory_, params_.expr_factory_, params_.session_info_,
+              container_table_schema, refresh_type))) {
+        LOG_WARN("fail to check mv type", KR(ret));
+      } else if (OB_UNLIKELY(!IS_VALID_FAST_REFRESH_TYPE(refresh_type))) {
+	      // When creating an MV, which can not be fast refreshed, with both fast refresh
+        // and on query computation, we should return CAN_NOT_ON_QUERY_COMPUTE
+        if (table_schema.mv_on_query_computation()) {
+	        ret = OB_ERR_MVIEW_CAN_NOT_ON_QUERY_COMPUTE;
+	      } else {
+	        ret = OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH;
+	      }
+        LOG_WARN("fast refresh is not supported for this mv", KR(ret), K(refresh_type));
+      } else if (OB_MV_FAST_REFRESH_MAJOR_REFRESH_MJV == refresh_type) {
+        table_schema.set_mv_major_refresh(IS_MV_MAJOR_REFRESH);
+        container_table_schema.set_mv_major_refresh(IS_MV_MAJOR_REFRESH);
+        refresh_info.refresh_mode_ = ObMVRefreshMode::MAJOR_COMPACTION;
+        LOG_INFO("[MAJ_REF_MV] match major refresh mv", K(table_schema.get_table_name()));
+      }
+      if (OB_SUCC(ret) && table_schema.mv_on_query_computation() &&
+          OB_FAIL(check_on_query_computation_supported(stmt))) {
+        LOG_WARN("fail to check on query computation mv column type", KR(ret));
+      }
     }
-    LOG_WARN("fail to check fast refresh valid", K(ret));
-  } else if (table_schema.mv_on_query_computation()
-             && OB_FAIL(check_on_query_computation_supported(stmt))) {
-    LOG_WARN("fail to check on query computation mv column type", K(ret));
   }
   return ret;
 }

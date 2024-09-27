@@ -10818,6 +10818,8 @@ int ObLogPlan::do_post_plan_processing()
     LOG_WARN("build location related tablet ids failed", K(ret));
   } else if (OB_FAIL(check_das_need_keep_ordering(root))) {
     LOG_WARN("failed to check das need keep ordering", K(ret));
+  } else if (OB_FAIL(set_major_refresh_mview_dep_table_scan(root))) {
+    LOG_WARN("failed to set major refresh mview dep table scan", K(ret));
   } else { /*do nothing*/ }
   return ret;
 }
@@ -11185,14 +11187,20 @@ int ObLogPlan::gen_das_table_location_info(ObLogTableScan *table_scan,
   ObSEArray<ObRawExpr *, 8> all_filters;
   bool has_dppr = false;
   ObOptimizerContext *opt_ctx = &get_optimizer_context();
+  const ObCostTableScanInfo *est_cost_info = NULL;
+  const ObTableMetaInfo *table_meta_info = NULL;
   if (OB_ISNULL(table_scan) ||
       OB_ISNULL(table_partition_info) ||
+      OB_ISNULL(opt_ctx) ||
       OB_ISNULL(sql_schema_guard = opt_ctx->get_sql_schema_guard()) ||
       OB_ISNULL(stmt = table_scan->get_stmt()) ||
       OB_ISNULL(table_item = stmt->get_table_item_by_id(table_scan->get_table_id())) ||
-      OB_ISNULL(table_scan->get_strong_sharding())) {
+      OB_ISNULL(table_scan->get_strong_sharding()) ||
+      OB_ISNULL(est_cost_info = table_scan->get_est_cost_info()) ||
+      OB_ISNULL(table_meta_info = est_cost_info->table_meta_info_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get unexpected null", K(sql_schema_guard), K(stmt), K(ret));
+    LOG_WARN("get unexpected null", K(sql_schema_guard), K(stmt), K(opt_ctx),
+             K(est_cost_info), K(table_meta_info), K(ret));
   } else if (!table_scan->use_das() || !table_scan->is_match_all()) {
     // do nothing
   } else if (OB_FAIL(append_array_no_dup(all_filters, table_scan->get_range_conditions()))) {
@@ -11203,14 +11211,14 @@ int ObLogPlan::gen_das_table_location_info(ObLogTableScan *table_scan,
                                                                     has_dppr))) {
     LOG_WARN("failed to find das dppr filter exprs", K(ret));
   } else if (!has_dppr) {
-    // do nothing
+      // do nothing
   } else {
     SMART_VAR(ObTableLocation, das_location) {
       const ObDataTypeCastParams dtc_params =
             ObBasicSessionInfo::create_dtc_params(opt_ctx->get_session_info());
       int64_t ref_table_id = table_scan->get_is_index_global() ?
-                              table_scan->get_index_table_id() :
-                              table_scan->get_ref_table_id();
+                             table_scan->get_index_table_id() :
+                             table_scan->get_ref_table_id();
       if (OB_FAIL(das_location.init(*sql_schema_guard,
                                     *stmt,
                                     opt_ctx->get_exec_ctx(),
@@ -11221,11 +11229,13 @@ int ObLogPlan::gen_das_table_location_info(ObLogTableScan *table_scan,
                                     dtc_params,
                                     false))) {
         LOG_WARN("fail to init table location", K(ret), K(all_filters));
-      } else if (das_location.is_all_partition()) {
+      } else if (OB_FALSE_IT(das_location.set_use_das(true))) {
+      } else if (OB_FALSE_IT(das_location.set_broadcast_table(table_meta_info->is_broadcast_table_))) {
+      } else if (das_location.is_all_partition() &&
+                 !das_location.is_dynamic_replica_select_table()) {
         // do nothing
       } else {
-        das_location.set_has_dynamic_exec_param(true);
-        das_location.set_use_das(true);
+        das_location.set_has_dynamic_exec_param(has_dppr);
         table_partition_info->set_table_location(das_location);
       }
     }
@@ -11564,6 +11574,97 @@ int ObLogPlan::check_das_need_keep_ordering(ObLogicalOperator *op)
   for (int i = 0; OB_SUCC(ret) && i < op->get_num_of_child(); ++i) {
     if (OB_FAIL(SMART_CALL(check_das_need_keep_ordering(op->get_child(i))))) {
       LOG_WARN("failed to check das need keep ordering", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::set_major_refresh_mview_dep_table_scan(ObLogicalOperator *op)
+{
+  int ret = OB_SUCCESS;
+  bool for_fast_refresh = false;
+  ObSQLSessionInfo *session = get_optimizer_context().get_session_info();
+   if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(session));
+  } else if (OB_FALSE_IT(for_fast_refresh = session->get_ddl_info().is_major_refreshing_mview())) {
+  } else if (OB_FAIL(set_major_refresh_mview_dep_table_scan(for_fast_refresh, false, op))) {
+    LOG_WARN("failed to set major refresh mview dep table scan", K(ret));
+  }
+  return ret;
+}
+
+int ObLogPlan::set_major_refresh_mview_dep_table_scan(bool for_fast_refresh,
+                                                      bool for_rt_mview,
+                                                      ObLogicalOperator *op)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null param", K(ret));
+  } else if (log_op_def::LOG_SET == op->get_type() && !for_rt_mview) {
+    if (OB_FAIL(is_major_refresh_rt_mview(op->get_stmt(),
+                                          get_optimizer_context().get_sql_schema_guard(),
+                                          for_rt_mview))) {
+      LOG_WARN("failed to check is major refresh rt mview", K(ret));
+    }
+  } else if (log_op_def::LOG_TABLE_SCAN == op->get_type() && (for_fast_refresh || for_rt_mview)) {
+    ObLogTableScan *scan = static_cast<ObLogTableScan*>(op);
+    const TableItem *table_item = NULL;
+    if (OB_ISNULL(op->get_stmt()) || OB_ISNULL(table_item = op->get_stmt()->get_table_item_by_id(scan->get_table_id()))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null param", K(ret));
+    } else if (is_virtual_table(scan->get_ref_table_id())
+               || is_inner_table(scan->get_ref_table_id())
+               || MATERIALIZED_VIEW == table_item->table_type_) {
+      /* do nothing */
+    } else if (for_fast_refresh) {
+      scan->set_for_mr_mv_refresh();
+      LOG_TRACE("set as major refresh mview dep table scan for refresh", K(scan->get_table_name()));
+    } else {
+      scan->set_for_mr_rt_mv();
+      LOG_TRACE("set as major refresh mview dep table scan for rt-mview", K(scan->get_table_name()));
+    }
+  }
+  for (int i = 0; OB_SUCC(ret) && i < op->get_num_of_child(); ++i) {
+    if (OB_FAIL(SMART_CALL(set_major_refresh_mview_dep_table_scan(for_fast_refresh,
+                                                                  for_rt_mview,
+                                                                  op->get_child(i))))) {
+      LOG_WARN("failed to set major refresh mview dep table scan", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::is_major_refresh_rt_mview(const ObDMLStmt *stmt,
+                                         const ObSqlSchemaGuard *sql_schema_guard,
+                                         bool &is_mr_rt_mview)
+{
+  int ret = OB_SUCCESS;
+  is_mr_rt_mview = false;
+  const ObSelectStmt *sel_stmt = dynamic_cast<const ObSelectStmt*>(stmt);
+  if (NULL == sel_stmt || !sel_stmt->is_expanded_mview()) {
+    /* do nothing */
+  } else if (OB_ISNULL(sel_stmt = sel_stmt->get_set_query(0)) || OB_ISNULL(sql_schema_guard)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null param", K(ret), K(sel_stmt), K(sql_schema_guard));
+  } else {
+    const ObIArray<TableItem*> &table_items = sel_stmt->get_table_items();
+    const TableItem *table_item = NULL;
+    const ObTableSchema *mview_schema = NULL;
+    for (int i = 0; NULL == table_item && i < table_items.count(); ++i) {
+      if (OB_NOT_NULL(table_items.at(i)) && MATERIALIZED_VIEW == table_items.at(i)->table_type_) {
+        table_item = table_items.at(i);
+      }
+    }
+    if (OB_FAIL(ret) || NULL == table_item) {
+    } else if (OB_FAIL(sql_schema_guard->get_table_schema(table_item->mview_id_, mview_schema))) {
+      LOG_WARN("failed to get table schema", K(ret));
+    } else if (OB_ISNULL(mview_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null mview schema", K(ret));
+    } else {
+      is_mr_rt_mview = mview_schema->mv_major_refresh();
     }
   }
   return ret;

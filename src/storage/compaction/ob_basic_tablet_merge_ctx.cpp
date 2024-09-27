@@ -788,6 +788,9 @@ void ObBasicTabletMergeCtx::add_sstable_merge_info(
     ADD_COMMENT("cost_mb", mem_peak_mb);
   }
   ADD_COMMENT("time", time_guard);
+  if (nullptr != static_param_.schema_ && static_param_.schema_->is_mv_major_refresh_table()) {
+    ADD_COMMENT("mv", 1);
+  }
 
 #undef ADD_COMMENT
   ObInfoParamBuffer info_allocator;

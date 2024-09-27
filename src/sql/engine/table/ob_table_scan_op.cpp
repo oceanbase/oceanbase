@@ -974,16 +974,27 @@ int ObTableScanOp::prepare_das_task()
     ObSEArray<ObTabletID, 1> tablet_ids;
     ObSEArray<ObObjectID, 1> partition_ids;
     ObSEArray<ObObjectID, 1> first_level_part_ids;
-    if (OB_FAIL(das_location.calculate_tablet_ids(ctx_,
-                                                  plan_ctx->get_param_store(),
-                                                  tablet_ids,
-                                                  partition_ids,
-                                                  first_level_part_ids,
-                                                  dtc_params))) {
+    if (das_location.is_dynamic_replica_select_table() && tsc_rtdef_.dynamic_selected_tablet_id_.is_valid()) {
+      if (OB_FAIL(tablet_ids.push_back(tsc_rtdef_.dynamic_selected_tablet_id_))) {
+        LOG_WARN("failed to push back dynamic selected tablet id", K(ret));
+      }
+    } else if (OB_FAIL(das_location.calculate_tablet_ids(ctx_,
+                                                         plan_ctx->get_param_store(),
+                                                         tablet_ids,
+                                                         partition_ids,
+                                                         first_level_part_ids,
+                                                         dtc_params))) {
       LOG_WARN("calculate dynamic partitions failed", K(ret));
-    } else {
-      LOG_TRACE("dynamic partitions", K(tablet_ids), K(partition_ids), K(first_level_part_ids));
+    } else if (das_location.is_dynamic_replica_select_table()) {
+      if (tablet_ids.count() != 1) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("dynamic selected table should have only one tablet", K(tablet_ids), K(ret));
+      } else {
+        tsc_rtdef_.dynamic_selected_tablet_id_ = tablet_ids.at(0);
+      }
     }
+    LOG_TRACE("dynamic calculate partitions", K(das_location.is_dynamic_replica_select_table()),
+             K(tablet_ids), K(partition_ids), K(first_level_part_ids), K(ret), K(das_location));
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
       ObDASTabletLoc *tablet_loc = nullptr;
       if (OB_FAIL(DAS_CTX(ctx_).extended_tablet_loc(*tsc_rtdef_.scan_rtdef_.table_loc_,

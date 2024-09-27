@@ -3218,10 +3218,17 @@ int ObTenantDupTabletSchemaHelper::get_all_dup_tablet_set_(TabletIDSet &tablet_s
     DUP_TABLE_LOG(WARN, "get table schemas in tenant failed", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCCESS == ret && i < table_schemas.count(); i++) {
+      bool is_restore = false;
       bool is_duplicated = false;
       const ObSimpleTableSchemaV2 *table_schema = table_schemas.at(i);
-      if (OB_FAIL(table_schema->check_is_duplicated(schema_guard, is_duplicated))) {
-        DUP_TABLE_LOG(WARN, "check duplicate failed", K(ret));
+      if (OB_FAIL(schema_guard.check_tenant_is_restore(table_schema->get_tenant_id(), is_restore))) {
+        DUP_TABLE_LOG(WARN, "fail to check tenant is restore", K(ret));
+      } else if (is_restore) {
+        is_duplicated = false;
+      } else if (table_schema->is_duplicate_table()) {
+        is_duplicated = true;
+      }
+      if (OB_FAIL(ret)) {
       } else if (is_duplicated) {
         ObArray<ObTabletID> tablet_id_arr;
         if (OB_FAIL(table_schema->get_tablet_ids(tablet_id_arr))) {

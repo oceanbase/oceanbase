@@ -4747,16 +4747,6 @@ int ObTablegroupSchema::get_zone_list(
   return ret;
 }
 
-int ObTablegroupSchema::check_is_duplicated(
-    share::schema::ObSchemaGetterGuard &guard,
-    bool &is_duplicated) const
-{
-  int ret = OB_SUCCESS;
-  UNUSED(guard);
-  is_duplicated = false;
-  return ret;
-}
-
 //TODO: These functions can be extracted; as an implementation of locality/primary_zone
 int ObTablegroupSchema::get_zone_replica_attr_array_inherit(
     ObSchemaGetterGuard &schema_guard,

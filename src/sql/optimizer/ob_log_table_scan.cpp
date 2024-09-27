@@ -548,18 +548,18 @@ int ObLogTableScan::generate_access_exprs()
       if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
-      } else if ((T_ORA_ROWSCN == expr->get_expr_type())
-                 && static_cast<ObPseudoColumnRawExpr*>(expr)->get_table_id() == table_id_) {
-        if (OB_FAIL(access_exprs_.push_back(expr))) {
-          LOG_WARN("fail to push back expr", K(ret));
-        }
-      } else if ((T_PSEUDO_EXTERNAL_FILE_URL == expr->get_expr_type())
-                 && static_cast<ObPseudoColumnRawExpr*>(expr)->get_table_id() == table_id_) {
+      } else if (static_cast<ObPseudoColumnRawExpr*>(expr)->get_table_id() != table_id_) {
+        /* do nothing */
+      } else if (T_ORA_ROWSCN != expr->get_expr_type()
+                 && T_PSEUDO_EXTERNAL_FILE_URL != expr->get_expr_type()
+                 && T_PSEUDO_OLD_NEW_COL != expr->get_expr_type()) {
+        /* do nothing */
+      } else if (OB_FAIL(access_exprs_.push_back(expr))) {
+        LOG_WARN("fail to push back expr", K(ret));
+      } else if (T_PSEUDO_EXTERNAL_FILE_URL == expr->get_expr_type()) {
         if (OB_FAIL(add_var_to_array_no_dup(ext_file_column_exprs_, expr))) {
           LOG_WARN("fail to push back expr", K(ret));
         } else if (OB_FAIL(add_var_to_array_no_dup(output_exprs_, expr))) {
-          LOG_WARN("fail to push back expr", K(ret));
-        } else if (OB_FAIL(access_exprs_.push_back(expr))) { //add access expr temp
           LOG_WARN("fail to push back expr", K(ret));
         }
       }
@@ -1176,7 +1176,8 @@ int ObLogTableScan::index_back_check()
         column_found = false;
       } else if (ob_is_geometry_tc(expr->get_data_type())) { // 在此处先标记为需要index_back，具体是否需要需要结合谓词来判断。
         column_found = false;
-      } else if (T_PSEUDO_GROUP_ID == expr->get_expr_type()) {
+      } else if (T_PSEUDO_GROUP_ID == expr->get_expr_type() ||
+                 T_PSEUDO_OLD_NEW_COL == expr->get_expr_type()) {
         // do nothing
       } else if (OB_UNLIKELY(!expr->is_column_ref_expr())) {
         ret = OB_ERR_UNEXPECTED;

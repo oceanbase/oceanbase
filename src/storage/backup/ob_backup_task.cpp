@@ -2891,13 +2891,15 @@ int ObLSBackupDataTask::do_backup_macro_block_data_(common::ObIArray<ObIODevice 
     while (OB_SUCC(ret)) {
       io_allocator.reuse();
       ObBufferReader buffer_reader;
+      common::ObTabletID tablet_id;
       ObITable::TableKey table_key;
       ObLogicMacroBlockId logic_id;
       MacroBlockId macro_id;
       ObBackupMacroBlockIndex macro_index;
       ObBackupProviderItem backup_item;
       ObBackupDeviceMacroBlockId physical_id;
-      bool need_copy = true;
+      bool need_copy = true; // when the macro block is neither in inc backup, or backed up in previous turn or retry, we backup it.
+      bool need_reuse_across_sstable = false; // when two major sstable share one macro block, we reuse it
       if (REACH_TIME_INTERVAL(CHECK_DISK_SPACE_INTERVAL)) {
         if (OB_FAIL(check_disk_space_())) {
           LOG_WARN("failed to check disk space", K(ret));
@@ -2914,18 +2916,38 @@ int ObLSBackupDataTask::do_backup_macro_block_data_(common::ObIArray<ObIODevice 
         }
       } else if (OB_FAIL(get_backup_item_(table_key, logic_id, backup_item))) {
         LOG_WARN("failed to get backup item", K(ret), K(table_key), K(logic_id));
+      } else if (FALSE_IT(tablet_id = table_key.tablet_id_)) {
       } else if (FALSE_IT(need_copy = backup_item.get_need_copy())) {
+      } else if (FALSE_IT(need_reuse_across_sstable = backup_item.get_need_reuse_across_sstable())) {
       } else if (OB_FAIL(check_macro_block_data_(buffer_reader))) {
         LOG_WARN("failed to check macro block data", K(ret), K(buffer_reader));
-      } else if (need_copy && OB_FAIL(write_macro_block_data_(buffer_reader, table_key, logic_id, macro_index))) {
-        LOG_WARN("failed to write macro block data", K(ret), K(buffer_reader), K(table_key), K(logic_id));
-      } else if (!need_copy && FALSE_IT(macro_index = backup_item.get_macro_index())) {
-      } else if (OB_FAIL(macro_index.get_backup_physical_id(backup_data_type_, physical_id))) {
+      } else {
+        if (need_reuse_across_sstable) {
+          if (OB_FAIL(wait_reuse_other_block_ready_(tablet_id, logic_id, macro_index))) {
+            LOG_WARN("failed to wait reuse other block ready", K(ret), K(tablet_id), K(logic_id));
+          } else {
+            LOG_INFO("wait reuse other block ready", K(tablet_id), K(table_key), K(logic_id), K(macro_index));
+          }
+        } else {
+          if (need_copy) {
+            if (OB_FAIL(write_macro_block_data_(buffer_reader, table_key, logic_id, macro_index))) {
+              LOG_WARN("failed to write macro block data", K(ret), K(buffer_reader), K(table_key), K(logic_id));
+            } else {
+              LOG_INFO("write macro block", K(tablet_id), K(table_key), K(logic_id), K(macro_index));
+            }
+          } else {
+            macro_index = backup_item.get_macro_index();
+          }
+        }
+      }
+      if (FAILEDx(macro_index.get_backup_physical_id(backup_data_type_, physical_id))) {
         LOG_WARN("failed to get backup physical id", K(ret), K_(backup_data_type), K(macro_index));
       } else if (OB_FAIL(prepare_index_block_rebuilder_if_need_(backup_item, &task_id_))) {
         LOG_WARN("failed to prepare index block rebuilder if need", K(ret));
       } else if (OB_FAIL(append_macro_row_to_rebuilder_(backup_item, buffer_reader, physical_id))) {
         LOG_WARN("failed to append macro row to rebuilder", K(ret), K(backup_item));
+      } else if (OB_FAIL(update_logic_id_to_macro_index_(tablet_id, table_key, logic_id, macro_index))) {
+        LOG_WARN("failed to update logic id to macro index", K(ret), K(logic_id), K(table_key), K(macro_index));
       } else if (OB_FAIL(close_index_block_rebuilder_if_need_(backup_item))) {
         LOG_WARN("failed to close index block rebuilder if need", K(ret));
       } else if (OB_FAIL(mark_backup_item_finished_(backup_item, physical_id))) {
@@ -3520,6 +3542,7 @@ int ObLSBackupDataTask::get_macro_block_id_list_(common::ObIArray<ObBackupMacroB
   int ret = OB_SUCCESS;
   macro_list.reset();
   item_list.reset();
+
   for (int64_t i = 0; OB_SUCC(ret) && i < backup_items_.count(); ++i) {
     const ObBackupProviderItem &item = backup_items_.at(i);
     ObBackupMacroBlockId macro_id;
@@ -4028,6 +4051,8 @@ int ObLSBackupDataTask::prepare_index_block_rebuilder_if_need_(
   } else if (FALSE_IT(tablet_stat = &ls_backup_ctx_->tablet_stat_)) {
   } else if (OB_FAIL(tablet_stat->add_opened_rebuilder_count(tablet_id))) {
     LOG_WARN("failed to add opened rebuilder count", K(ret), K(tablet_id));
+  } else {
+    LOG_INFO("add opened rebuilder count", K(tablet_id), "table_key", item.get_table_key(), K(item));
   }
   return ret;
 }
@@ -4077,6 +4102,8 @@ int ObLSBackupDataTask::close_index_block_rebuilder_if_need_(const ObBackupProvi
   } else if (FALSE_IT(tablet_stat = &ls_backup_ctx_->tablet_stat_)) {
   } else if (OB_FAIL(tablet_stat->add_closed_rebuilder_count(tablet_id))) {
     LOG_WARN("failed to add closed rebuilder count", K(ret), K(tablet_id));
+  } else {
+    LOG_INFO("close rebuilder count", K(tablet_id), "table_key", item.get_table_key(), K(item));
   }
   return ret;
 }
@@ -4133,6 +4160,87 @@ int ObLSBackupDataTask::close_tree_device_handle_(
       LOG_WARN("failed to close meta tree device and fd", K(tmp_ret), K(ret));
       ret = COVER_SUCC(tmp_ret);
     }
+  }
+  return ret;
+}
+
+int ObLSBackupDataTask::update_logic_id_to_macro_index_(const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key,
+    const blocksstable::ObLogicMacroBlockId &logic_id, const ObBackupMacroBlockIndex &macro_index)
+{
+  int ret = OB_SUCCESS;
+  ObBackupTabletSSTableIndexBuilderMgr *mgr = NULL;
+  if (OB_ISNULL(index_builder_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("mgr should not be null", K(ret));
+  } else if (!logic_id.is_valid() || !macro_index.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(logic_id), K(macro_index));
+  } else if (!table_key.is_major_sstable()) {
+    // do nothing
+  } else if (OB_FAIL(index_builder_mgr_->get_sstable_index_builder_mgr(tablet_id, mgr))) {
+    LOG_WARN("failed to get sstable index builder mgr", K(ret), K(tablet_id));
+  } else if (OB_FAIL(mgr->update_logic_id_to_macro_index(logic_id, macro_index))) {
+    LOG_WARN("failed to update logic id to macro index", K(ret), K(logic_id));
+  }
+  return ret;
+}
+
+int ObLSBackupDataTask::wait_reuse_other_block_ready_(
+    const common::ObTabletID &tablet_id, const blocksstable::ObLogicMacroBlockId &logic_id,
+    ObBackupMacroBlockIndex &macro_index)
+{
+  int ret = OB_SUCCESS;
+  macro_index.reset();
+  bool is_ready = false;
+  static const int64_t DEFAULT_SLEEP_US = 10_ms;
+  int64_t start_time = ObTimeUtility::current_time();
+  while (OB_SUCC(ret)) {
+    is_ready = false;
+    if (OB_ISNULL(ls_backup_ctx_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls backup ctx should not be null", K(ret));
+    } else if (OB_SUCCESS != ls_backup_ctx_->get_result_code()) {
+      ret = OB_EAGAIN;
+      LOG_WARN("ctx already failed", K(ret));
+    } else if (OB_FAIL(inner_check_reuse_block_ready_(tablet_id, logic_id, macro_index, is_ready))) {
+      LOG_WARN("failed to inner check reuse block ready", K(ret), K(tablet_id), K(logic_id));
+    } else if (is_ready) {
+      LOG_INFO("reuse macro block is ready", K(tablet_id), K(logic_id), K(macro_index));
+#ifdef ERRSIM
+      SERVER_EVENT_SYNC_ADD("backup_data", "reuse_macro_block",
+                            "tablet_id", tablet_id.id(),
+                            "logic_id", logic_id,
+                            "macro_index", macro_index);
+#endif
+      break;
+    } else {
+      usleep(DEFAULT_SLEEP_US);
+    }
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(ls_backup_ctx_)) {
+    ls_backup_ctx_->add_wait_reuse_across_sstable_time(ObTimeUtility::current_time() - start_time);
+  }
+  return ret;
+}
+
+int ObLSBackupDataTask::inner_check_reuse_block_ready_(
+    const common::ObTabletID &tablet_id, const blocksstable::ObLogicMacroBlockId &logic_id,
+    ObBackupMacroBlockIndex &macro_index, bool &is_ready)
+{
+  int ret = OB_SUCCESS;
+  macro_index.reset();
+  is_ready = false;
+  ObBackupTabletSSTableIndexBuilderMgr *mgr = NULL;
+  if (OB_ISNULL(index_builder_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("mgr should not be null", K(ret));
+  } else if (!tablet_id.is_valid() || !logic_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(tablet_id), K(logic_id));
+  } else if (OB_FAIL(index_builder_mgr_->get_sstable_index_builder_mgr(tablet_id, mgr))) {
+    LOG_WARN("failed to get sstable index builder mgr", K(ret), K(tablet_id));
+  } else if (OB_FAIL(mgr->check_real_macro_index_exist(logic_id, is_ready, macro_index)))  {
+    LOG_WARN("failed to check macro index exist", K(ret), K(logic_id));
   }
   return ret;
 }
@@ -5342,6 +5450,11 @@ int ObLSBackupFinishTask::process()
   } else if (FALSE_IT(result = ls_backup_ctx_->get_result_code())) {
   } else {
     ls_backup_ctx_->stat_mgr_.print_stat();
+    SERVER_EVENT_ADD("backup_data", "report_wait_reuse_across_sstable_time",
+                     "tenant_id", tenant_id,
+                     "task_id", task_id,
+                     "ls_id", ls_id.id(),
+                     "wait_reuse_time", ls_backup_ctx_->wait_reuse_across_sstable_time_);
   }
 #ifdef ERRSIM
   if (ls_backup_ctx_->param_.ls_id_.id() == GCONF.errsim_backup_ls_id) {

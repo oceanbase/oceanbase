@@ -145,6 +145,8 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcTabletMajorFreezeP, gctx_);
     RPC_PROCESSOR(ObRpcDetectSessionAliveP, gctx_);
     RPC_PROCESSOR(ObCancelGatherStatsP, gctx_);
+    RPC_PROCESSOR(ObCollectMvMergeInfoP, gctx_);
+    RPC_PROCESSOR(ObFetchStableMemberListP, gctx_);
     RPC_PROCESSOR(ObRpcPrepareTabletSplitTaskRangesP, gctx_);
     RPC_PROCESSOR(ObRpcCheckStorageOperationStatusP, gctx_);
 #ifdef OB_BUILD_SHARED_STORAGE

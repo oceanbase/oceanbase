@@ -23,7 +23,9 @@
 #include "lib/string/ob_string.h"
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "share/ob_time_utility2.h"
+#include "share/ob_global_stat_proxy.h"
 #include "common/object/ob_object.h"
+#include "share/backup/ob_backup_data_table_operator.h"
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_mview_info.h"
 #include "share/schema/ob_mlog_info.h"
@@ -183,10 +185,30 @@ int ObMViewSchedJobUtils::add_mview_info_and_refresh_job(ObISQLClient &sql_clien
   ObArenaAllocator allocator("CreateMVTmp");
   SCN curr_ts;
   mview_info.reset();
+  share::ObGlobalStatProxy stat_proxy(sql_client, tenant_id);
+  share::SCN major_refresh_mv_merge_scn;
+  ObArray<share::ObBackupJobAttr> backup_jobs;
+  uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
   if (refresh_info == nullptr) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("refresh_info is null", KR(ret));
-  } else if (!refresh_info->start_time_.is_null() || !refresh_info->next_time_expr_.empty()) {
+  } else if (ObMVRefreshMode::MAJOR_COMPACTION == refresh_info->refresh_mode_) {
+    if (OB_FAIL(acquire_major_refresh_mv_merge_scn_(sql_client, tenant_id))) {
+      LOG_WARN("failed to acquire major refresh mv merge scn", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(share::ObBackupJobOperator::get_jobs(
+                   *GCTX.sql_proxy_, meta_tenant_id, false /*select for update*/, backup_jobs))) {
+      LOG_WARN("failed to get backup jobs", KR(ret), K(tenant_id));
+    } else if (!backup_jobs.empty()) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("[MAJ_REF_MV] backup jobs exist, can not create materialized view", K(ret),
+               K(tenant_id));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "backup jobs exist, can not create materialized view, please "
+                                      "try again after backup jobs are finished");
+    }
+  }
+
+  if (OB_SUCC(ret) &&
+     (!refresh_info->start_time_.is_null() || !refresh_info->next_time_expr_.empty())) {
     ObString job_prefix(ObMViewInfo::MVIEW_REFRESH_JOB_PREFIX);
     int64_t job_id = OB_INVALID_ID;
 
@@ -225,6 +247,7 @@ int ObMViewSchedJobUtils::add_mview_info_and_refresh_job(ObISQLClient &sql_clien
       }
     }
   }
+
   if (OB_SUCC(ret)) {
     if (OB_FAIL(OB_TS_MGR.get_ts_sync(tenant_id,
                                       GCONF.rpc_timeout,
@@ -243,7 +266,13 @@ int ObMViewSchedJobUtils::add_mview_info_and_refresh_job(ObISQLClient &sql_clien
     mview_info.set_refresh_mode(refresh_info->refresh_mode_);
     mview_info.set_refresh_method(refresh_info->refresh_method_);
     mview_info.set_refresh_job(refresh_job);
-    mview_info.set_last_refresh_scn(curr_ts.get_val_for_inner_table_field());
+    // TODO: we should set last_refresh_scn to 0 for all kind of mview, and fix the mlog recycle
+    // problem later.
+    if (ObMVRefreshMode::MAJOR_COMPACTION == refresh_info->refresh_mode_) {
+      mview_info.set_last_refresh_scn(0);
+    } else {
+      mview_info.set_last_refresh_scn(curr_ts.get_val_for_inner_table_field());
+    }
     mview_info.set_schema_version(schema_version);
     if (refresh_info->start_time_.is_timestamp()) {
       mview_info.set_refresh_start(refresh_info->start_time_.get_timestamp());
@@ -448,6 +477,61 @@ int ObMViewSchedJobUtils::resolve_date_expr_to_timestamp(
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "datetime expression");
     }
   }
+  return ret;
+}
+
+int ObMViewSchedJobUtils::acquire_major_refresh_mv_merge_scn_(common::ObISQLClient &trans,
+                                                              const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  share::SCN major_refresh_mv_merge_scn;
+  ObMySQLTransaction tmp_trans;
+  common::ObISQLClient *sql_proxy = GCTX.sql_proxy_;
+
+  // firstly, check if major_refresh_mv_merge_scn has been set, if not, set it to 0
+  if (OB_UNLIKELY(OB_ISNULL(sql_proxy))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", KR(ret));
+  } else if (OB_FAIL(tmp_trans.start(sql_proxy, tenant_id))) {
+    LOG_WARN("fail to start trans", KR(ret), K(tenant_id));
+  } else {
+    share::ObGlobalStatProxy tmp_proxy(tmp_trans, tenant_id);
+    if (OB_FAIL(tmp_proxy.get_major_refresh_mv_merge_scn(true /*select for update*/,
+                                                         major_refresh_mv_merge_scn))) {
+      if (OB_ERR_NULL_VALUE == ret) {
+        ret = OB_SUCCESS;
+        LOG_INFO("[MAJ_REF_MV] major_refresh_mv_merge_scn has not been set");
+        major_refresh_mv_merge_scn.set_min();
+        if (OB_FAIL(tmp_proxy.update_major_refresh_mv_merge_scn(major_refresh_mv_merge_scn,
+                                                                false /*is incremental*/))) {
+          LOG_WARN("fail to update major_refresh_mv_merge_scn", KR(ret),
+                   K(major_refresh_mv_merge_scn));
+        } else {
+          LOG_INFO("[MAJ_REF_MV] init major_refresh_mv_merge_scn", K(tenant_id),
+                   K(major_refresh_mv_merge_scn));
+        }
+      } else {
+        LOG_WARN("fail to get major_refresh_mv_merge_scn", KR(ret), K(tenant_id));
+      }
+    }
+  }
+
+  if (tmp_trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = tmp_trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    share::ObGlobalStatProxy stat_proxy(trans, tenant_id);
+    if (OB_FAIL(stat_proxy.get_major_refresh_mv_merge_scn(true /*select for update*/,
+                                                          major_refresh_mv_merge_scn))) {
+      LOG_WARN("fail to get major_refresh_mv_merge_scn", KR(ret), K(tenant_id));
+    }
+  }
+
   return ret;
 }
 

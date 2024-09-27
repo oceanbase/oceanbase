@@ -120,6 +120,31 @@ bool ObTableMode::is_valid() const
 OB_SERIALIZE_MEMBER_SIMPLE(ObTableMode,
                            mode_);
 
+bool ObMvMode::is_valid() const
+{
+  bool bret = true;
+  // reserve for new flags
+  return bret;
+}
+
+int ObMvMode::assign(const ObMvMode &other)
+{
+  int ret = OB_SUCCESS;
+  mode_ = other.mode_;
+  return ret;
+}
+
+ObMvMode & ObMvMode::operator=(const ObMvMode &other)
+{
+  if (this != &other) {
+    mode_ = other.mode_;
+  }
+  return *this;
+}
+
+OB_SERIALIZE_MEMBER_SIMPLE(ObMvMode,
+                           mode_);
+
 common::ObString ObMergeSchema::EMPTY_STRING = common::ObString::make_string("");
 
 int ObMergeSchema::get_mulit_version_rowkey_column_ids(common::ObIArray<share::schema::ObColDesc> &column_ids) const
@@ -1605,6 +1630,10 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
 
       if (FAILEDx(depend_mock_fk_parent_table_ids_.assign(src_schema.depend_mock_fk_parent_table_ids_))) {
         LOG_WARN("fail to assign depend_mock_fk_parent_table_ids_ array", K(ret));
+      }
+
+      if (FAILEDx(mv_mode_.assign(src_schema.mv_mode_))) {
+        LOG_WARN("fail to assign mv_mode", K(ret));
       }
 
       //copy columns
@@ -3623,6 +3652,7 @@ void ObTableSchema::reset()
   cg_name_hash_arr_ = NULL;
   mlog_tid_ = OB_INVALID_ID;
   local_session_vars_.reset();
+  mv_mode_.reset();
   ObSimpleTableSchemaV2::reset();
 }
 
@@ -6585,24 +6615,6 @@ int ObSimpleTableSchemaV2::check_if_oracle_compat_mode(bool &is_oracle_mode) con
   return ObCompatModeGetter::check_is_oracle_mode_with_table_id(tenant_id, table_id, is_oracle_mode);
 }
 
-int ObSimpleTableSchemaV2::check_is_duplicated(
-    share::schema::ObSchemaGetterGuard &guard,
-    bool &is_duplicated) const
-{
-  int ret = OB_SUCCESS;
-  const uint64_t tenant_id = get_tenant_id();
-  bool is_restore = false;
-  is_duplicated = false;
-  if (OB_FAIL(guard.check_tenant_is_restore(tenant_id, is_restore))) {
-    LOG_WARN("fail to check tenant is restore", K(ret), K(tenant_id));
-  } else if (is_restore) {
-    is_duplicated = false;
-  } else if (ObDuplicateScope::DUPLICATE_SCOPE_CLUSTER == get_duplicate_scope()) {
-    is_duplicated = true;
-  }
-  return ret;
-}
-
 int ObTableSchema::get_generated_column_by_define(const ObString &col_def,
                                                   const bool only_hidden_column,
                                                   ObColumnSchemaV2 *&gen_col)
@@ -6985,6 +6997,7 @@ OB_DEF_SERIALIZE(ObTableSchema)
     OB_UNIS_ENCODE(index_params_);
   }
   OB_UNIS_ENCODE(micro_index_clustered_);
+  OB_UNIS_ENCODE(mv_mode_);
   return ret;
 }
 
@@ -7441,6 +7454,7 @@ OB_DEF_DESERIALIZE(ObTableSchema)
     }
   }
   OB_UNIS_DECODE(micro_index_clustered_);
+  OB_UNIS_DECODE(mv_mode_);
   return ret;
 }
 
@@ -7596,6 +7610,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(duplicate_read_consistency_);
   OB_UNIS_ADD_LEN(index_params_);
   OB_UNIS_ADD_LEN(micro_index_clustered_);
+  OB_UNIS_ADD_LEN(mv_mode_);
   return len;
 }
 

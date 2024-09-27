@@ -588,6 +588,7 @@ ob_set_subtarget(ob_storage access
   access/ob_multiple_scan_merge.cpp
   access/ob_multiple_skip_scan_merge.cpp
   access/ob_multiple_multi_skip_scan_merge.cpp
+  access/ob_multiple_mview_merge.cpp
   access/ob_table_scan_iterator.cpp
   access/ob_store_row_iterator.cpp
   access/ob_i_sample_iterator.cpp
@@ -746,6 +747,7 @@ ob_set_subtarget(ob_storage compaction
   compaction/ob_sstable_merge_history.cpp
   compaction/ob_batch_freeze_tablets_dag.cpp
   compaction/ob_progressive_merge_helper.cpp
+  compaction/ob_mview_compaction_util.cpp
 )
 
 ob_set_subtarget(ob_storage memtable

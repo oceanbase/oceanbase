@@ -32,6 +32,7 @@
 #include "observer/ob_server_event_history_table_operator.h"
 #include "share/restore/ob_restore_persist_helper.h"
 #include "storage/tablet/ob_tablet.h"
+#include "storage/high_availability/ob_rebuild_service.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 
 using namespace oceanbase;
@@ -2707,10 +2708,26 @@ ObLSRestoreMajorState::~ObLSRestoreMajorState()
 {
 }
 
+ERRSIM_POINT_DEF(EN_REBUILD_BEFORE_RESTORE_MAJOR)
 int ObLSRestoreMajorState::do_restore()
 {
-  DEBUG_SYNC(BEFORE_RESTORE_MAJOR);
   int ret = OB_SUCCESS;
+
+#ifdef ERRSIM
+  if (OB_SUCCESS != EN_REBUILD_BEFORE_RESTORE_MAJOR && !ls_->is_sys_ls() && is_follower(role_)) {
+    // trigger follower rebuild
+    ObRebuildService *rebuild_service = MTL(ObRebuildService *);
+    const ObLSRebuildType rebuild_type(ObLSRebuildType::TRANSFER);
+    if (OB_FAIL(rebuild_service->add_rebuild_ls(ls_->get_ls_id(), rebuild_type))) {
+      LOG_WARN("[ERRSIM] failed to add rebuild ls", K(ret), K(ls_->get_ls_id()), K(rebuild_type));
+    } else {
+      LOG_INFO("fake EN_REBUILD_BEFORE_RESTORE_MAJOR", K(ls_->get_ls_id()), K(rebuild_type));
+    }
+  }
+#endif
+
+  DEBUG_SYNC(BEFORE_RESTORE_MAJOR);
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));

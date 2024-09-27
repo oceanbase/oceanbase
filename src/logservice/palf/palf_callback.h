@@ -142,6 +142,16 @@ public:
   virtual int get_server_region(const common::ObAddr &server, common::ObRegion &region) const = 0;
 };
 
+class PalfReconfigCheckerCb
+{
+public:
+  virtual int check_can_add_member(const ObAddr &server,
+                                   const int64_t timeout_us) = 0;
+  virtual int check_can_change_memberlist(const ObMemberList &new_member_list,
+                                          const int64_t paxos_replica_num,
+                                          const int64_t timeout_us) = 0;
+};
+
 } // end namespace palf
 } // end namespace oceanbase
 #endif

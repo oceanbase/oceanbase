@@ -140,11 +140,11 @@ int ObTableIterParam::refresh_lob_column_out_status()
   return ret;
 }
 
-bool ObTableIterParam::enable_fuse_row_cache(const ObQueryFlag &query_flag) const
+bool ObTableIterParam::enable_fuse_row_cache(const ObQueryFlag &query_flag, const StorageScanType scan_type) const
 {
   bool bret = is_x86() && query_flag.is_use_fuse_row_cache() && !query_flag.is_read_latest() &&
-              nullptr != rowkey_read_info_ && !need_scn_ && is_same_schema_column_ &&
-              !has_virtual_columns_ && !has_lob_column_out_;
+              nullptr != rowkey_read_info_ && (!need_scn_ || is_mview_table_scan(scan_type)) &&
+              is_same_schema_column_ && !has_virtual_columns_ && !has_lob_column_out_;
   return bret;
 }
 
@@ -339,6 +339,7 @@ int ObTableAccessParam::init(
     iter_param_.vectorized_enabled_ = nullptr != get_op() && get_op()->is_vectorized();
     iter_param_.limit_prefetch_ = (nullptr == op_filters_ || op_filters_->empty());
     iter_param_.is_mds_query_ = scan_param.is_mds_query_;
+
     if (iter_param_.is_use_column_store() &&
         nullptr != table_param.get_read_info().get_cg_idxs() &&
         !iter_param_.need_fill_group_idx()) { // not use column store in group rescan
@@ -347,7 +348,8 @@ int ObTableAccessParam::init(
       iter_param_.set_not_use_column_store();
     }
     if (scan_param.need_switch_param_ ||
-        iter_param_.is_use_column_store()) {
+        iter_param_.is_use_column_store() ||
+        scan_param.is_mview_query()) {
       iter_param_.set_use_stmt_iter_pool();
     }
 
@@ -460,12 +462,13 @@ DEF_TO_STRING(ObTableAccessParam)
 }
 
 int set_row_scn(
+    const bool use_fuse_row_cache,
     const ObTableIterParam &iter_param,
     const ObDatumRow *store_row)
 {
   int ret = OB_SUCCESS;
   const ObColDescIArray *out_cols = nullptr;
-  const ObITableReadInfo *read_info = iter_param.get_read_info();
+  const ObITableReadInfo *read_info = iter_param.get_read_info(use_fuse_row_cache);
   if (OB_UNLIKELY(nullptr == read_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected null read info", K(ret));

@@ -875,7 +875,9 @@ public:
                                           ObSQLSessionInfo *session_info);
   int set_sharable_expr_reference(ObRawExpr &expr, ExplicitedRefType ref_type);
   int check_pseudo_column_valid();
-  int get_ora_rowscn_column(const uint64_t table_id, ObPseudoColumnRawExpr *&ora_rowscn);
+  int get_target_pseudo_column(const ObItemType target_type,
+                               const uint64_t table_id,
+                               ObPseudoColumnRawExpr *&pseudo_col);
   virtual int remove_useless_sharable_expr(ObRawExprFactory *expr_factory,
                                            ObSQLSessionInfo *session_info,
                                            bool explicit_for_col);

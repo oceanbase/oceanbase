@@ -44,7 +44,6 @@ public:
   virtual void reset() override;
   virtual void reuse() override;
   virtual void reclaim() override;
-  inline void set_iter_del_row(const bool iter_del_row) { iter_del_row_ = iter_del_row; }
 protected:
   virtual int calc_scan_range() override;
   virtual int construct_iters() override;
@@ -64,7 +63,6 @@ protected:
   ObScanSimpleMerger *simple_merge_;
   ObScanMergeLoserTree *loser_tree_;
   common::ObRowsMerger<ObScanMergeLoserTreeItem, ObScanMergeLoserTreeCmp> *rows_merger_;
-  bool iter_del_row_;
   int64_t consumers_[common::MAX_TABLE_CNT_IN_STORAGE];
   int64_t consumer_cnt_;
 private:

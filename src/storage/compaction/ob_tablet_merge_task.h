@@ -42,6 +42,7 @@ struct ObStaticMergeParam;
 class ObPartitionMerger;
 struct ObCachedTransStateMgr;
 class ObPartitionMergeProgress;
+class ObMviewMergeParameter;
 /*
 DAG : *PrepareTask -> ObTabletMergeTask* -> ObTabletMergeFinishTask
 
@@ -61,6 +62,10 @@ struct ObMergeParameter {
   const storage::ObTablesHandleArray & get_tables_handle() const;
   const ObStorageSchema *get_schema() const;
   bool is_full_merge() const;
+  OB_INLINE bool is_mv_merge() const
+  {
+    return nullptr != mview_merge_param_;
+  }
 
   const ObStaticMergeParam &static_param_;
   /* rest variables are different for MergeTask */
@@ -70,11 +75,13 @@ struct ObMergeParameter {
   ObITableReadInfo *cg_rowkey_read_info_;
   compaction::ObCachedTransStateMgr *trans_state_mgr_;
   share::ObDiagnoseLocation *error_location_;
+  ObMviewMergeParameter *mview_merge_param_;
   ObIAllocator *allocator_;
 
   int64_t to_string(char* buf, const int64_t buf_len) const;
 private:
   int set_merge_rowid_range(ObIAllocator *allocator);
+  int init_mview_merge_param(ObIAllocator *allocator);
   DISALLOW_COPY_AND_ASSIGN(ObMergeParameter);
 };
 

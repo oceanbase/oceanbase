@@ -153,6 +153,8 @@ int ObProgressiveMergeHelper::init(
   } else if (FALSE_IT(reset())) {
   } else if (static_param.is_full_merge_) {
     full_merge_ = check_macro_need_merge_ = true;
+  } else if (merge_param.is_mv_merge()) {
+    STORAGE_LOG(INFO, "mv merge, not init progressive merge", K(ret));
   } else {
     mgr_ = mgr; // init mgr first
     int64_t rewrite_macro_cnt = 0, reduce_macro_cnt = 0, rewrite_block_cnt_for_progressive = 0;

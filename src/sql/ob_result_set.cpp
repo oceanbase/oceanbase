@@ -53,6 +53,7 @@
 #include "sql/engine/dml/ob_link_op.h"
 #include <cctype>
 #include "sql/engine/expr/ob_expr_last_refresh_scn.h"
+#include "src/rootserver/mview/ob_mview_maintenance_service.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -575,6 +576,8 @@ OB_INLINE int ObResultSet::do_open_plan(ObExecContext &ctx)
   int ret = OB_SUCCESS;
   ctx.reset_op_env();
   exec_result_ = &(ctx.get_task_exec_ctx().get_execute_result());
+  rootserver::ObMViewMaintenanceService *mview_maintenance_service =
+                                        MTL(rootserver::ObMViewMaintenanceService*);
   if (stmt::T_PREPARE != stmt_type_) {
     if (OB_FAIL(ctx.init_phy_op(physical_plan_->get_phy_operator_size()))) {
       LOG_WARN("fail init exec phy op ctx", K(ret));
@@ -591,15 +594,17 @@ OB_INLINE int ObResultSet::do_open_plan(ObExecContext &ctx)
 
 
   if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(mview_maintenance_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("mview_maintenance_service is null", K(ret), KP(mview_maintenance_service));
   } else if (OB_FAIL(start_stmt())) {
     LOG_WARN("fail start stmt", K(ret));
   } else if (!physical_plan_->get_mview_ids().empty() && OB_PHY_PLAN_REMOTE != physical_plan_->get_plan_type()
-             && OB_FAIL(ObExprLastRefreshScn::set_last_refresh_scns(physical_plan_->get_mview_ids(),
-                                                                    ctx.get_sql_proxy(),
-                                                                    ctx.get_my_session(),
-                                                                    ctx.get_das_ctx().get_snapshot().core_.version_,
-                                                                    ctx.get_physical_plan_ctx()->get_mview_ids(),
-                                                                    ctx.get_physical_plan_ctx()->get_last_refresh_scns()))) {
+             && OB_FAIL((mview_maintenance_service->get_mview_refresh_info(physical_plan_->get_mview_ids(),
+                                                                           ctx.get_sql_proxy(),
+                                                                           ctx.get_das_ctx().get_snapshot().core_.version_,
+                                                                           ctx.get_physical_plan_ctx()->get_mview_ids(),
+                                                                           ctx.get_physical_plan_ctx()->get_last_refresh_scns())))) {
     LOG_WARN("fail to set last_refresh_scns", K(ret), K(physical_plan_->get_mview_ids()));
   } else {
     // for insert /*+ append */ into select clause

@@ -20,6 +20,8 @@
 #include "logservice/ob_log_service.h"
 #include "unittest/storage/init_basic_struct.h"
 #include "lib/profile/ob_trace_id.h"
+#include "storage/tx/ob_trans_service.h"
+#include "share/ob_global_stat_proxy.h"
 
 
 namespace oceanbase
@@ -33,26 +35,41 @@ int SimpleServerHelper::create_ls(uint64_t tenant_id, ObAddr addr)
     }
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
-  static int64_t start_ls_id = 1001;
-  ObLSID ls_id(ATOMIC_AAF(&start_ls_id,1));
-  if (OB_FAIL(GCTX.sql_proxy_->write(tenant_id, "alter system set enable_rebalance=false", affected_rows))) {
-  }
-  if (OB_SUCC(ret)) {
+  int64_t start_ls_id = 0;
+  ObLSID ls_id;
+  if (OB_FAIL(g_select_int64(tenant_id, "select max(ls_id) val from __all_ls", start_ls_id))) {
+    LOG_WARN("fail to get max ls id", KR(ret));
+  } else if (FALSE_IT(ls_id = max(1001, start_ls_id + 1))) {
+  } else if (OB_FAIL(GCTX.sql_proxy_->write(tenant_id, "alter system set enable_rebalance=false", affected_rows))) {
+  } else {
     ObSqlString sql;
-    sql.assign_fmt("insert into __all_ls (ls_id, ls_group_id, status, flag, create_scn) values(%ld, 1001,'NORMAL', '',0)", ls_id.id());
+    sql.assign_fmt("insert into __all_ls (ls_id, ls_group_id, status, flag, create_scn) values(%ld, 1001,'NORMAL', '', 1)", ls_id.id());
     if (FAILEDx(GCTX.sql_proxy_->write(tenant_id, sql.ptr(), affected_rows))) {
     }
     sql.assign_fmt("insert into __all_ls_status (tenant_id, ls_id, status, ls_group_id, unit_group_id, primary_zone) values(%ld, %ld,'NORMAL', 1001, 1001, 'zone1')", tenant_id, ls_id.id());
     if (FAILEDx(GCTX.sql_proxy_->write(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
     }
   }
+  share::SCN merge_scn;
   if (OB_FAIL(ret)) {
     return ret;
+  } else {
+    ObGlobalStatProxy proxy(*GCTX.sql_proxy_, tenant_id);
+    int tmp_ret = proxy.get_major_refresh_mv_merge_scn(false, merge_scn);
+    if (tmp_ret != OB_SUCCESS) {
+      LOG_WARN("get merge_scn failed", KR(tmp_ret));
+    }
+  }
+  if (!merge_scn.is_valid()) {
+    merge_scn.set_min();
   }
   MTL_SWITCH(tenant_id) {
     ObCreateLSArg arg;
     ObLSService* ls_svr = MTL(ObLSService*);
     FR(gen_create_ls_arg(tenant_id, ls_id, arg));
+    arg.major_mv_merge_info_.major_mv_merge_scn_publish_.atomic_store(merge_scn);
+    arg.major_mv_merge_info_.major_mv_merge_scn_safe_calc_.atomic_store(merge_scn);
+    arg.major_mv_merge_info_.major_mv_merge_scn_.atomic_store(merge_scn);
     FR(ls_svr->create_ls(arg));
     LOG_INFO("set member list");
     ObLSHandle handle;
@@ -912,6 +929,26 @@ void InjectTxFaultHelper::release()
   }
   mgr_ = NULL;
   tx_injects_.clear();
+}
+
+int SimpleServerHelper::get_tx_desc(uint64_t tenant_id, ObTransID tx_id, ObTxDesc *&tx_desc)
+{
+  int ret = OB_SUCCESS;
+  MTL_SWITCH(tenant_id) {
+    ret = MTL(ObTransService*)->tx_desc_mgr_.get(tx_id, tx_desc);
+  }
+  return ret;
+}
+
+int SimpleServerHelper::revert_tx_desc(uint64_t tenant_id, ObTxDesc *tx_desc)
+{
+  int ret = OB_SUCCESS;
+  MTL_SWITCH(tenant_id) {
+    if (OB_NOT_NULL(tx_desc)) {
+      MTL(ObTransService*)->tx_desc_mgr_.revert(*tx_desc);
+    }
+  }
+  return ret;
 }
 
 }

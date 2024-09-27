@@ -1515,8 +1515,10 @@ int ObTransformUtils::update_table_id_for_pseudo_columns(const ObIArray<ObRawExp
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null pseudo column", K(other_pseudo_columns.at(i)),
           K(pseudo_columns.at(i)), K(ret));
-    } else if (T_ORA_ROWSCN == other_pseudo_columns.at(i)->get_expr_type()
-               && T_ORA_ROWSCN == pseudo_columns.at(i)->get_expr_type()) {
+    } else if (other_pseudo_columns.at(i)->get_expr_type() != pseudo_columns.at(i)->get_expr_type()) {
+      /* do nothing */
+    } else if (T_ORA_ROWSCN == pseudo_columns.at(i)->get_expr_type()
+               || T_PSEUDO_OLD_NEW_COL == pseudo_columns.at(i)->get_expr_type()) {
       ObPseudoColumnRawExpr *pseudo_col1 = static_cast<ObPseudoColumnRawExpr*>(other_pseudo_columns.at(i));
       ObPseudoColumnRawExpr *pseudo_col2 = static_cast<ObPseudoColumnRawExpr*>(pseudo_columns.at(i));
       if (pseudo_col1->get_table_id() == old_table_id) {
@@ -7172,7 +7174,8 @@ int ObTransformUtils::check_need_pushdown_pseudo_column(const ObRawExpr &expr,
   int ret = OB_SUCCESS;
   need_pushdown = false;
   switch (expr.get_expr_type()) {
-    case T_ORA_ROWSCN: {
+    case T_ORA_ROWSCN:
+    case T_PSEUDO_OLD_NEW_COL: {
       need_pushdown = true;
       break;
     }

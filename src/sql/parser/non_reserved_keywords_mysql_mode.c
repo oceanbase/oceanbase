@@ -741,6 +741,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"replica_num", REPLICA_NUM},
   {"replica_type", REPLICA_TYPE},
   {"duplicate_scope", DUPLICATE_SCOPE},
+  {"duplicate_read_consistency", DUPLICATE_READ_CONSISTENCY},
   {"replication", REPLICATION},
   {"report", REPORT},
   {"require", REQUIRE},

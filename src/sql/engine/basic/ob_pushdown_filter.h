@@ -662,6 +662,10 @@ public:
   OB_INLINE void set_filter_rewrited() { is_rewrited_ = true; }
   OB_INLINE bool is_filter_rewrited() const { return is_rewrited_; }
   OB_INLINE int64_t get_skipped_rows() const { return skipped_rows_; }
+  OB_INLINE bool can_pushdown_decoder()
+  {
+    return 1 == get_col_count() && common::OB_HIDDEN_TRANS_VERSION_COLUMN_ID != get_col_ids().at(0);
+  }
   OB_INLINE void clear_skipped_rows() { skipped_rows_ = 0; }
   OB_INLINE common::ObIAllocator &get_allocator() { return allocator_; }
   inline int get_child(uint32_t nth_child, ObPushdownFilterExecutor *&filter_executor)

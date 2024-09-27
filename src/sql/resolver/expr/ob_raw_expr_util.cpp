@@ -3647,6 +3647,26 @@ int ObRawExprUtils::extract_column_exprs(const ObRawExpr *raw_expr,
   return ret;
 }
 
+int ObRawExprUtils::extract_column_exprs_and_rowscn(const ObRawExpr *raw_expr,
+                                         ObIArray<ObRawExpr*> &column_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (NULL == raw_expr) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid raw expr", K(ret), K(raw_expr));
+  } else {
+    if (T_REF_COLUMN == raw_expr->get_expr_type() || T_ORA_ROWSCN == raw_expr->get_expr_type()) {
+      ret = add_var_to_array_no_dup(column_exprs, const_cast<ObRawExpr*>(raw_expr));
+    } else {
+      int64_t N = raw_expr->get_param_count();
+      for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
+        ret = extract_column_exprs_and_rowscn(raw_expr->get_param_expr(i), column_exprs);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObRawExprUtils::extract_contain_exprs(ObRawExpr *raw_expr,
                                           const common::ObIArray<ObRawExpr*> &src_exprs,
                                           common::ObIArray<ObRawExpr *> &contain_exprs)

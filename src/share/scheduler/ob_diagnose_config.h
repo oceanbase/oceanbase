@@ -56,6 +56,8 @@ SUSPECT_INFO_TYPE_DEF(SUSPECT_TABLET_CANT_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PR
 SUSPECT_INFO_TYPE_DEF(SUSPECT_UPDATE_TALBET_STATE_FAILED, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH, false, "update tablet state failed",
     3, {"compaction_scn", "is_verified", "is_merged"})
 #endif
+SUSPECT_INFO_TYPE_DEF(SUSPECT_MV_IN_CREATION, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false,
+                      "materialized view creation has not finished", 2, {"schedule_scn", "is_row_store"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_INFO_TYPE_MAX, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "", 0, {})
 #endif
 

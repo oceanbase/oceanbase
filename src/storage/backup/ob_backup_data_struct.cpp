@@ -771,7 +771,6 @@ void ObBackupTabletMeta::reset()
 }
 
 /* ObBackupSSTableMeta */
-
 OB_SERIALIZE_MEMBER(ObBackupSSTableMeta, tablet_id_, sstable_meta_, logic_id_list_,
     entry_block_addr_for_other_block_, // FARM COMPAT WHITELIST
     total_other_block_count_,          // FARM COMPAT WHITELIST

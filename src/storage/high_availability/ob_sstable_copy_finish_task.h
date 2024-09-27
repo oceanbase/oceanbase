@@ -60,7 +60,9 @@ struct ObPhysicalCopyTaskInitParam final
                KP_(second_meta_index_store),
                K_(need_sort_macro_meta),
                K_(need_check_seq),
-               K_(ls_rebuild_seq));
+               K_(ls_rebuild_seq),
+               KP_(macro_block_reuse_mgr),
+               KPC_(extra_info));
 
 
   uint64_t tenant_id_;
@@ -79,6 +81,8 @@ struct ObPhysicalCopyTaskInitParam final
   bool need_sort_macro_meta_; // not use
   bool need_check_seq_;
   int64_t ls_rebuild_seq_;
+  ObMacroBlockReuseMgr *macro_block_reuse_mgr_;
+  ObCopyTabletRecordExtraInfo *extra_info_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPhysicalCopyTaskInitParam);
@@ -214,12 +218,13 @@ private:
 };
 
 
-class ObSSTableCopyFinishTask final : public share::ObITask
+class ObSSTableCopyFinishTask : public share::ObITask
 {
 public:
   ObSSTableCopyFinishTask();
   virtual ~ObSSTableCopyFinishTask();
-  int init(const ObPhysicalCopyTaskInitParam &init_param);
+  int init(
+      const ObPhysicalCopyTaskInitParam &init_param);
   ObPhysicalCopyCtx *get_copy_ctx() { return &copy_ctx_; }
   const ObMigrationSSTableParam *get_sstable_param() { return sstable_param_; }
   int get_next_macro_block_copy_info(
@@ -260,12 +265,25 @@ private:
       const ObMigrationSSTableParam *sstable_param,
       compaction::ObMergeType &merge_type);
   int create_sstable_();
+  int create_empty_sstable_();
+  int build_create_empty_sstable_param_(
+      ObTabletCreateSSTableParam &param);
+  int create_sstable_with_index_builder_();
+  int build_create_sstable_param_(
+      ObTablet *tablet,
+      const blocksstable::ObSSTableMergeRes &res,
+      ObTabletCreateSSTableParam &param);
   int build_restore_macro_block_id_mgr_(
       const ObPhysicalCopyTaskInitParam &init_param);
   int check_sstable_valid_();
   int check_sstable_meta_(
       const ObMigrationSSTableParam &src_meta,
       const ObSSTableMeta &write_meta);
+  int update_major_sstable_reuse_info_();
+  int update_copy_tablet_record_extra_info_();
+  int create_pure_remote_sstable_();
+  int build_create_pure_remote_sstable_param_(
+      ObTabletCreateSSTableParam &param);
   int alloc_and_init_sstable_creator_(ObCopiedSSTableCreatorImpl *&sstable_creator);
   void free_sstable_creator_(ObCopiedSSTableCreatorImpl *&sstable_creator);
   int get_space_optimization_mode_(

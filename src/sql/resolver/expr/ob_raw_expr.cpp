@@ -6387,6 +6387,11 @@ int ObPseudoColumnRawExpr::get_name_internal(char *buf, const int64_t buf_len, i
         LOG_WARN("failed to print", K(ret));
       }
       break;
+    case T_PSEUDO_OLD_NEW_COL:
+      if (OB_FAIL(BUF_PRINTF(OB_MLOG_OLD_NEW_COLUMN_NAME))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+      break;
     case T_PSEUDO_GROUP_ID:
     case T_PSEUDO_STMT_ID:
     case T_PSEUDO_GROUP_PARAM:

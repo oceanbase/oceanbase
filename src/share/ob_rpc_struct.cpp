@@ -9470,7 +9470,8 @@ bool ObCreateLSArg::is_valid() const
          && create_scn_.is_valid()
          && lib::Worker::CompatMode::INVALID != compat_mode_
          && (!is_create_ls_with_palf()
-             || palf_base_info_.is_valid());
+             || palf_base_info_.is_valid())
+         && major_mv_merge_info_.is_valid();
 }
 void ObCreateLSArg::reset()
 {
@@ -9512,16 +9513,18 @@ int ObCreateLSArg::init(const int64_t tenant_id,
     const SCN &create_scn,
     const lib::Worker::CompatMode &mode,
     const bool create_with_palf,
-    const palf::PalfBaseInfo &palf_base_info)
+    const palf::PalfBaseInfo &palf_base_info,
+    const storage::ObMajorMVMergeInfo &major_mv_merge_info)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
                   ||!id.is_valid()
                   || !ObReplicaTypeCheck::is_replica_type_valid(replica_type)
                   || !replica_property.is_valid()
-                  || !tenant_info.is_valid())) {
+                  || !tenant_info.is_valid()
+                  || !major_mv_merge_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(id), K(replica_type), K(tenant_info));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(id), K(replica_type), K(tenant_info), K(major_mv_merge_info));
   } else {
     (void)tenant_info_.assign(tenant_info);
     tenant_id_ = tenant_id;
@@ -9536,6 +9539,7 @@ int ObCreateLSArg::init(const int64_t tenant_id,
       create_ls_type_ = EMPTY_LS;
     }
     palf_base_info_ = palf_base_info;
+    major_mv_merge_info_ = major_mv_merge_info;
   }
   return ret;
 }
@@ -9544,7 +9548,7 @@ DEF_TO_STRING(ObCreateLSArg)
 {
   int64_t pos = 0;
   J_KV(K_(tenant_id), K_(id), K_(replica_type), K_(replica_property), K_(tenant_info),
-       K_(create_scn), K_(compat_mode), K_(palf_base_info), "create with palf", is_create_ls_with_palf());
+       K_(create_scn), K_(compat_mode), K_(palf_base_info), "create with palf", is_create_ls_with_palf(), K_(major_mv_merge_info));
   return pos;
 }
 
@@ -12997,6 +13001,84 @@ int ObCheckServerMachineStatusResult::assign(const ObCheckServerMachineStatusRes
   }
   return ret;
 }
+
+OB_SERIALIZE_MEMBER(ObCollectMvMergeInfoArg, ls_id_,
+                    tenant_id_, check_leader_, need_update_);
+int ObCollectMvMergeInfoArg::assign(const ObCollectMvMergeInfoArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    ls_id_ = other.ls_id_;
+    tenant_id_ = other.tenant_id_;
+    check_leader_ = other.check_leader_;
+    need_update_ = other.need_update_;
+  }
+  return ret;
+}
+int ObCollectMvMergeInfoArg::init(const share::ObLSID &ls_id,
+                                  const uint64_t tenant_id,
+                                  const bool check_leader,
+                                  const bool need_update)
+{
+  int ret = OB_SUCCESS;
+
+  if (!ls_id.is_valid() || OB_INVALID_TENANT_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), K(ls_id), K(tenant_id));
+  } else {
+    ls_id_ = ls_id;
+    tenant_id_ = tenant_id;
+    check_leader_ = check_leader;
+    need_update_ = need_update;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObCollectMvMergeInfoResult, mv_merge_info_, ret_);
+int ObCollectMvMergeInfoResult::assign(const ObCollectMvMergeInfoResult &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    mv_merge_info_ = other.mv_merge_info_;
+  }
+  return ret;
+}
+int ObCollectMvMergeInfoResult::init(const ObMajorMVMergeInfo &mv_merge_info, const int err_ret)
+{
+  int ret = OB_SUCCESS;
+  if (!mv_merge_info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), K(mv_merge_info));
+  } else {
+    mv_merge_info_ = mv_merge_info;
+    ret_ = err_ret;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObFetchStableMemberListArg, tenant_id_, ls_id_);
+int ObFetchStableMemberListArg::assign(const ObFetchStableMemberListArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    tenant_id_ = other.tenant_id_;
+    ls_id_ = other.ls_id_;
+  }
+  return ret;
+}
+int ObFetchStableMemberListArg::init(const share::ObLSID &ls_id, const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (!ls_id.is_valid() || OB_INVALID_TENANT_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), K(ls_id), K(tenant_id));
+  } else {
+    ls_id_ = ls_id;
+    tenant_id_ = tenant_id;
+  }
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER(ObRefreshServiceNameArg, tenant_id_, epoch_, from_server_, target_service_name_id_,
     service_name_list_, service_op_, update_tenant_info_arg_);
 int ObRefreshServiceNameArg::init(
@@ -13123,6 +13205,30 @@ int ObNotifySharedStorageInfoArg::init(const ObIArray<ObAdminStorageArg> &shared
     LOG_WARN("shared_storage_infos is empty", KR(ret), K(shared_storage_infos));
   } else if (OB_FAIL(shared_storage_infos_.assign(shared_storage_infos))) {
     LOG_WARN("fail to assign shared_storage_infos", KR(ret), K(shared_storage_infos));
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObFetchStableMemberListInfo, member_list_, config_version_);
+
+int ObFetchStableMemberListInfo::init(const common::ObMemberList &member_list, const palf::LogConfigVersion &config_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!member_list.is_valid() || !config_version.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), K(member_list), K(config_version));
+  } else if (OB_FAIL(member_list_.deep_copy(member_list))) {
+    LOG_WARN("fail to assign memberlist", KR(ret), K(member_list));
+  } else if (OB_FALSE_IT(config_version_ = config_version)) {
+  }
+  return ret;
+}
+int ObFetchStableMemberListInfo::assign(const ObFetchStableMemberListInfo &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(member_list_.deep_copy(other.member_list_))) {
+    LOG_WARN("fail to deep copy memberlist", KR(ret), K(other));
+  } else if (OB_FALSE_IT(config_version_ = other.config_version_)) {
   }
   return ret;
 }

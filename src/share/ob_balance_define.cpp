@@ -31,14 +31,14 @@ bool check_if_need_balance_table(
     const char *&table_type_str)
 {
   bool need_balance = false;
-  if (table_schema.is_duplicate_table()) {
+  if (table_schema.is_broadcast_table() || table_schema.is_duplicate_table()) {
     table_type_str = "DUPLICATE TABLE";
   } else if (table_schema.is_index_table() && !table_schema.is_global_index_table()) {
     table_type_str = "LOCAL INDEX";
   } else {
     table_type_str = ob_table_type_str(table_schema.get_table_type());
   }
-  need_balance = !table_schema.is_duplicate_table()
+  need_balance = !(table_schema.is_broadcast_table() || table_schema.is_duplicate_table())
       && (table_schema.is_user_table()
       || table_schema.is_global_index_table()
       || table_schema.is_tmp_table());

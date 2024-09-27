@@ -1299,10 +1299,16 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_major_merge(
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
   const int64_t last_major_snapshot_version = tablet.get_last_major_snapshot_version();
   int64_t max_sync_medium_scn = 0;
+  ObArenaAllocator temp_allocator("GetSSchema", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObStorageSchema *storage_schema = nullptr;
+  bool is_mv_major_refresh_tablet = false;
   if (tablet_id.is_ls_inner_tablet()) {
     // do nothing
   } else if (OB_FAIL(tablet.get_max_sync_medium_scn(max_sync_medium_scn))){
     LOG_WARN("failed to get max sync medium scn", K(ret), K(ls_id), K(tablet_id));
+  } else if (OB_FAIL(tablet.load_storage_schema(temp_allocator, storage_schema))) {
+    LOG_WARN("failed to load storage schema", K(ret), K(tablet));
+  } else if (FALSE_IT(is_mv_major_refresh_tablet = storage_schema->is_mv_major_refresh())) {
   } else {
     LOG_TRACE("diagnose tablet major merge", K(ls_id), K(tablet_id), K(compaction_scn), K(max_sync_medium_scn), K(last_major_snapshot_version));
     if (last_major_snapshot_version < compaction_scn) {
@@ -1325,6 +1331,13 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_major_merge(
       } else if (0 == last_major_snapshot_version) {
         const char* info = "no major sstable";
         ADD_MAJOR_WAIT_SCHEDULE(compaction_scn + WAIT_MEDIUM_SCHEDULE_INTERVAL, info);
+      } else if (is_mv_major_refresh_tablet &&
+                 ObBasicMergeScheduler::INIT_COMPACTION_SCN == last_major_snapshot_version) {
+        if (OB_FAIL(ADD_DIAGNOSE_INFO_FOR_TABLET(
+                MEDIUM_MERGE, ObCompactionDiagnoseInfo::DIA_STATUS_NOT_SCHEDULE,
+                ObTimeUtility::fast_current_time(), "current_status", "wait for materialized view creation"))) {
+          LOG_WARN("failed to add diagnose info", K(ret), K(ls_id), K(tablet_id));
+        }
       }
       if (OB_TMP_FAIL(diagnose_tablet_merge(
           MEDIUM_MERGE,

@@ -557,7 +557,7 @@ public:
   share::ObLSID dest_ls_id_;
   common::ObSArray<share::ObTransferTabletInfo> tablet_list_;
   uint64_t data_version_;
-  share::SCN new_mv_merge_scn_; // placeholder for feature collect_mv
+  share::SCN new_mv_merge_scn_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransferTabletInfoArg);
 };
@@ -1119,6 +1119,7 @@ public:
 private:
   int check_start_transfer_out_tablets_();
   int check_start_transfer_in_tablets_();
+  int check_start_transfer_in_mv_tablets_();
   // Major sstable or ddl sstable needs to exist in src_tablet
   int check_transfer_out_tablet_sstable_(const ObTablet *tablet);
 

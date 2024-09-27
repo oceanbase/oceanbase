@@ -2599,8 +2599,12 @@ typedef enum ObItemType
   T_RB_ITERATE_EXPRESSION = 4737,
   T_MODULE_DATA = 4738,
   T_MODULE_NAME = 4739,
+
   T_UNION_MERGE_HINT = 4740,
   T_UNION_MERGE_LIST = 4741,
+
+  T_PSEUDO_OLD_NEW_COL = 4742,
+
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

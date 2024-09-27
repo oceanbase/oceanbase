@@ -635,6 +635,26 @@ int ObBackupPath::join_table_list_meta_info_file(const share::SCN &scn)
   return ret;
 }
 
+int ObBackupPath::join_major_compaction_mview_dep_tablet_list_file()
+{
+  int ret = OB_SUCCESS;
+  char file_name[OB_MAX_BACKUP_PATH_LENGTH] = { 0 };
+  if (cur_pos_ <= 0) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K(*this));
+  } else if (OB_FAIL(databuff_printf(file_name,
+                                     sizeof(file_name),
+                                     "%s",
+                                     OB_STR_MAJOR_COMPACTION_MVIEW_DEP_TABLET_LIST))) {
+    LOG_WARN("failed to join table list tmp file", K(ret), K(*this));
+  } else if (OB_FAIL(join(file_name, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join file_name", K(ret), K(file_name));
+  } else if (OB_FAIL(trim_right_backslash())) {
+    LOG_WARN("failed to trim right backslash", K(ret));
+  }
+  return ret;
+}
+
 // param case: entry_d_name -> 'checkpoint_info.1678226622262333112.obarc', file_name -> 'checkpoint_info', type -> ARCHIVE
 // result : checkpoint -> 1678226622262333112
 int ObBackupPath::parse_checkpoint(const char *entry_d_name, const common::ObString &file_name, const ObBackupFileSuffix &type, uint64_t &checkpoint)
@@ -1571,6 +1591,17 @@ int ObBackupPathUtil::get_table_list_part_file_path(const share::ObBackupDest &b
   return ret;
 }
 
+// file:///obbackup/backup_set_1_full/infos/major_compaction_mview_dep_tablet_list
+int ObBackupPathUtil::get_major_compaction_mview_dep_tablet_list_path(const share::ObBackupDest &backup_set_dest, share::ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_ls_info_dir_path(backup_set_dest, path))) {
+    LOG_WARN("fail to get backup set info path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(path.join_major_compaction_mview_dep_tablet_list_file())) {
+    LOG_WARN("failed to join major compaction mview dep tablet list file", K(ret));
+  }
+  return ret;
+}
 
 int ObBackupPathUtil::construct_backup_set_dest(const share::ObBackupDest &backup_tenant_dest,
     const share::ObBackupSetDesc &backup_desc, share::ObBackupDest &backup_set_dest)

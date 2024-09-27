@@ -108,6 +108,7 @@ ObDDLResolver::ObDDLResolver(ObResolverParams &params)
     locality_(),
     is_random_primary_zone_(false),
     duplicate_scope_(share::ObDuplicateScope::DUPLICATE_SCOPE_NONE),
+    duplicate_read_consistency_(share::ObDuplicateReadConsistency::STRONG),
     enable_row_movement_(false),
     encryption_(),
     tablespace_id_(OB_INVALID_ID),
@@ -1212,6 +1213,7 @@ int ObDDLResolver::resolve_table_id_pre(ParseNode *node)
 int ObDDLResolver::resolve_table_options(ParseNode *node, bool is_index_option)
 {
   int ret = OB_SUCCESS;
+  bool exist_duplicate_read_consistency = false;
   if (NULL != node) {
     ParseNode *option_node = NULL;
     int32_t num = 0;
@@ -1231,9 +1233,18 @@ int ObDDLResolver::resolve_table_options(ParseNode *node, bool is_index_option)
         SQL_RESV_LOG(WARN, "node is null", K(ret));
       } else if (OB_FAIL(resolve_table_option(option_node, is_index_option))) {
         SQL_RESV_LOG(WARN, "resolve table option failed", K(ret));
+      } else if (T_DUPLICATE_READ_CONSISTENCY == option_node->type_) {
+        exist_duplicate_read_consistency = true;
       }
     }
   }
+  if (OB_SUCC(ret) && exist_duplicate_read_consistency) {
+    if (!ObDuplicateScopeChecker::is_valid_duplicate_scope(duplicate_scope_)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "duplicate read consistency with invalid duplicate scope");
+    }
+  }
+
   if (OB_SUCC(ret)) {
     if (CHARSET_INVALID == charset_type_
         &&  CS_TYPE_INVALID == collation_type_ ) {
@@ -2503,6 +2514,35 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("alter table duplicate scope not supported", KR(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table duplicate scope");
+          }
+        }
+        break;
+      }
+      case T_DUPLICATE_READ_CONSISTENCY: {
+        ObString duplicate_read_consistency_str;
+        share::ObDuplicateReadConsistency read_consistency = share::ObDuplicateReadConsistency::MAX;
+        uint64_t tenant_data_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+          LOG_WARN("get tenant data version failed", K(ret));
+        } else if (tenant_data_version < DATA_VERSION_4_3_4_0) { // todo siyu use data version 434
+          LOG_WARN("create table with duplicate_read_consistency option is not supported in data version less than 4.3.4", K(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "data version is less than 4.3.4, create table with duplicate_read_consistency option");
+        } else if (nullptr == option_node->children_ || 1 != option_node->num_child_) {
+          ret = common::OB_INVALID_ARGUMENT;
+          SQL_RESV_LOG(WARN, "invalid duplicate read consistency arg", K(ret), "num_child", option_node->num_child_);
+        } else if (nullptr == option_node->children_[0]) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "option node child is null", K(ret));
+        } else {
+          duplicate_read_consistency_str.assign_ptr(const_cast<char *>(option_node->children_[0]->str_value_),
+                                                    static_cast<int32_t>(option_node->children_[0]->str_len_));
+          duplicate_read_consistency_str = duplicate_read_consistency_str.trim();
+          if (OB_FAIL(ObDuplicateReadConsistencyChecker::convert_duplicate_read_consistency_string(
+                      duplicate_read_consistency_str, read_consistency))) {
+            SQL_RESV_LOG(WARN, "fail to convert duplicate read consistency string", K(ret));
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "duplicate_read_consistency");
+          } else {
+            duplicate_read_consistency_ = read_consistency;
           }
         }
         break;

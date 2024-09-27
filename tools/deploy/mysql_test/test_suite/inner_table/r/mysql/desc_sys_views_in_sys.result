@@ -8952,7 +8952,7 @@ MASTER_ROLLBACK_SEG	varchar(128)	NO
 MASTER_LINK	varchar(128)	NO			
 REWRITE_ENABLED	varchar(1)	NO			
 REWRITE_CAPABILITY	varchar(9)	NO			
-REFRESH_MODE	varchar(6)	NO			
+REFRESH_MODE	varchar(32)	NO			
 REFRESH_METHOD	varchar(8)	NO			
 BUILD_MODE	varchar(9)	NO			
 FAST_REFRESHABLE	varchar(18)	NO			
@@ -8995,7 +8995,7 @@ MASTER_ROLLBACK_SEG	varchar(128)	NO
 MASTER_LINK	varchar(128)	NO			
 REWRITE_ENABLED	varchar(1)	NO			
 REWRITE_CAPABILITY	varchar(9)	NO			
-REFRESH_MODE	varchar(6)	NO			
+REFRESH_MODE	varchar(32)	NO			
 REFRESH_METHOD	varchar(8)	NO			
 BUILD_MODE	varchar(9)	NO			
 FAST_REFRESHABLE	varchar(18)	NO			

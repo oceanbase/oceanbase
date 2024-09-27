@@ -133,6 +133,7 @@ int ObLS::init(const share::ObLSID &ls_id,
                const ObMigrationStatus &migration_status,
                const ObLSRestoreStatus &restore_status,
                const SCN &create_scn,
+               const ObMajorMVMergeInfo &major_mv_merge_info,
                const ObLSStoreFormat &store_format,
                observer::ObIMetaReport *reporter)
 {
@@ -161,8 +162,9 @@ int ObLS::init(const share::ObLSID &ls_id,
                                    migration_status,
                                    restore_status,
                                    create_scn,
+                                   major_mv_merge_info,
                                    store_format))) {
-    LOG_WARN("failed to init ls meta", K(ret), K(tenant_id), K(ls_id));
+    LOG_WARN("failed to init ls meta", K(ret), K(tenant_id), K(ls_id), K(major_mv_merge_info));
   } else {
     rs_reporter_ = reporter;
     ls_freezer_.init(this);
@@ -1543,6 +1545,9 @@ int ObLS::get_ls_info(ObLSVTInfo &ls_info)
       ls_info.tablet_change_checkpoint_scn_ = ls_meta_.get_tablet_change_checkpoint_scn();
       ls_info.transfer_scn_ = ls_meta_.get_transfer_scn();
       ls_info.tx_blocked_ = tx_blocked;
+      ls_info.mv_major_merge_scn_ = ls_meta_.get_major_mv_merge_info().major_mv_merge_scn_;
+      ls_info.mv_publish_scn_ = ls_meta_.get_major_mv_merge_info().major_mv_merge_scn_publish_;
+      ls_info.mv_safe_scn_ = ls_meta_.get_major_mv_merge_info().major_mv_merge_scn_safe_calc_;
       ls_info.required_data_disk_size_ = required_data_disk_size;
       if (tx_blocked) {
         TRANS_LOG(INFO, "current ls is blocked", K(ls_info));

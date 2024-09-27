@@ -34,7 +34,6 @@ ObMultipleScanMerge::ObMultipleScanMerge()
     simple_merge_(nullptr),
     loser_tree_(nullptr),
     rows_merger_(nullptr),
-    iter_del_row_(false),
     consumer_cnt_(0),
     filt_del_count_(0),
     range_(NULL),
@@ -308,7 +307,6 @@ void ObMultipleScanMerge::reset()
   loser_tree_ = nullptr;
   rows_merger_ = nullptr;
   tree_cmp_.reset();
-  iter_del_row_ = false;
   consumer_cnt_ = 0;
   filt_del_count_ = 0;
   range_ = NULL;
@@ -319,7 +317,6 @@ void ObMultipleScanMerge::reset()
 void ObMultipleScanMerge::reuse()
 {
   ObMultipleMerge::reuse();
-  iter_del_row_ = false;
   consumer_cnt_ = 0;
   filt_del_count_ = 0;
 }
@@ -328,7 +325,6 @@ void ObMultipleScanMerge::reclaim()
 {
   rows_merger_ = nullptr;
   tree_cmp_.reset();
-  iter_del_row_ = false;
   consumer_cnt_ = 0;
   range_ = NULL;
   ObMultipleMerge::reclaim();

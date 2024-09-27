@@ -417,6 +417,8 @@ public:
   static int extract_column_exprs(const ObRawExpr *raw_expr,
                                   common::ObIArray<ObRawExpr*> &column_exprs,
                                   bool need_pseudo_column = false);
+  static int extract_column_exprs_and_rowscn(const ObRawExpr *raw_expr,
+                                  common::ObIArray<ObRawExpr*> &column_exprs);
   static int extract_column_exprs(const common::ObIArray<ObRawExpr*> &exprs,
                                   common::ObIArray<ObRawExpr *> &column_exprs,
                                   bool need_pseudo_column = false);

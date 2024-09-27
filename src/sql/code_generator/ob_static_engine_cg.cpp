@@ -931,6 +931,7 @@ int ObStaticEngineCG::generate_calc_exprs(
             && T_PSEUDO_EXTERNAL_FILE_COL != raw_expr->get_expr_type()
             && T_PSEUDO_EXTERNAL_FILE_URL != raw_expr->get_expr_type()
             && T_PSEUDO_PARTITION_LIST_COL != raw_expr->get_expr_type()
+            && T_ORA_ROWSCN != raw_expr->get_expr_type()
             && !(raw_expr->is_const_expr() || raw_expr->has_flag(IS_DYNAMIC_USER_VARIABLE))
             && !(T_FUN_SYS_PART_HASH == raw_expr->get_expr_type() || T_FUN_SYS_PART_KEY == raw_expr->get_expr_type())
             && !(raw_expr->is_vector_sort_expr())) {

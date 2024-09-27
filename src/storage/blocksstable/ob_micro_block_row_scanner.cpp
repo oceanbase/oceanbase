@@ -555,8 +555,9 @@ int ObIMicroBlockRowScanner::apply_black_filter_batch(
   const common::ObIArray<int32_t> &col_offsets = filter.get_col_offsets(pd_filter_info.is_pd_to_cg_);
   ObSEArray<ObSqlDatumInfo, 16> datum_infos;
   bool filter_applied_directly = false;
-  if (ObIMicroBlockReader::Decoder == reader_->get_type() ||
-      ObIMicroBlockReader::CSDecoder == reader_->get_type()) {
+  if ((ObIMicroBlockReader::Decoder == reader_->get_type() ||
+      ObIMicroBlockReader::CSDecoder == reader_->get_type()) &&
+      filter.can_pushdown_decoder()) {
     if (decoder_->can_apply_black(col_offsets) &&
         OB_FAIL(decoder_->filter_black_filter_batch(
                 parent,
@@ -1915,7 +1916,7 @@ int ObMultiVersionMicroBlockRowScanner::lock_for_read(
   if (OB_FAIL(tx_table_guards.lock_for_read(lock_for_read_arg,
                                             can_read,
                                             scn_trans_version))) {
-    LOG_WARN("failed to check transaction status", K(ret));
+    LOG_WARN("failed to check transaction status", K(ret), K(*context_->store_ctx_));
   } else {
     trans_version = scn_trans_version.get_val_for_tx();
     if (OB_NOT_NULL(context_->trans_state_mgr_) &&

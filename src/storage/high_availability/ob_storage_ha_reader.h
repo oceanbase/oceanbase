@@ -42,13 +42,32 @@ public:
     DDL_MACRO_BLOCK_RESTORE_READER = 3,
     MAX_READER_TYPE
   };
+  struct CopyMacroBlockReadData final
+  {
+  public:
+    CopyMacroBlockReadData();
+    ~CopyMacroBlockReadData();
+    void reset();
+    bool is_valid() const;
+    int set_macro_meta(const blocksstable::ObDataMacroBlockMeta& macro_meta, const bool &is_reuse_macro_block);
+    int set_macro_data(const blocksstable::ObBufferReader& macro_data, const bool &is_reuse_macro_block);
+    void set_macro_block_id(const blocksstable::MacroBlockId &macro_block_id);
+    bool is_reuse_macro_block() const { return is_reuse_macro_block_; }
+    bool is_macro_data() const { return data_type_ == ObCopyMacroBlockHeader::DataType::MACRO_DATA; }
+    bool is_macro_meta() const { return data_type_ == ObCopyMacroBlockHeader::DataType::MACRO_META_ROW; }
+  public:
+    TO_STRING_KV(K_(data_type), K_(is_reuse_macro_block), K_(macro_data), KPC_(macro_meta));
+    ObCopyMacroBlockHeader::DataType data_type_;
+    bool is_reuse_macro_block_;
+    blocksstable::ObBufferReader macro_data_;
+    blocksstable::ObDataMacroBlockMeta *macro_meta_;
+    blocksstable::MacroBlockId macro_block_id_;
+    common::ObArenaAllocator allocator_;
+  };
   // macro block list is set in the init func
   ObICopyMacroBlockReader() {}
   virtual ~ObICopyMacroBlockReader() {}
-  virtual int get_next_macro_block(
-      obrpc::ObCopyMacroBlockHeader &header,
-      blocksstable::ObBufferReader &data,
-      blocksstable::MacroBlockId &macro_block_id) = 0;
+  virtual int get_next_macro_block(CopyMacroBlockReadData &read_data) = 0;
   virtual Type get_type() const = 0;
   virtual int64_t get_data_size() const = 0;
 private:
@@ -66,7 +85,7 @@ struct ObCopyMacroBlockReaderInitParam final
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(table_key), KPC_(copy_macro_range_info), K_(src_info),
       K_(is_leader_restore), K_(restore_action), KP_(bandwidth_throttle), KP_(svr_rpc_proxy),
       KP_(restore_base_info), KP_(meta_index_store), KP_(second_meta_index_store),
-      KP_(restore_macro_block_id_mgr));
+      KP_(restore_macro_block_id_mgr), KP_(macro_block_reuse_mgr));
 
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -84,7 +103,8 @@ struct ObCopyMacroBlockReaderInitParam final
   bool need_check_seq_;
   int64_t ls_rebuild_seq_;
   share::SCN backfill_tx_scn_;
-
+  int64_t data_version_; // max snapshot version of local major sstable (use for macro block reuse)
+  ObMacroBlockReuseMgr *macro_block_reuse_mgr_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCopyMacroBlockReaderInitParam);
 };
@@ -95,10 +115,7 @@ public:
   ObCopyMacroBlockObReader();
   virtual ~ObCopyMacroBlockObReader();
   int init(const ObCopyMacroBlockReaderInitParam &param);
-  virtual int get_next_macro_block(
-      obrpc::ObCopyMacroBlockHeader &header,
-      blocksstable::ObBufferReader &data,
-      blocksstable::MacroBlockId &macro_block_id);
+  virtual int get_next_macro_block(ObICopyMacroBlockReader::CopyMacroBlockReadData &read_info);
   virtual Type get_type() const { return MACRO_BLOCK_OB_READER; }
   virtual int64_t get_data_size() const { return data_size_; }
 
@@ -107,7 +124,7 @@ private:
   int fetch_next_buffer_if_need();
   int fetch_next_buffer();
   int alloc_from_memctx_first(char* &buf);
-
+  int get_read_info_(const ObCopyMacroBlockHeader &header, const ObBufferReader &data, CopyMacroBlockReadData &read_info);
 private:
   bool is_inited_;
   obrpc::ObStorageRpcProxy::SSHandle<obrpc::OB_HA_FETCH_MACRO_BLOCK> handle_;
@@ -119,6 +136,8 @@ private:
   common::ObMacroBlockSizeMemoryContext macro_block_mem_context_;
   int64_t last_send_time_;
   int64_t data_size_;
+  ObMacroBlockReuseMgr *macro_block_reuse_mgr_;
+  ObITable::TableKey table_key_;
   DISALLOW_COPY_AND_ASSIGN(ObCopyMacroBlockObReader);
 };
 
@@ -128,10 +147,7 @@ public:
   ObCopyMacroBlockRestoreReader();
   virtual ~ObCopyMacroBlockRestoreReader();
   int init(const ObCopyMacroBlockReaderInitParam &param);
-  virtual int get_next_macro_block(
-      obrpc::ObCopyMacroBlockHeader &header,
-      blocksstable::ObBufferReader &data,
-      blocksstable::MacroBlockId &macro_block_id);
+  virtual int get_next_macro_block(ObICopyMacroBlockReader::CopyMacroBlockReadData &read_info);
   virtual Type get_type() const { return MACRO_BLOCK_RESTORE_READER; }
   virtual int64_t get_data_size() const { return data_size_; }
 
@@ -179,10 +195,7 @@ public:
   ObCopyDDLMacroBlockRestoreReader();
   virtual ~ObCopyDDLMacroBlockRestoreReader();
   int init(const ObCopyMacroBlockReaderInitParam &param);
-  virtual int get_next_macro_block(
-      obrpc::ObCopyMacroBlockHeader &header,
-      blocksstable::ObBufferReader &data,
-      blocksstable::MacroBlockId &macro_block_id);
+  virtual int get_next_macro_block(ObICopyMacroBlockReader::CopyMacroBlockReadData &read_data);
   virtual Type get_type() const { return DDL_MACRO_BLOCK_RESTORE_READER; }
   virtual int64_t get_data_size() const { return data_size_; }
 
@@ -883,10 +896,7 @@ public:
   ObCopyRemoteSSTableMacroBlockRestoreReader();
   virtual ~ObCopyRemoteSSTableMacroBlockRestoreReader();
   int init(const ObCopyMacroBlockReaderInitParam &param);
-  virtual int get_next_macro_block(
-      obrpc::ObCopyMacroBlockHeader &header,
-      blocksstable::ObBufferReader &data,
-      blocksstable::MacroBlockId &macro_block_id);
+  virtual int get_next_macro_block(ObICopyMacroBlockReader::CopyMacroBlockReadData &read_data);
   virtual Type get_type() const { return REMOTE_SSTABLE_MACRO_BLOCK_RESTORE_READER; }
   virtual int64_t get_data_size() const { return data_size_; }
 
@@ -900,8 +910,7 @@ private:
 
   int read_backup_macro_block_data_(
       blocksstable::ObDataMacroBlockMeta &macro_meta,
-      obrpc::ObCopyMacroBlockHeader &header,
-      blocksstable::ObBufferReader &data);
+      ObICopyMacroBlockReader::CopyMacroBlockReadData &read_data);
   int get_backup_macro_block_index_(
       const ObRestoreMacroBlockId &macro_id,
       backup::ObBackupMacroBlockIndex &macro_index);
@@ -910,8 +919,7 @@ private:
       blocksstable::ObBufferReader &data_buffer);
   int read_local_macro_block_data_(
       blocksstable::ObDataMacroBlockMeta &macro_meta,
-      obrpc::ObCopyMacroBlockHeader &header,
-      blocksstable::ObBufferReader &data);
+      ObICopyMacroBlockReader::CopyMacroBlockReadData &read_data);
 
 private:
   bool is_inited_;
@@ -934,6 +942,7 @@ private:
   int64_t macro_block_count_;
   int64_t data_size_;
   ObSelfBufferWriter meta_row_buf_;
+  ObMacroBlockReuseMgr *macro_block_reuse_mgr_;
   DISALLOW_COPY_AND_ASSIGN(ObCopyRemoteSSTableMacroBlockRestoreReader);
 };
 }

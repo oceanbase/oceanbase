@@ -315,6 +315,10 @@ public:
   virtual int get_paxos_member_list_and_learner_list(common::ObMemberList &member_list,
                                                      int64_t &paxos_replica_num,
                                                      common::GlobalLearnerList &learner_list) const = 0;
+  virtual int get_stable_membership(LogConfigVersion &config_version,
+                                    common::ObMemberList &member_list,
+                                    int64_t &paxos_replica_num,
+                                    common::GlobalLearnerList &learner_list) const = 0;
   virtual int get_election_leader(common::ObAddr &addr) const = 0;
   virtual int get_parent(common::ObAddr &parent) const = 0;
 
@@ -760,6 +764,8 @@ public:
   virtual int reset_election_priority() = 0;
   virtual int set_locality_cb(palf::PalfLocalityInfoCb *locality_cb) = 0;
   virtual int reset_locality_cb() = 0;
+  virtual int set_reconfig_checker_cb(palf::PalfReconfigCheckerCb *reconfig_checker) = 0;
+  virtual int reset_reconfig_checker_cb() = 0;
   // ==================== Callback end ========================
   virtual int advance_election_epoch_and_downgrade_priority(const int64_t proposal_id,
                                                             const int64_t downgrade_priority_time_us,
@@ -863,6 +869,10 @@ public:
   int get_paxos_member_list_and_learner_list(common::ObMemberList &member_list,
                                              int64_t &paxos_replica_num,
                                              common::GlobalLearnerList &learner_list) const override final;
+  int get_stable_membership(LogConfigVersion &config_version,
+                            common::ObMemberList &member_list,
+                            int64_t &paxos_replica_num,
+                            common::GlobalLearnerList &learner_list) const override final;
   int get_election_leader(common::ObAddr &addr) const;
   int get_parent(common::ObAddr &parent) const;
   int force_set_as_single_replica() override final;
@@ -971,6 +981,8 @@ public:
   int reset_election_priority() override final;
   int set_locality_cb(palf::PalfLocalityInfoCb *locality_cb) override final;
   int reset_locality_cb() override final;
+  int set_reconfig_checker_cb(palf::PalfReconfigCheckerCb *reconfig_checker) override final;
+  int reset_reconfig_checker_cb() override final;
   // ==================== Callback end ========================
 public:
   int get_begin_lsn(LSN &lsn) const override final;
@@ -1459,7 +1471,7 @@ private:
   // a spin lock for read/write replica_meta mutex
   SpinLock replica_meta_lock_;
   SpinLock rebuilding_lock_;
-  SpinLock config_change_lock_;
+  mutable SpinLock config_change_lock_;
   SpinLock mode_change_lock_;
   // a spin lock for single replica mutex
   SpinLock flashback_lock_;

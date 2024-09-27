@@ -726,6 +726,7 @@ int ObTableLocation::assign(const ObTableLocation &other)
     tablet_id_ = other.tablet_id_;
     object_id_ = other.object_id_;
     check_no_partition_ = other.check_no_partition_;
+    is_broadcast_table_ = other.is_broadcast_table_;
     if (OB_FAIL(loc_meta_.assign(other.loc_meta_))) {
       LOG_WARN("assign loc meta failed", K(ret), K(other.loc_meta_));
     }
@@ -856,6 +857,7 @@ void ObTableLocation::reset()
   tablet_id_.reset();
   object_id_ = OB_INVALID_ID;
   check_no_partition_ = false;
+  is_broadcast_table_ = false;
 }
 int ObTableLocation::init(share::schema::ObSchemaGetterGuard &schema_guard,
     const ObDMLStmt &stmt,
@@ -1018,7 +1020,7 @@ int ObTableLocation::init_table_location(ObExecContext &exec_ctx,
                                  exec_ctx.get_sql_ctx(),
                                  is_weak_read))) {
       LOG_WARN("get is weak read failed", K(ret));
-    } else if (ObDuplicateScope::DUPLICATE_SCOPE_NONE != table_schema->get_duplicate_scope()) {
+    } else if (table_schema->is_duplicate_table()) {
       loc_meta_.is_dup_table_ = 1;
     }
     if (OB_SUCC(ret)) {
@@ -1323,7 +1325,7 @@ int ObTableLocation::init(
     bool is_weak_read = false;
     if (OB_FAIL(get_is_weak_read(stmt, session_info, exec_ctx->get_sql_ctx(), is_weak_read))) {
       LOG_WARN("get is weak read failed", K(ret));
-    } else if (ObDuplicateScope::DUPLICATE_SCOPE_NONE != table_schema->get_duplicate_scope()) {
+    } else if (table_schema->is_duplicate_table()) {
       loc_meta_.is_dup_table_ = 1;
     }
     if (is_dml_table) {
@@ -4860,6 +4862,7 @@ OB_DEF_SERIALIZE(ObTableLocation)
   OB_UNIS_ENCODE(related_list_);
   OB_UNIS_ENCODE(table_type_);
   OB_UNIS_ENCODE(check_no_partition_);
+  OB_UNIS_ENCODE(is_broadcast_table_);
   return ret;
 }
 
@@ -4938,6 +4941,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableLocation)
   OB_UNIS_ADD_LEN(related_list_);
   OB_UNIS_ADD_LEN(table_type_);
   OB_UNIS_ADD_LEN(check_no_partition_);
+  OB_UNIS_ADD_LEN(is_broadcast_table_);
   return len;
 }
 
@@ -5094,6 +5098,7 @@ OB_DEF_DESERIALIZE(ObTableLocation)
   OB_UNIS_DECODE(related_list_);
   OB_UNIS_DECODE(table_type_);
   OB_UNIS_DECODE(check_no_partition_);
+  OB_UNIS_DECODE(is_broadcast_table_);
   return ret;
 }
 

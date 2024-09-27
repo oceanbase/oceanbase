@@ -374,6 +374,7 @@ int ObTransformPreProcess::expand_materialized_view(ObDMLStmt *stmt, bool &trans
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null", K(ret), K(stmt), K(ctx_));
   } else if (ctx_->session_info_->get_ddl_info().is_refreshing_mview()
+             || ctx_->session_info_->get_ddl_info().is_major_refreshing_mview()
              || stmt->get_query_ctx()->get_global_hint().has_dbms_stats_hint()) {
     // 1. when refresh mview, do not expand rt-mv
     // 2. when gather stat, do not expand rt-mv

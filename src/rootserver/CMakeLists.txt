@@ -199,6 +199,12 @@ ob_set_subtarget(ob_rootserver mview
   mview/ob_mview_refresh_stats_maintenance_task.cpp
   mview/ob_mview_timer_task.cpp
   mview/ob_mview_dependency_service.cpp
+  mview/ob_mview_push_refresh_scn_task.cpp
+  mview/ob_mview_push_snapshot_task.cpp
+  mview/ob_replica_safe_check_task.cpp
+  mview/ob_collect_mv_merge_info_task.cpp
+  mview/ob_mview_clean_snapshot_task.cpp
+  mview/ob_mview_update_cache_task.cpp
 )
 
 ob_set_subtarget(ob_rootserver direct_load

@@ -41,6 +41,7 @@
 #include "storage/compaction/ob_basic_tablet_merge_ctx.h"
 #include "storage/compaction/ob_tenant_compaction_progress.h"
 #include "storage/checkpoint/ob_checkpoint_diagnose.h"
+#include "storage/compaction/ob_mview_compaction_util.h"
 
 namespace oceanbase
 {
@@ -63,6 +64,7 @@ ObMergeParameter::ObMergeParameter(
     cg_rowkey_read_info_(nullptr),
     trans_state_mgr_(nullptr),
     error_location_(nullptr),
+    mview_merge_param_(nullptr),
     allocator_(nullptr)
 {
 }
@@ -82,6 +84,11 @@ void ObMergeParameter::reset()
     cg_rowkey_read_info_->~ObITableReadInfo();
     allocator_->free(cg_rowkey_read_info_);
     cg_rowkey_read_info_ = nullptr;
+  }
+  if (nullptr != mview_merge_param_) {
+    mview_merge_param_->~ObMviewMergeParameter();
+    allocator_->free(mview_merge_param_);
+    mview_merge_param_ = nullptr;
   }
   allocator_ = nullptr;
 }
@@ -137,6 +144,15 @@ int ObMergeParameter::init(
     }
   }
   if (OB_SUCC(ret)) {
+    const ObStorageSchema *schema = nullptr;
+    if (OB_ISNULL(schema = get_schema())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("schema is null", K(ret), K(*this));;
+    } else if (schema->is_mv_major_refresh_table() && OB_FAIL(init_mview_merge_param(allocator))) {
+      STORAGE_LOG(WARN, "failed to init mview merge param", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
     FLOG_INFO("success to init ObMergeParameter", K(ret), K(idx), K_(static_param_.merge_scn), K_(merge_version_range), K_(merge_rowid_range));
   }
   return ret;
@@ -161,6 +177,18 @@ int ObMergeParameter::set_merge_rowid_range(ObIAllocator *allocator)
     STORAGE_LOG(WARN, "failed to get cs range", K(ret), K(merge_range_));
   }
 
+  return ret;
+}
+
+int ObMergeParameter::init_mview_merge_param(ObIAllocator *allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(mview_merge_param_ = OB_NEWx(ObMviewMergeParameter, allocator))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to alloc mview merge param", K(ret));
+  } else if (OB_FAIL(mview_merge_param_->init(*this))) {
+     STORAGE_LOG(WARN, "Failed to init mview merge param", K(ret));
+  }
   return ret;
 }
 

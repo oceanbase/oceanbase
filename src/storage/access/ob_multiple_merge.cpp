@@ -61,6 +61,7 @@ ObMultipleMerge::ObMultipleMerge()
       need_fill_virtual_columns_(false),
       need_output_row_with_nop_(false),
       inited_(false),
+      iter_del_row_(false),
       range_idx_delta_(0),
       get_table_param_(nullptr),
       read_memtable_only_(false),
@@ -951,6 +952,7 @@ void ObMultipleMerge::inner_reset()
   read_memtable_only_ = false;
   lob_reader_.reset();
   scan_state_ = ScanState::NONE;
+  iter_del_row_ = false;
 }
 
 void ObMultipleMerge::reset_iter_array(const bool can_reuse)
@@ -1342,10 +1344,8 @@ int ObMultipleMerge::prepare_read_tables(bool refresh)
         LOG_WARN("get table iterator fail", K(ret), K_(get_table_param), KP_(access_param));
       }
     } else if (OB_FAIL(get_table_param_->tablet_iter_.refresh_read_tables_from_tablet(
-        get_table_param_->sample_info_.is_no_sample()
-          ? access_ctx_->store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx()
-          : INT64_MAX,
-        false/*allow_not_ready*/,
+        generate_read_tables_version(),
+	false/*allow_not_ready*/,
         false/*major_sstable_only*/,
         need_split_src_table,
         need_split_dst_table))) {
@@ -1393,6 +1393,7 @@ int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_it
   int64_t memtable_cnt = 0;
   read_memtable_only_ = false;
   bool read_released_memtable = false;
+  int64_t major_version = -1;
   while (OB_SUCC(ret)) {
     ObITable *table_ptr = nullptr;
     bool need_table = true;
@@ -1412,6 +1413,9 @@ int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_it
       } else if (SampleInfo::SAMPLE_INCR_DATA == sample_info->scope_) {
         need_table = !table_ptr->is_major_sstable();
       }
+    }
+    if (OB_SUCC(ret)) {
+      need_table = check_table_need_read(*table_ptr, major_version);
     }
     if (OB_SUCC(ret) && need_table) {
       if (table_ptr->no_data_to_read()) {
@@ -1506,9 +1510,7 @@ int ObMultipleMerge::refresh_tablet_iter()
     const int64_t remain_timeout = THIS_WORKER.get_timeout_remain();
     const share::ObLSID &ls_id = access_ctx_->ls_id_;
     const common::ObTabletID &tablet_id = get_table_param_->tablet_iter_.get_tablet()->get_tablet_meta().tablet_id_;
-    const int64_t snapshot_version = get_table_param_->sample_info_.is_no_sample()
-      ? access_ctx_->store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx()
-      : INT64_MAX;
+    const int64_t snapshot_version = generate_read_tables_version();
     if (OB_UNLIKELY(remain_timeout <= 0)) {
       ret = OB_TIMEOUT;
       LOG_WARN("timeout reached", K(ret), K(ls_id), K(tablet_id), K(remain_timeout));
@@ -1734,7 +1736,8 @@ int ObMultipleMerge::set_base_version() const {
   int ret = OB_SUCCESS;
   // When the major table is currently being processed, the snapshot version is taken and placed
   // in the current context for base version to filter unnecessary rows in the mini or minor sstable
-  if (!access_param_->iter_param_.is_skip_scan() && is_scan() && tables_.count() > 1) {
+  if (!access_param_->iter_param_.is_skip_scan() &&
+      !access_ctx_->is_mview_query() && is_scan() && tables_.count() > 1) {
     ObITable *table = nullptr;
     if (OB_FAIL(tables_.at(0, table))) {
       STORAGE_LOG(WARN, "Fail to get the first store", K(ret));
@@ -1743,6 +1746,18 @@ int ObMultipleMerge::set_base_version() const {
     }
   }
   return ret;
+}
+
+int64_t ObMultipleMerge::generate_read_tables_version() const
+{
+  return get_table_param_->sample_info_.is_no_sample() ?
+         access_ctx_->store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx() : INT64_MAX;
+}
+
+bool ObMultipleMerge::check_table_need_read(const ObITable &table, int64_t &major_version) const
+{
+  UNUSEDx(table, major_version);
+  return true;
 }
 
 }

@@ -982,17 +982,50 @@ int ObLSAttrOperator::get_all_ls_by_order(const bool lock_sys_ls,
     bool only_existing_ls)
 {
   int ret = OB_SUCCESS;
+
   ls_operation_array.reset();
   ObMySQLTransaction trans;
-  ObLSAttr sys_ls_attr;
-
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("operation is not valid", KR(ret), "operation", *this);
   } else if (OB_FAIL(trans.start(proxy_, tenant_id_))) {
     LOG_WARN("failed to start transaction", KR(ret), K_(tenant_id));
-    /* to get accurate LS list need lock SYS_LS */
+  } else if (OB_FAIL(get_all_ls_by_order_in_trans(lock_sys_ls,
+                                                  ls_operation_array,
+                                                  trans,
+                                                  only_existing_ls))) {
+    LOG_WARN("failed get all ls in trans", KR(ret), K_(tenant_id));
+  }
+
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("failed to end trans", KR(ret), KR(tmp_ret));
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+      }
+  }
+
+
+  return ret;
+}
+
+int ObLSAttrOperator::get_all_ls_by_order_in_trans(const bool lock_sys_ls,
+                                                   ObLSAttrIArray &ls_operation_array,
+                                                   common::ObMySQLTransaction &trans,
+                                                   bool only_existing_ls)
+{
+  int ret = OB_SUCCESS;
+  ls_operation_array.reset();
+  ObLSAttr sys_ls_attr;
+
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("operation is not valid", KR(ret), "operation", *this);
+  } else if (!trans.is_started()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("transaction is not started", KR(ret));
   } else if (lock_sys_ls && OB_FAIL(get_ls_attr(SYS_LS, true /* for_update */, trans, sys_ls_attr))) {
+  /* to get accurate LS list need lock SYS_LS */
     LOG_WARN("failed to load sys ls status", KR(ret));
   } else {
     ObSqlString sql;
@@ -1005,16 +1038,8 @@ int ObLSAttrOperator::get_all_ls_by_order(const bool lock_sys_ls,
         LOG_WARN("failed to append", KR(ret), K(sql));
       }
     }
-    if (FAILEDx(exec_read(tenant_id_, sql, *proxy_, this, ls_operation_array))) {
+    if (FAILEDx(exec_read(tenant_id_, sql, trans, this, ls_operation_array))) {
       LOG_WARN("failed to construct ls attr", KR(ret), K(sql));
-    }
-  }
-
-  if (trans.is_started()) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("failed to end trans", KR(ret), KR(tmp_ret));
-      ret = OB_SUCC(ret) ? tmp_ret : ret;
     }
   }
 

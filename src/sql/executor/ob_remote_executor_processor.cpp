@@ -31,6 +31,7 @@
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "storage/tx/ob_trans_service.h"
 #include "sql/engine/expr/ob_expr_last_refresh_scn.h"
+#include "src/rootserver/mview/ob_mview_maintenance_service.h"
 
 namespace oceanbase
 {
@@ -432,10 +433,12 @@ int ObRemoteBaseExecuteP<T>::execute_remote_plan(ObExecContext &exec_ctx,
   ObPhysicalPlanCtx *plan_ctx = exec_ctx.get_physical_plan_ctx();
   ObOperator *se_op = nullptr; // static engine operator
   exec_ctx.set_use_temp_expr_ctx_cache(true);
+  rootserver::ObMViewMaintenanceService *mview_maintenance_service =
+                                        MTL(rootserver::ObMViewMaintenanceService*);
   FLTSpanGuard(remote_execute);
-  if (OB_ISNULL(plan_ctx) || OB_ISNULL(session)) {
+  if (OB_ISNULL(plan_ctx) || OB_ISNULL(session) || OB_ISNULL(mview_maintenance_service)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("op is NULL", K(ret), K(plan_ctx), K(session));
+    LOG_ERROR("op is NULL", K(ret), K(plan_ctx), K(session), KP(mview_maintenance_service));
   }
   if (OB_SUCC(ret)) {
     int64_t retry_times = 0;
@@ -468,13 +471,12 @@ int ObRemoteBaseExecuteP<T>::execute_remote_plan(ObExecContext &exec_ctx,
           LOG_WARN("created operator is NULL", K(ret));
         } else if (OB_FAIL(plan_ctx->reserve_param_space(plan.get_param_count()))) {
           LOG_WARN("reserve rescan param space failed", K(ret), K(plan.get_param_count()));
-        } else if (!plan.get_mview_ids().empty() && plan_ctx->get_mview_ids().empty()
-                   && OB_FAIL(ObExprLastRefreshScn::set_last_refresh_scns(plan.get_mview_ids(),
-                                                                          exec_ctx.get_sql_proxy(),
-                                                                          exec_ctx.get_my_session(),
-                                                                          exec_ctx.get_das_ctx().get_snapshot().core_.version_,
-                                                                          plan_ctx->get_mview_ids(),
-                                                                          plan_ctx->get_last_refresh_scns()))) {
+        } else if (!plan.get_mview_ids().empty() && plan_ctx->get_mview_ids().empty() &&
+                   OB_FAIL((mview_maintenance_service->get_mview_refresh_info(plan.get_mview_ids(),
+                                                                              exec_ctx.get_sql_proxy(),
+                                                                              exec_ctx.get_das_ctx().get_snapshot().core_.version_,
+                                                                              plan_ctx->get_mview_ids(),
+                                                                              plan_ctx->get_last_refresh_scns())))) {
           LOG_WARN("fail to set last_refresh_scns", K(ret), K(plan.get_mview_ids()));
         } else {
           if (OB_FAIL(se_op->open())) {

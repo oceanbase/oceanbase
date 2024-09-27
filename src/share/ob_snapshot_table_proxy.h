@@ -116,6 +116,10 @@ public:
   int get_all_snapshots(common::ObISQLClient &proxy,
                         const uint64_t tenant_id,
                         common::ObIArray<ObSnapshotInfo> &snapshots);
+  int get_all_snapshots(common::ObISQLClient &proxy,
+                        const uint64_t tenant_id,
+                        ObSnapShotType snapshot_type,
+                        common::ObIArray<ObSnapshotInfo> &snapshots);
   int get_snapshot(common::ObISQLClient &proxy,
                    const uint64_t tenant_id,
                    ObSnapShotType snapshot_type,
@@ -147,6 +151,7 @@ public:
                          const uint64_t tenant_id,
                          ObSnapShotType snapshot_type,
                          int64_t &count);
+  int push_snapshot_for_major_refresh_mv(common::ObISQLClient &proxy, const uint64_t tenant_id, const share::SCN &new_snapshot_scn);
 private:
   int gen_event_ts(int64_t &event_ts);
   int check_snapshot_valid(const SCN &snapshot_gc_scn,

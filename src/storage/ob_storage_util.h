@@ -16,6 +16,7 @@
 #include "lib/allocator/ob_allocator.h"
 #include "share/datum/ob_datum_funcs.h"
 #include "sql/engine/expr/ob_expr.h"
+#include "common/ob_common_types.h"
 
 namespace oceanbase
 {
@@ -441,6 +442,90 @@ inline ObFilterInCmpType get_filter_in_cmp_type(
   }
   return cmp_type;
 }
+
+inline int reverse_trans_version_val(common::ObDatum &datum)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(datum.is_nop() || datum.is_null() || datum.get_int() > 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpected datum value", K(ret), K(datum));
+  } else {
+    datum.set_int(-datum.get_int());
+  }
+  return ret;
+}
+int reverse_trans_version_val(common::ObDatum *datums, const int64_t count);
+int reverse_trans_version_val(ObIVector *vector, const int64_t count);
+
+enum class StorageScanType : int8_t
+{
+  NORMAL = 0,
+  MVIEW_FIRST_DELETE = 1,
+  MVIEW_LAST_INSERT = 2,
+  MVIEW_FINAL_ROW = 3,
+};
+OB_INLINE bool is_mview_scan_old_row(const StorageScanType type)
+{
+  return  StorageScanType::MVIEW_FIRST_DELETE == type;
+}
+OB_INLINE bool is_mview_scan_new_row(const StorageScanType type)
+{
+  return  StorageScanType::MVIEW_LAST_INSERT == type;
+}
+OB_INLINE bool is_mview_scan_final_row(const StorageScanType type)
+{
+  return  StorageScanType::MVIEW_FINAL_ROW == type;
+}
+OB_INLINE bool is_mview_table_scan(const StorageScanType type)
+{
+  return  StorageScanType::NORMAL < type && type <= StorageScanType::MVIEW_FINAL_ROW;
+}
+OB_INLINE bool is_mview_need_deleted_row(const StorageScanType type)
+{
+  return is_mview_scan_old_row(type) || is_mview_scan_final_row(type);
+}
+
+struct ObMviewScanInfo
+{
+  static const char *OLD_ROW;
+  static const char *NEW_ROW;
+  static const char *FINAL_ROW;
+  ObMviewScanInfo(ObIAllocator *alloc) : is_mv_refresh_query_(false),
+                                         scan_type_(StorageScanType::NORMAL),
+                                         begin_version_(-1),
+                                         end_version_(-1),
+                                         op_filters_(alloc)
+  {
+  }
+  int init(
+      const bool is_mv_refresh_query,
+      const StorageScanType scan_type,
+      const int64_t begin_version,
+      const int64_t end_version,
+      const common::ObIArray<sql::ObExpr *> &non_mview_filters);
+  OB_INLINE bool is_begin_valid() const { return -1 != begin_version_; }
+  OB_INLINE bool is_end_valid() const { return -1 != end_version_; }
+  OB_INLINE bool is_valid() const
+  {
+    return !(is_begin_valid() && is_end_valid() && begin_version_ >= end_version_) &&
+           is_mview_table_scan(scan_type_);
+  }
+  int check_and_update_version_range(const int64_t multi_version_start, common::ObVersionRange &origin_range);
+  TO_STRING_KV(K_(is_mv_refresh_query), K_(scan_type), K_(begin_version), K_(end_version), K_(op_filters));
+  bool is_mv_refresh_query_;
+  StorageScanType scan_type_;
+  // (begin_version, end_version]
+  int64_t begin_version_;
+  int64_t end_version_;
+  sql::ExprFixedArray op_filters_;
+};
+int build_mview_scan_info_if_need(
+    const common::ObQueryFlag query_flag,
+    const sql::ObExprPtrIArray *op_filters,
+    sql::ObEvalCtx &eval_ctx,
+    common::ObIAllocator *alloc,
+    ObMviewScanInfo *&mview_scan_info);
+void release_mview_scan_info(common::ObIAllocator *alloc, ObMviewScanInfo *&mview_scan_info);
 
 }
 }

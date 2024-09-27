@@ -2822,13 +2822,19 @@ int ObTableSqlService::update_mview_reference_table_status(
   share::schema::ObTableMode table_mode_struct = table_schema.get_table_mode_struct();
   uint64_t table_id = table_schema.get_table_id();
   int64_t new_schema_version = table_schema.get_schema_version();
+  int64_t mv_mode = table_schema.get_mv_mode();
   ObDMLSqlSplicer dml;
-  if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
-                                             exec_tenant_id, tenant_id)))
-      || OB_FAIL(dml.add_pk_column("table_id", ObSchemaUtils::get_extract_schema_id(
-                                               exec_tenant_id, table_id)))
-      || OB_FAIL(dml.add_column("schema_version", new_schema_version))
-      || OB_FAIL(dml.add_column("table_mode", table_mode_struct.mode_))) {
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("failed to get data version", KR(ret));
+  } else if (OB_FAIL(dml.add_pk_column(
+                 "tenant_id", ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id))) ||
+             OB_FAIL(dml.add_pk_column(
+                 "table_id", ObSchemaUtils::get_extract_schema_id(exec_tenant_id, table_id))) ||
+             OB_FAIL(dml.add_column("schema_version", new_schema_version)) ||
+             OB_FAIL(dml.add_column("table_mode", table_mode_struct.mode_)) ||
+             (data_version >= DATA_VERSION_4_3_4_0 &&
+              OB_FAIL(dml.add_column("mv_mode", mv_mode)))) {
     LOG_WARN("failed to add column", KR(ret), K(exec_tenant_id), K(tenant_id));
   } else {
     int64_t affected_rows = 0;
@@ -2856,6 +2862,7 @@ int ObTableSqlService::update_mview_reference_table_status(
       } else {
         const bool only_history = true;
         new_schema.set_table_referenced_by_mv(ObTableMode::get_table_referenced_by_mv_flag(table_mode_struct.mode_));
+        new_schema.set_mv_mode(mv_mode);
         new_schema.set_schema_version(new_schema_version);
         new_schema.set_in_offline_ddl_white_list(table_schema.get_in_offline_ddl_white_list());
         if (OB_FAIL(add_table(sql_client,
@@ -3243,6 +3250,10 @@ int ObTableSqlService::gen_table_dml(
             && OB_FAIL(dml.add_column("column_store", table.is_column_store_supported())))
         || ((data_version >= DATA_VERSION_4_3_2_0 || (data_version < DATA_VERSION_4_3_0_0 && data_version >= MOCK_DATA_VERSION_4_2_3_0))
             && OB_FAIL(dml.add_column("auto_increment_cache_size", table.get_auto_increment_cache_size())))
+        || ((data_version >= DATA_VERSION_4_3_4_0)
+            && OB_FAIL(dml.add_column("duplicate_read_consistency", table.get_duplicate_read_consistency())))
+        || ((data_version >= DATA_VERSION_4_3_4_0)
+            && OB_FAIL(dml.add_column("mv_mode", table.get_mv_mode())))
         || (data_version >= DATA_VERSION_4_3_2_1 &&
             OB_FAIL(dml.add_column("external_properties", ObHexEscapeSqlStr(table.get_external_properties()))))
         || (data_version >= DATA_VERSION_4_3_3_0
@@ -3412,6 +3423,10 @@ int ObTableSqlService::gen_table_options_dml(
             && OB_FAIL(dml.add_column("column_store", table.is_column_store_supported())))
         || ((data_version >= DATA_VERSION_4_3_2_0 || (data_version < DATA_VERSION_4_3_0_0 && data_version >= MOCK_DATA_VERSION_4_2_3_0))
             && OB_FAIL(dml.add_column("auto_increment_cache_size", table.get_auto_increment_cache_size())))
+        || ((data_version >= DATA_VERSION_4_3_4_0)
+            && OB_FAIL(dml.add_column("duplicate_read_consistency", table.get_duplicate_read_consistency())))
+        || ((data_version >= DATA_VERSION_4_3_4_0)
+            && OB_FAIL(dml.add_column("mv_mode", table.get_mv_mode())))
         || (data_version >= DATA_VERSION_4_3_3_0
             && OB_FAIL(dml.add_column("index_params", ObHexEscapeSqlStr(index_params))))
         ) {

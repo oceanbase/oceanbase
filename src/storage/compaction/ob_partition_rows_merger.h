@@ -187,6 +187,7 @@ protected:
   virtual ObPartitionMergeIter *alloc_merge_iter(const ObMergeParameter &merge_param, const bool is_base_iter, const bool is_small_sstable, const ObITable *table) = 0;
 private:
   int init_merge_iters(const ObMergeParameter &merge_param);
+  int init_mv_merge_iters(const ObMergeParameter &merge_param);
   int prepare_rows_merger();
   int build_rows_merger();
 

@@ -119,6 +119,7 @@
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
+#include "storage/compaction/ob_compaction_schedule_util.h"
 #include "share/schema/ob_mview_info.h"
 #include "storage/mview/ob_mview_sched_job_utils.h"
 #include "storage/vector_index/ob_vector_index_sched_job_utils.h"
@@ -2289,7 +2290,8 @@ int ObDDLService::create_tablets_in_trans_for_mv_(ObIArray<ObTableSchema> &table
   } else if (OB_ISNULL(GCTX.root_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("root service is null", KR(ret));
-  } else if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(tenant_id, frozen_scn))) {
+  } else if (OB_FAIL(frozen_scn.convert_for_tx(
+                 compaction::ObBasicMergeScheduler::INIT_COMPACTION_SCN))) {
     LOG_WARN("failed to get frozen status for create tablet", KR(ret), K(tenant_id));
   } else {
     ObTableCreator table_creator(
@@ -3312,7 +3314,9 @@ int ObDDLService::set_raw_table_options(
           break;
         }
         case ObAlterTableArg::DUPLICATE_SCOPE: {
-          new_table_schema.set_duplicate_scope(alter_table_schema.get_duplicate_scope());
+          // alter table duplicate scope not allowed in master now
+          new_table_schema.set_duplicate_attribute(alter_table_schema.get_duplicate_scope(),
+                                                   alter_table_schema.get_duplicate_read_consistency());
           break;
         }
         case ObAlterTableArg::ENABLE_ROW_MOVEMENT: {
@@ -6990,6 +6994,11 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
               }
               continue;
             }
+          }
+          if (OB_SUCC(ret) && new_table_schema.mv_major_refresh()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support to add index on mv", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "add index on major refresh materialized view is");
           }
           if (OB_FAIL(ret)) {
           } else if (create_index_arg->index_name_.empty()) {
@@ -14586,10 +14595,14 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
       bool is_adding_constraint = false;
       bool is_column_store = false;
       uint64_t table_id = alter_table_arg.alter_table_schema_.get_table_id();
-      if (orig_table_schema->has_mlog_table()) {
+      if (orig_table_schema->required_by_mview_refresh()) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("double table long running ddl on table with materialized view log is not supported", KR(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "double table long running ddl on table with materialized view log is");
+        LOG_WARN("double table long running ddl on table required by materialized view refresh is "
+                 "not supported",
+                 KR(ret));
+        LOG_USER_ERROR(
+            OB_NOT_SUPPORTED,
+            "double table long running ddl on table required by materialized view refresh is");
       } else if (orig_table_schema->is_mlog_table()) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("double table long running ddl on materialized view log is not supported", KR(ret));
@@ -16033,6 +16046,15 @@ int ObDDLService::get_and_check_table_schema(
         }
         if (OB_SUCC(ret) && !is_alter_pk) {
           allow_alter_mview = true;
+        }
+      } else {
+        // only allow for alter tablegroup
+        if (!alter_table_arg.is_alter_indexs_ && !alter_table_arg.is_alter_columns_ && !alter_table_arg.is_alter_partitions_ &&
+            !alter_table_arg.is_update_global_indexes_ && !alter_table_arg.is_convert_to_character_ && alter_table_arg.is_alter_options_) {
+          if (1 == alter_table_arg.alter_table_schema_.alter_option_bitset_.num_members() &&
+              alter_table_arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::TABLEGROUP_NAME)) {
+            allow_alter_mview = true;
+          }
         }
       }
       if (OB_SUCC(ret) && !allow_alter_mview) {
@@ -17738,14 +17760,13 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
               LOG_WARN("rename materialized view log is not supported",
                   KR(ret), K(table_schema->get_table_name()));
               LOG_USER_ERROR(OB_NOT_SUPPORTED, "rename materialized view log is");
-            } else if (table_schema->has_mlog_table()) {
+            } else if (table_schema->required_by_mview_refresh()) {
               ret = OB_NOT_SUPPORTED;
-              LOG_WARN("rename table with materialized view log is not supported",
+              LOG_WARN("rename table required by materialized view refresh is not supported",
                   KR(ret), K(table_schema->get_table_name()));
               LOG_USER_ERROR(OB_NOT_SUPPORTED, "rename table with materialized view log is");
-            } else if (OB_FAIL(ObDependencyInfo::collect_all_dep_objs(tenant_id,
-                                                                      table_schema->get_table_id(),
-                                                                      trans, all_dep_objs))) {
+            } else if (OB_FAIL(ObDependencyInfo::collect_all_dep_objs(
+                           tenant_id, table_schema->get_table_id(), trans, all_dep_objs))) {
               LOG_WARN("failed to collect dep info", K(ret));
             }
           }
@@ -21425,7 +21446,11 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
         }
         if (OB_SUCC(ret)) {
           int64_t schema_version = table_schemas[table_schemas.count()-1].get_schema_version();
-          if (OB_FAIL(unbind_hidden_tablets(*orig_table_schema, *hidden_table_schema,
+          if (orig_table_schema->mv_major_refresh()) {
+            // for major refresh mv skip modify ddl_info
+            // because of we read majoar mv data by specified snapshot
+            // last_refresh_scn may less then ddl snapshot
+          } else if (OB_FAIL(unbind_hidden_tablets(*orig_table_schema, *hidden_table_schema,
               schema_version, trans))) {
             LOG_WARN("failed to unbind hidden tablets", K(ret));
           }
@@ -23418,12 +23443,13 @@ int ObDDLService::check_table_schema_is_legal(const ObDatabaseSchema & database_
     LOG_WARN("can not truncate table in recyclebin",
             KR(ret), K(table_name), K(table_id), K(database_name));
   } else if (table_schema.is_user_table() || table_schema.is_mysql_tmp_table()) {
-    if (table_schema.has_mlog_table()) {
+    if (table_schema.required_by_mview_refresh()) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("truncate table with materialized view log is not supported",
+      LOG_WARN("truncate table required by materialized view refresh is not supported",
           KR(ret), K(table_schema), K(table_id));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "truncate table with materialized view log is");
-    } else if (check_foreign_key && OB_FAIL(check_is_foreign_key_parent_table(table_schema, trans))){
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "truncate table required by materialized view refresh is");
+    } else if (check_foreign_key &&
+               OB_FAIL(check_is_foreign_key_parent_table(table_schema, trans))) {
       LOG_WARN("failed to check table is foreign key's parent table", KR(ret), K(table_name), K(table_id));
     }
   } else if (0 != table_schema.get_autoinc_column_id()) {
@@ -23669,9 +23695,9 @@ int ObDDLService::truncate_table(const ObTruncateTableArg &arg,
         }
       } else if (OB_FAIL(check_enable_sys_table_ddl(*orig_table_schema, OB_DDL_TRUNCATE_TABLE_CREATE))) {
         LOG_WARN("ddl is not allowed on system table", K(ret));
-      } else if (orig_table_schema->has_mlog_table()) {
+      } else if (orig_table_schema->required_by_mview_refresh()) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("truncate table with materialized view log is not supported",
+        LOG_WARN("truncate table required by materialized view refresh is not supported",
             KR(ret), KPC(orig_table_schema));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "truncate table with materialized view log is");
       } else if (!orig_table_schema->check_can_do_ddl()) {
@@ -24307,15 +24333,15 @@ int ObDDLService::create_table_like(const ObCreateTableLikeArg &arg)
         LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, to_cstring(arg.origin_db_name_), to_cstring(arg.origin_table_name_),
                        "BASE TABLE");
         LOG_WARN("create table like inner table not allowed", K(ret), K(arg));
-      } else if (orig_table_schema->has_mlog_table()) {
+      } else if (orig_table_schema->required_by_mview_refresh()) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("create table like on table with materialized view log is not supported", KR(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create table like on table with materialized view log is");
-      } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
-              arg.new_db_name_,
-              arg.new_table_name_,
-              false,
-              new_table_schema))) {
+        LOG_WARN(
+            "create table like on table required by materialized view refresh is not supported",
+            KR(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                       "create table like on table required by materialized view refresh is");
+      } else if (OB_FAIL(schema_guard.get_table_schema(
+                     tenant_id, arg.new_db_name_, arg.new_table_name_, false, new_table_schema))) {
       } else if (NULL != new_table_schema) {
         ret = OB_ERR_TABLE_EXIST;
         LOG_WARN("target table already exist", K(arg), K(tenant_id), K(ret));
@@ -26318,10 +26344,10 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
         } else if (!drop_table_arg.force_drop_ && table_schema->is_in_recyclebin()) {
           ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
           LOG_WARN("can not drop table in recyclebin, use purge instead", K(ret), K(table_item));
-        } else if (table_schema->has_mlog_table()) {
+        } else if (table_schema->required_by_mview_refresh() && !table_schema->is_index_table()) {
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("drop table with materialized view log is not supported", KR(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop table with materialized view log is");
+          LOG_WARN("drop table required by materialized view refresh is not supported", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop table required by materialized view refresh is");
         } else if (OB_FAIL(tmp_table_schema.assign(*table_schema))) {
           LOG_WARN("fail to assign table schema", K(ret));
         } else if (OB_FAIL(schema_guard.check_database_in_recyclebin(

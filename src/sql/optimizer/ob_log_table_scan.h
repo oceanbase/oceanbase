@@ -224,7 +224,8 @@ public:
         multivalue_col_idx_(common::OB_INVALID_ID),
         multivalue_type_(-1),
         is_tsc_with_vid_(false),
-        rowkey_vid_tid_(common::OB_INVALID_ID)
+        rowkey_vid_tid_(common::OB_INVALID_ID),
+        mr_mv_scan_(common::ObQueryFlag::NormalMode)
   {
   }
 
@@ -687,6 +688,9 @@ public:
                               const ObColumnRefRawExpr *col_expr,
                               PushdownFilterMonotonicity &mono,
                               ObIArray<ObRawExpr *> &assist_exprs) const;
+  void set_for_mr_mv_refresh()  { mr_mv_scan_ = common::ObQueryFlag::RefreshMode;  }
+  void set_for_mr_rt_mv()  { mr_mv_scan_ = common::ObQueryFlag::RealTimeMode;  }
+  common::ObQueryFlag::MRMVScanMode get_mr_mv_scan() const { return mr_mv_scan_; }
 
   bool use_index_merge() const;
   const ObIArray<ObRawExpr*> &get_full_filters() const { return full_filters_; }
@@ -886,6 +890,8 @@ protected: // memeber variables
   bool is_tsc_with_vid_;
   uint64_t rowkey_vid_tid_;
   // end for table scan with vid
+
+  common::ObQueryFlag::MRMVScanMode mr_mv_scan_; // used for major refresh mview fast refresh and real-time mview
 
   // disallow copy and assign
   DISALLOW_COPY_AND_ASSIGN(ObLogTableScan);

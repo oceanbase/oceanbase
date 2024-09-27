@@ -621,6 +621,12 @@ private:
   int remove_index_builders_();
   int remove_sstable_index_builder_(const common::ObTabletID &tablet_id);
   int close_tree_device_handle_(ObBackupWrapperIODevice *&index_tree_device_handle, ObBackupWrapperIODevice *&meta_tree_device_handle);
+  int update_logic_id_to_macro_index_(const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key,
+      const blocksstable::ObLogicMacroBlockId &logic_id, const ObBackupMacroBlockIndex &macro_index);
+  int wait_reuse_other_block_ready_(const common::ObTabletID &tablet_id,
+      const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index);
+  int inner_check_reuse_block_ready_(const common::ObTabletID &tablet_id,
+      const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index, bool &is_ready);
 
 private:
   static const int64_t CHECK_DISK_SPACE_INTERVAL = 5 * 1000 * 1000;  // 5s;

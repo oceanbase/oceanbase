@@ -1075,6 +1075,7 @@ protected:
   common::ObString locality_;
   bool is_random_primary_zone_;
   share::ObDuplicateScope duplicate_scope_;
+  share::ObDuplicateReadConsistency duplicate_read_consistency_;
   bool enable_row_movement_;
   share::schema::ObTableMode table_mode_;
   common::ObString encryption_;

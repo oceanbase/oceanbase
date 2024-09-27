@@ -55,6 +55,7 @@ ob_set_subtarget(ob_logservice common
   ob_log_external_storage_utils.cpp
   ob_log_monitor.cpp
   ob_locality_adapter.cpp
+  ob_reconfig_checker_adapter.cpp
 )
 
 ob_set_subtarget(ob_logservice common_mixed

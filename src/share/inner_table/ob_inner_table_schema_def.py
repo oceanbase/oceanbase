@@ -319,7 +319,8 @@ all_table_def = dict(
       ('local_session_vars', 'longtext', 'true'),
       ('duplicate_read_consistency', 'int', 'false', '0'),
       ('index_params', 'varchar:OB_MAX_INDEX_PARAMS_LENGTH', 'false', ''),
-      ('micro_index_clustered', 'bool', 'false', 'false')
+      ('micro_index_clustered', 'bool', 'false', 'false'),
+      ('mv_mode', 'int', 'false', '0')
     ],
 )
 
@@ -12582,6 +12583,9 @@ def_table_schema(
   ('transfer_scn', 'uint'),
   ('tx_blocked', 'int'),
   ('required_data_disk_size', 'int', 'false', 0),
+  ('mv_major_merge_scn', 'uint', 'false', 0),
+  ('mv_publish_scn', 'uint', 'false', 0),
+  ('mv_safe_scn', 'uint', 'false', 0),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -35163,8 +35167,9 @@ def_table_schema(
           WHEN 1 THEN 'DEMAND'
           WHEN 2 THEN 'COMMIT'
           WHEN 3 THEN 'STATEMENT'
+          WHEN 4 THEN 'MAJOR_COMPACTION'
           ELSE NULL
-        END AS CHAR(6)
+        END AS CHAR(32)
       ) AS REFRESH_MODE,
       CAST(
         CASE C.REFRESH_METHOD
@@ -35265,8 +35270,9 @@ def_table_schema(
           WHEN 1 THEN 'DEMAND'
           WHEN 2 THEN 'COMMIT'
           WHEN 3 THEN 'STATEMENT'
+          WHEN 4 THEN 'MAJOR_COMPACTION'
           ELSE NULL
-        END AS CHAR(6)
+        END AS CHAR(32)
       ) AS REFRESH_MODE,
       CAST(
         CASE C.REFRESH_METHOD
@@ -57518,8 +57524,9 @@ def_table_schema(
                                1, 'DEMAND',
                                2, 'COMMIT',
                                3, 'STATEMENT',
+                               4, 'MAJOR_COMPACTION',
                                   NULL
-        ) AS VARCHAR2(6)
+        ) AS VARCHAR2(32)
       ) AS REFRESH_MODE,
       CAST(
         DECODE(C.REFRESH_METHOD, 0, 'NEVER',
@@ -57620,8 +57627,9 @@ def_table_schema(
                                1, 'DEMAND',
                                2, 'COMMIT',
                                3, 'STATEMENT',
+                               4, 'MAJOR_COMPACTION',
                                   NULL
-        ) AS VARCHAR2(6)
+        ) AS VARCHAR2(32)
       ) AS REFRESH_MODE,
       CAST(
         DECODE(C.REFRESH_METHOD, 0, 'NEVER',
@@ -57724,8 +57732,9 @@ def_table_schema(
                                1, 'DEMAND',
                                2, 'COMMIT',
                                3, 'STATEMENT',
+                               4, 'MAJOR_COMPACTION',
                                   NULL
-        ) AS VARCHAR2(6)
+        ) AS VARCHAR2(32)
       ) AS REFRESH_MODE,
       CAST(
         DECODE(C.REFRESH_METHOD, 0, 'NEVER',

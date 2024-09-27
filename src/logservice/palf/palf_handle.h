@@ -235,6 +235,10 @@ public:
   int get_paxos_member_list_and_learner_list(common::ObMemberList &member_list,
                                              int64_t &paxos_replica_num,
                                              GlobalLearnerList &learner_list) const;
+  int get_stable_membership(LogConfigVersion &config_version,
+                            common::ObMemberList &member_list,
+                            int64_t &paxos_replica_num,
+                            common::GlobalLearnerList &learner_list) const;
   int get_election_leader(common::ObAddr &addr) const;
   int get_parent(common::ObAddr &parent) const;
 
@@ -542,6 +546,8 @@ public:
   int reset_election_priority();
   int set_locality_cb(palf::PalfLocalityInfoCb *locality_cb);
   int reset_locality_cb();
+  int set_reconfig_checker_cb(palf::PalfReconfigCheckerCb *reconfig_checker);
+  int reset_reconfig_checker_cb();
   int stat(PalfStat &palf_stat) const;
 
   //---------config change lock related--------//

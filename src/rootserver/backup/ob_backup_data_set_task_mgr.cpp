@@ -589,6 +589,8 @@ int ObBackupSetTaskMgr::backup_meta_finish_()
     LOG_WARN("fail to merge ls meta infos", K(ret), K(ls_task));
   } else if (OB_FAIL(merge_tablet_to_ls_info_(consistent_scn, ls_task, new_ls_ids))) {
     LOG_WARN("[DATA_BACKUP]failed to merge tablet to ls info", K(ret), K(ls_task));
+  } else if (OB_FAIL(backup_major_compaction_mview_dep_tablet_list_())) {
+    LOG_WARN("failed to backup mview dep tablet list", K(ret));
   } else if (OB_FALSE_IT(DEBUG_SYNC(BEFORE_BACKUP_DATA))) {
   } else if (OB_FAIL(trans_.start(sql_proxy_, meta_tenant_id_))) {
     LOG_WARN("fail to start trans", K(ret), K(meta_tenant_id_));
@@ -817,6 +819,28 @@ int ObBackupSetTaskMgr::merge_tablet_to_ls_info_(const share::SCN &consistent_sc
         LOG_WARN("failed to push backup");
       }
     }
+  }
+  return ret;
+}
+
+int ObBackupSetTaskMgr::backup_major_compaction_mview_dep_tablet_list_()
+{
+  int ret = OB_SUCCESS;
+  ObBackupMajorCompactionMViewDepTabletListDesc desc;
+  common::ObArray<common::ObTabletID> mview_tablet_list;
+  share::SCN backup_scn;
+  if (OB_ISNULL(sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy should not be null", K(ret));
+  } else if (OB_FAIL(ObBackupDataScheduler::get_backup_scn(*sql_proxy_, set_task_attr_.tenant_id_, true/*is_backup_start*/, backup_scn))) {
+    LOG_WARN("failed to get backup scn", K(ret), K(set_task_attr_));
+  } else if (OB_FAIL(ObBackupMViewOperator::get_all_major_compaction_mview_dep_tablet_list(
+      *sql_proxy_, set_task_attr_.tenant_id_, backup_scn, mview_tablet_list))) {
+    LOG_WARN("failed to get all major compaction mveiw dep tablet list", K(ret), K(backup_scn));
+  } else if (OB_FAIL(desc.tablet_id_list_.assign(mview_tablet_list))) {
+    LOG_WARN("failed to assign tablet list", K(ret));
+  } else if (OB_FAIL(store_.write_major_compaction_mview_dep_tablet_list(desc))) {
+    LOG_WARN("failed to write mview dep tablet list", K(ret));
   }
   return ret;
 }

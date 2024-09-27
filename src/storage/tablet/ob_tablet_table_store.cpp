@@ -1567,6 +1567,7 @@ int ObTabletTableStore::inner_replace_remote_major_sstable_(
   ObITable *old_table = nullptr;
   ObSSTableMetaHandle old_sst_meta_hdl;
   ObSSTableMetaHandle new_sst_meta_hdl;
+  bool has_backup_macro = false;
 
   if (OB_ISNULL(new_table)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1574,16 +1575,15 @@ int ObTabletTableStore::inner_replace_remote_major_sstable_(
   } else if (old_store.major_tables_.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("no major table exist", K(ret), K(old_store), KPC(new_table));
-  } else if (OB_FAIL(static_cast<ObSSTable *>(new_table)->get_meta(new_sst_meta_hdl))) {
-    LOG_WARN("failed to get new sstable meta handle", K(ret), KPC(new_table));
-  } else if (new_sst_meta_hdl.get_sstable_meta().get_basic_meta().table_backup_flag_.has_backup()) {
+  } else if (OB_FAIL(ObTableStoreUtil::check_has_backup_macro_block(new_table, has_backup_macro))) {
+    LOG_WARN("failed to check new table has backup macro block", K(ret), KPC(new_table));
+  } else if (has_backup_macro) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("new table still has backup macro block", K(ret), KPC(new_table), K(new_sst_meta_hdl));
+    LOG_WARN("new table still has backup macro block", K(ret), KPC(new_table));
   } else if (OB_FAIL(old_store.major_tables_.get_all_tables(old_tables_array))) {
     LOG_WARN("failed to get major tables from old store", K(ret), K(old_store));
   }
 
-  bool has_backup_macro = false;
   for (int64_t idx = 0; OB_SUCC(ret) && idx < old_tables_array.count(); ++idx) {
     old_table = old_tables_array.at(idx);
     if (OB_ISNULL(old_table)) {
@@ -1591,14 +1591,10 @@ int ObTabletTableStore::inner_replace_remote_major_sstable_(
       LOG_WARN("get unexpected null table", K(ret), K(old_store));
     } else if (OB_FAIL(ObTableStoreUtil::check_has_backup_macro_block(old_table, has_backup_macro))) {
       LOG_WARN("failed to check table has backup macro block", K(ret), KPC(old_table));
-    } else if (!has_backup_macro) {
+    } else if (old_table->get_key() != new_table->get_key() || !has_backup_macro) {
       if (OB_FAIL(new_tables_array.push_back(old_table))) {
         LOG_WARN("failed to push back", K(ret));
       }
-    } else if (old_table->get_key() != new_table->get_key()) {
-      // Major compaction is not allowed during restore, only one major should be exist.
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("too many major sstable exist", K(ret), KPC(old_table), KPC(new_table), K(old_store));
     } else if (OB_FAIL(new_tables_array.push_back(new_table))) {
       LOG_WARN("failed to push back", K(ret));
     } else {
@@ -2356,13 +2352,6 @@ int ObTabletTableStore::check_new_major_sstable_can_be_accepted_(
     if (OB_FAIL(check_new_sstable_can_be_accepted_(ddl_sstables, major_table))) {
       LOG_WARN("failed to check accept the compacted sstable", K(ret), K(ddl_sstables), KPC(major_table));
     }
-  } else if (OB_FAIL(old_store.major_tables_.get_all_tables(major_tables))) {
-    LOG_WARN("failed to get major tables from old store", K(ret), K(old_store));
-  } else if (major_tables.empty()) {
-    // remote major sstable first be created in table store.
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("major sstable exist", K(ret), K(old_store), KPC(major_table));
   }
 
   return ret;

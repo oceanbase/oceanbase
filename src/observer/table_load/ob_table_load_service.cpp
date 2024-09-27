@@ -594,10 +594,10 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
       FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has roaringbitmap column", tmp_prefix);
     }
     // check if table has mlog
-    else if (table_schema->has_mlog_table()) {
+    else if (table_schema->required_by_mview_refresh()) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("direct-load does not support table with materialized view log", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table with materialized view log", tmp_prefix);
+      LOG_WARN("direct-load does not support table required by materialized view refresh", KR(ret));
+      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table required by materialized view refresh", tmp_prefix);
     } else if (ObDirectLoadMethod::is_incremental(method)) { // incremental direct-load
       if (!ObDirectLoadInsertMode::is_valid_for_incremental_method(insert_mode)) {
         ret = OB_NOT_SUPPORTED;

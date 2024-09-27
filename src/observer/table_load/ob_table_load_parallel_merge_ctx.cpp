@@ -397,7 +397,7 @@ public:
     } else {
       ObDirectLoadMultipleSSTableBuildParam build_param;
       build_param.tablet_id_ = tablet_ctx_->tablet_id_;
-      build_param.table_data_desc_ = parallel_merge_ctx_->table_data_desc_;
+      build_param.table_data_desc_ = parallel_merge_ctx_->store_ctx_->table_data_desc_;
       build_param.datum_utils_ = &(ctx_->schema_.datum_utils_);
       build_param.file_mgr_ = parallel_merge_ctx_->store_ctx_->tmp_file_mgr_;
       build_param.extra_buf_ = extra_buf_;
@@ -456,7 +456,7 @@ public:
     int ret = OB_SUCCESS;
     ObDirectLoadMultipleSSTableCompactParam compact_param;
     compact_param.tablet_id_ = tablet_ctx_->tablet_id_;
-    compact_param.table_data_desc_ = parallel_merge_ctx_->table_data_desc_;
+    compact_param.table_data_desc_ = parallel_merge_ctx_->store_ctx_->table_data_desc_;
     compact_param.datum_utils_ = &ctx_->schema_.datum_utils_;
     if (OB_FAIL(compactor_.init(compact_param))) {
       LOG_WARN("fail to init sstable compactor", KR(ret));

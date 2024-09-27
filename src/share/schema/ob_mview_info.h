@@ -65,6 +65,12 @@ public:
 #undef DEFINE_GETTER_AND_SETTER
 #undef DEFINE_STRING_GETTER_AND_SETTER
 
+  bool is_fast_lsm_mv() const
+  {
+    return (refresh_method_ == ObMVRefreshMethod::FAST &&
+            refresh_mode_ == ObMVRefreshMode::MAJOR_COMPACTION);
+  }
+
   int gen_insert_mview_dml(const uint64_t exec_tenant_id, ObDMLSqlSplicer &dml) const;
   int gen_update_mview_attribute_dml(const uint64_t exec_tenant_id, ObDMLSqlSplicer &dml) const;
   int gen_update_mview_last_refresh_info_dml(const uint64_t exec_tenant_id,
@@ -83,7 +89,12 @@ public:
   static int batch_fetch_mview_ids(ObISQLClient &sql_client, uint64_t tenant_id,
                                    uint64_t last_mview_id, ObIArray<uint64_t> &mview_ids,
                                    int64_t limit = -1);
-
+  static int update_major_refresh_mview_scn(ObISQLClient &sql_client, const uint64_t tenant_id,
+                                            const share::SCN &scn);
+  static int get_min_major_refresh_mview_scn(ObISQLClient &sql_client, const uint64_t tenant_id,
+                                             int64_t snapshot_for_tx, share::SCN &scn);
+  static int contains_major_refresh_mview_in_creation(ObISQLClient &sql_client,
+                                                      const uint64_t tenant_id, bool &contains);
   TO_STRING_KV(K_(tenant_id),
                K_(mview_id),
                K_(build_mode),

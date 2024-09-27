@@ -248,7 +248,8 @@ struct ObTableScanRtDef
       range_buffer_idx_(0),
       group_size_(0),
       max_group_size_(0),
-      attach_rtinfo_(nullptr)
+      attach_rtinfo_(nullptr),
+      dynamic_selected_tablet_id_()
   { }
 
   void prepare_multi_part_limit_param();
@@ -269,6 +270,13 @@ struct ObTableScanRtDef
   int64_t group_size_;
   int64_t max_group_size_;
   ObDASAttachRtInfo *attach_rtinfo_;
+  // dynamic partition pruning is used for two cases:
+  // 1. dynamic parameter as partitioned key
+  //    In this case, we need to calculate tablet ids every time we get new parameters
+  // 2. prefer to select local replica
+  //    In this case, tablet id only needs to be calculated once. dynamic_selected_tablet_id_
+  //    is used to store it to avoid duplicate calculations
+  ObTabletID dynamic_selected_tablet_id_;
 };
 
 // table scan operator input

@@ -37,6 +37,7 @@ template<typename T>
 class ObStoreRowIterPool;
 class ObBlockRowStore;
 class ObCGIterParamPool;
+struct ObTableScanRange;
 
 #define REALTIME_MONITOR_ADD_IO_READ_BYTES(CTX, SIZE) \
   if (OB_NOT_NULL(CTX)) CTX->add_io_read_bytes(SIZE)  \
@@ -147,8 +148,8 @@ struct ObTableAccessContext
   inline bool enable_get_fuse_row_cache(const int64_t threshold) const {
     return query_flag_.is_use_fuse_row_cache() && table_store_stat_.enable_get_fuse_row_cache(threshold) && !need_scn_ && !tablet_id_.is_ls_inner_tablet();
   }
-  inline bool enable_put_fuse_row_cache(const int64_t threshold) const {
-    return query_flag_.is_use_fuse_row_cache() && table_store_stat_.enable_put_fuse_row_cache(threshold) && !need_scn_ && !tablet_id_.is_ls_inner_tablet();
+  inline bool enable_put_fuse_row_cache(const int64_t threshold, const bool is_mview_table_scan) const {
+    return query_flag_.is_use_fuse_row_cache() && table_store_stat_.enable_put_fuse_row_cache(threshold) && (!need_scn_ || is_mview_table_scan) && !tablet_id_.is_ls_inner_tablet();
   }
   inline bool is_limit_end() const {
     return (nullptr != limit_param_ && limit_param_->limit_ >= 0 && (out_cnt_ - limit_param_->offset_ >= limit_param_->limit_));
@@ -193,9 +194,22 @@ struct ObTableAccessContext
            common::ObIAllocator &allocator,
            const common::ObVersionRange &trans_version_range,
            CachedIteratorNode *cached_iter_node = nullptr);
+  // used for mview table scan
+  int init_for_mview(common::ObIAllocator *allocator,
+                     const ObTableAccessContext &access_ctx,
+                     ObStoreCtx &store_ctx);
+  OB_INLINE bool is_mview_query() const
+  {
+    return nullptr != mview_scan_info_;
+  }
+  OB_INLINE StorageScanType get_scan_type() const
+  {
+    return is_mview_query() ?  mview_scan_info_->scan_type_ : StorageScanType::NORMAL;
+  }
   int alloc_iter_pool(const bool use_column_store);
   void inc_micro_access_cnt();
   int init_scan_allocator(ObTableScanParam &scan_param);
+  int init_mview_scan_info(const int64_t multi_version_start, const sql::ObExprPtrIArray *op_filters, sql::ObEvalCtx &eval_ctx);
   // update realtime monitor info
   OB_INLINE void add_io_read_bytes(const int64_t bytes)
   {
@@ -225,6 +239,7 @@ struct ObTableAccessContext
     K_(is_inited),
     K_(use_fuse_row_cache),
     K_(need_scn),
+    K_(need_release_mview_scan_info),
     K_(timeout),
     K_(ls_id),
     K_(tablet_id),
@@ -246,7 +261,8 @@ struct ObTableAccessContext
     KP_(cg_iter_pool),
     KP_(cg_param_pool),
     KP_(block_row_store),
-    KP_(sample_filter));
+    KP_(sample_filter),
+    KPC_(mview_scan_info));
 private:
   static const int64_t DEFAULT_COLUMN_SCALE_INFO_SIZE = 8;
   static const int64_t USE_BLOCK_CACHE_LIMIT = 128L << 10;  // 128K
@@ -257,7 +273,6 @@ private:
                                const ObVersionRange &trans_version_range); // local scan
   // init need_fill_scale_ and search column which need fill scale
   int init_column_scale_info(ObTableScanParam &scan_param);
-
 public:
   OB_INLINE common::ObIAllocator *get_long_life_allocator()
   {
@@ -270,6 +285,7 @@ public:
   bool is_inited_;
   bool use_fuse_row_cache_; // temporary code
   bool need_scn_;
+  bool need_release_mview_scan_info_;
   int64_t timeout_;
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
@@ -300,9 +316,7 @@ public:
   ObBlockRowStore *block_row_store_;
   ObRowSampleFilter *sample_filter_;
   compaction::ObCachedTransStateMgr *trans_state_mgr_;
-#ifdef ENABLE_DEBUG_LOG
-  transaction::ObDefensiveCheckRecordExtend defensive_check_record_;
-#endif
+  ObMviewScanInfo *mview_scan_info_;
 };
 
 } // namespace storage

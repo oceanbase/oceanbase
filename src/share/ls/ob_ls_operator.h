@@ -325,6 +325,10 @@ public:
   int get_all_ls_by_order(const bool lock_sys_ls,
                           ObLSAttrIArray &ls_operation_array,
                           bool only_existing_ls = true);
+  int get_all_ls_by_order_in_trans(const bool lock_sys_ls,
+                                   ObLSAttrIArray &ls_operation_array,
+                                   common::ObMySQLTransaction &trans,
+                                   bool only_existing_ls = true);
   int insert_ls(const ObLSAttr &ls_attr,
                 const ObTenantSwitchoverStatus &working_sw_status,
                 ObMySQLTransaction *trans = NULL);

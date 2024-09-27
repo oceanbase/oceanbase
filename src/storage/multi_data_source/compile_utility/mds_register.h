@@ -74,6 +74,7 @@
   #include "src/storage/multi_data_source/ob_start_transfer_in_mds_ctx.h"
   #include "src/storage/multi_data_source/ob_finish_transfer_in_mds_ctx.h"
   #include "src/share/ob_standby_upgrade.h"
+  #include "src/storage/mview/ob_major_mv_merge_info.h"
 #endif
 /**************************************************************************************************/
 
@@ -182,6 +183,14 @@ _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENU
                                           ::oceanbase::storage::mds::MdsCtx,\
                                           34,\
                                           TABLET_BINDING)
+  GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObMVPublishSCNHelper,\
+                                          ::oceanbase::storage::ObUnUseCtx, \
+                                          35,\
+                                          MV_PUBLISH_SCN)
+  GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObMVNoticeSafeHelper,\
+                                          ::oceanbase::storage::ObUnUseCtx, \
+                                          36,\
+                                          MV_NOTICE_SAFE)
   // # 余留位置（此行之前占位）
 #undef GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION
 #endif

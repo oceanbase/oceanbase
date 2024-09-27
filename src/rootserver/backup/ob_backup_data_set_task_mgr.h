@@ -66,6 +66,7 @@ private:
   int merge_tablet_to_ls_info_(const share::SCN &consistent_scn,
       const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks,
       common::ObIArray<share::ObLSID> &ls_ids);
+  int backup_major_compaction_mview_dep_tablet_list_();
   int get_tablet_list_by_snapshot(
       const share::SCN &consistent_scn, common::hash::ObHashMap<share::ObLSID, ObArray<ObTabletID>> &latest_ls_tablet_map);
   int fill_map_with_sys_tablets_(common::hash::ObHashMap<share::ObLSID, ObArray<ObTabletID>> &latest_ls_tablet_map);

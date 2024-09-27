@@ -41,6 +41,7 @@ public:
                                const ObIArray<ObRawExpr *> &access_exprs,
                                const log_op_def::ObLogOpType op_type,
                                const bool is_global_index_lookup,
+                               const bool use_column_store,
                                ObPushdownExprSpec &pd_spec);
   int generate_table_loc_meta(uint64_t table_loc_id,
                               const ObDMLStmt &stmt,
@@ -154,12 +155,12 @@ private:
                               ObDASSortCtDef *&sort_ctdef);
   int mapping_oracle_real_agent_virtual_exprs(const ObLogTableScan &op,
                                               common::ObIArray<ObRawExpr*> &access_exprs);
+  int generate_mr_mv_scan_flag(const ObLogTableScan &op, ObQueryFlag &query_flag) const;
   int generate_index_merge_ctdef(const ObLogTableScan &op, ObTableScanCtDef &tsc_ctdef, ObDASBaseCtDef *&root_ctdef);
   int generate_index_merge_node_ctdef(const ObLogTableScan &op,
                                       ObIndexMergeNode *node,
                                       common::ObIAllocator &alloc,
                                       ObDASBaseCtDef *&node_ctdef);
-
 private:
   ObStaticEngineCG &cg_;
 };

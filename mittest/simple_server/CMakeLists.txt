@@ -35,6 +35,11 @@ function(ob_freeze_observer case)
   target_link_libraries(${case} PRIVATE gtest gmock observer_test oceanbase)
 endfunction()
 
+function(ob_farm_observer case)
+  ob_unittest(${ARGV})
+  target_link_libraries(${case} PRIVATE gtest gmock observer_test oceanbase)
+endfunction()
+
 function(ob_offline_observer case case_file)
   add_executable(${case}
     EXCLUDE_FROM_ALL
@@ -60,6 +65,7 @@ endfunction()
 ob_offline_observer(test_simple_ob test_ob_simple_cluster.cpp)
 ob_offline_observer(test_transfer_tx test_transfer_tx.cpp)
 ob_offline_observer(test_tx_data test_tx_data.cpp)
+ob_offline_observer(test_collect_mv test_collect_mv.cpp)
 
 ob_unittest_observer(test_transfer_no_kill_tx test_transfer_tx.cpp)
 ob_unittest_observer(test_standby_balance test_standby_balance_ls_group.cpp)
@@ -142,3 +148,5 @@ ob_ha_unittest_observer(test_transfer_complete_restart_with_mds_flush storage_ha
 ob_ha_unittest_observer(test_transfer_with_empty_shell storage_ha/test_transfer_with_empty_shell.cpp)
 ob_ha_unittest_observer(test_mds_transaction test_mds_transaction.cpp)
 errsim_ha_unittest_observer(errsim_test_transfer_handler errsim/storage_ha/errsim_test_transfer_handler.cpp)
+
+ob_farm_observer(test_collect_mv_farm test_collect_mv.cpp)

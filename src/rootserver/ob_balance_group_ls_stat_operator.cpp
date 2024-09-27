@@ -543,7 +543,7 @@ int ObNewTableTabletAllocator::prepare(
     if (OB_FAIL(alloc_ls_for_meta_or_sys_tenant_tablet(table_schema))) {
       LOG_WARN("fail to alloc ls for meta or sys tenant tablet", KR(ret));
     }
-  } else if (table_schema.is_duplicate_table()) {
+  } else if (table_schema.is_broadcast_table() || table_schema.is_duplicate_table()) {
     if (OB_FAIL(alloc_ls_for_duplicate_table_(table_schema))) {
       LOG_WARN("fail to alloc ls for duplicate tablet", KR(ret), K(table_schema));
     }

@@ -13555,6 +13555,10 @@ int ObDMLResolver::resolve_pseudo_column(
     if (OB_FAIL(resolve_ora_rowscn_pseudo_column(q_name, real_ref_expr))) {
       LOG_WARN("resolve ora_rowscn pseudo column failed", K(ret));
     }
+  } else if (0 == q_name.col_name_.case_compare(OB_MLOG_OLD_NEW_COLUMN_NAME)) {
+    if (OB_FAIL(resolve_old_new_pseudo_column(q_name, real_ref_expr))) {
+      LOG_WARN("resolve old_new pseudo column failed", K(ret));
+    }
   } else if (lib::is_oracle_mode() &&
              0 == q_name.col_name_.case_compare(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME)) {
     if (OB_FAIL(resolve_rowid_pseudo_column(q_name, real_ref_expr))) {
@@ -13613,14 +13617,14 @@ int ObDMLResolver::resolve_ora_rowscn_pseudo_column(
   int ret = OB_SUCCESS;
   ObPseudoColumnRawExpr *pseudo_column_expr = NULL;
   const TableItem *table_item = NULL;
-  if (OB_FAIL(column_namespace_checker_.check_rowscn_table_column_namespace(
-      q_name, table_item))) {
+  if (OB_FAIL(column_namespace_checker_.check_table_column_namespace(q_name, table_item))) {
     LOG_WARN("check rowscn table colum namespace failed", K(ret));
   } else if (OB_ISNULL(table_item)) {
     ret = OB_ERR_BAD_FIELD_ERROR;
     LOG_WARN("OBE_ROWSCN pseudo column only avaliable in basic table", K(ret));
-  } else if (OB_FAIL(get_stmt()->get_ora_rowscn_column(table_item->table_id_,
-                                                       pseudo_column_expr))) {
+  } else if (OB_FAIL(get_stmt()->get_target_pseudo_column(T_ORA_ROWSCN,
+                                                          table_item->table_id_,
+                                                          pseudo_column_expr))) {
       LOG_WARN("failed to get ora_rowscn column", K(ret), K(table_item));
   } else if (pseudo_column_expr != NULL) {
     //this type of pseudo_column_expr has been add
@@ -13641,6 +13645,50 @@ int ObDMLResolver::resolve_ora_rowscn_pseudo_column(
     OZ(pseudo_column_expr->add_relation_id(get_stmt()->get_table_bit_index(table_item->table_id_)));
     OZ(get_stmt()->get_pseudo_column_like_exprs().push_back(pseudo_column_expr));
     LOG_DEBUG("ora_rowscn_expr build success", K(*pseudo_column_expr));
+  }
+  return ret;
+}
+
+int ObDMLResolver::resolve_old_new_pseudo_column(const ObQualifiedName &q_name,
+                                                 ObRawExpr *&real_ref_expr)
+{
+  int ret = OB_SUCCESS;
+  ObPseudoColumnRawExpr *pseudo_column_expr = NULL;
+  const TableItem *table_item = NULL;
+  if (OB_ISNULL(get_stmt()) || OB_ISNULL(params_.expr_factory_) || OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(get_stmt()), K_(params_.expr_factory), K(session_info_));
+  } else if (OB_FAIL(column_namespace_checker_.check_table_column_namespace(q_name, table_item))) {
+    LOG_WARN("check rowscn table colum namespace failed", K(ret));
+  } else if (OB_ISNULL(table_item)) {
+    ret = OB_ERR_BAD_FIELD_ERROR;
+    LOG_WARN("OBE_ROWSCN pseudo column only avaliable in basic table", K(ret));
+  } else if (OB_FAIL(get_stmt()->get_target_pseudo_column(T_PSEUDO_OLD_NEW_COL,
+                                                          table_item->table_id_,
+                                                          pseudo_column_expr))) {
+      LOG_WARN("failed to get old_new column", K(ret), K(table_item));
+  } else if (pseudo_column_expr != NULL) {
+    //this type of pseudo_column_expr has been add
+    real_ref_expr = pseudo_column_expr;
+  } else if (OB_FAIL(params_.expr_factory_->create_raw_expr(T_PSEUDO_OLD_NEW_COL, pseudo_column_expr))) {
+    LOG_WARN("create rowscn pseudo column expr failed", K(ret));
+  } else if (OB_ISNULL(pseudo_column_expr) ) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("pseudo column expr is null", K(ret));
+  } else if (OB_FAIL(pseudo_column_expr->add_relation_id(get_stmt()->get_table_bit_index(table_item->table_id_)))) {
+    LOG_WARN("failed to add relation id", K(ret));
+  } else if (OB_FAIL(get_stmt()->get_pseudo_column_like_exprs().push_back(pseudo_column_expr))) {
+    LOG_WARN("fail to push back", K(ret));
+  } else {
+    ObExprResType result_type;
+    result_type.set_varchar();
+    result_type.set_length(1);
+    result_type.set_collation_type(ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI);
+    result_type.set_collation_level(CS_LEVEL_IMPLICIT);
+    pseudo_column_expr->set_result_type(result_type);
+    pseudo_column_expr->set_table_id(table_item->table_id_);
+    real_ref_expr = pseudo_column_expr;
+    LOG_DEBUG("old_new_expr build success", K(*pseudo_column_expr));
   }
   return ret;
 }

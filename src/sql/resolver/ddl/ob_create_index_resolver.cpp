@@ -614,6 +614,11 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
       if (OB_TABLE_NOT_EXIST == ret) {
         ret = OB_ERR_UNEXPECTED; // rewrite errno
       }
+    } else if (mv_container_table_schema->mv_major_refresh()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("create index on major refresh materialized view is not supported", KR(ret),
+               K(tbl_schema->get_table_name()));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "create index on major refresh materialized view is");
     } else {
       is_oracle_temp_table_ = (tbl_schema->is_oracle_tmp_table());
       ObTableSchema &index_schema = crt_idx_stmt->get_create_index_arg().index_schema_;

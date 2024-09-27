@@ -263,7 +263,7 @@ ObTablet::ObTablet(const bool is_external_tablet)
     is_external_tablet_(is_external_tablet)
 {
 #if defined(__x86_64__) && !defined(ENABLE_OBJ_LEAK_CHECK)
-  check_size<ObTablet, ObRowkeyReadInfo, 1472>();
+  check_size<ObTablet, ObRowkeyReadInfo, 1448>();
 #endif
   MEMSET(memtables_, 0x0, sizeof(memtables_));
 }
@@ -5823,6 +5823,9 @@ int ObTablet::get_kept_snapshot_info(
   if (OB_SUCC(ret)) {
     bool use_multi_version_start_on_tablet = false;
     old_min_reserved_snapshot = snapshot_info.snapshot_;
+    const bool is_new_mv_in_restore = ObSnapShotType::SNAPSHOT_FOR_MAJOR_REFRESH_MV == snapshot_info.snapshot_type_ &&
+                                      0 == snapshot_info.snapshot_;
+    // if exist new mv in restore, use special snapshot info
     if (min_reserved_snapshot_on_ls > 0) {
       snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_FOR_LS_RESERVED, min_reserved_snapshot_on_ls);
       snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_FOR_MIN_MEDIUM, min_medium_snapshot);
@@ -5833,13 +5836,12 @@ int ObTablet::get_kept_snapshot_info(
       // if not sync ls_reserved_snapshot yet, should use multi_version_start on tablet
       use_multi_version_start_on_tablet = true;
     }
-    if (use_multi_version_start_on_tablet) {
+    if (use_multi_version_start_on_tablet || is_new_mv_in_restore) {
       snapshot_info.snapshot_type_ = ObStorageSnapshotInfo::SNAPSHOT_MULTI_VERSION_START_ON_TABLET;
       snapshot_info.snapshot_ = get_multi_version_start();
     }
     // snapshot info should smaller than snapshot on tablet
     snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_ON_TABLET, get_snapshot_version());
-
     const int64_t current_time = common::ObTimeUtility::fast_current_time();
     if (current_time - (snapshot_info.snapshot_ / 1000 /*use microsecond here*/) > 2_hour) {
       if (REACH_TENANT_TIME_INTERVAL(10_s)) {

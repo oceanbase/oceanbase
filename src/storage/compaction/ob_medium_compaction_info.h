@@ -219,6 +219,7 @@ public:
   static inline bool is_major_compaction(const ObCompactionType type) { return MAJOR_COMPACTION == type; }
   inline bool is_major_compaction() const { return is_major_compaction((ObCompactionType)compaction_type_); }
   inline bool is_medium_compaction() const { return is_medium_compaction((ObCompactionType)compaction_type_); }
+  inline bool is_invalid_mview_compaction() const { return storage_schema_.is_mv_major_refresh_table() && medium_merge_reason_ != ObAdaptiveMergePolicy::TENANT_MAJOR; }
   void clear_parallel_range()
   {
     parallel_merge_info_.clear();

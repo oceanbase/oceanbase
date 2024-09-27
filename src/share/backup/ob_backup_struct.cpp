@@ -2078,6 +2078,7 @@ bool ObBackupUtils::is_need_retry_error(const int err)
     case OB_TABLET_NOT_EXIST :
     case OB_CHECKSUM_ERROR :
     case OB_VERSION_NOT_MATCH:
+    case OB_INVALID_DATA:
       bret = false;
       break;
     default:

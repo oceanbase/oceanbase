@@ -460,14 +460,22 @@ int ObTenantFreezeInfoMgr::get_min_reserved_snapshot(
     snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_FOR_UNDO_RETENTION, snapshot_for_undo_retention);
     snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_FOR_TX, snapshot_for_tx);
     snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_FOR_MAJOR_FREEZE_TS, freeze_info.frozen_scn_.get_val_for_tx());
-
-    for (int64_t i = 0; i < snapshots.count() && OB_SUCC(ret); ++i) {
+    bool exist_mview_snapshot_type = false;
+    for (int64_t i = 0; i < snapshots.count() && OB_SUCC(ret) && !exist_mview_snapshot_type; ++i) {
       bool related = false;
       const ObSnapshotInfo &snapshot = snapshots.at(i);
       if (OB_FAIL(is_snapshot_related_to_tablet(tablet_id, snapshot, related))) {
         STORAGE_LOG(WARN, "fail to check snapshot relation", K(ret), K(tablet_id), K(snapshot));
       } else if (related) {
         snapshot_info.update_by_smaller_snapshot(snapshot.snapshot_type_, snapshot.snapshot_scn_.get_val_for_tx());
+        if (ObSnapShotType::SNAPSHOT_FOR_MAJOR_REFRESH_MV == snapshot.snapshot_type_) {
+          // if exist mview snapshot type and tenant in restore
+          if (MTL_TENANT_ROLE_CACHE_IS_RESTORE()) {
+            exist_mview_snapshot_type = true;
+            snapshot_info.update_by_smaller_snapshot(ObSnapShotType::SNAPSHOT_FOR_MAJOR_REFRESH_MV, static_cast<int64_t>(0));
+            LOG_INFO("exist new mv in restore", K(ret), K(snapshot_info), K(tablet_id), K(merged_version));
+          }
+        }
       }
     }
     LOG_TRACE("check_freeze_info_mgr", K(ret), K(snapshot_info), K(duration), K(snapshot_for_undo_retention),
@@ -550,16 +558,19 @@ int ObTenantFreezeInfoMgr::ReloadTask::refresh_merge_info()
       LOG_INFO("schedule zone to stop major merge", K(tenant_id), K(zone_merge_info), K(global_merge_info));
     } else {
       if (check_tenant_status_) {
-        bool is_restore = false;
-        if (OB_FAIL(ObMultiVersionSchemaService::get_instance().check_tenant_is_restore(nullptr, tenant_id, is_restore))) {
-          LOG_WARN("failed to check tenant is restore", K(ret));
-        } else if (is_restore) {
-          if (REACH_TENANT_TIME_INTERVAL(10L * 1000L * 1000L)) {
-            LOG_INFO("skip restoring tenant to schedule major merge", K(tenant_id), K(is_restore));
-          }
-        } else {
+        if (is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id)) {
           check_tenant_status_ = false;
-          LOG_INFO("finish check tenant restore", K(tenant_id), K(is_restore));
+        } else if (is_virtual_tenant_id(tenant_id)) { // skip virtual tenant
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("tenant is unexpected virtual tenant", KR(ret), K(tenant_id));
+        } else {
+          const ObTenantRole::Role &role = MTL_GET_TENANT_ROLE_CACHE();
+          if (is_primary_tenant(role) || is_standby_tenant(role)) {
+            check_tenant_status_ = false;
+            LOG_INFO("finish check tenant restore", K(tenant_id), K(role));
+          } else if (REACH_TENANT_TIME_INTERVAL(10L * 1000L * 1000L)) {
+            LOG_INFO("skip restoring tenant to schedule major merge", K(tenant_id), K(role));
+          }
         }
       }
       if (!check_tenant_status_) {
