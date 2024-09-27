@@ -1556,11 +1556,6 @@ private:
 
                            obrpc::ObAlterTableRes &res,
                            const uint64_t tenant_data_version);
-  int check_need_add_progressive_round(
-    const uint64_t tenant_data_version,
-    const ObTableSchema &table_schema,
-    const AlterTableSchema &alter_table_schema,
-    bool &need_add_progressive_round);
   int need_modify_not_null_constraint_validate(const obrpc::ObAlterTableArg &alter_table_arg,
                                                bool &is_add_not_null_col,
                                                bool &need_modify) const;

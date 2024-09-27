@@ -236,7 +236,7 @@ int ObCOMergeWriter::basic_init(const blocksstable::ObDatumRow &default_row,
       iter_ = OB_NEWx(ObDefaultRowIter, (&allocator_), default_row_);
     } else if (merge_param.is_full_merge() || sstable->is_small_sstable() || only_use_row_table) {
       iter_ = OB_NEWx(ObPartitionRowMergeIter, (&allocator_), allocator_, iter_co_build_row_store_);
-    } else if (MICRO_BLOCK_MERGE_LEVEL == merge_param.static_param_.merge_level_) {
+    } else if (MICRO_BLOCK_MERGE_LEVEL == merge_param.static_param_.get_merge_level_for_sstable(*sstable)) {
       iter_ = OB_NEWx(ObPartitionMicroMergeIter, (&allocator_), allocator_);
     } else {
       iter_ = OB_NEWx(ObPartitionMacroMergeIter, (&allocator_), allocator_);

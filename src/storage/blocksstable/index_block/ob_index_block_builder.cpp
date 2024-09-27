@@ -34,6 +34,7 @@
 
 namespace oceanbase
 {
+ERRSIM_POINT_DEF(EN_COMPACTION_DISABLE_SHARED_MACRO);
 using namespace common;
 using namespace storage;
 using namespace compaction;
@@ -1606,6 +1607,12 @@ int ObSSTableIndexBuilder::close_with_macro_seq(
       if (index_store_desc_.get_desc().is_cg() && res.row_count_ > 50000) {
         tmp_mode = DISABLE;
       }
+#ifdef ERRSIM
+      if (EN_COMPACTION_DISABLE_SHARED_MACRO) {
+        tmp_mode = DISABLE;
+        FLOG_INFO("ERRSIM EN_COMPACTION_DISABLE_SHARED_MACRO", KR(ret));
+      }
+#endif
       switch (tmp_mode) {
         case ENABLE:
           if (OB_FAIL(check_and_rewrite_sstable(res))) {

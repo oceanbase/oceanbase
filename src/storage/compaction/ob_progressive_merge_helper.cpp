@@ -14,6 +14,7 @@
 #include "storage/blocksstable/index_block/ob_index_block_macro_iterator.h"
 #include "storage/compaction/ob_partition_merger.h"
 #include "storage/compaction/ob_basic_tablet_merge_ctx.h"
+#include "observer/ob_server_event_history_table_operator.h"
 namespace oceanbase
 {
 using namespace blocksstable;
@@ -100,6 +101,10 @@ int64_t ObProgressiveMergeMgr::get_result_progressive_merge_step(
         K_(progressive_merge_step), K_(progressive_merge_num));
     }
     result_step = progressive_merge_num_;
+#ifdef ERRSIM
+      SERVER_EVENT_SYNC_ADD("merge_errsim", "end_progressive", K(tablet_id),
+          K(result_step), K_(progressive_merge_num));
+#endif
   }
   return result_step;
 }
@@ -145,6 +150,9 @@ int ObProgressiveMergeHelper::init(
 
     if (OB_FAIL(collect_macro_info(sstable, merge_param, rewrite_macro_cnt, reduce_macro_cnt, rewrite_block_cnt_for_progressive))) {
       LOG_WARN("Fail to scan secondary meta", K(ret), K(merge_param));
+    } else if (static_param.data_version_ >= DATA_VERSION_4_3_3_0 && sstable.is_cg_sstable()) {
+      need_rewrite_block_cnt_ = 0;
+      LOG_INFO("skip rewrite macro for progressive in cg sstable", "sstable", sstable.get_key(), K(rewrite_block_cnt_for_progressive));
     } else if (need_calc_progressive_merge()) {
       if (rewrite_block_cnt_for_progressive > 0) {
         need_rewrite_block_cnt_ = MAX(rewrite_block_cnt_for_progressive /

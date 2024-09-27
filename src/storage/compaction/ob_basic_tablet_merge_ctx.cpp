@@ -26,6 +26,7 @@
 #include "share/schema/ob_tenant_schema_service.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
 #include "storage/tablet/ob_mds_scan_param_helper.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {
@@ -278,6 +279,23 @@ bool ObStaticMergeParam::is_build_row_store_from_rowkey_cg() const
 bool ObStaticMergeParam::is_build_row_store() const
 {
   return ObCOMajorMergePolicy::is_build_row_store_merge(co_major_merge_type_);
+}
+
+ObMergeLevel ObStaticMergeParam::get_merge_level_for_sstable(
+  const ObSSTable &sstable) const
+{
+  ObMergeLevel ret_merge_level = merge_level_;
+  if (!is_full_merge_ && data_version_ >= DATA_VERSION_4_3_3_0) { // expect full merge
+    if (MACRO_BLOCK_MERGE_LEVEL == ret_merge_level && sstable.is_cg_sstable()) {
+      ret_merge_level = MICRO_BLOCK_MERGE_LEVEL;
+      LOG_INFO("for cg sstable, ignore macro merge level when progressive", K(sstable), K(ret_merge_level));
+#ifdef ERRSIM
+      SERVER_EVENT_SYNC_ADD("merge_errsim", "cg_disable_progressive", "tablet_id", get_tablet_id(),
+          "sstable", sstable.get_key());
+#endif
+    }
+  }
+  return ret_merge_level;
 }
 
 /*
