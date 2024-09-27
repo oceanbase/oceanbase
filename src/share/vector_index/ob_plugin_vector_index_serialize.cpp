@@ -192,6 +192,7 @@ int ObVectorIndexSerializer::serialize(void *index, ObOStreamBuf::CbParam &cb_pa
     std::ostream out(&streambuf);
     lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "VIndexVsagADP"));
     if (OB_FAIL(obvectorutil::fserialize(index, out))) {
+      ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
       LOG_WARN("fail to do vsag serialize", K(ret));
     } else {
       streambuf.check_finish(); // do last callback to ensure all the data is written
@@ -223,6 +224,7 @@ int ObVectorIndexSerializer::deserialize(void *&index, ObIStreamBuf::CbParam &cb
     } else {
       lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "VIndexVsagADP"));
       if (OB_FAIL(obvectorutil::fdeserialize(index, in))) {
+        ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
         LOG_WARN("fail to do vsag deserialize", K(ret));
       }
     }

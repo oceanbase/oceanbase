@@ -637,7 +637,7 @@ int ObPluginVectorIndexAdaptor::init_mem_data(ObVectorIndexRecordType type)
                                                       param->ef_construction_,
                                                       param->ef_search_,
                                                       incr_data_->mem_ctx_))) {
-          ret = OB_ERR_VSAG_RETURN_ERROR;
+          ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
           LOG_WARN("failed to create vsag index.", K(ret));
         }
       }
@@ -713,7 +713,7 @@ int ObPluginVectorIndexAdaptor::init_mem_data(ObVectorIndexRecordType type)
                                                param->ef_construction_,
                                                param->ef_search_,
                                                snap_data_->mem_ctx_))) {
-          ret = OB_ERR_VSAG_RETURN_ERROR;
+          ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
           LOG_WARN("failed to create vsag index.", K(ret), K(snap_data_->index_), KPC(param));
         }
       }
@@ -890,7 +890,7 @@ int ObPluginVectorIndexAdaptor::insert_rows(blocksstable::ObDatumRow *rows,
                                               incr_vids,
                                               dim,
                                               incr_vid_count))) {
-        ret = OB_ERR_VSAG_RETURN_ERROR;
+        ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
         LOG_WARN("failed to add index.", K(ret), K(dim), K(row_count));
       } else {
         incr_data_->curr_vid_max_ = incr_data_->curr_vid_max_ > max_vid ? incr_data_->curr_vid_max_ : max_vid;
@@ -939,7 +939,7 @@ int ObPluginVectorIndexAdaptor::add_snap_index(float *vectors, int64_t *vids, in
     lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
     TCWLockGuard lock_guard(snap_data_->mem_data_rwlock_);
     if (OB_FAIL(obvectorutil::add_index(snap_data_->index_, vectors, vids, dim, num))) {
-      ret = OB_ERR_VSAG_RETURN_ERROR;
+      ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
       LOG_WARN("failed to build index.", K(ret), K(dim), K(num));
     }
   }
@@ -1042,7 +1042,7 @@ int ObPluginVectorIndexAdaptor::write_into_delta_mem(ObVectorQueryAdaptorResultC
                                                  reinterpret_cast<int64_t *>(vids),
                                                  ctx->get_dim(),
                                                  count))) {
-        ret = OB_ERR_VSAG_RETURN_ERROR;
+        ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
         LOG_WARN("failed to add index.", K(ret), K(ctx->get_dim()), K(count));
       }
       LOG_TRACE("write into delta mem.", K(ret), K(ctx->get_dim()), K(count));
@@ -1441,7 +1441,7 @@ int ObPluginVectorIndexAdaptor::serialize(ObIAllocator *allocator, ObOStreamBuf:
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("snap index is not init", K(ret));
   } else if (OB_FAIL(obvectorutil::get_index_number(snap_data_->index_, snap_index_size))) {
-    ret = OB_ERR_VSAG_RETURN_ERROR;
+    ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
     LOG_WARN("failed to get snap index number.", K(ret));
   } else if (snap_index_size == 0) {
     // do nothing
@@ -1636,7 +1636,7 @@ int ObPluginVectorIndexAdaptor::vsag_query_vids(ObVectorQueryAdaptorResultContex
                                          delta_res_cnt,
                                          query_cond->ef_search_,
                                          ibitmap))) {
-      ret = OB_ERR_VSAG_RETURN_ERROR;
+      ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
       LOG_WARN("knn search delta failed.", K(ret), K(dim));
     }
   }
@@ -1653,7 +1653,7 @@ int ObPluginVectorIndexAdaptor::vsag_query_vids(ObVectorQueryAdaptorResultContex
                                          snap_res_cnt,
                                          query_cond->ef_search_,
                                          dbitmap))) {
-      ret = OB_ERR_VSAG_RETURN_ERROR;
+      ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
       LOG_WARN("knn search snap failed.", K(ret), K(dim));
     }
   }
@@ -2099,7 +2099,7 @@ int ObPluginVectorIndexAdaptor::check_need_sync_to_follower(bool &need_sync)
     int64_t current_incr_count = 0;
     if (OB_NOT_NULL(get_incr_index())) {
       if (OB_FAIL(obvectorutil::get_index_number(get_incr_index(), current_incr_count))) {
-        ret = OB_ERR_VSAG_RETURN_ERROR;
+        ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
         LOG_WARN("fail to get incr index number", K(ret));
         ret = OB_SUCCESS; // continue to check other parts
       }
@@ -2119,7 +2119,7 @@ int ObPluginVectorIndexAdaptor::check_need_sync_to_follower(bool &need_sync)
     int64_t current_snapshot_count = 0;
     if (OB_NOT_NULL(get_snap_index())) {
       if (OB_FAIL(obvectorutil::get_index_number(get_snap_index(), current_snapshot_count))) {
-        ret = OB_ERR_VSAG_RETURN_ERROR;
+        ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
         LOG_WARN("fail to get snap index number", K(ret));
         ret = OB_SUCCESS; // continue to check other parts
       }
