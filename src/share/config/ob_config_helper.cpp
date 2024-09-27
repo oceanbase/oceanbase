@@ -1438,6 +1438,12 @@ bool ObConfigKvGroupCommitRWModeChecker::check(const ObConfigItem &t) const
     || 0 == v_str.case_compare("write");
 }
 
+bool ObConfigDegradationPolicyChecker::check(const ObConfigItem &t) const
+{
+  common::ObString tmp_str(t.str());
+  return 0 == tmp_str.case_compare("LS_POLICY") || 0 == tmp_str.case_compare("CLUSTER_POLICY");
+}
+
 bool ObConfigRegexpEngineChecker::check(const ObConfigItem &t) const
 {
   bool valid = false;

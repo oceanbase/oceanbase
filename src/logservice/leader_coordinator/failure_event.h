@@ -32,6 +32,7 @@ enum class FailureType
   PROCESS_HANG = 3,// 流程阻塞，发现某主要流程一直不结束或者不断重试却不能成功
   MAJORITY_FAILURE = 4,// 多数派异常，如副本的网络与多数派断连
   SCHEMA_NOT_REFRESHED = 5, // sql may failed when tenant schema not refreshed yet
+  ENTER_ELECTION_SILENT = 6, // 副本进入选举静默状态
 };
 
 enum class FailureModule
@@ -70,6 +71,9 @@ inline const char *obj_to_cstring(FailureType type)
       break;
     case FailureType::SCHEMA_NOT_REFRESHED:
       ret = "SCHEMA NOT REFRESHED";
+      break;
+    case FailureType::ENTER_ELECTION_SILENT:
+      ret = "ENTER ELECTION SILENT";
       break;
     default:
       break;

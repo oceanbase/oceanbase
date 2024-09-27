@@ -733,6 +733,14 @@ DEF_BOOL(_enable_log_cache, OB_TENANT_PARAMETER, "True",
          "Value:  True:turned on  False: turned off",
          ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_STR_WITH_CHECKER(arbitration_degradation_policy, OB_CLUSTER_PARAMETER, "LS_POLICY",
+        common::ObConfigDegradationPolicyChecker,
+        "specifies the degradation policy, whether to check network connectivity with RS before arbitration degrades. "
+        "Value: LS_POLICY, CLUSTER_POLICY "
+        "LS_POLICY: default policy. "
+        "CLUSTER_POLICY: check network connectivity with RS before arbitration degrades. Do not degrade when not connected. "
+        "Then, switch log stream leaders to the replicas which are connected with RS.",
+        ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 // ========================= LogService Config End   =====================
 DEF_INT(resource_hard_limit, OB_CLUSTER_PARAMETER, "100", "[100, 10000]",
         "system utilization should not be large than resource_hard_limit",
