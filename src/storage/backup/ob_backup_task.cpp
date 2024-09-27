@@ -2704,6 +2704,11 @@ int ObLSBackupDataTask::process()
   ObBackupWrapperIODevice *index_tree_device_handle = NULL;
   ObBackupIntermediateTreeType meta_tree_type = ObBackupIntermediateTreeType::BACKUP_META_TREE;
   ObBackupWrapperIODevice *meta_tree_device_handle = NULL;
+
+  ObStorageIdMod mod;
+  mod.storage_id_ = param_.dest_id_;
+  mod.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_BACKUP;
+
   if (OB_FAIL(ret)) {
   } else if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -2722,12 +2727,12 @@ int ObLSBackupDataTask::process()
   } else if (OB_FAIL(do_write_file_header_())) {
     LOG_WARN("failed to do write file header", K(ret));
   } else if (OB_FAIL(prepare_companion_index_file_handle_(
-      task_id_, index_tree_type, index_tree_io_fd_, index_tree_device_handle))) {
+      task_id_, index_tree_type, mod, index_tree_io_fd_, index_tree_device_handle))) {
     LOG_WARN("failed to prepare companion index file handle for data file", K(ret), K_(task_id), K(index_tree_type));
   } else if (OB_FAIL(device_handle_array.push_back(index_tree_device_handle))) {
     LOG_WARN("failed to push back device handle", K(ret), KP(index_tree_device_handle));
   } else if (OB_FAIL(prepare_companion_index_file_handle_(
-      task_id_, meta_tree_type, meta_tree_io_fd_, meta_tree_device_handle))) {
+      task_id_, meta_tree_type, mod, meta_tree_io_fd_, meta_tree_device_handle))) {
     LOG_WARN("failed to prepare companion index file handle for data file", K(ret), K_(task_id), K(meta_tree_type));
   } else if (OB_FAIL(device_handle_array.push_back(meta_tree_device_handle))) {
     LOG_WARN("failed to push back device handle", K(ret), KP(meta_tree_device_handle));
@@ -3918,8 +3923,8 @@ int ObLSBackupDataTask::get_companion_index_file_path_(
   return ret;
 }
 
-int ObLSBackupDataTask::prepare_companion_index_file_handle_(const int64_t task_id,
-    const ObBackupIntermediateTreeType &tree_type, common::ObIOFd &io_fd, ObBackupWrapperIODevice *&device_handle)
+int ObLSBackupDataTask::prepare_companion_index_file_handle_(const int64_t task_id, const ObBackupIntermediateTreeType &tree_type,
+    const ObStorageIdMod &mod, common::ObIOFd &io_fd, ObBackupWrapperIODevice *&device_handle)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -3941,13 +3946,14 @@ int ObLSBackupDataTask::prepare_companion_index_file_handle_(const int64_t task_
   } else if (OB_FAIL(setup_io_storage_info_(param_.backup_dest_, storage_info_buf, sizeof(storage_info_buf), &io_d_opts))) {
     LOG_WARN("failed to setup io storage info", K(ret), K_(param));
   } else if (OB_FAIL(setup_io_device_opts_(task_id, tree_type, &io_d_opts))) {
-    LOG_WARN("failed to setup io device opts", K(ret), K(task_id));
+    LOG_WARN("failed to setup io device opts", K(ret), K(task_id), K(tree_type), K(mod));
   } else if (OB_FAIL(device->open(backup_path.get_ptr(),
                                   flag,
                                   mode,
                                   io_fd,
                                   &io_d_opts))) {
     LOG_WARN("failed to open device", K(ret), K_(param), K(backup_path));
+  } else if (FALSE_IT(device->set_storage_id_mod(mod))) {
   } else {
     device_handle = device;
     device = NULL;

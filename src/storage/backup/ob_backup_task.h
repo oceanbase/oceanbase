@@ -606,8 +606,8 @@ private:
       storage::ObTabletHandle &tablet_handle,
       ObBackupTabletStat *tablet_stat);
   int get_companion_index_file_path_(const ObBackupIntermediateTreeType &tree_type, const int64_t task_id, ObBackupPath &backup_path);
-  int prepare_companion_index_file_handle_(const int64_t task_id,
-      const ObBackupIntermediateTreeType &tree_type, common::ObIOFd &io_fd, ObBackupWrapperIODevice *&device_handle);
+  int prepare_companion_index_file_handle_(const int64_t task_id, const ObBackupIntermediateTreeType &tree_type,
+      const ObStorageIdMod &mod, common::ObIOFd &io_fd, ObBackupWrapperIODevice *&device_handle);
   int setup_io_storage_info_(const share::ObBackupDest &backup_dest, char *buf, const int64_t len, common::ObIODOpts *iod_opts);
   int setup_io_device_opts_(const int64_t task_id, const ObBackupIntermediateTreeType &tree_type, common::ObIODOpts *iod_opts);
   int get_index_block_rebuilder_ptr_(const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key,

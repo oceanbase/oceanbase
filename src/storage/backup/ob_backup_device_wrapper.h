@@ -105,6 +105,7 @@ public:
                                const int64_t first_id,
                                const int64_t second_id,
                                const int64_t third_id,
+                               ObStorageIdMod &mod,
                                ObBackupWrapperIODevice *&device,
                                ObIOFd &fd);
   static int close_device_and_fd(ObBackupWrapperIODevice *&device_handle, ObIOFd &fd);
@@ -118,6 +119,7 @@ private:
     const ObBackupDeviceMacroBlockId &backup_macro_id, common::ObIODOpts *io_d_opts);
   static int get_backup_dest_(const uint64_t tenant_id, const int64_t backup_set_id, share::ObBackupDest &backup_dest);
   static int get_backup_type_(const uint64_t tenant_id, const int64_t backup_set_id, share::ObBackupType &backup_type);
+  static int get_restore_dest_id_(const uint64_t tenant_id, ObStorageIdMod &mod);
 
 };
 
