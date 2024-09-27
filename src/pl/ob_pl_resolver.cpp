@@ -15641,11 +15641,16 @@ int ObPLResolver::resolve_condition_value(const ObStmtNodeTree *parse_tree,
       LOG_WARN("Invalid condition type", K(parse_tree->children_[0]->type_), K(ret));
     }
   } else {
+
     if (T_INT == parse_tree->type_
         || (T_VARCHAR == parse_tree->type_ && is_sys_db)) {
-      value.error_code_ = (T_INT == parse_tree->type_ 
-        ? parse_tree->value_ : static_cast<int64_t>(strtoll(parse_tree->str_value_, NULL, 10)));
-      if (value.error_code_ >= 0) {
+      if (T_INT == parse_tree->type_) {
+        value.error_code_ = parse_tree->value_;
+      } else if (T_VARCHAR == parse_tree->type_ && is_sys_db) {
+        CK (parse_tree->str_value_ != nullptr);
+        OX (value.error_code_ = static_cast<int64_t>(strtoll(parse_tree->str_value_, NULL, 10)));
+      }
+      if (OB_SUCC(ret) && value.error_code_ >= 0) {
         ret = OB_ERR_ILLEGAL_ERROR_NUM;
         LOG_WARN("illega error number for PRAGMA EXCEPTION_INIT", K(ret));
       }
