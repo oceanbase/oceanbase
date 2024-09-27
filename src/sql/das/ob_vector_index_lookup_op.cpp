@@ -478,7 +478,7 @@ int ObVectorIndexLookupOp::reuse_scan_iter(bool need_switch_param)
     adaptor_vid_iter_->reset();
     adaptor_vid_iter_->~ObVectorQueryVidIterator();
     if (nullptr != allocator_) {
-      allocator_->free(adaptor_vid_iter_);
+      allocator_->reset();
     }
     adaptor_vid_iter_ = nullptr;
   }
@@ -1202,7 +1202,7 @@ int ObVectorIndexLookupOp::revert_iter()
     adaptor_vid_iter_->reset();
     adaptor_vid_iter_->~ObVectorQueryVidIterator();
     if (nullptr != allocator_) {
-      allocator_->free(adaptor_vid_iter_);
+      allocator_->reset();
     }
     adaptor_vid_iter_ = nullptr;
   }
