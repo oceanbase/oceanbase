@@ -68,7 +68,7 @@ int ob_oss_str_assign(aos_string_t &dst, const int64_t len, const char *src);
 class ObStorageOSSRetryStrategy : public ObStorageIORetryStrategy<aos_status_t *>
 {
 public:
-  ObStorageOSSRetryStrategy(const int64_t timeout_us = OB_STORAGE_MAX_IO_TIMEOUT_US);
+  ObStorageOSSRetryStrategy(const int64_t timeout_us = DO_NOT_RETRY);
   virtual ~ObStorageOSSRetryStrategy();
 
   virtual void log_error(
