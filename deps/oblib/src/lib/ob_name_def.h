@@ -1185,4 +1185,6 @@
 #define N_AUDIT_LOG_FILTER_REMOVE_USER      "audit_log_filter_remove_user"
 #define N_CAN_ACCESS_TRIGGER                "can_access_trigger"
 #define N_SPLIT_PART                        "split_part"
+#define N_RB_ITERATE                        "rb_iterate"
+#define N_RB_SELECT                         "rb_select"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

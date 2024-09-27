@@ -8345,15 +8345,14 @@ int ObStaticEngineCG::generate_spec(ObLogJsonTable &op, ObJsonTableSpec &spec,
 {
   UNUSED(in_root_job);
   ObIAllocator &alloc = phy_plan_->get_allocator();
-  ObRawExpr *value_raw_expr = nullptr;
   ObArray<ObString> ns_arr;
-  ObExpr *value_expr = nullptr;
   ObString ns_prefix_str;
   int ret = OB_SUCCESS;
   if (OB_ISNULL(op.get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get stmt", K(ret));
-  } else if (OB_FAIL(spec.column_exprs_.init(op.get_stmt()->get_column_size()))
+  } else if (OB_FAIL(spec.value_exprs_.init(op.get_value_expr().count()))
+          || OB_FAIL(spec.column_exprs_.init(op.get_stmt()->get_column_size()))
           || OB_FAIL(spec.emp_default_exprs_.init(op.get_stmt()->get_column_size()))
           || OB_FAIL(spec.err_default_exprs_.init(op.get_stmt()->get_column_size()))
           || OB_FAIL(spec.cols_def_.init(op.get_origin_cols_def().count()))
@@ -8362,14 +8361,29 @@ int ObStaticEngineCG::generate_spec(ObLogJsonTable &op, ObJsonTableSpec &spec,
   } else if (OB_UNLIKELY(op.get_num_of_child() > 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected count of children", K(ret), K(op.get_num_of_child()));
-  } else if (OB_ISNULL(value_raw_expr = op.get_value_expr())) {
+  } else if (op.get_value_expr().empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get value raw expr", K(ret));
-  } else if (OB_FAIL(generate_rt_expr(*value_raw_expr, value_expr))) {
-    LOG_WARN("failed to generate rt expr", K(ret));
   } else {
-    spec.has_correlated_expr_ = value_raw_expr->has_flag(CNT_DYNAMIC_PARAM);
-    spec.value_expr_ = value_expr;
+    for (int64_t i = 0; OB_SUCC(ret) && i < op.get_value_expr().count(); ++i) {
+      ObRawExpr *value_raw_expr = nullptr;
+      ObExpr *value_expr = nullptr;
+      if (OB_ISNULL(value_raw_expr = op.get_value_expr().at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get value raw expr", K(ret), K(i));
+      } else if (OB_FAIL(generate_rt_expr(*value_raw_expr, value_expr))) {
+        LOG_WARN("failed to generate rt expr", K(ret), K(i));
+      } else if (OB_ISNULL(value_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("value_expr is null", K(ret), K(i), KPC(value_expr));
+      } else if (OB_FAIL(spec.value_exprs_.push_back(value_expr))) {
+        LOG_WARN("failed to push back value expr", K(ret), K(i));
+      } else {
+        spec.has_correlated_expr_ |= value_raw_expr->has_flag(CNT_DYNAMIC_PARAM);
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
     spec.table_type_ = op.get_table_type();  // table func type
 
     if (OB_FAIL(spec.dup_origin_column_defs(op.get_origin_cols_def()))) {
@@ -8416,10 +8430,10 @@ int ObStaticEngineCG::generate_spec(ObLogJsonTable &op, ObJsonTableSpec &spec,
 
         if (OB_FAIL(ret)) {
         } else if (col_item->col_idx_ == common::OB_INVALID_ID
-                   || col_item->col_idx_ >= spec.cols_def_.count()) {
+                  || col_item->col_idx_ >= spec.cols_def_.count()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to get origin column info", K(ret), K(col_item->col_idx_),
-                   K(col_item->column_name_));
+                  K(col_item->column_name_));
         } else {
           ObJtColInfo* col_info = spec.cols_def_.at(col_item->col_idx_);
           col_info->output_column_idx_ = spec.column_exprs_.count() - 1;

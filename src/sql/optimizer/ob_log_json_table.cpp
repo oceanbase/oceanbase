@@ -78,9 +78,13 @@ int ObLogJsonTable::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
     LOG_WARN("failed to generate access exprs", K(ret));
   } else if (OB_FAIL(append(all_exprs, access_exprs_))) {
     LOG_WARN("failed to append exprs", K(ret));
-  } else if (NULL != value_expr_ && OB_FAIL(all_exprs.push_back(value_expr_))) {
-    LOG_WARN("failed to push back expr", K(ret));
   } else {
+    // add value expr into all exprs
+    for (int64_t i = 0; OB_SUCC(ret) && i < value_exprs_.count(); i ++) {
+      if (OB_NOT_NULL(value_exprs_.at(i)) && OB_FAIL(all_exprs.push_back(value_exprs_.at(i)))) {
+        LOG_WARN("push value expr to array failed", K(ret));
+      }
+    }
     // add default value into all exprs
     for (int64_t i = 0; OB_SUCC(ret) && i < column_param_default_exprs_.count(); i ++) {
       if (OB_NOT_NULL(column_param_default_exprs_.at(i).default_error_expr_)
@@ -106,13 +110,13 @@ int ObLogJsonTable::get_plan_item_info(PlanText &plan_text,
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
     LOG_WARN("failed to get plan item info", K(ret));
-  } else if (OB_ISNULL(get_value_expr())) {
+  } else if (get_value_expr().empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null value expr", K(ret));
   } else {
     BEGIN_BUF_PRINT;
-    const ObRawExpr* value = get_value_expr();
-    EXPLAIN_PRINT_EXPR(value, type);
+    const ObIArray<ObRawExpr*> &value =  get_value_expr();
+    EXPLAIN_PRINT_EXPRS(value, type);
     END_BUF_PRINT(plan_item.special_predicates_,
                   plan_item.special_predicates_len_);
   }

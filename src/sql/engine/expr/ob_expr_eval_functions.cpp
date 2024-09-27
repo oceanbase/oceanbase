@@ -400,6 +400,7 @@
 #include "ob_expr_rb_calc.h"
 #include "ob_expr_rb_to_string.h"
 #include "ob_expr_rb_from_string.h"
+#include "ob_expr_rb_select.h"
 #include "ob_expr_array_contains.h"
 #include "ob_expr_audit_log_func.h"
 #include "ob_expr_can_access_trigger.h"
@@ -1261,7 +1262,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprArrayContains::eval_array_contains_ObString,                  /* 753 */
   ObExprArrayContains::eval_array_contains_array,                     /* 754 */
   ObExprSplitPart::calc_split_part_expr,                              /* 755 */
-  NULL, // ObExprRbSelect::eval_rb_select,                            /* 756 */
+  ObExprRbSelect::eval_rb_select,                                     /* 756 */
   ObExprVectorNegativeIPDistance::calc_negative_inner_product,        /* 757 */
   ObExprTokenize::eval_tokenize,                                      /* 758 */
   NULL, // ObExprEnhancedAesEncrypt::eval_aes_encrypt                 /* 759 */

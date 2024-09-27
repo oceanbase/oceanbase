@@ -2399,6 +2399,9 @@ int ObExprOperator::calc_cmp_type3(ObExprResType &type,
     || type3.is_blob() || type3.is_blob_locator())) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, ob_obj_type_str(type1.get_type()), ob_obj_type_str(type2.get_type()));
+  } else if (type1.is_roaringbitmap() || type2.is_roaringbitmap() || type3.is_roaringbitmap()) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("Incorrect cmp type with roaringbitmap arguments", K(type1), K(type2), K(type3), K(type_),K(ret));
   } else if (OB_SUCC(ObExprResultTypeUtil::get_relational_cmp_type(cmp_type, type2.get_type(), cmp_type))) {
     if (OB_UNLIKELY(ObMaxType == cmp_type)) {
       ret = OB_INVALID_ARGUMENT; // not compatible input

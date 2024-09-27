@@ -103,11 +103,16 @@ static void *roaring_realloc(void *ptr, size_t size) {
   } else if (NULL == ptr) {
     res = roaring_malloc(size);
   } else {
-    res = roaring_malloc(size);
     size_t ptr_location = reinterpret_cast<size_t>(ptr);
     void *size_ptr = reinterpret_cast<void *>(ptr_location - sizeof(size_t));
-    MEMCPY(res, ptr, *reinterpret_cast<size_t *>(size_ptr));
-    roaring_free(ptr);
+    size_t orig_size = *reinterpret_cast<size_t *>(size_ptr);
+    if (orig_size > size) {
+      res = ptr;
+    } else {
+      res = roaring_malloc(size);
+      MEMCPY(res, ptr, orig_size);
+      roaring_free(ptr);
+    }
   }
   return res;
 }

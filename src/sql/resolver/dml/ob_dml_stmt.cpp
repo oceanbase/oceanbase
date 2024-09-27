@@ -906,11 +906,15 @@ int ObDMLStmt::iterate_stmt_expr(ObStmtExprVisitor &visitor)
                OB_FAIL(visitor.visit(table_items_.at(i)->flashback_query_expr_,
                                      SCOPE_FROM))) {
       LOG_WARN("failed to visit flashback query expr", K(ret));
-    } else if (NULL != table_items_.at(i)->json_table_def_ &&
-               NULL != table_items_.at(i)->json_table_def_->doc_expr_ &&
-               OB_FAIL(visitor.visit(table_items_.at(i)->json_table_def_->doc_expr_,
-                                     SCOPE_FROM))) {
-      LOG_WARN("failed to add json table doc expr", K(ret));
+    } else if (NULL != table_items_.at(i)->json_table_def_) {
+      for (int64_t j = 0; OB_SUCC(ret) && j < table_items_.at(i)->json_table_def_->doc_exprs_.count(); ++j) {
+        if (NULL != table_items_.at(i)->json_table_def_->doc_exprs_.at(j) &&
+            OB_FAIL(visitor.visit(table_items_.at(i)->json_table_def_->doc_exprs_.at(j), SCOPE_FROM))) {
+          LOG_WARN("failed to add json table doc expr", K(ret));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (table_items_.at(i)->is_values_table() &&
                NULL != table_items_.at(i)->values_table_def_) {
       if (OB_FAIL(visitor.visit(table_items_.at(i)->values_table_def_->access_exprs_, SCOPE_FROM))) {
@@ -1558,8 +1562,12 @@ int ObDMLStmt::get_json_table_exprs(ObIArray<ObRawExpr *> &json_table_exprs) con
       LOG_WARN("table item is null", K(ret));
     } else if (!table_items_.at(i)->is_json_table()) {
       // do nothing
-    } else if (OB_FAIL(json_table_exprs.push_back(table_items_.at(i)->json_table_def_->doc_expr_))) {
-      LOG_WARN("failed to push back json table doc expr", K(ret));
+    } else {
+      for (int64_t j = 0; OB_SUCC(ret) && j < table_items_.at(i)->json_table_def_->doc_exprs_.count(); ++j) {
+        if (OB_FAIL(json_table_exprs.push_back(table_items_.at(i)->json_table_def_->doc_exprs_.at(j)))) {
+          LOG_WARN("failed to push back json table doc expr", K(ret));
+        }
+      }
     }
   }
   return ret;
@@ -5292,10 +5300,22 @@ int ObJsonTableDef::deep_copy(const ObJsonTableDef& src, ObIRawExprCopier &expr_
 {
   int ret = OB_SUCCESS;
   table_type_ = src.table_type_;
-  if (OB_FAIL(expr_copier.copy(src.doc_expr_, doc_expr_))) {
-    LOG_WARN("failed to deep copy raw expr", K(ret));
+  for (size_t i = 0; OB_SUCC(ret) && i < src.doc_exprs_.count(); ++i) {
+    if (OB_ISNULL(src.doc_exprs_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get doc expr, expr is null", K(ret));
+    } else {
+      ObRawExpr* doc_expr = nullptr;
+      if (OB_ISNULL(doc_expr = static_cast<ObRawExpr*>(allocator->alloc(sizeof(ObRawExpr))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate json table ObRawExpr struct", K(ret));
+      } else if (OB_FAIL(expr_copier.copy(src.doc_exprs_.at(i), doc_expr))) {
+        LOG_WARN("failed to deep copy raw expr", K(ret));
+      } else if (OB_FAIL(doc_exprs_.push_back(doc_expr))) {
+        LOG_WARN("fail to store doc_expr", K(ret));
+      }
+    }
   }
-
   for (size_t i = 0; OB_SUCC(ret) && i < src.all_cols_.count(); ++i) {
     if (OB_ISNULL(src.all_cols_.at(i))) {
       ret = OB_ERR_UNEXPECTED;
@@ -5332,10 +5352,10 @@ int ObJsonTableDef::assign(const ObJsonTableDef& src)
 {
   int ret = OB_SUCCESS;
 
-  doc_expr_ = src.doc_expr_;
-  table_type_ = src.table_type_;
-
-  if (OB_FAIL(all_cols_.assign(src.all_cols_))) {
+  if (OB_FAIL(doc_exprs_.assign(src.doc_exprs_))) {
+    LOG_WARN("fail to assign doc exprs.", K(ret));
+  } else if (OB_FALSE_IT(table_type_ = src.table_type_)) {
+  } else if (OB_FAIL(all_cols_.assign(src.all_cols_))) {
     LOG_WARN("fail to assign all cols.", K(ret));
   }
   for (size_t i = 0; OB_SUCC(ret) && i < src.namespace_arr_.count(); i ++) {

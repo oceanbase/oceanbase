@@ -4304,6 +4304,7 @@ public:
   inline void set_accuracy(const ObAccuracy &accuracy) { accuracy_ = accuracy; }
   inline int64_t get_accuracy_value() const { return accuracy_.accuracy_; }
   inline void set_int() { meta_.set_int(); }
+  inline void set_uint64() { meta_.set_uint64(); }
   inline uint64_t get_udt_id() const { return accuracy_.get_accuracy(); }
   inline void set_udt_id(uint64_t udt_id) { accuracy_.set_accuracy(udt_id); }
   inline void set_subschema_id(const uint16_t subschema_id) { meta_.set_subschema_id(subschema_id); }

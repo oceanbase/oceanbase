@@ -156,6 +156,7 @@ enum MulModeTableType {
   INVALID_TABLE_TYPE = 0,
   OB_ORA_JSON_TABLE_TYPE, // 1
   OB_ORA_XML_TABLE_TYPE = 2,
+  OB_RB_ITERATE_TABLE_TYPE = 3,
 };
 
 typedef struct ObJtColBaseInfo
@@ -199,14 +200,14 @@ typedef struct ObJtColBaseInfo
 typedef struct ObJsonTableDef {
   ObJsonTableDef()
     : all_cols_(),
-      doc_expr_(nullptr),
+      doc_exprs_(),
       table_type_(MulModeTableType::INVALID_TABLE_TYPE),
       namespace_arr_() {}
 
   int deep_copy(const ObJsonTableDef& src, ObIRawExprCopier &expr_copier, ObIAllocator* allocator);
   int assign(const ObJsonTableDef& src);
   common::ObSEArray<ObJtColBaseInfo*, 4, common::ModulePageAllocator, true> all_cols_;
-  ObRawExpr *doc_expr_;
+  common::ObSEArray<ObRawExpr*, 1, common::ModulePageAllocator, true> doc_exprs_;
   MulModeTableType table_type_;
   common::ObSEArray<ObString, 16, common::ModulePageAllocator, true> namespace_arr_;
 } ObJsonTableDef;

@@ -382,6 +382,10 @@ int ObMergeResolver::resolve_table(const ParseNode &parse_tree, TableItem *&tabl
         OZ (resolve_json_table_item(*table_node, table_item));
         break;
       }
+      case T_RB_ITERATE_EXPRESSION: {
+        OZ (resolve_rb_iterate_item(*table_node, table_item));
+        break;
+      }
       default: {
         /* won't be here */
         ret = OB_ERR_PARSER_SYNTAX;

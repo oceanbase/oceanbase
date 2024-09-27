@@ -11632,11 +11632,15 @@ int ObTransformUtils::is_from_item_correlated(
         LOG_WARN("failed to check function table expr correlated", K(ret));
       }
     } else if (table->is_json_table()) {
-      if (OB_ISNULL(table->json_table_def_->doc_expr_)) {
+      if (table->json_table_def_->doc_exprs_.empty()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null expr", K(ret));
-      } else if (OB_FAIL(is_correlated_expr(exec_params, table->json_table_def_->doc_expr_, is_correlated))) {
-        LOG_WARN("failed to check function table expr correlated", K(ret));
+      } else {
+        for (int64_t j = 0; OB_SUCC(ret) && !is_correlated && j < table->json_table_def_->doc_exprs_.count(); ++j) {
+          if (OB_FAIL(is_correlated_expr(exec_params, table->json_table_def_->doc_exprs_.at(j), is_correlated))) {
+            LOG_WARN("failed to check function table expr correlated", K(ret));
+          }
+        }
       }
     } else if (table->is_values_table()) {
       if (OB_ISNULL(table->values_table_def_)) {
@@ -15835,11 +15839,15 @@ int ObTransformUtils::check_contain_correlated_json_table(const ObDMLStmt *stmt,
         LOG_WARN("unexpect null table item", K(ret));
       } else if (!table->is_json_table()) {
         // do nothing
-      } else if (OB_ISNULL(table->json_table_def_) || OB_ISNULL(table->json_table_def_->doc_expr_)) {
+      } else if (OB_ISNULL(table->json_table_def_) || table->json_table_def_->doc_exprs_.empty()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null expr", K(ret), K(table->json_table_def_));
-      } else if (!table->json_table_def_->doc_expr_->get_relation_ids().is_empty()) {
-        is_contain = true;
+      } else {
+        for (int64_t j = 0; OB_SUCC(ret) && !is_contain && j < table->json_table_def_->doc_exprs_.count(); ++j) {
+          if (!table->json_table_def_->doc_exprs_.at(j)->get_relation_ids().is_empty()) {
+            is_contain = true;
+          }
+        }
       }
     }
   }

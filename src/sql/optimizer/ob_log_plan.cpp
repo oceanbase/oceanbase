@@ -1387,15 +1387,27 @@ int ObLogPlan::init_json_table_depend_info(const ObIArray<TableItem*> &table_ite
     } else if (OB_ISNULL(table->json_table_def_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null function table expr", K(ret));
-    } else if (table->json_table_def_->doc_expr_->get_relation_ids().is_empty()) {
-      //do thing
-    } else if (OB_FAIL(info.depend_table_set_.add_members(table->json_table_def_->doc_expr_->get_relation_ids()))) {
-      LOG_WARN("failed to assign table ids", K(ret));
-    } else if (OB_FAIL(init_json_table_column_depend_info(info.depend_table_set_, table, stmt))) { // deal column items default value
-      LOG_WARN("fail to init json table default value depend info", K(ret));
-    } else if (OB_FALSE_IT(info.table_idx_ = stmt->get_table_bit_index(table->table_id_))) {
-    } else if (OB_FAIL(table_depend_infos_.push_back(info))) {
-      LOG_WARN("failed to push back info", K(ret));
+    } else {
+      bool is_all_relation_id_empty = true;
+      for (int64_t j = 0; OB_SUCC(ret) && j < table->json_table_def_->doc_exprs_.count(); ++j) {
+        if (OB_ISNULL(table->json_table_def_->doc_exprs_.at(j))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("doc_expr in json_table_def is null", K(ret));
+        } else if (table->json_table_def_->doc_exprs_.at(j)->get_relation_ids().is_empty()) {
+          //do nothing
+        } else if (OB_FAIL(info.depend_table_set_.add_members(table->json_table_def_->doc_exprs_.at(j)->get_relation_ids()))) {
+          LOG_WARN("failed to assign table ids", K(ret));
+        } else {
+          is_all_relation_id_empty = false;
+        }
+        if (OB_FAIL(ret) || is_all_relation_id_empty) {
+        } else if (OB_FAIL(init_json_table_column_depend_info(info.depend_table_set_, table, stmt))) { // deal column items default value
+          LOG_WARN("fail to init json table default value depend info", K(ret));
+        } else if (OB_FALSE_IT(info.table_idx_ = stmt->get_table_bit_index(table->table_id_))) {
+        } else if (OB_FAIL(table_depend_infos_.push_back(info))) {
+          LOG_WARN("failed to push back info", K(ret));
+        }
+      }
     }
   }
   if (OB_SUCC(ret)) {
@@ -2712,11 +2724,12 @@ int ObLogPlan::allocate_json_table_path(JsonTablePath *json_table_path,
     LOG_WARN("failed to allocate json table path", K(ret));
   } else {
     op->set_table_id(json_table_path->table_id_);
-    op->add_values_expr(json_table_path->value_expr_);
     op->set_table_name(table_item->get_table_name());
     ObJsonTableDef* tbl_def = table_item->get_json_table_def();
 
-    if (OB_ISNULL(tbl_def)) {
+    if (OB_FAIL(op->add_values_expr(json_table_path->value_exprs_))) {
+      LOG_WARN("failed to add values expr", K(ret));
+    } else if (OB_ISNULL(tbl_def)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected param, table define can't be null", K(ret));
     } else if (OB_FAIL(append(op->get_origin_cols_def(), tbl_def->all_cols_))) {

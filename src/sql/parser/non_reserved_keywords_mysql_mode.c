@@ -1084,6 +1084,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"rb_build_agg", RB_BUILD_AGG},
   {"rb_or_agg", RB_OR_AGG},
   {"rb_and_agg", RB_AND_AGG},
+  {"rb_iterate", RB_ITERATE},
   {"optimizer_costs", OPTIMIZER_COSTS},
   {"micro_index_clustered", MICRO_INDEX_CLUSTERED}
 };

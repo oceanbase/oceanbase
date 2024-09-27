@@ -337,7 +337,7 @@ END_P SET_VAR DELIMITER
 
         QUARTER QUERY QUERY_RESPONSE_TIME QUEUE_TIME QUICK QUOTA_NAME
 
-        RB_AND_AGG RB_BUILD_AGG RB_OR_AGG REBUILD RECOVER RECOVERY_WINDOW RECYCLE REDO_BUFFER_SIZE REDOFILE REDUNDANCY REDUNDANT REFRESH REGION RELAY RELAYLOG
+        RB_AND_AGG RB_BUILD_AGG RB_ITERATE RB_OR_AGG REBUILD RECOVER RECOVERY_WINDOW RECYCLE REDO_BUFFER_SIZE REDOFILE REDUNDANCY REDUNDANT REFRESH REGION RELAY RELAYLOG
         RELAY_LOG_FILE RELAY_LOG_POS RELAY_THREAD RELOAD REMAP REMOVE REORGANIZE REPAIR REPEATABLE REPLICA
         REPLICA_NUM REPLICA_TYPE REPLICATION REPORT RESET RESOURCE RESOURCE_POOL RESOURCE_POOL_LIST RESPECT RESTART
         RESTORE RESUME RETURNED_SQLSTATE RETURNS RETURNING REVERSE REWRITE ROLLBACK ROLLUP ROOT
@@ -545,7 +545,7 @@ END_P SET_VAR DELIMITER
 %type <node> skip_index_type opt_skip_index_type_list
 %type <node> opt_rebuild_column_store
 %type <node> vec_index_params vec_index_param vec_index_param_value
-%type <node> json_table_expr mock_jt_on_error_on_empty jt_column_list json_table_column_def
+%type <node> json_table_expr rb_iterate_expr mock_jt_on_error_on_empty jt_column_list json_table_column_def
 %type <node> json_table_ordinality_column_def json_table_exists_column_def json_table_value_column_def json_table_nested_column_def
 %type <node> opt_value_on_empty_or_error_or_mismatch opt_on_mismatch
 %type <node> table_values_clause table_values_clause_with_order_by_and_limit values_row_list row_value
@@ -3342,6 +3342,10 @@ MOD '(' expr ',' expr ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_RB_AND_AGG, 1, $3);
   $$->reserved_ = 0;
+}
+| RB_ITERATE '(' simple_expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RB_ITERATE_EXPRESSION, 2, $3, NULL);
 }
 ;
 
@@ -12694,6 +12698,10 @@ tbl_name
 {
   $$ = $2;
   $$->value_ = 1; // value_ = 1 means with parentheses
+}
+| rb_iterate_expr
+{
+  $$ = $1;
 }
 ;
 
@@ -23532,6 +23540,21 @@ JSON '(' column_name ')' STORE AS '(' lob_storage_parameters ')'
 }
 ;
 
+rb_iterate_expr:
+RB_ITERATE '(' simple_expr ')' relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RB_ITERATE_EXPRESSION, 2, $3, $5);
+}
+| RB_ITERATE '(' simple_expr ')' AS relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RB_ITERATE_EXPRESSION, 2, $3, $6);
+}
+| RB_ITERATE '(' simple_expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RB_ITERATE_EXPRESSION, 2, $3, NULL);
+}
+;
+
 unreserved_keyword:
 unreserved_keyword_for_role_name { $$=$1;}
 | unreserved_keyword_ambiguous_roles { $$=$1;}
@@ -24356,6 +24379,7 @@ ACCESS_INFO
 |       SUM_OPNSIZE
 |       VALIDATION
 |       RB_BUILD_AGG
+|       RB_ITERATE
 |       RB_OR_AGG
 |       RB_AND_AGG
 |       OVERWRITE

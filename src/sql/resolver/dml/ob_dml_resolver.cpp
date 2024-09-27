@@ -4208,10 +4208,23 @@ int ObDMLResolver::resolve_table(const ParseNode &parse_tree,
           LOG_WARN("invalid argument", K(ret));
         } else if (lib::is_mysql_mode() && T_JSON_TABLE_EXPRESSION == table_node->type_
                    && GET_MIN_CLUSTER_VERSION() < DATA_VERSION_4_2_1_0) {
-          ret = OB_INVALID_ARGUMENT;
+          ret = OB_NOT_SUPPORTED;
           LOG_WARN("json table in mysql mode not support before 4.2.1", K(ret), K(GET_MIN_CLUSTER_VERSION()));
         }
         OZ (resolve_json_table_item(*table_node, table_item));
+        break;
+      }
+      case T_RB_ITERATE_EXPRESSION: {
+        if (OB_ISNULL(session_info_)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid argument", K(ret));
+        } else if (lib::is_mysql_mode() && T_RB_ITERATE_EXPRESSION == table_node->type_
+                   && GET_MIN_CLUSTER_VERSION() < DATA_VERSION_4_3_4_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("rb_iterate not support before 4.3.4", K(ret), K(GET_MIN_CLUSTER_VERSION()));
+        } else if (OB_FAIL(resolve_rb_iterate_item(*table_node, table_item))) {
+          LOG_WARN("failed to resolve rb iterate item", K(ret));
+        }
         break;
       }
       case T_VALUES_TABLE_EXPRESSION: {
@@ -5143,6 +5156,214 @@ int ObDMLResolver::resolve_str_const(const ParseNode &parse_tree, ObString& path
   return ret;
 }
 
+int ObDMLResolver::resolve_rb_iterate_item(const ParseNode &parse_tree, TableItem *&tbl_item)
+{
+  int ret = OB_SUCCESS;
+  ObDMLStmt *stmt = get_stmt();
+  TableItem *item = NULL;
+  ColumnItem *col_item = NULL;
+  ParseNode *expr_node = NULL;
+  ParseNode *alias_node = NULL;
+  ObRawExpr *rb_expr = NULL;
+  ObString alias_name;
+
+  if (T_RB_ITERATE_EXPRESSION != parse_tree.type_ || 2 != parse_tree.num_child_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table type not support ot param num mismatch", K(parse_tree.type_), K(parse_tree.num_child_));
+  } else if ((OB_ISNULL(stmt) || OB_ISNULL(allocator_))) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("resolver isn't init", K(ret), KP(stmt), KP(allocator_));
+  } else if (OB_ISNULL(expr_node = parse_tree.children_[0])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr node is null", K(ret));
+  } else {
+    alias_node = parse_tree.children_[1];
+  }
+
+  // resolve parse nodes
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(resolve_sql_expr(*(expr_node), rb_expr))) {
+    LOG_WARN("fail to resolve sql expr", K(ret));
+  } else if (OB_ISNULL(rb_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rb expr is null", K(ret));
+  } else {
+    uint64_t extra = rb_expr->get_extra();
+    extra |= CM_ERROR_ON_SCALE_OVER;
+    rb_expr->set_extra(extra);
+    OZ (rb_expr->deduce_type(session_info_));
+  }
+  // resolve alias_node
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(alias_node)) {
+    alias_name = ObString("rb_iterate");
+  } else {
+    alias_name.assign_ptr(alias_node->str_value_, alias_node->str_len_);
+  }
+
+  // create a table item and add root column
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(create_rb_iterate_table_item(item, alias_name))) {
+    LOG_WARN("failed to create rb iterate table item", K(ret));
+  } else if (OB_FAIL(item->json_table_def_->doc_exprs_.push_back(rb_expr))) {
+    LOG_WARN("failed to push back rb expr", K(ret));
+  } else if (OB_FAIL(rb_iterate_table_add_column(item, col_item))) {
+    LOG_WARN("failed to add rb iterate table column", K(ret));
+  } else {
+    tbl_item = item;
+  }
+
+  return ret;
+}
+
+int ObDMLResolver::create_rb_iterate_table_item(TableItem *&table_item, ObString alias_name)
+{
+  INIT_SUCC(ret);
+  ObDMLStmt *stmt = get_stmt();
+  ObJsonTableDef* table_def = NULL;
+  ObString table_name;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is null", K(stmt), K(ret));
+  } else if (OB_ISNULL(table_def = static_cast<ObJsonTableDef*>(allocator_->alloc(sizeof(ObJsonTableDef))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("faield to allocate memory json table def buffer", K(ret));
+  } else if (OB_FALSE_IT(table_def = static_cast<ObJsonTableDef*>(new (table_def) ObJsonTableDef()))) {
+  } else if (OB_FALSE_IT(table_def->table_type_ = MulModeTableType::OB_RB_ITERATE_TABLE_TYPE)) {
+  } else if (OB_ISNULL(table_item = stmt->create_table_item(*allocator_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to create table table_item", K(ret));
+  }
+
+  // generate table_name
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(alias_name)) {
+    bool is_table_name_existed = false;
+    int64_t table_name_order = 0;
+    table_name = ObString("rb_iterate");
+    do {
+      is_table_name_existed = false;
+      for (int64_t j = 0; OB_SUCC(ret) && !is_table_name_existed && j < stmt->get_table_items().count(); ++j) {
+        TableItem *tmp_table_item = NULL;
+        if (OB_ISNULL(tmp_table_item = stmt->get_table_item(j))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null table_item", K(ret));
+        } else if (0 == tmp_table_item->get_object_name().case_compare(table_name)) {
+          is_table_name_existed = true;
+        }
+      }
+      if (OB_SUCC(ret) && is_table_name_existed) {
+        table_name_order++;
+        char gen_table_name[OB_MAX_USER_TABLE_NAME_LENGTH_MYSQL + 1] = {'\0'};
+        if (OB_FAIL(databuff_printf(gen_table_name, OB_MAX_USER_TABLE_NAME_LENGTH_MYSQL, "rb_iterate_%ld", table_name_order))) {
+          LOG_WARN("failed to print table name", K(ret));
+        } else if (OB_FAIL(ob_write_string(*allocator_, ObString(gen_table_name), table_name))) {
+          LOG_WARN("failed to write string", K(ret));
+        }
+      }
+    } while (OB_SUCC(ret) && is_table_name_existed);
+  } else {
+    table_name = alias_name;
+  }
+
+  OX (table_item->table_name_ = table_name);
+  OX (table_item->alias_name_ = table_name);
+  OX (table_item->table_id_ = generate_table_id());
+  OX (table_item->type_ = TableItem::JSON_TABLE);
+  OX (table_item->json_table_def_ = table_def);
+  OZ (stmt->add_table_item(session_info_, table_item));
+
+  // create root_col
+  if (OB_SUCC(ret)) {
+    ObDmlJtColDef* root_col_def = NULL;
+    if (OB_ISNULL(root_col_def = static_cast<ObDmlJtColDef*>(allocator_->alloc(sizeof(ObDmlJtColDef))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate column def", K(ret));
+    } else {
+      root_col_def = new (root_col_def) ObDmlJtColDef();
+      root_col_def->table_id_ = table_item->table_id_;
+      root_col_def->col_base_info_.col_type_ = NESTED_COL_TYPE;
+      root_col_def->col_base_info_.parent_id_ = -1;
+      root_col_def->col_base_info_.id_ = 0;
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(json_table_infos_.push_back(root_col_def))) {
+      LOG_WARN("failed to push back column info", K(ret));
+    } else if (OB_FAIL(table_item->json_table_def_->all_cols_.push_back(&root_col_def->col_base_info_))) {
+      LOG_WARN("json table cols add param fail", K(ret));
+    }
+  }
+
+  return ret;
+}
+
+
+int ObDMLResolver::rb_iterate_table_add_column(TableItem *&table_item, ColumnItem *&col_item, int64_t col_id)
+{
+  INIT_SUCC(ret);
+  ObString col_name;
+  ObDmlJtColDef* col_def = NULL;
+  common::ObDataType data_type;
+  if (OB_ISNULL(col_def = static_cast<ObDmlJtColDef*>(allocator_->alloc(sizeof(ObDmlJtColDef))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory failed", K(ret));
+  } else {
+    col_def = new (col_def) ObDmlJtColDef();
+  }
+
+  // generate col_name
+  if (OB_FAIL(ret)) {
+  } else if (col_id == 1) {
+    // use alias name as column name
+    col_name = table_item->alias_name_;
+  } else {
+    char gen_col_name[OB_MAX_COLUMN_NAME_LENGTH + 1] = {'\0'};
+    if (OB_FAIL(databuff_printf(gen_col_name, OB_MAX_COLUMN_NAME_LENGTH, "%.*s_%ld", table_item->alias_name_.length(), table_item->alias_name_.ptr(), col_id))) {
+      LOG_WARN("failed to print col name", K(ret));
+    } else if (OB_FAIL(ob_write_string(*allocator_, ObString(gen_col_name), col_name))) {
+      LOG_WARN("failed to write string", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    col_def->col_base_info_.col_name_.assign_ptr(col_name.ptr(), col_name.length());
+    col_def->col_base_info_.col_type_ = COL_TYPE_RB_ITERATE;
+    col_def->col_base_info_.parent_id_ = 0;
+    col_def->col_base_info_.id_ = col_id;
+    col_def->col_base_info_.output_column_idx_ = col_id;
+    // check
+    bool exists = false;
+   if (OB_FAIL(resolve_json_table_check_dup_name(table_item->json_table_def_,
+                                                  col_def->col_base_info_.col_name_,
+                                                  exists))) {
+      LOG_WARN("json table check dup name fail", K(ret));
+    } else if (exists) {
+      ret = OB_NON_UNIQ_ERROR;
+      LOG_WARN("column in json table is ambiguous", K(col_def->col_base_info_.col_name_));
+    }
+  }
+
+  // column item
+  if (OB_SUCC(ret)) {
+    data_type.set_collation_level(CS_LEVEL_IMPLICIT);
+    data_type.set_uint64();
+    data_type.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY[ObUInt64Type]);
+    col_def->col_base_info_.data_type_ = data_type;
+    if (OB_FAIL(generate_json_table_output_column_item(table_item,
+                                                      data_type,
+                                                      col_def->col_base_info_.col_name_,
+                                                      col_def->col_base_info_.id_,
+                                                      col_item))) {
+      LOG_WARN("failed to generate json column.", K(ret));
+    } else if (OB_FALSE_IT(col_item->col_idx_ = table_item->json_table_def_->all_cols_.count())) {
+    } else if (OB_FAIL(table_item->json_table_def_->all_cols_.push_back(&col_def->col_base_info_))) {
+      LOG_WARN("failed to push_back col_base_info_ to all_cols_", K(ret));
+    }
+  }
+
+  return ret;
+}
+
 int ObDMLResolver::resolve_json_table_item(const ParseNode &parse_tree, TableItem *&tbl_item)
 {
   int ret = OB_SUCCESS;
@@ -5208,8 +5429,9 @@ int ObDMLResolver::resolve_json_table_item(const ParseNode &parse_tree, TableIte
       LOG_WARN("faield to allocate memory json table def buffer", K(ret));
     } else {
       table_def = static_cast<ObJsonTableDef*>(new (table_buf) ObJsonTableDef());
-      table_def->doc_expr_ = json_doc_expr;
-      if (T_JSON_TABLE_EXPRESSION == parse_tree.type_) {
+      if (OB_FAIL(table_def->doc_exprs_.push_back(json_doc_expr))) {
+        LOG_WARN("failed to push back doc expr", K(ret));
+      } else if (T_JSON_TABLE_EXPRESSION == parse_tree.type_) {
         table_def->table_type_ = MulModeTableType::OB_ORA_JSON_TABLE_TYPE;
       } else if (T_XML_TABLE_EXPRESSION == parse_tree.type_) {
         table_def->table_type_ = MulModeTableType::OB_ORA_XML_TABLE_TYPE;

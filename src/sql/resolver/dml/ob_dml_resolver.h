@@ -209,6 +209,11 @@ public:
                                   TableItem *&table_item);
   int resolve_json_table_item(const ParseNode &table_node,
                               TableItem *&table_item);
+  int resolve_rb_iterate_item(const ParseNode &table_node,
+                              TableItem *&table_item);
+  int create_rb_iterate_table_item(TableItem *&table_item, ObString alias_name = NULL);
+  int rb_iterate_table_add_column(TableItem *&table_item, ColumnItem *&col_item, int64_t col_id = 1);
+
   int resolve_xml_namespaces(const ParseNode *namespace_node, ObJsonTableDef*& table_def);
   int fill_same_column_to_using(JoinedTable* &joined_table);
   int get_columns_from_table_item(const TableItem *table_item, common::ObIArray<common::ObString> &column_names);

@@ -1118,7 +1118,7 @@ struct EstimateCostInfo {
     JsonTablePath()
       : Path(NULL),
         table_id_(OB_INVALID_ID),
-        value_expr_(NULL),
+        value_exprs_(),
         column_param_default_exprs_() {}
     virtual ~JsonTablePath() {}
     int assign(const JsonTablePath &other, common::ObIAllocator *allocator);
@@ -1133,7 +1133,7 @@ struct EstimateCostInfo {
     }
   public:
     uint64_t table_id_;
-    ObRawExpr* value_expr_;
+    common::ObSEArray<ObRawExpr*, 1, common::ModulePageAllocator, true> value_exprs_;
     common::ObSEArray<ObColumnDefault, 1, common::ModulePageAllocator, true> column_param_default_exprs_;
   private:
       DISALLOW_COPY_AND_ASSIGN(JsonTablePath);
@@ -1452,7 +1452,7 @@ struct NullAwareAntiJoinInfo {
                                 ObIArray<ObExecParamRawExpr *> &nl_params,
                                 ObIArray<ObRawExpr*> &subquery_exprs);
 
-    int param_json_table_expr(ObRawExpr* &json_table_expr,
+    int param_json_table_expr(ObIArray<ObRawExpr*> &json_table_exprs,
                               ObIArray<ObExecParamRawExpr *> &nl_params,
                               ObIArray<ObRawExpr*> &subquery_exprs);
     int generate_json_table_default_val(ObIArray<ObExecParamRawExpr *> &nl_param,
