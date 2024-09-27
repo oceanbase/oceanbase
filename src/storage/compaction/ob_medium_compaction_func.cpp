@@ -1469,7 +1469,8 @@ int ObMediumCompactionScheduleFunc::schedule_tablet_medium_merge(
 {
   int ret = OB_SUCCESS;
   create_dag_flag = false;
-
+  const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
+  const ObLSID &ls_id = ls.get_ls_id();
 #ifdef ERRSIM
   ret = OB_E(EventTable::EN_MEDIUM_CREATE_DAG) ret;
   if (OB_FAIL(ret)) {
@@ -1478,13 +1479,13 @@ int ObMediumCompactionScheduleFunc::schedule_tablet_medium_merge(
   }
 #endif
   const int64_t last_major_snapshot = tablet.get_last_major_snapshot_version(); // current compaction scn
-  if (MTL(ObTenantTabletScheduler *)->could_major_merge_start() && last_major_snapshot > 0) {
+  if (OB_FAIL(ObTenantTabletScheduler::check_ready_for_major_merge(ls_id, tablet, MEDIUM_MERGE))) {
+    LOG_WARN("failed to check ready for major merge", K(ret), K(ls_id), K(tablet_id));
+  } else if (MTL(ObTenantTabletScheduler *)->could_major_merge_start() && last_major_snapshot > 0) {
     bool is_standy_tenant = !MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID();
     if (is_standy_tenant && !scheduler_called) {
       // standy tenant should not visit inner table if it is not scheduler_called, wait for scheduler loop
     } else {
-      const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
-      const ObLSID &ls_id = ls.get_ls_id();
       ObArenaAllocator temp_allocator("GetMediumInfo", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()); // for load medium info
       const ObMediumCompactionInfoList *medium_list = nullptr;
       bool schedule_flag = false;

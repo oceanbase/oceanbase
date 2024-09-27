@@ -2896,7 +2896,7 @@ int ObService::inner_fill_tablet_info_(
   ObLSHandle ls_handle;
   ObTabletHandle tablet_handle;
   int ret = OB_SUCCESS;
-  bool need_wait_major_convert_in_cs_replica = false;
+  bool need_wait_for_report = false;
   ObTablet *tablet = nullptr;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -2923,14 +2923,11 @@ int ObService::inner_fill_tablet_info_(
   } else if (OB_ISNULL(gctx_.config_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("gctx_.config_ is null", KR(ret), K(tenant_id), K(tablet_id));
-  } else if (ls->is_cs_replica() && !tablet->get_tablet_meta().ha_status_.is_data_status_complete()) {
+  } else if (OB_FAIL(ObCSReplicaUtil::check_need_wait_for_report(*ls, *tablet, need_wait_for_report))) {
+    LOG_WARN("fail to check need wait report", K(ret), KPC(ls), KPC(tablet));
+  } else if (need_wait_for_report) {
     ret = OB_EAGAIN;
-    LOG_WARN("tablet is not complete in cs replica now, need retry later", KR(ret), KPC(ls), KPC(tablet));
-  } else if (OB_FAIL(ObCSReplicaUtil::check_need_wait_major_convert(*ls, tablet_id, *tablet, need_wait_major_convert_in_cs_replica))) {
-    LOG_WARN("fail to check need wait major convert in cs replica", K(ret), KPC(ls), KPC(tablet));
-  } else if (need_wait_major_convert_in_cs_replica) {
-    ret = OB_EAGAIN;
-    LOG_WARN("need wait major convert for cs replica", K(ret), K(tablet_id));
+    LOG_WARN("need wait report for cs replica", K(ret), K(tablet_id));
   } else if (OB_FAIL(tablet->get_tablet_report_info(
      gctx_.self_addr(), tablet_replica, tablet_checksum, need_checksum))) {
     LOG_WARN("fail to get tablet report info from tablet", KR(ret), K(tenant_id),

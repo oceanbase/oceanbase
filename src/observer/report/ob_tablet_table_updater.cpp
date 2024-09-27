@@ -627,6 +627,8 @@ int ObTabletTableUpdater::generate_tasks_(
       bool is_remove_task = false;
       if (OB_TENANT_NOT_IN_SERVER != ret && OB_LS_NOT_EXIST != ret && OB_TABLET_NOT_EXIST != ret) {
         LOG_WARN("failed to fill tablet replica info", KR(ret), KPC(task));
+      } else if (OB_EAGAIN == ret) {
+        ret = OB_SUCCESS; // do not affect report of other tablets
       } else if (OB_TENANT_NOT_IN_SERVER == ret) {
         is_remove_task = true;
         ret = OB_SUCCESS;

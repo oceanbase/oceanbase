@@ -692,7 +692,7 @@ int ObTablet::init_with_migrate_param(
       ObTableHandleV2 mds_mini_sstable;
       const blocksstable::ObSSTable *sstable = nullptr;
       const bool need_compat = !tablet_id.is_ls_inner_tablet() && param.version_ < ObMigrationTabletParam::PARAM_VERSION_V3;
-      bool need_process_cs_replica = false;
+      bool need_generate_cs_replica_cg_array = false;
       if (is_transfer) {
         // do nothing
       } else if (!need_compat) {
@@ -744,7 +744,7 @@ int ObTablet::init_with_migrate_param(
         // since transfer use storage schema from ls leader, need convert into cs storage schema in cs replica
         if (!is_transfer) {
           ALLOC_AND_INIT(allocator, storage_schema_addr_, param.storage_schema_);
-        } else if (OB_FAIL(inner_alloc_and_init_storage_schema(allocator, ls_id, tablet_id, param.storage_schema_, need_process_cs_replica))) {
+        } else if (OB_FAIL(inner_alloc_and_init_storage_schema(allocator, ls_id, tablet_id, param.storage_schema_, need_generate_cs_replica_cg_array))) {
           LOG_WARN("failed to int storage schema", K(ret), K(ls_id), K(tablet_id), K(param));
         }
       }
@@ -8394,24 +8394,24 @@ int ObTablet::inner_alloc_and_init_storage_schema(
     const share::ObLSID &ls_id,
     const ObTabletID &tablet_id,
     const ObStorageSchema &input_storage_schema,
-    bool &need_process_cs_replica)
+    bool &need_generate_cs_replica_cg_array)
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
-  need_process_cs_replica = false;
+  need_generate_cs_replica_cg_array = false;
   if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD))) {
     LOG_WARN("failed to get ls", K(ret), K(ls_id));
   } else if (OB_UNLIKELY(!ls_handle.is_valid()) || OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls is invalid or nullptr", K(ret), K(ls_id), K(ls_handle), KPC(ls));
-  } else if (OB_FAIL(ObCSReplicaUtil::check_need_process_cs_replica(*ls, tablet_id, input_storage_schema, need_process_cs_replica))) {
+  } else if (OB_FAIL(ObCSReplicaUtil::check_need_generate_cs_replica_cg_array(*ls, tablet_id, input_storage_schema, need_generate_cs_replica_cg_array))) {
     LOG_WARN("failed to check need process cs replica", K(ret), K(ls_id), K(tablet_id), K(input_storage_schema));
   } else if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, storage_schema_addr_.ptr_))) {
     LOG_WARN("fail to alloc and new storage schema", K(ret));
   } else if (OB_FAIL(storage_schema_addr_.get_ptr()->init(allocator, input_storage_schema,
-                     false /*skip_column_info*/, nullptr /*column_group_schema*/, need_process_cs_replica))) {
-    LOG_WARN("fail to init storage schema", K(ret), K(input_storage_schema), K(need_process_cs_replica));
+                     false /*skip_column_info*/, nullptr /*column_group_schema*/, need_generate_cs_replica_cg_array))) {
+    LOG_WARN("fail to init storage schema", K(ret), K(input_storage_schema), K(need_generate_cs_replica_cg_array));
   }
   return ret;
 }

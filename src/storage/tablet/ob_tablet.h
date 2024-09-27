@@ -457,7 +457,7 @@ public:
       const share::ObLSID &ls_id,
       const ObTabletID &tablet_id,
       const ObStorageSchema &input_storage_schema,
-      bool &need_process_cs_replica);
+      bool &need_generate_cs_replica_cg_array);
   int get_ddl_kv_mgr(ObDDLKvMgrHandle &ddl_kv_mgr_handle, bool try_create = false);
   int set_ddl_kv_mgr(const ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   int remove_ddl_kv_mgr(const ObDDLKvMgrHandle &ddl_kv_mgr_handle);
