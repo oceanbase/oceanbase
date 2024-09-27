@@ -31,6 +31,7 @@
 #ifdef OB_BUILD_ARBITRATION
 #include "rootserver/ob_arbitration_service.h"
 #endif
+#include "observer/dbms_scheduler/ob_dbms_sched_service.h"
 #include "rootserver/backup/ob_backup_task_scheduler.h"
 #include "rootserver/backup/ob_backup_service.h"
 #include "rootserver/backup/ob_archive_scheduler_service.h"
@@ -1075,8 +1076,10 @@ int ObLS::register_sys_service()
       REGISTER_TO_LOGSERVICE(HEARTBEAT_SERVICE_LOG_BASE_TYPE, MTL(ObHeartbeatService *));
       REGISTER_TO_LOGSERVICE(MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE, MTL(ObMViewMaintenanceService *));
       REGISTER_TO_LOGSERVICE(TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE, MTL(observer::ObTableLoadResourceService *));
+      REGISTER_TO_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
     }
     if (is_meta_tenant(tenant_id)) {
+      REGISTER_TO_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
       REGISTER_TO_LOGSERVICE(SNAPSHOT_SCHEDULER_LOG_BASE_TYPE, MTL(ObTenantSnapshotScheduler *));
     }
   }
@@ -1103,6 +1106,7 @@ int ObLS::register_user_service()
     REGISTER_TO_LOGSERVICE(TTL_LOG_BASE_TYPE, MTL(table::ObTTLService *));
     REGISTER_TO_LOGSERVICE(MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE, MTL(ObMViewMaintenanceService *));
     REGISTER_TO_LOGSERVICE(TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE, MTL(observer::ObTableLoadResourceService *));
+    REGISTER_TO_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
   }
 
   if (ls_id.is_user_ls()) {
@@ -1214,10 +1218,12 @@ void ObLS::unregister_sys_service_()
       UNREGISTER_FROM_LOGSERVICE(HEARTBEAT_SERVICE_LOG_BASE_TYPE, heartbeat_service);
       UNREGISTER_FROM_LOGSERVICE(MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE, MTL(ObMViewMaintenanceService *));
       UNREGISTER_FROM_LOGSERVICE(TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE, MTL(observer::ObTableLoadResourceService *));
+      UNREGISTER_FROM_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
     }
     if (is_meta_tenant(MTL_ID())) {
       ObTenantSnapshotScheduler * snapshot_scheduler = MTL(ObTenantSnapshotScheduler*);
       UNREGISTER_FROM_LOGSERVICE(SNAPSHOT_SCHEDULER_LOG_BASE_TYPE, snapshot_scheduler);
+      UNREGISTER_FROM_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
     }
   }
 }
@@ -1246,6 +1252,7 @@ void ObLS::unregister_user_service_()
     UNREGISTER_FROM_LOGSERVICE(TTL_LOG_BASE_TYPE, MTL(table::ObTTLService *));
     UNREGISTER_FROM_LOGSERVICE(MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE, MTL(ObMViewMaintenanceService *));
     UNREGISTER_FROM_LOGSERVICE(TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE, MTL(observer::ObTableLoadResourceService *));
+    UNREGISTER_FROM_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
   }
   if (ls_meta_.ls_id_.is_user_ls()) {
     UNREGISTER_FROM_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, &tablet_ttl_mgr_.get_vector_idx_scheduler());

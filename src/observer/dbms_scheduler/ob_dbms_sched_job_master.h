@@ -25,7 +25,7 @@
 #include "lib/thread/ob_simple_thread_pool.h"
 #include "lib/task/ob_timer.h"
 #include "lib/container/ob_iarray.h"
-
+#include "share/ob_unit_table_operator.h"
 #include "share/schema/ob_schema_service.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 
@@ -38,14 +38,6 @@ namespace oceanbase
 
 namespace dbms_scheduler
 {
-class ObDBMSSchedJobThread : public ObSimpleThreadPool
-{
-public:
-  ObDBMSSchedJobThread() {}
-  virtual ~ObDBMSSchedJobThread() {}
-private:
-  virtual void handle(void *task);
-};
 
 class ObDBMSSchedJobKey : public common::ObLink
 {
@@ -94,45 +86,10 @@ public:
 private:
   uint64_t tenant_id_;
   bool is_oracle_tenant_;
-  uint64_t job_id_;
+  int64_t job_id_;
   char job_name_buf_[JOB_NAME_MAX_SIZE];
   common::ObString job_name_;
   uint64_t execute_at_;
-};
-
-class ObDBMSSchedJobTask
-{
-public:
-  typedef common::ObSortedVector<ObDBMSSchedJobKey *> WaitVector;
-  typedef WaitVector::iterator WaitVectorIterator;
-
-  ObDBMSSchedJobTask()
-    : inited_(false),
-      allocator_(NULL),
-      wait_vector_(0, NULL, ObModIds::VECTOR) {}
-
-  virtual ~ObDBMSSchedJobTask() {}
-
-  int init();
-  int start(common::ObVSliceAlloc *allocator);
-  int stop();
-  int destroy();
-
-  int scheduler(ObDBMSSchedJobKey *job_key);
-  int add_new_job(ObDBMSSchedJobKey *job_key);
-  WaitVector &wait_vector() { return wait_vector_; }
-
-  inline static bool compare_job_key(
-    const ObDBMSSchedJobKey *lhs, const ObDBMSSchedJobKey *rhs);
-  inline static bool equal_job_key(
-    const ObDBMSSchedJobKey *lhs, const ObDBMSSchedJobKey *rhs);
-
-private:
-  bool inited_;
-  common::ObVSliceAlloc *allocator_;
-  WaitVector wait_vector_;
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObDBMSSchedJobTask);
 };
 
 class ObDBMSSchedJobMaster
@@ -140,74 +97,32 @@ class ObDBMSSchedJobMaster
 public:
   ObDBMSSchedJobMaster()
     : inited_(false),
-      stoped_(false),
-      running_(false),
+      stoped_(true),
+      is_leader_(false),
+      tenant_id_(OB_INVALID_TENANT_ID),
       trace_id_(NULL),
       rand_(),
       schema_service_(NULL),
       job_rpc_proxy_(NULL),
       self_addr_(),
-      allocator_(ObMemAttr(OB_SERVER_TENANT_ID, "DbmsScheduler"), OB_MALLOC_NORMAL_BLOCK_SIZE, block_alloc_),
-      alive_jobs_() {}
+      allocator_(ObMemAttr(MTL_ID(), "DbmsScheduler"), OB_MALLOC_NORMAL_BLOCK_SIZE, block_alloc_),
+      alive_jobs_(),
+      tenant_server_cache_(),
+      wait_vector_(0, NULL, ObModIds::VECTOR) {}
 
   virtual ~ObDBMSSchedJobMaster() { alive_jobs_.destroy(); };
 
-  class JobIdByTenant
-  {
-  public:
-    JobIdByTenant()
-        : tenant_id_(OB_INVALID_TENANT_ID),
-          job_id_(OB_INVALID_ID) {}
-    JobIdByTenant(const int64_t tenant_id, const int64_t job_id)
-      : tenant_id_(tenant_id),
-        job_id_(job_id) {}
-    ~JobIdByTenant() {}
-    bool operator ==(const JobIdByTenant &other) const
-    {
-      return tenant_id_ == other.tenant_id_ && job_id_ == other.job_id_;
-    }
-    bool operator !=(const JobIdByTenant &other) const
-    {
-      return !(*this == other);
-    }
-    uint64_t hash() const
-    {
-      uint64_t hash_val = 0;
-
-      hash_val = murmurhash(&tenant_id_, sizeof(tenant_id_), hash_val);
-      hash_val = murmurhash(&job_id_, sizeof(job_id_), hash_val);
-
-      return hash_val;
-    }
-    int hash(uint64_t &hash_val) const
-    {
-      hash_val = hash();
-      return OB_SUCCESS;
-    }
-    void set_tenant_id(int64_t tenant_id) { tenant_id_ = tenant_id; }
-    void set_job_id(int64_t job_id) { job_id_ = job_id; }
-    int64_t get_tenant_id() { return tenant_id_; }
-    int64_t get_job_id() { return job_id_; }
-    TO_STRING_KV(K_(tenant_id),
-      K_(job_id));
-  private:
-    int64_t tenant_id_;
-    int64_t job_id_;
-  };
-
-  static ObDBMSSchedJobMaster &get_instance();
-
   bool is_inited() { return inited_; }
-
-  int init(rootserver::ObUnitManager *unit_mgr,
-           common::ObISQLClient *sql_client,
-           share::schema::ObMultiVersionSchemaService *schema_service);
+  int init(common::ObMySQLProxy *sql_client,
+           share::schema::ObMultiVersionSchemaService *schema_service,
+           uint64_t tenant_id);
 
   int start();
   int stop();
+  bool is_stop() { return stoped_; }
+  bool is_leader() { return is_leader_; }
   int scheduler();
   int destroy();
-
   int alloc_job_key(
     ObDBMSSchedJobKey *&job_key,
     uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id, const common::ObString &job_name);
@@ -215,8 +130,9 @@ public:
 
   int server_random_pick_from_zone_list(int64_t tenant_id, common::ObIArray<common::ObZone> &zone_list, ObAddr &server);
   int get_execute_addr(ObDBMSSchedJobInfo &job_info, common::ObAddr &execute_addr);
-
-  int check_all_tenants();
+  void switch_to_leader();
+  void switch_to_follower();
+  int check_tenant();
   int check_new_jobs(uint64_t tenant_id, bool is_oracle_tenant);
   int register_new_jobs(uint64_t tenant_id, bool is_oracle_tenant, ObIArray<ObDBMSSchedJobInfo> &job_infos);
   int register_job(ObDBMSSchedJobKey *job_key, int64_t next_date);
@@ -228,30 +144,41 @@ private:
   const static int MAX_READY_JOBS_CAPACITY = 1024 * 1024;
   const static int MIN_SCHEDULER_INTERVAL = 1 * 1000 * 1000;
   const static int CHECK_NEW_INTERVAL = 20 * 1000 * 1000;
+  const static int UPDATE_SERVER_CACHE_INTERVAL = 10 * 1000 * 1000;
   const static int DEFAULT_ZONE_SIZE = 4;
   const static int FILTER_ZONE_SIZE = 1;
   const static int DEFALUT_SERVER_SIZE = 16;
 
   bool inited_;
   bool stoped_;
-  bool running_;
-
+  bool is_leader_;
+  uint64_t tenant_id_;
   const uint64_t *trace_id_;
 
   common::ObRandom rand_; // for random pick server
-  rootserver::ObUnitManager *unit_mgr_;
   share::schema::ObMultiVersionSchemaService *schema_service_; // for got all tenant info
   obrpc::ObDBMSSchedJobRpcProxy *job_rpc_proxy_;
 
   common::ObAddr self_addr_;
-  ObDBMSSchedJobTask scheduler_task_;
-  ObDBMSSchedJobThread scheduler_thread_;
   ObDBMSSchedTableOperator table_operator_;
+  ObUnitTableOperator unit_operator_;
 
   common::ObBlockAllocMgr block_alloc_;
   common::ObVSliceAlloc allocator_;
 
-  common::hash::ObHashSet<JobIdByTenant> alive_jobs_;
+  common::hash::ObHashSet<int64_t> alive_jobs_;
+
+  // server list cache
+  common::ObArray<ObAddr> tenant_server_cache_;
+  int update_tenant_server_cache();
+
+  // wait list
+  common::ObSortedVector<ObDBMSSchedJobKey *> wait_vector_;
+  void clear_wait_vector();
+  inline static bool compare_job_key(
+    const ObDBMSSchedJobKey *lhs, const ObDBMSSchedJobKey *rhs);
+  inline static bool equal_job_key(
+    const ObDBMSSchedJobKey *lhs, const ObDBMSSchedJobKey *rhs);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDBMSSchedJobMaster);

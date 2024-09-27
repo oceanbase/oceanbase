@@ -168,6 +168,7 @@ public:
   common::ObString &get_powner() { return powner_; }
   common::ObString &get_cowner() { return cowner_; }
   common::ObString &get_zone() { return field1_; }
+  common::ObString &get_repeat_interval() { return repeat_interval_; }
   common::ObString &get_interval() { return interval_; }
   common::ObString &get_program_name() { return program_name_; }
   common::ObString &get_job_name() { return job_name_; }
