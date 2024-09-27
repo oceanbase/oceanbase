@@ -1252,14 +1252,14 @@ int ObLoadDataDirectImpl::FileLoadExecutor::process_task_handle(TaskHandle *hand
     }
     while (OB_SUCC(ret) && !is_iter_end) {
       // 每个新的batch需要分配一个新的shared_allocator
-      ObTableLoadSharedAllocatorHandle allocator_handle =
-        ObTableLoadSharedAllocatorHandle::make_handle("TLD_share_alloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-      if (!allocator_handle) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to make allocator handle", KR(ret));
-      }
+      ObTableLoadSharedAllocatorHandle allocator_handle;
       ObTableLoadObjRowArray obj_rows;
-      obj_rows.set_allocator(allocator_handle);
+      if (OB_FAIL(ObTableLoadSharedAllocatorHandle::make_handle(
+            allocator_handle, "TLD_share_alloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()))) {
+        LOG_WARN("fail to make allocator handle", KR(ret));
+      } else {
+        obj_rows.set_allocator(allocator_handle);
+      }
 
       while (OB_SUCC(ret) && (processed_line_count < execute_param_->batch_row_count_)) {
         if (OB_FAIL(worker_ctx.data_parser_.get_next_row(row))) {
@@ -2052,17 +2052,12 @@ int ObLoadDataDirectImpl::BackupLoadExecutor::process_partition(int32_t session_
       processed_line_count = 0;
       if (OB_FAIL(check_status())) {
         LOG_WARN("fail to check status", KR(ret), K(partition_idx), K(session_id));
+      } else if (OB_FAIL(ObTableLoadSharedAllocatorHandle::make_handle(
+                   allocator_handle, "TLD_share_alloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()))) {
+        LOG_WARN("failed to make allocator handle", KR(ret));
       } else {
-        allocator_handle = ObTableLoadSharedAllocatorHandle::make_handle(
-          "TLD_share_alloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-        if (OB_UNLIKELY(!allocator_handle)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed to make allocator handle", KR(ret));
-        } else {
-          obj_rows.set_allocator(allocator_handle);
-        }
+        obj_rows.set_allocator(allocator_handle);
       }
-
       while (OB_SUCC(ret) && processed_line_count < execute_param_->batch_row_count_) {
         if (OB_FAIL(row_iter->get_next_row(new_row))) {
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
