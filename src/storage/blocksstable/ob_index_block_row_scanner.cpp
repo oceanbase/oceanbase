@@ -182,8 +182,7 @@ ObIndexBlockRowScanner::ObIndexBlockRowScanner()
     current_(ObIMicroBlockReaderInfo::INVALID_ROW_INDEX),
     start_(ObIMicroBlockReaderInfo::INVALID_ROW_INDEX),
     end_(ObIMicroBlockReaderInfo::INVALID_ROW_INDEX),
-    step_(1), range_idx_(0), nested_offset_(0),
-    curr_rowkey_begin_idx_(0), rowkey_end_idx_(0), rowkey_end_idx_for_last_index_row_(0),
+    step_(1), range_idx_(0), nested_offset_(0), rowkey_begin_idx_(0), rowkey_end_idx_(0),
     index_format_(IndexFormat::INVALID), is_get_(false), is_reverse_scan_(false),
     is_left_border_(false), is_right_border_(false), is_inited_(false)
 {}
@@ -224,9 +223,8 @@ void ObIndexBlockRowScanner::reset()
   step_ = 1;
   range_idx_ = 0;
   nested_offset_ = 0;
-  curr_rowkey_begin_idx_ = 0;
+  rowkey_begin_idx_ = 0;
   rowkey_end_idx_ = 0;
-  rowkey_end_idx_for_last_index_row_ = 0;
   index_format_ = IndexFormat::INVALID;
   is_get_ = false;
   is_reverse_scan_ = false;
@@ -362,9 +360,8 @@ int ObIndexBlockRowScanner::open(
     end_ = row_count - 1;
     macro_id_ = macro_id;
     rows_info_ = rows_info;
-    curr_rowkey_begin_idx_ = rowkey_begin_idx;
+    rowkey_begin_idx_ = rowkey_begin_idx;
     rowkey_end_idx_ = rowkey_end_idx;
-    rowkey_end_idx_for_last_index_row_ = curr_rowkey_begin_idx_;
     current_ = 0;
     is_get_ = false;
   }
@@ -787,6 +784,15 @@ int ObIndexBlockRowScanner::get_next_idx_row(ObMicroIndexInfo &idx_block_row)
   return ret;
 }
 
+void ObIndexBlockRowScanner::skip_index_rows()
+{
+  for (; rowkey_begin_idx_ < rowkey_end_idx_; ++rowkey_begin_idx_) {
+    if (!rows_info_->is_row_skipped(rowkey_begin_idx_)) {
+      break;
+    }
+  }
+}
+
 int ObIndexBlockRowScanner::find_rowkeys_belong_to_same_idx_row(int64_t &rowkey_idx)
 {
   int ret = OB_SUCCESS;
@@ -798,11 +804,11 @@ int ObIndexBlockRowScanner::find_rowkeys_belong_to_same_idx_row(int64_t &rowkey_
     cur_rowkey = block_meta_tree_->get_rowkey(current_);
   }
 
-  for (; OB_SUCC(ret) && curr_rowkey_begin_idx_ < rowkey_end_idx_; ++curr_rowkey_begin_idx_) {
-    if (rows_info_->is_row_skipped(curr_rowkey_begin_idx_)) {
+  for (; OB_SUCC(ret) && rowkey_begin_idx_ < rowkey_end_idx_; ++rowkey_begin_idx_) {
+    if (rows_info_->is_row_skipped(rowkey_begin_idx_)) {
       continue;
     }
-    const ObDatumRowkey &rowkey = rows_info_->get_rowkey(curr_rowkey_begin_idx_);
+    const ObDatumRowkey &rowkey = rows_info_->get_rowkey(rowkey_begin_idx_);
     int32_t cmp_ret = 0;
     if (nullptr != cur_rowkey) {
       if (OB_FAIL(rowkey.compare(*cur_rowkey, *datum_utils_, cmp_ret, false))) {
@@ -816,17 +822,17 @@ int ObIndexBlockRowScanner::find_rowkeys_belong_to_same_idx_row(int64_t &rowkey_
 
     if (OB_FAIL(ret)) {
     } else if (cmp_ret > 0) {
-      rowkey_idx = curr_rowkey_begin_idx_;
+      rowkey_idx = rowkey_begin_idx_;
       is_decided = true;
       break;
     } else if (cmp_ret == 0) {
-      rowkey_idx = curr_rowkey_begin_idx_ + 1;
+      rowkey_idx = rowkey_begin_idx_ + 1;
       is_decided = true;
       break;
     }
   }
   if (!is_decided) {
-    rowkey_idx = curr_rowkey_begin_idx_;
+    rowkey_idx = rowkey_begin_idx_;
   }
   return ret;
 }
@@ -834,17 +840,11 @@ int ObIndexBlockRowScanner::find_rowkeys_belong_to_same_idx_row(int64_t &rowkey_
 int ObIndexBlockRowScanner::skip_to_next_valid_position(ObMicroIndexInfo &idx_block_row)
 {
   int ret = OB_SUCCESS;
-  // The rowkeys may have been processed by the upper-layer sstable or by the bloom filter
-  // during prefetch, so the processed rowkeys must be skipped.
-  for (; curr_rowkey_begin_idx_ < rowkey_end_idx_; ++curr_rowkey_begin_idx_) {
-    if (!rows_info_->is_row_skipped(curr_rowkey_begin_idx_)) {
-      break;
-    }
-  }
-  if (curr_rowkey_begin_idx_ == rowkey_end_idx_) {
+  skip_index_rows();
+  if (rowkey_begin_idx_ == rowkey_end_idx_) {
     ret = OB_ITER_END;
   } else if (IndexFormat::TRANSFORMED == index_format_) {
-    const ObDatumRowkey &rowkey = rows_info_->get_rowkey(curr_rowkey_begin_idx_);
+    const ObDatumRowkey &rowkey = rows_info_->get_rowkey(rowkey_begin_idx_);
     ObDatumComparor<ObDatumRowkey> cmp(*datum_utils_, ret, false, true, false);
     const ObDatumRowkey *first = idx_data_header_->rowkey_array_ + current_;
     const ObDatumRowkey *last = idx_data_header_->rowkey_array_ + end_ + 1;
@@ -857,18 +857,18 @@ int ObIndexBlockRowScanner::skip_to_next_valid_position(ObMicroIndexInfo &idx_bl
       current_ = found - idx_data_header_->rowkey_array_;
     }
   } else if (IndexFormat::BLOCK_TREE == index_format_) {
-    if (OB_FAIL(block_meta_tree_->skip_to_next_valid_position(rows_info_->get_rowkey(curr_rowkey_begin_idx_),
+    if (OB_FAIL(block_meta_tree_->skip_to_next_valid_position(rows_info_->get_rowkey(rowkey_begin_idx_),
                                                               *datum_utils_,
                                                               current_))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
-        LOG_WARN("Failed to skip to next valid position in block meta tree", K(ret), K_(current), K_(curr_rowkey_begin_idx),
+        LOG_WARN("Failed to skip to next valid position in block meta tree", K(ret), K_(current), K_(rowkey_begin_idx),
                  KPC_(idx_data_header));
       }
     }
   } else if (IndexFormat::RAW_DATA == index_format_) {
     bool equal = false;
-    if (OB_FAIL(micro_reader_->find_bound(rows_info_->get_rowkey(curr_rowkey_begin_idx_), true, current_, current_, equal))) {
-      LOG_WARN("Failed to skip to next valid position in micro block reader", K(ret), K_(current), K_(curr_rowkey_begin_idx),
+    if (OB_FAIL(micro_reader_->find_bound(rows_info_->get_rowkey(rowkey_begin_idx_), true, current_, current_, equal))) {
+      LOG_WARN("Failed to skip to next valid position in micro block reader", K(ret), K_(current), K_(rowkey_begin_idx),
                KPC_(idx_data_header));
     } else if (current_ == (end_ + 1)) {
       ret = OB_ITER_END;
@@ -879,16 +879,9 @@ int ObIndexBlockRowScanner::skip_to_next_valid_position(ObMicroIndexInfo &idx_bl
   }
   if (OB_SUCC(ret)) {
     idx_block_row.rows_info_ = rows_info_;
-    idx_block_row.rowkey_begin_idx_ = curr_rowkey_begin_idx_;
-    // If a rowkey happens to be the endkey of the microblock, the rowkey idx must also be included in the rowkey idx range of next index row,
-    // because there may be multiple versions of one row across the microblock. Otherwise, some multi-version rows may be missed when do check_rows_lock.
-    // We must recognize this situation and treat it specifically when checking macro block bloom filters in prefetching phase,
-    // Otherwise, this border row may be filtered out incorrectly.
-    idx_block_row.is_rowkey_begin_idx_overlap_ = curr_rowkey_begin_idx_ < rowkey_end_idx_for_last_index_row_;
+    idx_block_row.rowkey_begin_idx_ = rowkey_begin_idx_;
     if (OB_FAIL(find_rowkeys_belong_to_same_idx_row(idx_block_row.rowkey_end_idx_))) {
       LOG_WARN("Failed to find rowkeys belong to same index row", K(ret), K_(current), KPC_(idx_data_header));
-    } else {
-      rowkey_end_idx_for_last_index_row_ = idx_block_row.rowkey_end_idx_;
     }
   }
   return ret;

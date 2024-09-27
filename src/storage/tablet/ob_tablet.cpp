@@ -2741,7 +2741,7 @@ int ObTablet::get_memtables(common::ObIArray<storage::ObITable *> &memtables, co
 int ObTablet::update_row(
     ObRelativeTable &relative_table,
     storage::ObStoreCtx &store_ctx,
-    const ObColDescIArray &col_descs,
+    const common::ObIArray<share::schema::ObColDesc> &col_descs,
     const ObIArray<int64_t> &update_idx,
     const storage::ObStoreRow &old_row,
     const storage::ObStoreRow &new_row,
@@ -2779,22 +2779,18 @@ int ObTablet::update_row(
       FALSE_IT(get_encrypt_meta(relative_table.get_table_id(), encrypt_meta_arr, encrypt_meta))) {
 #endif
     } else {
-      ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "update_row"));
+      ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), ObModIds::OB_STORE_ROW_EXISTER));
       ObTableIterParam param;
       ObTableAccessContext context;
-      const ObMemtableSetArg arg(&new_row,
-                                 &col_descs,
-                                 &update_idx,
-                                 &old_row,
-                                 1,     /*row_count*/
-                                 false, /*check_exist*/
-                                 encrypt_meta);
-
       if (OB_FAIL(prepare_param_ctx(allocator, relative_table, store_ctx, param, context))) {
         LOG_WARN("prepare param ctx fail, ", K(ret));
       } else if (OB_FAIL(write_memtable->set(param,
                                              context,
-                                             arg))) {
+                                             col_descs,
+                                             update_idx,
+                                             old_row,
+                                             new_row,
+                                             encrypt_meta))) {
         LOG_WARN("failed to set memtable, ", K(ret));
       }
     }
@@ -2803,75 +2799,21 @@ int ObTablet::update_row(
   return ret;
 }
 
-int ObTablet::update_rows(
-    ObRelativeTable &relative_table,
-    ObStoreCtx &store_ctx,
-    const ObColDescIArray &col_descs,
-    const ObIArray<int64_t> &update_idx,
-    const storage::ObStoreRow *old_tbl_rows,
-    const common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr,
-    ObRowsInfo &rows_info)
-{
-  int ret = OB_SUCCESS;
-  {
-    ObStorageTableGuard guard(this, store_ctx, true);
-    ObMemtable *write_memtable = nullptr;
-    const transaction::ObSerializeEncryptMeta *encrypt_meta = nullptr;
-    if (OB_UNLIKELY(!is_inited_)) {
-      ret = OB_NOT_INIT;
-      LOG_WARN("Not inited", K(ret), K_(is_inited));
-    } else if (OB_UNLIKELY(!store_ctx.is_valid()
-               || col_descs.count() <= 0
-               || !relative_table.is_valid())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("Invalid argument", K(ret), K(store_ctx), K(relative_table), K(col_descs));
-    } else if (OB_UNLIKELY(relative_table.get_tablet_id() != tablet_meta_.tablet_id_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Tablet id doesn't match", K(ret), K(relative_table.get_tablet_id()), K(tablet_meta_.tablet_id_));
-    } else if (OB_FAIL(guard.refresh_and_protect_memtable_for_write(relative_table))) {
-      LOG_WARN("Failed to protect table", K(ret));
-    } else if (OB_FAIL(prepare_memtable(relative_table, store_ctx, write_memtable))) {
-      LOG_WARN("Failed to prepare write memtable", K(ret), K(relative_table));
-#ifdef OB_BUILD_TDE_SECURITY
-    // XXX we do not turn on clog encryption now
-    } else if (false && NULL != encrypt_meta_arr && !encrypt_meta_arr->empty() &&
-        FALSE_IT(get_encrypt_meta(relative_table.get_table_id(), encrypt_meta_arr, encrypt_meta))) {
-#endif
-    } else {
-      ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "update_rows"));
-      ObTableIterParam param;
-      ObTableAccessContext context;
-      ObMemtableSetArg arg(rows_info.rows_,
-                           &col_descs,
-                           &update_idx,
-                           old_tbl_rows,
-                           rows_info.get_rowkey_cnt(),
-                           false/*check_exist*/,
-                           encrypt_meta);
-      if (OB_FAIL(prepare_param_ctx(allocator, relative_table, store_ctx, param, context))) {
-        LOG_WARN("Failed to prepare param ctx", K(ret));
-      } else if (OB_FAIL(write_memtable->multi_set(param, context, arg, rows_info))) {
-        LOG_WARN("Failed to multi-set memtable", K(ret), K(arg));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObTablet::insert_rows(
     ObRelativeTable &relative_table,
     ObStoreCtx &store_ctx,
+    ObStoreRow *rows,
+    ObRowsInfo &rows_info,
     const bool check_exist,
     const ObColDescIArray &col_descs,
-    const common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr,
-    ObRowsInfo &rows_info)
+    const int64_t row_count,
+    const common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr)
 {
   int ret = OB_SUCCESS;
   {
     ObStorageTableGuard guard(this, store_ctx, true);
     ObMemtable *write_memtable = nullptr;
     const transaction::ObSerializeEncryptMeta *encrypt_meta = nullptr;
-    const int64_t row_count = rows_info.get_rowkey_cnt();
     if (OB_UNLIKELY(!is_inited_)) {
       ret = OB_NOT_INIT;
       LOG_WARN("Not inited", K(ret), K_(is_inited));
@@ -2893,24 +2835,12 @@ int ObTablet::insert_rows(
         FALSE_IT(get_encrypt_meta(relative_table.get_table_id(), encrypt_meta_arr, encrypt_meta))) {
 #endif
     } else {
-      ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "insert_rows"));
+      ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "insert_acc_ctx"));
       ObTableIterParam param;
       ObTableAccessContext context;
-      const ObMemtableSetArg arg(rows_info.rows_,
-                                 &col_descs,
-                                 nullptr, /*update_idx*/
-                                 nullptr, /*old_row*/
-                                 row_count,
-                                 check_exist,
-                                 encrypt_meta);
       if (OB_FAIL(prepare_param_ctx(allocator, relative_table, store_ctx, param, context))) {
         LOG_WARN("Failed to prepare param ctx", K(ret));
-      } else if (1 == row_count) {
-        if (OB_FAIL(write_memtable->set(param, context, arg))) {
-          LOG_WARN("fail to set memtable", K(ret));
-          rows_info.set_row_conflict_error(0, ret);
-        }
-      } else if (OB_FAIL(write_memtable->multi_set(param, context, arg, rows_info))) {
+      } else if (OB_FAIL(write_memtable->multi_set(param, context, col_descs, rows, row_count, check_exist, encrypt_meta, rows_info))) {
         LOG_WARN("Failed to multi-set memtable", K(ret), K(row_count));
       }
     }
@@ -2918,7 +2848,7 @@ int ObTablet::insert_rows(
   return ret;
 }
 
-int ObTablet::insert_row(
+int ObTablet::insert_row_without_rowkey_check(
     ObRelativeTable &relative_table,
     ObStoreCtx &store_ctx,
     const bool check_exist,
@@ -2955,22 +2885,17 @@ int ObTablet::insert_row(
       FALSE_IT(get_encrypt_meta(relative_table.get_table_id(), encrypt_meta_arr, encrypt_meta))) {
 #endif
     } else {
-      ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "insert_row"));
+      ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), ObModIds::OB_STORE_ROW_EXISTER));
       ObTableIterParam param;
       ObTableAccessContext context;
-      const ObMemtableSetArg arg(&row,
-                                 &col_descs,
-                                 nullptr, /*update_idx*/
-                                 nullptr, /*old_row*/
-                                 1,       /*row_count*/
-                                 check_exist,
-                                 encrypt_meta);
-
       if (OB_FAIL(prepare_param_ctx(allocator, relative_table, store_ctx, param, context))) {
         LOG_WARN("prepare param ctx fail, ", K(ret));
       } else if (OB_FAIL(write_memtable->set(param,
                                              context,
-                                             arg))) {
+                                             col_descs,
+                                             row,
+                                             encrypt_meta,
+                                             check_exist))) {
         LOG_WARN("fail to set memtable", K(ret));
       }
     }

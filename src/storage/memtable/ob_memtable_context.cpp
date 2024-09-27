@@ -301,8 +301,7 @@ int ObMemtableCtx::write_lock_yield()
   return ret;
 }
 
-void ObMemtableCtx::on_wlock_retry(const ObMemtableKey& key,
-                                   const transaction::ObTransID &conflict_tx_id)
+void ObMemtableCtx::on_wlock_retry(const ObMemtableKey& key, const transaction::ObTransID &conflict_tx_id)
 {
   #define USING_LOG_PREFIX TRANS
   if (retry_info_.need_print()) {
@@ -312,12 +311,11 @@ void ObMemtableCtx::on_wlock_retry(const ObMemtableKey& key,
   retry_info_.on_conflict();
 }
 
-void ObMemtableCtx::on_key_duplication_retry(const ObMemtableKey &key,
-                                             const ObMvccRow *value,
-                                             const ObMvccWriteResult &res)
+void ObMemtableCtx::on_key_duplication_retry(const ObMemtableKey& key)
 {
-  TRANS_LOG_RET(WARN, OB_SUCCESS, "primary key duplication conflict",
-                K(key), KPC(this), KPC(value), K(res));
+  if (retry_info_.need_print()) {
+    TRANS_LOG_RET(WARN, OB_SUCCESS, "primary key duplication conflict", K(key), KPC(this));
+  }
 }
 
 void ObMemtableCtx::on_tsc_retry(const ObMemtableKey& key,
@@ -326,8 +324,7 @@ void ObMemtableCtx::on_tsc_retry(const ObMemtableKey& key,
                                  const transaction::ObTransID &conflict_tx_id)
 {
   if (retry_info_.need_print()) {
-    TRANS_LOG_RET(WARN, OB_SUCCESS, "transaction_set_consistency conflict", K(key),
-                  K(snapshot_version), K(max_trans_version), K(conflict_tx_id), KPC(this));
+    TRANS_LOG_RET(WARN, OB_SUCCESS, "transaction_set_consistency conflict", K(key), K(snapshot_version), K(max_trans_version), K(conflict_tx_id), KPC(this));
   }
   retry_info_.on_conflict();
 }
@@ -514,8 +511,6 @@ int ObMemtableCtx::do_trans_end(
     set_commit_version(trans_version);
     if (OB_FAIL(trans_mgr_.trans_end(commit))) {
       TRANS_LOG(WARN, "trans end error", K(ret), K(*this));
-    } else {
-      TRANS_LOG(DEBUG, "trans commit", KPC(this), K(commit), K(trans_version));
     }
     // after a transaction finishes, callback memory should be released
     // and check memory leakage

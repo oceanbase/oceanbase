@@ -490,14 +490,8 @@ public:
   virtual void reset() override { }
   int rewind(const ObDASDMLBaseCtDef *das_ctdef)
   {
-    if (nullptr != cur_row_) {
-      allocator_.free(cur_row_);
-      cur_row_ = nullptr;
-    }
-    if (nullptr != cur_rows_) {
-      allocator_.free(cur_rows_);
-      cur_rows_ = nullptr;
-    }
+    cur_row_ = nullptr;
+    cur_rows_ = nullptr;
     spatial_row_idx_ = 0;
     set_ctdef(das_ctdef);
     return common::OB_SUCCESS;

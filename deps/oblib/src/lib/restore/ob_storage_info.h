@@ -182,6 +182,7 @@ public:
   ObStorageChecksumType get_checksum_type() const;
   const char *get_checksum_type_str() const;
   virtual int get_storage_info_str(char *storage_info, const int64_t info_len) const;
+  int get_delete_mode() const { return delete_mode_; }
   virtual int get_authorization_str(char *authorization_str,
                                     const int64_t authorization_str_len,
                                     ObSTSToken &sts_token) const;
@@ -201,7 +202,7 @@ public:
 protected:
   virtual int get_access_key_(char *key_buf, const int64_t key_buf_len) const;
   virtual int parse_storage_info_(const char *storage_info, bool &has_appid);
-  int check_delete_mode_(const char *delete_mode) const;
+  int check_delete_mode_(const char *delete_mode);
   int check_addressing_model_(const char *addressing_model) const;
   int set_checksum_type_(const char *checksum_type_str);
   int set_storage_info_field_(const char *info, char *field, const int64_t length);
@@ -210,6 +211,7 @@ protected:
 
 
 public:
+  int delete_mode_;
   // TODO: Rename device_type_ to storage_protocol_type_ for better clarity
   // Prefix in the storage_info string, such as 's3://', indicates the protocol used to access the
   // target. Currently, both OBS and GCS are accessed via the s3 protocol, hence s3_region is updated

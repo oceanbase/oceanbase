@@ -104,7 +104,8 @@ int ObObjectStorageCredential::assign(const ObObjectStorageCredential &credentia
 
 //***********************ObObjectStorageInfo***************************
 ObObjectStorageInfo::ObObjectStorageInfo()
-  : device_type_(ObStorageType::OB_STORAGE_MAX_TYPE),
+  : delete_mode_(ObIStorageUtil::DELETE),
+    device_type_(ObStorageType::OB_STORAGE_MAX_TYPE),
     checksum_type_(ObStorageChecksumType::OB_MD5_ALGO),
     is_assume_role_mode_(false)
 {
@@ -123,6 +124,7 @@ ObObjectStorageInfo::~ObObjectStorageInfo()
 
 void ObObjectStorageInfo::reset()
 {
+  delete_mode_ = ObIStorageUtil::DELETE;
   device_type_ = ObStorageType::OB_STORAGE_MAX_TYPE;
   checksum_type_ = ObStorageChecksumType::OB_MD5_ALGO;
   endpoint_[0] = '\0';
@@ -399,8 +401,8 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
   }
   return ret;
 }
-
-int ObObjectStorageInfo::check_delete_mode_(const char *delete_mode) const
+//TODO(shifagndan): define delete mode as enum
+int ObObjectStorageInfo::check_delete_mode_(const char *delete_mode)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(delete_mode)) {
@@ -409,6 +411,10 @@ int ObObjectStorageInfo::check_delete_mode_(const char *delete_mode) const
   } else if (0 != strcmp(delete_mode, "delete") && 0 != strcmp(delete_mode, "tagging")) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "delete mode is invalid", K(ret), K(delete_mode));
+  } else if (0 == strcmp(delete_mode, "delete")) {
+    delete_mode_ = ObIStorageUtil::DELETE;
+  } else {
+    delete_mode_ = ObIStorageUtil::TAGGING;
   }
   return ret;
 }
@@ -507,6 +513,7 @@ int ObObjectStorageInfo::set_storage_info_field_(const char *info, char *field, 
 int ObObjectStorageInfo::assign(const ObObjectStorageInfo &storage_info)
 {
   int ret = OB_SUCCESS;
+  delete_mode_ = storage_info.delete_mode_;
   device_type_ = storage_info.device_type_;
   checksum_type_ = storage_info.checksum_type_;
   MEMCPY(endpoint_, storage_info.endpoint_, sizeof(endpoint_));

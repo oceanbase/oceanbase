@@ -32,7 +32,8 @@ public:
   int check_row_locked(
     const bool check_exist,
     const share::SCN &snapshot_version,
-    ObStoreRowLockState &lock_state);
+    ObStoreRowLockState &lock_state,
+    ObRowState &row_state);
   inline void set_iter_type(bool check_exist)
   {
     if (check_exist) {

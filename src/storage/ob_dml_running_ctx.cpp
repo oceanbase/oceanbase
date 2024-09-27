@@ -46,6 +46,7 @@ ObDMLRunningCtx::ObDMLRunningCtx(
     column_ids_(nullptr),
     idx_col_descs_(),
     tbl_row_(),
+    is_old_row_valid_for_lob_(false),
     schema_guard_(share::schema::ObSchemaMgrItem::MOD_RELATIVE_TABLE),
     is_inited_(false)
 {

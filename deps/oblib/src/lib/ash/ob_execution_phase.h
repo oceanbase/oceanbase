@@ -47,7 +47,6 @@ struct ObExecPhase
       uint64_t in_rpc_encode_: 1;
       uint64_t in_rpc_decode_: 1;
       uint64_t in_connection_mgr_: 1;
-      uint64_t in_check_row_confliction_: 1;
     };
   };
 };

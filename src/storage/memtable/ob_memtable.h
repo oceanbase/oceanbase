@@ -30,7 +30,6 @@
 #include "storage/compaction/ob_medium_compaction_mgr.h"
 #include "storage/tx_storage/ob_ls_handle.h" //ObLSHandle
 #include "storage/checkpoint/ob_checkpoint_diagnose.h"
-#include "storage/blocksstable/ob_row_writer.h"
 
 namespace oceanbase
 {
@@ -158,8 +157,8 @@ public:
       TRANS_LOG(WARN, "get_data_size failed", K(ret), KP(data), K(data_size));
     } else if (OB_ISNULL(new_node = (ObMvccTransNode *)allocator.alloc(sizeof(ObMvccTransNode) + data_size))
                || OB_ISNULL(new(new_node) ObMvccTransNode())) {
+      TRANS_LOG(WARN, "alloc ObMvccTransNode fail");
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      TRANS_LOG(WARN, "alloc ObMvccTransNode fail", K(data_size));
     } else if (OB_FAIL(ObMemtableDataHeader::build(reinterpret_cast<ObMemtableDataHeader *>(new_node->buf_), data))) {
       TRANS_LOG(WARN, "MemtableData dup fail", K(ret));
     }
@@ -201,43 +200,6 @@ enum class MemtableRefOp
   NONE = 0,
   INC_REF,
   DEC_REF
-};
-
-struct ObMemtableSetArg
-{
-public:
-  const storage::ObStoreRow *new_row_;
-  const ObIArray<ObColDesc> *columns_;
-  const ObIArray<int64_t> *update_idx_;
-  const storage::ObStoreRow *old_row_;
-  const int64_t row_count_;
-  const share::ObEncryptMeta *encrypt_meta_;
-  const bool check_exist_;
-
-  // initializer for ObMemtable::set/multi_set
-  ObMemtableSetArg(const storage::ObStoreRow *new_row,
-                   const ObIArray<ObColDesc> *columns,
-                   const ObIArray<int64_t> *update_idx,
-                   const storage::ObStoreRow *old_row,
-                   const int64_t row_count,
-                   const bool check_exist,
-                   const share::ObEncryptMeta *encrypt_meta);
-
-  TO_STRING_KV(KPC_(new_row),
-               KPC_(columns),
-               KPC_(update_idx),
-               KPC_(old_row),
-               K_(row_count),
-               K_(encrypt_meta),
-               K_(check_exist));
-
-  // must ensure all or nothing at all.
-  bool is_valid() const;
-  bool need_old_row() const;
-  int64_t get_row_count() const;
-  bool need_check_exist() const;
-  blocksstable::ObDmlFlag get_dml_flag() const;
-  int64_t get_column_cnt() const;
 };
 
 class ObMemtable : public ObIMemtable, public storage::checkpoint::ObFreezeCheckpoint
@@ -336,16 +298,31 @@ public:
   virtual int set(
       const storage::ObTableIterParam &param,
       storage::ObTableAccessContext &context,
-      const ObMemtableSetArg &arg);
+      const common::ObIArray<share::schema::ObColDesc> &columns, // TODO: remove columns
+      const storage::ObStoreRow &row,
+      const share::ObEncryptMeta *encrypt_meta,
+      const bool check_exist);
+  virtual int set(
+      const storage::ObTableIterParam &param,
+	    storage::ObTableAccessContext &context,
+      const common::ObIArray<share::schema::ObColDesc> &columns, // TODO: remove columns
+      const ObIArray<int64_t> &update_idx,
+      const storage::ObStoreRow &old_row,
+      const storage::ObStoreRow &new_row,
+      const share::ObEncryptMeta *encrypt_meta);
   int multi_set(
       const storage::ObTableIterParam &param,
 	    storage::ObTableAccessContext &context,
-      const ObMemtableSetArg &arg,
+      const common::ObIArray<share::schema::ObColDesc> &columns,
+      const storage::ObStoreRow *rows,
+      const int64_t row_count,
+      const bool check_exist,
+      const share::ObEncryptMeta *encrypt_meta,
       storage::ObRowsInfo &rows_info);
   int check_rows_locked(
+      const bool check_exist,
       const storage::ObTableIterParam &param,
       storage::ObTableAccessContext &context,
-      const bool check_exist,
       ObRowsInfo &rows_info);
 
   // lock is used to lock the row(s)
@@ -353,6 +330,7 @@ public:
   // tablet_id is necessary for the query_engine's key engine(NB: do we need it now?)
   // columns is the schema of the new_row, it contains the row key
   // row/rowkey/row_iter is the row key or row key iterator for lock
+
   virtual int lock(
       const storage::ObTableIterParam &param,
       storage::ObTableAccessContext &context,
@@ -588,6 +566,7 @@ public:
   void dec_unsubmitted_and_unsynced_cnt();
   virtual uint32_t get_freeze_flag() override;
   virtual OB_INLINE int64_t get_timestamp() const override { return timestamp_; }
+  int get_active_table_ids(common::ObIArray<uint64_t> &table_ids);
   blocksstable::ObDatumRange &m_get_real_range(blocksstable::ObDatumRange &real_range,
                                         const blocksstable::ObDatumRange &range, const bool is_reverse) const;
   int get_tx_table_guard(storage::ObTxTableGuard &tx_table_guard);
@@ -659,44 +638,58 @@ public:
                        K_(mt_stat_.last_print_time), K_(ls_id), K_(transfer_freeze_flag), K_(recommend_snapshot_version));
 private:
   static const int64_t OB_EMPTY_MEMSTORE_MAX_SIZE = 10L << 20; // 10MB
-
-  int mvcc_write_(ObStoreCtx &ctx,
-                  const ObMemtableKey &memtable_key,
-                  const ObTxNodeArg &tx_node_arg,
-                  const bool check_exist,
-                  ObMvccWriteResult &res);
-
-  int batch_mvcc_write_(const storage::ObTableIterParam &param,
-                        ObStoreCtx &ctx,
-                        const ObMemtableSetArg &memtable_set_arg,
-                        const ObMemtableKeyGenerator &memtable_keys,
-                        storage::ObRowsInfo &rows_info,
-                        ObTxNodeArgs &tx_node_args,
-                        ObMvccWriteResults &mvcc_results);
+  int mvcc_write_(
+      const storage::ObTableIterParam &param,
+	    storage::ObTableAccessContext &context,
+	    const ObMemtableKey *key,
+	    const ObTxNodeArg &arg,
+      const bool check_exist,
+	    bool &is_new_locked,
+      ObMvccRowAndWriteResult *mvcc_row = nullptr);
 
   int mvcc_replay_(storage::ObStoreCtx &ctx,
                    const ObMemtableKey *key,
                    const ObTxNodeArg &arg);
+  int lock_row_on_frozen_stores_(
+      const storage::ObTableIterParam &param,
+      const ObTxNodeArg &arg,
+      const ObMemtableKey *key,
+      const bool check_exist,
+      storage::ObTableAccessContext &context,
+      ObMvccRow *value,
+      ObMvccWriteResult &res);
 
-  int check_row_locked_on_frozen_stores_(
-    const storage::ObTableIterParam &param,
-    storage::ObTableAccessContext &context,
-    const bool check_exist,
-    const ObMemtableKey *memtable_key,
-    ObMvccWriteResult &res);
+  int lock_row_on_frozen_stores_on_success(
+      const bool row_locked,
+      const blocksstable::ObDmlFlag writer_dml_flag,
+      const share::SCN &max_trans_version,
+      storage::ObTableAccessContext &context,
+      ObMvccRow *value,
+      ObMvccWriteResult &res);
 
-  int check_rows_locked_on_frozen_stores_(
-    const storage::ObTableIterParam &param,
-    storage::ObTableAccessContext &context,
-    const bool check_exist,
-    ObMvccWriteResults &mvcc_results,
-    ObRowsInfo &rows_info);
+  void lock_row_on_frozen_stores_on_failure(
+      const blocksstable::ObDmlFlag writer_dml_flag,
+      const ObMemtableKey &key,
+      int &ret,
+      ObMvccRow *value,
+      storage::ObTableAccessContext &context,
+      ObMvccWriteResult &res);
 
-  int after_check_row_locked_on_frozen_stores_(
-    const int check_status,
-    storage::ObTableAccessContext &context,
-    const bool check_exist,
-    ObMvccWriteResult &res);
+  int lock_rows_on_frozen_stores_(
+      const bool check_exist,
+      const storage::ObTableIterParam &param,
+      const ObMemtableKeyGenerator &memtable_keys,
+      storage::ObTableAccessContext &context,
+      ObMvccRowAndWriteResults &mvcc_rows,
+      ObRowsInfo &rows_info);
+
+  int internal_lock_rows_on_frozen_stores_(
+      const bool check_exist,
+      const ObIArray<ObITable *> &iter_tables,
+      const storage::ObTableIterParam &param,
+      storage::ObTableAccessContext &context,
+      share::SCN &max_trans_version,
+      ObRowsInfo &rows_info);
 
   void get_begin(ObMvccAccessCtx &ctx);
   void get_end(ObMvccAccessCtx &ctx, int ret);
@@ -707,14 +700,22 @@ private:
 
   int set_(
 	    const storage::ObTableIterParam &param,
+      const common::ObIArray<share::schema::ObColDesc> &columns,
+      const storage::ObStoreRow &new_row,
+      const storage::ObStoreRow *old_row,
+      const common::ObIArray<int64_t> *update_idx,
+      const ObMemtableKey &mtk,
+      const bool check_exist,
       storage::ObTableAccessContext &context,
-      const ObMemtableSetArg &arg,
-      const ObMemtableKey &mtk);
+      ObMvccRowAndWriteResult *mvcc_row = nullptr);
   int multi_set_(
       const storage::ObTableIterParam &param,
-      storage::ObTableAccessContext &context,
-      const ObMemtableSetArg &arg,
+      const common::ObIArray<share::schema::ObColDesc> &columns,
+      const storage::ObStoreRow *rows,
+      const int64_t row_count,
+      const bool check_exist,
       const ObMemtableKeyGenerator &memtable_keys,
+      storage::ObTableAccessContext &context,
       storage::ObRowsInfo &rows_info);
   int lock_(
       const storage::ObTableIterParam &param,
@@ -740,25 +741,6 @@ private:
                                       ObIArray<blocksstable::ObDatumRange> &sample_memtable_ranges);
   int try_report_dml_stat_(const int64_t table_id);
   int report_residual_dml_stat_();
-
-  int build_row_data_(ObMemtableCtx *mem_ctx,
-                      const int64_t rowkey_column_cnt,
-                      const ObMemtableSetArg &arg,
-                      const int64_t index,
-                      blocksstable::ObRowWriter &row_writer,
-                      ObRowData &old_row_data,
-                      ObMemtableData &mtd);
-
-  OB_INLINE void cleanup_old_row_(ObMemtableCtx *mem_ctx,
-                                  ObTxNodeArgs &tx_node_args);
-  OB_INLINE void cleanup_old_row_(ObMemtableCtx *mem_ctx,
-                                  ObTxNodeArg &tx_node_arg);
-
-  OB_INLINE void mvcc_write_statistic_(const ObMvccWriteResults &res);
-
-  void mvcc_undo_(ObMvccWriteResults &res);
-
-  void mvcc_undo_(ObMvccWriteResult &res);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMemtable);
@@ -810,6 +792,18 @@ private:
   int64_t max_column_cnt_; // record max column count of row
 };
 
+class RowHeaderGetter
+{
+public:
+  RowHeaderGetter() : modify_count_(0), acc_checksum_(0) {}
+  ~RowHeaderGetter() {}
+  uint32_t get_modify_count() const { return modify_count_; }
+  uint32_t get_acc_checksum() const { return acc_checksum_; }
+  int get();
+private:
+  uint32_t modify_count_;
+  uint32_t acc_checksum_;
+};
 }
 }
 

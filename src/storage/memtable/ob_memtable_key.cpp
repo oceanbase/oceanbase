@@ -63,9 +63,6 @@ int ObMemtableKeyGenerator::init(const storage::ObStoreRow *rows,
         p_store_row_key->~ObStoreRowkey();
         TRANS_LOG(WARN, "mtk encode fail", K(ret), K(rows[i]), K(row_count), K(schema_rowkey_count));
       } else {
-        int64_t real_data_size = p_memtable_key->get_rowkey()->get_deep_copy_size();
-        int64_t aligned_data_size = ALIGN_UP(real_data_size, 8);
-        aligned_key_data_size_ += aligned_data_size;
         size_++;
       }
     }

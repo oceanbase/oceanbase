@@ -245,7 +245,7 @@ int Thread::try_wait()
     int pret = 0;
     if (0 != (pret = pthread_tryjoin_np(pth_, nullptr))) {
       ret = OB_EAGAIN;
-      LOG_WARN("pthread_tryjoin_np failed", K(pret), K(errno), K(ret), K(oceanbase::lib::Thread::tid_));
+      LOG_WARN("pthread_tryjoin_np failed", K(pret), K(errno), K(ret));
     } else {
       destroy_stack();
     }
