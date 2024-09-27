@@ -251,6 +251,7 @@ int ObPluginVectorIndexUtils::read_vector_info(ObPluginVectorIndexAdaptor *adapt
                (storage::ObTableScanParam, data_scan_param)) {
     ObArenaAllocator vid_id_scan_allocator("VecIdxTaskSC1", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObArenaAllocator data_scan_allocator("VecIdxTaskSC2", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    ObArenaAllocator batch_temp_allocator("VecIdxTaskSC3", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     uint32_t alloc_size = (ada_ctx.get_count() > ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE)
                           ? ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE
                           : ada_ctx.get_count();
@@ -298,6 +299,7 @@ int ObPluginVectorIndexUtils::read_vector_info(ObPluginVectorIndexAdaptor *adapt
       }
 
       for (int64_t j = 0; OB_SUCC(ret) && j < ada_ctx.get_count(); j += ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE) {
+        batch_temp_allocator.reuse();
         int64_t vec_cnt = ada_ctx.get_vec_cnt();
         for (int64_t i = 0; OB_SUCC(ret) && i < vec_cnt; i++) {
           if (OB_FAIL(read_object_from_vid_rowkey_table_iter(&(ada_ctx.get_vids()[i+j]),
@@ -305,7 +307,7 @@ int ObPluginVectorIndexUtils::read_vector_info(ObPluginVectorIndexAdaptor *adapt
                                                   vid_id_scan_param,
                                                   vid_id_iter,
                                                   type,
-                                                  allocator,
+                                                  batch_temp_allocator,
                                                   obj_ptr,
                                                   data_table_rowkey_count))) {
             LOG_WARN("failed to read obj from 2nd table.", K(ret));
@@ -315,7 +317,7 @@ int ObPluginVectorIndexUtils::read_vector_info(ObPluginVectorIndexAdaptor *adapt
                                                               data_scan_param,
                                                               data_iter,
                                                               INDEX_TYPE_IS_NOT,
-                                                              allocator,
+                                                              batch_temp_allocator,
                                                               output_obj[i],
                                                               get_data))) {
             LOG_WARN("failed to read obj from data table.", K(ret));
@@ -341,7 +343,8 @@ int ObPluginVectorIndexUtils::read_vector_info(ObPluginVectorIndexAdaptor *adapt
     }
     LOG_INFO("memdata sync scan_allocator_usage",
       K(vid_id_scan_allocator.used()), K(vid_id_scan_allocator.total()),
-      K(data_scan_allocator.used()), K(data_scan_allocator.total()));
+      K(data_scan_allocator.used()), K(data_scan_allocator.total()),
+      K(batch_temp_allocator.used()), K(batch_temp_allocator.total()));
   }
 
   if (OB_NOT_NULL(tsc_service)) {
