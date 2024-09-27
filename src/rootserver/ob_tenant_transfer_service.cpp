@@ -630,6 +630,11 @@ int ObTenantTransferService::lock_table_and_part_(
       const ObObjectID part_object_id = part_info.part_object_id();
       bool is_not_exist = false;
       bool is_lock_conflict = false;
+      bool exceed_tablet_count_threshold = false;
+      ObArenaAllocator related_table_allocator;
+      related_table_allocator.set_tenant_id(tenant_id_);
+      ObArray<ObSimpleTableSchemaV2 *> related_table_schemas;
+
       if (OB_NOT_NULL(table_schema) && table_schema->get_table_id() == table_id) {
         // use previous table_schema
       } else if (OB_FAIL(get_latest_table_schema_(allocator, table_id, table_schema))) {
@@ -654,7 +659,8 @@ int ObTenantTransferService::lock_table_and_part_(
           tablet_id,
           part_idx,
           subpart_idx))) {
-        if (OB_TRY_LOCK_ROW_CONFLICT == ret || OB_ERR_EXCLUSIVE_LOCK_CONFLICT == ret) {
+        // Table lock service converts some error codes that can be retried to OB_EAGAIN since 4_2_1_5
+        if (OB_TRY_LOCK_ROW_CONFLICT == ret || OB_ERR_EXCLUSIVE_LOCK_CONFLICT == ret || OB_EAGAIN == ret) {
           is_lock_conflict = true;
           TTS_INFO("lock conflict when adding in_trans lock",
               KR(ret), K(part_info), K(tablet_id), K(part_idx), K(subpart_idx), K(is_not_exist));
@@ -694,6 +700,18 @@ int ObTenantTransferService::lock_table_and_part_(
       } else if (OB_ISNULL(table_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table schema should not be null", KR(ret), K(part_info), K(tablet_id));
+      } else if (OB_FAIL(get_related_table_schemas_(*table_schema, related_table_allocator, related_table_schemas))) {
+        LOG_WARN("get related table schemas failed", KR(ret), KPC(table_schema));
+      } else if (OB_FAIL(check_tablet_count_by_threshold_(
+          tablet_ids,
+          related_table_schemas.count() + 1/*data_table*/,
+          exceed_tablet_count_threshold))) {
+        LOG_WARN("check tablet count by threshold failed", KR(ret), "tablet_ids_count", tablet_ids.count(),
+            "related_table_count", related_table_schemas.count());
+      } else if (!tablet_ids.empty() && exceed_tablet_count_threshold) { // contain at least one part
+        LOG_TRACE("exceed tablet count threshold", KR(ret), "tablet_ids_count", tablet_ids.count(),
+            "related_table_count", related_table_schemas.count());
+        break;
       } else if (OB_FAIL(add_out_trans_lock_(trans, lock_owner_id, *table_schema, part_info, tablet_id))) {
         LOG_WARN("add out trans table and online ddl lock failed",
             KR(ret), K(lock_owner_id), K(part_info), K(tablet_id));
@@ -703,7 +721,7 @@ int ObTenantTransferService::lock_table_and_part_(
         LOG_WARN("record need move table lock tablet failed", KR(ret), K(tablet_id), K(table_lock_tablet_list));
       } else if (OB_FAIL(tablet_ids.push_back(tablet_id))) {
         LOG_WARN("push back failed", KR(ret), K(tablet_id), K(tablet_ids), K(part_info));
-      } else if (OB_FAIL(generate_related_tablet_ids_(*table_schema, part_idx, subpart_idx, tablet_ids))) {
+      } else if (OB_FAIL(generate_related_tablet_ids_(related_table_schemas, part_idx, subpart_idx, tablet_ids))) {
         LOG_WARN("generate related tablet_ids failed", KR(ret),
             "table_id", table_schema->get_table_id(), K(part_idx), K(subpart_idx), K(tablet_ids));
       }
@@ -719,10 +737,10 @@ int ObTenantTransferService::lock_table_and_part_(
         }
       }
 
-      // Try to limit the number of tablet_list to _transfer_task_tablet_count_threshold.
-      // This is not a precise limit. In the worst case, there will be
-      // _transfer_task_tablet_count_threshold + 128(max index number) + 2(lob tablet number) tablets in tablet_list.
-      if (OB_SUCC(ret) && tablet_ids.count() >= get_tablet_count_threshold_()) {
+      if (FAILEDx(check_tablet_count_by_threshold_(tablet_ids, 1, exceed_tablet_count_threshold))) {
+        LOG_WARN("check tablet count by threshold failed", KR(ret), "tablet_ids_count", tablet_ids.count());
+      } else if (exceed_tablet_count_threshold) {
+        LOG_TRACE("reach tablet count threshold", KR(ret), "tablet_ids_count", tablet_ids.count());
         break;
       }
     } // end ARRAY_FOREACH
@@ -967,36 +985,27 @@ int ObTenantTransferService::record_need_move_table_lock_tablet_(
   return ret;
 }
 
+// part_idx and subpart_idx may be invalid for non-part table
 int ObTenantTransferService::generate_related_tablet_ids_(
-    share::schema::ObSimpleTableSchemaV2 &table_schema,
+    const ObIArray<ObSimpleTableSchemaV2 *> &related_table_schemas,
     const int64_t part_idx,
     const int64_t subpart_idx,
     common::ObIArray<ObTabletID> &tablet_ids)
 {
   int ret = OB_SUCCESS;
-  ObArray<ObSimpleTableSchemaV2 *> related_table_schemas;
-  ObArenaAllocator allocator;
-  const uint64_t table_id = table_schema.get_table_id();
   const int64_t start_time = ObTimeUtility::current_time();
   if (IS_NOT_INIT || OB_ISNULL(sql_proxy_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (FALSE_IT(allocator.set_tenant_id(tenant_id_))) {
-  } else if (table_schema.is_global_index_table()) {
-    // skip get related tables
-  } else if (OB_UNLIKELY(! need_balance_table(table_schema))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("only get related tables for user table and other need balance table", KR(ret),
-        K(table_id), K(table_schema));
-  } else if (OB_FAIL(get_related_table_schemas_(*sql_proxy_, table_schema, allocator, related_table_schemas))) {
-    LOG_WARN("fail to get related table schemas", KR(ret), K_(tenant_id), K(table_id));
+  } else if (related_table_schemas.empty()) {
+    // skip
   } else {
     ARRAY_FOREACH(related_table_schemas, idx) {
       ObSimpleTableSchemaV2 *related_table_schema = related_table_schemas.at(idx);
       ObTabletID related_tablet_id;
       if (OB_ISNULL(related_table_schema)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("related table schema is null", KR(ret), "primary_table", table_id);
+        LOG_WARN("related table schema is null", KR(ret));
       } else if (OB_FAIL(get_tablet_by_partition_idx_(
           *related_table_schema,
           part_idx,
@@ -1008,7 +1017,7 @@ int ObTenantTransferService::generate_related_tablet_ids_(
         LOG_WARN("fail to push back", KR(ret), K(related_tablet_id), K(tablet_ids));
       }
     }
-    TTS_INFO("get related tablet_ids", KR(ret), K(table_id), "related_table_count",
+    TTS_INFO("gen related tablet_ids", KR(ret), "related_table_count",
         related_table_schemas.count(), K(part_idx), K(subpart_idx), K(tablet_ids),
         "cost_time", ObTimeUtility::current_time() - start_time);
   }
@@ -1059,7 +1068,6 @@ int ObTenantTransferService::generate_tablet_list_(
 }
 
 int ObTenantTransferService::get_related_table_schemas_(
-    common::ObISQLClient &sql_proxy,
     ObSimpleTableSchemaV2 &table_schema,
     ObArenaAllocator &allocator,
     ObArray<ObSimpleTableSchemaV2 *> &related_table_schemas)
@@ -1073,7 +1081,15 @@ int ObTenantTransferService::get_related_table_schemas_(
   ObSchemaService *schema_service = NULL;
   const uint64_t primary_table_id = table_schema.get_table_id();
   ObArray<ObAuxTableMetaInfo> related_infos;
-  if (OB_ISNULL(GCTX.schema_service_)
+  if (IS_NOT_INIT || OB_ISNULL(sql_proxy_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (table_schema.is_global_index_table()) {
+    // skip get related tables
+  } else if (OB_UNLIKELY(!need_balance_table(table_schema))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("not need balance table", KR(ret), K(table_schema));
+  } else if (OB_ISNULL(GCTX.schema_service_)
       || OB_ISNULL(schema_service = GCTX.schema_service_->get_schema_service())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("GCTX.schema_service_ is null", KR(ret));
@@ -1082,7 +1098,7 @@ int ObTenantTransferService::get_related_table_schemas_(
       tenant_id_,
       table_schema.get_table_id(),
       schema_version,
-      sql_proxy,
+      *sql_proxy_,
       related_infos))) {
     LOG_WARN("fail to fetch_aux_tables", KR(ret), K_(tenant_id),
         K(primary_table_id), K(schema_status), K(related_table_ids), K(schema_version));
@@ -1811,6 +1827,27 @@ int64_t ObTenantTransferService::get_tablet_count_threshold_() const
         : DEFAULT_TABLET_COUNT_THRESHOLD;
   }
   return tablet_count_threshold;
+}
+
+// Try to limit the number of tablet_list to _transfer_task_tablet_count_threshold.
+// In the worst case, there will be OB_MAX_TRANSFER_BINDING_TABLET_CNT tablets in tablet_list.
+int ObTenantTransferService::check_tablet_count_by_threshold_(
+    const ObIArray<ObTabletID> &tablet_ids,
+    const int64_t new_tablet_cnt,
+    bool &exceed_threshold)
+{
+  int ret = OB_SUCCESS;
+  exceed_threshold = false;
+  if (OB_UNLIKELY(tablet_ids.count() > OB_MAX_TRANSFER_BINDING_TABLET_CNT)) {
+    exceed_threshold = true;
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("too many tablets in a transfer task",
+        KR(ret), K(new_tablet_cnt), "tablet_ids_count", tablet_ids.count(),
+        "tablet_count_limit", OB_MAX_TRANSFER_BINDING_TABLET_CNT);
+  } else {
+    exceed_threshold = (tablet_ids.count() + new_tablet_cnt > get_tablet_count_threshold_());
+  }
+  return ret;
 }
 
 #undef TTS_INFO

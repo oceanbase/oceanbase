@@ -280,6 +280,19 @@ bool is_aux_lob_meta_table(const ObTableType table_type);
 bool is_aux_lob_piece_table(const ObTableType table_type);
 bool is_aux_lob_table(const ObTableType table_type);
 
+const int64_t OB_AUX_LOB_TABLE_CNT = 2; // aux lob meta + aux lob piece
+// The max count of aux tables that can be created for each index.
+// Some special indexes such as full-text index(FTS), multi-value index, vector index, etc., have multiple aux tables.
+// These special indexes are not supported now.
+// The current index has only one aux table: the index table itself.
+const int64_t OB_MAX_TABLE_CNT_PER_INDEX = 1;
+// The max count of aux tables with physical tablets per user data table.
+// TODO: need to include mlog in master branch
+const int64_t OB_MAX_AUX_TABLE_PER_TABLE = OB_MAX_INDEX_PER_TABLE * OB_MAX_TABLE_CNT_PER_INDEX + OB_AUX_LOB_TABLE_CNT; // 130
+// The max tablet count of a transfer is one data table tablet with max aux tablets bound together.
+const int64_t OB_MAX_TRANSFER_BINDING_TABLET_CNT = OB_MAX_AUX_TABLE_PER_TABLE + 1; // 131
+
+// Note: When adding new index type with multiple aux tables, make sure OB_MAX_TABLE_CNT_PER_INDEX is correct
 enum ObIndexType
 {
   INDEX_TYPE_IS_NOT = 0,//is not index table
@@ -600,6 +613,7 @@ inline bool is_index_local_storage(ObIndexType index_type)
            || INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE == index_type;
 }
 
+// Note: When adding new related table, you need to modify OB_MAX_TRANSFER_BINDING_TABLET_CNT
 inline bool is_related_table(
     const ObTableType &table_type,
     const ObIndexType &index_type)
