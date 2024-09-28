@@ -231,7 +231,7 @@ public:
       const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info = NULL) = 0;
   // Parse the column data based on ObTableSchema
   virtual int parse_cols( const ObCDCLobAuxTableSchemaInfo &lob_aux_table_schema_info) = 0;
-  virtual int parse_ext_info_log(ObString &ext_info_log) = 0;
+  virtual int parse_ext_info_log(ObLobId &lob_id, ObString &ext_info_log) = 0;
   int get_cols(
       ColValueList **rowkey_cols,
       ColValueList **new_cols,
@@ -368,7 +368,7 @@ public:
       const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info = NULL);
   // Parse the column data based on ObTableSchema
   int parse_cols(const ObCDCLobAuxTableSchemaInfo &lob_aux_table_schema_info);
-  int parse_ext_info_log(ObString &ext_info_log);
+  int parse_ext_info_log(ObLobId &lob_id, ObString &ext_info_log);
   uint64_t hash(const uint64_t hash) const { return row_key_.murmurhash(hash); }
   void set_table_id(const uint64_t table_id) { table_id_ = table_id; }
   uint64_t get_table_id() const { return table_id_; }
@@ -438,7 +438,7 @@ public:
 
   // Parse the column data based on ObTableSchema
   int parse_cols(const ObCDCLobAuxTableSchemaInfo &lob_aux_table_schema_info);
-  int parse_ext_info_log(ObString &ext_info_log);
+  int parse_ext_info_log(ObLobId &lob_id, ObString &ext_info_log);
   uint64_t hash(const uint64_t hash) const { return rowkey_.murmurhash(hash); }
   uint64_t get_table_id() const { return table_id_; }
   blocksstable::ObDmlRowFlag get_dml_flag() const { return dml_flag_; }

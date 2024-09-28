@@ -157,6 +157,7 @@ private:
 
   static int register_ext_info_commit_cb(
       ObDMLRunningCtx &run_ctx,
+      const ObColDesc &column,
       ObDatum &col_data,
       ObObj &ext_info_data);
   static int register_ext_info_commit_cb(

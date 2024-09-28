@@ -418,6 +418,7 @@ int ObCDCLobDataMerger::handle_task_(
     const ObLobData *new_lob_data = lob_data_get_ctx.new_lob_data_;
     const bool is_new_col = task.is_new_col_;
     ObString **fragment_cb_array= lob_data_get_ctx.get_fragment_cb_array(is_new_col);
+    ObLobId lob_id;
 
     if (OB_ISNULL(lob_data_out_row_ctx_list) || OB_ISNULL(new_lob_data) || OB_ISNULL(fragment_cb_array)) {
       ret = OB_ERR_UNEXPECTED;
@@ -426,13 +427,14 @@ int ObCDCLobDataMerger::handle_task_(
     } else if (OB_ISNULL(stmt_task)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("stmt_task is nullptr", KR(ret), KPC(lob_data_out_row_ctx_list));
+    } else if (OB_FAIL(lob_data_get_ctx.get_lob_id(is_new_col, lob_id))) {
+      LOG_ERROR("lob_data_get_ctx get_lob_id failed", KR(ret), K(lob_data_get_ctx));
     } else {
       const PartTransTask &part_trans_task = stmt_task->get_host();
       const int64_t commit_version = part_trans_task.get_trans_commit_version();
       const uint64_t tenant_id = lob_data_out_row_ctx_list->get_tenant_id();
       const transaction::ObTransID &trans_id = lob_data_out_row_ctx_list->get_trans_id();
       const uint64_t table_id = lob_data_out_row_ctx_list->get_table_id_of_lob_aux_meta_key(lob_data_get_ctx);
-      const ObLobId lob_id = lob_data_get_ctx.get_lob_id();
       const uint32_t idx = task.idx_;
       LobAuxMetaKey lob_aux_meta_key(commit_version, tenant_id, trans_id, table_id, lob_id, task.seq_no_);
       const char *lob_data_ptr = nullptr;

@@ -179,6 +179,8 @@ public:
       const blocksstable::ObDmlFlag dml_flag,
       const transaction::ObTxSEQ &seq_no_st,
       const int64_t seq_no_cnt,
+      const ObString &index_data,
+      const ObObjType index_data_type,
       const storage::ObExtInfoLogHeader &header,
       ObObj &ext_info_data);
 public:

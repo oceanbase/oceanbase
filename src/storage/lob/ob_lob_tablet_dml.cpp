@@ -383,7 +383,7 @@ int ObLobTabletDmlHelper::process_delta_lob(
       // update datum with new disk locator
       datum.set_lob_data(*lob_param.lob_common_, lob_param.handle_size_);
       if (! lob_param.ext_info_log_.is_null()
-        && OB_FAIL(register_ext_info_commit_cb(run_ctx, datum, lob_param.ext_info_log_))) {
+        && OB_FAIL(register_ext_info_commit_cb(run_ctx, column, datum, lob_param.ext_info_log_))) {
         LOG_WARN("register_ext_info_commit_cb fail", K(ret), K(lob_param));
       }
     }
@@ -449,6 +449,7 @@ int ObLobTabletDmlHelper::prepare_lob_write(
 
 int ObLobTabletDmlHelper::register_ext_info_commit_cb(
     ObDMLRunningCtx &run_ctx,
+    const ObColDesc &column,
     ObDatum &col_data,
     ObObj &ext_info_data)
 {
@@ -476,7 +477,7 @@ int ObLobTabletDmlHelper::register_ext_info_commit_cb(
     LOG_WARN("write_auth fail", K(ret), K(run_ctx.store_ctx_));
   } else if (OB_FAIL(run_ctx.store_ctx_.mvcc_acc_ctx_.mem_ctx_->register_ext_info_commit_cb(
       run_ctx.dml_param_.timeout_, run_ctx.dml_flag_,
-      seq_no_st, seq_no_cnt, header, ext_info_data))) {
+      seq_no_st, seq_no_cnt, col_data.get_string(), column.col_type_.get_type(), header, ext_info_data))) {
     LOG_WARN("register_ext_info_commit_cb fail", K(ret), K(run_ctx.store_ctx_), K(col_data), K(ext_info_data));
   } else {
     lob_data_outrow_ctx->seq_no_st_ = seq_no_st.cast_to_int();
@@ -520,6 +521,8 @@ int ObLobTabletDmlHelper::register_ext_info_commit_cb(
       run_ctx.dml_flag_,
       seq_no_st,
       seq_no_cnt,
+      index_data,
+      column.col_type_.get_type(),
       header,
       ext_info_data))) {
     LOG_WARN("register_ext_info_commit_cb fail", K(ret), K(run_ctx.store_ctx_), K(seq_no_st), K(seq_no_cnt), K(index_datum), K(ext_info_data));
