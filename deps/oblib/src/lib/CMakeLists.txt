@@ -419,6 +419,7 @@ target_link_libraries(oblib_lib
   ${DEP_DIR}/lib/liblzma.a
 )
 
+if (NOT OB_BUILD_CDC)
 # vsag vector library
 target_link_directories(
   oblib_lib PUBLIC ${DEP_DIR}/lib ${DEP_DIR}/lib/vsag_lib
@@ -454,4 +455,6 @@ elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
   )
 else()
     message(FATAL_ERROR "Unsupported architecture: ${CMAKE_SYSTEM_PROCESSOR}")
+endif()
+
 endif()

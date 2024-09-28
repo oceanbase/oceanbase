@@ -185,7 +185,9 @@ if(OB_BUILD_CPP_ODPS)
 endif()
 
 # should not use initial-exec for tls-model if building OBCDC.
-if(NOT OB_BUILD_CDC)
+if(OB_BUILD_CDC)
+  add_definitions(-DOB_BUILD_CDC_DISABLE_VSAG)
+else()
   add_definitions(-DENABLE_INITIAL_EXEC_TLS_MODEL)
 endif()
 
