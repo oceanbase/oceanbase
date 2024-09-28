@@ -11581,7 +11581,6 @@ int ObDDLResolver::check_only_modify_auto_partition_attr(ObPartitionedStmt *stmt
     static const int32_t RANGE_PARTITION_NODE_NUM = 7;
     SET_PARTITION_DEFINITION = node->children_[RANGE_ELEMENTS_NODE] != nullptr;
     SET_PARTITION_KEY = node->children_[RANGE_FUN_EXPR_NODE] != nullptr;
-    SET_AUTO_PARTITION_SIZE = node->children_[RANGE_AUTO_SPLIT_TABLET_SIZE] != nullptr;
     if (RANGE_PARTITION_NODE_NUM == node->num_child_) {
       SET_AUTO_PARTITION_SIZE = node->children_[RANGE_AUTO_SPLIT_TABLET_SIZE] != nullptr;
     }
