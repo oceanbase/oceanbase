@@ -33,6 +33,7 @@ int ObDtlBufEncoder::switch_writer(const ObDtlMsg &msg)
       } else if (DtlWriterType::CHUNK_DATUM_WRITER == msg_writer_map[px_row.get_data_type()]) {
         msg_writer_ = &datum_msg_writer_;
       } else if (DtlWriterType::VECTOR_FIXED_WRITER == msg_writer_map[px_row.get_data_type()]) {
+        vector_fixed_msg_writer_.set_size_per_buffer(size_per_buffer_);
         msg_writer_ = &vector_fixed_msg_writer_;
       } else if (DtlWriterType::VECTOR_ROW_WRITER == msg_writer_map[px_row.get_data_type()]) {
         vector_row_msg_writer_.set_row_meta(meta_);

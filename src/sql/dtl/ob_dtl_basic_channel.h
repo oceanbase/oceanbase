@@ -563,11 +563,13 @@ public:
   {
     buffer->msg_type() = ObDtlMsgType::PX_VECTOR_FIXED;
   }
+  void set_size_per_buffer(const int64_t size) { size_per_buffer_ = size; }
 private:
   DtlWriterType type_;
   ObDtlLinkedBuffer *write_buffer_;
   ObDtlVectors vector_buffer_;
   int write_ret_;
+  int64_t size_per_buffer_;
 };
 
 OB_INLINE int ObDtlVectorFixedMsgWriter::write(
