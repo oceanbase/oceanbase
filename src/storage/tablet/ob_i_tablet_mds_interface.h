@@ -59,12 +59,12 @@ public:
   int get_ddl_data(const share::SCN &snapshot,
                    ObTabletBindingMdsUserData &data,
                    const int64_t timeout = ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US) const;
+  template<typename T, typename OP>
+  int cross_ls_get_latest(OP &&op, bool &is_committed) const;
   int get_autoinc_seq(ObIAllocator &allocator,
                       const share::SCN &snapshot,
                       share::ObTabletAutoincSeq &data,
                       const int64_t timeout = ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US) const;
-  template<typename OP>
-  int get_latest_split_data(OP &&op, bool &is_committed) const;
   int get_split_data(ObTabletSplitMdsUserData &data,
                      const int64_t timeout) const;
   int split_partkey_compare(const blocksstable::ObDatumRowkey &rowkey,

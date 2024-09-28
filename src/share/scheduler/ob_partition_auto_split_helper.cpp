@@ -597,7 +597,7 @@ int ObServerAutoSplitScheduler::check_and_fetch_tablet_split_info(const storage:
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pointer to tablet is nullptr", K(ret), KP(tablet));
-  } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_split_data(ReadSplitDataAutoPartSizeOp(auto_split_tablet_size), is_committed))) {
+  } else if (OB_FAIL(tablet->ObITabletMdsInterface::cross_ls_get_latest<ObTabletSplitMdsUserData>(ReadSplitDataAutoPartSizeOp(auto_split_tablet_size), is_committed))) {
     if (OB_EMPTY_RESULT == ret) {
       ret = OB_SUCCESS;
       auto_split_tablet_size = OB_INVALID_SIZE;

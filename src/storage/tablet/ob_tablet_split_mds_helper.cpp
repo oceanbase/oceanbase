@@ -719,7 +719,7 @@ int ObTabletSplitMdsHelper::batch_get_tablet_split(
           if (OB_SUCC(ret) && arg.check_committed_) {
             ObTabletSplitMdsUserData tmp_data;
             bool is_committed = true;
-            if (OB_FAIL(tablet_handle.get_obj()->get_latest_split_data(ReadSplitDataOp(tmp_data), is_committed))) {
+            if (OB_FAIL(tablet_handle.get_obj()->cross_ls_get_latest<ObTabletSplitMdsUserData>(ReadSplitDataOp(tmp_data), is_committed))) {
               if (OB_EMPTY_RESULT == ret) {
                 is_committed = true;
                 ret = OB_SUCCESS;

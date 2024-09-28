@@ -805,8 +805,8 @@ inline int ObITabletMdsInterface::check_transfer_in_redo_written(bool &written)
   #undef PRINT_WRAPPER
 }
 
-template<typename OP>
-int ObITabletMdsInterface::get_latest_split_data(OP &&op, bool &is_committed) const
+template<typename T, typename OP>
+int ObITabletMdsInterface::cross_ls_get_latest(OP &&op, bool &is_committed) const
 {
   #define PRINT_WRAPPER KR(ret)
   MDS_TG(10_ms);
@@ -828,7 +828,7 @@ int ObITabletMdsInterface::get_latest_split_data(OP &&op, bool &is_committed) co
     }
 
     if (OB_FAIL(ret)) {
-    } else if (CLICK_FAIL((cross_ls_get_latest<ObTabletSplitMdsUserData>(src, op, is_committed)))) {
+    } else if (CLICK_FAIL((cross_ls_get_latest<T>(src, op, is_committed)))) {
       if (OB_EMPTY_RESULT != ret) {
         MDS_LOG_GET(WARN, "fail to cross ls get latest", K(lbt()));
       }
