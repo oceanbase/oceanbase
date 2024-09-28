@@ -3947,7 +3947,7 @@ int ObDDLTaskRecordOperator::get_ddl_task_record_by_table_id(const uint64_t tena
 {
   int ret = OB_SUCCESS;
   ObSqlString sql_string;
-  ObArray<ObDDLTaskRecord> task_records;
+  records.reset();
   if (OB_UNLIKELY(!proxy.is_inited())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(proxy.is_inited()));
@@ -3958,7 +3958,7 @@ int ObDDLTaskRecordOperator::get_ddl_task_record_by_table_id(const uint64_t tena
       "schema_version, parent_task_id, trace_id, status, snapshot_version, task_version, execution_id, "
       "UNHEX(ddl_stmt_str) as ddl_stmt_str_unhex, ret_code, UNHEX(message) as message_unhex FROM %s WHERE object_id=%lu", OB_ALL_DDL_TASK_STATUS_TNAME, table_id))) {
     LOG_WARN("assign sql string failed", K(ret), K(table_id));
-  } else if (OB_FAIL(get_task_record(tenant_id, sql_string, proxy, allocator, task_records))) {
+  } else if (OB_FAIL(get_task_record(tenant_id, sql_string, proxy, allocator, records))) {
     LOG_WARN("get task record failed", K(ret), K(sql_string));
   }
   return ret;

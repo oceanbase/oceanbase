@@ -352,6 +352,7 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &arg, obrpc::ObDropIndexRes 
       const bool need_check_fts_index_conflict = !arg.is_inner_ && index_table_schema->is_fts_index();
       const bool is_inner_and_multivalue_index = arg.is_inner_ && index_table_schema->is_multivalue_index();
       const bool is_inner_and_vec_index = arg.is_inner_ && !arg.is_vec_inner_drop_ && index_table_schema->is_vec_index();
+      const bool need_check_vec_index_conflict = !arg.is_inner_ && index_table_schema->is_vec_index();
       const bool is_inner_and_fts_or_mulvalue_or_vector_index = is_inner_and_fts_index || is_inner_and_multivalue_index || is_inner_and_vec_index;
       bool has_index_task = false;
       typedef common::ObSEArray<share::schema::ObTableSchema, 4> TableSchemaArray;
@@ -359,6 +360,10 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &arg, obrpc::ObDropIndexRes 
         if (need_check_fts_index_conflict && OB_FAIL(ddl_service_.check_fts_index_conflict(table_schema->get_tenant_id(), table_schema->get_table_id()))) {
           if (OB_EAGAIN != ret) {
             LOG_WARN("failed to check fts index ", K(ret), K(arg));
+          }
+        } else if (need_check_vec_index_conflict && OB_FAIL(ddl_service_.check_vec_index_conflict(table_schema->get_tenant_id(), table_schema->get_table_id()))) {
+          if (OB_EAGAIN != ret) {
+            LOG_WARN("failed to check vec index ", K(ret), K(arg));
           }
         } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
           LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
@@ -1205,6 +1210,11 @@ int ObIndexBuilder::do_create_index(
              && OB_FAIL(ddl_service_.check_fts_index_conflict(table_schema->get_tenant_id(), table_id))) {
     if (OB_EAGAIN != ret) {
       LOG_WARN("failed to check fts index ", K(ret), K(arg));
+    }
+  } else if (!arg.is_inner_  && share::schema::is_vec_index(arg.index_type_)
+             && OB_FAIL(ddl_service_.check_vec_index_conflict(table_schema->get_tenant_id(), table_id))) {
+    if (OB_EAGAIN != ret) {
+      LOG_WARN("failed to check vec index ", K(ret), K(arg));
     }
   } else if (OB_FAIL(ObSysTableChecker::is_tenant_space_table_id(table_id, in_tenant_space))) {
     LOG_WARN("fail to check table in tenant space", K(ret), K(table_id));

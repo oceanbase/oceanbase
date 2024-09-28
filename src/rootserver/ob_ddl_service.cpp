@@ -43480,6 +43480,26 @@ int ObDDLService::check_fts_index_conflict(const uint64_t tenant_id, const uint6
   return ret;
 }
 
+int ObDDLService::check_vec_index_conflict(const uint64_t tenant_id, const uint64_t table_id) {
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator(lib::ObLabel("DdlTasRecord"));
+  ObArray<ObDDLTaskRecord> task_records;
+  if (OB_FAIL(ObDDLTaskRecordOperator::get_ddl_task_record_by_table_id(tenant_id, table_id, get_sql_proxy(), allocator, task_records))) {
+    LOG_WARN("get task record failed", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < task_records.count(); ++i) {
+      const ObDDLTaskRecord &cur_record = task_records.at(i);
+      if (cur_record.ddl_type_ == ObDDLType::DDL_CREATE_VEC_INDEX ||
+          cur_record.ddl_type_ == ObDDLType::DDL_DROP_VEC_INDEX ||
+          cur_record.ddl_type_ == ObDDLType::DDL_REBUILD_INDEX) {
+        ret = OB_EAGAIN;
+        LOG_WARN("vector index is building, will retry later", K(ret), K(table_id), K(cur_record));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLService::drop_index_to_scheduler_(ObMySQLTransaction &trans,
                                            ObSchemaGetterGuard &schema_guard,
                                            ObArenaAllocator &allocator,
@@ -43520,12 +43540,17 @@ int ObDDLService::drop_index_to_scheduler_(ObMySQLTransaction &trans,
       const bool is_fts_or_multivalue_or_vec_index = (index_table_schema->is_fts_or_multivalue_index() || index_table_schema->is_vec_index());
       const bool is_inner_and_domain_index = drop_index_arg->is_inner_ && is_fts_or_multivalue_or_vec_index;
       const bool need_check_fts_index_conflict = !drop_index_arg->is_inner_ && index_table_schema->is_fts_index();
+      const bool need_check_vec_index_conflict = !drop_index_arg->is_inner_ && index_table_schema->is_vec_index();
       bool has_index_task = false;
       typedef common::ObSEArray<share::schema::ObTableSchema, 4> TableSchemaArray;
       SMART_VAR(TableSchemaArray, new_index_schemas) {
       if (need_check_fts_index_conflict && OB_FAIL(check_fts_index_conflict(orig_table_schema.get_tenant_id(), orig_table_schema.get_table_id()))) {
         if (OB_EAGAIN != ret) {
           LOG_WARN("failed to check fts index ", K(ret));
+        }
+      } else if (need_check_vec_index_conflict && OB_FAIL(check_vec_index_conflict(orig_table_schema.get_tenant_id(), orig_table_schema.get_table_id()))) {
+        if (OB_EAGAIN != ret) {
+          LOG_WARN("failed to check vec index ", K(ret));
         }
       } else if (!drop_index_arg->is_inner_ && !index_table_schema->can_read_index() && OB_FAIL(ObDDLTaskRecordOperator::check_has_index_or_mlog_task(
           trans, *index_table_schema, orig_table_schema.get_tenant_id(), orig_table_schema.get_table_id(), has_index_task))) {
