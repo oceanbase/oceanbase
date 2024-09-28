@@ -502,6 +502,7 @@ public:
       const MacroBlockId &macro_id,
       common::ObIAllocator &allocator,
       ObDataMacroBlockMeta *&macro_meta);
+  int get_tablet_transfer_seq (int64_t &tablet_transfer_seq) const;
 
 private:
   void set_task_type(const bool is_cg, const bool is_ddl_merge, const common::ObIArray<ObIODevice *> *device_handle_array);
@@ -636,6 +637,7 @@ public:
   bool enable_dump_disk() const { return enable_dump_disk_; }
   OB_INLINE ObSSTablePrivateObjectCleaner & get_private_object_cleaner() { return object_cleaner_; }
   bool micro_index_clustered() const;
+  int64_t get_tablet_transfer_seq() const;
   const compaction::ObMergeBlockInfo &get_merge_block_info() const { return macro_writer_.get_merge_block_info(); }
   TO_STRING_KV(K(roots_.count()));
 
