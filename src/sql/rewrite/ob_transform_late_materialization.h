@@ -43,16 +43,19 @@ private:
       : late_material_indexs_(),
         check_sort_indexs_(),
         late_table_id_(common::OB_INVALID_ID),
-        base_index_(common::OB_INVALID_ID) { }
+        base_index_(common::OB_INVALID_ID),
+        check_column_store_(false) { }
     ObSEArray<uint64_t, 4> late_material_indexs_;
     ObSEArray<uint64_t, 2> check_sort_indexs_;  // global index of partition table is ok even if there is no sort op
     uint64_t late_table_id_;
     uint64_t base_index_;
+    bool check_column_store_;
 
     TO_STRING_KV(K_(late_material_indexs),
                  K_(check_sort_indexs),
                  K_(late_table_id),
-                 K_(base_index));
+                 K_(base_index),
+                 K_(check_column_store));
   };
 
   struct ObLateMaterializationInfo
@@ -61,13 +64,16 @@ private:
       :
         candi_index_names_(),
         candi_indexs_(),
-        project_col_in_view_() { }
+        project_col_in_view_(),
+        is_allow_column_table_(false) { }
     ObSEArray<ObString, 4> candi_index_names_;
     ObSEArray<uint64_t, 4> candi_indexs_; // late materialization index + some may late materialization index
     ObSEArray<uint64_t, 4> project_col_in_view_;
+    bool is_allow_column_table_;
     TO_STRING_KV(K_(candi_index_names),
                  K_(candi_indexs),
-                 K_(project_col_in_view));
+                 K_(project_col_in_view),
+                 K_(is_allow_column_table));
   };
   int check_hint_validity(const ObDMLStmt &stmt, bool &force_trans, bool &force_no_trans);
   int check_stmt_need_late_materialization(const ObSelectStmt &stmt, const bool force_accept, bool &need);
@@ -139,6 +145,28 @@ private:
                          bool &is_expected,
                          ObCostBasedLateMaterializationCtx &check_ctx);
   virtual int is_expected_plan(ObLogPlan *plan, void *check_ctx, bool is_trans_plan, bool &is_valid) override;
+  int gen_trans_info_for_row_store(const ObSelectStmt &stmt,
+                                   const ObIArray<uint64_t> &key_col_ids,
+                                   const ObIArray<uint64_t> &filter_col_ids,
+                                   const ObIArray<uint64_t> &orderby_col_ids,
+                                   const ObIArray<uint64_t> &select_col_ids,
+                                   const TableItem *table_item,
+                                   const ObTableSchema *table_schema,
+                                   ObLateMaterializationInfo &info,
+                                   ObCostBasedLateMaterializationCtx &check_ctx);
+  int gen_trans_info_for_column_store(const ObSelectStmt &stmt,
+                                      const ObIArray<uint64_t> &key_col_ids,
+                                      const ObIArray<uint64_t> &filter_col_ids,
+                                      const ObIArray<uint64_t> &orderby_col_ids,
+                                      const ObIArray<uint64_t> &select_col_ids,
+                                      const TableItem *table_item,
+                                      const ObTableSchema *table_schema,
+                                      ObLateMaterializationInfo &info,
+                                      ObCostBasedLateMaterializationCtx &check_ctx);
+  int check_is_allow_column_store(const ObSelectStmt &stmt,
+                                  const TableItem *table_item,
+                                  const ObTableSchema *table_schema,
+                                  bool &is_allow);
 };
 
 }
