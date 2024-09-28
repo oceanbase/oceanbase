@@ -343,6 +343,11 @@ int ObDASVIdMergeIter::build_rowkey_vid_range()
       need_filter_rowkey_vid_ = true;
     }
     rowkey_vid_scan_param_.sample_info_ = data_table_iter_->get_scan_param().sample_info_;
+    // try to reset sample info to row sample here
+    if (rowkey_vid_scan_param_.sample_info_.method_ == common::SampleInfo::BLOCK_SAMPLE) {
+      data_table_iter_->get_scan_param().sample_info_.method_ = common::SampleInfo::ROW_SAMPLE;
+      rowkey_vid_scan_param_.sample_info_.method_ = common::SampleInfo::ROW_SAMPLE;
+    }
   }
   LOG_INFO("build rowkey vid range", K(ret), K(need_filter_rowkey_vid_), K(rowkey_vid_scan_param_.key_ranges_),
       K(rowkey_vid_scan_param_.ss_key_ranges_), K(rowkey_vid_scan_param_.sample_info_));
@@ -398,8 +403,9 @@ int ObDASVIdMergeIter::concat_rows(int64_t &count, int64_t capacity)
   if (OB_FAIL(ret) && ret != OB_ITER_END) {
   } else { // whatever succ or iter_end, we should get from rowkey_vid_iter
     bool expect_iter_end = (ret == OB_ITER_END);
-    int real_cap = (data_row_cnt > 0 && !expect_iter_end) ? data_row_cnt : capacity;
+    int64_t real_cap = (data_row_cnt > 0 && !expect_iter_end) ? data_row_cnt : capacity;
     ret = OB_SUCCESS; // recover ret from iter end
+    LOG_TRACE("[vec index debug] start to get vid, show real cap", K(real_cap));
     while (OB_SUCC(ret) && (real_cap > 0 || expect_iter_end)) {
       rowkey_vid_row_cnt = 0;
       if (OB_FAIL(rowkey_vid_iter_->get_next_rows(rowkey_vid_row_cnt, real_cap))) {
@@ -408,7 +414,7 @@ int ObDASVIdMergeIter::concat_rows(int64_t &count, int64_t capacity)
         }
       }
       if (OB_FAIL(ret) && OB_ITER_END != ret) {
-      } else if (rowkey_vid_row_cnt > 0) {
+      } else if (rowkey_vid_row_cnt > 0 && real_cap > 0) {
         const int tmp_ret = ret;
         if (OB_FAIL(get_vid_ids(rowkey_vid_row_cnt, rowkey_vid_ctdef_, rowkey_vid_rtdef_, vid_ids))) {
           LOG_WARN("fail to get vid ids", K(ret), K(count));
@@ -416,8 +422,15 @@ int ObDASVIdMergeIter::concat_rows(int64_t &count, int64_t capacity)
           ret = tmp_ret;
         }
       }
-      real_cap -= rowkey_vid_row_cnt;
+      if (real_cap >= rowkey_vid_row_cnt) {
+        real_cap -= rowkey_vid_row_cnt;
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get so much vid from rowkey_vid_iter", K(ret), K(real_cap), K(data_row_cnt), K(rowkey_vid_row_cnt), K(vid_ids.count()));
+      }
+      LOG_TRACE("[vec index debug] finish one round, show real cap", K(real_cap), K(rowkey_vid_row_cnt), K(vid_ids.count()));
     }
+    LOG_TRACE("[vec index debug] finish all read show real cap", K(real_cap), K(vid_ids.count()));
     if (expect_iter_end && ret != OB_ITER_END) {
       int tmp_ret = ret;
       ret = OB_ERR_UNEXPECTED;
@@ -676,7 +689,7 @@ int ObDASVIdMergeIter::get_vid_ids(
     } else if (OB_FAIL(vid_ids.push_back(vid_id))) {
       LOG_WARN("fail to push back vid id", K(ret), K(vid_id));
     } else {
-      LOG_INFO("[vec index debug]get one vid ", K(vid_id));
+      LOG_TRACE("[vec index debug] get one vid ", K(vid_id), K(vid_ids.count()));
     }
   }
   return ret;
