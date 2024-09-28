@@ -188,6 +188,9 @@ int ObLobMetaIterator::rescan(ObLobAccessParam &param)
 
   // update scan order
   scan_param_.scan_flag_.scan_order_ = param.scan_backward_ ? ObQueryFlag::Reverse : ObQueryFlag::Forward;
+  // update timeout
+  scan_param_.timeout_ = param.timeout_;
+  scan_param_.for_update_wait_timeout_ = scan_param_.timeout_;
 
   if (OB_FAIL(build_range(param, rowkey_objs_, range))) {
     LOG_WARN("build_range fail", K(ret), K(param), KPC(this));

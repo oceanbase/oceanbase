@@ -724,6 +724,7 @@ int ObLobLocatorHelper::build_lob_locatorv2(ObLobLocatorV2 &locator,
             param.scan_backward_ = false;
             param.offset_ = 0;
             param.len_ = param.byte_size_;
+            param.no_need_retry_ = true;
             ObString output_data;
             output_data.assign_buffer(buffer + offset, param.len_);
             if (OB_FAIL( param.snapshot_.assign(tx_read_snapshot_))) {

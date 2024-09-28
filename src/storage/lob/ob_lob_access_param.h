@@ -46,7 +46,7 @@ public:
       parent_seq_no_(), seq_no_st_(), used_seq_cnt_(0), total_seq_cnt_(0), checksum_(0), update_len_(0),
       op_type_(ObLobDataOutRowCtx::OpType::SQL), is_total_quantity_log_(true),
       read_latest_(false), scan_backward_(false), is_fill_zero_(false), from_rpc_(false),
-      inrow_read_nocopy_(false), is_store_char_len_(true), need_read_latest_(false),
+      inrow_read_nocopy_(false), is_store_char_len_(true), need_read_latest_(false), no_need_retry_(false),
       inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD), schema_chunk_size_(OB_DEFAULT_LOB_CHUNK_SIZE),
       access_ctx_(nullptr), addr_(), lob_id_geneator_(nullptr), data_row_(nullptr)
   {}
@@ -115,7 +115,7 @@ public:
     KPC_(lob_locator), KPC_(lob_common), KPC_(lob_data), K_(byte_size), K_(handle_size), K_(timeout), KP_(allocator), KP_(tmp_allocator),
     K_(coll_type), K_(scan_backward), K_(offset), K_(len), K_(parent_seq_no), K_(seq_no_st), K_(used_seq_cnt), K_(total_seq_cnt), K_(checksum),
     K_(update_len), K_(op_type), K_(is_fill_zero), K_(from_rpc), K_(snapshot), K_(tx_id), K_(read_latest), K_(is_total_quantity_log),
-    K_(inrow_read_nocopy), K_(schema_chunk_size), K_(inrow_threshold), K_(is_store_char_len), K_(need_read_latest),
+    K_(inrow_read_nocopy), K_(schema_chunk_size), K_(inrow_threshold), K_(is_store_char_len), K_(need_read_latest), K(no_need_retry_),
     KP_(access_ctx), K_(addr), KPC_(lob_id_geneator), KPC_(data_row));
 
 private:
@@ -189,6 +189,8 @@ public:
   bool inrow_read_nocopy_;
   bool is_store_char_len_;
   bool need_read_latest_;
+  // whether need retry when some error occur
+  bool no_need_retry_;
 
   int64_t inrow_threshold_;
   int64_t schema_chunk_size_;
