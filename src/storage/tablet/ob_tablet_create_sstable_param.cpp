@@ -68,6 +68,7 @@ ObTabletCreateSSTableParam::ObTabletCreateSSTableParam()
     max_merged_trans_version_(0),
     ddl_scn_(SCN::min_scn()),
     filled_tx_scn_(SCN::min_scn()),
+    tx_data_recycle_scn_(SCN::min_scn()),
     is_co_table_without_cgs_(false),
     contain_uncommitted_row_(false),
     is_meta_root_(false),
@@ -119,6 +120,7 @@ bool ObTabletCreateSSTableParam::is_valid() const
                && occupy_size_ >= 0
                && ddl_scn_.is_valid()
                && filled_tx_scn_.is_valid()
+               && tx_data_recycle_scn_.is_valid()
                && original_size_ >= 0
                && recycle_version_ >= 0
                && root_macro_seq_ >= 0)) {
@@ -127,7 +129,8 @@ bool ObTabletCreateSSTableParam::is_valid() const
              K(root_row_store_type_), K_(latest_row_store_type), K(data_index_tree_height_), K(index_blocks_cnt_),
              K(data_blocks_cnt_), K(micro_block_cnt_), K(use_old_macro_block_count_),
              K(row_count_), K(column_group_cnt_), K(rowkey_column_cnt_), K(column_cnt_), K(occupy_size_),
-             K(original_size_), K(ddl_scn_), K(filled_tx_scn_), K_(recycle_version), K_(root_macro_seq));
+             K(original_size_), K(ddl_scn_), K(filled_tx_scn_), K_(recycle_version), K_(root_macro_seq),
+             K(tx_data_recycle_scn_));
   } else if (ObITable::is_ddl_sstable(table_key_.table_type_)) {
     // ddl sstable can have invalid meta addr, so skip following ifs
     if (!ddl_scn_.is_valid_and_not_min()) {
@@ -206,6 +209,7 @@ int ObTabletCreateSSTableParam::init_for_small_sstable(const blocksstable::ObSST
   int ret = OB_SUCCESS;
   const blocksstable::ObSSTableBasicMeta &basic_meta = sstable_meta.get_basic_meta();
   filled_tx_scn_ = basic_meta.filled_tx_scn_;
+  tx_data_recycle_scn_ = basic_meta.tx_data_recycle_scn_;
   ddl_scn_ = basic_meta.ddl_scn_;
   table_key_ = table_key;
   sstable_logic_seq_ = sstable_meta.get_sstable_seq();
@@ -614,6 +618,7 @@ int ObTabletCreateSSTableParam::init_for_ha(
   ddl_scn_ = sstable_param.basic_meta_.ddl_scn_;
   table_shared_flag_ = sstable_param.basic_meta_.table_shared_flag_;
   filled_tx_scn_ = sstable_param.basic_meta_.filled_tx_scn_;
+  tx_data_recycle_scn_ = sstable_param.basic_meta_.tx_data_recycle_scn_;
   if (table_key_.is_co_sstable()) {
     column_group_cnt_ = sstable_param.column_group_cnt_;
     full_column_cnt_ = sstable_param.full_column_cnt_;
@@ -666,6 +671,7 @@ int ObTabletCreateSSTableParam::init_for_ha(const blocksstable::ObMigrationSSTab
   max_merged_trans_version_ = sstable_param.basic_meta_.max_merged_trans_version_;
   ddl_scn_ = sstable_param.basic_meta_.ddl_scn_;
   filled_tx_scn_ = sstable_param.basic_meta_.filled_tx_scn_;
+  tx_data_recycle_scn_ = sstable_param.basic_meta_.tx_data_recycle_scn_;
   contain_uncommitted_row_ = sstable_param.basic_meta_.contain_uncommitted_row_;
   compressor_type_ = sstable_param.basic_meta_.compressor_type_;
   encrypt_id_ = sstable_param.basic_meta_.encrypt_id_;
@@ -740,6 +746,7 @@ int ObTabletCreateSSTableParam::init_for_remote(const blocksstable::ObMigrationS
   table_backup_flag_ = sstable_param.basic_meta_.table_backup_flag_;
   table_shared_flag_ = sstable_param.basic_meta_.table_shared_flag_;
   filled_tx_scn_ = sstable_param.basic_meta_.filled_tx_scn_;
+  tx_data_recycle_scn_ = sstable_param.basic_meta_.tx_data_recycle_scn_;
   if (table_key_.is_co_sstable()) {
     column_group_cnt_ = sstable_param.column_group_cnt_;
     full_column_cnt_ = sstable_param.full_column_cnt_;
