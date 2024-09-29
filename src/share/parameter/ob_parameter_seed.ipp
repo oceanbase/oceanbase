@@ -733,6 +733,12 @@ DEF_BOOL(_enable_log_cache, OB_TENANT_PARAMETER, "True",
          "Value:  True:turned on  False: turned off",
          ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_BOOL(_ob_enable_standby_db_parallel_log_transport, OB_TENANT_PARAMETER, "True",
+        "Specifies whether the parallel log transport protocol is enabled on the standby database. "
+        "The parallel log transport protocol is enabled only if this parameter is true and "
+        "the primary database is compatible with the parallel log transport protocol.",
+        ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_STR_WITH_CHECKER(arbitration_degradation_policy, OB_CLUSTER_PARAMETER, "LS_POLICY",
         common::ObConfigDegradationPolicyChecker,
         "specifies the degradation policy, whether to check network connectivity with RS before arbitration degrades. "
