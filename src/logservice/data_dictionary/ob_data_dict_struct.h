@@ -51,6 +51,11 @@ class ObTableSchema;
 }
 }
 
+namespace sql
+{
+class ObLocalSessionVar;
+}
+
 namespace datadict
 {
 
@@ -83,7 +88,8 @@ public:
   // NOTICE: update DEFAULT_VERSION if modify serialized fields in DictxxxMeta
   // update to 2 in 4.1 bp1: add column_ref_ids_ in ObDictColumnMeta
   // update to 3 in 4.2: add udt_set_id_ and sub_type_ in ObDictColumnMeta
-  const static int64_t DEFAULT_VERSION = 3;
+  // update to 4 in 4.2.5: add local_session_vars_ in ObDictColumnMeta
+  const static int64_t DEFAULT_VERSION = 4;
 public:
   OB_INLINE bool is_valid() const
   {
@@ -286,6 +292,9 @@ public:
   OB_INLINE bool is_autoincrement() const { return is_autoincrement_; }
   OB_INLINE bool is_hidden() const { return is_hidden_; }
   OB_INLINE bool is_tbl_part_key_column() const { return is_part_key_col_; }
+  OB_INLINE bool is_not_null_for_read() const { return is_not_null_for_read_; }
+  OB_INLINE bool is_not_null_for_write() const { return is_not_null_for_write_; }
+  OB_INLINE bool is_not_null_validate_column() const { return is_not_null_validate_column_; }
   OB_INLINE bool is_rowkey_column() const { return rowkey_position_ > 0; }
   OB_INLINE bool is_index_column() const { return index_position_ > 0; }
   OB_INLINE bool is_enum_or_set() const { return meta_type_.is_enum_or_set(); }
@@ -303,6 +312,9 @@ public:
 
   OB_INLINE uint64_t get_udt_set_id() const { return udt_set_id_; }
   OB_INLINE uint64_t get_sub_data_type() const { return sub_type_; }
+  OB_INLINE uint64_t get_srs_id() const { return srs_id_; }
+  OB_INLINE sql::ObLocalSessionVar &get_local_session_var() { return local_session_vars_; }
+  OB_INLINE sql::ObLocalSessionVar const &get_local_session_var() const { return local_session_vars_; }
   OB_INLINE bool is_udt_column() const { return udt_set_id_ > 0 && OB_INVALID_ID != udt_set_id_; }
   OB_INLINE bool is_xmltype() const {
     return is_udt_column()
@@ -331,7 +343,12 @@ private:
   static const int8_t AUTO_INC_BIT = 1;
   static const int8_t HIDDEN_BIT = 1;
   static const int8_t PART_KEY_BIT = 1;
-  static const int8_t RESERVE_BIT = 27;
+  static const int8_t NOT_NULL_FOR_READ_BIT = 1;
+  static const int8_t NOT_NULL_FOR_WRITE_BIT = 1;
+  static const int8_t NOT_NULL_VALIDATE_BIT = 1;
+  static const int8_t ROWKEY_BIT = 1;
+  static const int8_t INDEX_BIT = 1;
+  static const int8_t RESERVE_BIT = 22;
 private:
   ObIAllocator *allocator_;
   uint64_t column_id_;
@@ -343,12 +360,17 @@ private:
   union {
     uint32_t colulmn_properties_;
     struct{
-      uint32_t is_nullable_       : NULLABLE_BIT;
-      uint32_t is_zero_fill_      : ZERO_FILL_BIT;
-      uint32_t is_autoincrement_  : AUTO_INC_BIT;
-      uint32_t is_hidden_         : HIDDEN_BIT;
-      uint32_t is_part_key_col_   : PART_KEY_BIT;
-      uint32_t reserved_          : RESERVE_BIT;
+      uint32_t is_nullable_                  : NULLABLE_BIT;
+      uint32_t is_zero_fill_                 : ZERO_FILL_BIT;
+      uint32_t is_autoincrement_             : AUTO_INC_BIT;
+      uint32_t is_hidden_                    : HIDDEN_BIT;
+      uint32_t is_part_key_col_              : PART_KEY_BIT;
+      uint32_t is_not_null_for_read_         : NOT_NULL_FOR_READ_BIT;
+      uint32_t is_not_null_for_write_        : NOT_NULL_FOR_WRITE_BIT;
+      uint32_t is_not_null_validate_column_  : NOT_NULL_VALIDATE_BIT;
+      uint32_t is_rowkey_column_             : ROWKEY_BIT;
+      uint32_t is_index_column_              : INDEX_BIT;
+      uint32_t reserved_                     : RESERVE_BIT;
     };
   };
   int64_t column_flags_;
@@ -362,6 +384,8 @@ private:
   common::ObSEArray<uint64_t, 2> column_ref_ids_;
   uint64_t udt_set_id_;
   uint64_t sub_type_;
+  uint64_t srs_id_;
+  sql::ObLocalSessionVar local_session_vars_;
 }; // end of ObDictColumnMeta
 
 class ObDictTableMeta
