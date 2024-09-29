@@ -348,6 +348,8 @@ STAT_EVENT_ADD_DEF(PUSHDOWN_STORAGE_FILTER_ROW_CNT, "storage filtered row count"
 STAT_EVENT_ADD_DEF(MINOR_SSSTORE_READ_ROW_COUNT, "minor ssstore read row count", ObStatClassIds::STORAGE, 60091, true, true, true)
 STAT_EVENT_ADD_DEF(MAJOR_SSSTORE_READ_ROW_COUNT, "major ssstore read row count", ObStatClassIds::STORAGE, 60092, true, true, true)
 STAT_EVENT_ADD_DEF(STORAGE_WRITING_THROTTLE_TIME, "storage waiting throttle time", ObStatClassIds::STORAGE, 60093, true, true, true)
+STAT_EVENT_ADD_DEF(IO_READ_DEVICE_TIME, "io read execute time", ObStatClassIds::STORAGE, 60094, true, true, true)
+STAT_EVENT_ADD_DEF(IO_WRITE_DEVICE_TIME, "io write execute time", ObStatClassIds::STORAGE, 60095, true, true, true)
 
 // backup & restore
 STAT_EVENT_ADD_DEF(BACKUP_IO_READ_COUNT, "backup io read count", ObStatClassIds::STORAGE, 69000, true, true, true)
