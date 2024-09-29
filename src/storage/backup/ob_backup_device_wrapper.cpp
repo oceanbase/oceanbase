@@ -53,8 +53,9 @@ ObBackupWrapperIODevice::ObBackupWrapperIODevice()
     io_fd_(),
     simulated_fd_id_(),
     simulated_slot_version_(),
-    allocator_(ObModIds::BACKUP)
+    allocator_()
 {
+  allocator_.set_attr(lib::ObMemAttr(MTL_ID(), ObModIds::BACKUP));
 }
 
 ObBackupWrapperIODevice::~ObBackupWrapperIODevice()
@@ -311,7 +312,7 @@ int ObBackupWrapperIODevice::parse_storage_device_type_(
 int ObBackupWrapperIODevice::pre_alloc_block_array_()
 {
   int ret = OB_SUCCESS;
-  const ObMemAttr mem_attr(OB_SYS_TENANT_ID, ObModIds::BACKUP);
+  const ObMemAttr mem_attr(MTL_ID(), ObModIds::BACKUP);
   const int64_t total_block_cnt = DEFAULT_BLOCK_COUNT;
   if (OB_ISNULL(block_list_ = static_cast<int64_t *>(
       ob_malloc(sizeof(int64_t) * total_block_cnt, mem_attr)))) {
@@ -333,7 +334,7 @@ int ObBackupWrapperIODevice::check_need_realloc_(bool &need_realloc)
 int ObBackupWrapperIODevice::realloc_block_array_()
 {
   int ret = OB_SUCCESS;
-  const ObMemAttr mem_attr(OB_SYS_TENANT_ID, ObModIds::BACKUP);
+  const ObMemAttr mem_attr(MTL_ID(), ObModIds::BACKUP);
   const int64_t new_total_block_cnt = total_block_cnt_ * 2;
   int64_t *new_block_list = NULL;
   if (OB_ISNULL(new_block_list

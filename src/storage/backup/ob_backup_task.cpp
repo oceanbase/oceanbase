@@ -4179,6 +4179,8 @@ int ObLSBackupDataTask::update_logic_id_to_macro_index_(const common::ObTabletID
     // do nothing
   } else if (OB_FAIL(index_builder_mgr_->get_sstable_index_builder_mgr(tablet_id, mgr))) {
     LOG_WARN("failed to get sstable index builder mgr", K(ret), K(tablet_id));
+  } else if (!mgr->is_major_compaction_mview_dep_tablet()) {
+    // do nothing
   } else if (OB_FAIL(mgr->update_logic_id_to_macro_index(logic_id, macro_index))) {
     LOG_WARN("failed to update logic id to macro index", K(ret), K(logic_id));
   }

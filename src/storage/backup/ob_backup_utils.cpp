@@ -1853,7 +1853,7 @@ int ObBackupTabletProvider::prepare_tablet_(const uint64_t tenant_id, const shar
   } else if (OB_FAIL(fetch_tablet_sstable_array_(
       tablet_id, tablet_ref->tablet_handle_, *table_store_wrapper.get_member(), backup_data_type, is_major_compaction_mview_dep_tablet, sstable_array))) {
     LOG_WARN("failed to fetch tablet sstable array", K(ret), K(tablet_id), KPC(tablet_ref), K(backup_data_type));
-  } else if (OB_FAIL(prepare_tablet_sstable_index_builders_(tablet_id, sstable_array))) {
+  } else if (OB_FAIL(prepare_tablet_sstable_index_builders_(tablet_id, is_major_compaction_mview_dep_tablet, sstable_array))) {
     LOG_WARN("failed to prepare tablet sstable index builders", K(ret), K_(param), K(tablet_id), K(sstable_array));
   } else {
     ObITable::TableKey ss_ddl_table_key;
@@ -2271,7 +2271,7 @@ int ObBackupTabletProvider::fetch_tablet_sstable_array_(const common::ObTabletID
 }
 
 int ObBackupTabletProvider::prepare_tablet_sstable_index_builders_(const common::ObTabletID &tablet_id,
-    common::ObIArray<storage::ObSSTableWrapper> &sstable_array)
+    const bool is_major_compaction_mview_dep_tablet, common::ObIArray<storage::ObSSTableWrapper> &sstable_array)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(index_builder_mgr_)) {
@@ -2289,8 +2289,8 @@ int ObBackupTabletProvider::prepare_tablet_sstable_index_builders_(const common:
         LOG_WARN("failed to push back", K(ret), KPC(sstable_ptr));
       }
     }
-    if (FAILEDx(index_builder_mgr_->prepare_sstable_index_builders(tablet_id, table_key_array))) {
-      LOG_WARN("failed to open sstable index builder", K(ret), K(tablet_id), K(table_key_array));
+    if (FAILEDx(index_builder_mgr_->prepare_sstable_index_builders(tablet_id, table_key_array, is_major_compaction_mview_dep_tablet))) {
+      LOG_WARN("failed to open sstable index builder", K(ret), K(tablet_id), K(table_key_array), K(is_major_compaction_mview_dep_tablet));
     }
   }
   return ret;
@@ -2753,6 +2753,8 @@ int ObBackupTabletProvider::check_need_reuse_across_sstable_(const common::ObTab
     need_reuse_across_sstable = false;
   } else if (OB_FAIL(mgr->get_sstable_index_builder_mgr(tablet_id, sstable_mgr))) {
     LOG_WARN("failed to get sstable index builder mgr", K(ret), K(tablet_id));
+  } else if (!sstable_mgr->is_major_compaction_mview_dep_tablet()) {
+    need_reuse_across_sstable = false;
   } else if (OB_FAIL(sstable_mgr->check_place_holder_macro_index_exist(logic_id, macro_index_exist))) {
     LOG_WARN("failed to check place holder macro index exist", K(ret), K(logic_id));
   } else if (macro_index_exist) {

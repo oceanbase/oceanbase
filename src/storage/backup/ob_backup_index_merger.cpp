@@ -172,7 +172,9 @@ ObIBackupMultiLevelIndexBuilder::ObIBackupMultiLevelIndexBuilder()
       allocator_(),
       buffer_writer_(ObModIds::BACKUP),
       compressor_type_()
-{}
+{
+  allocator_.set_attr(lib::ObMemAttr(MTL_ID(), ObModIds::BACKUP));
+}
 
 ObIBackupMultiLevelIndexBuilder::~ObIBackupMultiLevelIndexBuilder()
 {

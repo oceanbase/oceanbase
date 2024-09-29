@@ -359,7 +359,7 @@ private:
       const ObTabletTableStore &table_store, const share::ObBackupDataType &backup_data_type,
       const bool is_major_compaction_mview_dep_tablet, common::ObIArray<storage::ObSSTableWrapper> &sstable_array);
   int prepare_tablet_sstable_index_builders_(const common::ObTabletID &tablet_id,
-      common::ObIArray<storage::ObSSTableWrapper> &sstable_array);
+      const bool is_major_compaction_mview_dep_tablet, common::ObIArray<storage::ObSSTableWrapper> &sstable_array);
   int open_tablet_sstable_index_builder_(const common::ObTabletID &tablet_id, const storage::ObTabletHandle &tablet_handle,
       const storage::ObITable::TableKey &table_key, blocksstable::ObSSTable *sstable, const bool is_empty_sstable);
   int prepare_tablet_logic_id_reader_(const common::ObTabletID &tablet_id, const storage::ObTabletHandle &tablet_handle,
