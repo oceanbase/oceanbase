@@ -2177,6 +2177,18 @@ DEF_STR_WITH_CHECKER(sql_plan_management_mode, OB_TENANT_PARAMETER, "Disable",
                      "\"Disable\" represent disable spm (default value)."
                      "\"OnlineEvolve\" represent evolve plan online.",
                      ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_STR_WITH_CHECKER(default_load_mode, OB_TENANT_PARAMETER, "DISABLED",
+                     common::ObDefaultLoadModeChecker,
+                     "Specifies default load data path."
+                     "\"DISABLED\" represent load data not in direct load path (default value)."
+                     "\"FULL_DIRECT_WRITE\" represent load data in full direct load path with insert semantics."
+                     "\"INC_DIRECT_WRITE\" represent load data in inc direct load path with insert semantics."
+                     "\"INC_REPLACE_DIRECT_WRITE\" represent load data in inc direct load path with replace semantics.",
+                     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(direct_load_allow_fallback, OB_TENANT_PARAMETER, "False",
+        "Control whether an error is reported when direct load of the derivative operation scenario is not supported.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 ERRSIM_DEF_TIME(errsim_delay_gc_interval, OB_CLUSTER_PARAMETER, "30m", "[0,)",
         "delay gc interval in errsim mode"
          "Range: [0, +∞)",

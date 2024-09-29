@@ -55,6 +55,7 @@
 #include "sql/optimizer/ob_log_temp_table_access.h"
 #include "sql/optimizer/ob_log_temp_table_transformation.h"
 #include "sql/optimizer/ob_px_resource_analyzer.h"
+#include "sql/optimizer/ob_direct_load_optimizer.h"
 #include "common/ob_smart_call.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "sql/optimizer/ob_log_err_log.h"
@@ -11722,16 +11723,36 @@ int ObLogPlan::calc_plan_resource()
 int ObLogPlan::add_explain_note()
 {
   int ret = OB_SUCCESS;
-  ObOptimizerContext &opt_ctx = get_optimizer_context();
-  ObInsertLogPlan *insert_plan = NULL;
   if (OB_FAIL(add_parallel_explain_note())) {
     LOG_WARN("fail to add explain note", K(ret));
-  } else if (NULL != (insert_plan = dynamic_cast<ObInsertLogPlan*>(this))
-             && insert_plan->is_direct_insert()
-             && OB_FALSE_IT(opt_ctx.add_plan_note(DIRECT_MODE_INSERT_INTO_SELECT))) {
-  } else if (NULL != (insert_plan = dynamic_cast<ObInsertLogPlan*>(this))
-             && insert_plan->is_insert_overwrite()
-             && OB_FALSE_IT(opt_ctx.add_plan_note(INSERT_OVERWRITE_TABLE))) {
+  } else if (OB_FAIL(add_direct_load_explain_note())) {
+    LOG_WARN("fail to add direct load explain note", K(ret));
+  }
+  return ret;
+}
+
+int ObLogPlan::add_direct_load_explain_note()
+{
+  int ret = OB_SUCCESS;
+  ObInsertLogPlan *insert_plan = NULL;
+  if (NULL != (insert_plan = dynamic_cast<ObInsertLogPlan*>(this))) {
+    ObOptimizerContext &opt_ctx = get_optimizer_context();
+    const ObDirectLoadOptimizerCtx &direct_load_optimizer_ctx = opt_ctx.get_direct_load_optimizer_ctx();
+    if (direct_load_optimizer_ctx.is_insert_overwrite()) {
+      opt_ctx.add_plan_note(INSERT_OVERWRITE_TABLE);
+    } else if (direct_load_optimizer_ctx.use_direct_load()) {
+      if (direct_load_optimizer_ctx.is_full_direct_load()) {
+        opt_ctx.add_plan_note(DIRECT_MODE_INSERT_INTO_SELECT, "full");
+      } else if (direct_load_optimizer_ctx.is_inc_direct_load()) {
+        opt_ctx.add_plan_note(DIRECT_MODE_INSERT_INTO_SELECT, "inc");
+      } else if (direct_load_optimizer_ctx.is_inc_replace_direct_load()) {
+        opt_ctx.add_plan_note(DIRECT_MODE_INSERT_INTO_SELECT, "inc_replace");
+      }
+    } else {
+      if (direct_load_optimizer_ctx.can_use_direct_load()) {
+        opt_ctx.add_plan_note(DIRECT_MODE_DISABLED_BY_PDML);
+      }
+    }
   }
   return ret;
 }

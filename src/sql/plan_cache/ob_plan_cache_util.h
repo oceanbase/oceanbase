@@ -1040,6 +1040,8 @@ public:
     bloom_filter_ratio_(0),
     enable_hyperscan_regexp_engine_(false),
     realistic_runtime_bloom_filter_size_(false),
+    direct_load_allow_fallback_(false),
+    default_load_mode_(0),
     cluster_config_version_(-1),
     tenant_config_version_(-1),
     tenant_id_(0)
@@ -1087,6 +1089,8 @@ public:
   int bloom_filter_ratio_;
   bool enable_hyperscan_regexp_engine_;
   bool realistic_runtime_bloom_filter_size_;
+  bool direct_load_allow_fallback_;
+  int default_load_mode_;
 
 private:
   // current cluster config version_

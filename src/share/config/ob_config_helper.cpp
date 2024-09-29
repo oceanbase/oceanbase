@@ -1155,6 +1155,22 @@ int64_t ObSqlPlanManagementModeChecker::get_spm_mode_by_string(const common::ObS
   return spm_mode;
 }
 
+bool ObDefaultLoadModeChecker::check(const ObConfigItem &t) const
+{
+  const ObString tmp_str(t.str());
+  bool result = false;
+  if (0 == tmp_str.case_compare("DISABLED")) {
+    result = true;
+  } else if (0 == tmp_str.case_compare("FULL_DIRECT_WRITE")) {
+    result = true;
+  } else if (0 == tmp_str.case_compare("INC_DIRECT_WRITE")) {
+    result = true;
+  } else if (0 == tmp_str.case_compare("INC_REPLACE_DIRECT_WRITE")) {
+    result = true;
+  }
+  return result;
+}
+
 int ObModeConfigParserUitl::parse_item_to_kv(char *item, ObString &key, ObString &value, const char* delim)
 {
   int ret = OB_SUCCESS;

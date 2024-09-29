@@ -23,6 +23,7 @@ namespace oceanbase
 {
 namespace sql
 {
+class ObDirectLoadOptimizerCtx;
 
 enum class ObLoadDupActionType {
   LOAD_STOP_ON_DUP = 0, //stop when going to insert duplicated key
@@ -240,7 +241,7 @@ public:
   };
 
   ObLoadDataStmt() :
-    ObCMDStmt(stmt::T_LOAD_DATA), is_default_table_columns_(false)
+    ObCMDStmt(stmt::T_LOAD_DATA), optimizer_ctx_(nullptr), is_default_table_columns_(false)
   {
   }
   virtual ~ObLoadDataStmt()
@@ -262,7 +263,10 @@ public:
   ObLoadDataHint &get_hints() { return hints_; }
   void set_default_table_columns() { is_default_table_columns_ = true; }
   bool get_default_table_columns() { return is_default_table_columns_; }
+  void set_optimizer_ctx(ObDirectLoadOptimizerCtx *optimizer_ctx) { optimizer_ctx_ = optimizer_ctx; }
+  ObDirectLoadOptimizerCtx *get_optimizer_ctx() { return optimizer_ctx_; }
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_),
+               KP_(optimizer_ctx),
                K_(load_args),
                K_(data_struct_in_file),
                K_(field_or_var_list),
@@ -271,6 +275,7 @@ public:
                K_(is_default_table_columns));
 
 private:
+  ObDirectLoadOptimizerCtx *optimizer_ctx_;
   ObLoadArgument load_args_;
   ObDataInFileStruct data_struct_in_file_;
   common::ObSEArray<FieldOrVarStruct, 4> field_or_var_list_;

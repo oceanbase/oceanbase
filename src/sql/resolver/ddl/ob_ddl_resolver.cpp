@@ -22,6 +22,7 @@
 #include "sql/resolver/ddl/ob_create_table_stmt.h"
 #include "sql/resolver/ddl/ob_alter_table_stmt.h"
 #include "sql/resolver/ddl/ob_create_tablegroup_stmt.h"
+#include "sql/resolver/dml/ob_dml_resolver.h"
 #include "sql/code_generator/ob_expr_generator_impl.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/ob_sql_utils.h"
@@ -13216,7 +13217,21 @@ int ObDDLResolver::resolve_hints(const ParseNode *node, ObDDLStmt &stmt, const O
             hint_parallel = 1;  // ignore invalid hint
           } else {
             hint_parallel = parallel_node->value_;
+            stmt.set_has_parallel_hint(true);
           }
+        } else if (T_APPEND == hint_node->type_) {
+          stmt.set_has_append_hint(true);
+        } else if (T_DIRECT == hint_node->type_) {
+          ObDirectLoadHint direct_load_hint;
+          if (OB_FAIL(ObDMLResolver::resolve_direct_load_hint(*hint_node, direct_load_hint))) {
+            LOG_WARN("resolve direct load hint failed", K(ret));
+          } else {
+            stmt.set_direct_load_hint(direct_load_hint);
+          }
+        } else if (T_NO_DIRECT == hint_node->type_) {
+          ObDirectLoadHint direct_load_hint;
+          direct_load_hint.has_no_direct_ = true;
+          stmt.set_direct_load_hint(direct_load_hint);
         }
       }
     }

@@ -19,6 +19,7 @@
 #include "sql/optimizer/ob_log_update.h"
 #include "sql/optimizer/ob_log_exchange.h"
 #include "sql/optimizer/ob_log_link_dml.h"
+#include "sql/optimizer/ob_direct_load_optimizer.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/dblink/ob_dblink_utils.h"
@@ -71,17 +72,41 @@ int ObDelUpdLogPlan::compute_dml_parallel()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected parallel", K(ret), K(dml_parallel), K(opt_ctx.get_parallel_rule()));
     } else {
-      if (del_upd_stmt->is_insert_stmt() &&
-          static_cast<const ObInsertStmt*>(del_upd_stmt)->is_overwrite()) {
-        const int64_t default_insert_overwrite_parallel = 2;
-        if (dml_parallel <= ObGlobalHint::DEFAULT_PARALLEL) {
-          dml_parallel = default_insert_overwrite_parallel;
+      if (del_upd_stmt->is_insert_stmt()) {
+        const ObInsertStmt *insert_stmt = static_cast<const ObInsertStmt*>(del_upd_stmt);
+        if (insert_stmt->is_overwrite()) {
+          const int64_t default_insert_overwrite_parallel = 2;
+          if (dml_parallel <= ObGlobalHint::DEFAULT_PARALLEL) {
+            dml_parallel = default_insert_overwrite_parallel;
+          }
+        }
+        if (dml_parallel <= ObGlobalHint::DEFAULT_PARALLEL && opt_ctx.get_parallel_rule() == PXParallelRule::MANUAL_HINT) {
+          // do nothing
+        } else if (OB_FAIL(check_is_direct_load(*insert_stmt, dml_parallel))) {
+          LOG_WARN("failed to check is direct load", K(ret));
+        } else if (opt_ctx.get_direct_load_optimizer_ctx().can_use_direct_load()) {
+          const int64_t default_direct_insert_parallel = 2;
+          if (dml_parallel <= ObGlobalHint::DEFAULT_PARALLEL) {
+            dml_parallel = default_direct_insert_parallel;
+          }
         }
       }
-      max_dml_parallel_ = dml_parallel;
-      use_pdml_ = (opt_ctx.is_online_ddl() || session_info->get_ddl_info().is_mview_complete_refresh() ||
-                  (ObGlobalHint::DEFAULT_PARALLEL < dml_parallel &&
-                  is_strict_mode(session_info->get_sql_mode())));
+      if (OB_SUCC(ret)) {
+        max_dml_parallel_ = dml_parallel;
+        use_pdml_ = (opt_ctx.is_online_ddl() ||
+                    (ObGlobalHint::DEFAULT_PARALLEL < dml_parallel &&
+                    is_strict_mode(session_info->get_sql_mode())));
+        if (opt_ctx.get_direct_load_optimizer_ctx().can_use_direct_load() && use_pdml_) {
+          get_optimizer_context().get_direct_load_optimizer_ctx().set_use_direct_load();
+          ObExecContext *exec_ctx = get_optimizer_context().get_exec_ctx();
+          if (OB_ISNULL(exec_ctx)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("exec_ctx is null", K(ret));
+          } else {
+            exec_ctx->get_table_direct_insert_ctx().set_is_direct(true);
+          }
+        }
+      }
     }
   }
   LOG_TRACE("finish compute dml parallel", K(use_pdml_), K(max_dml_parallel_),
@@ -1766,7 +1791,7 @@ int ObDelUpdLogPlan::collect_related_local_index_ids(IndexDMLInfo &primary_dml_i
   if (OB_ISNULL(stmt) || OB_ISNULL(schema_guard = optimizer_context_.get_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema guard is nullptr", K(ret), K(stmt), K(schema_guard));
-  } else if (NULL != insert_plan && insert_plan->is_direct_insert()) {
+  } else if (NULL != insert_plan && get_optimizer_context().get_direct_load_optimizer_ctx().use_direct_load()) {
     index_tid_array_size = 0; // no need building index
   } else if (OB_FAIL(schema_guard->get_can_write_index_array(tenant_id,
                                                              primary_dml_info.ref_table_id_,
@@ -1924,7 +1949,7 @@ int ObDelUpdLogPlan::prepare_table_dml_info_basic(const ObDmlTableInfo& table_in
     uint64_t index_tid[OB_MAX_INDEX_PER_TABLE];
     int64_t index_cnt = OB_MAX_INDEX_PER_TABLE;
     ObInsertLogPlan *insert_plan = dynamic_cast<ObInsertLogPlan*>(this);
-    if (NULL != insert_plan && insert_plan->is_direct_insert()) {
+    if (NULL != insert_plan && get_optimizer_context().get_direct_load_optimizer_ctx().use_direct_load()) {
       index_cnt = 0; // no need building index
     } else if (OB_FAIL(schema_guard->get_can_write_index_array(session_info->get_effective_tenant_id(),
                                                         table_info.ref_table_id_, index_tid, index_cnt, true))) {
@@ -2346,6 +2371,26 @@ int ObDelUpdLogPlan::allocate_link_dml_as_top(ObLogicalOperator *&old_top)
     LOG_WARN("failed to compute property", K(ret));
   } else {
     old_top = link_dml;
+  }
+  return ret;
+}
+
+// Direct-insert is enabled only:
+// 1. pdml insert
+// 2. insert into select, insert overwrite
+// 3. _ob_enable_direct_load
+// 4. append hint or direct_load hint or default load mode
+// 5. full_direct_load(auto_commit, not in a transaction) or inc_direct_load
+int ObDelUpdLogPlan::check_is_direct_load(const ObInsertStmt &insert_stmt, const int64_t dml_parallel)
+{
+  int ret = OB_SUCCESS;
+  if (insert_stmt.is_overwrite() || insert_stmt.value_from_select()) {
+    ObOptimizerContext &optimize_ctx = get_optimizer_context();
+    ObDirectLoadOptimizerCtx &direct_load_optimize_ctx = get_optimizer_context().get_direct_load_optimizer_ctx();
+    ObDirectLoadOptimizer optimizer(direct_load_optimize_ctx);
+    if (OB_FAIL(optimizer.optimize(insert_stmt, optimize_ctx, dml_parallel))) {
+      LOG_WARN("fail to optimize", K(ret));
+    }
   }
   return ret;
 }

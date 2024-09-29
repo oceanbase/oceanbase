@@ -435,9 +435,11 @@ int ObLoadDataResolver::resolve_hints(const ParseNode &node)
 
       switch (hint_node->type_) {
       case T_DIRECT: {
-        ObDirectLoadHint &direct_load_hint = stmt_hints.get_direct_load_hint();
+        ObDirectLoadHint direct_load_hint;
         if (OB_FAIL(ObDMLResolver::resolve_direct_load_hint(*hint_node, direct_load_hint))) {
           LOG_WARN("fail to resolve direct load hint", KR(ret));
+        } else {
+          stmt_hints.get_direct_load_hint().merge(direct_load_hint);
         }
         break;
       }
@@ -518,6 +520,10 @@ int ObLoadDataResolver::resolve_hints(const ParseNode &node)
         if (OB_FAIL(stmt_hints.set_value(ObLoadDataHint::NO_GATHER_OPTIMIZER_STATISTICS, 1))) {
           LOG_WARN("fail to set gather optimizer statistics", K(ret));
         }
+        break;
+      }
+      case T_NO_DIRECT: {
+        stmt_hints.get_direct_load_hint().has_no_direct_ = true;
         break;
       }
       default:

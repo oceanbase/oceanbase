@@ -14066,7 +14066,8 @@ int ObDMLResolver::check_insert_into_select_use_fast_column_convert(const ObColu
   if (stmt->is_insert_stmt() && GCONF._ob_enable_direct_load) {
     const ObInsertStmt *insert_stmt = reinterpret_cast<ObInsertStmt *>(stmt);
     ObQueryCtx *query_ctx = insert_stmt->get_query_ctx();
-    if (insert_stmt->value_from_select() && query_ctx->get_query_hint().get_global_hint().has_direct_load()) {
+    const ObGlobalHint &global_hint = query_ctx->get_query_hint().get_global_hint();
+    if (insert_stmt->value_from_select() && global_hint.has_direct_load()) {
       // 1.first get actual raw expr
       const ObRawExpr *target_real_ref = target_expr;
       const ObRawExpr *source_real_ref = source_expr;
@@ -14675,6 +14676,10 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
           global_hint.merge_opt_features_version_hint(version);
         }
       }
+      break;
+    }
+    case T_NO_DIRECT: {
+      global_hint.direct_load_hint_.has_no_direct_ = true;
       break;
     }
     case T_NO_QUERY_TRANSFORMATION: {
@@ -17353,7 +17358,6 @@ int ObDMLResolver::resolve_direct_load_hint(const ParseNode &hint_node, ObDirect
   ParseNode *child0 = nullptr; // need_sort
   ParseNode *child1 = nullptr; // max_error_row_count
   ParseNode *child2 = nullptr; // load_method
-  hint.reset();
   if (OB_UNLIKELY(3 != hint_node.num_child_) ||
       OB_ISNULL(child0 = hint_node.children_[0]) ||
       OB_ISNULL(child1 = hint_node.children_[1])) {
@@ -17379,7 +17383,7 @@ int ObDMLResolver::resolve_direct_load_hint(const ParseNode &hint_node, ObDirect
       LOG_WARN("invalid load method value", KR(ret), K(load_method_str));
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "load method in direct hint");
     } else {
-      hint.is_enable_ = true;
+      hint.has_direct_ = true;
       hint.need_sort_ = (need_sort_value != 0);
       hint.max_error_row_count_ = error_rows_value;
       hint.load_method_ = load_method_value;

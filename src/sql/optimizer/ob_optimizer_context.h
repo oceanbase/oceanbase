@@ -27,6 +27,7 @@
 #include "sql/engine/aggregate/ob_adaptive_bypass_ctrl.h"
 #include "sql/optimizer/ob_dynamic_sampling.h"
 #include "share/config/ob_config_helper.h"
+#include "sql/optimizer/ob_direct_load_optimizer.h"
 
 
 namespace oceanbase
@@ -324,6 +325,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   {
     return params_;
   }
+  inline const ObDirectLoadOptimizerCtx &get_direct_load_optimizer_ctx() const { return direct_load_optimizer_ctx_; }
+  inline ObDirectLoadOptimizerCtx &get_direct_load_optimizer_ctx() { return direct_load_optimizer_ctx_; }
   inline const ObGlobalHint &get_global_hint() { return global_hint_; }
   inline ObRawExprFactory &get_expr_factory() { return expr_factory_; }
   inline ObLogPlanFactory &get_log_plan_factory() { return log_plan_factory_; }
@@ -679,6 +682,7 @@ private:
   common::ObAddr server_;
   obrpc::ObSrvRpcProxy *srv_proxy_;
   const ParamStore *params_;
+  ObDirectLoadOptimizerCtx direct_load_optimizer_ctx_; // for direct load
   const ObGlobalHint &global_hint_;
   ObRawExprFactory &expr_factory_;
   ObLogPlanFactory log_plan_factory_;

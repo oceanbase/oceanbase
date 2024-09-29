@@ -17,6 +17,7 @@
 #include "observer/table_load/ob_table_load_error_row_handler.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "observer/table_load/ob_table_load_task_scheduler.h"
+#include "observer/ob_server_event_history_table_operator.h"
 #include "share/ob_autoincrement_service.h"
 #include "share/sequence/ob_sequence_cache.h"
 
@@ -230,6 +231,7 @@ int ObTableLoadCoordinatorCtx::advance_status(ObTableLoadStatusType status)
     else {
       status_ = status;
       table_load_status_to_string(status_, ctx_->job_stat_->coordinator_.status_);
+      add_to_all_server_event();
       LOG_INFO("LOAD DATA COORDINATOR advance status", K(status));
     }
   }
@@ -250,6 +252,7 @@ int ObTableLoadCoordinatorCtx::set_status_error(int error_code)
       status_ = ObTableLoadStatusType::ERROR;
       error_code_ = error_code;
       table_load_status_to_string(status_, ctx_->job_stat_->coordinator_.status_);
+      add_to_all_server_event();
       LOG_INFO("LOAD DATA COORDINATOR status error", KR(error_code));
     }
   }
@@ -265,6 +268,7 @@ int ObTableLoadCoordinatorCtx::set_status_abort()
   } else {
     status_ = ObTableLoadStatusType::ABORT;
     table_load_status_to_string(status_, ctx_->job_stat_->coordinator_.status_);
+    add_to_all_server_event();
     LOG_INFO("LOAD DATA COORDINATOR status abort");
   }
   return ret;
@@ -491,6 +495,15 @@ int ObTableLoadCoordinatorCtx::init_sequence()
     LOG_WARN("cache sequence_schema fail", K(tenant_id), K(sequence_id), KR(ret));
   }
   return ret;
+}
+
+void ObTableLoadCoordinatorCtx::add_to_all_server_event()
+{
+  SERVER_EVENT_ADD("direct_load", "load_data",
+                   "tenant_id", MTL_ID(),
+                   "table_name", ctx_->job_stat_->table_name_,
+                   "table_id", ctx_->job_stat_->job_id_,
+                   "status", ctx_->job_stat_->coordinator_.status_);
 }
 
 int ObTableLoadCoordinatorCtx::init_session_ctx_array()

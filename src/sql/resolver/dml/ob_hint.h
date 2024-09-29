@@ -106,11 +106,13 @@ public:
   ~ObDirectLoadHint() = default;
 
   void reset();
-  int assign(const ObDirectLoadHint &other);
+  void merge(const ObDirectLoadHint &other);
   int print_direct_load_hint(PlanText &plan_text) const;
-
-  OB_INLINE bool is_enable() const { return is_enable_; }
+  int print_direct_load_hint(char *buf, int64_t buf_len, int64_t &pos) const;
+  OB_INLINE bool is_enable() const { return !has_no_direct_ && has_direct_; }
+  OB_INLINE bool has_direct() const { return has_direct_; }
   OB_INLINE bool need_sort() const { return need_sort_; }
+  OB_INLINE bool has_no_direct() const { return has_no_direct_; }
   OB_INLINE int64_t get_max_error_row_count() const { return max_error_row_count_; }
   OB_INLINE bool is_full_load_method() const { return LoadMethod::FULL == load_method_; }
   OB_INLINE bool is_inc_load_method() const { return LoadMethod::INC == load_method_; }
@@ -118,17 +120,21 @@ public:
   OB_INLINE bool is_full_direct_load() const { return is_full_load_method(); }
   OB_INLINE bool is_inc_direct_load() const { return is_inc_load_method() || is_inc_replace_load_method(); }
 
-  TO_STRING_KV(K_(is_enable),
+  TO_STRING_KV(K_(has_direct),
                K_(need_sort),
+               K_(has_no_direct),
                K_(flags),
                K_(max_error_row_count),
                "load_method", get_load_method_string(load_method_));
+private:
+  int print_direct_load_hint_(char *buf, int64_t buf_len, int64_t &pos, const char *indent) const;
 public:
   union {
     struct {
-      uint64_t is_enable_ : 1;
+      uint64_t has_direct_ : 1;
       uint64_t need_sort_ : 1;
-      uint64_t reserved_ : 62;
+      uint64_t has_no_direct_ : 1;
+      uint64_t reserved_ : 61;
     };
     uint64_t flags_;
   };
@@ -344,15 +350,7 @@ struct ObGlobalHint {
   }
   bool has_direct_load() const
   {
-    return (has_append() || direct_load_hint_.is_enable());
-  }
-  bool has_inc_direct_load() const
-  {
-    return (direct_load_hint_.is_enable() && direct_load_hint_.is_inc_direct_load());
-  }
-  bool has_replace() const
-  {
-    return (direct_load_hint_.is_enable() && direct_load_hint_.is_inc_replace_load_method());
+    return !direct_load_hint_.has_no_direct() && (has_append() || direct_load_hint_.has_direct());
   }
   bool get_direct_load_need_sort() const;
 

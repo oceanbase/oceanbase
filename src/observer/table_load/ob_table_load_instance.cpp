@@ -211,7 +211,7 @@ int ObTableLoadInstance::start_stmt(
   }
   if (OB_SUCC(ret)) {
     stmt_ctx_.is_started_ = true;
-    LOG_INFO("start stmt succeed", KR(ret), K(stmt_ctx_));
+    LOG_INFO("start stmt succeed", KR(ret), K(stmt_ctx_), K(param));
   }
   return ret;
 }

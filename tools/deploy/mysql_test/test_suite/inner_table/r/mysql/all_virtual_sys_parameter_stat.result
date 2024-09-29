@@ -83,11 +83,13 @@ default_auto_increment_mode
 default_compress
 default_compress_func
 default_enable_extended_rowid
+default_load_mode
 default_progressive_merge_num
 default_row_format
 default_table_store_format
 devname
 diag_syslog_per_error_limit
+direct_load_allow_fallback
 disk_io_thread_count
 dtl_buffer_size
 dump_data_dictionary_to_log_interval

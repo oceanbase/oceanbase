@@ -311,10 +311,7 @@ void ObGlobalHint::merge_opt_features_version_hint(uint64_t opt_features_version
 
 void ObGlobalHint::merge_direct_load_hint(const ObDirectLoadHint &other)
 {
-  direct_load_hint_.flags_ |= other.flags_;
-  direct_load_hint_.max_error_row_count_ =
-      std::max(direct_load_hint_.max_error_row_count_, other.max_error_row_count_);
-  direct_load_hint_.load_method_ = other.load_method_;
+  direct_load_hint_.merge(other);
 }
 
 // use the first resource group hint now.
@@ -624,7 +621,7 @@ bool ObGlobalHint::get_direct_load_need_sort() const
   if (has_direct_load()) {
     // if direct(need_sort, max_allowed_error_rows) hint is provided,
     // use its need_sort param, otherwise need_sort = true
-    need_sort = direct_load_hint_.is_enable() ?
+    need_sort = direct_load_hint_.has_direct() ?
                     direct_load_hint_.need_sort() : true;
   }
   return need_sort;
@@ -3298,27 +3295,42 @@ void ObDirectLoadHint::reset()
   load_method_ = INVALID_LOAD_METHOD;
 }
 
-int ObDirectLoadHint::assign(const ObDirectLoadHint &other)
+void ObDirectLoadHint::merge(const ObDirectLoadHint &other)
 {
-  int ret = OB_SUCCESS;
-  flags_ = other.flags_;
+  has_direct_ = other.has_direct_;
+  need_sort_ = other.need_sort_;
+  has_no_direct_ |= other.has_no_direct_;
   max_error_row_count_ = other.max_error_row_count_;
   load_method_ = other.load_method_;
-  return ret;
 }
 
 int ObDirectLoadHint::print_direct_load_hint(PlanText &plan_text) const
 {
-  int ret = OB_SUCCESS;
   const char* outline_indent = ObQueryHint::get_outline_indent(plan_text.is_oneline_);
   char *buf = plan_text.buf_;
   int64_t &buf_len = plan_text.buf_len_;
   int64_t &pos = plan_text.pos_;
-  if (is_enable_) {
+
+  return print_direct_load_hint_(buf, buf_len, pos, outline_indent);
+}
+
+int ObDirectLoadHint::print_direct_load_hint(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  return print_direct_load_hint_(buf, buf_len, pos, ""/*indent*/);
+}
+
+int ObDirectLoadHint::print_direct_load_hint_(char *buf, int64_t buf_len, int64_t &pos, const char *indent) const
+{
+  int ret = OB_SUCCESS;
+  if (has_no_direct_) {
+    if (OB_FAIL(BUF_PRINTF("%sNO_DIRECT", indent))) {
+      LOG_WARN("failed to print no_direct hint", KR(ret));
+    }
+  } else if (has_direct_) {
     const char *need_sort_str = need_sort_ ? "TRUE" : "FALSE";
     const char *load_method_str = get_load_method_string(load_method_);
     if (OB_FAIL(BUF_PRINTF("%sDIRECT(%s, %ld, '%s')",
-        outline_indent, need_sort_str, max_error_row_count_, load_method_str))) {
+                           indent, need_sort_str, max_error_row_count_, load_method_str))) {
       LOG_WARN("failed to print direct load hint", KR(ret));
     }
   }

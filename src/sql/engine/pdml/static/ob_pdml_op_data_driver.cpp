@@ -170,15 +170,13 @@ int ObPDMLOpDataDriver::fill_cache_unitl_cache_full_or_child_iter_end(ObExecCont
   int ret = OB_SUCCESS;
   bool is_direct_load = false;
   const ObPhysicalPlanCtx *plan_ctx = nullptr;
-  const ObPhysicalPlan *plan = nullptr;
   if (OB_ISNULL(reader_) || OB_ISNULL(eval_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the reader is null", K(ret));
-  } else if (OB_ISNULL(plan_ctx = ctx.get_physical_plan_ctx())
-      || OB_ISNULL(plan = plan_ctx->get_phy_plan())) {
+  } else if (OB_ISNULL(plan_ctx = ctx.get_physical_plan_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null physical plan (ctx)", KR(ret), KP(plan_ctx), KP(plan));
-  } else if (OB_FALSE_IT(is_direct_load = ObTableDirectInsertService::is_direct_insert(*plan))) {
+    LOG_WARN("unexpected null physical plan (ctx)", KR(ret), KP(plan_ctx));
+  } else if (OB_FALSE_IT(is_direct_load = plan_ctx->get_is_direct_insert_plan())) {
     // 尝试追加上一次从child中读取出来，但是没有添加到cache中的row数据
   } else if (OB_FAIL(try_write_last_pending_row())) {
     LOG_WARN("fail write last pending row into cache", K(ret));

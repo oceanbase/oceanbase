@@ -53,6 +53,7 @@
 #include "sql/optimizer/ob_insert_log_plan.h"
 #include "sql/optimizer/ob_log_stat_collector.h"
 #include "sql/optimizer/ob_log_optimizer_stats_gathering.h"
+#include "sql/optimizer/ob_direct_load_optimizer.h"
 #include "share/datum/ob_datum_funcs.h"
 #include "share/schema/ob_schema_mgr.h"
 #include "sql/engine/ob_operator_factory.h"
@@ -2969,16 +2970,6 @@ int ObStaticEngineCG::generate_insert_with_das(ObLogInsert &op, ObTableInsertSpe
   if (OB_SUCC(ret) && op.get_stmt_id_expr() != nullptr) {
     if (OB_FAIL(generate_rt_expr(*op.get_stmt_id_expr(), spec.ab_stmt_id_))) {
       LOG_WARN("generate ab stmt id expr failed", K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    bool is_insert_overwrite = false;
-    if (OB_FAIL(check_is_insert_overwrite_stmt(log_plan, is_insert_overwrite))) {
-      LOG_WARN("check is insert overwrite failed", K(ret));
-    } else if (is_insert_overwrite) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "please explain extended for why, insert overwrite need open pdml");
     }
   }
 
@@ -6993,32 +6984,29 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op,
     spec.is_pdml_index_maintain_ = op.is_index_maintenance();
     spec.table_location_uncertain_ = op.is_table_location_uncertain(); // row-movement target table
     spec.is_pdml_update_split_ = op.is_pdml_update_split();
-    if (GCONF._ob_enable_direct_load) {
-      const ObGlobalHint &global_hint = op.get_plan()->get_optimizer_context().get_global_hint();
-      spec.plan_->set_append_table_id(op.get_append_table_id());
-      spec.plan_->set_enable_append(global_hint.has_direct_load());
-      spec.plan_->set_enable_inc_direct_load(global_hint.has_inc_direct_load());
-      spec.plan_->set_enable_replace(global_hint.has_replace());
-      spec.plan_->set_online_sample_percent(op.get_plan()->get_optimizer_context()
-                                                           .get_exec_ctx()->get_table_direct_insert_ctx()
-                                                           .get_online_sample_percent());
-      spec.plan_->set_direct_load_need_sort(global_hint.get_direct_load_need_sort());
-      // check is insert overwrite
-      bool is_insert_overwrite = false;
-      ObExecContext *exec_ctx = NULL;
-      ObPhysicalPlanCtx *plan_ctx = NULL;
-      if (OB_FAIL(check_is_insert_overwrite_stmt(log_plan, is_insert_overwrite))) {
-        LOG_WARN("check is insert overwrite failed", K(ret));
-      } else if (OB_FALSE_IT(spec.plan_->set_is_insert_overwrite(is_insert_overwrite))) {
-      } else if (OB_ISNULL(exec_ctx = log_plan->get_optimizer_context().get_exec_ctx())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexcepted null exec ctx", KR(ret), KP(exec_ctx));
-      } else if (OB_ISNULL(plan_ctx = exec_ctx->get_physical_plan_ctx())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null plan ctx", KR(ret), KP(plan_ctx));
-      } else {
-        plan_ctx->set_is_direct_insert_plan(ObTableDirectInsertService::is_direct_insert(*(spec.plan_)));
-      }
+    ObDirectLoadOptimizerCtx &direct_load_optimizer_ctx = op.get_plan()->get_optimizer_context().get_direct_load_optimizer_ctx();
+    spec.plan_->set_append_table_id(op.get_append_table_id());
+    spec.plan_->set_enable_append(direct_load_optimizer_ctx.use_direct_load());
+    spec.plan_->set_enable_inc_direct_load(ObDirectLoadMethod::is_incremental(direct_load_optimizer_ctx.load_method_));
+    spec.plan_->set_enable_replace(direct_load_optimizer_ctx.insert_mode_ == ObDirectLoadInsertMode::INC_REPLACE);
+    spec.plan_->set_online_sample_percent(op.get_plan()->get_optimizer_context()
+                                                         .get_exec_ctx()->get_table_direct_insert_ctx()
+                                                         .get_online_sample_percent());
+    // check is insert overwrite
+    bool is_insert_overwrite = false;
+    ObExecContext *exec_ctx = NULL;
+    ObPhysicalPlanCtx *plan_ctx = NULL;
+    if (OB_FAIL(check_is_insert_overwrite_stmt(log_plan, is_insert_overwrite))) {
+      LOG_WARN("check is insert overwrite failed", K(ret));
+    } else if (OB_FALSE_IT(spec.plan_->set_is_insert_overwrite(is_insert_overwrite))) {
+    } else if (OB_ISNULL(exec_ctx = log_plan->get_optimizer_context().get_exec_ctx())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexcepted null exec ctx", KR(ret), KP(exec_ctx));
+    } else if (OB_ISNULL(plan_ctx = exec_ctx->get_physical_plan_ctx())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null plan ctx", KR(ret), KP(plan_ctx));
+    } else {
+      plan_ctx->set_is_direct_insert_plan(direct_load_optimizer_ctx.use_direct_load());
     }
     int64_t partition_expr_idx = OB_INVALID_INDEX;
     if (OB_FAIL(ret)) {

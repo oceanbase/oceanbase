@@ -18,41 +18,28 @@
 #include "sql/engine/cmd/ob_load_data_impl.h"
 #include "sql/engine/cmd/ob_load_data_direct_impl.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/optimizer/ob_direct_load_optimizer.h"
+#include "sql/optimizer/ob_optimizer.h"
 
 namespace oceanbase
 {
 namespace sql
 {
 
-int ObLoadDataExecutor::check_is_direct_load(ObTableDirectInsertCtx &ctx, const ObLoadDataHint &load_hint)
-{
-  int ret = OB_SUCCESS;
-  ctx.set_is_direct(false);
-  if (GCONF._ob_enable_direct_load) {
-    const bool enable_direct = load_hint.get_direct_load_hint().is_enable();
-    int64_t append = 0;
-    if (enable_direct) { // direct
-      ctx.set_is_direct(true);
-    } else if (OB_FAIL(load_hint.get_value(ObLoadDataHint::APPEND, append))) {
-      LOG_WARN("fail to get APPEND", KR(ret));
-    } else if (append != 0) { // append
-      ctx.set_is_direct(true);
-    }
-  }
-  LOG_INFO("check load data is direct done.", K(ctx.get_is_direct()));
-  return ret;
-}
-
 int ObLoadDataExecutor::execute(ObExecContext &ctx, ObLoadDataStmt &stmt)
 {
   int ret = OB_SUCCESS;
   ObTableDirectInsertCtx &table_direct_insert_ctx = ctx.get_table_direct_insert_ctx();
   ObLoadDataBase *load_impl = NULL;
+  ObDirectLoadOptimizerCtx optimizer_ctx;
+  ObDirectLoadOptimizer optimizer(optimizer_ctx);
+  stmt.set_optimizer_ctx(&optimizer_ctx);
   if (!stmt.get_load_arguments().is_csv_format_) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("invalid resolver results", K(ret));
-  } else if (OB_FAIL(check_is_direct_load(table_direct_insert_ctx, stmt.get_hints()))) {
-    LOG_WARN("fail to check is load mode", KR(ret));
+  } else if (OB_FAIL(optimizer.optimize(&ctx, stmt))) {
+    LOG_WARN("fail to optimize", K(ret), K(stmt));
+  } else if (FALSE_IT(table_direct_insert_ctx.set_is_direct(optimizer_ctx.use_direct_load()))) {
   } else {
     if (!table_direct_insert_ctx.get_is_direct()) {
       if (OB_ISNULL(load_impl = OB_NEWx(ObLoadDataSPImpl, (&ctx.get_allocator())))) {

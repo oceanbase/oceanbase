@@ -140,34 +140,6 @@ int ObInsertResolver::resolve(const ParseNode &parse_tree)
     }
   }
 
-  // resolve hints and inner cast
-  if (OB_SUCC(ret)) {
-    if ((stmt::T_INSERT == insert_stmt->stmt_type_)
-        && insert_stmt->value_from_select()
-        && GCONF._ob_enable_direct_load) {
-      ObQueryCtx *query_ctx = insert_stmt->get_query_ctx();
-      if (OB_ISNULL(query_ctx)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("query ctx should not be NULL", KR(ret), KP(query_ctx));
-      } else {
-        if (insert_stmt->is_overwrite()) {
-          // For insert overwrite select
-          // 1. not allow add direct load hint
-          // 2. disable plan cache as direct load
-          if (query_ctx->get_query_hint_for_update().global_hint_.has_direct_load()) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert overwrite stmt with direct load hint");
-          } else {
-            query_ctx->get_query_hint_for_update().global_hint_.merge_plan_cache_hint(OB_USE_PLAN_CACHE_NONE);
-          }
-        } else if (query_ctx->get_query_hint().get_global_hint().has_direct_load()) {
-          // For insert into select clause with direct-insert mode, plan cache is disabled
-          query_ctx->get_query_hint_for_update().global_hint_.merge_plan_cache_hint(OB_USE_PLAN_CACHE_NONE);
-        }
-      }
-    }
-  }
-
   if (OB_SUCC(ret)) {
     if (OB_FAIL(insert_stmt->formalize_stmt(session_info_))) {
       LOG_WARN("pull stmt all expr relation ids failed", K(ret));

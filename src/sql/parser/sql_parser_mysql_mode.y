@@ -198,6 +198,8 @@ DISTINCT_PUSHDOWN NO_DISTINCT_PUSHDOWN
 USE_HASH_SET NO_USE_HASH_SET
 USE_DISTRIBUTED_DML NO_USE_DISTRIBUTED_DML
 PUSHDOWN
+// no direct load
+NO_DIRECT
 // direct load data hint
 DIRECT
 // hint related to optimizer statistics
@@ -11215,6 +11217,10 @@ READ_CONSISTENCY '(' consistency_level ')'
 | DIRECT '(' BOOL_VALUE ',' INTNUM ',' STRING_VALUE ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_DIRECT, 3, $3, $5, $7);
+}
+| NO_DIRECT
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_NO_DIRECT);
 }
 | APPEND
 {
