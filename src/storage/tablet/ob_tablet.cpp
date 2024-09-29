@@ -3990,7 +3990,7 @@ int ObTablet::get_kept_multi_version_start(
     }
 
     const int64_t current_time = common::ObTimeUtility::fast_current_time() * 1000; // needs ns here.
-    if (current_time - multi_version_start > 120 * 60 * 1000 * 1000L /*2 hour*/) {
+    if (current_time - multi_version_start > 40 * 1000 * 1000L /*40 min*/) {
       if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000L /*10s*/)) {
         LOG_INFO("tablet multi version start not advance for a long time", K(ret), K(ls_id), K(tablet_id),
                 K(multi_version_start), K(old_min_reserved_snapshot), K(min_medium_snapshot),
@@ -3999,7 +3999,7 @@ int ObTablet::get_kept_multi_version_start(
       }
     }
   }
-  LOG_INFO("get multi version start", K(ret), K(ls_id), K(tablet_id),
+  LOG_TRACE("get multi version start", K(ret), K(ls_id), K(tablet_id),
       K(multi_version_start), K(min_reserved_snapshot), K(min_medium_snapshot),
       K(ls_min_reserved_snapshot), K(last_major_snapshot_version));
   return ret;

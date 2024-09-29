@@ -1999,12 +1999,16 @@ void ObTenantDagScheduler::dump_dag_status(const bool force_dump/*false*/)
           "waiting_dag_count", waiting_dag_count[i]);
     }
     for (int64_t i = 0; i < ObDagType::DAG_TYPE_MAX; ++i) {
-      COMMON_LOG(INFO, "dump_dag_status", "type", OB_DAG_TYPES[i], "dag_count", dag_count[i]);
-      COMMON_LOG(INFO, "dump_dag_status", "type", OB_DAG_TYPES[i], "scheduled_task_count", scheduled_task_count[i]);
+      if (0 != dag_count[i] || 0 != scheduled_task_count[i]) {
+        COMMON_LOG(INFO, "dump_dag_status", "type", OB_DAG_TYPES[i], "dag_count", dag_count[i]);
+        COMMON_LOG(INFO, "dump_dag_status", "type", OB_DAG_TYPES[i], "scheduled_task_count", scheduled_task_count[i]);
+      }
     }
     for (int64_t i = 0; i < ObDagNetType::DAG_NET_TYPE_MAX; ++i) {
-      COMMON_LOG(INFO, "dump_dag_status[DAG_NET]", "type", OB_DAG_NET_TYPES[i].dag_net_type_str_,
+      if (0 != dag_net_count[i]) {
+        COMMON_LOG(INFO, "dump_dag_status[DAG_NET]", "type", OB_DAG_NET_TYPES[i].dag_net_type_str_,
           "dag_net_count", dag_net_count[i]);
+      }
     }
 
     COMMON_LOG(INFO, "dump_dag_status", K_(total_worker_cnt), K_(total_running_task_cnt), K_(work_thread_num), K(scheduled_task_cnt));
