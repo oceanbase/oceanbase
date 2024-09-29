@@ -172,7 +172,8 @@ public:
       op_result_(nullptr),
       attach_ctdef_(nullptr),
       attach_rtdef_(nullptr),
-      das_gts_opt_info_(op_alloc)
+      das_gts_opt_info_(op_alloc),
+      plan_line_id_(0)
   {
     das_task_node_.get_data() = this;
   }
@@ -239,7 +240,8 @@ public:
                        K_(related_rtdefs),
                        K_(task_status),
                        K_(related_tablet_ids),
-                       K_(das_task_node));
+                       K_(das_task_node),
+                       K_(plan_line_id));
 public:
   void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
   uint64_t get_tenant_id() const { return tenant_id_; }
@@ -334,6 +336,7 @@ protected:
   const ObDASBaseCtDef *attach_ctdef_;
   ObDASBaseRtDef *attach_rtdef_;
   ObDASGTSOptInfo das_gts_opt_info_;
+  int64_t plan_line_id_; //plan operator id
 };
 typedef common::ObObjStore<ObIDASTaskOp*, common::ObIAllocator&> DasTaskList;
 typedef DasTaskList::Iterator DASTaskIter;

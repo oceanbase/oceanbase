@@ -6061,6 +6061,7 @@ def_table_schema(
     ('thread_id', 'int', 'true'),
     ('stmt_type', 'int', 'true'),
     ('tablet_id', 'int', 'true'),
+    ('proxy_sid', 'int', 'true')
   ],
 )
 
@@ -12861,6 +12862,7 @@ def_table_schema(
     ('THREAD_ID', 'int', 'true'),
     ('STMT_TYPE', 'int', 'true'),
     ('TABLET_ID', 'int', 'true'),
+    ('PROXY_SID', 'int', 'true'),
   ],
   partition_columns = ['SVR_IP', 'SVR_PORT'],
   vtable_route_policy = 'distributed',
