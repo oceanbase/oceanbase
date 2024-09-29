@@ -426,14 +426,17 @@ int ObLSBackupMetaDagNet::start_running()
       }
     }
   }
-  if (OB_FAIL(ret) && OB_NOT_NULL(dag_scheduler) && OB_NOT_NULL(backup_meta_dag)) {
-    dag_scheduler->free_dag(*backup_meta_dag);
+  if (OB_FAIL(ret) && OB_NOT_NULL(dag_scheduler) && OB_NOT_NULL(finish_dag)) {
+    dag_scheduler->free_dag(*finish_dag, prepare_dag);
+    finish_dag = nullptr;
   }
   if (OB_FAIL(ret) && OB_NOT_NULL(dag_scheduler) && OB_NOT_NULL(prepare_dag)) {
-    dag_scheduler->free_dag(*prepare_dag);
+    dag_scheduler->free_dag(*prepare_dag, backup_meta_dag);
+    prepare_dag = nullptr;
   }
-  if (OB_FAIL(ret) && OB_NOT_NULL(dag_scheduler) && OB_NOT_NULL(finish_dag)) {
-    dag_scheduler->free_dag(*finish_dag);
+  if (OB_FAIL(ret) && OB_NOT_NULL(dag_scheduler) && OB_NOT_NULL(backup_meta_dag)) {
+    dag_scheduler->free_dag(*backup_meta_dag, nullptr/*parent_dag*/);
+    backup_meta_dag = nullptr;
   }
 
   if (OB_FAIL(ret)) {
@@ -654,7 +657,7 @@ int ObLSBackupDataDagNet::start_running()
     if (OB_FAIL(ret) && OB_NOT_NULL(scheduler) && OB_NOT_NULL(finish_dag)) {
       // add finish dag success and add prepare dag failed, need cancel finish dag
       if (add_finish_dag_success && !add_prepare_dag_success) {
-        if (OB_TMP_FAIL(scheduler->cancel_dag(finish_dag))) {
+        if (OB_TMP_FAIL(scheduler->cancel_dag(finish_dag, prepare_dag))) {
           LOG_ERROR("failed to cancel backup dag", K(tmp_ret), KP(scheduler), KP(finish_dag));
         } else {
           finish_dag = NULL;
@@ -663,11 +666,13 @@ int ObLSBackupDataDagNet::start_running()
     }
   }
 
-  if (OB_FAIL(ret) && OB_NOT_NULL(scheduler) && OB_NOT_NULL(prepare_dag)) {
-    scheduler->free_dag(*prepare_dag);
-  }
   if (OB_FAIL(ret) && OB_NOT_NULL(scheduler) && OB_NOT_NULL(finish_dag)) {
-    scheduler->free_dag(*finish_dag);
+    scheduler->free_dag(*finish_dag, prepare_dag);
+    finish_dag = NULL;
+  }
+  if (OB_FAIL(ret) && OB_NOT_NULL(scheduler) && OB_NOT_NULL(prepare_dag)) {
+    scheduler->free_dag(*prepare_dag, nullptr/*parent_dag*/);
+    prepare_dag = NULL;
   }
 
   if (OB_FAIL(ret)) {
@@ -876,7 +881,8 @@ int ObBackupBuildTenantIndexDagNet::start_running()
     }
   }
   if (OB_FAIL(ret) && OB_NOT_NULL(dag_scheduler) && OB_NOT_NULL(rebuild_dag)) {
-    dag_scheduler->free_dag(*rebuild_dag);
+    dag_scheduler->free_dag(*rebuild_dag, nullptr/*parent_dag*/);
+    rebuild_dag = NULL;
   }
 
   if (OB_FAIL(ret)) {
@@ -1038,7 +1044,8 @@ int ObLSBackupComplementLogDagNet::start_running()
     }
   }
   if (OB_FAIL(ret) && OB_NOT_NULL(dag_scheduler) && OB_NOT_NULL(complement_dag)) {
-    dag_scheduler->free_dag(*complement_dag);
+    dag_scheduler->free_dag(*complement_dag, nullptr/*parent_dag*/);
+    complement_dag = NULL;
   }
 
   if (OB_FAIL(ret)) {
@@ -2455,7 +2462,8 @@ int ObPrefetchBackupInfoTask::generate_next_prefetch_dag_()
     LOG_INFO("success to alloc next prefetch dag", K(ret), K_(param));
   }
   if (OB_FAIL(ret) && OB_NOT_NULL(scheduler) && OB_NOT_NULL(child_dag)) {
-    scheduler->free_dag(*child_dag);
+    scheduler->free_dag(*child_dag, dag_);
+    child_dag = NULL;
   }
   return ret;
 }
@@ -2515,7 +2523,8 @@ int ObPrefetchBackupInfoTask::generate_backup_dag_(
     }
   }
   if (OB_FAIL(ret) && OB_NOT_NULL(scheduler) && OB_NOT_NULL(child_dag)) {
-    scheduler->free_dag(*child_dag);
+    scheduler->free_dag(*child_dag, dag_);
+    child_dag = NULL;
   }
   return ret;
 }
@@ -3415,7 +3424,8 @@ int ObLSBackupDataTask::do_generate_next_backup_dag_()
   }
 
   if (OB_FAIL(ret) && OB_NOT_NULL(scheduler) && OB_NOT_NULL(next_dag)) {
-    scheduler->free_dag(*next_dag);
+    scheduler->free_dag(*next_dag, dag_);
+    next_dag = NULL;
   }
   return ret;
 }
@@ -4145,6 +4155,7 @@ int ObLSBackupPrepareTask::process()
       if (OB_FAIL(ret) && OB_NOT_NULL(scheduler) && OB_NOT_NULL(child_dag)) {
         if (!add_dag_success) {
           scheduler->free_dag(*child_dag, dag_);
+          child_dag = NULL;
         }
       }
     }
@@ -4177,7 +4188,8 @@ int ObLSBackupPrepareTask::process()
     }
   }
   if (OB_FAIL(ret) && OB_NOT_NULL(scheduler) && OB_NOT_NULL(rebuild_dag)) {
-    scheduler->free_dag(*rebuild_dag);
+    scheduler->free_dag(*rebuild_dag, dag_/*parent_dag*/);
+    rebuild_dag = nullptr;
   }
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {

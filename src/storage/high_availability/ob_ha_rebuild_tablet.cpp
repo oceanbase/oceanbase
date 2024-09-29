@@ -328,7 +328,7 @@ int ObRebuildTabletDagNet::start_running_for_rebuild_tablet_()
     if (OB_SUCCESS != (tmp_ret = erase_dag_from_dag_net(*initial_rebuild_tablet_dag))) {
       LOG_WARN("failed to erase dag from dag net", K(tmp_ret), KPC(initial_rebuild_tablet_dag));
     }
-    scheduler->free_dag(*initial_rebuild_tablet_dag);
+    scheduler->free_dag(*initial_rebuild_tablet_dag, nullptr/*parent_dag*/);
   }
   return ret;
 }
@@ -1349,7 +1349,7 @@ int ObTabletRebuildMajorDag::generate_next_dag(share::ObIDag *&dag)
   }
 
   if (OB_NOT_NULL(tablet_rebuild_dag)) {
-    scheduler->free_dag(*tablet_rebuild_dag);
+    scheduler->free_dag(*tablet_rebuild_dag, nullptr/*parent_dag*/);
     tablet_rebuild_dag = nullptr;
   }
 

@@ -789,7 +789,7 @@ public:
   int alloc_dag(T *&dag);
   template<typename T>
   int create_and_add_dag_net(const ObIDagInitParam *param);
-  void free_dag(ObIDag &dag, ObIDag *parent_dag = nullptr);
+  void free_dag(ObIDag &dag, ObIDag *parent_dag);
   template<typename T>
   void free_dag_net(T *&dag_net);
   void run1() final;
@@ -809,7 +809,7 @@ public:
   int64_t get_running_task_cnt(const ObDagPrio::ObDagPrioEnum priority);
   int32_t get_up_limit(const int64_t prio, int64_t &up_limit);
   int check_dag_exist(const ObIDag *dag, bool &exist);
-  int cancel_dag(const ObIDag *dag, ObIDag *parent_dag = nullptr);
+  int cancel_dag(const ObIDag *dag, ObIDag *parent_dag);
   int get_all_dag_info(
       common::ObIAllocator &allocator,
       common::ObIArray<void *> &dag_infos);
@@ -1125,7 +1125,7 @@ int ObTenantDagScheduler::create_and_add_dag(
     scheduler_sync_.signal(); // wake up scheduler
   }
   if (OB_FAIL(ret) && nullptr != dag) {
-    free_dag(*dag);
+    free_dag(*dag, nullptr/*parent_dag*/);
     dag = nullptr;
   }
   return ret;

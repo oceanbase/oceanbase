@@ -781,7 +781,7 @@ public:
           if (OB_SIZE_OVERFLOW != tmp_ret) {
             COMMON_LOG(ERROR, "failed to add dag", K(tmp_ret), K(*dag));
           }
-          scheduler_->free_dag(*dag);
+          scheduler_->free_dag(*dag, nullptr/*parent_dag*/);
         }
       }
     }
@@ -942,7 +942,7 @@ TEST_F(TestDagScheduler, baisc_test)
   EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag));
   EXPECT_EQ(OB_EAGAIN, scheduler->add_dag(dup_dag));
   if (OB_NOT_NULL(dup_dag)) {
-    scheduler->free_dag(*dup_dag);
+    scheduler->free_dag(*dup_dag, nullptr/*parent_dag*/);
   }
   wait_scheduler();
   EXPECT_EQ(counter, 20);
@@ -1059,7 +1059,7 @@ TEST_F(TestDagScheduler, test_cycle)
         EXPECT_EQ(OB_SUCCESS, dag->add_task(*mul_task));
         EXPECT_EQ(OB_INVALID_ARGUMENT, dag->add_task(*add_task));
         dag->free_task(*add_task);
-        scheduler->free_dag(*dag);
+        scheduler->free_dag(*dag, nullptr/*parent_dag*/);
       }
     }
   }

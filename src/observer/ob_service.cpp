@@ -682,7 +682,7 @@ int ObService::calc_column_checksum_request(const obrpc::ObCalcColumnChecksumReq
           }
           saved_ret = OB_SUCCESS != saved_ret ? saved_ret : tmp_ret;
           if (OB_SUCCESS != saved_ret && NULL != dag) {
-            dag_scheduler->free_dag(*dag);
+            dag_scheduler->free_dag(*dag, nullptr/*parent_dag*/);
             dag = NULL;
           }
           if (OB_SUCC(ret)) {
@@ -2602,7 +2602,7 @@ int ObService::build_ddl_single_replica_request(const ObDDLBuildSingleReplicaReq
       }
       if (OB_NOT_NULL(dag)) {
         (void) dag->handle_init_failed_ret_code(ret);
-        dag_scheduler->free_dag(*dag);
+        dag_scheduler->free_dag(*dag, nullptr/*parent_dag*/);
         dag = nullptr;
       }
       if (OB_FAIL(ret)) {
@@ -2645,13 +2645,13 @@ int ObService::check_and_cancel_ddl_complement_data_dag(const ObDDLBuildSingleRe
       LOG_WARN("fail to init complement data dag", K(ret), K(arg));
     } else if (OB_FAIL(dag_scheduler->check_dag_exist(dag, is_dag_exist))) {
       LOG_WARN("check dag exist failed", K(ret));
-    } else if (is_dag_exist && OB_FAIL(dag_scheduler->cancel_dag(dag))) {
+    } else if (is_dag_exist && OB_FAIL(dag_scheduler->cancel_dag(dag, nullptr/*parent_dag*/))) {
       // sync to cancel ready dag only, not including running dag.
       LOG_WARN("cancel dag failed", K(ret));
     }
     if (OB_NOT_NULL(dag)) {
       (void) dag->handle_init_failed_ret_code(ret);
-      dag_scheduler->free_dag(*dag);
+      dag_scheduler->free_dag(*dag, nullptr/*parent_dag*/);
       dag = nullptr;
     }
   }

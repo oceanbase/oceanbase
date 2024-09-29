@@ -411,7 +411,8 @@ int ObTabletGroupRestoreDagNet::start_running_for_restore_()
   }
 
   if (OB_NOT_NULL(initial_restore_dag) && OB_NOT_NULL(scheduler)) {
-    scheduler->free_dag(*initial_restore_dag);
+    scheduler->free_dag(*initial_restore_dag, nullptr/*parent_dag*/);
+    initial_restore_dag = nullptr;
   }
 
   return ret;
@@ -1381,7 +1382,7 @@ int ObStartTabletGroupRestoreTask::generate_tablet_restore_dag_()
         if (OB_TABLET_NOT_EXIST == ret) {
           //overwrite ret
           LOG_INFO("tablet is deleted, skip restore", K(logic_tablet_id), K(param));
-          scheduler->free_dag(*tablet_restore_dag);
+          scheduler->free_dag(*tablet_restore_dag, nullptr/*parent_dag*/);
           tablet_restore_dag = nullptr;
           ret = OB_SUCCESS;
         } else {
@@ -2071,7 +2072,7 @@ int ObTabletRestoreDag::generate_next_dag(share::ObIDag *&dag)
           if (OB_TABLET_NOT_EXIST == ret) {
             //overwrite ret
             LOG_INFO("tablet is deleted, skip restore", K(logic_tablet_id), K(param));
-            scheduler->free_dag(*tablet_restore_dag);
+            scheduler->free_dag(*tablet_restore_dag, nullptr/*parent_dag*/);
             tablet_restore_dag = nullptr;
             ret = OB_SUCCESS;
           } else {
@@ -2091,7 +2092,7 @@ int ObTabletRestoreDag::generate_next_dag(share::ObIDag *&dag)
   }
 
   if (OB_NOT_NULL(tablet_restore_dag)) {
-    scheduler->free_dag(*tablet_restore_dag);
+    scheduler->free_dag(*tablet_restore_dag, nullptr/*parent_dag*/);
     tablet_restore_dag = nullptr;
   }
 

@@ -228,7 +228,7 @@ int ObLSCompleteMigrationDagNet::start_running_for_migration_()
     if (OB_SUCCESS != (tmp_ret = (erase_dag_from_dag_net(*initial_dag)))) {
       LOG_WARN("failed to erase dag from dag net", K(tmp_ret), KPC(initial_dag));
     }
-    scheduler->free_dag(*initial_dag);
+    scheduler->free_dag(*initial_dag, nullptr/*parent_dag*/);
     initial_dag = nullptr;
   }
 

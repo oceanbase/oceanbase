@@ -438,7 +438,7 @@ int ObTabletTTLScheduler::generate_ttl_dag(ObTTLTaskInfo &task_info, TTLParamT &
   }
 
   if (OB_FAIL(ret) && OB_NOT_NULL(dag_scheduler) && OB_NOT_NULL(dag)) {
-    dag_scheduler->free_dag(*dag);
+    dag_scheduler->free_dag(*dag, nullptr/*parent_dag*/);
   }
   COMMON_LOG(INFO, "finish to build table api ttl dag", KR(ret), K(para), K(task_info));
   return ret;

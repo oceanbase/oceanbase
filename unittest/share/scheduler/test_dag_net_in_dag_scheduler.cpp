@@ -1097,7 +1097,7 @@ public:
     }
 
     if (OB_NOT_NULL(next_dag)) {
-      scheduler->free_dag(*next_dag);
+      scheduler->free_dag(*next_dag, nullptr/*parent_dag*/);
     }
     return ret;
   }
@@ -1190,7 +1190,7 @@ public:
         }
 
         if (OB_NOT_NULL(next_dag)) {
-          if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(next_dag))) {
+          if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(next_dag, nullptr/*parent_dag*/))) {
             COMMON_LOG(WARN, "failed to cancel next_dag", K(ret));
           }
           next_dag = nullptr;
@@ -1202,11 +1202,11 @@ public:
 
       if (OB_FAIL(ret)) {
         if (OB_NOT_NULL(next_dag)) {
-          scheduler->free_dag(*next_dag);
+          scheduler->free_dag(*next_dag, nullptr/*parent_dag*/);
         }
 
         if (OB_NOT_NULL(finish_dag)) {
-          scheduler->free_dag(*finish_dag);
+          scheduler->free_dag(*finish_dag, nullptr/*parent_dag*/);
         }
       }
     }
@@ -1331,7 +1331,7 @@ public:
         if (OB_SUCCESS != (tmp_ret = dag_net->erase_dag_from_dag_net(*new_dag))) {
           COMMON_LOG(WARN, "failed to erase dag from dag net", K(tmp_ret), KPC(new_dag));
         }
-        MTL(ObTenantDagScheduler*)->free_dag(*new_dag);
+        MTL(ObTenantDagScheduler*)->free_dag(*new_dag, nullptr/*parent_dag*/);
         new_dag = nullptr;
       }
 
@@ -1342,7 +1342,7 @@ public:
           COMMON_LOG(WARN, "failed to erase dag from dag net", K(tmp_ret), KPC(dag));
         }
 
-        if (OB_SUCCESS != (tmp_ret = MTL(ObTenantDagScheduler*)->cancel_dag(dag))) {
+        if (OB_SUCCESS != (tmp_ret = MTL(ObTenantDagScheduler*)->cancel_dag(dag, nullptr/*parent_dag*/))) {
           COMMON_LOG(WARN, "failed to cancel dag", K(tmp_ret), K(*dag));
           ob_abort();
         } else {
@@ -1465,7 +1465,7 @@ public:
     EXPECT_EQ(dag_record_map_.size(), 1);
     EXPECT_EQ(0, prepare_dag->children_.count());
 
-    MTL(ObTenantDagScheduler*)->free_dag(*prepare_dag);
+    MTL(ObTenantDagScheduler*)->free_dag(*prepare_dag, nullptr/*parent_dag*/);
     COMMON_LOG(INFO, "free dag", K(ret), KPC(this));
     EXPECT_EQ(dag_record_map_.size(), 0);
 
@@ -1566,7 +1566,7 @@ TEST_F(TestDagScheduler, test_cancel_dag_func)
   dag_net->get_dag_list(dag_array);
 
   for (int i = 0; i < dag_array.count(); ++i) {
-    scheduler->cancel_dag(dag_array[i]);
+    scheduler->cancel_dag(dag_array[i], nullptr/*parent_dag*/);
   }
 
   EXPECT_EQ(true, scheduler->is_empty());

@@ -381,7 +381,8 @@ int ObTabletBackfillTXDag::generate_next_dag(share::ObIDag *&dag)
   }
 
   if (OB_NOT_NULL(tablet_backfill_tx_dag)) {
-    scheduler->free_dag(*tablet_backfill_tx_dag);
+    scheduler->free_dag(*tablet_backfill_tx_dag, nullptr/*parent_dag*/);
+    tablet_backfill_tx_dag = nullptr;
   }
 
   if (OB_FAIL(ret)) {

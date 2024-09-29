@@ -715,7 +715,7 @@ int ObTransferBackfillTXDagNet::start_running_for_backfill_()
     if (OB_SUCCESS != (tmp_ret = erase_dag_from_dag_net(*backfill_tx_dag))) {
       LOG_WARN("failed to erase dag from dag net", K(tmp_ret), KPC(backfill_tx_dag));
     }
-    scheduler->free_dag(*backfill_tx_dag);
+    scheduler->free_dag(*backfill_tx_dag, nullptr/*parent_dag*/);
     backfill_tx_dag = nullptr;
   }
   return ret;

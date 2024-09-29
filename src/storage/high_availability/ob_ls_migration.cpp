@@ -356,7 +356,8 @@ int ObMigrationDagNet::start_running_for_migration_()
     if (OB_SUCCESS != (tmp_ret = erase_dag_from_dag_net(*initial_migration_dag))) {
       LOG_WARN("failed to erase dag from dag net", K(tmp_ret), KPC(initial_migration_dag));
     }
-    scheduler->free_dag(*initial_migration_dag);
+    scheduler->free_dag(*initial_migration_dag, nullptr/*parent_dag*/);
+    initial_migration_dag = nullptr;
   }
 
   if (OB_FAIL(ret) && OB_NOT_NULL(ctx_)) {
@@ -2350,7 +2351,7 @@ int ObTabletMigrationDag::generate_next_dag(share::ObIDag *&dag)
   }
 
   if (OB_NOT_NULL(tablet_migration_dag)) {
-    scheduler->free_dag(*tablet_migration_dag);
+    scheduler->free_dag(*tablet_migration_dag, nullptr/*parent_dag*/);
     tablet_migration_dag = nullptr;
   }
 
@@ -4106,7 +4107,7 @@ int ObTabletGroupMigrationDag::generate_next_dag(share::ObIDag *&dag)
   }
 
   if (OB_NOT_NULL(tablet_group_migration_dag)) {
-    scheduler->free_dag(*tablet_group_migration_dag);
+    scheduler->free_dag(*tablet_group_migration_dag, nullptr/*parent_dag*/);
     tablet_group_migration_dag = nullptr;
   }
 
