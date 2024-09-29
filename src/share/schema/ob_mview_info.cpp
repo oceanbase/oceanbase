@@ -473,7 +473,8 @@ int ObMViewInfo::update_major_refresh_mview_scn(ObISQLClient &sql_client,
     int64_t affected_rows = 0;
     ObSqlString sql;
     if (OB_FAIL(sql.assign_fmt("UPDATE %s SET last_refresh_scn = %lu, \
-                                last_refresh_type = %ld \
+                                last_refresh_type = %ld, \
+                                last_refresh_date = now(6) \
                                 WHERE refresh_mode = %ld and \
                                 last_refresh_scn < %lu AND last_refresh_scn > 0",
                                OB_ALL_MVIEW_TNAME, scn_val, last_refresh_type,

@@ -28,11 +28,12 @@ namespace oceanbase {
 namespace rootserver {
 
 #define QUERY_MAJOR_MV_MERGE_SCN_SQL "select mview_id,t2.data_table_id,last_refresh_scn,t3.tablet_id, \
-  t4.svr_ip,t4.svr_port,t4.end_log_scn from __all_mview t1 \
-  left join __all_table t2 on t1.mview_id = t2.table_id \
-  left join __all_tablet_to_ls t3 on t2.data_table_id = t3.table_id \
-  left join __all_virtual_table_mgr t4 on t3.tablet_id = t4.tablet_id and t4.table_type = 10 \
-  where t1.refresh_mode = 4 and t1.last_refresh_scn > 0 order by 1,2,3,4,5,6,7"
+  t4.svr_ip,t4.svr_port,t4.ls_id,t5.learner_list, t4.end_log_scn from %s t1 \
+  left join %s t2 on t1.mview_id = t2.table_id \
+  left join %s t3 on t2.data_table_id = t3.table_id \
+  left join %s t4 on t3.tablet_id = t4.tablet_id and t4.table_type = 10 \
+  left join %s t5 on t4.svr_ip = t5.svr_ip and t4.svr_port = t5.svr_port and t4.ls_id = t5.ls_id \
+  where t1.refresh_mode = %ld and t1.last_refresh_scn > 0 order by 1,2,3,4,5,6,7,9"
 
 
 ObMViewPushRefreshScnTask::ObMViewPushRefreshScnTask()
@@ -180,7 +181,6 @@ int ObMViewPushRefreshScnTask::check_major_mv_refresh_scn_safety(const uint64_t 
       ret = OB_SUCC(ret) ? tmp_ret : ret;
     }
   }
-  // TODO ignore learn list
   if (OB_SUCC(ret)) {
     LOG_INFO("major_mv_safety>>>>");
     bool is_safety = true;
@@ -201,7 +201,10 @@ int ObMViewPushRefreshScnTask::check_major_mv_refresh_scn_safety(const uint64_t 
              }
           }
         }
-        if (!find_dest_merge_scn) {
+        if (find_dest_merge_scn) {
+        } else if (merge_info.has_learner_) {
+          LOG_WARN("major_mv_safety>>>>", K(merge_info));
+        } else {
           LOG_ERROR("major_mv_safety>>>>", K(merge_info));
           is_safety = false;
         }
@@ -218,7 +221,13 @@ int ObMViewPushRefreshScnTask::get_major_mv_merge_info_(const uint64_t tenant_id
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
-  if (OB_FAIL(sql.assign_fmt(QUERY_MAJOR_MV_MERGE_SCN_SQL))) {
+  if (OB_FAIL(sql.assign_fmt(QUERY_MAJOR_MV_MERGE_SCN_SQL,
+          share::OB_ALL_MVIEW_TNAME,
+          share::OB_ALL_TABLE_TNAME,
+          share::OB_ALL_TABLET_TO_LS_TNAME,
+          share::OB_ALL_VIRTUAL_TABLE_MGR_TNAME,
+          share::OB_ALL_VIRTUAL_LOG_STAT_TNAME,
+          (int64_t)ObMVRefreshMode::MAJOR_COMPACTION))) {
     LOG_WARN("assign sql failed", KR(ret));
   } else {
     common::sqlclient::ObMySQLResult *result = nullptr;
@@ -237,6 +246,7 @@ int ObMViewPushRefreshScnTask::get_major_mv_merge_info_(const uint64_t tenant_id
           char svr_ip[OB_IP_STR_BUFF] = "";
           int64_t svr_port = 0;
           int64_t tmp_real_str_len = 0;
+          ObString learner_list;
           EXTRACT_INT_FIELD_MYSQL(*result, "mview_id", merge_info.mview_id_, int64_t);
           EXTRACT_INT_FIELD_MYSQL(*result, "data_table_id", merge_info.data_table_id_, int64_t);
           EXTRACT_UINT_FIELD_MYSQL(*result, "last_refresh_scn", merge_info.last_refresh_scn_, uint64_t);
@@ -244,7 +254,14 @@ int ObMViewPushRefreshScnTask::get_major_mv_merge_info_(const uint64_t tenant_id
           EXTRACT_STRBUF_FIELD_MYSQL(*result, "svr_ip", svr_ip, OB_IP_STR_BUFF, tmp_real_str_len);
           EXTRACT_INT_FIELD_MYSQL(*result, "svr_port", svr_port, int64_t);
           (void)merge_info.svr_addr_.set_ip_addr(svr_ip, static_cast<int32_t>(svr_port));
+          EXTRACT_INT_FIELD_MYSQL(*result, "ls_id", merge_info.ls_id_, int64_t);
           EXTRACT_UINT_FIELD_MYSQL(*result, "end_log_scn", merge_info.end_log_scn_, uint64_t);
+          EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(*result, "learner_list", learner_list);
+          if (learner_list.length() > 0) {
+            merge_info.has_learner_ = true;
+          } else {
+            merge_info.has_learner_ = false;
+          }
 
           if (OB_FAIL(ret)) {
             LOG_WARN("fail to extract field from result", KR(ret));

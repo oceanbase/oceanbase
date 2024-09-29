@@ -15,6 +15,7 @@
 #include "lib/task/ob_timer.h"
 #include "rootserver/mview/ob_mview_timer_task.h"
 #include "lib/container/ob_iarray.h"
+#include "share/ob_ls_id.h"
 
 namespace oceanbase
 {
@@ -34,19 +35,21 @@ public:
                          last_refresh_scn_(0),
                          tablet_id_(0),
                          svr_addr_(),
+                         ls_id_(),
+                         has_learner_(false),
                          end_log_scn_(0)
                          {}
   ~ObMajorMVMergeInfo() {}
   TO_STRING_KV(K_(mview_id), K_(data_table_id), K_(last_refresh_scn), K_(tablet_id),
-      K_(svr_addr), K_(end_log_scn));
+      K_(svr_addr), K_(ls_id), K_(has_learner), K_(end_log_scn));
   bool is_valid() {
     return mview_id_ > 0 && data_table_id_ > 0 && last_refresh_scn_ > 0
-      && svr_addr_.is_valid() && tablet_id_ > 0;
+      && svr_addr_.is_valid() && ls_id_.is_valid() && tablet_id_ > 0;
   }
   bool is_equal_node(ObMajorMVMergeInfo &other) {
     return mview_id_ == other.mview_id_ && data_table_id_ == other.data_table_id_
       && last_refresh_scn_ == other.last_refresh_scn_ && tablet_id_ == other.tablet_id_
-      && svr_addr_ == other.svr_addr_;
+      && svr_addr_ == other.svr_addr_ && ls_id_ == other.ls_id_;
   }
 public:
   int64_t mview_id_;
@@ -54,6 +57,8 @@ public:
   uint64_t last_refresh_scn_;
   int64_t tablet_id_;
   ObAddr svr_addr_;
+  share::ObLSID ls_id_;
+  bool has_learner_;
   uint64_t end_log_scn_;
 };
 
