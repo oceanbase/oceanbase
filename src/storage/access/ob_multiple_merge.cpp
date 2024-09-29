@@ -1414,7 +1414,7 @@ int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_it
         need_table = !table_ptr->is_major_sstable();
       }
     }
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && need_table) {
       need_table = check_table_need_read(*table_ptr, major_version);
     }
     if (OB_SUCC(ret) && need_table) {
