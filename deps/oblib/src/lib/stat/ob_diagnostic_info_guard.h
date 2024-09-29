@@ -22,6 +22,12 @@
 
 namespace oceanbase
 {
+
+#define GET_DIAGNOSTIC_INFO                              \
+  if (oceanbase::common::ObLocalDiagnosticInfo::get() != \
+      &oceanbase::common::ObDiagnosticInfo::dummy_di_)    \
+  oceanbase::common::ObLocalDiagnosticInfo::get()
+
 namespace observer
 {
 class ObInnerSqlWaitGuard;

@@ -222,9 +222,6 @@ private:
   ObLatchStatArray latch_stats_;
 };
 
-extern void set_ash_stat(const int64_t event_no, const int64_t p1, const int64_t p2, const int64_t p3);
-extern void reset_ash_stat(const int64_t event_no, bool is_idle);
-
 class ObWaitEventGuard
 {
 public:

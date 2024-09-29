@@ -2184,28 +2184,32 @@ int ObBasicSessionInfo::set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan)
     int64_t len = cur_phy_plan->stat_.sql_id_.length();
     MEMCPY(sql_id_, cur_phy_plan->stat_.sql_id_.ptr(), len);
     sql_id_[len] = '\0';
-    ObActiveSessionGuard::get_stat().plan_id_ = plan_id_;
-    ObActiveSessionGuard::get_stat().plan_hash_ = plan_hash_;
-    MEMMOVE(ObActiveSessionGuard::get_stat().sql_id_, sql_id_,
-        min(sizeof(ObActiveSessionGuard::get_stat().sql_id_), sizeof(sql_id_)));
+    if (ObLocalDiagnosticInfo::get() != &ObDiagnosticInfo::dummy_di_) {
+      ObActiveSessionGuard::get_stat().plan_id_ = plan_id_;
+      ObActiveSessionGuard::get_stat().plan_hash_ = plan_hash_;
+      MEMMOVE(ObActiveSessionGuard::get_stat().sql_id_, sql_id_,
+          min(sizeof(ObActiveSessionGuard::get_stat().sql_id_), sizeof(sql_id_)));
+    }
   }
   return ret;
 }
 
 void ObBasicSessionInfo::set_ash_stat_value(ObActiveSessionStat &ash_stat)
 {
-  int ret = OB_SUCCESS;
-  ash_stat.stmt_type_ = get_stmt_type();
-  ash_stat.plan_id_ = plan_id_;
-  ash_stat.plan_hash_ = plan_hash_;
-  MEMMOVE(ash_stat.sql_id_, sql_id_,
-      min(sizeof(ash_stat.sql_id_), sizeof(sql_id_)));
-  ash_stat.tenant_id_ = tenant_id_;
-  ash_stat.user_id_ = get_user_id();
-  ash_stat.session_id_ = get_sessid();
-  ash_stat.trace_id_ = get_current_trace_id();
-  ash_stat.tid_ = GETTID();
-  ash_stat.group_id_ = THIS_WORKER.get_group_id();
+  if (ObLocalDiagnosticInfo::get() != &ObDiagnosticInfo::dummy_di_) {
+    ash_stat.stmt_type_ = get_stmt_type();
+    ash_stat.plan_id_ = plan_id_;
+    ash_stat.plan_hash_ = plan_hash_;
+    MEMMOVE(ash_stat.sql_id_, sql_id_,
+        min(sizeof(ash_stat.sql_id_), sizeof(sql_id_)));
+    ash_stat.tenant_id_ = tenant_id_;
+    ash_stat.user_id_ = get_user_id();
+    ash_stat.session_id_ = get_sessid();
+    ash_stat.trace_id_ = get_current_trace_id();
+    ash_stat.tid_ = GETTID();
+    ash_stat.group_id_ = THIS_WORKER.get_group_id();
+  }
+
 }
 
 void ObBasicSessionInfo::set_current_trace_id(common::ObCurTraceId::TraceId *trace_id)
@@ -2213,7 +2217,7 @@ void ObBasicSessionInfo::set_current_trace_id(common::ObCurTraceId::TraceId *tra
   if (OB_ISNULL(trace_id)) {
   } else {
     curr_trace_id_ = *trace_id;
-    ObActiveSessionGuard::get_stat().trace_id_ = curr_trace_id_;
+    GET_DIAGNOSTIC_INFO->get_ash_stat().trace_id_ = curr_trace_id_;
   }
 }
 
@@ -2230,8 +2234,10 @@ void ObBasicSessionInfo::set_cur_sql_id(char *sql_id)
   } else {
     MEMCPY(sql_id_, sql_id, common::OB_MAX_SQL_ID_LENGTH);
     sql_id_[32] = '\0';
-    MEMMOVE(ObActiveSessionGuard::get_stat().sql_id_, sql_id_,
-        min(sizeof(ObActiveSessionGuard::get_stat().sql_id_), sizeof(sql_id_)));
+    if (ObLocalDiagnosticInfo::get() != &ObDiagnosticInfo::dummy_di_) {
+      MEMMOVE(ObActiveSessionGuard::get_stat().sql_id_, sql_id_,
+          min(sizeof(ObActiveSessionGuard::get_stat().sql_id_), sizeof(sql_id_)));
+    }
   }
 }
 
@@ -6348,8 +6354,10 @@ void ObBasicSessionInfo::set_session_sleep()
   set_session_state_(SESSION_SLEEP);
   thread_data_.mysql_cmd_ = obmysql::COM_SLEEP;
   thread_id_ = 0;
-  ObActiveSessionGuard::get_stat().end_retry_wait_event();
-  ObActiveSessionGuard::get_stat().block_sessid_ = 0;
+  if (ObLocalDiagnosticInfo::get() != &ObDiagnosticInfo::dummy_di_) {
+    ObActiveSessionGuard::get_stat().end_retry_wait_event();
+    ObActiveSessionGuard::get_stat().block_sessid_ = 0;
+  }
 }
 
 int ObBasicSessionInfo::base_save_session(BaseSavedValue &saved_value, bool skip_cur_stmt_tables)

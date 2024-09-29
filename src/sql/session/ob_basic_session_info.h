@@ -1267,13 +1267,13 @@ public:
   void reset_current_plan_id()
   {
     plan_id_ = 0;
-    ObActiveSessionGuard::get_stat().plan_id_ = 0;
+    GET_DIAGNOSTIC_INFO->get_ash_stat().plan_id_ = 0;
   }
   uint64_t get_current_plan_hash() const { return plan_hash_; }
   void reset_current_plan_hash()
   {
     plan_hash_ = 0;
-    ObActiveSessionGuard::get_stat().plan_hash_ = 0;
+    GET_DIAGNOSTIC_INFO->get_ash_stat().plan_hash_ = 0;
   }
   uint64_t get_last_plan_id() const { return last_plan_id_; }
   void set_last_plan_id(uint64_t plan_id) { last_plan_id_ = plan_id; }

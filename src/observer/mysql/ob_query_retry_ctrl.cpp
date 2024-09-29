@@ -1017,7 +1017,7 @@ void ObQueryRetryCtrl::empty_proc(ObRetryParam &v)
 
 void ObQueryRetryCtrl::before_func(ObRetryParam &v)
 {
-  ObActiveSessionGuard::get_stat().record_last_query_exec_use_time_us(common::ObTimeUtility::current_time() -
+  GET_DIAGNOSTIC_INFO->get_ash_stat().record_last_query_exec_use_time_us(common::ObTimeUtility::current_time() -
               ObActiveSessionGuard::get_stat().curr_query_start_time_);
   if (OB_UNLIKELY(v.is_inner_sql_)) {
     ObRetryObject retry_obj(v);
@@ -1334,7 +1334,7 @@ bool ObQueryRetryCtrl::can_start_retry_wait_event(const ObQueryRetryType& retry_
 }
 void ObQueryRetryCtrl::start_schema_error_retry_wait_event(ObSQLSessionInfo &session, const int error_code)
 {
-  ObActiveSessionGuard::get_stat().begin_retry_wait_event(
+  GET_DIAGNOSTIC_INFO->get_ash_stat().begin_retry_wait_event(
         ObWaitEventIds::SCHEMA_RETRY_WAIT,
         error_code,
         session.get_retry_info_for_update().get_retry_ash_diag_info().table_id_,
@@ -1343,7 +1343,7 @@ void ObQueryRetryCtrl::start_schema_error_retry_wait_event(ObSQLSessionInfo &ses
 
 void ObQueryRetryCtrl::start_location_error_retry_wait_event(ObSQLSessionInfo &session, const int error_code)
 {
-  ObActiveSessionGuard::get_stat().begin_retry_wait_event(
+  GET_DIAGNOSTIC_INFO->get_ash_stat().begin_retry_wait_event(
         ObWaitEventIds::LOCATION_RETRY_WAIT,
         error_code,
         session.get_retry_info_for_update().get_retry_ash_diag_info().ls_id_,
@@ -1352,25 +1352,26 @@ void ObQueryRetryCtrl::start_location_error_retry_wait_event(ObSQLSessionInfo &s
 
 void ObQueryRetryCtrl::start_rowlock_retry_wait_event(ObSQLSessionInfo &session)
 {
-  ObActiveSessionGuard::get_stat().begin_retry_wait_event(
+  GET_DIAGNOSTIC_INFO->get_ash_stat().begin_retry_wait_event(
         ObWaitEventIds::ROW_LOCK_WAIT,
         session.get_retry_info_for_update().get_retry_ash_diag_info().holder_tx_id_,
         session.get_retry_info_for_update().get_retry_ash_diag_info().holder_data_seq_num_,
         session.get_retry_info_for_update().get_retry_ash_diag_info().holder_lock_timestamp_);
 }
 
-void ObQueryRetryCtrl::start_px_worker_insufficient_retry_wait_event(ObSQLSessionInfo &session, const ObSqlCtx& sql_ctx)
+void ObQueryRetryCtrl::start_px_worker_insufficient_retry_wait_event(
+    ObSQLSessionInfo &session, const ObSqlCtx &sql_ctx)
 {
-    ObActiveSessionGuard::get_stat().begin_retry_wait_event(
-        ObWaitEventIds::INSUFFICIENT_PX_WORKER_RETRY_WAIT,
-        session.get_retry_info_for_update().get_retry_ash_diag_info().dop_,
-        session.get_retry_info_for_update().get_retry_ash_diag_info().required_px_workers_number_,
-        session.get_retry_info_for_update().get_retry_ash_diag_info().admitted_px_workers_number_);
+  GET_DIAGNOSTIC_INFO->get_ash_stat().begin_retry_wait_event(
+      ObWaitEventIds::INSUFFICIENT_PX_WORKER_RETRY_WAIT,
+      session.get_retry_info_for_update().get_retry_ash_diag_info().dop_,
+      session.get_retry_info_for_update().get_retry_ash_diag_info().required_px_workers_number_,
+      session.get_retry_info_for_update().get_retry_ash_diag_info().admitted_px_workers_number_);
 }
 
 void ObQueryRetryCtrl::start_gts_not_ready_retry_wait_event(ObSQLSessionInfo &session, const int error_code)
 {
-  ObActiveSessionGuard::get_stat().begin_retry_wait_event(
+  GET_DIAGNOSTIC_INFO->get_ash_stat().begin_retry_wait_event(
         ObWaitEventIds::GTS_NOT_READEY_RETRY_WAIT,
         error_code,
         session.get_retry_info_for_update().get_retry_ash_diag_info().sys_ls_leader_addr_,
@@ -1380,7 +1381,7 @@ void ObQueryRetryCtrl::start_gts_not_ready_retry_wait_event(ObSQLSessionInfo &se
 
 void ObQueryRetryCtrl::start_replica_not_readable_retry_wait_event(ObSQLSessionInfo &session)
 {
-  ObActiveSessionGuard::get_stat().begin_retry_wait_event(
+  GET_DIAGNOSTIC_INFO->get_ash_stat().begin_retry_wait_event(
         ObWaitEventIds::REPLICA_NOT_READABLE_RETRY_WAIT,
         session.get_retry_info_for_update().get_retry_ash_diag_info().ls_id_,
         ObActiveSessionGuard::get_stat().tablet_id_,
@@ -1389,7 +1390,7 @@ void ObQueryRetryCtrl::start_replica_not_readable_retry_wait_event(ObSQLSessionI
 
 void ObQueryRetryCtrl::start_other_retry_wait_event(ObSQLSessionInfo &session, const int error_code)
 {
-  ObActiveSessionGuard::get_stat().begin_retry_wait_event(
+  GET_DIAGNOSTIC_INFO->get_ash_stat().begin_retry_wait_event(
         ObWaitEventIds::OTHER_RETRY_WAIT,
         error_code,
         0,

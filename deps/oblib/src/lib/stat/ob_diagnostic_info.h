@@ -18,6 +18,12 @@
 
 namespace oceanbase
 {
+
+namespace observer
+{
+class ObSrvDeliver;
+}
+
 namespace common
 {
 
@@ -280,6 +286,9 @@ public:
       K_(need_aggregate), K(get_uref()), K(get_href()), K_(ash_stat));
 
 private:
+  friend class oceanbase::observer::ObSrvDeliver;
+  void inner_begin_wait_event(const int64_t event_no, const uint64_t timeout_ms = 0,
+      const uint64_t p1 = 0, const uint64_t p2 = 0, const uint64_t p3 = 0);
   ObWaitEventPool *pool_;
   ObDiagnosticInfoSlot *summary_slot_;  // point to summary slot when acquire this object for
                                         // performance.

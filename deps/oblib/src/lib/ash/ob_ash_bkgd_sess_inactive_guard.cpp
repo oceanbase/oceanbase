@@ -14,15 +14,23 @@
 
 #include "lib/ash/ob_ash_bkgd_sess_inactive_guard.h"
 #include "lib/ash/ob_active_session_guard.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 using namespace oceanbase::common;
 
 ObBKGDSessInActiveGuard::ObBKGDSessInActiveGuard()
 {
-  prev_stat_ = ObActiveSessionGuard::get_stat().is_active_session_;
-  ObActiveSessionGuard::set_sess_inactive();
+  if (ObLocalDiagnosticInfo::get() != &ObDiagnosticInfo::dummy_di_) {
+    need_record_ = true;
+    prev_stat_ = ObActiveSessionGuard::get_stat().is_active_session_;
+    ObActiveSessionGuard::set_sess_inactive();
+  } else {
+    need_record_ = false;
+  }
 }
 ObBKGDSessInActiveGuard::~ObBKGDSessInActiveGuard()
 {
-  ObActiveSessionGuard::get_stat().is_active_session_ = prev_stat_;
+  if (need_record_) {
+    ObActiveSessionGuard::get_stat().is_active_session_ = prev_stat_;
+  }
 }

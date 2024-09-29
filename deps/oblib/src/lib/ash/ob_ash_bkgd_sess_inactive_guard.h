@@ -24,6 +24,7 @@ public:
   ObBKGDSessInActiveGuard();
   ~ObBKGDSessInActiveGuard();
 private:
+  bool need_record_;
   bool prev_stat_;
 };
 

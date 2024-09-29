@@ -202,73 +202,78 @@ int ObDiagnosticInfo::init(
   return ret;
 }
 
+// for wait event begins when is_active_session_ = false.
+void ObDiagnosticInfo::inner_begin_wait_event(const int64_t event_no, const uint64_t timeout_ms,
+    const uint64_t p1, const uint64_t p2, const uint64_t p3)
+{
+  const int64_t cur_event_no = ash_stat_.event_no_;
+  if (cur_event_no == 0) {
+    // TODO(roland.qk): unify wait event record source.
+    ash_stat_.set_event(event_no, p1, p2, p3);
+    curr_wait_.reset();
+    curr_wait_.event_no_ = event_no;
+    curr_wait_.p1_ = p1;
+    curr_wait_.p2_ = p2;
+    curr_wait_.p3_ = p3;
+    curr_wait_.timeout_ms_ = timeout_ms;
+    curr_wait_.wait_begin_time_ = rdtsc();
+    ash_stat_.wait_event_begin_ts_ = curr_wait_.wait_begin_time_;
+  } else {
+    // do noting
+  }
+}
+
 void ObDiagnosticInfo::begin_wait_event(const int64_t event_no, const uint64_t timeout_ms,
     const uint64_t p1, const uint64_t p2, const uint64_t p3)
 {
   if (ash_stat_.is_active_session_) {
-    const int64_t cur_event_no = ash_stat_.event_no_;
-    if (cur_event_no == 0) {
-      // TODO(roland.qk): unify wait event record source.
-      ash_stat_.set_event(event_no, p1, p2, p3);
-      curr_wait_.reset();
-      curr_wait_.event_no_ = event_no;
-      curr_wait_.p1_ = p1;
-      curr_wait_.p2_ = p2;
-      curr_wait_.p3_ = p3;
-      curr_wait_.timeout_ms_ = timeout_ms;
-      curr_wait_.wait_begin_time_ = rdtsc();
-      ash_stat_.wait_event_begin_ts_ = curr_wait_.wait_begin_time_;
-    } else {
-      // do noting
-    }
+    inner_begin_wait_event(event_no, timeout_ms, p1, p2, p3);
   }
 }
 
 void ObDiagnosticInfo::end_wait_event(const int64_t event_no, const bool is_idle)
 {
   int ret = OB_SUCCESS;
-  if (ash_stat_.is_active_session_) {
-    const int cur_event_no = ash_stat_.event_no_;
-    if (cur_event_no == event_no) {
-      curr_wait_.wait_end_time_ = rdtsc();
-      curr_wait_.wait_time_ = (curr_wait_.wait_end_time_ - curr_wait_.wait_begin_time_) * 1000 /
-                              lib_get_cpu_khz();
-      // TODO(roland.qk): unify wait event record source.
-      const int64_t cur_wait_time = (curr_wait_.wait_end_time_ - ash_stat_.wait_event_begin_ts_) * 1000 /
-                              lib_get_cpu_khz();
-      if (!is_idle) {
-        ash_stat_.total_non_idle_wait_time_ += cur_wait_time;
-      } else {
-        ash_stat_.total_idle_wait_time_ += cur_wait_time;
-      }
-
-      ObWaitEventDesc desc;
-      desc.event_no_ = event_no;
-      desc.p1_ = ash_stat_.p1_;
-      desc.p2_ = ash_stat_.p2_;
-      desc.p3_ = ash_stat_.p3_;
-      ash_stat_.fixup_last_stat(desc);
-
-      ash_stat_.reset_event();
-      total_wait_.time_waited_ += curr_wait_.wait_time_;
-      ++total_wait_.total_waits_;
-      ObWaitEventStat *event_record = nullptr;
-      if (OB_FAIL(events_.get_and_set(
-              static_cast<ObWaitEventIds::ObWaitEventIdEnum>(event_no), event_record))) {
-        LOG_WARN("failed to retrive wait event record", K(ret), K(event_no));
-      } else {
-        event_record->time_waited_ += curr_wait_.wait_time_;
-        ++event_record->total_waits_;
-        event_record->max_wait_ =
-            std::max(static_cast<int64_t>(event_record->max_wait_), curr_wait_.wait_time_);
-        if (curr_wait_.timeout_ms_ > 0 &&
-            (curr_wait_.wait_time_ > (static_cast<int64_t>(curr_wait_.timeout_ms_) * 1000))) {
-          ++event_record->total_timeouts_;
-        }
-      }
+  const int cur_event_no = ash_stat_.event_no_;
+  if (cur_event_no == event_no) {
+    curr_wait_.wait_end_time_ = rdtsc();
+    curr_wait_.wait_time_ = (curr_wait_.wait_end_time_ - curr_wait_.wait_begin_time_) * 1000 /
+                            lib_get_cpu_khz();
+    // TODO(roland.qk): unify wait event record source.
+    const int64_t cur_wait_time = (curr_wait_.wait_end_time_ - ash_stat_.wait_event_begin_ts_) * 1000 /
+                            lib_get_cpu_khz();
+    if (!is_idle) {
+      ash_stat_.total_non_idle_wait_time_ += cur_wait_time;
     } else {
-      // do noting
+      ash_stat_.total_idle_wait_time_ += cur_wait_time;
     }
+
+    ObWaitEventDesc desc;
+    desc.event_no_ = event_no;
+    desc.p1_ = ash_stat_.p1_;
+    desc.p2_ = ash_stat_.p2_;
+    desc.p3_ = ash_stat_.p3_;
+    ash_stat_.fixup_last_stat(desc);
+
+    ash_stat_.reset_event();
+    total_wait_.time_waited_ += curr_wait_.wait_time_;
+    ++total_wait_.total_waits_;
+    ObWaitEventStat *event_record = nullptr;
+    if (OB_FAIL(events_.get_and_set(
+            static_cast<ObWaitEventIds::ObWaitEventIdEnum>(event_no), event_record))) {
+      LOG_WARN("failed to retrive wait event record", K(ret), K(event_no));
+    } else {
+      event_record->time_waited_ += curr_wait_.wait_time_;
+      ++event_record->total_waits_;
+      event_record->max_wait_ =
+          std::max(static_cast<int64_t>(event_record->max_wait_), curr_wait_.wait_time_);
+      if (curr_wait_.timeout_ms_ > 0 &&
+          (curr_wait_.wait_time_ > (static_cast<int64_t>(curr_wait_.timeout_ms_) * 1000))) {
+        ++event_record->total_timeouts_;
+      }
+    }
+  } else {
+    // do noting
   }
 }
 

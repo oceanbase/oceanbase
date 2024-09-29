@@ -633,7 +633,7 @@ protected:
   inline void begin_ash_line_id_reg()
   {
     // begin with current operator
-    ObActiveSessionGuard::get_stat().plan_line_id_ = static_cast<int32_t>(spec_.id_);//TODO(xiaochu.yh): fix uint64 to int32
+    GET_DIAGNOSTIC_INFO->get_ash_stat().plan_line_id_ = static_cast<int32_t>(spec_.id_);//TODO(xiaochu.yh): fix uint64 to int32
   }
   inline void end_ash_line_id_reg()
   {
@@ -641,9 +641,9 @@ protected:
     // known issue: when switch from batch to row in same op,
     // we shift line id to parent op un-intently. but we tolerate this inaccuracy
     if (OB_LIKELY(spec_.get_parent())) {
-      common::ObActiveSessionGuard::get_stat().plan_line_id_ = static_cast<int32_t>(spec_.get_parent()->id_);//TODO(xiaochu.yh): fix uint64 to int32
+      GET_DIAGNOSTIC_INFO->get_ash_stat().plan_line_id_ = static_cast<int32_t>(spec_.get_parent()->id_);//TODO(xiaochu.yh): fix uint64 to int32
     } else {
-      common::ObActiveSessionGuard::get_stat().plan_line_id_ = -1;
+      GET_DIAGNOSTIC_INFO->get_ash_stat().plan_line_id_ = -1;
     }
   }
   #ifdef ENABLE_DEBUG_LOG

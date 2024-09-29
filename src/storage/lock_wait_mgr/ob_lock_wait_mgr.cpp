@@ -1882,7 +1882,7 @@ void ObLockWaitMgr::set_ash_rowlock_diag_info(const ObRowConflictInfo &cflict_in
   ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(holder_data_seq_num_, cflict_info.conflict_tx_hold_seq_.get_seq());
   int64_t holder_lock_timestamp = calc_holder_tx_lock_timestamp(cflict_info.holder_tx_start_time_, cflict_info.conflict_tx_hold_seq_.get_seq());
   ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(holder_lock_timestamp_, holder_lock_timestamp);
-  common::ObActiveSessionGuard::get_stat().block_sessid_ = cflict_info.holder_sess_id_;
+  GET_DIAGNOSTIC_INFO->get_ash_stat().block_sessid_ = cflict_info.holder_sess_id_;
 }
 }; // end namespace lockwaitmgr
 }; // end namespace oceanbase

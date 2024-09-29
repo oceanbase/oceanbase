@@ -25,7 +25,7 @@ int ObVirtualDataAccessService::table_scan(ObVTableScanParam &param, ObNewRowIte
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
   const share::ObLSID &ls_id = param.ls_id_;
   const common::ObTabletID &data_tablet_id = param.tablet_id_;
-  ObActiveSessionGuard::get_stat().tablet_id_ = data_tablet_id.id();
+  GET_DIAGNOSTIC_INFO->get_ash_stat().tablet_id_ = data_tablet_id.id();
   ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, ls_id.id());
   int ret = OB_SUCCESS;
   ObVirtualTableIterator *vt_iter = NULL;

@@ -615,7 +615,7 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest &req)
     ObDiagnosticInfo *di = nullptr;
     if (OB_UNLIKELY(req.get_diagnostic_info())) {
       // possible repost
-      req.get_diagnostic_info()->begin_wait_event(ObWaitEventIds::NETWORK_QUEUE_WAIT, 0, pkt.get_pcode(), req.get_sql_request_level(), 0);
+      req.get_diagnostic_info()->inner_begin_wait_event(ObWaitEventIds::NETWORK_QUEUE_WAIT, 0, pkt.get_pcode(), req.get_sql_request_level(), 0);
     } else if (need_update_stat) {  // simplest way to check is_diagnose_info_enabled
       const int64_t allocated_sess_id =
           ObBackgroundSessionIdGenerator::get_instance().get_next_sess_id();
@@ -631,7 +631,7 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest &req)
           LOG_ERROR("reuse diagnostic info wrongly.", K(&req), K(req.get_diagnostic_info()), K(di));
         }
         req.set_diagnostic_info(di);
-        di->begin_wait_event(ObWaitEventIds::NETWORK_QUEUE_WAIT, 0, pkt.get_pcode(), req.get_sql_request_level(), 0);
+        di->inner_begin_wait_event(ObWaitEventIds::NETWORK_QUEUE_WAIT, 0, pkt.get_pcode(), req.get_sql_request_level(), 0);
       }
     }
     ObTenantDiagnosticInfoSummaryGuard g(nullptr == di ? nullptr : di->get_summary_slot());
@@ -819,8 +819,7 @@ int ObSrvDeliver::deliver_mysql_request(ObRequest &req)
       }*/
 
       if (OB_NOT_NULL(conn->di_)) {
-        conn->di_->get_ash_stat().set_sess_active();
-        conn->di_->begin_wait_event(ObWaitEventIds::NETWORK_QUEUE_WAIT, 0, 0, 0, 0);
+        conn->di_->inner_begin_wait_event(ObWaitEventIds::NETWORK_QUEUE_WAIT, 0, 0, 0, 0);
       }
       if (OB_FAIL(ret)) {
             // do nothing
