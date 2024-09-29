@@ -1088,6 +1088,7 @@ int ObTableQueryAsyncP::init_multi_cf_query_ctx(const ObString &arg_tablegroup_n
                                             table_schema->get_table_id(),
                                             table_schema->get_schema_version(),
                                             schema_guard_))) {
+          query_info->~ObTableSingleQueryInfo();
           LOG_WARN("fail to init schema_cache_guard_", K(ret));
         } else {
           query_info->table_id_ = table_schema->get_table_id();
@@ -1110,10 +1111,15 @@ int ObTableQueryAsyncP::init_multi_cf_query_ctx(const ObString &arg_tablegroup_n
               ObNewRange& range = ranges.at(i);
               range.table_id_ = query_info->table_id_;
             }
-            if (OB_FAIL(query_ctx->multi_cf_infos_.push_back(query_info))) {
-              LOG_WARN("fail to push query info", K(ret));
-            }
           }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(query_ctx->multi_cf_infos_.push_back(query_info))) {
+            LOG_WARN("fail to push query info", K(ret));
+          }
+        }
+        if (OB_FAIL(ret) && OB_NOT_NULL(query_info)) {
+          query_info->~ObTableSingleQueryInfo();
         }
       }
     }

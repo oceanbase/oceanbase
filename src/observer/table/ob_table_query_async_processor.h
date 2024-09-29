@@ -41,6 +41,14 @@ struct ObTableSingleQueryInfo : public ObTableInfoBase {
     result_(),
     query_() {}
 
+  ~ObTableSingleQueryInfo() {
+    row_iter_.close();
+    if (OB_NOT_NULL(spec_)) {
+      spec_->destroy_executor(executor_);
+      spec_->~ObTableApiSpec();
+    }
+  }
+
   int64_t to_string(char *buf, const int64_t len) const {
     return OB_SUCCESS;
   }
@@ -86,6 +94,11 @@ struct ObTableQueryAsyncCtx
   virtual ~ObTableQueryAsyncCtx()
   {
     row_iter_.close();
+    for (int i = 0; i < multi_cf_infos_.count(); i++) {
+      if (OB_NOT_NULL(multi_cf_infos_.at(i))) {
+        multi_cf_infos_.at(i)->~ObTableSingleQueryInfo();
+      }
+    }
     if (OB_NOT_NULL(spec_) && OB_NOT_NULL(executor_)) {
       spec_->destroy_executor(executor_);
     }

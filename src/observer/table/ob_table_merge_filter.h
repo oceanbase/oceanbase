@@ -28,7 +28,14 @@ class ObMergeTableQueryResultIterator : public ObTableQueryResultIterator
 public:
   ObMergeTableQueryResultIterator(common::ObIAllocator* allocator, const ObTableQuery& query, table::ObTableQueryResult &one_result);
   TO_STRING_KV(KP_(one_result), K_(binary_heap));
-  virtual ~ObMergeTableQueryResultIterator() {}
+  virtual ~ObMergeTableQueryResultIterator()
+  {
+    for (int i = 0; i < binary_heap_.count(); i++) {
+      if (OB_NOT_NULL(binary_heap_.at(i))) {
+        binary_heap_.at(i)->~ObRowCacheIterator();
+      }
+    }
+  }
 
   int init(const ObArray<ObTableQueryResultIterator*>& result_iters, Compare* compare);
 
@@ -63,6 +70,16 @@ private:
         row_(),
         iterable_result_(nullptr),
         result_iter_(nullptr) {}
+
+    ~ObRowCacheIterator()
+    {
+      if (OB_NOT_NULL(iterable_result_)) {
+        iterable_result_->~ObTableQueryIterableResult();
+      }
+      if (OB_NOT_NULL(result_iter_)) {
+        result_iter_->~ObTableQueryResultIterator();
+      }
+    }
     int init(ObTableQueryResultIterator *result_iter);
     int get_next_row(Row &row);
     TO_STRING_KV(KP_(iterable_result), KP_(result_iter));
@@ -162,7 +179,9 @@ int ObMergeTableQueryResultIterator<Row, Compare>::build_heap(const ObArray<ObTa
       } else {
         SERVER_LOG(WARN, "fail to init cache_iter", K(ret));
       }
+      cache_iterator->~ObRowCacheIterator();
     } else if (OB_FAIL(binary_heap_.push(cache_iterator))) {
+      cache_iterator->~ObRowCacheIterator();
       SERVER_LOG(WARN, "fail to push heap", K(ret));
     } else if (OB_FAIL(compare_.get_error_code())) {
       SERVER_LOG(WARN, "fail to compare items", K(ret));
@@ -195,28 +214,32 @@ int ObMergeTableQueryResultIterator<Row, Compare>::get_next_result(ObTableQueryR
         // Clean up rows that have already been serialized to response
         cache_iterator->allocator_.reuse();
         Row row;
+        bool is_iter_valid = false;
         if (OB_FAIL(cache_iterator->get_next_row(row))) {
           if (ret != OB_ITER_END) {
             SERVER_LOG(WARN, "fail to get next row from ObRowCacheIterator");
-          } else if(row.is_valid()) {
+          } else if (row.is_valid()) {
             if (OB_FAIL(ob_write_row(cache_iterator->allocator_, row, cache_iterator->row_))) {
               SERVER_LOG(WARN, "fail to copy row", K(ret));
             } else if (OB_FAIL(binary_heap_.push(cache_iterator))) {
               SERVER_LOG(WARN, "fail to push items", K(ret));
+            } else if (FALSE_IT(is_iter_valid = true)) {
             } else if (OB_FAIL(compare_.get_error_code())) {
               SERVER_LOG(WARN, "fail to compare items", K(ret));
             }
-          } else {
-            // scan end;
           }
         } else {
           if (OB_FAIL(ob_write_row(cache_iterator->allocator_, row, cache_iterator->row_))) {
             SERVER_LOG(WARN, "fail to copy row", K(ret));
           } else if (OB_FAIL(binary_heap_.push(cache_iterator))) {
             SERVER_LOG(WARN, "fail to push items", K(ret));
+          } else if (FALSE_IT(is_iter_valid = true)) {
           } else if (OB_FAIL(compare_.get_error_code())) {
             SERVER_LOG(WARN, "fail to compare items", K(ret));
           }
+        }
+        if (!is_iter_valid) {
+          cache_iterator->~ObRowCacheIterator();
         }
       }
     }

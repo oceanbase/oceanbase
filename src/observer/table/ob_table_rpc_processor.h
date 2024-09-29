@@ -228,8 +228,11 @@ struct ObTableInfoBase {
   explicit ObTableInfoBase()
                           :table_id_(OB_INVALID_ID),
                           simple_schema_(nullptr),
+                          req_timeinfo_guard_(),
                           schema_cache_guard_(),
                           schema_version_(OB_INVALID_VERSION){}
+
+  virtual ~ObTableInfoBase() {}
 
   TO_STRING_KV(K(table_id_),
               KP(simple_schema_),
@@ -237,6 +240,7 @@ struct ObTableInfoBase {
               K(schema_version_));
   int64_t table_id_;
   const share::schema::ObSimpleTableSchemaV2* simple_schema_;
+  observer::ObReqTimeGuard req_timeinfo_guard_; // 引用cache资源必须加ObReqTimeGuard
   table::ObKvSchemaCacheGuard schema_cache_guard_;
   int64_t schema_version_;
 };
