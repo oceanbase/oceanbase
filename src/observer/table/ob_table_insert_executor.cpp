@@ -127,8 +127,8 @@ int ObTableApiInsertExecutor::get_next_row()
 int ObTableApiInsertExecutor::process_single_operation(const ObTableEntity *entity)
 {
   int ret = OB_SUCCESS;
-
-  clear_evaluated_flag();
+  // clean all rt_exprs evaluated flag before each operation refresh value
+  clear_all_evaluated_flag();
   if (OB_ISNULL(entity)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("entity is null", K(ret));

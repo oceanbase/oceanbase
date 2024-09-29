@@ -251,6 +251,7 @@ public:
     has_lob_column_ = false;
     binlog_row_image_type_ = ObBinlogRowImage::FULL;
     is_full_table_scan_ = false;
+    has_generated_column_ = false;
   }
   virtual ~ObTableCtx()
   {}
@@ -287,7 +288,8 @@ public:
                K_(is_skip_scan),
                K_(is_client_set_put),
                K_(has_lob_column),
-               K_(binlog_row_image_type));
+               K_(binlog_row_image_type),
+               K_(has_generated_column));
 public:
   //////////////////////////////////////// getter ////////////////////////////////////////////////
   // for common
@@ -390,7 +392,7 @@ public:
   OB_INLINE bool return_affected_entity() const { return return_affected_entity_;}
   OB_INLINE bool return_rowkey() const { return return_rowkey_;}
   OB_INLINE uint64_t get_cur_cluster_version() const { return cur_cluster_version_;}
-  OB_INLINE bool has_generated_column() const { return table_schema_->has_generated_column(); }
+  OB_INLINE bool has_generated_column() const { return has_generated_column_; }
   // for aggregate
   OB_INLINE const common::ObIArray<uint64_t> &get_agg_projs() const { return agg_cell_proj_; }
   OB_INLINE ObPhysicalPlanCtx *get_physical_plan_ctx() { return exec_ctx_.get_physical_plan_ctx(); }
@@ -651,6 +653,7 @@ private:
   // for global index
   bool has_global_index_;
   bool is_global_index_scan_;
+  bool has_generated_column_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableCtx);
 };

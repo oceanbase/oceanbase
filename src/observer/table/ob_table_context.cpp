@@ -157,11 +157,16 @@ int ObTableCtx::construct_column_items()
           LOG_WARN("fail to get cascaded column ids", K(ret), K(item), K(*col_schema));
         } else if (OB_FAIL(column_items_.push_back(item))) {
           LOG_WARN("fail to push back column item", K(ret), K_(column_items), K(item));
-        } else if (!has_lob_column_ && is_lob_storage(item.column_type_)) {
-          has_lob_column_ = true;
+        } else {
+          if (!has_lob_column_ && is_lob_storage(item.column_type_)) {
+            has_lob_column_ = true;
+          }
+          if (!has_generated_column_ && item.is_generated_column_) {
+            has_generated_column_ = true;
+          }
         }
       }
-    }
+    } // end for
   }
 
   return ret;

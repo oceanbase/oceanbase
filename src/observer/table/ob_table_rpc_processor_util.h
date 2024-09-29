@@ -88,7 +88,8 @@ public:
       || is_transaction_rpc_timeout_err(err)
       || is_has_no_readable_replica_err(err)
       || is_select_dup_follow_replic_err(err)
-      || is_trans_stmt_need_retry_error(err);
+      || is_trans_stmt_need_retry_error(err)
+      || is_snapshot_discarded_err(err);
   }
 
   OB_INLINE static bool need_do_move_response(const int err, const obrpc::ObRpcPacket &rpc_pkt)
