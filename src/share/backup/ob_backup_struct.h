@@ -176,6 +176,7 @@ const char *const OB_STR_PREV_INC_BACKUP_SET_ID = "prev_inc_backup_set_id";
 const char *const OB_STRING_MJAOR_DATA = "major_data";
 const char *const OB_STRING_MINOR_DATA = "minor_data";
 const char *const OB_STR_COMMENT = "comment";
+const char *const OB_STR_COMPLETION_TS = "completion_ts";
 const char *const OB_STR_RETRY_ID = "retry_id";
 const char *const OB_STR_START_TURN_ID = "start_turn_id";
 const char *const OB_STR_FILE_COUNT = "file_count";

@@ -398,7 +398,8 @@ int ObImportTableJobScheduler::update_statistic_(
     }
   }
 
-  result.set_result(true, comment);
+  bool is_succeed = (succeed_task_cnt > 0);
+  result.set_result(is_succeed, comment);
   job.set_result(result);
   job.set_finished_table_count(succeed_task_cnt);
   job.set_failed_table_count(failed_task_cnt);

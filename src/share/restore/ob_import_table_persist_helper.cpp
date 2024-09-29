@@ -366,6 +366,8 @@ int ObImportTableTaskPersistHelper::advance_status(
     LOG_WARN("failed to add column", K(ret));
   } else if (next_status.is_finish() && OB_FAIL(dml.add_column(OB_STR_COMMENT, ObHexEscapeSqlStr(task.get_result().get_comment_str())))) {
     LOG_WARN("failed to add column", K(ret));
+  } else if (next_status.is_finish() && OB_FAIL(dml.add_column(OB_STR_COMPLETION_TS, task.get_completion_ts()))) {
+    LOG_WARN("failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_STATUS, next_status.get_str()))) {
     LOG_WARN("failed to add column", K(ret));
   } else if (OB_FAIL(dml.splice_update_sql(OB_ALL_IMPORT_TABLE_TASK_TNAME, sql))) {
