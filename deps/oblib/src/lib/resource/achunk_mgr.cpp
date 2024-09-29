@@ -404,7 +404,7 @@ int64_t AChunkMgr::to_string(char *buf, const int64_t buf_len) const
   ret = databuff_printf(buf, buf_len, pos,
       "[CHUNK_MGR] limit=%'15ld hold=%'15ld total_hold=%'15ld used=%'15ld freelists_hold=%'15ld"
       " total_maps=%'15ld total_unmaps=%'15ld large_maps=%'15ld large_unmaps=%'15ld huge_maps=%'15ld huge_unmaps=%'15ld"
-      " memalign=%d resident_size=%'15ld"
+      " memalign=%d resident_size=%'15ld divisive_memory_used=%'15ld"
 #ifndef ENABLE_SANITY
       " virtual_memory_used=%'15ld\n",
 #else
@@ -412,7 +412,7 @@ int64_t AChunkMgr::to_string(char *buf, const int64_t buf_len) const
 #endif
       limit_, hold_, total_hold_, get_used(), cache_hold_,
       total_maps, total_unmaps, large_maps, large_unmaps, get_maps(HUGE_ACHUNK_INDEX), get_unmaps(HUGE_ACHUNK_INDEX),
-      0, resident_size,
+      0, resident_size, get_divisive_mem_size(),
 #ifndef ENABLE_SANITY
       memory_used
 #else
