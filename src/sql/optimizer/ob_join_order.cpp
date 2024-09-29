@@ -6129,6 +6129,9 @@ int JoinPath::assign(const JoinPath &other, common::ObIAllocator *allocator)
   can_use_batch_nlj_ = other.can_use_batch_nlj_;
   is_naaj_ = other.is_naaj_;
   is_sna_ = other.is_sna_;
+  is_adaptive_ = other.is_adaptive_;
+  adaptive_dist_algo_ = other.adaptive_dist_algo_;
+  adaptive_threshold_ = other.adaptive_threshold_;
   inherit_sharding_index_ = other.inherit_sharding_index_;
   join_output_rows_ = other.join_output_rows_;
 
