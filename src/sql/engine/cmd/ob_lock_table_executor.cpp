@@ -110,25 +110,34 @@ int ObLockTableExecutor::execute_mysql_(ObExecContext &ctx,
     // ret = OB_NOT_SUPPORTED;
     LOG_WARN("only support after data version greater than", K(DATA_VERSION_4_2_5_0));
   } else {
-    switch(stmt.get_lock_stmt_type()) {
-    case ObLockTableStmt::MYSQL_LOCK_TABLE_STMT: {
-      ObMySQLLockTableExecutor executor;
-      if (OB_FAIL(executor.execute(ctx, stmt.get_mysql_lock_list()))) {
-        LOG_WARN("lock table failed", K(ret));
+    // only execute normally after enable lock_priority configuration, otherwise
+    // it will directly throw OB_SUCCESS, which is an empty implementation
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (!tenant_config.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      // if tenant config is invalid, this config will be set as false
+      LOG_WARN("tenant config is invalid");
+    } else if (tenant_config->enable_lock_priority) {
+      switch(stmt.get_lock_stmt_type()) {
+      case ObLockTableStmt::MYSQL_LOCK_TABLE_STMT: {
+        ObMySQLLockTableExecutor executor;
+        if (OB_FAIL(executor.execute(ctx, stmt.get_mysql_lock_list()))) {
+          LOG_WARN("lock table failed", K(ret));
+        }
+        break;
       }
-      break;
-    }
-    case ObLockTableStmt::MYSQL_UNLOCK_TABLE_STMT: {
-      ObMySQLUnlockTableExecutor executor;
-      if (OB_FAIL(executor.execute(ctx))) {
-        LOG_WARN("unlock table failed", K(ret));
+      case ObLockTableStmt::MYSQL_UNLOCK_TABLE_STMT: {
+        ObMySQLUnlockTableExecutor executor;
+        if (OB_FAIL(executor.execute(ctx))) {
+          LOG_WARN("unlock table failed", K(ret));
+        }
+        break;
       }
-      break;
-    }
-    default: {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unknown lock statement type", K(ret), K(stmt.get_lock_stmt_type()));
-    }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unknown lock statement type", K(ret), K(stmt.get_lock_stmt_type()));
+      }
+      }
     }
   }
   LOG_DEBUG("execute mysql lock table", K(ctx), K(stmt));

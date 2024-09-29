@@ -14401,11 +14401,12 @@ relation_factor lock_type
   malloc_non_terminal_node($$, result->malloc_pool_, T_MYSQL_LOCK_NODE, 2, $1, $2);
 }
 |
-relation_factor opt_as relation_name lock_type
+relation_factor AS relation_name lock_type
 {
   (void)$2;
-  (void)$3;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_MYSQL_LOCK_NODE, 2, $1, $4);
+  ParseNode *lock_table = NULL;
+  malloc_non_terminal_node(lock_table, result->malloc_pool_, T_ALIAS, 5, $1, $3, NULL, NULL, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MYSQL_LOCK_NODE, 2, lock_table, $4);
 }
 ;
 

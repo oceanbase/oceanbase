@@ -287,6 +287,7 @@ int ObTableLockOwnerID::serialize(char* buf, const int64_t buf_len, int64_t& pos
   } else if (data_version < DATA_VERSION_4_2_5_0) {
     // change the data to old version.
     ObOldLockOwner old_id;
+    old_id.pack_ = 0;  // make sure the flag and reserved bit is 0.
     old_id.type_ = type_;
     old_id.id_ = id_;
     if (old_id.type_ != type_ || old_id.id_ != id_) {
@@ -381,6 +382,7 @@ int64_t ObTableLockOwnerID::get_serialize_size() const
     LOG_WARN("get data version failed", K(ret));
   } else if (OB_UNLIKELY(data_version < DATA_VERSION_4_2_5_0)) {
     ObOldLockOwner old_id;
+    old_id.pack_ = 0;
     old_id.type_ = type_;
     old_id.id_ = id_;
     len += old_id.get_serialize_size();

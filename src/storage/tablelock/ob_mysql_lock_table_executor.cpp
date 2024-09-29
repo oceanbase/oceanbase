@@ -54,60 +54,44 @@ int ObMySQLLockTableExecutor::execute(ObExecContext &ctx,
   bool is_rollback = false;
   ObTxParam tx_param;
   int64_t timeout_us = THIS_WORKER.get_timeout_ts() - ObTimeUtility::current_time();
-  uint64_t tenant_id = MTL_ID();
-  bool is_enable_lock_priority = false;
+  OZ (ObLockContext::valid_execute_context(ctx));
+  // 1. check client_session_id is valid
+  // 2. modify inner table
+  // 2.1 add session into CLIENT_TO_SERVER_SESSION_INFO table
+  // 2.2 add lock_table into DETECT_LOCK_INFO table
+  // 3. lock table
+  OV (ObLockExecutor::proxy_is_support(ctx), OB_NOT_SUPPORTED);
 
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-  if (!tenant_config.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    // if tenant config is invalid, this config will be set as false
-    LOG_WARN("tenant config is invalid", K(tenant_id));
-  } else {
-    is_enable_lock_priority = tenant_config->enable_lock_priority;
-  }
-
-  // only execute normally after enable lock_priority configuration, otherwise
-  // it will directly throw OB_SUCCESS, which is an empty implementation
-  if (OB_SUCC(ret) && is_enable_lock_priority) {
-    OZ (ObLockContext::valid_execute_context(ctx));
-    // 1. check client_session_id is valid
-    // 2. modify inner table
-    // 2.1 add session into CLIENT_TO_SERVER_SESSION_INFO table
-    // 2.2 add lock_table into DETECT_LOCK_INFO table
-    // 3. lock table
-    OV (ObLockExecutor::proxy_is_support(ctx), OB_NOT_SUPPORTED);
-
-    if (OB_SUCC(ret)) {
-      SMART_VAR(ObLockContext, stack_ctx) {
-        OZ (stack_ctx.init(ctx, timeout_us));
-        // only when connect by proxy should check client_session
-        if (sess->is_obproxy_mode()) {
-          OZ (check_client_ssid(stack_ctx, client_session_id, client_session_create_ts));
-          if (OB_EMPTY_RESULT == ret) {
-            ret = OB_SUCCESS;  // there're no same client_session_id records, continue
-          } else {
-            // TODO(yangyifei.yyf): some SQL can not redo, reroute may cause errors, so skip this step temporarily
-            // OZ (check_need_reroute_(stack_ctx1, sess, client_session_id, client_session_create_ts));
-          }
+  if (OB_SUCC(ret)) {
+    SMART_VAR(ObLockContext, stack_ctx) {
+      OZ (stack_ctx.init(ctx, timeout_us));
+      // only when connect by proxy should check client_session
+      if (sess->is_obproxy_mode()) {
+        OZ (check_client_ssid(stack_ctx, client_session_id, client_session_create_ts));
+        if (OB_EMPTY_RESULT == ret) {
+          ret = OB_SUCCESS;  // there're no same client_session_id records, continue
+        } else {
+          // TODO(yangyifei.yyf): some SQL can not redo, reroute may cause errors, so skip this step temporarily
+          // OZ (check_need_reroute_(stack_ctx1, sess, client_session_id, client_session_create_ts));
         }
-        OZ (update_session_table_(stack_ctx,
-                                  client_session_id,
-                                  client_session_create_ts,
-                                  server_session_id));
-        OZ (ObInnerConnectionLockUtil::build_tx_param(sess, tx_param));
-        OZ (lock_tables_(sess,
-                        tx_param,
-                        client_session_id,
-                        client_session_create_ts,
-                        lock_node_list,
-                        timeout_us));
-        OX (mark_lock_session_(sess, true));
+      }
+      OZ (update_session_table_(stack_ctx,
+                                client_session_id,
+                                client_session_create_ts,
+                                server_session_id));
+      OZ (ObInnerConnectionLockUtil::build_tx_param(sess, tx_param));
+      OZ (lock_tables_(sess,
+                      tx_param,
+                      client_session_id,
+                      client_session_create_ts,
+                      lock_node_list,
+                      timeout_us));
+      OX (mark_lock_session_(sess, true));
 
-        is_rollback = (OB_SUCCESS != ret);
-        if (OB_TMP_FAIL(stack_ctx.destroy(ctx, is_rollback))) {
-          LOG_WARN("stack ctx destroy failed", K(tmp_ret));
-          COVER_SUCC(tmp_ret);
-        }
+      is_rollback = (OB_SUCCESS != ret);
+      if (OB_TMP_FAIL(stack_ctx.destroy(ctx, is_rollback))) {
+        LOG_WARN("stack ctx destroy failed", K(tmp_ret));
+        COVER_SUCC(tmp_ret);
       }
     }
   }

@@ -53,35 +53,43 @@ int ObLockTableResolver::resolve_mysql_mode_(const ParseNode &parse_tree)
   ParseNode *lock_list = NULL;
   ObString db_name;
 
-  ObLockTableStmt *lock_stmt = static_cast<ObLockTableStmt *>(stmt_);
-  if (parse_tree.num_child_ == 0) {
-    // it is unlock table stmt
-  } else if (parse_tree.num_child_ != 1) {
+  uint64_t tenant_id = session_info_->get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (!tenant_config.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("mysql lock table should only has one parameter which is mysql lock list", K(ret));
-  } else if (OB_ISNULL(parse_tree.children_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("child may be lost", K(ret));
-  } else if (FALSE_IT(lock_list = parse_tree.children_[MYSQL_LOCK_LIST])) {
-  } else if (lock_list->type_ != T_MYSQL_LOCK_LIST) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("wrong lock list", K(ret), K(lock_list->type_));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < lock_list->num_child_; ++i) {
-      const ParseNode *lock_node = lock_list->children_[i];
-      if (OB_ISNULL(lock_node)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("lock node is null");
-      } else if (OB_FAIL(resolve_mysql_lock_node_(*lock_node))) {
-        LOG_WARN("resolve mysql lock node failed", K(ret));
+    // if tenant config is invalid, this config will be set as false
+    LOG_WARN("tenant config is invalid", K(tenant_id));
+  } else if (tenant_config->enable_lock_priority) {
+    ObLockTableStmt *lock_stmt = static_cast<ObLockTableStmt *>(stmt_);
+    if (parse_tree.num_child_ == 0) {
+      // it is unlock table stmt
+    } else if (parse_tree.num_child_ != 1) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("mysql lock table should only has one parameter which is mysql lock list", K(ret));
+    } else if (OB_ISNULL(parse_tree.children_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("child may be lost", K(ret));
+    } else if (FALSE_IT(lock_list = parse_tree.children_[MYSQL_LOCK_LIST])) {
+    } else if (lock_list->type_ != T_MYSQL_LOCK_LIST) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("wrong lock list", K(ret), K(lock_list->type_));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < lock_list->num_child_; ++i) {
+        const ParseNode *lock_node = lock_list->children_[i];
+        if (OB_ISNULL(lock_node)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("lock node is null");
+        } else if (OB_FAIL(resolve_mysql_lock_node_(*lock_node))) {
+          LOG_WARN("resolve mysql lock node failed", K(ret));
+        }
       }
     }
-  }
-  if (OB_SUCC(ret)) {
-    if (parse_tree.num_child_ == 0) {
-      lock_stmt->set_lock_stmt_type(ObLockTableStmt::MYSQL_UNLOCK_TABLE_STMT);
-    } else {
-      lock_stmt->set_lock_stmt_type(ObLockTableStmt::MYSQL_LOCK_TABLE_STMT);
+    if (OB_SUCC(ret)) {
+      if (parse_tree.num_child_ == 0) {
+        lock_stmt->set_lock_stmt_type(ObLockTableStmt::MYSQL_UNLOCK_TABLE_STMT);
+      } else {
+        lock_stmt->set_lock_stmt_type(ObLockTableStmt::MYSQL_LOCK_TABLE_STMT);
+      }
     }
   }
   return ret;
