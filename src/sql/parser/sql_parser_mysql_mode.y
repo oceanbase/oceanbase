@@ -14212,7 +14212,7 @@ user_specification_without_password
 ;
 
 drop_role_stmt:
-DROP ROLE opt_if_not_exists user_list
+DROP ROLE opt_if_exists user_list
 {
   ParseNode *user_list_node = NULL;
   merge_nodes(user_list_node, result, T_USERS, $4);
