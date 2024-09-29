@@ -2285,9 +2285,10 @@ int ObDMLService::get_nested_dup_table_ctx(const uint64_t table_id,  DASDelCtxLi
   return ret;
 }
 
-int ObDMLService::handle_after_processing_multi_row(ObDMLModifyRowsList *dml_modify_rows, ObTableModifyOp *dml_op, bool is_iter_end)
+int ObDMLService::handle_after_processing_multi_row(ObDMLModifyRowsList *dml_modify_rows, ObTableModifyOp *dml_op)
 {
   int ret = OB_SUCCESS;
+  bool is_iter_end = dml_op->iter_end_;
   const ObDmlEventType t_insert = ObDmlEventType::DE_INSERTING;
   const ObDmlEventType t_update = ObDmlEventType::DE_UPDATING;
   const ObDmlEventType t_delete = ObDmlEventType::DE_DELETING;
@@ -2415,8 +2416,7 @@ int ObDMLService::handle_after_processing_single_row(ObDMLModifyRowsList *dml_mo
 }
 
 int ObDMLService::handle_after_row_processing(ObTableModifyOp *op,
-                                              ObDMLModifyRowsList *dml_modify_rows,
-                                              bool is_iter_end)
+                                              ObDMLModifyRowsList *dml_modify_rows)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(op) || OB_ISNULL(dml_modify_rows)) {
@@ -2430,7 +2430,7 @@ int ObDMLService::handle_after_row_processing(ObTableModifyOp *op,
   } else if (op->execute_single_row_) {
     ret = handle_after_processing_single_row(dml_modify_rows);
   } else {
-    ret = handle_after_processing_multi_row(dml_modify_rows, op, is_iter_end);
+    ret = handle_after_processing_multi_row(dml_modify_rows, op);
   }
   return ret;
 }

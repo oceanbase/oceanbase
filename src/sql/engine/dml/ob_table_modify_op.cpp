@@ -1168,7 +1168,7 @@ OperatorOpenOrder ObTableModifyOp::get_operator_open_order() const
   return open_order;
 }
 
-int ObTableModifyOp::submit_all_dml_task(bool is_iter_end)
+int ObTableModifyOp::submit_all_dml_task()
 {
   int ret = OB_SUCCESS;
   if (dml_rtctx_.das_ref_.has_task()) {
@@ -1179,7 +1179,7 @@ int ObTableModifyOp::submit_all_dml_task(bool is_iter_end)
       LOG_WARN("execute all dml das task failed", K(ret));
     } else if (OB_FAIL(dml_rtctx_.das_ref_.close_all_task())) {
       LOG_WARN("close all das task failed", K(ret));
-    } else if (OB_FAIL(ObDMLService::handle_after_row_processing(this, &get_dml_modify_row_list(), is_iter_end))) {
+    } else if (OB_FAIL(ObDMLService::handle_after_row_processing(this, &get_dml_modify_row_list()))) {
       LOG_WARN("perform batch foreign key constraints and after row trigger failed", K(ret));
     } else {
       dml_modify_rows_.clear();
@@ -1192,19 +1192,19 @@ int ObTableModifyOp::submit_all_dml_task(bool is_iter_end)
 //The data to be written by DML will be buffered in the DAS Write Buffer
 //When the buffer data exceeds 6M,
 //needs to be written to the storage to release the memory.
-int ObTableModifyOp::discharge_das_write_buffer(bool is_iter_end)
+int ObTableModifyOp::discharge_das_write_buffer()
 {
   int ret = OB_SUCCESS;
   if (dml_rtctx_.need_submit_all_tasks()) {
     LOG_INFO("DASWriteBuffer full, now to write storage",
              "buffer memory", dml_rtctx_.das_ref_.get_das_alloc().used(),
              K(dml_rtctx_.get_das_task_memory_size()), K(dml_rtctx_.get_das_parallel_task_size()));
-    ret = submit_all_dml_task(is_iter_end);
+    ret = submit_all_dml_task();
   } else if (execute_single_row_) {
     if (REACH_COUNT_INTERVAL(100)) { // print log per 100 times.
       LOG_TRACE("DML task excute single row", K(execute_single_row_));
     }
-    ret = submit_all_dml_task(is_iter_end);
+    ret = submit_all_dml_task();
   }
   return ret;
 }
@@ -1244,7 +1244,7 @@ int ObTableModifyOp::inner_get_next_row()
         }
       } else if (OB_FAIL(write_row_to_das_buffer())) {
         LOG_WARN("write row to das failed", K(ret));
-      } else if (OB_FAIL(discharge_das_write_buffer(iter_end_))) {
+      } else if (OB_FAIL(discharge_das_write_buffer())) {
         LOG_WARN("discharge das write buffer failed", K(ret));
       } else if (is_error_logging_ && err_log_rt_def_.first_err_ret_ != OB_SUCCESS) {
         clear_evaluated_flag();
@@ -1264,7 +1264,7 @@ int ObTableModifyOp::inner_get_next_row()
     if (OB_SUCC(ret) && iter_end_ && dml_rtctx_.das_ref_.has_task()) {
       //DML operator reach iter end,
       //now submit the remaining rows in the DAS Write Buffer to the storage
-      if (OB_FAIL(submit_all_dml_task(iter_end_))) {
+      if (OB_FAIL(submit_all_dml_task())) {
         LOG_WARN("failed to submit the remaining dml tasks", K(ret));
       }
     }
