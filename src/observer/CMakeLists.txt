@@ -273,6 +273,9 @@ ob_set_subtarget(ob_server table_load
   table_load/ob_table_load_multiple_heap_table_compactor.cpp
   table_load/ob_table_load_redef_table.cpp
   table_load/ob_table_load_stat.cpp
+  table_load/ob_table_load_pre_sorter.cpp
+  table_load/ob_table_load_mem_chunk_manager.cpp
+  table_load/ob_table_load_pre_sort_writer.cpp
 )
 
 ob_set_subtarget(ob_server virtual_table

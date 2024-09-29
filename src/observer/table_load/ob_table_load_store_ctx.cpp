@@ -30,6 +30,7 @@
 #include "storage/direct_load/ob_direct_load_sstable_index_block.h"
 #include "storage/direct_load/ob_direct_load_sstable_scan_merge.h"
 #include "storage/direct_load/ob_direct_load_tmp_file.h"
+#include "observer/table_load/ob_table_load_pre_sorter.h"
 
 namespace oceanbase
 {
@@ -57,6 +58,8 @@ ObTableLoadStoreCtx::ObTableLoadStoreCtx(ObTableLoadTableCtx *ctx)
     error_row_handler_(nullptr),
     sequence_schema_(&allocator_),
     next_session_id_(0),
+    pre_sorter_(nullptr),
+    enable_pre_sort_(false),
     status_(ObTableLoadStatusType::NONE),
     error_code_(OB_SUCCESS),
     last_heart_beat_ts_(0),
@@ -270,6 +273,23 @@ int ObTableLoadStoreCtx::init(
     else if (ctx_->schema_.has_identity_column_ && OB_FAIL(init_sequence())) {
       LOG_WARN("fail to init sequence", KR(ret));
     }
+    // init enable_pre_sort_ and pre_sorter_
+    if (OB_SUCC(ret)) {
+      enable_pre_sort_ = (is_multiple_mode_ && !table_data_desc_.is_heap_table_);
+      if (enable_pre_sort_) {
+        if (OB_ISNULL(pre_sorter_ = OB_NEWx(ObTableLoadPreSorter,
+                                                  (&allocator_),
+                                                  this->ctx_,
+                                                  this))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to allocate TableLoadPreSorter", KR(ret));
+        } else if (OB_FAIL(pre_sorter_->init())) {
+          LOG_WARN("fail to init pre sorter", KR(ret));
+        } else if (OB_FAIL(pre_sorter_->start())) {
+          LOG_WARN("fail to start pre_sorter", KR(ret));
+        }
+      }
+    }
     if (OB_SUCC(ret)) {
       is_inited_ = true;
     } else {
@@ -283,6 +303,9 @@ void ObTableLoadStoreCtx::stop()
 {
   if (nullptr != merger_) {
     merger_->stop();
+  }
+  if (nullptr != pre_sorter_) {
+    pre_sorter_->stop();
   }
   if (nullptr != task_scheduler_) {
     task_scheduler_->stop();
@@ -328,6 +351,11 @@ void ObTableLoadStoreCtx::destroy()
     insert_table_ctx_->~ObDirectLoadInsertTableContext();
     allocator_.free(insert_table_ctx_);
     insert_table_ctx_ = nullptr;
+  }
+  if (nullptr != pre_sorter_) {
+    pre_sorter_->~ObTableLoadPreSorter();
+    allocator_.free(pre_sorter_);
+    pre_sorter_ = nullptr;
   }
   if (nullptr != tmp_file_mgr_) {
     tmp_file_mgr_->~ObDirectLoadTmpFileManager();

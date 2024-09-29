@@ -31,6 +31,7 @@ class ObTableLoadStoreCtx;
 
 class ObTableLoadMerger
 {
+  friend class ObTableLoadPreSorter;
   class MergeTaskProcessor;
   class RescanTaskProcessor;
   class DelLobTaskProcessor;

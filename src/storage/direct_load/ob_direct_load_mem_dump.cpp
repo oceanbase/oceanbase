@@ -408,7 +408,6 @@ int ObDirectLoadMemDump::compact_tablet_tables(const ObTabletID &tablet_id)
       [](const std::pair<int64_t, ObIDirectLoadPartitionTable *> &a,
          const std::pair<int64_t, ObIDirectLoadPartitionTable *> &b) { return a.first < b.first; });
   }
-
   if (OB_SUCC(ret)) {
     if (OB_FAIL(new_table_compactor(tablet_id, compactor))) {
       LOG_WARN("fail to new table compactor", KR(ret));

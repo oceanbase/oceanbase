@@ -414,6 +414,24 @@ int ObTableLoadTransStoreWriter::cast_row(ObArenaAllocator &cast_allocator,
   return ret;
 }
 
+int ObTableLoadTransStoreWriter::cast_row(int32_t session_id,
+                                          const ObNewRow &new_row,
+                                          ObDatumRow &datum_row)
+{
+  int ret = OB_SUCCESS;
+  SessionContext &session_ctx = session_ctx_array_[session_id - 1];
+  session_ctx.cast_allocator_.reuse();
+  if (OB_FAIL(cast_row(session_ctx.cast_allocator_, session_ctx.cast_params_, new_row, datum_row,
+                        session_id))) {
+    if (OB_UNLIKELY(OB_EAGAIN != ret)) {
+      LOG_WARN("fail to cast row", KR(ret), K(session_id));
+    } else {
+      ret = OB_SUCCESS;
+    }
+  }
+  return ret;
+}
+
 int ObTableLoadTransStoreWriter::cast_column(
     ObArenaAllocator &cast_allocator,
     ObDataTypeCastParams cast_params,

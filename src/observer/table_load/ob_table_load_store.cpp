@@ -24,10 +24,12 @@
 #include "observer/table_load/ob_table_load_task_scheduler.h"
 #include "observer/table_load/ob_table_load_trans_store.h"
 #include "observer/table_load/ob_table_load_utils.h"
+#include "observer/table_load/ob_table_load_pre_sorter.h"
 #include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
 #include "share/stat/ob_opt_stat_monitor_manager.h"
 #include "storage/blocksstable/ob_sstable.h"
 #include "share/table/ob_table_load_dml_stat.h"
+#include "observer/table_load/ob_table_load_pre_sort_writer.h"
 
 namespace oceanbase
 {
@@ -84,6 +86,9 @@ void ObTableLoadStore::abort_ctx(ObTableLoadTableCtx *ctx, bool &is_stopped)
     ctx->store_ctx_->merger_->stop();
     ctx->store_ctx_->task_scheduler_->stop();
     is_stopped = ctx->store_ctx_->task_scheduler_->is_stopped() && (0 == ATOMIC_LOAD(&ctx->store_ctx_->px_writer_count_));
+    if (OB_NOT_NULL(ctx->store_ctx_->pre_sorter_)) {
+      ctx->store_ctx_->pre_sorter_->stop();
+    }
   }
 }
 
@@ -310,8 +315,14 @@ public:
   int process() override
   {
     int ret = OB_SUCCESS;
-    if (OB_FAIL(ctx_->store_ctx_->merger_->start())) {
-      LOG_WARN("fail to start merger", KR(ret));
+    if (ctx_->store_ctx_->enable_pre_sort_) {
+      if (OB_FAIL(ctx_->store_ctx_->pre_sorter_->chunks_manager_->close_all_chunk())) {
+        LOG_WARN("fail to close all chunk", KR(ret));
+      }
+    } else {
+      if (OB_FAIL(ctx_->store_ctx_->merger_->start())) {
+        LOG_WARN("fail to start merger", KR(ret));
+      }
     }
     return ret;
   }
@@ -857,6 +868,15 @@ int ObTableLoadStore::write(const ObTableLoadTransId &trans_id, int32_t session_
     //  } else {
     //    ret = OB_SUCCESS;
     //  }
+    } else if (store_ctx_->enable_pre_sort_) {
+      ObTableLoadPreSortWriter pre_sort_writer;
+      if (OB_FAIL(pre_sort_writer.init(ctx_->store_ctx_->pre_sorter_, store_writer))) {
+        LOG_WARN("fail to init pre sort writer", KR(ret));
+      } else if (OB_FAIL(pre_sort_writer.write(session_id, row_array))) {
+        LOG_WARN("fail to write to chunk");
+      } else if (OB_FAIL(pre_sort_writer.close_chunk())) {
+        LOG_WARN("fail to push chunk", KR(ret));
+      }
     } else {
       ObTableLoadTask *task = nullptr;
       WriteTaskProcessor *processor = nullptr;
@@ -866,7 +886,7 @@ int ObTableLoadStore::write(const ObTableLoadTransId &trans_id, int32_t session_
       }
       // 2. 设置processor
       else if (OB_FAIL(task->set_processor<WriteTaskProcessor>(ctx_, trans, store_writer,
-                                                               session_id))) {
+                                                              session_id))) {
         LOG_WARN("fail to set write task processor", KR(ret));
       } else if (OB_ISNULL(processor = dynamic_cast<WriteTaskProcessor *>(task->get_processor()))) {
         ret = OB_ERR_UNEXPECTED;
@@ -991,6 +1011,8 @@ int ObTableLoadStore::flush(ObTableLoadStoreTrans *trans)
     // after get store writer, avoid early commit
     else if (OB_FAIL(trans->set_trans_status_frozen())) {
       LOG_WARN("fail to freeze trans", KR(ret));
+    } else if (store_ctx_->enable_pre_sort_) {
+      // do nothing
     } else {
       for (int32_t session_id = 1; OB_SUCC(ret) && session_id <= param_.write_session_count_; ++session_id) {
         ObTableLoadTask *task = nullptr;

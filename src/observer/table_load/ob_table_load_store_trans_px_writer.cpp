@@ -63,7 +63,6 @@ void ObTableLoadStoreTransPXWriter::reset()
     store_ctx_ = nullptr;
   }
 }
-
 int ObTableLoadStoreTransPXWriter::init(ObTableLoadStoreCtx *store_ctx,
                                         ObTableLoadStoreTrans *trans,
                                         ObTableLoadTransStoreWriter *writer)
@@ -82,6 +81,9 @@ int ObTableLoadStoreTransPXWriter::init(ObTableLoadStoreCtx *store_ctx,
     trans_->inc_ref_count();
     writer_->inc_ref_count();
     ATOMIC_AAF(&store_ctx_->px_writer_count_, 1);
+    if (store_ctx_->enable_pre_sort_ && OB_FAIL(pre_sort_writer_.init(store_ctx_->pre_sorter_, writer_))) {
+      LOG_WARN("fail to init pre sort wirter", KR(ret));
+    }
     if (OB_SUCC(check_status())) {
       is_inited_ = true;
     }
@@ -207,9 +209,16 @@ int ObTableLoadStoreTransPXWriter::write(const blocksstable::ObDatumRow &row)
       new_row.storage_datums_ = row.storage_datums_;
       new_row.count_ = row.count_;
     }
-    if (OB_FAIL(writer_->px_write(tablet_id_, new_row))) {
-      LOG_WARN("fail to px write", KR(ret), K(row), K(new_row));
+    if (store_ctx_->enable_pre_sort_) {
+      if (OB_FAIL(pre_sort_writer_.px_write(tablet_id_, new_row))) {
+        LOG_WARN("fail to px write", KR(ret), K(row), K(new_row));
+      }
     } else {
+      if (OB_FAIL(writer_->px_write(tablet_id_, new_row))) {
+        LOG_WARN("fail to px write", KR(ret), K(row), K(new_row));
+      }
+    }
+    if (OB_SUCC(ret)) {
       row_count_++;
       if (row_count_ % CHECK_STATUS_CYCLE == 0) {
         if (OB_FAIL(check_status())) {
@@ -217,6 +226,15 @@ int ObTableLoadStoreTransPXWriter::write(const blocksstable::ObDatumRow &row)
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObTableLoadStoreTransPXWriter::finish_write()
+{
+  int ret = OB_SUCCESS;
+  if (store_ctx_->enable_pre_sort_ && OB_FAIL(pre_sort_writer_.close_chunk())) {
+    LOG_WARN("fail to push chunk", KR(ret));
   }
   return ret;
 }

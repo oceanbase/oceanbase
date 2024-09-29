@@ -539,12 +539,17 @@ int ObTableLoadMemCompactor::start_load()
 int ObTableLoadMemCompactor::start_compact()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(start_load())) {
-    LOG_WARN("fail to start load", KR(ret));
-  } else if (OB_FAIL(start_sample())) {
-    LOG_WARN("fail to start sample", KR(ret));
-  } else if (OB_FAIL(start_dump())) {
-    LOG_WARN("fail to start dump", KR(ret));
+  if (store_ctx_->enable_pre_sort_
+      && !store_ctx_->insert_table_ctx_->need_del_lob()) {
+    // do nothing
+  } else {
+    if (OB_FAIL(start_load())) {
+      LOG_WARN("fail to start load", KR(ret));
+    } else if (OB_FAIL(start_sample())) {
+      LOG_WARN("fail to start sample", KR(ret));
+    } else if (OB_FAIL(start_dump())) {
+      LOG_WARN("fail to start dump", KR(ret));
+    }
   }
   if (OB_FAIL(ret)) {
     set_has_error();

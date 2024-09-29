@@ -18,6 +18,7 @@
 #include "storage/direct_load/ob_direct_load_mem_dump.h"
 #include "storage/direct_load/ob_direct_load_mem_context.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
+#include "observer/table_load/ob_table_load_store_ctx.h"
 
 namespace oceanbase
 {
@@ -35,6 +36,7 @@ public:
   ObDirectLoadMemSample(observer::ObTableLoadTableCtx *ctx, ObDirectLoadMemContext *mem_ctx);
   virtual ~ObDirectLoadMemSample() {}
 
+  int do_pre_sort_sample();
   int do_sample();
 
 private:

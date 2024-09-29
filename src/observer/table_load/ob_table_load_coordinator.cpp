@@ -33,6 +33,7 @@
 #include "share/stat/ob_dbms_stats_utils.h"
 #include "observer/table_load/ob_table_load_index_long_wait.h"
 #include "observer/omt/ob_tenant.h"
+#include "storage/direct_load/ob_direct_load_mem_define.h"
 
 namespace oceanbase
 {
@@ -383,14 +384,14 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
               // 取写宏块或写临时文件需要内存的最小值，对于非排序模式，每个分区各自写临时文件，所以要乘分区数
               min_unsort_memory = SSTABLE_BUFFER_SIZE * partitions[i] * unit.thread_count_;
               if (need_sort) {
-                unit.memory_size_ = MIN(ObTableLoadAssignedMemoryManager::MIN_SORT_MEMORY_PER_TASK, memory_limit);
+                unit.memory_size_ = MIN(unit.thread_count_ * ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT * 4, memory_limit);
               } else {
                 // hint指定不排序，如果不排序内存大于内存上限，要改成走排序模式，一般是分区数较大的场景
                 if (min_unsort_memory < memory_limit) {
                   unit.memory_size_ = MAX(min_unsort_memory, MACROBLOCK_BUFFER_SIZE * write_session_count);
                 } else {
                   need_sort = true;
-                  unit.memory_size_ = MIN(ObTableLoadAssignedMemoryManager::MIN_SORT_MEMORY_PER_TASK, memory_limit);
+                  unit.memory_size_ = MIN(unit.thread_count_ * ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT * 4, memory_limit);
                 }
               }
             }
@@ -403,7 +404,7 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
             // 排序模式，所有节点都分配固定的最小排序内存
             for (int64_t i = 0; i < store_server_count; i++) {
               ObDirectLoadResourceUnit &unit = apply_arg.apply_array_[i];
-              unit.memory_size_ = MIN(ObTableLoadAssignedMemoryManager::MIN_SORT_MEMORY_PER_TASK, memory_limit);
+              unit.memory_size_ = MIN(unit.thread_count_ * ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT * 4, memory_limit);
             }
           }
         }

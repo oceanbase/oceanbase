@@ -23,6 +23,7 @@
 #include "storage/direct_load/ob_direct_load_trans_param.h"
 #include "observer/table_load/ob_table_load_service.h"
 #include "observer/table_load/ob_table_load_assigned_memory_manager.h"
+#include "observer/table_load/ob_table_load_merger.h"
 
 namespace oceanbase
 {
@@ -45,6 +46,7 @@ class ObTableLoadTransStore;
 class ObITableLoadTaskScheduler;
 class ObTableLoadMerger;
 class ObTableLoadErrorRowHandler;
+class ObTableLoadPreSorter;
 
 class ObTableLoadStoreCtx
 {
@@ -170,6 +172,8 @@ public:
     int64_t extra_buf_size_;
   };
   SessionContext *session_ctx_array_;
+  ObTableLoadPreSorter *pre_sorter_;
+  bool enable_pre_sort_;
 private:
   struct SegmentCtx : public common::LinkHashValue<table::ObTableLoadSegmentID>
   {

@@ -3271,6 +3271,9 @@ int ObLSTabletService::direct_insert_rows(
     if (OB_ITER_END == ret) {
       ret = OB_SUCCESS;
     }
+    if (OB_SUCC(ret) && OB_FAIL(writer.finish_write())) {
+      LOG_WARN("px wirter fail to finish write", KR(ret));
+    }
   }
   if (OB_NOT_NULL(table_ctx)) {
     ObTableLoadService::put_ctx(table_ctx);
