@@ -489,6 +489,7 @@ int ObDefaultCGScanner::apply_filter(
   } else {
     filter_result_ = result;
     filter_ = filter;
+    // TODO: set the max contant row id
     if (result) {
       result_bitmap.set_all_true();
     } else {

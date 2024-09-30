@@ -418,7 +418,7 @@ TEST_F(TestCGScanner, test_large_micro_selected)
   int64_t sql_batch_size = 256;
   int64_t total_cnt = row_cnt_ / 10;
   ObCGBitmap bitmap(allocator_);
-  bitmap.init(row_cnt_);
+  bitmap.init(row_cnt_, false);
   bitmap.reuse(0);
   for (int64_t i = 0; i < total_cnt; i++) {
     bitmap.set(i * 10);
@@ -592,8 +592,8 @@ TEST_F(TestCGScanner, test_filter)
   int64_t locate_count = 25;
   ObCGBitmap parent_bitmap(allocator_);
   ObCGBitmap bitmap(allocator_);
-  bitmap.init(locate_count);
-  bitmap.reuse(start, false);
+  bitmap.init(locate_count, false);
+  bitmap.reuse(start);
   ASSERT_EQ(OB_SUCCESS, cg_scanner->locate(ObCSRange(start, locate_count)));
   ASSERT_EQ(OB_SUCCESS, cg_scanner->apply_filter(nullptr, pd_filter, locate_count, &parent_bitmap, bitmap));
 

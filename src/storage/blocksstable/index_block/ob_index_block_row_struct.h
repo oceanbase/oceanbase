@@ -615,6 +615,11 @@ public:
   {
     return sql::ObBoolMaskType::PROBABILISTIC == static_cast<sql::ObBoolMaskType>(filter_constant_type_);
   }
+  OB_INLINE bool is_filter_constant() const
+  {
+    return sql::ObBoolMaskType::ALWAYS_TRUE == static_cast<sql::ObBoolMaskType>(filter_constant_type_) ||
+        sql::ObBoolMaskType::ALWAYS_FALSE == static_cast<sql::ObBoolMaskType>(filter_constant_type_);
+  }
   OB_INLINE void set_filter_constant_type(const sql::ObBoolMaskType type)
   {
     filter_constant_type_ = static_cast<uint16_t>(type);

@@ -147,6 +147,11 @@ struct ObBoolMask
   {
     return ObBoolMaskType::PROBABILISTIC == bmt_;
   }
+  OB_INLINE bool is_constant() const
+  {
+    return ObBoolMaskType::ALWAYS_TRUE == bmt_ ||
+        ObBoolMaskType::ALWAYS_FALSE == bmt_;
+  }
   OB_INLINE void set_always_true()
   {
     bmt_ = ObBoolMaskType::ALWAYS_TRUE;
@@ -158,6 +163,10 @@ struct ObBoolMask
   OB_INLINE void set_uncertain()
   {
     bmt_ = ObBoolMaskType::PROBABILISTIC;
+  }
+  OB_INLINE void set(ObBoolMaskType bmt)
+  {
+    bmt_ = bmt;
   }
   TO_STRING_KV(K_(bmt));
 
