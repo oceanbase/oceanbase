@@ -33,6 +33,7 @@ struct ObLobSplitParam;
 class ObTabletSplitDag;
 class ObTabletLobSplitDag;
 class ObComplementDataDag;
+class ObTablet;
 }
 
 namespace share
@@ -51,7 +52,7 @@ struct ObVerifyCkmParam;
 struct ObUpdateSkipMajorParam;
 #endif
 
-class ObScheduleDagFunc
+class ObScheduleDagFunc final
 {
 public:
   static int schedule_tablet_merge_dag(
@@ -91,10 +92,26 @@ public:
   static int schedule_verify_ckm_dag(ObVerifyCkmParam &param);
   static int schedule_update_skip_major_tablet_dag(const ObUpdateSkipMajorParam &param);
 #endif
-  static int get_exec_mode(
-      const bool is_major_merge_type,
-      const share::ObLSID &ls_id,
-      ObExecMode &exec_mode);
+};
+
+class ObDagParamFunc final
+{
+public:
+  static int fill_param(
+    const share::ObLSID &ls_id,
+    const storage::ObTablet &tablet,
+    const ObMergeType merge_type,
+    const int64_t &merge_snapshot_version,
+    const ObExecMode exec_mode,
+    const share::ObDagId *dag_net_id,
+    ObCOMergeDagParam &param);
+  static int fill_param(
+    const share::ObLSID &ls_id,
+    const storage::ObTablet &tablet,
+    const ObMergeType merge_type,
+    const int64_t &merge_snapshot_version,
+    const ObExecMode exec_mode,
+    ObTabletMergeDagParam &param);
 };
 
 }

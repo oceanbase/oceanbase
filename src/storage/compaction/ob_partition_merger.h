@@ -148,7 +148,6 @@ protected:
 
 private:
   int inner_open_macro_writer(ObBasicTabletMergeCtx &ctx, ObMergeParameter &merge_param);
-  int open_macro_writer_in_local(int64_t &macro_start_seq);
   virtual int inner_prepare_merge(ObBasicTabletMergeCtx &ctx, const int64_t idx) override final;
   virtual int inner_init() = 0;
 protected:

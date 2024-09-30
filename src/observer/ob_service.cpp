@@ -1170,7 +1170,7 @@ int ObService::tablet_major_freeze(const obrpc::ObTabletMajorFreezeArg &arg,
     LOG_WARN("invalid arg", K(ret), K(arg));
   } else {
     MTL_SWITCH(arg.tenant_id_) {
-      if (OB_FAIL(MTL(compaction::ObTenantTabletScheduler *)->try_schedule_tablet_medium_merge(
+      if (OB_FAIL(MTL(compaction::ObTenantTabletScheduler *)->user_request_schedule_medium_merge(
         arg.ls_id_, arg.tablet_id_, arg.is_rebuild_column_group_))) {
         LOG_WARN("failed to try schedule tablet major freeze", K(ret), K(arg));
       }

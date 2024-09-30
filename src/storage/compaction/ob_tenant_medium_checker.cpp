@@ -291,8 +291,8 @@ int ObTenantMediumChecker::check_medium_finish(
     const ObIArray<ObTabletCheckInfo> &tablet_ls_infos,
     int64_t start_idx,
     int64_t end_idx,
-    ObIArray<ObTabletCheckInfo> &check_tablet_ls_infos,
-    ObIArray<ObTabletCheckInfo> &finish_tablet_ls_infos,
+    ObArray<ObTabletCheckInfo> &check_tablet_ls_infos,
+    ObArray<ObTabletCheckInfo> &finish_tablet_ls_infos,
     ObBatchFinishCheckStat &stat)
 {
   int ret = OB_SUCCESS;
@@ -338,7 +338,8 @@ int ObTenantMediumChecker::check_medium_finish(
         K(finish_tablet_ls_infos.count()), K(tablet_ls_infos), K(check_tablet_ls_infos), K(finish_tablet_ls_infos));
       stat.succ_cnt_ += check_tablet_ls_infos.count();
       stat.finish_cnt_ += finish_tablet_ls_infos.count();
-      if (OB_FAIL(MTL(ObTenantTabletScheduler*)->schedule_next_round_for_leader(check_tablet_ls_infos, finish_tablet_ls_infos))) {
+      ObScheduleNewMediumLoop medium_loop(finish_tablet_ls_infos);
+      if (OB_FAIL(medium_loop.loop())) {
         LOG_WARN("failed to leader schedule", K(ret));
       } else {
         time_guard.click(ObCompactionScheduleTimeGuard::SCHEDULER_NEXT_ROUND);

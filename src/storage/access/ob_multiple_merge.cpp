@@ -813,7 +813,7 @@ int ObMultipleMerge::update_and_report_tablet_stat()
     access_ctx_->table_scan_stat_->row_cache_hit_cnt_ += access_ctx_->table_store_stat_.row_cache_hit_cnt_;
     access_ctx_->table_scan_stat_->row_cache_miss_cnt_ += access_ctx_->table_store_stat_.row_cache_miss_cnt_;
   }
-  if (MTL(compaction::ObTenantTabletScheduler *)->enable_adaptive_compaction()) {
+  if (compaction::ObBasicMergeScheduler::get_merge_scheduler()->enable_adaptive_compaction()) {
     report_tablet_stat();
   }
   access_ctx_->table_store_stat_.reuse();

@@ -2056,6 +2056,7 @@ int ObDagPrioScheduler::inner_add_dag_(
   } else {
     add_added_info_(dag->get_type());
     COMMON_LOG(INFO, "add dag success", KP(dag), "id", dag->get_dag_id(), K(dag->hash()), "dag_cnt", scheduler_->get_cur_dag_cnt(),
+        "dag_type", OB_DAG_TYPES[dag->get_type()].dag_type_str_,
         "dag_type_cnts", scheduler_->get_type_dag_cnt(dag->get_type()));
 
     dag = nullptr;
@@ -2287,7 +2288,7 @@ int ObDagPrioScheduler::rank_compaction_dags_()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   const int64_t batch_size = adaptive_task_limit_ * COMPACTION_DAG_RERANK_FACTOR;
-  const bool need_adaptive_schedule = MTL(compaction::ObTenantTabletScheduler *)->enable_adaptive_merge_schedule();
+  const bool need_adaptive_schedule = ObBasicMergeScheduler::get_merge_scheduler()->enable_adaptive_merge_schedule();
 
   if (!check_need_compaction_rank_()) {
     // ready list has plenty of dags, no need to rank new dags
@@ -3382,11 +3383,11 @@ bool ObDagPrioScheduler::try_switch(ObTenantDagWorker &worker)
 bool ObDagPrioScheduler::check_need_load_shedding_(const bool for_schedule)
 {
   bool need_shedding = false;
-  compaction::ObTenantTabletScheduler *tablet_scheduler = nullptr;
+  compaction::ObBasicMergeScheduler *scheduler = nullptr;
 
-  if (OB_ISNULL(tablet_scheduler = MTL(compaction::ObTenantTabletScheduler *))) {
+  if (OB_ISNULL(scheduler = ObBasicMergeScheduler::get_merge_scheduler())) {
     // may be during the start phase
-  } else if (tablet_scheduler->enable_adaptive_merge_schedule()) {
+  } else if (scheduler->enable_adaptive_merge_schedule()) {
     ObTenantTabletStatMgr *stat_mgr = MTL(ObTenantTabletStatMgr *);
     int64_t load_shedding_factor = 1;
     const int64_t extra_limit = for_schedule ? 0 : 1;

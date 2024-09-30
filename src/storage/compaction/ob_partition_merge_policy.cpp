@@ -31,7 +31,6 @@
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "storage/column_store/ob_column_oriented_sstable.h"
 #include "share/scn.h"
-#include "storage/compaction/ob_tablet_merge_checker.h"
 #include "storage/compaction/ob_medium_compaction_func.h"
 #include "storage/access/ob_table_estimator.h"
 #include "storage/access/ob_index_sstable_estimator.h"
@@ -1082,88 +1081,6 @@ int ObPartitionMergePolicy::refine_minor_merge_result(
   return ret;
 }
 
-// call this func means have serialized medium compaction clog = medium_snapshot
-int ObPartitionMergePolicy::check_need_medium_merge(
-    ObLS &ls,
-    storage::ObTablet &tablet,
-    const int64_t medium_snapshot,
-    bool &need_merge,
-    bool &can_merge,
-    bool &need_force_freeze)
-{
-  int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  need_merge = false;
-  can_merge = false;
-  const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
-  const ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
-  const int64_t last_major_snapshot_version = tablet.get_last_major_snapshot_version();
-  const bool is_tablet_data_status_complete = tablet.get_tablet_meta().ha_status_.is_data_status_complete();
-
-  bool ls_weak_read_ts_ready = ObTabletMergeChecker::check_weak_read_ts_ready(medium_snapshot, ls);
-  ObProtectedMemtableMgrHandle *protected_handle = NULL;
-
-  if (0 >= last_major_snapshot_version) {
-    // no major, no medium
-  } else {
-    need_merge = last_major_snapshot_version < medium_snapshot;
-    if (need_merge
-        && is_tablet_data_status_complete
-        && ls_weak_read_ts_ready) {
-      can_merge = tablet.get_snapshot_version() >= medium_snapshot;
-      if (!can_merge) {
-        ObTableHandleV2 memtable_handle;
-        ObITabletMemtable *last_frozen_memtable = nullptr;
-        if (OB_FAIL(tablet.get_protected_memtable_mgr_handle(protected_handle))) {
-          LOG_WARN("failed to get_protected_memtable_mgr_handle", K(ret), K(tablet));
-        } else if (OB_FAIL(protected_handle->get_last_frozen_memtable(memtable_handle))) {
-          if (OB_ENTRY_NOT_EXIST == ret) { // no frozen memtable, need force freeze
-            need_force_freeze = true;
-            ret = OB_SUCCESS;
-          } else {
-            LOG_WARN("failed to get last frozen memtable", K(ret), K(tablet));
-          }
-        } else if (OB_FAIL(memtable_handle.get_tablet_memtable(last_frozen_memtable))) {
-          LOG_WARN("failed to get last frozen memtable", K(ret));
-        } else {
-          need_force_freeze = last_frozen_memtable->get_snapshot_version() < medium_snapshot;
-          if (!need_force_freeze) {
-            LOG_INFO("tablet no need force freeze", K(ret), K(tablet_id), K(medium_snapshot), KPC(last_frozen_memtable));
-          }
-        }
-      }
-    }
-  }
-#ifdef ERRSIM
-  if (OB_SUCC(ret)) {
-    ret = OB_E(EventTable::EN_COMPACTION_DIAGNOSE_CANNOT_MAJOR) OB_SUCCESS;
-    if (OB_FAIL(ret)) {
-      STORAGE_LOG(INFO, "ERRSIM EN_COMPACTION_DIAGNOSE_CANNOT_MAJOR", K(ret));
-      can_merge = false;
-      ret = OB_SUCCESS;
-    }
-  }
-#endif
-  if (need_merge && !can_merge && REACH_TENANT_TIME_INTERVAL(60L * 1000L * 1000L)) {
-    LOG_INFO("check_need_medium_merge", K(ret), K(ls_id), K(tablet_id),
-             K(need_merge), K(can_merge), K(medium_snapshot),
-             K(need_force_freeze), K(is_tablet_data_status_complete), K(ls_weak_read_ts_ready));
-    if (OB_TMP_FAIL(ADD_SUSPECT_INFO(MEDIUM_MERGE, ObDiagnoseTabletType::TYPE_MEDIUM_MERGE,
-                    ls_id,
-                    tablet_id,
-                    ObSuspectInfoType::SUSPECT_CANT_MAJOR_MERGE,
-                    medium_snapshot,
-                    tablet.get_snapshot_version(),
-                    static_cast<int64_t>(is_tablet_data_status_complete),
-                    static_cast<int64_t>(ls_weak_read_ts_ready),
-                    static_cast<int64_t>(need_force_freeze),
-                    tablet.get_tablet_meta().max_serialized_medium_scn_))) {
-      LOG_WARN("failed to add suspect info", K(tmp_ret));
-    }
-  }
-  return ret;
-}
-
 int64_t ObPartitionMergePolicy::cal_hist_minor_merge_threshold()
 {
   int64_t compact_trigger = DEFAULT_MINOR_COMPACT_TRIGGER;
@@ -1468,6 +1385,12 @@ bool ObAdaptiveMergePolicy::is_valid_merge_reason(const AdaptiveMergeReason &rea
 {
   return reason > AdaptiveMergeReason::NONE &&
          reason < AdaptiveMergeReason::INVALID_REASON;
+}
+
+bool ObAdaptiveMergePolicy::is_user_request_merge_reason(const AdaptiveMergeReason &reason)
+{
+  return ObAdaptiveMergePolicy::REBUILD_COLUMN_GROUP == reason
+    || ObAdaptiveMergePolicy::USER_REQUEST == reason;
 }
 
 bool ObAdaptiveMergePolicy::is_valid_compaction_policy(const AdaptiveCompactionPolicy &policy)

@@ -714,7 +714,6 @@ ob_set_subtarget(ob_storage compaction
   compaction/ob_partition_merger.cpp
   compaction/ob_partition_merge_policy.cpp
   compaction/ob_partition_parallel_merge_ctx.cpp
-  compaction/ob_tablet_merge_checker.cpp
   compaction/ob_tablet_merge_ctx.cpp
   compaction/ob_basic_tablet_merge_ctx.cpp
   compaction/ob_tablet_merge_task.cpp
@@ -748,6 +747,11 @@ ob_set_subtarget(ob_storage compaction
   compaction/ob_batch_freeze_tablets_dag.cpp
   compaction/ob_progressive_merge_helper.cpp
   compaction/ob_mview_compaction_util.cpp
+  compaction/ob_medium_loop.cpp
+  compaction/ob_basic_schedule_tablet_func.cpp
+  compaction/ob_schedule_tablet_func.cpp
+  compaction/ob_tenant_status_cache.cpp
+  compaction/ob_schedule_status_cache.cpp
 )
 
 ob_set_subtarget(ob_storage memtable

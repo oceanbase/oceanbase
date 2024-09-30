@@ -30,7 +30,7 @@
 #include "storage/compaction/ob_sstable_merge_info_mgr.h"
 #include "storage/compaction/ob_compaction_diagnose.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
-#include "storage/compaction/ob_tablet_merge_checker.h"
+#include "storage/compaction/ob_schedule_status_cache.h"
 #include "share/ob_get_compat_mode.h"
 #include "share/resource_manager/ob_cgroup_ctrl.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
@@ -336,7 +336,7 @@ int ObTabletMergeDag::get_tablet_and_compat_mode()
   } else if (OB_FAIL(tmp_ls_handle.get_ls()->get_tablet_svr()->get_tablet(
       tablet_id_, tmp_tablet_handle, 0/*timeout_us*/, storage::ObMDSGetTabletMode::READ_ALL_COMMITED))) {
     LOG_WARN("failed to get tablet", K(ret), K(ls_id_), K(tablet_id_));
-  } else if (OB_FAIL(ObTabletMergeChecker::check_need_merge(merge_type_, *tmp_tablet_handle.get_obj()))) {
+  } else if (OB_FAIL(ObTabletStatusCache::check_could_execute(merge_type_, *tmp_tablet_handle.get_obj()))) {
     if (OB_NO_NEED_MERGE != ret) {
       LOG_WARN("failed to check need merge", K(ret));
     }

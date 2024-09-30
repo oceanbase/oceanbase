@@ -93,8 +93,8 @@ public:
       const ObIArray<ObTabletCheckInfo> &tablet_ls_infos,
       int64_t start_idx,
       int64_t end_idx,
-      ObIArray<ObTabletCheckInfo> &check_tablet_ls_infos,
-      ObIArray<ObTabletCheckInfo> &finish_tablet_ls_infos,
+      ObArray<ObTabletCheckInfo> &check_tablet_ls_infos,
+      ObArray<ObTabletCheckInfo> &finish_tablet_ls_infos,
       ObBatchFinishCheckStat &stat);
   int add_tablet_ls(const ObTabletID &tablet_id, const share::ObLSID &ls_id, const int64_t medium_scn);
   bool locality_cache_empty();

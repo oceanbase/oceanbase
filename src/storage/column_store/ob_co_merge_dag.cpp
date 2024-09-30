@@ -1290,7 +1290,7 @@ int ObCOMergeDagNet::inner_create_and_schedule_dags(ObIDag *parent_dag)
     }
   }
   // refine merge_batch_size_ with tenant memory
-  if (OB_SUCC(ret) && MTL(ObTenantTabletScheduler *)->enable_adaptive_merge_schedule()) {
+  if (OB_SUCC(ret) && ObBasicMergeScheduler::get_merge_scheduler()->enable_adaptive_merge_schedule()) {
     try_update_merge_batch_size(co_merge_ctx_->array_count_);
   }
 

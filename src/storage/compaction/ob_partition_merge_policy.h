@@ -86,13 +86,6 @@ public:
   {
     return OB_NOT_SUPPORTED;
   }
-   static int check_need_medium_merge(
-      storage::ObLS &ls,
-      storage::ObTablet &tablet,
-      const int64_t medium_snapshot,
-      bool &need_merge,
-      bool &can_merge,
-      bool &need_force_freeze);
   static int generate_parallel_minor_interval(
       const ObMergeType merge_type,
       const int64_t minor_compact_trigger,
@@ -257,6 +250,7 @@ public:
 
   static const char *merge_reason_to_str(const int64_t merge_reason);
   static bool is_valid_merge_reason(const AdaptiveMergeReason &reason);
+  static bool is_user_request_merge_reason(const AdaptiveMergeReason &reason);
   static bool is_skip_merge_reason(const AdaptiveMergeReason &reason);
   static bool is_valid_compaction_policy(const AdaptiveCompactionPolicy &policy);
   static bool is_schedule_medium(const share::schema::ObTableModeFlag &mode);

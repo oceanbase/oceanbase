@@ -730,5 +730,32 @@ bool ObMediumCompactionInfoList::need_check_finish() const
   return need_check;
 }
 
+int ObMediumCompactionInfoList::get_next_schedule_info(
+    const int64_t last_major_snapshot,
+    const int64_t major_frozen_snapshot,
+    const bool is_mv_refresh_tablet,
+    ObMediumCompactionInfo::ObCompactionType &compaction_type,
+    int64_t &schedule_scn) const
+{
+  int ret = OB_SUCCESS;
+  DLIST_FOREACH_X(info, get_list(), OB_SUCC(ret)) {
+    if (info->medium_snapshot_ <= last_major_snapshot) {
+      // finished, this medium info could recycle
+    } else {
+      if (info->is_medium_compaction()
+          || info->medium_snapshot_ <= major_frozen_snapshot
+          || is_mv_refresh_tablet) {
+        schedule_scn = info->medium_snapshot_;
+        compaction_type = (ObMediumCompactionInfo::ObCompactionType)info->compaction_type_;
+      }
+      break; // found one unfinish medium info, loop end
+    }
+  }
+  if (schedule_scn <= 0) {
+    ret = OB_NO_NEED_MERGE;
+  }
+  return ret;
+}
+
 } // namespace compaction
 } // namespace oceanbase

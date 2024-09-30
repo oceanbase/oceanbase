@@ -33,8 +33,9 @@ ObBasicMergeScheduler::ObBasicMergeScheduler()
     frozen_version_(INIT_COMPACTION_SCN),
     inner_table_merged_scn_(INIT_COMPACTION_SCN),
     merged_version_(INIT_COMPACTION_SCN),
-    min_data_version_(0),
-    major_merge_status_(false)
+    tenant_status_(),
+    major_merge_status_(false),
+    is_stop_(false)
   {}
 
 ObBasicMergeScheduler::~ObBasicMergeScheduler()
@@ -43,11 +44,12 @@ ObBasicMergeScheduler::~ObBasicMergeScheduler()
 
 void ObBasicMergeScheduler::reset()
 {
+  is_stop_ = true;
   obsys::ObWLockGuard frozen_version_guard(frozen_version_lock_);
   frozen_version_ = 0;
   inner_table_merged_scn_ = 0;
   merged_version_ = 0;
-  min_data_version_ = 0;
+  tenant_status_.reset();
   major_merge_status_ = false;
 }
 
@@ -103,50 +105,6 @@ bool ObBasicMergeScheduler::is_compacting() const
   return frozen_version_ > get_inner_table_merged_scn();
 }
 
-int ObBasicMergeScheduler::get_min_data_version(uint64_t &min_data_version)
-{
-  int ret = OB_SUCCESS;
-  min_data_version = ATOMIC_LOAD(&min_data_version_);
-  if (0 == min_data_version) { // force call GET_MIN_DATA_VERSION
-    uint64_t compat_version = 0;
-    if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), compat_version))) {
-      LOG_WARN("fail to get data version", KR(ret));
-    } else {
-      uint64_t old_version = ATOMIC_LOAD(&min_data_version_);
-      while (old_version < compat_version) {
-        if (ATOMIC_BCAS(&min_data_version_, old_version, compat_version)) {
-          // success to assign data version
-          break;
-        } else {
-          old_version = ATOMIC_LOAD(&min_data_version_);
-        }
-      } // end of while
-    }
-    if (OB_SUCC(ret)) {
-      min_data_version = ATOMIC_LOAD(&min_data_version_);
-    }
-  }
-  return ret;
-}
-
-int ObBasicMergeScheduler::refresh_data_version()
-{
-  int ret = OB_SUCCESS;
-  uint64_t compat_version = 0;
-  const uint64_t cached_data_version = ATOMIC_LOAD(&min_data_version_);
-  if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), compat_version))) {
-    LOG_WARN_RET(ret, "fail to get data version");
-  } else if (OB_UNLIKELY(compat_version < cached_data_version)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("data version is unexpected smaller", KR(ret), K(compat_version), K(cached_data_version));
-  } else if (compat_version > cached_data_version) {
-    ATOMIC_STORE(&min_data_version_, compat_version);
-    LOG_INFO("cache min data version", "old_data_version", cached_data_version,
-             "new_data_version", compat_version);
-  }
-  return ret;
-}
-
 void ObBasicMergeScheduler::update_frozen_version_and_merge_progress(const int64_t broadcast_version)
 {
   if (broadcast_version > get_frozen_version()) {
@@ -166,6 +124,11 @@ void ObBasicMergeScheduler::update_frozen_version_and_merge_progress(const int64
   }
 }
 
+void ObBasicMergeScheduler::update_merged_version(const int64_t merged_version)
+{
+   merged_version_ = merged_version;
+}
+
 void ObBasicMergeScheduler::update_merge_progress(const int64_t merge_version)
 {
   int ret = OB_SUCCESS;
@@ -179,7 +142,8 @@ void ObBasicMergeScheduler::update_merge_progress(const int64_t merge_version)
   const share::ObIDag::ObDagStatus dag_status = merged_version_ >= merge_version
                                               ? share::ObIDag::DAG_STATUS_FINISH
                                               : share::ObIDag::DAG_STATUS_NODE_RUNNING;
-  if (OB_FAIL(MTL(ObTenantCompactionProgressMgr *)->update_progress_status(merged_version_, dag_status))) {
+  if (merged_version_ > INIT_COMPACTION_SCN
+      && OB_FAIL(MTL(ObTenantCompactionProgressMgr *)->update_progress_status(merged_version_, dag_status))) {
     LOG_WARN("failed to finish progress", KR(ret), K(merge_version), K(merged_version_));
   }
 }

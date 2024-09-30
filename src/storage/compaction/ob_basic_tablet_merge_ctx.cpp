@@ -1299,7 +1299,7 @@ int ObBasicTabletMergeCtx::get_meta_compaction_info()
   } else if (OB_FAIL(ObMediumCompactionScheduleFunc::get_table_schema_to_merge(*schema_service,
                                                                                *tablet,
                                                                                schema_version,
-                                                                               ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_LATEST,
+                                                                               DATA_CURRENT_VERSION,
                                                                                mem_ctx_.get_allocator(),
                                                                                *storage_schema,
                                                                                is_building_index))) {

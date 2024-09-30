@@ -176,12 +176,13 @@ void ObMdsTableMergeTask::try_schedule_compaction_after_mds_mini(compaction::ObT
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = ctx.get_ls_id();
   const common::ObTabletID &tablet_id = ctx.get_tablet_id();
+  bool during_restore = false;
   if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || !tablet_handle.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(ls_id), K(tablet_id), K(tablet_handle), KPC(mds_merge_dag_));
   // when restoring, some log stream may be not ready,
   // thus the inner sql in ObTenantFreezeInfoMgr::try_update_info may timeout
-  } else if (!MTL(ObTenantTabletScheduler *)->is_restore()) {
+  } else if (OB_SUCCESS == ObBasicMergeScheduler::get_merge_scheduler()->during_restore(during_restore) && !during_restore) {
     if (0 == ctx.get_merge_info().get_merge_history().block_info_.macro_block_count_) {
       // no need to schedule mds minor merge
     } else if (OB_FAIL(ObTenantTabletScheduler::schedule_tablet_minor_merge<ObTabletMergeExecuteDag>(

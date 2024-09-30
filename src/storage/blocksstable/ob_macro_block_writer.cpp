@@ -1757,7 +1757,7 @@ int ObMacroBlockWriter::check_micro_block_need_merge(
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid micro_block", K(micro_block), K(ret));
   } else {
-    ObRowStoreType row_store_type = static_cast<ObRowStoreType>(micro_block.header_.row_store_type_);
+    const ObRowStoreType row_store_type = static_cast<ObRowStoreType>(micro_block.header_.row_store_type_);
     if (row_store_type != data_store_desc_->get_row_store_type()) {
       need_merge = true;
     } else if (micro_writer_->get_row_count() <= 0
