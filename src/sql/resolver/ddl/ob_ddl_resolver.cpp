@@ -3195,21 +3195,13 @@ int ObDDLResolver::resolve_file_format(const ParseNode *node, ObExternalFileForm
       }
       case T_COMPRESSION: {
         ObString string_v = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim();
-        ret = compression_format_from_string(string_v, format.compression_format_);
+        ret = compression_algorithm_from_string(string_v, format.csv_format_.compression_algorithm_);
         break;
       }
       default: {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid file format option", K(ret), K(node->type_));
       }
-    }
-
-    if (OB_SUCC(ret)
-        && format.format_type_ == ObExternalFileFormat::PARQUET_FORMAT
-        && format.compression_format_ != ObLoadCompressionFormat::NONE) {
-      LOG_WARN("parquet file doesn't support compression", K(format.compression_format_));
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "parquet file with compression");
     }
   }
   return ret;

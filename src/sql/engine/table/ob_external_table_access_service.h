@@ -70,7 +70,7 @@ public:
 
   int init(const common::ObString &location,
            const ObString &access_info,
-           ObLoadCompressionFormat compression_format,
+           ObCSVGeneralFormat::ObCSVCompression compression_format,
            ObIAllocator &allocator);
 
   int open(const ObString &filename);
@@ -96,7 +96,7 @@ private:
    *
    * It's no need to create new decompressor if the compression_format is the seem as decompressor's.
    */
-  int create_decompressor(ObLoadCompressionFormat compression_format);
+  int create_decompressor(ObCSVGeneralFormat::ObCSVCompression compression_format);
 
 private:
   ObExternalDataAccessDriver data_access_driver_;
@@ -113,7 +113,7 @@ private:
   ObIAllocator *allocator_ = nullptr;
 
   /// the compression format specified in `create external table` statement
-  ObLoadCompressionFormat compression_format_ = ObLoadCompressionFormat::NONE;
+  ObCSVGeneralFormat::ObCSVCompression compression_format_ = ObCSVGeneralFormat::ObCSVCompression::NONE;
 
   static const char * MEMORY_LABEL;
   static const int64_t COMPRESSED_DATA_BUFFER_SIZE;

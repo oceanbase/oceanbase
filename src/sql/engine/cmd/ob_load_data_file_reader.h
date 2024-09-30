@@ -38,14 +38,16 @@ public:
 public:
   ObLoadFileLocation file_location_;
   ObString filename_;
-  ObLoadCompressionFormat compression_format_;
+  ObCSVGeneralFormat::ObCSVCompression compression_format_;
   share::ObBackupStorageInfo access_info_;
   observer::ObIMPPacketSender *packet_handle_;
   ObSQLSessionInfo *session_;
   int64_t timeout_ts_;  // A job always has a deadline and file reading may cost a long time
 
 public:
-  static int parse_compression_format(ObString compression_name, ObString filename, ObLoadCompressionFormat &compression_format);
+  static int parse_compression_format(ObString compression_name,
+                                      ObString filename,
+                                      ObCSVGeneralFormat::ObCSVCompression &compression_format);
 };
 
 class ObFileReader
@@ -226,9 +228,11 @@ public:
   virtual int  decompress(const char *src, int64_t src_size, int64_t &consumed_size,
                           char *dest, int64_t dest_capacity, int64_t &decompressed_size) = 0;
 
-  virtual ObLoadCompressionFormat compression_format() const = 0;
+  virtual ObCSVGeneralFormat::ObCSVCompression compression_format() const = 0;
 
-  static int create(ObLoadCompressionFormat format, ObIAllocator &allocator, ObDecompressor *&decompressor);
+  static int create(ObCSVGeneralFormat::ObCSVCompression format,
+                    ObIAllocator &allocator,
+                    ObDecompressor *&decompressor);
   static void destroy(ObDecompressor *decompressor);
 
 protected:
@@ -275,7 +279,8 @@ protected:
 class ObZlibDecompressor : public ObDecompressor
 {
 public:
-  explicit ObZlibDecompressor(ObIAllocator &allocator, ObLoadCompressionFormat compression_format);
+  explicit ObZlibDecompressor(ObIAllocator &allocator,
+                              ObCSVGeneralFormat::ObCSVCompression compression_format);
   virtual ~ObZlibDecompressor();
 
   int  init() override;
@@ -284,13 +289,13 @@ public:
   int decompress(const char *src, int64_t src_size, int64_t &consumed_size,
                  char *dest, int64_t dest_capacity, int64_t &decompressed_size) override;
 
-  ObLoadCompressionFormat compression_format() const override { return compression_format_; }
+  ObCSVGeneralFormat::ObCSVCompression compression_format() const override { return compression_format_; }
 
 private:
   void *zlib_stream_ptr_    = nullptr;
   bool  zstream_need_reset_ = false; // the zstreamptr should be reset if we got Z_STREAM_END
 
-  ObLoadCompressionFormat compression_format_;
+  ObCSVGeneralFormat::ObCSVCompression compression_format_;
 };
 
 /**
@@ -308,7 +313,10 @@ public:
   int decompress(const char *src, int64_t src_size, int64_t &consumed_size,
                  char *dest, int64_t dest_capacity, int64_t &decompressed_size) override;
 
-  ObLoadCompressionFormat compression_format() const override { return ObLoadCompressionFormat::ZSTD; }
+  ObCSVGeneralFormat::ObCSVCompression compression_format() const override
+  {
+    return ObCSVGeneralFormat::ObCSVCompression::ZSTD;
+  }
 private:
   void *zstd_stream_context_ = nullptr;
 };

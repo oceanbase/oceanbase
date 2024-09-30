@@ -352,7 +352,7 @@ const int64_t ObExternalStreamFileReader::COMPRESSED_DATA_BUFFER_SIZE = 2 * 1024
 
 int ObExternalStreamFileReader::init(const common::ObString &location,
                              const ObString &access_info,
-                             ObLoadCompressionFormat compression_format,
+                             ObCSVGeneralFormat::ObCSVCompression compression_format,
                              ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
@@ -381,9 +381,9 @@ int ObExternalStreamFileReader::open(const ObString &filename)
   } else {
     is_file_end_ = false;
 
-    ObLoadCompressionFormat this_file_compression_format = compression_format_;
-    if (this_file_compression_format == ObLoadCompressionFormat::AUTO
-        && OB_FAIL(compression_format_from_suffix(filename, this_file_compression_format))) {
+    ObCSVGeneralFormat::ObCSVCompression this_file_compression_format = compression_format_;
+    if (this_file_compression_format == ObCSVGeneralFormat::ObCSVCompression::AUTO
+        && OB_FAIL(compression_algorithm_from_suffix(filename, this_file_compression_format))) {
       LOG_WARN("failed to dectect compression format from filename", K(ret), K(filename));
     }
 
@@ -528,12 +528,12 @@ int ObExternalStreamFileReader::read_compressed_data()
   return ret;
 }
 
-int ObExternalStreamFileReader::create_decompressor(ObLoadCompressionFormat compression_format)
+int ObExternalStreamFileReader::create_decompressor(ObCSVGeneralFormat::ObCSVCompression compression_format)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(allocator_)) {
     ret = OB_NOT_INIT;
-  } else if (compression_format == ObLoadCompressionFormat::NONE) {
+  } else if (compression_format == ObCSVGeneralFormat::ObCSVCompression::NONE) {
     ObDecompressor::destroy(decompressor_);
     decompressor_ = nullptr;
   } else if (OB_NOT_NULL(decompressor_) && decompressor_->compression_format() == compression_format) {
@@ -802,7 +802,7 @@ int ObCSVTableRowIterator::init(const storage::ObTableScanParam *scan_param)
     OZ (ObExternalTableRowIterator::init(scan_param));
     OZ (parser_.init(scan_param->external_file_format_.csv_format_));
     OZ (file_reader_.init(scan_param_->external_file_location_, scan_param->external_file_access_info_,
-                          scan_param_->external_file_format_.compression_format_, malloc_alloc_));
+                          scan_param_->external_file_format_.csv_format_.compression_algorithm_, malloc_alloc_));
     OZ (expand_buf());
 
     if (OB_SUCC(ret)) {
