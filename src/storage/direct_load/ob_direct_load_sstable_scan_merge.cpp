@@ -289,6 +289,7 @@ int ObDirectLoadSSTableScanMerge::get_next_row(const ObDatumRow *&datum_row)
     } else if (OB_FAIL(external_row->to_datums(datum_row_.storage_datums_, datum_row_.count_))) {
       LOG_WARN("fail to transfer datum row", KR(ret));
     } else {
+      datum_row_.row_flag_.set_flag(external_row->is_deleted() ? DF_DELETE : DF_INSERT);
       datum_row = &datum_row_;
     }
   }

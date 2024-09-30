@@ -75,7 +75,7 @@ int ObTableLoadPreSorter::init()
     LOG_WARN("fail to init task count", KR(ret), K(dump_task_count_), K(other_task_count_));
   } else if (OB_FAIL(init_mem_ctx())) {
     LOG_WARN("fail to init mem ctx", KR(ret));
-  } else if (OB_FAIL(parallel_merge_ctx_.init(store_ctx_, mem_ctx_.table_data_desc_))) {
+  } else if (OB_FAIL(parallel_merge_ctx_.init(store_ctx_, store_ctx_->data_store_table_ctx_, mem_ctx_.table_data_desc_))) {
     LOG_WARN("fail to init parallel_merge_ctx_", KR(ret));
   } else if (OB_FAIL(init_sample_task_scheduler())) {
     LOG_WARN("fail to init sample task scheduler", KR(ret));
@@ -107,14 +107,14 @@ int ObTableLoadPreSorter::init_task_count()
 int ObTableLoadPreSorter::init_mem_ctx()
 {
   int ret = OB_SUCCESS;
-  mem_ctx_.table_data_desc_ = store_ctx_->table_data_desc_;
+  mem_ctx_.table_data_desc_ = store_ctx_->data_store_table_ctx_->table_data_desc_;
   mem_ctx_.datum_utils_ = &(ctx_->schema_.datum_utils_);
   mem_ctx_.need_sort_ = ctx_->param_.need_sort_;
   mem_ctx_.column_count_ = (store_ctx_->ctx_->schema_.is_heap_table_
                               ? store_ctx_->ctx_->schema_.store_column_count_ - 1
                               : store_ctx_->ctx_->schema_.store_column_count_);
   mem_ctx_.mem_dump_task_count_ = dump_task_count_;
-  mem_ctx_.dml_row_handler_ = store_ctx_->error_row_handler_;
+  mem_ctx_.dml_row_handler_ = store_ctx_->data_store_table_ctx_->row_handler_;
   mem_ctx_.dup_action_ = ctx_->param_.dup_action_;
   mem_ctx_.file_mgr_ = store_ctx_->tmp_file_mgr_;
   if (OB_FAIL(mem_ctx_.init())) {
@@ -324,7 +324,7 @@ int ObTableLoadPreSorter::handle_parallel_merge_success()
 int ObTableLoadPreSorter::build_parallel_merge_result()
 {
   int ret = OB_SUCCESS;
-  ObTableLoadMerger *merger = store_ctx_->merger_;
+  ObTableLoadMerger *merger = store_ctx_->data_store_table_ctx_->merger_;
   const ObTableLoadParallelMergeCtx::TabletCtxMap &tablet_ctx_map =
     parallel_merge_ctx_.get_tablet_ctx_map();
   if (OB_ISNULL(merger)) {
@@ -401,19 +401,19 @@ int ObTableLoadPreSorter::build_merge_param(ObDirectLoadMergeParam& merge_param)
   merge_param.store_column_count_ = ctx_->schema_.store_column_count_;
   merge_param.fill_cg_thread_cnt_ = ctx_->param_.session_count_;
   merge_param.lob_column_idxs_ = &(ctx_->schema_.lob_column_idxs_);
-  merge_param.table_data_desc_ = store_ctx_->table_data_desc_;
+  merge_param.table_data_desc_ = store_ctx_->data_store_table_ctx_->table_data_desc_;
   merge_param.datum_utils_ = &(ctx_->schema_.datum_utils_);
   merge_param.lob_column_idxs_ = &(ctx_->schema_.lob_column_idxs_);
   merge_param.col_descs_ = &(ctx_->schema_.column_descs_);
-  merge_param.lob_id_table_data_desc_ = store_ctx_->lob_id_table_data_desc_;
+  merge_param.lob_id_table_data_desc_ = store_ctx_->data_store_table_ctx_->lob_id_table_data_desc_;
   merge_param.lob_meta_datum_utils_ = &(ctx_->schema_.lob_meta_datum_utils_);
   merge_param.lob_meta_col_descs_ = &(ctx_->schema_.lob_meta_column_descs_);
   merge_param.is_heap_table_ = ctx_->schema_.is_heap_table_;
-  merge_param.is_fast_heap_table_ = store_ctx_->is_fast_heap_table_;
+  merge_param.is_fast_heap_table_ = store_ctx_->data_store_table_ctx_->is_fast_heap_table_;
   merge_param.is_incremental_ = ObDirectLoadMethod::is_incremental(ctx_->param_.method_);
   merge_param.insert_mode_ = ctx_->param_.insert_mode_;
-  merge_param.insert_table_ctx_ = store_ctx_->insert_table_ctx_;
-  merge_param.dml_row_handler_ = store_ctx_->error_row_handler_;
+  merge_param.insert_table_ctx_ = store_ctx_->data_store_table_ctx_->insert_table_ctx_;
+  merge_param.dml_row_handler_ = store_ctx_->data_store_table_ctx_->row_handler_;
   merge_param.file_mgr_ = store_ctx_->tmp_file_mgr_;
   merge_param.trans_param_ = store_ctx_->trans_param_;
   return ret;
@@ -488,7 +488,7 @@ int ObTableLoadPreSorter::build_merge_ctx_for_multiple_mode(ObDirectLoadMergePar
       ObDirectLoadTabletMergeCtx *tablet_merge_ctx = tablet_merge_ctxs.at(i);
       if (OB_FAIL(tablet_merge_ctx->build_merge_task(
             *table_array, ctx_->schema_.column_descs_, ctx_->param_.session_count_,
-            store_ctx_->is_multiple_mode_))) {
+            store_ctx_->data_store_table_ctx_->is_multiple_mode_))) {
         LOG_WARN("fail to build merge task", KR(ret));
       }
     }
@@ -522,7 +522,7 @@ int ObTableLoadPreSorter::build_merge_ctx_for_non_multiple_mode(ObDirectLoadMerg
     if (OB_SUCC(ret)) {
       if (OB_FAIL(tablet_merge_ctx->build_merge_task(
             *table_array, ctx_->schema_.column_descs_, ctx_->param_.session_count_,
-            store_ctx_->is_multiple_mode_))) {
+            store_ctx_->data_store_table_ctx_->is_multiple_mode_))) {
         LOG_WARN("fail to build merge task", KR(ret));
       }
     }
@@ -537,7 +537,7 @@ int ObTableLoadPreSorter::build_merge_ctx()
 {
   int ret = OB_SUCCESS;
   ObDirectLoadMergeParam merge_param;
-  ObTableLoadMerger *merger = store_ctx_->merger_;
+  ObTableLoadMerger *merger = store_ctx_->data_store_table_ctx_->merger_;
   if (OB_ISNULL(merger)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("merger shoult not be nullptr", KR(ret));
@@ -545,9 +545,9 @@ int ObTableLoadPreSorter::build_merge_ctx()
     LOG_WARN("fail to build merge param", KR(ret));
   } else {
     ObTableLoadTableCompactResult &result = merger->table_compact_ctx_.result_;
-    if (OB_FAIL(merger->merge_ctx_.init(ctx_, merge_param, store_ctx_->ls_partition_ids_))) {
+    if (OB_FAIL(merger->merge_ctx_.init(ctx_, merge_param, store_ctx_->data_store_table_ctx_->ls_partition_ids_))) {
       LOG_WARN("fail to init merge ctx", KR(ret));
-    } else if (store_ctx_->is_multiple_mode_) {
+    } else if (store_ctx_->data_store_table_ctx_->is_multiple_mode_) {
       if (OB_FAIL(build_merge_ctx_for_multiple_mode(merge_param, merger, result))) {
         LOG_WARN("fail to build merge ctx for multiple mode", KR(ret));
       }
@@ -567,7 +567,7 @@ int ObTableLoadPreSorter::build_merge_ctx()
 int ObTableLoadPreSorter::start_merge()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(store_ctx_->merger_->start_merge())) {
+  if (OB_FAIL(store_ctx_->data_store_table_ctx_->merger_->start_merge())) {
     LOG_WARN("fail to start merge", KR(ret));
   }
   return ret;

@@ -17,6 +17,7 @@
 #include "observer/table_load/ob_table_load_store_trans.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "observer/table_load/ob_table_load_trans_store.h"
+#include "observer/table_load/ob_table_load_store_table_ctx.h"
 
 namespace oceanbase
 {
@@ -130,8 +131,8 @@ int ObTableLoadStoreTransPXWriter::check_tablet(const ObTabletID &tablet_id)
     LOG_WARN("unexpected store ctx is null", KR(ret), KPC(this));
   } else {
     bool tablet_found = false;
-    for (int64_t i = 0; i < store_ctx_->ls_partition_ids_.count(); ++i) {
-      const ObTableLoadLSIdAndPartitionId &ls_part_id = store_ctx_->ls_partition_ids_.at(i);
+    for (int64_t i = 0; i < store_ctx_->data_store_table_ctx_->ls_partition_ids_.count(); ++i) {
+      const ObTableLoadLSIdAndPartitionId &ls_part_id = store_ctx_->data_store_table_ctx_->ls_partition_ids_.at(i);
       if (ls_part_id.part_tablet_id_.tablet_id_ == tablet_id) {
         tablet_found = true;
         break;
@@ -139,7 +140,7 @@ int ObTableLoadStoreTransPXWriter::check_tablet(const ObTabletID &tablet_id)
     }
     if (OB_UNLIKELY(!tablet_found)) {
       ret = OB_TABLET_NOT_EXIST;
-      LOG_WARN("tablet id not found", KR(ret), K(tablet_id), K(store_ctx_->ls_partition_ids_));
+      LOG_WARN("tablet id not found", KR(ret), K(tablet_id), K(store_ctx_->data_store_table_ctx_->ls_partition_ids_));
     }
   }
   return ret;

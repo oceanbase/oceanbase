@@ -48,8 +48,8 @@ bool ObDirectLoadConflictCheckParam::is_valid() const
 {
   return tablet_id_.is_valid() && store_column_count_ > 0 && table_data_desc_.is_valid() &&
          nullptr != origin_table_ && nullptr != range_ && range_->is_valid() &&
-         nullptr != col_descs_ && nullptr != lob_column_idxs_ &&  nullptr != builder_ &&
-         nullptr != datum_utils_ && lob_meta_datum_utils_ != nullptr &&
+         nullptr != col_descs_ && nullptr != lob_column_idxs_ && nullptr != builder_ &&
+         nullptr != datum_utils_ && nullptr != lob_meta_datum_utils_ &&
          nullptr != dml_row_handler_ &&
          (lob_column_idxs_->empty() || tablet_id_in_lob_id_.is_valid());
 }
@@ -177,7 +177,7 @@ int ObDirectLoadConflictCheck::handle_get_next_row_finish(
   }
   if (OB_SUCC(ret)) {
     if (cmp_ret == 0) {
-      if (OB_FAIL(param_.dml_row_handler_->handle_update_row(*origin_row_, *load_row, datum_row))) {
+      if (OB_FAIL(param_.dml_row_handler_->handle_update_row(param_.tablet_id_, *origin_row_, *load_row, datum_row))) {
         LOG_WARN("fail to handle update row", KR(ret), KP(origin_row_), KP(load_row));
       } else {
         if (datum_row == load_row) {
@@ -191,12 +191,17 @@ int ObDirectLoadConflictCheck::handle_get_next_row_finish(
       origin_row_ = nullptr;
     } else {
       datum_row = load_row;
-      if (OB_FAIL(param_.dml_row_handler_->handle_insert_row(*datum_row))) {
-        LOG_WARN("fail to handle insert row", KR(ret), KP(datum_row));
+      if (datum_row->row_flag_.is_delete()) {
+        if (OB_FAIL(param_.dml_row_handler_->handle_delete_row(param_.tablet_id_, *datum_row))) {
+          LOG_WARN("fail to handle insert row", KR(ret), KP(datum_row));
+        }
+      } else {
+        if (OB_FAIL(param_.dml_row_handler_->handle_insert_row(param_.tablet_id_, *datum_row))) {
+          LOG_WARN("fail to handle insert row", KR(ret), KP(datum_row));
+        }
       }
     }
   }
-
   return ret;
 }
 

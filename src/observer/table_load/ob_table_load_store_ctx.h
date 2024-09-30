@@ -46,11 +46,13 @@ class ObTableLoadTransStore;
 class ObITableLoadTaskScheduler;
 class ObTableLoadMerger;
 class ObTableLoadErrorRowHandler;
+class ObTableLoadStoreTableCtx;
+class ObTableLoadMergerManager;
+class ObTableLoadOpenInsertTableCtxManager;
 class ObTableLoadPreSorter;
 
 class ObTableLoadStoreCtx
 {
-static const int64_t MACRO_BLOCK_WRITER_MEM_SIZE = 10 * 1024LL * 1024LL;
 public:
   ObTableLoadStoreCtx(ObTableLoadTableCtx *ctx);
   ~ObTableLoadStoreCtx();
@@ -135,32 +137,29 @@ private:
   int alloc_trans_ctx(const table::ObTableLoadTransId &trans_id, ObTableLoadTransCtx *&trans_ctx);
   int alloc_trans(const table::ObTableLoadTransId &trans_id, ObTableLoadStoreTrans *&trans);
   int init_session_ctx_array();
+  int init_store_table_ctxs(
+    const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> &partition_id_array,
+    const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> &target_partition_id_array);
   int init_trans_param();
   int generate_autoinc_params(share::AutoincParam &autoinc_param);
   int init_sequence();
 public:
   int commit_autoinc_value();
-  int get_next_insert_tablet_ctx(ObTabletID &tablet_id);
+  int get_next_insert_tablet_ctx(ObDirectLoadInsertTabletContext *&tablet_ctx);
   void handle_open_insert_tablet_ctx_finish(bool &is_finish);
 public:
-  ObTableLoadTableCtx * const ctx_;
+  ObTableLoadTableCtx * ctx_;
   common::ObArenaAllocator allocator_;
-  common::ObArray<table::ObTableLoadLSIdAndPartitionId> ls_partition_ids_;
-  common::ObArray<table::ObTableLoadLSIdAndPartitionId> target_ls_partition_ids_;
-  storage::ObDirectLoadTableDataDesc table_data_desc_;
-  storage::ObDirectLoadTableDataDesc lob_id_table_data_desc_;
   storage::ObDirectLoadTransParam trans_param_;
   table::ObTableLoadResultInfo result_info_;
   ObITableLoadTaskScheduler *task_scheduler_;
-  ObTableLoadMerger *merger_;
-  storage::ObDirectLoadInsertTableContext *insert_table_ctx_;
-  int64_t next_tablet_idx_;
-  int64_t opened_insert_tablet_count_;
-  bool is_multiple_mode_;
-  bool is_fast_heap_table_;
+  ObTableLoadErrorRowHandler *error_row_handler_;
+  hash::ObHashMap<ObTableID,  ObTableLoadStoreTableCtx* > index_store_table_ctx_map_;
+  ObTableLoadStoreTableCtx *data_store_table_ctx_;
+  ObTableLoadMergerManager *merger_manager_;
+  ObTableLoadOpenInsertTableCtxManager *open_insert_tablet_ctx_manager_;
   int64_t px_writer_count_;
   storage::ObDirectLoadTmpFileManager *tmp_file_mgr_;
-  ObTableLoadErrorRowHandler *error_row_handler_;
   share::schema::ObSequenceSchema sequence_schema_;
   uint64_t next_session_id_ CACHE_ALIGNED;
   struct SessionContext

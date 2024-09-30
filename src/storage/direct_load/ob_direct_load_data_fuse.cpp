@@ -228,8 +228,14 @@ int ObDirectLoadDataFuse::inner_get_next_row(const ObDatumRow *&datum_row)
       if (OB_FAIL(rows_merger_.pop())) {
         LOG_WARN("fail to pop item", KR(ret));
       } else if (item->iter_idx_ == LOAD_IDX) {
-        if (OB_FAIL(param_.dml_row_handler_->handle_insert_row(*datum_row))) {
-          LOG_WARN("fail to handle insert row", KR(ret), KPC(datum_row));
+        if (datum_row->row_flag_.is_delete()) {
+          if (OB_FAIL(param_.dml_row_handler_->handle_delete_row(param_.tablet_id_, *datum_row))) {
+            LOG_WARN("fail to handle insert row", KR(ret), KP(datum_row));
+          }
+        } else {
+          if (OB_FAIL(param_.dml_row_handler_->handle_insert_row(param_.tablet_id_, *datum_row))) {
+            LOG_WARN("fail to handle insert row", KR(ret), KP(datum_row));
+          }
         }
       }
     }
@@ -253,7 +259,7 @@ int ObDirectLoadDataFuse::inner_get_next_row(const ObDatumRow *&datum_row)
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(param_.dml_row_handler_->handle_update_row(*old_row, *new_row, datum_row))) {
+      if (OB_FAIL(param_.dml_row_handler_->handle_update_row(param_.tablet_id_, *old_row, *new_row, datum_row))) {
         LOG_WARN("fail to handle update row", KR(ret), KPC(old_row), KPC(new_row));
       }
     }

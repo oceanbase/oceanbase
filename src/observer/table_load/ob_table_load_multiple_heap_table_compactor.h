@@ -72,6 +72,7 @@ private:
   int create_heap_table_sorter(ObDirectLoadMultipleHeapTableSorter *&heap_table_sorter);
 private:
   ObTableLoadStoreCtx *store_ctx_;
+  ObTableLoadStoreTableCtx *store_table_ctx_;
   const ObTableLoadParam *param_;
   common::ObArenaAllocator allocator_; //需要最后析构
   int64_t finish_task_count_ CACHE_ALIGNED;

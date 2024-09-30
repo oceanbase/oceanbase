@@ -295,6 +295,7 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
       } else {
         bool include_cur_addr = false;
         bool need_sort = ctx_->param_.need_sort_;
+        bool main_need_sort = ctx_->param_.need_sort_;
         int64_t total_partitions = 0;
         ObArray<int64_t> partitions;
         int64_t store_server_count = all_leader_info_array.count();
@@ -374,41 +375,47 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
               // 直接写宏块需要的内存，对于非排序模式，每个分区各自写宏块，所以要乘分区数
               min_unsort_memory = MACROBLOCK_BUFFER_SIZE * partitions[i] * write_session_count;
               if (min_unsort_memory <= memory_limit) {
-                need_sort = false;
+                main_need_sort = false;
                 unit.memory_size_ = min_unsort_memory;
               } else {
-                need_sort = ctx_->param_.need_sort_; // allow forced non-sorting
+                main_need_sort = ctx_->param_.need_sort_; // allow forced non-sorting
                 unit.memory_size_ = MIN(ObTableLoadAssignedMemoryManager::MIN_SORT_MEMORY_PER_TASK, memory_limit);
               }
             } else {
               // 取写宏块或写临时文件需要内存的最小值，对于非排序模式，每个分区各自写临时文件，所以要乘分区数
               min_unsort_memory = SSTABLE_BUFFER_SIZE * partitions[i] * unit.thread_count_;
-              if (need_sort) {
+              if (main_need_sort) {
                 unit.memory_size_ = MIN(unit.thread_count_ * ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT * 4, memory_limit);
               } else {
                 // hint指定不排序，如果不排序内存大于内存上限，要改成走排序模式，一般是分区数较大的场景
                 if (min_unsort_memory < memory_limit) {
                   unit.memory_size_ = MAX(min_unsort_memory, MACROBLOCK_BUFFER_SIZE * write_session_count);
                 } else {
-                  need_sort = true;
+                  main_need_sort = true;
                   unit.memory_size_ = MIN(unit.thread_count_ * ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT * 4, memory_limit);
                 }
               }
             }
-            if (need_sort) {
-              // 只要有一个节点走排序模式，所有节点统一走排序模式
+
+            if (main_need_sort) {
               break;
             }
           }
-          if (need_sort) {
-            // 排序模式，所有节点都分配固定的最小排序内存
+          ObSchemaGetterGuard schema_guard;
+          const ObTableSchema *table_schema = nullptr;
+          if (OB_FAIL(ObTableLoadSchema::get_table_schema(tenant_id, ctx_->ddl_param_.dest_table_id_, schema_guard, table_schema))) {
+              LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(ctx_->ddl_param_.dest_table_id_));
+          } else if (main_need_sort || (ObDirectLoadMethod::is_incremental(ctx_->param_.method_) &&
+                                        table_schema->get_simple_index_infos().count() > 0)) {
+            need_sort = true;
             for (int64_t i = 0; i < store_server_count; i++) {
               ObDirectLoadResourceUnit &unit = apply_arg.apply_array_[i];
               unit.memory_size_ = MIN(unit.thread_count_ * ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT * 4, memory_limit);
             }
+          } else {
+            need_sort = false;
           }
         }
-
         if (OB_SUCC(ret)) {
           ObDirectLoadResourceOpRes apply_res;
           if (OB_FAIL(ObTableLoadResourceService::apply_resource(apply_arg, apply_res))) {
@@ -425,8 +432,8 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
             ctx_->param_.session_count_ = coordinator_session_count;
             ctx_->param_.write_session_count_ = write_session_count;
             ctx_->param_.exe_mode_ = (ctx_->schema_.is_heap_table_ ?
-                (need_sort ? ObTableLoadExeMode::MULTIPLE_HEAP_TABLE_COMPACT : ObTableLoadExeMode::FAST_HEAP_TABLE) :
-                (need_sort ? ObTableLoadExeMode::MEM_COMPACT : ObTableLoadExeMode::GENERAL_TABLE_COMPACT));
+                (main_need_sort ? ObTableLoadExeMode::MULTIPLE_HEAP_TABLE_COMPACT : ObTableLoadExeMode::FAST_HEAP_TABLE) :
+                (main_need_sort ? ObTableLoadExeMode::MEM_COMPACT : ObTableLoadExeMode::GENERAL_TABLE_COMPACT));
             ctx_->job_stat_->parallel_ = coordinator_session_count;
             if (OB_FAIL(ObTableLoadService::add_assigned_task(apply_arg))) {
               LOG_WARN("fail to add_assigned_task", KR(ret));
@@ -1709,7 +1716,7 @@ public:
         LOG_WARN("column count doesn't match value count", KR(ret), K(src_obj_row),
                  K(ctx_->param_.column_count_));
         ObNewRow new_row(src_obj_row.cells_, src_obj_row.count_);
-        if (OB_FAIL(error_row_handler->handle_error_row(ret, new_row))) {
+        if (OB_FAIL(error_row_handler->handle_error_row(ret))) {
           LOG_WARN("fail to handle error row", KR(ret));
         }
       } else if (OB_FAIL(src_obj_row.project(idx_array, out_obj_row))) {

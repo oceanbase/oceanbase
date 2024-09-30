@@ -82,7 +82,7 @@ int ObTableLoadPreSortWriter::write(int32_t session_id,
       if (OB_ISNULL(store_writer_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("store writer is nullptr", KR(ret));
-      } else if (OB_FAIL(datum_row.init(pre_sorter_->store_ctx_->table_data_desc_.column_count_))) {
+      } else if (OB_FAIL(datum_row.init(pre_sorter_->store_ctx_->data_store_table_ctx_->table_data_desc_.column_count_))) {
         LOG_WARN("fail to init datum row", KR(ret));
       } else if (OB_FAIL(store_writer_->cast_row(session_id, new_row, datum_row))) {
         if (OB_UNLIKELY(OB_EAGAIN != ret)) {
@@ -92,8 +92,9 @@ int ObTableLoadPreSortWriter::write(int32_t session_id,
         }
       } else if (OB_FAIL(external_row.external_row_.from_datums(datum_row.storage_datums_,
                                                                 datum_row.count_,
-                                                                pre_sorter_->store_ctx_->table_data_desc_.rowkey_column_num_,
-                                                                row.obj_row_.seq_no_))) {
+                                                                pre_sorter_->store_ctx_->data_store_table_ctx_->table_data_desc_.rowkey_column_num_,
+                                                                row.obj_row_.seq_no_,
+                                                                false))) {
         LOG_WARN("fail to cast to external row", KR(ret));
       } else if (OB_FAIL(append_row(external_row))) {
         LOG_WARN("fail to append row", KR(ret));
@@ -118,8 +119,9 @@ int ObTableLoadPreSortWriter::px_write(const ObTabletID &tablet_id,
     // do nothing
   } else if (OB_FAIL(external_row.external_row_.from_datums(row.storage_datums_,
                                                             row.count_,
-                                                            pre_sorter_->store_ctx_->table_data_desc_.rowkey_column_num_,
-                                                            seq_no))) {
+                                                            pre_sorter_->store_ctx_->data_store_table_ctx_->table_data_desc_.rowkey_column_num_,
+                                                            seq_no,
+                                                            false))) {
     LOG_WARN("fail to cast to external row", KR(ret));
   } else if (OB_FAIL(append_row(external_row))) {
     LOG_WARN("fail to append row", KR(ret));

@@ -286,6 +286,7 @@ int ObDirectLoadMultipleSSTableScanMerge::get_next_row(const ObDatumRow *&datum_
                  multiple_datum_row->to_datums(datum_row_.storage_datums_, datum_row_.count_))) {
       LOG_WARN("fail to transfer datum row", KR(ret));
     } else {
+      datum_row_.row_flag_.set_flag(multiple_datum_row->is_deleted_? ObDmlFlag::DF_DELETE : ObDmlFlag::DF_INSERT);
       datum_row = &datum_row_;
     }
   }

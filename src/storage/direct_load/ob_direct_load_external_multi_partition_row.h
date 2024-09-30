@@ -63,6 +63,7 @@ public:
   common::ObTabletID tablet_id_;
   ObDirectLoadConstDatumArray rowkey_datum_array_;
   table::ObTableLoadSequenceNo seq_no_;
+  bool is_deleted_;
   int64_t buf_size_;
   const char *buf_;
 };

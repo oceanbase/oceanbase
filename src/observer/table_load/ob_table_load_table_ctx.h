@@ -83,7 +83,7 @@ private:
 public:
   ObTableLoadParam param_;
   ObTableLoadDDLParam ddl_param_;
-  ObTableLoadSchema schema_;
+  ObTableLoadSchema schema_; // origin table load schema
   ObTableLoadCoordinatorCtx *coordinator_ctx_; // 只在控制节点构造
   ObTableLoadStoreCtx *store_ctx_; // 只在数据节点构造
   sql::ObLoadDataGID gid_;

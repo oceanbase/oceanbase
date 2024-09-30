@@ -220,7 +220,7 @@ int ObDirectLoadFastHeapTableBuilder::append_row(const ObTabletID &tablet_id,
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(param_.dml_row_handler_->handle_insert_row(datum_row_))) {
+      if (OB_FAIL(param_.dml_row_handler_->handle_insert_row_with_multi_version(param_.tablet_id_, datum_row_))) {
         LOG_WARN("fail to handle insert row", KR(ret), K_(datum_row));
       }
     }

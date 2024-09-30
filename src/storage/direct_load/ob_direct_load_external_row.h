@@ -32,20 +32,24 @@ public:
   int deep_copy(const ObDirectLoadExternalRow &src, char *buf, const int64_t len, int64_t &pos);
   // not deep copy
   int from_datums(blocksstable::ObStorageDatum *datums, int64_t column_count,
-                  int64_t rowkey_column_count, const table::ObTableLoadSequenceNo &seq_no);
+                  int64_t rowkey_column_count, const table::ObTableLoadSequenceNo &seq_no,
+                  const bool is_deleted);
   int to_datums(blocksstable::ObStorageDatum *datums, int64_t column_count) const;
   int get_rowkey(blocksstable::ObDatumRowkey &rowkey) const;
   bool is_valid() const
   {
     return rowkey_datum_array_.is_valid() && seq_no_.is_valid() && buf_size_ > 0 && nullptr != buf_;
   }
+
+  bool is_deleted() const { return is_deleted_; }
   OB_INLINE int64_t get_raw_size() const { return buf_size_; }
-  TO_STRING_KV(K_(rowkey_datum_array), K_(seq_no), K_(buf_size), KP_(buf));
+  TO_STRING_KV(K_(rowkey_datum_array), K_(seq_no), K_(is_deleted), K_(buf_size), KP_(buf));
 
 public:
   common::ObArenaAllocator allocator_;
   ObDirectLoadDatumArray rowkey_datum_array_;
   table::ObTableLoadSequenceNo seq_no_;
+  bool is_deleted_;//default is false
   int64_t buf_size_;
   const char *buf_;
 };
