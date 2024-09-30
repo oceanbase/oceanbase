@@ -12877,7 +12877,9 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
     } else if (OB_FAIL(new_table_schema.assign(*orig_table_schema))) {
       LOG_WARN("fail to assign schema", K(ret));
     } else if (OB_FAIL(delete_unused_columns_from_schema(*orig_table_schema,
-        false/*update_all_column_info*/, nullptr/*ddl_operator*/, nullptr/*trans*/, new_table_schema))) {
+        false/*need_remove_orig_table_unused_column, no need to remove unused columns from inner table since it is a new table.*/,
+        true/*need_redistribute_column_id, to redistribute columns id and index tables will be rebuilt with new column_id*/,
+        nullptr/*ddl_operator*/, nullptr/*trans*/, new_table_schema))) {
       LOG_WARN("remove all unused columns internally failed", K(ret));
     } else {
       ObDDLSQLTransaction trans(schema_service_);
@@ -16210,7 +16212,8 @@ int ObDDLService::is_foreign_key_name_prefix_match(const ObForeignKeyInfo &origi
 
 int ObDDLService::delete_unused_columns_from_schema(
     const ObTableSchema &orig_table_schema,
-    const bool update_all_column_info,
+    const bool need_remove_orig_table_unused_column,
+    const bool need_redistribute_column_id,
     ObDDLOperator *ddl_operator,
     common::ObMySQLTransaction *trans,
     ObTableSchema &new_table_schema)
@@ -16220,7 +16223,7 @@ int ObDDLService::delete_unused_columns_from_schema(
   ObArray<uint64_t> unused_column_ids;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check inner stat failed", K(ret));
-  } else if (OB_UNLIKELY(update_all_column_info && (nullptr == ddl_operator || nullptr == trans))) {
+  } else if (OB_UNLIKELY(need_remove_orig_table_unused_column && (nullptr == ddl_operator || nullptr == trans))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), KP(ddl_operator), KP(trans));
   } else if (OB_FAIL(orig_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
@@ -16232,15 +16235,15 @@ int ObDDLService::delete_unused_columns_from_schema(
       const ObColumnSchemaV2 *unused_col_schema = orig_table_schema.get_column_schema(unused_column_ids.at(i));
       if (OB_ISNULL(unused_col_schema)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unused column is null", KR(ret), "column_id", unused_column_ids.at(i));
-      } else if (!update_all_column_info) {
+        LOG_WARN("unused column is null", K(ret), "column_id", unused_column_ids.at(i));
+      } else if (!need_remove_orig_table_unused_column) { // update new table in memory.
         // Operation on the new table: remove column from memory.
         if (unused_col_schema->is_udt_hidden_column() && is_lob_storage(unused_col_schema->get_data_type())) {
           // hidden lob of udt column will be dropped when dropping udt column.
         } else if (OB_FAIL(drop_column_update_new_table(unused_col_schema->get_column_name_str(), new_table_schema))) {
           LOG_WARN("drop unused column failed", K(ret), KPC(unused_col_schema));
         }
-      } else {
+      } else { // update new table in inner table.
         // Operation on the original table: remove column from memory and inner table.
         if (OB_FAIL(ddl_operator->delete_single_column(*trans, new_table_schema.get_schema_version(),
           new_table_schema, unused_col_schema->get_column_name_str()))) {
@@ -16249,7 +16252,7 @@ int ObDDLService::delete_unused_columns_from_schema(
       }
     }
   }
-  if (OB_SUCC(ret) && !update_all_column_info && unused_column_ids.count() > 0) {
+  if (OB_SUCC(ret) && need_redistribute_column_id && unused_column_ids.count() > 0) {
     if (OB_FAIL(redistribute_column_ids(new_table_schema))) {
       LOG_WARN("redistribute column id failed", K(ret));
     }
@@ -19907,7 +19910,9 @@ int ObDDLService::new_truncate_table_in_trans(const ObIArray<const ObTableSchema
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("gen schema array count is less than 3", KR(ret), K(tenant_id), K(table_name), K(task_id));
     } else if (OB_FAIL(delete_unused_columns_from_schema(*orig_table_schemas.at(0),
-      true/*update_all_column_info*/, &ddl_operator, &trans, *new_table_schemas.at(0)))) {
+      true/*need_remove_orig_table_unused_column, remove unused column from inner table.*/,
+      false/*need_redistribute_column_id, to avoid column_id mismatched between data table and index ones.*/,
+      &ddl_operator, &trans, *new_table_schemas.at(0)))) {
       LOG_WARN("delete unused columns from schema internally failed", K(ret), KPC(orig_table_schemas.at(0)));
     } else {
       int gen_array_count = gen_schema_version_array.count();
@@ -20502,7 +20507,9 @@ int ObDDLService::truncate_table(const ObTruncateTableArg &arg,
           if (OB_FAIL(new_table_schema.assign(*orig_table_schema))) {
             LOG_WARN("fail to assign schema", K(ret));
           } else if (OB_FAIL(delete_unused_columns_from_schema(*orig_table_schema,
-            false/*update_all_column_info*/, nullptr/*ddl_operator*/, nullptr/*trans*/, new_table_schema))) {
+            false/*need_remove_orig_table_unused_column, no need to remove unused column from inner table since it is a new table.*/,
+            false/*need_redistribute_column_id, to avoid column_id mismatched between data table and index ones.*/,
+            nullptr/*ddl_operator*/, nullptr/*trans*/, new_table_schema))) {
             LOG_WARN("delete unused columns from schema failed", K(ret));
           } else if (OB_FAIL(schema_service->fetch_new_table_id(tenant_id, new_table_id))) {
             LOG_WARN("failed to fetch_new_table_id", K(ret));
@@ -20848,7 +20855,9 @@ int ObDDLService::rebuild_table_schema_with_new_id(const ObTableSchema &orig_tab
   if (OB_FAIL(new_table_schema.assign(orig_table_schema))) {
     LOG_WARN("fail to assign schema", K(ret));
   } else if (OB_FAIL(delete_unused_columns_from_schema(orig_table_schema,
-      false/*update_all_column_info*/, nullptr/*ddl_operator*/, nullptr/*trans*/, new_table_schema))) {
+      false/*need_remove_orig_table_unused_column, no need to remove unused columns from inner table since it is a new table.*/,
+      false/*need_redistribute_column_id, to avoid column_id mismatched between data table and index ones.*/,
+      nullptr/*ddl_operator*/, nullptr/*trans*/, new_table_schema))) {
     LOG_WARN("remove all unused columns internally failed", K(ret));
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
     LOG_WARN("fail to get schema guard with version in inner table", K(ret), K(tenant_id));

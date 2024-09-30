@@ -1542,9 +1542,22 @@ private:
       share::schema::ObSchemaGetterGuard &schema_guard,
       common::ObMySQLTransaction &trans,
       common::ObIAllocator &allocator);
+
+  // delete unused columns from inner table or memory.
+  // @param [in] orig_table_schema.
+  // @param [in] need_remove_orig_table_unused_column, to decide whether to remove origin table's unused columns.
+  //             = true for new_truncate whose table id will not be changed.
+  //             = false for old truncate table, offline ddl.
+  // @param [in] need_redistribute_column_id, to decide whether to redistribute column ids.
+  //             = true for offline_ddl.
+  //             = false for old truncate table, new truncate table.
+  // @param [in] ddl_operator, the operator to remove unused columns from inner table, valid when need_remove_orig_table_unused_column = true.
+  // @param [in] trans, the operator to remove unused columns from inner table, valid when need_remove_orig_table_unused_column = true.
+  // @param [out] new_table_schema, exclude unused columns compared to the orig_table_schema.
   int delete_unused_columns_from_schema(
       const share::schema::ObTableSchema &orig_table_schema,
-      const bool update_all_column_info,
+      const bool need_remove_orig_table_unused_column,
+      const bool need_redistribute_column_id,
       ObDDLOperator *ddl_operator,
       common::ObMySQLTransaction *trans,
       share::schema::ObTableSchema &new_table_schema);
