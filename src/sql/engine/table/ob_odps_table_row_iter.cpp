@@ -231,7 +231,9 @@ int ObODPSTableRowIterator::next_task()
         std::string download_id("");
         std::string schema(odps_format_.schema_.ptr(), odps_format_.schema_.length());
         std::vector<std::string> column_names;
-        if (OB_ISNULL(sqc) &&
+        if (part_spec.compare("#######DUMMY_FILE#######") == 0) {
+          ret = OB_ITER_END;
+        } else if (OB_ISNULL(sqc) &&
             OB_ISNULL((state_.download_handle_ = tunnel_.CreateDownload(project,
                                                                         table,
                                                                         std_part_spec,
