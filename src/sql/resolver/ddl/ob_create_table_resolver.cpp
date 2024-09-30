@@ -3540,6 +3540,13 @@ int ObCreateTableResolver::check_max_row_data_length(const ObTableSchema &table_
         LOG_USER_ERROR(OB_ERR_TOO_LONG_COLUMN_LENGTH, column->get_column_name(),
             ObAccuracy::MAX_ACCURACY2[is_oracle_mode][column->get_data_type()].get_length());
       } else {
+        if (length <= 0) {  // Temporary workaround only for array/vector/roaringbitmap types.
+          if (column->is_roaringbitmap()) {
+            length = ObAccuracy::DDL_DEFAULT_ACCURACY[ObRoaringBitmapType].get_length();
+          } else if (column->is_collection()) {
+            length = ObAccuracy::DDL_DEFAULT_ACCURACY[ObCollectionSQLType].get_length();
+          }
+        }
         length = min(length, max(table_schema.get_lob_inrow_threshold(), OB_MAX_LOB_HANDLE_LENGTH));
       }
     }
