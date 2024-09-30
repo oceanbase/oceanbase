@@ -317,7 +317,8 @@ int ObDirectLoadOptimizer::check_support_direct_load(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get schema guard", K(ret), KP(sql_ctx));
   } else {
-    if (direct_load_optimizer_ctx_.is_insert_overwrite() || direct_load_optimizer_ctx_.is_full_direct_load()) {
+    // insert overwrite和insert into select全量不支持autocommit=false和session在事务内
+    if (direct_load_optimizer_ctx_.is_insert_overwrite() || (direct_load_optimizer_ctx_.is_insert_into() && direct_load_optimizer_ctx_.is_full_direct_load())) {
       bool auto_commit = false;
       ObSQLSessionInfo *session_info = nullptr;
       if (OB_ISNULL(session_info = exec_ctx->get_my_session())) {

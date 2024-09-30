@@ -45,6 +45,7 @@ public:
   bool is_inc_direct_load() const { return load_method_ == ObDirectLoadMethod::INCREMENTAL && insert_mode_ == ObDirectLoadInsertMode::NORMAL; }
   bool is_inc_replace_direct_load() const { return load_method_ == ObDirectLoadMethod::INCREMENTAL && insert_mode_ == ObDirectLoadInsertMode::INC_REPLACE; }
   bool is_insert_overwrite() const { return ObDirectLoadMode::is_insert_overwrite(load_mode_); }
+  bool is_insert_into() const { return load_mode_ == ObDirectLoadMode::INSERT_INTO; }
   void reset();
   TO_STRING_KV(K_(table_id), K_(load_method), K_(insert_mode), K_(load_mode), K_(dup_action),
                K_(max_error_row_count), K_(need_sort), K_(can_use_direct_load), K_(use_direct_load), K_(is_optimized));
