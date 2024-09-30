@@ -927,8 +927,7 @@ bool ObPartitionMicroMergeIter::inner_check(const ObMergeParameter &merge_param)
   if (OB_UNLIKELY(!is_major_or_meta_merge_type(static_param.get_merge_type()))) {
     bret = false;
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "Unexpected merge type for major micro merge iter", K(bret), K(merge_param));
-  } else if (OB_UNLIKELY(NULL == table_ || !table_->is_sstable()
-    || merge_param.static_param_.get_merge_level_for_sstable(*static_cast<ObSSTable *>(table_)) != MICRO_BLOCK_MERGE_LEVEL)) {
+   } else if (OB_UNLIKELY(static_param.merge_level_ != MICRO_BLOCK_MERGE_LEVEL)) {
     bret = false;
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "Unexpected merge level for major micro merge iter", K(bret), K(merge_param));
   } else if (OB_UNLIKELY(static_param.is_full_merge_)) {

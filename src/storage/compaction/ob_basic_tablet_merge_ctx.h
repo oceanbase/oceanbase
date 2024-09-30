@@ -53,7 +53,7 @@ struct ObStaticMergeParam final
     is_full_merge_ = is_full_merge;
     merge_level_ = MACRO_BLOCK_MERGE_LEVEL;
   }
-  ObMergeLevel get_merge_level_for_sstable(const ObSSTable &sstable) const;
+  ObMergeLevel get_merge_level_for_sstable(const ObSSTable &sstable) const; // unused
 private:
   int init_multi_version_column_descs();
 
