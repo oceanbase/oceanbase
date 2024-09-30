@@ -348,6 +348,7 @@ int ObDASVIdMergeIter::build_rowkey_vid_range()
       data_table_iter_->get_scan_param().sample_info_.method_ = common::SampleInfo::ROW_SAMPLE;
       rowkey_vid_scan_param_.sample_info_.method_ = common::SampleInfo::ROW_SAMPLE;
     }
+    rowkey_vid_scan_param_.scan_flag_.scan_order_ = data_table_iter_->get_scan_param().scan_flag_.scan_order_;
   }
   LOG_INFO("build rowkey vid range", K(ret), K(need_filter_rowkey_vid_), K(rowkey_vid_scan_param_.key_ranges_),
       K(rowkey_vid_scan_param_.ss_key_ranges_), K(rowkey_vid_scan_param_.sample_info_));
@@ -522,12 +523,12 @@ int ObDASVIdMergeIter::sorted_merge_join_rows(int64_t &count, int64_t capacity)
           rowkeys_in_data_table))) {
     LOG_WARN("fail to get data table rowkeys", K(ret), K(data_table_cnt));
   } else {
-    const int64_t batch_size = is_iter_end ? capacity : data_table_cnt;
     int64_t remain_cnt = data_table_cnt;
     int64_t rowkey_vid_cnt = 0;
     while (OB_SUCC(ret) && remain_cnt > 0) {
       common::ObArray<common::ObRowkey> rowkeys_in_rowkey_vid;
       common::ObArray<int64_t> vid_ids_in_rowkey_vid;
+      const int64_t batch_size = is_iter_end ? capacity : remain_cnt;
       if (OB_FAIL(rowkey_vid_iter_->get_next_rows(rowkey_vid_cnt, batch_size)) && OB_ITER_END != ret) {
         LOG_WARN("fail to get next rowkey vid rows", K(ret), K(remain_cnt),  K(batch_size), K(rowkey_vid_iter_));
       } else if (OB_UNLIKELY(OB_ITER_END == ret && (!is_iter_end || 0 == rowkey_vid_cnt))){
