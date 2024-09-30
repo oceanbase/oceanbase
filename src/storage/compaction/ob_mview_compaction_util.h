@@ -78,9 +78,7 @@ struct ObMviewMergeSQL
 
 struct ObMviewMergeParameter
 {
-  static const int64_t MAX_REFRESH_SQL_COUNT = 4;
-  static const int64_t REFRESH_SQL_COUNT_V0 = MAX_REFRESH_SQL_COUNT;
-  static const int64_t REFRESH_SQL_COUNT_V1 = 2;
+  static const int64_t REFRESH_SQL_COUNT = 2;
   ObMviewMergeParameter();
   ~ObMviewMergeParameter();
   int init(const ObMergeParameter &merge_param);
@@ -88,10 +86,6 @@ struct ObMviewMergeParameter
   {
     return database_id_ > 0 && mview_id_ > 0 && container_table_id_ > 0 && container_tablet_id_.is_valid() &&
            schema_version_ > 0 && refresh_scn_range_.is_valid();
-  }
-  OB_INLINE bool is_refresh_sql_v0() const
-  {
-    return REFRESH_SQL_COUNT_V0 == refresh_sql_count_;
   }
   DECLARE_TO_STRING;
   uint64_t database_id_;
@@ -101,7 +95,8 @@ struct ObMviewMergeParameter
   int64_t schema_version_;
   share::ObScnRange refresh_scn_range_; // (last_refresh_scn, current_refresh_scn]
   int64_t refresh_sql_count_;
-  ObMviewMergeSQL refresh_sqls_[MAX_REFRESH_SQL_COUNT];
+  ObMviewMergeSQL refresh_sqls_[REFRESH_SQL_COUNT];
+  ObSqlString validation_sql_;
 };
 
 class ObMviewCompactionHelper
@@ -125,6 +120,7 @@ public:
   static int create_inner_connection(sql::ObSQLSessionInfo *session, common::sqlclient::ObISQLConnection *&connection);
   static void release_inner_connection(common::sqlclient::ObISQLConnection *&connection);
   static int set_params_to_session(sql::ObSQLSessionInfo *session);
+  static int validate_row_count(const ObMergeParameter &merge_param, const int64_t major_row_count);
 private:
   static int convert_datum_range(
       common::ObIAllocator &allocator,

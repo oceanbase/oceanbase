@@ -19,6 +19,7 @@
 #include "sql/session/ob_sql_session_mgr.h"
 #include "sql/resolver/mv/ob_mv_provider.h"
 #include "observer/ob_inner_sql_connection_pool.h"
+#include "observer/ob_inner_sql_result.h"
 
 namespace oceanbase
 {
@@ -32,7 +33,8 @@ ObMviewMergeParameter::ObMviewMergeParameter()
     container_tablet_id_(),
     schema_version_(0),
     refresh_scn_range_(),
-    refresh_sql_count_(0)
+    refresh_sql_count_(0),
+    validation_sql_()
 {
 }
 
@@ -43,7 +45,7 @@ ObMviewMergeParameter::~ObMviewMergeParameter()
 int ObMviewMergeParameter::init(const ObMergeParameter &merge_param)
 {
   int ret = OB_SUCCESS;
-  refresh_sql_count_ = REFRESH_SQL_COUNT_V1;
+  refresh_sql_count_ = REFRESH_SQL_COUNT;
   container_tablet_id_ = merge_param.static_param_.get_tablet_id();
   schema_version_ = merge_param.get_schema()->get_schema_version();
   ObSEArray<ObTabletID, 1> tablet_ids;
@@ -108,7 +110,8 @@ int64_t ObMviewMergeParameter::to_string(char *buf, const int64_t buf_len) const
        K_(container_tablet_id),
        K_(schema_version),
        K_(refresh_scn_range),
-       K_(refresh_sql_count));
+       K_(refresh_sql_count),
+       K_(validation_sql));
   J_COMMA();
   if (is_valid()) {
     for (int64_t i = 0; i < refresh_sql_count_; ++i) {
@@ -197,18 +200,20 @@ int ObMviewCompactionHelper::generate_mview_refresh_sql(
   if (OB_SUCC(ret)) {
     ObMviewMergeSQL *refresh_sqls = mview_param.refresh_sqls_;
     const common::ObIArray<ObString> &mv_ops = mv_provider.get_operators();
-    if (OB_UNLIKELY(mview_param.refresh_sql_count_ != mv_ops.count())) {
+    if (OB_UNLIKELY(mview_param.refresh_sql_count_ + 1 != mv_ops.count())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected number of refresh sql", K(ret), K(mv_ops.count()));
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < mv_ops.count(); ++i) {
-      if (mview_param.is_refresh_sql_v0()) {
-        refresh_sqls[i].type_ = 0 == i || 2 == i ? ObMviewMergeIterType::MVIEW_DELETE : ObMviewMergeIterType::MVIEW_INSERT;
-      } else {
-        refresh_sqls[i].type_ = ObMviewMergeIterType::MVIEW_REPLACE;
-      }
+    int64_t i = 0;
+    for (; OB_SUCC(ret) && i < mview_param.refresh_sql_count_; ++i) {
+      refresh_sqls[i].type_ = ObMviewMergeIterType::MVIEW_REPLACE;
       if (OB_FAIL(refresh_sqls[i].sql_.append(mv_ops.at(i)))) {
         LOG_WARN("Failed to append mv sql", K(ret), K(i));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(mview_param.validation_sql_.append(mv_ops.at(i)))) {
+        LOG_WARN("Failed to append mv validation sql", K(ret), K(i));
       }
     }
   }
@@ -331,6 +336,58 @@ int ObMviewCompactionHelper::set_params_to_session(sql::ObSQLSessionInfo *sessio
       LOG_INFO("[MVIEW COMPACTION]: SYS_VAR_OB_READ_CONSISTENCY=", K(result_val));
     }
   }
+  return ret;
+}
+
+int ObMviewCompactionHelper::validate_row_count(const ObMergeParameter &merge_param, const int64_t major_row_count)
+{
+  int ret = OB_SUCCESS;
+  int64_t join_row_count = 0;
+  sql::ObFreeSessionCtx free_session_ctx;
+  sql::ObSQLSessionInfo *session = nullptr;
+  sqlclient::ObISQLConnection *conn = nullptr;
+  observer::ObInnerSQLResult *sql_result = nullptr;
+  SMART_VAR(ObISQLClient::ReadResult, read_result) {
+    const ObSqlString &sql = merge_param.mview_merge_param_->validation_sql_;
+    if (OB_FAIL(create_inner_session(merge_param.get_schema()->is_oracle_mode(),
+                                    merge_param.mview_merge_param_->database_id_,
+                                    free_session_ctx, session))) {
+      LOG_WARN("Failed to create inner session", K(ret), KPC(merge_param.mview_merge_param_));
+    } else if (OB_FAIL(ObMviewCompactionHelper::create_inner_connection(session, conn))) {
+      LOG_WARN("Failed to create inner connection", K(ret));
+    } else if (OB_FAIL(conn->execute_read(GCONF.cluster_id, MTL_ID(), sql.ptr(), read_result))) {
+      LOG_WARN("Failed to execute", K(ret), K(sql));
+    } else if (OB_ISNULL(sql_result = static_cast<observer::ObInnerSQLResult *>(read_result.get_result()))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected null sql result", K(ret), K(sql));
+    } else if (OB_FAIL(sql_result->next())) {
+      if (OB_UNLIKELY(OB_ITER_END != ret)) {
+        LOG_WARN("Failed to get next row", K(ret));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    } else {
+      const ObNewRow *new_row = sql_result->get_row();
+      if (OB_UNLIKELY(nullptr == new_row || 1 != new_row->get_count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected result row", K(ret), KPC(new_row));
+      } else if (merge_param.get_schema()->is_oracle_mode()) {
+        const number::ObNumber nmb(new_row->get_cell(0).get_number());
+        if (OB_FAIL(nmb.extract_valid_int64_with_trunc(join_row_count))) {
+          STORAGE_LOG(WARN, "Failed to cast number to int64", K(ret), K(new_row->get_cell(0)));
+        }
+      } else {
+        join_row_count = new_row->get_cell(0).get_int();
+      }
+    }
+  }
+  if (OB_SUCC(ret) && major_row_count != join_row_count) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("MV major row count is not equal with join row count", K(ret), K(major_row_count), K(join_row_count));
+  }
+  read_result.~ReadResult();
+  ObMviewCompactionHelper::release_inner_connection(conn);
+  ObMviewCompactionHelper::release_inner_session(free_session_ctx, session);
   return ret;
 }
 

@@ -288,6 +288,8 @@ private:
   int gen_one_refresh_select_for_major_refresh_mjv(const ObIArray<int64_t> &rowkey_sel_pos,
                                                    const bool is_delta_left,
                                                    ObSelectStmt *&delta_stmt);
+  int gen_refresh_validation_select_for_major_refresh_mjv(const ObIArray<int64_t> &rowkey_sel_pos,
+                                                          ObSelectStmt *&delta_stmt);
   int gen_refresh_select_hint_for_major_refresh_mjv(const TableItem &left_table,
                                                     const TableItem &right_table,
                                                     ObStmtHint &stmt_hint);

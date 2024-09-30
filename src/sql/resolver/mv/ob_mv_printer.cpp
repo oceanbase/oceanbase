@@ -2556,6 +2556,7 @@ int ObMVPrinter::gen_refresh_select_for_major_refresh_mjv(ObIArray<ObDMLStmt*> &
   dml_stmts.reuse();
   ObSelectStmt *left_delta_stmt = NULL;
   ObSelectStmt *right_delta_stmt = NULL;
+  ObSelectStmt *validation_stmt = NULL;
   ObSEArray<int64_t, 8> rowkey_sel_pos;
   if (OB_FAIL(get_rowkey_pos_in_select(rowkey_sel_pos))) {
     LOG_WARN("failed to get rowkey pos in select", K(ret));
@@ -2563,8 +2564,11 @@ int ObMVPrinter::gen_refresh_select_for_major_refresh_mjv(ObIArray<ObDMLStmt*> &
     LOG_WARN("failed to generate gen left refresh select for major refresh mjv ", K(ret));
   } else if (OB_FAIL(gen_one_refresh_select_for_major_refresh_mjv(rowkey_sel_pos, false, right_delta_stmt))) {
     LOG_WARN("failed to generate gen right refresh select for major refresh mjv ", K(ret));
+  } else if (OB_FAIL(gen_refresh_validation_select_for_major_refresh_mjv(rowkey_sel_pos, validation_stmt))) {
+    LOG_WARN("failed to generate refresh validation select for major refresh mjv ", K(ret));
   } else if (OB_FAIL(dml_stmts.push_back(left_delta_stmt))
-             || OB_FAIL(dml_stmts.push_back(right_delta_stmt))) {
+             || OB_FAIL(dml_stmts.push_back(right_delta_stmt))
+             || OB_FAIL(dml_stmts.push_back(validation_stmt))) {
     LOG_WARN("failed to push back", K(ret));
   }
   return ret;
@@ -2916,6 +2920,56 @@ int ObMVPrinter::gen_one_refresh_select_for_major_refresh_mjv(const ObIArray<int
     left_table->flashback_query_expr_ = exprs_.refresh_scn_;
     left_table->flashback_query_type_ = TableItem::USING_SCN;
     right_table->flashback_query_expr_ = is_delta_left ? exprs_.last_refresh_scn_ : exprs_.refresh_scn_;
+    right_table->flashback_query_type_ = TableItem::USING_SCN;
+  }
+  return ret;
+}
+
+/*
+  generate validation stmt:
+    select count(*) cnt from t1 as of snapshot current_scn, t2 as of snapshot current_scn
+    where t1.c1 = t2.c1;
+*/
+int ObMVPrinter::gen_refresh_validation_select_for_major_refresh_mjv(const ObIArray<int64_t> &rowkey_sel_pos,
+                                                                     ObSelectStmt *&delta_stmt)
+{
+  int ret = OB_SUCCESS;
+  delta_stmt = NULL;
+  const ObIArray<TableItem*> &orig_table_items = mv_checker_.get_stmt().get_table_items();
+  const TableItem *orig_left_table = NULL;
+  TableItem *left_table = NULL;
+  TableItem *right_table = NULL;
+  ObAggFunRawExpr *aggr_expr = NULL;
+  if (OB_UNLIKELY(2 != orig_table_items.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected params", K(ret), K(orig_table_items));
+  } else if (OB_FAIL(create_simple_stmt(delta_stmt))
+             || OB_FAIL(prepare_gen_access_delta_data_for_major_refresh_mjv(rowkey_sel_pos, *delta_stmt))) {
+    LOG_WARN("failed to prepare generate access delta data for major refresh mjv", K(ret));
+  } else if (OB_UNLIKELY(2 != delta_stmt->get_table_items().count() || 2 != mv_checker_.get_stmt().get_table_items().count())
+             || OB_ISNULL(orig_left_table = mv_checker_.get_stmt().get_table_item(0))
+             || OB_ISNULL(left_table = delta_stmt->get_table_item(0))
+             || OB_ISNULL(right_table = delta_stmt->get_table_item(1))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected params", K(ret));
+  } else if (OB_FAIL(fill_table_partition_name(*orig_left_table, *left_table))) {
+    LOG_WARN("failed to fill table partition name", K(ret));
+  } else if (OB_FAIL(gen_refresh_select_hint_for_major_refresh_mjv(*left_table, *right_table, delta_stmt->get_stmt_hint()))) {
+    LOG_WARN("failed to gen refresh select hint for major refresh mjv", K(ret));
+  } else if (OB_FALSE_IT(delta_stmt->get_select_items().reset())) {
+  } else if (OB_FAIL(delta_stmt->get_select_items().prepare_allocate(1))) {
+    LOG_WARN("failed to prepare allocate arrays", K(ret));
+  } else if (OB_FAIL(ob_write_string(alloc_, ObString("CNT"), delta_stmt->get_select_item(0).alias_name_))) {
+    LOG_WARN("ob_write_string failed", K(ret));
+  } else if (OB_FAIL(expr_factory_.create_raw_expr(T_FUN_COUNT, aggr_expr))) {
+    LOG_WARN("create ObAggFunRawExpr failed", K(ret));
+  } else {
+    delta_stmt->get_order_items().reset();
+    delta_stmt->get_select_item(0).is_real_alias_ = true;
+    delta_stmt->get_select_item(0).expr_ = aggr_expr;
+    left_table->flashback_query_expr_ = exprs_.refresh_scn_;
+    left_table->flashback_query_type_ = TableItem::USING_SCN;
+    right_table->flashback_query_expr_ = exprs_.refresh_scn_;
     right_table->flashback_query_type_ = TableItem::USING_SCN;
   }
   return ret;
