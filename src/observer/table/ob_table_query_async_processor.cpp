@@ -239,6 +239,10 @@ int ObTableQueryASyncMgr::get_query_session(uint64_t sessid, ObTableQueryAsyncSe
     } else if (query_session->is_in_use()) { // one session cannot be held concurrently
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("query session already in use", K(sessid));
+    } else if (query_session->get_session_type() == ObTableEntityType::ET_HKV &&
+               query_session->timeout_ts_ < ObTimeUtility::current_time()) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("session is timeout", K(ret), K(query_session));
     } else {
       query_session->set_in_use(true);
     }
@@ -518,7 +522,6 @@ int ObTableQueryAsyncP::get_query_session(uint64_t sessid, ObTableQueryAsyncSess
     // use session trans_state_ which storage transaction state in query_next()
     trans_param_.trans_state_ptr_ = query_session->get_trans_state();
     query_session->set_session_type(arg_.entity_type_);
-    query_session->set_timout_ts(get_timeout_ts());
   }
 
   return ret;
