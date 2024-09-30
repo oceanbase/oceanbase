@@ -1065,6 +1065,7 @@ ObMigrationTabletParam::ObMigrationTabletParam()
     micro_index_clustered_(false),
     major_ckm_info_(),
     ddl_table_type_(ObITable::MAX_TABLE_TYPE),
+    is_storage_schema_cs_replica_(false),
     allocator_("MigTblParam", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), ObCtxIds::DEFAULT_CTX_ID)
 {
 }
@@ -1249,6 +1250,8 @@ int ObMigrationTabletParam::serialize(char *buf, const int64_t len, int64_t &pos
     LOG_WARN("failed to serialize micro_index_clustered", K(ret), K(len), K(new_pos), K_(micro_index_clustered));
   } else if (PARAM_VERSION_V3 <= version_ && new_pos - pos < length && OB_FAIL(major_ckm_info_.serialize(buf, len, new_pos))) {
     LOG_WARN("failed to serialize major ckm info", K(ret), K(len), K(new_pos), K_(major_ckm_info));
+  } else if (PARAM_VERSION_V3 <= version_ && new_pos - pos < length && OB_FAIL(serialization::encode_bool(buf, len, new_pos, is_storage_schema_cs_replica_))) {
+    LOG_WARN("failed to serialize is_storage_schema_cs_replica_", K(ret), K(len), K(new_pos), K_(is_storage_schema_cs_replica));
   } else if (OB_UNLIKELY(length != new_pos - pos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("length doesn't match standard length", K(ret), K(new_pos), K(pos), K(length));
@@ -1342,6 +1345,8 @@ int ObMigrationTabletParam::deserialize_v2_v3(const char *buf, const int64_t len
     LOG_WARN("failed to deserialize micro_index_clustered", K(ret), K(len));
   } else if (PARAM_VERSION_V3 <= version_ && new_pos - pos < length && OB_FAIL(major_ckm_info_.deserialize(allocator_, buf, len, new_pos))) {
     LOG_WARN("failed to deserialize major ckm info", K(ret), K(len));
+  } else if (PARAM_VERSION_V3 <= version_ && new_pos - pos < length && OB_FAIL(serialization::decode_bool(buf, len, new_pos, &is_storage_schema_cs_replica_))) {
+    LOG_WARN("failed to deserialize is_storage_schema_cs_replica", K(ret), K(len));
   } else if (OB_UNLIKELY(length != new_pos - pos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet's length doesn't match standard length", K(ret), K(new_pos), K(pos), K(length), KPC(this));
@@ -1545,6 +1550,7 @@ int64_t ObMigrationTabletParam::get_serialize_size() const
     size += serialization::encoded_length_bool(micro_index_clustered_);
     size += major_ckm_info_.get_serialize_size();
     size += serialization::encoded_length(ddl_table_type_);
+    size += serialization::encoded_length_bool(is_storage_schema_cs_replica_);
   }
   return size;
 }
@@ -1587,6 +1593,7 @@ void ObMigrationTabletParam::reset()
   micro_index_clustered_ = false;
   major_ckm_info_.reset();
   ddl_table_type_ = ObITable::MAX_TABLE_TYPE;
+  is_storage_schema_cs_replica_ = false;
   allocator_.reset();
 }
 
@@ -1630,6 +1637,7 @@ int ObMigrationTabletParam::assign(const ObMigrationTabletParam &param)
     mds_checkpoint_scn_ = param.mds_checkpoint_scn_;
     transfer_info_ = param.transfer_info_;
     extra_medium_info_ = param.extra_medium_info_;
+    is_storage_schema_cs_replica_ = param.is_storage_schema_cs_replica_;
     if (OB_FAIL(mds_data_.assign(param.mds_data_, allocator_))) {
       LOG_WARN("failed to assign mds data", K(ret), K(param));
     } else if (OB_FAIL(last_persisted_committed_tablet_status_.assign(
@@ -1723,7 +1731,6 @@ int ObMigrationTabletParam::construct_placeholder_storage_schema_and_medium(
   storage_schema.progressive_merge_num_ = 0;
   storage_schema.master_key_id_ = OB_INVALID_ID;
   storage_schema.compat_mode_ = static_cast<uint32_t>(lib::Worker::get_compatibility_mode());
-  storage_schema.is_cs_replica_compat_ = false;
 
   ObStorageRowkeyColumnSchema rowkey_schema;
   rowkey_schema.meta_type_.set_tinyint();

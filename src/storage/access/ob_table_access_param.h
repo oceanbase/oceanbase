@@ -268,6 +268,8 @@ public:
   OB_INLINE void set_use_global_iter_pool() { iter_param_.set_use_global_iter_pool(); }
   OB_INLINE void diable_use_global_iter_pool() { iter_param_.diable_use_global_iter_pool(); }
   OB_INLINE bool is_use_global_iter_pool() const { return iter_param_.is_use_global_iter_pool(); }
+private:
+  int check_valid_before_query_init(const ObTableParam &table_param, const ObTabletHandle &tablet_handle);
 public:
   DECLARE_TO_STRING;
 public:

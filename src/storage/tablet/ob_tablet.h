@@ -483,7 +483,7 @@ public:
 
   // column store replica
 public:
-  int check_cs_replica_compat_schema(bool &is_cs_replica_compat) const;
+  bool is_cs_replica_compat() const { return nullptr == rowkey_read_info_ ? false : rowkey_read_info_->is_cs_replica_compat(); }
   int check_row_store_with_co_major(bool &is_row_store_with_co_major) const;
   int pre_process_cs_replica(
       const ObDirectLoadType direct_load_type,
@@ -693,7 +693,10 @@ private:
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
       const lib::Worker::CompatMode compat_mode);
-  int build_read_info(common::ObArenaAllocator &allocator, const ObTablet *tablet = nullptr);
+  int build_read_info(
+      common::ObArenaAllocator &allocator,
+      const ObTablet *tablet,
+      const bool is_cs_replica_compat);
   int create_memtable(const int64_t schema_version,
                       const share::SCN clog_checkpoint_scn,
                       const bool for_direct_load,

@@ -402,7 +402,7 @@ void ObMultiVersionSSTableTest::init_tablet()
   tablet->storage_schema_addr_.get_ptr()->init(allocator_, table_schema_, lib::Worker::CompatMode::MYSQL);
   ASSERT_NE(nullptr, ptr = allocator_.alloc(sizeof(ObRowkeyReadInfo)));
   tablet->rowkey_read_info_ = new (ptr) ObRowkeyReadInfo();
-  tablet->build_read_info(allocator_);
+  tablet->build_read_info(allocator_, nullptr /*tablet*/, false /*is_cs_replica_compat*/);
 }
 
 void ObMultiVersionSSTableTest::reset_writer(
