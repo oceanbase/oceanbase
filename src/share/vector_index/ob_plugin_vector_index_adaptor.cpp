@@ -1133,7 +1133,7 @@ int ObPluginVectorIndexAdaptor::check_index_id_table_readnext_status(ObVectorQue
   if (OB_ISNULL(ctx) || OB_ISNULL(table_scan_iter)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get ctx or row_iter invalid.", K(ret), KP(row_iter));
-  } else if (snap_data_->is_inited() && snap_data_->rb_flag_) {
+  } else if (snap_data_->rb_flag_) {
     ctx->status_ = PVQ_LACK_SCN;
     ctx->flag_ = PVQP_SECOND;
   } else {
