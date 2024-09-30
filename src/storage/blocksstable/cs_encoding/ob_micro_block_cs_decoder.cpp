@@ -1750,6 +1750,7 @@ int ObMicroBlockCSDecoder::get_aggregate_result(
     ObAggCellVec &agg_cell)
 {
   int ret = OB_SUCCESS;
+  decoder_allocator_.reuse();
   ObColumnCSDecoder *column_decoder = nullptr;
   if (OB_UNLIKELY(nullptr == row_ids || row_cap <= 0)) {
     ret = OB_INVALID_ARGUMENT;

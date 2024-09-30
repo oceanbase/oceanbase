@@ -74,15 +74,16 @@ int ObAggGroupVec::eval_batch(
     blocksstable::ObIMicroBlockReader *reader,
     const int32_t *row_ids,
     const int64_t row_count,
-    const bool projected)
+    const bool reserve_memory)
 {
   UNUSEDx(iter_param, context, col_idx);
   int ret = OB_SUCCESS;
-  blocksstable::ObIMicroBlockReader *real_reader = nullptr;
+  if (nullptr != reader && reserve_memory) {
+    reader->reserve_reader_memory(true); // hold memory before aggregation finished
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < agg_cells_.count(); ++i) {
     ObAggCellVec *agg_cell = agg_cells_.at(i);
-    real_reader = PD_COUNT == agg_cell->get_type() && !agg_type_flag_.only_count() && projected ? nullptr : reader;
-    if (OB_FAIL(agg_cell->eval_batch(real_reader, col_offset_, row_ids, row_count))) {
+    if (OB_FAIL(agg_cell->eval_batch(reader, col_offset_, row_ids, row_count))) {
       LOG_WARN("Failed to aggregate batch rows", K(ret), K(row_count));
     }
   }
@@ -402,7 +403,11 @@ int ObAggregatedStoreVec::fill_rows(
     bool need_get_row_ids = false;
     int64_t micro_row_count = 0;
     blocksstable::ObIMicroBlockReader *reader = scanner.get_reader();
-    if (OB_FAIL(reader->get_row_count(micro_row_count))) {
+    if (OB_ISNULL(reader)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected null reader", K(ret), K(reader));
+    } else if (FALSE_IT(reader->reserve_reader_memory(false))) {
+    } else if (OB_FAIL(reader->get_row_count(micro_row_count))) {
       LOG_WARN("Failed to get micro row count", K(ret));
     } else if (!need_access_data_) {
       if (need_get_row_ids_ || micro_row_count != covered_row_count) {
@@ -424,7 +429,7 @@ int ObAggregatedStoreVec::fill_rows(
                                                        !filter_is_null()))) {
       LOG_WARN("Failed to project rows in aggregate pushdown", K(ret), K(begin_index), K(end_index), K(res));
     }
-    if (OB_SUCC(ret) && OB_FAIL(do_aggregate(reader))) {
+    if (OB_SUCC(ret) && OB_FAIL(do_aggregate(reader, need_access_data_))) {
       LOG_WARN("Failed to aggregate rows", K(ret), KP(reader));
     }
   }
@@ -457,14 +462,14 @@ int ObAggregatedStoreVec::fill_row(blocksstable::ObDatumRow &row)
   } else {
     count_++;
     eval_ctx_.set_batch_idx(count_);
-    if (OB_FAIL(do_aggregate())) {
+    if (OB_FAIL(do_aggregate(nullptr/*reader*/, false/*reserve_memory*/))) {
       LOG_WARN("Failed to aggregate rows", K(ret));
     }
   }
   return ret;
 }
 
-int ObAggregatedStoreVec::do_aggregate(blocksstable::ObIMicroBlockReader *reader)
+int ObAggregatedStoreVec::do_aggregate(blocksstable::ObIMicroBlockReader *reader, const bool reserve_memory)
 {
   int ret = OB_SUCCESS;
   if (count_ > 0) {
@@ -476,7 +481,7 @@ int ObAggregatedStoreVec::do_aggregate(blocksstable::ObIMicroBlockReader *reader
                                         reader,
                                         row_ids_,
                                         count_,
-                                        true))) {
+                                        reserve_memory))) {
         LOG_WARN("Failed to eval batch", K(ret), KPC(agg_group), K_(need_access_data), K_(need_get_row_ids));
       }
     }

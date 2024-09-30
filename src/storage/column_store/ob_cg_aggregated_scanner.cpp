@@ -122,7 +122,7 @@ int ObCGAggregatedScanner::get_next_rows(uint64_t &count, const uint64_t capacit
                                        nullptr/*reader*/,
                                        nullptr/*row_ids*/,
                                        cur_processed_row_count_,
-                                       false))) {
+                                       false/*reserve_memory*/))) {
       LOG_WARN("Fail to eval batch rows", K(ret));
     } else {
       ret = OB_ITER_END;
@@ -156,6 +156,7 @@ int ObCGAggregatedScanner::inner_fetch_rows(const int64_t row_cap, const int64_t
   int ret = OB_SUCCESS;
   bool projected = true;
   if (access_ctx_->block_row_store_->is_vec2()) {
+    micro_scanner_->reserve_reader_memory(false);
     ObAggGroupVec *agg_group_vec = static_cast<ObAggGroupVec *>(agg_group_);
     projected = agg_group_vec->check_need_project(micro_scanner_->get_reader(), row_ids_, row_cap);
     if (!projected) {
@@ -174,7 +175,7 @@ int ObCGAggregatedScanner::inner_fetch_rows(const int64_t row_cap, const int64_t
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(micro_scanner_->get_aggregate_result(0/*col_idx*/, row_ids_, row_cap, projected, *agg_group_))) {
+  } else if (OB_FAIL(micro_scanner_->get_aggregate_result(0/*col_idx*/, row_ids_, row_cap, projected/*reserve_memory*/, *agg_group_))) {
     LOG_WARN("Fail to get aggregate result", K(ret));
   }
   return ret;

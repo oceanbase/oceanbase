@@ -98,7 +98,7 @@ public:
       const int32_t col_idx,
       const int32_t *row_ids,
       const int64_t row_cap,
-      const bool projected,
+      const bool reserve_memory,
       ObAggGroupBase &agg_group);
   int advance_to_border(
       const ObDatumRowkey &rowkey,

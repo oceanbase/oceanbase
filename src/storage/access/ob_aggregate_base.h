@@ -105,7 +105,7 @@ public:
       blocksstable::ObIMicroBlockReader *reader,
       const int32_t *row_ids,
       const int64_t row_count,
-      const bool projected) = 0;
+      const bool reserve_memory) = 0;
   virtual int can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info, bool &can_agg) = 0;
   virtual int fill_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg) = 0;
   DECLARE_PURE_VIRTUAL_TO_STRING;
