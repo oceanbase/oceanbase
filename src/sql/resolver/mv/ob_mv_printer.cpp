@@ -2692,6 +2692,10 @@ int ObMVPrinter::append_rowkey_range_filter(const ObIArray<SelectItem> &select_i
 {
   int ret = OB_SUCCESS;
   const ObNewRange *range = NULL != major_refresh_info_ ? &major_refresh_info_->range_ : NULL;
+  ObOpRawExpr *start_const_row = NULL;
+  ObOpRawExpr *end_const_row = NULL;
+  ObOpRawExpr *start_col_row = NULL;
+  ObOpRawExpr *end_col_row = NULL;
   if (NULL == range) {
     /* do nothing */
   } else if (OB_UNLIKELY(select_items.count() < rowkey_count
@@ -2699,39 +2703,49 @@ int ObMVPrinter::append_rowkey_range_filter(const ObIArray<SelectItem> &select_i
                          || rowkey_count <  range->end_key_.get_obj_cnt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected params", K(ret), K(select_items.count()), KPC(range));
+  } else if (OB_FAIL(expr_factory_.create_raw_expr(T_OP_ROW, start_const_row))
+             || OB_FAIL(expr_factory_.create_raw_expr(T_OP_ROW, end_const_row))
+             || OB_FAIL(expr_factory_.create_raw_expr(T_OP_ROW, start_col_row))
+             || OB_FAIL(expr_factory_.create_raw_expr(T_OP_ROW, end_col_row))) {
+    LOG_WARN("failed to create raw expr", K(ret));
+  } else if (OB_ISNULL(start_const_row) || OB_ISNULL(end_const_row)
+             || OB_ISNULL(start_col_row) || OB_ISNULL(end_col_row)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to create raw expr", K(ret));
   } else {
     ObRawExpr *filter = NULL;
-    ObRawExpr *col = NULL;
     uint64_t s_cnt = range->start_key_.get_obj_cnt();
     uint64_t e_cnt = range->end_key_.get_obj_cnt();
     const ObObj *s_obj = range->start_key_.get_obj_ptr();
     const ObObj *e_obj = range->end_key_.get_obj_ptr();
-    for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_count; ++i) {
-      const ObObj *obj1 = i < s_cnt ? s_obj + i : NULL;
-      const ObObj *obj2 = i < e_cnt ? e_obj + i : NULL;
-      ObConstRawExpr *const_expr1 = NULL;
-      ObConstRawExpr *const_expr2 = NULL;
-      bool euqal = NULL != obj1 && NULL != obj2 && obj1->is_equal(*obj2);
-      ObItemType cmp_type1 = euqal ? T_OP_EQ : (range->border_flag_.inclusive_start() ? T_OP_GE : T_OP_GT);
-      ObItemType cmp_type2 = range->border_flag_.inclusive_end() ? T_OP_LE : T_OP_LT;
-      if (OB_ISNULL(col = select_items.at(i).expr_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null", K(ret), K(i), K(col));
-      } else if (NULL != obj1 && !obj1->is_min_value() &&
-                 OB_FAIL(ObRawExprUtils::build_const_obj_expr(expr_factory_, *obj1, const_expr1))) {
+    ObItemType cmp_type1 = range->border_flag_.inclusive_start() ? T_OP_GE : T_OP_GT;
+    ObItemType cmp_type2 = range->border_flag_.inclusive_end() ? T_OP_LE : T_OP_LT;
+    ObConstRawExpr *const_expr = NULL;
+    for (int64_t i = 0; OB_SUCC(ret) && i < s_cnt && !s_obj[i].is_min_value(); ++i) {
+      if (OB_FAIL(ObRawExprUtils::build_const_obj_expr(expr_factory_, s_obj[i], const_expr))) {
         LOG_WARN("failed to build const obj expr", K(ret));
-      } else if (NULL != obj2 && !obj2->is_max_value() && !euqal &&
-                 OB_FAIL(ObRawExprUtils::build_const_obj_expr(expr_factory_, *obj2, const_expr2))) {
-        LOG_WARN("failed to build const obj expr", K(ret));
-      } else if (NULL != const_expr1 &&
-                 (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(expr_factory_, cmp_type1, col, const_expr1, filter))
-                  || OB_FAIL(conds.push_back(filter)))) {
-        LOG_WARN("failed to build and push back binary op expr", K(ret));
-      } else if (NULL != const_expr2 &&
-                 (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(expr_factory_, cmp_type2, col, const_expr2, filter))
-                  || OB_FAIL(conds.push_back(filter)))) {
-        LOG_WARN("failed to build and push back binary op expr", K(ret));
+      } else if (OB_FAIL(start_col_row->add_param_expr(select_items.at(i).expr_))
+                 || OB_FAIL(start_const_row->add_param_expr(const_expr))) {
+        LOG_WARN("failed to add param expr", K(ret));
       }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < e_cnt && !e_obj[i].is_max_value(); ++i) {
+      if (OB_FAIL(ObRawExprUtils::build_const_obj_expr(expr_factory_, e_obj[i], const_expr))) {
+        LOG_WARN("failed to build const obj expr", K(ret));
+      } else if (OB_FAIL(end_col_row->add_param_expr(select_items.at(i).expr_))
+                 || OB_FAIL(end_const_row->add_param_expr(const_expr))) {
+        LOG_WARN("failed to add param expr", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (0 < start_col_row->get_param_count() &&
+               (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(expr_factory_, cmp_type1, start_col_row, start_const_row, filter))
+                || OB_FAIL(conds.push_back(filter)))) {
+      LOG_WARN("failed to build and push back binary op expr", K(ret));
+    } else if (0 < end_col_row->get_param_count() &&
+               (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(expr_factory_, cmp_type2, end_col_row, end_const_row, filter))
+                || OB_FAIL(conds.push_back(filter)))) {
+      LOG_WARN("failed to build and push back binary op expr", K(ret));
     }
   }
   return ret;
