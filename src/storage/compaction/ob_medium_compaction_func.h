@@ -108,6 +108,11 @@ public:
     const int64_t major_snapshot,
     const bool is_tombstone,
     bool &medium_clog_submitted);
+  static int get_table_id(
+      ObMultiVersionSchemaService &schema_service,
+      const ObTabletID &tablet_id,
+      const int64_t schema_version,
+      uint64_t &table_id);
 #ifdef OB_BUILD_SHARED_STORAGE
   // medium compaction is not considered
   int prepare_ls_major_merge_info(
@@ -200,11 +205,6 @@ protected:
     ObGetMergeTablesResult &result,
     int64_t &schema_version);
   int get_max_reserved_snapshot(int64_t &max_reserved_snapshot);
-  static int get_table_id(
-      ObMultiVersionSchemaService &schema_service,
-      const ObTabletID &tablet_id,
-      const int64_t schema_version,
-      uint64_t &table_id);
 
   int check_frequency(
     const int64_t max_reserved_snapshot,

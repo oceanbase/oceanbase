@@ -172,6 +172,20 @@ public:
   uint16_t *column_idxs_; //free the memory with the allocator outside
 };
 
+struct ObUpdateCSReplicaSchemaParam
+{
+public:
+  ObUpdateCSReplicaSchemaParam();
+  ~ObUpdateCSReplicaSchemaParam();
+  int init(const ObTablet &tablet);
+  bool is_valid() const;
+  TO_STRING_KV(K_(tablet_id), K_(major_column_cnt), K_(is_inited));
+public:
+  ObTabletID tablet_id_;
+  int64_t major_column_cnt_;
+  bool is_inited_;
+};
+
 class ObStorageSchema : public share::schema::ObMergeSchema
 {
 public:
@@ -190,11 +204,16 @@ public:
       const ObStorageSchema &old_schema,
       const bool skip_column_info = false,
       const ObStorageSchema *column_group_schema = nullptr,
-      const bool generate_cs_replica_cg_array = false);
+      const bool generate_cs_replica_cg_array = false,
+      const ObUpdateCSReplicaSchemaParam *update_param = nullptr);
   int deep_copy_column_array(
       common::ObIAllocator &allocator,
       const ObStorageSchema &src_schema,
       const int64_t copy_array_cnt);
+  int rebuild_column_array(
+      common::ObIAllocator &allocator,
+      const ObStorageSchema &src_schema,
+      const ObUpdateCSReplicaSchemaParam &update_param);
   int deep_copy_column_group_array(
       common::ObIAllocator &allocator,
       const ObStorageSchema &src_schema);
