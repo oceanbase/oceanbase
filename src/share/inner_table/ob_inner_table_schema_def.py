@@ -7055,7 +7055,8 @@ def_table_schema(
       ('svr_port', 'int'),
   ],
   in_tenant_space=True,
-  is_cluster_private=False,
+  is_cluster_private=True,
+  meta_record_in_sys = False,
   normal_columns = [
       ('database_id', 'int'),
       ('sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH'),
@@ -14620,9 +14621,10 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-def_table_schema(**gen_iterate_virtual_table_def(
+def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12495',
   table_name = '__all_virtual_spm_evo_result',
+  in_tenant_space = True,
   keywords = all_def_keywords['__all_spm_evo_result']))
 
 def_table_schema(**gen_iterate_virtual_table_def(
@@ -15143,7 +15145,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15451'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15457', all_def_keywords['__all_virtual_query_response_time'])))
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15458', all_def_keywords['__all_scheduler_job_run_detail_v2']))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15461', all_def_keywords['__all_virtual_log_transport_dest_stat'])))
-def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15466', all_def_keywords['__all_spm_evo_result']))
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15466', all_def_keywords['__all_virtual_spm_evo_result']))
 def_table_schema(**gen_sys_agent_virtual_table_def('15468', all_def_keywords['__all_pkg_type']))
 def_table_schema(**gen_sys_agent_virtual_table_def('15469', all_def_keywords['__all_pkg_type_attr']))
 def_table_schema(**gen_sys_agent_virtual_table_def('15470', all_def_keywords['__all_pkg_coll_type']))
@@ -36498,9 +36500,10 @@ def_table_schema(
          EVO_PLAN_CPU_TIME,
          BASELINE_EXEC_COUNT,
          BASELINE_CPU_TIME
-  FROM OCEANBASE.__ALL_SPM_EVO_RESULT R,
+  FROM OCEANBASE.__ALL_VIRTUAL_SPM_EVO_RESULT R,
        OCEANBASE.__ALL_DATABASE D
-  WHERE R.TENANT_ID = D.TENANT_ID
+  WHERE R.TENANT_ID = EFFECTIVE_TENANT_ID()
+    AND D.TENANT_ID = 0
     AND R.DATABASE_ID = D.DATABASE_ID
 """.replace("\n", " ")
 )
@@ -66578,7 +66581,7 @@ def_table_schema(
          EVO_PLAN_CPU_TIME,
          BASELINE_EXEC_COUNT,
          BASELINE_CPU_TIME
-  FROM SYS.ALL_VIRTUAL_SPM_EVO_RESULT_REAL_AGENT R,
+  FROM SYS.ALL_VIRTUAL_SPM_EVO_RESULT R,
        SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT D
   WHERE R.TENANT_ID = EFFECTIVE_TENANT_ID()
     AND D.TENANT_ID = EFFECTIVE_TENANT_ID()

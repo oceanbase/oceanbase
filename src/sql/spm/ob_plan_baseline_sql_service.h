@@ -155,7 +155,7 @@ public:
 
   int batch_record_evolution_result(const uint64_t tenant_id,
                                     ObIArray<EvolutionTaskResult*> &evo_res_array);
-  int insert_spm_record(ObMySQLTransaction& trans,
+  int insert_spm_record(ObMySQLProxy *proxy,
                         const uint64_t tenant_id,
                         const ObBaselineKey& key,
                         int64_t record_type);

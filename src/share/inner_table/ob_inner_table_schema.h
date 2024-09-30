@@ -1348,7 +1348,7 @@ public:
   static int all_virtual_query_response_time_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_scheduler_job_run_detail_v2_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_log_transport_dest_stat_ora_schema(share::schema::ObTableSchema &table_schema);
-  static int all_virtual_spm_evo_result_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_spm_evo_result_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_pkg_type_sys_agent_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_pkg_type_attr_sys_agent_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_pkg_coll_type_sys_agent_schema(share::schema::ObTableSchema &table_schema);
@@ -4146,7 +4146,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_query_response_time_ora_schema,
   ObInnerTableSchema::all_virtual_scheduler_job_run_detail_v2_real_agent_ora_schema,
   ObInnerTableSchema::all_virtual_log_transport_dest_stat_ora_schema,
-  ObInnerTableSchema::all_virtual_spm_evo_result_real_agent_ora_schema,
+  ObInnerTableSchema::all_virtual_spm_evo_result_ora_schema,
   ObInnerTableSchema::all_virtual_pkg_type_sys_agent_schema,
   ObInnerTableSchema::all_virtual_pkg_type_attr_sys_agent_schema,
   ObInnerTableSchema::all_virtual_pkg_coll_type_sys_agent_schema,
@@ -5834,6 +5834,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_DEADLOCK_DETECTOR_STAT_TID,
   OB_ALL_VIRTUAL_LOG_TRANSPORT_DEST_STAT_TID,
   OB_ALL_VIRTUAL_KV_GROUP_COMMIT_STATUS_TID,
+  OB_ALL_VIRTUAL_SPM_EVO_RESULT_TID,
   OB_ALL_VIRTUAL_KV_CLIENT_INFO_TID,
   OB_ALL_VIRTUAL_WR_SQL_PLAN_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
@@ -6118,7 +6119,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_QUERY_RESPONSE_TIME_ORA_TID,
   OB_ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2_REAL_AGENT_ORA_TID,
   OB_ALL_VIRTUAL_LOG_TRANSPORT_DEST_STAT_ORA_TID,
-  OB_ALL_VIRTUAL_SPM_EVO_RESULT_REAL_AGENT_ORA_TID,
+  OB_ALL_VIRTUAL_SPM_EVO_RESULT_ORA_TID,
   OB_ALL_VIRTUAL_PKG_TYPE_SYS_AGENT_TID,
   OB_ALL_VIRTUAL_PKG_TYPE_ATTR_SYS_AGENT_TID,
   OB_ALL_VIRTUAL_PKG_COLL_TYPE_SYS_AGENT_TID,
@@ -7844,6 +7845,7 @@ const uint64_t all_ora_mapping_virtual_table_org_tables [] = {
   OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_DETAIL_TID,
   OB_ALL_VIRTUAL_QUERY_RESPONSE_TIME_TID,
   OB_ALL_VIRTUAL_LOG_TRANSPORT_DEST_STAT_TID,
+  OB_ALL_VIRTUAL_SPM_EVO_RESULT_TID,
   OB_ALL_VIRTUAL_WR_SQL_PLAN_TID,
   OB_ALL_VIRTUAL_RES_MGR_SYSSTAT_TID,  };
 
@@ -8001,6 +8003,7 @@ const uint64_t all_ora_mapping_virtual_tables [] = {  OB_ALL_VIRTUAL_SQL_AUDIT_O
 ,  OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_DETAIL_ORA_TID
 ,  OB_ALL_VIRTUAL_QUERY_RESPONSE_TIME_ORA_TID
 ,  OB_ALL_VIRTUAL_LOG_TRANSPORT_DEST_STAT_ORA_TID
+,  OB_ALL_VIRTUAL_SPM_EVO_RESULT_ORA_TID
 ,  OB_ALL_VIRTUAL_WR_SQL_PLAN_ORA_TID
 ,  OB_ALL_VIRTUAL_RES_MGR_SYSSTAT_ORA_TID
 ,  };
@@ -8512,6 +8515,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_DEADLOCK_DETECTOR_STAT_TNAME,
   OB_ALL_VIRTUAL_LOG_TRANSPORT_DEST_STAT_TNAME,
   OB_ALL_VIRTUAL_KV_GROUP_COMMIT_STATUS_TNAME,
+  OB_ALL_VIRTUAL_SPM_EVO_RESULT_TNAME,
   OB_ALL_VIRTUAL_KV_CLIENT_INFO_TNAME,
   OB_ALL_VIRTUAL_WR_SQL_PLAN_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TNAME,
@@ -8796,7 +8800,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_QUERY_RESPONSE_TIME_ORA_TNAME,
   OB_ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2_REAL_AGENT_ORA_TNAME,
   OB_ALL_VIRTUAL_LOG_TRANSPORT_DEST_STAT_ORA_TNAME,
-  OB_ALL_VIRTUAL_SPM_EVO_RESULT_REAL_AGENT_ORA_TNAME,
+  OB_ALL_VIRTUAL_SPM_EVO_RESULT_ORA_TNAME,
   OB_ALL_VIRTUAL_PKG_TYPE_SYS_AGENT_TNAME,
   OB_ALL_VIRTUAL_PKG_TYPE_ATTR_SYS_AGENT_TNAME,
   OB_ALL_VIRTUAL_PKG_COLL_TYPE_SYS_AGENT_TNAME,
