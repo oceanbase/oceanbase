@@ -960,7 +960,8 @@ public:
     lib::ObMutexGuard guard(prio_lock_);
     ObIDag *stored_dag = nullptr;
     if (OB_UNLIKELY(dag.get_type() != ObDagType::DAG_TYPE_DDL
-        && dag.get_type() != ObDagType::DAG_TYPE_TABLET_SPLIT)) {
+        && dag.get_type() != ObDagType::DAG_TYPE_TABLET_SPLIT
+        && dag.get_type() != ObDagType::DAG_TYPE_LOB_SPLIT)) {
       ret = OB_INVALID_ARGUMENT;
       COMMON_LOG(WARN, "invalid arugment", K(ret), K(dag));
     } else if (OB_FAIL(dag_map_.get_refactored(&dag, stored_dag))) {
@@ -1223,7 +1224,9 @@ public:
       ret = OB_NOT_INIT;
       COMMON_LOG(WARN, "ObDagScheduler is not inited", K(ret));
     } else if (OB_ISNULL(dag) ||
-        (ObDagType::DAG_TYPE_DDL != dag->get_type() && ObDagType::DAG_TYPE_TABLET_SPLIT != dag->get_type())) {
+        (ObDagType::DAG_TYPE_DDL != dag->get_type()
+        && ObDagType::DAG_TYPE_TABLET_SPLIT != dag->get_type()
+        && ObDagType::DAG_TYPE_LOB_SPLIT != dag->get_type())) {
       ret = OB_INVALID_ARGUMENT;
       COMMON_LOG(WARN, "invalid arugment", K(ret), KPC(dag));
     } else if (OB_FAIL(prio_sche_[dag->get_priority()].get_dag_progress(*dag, row_inserted, physical_row_count))) {

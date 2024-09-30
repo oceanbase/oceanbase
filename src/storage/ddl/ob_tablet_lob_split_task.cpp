@@ -369,7 +369,7 @@ ObTabletLobBuildMapTask::ObTabletLobBuildMapTask()
 }
 
 ObTabletLobSplitDag::ObTabletLobSplitDag()
-  : ObIDag(ObDagType::DAG_TYPE_TABLET_SPLIT), is_inited_(false), param_(), context_()
+  : ObIDag(ObDagType::DAG_TYPE_LOB_SPLIT), is_inited_(false), param_(), context_()
 {
 }
 
@@ -449,7 +449,7 @@ int64_t ObTabletLobSplitDag::hash() const
     LOG_ERROR("table schema must not be NULL", K(tmp_ret), K(is_inited_), K(param_));
   } else {
     hash_val = param_.tenant_id_ + param_.ls_id_.hash()
-             + param_.ori_lob_meta_tablet_id_.hash() + ObDagType::DAG_TYPE_TABLET_SPLIT;
+             + param_.ori_lob_meta_tablet_id_.hash() + ObDagType::DAG_TYPE_LOB_SPLIT;
   }
   return hash_val;
 }
