@@ -123,7 +123,8 @@ int ObRoutePolicy::filter_replica(const ObAddr &local_server,
 int ObRoutePolicy::calculate_replica_priority(const ObAddr &local_server,
                                               const ObLSID &ls_id,
                                               ObIArray<CandidateReplica>& candi_replicas,
-                                              ObRoutePolicyCtx &ctx)
+                                              ObRoutePolicyCtx &ctx,
+                                              bool is_inner_table)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -133,6 +134,7 @@ int ObRoutePolicy::calculate_replica_priority(const ObAddr &local_server,
     ObRoutePolicyType policy_type = get_calc_route_policy_type(ctx);
     if (1 == candi_replicas.count() &&
         policy_type == COLUMN_STORE_ONLY &&
+        !is_inner_table &&
         !ObReplicaTypeCheck::is_columnstore_replica(candi_replicas.at(0).get_replica_type())) {
       ret = OB_NO_REPLICA_VALID;
       LOG_USER_ERROR(OB_NO_REPLICA_VALID);

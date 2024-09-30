@@ -863,7 +863,8 @@ int ObLogPlan::weak_select_replicas(const ObAddr &local_server,
             } else if (OB_FAIL(route_policy.calculate_replica_priority(local_server,
                                                                        phy_part_loc_info.get_ls_id(),
                                                                        replica_array,
-                                                                       route_policy_ctx))) {
+                                                                       route_policy_ctx,
+                                                                       is_inner_table(phy_tbl_loc_info->get_ref_table_id())))) {
               LOG_WARN("fail to calculate replica priority", K(replica_array), K(route_policy_ctx), K(ret));
             } else if (OB_FAIL(route_policy.select_replica_with_priority(route_policy_ctx, replica_array, phy_part_loc_info))) {
               LOG_WARN("fail to select replica", K(replica_array), K(ret));
