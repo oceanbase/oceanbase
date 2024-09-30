@@ -821,7 +821,8 @@ struct ObSetColumnStatParam
   hist_param_(),
   avgclen_(0),
   flags_(0),
-  col_meta_()
+  col_meta_(),
+  col_accuracy_()
   {}
   ObTableStatParam table_param_;
   int64_t distcnt_;
@@ -831,6 +832,7 @@ struct ObSetColumnStatParam
   int64_t avgclen_;
   int64_t flags_;
   common::ObObjMeta col_meta_;
+  common::ObAccuracy col_accuracy_;
 
   TO_STRING_KV(K(table_param_),
                K(distcnt_),
@@ -839,7 +841,8 @@ struct ObSetColumnStatParam
                K(hist_param_),
                K(avgclen_),
                K(flags_),
-               K(col_meta_));
+               K(col_meta_),
+               K(col_accuracy_));
 
 };
 
