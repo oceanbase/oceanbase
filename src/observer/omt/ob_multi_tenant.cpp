@@ -865,6 +865,8 @@ int ObMultiTenant::convert_hidden_to_real_sys_tenant(const ObUnitInfoGetter::ObT
     LOG_WARN("fail to write_tenant_super_block_slog", K(ret), K(new_super_block));
   } else {
     tenant->set_tenant_super_block(new_super_block);
+    // clear sys tenant prepare gc state
+    tenant->clear_prepare_unit_gc();
   }
 
   if (lock_succ) {
@@ -2129,6 +2131,8 @@ int ObMultiTenant::convert_real_to_hidden_sys_tenant()
     LOG_WARN("fail to write_tenant_super_block_slog", K(ret), K(tenant_meta));
   } else {
     tenant->set_tenant_super_block(tenant_meta.super_block_);
+    // clear sys tenant prepare gc state
+    tenant->clear_prepare_unit_gc();
   }
 
   if (lock_succ) {

@@ -536,6 +536,10 @@ public:
       marked_prepare_gc_ts_ = ObTimeUtility::current_time();
     }
   }
+  void clear_prepare_unit_gc()
+  {
+    marked_prepare_gc_ts_ = 0;
+  }
   bool is_prepare_unit_gc() const { return marked_prepare_gc_ts_ > 0; }
   int64_t get_prepare_unit_gc_ts() const { return marked_prepare_gc_ts_; }
   int64_t get_max_session_num(const int64_t rl_max_session_num);
