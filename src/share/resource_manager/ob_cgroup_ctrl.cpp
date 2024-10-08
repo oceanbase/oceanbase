@@ -324,8 +324,16 @@ int ObCgroupCtrl::get_group_path(
   char meta_tenant_path[PATH_BUFSIZE] = "";
   char group_name_path[PATH_BUFSIZE] = "";
   // gen root_cgroup_path
-  if (!is_valid_tenant_id(tenant_id) || is_server_tenant(tenant_id)) {
-    // if tenant_id is invalid or 500, return "other"
+  if (!is_valid_tenant_id(tenant_id)) {
+    if (OB_NOT_NULL(base_path) && 0 != STRLEN(base_path)) {
+      // background base, return "cgroup/background"
+      snprintf(root_cgroup_path, path_bufsize, "%s", root_cgroup_);
+    } else {
+      // if tenant_id is invalid and not background, return "cgroup/other"
+      snprintf(root_cgroup_path, path_bufsize, "%s", other_cgroup_);
+    }
+  } else if (is_server_tenant(tenant_id)) {
+    // if tenant_id is 500, return "cgroup/other"
     snprintf(root_cgroup_path, path_bufsize, "%s", other_cgroup_);
   } else {
     snprintf(root_cgroup_path, path_bufsize, "%s", root_cgroup_);
@@ -354,7 +362,7 @@ int ObCgroupCtrl::get_group_path(
       // do nothing
       // if group is invalid, return "root_cgroup_path/[base_path]/[user_tenant_path]/[meta_tenant_path]/"
     } else {
-      const char *group_name;
+      const char *group_name = nullptr;
       share::ObGroupName g_name;
       int tmp_ret = OB_SUCCESS;
       const int WARN_LOG_INTERVAL = 10 * 1000 * 1000L;
@@ -446,7 +454,9 @@ int ObCgroupCtrl::get_group_info_by_group_id(const uint64_t tenant_id,
   int ret = OB_SUCCESS;
   ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
   if (OB_FAIL(rule_mgr.get_group_name_by_id(tenant_id, group_id, group_name))) {
-    LOG_WARN("fail get group name", K(tenant_id), K(group_id), K(group_name));
+    if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
+      LOG_WARN("fail get group name", K(tenant_id), K(group_id), K(group_name));
+    }
   }
   return ret;
 }
