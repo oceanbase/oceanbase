@@ -101,7 +101,7 @@ public:
                       const int64_t task_id,
                       ObDDLKvMgrHandle &ddl_kv_mgr_handle,
                       int64_t &real_sleep_us);
-
+  ObIAllocator &get_allocator() { return allocator_; }
 private:
   struct SpeedHandleKey {
     public:
@@ -176,7 +176,7 @@ private:
   static const int64_t MAP_BUCKET_NUM  = 1024;
   bool is_inited_;
   common::hash::ObHashMap<SpeedHandleKey, ObDDLCtrlSpeedItem*> speed_handle_map_;
-  common::ObArenaAllocator allocator_;
+  common::ObConcurrentFIFOAllocator allocator_;
   common::ObBucketLock bucket_lock_;
   RefreshSpeedHandleTask refreshTimerTask_;
 };
