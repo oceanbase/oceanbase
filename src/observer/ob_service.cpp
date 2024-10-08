@@ -1311,6 +1311,7 @@ int ObService::check_memtable_cnt(
     LOG_WARN("invalid argument", K(ret), K(arg));
   } else {
     ObMinorFreezeArg minor_freeze_arg;
+    minor_freeze_arg.ls_id_ = arg.ls_id_;
     minor_freeze_arg.tablet_id_ = arg.tablet_id_;
     if (OB_FAIL(minor_freeze_arg.tenant_ids_.push_back(arg.tenant_id_))) {
       LOG_WARN("failed to push back tenant id", K(ret));
