@@ -542,6 +542,7 @@ private:
   int init_ddl_table_store(const share::SCN &start_scn, const int64_t snapshot_version, const share::SCN &ddl_checkpoint_scn);
   int update_major_sstable();
   int pre_process_cs_replica(const ObTabletID &tablet_id, bool &replay_normal_in_cs_replica);
+  int check_need_replay_column_store(const ObStorageSchema &storage_schema, const ObDirectLoadType &direct_load_type, bool &need_replay_column_store);
 
 private:
   share::SCN start_scn_;
