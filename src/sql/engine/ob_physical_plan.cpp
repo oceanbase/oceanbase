@@ -137,6 +137,8 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     use_rich_format_(false),
     subschema_ctx_(allocator_),
     disable_auto_memory_mgr_(false),
+    is_inner_sql_(false),
+    is_batch_params_execute_(false),
     all_local_session_vars_(&allocator_),
     udf_has_dml_stmt_(false),
     mview_ids_(&allocator_),
@@ -245,6 +247,8 @@ void ObPhysicalPlan::reset()
   subschema_ctx_.reset();
   all_local_session_vars_.reset();
   udf_has_dml_stmt_ = false;
+  is_inner_sql_ = false;
+  is_batch_params_execute_ = false;
   mview_ids_.reset();
   enable_inc_direct_load_ = false;
   enable_replace_ = false;

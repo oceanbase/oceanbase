@@ -41,6 +41,7 @@
 #include "sql/spm/ob_spm_define.h"
 #include "sql/spm/ob_spm_controller.h"
 #include "sql/spm/ob_spm_evolution_plan.h"
+#include "sql/spm/ob_plan_baseline_mgr.h"
 #endif
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
 #include "sql/plan_cache/ob_values_table_compression.h"
@@ -55,13 +56,14 @@ namespace oceanbase
 {
 namespace sql
 {
-struct ObGetPlanIdBySqlIdOp
+struct ObGetCandiBaselinePlanIdOp
 {
-  explicit ObGetPlanIdBySqlIdOp(common::ObIArray<uint64_t> *key_array,
+  explicit ObGetCandiBaselinePlanIdOp(common::ObIArray<uint64_t> *key_array,
+                                uint64_t db_id,
                                 const common::ObString &sql_id,
                                 const bool with_plan_hash,
                                 const uint64_t &plan_hash_value)
-    : key_array_(key_array), sql_id_(sql_id), with_plan_hash_(with_plan_hash), plan_hash_value_(plan_hash_value)
+    : key_array_(key_array), db_id_(db_id), sql_id_(sql_id), with_plan_hash_(with_plan_hash), plan_hash_value_(plan_hash_value)
   {
   }
   int operator()(common::hash::HashMapPair<ObCacheObjID, ObILibCacheObject *> &entry)
@@ -77,7 +79,9 @@ struct ObGetPlanIdBySqlIdOp
     } else if (OB_ISNULL(plan = dynamic_cast<ObPhysicalPlan *>(entry.second))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null plan", K(ret), K(plan));
-    } else if (sql_id_ != plan->stat_.sql_id_) {
+    } else if (!plan->should_add_baseline() || plan->stat_.constructed_sql_.empty()) {
+      // do nothing
+    } else if (!sql_id_.empty() && (db_id_ != plan->stat_.db_id_ || sql_id_ != plan->stat_.sql_id_)) {
       // do nothing
     } else if (with_plan_hash_ && plan->stat_.plan_hash_value_ != plan_hash_value_) {
       // do nothing
@@ -89,6 +93,7 @@ struct ObGetPlanIdBySqlIdOp
   }
 
   common::ObIArray<uint64_t> *key_array_;
+  uint64_t db_id_;
   common::ObString sql_id_;
   bool with_plan_hash_;
   uint64_t plan_hash_value_;
@@ -160,12 +165,12 @@ struct ObGetKVEntryBySQLIDOp : public ObKVEntryTraverseOp
 };
 
 #ifdef OB_BUILD_SPM
-struct ObGetPlanBaselineBySQLIDOp : public ObKVEntryTraverseOp
+struct ObGetPlanBaselineOp : public ObKVEntryTraverseOp
 {
-  explicit ObGetPlanBaselineBySQLIDOp(uint64_t db_id,
-                                      common::ObString sql_id,
-                                      LCKeyValueArray *key_val_list,
-                                      const CacheRefHandleID ref_handle)
+  explicit ObGetPlanBaselineOp(uint64_t db_id,
+                               common::ObString sql_id,
+                               LCKeyValueArray *key_val_list,
+                               const CacheRefHandleID ref_handle)
     : ObKVEntryTraverseOp(key_val_list, ref_handle),
       db_id_(db_id),
       sql_id_(sql_id)
@@ -177,7 +182,9 @@ struct ObGetPlanBaselineBySQLIDOp : public ObKVEntryTraverseOp
     is_match = false;
     if (ObLibCacheNameSpace::NS_SPM == entry.first->namespace_) {
       ObBaselineKey *key = static_cast<ObBaselineKey*>(entry.first);
-      if (db_id_ != common::OB_INVALID_ID && db_id_ != key->db_id_) {
+      if (sql_id_.empty()) {
+        is_match = true;
+      } else if (db_id_ != common::OB_INVALID_ID && db_id_ != key->db_id_) {
         // skip entry that has non-matched db_id
       } else if (sql_id_ == key->sql_id_) {
         is_match = true;
@@ -1402,12 +1409,12 @@ int ObPlanCache::cache_evict_plan_by_sql_id(uint64_t db_id, common::ObString sql
 }
 
 #ifdef OB_BUILD_SPM
-int ObPlanCache::cache_evict_baseline_by_sql_id(uint64_t db_id, common::ObString sql_id)
+int ObPlanCache::cache_evict_baseline(uint64_t db_id, common::ObString sql_id)
 {
   int ret = OB_SUCCESS;
   SQL_PC_LOG(TRACE, "cache evict plan baseline by sql id start");
   LCKeyValueArray to_evict_keys;
-  ObGetPlanBaselineBySQLIDOp get_ids_op(db_id, sql_id, &to_evict_keys, PLAN_BASELINE_HANDLE);
+  ObGetPlanBaselineOp get_ids_op(db_id, sql_id, &to_evict_keys, PLAN_BASELINE_HANDLE);
   if (OB_FAIL(foreach_cache_evict(get_ids_op))) {
     SQL_PC_LOG(WARN, "failed to foreach cache evict", K(ret));
   }
@@ -1589,32 +1596,71 @@ int ObPlanCache::cache_evict_by_glitch_node()
 int ObPlanCache::load_plan_baseline(const obrpc::ObLoadPlanBaselineArg &arg, uint64_t &load_count)
 {
   int ret = OB_SUCCESS;
-  common::ObSEArray<uint64_t, 4> plan_ids;
   ObGlobalReqTimeService::check_req_timeinfo();
-  ObGetPlanIdBySqlIdOp plan_id_op(&plan_ids, arg.sql_id_, arg.with_plan_hash_, arg.plan_hash_value_);
   load_count = 0;
-  if (OB_FAIL(co_mgr_.foreach_cache_obj(plan_id_op))) {
-    LOG_WARN("fail to traverse id2stat_map", K(ret));
-  } else {
-    ObPhysicalPlan *plan = NULL;
-    LOG_INFO("load plan baseline by sql ids", K(arg), K(plan_ids));
-    for (int64_t i = 0; i < plan_ids.count(); i++) {
-      uint64_t plan_id= plan_ids.at(i);
-      ObCacheObjGuard guard(LOAD_BASELINE_HANDLE);
-      int tmp_ret = ref_plan(plan_id, guard); //plan引用计数加1
-      plan = static_cast<ObPhysicalPlan*>(guard.cache_obj_);
-      if (OB_HASH_NOT_EXIST == tmp_ret) {
-        //do nothing;
-      } else if (OB_SUCCESS != tmp_ret || NULL == plan) {
-        LOG_WARN("get plan failed", K(tmp_ret), KP(plan));
-      } else {
-        LOG_INFO("load plan baseline by sql id", K(arg));
-        if (OB_FAIL(ObSpmController::load_baseline(arg, plan))) {
-          LOG_WARN("failed to load baseline", K(ret));
+  SMART_VAR(PlanIdArray, plan_ids) {
+    int64_t batch_exec_cnt = 0;
+    ObGetCandiBaselinePlanIdOp plan_id_op(&plan_ids, arg.database_id_, arg.sql_id_, arg.with_plan_hash_, arg.plan_hash_value_);
+    if (OB_FAIL(co_mgr_.foreach_cache_obj(plan_id_op))) {
+      SERVER_LOG(WARN, "fail to traverse id2stat_map");
+    } else {
+      int64_t pos = 0;
+      while (OB_SUCC(ret) && pos < plan_ids.count()) {
+        uint64_t tmp_load_count = 0;
+        if (OB_FAIL(batch_load_plan_baseline(arg, plan_ids, pos, tmp_load_count))) {
+          LOG_WARN("failed to batch load plan baseline", K(ret));
         } else {
-          ++load_count;
+          load_count += tmp_load_count;
+          ++batch_exec_cnt;
         }
       }
+    }
+    if (arg.sql_id_.empty()) {
+      LOG_INFO("batch load plan baseline", K(load_count), K(batch_exec_cnt), K(plan_ids.count()), K(arg));
+    } else {
+      LOG_INFO("load plan baseline by sql ids", K(load_count), K(batch_exec_cnt), K(plan_ids), K(arg));
+    }
+  }
+  return ret;
+}
+
+int ObPlanCache::batch_load_plan_baseline(const obrpc::ObLoadPlanBaselineArg &arg,
+                                          const PlanIdArray &plan_ids,
+                                          int64_t &pos,
+                                          uint64_t &load_count)
+{
+  int ret = OB_SUCCESS;
+  load_count = 0;
+  ObSpmBaselineLoader baseline_loader;
+  if (OB_UNLIKELY(pos < 0 || pos >= plan_ids.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected pos", K(ret), K(pos), K(plan_ids.count()));
+  } else if (OB_FAIL(baseline_loader.init_baseline_loader(arg))) {
+    LOG_WARN("failed to init baseline loader", K(ret));
+  } else {
+    bool need_add_next = true;
+    while (OB_SUCC(ret) && pos < plan_ids.count() && need_add_next) {
+      ObCacheObjGuard guard(LOAD_BASELINE_HANDLE);
+      int tmp_ret = ref_plan(plan_ids.at(pos), guard); //plan引用计数加1
+      ObPhysicalPlan *plan = static_cast<ObPhysicalPlan*>(guard.cache_obj_);
+      if (OB_HASH_NOT_EXIST == tmp_ret) {
+        ++pos;
+      } else if (OB_SUCCESS != tmp_ret || NULL == plan) {
+        ++pos;
+        LOG_WARN("get plan failed", K(tmp_ret), KP(plan));
+      } else if (OB_FAIL(baseline_loader.add_one_plan_baseline(*plan, need_add_next))) {
+        LOG_WARN("failed to add one plan baseline", K(ret));
+      } else if (need_add_next) {
+        ++pos;
+      }
+    }
+
+    if (OB_FAIL(ret) || 0 >= baseline_loader.get_baseline_count()) {
+    } else if (OB_FAIL(ObSpmController::load_baseline(baseline_loader))) {
+      LOG_WARN("failed to load baseline", K(ret));
+    } else {
+      load_count = baseline_loader.get_baseline_count();
+
     }
   }
   return ret;

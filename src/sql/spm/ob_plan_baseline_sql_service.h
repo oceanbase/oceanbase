@@ -29,6 +29,7 @@ class ObMySQLProxy;
 
 namespace sql
 {
+class ObSpmBaselineLoader;
 
 class ObPlanBaselineSqlService
 {
@@ -38,6 +39,7 @@ public:
   ~ObPlanBaselineSqlService() {}
   int init(ObMySQLProxy *proxy);
 
+  int load_plan_baseline(const uint64_t tenant_id, ObSpmBaselineLoader &baseline_loader);
   int update_baseline_item(ObMySQLTransaction& trans,
                            ObIAllocator& allocator,
                            const uint64_t tenant_id,
@@ -108,11 +110,11 @@ public:
   int spm_configure(const uint64_t tenant_id, const uint64_t database_id, const ObString& param_name, const int64_t& param_value);
   int purge_baselines(const uint64_t tenant_id, const uint64_t current_time, int64_t &baseline_affected);
 
-  int convert_sql_string(ObIAllocator &allocator,
-                         const ObCollationType input_collation,
-                         const ObString &input_str,
-                         bool truncate_str,
-                         ObString &output_str);
+  static int convert_sql_string(ObIAllocator &allocator,
+                                const ObCollationType input_collation,
+                                const ObString &input_str,
+                                bool truncate_str,
+                                ObString &output_str);
 
   int update_plan_baselines_result(const uint64_t tenant_id,
                                    EvoResultUpdateTask& evo_res);
