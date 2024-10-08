@@ -222,7 +222,8 @@ const char* ObCOMajorSSTableStatusStr[] = {
   "COL_ONLY_ALL",
   "PURE_COL",
   "PURE_COL_ONLY_ALL",
-  "COL_REPLICA_MAJOR"
+  "COL_REPLICA_MAJOR",
+  "DELAYED_TRANSFORM_MAJOR"
 };
 
 const char* co_major_sstable_status_to_str(const ObCOMajorSSTableStatus& major_sstable_status)
