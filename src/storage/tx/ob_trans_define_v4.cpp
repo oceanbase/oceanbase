@@ -280,7 +280,7 @@ void ObTxReadSnapshot::convert_to_out_tx()
   core_.scn_.reset();
 }
 
-OB_SERIALIZE_MEMBER(ObTxPart, id_, addr_, epoch_, first_scn_, last_scn_);
+OB_SERIALIZE_MEMBER(ObTxPart, id_, addr_, epoch_, first_scn_, last_scn_, flag_.flag_val_);
 
 DEFINE_SERIALIZE(ObTxDesc::FLAG::FOR_FIXED_SER_VAL)
 {

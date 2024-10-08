@@ -207,6 +207,33 @@ struct ObTxParam
   OB_UNIS_VERSION(1);
 };
 
+union ObTxPartFlag
+{
+  int64_t flag_val_;
+  struct FlagBit
+  {
+    unsigned int is_dup_ls_ : 1;
+
+    FlagBit() { reset(); }
+
+    void reset() { is_dup_ls_ = 0; }
+
+    TO_STRING_KV(K(is_dup_ls_));
+
+  } flag_bit_;
+
+  ObTxPartFlag() { reset(); }
+
+  void reset()
+  {
+    flag_val_ = 0;
+    flag_bit_.reset();
+  }
+
+  bool is_dup_ls() const { return flag_bit_.is_dup_ls_ == 1; }
+  void set_dup_ls() { flag_bit_.is_dup_ls_ = 1; }
+};
+
 struct ObTxPart
 {
   static const int64_t EPOCH_UNKNOWN = -1;
@@ -219,6 +246,7 @@ struct ObTxPart
   ObTxSEQ first_scn_;      // used to judge a ctx is clean in scheduler view
   ObTxSEQ last_scn_;       // used to get rollback savepoint set
   int64_t last_touch_ts_; // used to judge a ctx retouched after a time point
+  ObTxPartFlag flag_;     // used to describe some special attributes of a participant
   bool operator==(const ObTxPart &rhs) const { return id_ == rhs.id_ && addr_ == rhs.addr_; }
   bool operator!=(const ObTxPart &rhs) const { return !operator==(rhs); }
   bool is_clean() const { return !first_scn_.is_valid() || (first_scn_ > last_scn_); }
