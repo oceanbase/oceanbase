@@ -37,21 +37,23 @@ const ObLabel MEMORY_LABEL = ObLabel("LoadDataReader");
  */
 
 ObFileReadParam::ObFileReadParam()
-    : compression_format_(ObLoadCompressionFormat::NONE),
+    : compression_format_(ObCSVGeneralFormat::ObCSVCompression::NONE),
       packet_handle_(NULL),
       session_(NULL),
       timeout_ts_(-1)
 {
 }
 
-int ObFileReadParam::parse_compression_format(ObString compression_name, ObString filename, ObLoadCompressionFormat &compression_format)
+int ObFileReadParam::parse_compression_format(ObString compression_name,
+                                              ObString filename,
+                                              ObCSVGeneralFormat::ObCSVCompression &compression_format)
 {
   int ret = OB_SUCCESS;
   if (compression_name.length() == 0) {
-    compression_format = ObLoadCompressionFormat::NONE;
-  } else if (OB_FAIL(compression_format_from_string(compression_name, compression_format))) {
-  } else if (ObLoadCompressionFormat::AUTO == compression_format) {
-    ret = compression_format_from_suffix(filename, compression_format);
+    compression_format = ObCSVGeneralFormat::ObCSVCompression::NONE;
+  } else if (OB_FAIL(compression_algorithm_from_string(compression_name, compression_format))) {
+  } else if (ObCSVGeneralFormat::ObCSVCompression::AUTO == compression_format) {
+    ret = compression_algorithm_from_suffix(filename, compression_format);
   }
   return ret;
 }
@@ -132,7 +134,7 @@ int ObFileReader::open_decompress_reader(const ObFileReadParam &param,
                                          ObFileReader *&file_reader)
 {
   int ret = OB_SUCCESS;
-  if (param.compression_format_ == ObLoadCompressionFormat::NONE) {
+  if (param.compression_format_ == ObCSVGeneralFormat::ObCSVCompression::NONE) {
     file_reader = source_reader;
   } else {
     ObDecompressFileReader *tmp_reader = OB_NEW(ObDecompressFileReader, MEMORY_ATTR, allocator);
@@ -546,23 +548,25 @@ ObDecompressor::~ObDecompressor()
 {
 }
 
-int ObDecompressor::create(ObLoadCompressionFormat format, ObIAllocator &allocator, ObDecompressor *&decompressor)
+int ObDecompressor::create(ObCSVGeneralFormat::ObCSVCompression format,
+                           ObIAllocator &allocator,
+                           ObDecompressor *&decompressor)
 {
   int ret = OB_SUCCESS;
 
   decompressor = nullptr;
 
   switch (format) {
-    case ObLoadCompressionFormat::NONE: {
+    case ObCSVGeneralFormat::ObCSVCompression::NONE: {
       ret = OB_INVALID_ARGUMENT;
     } break;
 
-    case ObLoadCompressionFormat::GZIP:
-    case ObLoadCompressionFormat::DEFLATE: {
+    case ObCSVGeneralFormat::ObCSVCompression::GZIP:
+    case ObCSVGeneralFormat::ObCSVCompression::DEFLATE: {
       decompressor = OB_NEW(ObZlibDecompressor, MEMORY_ATTR, allocator, format);
     } break;
 
-    case ObLoadCompressionFormat::ZSTD: {
+    case ObCSVGeneralFormat::ObCSVCompression::ZSTD: {
       decompressor = OB_NEW(ObZstdDecompressor, MEMORY_ATTR, allocator);
     } break;
 
@@ -620,7 +624,7 @@ int ObDecompressFileReader::open(const ObFileReadParam &param, ObFileReader *sou
 {
   int ret = OB_SUCCESS;
 
-  if (param.compression_format_ == ObLoadCompressionFormat::NONE) {
+  if (param.compression_format_ == ObCSVGeneralFormat::ObCSVCompression::NONE) {
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(ObDecompressor::create(param.compression_format_, allocator_, decompressor_))) {
     LOG_WARN("failed to create decompressor", K(param.compression_format_), K(ret));
@@ -725,7 +729,8 @@ void zlib_free(voidpf opaque, voidpf address)
   }
 }
 
-ObZlibDecompressor::ObZlibDecompressor(ObIAllocator &allocator, ObLoadCompressionFormat compression_format)
+ObZlibDecompressor::ObZlibDecompressor(ObIAllocator &allocator,
+                                       ObCSVGeneralFormat::ObCSVCompression compression_format)
     : ObDecompressor(allocator), compression_format_(compression_format)
 {}
 
