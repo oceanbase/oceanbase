@@ -763,7 +763,7 @@ int ObDbmsSpace::estimate_index_table_size(ObMySQLProxy *sql_proxy,
   } else if (OB_FAIL(check_stats_valid(opt_stats, is_valid))) {
     SQL_ENG_LOG(WARN, "fail to check opt stats", K(ret));
   } else if (is_valid) {
-    if (OB_FAIL(estimate_index_table_size_by_opt_stats(sql_proxy, opt_stats, info, table_size))) {
+    if (OB_FAIL(estimate_index_table_size_by_opt_stats(sql_proxy, table_schema, opt_stats, info, table_size))) {
       SQL_ENG_LOG(WARN, "fail to estimate index table size", K(ret));
     }
   } else if (OB_FAIL(estimate_index_table_size_default(sql_proxy, table_schema, info, table_size))) {
@@ -802,6 +802,7 @@ int ObDbmsSpace::check_stats_valid(const OptStats &opt_stats, bool &is_valid)
 }
 
 int ObDbmsSpace::estimate_index_table_size_by_opt_stats(ObMySQLProxy *sql_proxy,
+                                                        const ObTableSchema *table_schema,
                                                         const OptStats &opt_stats,
                                                         IndexCostInfo &info,
                                                         ObIArray<uint64_t> &table_size)
@@ -809,9 +810,14 @@ int ObDbmsSpace::estimate_index_table_size_by_opt_stats(ObMySQLProxy *sql_proxy,
   int ret = OB_SUCCESS;
   table_size.reset();
 
-  if (OB_ISNULL(sql_proxy)) {
+  if (OB_ISNULL(sql_proxy) || OB_ISNULL(table_schema)) {
     ret = OB_INVALID_ARGUMENT;
-    SQL_ENG_LOG(WARN, "the args is null", K(ret), KP(sql_proxy));
+    SQL_ENG_LOG(WARN, "the args is null", K(ret), KP(sql_proxy), KP(table_schema));
+  } else if (OB_FAIL(get_svr_info_from_schema(table_schema,
+                                              info.svr_addr_,
+                                              info.tablet_ids_,
+                                              info.table_tenant_id_))) {
+    SQL_ENG_LOG(WARN, "fail to get info from schema", K(ret));
   } else if (OB_FAIL(inner_get_compressed_ratio(sql_proxy, info))) {
     SQL_ENG_LOG(WARN, "fail to get compression ratio", K(ret));
   } else {
