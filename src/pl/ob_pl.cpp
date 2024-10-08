@@ -1599,7 +1599,10 @@ int ObPL::execute(ObExecContext &ctx,
     CK (OB_NOT_NULL(result));
     OX (*result = local_result);
   }
-
+  if(OB_SUCC(ret) && lib::is_mysql_mode() && !routine.get_can_cached()) {
+    LOG_USER_WARN(OB_ERR_COMPILE_RESULT_NOT_ADD_CACHE, routine.get_function_name().length(), routine.get_function_name().ptr());
+    LOG_WARN("The compilation result cannot be added to the cache", K(routine.get_function_name()));
+  }
   //当前层 pl 执行时间
   int64_t execute_end = ObTimeUtility::current_time();
   pl.add_pl_exec_time(execute_end - execute_start - pl.get_pure_sql_exec_time(), is_called_from_sql);
