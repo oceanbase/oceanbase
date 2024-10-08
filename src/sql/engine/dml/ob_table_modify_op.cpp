@@ -805,6 +805,7 @@ int ObTableModifyOp::prepare_implict_cursor(int64_t affected_rows,
     implicit_cursor.matched_rows_ += matched_rows;
     implicit_cursor.affected_rows_ += affected_rows;
     implicit_cursor.duplicated_rows_ += duplicated_rows;
+    implicit_cursor.last_insert_id_ = plan_ctx->get_autoinc_col_value();
     LOG_DEBUG("merge implicit cursor", K(ret), K(implicit_cursor));
   }
   return ret;
