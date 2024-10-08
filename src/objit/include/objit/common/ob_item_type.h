@@ -508,6 +508,8 @@ typedef enum ObItemType
   T_FUN_SYS_SM3 = 776,
   T_FUN_SYS_SM4_ENCRYPT = 777,
   T_FUN_SYS_SM4_DECRYPT = 778,
+  T_FUN_SYS_ENHANCED_AES_ENCRYPT = 779,
+  T_FUN_SYS_ENHANCED_AES_DECRYPT = 780,
   ///< @note add new mysql only function type before this line
   T_MYSQL_ONLY_SYS_MAX_OP = 800,
 
@@ -2597,6 +2599,11 @@ typedef enum ObItemType
   T_RB_ITERATE_EXPRESSION = 4737,
   T_MODULE_DATA = 4738,
   T_MODULE_NAME = 4739,
+
+  T_UNION_MERGE_HINT = 4740,
+  T_UNION_MERGE_LIST = 4741,
+
+  T_PSEUDO_OLD_NEW_COL = 4742,
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;

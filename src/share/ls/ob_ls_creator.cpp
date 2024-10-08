@@ -34,6 +34,7 @@
 #endif
 #include "share/tenant_snapshot/ob_tenant_snapshot_table_operator.h"
 #include "share/restore/ob_tenant_clone_table_operator.h"
+#include "share/ob_global_stat_proxy.h" // for ObGlobalStatProxy
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -422,6 +423,47 @@ int ObLSCreator::process_after_has_member_list_(
   return ret;
 }
 
+int ObLSCreator::check_tenant_mv_merge_info_(const share::ObAllTenantInfo &tenant_info,
+                                             storage::ObMajorMVMergeInfo &major_mv_merge_info)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!is_valid() || !tenant_info.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_info));
+  } else if (tenant_info.is_primary() && id_.is_user_ls()) {
+    major_mv_merge_info.reset();
+    uint64_t data_version;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
+      LOG_WARN("fail to get data version", KR(ret), K(tenant_id_));
+    } else if (OB_UNLIKELY(data_version < DATA_VERSION_4_3_4_0)) {
+      LOG_INFO("data version is less than 4.3.4, not get tenant mv merge scn", KR(ret),
+                K(data_version), K(major_mv_merge_info));
+    } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sql proxy is null", KR(ret), KP(GCTX.sql_proxy_));
+    } else {
+      ObGlobalStatProxy proxy(*GCTX.sql_proxy_, tenant_id_);
+      share::SCN tenant_mv_merge_scn;
+      if (OB_FAIL(proxy.get_major_refresh_mv_merge_scn(true/*for update*/, tenant_mv_merge_scn))) {
+        if (OB_ERR_NULL_VALUE == ret) {
+          ret = OB_SUCCESS;
+          tenant_mv_merge_scn = share::SCN::min_scn();
+        } else {
+          LOG_WARN("fail to get major refresh mv merge scn", KR(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(major_mv_merge_info.init(tenant_mv_merge_scn, tenant_mv_merge_scn, tenant_mv_merge_scn))) {
+        LOG_WARN("fail to init major mv merge info", KR(ret), K(tenant_mv_merge_scn));
+      }
+      LOG_INFO("create ls with merge info", KR(ret), K(major_mv_merge_info));
+    }
+  }
+
+  return ret;
+}
+
 int ObLSCreator::create_ls_(const ObILSAddr &addrs,
                            const int64_t paxos_replica_num,
                            const share::ObAllTenantInfo &tenant_info,
@@ -456,18 +498,22 @@ int ObLSCreator::create_ls_(const ObILSAddr &addrs,
       int tmp_ret = OB_SUCCESS;
       ObArray<int> return_code_array;
       const common::ObReplicaProperty replica_property;
+      storage::ObMajorMVMergeInfo major_mv_merge_info;
       lib::Worker::CompatMode new_compat_mode = compat_mode == ORACLE_MODE ?
                                          lib::Worker::CompatMode::ORACLE :
                                          lib::Worker::CompatMode::MYSQL;
 
+      if (OB_FAIL(check_tenant_mv_merge_info_(tenant_info, major_mv_merge_info))) {
+        LOG_WARN("failed to check tenant mv merge info", KR(ret), K(tenant_info), K(major_mv_merge_info));
+      }
       for (int64_t i = 0; OB_SUCC(ret) && i < addrs.count(); ++i) {
         arg.reset();
         const ObLSReplicaAddr &addr = addrs.at(i);
         if (OB_FAIL(arg.init(tenant_id_, id_, addr.replica_type_,
                 replica_property, tenant_info, create_scn, new_compat_mode,
-                create_with_palf, palf_base_info))) {
+                create_with_palf, palf_base_info, major_mv_merge_info))) {
           LOG_WARN("failed to init create log stream arg", KR(ret), K(addr), K(create_with_palf), K(replica_property),
-              K_(id), K_(tenant_id), K(tenant_info), K(create_scn), K(new_compat_mode), K(palf_base_info));
+              K_(id), K_(tenant_id), K(tenant_info), K(create_scn), K(new_compat_mode), K(palf_base_info), K(major_mv_merge_info));
         } else if (OB_TMP_FAIL(create_ls_proxy_.call(addr.addr_, ctx.get_timeout(),
                 GCONF.cluster_id, tenant_id_, arg))) {
           LOG_WARN("failed to all async rpc", KR(tmp_ret), K(addr), K(ctx.get_timeout()),

@@ -705,7 +705,8 @@ int ObSqlTransControl::dblink_xa_prepare(ObExecContext &exec_ctx)
                                                              static_cast<common::sqlclient::DblinkDriverProto>(dblink_schema->get_driver_proto())))) {
             LOG_WARN("failed to init dblink param ctx", K(ret), K(dblink_param_ctx), K(dblink_id));
           } else if (OB_FAIL(dblink_proxy->create_dblink_pool(dblink_param_ctx,
-                                                        dblink_schema->get_host_addr(),
+                                                        dblink_schema->get_host_name(),
+                                                        dblink_schema->get_host_port(),
                                                         dblink_schema->get_tenant_name(),
                                                         dblink_schema->get_user_name(),
                                                         dblink_schema->get_plain_password(),
@@ -1585,9 +1586,9 @@ int ObSqlTransControl::lock_table(ObExecContext &exec_ctx,
     arg.timeout_us_ = lock_timeout_us;
     arg.is_from_sql_ = true;
 
-    OZ (lock_service->lock_table(*session->get_tx_desc(),
-                                tx_param,
-                                arg),
+    OZ (lock_service->lock(*session->get_tx_desc(),
+                           tx_param,
+                           arg),
         tx_param, table_id, lock_mode, lock_timeout_us);
   } else {
     ObLockPartitionRequest arg;

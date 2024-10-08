@@ -66,10 +66,11 @@ int __attribute__((weak)) gen_create_ls_arg(const int64_t tenant_id,
   arg.reset();
   lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::MYSQL;
   palf::PalfBaseInfo palf_base_info;
+  ObMajorMVMergeInfo major_merge_info;
   if (OB_FAIL(tenant_info.init(tenant_id, share::PRIMARY_TENANT_ROLE))) {
     STORAGE_LOG(WARN, "failed to init tenant info", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(arg.init(tenant_id, ls_id, replica_type, property, tenant_info, create_scn, compat_mode, false, palf_base_info))) {
-   STORAGE_LOG(WARN, "failed to init arg", KR(ret), K(tenant_id), K(ls_id), K(tenant_info), K(create_scn), K(compat_mode), K(palf_base_info));
+  } else if (OB_FAIL(arg.init(tenant_id, ls_id, replica_type, property, tenant_info, create_scn, compat_mode, false, palf_base_info, major_merge_info))) {
+   STORAGE_LOG(WARN, "failed to init arg", KR(ret), K(tenant_id), K(ls_id), K(tenant_info), K(create_scn), K(compat_mode), K(palf_base_info), K(major_merge_info));
   }
   return ret;
 }
@@ -85,6 +86,7 @@ int __attribute__((weak)) gen_create_tablet_arg(const int64_t tenant_id,
   obrpc::ObCreateTabletInfo tablet_info;
   ObArray<common::ObTabletID> index_tablet_ids;
   ObArray<int64_t> index_tablet_schema_idxs;
+  ObArray<int64_t> create_commit_versions;
   uint64_t table_id = 12345;
   arg.reset();
   share::schema::ObTableSchema table_schema_obj;
@@ -114,6 +116,7 @@ int __attribute__((weak)) gen_create_tablet_arg(const int64_t tenant_id,
           index_tablet_schema_idxs,
           lib::Worker::CompatMode::MYSQL,
           false,
+          create_commit_versions,
           false /*has_cs_replica*/))) {
     STORAGE_LOG(WARN, "failed to init tablet info", KR(ret), K(index_tablet_ids),
         K(tablet_id), K(index_tablet_schema_idxs));

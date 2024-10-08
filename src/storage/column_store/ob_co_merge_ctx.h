@@ -65,6 +65,10 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   virtual int cal_merge_param() override;
   virtual int prepare_index_tree() override { return OB_SUCCESS; }
   virtual int collect_running_info() override;
+  int collect_running_info_in_batch(
+    const uint32_t start_cg_idx,
+    const uint32_t end_cg_idx,
+    const ObCompactionTimeGuard &time_guard);
   virtual int build_ctx(bool &finish_flag) override;
   virtual int check_merge_ctx_valid() override;
   OB_INLINE bool all_cg_finish() const // locked by ObCODagNet ctx_lock_
@@ -147,7 +151,6 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   OB_INLINE bool is_build_row_store() const { return static_param_.is_build_row_store(); }
   int get_cg_schema_for_merge(const int64_t idx, const ObStorageColumnGroupSchema *&cg_schema_ptr);
   const ObSSTableMergeHistory &get_merge_history() { return dag_net_merge_history_; }
-
   INHERIT_TO_STRING_KV("ObCOTabletMergeCtx", ObBasicTabletMergeCtx,
       K_(array_count), K_(exe_stat));
   virtual int mark_cg_finish(const int64_t start_cg_idx, const int64_t end_cg_idx) { return OB_SUCCESS; }

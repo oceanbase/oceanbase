@@ -175,10 +175,12 @@ public:
   {
     return status_ >= RESTORE_START && status_ < WAIT_RESTORE_TO_CONSISTENT_SCN;
   }
+  bool is_before_restore_major_data() const
+  {
+    return status_ >= RESTORE_START && status_ < RESTORE_MAJOR_DATA;
+  }
   bool check_allow_read() const
   {
-    // TODO(yanfeng): wait merge quick restore code
-    // add following condition || (status_ >= QUICK_RESTORE_FINISH && status_ <= WAIT_RESTORE_MAJOR_DATA)
     return NONE == status_ || QUICK_RESTORE_FINISH == status_;
   }
   Status get_status() const { return status_; }

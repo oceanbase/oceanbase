@@ -80,7 +80,7 @@ private:
 private:
   int new_block(int64_t block_size, BlockInfo *&block);
 private:
-  DefaultPageAllocator inner_alloc_;
+  common::ObArenaAllocator inner_alloc_;
   BlockList blocks_;
   int64_t row_count_;
   int64_t col_count_;

@@ -38,26 +38,18 @@ public:
     ObTabletHandle &tablet_handle,
     const SCN &weak_read_ts,
     const ObMediumCompactionInfoList &medium_info_list,
-    ObScheduleStatistics *schedule_stat,
+    ObScheduleTabletCnt *schedule_tablet_cnt,
     const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason = ObAdaptiveMergePolicy::NONE)
     : allocator_("MediumSchedule"),
       ls_(ls),
       tablet_handle_(tablet_handle),
       weak_read_ts_(weak_read_ts.get_val_for_tx()),
       medium_info_list_(&medium_info_list),
-      schedule_stat_(schedule_stat),
+      schedule_tablet_cnt_(schedule_tablet_cnt),
       merge_reason_(merge_reason)
   {}
   ~ObMediumCompactionScheduleFunc() {}
 
-  static int schedule_tablet_medium_merge(
-      ObLS &ls,
-      ObTablet &tablet,
-      ObTabletSchedulePair &schedule_pair,
-      bool &create_dag_flag,
-      const int64_t major_frozen_scn,
-      const bool scheduler_called,
-      const ObExecMode exec_mode);
   /*
    * see
    * standby tenant should catch up broadcast scn when freeze info is recycled
@@ -70,12 +62,6 @@ public:
       const int64_t major_frozen_snapshot,
       const ObMediumCompactionInfoList &medium_list,
       bool &schedule_flag);
-  static int read_medium_info_from_list(
-      const ObMediumCompactionInfoList &medium_list,
-      const int64_t major_frozen_snapshot,
-      const int64_t last_major_snapshot,
-      ObMediumCompactionInfo::ObCompactionType &compaction_type,
-      int64_t &schedule_scn);
   static int is_election_leader(const share::ObLSID &ls_id, bool &ls_election_leader);
   static int get_max_sync_medium_scn(
     const ObTablet &tablet,
@@ -85,7 +71,7 @@ public:
     ObMultiVersionSchemaService &schema_service,
     const ObTablet &tablet,
     const int64_t schema_version,
-    const int64_t medium_compat_version,
+    const int64_t data_version,
     ObIAllocator &allocator,
     storage::ObStorageSchema &storage_schema,
     bool &is_skip_merge_index);
@@ -97,16 +83,8 @@ public:
   static int check_replica_checksum_items(
       const ObReplicaCkmArray &checksum_items,
       const bool is_medium_checker);
-  static int check_need_merge_and_schedule(
-      ObLS &ls,
-      ObTablet &tablet,
-      const int64_t schedule_scn,
-      const ObExecMode exec_mode,
-      bool &tablet_need_freeze_flag,
-      bool &create_dag_flag);
   int schedule_next_medium_for_leader(
     const int64_t major_snapshot,
-    const bool is_tombstone,
     bool &medium_clog_submitted);
 #ifdef OB_BUILD_SHARED_STORAGE
   // medium compaction is not considered
@@ -143,10 +121,6 @@ protected:
   int init_co_major_merge_type(
       const ObGetMergeTablesResult &result,
       ObMediumCompactionInfo &medium_info);
-  static int get_result_for_major(
-      ObTablet &tablet,
-      const ObMediumCompactionInfo &medium_info,
-      ObGetMergeTablesResult &result);
   int prepare_iter(
       const ObGetMergeTablesResult &result,
       ObTableStoreIterator &table_iter);
@@ -191,7 +165,6 @@ protected:
 
   int schedule_next_medium_primary_cluster(
     const int64_t major_snapshot,
-    const bool is_tombstone,
     bool &medium_clog_submitted);
 
   int choose_new_medium_snapshot(
@@ -236,7 +209,7 @@ private:
   ObTabletHandle tablet_handle_;
   const int64_t weak_read_ts_; // weak_read_ts_ should get before tablet
   const ObMediumCompactionInfoList *medium_info_list_;
-  ObScheduleStatistics *schedule_stat_;
+  ObScheduleTabletCnt *schedule_tablet_cnt_;
   ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason_;
 };
 

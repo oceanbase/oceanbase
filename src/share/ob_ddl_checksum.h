@@ -109,6 +109,7 @@ public:
       const uint64_t index_table_id,
       const int64_t ddl_task_id,
       const bool is_unique_index_checking,
+      const ObIArray<int64_t> &ignore_col_ids,
       bool &is_equal,
       common::ObMySQLProxy &sql_proxy);
   static int check_column_checksum_without_execution_id(
@@ -117,6 +118,7 @@ public:
       const uint64_t index_table_id,
       const int64_t ddl_task_id,
       const bool is_unique_index_checking,
+      const ObIArray<int64_t> &ignore_col_ids,
       bool &is_equal,
       common::ObMySQLProxy &sql_proxy);
   static int delete_checksum(

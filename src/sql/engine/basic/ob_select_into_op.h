@@ -251,7 +251,7 @@ public:
       if (last_line_pos_ > 0 && OB_NOT_NULL(buf_)) {
         if (OB_FAIL(flush_data(buf_, last_line_pos_, this))) {
         } else {
-          MEMCPY(buf_, buf_ + last_line_pos_, curr_pos_ - last_line_pos_);
+          MEMMOVE(buf_, buf_ + last_line_pos_, curr_pos_ - last_line_pos_);
           curr_pos_ = curr_pos_ - last_line_pos_;
           last_line_pos_ = 0;
         }

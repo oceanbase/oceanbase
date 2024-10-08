@@ -93,6 +93,7 @@ public:
   int add_new_indexkey_for_oracle_temp_table(obrpc::ObCreateIndexArg &index_arg);
 
 private:
+  int fill_high_bound_val_for_split_partition(const AlterTableSchema &alter_table_schema, ObPartition& split_part);
   int check_dup_foreign_keys_exist(
       share::schema::ObSchemaGetterGuard *schema_guard,
       const obrpc::ObCreateForeignKeyArg &foreign_key_arg);
@@ -179,6 +180,9 @@ private:
                                    const share::schema::ObTableSchema &origin_table_schema);
   int resolve_split_partition(const ParseNode *node,
                               const share::schema::ObTableSchema &origin_table_schema);
+  int fill_split_source_tablet_id(const ObString& source_part_name,
+                                  const share::schema::ObTableSchema &origin_table_schema,
+                                  share::schema::AlterTableSchema &alter_table_schema);
   virtual int get_table_schema_for_check(share::schema::ObTableSchema &table_schema) override;
   //int generate_new_schema(const share::schema::ObTableSchema &origin_table_schema,
   //                        share::schema::AlterTableSchema &new_table_schema);
@@ -193,7 +197,8 @@ private:
       ObRawExpr *part_expr);
   int check_alter_part_key_allowed(const share::schema::ObTableSchema &table_schema,
                                    const share::schema::ObColumnSchemaV2 &src_col_schema,
-                                   const share::schema::ObColumnSchemaV2 &dst_col_schema);
+                                   const share::schema::ObColumnSchemaV2 &dst_col_schema,
+                                   const bool is_part_key);
   int resolve_column_group_for_column();
   int generate_index_arg_cascade();
   int resolve_alter_column_groups(const ParseNode &node);

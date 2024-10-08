@@ -24,6 +24,7 @@
 #include "rootserver/ddl_task/ob_index_build_task.h"
 #include "rootserver/ddl_task/ob_modify_autoinc_task.h"
 #include "rootserver/ddl_task/ob_table_redefinition_task.h"
+#include "rootserver/ddl_task//ob_partition_split_task.h"
 #include "rootserver/ob_thread_idling.h"
 #include "lib/hash/ob_hashmap.h"
 #include "lib/profile/ob_trace_id.h"
@@ -260,6 +261,7 @@ public:
 
   int on_sstable_complement_job_reply(
       const common::ObTabletID &tablet_id,
+      const ObAddr &svr,
       const ObDDLTaskKey &task_key,
       const int64_t snapshot_version,
       const int64_t execution_id,
@@ -300,6 +302,9 @@ public:
   int prepare_alter_table_arg(const ObPrepareAlterTableArgParam &param,
                               const ObTableSchema *target_table_schema,
                               obrpc::ObAlterTableArg &alter_table_arg);
+  int cache_auto_split_task(const obrpc::ObAutoSplitTabletBatchArg &arg,
+                            obrpc::ObAutoSplitTabletBatchRes &res);
+  int schedule_auto_split_task();
 private:
   class DDLIdling : public ObThreadIdling
   {
@@ -374,6 +379,7 @@ private:
       const int64_t parallelism,
       const int64_t parent_task_id,
       const int64_t consumer_group_id,
+      const uint64_t tenant_data_version,
       const obrpc::ObCreateIndexArg *create_index_arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
@@ -491,6 +497,7 @@ private:
 
   int create_drop_fts_index_task(
       common::ObISQLClient &proxy,
+      const share::ObDDLType ddl_type,
       const share::schema::ObTableSchema *index_schema,
       const int64_t schema_version,
       const int64_t consumer_group_id,
@@ -528,6 +535,16 @@ private:
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
 
+int create_partition_split_task(
+    common::ObISQLClient &proxy,
+    const share::schema::ObTableSchema *table_schema,
+    const int64_t parallelism,
+    const int64_t parent_task_id,
+    const int64_t task_id,
+    const obrpc::ObPartitionSplitArg *partition_split_arg,
+    ObIAllocator &allocator,
+    ObDDLTaskRecord &task_record);
+
   int create_recover_restore_table_task(
       common::ObISQLClient &proxy,
       const share::ObDDLType &type,
@@ -559,6 +576,7 @@ private:
   int schedule_rebuild_index_task(const ObDDLTaskRecord &task_record);
   int schedule_drop_fts_index_task(const ObDDLTaskRecord &task_record);
   int schedule_ddl_retry_task(const ObDDLTaskRecord &task_record);
+  int schedule_partition_split_task(const ObDDLTaskRecord &task_record);
   int schedule_recover_restore_table_task(const ObDDLTaskRecord &task_record);
   int add_sys_task(ObDDLTask *task);
   int remove_sys_task(ObDDLTask *task);

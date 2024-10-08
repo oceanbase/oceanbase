@@ -3017,6 +3017,10 @@ int ObDelUpdResolver::build_column_conv_function_with_default_expr(ObInsertTable
     } else if (!table_info.is_link_table_ && OB_ISNULL(col_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("column schema is nullptr", K(ret), KPC(tbl_col), KPC(column_item));
+    } else if (!table_info.is_link_table_ && col_schema->is_doc_id_column()) {
+      if (OB_FAIL(build_doc_id_function_expr(table_info, *col_schema, *tbl_col, function_expr))) {
+        LOG_WARN("fail to build doc id function expr", K(ret), K(table_info), KPC(tbl_col), KPC(col_schema));
+      }
     } else if (!table_info.is_link_table_ && col_schema->is_vec_vid_column()) {
       if (OB_FAIL(build_vec_vid_function_expr(table_info, *col_schema, *tbl_col, function_expr))) {
           LOG_WARN("fail to build doc id function expr", K(ret), K(table_info), KPC(tbl_col), KPC(col_schema));
@@ -3038,7 +3042,7 @@ int ObDelUpdResolver::build_column_conv_function_with_default_expr(ObInsertTable
         // '\0' for optimizer calculating partition location. As storage do right
         // trim of '\0', so don't worry extra space usage.
         if (ObObjMeta::is_binary(tbl_col->get_data_type(),
-                                tbl_col->get_collation_type())) {
+                                 tbl_col->get_collation_type())) {
           if (OB_FAIL(build_padding_expr(session_info_, column_item, expr))) {
             LOG_WARN("Build padding expr error", K(ret));
           }
@@ -4070,17 +4074,48 @@ int ObDelUpdResolver::replace_gen_col_dependent_col(ObInsertTableInfo& table_inf
 {
   int ret = OB_SUCCESS;
   ObColumnRefRawExpr* col_expr = NULL;
+  ObDelUpdStmt *del_upd_stmt = get_del_upd_stmt();
+  ObSchemaGetterGuard *schema_guard = nullptr;
+  ColumnItem *column_item = nullptr;
+  if (OB_ISNULL(schema_checker_) || OB_ISNULL(schema_guard = schema_checker_->get_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid schema checker", K(ret), KP(schema_checker_), KP(schema_guard));
+  } else if (OB_ISNULL(del_upd_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("del upd stmt is nullptr", K(ret), KP(del_upd_stmt));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < table_info.column_exprs_.count(); i++) {
+    const ObColumnSchemaV2 *col_schema = nullptr;
+    bool need_replace_col = false;
     if (OB_ISNULL(col_expr = table_info.column_exprs_.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (!col_expr->is_generated_column() && !col_expr->is_vec_vid_column()) {
-      // do nothing
+    } else if (table_info.is_link_table_) {
+      if (col_expr->is_generated_column()) {
+        need_replace_col = true;
+      }
+    } else if (OB_ISNULL(column_item = del_upd_stmt->get_column_item_by_id(table_info.table_id_, col_expr->get_column_id()))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get column item", K(ret), K(table_info), KPC(col_expr));
+    } else if (OB_FAIL(schema_checker_->get_column_schema(
+                         session_info_->get_effective_tenant_id(),
+                         table_info.ref_table_id_,
+                         OB_INVALID_ID == column_item->base_cid_ ? column_item->column_id_ : column_item->base_cid_,
+                         col_schema,
+                         true/*get_hidden*/))) {
+      LOG_WARN("fail to get column schema", K(ret), KPC(col_expr), KPC(column_item));
+    } else if (OB_ISNULL(col_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column schema is nullptr", K(ret), KPC(col_expr), KPC(column_item));
+    } else if (col_expr->is_generated_column() || col_schema->is_doc_id_column() || col_expr->is_vec_vid_column()) {
+      need_replace_col = true;
+    }
+    if (OB_FAIL(ret)) {
     } else if (i >= table_info.column_conv_exprs_.count() ||
                OB_ISNULL(table_info.column_conv_exprs_.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid null column conv function", K(ret), K(i), K(table_info.column_conv_exprs_.count()));
-    } else if (OB_FAIL(replace_col_with_new_value(table_info, table_info.column_conv_exprs_.at(i)))) {
+    } else if (need_replace_col && OB_FAIL(replace_col_with_new_value(table_info, table_info.column_conv_exprs_.at(i)))) {
       LOG_WARN("failed to replace col with new value", K(ret));
     }
   }
@@ -5037,6 +5072,29 @@ int ObDelUpdResolver::mark_json_partial_update_flag(const ObColumnRefRawExpr *re
   return ret;
 }
 
+int ObDelUpdResolver::build_doc_id_function_expr(
+    const ObInsertTableInfo& table_info,
+    const ObColumnSchemaV2 &col_schema,
+    const ObColumnRefRawExpr &column,
+    ObRawExpr *&func_expr)
+{
+  int ret = OB_SUCCESS;
+  ObString col_def;
+  TableItem *table_item = get_stmt()->get_table_item_by_id(table_info.table_id_);
+  if (OB_ISNULL(table_item)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, table item is nullptr", K(ret), K(table_info), K(table_info));
+  } else if (OB_FAIL(col_schema.get_cur_default_value().get_string(col_def))) {
+    LOG_WARN("get generated column definition failed", K(ret), K(col_schema));
+  } else if (OB_FAIL(ObSQLUtils::convert_sql_text_from_schema_for_resolve(*allocator_, session_info_->get_dtc_params(),
+          col_def))) {
+    LOG_WARN("fail to convert for resolve", K(ret));
+  } else if (OB_FAIL(resolve_generated_column_expr(col_def, table_item->get_base_table_item(), &col_schema, column,
+          func_expr, true, get_del_upd_stmt()))) {
+    LOG_WARN("resolve generated column expr failed", K(ret));
+  }
+  return ret;
+}
 
 int ObDelUpdResolver::build_vec_vid_function_expr(
     const ObInsertTableInfo& table_info,

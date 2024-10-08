@@ -29,6 +29,107 @@ namespace oceanbase
 namespace sql
 {
 
+
+ObObjDatumMapType ObFTIndexRowCache::FTS_INDEX_TYPES[] = {OBJ_DATUM_STRING, OBJ_DATUM_STRING, OBJ_DATUM_8BYTE_DATA, OBJ_DATUM_8BYTE_DATA};
+ObObjDatumMapType ObFTIndexRowCache::FTS_DOC_WORD_TYPES[] = {OBJ_DATUM_STRING, OBJ_DATUM_STRING, OBJ_DATUM_8BYTE_DATA, OBJ_DATUM_8BYTE_DATA};
+
+ObFTIndexRowCache::ObFTIndexRowCache()
+  : rows_(),
+    row_idx_(0),
+    is_fts_index_aux_(true),
+    helper_(),
+    is_inited_(false)
+{
+}
+
+ObFTIndexRowCache::~ObFTIndexRowCache()
+{
+  reset();
+}
+
+int ObFTIndexRowCache::init(
+    const bool is_fts_index_aux,
+    const common::ObString &parser_name)
+{
+  int ret = OB_SUCCESS;
+  lib::ContextParam param;
+  param.set_mem_attr(MTL_ID(), "DocIdMerge", ObCtxIds::DEFAULT_CTX_ID).set_properties(lib::USE_TL_PAGE_OPTIONAL);
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init fulltext dml iterator twice", K(ret), K(is_inited_));
+  } else if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(merge_memctx_, param))) {
+    LOG_WARN("failed to create merge memctx", K(ret));
+  } else if (OB_FAIL(helper_.init(&(merge_memctx_->get_arena_allocator()), parser_name))) {
+    LOG_WARN("fail to init full-text parser helper", K(ret));
+  } else {
+    row_idx_ = 0;
+    is_fts_index_aux_ = is_fts_index_aux;
+    is_inited_ = true;
+  }
+  if (OB_UNLIKELY(!is_inited_)) {
+    reset();
+  }
+  return ret;
+}
+
+int ObFTIndexRowCache::segment(
+    const common::ObObjMeta &ft_obj_meta,
+    const ObString &doc_id,
+    const ObString &fulltext)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObFTIndexRowCache hasn't be initialized", K(ret), K(is_inited_));
+  } else if (FALSE_IT(reuse())) {
+  } else if (OB_FAIL(ObDASDomainUtils::generate_fulltext_word_rows(merge_memctx_->get_arena_allocator(), &helper_,
+          ft_obj_meta, doc_id, fulltext, is_fts_index_aux_, rows_))) {
+    LOG_WARN("fail to generate fulltext word rows", K(ret), K(helper_), K(is_fts_index_aux_));
+  } else {
+    row_idx_ = 0;
+  }
+  LOG_TRACE("word segment", K(ret), K(row_idx_), K(rows_.count()), K(doc_id), K(fulltext));
+  return ret;
+}
+
+int ObFTIndexRowCache::get_next_row(blocksstable::ObDatumRow *&row)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObFTIndexRowCache hasn't be initialized", K(ret), K(is_inited_));
+  } else if (row_idx_ >= rows_.count()) {
+    ret = OB_ITER_END;
+  } else {
+    row = (rows_[row_idx_]);
+    ++row_idx_;
+  }
+  LOG_TRACE("get next row", K(ret), KPC(row), K(row_idx_), K(rows_.count()));
+  return ret;
+}
+
+void ObFTIndexRowCache::reset()
+{
+  rows_.reset();
+  row_idx_ = 0;
+  is_fts_index_aux_ = true;
+  helper_.reset();
+  if (OB_NOT_NULL(merge_memctx_)) {
+    DESTROY_CONTEXT(merge_memctx_);
+    merge_memctx_ = nullptr;
+  }
+  is_inited_ = false;
+}
+
+void ObFTIndexRowCache::reuse()
+{
+  rows_.reuse();
+  row_idx_ = 0;
+  if (OB_NOT_NULL(merge_memctx_)) {
+    merge_memctx_->reset_remain_one_page();
+  }
+}
+
 int ObDASDomainUtils::generate_spatial_index_rows(
     ObIAllocator &allocator,
     const ObDASDMLBaseCtDef &das_ctdef,
@@ -206,14 +307,14 @@ int ObDASDomainUtils::generate_spatial_index_rows(
   int ret = OB_SUCCESS;
   if (OB_ISNULL(helper)
       || OB_UNLIKELY(ObCollationType::CS_TYPE_INVALID == type
-                  || ObCollationType::CS_TYPE_EXTENDED_MARK < type)
+                  || ObCollationType::CS_TYPE_PINYIN_BEGIN_MARK <= type)
       || OB_UNLIKELY(!words_count.created())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KPC(helper), K(type), K(words_count.created()));
   } else if (OB_FAIL(helper->segment(type, fulltext.ptr(), fulltext.length(), doc_length, words_count))) {
     LOG_WARN("fail to segment", K(ret), KPC(helper), K(type), K(fulltext));
   }
-  STORAGE_FTS_LOG(DEBUG, "segment and calc word count", K(ret), K(words_count.size()), K(type));
+  STORAGE_FTS_LOG(TRACE, "segment and calc word count", K(ret), K(words_count.size()), K(type));
   return ret;
 }
 
@@ -332,63 +433,65 @@ int ObDASDomainUtils::generate_multivalue_index_rows(ObIAllocator &allocator,
   if (OB_FAIL(get_pure_mutivalue_data(json_str, data, data_len, record_num))) {
     LOG_WARN("failed to parse binary.", K(ret), K(json_str));
   } else if (record_num == 0 && (is_unique_index && rowkey_column_start == 1)) {
-  } else if (OB_FAIL(calc_save_rowkey_policy(allocator, das_ctdef, row_projector,
-    dml_row, record_num, is_save_rowkey))) {
+  } else if (OB_FAIL(calc_save_rowkey_policy(allocator, das_ctdef, row_projector, dml_row, record_num, is_save_rowkey))) {
     LOG_WARN("failed to calc store policy.", K(ret), K(data_table_rowkey_cnt));
-  } else if (FALSE_IT(record_num = (record_num == 0 ? 1 : record_num))) {
-  } else if (OB_ISNULL(rows_buf = reinterpret_cast<char *>(allocator.alloc(record_num * sizeof(blocksstable::ObDatumRow))))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to alloc memory for multi value index rows buffer", K(ret));
   } else {
+    uint32_t real_record_num = record_num;
+    if (record_num == 0 && !(is_unique_index && rowkey_column_start == 1)) {
+      real_record_num = 1;
+    }
 
-    int64_t pos = sizeof(uint32_t);
-    blocksstable::ObDatumRow *rows = new (rows_buf) blocksstable::ObDatumRow[record_num];
-    ObObj obj;
+    if (OB_ISNULL(rows_buf = reinterpret_cast<char *>(allocator.alloc(real_record_num * sizeof(blocksstable::ObDatumRow))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc memory for multi value index rows buffer", K(ret));
+    } else {
+      int64_t pos = sizeof(uint32_t);
+      blocksstable::ObDatumRow *rows = new (rows_buf) blocksstable::ObDatumRow[real_record_num];
 
-    for (int i = 0; OB_SUCC(ret) && (i < record_num || !is_none_unique_done) ; ++i) {
-      if (OB_FAIL(rows[i].init(allocator, column_num))) {
-        LOG_WARN("init datum row failed", K(ret), K(column_num));
-      } else {
-        for (uint64_t j = 0; OB_SUCC(ret) && j < column_num; j++) {
-          ObObjMeta col_type = das_ctdef.column_types_.at(j);
-          const ObAccuracy &col_accuracy = das_ctdef.column_accuracys_.at(j);
-          int64_t projector_idx = row_projector.at(j);
+      for (int i = 0; OB_SUCC(ret) && (i < record_num || !is_none_unique_done) ; ++i) {
+        if (OB_FAIL(rows[i].init(allocator, column_num))) {
+          LOG_WARN("init datum row failed", K(ret), K(column_num));
+        } else {
+          for(uint64_t j = 0; OB_SUCC(ret) && j < column_num; j++) {
+            ObObjMeta col_type = das_ctdef.column_types_.at(j);
+            const ObAccuracy &col_accuracy = das_ctdef.column_accuracys_.at(j);
+            int64_t projector_idx = row_projector.at(j);
 
-          if (multivalue_idx == projector_idx) {
-            // TODO: change obj to datum when do deserialize@yunyi
-            obj.set_nop_value();
-            if (OB_FAIL(obj.deserialize(data, data_len, pos))) {
-              LOG_WARN("failed to deserialize datum", K(ret), K(json_str));
-            } else {
+            if (multivalue_idx == projector_idx) {
+              // TODO: change obj to datum when do deserialize@xuanxi
+              ObObj obj;
+              obj.set_nop_value();
               if (ob_is_number_or_decimal_int_tc(col_type.get_type()) || ob_is_temporal_type(col_type.get_type())) {
                 col_type.set_collation_level(CS_LEVEL_NUMERIC);
               } else {
                 col_type.set_collation_level(CS_LEVEL_IMPLICIT);
               }
               obj.set_meta_type(col_type);
-              is_none_unique_done = true;
-              if (OB_FAIL(rows[i].storage_datums_[j].from_obj_enhance(obj))) {
+              if (OB_FAIL(obj.deserialize(data, data_len, pos))) {
+                LOG_WARN("failed to deserialize datum", K(ret), K(json_str));
+              } else if (OB_FAIL(rows[i].storage_datums_[j].from_obj_enhance(obj))) {
                 LOG_WARN("failed to convert datum from obj", K(ret), K(obj));
+              } else {
+                is_none_unique_done = true;
               }
+            } else if (!is_save_rowkey && (rowkey_column_start >= j && j < rowkey_column_end)) {
+              rows[i].storage_datums_[j].set_null();
+            } else if (multivalue_arr_idx == projector_idx) {
+              rows[i].storage_datums_[j].set_null();
+            } else {
+              rows[i].storage_datums_[j].shallow_copy_from_datum(dml_row.cells()[projector_idx]);
             }
-          } else if (!is_save_rowkey && (rowkey_column_start >= j && j < rowkey_column_end)) {
-            rows[i].storage_datums_[j].set_null();
-          } else if (multivalue_arr_idx == projector_idx) {
-            rows[i].storage_datums_[j].set_null();
-          } else {
-            rows[i].storage_datums_[j].shallow_copy_from_datum(dml_row.cells()[projector_idx]);
+            if (OB_SUCC(ret) && OB_FAIL(ObDASUtils::reshape_datum_value(col_type, col_accuracy, true, allocator, rows[i].storage_datums_[j]))) {
+              LOG_WARN("reshape storage value failed", K(ret), K(col_type), K(projector_idx), K(j));
+            }
           }
 
-          if (OB_SUCC(ret) && OB_FAIL(ObDASUtils::reshape_datum_value(col_type, col_accuracy, true, allocator, rows[i].storage_datums_[j]))) {
-            LOG_WARN("reshape storage value failed", K(ret), K(col_type), K(projector_idx), K(j));
-          }
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(mvi_rows.push_back(&rows[i]))) {
+              LOG_WARN("failed to push back spatial index row", K(ret), K(rows[i]));
+            }
+          } // end if (OB_SUCC(ret))
         }
-
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(mvi_rows.push_back(&rows[i]))) {
-            LOG_WARN("failed to push back spatial index row", K(ret), K(rows[i]));
-          }
-        } // end if (OB_SUCC(ret))
       }
     }
   }

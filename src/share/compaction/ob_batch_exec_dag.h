@@ -46,6 +46,10 @@ public:
     }
     return ret_val;
   }
+  void clear_array()
+  {
+    tablet_info_array_.reset();
+  }
   VIRTUAL_TO_STRING_KV(K_(param_type), K_(ls_id), K_(compaction_scn), "tablet_id_cnt", tablet_info_array_.count(), K_(tablet_info_array));
 public:
   static constexpr int64_t DEFAULT_BATCH_SIZE = 128;

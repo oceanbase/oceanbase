@@ -36,7 +36,6 @@
 #include "share/ob_tenant_info_proxy.h"
 #include "observer/ob_inner_sql_connection.h"
 #include "share/backup/ob_backup_server_mgr.h"
-#include "share/backup/ob_backup_tablet_reorganize_helper.h"
 #include "rootserver/backup/ob_backup_table_list_mgr.h"
 
 using namespace oceanbase;
@@ -590,6 +589,8 @@ int ObBackupSetTaskMgr::backup_meta_finish_()
     LOG_WARN("fail to merge ls meta infos", K(ret), K(ls_task));
   } else if (OB_FAIL(merge_tablet_to_ls_info_(consistent_scn, ls_task, new_ls_ids))) {
     LOG_WARN("[DATA_BACKUP]failed to merge tablet to ls info", K(ret), K(ls_task));
+  } else if (OB_FAIL(backup_major_compaction_mview_dep_tablet_list_())) {
+    LOG_WARN("failed to backup mview dep tablet list", K(ret));
   } else if (OB_FALSE_IT(DEBUG_SYNC(BEFORE_BACKUP_DATA))) {
   } else if (OB_FAIL(trans_.start(sql_proxy_, meta_tenant_id_))) {
     LOG_WARN("fail to start trans", K(ret), K(meta_tenant_id_));
@@ -818,6 +819,28 @@ int ObBackupSetTaskMgr::merge_tablet_to_ls_info_(const share::SCN &consistent_sc
         LOG_WARN("failed to push backup");
       }
     }
+  }
+  return ret;
+}
+
+int ObBackupSetTaskMgr::backup_major_compaction_mview_dep_tablet_list_()
+{
+  int ret = OB_SUCCESS;
+  ObBackupMajorCompactionMViewDepTabletListDesc desc;
+  common::ObArray<common::ObTabletID> mview_tablet_list;
+  share::SCN backup_scn;
+  if (OB_ISNULL(sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy should not be null", K(ret));
+  } else if (OB_FAIL(ObBackupDataScheduler::get_backup_scn(*sql_proxy_, set_task_attr_.tenant_id_, true/*is_backup_start*/, backup_scn))) {
+    LOG_WARN("failed to get backup scn", K(ret), K(set_task_attr_));
+  } else if (OB_FAIL(ObBackupMViewOperator::get_all_major_compaction_mview_dep_tablet_list(
+      *sql_proxy_, set_task_attr_.tenant_id_, backup_scn, mview_tablet_list))) {
+    LOG_WARN("failed to get all major compaction mveiw dep tablet list", K(ret), K(backup_scn));
+  } else if (OB_FAIL(desc.tablet_id_list_.assign(mview_tablet_list))) {
+    LOG_WARN("failed to assign tablet list", K(ret));
+  } else if (OB_FAIL(store_.write_major_compaction_mview_dep_tablet_list(desc))) {
+    LOG_WARN("failed to write mview dep tablet list", K(ret));
   }
   return ret;
 }
@@ -1189,6 +1212,10 @@ int ObBackupSetTaskMgr::change_turn_(
     ObIArray<storage::ObBackupDataTabletToLSInfo> &tablets_to_ls)
 {
   int ret = OB_SUCCESS;
+  ROOTSERVICE_EVENT_INSTANCE.sync_add_event("rs_backup", "rs_before_change_turn",
+                             "tenant_id", set_task_attr_.tenant_id_,
+                             "task_id", set_task_attr_.task_id_);
+  DEBUG_SYNC(RS_CHANGE_TURN_DEBUG_SYNC);
   ObTimeoutCtx ctx;
   const int64_t DEFAULT_TIMEOUT = 60_s;
   const int64_t INNER_SQL_TIMEOUT = GCONF.internal_sql_execute_timeout;
@@ -1558,10 +1585,7 @@ int ObBackupSetTaskMgr::do_get_change_turn_tablets_(
   ObHashMap<ObLSID, ObArray<ObTabletReorganizeInfo>> tablet_reorganize_ls_map;
   ObHashSet<ObLSID> ls_id_set;
   ObHashSet<ObLSID> new_ls_id_set;
-  ObLSID transfer_ls_id;
-  ObLSID split_ls_id;
   ObLSID final_ls_id;
-  int64_t transfer_seq = 0;
   const int64_t OB_BACKUP_MAX_LS_BUCKET = 1024;
   if (OB_ISNULL(job_attr_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1584,35 +1608,8 @@ int ObBackupSetTaskMgr::do_get_change_turn_tablets_(
     for (auto iter = skipped_tablets.begin(); OB_SUCC(ret) && iter != skipped_tablets.end(); ++iter) {
       const ObBackupSkipTabletAttr &skip_tablet = iter->first;
       descendent_list.reset();
-      if (OB_FAIL(ObBackupTabletToLSOperator::get_ls_of_tablet(*sql_proxy_, job_attr_->tenant_id_, skip_tablet.tablet_id_, transfer_ls_id, transfer_seq))) {
-        if (OB_ENTRY_NOT_EXIST == ret) {
-          ret = OB_SUCCESS;
-          bool has_reorganized = false;
-          ObArray<ObTabletReorganizeInfo> *tablet_reorganize_array = NULL;
-          if (OB_FAIL(ObBackupTabletReorganizeHelper::check_tablet_has_reorganized(
-              *sql_proxy_, job_attr_->tenant_id_, skip_tablet.tablet_id_, split_ls_id, has_reorganized))) {
-            LOG_WARN("failed to check tablet has reorganized", K(ret), K(skip_tablet));
-          } else if (!has_reorganized) {
-            LOG_WARN("[DATA_BACKUP]deleted tablet", K(skip_tablet));
-          } else if (OB_ISNULL(tablet_reorganize_array = tablet_reorganize_ls_map.get(split_ls_id))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("do not exist", K(ret), K(split_ls_id));
-          } else if (OB_FAIL(ObBackupTabletReorganizeHelper::get_leaf_children_from_history(
-              job_attr_->tenant_id_, *tablet_reorganize_array, skip_tablet.tablet_id_, descendent_list))) {
-            LOG_WARN("failed to get lead children from history", K(ret));
-          } else {
-            final_ls_id = split_ls_id;
-          }
-        } else {
-          LOG_WARN("[DATA_BACKUP]failed to get tablet", K(ret), K(skip_tablet));
-        }
-      } else if (OB_FAIL(descendent_list.push_back(skip_tablet.tablet_id_))) {
-        LOG_WARN("failed to push back", K(ret));
-      } else {
-        final_ls_id = transfer_ls_id;
-      }
-      if (OB_FAIL(ret)) {
-        // do nothing
+      if (OB_FAIL(decide_tablet_final_ls_(skip_tablet, tablet_reorganize_ls_map, descendent_list, final_ls_id))) {
+        LOG_WARN("failed to decide tablet final ls", K(ret), K(skip_tablet), K(descendent_list));
       } else if (!final_ls_id.is_valid()) {
         // do nothing
       } else {
@@ -1666,6 +1663,68 @@ int ObBackupSetTaskMgr::do_get_change_turn_tablets_(
     if (OB_SUCC(ret)) {
       FLOG_INFO("[DATA_BACKUP]get new turn tablet_to_ls", K(tablet_to_ls));
     }
+  }
+  return ret;
+}
+
+int ObBackupSetTaskMgr::decide_tablet_final_ls_(const share::ObBackupSkipTabletAttr &skip_tablet,
+                                                common::hash::ObHashMap<share::ObLSID, common::ObArray<ObTabletReorganizeInfo>> &tablet_reorganize_ls_map,
+                                                common::ObArray<common::ObTabletID> &descendent_list,
+                                                share::ObLSID &final_ls_id)
+{
+  int ret = OB_SUCCESS;
+  final_ls_id.reset();
+  ObLSID transfer_ls_id;
+  ObLSID split_ls_id;
+  int64_t transfer_seq = 0;
+  const int64_t OB_BACKUP_MAX_LS_BUCKET = 1024;
+  if (!skip_tablet.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(skip_tablet));
+  } else if (OB_ISNULL(sql_proxy_) || OB_ISNULL(job_attr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy or job attr should not be null", K(ret), KP_(sql_proxy), KP_(job_attr));
+  } else if (OB_FAIL(ObBackupTabletToLSOperator::get_ls_of_tablet(*sql_proxy_, job_attr_->tenant_id_, skip_tablet.tablet_id_, transfer_ls_id, transfer_seq))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("[DATA_BACKUP]failed to get tablet", K(ret), K(skip_tablet));
+    } else {
+      ret = OB_SUCCESS;
+      bool has_reorganized = false;
+      ObArray<ObTabletReorganizeInfo> *tablet_reorganize_array = NULL;
+      if (OB_FAIL(ObBackupTabletReorganizeHelper::check_tablet_has_reorganized(
+          *sql_proxy_, job_attr_->tenant_id_, skip_tablet.tablet_id_, split_ls_id, has_reorganized))) {
+        LOG_WARN("failed to check tablet has reorganized", K(ret), K(skip_tablet));
+      } else if (!has_reorganized) {
+        LOG_INFO("[DATA_BACKUP]deleted tablet", K(skip_tablet));
+      } else if (OB_ISNULL(tablet_reorganize_array = tablet_reorganize_ls_map.get(split_ls_id))) {
+        ObHashSet<ObLSID> split_ls_id_set;
+        if (OB_FAIL(split_ls_id_set.create(OB_BACKUP_MAX_LS_BUCKET))) {
+          LOG_WARN("[DATA_BACKUP]failed to create set", K(ret));
+        } else if (OB_FAIL(split_ls_id_set.set_refactored(split_ls_id))) {
+          LOG_WARN("failed to set ls id", K(ret), K(split_ls_id));
+        } else if (OB_FAIL(ObBackupTabletReorganizeHelper::get_ls_to_tablet_reorganize_info_map(
+            *sql_proxy_, job_attr_->tenant_id_, split_ls_id_set, tablet_reorganize_ls_map))) {
+          LOG_WARN("failed to get tablet reorganize hash map", K(ret), KPC_(job_attr));
+        } else if (OB_ISNULL(tablet_reorganize_array = tablet_reorganize_ls_map.get(split_ls_id))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("split ls id has no tablet reoragnize array", K(ret), K(split_ls_id));
+        } else {
+          LOG_INFO("get ls to tablet reorganize info map", K(split_ls_id));
+        }
+      }
+      if (!has_reorganized) {
+        // do nothing
+      } else if (FAILEDx(ObBackupTabletReorganizeHelper::get_leaf_children_from_history(
+          job_attr_->tenant_id_, *tablet_reorganize_array, skip_tablet.tablet_id_, descendent_list))) {
+        LOG_WARN("failed to get lead children from history", K(ret));
+      } else {
+        final_ls_id = split_ls_id;
+      }
+    }
+  } else if (OB_FAIL(descendent_list.push_back(skip_tablet.tablet_id_))) {
+    LOG_WARN("failed to push back", K(ret));
+  } else {
+    final_ls_id = transfer_ls_id;
   }
   return ret;
 }

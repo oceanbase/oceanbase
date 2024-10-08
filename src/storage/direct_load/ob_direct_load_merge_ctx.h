@@ -71,7 +71,8 @@ public:
                KP_(insert_table_ctx),
                KP_(dml_row_handler),
                KP_(file_mgr),
-               K_(trans_param));
+               K_(trans_param),
+               K_(index_table_count));
 public:
   uint64_t table_id_;
   uint64_t lob_meta_table_id_;
@@ -95,6 +96,7 @@ public:
   ObDirectLoadDMLRowHandler *dml_row_handler_;
   ObDirectLoadTmpFileManager *file_mgr_;
   ObDirectLoadTransParam trans_param_;
+  int index_table_count_;
 };
 
 class ObDirectLoadMergeCtx
@@ -162,8 +164,9 @@ public:
   {
     return param_.is_incremental_ &&
            (param_.insert_mode_ == ObDirectLoadInsertMode::NORMAL ||
-           (param_.insert_mode_ == ObDirectLoadInsertMode::INC_REPLACE && param_.lob_column_idxs_->count() > 0));
+           (param_.insert_mode_ == ObDirectLoadInsertMode::INC_REPLACE && (param_.lob_column_idxs_->count() > 0 || param_.index_table_count_ > 0)));
   }
+
   const ObDirectLoadMergeParam &get_param() const { return param_; }
   const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
   const common::ObIArray<ObDirectLoadPartitionMergeTask *> &get_tasks() const

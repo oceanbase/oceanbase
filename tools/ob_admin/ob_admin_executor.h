@@ -44,6 +44,7 @@ protected:
   int prepare_io();
   int prepare_decoder();
   int load_config();
+  int set_s3_url_encode_type(const char *type_str) const;
 
 protected:
   share::ObTenantBase mock_server_tenant_;

@@ -2918,7 +2918,8 @@ int ObPDAggFactory::alloc_cell(
     void *buf = nullptr;
     ObAggCell *cell = nullptr;
     switch (basic_info.agg_expr_->type_) {
-      case T_REF_COLUMN: {
+      case T_REF_COLUMN:
+      case T_ORA_ROWSCN: {
         if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObFirstRowAggCell))) ||
             OB_ISNULL(cell = new(buf) ObFirstRowAggCell(basic_info, allocator_))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;

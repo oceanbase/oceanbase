@@ -172,11 +172,14 @@ int ObCOTabletMergeCtx::prepare_cs_replica_param()
   ObStorageSchema *schema_on_tablet = nullptr;
   ObSSTable *sstable = nullptr;
   if (static_param_.ls_handle_.get_ls()->is_cs_replica()) {
-    if (OB_FAIL(static_param_.tablet_schema_guard_.init(tablet_handle_, mem_ctx_))) {
+    if (OB_UNLIKELY(!tablet_handle_.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet handle is invalid", K(ret), K_(tablet_handle));
+    } else if (OB_FAIL(static_param_.tablet_schema_guard_.init(tablet_handle_, mem_ctx_))) {
       LOG_WARN("failed to init cs replica schema guard", K(ret), KPC(this));
     } else if (OB_FAIL(static_param_.tablet_schema_guard_.load(schema_on_tablet))) {
       LOG_WARN("failed to load schema on tablet", K(ret));
-    } else if (schema_on_tablet->is_cs_replica_compat()) {
+    } else if (tablet_handle_.get_obj()->is_cs_replica_compat()) {
       static_param_.is_cs_replica_ = true;
     } else if (is_convert_co_major_merge(get_merge_type())) {
       static_param_.is_cs_replica_ = true;
@@ -321,6 +324,30 @@ int ObCOTabletMergeCtx::collect_running_info()
   return ret;
 }
 
+int ObCOTabletMergeCtx::collect_running_info_in_batch(
+  const uint32_t start_cg_idx,
+  const uint32_t end_cg_idx,
+  const ObCompactionTimeGuard &time_guard)
+{
+  int ret = OB_SUCCESS;
+  ObSSTableMergeHistory &merge_history = cg_merge_info_array_[start_cg_idx]->get_merge_history();
+  for (int64_t idx = start_cg_idx + 1; OB_SUCC(ret) && idx < end_cg_idx; ++idx) {
+    const ObSSTableMergeHistory &tmp = cg_merge_info_array_[idx]->get_merge_history();
+    if (OB_FAIL(merge_history.update_block_info(tmp.block_info_, true/*without_row_cnt*/))) {
+      LOG_WARN("failed to update block info", KR(ret), K(tmp));
+    }
+  }
+  if (FAILEDx(dag_net_merge_history_.update_block_info(
+      merge_history.block_info_,
+      0 == start_cg_idx ? false : true/*without_row_cnt*/))) {
+    LOG_WARN("failed to update block info", KR(ret), K(dag_net_merge_history_), K(merge_history));
+  } else {
+    dag_net_merge_history_.update_execute_time(merge_history.running_info_.execute_time_);
+    info_collector_.time_guard_.add_time_guard(time_guard);
+  }
+  return ret;
+}
+
 // for ObCOMergeBatchExeDag
 int ObCOTabletMergeCtx::collect_running_info(
     const uint32_t start_cg_idx,
@@ -334,6 +361,8 @@ int ObCOTabletMergeCtx::collect_running_info(
   if (OB_UNLIKELY(NULL != new_table && !new_table->is_sstable())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get new sstable", K(ret), KP(new_table));
+  } else if (OB_FAIL(collect_running_info_in_batch(start_cg_idx, end_cg_idx, time_guard))) {
+    LOG_WARN("failed to collect running info in batch");
   } else {
     const ObSSTable *new_sstable = static_cast<ObSSTable *>(new_table);
     add_sstable_merge_info(cg_merge_info_array_[start_cg_idx]->get_merge_history(),

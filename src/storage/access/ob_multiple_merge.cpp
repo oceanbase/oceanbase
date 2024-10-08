@@ -55,13 +55,13 @@ ObMultipleMerge::ObMultipleMerge()
       curr_scan_index_(0),
       curr_rowkey_(),
       nop_pos_(),
-      row_stat_(),
       scan_cnt_(0),
       need_padding_(false),
       need_fill_default_(false),
       need_fill_virtual_columns_(false),
       need_output_row_with_nop_(false),
       inited_(false),
+      iter_del_row_(false),
       range_idx_delta_(0),
       get_table_param_(nullptr),
       read_memtable_only_(false),
@@ -153,7 +153,6 @@ int ObMultipleMerge::init(
     iters_.reuse();
     access_param_ = &param;
     access_ctx_ = &context;
-    row_stat_.reset();
     cur_row_.count_ = access_param_->iter_param_.out_cols_project_->count();
     scan_state_ = ScanState::NONE;
     read_memtable_only_ = false;
@@ -441,7 +440,6 @@ int ObMultipleMerge::get_next_row(ObDatumRow *&row)
           scan_state_ = ScanState::SINGLE_ROW;
         }
       }
-
       if (OB_SUCC(ret)) {
         if (OB_FAIL(fill_group_idx_if_need(unprojected_row_))) {
           LOG_WARN("Failed to fill iter idx", K(ret), KPC(access_param_), K(unprojected_row_));
@@ -815,7 +813,7 @@ int ObMultipleMerge::update_and_report_tablet_stat()
     access_ctx_->table_scan_stat_->row_cache_hit_cnt_ += access_ctx_->table_store_stat_.row_cache_hit_cnt_;
     access_ctx_->table_scan_stat_->row_cache_miss_cnt_ += access_ctx_->table_store_stat_.row_cache_miss_cnt_;
   }
-  if (MTL(compaction::ObTenantTabletScheduler *)->enable_adaptive_compaction()) {
+  if (compaction::ObBasicMergeScheduler::get_merge_scheduler()->enable_adaptive_compaction()) {
     report_tablet_stat();
   }
   access_ctx_->table_store_stat_.reuse();
@@ -900,7 +898,6 @@ void ObMultipleMerge::reset()
 void ObMultipleMerge::reuse()
 {
   reuse_iter_array();
-  row_stat_.reset();
   range_idx_delta_ = 0;
   unprojected_row_.row_flag_.reset();
   if (nullptr != block_row_store_) {
@@ -946,7 +943,6 @@ void ObMultipleMerge::inner_reset()
   access_param_ = NULL;
   access_ctx_ = NULL;
   nop_pos_.reset();
-  row_stat_.reset();
   scan_cnt_ = 0;
   need_padding_ = false;
   need_fill_default_ = false;
@@ -956,6 +952,7 @@ void ObMultipleMerge::inner_reset()
   read_memtable_only_ = false;
   lob_reader_.reset();
   scan_state_ = ScanState::NONE;
+  iter_del_row_ = false;
 }
 
 void ObMultipleMerge::reset_iter_array(const bool can_reuse)
@@ -1029,6 +1026,18 @@ int ObMultipleMerge::open()
       LOG_WARN("Failed to init iter pool", K(ret));
     } else {
       stmt_iter_pool_ = access_ctx_->get_stmt_iter_pool();
+    }
+  }
+  if (OB_SUCC(ret)) {
+    // fill auto split params if need
+    const ObTableIterParam &iter_param = access_param_->iter_param_;
+    const int64_t table_id = access_param_->iter_param_.table_id_;
+    if (OB_NOT_NULL(iter_param.auto_split_filter_) && iter_param.auto_split_filter_type_ < static_cast<uint64_t>(ObTabletSplitType::MAX_TYPE)) {
+      ObPartitionSplitQuery split_query;
+      if (OB_FAIL(split_query.fill_auto_split_params(iter_param.tablet_id_, iter_param.ls_id_,
+          iter_param.op_, iter_param.auto_split_filter_type_, iter_param.auto_split_params_, *access_ctx_->stmt_allocator_))) {
+        LOG_WARN("fail to fill split params.", K(ret));
+      }
     }
   }
   if (OB_SUCC(ret)) {
@@ -1320,19 +1329,26 @@ int ObMultipleMerge::prepare_read_tables(bool refresh)
     }
   } else if (FALSE_IT(get_table_param_->tablet_iter_.table_iter()->reset())) {
   } else {
+    const bool need_split_src_table = access_param_->iter_param_.is_tablet_spliting();
+    const bool need_split_dst_table = refresh ? true : get_table_param_->need_split_dst_table_;
     if (OB_UNLIKELY(get_table_param_->frozen_version_ != -1)) {
       if (!get_table_param_->sample_info_.is_no_sample()) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("sample query does not support frozen_version", K(ret), K_(get_table_param), KP_(access_param));
       } else if (OB_FAIL(get_table_param_->tablet_iter_.refresh_read_tables_from_tablet(
-          get_table_param_->frozen_version_, false/*allow_not_ready*/, true/*major only*/))) {
+          get_table_param_->frozen_version_,
+          false/*allow_not_ready*/,
+          true/*major_sstable_only*/,
+          need_split_src_table,
+          need_split_dst_table))) {
         LOG_WARN("get table iterator fail", K(ret), K_(get_table_param), KP_(access_param));
       }
     } else if (OB_FAIL(get_table_param_->tablet_iter_.refresh_read_tables_from_tablet(
-        get_table_param_->sample_info_.is_no_sample()
-          ? access_ctx_->store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx()
-          : INT64_MAX,
-        false/*allow_not_ready*/))) {
+        generate_read_tables_version(),
+	false/*allow_not_ready*/,
+        false/*major_sstable_only*/,
+        need_split_src_table,
+        need_split_dst_table))) {
       LOG_WARN("get table iterator fail", K(ret), K_(get_table_param), KP_(access_param));
     }
 
@@ -1377,6 +1393,7 @@ int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_it
   int64_t memtable_cnt = 0;
   read_memtable_only_ = false;
   bool read_released_memtable = false;
+  int64_t major_version = -1;
   while (OB_SUCC(ret)) {
     ObITable *table_ptr = nullptr;
     bool need_table = true;
@@ -1396,6 +1413,9 @@ int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_it
       } else if (SampleInfo::SAMPLE_INCR_DATA == sample_info->scope_) {
         need_table = !table_ptr->is_major_sstable();
       }
+    }
+    if (OB_SUCC(ret) && need_table) {
+      need_table = check_table_need_read(*table_ptr, major_version);
     }
     if (OB_SUCC(ret) && need_table) {
       if (table_ptr->no_data_to_read()) {
@@ -1431,6 +1451,7 @@ int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_it
     }
   }
   #endif
+
   return ret;
 }
 
@@ -1489,9 +1510,7 @@ int ObMultipleMerge::refresh_tablet_iter()
     const int64_t remain_timeout = THIS_WORKER.get_timeout_remain();
     const share::ObLSID &ls_id = access_ctx_->ls_id_;
     const common::ObTabletID &tablet_id = get_table_param_->tablet_iter_.get_tablet()->get_tablet_meta().tablet_id_;
-    const int64_t snapshot_version = get_table_param_->sample_info_.is_no_sample()
-      ? access_ctx_->store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx()
-      : INT64_MAX;
+    const int64_t snapshot_version = generate_read_tables_version();
     if (OB_UNLIKELY(remain_timeout <= 0)) {
       ret = OB_TIMEOUT;
       LOG_WARN("timeout reached", K(ret), K(ls_id), K(tablet_id), K(remain_timeout));
@@ -1506,7 +1525,9 @@ int ObMultipleMerge::refresh_tablet_iter()
         snapshot_version,
         snapshot_version,
         get_table_param_->tablet_iter_,
-        false/*allow_not_ready*/))) {
+        false/*allow_not_ready*/,
+        true/*need_split_src_table*/,
+        true/*need_split_dst_table*/))) {
       LOG_WARN("failed to refresh tablet iterator", K(ret), K(ls_id), K_(get_table_param), KP_(access_param));
     } else {
       get_table_param_->refreshed_merge_ = this;
@@ -1715,7 +1736,8 @@ int ObMultipleMerge::set_base_version() const {
   int ret = OB_SUCCESS;
   // When the major table is currently being processed, the snapshot version is taken and placed
   // in the current context for base version to filter unnecessary rows in the mini or minor sstable
-  if (!access_param_->iter_param_.is_skip_scan() && is_scan() && tables_.count() > 1) {
+  if (!access_param_->iter_param_.is_skip_scan() &&
+      !access_ctx_->is_mview_query() && is_scan() && tables_.count() > 1) {
     ObITable *table = nullptr;
     if (OB_FAIL(tables_.at(0, table))) {
       STORAGE_LOG(WARN, "Fail to get the first store", K(ret));
@@ -1724,6 +1746,18 @@ int ObMultipleMerge::set_base_version() const {
     }
   }
   return ret;
+}
+
+int64_t ObMultipleMerge::generate_read_tables_version() const
+{
+  return get_table_param_->sample_info_.is_no_sample() ?
+         access_ctx_->store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx() : INT64_MAX;
+}
+
+bool ObMultipleMerge::check_table_need_read(const ObITable &table, int64_t &major_version) const
+{
+  UNUSEDx(table, major_version);
+  return true;
 }
 
 }

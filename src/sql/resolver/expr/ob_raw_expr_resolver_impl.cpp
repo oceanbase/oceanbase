@@ -1367,6 +1367,30 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
         }
         break;
       }
+      case T_RB_ITERATE_EXPRESSION: {
+        if (!is_root_expr) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "use rb_iterate as parameter of other expr");
+        } else {
+          ObSysFunRawExpr *func_expr = NULL;
+          ObRawExpr *para_expr = NULL;
+          if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_RB_ITERATE_EXPRESSION, func_expr))) {
+            LOG_WARN("fail to create raw expr", K(ret));
+          } else if (OB_ISNULL(func_expr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("column ref expr is null");
+          } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[0], para_expr)))) {
+            LOG_WARN("fail to recursive resolve", K(ret), K(node->children_[0]));
+          } else if (ctx_.aggr_exprs_->count() > 0) {
+            ret = OB_ERR_INVALID_GROUP_FUNC_USE;
+            LOG_WARN("no resolver can produce aggregate function", K(ret));
+          } else if (OB_FAIL(func_expr->add_param_expr(para_expr))) {
+            LOG_WARN("fail to add param expr", K(ret), K(para_expr));
+          }
+          expr = func_expr;
+        }
+        break;
+      }
       default:
         ret = OB_ERR_PARSER_SYNTAX;
         LOG_WARN("Wrong type in expression", K(get_type_name(node->type_)));
@@ -7065,16 +7089,6 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node,
       }
     }
   }
-
-  //mark expr is deterministic or not(default deterministic)
-  if (OB_SUCC(ret)) {
-    //bug:
-    //maybe have more exprs, can be added below in the future.
-    if (lib::is_oracle_mode() && expr->get_expr_type() == T_FUN_SYS_REGEXP_REPLACE) {
-      expr->set_is_deterministic(false);
-    }
-  }
-
   return ret;
 }
 

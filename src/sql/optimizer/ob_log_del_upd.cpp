@@ -1660,7 +1660,9 @@ int ObLogDelUpd::replace_dml_info_exprs(
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_info->column_old_values_exprs_.count(); ++i) {
       ObRawExpr *&expr = index_dml_info->column_old_values_exprs_.at(i);
-      if (expr->is_column_ref_expr() && static_cast<ObColumnRefRawExpr *>(expr)->is_vec_vid_column()) {
+      if (expr->is_column_ref_expr() && static_cast<ObColumnRefRawExpr *>(expr)->is_doc_id_column()) {
+        // just skip, nothing to do.
+      } else if (expr->is_column_ref_expr() && static_cast<ObColumnRefRawExpr *>(expr)->is_vec_vid_column()) {
         // just skip, nothing to do.
       } else if (OB_FAIL(replace_expr_action(replacer, index_dml_info->column_old_values_exprs_.at(i)))) {
         LOG_WARN("fail to replace expr", K(ret), K(i), K(index_dml_info->column_old_values_exprs_));

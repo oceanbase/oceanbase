@@ -35,6 +35,7 @@ struct ObSSTableMicroBlockState {
   };
 };
 
+struct ObTableAccessContext;
 struct ObTableScanStoreStat;
 class ObMicroBlockHandleMgr;
 struct ObMicroBlockDataHandle
@@ -173,6 +174,7 @@ public:
   void reset();
   int init(const bool enable_prefetch_limiting, ObTableScanStoreStat &stat, ObQueryFlag &query_flag);
   int get_micro_block_handle(
+      ObTableAccessContext *access_ctx,
       blocksstable::ObMicroIndexInfo &index_block_info,
       const bool is_data_block,
       const bool need_submit_io,
@@ -180,6 +182,7 @@ public:
       ObMicroBlockDataHandle &micro_block_handle,
       int16_t cur_level);
   int prefetch_multi_data_block(
+      ObTableAccessContext *access_ctx,
       const ObMicroIndexInfo *micro_data_infos,
       ObMicroBlockDataHandle *micro_data_handles,
       const int64_t max_micro_handle_cnt,

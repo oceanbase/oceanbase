@@ -19,11 +19,15 @@
 #include "storage/tx/ob_trans_deadlock_adapter.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_trans_part_ctx.h"
+#include "storage/tx/ob_trans_service.h"
 #include "storage/tablelock/ob_obj_lock.h"
 #include "storage/tablelock/ob_table_lock_common.h"
 #include "storage/tablelock/ob_mem_ctx_table_lock.h"
 #include "storage/tablelock/ob_table_lock_iterator.h"
 #include "storage/tablelock/ob_table_lock_rpc_struct.h"
+#include "storage/tablelock/ob_lock_memtable.h"
+#include "storage/tablelock/ob_table_lock_deadlock.h"
+#include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
 {
@@ -45,6 +49,7 @@ static const int64_t MAX_LOCK_CNT_IN_BUCKET = 10;
 static const char *OB_TABLE_LOCK_NODE = "TableLockNode";
 static const char *OB_TABLE_LOCK_MAP_ELEMENT = "TableLockMapEle";
 static const char *OB_TABLE_LOCK_MAP = "TableLockMap";
+static const int64_t DEFAULT_RWLOCK_TIMEOUT_US = 100L * 1000L;  // 100ms
 
 bool ObTableLockOpLinkNode::is_complete_outtrans_lock() const
 {
@@ -95,6 +100,7 @@ ObOBJLock::ObOBJLock(const ObLockID &lock_id) : lock_id_(lock_id)
   is_deleted_ = false;
   row_share_ = 0;
   row_exclusive_ = 0;
+  max_split_epoch_ = SCN::invalid_scn();
   memset(map_, 0, sizeof(ObTableLockOpList *) * TABLE_LOCK_MODE_COUNT);
 }
 
@@ -168,25 +174,37 @@ int ObOBJLock::slow_lock(
   ObMemAttr attr(tenant_id, "ObTableLockOp");
   // 1. check lock conflict.
   // 2. record lock op.
-  WRLockGuard guard(rwlock_);
-  if (is_deleted_) {
+  // WRLockGuard guard(rwlock_);
+
+  int64_t abs_timeout_us = ObTimeUtility::current_time() + DEFAULT_RWLOCK_TIMEOUT_US;
+  if (param.expired_time_ != 0) {
+    abs_timeout_us = std::min(param.expired_time_, abs_timeout_us);
+  }
+  WRLockGuardWithTimeout guard(rwlock_, abs_timeout_us, ret);
+
+  if (OB_FAIL(ret)) {
+    if (OB_TIMEOUT == ret) {
+      ret = OB_EAGAIN;
+    }
+    LOG_WARN("try get write lock of obj failed", K(ret), KPC(this), K(param), K(lock_op), K(abs_timeout_us));
+  } else if (is_deleted_) {
     ret = OB_EAGAIN;
   } else if (OB_FAIL(check_allow_lock_(lock_op,
                                        lock_mode_cnt_in_same_trans,
                                        conflict_tx_set,
-                                       conflict_with_dml_lock))) {
+                                       conflict_with_dml_lock,
+                                       true,  /* include_finish_tx */
+                                       false, /* only_check_dml_lock */
+                                       param.is_for_replace_))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("check allow lock failed", K(ret), K(lock_op));
     }
-  } else if (OB_FAIL(get_or_create_op_list(lock_op.lock_mode_,
-                                           tenant_id,
-                                           allocator,
-                                           op_list))) {
+  } else if (OB_FAIL(get_or_create_op_list(lock_op.lock_mode_, tenant_id, allocator, op_list))) {
     LOG_WARN("get or create owner map failed.", K(ret));
   } else if (OB_ISNULL(ptr = allocator.alloc(sizeof(ObTableLockOpLinkNode), attr))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alllocate ObTableLockOpLinkNode ", K(ret));
-  } else if (FALSE_IT(lock_op_node = new(ptr) ObTableLockOpLinkNode())) {
+  } else if (FALSE_IT(lock_op_node = new (ptr) ObTableLockOpLinkNode())) {
     // do nothing
   } else if (OB_FAIL(lock_op_node->init(lock_op))) {
     LOG_WARN("init lock owner failed.", K(ret), K(lock_op));
@@ -268,29 +286,67 @@ int ObOBJLock::recover_lock(
 {
   int ret = OB_SUCCESS;
   common::ObTimeGuard timeguard("recover_lock", 10 * 1000);
-  if (OB_UNLIKELY(!lock_op.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument.", K(ret), K(lock_op));
-  } else if (FALSE_IT(timeguard.click("start"))) {
-  } else if (OB_LIKELY(!lock_op.need_record_lock_op())) {
-    RDLockGuard guard(rwlock_);
-    timeguard.click("rlock");
-    if (is_deleted_) {
-      // need retry from upper layer.
-      ret = OB_EAGAIN;
-    } else if (OB_FAIL(recover_(lock_op, allocator))) {
-      LOG_WARN("recover lock failed.", K(ret), K(lock_op));
+  int64_t abs_timeout_us = ObTimeUtility::current_time() + DEFAULT_RWLOCK_TIMEOUT_US;
+  if (lock_op.op_type_ == TABLET_SPLIT) {
+    // WRLockGuard guard(rwlock_);
+    WRLockGuardWithTimeout guard(rwlock_, abs_timeout_us, ret);
+    if (OB_FAIL(ret)) {
+      if (OB_TIMEOUT == ret) {
+        ret = OB_EAGAIN;
+      }
+      LOG_WARN("try get write lock of obj failed", K(ret), KPC(this), K(lock_op), K(abs_timeout_us));
+    } else {
+      timeguard.click("wlock");
+      LOG_INFO("recover tablet_split lock_op", K(lock_op));
+      if (is_deleted_) {
+        // need retry from upper layer.
+        ret = OB_EAGAIN;
+      } else {
+        max_split_epoch_ = lock_op.commit_scn_;
+      }
     }
   } else {
-    WRLockGuard guard(rwlock_);
-    timeguard.click("wlock");
-    if (is_deleted_) {
-      // need retry from upper layer.
-      ret = OB_EAGAIN;
-    } else if (OB_FAIL(recover_(lock_op, allocator))) {
-      LOG_WARN("recover lock failed.", K(ret), K(lock_op));
+    if (OB_UNLIKELY(!lock_op.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument.", K(ret), K(lock_op));
+    } else if (FALSE_IT(timeguard.click("start"))) {
+    } else if (OB_LIKELY(!lock_op.need_record_lock_op())) {
+      // RDLockGuard guard(rwlock_);
+      RDLockGuardWithTimeout guard(rwlock_, abs_timeout_us, ret);
+      if (OB_FAIL(ret)) {
+        if (OB_TIMEOUT == ret) {
+          ret = OB_EAGAIN;
+        }
+        LOG_WARN("try get read lock of obj failed", K(ret), KPC(this), K(lock_op), K(abs_timeout_us));
+      } else {
+        timeguard.click("rlock");
+        if (is_deleted_) {
+          // need retry from upper layer.
+          ret = OB_EAGAIN;
+        } else if (OB_FAIL(recover_(lock_op, allocator))) {
+          LOG_WARN("recover lock failed.", K(ret), K(lock_op));
+        }
+      }
+    } else {
+      // WRLockGuard guard(rwlock_);
+      WRLockGuardWithTimeout guard(rwlock_, abs_timeout_us, ret);
+      if (OB_FAIL(ret)) {
+        if (OB_TIMEOUT == ret) {
+          ret = OB_EAGAIN;
+        }
+        LOG_WARN("try get write lock of obj failed", K(ret), KPC(this), K(lock_op), K(abs_timeout_us));
+      } else {
+        timeguard.click("wlock");
+        if (is_deleted_) {
+          // need retry from upper layer.
+          ret = OB_EAGAIN;
+        } else if (OB_FAIL(recover_(lock_op, allocator))) {
+          LOG_WARN("recover lock failed.", K(ret), K(lock_op));
+        }
+      }
     }
   }
+
   LOG_DEBUG("recover table lock", K(ret), K(lock_op));
   return ret;
 }
@@ -341,8 +397,15 @@ int ObOBJLock::update_lock_status(const ObTableLockOp &lock_op,
   } else {
     {
       // update the lock status to complete
-      RDLockGuard guard(rwlock_);
-      if (is_deleted_) {
+      // RDLockGuard guard(rwlock_);
+      int64_t abs_timeout_us = ObTimeUtility::current_time() + DEFAULT_RWLOCK_TIMEOUT_US;
+      RDLockGuardWithTimeout guard(rwlock_, abs_timeout_us, ret);
+      if (OB_FAIL(ret)) {
+        if (OB_TIMEOUT == ret) {
+          ret = OB_EAGAIN;
+        }
+        LOG_WARN("try get read lock of obj failed", K(ret), KPC(this), K(lock_op), K(abs_timeout_us));
+      } else if (is_deleted_) {
         // the op is deleted, no need update its status.
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("the lock should not be deleted while update lock status", K(ret), K(lock_op));
@@ -365,17 +428,20 @@ int ObOBJLock::update_lock_status(const ObTableLockOp &lock_op,
     if (OB_SUCC(ret) &&
         lock_op.op_type_ == OUT_TRANS_UNLOCK &&
         status == LOCK_OP_COMPLETE) {
-      WRLockGuard guard(rwlock_);
-      if (is_deleted_) {
+      // WRLockGuard guard(rwlock_);
+      int64_t abs_timeout_us = ObTimeUtility::current_time() + DEFAULT_RWLOCK_TIMEOUT_US;
+      WRLockGuardWithTimeout guard(rwlock_, abs_timeout_us, ret);
+      if (OB_FAIL(ret)) {
+        if (OB_TIMEOUT == ret) {
+          ret = OB_EAGAIN;
+        }
+        LOG_WARN("try get write lock of obj failed", K(ret), KPC(this), K(lock_op), K(abs_timeout_us));
+      } else if (is_deleted_) {
         // the op is deleted, no need update its status.
         LOG_WARN("the lock is deleted, no need do compact", K(lock_op));
-      } else if (OB_TMP_FAIL(get_op_list(lock_op.lock_mode_,
-                                         op_list))) {
+      } else if (OB_TMP_FAIL(get_op_list(lock_op.lock_mode_, op_list))) {
         LOG_WARN("get lock list failed, no need do compact", K(tmp_ret), K(lock_op));
-      } else if (OB_TMP_FAIL(compact_tablelock_(lock_op,
-                                                op_list,
-                                                allocator,
-                                                unused_is_compacted))) {
+      } else if (OB_TMP_FAIL(compact_tablelock_(lock_op, op_list, allocator, unused_is_compacted))) {
         LOG_WARN("compact tablelock failed", K(tmp_ret), K(lock_op));
       } else {
         drop_op_list_if_empty_(lock_op.lock_mode_, op_list, allocator);
@@ -429,13 +495,20 @@ int ObOBJLock::fast_lock(
     ObTxIDSet &conflict_tx_set)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
+  int64_t abs_timeout_us = ObTimeUtility::current_time() + DEFAULT_RWLOCK_TIMEOUT_US;
+  if (param.expired_time_ != 0) {
+    abs_timeout_us = std::min(param.expired_time_, abs_timeout_us);
+  }
   {
     // lock first time
-    RDLockGuard guard(rwlock_);
-    if (OB_FAIL(try_fast_lock_(lock_op,
-                               lock_mode_cnt_in_same_trans,
-                               conflict_tx_set))) {
+    // RDLockGuard guard(rwlock_);
+    RDLockGuardWithTimeout guard(rwlock_, abs_timeout_us, ret);
+    if (OB_FAIL(ret)) {
+      if (OB_TIMEOUT == ret) {
+        ret = OB_EAGAIN;
+      }
+      LOG_WARN("try get read lock of obj failed", K(ret), KPC(this), K(param), K(lock_op), K(abs_timeout_us));
+    } else if (OB_FAIL(try_fast_lock_(lock_op, lock_mode_cnt_in_same_trans, conflict_tx_set))) {
       if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_EAGAIN != ret) {
         LOG_WARN("try fast lock failed", KR(ret), K(lock_op));
       }
@@ -460,7 +533,10 @@ int ObOBJLock::lock(
   // 1. lock myself.
   // 2. try to lock.
   LOG_DEBUG("ObOBJLock::lock ", K(param), K(lock_op));
-  if (OB_UNLIKELY(!lock_op.is_valid())) {
+  if (OB_UNLIKELY(has_splitted())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("this obj has been splitted as src_tablet, should not get lock request", K(ret), KPC(this));
+  } else if (OB_UNLIKELY(!lock_op.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument.", K(ret), K(lock_op));
   } else {
@@ -515,8 +591,18 @@ int ObOBJLock::unlock(
     LOG_ERROR("should only slow lock op", K(ret), K(unlock_op));
   } else {
     {
-      WRLockGuard guard(rwlock_);
-      if (!is_try_lock && OB_UNLIKELY(ObClockGenerator::getClock() >= expired_time)) {
+      // WRLockGuard guard(rwlock_);
+      int64_t abs_timeout_us = ObTimeUtility::current_time() + DEFAULT_RWLOCK_TIMEOUT_US;
+      if (expired_time != 0) {
+        abs_timeout_us = std::min(expired_time, abs_timeout_us);
+      }
+      WRLockGuardWithTimeout guard(rwlock_, abs_timeout_us, ret);
+      if (OB_FAIL(ret)) {
+        if (OB_TIMEOUT == ret) {
+          ret = OB_EAGAIN;
+        }
+        LOG_WARN("try get write lock of obj failed", K(ret), KPC(this), K(unlock_op), K(abs_timeout_us));
+      } else if (!is_try_lock && OB_UNLIKELY(ObClockGenerator::getClock() >= expired_time)) {
         ret = (ret == OB_SUCCESS ? OB_TIMEOUT : ret);
         LOG_WARN("unlock is timeout", K(ret), K(unlock_op));
       } else if (is_deleted_) {
@@ -538,6 +624,7 @@ int ObOBJLock::unlock(
 
   return ret;
 }
+
 void ObOBJLock::remove_lock_op(
     const ObTableLockOp &lock_op,
     ObMalloc &allocator)
@@ -561,15 +648,22 @@ void ObOBJLock::remove_lock_op(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid lock mode", K(ret), K(lock_op), K(map_index));
   } else {
-    WRLockGuard guard(rwlock_);
-    op_list = map_[map_index];
-    delete_lock_op_from_list_(lock_op,
-                              op_list,
-                              allocator);
-    drop_op_list_if_empty_(lock_op.lock_mode_,
-                           op_list,
-                           allocator);
-    wakeup_waiters_(lock_op);
+    // WRLockGuard guard(rwlock_);
+    int64_t abs_timeout_us = ObTimeUtility::current_time() + DEFAULT_RWLOCK_TIMEOUT_US;
+    WRLockGuardWithTimeout guard(rwlock_, abs_timeout_us, ret);
+    if (OB_FAIL(ret)) {
+      if (OB_TIMEOUT == ret) {
+        ret = OB_EAGAIN;
+      }
+      LOG_WARN("try get write lock of obj failed", K(ret), KPC(this), K(lock_op), K(abs_timeout_us));
+    } else {
+      op_list = map_[map_index];
+      delete_lock_op_from_list_(lock_op, op_list, allocator);
+      drop_op_list_if_empty_(lock_op.lock_mode_,
+                            op_list,
+                            allocator);
+      wakeup_waiters_(lock_op);
+    }
   }
   LOG_DEBUG("ObOBJLock::remove_lock_op finish.");
 }
@@ -591,16 +685,25 @@ SCN ObOBJLock::get_min_ddl_lock_committed_scn(const SCN &flushed_scn) const
 {
   int ret = OB_SUCCESS;
   SCN min_rec_scn = SCN::max_scn();
-  RDLockGuard guard(rwlock_);
-  for (int i = 0; i < TABLE_LOCK_MODE_COUNT; i++) {
-    ObTableLockOpList *op_list = map_[i];
-    if (op_list != NULL) {
-      DLIST_FOREACH(curr, *op_list) {
-        if (curr->lock_op_.op_type_ ==  OUT_TRANS_LOCK
-            && curr->lock_op_.lock_op_status_ == LOCK_OP_COMPLETE
-            && curr->lock_op_.commit_scn_ > flushed_scn
-            && curr->lock_op_.commit_scn_ < min_rec_scn) {
-          min_rec_scn = curr->lock_op_.commit_scn_;
+  int64_t abs_timeout_us = ObTimeUtility::current_time() + DEFAULT_RWLOCK_TIMEOUT_US;
+  // RDLockGuard guard(rwlock_);
+  RDLockGuardWithTimeout guard(rwlock_, abs_timeout_us, ret);
+  if (OB_FAIL(ret)) {
+    if (OB_TIMEOUT == ret) {
+      ret = OB_EAGAIN;
+    }
+    LOG_WARN("try get read lock of obj failed", K(ret), KPC(this), K(abs_timeout_us));
+  } else {
+    for (int i = 0; i < TABLE_LOCK_MODE_COUNT; i++) {
+      ObTableLockOpList *op_list = map_[i];
+      if (op_list != NULL) {
+        DLIST_FOREACH(curr, *op_list) {
+          if (curr->lock_op_.op_type_ ==  OUT_TRANS_LOCK
+              && curr->lock_op_.lock_op_status_ == LOCK_OP_COMPLETE
+              && curr->lock_op_.commit_scn_ > flushed_scn
+              && curr->lock_op_.commit_scn_ < min_rec_scn) {
+            min_rec_scn = curr->lock_op_.commit_scn_;
+          }
         }
       }
     }
@@ -613,30 +716,54 @@ int ObOBJLock::get_table_lock_store_info(
     const SCN &freeze_scn)
 {
   int ret = OB_SUCCESS;
-  RDLockGuard guard(rwlock_);
-  for (int i = 0; i < TABLE_LOCK_MODE_COUNT; i++) {
-    ObTableLockOpList *op_list = map_[i];
-    if (op_list != NULL) {
-      DLIST_FOREACH(curr, *op_list) {
-        if (curr->lock_op_.commit_scn_ <= freeze_scn &&
-            (curr->is_complete_outtrans_lock() || curr->is_complete_outtrans_unlock())) {
-          ObTableLockOp store_info;
-          if(OB_FAIL(curr->get_table_lock_store_info(store_info))) {
-            LOG_WARN("get_table_lock_store_info failed", K(ret));
-          } else if (OB_FAIL(store_arr.push_back(store_info))) {
-            LOG_WARN("failed to push back table lock info arr", K(ret));
+  // RDLockGuard guard(rwlock_);
+  int64_t abs_timeout_us = ObTimeUtility::current_time() + DEFAULT_RWLOCK_TIMEOUT_US;
+  RDLockGuardWithTimeout guard(rwlock_, abs_timeout_us, ret);
+  if (OB_FAIL(ret)) {
+    if (OB_TIMEOUT == ret) {
+      ret = OB_EAGAIN;
+    }
+    LOG_WARN("try get read lock of obj failed", K(ret), KPC(this), K(abs_timeout_us));
+  } else {
+    for (int i = 0; i < TABLE_LOCK_MODE_COUNT; i++) {
+      ObTableLockOpList *op_list = map_[i];
+      if (op_list != NULL) {
+        DLIST_FOREACH(curr, *op_list) {
+          if (curr->lock_op_.commit_scn_ <= freeze_scn &&
+              (curr->is_complete_outtrans_lock() || curr->is_complete_outtrans_unlock())) {
+            ObTableLockOp store_info;
+            if(OB_FAIL(curr->get_table_lock_store_info(store_info))) {
+              LOG_WARN("get_table_lock_store_info failed", K(ret));
+            } else if (OB_FAIL(store_arr.push_back(store_info))) {
+              LOG_WARN("failed to push back table lock info arr", K(ret));
+            }
+          }
+
+          if (ret != OB_SUCCESS) {
+            break;
           }
         }
-
-        if (ret != OB_SUCCESS) {
-          break;
-        }
+      }
+      if (ret != OB_SUCCESS) {
+        break;
       }
     }
-    if (ret != OB_SUCCESS) {
-      break;
+  }
+
+  if (OB_SUCC(ret)) {
+    // store split info
+    SCN max_split_epoch = max_split_epoch_;
+    if (max_split_epoch.is_valid() && !max_split_epoch.is_min()) {
+      ObTableLockOp split_store_info;
+      split_store_info.op_type_ = TABLET_SPLIT;
+      split_store_info.commit_scn_ = max_split_epoch;
+      split_store_info.lock_id_ = lock_id_;
+      if (OB_FAIL(store_arr.push_back(split_store_info))) {
+        LOG_WARN("failed to push back table lock info arr", K(ret));
+      }
     }
   }
+
   return ret;
 }
 
@@ -644,8 +771,15 @@ int ObOBJLock::compact_tablelock(ObMalloc &allocator,
                                  bool &is_compacted,
                                  const bool is_force) {
   int ret = OB_SUCCESS;
-  WRLockGuard guard(rwlock_);
-  if (OB_FAIL(compact_tablelock_(allocator, is_compacted, is_force))) {
+  int64_t abs_timeout_us = ObTimeUtility::current_time() + DEFAULT_RWLOCK_TIMEOUT_US;
+  // WRLockGuard guard(rwlock_);
+  WRLockGuardWithTimeout guard(rwlock_, abs_timeout_us, ret);
+  if (OB_FAIL(ret)) {
+    if (OB_TIMEOUT == ret) {
+      ret = OB_EAGAIN;
+    }
+    LOG_WARN("try get write lock of obj failed", K(ret), KPC(this), K(abs_timeout_us));
+  } else if (OB_FAIL(compact_tablelock_(allocator, is_compacted, is_force))) {
     LOG_WARN("compact table lock failed", K(ret), K(is_compacted), K(is_force));
   }
   return ret;
@@ -805,7 +939,7 @@ int ObOBJLock::check_op_allow_lock_(const ObTableLockOp &lock_op)
   // there is no unlock op, else return OB_TRY_LOCK_ROW_CONFLICT.
   // 2. IN_TRANS lock:
   // 1) if the lock status is LOCK_OP_DOING, return OB_OBJ_LOCK_EXIST to prevent
-  // lock twice.
+  // lock twice (except obj_type is DBMS_LOCK).
   int map_index = 0;
   ObTableLockOpList *op_list = NULL;
 
@@ -864,13 +998,67 @@ int ObOBJLock::check_allow_unlock_(
   return ret;
 }
 
+int ObOBJLock::eliminate_conflict_caused_by_split_if_need_(
+    const ObTableLockOp &lock_op,
+    storage::ObStoreCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  // WRLockGuard guard(rwlock_);
+  int64_t abs_timeout_us = ObTimeUtility::current_time() + DEFAULT_RWLOCK_TIMEOUT_US;
+  WRLockGuardWithTimeout guard(rwlock_, abs_timeout_us, ret);
+  if (OB_FAIL(ret)) {
+    if (OB_TIMEOUT == ret) {
+      ret = OB_EAGAIN;
+    }
+    LOG_WARN("try get write lock of obj failed", K(ret), K(lock_op), KPC(this), K(abs_timeout_us));
+  } else if (has_splitted()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("this obj has been splitted as src_tablet, should not get lock request", K(ret), KPC(this));
+  } else if (max_split_epoch_.is_valid()) {
+    ObTableLockMode curr_lock_mode = ROW_EXCLUSIVE;
+    int64_t conflict_modes = 0;
+    if (!request_lock(curr_lock_mode, lock_op.lock_mode_, conflict_modes)) {
+      bool conflict = true;
+      ObTransService *txs = NULL;
+      ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;
+      SCN min_scn;
+      if (OB_ISNULL(txs = MTL(ObTransService*))) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("trans_service should not empty");
+      } else if (OB_FAIL(txs->get_tx_ctx_mgr().get_ls_tx_ctx_mgr(ctx.ls_id_,
+                                                                ls_tx_ctx_mgr))) {
+        LOG_WARN("get_ls_tx_ctx_mgr failed", K(ret));
+      } else if (OB_FAIL(ls_tx_ctx_mgr->get_min_start_scn(min_scn))) {
+        LOG_WARN("get_min_start_scn failed", K(ret));
+      } else if (min_scn >= max_split_epoch_) {  //ensure active trans over before split
+        LOG_INFO("reset max_split_epoch_ when active trans over before split",
+                K(min_scn), K(max_split_epoch_));
+        max_split_epoch_ = SCN::invalid_scn();
+        conflict = false;
+      }
+      if (OB_SUCC(ret) && conflict) {
+        ret = OB_TRY_LOCK_ROW_CONFLICT;
+      }
+      if (OB_NOT_NULL(ls_tx_ctx_mgr)) {
+        if (OB_TMP_FAIL(txs->get_tx_ctx_mgr().revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr))) {
+          ret = OB_SUCCESS == ret ? tmp_ret : ret;
+          LOG_WARN("revert ls tx ctx mgr with ref failed", K(ret), K(tmp_ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObOBJLock::check_allow_lock_(
     const ObTableLockOp &lock_op,
     const uint64_t lock_mode_cnt_in_same_trans[],
     ObTxIDSet &conflict_tx_set,
     bool &conflict_with_dml_lock,
     const bool include_finish_tx,
-    const bool only_check_dml_lock)
+    const bool only_check_dml_lock,
+    const bool check_for_replace)
 {
   int ret = OB_SUCCESS;
   int64_t conflict_modes = 0;
@@ -883,7 +1071,9 @@ int ObOBJLock::check_allow_lock_(
       LOG_WARN("check_op_allow_lock failed.", K(ret), K(lock_op));
     }
   } else if (OB_FAIL(get_exist_lock_mode_without_curr_trans(lock_mode_cnt_in_same_trans,
-                                                            curr_lock_mode))) {
+                                                            curr_lock_mode,
+                                                            lock_op.create_trans_id_,
+                                                            check_for_replace))) {
     LOG_WARN("meet unexpected error during get lock_mode without current trans", K(ret));
   } else if (!request_lock(curr_lock_mode,
                            lock_op.lock_mode_,
@@ -923,6 +1113,7 @@ int ObOBJLock::check_allow_lock(
     const uint64_t lock_mode_cnt_in_same_trans[],
     ObTxIDSet &conflict_tx_set,
     bool &conflict_with_dml_lock,
+    const int64_t expired_time,
     ObMalloc &allocator,
     const bool include_finish_tx,
     const bool only_check_dml_lock)
@@ -932,91 +1123,78 @@ int ObOBJLock::check_allow_lock(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument.", K(ret), K(lock_op));
   } else {
-    RDLockGuard guard(rwlock_);
-    ret = check_allow_lock_(lock_op,
-                            lock_mode_cnt_in_same_trans,
-                            conflict_tx_set,
-                            conflict_with_dml_lock,
-                            include_finish_tx,
-                            only_check_dml_lock);
+    // RDLockGuard guard(rwlock_);
+    int64_t abs_timeout_us = ObTimeUtility::current_time() + DEFAULT_RWLOCK_TIMEOUT_US;
+    if (expired_time != 0) {
+      abs_timeout_us = std::min(expired_time, abs_timeout_us);
+    }
+    RDLockGuardWithTimeout guard(rwlock_, abs_timeout_us, ret);
+    if (OB_FAIL(ret)) {
+      if (OB_TIMEOUT == ret) {
+        ret = OB_EAGAIN;
+      }
+      LOG_WARN("try get read lock of obj failed", K(ret), KPC(this), K(lock_op), K(abs_timeout_us));
+    } else {
+      ret = check_allow_lock_(lock_op,
+                              lock_mode_cnt_in_same_trans,
+                              conflict_tx_set,
+                              conflict_with_dml_lock,
+                              include_finish_tx,
+                              only_check_dml_lock);
+    }
   }
   return ret;
 }
 
-int ObOBJLock::get_exist_lock_mode_without_curr_trans(
-    const uint64_t lock_mode_cnt_in_same_trans[],
-    ObTableLockMode &lock_mode_without_curr_trans)
+int ObOBJLock::get_exist_lock_mode_without_curr_trans(const uint64_t lock_mode_cnt_in_same_trans[],
+                                                      ObTableLockMode &lock_mode_without_curr_trans,
+                                                      const ObTransID &trans_id,
+                                                      const bool is_for_replace)
 {
   int ret = OB_SUCCESS;
-  lock_mode_without_curr_trans = 0x0;
+  ObTableLockMode lock_mode = NO_LOCK;
+  int64_t lock_mode_cnt[TABLE_LOCK_MODE_COUNT] = {0};
+  for (int64_t i = 0; i < TABLE_LOCK_MODE_COUNT; i++) {
+    // 1. count the number of lock_ops for each lock_mode
+    lock_mode = get_lock_mode_by_index(i);
+    lock_mode_cnt[i] = OB_ISNULL(map_[i]) ? 0 : map_[i]->get_size();
+    if (ROW_SHARE == lock_mode) {
+      lock_mode_cnt[i] += row_share_;
+    } else if (ROW_EXCLUSIVE == lock_mode) {
+      lock_mode_cnt[i] += row_exclusive_;
+    }
+    // 2. remove lock_modes which is held by current transaction
+    lock_mode_cnt[i] -= lock_mode_cnt_in_same_trans[i];
+    // 2.1 recheck for replace
+    if (is_for_replace) {
+      LOG_DEBUG("recheck for replace begin", K(lock_mode), K(lock_mode_cnt[i]), K(lock_mode_cnt_in_same_trans[i]));
+      // Only one case should be recehcked: lock_mode of this obj is exsited,
+      // but there's no this lock_mode actually becuase current transaction
+      // has unlocked it in the replace progress.
+      // It happens because there may be 2 lock_ops with the same lock_mode
+      // in the replace situation, 1 is lock_op which is completed, and the
+      // other is unlock_op which is still doing. It means this lock_mode has
+      // no locks on it now.
+      if (lock_mode_cnt[i] >= 2) {
+        bool allow_replace = false;
+        if (OB_FAIL(check_allow_replace_from_list_(map_[i], trans_id, allow_replace))) {
+          LOG_WARN("check allow replace failed", K(i));
+        } else if (allow_replace) {
+          lock_mode_cnt[i] = 0;
+        }
+      }
+      LOG_DEBUG("recheck for replace end", K(lock_mode), K(lock_mode_cnt[i]), K(lock_mode_cnt_in_same_trans[i]));
+    }
+    // 2.2 check valid for the lock op of current transaction
+    check_curr_trans_lock_is_valid_(lock_mode_cnt_in_same_trans, lock_mode_cnt);
 
-  int row_share_not_in_curr_trans = get_exist_lock_mode_cnt_without_curr_trans_(ROW_SHARE, lock_mode_cnt_in_same_trans);
-  int row_exclusive_not_in_curr_trans =
-    get_exist_lock_mode_cnt_without_curr_trans_(ROW_EXCLUSIVE, lock_mode_cnt_in_same_trans);
-  int share_not_in_curr_trans = get_exist_lock_mode_cnt_without_curr_trans_(SHARE, lock_mode_cnt_in_same_trans);
-  int share_row_exclusive_not_in_curr_trans =
-    get_exist_lock_mode_cnt_without_curr_trans_(SHARE_ROW_EXCLUSIVE, lock_mode_cnt_in_same_trans);
-  int exclusive_not_in_curr_trans = get_exist_lock_mode_cnt_without_curr_trans_(EXCLUSIVE, lock_mode_cnt_in_same_trans);
-
-  if (OB_UNLIKELY(row_share_not_in_curr_trans < 0 || row_exclusive_not_in_curr_trans < 0 || share_not_in_curr_trans < 0
-                  || share_row_exclusive_not_in_curr_trans < 0 || exclusive_not_in_curr_trans < 0)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("lock_mode count should not be negative",
-              K(row_share_not_in_curr_trans),
-              K(row_exclusive_not_in_curr_trans),
-              K(share_not_in_curr_trans),
-              K(share_row_exclusive_not_in_curr_trans),
-              K(exclusive_not_in_curr_trans));
-  } else if (OB_UNLIKELY(lock_mode_cnt_in_same_trans[get_index_by_lock_mode(ROW_SHARE)] > 0
-                         && exclusive_not_in_curr_trans > 0)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("current trans has rs lock, others should not have x lock",
-              K(lock_mode_cnt_in_same_trans),
-              K(exclusive_not_in_curr_trans));
-  } else if (OB_UNLIKELY(lock_mode_cnt_in_same_trans[get_index_by_lock_mode(ROW_EXCLUSIVE)] > 0
-                         && (share_not_in_curr_trans > 0 || share_row_exclusive_not_in_curr_trans > 0
-                             || exclusive_not_in_curr_trans))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("current trans has rx lock, others should not have s/srx/x lock",
-              K(share_not_in_curr_trans),
-              K(share_row_exclusive_not_in_curr_trans),
-              K(exclusive_not_in_curr_trans));
-  } else if (OB_UNLIKELY(lock_mode_cnt_in_same_trans[get_index_by_lock_mode(SHARE)] > 0
-                         && (row_exclusive_not_in_curr_trans > 0 || share_row_exclusive_not_in_curr_trans > 0
-                             || exclusive_not_in_curr_trans > 0))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("current trans has s lock, others should not have rx/srx/x lock",
-              K(row_exclusive_not_in_curr_trans),
-              K(share_row_exclusive_not_in_curr_trans),
-              K(exclusive_not_in_curr_trans));
-  } else if (OB_UNLIKELY(lock_mode_cnt_in_same_trans[get_index_by_lock_mode(SHARE_ROW_EXCLUSIVE)] > 0
-                         && (row_exclusive_not_in_curr_trans > 0 || share_not_in_curr_trans > 0
-                             || share_row_exclusive_not_in_curr_trans > 0 || exclusive_not_in_curr_trans > 0))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("current trans has srx lock, others should not have rx/s/srx/x lock",
-              K(row_exclusive_not_in_curr_trans),
-              K(share_not_in_curr_trans),
-              K(share_row_exclusive_not_in_curr_trans),
-              K(exclusive_not_in_curr_trans));
-  } else if (OB_UNLIKELY(lock_mode_cnt_in_same_trans[get_index_by_lock_mode(EXCLUSIVE)] > 0
-                         && (row_share_not_in_curr_trans > 0 || row_exclusive_not_in_curr_trans > 0
-                             || share_not_in_curr_trans > 0 || share_row_exclusive_not_in_curr_trans > 0
-                             || exclusive_not_in_curr_trans > 0))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("current trans has x lock, others should not have any locks",
-              K(row_share_not_in_curr_trans),
-              K(row_exclusive_not_in_curr_trans),
-              K(share_not_in_curr_trans),
-              K(share_row_exclusive_not_in_curr_trans),
-              K(exclusive_not_in_curr_trans));
-  } else {
-    lock_mode_without_curr_trans |= (row_share_not_in_curr_trans == 0 ? 0 : ROW_SHARE);
-    lock_mode_without_curr_trans |= (row_exclusive_not_in_curr_trans == 0 ? 0 : ROW_EXCLUSIVE);
-    lock_mode_without_curr_trans |= (share_not_in_curr_trans == 0 ? 0 : SHARE);
-    lock_mode_without_curr_trans |= (share_row_exclusive_not_in_curr_trans == 0 ? 0 : SHARE_ROW_EXCLUSIVE);
-    lock_mode_without_curr_trans |= (exclusive_not_in_curr_trans == 0 ? 0 : EXCLUSIVE);
+    // 3. set the lock_mode without current transaction
+    lock_mode_without_curr_trans |= (lock_mode_cnt[i] > 0 ? lock_mode : 0);
   }
 
+  LOG_DEBUG("get_exist_lock_mode_without_cur_trans",
+            K(lock_mode_without_curr_trans),
+            K(is_for_replace));
   return ret;
 }
 
@@ -1037,8 +1215,18 @@ void ObOBJLock::reset_(ObMalloc &allocator)
 }
 void ObOBJLock::reset(ObMalloc &allocator)
 {
-  WRLockGuard guard(rwlock_);
-  reset_(allocator);
+  int ret = OB_SUCCESS;
+  // WRLockGuard guard(rwlock_);
+  int64_t abs_timeout_us = ObTimeUtility::current_time() + DEFAULT_RWLOCK_TIMEOUT_US;
+  WRLockGuardWithTimeout guard(rwlock_, abs_timeout_us, ret);
+  if (OB_FAIL(ret)) {
+    if (OB_TIMEOUT == ret) {
+      ret = OB_EAGAIN;
+    }
+    LOG_WARN("try get write lock of obj failed", K(ret), KPC(this), K(abs_timeout_us));
+  } else {
+    reset_(allocator);
+  }
 }
 
 void ObOBJLock::reset_without_lock(ObMalloc &allocator)
@@ -1048,8 +1236,18 @@ void ObOBJLock::reset_without_lock(ObMalloc &allocator)
 
 void ObOBJLock::print() const
 {
-  RDLockGuard guard(rwlock_);
-  print_();
+  // RDLockGuard guard(rwlock_);
+  int ret = OB_SUCCESS;
+  int64_t abs_timeout_us = ObTimeUtility::current_time() + DEFAULT_RWLOCK_TIMEOUT_US;
+  RDLockGuardWithTimeout guard(rwlock_, abs_timeout_us, ret);
+  if (OB_FAIL(ret)) {
+    if (OB_TIMEOUT == ret) {
+      ret = OB_EAGAIN;
+    }
+    LOG_WARN("try get read lock of obj failed", K(ret), KPC(this), K(abs_timeout_us));
+  } else {
+    print_();
+  }
 }
 
 void ObOBJLock::print_without_lock() const
@@ -1075,14 +1273,22 @@ int ObOBJLock::get_lock_op_iter(const ObLockID &lock_id,
                                 ObLockOpIterator &iter) const
 {
   int ret = OB_SUCCESS;
-  RDLockGuard guard(rwlock_);
-  ObTableLockOpList *op_list = NULL;
-  for (int i = 0; OB_SUCC(ret) && i < TABLE_LOCK_MODE_COUNT; i++) {
-    op_list = map_[i];
-    if (NULL != op_list) {
-      if (OB_FAIL(get_lock_op_list_iter_(op_list,
-                                         iter))) {
-        TABLELOCK_LOG(WARN, "get lock op list iter failed", K(ret), K(i));
+  // RDLockGuard guard(rwlock_);
+  int64_t abs_timeout_us = ObTimeUtility::current_time() + DEFAULT_RWLOCK_TIMEOUT_US;
+  RDLockGuardWithTimeout guard(rwlock_, abs_timeout_us, ret);
+  if (OB_FAIL(ret)) {
+    if (OB_TIMEOUT == ret) {
+      ret = OB_EAGAIN;
+    }
+    LOG_WARN("try get read lock of obj failed", K(ret), KPC(this), K(abs_timeout_us));
+  } else {
+    ObTableLockOpList *op_list = NULL;
+    for (int i = 0; OB_SUCC(ret) && i < TABLE_LOCK_MODE_COUNT; i++) {
+      op_list = map_[i];
+      if (NULL != op_list) {
+        if (OB_FAIL(get_lock_op_list_iter_(op_list, iter))) {
+          TABLELOCK_LOG(WARN, "get lock op list iter failed", K(ret), K(i));
+        }
       }
     }
   }
@@ -1115,6 +1321,221 @@ int ObOBJLock::get_lock_op_iter(const ObLockID &lock_id,
   if (OB_SUCC(ret) &&
       OB_FAIL(iter.set_ready())) {
     TABLELOCK_LOG(WARN, "iterator set ready failed", K(ret));
+  }
+  return ret;
+}
+
+int ObOBJLock::reset_split_epoch()
+{
+  int ret = OB_SUCCESS;
+  // WRLockGuard guard(rwlock_);
+  int64_t abs_timeout_us = ObTimeUtility::current_time() + DEFAULT_RWLOCK_TIMEOUT_US;
+  WRLockGuardWithTimeout guard(rwlock_, abs_timeout_us, ret);
+  if (OB_FAIL(ret)) {
+    if (OB_TIMEOUT == ret) {
+      ret = OB_EAGAIN;
+    }
+    LOG_WARN("try get write lock of obj failed", K(ret), KPC(this), K(abs_timeout_us));
+  } else if (OB_FAIL(reset_split_epoch_())) {
+    LOG_WARN("reset split epoch failed", KPC(this));
+  }
+  return ret;
+}
+
+int ObOBJLockMap::add_split_epoch(const ObLockID &lock_id,
+                                  const share::SCN &split_epoch,
+                                  const bool for_replay)
+{
+  int ret = OB_SUCCESS;
+  ObOBJLock *obj_lock = NULL;
+  do {
+    if (OB_FAIL(get_or_create_obj_lock_with_ref_(lock_id, obj_lock))) {
+      LOG_WARN("get_or_create_obj_lock_with_ref failed", K(ret), K(lock_id));
+    } else if (OB_FAIL(obj_lock->set_split_epoch(split_epoch, for_replay))) {
+      LOG_WARN("set_split_epoch failed", K(lock_id), K(split_epoch), K(ret), K(for_replay));
+    } else {
+      LOG_INFO("add_split_epoch successfully", K(split_epoch), K(lock_id));
+    }
+
+    if (OB_NOT_NULL(obj_lock)) {
+      lock_map_.revert(obj_lock);
+    }
+  } while (OB_EAGAIN == ret);
+  return ret;
+}
+
+int ObOBJLockMap::add_split_epoch(const ObSArray<ObLockID> &lock_ids,
+                                  const share::SCN &split_epoch,
+                                  const bool for_replay)
+{
+  int ret = OB_SUCCESS;
+  ObOBJLock *obj_lock = NULL;
+  ObSArray<ObOBJLock *> added_obj_locks;
+  for (int64_t i = 0; OB_SUCC(ret) && i < lock_ids.count(); i++) {
+    do {
+      if (OB_FAIL(get_or_create_obj_lock_with_ref_(lock_ids[i], obj_lock))) {
+        LOG_WARN("get_or_create_obj_lock_with_ref failed", K(ret), K(lock_ids[i]));
+      } else if (OB_ISNULL(obj_lock)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_ERROR("obj_lock is null after get_or_create_obj_lock_with_ref_ for tablet", K(ret), K(lock_ids[i]));
+      } else if (OB_FAIL(obj_lock->set_split_epoch(split_epoch, for_replay))) {
+        LOG_WARN("the obj_lock is deleted", K(obj_lock), K(split_epoch), K(ret));
+      } else if (OB_FAIL(added_obj_locks.push_back(obj_lock))) {
+        LOG_WARN("add obj_lock into added_obj_locks failed", K(obj_lock), K(added_obj_locks.count()));
+        if (OB_FAIL(obj_lock->reset_split_epoch())) {
+          ret = OB_ERR_UNEXPECTED;  // the obj_lock with valid max_split_epoch_ should not be deleted
+          LOG_ERROR("meet fails when push obj_lock to added_obj_locks, and reset it fails", K(ret), K(obj_lock));
+        }
+      } else {
+        LOG_INFO("add_split_epoch successfully", K(split_epoch), K(lock_ids[i]));
+      }
+      // If meet fails, the last obj_lock is not in the added_obj_locks,
+      // so we shuold revert it individually.
+      if (OB_FAIL(ret) && OB_NOT_NULL(obj_lock)) {
+        lock_map_.revert(obj_lock);
+      }
+    } while (OB_EAGAIN == ret);
+  }
+
+  // If meet fails, reset split epoch for all destination
+  // table locks which has been set before.
+  if (OB_FAIL(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    for (int64_t i = 0; i < added_obj_locks.count(); i++) {
+      if (OB_ISNULL(obj_lock = added_obj_locks[i])) {
+        tmp_ret = OB_INVALID_ARGUMENT;
+        LOG_ERROR("obj_lock is null in added_obj_locks", K(ret), K(tmp_ret), K(i));
+      } else if (OB_TMP_FAIL(obj_lock->reset_split_epoch())) {
+        ret = OB_ERR_UNEXPECTED;  // the obj_lock with valid max_split_epoch_ should not be deleted
+        LOG_ERROR("reset_split_epoch failed", K(ret), K(tmp_ret), KPC(obj_lock), K(split_epoch));
+      }
+      if (OB_NOT_NULL(obj_lock)) {
+        lock_map_.revert(obj_lock);
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObOBJLockMap::get_split_epoch(const ObLockID &lock_id,
+                                  share::SCN &split_epoch)
+{
+  int ret = OB_SUCCESS;
+  ObOBJLock *obj_lock = NULL;
+  do {
+    if (OB_FAIL(get_obj_lock_with_ref_(lock_id, obj_lock))) {
+      LOG_WARN("get_or_create_obj_lock_with_ref failed", K(ret), K(lock_id));
+    } else if (OB_FAIL(obj_lock->get_split_epoch(split_epoch))) {
+      LOG_WARN("the obj_lock is deleted", K(lock_id), K(split_epoch), K(ret));
+    }
+    if (OB_NOT_NULL(obj_lock)) {
+      lock_map_.revert(obj_lock);
+    }
+  } while (OB_EAGAIN == ret);
+  return ret;
+}
+
+int ObOBJLock::table_lock_split(const ObTabletID &src_tablet_id,
+                                const ObSArray<common::ObTabletID> &dst_tablet_ids,
+                                const transaction::ObTransID &trans_id,
+                                ObLockTableSplitLogCb &callback)
+{
+  int ret = OB_SUCCESS;
+  // WRLockGuard guard(rwlock_);
+  int64_t abs_timeout_us = ObTimeUtility::current_time() + DEFAULT_RWLOCK_TIMEOUT_US;
+  WRLockGuardWithTimeout guard(rwlock_, abs_timeout_us, ret);
+
+  if (OB_FAIL(ret)) {
+    if (callback.is_logging_) {
+      ret = OB_TABLE_LOCK_IS_SPLITTING;
+      LOG_WARN("table lock of this tablet is splitting",
+               K(ret),
+               KPC(this),
+               K(src_tablet_id),
+               K(dst_tablet_ids),
+               K(trans_id),
+               K(abs_timeout_us));
+    } else if (OB_TIMEOUT == ret) {
+      ret = OB_EAGAIN;
+    }
+    LOG_WARN("try get write lock of obj failed",
+             K(ret),
+             KPC(this),
+             K(src_tablet_id),
+             K(dst_tablet_ids),
+             K(trans_id),
+             K(abs_timeout_us));
+  } else {
+    bool exist_cannot_split_lock = exist_cannot_split_lock_(trans_id);
+    bool need_split = need_split_();
+
+    if (!exist_cannot_split_lock && need_split) {
+      if (OB_FAIL(submit_log_(callback, src_tablet_id, dst_tablet_ids))) {
+        LOG_WARN("submit log for splitting table lock failed", K(src_tablet_id), K(dst_tablet_ids), K(trans_id));
+      } else {
+        // To ensure the safety of the ObLockTableSplitLogCb in the lock_memtable,
+        // we should hold the handle of the lock memtable during the callback is logging
+        // (include submit log and wait for callback on_success or on_failure)
+        LOG_WARN("finish log, wait for callback");
+        while (callback.is_logging_) {
+          if (REACH_TIME_INTERVAL(3 * 1000 * 1000)) {
+            LOG_INFO("wait for the table lock split callback", K(ret), K(src_tablet_id), K(dst_tablet_ids));
+          }
+          ob_usleep(1000 * 1000);
+        }
+        // table lock split sucessfully on src_tablet, can not be rollbacked later
+        if (callback.cb_success()) {
+          set_split_epoch_(share::SCN::max_scn());
+        }
+      }
+    }
+    if (exist_cannot_split_lock) {
+      ret = OB_NOT_SUPPORTED;
+      print();
+      LOG_WARN("exist can not split lock", K(ret), K(lock_id_), K(src_tablet_id));
+    }
+    if (!need_split) {
+      if (has_splitted()) {
+        ret = OB_TABLE_LOCK_SPLIT_TWICE;
+        LOG_WARN("table lock has splitted", K(ret), KPC(this));
+      }
+      LOG_WARN("no need to split table lock", K(ret), KPC(this));
+    }
+  }
+  return ret;
+}
+
+int ObOBJLock::set_split_epoch(const share::SCN &scn, const bool for_replay)
+{
+  int ret = OB_SUCCESS;
+  // WRLockGuard guard(rwlock_);
+  int64_t abs_timeout_us = ObTimeUtility::current_time() + DEFAULT_RWLOCK_TIMEOUT_US;
+  WRLockGuardWithTimeout guard(rwlock_, abs_timeout_us, ret);
+  if (OB_FAIL(ret)) {
+    if (OB_TIMEOUT == ret) {
+      ret = OB_EAGAIN;
+    }
+    LOG_WARN("try get write lock of obj failed", K(ret), KPC(this), K(abs_timeout_us));
+  } else if (OB_FAIL(set_split_epoch_(scn, for_replay))) {
+    LOG_WARN("set split epoch failed", KPC(this), K(scn), K(for_replay));
+  }
+  return ret;
+}
+
+int ObOBJLock::get_split_epoch(share::SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  // RDLockGuard guard(rwlock_);
+  int64_t abs_timeout_us = ObTimeUtility::current_time() + DEFAULT_RWLOCK_TIMEOUT_US;
+  RDLockGuardWithTimeout guard(rwlock_, abs_timeout_us, ret);
+  if (OB_FAIL(ret)) {
+    if (OB_TIMEOUT == ret) {
+      ret = OB_EAGAIN;
+    }
+    LOG_WARN("try get read lock of obj failed", K(ret), KPC(this), K(abs_timeout_us));
+  } else if (OB_FAIL(get_split_epoch_(scn))) {
+    LOG_WARN("get split epoch failed", KPC(this));
   }
   return ret;
 }
@@ -1264,6 +1685,53 @@ int ObOBJLock::check_op_allow_lock_from_list_(
     if (need_break) {
       break;
     }
+  }
+  return ret;
+}
+
+int ObOBJLock::check_allow_replace_from_list_(ObTableLockOpList *op_list, const ObTransID &trans_id, bool &allow_replace)
+{
+  int ret = OB_SUCCESS;
+  hash::ObHashMap<int64_t, ObTableLockOp> lock_op_map;
+  int32_t lock_op_cnt = op_list->get_size();
+
+  allow_replace = false;
+  ObTableLockOwnerID owner_id;
+  ObTableLockOp *lock_op = nullptr;
+
+  LOG_DEBUG("start check_allow_replace_from_list_", K(lock_op_cnt));
+  if (OB_FAIL(lock_op_map.create(10, lib::ObMemAttr(MTL_ID(), "TableLockOpMap")))) {
+    LOG_WARN("create lock_map for replace check failed", K(ret));
+  } else {
+    DLIST_FOREACH_NORET(curr, *op_list)
+    {
+      int64_t owner_id = curr->get_owner_id().id();
+      if (FALSE_IT(lock_op = lock_op_map.get(owner_id))) {
+      } else {
+        if (OB_ISNULL(lock_op)) {
+          LOG_DEBUG("lock_op not in the map, will set it", K(curr->lock_op_));
+          if (OB_FAIL(lock_op_map.set_refactored(owner_id, curr->lock_op_))) {
+            LOG_WARN("set lock_op into map failed", K(ret), K(curr->lock_op_));
+          }
+        } else if ((OUT_TRANS_LOCK == lock_op->op_type_ && OUT_TRANS_UNLOCK == curr->lock_op_.op_type_
+                    && LOCK_OP_COMPLETE == lock_op->lock_op_status_ && LOCK_OP_DOING == curr->lock_op_.lock_op_status_
+                    && trans_id == curr->lock_op_.create_trans_id_)
+                   || (OUT_TRANS_UNLOCK == lock_op->op_type_ && OUT_TRANS_LOCK == curr->lock_op_.op_type_
+                       && LOCK_OP_DOING == lock_op->lock_op_status_
+                       && LOCK_OP_COMPLETE == curr->lock_op_.lock_op_status_
+                       && trans_id == lock_op->create_trans_id_)) {
+          LOG_DEBUG("find matched lock_op, will remove them", K(lock_op_cnt), KPC(lock_op), K(curr->lock_op_));
+          lock_op_cnt -= 2;
+        } else {
+          allow_replace = false;
+          break;
+        }
+      }
+    }
+  }
+  LOG_DEBUG("finsih check_allow_replace_from_list_", K(lock_op_cnt));
+  if (OB_SUCC(ret) && 0 == lock_op_cnt) {
+    allow_replace = true;
   }
   return ret;
 }
@@ -1519,6 +1987,249 @@ int ObOBJLock::compact_tablelock_(ObMalloc &allocator,
     }
   }
   return ret;
+}
+
+int ObOBJLock::register_into_deadlock_detector_(const ObStoreCtx &ctx,
+                                                const ObTableLockOp &lock_op)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObTransLockPartID tx_lock_part_id;
+  ObAddr parent_addr;
+  const ObLSID &ls_id = ctx.ls_id_;
+  const int64_t priority = ~(ctx.mvcc_acc_ctx_.tx_desc_->get_active_ts());
+  tx_lock_part_id.lock_id_ = lock_op.lock_id_;
+  tx_lock_part_id.trans_id_ = lock_op.create_trans_id_;
+  if (OB_FAIL(ObTableLockDeadlockDetectorHelper::register_trans_lock_part(
+      tx_lock_part_id, ls_id, priority))) {
+    LOG_WARN("register trans lock part failed", K(ret), K(tx_lock_part_id),
+             K(ls_id));
+  } else if (OB_FAIL(ObTransDeadlockDetectorAdapter::get_trans_scheduler_info_on_participant(
+      tx_lock_part_id.trans_id_, ls_id, parent_addr))) {
+    LOG_WARN("get scheduler address failed", K(tx_lock_part_id), K(ls_id));
+  } else if (OB_FAIL(ObTableLockDeadlockDetectorHelper::add_parent(
+      tx_lock_part_id, parent_addr, lock_op.create_trans_id_))) {
+    LOG_WARN("add parent failed", K(ret), K(tx_lock_part_id));
+  } else if (OB_FAIL(ObTableLockDeadlockDetectorHelper::block(tx_lock_part_id,
+                                                              ls_id,
+                                                              lock_op))) {
+    LOG_WARN("add dependency failed", K(ret), K(tx_lock_part_id));
+  } else {
+    LOG_DEBUG("succeed register to the dead lock detector");
+  }
+  if (OB_FAIL(ret)) {
+    if (OB_SUCCESS != (tmp_ret = ObTableLockDeadlockDetectorHelper::
+                       unregister_trans_lock_part(tx_lock_part_id))) {
+      if (tmp_ret != OB_ENTRY_NOT_EXIST) {
+        LOG_WARN("unregister from deadlock detector failed", K(ret),
+                 K(tx_lock_part_id));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObOBJLock::unregister_from_deadlock_detector_(const ObTableLockOp &lock_op)
+{
+  int ret = OB_SUCCESS;
+  ObTransLockPartID tx_lock_part_id;
+  tx_lock_part_id.lock_id_ = lock_op.lock_id_;
+  tx_lock_part_id.trans_id_ = lock_op.create_trans_id_;
+  if (OB_FAIL(ObTableLockDeadlockDetectorHelper::unregister_trans_lock_part(
+      tx_lock_part_id))) {
+    LOG_WARN("unregister trans lock part failed", K(ret), K(tx_lock_part_id));
+  } else {
+    // do nothing
+  }
+  return ret;
+}
+
+bool ObOBJLock::exist_cannot_split_lock_(const ObTransID &split_start_trans_id) const
+{
+  int ret = OB_SUCCESS;
+  bool exist_cannot_split_lock = false;
+  ObTableLockOpList *op_list = NULL;
+  for (int i = 0; i < TABLE_LOCK_MODE_COUNT; i++) {
+    op_list = map_[i];
+    if (NULL != op_list) {
+      DLIST_FOREACH_NORET(curr, *op_list) {
+        if (NULL != curr &&
+            curr->lock_op_.create_trans_id_ != split_start_trans_id) {
+          exist_cannot_split_lock = true;
+          break;
+        }
+      }
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("op_list of this obj_lock is null!", K(lock_id_));
+    }
+  }
+  return exist_cannot_split_lock;
+}
+
+bool ObOBJLock::need_split_() const
+{
+  // The split transaction will lock src_tablet with RX OUT_TRANS_LOCK, so there're
+  // no share and exclusive locks on the src_tablet.
+  // So we can only consider about splitting RS and RX locks on the src_tablet.
+  // In addition, if the max_split_epoch_ is valid but not min_scn, it means that
+  // we have gotten into splitting process before but it didn't finish, so it still
+  // needs split. (It may be a continuous splitting scenario.)
+  // And if the max_split_epoch_ is max_scn, it means that it has been splitted,
+  // so it doesn't need split.
+  return (row_exclusive_ != 0) || (row_share_ != 0)
+         || (max_split_epoch_.is_valid() && !max_split_epoch_.is_min() && !max_split_epoch_.is_max());
+}
+
+int ObOBJLock::submit_log_(ObLockTableSplitLogCb &callback,
+                           common::ObTabletID src_tablet_id,
+                           const ObSArray<common::ObTabletID> &dst_tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  ObLSID ls_id;
+
+  if (!callback.is_logging_) {
+    callback.is_logging_ = true;
+    ObLockTableSplitLog split_log;
+    if (OB_FAIL(split_log.init(src_tablet_id, dst_tablet_ids))) {
+      LOG_WARN("init split_log failed", K(ret), K(src_tablet_id), K(dst_tablet_ids));
+    } else if (OB_FAIL(callback.set(src_tablet_id, dst_tablet_ids))) {
+      LOG_WARN("set split_log_cb failed", K(ret), K(src_tablet_id), K(dst_tablet_ids));
+    } else {
+      char *buffer = nullptr;
+      int64_t pos = 0;
+      int64_t buffer_size = split_log.get_serialize_size();
+
+      logservice::ObLogBaseHeader base_header(logservice::ObLogBaseType::TABLE_LOCK_LOG_BASE_TYPE,
+                                              logservice::ObReplayBarrierType::NO_NEED_BARRIER);
+      buffer_size += base_header.get_serialize_size();
+      ObLSService *ls_service = nullptr;
+      ObLSHandle ls_handle;
+      ObLS *ls = nullptr;
+      const bool need_nonblock = false;
+      palf::LSN lsn;
+      SCN scn;
+      ObMemAttr attr(MTL_ID(), "SplitLog");
+      if (OB_ISNULL(buffer = static_cast<char *>(mtl_malloc(buffer_size, attr)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc buffer", K(ret));
+      } else if (OB_FAIL(base_header.serialize(buffer, buffer_size, pos))) {
+        LOG_WARN("failed to serialize split log header", K(ret), K(buffer_size), K(pos));
+      } else if (OB_FAIL(split_log.serialize(buffer, buffer_size, pos))) {
+        LOG_WARN("failed to serialize split log", K(ret), K(buffer_size), K(pos));
+      } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("mtl ObLSService should not be null", K(ret));
+      } else if (OB_FAIL(ls_service->get_ls(callback.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+        LOG_WARN("failed to get ls", K(ret));
+      } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ls should not be NULL", K(ret));
+      } else if (OB_FAIL(ls->append(buffer, buffer_size, SCN::min_scn(), need_nonblock, false/*allow_compression*/, &callback, lsn, scn))) {
+        LOG_WARN("failed to submit log", K(ret), K(buffer_size), K(pos));
+      } else {
+        // These params should be gotten after append log to LS,
+        // so we need to use lock to avoid LS can read callback
+        // before these params have been set into it.
+        callback.last_submit_scn_ = scn;
+        callback.last_submit_log_ts_ = ObTimeUtility::current_time();
+        LOG_INFO("submit split log success", K(scn), K(callback), K(src_tablet_id), K(dst_tablet_ids));
+      }
+      if (nullptr != buffer) {
+        mtl_free(buffer);
+        buffer = nullptr;
+      }
+    }
+    if (OB_FAIL(ret)) {
+      callback.is_logging_ = false;
+    }
+  } else if (callback.last_submit_log_ts_ == OB_INVALID_TIMESTAMP) {
+    LOG_WARN("callback is logging, but hasn't submitted log", K(ret), K(callback));
+  } else if (ObTimeUtility::current_time() - callback.last_submit_log_ts_ >
+    SUBMIT_LOG_ALARM_INTERVAL && REACH_TIME_INTERVAL(1000L * 1000L)) {
+    LOG_WARN("maybe submit log callback use too mush time", K(ret), K(callback));
+  }
+
+  return ret;
+}
+
+int ObOBJLock::set_split_epoch_(const share::SCN &scn, const bool for_replay)
+{
+  int ret = OB_SUCCESS;
+  if (is_deleted_) {
+    ret = OB_EAGAIN;
+    LOG_WARN("the obj_lock is_deleted, and need retry", K(ret));
+  } else if (!for_replay && max_split_epoch_ > scn) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN(
+      "the input scn is smaller than max_split_epoch_, so we ignore this set_split_epoch", K(max_split_epoch_), K(scn));
+  } else {
+    max_split_epoch_.inc_update(scn);
+  }
+  return ret;
+}
+
+int ObOBJLock::get_split_epoch_(share::SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  if (is_deleted_) {
+    ret = OB_EAGAIN;
+    LOG_WARN("the obj_lock is_deleted, and need retry", K(ret));
+  } else {
+    scn = max_split_epoch_;
+  }
+  return ret;
+}
+
+int ObOBJLock::reset_split_epoch_()
+{
+  int ret = OB_SUCCESS;
+  if (is_deleted_) {
+    ret = OB_EAGAIN;
+    LOG_WARN("the obj_lock is_deleted, and need retry", K(ret), K(max_split_epoch_));
+  } else {
+    max_split_epoch_ = SCN::invalid_scn();
+  }
+  return ret;
+}
+
+void ObOBJLock::check_curr_trans_lock_is_valid_(const uint64_t lock_mode_cnt_in_same_trans[], const int64_t *lock_mode_cnt)
+{
+  int err_code = 0;
+  int64_t exclusive_cnt = lock_mode_cnt[get_index_by_lock_mode(EXCLUSIVE)];
+  int64_t share_row_exclusive_cnt = lock_mode_cnt[get_index_by_lock_mode(SHARE_ROW_EXCLUSIVE)];
+  int64_t share_cnt = lock_mode_cnt[get_index_by_lock_mode(SHARE)];
+  int64_t row_exclusive_cnt = lock_mode_cnt[get_index_by_lock_mode(ROW_EXCLUSIVE)];
+  int64_t row_share_cnt = lock_mode_cnt[get_index_by_lock_mode(ROW_SHARE)];
+
+  if (lock_mode_cnt_in_same_trans[get_index_by_lock_mode(EXCLUSIVE)] > 0) {
+    if (row_share_cnt > 1 || row_exclusive_cnt > 1 ||
+      share_cnt > 1 || share_row_exclusive_cnt > 1 || exclusive_cnt > 1) {
+      err_code = 1;
+    }
+  } else if (lock_mode_cnt_in_same_trans[get_index_by_lock_mode(SHARE_ROW_EXCLUSIVE)] > 0) {
+    if (row_exclusive_cnt > 1 || share_cnt > 1 || share_row_exclusive_cnt > 1) {
+      err_code = 2;
+    }
+  } else if (lock_mode_cnt_in_same_trans[get_index_by_lock_mode(SHARE)] > 0) {
+    if (row_exclusive_cnt > 1 || share_row_exclusive_cnt > 1) {
+      err_code = 3;
+    }
+  } else if (lock_mode_cnt_in_same_trans[get_index_by_lock_mode(ROW_EXCLUSIVE)] > 0) {
+    if (share_cnt > 1 || share_row_exclusive_cnt > 1) {
+      err_code = 4;
+    }
+  }
+  if (err_code) {
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED,
+                  "unexpected error",
+                  K(err_code),
+                  K(row_share_cnt),
+                  K(row_exclusive_cnt),
+                  K(share_cnt),
+                  K(share_row_exclusive_cnt),
+                  K(exclusive_cnt));
+  }
 }
 
 int ObOBJLock::get_or_create_op_list(const ObTableLockMode mode,
@@ -1843,11 +2554,8 @@ int ObOBJLockMap::unlock(
       obj_lock = NULL;
       if (OB_FAIL(get_obj_lock_with_ref_(lock_op.lock_id_,
                                          obj_lock))) {
+      } else if (OB_FAIL(obj_lock->unlock(lock_op, is_try_lock, expired_time, allocator_))) {
         LOG_WARN("get lock op list map failed.", K(ret), K(lock_op));
-      } else if (OB_FAIL(obj_lock->unlock(lock_op,
-                                          is_try_lock,
-                                          expired_time,
-                                          allocator_))) {
         if (ret != OB_EAGAIN) {
           LOG_WARN("create unlock op failed.", K(ret), K(lock_op));
         }
@@ -1910,14 +2618,23 @@ int ObOBJLockMap::remove_lock(const ObLockID &lock_id)
       LOG_WARN("get lock map failed.", K(ret), K(lock_id));
     }
   } else {
-    WRLockGuard guard(obj_lock->rwlock_);
-    obj_lock->set_deleted();
-    obj_lock->reset_without_lock(allocator_);
-    if (OB_FAIL(lock_map_.del(lock_id, obj_lock))) {
-      if (ret != OB_ENTRY_NOT_EXIST) {
-        LOG_WARN("remove lock owner list map failed. ", K(ret), K(lock_id));
-      } else {
-        ret = OB_OBJ_LOCK_NOT_EXIST;
+    // WRLockGuard guard(obj_lock->rwlock_);
+    int abs_timeout_us = ObTimeUtility::current_time() + DEFAULT_RWLOCK_TIMEOUT_US;
+    WRLockGuardWithTimeout guard(obj_lock->rwlock_, abs_timeout_us, ret);
+    if (OB_FAIL(ret)) {
+      if (OB_TIMEOUT == ret) {
+        ret = OB_EAGAIN;
+      }
+      LOG_WARN("try get write lock of obj failed", K(ret), KPC(obj_lock), K(abs_timeout_us));
+    } else {
+      obj_lock->set_deleted();
+      obj_lock->reset_without_lock(allocator_);
+      if (OB_FAIL(lock_map_.del(lock_id, obj_lock))) {
+        if (ret != OB_ENTRY_NOT_EXIST) {
+          LOG_WARN("remove lock owner list map failed. ", K(ret), K(lock_id));
+        } else {
+          ret = OB_OBJ_LOCK_NOT_EXIST;
+        }
       }
     }
   }
@@ -2001,6 +2718,7 @@ int ObOBJLockMap::check_allow_lock(
     const ObTableLockOp &lock_op,
     const uint64_t lock_mode_cnt_in_same_trans[],
     ObTxIDSet &conflict_tx_set,
+    const int64_t expired_time,
     const bool include_finish_tx,
     const bool only_check_dml_lock)
 {
@@ -2028,6 +2746,7 @@ int ObOBJLockMap::check_allow_lock(
                                                 lock_mode_cnt_in_same_trans,
                                                 conflict_tx_set,
                                                 conflict_with_dml_lock,
+                                                expired_time,
                                                 allocator_,
                                                 include_finish_tx,
                                                 only_check_dml_lock))) {
@@ -2044,6 +2763,64 @@ int ObOBJLockMap::check_allow_lock(
   return ret;
 }
 
+int ObOBJLockMap::table_lock_split(const ObTabletID &src_tablet_id,
+                                   const ObSArray<common::ObTabletID> &dst_tablet_ids,
+                                   const transaction::ObTransID &trans_id,
+                                   ObLockTableSplitLogCb &callback)
+{
+  int ret = OB_SUCCESS;
+  ObLockID src_lock_id;
+  ObOBJLock *src_obj_lock = nullptr;
+  if (OB_FAIL(get_lock_id(src_tablet_id, src_lock_id))) {
+    LOG_WARN("get_lock_id for src_tablet failed", K(ret), K(src_tablet_id));
+  } else if (OB_FAIL(get_obj_lock_with_ref_(src_lock_id, src_obj_lock))) {
+    LOG_WARN("get_obj_lock_with_ref_ for src_tablet failed", K(ret), K(src_lock_id), K(src_tablet_id));
+  } else if (src_obj_lock->has_splitted()) {
+    ret = OB_TABLE_LOCK_SPLIT_TWICE;
+    LOG_WARN("src_tablet has spliitted", K(ret), K(src_lock_id), K(src_tablet_id));
+  } else {
+    ObSArray<ObLockID> dst_lock_ids;
+    // create obj_lock for dst_tablets if it's not existed, to avoid no memory error during callback
+    if (OB_FAIL(get_lock_id(dst_tablet_ids, dst_lock_ids))) {
+      LOG_WARN("get_lock_id for dst_tablets failed", K(ret), K(dst_tablet_ids));
+    } else if (OB_FAIL(add_split_epoch(dst_lock_ids, share::SCN::min_scn()))) {
+      LOG_WARN("add split epoch for dst_lock_ids failed", K(ret), K(dst_lock_ids));
+    } else if (OB_FAIL(src_obj_lock->table_lock_split(src_tablet_id, dst_tablet_ids, trans_id, callback))) {
+      LOG_WARN("submit table lock split log failed", K(ret), K(src_tablet_id), K(dst_tablet_ids), K(trans_id));
+      // submit table lock split failed, so we should reset split epoch for all dst_tablets,
+      // to make sure that GC thread can collect them later.
+      for (int64_t i = 0; i < dst_lock_ids.count(); i++) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(reset_split_epoch(dst_lock_ids[i]))) {
+          LOG_ERROR("reset_split_epoch for dst_tablet failed", K(ret), K(tmp_ret), K(dst_lock_ids[i]));
+        }
+      }
+    }
+  }
+  if (OB_NOT_NULL(src_obj_lock)) {
+    lock_map_.revert(src_obj_lock);
+  }
+  return ret;
+}
+
+int ObOBJLockMap::reset_split_epoch(const ObLockID &lock_id)
+{
+  int ret = OB_SUCCESS;
+  ObOBJLock *obj_lock = NULL;
+  do {
+    if (OB_FAIL(get_obj_lock_with_ref_(lock_id, obj_lock))) {
+      LOG_WARN("get_or_create_obj_lock_with_ref failed", K(ret), K(lock_id));
+    } else if (OB_FAIL(obj_lock->reset_split_epoch())) {
+      LOG_WARN("reset_split_epoch failed", K(lock_id));
+    }
+    if (OB_NOT_NULL(obj_lock)) {
+      lock_map_.revert(obj_lock);
+    }
+  } while (OB_EAGAIN == ret);
+
+  return ret;
+}
+
 void ObOBJLockMap::drop_obj_lock_if_empty_(
     const ObLockID &lock_id,
     ObOBJLock *obj_lock)
@@ -2057,14 +2834,33 @@ void ObOBJLockMap::drop_obj_lock_if_empty_(
     LOG_WARN("invalid argument", K(ret), K(obj_lock), K(lock_id));
   } else {
     {
-      RDLockGuard guard(obj_lock->rwlock_);
-      is_empty = (obj_lock->size_without_lock() == 0);
+      // RDLockGuard guard(obj_lock->rwlock_);
+      int64_t abs_timeout_us = ObTimeUtility::current_time() + DEFAULT_RWLOCK_TIMEOUT_US;
+      RDLockGuardWithTimeout guard(obj_lock->rwlock_, abs_timeout_us, ret);
+      if (OB_FAIL(ret)) {
+        if (OB_TIMEOUT == ret) {
+          ret = OB_EAGAIN;
+        }
+        LOG_WARN("try get read lock of obj failed", K(ret), KPC(obj_lock), K(abs_timeout_us));
+      } else {
+        is_empty = (obj_lock->size_without_lock() == 0
+                    && (!obj_lock->max_split_epoch_.is_valid() || obj_lock->max_split_epoch_.is_max()));
+      }
     }
     if (is_empty) {
-      WRLockGuard guard(obj_lock->rwlock_);
-      // lock and delete flag make sure no one insert a new op.
-      // but maybe have deleted by another concurrent thread.
-      if (obj_lock->size_without_lock() == 0 && !obj_lock->is_deleted()) {
+      // WRLockGuard guard(obj_lock->rwlock_);
+      int64_t abs_timeout_us = ObTimeUtility::current_time() + DEFAULT_RWLOCK_TIMEOUT_US;
+      WRLockGuardWithTimeout guard(obj_lock->rwlock_, abs_timeout_us, ret);
+      if (OB_FAIL(ret)) {
+        if (OB_TIMEOUT == ret) {
+          ret = OB_EAGAIN;
+        }
+        LOG_WARN("try get write lock of obj failed", K(ret), KPC(obj_lock), K(abs_timeout_us));
+      } else if (obj_lock->size_without_lock() == 0
+                 && (!obj_lock->max_split_epoch_.is_valid() || obj_lock->max_split_epoch_.is_max())
+                 && !obj_lock->is_deleted()) {
+        // lock and delete flag make sure no one insert a new op.
+        // but maybe have deleted by another concurrent thread.
         obj_lock->set_deleted();
         if (OB_FAIL(get_obj_lock_with_ref_(lock_id, recheck_ptr))) {
           if (ret != OB_OBJ_LOCK_NOT_EXIST) {
@@ -2087,7 +2883,6 @@ void ObOBJLockMap::drop_obj_lock_if_empty_(
   LOG_DEBUG("try remove lock owner list map. ", K(ret), K(is_empty), K(lock_id),
             K(obj_lock));
 }
-
 }
 }
 }

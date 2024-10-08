@@ -27,6 +27,7 @@
 #include "sql/engine/aggregate/ob_adaptive_bypass_ctrl.h"
 #include "sql/optimizer/ob_dynamic_sampling.h"
 #include "share/config/ob_config_helper.h"
+#include "sql/optimizer/ob_direct_load_optimizer.h"
 
 
 namespace oceanbase
@@ -259,7 +260,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     correlation_type_(ObEstCorrelationType::MAX),
     use_column_store_replica_(false),
     push_join_pred_into_view_enabled_(true),
-    table_access_policy_(ObTableAccessPolicy::AUTO)
+    table_access_policy_(ObTableAccessPolicy::AUTO),
+    partition_wise_plan_enabled_(true)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -323,11 +325,21 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   {
     return params_;
   }
+  inline const ObDirectLoadOptimizerCtx &get_direct_load_optimizer_ctx() const { return direct_load_optimizer_ctx_; }
+  inline ObDirectLoadOptimizerCtx &get_direct_load_optimizer_ctx() { return direct_load_optimizer_ctx_; }
   inline const ObGlobalHint &get_global_hint() { return global_hint_; }
   inline ObRawExprFactory &get_expr_factory() { return expr_factory_; }
   inline ObLogPlanFactory &get_log_plan_factory() { return log_plan_factory_; }
   inline bool can_use_pdml() const { return can_use_pdml_; }
   inline bool is_online_ddl() const { return is_online_ddl_; }
+  inline bool is_insert_stmt_in_online_ddl() const
+  {
+    bool bret = false;
+    if (OB_NOT_NULL(root_stmt_)) {
+      bret = is_online_ddl_ && root_stmt_->is_insert_stmt() && root_stmt_->get_table_items().count() > 0;
+    }
+    return bret;
+  }
   inline int64_t get_ddl_sample_column_count() const { return ddl_sample_column_count_; }
   inline bool is_heap_table_ddl() const { return is_heap_table_ddl_; }
   inline bool is_pdml_heap_table() const { return is_pdml_heap_table_; }
@@ -630,6 +642,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_has_multiple_link_stmt(bool v) { has_multiple_link_stmt_ = v; }
   inline bool is_hash_join_enabled() const { return hash_join_enabled_; }
   inline void set_hash_join_enabled(bool enabled) { hash_join_enabled_ = enabled; }
+  inline bool is_partition_wise_plan_enabled() const { return partition_wise_plan_enabled_; }
+  inline void set_partition_wise_plan_enabled(bool enabled) { partition_wise_plan_enabled_ = enabled; }
   inline bool is_merge_join_enabled() const { return optimizer_sortmerge_join_enabled_; }
   inline void set_merge_join_enabled(bool enabled) { optimizer_sortmerge_join_enabled_ = enabled; }
   inline bool is_nested_join_enabled() const { return nested_loop_join_enabled_; }
@@ -668,6 +682,7 @@ private:
   common::ObAddr server_;
   obrpc::ObSrvRpcProxy *srv_proxy_;
   const ParamStore *params_;
+  ObDirectLoadOptimizerCtx direct_load_optimizer_ctx_; // for direct load
   const ObGlobalHint &global_hint_;
   ObRawExprFactory &expr_factory_;
   ObLogPlanFactory log_plan_factory_;
@@ -752,6 +767,7 @@ private:
   bool use_column_store_replica_;
   bool push_join_pred_into_view_enabled_;
   ObTableAccessPolicy table_access_policy_;
+  bool partition_wise_plan_enabled_;
 };
 }
 }

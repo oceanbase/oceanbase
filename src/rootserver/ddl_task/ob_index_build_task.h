@@ -111,12 +111,12 @@ public:
       const int ret_code);
   int update_complete_sstable_job_status(
       const common::ObTabletID &tablet_id,
+      const ObAddr &addr,
       const int64_t snapshot_version,
       const int64_t execution_id,
       const int ret_code,
       const ObDDLTaskInfo &addition_info);
   virtual int process() override;
-  virtual int cleanup_impl() override;
   virtual bool is_valid() const override;
   virtual int collect_longops_stat(share::ObLongopsValue &value) override;
   virtual int serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const override;
@@ -124,7 +124,7 @@ public:
   virtual int64_t get_serialize_param_size() const override;
   virtual bool support_longops_monitoring() const override { return true; }
   static int deep_copy_index_arg(common::ObIAllocator &allocator, const obrpc::ObCreateIndexArg &source_arg, obrpc::ObCreateIndexArg &dest_arg);
-  INHERIT_TO_STRING_KV("ObDDLTask", ObDDLTask, K(index_table_id_), K(snapshot_held_), K(is_sstable_complete_task_submitted_), K(sstable_complete_request_time_),
+  INHERIT_TO_STRING_KV("ObDDLTask", ObDDLTask, K(index_table_id_), K(doc_id_col_id_), K(snapshot_held_), K(is_sstable_complete_task_submitted_), K(sstable_complete_request_time_),
       K(sstable_complete_ts_), K(check_unique_snapshot_), K(complete_sstable_job_ret_code_), K_(redefinition_execution_id), K(create_index_arg_), K(target_cg_cnt_));
 private:
   int prepare();
@@ -136,6 +136,7 @@ private:
   int enable_index();
   int clean_on_failed();
   int succ();
+  virtual int cleanup_impl() override;
   int hold_snapshot(const int64_t snapshot);
   int release_snapshot(const int64_t snapshot);
   int update_index_status_in_schema(
@@ -169,6 +170,7 @@ private:
   using ObDDLTask::schema_version_;
   using ObDDLTask::snapshot_version_;
   uint64_t &index_table_id_;
+  uint64_t doc_id_col_id_;
   bool is_unique_index_;
   bool is_global_index_;
   ObRootService *root_service_;

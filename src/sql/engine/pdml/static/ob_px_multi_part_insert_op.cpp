@@ -51,7 +51,7 @@ int ObPxMultiPartInsertOp::inner_open()
   }
   if (OB_SUCC(ret)) {
     const ObPhysicalPlan *plan = GET_PHY_PLAN_CTX(ctx_)->get_phy_plan();
-    if (ObTableDirectInsertService::is_direct_insert(*plan)) {
+    if (GET_PHY_PLAN_CTX(ctx_)->get_is_direct_insert_plan()) {
       int64_t px_task_id = ctx_.get_px_task_id() + 1;
       int64_t ddl_task_id = plan->get_ddl_task_id();
       if (OB_FAIL(ObTableDirectInsertService::open_task(
@@ -109,7 +109,7 @@ int ObPxMultiPartInsertOp::inner_close()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   const ObPhysicalPlan *plan = GET_PHY_PLAN_CTX(ctx_)->get_phy_plan();
-  if (ObTableDirectInsertService::is_direct_insert(*plan)) {
+  if (GET_PHY_PLAN_CTX(ctx_)->get_is_direct_insert_plan()) {
     int64_t px_task_id = ctx_.get_px_task_id() + 1;
     int64_t ddl_task_id = plan->get_ddl_task_id();
     int error_code = (static_cast<const ObPxMultiPartInsertOpInput *>(input_))->get_error_code();

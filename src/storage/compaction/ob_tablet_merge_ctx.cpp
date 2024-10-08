@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 #include "storage/compaction/ob_tablet_merge_ctx.h"
+#include "share/schema/ob_tenant_schema_service.h"
 #include "storage/blocksstable/index_block/ob_index_block_builder.h"
 #include "storage/ob_storage_schema.h"
 #include "storage/tablet/ob_tablet_create_delete_helper.h"
@@ -29,6 +30,7 @@
 #include "storage/access/ob_index_sstable_estimator.h"
 #include "storage/compaction/ob_medium_list_checker.h"
 #include "storage/compaction/ob_batch_freeze_tablets_dag.h"
+#include "storage/compaction/ob_schedule_tablet_func.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/compaction/ob_tenant_compaction_obj_mgr.h"
 #include "storage/blocksstable/index_block/ob_index_block_builder.h"
@@ -110,6 +112,19 @@ int ObTabletMergeCtx::collect_running_info()
   return ret;
 }
 
+int ObTabletMergeCtx::update_block_info(
+    const ObMergeBlockInfo &block_info,
+    const int64_t cost_time)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(merge_info_.get_merge_history().update_block_info(block_info, false/*without_row_cnt*/))) {
+    LOG_WARN("failed to update block info", KR(ret), K(block_info));
+  } else {
+    merge_info_.get_merge_history().update_execute_time(cost_time);
+  }
+  return ret;
+}
+
 /*
  *  ----------------------------------------------ObTabletMiniMergeCtx--------------------------------------------------
  */
@@ -170,9 +185,10 @@ void ObTabletMiniMergeCtx::try_schedule_compaction_after_mini(ObTabletHandle &ta
 {
   int tmp_ret = OB_SUCCESS;
   bool create_dag = false;
+  bool during_restore = false;
   // when restoring, some log stream may be not ready,
   // thus the inner sql in ObTenantFreezeInfoMgr::try_update_info may timeout
-  if (!MTL(ObTenantTabletScheduler *)->is_restore()) {
+  if (OB_SUCCESS == ObBasicMergeScheduler::get_merge_scheduler()->during_restore(during_restore) && !during_restore) {
     if (get_tablet_id().is_ls_inner_tablet() ||
         0 == get_merge_info().get_merge_history().get_macro_block_count()) {
       // do nothing
@@ -243,8 +259,14 @@ int ObTabletMiniMergeCtx::try_schedule_adaptive_merge(
 
   if (is_tombstone_scene) {
     if (ObAdaptiveMergePolicy::is_schedule_medium(queuing_cfg.mode_) && !medium_is_cooling_down) {
-      if (OB_TMP_FAIL(ObTenantTabletScheduler::schedule_medium_merge_for_tombstone(*static_param_.ls_handle_.get_ls(), tablet_id, create_dag))) {
-        LOG_WARN_RET(tmp_ret, "failed to schedule medium merge for tablet after mini", "param",get_dag_param(), K(tablet_id));
+      ObScheduleTabletFunc func(0/*merge_version*/, ObAdaptiveMergePolicy::TOMBSTONE_SCENE);
+      bool unused_tablet_merge_finish = false;
+      if (OB_TMP_FAIL(func.switch_ls(static_param_.ls_handle_))) {
+        if (OB_STATE_NOT_MATCH != tmp_ret) {
+          LOG_WARN("failed to switch ls", KR(tmp_ret), K(ls_id), "param", get_dag_param());
+        }
+      } else if (OB_TMP_FAIL(func.schedule_tablet(tablet_handle, unused_tablet_merge_finish))) {
+        LOG_WARN("failed to schedule tablet", KR(tmp_ret), K(ls_id), K(tablet_id));
       }
     } else if (ObAdaptiveMergePolicy::is_schedule_meta(queuing_cfg.mode_)) {
       // TODO(chengkong): if ls offine or deleted, affect meta compaction?

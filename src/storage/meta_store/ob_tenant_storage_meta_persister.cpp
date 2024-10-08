@@ -351,7 +351,7 @@ int ObTenantStorageMetaPersister::write_active_tablet_array(ObLS *ls)
         LOG_WARN("tablet key or addr is invalid", K(ret), K(tablet_key), K(addr));
       } else if (!addr.is_disked()) {
         FLOG_INFO("skip MEM and NONE type", K(ret), K(tablet_key), K(addr));
-      } else if (OB_FAIL(active_tablet_arr.items_.push_back(ObActiveTabletItem(tablet_key.tablet_id_, addr.fifth_id())))) {
+      } else if (OB_FAIL(active_tablet_arr.items_.push_back(ObActiveTabletItem(tablet_key.tablet_id_, addr.block_id().meta_version_id())))) {
         LOG_WARN("fail to push back active tablet item", K(ret), K(tablet_key), K(addr));
       }
     }
@@ -852,6 +852,7 @@ int ObTenantStorageMetaPersister::ss_check_and_delete_tablet_current_version(
   const ObLSID &ls_id,
   const uint64_t ls_epoch,
   const int64_t deleted_tablet_version,
+  const int64_t deleted_tablet_transfer_seq,
   ObArenaAllocator &allocator)
 {
   int ret = OB_SUCCESS;
@@ -868,9 +869,14 @@ int ObTenantStorageMetaPersister::ss_check_and_delete_tablet_current_version(
       LOG_WARN("fail to read cur version",
         K(ret), K(ls_id), K(tablet_id), K(deleted_tablet_version), K(current_version_opt));
     }
-  } else if (latest_addr.tablet_addr_.fifth_id() > deleted_tablet_version) {
+  } else if (latest_addr.tablet_addr_.block_id().meta_transfer_seq() > deleted_tablet_transfer_seq) {
+    // newer tablet_transfer_seq need not process
+  } else if (latest_addr.tablet_addr_.block_id().meta_transfer_seq() < deleted_tablet_transfer_seq) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet transfer_seq in rebooting should not larger than curr_version", K(ret), K(deleted_tablet_transfer_seq), K(latest_addr));
+  } else if (latest_addr.tablet_addr_.block_id().meta_version_id() > deleted_tablet_version) {
     // may be transfer_in tablet, need not delete current_version tablet;
-  } else if (latest_addr.tablet_addr_.fifth_id() < deleted_tablet_version) {
+  } else if (latest_addr.tablet_addr_.block_id().meta_version_id() < deleted_tablet_version) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet version in current_version is the last version of tablet, should equal to the version in pending_free_arr",
         K(ret), K(ls_id), K(tablet_id), K(deleted_tablet_version), K(latest_addr));
@@ -941,8 +947,8 @@ int ObTenantStorageMetaPersister::ss_remove_tablet_(
     ObLSPendingFreeTabletArray tmp_array;
     lib::ObMutexGuard guard(array_info->lock_);
     const int64_t curr_t = ObTimeUtility::fast_current_time();
-    const ObPendingFreeTabletItem tablet_item(tablet_id, tablet_addr.fifth_id(),
-        ObPendingFreeTabletStatus::WAIT_GC, curr_t, gc_type);
+    const ObPendingFreeTabletItem tablet_item(tablet_id, tablet_addr.block_id().meta_version_id(),
+        ObPendingFreeTabletStatus::WAIT_GC, curr_t, gc_type, tablet_addr.block_id().meta_transfer_seq());
     if (OB_FAIL(tmp_array.assign(array_info->pending_free_tablet_arr_))) {
       LOG_WARN("fail to assign pending free tablet array", K(ret));
     } else if (has_exist_in_array(tmp_array.items_, tablet_item)) {
@@ -977,38 +983,53 @@ int ObTenantStorageMetaPersister::create_tenant_ls_item_(
     const ObLSID ls_id, int64_t &ls_epoch)
 {
   int ret = OB_SUCCESS;
-  lib::ObMutexGuard guard(super_block_lock_);
-  omt::ObTenant *tenant = static_cast<omt::ObTenant*>(MTL_CTX());
-  ObTenantSuperBlock tenant_super_block = tenant->get_super_block();
-
-  int64_t i = 0;
-  for (; i < tenant_super_block.ls_cnt_; i++) {
-    const ObLSItem &item = tenant_super_block.ls_item_arr_[i];
-    if (ls_id == item.ls_id_ && item.status_ != ObLSItemStatus::CREATE_ABORT &&
-        item.status_ != ObLSItemStatus::DELETED) {
-      break;
-    }
-  }
-  if (OB_UNLIKELY(i != tenant_super_block.ls_cnt_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls item already exist", K(ret), "ls_item", tenant_super_block.ls_item_arr_[i]);
-  } else if (OB_UNLIKELY(ObTenantSuperBlock::MAX_LS_COUNT == i)) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("too many ls", K(ret), K(ls_id), K(tenant_super_block));
+  uint64_t inf_seq = 0;
+  // have to get macro_seq before get sputer_block_lock
+  // update preallocate.. need the lock either
+  if (OB_FAIL(TENANT_SEQ_GENERATOR.get_private_object_seq(inf_seq))) {
+    LOG_WARN("fail to get tenant_object_seq", K(ret));
   } else {
-    ObLSItem &item = tenant_super_block.ls_item_arr_[i];
-    tenant_super_block.ls_cnt_ = i + 1;
-    item.ls_id_ = ls_id;
-    item.status_ = ObLSItemStatus::CREATING;
-    item.epoch_ = tenant_super_block.auto_inc_ls_epoch_++;
-    ls_epoch = item.epoch_;
-    if (OB_FAIL(ss_write_tenant_super_block_(tenant_super_block))) {
-      LOG_WARN("fail to write tenant super block", K(ret), K(tenant_super_block));
+    lib::ObMutexGuard guard(super_block_lock_);
+    omt::ObTenant *tenant = static_cast<omt::ObTenant*>(MTL_CTX());
+    ObTenantSuperBlock tenant_super_block = tenant->get_super_block();
+
+    int64_t i = 0;
+    for (; i < tenant_super_block.ls_cnt_; i++) {
+      const ObLSItem &item = tenant_super_block.ls_item_arr_[i];
+      if (ls_id == item.ls_id_ && item.status_ != ObLSItemStatus::CREATE_ABORT &&
+          item.status_ != ObLSItemStatus::DELETED) {
+        break;
+      }
+    }
+    if (OB_UNLIKELY(i != tenant_super_block.ls_cnt_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls item already exist", K(ret), "ls_item", tenant_super_block.ls_item_arr_[i]);
+    } else if (OB_UNLIKELY(ObTenantSuperBlock::MAX_LS_COUNT == i)) {
+      ret = OB_SIZE_OVERFLOW;
+      LOG_WARN("too many ls", K(ret), K(ls_id), K(tenant_super_block));
     } else {
-      tenant->set_tenant_super_block(tenant_super_block);
+      ObLSItem &item = tenant_super_block.ls_item_arr_[i];
+      tenant_super_block.ls_cnt_ = i + 1;
+      item.ls_id_ = ls_id;
+      item.min_macro_seq_ = inf_seq;
+      item.max_macro_seq_ = UINT64_MAX;
+      item.status_ = ObLSItemStatus::CREATING;
+      item.epoch_ = tenant_super_block.auto_inc_ls_epoch_++;
+      ls_epoch = item.epoch_;
+      if (!item.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected new ls_item", K(ret), K(item));
+      } else if (OB_FAIL(ss_write_tenant_super_block_(tenant_super_block))) {
+        LOG_WARN("fail to write tenant super block", K(ret), K(tenant_super_block));
+      } else {
+        tenant->set_tenant_super_block(tenant_super_block);
+        FLOG_INFO("create tenant ls item", K(ret), K(item), K(tenant_super_block), K(i));
+      }
     }
   }
-  FLOG_INFO("create tenant ls item", K(ret), K(ls_id));
+  if (OB_FAIL(ret)) {
+    FLOG_INFO("create tenant ls item failed", K(ret), K(ls_id));
+  }
   return ret;
 }
 
@@ -1016,29 +1037,52 @@ int ObTenantStorageMetaPersister::update_tenant_ls_item_(
     const ObLSID ls_id, const int64_t ls_epoch, const ObLSItemStatus status)
 {
   int ret = OB_SUCCESS;
-  lib::ObMutexGuard guard(super_block_lock_);
-  omt::ObTenant *tenant = static_cast<omt::ObTenant*>(MTL_CTX());
-  ObTenantSuperBlock tenant_super_block = tenant->get_super_block();
-  int64_t i = 0;
-  for (; i < tenant_super_block.ls_cnt_; i++) {
-    const ObLSItem &item = tenant_super_block.ls_item_arr_[i];
-    if (ls_id == item.ls_id_ && ls_epoch == item.epoch_) {
-      break;
+
+  uint64_t sup_seq = 0;
+  if (ObLSItemStatus::DELETED == status) {
+    // have to get macro_seq before get sputer_block_lock
+    // update preallocate.. need the lock either
+    if (OB_FAIL(TENANT_SEQ_GENERATOR.get_private_object_seq(sup_seq))) {
+      LOG_WARN("fail to get tenant_object_seq", K(ret));
     }
   }
-  if (OB_UNLIKELY(i == tenant_super_block.ls_cnt_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls not exist", K(ret), K(ls_id), K(ls_epoch), K(status));
+
+  if (OB_FAIL(ret)) {
   } else {
-    const ObLSItem old_item = tenant_super_block.ls_item_arr_[i];
-    ObLSItem &new_item = tenant_super_block.ls_item_arr_[i];
-    new_item.status_ = status;
-    if (OB_FAIL(ss_write_tenant_super_block_(tenant_super_block))) {
-      LOG_WARN("fail to write tenant super block", K(ret), K(tenant_super_block));
-    } else {
-      tenant->set_tenant_super_block(tenant_super_block);
-      FLOG_INFO("update tenant super block ls item", K(ret), K(old_item), K(new_item));
+    lib::ObMutexGuard guard(super_block_lock_);
+    omt::ObTenant *tenant = static_cast<omt::ObTenant*>(MTL_CTX());
+    ObTenantSuperBlock tenant_super_block = tenant->get_super_block();
+    int64_t i = 0;
+    for (; i < tenant_super_block.ls_cnt_; i++) {
+      const ObLSItem &item = tenant_super_block.ls_item_arr_[i];
+      if (ls_id == item.ls_id_ && ls_epoch == item.epoch_) {
+        break;
+      }
     }
+    if (OB_UNLIKELY(i == tenant_super_block.ls_cnt_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls not exist", K(ret), K(ls_id), K(ls_epoch), K(status));
+    } else {
+      const ObLSItem old_item = tenant_super_block.ls_item_arr_[i];
+      ObLSItem &new_item = tenant_super_block.ls_item_arr_[i];
+      new_item.status_ = status;
+      if (ObLSItemStatus::DELETED == status) {
+        // update the supremum seq of the deleted_ls_item
+        new_item.max_macro_seq_ = sup_seq;
+      }
+      if (!new_item.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected new ls_item", K(ret), K(new_item), K(old_item));
+      } else if (OB_FAIL(ss_write_tenant_super_block_(tenant_super_block))) {
+        LOG_WARN("fail to write tenant super block", K(ret), K(tenant_super_block));
+      } else {
+        tenant->set_tenant_super_block(tenant_super_block);
+        FLOG_INFO("update tenant super block ls item", K(ret), K(old_item), K(new_item), K(tenant_super_block), K(i));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+    FLOG_INFO("update tenant ls item failed", K(ret), K(ls_id), K(ls_epoch), K(status));
   }
   return ret;
 }
@@ -1077,7 +1121,7 @@ int ObTenantStorageMetaPersister::delete_tenant_ls_item_(
         LOG_WARN("fail to write tenant super block", K(ret), K(ls_id), K(ls_epoch), K(tenant_super_block), K(tmp_super_block));
       } else {
         tenant->set_tenant_super_block(tmp_super_block);
-        FLOG_INFO("update tenant super block ls item", K(ret), K(ls_id), K(ls_epoch), K(tenant_super_block), K(tmp_super_block));
+        FLOG_INFO("update tenant super block ls item (delete)", K(ret), K(ls_id), K(ls_epoch), K(tenant_super_block), K(tmp_super_block));
       }
     } else {
       ret = OB_ERR_UNEXPECTED;
@@ -1222,8 +1266,9 @@ int ObTenantStorageMetaPersister::ss_batch_remove_ls_tablets(
           common::ObTabletID tablet_id = tablet_id_arr.at(i);
           ObMetaDiskAddr tablet_addr = tablet_addr_arr.at(i);
 
-          ObPendingFreeTabletItem tablet_item(tablet_id, tablet_addr.fifth_id(),
-              ObPendingFreeTabletStatus::WAIT_GC, INT64_MAX /* delete_time */ , GCTabletType::DropLS);
+          ObPendingFreeTabletItem tablet_item(tablet_id, tablet_addr.block_id().meta_version_id(),
+              ObPendingFreeTabletStatus::WAIT_GC, INT64_MAX /* delete_time */ , GCTabletType::DropLS,
+              tablet_addr.block_id().meta_transfer_seq());
           if (has_exist_in_array(tmp_pending_free_array.items_, tablet_item)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("tablet_item has existed in pending free tablet arr", K(ret), K(tmp_pending_free_array), K(tablet_item));

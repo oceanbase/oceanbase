@@ -436,6 +436,7 @@ int ObServerSchemaUpdater::try_reload_schema(
       LOG_WARN("fail to set tenant received broadcast version", K(tmp_ret), K(schema_info));
     }
 
+    DEBUG_SYNC(BEFORE_ADD_REFRESH_SCHEMA_TASK);
     const bool did_retry = true;
     ObServerSchemaTask refresh_task(ObServerSchemaTask::REFRESH, did_retry, schema_info);
     if (OB_FAIL(task_queue_.add(refresh_task))) {
@@ -471,6 +472,7 @@ int ObServerSchemaUpdater::async_refresh_schema(
     const int64_t schema_version)
 {
   int ret = OB_SUCCESS;
+  DEBUG_SYNC(BEFORE_ADD_ASYNC_REFRESH_SCHEMA_TASK);
   ObServerSchemaTask refresh_task(ObServerSchemaTask::ASYNC_REFRESH,
                                   tenant_id, schema_version);
   if (!inited_) {

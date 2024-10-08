@@ -69,6 +69,7 @@ public:
       const lib::Worker::CompatMode compat_mode,
       const ObTabletTableStoreFlag &table_store_flag,
       const int64_t create_schema_version,
+      const share::SCN &clog_checkpoint_scn,
       const bool micro_index_clustered,
       const bool has_cs_replica);
   int init(
@@ -292,7 +293,8 @@ public:
                K_(transfer_info),
                K_(create_schema_version),
                K_(micro_index_clustered),
-               K_(major_ckm_info));
+               K_(major_ckm_info),
+               K_(is_storage_schema_cs_replica));
 private:
   int deserialize_v2_v3(const char *buf, const int64_t len, int64_t &pos);
   int deserialize_v1(const char *buf, const int64_t len, int64_t &pos);
@@ -346,6 +348,7 @@ public:
   bool micro_index_clustered_;
   blocksstable::ObMajorChecksumInfo major_ckm_info_; // from table store
   ObITable::TableType ddl_table_type_;
+  bool is_storage_schema_cs_replica_;
 
   // Add new serialization member before this line, below members won't serialize
   common::ObArenaAllocator allocator_; // for storage schema

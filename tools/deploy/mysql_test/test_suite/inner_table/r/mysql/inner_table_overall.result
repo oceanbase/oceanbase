@@ -277,6 +277,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 478	__all_import_table_job_history	0	201001	1
 479	__all_import_table_task	0	201001	1
 480	__all_import_table_task_history	0	201001	1
+482	__all_tablet_reorganize_history	0	201001	1
 483	__all_storage_ha_error_diagnose_history	0	201001	1
 484	__all_storage_ha_perf_diagnose_history	0	201001	1
 485	__all_clone_job	0	201001	1
@@ -764,6 +765,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12475	__all_virtual_user_proxy_info_history	2	201001	1
 12476	__all_virtual_user_proxy_role_info	2	201001	1
 12477	__all_virtual_user_proxy_role_info_history	2	201001	1
+12478	__all_virtual_tablet_reorganize_history	2	201001	1
 12479	__all_virtual_res_mgr_directive	2	201001	1
 12480	__all_virtual_service	2	201001	1
 12481	__all_virtual_tenant_resource_limit	2	201001	1
@@ -1164,6 +1166,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21478	V$OB_TENANT_RUNTIME_INFO	1	201001	1
 21479	GV$OB_CGROUP_CONFIG	1	201001	1
 21480	V$OB_CGROUP_CONFIG	1	201001	1
+21485	DBA_OB_FORMAT_OUTLINES	1	201001	1
 21486	procs_priv	1	201003	1
 21497	DBA_OB_AUX_STATISTICS	1	201001	1
 21498	CDB_OB_AUX_STATISTICS	1	201001	1
@@ -1252,6 +1255,9 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21586	GV$OB_NIC_INFO	1	201001	1
 21589	DBA_SCHEDULER_JOB_RUN_DETAILS	1	201001	1
 21590	CDB_SCHEDULER_JOB_RUN_DETAILS	1	201001	1
+21592	CDB_OB_SERVER_SPACE_USAGE	1	201001	1
+21594	CDB_OB_SPACE_USAGE	1	201001	1
+21596	CDB_OB_TABLE_SPACE_USAGE	1	201001	1
 21599	GV$OB_SS_LOCAL_CACHE	1	201001	1
 21600	V$OB_SS_LOCAL_CACHE	1	201001	1
 21601	GV$OB_KV_GROUP_COMMIT_STATUS	1	201001	1

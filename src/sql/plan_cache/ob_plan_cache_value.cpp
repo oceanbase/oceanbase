@@ -182,6 +182,7 @@ ObPlanCacheValue::ObPlanCacheValue()
     enable_rich_vector_format_(false)
 {
   MEMSET(sql_id_, 0, sizeof(sql_id_));
+  MEMSET(format_sql_id_, 0, sizeof(format_sql_id_));
   not_param_index_.set_attr(ObMemAttr(MTL_ID(), "NotParamIdex"));
   neg_param_index_.set_attr(ObMemAttr(MTL_ID(), "NegParamIdex"));
   must_be_positive_idx_.set_attr(ObMemAttr(MTL_ID(), "MustBePosiIdx"));
@@ -271,6 +272,7 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
     is_batch_execute_ = pc_ctx.sql_ctx_.is_batch_params_execute();
     has_dynamic_values_table_ = pc_ctx.exec_ctx_.has_dynamic_values_table();
     MEMCPY(sql_id_, pc_ctx.sql_ctx_.sql_id_, sizeof(pc_ctx.sql_ctx_.sql_id_));
+    MEMCPY(format_sql_id_, pc_ctx.sql_ctx_.format_sql_id_, sizeof(pc_ctx.sql_ctx_.format_sql_id_));
     if (OB_FAIL(not_param_index_.add_members2(pc_ctx.not_param_index_))) {
       LOG_WARN("fail to add not param index members", K(ret));
     } else if (OB_FAIL(neg_param_index_.add_members2(pc_ctx.neg_param_index_))) {
@@ -316,24 +318,36 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
       //deep copy constructed sql
       if (OB_SUCC(ret)) {
         ObString outline_signature_str;
+        ObString outline_format_signature_str;
         if (PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
           outline_signature_str = pc_ctx.raw_sql_;
+          outline_format_signature_.reset();
         } else {
           outline_signature_str = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_;
+          outline_format_signature_str = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.format_sql_;
         }
-        int64_t size = outline_signature_str.get_serialize_size();
-        if (0 == size) {
+        int64_t size1 = outline_signature_str.get_serialize_size();
+        int64_t size2 = outline_format_signature_str.get_serialize_size();
+        if (0 == size1 || 0 == size2) {
           ret = OB_ERR_UNEXPECTED;
         } else {
-          char *buf = NULL;
-          int64_t pos_s = 0;
-          if (OB_UNLIKELY(NULL == (buf = (char *)pc_alloc_->alloc(size)))) {
+          char *buf1 = NULL;
+          char *buf2 = NULL;
+          int64_t pos_s1 = 0;
+          int64_t pos_s2 = 0;
+          if (OB_UNLIKELY(NULL == (buf1 = (char *)pc_alloc_->alloc(size1)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("fail to alloc mem", K(ret));
-          } else if (OB_FAIL(outline_signature_str.serialize(buf, size, pos_s))) {
+          } else if (OB_UNLIKELY(NULL == (buf2 = (char *)pc_alloc_->alloc(size2)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to alloc mem", K(ret));
+          } else if (OB_FAIL(outline_signature_str.serialize(buf1, size1, pos_s1))) {
+            LOG_WARN("fail to serialize constructed_sql_", K(ret));
+          } else if (OB_FAIL(outline_format_signature_str.serialize(buf2, size2, pos_s2))) {
             LOG_WARN("fail to serialize constructed_sql_", K(ret));
           } else {
-            outline_signature_.assign_ptr(buf, static_cast<ObString::obstr_size_t>(pos_s));
+            outline_signature_.assign_ptr(buf1, static_cast<ObString::obstr_size_t>(pos_s1));
+            outline_format_signature_.assign_ptr(buf2, static_cast<ObString::obstr_size_t>(pos_s2));
           }
         }
       }
@@ -592,85 +606,90 @@ int ObPlanCacheValue::choose_plan(ObPlanCacheCtx &pc_ctx,
             } else {
               SQL_PC_LOG(TRACE, "failed to select plan in plan set", K(ret));
             }
-          } else if (pc_ctx.sql_ctx_.enable_sql_resource_manage_) {
-            uint64_t rule_id = plan_set->resource_map_rule_.get_res_map_rule_id();
-            int64_t param_idx = plan_set->resource_map_rule_.get_res_map_rule_param_idx();
-            if (plan_set->resource_map_rule_.use_hint_control_resource()
-                || (rule_id != OB_INVALID_ID && param_idx != OB_INVALID_INDEX)) {
-              uint64_t final_choosed_group_id = OB_INVALID_ID;
-              // 1. check hint first
-              if (plan_set->resource_map_rule_.use_hint_control_resource()) {
-                share::ObGroupName group_name;
-                group_name.set_value(plan_set->resource_map_rule_.get_resource_group());
-                ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
-                if (OB_FAIL(rule_mgr.get_group_id_by_name(tenant_id, group_name,
-                                                          final_choosed_group_id))) {
-                  if (OB_HASH_NOT_EXIST == ret) {
-                    // create directive and delete it immediately，may haven't beed flush into disk
-                    // storage group not exist, or hint is invalid，need to try to match column rule
-                    ret = OB_SUCCESS;
-                    LOG_TRACE("resource group specified by hint did not exist",
-                              K(plan_set->resource_map_rule_.get_resource_group()), K(tenant_id));
+          } else if (NULL != params) {
+            if (pc_ctx.sql_ctx_.enable_sql_resource_manage_) {
+              uint64_t rule_id = plan_set->resource_map_rule_.get_res_map_rule_id();
+              int64_t param_idx = plan_set->resource_map_rule_.get_res_map_rule_param_idx();
+              if (plan_set->resource_map_rule_.use_hint_control_resource()
+                  || (rule_id != OB_INVALID_ID && param_idx != OB_INVALID_INDEX)) {
+                uint64_t final_choosed_group_id = OB_INVALID_ID;
+                // 1. check hint first
+                if (plan_set->resource_map_rule_.use_hint_control_resource()) {
+                  share::ObGroupName group_name;
+                  group_name.set_value(plan_set->resource_map_rule_.get_resource_group());
+                  ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
+                  if (OB_FAIL(rule_mgr.get_group_id_by_name(tenant_id, group_name,
+                                                            final_choosed_group_id))) {
+                    if (OB_HASH_NOT_EXIST == ret) {
+                      // create directive and delete it immediately，may haven't beed flush into
+                      // disk storage group not exist, or hint is invalid，need to try to match
+                      // column rule
+                      ret = OB_SUCCESS;
+                      LOG_TRACE("resource group specified by hint did not exist",
+                                K(plan_set->resource_map_rule_.get_resource_group()), K(tenant_id));
+                    } else {
+                      LOG_WARN("fail get group id", K(ret), K(final_choosed_group_id),
+                               K(group_name));
+                    }
+                  }
+                } else {
+                  // 2. check col res map rule
+                  uint64_t tenant_id = OB_INVALID_ID;
+                  ObString param_text;
+                  ObCollationType cs_type = CS_TYPE_INVALID;
+                  if (OB_UNLIKELY(param_idx < 0 || param_idx >= params->count())) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_ERROR("unexpected res map rule param idx", K(ret), K(rule_id), K(param_idx),
+                              K(params->count()));
+                  } else if (OB_FAIL(session->get_collation_connection(cs_type))) {
+                    LOG_WARN("get collation connection failed", K(ret));
+                  } else if (OB_INVALID_ID == (tenant_id = session->get_effective_tenant_id())) {
+                    ret = OB_ERR_UNEXPECTED;
+                    SQL_PC_LOG(ERROR, "got effective tenant id is invalid", K(ret));
+                  } else if (OB_FAIL(ObObjCaster::get_obj_param_text(
+                               params->at(param_idx), pc_ctx.raw_sql_, pc_ctx.allocator_, cs_type,
+                               param_text))) {
+                    LOG_WARN("get obj param text failed", K(ret));
                   } else {
-                    LOG_WARN("fail get group id", K(ret), K(final_choosed_group_id), K(group_name));
+                    final_choosed_group_id =
+                      G_RES_MGR.get_col_mapping_rule_mgr().get_column_mapping_group_id(
+                        tenant_id, rule_id, session->get_user_name(), param_text);
                   }
                 }
-              } else {
-                // 2. check col res map rule
-                uint64_t tenant_id = OB_INVALID_ID;
-                ObString param_text;
-                ObCollationType cs_type = CS_TYPE_INVALID;
-                if (OB_UNLIKELY(param_idx < 0 || param_idx >= params->count())) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_ERROR("unexpected res map rule param idx", K(ret), K(rule_id), K(param_idx),
-                            K(params->count()));
-                } else if (OB_FAIL(session->get_collation_connection(cs_type))) {
-                  LOG_WARN("get collation connection failed", K(ret));
-                } else if (OB_INVALID_ID == (tenant_id = session->get_effective_tenant_id())) {
-                  ret = OB_ERR_UNEXPECTED;
-                  SQL_PC_LOG(ERROR, "got effective tenant id is invalid", K(ret));
-                } else if (OB_FAIL(ObObjCaster::get_obj_param_text(
-                             params->at(param_idx), pc_ctx.raw_sql_, pc_ctx.allocator_, cs_type,
-                             param_text))) {
-                  LOG_WARN("get obj param text failed", K(ret));
-                } else {
-                  final_choosed_group_id =
-                    G_RES_MGR.get_col_mapping_rule_mgr().get_column_mapping_group_id(
-                      tenant_id, rule_id, session->get_user_name(), param_text);
+                // 3.use default resource group if not match any resource group
+                // OB_INVALID_ID means current neither
+                // resource group specified by hint
+                // nor
+                // user+param_value column rule
+                // is in used
+                // get group_id according to current user.
+                if (OB_SUCC(ret) && OB_INVALID_ID == final_choosed_group_id) {
+                  if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_user(
+                        tenant_id, session->get_user_id(), final_choosed_group_id))) {
+                    LOG_WARN("get group id by user failed", K(ret));
+                  } else if (OB_INVALID_ID == final_choosed_group_id) {
+                    // if not set consumer_group for current user, use OTHER_GROUP by default.
+                    final_choosed_group_id = 0;
+                  }
                 }
-              }
-              // 3.use default resource group if not match any resource group
-              // OB_INVALID_ID means current neither
-              // resource group specified by hint
-              // nor
-              // user+param_value column rule
-              // is in used
-              // get group_id according to current user.
-              if (OB_SUCC(ret) && OB_INVALID_ID == final_choosed_group_id) {
-                if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_user(
-                      tenant_id, session->get_user_id(), final_choosed_group_id))) {
-                  LOG_WARN("get group id by user failed", K(ret));
-                } else if (OB_INVALID_ID == final_choosed_group_id) {
-                  // if not set consumer_group for current user, use OTHER_GROUP by default.
-                  final_choosed_group_id = 0;
+                if (OB_SUCC(ret)) {
+                  if (final_choosed_group_id == THIS_WORKER.get_group_id()) {
+                    // do nothing if equals to current group id.
+                  } else if (session->get_is_in_retry()
+                             && OB_NEED_SWITCH_CONSUMER_GROUP
+                                  == session->get_retry_info().get_last_query_retry_err()) {
+                    LOG_ERROR(
+                      "use unexpected group when retry, maybe set packet retry failed before",
+                      K(final_choosed_group_id), K(THIS_WORKER.get_group_id()),
+                      K(plan_set->resource_map_rule_));
+                  } else {
+                    session->set_expect_group_id(final_choosed_group_id);
+                    ret = OB_NEED_SWITCH_CONSUMER_GROUP;
+                  }
+                  LOG_TRACE("get expect rule id", K(ret), K(final_choosed_group_id),
+                            K(THIS_WORKER.get_group_id()), K(session->get_expect_group_id()),
+                            K(pc_ctx.raw_sql_));
                 }
-              }
-              if (OB_SUCC(ret)) {
-                if (final_choosed_group_id == THIS_WORKER.get_group_id()) {
-                  // do nothing if equals to current group id.
-                } else if (session->get_is_in_retry()
-                           && OB_NEED_SWITCH_CONSUMER_GROUP
-                                == session->get_retry_info().get_last_query_retry_err()) {
-                  LOG_ERROR("use unexpected group when retry, maybe set packet retry failed before",
-                            K(final_choosed_group_id), K(THIS_WORKER.get_group_id()),
-                            K(plan_set->resource_map_rule_));
-                } else {
-                  session->set_expect_group_id(final_choosed_group_id);
-                  ret = OB_NEED_SWITCH_CONSUMER_GROUP;
-                }
-                LOG_TRACE("get expect rule id", K(ret), K(final_choosed_group_id),
-                          K(THIS_WORKER.get_group_id()), K(session->get_expect_group_id()),
-                          K(pc_ctx.raw_sql_));
               }
             }
             break; //这个地方建议保留，如果去掉，需要另外加标记在for()中判断，并且不使用上面的for循环的宏；
@@ -1420,6 +1439,10 @@ void ObPlanCacheValue::reset()
       pc_alloc_->free(outline_signature_.ptr());
       outline_signature_.reset();
     }
+    if (NULL != outline_format_signature_.ptr()) {
+      pc_alloc_->free(outline_format_signature_.ptr());
+      outline_format_signature_.reset();
+    }
     if (NULL != constructed_sql_.ptr()) {
       pc_alloc_->free(constructed_sql_.ptr());
       constructed_sql_.reset();
@@ -1607,18 +1630,38 @@ int ObPlanCacheValue::get_outline_version(ObSchemaGetterGuard &schema_guard,
     //do nothing
   } else {
     const ObString &signature = outline_signature_;
+    const ObString &format_signature = outline_format_signature_;
+    // try normal
     if (OB_FAIL(schema_guard.get_outline_info_with_signature(tenant_id,
             database_id,
             signature,
+            false,
             outline_info))) {
       LOG_WARN("failed to get_outline_info", K(tenant_id), K(database_id), K(signature));
-    } else if (NULL == outline_info) {
-      if (OB_FAIL(schema_guard.get_outline_info_with_sql_id(tenant_id,
-              database_id,
-              ObString::make_string(sql_id_),
-              outline_info))) {
+    // try format
+    } else if (NULL == outline_info &&
+              OB_FAIL(schema_guard.get_outline_info_with_signature(tenant_id,
+                      database_id,
+                      format_signature,
+                      true,
+                      outline_info))) {
         LOG_WARN("failed to get_outline_info", K(tenant_id), K(database_id), K(signature));
-      }
+    // try normal
+    } else if (NULL == outline_info && !ObString::make_string(sql_id_).empty() &&
+              OB_FAIL(schema_guard.get_outline_info_with_sql_id(tenant_id,
+                      database_id,
+                      ObString::make_string(sql_id_),
+                      false,
+                      outline_info))) {
+        LOG_WARN("failed to get_outline_info", K(tenant_id), K(database_id), K(signature));
+    // try format
+    } else if (NULL == outline_info && !ObString::make_string(format_sql_id_).empty() &&
+              OB_FAIL(schema_guard.get_outline_info_with_sql_id(tenant_id,
+                      database_id,
+                      ObString::make_string(format_sql_id_),
+                      true,
+                      outline_info))) {
+        LOG_WARN("failed to get_outline_info", K(tenant_id), K(database_id), K(signature));
     }
     if (OB_SUCC(ret)) {
       if (NULL == outline_info) {

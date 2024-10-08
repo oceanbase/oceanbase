@@ -141,7 +141,7 @@ int ObIndexBuilderUtil::add_column(
       if (column.is_spatial_generated_column()) {
         column.set_geo_col_id(data_column->get_geo_col_id());
       }
-      if (column.is_fulltext_column()) {
+      if (table_schema.is_fts_index() || (table_schema.is_multivalue_index())) {
         ObObj default_value;
         column.del_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
         if (column.is_word_segment_column()) {
@@ -761,15 +761,11 @@ int ObIndexBuilderUtil::adjust_expr_index_args(
       LOG_WARN("failed to adjust vec index args", K(ret));
     }
   } else if (is_fts_index(arg.index_type_)) {
-    if (OB_FAIL(ObFtsIndexBuilderUtil::check_fts_or_multivalue_index_allowed(data_schema))) {
-      LOG_WARN("fail to check fts index allowed", K(ret));
-    } else if (OB_FAIL(ObFtsIndexBuilderUtil::adjust_fts_args(arg, data_schema, allocator, gen_columns))) {
+    if (OB_FAIL(ObFtsIndexBuilderUtil::adjust_fts_args(arg, data_schema, allocator, gen_columns))) {
       LOG_WARN("failed to adjust fts args", K(ret));
     }
   } else if (is_multivalue_index(arg.index_type_)) {
-    if (OB_FAIL(ObFtsIndexBuilderUtil::check_fts_or_multivalue_index_allowed(data_schema))) {
-      LOG_WARN("fail to check multivalue index allowed", K(ret));
-    } else if (OB_FAIL(ObMulValueIndexBuilderUtil::adjust_mulvalue_index_args(arg, data_schema, gen_columns))) {
+    if (OB_FAIL(ObMulValueIndexBuilderUtil::adjust_mulvalue_index_args(arg, data_schema, allocator, gen_columns, true))) {
       LOG_WARN("failed to adjust multivalue args", K(ret));
     }
   } else if (OB_FAIL(adjust_ordinary_index_column_args(arg, data_schema, allocator, gen_columns))) {
@@ -862,9 +858,6 @@ int ObIndexBuilderUtil::adjust_ordinary_index_column_args(
                                                         ObResolverUtils::CHECK_FOR_FUNCTION_INDEX,
                                                         NULL))) {
             LOG_WARN("build generated column expr failed", K(ret));
-          } else if (!expr->is_deterministic()) {
-            ret = OB_ERR_ONLY_PURE_FUNC_CANBE_INDEXED;
-            LOG_WARN("only pure functions can be indexed", K(ret));
           } else if (!expr->is_column_ref_expr()) {
             //real index expr, so generate hidden generated column in data table schema
             if (lib::Worker::CompatMode::MYSQL == compat_mode) {

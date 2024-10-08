@@ -35,7 +35,7 @@ public:
   ObRpcProcessorBase()
       : rpc_pkt_(NULL), sh_(NULL), sc_(NULL), is_stream_(false), is_stream_end_(false),
         require_rerouting_(false), preserve_recv_data_(false), preserved_buf_(NULL),
-        uncompressed_buf_(NULL), using_buffer_(NULL), send_timestamp_(0), pkt_size_(0), tenant_id_(0),
+        uncompressed_buf_(NULL), timeout_(0), using_buffer_(NULL), send_timestamp_(0), pkt_size_(0), tenant_id_(0),
         result_compress_type_(common::INVALID_COMPRESSOR)
   {}
 
@@ -115,6 +115,7 @@ protected:
 protected:
   int part_response(const int retcode, bool is_last);
   int part_response_error(rpc::ObRequest* req, const int retcode);
+  void set_timeout(uint64_t timeout) { timeout_ = timeout; }
   int do_response(const Response &rsp);
   void compress_result(const char *src_buf, int64_t src_len,
                        char *dst_buf, int64_t dst_len, ObRpcPacket *pkt);
@@ -163,6 +164,11 @@ protected:
   char *preserved_buf_;
 
   char *uncompressed_buf_;
+
+  // In OBKV-ODP mode, the expiration time of a session needs to be passed to OBKV-ODP.
+  // Currently, this expiration time is placed in the timeout field of the response
+  // header. This is where the session's expiration time is temporarily stored.
+  uint64_t timeout_;
 
   common::ObDataBuffer *using_buffer_;
 

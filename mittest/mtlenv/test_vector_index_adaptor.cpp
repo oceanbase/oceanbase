@@ -919,7 +919,7 @@ TEST_F(TestVectorIndexAdaptor, test_ser_deser)
 
   ObTestHNSWSerializeCallback::CbParam ser_param;
   ser_param.allocator_ = &allocator;
-  ASSERT_EQ(0, index_seri.serialize(index_handler, ser_param, ser_cb));
+  ASSERT_EQ(0, index_seri.serialize(index_handler, ser_param, ser_cb, MTL_ID()));
 
   // do deserialize
   obvectorlib::VectorIndexPtr des_index_handler = nullptr;
@@ -940,7 +940,7 @@ TEST_F(TestVectorIndexAdaptor, test_ser_deser)
                                       max_degree,
                                       ef_construction,
                                       ef_search), 0);
-  ASSERT_EQ(0, index_seri.deserialize(des_index_handler, des_param, des_cb));
+  ASSERT_EQ(0, index_seri.deserialize(des_index_handler, des_param, des_cb, MTL_ID()));
   // check vector count
   ASSERT_EQ(0, obvectorutil::get_index_number(des_index_handler, index_size));
   ASSERT_EQ(index_size, num_vectors);

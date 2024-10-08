@@ -82,7 +82,7 @@ int ObStorageEstimator::estimate_block_count_and_row_count(const obrpc::ObEstBlo
 
 // estimate scan rowcount
 int ObStorageEstimator::storage_estimate_rowcount(const uint64_t tenant_id,
-                                                  const ObTableScanParam &param,
+                                                  ObTableScanParam &param,
                                                   const ObSimpleBatch &batch,
                                                   obrpc::ObEstPartResElement &res)
 {
@@ -117,7 +117,7 @@ int ObStorageEstimator::storage_estimate_rowcount(const uint64_t tenant_id,
 int ObStorageEstimator::storage_estimate_partition_batch_rowcount(
     const uint64_t tenant_id,
     const ObSimpleBatch &batch,
-    const storage::ObTableScanParam &table_scan_param,
+    storage::ObTableScanParam &table_scan_param,
     ObIArray<ObEstRowCountRecord> &est_records,
     double &logical_row_count,
     double &physical_row_count)
@@ -130,10 +130,11 @@ int ObStorageEstimator::storage_estimate_partition_batch_rowcount(
     const int64_t timeout_us = THIS_WORKER.get_timeout_remain();
     ObAccessService *access_service = NULL;
     storage::ObTableScanRange table_scan_range;
+
     if (OB_ISNULL(access_service = MTL(ObAccessService *))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(access_service));
-    } else if (OB_FAIL(table_scan_range.init(batch, allocator))) {
+    } else if (OB_FAIL(table_scan_range.init(table_scan_param, batch, allocator))) {
       STORAGE_LOG(WARN, "Failed to init table scan range", K(ret), K(batch));
     } else if (OB_FAIL(access_service->estimate_row_count(table_scan_param,
                                                           table_scan_range,

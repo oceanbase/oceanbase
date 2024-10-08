@@ -359,10 +359,14 @@ int ObLockMemCtx::check_lock_exist( //TODO(lihongqin):check it
     LOG_WARN("invalid argument.", K(ret), K(lock_id), K(owner_id), K(mode));
   } else {
     RDLockGuard guard(list_rwlock_);
+    int64_t lock_mode_cnt[TABLE_LOCK_MODE_COUNT] = {0};
     DLIST_FOREACH(curr, lock_list_) {
-      if (curr->lock_op_.lock_id_ == lock_id) {
+      const ObTableLockOp &lock_op = curr->lock_op_;
+      if (lock_op.lock_id_ == lock_id) {
         // BE CAREFUL: get all the lock mode curr trans has got.
-        lock_mode_cnt_in_same_trans[get_index_by_lock_mode(curr->lock_op_.lock_mode_)]++;
+        if (curr->lock_op_.op_type_ != OUT_TRANS_UNLOCK) {
+          lock_mode_cnt_in_same_trans[get_index_by_lock_mode(curr->lock_op_.lock_mode_)]++;
+        }
         // check exist.
         if (curr->lock_op_.owner_id_ == owner_id &&
             curr->lock_op_.op_type_ == op_type && /* different op type may lock twice */

@@ -279,6 +279,7 @@ int ObIMicroBlockRowScanner::get_next_rows()
     if (OB_SUCC(ret) && OB_NOT_NULL(context_)) {
       context_->table_store_stat_.logical_read_cnt_ += (current_ - prev_current);
       context_->table_store_stat_.physical_read_cnt_ += (current_ - prev_current);
+      REALTIME_MONITOR_ADD_READ_ROW_CNT(context_, current_ - prev_current);
     }
   }
   return ret;
@@ -554,8 +555,9 @@ int ObIMicroBlockRowScanner::apply_black_filter_batch(
   const common::ObIArray<int32_t> &col_offsets = filter.get_col_offsets(pd_filter_info.is_pd_to_cg_);
   ObSEArray<ObSqlDatumInfo, 16> datum_infos;
   bool filter_applied_directly = false;
-  if (ObIMicroBlockReader::Decoder == reader_->get_type() ||
-      ObIMicroBlockReader::CSDecoder == reader_->get_type()) {
+  if ((ObIMicroBlockReader::Decoder == reader_->get_type() ||
+      ObIMicroBlockReader::CSDecoder == reader_->get_type()) &&
+      filter.can_pushdown_decoder()) {
     if (decoder_->can_apply_black(col_offsets) &&
         OB_FAIL(decoder_->filter_black_filter_batch(
                 parent,
@@ -819,6 +821,21 @@ int ObIMicroBlockRowScanner::filter_pushdown_filter(
   return ret;
 }
 
+////////////////////////////////// ObMicroBlockRowDirectScanner ////////////////////////////////////////////
+int ObMicroBlockRowDirectScanner::init(
+    const storage::ObTableIterParam &param,
+    storage::ObTableAccessContext &context,
+    const blocksstable::ObSSTable *sstable)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObIMicroBlockRowScanner::init(param, context, sstable))) {
+    LOG_WARN("base init failed", K(ret));
+  } else {
+    is_inited_ = true;
+  }
+  return ret;
+}
+
 int ObIMicroBlockRowScanner::filter_micro_block_in_blockscan(sql::PushdownFilterInfo &pd_filter_info)
 {
   int ret = OB_SUCCESS;
@@ -849,6 +866,24 @@ int ObIMicroBlockRowScanner::filter_micro_block_in_blockscan(sql::PushdownFilter
     } else if (OB_FAIL(pd_filter_info.filter_->execute(nullptr, pd_filter_info, this, param_->vectorized_enabled_ && block_row_store_->is_empty()))) {
       LOG_WARN("Fail to filter", K(ret), KPC(pd_filter_info.filter_));
     }
+  }
+  return ret;
+}
+
+int ObMicroBlockRowDirectScanner::open(
+    const MacroBlockId &macro_id,
+    const ObMicroBlockData &block_data,
+    const bool is_left_border,
+    const bool is_right_border)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObIMicroBlockRowScanner::open(macro_id, block_data, is_left_border, is_right_border))) {
+    LOG_WARN("base open failed", K(ret));
+  } else if (OB_FAIL(set_base_scan_param(is_left_border, is_right_border))) {
+    LOG_WARN("failed to set base scan param", K(ret), K_(macro_id), K(is_left_border), K(is_right_border));
+  } else if (OB_NOT_NULL(block_row_store_) && block_row_store_->is_valid()) {
+    // Storage pushdown filter is valid and reuse
+    block_row_store_->reset_blockscan();
   }
   return ret;
 }
@@ -951,7 +986,7 @@ int ObIMicroBlockRowScanner::get_aggregate_result(
     const int32_t col_idx,
     const int32_t *row_ids,
     const int64_t row_cap,
-    const bool projected,
+    const bool reserve_memory,
     ObAggGroupBase &agg_group)
 {
   int ret = OB_SUCCESS;
@@ -961,7 +996,7 @@ int ObIMicroBlockRowScanner::get_aggregate_result(
   } else if (OB_UNLIKELY(nullptr == row_ids || row_cap < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid arguments", K(ret), KP(row_ids), K(row_cap));
-  } else if (OB_FAIL(agg_group.eval_batch(param_, context_, col_idx, reader_, row_ids, row_cap, projected))) {
+  } else if (OB_FAIL(agg_group.eval_batch(param_, context_, col_idx, reader_, row_ids, row_cap, reserve_memory))) {
     LOG_WARN("Fail to eval batch rows", K(ret));
   }
   return ret;
@@ -1881,7 +1916,7 @@ int ObMultiVersionMicroBlockRowScanner::lock_for_read(
   if (OB_FAIL(tx_table_guards.lock_for_read(lock_for_read_arg,
                                             can_read,
                                             scn_trans_version))) {
-    LOG_WARN("failed to check transaction status", K(ret));
+    LOG_WARN("failed to check transaction status", K(ret), K(*context_->store_ctx_));
   } else {
     trans_version = scn_trans_version.get_val_for_tx();
     if (OB_NOT_NULL(context_->trans_state_mgr_) &&

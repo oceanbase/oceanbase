@@ -53,6 +53,7 @@
 #include "sql/engine/dml/ob_link_op.h"
 #include <cctype>
 #include "sql/engine/expr/ob_expr_last_refresh_scn.h"
+#include "src/rootserver/mview/ob_mview_maintenance_service.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -215,11 +216,16 @@ int ObResultSet::open_result()
       }
     } else if (OB_FAIL(drive_dml_query())) {
       LOG_WARN("fail to drive dml query", K(ret));
-    } else if ((stmt::T_INSERT == get_stmt_type())
-        && (ObTableDirectInsertService::is_direct_insert(*physical_plan_))) {
-      // for insert /*+ append */ into select clause
-      if (OB_FAIL(ObTableDirectInsertService::commit_direct_insert(get_exec_context(), *physical_plan_))) {
-        LOG_WARN("fail to commit direct insert", KR(ret));
+    } else if (stmt::T_INSERT == get_stmt_type()) {
+      ObPhysicalPlanCtx *plan_ctx = NULL;
+      if (OB_ISNULL(plan_ctx = get_exec_context().get_physical_plan_ctx())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("physical plan ctx is null");
+      } else if (plan_ctx->get_is_direct_insert_plan()) {
+        // for insert /*+ append */ into select clause
+        if (OB_FAIL(ObTableDirectInsertService::commit_direct_insert(get_exec_context(), *physical_plan_))) {
+          LOG_WARN("fail to commit direct insert", KR(ret));
+        }
       }
     }
   }
@@ -575,6 +581,8 @@ OB_INLINE int ObResultSet::do_open_plan(ObExecContext &ctx)
   int ret = OB_SUCCESS;
   ctx.reset_op_env();
   exec_result_ = &(ctx.get_task_exec_ctx().get_execute_result());
+  rootserver::ObMViewMaintenanceService *mview_maintenance_service =
+                                        MTL(rootserver::ObMViewMaintenanceService*);
   if (stmt::T_PREPARE != stmt_type_) {
     if (OB_FAIL(ctx.init_phy_op(physical_plan_->get_phy_operator_size()))) {
       LOG_WARN("fail init exec phy op ctx", K(ret));
@@ -591,22 +599,29 @@ OB_INLINE int ObResultSet::do_open_plan(ObExecContext &ctx)
 
 
   if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(mview_maintenance_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("mview_maintenance_service is null", K(ret), KP(mview_maintenance_service));
   } else if (OB_FAIL(start_stmt())) {
     LOG_WARN("fail start stmt", K(ret));
   } else if (!physical_plan_->get_mview_ids().empty() && OB_PHY_PLAN_REMOTE != physical_plan_->get_plan_type()
-             && OB_FAIL(ObExprLastRefreshScn::set_last_refresh_scns(physical_plan_->get_mview_ids(),
-                                                                    ctx.get_sql_proxy(),
-                                                                    ctx.get_my_session(),
-                                                                    ctx.get_das_ctx().get_snapshot().core_.version_,
-                                                                    ctx.get_physical_plan_ctx()->get_mview_ids(),
-                                                                    ctx.get_physical_plan_ctx()->get_last_refresh_scns()))) {
+             && OB_FAIL((mview_maintenance_service->get_mview_refresh_info(physical_plan_->get_mview_ids(),
+                                                                           ctx.get_sql_proxy(),
+                                                                           ctx.get_das_ctx().get_snapshot().core_.version_,
+                                                                           ctx.get_physical_plan_ctx()->get_mview_ids(),
+                                                                           ctx.get_physical_plan_ctx()->get_last_refresh_scns())))) {
     LOG_WARN("fail to set last_refresh_scns", K(ret), K(physical_plan_->get_mview_ids()));
   } else {
     // for insert /*+ append */ into select clause
-    if ((stmt::T_INSERT == get_stmt_type())
-        && (ObTableDirectInsertService::is_direct_insert(*physical_plan_))) {
-      if (OB_FAIL(ObTableDirectInsertService::start_direct_insert(ctx, *physical_plan_))) {
-        LOG_WARN("fail to start direct insert", KR(ret));
+    if (stmt::T_INSERT == get_stmt_type()) {
+      ObPhysicalPlanCtx *plan_ctx = NULL;
+      if (OB_ISNULL(plan_ctx = get_exec_context().get_physical_plan_ctx())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("physical plan ctx is null");
+      } else if (plan_ctx->get_is_direct_insert_plan()) {
+        if (OB_FAIL(ObTableDirectInsertService::start_direct_insert(ctx, *physical_plan_))) {
+          LOG_WARN("fail to start direct insert", KR(ret));
+        }
       }
     }
     /* 将exec_result_设置到executor的运行时环境中，用于返回数据 */
@@ -850,8 +865,7 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
 
     ObPxAdmission::exit_query_admission(my_session_, get_exec_context(), get_stmt_type(), *get_physical_plan());
     // Finishing direct-insert must be executed after ObPxTargetMgr::release_target()
-    if ((stmt::T_INSERT == get_stmt_type()) &&
-        (ObTableDirectInsertService::is_direct_insert(*physical_plan_))) {
+    if (stmt::T_INSERT == get_stmt_type() && plan_ctx->get_is_direct_insert_plan()) {
       // for insert /*+ append */ into select clause
       int tmp_ret = OB_SUCCESS;
       if (OB_TMP_FAIL(ObTableDirectInsertService::finish_direct_insert(

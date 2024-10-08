@@ -639,6 +639,7 @@ int ObCOSSTableRowScanner::filter_rows_with_limit(BlockScanState &blockscan_stat
         LOG_WARN("Fail to inner filter", K(ret));
       }
     } else if (nullptr != result_bitmap && result_bitmap->is_all_false()) {
+      // TODO: @dengzhi.ldz opt for cg scanner with limit
       update_current(group_size_);
     } else {
       int64_t begin_idx = begin;
@@ -682,7 +683,15 @@ int ObCOSSTableRowScanner::filter_rows_without_limit(BlockScanState &blockscan_s
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected result bitmap", K(ret), KPC(rows_filter_));
       } else if (nullptr != result_bitmap && result_bitmap->is_all_false()) {
-        update_current(group_size_);
+        if (result_bitmap->get_filter_constant_type().is_always_false()) {
+          if (reverse_scan_) {
+            current_ = MAX(result_bitmap->get_filter_constant_id(), end_) - 1;
+          } else {
+            current_ = MIN(result_bitmap->get_filter_constant_id(), end_) + 1;
+          }
+        } else {
+          update_current(group_size_);
+        }
         current_start_row_id = current_;
       } else {
         need_do_filter = false;
@@ -717,7 +726,7 @@ int ObCOSSTableRowScanner::filter_rows_without_limit(BlockScanState &blockscan_s
               result_bitmap))) {
     LOG_WARN("Fail to locate", K(ret), K(current_), K(group_size_), KP(result_bitmap));
   }
-  LOG_DEBUG("COScanner filter_rows_with_limit end", K(ret), K_(state), K_(blockscan_state),
+  LOG_DEBUG("COScanner filter_rows_without_limit end", K(ret), K_(state), K_(blockscan_state),
             K_(current), K_(group_size), K_(end));
   return ret;
 }
@@ -748,8 +757,7 @@ int ObCOSSTableRowScanner::inner_filter(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected result bitmap", K(ret), KPC(rows_filter_));
     } else {
-      int64_t select_cnt = result_bitmap->popcnt();
-      EVENT_ADD(ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT, select_cnt);
+      EVENT_ADD(ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT, result_bitmap->popcnt());
     }
   } else {
     EVENT_ADD(ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT, group_size);
@@ -759,7 +767,9 @@ int ObCOSSTableRowScanner::inner_filter(
     access_ctx_->table_store_stat_.logical_read_cnt_ += group_size;
     access_ctx_->table_store_stat_.physical_read_cnt_ += group_size;
     LOG_TRACE("[COLUMNSTORE] COSSTableRowScanner inner filter", K(ret), "begin", begin, "count", group_size,
-              "filtered", nullptr == rows_filter_ ? 0 : 1, "popcnt", nullptr == result_bitmap ? group_size : result_bitmap->popcnt());
+              "filtered", nullptr == rows_filter_ ? 0 : 1, "popcnt", nullptr == result_bitmap ? group_size : result_bitmap->popcnt(),
+              "filter_constant_type", nullptr == result_bitmap ? sql::ObBoolMaskType::ALWAYS_TRUE : result_bitmap->get_filter_constant_type(),
+              "filter_constant_id", nullptr == result_bitmap ? (begin + group_size - 1) : result_bitmap->get_filter_constant_id());
   }
   return ret;
 }
@@ -787,18 +797,32 @@ int ObCOSSTableRowScanner::update_continuous_range(
         rows_filter_ == nullptr ? true : rows_filter_->can_continuous_filter();
     if (group_is_true && filter_tree_can_continuous) {
       // current group is true, continue do filter if not reach end
+      sql::ObBoolMask filter_constant_type;
+      if (nullptr != result_bitmap) {
+        filter_constant_type = result_bitmap->get_filter_constant_type();
+      }
       if (reverse_scan_) {
-        continuous_end_row_id = current_start_row_id;
+        // continuous_end_row_id = current_start_row_id;
+        continuous_end_row_id = filter_constant_type.is_always_true() ? MAX(result_bitmap->get_filter_constant_id(), end_) : current_start_row_id;
         current_start_row_id = continuous_end_row_id - 1;
         continue_filter = current_start_row_id >= end_;
       } else {
-        continuous_end_row_id = current_start_row_id + current_group_size - 1;
+        // continuous_end_row_id = current_start_row_id + current_group_size - 1;
+        continuous_end_row_id = filter_constant_type.is_always_true() ? MIN(result_bitmap->get_filter_constant_id(), end_) : current_start_row_id + current_group_size - 1;
         current_start_row_id = continuous_end_row_id + 1;
         continue_filter = current_start_row_id <= end_;
       }
     } else if ((nullptr != result_bitmap && result_bitmap->is_all_false()) && OB_INVALID_CS_ROW_ID == continuous_end_row_id) {
       // current group is false and no continuous true range before, skip this group and continue do filter
-      update_current(current_group_size);
+      if (result_bitmap->get_filter_constant_type().is_always_false()) {
+        if (reverse_scan_) {
+          current_ = MAX(result_bitmap->get_filter_constant_id(), end_) - 1;
+        } else {
+          current_ = MIN(result_bitmap->get_filter_constant_id(), end_) + 1;
+        }
+      } else {
+        update_current(current_group_size);
+      }
       current_start_row_id = current_;
     } else {
       continue_filter = false;
@@ -809,6 +833,8 @@ int ObCOSSTableRowScanner::update_continuous_range(
       // no continuous true range before, will project current group
     }
   }
+  LOG_DEBUG("Filter continuous range info", K(ret), K(current_start_row_id), K(current_group_size),
+            K(continuous_end_row_id), K(continue_filter), K_(pending_end_row_id), K_(current), KPC(result_bitmap));
   return ret;
 }
 

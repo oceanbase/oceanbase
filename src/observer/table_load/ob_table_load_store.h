@@ -43,10 +43,11 @@ public:
   static void abort_ctx(ObTableLoadTableCtx *ctx, bool &is_stopped);
   int init();
 private:
+  static void cancel_table_ctx(ObTableLoadTableCtx *ctx);
   static int abort_active_trans(ObTableLoadTableCtx *ctx);
-
 // table load ctrl interface
 public:
+
   int pre_begin();
   int confirm_begin();
 private:

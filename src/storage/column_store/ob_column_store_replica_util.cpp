@@ -106,7 +106,7 @@ int ObCSReplicaUtil::check_need_process_cs_replica(
   int ret = OB_SUCCESS;
   need_process_cs_replica = ls.is_cs_replica()
                            && tablet_id.is_user_tablet()
-                           && (schema.is_row_store() || schema.is_cs_replica_compat())
+                           && schema.is_row_store()
                            && schema.is_user_data_table();
   return ret;
 }
@@ -118,7 +118,7 @@ int ObCSReplicaUtil::check_need_wait_major_convert(
     bool &need_wait_major_convert)
 {
   int ret = OB_SUCCESS;
-  bool need_process_cs_replica = false;
+  bool need_process_cs_replica = tablet.is_cs_replica_compat();
   ObStorageSchema *storage_schema = nullptr;
   ObArenaAllocator arena_allocator(common::ObMemAttr(MTL_ID(), "CkMjrCvrt"));
   ObTabletMemberWrapper<ObTabletTableStore> wrapper;
@@ -130,7 +130,7 @@ int ObCSReplicaUtil::check_need_wait_major_convert(
   } else if (OB_ISNULL(storage_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("storage schema is nullptr", K(ret), K(tablet));
-  } else if (OB_FAIL(check_need_process_cs_replica(ls, tablet_id, *storage_schema, need_process_cs_replica))) {
+  } else if (!need_process_cs_replica && OB_FAIL(check_need_process_cs_replica(ls, tablet_id, *storage_schema, need_process_cs_replica))) {
     LOG_WARN("fail to check need process cs replica", K(ret), K(ls), K(tablet_id), KPC(storage_schema));
   } else if (need_process_cs_replica) {
     if (tablet.is_row_store()) {

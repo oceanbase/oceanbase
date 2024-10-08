@@ -320,7 +320,6 @@ int TestDmlCommon::mock_access_service(
     ObAccessService *svc = MTL(ObAccessService*);
     // do copy
     mock_svc->is_inited_ = svc->is_inited_;
-    mock_svc->tenant_id_ = svc->tenant_id_;
     mock_svc->ls_svr_ = svc->ls_svr_;
     mock_svc->tablet_service_ = tablet_service;
 
@@ -567,6 +566,7 @@ int TestDmlCommon::build_pure_data_tablet_arg(
   ObCreateTabletInfo tablet_info;
   ObArray<common::ObTabletID> tablet_id_array;
   ObArray<int64_t> tablet_schema_index_array;
+  ObArray<int64_t> create_commit_versions;
   share::schema::ObTableSchema table_schema;
   build_data_table_schema(tenant_id, table_schema);
 
@@ -575,7 +575,7 @@ int TestDmlCommon::build_pure_data_tablet_arg(
     STORAGE_LOG(WARN, "failed to push tablet id into array", K(ret), K(data_tablet_id));
   } else if (OB_FAIL(tablet_schema_index_array.push_back(0))) {
     STORAGE_LOG(WARN, "failed to push index into array", K(ret));
-  } else if (OB_FAIL(tablet_info.init(tablet_id_array, data_tablet_id, tablet_schema_index_array, lib::Worker::CompatMode::MYSQL, false, false /*has_cs_replica*/))) {
+  } else if (OB_FAIL(tablet_info.init(tablet_id_array, data_tablet_id, tablet_schema_index_array, lib::Worker::CompatMode::MYSQL, false, create_commit_versions, false /*has_cs_replica*/))) {
     STORAGE_LOG(WARN, "failed to init tablet info", K(ret), K(tablet_id_array),
         K(data_tablet_id), K(tablet_schema_index_array));
   } else if (OB_FAIL(arg.init_create_tablet(ls_id, share::SCN::min_scn(), false/*need_check_tablet_cnt*/))) {
@@ -605,6 +605,7 @@ int TestDmlCommon::build_mixed_tablets_arg(
   ObCreateTabletInfo tablet_info;
   ObArray<common::ObTabletID> tablet_id_array;
   ObArray<int64_t> tablet_schema_index_array;
+  ObArray<int64_t> create_commit_versions;
   share::schema::ObTableSchema data_table_schema;
   share::schema::ObTableSchema index_table_schema;
   build_data_table_schema(tenant_id, data_table_schema);
@@ -627,7 +628,7 @@ int TestDmlCommon::build_mixed_tablets_arg(
     STORAGE_LOG(WARN, "failed to push index into array", K(ret));
   } else if (OB_FAIL(tablet_schema_index_array.push_back(1))) {
     STORAGE_LOG(WARN, "failed to push index into array", K(ret));
-  } else if (OB_FAIL(tablet_info.init(tablet_id_array, data_tablet_id, tablet_schema_index_array, lib::Worker::CompatMode::MYSQL, false, false /*has_cs_replica*/))) {
+  } else if (OB_FAIL(tablet_info.init(tablet_id_array, data_tablet_id, tablet_schema_index_array, lib::Worker::CompatMode::MYSQL, false, create_commit_versions, false /*has_cs_replica*/))) {
     STORAGE_LOG(WARN, "failed to init tablet info", K(ret), K(tablet_id_array),
         K(data_tablet_id), K(tablet_schema_index_array));
   } else if (OB_FAIL(arg.init_create_tablet(ls_id, share::SCN::min_scn(), false/*need_check_tablet_cnt*/))) {

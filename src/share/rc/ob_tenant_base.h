@@ -196,6 +196,7 @@ namespace rootserver
   class ObBackupCleanService;
   class ObArchiveSchedulerService;
   class ObArbitrationService;
+  class ObDBMSSchedService;
   class ObHeartbeatService;
   class ObStandbySchemaRefreshTrigger;
   class ObTenantSnapshotScheduler;
@@ -243,6 +244,7 @@ class ObIndexUsageInfoMgr;
 class ObStorageIOUsageRepoter;
 class ObResourceLimitCalculator;
 class ObPluginVectorIndexService;
+class ObAutoSplitTaskCache;
 namespace schema
 {
   class ObTenantSchemaService;
@@ -293,7 +295,6 @@ using ObPartTransCtxObjPool = common::ObServerObjectPool<transaction::ObPartTran
 using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage::ObTableScanIterator>;
 #define MTL_MEMBERS                                  \
   MTL_LIST(                                          \
-      share::ObTenantDagScheduler*,                  \
       blocksstable::ObDecodeResourcePool*,           \
       omt::ObSharedTimer*,                           \
       oceanbase::sql::ObTenantSQLSessionMgr*,        \
@@ -379,6 +380,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       compaction::ObTenantMediumChecker*,            \
       storage::ObTenantCompactionMemPool*,           \
       TenantCompactionObjMgr                         \
+      share::ObTenantDagScheduler*,                  \
       storage::ObStorageHAService*,                  \
       storage::ObTenantFreezeInfoMgr*,               \
       TenantLSMergeScheduler                         \
@@ -400,6 +402,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       oceanbase::common::sqlclient::ObTenantOciEnvs*, \
       rootserver::ObHeartbeatService*,              \
       storage::ObEmptyReadBucket*,                  \
+      rootserver::ObDBMSSchedService*,              \
       TenantErrsimModule                            \
       TenantErrsimEvent                             \
       storage::ObTenantDirectLoadMgr*,              \
@@ -421,9 +424,10 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       storage::ObStorageHADiagMgr*,                  \
       common::sqlclient::ObTenantDblinkKeeper*,      \
       storage::ObGlobalIteratorPool*,                \
-      share::ObPluginVectorIndexService*,            \
       common::ObRbMemMgr*,                           \
+      share::ObPluginVectorIndexService*,            \
       storage::ObTenantRestoreInfoMgr*,              \
+      share::ObAutoSplitTaskCache*    ,              \
       sql::ObAuditLogger*,                           \
       sql::ObAuditLogUpdater*,                       \
       table::ObTableGroupCommitMgr*,                 \

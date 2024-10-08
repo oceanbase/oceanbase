@@ -402,7 +402,7 @@ void ObMultiVersionSSTableTest::init_tablet()
   tablet->storage_schema_addr_.get_ptr()->init(allocator_, table_schema_, lib::Worker::CompatMode::MYSQL);
   ASSERT_NE(nullptr, ptr = allocator_.alloc(sizeof(ObRowkeyReadInfo)));
   tablet->rowkey_read_info_ = new (ptr) ObRowkeyReadInfo();
-  tablet->build_read_info(allocator_);
+  tablet->build_read_info(allocator_, nullptr /*tablet*/, false /*is_cs_replica_compat*/);
 }
 
 void ObMultiVersionSSTableTest::reset_writer(
@@ -425,7 +425,7 @@ void ObMultiVersionSSTableTest::reset_writer(
   SCN scn;
   scn.convert_for_tx(snapshot_version);
   ASSERT_EQ(OB_SUCCESS, data_desc_.init(false/*is_ddl*/, table_schema_, ls_id, tablet_id, merge_type, snapshot_version, DATA_VERSION_4_1_0_0,
-                                        table_schema_.get_micro_index_clustered(), scn));
+                                        table_schema_.get_micro_index_clustered(), 0 /*transfer_seq*/, scn));
   void *builder_buf = allocator_.alloc(sizeof(ObSSTableIndexBuilder));
   root_index_builder_ = new (builder_buf) ObSSTableIndexBuilder(false /* not need writer buffer*/);
   ASSERT_NE(nullptr, root_index_builder_);

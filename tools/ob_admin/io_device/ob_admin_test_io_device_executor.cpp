@@ -79,11 +79,12 @@ int ObAdminTestIODeviceExecutor::parse_cmd_(int argc, char *argv[])
   int ret = OB_SUCCESS;
   int opt = 0;
   int index = -1;
-  const char *opt_str = "h:d:s:q";
+  const char *opt_str = "h:d:s:q:e:";
   struct option longopts[] = {{"help", 0, NULL, 'h'},
       {"backup_path", 1, NULL, 'd'},
       {"storage_info", 1, NULL, 's'},
       {"quiet", 0, NULL, 'q' },
+      {"s3_url_encode_type", 0, NULL, 'e'},
       {NULL, 0, NULL, 0}};
   while (OB_SUCC(ret) && -1 != (opt = getopt_long(argc, argv, opt_str, longopts, &index))) {
     switch (opt) {
@@ -109,6 +110,12 @@ int ObAdminTestIODeviceExecutor::parse_cmd_(int argc, char *argv[])
       }
       case 'q': {
         is_quiet_ = true;
+        break;
+      }
+      case 'e': {
+        if (OB_FAIL(set_s3_url_encode_type(optarg))) {
+          STORAGE_LOG(WARN, "failed to set s3 url encode type", KR(ret));
+        }
         break;
       }
       default: {
@@ -763,6 +770,7 @@ int ObAdminTestIODeviceExecutor::print_usage_()
   printf("options:\n");
   printf(HELP_FMT, "-d,--backup-file-path", "absolute backup file path with file prefix");
   printf(HELP_FMT, "-s,--storage-info", "oss/cos should provide storage info");
+  printf(HELP_FMT, "-e,--s3_url_encode_type", "set S3 protocol url encode type");
   printf("samples:\n");
   printf("  test nfs device: \n");
   printf("\tob_admin test_io_device -dfile:///home/admin/backup_info \n");
@@ -772,7 +780,8 @@ int ObAdminTestIODeviceExecutor::print_usage_()
   printf("\tob_admin test_io_device -d'cos://home/admin/backup_info' "
          "-s'host=xxx.com&access_id=111&access_key=222&appid=333'\n");
   printf("\tob_admin test_io_device -d's3://home/admin/backup_info' "
-         "-s'host=xxx.com&access_id=111&access_key=222&region=333'\n");
+         "-s'host=xxx.com&access_id=111&access_key=222&region=333'\n"
+         "-e'compliantRfc3986Encoding'");
   return ret;
 }
 

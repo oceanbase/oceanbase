@@ -1104,10 +1104,17 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
           int64_t len = min(record.data_.proxy_user_name_len_, OB_MAX_USER_NAME_LENGTH);
           cells[cell_idx].set_varchar(record.data_.proxy_user_name_,
                                       static_cast<ObString::obstr_size_t>(len));
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                              ObCharset::get_default_charset()));
         } break;
         //format_sql_id
         case FORMAT_SQL_ID: {
-          cells[cell_idx].set_varchar("");
+          if (OB_MAX_SQL_ID_LENGTH == strlen(record.data_.format_sql_id_)) {
+            cells[cell_idx].set_varchar(record.data_.format_sql_id_,
+                                        static_cast<ObString::obstr_size_t>(OB_MAX_SQL_ID_LENGTH));
+          } else {
+            cells[cell_idx].set_varchar("");
+          }
           cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                               ObCharset::get_default_charset()));
         } break;

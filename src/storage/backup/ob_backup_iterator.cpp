@@ -1305,7 +1305,7 @@ int ObBackupUnorderedMacroBlockIndexIterator::init(const int64_t task_id, const 
       ret = OB_ENTRY_NOT_EXIST;
       LOG_WARN("no file exists", K(ret));
     } else {
-      std::sort(file_id_list.begin(), file_id_list.end());
+      lib::ob_sort(file_id_list.begin(), file_id_list.end());
       if (OB_FAIL(file_id_list_.assign(file_id_list))) {
         LOG_WARN("failed to assign", K(ret), K(file_id_list));
       } else if (OB_FAIL(do_fetch_new_())) {

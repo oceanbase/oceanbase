@@ -463,20 +463,6 @@ int ObTenantFreezer::ls_freeze_all_unit(const share::ObLSID &ls_id,
   return ret;
 }
 
-int ObTenantFreezer::tablet_freeze(const common::ObTabletID &tablet_id,
-                                   const bool is_sync,
-                                   const int64_t max_retry_time_us,
-                                   const bool need_rewrite_tablet_meta,
-                                   const ObFreezeSourceFlag source)
-{
-  return tablet_freeze(ObLSID(ObLSID::INVALID_LS_ID),
-                       tablet_id,
-                       is_sync,
-                       max_retry_time_us,
-                       need_rewrite_tablet_meta,
-                       source);
-}
-
 int ObTenantFreezer::tablet_freeze(share::ObLSID ls_id,
                                    const common::ObTabletID &tablet_id,
                                    const bool is_sync,
@@ -492,16 +478,6 @@ int ObTenantFreezer::tablet_freeze(share::ObLSID ls_id,
   // 0 as default timeout ts
   const int64_t abs_timeout_ts = (0 == max_retry_time_us) ? 0 : ObClockGenerator::getClock() + max_retry_time_us;
 
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("[TenantFreezer] tenant freezer not inited", KR(ret));
-  } else if (!ls_id.is_valid()) {
-    // if ls_id is invalid, get ls id by tablet id
-    if (OB_FAIL(GCTX.location_service_->get(tenant_info_.tenant_id_, tablet_id, INT64_MAX, is_cache_hit, ls_id))) {
-      LOG_WARN("[TenantFreezer] fail to get ls id according to tablet_id", KR(ret), K(tablet_id));
-    }
-  }
-
   FLOG_INFO("[TenantFreezer] tablet_freeze start",
             KR(ret),
             K(ls_id),
@@ -510,7 +486,11 @@ int ObTenantFreezer::tablet_freeze(share::ObLSID ls_id,
             K(tablet_id),
             KTIME(abs_timeout_ts));
 
-  if (OB_FAIL(ret)) {
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("[TenantFreezer] tenant freezer not inited", KR(ret));
+  } else if (!ls_id.is_valid()) {
+    LOG_ERROR("[TenantFreezer] ls id can not be invalid", KR(ret), K(tablet_id));
   } else if (OB_FAIL(ls_srv->get_ls(ls_id, handle, ObLSGetMod::TXSTORAGE_MOD))) {
     LOG_WARN("[TenantFreezer] fail to get ls", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = handle.get_ls())) {
@@ -529,8 +509,6 @@ int ObTenantFreezer::tablet_freeze(share::ObLSID ls_id,
 
   return ret;
 }
-
-
 
 int ObTenantFreezer::check_and_freeze_normal_data_(ObTenantFreezeCtx &ctx)
 {

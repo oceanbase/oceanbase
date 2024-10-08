@@ -322,6 +322,15 @@ int PalfHandle::get_paxos_member_list_and_learner_list(common::ObMemberList &mem
   return palf_handle_impl_->get_paxos_member_list_and_learner_list(member_list, paxos_replica_num, learner_list);
 }
 
+int PalfHandle::get_stable_membership(LogConfigVersion &config_version,
+                                      common::ObMemberList &member_list,
+                                      int64_t &paxos_replica_num,
+                                      common::GlobalLearnerList &learner_list) const
+{
+  CHECK_VALID;
+  return palf_handle_impl_->get_stable_membership(config_version, member_list, paxos_replica_num, learner_list);
+}
+
 int PalfHandle::get_election_leader(common::ObAddr &addr) const
 {
   CHECK_VALID;
@@ -453,6 +462,18 @@ int PalfHandle::upgrade_learner_to_acceptor(const LogMemberAckInfoList &upgrade_
 {
   CHECK_VALID;
   return palf_handle_impl_->upgrade_learner_to_acceptor(upgrade_servers, timeout_us);
+}
+
+int PalfHandle::set_election_silent_flag(const bool election_silent_flag)
+{
+  CHECK_VALID;
+  return palf_handle_impl_->set_election_silent_flag(election_silent_flag);
+}
+
+bool PalfHandle::is_election_silent() const
+{
+  CHECK_VALID;
+  return palf_handle_impl_->is_election_silent();
 }
 #endif
 
@@ -737,6 +758,31 @@ int PalfHandle::reset_locality_cb()
     PALF_LOG(WARN, "reset_locality_cb failed", KR(ret));
   } else {
     PALF_LOG(INFO, "reset_locality_cb success", KR(ret));
+  }
+  return ret;
+}
+
+int PalfHandle::set_reconfig_checker_cb(palf::PalfReconfigCheckerCb *reconfig_checker)
+{
+  int ret = OB_SUCCESS;
+  CHECK_VALID;
+  if (OB_ISNULL(reconfig_checker)) {
+    PALF_LOG(INFO, "no need set_reconfig_checker_cb", KR(ret), KP(reconfig_checker));
+  } else if (OB_FAIL(palf_handle_impl_->set_reconfig_checker_cb(reconfig_checker))) {
+    PALF_LOG(WARN, "set_reconfig_checker_cb failed", KR(ret));
+  } else {
+  }
+  return ret;
+}
+
+int PalfHandle::reset_reconfig_checker_cb()
+{
+  int ret = OB_SUCCESS;
+  CHECK_VALID;
+  if (OB_FAIL(palf_handle_impl_->reset_reconfig_checker_cb())) {
+    PALF_LOG(WARN, "reset_reconfig_checker_cb failed", KR(ret));
+  } else {
+    PALF_LOG(INFO, "reset_reconfig_checker_cb success", KR(ret));
   }
   return ret;
 }

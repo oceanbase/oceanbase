@@ -99,8 +99,6 @@ private:
  int process_upgrade_data_version_log_(const share::SCN &sync_scn,
                                        const transaction::ObTxBufferNode &node,
                                        common::ObMySQLTransaction &trans);
- int process_gc_log_(logservice::ObGCLSLog &gc_log,
-                     const share::SCN &syn_scn);
  int process_ls_tx_log_(transaction::ObTxLogBlock &tx_log,
                         const share::SCN &syn_scn);
  int process_ls_table_in_trans_(const transaction::ObTxBufferNode &node,
@@ -129,7 +127,8 @@ private:
  int report_sys_ls_recovery_stat_in_trans_(const share::SCN &sync_scn,
                                            const bool only_update_readable_scn,
                                            common::ObMySQLTransaction &trans,
-                                           const char* comment);
+                                           const char* comment,
+                                           const bool need_check_sync_scn);
 
  int process_ls_transfer_task_in_trans_(const transaction::ObTxBufferNode &node,
      const share::SCN &sync_scn, common::ObMySQLTransaction &trans);

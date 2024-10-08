@@ -190,6 +190,8 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "load data to the view is");
     } else if (OB_FAIL(check_trigger_constraint(tschema))) {
       LOG_WARN("check trigger constraint failed", K(ret), KPC(tschema));
+    } else if (OB_FAIL(check_collection_sql_type(tschema))) {
+      LOG_WARN("check collection sql type column failed", K(ret), KPC(tschema));
     } else {
       load_args.table_id_ = tschema->get_table_id();
       load_args.table_name_ = table_name;
@@ -270,9 +272,12 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
       load_args.file_cs_type_ = CS_TYPE_UTF8MB4_BIN;
     }
     if (OB_SUCC(ret)) {
-      if (ObCharset::charset_type_by_coll(load_args.file_cs_type_) == CHARSET_UTF16) {
+      int64_t mbminlen = 0;
+      if (OB_FAIL(common::ObCharset::get_mbminlen_by_coll(load_args.file_cs_type_, mbminlen))) {
+        LOG_WARN("unexpected error ", K(ret));
+      } else if (mbminlen > 1) {
         ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "utf16 encoded files are");
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "compatible with ascii files are");
       }
     }
   }
@@ -430,9 +435,11 @@ int ObLoadDataResolver::resolve_hints(const ParseNode &node)
 
       switch (hint_node->type_) {
       case T_DIRECT: {
-        ObDirectLoadHint &direct_load_hint = stmt_hints.get_direct_load_hint();
+        ObDirectLoadHint direct_load_hint;
         if (OB_FAIL(ObDMLResolver::resolve_direct_load_hint(*hint_node, direct_load_hint))) {
           LOG_WARN("fail to resolve direct load hint", KR(ret));
+        } else {
+          stmt_hints.get_direct_load_hint().merge(direct_load_hint);
         }
         break;
       }
@@ -513,6 +520,10 @@ int ObLoadDataResolver::resolve_hints(const ParseNode &node)
         if (OB_FAIL(stmt_hints.set_value(ObLoadDataHint::NO_GATHER_OPTIMIZER_STATISTICS, 1))) {
           LOG_WARN("fail to set gather optimizer statistics", K(ret));
         }
+        break;
+      }
+      case T_NO_DIRECT: {
+        stmt_hints.get_direct_load_hint().has_no_direct_ = true;
         break;
       }
       default:
@@ -1632,6 +1643,31 @@ int ObLoadDataResolver::check_trigger_constraint(const ObTableSchema *table_sche
         } else {
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "if table has insert or update trigger, load data");
         }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLoadDataResolver::check_collection_sql_type(const ObTableSchema *table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table_schema)
+      || OB_ISNULL(schema_checker_)
+      || OB_ISNULL(session_info_)
+      || OB_ISNULL(schema_checker_->get_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("object is null", K(ret), K(table_schema), K(schema_checker_),
+             K(session_info_), K(schema_checker_->get_schema_guard()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_schema->get_column_count(); i++) {
+      const ObColumnSchemaV2 *col_schema = nullptr;
+      if (OB_ISNULL(col_schema = table_schema->get_column_schema_by_idx(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected col_schema, is nullptr", K(ret), K(i), KPC(table_schema));
+      } else if (col_schema->get_meta_type().is_collection_sql_type()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support load data if table has array/vector column", K(ret), KPC(col_schema));
       }
     }
   }

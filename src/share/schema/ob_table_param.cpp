@@ -629,7 +629,8 @@ ObTableParam::ObTableParam(ObIAllocator &allocator)
     is_fts_index_(false),
     is_multivalue_index_(false),
     is_column_replica_table_(false),
-    is_vec_index_(false)
+    is_vec_index_(false),
+    is_partition_table_(false)
 {
   reset();
 }
@@ -660,6 +661,7 @@ void ObTableParam::reset()
   is_multivalue_index_ = false;
   is_column_replica_table_ = false;
   is_vec_index_ = false;
+  is_partition_table_ = false;
 }
 
 OB_DEF_SERIALIZE(ObTableParam)
@@ -703,6 +705,9 @@ OB_DEF_SERIALIZE(ObTableParam)
   }
   if (OB_SUCC(ret)) {
     OB_UNIS_ENCODE(is_vec_index_);
+  }
+  if (OB_SUCC(ret)) {
+    OB_UNIS_ENCODE(is_partition_table_);
   }
   return ret;
 }
@@ -796,6 +801,10 @@ OB_DEF_DESERIALIZE(ObTableParam)
     LST_DO_CODE(OB_UNIS_DECODE,
                 is_vec_index_);
   }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE,
+                is_partition_table_);
+  }
   return ret;
 }
 
@@ -843,6 +852,11 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_ADD_LEN,
               is_vec_index_);
+  }
+
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ADD_LEN,
+                is_partition_table_);
   }
   return len;
 }
@@ -955,10 +969,11 @@ int ObTableParam::construct_columns_and_projector(
   } else if (!is_cs && query_cs_replica) {
     is_cs = true;
     is_column_replica_table_ = true;
+    has_all_column_group = false;
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(table_schema.has_all_column_group(has_all_column_group))) {
+  } else if (!is_column_replica_table_ && OB_FAIL(table_schema.has_all_column_group(has_all_column_group))) {
     LOG_WARN("Failed to check if has all column group", K(ret));
   } else {
     // column array
@@ -1026,10 +1041,14 @@ int ObTableParam::construct_columns_and_projector(
       } else if (OB_UNLIKELY(common::OB_HIDDEN_TRANS_VERSION_COLUMN_ID == column_id) ||
                  common::OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID == column_id ||
                  common::OB_HIDDEN_LOGICAL_ROWID_COLUMN_ID == column_id ||
+                  common::OB_MAJOR_REFRESH_MVIEW_OLD_NEW_COLUMN_ID == column_id ||
                  common::OB_HIDDEN_GROUP_IDX_COLUMN_ID == column_id) {
         ObObjMeta meta_type;
         if (common::OB_HIDDEN_LOGICAL_ROWID_COLUMN_ID == column_id) {
           meta_type.set_urowid();
+        } else if (common::OB_MAJOR_REFRESH_MVIEW_OLD_NEW_COLUMN_ID == column_id) {
+          meta_type.set_varchar();
+          meta_type.set_collation_type(ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI);
         } else {
           meta_type.set_int();
         }

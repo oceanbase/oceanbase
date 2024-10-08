@@ -14,6 +14,7 @@
 #define OCEANBASE_STORAGE_OB_DDL_CLOG_H_
 
 #include "storage/ob_i_table.h"
+#include "share/ob_rpc_struct.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/blocksstable/index_block/ob_index_block_builder.h"
 #include "storage/ddl/ob_ddl_struct.h"
@@ -328,6 +329,86 @@ public:
 public:
   share::ObLSID ls_id_;
   common::ObSArray<common::ObTabletID> hidden_tablet_ids_;
+};
+
+// === Log for tablet split start ===
+class ObTabletSplitInfo final
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObTabletSplitInfo();
+  ~ObTabletSplitInfo() = default;
+  int assign(const ObTabletSplitInfo &info);
+  bool is_valid() const;
+  TO_STRING_KV(K_(table_id), K_(lob_table_id), K_(schema_version),
+    K_(task_id), K_(source_tablet_id), K_(dest_tablets_id),
+    K_(compaction_scn), K_(data_format_version), K_(consumer_group_id),
+    K_(can_reuse_macro_block), K_(split_sstable_type), K_(lob_col_idxs),
+    K_(parallel_datum_rowkey_list));
+public:
+  common::ObArenaAllocator rowkey_allocator_; // alloc buf for datum rowkey.
+  uint64_t table_id_; // scan rows needed, index table id or main table id.
+  uint64_t lob_table_id_; // scan rows needed, valid when split lob tablet.
+  int64_t schema_version_; // report replica build status needed.
+  int64_t task_id_; // report replica build status needed.
+  common::ObTabletID source_tablet_id_;
+  common::ObSArray<common::ObTabletID> dest_tablets_id_;
+  int64_t compaction_scn_;
+  int64_t data_format_version_;
+  uint64_t consumer_group_id_;
+  bool can_reuse_macro_block_;
+  share::ObSplitSSTableType split_sstable_type_;
+  common::ObSEArray<uint64_t, 16> lob_col_idxs_;
+  common::ObSArray<blocksstable::ObDatumRowkey> parallel_datum_rowkey_list_;
+};
+
+struct ObTabletSplitStartLog final
+{
+    OB_UNIS_VERSION_V(1);
+public:
+  ObTabletSplitStartLog()
+    : basic_info_()
+  { }
+  ~ObTabletSplitStartLog() = default;
+  int assign(const ObTabletSplitStartLog &log);
+  bool is_valid() const { return basic_info_.is_valid(); }
+  const common::ObTabletID &get_source_tablet_id() const { return basic_info_.source_tablet_id_; }
+  TO_STRING_KV(K_(basic_info));
+public:
+  ObTabletSplitInfo basic_info_;
+};
+
+struct ObTabletSplitFinishLog final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTabletSplitFinishLog()
+    : basic_info_()
+  { }
+  ~ObTabletSplitFinishLog() = default;
+  int assign(const ObTabletSplitFinishLog &log);
+  bool is_valid() const { return basic_info_.is_valid(); }
+  const common::ObTabletID &get_source_tablet_id() const { return basic_info_.source_tablet_id_; }
+  TO_STRING_KV(K_(basic_info));
+public:
+  ObTabletSplitInfo basic_info_;
+};
+// === Log for tablet split end ===
+
+struct ObTabletFreezeLog final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTabletFreezeLog()
+    : tablet_id_(common::ObTabletID::INVALID_TABLET_ID)
+  { }
+  ~ObTabletFreezeLog() = default;
+  int assign(const ObTabletFreezeLog &log);
+  bool is_valid() const { return tablet_id_.is_valid(); }
+  const common::ObTabletID &get_source_tablet_id() const { return tablet_id_; }
+  TO_STRING_KV(K(tablet_id_));
+public:
+  common::ObTabletID tablet_id_;
 };
 
 } // namespace storage

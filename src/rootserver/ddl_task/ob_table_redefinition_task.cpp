@@ -196,6 +196,7 @@ int ObTableRedefinitionTask::init(const ObDDLTaskRecord &task_record)
 }
 
 int ObTableRedefinitionTask::update_complete_sstable_job_status(const common::ObTabletID &tablet_id,
+                                                                const ObAddr &addr,
                                                                 const int64_t snapshot_version,
                                                                 const int64_t execution_id,
                                                                 const int ret_code,
@@ -218,20 +219,20 @@ int ObTableRedefinitionTask::update_complete_sstable_job_status(const common::Ob
       case ObDDLType::DDL_DIRECT_LOAD_INSERT: {
         complete_sstable_job_ret_code_ = ret_code;
         ret_code_ = ret_code;
-        LOG_INFO("table redefinition task callback", K(complete_sstable_job_ret_code_));
+        LOG_INFO("table redefinition task callback", K(addr), K(complete_sstable_job_ret_code_));
         break;
       }
       default : {
         if (OB_UNLIKELY(snapshot_version_ != snapshot_version)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("error unexpected, snapshot version is not equal", K(ret), K(snapshot_version_), K(snapshot_version));
+          LOG_WARN("error unexpected, snapshot version is not equal", K(addr), K(ret), K(snapshot_version_), K(snapshot_version));
         } else if (execution_id < execution_id_) {
           ret = OB_TASK_EXPIRED;
-          LOG_WARN("receive a mismatch execution result, ignore", K(ret_code), K(execution_id), K(execution_id_));
+          LOG_WARN("receive a mismatch execution result, ignore", K(addr), K(ret_code), K(execution_id), K(execution_id_));
         } else {
           complete_sstable_job_ret_code_ = ret_code;
           execution_id_ = execution_id; // update ObTableRedefinitionTask::execution_id_ from ObDDLRedefinitionSSTableBuildTask::execution_id_
-          LOG_INFO("table redefinition task callback", K(complete_sstable_job_ret_code_), K(execution_id_));
+          LOG_INFO("table redefinition task callback", K(addr), K(complete_sstable_job_ret_code_), K(execution_id_));
         }
         break;
       }
@@ -515,12 +516,13 @@ int ObTableRedefinitionTask::copy_table_indexes()
           }
           LOG_INFO("indexes schema are already built", K(index_ids));
         } else {
-          // if there is no indexes in new tables, we need to rebuild indexes in new table
           int64_t ddl_rpc_timeout = 0;
           int64_t all_tablet_count = 0;
           ObSchemaGetterGuard orig_schema_guard;
           if (OB_FAIL(root_service->get_ddl_service().get_tenant_schema_guard_with_version_in_inner_table(tenant_id_, orig_schema_guard))) {
             LOG_WARN("get schema guard failed", K(ret), K(tenant_id_));
+          } else if (OB_FAIL(generate_rebuild_index_arg_list(tenant_id_, object_id_, orig_schema_guard, alter_table_arg_))) {
+            LOG_WARN("fail to generate rebuild index arg list", K(ret), K(tenant_id_), K(object_id_));
           } else if (OB_FAIL(get_orig_all_index_tablet_count(orig_schema_guard, all_tablet_count))) {
             LOG_WARN("get all tablet count failed", K(ret));
           } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(all_tablet_count, ddl_rpc_timeout))) {

@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/iter/ob_das_local_lookup_iter.h"
 #include "sql/das/iter/ob_das_scan_iter.h"
+#include "sql/das/iter/ob_das_doc_id_merge_iter.h"
 #include "sql/das/iter/ob_das_vid_merge_iter.h"
 #include "sql/das/ob_das_scan_op.h"
 #include "sql/das/ob_das_ir_define.h"
@@ -176,11 +177,14 @@ void ObDASLocalLookupIter::reset_lookup_state()
 int ObDASLocalLookupIter::add_rowkey()
 {
   int ret = OB_SUCCESS;
-  OB_ASSERT(data_table_iter_->get_type() == DAS_ITER_SCAN || data_table_iter_->get_type() == DAS_ITER_VEC_VID_MERGE);
+  OB_ASSERT(data_table_iter_->get_type() == DAS_ITER_SCAN || data_table_iter_->get_type() == DAS_ITER_DOC_ID_MERGE
+                                                          || data_table_iter_->get_type() == DAS_ITER_VEC_VID_MERGE);
   ObDASScanIter *scan_iter = nullptr;
   if (data_table_iter_->get_type() == DAS_ITER_SCAN) {
     scan_iter = static_cast<ObDASScanIter *>(data_table_iter_);
-  } else {
+  } else if (data_table_iter_->get_type() == DAS_ITER_DOC_ID_MERGE) {
+    scan_iter = static_cast<ObDASDocIdMergeIter *>(data_table_iter_)->get_data_table_iter();
+  } else if (data_table_iter_->get_type() == DAS_ITER_VEC_VID_MERGE) {
     scan_iter = static_cast<ObDASVIdMergeIter *>(data_table_iter_)->get_data_table_iter();
   }
   storage::ObTableScanParam &scan_param = scan_iter->get_scan_param();
@@ -252,7 +256,8 @@ int ObDASLocalLookupIter::add_rowkeys(int64_t count)
 int ObDASLocalLookupIter::do_index_lookup()
 {
   int ret = OB_SUCCESS;
-  OB_ASSERT(data_table_iter_->get_type() == DAS_ITER_SCAN || data_table_iter_->get_type() == DAS_ITER_VEC_VID_MERGE);
+  OB_ASSERT(data_table_iter_->get_type() == DAS_ITER_SCAN || data_table_iter_->get_type() == DAS_ITER_DOC_ID_MERGE
+                                                          || data_table_iter_->get_type() == DAS_ITER_VEC_VID_MERGE);
   if (is_first_lookup_) {
     is_first_lookup_ = false;
     if (OB_FAIL(init_scan_param(lookup_param_, lookup_ctdef_, lookup_rtdef_))) {
@@ -280,10 +285,13 @@ int ObDASLocalLookupIter::do_index_lookup()
 int ObDASLocalLookupIter::check_index_lookup()
 {
   int ret = OB_SUCCESS;
-  OB_ASSERT(data_table_iter_->get_type() == DAS_ITER_SCAN || data_table_iter_->get_type() == DAS_ITER_VEC_VID_MERGE);
+  OB_ASSERT(data_table_iter_->get_type() == DAS_ITER_SCAN || data_table_iter_->get_type() == DAS_ITER_DOC_ID_MERGE
+                                                          || data_table_iter_->get_type() == DAS_ITER_VEC_VID_MERGE);
   ObDASScanIter *scan_iter = nullptr;
   if (data_table_iter_->get_type() == DAS_ITER_SCAN) {
     scan_iter = static_cast<ObDASScanIter*>(data_table_iter_);
+  } else if (data_table_iter_->get_type() == DAS_ITER_DOC_ID_MERGE) {
+    scan_iter = static_cast<ObDASDocIdMergeIter *>(data_table_iter_)->get_data_table_iter();
   } else {
     scan_iter = static_cast<ObDASVIdMergeIter *>(data_table_iter_)->get_data_table_iter();
   }

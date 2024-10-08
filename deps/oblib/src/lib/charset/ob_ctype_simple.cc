@@ -24,7 +24,6 @@
 
 #define CUTOFF  (UINT64_MAX / 10)
 #define CUTLIM  (UINT64_MAX % 10)
-#define SPACE_INT 0x20202020
 #define DIGITS_IN_ULONGLONG 20
 #define PLANE_SIZE 0x100
 #define PLANE_NUM 0x100
@@ -765,7 +764,7 @@ void ob_hash_sort_simple(const ObCharsetInfo *cs,
   const unsigned char *end;
   unsigned char data[HASH_BUFFER_LENGTH];
   int length = 0;
-  end= calc_end_space ? key + len : skip_trailing_space(key, len, 0);
+  end= calc_end_space ? key + len : cs->cset->skip_trailing_space(cs, key, len); // used in gbk sjis tis620
 
   if (NULL == hash_algo) {
     for (; key < (unsigned char*) end ; key++) {
@@ -785,7 +784,32 @@ void ob_hash_sort_simple(const ObCharsetInfo *cs,
   }
 }
 
-#define SPACE_INT 0x20202020
+const unsigned char *skip_trailing_space(const struct ObCharsetInfo *cs __attribute__((unused)),const unsigned char *ptr,size_t len)
+{
+  const static unsigned SPACE_INT = 0x20202020;
+  const unsigned char *end= ptr + len;
+  if (len > 20) {
+    const unsigned char *end_words= (const unsigned char *)(int_ptr)
+      (((ulonglong)(int_ptr)end) / SIZEOF_INT * SIZEOF_INT);
+    const unsigned char *start_words= (const unsigned char *)(int_ptr)
+       ((((ulonglong)(int_ptr)ptr) + SIZEOF_INT - 1) / SIZEOF_INT * SIZEOF_INT);
+    ob_charset_assert(((ulonglong)(int_ptr)ptr) >= SIZEOF_INT);
+    if (end_words > ptr) {
+      while (end > end_words && end[-1] == 0x20) {
+        end--;
+      }
+      if (end[-1] == 0x20 && start_words < end_words) {
+        while (end > start_words && ((unsigned *)end)[-1] == SPACE_INT) {
+          end -= SIZEOF_INT;
+        }
+      }
+    }
+  }
+  while (end > ptr && end[-1] == 0x20)
+    end--;
+  return (end);
+}
+
 
 size_t ob_strxfrm_pad(const ObCharsetInfo *cs, unsigned char *str, unsigned char *frm_end,
                       unsigned char *str_end, unsigned int nweights, unsigned int flags) {

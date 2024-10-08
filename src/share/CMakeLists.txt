@@ -30,8 +30,23 @@ ob_set_subtarget(ob_share ALONE
   vector/expr_cmp_func_parts/expr_cmp_func_part_13.cpp
   vector/expr_cmp_func_parts/expr_cmp_func_part_14.cpp
   vector/expr_cmp_func_parts/expr_cmp_func_part_15.cpp
-
   aggregate/approx_count_distinct_synopsis.cpp
+  datum/ob_datum_funcs_compilation_0.cpp
+  datum/ob_datum_funcs_compilation_1.cpp
+  datum/ob_datum_funcs_compilation_2.cpp
+  datum/ob_datum_funcs_compilation_3.cpp
+  datum/ob_datum_funcs_compilation_4.cpp
+  datum/ob_datum_funcs_compilation_5.cpp
+  datum/ob_datum_funcs_compilation_6.cpp
+  datum/ob_datum_funcs_compilation_7.cpp
+  datum/ob_datum_funcs_compilation_8.cpp
+  datum/ob_datum_funcs_compilation_9.cpp
+  datum/ob_datum_funcs_compilation_10.cpp
+  datum/ob_datum_funcs_compilation_11.cpp
+  datum/ob_datum_funcs_compilation_12.cpp
+  datum/ob_datum_funcs_compilation_13.cpp
+  datum/ob_datum_funcs_compilation_14.cpp
+  datum/ob_datum_funcs_compilation_15.cpp
 )
 
 file(GLOB SCHEMA_CPPS "inner_table/ob_inner_table_schema.*.cpp")
@@ -110,6 +125,7 @@ ob_set_subtarget(ob_share common
   ob_ddl_sim_point.cpp
   ob_ddl_common.cpp
   ob_ddl_error_message_table_operator.cpp
+  ob_tablet_reorganize_history_table_operator.cpp
   ob_ddl_task_executor.cpp
   ob_debug_sync.cpp
   ob_debug_sync_point.cpp
@@ -212,6 +228,7 @@ ob_set_subtarget(ob_share common
   ob_cluster_event_history_table_operator.cpp
   scn.cpp
   ob_throttling_utils.cpp
+  ob_partition_split_query.cpp
   ob_storage_ha_diagnose_struct.cpp
   ob_storage_ha_diagnose_operator.cpp
   ob_vec_index_builder_util.cpp
@@ -309,6 +326,7 @@ ob_set_subtarget(ob_share common_mixed
   scheduler/ob_tenant_dag_scheduler.cpp
   scheduler/ob_sys_task_stat.cpp
   scheduler/ob_dag_warning_history_mgr.cpp
+  scheduler/ob_partition_auto_split_helper.cpp
   compaction/ob_compaction_locality_cache.cpp
   compaction/ob_table_ckm_items.cpp
   compaction/ob_compaction_time_guard.cpp

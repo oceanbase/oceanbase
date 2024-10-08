@@ -23,6 +23,30 @@ namespace oceanbase
 
 namespace storage
 {
+template <typename T>
+int add_dag_and_get_progress(
+    T *dag,
+    int64_t &row_inserted,
+    int64_t &physical_row_count)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  row_inserted = 0;
+  physical_row_count = 0;
+  if (OB_ISNULL(dag)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KP(dag));
+  } else if (OB_FAIL(MTL(ObTenantDagScheduler*)->add_dag(dag))) {
+    // caution ret = OB_EAGAIN or OB_SIZE_OVERFLOW
+    if (OB_EAGAIN == ret
+        && OB_TMP_FAIL(MTL(ObTenantDagScheduler*)->get_dag_progress<T>(dag, row_inserted, physical_row_count))) {
+      // tmp_ret is used to prevent the failure from affecting DDL_Task status
+      LOG_WARN("get complement data progress failed", K(tmp_ret), K(ret));
+    }
+  }
+  return ret;
+}
+
 class ObScan;
 class ObLocalScan;
 class ObRemoteScan;
@@ -120,7 +144,7 @@ public:
     is_inited_(false), ddl_agent_(), direct_load_type_(ObDirectLoadType::DIRECT_LOAD_INVALID),
     is_major_sstable_exist_(false), complement_data_ret_(common::OB_SUCCESS),
     lock_(ObLatchIds::COMPLEMENT_DATA_CONTEXT_LOCK), concurrent_cnt_(0),
-    row_scanned_(0), row_inserted_(0), cg_row_inserted_(0), context_id_(0), lob_cols_cnt_(0)
+    physical_row_count_(0), row_scanned_(0), row_inserted_(0), cg_row_inserted_(0), context_id_(0), lob_cols_cnt_(0)
   {}
   ~ObComplementDataContext() { destroy(); }
   int init(
@@ -131,7 +155,7 @@ public:
   int add_column_checksum(const ObIArray<int64_t> &report_col_checksums, const ObIArray<int64_t> &report_col_ids);
   int get_column_checksum(ObIArray<int64_t> &report_col_checksums, ObIArray<int64_t> &report_col_ids);
   TO_STRING_KV(K_(is_inited), K_(ddl_agent), K_(direct_load_type), K_(is_major_sstable_exist), K_(complement_data_ret), K_(concurrent_cnt),
-      K_(row_scanned), K_(row_inserted), K_(cg_row_inserted), K_(context_id), K_(lob_cols_cnt));
+      K_(physical_row_count), K_(row_scanned), K_(row_inserted), K_(cg_row_inserted), K_(context_id), K_(lob_cols_cnt));
 public:
   bool is_inited_;
   ObDirectLoadMgrAgent ddl_agent_;
@@ -140,6 +164,7 @@ public:
   int complement_data_ret_;
   ObSpinLock lock_;
   int64_t concurrent_cnt_;
+  int64_t physical_row_count_;
   int64_t row_scanned_;
   int64_t row_inserted_;
   int64_t cg_row_inserted_; // unused now.
@@ -162,9 +187,9 @@ public:
   int64_t hash() const;
   bool operator ==(const share::ObIDag &other) const;
   bool is_inited() const { return is_inited_; }
+  void handle_init_failed_ret_code(int ret) { context_.complement_data_ret_ = ret; }
   ObComplementDataParam &get_param() { return param_; }
   ObComplementDataContext &get_context() { return context_; }
-  void handle_init_failed_ret_code(int ret) { context_.complement_data_ret_ = ret; }
   int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
 
   int fill_dag_key(char *buf, const int64_t buf_len) const override;
@@ -177,6 +202,7 @@ public:
   virtual bool is_ha_dag() const override { return false; }
   // report replica build status to RS.
   int report_replica_build_status();
+  int calc_total_row_count();
   int check_and_exit_on_demand();
 private:
   bool is_inited_;

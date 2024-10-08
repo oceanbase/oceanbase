@@ -132,6 +132,7 @@ public:
     const compaction::ObTabletLSPairCache &tablet_ls_pair_cache);
 #endif
   int build_column_ckm_sum_array(
+    const bool is_data_table,
     const share::SCN &compaction_scn,
     const share::schema::ObTableSchema &table_schema,
     int64_t &row_cnt);
@@ -170,6 +171,10 @@ private:
     share::schema::ObSchemaGetterGuard &schema_guard,
     const compaction::ObTabletLSPairCache &tablet_ls_pair_cache,
     common::ObIArray<ObTabletID> &tablet_id_array);
+  int check_tail_column_checksums_legal(
+    const bool is_data_table,
+    const ObIArray<int64_t> &base_column_checksums,
+    const ObIArray<int64_t> &check_column_checksums);
 
   static const int64_t DEFAULT_COLUMN_CNT = 64;
   static const int64_t DEFAULT_TABLET_CNT = 16;

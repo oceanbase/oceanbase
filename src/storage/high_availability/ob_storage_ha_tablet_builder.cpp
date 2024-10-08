@@ -1196,6 +1196,8 @@ int ObStorageHATabletsBuilder::hold_local_complete_tablet_sstable_(
     LOG_WARN("hold local complete tablet sstable get invalid argument", K(ret));
   } else if (tablet->get_tablet_meta().tablet_id_.is_ls_inner_tablet()) {
     LOG_INFO("ls inner tablet do not reuse any sstable", K(ret), KPC(tablet));
+  } else if (!tablet->get_tablet_meta().ha_status_.is_restore_status_full()) {
+    LOG_INFO("tablet is in restore, do not reuse any sstable", K(ret), KPC(tablet));
   } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
     //TODO(muwei.ym) ls inner tablet now do not reuse any sstable, will reuse in 4.3
@@ -2756,7 +2758,7 @@ int ObStorageHATabletBuilderUtil::inner_update_tablet_table_store_with_minor_(
 
     if (OB_FAIL(update_table_store_param.tables_handle_.assign(tables_handle))) {
       LOG_WARN("failed to assign tables handle", K(ret), K(tables_handle));
-    } else if (OB_FAIL(ls->build_ha_tablet_new_table_store(tablet_id, update_table_store_param))) {
+    } else if (OB_FAIL(ls->build_tablet_with_batch_tables(tablet_id, update_table_store_param))) {
       LOG_WARN("failed to build ha tablet new table store", K(ret), K(tablet_id), KPC(tablet), KPC(src_tablet_meta), K(update_table_store_param));
     }
   }

@@ -221,7 +221,10 @@ int ObCOSSTableRowsFilter::apply(const ObCSRange &range)
     adjust_batch_size();
     prepared_ = false;
     LOG_DEBUG("[COLUMNSTORE] apply filter info", K(range),
-              K(bitmap_buffer_[0]->size()), K(bitmap_buffer_[0]->popcnt()));
+              "filter_constant_type", bitmap_buffer_[0]->get_filter_constant_type(),
+              "filter_constant_id", bitmap_buffer_[0]->get_filter_constant_id(),
+              "bitmap_size", bitmap_buffer_[0]->size(),
+              "popcnt", bitmap_buffer_[0]->popcnt());
   }
   return ret;
 }
@@ -269,6 +272,7 @@ int ObCOSSTableRowsFilter::apply_filter(
     // Parent prepare_skip_filter can not be called here.
   } else if (filter->is_sample_node()) {
     ObSampleFilterExecutor *sample_executor = static_cast<ObSampleFilterExecutor *>(filter);
+    result->set_filter_uncertain();
     if (OB_FAIL(sample_executor->apply_sample_filter(range, *result->get_inner_bitmap()))) {
       LOG_WARN("Failed to apply sample filter", K(ret), K(range), KP(result), KPC(sample_executor));
     }
@@ -353,8 +357,9 @@ int ObCOSSTableRowsFilter::post_apply_filter(
       is_skip = true;
     }
   }
-  LOG_DEBUG("[COLUMNSTORE] post apply filter info", "is_and", filter.is_logic_and_node(), K(result.size()),
-            K(result.popcnt()), K(child_result.size()), K(child_result.popcnt()));
+  LOG_DEBUG("[COLUMNSTORE] post apply filter info", K(ret), K(is_skip), "is_and", filter.is_logic_and_node(),
+            K(result.size()), K(result.popcnt()), K(result.get_filter_constant_type()), K(result.get_filter_constant_id()),
+            K(child_result.size()), K(child_result.popcnt()), K(child_result.get_filter_constant_type()), K(child_result.get_filter_constant_id()));
   return ret;
 }
 
@@ -660,7 +665,7 @@ int ObCOSSTableRowsFilter::init_bitmap_buffer(uint32_t bitmap_buffer_count)
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("Failed to alloc memory for filter bitmap", K(ret));
       } else if (FALSE_IT(filter_bitmap = new (buf) ObCGBitmap(*allocator_))) {
-      } else if (OB_FAIL(filter_bitmap->init(batch_size_))) {
+      } else if (OB_FAIL(filter_bitmap->init(batch_size_, access_ctx_->query_flag_.is_reverse_scan()))) {
         LOG_WARN("Failed to init bitmap", K(ret), K_(batch_size));
       } else if (OB_FAIL(bitmap_buffer_.push_back(filter_bitmap))) {
         LOG_WARN("Failed to push_back filter bitmap", K(ret), KP(filter_bitmap));
@@ -690,7 +695,7 @@ int ObCOSSTableRowsFilter::prepare_bitmap_buffer(
     if (OB_ISNULL(result)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected nullptr filter_bitmap", K(ret), K(depth));
-    } else if (OB_FAIL(result->reserve(range.get_row_count()))) {
+    } else if (OB_FAIL(result->switch_context(range.get_row_count(), access_ctx_->query_flag_.is_reverse_scan()))) {
       LOG_WARN("Failed to expand size for filter bitmap", K(ret), K(range));
     } else if (0 == depth) {
       result->reuse(range.start_row_id_, filter.is_logic_and_node());

@@ -2122,7 +2122,8 @@ int ObPL::execute(ObExecContext &ctx,
                   bool in_function,
                   uint64_t loc,
                   bool is_called_from_sql,
-                  uint64_t dblink_id)
+                  uint64_t dblink_id,
+                  const ObRoutineInfo *dblink_routine_info)
 {
   int ret = OB_SUCCESS;
   DISABLE_SQL_MEMLEAK_GUARD;
@@ -2140,14 +2141,17 @@ int ObPL::execute(ObExecContext &ctx,
   SMART_VAR(ObPLContext, stack_ctx) {
     if (OB_ISNULL(ctx.get_my_session()->get_pl_context())) {
       // set work timeout for compile it only top level store routine
-      int64_t pl_block_timeout = 0;
-      int64_t query_start_time = ctx.get_my_session()->get_query_start_time();
-      old_worker_timeout_ts = THIS_WORKER.get_timeout_ts();
-      OZ (ctx.get_my_session()->get_pl_block_timeout(pl_block_timeout));
-      if (OB_SUCC(ret) && pl_block_timeout > OB_MAX_USER_SPECIFIED_TIMEOUT) {
-        pl_block_timeout = OB_MAX_USER_SPECIFIED_TIMEOUT;
+      // needn't set timeout for execute dblink
+      if (!is_valid_id(dblink_id)) {
+        int64_t pl_block_timeout = 0;
+        int64_t query_start_time = ctx.get_my_session()->get_query_start_time();
+        old_worker_timeout_ts = THIS_WORKER.get_timeout_ts();
+        OZ (ctx.get_my_session()->get_pl_block_timeout(pl_block_timeout));
+        if (OB_SUCC(ret) && pl_block_timeout > OB_MAX_USER_SPECIFIED_TIMEOUT) {
+          pl_block_timeout = OB_MAX_USER_SPECIFIED_TIMEOUT;
+        }
+        OX (THIS_WORKER.set_timeout_ts(query_start_time + pl_block_timeout));
       }
-      OX (THIS_WORKER.set_timeout_ts(query_start_time + pl_block_timeout));
     } else {
       ObPLContext *curr = ctx.get_my_session()->get_pl_context()->get_top_stack_ctx();
       parent_trace_id.set(curr->get_trace_id());
@@ -2293,7 +2297,9 @@ int ObPL::execute(ObExecContext &ctx,
       if (OB_FAIL(ret)) {
 #ifdef OB_BUILD_ORACLE_PL
       } else if (is_valid_id(dblink_id)) {
-        OZ (ObSPIService::spi_execute_dblink(ctx, allocator, dblink_id, package_id, routine_id, params, &result));
+        OZ (ObSPIService::spi_execute_dblink(ctx, allocator, dblink_id, package_id,
+                                             routine_id, params, &result,
+                                             dblink_routine_info));
 #endif
       } else {
         OZ (execute(ctx,

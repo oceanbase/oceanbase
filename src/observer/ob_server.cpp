@@ -110,6 +110,7 @@
 #include "share/ob_server_blacklist.h"
 #include "rootserver/standby/ob_standby_service.h" // ObStandbyService
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
+#include "share/scheduler/ob_partition_auto_split_helper.h"
 #include "share/longops_mgr/ob_longops_mgr.h"
 #include "logservice/palf/election/interface/election.h"
 #include "share/ob_ddl_sim_point.h"
@@ -518,6 +519,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("set sys task status self addr failed", KR(ret));
     } else if (OB_FAIL(ObTableStoreStatMgr::get_instance().init())) {
       LOG_ERROR("init table store stat mgr failed", KR(ret));
+    } else if (OB_FAIL(ObServerAutoSplitScheduler::get_instance().init())) {
+      LOG_ERROR("init auto split scheduler failed", KR(ret));
     } else if (OB_FAIL(ObCompatModeGetter::instance().init(&sql_proxy_))) {
       LOG_ERROR("init get compat mode server failed",KR(ret));
     } else if (OB_FAIL(table_service_.init())) {

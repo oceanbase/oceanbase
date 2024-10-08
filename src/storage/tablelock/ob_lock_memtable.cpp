@@ -46,6 +46,156 @@ namespace transaction
 namespace tablelock
 {
 
+OB_SERIALIZE_MEMBER(ObLockTableSplitLog, src_tablet_id_, dst_tablet_ids_);
+
+int ObLockTableSplitLogCb::on_success()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("ObLockTableSplitLogCb is not init!");
+  } else if (!is_logging_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("should be logging", K(ret));
+  } else if (OB_ISNULL(memtable_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("lock memtable should not be null", K(ret));
+  } else if (OB_TMP_FAIL(memtable_->add_split_epoch(last_submit_scn_, dst_tablet_ids_))) {
+    LOG_WARN("add_split_epoch_to_dst_tablet failed", K(tmp_ret), KPC(this));
+  } else {
+    memtable_->update_rec_and_max_committed_scn(last_submit_scn_);
+    cb_success_ = true;
+    FLOG_INFO("table lock split successfully", KPC(this));
+    // TODO for @lihongqin.lhq
+    // notice RS table_lock split successfully
+  }
+
+  if (OB_FAIL(ret) || OB_FAIL(tmp_ret)) {
+    cb_success_ = false;
+    // TODO for @lihongqin.lhq
+    // notice RS table_lock split failed
+  }
+
+  is_logging_ = false;
+  return ret;
+}
+
+int ObLockTableSplitLogCb::on_failure()
+{
+  // no notice RS and will retry table_lock split
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("ObLockTableSplitLogCb is not init!");
+  } else {
+    cb_success_ = false;
+    is_logging_ = false;
+    LOG_WARN("ObLockTableSplitLogCb on_failure", K(ret), K(*this));
+  }
+  return ret;
+}
+
+int ObLockTableSplitLogCb::init(ObLockMemtable *memtable, const share::ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init ObLockTableSplitLogCb twice", KR(ret), K(memtable), K(ls_id));
+  } else if (!is_valid_(memtable, ls_id)){
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("the parameters is invalid", K(ret), K(memtable), K(ls_id));
+  } else {
+    memtable_ = memtable;
+    ls_id_ = ls_id;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObLockTableSplitLogCb::set(const ObTabletID &src_tablet_id,
+                               const ObSArray<common::ObTabletID> &dst_tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObLockTableSplitLogCb is not init", K(ret), K(src_tablet_id), K(dst_tablet_ids));
+  } else if (!src_tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("src_tablet_id is invalid", K(ret), K(src_tablet_id));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < dst_tablet_ids.count(); i++) {
+      ObTabletID dst_tablet_id = dst_tablet_ids[i];
+      if (!dst_tablet_id.is_valid()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("dst_tablet_id is invalid", K(ret), K(dst_tablet_id));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(dst_tablet_ids_.assign(dst_tablet_ids))) {
+        LOG_WARN("assign dst_tablet_id failed", K(ret), K(dst_tablet_ids));
+      } else {
+        src_tablet_id_ = src_tablet_id;
+      }
+    }
+  }
+  return ret;
+}
+
+bool ObLockTableSplitLogCb::is_valid()
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = true;
+  if (IS_NOT_INIT) {
+    is_valid = false;
+    LOG_WARN("ObLockTableSplitLogCb is not init");
+  } else {
+    is_valid = is_valid_(memtable_, ls_id_);
+  }
+  return is_valid;
+}
+
+bool ObLockTableSplitLogCb::is_valid_(const ObLockMemtable *memtable, const ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = true;
+  if (OB_ISNULL(memtable)) {
+    is_valid = false;
+    LOG_WARN("ObLockMemtable in ObLockTableSplitLogCb is null");
+  }
+  if (!ls_id.is_valid()) {
+    is_valid = false;
+    LOG_WARN("ObLSID in ObLockTableSplitLogCb is invalid");
+  }
+  return is_valid;
+}
+
+int ObLockTableSplitLog::init(common::ObTabletID &src_tablet_id, const ObSArray<common::ObTabletID> &dst_tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  if (!src_tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("src_tablet_id is invalid", K(ret), K(src_tablet_id));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < dst_tablet_ids.count(); i++) {
+      ObTabletID dst_tablet_id = dst_tablet_ids[i];
+      if (!dst_tablet_id.is_valid()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("dst_tablet_id is invalid", K(ret), K(dst_tablet_id));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(dst_tablet_ids_.assign(dst_tablet_ids))) {
+        LOG_WARN("assign dst_tablet_id failed", K(ret), K(dst_tablet_ids));
+      } else {
+        src_tablet_id_ = src_tablet_id;
+      }
+    }
+  }
+  return ret;
+}
+
 ObLockMemtable::ObLockMemtable()
   : ObIMemtable(),
     is_inited_(false),
@@ -58,8 +208,7 @@ ObLockMemtable::ObLockMemtable()
     need_check_tablet_status_(false),
     freezer_(nullptr),
     flush_lock_(common::ObLatchIds::CLOG_CKPT_LOCK)
-{
-}
+{}
 
 ObLockMemtable::~ObLockMemtable()
 {
@@ -106,8 +255,8 @@ void ObLockMemtable::reset()
   max_committed_scn_.reset();
   ObITable::reset();
   obj_lock_map_.reset();
-  freeze_scn_.reset();
-  flushed_scn_.reset();
+  freeze_scn_.set_min();
+  flushed_scn_.set_min();
   is_frozen_ = false;
   need_check_tablet_status_ = false;
   freezer_ = nullptr;
@@ -239,13 +388,15 @@ int ObLockMemtable::lock_(
     // TODO: yanyuan.cxf only wait at the first conflict trans now, but we need
     // wait all the conflict trans to do deadlock detect.
     ObFunction<int(bool &need_wait)> recheck_f([this,
+                                                &param,
                                                 &lock_op,
                                                 &lock_mode_cnt_in_same_trans](bool &need_wait) -> int {
       int ret = OB_SUCCESS;
       ObTxIDSet conflict_tx_set;
       if (OB_FAIL(this->obj_lock_map_.check_allow_lock(lock_op,
                                                        lock_mode_cnt_in_same_trans,
-                                                       conflict_tx_set)) &&
+                                                       conflict_tx_set,
+                                                       param.expired_time_)) &&
           OB_TRY_LOCK_ROW_CONFLICT != ret) {
         LOG_WARN("check allow lock failed", K(ret));
       } else if (OB_TRY_LOCK_ROW_CONFLICT == ret) {
@@ -283,7 +434,6 @@ int ObLockMemtable::check_tablet_write_allow_(const ObTableLockOp &lock_op)
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
   ObTabletHandle tablet_handle;
-  ObTabletStatus::Status tablet_status = ObTabletStatus::MAX;
   ObTabletCreateDeleteMdsUserData data;
   bool is_commited = false;
   if (!need_check_tablet_status_) {
@@ -307,9 +457,7 @@ int ObLockMemtable::check_tablet_write_allow_(const ObTableLockOp &lock_op)
       ret = OB_TABLET_NOT_EXIST;
       LOG_WARN("failed to get CreateDeleteMdsUserData", KR(ret), K(ls->get_ls_id()), K(tablet_id));
     }
-  } else if (FALSE_IT(tablet_status = data.get_tablet_status())) {
-  } else if (is_commited && (ObTabletStatus::NORMAL == tablet_status
-                             || ObTabletStatus::TRANSFER_IN == tablet_status)) {
+  } else if (is_commited && data.tablet_status_.is_writable_for_dml()) {
     // allow
   } else {
     ret = OB_TABLET_NOT_EXIST;
@@ -498,12 +646,178 @@ int ObLockMemtable::post_obj_lock_conflict_(ObMvccAccessCtx &acc_ctx,
   return ret;
 }
 
-int ObLockMemtable::check_lock_conflict(
-    const ObMemtableCtx *mem_ctx,
-    const ObTableLockOp &lock_op,
-    ObTxIDSet &conflict_tx_set,
-    const bool include_finish_tx,
-    const bool only_check_dml_lock)
+void ObLockMemtable::update_rec_and_max_committed_scn(const share::SCN &commit_scn)
+{
+  RLockGuard guard(flush_lock_);
+  if (commit_scn <= freeze_scn_) {
+    LOG_INFO("meet disordered replay, will dec_update pre_rec_scn_",
+             K(commit_scn),
+             K(rec_scn_),
+             K(pre_rec_scn_),
+             K(freeze_scn_),
+             K(ls_id_));
+    pre_rec_scn_.dec_update(commit_scn);
+  } else {
+    rec_scn_.dec_update(commit_scn);
+  }
+  max_committed_scn_.inc_update(commit_scn);
+}
+
+int ObLockMemtable::check_table_lock_split_(const ObTableLockOp &lock_op,
+                                            const ObStoreCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+  // TODO for @lihongqin.lhq
+  // get_split_start_trans_id(ObTabletID tablet_id)
+  // if not splitting, return invalid value
+  // else return start_trans_id
+
+  // ObTransID split_start_trans_id = get_split_start_trans_id(lock_op.lock_id_.obj_id_);
+  // // if the tablet split start after the checking,
+  // // the lock_op will block OUT_TRANS_LOCK from start_split_trans
+  // // and the lock_op must not be OUT_TRANS_LOCK from start_split_trans
+  // if (split_start_trans_id.is_valid()) {
+  //   // splitting
+  //   // if the tablet split end after the checking
+  //   // the lock_op also be refused
+  //   // and the lock_op must not be OUT_TRANS_LOCK from start_split_trans
+  //   if (lock_op.is_out_trans_lock_op()) {
+  //     if (ctx.mvcc_acc_ctx_.tx_id_ == split_start_trans_id) {
+  //       // if exist_cannot_split_lock need tablet_split fail
+  //       ObTabletID src_tablet_id(lock_op.lock_id_.obj_id_);
+  //       bool exist_cannot_split_lock = false;
+  //       if (OB_FAIL(check_exist_cannot_split_lock_(src_tablet_id, split_start_trans_id, exist_cannot_split_lock))) {
+  //         // do nothing
+  //       } else if (exist_cannot_split_lock) {
+  //         ret = OB_TRY_LOCK_ROW_CONFLICT;
+  //       }
+  //     } else {
+  //       ret = OB_TRY_LOCK_ROW_CONFLICT;
+  //     }
+  //   }
+  // }
+  return ret;
+}
+
+int ObLockMemtable::check_valid_for_table_lock_split_(const common::ObTabletID src_tablet_id,
+                                                      const ObSArray<common::ObTabletID> &dst_tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  if (!src_tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("src_tablet_id is invalid", K(ret), K(src_tablet_id), K(dst_tablet_ids));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < dst_tablet_ids.count(); i++) {
+      if (!dst_tablet_ids[i].is_valid()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("dst_tablet_id is invalid", K(ret), K(src_tablet_id), K(dst_tablet_ids[i]));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLockMemtable::get_split_status_(const ObTabletID tablet_id,
+                                      ObTableLockSplitStatus &split_status)
+{
+  int ret = OB_SUCCESS;
+  ObLockID lock_id;
+  share::SCN split_epoch = share::SCN::invalid_scn();
+  if (OB_FAIL(get_lock_id(tablet_id, lock_id))) {
+    LOG_WARN("get_lock_id failed", K(ret), K(tablet_id));
+  } else if (OB_FAIL(obj_lock_map_.get_split_epoch(lock_id, split_epoch))) {
+    // TODO(yangyifei.yyf): we need to check whether the obj_lock of this src_tablet
+    // is locked here. If it's locked, it's splitting out.
+    LOG_WARN("get_split_epoch for src_tablet failed", K(ret), K(lock_id));
+  } else {
+    if (!split_epoch.is_valid()) {
+      split_status = ObTableLockSplitStatus::NO_SPLIT;
+    } else if (split_epoch.is_max()) {
+      split_status = ObTableLockSplitStatus::SPLITTED;
+    } else if (split_epoch.is_min()) {
+      split_status = ObTableLockSplitStatus::WAIT_FOR_CALLBACK;
+    } else {
+      split_status = ObTableLockSplitStatus::SPLITTING_IN;
+    }
+  }
+  return ret;
+}
+
+
+int ObLockMemtable::add_split_epoch(const share::SCN &split_epoch,
+                                    const ObSArray<common::ObTabletID> &tablet_ids,
+                                    const bool for_replay)
+{
+  int ret = OB_SUCCESS;
+  ObSArray<ObLockID> lock_ids;
+  if (OB_FAIL(get_lock_id(tablet_ids, lock_ids))) {
+    LOG_WARN("get_lock_id for dst_tablet_ids failed", K(ret), K(tablet_ids));
+  } else if (OB_FAIL(obj_lock_map_.add_split_epoch(lock_ids, split_epoch, for_replay))) {
+    LOG_WARN("add_split_epoch for dst_lock_ids failed", K(ret), K(tablet_ids), K(lock_ids), K(split_epoch));
+  }
+  return ret;
+}
+
+int ObLockMemtable::add_split_epoch(const share::SCN &split_epoch,
+                                    const common::ObTabletID &tablet_id,
+                                    const bool for_replay)
+{
+  int ret = OB_SUCCESS;
+  ObLockID lock_id;
+  if (OB_FAIL(get_lock_id(tablet_id, lock_id))) {
+    LOG_WARN("get_lock_id for dst_tablet_ids failed", K(ret), K(tablet_id));
+  } else if (OB_FAIL(obj_lock_map_.add_split_epoch(lock_id, split_epoch, for_replay))) {
+    LOG_WARN("add_split_epoch for dst_lock_ids failed", K(ret), K(tablet_id), K(lock_id), K(split_epoch));
+  }
+  return ret;
+}
+
+int ObLockMemtable::get_split_status(const ObTabletID src_tablet_id,
+                                     const ObSArray<ObTabletID> dst_tablet_ids,
+                                     ObTableLockSplitStatus &src_split_status,
+                                     ObTableLockSplitStatus &dst_split_status)
+{
+  int ret = OB_SUCCESS;
+  bool all_set_epoch = true;
+  ObLockID src_lock_id;
+  share::SCN split_epoch = share::SCN::invalid_scn();
+  src_split_status = ObTableLockSplitStatus::INVALID_STATE;
+  dst_split_status = ObTableLockSplitStatus::INVALID_STATE;
+  // check for src_tablet
+  if (OB_FAIL(check_valid_for_table_lock_split_(src_tablet_id, dst_tablet_ids))) {
+    LOG_WARN("the parameters for table lock split is invlaid", K(ret), K(src_tablet_id), K(dst_tablet_ids));
+  } else {
+    if (OB_FAIL(get_split_status_(src_tablet_id, src_split_status))) {
+      LOG_WARN("get_split_status for src_tablet failed", K(ret), K(src_tablet_id));
+    }
+
+    ObTableLockSplitStatus tmp_split_status = ObTableLockSplitStatus::INVALID_STATE;
+    for (int64_t i = 0; OB_SUCC(ret) && i < dst_tablet_ids.count(); i++) {
+      if (OB_FAIL(get_split_status_(dst_tablet_ids[i], tmp_split_status))) {
+        LOG_WARN("get_split_status for dst_tablet failed", K(ret), K(dst_tablet_ids[i]));
+      } else {
+        if (ObTableLockSplitStatus::INVALID_STATE == tmp_split_status
+            || ObTableLockSplitStatus::SPLITTED == tmp_split_status
+            || ObTableLockSplitStatus::SPLITTING_OUT == tmp_split_status) {
+          LOG_WARN("meet illeagle state for dst_tablet", K(dst_tablet_ids[i]), K(tmp_split_status));
+          break;
+        } else if (ObTableLockSplitStatus::WAIT_FOR_CALLBACK == tmp_split_status) {
+          break;
+        }
+        // if the split status of dst_tablet is splitting_out, keep check other dst_tablets.
+      }
+    }
+    dst_split_status = tmp_split_status;
+  }
+  return ret;
+}
+
+int ObLockMemtable::check_lock_conflict(const ObMemtableCtx *mem_ctx,
+                                        const ObTableLockOp &lock_op,
+                                        ObTxIDSet &conflict_tx_set,
+                                        const int64_t expired_time,
+                                        const bool include_finish_tx,
+                                        const bool only_check_dml_lock)
 {
   int ret = OB_SUCCESS;
   bool lock_exist = false;
@@ -564,6 +878,10 @@ int ObLockMemtable::lock(
              || OB_UNLIKELY(!lock_op.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(lock_op), K(ctx));
+  // } else if (OB_FAIL(check_table_lock_split_(lock_op,
+  //                                            ctx))) {
+  //   LOG_WARN("can not lock because table lock spliting",
+  //            K(ret), K(param), K(lock_op), K(ctx));
   } else if (OB_FAIL(lock_(param, ctx, lock_op))) {
     if (ret != OB_TRY_LOCK_ROW_CONFLICT) {
       LOG_WARN("lock failed.", K(ret), K(param), K(lock_op));
@@ -598,6 +916,35 @@ int ObLockMemtable::unlock(
   }
   LOG_DEBUG("ObLockMemtable::unlock finish.", K(ret), K(is_try_lock),
             K(expired_time), K(unlock_op));
+  return ret;
+}
+
+int ObLockMemtable::replace(storage::ObStoreCtx &ctx,
+                            const ObReplaceLockParam &param,
+                            const ObTableLockOp &unlock_op,
+                            ObTableLockOp &new_lock_op)
+{
+  int ret = OB_SUCCESS;
+  LOG_DEBUG("ObLockMemtable::replace ", K(param), K(new_lock_op), K(unlock_op));
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObLockMemtable not inited.", K(ret));
+  } else if (OB_UNLIKELY(!ctx.is_valid())
+             || OB_UNLIKELY(!ctx.is_write())
+             || OB_UNLIKELY(!new_lock_op.is_valid())
+             || OB_UNLIKELY(!unlock_op.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(new_lock_op), K(unlock_op), K(ctx));
+  } else if (OB_FAIL(unlock_(ctx, unlock_op, param.is_try_lock_, param.expired_time_))) {
+    if (ret != OB_TRY_LOCK_ROW_CONFLICT) {
+      LOG_WARN("unlock failed.", K(ret), K(param), K(new_lock_op), K(unlock_op));
+    }
+  } else if (OB_FAIL(lock_(param, ctx, new_lock_op))) {
+    if (ret != OB_TRY_LOCK_ROW_CONFLICT) {
+      LOG_WARN("lock failed.", K(ret), K(param), K(new_lock_op), K(unlock_op));
+    }
+  }
+  LOG_DEBUG("ObLockMemtable::replace finish.", K(ret), K(param), K(new_lock_op), K(unlock_op));
   return ret;
 }
 
@@ -659,16 +1006,7 @@ int ObLockMemtable::update_lock_status(
     LOG_WARN("update lock status failed.", K(op_info), K(status));
   } else if ((OUT_TRANS_LOCK == op_info.op_type_ || OUT_TRANS_UNLOCK == op_info.op_type_)
              && LOCK_OP_COMPLETE == status) {
-    RLockGuard guard(flush_lock_);
-    if (commit_scn <= freeze_scn_) {
-      LOG_INFO("meet disordered replay, will dec_update pre_rec_scn_", K(ret),
-               K(op_info), K(commit_scn), K(rec_scn_), K(pre_rec_scn_),
-               K(freeze_scn_), K(ls_id_));
-      pre_rec_scn_.dec_update(commit_scn);
-    } else {
-      rec_scn_.dec_update(commit_scn);
-    }
-    max_committed_scn_.inc_update(commit_scn);
+    update_rec_and_max_committed_scn(commit_scn);
     LOG_INFO("out_trans update_lock_status", K(ret), K(op_info), K(commit_scn), K(status), K(rec_scn_), K(ls_id_));
   }
   LOG_DEBUG("ObLockMemtable::update_lock_status", K(ret), K(op_info), K(commit_scn), K(status));
@@ -687,7 +1025,7 @@ int ObLockMemtable::recover_obj_lock(const ObTableLockOp &op_info)
   } else if (OB_FAIL(obj_lock_map_.recover_obj_lock(op_info))) {
     LOG_WARN("recover_obj_lock failed", K(ret), K(op_info));
   }
-  LOG_DEBUG("LockMemtable::recover_obj_lock success", K(op_info), K(ret));
+  LOG_DEBUG("LockMemtable::recover_obj_lock success", K(op_info), K(ret), K(this), K(*this));
   return ret;
 }
 
@@ -977,6 +1315,64 @@ int ObLockMemtable::flush(SCN recycle_scn,
   return ret;
 }
 
+int ObLockMemtable::replay_split_log(const void *buffer,
+                                     const int64_t nbytes,
+                                     const palf::LSN &lsn,
+                                     const SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  if (scn <= flushed_scn_) {
+    LOG_INFO("no need replay", K(ret), K(scn), K(flushed_scn_));
+  } else {
+    int64_t pos = 0;
+    ObLockTableSplitLog split_log;
+    logservice::ObLogBaseHeader base_header;
+    const char *log_buf = static_cast<const char *>(buffer);
+    ObTabletID src_tablet_id;
+    ObSArray<ObTabletID> dst_tablet_ids;
+
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("ObLockMemtable not inited", K(ret));
+    } else if (OB_ISNULL(log_buf)
+        || OB_UNLIKELY(nbytes <= 0)
+        || OB_UNLIKELY(!lsn.is_valid())
+        || OB_UNLIKELY(!scn.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid arguments", K(buffer), K(nbytes), K(pos),
+               K(lsn), K(scn), K(ret));
+    } else if (OB_FAIL(base_header.deserialize(log_buf, nbytes, pos))) {
+      LOG_WARN("log base header deserialize error",
+              K(ret), KP(buffer), K(nbytes), K(lsn), K(scn));
+    } else if (OB_FAIL(split_log.deserialize((char *)buffer, nbytes, pos))) {
+      LOG_WARN("split_log deserialize error", K(ret));
+    } else {
+      src_tablet_id = split_log.get_src_tablet_id();
+      dst_tablet_ids = split_log.get_dst_tablet_ids();
+      if (OB_FAIL(check_valid_for_table_lock_split_(src_tablet_id, dst_tablet_ids))) {
+        LOG_WARN("the parameters for table lock split is invlaid", K(ret), K(src_tablet_id), K(dst_tablet_ids));
+      } else if (OB_FAIL(add_split_epoch(share::SCN::max_scn(), src_tablet_id, true))) {
+        LOG_WARN("add_split_epoch_ to src_tablet failed",
+                K(ret), K(src_tablet_id));
+      } else if(OB_FAIL(add_split_epoch(scn, split_log.get_dst_tablet_ids(), true))) {
+        LOG_WARN("add_split_epoch_ to dst_tablets failed",
+                K(ret), K(dst_tablet_ids));
+      } else {
+        LOG_INFO("replay add_split_epoch_to_dst_tablet successfully",
+                K(scn),
+                K(dst_tablet_ids));
+        update_rec_and_max_committed_scn(scn);
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      ret = OB_EAGAIN;
+    }
+  }
+
+  return ret;
+}
+
 int ObLockMemtable::replay_row(
     storage::ObStoreCtx &ctx,
     const share::SCN &scn,
@@ -1046,10 +1442,32 @@ int ObLockMemtable::replay_lock(
     LOG_WARN("invalid argument", K(ret), K(mem_ctx), K(lock_op));
   } else if (OB_FAIL(replay_lock_(mem_ctx, lock_op, scn))) {
     LOG_WARN("replay lock failed", K(ret), K(lock_op));
-  } else {
-    // do nothing
   }
-  LOG_DEBUG("ObMemtable::replay_lock finish.", K(ret), K(lock_op), K(ls_id_));
+  LOG_DEBUG("ObMemtable::replay_lock finish.", K(ret), K(lock_op), K(ls_id_), K(scn));
+  return ret;
+}
+
+int ObLockMemtable::table_lock_split(const ObTabletID &src_tablet_id,
+                                     const ObSArray<common::ObTabletID> &dst_tablet_ids,
+                                     const transaction::ObTransID &trans_id)
+{
+  int ret = OB_SUCCESS;
+  ObLockTableSplitLogCb split_cb;
+  LOG_INFO("start split", K(src_tablet_id), K(dst_tablet_ids));
+
+  if (OB_FAIL(check_valid_for_table_lock_split_(src_tablet_id, dst_tablet_ids))) {
+    LOG_WARN(
+      "the parameters for table lock split is invlaid", K(ret), K(split_cb), K(src_tablet_id), K(dst_tablet_ids));
+  } else if (OB_FAIL(split_cb.init(this, ls_id_))) {
+    LOG_WARN("init ObLockTableSplitLogCb failed", K(ret), K(ls_id_));
+  } else if (OB_FAIL(obj_lock_map_.table_lock_split(src_tablet_id, dst_tablet_ids, trans_id, split_cb))) {
+    LOG_WARN("table lock split failed", K(ret), K(src_tablet_id), K(dst_tablet_ids), K(trans_id), K(split_cb));
+  }
+
+  if (!split_cb.cb_success()) {
+    ret = OB_TABLE_LOCK_SPLIT_FAIL;
+    LOG_WARN("table lock split failed!", K(ret), K(split_cb));
+  }
   return ret;
 }
 

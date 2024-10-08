@@ -168,10 +168,10 @@ int64_t ObRSCompactionTimeGuard::to_string(char *buf, const int64_t buf_len) con
  */
 const char *ObCompactionScheduleTimeGuard::CompactionEventStr[] = {
     "GET_TABLET",
-    "UPDATE_TABLET_REPORT_STATUS",
+    "INIT_TABLET_STATUS",
     "READ_MEDIUM_INFO",
     "SCHEDULE_NEXT_MEDIUM",
-    "SCHEDULE_TABLET_MEDIUM",
+    "SCHEDULE_TABLET_EXECUTE",
     "FAST_FREEZE",
     "SEARCH_META_TABLE",
     "CHECK_META_TABLE",

@@ -17,7 +17,7 @@ SUSPECT_INFO_TYPE_DEF(SUSPECT_MEMTABLE_CANT_MINOR_MERGE, ObDiagnoseInfoPrio::DIA
 SUSPECT_INFO_TYPE_DEF(SUSPECT_CANT_SCHEDULE_MINOR_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_MID, false, "can't schedule minor merge",
     3, {"min_snapshot_version", "max_snapshot_version", "mini_sstable_cnt"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_CANT_MAJOR_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_MID, false, "need major merge but can't merge now",
-    6, {"compaction_scn", "tablet_snapshot_version", "is_tablet_data_status_complete", "ls_weak_read_ts_ready", "need_force_freeze", "max_serialized_medium_scn"})
+    5, {"compaction_scn", "tablet_snapshot_version", "ls_weak_read_ts_ready", "need_force_freeze", "max_serialized_medium_scn"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_SCHEDULE_MEDIUM_FAILED, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_MID, false, "schedule medium failed",
     3, {"compaction_scn", "store_column_cnt", "error_code"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_SSTABLE_COUNT_NOT_SAFE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH, true, "sstable count is not safe",
@@ -42,11 +42,11 @@ SUSPECT_INFO_TYPE_DEF(SUSPECT_COMPACTION_REPORT_ADD_FAILED, ObDiagnoseInfoPrio::
     1, {"errno"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_COMPACTION_REPORT_PROGRESS_FAILED, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH, false, "compaction report task process failed",
     1, {"errno"})
+SUSPECT_INFO_TYPE_DEF(SUSPECT_LS_CANT_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "ls can't schedule merge",
+    1, {"weak_read_ts"})
 #ifdef OB_BUILD_SHARED_STORAGE
 SUSPECT_INFO_TYPE_DEF(SUSPECT_SS_START_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "failed to start ss merge",
     2, {"broadcast_version", "error_code"})
-SUSPECT_INFO_TYPE_DEF(SUSPECT_LS_CANT_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "ls can't schedule merge",
-    2, {"ls_weak_read_ts_ready", "ls_state_is_abnormal"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_LS_MERGE_HUNG, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_MID, false, "ls merge maybe hung",
     2, {"compaction_scn", "ls_state"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_LS_SCHEDULE_DAG, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH, false, "ls failed to schedule verify ckm dag",
@@ -56,6 +56,8 @@ SUSPECT_INFO_TYPE_DEF(SUSPECT_TABLET_CANT_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PR
 SUSPECT_INFO_TYPE_DEF(SUSPECT_UPDATE_TALBET_STATE_FAILED, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH, false, "update tablet state failed",
     3, {"compaction_scn", "is_verified", "is_merged"})
 #endif
+SUSPECT_INFO_TYPE_DEF(SUSPECT_MV_IN_CREATION, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false,
+                      "materialized view creation has not finished", 2, {"schedule_scn", "is_row_store"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_INFO_TYPE_MAX, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "", 0, {})
 #endif
 

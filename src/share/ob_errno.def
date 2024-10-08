@@ -1957,6 +1957,7 @@ DEFINE_ERROR(OB_SEQUENCE_NOT_MATCH, -7121, -1, "HY000", "compare sequence not ma
 DEFINE_ERROR(OB_SEQUENCE_TOO_SMALL, -7122, -1, "HY000", "compare sequence too small");
 DEFINE_ERROR(OB_TRANSFER_CANNOT_START, -7123, -1, "HY000", "transfer cannot start");
 DEFINE_ERROR_EXT_DEP(OB_PARTITION_ALREADY_BALANCED, -7124, -1, "HY000", "partitions are already balanced", "partitions are already balanced, %s");
+DEFINE_ERROR(NEW_MV_MAJOR_VERSION_NOT_MATCH, -7125, -1, "HY000", "new mv major version is not match");
 
 // 余留位置
 ////////////////////////////////////////////////////////////////
@@ -2325,8 +2326,7 @@ DEFINE_ERROR_EXT_DEP(OB_RESTORE_SOURCE_NOT_ENOUGH, -9119, -1, "HY000", "do not h
 DEFINE_ERROR_DEP(OB_OBJECT_NOT_EXIST, -9120, -1, "HY000", "cannot find object on object storage");
 DEFINE_ERROR_DEP(OB_S2_REUSE_VERSION_MISMATCH, -9121, -1, "HY000", "reuse_version of mem_block or phy_block is not mismatched with micro_meta in s2 micro_cache");
 DEFINE_ERROR_DEP(OB_S2_ENTRY_NOT_EXIST, -9122, -1, "HY000", "entry not exist in s2 micro_cache");
-DEFINE_ERROR(OB_TABLET_IS_SPLIT_SRC, -9123, -1, "HY000", "cannot access split src tablet");
-
+DEFINE_ERROR(OB_TABLET_IS_SPLIT_SRC, -9123, -1, "HY000", "cannot write to split src tablet");
 DEFINE_ERROR_DEP(OB_ALLOCATE_TMP_FILE_PAGE_FAILED, -9124, -1, "HY000", "fail to allocate a tmp file page");
 DEFINE_ERROR_DEP(OB_SS_MICRO_CACHE_DISABLED, -9125, -1, "HY000", "ss_micro_cache is disabled");
 DEFINE_ERROR_DEP(OB_SS_CACHE_REACH_MEM_LIMIT, -9126, -1, "HY000", "ss_micro_cache has reached memory limit");

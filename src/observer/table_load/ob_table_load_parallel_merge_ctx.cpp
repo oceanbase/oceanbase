@@ -14,6 +14,7 @@
 
 #include "observer/table_load/ob_table_load_parallel_merge_ctx.h"
 #include "observer/table_load/ob_table_load_error_row_handler.h"
+#include "observer/table_load/ob_table_load_data_row_handler.h"
 #include "observer/table_load/ob_table_load_service.h"
 #include "observer/table_load/ob_table_load_stat.h"
 #include "observer/table_load/ob_table_load_store_ctx.h"
@@ -25,6 +26,7 @@
 #include "storage/direct_load/ob_direct_load_multiple_sstable_scan_merge.h"
 #include "storage/direct_load/ob_direct_load_multiple_sstable_scanner.h"
 #include "storage/direct_load/ob_direct_load_range_splitter.h"
+#include "observer/table_load/ob_table_load_store_table_ctx.h"
 
 namespace oceanbase
 {
@@ -372,7 +374,7 @@ public:
     ObDirectLoadMultipleSSTableScanMergeParam scan_merge_param;
     scan_merge_param.table_data_desc_ = parallel_merge_ctx_->table_data_desc_;
     scan_merge_param.datum_utils_ = &(ctx_->schema_.datum_utils_);
-    scan_merge_param.dml_row_handler_ = parallel_merge_ctx_->store_ctx_->error_row_handler_;
+    scan_merge_param.dml_row_handler_ = parallel_merge_ctx_->store_table_ctx_->row_handler_;
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ctx_->merge_sstable_count_; ++i) {
       ObDirectLoadMultipleSSTable *sstable = tablet_ctx_->sstables_.at(i);
       if (OB_FAIL(sstable_array_.push_back(sstable))) {
@@ -396,6 +398,7 @@ public:
       LOG_WARN("fail to alloc memory", KR(ret));
     } else {
       ObDirectLoadMultipleSSTableBuildParam build_param;
+      build_param.tablet_id_ = tablet_ctx_->tablet_id_;
       build_param.table_data_desc_ = parallel_merge_ctx_->table_data_desc_;
       build_param.datum_utils_ = &(ctx_->schema_.datum_utils_);
       build_param.file_mgr_ = parallel_merge_ctx_->store_ctx_->tmp_file_mgr_;
@@ -454,6 +457,7 @@ public:
   {
     int ret = OB_SUCCESS;
     ObDirectLoadMultipleSSTableCompactParam compact_param;
+    compact_param.tablet_id_ = tablet_ctx_->tablet_id_;
     compact_param.table_data_desc_ = parallel_merge_ctx_->table_data_desc_;
     compact_param.datum_utils_ = &ctx_->schema_.datum_utils_;
     if (OB_FAIL(compactor_.init(compact_param))) {
@@ -537,6 +541,7 @@ private:
 
 ObTableLoadParallelMergeCtx::ObTableLoadParallelMergeCtx()
   : store_ctx_(nullptr),
+    store_table_ctx_(nullptr),
     thread_count_(0),
     cb_(nullptr),
     allocator_("TLD_ParalMerge"),
@@ -570,21 +575,22 @@ ObTableLoadParallelMergeCtx::~ObTableLoadParallelMergeCtx()
   heavy_task_list_.reset();
 }
 
-int ObTableLoadParallelMergeCtx::init(ObTableLoadStoreCtx *store_ctx,
+int ObTableLoadParallelMergeCtx::init(ObTableLoadStoreCtx *store_ctx, ObTableLoadStoreTableCtx *store_table_ctx,
                                       const ObDirectLoadTableDataDesc &table_data_desc)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableLoadParallelMergeCtx init twice", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(nullptr == store_ctx || !table_data_desc.is_valid())) {
+  } else if (OB_UNLIKELY(nullptr == store_ctx || nullptr == store_table_ctx || !table_data_desc.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), KP(store_ctx), K(table_data_desc));
+    LOG_WARN("invalid args", KR(ret), KP(store_ctx), KP(store_table_ctx), K(table_data_desc));
   } else {
     if (OB_FAIL(tablet_ctx_map_.create(1024, "TLD_CptCtxMap", "TLD_CptCtxMap", MTL_ID()))) {
       LOG_WARN("fail to create ctx map", KR(ret));
     } else {
       store_ctx_ = store_ctx;
+      store_table_ctx_ = store_table_ctx;
       table_data_desc_ = table_data_desc;
       thread_count_ = store_ctx_->task_scheduler_->get_thread_count();
       is_inited_ = true;

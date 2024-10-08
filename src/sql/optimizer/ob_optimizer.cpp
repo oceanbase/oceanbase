@@ -565,6 +565,8 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
   bool has_cursor_expr = false;
   int64_t link_stmt_count = 0;
   bool push_join_pred_into_view_enabled = true;
+  bool partition_wise_plan_enabled = true;
+  bool exists_partition_wise_plan_enabled_hint = false;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session.get_effective_tenant_id()));
   bool rowsets_enabled = tenant_config.is_valid() && tenant_config->_rowsets_enabled;
   ctx_.set_is_online_ddl(session.get_ddl_info().is_ddl());  // set is online ddl first, is used by other extract operations
@@ -627,6 +629,10 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     LOG_WARN("failed to get opt param enable spf batch rescan", K(ret));
   } else if (OB_FAIL(ctx_.get_global_hint().opt_params_.get_bool_opt_param(ObOptParamHint::_PUSH_JOIN_PREDICATE, push_join_pred_into_view_enabled))) {
     LOG_WARN("fail to check rowsets enabled", K(ret));
+  } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::PARTITION_WISE_PLAN_ENABLED,
+                                                   partition_wise_plan_enabled,
+                                                   exists_partition_wise_plan_enabled_hint))) {
+    LOG_WARN("failed to check partition wise plan enabled", K(ret));
   } else {
     ctx_.set_storage_estimation_enabled(storage_estimation_enabled);
     ctx_.set_serial_set_order(force_serial_set_order);
@@ -655,6 +661,12 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
       ctx_.set_hash_join_enabled(hash_join_enabled);
       ctx_.set_merge_join_enabled(optimizer_sortmerge_join_enabled);
       ctx_.set_nested_join_enabled(nested_loop_join_enabled);
+    }
+    if (tenant_config.is_valid()) {
+      ctx_.set_partition_wise_plan_enabled(tenant_config->_partition_wise_plan_enabled);
+    }
+    if (exists_partition_wise_plan_enabled_hint) {
+      ctx_.set_partition_wise_plan_enabled(partition_wise_plan_enabled);
     }
     if (!session.is_inner() && stmt.get_query_ctx()->get_injected_random_status()) {
       ctx_.set_generate_random_plan(true);

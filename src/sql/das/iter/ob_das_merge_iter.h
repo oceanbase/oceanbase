@@ -27,7 +27,18 @@ struct ObDASMergeIterParam : public ObDASIterParam
 {
 public:
   ObDASMergeIterParam()
-    : ObDASIterParam(ObDASIterType::DAS_ITER_MERGE)
+    : ObDASIterParam(ObDASIterType::DAS_ITER_MERGE),
+      eval_infos_(nullptr),
+      need_update_partition_id_(false),
+      pdml_partition_id_(nullptr),
+      partition_id_calc_type_(0),
+      should_scan_index_(false),
+      ref_table_id_(),
+      is_vectorized_(false),
+      frame_info_(nullptr),
+      execute_das_directly_(false),
+      enable_rich_format_(false),
+      used_for_keep_order_(false)
   {}
   ObFixedArray<ObEvalInfo*, ObIAllocator> *eval_infos_;
   bool need_update_partition_id_;

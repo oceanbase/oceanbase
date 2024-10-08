@@ -1200,7 +1200,7 @@ int ObIOSender::enqueue_request(ObIORequest &req)
                 //phy_queue from idle to active
                 int tmp_ret = OB_SUCCESS;
                 tmp_ret = io_clock->try_sync_tenant_clock(io_clock);
-                if (OB_FAIL(io_clock->calc_phyqueue_clock(tmp_phy_queue, req))) {
+                if (OB_TMP_FAIL(io_clock->calc_phyqueue_clock(tmp_phy_queue, req))) {
                   LOG_WARN("calc phyqueue clock failed", K(ret), K(tmp_phy_queue->queue_index_));
                 } else if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
                   LOG_WARN("sync tenant clock failed", K(tmp_ret));
@@ -1462,7 +1462,10 @@ int ObIOSender::inc_queue_count(const ObIORequest &req) {
 int ObIOSender::dec_queue_count(const ObIORequest &req) {
   int ret = OB_SUCCESS;
   ATOMIC_DEC(&sender_req_count_);
-  if (req.fd_.device_handle_->is_object_device()) {
+  if (OB_ISNULL(req.fd_.device_handle_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("req is cleared", K(ret), K(req), K(req.fd_));
+  } else if (req.fd_.device_handle_->is_object_device()) {
     if (req.get_mode() == ObIOMode::READ) {
       ATOMIC_DEC(&sender_req_remote_r_count_);
     } else if (req.get_mode() == ObIOMode::WRITE) {
@@ -2527,10 +2530,8 @@ int ObSyncIOChannel::do_sync_io(ObIORequest &req)
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported io mode", K(ret), K(req));
   }
-  if (OB_NOT_NULL(req.io_result_)) {
-    req.io_result_->time_log_.return_ts_ = ObTimeUtility::fast_current_time();
-  }
   if (OB_SUCC(ret)) {
+    req.io_result_->time_log_.return_ts_ = ObTimeUtility::fast_current_time();
     req.io_result_->complete_size_ = io_size;
     if (req.can_callback()) {
       if (OB_FAIL(req.tenant_io_mgr_.get_ptr()->enqueue_callback(req))) {

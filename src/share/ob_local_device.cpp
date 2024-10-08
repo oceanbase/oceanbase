@@ -1369,7 +1369,7 @@ int ObLocalDevice::resize_block_file(const int64_t new_size)
   } else if (0 == delta_size) {
     SHARE_LOG(INFO, "The file size is not changed, ", K(new_size), K(block_file_size_));
   } else if (0 != (sys_ret = ::fallocate(block_fd_, 0, block_file_size_, delta_size))) {
-    ret = ObIODeviceLocalFileOp::convert_sys_errno();;
+    ret = ObIODeviceLocalFileOp::convert_sys_errno();
     SHARE_LOG(WARN, "fail to expand file size", K(ret), K(sys_ret), K(block_file_size_),
         K(delta_size), K(errno), KERRMSG);
   } else if (OB_ISNULL(new_free_block_array

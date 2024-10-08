@@ -1048,7 +1048,6 @@ public:
   inline void set_execution_id(int64_t execution_id) { execution_id_ = execution_id; }
   inline int64_t get_execution_id() const { return execution_id_; }
   inline void set_result(int rc) { rc_ = rc; }
-  inline bool has_result() const { return rc_ <= 0; }
   inline int get_result() const { return rc_; }
   void set_das_retry_rc(int das_retry_rc)
   { das_retry_rc_ = (das_retry_rc_ == common::OB_SUCCESS ? das_retry_rc : das_retry_rc_); }

@@ -91,10 +91,11 @@ public:
 
   RPC_AP(PR5 minor_freeze, OB_MINOR_FREEZE, (ObMinorFreezeArg), obrpc::Int64);
   RPC_AP(PR5 check_schema_version_elapsed, OB_CHECK_SCHEMA_VERSION_ELAPSED, (ObCheckSchemaVersionElapsedArg), ObCheckSchemaVersionElapsedResult);
+  RPC_AP(PR5 check_memtable_cnt, OB_CHECK_MEMTABLE_CNT, (ObCheckMemtableCntArg), ObCheckMemtableCntResult);
+  RPC_AP(PR5 check_medium_compaction_info_list_cnt, OB_CHECK_MEDIUM_INFO_LIST_CNT, (ObCheckMediumCompactionInfoListArg), ObCheckMediumCompactionInfoListResult);
   RPC_AP(PR5 check_modify_time_elapsed, OB_CHECK_MODIFY_TIME_ELAPSED, (ObCheckModifyTimeElapsedArg), ObCheckModifyTimeElapsedResult);
 
   RPC_AP(PR5 check_ddl_tablet_merge_status, OB_DDL_CHECK_TABLET_MERGE_STATUS, (ObDDLCheckTabletMergeStatusArg), ObDDLCheckTabletMergeStatusResult);
-
   RPC_S(PR5 switch_leader, OB_SWITCH_LEADER, (ObSwitchLeaderArg));
   RPC_S(PR5 batch_switch_rs_leader, OB_BATCH_SWITCH_RS_LEADER, (ObAddr));
   RPC_S(PR5 get_partition_count, OB_GET_PARTITION_COUNT,
@@ -146,7 +147,12 @@ public:
   RPC_S(PR5 force_set_server_list, OB_FORCE_SET_SERVER_LIST, (ObForceSetServerListArg));
   RPC_S(PR5 calc_column_checksum_request, OB_CALC_COLUMN_CHECKSUM_REQUEST, (ObCalcColumnChecksumRequestArg), obrpc::ObCalcColumnChecksumRequestRes);
   RPC_AP(PR5 build_ddl_single_replica_request, OB_DDL_BUILD_SINGLE_REPLICA_REQUEST, (obrpc::ObDDLBuildSingleReplicaRequestArg), obrpc::ObDDLBuildSingleReplicaRequestResult);
+  RPC_S(PR5 build_split_tablet_data_start_request, OB_SPLIT_TABLET_DATA_START_REQUEST, (obrpc::ObTabletSplitStartArg), obrpc::ObTabletSplitStartResult);
+  RPC_S(PR5 build_split_tablet_data_finish_request, OB_SPLIT_TABLET_DATA_FINISH_REQUEST, (obrpc::ObTabletSplitFinishArg), obrpc::ObTabletSplitFinishResult);
+  RPC_S(PR5 freeze_split_src_tablet, OB_FREEZE_SPLIT_SRC_TABLET, (obrpc::ObFreezeSplitSrcTabletArg), obrpc::ObFreezeSplitSrcTabletRes);
+  RPC_S(PR5 prepare_tablet_split_task_ranges, OB_PREPARE_TABLET_SPLIT_TASK_RANGES, (obrpc::ObPrepareSplitRangesArg), obrpc::ObPrepareSplitRangesRes);
   RPC_S(PR5 check_and_cancel_ddl_complement_dag, OB_CHECK_AND_CANCEL_DDL_COMPLEMENT_DAG, (ObDDLBuildSingleReplicaRequestArg), Bool);
+  RPC_S(PR5 fetch_split_tablet_info, OB_FETCH_SPLIT_TABLET_INFO, (obrpc::ObFetchSplitTabletInfoArg), obrpc::ObFetchSplitTabletInfoRes);
   RPC_S(PR5 check_and_cancel_delete_lob_meta_row_dag, OB_CHECK_AND_CANCEL_DELETE_LOB_META_ROW_DAG, (ObDDLBuildSingleReplicaRequestArg), Bool);
   RPC_S(PR5 fetch_tablet_autoinc_seq_cache, OB_FETCH_TABLET_AUTOINC_SEQ_CACHE, (obrpc::ObFetchTabletSeqArg), obrpc::ObFetchTabletSeqRes);
   RPC_AP(PR5 batch_get_tablet_autoinc_seq, OB_BATCH_GET_TABLET_AUTOINC_SEQ, (obrpc::ObBatchGetTabletAutoincSeqArg), obrpc::ObBatchGetTabletAutoincSeqRes);
@@ -154,6 +160,7 @@ public:
   RPC_S(PR5 set_tablet_autoinc_seq, OB_SET_TABLET_AUTOINC_SEQ, (obrpc::ObBatchSetTabletAutoincSeqArg), obrpc::ObBatchSetTabletAutoincSeqRes);
   RPC_AP(PR5 clear_tablet_autoinc_seq_cache, OB_CLEAR_TABLET_AUTOINC_SEQ_CACHE, (obrpc::ObClearTabletAutoincSeqCacheArg), obrpc::Int64);
   RPC_S(PR5 batch_get_tablet_binding, OB_BATCH_GET_TABLET_BINDING, (obrpc::ObBatchGetTabletBindingArg), obrpc::ObBatchGetTabletBindingRes);
+  RPC_S(PR5 batch_get_tablet_split, OB_BATCH_GET_TABLET_SPLIT, (obrpc::ObBatchGetTabletSplitArg), obrpc::ObBatchGetTabletSplitRes);
   RPC_S(PRD force_create_sys_table, OB_FORCE_CREATE_SYS_TABLE, (ObForceCreateSysTableArg));
   RPC_S(PRD schema_revise, OB_SCHEMA_REVISE, (ObSchemaReviseArg));
   RPC_S(PRD force_set_locality, OB_FORCE_SET_LOCALITY, (ObForceSetLocalityArg));
@@ -207,9 +214,11 @@ public:
          transaction::tablelock::ObTableLockTaskResult);
   RPC_AP(PR4 unlock_table, OB_HIGH_PRIORITY_TABLE_LOCK_TASK, (transaction::tablelock::ObTableLockTaskRequest),
          transaction::tablelock::ObTableLockTaskResult);
-  RPC_AP(PR5 batch_lock_obj, OB_BATCH_TABLE_LOCK_TASK, (transaction::tablelock::ObLockTaskBatchRequest),
+  RPC_AP(PR5 batch_lock_obj, OB_BATCH_TABLE_LOCK_TASK, (transaction::tablelock::ObLockTaskBatchRequest<transaction::tablelock::ObLockParam>),
          transaction::tablelock::ObTableLockTaskResult);
-  RPC_AP(PR4 batch_unlock_obj, OB_HIGH_PRIORITY_BATCH_TABLE_LOCK_TASK, (transaction::tablelock::ObLockTaskBatchRequest),
+  RPC_AP(PR4 batch_unlock_obj, OB_HIGH_PRIORITY_BATCH_TABLE_LOCK_TASK, (transaction::tablelock::ObLockTaskBatchRequest<transaction::tablelock::ObLockParam>),
+         transaction::tablelock::ObTableLockTaskResult);
+  RPC_AP(PR5 batch_replace_lock_obj, OB_BATCH_REPLACE_TABLE_LOCK_TASK, (transaction::tablelock::ObLockTaskBatchRequest<transaction::tablelock::ObReplaceLockParam>),
          transaction::tablelock::ObTableLockTaskResult);
   RPC_S(PR4 admin_remove_lock_op, OB_REMOVE_OBJ_LOCK, (transaction::tablelock::ObAdminRemoveLockOpArg));
   RPC_S(PR4 admin_update_lock_op, OB_UPDATE_OBJ_LOCK, (transaction::tablelock::ObAdminUpdateLockOpArg));
@@ -286,6 +295,8 @@ public:
   RPC_S(PR5 phy_res_calculate_by_unit, OB_CAL_UNIT_PHY_RESOURCE, (obrpc::Int64), share::ObMinPhyResourceResult);
   RPC_S(PR5 rpc_reverse_keepalive, OB_RPC_REVERSE_KEEPALIVE, (obrpc::ObRpcReverseKeepaliveArg), obrpc::ObRpcReverseKeepaliveResp);
   RPC_AP(PR5 kill_query_client_session, OB_KILL_QUERY_CLIENT_SESSION, (ObKillQueryClientSessionArg), obrpc::Int64);
+  RPC_AP(PR5 collect_mv_merge_info, OB_COLLECT_MV_MERGE_INFO, (obrpc::ObCollectMvMergeInfoArg), obrpc::ObCollectMvMergeInfoResult);
+  RPC_S(PR5 fetch_stable_member_list, OB_FETCH_STABLE_MEMBER_LIST, (obrpc::ObFetchStableMemberListArg), obrpc::ObFetchStableMemberListInfo);
   RPC_S(PR5 notify_shared_storage_info, OB_NOTIFY_SHARED_STORAGE_INFO, (obrpc::ObNotifySharedStorageInfoArg), obrpc::ObNotifySharedStorageInfoResult);
 }; // end of class ObSrvRpcProxy
 

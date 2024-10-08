@@ -17,7 +17,7 @@
 #include "share/ob_cluster_version.h"
 #include "share/rc/ob_tenant_base.h"
 #include "lib/json_type/ob_json_base.h"
-
+#include "common/ob_smart_call.h"
 namespace oceanbase
 {
 using namespace common;
@@ -42,7 +42,7 @@ int ObJsonWrapper::get_raw_binary(ObIJsonBase *j_base, ObString &result, ObIAllo
     if (OB_FAIL(j_base->get_raw_binary_v0(result, allocator))) {
       LOG_WARN("get raw binary fail", K(ret), K(tenant_data_version), K(tenant_id));
     }
-  } else if (OB_FAIL(j_base->get_raw_binary(result, allocator))) {
+  } else if (OB_FAIL(SMART_CALL(j_base->get_raw_binary(result, allocator)))) {
     LOG_WARN("get raw binary fail", K(ret), K(tenant_data_version), K(tenant_id));
   }
   return ret;

@@ -606,8 +606,8 @@ private:
       storage::ObTabletHandle &tablet_handle,
       ObBackupTabletStat *tablet_stat);
   int get_companion_index_file_path_(const ObBackupIntermediateTreeType &tree_type, const int64_t task_id, ObBackupPath &backup_path);
-  int prepare_companion_index_file_handle_(const int64_t task_id,
-      const ObBackupIntermediateTreeType &tree_type, common::ObIOFd &io_fd, ObBackupWrapperIODevice *&device_handle);
+  int prepare_companion_index_file_handle_(const int64_t task_id, const ObBackupIntermediateTreeType &tree_type,
+      const ObStorageIdMod &mod, common::ObIOFd &io_fd, ObBackupWrapperIODevice *&device_handle);
   int setup_io_storage_info_(const share::ObBackupDest &backup_dest, char *buf, const int64_t len, common::ObIODOpts *iod_opts);
   int setup_io_device_opts_(const int64_t task_id, const ObBackupIntermediateTreeType &tree_type, common::ObIODOpts *iod_opts);
   int get_index_block_rebuilder_ptr_(const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key,
@@ -621,6 +621,12 @@ private:
   int remove_index_builders_();
   int remove_sstable_index_builder_(const common::ObTabletID &tablet_id);
   int close_tree_device_handle_(ObBackupWrapperIODevice *&index_tree_device_handle, ObBackupWrapperIODevice *&meta_tree_device_handle);
+  int update_logic_id_to_macro_index_(const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key,
+      const blocksstable::ObLogicMacroBlockId &logic_id, const ObBackupMacroBlockIndex &macro_index);
+  int wait_reuse_other_block_ready_(const common::ObTabletID &tablet_id,
+      const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index);
+  int inner_check_reuse_block_ready_(const common::ObTabletID &tablet_id,
+      const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index, bool &is_ready);
 
 private:
   static const int64_t CHECK_DISK_SPACE_INTERVAL = 5 * 1000 * 1000;  // 5s;

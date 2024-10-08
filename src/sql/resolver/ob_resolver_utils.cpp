@@ -3602,6 +3602,20 @@ bool ObResolverUtils::is_valid_oracle_partition_data_type(const ObObjType data_t
   return bret;
 }
 
+bool ObResolverUtils::is_partition_range_column_type(const ObObjType type)
+{
+  // true means if the partition column(s) contain the type, then it's
+  // part_func_type must be PARTITION_FUNC_TYPE_RANGE_COLUMNS
+  return ob_is_float_tc(type) ||
+         ob_is_double_tc(type) ||
+         ob_is_decimal_int_tc(type) ||
+         ob_is_datetime_tc(type) ||
+         ob_is_string_tc(type) ||
+         ob_is_date_tc(type) ||
+         ob_is_time_tc(type) ||
+         ob_is_number_tc(type);
+}
+
 bool ObResolverUtils::is_valid_partition_column_type(const ObObjType type,
     const ObPartitionFuncType part_type, const bool is_check_value)
 {
@@ -3630,14 +3644,12 @@ bool ObResolverUtils::is_valid_partition_column_type(const ObObjType type,
         bret = true;
       }
     } else {
-      //对partition by range columns(c1) 中列的类型进行检查
       /**
        * All integer types: TINYINT, SMALLINT, MEDIUMINT, INT (INTEGER), and BIGINT. (This is the same as with partitioning by RANGE and LIST.)
        * Other numeric data types (such as DECIMAL or FLOAT) are not supported as partitioning columns.
        * DATE and DATETIME.
-       * Columns using other data types relating to dates or times are not supported as partitioning columns.
-       * The following string types: CHAR, VARCHAR, BINARY, and VARBINARY.
-       * TEXT and BLOB columns are not supported as partitioning columns.
+       * timestamp is not supported as partitioning columns.
+       * The following Text types: TEXT, BLOB and LONGTEXT columns are not supported as partitioning columns.
        */
       //https://dev.mysql.com/doc/refman/5.7/en/partitioning-columns.html
       ObObjTypeClass type_class = ob_obj_type_class(type);
@@ -3647,9 +3659,10 @@ bool ObResolverUtils::is_valid_partition_column_type(const ObObjType type,
         bret = true;
       }else if (PARTITION_FUNC_TYPE_RANGE_COLUMNS == part_type &&
                  GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_1 &&
-                 (ObFloatTC == type_class || ObDoubleTC == type_class ||
-                  ObDecimalIntTC == type_class || ObTimestampType == type)) {
+                 is_partition_range_column_type(type)) {
         /*
+          if the cluster version is greater than 4_3_0_1, we then make
+          other columns types such as timestamp, float, double, decimal available to range columns
           not compatible with MySql, relaied by size partition
         */
         bret = true;
@@ -3859,6 +3872,9 @@ int ObResolverUtils::check_part_value_result_type(const ObPartitionFuncType part
       }
       if (ObFloatType == part_column_expr_type ||
           ObDoubleType == part_column_expr_type ||
+          ObUFloatType == part_column_expr_type ||
+          ObUDoubleType == part_column_expr_type||
+          ObUNumberType == part_column_expr_type ||
           ObDecimalIntType == part_column_expr_type) {
           is_allow = (ObStringTC == part_value_expr_tc || ObDecimalIntTC == part_value_expr_tc
                       || (ObIntTC <= part_value_expr_tc && part_value_expr_tc <= ObNumberTC));
@@ -3888,7 +3904,8 @@ int ObResolverUtils::deduce_expect_value_tc(const ObObjType part_column_expr_typ
     case ObSmallIntType:
     case ObMediumIntType:
     case ObInt32Type:
-    case ObIntType: {
+    case ObIntType:
+    case ObYearType: {
       expect_value_tc = ObIntTC;
       need_cs_check = false;
       break;
@@ -3938,14 +3955,17 @@ int ObResolverUtils::deduce_expect_value_tc(const ObObjType part_column_expr_typ
       break;
     }
     case ObFloatType:
-    case ObDoubleType: {
+    case ObDoubleType:
+    case ObUDoubleType:
+    case ObUFloatType: {
       if (is_oracle_mode || (PARTITION_FUNC_TYPE_RANGE_COLUMNS == part_func_type)) {
         expect_value_tc = ObStringTC;
         break;
       }
     }
     case ObNumberType:
-    case ObNumberFloatType: {
+    case ObNumberFloatType:
+    case ObUNumberType: {
       if (is_oracle_mode) {
         expect_value_tc = ObNumberTC;
         break;
@@ -6323,7 +6343,7 @@ int ObResolverUtils::check_unique_index_cover_partition_column(const ObTableSche
                                                                const ObCreateIndexArg &arg)
 {
   int ret = OB_SUCCESS;
-  if (!table_schema.is_partitioned_table()
+  if (!(table_schema.is_partitioned_table() || table_schema.is_auto_partitioned_table())
       || (INDEX_TYPE_PRIMARY != arg.index_type_
           && INDEX_TYPE_UNIQUE_LOCAL != arg.index_type_
           && INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL != arg.index_type_
@@ -6336,11 +6356,17 @@ int ObResolverUtils::check_unique_index_cover_partition_column(const ObTableSche
     if (OB_FAIL(get_index_column_ids(table_schema, arg.index_columns_, idx_col_ids))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Failed to get index column ids", K(ret), K(table_schema), K(arg.index_columns_));
-    } else if (OB_FAIL(unique_idx_covered_partition_columns(table_schema, idx_col_ids, partition_info))) {
-      LOG_WARN("Unique index covered partition columns failed", K(ret));
-    } else if (OB_FAIL(unique_idx_covered_partition_columns(table_schema, idx_col_ids, subpartition_info))) {
-      LOG_WARN("Unique index convered partition columns failed", K(ret));
-    } else { }//do nothing
+    } else if (table_schema.is_auto_partitioned_table() && !table_schema.is_partitioned_table()) {
+      if (OB_FAIL(unique_idx_covered_presetting_partition_columns(table_schema, idx_col_ids))) {
+        LOG_WARN("Unique index covered presetting partition columns failed", KR(ret));
+      }
+    } else {
+      if (OB_FAIL(unique_idx_covered_partition_columns(table_schema, idx_col_ids, partition_info))) {
+        LOG_WARN("Unique index covered partition columns failed", KR(ret));
+      } else if (OB_FAIL(unique_idx_covered_partition_columns(table_schema, idx_col_ids, subpartition_info))) {
+        LOG_WARN("Unique index covered partition columns failed", KR(ret));
+      } else { }//do nothing
+    }
   }
   return ret;
 }
@@ -6360,6 +6386,31 @@ int ObResolverUtils::get_index_column_ids(
       LOG_WARN("Failed to add column id", K(ret));
     } else { }//do nothing
   }
+  return ret;
+}
+
+int ObResolverUtils::unique_idx_covered_presetting_partition_columns(const share::schema::ObTableSchema &table_schema,
+                                                                     const common::ObIArray<uint64_t> &index_columns)
+{
+  int ret = OB_SUCCESS;
+  const ObColumnSchemaV2 *column_schema = NULL;
+  ObArray<uint64_t> presetting_partition_column_ids;
+
+  if (OB_FAIL(table_schema.get_presetting_partition_keys(presetting_partition_column_ids))) {
+    LOG_WARN("fail to get presetting partition key columns", KR(ret), K(table_schema), K(index_columns));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < presetting_partition_column_ids.count(); i++) {
+      uint64_t column_id = presetting_partition_column_ids.at(i);
+      if (!has_exist_in_array(index_columns, column_id)) {
+        ret = OB_EER_UNIQUE_KEY_NEED_ALL_FIELDS_IN_PF;
+        LOG_WARN("unique key does not include all presetting partition key", KR(ret),
+                                                                             K(presetting_partition_column_ids),
+                                                                             K(index_columns));
+        LOG_USER_ERROR(OB_EER_UNIQUE_KEY_NEED_ALL_FIELDS_IN_PF, "UNIQUE INDEX");
+      }
+    } // end for
+  }
+
   return ret;
 }
 
@@ -9671,7 +9722,7 @@ int ObResolverUtils::check_allowed_alter_operations_for_mlog(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("alter materialized view log is not supported", KR(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter materialized view log is");
-  } else if (table_schema.has_mlog_table()) {
+  } else if (table_schema.required_by_mview_refresh()) {
     bool is_alter_pk = false;
     ObIndexArg::IndexActionType pk_action_type;
     for (int64_t i = 0; OB_SUCC(ret) && (i < arg.index_arg_list_.count()); ++i) {
@@ -9725,40 +9776,50 @@ int ObResolverUtils::check_allowed_alter_operations_for_mlog(
       // generate more specific error messages
       if (is_alter_pk) {
         if (ObIndexArg::ADD_PRIMARY_KEY == pk_action_type) {
-          LOG_WARN("add primary key to table with materialized view log is not supported",
+          LOG_WARN(
+              "add primary key to table required by materialized view refresh is not supported",
               KR(ret), K(table_schema.get_table_name()));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "add primary key to table with materialized view log is");
+          LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                         "add primary key to table required by materialized view refresh is");
         } else if (ObIndexArg::DROP_PRIMARY_KEY == pk_action_type) {
-          LOG_WARN("drop the primary key of table with materialized view log is not supported",
-              KR(ret), K(table_schema.get_table_name()));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop the primary key of table with materialized view log is");
+          LOG_WARN("drop the primary key of table required by materialized view refresh is not "
+                   "supported",
+                   KR(ret), K(table_schema.get_table_name()));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                         "drop the primary key of table required by materialized view refresh is");
         } else {
-          LOG_WARN("alter the primary key of table with materialized view log is not supported",
-              KR(ret), K(table_schema.get_table_name()));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter the primary key of table with materialized view log is");
+          LOG_WARN("alter the primary key of table required by materialized view refresh is not "
+                   "supported",
+                   KR(ret), K(table_schema.get_table_name()));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                         "alter the primary key of table required by materialized view refresh is");
         }
       } else if (arg.is_alter_columns_) {
-        LOG_WARN("alter column of table with materialized view log is not supported",
-            KR(ret), K(table_schema.get_table_name()));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter column of table with materialized view log is");
+        LOG_WARN("alter column of table required by materialized view refresh is not supported",
+                 KR(ret), K(table_schema.get_table_name()));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                       "alter column of table required by materialized view refresh is");
       } else if (arg.is_alter_partitions_) {
-        LOG_WARN("alter partition of table with materialized view log is not supported",
-            KR(ret), K(table_schema.get_table_name()));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter partition of table with materialized view log is");
+        LOG_WARN("alter partition of table required by materialized view refresh is not supported",
+                 KR(ret), K(table_schema.get_table_name()));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                       "alter partition of table required by materialized view refresh is");
       } else if (arg.is_alter_options_) {
         if (arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::TABLE_NAME)) {
-          LOG_WARN("alter name of table with materialized view log is not supported",
-              KR(ret), K(table_schema.get_table_name()));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter name of table with materialized view log is");
+          LOG_WARN("alter name of table required by materialized view refresh is not supported",
+                   KR(ret), K(table_schema.get_table_name()));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                         "alter name of table required by materialized view refresh is");
         } else {
-          LOG_WARN("alter option of table with materialized view log is not supported",
-              KR(ret), K(table_schema.get_table_name()), K(arg));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter option of table with materialized view log is");
+          LOG_WARN("alter option of table required by materialized view refresh is not supported",
+                   KR(ret), K(table_schema.get_table_name()), K(arg));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                         "alter option of table required by materialized view refresh is");
         }
       } else {
-        LOG_WARN("alter table with materialized view log is not supported",
-            KR(ret), K(table_schema.get_table_name()), K(arg));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table with materialized view log is");
+        LOG_WARN("alter table required by materialized view refresh is not supported", KR(ret),
+                 K(table_schema.get_table_name()), K(arg));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table required by materialized view refresh is");
       }
     }
   }

@@ -842,7 +842,8 @@ struct ObSetColumnStatParam
   hist_param_(),
   avgclen_(NULLOPT),
   flags_(NULLOPT),
-  col_meta_()
+  col_meta_(),
+  col_accuracy_()
   {}
 
   inline bool is_invalid() const {
@@ -860,6 +861,7 @@ struct ObSetColumnStatParam
   int64_t avgclen_;
   int64_t flags_;
   common::ObObjMeta col_meta_;
+  common::ObAccuracy col_accuracy_;
   static constexpr int64_t NULLOPT = -1;
 
   TO_STRING_KV(K(table_param_),
@@ -869,7 +871,8 @@ struct ObSetColumnStatParam
                K(hist_param_),
                K(avgclen_),
                K(flags_),
-               K(col_meta_));
+               K(col_meta_),
+               K(col_accuracy_));
 
 };
 

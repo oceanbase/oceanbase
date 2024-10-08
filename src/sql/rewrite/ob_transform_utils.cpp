@@ -1515,8 +1515,10 @@ int ObTransformUtils::update_table_id_for_pseudo_columns(const ObIArray<ObRawExp
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null pseudo column", K(other_pseudo_columns.at(i)),
           K(pseudo_columns.at(i)), K(ret));
-    } else if (T_ORA_ROWSCN == other_pseudo_columns.at(i)->get_expr_type()
-               && T_ORA_ROWSCN == pseudo_columns.at(i)->get_expr_type()) {
+    } else if (other_pseudo_columns.at(i)->get_expr_type() != pseudo_columns.at(i)->get_expr_type()) {
+      /* do nothing */
+    } else if (T_ORA_ROWSCN == pseudo_columns.at(i)->get_expr_type()
+               || T_PSEUDO_OLD_NEW_COL == pseudo_columns.at(i)->get_expr_type()) {
       ObPseudoColumnRawExpr *pseudo_col1 = static_cast<ObPseudoColumnRawExpr*>(other_pseudo_columns.at(i));
       ObPseudoColumnRawExpr *pseudo_col2 = static_cast<ObPseudoColumnRawExpr*>(pseudo_columns.at(i));
       if (pseudo_col1->get_table_id() == old_table_id) {
@@ -2272,7 +2274,8 @@ int ObTransformUtils::is_expr_not_null(ObNotNullContext &ctx,
     bool is_null = false;
     if (OB_FAIL(is_const_expr_not_null(ctx, expr, is_not_null, is_null))) {
       LOG_WARN("failed to check calculable expr not null", K(ret));
-    } else if (is_not_null && NULL != constraints &&
+    } else if (is_not_null && !expr->is_const_raw_expr() &&
+               NULL != constraints &&
                OB_FAIL(constraints->push_back(const_cast<ObRawExpr*>(expr)))) {
       LOG_WARN("failed to push back constraint expr", K(ret));
     }
@@ -2352,7 +2355,7 @@ int ObTransformUtils::is_const_expr_not_null(ObNotNullContext &ctx,
     LOG_WARN("failed to calc const or calculable expr", K(ret));
   } 
   
-  if (OB_SUCC(ret) && got_result) {
+  if (OB_SUCC(ret) && got_result && !result.is_ext()) {
     if (result.is_null() || (lib::is_oracle_mode() && result.is_null_oracle())) {
       is_not_null = false;
       is_null = true;
@@ -2876,6 +2879,7 @@ inline bool is_valid_sys_func(const ObItemType type)
     T_FUN_SYS_LEAST,
     T_FUN_SYS_GREATEST,
     T_FUN_SYS_CAST,
+    T_FUN_SYS_TIMESTAMP,
   };
   for (int64_t i = 0; !ret && i < sizeof(WHITE_LIST) / sizeof(ObItemType); ++i) {
     ret = (type == WHITE_LIST[i]);
@@ -7171,7 +7175,8 @@ int ObTransformUtils::check_need_pushdown_pseudo_column(const ObRawExpr &expr,
   int ret = OB_SUCCESS;
   need_pushdown = false;
   switch (expr.get_expr_type()) {
-    case T_ORA_ROWSCN: {
+    case T_ORA_ROWSCN:
+    case T_PSEUDO_OLD_NEW_COL: {
       need_pushdown = true;
       break;
     }
@@ -11631,11 +11636,15 @@ int ObTransformUtils::is_from_item_correlated(
         LOG_WARN("failed to check function table expr correlated", K(ret));
       }
     } else if (table->is_json_table()) {
-      if (OB_ISNULL(table->json_table_def_->doc_expr_)) {
+      if (table->json_table_def_->doc_exprs_.empty()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null expr", K(ret));
-      } else if (OB_FAIL(is_correlated_expr(exec_params, table->json_table_def_->doc_expr_, is_correlated))) {
-        LOG_WARN("failed to check function table expr correlated", K(ret));
+      } else {
+        for (int64_t j = 0; OB_SUCC(ret) && !is_correlated && j < table->json_table_def_->doc_exprs_.count(); ++j) {
+          if (OB_FAIL(is_correlated_expr(exec_params, table->json_table_def_->doc_exprs_.at(j), is_correlated))) {
+            LOG_WARN("failed to check function table expr correlated", K(ret));
+          }
+        }
       }
     } else if (table->is_values_table()) {
       if (OB_ISNULL(table->values_table_def_)) {
@@ -14395,41 +14404,6 @@ int ObTransformUtils::get_stmt_map_after_copy(ObDMLStmt *origin_stmt,
   return ret;
 }
 
-int ObTransformUtils::check_expand_temp_table_valid(ObSelectStmt *stmt, bool &is_valid)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr*, 16> exprs;
-  is_valid = true;
-  if (OB_ISNULL(stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null stmt", K(ret));
-  } else if (OB_FAIL(stmt->get_relation_exprs(exprs))) {
-    LOG_WARN("failed to get relation exprs", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < exprs.count(); i++) {
-    if (OB_ISNULL(exprs.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else if (exprs.at(i)->has_flag(CNT_RAND_FUNC) ||
-               exprs.at(i)->has_flag(CNT_STATE_FUNC) ||
-               exprs.at(i)->has_flag(CNT_DYNAMIC_USER_VARIABLE)) {
-      is_valid = false;
-    }
-  }
-  if (OB_SUCC(ret) && is_valid) {
-    ObSEArray<ObSelectStmt *, 4> child_stmts;
-    if (OB_FAIL(stmt->get_child_stmts(child_stmts))) {
-      LOG_WARN("failed to get child stmts", K(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < child_stmts.count(); i++) {
-      if (OB_FAIL(SMART_CALL(check_expand_temp_table_valid(child_stmts.at(i), is_valid)))) {
-        LOG_WARN("failed to check expand temp table valid", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObTransformUtils::expand_temp_table(ObTransformerCtx *ctx, ObDMLStmt::TempTableInfo& table_info)
 {
   int ret = OB_SUCCESS;
@@ -15869,44 +15843,28 @@ int ObTransformUtils::check_contain_correlated_json_table(const ObDMLStmt *stmt,
         LOG_WARN("unexpect null table item", K(ret));
       } else if (!table->is_json_table()) {
         // do nothing
-      } else if (OB_ISNULL(table->json_table_def_) || OB_ISNULL(table->json_table_def_->doc_expr_)) {
+      } else if (OB_ISNULL(table->json_table_def_) || table->json_table_def_->doc_exprs_.empty()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null expr", K(ret), K(table->json_table_def_));
-      } else if (!table->json_table_def_->doc_expr_->get_relation_ids().is_empty()) {
-        is_contain = true;
+      } else {
+        for (int64_t j = 0; OB_SUCC(ret) && !is_contain && j < table->json_table_def_->doc_exprs_.count(); ++j) {
+          if (!table->json_table_def_->doc_exprs_.at(j)->get_relation_ids().is_empty()) {
+            is_contain = true;
+          }
+        }
       }
     }
   }
   return ret;
 }
 
-int ObTransformUtils::check_contain_cannot_duplicate_expr(const ObIArray<ObRawExpr*> &exprs, bool &is_contain) {
+int ObTransformUtils::check_contain_lost_deterministic_expr(const ObIArray<ObRawExpr*> &exprs,
+                                                            bool &is_contain) {
   int ret = OB_SUCCESS;
   is_contain = false;
   for (int64_t i = 0; OB_SUCC(ret) && !is_contain && i < exprs.count(); ++i) {
-    if (OB_FAIL(recursive_check_cannot_duplicate_expr(exprs.at(i), is_contain))) {
-      LOG_WARN("fail to check cannot duplicate expr", K(ret), K(i), K(exprs));
-    }
-  }
-  return ret;
-}
-
-int ObTransformUtils::recursive_check_cannot_duplicate_expr(const ObRawExpr *expr, bool &is_contain) {
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expr is null", K(ret));
-  } else if (expr->has_flag(CNT_DYNAMIC_USER_VARIABLE)
-             || expr->has_flag(CNT_STATE_FUNC)
-             || expr->has_flag(CNT_RAND_FUNC)) {
-    is_contain = true;
-  } else if (!expr->is_deterministic()) {
-    is_contain = true;
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && !is_contain && i < expr->get_param_count(); ++i) {
-      if (OB_FAIL(SMART_CALL(recursive_check_cannot_duplicate_expr(expr->get_param_expr(i), is_contain)))) {
-        LOG_WARN("fail to check cannot duplicate expr", K(ret), K(i), KPC(expr));
-      }
+    if (!exprs.at(i)->is_deterministic()) {
+      is_contain = true;
     }
   }
   return ret;

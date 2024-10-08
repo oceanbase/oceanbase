@@ -25,7 +25,7 @@ public:
   ObLogJsonTable(ObLogPlan &plan)
       : ObLogicalOperator(plan),
         table_id_(OB_INVALID_ID),
-        value_expr_(NULL),
+        value_exprs_(),
         table_name_(),
         access_exprs_(),
         all_cols_def_(),
@@ -33,9 +33,9 @@ public:
         namespace_arr_() {}
 
   virtual ~ObLogJsonTable() {}
-  void add_values_expr(ObRawExpr* expr) { value_expr_ = expr; }
-  const ObRawExpr* get_value_expr() const { return value_expr_; }
-  ObRawExpr* get_value_expr() { return value_expr_; }
+  int add_values_expr(ObIArray<ObRawExpr*> &exprs) { return append(value_exprs_, exprs); }
+  const ObIArray<ObRawExpr*> &get_value_expr() const { return value_exprs_; }
+  ObIArray<ObRawExpr*> &get_value_expr() { return value_exprs_; }
   virtual uint64_t hash(uint64_t seed) const override;
   int generate_access_exprs();
   ObIArray<ObRawExpr*> &get_access_exprs() { return access_exprs_; }
@@ -62,7 +62,7 @@ public:
   ObColumnDefault* get_column_param_default_val(int64_t index);
 private:
   uint64_t table_id_;
-  ObRawExpr* value_expr_;
+  common::ObSEArray<ObRawExpr*, 1, common::ModulePageAllocator, true> value_exprs_;
   common::ObString table_name_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> access_exprs_;
 

@@ -236,12 +236,15 @@ int ObTenantStorageMetaReplayer::s2_replay_ls_tablets_(
                                                                                            ls->get_ls_id(),
                                                                                            ls->get_ls_epoch(),
                                                                                            deleting_item.tablet_meta_version_,
+                                                                                           deleting_item.tablet_transfer_seq_,
                                                                                            allocator))) {
         LOG_WARN("failed to check and delete the current_version file of the tablet", K(ret), K(deleting_item), KPC(ls));
       }
     }
 
     // 3. replay create tablets recorded in active_tablets (except had deleted in pending_free_arr);
+    //    Even though in different transfer_seq, the tablet_version is unique.
+    //    Therefore the compare is safe.
     for (int64_t i = 0; OB_SUCC(ret) && i < active_tablets.items_.count(); i++) {
       const ObActiveTabletItem &active_item = active_tablets.items_.at(i);
       bool has_deleted = false;
@@ -259,7 +262,7 @@ int ObTenantStorageMetaReplayer::s2_replay_ls_tablets_(
         blocksstable::MacroBlockId object_id;
         ObStorageObjectOpt opt;
         const int64_t object_size = OB_DEFAULT_MACRO_BLOCK_SIZE;
-        opt.set_ss_private_tablet_meta_object_opt(ls_id.id(), active_item.tablet_id_.id(), ObStorageObjectOpt::INVALID_TABLET_VERSION);
+        opt.set_ss_private_tablet_meta_object_opt(ls_id.id(), active_item.tablet_id_.id(), ObStorageObjectOpt::INVALID_TABLET_VERSION, ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ);
         if (OB_FAIL(OB_STORAGE_OBJECT_MGR.ss_get_object_id(opt, object_id))) {
           LOG_WARN("fail to get object id", K(ret), K(opt));
         } else if (OB_FAIL(inaccurate_addr.set_block_addr(object_id, 0/*offset*/, object_size, ObMetaDiskAddr::DiskType::RAW_BLOCK))) {
@@ -325,6 +328,7 @@ int ObTenantStorageMetaReplayer::s2_replay_ls_tablets_for_trans_info_tmp_(
                                                                                            ls->get_ls_id(),
                                                                                            ls->get_ls_epoch(),
                                                                                            deleting_item.tablet_meta_version_,
+                                                                                           deleting_item.tablet_transfer_seq_,
                                                                                            allocator))) {
         LOG_WARN("failed to check and delete the current_version file of the tablet", K(ret), K(deleting_item), KPC(ls));
       }
@@ -354,7 +358,7 @@ int ObTenantStorageMetaReplayer::s2_replay_ls_tablets_for_trans_info_tmp_(
           LOG_WARN("fail to read cur version", K(ret), K(item), K(current_version_opt));
         }
       } else if (ObStorageObjectOpt::INVALID_TABLET_VERSION != deleted_tablet_meta_version
-              && latest_addr.tablet_addr_.fifth_id() <= deleted_tablet_meta_version) {
+              && latest_addr.tablet_addr_.block_id().meta_version_id() <= deleted_tablet_meta_version) {
         ret = OB_ERR_UNEXPECTED;
         LOG_INFO("this tablet has been deleted, but current_version has not been deleted", K(ret), K(item), K(current_version_opt), K(latest_addr), K(deleted_tablet_meta_version));
       } else if (OB_FAIL(ls_tablet_svr->s2_replay_create_tablet_for_trans_info_tmp(latest_addr.tablet_addr_, ls_handle, ObTabletID(tablet_id)))) {

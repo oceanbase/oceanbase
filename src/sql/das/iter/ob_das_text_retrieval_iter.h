@@ -70,7 +70,6 @@ public:
     inv_idx_tablet_id_ = inv_tablet_id;
     fwd_idx_tablet_id_ = fwd_tablet_id;
   }
-
   INHERIT_TO_STRING_KV("ObDASIter", ObDASIter, K_(calc_exprs), K_(need_fwd_idx_agg),
       K_(need_inv_idx_agg), K_(inv_idx_agg_evaluated), K_(not_first_fwd_agg), K_(is_inited));
 protected:
@@ -79,7 +78,7 @@ protected:
   virtual int inner_release() override;
   virtual int inner_get_next_row() override;
   virtual int inner_get_next_rows(int64_t &count, int64_t capacity) override;
-private:
+protected:
   int init_inv_idx_scan_param();
   int init_fwd_idx_scan_param();
   static int init_base_idx_scan_param(
@@ -94,16 +93,19 @@ private:
   int do_doc_cnt_agg();
   int do_token_cnt_agg(const ObDocId &doc_id, int64_t &token_count);
   int get_inv_idx_scan_doc_id(ObDocId &doc_id);
+  int get_next_row_inner();
   int fill_token_cnt_with_doc_len();
+  int batch_fill_token_cnt_with_doc_len(const int64_t &count);
   int fill_token_doc_cnt();
   int project_relevance_expr();
+  int batch_project_relevance_expr(const int64_t &count);
   int reuse_fwd_idx_iter();
   int gen_inv_idx_scan_range(const ObString &query_token, ObNewRange &scan_range);
   int gen_fwd_idx_scan_range(const ObDocId &doc_id, ObNewRange &scan_range);
   inline bool need_calc_relevance() { return true; } // TODO: reduce tsc ops if no need to calc relevance
   int init_calc_exprs();
   void clear_row_wise_evaluated_flag();
-
+  void clear_batch_wise_evaluated_flag(const int64_t &count);
   // TODO: delete this after enable standard vectorized execution
   inline int get_next_single_row(const bool is_vectorized, ObNewRowIterator *iter)
   {
@@ -116,11 +118,12 @@ private:
     }
     return ret;
   }
-private:
+protected:
   static const int64_t FWD_IDX_ROWKEY_COL_CNT = 2;
   static const int64_t INV_IDX_ROWKEY_COL_CNT = 2;
-private:
+protected:
   lib::MemoryContext mem_context_;
+  ObArenaAllocator allocator_;
   const ObDASIRScanCtDef *ir_ctdef_;
   ObDASIRScanRtDef *ir_rtdef_;
   transaction::ObTxDesc *tx_desc_;
@@ -137,13 +140,40 @@ private:
   ObDASScanIter *forward_idx_iter_;
   ObObj *fwd_range_objs_;
   sql::ObExpr *doc_token_cnt_expr_;
+  sql::ObBitVector *skip_;
   int64_t token_doc_cnt_;
+  int64_t max_batch_size_;
   bool need_fwd_idx_agg_;
   bool need_inv_idx_agg_;
   bool inv_idx_agg_evaluated_;
   bool not_first_fwd_agg_;
   bool is_inited_;
 };
+
+class ObDASTRCacheIter : public ObDASTextRetrievalIter
+{
+public:
+  ObDASTRCacheIter();
+  virtual ~ObDASTRCacheIter() {}
+  int get_cur_row(double &relevance, ObDocId &doc_id) const;
+  INHERIT_TO_STRING_KV("ObDASTextRetrievalIter", ObDASTextRetrievalIter, K_(cur_idx), K_(count),
+      K_(relevance), K_(doc_id));
+protected:
+  virtual int inner_init(ObDASIterParam &param) override;
+  virtual int inner_reuse() override;
+  virtual int inner_release() override;
+  virtual int inner_get_next_rows(int64_t &count, int64_t capacity) override;
+private:
+  int get_next_batch_inner();
+  int save_relevances_and_docids();
+  int save_docids();
+private:
+  int64_t cur_idx_;
+  int64_t count_;
+  ObFixedArray<double, ObIAllocator> relevance_;
+  ObFixedArray<ObDocId, ObIAllocator> doc_id_;
+};
+
 
 } // namespace sql
 } // namespace oceanbase

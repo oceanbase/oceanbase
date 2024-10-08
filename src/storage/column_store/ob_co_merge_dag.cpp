@@ -250,8 +250,9 @@ int ObCOMergePrepareTask::schedule_minor_exec_dag(
   result.version_range_.multi_version_start_ = ctx.get_tablet()->get_multi_version_start();
   result.version_range_.base_version_ = 0;
   result.version_range_.snapshot_version_ = ctx.get_tablet()->get_snapshot_version();
+  result.transfer_seq_ = ctx.get_tablet()->get_transfer_seq();
   ObTabletMergeDagParam dag_param(MINOR_MERGE, ctx.get_ls_id(),
-                                  ctx.get_tablet_id(), ctx.get_transfer_seq());
+                                  ctx.get_tablet_id(), ctx.get_schedule_transfer_seq());
   if (OB_FAIL(MTL(share::ObTenantDagScheduler *)->alloc_dag(minor_exe_dag))) {
     LOG_WARN("failed to alloc dag", K(ret));
   } else if (OB_FAIL(minor_exe_dag->prepare_init(
@@ -1289,7 +1290,7 @@ int ObCOMergeDagNet::inner_create_and_schedule_dags(ObIDag *parent_dag)
     }
   }
   // refine merge_batch_size_ with tenant memory
-  if (OB_SUCC(ret) && MTL(ObTenantTabletScheduler *)->enable_adaptive_merge_schedule()) {
+  if (OB_SUCC(ret) && ObBasicMergeScheduler::get_merge_scheduler()->enable_adaptive_merge_schedule()) {
     try_update_merge_batch_size(co_merge_ctx_->array_count_);
   }
 
@@ -1395,10 +1396,10 @@ int ObCOMergeDagNet::swap_tablet_after_minor()
           ObTabletCommon::DEFAULT_GET_TABLET_NO_WAIT,
           storage::ObMDSGetTabletMode::READ_ALL_COMMITED))) {
     LOG_WARN("failed to get tablet", K(ret));
-  } else if (OB_FAIL(ObTablet::check_transfer_seq_equal(*tmp_tablet_handle.get_obj(), co_merge_ctx_->get_transfer_seq()))) {
+  } else if (OB_FAIL(ObTablet::check_transfer_seq_equal(*tmp_tablet_handle.get_obj(), co_merge_ctx_->get_schedule_transfer_seq()))) {
     LOG_WARN("tmp tablet transfer seq not eq with old transfer seq", K(ret),
         "tmp_tablet_meta", tmp_tablet_handle.get_obj()->get_tablet_meta(),
-        "old_transfer_seq", co_merge_ctx_->get_transfer_seq());
+        "old_transfer_seq", co_merge_ctx_->get_schedule_transfer_seq());
   } else if (OB_FAIL(ObPartitionMergePolicy::get_result_by_snapshot(
     *tmp_tablet_handle.get_obj(),
     co_merge_ctx_->get_merge_version(),
@@ -1408,6 +1409,7 @@ int ObCOMergeDagNet::swap_tablet_after_minor()
     LOG_WARN("failed to assign tables handle", K(ret), K(tmp_result));
   } else {
     co_merge_ctx_->tablet_handle_ = tmp_tablet_handle;
+    co_merge_ctx_->static_param_.tablet_transfer_seq_ = tmp_tablet_handle.get_obj()->get_transfer_seq();
     co_merge_ctx_->static_param_.rowkey_read_info_ =
       static_cast<const ObRowkeyReadInfo *>(&(co_merge_ctx_->get_tablet()->get_rowkey_read_info()));
     LOG_INFO("success to swap tablet after minor", K(ret), K(tmp_result),
@@ -1574,10 +1576,10 @@ int ObCOMergeDagNet::get_compat_mode()
           0/*timeout_us*/,
           storage::ObMDSGetTabletMode::READ_ALL_COMMITED))) {
     LOG_WARN("failed to get tablet", K(ret), K(ls_id_), K(tablet_id_));
-  } else if (OB_FAIL(ObTablet::check_transfer_seq_equal(*tmp_tablet_handle.get_obj(), basic_param_.transfer_seq_))) {
+  } else if (OB_FAIL(ObTablet::check_transfer_seq_equal(*tmp_tablet_handle.get_obj(), basic_param_.schedule_transfer_seq_))) {
     LOG_WARN("tmp tablet transfer seq not eq with old transfer seq", K(ret),
         "tmp_tablet_meta", tmp_tablet_handle.get_obj()->get_tablet_meta(),
-        "old_transfer_seq", basic_param_.transfer_seq_);
+        "old_transfer_seq", basic_param_.schedule_transfer_seq_);
   } else {
     basic_param_.dag_net_id_ = get_dag_id();
     basic_param_.skip_get_tablet_ = true;

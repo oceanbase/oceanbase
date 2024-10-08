@@ -67,12 +67,12 @@
 #include "share/backup/ob_backup_config.h"
 #include "share/backup/ob_backup_helper.h"
 #include "share/scheduler/ob_sys_task_stat.h"
+#include "share/scheduler/ob_partition_auto_split_helper.h"
 
 #include "sql/executor/ob_executor_rpc_proxy.h"
 #include "sql/engine/cmd/ob_user_cmd_executor.h"
 #include "sql/engine/px/ob_px_util.h"
 #include "observer/dbms_job/ob_dbms_job_master.h"
-#include "observer/dbms_scheduler/ob_dbms_sched_job_master.h"
 
 #include "rootserver/ob_bootstrap.h"
 #include "rootserver/ob_partition_exchange.h"
@@ -766,12 +766,7 @@ int ObRootService::fake_init(ObServerConfig &config,
     }
   }
 
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobMaster::get_instance()
-          .init(&unit_manager_, &sql_proxy_, schema_service_))) {
-      LOG_WARN("failed to init ObDBMSSchedJobMaster", K(ret));
-    }
-  }
+
 
   if (OB_SUCC(ret)) {
     inited_ = true;
@@ -915,6 +910,8 @@ int ObRootService::init(ObServerConfig &config,
     FLOG_WARN("init THE_RS_JOB_TABLE failed", KR(ret));
   } else if (OB_FAIL(ddl_scheduler_.init(this))) {
     FLOG_WARN("init ddl task scheduler failed", KR(ret));
+  } else if (OB_FAIL(ObRsAutoSplitScheduler::get_instance().init())) {
+    FLOG_WARN("init auto split task scheduler failed", K(ret));
   } else if (OB_FAIL(schema_history_recycler_.init(*schema_service_,
                                                    zone_manager_,
                                                    sql_proxy_))) {
@@ -922,15 +919,13 @@ int ObRootService::init(ObServerConfig &config,
   } else if (OB_FAIL(dbms_job::ObDBMSJobMaster::get_instance().init(&sql_proxy_,
                                                                     schema_service_))) {
     FLOG_WARN("init ObDBMSJobMaster failed", KR(ret));
-  } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobMaster::get_instance().init(&unit_manager_,
-                                                                               &sql_proxy_,
-                                                                               schema_service_))) {
-    FLOG_WARN("init ObDBMSSchedJobMaster failed", KR(ret));
+  }
 #ifdef OB_BUILD_TDE_SECURITY
-  } else if (OB_FAIL(master_key_mgr_.init(&zone_manager_, schema_service_))) {
+  else if (OB_FAIL(master_key_mgr_.init(&zone_manager_, schema_service_))) {
     FLOG_WARN("init master key mgr failed", KR(ret));
+  }
 #endif
-  } else if (OB_FAIL(disaster_recovery_task_executor_.init(lst_operator,
+   else if (OB_FAIL(disaster_recovery_task_executor_.init(lst_operator,
                                                            rpc_proxy_))) {
     FLOG_WARN("init disaster recovery task executor failed", KR(ret));
   } else if (OB_FAIL(disaster_recovery_task_mgr_.init(self,
@@ -1037,8 +1032,6 @@ void ObRootService::destroy()
     FLOG_INFO("disaster recovery task mgr destroy");
   }
 
-  dbms_scheduler::ObDBMSSchedJobMaster::get_instance().destroy();
-  FLOG_INFO("ObDBMSSchedJobMaster destroy");
   TG_DESTROY(lib::TGDefIDs::GlobalCtxTimer);
   FLOG_INFO("global ctx timer destroyed");
 
@@ -1253,8 +1246,6 @@ int ObRootService::stop()
 #endif
       disaster_recovery_task_mgr_.stop();
       FLOG_INFO("disaster_recovery_task_mgr stop");
-      dbms_scheduler::ObDBMSSchedJobMaster::get_instance().stop();
-      FLOG_INFO("dbms sched job master stop");
       TG_STOP(lib::TGDefIDs::GlobalCtxTimer);
       FLOG_INFO("global ctx timer stop");
     }
@@ -3496,7 +3487,8 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
         //if we pass the table_schema argument, the create_index_arg can not set database_name
         //and table_name, which will used from get data table schema in generate_schema
         if (!index_arg.index_schema_.is_partitioned_table()
-            && !table_schema.is_partitioned_table()) {
+            && !table_schema.is_partitioned_table()
+            && !table_schema.is_auto_partitioned_table()) {
           if (INDEX_TYPE_NORMAL_GLOBAL == index_arg.index_type_) {
             index_arg.index_type_ = INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE;
           } else if (INDEX_TYPE_UNIQUE_GLOBAL == index_arg.index_type_) {
@@ -4163,7 +4155,8 @@ int ObRootService::execute_ddl_task(const obrpc::ObAlterTableArg &arg,
         }
         break;
       }
-      case share::CLEANUP_GARBAGE_TASK: {
+      case share::CLEANUP_GARBAGE_TASK:
+      case share::PARTITION_SPLIT_RECOVERY_CLEANUP_GARBAGE_TASK: {
         if (OB_FAIL(ddl_service_.cleanup_garbage(
             const_cast<obrpc::ObAlterTableArg &>(arg)))) {
           LOG_WARN("failed to cleanup garbage", K(ret));
@@ -4206,6 +4199,12 @@ int ObRootService::execute_ddl_task(const obrpc::ObAlterTableArg &arg,
       case share::MAKE_RECOVER_RESTORE_TABLE_TASK_TAKE_EFFECT: {
         if (OB_FAIL(ddl_service_.make_recover_restore_tables_visible(const_cast<ObAlterTableArg &>(arg)))) {
           LOG_WARN("make recovert restore task visible failed", K(ret), K(arg));
+        }
+        break;
+      }
+      case share::PARTITION_SPLIT_RECOVERY_TASK: {
+        if (OB_FAIL(ddl_service_.restore_the_table_to_split_completed_state(const_cast<ObAlterTableArg &>(arg)))) {
+          LOG_WARN("failed to restore the table to split completed state", K(ret));
         }
         break;
       }
@@ -4729,10 +4728,6 @@ int ObRootService::create_index(const ObCreateIndexArg &arg, obrpc::ObAlterTable
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
-  } else if (is_multivalue_index(arg.index_type_)) {
-    // todo yunyi not dynamic create multivlaue index
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not supported", K(ret));
   } else {
     ObIndexBuilder index_builder(ddl_service_);
     if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(arg.tenant_id_, schema_guard))) {
@@ -5082,6 +5077,82 @@ int ObRootService::rebuild_index(const obrpc::ObRebuildIndexArg &arg, obrpc::ObA
                         "table_id", arg.index_table_id_,
                         "schema_version", res.schema_version_);
   LOG_INFO("finish rebuild index ddl", K(ret), K(arg), K(res), "ddl_event_info", ObDDLEventInfo());
+  return ret;
+}
+
+int ObRootService::send_auto_split_tablet_task_request(const obrpc::ObAutoSplitTabletBatchArg &arg,
+                                                       obrpc::ObAutoSplitTabletBatchRes &res)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K(inited_));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(arg));
+  } else if (OB_FAIL(ddl_scheduler_.cache_auto_split_task(arg, res))) {
+    LOG_WARN("fail to cache auto split task", K(ret), K(arg), K(res));
+  }
+  return ret;
+}
+
+int ObRootService::split_global_index_tablet(const obrpc::ObAlterTableArg &arg)
+{
+  int ret = OB_SUCCESS;
+  bool is_oracle_mode = false;
+  ObSchemaGetterGuard schema_guard;
+  const uint64_t tenant_id = arg.alter_table_schema_.get_tenant_id();
+  ObAlterTableArg &nonconst_arg = const_cast<ObAlterTableArg &>(arg);
+  obrpc::ObAlterTableRes res;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid()) || arg.is_add_to_scheduler_ || !arg.alter_table_schema_.is_global_index_table()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(arg), K(arg.is_add_to_scheduler_), K(arg.alter_table_schema_.is_global_index_table()));
+  } else {
+    if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+      LOG_WARN("get schema guard in inner table failed", K(ret));
+    } else if (OB_FAIL(check_parallel_ddl_conflict(schema_guard, arg))) {
+      LOG_WARN("check parallel ddl conflict failed", K(ret));
+    } else if (OB_FAIL(table_allow_ddl_operation(arg))) {
+      LOG_WARN("table can't do ddl now", K(ret));
+    } else if (OB_FAIL(ddl_service_.split_global_index_partitions(nonconst_arg, res))) {
+      LOG_WARN("split global index failed", K(arg), K(ret));
+    }
+  }
+  char table_id_buffer[256];
+  snprintf(table_id_buffer, sizeof(table_id_buffer), "table_id:%ld, hidden_table_id:%ld",
+            arg.table_id_, arg.hidden_table_id_);
+  ROOTSERVICE_EVENT_ADD("ddl scheduler", "split global index",
+                        K(tenant_id),
+                        "ret", ret,
+                        "trace_id", *ObCurTraceId::get_trace_id(),
+                        "task_id", res.task_id_,
+                        "table_id", table_id_buffer,
+                        "schema_version", res.schema_version_);
+  LOG_INFO("finish split global index tablet ddl", K(ret), K(arg), K(res), "ddl_event_info", ObDDLEventInfo());
+  return ret;
+}
+
+int ObRootService::clean_splitted_tablet(const obrpc::ObCleanSplittedTabletArg &arg)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(arg.tenant_id_, data_version))) {
+    LOG_WARN("failed to get min data version", KR(ret));
+  } else if (data_version < DATA_VERSION_4_3_4_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("current data version doesn't support to clean splitted tablet", K(ret), K(data_version));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (OB_FAIL(ddl_service_.clean_splitted_tablet(arg))) {
+    LOG_WARN("ddl_service clean splitted tablet failed", KR(ret), K(arg));
+  }
   return ret;
 }
 
@@ -5932,11 +6003,7 @@ int ObRootService::do_restart()
     FLOG_INFO("success to start dbms job master");
   }
 
-  if (FAILEDx(dbms_scheduler::ObDBMSSchedJobMaster::get_instance().start())) {
-    FLOG_WARN("failed to start dbms sched job master", KR(ret));
-  } else {
-    FLOG_INFO("success to start dbms sched job mstart");
-  }
+
 
   if (OB_SUCC(ret)) {
     upgrade_executor_.start();
@@ -6734,7 +6801,7 @@ int ObRootService::create_outline(const ObCreateOutlineArg &arg)
     bool is_update = false;
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ddl_service_.check_outline_exist(outline_info, is_or_replace, is_update))) {
-        LOG_WARN("failed to check_outline_exist", K(outline_info), K(ret));
+        LOG_WARN("failed to check_outline_exist", K(outline_info), K(is_or_replace), K(is_update), K(ret));
       }
     }
 
@@ -10529,6 +10596,7 @@ int ObRootService::table_allow_ddl_operation(const obrpc::ObAlterTableArg &arg)
   const ObString &origin_database_name = alter_table_schema.get_origin_database_name();
   const ObString &origin_table_name = alter_table_schema.get_origin_table_name();
   schema_guard.set_session_id(arg.session_id_);
+  bool is_index = arg.alter_table_schema_.is_index_table();
   if (arg.is_refresh_sess_active_time()) {
     //do nothing
   } else if (!arg.is_valid()) {
@@ -10537,17 +10605,12 @@ int ObRootService::table_allow_ddl_operation(const obrpc::ObAlterTableArg &arg)
   } else if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
     LOG_WARN("get schema guard in inner table failed", K(ret));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, origin_database_name,
-                                                   origin_table_name, false, schema))) {
+                                                   origin_table_name, is_index, schema))) {
     LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(origin_database_name), K(origin_table_name));
   } else if (OB_ISNULL(schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("invalid schema", K(ret));
     LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(origin_database_name), to_cstring(origin_table_name));
-  } else if (schema->is_in_splitting()) {
-    //TODO ddl must not execute on splitting table due to split not unstable
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("table is physical or logical split can not split", K(ret), K(schema));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "table is in physial or logical split, ddl operation");
   } else if (schema->is_ctas_tmp_table()) {
     if (!alter_table_schema.alter_option_bitset_.has_member(ObAlterTableArg::SESSION_ID)) {
       //to prevet alter table after failed to create table, the table is invisible.
@@ -10555,7 +10618,7 @@ int ObRootService::table_allow_ddl_operation(const obrpc::ObAlterTableArg &arg)
       LOG_WARN("try to alter invisible table schema", K(schema->get_session_id()), K(arg));
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, "try to alter invisible table");
     }
-  } else if (schema->has_mlog_table() || schema->is_mlog_table()) {
+  } else if (schema->required_by_mview_refresh() || schema->is_mlog_table()) {
     if (OB_FAIL(ObResolverUtils::check_allowed_alter_operations_for_mlog(
         tenant_id, arg, *schema))) {
       LOG_WARN("failed to check allowed alter operation for mlog",
@@ -11623,10 +11686,10 @@ int ObRootService::drop_restore_point(const obrpc::ObDropRestorePointArg &arg)
 int ObRootService::build_ddl_single_replica_response(const obrpc::ObDDLBuildSingleReplicaResponseArg &arg)
 {
   int ret = OB_SUCCESS;
-  LOG_INFO("receive build ddl single replica response", K(arg));
   ObDDLTaskInfo info;
   info.row_scanned_ = arg.row_scanned_;
   info.row_inserted_ = arg.row_inserted_;
+  info.physical_row_count_ = arg.physical_row_count_;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
@@ -11636,7 +11699,7 @@ int ObRootService::build_ddl_single_replica_response(const obrpc::ObDDLBuildSing
   } else if (OB_FAIL(DDL_SIM(arg.tenant_id_, arg.task_id_, PROCESS_BUILD_SSTABLE_RESPONSE_SLOW))) {
     LOG_WARN("ddl sim failure: procesc build sstable response slow", K(ret));
   } else if (OB_FAIL(ddl_scheduler_.on_sstable_complement_job_reply(
-      arg.tablet_id_/*source tablet id*/, ObDDLTaskKey(arg.dest_tenant_id_, arg.dest_schema_id_, arg.dest_schema_version_), arg.snapshot_version_, arg.execution_id_, arg.ret_code_, info))) {
+      arg.tablet_id_/*source tablet id*/, arg.server_addr_, ObDDLTaskKey(arg.dest_tenant_id_, arg.dest_schema_id_, arg.dest_schema_version_), arg.snapshot_version_, arg.execution_id_, arg.ret_code_, info))) {
     LOG_WARN("handle column checksum calc response failed", K(ret), K(arg));
   }
   ROOTSERVICE_EVENT_ADD("ddl scheduler", "build ddl single replica response",

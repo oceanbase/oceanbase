@@ -459,6 +459,105 @@ int ObMViewInfo::batch_fetch_mview_ids(ObISQLClient &sql_client, uint64_t tenant
   return ret;
 }
 
+int ObMViewInfo::update_major_refresh_mview_scn(ObISQLClient &sql_client,
+                                                const uint64_t tenant_id, const share::SCN &scn)
+{
+  int ret = OB_SUCCESS;
+
+  if (!scn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid scn", KR(ret), K(scn));
+  } else {
+    const uint64_t scn_val = scn.get_val_for_inner_table_field();
+    const int64_t last_refresh_type = (int64_t)ObMVRefreshType::FAST;
+    int64_t affected_rows = 0;
+    ObSqlString sql;
+    if (OB_FAIL(sql.assign_fmt("UPDATE %s SET last_refresh_scn = %lu, \
+                                last_refresh_type = %ld, \
+                                last_refresh_date = now(6) \
+                                WHERE refresh_mode = %ld and \
+                                last_refresh_scn < %lu AND last_refresh_scn > 0",
+                               OB_ALL_MVIEW_TNAME, scn_val, last_refresh_type,
+                               ObMVRefreshMode::MAJOR_COMPACTION,
+                               scn_val))) {
+      LOG_WARN("fail to assign sql", KR(ret));
+    } else if (OB_FAIL(sql_client.write(tenant_id, sql.ptr(), affected_rows))) {
+      LOG_WARN("execute sql failed", KR(ret), K(sql));
+    } else if (OB_UNLIKELY(affected_rows < 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected affected_rows", K(ret), K(affected_rows));
+    }
+  }
+
+  return ret;
+}
+
+int ObMViewInfo::get_min_major_refresh_mview_scn(ObISQLClient &sql_client, const uint64_t tenant_id,
+                                                 int64_t snapshot_for_tx, share::SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  scn.reset();
+  ObSqlString sql;
+
+  SMART_VAR(ObMySQLProxy::MySQLResult, res)
+  {
+    ObMySQLResult *result = nullptr;
+    if (OB_FAIL(sql.assign_fmt(
+            "SELECT min(last_refresh_scn) min_refresh_scn FROM %s as of snapshot %ld WHERE "
+            "refresh_mode = %ld ",
+            OB_ALL_MVIEW_TNAME, snapshot_for_tx, ObMVRefreshMode::MAJOR_COMPACTION))) {
+      LOG_WARN("fail to assign sql", KR(ret));
+    } else if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
+      LOG_WARN("execute sql failed", KR(ret), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("result is null", KR(ret));
+    } else if (OB_FAIL(result->next())) {
+      LOG_WARN("fail to get next", KR(ret));
+    } else {
+      uint64_t scn_val = 0;
+      EXTRACT_UINT_FIELD_MYSQL(*result, "min_refresh_scn", scn_val, uint64_t);
+      if (OB_SUCC(ret)) {
+        scn.convert_for_inner_table_field(scn_val);
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObMViewInfo::contains_major_refresh_mview_in_creation(ObISQLClient &sql_client,
+                                                          const uint64_t tenant_id, bool &contains)
+{
+  int ret = OB_SUCCESS;
+  contains = false;
+  ObSqlString sql;
+
+  SMART_VAR(ObMySQLProxy::MySQLResult, res)
+  {
+    ObMySQLResult *result = nullptr;
+    if (OB_FAIL(sql.assign_fmt(
+            "SELECT count(*) cnt FROM %s WHERE refresh_mode = %ld and last_refresh_scn = 0",
+            OB_ALL_MVIEW_TNAME, ObMVRefreshMode::MAJOR_COMPACTION))) {
+      LOG_WARN("fail to assign sql", KR(ret));
+    } else if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
+      LOG_WARN("execute sql failed", KR(ret), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("result is null", KR(ret));
+    } else if (OB_FAIL(result->next())) {
+      LOG_WARN("fail to get next", KR(ret));
+    } else {
+      int64_t cnt = 0;
+      EXTRACT_INT_FIELD_MYSQL(*result, "cnt", cnt, int64_t);
+      if (OB_SUCC(ret) && cnt > 0) {
+        contains = true;
+      }
+    }
+  }
+
+  return ret;
+}
 } // namespace schema
 } // namespace share
 } // namespace oceanbase

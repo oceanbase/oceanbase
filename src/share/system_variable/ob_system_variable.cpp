@@ -1924,6 +1924,24 @@ int ObSysVarOnCheckFuncs::check_and_convert_charset(ObExecContext &ctx,
       ret = OB_INVALID_ARGUMENT;
       LOG_ERROR("invalid type", K(ret), K(in_val));
     }
+    if (OB_SUCC(ret)) {
+      if (0 == set_var.var_name_.case_compare(OB_SV_CHARACTER_SET_CLIENT)
+        || 0 == set_var.var_name_.case_compare(OB_SV_CHARACTER_SET_CONNECTION)
+        || 0 == set_var.var_name_.case_compare(OB_SV_CHARACTER_SET_RESULTS)) {
+        ObCollationType cstype = static_cast<ObCollationType>(out_val.get_int());
+        if (!ObCharset::is_valid_collation(cstype)) {
+          ret = OB_ERR_UNKNOWN_CHARSET;
+          LOG_USER_ERROR(OB_ERR_UNKNOWN_CHARSET, in_val.get_string().length(), in_val.get_string().ptr());
+        } else if(ObCharset::get_charset(cstype)->mbminlen > 1) {
+          ret = OB_ERR_WRONG_VALUE_FOR_VAR;
+          LOG_USER_ERROR(OB_ERR_WRONG_VALUE_FOR_VAR,
+                      set_var.var_name_.length(),
+                      set_var.var_name_.ptr(),
+                      in_val.get_string().length(),
+                      in_val.get_string().ptr());
+        }
+      }
+    }
   }
   return ret;
 }
@@ -1996,6 +2014,23 @@ int ObSysVarOnCheckFuncs::check_and_convert_collation_not_null(ObExecContext &ct
     } else {
       ret = OB_INVALID_ARGUMENT;
       LOG_ERROR("invalid type", K(ret), K(in_val));
+    }
+
+    if (OB_SUCC(ret)) {
+      if (0 == set_var.var_name_.case_compare(OB_SV_COLLATION_CONNECTION)) {
+        ObCollationType cstype = static_cast<ObCollationType>(out_val.get_int());
+        if (!ObCharset::is_valid_collation(cstype)) {
+          ret = OB_ERR_UNKNOWN_CHARSET;
+          LOG_USER_ERROR(OB_ERR_UNKNOWN_CHARSET, in_val.get_string().length(), in_val.get_string().ptr());
+        } else if(ObCharset::get_charset(cstype)->mbminlen > 1) {
+          ret = OB_ERR_WRONG_VALUE_FOR_VAR;
+          LOG_USER_ERROR(OB_ERR_WRONG_VALUE_FOR_VAR,
+                      set_var.var_name_.length(),
+                      set_var.var_name_.ptr(),
+                      in_val.get_string().length(),
+                      in_val.get_string().ptr());
+        }
+      }
     }
   }
   return ret;

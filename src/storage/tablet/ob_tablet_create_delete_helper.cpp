@@ -231,7 +231,8 @@ int ObTabletCreateDeleteHelper::check_status_for_new_mds(
     const ObTabletStatus::Status &status = user_data.tablet_status_.get_status();
     switch (status) {
       case ObTabletStatus::NORMAL:
-        ret = check_read_snapshot_for_normal(tablet, snapshot_version, timeout_us, user_data, is_committed);
+      case ObTabletStatus::SPLIT_DST:
+        ret = check_read_snapshot_for_normal_or_split_dst(tablet, snapshot_version, timeout_us, user_data, is_committed);
         break;
       case ObTabletStatus::DELETED:
         ret = check_read_snapshot_for_deleted(tablet, snapshot_version, user_data, is_committed);
@@ -244,6 +245,12 @@ int ObTabletCreateDeleteHelper::check_status_for_new_mds(
         break;
       case ObTabletStatus::TRANSFER_OUT_DELETED:
         ret = check_read_snapshot_for_transfer_out_deleted(tablet, snapshot_version, user_data, is_committed);
+        break;
+      case ObTabletStatus::SPLIT_SRC:
+        ret = check_read_snapshot_for_split_src(tablet, snapshot_version, user_data, is_committed);
+        break;
+      case ObTabletStatus::SPLIT_SRC_DELETED:
+        ret = check_read_snapshot_for_split_src_deleted(tablet, user_data, is_committed);
         break;
       default:
         ret = OB_ERR_UNEXPECTED;
@@ -298,7 +305,7 @@ int ObTabletCreateDeleteHelper::check_read_snapshot_by_commit_version(
   }
 
   if (OB_FAIL(ret)) {
-  } else if (ObTabletStatus::NORMAL == tablet_status || ObTabletStatus::TRANSFER_IN == tablet_status) {
+  } else if (ObTabletStatus::NORMAL == tablet_status || ObTabletStatus::TRANSFER_IN == tablet_status || ObTabletStatus::SPLIT_DST == tablet_status) {
     if (OB_UNLIKELY(tablet.is_empty_shell())) {
       ret = OB_TABLET_NOT_EXIST;
       LOG_WARN("tablet is empty shell", K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(create_commit_version));
@@ -310,7 +317,7 @@ int ObTabletCreateDeleteHelper::check_read_snapshot_by_commit_version(
   return ret;
 }
 
-int ObTabletCreateDeleteHelper::check_read_snapshot_for_normal(
+int ObTabletCreateDeleteHelper::check_read_snapshot_for_normal_or_split_dst(
     ObTablet &tablet,
     const int64_t snapshot_version,
     const int64_t timeout_us,
@@ -323,7 +330,7 @@ int ObTabletCreateDeleteHelper::check_read_snapshot_for_normal(
   const ObTabletStatus &tablet_status = user_data.tablet_status_;
   share::SCN read_snapshot;
 
-  if (OB_UNLIKELY(ObTabletStatus::NORMAL != tablet_status)) {
+  if (OB_UNLIKELY(ObTabletStatus::NORMAL != tablet_status && ObTabletStatus::SPLIT_DST != tablet_status)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(ls_id), K(tablet_id), K(user_data));
   } else if (is_committed) {
@@ -460,6 +467,55 @@ int ObTabletCreateDeleteHelper::check_read_snapshot_for_transfer_out_deleted(
     ret = OB_TABLET_NOT_EXIST;
     LOG_WARN("read snapshot is no smaller than transfer scn after transfer out deleted status, should retry on dst ls",
         K(ret), K(read_snapshot), K(transfer_scn), K(tablet_status));
+  }
+
+  return ret;
+}
+
+int ObTabletCreateDeleteHelper::check_read_snapshot_for_split_src(
+    ObTablet &tablet,
+    const int64_t snapshot_version,
+    const ObTabletCreateDeleteMdsUserData &user_data,
+    const bool is_committed)
+{
+  int ret = OB_SUCCESS;
+  const share::ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
+  const common::ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
+  const ObTabletStatus &tablet_status = user_data.tablet_status_;
+
+  if (OB_UNLIKELY(ObTabletStatus::SPLIT_SRC != tablet_status)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(ls_id), K(tablet_id), K(user_data));
+  } else if (is_committed) {
+    if (snapshot_version < user_data.create_commit_version_) {
+      ret = OB_SNAPSHOT_DISCARDED;
+      LOG_WARN("read snapshot smaller than create commit version",
+          K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(user_data));
+    } else {
+      ret = OB_TABLET_IS_SPLIT_SRC;
+      LOG_WARN("tablet is split src", K(ret), K(ls_id), K(tablet_id), K(common::lbt()));
+    }
+  }
+
+  return ret;
+}
+
+int ObTabletCreateDeleteHelper::check_read_snapshot_for_split_src_deleted(
+    ObTablet &tablet,
+    const ObTabletCreateDeleteMdsUserData &user_data,
+    const bool is_committed)
+{
+  int ret = OB_SUCCESS;
+  const share::ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
+  const common::ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
+  const ObTabletStatus &tablet_status = user_data.tablet_status_;
+
+  if (OB_UNLIKELY(ObTabletStatus::SPLIT_SRC_DELETED != tablet_status)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(ls_id), K(tablet_id), K(user_data));
+  } else if (is_committed) {
+    ret = OB_TABLET_NOT_EXIST;
+    LOG_WARN("split src deleted", K(ret), K(ls_id), K(tablet_id), K(common::lbt()));
   }
 
   return ret;

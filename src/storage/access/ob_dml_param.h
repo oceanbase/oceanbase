@@ -137,7 +137,8 @@ public:
         need_scn_(false),
         need_switch_param_(false),
         is_mds_query_(false),
-        is_thread_scope_(true)
+        is_thread_scope_(true),
+        tx_seq_base_(-1)
   {}
   virtual ~ObTableScanParam() {}
 public:
@@ -158,8 +159,19 @@ public:
   OB_INLINE bool use_index_skip_scan() const {
     return (1 == ss_key_ranges_.count()) && (!ss_key_ranges_.at(0).is_whole_range());
   }
+  OB_INLINE bool is_mview_query() const {
+    return nullptr != op_filters_ && scan_flag_.is_mr_mview_query();
+  }
+  void destroy() override
+  {
+    if (OB_UNLIKELY(ss_key_ranges_.get_capacity() > OB_DEFAULT_RANGE_COUNT)) {
+      ss_key_ranges_.destroy();
+    }
+    ObVTableScanParam::destroy();
+  }
   bool is_thread_scope_;
   ObRangeArray ss_key_ranges_;  // used for index skip scan, use as postfix range for ObVTableScanParam::key_ranges_
+  int64_t tx_seq_base_;  // used by lob when main table is read_latest
 
   DECLARE_VIRTUAL_TO_STRING;
 private:
@@ -190,7 +202,8 @@ struct ObDMLBaseParam
         write_flag_(),
         check_schema_version_(true),
         ddl_task_id_(0),
-        lob_allocator_(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
+        lob_allocator_(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+        data_row_for_lob_(nullptr)
   {
   }
 
@@ -226,6 +239,7 @@ struct ObDMLBaseParam
   bool check_schema_version_;
   int64_t ddl_task_id_;
   mutable ObArenaAllocator lob_allocator_;
+  const blocksstable::ObDatumRow *data_row_for_lob_; // for tablet split
   bool is_valid() const { return (timeout_ > 0 && schema_version_ >= 0) && nullptr != store_ctx_guard_; }
   bool is_direct_insert() const { return (direct_insert_task_id_ > 0); }
   DECLARE_TO_STRING;

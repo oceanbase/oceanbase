@@ -90,6 +90,7 @@
 #include "logservice/ob_server_log_block_mgr.h"
 #include "rootserver/ob_admin_drtask_util.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
+#include "storage/mview/ob_major_mv_merge_info.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/shared_storage/ob_ss_micro_cache.h"
 #include "close_modules/shared_storage/storage/shared_storage/ob_ss_micro_cache_io_helper.h"
@@ -556,7 +557,7 @@ int ObRpcCheckandCancelDDLComplementDagP::process()
   int ret = OB_SUCCESS;
   if (OB_ISNULL(gctx_.ob_service_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("invalid argument", K(ret), K(gctx_.ob_service_));
+    LOG_ERROR("invalid arguments", K(ret), KP(gctx_.ob_service_));
   } else {
     bool is_dag_exist = true;
     ret = gctx_.ob_service_->check_and_cancel_ddl_complement_data_dag(arg_, is_dag_exist);
@@ -575,6 +576,56 @@ int ObRpcCheckandCancelDeleteLobMetaRowDagP::process()
     bool is_dag_exist = true;
     ret = gctx_.ob_service_->check_and_cancel_delete_lob_meta_row_dag(arg_, is_dag_exist);
     result_ = is_dag_exist;
+  }
+  return ret;
+}
+
+int ObRpcBuildSplitTabletDataStartRequestP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid arguments", K(ret), KP(gctx_.ob_service_));
+  } else {
+    ret = gctx_.ob_service_->build_split_tablet_data_start_request(arg_, result_);
+  }
+  return ret;
+}
+
+int ObRpcBuildSplitTabletDataFinishRequestP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid arguments", K(ret), KP(gctx_.ob_service_));
+  } else {
+    ret = gctx_.ob_service_->build_split_tablet_data_finish_request(arg_, result_);
+  }
+  return ret;
+}
+
+int ObRpcFreezeSplitSrcTabletP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid arguments", K(ret), KP(gctx_.ob_service_));
+  } else {
+    const int64_t abs_timeout_us = nullptr == rpc_pkt_ ? 0 : get_receive_timestamp() + rpc_pkt_->get_timeout();
+    ret = gctx_.ob_service_->freeze_split_src_tablet(arg_, result_, abs_timeout_us);
+  }
+  return ret;
+}
+
+int ObRpcFetchSplitTabletInfoP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid arguments", K(ret), KP(gctx_.ob_service_));
+  } else {
+    const int64_t abs_timeout_us = nullptr == rpc_pkt_ ? 0 : get_receive_timestamp() + rpc_pkt_->get_timeout();
+    ret = gctx_.ob_service_->fetch_split_tablet_info(arg_, result_, abs_timeout_us);
   }
   return ret;
 }
@@ -745,6 +796,42 @@ int ObRpcCheckSchemaVersionElapsedP::process()
     LOG_ERROR("invalid argument", K(ret), K(gctx_.ob_service_));
   } else {
     ret = gctx_.ob_service_->check_schema_version_elapsed(arg_, result_);
+  }
+  return ret;
+}
+
+int ObRpcCheckMemtableCntP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(ret), K(gctx_.ob_service_));
+  } else {
+    ret = gctx_.ob_service_->check_memtable_cnt(arg_, result_);
+  }
+  return ret;
+}
+
+int ObRpcCheckMediumCompactionInfoListP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(ret), K(gctx_.ob_service_));
+  } else {
+    ret = gctx_.ob_service_->check_medium_compaction_info_list_cnt(arg_, result_);
+  }
+  return ret;
+}
+
+int ObRpcPrepareTabletSplitTaskRangesP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(ret), K(gctx_.ob_service_));
+  } else {
+    ret = gctx_.ob_service_->prepare_tablet_split_task_ranges(arg_, result_);
   }
   return ret;
 }
@@ -2316,6 +2403,19 @@ int ObRpcBatchGetTabletBindingP::process()
   return ret;
 }
 
+int ObRpcBatchGetTabletSplitP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(rpc_pkt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid rpc pkt", K(ret));
+  } else {
+    const int64_t abs_timeout_us = get_send_timestamp() + rpc_pkt_->get_timeout();
+    ret = ObTabletSplitMdsHelper::batch_get_tablet_split(abs_timeout_us, arg_, result_);
+  }
+  return ret;
+}
+
 #ifdef OB_BUILD_TDE_SECURITY
 int ObDumpTenantCacheMasterKeyP::process()
 {
@@ -3480,6 +3580,97 @@ int ObResourceLimitCalculatorP::process()
   int ret = OB_SUCCESS;
   if (OB_FAIL(MTL(ObResourceLimitCalculator *)->get_tenant_min_phy_resource_value(result_))) {
     LOG_WARN("get physical resource needed by unit failed", K(ret));
+  }
+  return ret;
+}
+
+int ObCollectMvMergeInfoP::process()
+{
+  int ret = OB_SUCCESS;
+  ObMajorMVMergeInfo merge_info;
+  const share::ObLSID ls_id = arg_.get_ls_id();
+  const uint64_t tenant_id = arg_.get_tenant_id();
+  int64_t proposal_id = 0;
+
+  MTL_SWITCH(tenant_id) {
+    if (arg_.need_update() &&
+        OB_FAIL(ObMVCheckReplicaHelper::get_and_update_merge_info(ls_id, merge_info))) {
+      LOG_WARN("get and update merge info failed", K(ret));
+    } else if (!arg_.need_update() &&
+        OB_FAIL(ObMVCheckReplicaHelper::get_merge_info(ls_id, merge_info))) {
+      LOG_WARN("get merge info failed", K(ret));
+    } else if (arg_.need_check_leader()) {
+      ObRole role;
+      logservice::ObLogService *log_service = nullptr;
+      if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("log service should not be NULL", K(ret), KP(log_service));
+      } else if (OB_FAIL(log_service->get_palf_role(ls_id, role, proposal_id))) {
+        LOG_WARN("failed to get role", K(ret), K(arg_));
+      } else if (!is_strong_leader(role)) {
+        ret = OB_LS_NOT_LEADER;
+        LOG_WARN("it is not leader, cannot collect merge info", K(ret), K(ls_id), K(role), K(arg_));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(result_.init(merge_info, ret))) {
+      LOG_WARN("init collect mv merge info result failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObFetchStableMemberListP::process()
+{
+  int ret = OB_SUCCESS;
+  const share::ObLSID ls_id = arg_.get_ls_id();
+  const uint64_t tenant_id = arg_.get_tenant_id();
+  // todo siyu :: use new stable member list interface
+  MTL_SWITCH(tenant_id) {
+    ObLSService *ls_svr = NULL;
+    ObLSHandle ls_handle;
+    ObLS *ls = NULL;
+    logservice::ObLogHandler *log_handler = NULL;
+    common::ObMemberList member_list;
+    GlobalLearnerList learn_list;
+    int64_t paxos_replica_num = 0;
+    logservice::ObLogService *log_service = nullptr;
+    palf::LogConfigVersion log_config_version;
+    ObRole role;
+    int64_t proposal_id = 0;
+    int64_t proposal_id_new = 0;
+
+    if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("log service should not be NULL", K(ret), KP(log_service));
+    } else if (OB_FAIL(log_service->get_palf_role(ls_id, role, proposal_id))) {
+      LOG_WARN("failed to get role", K(ret), K(arg_));
+    } else if (!is_strong_leader(role)) {
+      ret = OB_LS_NOT_LEADER;
+      LOG_WARN("ls is not leader, cannot get member list", K(ret), K(role), K(arg_));
+    } else if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls service should not be null", K(ret));
+    } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      LOG_WARN("failed to get ls", K(ret), K(ls_id));
+    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls should not be null", K(ret));
+    } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("log handler should not be NULL", K(ret));
+    } else if (OB_FAIL(log_handler->get_stable_membership(log_config_version, member_list,
+                                                          paxos_replica_num, learn_list))) {
+      LOG_WARN("failed to get paxos member list and log config version", K(ret));
+    } else if (OB_FAIL(result_.init(member_list, log_config_version))) {
+      LOG_WARN("failed to int member list and config version", K(ret), K(member_list), K(log_config_version));
+    } else if (OB_FAIL(log_service->get_palf_role(ls_id, role, proposal_id_new))) {
+      LOG_WARN("failed to get role", K(ret), K(arg_));
+    } else if (proposal_id_new != proposal_id || !is_strong_leader(role)) {
+      // double check for get stable memberlist
+      ret = OB_LS_NOT_LEADER;
+      LOG_WARN("ls is not leader, cannot get member list", K(ret), K(role), K(arg_));
+    }
   }
   return ret;
 }

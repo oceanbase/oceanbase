@@ -53,6 +53,9 @@ public:
   Status &get_status() { return status_; }
   const Status &get_status() const { return status_; }
 
+  bool is_deleted_for_gc() const;
+  bool is_writable_for_dml() const;
+
   int serialize(char *buf, const int64_t len, int64_t &pos) const;
   int deserialize(const char *buf, const int64_t len, int64_t &pos);
   int64_t get_serialize_size() const;

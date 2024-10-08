@@ -51,7 +51,7 @@ int segment_and_calc_word_count(
   int64_t doc_length = 0;
   if (OB_ISNULL(helper)
       || OB_UNLIKELY(ObCollationType::CS_TYPE_INVALID == type
-                  || ObCollationType::CS_TYPE_EXTENDED_MARK < type)
+                  || ObCollationType::CS_TYPE_PINYIN_BEGIN_MARK <= type)
       || OB_UNLIKELY(!words_count.created())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KPC(helper), K(type), K(words_count.created()));
@@ -510,7 +510,7 @@ TEST_F(ObTestFTParseHelper, test_parse_fulltext)
 
   ASSERT_EQ(OB_INVALID_ARGUMENT, parse_helper_.segment(CS_TYPE_INVALID, ObTestAddWord::TEST_FULLTEXT,
         std::strlen(ObTestAddWord::TEST_FULLTEXT), doc_length, ft_word_map));
-  ASSERT_EQ(OB_INVALID_ARGUMENT, parse_helper_.segment(CS_TYPE_EXTENDED_MARK, ObTestAddWord::TEST_FULLTEXT,
+  ASSERT_EQ(OB_INVALID_ARGUMENT, parse_helper_.segment(CS_TYPE_PINYIN_BEGIN_MARK, ObTestAddWord::TEST_FULLTEXT,
         std::strlen(ObTestAddWord::TEST_FULLTEXT), doc_length, ft_word_map));
 
   ASSERT_EQ(OB_INIT_TWICE, parse_helper_.init(&allocator_, plugin_name_));
@@ -681,7 +681,7 @@ TEST_F(ObTestNgramFTParseHelper, test_parse_fulltext)
 
   ASSERT_EQ(OB_INVALID_ARGUMENT, parse_helper_.segment(CS_TYPE_INVALID, ObTestAddWord::TEST_FULLTEXT,
         std::strlen(ObTestAddWord::TEST_FULLTEXT), doc_length, words));
-  ASSERT_EQ(OB_INVALID_ARGUMENT, parse_helper_.segment(CS_TYPE_EXTENDED_MARK, ObTestAddWord::TEST_FULLTEXT,
+  ASSERT_EQ(OB_INVALID_ARGUMENT, parse_helper_.segment(CS_TYPE_PINYIN_BEGIN_MARK, ObTestAddWord::TEST_FULLTEXT,
         std::strlen(ObTestAddWord::TEST_FULLTEXT), doc_length, words));
 
   ASSERT_EQ(OB_INIT_TWICE, parse_helper_.init(&allocator_, plugin_name_));

@@ -250,6 +250,7 @@ public:
 
   int add_explain_note();
   int add_parallel_explain_note();
+  int add_direct_load_explain_note();
 
   int adjust_final_plan_info(ObLogicalOperator *&op);
 
@@ -264,7 +265,15 @@ public:
   int collect_location_related_info(ObLogicalOperator &op);
   int build_location_related_tablet_ids();
   int check_das_need_keep_ordering(ObLogicalOperator *op);
-  int check_das_need_scan_with_vid(ObLogicalOperator *op);
+  int check_das_need_scan_with_domain_id(ObLogicalOperator *op);
+
+  int set_major_refresh_mview_dep_table_scan(ObLogicalOperator *op);
+  int set_major_refresh_mview_dep_table_scan(bool for_fast_refresh,
+                                             bool for_rt_mview,
+                                             ObLogicalOperator *op);
+  int is_major_refresh_rt_mview(const ObDMLStmt *set_stmt,
+                                const ObSqlSchemaGuard *sql_schema_guard,
+                                bool &is_mr_rt_mview);
 
   int gen_das_table_location_info(ObLogTableScan *table_scan,
                                   ObTablePartitionInfo *&table_partition_info);
@@ -424,6 +433,11 @@ public:
                                          ObExchangeInfo &right_exch_info);
   void set_insert_stmt(const ObInsertStmt *insert_stmt) { insert_stmt_ = insert_stmt; }
   const ObInsertStmt *get_insert_stmt() const { return insert_stmt_; }
+  int get_part_exprs(uint64_t table_id,
+                     uint64_t ref_table_id,
+                     share::schema::ObPartitionLevel &part_level,
+                     ObRawExpr *&part_expr,
+                     ObRawExpr *&subpart_expr);
   void set_nonrecursive_plan_for_fake_cte(ObSelectLogPlan *plan) { nonrecursive_plan_for_fake_cte_ = plan; }
   ObSelectLogPlan *get_nonrecursive_plan_for_fake_cte() { return nonrecursive_plan_for_fake_cte_; }
 
@@ -488,9 +502,9 @@ public:
     void clear_ignore_hint()  { ignore_hint_ = false; }
     inline bool allow_basic() const { return ignore_hint_ || (!force_partition_wise_ && !force_dist_hash_); }
     inline bool allow_dist_hash() const { return ignore_hint_ || (!force_basic_ && !force_partition_wise_); }
-    inline bool allow_partition_wise(bool parallel_more_than_part_cnt) const
+    inline bool allow_partition_wise(bool enable_partition_wise_plan) const
     {
-      bool disable_by_rule = parallel_more_than_part_cnt && optimizer_features_enable_version_ > COMPAT_VERSION_4_3_2;
+      bool disable_by_rule = !enable_partition_wise_plan && optimizer_features_enable_version_ > COMPAT_VERSION_4_3_2;
       return ignore_hint_ ? !disable_by_rule
                           : (disable_by_rule ? force_partition_wise_ : (!force_basic_ && !force_dist_hash_));
     }
@@ -654,6 +668,19 @@ public:
                                                            const ObIArray<ObLogicalOperator*> &subquery_ops,
                                                            const ObIArray<ObExecParamRawExpr *> &params,
                                                            ObExchangeInfo &exch_info);
+
+  /**
+   * @brief Compute to check whether we need add random shuffle exchange for subplan filter
+   * @param[in] top  Left child of subplan filter operator
+   * @param[in] params  Exec exprs of subplan filter operator, used to construct Hash Shuffle Exchange
+   * @param[in] dist_algo
+   * @param[out] exch_info Shuffle exchange operator info that generate
+   * @return
+   */
+  int compute_subplan_filter_random_shuffle_info(ObLogicalOperator* top,
+                                                 const ObIArray<ObExecParamRawExpr *> &params,
+                                                 const DistAlgo dist_algo,
+                                                 ObExchangeInfo &exch_info);
 
   int find_base_sharding_table_scan(const ObLogicalOperator &op,
                                     const ObLogTableScan *&tsc);
@@ -1691,12 +1718,6 @@ protected:
 
   int get_cache_calc_part_id_expr(int64_t table_id, int64_t ref_table_id,
       CalcPartIdType calc_type, ObRawExpr* &expr);
-
-  int get_part_exprs(uint64_t table_id,
-                    uint64_t ref_table_id,
-                    share::schema::ObPartitionLevel &part_level,
-                    ObRawExpr *&part_expr,
-                    ObRawExpr *&subpart_expr);
 
   int create_hash_sortkey(const int64_t part_cnt,
                           const common::ObIArray<OrderItem> &order_keys,

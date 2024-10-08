@@ -15,6 +15,7 @@
 #include "storage/compaction/ob_partition_rows_merger.h"
 #include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/compaction/ob_tablet_merge_ctx.h"
+#include "storage/compaction/ob_mview_compaction_util.h"
 
 namespace oceanbase
 {
@@ -581,7 +582,9 @@ int ObPartitionMergeHelper::init_merge_iters(const ObMergeParameter &merge_param
     ObSSTable *sstable = nullptr;
     ObPartitionMergeIter *merge_iter = nullptr;
     bool is_small_sstable = false;
-
+    if (merge_param.is_mv_merge() && OB_FAIL(init_mv_merge_iters(merge_param))) {
+      STORAGE_LOG(WARN, "Failed to init mv merge iters", K(ret), K(merge_param));
+    }
     for (int64_t i = table_cnt - 1; OB_SUCC(ret) && i >= 0; i--) {
       if (OB_ISNULL(table = tables_handle.get_table(i))) {
         ret = OB_ERR_UNEXPECTED;
@@ -621,6 +624,35 @@ int ObPartitionMergeHelper::init_merge_iters(const ObMergeParameter &merge_param
     }
 
     return ret;
+}
+
+int ObPartitionMergeHelper::init_mv_merge_iters(const ObMergeParameter &merge_param)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(0 != merge_iters_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "Unexpected iters count in mv merge", K(ret));
+  } else {
+    ObPartitionMergeIter *merge_iter = nullptr;
+    for (int64_t i = merge_param.mview_merge_param_->refresh_sql_count_ - 1; OB_SUCC(ret) && i >= 0 ; i--) {
+      if (OB_ISNULL(merge_iter = alloc_helper<ObPartitionMVRowMergeIter>(allocator_, allocator_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(WARN, "Failed to alloc memory for mv merge iter", K(ret));
+      } else if (OB_FAIL(merge_iter->init(merge_param, i, &read_info_))) {
+        STORAGE_LOG(WARN, "Failed to init mv merge iter", K(ret), K(i));
+      } else if (OB_FAIL(merge_iters_.push_back(merge_iter))) {
+        STORAGE_LOG(WARN, "Failed to push back mv merge iter", K(ret), KPC(merge_iter));
+      } else {
+        STORAGE_LOG(INFO, "Succ to init mv merge iter", K(ret), K(i), KPC(merge_iter));
+        merge_iter = nullptr;
+      }
+      if (OB_FAIL(ret) && nullptr != merge_iter) {
+        merge_iter->~ObPartitionMergeIter();
+        allocator_.free(merge_iter);
+      }
+    }
+  }
+  return ret;
 }
 
 int ObPartitionMergeHelper::prepare_rows_merger()
@@ -896,6 +928,8 @@ void ObPartitionMergeHelper::reset()
       if (OB_NOT_NULL(table = iter->get_table())) {
         FLOG_INFO("partition merge iter row count", K(i), "row_count", iter->get_iter_row_count(),
             "ghost_row_count", iter->get_ghost_row_count(), "table_key", table->get_key());
+      } else {
+        FLOG_INFO("partition merge iter row count", K(i), "row_count", iter->get_iter_row_count(), KPC(iter));
       }
       iter->~ObPartitionMergeIter();
       iter = nullptr;

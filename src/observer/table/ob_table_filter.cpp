@@ -296,6 +296,7 @@ int ObNormalTableQueryResultIterator::get_next_result(table::ObTableQueryResult 
   return ret;
 }
 
+
 bool ObNormalTableQueryResultIterator::has_more_result() const
 {
   return has_more_rows_;

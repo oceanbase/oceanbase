@@ -139,7 +139,9 @@ int ObRawExprDeduceType::visit(ObPlQueryRefRawExpr &expr)
 int ObRawExprDeduceType::visit(ObExecParamRawExpr &expr)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr.get_ref_expr())) {
+  if (expr.is_eval_by_storage()) {
+    // do nothing
+  } else if (OB_ISNULL(expr.get_ref_expr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ref expr is null", K(ret));
   } else if (OB_FAIL(expr.get_ref_expr()->postorder_accept(*this))) {
@@ -2567,8 +2569,13 @@ int ObRawExprDeduceType::visit(ObSysFunRawExpr &expr)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
   } else if (NULL == op) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("Get expression operator failed", "expr type", expr.get_expr_type());
+    if (T_RB_ITERATE_EXPRESSION == expr.get_expr_type()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "rb_iterate usage");
+    } else {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("Get expression operator failed", "expr type", expr.get_expr_type());
+    }
   } else if (T_FUN_SYS_CAST == expr.get_expr_type() &&
              OB_FAIL(adjust_cast_as_signed_unsigned(expr))) {
     LOG_WARN("failed to adjust cast as signed unsigned", K(ret), K(expr));

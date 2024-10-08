@@ -105,24 +105,15 @@ TEST_F(TestLockMemtableCheckpoint, replay_disorder)
   commit_version.set_base();
   commit_scn.set_base();
 
-  // 1. get ls checkpoint
+  // 1.recover unlock op and lock op
   LOG_INFO("TestLockMemtableCheckpoint::replay_disorder 1");
-  ObCheckpointExecutor *checkpoint_executor = ls_->get_checkpoint_executor();
-  ObCommonCheckpoint *checkpoint =
-      dynamic_cast<ObLSTxService *>(
-          checkpoint_executor
-              ->handlers_[logservice::TRANS_SERVICE_LOG_BASE_TYPE])
-          ->common_checkpoints_[ObCommonCheckpointType::LOCK_MEMTABLE_TYPE];
-
-  // 2.recover unlock op and lock op
-  LOG_INFO("TestLockMemtableCheckpoint::replay_disorder 2");
   ret = memtable_->recover_obj_lock(DEFAULT_OUT_TRANS_UNLOCK_OP);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = memtable_->recover_obj_lock(DEFAULT_OUT_TRANS_LOCK_OP);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  // 3. update lock status disorder
-  LOG_INFO("TestLockMemtableCheckpoint::replay_disorder 3");
+  // 2. update lock status disorder
+  LOG_INFO("TestLockMemtableCheckpoint::replay_disorder 2");
   commit_version.val_ = 3;
   commit_scn.val_ = 3;
   ret = memtable_->update_lock_status(DEFAULT_OUT_TRANS_UNLOCK_OP,
@@ -139,19 +130,17 @@ TEST_F(TestLockMemtableCheckpoint, replay_disorder)
                                      COMMIT_LOCK_OP_STATUS);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  // 4. check checkpoint
+  // 3. check checkpoint
   // The rec_scn should be equal with the smaller commit_scn
-  LOG_INFO("TestLockMemtableCheckpoint::replay_disorder 4");
+  LOG_INFO("TestLockMemtableCheckpoint::replay_disorder 3");
   ASSERT_EQ(commit_scn.val_, memtable_->get_rec_scn().val_);
-  share::SCN rec_scn = checkpoint->get_rec_scn();
-  ASSERT_EQ(commit_scn.val_, rec_scn.val_);
 
-  // 5. flush and get a previous commit log
+  // 4. flush and get a previous commit log
   // You will find the log about disordered replay in the log file.
-  LOG_INFO("TestLockMemtableCheckpoint::replay_disorder 5");
+  LOG_INFO("TestLockMemtableCheckpoint::replay_disorder 4");
   ret = memtable_->recover_obj_lock(DEFAULT_OUT_TRANS_UNLOCK_OP);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(OB_SUCCESS, checkpoint->flush(share::SCN::max_scn(), 0));
+  ASSERT_EQ(OB_SUCCESS, memtable_->flush(share::SCN::max_scn(), 0));
   commit_version.val_ = 1;
   commit_scn.val_ = 1;
   ret = memtable_->update_lock_status(DEFAULT_OUT_TRANS_UNLOCK_OP,
@@ -160,17 +149,15 @@ TEST_F(TestLockMemtableCheckpoint, replay_disorder)
                                      COMMIT_LOCK_OP_STATUS);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  // 6. check checkpoint
+  // 5. check checkpoint
   // The rec_scn should be equal with the smaller commit_scn
   // during flushing (i.e. it's get from pre_rec_scn)
-  LOG_INFO("TestLockMemtableCheckpoint::replay_disorder 6");
+  LOG_INFO("TestLockMemtableCheckpoint::replay_disorder 5");
   ASSERT_EQ(commit_scn.val_, memtable_->get_rec_scn().val_);
-  rec_scn = checkpoint->get_rec_scn();
-  ASSERT_EQ(commit_scn.val_, rec_scn.val_);
 
-  // 7. get a commit log with a commit_scn which
+  // 6. get a commit log with a commit_scn which
   // is larger than freeze_scn during flushing
-  LOG_INFO("TestLockMemtableCheckpoint::replay_disorder 7");
+  LOG_INFO("TestLockMemtableCheckpoint::replay_disorder 6");
   ret = memtable_->recover_obj_lock(DEFAULT_OUT_TRANS_LOCK_OP);
   ASSERT_EQ(OB_SUCCESS, ret);
   commit_version.val_ = 4;
@@ -180,29 +167,25 @@ TEST_F(TestLockMemtableCheckpoint, replay_disorder)
                                      commit_scn,
                                      COMMIT_LOCK_OP_STATUS);
 
-  // 8. check checkpoint
+  // 7. check checkpoint
   // The rec_scn should still be equal with the smaller
   // commit_scn during flushing (i.e. it's get from pre_rec_scn)
-  LOG_INFO("TestLockMemtableCheckpoint::replay_disorder 8");
+  LOG_INFO("TestLockMemtableCheckpoint::replay_disorder 7");
   ASSERT_EQ(1, memtable_->get_rec_scn().val_);
-  rec_scn = checkpoint->get_rec_scn();
-  ASSERT_EQ(1, rec_scn.val_);
 
-  // 9. flush finish
-  LOG_INFO("TestLockMemtableCheckpoint::replay_disorder 9");
+  // 8. flush finish
+  LOG_INFO("TestLockMemtableCheckpoint::replay_disorder 8");
   ret = memtable_->on_memtable_flushed();
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  // 10. check checkpoint
+  // 9. check checkpoint
   // The rec_scn should be equal with the latest commit_scn
   // which got during previous flushing (i.e. it's get from rec_scn)
-  LOG_INFO("TestLockMemtableCheckpoint::replay_disorder 10");
+  LOG_INFO("TestLockMemtableCheckpoint::replay_disorder 9");
   ASSERT_EQ(commit_scn.val_, memtable_->get_rec_scn().val_);
-  rec_scn = checkpoint->get_rec_scn();
-  ASSERT_EQ(commit_scn.val_, rec_scn.val_);
 
-  // 11. clean up
-  LOG_INFO("TestLockMemtableCheckpoint::replay_disorder 11");
+  // 10. clean up
+  LOG_INFO("TestLockMemtableCheckpoint::replay_disorder 10");
   table_handle_.reset();
   ls_handle_.reset();
   ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id_));

@@ -203,7 +203,6 @@ void PxWorkerFunctor::operator ()(bool need_exec)
             if (OB_FAIL(runtime_arg.init_deserialize_param(mem_context, *env_arg_.get_gctx()))) {
               LOG_WARN("fail to init args", K(ret));
             } else if (OB_FAIL(runtime_arg.deep_copy_assign(task_arg_, mem_context->get_arena_allocator()))) {
-              (void) ObInterruptUtil::interrupt_qc(task_arg_.task_, ret, task_arg_.exec_ctx_);
               LOG_WARN("fail deep copy assign arg", K(task_arg_), K(ret));
             } else {
               // 绑定sqc_handler，方便算子任何地方都可以拿sqc_handle
@@ -244,6 +243,15 @@ void PxWorkerFunctor::operator ()(bool need_exec)
   } else if (sqc_handler->get_flt_ctx().trace_id_.is_inited()) {
     OBTRACE->reset();
   }
+
+  //if start worker failed, still need set task state, interrupt qc
+  if (OB_FAIL(ret)) {
+    if (task_arg_.sqc_task_ptr_ != NULL) {
+      task_arg_.sqc_task_ptr_->set_task_state(SQC_TASK_EXIT);
+    }
+    (void) ObInterruptUtil::interrupt_qc(task_arg_.task_, ret, task_arg_.exec_ctx_);
+  }
+
   PxWorkerFinishFunctor on_func_finish;
   on_func_finish();
   ObCurTraceId::reset();

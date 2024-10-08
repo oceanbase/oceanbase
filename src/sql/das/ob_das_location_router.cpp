@@ -837,7 +837,8 @@ int ObDASLocationRouter::nonblock_get_readable_replica(const uint64_t tenant_id,
     } else if (OB_FAIL(ObBLService::get_instance().check_in_black_list(bl_key, in_black_list))) {
       LOG_WARN("check in black list failed", K(ret));
     } else if (!in_black_list) {
-      if (route_policy == COLUMN_STORE_ONLY && tmp_replica_loc.get_replica_type() != REPLICA_TYPE_COLUMNSTORE) {
+      if ((route_policy == COLUMN_STORE_ONLY && tmp_replica_loc.get_replica_type() != REPLICA_TYPE_COLUMNSTORE) ||
+          (route_policy != COLUMN_STORE_ONLY && tmp_replica_loc.get_replica_type() == REPLICA_TYPE_COLUMNSTORE)) {
         // skip the tmp_replica_loc
         LOG_TRACE("skip the replica due to the COLUMN_STORE_ONLY policy.", K(ret), K(tmp_replica_loc));
       } else if (tmp_replica_loc.get_server() == GCTX.self_addr()) {

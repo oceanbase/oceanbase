@@ -38,6 +38,7 @@ public:
   void erase_task_result();
   void set_has_more(const bool has_more) { has_more_ = has_more; }
   void set_need_check_output_datum(bool v) { need_check_output_datum_ = v; }
+  void set_tsc_monitor_info(ObTSCMonitorInfo *tsc_monitor_info) { tsc_monitor_info_ = tsc_monitor_info; }
   TO_STRING_KV(KPC_(output_exprs));
 private:
   int fetch_result();
@@ -54,6 +55,7 @@ private:
   bool has_more_;
   bool need_check_output_datum_;
   bool enable_rich_format_;
+  ObTSCMonitorInfo *tsc_monitor_info_;
 };
 }  // namespace sql
 }  // namespace oceanbase

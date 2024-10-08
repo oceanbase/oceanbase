@@ -912,7 +912,8 @@ ObTransferTabletInfoArg::ObTransferTabletInfoArg()
     src_ls_id_(),
     dest_ls_id_(),
     tablet_list_(),
-    data_version_(0)
+    data_version_(0),
+    new_mv_merge_scn_(share::ObScnRange::MIN_SCN)
 {
 }
 
@@ -923,6 +924,7 @@ void ObTransferTabletInfoArg::reset()
   dest_ls_id_.reset();
   tablet_list_.reset();
   data_version_ = 0;
+  new_mv_merge_scn_ = share::ObScnRange::MIN_SCN;
 }
 
 int ObTransferTabletInfoArg::assign(const ObTransferTabletInfoArg &other)
@@ -938,6 +940,7 @@ int ObTransferTabletInfoArg::assign(const ObTransferTabletInfoArg &other)
     src_ls_id_ = other.src_ls_id_;
     dest_ls_id_ = other.dest_ls_id_;
     data_version_ = other.data_version_;
+    new_mv_merge_scn_ = other.new_mv_merge_scn_;
   }
   return ret;
 }
@@ -947,10 +950,11 @@ bool ObTransferTabletInfoArg::is_valid() const
   return OB_INVALID_ID != tenant_id_
          && src_ls_id_.is_valid()
          && dest_ls_id_.is_valid()
-         && !tablet_list_.empty();
+         && !tablet_list_.empty()
+         && new_mv_merge_scn_.is_valid();
 }
 
-OB_SERIALIZE_MEMBER(ObTransferTabletInfoArg, tenant_id_, src_ls_id_, dest_ls_id_, tablet_list_, data_version_);
+OB_SERIALIZE_MEMBER(ObTransferTabletInfoArg, tenant_id_, src_ls_id_, dest_ls_id_, tablet_list_, data_version_, new_mv_merge_scn_);
 
 ObFetchLSReplayScnArg::ObFetchLSReplayScnArg()
   : tenant_id_(OB_INVALID_ID),
@@ -2456,6 +2460,9 @@ int ObCheckStartTransferTabletsDelegate::process()
       LOG_WARN("failed to check start transfer out tablets", K(ret), K(arg_));
     } else if (OB_FAIL(check_start_transfer_in_tablets_())) {
       LOG_WARN("failed to check start transfer in tablets", K(ret), K(arg_));
+    } else if (share::ObScnRange::MIN_SCN != arg_.new_mv_merge_scn_
+        && OB_FAIL(check_start_transfer_in_mv_tablets_())) {
+      LOG_WARN("failed to check start transfer in mv tablets", K(ret), K(arg_));
     }
   }
   return ret;
@@ -2546,6 +2553,56 @@ int ObCheckStartTransferTabletsDelegate::check_start_transfer_out_tablets_()
         LOG_WARN("tablet transfer seq is is not match", K(ret), KPC(tablet), K(tablet_info), K(user_data));
       } else if (OB_FAIL(check_transfer_out_tablet_sstable_(tablet))) {
         LOG_WARN("failed to check sstable", K(ret), KPC(tablet), K(user_data));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObCheckStartTransferTabletsDelegate::check_start_transfer_in_mv_tablets_()
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  ObLSService *ls_service = nullptr;
+  ObLS *src_ls = nullptr;
+  ObStorageSchema *storage_schema = nullptr;
+  ObArenaAllocator allocator;
+  if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
+  } else if (OB_FAIL(ls_service->get_ls(arg_.src_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    LOG_WARN("failed to get src ls", K(ret), K(arg_));
+  } else if (OB_ISNULL(src_ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("src ls should not be NULL", K(ret), K(arg_), KP(src_ls));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < arg_.tablet_list_.count(); ++i) {
+      const ObTransferTabletInfo &tablet_info = arg_.tablet_list_.at(i);
+      ObTabletHandle tablet_handle;
+      ObTablet *tablet = nullptr;
+      if (OB_FAIL(src_ls->get_tablet(tablet_info.tablet_id_, tablet_handle, 0,
+          ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+        LOG_WARN("failed to get tablet", K(ret), K(tablet_info));
+      } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tablet should not be NULL", K(ret), KP(tablet));
+      } else if (tablet->is_ls_inner_tablet()) {
+        // skip ls inner tablet
+      } else if (OB_FAIL(tablet->load_storage_schema(allocator, storage_schema))) {
+        LOG_WARN("load storage schema failed", K(ret), KPC(tablet));
+      } else if (OB_ISNULL(storage_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("storage schema is NULL", K(ret), KPC(tablet));
+      } else if (storage_schema->is_mv_major_refresh()) {
+        const int64_t snapshot = tablet->get_last_major_snapshot_version();
+        if (0 == snapshot) {
+          LOG_INFO("check major_mv merge_scn snapshot is 0, there is no major sstable", K(ret), K(arg_), K(snapshot), KPC(tablet));
+        } else if (arg_.new_mv_merge_scn_.get_val_for_gts() > snapshot) {
+          ret = NEW_MV_MAJOR_VERSION_NOT_MATCH;
+          LOG_WARN("new mv major version is not match", K(ret), K(arg_), K(snapshot), KPC(src_ls), KPC(tablet));
+        } else {
+          LOG_INFO("check major_mv merge_scn success", K(src_ls->get_ls_id()), K(tablet->get_tablet_id()), K(snapshot), K(arg_));
+        }
       }
     }
   }

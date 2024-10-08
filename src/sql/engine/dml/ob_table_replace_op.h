@@ -33,6 +33,7 @@ public:
       conflict_checker_ctdef_(alloc),
       has_global_unique_index_(false),
       all_saved_exprs_(alloc),
+      doc_id_col_id_(OB_INVALID_ID),
       alloc_(alloc)
   {
   }
@@ -57,6 +58,7 @@ public:
   bool has_global_unique_index_;
   // insert_row(new_row) + dependency child_output
   ExprFixedArray all_saved_exprs_;
+  uint64_t doc_id_col_id_;
 protected:
   common::ObIAllocator &alloc_;
 private:

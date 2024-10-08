@@ -184,11 +184,11 @@ int ObPLDbLinkGuard::get_dblink_type_with_synonym(sql::ObSQLSessionInfo &session
   common::ObDbLinkProxy *dblink_proxy = NULL;
   common::sqlclient::ObISQLConnection *dblink_conn = NULL;
   common::sqlclient::DblinkDriverProto link_type = DBLINK_UNKNOWN;
+  ObString full_name;
   OZ (ObPLDblinkUtil::init_dblink(dblink_proxy, dblink_conn, session_info, schema_guard, dblink_name, link_type, false));
   CK (OB_NOT_NULL(dblink_proxy));
   CK (OB_NOT_NULL(dblink_conn));
   if (OB_SUCC(ret)) {
-    ObString full_name;
     ObString schema_name;
     ObString object_name;
     ObString sub_object_name;
@@ -225,6 +225,65 @@ int ObPLDbLinkGuard::get_dblink_type_with_synonym(sql::ObSQLSessionInfo &session
     }
     if (OB_SUCC(ret)) {
       ret = tmp_ret;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (NULL != udt) {
+      if (ObPLTypeFrom::PL_TYPE_DBLINK == udt->get_type_from_origin()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("type is not supported", K(ret), KPC(udt));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, full_name.ptr());
+      }
+      if (OB_SUCC(ret)) {
+        if (!udt->is_collection_type() && !udt->is_record_type()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "in dblink, composite types other than collection type and record type are");
+        } else {
+          const ObRecordType *record_type = NULL;
+          if (udt->is_collection_type()) {
+            const ObCollectionType *coll_type = static_cast<const ObCollectionType *>(udt);
+            if (OB_ISNULL(coll_type)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("coll_type is NULL", K(ret));
+            } else {
+              const ObPLDataType &elem_type = coll_type->get_element_type();
+              if (elem_type.is_obj_type()) {
+                // do nothing
+              } else if (elem_type.is_record_type()) {
+                const pl::ObUserDefinedType *udt2 = NULL;
+                OZ (get_dblink_type_by_id(extract_package_id(elem_type.get_user_type_id()),
+                                          elem_type.get_user_type_id(), udt2));
+                if (OB_SUCC(ret)) {
+                  record_type = static_cast<const ObRecordType *>(udt2);
+                }
+              } else {
+                ret = OB_NOT_SUPPORTED;
+                LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                               "in dblink, collection element type must be basic types or record types, other types are");
+              }
+            }
+          } else if (OB_ISNULL(record_type = static_cast<const ObRecordType *>(udt))){
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("record_type is NULL", K(ret));
+          }
+          if (OB_SUCC(ret) && OB_NOT_NULL(record_type)) {
+            for (int64_t mem_idx = 0; OB_SUCC(ret) && mem_idx < record_type->get_member_count(); mem_idx++) {
+              const ObPLDataType *mem_type = record_type->get_record_member_type(mem_idx);
+              if (OB_ISNULL(mem_type)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("mem_type is NULL", K(ret));
+              } else if (!mem_type->is_obj_type()) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                               "in dblink, record type member types must be basic types, other types are");
+              }
+            }
+          }
+        }
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, full_name.ptr());
     }
   }
 #endif
@@ -418,6 +477,16 @@ int ObPLDbLinkGuard::dblink_name_resolve(common::ObDbLinkProxy *dblink_proxy,
       OZ (ob_write_string(alloctor, ObString(part2), sub_object_name));
     }
 #undef BIND_BASIC_BY_POS
+  }
+  if (NULL != dblink_schema
+      && NULL != dblink_proxy
+      && NULL != dblink_conn
+      && DblinkDriverProto::DBLINK_DRV_OCI == static_cast<DblinkDriverProto>(dblink_schema->get_driver_proto())) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = static_cast<ObOciConnection *>(dblink_conn)->free_oci_stmt())) {
+      LOG_WARN("failed to close oci result", K(tmp_ret));
+      ret = (OB_SUCC(ret) ? tmp_ret : ret);
+    }
   }
 #endif
   return ret;

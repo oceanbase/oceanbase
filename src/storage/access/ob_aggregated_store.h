@@ -15,6 +15,7 @@
 
 #include "sql/engine/expr/ob_expr.h"
 #include "ob_block_batched_row_store.h"
+#include "storage/blocksstable/ob_datum_row.h"
 #include "storage/access/ob_pushdown_aggregate.h"
 #include "storage/blocksstable/index_block/ob_index_block_row_struct.h"
 
@@ -48,7 +49,7 @@ public:
       blocksstable::ObIMicroBlockReader *reader,
       const int32_t *row_ids,
       const int64_t row_count,
-      const bool projected) override;
+      const bool reserve_memory) override;
   int eval(blocksstable::ObStorageDatum &datum, const int64_t row_count) override;
   int fill_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg) override;
   OB_INLINE bool is_vec() const override { return false; }

@@ -89,6 +89,7 @@ public:
   // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
   // This is used to create remote sstable
   int init_for_remote(const blocksstable::ObMigrationSSTableParam &migration_param);
+
   int init_for_mds(const compaction::ObBasicTabletMergeCtx &ctx,
                    const blocksstable::ObSSTableMergeRes &res,
                    const ObStorageSchema &mds_schema);
@@ -177,6 +178,7 @@ public:
   int64_t max_merged_trans_version_;
   share::SCN ddl_scn_; // saved into sstable meta
   share::SCN filled_tx_scn_;
+  share::SCN tx_data_recycle_scn_;
   bool is_co_table_without_cgs_; // only used for creating co sstable without cg sstables
   bool contain_uncommitted_row_;
   bool is_meta_root_;

@@ -29,6 +29,7 @@ enum class ObBackupFuseTabletType : uint64_t
   FUSE_TABLET_META_USE_V2 = 1,  // when transfer seq is equal
   FUSE_TABLET_META_DELETED = 2, // when tablet is deleted at backup data stage
   FUSE_TABLET_LS_INNER_TABLET = 3, // tablet is ls inner tablet
+  FUSE_TABLET_META_REORGANIZED = 4, // when tablet is reorganized(split or merge) // FARM COMPAT WHITELIST
   MAX,
 };
 

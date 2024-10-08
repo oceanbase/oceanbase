@@ -606,6 +606,8 @@ int ObTableRpcImpl::query_next(const ObTableRequestOptions &request_options, ObT
     request.consistency_level_ = request_options.consistency_level();
     request.query_session_id_ = query_async_multi_result_.session_id_;
     request.query_type_ = ObQueryOperationType::QUERY_NEXT;
+    request.table_name_ = table_name_;
+    request.table_id_ = table_id_;
     query_async_multi_result_.has_more_ = false;
     result = &query_async_multi_result_.get_one_result();
     result->reset();

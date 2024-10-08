@@ -3349,7 +3349,7 @@
   "optimizer_features_enable": {
     "id": 10150,
     "name": "optimizer_features_enable",
-    "default_value": "4.3.3.0",
+    "default_value": "4.3.4.0",
     "base_value": "",
     "data_type": "varchar",
     "info": "enabling a series of optimizer features based on an OceanBase release number",
@@ -6034,12 +6034,11 @@
     "base_value": "0",
     "data_type": "bool",
     "info": "To set whether the SQL for the current session is logged into the SQL plan monitor.",
-    "flags": "SESSION",
+    "flags": "SESSION | INFLUENCE_PLAN",
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "",
-    "placeholder": true
+    "ref_url": ""
   },
   "insert_id": {
     "id": 10328,

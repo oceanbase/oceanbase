@@ -6435,7 +6435,8 @@ int ObPartTransCtx::switch_to_leader(const SCN &start_working_ts)
     const bool contain_mds_transfer_out = is_contain_mds_type_(ObTxDataSourceType::START_TRANSFER_OUT)
                            || is_contain_mds_type_(ObTxDataSourceType::START_TRANSFER_OUT_PREPARE)
                            || is_contain_mds_type_(ObTxDataSourceType::START_TRANSFER_OUT_V2);
-    const bool need_kill_tx = contain_mds_table_lock || contain_mds_transfer_out;
+    const bool contain_mds_tablet_split = is_contain_mds_type_(ObTxDataSourceType::TABLET_SPLIT);
+    const bool need_kill_tx = contain_mds_table_lock || contain_mds_transfer_out || contain_mds_tablet_split;
     bool kill_by_append_mode_initial_scn = false;
     if (append_mode_initial_scn.is_valid()) {
       kill_by_append_mode_initial_scn = exec_info_.max_applying_log_ts_ <= append_mode_initial_scn;
@@ -6443,21 +6444,21 @@ int ObPartTransCtx::switch_to_leader(const SCN &start_working_ts)
 
     if (ObTxState::INIT == exec_info_.state_) {
       if (exec_info_.data_complete_ && !contain_mds_table_lock && !contain_mds_transfer_out
-          && !kill_by_append_mode_initial_scn) {
+          && !contain_mds_tablet_split && !kill_by_append_mode_initial_scn) {
         if (OB_FAIL(mt_ctx_.replay_to_commit(false /*is_resume*/))) {
           TRANS_LOG(WARN, "replay to commit failed", KR(ret), K(*this));
         }
       } else {
         TRANS_LOG(WARN, "txn data incomplete, will be aborted", K(contain_mds_table_lock),
-                  K(contain_mds_transfer_out), K(kill_by_append_mode_initial_scn),
+                  K(contain_mds_transfer_out), K(contain_mds_tablet_split), K(kill_by_append_mode_initial_scn),
                   K(append_mode_initial_scn), KPC(this));
         if (has_persisted_log_()) {
           if (ObPartTransAction::COMMIT == part_trans_action_
               || get_upstream_state() >= ObTxState::REDO_COMPLETE) {
 
             TRANS_LOG(WARN, "abort self instantly with a tx_commit request",
-                      K(contain_mds_table_lock), K(contain_mds_transfer_out), K(need_kill_tx),
-                      K(kill_by_append_mode_initial_scn), K(append_mode_initial_scn), KPC(this));
+                      K(contain_mds_table_lock), K(contain_mds_transfer_out), K(contain_mds_tablet_split),
+                      K(need_kill_tx), K(kill_by_append_mode_initial_scn), K(append_mode_initial_scn), KPC(this));
             if (OB_FAIL(do_local_tx_end_(TxEndAction::ABORT_TX))) {
               //Temporary fix:
               //The transaction cannot be killed temporarily, waiting for handle_timeout to retry abort.
@@ -9902,8 +9903,12 @@ int ObPartTransCtx::do_transfer_out_tx_op(const SCN data_end_scn,
   } else if (NotifyType::REGISTER_SUCC == op_type) {
     // blocking active tx which start_scn <= data_end_scn
     // when register modify memory state only
-    sub_state_.set_transfer_blocking();
-    is_operated = true;
+    if (exec_info_.max_applying_log_ts_.is_valid() && exec_info_.max_applying_log_ts_ >= op_scn) {
+      // do nothing
+    } else {
+      sub_state_.set_transfer_blocking();
+      is_operated = true;
+    }
   } else if (NotifyType::ON_REDO == op_type) {
     if (exec_info_.max_applying_log_ts_.is_valid() && exec_info_.max_applying_log_ts_ >= op_scn) {
       // do nothing
@@ -10165,7 +10170,9 @@ int ObPartTransCtx::move_tx_op(const ObTransferMoveTxParam &move_tx_param,
     ret = OB_NEED_RETRY;
     TRANS_LOG(WARN, "has state log submitting need retry", KR(ret), K(trans_id_), K(sub_state_));
   } else if (NotifyType::REGISTER_SUCC == move_tx_param.op_type_) {
-    if (exec_info_.state_ >= ObTxState::ABORT) {
+    if (exec_info_.max_applying_log_ts_.is_valid() && exec_info_.max_applying_log_ts_ >= move_tx_param.op_scn_) {
+      // do nothing
+    } else if (exec_info_.state_ >= ObTxState::ABORT) {
       // this ctx may be recycled soon
       // a. RetainCtx recycle
       // b. get_tx_ctx and abort/clear log callback concurrent

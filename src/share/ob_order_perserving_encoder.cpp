@@ -525,8 +525,9 @@ int ObOrderPerservingEncoder::encode_from_string_varlen(
     }
   } else if (cs == CS_TYPE_UTF8MB4_GENERAL_CI || cs == CS_TYPE_GBK_CHINESE_CI
              || cs == CS_TYPE_UTF16_GENERAL_CI || cs == CS_TYPE_UTF16_BIN
-             || cs == CS_TYPE_GB18030_CHINESE_CI ||
-             (CS_TYPE_GB18030_2022_PINYIN_CI <= cs && cs <= CS_TYPE_GB18030_2022_STROKE_CS)) {
+             || cs == CS_TYPE_GB18030_CHINESE_CI || cs == CS_TYPE_UTF16LE_GENERAL_CI
+             || cs == CS_TYPE_UTF16LE_BIN
+             || (CS_TYPE_GB18030_2022_PINYIN_CI <= cs && cs <= CS_TYPE_GB18030_2022_STROKE_CS)) {
     int64_t res_len = ObCharset::sortkey_var_len(cs, str.ptr(), str.length(), (char *)to,
                                                  max_buf_len - to_len - safety_buf_size,
                                                  is_mem, is_valid_uni);
@@ -577,8 +578,9 @@ int ObOrderPerservingEncoder::encode_from_string_varlen(
     }
   } else if (cs == CS_TYPE_UTF8MB4_GENERAL_CI || cs == CS_TYPE_GBK_CHINESE_CI
              || cs == CS_TYPE_UTF16_GENERAL_CI || cs == CS_TYPE_UTF16_BIN
-             || cs == CS_TYPE_GB18030_CHINESE_CI ||
-             (CS_TYPE_GB18030_2022_PINYIN_CI <= cs && cs <= CS_TYPE_GB18030_2022_STROKE_CS)) {
+             || cs == CS_TYPE_UTF16LE_GENERAL_CI || cs == CS_TYPE_UTF16LE_BIN
+             || cs == CS_TYPE_GB18030_CHINESE_CI
+             || (CS_TYPE_GB18030_2022_PINYIN_CI <= cs && cs <= CS_TYPE_GB18030_2022_STROKE_CS)) {
     int64_t res_len = ObCharset::sortkey_var_len(cs, str.ptr(), str.length(), (char *)to,
                                                  max_buf_len - to_len - safty_buf_size,
                                                  param.is_memcmp_, param.is_valid_uni_);
@@ -877,6 +879,8 @@ int ObOrderPerservingEncoder::encode_tails(unsigned char *to, int64_t max_buf_le
            || cs == CS_TYPE_UTF16_GENERAL_CI
            || cs == CS_TYPE_UTF16_BIN
            || cs == CS_TYPE_GB18030_CHINESE_CI
+           || cs == CS_TYPE_UTF16LE_GENERAL_CI
+           || cs == CS_TYPE_UTF16LE_BIN
            || (CS_TYPE_GB18030_2022_PINYIN_CI <= cs && cs <= CS_TYPE_GB18030_2022_STROKE_CS)) {
     if (with_empty_str) {
       *to = 0x00;

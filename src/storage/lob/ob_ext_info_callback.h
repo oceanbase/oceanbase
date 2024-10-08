@@ -43,6 +43,10 @@ struct ObExtInfoLogHeader
     type_(0)
   {}
 
+  ObExtInfoLogHeader(const ObExtInfoLogType type):
+    type_(type)
+  {}
+
   ObExtInfoLogType get_type() const { return static_cast<ObExtInfoLogType>(type_); }
   bool is_json_diff() const { return get_type() == OB_JSON_DIFF_EXT_INFO_LOG; }
 
@@ -78,16 +82,19 @@ private:
 class ObExtInfoCallback : public memtable::ObITransCallback
 {
 public:
-  static const int32_t OB_EXT_INFO_MUTATOR_ROW_COUNT = 2;
+  static const int32_t OB_EXT_INFO_MUTATOR_ROW_MIN_COUNT = 2;
+  static const int32_t OB_EXT_INFO_MUTATOR_ROW_COUNT = 3;
   static const int32_t OB_EXT_INFO_MUTATOR_ROW_KEY_IDX = 0;
   static const int32_t OB_EXT_INFO_MUTATOR_ROW_KEY_CNT = 1;
   static const int32_t OB_EXT_INFO_MUTATOR_ROW_VALUE_IDX = 1;
+  static const int32_t OB_EXT_INFO_MUTATOR_ROW_LOB_ID_IDX = 2;
 
 public:
   ObExtInfoCallback() :
       ObITransCallback(),
       allocator_(nullptr),
       seq_no_cur_(),
+      lob_id_(),
       dml_flag_(blocksstable::ObDmlFlag::DF_MAX),
       key_obj_(),
       key_(),
@@ -101,7 +108,6 @@ public:
   virtual memtable::MutatorType get_mutator_type() const override;
   virtual transaction::ObTxSEQ get_seq_no() const override { return seq_no_cur_; }
   virtual int64_t get_data_size() override { return mutator_row_len_; };
-
   virtual int log_submitted(const SCN scn, storage::ObIMemtable *&last_mt);
   virtual int release_resource();
 
@@ -110,14 +116,16 @@ public:
       ObIAllocator &allocator,
       const blocksstable::ObDmlFlag dml_flag,
       const transaction::ObTxSEQ &seq_no_cur,
+      const ObLobId &lob_id,
       ObString &data);
 
 public:
-  TO_STRING_KV(K(seq_no_cur_), K(dml_flag_), K(mutator_row_len_), KP(mutator_row_buf_));
+  TO_STRING_KV(K(seq_no_cur_), K(lob_id_), K(dml_flag_), K(mutator_row_len_), KP(mutator_row_buf_));
 
 private:
   ObIAllocator *allocator_;
   transaction::ObTxSEQ seq_no_cur_;
+  ObLobId lob_id_;
   blocksstable::ObDmlFlag dml_flag_;
   ObObj key_obj_;
   memtable::ObMemtableKey key_;
@@ -130,6 +138,14 @@ class ObExtInfoCbRegister {
 public:
   static const int32_t OB_EXT_INFO_LOG_HEADER_LEN = 1;
   static const int64_t OB_EXT_INFO_LOG_BLOCK_MAX_SIZE;
+
+public:
+  static int alloc_seq_no(
+      transaction::ObTxDesc *tx_desc,
+      const transaction::ObTxSEQ &parent_seq_no,
+      const int64_t data_size, /*include header size*/
+      transaction::ObTxSEQ &seq_no_st,
+      int64_t &seq_no_cnt);
 
 public:
   ObExtInfoCbRegister():
@@ -153,36 +169,19 @@ public:
     memtable::ObIMvccCtx *ctx,
     const int64_t timeout,
     const blocksstable::ObDmlFlag dml_flag,
-    transaction::ObTxDesc *tx_desc,
-    transaction::ObTxSEQ &parent_seq_no,
-    blocksstable::ObStorageDatum &index_data,
-    ObObjType &type,
+    const transaction::ObTxSEQ &seq_no_st,
+    const int64_t seq_no_cnt,
+    const ObString &index_data,
+    const ObObjType index_data_type,
+    const ObExtInfoLogHeader &header,
     ObObj &ext_info_data);
 
 private:
 
-  static ObExtInfoLogType get_type(ObObjType &obj_type)
-  {
-    ObExtInfoLogType res = OB_INVALID_EXT_INFO_LOG;
-    switch (obj_type)
-    {
-    case ObJsonType:
-      res = OB_JSON_DIFF_EXT_INFO_LOG;
-      break;
-    default:
-      break;
-    }
-    return res;
-  }
-
   int build_data_iter(ObObj &ext_info_data);
 
-  int set_index_data(blocksstable::ObStorageDatum &index_data, ObObjType &type);
-  int set_outrow_ctx_seq_no(blocksstable::ObStorageDatum& index_data);
-
   int get_data(ObString &data);
-
-  int init_header(ObObjType &type);
+  int get_lob_id(const ObString &index_data, const ObObjType index_data_type, ObLobId &lob_id);
 
 public:
   TO_STRING_KV(K(timeout_), K(data_size_), K(seq_no_st_), K(seq_no_cnt_), K(header_writed_));

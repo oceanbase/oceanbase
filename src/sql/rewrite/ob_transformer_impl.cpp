@@ -700,12 +700,16 @@ int ObTransformerImpl::check_stmt_functions(const ObDMLStmt *stmt, StmtFunc &fun
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null table item", K(ret));
     } else if (!table->is_json_table()) { // do nothing
-    } else if (OB_ISNULL(table->json_table_def_)
-               || OB_ISNULL(table->json_table_def_->doc_expr_)) {
+    } else if (OB_ISNULL(table->json_table_def_) || table->json_table_def_->doc_exprs_.empty()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null expr", K(ret));
-    } else if (!table->json_table_def_->doc_expr_->get_relation_ids().is_empty()) {
-      func.contain_json_table_ = true;
+    } else {
+      for (int j = 0; OB_SUCC(ret) && !func.contain_json_table_ && j < table->json_table_def_->doc_exprs_.count(); ++j) {
+        if (OB_NOT_NULL(table->json_table_def_->doc_exprs_.at(j)) &&
+            !table->json_table_def_->doc_exprs_.at(j)->get_relation_ids().is_empty()) {
+          func.contain_json_table_ = true;
+        }
+      }
     }
   }
   if (OB_SUCC(ret) && (stmt->is_delete_stmt() ||

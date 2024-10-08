@@ -53,9 +53,20 @@ namespace logservice
 class ObLogHandler;
 }
 
+namespace memtable
+{
+class ObIMultiSourceDataUnit;
+}
+
 namespace blocksstable
 {
+class ObSSTable;
 struct ObSSTableMergeRes;
+}
+
+namespace compaction
+{
+class ObExtraMediumInfo;
 }
 
 namespace transaction
@@ -182,6 +193,7 @@ public:
       const int64_t snapshot_version,
       const ObCreateTabletSchema &storage_schema,
       const bool need_create_empty_major_sstable,
+      const share::SCN &clog_checkpoint_scn,
       const bool micro_index_clustered,
       const bool need_generate_cs_replica_cg_array,
       const bool has_cs_replica,
@@ -471,7 +483,7 @@ public:
 
   // column store replica
 public:
-  int check_cs_replica_compat_schema(bool &is_cs_replica_compat) const;
+  bool is_cs_replica_compat() const { return nullptr == rowkey_read_info_ ? false : rowkey_read_info_->is_cs_replica_compat(); }
   int check_row_store_with_co_major(bool &is_row_store_with_co_major) const;
   int pre_process_cs_replica(
       const ObDirectLoadType direct_load_type,
@@ -527,10 +539,11 @@ public:
       const uint64_t cache_size,
       share::ObTabletAutoincInterval &result);
 
-  int update_tablet_autoinc_seq(const uint64_t autoinc_seq);
+  int update_tablet_autoinc_seq(const uint64_t autoinc_seq, const bool is_tablet_creating);
   int get_kept_snapshot_info(
       const int64_t min_reserved_snapshot_on_ls,
       ObStorageSnapshotInfo &snapshot_info) const;
+  int get_end_autoinc_seq(uint64_t &end_autoinc_seq);
   int check_schema_version_elapsed(
       const int64_t schema_version,
       const bool need_wait_trans_end,
@@ -557,7 +570,8 @@ public:
   int check_snapshot_readable_with_cache(
       const int64_t snapshot_version,
       const int64_t schema_version,
-      const int64_t timeout);
+      const int64_t timeout,
+      bool &need_split_dst_table);
   int set_tablet_status(
       const ObTabletCreateDeleteMdsUserData &tablet_status,
       mds::MdsCtx &ctx);
@@ -574,16 +588,17 @@ public:
       const ObTabletBindingMdsUserData &ddl_info,
       mds::MdsCtx &ctx);
 
-
   int set_frozen_for_all_memtables();
+
   // different from the is_valid() function
   // typically used for check valid for migration or restore
   int check_valid(const bool ignore_ha_status = false) const;
 
   int64_t to_string(char *buf, const int64_t buf_len) const;
   int get_max_column_cnt_on_schema_recorder(int64_t &max_column_cnt);
-  int get_ls_epoch(int64_t &ls_epoch);
   static int get_tablet_version(const char *buf, const int64_t len, int32_t &version);
+  int get_max_schema_version(int64_t &schema_version);
+  int get_ls_epoch(int64_t &ls_epoch);
   int get_sstable_column_checksum(
     const blocksstable::ObSSTable &sstable,
     common::ObIArray<int64_t> &column_checksums) const;
@@ -678,15 +693,17 @@ private:
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
       const lib::Worker::CompatMode compat_mode);
-  int build_read_info(common::ObArenaAllocator &allocator, const ObTablet *tablet = nullptr);
+  int build_read_info(
+      common::ObArenaAllocator &allocator,
+      const ObTablet *tablet,
+      const bool is_cs_replica_compat);
   int create_memtable(const int64_t schema_version,
                       const share::SCN clog_checkpoint_scn,
                       const bool for_direct_load,
                       const bool for_replay);
   int try_update_start_scn();
   int try_update_ddl_checkpoint_scn();
-  int try_update_table_store_flag(const ObUpdateTableStoreParam &param);
-  int get_max_schema_version(int64_t &schema_version);
+  int try_update_table_store_flag(const bool with_major);
   int inner_get_all_sstables(ObTableStoreIterator &iter, const bool need_unpack = false) const;
   int check_schema_version_for_bounded_staleness_read(
       const int64_t table_version_for_read,
@@ -716,6 +733,7 @@ private:
   int inner_get_memtables(common::ObIArray<storage::ObITable *> &memtables, const bool need_active) const;
 
   int write_sync_tablet_seq_log(share::ObTabletAutoincSeq &autoinc_seq,
+                                const bool is_tablet_creating,
                                 share::SCN &scn);
 
   int update_ddl_info(
@@ -731,22 +749,38 @@ private:
   int get_read_tables(
       const int64_t snapshot_version,
       ObTabletTableIterator &iter,
-      const bool allow_no_ready_read);
+      const bool allow_no_ready_read,
+      const bool need_split_src_table,
+      const bool need_split_dst_table);
   int get_read_major_sstable(
       const int64_t &major_snapshot_version,
-      ObTabletTableIterator &iter);
+      ObTabletTableIterator &iter,
+      const bool need_split_src_table);
   int auto_get_read_tables(
       const int64_t snapshot_version,
       ObTabletTableIterator &iter,
-      const bool allow_no_ready_read);
+      const bool allow_no_ready_read,
+      const bool need_split_src_table,
+      const bool need_split_dst_table);
   int get_read_tables_(
       const int64_t snapshot_version,
       ObTableStoreIterator &iter,
       ObStorageMetaHandle &table_store_handle,
-      const bool allow_no_ready_read);
+      const ObGetReadTablesMode mode);
   int get_read_major_sstable(
       const int64_t &major_snapshot_version,
       ObTableStoreIterator &iter) const;
+  int get_split_src_major_table_if_need(
+      const int64_t &major_snapshot_version,
+      ObTabletTableIterator &iter);
+  int get_split_src_read_table_if_need(
+      const int64_t snapshot_version,
+      ObTabletTableIterator &iter,
+      bool &succ_get_split_src_tables);
+  int get_split_dst_read_table(
+      const int64_t snapshot_version,
+      ObTabletTableIterator &iter);
+
   int allow_to_read_();
 
   int check_medium_list() const;
@@ -909,7 +943,7 @@ private:
   int64_t memtable_count_;                                   // size: 8B, alignment: 8B
   ObDDLKV **ddl_kvs_;                                        // size: 8B, alignment: 8B
   int64_t ddl_kv_count_;                                     // size: 8B, alignment: 8B
-  ObTabletPointerHandle pointer_hdl_;                        // size: 24B, alignment: 8B
+  ObTabletPointerHandle pointer_hdl_;                   // size: 24B, alignment: 8B
   ObMetaDiskAddr tablet_addr_;                               // size: 48B, alignment: 8B 1080
   // NOTICE: these two pointers: memtable_mgr_ and log_handler_,
   // are considered as cache for tablet.

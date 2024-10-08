@@ -223,6 +223,30 @@ bool ObBackupTableListMetaInfoDesc::is_valid() const
   return scn_.is_valid() && count_ >= 0 && batch_size_ > 0;
 }
 
+/*
+ *-----------------------------ObBackupMajorCompactionMViewDepTabletListDesc-----------------------
+ */
+
+OB_SERIALIZE_MEMBER(ObBackupMajorCompactionMViewDepTabletListDesc, tablet_id_list_);
+
+ObBackupMajorCompactionMViewDepTabletListDesc::ObBackupMajorCompactionMViewDepTabletListDesc()
+  : ObExternBackupDataDesc(ObBackupFileType::BACKUP_MVIEW_DEP_TABLET_LIST_FILE, FILE_VERSION),
+    tablet_id_list_() {}
+
+bool ObBackupMajorCompactionMViewDepTabletListDesc::is_valid() const
+{
+  int ret = OB_SUCCESS;
+  bool bret = true;
+  ARRAY_FOREACH(tablet_id_list_, i) {
+    const ObTabletID &tablet_id = tablet_id_list_.at(i);
+    if (!tablet_id.is_valid()) {
+      bret = false;
+      break;
+    }
+  }
+  return bret;
+}
+
 int ObBackupSetFilter::get_backup_set_array(ObIArray<share::ObBackupSetDesc> &backup_set_array) const
 {
   int ret = OB_SUCCESS;
@@ -1458,6 +1482,49 @@ int ObBackupDataStore::is_table_list_meta_exist(const share::SCN &scn, bool &is_
     LOG_WARN("failed to get format file path", K(ret));
   } else if (OB_FAIL(util.is_exist(full_path.get_obstr(), storage_info, is_exist))) {
     LOG_WARN("failed to check format file exist.", K(ret), K(full_path));
+  }
+  return ret;
+}
+
+int ObBackupDataStore::write_major_compaction_mview_dep_tablet_list(const ObBackupMajorCompactionMViewDepTabletListDesc &desc)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupPath path;
+  ObBackupPathString full_path;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data extern mgr not init", K(ret));
+  } else if (!desc.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("table list meta desc is not valid", K(ret), K(desc));
+  } else if (OB_FAIL(ObBackupPathUtil::get_major_compaction_mview_dep_tablet_list_path(backup_set_dest_, path))) {
+    LOG_WARN("fail to get table list meta path", K(ret), K(backup_set_dest_));
+  } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
+    LOG_WARN("fail to assign full path", K(ret));
+  } else if (OB_FAIL(write_single_file(full_path, desc))) {
+    LOG_WARN("fail to write single file", K(ret), K(desc));
+  } else {
+    LOG_INFO("write mview dep tablet list", K(desc));
+  }
+  return ret;
+}
+
+int ObBackupDataStore::read_major_compaction_mview_dep_tablet_list(ObBackupMajorCompactionMViewDepTabletListDesc &desc)
+{
+  int ret = OB_SUCCESS;
+  ObBackupPath path;
+  ObBackupPathString full_path;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data extern mgr not init", K(ret));
+  } else if (OB_FAIL(ObBackupPathUtil::get_major_compaction_mview_dep_tablet_list_path(backup_set_dest_, path))) {
+    LOG_WARN("fail to get table list dir path", K(ret), K_(backup_set_dest));
+  } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
+    LOG_WARN("fail to assign full path", K(ret));
+  } else if (OB_FAIL(read_single_file(full_path, desc))) {
+    LOG_WARN("fail to read single file", K(ret), K(full_path));
+  } else {
+    LOG_INFO("read mview dep tablet list", K(desc));
   }
   return ret;
 }

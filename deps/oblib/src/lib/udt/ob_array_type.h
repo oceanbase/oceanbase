@@ -144,9 +144,12 @@ public :
     } else {
       int64_t curr_pos = data_container_->null_bitmaps_.size();
       int64_t capacity = curr_pos + length;
-      data_container_->null_bitmaps_.prepare_allocate(capacity);
-      uint8_t *cur_null_bitmap = data_container_->null_bitmaps_.get_data() + curr_pos;
-      MEMCPY(cur_null_bitmap, nulls, length * sizeof(uint8_t));
+      if (OB_FAIL(data_container_->null_bitmaps_.prepare_allocate(capacity))) {
+        OB_LOG(WARN, "allocate memory failed", K(ret), K(capacity));
+      } else {
+        uint8_t *cur_null_bitmap = data_container_->null_bitmaps_.get_data() + curr_pos;
+        MEMCPY(cur_null_bitmap, nulls, length * sizeof(uint8_t));
+      }
     }
     return ret;
   }
@@ -159,9 +162,12 @@ public :
     } else {
       int64_t curr_pos = data_container_->offsets_.size();
       int64_t capacity = curr_pos + length;
-      data_container_->offsets_.prepare_allocate(capacity);
-      char *cur_offsets =  reinterpret_cast<char *>(data_container_->offsets_.get_data() + curr_pos * sizeof(uint32_t));
-      MEMCPY(cur_offsets, offsets, length * sizeof(uint32_t));
+      if (OB_FAIL(data_container_->offsets_.prepare_allocate(capacity))) {
+        OB_LOG(WARN, "allocate memory failed", K(ret), K(capacity));
+      } else {
+        char *cur_offsets =  reinterpret_cast<char *>(data_container_->offsets_.get_data() + curr_pos * sizeof(uint32_t));
+        MEMCPY(cur_offsets, offsets, length * sizeof(uint32_t));
+      }
     }
     return ret;
   }
@@ -174,8 +180,11 @@ public :
     } else {
       int64_t curr_pos = data_container_->raw_data_.size();
       int64_t capacity = curr_pos + length;
-      data_container_->raw_data_.prepare_allocate(capacity);
-      data = reinterpret_cast<T *>(data_container_->raw_data_.get_data() + curr_pos);
+      if (OB_FAIL(data_container_->raw_data_.prepare_allocate(capacity))) {
+        OB_LOG(WARN, "allocate memory failed", K(ret), K(capacity));
+      } else {
+        data = reinterpret_cast<T *>(data_container_->raw_data_.get_data() + curr_pos);
+      }
     }
     return ret;
   }
@@ -470,16 +479,22 @@ public :
       const uint32_t src_null_offset = begin * sizeof(uint8_t);
       int64_t curr_pos = this->data_container_->raw_data_.size();
       int64_t capacity = curr_pos + len;
-      this->data_container_->raw_data_.prepare_allocate(capacity);
-      char *cur_data = reinterpret_cast<char *>(this->data_container_->raw_data_.get_data() + curr_pos);
-      MEMCPY(cur_data, src.get_data() + src_data_offset, len * sizeof(T));
-      // insert nullbitmaps
-      curr_pos = this->data_container_->null_bitmaps_.size();
-      capacity = curr_pos + len;
-      this->data_container_->null_bitmaps_.prepare_allocate(capacity);
-      uint8_t *cur_null_bitmap = this->data_container_->null_bitmaps_.get_data() + curr_pos;
-      MEMCPY(cur_null_bitmap, src.get_nullbitmap() + src_null_offset, len * sizeof(uint8_t));
-      this->length_ += len;
+      if (OB_FAIL(this->data_container_->raw_data_.prepare_allocate(capacity))) {
+        OB_LOG(WARN, "allocate memory failed", K(ret), K(capacity));
+      } else {
+        char *cur_data = reinterpret_cast<char *>(this->data_container_->raw_data_.get_data() + curr_pos);
+        MEMCPY(cur_data, src.get_data() + src_data_offset, len * sizeof(T));
+        // insert nullbitmaps
+        curr_pos = this->data_container_->null_bitmaps_.size();
+        capacity = curr_pos + len;
+        if (OB_FAIL(this->data_container_->null_bitmaps_.prepare_allocate(capacity))) {
+          OB_LOG(WARN, "allocate memory failed", K(ret), K(capacity));
+        } else {
+          uint8_t *cur_null_bitmap = this->data_container_->null_bitmaps_.get_data() + curr_pos;
+          MEMCPY(cur_null_bitmap, src.get_nullbitmap() + src_null_offset, len * sizeof(uint8_t));
+          this->length_ += len;
+        }
+      }
     }
     return ret;
   }

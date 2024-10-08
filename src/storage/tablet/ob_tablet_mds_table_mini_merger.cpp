@@ -383,7 +383,7 @@ int ObMdsTableMiniMerger::init(compaction::ObTabletMergeCtx &ctx, ObMdsMiniMerge
       LOG_WARN("mds storage schema is invalid", K(ret), KP(storage_schema), KPC(storage_schema));
     } else if (OB_FAIL(data_desc_.init(false/*is ddl*/, *storage_schema, ls_id, tablet_id,
         ctx.get_merge_type(), ctx.get_snapshot(), data_version, ctx.static_desc_.micro_index_clustered_,
-        ctx.static_param_.scn_range_.end_scn_))) {
+        ctx.static_desc_.tablet_transfer_seq_, ctx.static_param_.scn_range_.end_scn_))) {
       LOG_WARN("fail to init whole desc", KR(ret), K(ctx), K(ls_id), K(tablet_id));
     } else if (OB_FAIL(macro_start_seq.set_parallel_degree(0))) {
       LOG_WARN("Failed to set parallel degree to macro start seq", K(ret));
@@ -417,6 +417,7 @@ int ObMdsTableMiniMerger::generate_mds_mini_sstable(
     ObTableHandleV2 &table_handle)
 {
   int ret = OB_SUCCESS;
+  TIMEGUARD_INIT(STORAGE, 20_ms);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
@@ -424,13 +425,13 @@ int ObMdsTableMiniMerger::generate_mds_mini_sstable(
     SMART_VARS_2((ObSSTableMergeRes, res), (ObTabletCreateSSTableParam, param)) {
       if (OB_FAIL(macro_writer_.close())) {
         LOG_WARN("fail to close macro writer", K(ret), K(macro_writer_));
-      } else if (OB_FAIL(ctx_->update_block_info(macro_writer_.get_merge_block_info()))) {
+      } else if (OB_FAIL(ctx_->update_block_info(macro_writer_.get_merge_block_info(), 0/*cost_time*/))) {
         STORAGE_LOG(WARN, "Failed to add macro blocks", K(ret));
       } else if (OB_FAIL(sstable_builder_.close(res))) {
         LOG_WARN("fail to close sstable builder", K(ret), K(sstable_builder_));
-      } else if (OB_FAIL(param.init_for_mds(*ctx_, res, *storage_schema_))) {
+      } else if (CLICK_FAIL(param.init_for_mds(*ctx_, res, *storage_schema_))) {
         LOG_WARN("fail to create sstable param for mds", K(ret));
-      } else if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable(param, allocator, table_handle))) {
+      } else if (CLICK_FAIL(ObTabletCreateDeleteHelper::create_sstable(param, allocator, table_handle))) {
         LOG_WARN("fail to create sstable", K(ret), K(param));
         CTX_SET_DIAGNOSE_LOCATION(*ctx_);
       } else {
@@ -481,6 +482,7 @@ int ObMdsDataCompatHelper::generate_mds_mini_sstable(
     ctx->static_param_.scn_range_.end_scn_ = mig_param.mds_checkpoint_scn_;
     ctx->static_param_.version_range_.snapshot_version_ = mig_param.mds_checkpoint_scn_.get_val_for_tx();
     ctx->static_param_.pre_warm_param_.type_ = ObPreWarmerType::MEM_PRE_WARM;
+    ctx->static_desc_.tablet_transfer_seq_ = mig_param.transfer_info_.transfer_seq_;
   }
 
   if (OB_FAIL(ret)) {
@@ -535,6 +537,7 @@ int ObMdsDataCompatHelper::generate_mds_mini_sstable(
     ctx->static_param_.scn_range_.end_scn_ = tablet.get_mds_checkpoint_scn();
     ctx->static_param_.version_range_.snapshot_version_ = tablet.get_mds_checkpoint_scn().get_val_for_tx();
     ctx->static_param_.pre_warm_param_.type_ = ObPreWarmerType::MEM_PRE_WARM;
+    ctx->static_desc_.tablet_transfer_seq_ = tablet.get_transfer_seq();
 
     if (CLICK_FAIL(tablet.build_full_memory_mds_data(allocator, data))) {
       LOG_WARN("fail to build full memory mds data", K(ret));

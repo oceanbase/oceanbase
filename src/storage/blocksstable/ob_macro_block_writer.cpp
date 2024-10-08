@@ -21,6 +21,7 @@
 #include "share/ob_task_define.h"
 #include "share/schema/ob_table_schema.h"
 #include "storage/blocksstable/index_block/ob_index_block_builder.h"
+#include "storage/blocksstable/index_block/ob_index_block_macro_iterator.h"
 #include "storage/blocksstable/index_block/ob_index_block_dual_meta_iterator.h"
 #include "storage/blocksstable/index_block/ob_index_block_row_struct.h"
 #include "storage/blocksstable/ob_macro_block_writer.h"
@@ -1695,9 +1696,11 @@ int ObMacroBlockWriter::alloc_block()
     }
   } else {
     if (data_store_desc_->is_for_index_or_meta()) {
-      storage_opt.set_private_meta_macro_object_opt(data_store_desc_->get_tablet_id().id());
+      storage_opt.set_private_meta_macro_object_opt(data_store_desc_->get_tablet_id().id(),
+                                                    data_store_desc_->get_tablet_transfer_seq());
     } else {
-      storage_opt.set_private_object_opt(data_store_desc_->get_tablet_id().id());
+      storage_opt.set_private_object_opt(data_store_desc_->get_tablet_id().id(),
+                                         data_store_desc_->get_tablet_transfer_seq());
     }
   }
   if (macro_blocks_[current_index_].is_dirty()) { // has been allocated
@@ -1754,7 +1757,7 @@ int ObMacroBlockWriter::check_micro_block_need_merge(
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid micro_block", K(micro_block), K(ret));
   } else {
-    ObRowStoreType row_store_type = static_cast<ObRowStoreType>(micro_block.header_.row_store_type_);
+    const ObRowStoreType row_store_type = static_cast<ObRowStoreType>(micro_block.header_.row_store_type_);
     if (row_store_type != data_store_desc_->get_row_store_type()) {
       need_merge = true;
     } else if (micro_writer_->get_row_count() <= 0

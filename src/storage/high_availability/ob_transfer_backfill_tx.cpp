@@ -1667,7 +1667,7 @@ int ObTransferReplaceTableTask::transfer_replace_tables_(
                           "has_transfer_table", tablet->get_tablet_meta().has_transfer_table());
 #endif
 
-    if (FAILEDx(ls->build_ha_tablet_new_table_store(tablet_info.tablet_id_, param))) {
+    if (FAILEDx(ls->build_tablet_with_batch_tables(tablet_info.tablet_id_, param))) {
       LOG_WARN("failed to build ha tablet new table store", K(ret), K(param), K(tablet_info));
     } else {
       LOG_INFO("[TRANSFER_BACKFILL]succ transfer replace tables", K(ret), K(param), K(tablet_info), KPC_(ctx));

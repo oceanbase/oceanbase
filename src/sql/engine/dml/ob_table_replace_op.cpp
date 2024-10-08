@@ -53,6 +53,7 @@ OB_DEF_SERIALIZE(ObTableReplaceSpec)
   OB_UNIS_ENCODE(conflict_checker_ctdef_);
   OB_UNIS_ENCODE(has_global_unique_index_);
   OB_UNIS_ENCODE(all_saved_exprs_);
+  OB_UNIS_ENCODE(doc_id_col_id_);
   return ret;
 }
 
@@ -77,6 +78,7 @@ OB_DEF_DESERIALIZE(ObTableReplaceSpec)
   OB_UNIS_DECODE(conflict_checker_ctdef_);
   OB_UNIS_DECODE(has_global_unique_index_);
   OB_UNIS_DECODE(all_saved_exprs_);
+  OB_UNIS_DECODE(doc_id_col_id_);
   return ret;
 }
 
@@ -98,6 +100,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableReplaceSpec)
   OB_UNIS_ADD_LEN(conflict_checker_ctdef_);
   OB_UNIS_ADD_LEN(has_global_unique_index_);
   OB_UNIS_ADD_LEN(all_saved_exprs_);
+  OB_UNIS_ADD_LEN(doc_id_col_id_);
   return len;
 }
 
@@ -832,6 +835,8 @@ int ObTableReplaceOp::check_values(bool &is_equal,
     if (OB_SUCC(ret)) {
       if (share::schema::ObColumnSchemaV2::is_hidden_pk_column_id(column_ids[i])) {
         //隐藏主键列不处理
+      } else if (MY_SPEC.doc_id_col_id_ == column_ids[i]) {
+        // skip doc id
       } else {
         const ObDatum &insert_datum = replace_row->cells()[i];
         const ObDatum &del_datum = delete_row->cells()[i];

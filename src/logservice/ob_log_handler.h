@@ -134,6 +134,10 @@ public:
                                                      common::GlobalLearnerList &learner_list) const = 0;
   virtual int get_global_learner_list(common::GlobalLearnerList &learner_list) const = 0;
   virtual int get_leader_config_version(palf::LogConfigVersion &config_version) const = 0;
+  virtual int get_stable_membership(palf::LogConfigVersion &config_version,
+                                    common::ObMemberList &member_list,
+                                    int64_t &paxos_replica_num,
+                                    common::GlobalLearnerList &learner_list) const = 0;
   //  get leader from election, used only for non_palf_leader rebuilding.
   virtual int get_election_leader(common::ObAddr &addr) const = 0;
   virtual int get_parent(common::ObAddr &parent) const = 0;
@@ -481,6 +485,20 @@ public:
   // @brief, get global learner list of this paxos group
   // @param[out] common::GlobalLearnerList&
   int get_global_learner_list(common::GlobalLearnerList &learner_list) const override final;
+  // @brief, get stable membership info from the leader
+  // @param[out] palf::LogConfigVersion&
+  // @param[out] common::ObMemberList&
+  // @param[out] int64_t&
+  // @param[out] common::GlobalLearnerList&
+  // retval:
+  //   OB_SUCCESS
+  //   OB_NOT_INIT
+  //   OB_EAGAIN: the leader is changing memberlist, try again
+  //   OB_NOT_RUNNING: the replica is offlined
+  int get_stable_membership(palf::LogConfigVersion &config_version,
+                            common::ObMemberList &member_list,
+                            int64_t &paxos_replica_num,
+                            common::GlobalLearnerList &learner_list) const override final;
   // @brief, get leader from election, used only for non_palf_leader rebuilding
   // @param[out] addr: address of leader
   // retval:

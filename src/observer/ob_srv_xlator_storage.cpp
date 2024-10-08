@@ -58,6 +58,8 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     //RPC_PROCESSOR(ObRpcRemoveReplicaP, gctx_);
     RPC_PROCESSOR(ObRpcMinorFreezeP, gctx_);
     RPC_PROCESSOR(ObRpcCheckSchemaVersionElapsedP, gctx_);
+    RPC_PROCESSOR(ObRpcCheckMemtableCntP, gctx_);
+    RPC_PROCESSOR(ObRpcCheckMediumCompactionInfoListP, gctx_);
     RPC_PROCESSOR(ObRpcCheckCtxCreateTimestampElapsedP, gctx_);
     RPC_PROCESSOR(ObRpcUpdateBaselineSchemaVersionP, gctx_);
     RPC_PROCESSOR(ObRpcSwitchLeaderP, gctx_);
@@ -101,11 +103,16 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObPreProcessServerP, gctx_);
     RPC_PROCESSOR(ObRpcBroadcastRsListP, gctx_);
     RPC_PROCESSOR(ObRpcBuildDDLSingleReplicaRequestP, gctx_);
+    RPC_PROCESSOR(ObRpcBuildSplitTabletDataStartRequestP, gctx_);
+    RPC_PROCESSOR(ObRpcBuildSplitTabletDataFinishRequestP, gctx_);
+    RPC_PROCESSOR(ObRpcFreezeSplitSrcTabletP, gctx_);
+    RPC_PROCESSOR(ObRpcFetchSplitTabletInfoP, gctx_);
     RPC_PROCESSOR(ObRpcFetchTabletAutoincSeqCacheP, gctx_);
     RPC_PROCESSOR(ObRpcBatchGetTabletAutoincSeqP, gctx_);
     RPC_PROCESSOR(ObRpcBatchSetTabletAutoincSeqP, gctx_);
     RPC_PROCESSOR(ObRpcClearTabletAutoincSeqCacheP, gctx_);
     RPC_PROCESSOR(ObRpcBatchGetTabletBindingP, gctx_);
+    RPC_PROCESSOR(ObRpcBatchGetTabletSplitP, gctx_);
     RPC_PROCESSOR(ObRpcRemoteWriteDDLRedoLogP, gctx_);
     RPC_PROCESSOR(ObRpcRemoteWriteDDLCommitLogP, gctx_);
     RPC_PROCESSOR(ObRpcSetTabletAutoincSeqP, gctx_);
@@ -138,6 +145,9 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcTabletMajorFreezeP, gctx_);
     RPC_PROCESSOR(ObRpcDetectSessionAliveP, gctx_);
     RPC_PROCESSOR(ObCancelGatherStatsP, gctx_);
+    RPC_PROCESSOR(ObCollectMvMergeInfoP, gctx_);
+    RPC_PROCESSOR(ObFetchStableMemberListP, gctx_);
+    RPC_PROCESSOR(ObRpcPrepareTabletSplitTaskRangesP, gctx_);
     RPC_PROCESSOR(ObRpcCheckStorageOperationStatusP, gctx_);
 #ifdef OB_BUILD_SHARED_STORAGE
     RPC_PROCESSOR(ObRpcRemoteWriteDDLFinishLogP, gctx_);

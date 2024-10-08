@@ -1030,6 +1030,11 @@ int ObDbmsStatsExecutor::do_set_column_stats(ObIAllocator &allocator,
     //5.set max/val value
     if (param.hist_param_.minval_ != NULL || param.hist_param_.maxval_ != NULL) {
       ObCastCtx cast_ctx(&allocator, &dtc_params, CM_NONE, param.col_meta_.get_collation_type());
+      ObAccuracy res_acc;
+      if (param.col_meta_.is_decimal_int()) {
+        res_acc = param.col_accuracy_;
+        cast_ctx.res_accuracy_ = &res_acc;
+      }
       if ((param.hist_param_.minval_ != NULL &&
            OB_FAIL(ObObjCaster::to_type(param.col_meta_.get_type(), cast_ctx, *param.hist_param_.minval_, column_stat->get_min_value()))) ||
           (param.hist_param_.maxval_ != NULL &&

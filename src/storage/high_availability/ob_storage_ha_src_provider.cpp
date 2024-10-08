@@ -1143,7 +1143,7 @@ int ObCTypeReplicaSrcProvider::init(const ObMigrationChooseSrcHelperInitParam &p
   return ret;
 }
 
-int ObCTypeReplicaSrcProvider::get_valid_c_replica_(
+int ObCTypeReplicaSrcProvider::get_c_replica_(
     const common::ObAddr &addr,
     const common::GlobalLearnerList &learner_list,
     ObIArray<common::ObAddr> &c_replica_list) const
@@ -1172,7 +1172,8 @@ int ObCTypeReplicaSrcProvider::inner_choose_ob_src_(
   choosen_src_addr.reset();
   common::ObArray<int64_t> candidate_addr_list;
   obrpc::ObFetchLSMetaInfoResp ls_info;
-  ObArray<common::ObAddr> c_replica_list;
+  ObArray<common::ObAddr> all_c_replica_list;
+  ObArray<common::ObAddr> valid_c_replica_list;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObCTypeReplicaSrcProvider is not init.", K(ret));
@@ -1181,7 +1182,9 @@ int ObCTypeReplicaSrcProvider::inner_choose_ob_src_(
     LOG_WARN("invalid argument!", K(ret), K(addr_list), K(learner_list), K(arg));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < addr_list.count(); ++i) {
-      if (OB_TMP_FAIL(check_replica_validity(addr_list.at(i), arg.dst_, learner_list, ls_info))) {
+      if (OB_FAIL(get_c_replica_(addr_list.at(i), learner_list, all_c_replica_list))) {
+        LOG_WARN("failed to get all c replica", K(ret), "addr", addr_list.at(i), K(learner_list));
+      } else if (OB_TMP_FAIL(check_replica_validity(addr_list.at(i), arg.dst_, learner_list, ls_info))) {
         if (OB_DATA_SOURCE_NOT_EXIST == tmp_ret) {
           // overwrite ret
           ret = tmp_ret;
@@ -1194,25 +1197,32 @@ int ObCTypeReplicaSrcProvider::inner_choose_ob_src_(
         }
       } else if (OB_FAIL(candidate_addr_list.push_back(i))) {
         LOG_WARN("failed to push back to candidate_addr_list", K(ret), "index", i, "addr", addr_list.at(i));
-      } else if (OB_FAIL(get_valid_c_replica_(addr_list.at(i), learner_list, c_replica_list))) {
+      } else if (OB_FAIL(get_c_replica_(addr_list.at(i), learner_list, valid_c_replica_list))) {
         LOG_WARN("failed to get valid c replica", K(ret), "addr", addr_list.at(i), K(learner_list));
       }
     }
     if (OB_SUCC(ret)) {
-      if (candidate_addr_list.empty() && c_replica_list.empty()) {
+      if (candidate_addr_list.empty() && valid_c_replica_list.empty()) {
         ret = OB_DATA_SOURCE_NOT_EXIST;
         LOG_INFO("no available data source exist in this area", K(ret), "tenant_id", get_tenant_id(),
             "ls_id", get_ls_id(), K(arg.dst_), K(addr_list), K(learner_list));
-      } else if (candidate_addr_list.empty() && !c_replica_list.empty()) {
+      } else if (candidate_addr_list.empty() && !valid_c_replica_list.empty()) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("this case is unexpected", K(ret), K(c_replica_list), "tenant_id", get_tenant_id(),
+        LOG_WARN("this case is unexpected", K(ret), K(valid_c_replica_list), "tenant_id", get_tenant_id(),
             "ls_id", get_ls_id(), K(arg.dst_), K(addr_list), K(learner_list));
-      } else if (!c_replica_list.empty()) {
-        int64_t num = c_replica_list.count();
-        choosen_src_addr = c_replica_list.at(rand() % num);
+      } else if (!valid_c_replica_list.empty()) {
+        // if C replica exist, choose one of them
+        int64_t num = valid_c_replica_list.count();
+        choosen_src_addr = valid_c_replica_list.at(rand() % num);
         LOG_INFO("found available C replica source in this area", "tenant_id", get_tenant_id(),
-            "ls_id", get_ls_id(), K(arg.dst_), K(learner_list), K(choosen_src_addr), K(addr_list), K(c_replica_list));
+            "ls_id", get_ls_id(), K(arg.dst_), K(learner_list), K(choosen_src_addr), K(addr_list), K(valid_c_replica_list));
+      } else if (!all_c_replica_list.empty()) {
+        // if C replica exist, but all C replica is not available, fail this migration
+        ret = OB_DATA_SOURCE_NOT_EXIST;
+        LOG_INFO("C replica exist, but all C replica is not available", K(ret), "tenant_id", get_tenant_id(),
+            "ls_id", get_ls_id(), K(arg.dst_), K(learner_list), K(addr_list), K(all_c_replica_list), K(valid_c_replica_list));
       } else {
+        // if no C replica exist, choose other replica
         int64_t num = candidate_addr_list.count();
         choosen_src_addr = addr_list.at(candidate_addr_list.at(rand() % num));
         LOG_INFO("no available C replica, but found other available source in this area", "tenant_id", get_tenant_id(),

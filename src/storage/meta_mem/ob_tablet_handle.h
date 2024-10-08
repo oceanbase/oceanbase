@@ -72,9 +72,10 @@ class ObTabletTableIterator final
 {
   friend class ObTablet;
   friend class ObLSTabletService;
+  typedef ObSEArray<ObTabletHandle, 2> SplitExtraTabletHandleArray;
 public:
-  ObTabletTableIterator() : tablet_handle_(), table_store_iter_(), transfer_src_handle_(nullptr) {}
-  explicit ObTabletTableIterator(const bool is_reverse) : tablet_handle_(), table_store_iter_(is_reverse), transfer_src_handle_(nullptr) {}
+  ObTabletTableIterator() : tablet_handle_(), table_store_iter_(), transfer_src_handle_(nullptr), split_extra_tablet_handles_(nullptr) {}
+  explicit ObTabletTableIterator(const bool is_reverse) : tablet_handle_(), table_store_iter_(is_reverse), transfer_src_handle_(nullptr), split_extra_tablet_handles_(nullptr) {}
   int assign(const ObTabletTableIterator& other);
   ~ObTabletTableIterator() { reset(); }
   void reset()
@@ -86,6 +87,11 @@ public:
       ob_free(transfer_src_handle_);
       transfer_src_handle_ = nullptr;
     }
+    if (nullptr != split_extra_tablet_handles_) {
+      split_extra_tablet_handles_->~ObIArray<ObTabletHandle>();
+      ob_free(split_extra_tablet_handles_);
+      split_extra_tablet_handles_ = nullptr;
+    }
   }
   bool is_valid() const { return tablet_handle_.is_valid() || table_store_iter_.is_valid(); }
   ObTableStoreIterator *table_iter();
@@ -96,28 +102,34 @@ public:
   const ObTabletHandle *get_tablet_handle_ptr() const { return &tablet_handle_; }
   int set_tablet_handle(const ObTabletHandle &tablet_handle);
   int set_transfer_src_tablet_handle(const ObTabletHandle &tablet_handle);
+  int add_split_extra_tablet_handle(const ObTabletHandle &tablet_handle);
   int refresh_read_tables_from_tablet(
       const int64_t snapshot_version,
       const bool allow_no_ready_read,
-      const bool major_sstable_only = false);
+      const bool major_sstable_only,
+      const bool need_split_src_table,
+      const bool need_split_dst_table);
   int get_mds_sstables_from_tablet(const int64_t snapshot_version);
   int get_read_tables_from_tablet(
       const int64_t snapshot_version,
       const bool allow_no_ready_read,
       const bool major_sstable_only,
+      const bool need_split_src_table,
+      const bool need_split_dst_table,
       ObIArray<ObITable *> &tables);
   TO_STRING_KV(K_(tablet_handle), K_(transfer_src_handle), K_(table_store_iter));
 private:
   ObTabletHandle tablet_handle_;
   ObTableStoreIterator table_store_iter_;
   ObTabletHandle *transfer_src_handle_;
+  ObIArray<ObTabletHandle> *split_extra_tablet_handles_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletTableIterator);
 };
 
 struct ObGetTableParam final
 {
 public:
-  ObGetTableParam() : frozen_version_(-1), sample_info_(), tablet_iter_(), refreshed_merge_(nullptr) {}
+  ObGetTableParam() : frozen_version_(-1), sample_info_(), tablet_iter_(), refreshed_merge_(nullptr), need_split_dst_table_(true) {}
   ~ObGetTableParam() { reset(); }
   bool is_valid() const { return tablet_iter_.is_valid(); }
   void reset()
@@ -126,8 +138,9 @@ public:
     sample_info_.reset();
     tablet_iter_.reset();
     refreshed_merge_ = nullptr;
+    need_split_dst_table_ = true;
   }
-  TO_STRING_KV(K_(frozen_version), K_(sample_info), K_(tablet_iter));
+  TO_STRING_KV(K_(frozen_version), K_(sample_info), K_(tablet_iter), K_(need_split_dst_table));
 public:
   int64_t frozen_version_;
   common::SampleInfo sample_info_;
@@ -136,6 +149,10 @@ public:
   // when tablet has been refreshed, to notify other ObMultipleMerge in ObTableScanIterator re-inited
   // before rescan.
   void *refreshed_merge_;
+
+  // true means maybe need split dst table, which is always safe because get_read_tables will check by mds again;
+  // false means no need split dst table, which is for optimization and UNSAFE
+  bool need_split_dst_table_;
   DISALLOW_COPY_AND_ASSIGN(ObGetTableParam);
 };
 

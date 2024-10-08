@@ -15,6 +15,7 @@
 
 #include "lib/thread/ob_work_queue.h"
 #include "lib/thread/ob_dynamic_thread_pool.h"
+#include "lib/atomic/ob_atomic.h"
 #include "share/ob_common_rpc_proxy.h" // ObCommonRpcProxy
 #include "share/ob_srv_rpc_proxy.h" // ObPartitionServiceRpcProxy
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
@@ -82,7 +83,6 @@ private:
   int build_copy_macro_block_reader_init_param_(
       ObCopyMacroBlockReaderInitParam &init_param);
   int record_server_event_();
-
 private:
   // For rebuilder can not retry, define MAX_RETRY_TIMES as 1.
   static const int64_t MAX_RETRY_TIMES = 1;
@@ -93,7 +93,6 @@ private:
   ObITable::TableKey copy_table_key_;
   const ObCopyMacroRangeInfo *copy_macro_range_info_;
   int64_t task_idx_;
-
   DISALLOW_COPY_AND_ASSIGN(ObPhysicalCopyTask);
 };
 

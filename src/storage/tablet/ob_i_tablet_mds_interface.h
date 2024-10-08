@@ -59,10 +59,19 @@ public:
   int get_ddl_data(const share::SCN &snapshot,
                    ObTabletBindingMdsUserData &data,
                    const int64_t timeout = ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US) const;
+  template<typename T, typename OP>
+  int cross_ls_get_latest(OP &&op, bool &is_committed) const;
   int get_autoinc_seq(ObIAllocator &allocator,
                       const share::SCN &snapshot,
                       share::ObTabletAutoincSeq &data,
                       const int64_t timeout = ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US) const;
+  int get_split_data(ObTabletSplitMdsUserData &data,
+                     const int64_t timeout) const;
+  int split_partkey_compare(const blocksstable::ObDatumRowkey &rowkey,
+                            const ObITableReadInfo &rowkey_read_info,
+                            const ObIArray<uint64_t> &partkey_projector,
+                            int &cmp_ret,
+                            const int64_t timeout) const;
   int fill_virtual_info(ObIArray<mds::MdsNodeInfoForVirtualTable> &mds_node_info_array) const;
   TO_STRING_KV(KP(this), "is_inited", check_is_inited_(), "ls_id", get_tablet_meta_().ls_id_,
                "tablet_id", get_tablet_id_(), KP(get_tablet_pointer_()));
@@ -213,6 +222,34 @@ struct ReadAutoIncSeqOp
   }
   common::ObIAllocator &allocator_;
   share::ObTabletAutoincSeq &auto_inc_seq_;
+};
+
+struct ReadSplitDataOp
+{
+  ReadSplitDataOp(ObTabletSplitMdsUserData &split_data) : split_data_(split_data) {}
+  int operator()(const ObTabletSplitMdsUserData &data)
+  {
+    return split_data_.assign(data);
+  }
+  ObTabletSplitMdsUserData &split_data_;
+};
+
+struct ReadSplitDataPartkeyCompareOp
+{
+  ReadSplitDataPartkeyCompareOp(const blocksstable::ObDatumRowkey &rowkey,
+                                const ObITableReadInfo &rowkey_read_info,
+                                const ObIArray<uint64_t> &partkey_projector,
+                                int &cmp_ret)
+    : rowkey_(rowkey), rowkey_read_info_(rowkey_read_info), partkey_projector_(partkey_projector),
+      cmp_ret_(cmp_ret) {}
+  int operator()(const ObTabletSplitMdsUserData &data)
+  {
+    return data.partkey_compare(rowkey_, rowkey_read_info_, partkey_projector_, cmp_ret_);
+  }
+  const blocksstable::ObDatumRowkey &rowkey_;
+  const ObITableReadInfo &rowkey_read_info_;
+  const ObIArray<uint64_t> &partkey_projector_;
+  int &cmp_ret_;
 };
 
 template <>

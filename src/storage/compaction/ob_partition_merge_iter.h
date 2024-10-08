@@ -21,12 +21,15 @@
 #include "storage/access/ob_table_access_param.h"
 #include "storage/access/ob_table_access_context.h"
 #include "storage/compaction/ob_index_block_micro_iterator.h"
+#include "storage/blocksstable/index_block/ob_index_block_macro_iterator.h"
+#include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
 #include "storage/blocksstable/index_block/ob_index_block_dual_meta_iterator.h"
 #include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
 #include "storage/blocksstable/ob_datum_row.h"
 #include "storage/access/ob_table_access_param.h"
 #include "storage/access/ob_table_access_context.h"
 #include "storage/access/ob_micro_block_handle_mgr.h"
+#include "sql/session/ob_sql_session_mgr.h"
 
 namespace oceanbase
 {
@@ -35,6 +38,10 @@ using namespace blocksstable;
 namespace storage
 {
 struct ObTransNodeDMLStat;
+}
+namespace observer
+{
+class ObInnerSQLResult;
 }
 
 namespace compaction
@@ -125,7 +132,7 @@ public:
   virtual void reset();
   virtual int init(const ObMergeParameter &merge_param,
            const int64_t iter_idx,
-           const ObITableReadInfo *read_info) override final;
+           const ObITableReadInfo *read_info) override;
   virtual int init(const ObMergeParameter &merge_param, ObITable *table, const ObITableReadInfo *read_info) override final;
   virtual OB_INLINE bool is_iter_end() const override { return iter_end_; }
   virtual int multi_version_compare(const ObPartitionMergeIter &other, int &cmp_ret)
@@ -398,6 +405,34 @@ private:
   bool last_mvcc_row_already_output_;
   bool have_macro_output_row_;
   const bool reuse_uncommit_row_;
+};
+
+class ObPartitionMVRowMergeIter final : public ObPartitionMergeIter
+{
+public:
+  ObPartitionMVRowMergeIter(common::ObIAllocator &allocator);
+  virtual ~ObPartitionMVRowMergeIter();
+  virtual int init(const ObMergeParameter &merge_param,
+           const int64_t refresh_sql_idx,
+           const ObITableReadInfo *read_info) override;
+  virtual int next() override;
+  TO_STRING_KV(K_(is_delete), K_(is_replace), K_(sql_idx), K_(sql_read_col_cnt), K_(store_col_cnt),
+               K_(free_session_ctx), KP_(session), KP_(conn), KP_(sql_result));
+protected:
+  virtual int inner_init(const ObMergeParameter &merge_param) override;
+  virtual bool inner_check(const ObMergeParameter &merge_param) override;
+private:
+  bool is_delete_;
+  bool is_replace_;
+  int64_t sql_idx_;
+  int64_t sql_read_col_cnt_;
+  int64_t store_col_cnt_;
+  ObISQLClient::ReadResult read_result_;
+  blocksstable::ObDatumRow result_row_;
+  sql::ObFreeSessionCtx free_session_ctx_;
+  sql::ObSQLSessionInfo *session_;
+  sqlclient::ObISQLConnection *conn_;
+  observer::ObInnerSQLResult *sql_result_;
 };
 
 static const int64_t DEFAULT_ITER_COUNT = 16;

@@ -155,8 +155,10 @@ private:
   static int check_arg2(bool returning_rowkey,
                         bool returning_affected_entity);
   static int adjust_entities(ObTableBatchCtx &ctx);
-  static int get_result_index(const common::ObNewRow &row,
-                              const common::ObIArray<ObTableOperation> &ops,
+  static int get_result_index(const ObNewRow &row,
+                              const ObIArray<ObTableOperation> &ops,
+                              const ObIArray<uint64_t> &rowkey_ids,
+                              ObObj *rowkey_cells,
                               ObIArray<int64_t> &indexs);
 };
 

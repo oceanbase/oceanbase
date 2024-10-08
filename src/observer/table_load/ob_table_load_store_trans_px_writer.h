@@ -13,6 +13,7 @@
 #pragma once
 
 #include "common/ob_tablet_id.h"
+#include "observer/table_load/ob_table_load_pre_sort_writer.h"
 
 namespace oceanbase
 {
@@ -39,6 +40,7 @@ public:
   int prepare_write(const common::ObTabletID &tablet_id,
                     const common::ObIArray<uint64_t> &column_ids);
   int write(const blocksstable::ObDatumRow  &row);
+  int finish_write();
 
   TO_STRING_KV(KP_(store_ctx),
                KP_(trans),
@@ -60,6 +62,7 @@ private:
   ObTableLoadStoreCtx *store_ctx_;
   ObTableLoadStoreTrans *trans_;
   ObTableLoadTransStoreWriter *writer_;
+  ObTableLoadPreSortWriter pre_sort_writer_;
   ObTabletID tablet_id_;
   int64_t column_count_;
   int64_t row_count_;

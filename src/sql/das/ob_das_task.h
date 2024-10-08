@@ -100,7 +100,8 @@ public:
       user_id_(0),
       session_id_(0),
       plan_id_(0),
-      plan_hash_(0)
+      plan_hash_(0),
+      tsc_monitor_info_(nullptr)
   {
     sql_id_[0] = '\0';
   }
@@ -136,6 +137,8 @@ public:
   uint64_t plan_id_;
 private:
   uint64_t plan_hash_; // no use!!!
+public:
+  ObTSCMonitorInfo *tsc_monitor_info_;
 };
 
 class ObIDASTaskOp
@@ -169,7 +172,8 @@ public:
       op_result_(nullptr),
       attach_ctdef_(nullptr),
       attach_rtdef_(nullptr),
-      das_gts_opt_info_(op_alloc)
+      das_gts_opt_info_(op_alloc),
+      plan_line_id_(0)
   {
     das_task_node_.get_data() = this;
   }
@@ -236,7 +240,8 @@ public:
                        K_(related_rtdefs),
                        K_(task_status),
                        K_(related_tablet_ids),
-                       K_(das_task_node));
+                       K_(das_task_node),
+                       K_(plan_line_id));
 public:
   void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
   uint64_t get_tenant_id() const { return tenant_id_; }
@@ -331,6 +336,7 @@ protected:
   const ObDASBaseCtDef *attach_ctdef_;
   ObDASBaseRtDef *attach_rtdef_;
   ObDASGTSOptInfo das_gts_opt_info_;
+  int64_t plan_line_id_; //plan operator id
 };
 typedef common::ObObjStore<ObIDASTaskOp*, common::ObIAllocator&> DasTaskList;
 typedef DasTaskList::Iterator DASTaskIter;
@@ -343,7 +349,7 @@ public:
   virtual ~ObIDASTaskResult() { }
   virtual int init(const ObIDASTaskOp &task_op, common::ObIAllocator &alloc) = 0;
   virtual int reuse() = 0;
-  virtual int link_extra_result(ObDASExtraData &extra_result)
+  virtual int link_extra_result(ObDASExtraData &extra_result, ObIDASTaskOp *task_op)
   {
     UNUSED(extra_result);
     return common::OB_NOT_IMPLEMENT;
@@ -622,6 +628,7 @@ private:
   bool has_more_;
   bool enable_rich_format_;
   ObTempRowStore vec_row_store_;
+public:
   int64_t io_read_bytes_;
   int64_t ssstore_read_bytes_;
   int64_t ssstore_read_row_cnt_;

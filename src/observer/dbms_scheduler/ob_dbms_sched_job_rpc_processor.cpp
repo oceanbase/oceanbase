@@ -33,11 +33,7 @@ int ObRpcAPDBMSSchedJobCB::process()
 {
   int ret = OB_SUCCESS;
   ObDBMSSchedJobResult &result = result_;
-  ObDBMSSchedJobMaster &job_master = ObDBMSSchedJobMaster::get_instance();
-  if (!job_master.is_inited()) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("dbms sched job master not init", K(ret), K(job_master.is_inited()));
-  } else if (!result.is_valid()) {
+  if (!result.is_valid()) {
     ret = OB_INVALID_ERROR;
     LOG_WARN("dbms sched job result is invalid", K(ret), K(result));
   } else {

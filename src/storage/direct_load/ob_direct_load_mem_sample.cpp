@@ -27,7 +27,9 @@ using namespace observer;
 using namespace table;
 
 ObDirectLoadMemSample::ObDirectLoadMemSample(observer::ObTableLoadTableCtx *ctx, ObDirectLoadMemContext *mem_ctx)
-  : ctx_(ctx), mem_ctx_(mem_ctx), range_count_(mem_ctx_->mem_dump_task_count_) {}
+  : ctx_(ctx), mem_ctx_(mem_ctx), range_count_(mem_ctx_->mem_dump_task_count_)
+{
+}
 
 
 int ObDirectLoadMemSample::gen_ranges(ObIArray<ChunkType *> &chunks, ObIArray<RangeType> &ranges)
@@ -79,14 +81,15 @@ int ObDirectLoadMemSample::do_work()
   int ret = OB_SUCCESS;
   ObArray<ChunkType *> chunks;
   ObArray<RangeType> ranges;
-  auto context_ptr = ObTableLoadHandle<ObDirectLoadMemDump::Context>::make_handle();
-  context_ptr->sub_dump_count_ = range_count_;
+  ObTableLoadHandle<ObDirectLoadMemDump::Context> context_ptr;
 
   chunks.set_tenant_id(MTL_ID());
   ranges.set_tenant_id(MTL_ID());
   mem_ctx_->mem_chunk_queue_.pop_all(chunks);
-
-  if (OB_FAIL(context_ptr->init())) {
+  if (OB_FAIL(ObTableLoadHandle<ObDirectLoadMemDump::Context>::make_handle(context_ptr))) {
+    LOG_WARN("fail to make handle", KR(ret));
+  } else if (FALSE_IT(context_ptr->sub_dump_count_ = range_count_)) {
+  } else if (OB_FAIL(context_ptr->init())) {
     LOG_WARN("fail to init context", KR(ret));
   } else if (OB_FAIL(context_ptr->mem_chunk_array_.assign(chunks))) {
     LOG_WARN("fail to assgin chunks", KR(ret));
@@ -174,6 +177,48 @@ int ObDirectLoadMemSample::do_sample()
   }
   if (ret != OB_SUCCESS || mem_ctx_->has_error_) {
     mem_ctx_->mem_dump_queue_.push(nullptr); //出错了，让dump结束，避免卡死
+  }
+  return ret;
+}
+int ObDirectLoadMemSample::do_pre_sort_sample()
+{
+  int ret = OB_SUCCESS;
+  while (OB_SUCC(ret) && !(mem_ctx_->has_error_)) {
+    if (mem_ctx_->all_trans_finished_) {
+      if (mem_ctx_->mem_chunk_queue_.size() > 0) {
+        if (OB_FAIL(do_work())) {
+          LOG_WARN("fail to do work", KR(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(mem_ctx_->mem_dump_queue_.push(nullptr))) {
+          LOG_WARN("fail to push queue", KR(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        while (mem_ctx_->running_dump_count_ > 0 && !(mem_ctx_->has_error_)) {
+          usleep(100000);
+        }
+      }
+      break;
+    }
+    int64_t mem_chunk_dump_count = mem_ctx_->table_data_desc_.max_mem_chunk_count_ / 4;
+    if (mem_chunk_dump_count <= 0) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid args", K(mem_ctx_->table_data_desc_.max_mem_chunk_count_));
+    }
+    if (OB_SUCC(ret)) {
+      if (mem_ctx_->mem_chunk_queue_.size() < mem_chunk_dump_count) {
+        usleep(50000);
+        continue;
+      }
+      if (OB_FAIL(do_work())) {
+        LOG_WARN("fail to do work", KR(ret));
+      }
+    }
+  }
+  if (ret != OB_SUCCESS || mem_ctx_->has_error_) {
+    mem_ctx_->mem_dump_queue_.push(nullptr);
   }
   return ret;
 }

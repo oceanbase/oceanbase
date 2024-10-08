@@ -636,6 +636,16 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObTTLDutyDurationChecker);
 };
 
+class ObMySQLVersionLengthChecker : public ObConfigChecker {
+public:
+  ObMySQLVersionLengthChecker()
+  {}
+  virtual ~ObMySQLVersionLengthChecker(){};
+  bool check(const ObConfigItem& t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObMySQLVersionLengthChecker);
+};
+
 class ObConfigPublishSchemaModeChecker
   : public ObConfigChecker
 {
@@ -824,6 +834,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObSqlPlanManagementModeChecker);
 };
 
+class ObDefaultLoadModeChecker
+  : public ObConfigChecker
+{
+public:
+  ObDefaultLoadModeChecker() {}
+  virtual ~ObDefaultLoadModeChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObDefaultLoadModeChecker);
+};
+
 class ObModeConfigParserUitl
 {
 public:
@@ -940,6 +961,16 @@ public:
   virtual bool check(const ObConfigItem &t) const override;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigS3URLEncodeTypeChecker);
+};
+
+class ObConfigDegradationPolicyChecker : public ObConfigChecker
+{
+public:
+  ObConfigDegradationPolicyChecker() {}
+  virtual ~ObConfigDegradationPolicyChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigDegradationPolicyChecker);
 };
 
 typedef __ObConfigContainer<ObConfigStringKey,

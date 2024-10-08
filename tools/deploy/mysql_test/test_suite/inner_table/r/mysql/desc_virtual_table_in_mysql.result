@@ -888,6 +888,7 @@ local_session_vars	longtext	YES		NULL
 duplicate_read_consistency	bigint(20)	NO		0	
 index_params	varchar(256)	NO			
 micro_index_clustered	tinyint(4)	NO		0	
+mv_mode	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_core_all_table;
 IF(count(*) >= 0, 1, 0)
 1
@@ -1824,6 +1825,7 @@ local_session_vars	longtext	YES		NULL
 duplicate_read_consistency	bigint(20)	NO		0	
 index_params	varchar(256)	NO			
 micro_index_clustered	tinyint(4)	NO		0	
+mv_mode	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table;
 IF(count(*) >= 0, 1, 0)
 1
@@ -2905,6 +2907,9 @@ tablet_change_checkpoint_scn	bigint(20) unsigned	NO		NULL
 transfer_scn	bigint(20) unsigned	NO		NULL	
 tx_blocked	bigint(20)	NO		NULL	
 required_data_disk_size	bigint(20)	NO		0	
+mv_major_merge_scn	bigint(20) unsigned	NO		0	
+mv_publish_scn	bigint(20) unsigned	NO		0	
+mv_safe_scn	bigint(20) unsigned	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ls_info;
 IF(count(*) >= 0, 1, 0)
 1
@@ -3173,6 +3178,7 @@ PLAN_HASH	bigint(20) unsigned	YES		NULL
 THREAD_ID	bigint(20)	YES		NULL	
 STMT_TYPE	bigint(20)	YES		NULL	
 TABLET_ID	bigint(20)	YES		NULL	
+PROXY_SID	bigint(20)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ash;
 IF(count(*) >= 0, 1, 0)
 1
@@ -3966,6 +3972,7 @@ plan_hash	bigint(20) unsigned	YES		NULL
 thread_id	bigint(20)	YES		NULL	
 stmt_type	bigint(20)	YES		NULL	
 tablet_id	bigint(20)	YES		NULL	
+proxy_sid	bigint(20)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_wr_active_session_history;
 IF(count(*) >= 0, 1, 0)
 1

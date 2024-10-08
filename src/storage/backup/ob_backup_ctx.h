@@ -30,6 +30,7 @@
 #include "storage/blocksstable/ob_logic_macro_id.h"
 #include "storage/backup/ob_backup_file_writer_ctx.h"
 #include "lib/oblog/ob_log_module.h"
+#include "lib/hash/ob_hashset.h"
 
 namespace oceanbase {
 namespace backup {
@@ -299,12 +300,18 @@ public:
     return tablet_holder_;
   }
 
+  int check_is_major_compaction_mview_dep_tablet(const common::ObTabletID &tablet_id, bool &is_major_compaction_mview_dep_tablet) const;
+  void add_wait_reuse_across_sstable_time(int64_t cost_time);
+
 private:
   int recover_last_retry_ctx_();
   int prepare_tablet_id_reader_(ObILSTabletIdReader *&reader);
   int get_all_tablet_id_list_(ObILSTabletIdReader *reader, common::ObIArray<common::ObTabletID> &tablet_list);
+  int get_backup_scn_(const ObLSBackupParam &param, const share::ObBackupDataType &backup_data_type, share::SCN &backup_scn);
+  int prepare_mview_dep_tablet_set_(const ObLSBackupParam &param, const share::ObBackupDataType &backup_data_type);
+  int check_mview_tablet_set_(const uint64_t tenant_id, common::ObMySQLProxy &sql_proxy);
   int seperate_tablet_id_list_(const common::ObIArray<common::ObTabletID> &tablet_id_list,
-      common::ObIArray<common::ObTabletID> &sys_tablet_list, common::ObIArray<common::ObTabletID> &data_tablet_id_list);
+      common::ObArray<common::ObTabletID> &sys_tablet_list, common::ObArray<common::ObTabletID> &data_tablet_id_list);
   int inner_do_next_(common::ObTabletID &tablet_id);
   int check_need_skip_(const common::ObTabletID &tablet_id, bool &need_skip);
   int check_need_skip_major_(const common::ObTabletID &tablet_id, bool &need_skip);
@@ -312,6 +319,7 @@ private:
 
 private:
   static const int64_t DEFAULT_FINISH_TABLET_SET_SIZE = 10000;
+  static const int64_t DEFAULT_MVIEW_DEP_TABLET_SET_SIZE = 10000;
 
 public:
   bool is_inited_;
@@ -338,6 +346,8 @@ public:
   share::SCN backup_tx_table_filled_tx_scn_;
   ObBackupTabletIndexBlockBuilderMgr index_builder_mgr_;
   common::ObInOutBandwidthThrottle *bandwidth_throttle_;
+  common::hash::ObHashSet<common::ObTabletID> mview_dep_tablet_set_;
+  int64_t wait_reuse_across_sstable_time_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupCtx);
 };
 

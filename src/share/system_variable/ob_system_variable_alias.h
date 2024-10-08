@@ -427,6 +427,7 @@ namespace share
   static const char* const OB_SV_INNODB_SYNC_DEBUG = "innodb_sync_debug";
   static const char* const OB_SV_DEFAULT_COLLATION_FOR_UTF8MB4 = "default_collation_for_utf8mb4";
   static const char* const OB_SV__ENABLE_OLD_CHARSET_AGGREGATION = "_enable_old_charset_aggregation";
+  static const char* const OB_SV_ENABLE_SQL_PLAN_MONITOR = "enable_sql_plan_monitor";
   static const char* const OB_SV_INSERT_ID = "insert_id";
   static const char* const OB_SV_JOIN_BUFFER_SIZE = "join_buffer_size";
   static const char* const OB_SV_MAX_JOIN_SIZE = "max_join_size";

@@ -46,6 +46,7 @@ namespace storage
 class ObLsmtTransNode;
 class ObFreezer;
 class ObExtInfoCallback;
+class ObExtInfoLogHeader;
 }
 
 using namespace transaction::tablelock;
@@ -176,10 +177,11 @@ public:
   int register_ext_info_commit_cb(
       const int64_t timeout,
       const blocksstable::ObDmlFlag dml_flag,
-      transaction::ObTxDesc *tx_desc,
-      transaction::ObTxSEQ &parent_seq_no,
-      blocksstable::ObStorageDatum &index_data,
-      ObObjType &type,
+      const transaction::ObTxSEQ &seq_no_st,
+      const int64_t seq_no_cnt,
+      const ObString &index_data,
+      const ObObjType index_data_type,
+      const storage::ObExtInfoLogHeader &header,
       ObObj &ext_info_data);
 public:
   virtual void reset()

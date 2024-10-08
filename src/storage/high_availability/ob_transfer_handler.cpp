@@ -31,6 +31,7 @@
 #include "share/ob_storage_ha_diagnose_struct.h"
 #include "storage/high_availability/ob_storage_ha_diagnose_mgr.h"
 #include "storage/tx/wrs/ob_weak_read_util.h"
+#include "rootserver/mview/ob_collect_mv_merge_info_task.h"
 
 using namespace oceanbase::transaction;
 using namespace oceanbase::share;
@@ -916,6 +917,37 @@ int ObTransferHandler::get_ls_active_trans_count_(
   return ret;
 }
 
+int ObTransferHandler::get_dest_ls_mv_merge_scn_(
+    const share::ObTransferTaskInfo &task_info,
+    share::SCN &new_mv_merge_scn)
+{
+  int ret = OB_SUCCESS;
+  new_mv_merge_scn.set_min();
+  ObMajorMVMergeInfo mv_merge_info;
+  uint64_t data_version = 0;
+  ObAddr dest_ls_leader;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("transfer handler do not init", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+    LOG_WARN("fail to get data version", KR(ret));
+  } else if (OB_UNLIKELY(data_version < DATA_VERSION_4_3_4_0)) {
+  } else if (!task_info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("check start status src ls info get invalid argument", K(ret), K(task_info));
+  } else if (OB_FAIL(get_ls_leader_(task_info.dest_ls_id_, dest_ls_leader))) {
+    LOG_WARN("failed to get dest ls leader", K(ret), K(task_info));
+  } else if (OB_FAIL(rootserver::ObCollectMvMergeInfoTask::sync_get_ls_member_merge_info(
+                     dest_ls_leader, task_info.tenant_id_, task_info.dest_ls_id_,
+                     mv_merge_info, obrpc::ObRpcProxy::MAX_RPC_TIMEOUT,
+                     true /*need check leader*/))) {
+    LOG_WARN("failed to get ls member merge info", K(ret),
+             K(dest_ls_leader), K(task_info), K(new_mv_merge_scn));
+  } else if (OB_FALSE_IT(new_mv_merge_scn = mv_merge_info.major_mv_merge_scn_publish_)) {
+  }
+  return ret;
+}
+
 int ObTransferHandler::check_start_status_transfer_tablets_(
     const share::ObTransferTaskInfo &task_info)
 {
@@ -923,6 +955,7 @@ int ObTransferHandler::check_start_status_transfer_tablets_(
   common::ObMemberList member_list;
   ObArray<ObAddr> member_addr_list;
   const int64_t cluster_id = GCONF.cluster_id;
+  SCN new_mv_merge_scn;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -934,6 +967,8 @@ int ObTransferHandler::check_start_status_transfer_tablets_(
     LOG_WARN("failed to get src ls member list", K(ret), K(task_info));
   } else if (OB_FAIL(member_list.get_addr_array(member_addr_list))) {
     LOG_WARN("failed to get addr array", K(ret), K(task_info), K(member_list));
+  } else if (OB_FAIL(get_dest_ls_mv_merge_scn_(task_info, new_mv_merge_scn))) {
+    LOG_WARN("failed to get dest ls mv merge scn", K(ret), K(task_info));
   } else {
     storage::ObCheckStartTransferTabletsProxy batch_proxy(
         *(GCTX.storage_rpc_proxy_), &obrpc::ObStorageRpcProxy::check_start_transfer_tablets);
@@ -944,6 +979,7 @@ int ObTransferHandler::check_start_status_transfer_tablets_(
       arg.src_ls_id_ = task_info.src_ls_id_;
       arg.dest_ls_id_ = task_info.dest_ls_id_;
       arg.data_version_ = task_info.data_version_;
+      arg.new_mv_merge_scn_ = new_mv_merge_scn;
       const int64_t timeout = GCONF.rpc_timeout;
       const int64_t cluster_id = GCONF.cluster_id;
       const uint64_t group_id = share::OBCG_STORAGE;

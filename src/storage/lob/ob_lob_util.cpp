@@ -27,78 +27,6 @@ using namespace transaction;
 namespace storage
 {
 
-ObLobAccessParam::~ObLobAccessParam()
-{
-  if (OB_NOT_NULL(dml_base_param_)) {
-    if (OB_NOT_NULL(dml_base_param_->store_ctx_guard_)) {
-      dml_base_param_->store_ctx_guard_->~ObStoreCtxGuard();
-    }
-    dml_base_param_->~ObDMLBaseParam();
-  }
-}
-
-int ObLobAccessParam::assign(const ObLobAccessParam& other)
-{
-  int ret = OB_SUCCESS;
-  this->tmp_allocator_ = other.tmp_allocator_;
-  this->allocator_ = other.allocator_;
-  this->tx_desc_ = other.tx_desc_;
-  // use assign
-  // this->snapshot_ = other.snapshot_;
-  this->tx_id_ = other.tx_id_;
-  this->sql_mode_ = other.sql_mode_;
-  this->dml_base_param_ = other.dml_base_param_;
-
-  this->tenant_id_ = other.tenant_id_;
-  this->src_tenant_id_ = other.src_tenant_id_;
-  this->ls_id_ = other.ls_id_;
-  this->tablet_id_ = other.tablet_id_;
-  this->lob_meta_tablet_id_ = other.lob_meta_tablet_id_;
-  this->lob_piece_tablet_id_ = other.lob_piece_tablet_id_;
-
-  this->coll_type_ = other.coll_type_;
-  this->lob_locator_ = other.lob_locator_;
-  this->lob_common_ = other.lob_common_;
-  this->lob_data_ = other.lob_data_;
-  this->byte_size_ = other.byte_size_;
-  this->handle_size_ = other.handle_size_;
-
-  this->timeout_ = other.timeout_;
-  this->fb_snapshot_ = other.fb_snapshot_;
-
-  this->offset_ = other.offset_;
-  this->len_ = other.len_;
-
-  this->parent_seq_no_ = other.parent_seq_no_;
-  this->seq_no_st_ = other.seq_no_st_;
-  this->used_seq_cnt_ = other.used_seq_cnt_;
-  this->total_seq_cnt_ = other.total_seq_cnt_;
-  this->checksum_ = other.checksum_;
-  this->update_len_ = other.update_len_;
-  this->op_type_ = other.op_type_;
-
-  this->is_total_quantity_log_ = other.is_total_quantity_log_;
-  this->read_latest_ = other.read_latest_;
-  this->scan_backward_ = other.scan_backward_;
-  this->is_fill_zero_ = other.is_fill_zero_;
-  this->from_rpc_ = other.from_rpc_;
-  this->inrow_read_nocopy_ = other.inrow_read_nocopy_;
-  this->is_store_char_len_ = other.is_store_char_len_;
-
-  this->inrow_threshold_ = other.inrow_threshold_;
-  this->schema_chunk_size_ = other.schema_chunk_size_;
-
-  this->ext_info_log_ = other.ext_info_log_;
-  this->access_ctx_ = other.access_ctx_;
-  this->lob_id_geneator_ = other.lob_id_geneator_;
-  this->remote_query_ctx_ = other.remote_query_ctx_;
-
-  if (OB_FAIL(this->snapshot_.assign(other.snapshot_))) {
-    LOG_WARN("assign snapshot fail", K(ret), K(other));
-  }
-  return ret;
-}
-
 ObCollationType ObLobCharsetUtil::get_collation_type(ObObjType type, ObCollationType ori_coll_type)
 {
   ObCollationType coll_type = ori_coll_type;
@@ -108,94 +36,15 @@ ObCollationType ObLobCharsetUtil::get_collation_type(ObObjType type, ObCollation
   return coll_type;
 }
 
-int ObLobAccessParam::set_lob_locator(common::ObLobLocatorV2 *lob_locator)
+void ObLobCharsetUtil::transform_query_result_charset(
+    const common::ObCollationType& coll_type,
+    const char* data,
+    uint32_t len,
+    uint32_t &byte_len,
+    uint32_t &byte_st)
 {
-  int ret = OB_SUCCESS;
-  ObString disk_locator;
-  if (OB_ISNULL(lob_locator)) {
-    // do nothing
-  } else if (!lob_locator->has_lob_header()) {
-    // do nothing
-  } else if (!lob_locator->is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("lob locator is invalid", K(ret), KPC(lob_locator));
-  } else if (!(lob_locator->is_lob_disk_locator() || lob_locator->is_persist_lob() || lob_locator->is_full_temp_lob())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("lob locator type is invalid", K(ret), KPC(lob_locator));
-  } else if (OB_FAIL(lob_locator->get_disk_locator(disk_locator))) {
-    LOG_WARN("failed to get lob common from lob locator", K(ret), KPC(lob_locator));
-  } else {
-    lob_common_ = reinterpret_cast<ObLobCommon*>(disk_locator.ptr());
-    handle_size_ = disk_locator.length();
-    lob_locator_ = lob_locator;
-  }
-  return ret;
-}
-
-int64_t ObLobAccessParam::get_schema_chunk_size() const
-{
-  uint64_t chunk_size = 0;
-  if (0 == schema_chunk_size_ || schema_chunk_size_ > ObLobMetaUtil::LOB_OPER_PIECE_DATA_SIZE) {
-    chunk_size = ObLobMetaUtil::LOB_OPER_PIECE_DATA_SIZE;
-  } else {
-    chunk_size = schema_chunk_size_;
-  }
-  return chunk_size;
-}
-
-bool ObLobAccessParam::has_store_chunk_size() const
-{
-  bool bres = false;
-  if (OB_ISNULL(lob_common_)) {
-  } else if (lob_common_->in_row_ || ! lob_common_->is_init_) {
-  } else if (OB_ISNULL(lob_data_)) {
-  } else {
-    bres = true;
-  }
-  return bres;
-}
-
-// chunk size can be changed online.
-// that means lob data that has been writed may have different chunk size with schema
-// so here should get chunk size according context
-int ObLobAccessParam::get_store_chunk_size(int64_t &chunk_size) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(lob_common_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("lob_common_ is null", KR(ret), KPC(this));
-  } else if (lob_common_->in_row_ || ! lob_common_->is_init_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("lob_common_ is not outrow", KR(ret), KPC(lob_common_), KPC(this));
-  } else if (OB_ISNULL(lob_data_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("lob_data_ is null", KR(ret), KPC(lob_common_), KPC(this));
-  } else {
-    ObLobDataOutRowCtx *outrow_ctx = reinterpret_cast<ObLobDataOutRowCtx*>(lob_data_->buffer_);
-    chunk_size = outrow_ctx->get_real_chunk_size();
-  }
-  return ret;
-}
-
-int64_t ObLobAccessParam::get_inrow_threshold()
-{
-  int64_t res = inrow_threshold_;
-  if (res < OB_MIN_LOB_INROW_THRESHOLD || res > OB_MAX_LOB_INROW_THRESHOLD) {
-    LIB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "invalid inrow threshold, use default inrow threshold", K(res));
-    res = OB_DEFAULT_LOB_INROW_THRESHOLD;
-  }
-  return res;
-}
-
-int ObLobAccessParam::is_timeout()
-{
-  int ret = OB_SUCCESS;
-  int64_t cur_time = ObTimeUtility::current_time();
-  if (cur_time > timeout_) {
-    ret = OB_TIMEOUT;
-    LOG_WARN("query timeout", K(ret), K(cur_time), K(timeout_));
-  }
-  return ret;
+  byte_st = ObCharset::charpos(coll_type, data, len, byte_st);
+  byte_len = ObCharset::charpos(coll_type, data + byte_st, len - byte_st, byte_len);
 }
 
 int ObInsertLobColumnHelper::start_trans(const share::ObLSID &ls_id,

@@ -17,6 +17,10 @@
 #include "storage/memtable/ob_memtable_interface.h"
 #include "storage/tablelock/ob_obj_lock.h"
 #include "lib/lock/ob_spin_rwlock.h"
+#include "logservice/ob_append_callback.h"
+#include "logservice/ob_log_base_type.h"
+#include "logservice/ob_log_base_header.h"
+#include "logservice/ob_log_handler.h"
 #include "share/scn.h"
 
 namespace oceanbase
@@ -40,11 +44,96 @@ namespace tablelock
 {
 struct ObLockParam;
 
+class ObLockTableSplitLog final
+{
+public:
+  OB_UNIS_VERSION(1);
+public:
+  ObLockTableSplitLog() { reset(); }
+  ~ObLockTableSplitLog() { reset(); }
+
+  int init(common::ObTabletID &src_tablet_id, const ObSArray<common::ObTabletID> &dst_tablet_ids);
+
+  void reset() {
+    src_tablet_id_ = 0;
+    dst_tablet_ids_.reset();
+  }
+
+  const ObTabletID &get_src_tablet_id() { return src_tablet_id_; }
+  ObSArray<ObTabletID> &get_dst_tablet_ids() { return dst_tablet_ids_; }
+  TO_STRING_KV(K(src_tablet_id_), K(dst_tablet_ids_));
+
+private:
+  ObTabletID src_tablet_id_;
+  ObSArray<ObTabletID> dst_tablet_ids_;
+};
+
+class ObLockTableSplitLogCb : public logservice::AppendCb
+{
+friend class ObOBJLock;
+public:
+  ObLockTableSplitLogCb()
+    : is_inited_(false),
+      memtable_(nullptr),
+      ls_id_(share::ObLSID::INVALID_LS_ID),
+      src_tablet_id_(OB_INVALID_ID),
+      dst_tablet_ids_(),
+      is_logging_(false),
+      cb_success_(false),
+      last_submit_log_ts_(OB_INVALID_TIMESTAMP),
+      last_submit_scn_() {}
+  virtual ~ObLockTableSplitLogCb() {}
+  int init(ObLockMemtable *memtable, const share::ObLSID &ls_id);
+  int set(const ObTabletID &src_tablet_id, const ObSArray<common::ObTabletID> &dst_tablet_ids);
+  bool is_valid();
+  bool cb_success() { return cb_success_; };
+  // we should ensure that the lock memtable won't be released
+  // after submit_log, until the callback on_success or on_failure
+  virtual int on_success() override;
+  virtual int on_failure() override;
+  TO_STRING_KV(K(is_inited_),
+               K(memtable_),
+               K(ls_id_),
+               K(src_tablet_id_),
+               K(dst_tablet_ids_),
+               K(last_submit_log_ts_),
+               K(last_submit_scn_),
+               K(is_logging_),
+               K(cb_success_));
+private:
+  bool is_valid_(const ObLockMemtable *memtable, const share::ObLSID &ls_id);
+private:
+  bool is_inited_;
+
+  ObLockMemtable *memtable_;
+  share::ObLSID ls_id_;
+  ObTabletID src_tablet_id_;
+  ObSArray<ObTabletID> dst_tablet_ids_;
+
+  // To ensure only one writer can append log to LS at the same time,
+  // and only submit_log will change it to be true.
+  bool is_logging_;
+  bool cb_success_;
+  // params get from the LS
+  int64_t last_submit_log_ts_;
+  share::SCN last_submit_scn_;
+};
+
 class ObLockMemtable
-  : public ObIMemtable,
+  : public storage::ObIMemtable,
     public storage::checkpoint::ObCommonCheckpoint
 {
 public:
+  enum ObTableLockSplitStatus
+  {
+    INVALID_STATE = 0,
+    NO_SPLIT = 1,  // maybe has splitted into as a dst_tablet
+    WAIT_FOR_CALLBACK = 2,
+    SPLITTING_OUT = 3,  // for src_tablet only
+    SPLITTING_IN = 4,  // the cb_ has been callbacked
+    SPLITTED = 5
+  };
+
   ObLockMemtable();
   ~ObLockMemtable();
 
@@ -61,12 +150,17 @@ public:
              const ObTableLockOp &unlock_op,
              const bool is_try_lock = true,
              const int64_t expired_time = 0);
+  int replace(storage::ObStoreCtx &ctx,
+              const ObReplaceLockParam &param,
+              const ObTableLockOp &unlock_op,
+              ObTableLockOp &new_lock_op);
   // pre_check_lock to reduce useless lock and lock rollback
   // 1. check_lock_exist in mem_ctx
   // 2. check_lock_conflict in obj_map
   int check_lock_conflict(const memtable::ObMemtableCtx *mem_ctx,
                           const ObTableLockOp &lock_op,
                           ObTxIDSet &conflict_tx_set,
+                          const int64_t expired_time,
                           const bool include_finish_tx = true,
                           const bool only_check_dml_lock = false);
   // remove all the locks of the specified tablet
@@ -89,6 +183,7 @@ public:
                          const share::SCN &commit_scn,
                          const ObTableLockOpStatus status);
 
+  void update_rec_and_max_committed_scn(const share::SCN &scn);
   int get_table_lock_store_info(ObIArray<ObTableLockOp> &store_arr);
 
   // get all the lock id in the lock map
@@ -141,6 +236,30 @@ public:
   int replay_lock(memtable::ObMemtableCtx *mem_ctx,
                   const ObTableLockOp &lock_op,
                   const share::SCN &scn);
+
+  // ====================== SPLIT TABLE LOCK ======================
+  int table_lock_split(const common::ObTabletID &src_tablet_id,
+                       const ObSArray<common::ObTabletID> &dst_tablet_ids,
+                       const transaction::ObTransID &trans_id);
+  int replay_split_log(const void *buffer,
+                       const int64_t nbytes,
+                       const palf::LSN &lsn,
+                       const share::SCN &scn);
+  int get_split_status(const ObTabletID src_tablet_id,
+                       const ObSArray<ObTabletID> dst_tablet_ids,
+                       ObTableLockSplitStatus &src_split_status,
+                       ObTableLockSplitStatus &dst_split_status);
+  // The split_epoch here is the submit scn of the log of table lock split,
+  // identifies the time at which table lock split begins.
+  // The table locks which are generated by dml will be stored in destination
+  // tablets, until all of them have finished, i.e. the transactions which
+  // start before this split_epoch have been committed/aborted.
+  int add_split_epoch(const share::SCN &split_epoch,
+                      const ObSArray<common::ObTabletID> &tablet_ids,
+                      const bool for_replay = false);
+  int add_split_epoch(const share::SCN &split_epoch,
+                      const common::ObTabletID &tablet_id,
+                      const bool for_replay = false);
 
   // ================ NOT SUPPORTED INTERFACE ===============
 
@@ -198,6 +317,23 @@ private:
                               const ObTableLockMode &lock_mode,
                               const ObTransID &conflict_tx_id,
                               ObFunction<int(bool &need_wait)> &recheck_f);
+  // table lock split just support in_trans dml lock,
+  // table split should be failed when exist_cannot_split_lock
+  int check_exist_cannot_split_lock_(const common::ObTabletID &src_tablet_id,
+                                     const ObTransID &split_start_trans_id,
+                                     bool &exist_cannot_split_lock);
+  int need_split_(const common::ObTabletID &src_tablet_id,
+                  bool &need_split);
+  int submit_log_(common::ObTabletID src_tablet_id,
+                  const ObSArray<common::ObTabletID> &dst_tablet_ids);
+  // cannot add OUT_TRANS_LOCK when tablet is splitting
+  // except split_start_transaction
+  int check_table_lock_split_(const ObTableLockOp &lock_op,
+                              const ObStoreCtx &ctx);
+  int check_valid_for_table_lock_split_(const common::ObTabletID src_tablet_id,
+                                        const ObSArray<common::ObTabletID> &dst_tablet_ids);
+  int get_split_status_(const ObTabletID tablet_id, ObTableLockSplitStatus &split_status);
+
   int register_into_deadlock_detector_(const storage::ObStoreCtx &ctx,
                                        const ObTableLockOp &lock_op);
   int unregister_from_deadlock_detector_(const ObTableLockOp &lock_op);

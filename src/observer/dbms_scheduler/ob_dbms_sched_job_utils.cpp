@@ -77,6 +77,7 @@ int ObDBMSSchedJobInfo::deep_copy(ObIAllocator &allocator, const ObDBMSSchedJobI
   OZ (ob_write_string(allocator, other.cowner_, cowner_));
 
   OZ (ob_write_string(allocator, other.interval_, interval_));
+  OZ (ob_write_string(allocator, other.repeat_interval_, repeat_interval_));
 
   OZ (ob_write_string(allocator, other.what_, what_));
   OZ (ob_write_string(allocator, other.nlsenv_, nlsenv_));

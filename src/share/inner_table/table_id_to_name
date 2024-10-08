@@ -329,6 +329,7 @@
 # 478: __all_import_table_job_history
 # 479: __all_import_table_task
 # 480: __all_import_table_task_history
+# 482: __all_tablet_reorganize_history
 # 483: __all_storage_ha_error_diagnose_history
 # 484: __all_storage_ha_perf_diagnose_history
 # 485: __all_clone_job
@@ -1137,6 +1138,8 @@
 # 12477: __all_virtual_user_proxy_role_info_history
 # 12477: __all_user_proxy_role_info  # BASE_TABLE_NAME
 # 12477: __all_user_proxy_role_info_history  # BASE_TABLE_NAME1
+# 12478: __all_virtual_tablet_reorganize_history
+# 12478: __all_tablet_reorganize_history  # BASE_TABLE_NAME
 # 12479: __all_virtual_res_mgr_directive
 # 12479: __all_res_mgr_directive  # BASE_TABLE_NAME
 # 12480: __all_virtual_service
@@ -2171,6 +2174,7 @@
 # 21478: V$OB_TENANT_RUNTIME_INFO
 # 21479: GV$OB_CGROUP_CONFIG
 # 21480: V$OB_CGROUP_CONFIG
+# 21485: DBA_OB_FORMAT_OUTLINES
 # 21486: procs_priv
 # 21497: DBA_OB_AUX_STATISTICS
 # 21498: CDB_OB_AUX_STATISTICS
@@ -2259,6 +2263,9 @@
 # 21586: GV$OB_NIC_INFO
 # 21589: DBA_SCHEDULER_JOB_RUN_DETAILS
 # 21590: CDB_SCHEDULER_JOB_RUN_DETAILS
+# 21592: CDB_OB_SERVER_SPACE_USAGE
+# 21594: CDB_OB_SPACE_USAGE
+# 21596: CDB_OB_TABLE_SPACE_USAGE
 # 21599: GV$OB_SS_LOCAL_CACHE
 # 21600: V$OB_SS_LOCAL_CACHE
 # 21601: GV$OB_KV_GROUP_COMMIT_STATUS
@@ -2526,6 +2533,7 @@
 # 25265: DBA_OB_IMPORT_TABLE_JOB_HISTORY
 # 25266: DBA_OB_IMPORT_TABLE_TASKS
 # 25267: DBA_OB_IMPORT_TABLE_TASK_HISTORY
+# 25272: DBA_OB_FORMAT_OUTLINES
 # 25275: DBA_OB_TRANSFER_PARTITION_TASKS
 # 25276: DBA_OB_TRANSFER_PARTITION_TASK_HISTORY
 # 25278: USER_USERS
@@ -3117,6 +3125,9 @@
 # 101091: __idx_471_idx_dbms_lock_allocated_expiration
 # 101091: idx_dbms_lock_allocated_expiration  # INDEX_NAME
 # 101091: __all_dbms_lock_allocated  # DATA_BASE_TABLE_NAME
+# 101092: __idx_482_idx_tablet_his_table_id_src
+# 101092: idx_tablet_his_table_id_src  # INDEX_NAME
+# 101092: __all_tablet_reorganize_history  # DATA_BASE_TABLE_NAME
 # 101093: __idx_410_idx_kv_ttl_task_table_id
 # 101093: idx_kv_ttl_task_table_id  # INDEX_NAME
 # 101093: __all_kv_ttl_task  # DATA_BASE_TABLE_NAME
@@ -3158,6 +3169,9 @@
 # 101106: __idx_519_idx_scheduler_job_run_detail_v2_job_class_time
 # 101106: idx_scheduler_job_run_detail_v2_job_class_time  # INDEX_NAME
 # 101106: __all_scheduler_job_run_detail_v2  # DATA_BASE_TABLE_NAME
+# 101104: __idx_482_idx_tablet_his_table_id_dest
+# 101104: idx_tablet_his_table_id_dest  # INDEX_NAME
+# 101104: __all_tablet_reorganize_history  # DATA_BASE_TABLE_NAME
 # 15306: __idx_15120_idx_data_table_id_real_agent
 # 15306: idx_data_table_id_real_agent  # INDEX_NAME
 # 15306: __all_table  # DATA_BASE_TABLE_NAME

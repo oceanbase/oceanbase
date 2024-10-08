@@ -420,6 +420,7 @@ int ObLSService::inner_create_ls_(const share::ObLSID &lsid,
                                   const ObMigrationStatus &migration_status,
                                   const ObLSRestoreStatus &restore_status,
                                   const SCN &create_scn,
+                                  const ObMajorMVMergeInfo &major_mv_merge_info,
                                   const ObLSStoreFormat &store_format,
                                   ObLS *&ls)
 {
@@ -438,6 +439,7 @@ int ObLSService::inner_create_ls_(const share::ObLSID &lsid,
                               migration_status,
                               restore_status,
                               create_scn,
+                              major_mv_merge_info,
                               store_format,
                               rs_reporter_))) {
     LOG_WARN("fail to init ls", K(ret), K(lsid));
@@ -517,6 +519,7 @@ int ObLSService::create_ls(const obrpc::ObCreateLSArg &arg)
     common_arg.restore_status_ = get_restore_status_by_tenant_role_(arg.get_tenant_info().get_tenant_role());
     common_arg.create_type_ = get_create_type_by_tenant_role_(arg.get_tenant_info().get_tenant_role());
     common_arg.need_create_inner_tablet_ = need_create_inner_tablets_(arg);
+    common_arg.major_mv_merge_info_ = arg.get_major_mv_merge_info();
 
     if (OB_FAIL(create_ls_(common_arg, mig_arg))) {
       LOG_WARN("create ls failed", K(ret), K(arg));
@@ -918,6 +921,7 @@ int ObLSService::replay_create_ls_(const int64_t ls_epoch, const ObLSMeta &ls_me
                                       migration_status,
                                       restore_status,
                                       ls_meta.get_clog_checkpoint_scn(),
+                                      ls_meta.get_major_mv_merge_info(),
                                       ls_meta.get_store_format(),
                                       ls))) {
     LOG_WARN("fail to inner create ls", K(ret), K(ls_meta.ls_id_));
@@ -1285,6 +1289,7 @@ int ObLSService::create_ls_(const ObCreateLSCommonArg &arg,
                                               arg.migration_status_,
                                               arg.restore_status_,
                                               arg.create_scn_,
+                                              arg.major_mv_merge_info_,
                                               ls_store_format,
                                               ls))) {
       LOG_WARN("create ls failed", K(ret), K(arg.ls_id_), K(ls_store_format));
@@ -1367,6 +1372,7 @@ int ObLSService::create_ls_for_ha(
     common_arg.restore_status_ = restore_status;
     common_arg.task_id_ = task_id;
     common_arg.need_create_inner_tablet_ = false;
+    common_arg.major_mv_merge_info_.reset();
 
     if (OB_FAIL(create_ls_(common_arg, arg))) {
       LOG_WARN("failed to create ls", K(ret), K(arg));

@@ -189,5 +189,32 @@ int ObAdminExecutor::load_config()
   return ret;
 }
 
+int ObAdminExecutor::set_s3_url_encode_type(const char *type_str) const
+{
+  // When compliantRfc3986Encoding is set to true:
+  // - Adhere to RFC 3986 by supporting the encoding of reserved characters
+  //   such as '-', '_', '.', '$', '@', etc.
+  // - This approach mitigates inconsistencies in server behavior when accessing
+  //   COS using the S3 SDK.
+  // Otherwise, the reserved characters will not be encoded,
+  // following the default behavior of the S3 SDK.
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(type_str)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "type str is null", KR(ret), KP(type_str));
+  } else if (OB_FAIL(common::ObDeviceManager::get_instance().init_devices_env())) {
+    STORAGE_LOG(WARN, "fail to init device env", KR(ret), K(type_str));
+  } else if (0 == STRCASECMP("default", type_str)) {
+    Aws::Http::SetCompliantRfc3986Encoding(false);
+  } else if (0 == STRCASECMP("compliantRfc3986Encoding", type_str)) {
+    Aws::Http::SetCompliantRfc3986Encoding(true);
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "type str is invalid, expect 'dafault'/'compliantRfc3986Encoding'",
+        KR(ret), K(type_str));
+  }
+  return ret;
+}
+
 }
 }

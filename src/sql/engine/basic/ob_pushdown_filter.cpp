@@ -365,6 +365,13 @@ int ObPushdownFilterConstructor::is_white_mode(const ObRawExpr* raw_expr, bool &
         break;
     }
   }
+  // for auto split local index query filter
+  if (OB_SUCC(ret)) {
+    if (raw_expr->has_flag(IS_AUTO_PART_EXPR)) {
+      is_white = false;
+      LOG_DEBUG("has flag: is_auto_part_expr, dont go white filter");
+    }
+  }
   return ret;
 }
 
@@ -376,12 +383,13 @@ int ObPushdownFilterConstructor::create_black_filter_node(
   ObExpr *expr = nullptr;
   ObSEArray<ObRawExpr *, 4> column_exprs;
   ObPushdownBlackFilterNode *black_filter_node = nullptr;
+
   if (OB_ISNULL(raw_expr)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid null raw expr", K(ret));
   } else if (OB_FAIL(static_cg_.generate_rt_expr(*raw_expr, expr))) {
     LOG_WARN("failed to generate rt expr", K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(raw_expr, column_exprs))) {
+  } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs_and_rowscn(raw_expr, column_exprs))) {
     LOG_WARN("failed to extract column exprs", K(ret));
   } else if (OB_FAIL(factory_.alloc(PushdownFilterType::BLACK_FILTER, 0, filter_node))) {
     LOG_WARN("failed t o alloc pushdown filter", K(ret));
@@ -400,11 +408,19 @@ int ObPushdownFilterConstructor::create_black_filter_node(
     for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs.count(); ++i) {
       ObRawExpr *sub_raw_expr = column_exprs.at(i);
       ObExpr *sub_expr = nullptr;
-      ObColumnRefRawExpr *ref_expr = static_cast<ObColumnRefRawExpr*>(sub_raw_expr);
-      if (OB_FAIL(static_cg_.generate_rt_expr(*sub_raw_expr, sub_expr))) {
+      if (T_ORA_ROWSCN == sub_raw_expr->get_expr_type()) {
+         if (OB_FAIL(black_filter_node->col_ids_.push_back(common::OB_HIDDEN_TRANS_VERSION_COLUMN_ID))) {
+           LOG_WARN("failed to push back column id", K(ret));
+         }
+      } else {
+        ObColumnRefRawExpr *ref_expr = static_cast<ObColumnRefRawExpr*>(sub_raw_expr);
+        if (OB_FAIL(black_filter_node->col_ids_.push_back(ref_expr->get_column_id()))) {
+          LOG_WARN("failed to push back column id", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(static_cg_.generate_rt_expr(*sub_raw_expr, sub_expr))) {
         LOG_WARN("failed to generate rt expr", K(ret));
-      } else if (OB_FAIL(black_filter_node->col_ids_.push_back(ref_expr->get_column_id()))) {
-        LOG_WARN("failed to push back column id", K(ret));
       } else if (OB_FAIL(black_filter_node->column_exprs_.push_back(sub_expr))) {
         LOG_WARN("failed to push back column expr", K(ret));
       }
@@ -1156,6 +1172,7 @@ int ObPushdownFilterExecutor::init_filter_param(
     const bool need_padding)
 {
   int ret = OB_SUCCESS;
+
   const ObIArray<uint64_t> &col_ids = get_col_ids();
   const int64_t col_count = col_ids.count();
   if (is_filter_node()) {
@@ -1227,7 +1244,6 @@ int ObPushdownFilterExecutor::init_filter_param(
       }
     }
   }
-
   if (OB_SUCC(ret)) {
     n_cols_ = col_count;
   }

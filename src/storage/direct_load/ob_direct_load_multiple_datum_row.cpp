@@ -24,7 +24,7 @@ using namespace blocksstable;
 using namespace table;
 
 ObDirectLoadMultipleDatumRow::ObDirectLoadMultipleDatumRow()
-  : allocator_("TLD_MultiRow"), buf_size_(0), buf_(nullptr)
+  : allocator_("TLD_MultiRow"), is_deleted_(false), buf_size_(0), buf_(nullptr)
 {
   allocator_.set_tenant_id(MTL_ID());
 }
@@ -37,6 +37,7 @@ void ObDirectLoadMultipleDatumRow::reset()
 {
   rowkey_.reset();
   seq_no_.reset();
+  is_deleted_ = false;
   buf_size_ = 0;
   buf_ = nullptr;
   allocator_.reset();
@@ -46,6 +47,7 @@ void ObDirectLoadMultipleDatumRow::reuse()
 {
   rowkey_.reuse();
   seq_no_.reset();
+  is_deleted_ = false;
   buf_size_ = 0;
   buf_ = nullptr;
   allocator_.reuse();
@@ -77,6 +79,7 @@ int ObDirectLoadMultipleDatumRow::deep_copy(const ObDirectLoadMultipleDatumRow &
     } else {
       buf_size_ = src.buf_size_;
       seq_no_ = src.seq_no_;
+      is_deleted_ = src.is_deleted_;
       buf_ = buf + pos;
       MEMCPY(buf + pos, src.buf_, buf_size_);
       pos += buf_size_;
@@ -86,7 +89,7 @@ int ObDirectLoadMultipleDatumRow::deep_copy(const ObDirectLoadMultipleDatumRow &
 }
 
 int ObDirectLoadMultipleDatumRow::from_datums(const ObTabletID &tablet_id, ObStorageDatum *datums,
-                                              int64_t column_count, int64_t rowkey_column_count, const ObTableLoadSequenceNo &seq_no)
+                                              int64_t column_count, int64_t rowkey_column_count, const ObTableLoadSequenceNo &seq_no, const bool is_deleted)
 {
   OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, transfer_external_row_time_us);
   int ret = OB_SUCCESS;
@@ -98,6 +101,7 @@ int ObDirectLoadMultipleDatumRow::from_datums(const ObTabletID &tablet_id, ObSto
   } else {
     reuse();
     seq_no_ = seq_no;
+    is_deleted_ = is_deleted;
     ObDirectLoadDatumArray serialize_datum_array;
     if (OB_FAIL(rowkey_.assign(tablet_id, datums, rowkey_column_count))) {
       LOG_WARN("fail to assign rowkey", KR(ret));
@@ -171,7 +175,7 @@ OB_DEF_SERIALIZE_SIMPLE(ObDirectLoadMultipleDatumRow)
 {
   OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, external_row_serialize_time_us);
   int ret = OB_SUCCESS;
-  LST_DO_CODE(OB_UNIS_ENCODE, rowkey_, seq_no_, buf_size_);
+  LST_DO_CODE(OB_UNIS_ENCODE, rowkey_, seq_no_, is_deleted_, buf_size_);
   if (OB_SUCC(ret) && OB_NOT_NULL(buf_)) {
     MEMCPY(buf + pos, buf_, buf_size_);
     pos += buf_size_;
@@ -184,7 +188,7 @@ OB_DEF_DESERIALIZE_SIMPLE(ObDirectLoadMultipleDatumRow)
   OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, external_row_deserialize_time_us);
   int ret = OB_SUCCESS;
   reuse();
-  LST_DO_CODE(OB_UNIS_DECODE, rowkey_, seq_no_, buf_size_);
+  LST_DO_CODE(OB_UNIS_DECODE, rowkey_, seq_no_, is_deleted_, buf_size_);
   if (OB_SUCC(ret)) {
     buf_ = buf + pos;
     pos += buf_size_;
@@ -196,7 +200,7 @@ OB_DEF_SERIALIZE_SIZE_SIMPLE(ObDirectLoadMultipleDatumRow)
 {
   OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, external_row_serialize_time_us);
   int64_t len = 0;
-  LST_DO_CODE(OB_UNIS_ADD_LEN, rowkey_, seq_no_, buf_size_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, rowkey_, seq_no_, is_deleted_, buf_size_);
   len += buf_size_;
   return len;
 }

@@ -75,6 +75,11 @@ using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 using namespace oceanbase::common::sqlclient;
 
+ObString get_display_mysql_version_cfg()
+{
+  return GCONF._display_mysql_version.get_value_string();;
+}
+
 ObSqlArrayExpandGuard::ObSqlArrayExpandGuard(ParamStore &params, ObIAllocator &allocator)
   : array_obj_list_(allocator),
     ret_(OB_SUCCESS)
@@ -638,6 +643,12 @@ int ObSQLUtils::is_charset_data_version_valid(ObCharsetType charset_type, const 
     ret = OB_NOT_SUPPORTED;
     SQL_LOG(WARN, "charset not supported when data_version < 4_2_4_0 or between [430,433)",K(charset_type), K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2.4 or between [430,433), charset is");
+  } else if ((CHARSET_SJIS == charset_type || CHARSET_HKSCS == charset_type || CHARSET_HKSCS31 == charset_type
+              || CHARSET_DEC8 == charset_type || CHARSET_BIG5 == charset_type || CHARSET_UTF16LE == charset_type)
+              && ((data_version < MOCK_DATA_VERSION_4_2_5_0) || (DATA_VERSION_4_3_0_0 <= data_version && data_version < DATA_VERSION_4_3_4_0))) {
+    ret = OB_NOT_SUPPORTED;
+    SQL_LOG(WARN, "charset not supported when data_version < 4_2_5_0 or between [430,434)",K(charset_type), K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2.5 or between [430,434), charset is");
   }
   return ret;
 }
@@ -650,12 +661,26 @@ int ObSQLUtils::is_collation_data_version_valid(ObCollationType collation_type, 
     SQL_LOG(WARN, "failed to GET_MIN_DATA_VERSION", K(ret));
   } else if ((data_version < MOCK_DATA_VERSION_4_2_4_0
               || (data_version >= DATA_VERSION_4_3_0_0 && data_version < DATA_VERSION_4_3_3_0))
-             && (CS_TYPE_UTF8MB4_CROATIAN_CI == collation_type
+             && (CS_TYPE_UTF8MB4_CROATIAN_UCA_CI == collation_type
                  || CS_TYPE_UTF8MB4_UNICODE_520_CI == collation_type
-                 || CS_TYPE_UTF8MB4_CZECH_CI == collation_type)) {
+                 || CS_TYPE_UTF8MB4_CZECH_UCA_CI == collation_type
+                 || CS_TYPE_UTF8MB4_0900_AI_CI == collation_type)) {
     ret = OB_NOT_SUPPORTED;
-    SQL_LOG(WARN, "Unicode collation not supported when data_version < 4_2_2_0", K(collation_type), K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2.2, unicode collation is");
+    SQL_LOG(WARN, "Unicode collation not supported when data_version < 4_2_4_0 or between [430,433)", K(collation_type), K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Unicode collation not supported when data_version < 4_2_4_0 or between [430,433), unicode collation is");
+  } else if ((data_version < MOCK_DATA_VERSION_4_2_5_0
+              || (data_version >= DATA_VERSION_4_3_0_0 && data_version < DATA_VERSION_4_3_4_0))
+              && (CS_TYPE_UTF8MB4_ZH_0900_AS_CS != collation_type &&
+                 CS_TYPE_UTF8MB4_CROATIAN_UCA_CI != collation_type &&
+                 CS_TYPE_UTF8MB4_UNICODE_520_CI != collation_type &&
+                 CS_TYPE_UTF8MB4_CZECH_UCA_CI != collation_type &&
+                 CS_TYPE_UTF8MB4_0900_AI_CI != collation_type &&
+                 ((CS_TYPE_UTF8MB4_0900_AI_CI <= collation_type && collation_type <= CS_TYPE_UTF8MB4_MN_CYRL_0900_AS_CS)
+                  || (CS_TYPE_UTF16_ICELANDIC_UCA_CI <= collation_type && collation_type <= CS_TYPE_UTF16_VIETNAMESE_CI)
+                  || (CS_TYPE_UTF8MB4_ICELANDIC_UCA_CI <= collation_type && collation_type <= CS_TYPE_UTF8MB4_VIETNAMESE_CI)))) {
+    ret = OB_NOT_SUPPORTED;
+    SQL_LOG(WARN, "Unicode collation not supported when data_version < 4_2_5_0 or between [430,434)", K(collation_type), K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Unicode collation not supported when data_version < 4_2_5_0 or between [430,434), unicode collation is");
   }
 #ifndef OB_BUILD_CLOSE_MODULES
   if (OB_SUCC(ret)) {
@@ -668,15 +693,6 @@ int ObSQLUtils::is_collation_data_version_valid(ObCollationType collation_type, 
     }
   }
 #endif
-  if (OB_SUCC(ret)) {
-    if ((CS_TYPE_UTF8MB4_0900_AI_CI == collation_type) &&
-        ((data_version < MOCK_DATA_VERSION_4_2_4_0) ||
-         (DATA_VERSION_4_3_0_0 <= data_version && data_version < DATA_VERSION_4_3_3_0))) {
-      ret = OB_NOT_SUPPORTED;
-      SQL_LOG(WARN, "Unicode collation not supported when data_version < 4_2_4_0 or between [430,433)", K(collation_type), K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2.4 or between [430,433), collation is");
-    }
-  }
   return ret;
 }
 
@@ -1249,31 +1265,37 @@ int ObSQLUtils::check_and_convert_table_name(const ObCollationType cs_type,
     char origin_name[OB_MAX_USER_TABLE_NAME_LENGTH_ORACLE * OB_MAX_CHAR_LEN + 1] = {'\0'};
     MEMCPY(origin_name, name_str, name_len);
     if (!preserve_lettercase) {
-      ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, name);
-    }
-    bool check_for_path_chars = false;
-    int64_t max_ident_len = max_user_table_name_length;
-    if ((stmt::T_SELECT == stmt_type || stmt::T_INSERT == stmt_type) && is_index_table) {
-      //索引表会有额外前缀,因此查询时长度限制用OB_MAX_TABLE_NAME_LENGTH
-      max_ident_len = OB_MAX_TABLE_NAME_LENGTH;
-    }
-    if (OB_ERR_WRONG_IDENT_NAME == (ret = check_ident_name(CS_TYPE_UTF8MB4_GENERAL_CI,
-                                                           name,
-                                                           check_for_path_chars,
-                                                           max_ident_len))) {
-      if (lib::is_oracle_mode()) {
-        // It allows the last char of table name and index name is space in oracle mode
-        ret = OB_SUCCESS;
-      } else {
+      size_t sz = ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, name);
+      if (sz == 0) {
         ret = OB_WRONG_TABLE_NAME;
-        LOG_USER_ERROR(OB_WRONG_TABLE_NAME, (int)strlen(origin_name), origin_name);
-        LOG_WARN("Incorrect table name", K(origin_name), K(ret));
+        LOG_WARN("fail to convert table name to lower case", K(name), K(ret));
       }
-    } else if (OB_ERR_TOO_LONG_IDENT == ret) {
-      LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, (int)strlen(origin_name), origin_name);
-      LOG_WARN("table name is too long", K(origin_name), K(max_ident_len), K(ret), K(stmt_type), K(is_index_table));
-    } else if (OB_FAIL(ret)) {
-      LOG_WARN("fail to check ident name", K(origin_name), K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      bool check_for_path_chars = false;
+      int64_t max_ident_len = max_user_table_name_length;
+      if ((stmt::T_SELECT == stmt_type || stmt::T_INSERT == stmt_type) && is_index_table) {
+        //索引表会有额外前缀,因此查询时长度限制用OB_MAX_TABLE_NAME_LENGTH
+        max_ident_len = OB_MAX_TABLE_NAME_LENGTH;
+      }
+      if (OB_ERR_WRONG_IDENT_NAME == (ret = check_ident_name(CS_TYPE_UTF8MB4_GENERAL_CI,
+                                                            name,
+                                                            check_for_path_chars,
+                                                            max_ident_len))) {
+        if (lib::is_oracle_mode()) {
+          // It allows the last char of table name and index name is space in oracle mode
+          ret = OB_SUCCESS;
+        } else {
+          ret = OB_WRONG_TABLE_NAME;
+          LOG_USER_ERROR(OB_WRONG_TABLE_NAME, (int)strlen(origin_name), origin_name);
+          LOG_WARN("Incorrect table name", K(origin_name), K(ret));
+        }
+      } else if (OB_ERR_TOO_LONG_IDENT == ret) {
+        LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, (int)strlen(origin_name), origin_name);
+        LOG_WARN("table name is too long", K(origin_name), K(max_ident_len), K(ret), K(stmt_type), K(is_index_table));
+      } else if (OB_FAIL(ret)) {
+        LOG_WARN("fail to check ident name", K(origin_name), K(ret));
+      }
     }
   }
   return ret;
@@ -2114,7 +2136,8 @@ int ObSQLUtils::get_outline_key(ObIAllocator &allocator,
                                 ObString &outline_key,
                                 ObMaxConcurrentParam::FixParamStore &fix_param_store,
                                 ParseMode parse_mode,
-                                bool &has_questionmark_in_sql)
+                                bool &has_questionmark_in_sql,
+                                bool need_format)
 {
   int ret = OB_SUCCESS;
   has_questionmark_in_sql = false;
@@ -2158,11 +2181,16 @@ int ObSQLUtils::get_outline_key(ObIAllocator &allocator,
     ObSEArray<ObPCParam *, OB_PC_RAW_PARAM_COUNT> raw_params;
     SqlInfo sql_info;
     char *buf = NULL;
+    char *buf2 = NULL;
     int32_t pos = 0;
+    int32_t pos2 = 0;
+    bool can_format = false;
+    ObString constructed_sql;
     const bool is_transform_outline = true;
     const bool is_parameterized_execute = false;
     ParseNode *type_node = NULL;
     sql_info.need_check_fp_ = false;
+    int64_t format_len = query_sql.length() * 2;
     if (OB_FAIL(parser.parse(query_sql, parse_result))) {
       LOG_WARN("Generate syntax tree failed", "sql", query_sql, K(ret));
     } else if (OB_ISNULL(parse_result.result_tree_)) {
@@ -2198,6 +2226,9 @@ int ObSQLUtils::get_outline_key(ObIAllocator &allocator,
                                                                         raw_params,
                                                                         parse_mode))) {
       LOG_WARN("fail to fast_parameterize_sql", K(ret));
+    } else if (need_format
+          && OB_FAIL(ObSqlParameterization::formalize_sql_filter_hint(allocator, no_param_sql, no_param_sql, raw_params))) {
+      LOG_WARN("failed to formalize fast parser sql", K(no_param_sql), K(ret));
     } else if (check_param && OB_FAIL(ObSqlParameterization::check_and_generate_param_info(raw_params,
                                                                             sql_info,
                                                                             special_params))) {
@@ -2208,13 +2239,23 @@ int ObSQLUtils::get_outline_key(ObIAllocator &allocator,
         LOG_WARN("fail to check and generate not params",
                  K(ret), K(query_sql), K(no_param_sql));
       }
-    } else if (OB_UNLIKELY(NULL == (buf = (char *)allocator.alloc(query_sql.length())))) {
+    } else if (OB_UNLIKELY(NULL == (buf = (char *)allocator.alloc(format_len))) ||
+        OB_UNLIKELY(NULL == (buf2 = (char *)allocator.alloc(format_len)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("fail to alloc buf", K(ret));
-    } else if (OB_FAIL(ObSqlParameterization::construct_sql(no_param_sql, special_params, buf, query_sql.length(), pos))) {
+    } else if (OB_FAIL(ObSqlParameterization::construct_sql(no_param_sql, special_params, buf, format_len, pos))) {
       LOG_WARN("fail to construct_sql", K(ret), K(no_param_sql), K(special_params.count()));
+    } else if (FALSE_IT(constructed_sql.assign_ptr(buf, pos))) {
+      // do nothing
+    } else if (need_format
+          && OB_FAIL(ObSqlParameterization::try_format_in_expr(constructed_sql, buf2, format_len, pos2, can_format))) {
+      LOG_WARN("fail to format in expr", K(ret));
     } else {
-      ObString constructed_sql(pos, buf);
+      if (need_format) {
+        constructed_sql.assign_ptr(buf2, pos2);
+      } else {
+        constructed_sql.assign_ptr(buf, pos);
+      }
       int64_t size = constructed_sql.get_serialize_size();
       if (0 == size) {
         ret = OB_ERR_UNEXPECTED;
@@ -4746,6 +4787,11 @@ bool ObSQLUtils::is_oracle_empty_string(const ObObjParam &param)
                               || ObNCharType == param.get_param_meta().get_type()));
 }
 
+bool ObSQLUtils::is_oracle_null_with_normal_type(const ObObjParam &param)
+{
+  return (param.is_null() && param.get_param_meta().get_type() != ObNullType);
+}
+
 bool ObSQLUtils::is_one_part_table_can_skip_part_calc(const ObTableSchema &schema)
 {
   bool can_skip = false;
@@ -4909,54 +4955,68 @@ int ObPreCalcExprConstraint::assign(const ObPreCalcExprConstraint &other, common
   return ret;
 }
 
-int ObPreCalcExprConstraint::check_is_match(const ObObjParam &obj_param, bool &is_match) const
+int ObPreCalcExprConstraint::check_is_match(ObDatumObjParam &datum_param,
+                                            ObExecContext &exec_ctx,
+                                            bool &is_match) const
 {
   int ret = OB_SUCCESS;
-  switch (expect_result_) {
-    case PRE_CALC_RESULT_NULL:
-      is_match = obj_param.is_null();
-      break;
-    case PRE_CALC_RESULT_NOT_NULL:
-      is_match = !obj_param.is_null();
-      break;
-    case PRE_CALC_RESULT_TRUE:
-      is_match = obj_param.get_bool();
-      break;
-    case PRE_CALC_RESULT_FALSE:
-      is_match = !obj_param.get_bool();
-      break;
-    case PRE_CALC_PRECISE:
-    case PRE_CALC_NOT_PRECISE: {
-      //default escape
-      //@todu JueHui: make escape value can be parameterized
-      char escape = '\\';
-      bool is_precise = false;
-      bool expect_precise = PRE_CALC_PRECISE == expect_result_;
-      if (OB_FAIL(ObQueryRange::is_precise_like_range(obj_param, escape, is_precise))) {
-        LOG_WARN("failed to check precise constraint.", K(ret));
-      } else {
-        is_match = is_precise == expect_precise;
+  ObObjParam obj_param;
+  ObDatum &datum = datum_param.datum_;
+  bool is_udt_type = false;
+  bool is_udt_null = false;
+  if (OB_FAIL(datum_param.to_objparam(obj_param, &exec_ctx.get_allocator()))) {
+    LOG_WARN("failed to obj param", K(ret));
+  } else if (OB_FALSE_IT(is_udt_type = lib::is_oracle_mode() && obj_param.get_param_meta().is_ext())) {
+  } else if (is_udt_type && OB_FAIL(pl::ObPLDataType::datum_is_null(&datum, is_udt_type, is_udt_null))) {
+    LOG_WARN("check complex value is null not support");
+  } else {
+    bool is_udt_type = lib::is_oracle_mode() && obj_param.get_param_meta().is_ext();
+    switch (expect_result_) {
+      case PRE_CALC_RESULT_NULL:
+        is_match = is_udt_type ? is_udt_null : obj_param.is_null();
+        break;
+      case PRE_CALC_RESULT_NOT_NULL:
+        is_match = is_udt_type ? !is_udt_null : !obj_param.is_null();
+        break;
+      case PRE_CALC_RESULT_TRUE:
+        is_match = obj_param.get_bool();
+        break;
+      case PRE_CALC_RESULT_FALSE:
+        is_match = !obj_param.get_bool();
+        break;
+      case PRE_CALC_PRECISE:
+      case PRE_CALC_NOT_PRECISE: {
+        //default escape
+        //@todu JueHui: make escape value can be parameterized
+        char escape = '\\';
+        bool is_precise = false;
+        bool expect_precise = PRE_CALC_PRECISE == expect_result_;
+        if (OB_FAIL(ObQueryRange::is_precise_like_range(obj_param, escape, is_precise))) {
+          LOG_WARN("failed to check precise constraint.", K(ret));
+        } else {
+          is_match = is_precise == expect_precise;
+        }
+        break;
+      }
+      case PRE_CALC_RESULT_NO_WILDCARD: {
+        ObString pattern_val = obj_param.get_string();
+        if (obj_param.is_lob()) {
+          is_match = false;
+        } else if (!pattern_val.empty()) {
+          is_match = OB_ISNULL(pattern_val.find('%')) &&
+                    OB_ISNULL(pattern_val.find('_')) &&
+                    OB_ISNULL(pattern_val.find('\\'));
+        } else {
+          is_match = true;
+        }
       }
       break;
-    }
-    case PRE_CALC_RESULT_NO_WILDCARD: {
-      ObString pattern_val = obj_param.get_string();
-      if (obj_param.is_lob()) {
-        is_match = false;
-      } else if (!pattern_val.empty()) {
-        is_match = OB_ISNULL(pattern_val.find('%')) &&
-                  OB_ISNULL(pattern_val.find('_')) &&
-                  OB_ISNULL(pattern_val.find('\\'));
-      } else {
-        is_match = true;
-      }
-    }
-    break;
-    default:
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected expect res type", K_(expect_result), K(ret));
-      break;
-  } // switch end
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected expect res type", K_(expect_result), K(ret));
+        break;
+    } // switch end
+  }
   return ret;
 }
 
@@ -4977,10 +5037,15 @@ int ObRowidConstraint::assign(const ObPreCalcExprConstraint &other, common::ObIA
   return ret;
 }
 
-int ObRowidConstraint::check_is_match(const ObObjParam &obj_param, bool &is_match) const
+int ObRowidConstraint::check_is_match(ObDatumObjParam &datum_param,
+                                      ObExecContext &exec_ctx,
+                                      bool &is_match) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!obj_param.is_urowid())) {
+  ObObjParam obj_param;
+  if (OB_FAIL(datum_param.to_objparam(obj_param, &exec_ctx.get_allocator()))) {
+    LOG_WARN("failed to obj param", K(ret));
+  } else if (OB_UNLIKELY(!obj_param.is_urowid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected rowid param", K(obj_param), K(ret));
   } else {

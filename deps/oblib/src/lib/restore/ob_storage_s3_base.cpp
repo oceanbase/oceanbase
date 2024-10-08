@@ -449,8 +449,6 @@ int ObS3Client::complete_multipart_upload(const Model::CompleteMultipartUploadRe
 {
   S3OperationFunc<Model::CompleteMultipartUploadRequest, Model::CompleteMultipartUploadOutcome>
       s3_op_func = &S3Client::CompleteMultipartUpload;
-  // disable the retry mechanism
-  const int64_t DO_NOT_RETRY = 0;
   return do_s3_operation_(s3_op_func, request, outcome, DO_NOT_RETRY/*retry_timeout_us*/);
 }
 

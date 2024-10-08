@@ -202,11 +202,19 @@ int ObTableBatchService::adjust_entities(ObTableBatchCtx &ctx)
   return ret;
 }
 
-int ObTableBatchService::get_result_index(const ObNewRow &row,
-                                          const ObIArray<ObTableOperation> &ops,
-                                          ObIArray<int64_t> &indexs)
+int ObTableBatchService::get_result_index(
+    const ObNewRow &row,
+    const ObIArray<ObTableOperation> &ops,
+    const ObIArray<uint64_t> &rowkey_ids,
+    ObObj *rowkey_cells,
+    ObIArray<int64_t> &indexs)
 {
   int ret = OB_SUCCESS;
+
+  for (int64_t pos = 0; pos < rowkey_ids.count(); ++pos) {
+    rowkey_cells[pos] = row.get_cell(rowkey_ids.at(pos));
+  }
+  ObRowkey row_rowkey(rowkey_cells, rowkey_ids.count());
 
   for (int64_t i = 0; i < ops.count() && OB_SUCC(ret); i++) {
     const ObITableEntity &entity = ops.at(i).entity();
@@ -233,13 +241,16 @@ int ObTableBatchService::multi_get_fuse_key_range(ObTableBatchCtx &ctx,
   const ObIArray<ObTableOperation> &ops = *ctx.ops_;
   const int64_t op_size = ops.count();
   int64_t row_cnt = 0;
+  ObKvSchemaCacheGuard *schema_cache_guard = tb_ctx.get_schema_cache_guard();
   ObTableAuditMultiOp multi_op(ObTableOperationType::Type::GET, ops);
   OB_TABLE_START_AUDIT(*ctx.credential_,
                        *tb_ctx.get_sess_guard(),
                        tb_ctx.get_table_name(),
                        &ctx.audit_ctx_, multi_op);
-
-  if (OB_FAIL(spec.create_executor(tb_ctx, executor))) {
+  if (OB_ISNULL(schema_cache_guard) || !schema_cache_guard->is_inited()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_cache_cache is NULL or not inited", K(ret));
+  } else if (OB_FAIL(spec.create_executor(tb_ctx, executor))) {
     LOG_WARN("fail to create scan executor", K(ret));
   } else if (OB_FAIL(row_iter.open(static_cast<ObTableApiScanExecutor *>(executor)))) {
     LOG_WARN("fail to open scan row iterator", K(ret));
@@ -265,55 +276,70 @@ int ObTableBatchService::multi_get_fuse_key_range(ObTableBatchCtx &ctx,
       }
     }
 
-    if (OB_SUCC(ret)) {
-      ObKvSchemaCacheGuard *schema_cache_guard = tb_ctx.get_schema_cache_guard();
-      if (OB_ISNULL(schema_cache_guard) || !schema_cache_guard->is_inited()) {
+    ObIAllocator &allocator = tb_ctx.get_allocator();
+    ObObj *rowkey_cells = nullptr;
+    common::ObSEArray<uint64_t, 4> rowkey_column_ids;
+    common::ObSEArray<uint64_t, 4> rowkey_idxs;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(schema_cache_guard->get_rowkey_column_ids(rowkey_column_ids))) {
+      LOG_WARN("fail to get rowkey column ids", K(ret));
+    } else if (OB_ISNULL(
+                    rowkey_cells =
+                        static_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * rowkey_column_ids.count())))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc cells buffer", K(ret), K(rowkey_column_ids.count()));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_column_ids.count(); ++i) {
+      int64_t idx = 0;
+      if (OB_FAIL(schema_cache_guard->get_column_info_idx(rowkey_column_ids[i], idx))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("schema_cache_cache is NULL or not inited", K(ret));
-      } else {
-        const ObTableEntity *entity = nullptr;
-        ObIAllocator &allocator = tb_ctx.get_allocator();
-        // There may be duplicate primary keys in the range, duplicate primary keys can only scan 1 record,
-        // we will return an empty result for duplicate primary keys op.
-        // For example, if there are 50 operations out of 100 with the same primary key,
-        // only 50 records can be scanned, but we return 100 results
-        for (int64_t i = 0; OB_SUCC(ret) && i < op_size; ++i) {
-          ObNewRow *row = nullptr;
-          if (OB_FAIL(row_iter.get_next_row(row, allocator))) {
-            if (ret != OB_ITER_END) {
-              LOG_WARN("fail to get next row", K(ret));
-            } else {
-              ret = OB_SUCCESS;
-            }
-          } else {
-            row_cnt++;
-          }
-          if (OB_SUCC(ret) && OB_NOT_NULL(row)) {
-            ObSEArray<int64_t, 2> indexs;
-            if (OB_FAIL(get_result_index(*row, ops, indexs))) {
-              LOG_WARN("fail to get reuslt indexs", K(ret), KPC(row), K(ops));
-            } else {
-              for (int64_t idx = 0; OB_SUCC(ret) && idx < indexs.count(); ++idx) {
-                int64_t index = indexs[idx];
-                if (index >= ctx.results_->count() || index >= op_size) {
-                  ret = OB_INDEX_OUT_OF_RANGE;
-                  LOG_WARN("result index is out of range",
-                      K(ret), K(index), K(ctx.results_->count()), K(op_size), KPC(row), K(ops));
-                } else if (OB_FAIL(ctx.results_->at(index).get_entity(result_entity))) {
-                  LOG_WARN("fail to get result entity", K(ret));
-                } else if (OB_ISNULL(entity = &static_cast<const ObTableEntity &>(ops.at(index).entity()))) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("entity is null", K(ret), K(index));
-                } else if (OB_FAIL(ObTableApiUtil::construct_entity_from_row(
-                               allocator, row, *schema_cache_guard, entity->get_properties_names(), result_entity))) {
-                  LOG_WARN("fail to construct result entity from row", K(ret), KPC(row), KPC(entity));
-                }
-              }  // end for
-            }
-          }
-        }  // end for
+        LOG_WARN("fail to get column info idx", K(ret), K(rowkey_column_ids[i]));
+      } else if (OB_FAIL(rowkey_idxs.push_back(idx))) {
+        LOG_WARN("fail to push back rowkey idx", K(ret), K(rowkey_column_ids[i]));
       }
     }
+
+    // There may be duplicate primary keys in the range, duplicate primary keys can only scan 1 record,
+    // we will return an empty result for duplicate primary keys op.
+    // For example, if there are 50 operations out of 100 with the same primary key,
+    // only 50 records can be scanned, but we return 100 results
+    for (int64_t i = 0; OB_SUCC(ret) && i < op_size; ++i) {
+      ObNewRow *row = nullptr;
+      if (OB_FAIL(row_iter.get_next_row(row, allocator))) {
+        if (ret != OB_ITER_END) {
+          LOG_WARN("fail to get next row", K(ret));
+        } else {
+          ret = OB_SUCCESS;
+        }
+      } else {
+        row_cnt++;
+      }
+      if (OB_SUCC(ret) && OB_NOT_NULL(row)) {
+        ObSEArray<int64_t, 2> indexs;
+        if (OB_FAIL(get_result_index(*row, ops, rowkey_idxs, rowkey_cells, indexs))) {
+          LOG_WARN("fail to get reuslt indexs", K(ret), KPC(row), K(ops));
+        } else {
+          const ObTableEntity *requset_entity = nullptr;
+          ObITableEntity *result_entity = nullptr;
+          for (int64_t idx = 0; OB_SUCC(ret) && idx < indexs.count(); ++idx) {
+            int64_t index = indexs[idx];
+            if (index >= ctx.results_->count() || index >= op_size) {
+                ret = OB_INDEX_OUT_OF_RANGE;
+                LOG_WARN("result index is out of range",
+                    K(ret), K(index), K(ctx.results_->count()), K(op_size), KPC(row), K(ops));
+            } else if (OB_FAIL(OB_FAIL(ctx.results_->at(index).get_entity(result_entity)))) {
+              LOG_WARN("fail to get result entity", K(ret));
+            } else if (OB_ISNULL(requset_entity = &static_cast<const ObTableEntity &>(ops.at(index).entity()))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("entity is null", K(ret), K(index));
+            } else if (OB_FAIL(ObTableApiUtil::construct_entity_from_row(allocator, row,
+                *schema_cache_guard, requset_entity->get_properties_names(), result_entity))) {
+              LOG_WARN("fail to construct result entity from row", K(ret), KPC(row), KPC(requset_entity));
+            }
+          }  // end for
+        }
+      }
+    } // end for
   }
 
   int tmp_ret = OB_SUCCESS;
@@ -725,6 +751,7 @@ int ObTableBatchService::htable_put(ObTableBatchCtx &ctx)
   } else if (OB_FAIL(tb_ctx.check_insert_up_can_use_put(can_use_put))) {
     LOG_WARN("fail to check htable put can use table api put", K(ret));
   } else if (can_use_put) {
+    tb_ctx.set_operation_type(ObTableOperationType::INSERT);
     tb_ctx.set_client_use_put(true);
     if (OB_FAIL(ObTableOpWrapper::get_insert_spec(tb_ctx, cache_guard, spec))) {
       LOG_WARN("fail to get insert spec", K(ret));

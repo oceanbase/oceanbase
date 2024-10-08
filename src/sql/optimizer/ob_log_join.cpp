@@ -1417,6 +1417,8 @@ int ObLogJoin::check_if_disable_batch(ObLogicalOperator* root, bool &can_use_bat
       can_use_batch_nlj = false;
     } else if (ts->get_scan_direction() != default_asc_direction() && ts->get_scan_direction() != ObOrderDirection::UNORDERED) {
       can_use_batch_nlj = false;
+    } else if (ts->use_index_merge()) {
+      can_use_batch_nlj = false;
     } else {
       SMART_VAR(ObTablePartitionInfo, tmp_info) {
         ObTablePartitionInfo *tmp_info_ptr = &tmp_info;

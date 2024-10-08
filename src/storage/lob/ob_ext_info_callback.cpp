@@ -128,7 +128,6 @@ memtable::MutatorType ObExtInfoCallback::get_mutator_type() const
   return memtable::MutatorType::MUTATOR_ROW_EXT_INFO;
 }
 
-
 int ObExtInfoCallback::log_submitted(const SCN scn, storage::ObIMemtable *&last_mt)
 {
   return release_resource();
@@ -182,6 +181,7 @@ int ObExtInfoCallback::set(
     ObIAllocator &allocator,
     const blocksstable::ObDmlFlag dml_flag,
     const transaction::ObTxSEQ &seq_no_cur,
+    const ObLobId &lob_id,
     ObString &data)
 {
   int ret = OB_SUCCESS;
@@ -192,6 +192,7 @@ int ObExtInfoCallback::set(
 
   dml_flag_ = dml_flag;
   seq_no_cur_ = seq_no_cur;
+  lob_id_ = lob_id;
   allocator_ = &(lob_mngr->get_ext_info_log_allocator());
 
   key_obj_.reset();
@@ -212,8 +213,8 @@ int ObExtInfoCallback::set(
       LOG_WARN("init datum row fail", K(ret));
     } else if (OB_FAIL(datum_row.storage_datums_[OB_EXT_INFO_MUTATOR_ROW_KEY_IDX].from_obj_enhance(key_obj_))) {
       LOG_WARN("set datum fail", K(ret), K(data));
-    } else if (OB_FAIL(datum_row.storage_datums_[OB_EXT_INFO_MUTATOR_ROW_VALUE_IDX].from_buf_enhance(data.ptr(), data.length()))) {
-      LOG_WARN("set datum fail", K(ret), K(data));
+    } else if (OB_FALSE_IT(datum_row.storage_datums_[OB_EXT_INFO_MUTATOR_ROW_VALUE_IDX].set_string(data))) {
+    } else if (OB_FALSE_IT(datum_row.storage_datums_[OB_EXT_INFO_MUTATOR_ROW_LOB_ID_IDX].set_string(reinterpret_cast<char*>(&lob_id_), sizeof(lob_id_)))) {
     } else if (OB_FAIL(row_writer.write(OB_EXT_INFO_MUTATOR_ROW_KEY_CNT, datum_row, buf, len))) {
       LOG_WARN("write row data fail", K(ret));
     } else if (OB_ISNULL(mutator_row_buf_ = static_cast<char*>(allocator_->alloc(len)))) {
@@ -224,6 +225,33 @@ int ObExtInfoCallback::set(
       mutator_row_len_ = len;
     }
   } // end row_writer
+  return ret;
+}
+
+int ObExtInfoCbRegister::alloc_seq_no(
+    transaction::ObTxDesc *tx_desc,
+    const transaction::ObTxSEQ &parent_seq_no,
+    const int64_t data_size,
+    transaction::ObTxSEQ &seq_no_st,
+    int64_t &seq_no_cnt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(tx_desc)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tx desc is null", K(ret));
+  } else if (data_size <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("data_size is invalid", K(ret), K(data_size));
+  } else {
+    if (data_size % OB_EXT_INFO_LOG_BLOCK_MAX_SIZE > 0) {
+      seq_no_cnt = data_size / OB_EXT_INFO_LOG_BLOCK_MAX_SIZE + 1;
+    } else {
+      seq_no_cnt = data_size / OB_EXT_INFO_LOG_BLOCK_MAX_SIZE;
+    }
+    if (OB_FAIL(tx_desc->get_and_inc_tx_seq(parent_seq_no.get_branch(), seq_no_cnt, seq_no_st))) {
+      LOG_WARN("alloc seq_no fail", K(ret), K(parent_seq_no), KPC(tx_desc));
+    }
+  }
   return ret;
 }
 
@@ -238,7 +266,6 @@ ObExtInfoCbRegister::~ObExtInfoCbRegister()
     // date_iter is alloc from ObLobManager::query
     // that use ob_malloc alloc memory, so here use ob_delete
     data_iter_->reset();
-    data_iter_->~ObLobQueryIter();
     OB_DELETE(ObLobQueryIter, "unused", data_iter_);
     data_iter_ = nullptr;
   }
@@ -248,55 +275,54 @@ int ObExtInfoCbRegister::register_cb(
     memtable::ObIMvccCtx *ctx,
     const int64_t timeout,
     const blocksstable::ObDmlFlag dml_flag,
-    transaction::ObTxDesc *tx_desc,
-    transaction::ObTxSEQ &parent_seq_no,
-    blocksstable::ObStorageDatum &index_data,
-    ObObjType &type,
+    const transaction::ObTxSEQ &seq_no_st,
+    const int64_t seq_no_cnt,
+    const ObString &index_data,
+    const ObObjType index_data_type,
+    const ObExtInfoLogHeader &header,
     ObObj &ext_info_data)
 {
   int ret = OB_SUCCESS;
   ext_info_data_ = ext_info_data;
   timeout_ = timeout;
+  seq_no_st_ = seq_no_st;
+  seq_no_cnt_ = seq_no_cnt;
+  header_ = header;
   ObLobManager *lob_mngr = MTL(ObLobManager*);
+  ObLobId lob_id;
   if (OB_ISNULL(lob_mngr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[STORAGE_LOB]get lob manager instance failed.", K(ret));
-  } else if (OB_ISNULL(tx_desc)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tx_desc is null", K(ret));
   } else if (ext_info_data.is_null()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("data is empty", K(ret), K(ext_info_data));
   } else if (OB_ISNULL(mvcc_ctx_ = ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("data is empty", K(ret), K(ext_info_data));
-  } else if (OB_FAIL(init_header(type))) {
-    LOG_WARN("init_header_ fail", K(ret), K(ext_info_data));
+  } else if (OB_FAIL(get_lob_id(index_data, index_data_type, lob_id))) {
+    LOG_WARN("get lob id fail", K(ret), K(index_data_type));
   } else if (OB_FAIL(build_data_iter(ext_info_data))) {
     LOG_WARN("build data iter fail", K(ret));
-  } else if (FALSE_IT(seq_no_cnt_ = data_size_/OB_EXT_INFO_LOG_BLOCK_MAX_SIZE + 1)) {
-  } else if (OB_FAIL(tx_desc->get_and_inc_tx_seq(parent_seq_no.get_branch(),
-                                                 seq_no_cnt_,
-                                                 seq_no_st_))) {
-    LOG_WARN("get and inc tx seq failed", K(ret), K_(seq_no_cnt));
   } else {
     transaction::ObTxSEQ seq_no_cur = seq_no_st_;
     ObString data;
     int cb_cnt = 0;
     while (OB_SUCC(ret) && OB_SUCC(get_data(data))) {
       storage::ObExtInfoCallback *cb = nullptr;
-      if (OB_ISNULL(cb = mvcc_ctx_->alloc_ext_info_callback())) {
+      if (cb_cnt >= seq_no_cnt_) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("seq no alloc too small", K(ret), K(seq_no_cnt_), K(cb_cnt), K(data_size_));
+      } else if (OB_ISNULL(cb = mvcc_ctx_->alloc_ext_info_callback())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc row callback failed", K(ret));
+      } else if (OB_FAIL(cb->set(tmp_allocator_, dml_flag, seq_no_cur, lob_id, data))) {
+        LOG_WARN("set row callback failed", K(ret), K(*cb));
+      } else if (OB_FAIL(mvcc_ctx_->append_callback(cb))) {
+        LOG_WARN("register ext info callback failed", K(ret), K(*this),K(*cb));
       } else {
-        cb->set(tmp_allocator_, dml_flag, seq_no_cur, data);
         seq_no_cur = seq_no_cur + 1;
-        if (OB_FAIL(mvcc_ctx_->append_callback(cb))) {
-          LOG_ERROR("register ext info callback failed", K(ret), K(*this),K(*cb));
-        } else {
-          ++cb_cnt;
-          LOG_DEBUG("register ext info callback success", K(*cb));
-        }
+        ++cb_cnt;
+        LOG_DEBUG("register ext info callback success", K(*cb));
       }
       if (OB_FAIL(ret) && OB_NOT_NULL(cb)) {
         mvcc_ctx_->free_ext_info_callback(cb);
@@ -305,57 +331,11 @@ int ObExtInfoCbRegister::register_cb(
     if (OB_ITER_END == ret) {
       ret = OB_SUCCESS;
     }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FALSE_IT(seq_no_cnt_ = cb_cnt)) {
-    } else if (OB_FAIL(set_index_data(index_data, type))) {
-      LOG_WARN("set_index_data fail", K(ret));
+
+    if (OB_SUCC(ret) && cb_cnt != seq_no_cnt_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("seq_no used is not match", K(ret), K(seq_no_cnt_), K(cb_cnt), K(data_size_));
     }
-  }
-  return ret;
-}
-
-int ObExtInfoCbRegister::init_header(ObObjType &type)
-{
-  int ret = OB_SUCCESS;
-  header_.type_ = get_type(type);
-  return ret;
-}
-
-int ObExtInfoCbRegister::set_index_data(blocksstable::ObStorageDatum &index_data, ObObjType &type)
-{
-  int ret = OB_SUCCESS;
-  if (is_lob_storage(type)) {
-    if (OB_FAIL(set_outrow_ctx_seq_no(index_data))) {
-      LOG_WARN("set_outrow_ctx_seq_no fail", K(ret));
-    }
-  } else {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not support type", K(ret), K(index_data));
-  }
-  return ret;
-}
-
-int ObExtInfoCbRegister::set_outrow_ctx_seq_no(blocksstable::ObStorageDatum& index_data)
-{
-  int ret = OB_SUCCESS;
-  ObLobLocatorV2 locator;
-  ObLobCommon *lob_common = nullptr;
-  ObString str_data = index_data.get_string();
-  if (str_data.empty()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("index lob data is empty", K(ret), K(index_data));
-  } else if (OB_ISNULL(lob_common = reinterpret_cast<ObLobCommon*>(str_data.ptr()))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("lob_common is null", K(ret), K(index_data));
-  } else if (! lob_common->is_valid() || lob_common->in_row_ || lob_common->is_mem_loc_ || ! lob_common->is_init_  ) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid lob", K(ret), K(*lob_common));
-  } else {
-    ObLobData *lob_data = reinterpret_cast<ObLobData *>(lob_common->buffer_);
-    ObLobDataOutRowCtx *lob_data_outrow_ctx = reinterpret_cast<ObLobDataOutRowCtx *>(lob_data->buffer_);
-    lob_data_outrow_ctx->seq_no_st_ = seq_no_st_.cast_to_int();
-    lob_data_outrow_ctx->seq_no_cnt_ = seq_no_cnt_;
-    lob_data_outrow_ctx->modified_len_ = data_size_ + header_.get_serialize_size();
   }
   return ret;
 }
@@ -448,6 +428,32 @@ int ObExtInfoCbRegister::get_data(ObString &data)
     } else {
       data.assign_ptr(data_buffer_.ptr(), data_buffer_.length());
     }
+  }
+  return ret;
+}
+
+int ObExtInfoCbRegister::get_lob_id(const ObString &index_data, const ObObjType type, ObLobId &lob_id)
+{
+  int ret = OB_SUCCESS;
+  if (is_lob_storage(type)) {
+    ObLobCommon *lob_common = nullptr;
+    ObString str_data = index_data;
+    if (str_data.empty()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("index lob data is empty", K(ret), K(index_data));
+    } else if (OB_ISNULL(lob_common = reinterpret_cast<ObLobCommon*>(str_data.ptr()))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("lob_common is null", K(ret), K(index_data));
+    } else if (! lob_common->is_valid() || lob_common->in_row_ || lob_common->is_mem_loc_ || ! lob_common->is_init_  ) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid lob", K(ret), K(*lob_common));
+    } else {
+      ObLobData *lob_data = reinterpret_cast<ObLobData *>(lob_common->buffer_);
+      lob_id = lob_data->id_;
+    }
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support type", K(ret), K(index_data));
   }
   return ret;
 }

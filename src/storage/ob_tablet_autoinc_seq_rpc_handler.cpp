@@ -30,12 +30,13 @@ namespace storage
 
 // ObSyncTabletSeqReplayExecutor
 ObSyncTabletSeqReplayExecutor::ObSyncTabletSeqReplayExecutor()
-  : ObTabletReplayExecutor(), seq_(0), scn_()
+  : ObTabletReplayExecutor(), seq_(0), is_tablet_creating_(false), scn_()
 {
 }
 
 int ObSyncTabletSeqReplayExecutor::init(
     const uint64_t autoinc_seq,
+    const bool is_tablet_creating,
     const SCN &replay_scn)
 {
   int ret = OB_SUCCESS;
@@ -48,6 +49,7 @@ int ObSyncTabletSeqReplayExecutor::init(
     LOG_WARN("invalid arguments", K(autoinc_seq), K(replay_scn), K(ret));
   } else {
     seq_ = autoinc_seq;
+    is_tablet_creating_ = is_tablet_creating;
     scn_ = replay_scn;
     is_inited_ = true;
   }
@@ -151,6 +153,7 @@ int ObTabletAutoincSeqRpcHandler::fetch_tablet_autoinc_seq_cache(
         LOG_WARN("get ls failed", K(ret), K(ls_id));
       } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle, THIS_WORKER.is_timeout_ts_valid() ? THIS_WORKER.get_timeout_remain() : obrpc::ObRpcProxy::MAX_RPC_TIMEOUT))) {
         LOG_WARN("failed to get tablet", KR(ret), K(arg));
+      // TODO(lihongqin.lhq): fetch from split dst to avoid retry
       } else if (OB_FAIL(tablet_handle.get_obj()->fetch_tablet_autoinc_seq_cache(
           arg.cache_size_, autoinc_interval))) {
         LOG_WARN("failed to fetch tablet autoinc seq on tablet", K(ret), K(tablet_id));
@@ -248,15 +251,21 @@ int ObTabletAutoincSeqRpcHandler::batch_set_tablet_autoinc_seq(
         LOG_WARN("follower received FetchTabletsSeq rpc", K(ret), K(ls_id));
       } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
         LOG_WARN("get ls failed", K(ret), K(ls_id));
+      } else if (OB_FAIL(ls_handle.get_ls()->get_ls_role(role))) {
+        LOG_WARN("get role failed", K(ret), K(MTL_ID()), K(arg.ls_id_));
+      } else if (OB_UNLIKELY(ObRole::LEADER != role)) {
+        ret = OB_NOT_MASTER;
+        LOG_WARN("ls not leader", K(ret), K(MTL_ID()), K(arg.ls_id_));
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < res.autoinc_params_.count(); i++) {
           int tmp_ret = OB_SUCCESS;
           ObTabletHandle tablet_handle;
           share::ObMigrateTabletAutoincSeqParam &autoinc_param = res.autoinc_params_.at(i);
           ObBucketHashWLockGuard lock_guard(bucket_lock_, autoinc_param.dest_tablet_id_.hash());
-          if (OB_TMP_FAIL(ls_handle.get_ls()->get_tablet(autoinc_param.dest_tablet_id_, tablet_handle))) {
+          if (OB_TMP_FAIL(ls_handle.get_ls()->get_tablet(autoinc_param.dest_tablet_id_, tablet_handle,
+              ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
             LOG_WARN("failed to get tablet", K(tmp_ret), K(autoinc_param));
-          } else if (OB_TMP_FAIL(tablet_handle.get_obj()->update_tablet_autoinc_seq(autoinc_param.autoinc_seq_))) {
+          } else if (OB_TMP_FAIL(tablet_handle.get_obj()->update_tablet_autoinc_seq(autoinc_param.autoinc_seq_, arg.is_tablet_creating_))) {
             LOG_WARN("failed to update tablet autoinc seq", K(tmp_ret), K(autoinc_param));
           }
           autoinc_param.ret_code_ = tmp_ret;
@@ -271,6 +280,7 @@ int ObTabletAutoincSeqRpcHandler::replay_update_tablet_autoinc_seq(
     const ObLS *ls,
     const ObTabletID &tablet_id,
     const uint64_t autoinc_seq,
+    const bool is_tablet_creating,
     const share::SCN &replay_scn)
 {
   int ret = OB_SUCCESS;
@@ -281,8 +291,8 @@ int ObTabletAutoincSeqRpcHandler::replay_update_tablet_autoinc_seq(
     ObTabletHandle tablet_handle;
     ObBucketHashWLockGuard guard(bucket_lock_, tablet_id.hash());
     ObSyncTabletSeqReplayExecutor replay_executor;
-    if (OB_FAIL(replay_executor.init(autoinc_seq, replay_scn))) {
-      LOG_WARN("failed to init tablet auto inc sequence replay executor", K(ret), K(autoinc_seq), K(replay_scn));
+    if (OB_FAIL(replay_executor.init(autoinc_seq, is_tablet_creating, replay_scn))) {
+      LOG_WARN("failed to init tablet auto inc sequence replay executor", K(ret), K(autoinc_seq), K(is_tablet_creating), K(replay_scn));
     } else if (OB_FAIL(replay_executor.execute(replay_scn, ls->get_ls_id(), tablet_id))) {
       if (OB_TABLET_NOT_EXIST == ret) {
         LOG_INFO("tablet may be deleted, skip this log", K(ret), K(tablet_id), K(replay_scn));

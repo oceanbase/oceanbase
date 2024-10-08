@@ -47,6 +47,7 @@ public:
       OB_SYS_TENANT_ID);
     ASSERT_EQ(OB_SUCCESS, ret);
     int s = (int)time(NULL);
+    SERVER_STORAGE_META_SERVICE.is_started_ = true;
     LOG_INFO("initial setup random seed", K(s));
     srandom(s);
   }

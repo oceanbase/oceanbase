@@ -79,7 +79,9 @@ ob_set_subtarget(ob_sql das
   das/iter/ob_das_text_retrieval_iter.cpp
   das/iter/ob_das_text_retrieval_merge_iter.cpp
   das/iter/ob_das_iter_utils.cpp
+  das/iter/ob_das_doc_id_merge_iter.cpp
   das/iter/ob_das_vid_merge_iter.cpp
+  das/iter/ob_das_index_merge_iter.cpp
 )
 
 ob_set_subtarget(ob_sql dtl
@@ -773,6 +775,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_vec_key.cpp
   engine/expr/ob_expr_vec_data.cpp
   engine/expr/ob_expr_topn_filter.cpp
+  engine/expr/ob_expr_tokenize.cpp
   engine/expr/ob_expr_gtid.cpp
   engine/expr/ob_expr_inner_table_option_printer.cpp
   engine/expr/ob_expr_rb_build_empty.cpp
@@ -785,6 +788,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_rb_calc.cpp
   engine/expr/ob_expr_rb_to_string.cpp
   engine/expr/ob_expr_rb_from_string.cpp
+  engine/expr/ob_expr_rb_select.cpp
   engine/expr/ob_expr_array_contains.cpp
   engine/expr/ob_expr_decode_trace_id.cpp
   engine/expr/ob_expr_split_part.cpp
@@ -1057,6 +1061,7 @@ ob_set_subtarget(ob_sql optimizer
   optimizer/ob_log_optimizer_stats_gathering.cpp
   optimizer/ob_dynamic_sampling.cpp
   optimizer/ob_log_values_table_access.cpp
+  optimizer/ob_direct_load_optimizer.cpp
 )
 
 ob_set_subtarget(ob_sql plan_cache

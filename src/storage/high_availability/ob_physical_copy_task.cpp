@@ -25,6 +25,7 @@
 #include "storage/compaction/ob_refresh_tablet_util.h"
 #endif
 #include "storage/tablet/ob_mds_schema_helper.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
 
 namespace oceanbase
 {
@@ -32,7 +33,6 @@ using namespace share;
 using namespace compaction;
 namespace storage
 {
-
 /******************ObPhysicalCopyTask*********************/
 ObPhysicalCopyTask::ObPhysicalCopyTask()
   : ObITask(TASK_TYPE_MIGRATE_COPY_PHYSICAL),
@@ -94,8 +94,6 @@ int ObPhysicalCopyTask::process()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObMacroBlocksWriteCtx copied_ctx;
-  int64_t copy_count = 0;
-  int64_t reuse_count = 0;
   ObCopyTabletStatus::STATUS status = ObCopyTabletStatus::MAX_STATUS;
   ObTabletCopyFinishTask *tablet_finish_task = nullptr;
 
@@ -125,6 +123,8 @@ int ObPhysicalCopyTask::process()
             K(copied_ctx.get_macro_block_count()), K(copied_ctx));
       }
     }
+    copy_ctx_->total_macro_count_ += copied_ctx.get_macro_block_count();
+    copy_ctx_->reuse_macro_count_ += copied_ctx.use_old_macro_block_count_;
     LOG_INFO("physical copy task finish", K(ret), KPC(copy_macro_range_info_), KPC(copy_ctx_));
   }
 
@@ -479,7 +479,7 @@ int ObPhysicalCopyTask::get_macro_block_writer_(
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory", K(ret));
     } else if (OB_FAIL(tmp_writer->init(copy_ctx_->tenant_id_, copy_ctx_->ls_id_, copy_ctx_->tablet_id_,
-        this->get_dag()->get_dag_id(), sstable_param, reader, index_block_rebuilder))) {
+        this->get_dag()->get_dag_id(), sstable_param, reader, index_block_rebuilder, copy_ctx_->extra_info_))) {
       STORAGE_LOG(WARN, "failed to init macro block writer", K(ret), KPC(copy_ctx_));
     } else {
       writer = tmp_writer;
@@ -535,6 +535,7 @@ int ObPhysicalCopyTask::build_copy_macro_block_reader_init_param_(
     ObCopyMacroBlockReaderInitParam &init_param)
 {
   int ret = OB_SUCCESS;
+  int64_t snapshot_version = 0;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("physical copy task do not init", K(ret));
@@ -558,11 +559,30 @@ int ObPhysicalCopyTask::build_copy_macro_block_reader_init_param_(
     init_param.need_check_seq_ = copy_ctx_->need_check_seq_;
     init_param.ls_rebuild_seq_ = copy_ctx_->ls_rebuild_seq_;
     init_param.backfill_tx_scn_ = finish_task_->get_sstable_param()->basic_meta_.filled_tx_scn_;
-    if (!init_param.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("copy macro block reader init param is invalid", K(ret), K(init_param));
+    init_param.macro_block_reuse_mgr_ = copy_ctx_->macro_block_reuse_mgr_;
+    init_param.data_version_ = 0;
+
+    if (OB_ISNULL(copy_ctx_->macro_block_reuse_mgr_)) {
+      // skip reuse
+    } else if (OB_FAIL(copy_ctx_->macro_block_reuse_mgr_->get_major_snapshot_version(copy_ctx_->table_key_, snapshot_version))) {
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        LOG_WARN("failed to get reuse major snapshot version", K(ret), KPC(copy_ctx_));
+      } else {
+        ret = OB_SUCCESS;
+        LOG_INFO("major snapshot version not exist, maybe copying first major in this tablet, skip reuse, set data_version_ to 0", K(ret), KPC(copy_ctx_));
+      }
     } else {
-      LOG_INFO("succeed init param", KPC(copy_macro_range_info_), K(init_param));
+      init_param.data_version_ = snapshot_version;
+      LOG_INFO("succeed get and set reuse major max snapshot version", K(snapshot_version), KPC(copy_ctx_), K(init_param));
+    }
+
+    if (OB_SUCC(ret)) {
+      if (!init_param.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("copy macro block reader init param is invalid", K(ret), K(init_param));
+      } else {
+        LOG_INFO("succeed init param", KPC(copy_macro_range_info_), K(init_param));
+      }
     }
   }
   return ret;
@@ -586,6 +606,7 @@ int ObPhysicalCopyTask::record_server_event_()
   return ret;
 }
 
-}
-}
 
+
+}
+}

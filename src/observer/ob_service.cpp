@@ -32,6 +32,7 @@
 #include "common/ob_tenant_data_version_mgr.h"
 #include "share/ob_version.h"
 
+#include "share/ob_ddl_common.h"
 #include "share/ob_version.h"
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "share/deadlock/ob_deadlock_inner_table_service.h"
@@ -54,10 +55,14 @@
 #include "observer/ob_server_schema_updater.h"
 #include "ob_server_event_history_table_operator.h"
 #include "share/ob_alive_server_tracer.h"
+#include "storage/ddl/ob_tablet_split_task.h"
+#include "storage/ddl/ob_tablet_lob_split_task.h"
 #include "storage/ddl/ob_complement_data_task.h" // complement data for drop column
+#include "storage/ddl/ob_ddl_clog.h"
 #include "storage/ddl/ob_delete_lob_meta_row_task.h" // delete lob meta row for drop vec index
 #include "storage/ddl/ob_ddl_merge_task.h"
 #include "storage/ddl/ob_build_index_task.h"
+#include "storage/ddl/ob_ddl_redo_log_writer.h"
 #include "storage/tablet/ob_tablet_multi_source_data.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/tx_storage/ob_ls_map.h"
@@ -84,6 +89,7 @@
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
+#include "storage/compaction/ob_schedule_dag_func.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "share/ob_cluster_event_history_table_operator.h"//CLUSTER_EVENT_INSTANCE
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
@@ -1164,7 +1170,7 @@ int ObService::tablet_major_freeze(const obrpc::ObTabletMajorFreezeArg &arg,
     LOG_WARN("invalid arg", K(ret), K(arg));
   } else {
     MTL_SWITCH(arg.tenant_id_) {
-      if (OB_FAIL(MTL(compaction::ObTenantTabletScheduler *)->try_schedule_tablet_medium_merge(
+      if (OB_FAIL(MTL(compaction::ObTenantTabletScheduler *)->user_request_schedule_medium_merge(
         arg.ls_id_, arg.tablet_id_, arg.is_rebuild_column_group_))) {
         LOG_WARN("failed to try schedule tablet major freeze", K(ret), K(arg));
       }
@@ -1266,7 +1272,10 @@ int ObService::check_schema_version_elapsed(
           LOG_WARN("ddl sim failure: check schema version elapsed slow", K(tmp_ret), K(arg));
         } else if (OB_TMP_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
           LOG_WARN("get ls failed", K(tmp_ret), K(i), K(ls_id));
-        } else if (OB_TMP_FAIL(ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle))) {
+        } else if (OB_TMP_FAIL(ls_handle.get_ls()->get_tablet(tablet_id,
+                                                              tablet_handle,
+                                                              ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US,
+                                                              ObMDSGetTabletMode::READ_ALL_COMMITED))) {
           LOG_WARN("fail to get tablet", K(tmp_ret), K(i), K(ls_id), K(tablet_id));
         } else if (OB_TMP_FAIL(tablet_handle.get_obj()->check_schema_version_elapsed(arg.schema_version_,
                                                                                      arg.need_wait_trans_end_,
@@ -1282,6 +1291,108 @@ int ObService::check_schema_version_elapsed(
         }
       }
     }
+  }
+  return ret;
+}
+
+// 1. minor freeze
+// 2. get memtable cnt
+int ObService::check_memtable_cnt(
+    const obrpc::ObCheckMemtableCntArg &arg,
+    obrpc::ObCheckMemtableCntResult &result)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("receive check memtable cnt request", K(arg));
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(arg));
+  } else {
+    ObMinorFreezeArg minor_freeze_arg;
+    minor_freeze_arg.tablet_id_ = arg.tablet_id_;
+    if (OB_FAIL(minor_freeze_arg.tenant_ids_.push_back(arg.tenant_id_))) {
+      LOG_WARN("failed to push back tenant id", K(ret));
+    } else if (OB_FAIL(handle_ls_freeze_req_(minor_freeze_arg))) {
+      LOG_WARN("failed to handle tablet freeze", K(ret));
+    } else {
+      MTL_SWITCH(arg.tenant_id_) {
+        bool freeze_finished = false;
+        ObTabletID tablet_id = arg.tablet_id_;
+        const int64_t expire_renew_time = INT64_MAX;
+        bool is_cache_hit = false;
+        ObLSID ls_id = arg.ls_id_;
+        ObLSService *ls_srv = MTL(ObLSService *);
+        ObLSHandle ls_handle;
+        ObLS *ls = nullptr;
+        ObLSTabletService *ls_tablet_service = nullptr;
+        ObTabletHandle tablet_handle;
+        ObTablet *tablet = nullptr;
+        ObArray<ObTableHandleV2> memtable_handles;
+        if (OB_FAIL(ls_srv->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+          LOG_WARN("fail to get ls", K(ret), K(ls_id));
+        } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("ls is null", K(ret), K(ls_id));
+        } else if (OB_ISNULL(ls_tablet_service = ls->get_tablet_svr())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("tablet service should not be null", K(ret), K(ls_id));
+        } else if (OB_FAIL(ls_tablet_service->get_tablet(tablet_id,
+                tablet_handle, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_10_S, ObMDSGetTabletMode::READ_ALL_COMMITED))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get tablet handle failed", K(ret), K(tablet_id));
+        } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
+        } else if (OB_FAIL(tablet->get_all_memtables(memtable_handles))) {
+          LOG_WARN("failed to get_memtable_mgr for get all memtable", K(ret), KPC(tablet));
+        } else {
+          result.memtable_cnt_ = memtable_handles.count();
+          freeze_finished = result.memtable_cnt_ == 0 ? true : false;
+          if (freeze_finished) {
+            ObTabletFreezeLog freeze_log;
+            freeze_log.tablet_id_ = tablet_id;
+            if (OB_FAIL(storage::ObDDLRedoLogWriter::
+                  write_auto_split_log(ls_id,
+                                       ObDDLClogType::DDL_TABLET_FREEZE_LOG,
+                                       logservice::ObReplayBarrierType::STRICT_BARRIER,
+                                       freeze_log))) {
+              LOG_WARN("write tablet freeze log failed", K(ret), K(freeze_log));
+            }
+          }
+        }
+      } // MTL_SWITCH
+    }
+  }
+  LOG_INFO("finish check memtable cnt request", K(ret), K(arg));
+  return ret;
+}
+
+// possible results:
+// 1. ret != OB_SUCCESS
+// 2. ret == OB_SUCCESS && info_list_cnt_ > 0 && invalid compaction_scn
+// 3. ret == OB_SUCCESS && info_list_cnt_ == 0 && valid primary_compaction_scn_
+int ObService::check_medium_compaction_info_list_cnt(
+    const obrpc::ObCheckMediumCompactionInfoListArg &arg,
+    obrpc::ObCheckMediumCompactionInfoListResult &result)
+{
+  return ObTabletSplitUtil::check_medium_compaction_info_list_cnt(arg, result);
+}
+
+int ObService::prepare_tablet_split_task_ranges(
+    const obrpc::ObPrepareSplitRangesArg &arg,
+    obrpc::ObPrepareSplitRangesRes &result)
+{
+  int ret = OB_SUCCESS;
+  result.parallel_datum_rowkey_list_.reset();
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(arg));
+  } else if (OB_FAIL(ObTabletSplitUtil::split_task_ranges(result.rowkey_allocator_, arg.ls_id_,
+      arg.tablet_id_, arg.user_parallelism_, arg.schema_tablet_size_, result.parallel_datum_rowkey_list_))) {
+    LOG_WARN("split task ranges failed", K(ret));
   }
   return ret;
 }
@@ -2721,23 +2832,181 @@ int ObService::broadcast_rs_list(const ObRsListArg &arg)
   return ret;
 }
 
+int ObService::build_split_tablet_data_start_request(const obrpc::ObTabletSplitStartArg &arg,  obrpc::ObTabletSplitStartResult &res)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(arg));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < arg.split_info_array_.count(); i++) {
+      const ObTabletSplitArg &each_arg = arg.split_info_array_.at(i);
+      if (OB_FAIL(ObTabletLobSplitUtil::process_write_split_start_log_request(each_arg))) {
+        LOG_WARN("process write split start log failed", K(ret), K(tmp_ret), K(arg));
+      }
+      if (OB_TMP_FAIL(res.ret_codes_.push_back(ret))) {
+        LOG_WARN("push back result failed", K(ret), K(tmp_ret));
+      }
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    }
+  }
+  LOG_INFO("process write split start log finished", K(ret), K(arg));
+  return ret;
+}
+
+int ObService::build_split_tablet_data_finish_request(const obrpc::ObTabletSplitFinishArg &arg, obrpc::ObTabletSplitFinishResult &res)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(arg));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < arg.split_info_array_.count(); i++) {
+      ObTabletSplitFinishResult unused_res;
+      const ObTabletSplitArg &each_arg = arg.split_info_array_.at(i);
+      if (OB_FAIL(ObTabletLobSplitUtil::process_tablet_split_request(
+          each_arg.lob_col_idxs_.count() > 0/*is_lob_tablet*/,
+          false/*is_start_request*/,
+          static_cast<const void *>(&each_arg),
+          static_cast<void *>(&unused_res)))) {
+        LOG_WARN("process split finish request failed", K(ret), K(arg));
+      }
+      if (OB_TMP_FAIL(res.ret_codes_.push_back(ret))) {
+        LOG_WARN("push back failed", K(ret), K(tmp_ret));
+      }
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    }
+  }
+  LOG_INFO("process split finish request succ", K(ret), K(arg));
+  return ret;
+}
+
+int ObService::freeze_split_src_tablet(const ObFreezeSplitSrcTabletArg &arg,
+                                       ObFreezeSplitSrcTabletRes &res,
+                                       const int64_t abs_timeout_us)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("service not inited", K(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(arg));
+  } else {
+    MTL_SWITCH(arg.tenant_id_) {
+      ObLSService *ls_service = MTL(ObLSService *);
+      logservice::ObLogService *log_service = MTL(logservice::ObLogService*);
+      ObLSHandle ls_handle;
+      ObLS *ls = nullptr;
+      ObRole role = INVALID_ROLE;
+      int64_t proposal_id = -1;
+      bool has_active_memtable = false;
+      if (OB_ISNULL(ls_service) || OB_ISNULL(log_service)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected ls_service or log_service", K(ret));
+      } else if (OB_FAIL(ls_service->get_ls(arg.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+        LOG_WARN("get ls failed", K(ret), K(arg));
+      } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid ls", K(ret), K(arg.ls_id_));
+      } else if (OB_FAIL(ls->get_ls_role(role))) {
+        LOG_WARN("get role failed", K(ret), K(MTL_ID()), K(arg.ls_id_));
+      } else if (OB_UNLIKELY(ObRole::LEADER != role)) {
+        ret = OB_NOT_MASTER;
+        LOG_WARN("ls not leader", K(ret), K(MTL_ID()), K(arg.ls_id_));
+      } else if (OB_FAIL(ls->tablet_freeze(checkpoint::INVALID_TRACE_ID, arg.tablet_ids_, true/*is_sync*/, abs_timeout_us,
+              false/*need_rewrite_meta*/, ObFreezeSourceFlag::TABLET_SPLIT))) {
+        LOG_WARN("batch tablet freeze failed", K(ret), K(arg));
+      } else if (OB_FAIL(ls->check_tablet_no_active_memtable(arg.tablet_ids_, has_active_memtable))) {
+        // safer with this check, non-mandatory
+        LOG_WARN("check tablet has active memtable failed", K(ret), K(arg));
+      } else if (has_active_memtable) {
+        ret = OB_EAGAIN;
+        LOG_WARN("tablet has active memtable need retry", K(ret), K(arg));
+      } else if (OB_FAIL(ls->get_log_handler()->get_max_scn(res.data_end_scn_))) {
+        LOG_WARN("log_handler get_max_scn failed", K(ret), K(arg));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObService::fetch_split_tablet_info(const ObFetchSplitTabletInfoArg &arg,
+                                       ObFetchSplitTabletInfoRes &res,
+                                       const int64_t abs_timeout_us)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("service not inited", K(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(arg));
+  } else {
+    MTL_SWITCH(arg.tenant_id_) {
+      ObLSService *ls_service = MTL(ObLSService *);
+      ObLSHandle ls_handle;
+      ObLS *ls = nullptr;
+      ObRole role = INVALID_ROLE;
+      if (OB_ISNULL(ls_service)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected ls_service or log_service", K(ret));
+      } else if (OB_FAIL(ls_service->get_ls(arg.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+        LOG_WARN("get ls failed", K(ret), K(arg));
+      } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid ls", K(ret), K(arg.ls_id_));
+      } else if (OB_FAIL(ls->get_ls_role(role))) {
+        LOG_WARN("get role failed", K(ret), K(MTL_ID()), K(arg.ls_id_));
+      } else if (OB_UNLIKELY(ObRole::LEADER != role)) {
+        ret = OB_NOT_MASTER;
+        LOG_WARN("ls not leader", K(ret), K(MTL_ID()), K(arg.ls_id_));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < arg.tablet_ids_.count(); i++) {
+          const ObTabletID &tablet_id = arg.tablet_ids_.at(i);
+          ObTabletHandle tablet_handle;
+          ObTabletCreateDeleteMdsUserData user_data;
+          if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle))) {
+            LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
+          } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_tablet_status(
+                  share::SCN::max_scn(), user_data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US))) {
+            LOG_WARN("failed to get tablet status", K(ret), K(arg.ls_id_), K(tablet_id));
+          } else if (OB_FAIL(res.create_commit_versions_.push_back(user_data.create_commit_version_))) {
+            LOG_WARN("failed to push back", K(ret));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObService::build_ddl_single_replica_request(const ObDDLBuildSingleReplicaRequestArg &arg,
                                                 ObDDLBuildSingleReplicaRequestResult &res)
 {
   int ret = OB_SUCCESS;
-  LOG_INFO("receive build single replica request", K(arg));
+  ObTenantDagScheduler *dag_scheduler = nullptr;
   if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(arg));
+  } else if (OB_ISNULL(dag_scheduler = MTL(ObTenantDagScheduler *))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag scheduler is null", K(ret));
   } else {
-    if (is_complement_data_relying_on_dag(ObDDLType(arg.ddl_type_))) {
+    if (share::is_tablet_split(ObDDLType(arg.ddl_type_))) {
+      if (OB_FAIL(ObTabletLobSplitUtil::process_tablet_split_request(
+            arg.lob_col_idxs_.count() > 0/*is_lob_tablet*/,
+            true/*is_start_request*/,
+            static_cast<const void *>(&arg),
+            static_cast<void *>(&res)))) {
+        LOG_WARN("process split start request failed", K(ret), K(arg));
+      }
+    } else if (is_complement_data_relying_on_dag(ObDDLType(arg.ddl_type_))) {
       int saved_ret = OB_SUCCESS;
-      ObTenantDagScheduler *dag_scheduler = nullptr;
       ObComplementDataDag *dag = nullptr;
-      if (OB_ISNULL(dag_scheduler = MTL(ObTenantDagScheduler *))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("dag scheduler is null", K(ret));
-      } else if (OB_FAIL(dag_scheduler->alloc_dag(dag))) {
+      if (OB_FAIL(dag_scheduler->alloc_dag(dag))) {
         LOG_WARN("fail to alloc dag", K(ret));
       } else if (OB_ISNULL(dag)) {
         ret = OB_ERR_UNEXPECTED;
@@ -2746,17 +3015,21 @@ int ObService::build_ddl_single_replica_request(const ObDDLBuildSingleReplicaReq
         LOG_WARN("fail to init complement data dag", K(ret), K(arg));
       } else if (OB_FAIL(dag->create_first_task())) {
         LOG_WARN("create first task failed", K(ret));
-      } else if (OB_FAIL(dag_scheduler->add_dag(dag))) {
+      } else if (OB_FAIL(add_dag_and_get_progress<ObComplementDataDag>(dag, res.row_inserted_, res.physical_row_count_))) {
         saved_ret = ret;
-        LOG_WARN("add dag failed", K(ret), K(arg));
-        if (OB_EAGAIN == saved_ret) {
-          dag_scheduler->get_complement_data_dag_progress(dag, res.row_scanned_, res.row_inserted_);
+        if (OB_EAGAIN == ret) {
+          ret = OB_SUCCESS;
+        } else if (OB_SIZE_OVERFLOW == ret) {
+          ret = OB_EAGAIN;
+        } else {
+          LOG_WARN("add dag and get progress failed", K(ret));
         }
       } else {
         dag = nullptr;
       }
+
       if (OB_NOT_NULL(dag)) {
-        (void) dag->handle_init_failed_ret_code(ret);
+        // to free dag.
         dag_scheduler->free_dag(*dag);
         dag = nullptr;
       }
@@ -2800,11 +3073,11 @@ int ObService::build_ddl_single_replica_request(const ObDDLBuildSingleReplicaReq
         dag = nullptr;
       }
     } else {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not supported ddl type", K(ret), K(arg));
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid ddl type request", K(ret), K(arg));
     }
-
   }
+  LOG_INFO("receive build single replica request", K(ret), K(arg));
   return ret;
 }
 
@@ -2879,7 +3152,6 @@ int ObService::check_and_cancel_delete_lob_meta_row_dag(const obrpc::ObDDLBuildS
       LOG_WARN("cancel dag failed", K(ret));
     }
     if (OB_NOT_NULL(dag)) {
-      (void) dag->handle_init_failed_ret_code(ret);
       dag_scheduler->free_dag(*dag);
       dag = nullptr;
     }

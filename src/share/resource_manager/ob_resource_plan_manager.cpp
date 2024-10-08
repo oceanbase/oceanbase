@@ -62,12 +62,6 @@ int ObResourcePlanManager::switch_resource_plan(const uint64_t tenant_id, ObStri
     if (OB_FAIL(GCTX.cgroup_ctrl_->reset_all_group_iops(tenant_id))) {
       LOG_ERROR("reset old plan group directive failed", K(tenant_id), K(ret));
     }
-    if (OB_SUCC(ret) && plan_name.empty()) {
-      // reset user and function hashmap
-      if (OB_FAIL(proxy.reset_all_mapping_rules())) {
-        LOG_WARN("fail reset all group rules",K(ret));
-      }
-    }
 
     if (OB_SUCC(ret)) {
       if (OB_FAIL(tenant_plan_map_.set_refactored(tenant_id, cur_plan, 1))) {  // overrite

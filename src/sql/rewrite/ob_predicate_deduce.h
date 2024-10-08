@@ -75,12 +75,9 @@ public:
 
   static inline bool contain_special_expr(ObRawExpr &expr)
   {
-    return expr.has_flag(CNT_RAND_FUNC) ||
-           expr.has_flag(CNT_SUB_QUERY) ||
+    return !expr.is_deterministic() ||
            expr.has_flag(CNT_ROWNUM) ||
-           expr.has_flag(CNT_SEQ_EXPR) ||
-           expr.has_flag(CNT_STATE_FUNC) ||
-           expr.has_flag(CNT_DYNAMIC_USER_VARIABLE);
+           expr.has_flag(CNT_SUB_QUERY);
   }
 
   static int check_lossless_cast_table_filter(ObRawExpr *expr,

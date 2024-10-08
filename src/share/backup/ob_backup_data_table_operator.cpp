@@ -19,6 +19,7 @@
 #include "share/config/ob_server_config.h"
 #include "lib/mysqlclient/ob_mysql_transaction.h"
 #include "share/ob_share_util.h"
+#include "lib/ob_define.h"
 
 namespace oceanbase
 { 
@@ -101,6 +102,8 @@ int ObBackupSetFileOperator::fill_dml_with_backup_set_(const ObBackupSetFileDesc
   } else if (OB_FAIL(dml.add_column(OB_STR_STATUS, backup_set_desc.get_backup_set_status_str()))) {
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_FILE_STATUS, ObBackupFileStatus::get_str(backup_set_desc.file_status_)))) {
+    LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
+  } else if (OB_FAIL(dml.add_column(OB_STR_BACKUP_PLUS_ARCHIVELOG, backup_set_desc.get_plus_archivelog_str()))) {
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_RESULT, backup_set_desc.result_))) {
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
@@ -2429,6 +2432,62 @@ int ObBackupSkippedTabletOperator::move_skip_tablet_to_his(
   } else if (OB_FAIL(proxy.write(get_exec_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
     LOG_WARN("[DATA_BACKUP]failed to exec sql", K(ret), K(sql));
   } 
+  return ret;
+}
+
+int ObBackupMViewOperator::get_all_major_compaction_mview_dep_tablet_list(common::ObMySQLProxy &proxy,
+                                                                          const uint64_t tenant_id,
+                                                                          const share::SCN &snapshot,
+                                                                          common::ObIArray<common::ObTabletID> &tablet_list)
+{
+  int ret = OB_SUCCESS;
+  tablet_list.reset();
+  ObSqlString sql;
+  int64_t affected_rows = -1;
+  if (OB_INVALID_TENANT_ID == tenant_id || !snapshot.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid arg", K(ret), K(tenant_id), K(snapshot));
+  } else {
+    HEAP_VAR(ObMySQLProxy::ReadResult, res) {
+      ObMySQLResult *result = NULL;
+      if (OB_FAIL(sql.assign_fmt("select tablet_id from %s as of snapshot %ld where table_id in ("
+          " select p_obj from %s as of snapshot %ld"
+          " where mview_id in (select mview_id from %s as of snapshot %ld where refresh_mode=%ld) "
+          " union all "
+          " select data_table_id from %s as of snapshot %ld"
+          " where table_id in (select mview_id from %s as of snapshot %ld where refresh_mode=%ld))",
+          OB_ALL_TABLET_TO_LS_TNAME, snapshot.get_val_for_inner_table_field(),
+          OB_ALL_MVIEW_DEP_TNAME, snapshot.get_val_for_inner_table_field(),
+          OB_ALL_MVIEW_TNAME, snapshot.get_val_for_inner_table_field(), schema::ObMVRefreshMode::MAJOR_COMPACTION,
+          OB_ALL_TABLE_TNAME, snapshot.get_val_for_inner_table_field(),
+          OB_ALL_MVIEW_TNAME, snapshot.get_val_for_inner_table_field(), schema::ObMVRefreshMode::MAJOR_COMPACTION))) {
+        LOG_WARN("failed to assign fmt", K(ret), K(snapshot));
+      } else if (OB_FAIL(proxy.read(res, common::gen_user_tenant_id(tenant_id), sql.ptr()))) {
+        LOG_WARN("failed to read sql", K(ret), K(tenant_id), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", K(ret), K(sql));
+      } else {
+        while (OB_SUCC(ret)) {
+          if (OB_FAIL(result->next())) {
+            if (OB_ITER_END == ret) {
+              ret = OB_SUCCESS;
+              break;
+            } else {
+              LOG_WARN("failed to get next row", K(ret));
+            }
+          } else {
+            int64_t tablet_id = -1;
+            EXTRACT_INT_FIELD_MYSQL(*result, OB_STR_TABLET_ID, tablet_id, int64_t);
+            if (FAILEDx(tablet_list.push_back(ObTabletID(tablet_id)))) {
+              LOG_WARN("failed to push back", K(ret), K(tablet_id));
+            }
+          }
+        }
+      }
+    }
+  }
+  LOG_INFO("get all mview dep tablet list", K(ret), K(sql), K(tablet_list));
   return ret;
 }
 

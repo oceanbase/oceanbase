@@ -2402,6 +2402,8 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
           } else {
             //invalid name, do nothing
           }
+        } else if (T_RB_ITERATE_EXPRESSION == sel_expr->get_expr_type()) {
+          select_item.alias_name_ = ObString("rb_iterate");
         } else if (is_oracle_mode()
                     && T_QUESTIONMARK == sel_expr->get_expr_type()
                     && is_colum_without_alias(project_node)) {
@@ -2464,6 +2466,7 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
         }
       }
 
+
       if (OB_SUCC(ret) && is_oracle_mode() && T_FUN_SYS_XMLSEQUENCE == sel_expr->get_expr_type()) {
         // Currently, xmlsequence is not supported in the select clause.
         ret = OB_NOT_SUPPORTED;
@@ -2518,6 +2521,10 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
     } else {/*do nothing*/}
   } // end for
 
+  if (OB_SUCC(ret) && OB_FAIL(transfer_rb_iterate_items())) {
+    LOG_WARN("failed to transfer rb_iterate items", K(ret));
+  }
+
   if (OB_SUCC(ret)) {
     // Oracle mode, * can't be used with other expresion
     // like: select 1,* from t1; select *,1 from t1;
@@ -2526,6 +2533,65 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
       LOG_WARN("star can't be used with other expression", K(ret));
     }
   }
+  return ret;
+}
+
+int ObSelectResolver::transfer_rb_iterate_items()
+{
+  INIT_SUCC(ret);
+  TableItem *table_item = NULL;
+  ObSelectStmt *select_stmt = NULL;
+  int64_t rb_iterate_col_id = 0;
+  if (OB_ISNULL(session_info_) || OB_ISNULL(select_stmt = get_select_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(session_info_), K(select_stmt), K(ret));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_select_item_size(); i++) {
+    SelectItem &select_item = select_stmt->get_select_item(i);
+    if (OB_ISNULL(select_item.expr_) || select_item.expr_->get_expr_type() != T_RB_ITERATE_EXPRESSION) {
+      // do noting
+    } else {
+      ColumnItem *col_item = NULL;
+      ObRawExpr *rb_iterate_expr = select_item.expr_;
+      ObRawExpr *rb_expr = NULL;
+      rb_iterate_col_id++;
+      if (OB_ISNULL(table_item) && OB_FAIL(create_rb_iterate_table_item(table_item))) {
+        LOG_WARN("failed to create rb_iterate table item", K(ret));
+      } else if (rb_iterate_expr->get_param_count() == 0 || OB_ISNULL(rb_iterate_expr->get_param_expr(0))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param_expr of rb_iterate_expr is null or empty", K(ret));
+      } else {
+        // get and push_back rb_expr
+        rb_expr = rb_iterate_expr->get_param_expr(0);
+        uint64_t extra = rb_expr->get_extra();
+        extra |= CM_ERROR_ON_SCALE_OVER;
+        rb_expr->set_extra(extra);
+        if (OB_FAIL(rb_expr->deduce_type(session_info_))) {
+          LOG_WARN("failed to deduce type", K(ret));
+        } else if (OB_FAIL(table_item->json_table_def_->doc_exprs_.push_back(rb_expr))) {
+          LOG_WARN("failed to push back rb expr", K(ret));
+        }
+      }
+      // add value column to rb_iterate table item
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(rb_iterate_table_add_column(table_item, col_item, rb_iterate_col_id))) {
+        LOG_WARN("failed to add rb iterate table column", K(ret));
+      } else {
+        // replace expr in select item
+        select_item.expr_ = col_item->get_expr();
+      }
+    }
+  } // end for
+
+  if (OB_NOT_NULL(table_item)) {
+    // add table_item to select_stmt
+    OZ( column_namespace_checker_.add_reference_table(table_item), table_item );
+    OZ( select_stmt->add_from_item(table_item->table_id_, table_item->is_joined_table()) );
+    OZ( add_from_items_order(table_item), table_item );
+    OX( select_stmt->set_has_reverse_link(table_item->is_reverse_link_) );
+  }
+
   return ret;
 }
 

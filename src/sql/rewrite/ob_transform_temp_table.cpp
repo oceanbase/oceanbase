@@ -212,8 +212,8 @@ int ObTransformTempTable::expand_temp_table(ObIArray<TempTableInfo> &temp_table_
       LOG_WARN("unexpect null ref query", K(helper), K(ret));
     } else if (OB_FAIL(check_stmt_size(helper.temp_table_query_, stmt_size, is_oversize_stmt))) {
       LOG_WARN("check stmt size failed", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::check_expand_temp_table_valid(helper.temp_table_query_, can_expand))) {
-      LOG_WARN("failed to check expand temp table valid", K(ret));
+    } else if (OB_FAIL(helper.temp_table_query_->is_query_deterministic(can_expand))) {
+      LOG_WARN("failed to check stmt is deterministic", K(ret));
     } else if (OB_FAIL(check_has_for_update(helper, has_for_update))) {
       LOG_WARN("failed to check has for update", K(ret));
     } else if (!can_expand) {

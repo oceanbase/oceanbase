@@ -131,10 +131,11 @@ public:
   enum RangeNode {
     RANGE_FUN_EXPR_NODE = 0,
     RANGE_ELEMENTS_NODE = 1,
-    RANGE_SUBPARTITIOPPN_NODE = 2,
+    RANGE_SUBPARTITION_NODE = 2,
     RANGE_PARTITION_NUM_NODE = 3,
     RANGE_TEMPLATE_MARK = 4,
     RANGE_INTERVAL_NODE = 5,
+    RANGE_AUTO_SPLIT_TABLET_SIZE = 6,
   };
   enum ElementsNode {
     PARTITION_NAME_NODE = 0,
@@ -682,6 +683,16 @@ protected:
       ParseNode *node,
       share::schema::ObTableSchema &table_schema,
       common::ObSEArray<ObRawExpr*, 8> &range_exprs);
+  int resolve_auto_partition_with_tenant_config(ObCreateTableStmt *stmt, ParseNode *node,
+                                                ObTableSchema &table_schema);
+  int resolve_auto_partition(ObPartitionedStmt *stmt, ParseNode *node,
+                             ObTableSchema &table_schema);
+  int resolve_presetting_partition_key(ParseNode *node, share::schema::ObTableSchema &table_schema);
+  int try_set_auto_partition_by_config(common::ObIArray<obrpc::ObCreateIndexArg> &index_arg_list,
+                                       ObTableSchema &table_schema);
+  int check_only_modify_auto_partition_attr(ObPartitionedStmt *stmt, ParseNode *node,
+                                            ObTableSchema &table_schema, bool &is_only_modify_auto_part_attr);
+
   static int resolve_interval_node(
       ObResolverParams &params,
       ParseNode *interval_node,
@@ -1003,6 +1014,17 @@ protected:
       const bool is_char_type,
       const ObCollationType &collation_type,
       ObObj &default_value, ObString &str);
+  int get_suggest_index_scope(
+      const uint64_t tenant_id,
+      const uint64_t data_table_id,
+      const ObCreateIndexArg &index_arg,
+      const INDEX_KEYNAME key,
+      bool &global);
+  int check_primary_key_prefix_of_index_columns(
+      const ObTableSchema &table_schema,
+      const ObCreateIndexArg &index_arg,
+      bool &is_prefix);
+  bool is_support_split_index_key(const INDEX_KEYNAME index_keyname);
   bool is_column_group_supported() const;
   int64_t block_size_;
   int64_t consistency_level_;
@@ -1053,6 +1075,7 @@ protected:
   common::ObString locality_;
   bool is_random_primary_zone_;
   share::ObDuplicateScope duplicate_scope_;
+  share::ObDuplicateReadConsistency duplicate_read_consistency_;
   bool enable_row_movement_;
   share::schema::ObTableMode table_mode_;
   common::ObString encryption_;

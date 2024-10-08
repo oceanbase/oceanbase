@@ -776,7 +776,7 @@ int ObDirectLoadInsertTableContext::init(
                  MTL(ObTenantDirectLoadMgr *)->alloc_execution_context_id(ddl_ctrl_.context_id_))) {
       LOG_WARN("alloc execution context id failed", K(ret));
     } else if (OB_FAIL(create_all_tablet_contexts(ls_partition_ids, target_ls_partition_ids))) {
-      LOG_WARN("fail to create all tablet contexts", KR(ret));
+      LOG_WARN("fail to create all tablet contexts", KR(ret), K(ls_partition_ids), K(target_ls_partition_ids));
     } else if (param_.online_opt_stat_gather_ &&
                sql_stat_map_.create(1024, "TLD_SqlStatMap", "TLD_SqlStatMap", MTL_ID())) {
       LOG_WARN("fail to create sql stat map", KR(ret));
@@ -800,7 +800,7 @@ int ObDirectLoadInsertTableContext::create_all_tablet_contexts(
     if (OB_ISNULL(tablet_ctx = OB_NEWx(ObDirectLoadInsertTabletContext, (&allocator_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObDirectLoadInsertTabletContext", KR(ret));
-    } else if (OB_FAIL(tablet_ctx->init(this, ls_id, origin_tablet_id, tablet_id))) {
+    } else if (OB_FAIL(tablet_ctx->init(this, ls_id, origin_tablet_id, tablet_id))){
       LOG_WARN("fail to init fast heap table tablet ctx", KR(ret));
     } else if (OB_FAIL(tablet_ctx_map_.set_refactored(origin_tablet_id, tablet_ctx))) {
       LOG_WARN("fail to set tablet ctx map", KR(ret));

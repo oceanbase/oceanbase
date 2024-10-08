@@ -192,6 +192,7 @@ public:
                                                   //quick restore with rebuild replace major will has same key sstable
   storage::ObTableSharedFlag table_shared_flag_;
   int64_t root_macro_seq_;
+  share::SCN tx_data_recycle_scn_;
   //Add new variable need consider ObSSTableMetaChecker
 };
 

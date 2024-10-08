@@ -19,6 +19,7 @@
 #include "storage/compaction/ob_medium_compaction_mgr.h"
 #include "storage/compaction/ob_medium_list_checker.h"
 #include "storage/compaction/ob_extra_medium_info.h"
+#include "storage/tablet/ob_tablet_binding_info.h"
 #include "storage/tablet/ob_tablet_full_memory_mds_data.h"
 #include "storage/tablet/ob_tablet_obj_load_helper.h"
 #include "storage/tablet/ob_i_tablet_mds_interface.h"

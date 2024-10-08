@@ -19,6 +19,7 @@
 #include "storage/ob_storage_rpc.h"
 #include "storage/ls/ob_ls_meta_package.h"                      // ObLSMetaPackage
 #include "share/resource_limit_calculator/ob_resource_limit_calculator.h"
+#include "storage/mview/ob_major_mv_merge_info.h"
 
 namespace oceanbase
 {
@@ -172,7 +173,7 @@ public:
     if (OB_FAIL(get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
       STORAGE_LOG(WARN, "failed to get ls", K(ret), K(ls_id), K(tablet_id));
     } else {
-      ls_handle.get_ls()->get_ls_private_block_gc_handler().report_tablet_id_for_gc(tablet_info);
+      ls_handle.get_ls()->get_ls_private_block_gc_handler().report_tablet_id_for_gc_service(tablet_info);
     }
   }
 #endif
@@ -200,6 +201,7 @@ private:
     ObLSRestoreStatus restore_status_;
     share::ObTaskId task_id_;
     bool need_create_inner_tablet_;
+    storage::ObMajorMVMergeInfo major_mv_merge_info_;
   };
 
   int create_ls_(const ObCreateLSCommonArg &arg,
@@ -211,6 +213,7 @@ private:
                        const ObMigrationStatus &migration_status,
                        const share::ObLSRestoreStatus &restore_status,
                        const share::SCN &create_scn,
+                       const ObMajorMVMergeInfo &major_mv_merge_info,
                        const ObLSStoreFormat &store_format,
                        ObLS *&ls);
   int inner_del_ls_(ObLS *&ls);

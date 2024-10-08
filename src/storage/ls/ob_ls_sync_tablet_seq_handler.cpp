@@ -72,6 +72,7 @@ int ObLSSyncTabletSeqHandler::replay(const void *buffer,
   } else if (OB_FAIL(autoinc_seq_handler.replay_update_tablet_autoinc_seq(ls_,
                                                                           log.get_tablet_id(),
                                                                           log.get_autoinc_seq(),
+                                                                          base_header.need_pre_replay_barrier(),
                                                                           scn))) {
     LOG_WARN("failed to update tablet auto inc seq", K(ret), K(log));
   }

@@ -1149,6 +1149,11 @@ int ObCreateTableHelper::generate_table_schema_()
     }
   }
 
+  // check auto_partition validity
+  if (FAILEDx(new_table.check_validity_for_auto_partition())) {
+    LOG_WARN("fail to check auto partition setting", KR(ret), K(new_table), K(arg_));
+  }
+
   if (FAILEDx(new_tables_.push_back(new_table))) {
     LOG_WARN("fail to push back table", KR(ret));
   }
@@ -1197,7 +1202,8 @@ int ObCreateTableHelper::generate_aux_table_schemas_()
       index_schema.reset();
       obrpc::ObCreateIndexArg &index_arg = const_cast<obrpc::ObCreateIndexArg&>(arg_.index_arg_list_.at(i));
       if (!index_arg.index_schema_.is_partitioned_table()
-          && !data_table->is_partitioned_table()) {
+          && !data_table->is_partitioned_table()
+          && !data_table->is_auto_partitioned_table()) {
         if (INDEX_TYPE_NORMAL_GLOBAL == index_arg.index_type_) {
           index_arg.index_type_ = INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE;
         } else if (INDEX_TYPE_UNIQUE_GLOBAL == index_arg.index_type_) {

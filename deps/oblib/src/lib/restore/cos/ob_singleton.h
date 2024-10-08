@@ -50,6 +50,8 @@ private:
 } // qcloud_cos
 
 static int64_t OB_STORAGE_MAX_IO_TIMEOUT_US = 20LL * 1000LL * 1000LL;  // 20s
+// disable the retry mechanism
+static constexpr int64_t DO_NOT_RETRY = 0;
 
 // interface class, used for COS,
 // as COS cannot utilize OB's code directly, to avoid compilation errors

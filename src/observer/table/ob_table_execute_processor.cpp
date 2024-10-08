@@ -384,6 +384,9 @@ ObTableProccessType ObTableApiExecuteP::get_stat_event_type()
     case ObTableOperationType::APPEND:
       event_type = ObTableProccessType::TABLE_API_SINGLE_APPEND;
       break;
+    case ObTableOperationType::TRIGGER:
+      event_type = ObTableProccessType::TABLE_API_GROUP_TRIGGER;
+      break;
     default:
       event_type = ObTableProccessType::TABLE_API_PROCESS_TYPE_INVALID;
       break;

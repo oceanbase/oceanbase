@@ -2577,6 +2577,120 @@ int ObDDLOperator::update_boundary_schema_version(const uint64_t &tenant_id,
   return ret;
 }
 
+int ObDDLOperator::inc_table_schema_version(ObMySQLTransaction &trans,
+                                            const uint64_t tenant_id,
+                                            const uint64_t table_id)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+
+  if (OB_INVALID_ID == table_id || OB_INVALID_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(table_id), K(tenant_id));
+  } else if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("schema service should not be NULL", K(ret));
+  } else if (OB_FAIL(schema_service->get_table_sql_service().
+                                        update_data_table_schema_version(trans,
+                                                                         tenant_id,
+                                                                         table_id,
+                                                                         false))) {
+    LOG_WARN("fail to update schema version", K(ret));
+  }
+  return ret;
+}
+
+// split_table_partitions() will modify __all_part and __all_table:
+// 1. add split partitions' information into __all_part based on inc_table_schema
+//    which records the setting of split partitions
+// 2. modify part_idx, partition_type of origin partition in __all_part
+//    based on upd_table_schema which records the setting of changed origin partitions
+// 3. modify part_num of table in __all_table based on new_table_schema
+//    which records the setting of table
+int ObDDLOperator::split_table_partitions(const ObTableSchema &orig_table_schema,
+                                          ObTableSchema &inc_table_schema,
+                                          ObTableSchema &new_table_schema,
+                                          ObTableSchema &upd_table_schema,
+                                          ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = new_table_schema.get_tenant_id();
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service is NULL", KR(ret));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("fail to gen new schema_version", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_service->get_table_sql_service().add_split_inc_part_info(trans,
+                                                                                     orig_table_schema,
+                                                                                     inc_table_schema,
+                                                                                     new_schema_version))) {
+    LOG_WARN("add split inc part info failed", KR(ret),
+                                               K(new_table_schema),
+                                               K(inc_table_schema),
+                                               K(new_schema_version));
+  } else if (orig_table_schema.is_partitioned_table()) {
+    if (OB_FAIL(schema_service->get_table_sql_service().update_part_info(trans,
+                                                                         orig_table_schema,
+                                                                         upd_table_schema,
+                                                                         new_schema_version))) {
+      LOG_WARN("update split part info failed", KR(ret),
+                                                K(orig_table_schema),
+                                                K(upd_table_schema),
+                                                K(new_schema_version));
+    }
+  } else { // !orig_table_schema.is_partitioned_table()
+    if (orig_table_schema.is_user_table() || orig_table_schema.is_global_index_table()) {
+      const ObRowkeyInfo& partition_key_info = new_table_schema.get_partition_key_info();
+      if (partition_key_info.get_size() == 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid partition key numbers", KR(ret), K(orig_table_schema), K(new_table_schema));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < partition_key_info.get_size(); i++) {
+          const ObRowkeyColumn* partition_key_column = partition_key_info.get_column(i);
+          if (OB_ISNULL(partition_key_column)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("partition_key_column is null", KR(ret), K(new_table_schema));
+          } else {
+            ObColumnSchemaV2* column_schema = new_table_schema.get_column_schema(
+                                                      partition_key_column->column_id_);
+
+            if (OB_ISNULL(column_schema)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected null", KR(ret), K(orig_table_schema), K(new_table_schema),
+                                          KPC(partition_key_column));
+            } else if (FALSE_IT(column_schema->set_schema_version(new_schema_version))) {
+            } else if (OB_FAIL(schema_service->get_table_sql_service()
+                                    .update_single_column(trans, orig_table_schema, new_table_schema,
+                                                          *column_schema, false /* record_ddl_operation */))) {
+              LOG_WARN("update single column failed", KR(ret), K(orig_table_schema),
+                                                      K(new_table_schema), KPC(column_schema));
+            }
+          }
+        } // end for
+      }
+    } else if (!orig_table_schema.is_index_local_storage() &&
+               !orig_table_schema.is_aux_lob_table()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("not supported table type", KR(ret), K(orig_table_schema));
+    } else {
+      // do nothing
+    }
+  }
+
+  if (OB_SUCC(ret)){
+    new_table_schema.set_schema_version(new_schema_version);
+    if (OB_FAIL(schema_service->get_table_sql_service()
+                           .update_splitting_partition_option(trans, new_table_schema))) {
+      LOG_WARN("update splitting partition option failed", KR(ret), K(new_table_schema));
+    }
+  }
+
+  return ret;
+}
+
 int ObDDLOperator::truncate_table_partitions(const share::schema::ObTableSchema &orig_table_schema,
                                              share::schema::ObTableSchema &inc_table_schema,
                                              share::schema::ObTableSchema &del_table_schema,
@@ -2858,6 +2972,40 @@ int ObDDLOperator::drop_table_partitions(const ObTableSchema &orig_table_schema,
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObDDLOperator::drop_table_splitted_partitions(const ObTableSchema &orig_table_schema,
+                                                  ObTableSchema &inc_table_schema,
+                                                  ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  bool is_truncate_table = false;
+  bool is_truncate_partition = true; // in order to avoid logging operation in drop_inc_part_info()
+  const uint64_t tenant_id = orig_table_schema.get_tenant_id();
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service is NULL", K(ret));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_service->get_table_sql_service().drop_inc_part_info(trans,
+                                                                                orig_table_schema,
+                                                                                inc_table_schema,
+                                                                                new_schema_version,
+                                                                                is_truncate_partition,
+                                                                                is_truncate_table))) {
+    LOG_WARN("delete inc part info failed", K(ret));
+  } else if (OB_FAIL(schema_service->get_table_sql_service().
+                                        update_data_table_schema_version(trans,
+                                                                         tenant_id,
+                                                                         orig_table_schema.get_table_id(),
+                                                                         false,
+                                                                         new_schema_version))) {
+    LOG_WARN("fail to update schema version", K(ret));
   }
   return ret;
 }
@@ -4421,6 +4569,87 @@ int ObDDLOperator::update_index_status(
   return ret;
 }
 
+// "alter table ... partition by" clause need to call this function to modify index type
+// when enable auto partitioning feature for non-partitioned table and it has global local index
+int ObDDLOperator::update_index_type(const ObTableSchema &data_table_schema,
+                                     const uint64_t index_table_id,
+                                     const share::schema::ObIndexType index_type,
+                                     const common::ObString *ddl_stmt_str,
+                                     common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  ObArray<uint64_t> index_table_ids;
+  ObArray<ObIndexType> index_types;
+
+  if (!data_table_schema.is_valid() ||
+      OB_INVALID_ID == index_table_id || index_type >= INDEX_TYPE_MAX) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument",
+      K(ret), K(data_table_schema), K(index_table_id), K(INDEX_TYPE_MAX));
+  } else if (OB_FAIL(index_table_ids.push_back(index_table_id))) {
+    LOG_WARN("fail to push back", K(ret), K(index_table_id));
+  } else if (OB_FAIL(index_types.push_back(index_type))) {
+    LOG_WARN("fail to push back", K(ret), K(index_type));
+  } else if (OB_FAIL(update_indexes_type(data_table_schema,
+                                        index_table_ids, index_types,
+                                        ddl_stmt_str,
+                                        trans))) {
+    LOG_WARN("update index type failed", K(ret), K(data_table_schema));
+  }
+
+  return ret;
+}
+
+int ObDDLOperator::update_indexes_type(const ObTableSchema &data_table_schema,
+                                      const ObIArray<uint64_t> &index_table_ids,
+                                      const ObIArray<ObIndexType> &index_types,
+                                      const common::ObString *ddl_stmt_str,
+                                      common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  uint64_t tenant_id = data_table_schema.get_tenant_id();
+  uint64_t data_table_id = data_table_schema.get_table_id();
+
+  if (OB_INVALID_TENANT_ID == tenant_id || OB_INVALID_ID == data_table_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(data_table_id));
+  } else if (index_table_ids.count() != index_types.count()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(index_table_ids), K(index_types), K(data_table_schema));
+  } else if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("schema service should not be NULL", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_table_ids.count(); i++) {
+      uint64_t index_table_id = index_table_ids.at(i);
+      ObIndexType index_type = index_types.at(i);
+      if (OB_INVALID_ID == data_table_id || OB_INVALID_ID == index_table_id
+          || index_type <= INDEX_TYPE_IS_NOT || index_type >= INDEX_TYPE_MAX) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(ret), K(data_table_id), K(index_table_id), K(index_type));
+      } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+        LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+      } else if (OB_FAIL(schema_service->get_table_sql_service().update_index_type(
+                                                      data_table_schema, index_table_id,
+                                                      index_type, new_schema_version,
+                                                      ddl_stmt_str,
+                                                      trans))) {
+        LOG_WARN("update index type failed", K(ret), K(data_table_schema));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(schema_service->get_table_sql_service().update_data_table_schema_version(
+                                                      trans, tenant_id,
+                                                      data_table_id,
+                                                      data_table_schema.get_in_offline_ddl_white_list()))) {
+    LOG_WARN("update data table schema version failed", K(ret));
+  }
+  return ret;
+}
+
 int ObDDLOperator::update_table_attribute(ObTableSchema &new_table_schema,
                                           common::ObMySQLTransaction &trans,
                                           const ObSchemaOperationType operation_type,
@@ -4604,6 +4833,29 @@ int ObDDLOperator::update_partition_option(common::ObMySQLTransaction &trans,
   } else {
     if (OB_FAIL(schema_service_impl->get_table_sql_service().update_partition_option(
         trans, table_schema, new_schema_version))) {
+      RS_LOG(WARN, "failed to update partition option", K(table_schema), K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDDLOperator::update_partition_option(common::ObMySQLTransaction &trans,
+                                           ObTableSchema &table_schema,
+                                           const ObString &ddl_stmt_str)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = table_schema.get_tenant_id();
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObSchemaService *schema_service_impl = schema_service_.get_schema_service();
+  if (OB_ISNULL(schema_service_impl)) {
+    ret = OB_ERR_SYS;
+    RS_LOG(WARN, "schema_service_impl must not null", K(ret));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+  } else {
+    table_schema.set_schema_version(new_schema_version);
+    if (OB_FAIL(schema_service_impl->get_table_sql_service().update_partition_option(
+        trans, table_schema, &ddl_stmt_str))) {
       RS_LOG(WARN, "failed to update partition option", K(table_schema), K(ret));
     }
   }
@@ -5002,9 +5254,9 @@ int ObDDLOperator::drop_table_to_recyclebin(const ObTableSchema &table_schema,
   // materialized view will not be dropped into recyclebin
   if (table_schema.get_table_type() == MATERIALIZED_VIEW) {
     LOG_WARN("bypass recyclebin for materialized view");
-  } else if (OB_UNLIKELY(table_schema.has_mlog_table())) {
+  } else if (OB_UNLIKELY(table_schema.required_by_mview_refresh())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table with materialized view log should not come to recyclebin", KR(ret));
+    LOG_WARN("table required by materialized view refresh should not come to recyclebin", KR(ret));
   } else if (OB_UNLIKELY(table_schema.get_table_type() == MATERIALIZED_VIEW_LOG)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("materialized view log should not come to recyclebin", KR(ret));
@@ -10565,8 +10817,13 @@ int ObDDLOperator::drop_inner_generated_index_column(ObMySQLTransaction &trans,
       }
       // There are no other indexes, delete the hidden column.
       if (OB_SUCC(ret) && !exist_index) {
-				// if generate column is not the last column // 1. update prev_column_id // 2. update inner table
-        if (OB_FAIL(update_prev_id_for_delete_column(*data_table, new_data_table_schema, *index_col, trans))) {
+        if (index_col->is_multivalue_generated_array_column() || index_col->is_multivalue_generated_column()) {
+          // multivalue array column not in the index schema, need do delete as well do real delete in drop_inner_generated_domain_extra_column
+          if (OB_FAIL(drop_inner_generated_domain_extra_column(trans, data_table, *index_col, new_data_table_schema))) {
+            LOG_WARN("failed to drop budy column", K(ret));
+          }
+        // if generate column is not the last column // 1. update prev_column_id // 2. update inner table
+        } else if (OB_FAIL(update_prev_id_for_delete_column(*data_table, new_data_table_schema, *index_col, trans))) {
           LOG_WARN("failed to update column previous id for delete column", K(ret));
         } else if (OB_FAIL(delete_single_column(trans, new_data_table_schema, index_col->get_column_name_str()))) {
           LOG_WARN("delete index inner generated column failed", K(new_data_table_schema), K(*index_col));
@@ -10592,6 +10849,47 @@ int ObDDLOperator::drop_inner_generated_index_column(ObMySQLTransaction &trans,
         }
       }
     }
+  }
+
+  return ret;
+}
+
+int ObDDLOperator::drop_inner_generated_domain_extra_column(
+  common::ObMySQLTransaction &trans,
+  const share::schema::ObTableSchema *ori_data_schema,
+  const share::schema::ObColumnSchemaV2 &ori_column_schema,
+  share::schema::ObTableSchema &new_data_table_schema)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = ori_data_schema->get_tenant_id();
+  const ObColumnSchemaV2 *budy_col = NULL;
+  bool is_match = false;
+
+  if (OB_ISNULL(ori_data_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, ori_data_schema is nullptr", K(ret));
+  } else if (ori_column_schema.is_multivalue_generated_array_column()) {
+  } else if (OB_ISNULL(budy_col = ori_data_schema->get_column_schema(tenant_id, ori_column_schema.get_column_id() + 1))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, budy column schema is nullptr", K(ret), K(ori_column_schema));
+  } else if (!budy_col->is_multivalue_generated_array_column()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, budy column schema not fould", K(ret), K(*budy_col));
+  } else if (OB_FAIL(ObMulValueIndexBuilderUtil::is_matched_budy_column(ori_column_schema, *budy_col, is_match))) {
+    LOG_WARN("failed to match column", K(ret));
+  } else if (!is_match) {
+    ret = OB_ERR_COLUMN_NOT_FOUND;
+    LOG_WARN("unexpected error, budy column not found", K(ret), K(*budy_col));
+  // delete budy column
+  } else if (OB_FAIL(update_prev_id_for_delete_column(*ori_data_schema, new_data_table_schema, *budy_col, trans))) {
+    LOG_WARN("failed to update column previous id for delete column", K(ret));
+  } else if (OB_FAIL(delete_single_column(trans, new_data_table_schema, budy_col->get_column_name_str()))) {
+    LOG_WARN("delete index inner generated column failed", K(new_data_table_schema), K(*budy_col));
+  // delete index column
+  } else if (OB_FAIL(update_prev_id_for_delete_column(*ori_data_schema, new_data_table_schema, ori_column_schema, trans))) {
+    LOG_WARN("failed to update column previous id for delete column", K(ret));
+  } else if (OB_FAIL(delete_single_column(trans, new_data_table_schema, ori_column_schema.get_column_name_str()))) {
+    LOG_WARN("delete index inner generated column failed", K(new_data_table_schema), K(*budy_col));
   }
 
   return ret;

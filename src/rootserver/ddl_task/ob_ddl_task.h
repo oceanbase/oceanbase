@@ -106,12 +106,13 @@ public:
 struct ObDDLTaskInfo final
 {
 public:
-  ObDDLTaskInfo() : row_scanned_(0), row_inserted_(0) {}
+  ObDDLTaskInfo() : row_scanned_(0), row_inserted_(0), physical_row_count_(0) {}
   ~ObDDLTaskInfo() {}
-  TO_STRING_KV(K_(row_scanned), K_(row_inserted), K_(ls_id), K_(ls_leader_addr), K_(partition_ids));
+  TO_STRING_KV(K_(row_scanned), K_(row_inserted), K_(physical_row_count), K_(ls_id), K_(ls_leader_addr), K_(partition_ids));
 public:
   int64_t row_scanned_;
   int64_t row_inserted_;
+  int64_t physical_row_count_;
   share::ObLSID ls_id_;
   common::ObAddr ls_leader_addr_;
   ObArray<ObTabletID> partition_ids_;
@@ -393,6 +394,12 @@ public:
       common::ObMySQLProxy &proxy,
       common::ObIAllocator &allocator,
       common::ObIArray<ObDDLTaskRecord> &records);
+  static int get_ddl_task_record_by_table_id(
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      common::ObMySQLProxy &proxy,
+      common::ObIAllocator &allocator,
+      common::ObIArray<ObDDLTaskRecord> &records);
 
   static int check_task_id_exist(
       common::ObMySQLProxy &proxy,
@@ -461,6 +468,11 @@ public:
       common::ObIAllocator &allocator,
       common::ObIArray<ObString> &records);
 
+  static int get_partition_split_task_ids(
+      common::ObISQLClient &proxy,
+      const uint64_t tenant_id,
+      const ObIArray<uint64_t> &table_ids,
+      ObIArray<int64_t> &task_ids);
   static int check_rebuild_vec_index_task_exist(
       const uint64_t tenant_id,
       const uint64_t data_table_id,
@@ -507,6 +519,13 @@ public:
       const uint64_t tenant_id,
       const int64_t ddl_task_id,
       const uint64_t table_id,
+      const WaitTransType wait_trans_type,
+      const int64_t wait_version);
+  int init(
+      const uint64_t tenant_id,
+      const int64_t ddl_task_id,
+      const uint64_t table_id,
+      const common::ObIArray<common::ObTabletID> &tablet_ids,
       const WaitTransType wait_trans_type,
       const int64_t wait_version);
   void reset();
@@ -752,7 +771,6 @@ public:
   static bool check_is_load_data(share::ObDDLType task_type);
   virtual bool support_longops_monitoring() const { return false; }
   int cleanup();
-  virtual int cleanup_impl() { return OB_NOT_SUPPORTED; }
   int update_task_record_status_and_msg(common::ObISQLClient &proxy, const share::ObDDLTaskStatus real_new_status);
 
   #ifdef ERRSIM
@@ -800,10 +818,12 @@ protected:
              || MAX_ERR_TOLERANCE_CNT > ++err_code_occurence_cnt_));
   }
   int init_ddl_task_monitor_info(const uint64_t target_table_id);
-  virtual bool task_can_retry() const { return true; }
   virtual bool is_ddl_retryable() const { return true; }
 private:
-  void clear_old_status_context();
+  virtual int cleanup_impl() { return OB_NOT_SUPPORTED; }
+  virtual bool task_can_retry() const { return true; }
+protected:
+  virtual void clear_old_status_context();
 protected:
   static const int64_t TASK_EXECUTE_TIME_THRESHOLD = 3 * 24 * 60 * 60 * 1000000L; // 3 days
   common::TCRWLock lock_;

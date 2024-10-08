@@ -541,6 +541,114 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObBackfillTabletsTableMgr);
 };
 
+class ObMacroBlockReuseMgr final
+{
+public:
+  ObMacroBlockReuseMgr();
+  ~ObMacroBlockReuseMgr();
+  int init();
+  void reset();
+  int destroy();
+  int count(int64_t &count);
+  bool is_inited() const { return is_inited_; }
+  // get the macro block physical ID and data checksum by the macro block logical ID
+  int get_macro_block_reuse_info(
+    const ObITable::TableKey &table_key,
+    const blocksstable::ObLogicMacroBlockId &logic_id,
+    blocksstable::MacroBlockId &macro_id,
+    int64_t &data_checksum);
+  // add the macro block logical ID -> [physical ID, data checksum] and data checksum mapping
+  int add_macro_block_reuse_info(
+    const ObITable::TableKey &table_key,
+    const blocksstable::ObLogicMacroBlockId &logic_id,
+    const blocksstable::MacroBlockId &macro_id,
+    const int64_t &data_checksum);
+  // update single reuse map of the chosen major sstable
+  // if the snapshot version of the input table key is larger than the one in the reuse map, update the reuse map
+  int update_single_reuse_map(const ObITable::TableKey &table_key, const storage::ObTabletHandle &tablet_handle, const blocksstable::ObSSTable &sstable);
+  // get target sstable's version in the reuse map
+  int get_major_snapshot_version(const ObITable::TableKey &table_key, int64_t &snapshot_version);
+public:
+  static int64_t get_item_size() {
+      // size of key + size of value + size pointer of next node (linear hash map)
+      // see ObLinearHashMap::Node
+      return sizeof(blocksstable::ObLogicMacroBlockId)
+        + sizeof(MacroBlockReuseInfo)
+        + sizeof(void *);
+  }
+private:
+  // physical ID and data checksum of a macro block, value of a single reuse map
+  struct MacroBlockReuseInfo final
+  {
+  public:
+    MacroBlockReuseInfo();
+    ~MacroBlockReuseInfo() = default;
+    void reset();
+  public:
+    blocksstable::MacroBlockId id_;
+    int64_t data_checksum_;
+
+    TO_STRING_KV(
+      K_(id),
+      K_(data_checksum));
+  };
+  // logical ID -> [physical ID, data checksum] mapping of a major sstable.
+  typedef ObLinearHashMap<blocksstable::ObLogicMacroBlockId, MacroBlockReuseInfo> ReuseMap;
+  // Key of the reuse_maps, use the tablet_id and column_group_idx to identify the lastest local snapshot version
+  // and the reuse info (logical ID -> [physical ID, data checksum] mapping) of a major sstable.
+  struct ReuseMajorTableKey final
+  {
+  public:
+    ReuseMajorTableKey();
+    ReuseMajorTableKey(const common::ObTabletID &tablet_id, const uint16_t column_group_idx);
+    ~ReuseMajorTableKey() = default;
+    void reset();
+    uint64_t hash() const;
+    int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; };
+    bool operator == (const ReuseMajorTableKey &other) const;
+    TO_STRING_KV(
+      K_(tablet_id),
+      K_(column_group_idx));
+
+  public:
+    common::ObTabletID tablet_id_;
+    uint16_t column_group_idx_;
+  };
+  // Value of the reuse_maps, indicate the reuse info (logical ID -> [physical ID, data checksum] mapping) of a
+  // specific version major sstable (the latest local snapshot version).
+  struct ReuseMajorTableValue final
+  {
+  public:
+    ReuseMajorTableValue();
+    ~ReuseMajorTableValue();
+    int init(const int64_t &snapshot_version);
+    int count(int64_t &count);
+    TO_STRING_KV(
+      K_(is_inited),
+      K_(snapshot_version));
+  public:
+    bool is_inited_;
+    int64_t snapshot_version_;
+    ReuseMap reuse_map_;
+  };
+  typedef ObLinearHashMap<ReuseMajorTableKey, ReuseMajorTableValue *> ReuseMaps;
+private:
+  int get_reuse_key_(const ObITable::TableKey &table_key, ReuseMajorTableKey &reuse_key);
+  int get_reuse_value_(const ObITable::TableKey &table_key, ReuseMap *&reuse_map, int64_t &snapshot_version);
+  // remove single reuse map of the chosen major sstable (chosen by table_key)
+  int remove_single_reuse_map_(const ReuseMajorTableKey &reuse_key);
+  // build single reuse map of the chosen major sstable
+  int build_single_reuse_map_(const ObITable::TableKey &table_key, const storage::ObTabletHandle &tablet_handle, const blocksstable::ObSSTable &sstable);
+  // alloc reuse value then init it
+  int prepare_reuse_value_(const int64_t &snapshot_version, ReuseMajorTableValue *&reuse_value);
+  // free reuse value
+  void free_reuse_value_(ReuseMajorTableValue *&reuse_value);
+private:
+  bool is_inited_;
+  ReuseMaps reuse_maps_; // mapping from major sstable to reuse info (if not column store, this map will only contain one element)
+  DISALLOW_COPY_AND_ASSIGN(ObMacroBlockReuseMgr);
+};
+
 struct ObLogicTabletID final
 {
 public:

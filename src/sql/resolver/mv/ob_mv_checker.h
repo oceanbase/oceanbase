@@ -30,7 +30,12 @@ enum ObMVRefreshableType
     OB_MV_FAST_REFRESH_SIMPLE_MAV, // fast refresh for single table MAV
     OB_MV_FAST_REFRESH_SIMPLE_MJV, // fast refresh for inner join MJV
     OB_MV_FAST_REFRESH_SIMPLE_JOIN_MAV, // fast refresh for inner join MAV
+    OB_MV_FAST_REFRESH_MAJOR_REFRESH_MJV, // fast refresh for major compaction mv
   };
+inline bool IS_VALID_FAST_REFRESH_TYPE(ObMVRefreshableType type)
+{
+  return type >= OB_MV_FAST_REFRESH_SIMPLE_MAV;
+}
 
 struct FastRefreshableNotes
 {
@@ -54,24 +59,29 @@ class ObMVChecker
   public:
   explicit ObMVChecker(const ObSelectStmt &stmt,
                        ObRawExprFactory &expr_factory,
-                       ObSQLSessionInfo *session_info)
+                       ObSQLSessionInfo *session_info,
+                       const ObTableSchema &mv_container_table_schema)
     : stmt_(stmt),
       refresh_type_(OB_MV_REFRESH_INVALID),
       expr_factory_(expr_factory),
       session_info_(session_info),
-      fast_refreshable_note_(NULL)
+      fast_refreshable_note_(NULL),
+      mv_container_table_schema_(mv_container_table_schema)
     {}
   ~ObMVChecker() {}
 
-  static int check_mv_fast_refresh_valid(const ObSelectStmt *view_stmt,
-                                         ObStmtFactory *stmt_factory,
-                                         ObRawExprFactory *expr_factory,
-                                         ObSQLSessionInfo *session_info);
+  static int check_mv_fast_refresh_type(const ObSelectStmt *view_stmt,
+                                        ObStmtFactory *stmt_factory,
+                                        ObRawExprFactory *expr_factory,
+                                        ObSQLSessionInfo *session_info,
+                                        ObTableSchema &container_table_schema,
+                                        ObMVRefreshableType &refresh_type);
   int check_mv_refresh_type();
   ObMVRefreshableType get_refersh_type() const { return refresh_type_; };
   static bool is_basic_aggr(const ObItemType aggr_type);
   static int get_dependent_aggr_of_fun_sum(const ObSelectStmt &stmt, const ObRawExpr *sum_param, const ObAggFunRawExpr *&dep_aggr);
   const ObSelectStmt &get_stmt() const {  return stmt_; }
+  const ObTableSchema &get_mv_container_table_schema() const {  return mv_container_table_schema_;  }
   const ObIArray<std::pair<ObAggFunRawExpr*, ObRawExpr*>> &get_expand_aggrs() const {  return expand_aggrs_;  }
   int get_mlog_table_schema(const TableItem *table, const share::schema::ObTableSchema *&mlog_schema) const;
   void set_fast_refreshable_note(FastRefreshableNotes *note) {  fast_refreshable_note_ = note; }
@@ -83,6 +93,7 @@ private:
                                                    bool &all_table_exists_rowkey,
                                                    bool &contain_all_rowkey);
   int check_mv_stmt_use_special_expr(const ObSelectStmt &stmt, bool &has_special_expr);
+  int check_mv_table_type_valid(const ObSelectStmt &stmt, bool &is_valid);
   int check_mv_dependency_mlog_tables(const ObSelectStmt &stmt, bool &is_valid);
   int check_mv_duplicated_exprs(const ObSelectStmt &stmt, bool &has_dup_exprs);
   bool check_mlog_table_valid(const share::schema::ObTableSchema *table_schema,
@@ -118,6 +129,16 @@ private:
                                        const bool for_join_mav,
                                        bool &is_valid);
   void append_fast_refreshable_note(const char *str, const ObMVRefreshableType type = OB_MV_COMPLETE_REFRESH);
+  int check_match_major_refresh_mv(const ObSelectStmt &stmt, bool &is_match);
+  int check_right_table_join_key_valid(const ObSelectStmt &stmt, const JoinedTable *joined_table,
+                                       const ObTableSchema *right_table_schema, bool &is_valid);
+  int check_left_table_partition_rule_valid(const ObSelectStmt &stmt, const TableItem *left_table,
+                                            const ObTableSchema *left_table_schema, bool &is_valid);
+  int check_left_table_rowkey_valid(const ObSelectStmt &stmt,
+                                    const ObTableSchema *left_table_schema, bool &is_valid);
+  int check_broadcast_table_valid(const ObSelectStmt &stmt, const ObTableSchema *right_table_schema,
+                                  bool &is_valid);
+  int check_column_store_valid(const ObSelectStmt &stmt, bool &is_valid);
 
   const ObSelectStmt &stmt_;
   ObMVRefreshableType refresh_type_;
@@ -127,6 +148,7 @@ private:
   ObRawExprFactory &expr_factory_;
   ObSQLSessionInfo *session_info_;
   FastRefreshableNotes *fast_refreshable_note_;
+  const ObTableSchema &mv_container_table_schema_;
   DISALLOW_COPY_AND_ASSIGN(ObMVChecker);
 };
 

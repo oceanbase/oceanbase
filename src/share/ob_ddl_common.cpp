@@ -28,6 +28,7 @@
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tx_storage/ob_ls_map.h"
+#include "storage/tx_storage/ob_ls_service.h"
 #include "rootserver/ob_root_service.h"
 #include "rootserver/ddl_task/ob_ddl_task.h"
 #include "storage/column_store/ob_column_oriented_sstable.h"
@@ -139,6 +140,9 @@ const char *oceanbase::share::get_ddl_type(ObDDLType ddl_type)
       break;
     case ObDDLType::DDL_CHANGE_COLUMN_NAME:
       ret_name = "DDL_CHANGE_COLUMN_NAME";
+      break;
+    case ObDDLType::DDL_PARTITION_SPLIT_RECOVERY_TABLE_REDEFINITION:
+      ret_name = "DDL_PARTITION_SPLIT_RECOVERY_TABLE_REDEFINITION";
       break;
     default:
       break;
@@ -803,6 +807,60 @@ int ObDDLUtil::generate_spatial_index_column_names(const ObTableSchema &dest_tab
   return ret;
 }
 
+
+int ObDDLUtil::generate_multivalue_index_column_names(const ObTableSchema &dest_table_schema,
+                                                   const ObTableSchema &source_table_schema,
+                                                   ObArray<ObColumnNameInfo> &insert_column_names,
+                                                   ObArray<ObColumnNameInfo> &column_names,
+                                                   ObArray<int64_t> &select_column_ids)
+{
+  int ret = OB_SUCCESS;
+  if (dest_table_schema.is_multivalue_index_aux()) {
+    uint64_t mulvalue_col_id = OB_INVALID_ID;
+    uint64_t mulvalue_array_col_id = OB_INVALID_ID;
+    ObArray<ObColDesc> column_ids;
+    const ObColumnSchemaV2 *column_schema = nullptr;
+    const ObColumnSchemaV2 *array_column = nullptr;
+    // get dest table column names
+    if (OB_FAIL(dest_table_schema.get_column_ids(column_ids))) {
+      LOG_WARN("fail to get column ids", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
+        const int64_t col_id =  column_ids.at(i).col_id_;
+        if (OB_ISNULL(column_schema = dest_table_schema.get_column_schema(col_id))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("error unexpected, column schema must not be nullptr", K(ret));
+        } else if (OB_FAIL(insert_column_names.push_back(ObColumnNameInfo(column_schema->get_column_name_str(), false)))) {
+          LOG_WARN("push back insert column name failed", K(ret));
+        } else if (OB_FAIL(column_names.push_back(ObColumnNameInfo(column_schema->get_column_name_str(), false)))) {
+          LOG_WARN("push back rowkey column name failed", K(ret));
+        } else if (OB_FAIL(select_column_ids.push_back(col_id))) {
+          LOG_WARN("push back select column id failed", K(ret), K(col_id));
+        } else if (OB_ISNULL(column_schema = source_table_schema.get_column_schema(col_id))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("error unexpected, column schema must not be nullptr", K(ret));
+        } else if (column_schema->is_multivalue_generated_column()) {
+          array_column = source_table_schema.get_column_schema(col_id + 1);
+        }
+      } // end for
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(array_column)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected, array column schema must not be nullptr", K(ret));
+      } else {
+        if (OB_FAIL(column_names.push_back(ObColumnNameInfo(array_column->get_column_name_str(), false)))) {
+          LOG_WARN("push back rowkey column name failed", K(ret));
+        } else if (OB_FAIL(select_column_ids.push_back(array_column->get_column_id()))) {
+          LOG_WARN("push back select column id failed", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+
 int ObDDLUtil::generate_build_replica_sql(
     const uint64_t tenant_id,
     const int64_t data_table_id,
@@ -831,7 +889,7 @@ int ObDDLUtil::generate_build_replica_sql(
   } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, GENERATE_BUILD_REPLICA_SQL))) {
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(task_id));
   } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
-      tenant_id, schema_guard, schema_version))) {
+      tenant_id, schema_guard))) {
     LOG_WARN("fail to get tenant schema guard", K(ret), K(data_table_id));
   } else if (OB_FAIL(schema_guard.check_formal_guard())) {
     LOG_WARN("fail to check formal guard", K(ret));
@@ -857,6 +915,11 @@ int ObDDLUtil::generate_build_replica_sql(
     // get dest table column names
     if (dest_table_schema->is_spatial_index()) {
       if (OB_FAIL(ObDDLUtil::generate_spatial_index_column_names(*dest_table_schema, *source_table_schema, insert_column_names,
+                                                                 column_names, select_column_ids))) {
+        LOG_WARN("generate spatial index column names failed", K(ret));
+      }
+    } else if (dest_table_schema->is_multivalue_index_aux()) {
+      if (OB_FAIL(ObDDLUtil::generate_multivalue_index_column_names(*dest_table_schema, *source_table_schema, insert_column_names,
                                                                  column_names, select_column_ids))) {
         LOG_WARN("generate spatial index column names failed", K(ret));
       }
@@ -894,13 +957,7 @@ int ObDDLUtil::generate_build_replica_sql(
         }
       }
     }
-    bool need_add_partition_key = source_table_schema->is_heap_table() && dest_table_schema->is_index_local_storage();
-    bool is_partitioned_vec_idx_table = dest_table_schema->is_partitioned_table() && dest_table_schema->is_index_local_storage() &&
-                                        (dest_table_schema->is_vec_delta_buffer_type() ||
-                                         dest_table_schema->is_vec_index_id_type() ||
-                                         dest_table_schema->is_vec_index_snapshot_data_type());
-    need_add_partition_key = is_partitioned_vec_idx_table || need_add_partition_key;
-    if (OB_SUCC(ret) && need_add_partition_key) {
+    if (OB_SUCC(ret) && dest_table_schema->need_partition_key_for_build_local_index(*source_table_schema)) {
       ObArray<ObColDesc> src_column_ids;
       ObSEArray<uint64_t, 5> extra_column_ids;
       if (OB_FAIL(source_table_schema->get_column_ids(src_column_ids))) {
@@ -973,7 +1030,9 @@ int ObDDLUtil::generate_build_replica_sql(
         } else if (OB_ISNULL(column_schema = dest_table_schema->get_column_schema(col_id))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("error unexpected, column schema must not be nullptr", K(ret), K(col_id));
-        } else if (column_schema->is_generated_column() && !dest_table_schema->is_spatial_index()) {
+        } else if (column_schema->is_generated_column() &&
+          !dest_table_schema->is_spatial_index() &&
+          !dest_table_schema->is_multivalue_index_aux()) {
           // generated columns cannot be row key.
         } else if (OB_FAIL(rowkey_column_names.push_back(ObColumnNameInfo(column_schema->get_column_name_str(), is_shadow_column)))) {
           LOG_WARN("fail to push back rowkey column name", K(ret));
@@ -1734,6 +1793,29 @@ bool ObDDLUtil::need_remote_write(const int ret_code)
         || OB_EAGAIN == ret_code);
 }
 
+
+int ObDDLUtil::get_tablet_leader(
+  const uint64_t tenant_id,
+  const common::ObTabletID &tablet_id,
+  common::ObAddr &leader_addr)
+{
+  int ret = OB_SUCCESS;
+  ObLSLocation location;
+  share::ObLSID unused_ls_id;
+  if (OB_INVALID_TENANT_ID == tenant_id || !tablet_id.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get tablet leader, invalid id", K(ret), K(tenant_id), K(tablet_id));
+  } else if (OB_FAIL(get_tablet_replica_location(tenant_id, tablet_id, unused_ls_id, location))) {
+    LOG_WARN("fail to get tablet replica location", K(ret), K(tenant_id), K(tablet_id));
+  } else if (OB_FAIL(location.get_leader(leader_addr))) {
+    LOG_WARN("fail to get tablet leader addr", K(ret), K(tenant_id), K(tablet_id));
+  } else if (!leader_addr.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get tablet leader, addr is invalid", K(ret), K(tenant_id), K(tablet_id));
+  }
+  return ret;
+}
+
 int ObDDLUtil::get_tablet_paxos_member_list(
   const uint64_t tenant_id,
   const common::ObTabletID &tablet_id,
@@ -1743,10 +1825,11 @@ int ObDDLUtil::get_tablet_paxos_member_list(
   int ret = OB_SUCCESS;
   ObLSLocation location;
   paxos_member_count = 0;
+  share::ObLSID unused_ls_id;
   if (OB_INVALID_TENANT_ID == tenant_id || !tablet_id.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get tablet replica location, invalid id", K(ret), K(tenant_id), K(tablet_id));
-  } else if (OB_FAIL(get_tablet_replica_location(tenant_id, tablet_id, location))) {
+  } else if (OB_FAIL(get_tablet_replica_location(tenant_id, tablet_id, unused_ls_id, location))) {
     LOG_WARN("fail to get tablet replica location", K(tenant_id), K(tablet_id), K(ret));
   } else {
     const ObIArray<ObLSReplicaLocation> &ls_locations = location.get_replica_locations();
@@ -1766,17 +1849,102 @@ int ObDDLUtil::get_tablet_paxos_member_list(
   }
   return ret;
 }
+int ObDDLUtil::get_tablet_physical_row_cnt(
+  const share::ObLSID &ls_id,
+  const ObTabletID &tablet_id,
+  const bool calc_sstable,
+  const bool calc_memtable,
+  int64_t &physical_row_count /*OUT*/)
+{
+  int ret = OB_SUCCESS;
+
+  // get total rows of the table; physical
+  // src_tablet_id -> tablet -> sstables -> sstable_metas -> row_count
+  //                         -> memtables -> physical_row_cnt
+  ObLSHandle ls_handle;
+  ObTabletHandle tablet_handle;
+  ObTablet *tablet = nullptr;
+  ObTableStoreIterator table_store_iter;
+
+  physical_row_count = 0;
+
+  if (!ls_id.is_valid() || !tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(ls_id), K(tablet_id));
+  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
+    LOG_WARN("get ls failed", K(ret), K(ls_id));
+  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_10_S, ObMDSGetTabletMode::READ_ALL_COMMITED))) {
+    LOG_WARN("fail to get tablet", K(ret), K(ls_id), K(tablet_id));
+  } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpecter error", K(ret), K(tablet_handle));
+  } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet is nullptr", K(ret), K(tablet_handle));
+  } else if (OB_FAIL(tablet->get_all_tables(table_store_iter))) {
+    LOG_WARN("get all tables failed", K(ret));
+  } else if (!table_store_iter.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table_store_iter is invalid", K(ret), K(table_store_iter), KPC(tablet));
+  } else {
+    table_store_iter.resume();
+    while (OB_SUCC(ret)) {
+      ObITable *table = nullptr;
+      ObSSTable *sstable = nullptr;
+      memtable::ObMemtable* memtable = nullptr;
+      ObSSTableMetaHandle sstable_meta_hdl;
+      if (OB_FAIL(table_store_iter.get_next(table))) {
+        if (OB_UNLIKELY(OB_ITER_END == ret)) {
+          ret = OB_SUCCESS;
+          break;
+        } else {
+          LOG_WARN("get next table failed", K(ret));
+        }
+      } else if (OB_UNLIKELY(OB_ISNULL(table))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected err", K(ret), KPC(table));
+      } else if (calc_sstable && table->is_sstable()) {
+        if (OB_FALSE_IT(sstable = static_cast<ObSSTable*>(table))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("sstable static_cast failed", K(ret), KPC(table));
+        } else if (OB_ISNULL(sstable) || !sstable->is_valid()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("the sstable is null or invalid", K(ret));
+        } else if (OB_FAIL(sstable->get_meta(sstable_meta_hdl))) {
+          LOG_WARN("get sstable meta failed", K(ret), KPC(sstable));
+        } else {
+          physical_row_count += sstable_meta_hdl.get_sstable_meta().get_row_count();
+        }
+      } else if (calc_memtable && table->is_memtable()) {
+        if (OB_FALSE_IT(memtable = static_cast<memtable::ObMemtable*>(table))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("memtable static_cast failed", K(ret), KPC(table));
+        } else if (OB_ISNULL(memtable)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get memtable meta failed", K(ret), KPC(memtable));
+        } else {
+          physical_row_count += memtable->get_physical_row_cnt();
+        }
+      }
+    } // end while
+  }
+  if (OB_FAIL(ret)) {
+    physical_row_count = 0;
+  }
+  return ret;
+}
 
 int ObDDLUtil::get_tablet_replica_location(
     const uint64_t tenant_id,
     const common::ObTabletID &tablet_id,
+    ObLSID &ls_id,
     ObLSLocation &location)
 {
   int ret = OB_SUCCESS;
   const int64_t cluster_id = GCONF.cluster_id;
-  share::ObLSID ls_id;
   int64_t expire_renew_time = INT64_MAX;
   bool is_cache_hit = false;
+  ls_id.reset();
   if (OB_UNLIKELY(nullptr == GCTX.location_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("location service ptr is null", K(ret));
@@ -1796,6 +1964,96 @@ int ObDDLUtil::get_tablet_replica_location(
                                                  is_cache_hit,
                                                  location))) {
     LOG_WARN("fail to get ls location", K(ret), K(cluster_id), K(tenant_id), K(ls_id), K(tablet_id));
+  }
+  return ret;
+}
+
+// filter offline replica and arbitration one.
+int ObDDLUtil::get_split_replicas_addrs(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    ObIArray<ObAddr> &member_addrs_array,
+    ObIArray<ObAddr> &learner_addrs_array)
+{
+  int ret = OB_SUCCESS;
+  member_addrs_array.reset();
+  learner_addrs_array.reset();
+  ObLSInfo ls_info;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || !ls_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_ISNULL(GCTX.lst_operator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("lst_operator is null", K(ret));
+  } else if (OB_FAIL(GCTX.lst_operator_->get(GCONF.cluster_id, tenant_id, ls_id, share::ObLSTable::COMPOSITE_MODE/*for sys tenant only*/, ls_info))) {
+    LOG_WARN("fail to get ls info", K(ret), K(tenant_id), K(ls_id));
+  } else {
+    int64_t leader_replica_index = OB_INVALID_INDEX;
+    ObArray<ObAddr> filter_replica_addrs; // for split, we should ignore offline replica and arbitration replica.
+    const ObLSInfo::ReplicaArray &all_replicas = ls_info.get_replicas();
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < all_replicas.count(); idx++) {
+      const ObLSReplica &tmp_replica = all_replicas.at(idx);
+      if (REPLICA_TYPE_ARBITRATION == tmp_replica.get_replica_type()
+        || REPLICA_STATUS_OFFLINE == tmp_replica.get_replica_status()) {
+        if (OB_FAIL(filter_replica_addrs.push_back(tmp_replica.get_server()))) {
+          LOG_WARN("push back failed", K(ret));
+        } else {
+          LOG_TRACE("filter offline replica and arbitration replica for split", K(ret), K(tmp_replica));
+        }
+      } else if (ObRole::LEADER == tmp_replica.get_role()) {
+        leader_replica_index = idx;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_INVALID_INDEX == leader_replica_index) {
+        ret = OB_EAGAIN;
+        LOG_WARN("No leader found, try again", K(ret), K(tenant_id), K(ls_id), K(all_replicas));
+      } else {
+        const ObLSReplica &leader_replica = all_replicas.at(leader_replica_index);
+        const ObLSReplica::MemberList &member_list = leader_replica.get_member_list();
+        for (int64_t idx = 0; OB_SUCC(ret) && idx < member_list.count(); ++idx) {
+          const common::ObAddr &addr = member_list.at(idx).get_server();
+          if (common::is_contain(filter_replica_addrs, addr)) {
+            // filter.
+            LOG_TRACE("ignore replica", K(ret), K(addr));
+          } else if (OB_FAIL(member_addrs_array.push_back(addr))) {
+            LOG_WARN("failed to push addr", K(ret));
+          }
+        }
+        const common::GlobalLearnerList &learner_list = leader_replica.get_learner_list();
+        for (int64_t idx = 0; OB_SUCC(ret) && idx < learner_list.get_member_number(); ++idx) {
+          common::ObAddr addr;
+          if (OB_FAIL(learner_list.get_server_by_index(idx, addr))) {
+            LOG_WARN("failed to push addr", KR(ret), K(idx));
+          } else if (OB_FAIL(learner_addrs_array.push_back(addr))) {
+            LOG_WARN("failed to push addr", KR(ret), K(addr));
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && member_addrs_array.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected empty member list", K(ret), K(tenant_id), K(ls_id));
+  }
+  return ret;
+}
+
+int ObDDLUtil::get_split_replicas_addrs(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    ObIArray<ObAddr> &replica_addr_array)
+{
+  int ret = OB_SUCCESS;
+  replica_addr_array.reset();
+  ObArray<ObAddr> member_addrs_array;
+  ObArray<ObAddr> learners_addr_array;
+  if (OB_FAIL(get_split_replicas_addrs(tenant_id, ls_id, member_addrs_array, learners_addr_array))) {
+    LOG_WARN("get addrs failed", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(append(replica_addr_array/*dst*/, member_addrs_array/*src*/))) {
+    LOG_WARN("append failed", K(ret));
+  } else if (OB_FAIL(append(replica_addr_array/*dst*/, learners_addr_array/*src*/))) {
+    LOG_WARN("append failed", K(ret));
   }
   return ret;
 }
@@ -2340,6 +2598,18 @@ int ObDDLUtil::get_data_information(
 static inline void try_replace_user_tenant_id(const uint64_t user_tenant_id, uint64_t &check_tenant_id)
 {
   check_tenant_id = !is_user_tenant(check_tenant_id) ? check_tenant_id : user_tenant_id;
+}
+
+int ObDDLUtil::replace_user_tenant_id(const uint64_t tenant_id,
+                                      obrpc::ObPartitionSplitArg &split_arg)
+{
+  int ret = OB_SUCCESS;
+  if (!is_user_tenant(tenant_id)) {
+    LOG_TRACE("not user tenant, no need to replace", K(tenant_id));
+  } else {
+    try_replace_user_tenant_id(tenant_id, split_arg.exec_tenant_id_);
+  }
+  return ret;
 }
 
 int ObDDLUtil::replace_user_tenant_id(
@@ -2973,6 +3243,35 @@ int ObDDLUtil::update_tablet_gc_info(const ObTabletID &tablet_id, const int64_t 
 }
 
 #endif
+
+int ObDDLUtil::get_global_index_table_ids(const schema::ObTableSchema &table_schema, ObIArray<uint64_t> &global_index_table_ids, ObSchemaGetterGuard &schema_guard)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+  global_index_table_ids.reset();
+  if (OB_UNLIKELY(!table_schema.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(table_schema), K(table_schema.is_valid()));
+  } else if (OB_FAIL(table_schema.get_simple_index_infos(simple_index_infos))) {
+    LOG_WARN("get simple index infos failed", K(ret));
+  } else {
+    const uint64_t tenant_id = table_schema.get_tenant_id();
+    for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); i++) {
+      const ObTableSchema *aux_table_schema = NULL;
+      if (OB_FAIL(schema_guard.get_table_schema(tenant_id, simple_index_infos.at(i).table_id_, aux_table_schema))) {
+        LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(simple_index_infos.at(i).table_id_));
+      } else if (OB_ISNULL(aux_table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table schema should not be null", K(ret));
+      } else if (aux_table_schema->is_global_index_table()) {
+        if (OB_FAIL(global_index_table_ids.push_back(aux_table_schema->get_table_id()))) {
+          LOG_WARN("failed to push back", K(ret), K(aux_table_schema->get_table_id()));
+        }
+      }
+    }
+  }
+  return ret;
+}
 
 int64_t ObDDLUtil::get_real_parallelism(const int64_t parallelism, const bool is_mv_refresh)
 {
@@ -3779,6 +4078,40 @@ int ObCODDLUtil::need_column_group_store(const schema::ObTableSchema &table_sche
   int ret = OB_SUCCESS;
   if (OB_FAIL(table_schema.get_is_column_store(need_column_group))) {
       SHARE_LOG(WARN, "fail to check whether table is column store", K(ret));
+  }
+  return ret;
+}
+
+// for partition split.
+int ObSplitUtil::deserializ_parallel_datum_rowkey(
+      common::ObIAllocator &rowkey_allocator,
+      const char *buf, const int64_t data_len, int64_t &pos,
+      ObIArray<blocksstable::ObDatumRowkey> &parallel_datum_rowkey_list)
+{
+  int ret = OB_SUCCESS;
+  parallel_datum_rowkey_list.reset();
+  if (pos == data_len) {
+    LOG_INFO("no parallel info", K(pos), K(data_len), KP(buf));
+  } else if (OB_UNLIKELY(nullptr == buf || pos > data_len)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), KP(buf), K(pos), K(data_len));
+  } else {
+    int64_t rowkey_arr_cnt = 0;
+    LST_DO_CODE(OB_UNIS_DECODE, rowkey_arr_cnt);
+    if (FAILEDx(parallel_datum_rowkey_list.prepare_allocate(rowkey_arr_cnt))) {
+      LOG_WARN("reserve failed", K(ret), K(rowkey_arr_cnt));
+    } else {
+      ObStorageDatum tmp_storage_datum[OB_INNER_MAX_ROWKEY_COLUMN_NUMBER];
+      ObDatumRowkey tmp_datum_rowkey;
+      tmp_datum_rowkey.assign(tmp_storage_datum, OB_INNER_MAX_ROWKEY_COLUMN_NUMBER);
+      for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_arr_cnt; i++) {
+        if (OB_FAIL(tmp_datum_rowkey.deserialize(buf, data_len, pos))) {
+          LOG_WARN("failed to decode concurrent cnt", K(ret), K(i), K(rowkey_arr_cnt), K(data_len), K(pos));
+        } else if (OB_FAIL(tmp_datum_rowkey.deep_copy(parallel_datum_rowkey_list.at(i), rowkey_allocator))) {
+          LOG_WARN("failed to deep copy end key", K(ret), K(i), K(tmp_datum_rowkey));
+        }
+      }
+    }
   }
   return ret;
 }

@@ -578,6 +578,27 @@ int ObLogHandler::get_global_learner_list(common::GlobalLearnerList &learner_lis
   return palf_handle_.get_global_learner_list(learner_list);
 }
 
+int ObLogHandler::get_stable_membership(
+    palf::LogConfigVersion &config_version,
+    common::ObMemberList &member_list,
+    int64_t &paxos_replica_num,
+    common::GlobalLearnerList &learner_list) const
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "loghandler is not inited or maybe destroyed", K(ret), K(id_));
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+    CLOG_LOG(INFO, "loghandler is stopped", K(ret), K_(id));
+  } else if (OB_FAIL(palf_handle_.get_stable_membership(config_version,
+      member_list, paxos_replica_num, learner_list))) {
+    CLOG_LOG(WARN, "get_stable_membership failed", K(ret), KPC(this));
+  } else {/*do nothing*/}
+  return ret;
+}
+
 int ObLogHandler::get_election_leader(common::ObAddr &addr) const
 {
   RLockGuard guard(lock_);

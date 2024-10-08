@@ -126,6 +126,10 @@ public:
   OB_INLINE ObTableGroupFactory<ObTableGroupCommitSingleOp>& get_op_factory() { return op_factory_; }
   int64_t get_group_size(bool is_read) const;
   int create_and_add_ls_group(const ObTableGroupCtx &ctx);
+private:
+  int clean_group_map();
+  int clean_expired_groups();
+  int clean_failed_groups();
 public:
 	class ObTableGroupTriggerTask : public common::ObTimerTask
   {
@@ -139,6 +143,7 @@ public:
     int run_trigger_task();
     int trigger_other_group();
     int trigger_failed_group();
+    int trigger_expire_group();
   private:
     ObTableGroupCommitMgr &group_mgr_;
   };

@@ -804,7 +804,7 @@ int ObRawExprUtils::resolve_udf_common_info(const ObString &db_name,
   OZ (udf_raw_expr->set_subprogram_path(subprogram_path));
   OX (udf_raw_expr->set_udf_id(udf_id));
   OX (udf_raw_expr->set_pkg_id(package_id));
-  OX (udf_raw_expr->set_is_deterministic(is_deterministic));
+  OX (udf_raw_expr->set_udf_deterministic(is_deterministic));
   OX (udf_raw_expr->set_parallel_enable(is_parallel_enable));
   OX (udf_raw_expr->set_udf_schema_version(udf_schema_version));
   OX (udf_raw_expr->set_pkg_schema_version(pkg_schema_version));
@@ -2068,7 +2068,7 @@ int ObRawExprUtils::check_deterministic_single(const ObRawExpr *expr,
         } else {
           const ObUDFRawExpr *udf_expr = dynamic_cast<const ObUDFRawExpr *>(expr);
           CK(OB_NOT_NULL(udf_expr));
-          if (!udf_expr->is_deterministic()) {
+          if (!udf_expr->is_udf_deterministic()) {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("user-defined function is not deterministic", K(ret), K(*expr));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "The user-defined function is not deterministic");
@@ -3213,7 +3213,7 @@ int ObRawExprUtils::resolve_gen_column_udf_expr(ObRawExpr *&udf_expr,
   // } else if (OB_ISNULL(expr)) {
   //   ret = OB_ERR_UNEXPECTED;
   //   LOG_WARN("Invalid expr", K(expr), K(ret));
-  // } else if (expr->is_udf_expr() && !expr->is_deterministic()) {
+  // } else if (expr->is_udf_expr() && !expr->is_udf_deterministic()) {
   //   ret = OB_ERR_USE_UDF_NOT_DETERMIN;
   //   LOG_WARN("generated column expect deterministic udf", K(q_name), K(ret));
   //   LOG_USER_ERROR(OB_ERR_USE_UDF_NOT_DETERMIN);
@@ -3641,6 +3641,26 @@ int ObRawExprUtils::extract_column_exprs(const ObRawExpr *raw_expr,
       int64_t N = raw_expr->get_param_count();
       for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
         ret = extract_column_exprs(raw_expr->get_param_expr(i), column_exprs, need_pseudo_column);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRawExprUtils::extract_column_exprs_and_rowscn(const ObRawExpr *raw_expr,
+                                         ObIArray<ObRawExpr*> &column_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (NULL == raw_expr) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid raw expr", K(ret), K(raw_expr));
+  } else {
+    if (T_REF_COLUMN == raw_expr->get_expr_type() || T_ORA_ROWSCN == raw_expr->get_expr_type()) {
+      ret = add_var_to_array_no_dup(column_exprs, const_cast<ObRawExpr*>(raw_expr));
+    } else {
+      int64_t N = raw_expr->get_param_count();
+      for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
+        ret = extract_column_exprs_and_rowscn(raw_expr->get_param_expr(i), column_exprs);
       }
     }
   }

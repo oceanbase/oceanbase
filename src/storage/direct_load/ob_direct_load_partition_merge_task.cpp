@@ -301,6 +301,8 @@ int ObDirectLoadPartitionRangeMergeTask::RowIterator::inner_get_next_row(ObDatum
            i < datum_row->count_; ++i, ++j) {
         datum_row_.storage_datums_[j] = datum_row->storage_datums_[i];
       }
+      datum_row_.row_flag_.set_flag(datum_row->row_flag_.is_delete() ? blocksstable::DF_DELETE : blocksstable::DF_INSERT,
+                                    datum_row->row_flag_.is_delete() || !insert_tablet_ctx_->is_incremental() ? DF_TYPE_NORMAL : DF_TYPE_INSERT_DELETE);
       result_row = &datum_row_;
     }
   }
@@ -550,6 +552,8 @@ int ObDirectLoadPartitionRangeMultipleMergeTask::RowIterator::inner_get_next_row
            i < datum_row->count_; ++i, ++j) {
         datum_row_.storage_datums_[j] = datum_row->storage_datums_[i];
       }
+      datum_row_.row_flag_.set_flag(datum_row->row_flag_.is_delete() ? blocksstable::DF_DELETE : blocksstable::DF_INSERT,
+                                    datum_row->row_flag_.is_delete() || !insert_tablet_ctx_->is_incremental() ? DF_TYPE_NORMAL : DF_TYPE_INSERT_DELETE);
       result_row = &datum_row_;
     }
   }
@@ -716,6 +720,7 @@ int ObDirectLoadPartitionHeapTableMergeTask::RowIterator::init(
       deserialize_datum_cnt_ = merge_param.store_column_count_ - merge_param.rowkey_column_num_;
       pk_interval_ = pk_interval;
       dml_row_handler_ = merge_param.dml_row_handler_;
+      tablet_id_ = tablet_id;
       is_inited_ = true;
     }
   }
@@ -747,7 +752,7 @@ int ObDirectLoadPartitionHeapTableMergeTask::RowIterator::inner_get_next_row(
       result_row = &datum_row_;
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(dml_row_handler_->handle_insert_row(*result_row))) {
+      if (OB_FAIL(dml_row_handler_->handle_insert_row_with_multi_version(tablet_id_, *result_row))) {
         LOG_WARN("fail to handle insert row", KR(ret), KPC(result_row));
       }
     }
@@ -873,6 +878,7 @@ int ObDirectLoadPartitionHeapTableMultipleMergeTask::RowIterator::init(
       deserialize_datum_cnt_ = merge_param.store_column_count_ - merge_param.rowkey_column_num_;
       pk_interval_ = pk_interval;
       dml_row_handler_ = merge_param.dml_row_handler_;
+      tablet_id_ = tablet_id;
       is_inited_ = true;
     }
   }
@@ -905,7 +911,7 @@ int ObDirectLoadPartitionHeapTableMultipleMergeTask::RowIterator::inner_get_next
       result_row = &datum_row_;
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(dml_row_handler_->handle_insert_row(*result_row))) {
+      if (OB_FAIL(dml_row_handler_->handle_insert_row_with_multi_version(tablet_id_, *result_row))) {
         LOG_WARN("fail to handle insert row", KR(ret), KPC(result_row));
       }
     }
@@ -1107,6 +1113,8 @@ int ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::RowIterator::inner
                 i < datum_row->count_; ++i, ++j) {
             datum_row_.storage_datums_[j] = datum_row->storage_datums_[i];
           }
+          datum_row_.row_flag_.set_flag(datum_row->row_flag_.is_delete() ? blocksstable::DF_DELETE : blocksstable::DF_INSERT,
+                                    datum_row->row_flag_.is_delete() || !insert_tablet_ctx_->is_incremental() ? DF_TYPE_NORMAL : DF_TYPE_INSERT_DELETE);
           result_row = &datum_row_;
         }
       }
@@ -1137,7 +1145,7 @@ int ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::RowIterator::inner
         result_row = &datum_row_;
       }
       if (OB_SUCC(ret) && nullptr != result_row) {
-        if (OB_FAIL(dml_row_handler_->handle_insert_row(*result_row))) {
+        if (OB_FAIL(dml_row_handler_->handle_insert_row_with_multi_version(tablet_id_, *result_row))) {
           LOG_WARN("fail to handle insert row", KR(ret), KPC(result_row));
         }
       }

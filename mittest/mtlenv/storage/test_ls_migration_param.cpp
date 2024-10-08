@@ -218,7 +218,7 @@ TEST_F(TestLSMigrationParam, test_placeholder_storage_schema)
   placeholder_tablet.tablet_meta_.compat_mode_ = lib::Worker::get_compatibility_mode();
   ASSERT_NE(nullptr, ptr = allocator.alloc(sizeof(ObRowkeyReadInfo)));
   placeholder_tablet.rowkey_read_info_ = new (ptr) ObRowkeyReadInfo();
-  placeholder_tablet.build_read_info(allocator);
+  placeholder_tablet.build_read_info(allocator, nullptr /*tablet*/, false /*is_cs_replica_compat*/);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
@@ -253,8 +253,7 @@ TEST_F(TestLSMigrationParam, test_migrate_tablet_param)
   SCN scn;
   scn.convert_from_ts(ObTimeUtility::current_time());
   ret = src_handle.get_obj()->init_for_first_time_creation(allocator_, src_key.ls_id_, src_key.tablet_id_, src_key.tablet_id_,
-      scn, 2022, create_tablet_schema, true/*need_create_empty_major_sstable*/,
-      true/*micro_index_clustered*/, false/*need_generate_cs_replica_cg_array*/, false/*has_cs_replica*/, ls_handle.get_ls()->get_freezer());
+      scn, 2022, create_tablet_schema, true/*need_create_empty_major_sstable*/, SCN::invalid_scn(), true/*micro_index_clustered*/, false/*need_generate_cs_replica_cg_array*/, false/*has_cs_replica*/, ls_handle.get_ls()->get_freezer());
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   share::SCN create_commit_scn;
@@ -338,8 +337,7 @@ TEST_F(TestLSMigrationParam, test_migration_param_compat)
   SCN scn;
   scn.convert_from_ts(ObTimeUtility::current_time());
   ret = src_handle.get_obj()->init_for_first_time_creation(allocator_, src_key.ls_id_, src_key.tablet_id_, src_key.tablet_id_,
-      scn, 2022, create_tablet_schema, true/*need_create_empty_major_sstable*/,
-      true/*micro_index_clustered*/, false/*need_generate_cs_replica_cg_array*/, false/*has_cs_replica*/, ls_handle.get_ls()->get_freezer());
+      scn, 2022, create_tablet_schema, true/*need_create_empty_major_sstable*/, SCN::invalid_scn(), true/*micro_index_clustered*/, false/*need_generate_cs_replica_cg_array*/, false/*has_cs_replica*/, ls_handle.get_ls()->get_freezer());
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   share::SCN create_commit_scn;

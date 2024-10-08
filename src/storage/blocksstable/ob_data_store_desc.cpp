@@ -28,16 +28,22 @@ ObStaticDataStoreDesc::ObStaticDataStoreDesc()
 
 bool ObStaticDataStoreDesc::is_valid() const
 {
-  return ls_id_.is_valid()
+  bool is_valid =
+         ls_id_.is_valid()
          && tablet_id_.is_valid()
          && compressor_type_ > ObCompressorType::INVALID_COMPRESSOR
          && snapshot_version_ > 0
          && schema_version_ >= 0;
+  if (GCTX.is_shared_storage_mode()) {
+    is_valid &= (tablet_transfer_seq_ != ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ);
+  }
+  return is_valid;
 }
 
 void ObStaticDataStoreDesc::reset()
 {
   MEMSET(this, 0, sizeof(*this));
+  tablet_transfer_seq_ = ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ;
   need_submit_io_ = true;
 }
 
@@ -49,6 +55,7 @@ int ObStaticDataStoreDesc::assign(const ObStaticDataStoreDesc &desc)
   compressor_type_ = desc.compressor_type_;
   ls_id_ = desc.ls_id_;
   tablet_id_ = desc.tablet_id_;
+  tablet_transfer_seq_ = desc.tablet_transfer_seq_;
   macro_block_size_ = desc.macro_block_size_;
   macro_store_size_ = desc.macro_store_size_;
   micro_block_size_limit_ = desc.micro_block_size_limit_;
@@ -107,6 +114,7 @@ int ObStaticDataStoreDesc::init(
     const ObMergeSchema &merge_schema,
     const share::ObLSID &ls_id,
     const common::ObTabletID tablet_id,
+    const int64_t tablet_transfer_seq,
     const compaction::ObMergeType merge_type,
     const int64_t snapshot_version,
     const share::SCN &end_scn,
@@ -129,6 +137,7 @@ int ObStaticDataStoreDesc::init(
     merge_type_ = merge_type;
     ls_id_ = ls_id;
     tablet_id_ = tablet_id;
+    tablet_transfer_seq_ = tablet_transfer_seq;
     exec_mode_ = exec_mode;
     encoding_granularity_ = encoding_granularity;
 
@@ -861,6 +870,15 @@ int ObWholeDataStoreDesc::assign(const ObDataStoreDesc &desc)
   return ret;
 }
 
+int ObWholeDataStoreDesc::assign(const ObWholeDataStoreDesc &desc)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(assign(desc.desc_))) {
+    STORAGE_LOG(WARN, "failed to assign desc", KR(ret), K(desc));
+  }
+  return ret;
+}
+
 int ObWholeDataStoreDesc::init(
     const ObStaticDataStoreDesc &static_desc,
     const ObMergeSchema &merge_schema,
@@ -891,6 +909,7 @@ int ObWholeDataStoreDesc::init(
     const int64_t snapshot_version,
     const int64_t cluster_version,
     const bool micro_index_clustered,
+    const int64_t tablet_transfer_seq,
     const share::SCN &end_scn,
     const storage::ObStorageColumnGroupSchema *cg_schema,
     const uint16_t table_cg_idx,
@@ -909,7 +928,7 @@ int ObWholeDataStoreDesc::init(
     }
   }
 
-  if (OB_FAIL(static_desc_.init(is_ddl, merge_schema, ls_id, tablet_id, merge_type,
+  if (OB_FAIL(static_desc_.init(is_ddl, merge_schema, ls_id, tablet_id, tablet_transfer_seq, merge_type,
                                 snapshot_version, end_scn, cluster_version,
                                 exec_mode, micro_index_clustered, need_submit_io, encoding_granularity))) {
     STORAGE_LOG(WARN, "failed to init static desc", KR(ret));

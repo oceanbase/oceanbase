@@ -632,6 +632,11 @@ bool ObTTLDutyDurationChecker::check(const ObConfigItem& t) const
   return OB_SUCCESS == common::ObTTLUtil::parse(t.str(), duty_duration) && duty_duration.is_valid();
 }
 
+bool ObMySQLVersionLengthChecker::check(const ObConfigItem& t) const
+{
+  return STRLEN(t.str()) < 16; // length of MySQL version is less then 16
+}
+
 bool ObConfigPublishSchemaModeChecker::check(const ObConfigItem& t) const
 {
   return 0 == t.case_compare(PUBLISH_SCHEMA_MODE_BEST_EFFORT)
@@ -1150,6 +1155,22 @@ int64_t ObSqlPlanManagementModeChecker::get_spm_mode_by_string(const common::ObS
   return spm_mode;
 }
 
+bool ObDefaultLoadModeChecker::check(const ObConfigItem &t) const
+{
+  const ObString tmp_str(t.str());
+  bool result = false;
+  if (0 == tmp_str.case_compare("DISABLED")) {
+    result = true;
+  } else if (0 == tmp_str.case_compare("FULL_DIRECT_WRITE")) {
+    result = true;
+  } else if (0 == tmp_str.case_compare("INC_DIRECT_WRITE")) {
+    result = true;
+  } else if (0 == tmp_str.case_compare("INC_REPLACE_DIRECT_WRITE")) {
+    result = true;
+  }
+  return result;
+}
+
 int ObModeConfigParserUitl::parse_item_to_kv(char *item, ObString &key, ObString &value, const char* delim)
 {
   int ret = OB_SUCCESS;
@@ -1431,6 +1452,12 @@ bool ObConfigKvGroupCommitRWModeChecker::check(const ObConfigItem &t) const
   return 0 == v_str.case_compare("all")
     || 0 == v_str.case_compare("read")
     || 0 == v_str.case_compare("write");
+}
+
+bool ObConfigDegradationPolicyChecker::check(const ObConfigItem &t) const
+{
+  common::ObString tmp_str(t.str());
+  return 0 == tmp_str.case_compare("LS_POLICY") || 0 == tmp_str.case_compare("CLUSTER_POLICY");
 }
 
 bool ObConfigRegexpEngineChecker::check(const ObConfigItem &t) const

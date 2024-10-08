@@ -550,12 +550,14 @@ public:
   int assign(const ObTransferTabletInfoArg &other);
   void reset();
 
-  TO_STRING_KV(K_(tenant_id), K_(src_ls_id), K_(dest_ls_id), K_(tablet_list), K_(data_version));
+  TO_STRING_KV(K_(tenant_id), K_(src_ls_id), K_(dest_ls_id),
+       K_(tablet_list), K_(data_version), K_(new_mv_merge_scn));
   uint64_t tenant_id_;
   share::ObLSID src_ls_id_;
   share::ObLSID dest_ls_id_;
   common::ObSArray<share::ObTransferTabletInfo> tablet_list_;
   uint64_t data_version_;
+  share::SCN new_mv_merge_scn_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransferTabletInfoArg);
 };
@@ -1117,6 +1119,7 @@ public:
 private:
   int check_start_transfer_out_tablets_();
   int check_start_transfer_in_tablets_();
+  int check_start_transfer_in_mv_tablets_();
   // Major sstable or ddl sstable needs to exist in src_tablet
   int check_transfer_out_tablet_sstable_(const ObTablet *tablet);
 

@@ -155,7 +155,7 @@ public:
   MYSQL_STMT *get_stmt_handler();
   MYSQL *get_conn_handler();
   virtual int close();
-  virtual int init(ObMySQLConnection &conn, const char *sql, int64_t param_count);
+  virtual int init(ObMySQLConnection &conn, const ObString &sql, int64_t param_count);
   int bind_param(ObBindParam &param);
   int bind_result(ObBindParam &param);
   int bind_param_int(const int64_t col_idx, int64_t *out_buf);
@@ -215,7 +215,7 @@ public:
     in_out_map_.reset();
     proc_ = NULL;
   }
-  virtual int init(ObMySQLConnection &conn, const char *sql, int64_t param_count);
+  virtual int init(ObMySQLConnection &conn, const ObString &sql, int64_t param_count);
   virtual int close();
   virtual void free_resouce();
   virtual int close_mysql_stmt();

@@ -175,6 +175,8 @@ TABLE_COLLATION	varchar(32)	NO
 CHECKSUM	bigint(0) unsigned	NO			
 CREATE_OPTIONS	varchar(255)	NO			
 TABLE_COMMENT	text	NO			
+AUTO_SPLIT	varchar(16)	NO			
+AUTO_SPLIT_TABLET_SIZE	bigint(20) unsigned	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.TABLES limit 1);
 cnt
 1
@@ -705,6 +707,7 @@ TX_STATE_VERSION	bigint(20) unsigned	NO		NULL
 FLT_TRACE_ID	varchar(1024)	NO		NULL	
 PL_TRACE_ID	varchar(128)	YES		NULL	
 PLSQL_EXEC_TIME	bigint(20)	NO		NULL	
+FORMAT_SQL_ID	varchar(32)	NO		NULL	
 STMT_TYPE	varchar(128)	YES		NULL	
 TOTAL_MEMSTORE_READ_ROW_COUNT	bigint(20)	NO		NULL	
 TOTAL_SSSTORE_READ_ROW_COUNT	bigint(20)	NO		NULL	
@@ -1024,6 +1027,7 @@ TX_STATE_VERSION	bigint(20) unsigned	NO
 FLT_TRACE_ID	varchar(1024)	NO			
 PL_TRACE_ID	varchar(128)	NO			
 PLSQL_EXEC_TIME	bigint(20)	NO			
+FORMAT_SQL_ID	varchar(32)	NO			
 STMT_TYPE	varchar(128)	NO			
 TOTAL_MEMSTORE_READ_ROW_COUNT	bigint(20)	NO			
 TOTAL_SSSTORE_READ_ROW_COUNT	bigint(20)	NO			
@@ -2887,6 +2891,8 @@ HAS_SENSITIVE_COLUMN	varchar(3)	NO
 ADMIT_NULL	varchar(3)	NO			
 DATA_LINK_DML_ENABLED	varchar(3)	NO			
 LOGICAL_REPLICATION	varchar(8)	NO			
+AUTO_SPLIT	varchar(16)	NO			
+AUTO_SPLIT_TABLET_SIZE	bigint(20)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_TABLES limit 1);
 cnt
 1
@@ -8482,6 +8488,24 @@ CGROUP_PATH	varchar(256)	NO
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_CGROUP_CONFIG limit 1);
 cnt
 1
+desc oceanbase.DBA_OB_FORMAT_OUTLINES;
+Field	Type	Null	Key	Default	Extra
+CREATE_TIME	timestamp(6)	YES			
+MODIFY_TIME	timestamp(6)	YES			
+TENANT_ID	bigint(20)	NO		NULL	
+DATABASE_ID	bigint(20)	NO		NULL	
+OUTLINE_ID	bigint(20)	NO		NULL	
+DATABASE_NAME	varchar(128)	NO			
+OUTLINE_NAME	varchar(128)	NO			
+VISIBLE_SIGNATURE	longtext	NO		NULL	
+FORMAT_SQL_TEXT	longtext	YES		NULL	
+OUTLINE_TARGET	longtext	NO		NULL	
+OUTLINE_SQL	longtext	NO		NULL	
+FORMAT_SQL_ID	varbinary(32)	NO			
+OUTLINE_CONTENT	longtext	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_FORMAT_OUTLINES limit 1);
+cnt
+1
 desc mysql.procs_priv;
 Field	Type	Null	Key	Default	Extra
 Host	varchar(60)	NO			
@@ -8928,7 +8952,7 @@ MASTER_ROLLBACK_SEG	varchar(128)	NO
 MASTER_LINK	varchar(128)	NO			
 REWRITE_ENABLED	varchar(1)	NO			
 REWRITE_CAPABILITY	varchar(9)	NO			
-REFRESH_MODE	varchar(6)	NO			
+REFRESH_MODE	varchar(32)	NO			
 REFRESH_METHOD	varchar(8)	NO			
 BUILD_MODE	varchar(9)	NO			
 FAST_REFRESHABLE	varchar(18)	NO			
@@ -8971,7 +8995,7 @@ MASTER_ROLLBACK_SEG	varchar(128)	NO
 MASTER_LINK	varchar(128)	NO			
 REWRITE_ENABLED	varchar(1)	NO			
 REWRITE_CAPABILITY	varchar(9)	NO			
-REFRESH_MODE	varchar(6)	NO			
+REFRESH_MODE	varchar(32)	NO			
 REFRESH_METHOD	varchar(8)	NO			
 BUILD_MODE	varchar(9)	NO			
 FAST_REFRESHABLE	varchar(18)	NO			
@@ -9916,6 +9940,41 @@ JOB_CLASS	varchar(30)	YES		NULL
 GMT_CREATE	timestamp(6)	NO		NULL	
 GMT_MODIFIED	timestamp(6)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_SCHEDULER_JOB_RUN_DETAILS limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_SERVER_SPACE_USAGE;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	varchar(128)	NO		NULL	
+TENANT_NAME	varchar(128)	NO		NULL	
+SERVER_IP	varchar(46)	NO		NULL	
+SERVER_PORT	bigint(20)	NO		NULL	
+SPACE_TYPE	varchar(9)	NO			
+DATA_BYTES	decimal(42,0)	NO		NULL	
+USAGE_BYTES	decimal(42,0)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_SERVER_SPACE_USAGE limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_SPACE_USAGE;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	varchar(128)	NO		NULL	
+TENANT_NAME	varchar(128)	NO		NULL	
+ENDPOINT	varchar(1024)	NO		NULL	
+PATH	varchar(1024)	NO		NULL	
+SPACE_TYPE	varchar(11)	NO			
+USAGE_BYTES	decimal(42,0)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_SPACE_USAGE limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_TABLE_SPACE_USAGE;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	varchar(128)	NO		NULL	
+TABLE_ID	bigint(20)	NO		NULL	
+TENANT_NAME	varchar(128)	NO		NULL	
+DATABASE_NAME	varchar(128)	NO			
+TABLE_NAME	varchar(256)	NO			
+OCCUPY_SIZE	decimal(42,0)	NO			
+REQUIRED_SIZE	decimal(42,0)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_TABLE_SPACE_USAGE limit 1);
 cnt
 1
 desc oceanbase.GV$OB_SS_LOCAL_CACHE;

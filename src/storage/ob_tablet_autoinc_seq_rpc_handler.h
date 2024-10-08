@@ -30,15 +30,17 @@ class ObSyncTabletSeqReplayExecutor final : public logservice::ObTabletReplayExe
 public:
   ObSyncTabletSeqReplayExecutor();
   int init(const uint64_t autoinc_seq,
+      const bool is_tablet_creating,
       const share::SCN &replay_scn);
 
   TO_STRING_KV(K_(seq),
+               K_(is_tablet_creating),
                K_(scn));
 
 protected:
   bool is_replay_update_tablet_status_() const override
   {
-    return false;
+    return is_tablet_creating_;
   }
 
   // replay to the tablet
@@ -55,6 +57,7 @@ protected:
 
 private:
   uint64_t seq_;
+  bool is_tablet_creating_;
   share::SCN scn_;
 };
 
@@ -77,6 +80,7 @@ public:
       const ObLS *ls,
       const ObTabletID &tablet_id,
       const uint64_t autoinc_seq,
+      const bool is_tablet_creating,
       const share::SCN &replay_scn);
 private:
   ObTabletAutoincSeqRpcHandler();

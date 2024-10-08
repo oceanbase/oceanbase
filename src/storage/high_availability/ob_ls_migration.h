@@ -89,11 +89,14 @@ public:
   void reset();
   int set_copy_tablet_status(const ObCopyTabletStatus::STATUS &status) override;
   int get_copy_tablet_status(ObCopyTabletStatus::STATUS &status) const override;
+  int get_copy_tablet_record_extra_info(const ObCopyTabletRecordExtraInfo *&extra_info) const override;
   VIRTUAL_TO_STRING_KV(K_(tablet_id), K_(status));
 
 public:
   common::ObTabletID tablet_id_;
   ObTabletHandle tablet_handle_;
+  ObMacroBlockReuseMgr macro_block_reuse_mgr_;
+  ObCopyTabletRecordExtraInfo extra_info_; // extra info of server event
 private:
   common::SpinRWLock lock_;
   ObCopyTabletStatus::STATUS status_;
@@ -388,14 +391,12 @@ private:
       bool &need_copy);
   int check_transfer_seq_equal_(
       const ObMigrationTabletParam *src_tablet_meta);
-
   int generate_mds_copy_tasks_(
       ObTabletCopyFinishTask *tablet_copy_finish_task,
       share::ObITask *&parent_task);
   int get_need_copy_sstable_info_key_(
       const common::ObIArray<ObITable::TableKey> &copy_table_key_array,
       common::ObIArray<ObITable::TableKey> &filter_table_key_array);
-
 
 private:
   bool is_inited_;

@@ -656,8 +656,8 @@ int ObExprCast::get_cast_type(const bool enable_decimal_int,
       dst_type.set_udt_id(param_type2.get_udt_id());
       if (ob_is_collection_sql_type(obj_type)) {
         // recover subschema id
-        dst_type.set_collation_type(static_cast<ObCollationType>(parse_node.int16_values_[OB_NODE_CAST_COLL_IDX]));
-        dst_type.set_collation_level(static_cast<ObCollationLevel>(parse_node.int16_values_[OB_NODE_CAST_CS_LEVEL_IDX]));
+        dst_type.set_cs_type(static_cast<ObCollationType>(parse_node.int16_values_[OB_NODE_CAST_COLL_IDX]));
+        dst_type.set_cs_level(static_cast<ObCollationLevel>(parse_node.int16_values_[OB_NODE_CAST_CS_LEVEL_IDX]));
       }
     } else if (lib::is_mysql_mode() && ob_is_json(obj_type)) {
       dst_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);

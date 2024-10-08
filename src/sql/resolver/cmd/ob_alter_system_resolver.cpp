@@ -5354,7 +5354,7 @@ int ObAlterSystemResolverUtil::get_tenant_ids(const ParseNode &t_node, ObIArray<
 int ObTableTTLResolver::resolve(const ParseNode& parse_tree)
 {
   int ret = OB_SUCCESS;
-  uint64_t tenant_data_version = 0;;
+  uint64_t tenant_data_version = 0;
   const uint64_t cur_tenant_id = session_info_->get_effective_tenant_id();
   if (OB_FAIL(GET_MIN_DATA_VERSION(cur_tenant_id, tenant_data_version))) {
     LOG_WARN("get tenant data version failed", K(ret));

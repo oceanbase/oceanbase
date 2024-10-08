@@ -17,6 +17,8 @@
 #include "storage/access/ob_table_read_info.h"
 #include "ob_tablet_merge_ctx.h"
 #include "storage/column_store/ob_column_oriented_sstable.h"
+#include "storage/compaction/ob_mview_compaction_util.h"
+#include "observer/ob_inner_sql_result.h"
 
 namespace oceanbase
 {
@@ -927,7 +929,7 @@ bool ObPartitionMicroMergeIter::inner_check(const ObMergeParameter &merge_param)
   if (OB_UNLIKELY(!is_major_or_meta_merge_type(static_param.get_merge_type()))) {
     bret = false;
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "Unexpected merge type for major micro merge iter", K(bret), K(merge_param));
-  } else if (OB_UNLIKELY(static_param.merge_level_ != MICRO_BLOCK_MERGE_LEVEL)) {
+   } else if (OB_UNLIKELY(static_param.merge_level_ != MICRO_BLOCK_MERGE_LEVEL)) {
     bret = false;
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "Unexpected merge level for major micro merge iter", K(bret), K(merge_param));
   } else if (OB_UNLIKELY(static_param.is_full_merge_)) {
@@ -2139,6 +2141,174 @@ int ObPartitionMinorMacroMergeIter::get_curr_macro_block(
     LOG_WARN("fail to get clustered index info", K(ret));
   } else {
     macro_desc = &curr_block_desc_;
+  }
+  return ret;
+}
+
+/*
+ * ObPartitionRowMergeIter used for mv major merge
+ */
+ObPartitionMVRowMergeIter::ObPartitionMVRowMergeIter(common::ObIAllocator &allocator)
+  : ObPartitionMergeIter(allocator),
+    is_delete_(false),
+    is_replace_(false),
+    sql_idx_(-1),
+    sql_read_col_cnt_(0),
+    store_col_cnt_(0),
+    read_result_(),
+    result_row_(),
+    free_session_ctx_(),
+    session_(nullptr),
+    conn_(nullptr),
+    sql_result_(nullptr)
+{
+}
+
+ObPartitionMVRowMergeIter::~ObPartitionMVRowMergeIter()
+{
+  read_result_.~ReadResult(); // need decons before session
+  ObMviewCompactionHelper::release_inner_connection(conn_);
+  ObMviewCompactionHelper::release_inner_session(free_session_ctx_, session_);
+}
+
+int ObPartitionMVRowMergeIter::init(const ObMergeParameter &merge_param,
+                                    const int64_t refresh_sql_idx,
+                                    const ObITableReadInfo *read_info)
+{
+  int ret = OB_SUCCESS;
+  int64_t store_column_cnt = 0;
+  sql_idx_ = refresh_sql_idx;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("ObPartitionMVRowMergeIter init twice", K(ret));
+  } else if (OB_UNLIKELY(!merge_param.is_valid()
+                         || refresh_sql_idx < 0 || refresh_sql_idx >= merge_param.mview_merge_param_->refresh_sql_count_
+                         || nullptr == read_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid arguments to init ObPartitionMVRowMergeIter", K(ret),
+             K(merge_param), K(refresh_sql_idx), KP(read_info));
+  } else if (OB_UNLIKELY(!inner_check(merge_param))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument to inner init", K(ret), K(*this), K(merge_param));
+  } else if (OB_FAIL(inner_init(merge_param))) {
+    LOG_WARN("Failed to inner init", K(ret));
+  } else if (OB_FAIL(merge_param.get_schema()->get_store_column_count(store_column_cnt, true /* full_col, unused */))) {
+    LOG_WARN("Failed to get store column cnt", K(ret));
+  } else if (OB_FAIL(result_row_.init(allocator_, store_column_cnt + storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt()))) {
+    LOG_WARN("Failed to init result row", K(ret), K(store_column_cnt));
+  } else {
+    is_delete_ = merge_param.mview_merge_param_->refresh_sqls_[sql_idx_].is_delete();
+    is_replace_ = merge_param.mview_merge_param_->refresh_sqls_[sql_idx_].is_replace();
+    schema_rowkey_column_cnt_ = read_info->get_schema_rowkey_count();
+    result_row_.count_ = store_column_cnt + storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+    result_row_.storage_datums_[schema_rowkey_column_cnt_].set_int(-merge_param.merge_version_range_.snapshot_version_);
+    result_row_.storage_datums_[schema_rowkey_column_cnt_ + 1].set_int(0);
+    sql_read_col_cnt_ = is_replace_ ? store_column_cnt + 1 : // normal columns + old_new$$
+                                      is_delete_ ? schema_rowkey_column_cnt_ : store_column_cnt;
+    store_col_cnt_ = is_replace_ ? sql_read_col_cnt_ - 1 : sql_read_col_cnt_;
+    iter_row_count_ = 0;
+    iter_row_id_ = -1;
+    curr_row_ = nullptr;
+    iter_end_ = false;
+    is_base_iter_ = false;
+    is_inited_ = true;
+    LOG_INFO("[MVIEW COMPACTION]: Succ to init partition mv merge iter", K(ret), K(*this));
+  }
+  return ret;
+}
+
+bool ObPartitionMVRowMergeIter::inner_check(const ObMergeParameter &merge_param)
+{
+  bool bret = true;
+  if (OB_UNLIKELY(is_multi_version_merge(merge_param.static_param_.get_merge_type()) ||
+      !merge_param.is_mv_merge())) {
+    bret = false;
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "Unexpected merge type for mv merge", K(merge_param));
+  } else if (OB_UNLIKELY(!merge_param.mview_merge_param_->is_valid())) {
+    bret = false;
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "Invalid mv merge param", K(merge_param));
+  }
+  return bret;
+}
+
+int ObPartitionMVRowMergeIter::inner_init(const ObMergeParameter &merge_param)
+{
+  int ret = OB_SUCCESS;
+  const ObSqlString &sql = merge_param.mview_merge_param_->refresh_sqls_[sql_idx_].sql_;
+  if (OB_FAIL(ObMviewCompactionHelper::create_inner_session(merge_param.get_schema()->is_oracle_mode(),
+                                                            merge_param.mview_merge_param_->database_id_,
+                                                            free_session_ctx_, session_))) {
+    LOG_WARN("Failed to create inner session", K(ret), KPC(merge_param.mview_merge_param_));
+  } else if (OB_FAIL(ObMviewCompactionHelper::create_inner_connection(session_, conn_))) {
+    LOG_WARN("Failed to create inner connection", K(ret), K_(sql_idx));
+  } else if (OB_FAIL(conn_->execute_read(GCONF.cluster_id, MTL_ID(), sql.ptr(), read_result_))) {
+    LOG_WARN("Failed to execute", K(ret), K_(sql_idx), K(sql));
+  } else if (OB_ISNULL(sql_result_ = static_cast<observer::ObInnerSQLResult *>(read_result_.get_result()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected null sql result", K(ret), K_(sql_idx), K(sql));
+  }
+  if (OB_FAIL(ret)) {
+    ObMviewCompactionHelper::release_inner_connection(conn_);
+    ObMviewCompactionHelper::release_inner_session(free_session_ctx_, session_);
+  }
+  return ret;
+}
+
+int ObPartitionMVRowMergeIter::next()
+{
+  int ret = OB_SUCCESS;
+  bool is_delete_row = is_delete_;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObPartitionRowMergeIter is not inited", K(ret), K(*this));
+  } else if (OB_UNLIKELY(iter_end_)) {
+    ret = OB_ITER_END;
+  } else if (FALSE_IT(curr_row_ = nullptr)) {
+  } else if (OB_FAIL(sql_result_->next())) {
+    if (OB_UNLIKELY(OB_ITER_END != ret)) {
+      LOG_WARN("Failed to get next row", K(ret));
+    } else {
+      iter_end_ = true;
+    }
+  } else {
+    const ObNewRow *new_row = sql_result_->get_row();
+    if (OB_UNLIKELY(nullptr == new_row || sql_read_col_cnt_ != new_row->get_count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected result row", K(ret), K(schema_rowkey_column_cnt_), K(sql_read_col_cnt_), KPC(new_row));
+    }
+    int64_t read_idx = 0;
+    for (; OB_SUCC(ret) && read_idx < schema_rowkey_column_cnt_; ++read_idx) {
+      if (OB_FAIL(result_row_.storage_datums_[read_idx].from_obj(new_row->get_cell(read_idx)))) {
+        LOG_WARN("Failed to convert obj to datum", K(ret));
+      }
+    }
+    for (; OB_SUCC(ret) && read_idx < store_col_cnt_; ++read_idx) {
+      const int64_t datum_idx = read_idx + storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+      if (OB_FAIL(result_row_.storage_datums_[datum_idx].from_obj(new_row->get_cell(read_idx)))) {
+        LOG_WARN("Failed to convert obj to datum", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && is_replace_) {
+      const ObObj &old_new_obj = new_row->get_cell(read_idx);
+      if (OB_UNLIKELY(old_new_obj.is_nop_value() || old_new_obj.is_null())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected null old_new$$ value", K(ret), K(old_new_obj));
+      } else if (0 == ObString::make_string(ObMviewScanInfo::OLD_ROW).case_compare(old_new_obj.get_string())) {
+        is_delete_row = true;
+      } else if (0 == ObString::make_string(ObMviewScanInfo::NEW_ROW).case_compare(old_new_obj.get_string())) {
+        is_delete_row = false;
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected old_new$$ value", K(ret), K(old_new_obj));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    is_delete_row ? result_row_.row_flag_.set_flag(ObDmlFlag::DF_DELETE) : result_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
+    curr_row_ = &result_row_;
+    iter_row_count_++;
+    iter_row_id_++;
+    LOG_DEBUG("[MVIEW COMPACTION]: iter next row", K(ret), K(*this), K_(result_row));
   }
   return ret;
 }

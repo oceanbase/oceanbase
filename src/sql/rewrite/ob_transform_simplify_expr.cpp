@@ -531,7 +531,7 @@ int ObTransformSimplifyExpr::extract_null_expr(ObRawExpr *expr,
                                                           got_result,
                                                           *ctx_->allocator_))) {
       LOG_WARN("failed to calc const or calculable expr", K(ret));
-    } else if (got_result && 
+    } else if (got_result && !result.is_ext() &&
                (result.is_null() || (lib::is_oracle_mode() && result.is_null_oracle())))  {
       if (OB_FAIL(null_expr_lists.push_back(expr))) {
         LOG_WARN("failed to push back expr", K(ret));
@@ -1440,7 +1440,7 @@ int ObTransformSimplifyExpr::do_remove_dummy_nvl(ObDMLStmt *stmt,
                                                                 got_result,
                                                                 *ctx_->allocator_))) {
             LOG_WARN("failed to calc const or caculable expr", K(ret));
-          } else if (got_result && (result.is_null()
+          } else if (got_result && !result.is_ext() && (result.is_null()
                      || (lib::is_oracle_mode() && result.is_null_oracle()))) {
             // NVL(NULL, child_1) -> child_1
             ObExprConstraint expr_cons(child_0, PreCalcExprExpectResult::PRE_CALC_RESULT_NULL);
@@ -1879,14 +1879,14 @@ int ObTransformSimplifyExpr::is_valid_for_remove_subquery(const ObSelectStmt* st
 {
   int ret = OB_SUCCESS;
   is_valid = false;
-  bool has_rand = false;
+  bool is_deterministic = false;
   bool has_rownum = false;
   if (stmt->is_contains_assignment() || stmt->has_subquery() || 0 != stmt->get_window_func_count() ||
       stmt->is_hierarchical_query() || stmt->is_set_stmt() || 0 != stmt->get_pseudo_column_like_exprs().count()) {
     /* do nothing */
-  } else if (OB_FAIL(stmt->has_rand(has_rand))) {
+  } else if (OB_FAIL(stmt->is_query_deterministic(is_deterministic))) {
     LOG_WARN("failed to check if stmt has rand", K(ret));
-  } else if (has_rand) {
+  } else if (!is_deterministic) {
     /* do nothing */
   } else if (OB_FAIL(stmt->has_rownum(has_rownum))) {
     LOG_WARN("failed to check if stmt has rownum", K(ret));

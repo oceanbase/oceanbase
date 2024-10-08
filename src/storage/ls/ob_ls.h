@@ -67,12 +67,12 @@
 #include "storage/high_availability/ob_ls_transfer_info.h"
 #include "observer/table/ttl/ob_tenant_tablet_ttl_mgr.h"
 #include "storage/ls/ob_ls_transfer_status.h"
+#include "storage/mview/ob_major_mv_merge_info.h"
 #include "storage/ls/ob_freezer_define.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_private_block_gc_task.h"
 #include "storage/shared_storage/prewarm/ob_ls_prewarm_handler.h"
 #endif
-
 
 namespace oceanbase
 {
@@ -107,6 +107,9 @@ struct ObLSVTInfo
   share::SCN tablet_change_checkpoint_scn_;
   share::SCN transfer_scn_;
   bool tx_blocked_;
+  share::SCN mv_major_merge_scn_;
+  share::SCN mv_publish_scn_;
+  share::SCN mv_safe_scn_;
   int64_t required_data_disk_size_;
   TO_STRING_KV(K_(ls_id),
                K_(replica_type),
@@ -120,6 +123,9 @@ struct ObLSVTInfo
                K_(tablet_change_checkpoint_scn),
                K_(transfer_scn),
                K_(tx_blocked),
+               K_(mv_major_merge_scn),
+               K_(mv_publish_scn),
+               K_(mv_safe_scn),
                K_(required_data_disk_size));
 };
 
@@ -241,6 +247,7 @@ public:
            const ObMigrationStatus &migration_status,
            const share::ObLSRestoreStatus &restore_status,
            const share::SCN &create_scn,
+           const ObMajorMVMergeInfo &major_mv_merge_info,
            const ObLSStoreFormat &store_format,
            observer::ObIMetaReport *reporter);
   // I am ready to work now.
@@ -480,11 +487,14 @@ public:
   }
   CONST_DELEGATE_WITH_RET(ls_meta_, get_rebuild_seq, int64_t);
   CONST_DELEGATE_WITH_RET(ls_meta_, get_tablet_change_checkpoint_scn, share::SCN);
-
+  DELEGATE_WITH_RET(ls_meta_, set_tablet_change_checkpoint_scn, int);
   int set_tablet_change_checkpoint_scn(const share::SCN &tablet_change_checkpoint_scn)
   {
     return ls_meta_.set_tablet_change_checkpoint_scn(ls_epoch_, tablet_change_checkpoint_scn);
   }
+  int set_major_mv_merge_scn(const share::SCN &scn) { return ls_meta_.set_major_mv_merge_scn(ls_epoch_, scn); }
+  int set_major_mv_merge_scn_safe_calc(const share::SCN &scn) { return ls_meta_.set_major_mv_merge_scn_safe_calc(ls_epoch_, scn); }
+  int set_major_mv_merge_scn_publish(const share::SCN &scn) { return ls_meta_.set_major_mv_merge_scn_publish(ls_epoch_, scn); }
   int set_restore_status(
       const share::ObLSRestoreStatus &restore_status,
       const int64_t rebuild_seq);
@@ -632,18 +642,25 @@ public:
   //                         const ObTableLockOp &lock_op,
   //                         ObTxIDSet &conflict_tx_set);
   DELEGATE_WITH_RET(lock_table_, check_lock_conflict, int);
-  // lock a object
+  // lock an object
   // @param[in] ctx, store ctx for trans.
   // @param[in] param, contain the lock id, lock type and so on.
   // int lock(ObStoreCtx &ctx,
   //          const transaction::tablelock::ObLockParam &param);
   DELEGATE_WITH_RET(lock_table_, lock, int);
-  // unlock a object
+  // unlock an object
   // @param[in] ctx, store ctx for trans.
   // @param[in] param, contain the lock id, lock type and so on.
   // int unlock(ObStoreCtx &ctx,
   //            const transaction::tablelock::ObLockParam &param);
   DELEGATE_WITH_RET(lock_table_, unlock, int);
+  // replace the lock of an object
+  // @param[in] ctx, store ctx for trans.
+  // @param[in] param, contain the lock id, lock type and so on of the previous lock, and new owner_id,
+  // lock_mode of new lock
+  // int replace(ObStoreCtx &ctx,
+  //             const transaction::tablelock::ObReplaceLockParam &param);
+  DELEGATE_WITH_RET(lock_table_, replace_lock, int);
   // admin remove a lock op
   // @param[in] op_info, contain the lock id, lock type and so on.
   // void admin_remove_lock_op(const ObTableLockOp &op_info);
@@ -983,7 +1000,7 @@ public:
       const int64_t ls_rebuild_seq,
       const ObTabletHandle &old_tablet_handle,
       const ObIArray<storage::ObITable *> &tables);
-  int build_ha_tablet_new_table_store(
+  int build_tablet_with_batch_tables(
       const ObTabletID &tablet_id,
       const ObBatchUpdateTableStoreParam &param);
   int build_new_tablet_from_mds_table(

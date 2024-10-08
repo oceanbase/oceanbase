@@ -85,12 +85,12 @@ public:
   virtual common::sqlclient::ObSQLConnPoolType get_type() override { return common::sqlclient::INNER_POOL; }
   virtual common::sqlclient::DblinkDriverProto get_pool_link_driver_proto() override { return common::sqlclient::DBLINK_DRV_OB; }
   // for dblink
-  virtual int create_dblink_pool(const common::sqlclient::dblink_param_ctx &param_ctx, const ObAddr &server,
+  virtual int create_dblink_pool(const common::sqlclient::dblink_param_ctx &param_ctx, const ObString &host_name, int32_t port,
                                  const ObString &db_tenant, const ObString &db_user,
                                  const ObString &db_pass, const ObString &db_name,
                                  const common::ObString &conn_str,
                                  const common::ObString &cluster_str) override
-  { UNUSEDx(param_ctx, server, db_tenant, db_user, db_pass, db_name, conn_str); return OB_SUCCESS; }
+  { UNUSEDx(param_ctx, host_name, port, db_tenant, db_user, db_pass, db_name, conn_str); return OB_SUCCESS; }
   virtual int acquire_dblink(const sqlclient::dblink_param_ctx &param_ctx, common::sqlclient::ObISQLConnection *&dblink_conn)
   { UNUSEDx(param_ctx, dblink_conn); return OB_SUCCESS; }
   virtual int release_dblink(common::sqlclient::ObISQLConnection *dblink_conn)

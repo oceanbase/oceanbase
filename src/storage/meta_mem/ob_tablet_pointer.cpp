@@ -45,14 +45,16 @@ ObTabletPointer::ObTabletPointer()
     protected_memtable_mgr_handle_(),
     ddl_info_(),
     initial_state_(true),
+    flying_(false),
     ddl_kv_mgr_lock_(),
     mds_lock_(),
     mds_table_handler_(),
     old_version_chain_(nullptr),
-    attr_()
+    attr_(),
+    auto_part_size_(OB_INVALID_SIZE)
 {
 #if defined(__x86_64__) && !defined(ENABLE_OBJ_LEAK_CHECK)
-  static_assert(sizeof(ObTabletPointer) == 352, "The size of ObTabletPointer will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+  static_assert(sizeof(ObTabletPointer) == 360, "The size of ObTabletPointer will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
 #endif
 }
 
@@ -65,9 +67,12 @@ ObTabletPointer::ObTabletPointer(
     protected_memtable_mgr_handle_(memtable_mgr_handle),
     ddl_info_(),
     initial_state_(true),
+    flying_(false),
     ddl_kv_mgr_lock_(),
     mds_table_handler_(),
-    old_version_chain_(nullptr)
+    old_version_chain_(nullptr),
+    attr_(),
+    auto_part_size_(OB_INVALID_SIZE)
 {
 }
 
@@ -90,6 +95,8 @@ void ObTabletPointer::reset()
   reset_obj();
   phy_addr_.reset();
   ls_handle_.reset();
+  auto_part_size_ = OB_INVALID_SIZE;
+  flying_ = false;
 }
 
 void ObTabletPointer::reset_obj()
@@ -123,6 +130,18 @@ void ObTabletPointer::reset_obj()
     }
   }
 }
+
+bool ObTabletPointer::need_push_to_flying_() const
+{
+  return (is_in_memory() && obj_.ptr_->get_ref() > 1) ||
+          OB_NOT_NULL(old_version_chain_);
+}
+
+bool ObTabletPointer::need_remove_from_flying_() const
+{
+  return is_flying() && is_old_version_chain_empty();
+}
+
 
 int ObTabletPointer::read_from_disk(
     const bool is_full_load,
@@ -325,7 +344,7 @@ int ObTabletPointer::dump_meta_obj(ObMetaObjGuard<ObTablet> &guard, void *&free_
     const ObTabletID tablet_id = obj_.ptr_->tablet_meta_.tablet_id_;
     const int64_t wash_score = obj_.ptr_->get_wash_score();
     guard.get_obj(meta_obj);
-    const ObTabletPersisterParam param(ls_id, ls_handle_.get_ls()->get_ls_epoch(), tablet_id);
+    const ObTabletPersisterParam param(ls_id, ls_handle_.get_ls()->get_ls_epoch(), tablet_id, obj_.ptr_->get_transfer_seq());
     ObTablet *tmp_obj = obj_.ptr_;
     if (OB_NOT_NULL(meta_obj.ptr_) && obj_.ptr_->get_try_cache_size() <= ObTenantMetaMemMgr::NORMAL_TABLET_POOL_SIZE) {
       char *buf = reinterpret_cast<char*>(meta_obj.ptr_);
@@ -708,6 +727,16 @@ int ObTabletPointer::set_tablet_attr(const ObTabletAttr &attr)
     attr_ = attr;
   }
   return ret;
+}
+
+int64_t ObTabletPointer::get_auto_part_size() const
+{
+  return ATOMIC_LOAD(&auto_part_size_);
+}
+
+void ObTabletPointer::set_auto_part_size(const int64_t auto_part_size)
+{
+  ATOMIC_STORE(&auto_part_size_, auto_part_size);
 }
 
 int64_t ObITabletFilterOp::total_skip_cnt_ = 0;

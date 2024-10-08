@@ -18,10 +18,6 @@
 #include "ob_expr_rb_func_helper.h"
 #include "lib/roaringbitmap/ob_rb_utils.h"
 
-// #include "lib/encode/ob_base64_encode.h" // for ObBase64Encoder
-// #include "lib/utility/ob_fast_convert.h" // ObFastFormatInt::format_unsigned
-// #include "rpc/obmysql/ob_mysql_global.h" // DOUBLE_TO_STRING_CONVERSION_BUFFER_SIZE
-
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 

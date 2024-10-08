@@ -226,16 +226,9 @@ int ObDatumRow::deep_copy(const ObDatumRow &src, ObIAllocator &allocator)
   } else if (OB_UNLIKELY(get_capacity() < src.count_ || nullptr == storage_datums_)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Unexpected local datum row to deep copy", K(ret), KPC(this));
+  } else if (OB_FAIL(copy_attributes_except_datums(src))) {
+    STORAGE_LOG(WARN, "copy attribute from other failed", K(ret), K(src));
   } else {
-    count_ = src.count_;
-    row_flag_ = src.row_flag_;
-    mvcc_row_flag_  = src.mvcc_row_flag_;
-    trans_id_ = src.trans_id_;
-    scan_index_ = src.scan_index_;
-    group_idx_ = src.group_idx_;
-    snapshot_version_ = src.snapshot_version_;
-    fast_filter_skipped_ = src.fast_filter_skipped_;
-    have_uncommited_row_ = src.have_uncommited_row_;
     for(int64_t i = 0; OB_SUCC(ret) && i < count_; i++) {
       if (OB_FAIL(storage_datums_[i].deep_copy(src.storage_datums_[i], allocator))) {
         STORAGE_LOG(WARN, "Failed to deep copy storage datum", K(ret), K(src.storage_datums_[i]));
@@ -292,6 +285,29 @@ int ObDatumRow::is_datums_changed(const ObDatumRow &other, bool &is_changed) con
         break;
       }
     }
+  }
+  return ret;
+}
+
+int ObDatumRow::copy_attributes_except_datums(const ObDatumRow &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!other.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid argument to deep copy datum row", K(ret), K(other));
+  } else if (OB_UNLIKELY(get_capacity() < other.count_ || nullptr == storage_datums_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "Unexpected local datum row to deep copy", K(ret), KPC(this));
+  } else {
+    count_ = other.count_;
+    row_flag_ = other.row_flag_;
+    mvcc_row_flag_  = other.mvcc_row_flag_;
+    trans_id_ = other.trans_id_;
+    scan_index_ = other.scan_index_;
+    group_idx_ = other.group_idx_;
+    snapshot_version_ = other.snapshot_version_;
+    fast_filter_skipped_ = other.fast_filter_skipped_;
+    have_uncommited_row_ = other.have_uncommited_row_;
   }
   return ret;
 }

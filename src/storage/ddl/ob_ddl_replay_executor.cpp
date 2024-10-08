@@ -18,6 +18,7 @@
 #include "storage/ls/ob_ls.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
+#include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
@@ -178,12 +179,12 @@ int ObDDLStartReplayExecutor::init(
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
-    LOG_WARN("init twice", KR(ret), K_(is_inited));
+    LOG_WARN("init twice", K(ret), K_(is_inited));
   } else if (OB_ISNULL(ls)
           || OB_UNLIKELY(!log.is_valid())
           || OB_UNLIKELY(!scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", KP(ls), K(log), K(scn), K(ret));
+    LOG_WARN("invalid arguments", K(ret), KPC(ls), K(log), K(scn));
   } else {
     ls_ = ls;
     log_ = &log;
@@ -325,12 +326,12 @@ int ObDDLRedoReplayExecutor::init(
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
-    LOG_WARN("init twice", KR(ret), K_(is_inited));
+    LOG_WARN("init twice", K(ret), K_(is_inited));
   } else if (OB_ISNULL(ls)
           || OB_UNLIKELY(!log.is_valid())
           || OB_UNLIKELY(!scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", KP(ls), K(log), K(scn), K(ret));
+    LOG_WARN("invalid arguments", K(ret), KPC(ls), K(log), K(scn));
   } else {
     ls_ = ls;
     log_ = &log;
@@ -405,7 +406,8 @@ int ObDDLRedoReplayExecutor::do_inc_replay_(
     // do nothing
   } else {
     ObStorageObjectOpt opt;
-    opt.set_private_object_opt(tablet_handle.get_obj()->get_tablet_id().id());
+    opt.set_private_object_opt(tablet_handle.get_obj()->get_tablet_id().id(),
+                               tablet_handle.get_obj()->get_transfer_seq());
     ObStorageObjectWriteInfo object_write_info;
     object_write_info.buffer_ = write_info.buffer_;
     object_write_info.size_= write_info.size_;
@@ -471,7 +473,8 @@ int ObDDLRedoReplayExecutor::do_full_replay_(
   } else {
     const ObDDLMacroBlockRedoInfo &redo_info = log_->get_redo_info();
     ObStorageObjectOpt opt;
-    opt.set_private_object_opt(tablet_handle.get_obj()->get_tablet_id().id());
+    opt.set_private_object_opt(tablet_handle.get_obj()->get_tablet_id().id(),
+                               tablet_handle.get_obj()->get_transfer_seq());
     ObStorageObjectHandle macro_handle;
     ObStorageObjectWriteInfo write_info;
     write_info.buffer_ = redo_info.data_buffer_.ptr();
@@ -642,12 +645,12 @@ int ObDDLCommitReplayExecutor::init(
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
-    LOG_WARN("init twice", KR(ret), K_(is_inited));
+    LOG_WARN("init twice", K(ret), K_(is_inited));
   } else if (OB_ISNULL(ls)
           || OB_UNLIKELY(!log.is_valid())
           || OB_UNLIKELY(!scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", KP(ls), K(log), K(scn), K(ret));
+    LOG_WARN("invalid arguments", K(ret), KPC(ls), K(log), K(scn));
   } else {
     ls_ = ls;
     log_ = &log;
@@ -745,10 +748,353 @@ int ObDDLCommitReplayExecutor::replay_ddl_commit(ObTabletHandle &tablet_handle)
   return ret;
 }
 
+// ObDDLStartReplayExecutor
+ObSplitStartReplayExecutor::ObSplitStartReplayExecutor()
+  : ObDDLReplayExecutor(), log_(nullptr)
+{
+
+}
+
+int ObSplitStartReplayExecutor::init(
+    ObLS *ls,
+    const ObTabletSplitStartLog &log,
+    const SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", K(ret), K_(is_inited));
+  } else if (OB_ISNULL(ls)
+          || OB_UNLIKELY(!log.is_valid())
+          || OB_UNLIKELY(!scn.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KPC(ls), K(log), K(scn));
+  } else {
+    ls_ = ls;
+    log_ = &log;
+    scn_ = scn;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObSplitStartReplayExecutor::prepare_param_from_log(
+    const share::ObLSID &ls_id,
+    const ObTabletSplitInfo &info,
+    ObTabletSplitParam &param)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!ls_id.is_valid() || !info.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(ls_id), K(info));
+  } else {
+    param.tenant_id_           = MTL_ID();
+    param.ls_id_               = ls_id;
+    param.table_id_            = info.table_id_;
+    param.schema_version_      = info.schema_version_;
+    param.task_id_             = info.task_id_;
+    param.source_tablet_id_    = info.source_tablet_id_;
+    param.compaction_scn_      = info.compaction_scn_;
+    param.data_format_version_ = info.data_format_version_;
+    param.consumer_group_id_   = info.consumer_group_id_;
+    param.can_reuse_macro_block_ = info.can_reuse_macro_block_;
+    param.split_sstable_type_    = info.split_sstable_type_;
+    param.user_parallelism_    = info.parallel_datum_rowkey_list_.count() - 1;
+    // skip lob_col_idxs.
+    if (OB_FAIL(ObCompatModeGetter::get_table_compat_mode(param.tenant_id_, param.table_id_, param.compat_mode_))) {
+      LOG_WARN("failed to get compat mode", K(ret));
+    } else if (OB_FAIL(param.parallel_datum_rowkey_list_.assign(info.parallel_datum_rowkey_list_))) {
+      LOG_WARN("assign failed", K(ret));
+    } else if (OB_FAIL(param.dest_tablets_id_.assign(info.dest_tablets_id_))) {
+      LOG_WARN("assign failed", K(ret), K(info));
+    }
+  }
+  return ret;
+}
+
+int ObSplitStartReplayExecutor::prepare_param_from_log(
+    const share::ObLSID &ls_id,
+    const ObTabletSplitInfo &info,
+    ObLobSplitParam &param)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!ls_id.is_valid() || !info.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(ls_id), K(info));
+  } else {
+    param.tenant_id_              = MTL_ID();
+    param.ls_id_                  = ls_id;
+    param.source_table_id_        = info.table_id_;
+    param.dest_schema_id_         = info.lob_table_id_;
+    param.schema_version_         = info.schema_version_;
+    param.task_id_                = info.task_id_;
+    param.ori_lob_meta_tablet_id_ = info.source_tablet_id_;
+    param.compaction_scn_         = info.compaction_scn_;
+    param.data_format_version_    = info.data_format_version_;
+    param.consumer_group_id_      = info.consumer_group_id_;
+    // skip can_reuse_macro_block
+    param.split_sstable_type_     = info.split_sstable_type_;
+    param.parallelism_            = info.parallel_datum_rowkey_list_.count() - 1;
+    if (OB_FAIL(ObCompatModeGetter::get_table_compat_mode(param.tenant_id_, param.source_table_id_, param.compat_mode_))) {
+      LOG_WARN("failed to get compat mode", K(ret));
+    } else if (OB_FAIL(param.lob_col_idxs_.assign(info.lob_col_idxs_))) {
+      LOG_WARN("assign failed", K(ret));
+    } else if (OB_FAIL(param.parallel_datum_rowkey_list_.assign(info.parallel_datum_rowkey_list_))) {
+      LOG_WARN("assign failed", K(ret));
+    } else if (OB_FAIL(param.new_lob_tablet_ids_.assign(info.dest_tablets_id_))) {
+      LOG_WARN("assign failed", K(ret), K(info));
+    }
+  }
+  return ret;
+}
+
+
+int ObSplitStartReplayExecutor::do_replay_(ObTabletHandle &handle)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(handle);
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDDLRedoLogReplayer has not been inited", K(ret));
+  } else if (OB_ISNULL(log_) || OB_UNLIKELY(!log_->is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KPC(log_));
+  } else if (log_->basic_info_.lob_col_idxs_.count() > 0) {
+    // lob tablet.
+    ObLobSplitParam param;
+    if (OB_FAIL(ObSplitStartReplayExecutor::prepare_param_from_log(ls_->get_ls_id(), log_->basic_info_, param))) {
+      LOG_WARN("prepare lob split param failed", K(ret), KPC(log_));
+    } else if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_lob_tablet_split_dag(param))) {
+      LOG_WARN("schedule tablet split dag failed, but ignore to wait", K(ret), K(param));
+      ret = OB_SUCCESS;
+    } else {
+      LOG_INFO("schedule lob tablet split dag successfully", K(ret), K(param));
+    }
+  } else {
+    ObTabletSplitParam param;
+    if (OB_FAIL(ObSplitStartReplayExecutor::prepare_param_from_log(ls_->get_ls_id(), log_->basic_info_, param))) {
+      LOG_WARN("prepare tablet split param failed", K(ret), KPC(log_));
+    } else if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_tablet_split_dag(param))) {
+      LOG_WARN("schedule tablet split dag failed, but ignore to wait", K(ret), K(param));
+      ret = OB_SUCCESS;
+    } else {
+      LOG_INFO("schedule tablet split dag successfully", K(ret), K(param));
+    }
+  }
+  LOG_INFO("finish replay tablet split start log", K(ret), K(scn_), KPC(log_));
+  return ret;
+}
+
+// ObSplitFinishReplayExecutor
+ObSplitFinishReplayExecutor::ObSplitFinishReplayExecutor()
+  : ObDDLReplayExecutor(), log_(nullptr)
+{
+
+}
+
+int ObSplitFinishReplayExecutor::init(
+    ObLS *ls,
+    const ObTabletSplitFinishLog &log,
+    const SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", K(ret), K_(is_inited));
+  } else if (OB_ISNULL(ls)
+          || OB_UNLIKELY(!log.is_valid())
+          || OB_UNLIKELY(!scn.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KPC(ls), K(log), K(scn));
+  } else {
+    ls_ = ls;
+    log_ = &log;
+    scn_ = scn;
+    is_inited_ = true;
+  }
+
+  return ret;
+}
+
+int ObSplitFinishReplayExecutor::do_replay_(ObTabletHandle &handle)
+{
+  UNUSED(handle);
+  int ret = OB_SUCCESS;
+  ObLSID ls_id;
+  ObLobSplitParam lob_split_param;
+  ObTabletSplitParam data_split_param;
+  const ObIArray<ObTabletID> *dest_tablet_ids = nullptr;
+  const int64_t wait_start_ts = ObTimeUtility::fast_current_time();
+  bool is_lob_tablet = false;
+  bool is_all_majors_existed = false;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDDLRedoLogReplayer has not been inited", K(ret));
+  } else if (OB_ISNULL(log_) || OB_UNLIKELY(!log_->is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KPC(log_));
+  } else if (OB_ISNULL(dest_tablet_ids = &(log_->basic_info_.dest_tablets_id_))) {
+    ret = OB_NULL_CHECK_ERROR;
+    LOG_WARN("unexpected nullptr of dest_tablet_ids", K(ret), KPC(dest_tablet_ids));
+  } else if (OB_FALSE_IT(is_lob_tablet = log_->basic_info_.lob_col_idxs_.count() > 0)) {
+  } else if (OB_FALSE_IT(ls_id = ls_->get_ls_id())) {
+  } else if (is_lob_tablet &&
+      OB_FAIL(ObSplitStartReplayExecutor::prepare_param_from_log(ls_id, log_->basic_info_, lob_split_param))) {
+    LOG_WARN("prepare lob split param failed", K(ret), K(ls_id), KPC(log_));
+  } else if (!is_lob_tablet &&
+      OB_FAIL(ObSplitStartReplayExecutor::prepare_param_from_log(ls_id, log_->basic_info_, data_split_param))) {
+    LOG_WARN("prepare tablet split param failed", K(ret), K(ls_id), KPC(log_));
+  } else {
+    if (is_lob_tablet && OB_FAIL(compaction::ObScheduleDagFunc::schedule_lob_tablet_split_dag(lob_split_param))) {
+      if (OB_EAGAIN == ret || OB_SIZE_OVERFLOW == ret) {
+        if (REACH_TIME_INTERVAL(10L * 1000L * 1000L)) {
+          LOG_INFO("schedule wait lob tablet split end", K(ret), K(lob_split_param));
+        }
+      } else {
+        LOG_WARN("schedule lob tablet split dag failed", K(ret), K(lob_split_param));
+      }
+    } else if (!is_lob_tablet && OB_FAIL(compaction::ObScheduleDagFunc::schedule_tablet_split_dag(data_split_param))) {
+      if (OB_EAGAIN == ret || OB_SIZE_OVERFLOW == ret) {
+        if (REACH_TIME_INTERVAL(10L * 1000L * 1000L)) {
+          LOG_INFO("schedule wait data tablet split end", K(ret), K(lob_split_param));
+        }
+      } else {
+        LOG_WARN("schedule data tablet split failed", K(ret), K(data_split_param));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ObTabletSplitUtil::check_major_sstables_exist(ls_id, *dest_tablet_ids, is_all_majors_existed))) {
+        LOG_WARN("check all tablets major exist failed", K(ret), K(ls_id), KPC(dest_tablet_ids));
+      } else if (!is_all_majors_existed) {
+        ret = OB_EAGAIN;
+      }
+    }
+  }
+  if (OB_TABLET_STATUS_NO_NEED_TO_SPLIT == ret) {
+    LOG_INFO("skip replaying the tablet split finish log", K(ret), K(is_all_majors_existed), KPC(log_));
+    //overwrite ret
+    ret = OB_SUCCESS;
+    if (OB_FAIL(modify_tablet_restore_status_if_need(*dest_tablet_ids, handle, ls_))) {
+      LOG_WARN("failed to modify tablet restore status", K(ret), K(dest_tablet_ids), "src_tablet_handle", handle, KPC(log_));
+    }
+  } else {
+    LOG_INFO("finish replay tablet split finish log", K(ret), K(is_all_majors_existed), K(scn_), KPC(log_),
+        "wait_elpased_s", (ObTimeUtility::fast_current_time() - wait_start_ts) / 1000000L);
+  }
+  return ret;
+}
+
+// ObTabletFreezeReplayExecutor
+ObTabletFreezeReplayExecutor::ObTabletFreezeReplayExecutor()
+  : ObDDLReplayExecutor(), log_(nullptr)
+{
+
+}
+
+int ObSplitFinishReplayExecutor::modify_tablet_restore_status_if_need(
+    const ObIArray<ObTabletID> &dest_tablet_ids,
+    const ObTabletHandle &src_tablet_handle,
+    ObLS* ls)
+{
+  int ret = OB_SUCCESS;
+  ObTablet *src_tablet;
+  ObTabletRestoreStatus::STATUS src_restore_status = ObTabletRestoreStatus::STATUS::RESTORE_STATUS_MAX;
+  if (OB_UNLIKELY(dest_tablet_ids.count() <= 0 || !src_tablet_handle.is_valid() || OB_ISNULL(ls))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(dest_tablet_ids), K(src_tablet_handle), KP(ls));
+  } else if (OB_ISNULL(src_tablet = src_tablet_handle.get_obj())) {
+    ret = OB_NULL_CHECK_ERROR;
+    LOG_WARN("unexpected nullptr of src_tablet", K(ret), KP(src_tablet));
+  } else if (OB_FAIL(src_tablet->get_restore_status(src_restore_status))) {
+    LOG_WARN("failed to get restore status of tablet", K(ret), K(src_tablet));
+  } else if (ObTabletRestoreStatus::STATUS::UNDEFINED == src_restore_status) {
+    /*skip the split, counting on restoring to fill the destination tablet data*/
+    ObTabletHandle des_handle;
+    ObTablet *tablet;
+    ObTabletRestoreStatus::STATUS des_restore_status = ObTabletRestoreStatus::STATUS::RESTORE_STATUS_MAX;
+    for (int64_t i = 0; OB_SUCC(ret) && i < dest_tablet_ids.count(); ++i) {
+      des_handle.reset();
+      const ObTabletID &t_id = dest_tablet_ids.at(i);
+      if (OB_FAIL(ls->get_tablet(t_id, des_handle))) {
+        LOG_WARN("failed to get table", K(ret), K(t_id));
+      } else if (OB_ISNULL(tablet = des_handle.get_obj())) {
+        ret = OB_NULL_CHECK_ERROR;
+        LOG_WARN("unexpected null ptr of tablet", K(ret), KPC(tablet));
+      } else if (OB_FAIL(tablet->get_restore_status(des_restore_status))) {
+        LOG_WARN("failed to get restore status of tablet", K(ret), K(tablet));
+      } else if (ObTabletRestoreStatus::STATUS::FULL != des_restore_status) {
+          //do nothing
+      } else if (OB_FAIL(ls->get_tablet_svr()->update_tablet_restore_status(t_id,
+          ObTabletRestoreStatus::STATUS::EMPTY, false/* need reset transfer flag */))) {
+        LOG_WARN("failed to update tablet restore status", K(ret), KPC(tablet));
+      } else {
+        LOG_INFO("modify tablet restore status", K(tablet->get_tablet_id()), "old status", des_restore_status, "new status", ObTabletRestoreStatus::STATUS::EMPTY);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTabletFreezeReplayExecutor::init(
+    ObLS *ls,
+    const ObTabletFreezeLog &log,
+    const SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", K(ret), K_(is_inited));
+  } else if (OB_ISNULL(ls)
+          || OB_UNLIKELY(!log.is_valid())
+          || OB_UNLIKELY(!scn.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KPC(ls), K(log), K(scn));
+  } else {
+    ls_ = ls;
+    log_ = &log;
+    scn_ = scn;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObTabletFreezeReplayExecutor::do_replay_(ObTabletHandle &handle)
+{
+  UNUSED(handle);
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDDLRedoLogReplayer has not been inited", K(ret));
+  } else if (OB_ISNULL(log_) || OB_UNLIKELY(!log_->is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KPC(log_));
+  } else {
+    uint64_t tenant_id = MTL_ID();
+    const ObTabletID &tablet_id = log_->tablet_id_;
+    const int64_t abs_timeout_ts = ObClockGenerator::getClock() + 10LL * 1000LL * 1000LL;
+    const bool need_rewrite_tablet_meta = false;
+    MTL_SWITCH(tenant_id) {
+      const ObLSID ls_id = ls_->get_ls_id();
+      storage::ObTenantFreezer* freezer = nullptr;
+      if (OB_ISNULL(freezer = MTL(storage::ObTenantFreezer*))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ObTenantFreezer shouldn't be null", K(ret), K(tenant_id));
+      } else if (OB_FAIL(freezer->tablet_freeze(ls_id, tablet_id, true/*is_sync*/, abs_timeout_ts, need_rewrite_tablet_meta, ObFreezeSourceFlag::TABLET_SPLIT))) {
+        LOG_WARN("fail to freeze tablet", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
+      } else {
+        LOG_INFO("succeed to freeze tablet", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
+      }
+    }
+  }
+  LOG_INFO("finish replay tablet freeze log", K(ret), KPC(log_));
+  return ret;
+}
+
+
 #ifdef OB_BUILD_SHARED_STORAGE
 // ObDDLFinishReplayExecutor
 ObDDLFinishReplayExecutor::ObDDLFinishReplayExecutor()
-  : ObDDLReplayExecutor(), log_(nullptr)
+ : ObDDLReplayExecutor(), log_(nullptr)
 {
 }
 
@@ -1049,6 +1395,7 @@ int ObDDLIncCommitReplayExecutor::init(
   return ret;
 }
 
+
 int ObDDLIncCommitReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
@@ -1092,7 +1439,7 @@ int ObSchemaChangeReplayExecutor::init(
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
-    LOG_WARN("init twice", KR(ret), K_(is_inited));
+    LOG_WARN("init twice", K(ret), K_(is_inited));
   } else if (OB_UNLIKELY(!log.is_valid())
           || OB_UNLIKELY(!scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;

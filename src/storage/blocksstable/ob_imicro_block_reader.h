@@ -202,14 +202,17 @@ public:
   ObIMicroBlockReaderInfo()
       : is_inited_(false),
       row_count_(-1),
+      original_data_length_(0),
       read_info_(nullptr),
 	  datum_utils_(nullptr)
   {}
   virtual ~ObIMicroBlockReaderInfo() { reset(); }
   OB_INLINE int64_t row_count() const { return row_count_; }
+  OB_INLINE int64_t original_data_length() const { return original_data_length_; }
   OB_INLINE void reset()
   {
     row_count_ = -1;
+    original_data_length_ = 0;
     read_info_ = nullptr;
     datum_utils_ = nullptr;
     is_inited_ = false;
@@ -217,6 +220,7 @@ public:
 
   bool is_inited_;
   int64_t row_count_;
+  int64_t original_data_length_;
   const ObITableReadInfo *read_info_;
   const ObStorageDatumUtils *datum_utils_;
 };

@@ -25,6 +25,7 @@ namespace observer
 class ObTableLoadStoreCtx;
 class ObTableLoadMerger;
 class ObTableLoadTableCompactCtx;
+class ObTableLoadStoreTableCtx;
 
 struct ObTableLoadTableCompactTabletResult : public common::LinkHashValue<common::ObTabletID>
 {
@@ -56,6 +57,7 @@ class ObTableLoadTableCompactConfig
 {
 public:
   ObTableLoadTableCompactConfig() : is_sort_lobid_(false) {}
+  virtual ~ObTableLoadTableCompactConfig();
   virtual int handle_table_compact_success() = 0;
   virtual int get_tables(common::ObIArray<storage::ObIDirectLoadPartitionTable *> &table_array,
                  common::ObIAllocator &allocator) = 0;
@@ -66,13 +68,26 @@ public:
 class ObTableLoadTableCompactConfigMainTable : public ObTableLoadTableCompactConfig
 {
 public:
+  ~ObTableLoadTableCompactConfigMainTable() override {}
   int init(ObTableLoadStoreCtx *store_ctx, ObTableLoadMerger &merger);
-
   int handle_table_compact_success() override;
   int get_tables(common::ObIArray<storage::ObIDirectLoadPartitionTable *> &table_array,
                  common::ObIAllocator &allocator) override;
 private:
   ObTableLoadStoreCtx *store_ctx_;
+  ObTableLoadMerger *merger_;
+};
+
+class ObTableLoadTableCompactConfigIndexTable : public ObTableLoadTableCompactConfig
+{
+public:
+  ObTableLoadTableCompactConfigIndexTable();
+  ~ObTableLoadTableCompactConfigIndexTable() override;
+  int init(ObTableLoadMerger &merger);
+  int handle_table_compact_success() override;
+  int get_tables(common::ObIArray<storage::ObIDirectLoadPartitionTable *> &table_array,
+                 common::ObIAllocator &allocator) override;
+private:
   ObTableLoadMerger *merger_;
 };
 
@@ -144,7 +159,7 @@ class ObTableLoadTableCompactCtx
 public:
   ObTableLoadTableCompactCtx();
   ~ObTableLoadTableCompactCtx();
-  int init(ObTableLoadStoreCtx *store_ctx, ObTableLoadTableCompactConfig *compact_config);
+  int init(ObTableLoadStoreCtx *store_ctx, ObTableLoadStoreTableCtx * store_table_ctx, ObTableLoadTableCompactConfig *compact_config);
   bool is_valid() const;
   int start();
   void stop();
@@ -157,6 +172,7 @@ private:
 
 public:
   ObTableLoadStoreCtx *store_ctx_;
+  ObTableLoadStoreTableCtx * store_table_ctx_;
   ObTableLoadTableCompactConfig *compact_config_;
   mutable obsys::ObRWLock rwlock_;
   ObTableLoadTableCompactorHandle compactor_handle_;

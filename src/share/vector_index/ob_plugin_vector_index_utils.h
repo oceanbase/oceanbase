@@ -106,6 +106,7 @@ private:
                                SCN target_scn,
                                schema::ObIndexType type,
                                ObIAllocator &allocator,
+                               ObIAllocator &scan_allocator,
                                ObTableScanParam &scan_param,
                                ObTableParam &table_param,
                                common::ObNewRowIterator *&scan_iter);
@@ -113,6 +114,7 @@ private:
                                     ObPluginVectorIndexAdaptor *adapter,
                                     SCN target_scn,
                                     ObIAllocator *allocator,
+                                    ObIAllocator *scan_allocator,
                                     schema::ObIndexType type,
                                     uint64_t table_id);
   static int init_table_param(ObTableParam *table_param,

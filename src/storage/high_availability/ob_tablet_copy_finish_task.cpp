@@ -44,6 +44,7 @@ ObTabletCopyFinishTask::ObTabletCopyFinishTask()
     minor_tables_handle_(),
     ddl_tables_handle_(),
     major_tables_handle_(),
+    mds_tables_handle_(),
     restore_action_(ObTabletRestoreAction::MAX),
     src_tablet_meta_(nullptr),
     copy_tablet_ctx_(nullptr),
@@ -99,6 +100,7 @@ int ObTabletCopyFinishTask::process()
   int ret = OB_SUCCESS;
   bool only_contain_major = false;
   ObCopyTabletStatus::STATUS status = ObCopyTabletStatus::MAX_STATUS;
+  const ObCopyTabletRecordExtraInfo *extra_info = nullptr;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -136,13 +138,24 @@ int ObTabletCopyFinishTask::process()
                           + ddl_tables_handle_.get_count()
                           + major_tables_handle_.get_count();
 
+  int tmp_ret = OB_SUCCESS;
+  char extra_info_str[MAX_ROOTSERVICE_EVENT_EXTRA_INFO_LENGTH] = {0};
+  if (OB_SUCCESS != (tmp_ret = copy_tablet_ctx_->get_copy_tablet_record_extra_info(extra_info))) {
+    LOG_WARN("failed to get copy tablet record extra info", K(tmp_ret), KP(extra_info));
+  } else if (OB_ISNULL(extra_info)) {
+    LOG_WARN("copy tablet record extra info is NULL", K(extra_info));
+  } else if (OB_SUCCESS != (tmp_ret = common::databuff_printf(extra_info_str, MAX_ROOTSERVICE_EVENT_EXTRA_INFO_LENGTH, "%s", to_cstring(*extra_info)))) {
+    LOG_WARN("failed to print extra info", K(tmp_ret), K(extra_info));
+  }
+
   SERVER_EVENT_ADD("storage_ha", "tablet_copy_finish_task",
         "tenant_id", MTL_ID(),
         "ls_id", ls_->get_ls_id().id(),
         "tablet_id", tablet_id_.id(),
         "ret", ret,
         "result", ha_dag_->get_ha_dag_net_ctx()->is_failed(),
-        "sstable_count", sstable_count);
+        "sstable_count", sstable_count,
+        extra_info_str);
 
   if (OB_FAIL(ret)) {
     int tmp_ret = OB_SUCCESS;
@@ -626,6 +639,51 @@ int ObTabletCopyFinishTask::check_log_replay_to_mds_sstable_end_scn_()
   return ret;
 }
 
+/******************ObCopyTabletRecordExtraInfo*********************/
+ObCopyTabletRecordExtraInfo::ObCopyTabletRecordExtraInfo()
+  : cost_time_ms_(0),
+    total_data_size_(0),
+    write_data_size_(0),
+    major_count_(0),
+    macro_count_(0),
+    major_macro_count_(0),
+    reuse_macro_count_(0),
+    max_reuse_mgr_size_(0)
+{
+}
+
+ObCopyTabletRecordExtraInfo::~ObCopyTabletRecordExtraInfo()
+{
+}
+
+void ObCopyTabletRecordExtraInfo::reset()
+{
+  cost_time_ms_ = 0;
+  total_data_size_ = 0;
+  write_data_size_ = 0;
+  major_count_ = 0;
+  macro_count_ = 0;
+  major_macro_count_ = 0;
+  reuse_macro_count_ = 0;
+  max_reuse_mgr_size_ = 0;
+}
+
+int ObCopyTabletRecordExtraInfo::update_max_reuse_mgr_size(ObMacroBlockReuseMgr *&reuse_mgr)
+{
+  int ret = OB_SUCCESS;
+  int64_t count = 0;
+
+  if (OB_ISNULL(reuse_mgr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("update max reuse mgr size get invalid argument", K(ret), KP(reuse_mgr));
+  } else if (OB_FAIL(reuse_mgr->count(count))) {
+    LOG_WARN("failed to count reuse mgr", K(ret), KP(reuse_mgr));
+  } else {
+    max_reuse_mgr_size_ = MAX(count * reuse_mgr->get_item_size(), max_reuse_mgr_size_);
+  }
+
+  return ret;
+}
 
 }
 }

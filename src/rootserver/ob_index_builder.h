@@ -83,6 +83,8 @@ public:
       const share::schema::ObTableSchema &data_schema,
       const common::ObIArray<share::schema::ObTableSchema> &index_schemas,
       const obrpc::ObDropIndexArg &arg,
+      const common::ObIArray<common::ObTabletID> *inc_data_tablet_ids,
+      const common::ObIArray<common::ObTabletID> *del_data_tablet_ids,
       common::ObIAllocator &allocator,
       bool &task_has_exist,
       ObDDLTaskRecord &task_record);
@@ -128,6 +130,8 @@ private:
   int set_basic_infos(const obrpc::ObCreateIndexArg &arg,
                       const share::schema::ObTableSchema &data_schema,
                       share::schema::ObTableSchema &schema);
+  int set_global_index_auto_partition_infos(const share::schema::ObTableSchema &data_schema,
+                                            share::schema::ObTableSchema &schema);
   int set_index_table_columns(const obrpc::ObCreateIndexArg &arg,
                               const share::schema::ObTableSchema &data_schema,
                               share::schema::ObTableSchema &schema);
@@ -136,6 +140,9 @@ private:
                               share::schema::ObTableSchema &schema);
 
   bool is_final_index_status(const share::schema::ObIndexStatus index_status) const;
+  int set_local_index_partition_schema(const share::schema::ObTableSchema &data_schema,
+                                       share::schema::ObTableSchema &index_schema);
+
   int check_has_none_shared_index_tables_for_fts_or_multivalue_index_(
       const uint64_t tenant_id,
       const uint64_t data_table_id,

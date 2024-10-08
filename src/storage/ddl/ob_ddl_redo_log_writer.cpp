@@ -995,6 +995,126 @@ if (OB_ISNULL(buffer = static_cast<char *>(ob_malloc(buffer_size, ObMemAttr(MTL_
   return ret;
 }
 
+template <typename T>
+int ObDDLRedoLogWriter::write_auto_split_log(
+    const share::ObLSID &ls_id,
+    const ObDDLClogType &clog_type,
+    const ObReplayBarrierType &replay_barrier_type,
+    const T &log)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator tmp_arena("SplitLogBuf", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  logservice::ObLogBaseHeader base_header(logservice::ObLogBaseType::DDL_LOG_BASE_TYPE,
+                                          replay_barrier_type);
+  ObDDLClogHeader ddl_header(clog_type);
+  const int64_t buffer_size = base_header.get_serialize_size()
+                              + ddl_header.get_serialize_size()
+                              + log.get_serialize_size();
+  char *buffer = nullptr; // stack space avoided, to avoid too muck stack size.
+  int64_t pos = 0;
+  ObDDLClogCb *cb = nullptr;
+
+  palf::LSN lsn;
+  const bool need_nonblock= false;
+  SCN scn = SCN::min_scn();
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  logservice::ObLogHandler *log_handler = nullptr;
+  if (OB_UNLIKELY(!ls_id.is_valid()) ||
+      OB_UNLIKELY(ObDDLClogType::DDL_TABLET_SPLIT_START_LOG != clog_type &&
+                  ObDDLClogType::DDL_TABLET_SPLIT_FINISH_LOG != clog_type &&
+                  ObDDLClogType::DDL_TABLET_FREEZE_LOG != clog_type) ||
+      OB_UNLIKELY(!log.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(ls_id), K(clog_type), K(log));
+  } else if (OB_ISNULL(buffer = static_cast<char *>(tmp_arena.alloc(buffer_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc failed", K(ret), K(buffer_size));
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
+    LOG_WARN("get ls failed", K(ret), K(log));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ls should not be null", K(ret));
+  } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get log handler failed", K(ret), K(log));
+  } else if (OB_ISNULL(cb = op_alloc(ObDDLClogCb))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc memory", K(ret));
+  } else if (OB_FAIL(base_header.serialize(buffer, buffer_size, pos))) {
+    LOG_WARN("failed to serialize log base header", K(ret));
+  } else if (OB_FAIL(ddl_header.serialize(buffer, buffer_size, pos))) {
+    LOG_WARN("fail to seriaize ddl start log", K(ret));
+  } else if (OB_FAIL(log.serialize(buffer, buffer_size, pos))) {
+    LOG_WARN("fail to seriaize ddl start log", K(ret));
+  } else if (OB_FAIL(log_handler->append(buffer,
+                                         buffer_size,
+                                         SCN::min_scn(),
+                                         need_nonblock,
+                                         false/*allow_compression*/,
+                                         cb,
+                                         lsn,
+                                         scn))) {
+    LOG_WARN("fail to submit ddl start log", K(ret), K(buffer_size));
+    if (ObDDLUtil::need_remote_write(ret)) {
+      ret = OB_NOT_MASTER;
+      LOG_INFO("overwrite return to OB_NOT_MASTER");
+    }
+  } else {
+    ObDDLClogCb *tmp_cb = cb;
+    cb = nullptr;
+    bool finish = false;
+    const int64_t start_time = ObTimeUtility::current_time();
+    while (OB_SUCC(ret) && !finish) {
+      if (tmp_cb->is_success()) {
+        finish = true;
+      } else if (tmp_cb->is_failed()) {
+        ret = OB_NOT_MASTER;
+      }
+      if (OB_SUCC(ret) && !finish) {
+        const int64_t current_time = ObTimeUtility::current_time();
+        if (current_time - start_time > ObDDLRedoLogHandle::DDL_REDO_LOG_TIMEOUT) {
+          ret = OB_TIMEOUT;
+          LOG_WARN("write auto split log timeout", K(ret), K(log));
+        } else {
+          ob_usleep(ObDDLRedoLogHandle::CHECK_DDL_REDO_LOG_FINISH_INTERVAL);
+        }
+      }
+    }
+    tmp_cb->try_release(); // release the memory no matter succ or not
+  }
+  if (OB_FAIL(ret)) {
+    if (nullptr != cb) {
+      op_free(cb);
+      cb = nullptr;
+    }
+  }
+  tmp_arena.reset();
+  buffer = nullptr;
+  SERVER_EVENT_ADD("ddl", "write_split_log",
+      "ret", ret,
+      "tenant_id", MTL_ID(),
+      "src_tablet_id", log.get_source_tablet_id().id(),
+      "clog_type", clog_type,
+      "scn", scn,
+      "trace_id", *ObCurTraceId::get_trace_id());
+  LOG_INFO("write split log finished", K(ret), K(ls_id), K(clog_type), K(scn));
+  return ret;
+}
+
+template int ObDDLRedoLogWriter::write_auto_split_log(const share::ObLSID &ls_id,
+                                  const ObDDLClogType &clog_type,
+                                  const ObReplayBarrierType &replay_barrier_type,
+                                  const ObTabletSplitStartLog &log);
+template int ObDDLRedoLogWriter::write_auto_split_log(const share::ObLSID &ls_id,
+                                  const ObDDLClogType &clog_type,
+                                  const ObReplayBarrierType &replay_barrier_type,
+                                  const ObTabletSplitFinishLog &log);
+template int ObDDLRedoLogWriter::write_auto_split_log(const share::ObLSID &ls_id,
+                                  const ObDDLClogType &clog_type,
+                                  const ObReplayBarrierType &replay_barrier_type,
+                                  const ObTabletFreezeLog &log);
+
 bool ObDDLRedoLogWriter::need_retry(int ret_code)
 {
   return OB_NOT_MASTER == ret_code;

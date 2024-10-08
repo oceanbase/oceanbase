@@ -68,7 +68,8 @@ int ObTabletPointerMap::erase(const ObTabletMapKey &key, ObMetaObjGuard<ObTablet
 int ObTabletPointerMap::inner_erase(const ObTabletMapKey &key)
 {
   int ret = common::OB_SUCCESS;
-  ObResourceValueStore<ObTabletPointer> *ptr = NULL;
+  ObResourceValueStore<ObTabletPointer> *ptr = nullptr;
+  ObTabletPointer *tablet_ptr = nullptr;
   uint64_t hash_val = 0;
   if (OB_UNLIKELY(!key.is_valid())) {
     ret = common::OB_INVALID_ARGUMENT;
@@ -79,11 +80,16 @@ int ObTabletPointerMap::inner_erase(const ObTabletMapKey &key)
     common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
     if (OB_FAIL(ResourceMap::map_.get_refactored(key, ptr))) {
       STORAGE_LOG(WARN, "fail to get from map", K(ret));
+    } else if (OB_ISNULL(ptr)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "ptr should not be nullptr", K(ret), K(key), KP(ptr));
+    } else if (OB_ISNULL(tablet_ptr = ptr->get_value_ptr())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "value should not be nullptr", K(ret), K(key), KP(tablet_ptr));
     } else if (OB_FAIL(ResourceMap::map_.erase_refactored(key))) {
       STORAGE_LOG(WARN, "fail to erase from map", K(ret));
     } else {
-      ObTabletPointer *value = ptr->get_value_ptr();
-      value->reset_obj();
+      tablet_ptr->reset_obj();
       if (OB_FAIL(ResourceMap::dec_handle_ref(ptr))) {
         STORAGE_LOG(WARN, "fail to dec handle ref", K(ret));
       }

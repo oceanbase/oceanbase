@@ -166,6 +166,8 @@ TG_DEF(TIMEZONE_MGR, TimezoneMgr, TIMER)
 TG_DEF(MASTER_KEY_MGR, MasterKeyMgr, QUEUE_THREAD, 1, 100)
 // TG_DEF(SRS_MGR, SrsMgr, TIMER, 128)
 // TG_DEF(InfoPoolResize, InfoPoolResize, TIMER)
+
+TG_DEF(DBMSSchedService, DBMSSched, REENTRANT_THREAD_POOL, 1)
 TG_DEF(TenantTransferService, TransferSrv, REENTRANT_THREAD_POOL, ThreadCountPair(4 ,1))
 TG_DEF(WR_TIMER_THREAD, WrTimer, TIMER)
 
@@ -199,4 +201,5 @@ TG_DEF(ObPrivateBlockGCThread, PrivGCThread, QUEUE_THREAD,
 TG_DEF(TmpFileSwap, TFSwap, THREAD_POOL, 1)
 TG_DEF(TableGroupCommitMgr, TableGroupCommitMgr, TIMER)
 TG_DEF(TmpFileFlush, TFFlush, TIMER, 1024)
+TG_DEF(LogFetcherBGWorker, LogFetcherBGW, TIMER)
 #endif

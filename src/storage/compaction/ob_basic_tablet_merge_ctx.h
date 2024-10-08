@@ -53,6 +53,7 @@ struct ObStaticMergeParam final
     is_full_merge_ = is_full_merge;
     merge_level_ = MACRO_BLOCK_MERGE_LEVEL;
   }
+  ObMergeLevel get_merge_level_for_sstable(const ObSSTable &sstable) const; // unused
 private:
   int init_multi_version_column_descs();
 
@@ -64,7 +65,7 @@ public:
       K_(sstable_logic_seq), K_(tables_handle), K_(is_rebuild_column_store), K_(is_schema_changed), K_(is_tenant_major_merge),
       K_(is_cs_replica), K_(read_base_version), K_(merge_scn), K_(need_parallel_minor_merge),
       KP_(schema), "multi_version_column_descs_cnt", multi_version_column_descs_.count(),
-      K_(ls_handle), K_(snapshot_info), K_(is_backfill), K_(tablet_schema_guard));
+      K_(ls_handle), K_(snapshot_info), K_(is_backfill), K_(tablet_schema_guard), K_(tablet_transfer_seq));
 
   ObTabletMergeDagParam &dag_param_;
   bool is_full_merge_; // full merge or increment merge
@@ -98,6 +99,7 @@ public:
   common::ObSEArray<share::schema::ObColDesc, 2 * OB_ROW_DEFAULT_COLUMNS_COUNT> multi_version_column_descs_;
   share::ObPreWarmerParam pre_warm_param_;
   storage::ObCSReplicaStorageSchemaGuard tablet_schema_guard_; // original storage schema on tablet, used only in cs replcia
+  int64_t tablet_transfer_seq_; // only used in shared_storage mode, used to init statis_desc;
   DISALLOW_COPY_AND_ASSIGN(ObStaticMergeParam);
 };
 
@@ -217,7 +219,7 @@ public:
   DAG_PARAM_FUNC(const ObLSID &, ls_id);
   DAG_PARAM_FUNC(const ObTabletID &, tablet_id);
   DAG_PARAM_FUNC(int64_t, merge_version);
-  DAG_PARAM_FUNC(int64_t, transfer_seq);
+  DAG_PARAM_FUNC(int64_t, schedule_transfer_seq);
   DAG_PARAM_FUNC(ObExecMode, exec_mode);
   STATIC_PARAM_FUNC(bool, is_tenant_major_merge);
   STATIC_PARAM_FUNC(bool, is_full_merge);
@@ -253,7 +255,10 @@ public:
   int build_update_table_store_param(
     const blocksstable::ObSSTable *sstable,
     ObUpdateTableStoreParam &param);
-  virtual int update_block_info(const ObMergeBlockInfo &block_info) { return OB_NOT_SUPPORTED; }
+  virtual int update_block_info(
+    const ObMergeBlockInfo &block_info,
+    const int64_t cost_time)
+  { return OB_NOT_SUPPORTED; }
   VIRTUAL_TO_STRING_KV(K_(static_param), K_(static_desc), K_(parallel_merge_ctx), K_(tablet_handle),
     K_(info_collector), KP_(merge_dag));
 protected:

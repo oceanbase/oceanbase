@@ -128,9 +128,12 @@ private:
   int generate_uk_idx_array(const ObIArray<obrpc::ObCreateIndexArg> &index_arg_list, ObIArray<int64_t> &uk_idx_in_index_arg_list);
   bool is_pk_uk_duplicate(const ObIArray<ObString> &pk_columns_name, const ObIArray<obrpc::ObCreateIndexArg> &index_arg_list, const ObIArray<int64_t> &uk_idx);
   bool is_uk_uk_duplicate(const ObIArray<int64_t> &uk_idx, const ObIArray<obrpc::ObCreateIndexArg> &index_arg_list);
+
   int resolve_auto_partition(const ParseNode *partition_node);
   int check_external_table_generated_partition_column_sanity(ObTableSchema &table_schema, ObRawExpr *dependant_expr, ObIArray<int64_t> &external_part_idx);
   typedef common::hash::ObPlacementHashSet<uint64_t, common::OB_MAX_USER_DEFINED_COLUMNS_COUNT> VPColumnIdHashSet;
+  uint64_t gen_column_group_id();
+  int resolve_column_group(const ParseNode *cg_node);
 
   int add_inner_index_for_heap_gtt();
   int check_max_row_data_length(const ObTableSchema &table_schema);
@@ -154,6 +157,8 @@ private:
 
   uint64_t cur_udt_set_id_;
   common::ObSEArray<uint64_t, 4> vec_index_col_ids_;
+  bool has_vec_index_;
+  bool has_fts_index_;
 };
 
 } // end namespace sql

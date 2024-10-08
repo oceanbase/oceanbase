@@ -291,6 +291,18 @@ enum ObDDLIgnoreSyncCdcFlag
   DONT_SYNC_LOG_FOR_CDC = 1,
 };
 
+enum ObMVMajorRefreshFlag
+{
+  IS_NOT_MV_MAJOR_REFRESH = 0,
+  IS_MV_MAJOR_REFRESH = 1
+};
+
+enum ObTableReferencedByFastLSMMVFlag
+{
+  IS_NOT_REFERENCED_BY_FAST_LSM_MV = 0,
+  IS_REFERENCED_BY_FAST_LSM_MV = 1
+};
+
 struct ObTableMode {
   OB_UNIS_VERSION_V(1);
 private:
@@ -322,9 +334,7 @@ private:
   static const int32_t TM_MV_ON_QUERY_COMPUTATION_BITS = 1;
   static const int32_t TM_DDL_IGNORE_SYNC_CDC_OFFSET = 29;
   static const int32_t TM_DDL_IGNORE_SYNC_CDC_BITS = 1;
-  static const int32_t TM_MV_MAJOR_REFRESH_OFFSET = 30;
-  static const int32_t TM_MV_MAJOR_REFRESH_BITS = 1;
-  static const int32_t TM_RESERVED = 1;
+  static const int32_t TM_RESERVED = 2;
 
   static const uint32_t MODE_FLAG_MASK = (1U << TM_MODE_FLAG_BITS) - 1;
   static const uint32_t PK_MODE_MASK = (1U << TM_PK_MODE_BITS) - 1;
@@ -437,9 +447,53 @@ public:
       uint32_t mv_enable_query_rewrite_flag_ : TM_MV_ENABLE_QUERY_REWRITE_BITS;
       uint32_t mv_on_query_computation_flag_ : TM_MV_ON_QUERY_COMPUTATION_BITS;
       uint32_t ddl_table_ignore_sync_cdc_flag_ : TM_DDL_IGNORE_SYNC_CDC_BITS;
-      uint32_t reserved_ :TM_RESERVED;
+      uint32_t reserved_ : TM_RESERVED;
     };
   };
+};
+
+struct ObMvMode {
+  OB_UNIS_VERSION_V(1);
+private:
+  static const int32_t MM_MV_MAJOR_REFRESH_OFFSET = 0;
+  static const int32_t MM_MV_MAJOR_REFRESH_BITS = 1;
+  static const uint32_t MM_MV_MAJOR_REFRESH_MASK = (1U << MM_MV_MAJOR_REFRESH_BITS) - 1;
+  static const int32_t MM_TABLE_REFERENCED_BY_FAST_LSM_MV_OFFSET = 1;
+  static const int32_t MM_TABLE_REFERENCED_BY_FAST_LSM_MV_BITS = 1;
+  static const uint32_t MM_TABLE_REFERENCED_BY_FAST_LSM_MV_MASK =
+      (1U << MM_TABLE_REFERENCED_BY_FAST_LSM_MV_BITS) - 1;
+  static const int32_t MM_RESERVED = 62;
+public:
+  ObMvMode() { reset(); }
+  virtual ~ObMvMode() { reset(); }
+  void reset() { mode_ = 0; }
+  bool operator==(const ObMvMode &other) const { return mode_ == other.mode_; }
+  int assign(const ObMvMode &other);
+  ObMvMode &operator=(const ObMvMode &other);
+  bool is_valid() const;
+  static ObMVMajorRefreshFlag get_mv_major_refresh_flag(int64_t mv_mode)
+  {
+    return (ObMVMajorRefreshFlag)((mv_mode >> MM_MV_MAJOR_REFRESH_OFFSET) &
+                                  MM_MV_MAJOR_REFRESH_MASK);
+  }
+  static ObTableReferencedByFastLSMMVFlag get_table_referenced_by_fast_lsm_mv_flag(int64_t mv_mode)
+  {
+    return (ObTableReferencedByFastLSMMVFlag)(
+        (mv_mode >> MM_TABLE_REFERENCED_BY_FAST_LSM_MV_OFFSET) &
+        MM_TABLE_REFERENCED_BY_FAST_LSM_MV_MASK);
+  }
+  union
+  {
+    int64_t mode_;
+    struct
+    {
+      uint64_t mv_major_refresh_flag_ : MM_MV_MAJOR_REFRESH_BITS;
+      uint64_t table_referenced_by_fast_lsm_mv_flag_ : MM_TABLE_REFERENCED_BY_FAST_LSM_MV_BITS;
+      uint64_t reserved_ : MM_RESERVED;
+    };
+  };
+  TO_STRING_KV("mv_major_refresh_flag", mv_major_refresh_flag_,
+               "table_referenced_by_fast_lsm_mv_flag", table_referenced_by_fast_lsm_mv_flag_);
 };
 
 struct ObBackUpTableModeOp
@@ -602,6 +656,7 @@ public:
     UNUSED(check_large);
     return common::OB_NOT_SUPPORTED;
   }
+
   virtual int get_store_column_count(int64_t &column_count, const bool full_col) const
   {
     UNUSED(column_count);
@@ -649,6 +704,11 @@ public:
   virtual int get_skip_index_col_attr(common::ObIArray<ObSkipIndexColumnAttr> &skip_idx_attrs) const
   {
     UNUSED(skip_idx_attrs);
+    return common::OB_NOT_SUPPORTED;
+  }
+  virtual int get_mv_mode_struct(ObMvMode &mv_mode) const
+  {
+    UNUSED(mv_mode);
     return common::OB_NOT_SUPPORTED;
   }
   DECLARE_PURE_VIRTUAL_TO_STRING;
@@ -815,9 +875,6 @@ public:
   virtual int get_paxos_replica_num(
       share::schema::ObSchemaGetterGuard &guard,
       int64_t &num) const override;
-  virtual int check_is_duplicated(
-      share::schema::ObSchemaGetterGuard &guard,
-      bool &is_duplicated) const override;
   virtual int get_first_primary_zone_inherit(
       share::schema::ObSchemaGetterGuard &schema_guard,
       const common::ObIArray<rootserver::ObReplicaAddr> &replica_addrs,
@@ -838,6 +895,9 @@ public:
       const ObTabletID &tablet_id,
       int64_t &part_id,
       int64_t &subpart_id) const;
+  int get_hidden_part_id_by_tablet_id(
+      const ObTabletID &tablet_id,
+      int64_t &part_id) const;
   /**
    * first_level_part_id represent the first level part id of subpartition,
    * otherwise its value is OB_INVALID_ID
@@ -1000,6 +1060,7 @@ public:
   inline bool is_vec_index_snapshot_data_type() const;
   inline bool is_fts_index() const;
   inline bool is_built_in_fts_index() const;
+  inline bool is_built_in_multivalue_index() const;
   inline bool is_built_in_index() const;  // fts / vector index
   inline bool is_rowkey_doc_id() const;
   inline bool is_doc_id_rowkey() const;
@@ -1042,12 +1103,22 @@ public:
   inline bool is_partitioned_table() const { return PARTITION_LEVEL_ONE == get_part_level() || PARTITION_LEVEL_TWO == get_part_level(); }
   virtual ObPartitionLevel get_part_level() const override;
   virtual share::ObDuplicateScope get_duplicate_scope() const override { return duplicate_scope_; }
-  inline bool is_duplicate_table() const { return duplicate_scope_ != ObDuplicateScope::DUPLICATE_SCOPE_NONE; }
-  virtual void set_duplicate_scope(const share::ObDuplicateScope duplicate_scope) override { duplicate_scope_ = duplicate_scope; }
-  virtual void set_duplicate_scope(const int64_t duplicate_scope) override { duplicate_scope_ = static_cast<share::ObDuplicateScope>(duplicate_scope); }
-
+  inline void set_duplicate_attribute(const share::ObDuplicateScope duplicate_scope,
+                                      const share::ObDuplicateReadConsistency duplicate_read_consistency) {
+    duplicate_scope_ = duplicate_scope;
+    duplicate_read_consistency_ = duplicate_read_consistency;
+  }
   inline void set_duplicate_read_consistency(const share::ObDuplicateReadConsistency duplicate_read_consistency) { duplicate_read_consistency_ = duplicate_read_consistency; }
   inline share::ObDuplicateReadConsistency get_duplicate_read_consistency() const { return duplicate_read_consistency_; }
+
+  inline bool is_duplicate_table() const {
+    return duplicate_scope_ == ObDuplicateScope::DUPLICATE_SCOPE_CLUSTER
+           && duplicate_read_consistency_ == ObDuplicateReadConsistency::STRONG;
+  }
+  inline bool is_broadcast_table() const {
+    return duplicate_scope_ == ObDuplicateScope::DUPLICATE_SCOPE_CLUSTER
+           && duplicate_read_consistency_ == ObDuplicateReadConsistency::WEAK;
+  }
   // for encrypt
   int set_encryption_str(const common::ObString &str) { return deep_copy_str(str, encryption_); }
   virtual const common::ObString &get_encryption_str() const override { return encryption_; }
@@ -1069,7 +1140,27 @@ public:
   inline bool has_rowid() const { return is_user_table() || is_tmp_table(); }
   inline bool gen_normal_tablet() const { return has_rowid() && !is_extended_rowid_mode(); }
   inline bool is_new_queuing_table_mode() const { return is_new_queuing_mode(static_cast<ObTableModeFlag>(table_mode_.mode_flag_)); }
-
+  /**
+  * During the construction of a local index in a partition table, the included columns may not contain the partition key.
+  * Since it's necessary to calculate which partition the data will be stored in, the partition key must be supplied to augment the index.
+  *
+  * For the function to return true, the following conditions must be met:
+  * 1) Local index
+  * 2) The indexed table does not contain the partition key.
+  *
+  * Current case:
+  * 1) the local index of the heap
+  * 2) two of the fts related table : fts_index_aux and fts_doc_word_aux.
+  *    Note: other tables of the fts related table (doc_rowkey table and rowkey_doc table) contain the partition key.
+  **/
+  inline bool need_partition_key_for_build_local_index(const ObSimpleTableSchemaV2 &data_table_schema) const
+  {
+    const bool heap_case =  is_index_local_storage() && data_table_schema.is_heap_table();
+    const bool fts_case = is_partitioned_table() && is_index_local_storage() && (is_fts_index_aux() || is_fts_doc_word_aux());
+    const bool multivalue_case = is_partitioned_table() && is_index_local_storage() && is_multivalue_index_aux();
+    const bool vec_case = is_partitioned_table() && is_index_local_storage() && (is_vec_delta_buffer_type() || is_vec_index_id_type() || is_vec_index_snapshot_data_type());
+    return heap_case || fts_case || vec_case || multivalue_case;
+  }
   DECLARE_VIRTUAL_TO_STRING;
 protected:
   uint64_t tenant_id_;
@@ -1280,6 +1371,7 @@ public:
   int reorder_column(const ObString &column_name, const bool is_first, const ObString &prev_column_name, const ObString &next_column_name);
   int add_aux_vp_tid(const uint64_t aux_vp_tid);
   int add_partition_key(const common::ObString &column_name);
+  int add_partition_key(const uint64_t column_id);
   int add_subpartition_key(const common::ObString &column_name);
   int add_zone(const common::ObString &zone);
   int set_view_definition(const common::ObString &view_definition);
@@ -1295,6 +1387,10 @@ public:
   int delete_constraint(const common::ObString &constraint_name);
   // Copy all constraint information in src_schema
   int assign_constraint(const ObTableSchema &other);
+  int assign_partition_schema_without_auto_part_attr(const ObTableSchema &other);
+  int enable_auto_partition(const int64_t auto_part_size);
+  int detect_part_func_type(ObPartitionFuncType &part_func_type);
+  void forbid_auto_partition();
   void clear_constraint();
   int set_ttl_definition(const common::ObString &ttl_definition) { return deep_copy_str(ttl_definition, ttl_definition_); }
   int set_kv_attributes(const common::ObString &kv_attributes) { return deep_copy_str(kv_attributes, kv_attributes_); }
@@ -1506,6 +1602,8 @@ public:
   int get_spatial_geo_column_id(uint64_t &geo_column_id) const;
   int get_spatial_index_column_ids(common::ObIArray<uint64_t> &column_ids) const;
   int get_fulltext_column_ids(uint64_t &doc_id_col_id, uint64_t &ft_col_id) const;
+  int get_multivalue_column_id(uint64_t &multivalue_col_id) const;
+
   int get_vec_index_column_id(uint64_t &vec_vector_id) const;
   int get_vec_index_vid_col_id(uint64_t &vec_id_col_id) const;
   // get columns for building rowid
@@ -1622,8 +1720,17 @@ public:
 
   virtual int alloc_partition(const ObPartition *&partition);
   virtual int alloc_partition(const ObSubPartition *&subpartition);
+  int check_enable_split_partition(bool is_auto_partitioning) const;
+  int check_validity_for_auto_partition() const;
+  int check_can_do_manual_split_partition() const;
+  ObPartitionLevel get_target_part_level_for_auto_partitioned_table() const;
+  int get_part_func_expr_str(ObString &part_func_expr, common::ObIAllocator &allocator,
+                             const bool using_auto_partitioned_mode) const;
+  int get_presetting_partition_keys(common::ObIArray<uint64_t> &partition_key_ids) const;
+  int get_partition_keys_by_part_func_expr(common::ObString &part_func_expr_str, common::ObIArray<uint64_t> &partition_key_ids) const;
+  int extract_actual_index_rowkey_columns_name(ObIArray<ObString> &rowkey_columns_name) const;
+  int is_presetting_partition_key(const uint64_t partition_key_id, bool &is_presetting_partition_key) const;
   int check_primary_key_cover_partition_column();
-  int check_auto_partition_valid();
   int check_rowkey_cover_partition_keys(const common::ObPartitionKeyInfo &part_key);
   int check_index_table_cover_partition_keys(const common::ObPartitionKeyInfo &part_key) const;
   int check_create_index_on_hidden_primary_key(const ObTableSchema &index_table) const;
@@ -1633,7 +1740,21 @@ public:
 
   virtual int calc_part_func_expr_num(int64_t &part_func_expr_num) const;
   virtual int calc_subpart_func_expr_num(int64_t &subpart_func_expr_num) const;
-  int is_partition_key(uint64_t column_id, bool &result) const;
+
+  // checking the column is partition key or subpartition key.
+  // if the ignore_presetting_key == true, the following functions are equal to that of ObColumnSchemaV2,
+  // otherwise, they will check whether the column is presetting key.
+  int is_tbl_partition_key(const uint64_t column_id, bool &result,
+                           const bool ignore_presetting_key=true) const;
+  int is_tbl_partition_key(const share::schema::ObColumnSchemaV2 &orig_column_schema,
+                           bool& result,
+                           const bool ignore_presetting_key=true) const;
+  int is_partition_key(const share::schema::ObColumnSchemaV2 &orig_column_schema,
+                       bool& result,
+                       const bool ignore_presetting_key=true) const;
+  int is_subpartition_key(const share::schema::ObColumnSchemaV2 &orig_column_schema,
+                          bool& result,
+                          const bool ignore_presetting_key=true) const;
   inline void reset_simple_index_infos() { simple_index_infos_.reset(); }
   inline const common::ObIArray<ObAuxTableMetaInfo> &get_simple_index_infos() const
   {
@@ -1697,14 +1818,13 @@ public:
   int get_all_cg_type_column_group(const ObColumnGroupSchema *&column_group) const;
   int get_each_column_group(ObIArray<ObColumnGroupSchema*> &each_cgs) const;
   int is_partition_key_match_rowkey_prefix(bool &is_prefix) const;
+  int is_presetting_partition_key_match_rowkey_prefix(bool &is_prefix) const;
   int get_column_group_index(const share::schema::ObColumnParam &param,
                              const bool need_calculate_cg_idx,
                              int32_t &cg_idx) const;
   int is_column_group_exist(const common::ObString &cg_name, bool &exist) const;
 
   int get_all_column_ids(ObIArray<uint64_t> &column_ids) const;
-  int generate_partition_key_from_rowkey(const common::ObRowkey &rowkey,
-                                         common::ObRowkey &hign_bound_value) const;
   virtual int init_column_meta_array(
       common::ObIArray<blocksstable::ObSSTableColumnMeta> &meta_array) const override;
   int check_column_can_be_altered_online(const ObColumnSchemaV2 *src_schema,
@@ -1779,6 +1899,7 @@ public:
                              uint64_t column_id,
                              bool &is_mul) const;
   int get_doc_id_rowkey_tid(uint64_t &doc_id_rowkey_tid) const;
+  int get_rowkey_doc_id_tid(uint64_t &rowkey_doc_id_tid) const;
   int get_vec_id_rowkey_tid(uint64_t &doc_id_rowkey_tid) const;
   void set_aux_lob_meta_tid(const uint64_t& table_id) { aux_lob_meta_tid_ = table_id; }
   void set_aux_lob_piece_tid(const uint64_t& table_id) { aux_lob_piece_tid_ = table_id; }
@@ -1790,6 +1911,7 @@ public:
   int64_t get_lob_columns_count() const;
   bool has_lob_aux_table() const { return (aux_lob_meta_tid_ != OB_INVALID_ID && aux_lob_piece_tid_ != OB_INVALID_ID); }
   bool has_mlog_table() const { return (OB_INVALID_ID != mlog_tid_); }
+  bool required_by_mview_refresh() const { return has_mlog_table() || table_referenced_by_fast_lsm_mv(); }
   inline void add_table_flag(uint64_t flag) { table_flags_ |= flag; }
   inline void del_table_flag(uint64_t flag) { table_flags_ &= ~flag; }
   inline void add_or_del_table_flag(uint64_t flag, bool is_add)
@@ -1820,6 +1942,30 @@ public:
   uint64_t get_mlog_tid() const { return mlog_tid_; }
   inline sql::ObLocalSessionVar &get_local_session_var() { return local_session_vars_; }
   inline const sql::ObLocalSessionVar &get_local_session_var() const { return local_session_vars_; }
+  inline void set_mv_mode(const int64_t mv_mode) { mv_mode_.mode_ = mv_mode; }
+  inline int64_t get_mv_mode() const { return mv_mode_.mode_; }
+  virtual int get_mv_mode_struct(ObMvMode &mv_mode) const override
+  {
+    mv_mode = mv_mode_;
+    return OB_SUCCESS;
+  }
+  inline bool mv_major_refresh() const
+  {
+    return IS_MV_MAJOR_REFRESH == (enum ObMVMajorRefreshFlag)mv_mode_.mv_major_refresh_flag_;
+  }
+  inline void set_mv_major_refresh(const ObMVMajorRefreshFlag flag)
+  {
+    mv_mode_.mv_major_refresh_flag_ = flag;
+  }
+  inline bool table_referenced_by_fast_lsm_mv() const
+  {
+    return IS_REFERENCED_BY_FAST_LSM_MV ==
+           (enum ObTableReferencedByFastLSMMVFlag)mv_mode_.table_referenced_by_fast_lsm_mv_flag_;
+  }
+  inline void set_table_referenced_by_fast_lsm_mv(const ObTableReferencedByFastLSMMVFlag flag)
+  {
+    mv_mode_.table_referenced_by_fast_lsm_mv_flag_ = flag;
+  }
   DECLARE_VIRTUAL_TO_STRING;
 
 protected:
@@ -1897,6 +2043,7 @@ private:
       const common::hash::ObHashMap<uint64_t, uint64_t> &column_id_map,
       ObRowkeyInfo &rowkey_info);
   int alter_view_column_internal(ObColumnSchemaV2 &column_schema);
+  int add_partition_key_(ObColumnSchemaV2 &column);
   int get_base_rowkey_column_group_index(int32_t &cg_idx) const;
   int calc_column_group_index_(const uint64_t column_id, int32_t &cg_idx) const;
 
@@ -2028,6 +2175,7 @@ protected:
   common::ObString index_params_;
   // exec_env
   common::ObString exec_env_;
+  ObMvMode mv_mode_;
 };
 
 class ObPrintableTableSchema final : public ObTableSchema
@@ -2077,8 +2225,7 @@ inline bool ObSimpleTableSchemaV2::is_global_unique_index_table(const ObIndexTyp
 inline bool ObSimpleTableSchemaV2::is_local_unique_index_table() const
 {
   //
-  return INDEX_TYPE_UNIQUE_LOCAL == index_type_
-      || INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE == index_type_;
+  return share::schema::is_local_unique_index_table(index_type_);
 }
 
 inline bool ObSimpleTableSchemaV2::is_global_local_index_table() const
@@ -2159,6 +2306,11 @@ inline bool ObSimpleTableSchemaV2::is_fts_index() const
 inline bool ObSimpleTableSchemaV2::is_built_in_fts_index() const
 {
   return share::schema::is_built_in_fts_index(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_built_in_multivalue_index() const
+{
+  return share::schema::is_built_in_multivalue_index(index_type_);
 }
 
 inline bool ObSimpleTableSchemaV2::is_built_in_index() const

@@ -56,30 +56,35 @@
      QualifierFilter = 260,
      SingleColumnValueFilter = 261,
      PageFilter = 262,
-     ColumnPaginationFilter = 263,
-     ColumnCountGetFilter = 264,
-     CheckAndMutateFilter = 265,
-     PrefixFilter = 266,
-     TableCompareFilter = 267,
-     LESS = 268,
-     LESS_OR_EQUAL = 269,
-     EQUAL = 270,
-     NOT_EQUAL = 271,
-     GREATER = 272,
-     GREATER_OR_EQUAL = 273,
-     NO_OP = 274,
-     IS = 275,
-     IS_NOT = 276,
-     BOOL_VALUE = 277,
-     STRING_VALUE = 278,
-     INT_VALUE = 279,
-     OR = 280,
-     AND = 281,
-     T_OR = 282,
-     T_AND = 283,
-     WHILE = 284,
-     SKIP = 285,
-     ERROR = 286
+     ColumnCountGetFilter = 263,
+     ColumnPrefixFilter = 264,
+     ColumnPaginationFilter = 265,
+     CheckAndMutateFilter = 266,
+     PrefixFilter = 267,
+     FirstKeyOnlyFilter = 268,
+     KeyOnlyFilter = 269,
+     TimestampsFilter = 270,
+     TableCompareFilter = 271,
+     RandomRowFilter = 272,
+     LESS = 273,
+     LESS_OR_EQUAL = 274,
+     EQUAL = 275,
+     NOT_EQUAL = 276,
+     GREATER = 277,
+     GREATER_OR_EQUAL = 278,
+     NO_OP = 279,
+     IS = 280,
+     IS_NOT = 281,
+     BOOL_VALUE = 282,
+     STRING_VALUE = 283,
+     INT_VALUE = 284,
+     OR = 285,
+     AND = 286,
+     T_OR = 287,
+     T_AND = 288,
+     WHILE = 289,
+     SKIP = 290,
+     ERROR = 291
    };
 #endif
 
@@ -97,11 +102,12 @@ typedef union YYSTYPE
     oceanbase::table::hfilter::CompareOperator cmp_op;
     oceanbase::table::ObHTableFilterParser::SimpleString sval;
     oceanbase::table::hfilter::Filter *fval;
+    oceanbase::common::ObSEArray<int64_t, 8> *array;
 
 
 
 /* Line 1676 of yacc.c  */
-#line 94 "../../../src/observer/table/htable_filter_tab.hxx"
+#line 100 "../../../src/observer/table/htable_filter_tab.hxx"
 } YYSTYPE;
 # define YYSTYPE_IS_TRIVIAL 1
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */

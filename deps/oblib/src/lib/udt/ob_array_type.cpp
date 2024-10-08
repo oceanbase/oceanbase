@@ -467,10 +467,13 @@ int ret = OB_SUCCESS;
     const uint32_t src_data_offset = begin * sizeof(float);
     int64_t curr_pos = data_container_->raw_data_.size();
     int64_t capacity = curr_pos + len;
-    data_container_->raw_data_.prepare_allocate(capacity);
-    char *cur_data = reinterpret_cast<char *>(data_container_->raw_data_.get_data() + curr_pos);
-    MEMCPY(cur_data, src.get_data() + src_data_offset, len * sizeof(float));
-    length_ += len;
+    if (OB_FAIL(data_container_->raw_data_.prepare_allocate(capacity))) {
+      OB_LOG(WARN, "allocate memory failed", K(ret), K(capacity));
+    } else {
+      char *cur_data = reinterpret_cast<char *>(data_container_->raw_data_.get_data() + curr_pos);
+      MEMCPY(cur_data, src.get_data() + src_data_offset, len * sizeof(float));
+      length_ += len;
+    }
   }
   return ret;
 }
@@ -585,28 +588,31 @@ int ObArrayBinary::insert_from(const ObIArrayType &src, uint32_t begin, uint32_t
     uint32_t src_len = src.get_offsets()[begin + len - 1] - src_offset;
     int64_t curr_pos = data_container_->raw_data_.size();
     int64_t capacity = curr_pos + src_len;
-    data_container_->raw_data_.prepare_allocate(capacity);
-    char *cur_data = data_container_->raw_data_.get_data() + curr_pos;
-    MEMCPY(cur_data, src.get_data() + src_offset, src_len);
-    // insert offsets
-    uint32_t last_offset = src_offset;
-    uint32_t pre_max_offset = data_container_->offset_at(length_);
-    for (uint32_t i = 0; i < len && OB_SUCC(ret); ++i) {
-      if (OB_FAIL(data_container_->offsets_.push_back(pre_max_offset + src.get_offsets()[begin + i] - last_offset))) {
-        OB_LOG(WARN, "failed to push value to array data", K(ret));
-      } else {
-        last_offset = src.get_offsets()[begin + i];
-        pre_max_offset = data_container_->offset_at(data_container_->offsets_.size());
+    if (OB_FAIL(data_container_->raw_data_.prepare_allocate(capacity))) {
+      OB_LOG(WARN, "allocate memory failed", K(ret), K(capacity));
+    } else {
+      char *cur_data = data_container_->raw_data_.get_data() + curr_pos;
+      MEMCPY(cur_data, src.get_data() + src_offset, src_len);
+      // insert offsets
+      uint32_t last_offset = src_offset;
+      uint32_t pre_max_offset = data_container_->offset_at(length_);
+      for (uint32_t i = 0; i < len && OB_SUCC(ret); ++i) {
+        if (OB_FAIL(data_container_->offsets_.push_back(pre_max_offset + src.get_offsets()[begin + i] - last_offset))) {
+          OB_LOG(WARN, "failed to push value to array data", K(ret));
+        } else {
+          last_offset = src.get_offsets()[begin + i];
+          pre_max_offset = data_container_->offset_at(data_container_->offsets_.size());
+        }
       }
-    }
-    // insert nullbitmaps
-    for (uint32_t i = 0; i < len && OB_SUCC(ret); ++i) {
-      if (OB_FAIL(data_container_->null_bitmaps_.push_back(src.get_nullbitmap()[begin + i]))) {
-        OB_LOG(WARN, "failed to push null", K(ret));
+      // insert nullbitmaps
+      for (uint32_t i = 0; i < len && OB_SUCC(ret); ++i) {
+        if (OB_FAIL(data_container_->null_bitmaps_.push_back(src.get_nullbitmap()[begin + i]))) {
+          OB_LOG(WARN, "failed to push null", K(ret));
+        }
       }
-    }
-    if (OB_SUCC(ret)) {
-      length_ += len;
+      if (OB_SUCC(ret)) {
+        length_ += len;
+      }
     }
   }
   return ret;

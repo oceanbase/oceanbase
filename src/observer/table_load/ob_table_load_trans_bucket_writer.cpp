@@ -399,7 +399,7 @@ int ObTableLoadTransBucketWriter::write_for_partitioned(SessionContext &session_
     } else if (OB_FAIL(coordinator_ctx_->partition_calc_.get_part_key(obj_rows.at(i), part_key))) {
       LOG_WARN("fail to get part key", KR(ret));
     } else if (OB_FAIL(coordinator_ctx_->partition_calc_.cast_part_key(part_key, allocator))) {
-      if (OB_FAIL(error_row_handler->handle_error_row(ret, part_key))) {
+      if (OB_FAIL(error_row_handler->handle_error_row(ret))) {
         LOG_WARN("failed to handle error row", K(ret), K(part_key));
       } else {
         ret = OB_SUCCESS;
@@ -422,7 +422,7 @@ int ObTableLoadTransBucketWriter::write_for_partitioned(SessionContext &session_
     bool need_write = false;
     if (OB_UNLIKELY(!partition_id.is_valid())) {
       ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
-      if (OB_FAIL(error_row_handler->handle_error_row(ret, part_keys.at(i)))) {
+      if (OB_FAIL(error_row_handler->handle_error_row(ret))) {
         LOG_WARN("failed to handle error row", K(ret), K(part_keys.at(i)));
       } else {
         ret = OB_SUCCESS;

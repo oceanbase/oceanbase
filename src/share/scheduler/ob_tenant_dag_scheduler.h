@@ -952,6 +952,32 @@ public:
   int diagnose_minor_exe_dag(
     const compaction::ObMergeDagHash &merge_dag_info,
     compaction::ObDiagnoseTabletCompProgress &progress);
+
+  template <typename T>
+  int get_dag_progress(const T &dag, int64_t &row_inserted, int64_t &physical_row_count)
+  {
+    int ret = OB_SUCCESS;
+    lib::ObMutexGuard guard(prio_lock_);
+    ObIDag *stored_dag = nullptr;
+    if (OB_UNLIKELY(dag.get_type() != ObDagType::DAG_TYPE_DDL
+        && dag.get_type() != ObDagType::DAG_TYPE_TABLET_SPLIT
+        && dag.get_type() != ObDagType::DAG_TYPE_LOB_SPLIT)) {
+      ret = OB_INVALID_ARGUMENT;
+      COMMON_LOG(WARN, "invalid arugment", K(ret), K(dag));
+    } else if (OB_FAIL(dag_map_.get_refactored(&dag, stored_dag))) {
+      if (OB_HASH_NOT_EXIST != ret) {
+        COMMON_LOG(WARN, "failed to get from dag map", K(ret));
+      }
+    } else if (OB_ISNULL(stored_dag)) {
+      ret = OB_ERR_SYS;
+      COMMON_LOG(WARN, "dag is null", K(ret));
+    } else {
+      row_inserted = static_cast<T*>(stored_dag)->get_context().row_inserted_;
+      physical_row_count = static_cast<T*>(stored_dag)->get_context().physical_row_count_;
+    }
+    return ret;
+  }
+
   int diagnose_compaction_dags();
   int get_complement_data_dag_progress(const ObIDag &dag,
     int64_t &row_scanned,
@@ -1184,11 +1210,30 @@ public:
   int check_dag_net_exist(
       const ObDagId &dag_id, bool &exist);
   int cancel_dag_net(const ObDagId &dag_id);
-  int get_complement_data_dag_progress(const ObIDag *dag, int64_t &row_scanned, int64_t &row_inserted);
   int deal_with_finish_task(ObITask &task, ObTenantDagWorker &worker, int error_code);
   bool try_switch(ObTenantDagWorker &worker);
   int dispatch_task(ObITask &task, ObTenantDagWorker *&ret_worker, const int64_t priority);
   void finish_dag_net(ObIDagNet *dag_net);
+  template <typename T>
+  int get_dag_progress(const T *dag,
+                      int64_t &row_inserted,
+                      int64_t &physical_row_count)
+  {
+    int ret = OB_SUCCESS;
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+      COMMON_LOG(WARN, "ObDagScheduler is not inited", K(ret));
+    } else if (OB_ISNULL(dag) ||
+        (ObDagType::DAG_TYPE_DDL != dag->get_type()
+        && ObDagType::DAG_TYPE_TABLET_SPLIT != dag->get_type()
+        && ObDagType::DAG_TYPE_LOB_SPLIT != dag->get_type())) {
+      ret = OB_INVALID_ARGUMENT;
+      COMMON_LOG(WARN, "invalid arugment", K(ret), KPC(dag));
+    } else if (OB_FAIL(prio_sche_[dag->get_priority()].get_dag_progress(*dag, row_inserted, physical_row_count))) {
+      COMMON_LOG(WARN, "fail to get dag progress", K(ret), KPC(dag));
+    }
+    return ret;
+  }
   // for unittest
   int get_first_dag_net(ObIDagNet *&dag_net);
 

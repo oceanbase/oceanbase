@@ -32,6 +32,10 @@ RPC_F(obrpc::OB_GET_WRS_INFO, obrpc::ObGetWRSArg,
     obrpc::ObSrvRpcProxy::ObRpc<obrpc::OB_GET_WRS_INFO>::Response, ObGetWRSProxy);
 RPC_F(obrpc::OB_CHECK_SCHEMA_VERSION_ELAPSED, obrpc::ObCheckSchemaVersionElapsedArg,
     obrpc::ObCheckSchemaVersionElapsedResult, ObCheckSchemaVersionElapsedProxy);
+RPC_F(obrpc::OB_CHECK_MEMTABLE_CNT, obrpc::ObCheckMemtableCntArg,
+      obrpc::ObCheckMemtableCntResult, ObCheckMemtableCntProxy);
+RPC_F(obrpc::OB_CHECK_MEDIUM_INFO_LIST_CNT, obrpc::ObCheckMediumCompactionInfoListArg,
+      obrpc::ObCheckMediumCompactionInfoListResult, ObCheckMediumCompactionInfoListProxy);
 RPC_F(obrpc::OB_DDL_BUILD_SINGLE_REPLICA_REQUEST, obrpc::ObDDLBuildSingleReplicaRequestArg,
     obrpc::ObDDLBuildSingleReplicaRequestResult, ObDDLBuildSingleReplicaRequestProxy);
 RPC_F(obrpc::OB_CHECK_MODIFY_TIME_ELAPSED, obrpc::ObCheckModifyTimeElapsedArg,

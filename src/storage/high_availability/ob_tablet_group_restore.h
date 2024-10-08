@@ -88,6 +88,7 @@ public:
   void reset();
   int set_copy_tablet_status(const ObCopyTabletStatus::STATUS &status) override;
   int get_copy_tablet_status(ObCopyTabletStatus::STATUS &status) const override;
+  int get_copy_tablet_record_extra_info(const ObCopyTabletRecordExtraInfo *&extra_info) const override;
   VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), KPC_(restore_base_info), K_(is_leader),
       K_(action), KP_(meta_index_store), KP_(second_meta_index_store), K_(replica_type), KP_(ha_table_info_mgr), K_(status));
 
@@ -105,6 +106,8 @@ public:
   ObStorageHATableInfoMgr *ha_table_info_mgr_;
   bool need_check_seq_;
   int64_t ls_rebuild_seq_;
+  ObMacroBlockReuseMgr macro_block_reuse_mgr_;
+  ObCopyTabletRecordExtraInfo extra_info_;
 private:
   common::SpinRWLock lock_;
   ObCopyTabletStatus::STATUS status_;
@@ -462,6 +465,8 @@ private:
   int verify_table_store_();
   int update_restore_status_();
   int record_server_event_();
+  int report_ls_finish_bytes_();
+  bool is_need_report_ls_finish_bytes_();
 
 private:
   bool is_inited_;

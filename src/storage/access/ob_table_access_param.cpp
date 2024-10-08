@@ -17,6 +17,7 @@
 #include "storage/ob_relative_table.h"
 #include "storage/tablet/ob_tablet.h"
 #include "share/schema/ob_table_dml_param.h"
+#include "sql/engine/expr/ob_expr.h"
 
 namespace oceanbase
 {
@@ -24,10 +25,10 @@ using namespace common;
 using namespace blocksstable;
 namespace storage
 {
-
 ObTableIterParam::ObTableIterParam()
     : table_id_(0),
       tablet_id_(),
+      ls_id_(),
       read_info_(nullptr),
       rowkey_read_info_(nullptr),
       tablet_handle_(nullptr),
@@ -77,6 +78,7 @@ void ObTableIterParam::reset()
 {
   table_id_ = 0;
   tablet_id_.reset();
+  ls_id_.reset();
   read_info_ = nullptr;
   rowkey_read_info_ = nullptr;
   tablet_handle_ = nullptr;
@@ -138,11 +140,11 @@ int ObTableIterParam::refresh_lob_column_out_status()
   return ret;
 }
 
-bool ObTableIterParam::enable_fuse_row_cache(const ObQueryFlag &query_flag) const
+bool ObTableIterParam::enable_fuse_row_cache(const ObQueryFlag &query_flag, const StorageScanType scan_type) const
 {
   bool bret = is_x86() && query_flag.is_use_fuse_row_cache() && !query_flag.is_read_latest() &&
-              nullptr != rowkey_read_info_ && !need_scn_ && is_same_schema_column_ &&
-              !has_virtual_columns_ && !has_lob_column_out_;
+              nullptr != rowkey_read_info_ && (!need_scn_ || is_mview_table_scan(scan_type)) &&
+              is_same_schema_column_ && !has_virtual_columns_ && !has_lob_column_out_;
   return bret;
 }
 
@@ -268,6 +270,8 @@ int ObTableAccessParam::init(
   } else if (OB_UNLIKELY(nullptr == rowkey_read_info && nullptr == tablet_handle)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), KP(rowkey_read_info), KP(tablet_handle));
+  } else if (OB_NOT_NULL(tablet_handle) && OB_FAIL(check_valid_before_query_init(*scan_param.table_param_, *tablet_handle))) {
+    LOG_WARN("failed to check cs replica compat schema", K(ret), KPC(tablet_handle));
   } else {
     const share::schema::ObTableParam &table_param = *scan_param.table_param_;
     iter_param_.table_id_ = table_param.get_table_id();
@@ -319,6 +323,7 @@ int ObTableAccessParam::init(
       iter_param_.table_scan_opt_.storage_rowsets_size_ = 1;
     }
     iter_param_.pushdown_filter_ = scan_param.pd_storage_filters_;
+    iter_param_.ls_id_ = scan_param.ls_id_;
     iter_param_.is_column_replica_table_ = table_param.is_column_replica_table();
      // disable blockscan if scan order is KeepOrder(for iterator iterator and table api)
      // disable blockscan if use index skip scan as no large range to scan
@@ -336,6 +341,7 @@ int ObTableAccessParam::init(
     iter_param_.vectorized_enabled_ = nullptr != get_op() && get_op()->is_vectorized();
     iter_param_.limit_prefetch_ = (nullptr == op_filters_ || op_filters_->empty());
     iter_param_.is_mds_query_ = scan_param.is_mds_query_;
+
     if (iter_param_.is_use_column_store() &&
         nullptr != table_param.get_read_info().get_cg_idxs() &&
         !iter_param_.need_fill_group_idx()) { // not use column store in group rescan
@@ -344,7 +350,8 @@ int ObTableAccessParam::init(
       iter_param_.set_not_use_column_store();
     }
     if (scan_param.need_switch_param_ ||
-        iter_param_.is_use_column_store()) {
+        iter_param_.is_use_column_store() ||
+        scan_param.is_mview_query()) {
       iter_param_.set_use_stmt_iter_pool();
     }
 
@@ -358,6 +365,22 @@ int ObTableAccessParam::init(
     }
   }
 
+  return ret;
+}
+
+int ObTableAccessParam::check_valid_before_query_init(
+    const ObTableParam &table_param,
+    const ObTabletHandle &tablet_handle)
+{
+  int ret = OB_SUCCESS;
+  ObTablet *tablet = nullptr;
+  if (OB_UNLIKELY(!tablet_handle.is_valid() || OB_ISNULL(tablet = tablet_handle.get_obj()))) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid table handle", K(ret), K(tablet_handle), KPC(tablet));
+  } else if (OB_UNLIKELY(tablet->is_cs_replica_compat() && !table_param.is_column_replica_table())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid table param for cs replica tablet", K(ret), K(table_param), KPC(tablet));
+  }
   return ret;
 }
 
@@ -457,12 +480,13 @@ DEF_TO_STRING(ObTableAccessParam)
 }
 
 int set_row_scn(
+    const bool use_fuse_row_cache,
     const ObTableIterParam &iter_param,
     const ObDatumRow *store_row)
 {
   int ret = OB_SUCCESS;
   const ObColDescIArray *out_cols = nullptr;
-  const ObITableReadInfo *read_info = iter_param.get_read_info();
+  const ObITableReadInfo *read_info = iter_param.get_read_info(use_fuse_row_cache);
   if (OB_UNLIKELY(nullptr == read_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected null read info", K(ret));

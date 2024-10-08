@@ -1721,7 +1721,7 @@ ObStaticEngineExprCG::ObExprBatchSize ObStaticEngineExprCG::get_expr_execute_siz
       has_usr_var_expr = true;
     } else if (T_FUN_UDF == type) {
       has_udf_expr = true;
-      if (!(static_cast<ObUDFRawExpr*>(raw_exprs.at(i))->is_deterministic())) {
+      if (!(static_cast<ObUDFRawExpr*>(raw_exprs.at(i))->is_udf_deterministic())) {
         size = ObExprBatchSize::one;
         break;
       }

@@ -969,7 +969,7 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
       } else {
         ObString res = result->get_string();
         OZ (ObCharsetUtils::remove_char_endspace(  // this function only adjust res.data_length_
-            res, ObCharset::charset_type_by_coll(result->get_collation_type())));
+            res, ObCharset::get_charset(result->get_collation_type())));
         OX (result->val_len_ = res.length());
       }
     } else {
@@ -4214,11 +4214,17 @@ int ObSPIService::spi_check_early_exit(pl::ObPLExecCtx *ctx)
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(ctx));
-  CK (OB_NOT_NULL(ctx->exec_ctx_));
-  CK (OB_NOT_NULL(ctx->exec_ctx_->get_my_session()));
+  OZ (spi_check_timeout(*ctx->exec_ctx_));
+  return ret;
+}
+
+int ObSPIService::spi_check_timeout(sql::ObExecContext &exec_ctx)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(exec_ctx.get_my_session()));
 
   if (OB_SUCC(ret)) {
-    ObSQLSessionInfo *session_info = ctx->exec_ctx_->get_my_session();
+    ObSQLSessionInfo *session_info = exec_ctx.get_my_session();
     if (OB_FAIL(session_info->check_session_status())) {
       LOG_WARN("spi check session not healthy", K(ret));
     } else if (session_info->is_in_transaction()
@@ -8609,20 +8615,25 @@ int ObSPIService::spi_execute_dblink(ObExecContext &exec_ctx,
                                      uint64_t package_id,
                                      uint64_t proc_id,
                                      ParamStore &params,
-                                     ObObj *result)
+                                     ObObj *result,
+                                     const ObRoutineInfo *dblink_routine_info)
 {
   int ret = OB_SUCCESS;
   const ObRoutineInfo *routine_info = NULL;
   const pl::ObPLDbLinkInfo *dblink_info = NULL;
   pl::ObPLPackageGuard *package_guard = NULL;
-  OZ (exec_ctx.get_package_guard(package_guard));
-  CK (OB_NOT_NULL(package_guard));
-  OZ (package_guard->dblink_guard_.get_dblink_routine_info(dblink_id, package_id,
-                                                                          proc_id, routine_info),
-                                                                          dblink_id, package_id, proc_id);
-  CK (OB_NOT_NULL(routine_info));
-  OZ (package_guard->dblink_guard_.get_dblink_info(dblink_id, dblink_info));
-  CK (OB_NOT_NULL(dblink_info));
+  if (NULL != dblink_routine_info) {
+    routine_info = dblink_routine_info;
+  } else {
+    OZ (exec_ctx.get_package_guard(package_guard));
+    CK (OB_NOT_NULL(package_guard));
+    OZ (package_guard->dblink_guard_.get_dblink_routine_info(dblink_id, package_id,
+                                                             proc_id, routine_info),
+                                                             dblink_id, package_id, proc_id);
+    CK (OB_NOT_NULL(routine_info));
+    OZ (package_guard->dblink_guard_.get_dblink_info(dblink_id, dblink_info));
+    CK (OB_NOT_NULL(dblink_info));
+  }
   OZ (spi_execute_dblink(exec_ctx, allocator, dblink_info, routine_info, params, result));
   return ret;
 }
@@ -8716,7 +8727,7 @@ int ObSPIService::spi_execute_dblink(ObExecContext &exec_ctx,
       LOG_WARN("failed to revert dblink conn", K(ret), K(tmp_ret), KP(dblink_conn));
     }
   }
-
+  OZ (spi_check_timeout(exec_ctx));
   return ret;
 }
 

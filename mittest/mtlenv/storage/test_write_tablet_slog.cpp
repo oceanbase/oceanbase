@@ -128,7 +128,7 @@ TEST_F(TestWriteTabletSlog, basic)
   // persist and transform tablet
   const ObTabletMapKey key(ls_id, tablet_id);
   ObTabletHandle new_tablet_hdl;
-  const ObTabletPersisterParam param(ls_id, ls->get_ls_epoch(), tablet_id);
+  const ObTabletPersisterParam param(ls_id, ls->get_ls_epoch(), tablet_id, 0 /*transfer_seq*/);
   ASSERT_EQ(OB_SUCCESS, ObTabletPersister::persist_and_transform_tablet(param, *tablet, new_tablet_hdl));
 
   // write create tablet slog

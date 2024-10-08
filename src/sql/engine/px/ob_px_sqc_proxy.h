@@ -144,10 +144,6 @@ public:
       bool send_piece = true,
       bool need_wait_whole_msg = true);
 
-
-  // 用于 worker 汇报执行结果
-  int report_task_finish_status(int64_t task_idx, int rc);
-
   // for root thread
   int check_task_finish_status(int64_t timeout_ts);
 

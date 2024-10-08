@@ -43,7 +43,8 @@ enum class ObFreezeSourceFlag : int64_t
   DIRECT_INC_FREEZE   = 11,
   GC_RETAIN_CTX       = 12, // deprecated
   TEST_MODE           = 13, // used for test only
-  MAX_SOURCE          = 14,
+  TABLET_SPLIT        = 14,
+  MAX_SOURCE          = 15,
 };
 
 inline bool is_valid_freeze_source(const ObFreezeSourceFlag source)

@@ -27,11 +27,12 @@ using namespace oceanbase::common;
     oceanbase::table::hfilter::CompareOperator cmp_op;
     oceanbase::table::ObHTableFilterParser::SimpleString sval;
     oceanbase::table::hfilter::Filter *fval;
+    oceanbase::common::ObSEArray<int64_t, 8> *array;
 };
 
-%token RowFilter ValueFilter QualifierFilter SingleColumnValueFilter PageFilter ColumnPaginationFilter ColumnCountGetFilter
-%token CheckAndMutateFilter PrefixFilter
-%token TableCompareFilter
+%token RowFilter ValueFilter QualifierFilter SingleColumnValueFilter PageFilter ColumnCountGetFilter ColumnPrefixFilter ColumnPaginationFilter
+%token CheckAndMutateFilter PrefixFilter FirstKeyOnlyFilter KeyOnlyFilter TimestampsFilter
+%token TableCompareFilter RandomRowFilter
 %token LESS LESS_OR_EQUAL EQUAL NOT_EQUAL GREATER GREATER_OR_EQUAL NO_OP IS IS_NOT
 %token  <ival>          BOOL_VALUE
 %token  <sval>          STRING_VALUE
@@ -48,6 +49,7 @@ using namespace oceanbase::common;
 %type   <fval>          simple_filter filter result_filter
 %type   <sval>          family qualifier comparator
 %type   <cmp_op>        compare_op
+%type   <array>         timestamp_list
 
 %start result_filter
 %%
@@ -341,6 +343,37 @@ simple_filter:
                         YYABORT;
                     }
                 }
+        |       RandomRowFilter '(' INT_VALUE ')'
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    float_t chance = *(reinterpret_cast<float_t*>(&($3)));
+                    $$ = OB_NEWx(hfilter::RandomRowFilter, parse_ctx->allocator(), chance);
+                    if (nullptr == $$) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse RandomRowFilter");
+                        YYABORT;
+                    }
+                }
+        |       ColumnPrefixFilter '(' STRING_VALUE ')'
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    $$ = OB_NEWx(hfilter::ColumnPrefixFilter, parse_ctx->allocator(), parse_ctx->create_ob_string($3));
+                    if (nullptr == $$) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse ColumnPrefixFilter");
+                        YYABORT;
+                    }
+                }
         |       ColumnPaginationFilter '(' INT_VALUE ',' INT_VALUE ')'
                 {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
@@ -356,6 +389,69 @@ simple_filter:
                     }
                     if (OB_SUCCESS != ret) {
                         ob_hfilter_error(&(@$), parse_ctx, "failed to parse ColumnPaginationFilter");
+                        YYABORT;
+                    }
+                }
+        |       ColumnPaginationFilter '(' INT_VALUE ',' STRING_VALUE ')'
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    $$ = OB_NEWx(hfilter::ColumnPaginationFilter, parse_ctx->allocator(), $3, parse_ctx->create_ob_string($5));
+                    if (nullptr == $$) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    } else if ($3 < 0) {
+                        ret = OB_INVALID_ARGUMENT;
+                        LOG_WARN("arguments must be positive", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse ColumnPaginationFilter");
+                        YYABORT;
+                    }
+                }
+        |       FirstKeyOnlyFilter '(' ')'
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    $$ = OB_NEWx(hfilter::FirstKeyOnlyFilter, parse_ctx->allocator());
+                    if (nullptr == $$) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse FirstKeyOnlyFilter");
+                        YYABORT;
+                    }
+                }
+        |       KeyOnlyFilter '(' BOOL_VALUE ')'
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    $$ = OB_NEWx(hfilter::KeyOnlyFilter, parse_ctx->allocator(), $3);
+                    if (nullptr == $$) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse KeyOnlyFilter");
+                        YYABORT;
+                    }
+                }
+        |       TimestampsFilter '(' timestamp_list ',' BOOL_VALUE ')'
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    $$ = OB_NEWx(hfilter::TimestampsFilter, parse_ctx->allocator(), $3, $5);
+                    if (nullptr == $$) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse TimestampsFilter");
                         YYABORT;
                     }
                 }
@@ -439,5 +535,35 @@ compare_op:
 comparator:
                 STRING_VALUE
                 { $$ = $1; }
+        ;
+timestamp_list:
+                INT_VALUE
+                {
+                    typedef ObSEArray<int64_t, 8> i64_array;
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    $$ = OB_NEWx(i64_array, parse_ctx->allocator());
+                    if (nullptr == $$) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL($$->push_back($1))) {
+                        LOG_WARN("failed to push back", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse timestamp list");
+                        YYABORT;
+                    }
+                }
+        |       timestamp_list ',' INT_VALUE
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    if (OB_FAIL($1->push_back($3))) {
+                        LOG_WARN("failed to push back", K(ret));
+                    }
+                    $$ = $1;
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse timestamp list");
+                        YYABORT;
+                    }
+                }
         ;
 %%

@@ -67,6 +67,7 @@ public:
   RPC_S(PRD recover_restore_table_ddl, obrpc::OB_RECOVER_RESTORE_TABLE_DDL, (ObRecoverRestoreTableDDLArg));
   RPC_S(PRD parallel_create_table, obrpc::OB_PARALLEL_CREATE_TABLE, (ObCreateTableArg), ObCreateTableRes);
   RPC_S(PRD alter_table, obrpc::OB_ALTER_TABLE, (ObAlterTableArg), ObAlterTableRes);
+  RPC_S(PRD split_global_index_tablet, obrpc::OB_SPLIT_GLOBAL_INDEX_TABLET, (ObAlterTableArg));
   RPC_S(PRD create_hidden_table, obrpc::OB_CREATE_HIDDEN_TABLE, (obrpc::ObCreateHiddenTableArg), ObCreateHiddenTableRes);
   RPC_S(PRD alter_database, obrpc::OB_ALTER_DATABASE, (ObAlterDatabaseArg));
   RPC_S(PRD drop_database, obrpc::OB_DROP_DATABASE, (ObDropDatabaseArg), ObDropDatabaseRes);
@@ -261,6 +262,8 @@ public:
   RPC_S(PR5 request_time_zone_info, obrpc::OB_REQUEST_TIME_ZONE_INFO, (common::ObRequestTZInfoArg), common::ObRequestTZInfoResult);
   RPC_S(PR5 calc_column_checksum_response, obrpc::OB_CALC_COLUMN_CHECKSUM_RESPONSE, (obrpc::ObCalcColumnChecksumResponseArg));
   RPC_S(PR5 build_ddl_single_replica_response, obrpc::OB_DDL_BUILD_SINGLE_REPLICA_RESPONSE, (obrpc::ObDDLBuildSingleReplicaResponseArg));
+  RPC_S(PRD clean_splitted_tablet, obrpc::OB_CLEAN_SPLITTED_TABLET, (ObCleanSplittedTabletArg));
+  RPC_S(PR5 send_auto_split_tablet_task_request, obrpc::OB_AUTO_SPLIT_TABLET_TASK_REQUEST, (obrpc::ObAutoSplitTabletBatchArg), obrpc::ObAutoSplitTabletBatchRes);
   RPC_S(PR5 cancel_ddl_task, obrpc::OB_CANCEL_DDL_TASK, (obrpc::ObCancelDDLTaskArg));
   RPC_S(PR5 start_redef_table, obrpc::OB_START_REDEF_TABLE, (ObStartRedefTableArg), ObStartRedefTableRes);
   RPC_S(PR5 copy_table_dependents, obrpc::OB_COPY_TABLE_DEPENDENTS, (ObCopyTableDependentsArg));

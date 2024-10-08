@@ -242,7 +242,7 @@ private:
       const common::ObIArray<common::ObAddr> &addr_list,
       const common::GlobalLearnerList &learner_list,
       const ObMigrationOpArg &arg, common::ObAddr &choosen_src_addr);
-  int get_valid_c_replica_(
+  int get_c_replica_(
       const common::ObAddr &addr,
       const common::GlobalLearnerList &learner_list,
       ObIArray<common::ObAddr> &c_replica_list) const;

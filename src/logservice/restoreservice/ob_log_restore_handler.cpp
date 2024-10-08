@@ -96,6 +96,22 @@ const char *restore_status_str[static_cast<int>(RestoreSyncStatus::MAX_RESTORE_S
   "NOT AVAILABLE",
 };
 
+RestoreSyncStatus str_to_restore_sync_status(const ObString &str)
+{
+  RestoreSyncStatus ret_status = RestoreSyncStatus::MAX_RESTORE_SYNC_STATUS;
+  if (str.empty()) {
+    ret_status = RestoreSyncStatus::MAX_RESTORE_SYNC_STATUS;
+  } else {
+    for (int64_t i = 0; i < ARRAYSIZEOF(restore_status_str); i++) {
+      if (0 == str.case_compare(restore_status_str[i])) {
+        ret_status = static_cast<RestoreSyncStatus>(i);
+        break;
+      }
+    }
+  }
+  return ret_status;
+}
+
 ObLogRestoreHandler::ObLogRestoreHandler() :
   parent_(NULL),
   context_(),

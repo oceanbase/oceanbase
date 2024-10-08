@@ -459,7 +459,9 @@
 #include "sql/engine/expr/ob_expr_rb_calc.h"
 #include "sql/engine/expr/ob_expr_rb_to_string.h"
 #include "sql/engine/expr/ob_expr_rb_from_string.h"
+#include "sql/engine/expr/ob_expr_rb_select.h"
 #include "sql/engine/expr/ob_expr_array_contains.h"
+#include "sql/engine/expr/ob_expr_tokenize.h"
 #include "sql/engine/expr/ob_expr_lock_func.h"
 #include "sql/engine/expr/ob_expr_decode_trace_id.h"
 #include "sql/engine/expr/ob_expr_topn_filter.h"
@@ -1146,6 +1148,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprRbAndnotNull2empty);
     REG_OP(ObExprRbToString);
     REG_OP(ObExprRbFromString);
+    REG_OP(ObExprRbSelect);
     REG_OP(ObExprGetPath);
     REG_OP(ObExprGTIDSubset);
     REG_OP(ObExprGTIDSubtract);
@@ -1162,6 +1165,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprSm4Encrypt);
     REG_OP(ObExprSm4Decrypt);
     REG_OP(ObExprSplitPart);
+    REG_OP(ObExprTokenize);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);

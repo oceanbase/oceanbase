@@ -25,6 +25,7 @@ select name from __all_virtual_sys_parameter_stat where name not like "module_te
 name
 alert_log_level
 all_server_list
+arbitration_degradation_policy
 arbitration_timeout
 archive_lag_target
 audit_log_buffer_size
@@ -40,6 +41,7 @@ audit_log_strategy
 audit_sys_operations
 audit_trail
 autoinc_cache_refresh_interval
+auto_split_tablet_size
 backup_data_file_size
 balancer_idle_time
 balancer_log_interval
@@ -81,15 +83,18 @@ default_auto_increment_mode
 default_compress
 default_compress_func
 default_enable_extended_rowid
+default_load_mode
 default_progressive_merge_num
 default_row_format
 default_table_store_format
 devname
 diag_syslog_per_error_limit
+direct_load_allow_fallback
 disk_io_thread_count
 dtl_buffer_size
 dump_data_dictionary_to_log_interval
 enable_async_syslog
+enable_auto_split
 enable_cgroup
 enable_crazy_medium_compaction
 enable_dblink
@@ -134,6 +139,7 @@ job_queue_processes
 json_document_max_depth
 kv_group_commit_batch_size
 kv_group_commit_rw_mode
+kv_hbase_client_scanner_timeout_period
 kv_transport_compress_func
 kv_transport_compress_threshold
 kv_ttl_duty_duration
@@ -305,6 +311,7 @@ _datafile_usage_lower_bound_percentage
 _datafile_usage_upper_bound_percentage
 _data_storage_io_timeout
 _delay_resource_recycle_after_correctness_issue
+_display_mysql_version
 _enable_active_txn_transfer
 _enable_adaptive_compaction
 _enable_adaptive_merge_schedule
@@ -419,6 +426,7 @@ _ob_enable_dynamic_worker
 _ob_enable_fast_freeze
 _ob_enable_fast_parser
 _ob_enable_prepared_statement
+_ob_enable_standby_db_parallel_log_transport
 _ob_get_gts_ahead_interval
 _ob_max_thread_num
 _ob_obj_dep_maint_task_interval
@@ -438,6 +446,7 @@ _parallel_max_active_sessions
 _parallel_min_message_pool
 _parallel_redo_logging_trigger
 _parallel_server_sleep_time
+_partition_wise_plan_enabled
 _pdml_thread_cache_size
 _pipelined_table_function_memory_limit
 _preserve_order_for_pagination

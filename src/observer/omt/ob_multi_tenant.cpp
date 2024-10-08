@@ -116,6 +116,7 @@
 #include "rootserver/backup/ob_backup_service.h" //ObBackupDataService and ObBackupCleanService
 #include "rootserver/backup/ob_backup_task_scheduler.h" // ObBackupTaskScheduler
 #include "rootserver/backup/ob_archive_scheduler_service.h" // ObArchiveSchedulerService
+#include "observer/dbms_scheduler/ob_dbms_sched_service.h" // ObDBMSSchedService
 #include "logservice/leader_coordinator/ob_leader_coordinator.h"
 #include "storage/lob/ob_lob_manager.h"
 #include "share/deadlock/ob_deadlock_detector_mgr.h"
@@ -172,6 +173,7 @@
 #include "storage/tenant_snapshot/ob_tenant_snapshot_service.h"
 #include "share/index_usage/ob_index_usage_info_mgr.h"
 #include "rootserver/mview/ob_mview_maintenance_service.h"
+#include "storage/restore/ob_tenant_restore_info_mgr.h"
 #include "share/io/ob_storage_io_usage_reporter.h"
 #include "share/resource_limit_calculator/ob_resource_limit_calculator.h"
 #include "storage/checkpoint/ob_checkpoint_diagnose.h"
@@ -179,6 +181,7 @@
 #include "lib/roaringbitmap/ob_rb_memory_mgr.h"
 #include "storage/tmp_file/ob_tmp_file_manager.h" // ObTenantTmpFileManager
 #include "storage/restore/ob_tenant_restore_info_mgr.h"
+#include "share/scheduler/ob_partition_auto_split_helper.h"
 #ifdef OB_BUILD_AUDIT_SECURITY
 #include "sql/audit/ob_audit_logger.h"
 #include "sql/audit/ob_audit_log_mgr.h"
@@ -544,7 +547,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, ObTenantFreezer::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObDataAccessService::mtl_init, nullptr, nullptr, nullptr, ObDataAccessService::mtl_destroy);
     MTL_BIND2(mtl_new_default, ObDASIDService::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
-    MTL_BIND2(mtl_new_default, ObAccessService::mtl_init, nullptr, mtl_stop_default, nullptr, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, ObAccessService::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObCheckPointService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObTransferService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, rootserver::ObTenantTransferService::mtl_init, nullptr, rootserver::ObTenantTransferService::mtl_stop, rootserver::ObTenantTransferService::mtl_wait, mtl_destroy_default);
@@ -607,7 +610,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, ObTenantErrsimModuleMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObTenantErrsimEventMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
 #endif
-
+    MTL_BIND2(mtl_new_default, rootserver::ObDBMSSchedService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, table::ObHTableLockMgr::mtl_init, nullptr, nullptr, nullptr, table::ObHTableLockMgr::mtl_destroy);
     MTL_BIND2(mtl_new_default, ObSharedTimer::mtl_init, ObSharedTimer::mtl_start, ObSharedTimer::mtl_stop, ObSharedTimer::mtl_wait, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObOptStatMonitorManager::mtl_init, ObOptStatMonitorManager::mtl_start, ObOptStatMonitorManager::mtl_stop, ObOptStatMonitorManager::mtl_wait, mtl_destroy_default);
@@ -618,6 +621,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, ObIndexUsageInfoMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, storage::ObTabletMemtableMgrPool::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, rootserver::ObMViewMaintenanceService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, storage::ObTenantRestoreInfoMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObStorageIOUsageRepoter::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
 #ifdef OB_BUILD_SHARED_STORAGE
     MTL_BIND2(mtl_new_default, ObPublicBlockGCService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
@@ -638,6 +642,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, table::ObTableClientInfoMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, observer::ObTableQueryASyncMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObPluginVectorIndexService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, ObAutoSplitTaskCache::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
   }
 
   if (OB_SUCC(ret)) {

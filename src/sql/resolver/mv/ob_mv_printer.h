@@ -50,6 +50,22 @@ struct SharedPrinterRawExprs
   ObConstRawExpr *str_o_;
 };
 
+struct MajorRefreshInfo  {
+  MajorRefreshInfo(const int64_t part_idx, const int64_t sub_part_idx, const ObNewRange &range)
+    : part_idx_(part_idx),
+      sub_part_idx_(sub_part_idx),
+      range_(range)
+  {}
+
+  bool is_valid_info() const {  return OB_INVALID_INDEX != part_idx_ || OB_INVALID_INDEX != sub_part_idx_ || !range_.is_whole_range();}
+
+  TO_STRING_KV(K_(part_idx), K_(sub_part_idx), K_(range));
+  const int64_t part_idx_;
+  const int64_t sub_part_idx_;
+  const ObNewRange &range_;
+  DISALLOW_COPY_AND_ASSIGN(MajorRefreshInfo);
+};
+
 class ObMVPrinter
 {
 public:
@@ -66,7 +82,8 @@ public:
       for_rt_expand_(for_rt_expand),
       stmt_factory_(stmt_factory),
       expr_factory_(expr_factory),
-      exprs_()
+      exprs_(),
+      major_refresh_info_(NULL)
     {}
   ~ObMVPrinter() {}
 
@@ -84,10 +101,12 @@ public:
   static const ObString WIN_MIN_SEQ_COL_NAME;
 
   static int print_mv_operators(const share::schema::ObTableSchema &mv_schema,
+                                const share::schema::ObTableSchema &mv_container_schema,
                                 const ObSelectStmt &view_stmt,
                                 const bool for_rt_expand,
                                 const share::SCN &last_refresh_scn,
                                 const share::SCN &refresh_scn,
+                                const MajorRefreshInfo *major_refresh_info,
                                 ObIAllocator &alloc,
                                 ObIAllocator &str_alloc,
                                 ObSchemaGetterGuard *schema_guard,
@@ -98,7 +117,6 @@ public:
                                 ObMVRefreshableType &refreshable_type);
 
 private:
-
   enum MlogExtColFlag {
     MLOG_EXT_COL_OLD_NEW      = 0x1,
     MLOG_EXT_COL_SEQ          = 0x1 << 1,
@@ -107,7 +125,7 @@ private:
     MLOG_EXT_COL_WIN_MAX_SEQ  = 0x1 << 4,
   };
 
-  int init(const share::SCN &last_refresh_scn, const share::SCN &refresh_scn);
+  int init(const share::SCN &last_refresh_scn, const share::SCN &refresh_scn, const MajorRefreshInfo *major_refresh_info);
   int gen_mv_operator_stmts(ObIArray<ObDMLStmt*> &dml_stmts);
   int gen_refresh_dmls_for_mv(ObIArray<ObDMLStmt*> &dml_stmts);
   int gen_real_time_view_for_mv(ObSelectStmt *&sel_stmt);
@@ -135,7 +153,8 @@ private:
                                 const TableItem *outer_table,
                                 const bool is_exists,
                                 const bool use_orig_sel_alias,
-                                ObRawExpr *&exists_expr);
+                                ObRawExpr *&exists_expr,
+                                bool use_mlog = true);
   int get_column_name_from_origin_select_items(const uint64_t table_id,
                                                const uint64_t column_id,
                                                const ObString *&col_name);
@@ -256,6 +275,32 @@ private:
                                TableItem *&table_item,
                                ObSelectStmt *view_stmt = NULL,
                                const bool add_to_from = true);
+
+  int gen_refresh_select_for_major_refresh_mjv(ObIArray<ObDMLStmt*> &dml_stmts);
+  int get_rowkey_pos_in_select(ObIArray<int64_t> &rowkey_sel_pos);
+  int gen_real_time_view_for_major_refresh_mjv(ObSelectStmt *&sel_stmt);
+  int gen_access_mv_data_for_major_refresh_mjv(ObSelectStmt *&sel_stmt);
+  int gen_not_exists_cond_for_major_refresh_mjv(const ObIArray<ObRawExpr*> &upper_sel_exprs,
+                                                const TableItem *source_table,
+                                                ObRawExpr *&exists_expr);
+  int gen_real_time_view_access_delta_data_for_major_refresh_mjv(ObSelectStmt *&delta_left_stmt,
+                                                                 ObSelectStmt *&delta_right_stmt);
+  int gen_one_refresh_select_for_major_refresh_mjv(const ObIArray<int64_t> &rowkey_sel_pos,
+                                                   const bool is_delta_left,
+                                                   ObSelectStmt *&delta_stmt);
+  int gen_refresh_validation_select_for_major_refresh_mjv(const ObIArray<int64_t> &rowkey_sel_pos,
+                                                          ObSelectStmt *&delta_stmt);
+  int gen_refresh_select_hint_for_major_refresh_mjv(const TableItem &left_table,
+                                                    const TableItem &right_table,
+                                                    ObStmtHint &stmt_hint);
+  int prepare_gen_access_delta_data_for_major_refresh_mjv(const ObIArray<int64_t> &rowkey_sel_pos,
+                                                          ObSelectStmt &base_delta_stmt);
+  int append_old_new_col_filter(const TableItem &table, ObRawExpr *val, ObIArray<ObRawExpr*>& conds);
+  int fill_table_partition_name(const TableItem &src_table, TableItem &table);
+  int append_rowkey_range_filter(const ObIArray<SelectItem> &select_items,
+                                 uint64_t rowkey_count,
+                                 ObIArray<ObRawExpr*> &conds);
+  int assign_simple_sel_stmt(ObSelectStmt &target_stmt, ObSelectStmt &source_stmt);
   template <typename StmtType>
   inline int create_simple_stmt(StmtType *&stmt)
   {
@@ -288,6 +333,7 @@ private:
   ObStmtFactory &stmt_factory_;
   ObRawExprFactory &expr_factory_;
   SharedPrinterRawExprs exprs_;
+  const MajorRefreshInfo *major_refresh_info_;
   DISALLOW_COPY_AND_ASSIGN(ObMVPrinter);
 };
 

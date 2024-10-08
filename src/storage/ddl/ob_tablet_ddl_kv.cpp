@@ -16,6 +16,7 @@
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 #include "share/scn.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
+#include "storage/blocksstable/index_block/ob_index_block_builder.h"
 #include "storage/blocksstable/ob_macro_block_struct.h"
 #include "storage/blocksstable/ob_object_manager.h"
 #include "share/ob_force_print_log.h"

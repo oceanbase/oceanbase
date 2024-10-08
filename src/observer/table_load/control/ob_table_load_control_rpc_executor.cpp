@@ -650,11 +650,13 @@ int ObDirectLoadControlInsertTransExecutor::process()
   if (OB_SUCC(ret)) {
     ObTableLoadTableCtx *table_ctx = nullptr;
     ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
-    ObTableLoadSharedAllocatorHandle allocator_handle =
-      ObTableLoadSharedAllocatorHandle::make_handle("TLD_share_alloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    ObTableLoadSharedAllocatorHandle allocator_handle;
     int64_t data_len = arg_.payload_.length();
     char *buf = nullptr;
-    if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {
+    if (OB_FAIL(ObTableLoadSharedAllocatorHandle::make_handle(
+          allocator_handle, "TLD_share_alloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()))) {
+      LOG_WARN("failed to make allocator handle", KR(ret));
+    } else if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {
       LOG_WARN("fail to get table ctx", KR(ret), K(key));
     } else if (!allocator_handle) {
       ret = OB_ALLOCATE_MEMORY_FAILED;

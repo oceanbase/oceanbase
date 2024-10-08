@@ -316,7 +316,7 @@ int ObLSRecoveryReportor::update_ls_recovery(
     LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id), K(ls_recovery_stat));
   } else if (ls->is_sys_ls()) {
     //only primary tenant
-    if (OB_FAIL(update_sys_ls_recovery_stat_and_tenant_info(ls_recovery_stat, share::PRIMARY_TENANT_ROLE, false, trans))) {
+    if (OB_FAIL(update_sys_ls_recovery_stat_and_tenant_info(ls_recovery_stat, share::PRIMARY_TENANT_ROLE, false, false, trans))) {
       LOG_WARN("failed to update sys ls recovery stat", KR(ret), K(ls_recovery_stat));
     }
   } else if (OB_FAIL(ObLSServiceHelper::update_ls_recover_in_trans(ls_recovery_stat, false, trans))) {
@@ -341,8 +341,12 @@ int ObLSRecoveryReportor::update_ls_recovery(
   return ret;
 }
 
-int ObLSRecoveryReportor::update_sys_ls_recovery_stat_and_tenant_info(share::ObLSRecoveryStat &ls_recovery_stat,
-      const share::ObTenantRole &tenant_role, const bool only_update_readable_scn, ObMySQLTransaction &trans)
+int ObLSRecoveryReportor::update_sys_ls_recovery_stat_and_tenant_info(
+    share::ObLSRecoveryStat &ls_recovery_stat,
+    const share::ObTenantRole &tenant_role,
+    const bool only_update_readable_scn,
+    const bool check_sync_valid,
+    ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!ls_recovery_stat.is_valid() || !ls_recovery_stat.get_ls_id().is_sys_ls()
@@ -368,8 +372,9 @@ int ObLSRecoveryReportor::update_sys_ls_recovery_stat_and_tenant_info(share::ObL
           K(ls_recovery_stat), K(tenant_info), K(only_update_readable_scn));
     } else if (OB_FAIL(ObLSServiceHelper::update_ls_recover_in_trans(ls_recovery_stat, only_update_readable_scn, trans))) {
       LOG_WARN("failed to update ls recovery in trans", KR(ret), K(ls_recovery_stat), K(only_update_readable_scn));
-    } else if (OB_FAIL(update_tenant_info_in_trans(tenant_info, trans))) {
-      LOG_WARN("failed to update tenant info in trans", KR(ret), K(tenant_info));
+    } else if (OB_FAIL(update_tenant_info_in_trans(tenant_info, check_sync_valid, ls_recovery_stat.get_sync_scn(), trans))) {
+      LOG_WARN("failed to update tenant info in trans", KR(ret), K(tenant_info), K(check_sync_valid),
+          K(ls_recovery_stat));
     }
   }
   return ret;
@@ -377,10 +382,13 @@ int ObLSRecoveryReportor::update_sys_ls_recovery_stat_and_tenant_info(share::ObL
 
 int ObLSRecoveryReportor::update_tenant_info_in_trans(
     const share::ObAllTenantInfo &old_tenant_info,
+    const bool check_sync_valid,
+    const share::SCN &sys_ls_sync_scn,
     common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!old_tenant_info.is_valid())) {
+  if (OB_UNLIKELY(!old_tenant_info.is_valid()
+        || (check_sync_valid && !sys_ls_sync_scn.is_valid()))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant info is invalid", KR(ret), K(old_tenant_info));
   } else {
@@ -394,6 +402,13 @@ int ObLSRecoveryReportor::update_tenant_info_in_trans(
             tenant_id, trans, sync_scn, readable_scn))) {
       LOG_WARN("failed to get tenant recovery stat", KR(ret), K(tenant_id));
       //TODO replayable_scn is equal to sync_scn
+    } else if (check_sync_valid && sync_scn != sys_ls_sync_scn) {
+      //for double check, if has multi_source, sync_scn of SYS_LS is the smllest
+      //这里可能存在一种情况：日志流从CREATING变成NORMAL的多源事务，在检查用户日志流的同步位点的时候，不会参考这个日志流的同步位点。
+      //但是在计算tenant_info的位点时，由于这个日志流已经变成NORMAL的状态了，所以会看这个日志流
+      //所以这种情况也会出现租户的位点小于1号日志流的位点的情况，算是预期内的。
+      ret = OB_NEED_RETRY;
+      LOG_WARN("failed to check sync scn", KR(ret), K(sync_scn), K(sys_ls_sync_scn));
     } else if (OB_FAIL(info_proxy.update_tenant_recovery_status_in_trans(
                    tenant_id, trans, old_tenant_info, sync_scn,
                    sync_scn, readable_scn))) {

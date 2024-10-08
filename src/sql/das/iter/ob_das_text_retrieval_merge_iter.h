@@ -15,6 +15,7 @@
 
 #include "ob_das_iter.h"
 #include "lib/container/ob_loser_tree.h"
+#include "sql/engine/basic/ob_chunk_datum_store.h"
 
 namespace oceanbase
 {
@@ -63,8 +64,9 @@ public:
       ir_rtdef_(nullptr),
       doc_cnt_iter_(nullptr),
       tx_desc_(nullptr),
-      snapshot_(nullptr)
-  {}
+      snapshot_(nullptr),
+      query_tokens_()
+{}
 
   virtual bool is_valid() const override
   {
@@ -76,6 +78,7 @@ public:
   ObDASIter *doc_cnt_iter_;
   transaction::ObTxDesc *tx_desc_;
   transaction::ObTxReadSnapshot *snapshot_;
+  ObArray<ObString> query_tokens_;
 };
 
 class ObDASTextRetrievalMergeIter : public ObDASIter
@@ -105,39 +108,36 @@ public:
   void set_ls_id(const ObLSID &ls_id) { ls_id_ = ls_id; }
   storage::ObTableScanParam &get_doc_agg_param() { return whole_doc_agg_param_; }
   int set_related_tablet_ids(const ObLSID &ls_id, const ObDASRelatedTabletID &related_tablet_ids);
-  int set_merge_iters(const ObIArray<ObDASIter *> &retrieval_iters);
+  virtual int set_merge_iters(const ObIArray<ObDASIter *> &retrieval_iters);
   const ObIArray<ObString> &get_query_tokens() { return query_tokens_; }
+  bool is_taat_mode() { return RetrievalProcType::TAAT == processing_type_; }
+  static int build_query_tokens(const ObDASIRScanCtDef *ir_ctdef, ObDASIRScanRtDef *ir_rtdef, common::ObIAllocator &alloc, ObArray<ObString> &query_tokens);
 protected:
   virtual int inner_init(ObDASIterParam &param) override;
   virtual int inner_reuse() override;
   virtual int inner_release() override;
   virtual int inner_get_next_row() override;
   virtual int inner_get_next_rows(int64_t &count, int64_t capacity) override;
-
-private:
+protected:
+  virtual int check_and_prepare();
+  int project_result(const ObIRIterLoserTreeItem &item, const double relevance);
+  int project_relevance(const ObIRIterLoserTreeItem &item, const double relevance);
+  int project_docid();
+  void clear_evaluated_infos();
   int init_iters(
       transaction::ObTxDesc *tx_desc,
       transaction::ObTxReadSnapshot *snapshot,
       const ObIArray<ObString> &query_tokens);
-  int init_query_tokens(const ObDASIRScanCtDef *ir_ctdef, ObDASIRScanRtDef *ir_rtdef);
+  int init_query_tokens(const ObArray<ObString> &query_tokens);
   void release_iters();
-  int pull_next_batch_rows();
-  int fill_loser_tree_item(
-      ObDASTextRetrievalIter &iter,
-      const int64_t iter_idx,
-      ObIRIterLoserTreeItem &item);
-  int next_disjunctive_document();
   int init_total_doc_cnt_param(transaction::ObTxDesc *tx_desc, transaction::ObTxReadSnapshot *snapshot);
   int do_total_doc_cnt();
-  int project_result(const ObIRIterLoserTreeItem &item, const double relevance);
-  void clear_evaluated_infos();
-private:
+protected:
   static const int64_t OB_DEFAULT_QUERY_TOKEN_ITER_CNT = 4;
   typedef ObSEArray<ObDASTextRetrievalIter *, OB_DEFAULT_QUERY_TOKEN_ITER_CNT> ObDASTokenRetrievalIterArray;
   lib::MemoryContext mem_context_;
   TokenRelationType relation_type_;
   RetrievalProcType processing_type_;
-  ObIAllocator *allocator_;
   const ObDASIRScanCtDef *ir_ctdef_;
   ObDASIRScanRtDef *ir_rtdef_;
   transaction::ObTxDesc *tx_desc_;
@@ -146,10 +146,8 @@ private:
   common::ObTabletID doc_id_idx_tablet_id_;
   ObArray<ObString> query_tokens_;
   ObDASTokenRetrievalIterArray token_iters_;
-  ObIRIterLoserTreeCmp loser_tree_cmp_;
-  ObIRIterLoserTree *iter_row_heap_;
-  ObFixedArray<int64_t, ObIAllocator> next_batch_iter_idxes_;
-  int64_t next_batch_cnt_;
+  ObFixedArray<ObDocId, ObIAllocator> cache_doc_ids_;
+  int64_t next_written_idx_;
   ObDASScanIter *whole_doc_cnt_iter_;
   ObTableScanParam whole_doc_agg_param_;
   common::ObLimitParam limit_param_;
@@ -158,6 +156,72 @@ private:
   bool doc_cnt_calculated_;
   bool doc_cnt_iter_acquired_;
   bool is_inited_;
+};
+
+class ObDASTRTaatIter : public ObDASTextRetrievalMergeIter
+{
+public:
+  ObDASTRTaatIter();
+  virtual ~ObDASTRTaatIter() {}
+  virtual int rescan() override;
+  virtual int set_merge_iters(const ObIArray<ObDASIter *> &retrieval_iters) override;
+protected:
+  virtual int inner_init(ObDASIterParam &param) override;
+  virtual int inner_reuse() override;
+  virtual int inner_release() override;
+  virtual int inner_get_next_row() override;
+  virtual int inner_get_next_rows(int64_t &count, int64_t capacity) override;
+  virtual int check_and_prepare() override;
+private:
+  int get_next_batch_rows(int64_t &count, int64_t capacity);
+  int fill_output_exprs(int64_t &count, int64_t safe_capacity);
+  int load_next_hashmap();
+  int inner_load_next_hashmap();
+  int fill_total_doc_cnt();
+  int init_stores_by_partition();
+  int fill_chunk_store_by_tr_iter();
+private:
+  static const int64_t OB_MAX_HASHMAP_COUNT = 20;
+  static const int64_t OB_HASHMAP_DEFAULT_SIZE = 1000;
+  hash::ObHashMap<ObDocId, double> **hash_maps_;
+  sql::ObChunkDatumStore **datum_stores_;
+  sql::ObChunkDatumStore::Iterator **datum_store_iters_;
+  int64_t hash_map_size_;
+  hash::ObHashMap<ObDocId, double>::iterator *cur_map_iter_;
+  int64_t total_doc_cnt_;
+  int64_t next_clear_map_idx_;
+  int64_t cur_map_idx_;
+  ObDocId cache_first_docid_;
+  bool is_chunk_store_inited_;
+  bool is_hashmap_inited_;
+};
+
+class ObDASTRDaatIter : public ObDASTextRetrievalMergeIter
+{
+public:
+  ObDASTRDaatIter();
+  virtual ~ObDASTRDaatIter() {}
+  virtual int rescan() override;
+  virtual int set_merge_iters(const ObIArray<ObDASIter *> &retrieval_iters) override;
+protected:
+  virtual int inner_init(ObDASIterParam &param) override;
+  virtual int inner_reuse() override;
+  virtual int inner_release() override;
+  virtual int inner_get_next_row() override;
+  virtual int inner_get_next_rows(int64_t &count, int64_t capacity) override;
+private:
+  int pull_next_batch_rows();
+  int pull_next_batch_rows_with_batch_mode();
+  int fill_loser_tree_item(
+      ObDASTextRetrievalIter &iter,
+      const int64_t iter_idx,
+      ObIRIterLoserTreeItem &item);
+  int next_disjunctive_document(bool batch_mode);
+private:
+  ObIRIterLoserTreeCmp loser_tree_cmp_;
+  ObIRIterLoserTree *iter_row_heap_;
+  ObFixedArray<int64_t, ObIAllocator> next_batch_iter_idxes_;
+  int64_t next_batch_cnt_;
 };
 
 } // namespace sql

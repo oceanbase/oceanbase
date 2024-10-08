@@ -636,6 +636,7 @@ int ObDbmsStats::set_column_stats(sql::ObExecContext &ctx,
                                             params.at(2),
                                             params.at(3),
                                             param.col_meta_,
+                                            param.col_accuracy_,
                                             param.table_param_))) {
     LOG_WARN("failed to parse set column stats", K(ret));
   } else if (OB_FAIL(parse_set_column_stats_options(ctx,
@@ -3760,6 +3761,7 @@ int ObDbmsStats::parse_set_column_stats(ObExecContext &ctx,
                                         const ObObjParam &colname,
                                         const ObObjParam &part_name,
                                         ObObjMeta &col_meta,
+                                        ObAccuracy &col_accuracy,
                                         ObTableStatParam &param)
 {
   int ret = OB_SUCCESS;
@@ -3816,6 +3818,7 @@ int ObDbmsStats::parse_set_column_stats(ObExecContext &ctx,
         col_param.column_id_ = col->get_column_id();
         col_param.cs_type_   = col->get_collation_type();
         col_meta = col->get_meta_type();
+        col_accuracy = col->get_accuracy();
         col_param.gather_flag_ = 0;
         col_param.bucket_num_ = -1;
         if (col->is_index_column()) {

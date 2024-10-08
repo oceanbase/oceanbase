@@ -177,7 +177,7 @@ int ObIStreamBuf::do_callback()
 /*
  * ObVectorIndexSerializer implement
  * */
-int ObVectorIndexSerializer::serialize(void *index, ObOStreamBuf::CbParam &cb_param, ObOStreamBuf::Callback &cb, const int64_t capacity)
+int ObVectorIndexSerializer::serialize(void *index, ObOStreamBuf::CbParam &cb_param, ObOStreamBuf::Callback &cb, uint64_t tenant_id, const int64_t capacity)
 {
   int ret = OB_SUCCESS;
   char *data = nullptr;
@@ -190,7 +190,9 @@ int ObVectorIndexSerializer::serialize(void *index, ObOStreamBuf::CbParam &cb_pa
   } else {
     ObOStreamBuf streambuf(data, capacity, cb_param, cb);
     std::ostream out(&streambuf);
+    lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "VIndexVsagADP"));
     if (OB_FAIL(obvectorutil::fserialize(index, out))) {
+      ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
       LOG_WARN("fail to do vsag serialize", K(ret));
     } else {
       streambuf.check_finish(); // do last callback to ensure all the data is written
@@ -202,7 +204,7 @@ int ObVectorIndexSerializer::serialize(void *index, ObOStreamBuf::CbParam &cb_pa
   return ret;
 }
 
-int ObVectorIndexSerializer::deserialize(void *&index, ObIStreamBuf::CbParam &cb_param, ObIStreamBuf::Callback &cb)
+int ObVectorIndexSerializer::deserialize(void *&index, ObIStreamBuf::CbParam &cb_param, ObIStreamBuf::Callback &cb, uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   char *data = nullptr;
@@ -219,8 +221,14 @@ int ObVectorIndexSerializer::deserialize(void *&index, ObIStreamBuf::CbParam &cb
       } else {
         LOG_WARN("failed to init istreambuf", K(ret));
       }
-    } else if (OB_FAIL(obvectorutil::fdeserialize(index, in))) {
-      LOG_WARN("fail to do vsag deserialize", K(ret));
+    } else {
+      lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "VIndexVsagADP"));
+      if (OB_FAIL(obvectorutil::fdeserialize(index, in))) {
+        ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
+        LOG_WARN("fail to do vsag deserialize", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(streambuf.get_error_code())) {
       if (ret == OB_ITER_END) {
         LOG_INFO("[vec index deserialize] read table finish, just return");

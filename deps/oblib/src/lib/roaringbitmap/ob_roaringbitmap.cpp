@@ -311,6 +311,97 @@ int ObRoaringBitmap::value_andnot(ObRoaringBitmap *rb)
   return ret;
 }
 
+int ObRoaringBitmap::subset(ObRoaringBitmap *res_rb,
+                            uint64_t limit,
+                            uint64_t offset,
+                            bool reverse,
+                            uint64_t range_start,
+                            uint64_t range_end)
+{
+  int ret = OB_SUCCESS;
+  uint64_t count = 0;
+  res_rb->set_empty();
+  if (limit == 0 || offset >= get_cardinality() || range_start > range_end) {
+    // do nothing
+  } else if (is_empty_type()) {
+    // do nothing
+  } else if (is_single_type()) {
+    if (offset == 0 && limit > 0
+        && range_start <= get_single_value()
+        && range_end >= get_single_value()) {
+      res_rb->set_single(get_single_value());
+    }
+  } else if (is_set_type()) {
+    if (OB_FAIL(convert_to_bitmap())) {
+      LOG_WARN("failed to convert roaringbitmap to bitmap type", K(ret));
+    } else if (OB_FAIL(subset(res_rb, limit, offset, reverse, range_start, range_end))) {
+      LOG_WARN("failed to select subset", K(ret));
+    }
+  } else if (is_bitmap_type()) {
+    roaring::api::roaring64_iterator_t* iter = nullptr;
+    ROARING_TRY_CATCH(iter = roaring::api::roaring64_iterator_create(get_bitmap()));
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(iter)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else if (!roaring::api::roaring64_iterator_has_value(iter)) {
+      // do nothing
+    } else if (roaring::api::roaring64_iterator_move_equalorlarger(iter, range_start)) {
+      if (!reverse) {
+        // skip offset
+        for (uint64_t i = 0; OB_SUCC(ret) && i < offset; i++) {
+          if (!roaring::api::roaring64_iterator_advance(iter)) {
+            ret = OB_ITER_END;
+          }
+        }
+        // add values
+        while (OB_SUCC(ret) && roaring::api::roaring64_iterator_value(iter) <= range_end && count < limit) {
+          if (OB_FAIL(res_rb->value_add(roaring::api::roaring64_iterator_value(iter)))) {
+            LOG_WARN("failed to add value", K(ret), K(roaring::api::roaring64_iterator_value(iter)));
+          } else if (OB_FALSE_IT(count++)) {
+          } else if (!roaring::api::roaring64_iterator_advance(iter)) {
+            ret = OB_ITER_END;
+          }
+        }
+      } else {
+        // jump to the last value in the range
+        uint64_t range_count = 0;
+        while (OB_SUCC(ret) && roaring::api::roaring64_iterator_value(iter) <= range_end) {
+          range_count++;
+          if (!roaring::api::roaring64_iterator_advance(iter)) {
+            break;
+          }
+        }
+        if (range_count > offset) {
+          // reverse skip offset
+          for (uint64_t i = 0; OB_SUCC(ret) && i < offset + 1; i++) {
+            if (!roaring::api::roaring64_iterator_previous(iter)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected failed to get previous iterator", K(ret));
+            }
+          }
+          // add values
+          while (OB_SUCC(ret) && roaring::api::roaring64_iterator_value(iter) >= range_start && count < limit) {
+            if (OB_FAIL(res_rb->value_add(roaring::api::roaring64_iterator_value(iter)))) {
+              LOG_WARN("failed to add value", K(ret), K(roaring::api::roaring64_iterator_value(iter)));
+            } else if (OB_FALSE_IT(count++)) {
+            } else if (!roaring::api::roaring64_iterator_previous(iter)) {
+              ret = OB_ITER_END;
+            }
+          }
+        }
+      }
+    }
+    if (OB_NOT_NULL(iter)) {
+      roaring::api::roaring64_iterator_free(iter);
+    }
+  }
+
+  if (ret == OB_ITER_END) {
+    ret = OB_SUCCESS;
+  }
+  return ret;
+}
+
 int ObRoaringBitmap::optimize()
 {
   int ret = OB_SUCCESS;
@@ -384,46 +475,48 @@ int ObRoaringBitmap::deserialize(const ObString &rb_bin, bool need_validate)
       }
       case ObRbBinType::SET_32: {
         uint32_t value_32 = 0;
-        uint32_t pre_val = 0;
         uint8_t value_count = static_cast<uint8_t>(*(rb_bin.ptr() + offset));
         offset += RB_VALUE_COUNT_SIZE;
-        for (int i = 0; OB_SUCC(ret) && i < value_count; i++) {
-          value_32 = *reinterpret_cast<const uint32_t*>(rb_bin.ptr() + offset);
-          offset += sizeof(uint32_t);
-          if (need_validate) {
-            if (i == 0) {
-              pre_val = value_32;
-            } else if (value_32 <= pre_val) {
+        if (value_count < 2 || value_count > MAX_BITMAP_SET_VALUES) {
+          ret = OB_INVALID_DATA;
+          LOG_WARN("invalid roaringbitmap value_count", K(ret), K(bin_type), K(value_count));
+        } else if (OB_FAIL(set_.create(MAX_BITMAP_SET_VALUES))) {
+          LOG_WARN("failed to create set", K(ret));
+        } else if (OB_FALSE_IT(type_ = ObRbType::SET)) {
+        } else {
+          for (int i = 0; OB_SUCC(ret) && i < value_count; i++) {
+            value_32 = *reinterpret_cast<const uint32_t*>(rb_bin.ptr() + offset);
+            offset += sizeof(uint32_t);
+            if (need_validate && set_.exist_refactored(value_32) == OB_HASH_EXIST) {
               ret = OB_INVALID_DATA;
-              LOG_WARN("invalid roaringbitmap set binary", K(ret), K(i), K(value_32), K(pre_val));
+              LOG_WARN("invalid roaringbitmap set binary", K(ret), K(i), K(value_32));
+            } else if (OB_FAIL(set_.set_refactored(static_cast<uint64_t>(value_32)))) {
+              LOG_WARN("failed to set value to the set", K(ret), K(value_32));
             }
-          }
-          if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(value_add(static_cast<uint64_t>(value_32)))) {
-            LOG_WARN("failed to add value to roaringbtimap", K(ret), K(value_32));
           }
         }
         break;
       }
       case ObRbBinType::SET_64: {
         uint64_t value_64 = 0;
-        uint64_t pre_val = 0;
         uint8_t value_count = static_cast<uint8_t>(*(rb_bin.ptr() + offset));
         offset += RB_VALUE_COUNT_SIZE;
-        for (int i = 0; OB_SUCC(ret) && i < value_count; i++) {
-          value_64 = *reinterpret_cast<const uint64_t*>(rb_bin.ptr() + offset);
-          offset += sizeof(uint64_t);
-          if (need_validate) {
-            if (i == 0) {
-              pre_val = value_64;
-            } else if (value_64 <= pre_val) {
+        if (value_count < 2 || value_count > MAX_BITMAP_SET_VALUES) {
+          ret = OB_INVALID_DATA;
+          LOG_WARN("invalid roaringbitmap value_count", K(ret), K(bin_type), K(value_count));
+        } else if (OB_FAIL(set_.create(MAX_BITMAP_SET_VALUES))) {
+          LOG_WARN("failed to create set", K(ret));
+        } else if (OB_FALSE_IT(type_ = ObRbType::SET)) {
+        } else {
+          for (int i = 0; OB_SUCC(ret) && i < value_count; i++) {
+            value_64 = *reinterpret_cast<const uint64_t*>(rb_bin.ptr() + offset);
+            offset += sizeof(uint64_t);
+            if (need_validate && set_.exist_refactored(value_64) == OB_HASH_EXIST) {
               ret = OB_INVALID_DATA;
-              LOG_WARN("invalid roaringbitmap set binary", K(ret), K(i), K(value_64), K(pre_val));
+              LOG_WARN("invalid roaringbitmap set binary", K(ret), K(i), K(value_64));
+            } else if (OB_FAIL(set_.set_refactored(value_64))) {
+              LOG_WARN("failed to set value to the set", K(ret), K(value_64));
             }
-          }
-          if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(value_add(value_64))) {
-            LOG_WARN("failed to add value to roaringbtimap", K(ret), K(value_64));
           }
         }
         break;
@@ -524,7 +617,7 @@ int ObRoaringBitmap::serialize(ObStringBuffer &res_buf)
           } else {
             uint32_t value_32 = 0;
             hash::ObHashSet<uint64_t>::const_iterator iter;
-            for (iter = set_.begin(); iter != set_.end(); iter++) {
+            for (iter = set_.begin(); OB_SUCC(ret) && iter != set_.end(); iter++) {
               value_32 = static_cast<uint32_t>(iter->first);
               if (OB_FAIL(res_buf.append(reinterpret_cast<const char*>(&value_32), sizeof(uint32_t)))) {
                 LOG_WARN("failed to append value", K(ret));
@@ -539,7 +632,7 @@ int ObRoaringBitmap::serialize(ObStringBuffer &res_buf)
             LOG_WARN("failed to append single_value", K(ret));
           } else {
             hash::ObHashSet<uint64_t>::const_iterator iter;
-            for (iter = set_.begin(); iter != set_.end(); iter++) {
+            for (iter = set_.begin(); OB_SUCC(ret) && iter != set_.end(); iter++) {
               if (OB_FAIL(res_buf.append(reinterpret_cast<const char*>(&(iter->first)), sizeof(uint64_t)))) {
                 LOG_WARN("failed to append value", K(ret));
               }
@@ -604,6 +697,55 @@ int ObRoaringBitmap::convert_to_bitmap() {
         set_.destroy();
       }
       type_ = ObRbType::BITMAP;
+    }
+  }
+  return ret;
+}
+
+int ObRoaringBitmapIter::init()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(rb_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("roaringbitmap is null", K(ret));
+  } else if (inited_) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", K(ret));
+  } else if (rb_->get_cardinality() == 0) {
+    ret = OB_ITER_END;
+  } else if (OB_FAIL(rb_->convert_to_bitmap())) {
+    LOG_WARN("failed to convert roaringbitmap to bitmap type", K(ret));
+  } else {
+    ROARING_TRY_CATCH(iter_ = roaring::api::roaring64_iterator_create(rb_->get_bitmap()));
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(iter_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to create roaringbitmap iterator", K(ret));
+    } else if (!roaring::api::roaring64_iterator_has_value(iter_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("roaringbitmap iterator has no value at first value", K(ret));
+    } else {
+      curr_val_= roaring::api::roaring64_iterator_value(iter_);
+      inited_ = true;
+    }
+  }
+  return ret;
+}
+
+int ObRoaringBitmapIter::get_next()
+{
+  int ret = OB_SUCCESS;
+  bool has_next = false;
+  if (!inited_ && (OB_FAIL(this->init()))) {
+    LOG_WARN("failed to init roaringbitmap iterator", K(ret));
+  } else {
+    ROARING_TRY_CATCH(has_next = roaring::api::roaring64_iterator_advance(iter_));
+    if (OB_FAIL(ret)) {
+    } else if (!has_next) {
+      ret = OB_ITER_END;
+    } else {
+      curr_val_ = roaring::api::roaring64_iterator_value(iter_);
+      val_idx_++;
     }
   }
   return ret;

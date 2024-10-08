@@ -25,6 +25,7 @@
 #include "sql/optimizer/ob_log_subplan_filter.h"
 #include "sql/optimizer/ob_log_insert_all.h"
 #include "sql/optimizer/ob_log_link_dml.h"
+#include "sql/optimizer/ob_direct_load_optimizer.h"
 #include "sql/ob_optimizer_trace_impl.h"
 #include "common/ob_smart_call.h"
 #include "sql/resolver/dml/ob_del_upd_resolver.h"
@@ -95,8 +96,6 @@ int ObInsertLogPlan::generate_normal_raw_plan()
       // compute parallel before check allocate stats gather
       if (OB_FAIL(compute_dml_parallel())) {
         LOG_WARN("failed to compute dml parallel", K(ret));
-      } else if (use_pdml() && OB_FAIL(set_is_direct_insert())) {
-        LOG_WARN("failed to set is direct insert", K(ret));
       }
       if (OB_SUCC(ret)) {
         bool tmp_need_osg = false;
@@ -106,7 +105,7 @@ int ObInsertLogPlan::generate_normal_raw_plan()
                    OB_FAIL(get_online_estimate_percent(online_sample_percent))) {
           LOG_WARN("failed to get sys online sample percent", K(ret));
         } else {
-          if (is_direct_insert()) {
+          if (get_optimizer_context().get_direct_load_optimizer_ctx().use_direct_load()) {
             get_optimizer_context().get_exec_ctx()->get_table_direct_insert_ctx()
               .set_is_online_gather_statistics(tmp_need_osg);
             get_optimizer_context().get_exec_ctx()->get_table_direct_insert_ctx()
@@ -348,44 +347,6 @@ int ObInsertLogPlan::generate_osg_share_info(OSGShareInfo *&info)
           LOG_WARN("fail to append column ids", K(ret));
         }
       }
-    }
-  }
-  return ret;
-}
-
-// Direct-insert is enabled only:
-// 1. pdml insert
-// 2. _ob_enable_direct_load
-// 3. insert into select clause
-// 4. append hint or direct_load hint
-// 5. full_direct_load(auto_commit, not in a transaction) or inc_direct_load
-int ObInsertLogPlan::set_is_direct_insert() {
-  int ret = OB_SUCCESS;
-  is_direct_insert_ = false;
-  bool auto_commit = false;
-  const ObSQLSessionInfo* session_info = get_optimizer_context().get_session_info();
-  if (OB_ISNULL(get_stmt()) || OB_ISNULL(session_info)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(get_stmt()), K(session_info));
-  } else if (get_stmt()->is_overwrite()) {
-    // insert overwrite with full direct load
-    if (OB_FAIL(session_info->get_autocommit(auto_commit))) {
-      LOG_WARN("failed to get auto commit", KR(ret));
-    } else if (auto_commit && !session_info->is_in_transaction()){
-      is_direct_insert_ = true;
-      set_is_insert_overwrite(true);
-    }
-  } else if (!get_stmt()->value_from_select()
-             || (!get_optimizer_context().get_global_hint().has_direct_load())
-             || !GCONF._ob_enable_direct_load) {
-  } else if (get_optimizer_context().get_global_hint().has_inc_direct_load()) {
-    is_direct_insert_ = true;
-  } else {
-    // full direct load
-    if (OB_FAIL(session_info->get_autocommit(auto_commit))) {
-      LOG_WARN("failed to get auto commit", KR(ret));
-    } else if (auto_commit && !session_info->is_in_transaction()){
-      is_direct_insert_ = true;
     }
   }
   return ret;
@@ -1465,19 +1426,14 @@ int ObInsertLogPlan::prepare_table_dml_info_for_ddl(const ObInsertTableInfo& tab
       //@TODO: 后续@yibo, @cangdi会重构create local index的处理
       index_dml_info->ref_table_id_ = table_item->ddl_table_id_;
     }
-    bool need_all_part = index_schema->is_index_table() && !index_schema->is_global_index_table() && data_table_schema->is_heap_table();
-    if (optimizer_context_.is_online_ddl()) {
-      need_all_part = need_all_part || (index_schema->is_partitioned_table() &&
-                                        (index_schema->is_vec_delta_buffer_type() ||
-                                        index_schema->is_vec_index_id_type() ||
-                                        index_schema->is_vec_index_snapshot_data_type()));
-    }
+
     if (OB_SUCC(ret)) {
       if (OB_FAIL(get_all_rowkey_columns_for_ddl(table_info, index_schema, index_dml_info->column_exprs_))) {
         LOG_WARN("failed to get all rowkey columns for ddl" , K(ret));
       } else if (OB_FAIL(get_all_columns_for_ddl(table_info, index_schema, index_dml_info->column_exprs_))) {
         LOG_WARN("failed to get all columns for ddl" , K(ret));
-      } else if (need_all_part &&
+      } else if (index_schema->is_index_local_storage() &&
+                 index_schema->need_partition_key_for_build_local_index(*data_table_schema) &&
                  OB_FAIL(get_all_part_columns_for_ddl(table_info, data_table_schema, index_dml_info->column_exprs_))) {
         LOG_WARN("failed to get all part columns for ddl" , K(ret));
       } else {

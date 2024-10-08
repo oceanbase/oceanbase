@@ -53,6 +53,8 @@ public:
   ~ObPluginName() = default;
 
   int set_name(const char *name);
+  int set_name(const ObString &name);
+
   OB_INLINE bool is_valid() const { return STRLEN(name_) > 0; }
   OB_INLINE int len() const { return STRLEN(name_); }
   OB_INLINE char *str() { return name_; }

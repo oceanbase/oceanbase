@@ -813,7 +813,7 @@ int ObTransformConstPropagate::collect_equal_pair_from_pullup(ObDMLStmt *stmt,
                                                                   got_result,
                                                                   *ctx_->allocator_))) {
               LOG_WARN("failed to calc const or caculable expr", K(ret));
-            } else if (got_result && (result.is_null()
+            } else if (got_result && !result.is_ext() && (result.is_null()
                       || (lib::is_oracle_mode() && result.is_null_oracle()))) {
               is_valid = true;
               if (!equal_info.const_expr_ -> is_const_raw_expr()) {

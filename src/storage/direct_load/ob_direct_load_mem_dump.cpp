@@ -278,6 +278,7 @@ int ObDirectLoadMemDump::dump_tables()
       }
     }
     if (OB_SUCC(ret)) {
+      datum_row.row_flag_.set_flag(external_row->is_deleted_?ObDmlFlag::DF_DELETE : ObDmlFlag::DF_INSERT);
       if (OB_FAIL(external_row->to_datums(datum_row.storage_datums_, datum_row.count_))) {
         LOG_WARN("fail to transfer dataum row", KR(ret));
       } else if (OB_FAIL(table_builder->append_row(external_row->tablet_id_, external_row->seq_no_, datum_row))) {
@@ -408,7 +409,6 @@ int ObDirectLoadMemDump::compact_tablet_tables(const ObTabletID &tablet_id)
       [](const std::pair<int64_t, ObIDirectLoadPartitionTable *> &a,
          const std::pair<int64_t, ObIDirectLoadPartitionTable *> &b) { return a.first < b.first; });
   }
-
   if (OB_SUCC(ret)) {
     if (OB_FAIL(new_table_compactor(tablet_id, compactor))) {
       LOG_WARN("fail to new table compactor", KR(ret));

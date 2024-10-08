@@ -185,8 +185,6 @@ int ObResourceManagerProxy::delete_plan(
       //删除当前使用的plan，把当前所有IO资源置空
       if (OB_FAIL(GCTX.cgroup_ctrl_->reset_all_group_iops(tenant_id))) {
         LOG_WARN("reset cur plan group directive failed",K(plan), K(ret));
-      } else if (OB_FAIL(reset_all_mapping_rules())) {
-        LOG_WARN("reset hashmap failed when delete using plan");
       } else {
         LOG_INFO("reset cur plan group directive success",K(plan), K(ret));
       }
@@ -2268,11 +2266,5 @@ int ObResourceManagerProxy::get_iops_config(
       }
     }
   }
-  return ret;
-}
-
-int ObResourceManagerProxy::reset_all_mapping_rules()
-{
-  int ret = G_RES_MGR.get_mapping_rule_mgr().reset_mapping_rules();
   return ret;
 }

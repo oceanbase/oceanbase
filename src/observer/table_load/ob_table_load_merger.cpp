@@ -14,6 +14,7 @@
 
 #include "observer/table_load/ob_table_load_merger.h"
 #include "observer/table_load/ob_table_load_error_row_handler.h"
+#include "observer/table_load/ob_table_load_data_row_handler.h"
 #include "observer/table_load/ob_table_load_service.h"
 #include "observer/table_load/ob_table_load_stat.h"
 #include "observer/table_load/ob_table_load_store_ctx.h"
@@ -24,6 +25,8 @@
 #include "storage/direct_load/ob_direct_load_fast_heap_table.h"
 #include "storage/direct_load/ob_direct_load_multi_map.h"
 #include "storage/direct_load/ob_direct_load_range_splitter.h"
+#include "observer/table_load/ob_table_load_store_table_ctx.h"
+#include "observer/table_load/ob_table_load_merger_manager.h"
 #include "storage/blocksstable/ob_sstable.h"
 
 namespace oceanbase
@@ -246,20 +249,29 @@ private:
  * ObTableLoadMerger
  */
 
-ObTableLoadMerger::ObTableLoadMerger(ObTableLoadStoreCtx *store_ctx)
-  : store_ctx_(store_ctx),
+ObTableLoadMerger::ObTableLoadMerger(ObTableLoadStoreCtx *store_ctx, ObTableLoadStoreTableCtx *store_table_ctx)
+  : store_table_ctx_(store_table_ctx),
+    allocator_("TLD_TLM"),
+    store_ctx_(store_ctx),
     param_(store_ctx->ctx_->param_),
+    table_compact_config_(nullptr),
     running_thread_count_(0),
     has_error_(false),
     is_stop_(false),
     is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadMerger::~ObTableLoadMerger()
 {
   abort_unless(merging_list_.is_empty());
   abort_unless(rescan_list_.is_empty());
+  if (OB_NOT_NULL(table_compact_config_)) {
+    table_compact_config_->~ObTableLoadTableCompactConfig();
+    allocator_.free(table_compact_config_);
+    table_compact_config_ = nullptr;
+  }
 }
 
 int ObTableLoadMerger::init()
@@ -269,12 +281,39 @@ int ObTableLoadMerger::init()
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableLoadMerger init twice", KR(ret), KP(this));
   } else {
-    if (OB_FAIL(table_compact_config_.init(store_ctx_, *this))) {
-      LOG_WARN("fail to init table_compact_config_", KR(ret));
+    if (store_table_ctx_->is_index_table_) {
+      ObTableLoadTableCompactConfigIndexTable *index_table_compact_config = nullptr;
+      if (OB_ISNULL(index_table_compact_config = OB_NEWx(ObTableLoadTableCompactConfigIndexTable, &allocator_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate memory for table compact config", KR(ret));
+      } else if (OB_FAIL((index_table_compact_config->init(*this)))) {
+        LOG_WARN("fail to init table compact config", KR(ret));
+      } else {
+        table_compact_config_ = index_table_compact_config;
+      }
+    } else {
+      ObTableLoadTableCompactConfigMainTable *main_table_compact_config = nullptr;
+      if (OB_ISNULL(main_table_compact_config = OB_NEWx(ObTableLoadTableCompactConfigMainTable, &allocator_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate memory for table compact config", KR(ret));
+      } else if (OB_FAIL((main_table_compact_config->init(store_ctx_, *this)))) {
+        LOG_WARN("fail to init table compact config", KR(ret));
+      } else {
+        table_compact_config_ = main_table_compact_config;
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(lob_id_compact_config_.init(*this))) {
       LOG_WARN("fail to init lob id compact config", KR(ret));
-    } else if (OB_FAIL(table_compact_ctx_.init(store_ctx_, &table_compact_config_))) {
+    } else if (OB_FAIL(table_compact_ctx_.init(store_ctx_, store_table_ctx_, table_compact_config_))) {
       LOG_WARN("fail to init table compact ctx", KR(ret));
+    }
+    if (OB_FAIL(ret)) {
+      if (OB_NOT_NULL(table_compact_config_)) {
+        table_compact_config_->~ObTableLoadTableCompactConfig();
+        allocator_.free(table_compact_config_);
+        table_compact_config_ = nullptr;
+      }
     } else {
       is_inited_ = true;
     }
@@ -289,7 +328,7 @@ int ObTableLoadMerger::start()
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadMerger not init", KR(ret), KP(this));
   } else {
-    if (store_ctx_->is_fast_heap_table_) {
+    if (store_table_ctx_->is_fast_heap_table_) {
       if (OB_FAIL(build_merge_ctx())) {
         LOG_WARN("fail to build merge ctx", KR(ret));
       } else if (OB_FAIL(start_merge())) {
@@ -361,31 +400,31 @@ int ObTableLoadMerger::build_merge_ctx()
 {
   int ret = OB_SUCCESS;
   ObDirectLoadMergeParam merge_param;
-  merge_param.table_id_ = param_.table_id_;
-  merge_param.lob_meta_table_id_ = store_ctx_->ctx_->schema_.lob_meta_table_id_;
-  merge_param.target_table_id_ = store_ctx_->ctx_->ddl_param_.dest_table_id_;
-  merge_param.rowkey_column_num_ = store_ctx_->ctx_->schema_.rowkey_column_count_;
-  merge_param.store_column_count_ = store_ctx_->ctx_->schema_.store_column_count_;
+  merge_param.table_id_ = store_table_ctx_->table_id_;
+  merge_param.lob_meta_table_id_ = store_table_ctx_->schema_->lob_meta_table_id_;
+  merge_param.target_table_id_ = store_table_ctx_->table_id_;
+  merge_param.rowkey_column_num_ = store_table_ctx_->schema_->rowkey_column_count_;
+  merge_param.store_column_count_ = store_table_ctx_->schema_->store_column_count_;
   merge_param.fill_cg_thread_cnt_ = param_.session_count_;
-  merge_param.lob_column_idxs_ = &(store_ctx_->ctx_->schema_.lob_column_idxs_);
-  merge_param.table_data_desc_ = store_ctx_->table_data_desc_;
-  merge_param.datum_utils_ = &(store_ctx_->ctx_->schema_.datum_utils_);
-  merge_param.lob_column_idxs_ = &(store_ctx_->ctx_->schema_.lob_column_idxs_);
-  merge_param.col_descs_ = &(store_ctx_->ctx_->schema_.column_descs_);
-  merge_param.lob_id_table_data_desc_ = store_ctx_->lob_id_table_data_desc_;
-  merge_param.lob_meta_datum_utils_ = &(store_ctx_->ctx_->schema_.lob_meta_datum_utils_);
-  merge_param.lob_meta_col_descs_ = &(store_ctx_->ctx_->schema_.lob_meta_column_descs_);
-  merge_param.is_heap_table_ = store_ctx_->ctx_->schema_.is_heap_table_;
-  merge_param.is_fast_heap_table_ = store_ctx_->is_fast_heap_table_;
+  merge_param.lob_column_idxs_ = &(store_table_ctx_->schema_->lob_column_idxs_);
+  merge_param.table_data_desc_ = store_table_ctx_->table_data_desc_;
+  merge_param.datum_utils_ = &(store_table_ctx_->schema_->datum_utils_);
+  merge_param.col_descs_ = &(store_table_ctx_->schema_->column_descs_);
+  merge_param.lob_id_table_data_desc_ = store_table_ctx_->lob_id_table_data_desc_;
+  merge_param.lob_meta_datum_utils_ = &(store_table_ctx_->schema_->lob_meta_datum_utils_);
+  merge_param.lob_meta_col_descs_ = &(store_table_ctx_->schema_->lob_meta_column_descs_);
+  merge_param.is_heap_table_ = store_table_ctx_->schema_->is_heap_table_;
+  merge_param.is_fast_heap_table_ = store_table_ctx_->is_fast_heap_table_;
   merge_param.is_incremental_ = ObDirectLoadMethod::is_incremental(param_.method_);
   merge_param.insert_mode_ = param_.insert_mode_;
-  merge_param.insert_table_ctx_ = store_ctx_->insert_table_ctx_;
-  merge_param.dml_row_handler_ = store_ctx_->error_row_handler_;
+  merge_param.insert_table_ctx_ = store_table_ctx_->insert_table_ctx_;
+  merge_param.dml_row_handler_ = store_table_ctx_->row_handler_;
   merge_param.file_mgr_ = store_ctx_->tmp_file_mgr_;
   merge_param.trans_param_ = store_ctx_->trans_param_;
-  if (OB_FAIL(merge_ctx_.init(store_ctx_->ctx_, merge_param, store_ctx_->ls_partition_ids_))) {
+  merge_param.index_table_count_ = store_table_ctx_->schema_->index_table_count_;
+  if (OB_FAIL(merge_ctx_.init(store_ctx_->ctx_, merge_param, store_table_ctx_->ls_partition_ids_))) {
     LOG_WARN("fail to init merge ctx", KR(ret));
-  } else if (store_ctx_->is_multiple_mode_) {
+  } else if (store_table_ctx_->is_multiple_mode_) {
     const ObIArray<ObDirectLoadTabletMergeCtx *> &tablet_merge_ctxs =
       merge_ctx_.get_tablet_merge_ctxs();
     ObArray<ObIDirectLoadPartitionTable *> empty_table_array;
@@ -407,7 +446,7 @@ int ObTableLoadMerger::build_merge_ctx()
     } else {
       table_array = &empty_table_array;
     }
-    if (!merge_param.is_heap_table_ && !table_array->empty()) {
+    if (!store_table_ctx_->schema_->is_heap_table_ && !table_array->empty()) {
       // for optimize split range is too slow
       ObArray<ObDirectLoadMultipleSSTable *> multiple_sstable_array;
       ObDirectLoadMultipleMergeRangeSplitter range_splitter;
@@ -422,8 +461,8 @@ int ObTableLoadMerger::build_merge_ctx()
         }
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(range_splitter.init(multiple_sstable_array, merge_param.table_data_desc_,
-                                        merge_param.datum_utils_, *merge_param.col_descs_))) {
+        if (OB_FAIL(range_splitter.init(multiple_sstable_array, store_table_ctx_->table_data_desc_,
+                                        &(store_table_ctx_->schema_->datum_utils_), (store_table_ctx_->schema_->column_descs_)))) {
           LOG_WARN("fail to init range splitter", KR(ret));
         }
       }
@@ -434,7 +473,7 @@ int ObTableLoadMerger::build_merge_ctx()
           LOG_WARN("fail to build merge task for multiple pk table", KR(ret));
         }
       }
-   } else if (merge_param.is_heap_table_ && !table_array->empty() &&
+   } else if (store_table_ctx_->schema_->is_heap_table_ && !table_array->empty() &&
                tablet_merge_ctxs.count() > param_.session_count_ * 2) {
       // for optimize the super multi-partition heap table space serious enlargement
       for (int64_t i = 0; OB_SUCC(ret) && i < tablet_merge_ctxs.count(); ++i) {
@@ -448,8 +487,8 @@ int ObTableLoadMerger::build_merge_ctx()
       for (int64_t i = 0; OB_SUCC(ret) && i < tablet_merge_ctxs.count(); ++i) {
         ObDirectLoadTabletMergeCtx *tablet_merge_ctx = tablet_merge_ctxs.at(i);
         if (OB_FAIL(tablet_merge_ctx->build_merge_task(
-              *table_array, store_ctx_->ctx_->schema_.column_descs_, param_.session_count_,
-              store_ctx_->is_multiple_mode_))) {
+              *table_array, store_table_ctx_->schema_->column_descs_, param_.session_count_,
+              store_table_ctx_->is_multiple_mode_))) {
           LOG_WARN("fail to build merge task", KR(ret));
         }
       }
@@ -475,8 +514,8 @@ int ObTableLoadMerger::build_merge_ctx()
       }
       if (OB_SUCC(ret)) {
         if (OB_FAIL(tablet_merge_ctx->build_merge_task(
-              *table_array, store_ctx_->ctx_->schema_.column_descs_, param_.session_count_,
-              store_ctx_->is_multiple_mode_))) {
+              *table_array, store_table_ctx_->schema_->column_descs_, param_.session_count_,
+              store_table_ctx_->is_multiple_mode_))) {
           LOG_WARN("fail to build merge task", KR(ret));
         }
       }
@@ -551,21 +590,21 @@ int ObTableLoadMerger::build_del_lob_ctx(bool &need_del_lob)
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(range_splitter.init(multiple_sstable_array, store_ctx_->lob_id_table_data_desc_,
-                                      &(store_ctx_->ctx_->schema_.lob_meta_datum_utils_),
-                                      store_ctx_->ctx_->schema_.lob_meta_column_descs_))) {
+      if (OB_FAIL(range_splitter.init(multiple_sstable_array, store_table_ctx_->lob_id_table_data_desc_,
+                                      &(store_table_ctx_->schema_->lob_meta_datum_utils_),
+                                      store_table_ctx_->schema_->lob_meta_column_descs_))) {
         LOG_WARN("fail to init range splitter", KR(ret));
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_merge_ctxs.count(); ++i) {
       ObDirectLoadTabletMergeCtx *tablet_merge_ctx = tablet_merge_ctxs.at(i);
       ObDirectLoadInsertTabletContext *insert_tablet_ctx = nullptr;
-      if (OB_FAIL(store_ctx_->insert_table_ctx_->get_tablet_context(
-            tablet_merge_ctx->get_tablet_id(), insert_tablet_ctx))) {
+      if (OB_FAIL(store_table_ctx_->insert_table_ctx_->get_tablet_context(
+          tablet_merge_ctx->get_tablet_id(), insert_tablet_ctx))) {
         LOG_WARN("fail to get tablet ctx", KR(ret), K(tablet_merge_ctx->get_tablet_id()));
       } else if (OB_FAIL(tablet_merge_ctx->build_del_lob_task(
-                   multiple_sstable_array, range_splitter, param_.session_count_,
-                   insert_tablet_ctx->get_min_insert_lob_id()))) {
+                 multiple_sstable_array, range_splitter, param_.session_count_,
+                 insert_tablet_ctx->get_min_insert_lob_id()))) {
         LOG_WARN("fail to build del lob task for multiple pk table", KR(ret));
       }
     }
@@ -790,23 +829,23 @@ int ObTableLoadMerger::handle_merge_thread_finish(int ret_code)
       // release tmpfile
       // TODO(suzhi.yt) release all tables and merge tasks
       table_compact_ctx_.result_.release_all_table_data();
-      if (store_ctx_->insert_table_ctx_->need_rescan()) {
+      if (store_table_ctx_->insert_table_ctx_->need_rescan()) {
         if (OB_FAIL(build_rescan_ctx())) {
           LOG_WARN("fail to build rescan ctx", KR(ret));
         } else if (OB_FAIL(start_rescan())) {
           LOG_WARN("fail to start rescan", KR(ret));
         }
-      } else if (store_ctx_->insert_table_ctx_->need_del_lob()) {
+      } else if (store_table_ctx_->insert_table_ctx_->need_del_lob()) {
         if (OB_FAIL(merge_ctx_.close_table_builder())) {
           LOG_WARN("fail to close table builder", KR(ret));
-        } else if (OB_FAIL(lob_id_compact_ctx_.init(store_ctx_, &lob_id_compact_config_))) {
+        } else if (OB_FAIL(lob_id_compact_ctx_.init(store_ctx_, store_table_ctx_, &lob_id_compact_config_))) {
           LOG_WARN("fail to init lob compact", KR(ret));
         } else if (OB_FAIL(lob_id_compact_ctx_.start())) {
           LOG_WARN("fail to start lob compact", KR(ret));
         }
       } else {
-        if (OB_FAIL(store_ctx_->set_status_merged())) {
-          LOG_WARN("fail to set store status merged", KR(ret));
+        if (OB_FAIL(store_ctx_->merger_manager_->handle_merge_finish())) {
+          LOG_WARN("fail to handle merge finish", KR(ret));
         }
       }
     }
@@ -825,8 +864,8 @@ int ObTableLoadMerger::handle_rescan_thread_finish(const int ret_code)
     if (OB_UNLIKELY(is_stop_ || has_error_)) {
     } else {
       FLOG_INFO("LOAD RESCAN COMPLETED");
-      if (OB_FAIL(store_ctx_->set_status_merged())) {
-        LOG_WARN("fail to set store status merged", KR(ret));
+      if (OB_FAIL(store_ctx_->merger_manager_->handle_merge_finish())) {
+        LOG_WARN("fail to handle merge finish", KR(ret));
       }
     }
   }
@@ -845,8 +884,8 @@ int ObTableLoadMerger::handle_del_lob_thread_finish(int ret_code)
     } else {
       FLOG_INFO("LOAD DEL LOB COMPLETED");
       lob_id_compact_ctx_.result_.release_all_table_data();
-      if (OB_FAIL(store_ctx_->set_status_merged())) {
-        LOG_WARN("fail to set store status merged", KR(ret));
+      if (OB_FAIL(store_ctx_->merger_manager_->handle_merge_finish())) {
+        LOG_WARN("fail to handle merge finish", KR(ret));
       }
     }
   }

@@ -9916,6 +9916,63 @@ int ObInnerTableSchema::all_virtual_ls_info_schema(ObTableSchema &table_schema)
       required_data_disk_size_default,
       required_data_disk_size_default); //default_value
   }
+
+  if (OB_SUCC(ret)) {
+    ObObj mv_major_merge_scn_default;
+    mv_major_merge_scn_default.set_uint64(0);
+    ADD_COLUMN_SCHEMA_T("mv_major_merge_scn", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObUInt64Type, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(uint64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      mv_major_merge_scn_default,
+      mv_major_merge_scn_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj mv_publish_scn_default;
+    mv_publish_scn_default.set_uint64(0);
+    ADD_COLUMN_SCHEMA_T("mv_publish_scn", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObUInt64Type, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(uint64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      mv_publish_scn_default,
+      mv_publish_scn_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj mv_safe_scn_default;
+    mv_safe_scn_default.set_uint64(0);
+    ADD_COLUMN_SCHEMA_T("mv_safe_scn", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObUInt64Type, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(uint64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      mv_safe_scn_default,
+      mv_safe_scn_default); //default_value
+  }
   if (OB_SUCC(ret)) {
     table_schema.get_part_option().set_part_num(1);
     table_schema.set_part_level(PARTITION_LEVEL_ONE);

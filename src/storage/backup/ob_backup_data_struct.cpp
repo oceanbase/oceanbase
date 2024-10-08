@@ -771,14 +771,14 @@ void ObBackupTabletMeta::reset()
 }
 
 /* ObBackupSSTableMeta */
-
 OB_SERIALIZE_MEMBER(ObBackupSSTableMeta, tablet_id_, sstable_meta_, logic_id_list_,
     entry_block_addr_for_other_block_, // FARM COMPAT WHITELIST
-    total_other_block_count_           // FARM COMPAT WHITELIST
+    total_other_block_count_,          // FARM COMPAT WHITELIST
+    is_major_compaction_mview_dep_
     );
 
 ObBackupSSTableMeta::ObBackupSSTableMeta() : tablet_id_(), sstable_meta_(), logic_id_list_(),
-    entry_block_addr_for_other_block_(), total_other_block_count_(0)
+    entry_block_addr_for_other_block_(), total_other_block_count_(0), is_major_compaction_mview_dep_(false)
 {}
 
 bool ObBackupSSTableMeta::is_valid() const
@@ -793,6 +793,7 @@ void ObBackupSSTableMeta::reset()
   logic_id_list_.reset();
   entry_block_addr_for_other_block_.reset();
   total_other_block_count_ = 0;
+  is_major_compaction_mview_dep_ = false;
 }
 
 int ObBackupSSTableMeta::assign(const ObBackupSSTableMeta &backup_sstable_meta)
@@ -809,6 +810,7 @@ int ObBackupSSTableMeta::assign(const ObBackupSSTableMeta &backup_sstable_meta)
     entry_block_addr_for_other_block_ = backup_sstable_meta.entry_block_addr_for_other_block_;
     total_other_block_count_ = backup_sstable_meta.total_other_block_count_;
     tablet_id_ = backup_sstable_meta.tablet_id_;
+    is_major_compaction_mview_dep_ = backup_sstable_meta.is_major_compaction_mview_dep_;
   }
   return ret;
 }
@@ -1573,7 +1575,7 @@ bool ObBackupDeviceMacroBlockId::is_valid() const
       && static_cast<uint64_t>(blocksstable::ObMacroBlockIdMode::ID_MODE_BACKUP) == id_mode_;
 }
 
-int ObBackupDeviceMacroBlockId::get_backup_macro_block_index(const share::ObBackupDataType &backup_data_type,
+int ObBackupDeviceMacroBlockId::get_backup_macro_block_index(
     const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index) const
 {
   int ret = OB_SUCCESS;

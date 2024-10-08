@@ -37,8 +37,11 @@ static void *roaring_malloc(size_t size) {
       int ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("mem_mgr is null", K(tenant_id));
       ob_abort();
-    } else if (last_mem_attr.label_[0] == 'V') {
-      alloc_ptr = ob_malloc(alloc_size, SET_IGNORE_MEM_VERSION(lib::ObMemAttr(tenant_id, "VIndexBitmapADP")));
+    } else if (last_mem_attr.label_.is_valid() &&
+               last_mem_attr.label_[0] == 'V' &&
+               last_mem_attr.label_[1] == 'I' &&
+               last_mem_attr.label_[2] == 'B') {
+      alloc_ptr = ob_malloc(alloc_size, SET_IGNORE_MEM_VERSION(lib::ObMemAttr(tenant_id, "VIBitmapADP")));
       mem_mgr->incr_vec_idx_used(alloc_size);
     } else {
       alloc_ptr = mem_mgr->alloc(alloc_size);
@@ -77,7 +80,10 @@ static void roaring_free(void *ptr) {
       lib::ObMemAttr last_mem_attr = lib::ObMallocHookAttrGuard::get_tl_mem_attr();
       if (OB_ISNULL(mem_mgr)) {
         ob_free(alloc_ptr);
-      } else if (last_mem_attr.label_[0] == 'V') {
+      } else if (last_mem_attr.label_.is_valid() &&
+                 last_mem_attr.label_[0] == 'V' &&
+                 last_mem_attr.label_[1] == 'I' &&
+                 last_mem_attr.label_[2] == 'B') {
         void *size_ptr = reinterpret_cast<void *>(ptr_location - sizeof(size_t));
         size_t free_size = *reinterpret_cast<size_t *>(size_ptr);
         ob_free(alloc_ptr);
@@ -97,11 +103,16 @@ static void *roaring_realloc(void *ptr, size_t size) {
   } else if (NULL == ptr) {
     res = roaring_malloc(size);
   } else {
-    res = roaring_malloc(size);
     size_t ptr_location = reinterpret_cast<size_t>(ptr);
     void *size_ptr = reinterpret_cast<void *>(ptr_location - sizeof(size_t));
-    MEMCPY(res, ptr, *reinterpret_cast<size_t *>(size_ptr));
-    roaring_free(ptr);
+    size_t orig_size = *reinterpret_cast<size_t *>(size_ptr);
+    if (orig_size > size) {
+      res = ptr;
+    } else {
+      res = roaring_malloc(size);
+      MEMCPY(res, ptr, orig_size);
+      roaring_free(ptr);
+    }
   }
   return res;
 }
@@ -177,6 +188,7 @@ int ObRbMemMgr::init()
 
 void ObRbMemMgr::destroy()
 {
+  FLOG_INFO("destroy Roaring bitmap manager", K(MTL_ID()));
   allocator_.destroy();
   is_inited_ = false;
 }

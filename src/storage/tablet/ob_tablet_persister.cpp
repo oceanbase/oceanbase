@@ -300,7 +300,7 @@ void ObTabletPersister::print_time_stats(
           LOG_WARN("fail to get initial tablet meta version", K(ret), K(ls_id), K(tablet_id));
         }
       } else if (old_tablet_addr.is_block()) {
-        meta_version = old_tablet_addr.block_id().fourth_id() + 1;
+        meta_version = old_tablet_addr.block_id().meta_version_id() + 1;
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected old tablet addr", K(ret), K(tablet_id), K(old_tablet_addr));
@@ -310,14 +310,14 @@ void ObTabletPersister::print_time_stats(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected tablet meta version", K(ret), K(meta_version));
       } else {
-        opt.set_ss_private_tablet_meta_object_opt(ls_id.id(), tablet_id.id(), meta_version);
+        opt.set_ss_private_tablet_meta_object_opt(ls_id.id(), tablet_id.id(), meta_version, persist_param.tablet_transfer_seq_);
       }
     } else {
       opt.set_ss_share_tablet_meta_object_opt(persist_param.tablet_id_.id(), persist_param.snapshot_version_);
     }
 #endif
   } else {
-    opt.set_private_meta_macro_object_opt(persist_param.tablet_id_.id());
+    opt.set_private_meta_macro_object_opt(persist_param.tablet_id_.id(), persist_param.tablet_transfer_seq_);
   }
   return ret;
 }
@@ -695,7 +695,7 @@ int ObTabletPersister::persist_and_fill_tablet(
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(linked_writer.init_for_object(param_.tablet_id_.id(), param_.snapshot_version_,
+  } else if (OB_FAIL(linked_writer.init_for_object(param_.tablet_id_.id(), param_.tablet_transfer_seq_, param_.snapshot_version_,
                                                    cur_macro_seq_, param_.ddl_redo_callback_))) {
     LOG_WARN("fail to init linked writer", K(ret), K(old_tablet));
   } else if (OB_FAIL(tablet_macro_info.init(allocator_, block_info_set, &linked_writer))) {
@@ -1184,7 +1184,7 @@ int ObTabletPersister::transform(const ObTabletTransformArg &arg, char *buf, con
 void ObTabletPersister::build_async_write_start_opt_(blocksstable::ObStorageObjectOpt &start_opt) const
 {
   if (!param_.is_shared_object()) {
-    start_opt.set_private_meta_macro_object_opt(param_.tablet_id_.id());
+    start_opt.set_private_meta_macro_object_opt(param_.tablet_id_.id(), param_.tablet_transfer_seq_);
   } else {
     start_opt.set_ss_share_meta_macro_object_opt(
       param_.tablet_id_.id(), cur_macro_seq_, 0/*cg_id*/);
@@ -1345,8 +1345,7 @@ int ObTabletPersister::fetch_and_persist_large_co_sstable(
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (sstable_persist_ctx.cg_sstable_cnt_ != cg_sstables.count() ||
-                 sstable_persist_ctx.cg_sstable_cnt_ != cg_write_infos.count()) {
+      } else if (cg_sstables.count() != cg_write_infos.count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unmatched cg_sstable_count and write_infos", KR(ret), K(sstable_persist_ctx), K(cg_sstables.count()), K(cg_write_infos.count()));
       } else if (0 < cg_write_infos.count()
@@ -1397,6 +1396,7 @@ int ObTabletPersister::persist_sstable_linked_block_if_need(
     if (OB_FAIL(sstable->persist_linked_block_if_need(
         allocator,
         param_.tablet_id_,
+        param_.tablet_transfer_seq_,
         param_.snapshot_version_,
         param_.ddl_redo_callback_,
         macro_start_seq,

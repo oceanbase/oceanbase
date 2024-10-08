@@ -16,16 +16,17 @@
 #include "lib/task/ob_timer.h"
 #include "storage/blocksstable/ob_macro_block_id.h"
 #include "storage/access/ob_dml_param.h"
-#include "ob_lob_util.h"
-#include "ob_lob_seq.h"
-#include "ob_lob_persistent_adaptor.h"
+#include "storage/lob/ob_lob_util.h"
+#include "storage/lob/ob_lob_seq.h"
+#include "storage/lob/ob_lob_persistent_adaptor.h"
+#include "storage/lob/ob_lob_remote.h"
 
 namespace oceanbase
 {
 namespace storage
 {
 
-class ObLobMetaSingleGetter;
+class ObLobMetaIterator;
 
 class ObLobMetaUtil {
 public:
@@ -92,9 +93,16 @@ class ObLobMetaScanIter {
 public:
   ObLobMetaScanIter();
   ~ObLobMetaScanIter() { reset(); }
-  int open(ObLobAccessParam &param, ObILobApator* lob_adapter);
-  int get_next_row(ObLobMetaInfo &row);
+  int open_local(ObLobAccessParam &param, ObPersistentLobApator* lob_adapter);
+  int open_remote(ObLobAccessParam &param);
+
+  // interface for read only
+  int get_next_row(ObString &block_data);
+
+  // interface for partial update
+  // partial update 包含部分读
   int get_next_row(ObLobMetaScanResult &result);
+
   uint64_t get_cur_pos() { return cur_pos_; }
   uint64_t get_cur_byte_pos() { return cur_byte_pos_; }
   ObLobMetaInfo get_cur_info() { return cur_info_; }
@@ -106,25 +114,37 @@ public:
   bool not_calc_char_len() const { return not_calc_char_len_; }
   void set_not_need_last_info(bool not_need_last_info) { not_need_last_info_ = not_need_last_info;}
   bool not_need_last_info() const { return not_need_last_info_; }
-  TO_STRING_KV(K_(cur_pos), K_(cur_byte_pos), K_(cur_info), K_(not_calc_char_len), K_(not_need_last_info));
+  bool is_remote() const { return is_remote_; }
+
+  // the memory of cur_info may be relased by storage
+  // so can not print cur_info directly
+  TO_STRING_KV(K_(cur_pos), K_(cur_byte_pos), K(cur_info_.lob_id_), K_(not_calc_char_len), K_(not_need_last_info));
 private:
   bool is_in_range(const ObLobMetaInfo& info);
+  int get_next_row_remote(ObString &data);
+  int get_next_row_local(ObLobMetaInfo &row);
+  int get_next_row_local(ObString &data);
+  int get_next_row_local(ObLobMetaScanResult &result);
+
+  // interface for full delete
+  int get_next_row(ObLobMetaInfo &row);
+
 private:
   ObILobApator* lob_adatper_;
-  common::ObNewRowIterator *meta_iter_; // lob meta tablet scan iter
+  ObLobMetaIterator *meta_iter_; // lob meta tablet scan iter
   int64_t byte_size_; // param.byte_size
   uint64_t offset_; // param.offset
   uint64_t len_; // param.len
   ObCollationType coll_type_; // param.coll_type
   bool scan_backward_; // param.scan_backward
   ObIAllocator *allocator_;
-  ObLobAccessCtx *access_ctx_;
-  ObTableScanParam scan_param_;
   uint64_t cur_pos_;
   uint64_t cur_byte_pos_;
   ObLobMetaInfo cur_info_;
   bool not_calc_char_len_;
   bool not_need_last_info_;
+  bool is_remote_;
+  ObLobRemoteQueryCtx *remote_ctx_;
 };
 
 class ObLobWriteBuffer;
@@ -221,39 +241,6 @@ private:
   bool is_end_;
   bool is_store_char_len_;
 };
- 
-class ObLobMetaManager {
-public:
-  explicit ObLobMetaManager(const uint64_t tenant_id) :
-    persistent_lob_adapter_(tenant_id)
-  {}
-  ~ObLobMetaManager() {}
-  // write one lob meta row
-  int write(ObLobAccessParam& param, ObLobMetaInfo& in_row);
-  int batch_insert(ObLobAccessParam& param, blocksstable::ObDatumRowIterator &iter);
-  int batch_delete(ObLobAccessParam& param, blocksstable::ObDatumRowIterator &iter);
-  // append
-  int append(ObLobAccessParam& param, ObLobMetaWriteIter& iter);
-  // return ObLobMetaWriteResult
-  int insert(ObLobAccessParam& param, ObLobMetaWriteIter& iter);
-  // specified range rebuild
-  int rebuild(ObLobAccessParam& param);
-  // specified range LobMeta scan
-  int scan(ObLobAccessParam& param, ObLobMetaScanIter &iter);
-  // specified range erase
-  int erase(ObLobAccessParam& param, ObLobMetaInfo& in_row);
-  // specified range update
-  int update(ObLobAccessParam& param, ObLobMetaInfo& old_row, ObLobMetaInfo& new_row);
-  // fetch lob id
-  int fetch_lob_id(ObLobAccessParam& param, uint64_t &lob_id);
-
-  int open(ObLobAccessParam &param, ObLobMetaSingleGetter* getter);
-
-  TO_STRING_KV("[LOB]", "meta mngr");
-private:
-  // lob adaptor
-  ObPersistentLobApator persistent_lob_adapter_;
-};
 
 OB_INLINE int64_t ob_lob_writer_length_validation(const common::ObCollationType &coll_type,
                                                   const int64_t &data_len,
@@ -302,34 +289,33 @@ private:
   ObLobMetaWriteResult result_;
 };
 
-class ObLobMetaSingleGetter
+class ObInRowLobDataSpliter
 {
 public:
-  ObLobMetaSingleGetter():
-    param_(nullptr),
-    scan_param_(),
-    row_objs_(nullptr),
-    table_id_(0),
-    lob_adatper_(nullptr),
-    scan_iter_(nullptr)
+  ObInRowLobDataSpliter(ObArray<ObLobMetaInfo> &lob_meta_list):
+    cs_type_(ObCollationType::CS_TYPE_INVALID),
+    chunk_size_(0),
+    inrow_data_(),
+    byte_pos_(0),
+    char_pos_(0),
+    lob_meta_list_(lob_meta_list)
   {}
 
-  ~ObLobMetaSingleGetter();
+  int split(ObCollationType cs_type, const int64_t chunk_size, const ObString &inrow_data);
+  int64_t byte_pos() const { return byte_pos_; }
+  int64_t char_pos() const { return char_pos_; }
 
-  int open(ObLobAccessParam &param, ObILobApator* lob_adatper);
-
-  int get_next_row(ObString &seq_id, ObLobMetaInfo &info);
+protected:
+  int get_next_row(ObLobMetaInfo &info);
 
 private:
-  ObLobAccessParam *param_;
-  ObTableScanParam scan_param_;
-  ObObj *row_objs_;
-  uint64_t table_id_;
-public:
-  ObILobApator *lob_adatper_;
-  ObTableScanIterator *scan_iter_;
+  ObCollationType cs_type_;
+  int64_t chunk_size_;
+  ObString inrow_data_;
+  int64_t byte_pos_;
+  int64_t char_pos_;
+  ObArray<ObLobMetaInfo> &lob_meta_list_;
 };
-
 
 } // storage
 } // oceanbase

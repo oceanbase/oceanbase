@@ -53,8 +53,9 @@ ObBackupWrapperIODevice::ObBackupWrapperIODevice()
     io_fd_(),
     simulated_fd_id_(),
     simulated_slot_version_(),
-    allocator_(ObModIds::BACKUP)
+    allocator_()
 {
+  allocator_.set_attr(lib::ObMemAttr(MTL_ID(), ObModIds::BACKUP));
 }
 
 ObBackupWrapperIODevice::~ObBackupWrapperIODevice()
@@ -311,7 +312,7 @@ int ObBackupWrapperIODevice::parse_storage_device_type_(
 int ObBackupWrapperIODevice::pre_alloc_block_array_()
 {
   int ret = OB_SUCCESS;
-  const ObMemAttr mem_attr(OB_SYS_TENANT_ID, ObModIds::BACKUP);
+  const ObMemAttr mem_attr(MTL_ID(), ObModIds::BACKUP);
   const int64_t total_block_cnt = DEFAULT_BLOCK_COUNT;
   if (OB_ISNULL(block_list_ = static_cast<int64_t *>(
       ob_malloc(sizeof(int64_t) * total_block_cnt, mem_attr)))) {
@@ -333,7 +334,7 @@ int ObBackupWrapperIODevice::check_need_realloc_(bool &need_realloc)
 int ObBackupWrapperIODevice::realloc_block_array_()
 {
   int ret = OB_SUCCESS;
-  const ObMemAttr mem_attr(OB_SYS_TENANT_ID, ObModIds::BACKUP);
+  const ObMemAttr mem_attr(MTL_ID(), ObModIds::BACKUP);
   const int64_t new_total_block_cnt = total_block_cnt_ * 2;
   int64_t *new_block_list = NULL;
   if (OB_ISNULL(new_block_list
@@ -473,6 +474,7 @@ int ObBackupDeviceHelper::get_device_and_fd(
     const int64_t first_id,
     const int64_t second_id,
     const int64_t third_id,
+    ObStorageIdMod &mod,
     ObBackupWrapperIODevice *&device,
     ObIOFd &fd)
 {
@@ -500,16 +502,19 @@ int ObBackupDeviceHelper::get_device_and_fd(
     LOG_WARN("failed to get data file path", K(ret), K(backup_macro_id));
   } else if (OB_FAIL(get_backup_dest_(tenant_id, backup_macro_id.get_backupset_id(), backup_dest))) {
     LOG_WARN("failed to get backup dest", K(ret), K(tenant_id), K(backup_macro_id));
+  } else if (OB_FAIL(get_restore_dest_id_(tenant_id, mod))) {
+    LOG_WARN("failed to get restore dest id", K(tenant_id));
   } else if (OB_FAIL(ObBackupWrapperIODevice::setup_io_storage_info(backup_dest, buf, sizeof(buf), &io_d_opts))) {
     LOG_WARN("failed to setup io storage info", K(ret), K(backup_dest));
   } else if (OB_FAIL(setup_io_device_opts_(tenant_id, backup_macro_id, &io_d_opts))) {
-    LOG_WARN("failed to setup io device opts", K(ret), K(tenant_id), K(backup_macro_id));
+    LOG_WARN("failed to setup io device opts", K(ret), K(tenant_id), K(backup_macro_id), K(mod));
   } else if (OB_FAIL(device_hd->open(backup_path.get_ptr(),
                                      flag,
                                      mode,
                                      fd,
                                      &io_d_opts))) {
     LOG_WARN("failed to open device", K(ret), K(backup_path));
+  } else if (FALSE_IT(device_hd->set_storage_id_mod(mod))) {
   } else {
     fd.first_id_ = first_id;
     fd.second_id_ = second_id;
@@ -648,6 +653,29 @@ int ObBackupDeviceHelper::get_backup_type_(const uint64_t tenant_id, const int64
       LOG_WARN("failed to get backup type", K(ret), K(backup_set_id));
     } else {
       LOG_INFO("get backup type", K(backup_set_id), K(backup_type));
+    }
+  }
+  return ret;
+}
+
+int ObBackupDeviceHelper::get_restore_dest_id_(const uint64_t tenant_id, ObStorageIdMod &mod)
+{
+  int ret = OB_SUCCESS;
+  if (mod.storage_used_mod_ != ObStorageUsedMod::STORAGE_USED_RESTORE) {
+    // do nothing
+  } else {
+    MTL_SWITCH(tenant_id) {
+      int64_t dest_id = 0;
+      ObTenantRestoreInfoMgr *mgr = MTL(ObTenantRestoreInfoMgr *);
+      if (OB_ISNULL(mgr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("mgr should not be null", K(ret));
+      } else if (OB_FAIL(mgr->get_restore_dest_id(dest_id))) {
+        LOG_WARN("failed to get backup type", K(ret), K(tenant_id));
+      } else {
+        mod.storage_id_ = dest_id;
+        LOG_INFO("get backup dest id", K(mod));
+      }
     }
   }
   return ret;

@@ -435,7 +435,7 @@ int ObDbLinkProxy::switch_dblink_conn_pool(DblinkDriverProto type, ObISQLConnect
   return ret;
 }
 
-int ObDbLinkProxy::create_dblink_pool(const dblink_param_ctx &param_ctx, const ObAddr &server,
+int ObDbLinkProxy::create_dblink_pool(const dblink_param_ctx &param_ctx, const ObString &host_name, int32_t port,
                                       const ObString &db_tenant, const ObString &db_user,
                                       const ObString &db_pass, const ObString &db_name,
                                       const common::ObString &conn_str,
@@ -451,10 +451,10 @@ int ObDbLinkProxy::create_dblink_pool(const dblink_param_ctx &param_ctx, const O
     LOG_WARN("mysql proxy not inited");
   } else if (OB_FAIL(switch_dblink_conn_pool(param_ctx.link_type_, dblink_pool))) {
     LOG_WARN("failed to get dblink interface", K(ret));
-  } else if (OB_FAIL(dblink_pool->create_dblink_pool(param_ctx, server, db_tenant,
+  } else if (OB_FAIL(dblink_pool->create_dblink_pool(param_ctx, host_name, port, db_tenant,
                                                      db_user, db_pass, db_name,
                                                      conn_str, cluster_str))) {
-    LOG_WARN("create dblink pool failed", K(ret), K(param_ctx), K(server),
+    LOG_WARN("create dblink pool failed", K(ret), K(param_ctx), K(host_name), K(port),
              K(db_tenant), K(db_user), K(db_pass), K(db_name));
   }
   return ret;
@@ -531,7 +531,7 @@ int ObDbLinkProxy::execute_init_sql(const sqlclient::dblink_param_ctx &param_ctx
       }
     }
   } else if (DBLINK_DRV_OB == param_ctx.link_type_) {
-    static sql_ptr_type sql_ptr[] = {
+    sql_ptr_type sql_ptr[] = {
       param_ctx.set_client_charset_cstr_,
       param_ctx.set_connection_charset_cstr_,
       param_ctx.set_results_charset_cstr_,
@@ -609,27 +609,27 @@ int ObDbLinkProxy::release_dblink(/*uint64_t dblink_id,*/ DblinkDriverProto dbli
   return ret;
 }
 
-int ObDbLinkProxy::dblink_read(ObISQLConnection *dblink_conn, ReadResult &result, const char *sql)
+int ObDbLinkProxy::dblink_read(ObISQLConnection *dblink_conn, ReadResult &result, const ObString &sql)
 {
   int ret = OB_SUCCESS;
   result.reset();
-  if (OB_ISNULL(dblink_conn) || OB_ISNULL(sql)) {
+  if (OB_ISNULL(dblink_conn) || sql.empty()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("null ptr", K(ret), KP(dblink_conn), KP(sql));
+    LOG_WARN("null ptr", K(ret), KP(dblink_conn), K(sql));
   } else if (OB_FAIL(dblink_conn->execute_read(OB_INVALID_TENANT_ID, sql, result))) {
-    LOG_WARN("read from dblink failed", K(ret), K(dblink_conn), KCSTRING(sql));
+    LOG_WARN("read from dblink failed", K(ret), K(dblink_conn), K(sql));
   } else {
     LOG_DEBUG("succ to read from dblink", K(sql));
   }
   return ret;
 }
 
-int ObDbLinkProxy::dblink_write(ObISQLConnection *dblink_conn, int64_t &affected_rows, const char *sql)
+int ObDbLinkProxy::dblink_write(ObISQLConnection *dblink_conn, int64_t &affected_rows, const ObString &sql)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(dblink_conn) || OB_ISNULL(sql)) {
+  if (OB_ISNULL(dblink_conn) || sql.empty()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("null ptr", K(ret), KP(dblink_conn), KP(sql));
+    LOG_WARN("null ptr", K(ret), KP(dblink_conn), K(sql));
   } else if (OB_FAIL(dblink_conn->execute_write(OB_INVALID_TENANT_ID, sql, affected_rows))) {
     LOG_WARN("write to dblink failed", K(ret), K(dblink_conn), K(sql));
   } else {
@@ -652,16 +652,16 @@ int ObDbLinkProxy::dblink_execute_proc(ObISQLConnection *dblink_conn)
 
 
 int ObDbLinkProxy::dblink_prepare(sqlclient::ObISQLConnection *dblink_conn,
-                                  const char *sql,
+                                  const ObString &sql,
                                   int64_t param_count,
                                   ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(dblink_conn) || OB_ISNULL(sql)) {
+  if (OB_ISNULL(dblink_conn) || sql.empty()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("null ptr", K(ret), KP(dblink_conn), KP(sql));
+    LOG_WARN("null ptr", K(ret), KP(dblink_conn), K(sql));
   } else if (OB_FAIL(dblink_conn->prepare(sql, param_count, allocator))) {
-    LOG_WARN("prepare to dblink failed", K(ret), K(ObString(sql)));
+    LOG_WARN("prepare to dblink failed", K(ret), K(sql));
   }
   return ret;
 }

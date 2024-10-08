@@ -1886,6 +1886,7 @@ public:
   bool is_not_calculable_expr() const;
   bool cnt_not_calculable_expr() const;
   int is_const_inherit_expr(bool &is_const_inherit, const bool param_need_replace = false) const;
+  bool check_is_deterministic_expr() const;
   int is_non_pure_sys_func_expr(bool &is_non_pure) const;
   bool is_specified_pseudocolumn_expr() const;
   void set_alias_column_name(const common::ObString &alias_name) { alias_column_name_ = alias_name; }
@@ -1980,6 +1981,7 @@ public:
   bool is_oracle_spatial_expr() const;
   bool is_json_domain_expr() const;
   bool is_multivalue_expr() const;
+  bool is_multivalue_index_column_expr() const;
   ObRawExpr* get_json_domain_param_expr();
   bool is_geo_expr() const;
   bool is_domain_expr() const;
@@ -2428,14 +2430,16 @@ class ObExecParamRawExpr : public ObConstRawExpr
 public:
   ObExecParamRawExpr() :
     ObConstRawExpr(),
-    ref_same_dblink_(false)
+    ref_same_dblink_(false),
+    eval_by_storage_(false)
   {
     set_expr_class(ObIRawExpr::EXPR_EXEC_PARAM);
   }
 
   ObExecParamRawExpr(common::ObIAllocator &alloc)
     : ObConstRawExpr(alloc),
-      ref_same_dblink_(false)
+      ref_same_dblink_(false),
+      eval_by_storage_(false)
   {
     set_expr_class(ObIRawExpr::EXPR_EXEC_PARAM);
   }
@@ -2456,6 +2460,8 @@ public:
   bool is_onetime() const { return is_onetime_; }
   bool is_ref_same_dblink() const { return ref_same_dblink_; }
   void set_ref_same_dblink(bool ref_same_dblink) { ref_same_dblink_ = ref_same_dblink; }
+  bool is_eval_by_storage() const { return eval_by_storage_; }
+  void set_eval_by_storage(bool eval_by_storage) { eval_by_storage_ = eval_by_storage; }
   int assign(const ObRawExpr &other) override;
   int inner_deep_copy(ObIRawExprCopier &copier) override;
   virtual int replace_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
@@ -2476,6 +2482,7 @@ private:
   ObRawExpr *outer_expr_;
   bool is_onetime_;
   bool ref_same_dblink_;
+  bool eval_by_storage_;
 };
 
 class ObQueryRefRawExpr : public ObRawExpr
@@ -3988,7 +3995,7 @@ public:
       params_type_(),
       database_name_(),
       package_name_(),
-      is_deterministic_(false),
+      has_deterministic_attribute_(false),
       is_parallel_enable_(false),
       is_udt_udf_(false),
       is_pkg_body_udf_(false),
@@ -4001,6 +4008,7 @@ public:
       params_name_(),
       params_desc_v2_() {
     set_expr_class(ObIRawExpr::EXPR_UDF);
+    is_deterministic_ = false;
   }
 
   ObUDFRawExpr()
@@ -4015,7 +4023,7 @@ public:
       params_type_(),
       database_name_(),
       package_name_(),
-      is_deterministic_(false),
+      has_deterministic_attribute_(false),
       is_parallel_enable_(false),
       is_udt_udf_(false),
       is_pkg_body_udf_(false),
@@ -4028,6 +4036,7 @@ public:
       params_name_(),
       params_desc_v2_() {
     set_expr_class(ObIRawExpr::EXPR_UDF);
+    is_deterministic_ = false;
   }
 
   virtual ~ObUDFRawExpr() {}
@@ -4163,6 +4172,8 @@ public:
   {
     return common::OB_INVALID_ID == pkg_id_ && common::OB_INVALID_ID == type_id_;
   }
+  inline bool is_udf_deterministic() const { return has_deterministic_attribute_; }
+  void set_udf_deterministic(bool is_deterministic);
 
   VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_,
                                             N_RESULT_TYPE, result_type_,
@@ -4175,6 +4186,7 @@ public:
                                             K_(pkg_id),
                                             K_(type_id),
                                             K_(subprogram_path),
+                                            K_(has_deterministic_attribute),
                                             K_(is_deterministic),
                                             K_(is_udt_udf),
                                             K_(is_return_sys_cursor),
@@ -4201,7 +4213,7 @@ private:
   common::ObSEArray<ObExprResType, 5, common::ModulePageAllocator, true> params_type_;
   common::ObString database_name_;
   common::ObString package_name_;
-  bool is_deterministic_;
+  bool has_deterministic_attribute_;  // udf deterministic attribute
   bool is_parallel_enable_;
   bool is_udt_udf_;
   bool is_pkg_body_udf_;

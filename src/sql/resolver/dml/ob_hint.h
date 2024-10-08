@@ -106,11 +106,13 @@ public:
   ~ObDirectLoadHint() = default;
 
   void reset();
-  int assign(const ObDirectLoadHint &other);
+  void merge(const ObDirectLoadHint &other);
   int print_direct_load_hint(PlanText &plan_text) const;
-
-  OB_INLINE bool is_enable() const { return is_enable_; }
+  int print_direct_load_hint(char *buf, int64_t buf_len, int64_t &pos) const;
+  OB_INLINE bool is_enable() const { return !has_no_direct_ && has_direct_; }
+  OB_INLINE bool has_direct() const { return has_direct_; }
   OB_INLINE bool need_sort() const { return need_sort_; }
+  OB_INLINE bool has_no_direct() const { return has_no_direct_; }
   OB_INLINE int64_t get_max_error_row_count() const { return max_error_row_count_; }
   OB_INLINE bool is_full_load_method() const { return LoadMethod::FULL == load_method_; }
   OB_INLINE bool is_inc_load_method() const { return LoadMethod::INC == load_method_; }
@@ -118,17 +120,21 @@ public:
   OB_INLINE bool is_full_direct_load() const { return is_full_load_method(); }
   OB_INLINE bool is_inc_direct_load() const { return is_inc_load_method() || is_inc_replace_load_method(); }
 
-  TO_STRING_KV(K_(is_enable),
+  TO_STRING_KV(K_(has_direct),
                K_(need_sort),
+               K_(has_no_direct),
                K_(flags),
                K_(max_error_row_count),
                "load_method", get_load_method_string(load_method_));
+private:
+  int print_direct_load_hint_(char *buf, int64_t buf_len, int64_t &pos, const char *indent) const;
 public:
   union {
     struct {
-      uint64_t is_enable_ : 1;
+      uint64_t has_direct_ : 1;
       uint64_t need_sort_ : 1;
-      uint64_t reserved_ : 62;
+      uint64_t has_no_direct_ : 1;
+      uint64_t reserved_ : 61;
     };
     uint64_t flags_;
   };
@@ -176,11 +182,12 @@ struct ObOptParamHint
     DEF(RUNTIME_FILTER_TYPE,)                       \
     DEF(BLOOM_FILTER_RATIO,)                        \
     DEF(CORRELATION_FOR_CARDINALITY_ESTIMATION,)    \
-    DEF(CARDINALITY_ESTIMATION_MODEL,) \
+    DEF(CARDINALITY_ESTIMATION_MODEL,)              \
     DEF(_PUSH_JOIN_PREDICATE,)                      \
-    DEF(RANGE_INDEX_DIVE_LIMIT,) \
-    DEF(PARTITION_INDEX_DIVE_LIMIT,) \
+    DEF(RANGE_INDEX_DIVE_LIMIT,)                    \
+    DEF(PARTITION_INDEX_DIVE_LIMIT,)                \
     DEF(OB_TABLE_ACCESS_POLICY,)                    \
+    DEF(PARTITION_WISE_PLAN_ENABLED,)               \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 
@@ -269,7 +276,8 @@ struct ObGlobalHint {
 #define COMPAT_VERSION_4_3_1      (oceanbase::common::cal_version(4, 3, 1, 0))
 #define COMPAT_VERSION_4_3_2      (oceanbase::common::cal_version(4, 3, 2, 0))
 #define COMPAT_VERSION_4_3_3      (oceanbase::common::cal_version(4, 3, 3, 0))
-#define LASTED_COMPAT_VERSION     COMPAT_VERSION_4_3_3
+#define COMPAT_VERSION_4_3_4      (oceanbase::common::cal_version(4, 3, 4, 0))
+#define LASTED_COMPAT_VERSION     COMPAT_VERSION_4_3_4
   static bool is_valid_opt_features_version(uint64_t version)
   { return COMPAT_VERSION_4_0 <= version && LASTED_COMPAT_VERSION >= version; }
 
@@ -342,15 +350,7 @@ struct ObGlobalHint {
   }
   bool has_direct_load() const
   {
-    return (has_append() || direct_load_hint_.is_enable());
-  }
-  bool has_inc_direct_load() const
-  {
-    return (direct_load_hint_.is_enable() && direct_load_hint_.is_inc_direct_load());
-  }
-  bool has_replace() const
-  {
-    return (direct_load_hint_.is_enable() && direct_load_hint_.is_inc_replace_load_method());
+    return !direct_load_hint_.has_no_direct() && (has_append() || direct_load_hint_.has_direct());
   }
   bool get_direct_load_need_sort() const;
 
@@ -572,7 +572,8 @@ public:
       HINT_PQ_SET,
       HINT_JOIN_FILTER,
       HINT_TABLE_DYNAMIC_SAMPLING,
-      HINT_PQ
+      HINT_PQ,
+      HINT_UNION_MERGE
     };
 
   static const int64_t MAX_EXPR_STR_LENGTH_IN_HINT = 1024;
@@ -649,6 +650,7 @@ public:
   bool is_coalesce_aggr_hint() const {return HINT_COALESCE_AGGR == hint_class_; }
   bool is_trans_added() const { return is_trans_added_; }
   bool set_trans_added(bool is_trans_added) { return is_trans_added_ = is_trans_added; }
+  bool is_union_merge_hint() const { return T_UNION_MERGE_HINT == hint_type_; }
 
   VIRTUAL_TO_STRING_KV("hint_type", get_type_name(hint_type_),
                        K_(hint_class), K_(qb_name),
@@ -1029,6 +1031,28 @@ private:
   ObTableInHint table_;
   common::ObString index_name_;
   int64_t index_prefix_;
+};
+
+class ObUnionMergeHint : public ObOptHint
+{
+public:
+  ObUnionMergeHint(ObItemType hint_type = T_UNION_MERGE_HINT)
+    : ObOptHint(hint_type)
+  {
+    set_hint_class(HINT_UNION_MERGE);
+  }
+  int assign(const ObUnionMergeHint &other);
+  virtual ~ObUnionMergeHint() {}
+  virtual int get_all_table_in_hint(ObIArray<ObTableInHint*> &all_tables) override { return all_tables.push_back(&table_); }
+  virtual int print_hint_desc(PlanText &plan_text) const override;
+  ObTableInHint &get_table() { return table_; }
+  const ObTableInHint &get_table() const { return table_; }
+  common::ObIArray<common::ObString> &get_index_name_list() { return index_name_list_; }
+  const common::ObIArray<common::ObString> &get_index_name_list() const { return index_name_list_; }
+  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table), K_(index_name_list));
+private:
+  ObTableInHint table_;
+  common::ObSEArray<common::ObString, 2, common::ModulePageAllocator, true> index_name_list_;
 };
 
 class ObTableParallelHint : public ObOptHint

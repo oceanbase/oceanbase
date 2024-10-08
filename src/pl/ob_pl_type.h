@@ -318,7 +318,7 @@ public:
   {
     type_from_origin_ = type_from_origin;
   }
-
+  inline ObPLTypeFrom get_type_from_origin() const { return type_from_origin_; }
   const common::ObDataType *get_data_type() const { return is_obj_type() ? &obj_type_ : NULL; }
   common::ObDataType *get_data_type() { return is_obj_type() ? &obj_type_ : NULL; }
   const common::ObObjMeta *get_meta_type() const { return  is_obj_type() ? &(obj_type_.meta_) : NULL; }

@@ -990,6 +990,7 @@ int ObDtlBasicChannel::switch_writer(const ObDtlMsg &msg)
       } else if (DtlWriterType::CHUNK_DATUM_WRITER == msg_writer_map[px_row.get_data_type()]) {
         msg_writer_ = &datum_msg_writer_;
       } else if (DtlWriterType::VECTOR_FIXED_WRITER == msg_writer_map[px_row.get_data_type()]) {
+        vector_fixed_msg_writer_.set_size_per_buffer(send_buffer_size_);
         msg_writer_ = &vector_fixed_msg_writer_;
       } else if (DtlWriterType::VECTOR_ROW_WRITER == msg_writer_map[px_row.get_data_type()]) {
         vector_row_msg_writer_.set_row_meta(meta_);
@@ -1521,7 +1522,7 @@ int ObDtlVectorMsgWriter::serialize()
 //--------------end ObDtlVectorsFixedMsgWriter---------------
 ObDtlVectorFixedMsgWriter::ObDtlVectorFixedMsgWriter() :
   type_(VECTOR_FIXED_WRITER), write_buffer_(nullptr), vector_buffer_(),
-  write_ret_(OB_SUCCESS)
+  write_ret_(OB_SUCCESS), size_per_buffer_(-1)
 {}
 
 ObDtlVectorFixedMsgWriter::~ObDtlVectorFixedMsgWriter()
@@ -1533,12 +1534,12 @@ int ObDtlVectorFixedMsgWriter::init(ObDtlLinkedBuffer *buffer, uint64_t tenant_i
 {
   int ret = OB_SUCCESS;
   UNUSED(tenant_id);
-  if (nullptr == buffer) {
+  if (nullptr == buffer || size_per_buffer_ < 0 || buffer->size() < size_per_buffer_) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("write buffer is null", K(ret));
+    LOG_WARN("write buffer is null", K(ret), K(size_per_buffer_), K(buffer->size()), K(lbt()));
   } else {
     reset();
-    vector_buffer_.set_buf(buffer->buf(), buffer->size());
+    vector_buffer_.set_buf(buffer->buf(), size_per_buffer_); /*keep fixed msg use buffer with same size*/
     write_buffer_ = buffer;
   }
   return ret;

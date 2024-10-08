@@ -56,7 +56,6 @@ public:
   OB_INLINE bool is_file() const { return FILE == type_; }
   OB_INLINE bool is_memory() const { return MEM == type_; }
   OB_INLINE bool is_none() const { return NONE == type_; }
-  OB_INLINE int64_t fifth_id() const { return fifth_id_; }
   OB_INLINE void set_none_addr() { type_ = NONE; }
   OB_INLINE void set_seq(const uint64_t seq) { seq_ = seq; }
   OB_INLINE void set_size(const uint64_t size) { size_ = size; }

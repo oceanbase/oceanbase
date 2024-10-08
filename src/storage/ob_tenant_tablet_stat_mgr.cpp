@@ -939,9 +939,9 @@ int ObTenantTabletStatMgr::batch_clear_tablet_stat(
         clear_cnt++;
       }
     }
-  }
-  if (OB_SUCC(ret)) {
-    FLOG_INFO("batch clear tablet stat in ls", K(ret), K(ls_id), K(tablet_cnt), K(clear_cnt));
+    if (OB_SUCC(ret)) {
+      FLOG_INFO("batch clear tablet stat in ls", K(ret), K(ls_id), K(tablet_cnt), K(clear_cnt));
+    }
   }
   return ret;
 }

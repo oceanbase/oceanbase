@@ -179,6 +179,7 @@ int ObMicroBlockGetReader::inner_init(
     LOG_WARN("failed to init reader", K(ret), K(block_data), K(read_info));
   } else {
     row_count_ = header_->row_count_;
+    original_data_length_ = header_->original_length_;
     read_info_ = &read_info;
     if (OB_FAIL(ObIMicroBlockGetReader::init_hash_index(block_data, hash_index_, header_))) {
       LOG_WARN("failed to init micro block hash index", K(ret), K(rowkey), K(block_data), K(read_info));
@@ -407,6 +408,7 @@ int ObMicroBlockReader::init(
     LOG_WARN("fail to init, ", K(ret));
   } else {
     row_count_ = header_->row_count_;
+    original_data_length_ = header_->original_length_;
     read_info_ = &read_info;
     datum_utils_ = &(read_info.get_datum_utils());
     is_inited_ = true;
@@ -430,6 +432,7 @@ int ObMicroBlockReader::init(
     LOG_WARN("fail to init, ", K(ret));
   } else {
     row_count_ = header_->row_count_;
+    original_data_length_ = header_->original_length_;
     read_info_ = nullptr;
     datum_utils_ = datum_utils;
     is_inited_ = true;
@@ -723,6 +726,8 @@ int ObMicroBlockReader::filter_pushdown_filter(
               col_idx,
               tmp_datum))) {
             LOG_WARN("fail to read column", K(ret), K(i), K(col_idx), K(row_idx), KPC_(header));
+          } else if (OB_UNLIKELY(header_->is_trans_version_column_idx(col_idx))) {
+            datum.set_int(-tmp_datum.get_int());
           } else if (tmp_datum.is_nop_value()) {
             if (OB_UNLIKELY(default_datums.at(i).is_nop())) {
               ret = OB_ERR_UNEXPECTED;
@@ -811,6 +816,7 @@ int ObMicroBlockReader::get_rows(
   } else if (OB_FAIL(row_buf.reserve(read_info_->get_request_count()))) {
     LOG_WARN("Failed to reserve row buf", K(ret), K(row_buf), KPC(read_info_));
   } else {
+    const ObColumnIndexArray &cols_index = read_info_->get_columns_index();
     for (int64_t idx = 0; OB_SUCC(ret) && idx < row_cap; ++idx) {
       row_idx = row_ids[idx];
       if (OB_UNLIKELY(row_idx < 0 || row_idx >= header_->row_count_)) {
@@ -829,6 +835,8 @@ int ObMicroBlockReader::get_rows(
           if (col_idx >= read_info_->get_request_count()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("Unexpected col idx", K(ret), K(i), K(col_idx), K(read_info_->get_request_count()));
+          } else if (OB_UNLIKELY(header_->is_trans_version_column_idx(cols_index.at(col_idx)))) {
+            datum.set_int(-row_buf.storage_datums_[col_idx].get_int());
           } else if (row_buf.storage_datums_[col_idx].is_null()) {
             datum.set_null();
           } else if (row_buf.storage_datums_[col_idx].is_nop()) {
@@ -910,6 +918,8 @@ int ObMicroBlockReader::get_rows(
     }
   }
   if (OB_SUCC(ret)) {
+    ObStorageDatum trans_datum;
+    const ObColumnIndexArray &cols_index = read_info_->get_columns_index();
     for (int64_t idx = 0; OB_SUCC(ret) && idx < row_cap; ++idx) {
       row_idx = row_ids[idx];
       if (OB_UNLIKELY(row_idx < 0 || row_idx >= header_->row_count_)) {
@@ -929,6 +939,10 @@ int ObMicroBlockReader::get_rows(
           if (col_idx >= read_info_->get_request_count()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("Unexpected col idx", K(ret), K(i), K(col_idx), K(read_info_->get_request_count()));
+          } else if (OB_UNLIKELY(header_->is_trans_version_column_idx(cols_index.at(col_idx)))) {
+            trans_datum.reuse();
+            trans_datum.set_int(-row_buf.storage_datums_[col_idx].get_int());
+            col_datum = &trans_datum;
           } else if (row_buf.storage_datums_[col_idx].is_nop()) {
             if (OB_ISNULL(default_row)) {
               ret = OB_ERR_UNEXPECTED;

@@ -248,5 +248,107 @@ int ObMVDepUtils::get_table_ids_only_referenced_by_given_mv(
   }
   return ret;
 }
+
+int ObMVDepUtils::get_table_ids_only_referenced_by_given_fast_lsm_mv(
+    ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    const uint64_t mview_table_id,
+    ObIArray<uint64_t> &ref_table_ids)
+{
+  int ret = OB_SUCCESS;
+  if ((OB_INVALID_TENANT_ID == tenant_id)
+      || (OB_INVALID_ID == mview_table_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id or mview_table_id",
+        KR(ret), K(tenant_id), K(mview_table_id));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      ObSqlString sql;
+      ObMySQLResult *result = NULL;
+      const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+      if (OB_FAIL(sql.assign_fmt(
+              "select a.p_obj from"
+              " (select p_obj from %s dep, %s mv where dep.mview_id = mv.mview_id and "
+              "mv.refresh_mode in (%ld) group by p_obj having count(*) = 1) a,"
+              " (select p_obj from %s dep, %s mv where dep.mview_id = mv.mview_id and "
+              "mv.refresh_mode in (%ld) and dep.tenant_id = %lu and dep.mview_id = %lu) b "
+              "where a.p_obj = b.p_obj",
+              OB_ALL_MVIEW_DEP_TNAME, OB_ALL_MVIEW_TNAME,
+              ObMVRefreshMode::MAJOR_COMPACTION,
+              OB_ALL_MVIEW_DEP_TNAME, OB_ALL_MVIEW_TNAME,
+              ObMVRefreshMode::MAJOR_COMPACTION,
+              ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id), mview_table_id))) {
+        LOG_WARN("failed to assign sql", KR(ret));
+      } else if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
+        LOG_WARN("failed to execute read", KR(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", KR(ret), KP(result));
+      } else {
+        while (OB_SUCC(ret)) {
+          if (OB_FAIL(result->next())) {
+            if (OB_UNLIKELY(OB_ITER_END != ret)) {
+              LOG_WARN("failed to get next", KR(ret));
+            } else {
+              ret = OB_SUCCESS;
+              break;
+            }
+          } else {
+            uint64_t ref_table_id = OB_INVALID_ID;
+            EXTRACT_INT_FIELD_MYSQL(*result, "p_obj", ref_table_id, uint64_t);
+            if (OB_SUCC(ret)) {
+              if (OB_FAIL(ref_table_ids.push_back(ref_table_id))) {
+                LOG_WARN("failed to add ref table id to array", KR(ret), K(ref_table_id));
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+int ObMVDepUtils::get_referring_mv_of_base_table(ObISQLClient &sql_client, const uint64_t tenant_id,
+                                                 const uint64_t base_table_id,
+                                                 ObIArray<uint64_t> &mview_ids)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+
+  SMART_VAR(ObMySQLProxy::MySQLResult, res)
+  {
+    ObMySQLResult *result = nullptr;
+    if (OB_FAIL(sql.assign_fmt("SELECT mview_id FROM %s WHERE p_obj = %ld",
+                               share::OB_ALL_MVIEW_DEP_TNAME, base_table_id))) {
+      LOG_WARN("fail to assign sql", KR(ret));
+    } else if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
+      LOG_WARN("execute sql failed", KR(ret), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("result is null", KR(ret));
+    } else {
+      while (OB_SUCC(ret)) {
+        if (OB_FAIL(result->next())) {
+          if (OB_UNLIKELY(OB_ITER_END != ret)) {
+            LOG_WARN("failed to get next", KR(ret));
+          } else {
+            ret = OB_SUCCESS;
+            break;
+          }
+        } else {
+          uint64_t mview_id = 0;
+          EXTRACT_INT_FIELD_MYSQL(*result, "mview_id", mview_id, uint64_t);
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(mview_ids.push_back(mview_id))) {
+              LOG_WARN("failed to add ref table id to array", KR(ret), K(mview_id));
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
 } // end of sql
 } // end of oceanbase

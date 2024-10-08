@@ -592,6 +592,37 @@ int PalfHandleImpl::get_paxos_member_list_and_learner_list(
   return ret;
 }
 
+int PalfHandleImpl::get_stable_membership(LogConfigVersion &config_version,
+                                          common::ObMemberList &member_list,
+                                          int64_t &paxos_replica_num,
+                                          common::GlobalLearnerList &learner_list) const
+{
+  int ret = OB_SUCCESS;
+  const int get_lock = config_change_lock_.trylock();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(ERROR, "PalfHandleImpl has not inited", K(ret));
+  } else if (OB_SUCCESS != get_lock) {
+    ret = OB_EAGAIN;
+    if (palf_reach_time_interval(1000 * 1000, config_change_print_time_us_)) {
+      PALF_LOG(WARN, "another config_change is running, try again", KR(ret), KPC(this));
+    }
+  } else {
+    RLockGuard guard(lock_);
+    if (OB_FAIL(config_mgr_.get_config_version(config_version))) {
+      PALF_LOG(WARN, "failed to get_config_version", K(ret), K_(palf_id));
+    } else if (OB_FAIL(config_mgr_.get_curr_member_list(member_list, paxos_replica_num))) {
+      PALF_LOG(WARN, "get_curr_member_list failed", K(ret), KPC(this));
+    } else if (OB_FAIL(config_mgr_.get_global_learner_list(learner_list))) {
+      PALF_LOG(WARN, "get_global_learner_list failed", K(ret), KPC(this));
+    }
+  }
+  if (OB_SUCCESS == get_lock) {
+    config_change_lock_.unlock();
+  }
+  return ret;
+}
+
 int PalfHandleImpl::get_election_leader(ObAddr &addr) const
 {
   int ret = OB_SUCCESS;
@@ -1131,6 +1162,29 @@ int PalfHandleImpl::get_arbitration_member(common::ObMember &arb_member) const
   }
   return ret;
 }
+
+int PalfHandleImpl::set_election_silent_flag(const bool election_silent_flag)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    election_msg_sender_.set_silent_flag(election_silent_flag);
+    PALF_LOG(INFO, "set election_silent_flag", K(election_silent_flag));
+  }
+  return ret;
+}
+
+bool PalfHandleImpl::is_election_silent() const
+{
+  bool bool_ret = false;
+  if (IS_NOT_INIT) {
+  } else {
+    bool_ret = election_msg_sender_.get_silent_flag();
+  }
+  return bool_ret;
+
+}
 #endif
 
 int PalfHandleImpl::change_access_mode(const int64_t proposal_id,
@@ -1383,7 +1437,20 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
       }
     }
     time_guard.click("precheck");
-    // step 3: check whether the new config info can be set to the election module
+    // step 3: check whether the reconfiguration is allowed
+    if (OB_SUCC(ret) && is_add_log_sync_member_list(args.type_) &&
+        UPGRADE_LEARNER_TO_ACCEPTOR != args.type_) {
+      ret = plugins_.check_can_add_member(args.server_.get_server(), timeout_us);
+      // reset retcode if the plugin is empty
+      ret = (OB_NOT_INIT == ret)? OB_SUCCESS: ret;
+    } else if (OB_SUCC(ret) && DEGRADE_ACCEPTOR_TO_LEARNER != args.type_ &&
+        (is_remove_log_sync_member_list(args.type_) || CHANGE_REPLICA_NUM == args.type_)) {
+      ret = plugins_.check_can_change_memberlist(new_config_info.config_.log_sync_memberlist_,
+          new_config_info.config_.log_sync_replica_num_, timeout_us);
+      ret = (OB_NOT_INIT == ret)? OB_SUCCESS: ret;
+    }
+    time_guard.click("check_deps");
+    // step 4: check whether the new config info can be set to the election module
     while (OB_SUCCESS == ret && OB_SUCC(not_timeout())) {
       {
         RLockGuard guard(lock_);
@@ -1401,12 +1468,12 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
       ob_usleep(50 * 1000);
     }
     time_guard.click("wait_ele");
-    // step 4: waiting for log barrier if a arbitration member exists
+    // step 5: waiting for log barrier if a arbitration member exists
     if (OB_SUCC(ret) && true == new_config_info.config_.arbitration_member_.is_valid()) {
       ret = wait_log_barrier_(args, new_config_info, not_timeout);
     }
     time_guard.click("wait_barrier");
-    // step 5: motivate reconfiguration
+    // step 6: motivate reconfiguration
     while (OB_SUCCESS == ret && OB_SUCC(not_timeout())) {
       bool need_wlock = false;
       bool need_rlock = false;
@@ -2569,6 +2636,35 @@ int PalfHandleImpl::reset_locality_cb()
   return ret;
 }
 
+int PalfHandleImpl::set_reconfig_checker_cb(PalfReconfigCheckerCb *reconfig_checker)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "not initted", KR(ret), KPC(this));
+  } else if (OB_ISNULL(reconfig_checker)) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "reconfig_checker is NULL, can't register", KR(ret), KPC(this));
+  } else if (OB_FAIL(plugins_.add_plugin(reconfig_checker))) {
+    PALF_LOG(WARN, "add_plugin failed", KR(ret), KPC(this), KP(reconfig_checker), K_(plugins));
+  } else {
+    PALF_LOG(INFO, "set_reconfig_checker_cb success", KPC(this), K_(plugins), KP(reconfig_checker));
+  }
+  return ret;
+}
+
+int PalfHandleImpl::reset_reconfig_checker_cb()
+{
+  int ret = OB_SUCCESS;
+  PalfReconfigCheckerCb *reconfig_checker = NULL;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (OB_FAIL(plugins_.del_plugin(reconfig_checker))) {
+    PALF_LOG(WARN, "del_plugin failed", KR(ret), KPC(this), K_(plugins));
+  }
+  return ret;
+}
+
 int PalfHandleImpl::check_and_switch_freeze_mode()
 {
   int ret = OB_SUCCESS;
@@ -2920,6 +3016,7 @@ int PalfHandleImpl::do_init_mem_(
     has_set_deleted_ = false;
     palf_env_impl_ = palf_env_impl;
     is_inited_ = true;
+    election_msg_sender_.set_palf_id(palf_id);
     PALF_LOG(INFO, "PalfHandleImpl do_init_ success", K(ret), K(palf_id), K(self), K(log_dir), K(palf_base_info),
         K(log_meta), K(fetch_log_engine), K(alloc_mgr), K(log_rpc));
   }

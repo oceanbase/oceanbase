@@ -93,6 +93,7 @@ bool ObSSTableRowScanner<PrefetchType>::can_batch_scan() const
 {
     return can_blockscan() &&
           block_row_store_->filter_applied() &&
+          !access_ctx_->is_mview_query() &&
           // can batch scan when only enable_pd_aggregate, as it uses own datum buffer and only return aggregated result
           (iter_param_->vectorized_enabled_ || iter_param_->enable_pd_aggregate());
 }
@@ -271,6 +272,7 @@ int ObSSTableRowScanner<PrefetchType>::open_cur_data_block(ObSSTableReadHandle &
       }
       if (OB_SUCC(ret)) {
         access_ctx_->inc_micro_access_cnt();
+        REALTIME_MONITOR_ADD_SSSTORE_READ_BYTES(access_ctx_, micro_scanner_->get_data_length());
         LOG_DEBUG("Success to open micro block", K(ret), K(read_handle), K(prefetcher_.cur_micro_data_fetch_idx_),
                   K(micro_info), K(micro_handle), KPC(this), K(common::lbt()));
       }
@@ -337,7 +339,7 @@ int ObSSTableRowScanner<PrefetchType>::inner_get_next_row(const ObDatumRow *&sto
     ObDatumRow &datum_row = *const_cast<ObDatumRow *>(store_row);
     if (!store_row->row_flag_.is_not_exist() &&
       iter_param_->need_scn_ &&
-      OB_FAIL(set_row_scn(*iter_param_, store_row))) {
+      OB_FAIL(set_row_scn(access_ctx_->use_fuse_row_cache_, *iter_param_, store_row))) {
       LOG_WARN("failed to set row scn", K(ret));
     }
     EVENT_INC(ObStatEventIds::SSSTORE_READ_ROW_COUNT);

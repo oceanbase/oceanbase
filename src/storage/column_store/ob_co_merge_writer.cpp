@@ -180,7 +180,7 @@ int ObWriteHelper::end_write(ObTabletMergeInfo &merge_info)
     STORAGE_LOG(WARN, "failed to close macro writer", K(ret), K(macro_writer_));
   } else {
     ObSSTableMergeHistory &merge_history = merge_info.get_merge_history();
-    if (OB_FAIL(merge_history.update_block_info(macro_writer_.get_merge_block_info()))) {
+    if (OB_FAIL(merge_history.update_block_info(macro_writer_.get_merge_block_info(), false/*without_row_cnt*/))) {
       STORAGE_LOG(WARN, "Failed to add macro blocks", K(ret));
     }
   }

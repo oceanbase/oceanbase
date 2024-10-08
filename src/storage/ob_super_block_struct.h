@@ -207,7 +207,7 @@ public:
 
   bool is_valid() const
   {
-    return ls_id_.is_valid() && epoch_ >= 0 && ObLSItemStatus::MAX != status_;
+    return ls_id_.is_valid() && epoch_ >= 0 && ObLSItemStatus::MAX != status_ && min_macro_seq_ < max_macro_seq_;
   }
 
   TO_STRING_KV(K_(ls_id), K_(epoch), K_(status), K_(min_macro_seq), K_(max_macro_seq));
@@ -341,17 +341,19 @@ public:
     const common::ObTabletID tablet_id,
     const int64_t tablet_meta_version,
     const ObPendingFreeTabletStatus status,
-    int64_t free_time,
-    GCTabletType gc_type)
+    const int64_t free_time,
+    const GCTabletType gc_type,
+    const int64_t tablet_transfer_seq)
     : tablet_id_(tablet_id), tablet_meta_version_(tablet_meta_version),
       status_(status), free_time_(free_time),
-      gc_type_(gc_type), tablet_transfer_seq_(share::OB_INVALID_TRANSFER_SEQ)
+      gc_type_(gc_type), tablet_transfer_seq_(tablet_transfer_seq)
   {}
 
   bool is_valid() const
   {
     return tablet_id_.is_valid() && tablet_meta_version_ > 0 &&
-        ObPendingFreeTabletStatus::MAX != status_;
+        ObPendingFreeTabletStatus::MAX != status_ &&
+        tablet_transfer_seq_ != share::OB_INVALID_TRANSFER_SEQ;
   }
   bool operator == (const ObPendingFreeTabletItem &other) const {
     return tablet_id_ == other.tablet_id_ &&

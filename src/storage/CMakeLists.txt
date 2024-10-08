@@ -335,6 +335,9 @@ ob_set_subtarget(ob_storage tablet
   tablet/ob_tablet_multi_source_data.cpp
   tablet/ob_tablet_service_clog_replay_executor.cpp
   tablet/ob_tablet_status.cpp
+  tablet/ob_tablet_split_mds_helper.cpp
+  tablet/ob_tablet_split_mds_user_data.cpp
+  tablet/ob_tablet_split_replay_executor.cpp
   tablet/ob_tablet_table_store.cpp
   tablet/ob_tablet_table_store_iterator.cpp
   tablet/ob_table_store_util.cpp
@@ -494,6 +497,7 @@ ob_set_subtarget(ob_storage tx_storage
   tx_storage/ob_tenant_memory_printer.cpp
   tx_storage/ob_tablet_gc_service.cpp
   tx_storage/ob_empty_shell_task.cpp
+  tx_storage/ob_empty_shell_object_checker.cpp
 )
 
 ob_set_subtarget(ob_storage tx_table
@@ -584,6 +588,7 @@ ob_set_subtarget(ob_storage access
   access/ob_multiple_scan_merge.cpp
   access/ob_multiple_skip_scan_merge.cpp
   access/ob_multiple_multi_skip_scan_merge.cpp
+  access/ob_multiple_mview_merge.cpp
   access/ob_table_scan_iterator.cpp
   access/ob_store_row_iterator.cpp
   access/ob_i_sample_iterator.cpp
@@ -609,6 +614,7 @@ ob_set_subtarget(ob_storage access
 ob_set_subtarget(ob_storage ddl
   ddl/ob_build_index_task.cpp
   ddl/ob_complement_data_task.cpp
+  ddl/ob_tablet_split_task.cpp
   ddl/ob_delete_lob_meta_row_task.cpp
   ddl/ob_ddl_clog.cpp
   ddl/ob_ddl_merge_task.cpp
@@ -626,10 +632,12 @@ ob_set_subtarget(ob_storage ddl
   ddl/ob_ddl_replay_executor.cpp
   ddl/ob_ddl_heart_beat_task.cpp
   ddl/ob_ddl_server_client.cpp
+  ddl/ob_tablet_lob_split_task.cpp
   ddl/ob_ddl_seq_generator.cpp
   ddl/ob_ddl_inc_clog.cpp
   ddl/ob_ddl_inc_clog_callback.cpp
   ddl/ob_ddl_inc_redo_log_writer.cpp
+  ddl/ob_ddl_alter_auto_part_attr.cpp
 )
 
 ob_set_subtarget(ob_storage common
@@ -669,24 +677,26 @@ ob_set_subtarget(ob_storage common
   ob_tenant_tablet_stat_mgr.cpp
   ob_protected_memtable_mgr_handle.cpp
   ob_gc_upper_trans_helper.cpp
+  ob_partition_pre_split.cpp
 )
 
 ob_set_subtarget(ob_storage common_mixed
+  checkpoint/ob_checkpoint_diagnose.cpp
   checkpoint/ob_checkpoint_executor.cpp
   checkpoint/ob_data_checkpoint.cpp
   checkpoint/ob_freeze_checkpoint.cpp
-  meta_mem/ob_tablet_leak_checker.cpp
-  checkpoint/ob_checkpoint_diagnose.cpp
   meta_mem/ob_external_tablet_cnt_map.cpp
+  meta_mem/ob_flying_tablet_pointer_map.cpp
   meta_mem/ob_meta_obj_struct.cpp
+  meta_mem/ob_storage_meta_cache.cpp
   meta_mem/ob_tablet_handle.cpp
+  meta_mem/ob_tablet_leak_checker.cpp
   meta_mem/ob_tablet_map_key.cpp
   meta_mem/ob_tablet_pointer_map.cpp
   meta_mem/ob_tablet_pointer_handle.cpp
   meta_mem/ob_tablet_pointer.cpp
   meta_mem/ob_tenant_meta_mem_mgr.cpp
   meta_mem/ob_tenant_meta_obj_pool.cpp
-  meta_mem/ob_storage_meta_cache.cpp
   utl_file/ob_utl_file_handler.cpp
   blockstore/ob_shared_object_reader_writer.cpp
   concurrency_control/ob_multi_version_garbage_collector.cpp
@@ -704,7 +714,6 @@ ob_set_subtarget(ob_storage compaction
   compaction/ob_partition_merger.cpp
   compaction/ob_partition_merge_policy.cpp
   compaction/ob_partition_parallel_merge_ctx.cpp
-  compaction/ob_tablet_merge_checker.cpp
   compaction/ob_tablet_merge_ctx.cpp
   compaction/ob_basic_tablet_merge_ctx.cpp
   compaction/ob_tablet_merge_task.cpp
@@ -737,6 +746,12 @@ ob_set_subtarget(ob_storage compaction
   compaction/ob_sstable_merge_history.cpp
   compaction/ob_batch_freeze_tablets_dag.cpp
   compaction/ob_progressive_merge_helper.cpp
+  compaction/ob_mview_compaction_util.cpp
+  compaction/ob_medium_loop.cpp
+  compaction/ob_basic_schedule_tablet_func.cpp
+  compaction/ob_schedule_tablet_func.cpp
+  compaction/ob_tenant_status_cache.cpp
+  compaction/ob_schedule_status_cache.cpp
 )
 
 ob_set_subtarget(ob_storage memtable
@@ -904,6 +919,15 @@ ob_set_subtarget(ob_storage lob
   lob/ob_lob_persistent_reader.cpp
   lob/ob_lob_persistent_iterator.cpp
   lob/ob_lob_write_buffer.cpp
+  lob/ob_lob_cursor.cpp
+  lob/ob_lob_location.cpp
+  lob/ob_lob_remote.cpp
+  lob/ob_lob_iterator.cpp
+  lob/ob_lob_handler.cpp
+  lob/ob_lob_meta_manager.cpp
+  lob/ob_lob_retry.cpp
+  lob/ob_lob_tablet_dml.cpp
+  lob/ob_lob_locator_struct.cpp
 )
 
 ob_set_subtarget(ob_storage mview

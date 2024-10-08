@@ -161,7 +161,7 @@ static int64_t get_current_time_us()
 class ObStorageCOSRetryStrategy : public ObStorageIORetryStrategyBase<cos_status_t *>
 {
 public:
-  ObStorageCOSRetryStrategy(const int64_t timeout_us = OB_STORAGE_MAX_IO_TIMEOUT_US)
+  ObStorageCOSRetryStrategy(const int64_t timeout_us = DO_NOT_RETRY)
       : ObStorageIORetryStrategyBase<cos_status_t *>(timeout_us)
   {
     start_time_us_ = get_current_time_us();

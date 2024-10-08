@@ -46,12 +46,12 @@ class ObCgInfo
 public:
   ObCgInfo() : name_(nullptr), is_critical_(false), worker_concurrency_(1) {}
   void set_name(const char *name) { name_ = name; }
-  void set_args(group_flags_t flags = DEFAULT, uint64_t worker_concurrency = 1)
+  void set_args(group_flags_t flags = group_flags_t::DEFAULT, uint64_t worker_concurrency = 1)
   {
     set_flags(flags);
     set_worker_concurrency(worker_concurrency);
   }
-  void set_flags(group_flags_t flags = DEFAULT)
+  void set_flags(group_flags_t flags = group_flags_t::DEFAULT)
   {
     if (DEFAULT == flags || share::INVALID == flags) {
       // do nothing

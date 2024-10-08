@@ -2852,6 +2852,7 @@ int ObPartitionSchema::assign_partition_schema(const ObPartitionSchema &src_sche
     partition_schema_version_ = src_schema.partition_schema_version_;
     partition_status_ = src_schema.partition_status_;
     sub_part_template_flags_ = src_schema.sub_part_template_flags_;
+
     if (OB_SUCC(ret)) {
       part_option_ = src_schema.part_option_;
       if (OB_FAIL(part_option_.get_err_ret())) {
@@ -3338,6 +3339,26 @@ int ObPartitionSchema::get_max_part_idx(int64_t &part_idx, const bool skip_exter
     }
   }
   return ret;
+}
+
+bool ObPartitionSchema::is_in_splitting() const
+{
+  int ret = OB_SUCCESS;
+  bool is_splitting = false;
+
+  if (hidden_partition_array_ != nullptr) {
+    for (int64_t i = 0; OB_SUCC(ret) && !is_splitting && i < hidden_partition_num_; ++i) {
+      ObPartition *part = hidden_partition_array_[i];
+
+      if (OB_ISNULL(part)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("part array is null", K(ret), K(i), K(hidden_partition_num_));
+      } else if (part->is_in_splitting()) {
+        is_splitting = true;
+      }
+    }
+  }
+  return is_splitting;
 }
 
 bool ObPartitionSchema::is_valid() const
@@ -4726,16 +4747,6 @@ int ObTablegroupSchema::get_zone_list(
   return ret;
 }
 
-int ObTablegroupSchema::check_is_duplicated(
-    share::schema::ObSchemaGetterGuard &guard,
-    bool &is_duplicated) const
-{
-  int ret = OB_SUCCESS;
-  UNUSED(guard);
-  is_duplicated = false;
-  return ret;
-}
-
 //TODO: These functions can be extracted; as an implementation of locality/primary_zone
 int ObTablegroupSchema::get_zone_replica_attr_array_inherit(
     ObSchemaGetterGuard &schema_guard,
@@ -5031,6 +5042,68 @@ int64_t ObPartitionOption::get_convert_size() const
 bool ObPartitionOption::is_valid() const
 {
   return ObSchema::is_valid() && part_num_ > 0;
+}
+
+void ObPartitionOption::assign_auto_partition_attr(const ObPartitionOption & src)
+{
+  auto_part_ = src.auto_part_;
+  auto_part_size_ = src.auto_part_size_;
+}
+
+int ObPartitionOption::enable_auto_partition(const int64_t auto_part_size)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!is_valid_split_part_type())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("invalid part type for split partition", KR(ret), K(part_func_type_));
+  } else if (OB_FAIL(enable_auto_partition_(auto_part_size))) {
+    LOG_WARN("fail to enable auto_partition", KR(ret), K(auto_part_size));
+  }
+
+  return ret;
+}
+
+int ObPartitionOption::enable_auto_partition(const int64_t auto_part_size,
+                                             const ObPartitionFuncType part_func_type)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!is_valid_split_part_type(part_func_type))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("invalid part type for split partition", KR(ret), K(part_func_type));
+  } else if (OB_FAIL(enable_auto_partition_(auto_part_size))) {
+    LOG_WARN("fail to enable auto_partition", KR(ret), K(auto_part_size));
+  } else {
+    part_func_type_ = part_func_type;
+  }
+
+  return ret;
+}
+
+int ObPartitionOption::enable_auto_partition_(const int64_t auto_part_size)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(auto_part_size < ObPartitionOption::MIN_AUTO_PART_SIZE)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("the auto split tablet size is less than MIN_AUTO_PART_SIZE", KR(ret), K(auto_part_size));
+  } else {
+    auto_part_ = true;
+    auto_part_size_ = auto_part_size;
+  }
+
+  return ret;
+}
+
+void ObPartitionOption::forbid_auto_partition(const bool is_partitioned_table)
+{
+  if (!is_partitioned_table) {
+    part_func_type_ = PARTITION_FUNC_TYPE_HASH;
+    reset_string(part_func_expr_);
+  }
+  auto_part_ = false;
+  auto_part_size_ = -1;
 }
 
 OB_DEF_SERIALIZE(ObPartitionOption)
@@ -6175,7 +6248,7 @@ int ObPartitionUtils::check_param_valid_(
           }
           if (OB_SUCC(ret) && !finded && related_tid != data_table_id) {
             ret = OB_TABLE_NOT_EXIST;
-            LOG_WARN("local index not exist", KR(ret), K(table_id));
+            LOG_WARN("local index not exist", KR(ret), K(related_tid), K(data_table_id), K(table_id), K(simple_index_infos));
           }
         } // end for related_tids
         if (OB_SUCC(ret) && !index_exist) {
@@ -9725,6 +9798,13 @@ bool is_mlog_table(const ObTableType table_type)
   return (ObTableType::MATERIALIZED_VIEW_LOG == table_type);
 }
 
+bool is_support_split_index_type(const ObIndexType index_type)
+{
+  return INDEX_TYPE_NORMAL_LOCAL == index_type || INDEX_TYPE_UNIQUE_LOCAL == index_type
+      || INDEX_TYPE_NORMAL_GLOBAL == index_type || INDEX_TYPE_UNIQUE_GLOBAL == index_type
+      || INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE == index_type || INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE == index_type;
+}
+
 const char *schema_type_str(const ObSchemaType schema_type)
 {
   const char *str = "";
@@ -10607,6 +10687,7 @@ void ObOutlineInfo::reset()
   format_ = HINT_NORMAL;
   format_outline_ = false;
   outline_params_wrapper_.destroy();
+  format_outline_ = false;
   ObSchema::reset();
 }
 
@@ -10634,10 +10715,15 @@ bool ObOutlineInfo::is_valid() const
   bool valid_ret = true;
   if (!ObSchema::is_valid()) {
     valid_ret = false;
-  } else if (name_.empty() || !((!signature_.empty() && !sql_text_.empty() && sql_id_.empty())
-             || (signature_.empty() && sql_text_.empty() && is_sql_id_valid(sql_id_)))
+  } else if (name_.empty()
              || owner_.empty() || version_.empty()
              || (outline_content_.empty() && !has_outline_params())) {
+    valid_ret = false;
+  } else if (!is_format() && !((!signature_.empty() && !sql_text_.empty() && sql_id_.empty())
+                  || (signature_.empty() && sql_text_.empty() && is_sql_id_valid(sql_id_)))) {
+    valid_ret = false;
+  } else if (is_format() && !(((format_sql_text_.empty() && is_sql_id_valid(format_sql_id_))
+                  || (!format_sql_text_.empty() && format_sql_id_.empty())))) {
     valid_ret = false;
   } else if (OB_INVALID_ID == tenant_id_ || OB_INVALID_ID == database_id_ || OB_INVALID_ID == outline_id_) {
     valid_ret = false;
@@ -10652,10 +10738,14 @@ bool ObOutlineInfo::is_valid_for_replace() const
   bool valid_ret = true;
   if (!ObSchema::is_valid()) {
     valid_ret = false;
-  } else if (name_.empty() || !((!signature_.empty() && !sql_text_.empty() && sql_id_.empty())
-             || (signature_.empty() && sql_text_.empty() && is_sql_id_valid(sql_id_)))
-             || owner_.empty() || version_.empty()
+  } else if (name_.empty() || owner_.empty() || version_.empty()
              || (outline_content_.empty() && !has_outline_params())) {
+    valid_ret = false;
+  } else if (!is_format() && !((!signature_.empty() && !sql_text_.empty() && sql_id_.empty()) ||
+                                (signature_.empty() && sql_text_.empty() && is_sql_id_valid(sql_id_)))) {
+    valid_ret = false;
+  } else if (is_format() && !((!signature_.empty() && !format_sql_text_.empty() && sql_id_.empty()) ||
+                             (signature_.empty() && format_sql_text_.empty() && is_sql_id_valid(format_sql_id_)))) {
     valid_ret = false;
   } else if (OB_INVALID_ID == tenant_id_ || OB_INVALID_ID == database_id_
              || OB_INVALID_ID == outline_id_) {
@@ -10820,6 +10910,7 @@ OB_DEF_DESERIALIZE(ObOutlineInfo)
     LOG_WARN("Fail to deep copy outline_content", K(ret));
   } else if (OB_FAIL(deep_copy_str(sql_text, sql_text_))) {
     LOG_WARN("Fail to deep copy sql_text", K(ret));
+
   } else if (OB_FAIL(deep_copy_str(outline_target, outline_target_))) {
     LOG_WARN("Fail to deep copy outline target", K(ret));
   } else if (OB_FAIL(deep_copy_str(owner, owner_))) {
@@ -11069,12 +11160,6 @@ int ObDbLinkBaseInfo::dblink_decrypt(common::ObString &src, common::ObString &ds
 
 #endif
   return ret;
-}
-
-int ObDbLinkBaseInfo::set_host_ip(const common::ObString &host_ip)
-{
-  bool bret = host_addr_.set_ip_addr(host_ip, 0);
-  return bret ? common::OB_SUCCESS : common::OB_ERR_UNEXPECTED;
 }
 
 OB_SERIALIZE_MEMBER(ObDbLinkInfo,
@@ -13169,7 +13254,7 @@ int ObContextSchema::assign(const ObContextSchema &src_schema)
     if (OB_FAIL(set_namespace(src_schema.namespace_))) {
       LOG_WARN("failed to set ctx namespace", K(ret));
     } else if (OB_FAIL(set_schema_name(src_schema.schema_name_))) {
-      LOG_WARN("failed to set schema name", K(ret));;
+      LOG_WARN("failed to set schema name", K(ret));
     } else if (OB_FAIL(set_trusted_package(src_schema.trusted_package_))) {
       LOG_WARN("failed to set trusted package name", K(ret));
     }

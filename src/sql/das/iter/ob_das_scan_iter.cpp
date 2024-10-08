@@ -83,7 +83,7 @@ int ObDASScanIter::do_table_scan()
       LOG_WARN("fail to scan table", KPC_(scan_param), K(ret));
     }
   }
-  LOG_DEBUG("das scan iter do table scan", KPC_(scan_param), K(ret));
+  LOG_DEBUG("[DAS ITER] scan iter do table scan", KPC_(scan_param), K(ret));
 
   return ret;
 }
@@ -100,7 +100,7 @@ int ObDASScanIter::rescan()
     // reset need_switch_param_ after real rescan.
     scan_param_->need_switch_param_ = false;
   }
-  LOG_DEBUG("das scan iter rescan", KPC_(scan_param), K(ret));
+  LOG_DEBUG("[DAS ITER] das scan iter rescan", KPC_(scan_param), K(ret));
 
   return ret;
 }
@@ -130,6 +130,9 @@ int ObDASScanIter::inner_get_next_rows(int64_t &count, int64_t capacity)
       LOG_WARN("failed to get next row", K(ret));
     }
   }
+  LOG_TRACE("[DAS ITER] scan iter get next rows", K(count), K(capacity), KPC_(scan_param), K(ret));
+  const ObBitVector *skip = nullptr;
+  PRINT_VECTORIZED_ROWS(SQL, DEBUG, *eval_ctx_, *output_, count, skip);
   return ret;
 }
 

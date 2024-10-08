@@ -1466,6 +1466,7 @@ constexpr int OB_TABLET_GC_LOCK_CONFLICT = -7120;
 constexpr int OB_SEQUENCE_NOT_MATCH = -7121;
 constexpr int OB_SEQUENCE_TOO_SMALL = -7122;
 constexpr int OB_TRANSFER_CANNOT_START = -7123;
+constexpr int NEW_MV_MAJOR_VERSION_NOT_MATCH = -7125;
 constexpr int OB_ERR_DIMENSION_NUMBER_IS_OUT_OF_RANGE = -7290;
 constexpr int OB_ERR_INVALID_SRID_IN_SDO_GEOMETRY = -7292;
 constexpr int OB_ERR_INVALID_GTYPE_FOR_POINT_OBJECT = -7293;
@@ -3643,6 +3644,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SEQUENCE_TOO_SMALL__USER_ERROR_MSG "compare sequence too small"
 #define OB_TRANSFER_CANNOT_START__USER_ERROR_MSG "transfer cannot start"
 #define OB_PARTITION_ALREADY_BALANCED__USER_ERROR_MSG "partitions are already balanced, %s"
+#define NEW_MV_MAJOR_VERSION_NOT_MATCH__USER_ERROR_MSG "new mv major version is not match"
 #define OB_ERR_GIS_DIFFERENT_SRIDS__USER_ERROR_MSG "Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical."
 #define OB_ERR_GIS_UNSUPPORTED_ARGUMENT__USER_ERROR_MSG "Calling geometry function %s with unsupported types of arguments."
 #define OB_ERR_GIS_UNKNOWN_ERROR__USER_ERROR_MSG "Unknown GIS error occurred in function %s."
@@ -3905,7 +3907,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_OBJECT_NOT_EXIST__USER_ERROR_MSG "cannot find object on object storage"
 #define OB_S2_REUSE_VERSION_MISMATCH__USER_ERROR_MSG "reuse_version of mem_block or phy_block is not mismatched with micro_meta in s2 micro_cache"
 #define OB_S2_ENTRY_NOT_EXIST__USER_ERROR_MSG "entry not exist in s2 micro_cache"
-#define OB_TABLET_IS_SPLIT_SRC__USER_ERROR_MSG "cannot access split src tablet"
+#define OB_TABLET_IS_SPLIT_SRC__USER_ERROR_MSG "cannot write to split src tablet"
 #define OB_ALLOCATE_TMP_FILE_PAGE_FAILED__USER_ERROR_MSG "fail to allocate a tmp file page"
 #define OB_SS_MICRO_CACHE_DISABLED__USER_ERROR_MSG "ss_micro_cache is disabled"
 #define OB_SS_CACHE_REACH_MEM_LIMIT__USER_ERROR_MSG "ss_micro_cache has reached memory limit"
@@ -7702,6 +7704,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TRANSFER_CANNOT_START__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -7123, transfer cannot start"
 #define OB_PARTITION_ALREADY_BALANCED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7124, partitions are already balanced, %s"
 #define OB_PARTITION_ALREADY_BALANCED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -7124, partitions are already balanced, %s"
+#define NEW_MV_MAJOR_VERSION_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7125, new mv major version is not match"
+#define NEW_MV_MAJOR_VERSION_NOT_MATCH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -7125, new mv major version is not match"
 #define OB_ERR_GIS_DIFFERENT_SRIDS__ORA_USER_ERROR_MSG "ORA-00600: Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical."
 #define OB_ERR_GIS_DIFFERENT_SRIDS__OBE_USER_ERROR_MSG "OBE-00600: Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical."
 #define OB_ERR_GIS_UNSUPPORTED_ARGUMENT__ORA_USER_ERROR_MSG "ORA-00600: Calling geometry function %s with unsupported types of arguments."
@@ -8226,8 +8230,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_S2_REUSE_VERSION_MISMATCH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9121, reuse_version of mem_block or phy_block is not mismatched with micro_meta in s2 micro_cache"
 #define OB_S2_ENTRY_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9122, entry not exist in s2 micro_cache"
 #define OB_S2_ENTRY_NOT_EXIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9122, entry not exist in s2 micro_cache"
-#define OB_TABLET_IS_SPLIT_SRC__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9123, cannot access split src tablet"
-#define OB_TABLET_IS_SPLIT_SRC__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9123, cannot access split src tablet"
+#define OB_TABLET_IS_SPLIT_SRC__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9123, cannot write to split src tablet"
+#define OB_TABLET_IS_SPLIT_SRC__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9123, cannot write to split src tablet"
 #define OB_ALLOCATE_TMP_FILE_PAGE_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9124, fail to allocate a tmp file page"
 #define OB_ALLOCATE_TMP_FILE_PAGE_FAILED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9124, fail to allocate a tmp file page"
 #define OB_SS_MICRO_CACHE_DISABLED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9125, ss_micro_cache is disabled"
@@ -9021,7 +9025,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2356];
+extern int g_all_ob_errnos[2357];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

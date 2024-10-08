@@ -69,6 +69,7 @@
 #include "pl/sys_package/ob_dbms_xplan.h"
 #include "pl/sys_package/ob_pl_dbms_resource_manager.h"
 #include "pl/sys_package/ob_dbms_session.h"
+#include "pl/sys_package/ob_dbms_space.h"
 #include "pl/sys_package/ob_dbms_workload_repository.h"
 #include "pl/sys_package/ob_dbms_mview_mysql.h"
 #include "pl/sys_package/ob_dbms_mview_stats_mysql.h"
@@ -619,6 +620,10 @@
   INTERFACE_DEF(INTERFACE_DBMS_SESSION_SET_IDENTIFIER, "SET_IDENTIFIER", (ObDBMSSession::set_identifier))
   INTERFACE_DEF(INTERFACE_DBMS_SESSION_RESET_PACKAGE, "RESET_PACKAGE", (ObDBMSSession::reset_package))
   // end of dbms_session
+
+  // start of dbms_space
+  INTERFACE_DEF(INTERFACE_DBMS_SPACE_CREATE_INDEX_COST, "CREATE_INDEX_COST", (ObDbmsSpace::create_index_cost))
+  // end of dbms_space
 
 #ifdef OB_BUILD_ORACLE_PL
   // start of dbms_rls

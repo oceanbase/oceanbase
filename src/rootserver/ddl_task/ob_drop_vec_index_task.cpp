@@ -538,6 +538,7 @@ int ObDropVecIndexTask::prepare(const share::ObDDLTaskStatus &new_status)
 {
   int ret = OB_SUCCESS;
   bool state_finished = false;
+  DEBUG_SYNC(DROP_VECTOR_INDEX_PREPARE_STATUS);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -925,14 +926,10 @@ int ObDropVecIndexTask::send_build_single_replica_request()
     ret = OB_NOT_INIT;
     LOG_WARN("ObColumnRedefinitionTask has not been inited", K(ret));
   } else {
-    ObDDLSingleReplicaExecutorParam param;
+    ObDDLReplicaBuildExecutorParam param;
     param.tenant_id_ = tenant_id_;
     param.dest_tenant_id_ = dst_tenant_id_;
-    param.type_ = task_type_;
-    param.source_table_id_ = vec_index_snapshot_data_.table_id_;
-    param.dest_table_id_ = target_object_id_;
-    param.schema_version_ = schema_version_;
-    param.dest_schema_version_ = dst_schema_version_;
+    param.ddl_type_ = task_type_;
     param.snapshot_version_ = snapshot_version_; // should > 0, but = 0
     param.task_id_ = task_id_;
     param.parallelism_ = std::max(parallelism_, 1L);
@@ -944,6 +941,26 @@ int ObDropVecIndexTask::send_build_single_replica_request()
       LOG_WARN("fail to get tablets", K(ret), K(tenant_id_), K(object_id_));
     } else if (OB_FAIL(ObDDLUtil::get_tablets(dst_tenant_id_, vec_index_snapshot_data_.table_id_, param.dest_tablet_ids_))) {
       LOG_WARN("fail to get tablets", K(ret), K(tenant_id_), K(target_object_id_));
+    }
+
+    const int64_t src_tablet_cnt = param.source_tablet_ids_.count();
+    for (int64_t i = 0; OB_SUCC(ret) && i < src_tablet_cnt; ++i) {
+      if (OB_FAIL(param.source_table_ids_.push_back(vec_index_snapshot_data_.table_id_))) {
+        LOG_WARN("failed to push back src table id", K(ret));
+      } else if (OB_FAIL(param.source_schema_versions_.push_back(schema_version_))) {
+        LOG_WARN("failed to push back src schema version", K(ret));
+      }
+    }
+    const int64_t dest_tablet_cnt = param.dest_tablet_ids_.count();
+    for (int64_t i = 0; OB_SUCC(ret) && i < dest_tablet_cnt; ++i) {
+      if (OB_FAIL(param.dest_table_ids_.push_back(target_object_id_))) {
+        LOG_WARN("failed to push back dest table id", K(ret));
+      } else if (OB_FAIL(param.dest_schema_versions_.push_back(dst_schema_version_))) {
+        LOG_WARN("failed to push back dest schema version", K(ret));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(replica_builder_.build(param))) {
       LOG_WARN("fail to send build single replica", K(ret), K(param));
     } else {
@@ -975,6 +992,7 @@ int ObDropVecIndexTask::check_build_single_replica(bool &is_end)
 
 // update sstable complement status for all leaders
 int ObDropVecIndexTask::update_drop_lob_meta_row_job_status(const common::ObTabletID &tablet_id,
+                                                            const ObAddr &addr,
                                                             const int64_t snapshot_version,
                                                             const int64_t execution_id,
                                                             const int ret_code,
@@ -991,10 +1009,12 @@ int ObDropVecIndexTask::update_drop_lob_meta_row_job_status(const common::ObTabl
     LOG_WARN("snapshot version not match", K(ret), K(snapshot_version), K(snapshot_version_));
   } else if (execution_id < execution_id_) {
     LOG_INFO("receive a mismatch execution result, ignore", K(ret_code), K(execution_id), K(execution_id_));
-  } else if (OB_FAIL(replica_builder_.set_partition_task_status(tablet_id,
-                                                                ret_code,
-                                                                addition_info.row_scanned_,
-                                                                addition_info.row_inserted_))) {
+  } else if (OB_FAIL(replica_builder_.update_build_progress(tablet_id,
+                                                            addr,
+                                                            ret_code,
+                                                            addition_info.row_scanned_,
+                                                            addition_info.row_inserted_,
+                                                            addition_info.physical_row_count_))) {
     LOG_WARN("fail to set partition task status", K(ret));
   }
   return ret;

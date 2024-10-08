@@ -148,6 +148,8 @@ void ObMigrationCtx::reuse()
 ObCopyTabletCtx::ObCopyTabletCtx()
   : tablet_id_(),
     tablet_handle_(),
+    macro_block_reuse_mgr_(),
+    extra_info_(),
     lock_(common::ObLatchIds::MIGRATE_LOCK),
     status_(ObCopyTabletStatus::MAX_STATUS)
 {
@@ -170,6 +172,7 @@ void ObCopyTabletCtx::reset()
   tablet_id_.reset();
   tablet_handle_.reset();
   status_ = ObCopyTabletStatus::MAX_STATUS;
+  extra_info_.reset();
 }
 
 int ObCopyTabletCtx::set_copy_tablet_status(const ObCopyTabletStatus::STATUS &status)
@@ -195,6 +198,18 @@ int ObCopyTabletCtx::get_copy_tablet_status(ObCopyTabletStatus::STATUS &status) 
     LOG_WARN("copy tablet ctx is invalid", K(ret), KPC(this));
   } else {
     status = status_;
+  }
+  return ret;
+}
+
+int ObCopyTabletCtx::get_copy_tablet_record_extra_info(const ObCopyTabletRecordExtraInfo *&extra_info) const
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("copy tablet ctx is invalid", K(ret), KPC(this));
+  } else {
+    extra_info = &extra_info_;
   }
   return ret;
 }
@@ -1089,6 +1104,12 @@ int ObStartMigrationTask::deal_with_local_ls_()
       LOG_WARN("leader cannot as add, migrate, change dst",
           K(ret), K(is_leader), "myaddr", MYADDR, "arg", ctx_->arg_);
     }
+#ifdef ERRSIM
+  } else if (FALSE_IT(SERVER_EVENT_SYNC_ADD("storage_ha", "before_migration_ls_offline",
+    "tenant_id", ctx_->tenant_id_, "ls_id", ctx_->arg_.ls_id_.id()))) {
+
+  } else if (FALSE_IT(DEBUG_SYNC(BEFORE_MIGRATION_LS_OFFLINE))) {
+#endif
   } else if (OB_FAIL(ls->offline())) {
     LOG_WARN("failed to disable log", K(ret), KPC(ctx_));
   } else if (ObMigrationOpType::REBUILD_LS_OP == ctx_->arg_.type_) {
@@ -1667,6 +1688,9 @@ int ObStartMigrationTask::fill_restore_arg_if_needed_()
     } else if (!restore_status.is_before_restore_to_consistent_scn()
                && OB_FAIL(helper.get_ls_total_tablet_cnt(*sql_proxy_, dest_ls_key, ls_restore_progress.tablet_count_))) {
       LOG_WARN("fail to get total tablet cnt", K(ret), K(dest_ls_key), K(restore_status));
+    } else if (!restore_status.is_before_restore_major_data()
+               && OB_FAIL(helper.get_ls_total_bytes(*sql_proxy_, dest_ls_key, ls_restore_progress.total_bytes_))) {
+      LOG_WARN("fail to get total bytes", K(ret), K(dest_ls_key), K(restore_status));
     } else if (OB_FAIL(helper.insert_initial_ls_restore_progress(*sql_proxy_, ls_restore_progress))) {
       LOG_WARN("fail to insert initial restore progress", K(ret), K(ls_restore_progress));
     } else {
@@ -2502,7 +2526,8 @@ int ObTabletMigrationDag::inner_reset_status_for_retry()
         "tenant_id", ctx->tenant_id_,
         "ls_id", ctx->arg_.ls_id_.id(),
         "tablet_id", copy_tablet_ctx_.tablet_id_,
-        "result", result, "retry_count", retry_count);
+        "result", result,
+        "retry_count", retry_count);
     if (OB_FAIL(ctx->ha_table_info_mgr_.remove_tablet_table_info(copy_tablet_ctx_.tablet_id_))) {
       if (OB_HASH_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
@@ -2511,8 +2536,12 @@ int ObTabletMigrationDag::inner_reset_status_for_retry()
       }
     }
 
+    DEBUG_SYNC(BEFORE_TABLET_MIGRATION_DAG_INNER_RETRY);
+
     if (OB_SUCC(ret)) {
       copy_tablet_ctx_.tablet_handle_.reset();
+      copy_tablet_ctx_.extra_info_.reset();
+      copy_tablet_ctx_.macro_block_reuse_mgr_.reset();
       if (OB_ISNULL(ls = ls_handle_.get_ls())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ls should not be NULL", K(ret), K(copy_tablet_ctx_));
@@ -2655,6 +2684,8 @@ int ObTabletMigrationTask::process()
     LOG_WARN("failed to build copy table key info", K(ret), KPC(copy_tablet_ctx_));
   } else if (OB_FAIL(build_copy_sstable_info_mgr_())) {
     LOG_WARN("failed to build copy sstable info mgr", K(ret), KPC(copy_tablet_ctx_));
+  } else if (OB_FAIL(ObStorageHAUtils::build_major_sstable_reuse_info(copy_tablet_ctx_->tablet_handle_, copy_tablet_ctx_->macro_block_reuse_mgr_, false /* is_restore */))) {
+    LOG_WARN("failed to update major sstable reuse info", K(ret), KPC(copy_tablet_ctx_));
   } else {
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {
@@ -2861,6 +2892,10 @@ int ObTabletMigrationTask::generate_physical_copy_task_(
     } else if (FALSE_IT(init_param.need_sort_macro_meta_ = false)) {
     } else if (FALSE_IT(init_param.need_check_seq_ = true)) {
     } else if (FALSE_IT(init_param.ls_rebuild_seq_ = ctx_->local_rebuild_seq_)) {
+    } else if (FALSE_IT(init_param.macro_block_reuse_mgr_ = ObITable::is_major_sstable(copy_table_key.table_type_) ? &copy_tablet_ctx_->macro_block_reuse_mgr_ : nullptr)) {
+    } else if (FALSE_IT(init_param.extra_info_ = &copy_tablet_ctx_->extra_info_)) {
+    } else if (OB_FAIL(ctx_->ha_table_info_mgr_.get_table_info(copy_tablet_ctx_->tablet_id_, copy_table_key, init_param.sstable_param_))) {
+      LOG_WARN("failed to get table info", K(ret), KPC(copy_tablet_ctx_), K(copy_table_key));
     } else if (!need_copy && FALSE_IT(init_param.sstable_macro_range_info_.copy_table_key_ = copy_table_key)) {
     } else if (need_copy && OB_FAIL(copy_sstable_info_mgr_.get_copy_sstable_maro_range_info(copy_table_key, init_param.sstable_macro_range_info_))) {
       LOG_WARN("failed to get copy sstable macro range info", K(ret), K(copy_table_key));
@@ -2914,6 +2949,10 @@ int ObTabletMigrationTask::build_copy_table_key_info_()
     LOG_WARN("tablet migration task do not init", K(ret));
   } else if (OB_FAIL(ctx_->ha_table_info_mgr_.get_table_keys(copy_tablet_ctx_->tablet_id_, copy_table_key_array_))) {
     LOG_WARN("failed to get copy table keys", K(ret), KPC(copy_tablet_ctx_));
+    // sort copy table key array by snapshot version, copy major sstable from low version to high version
+  } else if (FALSE_IT(ObStorageHAUtils::sort_table_key_array_by_snapshot_version(copy_table_key_array_))) {
+  } else {
+    LOG_INFO("succeed to build copy table key info", K(copy_table_key_array_));
   }
   return ret;
 }

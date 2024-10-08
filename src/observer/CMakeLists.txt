@@ -58,6 +58,7 @@ ob_set_subtarget(ob_server dbms_job
   dbms_scheduler/ob_dbms_sched_job_rpc_processor.cpp
   dbms_scheduler/ob_dbms_sched_job_rpc_proxy.cpp
   dbms_scheduler/ob_dbms_sched_table_operator.cpp
+  dbms_scheduler/ob_dbms_sched_service.cpp
  )
 
 ob_set_subtarget(ob_server mysql
@@ -272,6 +273,15 @@ ob_set_subtarget(ob_server table_load
   table_load/ob_table_load_multiple_heap_table_compactor.cpp
   table_load/ob_table_load_redef_table.cpp
   table_load/ob_table_load_stat.cpp
+  table_load/ob_table_load_index_table_projector.cpp
+  table_load/ob_table_load_store_table_ctx.cpp
+  table_load/ob_table_load_merger_manager.cpp
+  table_load/ob_table_load_index_row_handler.cpp
+  table_load/ob_table_load_data_row_handler.cpp
+  table_load/ob_table_load_open_insert_table_ctx_manager.cpp
+  table_load/ob_table_load_pre_sorter.cpp
+  table_load/ob_table_load_mem_chunk_manager.cpp
+  table_load/ob_table_load_pre_sort_writer.cpp
 )
 
 ob_set_subtarget(ob_server virtual_table

@@ -426,6 +426,19 @@ int ObLSRecoveryStatOperator::fill_cell(common::sqlclient::ObMySQLResult*result,
   return ret;
 }
 
+
+int ObLSRecoveryStatOperator::construct_status_sql_(common::ObSqlString &sql)
+{
+  int ret = OB_SUCCESS;
+  sql.reset();
+  if (OB_FAIL(sql.assign_fmt("status not in ('%s', '%s', '%s')",
+          ls_status_to_str(OB_LS_CREATING), ls_status_to_str(OB_LS_CREATED),
+          ls_status_to_str(OB_LS_CREATE_ABORT)))) {
+    LOG_WARN("failed to assign fmt", KR(ret));
+  }
+  return ret;
+}
+
 int ObLSRecoveryStatOperator::get_tenant_recovery_stat(const uint64_t tenant_id,
                                                        ObISQLClient &client,
                                                        SCN &sync_scn,
@@ -437,6 +450,7 @@ int ObLSRecoveryStatOperator::get_tenant_recovery_stat(const uint64_t tenant_id,
     LOG_WARN("invalid_argument", KR(ret), K(tenant_id));
   } else {
     common::ObSqlString sql;
+    common::ObSqlString status_sql;
     const uint64_t exec_tenant_id = get_exec_tenant_id(tenant_id);
     //The sync_scn and readable_scn at the tenant level need to be calculated separately, and the reference LS list is different.
     //The following statement collects sync_scn and readable_scn at the same time in one SQL.
@@ -449,13 +463,20 @@ int ObLSRecoveryStatOperator::get_tenant_recovery_stat(const uint64_t tenant_id,
     //Specifically, two types of LS need to be referred to when calculating readable_scn:
     //  1) LS that has not entered the deletion state;
     //  2) LS that has entered the deletion state, but drop_scn > readable_scn, that is, the deletion site of the LS is greater than the readable site scenario
-    if (OB_FAIL(sql.assign_fmt(
+    if (OB_FAIL(construct_status_sql_(status_sql))) {
+      LOG_WARN("failed to get sync scn sql", KR(ret));
+    } else if (OB_FAIL(sql.assign_fmt(
             "select sync_scn, min_wrs from "
-            "(select min(greatest(create_scn, sync_scn)) as sync_scn from %s where drop_scn = %ld) p, "
-            "(select min(greatest(create_scn, readable_scn)) as min_wrs from %s where drop_scn = %ld or drop_scn > readable_scn) q",
-            OB_ALL_LS_RECOVERY_STAT_TNAME, SCN::base_scn().get_val_for_inner_table_field(),
-            OB_ALL_LS_RECOVERY_STAT_TNAME, SCN::base_scn().get_val_for_inner_table_field()))) {
-      LOG_WARN("failed to assign sql", KR(ret), K(sql), K(tenant_id));
+            "(select min(greatest(a.create_scn, a.sync_scn)) as sync_scn "
+              "from %s as a join %s as b on a.tenant_id = b.tenant_id and a.ls_id = b.ls_id "
+              "where a.drop_scn = %ld and b.%s) p, "
+            "(select min(greatest(c.create_scn, c.readable_scn)) as min_wrs "
+              "from %s as c join %s as d on c.tenant_id = d.tenant_id and c.ls_id = d.ls_id "
+              "where c.drop_scn = %ld or c.drop_scn > c.readable_scn and d.%s) q",
+            OB_ALL_LS_RECOVERY_STAT_TNAME, OB_ALL_LS_STATUS_TNAME,
+            SCN::base_scn().get_val_for_inner_table_field(), status_sql.ptr(),
+            OB_ALL_LS_RECOVERY_STAT_TNAME, OB_ALL_LS_STATUS_TNAME,
+            SCN::base_scn().get_val_for_inner_table_field(), status_sql.ptr()))) {
     } else if (OB_FAIL(get_all_ls_recovery_stat_(tenant_id, sql, client, sync_scn, min_wrs))) {
       LOG_WARN("failed to get tenant stat", KR(ret), K(tenant_id), K(sql));
     }
@@ -617,16 +638,29 @@ int ObLSRecoveryStatOperator::get_user_ls_sync_scn(const uint64_t tenant_id,
     LOG_WARN("invalid_argument", KR(ret), K(tenant_id));
   } else {
     common::ObSqlString sql;
-    SCN min_wrs_scn;
+    common::ObSqlString status_sql;
+    SCN min_wrs_scn;//no use, not valid
     const uint64_t exec_tenant_id = get_exec_tenant_id(tenant_id);
-    if (OB_FAIL(sql.assign_fmt(
-            "select min(greatest(create_scn, sync_scn)) as sync_scn, "
-            "min(greatest(create_scn, readable_scn)) as min_wrs from %s where "
-            "(drop_scn = %ld or drop_scn > sync_scn) and tenant_id = %lu and ls_id != %ld",
-            OB_ALL_LS_RECOVERY_STAT_TNAME, SCN::base_scn().get_val_for_inner_table_field(), tenant_id, SYS_LS.id()))) {
-      LOG_WARN("failed to assign sql", KR(ret), K(sql), K(tenant_id));
+    if (OB_FAIL(construct_status_sql_(status_sql))) {
+      LOG_WARN("failed to construct status sql", KR(ret));
+    } else if (OB_FAIL(sql.assign_fmt(
+            "select min(greatest(a.create_scn, a.sync_scn)) as sync_scn, "
+            "min(a.readable_scn) as min_wrs "
+            "from %s as a join %s as b on a.tenant_id = b.tenant_id and a.ls_id = b.ls_id "
+            "where (a.drop_scn = %ld or a.drop_scn > a.sync_scn) and a.tenant_id = %lu "
+            "and a.ls_id != %ld and b.%s",
+            OB_ALL_LS_RECOVERY_STAT_TNAME, OB_ALL_LS_STATUS_TNAME,
+            SCN::base_scn().get_val_for_inner_table_field(), tenant_id,
+            SYS_LS.id(), status_sql.ptr()))) {
+      LOG_WARN("failed to assign sql", KR(ret), K(sql), K(tenant_id), K(status_sql));
     } else if (OB_FAIL(get_all_ls_recovery_stat_(tenant_id, sql, client, sync_scn, min_wrs_scn))) {
-      LOG_WARN("failed to get tenant stat", KR(ret), K(tenant_id), K(sql));
+      if (OB_ERR_NULL_VALUE == ret) {
+        ret = OB_SUCCESS;
+        sync_scn.set_max();
+        LOG_INFO("no user ls, set sync scn max", K(tenant_id), K(sql));
+      } else {
+        LOG_WARN("failed to get tenant stat", KR(ret), K(tenant_id), K(sql));
+      }
     }
   }
   return ret;

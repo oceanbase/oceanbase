@@ -98,6 +98,7 @@ protected:
     THREAD_ID,
     STMT_TYPE,
     TABLET_ID,
+    PROXY_SID,
   };
   DISALLOW_COPY_AND_ASSIGN(ObVirtualASH);
   share::ObActiveSessHistList::Iterator iterator_;

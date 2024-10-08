@@ -380,6 +380,35 @@ int ObTableLoadSchema::check_has_lob_column(const ObTableSchema *table_schema, b
   return ret;
 }
 
+int ObTableLoadSchema::check_has_non_local_index(share::schema::ObSchemaGetterGuard &schema_guard,
+                                       const share::schema::ObTableSchema *table_schema,
+                                       bool &bret)
+{
+  int ret = OB_SUCCESS;
+  bret = false;
+  if (OB_UNLIKELY(nullptr == table_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(table_schema));
+  } else {
+    const ObIArray<ObAuxTableMetaInfo> &simple_index_infos = table_schema->get_simple_index_infos();
+    for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); i++) {
+      const ObAuxTableMetaInfo &index_table_info = simple_index_infos.at(i);
+      const share::schema::ObTableSchema *index_table_schema = nullptr;
+      if (OB_FAIL(get_table_schema(schema_guard, MTL_ID(), index_table_info.table_id_,
+                                   index_table_schema))) {
+        LOG_WARN("fail to get table shema of index table", KR(ret), K(index_table_info.table_id_));
+      } else {
+        if (INDEX_TYPE_NORMAL_LOCAL != index_table_schema->get_index_type() &&
+            INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE != index_table_schema->get_index_type()) {
+          bret = true;
+          break;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTableLoadSchema::get_tenant_optimizer_gather_stats_on_load(const uint64_t tenant_id,
                                                                  bool &value)
 {
@@ -437,6 +466,7 @@ ObTableLoadSchema::ObTableLoadSchema()
     part_level_(PARTITION_LEVEL_ZERO),
     schema_version_(0),
     lob_meta_table_id_(OB_INVALID_ID),
+    index_table_count_(0),
     is_inited_(false)
 {
   allocator_.set_tenant_id(MTL_ID());
@@ -465,6 +495,7 @@ void ObTableLoadSchema::reset()
   part_level_ = PARTITION_LEVEL_ZERO;
   schema_version_ = 0;
   lob_meta_table_id_ = OB_INVALID_ID;
+  index_table_count_ = 0;
   lob_column_idxs_.reset();
   column_descs_.reset();
   multi_version_column_descs_.reset();
@@ -515,6 +546,7 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
     if (table_schema->has_lob_aux_table()) {
       lob_meta_table_id_ = table_schema->get_aux_lob_meta_tid();
     }
+    index_table_count_ = table_schema->get_simple_index_infos().count();
     if (OB_FAIL(ObTableLoadUtils::deep_copy(table_schema->get_table_name_str(), table_name_,
                                             allocator_))) {
       LOG_WARN("fail to deep copy table name", KR(ret));

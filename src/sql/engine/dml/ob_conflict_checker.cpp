@@ -199,8 +199,7 @@ int ObConflictChecker::create_conflict_map(int64_t replace_row_cnt)
 }
 
 //初始化map array， map创建hash_bucket将会在延后
-int ObConflictChecker::init_conflict_checker(const ObExprFrameInfo *expr_frame_info,
-                                             ObDASTableLoc *table_loc)
+int ObConflictChecker::init_conflict_checker(const ObExprFrameInfo *expr_frame_info, ObDASTableLoc *table_loc)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session = eval_ctx_.exec_ctx_.get_my_session();
@@ -1102,6 +1101,5 @@ int ObConflictChecker::attach_related_taskinfo(ObDASScanOp &target_op, ObDASBase
   }
   return ret;
 }
-
 }  // namespace sql
 }  // namespace oceanbase

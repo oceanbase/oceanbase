@@ -268,7 +268,7 @@ int ObExprPLGetCursorAttr::calc_pl_get_cursor_attr(
       case pl::ObPLGetCursorAttrInfo::PL_CURSOR_ROWCOUNT: {
         if (OB_ISNULL(cursor)) {
           ret = OB_ERR_INVALID_CURSOR;
-          LOG_WARN("cursor is null", K(ret));;
+          LOG_WARN("cursor is null", K(ret));
         } else {
           int64_t rowcount = 0;
           bool isnull = false;
@@ -306,7 +306,7 @@ int ObExprPLGetCursorAttr::calc_pl_get_cursor_attr(
       case pl::ObPLGetCursorAttrInfo::PL_CURSOR_BULK_ROWCOUNT: {
         if (OB_ISNULL(cursor)) {
           ret = OB_ERR_INVALID_CURSOR;
-          LOG_WARN("cursor is null", K(ret));;
+          LOG_WARN("cursor is null", K(ret));
         } else {
           int64_t index = datum->get_int();
           int64_t rowcount = 0;

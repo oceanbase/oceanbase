@@ -961,6 +961,7 @@ local_session_vars	longtext	YES		NULL
 duplicate_read_consistency	bigint(20)	NO		0	
 index_params	varchar(256)	NO			
 micro_index_clustered	tinyint(4)	NO		0	
+mv_mode	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_core_all_table;
 IF(count(*) >= 0, 1, 0)
 1
@@ -2719,6 +2720,7 @@ local_session_vars	longtext	YES		NULL
 duplicate_read_consistency	bigint(20)	NO		0	
 index_params	varchar(256)	NO			
 micro_index_clustered	tinyint(4)	NO		0	
+mv_mode	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table;
 IF(count(*) >= 0, 1, 0)
 1
@@ -2814,6 +2816,7 @@ local_session_vars	longtext	YES		NULL
 duplicate_read_consistency	bigint(20)	YES		0	
 index_params	varchar(256)	YES			
 micro_index_clustered	tinyint(4)	YES		0	
+mv_mode	bigint(20)	YES		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table_history;
 IF(count(*) >= 0, 1, 0)
 1
@@ -6498,6 +6501,9 @@ tablet_change_checkpoint_scn	bigint(20) unsigned	NO		NULL
 transfer_scn	bigint(20) unsigned	NO		NULL	
 tx_blocked	bigint(20)	NO		NULL	
 required_data_disk_size	bigint(20)	NO		0	
+mv_major_merge_scn	bigint(20) unsigned	NO		0	
+mv_publish_scn	bigint(20) unsigned	NO		0	
+mv_safe_scn	bigint(20) unsigned	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ls_info;
 IF(count(*) >= 0, 1, 0)
 1
@@ -6856,6 +6862,7 @@ PLAN_HASH	bigint(20) unsigned	YES		NULL
 THREAD_ID	bigint(20)	YES		NULL	
 STMT_TYPE	bigint(20)	YES		NULL	
 TABLET_ID	bigint(20)	YES		NULL	
+PROXY_SID	bigint(20)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ash;
 IF(count(*) >= 0, 1, 0)
 1
@@ -8262,6 +8269,7 @@ plan_hash	bigint(20) unsigned	YES		NULL
 thread_id	bigint(20)	YES		NULL	
 stmt_type	bigint(20)	YES		NULL	
 tablet_id	bigint(20)	YES		NULL	
+proxy_sid	bigint(20)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_wr_active_session_history;
 IF(count(*) >= 0, 1, 0)
 1
@@ -9725,6 +9733,18 @@ gmt_create	timestamp(6)	NO		NULL
 gmt_modified	timestamp(6)	NO		NULL	
 is_deleted	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_user_proxy_role_info_history;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_tablet_reorganize_history;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+ls_id	bigint(20)	NO	PRI	NULL	
+src_tablet_id	bigint(20)	NO	PRI	NULL	
+dest_tablet_id	bigint(20)	NO	PRI	NULL	
+type	bigint(20)	NO		NULL	
+create_time	timestamp(6)	NO		NULL	
+finish_time	timestamp(6)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tablet_reorganize_history;
 IF(count(*) >= 0, 1, 0)
 1
 desc oceanbase.__all_virtual_res_mgr_directive;

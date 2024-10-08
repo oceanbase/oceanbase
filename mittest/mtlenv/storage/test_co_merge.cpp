@@ -396,6 +396,7 @@ void TestCOMerge::prepare_co_sstable(
                           snapshot_version,
                           DATA_CURRENT_VERSION,
                           table_schema.get_micro_index_clustered(),
+                          0 /*tablet_transfer_seq*/,
                           share::SCN::invalid_scn(),
                           &cg_schema,
                           i));

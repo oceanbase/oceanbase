@@ -163,7 +163,6 @@ int ObTransformGroupByPushdown::check_groupby_push_down_validity(ObSelectStmt *s
 {
   int ret = OB_SUCCESS;
   bool has_rownum = false;
-  bool has_rand = false;
   bool contain_inner_table = false;
   bool contain_lateral_table = false;
   is_valid = true;
@@ -197,11 +196,10 @@ int ObTransformGroupByPushdown::check_groupby_push_down_validity(ObSelectStmt *s
   } else if (has_rownum) {
     is_valid = false;
     OPT_TRACE("stmt contain rownum, can not transform");
-  } else if (OB_FAIL(stmt->has_rand(has_rand))) {
+  } else if (OB_FAIL(stmt->is_query_deterministic(is_valid))) {
     LOG_WARN("failed to check stmt has rand", K(ret));
-  } else if (has_rand) {
-    is_valid = false;
-    OPT_TRACE("stmt has rand expr, can not transform");
+  } else if (!is_valid) {
+    OPT_TRACE("stmt is not deterministic, can not transform");
   } else if (OB_FAIL(check_groupby_validity(*stmt, is_valid))) {
     LOG_WARN("failed to check group by validity", K(ret));
   } else if (!is_valid) {

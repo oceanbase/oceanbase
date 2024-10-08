@@ -401,6 +401,8 @@ int FilterListBase::add_filter(Filter *filter)
     LOG_WARN("filter is nullptr", K(ret));
   } else if (OB_FAIL(filters_.push_back(filter))) {
     LOG_WARN("failed to push back", K(ret));
+  } else if (OB_FAIL(cell_included_.push_back(false))) {
+    LOG_WARN("failed to push back", K(ret));
   }
   return ret;
 }
@@ -424,9 +426,9 @@ const char* FilterListBase::operator_to_string(Operator op)
 void FilterListBase::reset()
 {
   const int64_t N = filters_.count();
-  for (int64_t i = 0; i < N; ++i)
-  {
+  for (int64_t i = 0; i < N; ++i) {
     filters_.at(i)->reset();
+    cell_included_.at(i) = false;
   } // end for
 }
 
@@ -498,36 +500,142 @@ int FilterListBase::get_format_filter_string(char *buf, int64_t buf_len, int64_t
 FilterListAND::~FilterListAND()
 {}
 
+Filter::ReturnCode FilterListAND::merge_return_code(ReturnCode rc, ReturnCode local_rc)
+{
+  ReturnCode ret_code = local_rc;
+  if (rc == ReturnCode::SEEK_NEXT_USING_HINT) {
+    ret_code = ReturnCode::SEEK_NEXT_USING_HINT;
+  } else {
+    switch (local_rc) {
+      case ReturnCode::SEEK_NEXT_USING_HINT:
+        ret_code = ReturnCode::SEEK_NEXT_USING_HINT;
+        break;
+      case ReturnCode::INCLUDE:
+        ret_code = rc;
+        break;
+      case ReturnCode::INCLUDE_AND_NEXT_COL:
+        if (rc == ReturnCode::INCLUDE
+            || rc == ReturnCode::INCLUDE_AND_NEXT_COL) {
+          ret_code = ReturnCode::INCLUDE_AND_NEXT_COL;
+        } else if (rc == ReturnCode::INCLUDE_AND_SEEK_NEXT_ROW) {
+          ret_code = ReturnCode::INCLUDE_AND_SEEK_NEXT_ROW;
+        } else if (rc == ReturnCode::SKIP
+                   || rc == ReturnCode::NEXT_COL) {
+          ret_code = ReturnCode::NEXT_COL;
+        } else if (rc == ReturnCode::NEXT_ROW) {
+          ret_code = ReturnCode::NEXT_ROW;
+        }
+        break;
+      case ReturnCode::INCLUDE_AND_SEEK_NEXT_ROW:
+        if (rc == ReturnCode::INCLUDE
+            || rc == ReturnCode::INCLUDE_AND_NEXT_COL
+            || rc == ReturnCode::INCLUDE_AND_SEEK_NEXT_ROW) {
+          ret_code = ReturnCode::INCLUDE_AND_SEEK_NEXT_ROW;
+        } else if (rc == ReturnCode::SKIP
+                   || rc == ReturnCode::NEXT_COL
+                   || rc == ReturnCode::NEXT_ROW) {
+          ret_code = ReturnCode::NEXT_ROW;
+        }
+        break;
+      case ReturnCode::SKIP:
+        if (rc == ReturnCode::INCLUDE
+            || rc == ReturnCode::SKIP) {
+          ret_code = ReturnCode::SKIP;
+        } else if (rc == ReturnCode::INCLUDE_AND_NEXT_COL
+                   || rc == ReturnCode::NEXT_COL) {
+          ret_code = ReturnCode::NEXT_COL;
+        } else if (rc == ReturnCode::INCLUDE_AND_SEEK_NEXT_ROW
+                   || rc == ReturnCode::NEXT_ROW) {
+          ret_code = ReturnCode::NEXT_ROW;
+        }
+        break;
+      case ReturnCode::NEXT_COL:
+        if (rc == ReturnCode::INCLUDE
+            || rc == ReturnCode::INCLUDE_AND_NEXT_COL
+            || rc == ReturnCode::SKIP
+            || rc == ReturnCode::NEXT_COL) {
+          ret_code = ReturnCode::NEXT_COL;
+        } else if (rc == ReturnCode::INCLUDE_AND_SEEK_NEXT_ROW
+                   || rc == ReturnCode::NEXT_ROW) {
+          ret_code = ReturnCode::NEXT_ROW;
+        }
+        break;
+      case ReturnCode::NEXT_ROW:
+        ret_code = ReturnCode::NEXT_ROW;
+        break;
+      default:
+        break;
+    }  // end switch
+  }
+  return ret_code;
+}
+
 int FilterListAND::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
 {
   int ret = OB_SUCCESS;
   ret_code = ReturnCode::INCLUDE;
   seek_hint_filters_.reset();
+  ReturnCode local_rc = ReturnCode::INCLUDE;
   const int64_t N = filters_.count();
   bool loop = true;
-  for (int64_t i = 0; OB_SUCCESS == ret && i < N && loop; ++i) {
+  int64_t i = 0;
+  for (; OB_SUCCESS == ret && i < N && loop; ++i) {
     Filter *filter = filters_.at(i);
     if (filter->filter_all_remaining()) {
       ret_code = ReturnCode::NEXT_ROW;
       loop = false;
     } else {
-      if (OB_FAIL(filter->filter_cell(cell, ret_code))) {
+      if (OB_FAIL(filter->filter_cell(cell, local_rc))) {
         LOG_WARN("failed to filter cell", K(ret));
+        loop = false;
       } else {
+        ret_code = merge_return_code(ret_code, local_rc);
         switch (ret_code) {
           case ReturnCode::INCLUDE_AND_NEXT_COL:
           case ReturnCode::INCLUDE:
-            continue;
-          case ReturnCode::SEEK_NEXT_USING_HINT:
+          case ReturnCode::INCLUDE_AND_SEEK_NEXT_ROW: {
+            break;
+          }
+          case ReturnCode::SEEK_NEXT_USING_HINT: {
             if (OB_FAIL(seek_hint_filters_.push_back(filter))) {
               LOG_WARN("failed to push back", K(ret));
             }
-          default:
+          }
+          default: {
             loop = false;
+          }
+        }
+      }
+    }
+  }// end for
+  for (; i < N && ret == OB_SUCCESS; ++i) {
+    Filter *filter = filters_.at(i);
+    if (filter != NULL && filter->is_hinting_filter()) {
+      if (OB_FAIL(filter->filter_cell(cell, local_rc))) {
+        LOG_WARN("failed to filter cell", K(ret));
+      } else if (local_rc == ReturnCode::SEEK_NEXT_USING_HINT) {
+        if (OB_FAIL(seek_hint_filters_.push_back(filter))) {
+          LOG_WARN("failed to push back", K(ret));
         }
       }
     }
   }
+  if (OB_SUCC(ret) && !seek_hint_filters_.empty()) {
+    ret_code = ReturnCode::SEEK_NEXT_USING_HINT;
+  }
+  return ret;
+}
+
+int FilterListAND::transform_cell(ObIAllocator &allocator, ObHTableCellEntity &cell)
+{
+  int ret = OB_SUCCESS;
+  const int64_t N = filters_.count();
+    for (int64_t i = 0; i < N && OB_SUCC(ret); ++i) {
+      Filter* filter = filters_.at(i);
+      if (OB_NOT_NULL(filter) && OB_FAIL(filter->transform_cell(allocator, cell))) {
+        LOG_WARN("failed to transform cell", K(ret), KP(filter), K(cell));
+      }
+    } // end for
   return ret;
 }
 
@@ -592,6 +700,35 @@ bool FilterListAND::filter_row()
   }
   return bret;
 }
+
+int FilterListAND::get_next_cell_hint(common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell)
+{
+  int ret = OB_SUCCESS;
+  ObHTableCell* max_cell = NULL;
+  if (!seek_hint_filters_.empty()) {
+    const int64_t N = seek_hint_filters_.count();
+    for (int64_t i = 0; i < N && ret == OB_SUCCESS; ++i) {
+      Filter *filter = seek_hint_filters_.at(i);
+      if (filter != NULL && !filter->filter_all_remaining()) {
+        ObHTableCell* get_cell = NULL;
+        if (OB_FAIL(filter->get_next_cell_hint(allocator, cell, get_cell))) {
+          LOG_WARN("failed to get next hint cell of filter", K(ret), K(*filter));
+        } else {
+          if (get_cell != NULL) {
+            if (max_cell == NULL) {
+              max_cell = get_cell;
+            } else if (ObHTableUtils::compare_cell(*max_cell, *get_cell, is_reversed()) > 0) {
+              max_cell = get_cell;
+            }
+          }
+        }
+      }
+    } // end for
+  }
+  new_cell = max_cell;
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////////
 FilterListOR::~FilterListOR()
 {}
@@ -608,8 +745,7 @@ bool FilterListOR::filter_all_remaining()
     bret = FilterListBase::filter_all_remaining();
   } else {
     const int64_t N = filters_.count();
-    for (int64_t i = 0; i < N; ++i)
-    {
+    for (int64_t i = 0; i < N; ++i) {
       if (!filters_.at(i)->filter_all_remaining()) {
         bret = false;
         break;
@@ -626,8 +762,7 @@ bool FilterListOR::filter_row_key(const ObHTableCell &first_row_cell)
     bret = FilterListBase::filter_row_key(first_row_cell);
   } else {
     const int64_t N = filters_.count();
-    for (int64_t i = 0; i < N; ++i)
-    {
+    for (int64_t i = 0; i < N; ++i) {
       Filter *filter = filters_.at(i);
       if (!filter->filter_all_remaining() && !filter->filter_row_key(first_row_cell)) {
         bret = false;
@@ -770,8 +905,7 @@ int FilterListOR::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
     bool every_filter_return_hint = true;
     ret_code = ReturnCode::SKIP;  // Each sub-filter in filter list got true for filterAllRemaining().
     const int64_t N = filters_.count();
-    for (int64_t i = 0; i < N; ++i)
-    {
+    for (int64_t i = 0; i < N; ++i) {
       Filter *filter = filters_.at(i);
       if (filter->filter_all_remaining()) {
         continue;
@@ -783,6 +917,11 @@ int FilterListOR::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
           if (ReturnCode::SEEK_NEXT_USING_HINT != local_rc) {
             every_filter_return_hint = false;
           }
+          if (ReturnCode::INCLUDE == local_rc
+              || ReturnCode::INCLUDE_AND_NEXT_COL == local_rc
+              || ReturnCode::INCLUDE_AND_SEEK_NEXT_ROW == local_rc) {
+            cell_included_.at(i) = true;
+          }
           ret_code = merge_return_code(ret_code, local_rc);
           LOG_DEBUG("[yzfdebug] OR filter cell", K(i), K(local_rc), K(ret_code));
         }
@@ -792,6 +931,22 @@ int FilterListOR::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
       ret_code = ReturnCode::SEEK_NEXT_USING_HINT;
     }
   }
+  return ret;
+}
+
+int FilterListOR::transform_cell(ObIAllocator &allocator, ObHTableCellEntity &cell)
+{
+  int ret = OB_SUCCESS;
+  const int64_t N = filters_.count();
+    for (int64_t i = 0; i < N && OB_SUCC(ret); ++i) {
+      bool included = cell_included_.at(i);
+      if (included) {
+        Filter* filter = filters_.at(i);
+        if (OB_NOT_NULL(filter) && OB_FAIL(filter->transform_cell(allocator, cell))) {
+          LOG_WARN("failed to transform cell", K(ret), KP(filter), K(cell));
+        }
+      }
+    } // end for
   return ret;
 }
 
@@ -812,6 +967,36 @@ bool FilterListOR::filter_row()
     } // end for
   }
   return bret;
+}
+
+int FilterListOR::get_next_cell_hint(common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell)
+{
+  int ret = OB_SUCCESS;
+  ObHTableCell* min_cell = NULL;
+  if (!filters_.empty()) {
+    const int64_t N = filters_.count();
+    bool loop = true;
+    for (int64_t i = 0; i < N && ret == OB_SUCCESS && loop; ++i) {
+      Filter *filter = filters_.at(i);
+      if (filter != NULL && !filter->filter_all_remaining()) {
+        ObHTableCell* get_cell = NULL;
+        if (OB_FAIL(filter->get_next_cell_hint(allocator, cell, get_cell))) {
+          LOG_WARN("failed to get next hint cell of filter", K(ret), K(*filter));
+        } else {
+          if (get_cell == NULL) {
+            min_cell = NULL;
+            loop = false;
+          } else if (min_cell == NULL) {
+            min_cell = get_cell;
+          } else if (ObHTableUtils::compare_cell(*min_cell, *get_cell, is_reversed()) > 0) {
+            min_cell = get_cell;
+          }
+        }
+      }
+    }
+  }
+  new_cell = min_cell;
+  return ret;
 }
 ////////////////////////////////////////////////////////////////
 SkipFilter::~SkipFilter() {}
@@ -845,9 +1030,9 @@ bool SkipFilter::filter_row()
   return filter_row_;
 }
 
-int SkipFilter::transform_cell(const ObHTableCell &cell, const ObHTableCell *&new_cell)
+int SkipFilter::transform_cell(ObIAllocator &allocator, ObHTableCellEntity &cell)
 {
-  return filter_->transform_cell(cell, new_cell);
+  return filter_->transform_cell(allocator, cell);
 }
 
 // statement is "SkipFilter $filter"
@@ -925,9 +1110,9 @@ int WhileMatchFilter::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code
   return ret;
 }
 
-int WhileMatchFilter::transform_cell(const ObHTableCell &cell, const ObHTableCell *&new_cell)
+int WhileMatchFilter::transform_cell(ObIAllocator &allocator, ObHTableCellEntity &cell)
 {
-  return filter_->transform_cell(cell, new_cell);
+  return filter_->transform_cell(allocator, cell);
 }
 
 bool WhileMatchFilter::filter_row()
@@ -1116,20 +1301,58 @@ int64_t PageFilter::get_format_filter_string_length() const
 int PageFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
-
-  if (OB_ISNULL(buf)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("buf is bull", KR(ret));
-  } else {
-    int64_t n = snprintf(buf + pos, buf_len - pos, "PageFilter");
-    if (n < 0 || n > buf_len - pos) {
-      ret = OB_BUF_NOT_ENOUGH;
-      LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
-    } else {
-      pos += n;
-    }
+  if (OB_FAIL(ObHTableUtils::get_format_filter_string(buf, buf_len, pos, "PageFilter"))) {
+    LOG_WARN("failed to format filter string", K(ret));
   }
+  return ret;
+}
 
+////////////////////////////////////////////////////////////////
+bool RandomRowFilter::filter_row_key(const ObHTableCell &first_row_cell)
+{
+  UNUSED(first_row_cell);
+  if (chance_ < 0) {
+      filter_out_row_ = true;
+  } else if (chance_ > 1) {
+      filter_out_row_ = false;
+  } else {
+      filter_out_row_ = !((float(rand()) / (RAND_MAX + 1.0f)) < chance_);
+  }
+  return filter_out_row_;
+}
+
+int RandomRowFilter::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
+{
+  UNUSED(cell);
+  ret_code = ReturnCode::INCLUDE;
+  if(filter_out_row_) {
+    ret_code = ReturnCode::NEXT_ROW;
+  }
+  return common::OB_SUCCESS;
+}
+
+void RandomRowFilter::reset()
+{
+  filter_out_row_ = false;
+}
+
+bool RandomRowFilter::filter_row()
+{
+  return filter_out_row_;
+}
+
+// statement is "RandomRowFilter"
+int64_t RandomRowFilter::get_format_filter_string_length() const
+{
+  return strlen("RandomRowFilter");
+}
+
+int RandomRowFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObHTableUtils::get_format_filter_string(buf, buf_len, pos, "RandomRowFilter"))) {
+    LOG_WARN("failed to format filter string", K(ret));
+  }
   return ret;
 }
 
@@ -1137,12 +1360,28 @@ int PageFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &po
 int ColumnPaginationFilter::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
 {
   int ret = OB_SUCCESS;
-  UNUSED(cell);
-  if (count_ >= offset_ + limit_) {
-    ret_code = ReturnCode::NEXT_ROW;
-  } else{
-    ret_code = count_ < offset_ ? ReturnCode::NEXT_COL : ReturnCode::INCLUDE_AND_NEXT_COL;
-    count_++;
+  if (!column_offset_.empty()) {
+    if (count_ >= limit_) {
+      ret_code = ReturnCode::NEXT_ROW;
+    } else {
+      int cmp = 0;
+      if (count_ == 0) {
+        cmp = cell.get_qualifier().compare(column_offset_);
+      }
+      if (cmp < 0) {
+        ret_code = ReturnCode::SEEK_NEXT_USING_HINT;
+      } else {
+        count_ ++;
+        ret_code = ReturnCode::INCLUDE_AND_NEXT_COL;
+      }
+    }
+  } else {
+    if (count_ >= offset_ + limit_) {
+      ret_code = ReturnCode::NEXT_ROW;
+    } else{
+      ret_code = count_ < offset_ ? ReturnCode::NEXT_COL : ReturnCode::INCLUDE_AND_NEXT_COL;
+      count_++;
+    }
   }
   return ret;
 }
@@ -1162,13 +1401,265 @@ int64_t ColumnPaginationFilter::get_format_filter_string_length() const
 int ColumnPaginationFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
+  if (OB_FAIL(ObHTableUtils::get_format_filter_string(buf, buf_len, pos, "ColumnPaginationFilter"))) {
+    LOG_WARN("failed to format filter string", K(ret));
+  }
+  return ret;
+}
+
+int ColumnPaginationFilter::get_next_cell_hint(common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell)
+{
+  int ret = OB_SUCCESS;
+  ret = ObHTableUtils::create_first_cell_on_row_col(allocator, cell, column_offset_, new_cell);
+  return ret;
+}
+
+////////////////////////////////////////////////////////////////
+int ColumnPrefixFilter::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
+{
+  int ret = OB_SUCCESS;
+  ObString qualifier = cell.get_qualifier();
+  if (qualifier.length() < prefix_.length()) {
+    int32_t cmp = qualifier.compare(prefix_);
+    if (cmp <= 0) {
+      ret_code = ReturnCode::SEEK_NEXT_USING_HINT;
+    } else {
+      ret_code = ReturnCode::NEXT_ROW;
+    }
+  } else {
+    bool matched = qualifier.prefix_match(prefix_);
+    if (matched) {
+      ret_code = ReturnCode::INCLUDE;
+    } else {
+      int cmp = qualifier.compare(prefix_);
+      if (cmp < 0) {
+        ret_code = ReturnCode::SEEK_NEXT_USING_HINT;
+      } else {
+        ret_code = ReturnCode::NEXT_ROW;
+      }
+    }
+  }
+  return ret;
+}
+
+int ColumnPrefixFilter::get_next_cell_hint(common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObHTableUtils::create_first_cell_on_row_col(allocator, cell, prefix_, new_cell))) {
+    LOG_WARN("failed to create hint cell of filter", K(ret));
+  }
+  return ret;
+}
+
+// statement is "ColumnPrefixFilter"
+int64_t ColumnPrefixFilter::get_format_filter_string_length() const
+{
+  return strlen("ColumnPrefixFilter");
+}
+
+int ColumnPrefixFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObHTableUtils::get_format_filter_string(buf, buf_len, pos, "ColumnPrefixFilter"))) {
+    LOG_WARN("failed to format filter string", K(ret));
+  }
+  return ret;
+}
+
+////////////////////////////////////////////////////////////////
+int FirstKeyOnlyFilter::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
+{
+  int ret = OB_SUCCESS;
+  if (found_) {
+    ret_code = ReturnCode::NEXT_ROW;
+  } else {
+    found_ = true;
+    ret_code = ReturnCode::INCLUDE;
+  }
+  return ret;
+}
+
+void FirstKeyOnlyFilter::reset()
+{
+  found_ = false;
+}
+
+// statement is "FirstKeyOnlyFilter"
+int64_t FirstKeyOnlyFilter::get_format_filter_string_length() const
+{
+  return strlen("FirstKeyOnlyFilter");
+}
+
+int FirstKeyOnlyFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
 
   if (OB_ISNULL(buf)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("buf is bull", KR(ret));
+    LOG_WARN("buf is null", KR(ret));
   } else {
-    int64_t n = snprintf(buf + pos, buf_len - pos, "ColumnPaginationFilter");
-    if (n < 0 || n > buf_len - pos) {
+    int64_t n = snprintf(buf + pos, buf_len - pos, "FirstKeyOnlyFilter");
+    if (n < 0) {
+      ret = OB_BUF_NOT_ENOUGH;
+      LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+    } else {
+      pos += n;
+    }
+  }
+
+  return ret;
+}
+
+////////////////////////////////////////////////////////////////
+int KeyOnlyFilter::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
+{
+  ret_code = ReturnCode::INCLUDE;
+  return OB_SUCCESS;
+}
+
+int KeyOnlyFilter::transform_cell(ObIAllocator &allocator, ObHTableCellEntity &cell)
+{
+  int ret = OB_SUCCESS;
+  ObNewRow* row = cell.get_ob_row();
+  if (OB_ISNULL(row)) {
+    ret = OB_NULL_CHECK_ERROR;
+    LOG_WARN("ob row is null", K(ret));
+  } else {
+    if (len_as_val_) {
+      int32_t len = cell.get_value().length();
+      char* val = nullptr;
+      if (OB_FAIL(ObHTableUtils::generate_hbase_bytes(allocator, len, val))) {
+        LOG_WARN("fail to generate hbase bytes", K(ret));
+      } else {
+        cell.get_ob_row()->get_cell(ObHTableConstants::COL_IDX_V).set_varchar(val, sizeof(len));
+      }
+    } else {
+      ObString s = ObString();
+      cell.get_ob_row()->get_cell(ObHTableConstants::COL_IDX_V).set_varchar(s);
+    }
+  }
+  return ret;
+}
+
+// statement is "KeyOnlyFilter"
+int64_t KeyOnlyFilter::get_format_filter_string_length() const
+{
+  return strlen("KeyOnlyFilter");
+}
+
+int KeyOnlyFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is null", KR(ret));
+  } else {
+    int64_t n = snprintf(buf + pos, buf_len - pos, "KeyOnlyFilter");
+    if (n < 0) {
+      ret = OB_BUF_NOT_ENOUGH;
+      LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+    } else {
+      pos += n;
+    }
+  }
+
+  return ret;
+}
+
+////////////////////////////////////////////////////////////////
+int TimestampsFilter::init()
+{
+  int ret = OB_SUCCESS;
+  bool is_first = true;
+  if (OB_NOT_NULL(origin_ts_)) {
+    FOREACH_X(ts, (*origin_ts_), OB_SUCC(ret)) {
+      ObTimestampNode node = ObTimestampNode(-(*ts));
+      if (OB_FAIL(nodes_.push_back(node))) {
+        LOG_WARN("failed to push back", K(ret), K(node));
+      } else {
+        ObTimestampNode* node_ptr = &*(nodes_.end() - 1);
+        if (OB_FAIL(timestamps_.insert(node_ptr))) {
+          LOG_WARN("failed to insert to rb tree", K(ret), KP(node_ptr));
+        }
+      }
+    } // end for each
+    ObTimestampNode* last_node = timestamps_.get_last();
+    if (OB_NOT_NULL(last_node)) {
+      max_timestamp_ = last_node->get_value();
+    }
+  }
+  return ret;
+}
+
+int TimestampsFilter::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
+{
+  int ret = OB_SUCCESS;
+  ObTimestampNode key_node = ObTimestampNode(cell.get_timestamp());
+  ObTimestampNode* found = nullptr;
+
+  if (!is_inited_) {
+    if (OB_FAIL(init())) {
+      LOG_WARN("failed to init timestamps", K(ret));
+    } else {
+      is_inited_ = true;
+    }
+  }
+  if (OB_SUCCESS == ret) {
+    if (OB_FAIL(timestamps_.search(&key_node, found))) {
+      OBLOG_LOG(WARN, "search node from tree failed", KR(ret), K(key_node));
+    } else {
+      if (OB_NOT_NULL(found)) {
+        ret_code = ReturnCode::INCLUDE;
+      } else if (cell.get_timestamp() > max_timestamp_) {
+        ret_code = ReturnCode::NEXT_COL;
+      } else {
+        ret_code = can_hint_? ReturnCode::SEEK_NEXT_USING_HINT : ReturnCode::SKIP;
+      }
+    }
+  }
+  return ret;
+}
+
+int TimestampsFilter::get_next_cell_hint(common::ObArenaAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell)
+{
+  int ret = OB_SUCCESS;
+  if (can_hint_) {
+    ObTimestampNode key_node = ObTimestampNode(cell.get_timestamp());
+    ObTimestampNode* found = nullptr;
+    if (OB_FAIL(timestamps_.psearch(&key_node, found))) {
+      OBLOG_LOG(WARN, "search node from tree failed", KR(ret), K(key_node));
+    } else {
+      if (found == NULL) {
+        if (OB_FAIL(ObHTableUtils::create_last_cell_on_row_col(allocator, cell, new_cell))) {
+          LOG_WARN("failed to create cell", K(ret), K(cell));
+        }
+      } else if (OB_FAIL(ObHTableUtils::create_first_cell_on_row_col_ts(allocator, cell, found->get_value(), new_cell))) {
+        LOG_WARN("failed to create cell", K(ret), K(cell));
+      }
+    }
+  } else {
+    new_cell = nullptr;
+  }
+  return ret;
+}
+
+// statement is "TimestampsFilter"
+int64_t TimestampsFilter::get_format_filter_string_length() const
+{
+  return strlen("TimestampsFilter");
+}
+
+int TimestampsFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is null", KR(ret));
+  } else {
+    int64_t n = snprintf(buf + pos, buf_len - pos, "TimestampsFilter");
+    if (n < 0) {
       ret = OB_BUF_NOT_ENOUGH;
       LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
     } else {
@@ -1218,20 +1709,9 @@ int64_t ColumnCountGetFilter::get_format_filter_string_length() const
 int ColumnCountGetFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
-
-  if (OB_ISNULL(buf)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("buf is bull", KR(ret));
-  } else {
-    int64_t n = snprintf(buf + pos, buf_len - pos, "ColumnCountGetFilter");
-    if (n < 0 || n > buf_len - pos) {
-      ret = OB_BUF_NOT_ENOUGH;
-      LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
-    } else {
-      pos += n;
-    }
+  if (OB_FAIL(ObHTableUtils::get_format_filter_string(buf, buf_len, pos, "ColumnCountGetFilter"))) {
+    LOG_WARN("failed to format filter string", K(ret));
   }
-
   return ret;
 }
 ////////////////////////////////////////////////////////////////
