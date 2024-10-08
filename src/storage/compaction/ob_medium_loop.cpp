@@ -265,7 +265,7 @@ int ObScheduleNewMediumLoop::loop()
     } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_tablet(
                  tablet_id, tablet_handle, 0 /*timeout_us*/))) {
       LOG_WARN("get tablet failed", K(ret), K(ls_id), K(tablet_id));
-    } else if (OB_FAIL(func.request_schedule_new_round(tablet_handle, false/*print_warn_log*/))) {
+    } else if (OB_FAIL(func.request_schedule_new_round(tablet_handle, false/*user_request*/))) {
       LOG_WARN("get tablet failed", K(ret), K(ls_id), K(tablet_id));
     }
   } // end of for

@@ -1544,7 +1544,7 @@ int ObTenantTabletScheduler::user_request_schedule_medium_merge(
     } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_tablet(
                  tablet_id, tablet_handle, 0 /*timeout_us*/))) {
       LOG_WARN("get tablet failed", K(ret), K(ls_id), K(tablet_id));
-    } else if (OB_FAIL(func.request_schedule_new_round(tablet_handle, true/*print_warn_log*/))) {
+    } else if (OB_FAIL(func.request_schedule_new_round(tablet_handle, true/*user_request*/))) {
       LOG_WARN("failed to request schedule new round", K(ret), K(ls_id), K(tablet_id));
     }
   }

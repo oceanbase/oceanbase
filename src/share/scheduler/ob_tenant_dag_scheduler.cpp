@@ -2288,7 +2288,12 @@ int ObDagPrioScheduler::rank_compaction_dags_()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   const int64_t batch_size = adaptive_task_limit_ * COMPACTION_DAG_RERANK_FACTOR;
-  const bool need_adaptive_schedule = ObBasicMergeScheduler::get_merge_scheduler()->enable_adaptive_merge_schedule();
+  bool need_adaptive_schedule = false;
+  const compaction::ObBasicMergeScheduler *scheduler = nullptr;
+
+  if (OB_NOT_NULL(scheduler = ObBasicMergeScheduler::get_merge_scheduler())) {
+    need_adaptive_schedule = scheduler->enable_adaptive_merge_schedule();
+  }
 
   if (!check_need_compaction_rank_()) {
     // ready list has plenty of dags, no need to rank new dags
@@ -3060,7 +3065,7 @@ int ObDagPrioScheduler::get_max_major_finish_time(
           }
         }
         if (OB_NOT_NULL(progress) && progress->get_estimated_finish_time() > estimated_finish_time) {
-          estimated_finish_time = estimated_finish_time;
+          estimated_finish_time = progress->get_estimated_finish_time();
         }
       } else {
         break;

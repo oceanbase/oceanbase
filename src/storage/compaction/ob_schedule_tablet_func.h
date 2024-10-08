@@ -31,7 +31,7 @@ struct ObScheduleTabletFunc final : public ObBasicScheduleTabletFunc
     bool &tablet_merge_finish);
   int request_schedule_new_round(
     storage::ObTabletHandle &tablet_handle,
-    const bool print_warn_log);
+    const bool user_request);
   const ObTabletStatusCache &get_tablet_status() const { return tablet_status_; }
   virtual const ObCompactionTimeGuard &get_time_guard() const override { return time_guard_; }
   int diagnose_switch_tablet(storage::ObLS &ls, const storage::ObTablet &tablet);
@@ -40,7 +40,8 @@ struct ObScheduleTabletFunc final : public ObBasicScheduleTabletFunc
 private:
   virtual void schedule_freeze_dag(const bool force) override;
   int schedule_tablet_new_round(
-    storage::ObTabletHandle &tablet_handle);
+    storage::ObTabletHandle &tablet_handle,
+    const bool user_request);
   int schedule_tablet_execute(
     storage::ObTablet &tablet);
   int get_schedule_execute_info(

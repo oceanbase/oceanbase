@@ -4631,10 +4631,13 @@ int ObTablet::do_rowkey_exists(
         // ROWKEY IN_ROW_CACHE / NOT EXIST
       } else if (FALSE_IT(context.store_ctx_->tablet_stat_.exist_row_read_table_cnt_ = check_table_cnt)) {
       } else if (FALSE_IT(context.store_ctx_->tablet_stat_.exist_row_total_table_cnt_ = table_iter.table_store_iter_.count())) {
-      } else if (ObBasicMergeScheduler::get_merge_scheduler()->enable_adaptive_compaction()) {
-        bool report_succ = false; /*placeholder*/
-        if (OB_TMP_FAIL(MTL(ObTenantTabletStatMgr *)->report_stat(context.store_ctx_->tablet_stat_, report_succ))) {
-          LOG_WARN("failed to report tablet stat", K(tmp_ret), K(stat));
+      } else {
+        const compaction::ObBasicMergeScheduler *scheduler = nullptr;
+        if (OB_NOT_NULL(scheduler = ObBasicMergeScheduler::get_merge_scheduler()) && scheduler->enable_adaptive_compaction()) {
+          bool report_succ = false; /*placeholder*/
+          if (OB_TMP_FAIL(MTL(ObTenantTabletStatMgr *)->report_stat(context.store_ctx_->tablet_stat_, report_succ))) {
+            LOG_WARN("failed to report tablet stat", K(tmp_ret), K(stat));
+          }
         }
       }
     }
@@ -4689,10 +4692,13 @@ int ObTablet::do_rowkeys_exist(
     int tmp_ret = OB_SUCCESS;
     if (0 == access_ctx.table_store_stat_.empty_read_cnt_) {
       // ROWKEY IN_ROW_CACHE / NOT EXIST
-    } else if (ObBasicMergeScheduler::get_merge_scheduler()->enable_adaptive_compaction()) {
-      bool report_succ = false; /*placeholder*/
-      if (OB_TMP_FAIL(MTL(ObTenantTabletStatMgr *)->report_stat(tablet_stat, report_succ))) {
-        LOG_WARN("failed to report tablet stat", K(tmp_ret), K(tablet_stat));
+    } else {
+      const compaction::ObBasicMergeScheduler *scheduler = nullptr;
+      if (OB_NOT_NULL(scheduler = ObBasicMergeScheduler::get_merge_scheduler()) && scheduler->enable_adaptive_compaction()) {
+        bool report_succ = false; /*placeholder*/
+        if (OB_TMP_FAIL(MTL(ObTenantTabletStatMgr *)->report_stat(tablet_stat, report_succ))) {
+          LOG_WARN("failed to report tablet stat", K(tmp_ret), K(tablet_stat));
+        }
       }
     }
   }
