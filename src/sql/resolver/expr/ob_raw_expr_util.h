@@ -1087,7 +1087,7 @@ public:
   static int build_or_exprs(ObRawExprFactory &expr_factory,
                             const ObIArray<ObRawExpr*> &exprs,
                             ObRawExpr* &or_expr);
-
+  static int get_exprs_inside_and_or(ObRawExpr *and_or_expr, ObIArray<ObRawExpr *> &exprs);
   static int build_and_expr(ObRawExprFactory &expr_factory,
                             const ObIArray<ObRawExpr*> &exprs,
                             ObRawExpr * &and_expr);

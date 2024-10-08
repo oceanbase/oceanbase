@@ -114,7 +114,6 @@ public:
   bool with_rows() const
   { return ObStmt::is_select_stmt(stmt_type_) || is_returning() || need_drive_dml_query_; }
   int copy_common_info(ObPhysicalPlan &src);
-  int extract_query_range(ObExecContext &ctx) const;
   //user var
   bool is_contains_assignment() const {return is_contains_assignment_;}
   void set_contains_assignment(bool v) {is_contains_assignment_ = v;}

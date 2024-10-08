@@ -8836,6 +8836,35 @@ int ObRawExprUtils::build_or_exprs(ObRawExprFactory &expr_factory,
   return ret;
 }
 
+int ObRawExprUtils::get_exprs_inside_and_or(ObRawExpr *and_or_expr,
+                                            ObIArray<ObRawExpr *> &exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(and_or_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("got unexpected null ptr", K(ret));
+  } else if (OB_UNLIKELY(T_OP_OR != and_or_expr->get_expr_type() &&
+                         T_OP_AND != and_or_expr->get_expr_type())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("got unexpected expr type", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < and_or_expr->get_param_count(); i++) {
+      ObRawExpr *expr = and_or_expr->get_param_expr(i);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("got unexpected null ptr", K(ret));
+      } else if (expr->get_expr_type() == T_OP_OR || expr->get_expr_type() == T_OP_AND) {
+        if (OB_FAIL(SMART_CALL(get_exprs_inside_and_or(expr, exprs)))) {
+          LOG_WARN("failed to get all expr inside and or", K(ret));
+        }
+      } else if (OB_FAIL(exprs.push_back(expr))) {
+        LOG_WARN("failed to push back");
+      }
+    }
+  }
+  return ret;
+}
+
 int ObRawExprUtils::build_and_expr(ObRawExprFactory &expr_factory,
                                    const ObIArray<ObRawExpr*> &exprs,
                                    ObRawExpr * &and_expr)
