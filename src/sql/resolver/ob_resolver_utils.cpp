@@ -2351,7 +2351,8 @@ stmt::StmtType ObResolverUtils::get_stmt_type_by_item_type(const ObItemType item
         type = stmt::T_INSERT;
       }
       break;
-      case T_SP_CREATE_TYPE: {
+      case T_SP_CREATE_TYPE:
+      case T_SP_CREATE_TYPE_BODY: {
         type = stmt::T_CREATE_TYPE;
       }
       break;
