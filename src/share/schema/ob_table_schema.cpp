@@ -7716,13 +7716,12 @@ int ObTableSchema::check_can_do_manual_split_partition() const
 // 1. not support data version which is lower than 4.4
 // 2. not support to split partition of sys_table/local_index/domain_index/spatial_index/lob
 // 3. not support to split partition of no primary key table
-// 4. not support to split partition of a table belong to tablegroup
-// 5. not support to split partition of a table including spatial index or domain index
-// 6. not support to split hash/list/interval partition
-// 7. not support to split subpartition
-// 8. not support mismatching between partition key and primary key prefix
-// 9. not support column store table to split partition
-// 10. only support automatic partitioning global index tables in non user tables
+// 4. not support to split partition of a table including spatial index or domain index
+// 5. not support to split hash/list/interval partition
+// 6. not support to split subpartition
+// 7. not support mismatching between partition key and primary key prefix
+// 8. not support column store table to split partition
+// 9. only support automatic partitioning global index tables in non user tables
 int ObTableSchema::check_enable_split_partition(bool is_auto_partitioning) const
 {
   int ret = OB_SUCCESS;
@@ -7749,14 +7748,10 @@ int ObTableSchema::check_enable_split_partition(bool is_auto_partitioning) const
     LOG_WARN("not support to split a partition of column store table", KR(ret), KPC(this));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "column store table is");
   } else if (is_user_table()) {
-    // check tablegroup and indexes of auto-partitioned data table
+    // check indexes of auto-partitioned data table
     ObArray<ObAuxTableMetaInfo> simple_index_infos;
 
-    if (tablegroup_id_ != OB_INVALID_ID) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("split partition of a table in tablegroup is not supported", KR(ret), KPC(this));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "split partition of a table in tablegroup is");
-    } else if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
+    if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
       LOG_WARN("get_simple_index_infos failed", KR(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {

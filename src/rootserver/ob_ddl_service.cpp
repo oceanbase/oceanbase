@@ -3230,13 +3230,9 @@ int ObDDLService::set_raw_table_options(
             uint64_t tablegroup_id = OB_INVALID_ID;
             uint64_t tenant_id = alter_table_schema.get_tenant_id();
             //tablegroup_id not set in resolver, only record tablegroup name
-            if (new_table_schema.is_auto_partitioned_table()) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("not support to add auto-partitioned table to tablegroup", KR(ret), K(new_table_schema));
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "add auto-partitioned table to tablegroup is");
-            } else if (OB_FAIL(schema_guard.get_tablegroup_id(tenant_id,
-                                                              tablegroup_name,
-                                                              tablegroup_id))) {
+            if (OB_FAIL(schema_guard.get_tablegroup_id(tenant_id,
+                                                       tablegroup_name,
+                                                       tablegroup_id))) {
               LOG_WARN("failed to get tablegroup id", K(ret), K(tablegroup_name));
             } else if (OB_INVALID_ID == tablegroup_id) {
               ret = OB_TABLEGROUP_NOT_EXIST;
@@ -13401,8 +13397,7 @@ int ObDDLService::alter_table_partitions(const obrpc::ObAlterTableArg &alter_tab
                K(orig_table_schema), K(inc_table_schema));
     }
   }
-
-  if (OB_SUCC(ret) && !is_add_and_drop_partition(op_type)) {
+  if (OB_SUCC(ret) && !is_add_and_drop_partition(op_type) && !alter_table_arg.is_split_partition()) {
     if (OB_FAIL(check_alter_partition_with_tablegroup(&orig_table_schema, new_table_schema, schema_guard))) {
       LOG_WARN("fail to check alter partition with tablegroup", KR(ret), K(orig_table_schema), K(new_table_schema));
     }
