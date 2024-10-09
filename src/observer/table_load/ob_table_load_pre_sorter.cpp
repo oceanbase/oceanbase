@@ -416,6 +416,7 @@ int ObTableLoadPreSorter::build_merge_param(ObDirectLoadMergeParam& merge_param)
   merge_param.dml_row_handler_ = store_ctx_->data_store_table_ctx_->row_handler_;
   merge_param.file_mgr_ = store_ctx_->tmp_file_mgr_;
   merge_param.trans_param_ = store_ctx_->trans_param_;
+  merge_param.index_table_count_ = ctx_->schema_.index_table_count_;
   return ret;
 }
 
