@@ -1075,7 +1075,6 @@ int ObTablet::read_medium_info_list(
     LOG_WARN("fail to init medium info list", K(ret));
   } else {
     medium_info_list = tmp_list;
-    LOG_INFO("DanLing Debug: read medium info", K(ls_id), K(tablet_id), KPC(tmp_list));
   }
 
   if (OB_FAIL(ret)) {

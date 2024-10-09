@@ -125,6 +125,18 @@ private:
   common::hash::ObHashMap<ObTabletID, ProhibitFlag> tablet_id_map_; // tablet is used for transfer of medium compaction
 };
 
+
+struct ObCSReplicaChecksumHelper
+{
+public:
+  static int check_column_type(
+      const common::ObTabletID &tablet_id,
+      const int64_t compaction_scn,
+      const common::ObIArray<int64_t> &column_idxs,
+      bool &is_large_text_column);
+};
+
+
 struct ObTenantTabletMediumParam
 {
 public:
