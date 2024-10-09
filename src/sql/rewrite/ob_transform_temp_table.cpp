@@ -1829,6 +1829,9 @@ int ObTransformTempTable::project_pruning(ObIArray<TempTableInfo> &temp_table_in
       LOG_WARN("failed to rempve select item", K(ret));
     } else if (OB_FAIL(add_normal_temp_table_trans_hint(*info.temp_table_query_, T_PROJECT_PRUNE))) {
       LOG_WARN("failed to add transform hint", K(ret));
+    } else if (OB_FAIL(info.temp_table_query_->formalize_stmt_expr_reference(ctx_->expr_factory_,
+                                                                             ctx_->session_info_))) {
+      LOG_WARN("failed to formalize stmt reference", K(ret));
     } else {
       trans_happened = true;
     }
