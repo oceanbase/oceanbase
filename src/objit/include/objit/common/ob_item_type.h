@@ -2606,6 +2606,9 @@ typedef enum ObItemType
 
   T_PSEUDO_OLD_NEW_COL = 4742,
 
+  T_TRANSFORM_DISTINCT_AGG = 4743,
+  T_NO_TRANSFORM_DISTINCT_AGG = 4744,
+
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
