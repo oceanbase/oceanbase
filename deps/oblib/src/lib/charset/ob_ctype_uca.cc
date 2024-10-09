@@ -2584,9 +2584,9 @@ static int ob_coll_check_rule_and_inherit(const ObCharsetInfo *cs,
   int orig_rule_num = rules->nrules;
   for (int i = 0; i < orig_rule_num; ++i) {
     ObCollRule r = *(rules->rule + i);
-        if ((cs->coll_param != &zh_coll_param
-         || cs->coll_param != &zh2_coll_param
-         || cs->coll_param != &zh3_coll_param) && r.curr[1]) continue;
+        if ((!(cs->coll_param == &zh_coll_param
+         || cs->coll_param == &zh2_coll_param
+         || cs->coll_param == &zh3_coll_param)) && r.curr[1]) continue;
     Unidata_decomp *decomp_rec = get_decomposition(r.curr[0]);
     if (ob_coll_add_inherit_rules(rules, &r, decomp_rec, &comp_added)) return 1;
   }
