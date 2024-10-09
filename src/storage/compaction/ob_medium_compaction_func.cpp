@@ -71,6 +71,7 @@ int ObMediumCompactionScheduleFunc::choose_medium_snapshot(
   param.merge_type_ = MEDIUM_MERGE;
   int64_t max_reserved_snapshot = 0;
   ObTablet &tablet = *tablet_handle_.get_obj();
+  const int64_t transfer_start_snapshot = tablet.get_tablet_meta().transfer_info_.transfer_start_scn_.get_val_for_tx();
 
   if (OB_FAIL(ObAdaptiveMergePolicy::get_meta_merge_tables(param, ls_, tablet, result))) {
     if (OB_NO_NEED_MERGE != ret) {
@@ -92,6 +93,10 @@ int ObMediumCompactionScheduleFunc::choose_medium_snapshot(
   if (OB_FAIL(ret)) {
   } else if (medium_info.medium_snapshot_ <= max_sync_medium_scn) {
     ret = OB_NO_NEED_MERGE;
+  } else if (medium_info.medium_snapshot_ < transfer_start_snapshot) {
+    ret = OB_NO_NEED_MERGE;
+    LOG_INFO("medium snapshot is smaller than transfer start snapshot, no need merge", K(ret),
+        K(medium_info), K(transfer_start_snapshot), K(tablet));
   } else if (OB_FAIL(check_frequency(max_reserved_snapshot, medium_info.medium_snapshot_))) { // check schedule interval
     if (OB_NO_NEED_MERGE != ret) {
       LOG_WARN("failed to check medium scn valid", K(ret), KPC(this));
