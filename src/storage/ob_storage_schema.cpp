@@ -481,6 +481,7 @@ int ObStorageSchema::init(
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "storage schema is invalid", K(ret));
   } else {
+    is_cs_replica_compat_ = is_cg_array_generated_in_cs_replica();
     is_inited_ = true;
   }
 
@@ -554,6 +555,7 @@ int ObStorageSchema::init(
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR, "storage schema is invalid", K(ret));
     } else {
+      is_cs_replica_compat_ = is_cg_array_generated_in_cs_replica();
       is_inited_ = true;
     }
   }
@@ -1148,6 +1150,7 @@ int ObStorageSchema::generate_cs_replica_cg_array()
   if (OB_FAIL(generate_cs_replica_cg_array(*allocator_, column_group_array_))) {
     STORAGE_LOG(WARN, "Failed to generate column store cg array", K(ret), KPC(this));
   } else {
+    is_cs_replica_compat_ = is_cg_array_generated_in_cs_replica();
     STORAGE_LOG(INFO, "[CS-Replica] Success to generate cs replica cg array", K(ret), KPC(this));
   }
   return ret;
@@ -1325,13 +1328,13 @@ int ObStorageSchema::get_column_group_index(
   return ret;
 }
 
-bool ObStorageSchema::is_cs_replica_compat() const
+bool ObStorageSchema::is_cg_array_generated_in_cs_replica() const
 {
   bool bret = false;
   if (column_group_array_.count() <= 1) {
     // row store
   } else {
-    bret = column_group_array_.at(0).is_rowkey_column_group();
+    bret = column_group_array_.at(0).is_rowkey_column_group(); // only cs replica set rowkey cg in the front of cg array
   }
   return bret;
 }
