@@ -1267,6 +1267,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprTokenize::eval_tokenize,                                      /* 758 */
   NULL, // ObExprEnhancedAesEncrypt::eval_aes_encrypt                 /* 759 */
   NULL, // ObExprEnhancedAesDecrypt::eval_aes_decrypt                 /* 760 */
+  NULL, // ObExprMysqlProcInfo::mysql_proc_info                       /* 761 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
