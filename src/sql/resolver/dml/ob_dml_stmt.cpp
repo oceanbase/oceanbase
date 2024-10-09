@@ -3919,6 +3919,26 @@ int ObDMLStmt::check_if_table_exists(uint64_t table_id, bool &is_existed) const
   return ret;
 }
 
+int ObDMLStmt::has_special_expr(const ObExprInfoFlag flag, bool &has) const
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 16> exprs;
+  has = false;
+  if (OB_FAIL(get_relation_exprs(exprs))) {
+    LOG_WARN("failed to get relation exprs", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !has && i < exprs.count(); i++) {
+      if (OB_ISNULL(exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (exprs.at(i)->has_flag(flag)) {
+        has = true;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDMLStmt::rebuild_tables_hash()
 {
   int ret = OB_SUCCESS;
