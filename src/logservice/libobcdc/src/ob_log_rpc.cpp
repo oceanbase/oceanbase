@@ -262,6 +262,9 @@ int ObLogRpc::reload_ssl_config()
       } else if (last_ssl_info_hash_ == new_hash_value) {
         LOG_INFO("no need reload_ssl_config", K(new_hash_value));
       } else {
+#ifdef OB_BUILD_TDE_SECURITY
+        share::ObSSLClient client;
+#endif
         bool use_bkmi = false;
         bool use_sm = false;
         const char *ca_cert = NULL;
@@ -286,8 +289,6 @@ int ObLogRpc::reload_ssl_config()
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("only support local file mode", K(ret));
 #else
-          share::ObSSLClient client;
-
           if (OB_FAIL(client.init(ssl_config.ptr(), ssl_config.length()))) {
             OB_LOG(WARN, "kms client init", K(ret), K(ssl_config));
           } else if (OB_FAIL(client.check_param_valid())) {
