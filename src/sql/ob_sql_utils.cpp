@@ -862,10 +862,10 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
             }
           }
         }
-      }
-      if (NULL != out_ctx &&  NULL != out_ctx->get_original_package_guard()) {
-        // avoid out_ctx.package_guard_ be freed
-        exec_ctx.set_package_guard(NULL);
+        if (NULL != out_ctx &&  NULL != out_ctx->get_original_package_guard()) {
+          // avoid out_ctx.package_guard_ be freed
+          exec_ctx.set_package_guard(NULL);
+        }
       }
     }
   }
