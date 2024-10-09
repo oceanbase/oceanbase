@@ -73,6 +73,7 @@ int ObMediumCompactionScheduleFunc::choose_medium_snapshot(
   int ret = OB_SUCCESS;
   ObGetMergeTablesParam param;
   param.merge_type_ = MEDIUM_MERGE;
+
   if (OB_FAIL(ObAdaptiveMergePolicy::get_meta_merge_tables(
           param,
           ls,
@@ -494,6 +495,7 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(
     const ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
     int64_t max_sync_medium_scn = 0;
     ObMediumCompactionInfo medium_info;
+    const int64_t transfer_start_snapshot = tablet->get_tablet_meta().transfer_info_.transfer_start_scn_.get_val_for_tx();
     LOG_TRACE("decide_medium_snapshot", K(ret), KPC(this), K(tablet_id), K(merge_reason));
     if (OB_FAIL(ObMediumCompactionScheduleFunc::get_max_sync_medium_scn(
       *tablet, *medium_info_list_, max_sync_medium_scn))) {
@@ -523,6 +525,10 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(
         LOG_WARN("failed to choose new medium snapshot", KR(ret), K(max_reserved_snapshot), K(medium_info));
       } else if (OB_FAIL(choose_medium_schema_version(allocator_, medium_info.medium_snapshot_, *tablet, schema_version))) {
         LOG_WARN("failed to choose medium schema version", K(ret), K(tablet));
+      } else if (medium_info.medium_snapshot_ < transfer_start_snapshot) {
+        ret = OB_NO_NEED_MERGE;
+        LOG_INFO("medium snapshot is smaller than transfer start snapshot, no need merge", K(ret),
+           K(medium_info), K(transfer_start_snapshot), K(tablet));
       }
 
       if (OB_SUCC(ret) && !is_major) {
