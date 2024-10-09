@@ -1252,7 +1252,7 @@ int ObBackupPathUtil::get_cluster_parameters_info_path(const share::ObBackupDest
   } else if (OB_FAIL(share::backup_time_to_strftime(timestamp_sec, time_buff, sizeof(time_buff), time_pos, 'T'/* concat */))) {
     LOG_WARN("failed to format time tag", K(ret), K(timestamp_sec));
   } else if (OB_FAIL(databuff_printf(str_path, sizeof(str_path), str_pos,
-      "/%.*s.%.*s", static_cast<int>(strlen(OB_STR_CLUSTER_PARAMETER_INFO)), OB_STR_CLUSTER_PARAMETER_INFO,
+      "%.*s.%.*s", static_cast<int>(strlen(OB_STR_CLUSTER_PARAMETER_INFO)), OB_STR_CLUSTER_PARAMETER_INFO,
       static_cast<int>(time_pos), time_buff))) {
     LOG_WARN("failed to print str path", K(ret), K(time_buff));
   } else if (OB_FAIL(backup_path.join(str_path, ObBackupFileSuffix::BACKUP))) {
