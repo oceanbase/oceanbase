@@ -461,7 +461,7 @@ int ObTabletLobSplitDag::fill_info_param(compaction::ObIBasicInfoParam *&out_par
     ret = OB_NOT_INIT;
     LOG_WARN("ObTabletLobSplitDag has not been initialized", K(ret));
   } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
-      static_cast<int64_t>(param_.ori_lob_meta_tablet_id_.id()), param_.parallelism_))) {
+      static_cast<int64_t>(param_.ls_id_.id()), static_cast<int64_t>(param_.ori_lob_meta_tablet_id_.id())))) {
     LOG_WARN("failed to fill info param", K(ret));
   }
   return ret;

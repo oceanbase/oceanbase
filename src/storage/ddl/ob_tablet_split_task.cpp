@@ -502,7 +502,7 @@ int ObTabletSplitDag::fill_info_param(compaction::ObIBasicInfoParam *&out_param,
     ret = OB_NOT_INIT;
     LOG_WARN("ObComplementDataDag has not been initialized", K(ret));
   } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
-      static_cast<int64_t>(param_.source_tablet_id_.id()), param_.user_parallelism_))) {
+      static_cast<int64_t>(param_.ls_id_.id()), static_cast<int64_t>(param_.source_tablet_id_.id())))) {
     LOG_WARN("failed to fill info param", K(ret));
   }
   return ret;
@@ -2327,6 +2327,12 @@ int ObTabletSplitUtil::check_satisfy_split_condition(
     ret = OB_NEED_RETRY;
     if (REACH_COUNT_INTERVAL(1000L)) {
       LOG_INFO("should wait memtable dump", K(ret), "tablet_id", tablet->get_tablet_meta().tablet_id_, K(memtable_handles));
+    }
+  } else if (!source_tablet_handle.get_obj()->get_tablet_meta().ha_status_.check_allow_read()) {
+    ret = OB_NEED_RETRY;
+    if (REACH_COUNT_INTERVAL(1000L)) {
+      LOG_INFO("should wait data complete", K(ret), "tablet_id", tablet->get_tablet_meta().tablet_id_,
+          "tablet_meta", source_tablet_handle.get_obj()->get_tablet_meta());
     }
   } else if (MTL_TENANT_ROLE_CACHE_IS_RESTORE()) {
     LOG_INFO("dont check compaction in restore progress", K(ret), "tablet_id", tablet->get_tablet_meta().tablet_id_);
