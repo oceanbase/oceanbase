@@ -3422,7 +3422,8 @@ int ObSql::generate_plan(ParseResult &parse_result,
         time_t seed = OB_ERROR == tmp_ret ? time(NULL) : std::abs(tmp_ret);
         stmt->get_query_ctx()->set_injected_random_status(true);
         stmt->get_query_ctx()->set_random_plan_seed(seed);
-        LOG_TRACE("The random seed for plan gen is ", K(seed));
+        LOG_INFO("The random seed for plan gen is ", K(seed));
+        OPT_TRACE("The random seed for plan gen is ", seed);
       }
     }
 
