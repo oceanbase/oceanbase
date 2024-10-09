@@ -427,7 +427,7 @@ int ObDRTaskKey::init(
   return ret;
 }
 
-int ObDRTaskKey::init(
+int ObDRTaskKey::assign(
     const ObDRTaskKey &that)
 {
   int ret = OB_SUCCESS;
@@ -526,7 +526,7 @@ int ObDRTask::set_task_key(
     const ObDRTaskKey &task_key)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(task_key_.init(task_key))) {
+  if (OB_FAIL(task_key_.assign(task_key))) {
     LOG_WARN("fail to init task", KR(ret), K(task_key));
   }
   return ret;
@@ -540,7 +540,6 @@ void ObDRTask::set_schedule()
 int ObDRTask::deep_copy(const ObDRTask &that)
 {
   int ret = OB_SUCCESS;
-  task_key_ = that.task_key_;
   tenant_id_ = that.tenant_id_;
   ls_id_ = that.ls_id_;
   cluster_id_ = that.cluster_id_;
@@ -555,6 +554,8 @@ int ObDRTask::deep_copy(const ObDRTask &that)
   task_id_ = that.task_id_;
   if (OB_FAIL(set_comment(that.comment_.string()))) {
     LOG_WARN("fail to assign comment", KR(ret), K_(comment), K(that));
+  } else if (OB_FAIL(task_key_.assign(that.task_key_))) {
+    LOG_WARN("fail to set task_key", KR(ret), K_(task_key), K(that));
   }
   return ret;
 }

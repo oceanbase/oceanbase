@@ -208,7 +208,8 @@ public:
            const share::ObLSID &ls_id,
            const common::ObZone &task_execute_zone,
            const ObDRTaskType &task_type);
-  int init(const ObDRTaskKey &that);
+  int assign(const ObDRTaskKey &that);
+  ObDRTaskKey& operator=(const ObDRTaskKey&) = delete;
   TO_STRING_KV(K_(tenant_id),
                K_(ls_id),
                K_(task_execute_zone),
