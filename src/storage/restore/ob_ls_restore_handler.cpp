@@ -2786,8 +2786,12 @@ int ObLSRestoreFinishState::restore_finish_()
 
 //================================ObLSRestoreWaitState=======================================
 
-ObLSRestoreWaitState::ObLSRestoreWaitState(const share::ObLSRestoreStatus::Status &status)
-  : ObILSRestoreState(status), has_confirmed_(false)
+ObLSRestoreWaitState::ObLSRestoreWaitState(
+    const share::ObLSRestoreStatus::Status &status,
+    const bool require_multi_replica_sync)
+  : ObILSRestoreState(status),
+    has_confirmed_(false),
+    require_multi_replica_sync_(require_multi_replica_sync)
 {
 }
 
@@ -2884,9 +2888,9 @@ int ObLSRestoreWaitState::leader_wait_follower_()
     next_status = ObLSRestoreStatus::Status::RESTORE_NONE;
   }
   LOG_INFO("leader is wait follower", "leader current status", ls_restore_status_, "next status", next_status, KPC(ls_));
-  if (OB_FAIL(check_all_follower_restore_finish_(all_finish))) {
+  if (OB_FAIL(require_multi_replica_sync_ && check_all_follower_restore_finish_(all_finish))) {
     LOG_WARN("fail to request follower restore meta result", K(ret), KPC(ls_));
-  } else if (!all_finish) {
+  } else if (require_multi_replica_sync_ && !all_finish) {
   } else if (OB_FAIL(check_can_advance_status_(can_advance))) {
     LOG_WARN("fail to check can advance status", K(ret), KPC(ls_));
   } else if (!can_advance) {
@@ -2917,9 +2921,9 @@ int ObLSRestoreWaitState::follower_wait_leader_()
 
   LOG_INFO("follower is wait leader", "follower current status", ls_restore_status_, "next status", next_status, KPC(ls_));
   ObLSRestoreStatus leader_restore_status(ObLSRestoreStatus::Status::LS_RESTORE_STATUS_MAX);
-  if (OB_FAIL(request_leader_status_(leader_restore_status))) {
+  if (require_multi_replica_sync_ && OB_FAIL(request_leader_status_(leader_restore_status))) {
     LOG_WARN("fail to request leader tablets and status", K(ret), KPC(ls_));
-  } else if (check_leader_restore_finish_(leader_restore_status, ls_restore_status_)) {
+  } else if (!require_multi_replica_sync_ || check_leader_restore_finish_(leader_restore_status, ls_restore_status_)) {
     bool can_advance = false;
     if (OB_FAIL(check_can_advance_status_(can_advance))) {
       LOG_WARN("fail to check can advance status", K(ret), KPC(ls_));

@@ -430,7 +430,7 @@ class ObLSRestoreFinishState final : public ObILSRestoreState
 class ObLSRestoreWaitState : public ObILSRestoreState
 {
 public:
-  ObLSRestoreWaitState(const share::ObLSRestoreStatus::Status &status);
+  ObLSRestoreWaitState(const share::ObLSRestoreStatus::Status &status, const bool require_multi_replica_sync);
   virtual ~ObLSRestoreWaitState();
   virtual int do_restore() override;
 
@@ -446,6 +446,15 @@ private:
 private:
   // Indicate whether has checked all tablets has been restored.
   bool has_confirmed_;
+  /*
+    require_multi_replica_sync_ control the condition if can goto next step in WAIT status. If true, leader
+    can switch to next status only when all followers are in WAIT status, and follower can switch to next
+    status only if leader is in WAIT status.
+    As replicas, no matter leader or follower, all restore data from backup. Almost, require_multi_replica_sync_
+    is unnecessary, except for ObLSRestoreWaitCreateUserTabletState, which we should make sure all replicas are
+    online before leader sync log.
+  */
+  bool require_multi_replica_sync_;
   DISALLOW_COPY_AND_ASSIGN(ObLSRestoreWaitState);
 };
 
@@ -453,7 +462,7 @@ class ObLSRestoreWaitRestoreSysTabletState final : public ObLSRestoreWaitState
 {
 public:
   ObLSRestoreWaitRestoreSysTabletState()
-    : ObLSRestoreWaitState(share::ObLSRestoreStatus::Status::WAIT_RESTORE_SYS_TABLETS) {}
+    : ObLSRestoreWaitState(share::ObLSRestoreStatus::Status::WAIT_RESTORE_SYS_TABLETS, false /* require multi replica sync */) {}
   virtual ~ObLSRestoreWaitRestoreSysTabletState() {}
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLSRestoreWaitRestoreSysTabletState);
@@ -463,7 +472,7 @@ class ObLSRestoreWaitCreateUserTabletState final : public ObLSRestoreWaitState
 {
 public:
   ObLSRestoreWaitCreateUserTabletState()
-    : ObLSRestoreWaitState(share::ObLSRestoreStatus::Status::WAIT_RESTORE_TABLETS_META) {}
+    : ObLSRestoreWaitState(share::ObLSRestoreStatus::Status::WAIT_RESTORE_TABLETS_META, true /* require multi replica sync */) {}
   virtual ~ObLSRestoreWaitCreateUserTabletState() {}
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLSRestoreWaitCreateUserTabletState);
@@ -474,7 +483,7 @@ class ObLSWaitRestoreConsistentScnState final : public ObLSRestoreWaitState
 {
 public:
   ObLSWaitRestoreConsistentScnState()
-    : ObLSRestoreWaitState(ObLSRestoreStatus::Status::WAIT_RESTORE_TO_CONSISTENT_SCN) {}
+    : ObLSRestoreWaitState(ObLSRestoreStatus::Status::WAIT_RESTORE_TO_CONSISTENT_SCN, false /* require multi replica sync */) {}
   virtual ~ObLSWaitRestoreConsistentScnState() {}
 
   // Check if log has been recovered to restore_scn.
@@ -496,7 +505,7 @@ class ObLSRestoreWaitQuickRestoreState final : public ObLSRestoreWaitState
 {
 public:
   ObLSRestoreWaitQuickRestoreState()
-    : ObLSRestoreWaitState(share::ObLSRestoreStatus::Status::WAIT_QUICK_RESTORE) {}
+    : ObLSRestoreWaitState(share::ObLSRestoreStatus::Status::WAIT_QUICK_RESTORE, false /* require multi replica sync */) {}
   virtual ~ObLSRestoreWaitQuickRestoreState() {}
 
   // Check if log has been recovered to restore_scn.
@@ -513,7 +522,8 @@ class ObLSRestoreWaitRestoreMajorDataState final : public ObLSRestoreWaitState
 {
 public:
   ObLSRestoreWaitRestoreMajorDataState()
-    : ObLSRestoreWaitState(share::ObLSRestoreStatus::Status::WAIT_RESTORE_MAJOR_DATA), has_reported_(false) {}
+    : ObLSRestoreWaitState(share::ObLSRestoreStatus::Status::WAIT_RESTORE_MAJOR_DATA, false /* require multi replica sync */),
+      has_reported_(false) {}
   virtual ~ObLSRestoreWaitRestoreMajorDataState() {}
 
   // Check if log has been recovered to restore_scn.

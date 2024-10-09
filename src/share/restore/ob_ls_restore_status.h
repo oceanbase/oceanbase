@@ -32,27 +32,28 @@ public:
     RESTORE_NONE = 0,
     // log stream restore initial state
     RESTORE_START = 1,
-    // restore sys tablets and create user tables
+    // restore sys tablets and create user tablets
     RESTORE_SYS_TABLETS = 2,
-    // wait followers to restore sys tablets
+    // sys tablets have been restored, and user tablets have been created.
     WAIT_RESTORE_SYS_TABLETS = 3,
     // restore tablets meta
     RESTORE_TABLETS_META = 4,
-    // wait restore tablets meta
+    // user tablets' meta have been restored.
     WAIT_RESTORE_TABLETS_META = 5,
-    // replay log to consistent_scn
+    // recover log to consistent_scn
     RESTORE_TO_CONSISTENT_SCN = 6,
-    // wait followers to replay log to consistent_scn
+    // clog has been recovered to consistent_scn, be enable to go to next state only if
+    // the tenant restore status has exceeded PHYSICAL_RESTORE_WAIT_CONSISTENT_SCN.
     WAIT_RESTORE_TO_CONSISTENT_SCN = 7,
-    // restore major sst meta, minor sst and clog
+    // restore only minor sstables and recover clog to user-specific scn.
     QUICK_RESTORE = 8,
-    // wait followers to do quick restore
+    // minor sstables have been restored and clog has been recovered to user-specific scn.
     WAIT_QUICK_RESTORE = 9,
-    // finish quick restore, major macro blocks are in remote reference state
+    // finish quick restore, only a transitional state, nothing special.
     QUICK_RESTORE_FINISH = 10,
-    // restore major macro blocks
+    // restore major sstables
     RESTORE_MAJOR_DATA = 11,
-    // wait followers to restore major macro blocks
+    // major sstables have been restored.
     WAIT_RESTORE_MAJOR_DATA = 12,
     // restore failed
     RESTORE_FAILED = 13,

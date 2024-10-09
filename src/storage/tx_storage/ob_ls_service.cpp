@@ -589,6 +589,7 @@ int ObLSService::write_remove_ls_slog_(const share::ObLSID &ls_id) const
   return ret;
 }
 
+ERRSIM_POINT_DEF(CREATE_LS_REPLICA_FAIL)
 int ObLSService::create_ls(const obrpc::ObCreateLSArg &arg)
 {
   int ret = OB_SUCCESS;
@@ -610,6 +611,10 @@ int ObLSService::create_ls(const obrpc::ObCreateLSArg &arg)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("the ls service has not been inited", K(ret));
+#ifdef ERRSIM
+  } else if (OB_FAIL(CREATE_LS_REPLICA_FAIL)) {
+    LOG_WARN("CREATE_LS_REPLICA_FAIL");
+#endif
   } else if (OB_UNLIKELY(!ObServerCheckpointSlogHandler::get_instance().is_started())) {
     ret = OB_NOT_RUNNING;
     LOG_WARN("ls service does not service before slog replay finished", K(ret));
