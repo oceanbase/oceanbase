@@ -474,14 +474,16 @@ int ObDASDomainUtils::generate_multivalue_index_rows(ObIAllocator &allocator,
               } else {
                 is_none_unique_done = true;
               }
-            } else if (!is_save_rowkey && (rowkey_column_start >= j && j < rowkey_column_end)) {
+            } else if (!is_save_rowkey && (j >= rowkey_column_start && j < rowkey_column_end)) {
               rows[i].storage_datums_[j].set_null();
             } else if (multivalue_arr_idx == projector_idx) {
               rows[i].storage_datums_[j].set_null();
             } else {
               rows[i].storage_datums_[j].shallow_copy_from_datum(dml_row.cells()[projector_idx]);
             }
-            if (OB_SUCC(ret) && OB_FAIL(ObDASUtils::reshape_datum_value(col_type, col_accuracy, true, allocator, rows[i].storage_datums_[j]))) {
+
+            if (rows[i].storage_datums_[j].is_null()) {  // do nothing
+            } else if (OB_SUCC(ret) && OB_FAIL(ObDASUtils::reshape_datum_value(col_type, col_accuracy, true, allocator, rows[i].storage_datums_[j]))) {
               LOG_WARN("reshape storage value failed", K(ret), K(col_type), K(projector_idx), K(j));
             }
           }
