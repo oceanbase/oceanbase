@@ -11766,13 +11766,15 @@ int ObLogPlan::adjust_final_plan_info(ObLogicalOperator *&op)
         LOG_WARN("failed to allocate subquery id", K(ret));
       } else if (!subplan_filter->is_update_set()) {
         // do nothing
-      } else if (OB_UNLIKELY(!subplan_filter->get_stmt()->is_update_stmt())) {
+      } else if (OB_UNLIKELY(!subplan_filter->get_stmt()->is_insert_stmt() &&
+                              !subplan_filter->get_stmt()->is_merge_stmt() &&
+                              !subplan_filter->get_stmt()->is_update_stmt())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("update stmt is expected", K(ret));
       } else {
-        ObUpdateLogPlan *plan = static_cast<ObUpdateLogPlan *>(op->get_plan());
+        ObDelUpdLogPlan *plan = static_cast<ObDelUpdLogPlan *>(op->get_plan());
         // stmt is only allowed to be modified in the function;
-        ObUpdateStmt *stmt = const_cast<ObUpdateStmt* >(plan->get_stmt());
+        ObDelUpdStmt *stmt = const_cast<ObDelUpdStmt* >(plan->get_stmt());
         if (OB_FAIL(plan->perform_vector_assign_expr_replacement(stmt))) {
           LOG_WARN("failed to perform vector assgin expr replace", K(ret));
         }
