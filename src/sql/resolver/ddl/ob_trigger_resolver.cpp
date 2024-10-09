@@ -564,10 +564,11 @@ int ObTriggerResolver::resolve_timing_point(int16_t before_or_after, int16_t stm
   ParseResult parse_result;
   const ObStmtNodeTree *parse_tree = NULL;
   bool is_include_old_new_in_trigger = false;
-  const ObString &trigger_body = trigger_arg.trigger_info_.get_trigger_body();
+  ObString trigger_body = trigger_arg.trigger_info_.get_trigger_body();
   parse_result.is_for_trigger_ = 1;
   parse_result.mysql_compatible_comment_ = 0;
   parse_result.is_dynamic_sql_ = 0;
+  OZ (ObSQLUtils::convert_sql_text_from_schema_for_resolve(*allocator_, session_info_->get_dtc_params(), trigger_body));
   OZ (pl_parser.parse(trigger_body, trigger_body, parse_result, true));
   CK (OB_NOT_NULL(parse_tree = parse_result.result_tree_));
   CK (T_STMT_LIST == parse_tree->type_);
@@ -1193,7 +1194,10 @@ int ObTriggerResolver::analyze_trigger(ObSchemaGetterGuard &schema_guard,
         ObPLParser parser(allocator, session_info->get_charsets4parser(), session_info->get_sql_mode());
         ObStmtNodeTree *column_list = NULL;
         ParseResult parse_result;
-        OZ (parser.parse(trigger_info.get_update_columns(), trigger_info.get_update_columns(), parse_result, true));
+        ObString update_columns = trigger_info.get_update_columns();
+        OZ (ObSQLUtils::convert_sql_text_from_schema_for_resolve(
+                  allocator, session_info->get_dtc_params(), update_columns));
+        OZ (parser.parse(update_columns, update_columns, parse_result, true));
         CK (OB_NOT_NULL(parse_result.result_tree_) && 1 == parse_result.result_tree_->num_child_);
         CK (OB_NOT_NULL(column_list = parse_result.result_tree_->children_[0]));
         CK (column_list->type_ == T_TG_COLUMN_LIST);
@@ -1212,7 +1216,7 @@ int ObTriggerResolver::analyze_trigger(ObSchemaGetterGuard &schema_guard,
             OX (column_schema = table_schema->get_column_schema(column_node->str_value_));
             if (OB_SUCC(ret) && OB_ISNULL(column_schema)) {
               ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
-              LOG_WARN("column not exist", K(ret), K(trigger_info.get_update_columns()), K(i));
+              LOG_WARN("column not exist", K(ret), K(update_columns), K(i));
               LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, (int32_t)column_node->str_len_, column_node->str_value_);
             }
           }
