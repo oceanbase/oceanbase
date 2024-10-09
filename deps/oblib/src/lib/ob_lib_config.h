@@ -72,7 +72,13 @@ inline void reload_diagnose_info_config(const bool enable_diagnose_info)
 
 inline bool is_trace_log_enabled()
 {
-  return ObLibConfig::enable_trace_log_ && !ObPerfModeGuard::get_tl_instance();
+  bool bool_ret = ObLibConfig::enable_trace_log_;
+#ifdef ENABLE_DEBUG_LOG
+  if (!bool_ret) {
+    bool_ret = true;
+  }
+#endif
+  return bool_ret && !ObPerfModeGuard::get_tl_instance();
 }
 
 inline void reload_trace_log_config(const bool enable_trace_log)

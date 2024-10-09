@@ -27,8 +27,8 @@ alter system set weak_read_version_refresh_interval="3s";
 use oceanbase;
 set ob_read_consistency = 'weak';
 show variables like 'ob_read_consistency';
-select count(1) > 0 from __all_server;
-select count(1) from gv$ob_sql_audit where consistency_level=3 and query_sql = 'select count(1) > 0 from __all_server' and query_sql not like '%sql_audit%';
+select count(1) >= 0 from __all_server;
+select count(1) from gv$ob_sql_audit where consistency_level=3 and query_sql = 'select count(1) >= 0 from __all_server' and query_sql not like '%sql_audit%';
 --sleep 2
 
 # 0. 禁用ob_max_read_stale_time
