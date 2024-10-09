@@ -55,7 +55,8 @@ OB_SERIALIZE_MEMBER(ObJoinFilterRuntimeConfig,
     runtime_filter_wait_time_ms_,
     runtime_filter_max_in_num_,
     runtime_bloom_filter_max_size_,
-    px_message_compression_);
+    px_message_compression_,
+    build_send_opt_);
 
 OB_SERIALIZE_MEMBER(ObRuntimeFilterInfo,
                     filter_expr_id_,

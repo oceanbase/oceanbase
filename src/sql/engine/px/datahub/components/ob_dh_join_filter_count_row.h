@@ -29,6 +29,26 @@ class ObJoinFilterCountRowPieceMsgListener;
 class ObJoinFilterCountRowPieceMsgCtx;
 class ObPxCoordInfo;
 
+class ObJoinFilterNdv final
+{
+  OB_UNIS_VERSION(1);
+public:
+  static void gather_piece_ndv(const ObJoinFilterNdv &piece_ndv, ObJoinFilterNdv &total_ndv);
+public:
+  ~ObJoinFilterNdv() = default;
+  ObJoinFilterNdv &operator=(const ObJoinFilterNdv &r) = default;
+  inline void reset() {
+    valid_ = true;
+    count_ = 0;
+  }
+
+  TO_STRING_KV(K(valid_), K(count_));
+  bool valid_{true};
+  uint64_t count_{0};
+};
+
+typedef ObSEArray<ObJoinFilterNdv, 4> ObJoinFilterNdvInfo;
+
 class ObJoinFilterCountRowPieceMsg
   : public ObDatahubPieceMsg<dtl::ObDtlMsgType::DH_JOIN_FILTER_COUNT_ROW_PIECE_MSG>
 {
@@ -56,7 +76,7 @@ public:
   bool each_sqc_has_full_data_{false}; // True iff in shared hash join
   int64_t sqc_id_{OB_INVALID}; // From which sqc
   int64_t total_rows_{0}; // row count of one thread
-
+  ObJoinFilterNdvInfo ndv_info_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObJoinFilterCountRowPieceMsg);
 };
@@ -84,6 +104,7 @@ public:
   }
   VIRTUAL_TO_STRING_KV(K_(total_rows));
   int64_t total_rows_{0};
+  ObJoinFilterNdvInfo ndv_info_;
 };
 
 struct JoinFilterSqcRowInfo
