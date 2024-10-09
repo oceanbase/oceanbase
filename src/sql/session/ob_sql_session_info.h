@@ -784,11 +784,9 @@ public:
   {
   public:
     ObCachedTenantConfigInfo(ObSQLSessionInfo *session) :
-                                 is_external_consistent_(false),
                                  enable_batched_multi_statement_(false),
                                  enable_sql_extension_(false),
                                  saved_tenant_info_(0),
-                                 enable_bloom_filter_(true),
                                  px_join_skew_handling_(true),
                                  px_join_skew_minfreq_(30),
                                  at_type_(ObAuditTrailType::NONE),
@@ -813,9 +811,7 @@ public:
     }
     ~ObCachedTenantConfigInfo() {}
     void refresh();
-    bool get_is_external_consistent() const { return is_external_consistent_; }
     bool get_enable_batched_multi_statement() const { return enable_batched_multi_statement_; }
-    bool get_enable_bloom_filter() const { return enable_bloom_filter_; }
     bool get_enable_sql_extension() const { return enable_sql_extension_; }
     ObAuditTrailType get_at_type() const { return at_type_; }
     bool enable_audit_log() const { return audit_log_enable_; }
@@ -837,11 +833,9 @@ public:
     bool enable_enum_set_subschema() const { return enable_enum_set_subschema_; }
   private:
     //租户级别配置项缓存session 上，避免每次获取都需要刷新
-    bool is_external_consistent_;
     bool enable_batched_multi_statement_;
     bool enable_sql_extension_;
     uint64_t saved_tenant_info_;
-    bool enable_bloom_filter_;
     bool px_join_skew_handling_;
     int64_t px_join_skew_minfreq_;
     ObAuditTrailType at_type_;
@@ -1422,20 +1416,10 @@ public:
   void set_xa_last_result(const int result) { xa_last_result_ = result; }
   // 为了性能优化考虑，租户级别配置项不需要实时获取，缓存在session上，每隔5s触发一次刷新
   void refresh_tenant_config() { cached_tenant_config_info_.refresh(); }
-  bool is_support_external_consistent()
-  {
-    cached_tenant_config_info_.refresh();
-    return cached_tenant_config_info_.get_is_external_consistent();
-  }
   bool is_enable_batched_multi_statement()
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.get_enable_batched_multi_statement();
-  }
-  bool is_enable_bloom_filter()
-  {
-    cached_tenant_config_info_.refresh();
-    return cached_tenant_config_info_.get_enable_bloom_filter();
   }
   int64_t get_px_join_skew_minfreq()
   {

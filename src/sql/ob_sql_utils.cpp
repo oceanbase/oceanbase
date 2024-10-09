@@ -1509,14 +1509,13 @@ int ObSQLUtils::check_enable_mysql_compatible_dates(const sql::ObSQLSessionInfo 
 {
   int ret = OB_SUCCESS;
   enabled = false;
-  uint64_t data_version = 0;
-  if (!lib::is_mysql_mode()) {
-    // only support mysql dates in mysql mode now.
-  } else if (OB_ISNULL(session)) {
+  if (OB_ISNULL(session)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("session is null", K(ret));
   } else if ((const_cast<sql::ObSQLSessionInfo *>(session))->is_enable_mysql_compatible_dates()) {
-    if (is_ddl_scenario) {
+    if (!lib::is_mysql_mode()) {
+      // only support mysql dates in mysql mode now.
+    } else if (is_ddl_scenario) {
       uint64_t data_version = 0;
       if (OB_FAIL(GET_MIN_DATA_VERSION(session->get_effective_tenant_id(), data_version))) {
         SQL_LOG(WARN, "fail to get data version", K(ret));

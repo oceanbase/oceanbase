@@ -3013,17 +3013,10 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       ATOMIC_STORE(&data_version_, data_version);
     }
       // 1.是否支持外部一致性
-    is_external_consistent_ = transaction::ObTsMgr::get_instance().is_external_consistent(effective_tenant_id);
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(effective_tenant_id));
     if (OB_LIKELY(tenant_config.is_valid())) {
       // 2.是否允许 batch_multi_statement
       enable_batched_multi_statement_ = tenant_config->ob_enable_batched_multi_statement;
-      // 3.是否允许bloom_filter
-      if (tenant_config->_bloom_filter_enabled) {
-        enable_bloom_filter_ = true;
-      } else {
-        enable_bloom_filter_ = false;
-      }
       // 4.sort area size
       ATOMIC_STORE(&sort_area_size_, tenant_config->_sort_area_size);
       ATOMIC_STORE(&hash_area_size_, tenant_config->_hash_area_size);
