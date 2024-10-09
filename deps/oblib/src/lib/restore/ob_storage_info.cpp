@@ -358,6 +358,8 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
         const char *checksum_type_str = token + strlen(CHECKSUM_TYPE);
         if (OB_FAIL(set_checksum_type_(checksum_type_str))) {
           OB_LOG(WARN, "fail to set checksum type", K(ret), K(checksum_type_str));
+        } else if (OB_FAIL(set_storage_info_field_(token, extension_, sizeof(extension_)))) {
+          LOG_WARN("fail to set checksum type into extension", K(ret), K(token));
         }
       } else if (0 == strncmp(ROLE_ARN, token, strlen(ROLE_ARN))) {
         if (ObStorageType::OB_STORAGE_FILE == device_type_) {
@@ -541,8 +543,7 @@ int ObObjectStorageInfo::get_info_str_(char *storage_info, const int64_t info_le
     // Access object storage by ak/sk
     if (OB_FAIL(get_access_key_(key, sizeof(key)))) {
       LOG_WARN("failed to get access key", K(ret));
-    } else if (OB_FAIL(databuff_printf(storage_info, info_len, "%s&%s&%s&%s%s", endpoint_,
-                   access_id_, key, CHECKSUM_TYPE, get_checksum_type_str()))) {
+    } else if (OB_FAIL(databuff_printf(storage_info, info_len, "%s&%s&%s", endpoint_, access_id_, key))) {
       LOG_WARN("failed to set storage info", K(ret), K(info_len));
     }
   }
@@ -584,8 +585,7 @@ int ObObjectStorageInfo::get_storage_info_str(char *storage_info, const int64_t 
   } else if (is_assume_role_mode_) {
     // Access object storage by assume_role
     int64_t pos = 0;
-    if (OB_FAIL(databuff_printf(storage_info, info_len, pos, "%s&%s&%s%s", endpoint_, role_arn_,
-            CHECKSUM_TYPE, get_checksum_type_str()))) {
+    if (OB_FAIL(databuff_printf(storage_info, info_len, pos, "%s&%s", endpoint_, role_arn_))) {
       LOG_WARN("failed to set storage info of other types", K(ret), K(info_len), KPC(this));
     }
     // `external_id` is optional
@@ -622,9 +622,8 @@ int ObObjectStorageInfo::get_authorization_str(
     ObObjectStorageCredential credential;
     if (OB_FAIL(ObDeviceCredentialMgr::get_instance().get_credential(*this, credential))) {
       OB_LOG(WARN, "failed to get credential", K(ret), KPC(this), K(credential));
-    } else if (OB_FAIL(databuff_printf(authorization_str, authorization_str_len,
-                   "%s&%s%s&%s%s&%s%s", endpoint_, ACCESS_ID, credential.access_id_, ACCESS_KEY,
-                   credential.access_key_, CHECKSUM_TYPE, get_checksum_type_str()))) {
+    } else if (OB_FAIL(databuff_printf(authorization_str, authorization_str_len, "%s&%s%s&%s%s",
+                      endpoint_, ACCESS_ID, credential.access_id_, ACCESS_KEY, credential.access_key_))) {
       OB_LOG(WARN, "failed to set storage info of other types", K(ret), KP(authorization_str),
           K(authorization_str_len), KPC(this));
     } else if (OB_FAIL(sts_token.assign(credential.sts_token_))) {
