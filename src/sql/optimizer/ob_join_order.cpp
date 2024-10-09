@@ -5449,16 +5449,19 @@ int AccessPath::check_and_prepare_estimate_parallel_params(const int64_t cur_min
     server_cnt = server_list.count();
     cur_parallel_degree_limit = opt_ctx->get_parallel_degree_limit(server_cnt);
     const int64_t row_parallel_limit = std::floor(phy_query_range_row_count_ / ROW_COUNT_THRESHOLD_PER_DOP);
-    const int64_t ss_scan_parallel_limit = std::floor(est_cost_info_.ss_prefix_ndv_);
-    if (cur_min_parallel_degree > ObGlobalHint::DEFAULT_PARALLEL && cur_min_parallel_degree < cur_parallel_degree_limit) {
+    if (cur_min_parallel_degree > ObGlobalHint::UNSET_PARALLEL && cur_min_parallel_degree < cur_parallel_degree_limit) {
       cur_parallel_degree_limit = cur_min_parallel_degree;
     }
-    if (row_parallel_limit > ObGlobalHint::DEFAULT_PARALLEL && row_parallel_limit < cur_parallel_degree_limit) {
+    if (row_parallel_limit < cur_parallel_degree_limit) {
       cur_parallel_degree_limit = row_parallel_limit;
     }
-    if (ss_scan_parallel_limit > ObGlobalHint::DEFAULT_PARALLEL && ss_scan_parallel_limit < cur_parallel_degree_limit) {
-      cur_parallel_degree_limit = ss_scan_parallel_limit;
+    if (OptSkipScanState::SS_DISABLE != use_skip_scan_) {
+      const int64_t ss_scan_parallel_limit = std::floor(est_cost_info_.ss_prefix_ndv_);
+      if (ss_scan_parallel_limit < cur_parallel_degree_limit) {
+        cur_parallel_degree_limit = ss_scan_parallel_limit;
+      }
     }
+    cur_parallel_degree_limit = std::max(1L, cur_parallel_degree_limit);
   }
   return ret;
 }
@@ -5481,6 +5484,8 @@ int AccessPath::prepare_estimate_parallel(const int64_t pre_parallel,
   const double part_cnt_double = static_cast<double>(part_cnt);
   #define IS_PART_GI(check_dop) (ObGranuleUtil::is_partition_granule(part_cnt, check_dop, 0, px_part_gi_min_part_per_dop, true))
   if (ObGlobalHint::DEFAULT_PARALLEL > pre_parallel) {
+    parallel = ObGlobalHint::DEFAULT_PARALLEL;
+  } else if (ObGlobalHint::DEFAULT_PARALLEL == pre_parallel && 1 < server_cnt) {
     parallel = std::min(parallel_degree_limit, server_cnt);
   } else if (OB_UNLIKELY(cost_threshold_us < 1000.0)) {
     ret = OB_ERR_UNEXPECTED;
