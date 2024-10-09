@@ -714,6 +714,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
     } else {
       session.set_current_execution_id(GCTX.sql_engine_->get_execution_id());
       session.reset_plsql_exec_time();
+      session.set_stmt_type(stmt::T_NONE);
       result.get_exec_context().set_need_disconnect(true);
       ctx_.schema_guard_ = schema_guard;
       retry_ctrl_.set_tenant_local_schema_version(tenant_version);
