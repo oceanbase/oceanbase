@@ -291,7 +291,8 @@ int ObBasicStatsEstimator::do_estimate_block_count(ObExecContext &ctx,
     if (OB_FAIL(THIS_WORKER.check_status())) {
       LOG_WARN("failed to check status", K(ret));
       retry_cnt = MAX_RETRY_CNT;
-    } else if (OB_FAIL(do_estimate_block_count_and_row_count(ctx, tenant_id, table_id, tablet_ids,
+    } else if (OB_FAIL(do_estimate_block_count_and_row_count(ctx, tenant_id, table_id,
+                                                             false, tablet_ids,
                                                              partition_ids, estimate_res))) {
       LOG_WARN("failed to do estimate block count and row count", K(ret));
       if (DAS_CTX(ctx).get_location_router().is_refresh_location_error(ret)) {
@@ -309,6 +310,7 @@ int ObBasicStatsEstimator::do_estimate_block_count(ObExecContext &ctx,
 int ObBasicStatsEstimator::do_estimate_block_count_and_row_count(ObExecContext &ctx,
                                                                  const uint64_t tenant_id,
                                                                  const uint64_t table_id,
+                                                                 bool force_leader,
                                                                  const ObIArray<ObTabletID> &tablet_ids,
                                                                  const ObIArray<ObObjectID> &partition_ids,
                                                                  ObIArray<EstimateBlockRes> &estimate_res)
@@ -328,12 +330,17 @@ int ObBasicStatsEstimator::do_estimate_block_count_and_row_count(ObExecContext &
     ObSEArray<ObAddr, 4> all_selected_addr;
     for (int64_t i = 0; OB_SUCC(ret) && i < candi_tablet_locs.count(); ++i) {
       ObAddr selected_addr;
-      if (OB_FAIL(ObSQLUtils::choose_best_partition_replica_addr(ctx.get_addr(),
+      if (!force_leader &&
+          OB_FAIL(ObSQLUtils::choose_best_partition_replica_addr(ctx.get_addr(),
                                                                  candi_tablet_locs.at(i),
                                                                  true,
                                                                  selected_addr))) {
         LOG_WARN("failed to get best partition replica addr", K(ret), K(candi_tablet_locs), K(i),
                                                               K(ctx.get_addr()));
+      } else if (force_leader &&
+                 OB_FAIL(ObSQLUtils::get_strong_partition_replica_addr(candi_tablet_locs.at(i),
+                                                                       selected_addr))) {
+
       } else if (OB_FAIL(all_selected_addr.push_back(selected_addr))) {
         LOG_WARN("failed to push back", K(ret));
       } else {/*do nothing*/}

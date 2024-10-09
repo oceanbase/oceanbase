@@ -727,6 +727,9 @@ public:
   static int check_enable_mysql_compatible_dates(const sql::ObSQLSessionInfo *session,
                                                  const bool is_ddl_scenario,
                                                  bool &enabled);
+
+   static int get_strong_partition_replica_addr(const ObCandiTabletLoc &phy_part_loc_info,
+                                                ObAddr &selected_addr);
 private:
   static bool check_mysql50_prefix(common::ObString &db_name);
   static bool part_expr_has_virtual_column(const ObExpr *part_expr);

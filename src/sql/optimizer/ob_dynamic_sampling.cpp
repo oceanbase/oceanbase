@@ -25,6 +25,7 @@
 #include "sql/optimizer/ob_optimizer_context.h"
 #include "sql/optimizer/ob_opt_selectivity.h"
 #include "sql/optimizer/ob_log_plan.h"
+#include "sql/optimizer/ob_access_path_estimation.h"
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 namespace oceanbase {
@@ -866,12 +867,27 @@ int ObDynamicSampling::estimate_table_block_count_and_row_count(const ObDSTableP
     LOG_WARN("failed to get all tablet id and object id", K(ret));
   } else if (OB_FAIL(ObBasicStatsEstimator::do_estimate_block_count_and_row_count(*ctx_->get_exec_ctx(),
                                                                                   ctx_->get_session_info()->get_effective_tenant_id(),
+                                                                                  false,
                                                                                   param.table_id_,
                                                                                   tablet_ids,
                                                                                   partition_ids,
                                                                                   estimate_result))) {
-    LOG_WARN("failed to do estimate block count and row count", K(ret));
-  } else {
+    LOG_WARN("failed to do estimate block count and row count use best replication", K(ret));
+    if (!ObAccessPathEstimation::is_retry_ret(ret)) {
+      // do nothing
+    } else if (OB_FALSE_IT(ret = OB_SUCCESS)) {
+    } else if (OB_FAIL(ObBasicStatsEstimator::do_estimate_block_count_and_row_count(*ctx_->get_exec_ctx(),
+                                                                                    ctx_->get_session_info()->get_effective_tenant_id(),
+                                                                                    true,
+                                                                                    param.table_id_,
+                                                                                    tablet_ids,
+                                                                                    partition_ids,
+                                                                                    estimate_result))) {
+      LOG_WARN("failed to do estimate block count and row count use leader replication", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
     for (int64_t i = 0; i < estimate_result.count(); ++i) {
       macro_block_num_ += estimate_result.at(i).macro_block_count_;
       micro_block_num_ += estimate_result.at(i).micro_block_count_;

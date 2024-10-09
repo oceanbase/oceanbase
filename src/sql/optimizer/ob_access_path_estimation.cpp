@@ -2103,7 +2103,7 @@ int ObAccessPathEstimation::process_dynamic_sampling_estimation(ObOptimizerConte
       int64_t start_time = ObTimeUtility::current_time();
       bool throw_ds_error = false;
       if (OB_FAIL(dynamic_sampling.estimate_table_rowcount(ds_table_param, ds_result_items, throw_ds_error))) {
-        if (!throw_ds_error && !is_retry_ret(ret)) {
+        if (!throw_ds_error) {
           LOG_WARN("failed to estimate table rowcount caused by some reason, please check!!!", K(ret),
                   K(start_time), K(ObTimeUtility::current_time() - start_time), K(ds_table_param),
                   K(ctx.get_session_info()->get_current_query_string()));
