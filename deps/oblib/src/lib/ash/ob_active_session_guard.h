@@ -214,6 +214,7 @@ public:
         retry_wait_event_p1_(0),
         retry_wait_event_p2_(0),
         retry_wait_event_p3_(0),
+        retry_plan_line_id_(-1),
         need_calc_wait_event_end_(false),
         last_query_exec_use_time_us_(0),
         curr_query_start_time_(0),
@@ -337,6 +338,7 @@ public:
   int64_t retry_wait_event_p1_;
   int64_t retry_wait_event_p2_;
   int64_t retry_wait_event_p3_;
+  int64_t retry_plan_line_id_;
   bool need_calc_wait_event_end_;
   int64_t last_query_exec_use_time_us_;
   int64_t curr_query_start_time_;
@@ -347,7 +349,7 @@ public:
       K_(wait_event_begin_ts), K_(total_idle_wait_time), K_(total_non_idle_wait_time),
       K_(prev_idle_wait_time), K_(prev_non_idle_wait_time), K_(total_cpu_time),
       K_(is_active_session), K_(inner_sql_wait_type_id), K_(pcode),
-      K_(extra_elapse_time), K_(prev_inner_sql_wait_type_id), K_(fixup_index), K_(fixup_ash_buffer), K_(retry_wait_event_no));
+      K_(extra_elapse_time), K_(prev_inner_sql_wait_type_id), K_(fixup_index), K_(fixup_ash_buffer), K_(retry_wait_event_no), K_(retry_plan_line_id));
 
 private:
 

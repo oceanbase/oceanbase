@@ -2251,6 +2251,7 @@ int ObInnerSQLConnection::create_session_by_mgr()
       } else {
         OB_ASSERT(di != nullptr);
         inner_session_->set_ash_stat_value(di->get_ash_stat());
+        di->get_ash_stat().tenant_id_ = tenant_id;
         di->get_ash_stat().session_type_ = ObActiveSessionStatItem::SessionType::BACKGROUND;
         snprintf(di->get_ash_stat().module_, ASH_MODULE_STR_LEN, "LOCAL INNER SQL EXEC (%.*s)",
             ASH_MODULE_STR_LEN - 18 /*INNER SQL EXEC ()*/,

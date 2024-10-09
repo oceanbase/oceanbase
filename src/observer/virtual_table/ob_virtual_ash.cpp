@@ -333,7 +333,11 @@ int ObVirtualASH::convert_node_to_row(const ObActiveSessionStatItem &node, ObNew
       }
       case PLSQL_ENTRY_SUBPROGRAM_ID: {
         if (OB_INVALID_ID == node.plsql_entry_subprogram_id_) {
-          cells[cell_idx].set_null();
+          if (OB_INVALID_ID != node.plsql_entry_object_id_) {
+            cells[cell_idx].set_int(1);
+          } else {
+            cells[cell_idx].set_null();
+          }
         } else {
           cells[cell_idx].set_int(node.plsql_entry_subprogram_id_);
         }

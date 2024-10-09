@@ -635,7 +635,7 @@ protected:
     // begin with current operator
     GET_DIAGNOSTIC_INFO->get_ash_stat().plan_line_id_ = static_cast<int32_t>(spec_.id_);//TODO(xiaochu.yh): fix uint64 to int32
   }
-  inline void end_ash_line_id_reg()
+  inline void end_ash_line_id_reg(int ret)
   {
     // move back to parent operator
     // known issue: when switch from batch to row in same op,
@@ -644,6 +644,9 @@ protected:
       GET_DIAGNOSTIC_INFO->get_ash_stat().plan_line_id_ = static_cast<int32_t>(spec_.get_parent()->id_);//TODO(xiaochu.yh): fix uint64 to int32
     } else {
       GET_DIAGNOSTIC_INFO->get_ash_stat().plan_line_id_ = -1;
+    }
+    if (OB_FAIL(ret) && -1 == common::ObActiveSessionGuard::get_stat().retry_plan_line_id_) {
+      common::ObActiveSessionGuard::get_stat().retry_plan_line_id_ = static_cast<int32_t>(spec_.id_);
     }
   }
   #ifdef ENABLE_DEBUG_LOG

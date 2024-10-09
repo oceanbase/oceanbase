@@ -210,6 +210,7 @@ void ObActiveSessionStat::end_retry_wait_event()
   retry_wait_event_p1_ = 0;
   retry_wait_event_p2_ = 0;
   retry_wait_event_p3_ = 0;
+  retry_plan_line_id_  = -1;
   need_calc_wait_event_end_ = false;
 }
 
@@ -276,6 +277,7 @@ int64_t ObAshBuffer::append(const ObActiveSessionStat &stat)
     buffer_[idx].p1_ = stat.retry_wait_event_p1_;
     buffer_[idx].p2_ = stat.retry_wait_event_p2_;
     buffer_[idx].p3_ = stat.retry_wait_event_p3_;
+    buffer_[idx].plan_line_id_ = stat.retry_plan_line_id_;
   }
   return idx;
 }

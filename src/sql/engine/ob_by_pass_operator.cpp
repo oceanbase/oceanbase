@@ -44,7 +44,7 @@ int ObByPassOperator::get_next_row()
         op_monitor_info_.last_row_time_ = oceanbase::common::ObClockGenerator::getClock();
       }
     }
-    end_ash_line_id_reg();
+    end_ash_line_id_reg(ret);
     end_cpu_time_counting();
   } else {
     ret = ObOperator::get_next_row();
@@ -81,7 +81,7 @@ int ObByPassOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRow
         op_monitor_info_.last_row_time_ = ObClockGenerator::getClock();
       }
     }
-    end_ash_line_id_reg();
+    end_ash_line_id_reg(ret);
     end_cpu_time_counting();
   } else {
     ret = ObOperator::get_next_batch(max_row_cnt, batch_rows);
