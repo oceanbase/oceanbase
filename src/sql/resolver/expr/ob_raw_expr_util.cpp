@@ -8991,9 +8991,9 @@ int ObRawExprUtils::build_rowid_expr(const ObDMLStmt *dml_stmt,
     ObSysFunRawExpr *calc_urowid_expr = NULL;
     OZ(expr_factory.create_raw_expr(T_FUN_SYS_CALC_UROWID, calc_urowid_expr));
     CK(OB_NOT_NULL(calc_urowid_expr));
-    calc_urowid_expr->set_func_name(ObString::make_string(N_CALC_UROWID));
+    OX(calc_urowid_expr->set_func_name(ObString::make_string(N_CALC_UROWID)));
     OZ(calc_urowid_expr->add_param_expr(version_expr));
-    if (table_schema.is_external_table()) {
+    if (OB_SUCC(ret) && table_schema.is_external_table()) {
       OZ(add_calc_partition_id_on_calc_rowid_expr(dml_stmt, expr_factory, session_info,
                                                   table_schema, logical_table_id,
                                                   calc_urowid_expr));
@@ -9007,7 +9007,7 @@ int ObRawExprUtils::build_rowid_expr(const ObDMLStmt *dml_stmt,
                                                table_schema, logical_table_id, calc_urowid_expr));
     }
     OZ(calc_urowid_expr->formalize(&session_info));
-    rowid_expr = calc_urowid_expr;
+    OX(rowid_expr = calc_urowid_expr);
     LOG_TRACE("succeed to build rowid expr", KPC(rowid_expr));
   }
   return ret;
