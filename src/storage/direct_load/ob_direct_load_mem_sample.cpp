@@ -81,12 +81,13 @@ int ObDirectLoadMemSample::do_work()
   ObArray<RangeType> ranges;
   chunks.set_tenant_id(MTL_ID());
   ranges.set_tenant_id(MTL_ID());
-  auto context_ptr = ObTableLoadHandle<ObDirectLoadMemDump::Context>::make_handle();
-  context_ptr->sub_dump_count_ = range_count_;
+  ObTableLoadHandle<ObDirectLoadMemDump::Context> context_ptr;
 
   mem_ctx_->mem_chunk_queue_.pop_all(chunks);
-
-  if (OB_FAIL(context_ptr->init())) {
+  if (OB_FAIL(ObTableLoadHandle<ObDirectLoadMemDump::Context>::make_handle(context_ptr))) {
+    LOG_WARN("fail to make handle", KR(ret));
+  } else if (FALSE_IT(context_ptr->sub_dump_count_ = range_count_)) {
+  } else if (OB_FAIL(context_ptr->init())) {
     LOG_WARN("fail to init context", KR(ret));
   } else if (OB_FAIL(context_ptr->mem_chunk_array_.assign(chunks))) {
     LOG_WARN("fail to assgin chunks", KR(ret));

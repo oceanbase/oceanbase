@@ -41,13 +41,18 @@ public:
   }
 
   template<class... Args >
-  static ObTableLoadHandle make_handle(Args... args)
+  static int make_handle(ObTableLoadHandle &handle, Args... args)
   {
+    int ret = OB_SUCCESS;
     ObMemAttr attr(MTL_ID(), "TLD_Handle");
-    ObTableLoadHandle handle;
-    handle.ptr_ = OB_NEW(Object, attr, args...);
-    handle.ptr_->ref_count_ = 1;
-    return handle;
+    handle.reset();
+    if (OB_ISNULL(handle.ptr_ = OB_NEW(Object, attr, args...))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      OB_LOG(WARN, "fail to new object", KR(ret));
+    } else {
+      handle.ptr_->ref_count_ = 1;
+    }
+    return ret;
   }
 
   ObTableLoadHandle(const ObTableLoadHandle &other) : ptr_(nullptr) {
