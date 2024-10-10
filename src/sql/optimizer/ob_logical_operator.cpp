@@ -3461,6 +3461,11 @@ int ObLogicalOperator::project_pruning_pre()
     } else {
       do_project_pruning(temp_scan->get_access_exprs(), deps);
     }
+  } else if (LOG_JOIN == type_) {
+    ObLogJoin *join_op = static_cast<ObLogJoin*>(this);
+    if (OB_FAIL(join_op->check_and_remove_aj_dependance())) {
+      LOG_WARN("Fail to check and remove aj dependance", K(ret));
+    }
   }
   if (OB_SUCC(ret) && OB_FAIL(try_add_remove_const_exprs())) {
     LOG_WARN("failed to add remove const exprs", K(ret));
@@ -3487,6 +3492,34 @@ void ObLogicalOperator::do_project_pruning(ObIArray<ObRawExpr *> &exprs, PPDeps 
     exprs.pop_back();
     i--;
   }
+}
+
+int ObLogicalOperator::do_project_pruning(ObIArray<ObRawExpr *> &exprs, PPDeps &deps,
+                                          ObIArray<ObRawExpr *> &pruned_exprs)
+{
+  int ret = OB_SUCCESS;
+  int64_t i = 0;
+  int64_t j = 0;
+  LOG_TRACE("start to do project pruning", K(type_), K(exprs), K(deps));
+  for (i = 0, j = 0; OB_SUCC(ret) && i < exprs.count(); i++) {
+    if (deps.has_member(static_cast<int32_t>(i))
+        || T_ORA_ROWSCN == exprs.at(i)->get_expr_type()) {
+      exprs.at(j++) = exprs.at(i);
+    } else {
+      LOG_TRACE("project pruning remove expr", K(exprs.at(i)), K(*exprs.at(i)),
+          K(get_name()), K(lbt()));
+      if (OB_FAIL(pruned_exprs.push_back(exprs.at(i)))) {
+        LOG_WARN("Fail to push back", K(ret), K(i));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    while (i > j) {
+      exprs.pop_back();
+      i--;
+    }
+  }
+  return ret;
 }
 
 int ObLogicalOperator::try_add_remove_const_exprs()

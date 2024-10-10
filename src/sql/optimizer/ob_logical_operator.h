@@ -1712,6 +1712,8 @@ protected:
   virtual int check_output_dependance(common::ObIArray<ObRawExpr *> &child_output, PPDeps &deps);
   void do_project_pruning(common::ObIArray<ObRawExpr *> &exprs,
                           PPDeps &deps);
+  int do_project_pruning(common::ObIArray<ObRawExpr *> &exprs,
+                         PPDeps &deps, ObIArray<ObRawExpr *> &pruned_exprs);
   int try_add_remove_const_exprs();
   virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer);
   int replace_exprs_action(ObRawExprReplacer &replacer, common::ObIArray<ObRawExpr*> &dest_exprs);

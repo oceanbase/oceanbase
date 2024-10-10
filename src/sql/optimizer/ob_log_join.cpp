@@ -78,6 +78,23 @@ int ObLogJoin::set_granule_repart_ref_table_id_recursively(ObLogicalOperator *op
   return ret;
 }
 
+int ObLogJoin::get_aj_hj_used_exprs(ObIArray<ObRawExpr*> &all_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(append(all_exprs, output_exprs_))) {
+    LOG_WARN("failed to append exprs", K(ret));
+  } else if (OB_FAIL(append_array_no_dup(all_exprs, join_conditions_))) {
+    LOG_WARN("failed to append exprs", K(ret));
+  } else if (OB_FAIL(append_array_no_dup(all_exprs, join_filters_))) {
+    LOG_WARN("failed to append exprs", K(ret));
+  } else if (OB_FAIL(append_array_no_dup(all_exprs, get_filter_exprs()))) {
+    LOG_WARN("failed to append exprs", K(ret));
+  } else if (OB_FAIL(append_array_no_dup(all_exprs, get_startup_exprs()))) {
+    LOG_WARN("failed to append exprs", K(ret));
+  }
+  return ret;
+}
+
 int ObLogJoin::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
 {
   int ret = OB_SUCCESS;
@@ -1521,4 +1538,31 @@ bool ObLogJoin::is_shared_hash_join()
     b_ret = DIST_BC2HOST_NONE == join_dist_algo_;
   }
   return b_ret;
+}
+
+ERRSIM_POINT_DEF(ERRSIM_REMOVE_AJ_DEPENDANCE);
+int ObLogJoin::check_and_remove_aj_dependance()
+{
+  int ret = OB_SUCCESS;
+  if (is_adaptive() && get_join_algo() == HASH_JOIN &&
+      ERRSIM_REMOVE_AJ_DEPENDANCE == OB_SUCCESS) {
+    ObLogicalOperator::PPDeps deps;
+    ObSEArray<ObRawExpr*, 8> col_exprs;
+    ObRawExprCheckDep dep_checker(get_adaptive_hj_scan_cols(), deps, false);
+    if (OB_FAIL(get_aj_hj_used_exprs(col_exprs))) {
+      LOG_WARN("failed to get aj hj op exprs", K(ret));
+    } else if (OB_FAIL(dep_checker.check(col_exprs))) {
+      LOG_WARN("failed to check exprs", K(ret));
+    } else {
+      ObSEArray<ObRawExpr*, 8> pruned_exprs;
+      if (OB_FAIL(do_project_pruning(get_adaptive_hj_scan_cols(), deps, pruned_exprs))) {
+        LOG_WARN("Fail to do aj project pruning", K(ret));
+      } else if (OB_FAIL(do_project_pruning(get_adaptive_nlj_scan_cols(), deps, pruned_exprs))) {
+        LOG_WARN("Fail to do aj project pruning", K(ret));
+      } else if (OB_FAIL(ObOptimizerUtil::remove_item(op_exprs_, pruned_exprs))) {
+        LOG_WARN("Fail to remove item", K(ret));
+      }
+    }
+  }
+  return ret;
 }
