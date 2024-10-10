@@ -142,7 +142,7 @@ static constexpr ObDiagnoseInfoStruct OB_DAG_WARNING_INFO_TYPES[] = {
   {3, true, "DAG_INITIAL_REBUILD_TABLET", {"tenant_id", "ls_id", "op_type"}},
   {3, true, "DAG_START_REBUILD_TABLET", {"tenant_id", "ls_id", "op_type"}},
   {3, true, "DAG_FINISH_REBUILD_TABLET", {"tenant_id", "ls_id", "op_type"}},
-  {3, true, "DAG_TABLET_REBUILD", {"tenant_id", "ls_id", "op_type"}},
+  {4, true, "DAG_TABLET_REBUILD", {"tenant_id", "ls_id", "op_type"}},
 
   {0, false, "", {}},
 };
