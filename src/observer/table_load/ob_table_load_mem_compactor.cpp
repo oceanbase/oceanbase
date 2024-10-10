@@ -685,6 +685,8 @@ int ObTableLoadMemCompactor::build_result()
         LOG_WARN("fail to copy sstable", KR(ret));
       } else if (OB_FAIL(result.add_table(copied_sstable))) {
         LOG_WARN("fail to add table", KR(ret));
+      } else {
+        LOG_INFO("finish compact", K(i), K(copied_sstable->get_tablet_id()), K(copied_sstable->get_row_count()));
       }
       if (OB_FAIL(ret)) {
         if (nullptr != copied_sstable) {

@@ -526,6 +526,8 @@ int ObTableLoadMultipleHeapTableCompactor::build_result_for_heap_table()
       LOG_WARN("fail to copy external table", KR(ret));
     } else if (OB_FAIL(result.add_table(copied_multi_heap_sstable))) {
       LOG_WARN("fail to add tablet sstable", KR(ret));
+    } else {
+      LOG_INFO("finish compact", K(i), K(copied_multi_heap_sstable->get_tablet_id()), K(copied_multi_heap_sstable->get_row_count()));
     }
     if (OB_FAIL(ret)) {
       if (nullptr != copied_multi_heap_sstable) {
