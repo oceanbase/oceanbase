@@ -39,7 +39,7 @@ struct ObICopyTabletCtx
 public:
   virtual int set_copy_tablet_status(const ObCopyTabletStatus::STATUS &status) = 0;
   virtual int get_copy_tablet_status(ObCopyTabletStatus::STATUS &status) const = 0;
-  virtual int get_copy_tablet_record_extra_info(const ObCopyTabletRecordExtraInfo *&extra_info) const = 0;
+  virtual int get_copy_tablet_record_extra_info(ObCopyTabletRecordExtraInfo *&extra_info) = 0;
 };
 
 class ObCopyTabletRecordExtraInfo final
@@ -56,13 +56,14 @@ public:
   OB_INLINE void add_macro_count(const int64_t &macro_count) { ATOMIC_FAA(&macro_count_, macro_count); }
   OB_INLINE void add_major_macro_count(const int64_t &major_macro_count) { ATOMIC_FAA(&major_macro_count_, major_macro_count); }
   OB_INLINE void add_reuse_macro_count(const int64_t &reuse_macro_count) { ATOMIC_FAA(&reuse_macro_count_, reuse_macro_count); }
+  OB_INLINE void set_restore_action(const ObTabletRestoreAction::ACTION &action) { ATOMIC_SET(&restore_action_, action); }
   OB_INLINE int get_major_count() const { return ATOMIC_LOAD(&major_count_); }
   // not atomic, but only called when major sstable copy finish, which is sequential
-  int update_max_reuse_mgr_size(
-    ObMacroBlockReuseMgr *&reuse_mgr);
+  int update_max_reuse_mgr_size(ObMacroBlockReuseMgr *reuse_mgr);
 
-  TO_STRING_KV(K_(cost_time_ms), K_(total_data_size), K_(write_data_size), K_(major_count), K_(macro_count),
-      K_(major_macro_count), K_(reuse_macro_count), K_(max_reuse_mgr_size));
+  TO_STRING_KV(K_(cost_time_ms), K_(total_data_size), K_(write_data_size), K_(major_count),
+      K_(macro_count), K_(major_macro_count), K_(reuse_macro_count), K_(max_reuse_mgr_size),
+      "restore_action", ObTabletRestoreAction::get_action_str(restore_action_));
 private:
   // The following 3 member variables are updated when writer of physical copy task finish
   // time cost of tablet copy (fully migration / restore of a single tablet)
@@ -83,6 +84,10 @@ private:
   int64_t reuse_macro_count_;
   // max reuse mgr size
   int64_t max_reuse_mgr_size_;
+
+  // The following 1 member variable are updated when tablet copy finish
+  // restore action (when migration, it is RESTORE_NONE)
+  ObTabletRestoreAction::ACTION restore_action_;
 };
 
 struct ObPhysicalCopyCtx final

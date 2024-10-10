@@ -18,6 +18,54 @@ namespace oceanbase
 namespace storage
 {
 
+/******************ObCopyTabletRecordExtraInfo*********************/
+ObCopyTabletRecordExtraInfo::ObCopyTabletRecordExtraInfo()
+  : cost_time_ms_(0),
+    total_data_size_(0),
+    write_data_size_(0),
+    major_count_(0),
+    macro_count_(0),
+    major_macro_count_(0),
+    reuse_macro_count_(0),
+    max_reuse_mgr_size_(0),
+    restore_action_(ObTabletRestoreAction::ACTION::RESTORE_NONE)
+{
+}
+
+ObCopyTabletRecordExtraInfo::~ObCopyTabletRecordExtraInfo()
+{
+}
+
+void ObCopyTabletRecordExtraInfo::reset()
+{
+  cost_time_ms_ = 0;
+  total_data_size_ = 0;
+  write_data_size_ = 0;
+  major_count_ = 0;
+  macro_count_ = 0;
+  major_macro_count_ = 0;
+  reuse_macro_count_ = 0;
+  max_reuse_mgr_size_ = 0;
+  restore_action_ = ObTabletRestoreAction::ACTION::RESTORE_NONE;
+}
+
+int ObCopyTabletRecordExtraInfo::update_max_reuse_mgr_size(ObMacroBlockReuseMgr *reuse_mgr)
+{
+  int ret = OB_SUCCESS;
+  int64_t count = 0;
+
+  if (OB_ISNULL(reuse_mgr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("update max reuse mgr size get invalid argument", K(ret), KP(reuse_mgr));
+  } else if (OB_FAIL(reuse_mgr->count(count))) {
+    LOG_WARN("failed to count reuse mgr", K(ret), KP(reuse_mgr));
+  } else {
+    max_reuse_mgr_size_ = MAX(count * reuse_mgr->get_item_size(), max_reuse_mgr_size_);
+  }
+
+  return ret;
+}
+
 /******************ObPhysicalCopyCtx*********************/
 ObPhysicalCopyCtx::ObPhysicalCopyCtx()
   : lock_(),

@@ -202,7 +202,7 @@ int ObCopyTabletCtx::get_copy_tablet_status(ObCopyTabletStatus::STATUS &status) 
   return ret;
 }
 
-int ObCopyTabletCtx::get_copy_tablet_record_extra_info(const ObCopyTabletRecordExtraInfo *&extra_info) const
+int ObCopyTabletCtx::get_copy_tablet_record_extra_info(ObCopyTabletRecordExtraInfo *&extra_info)
 {
   int ret = OB_SUCCESS;
   if (!is_valid()) {

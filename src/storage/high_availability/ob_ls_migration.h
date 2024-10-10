@@ -89,7 +89,7 @@ public:
   void reset();
   int set_copy_tablet_status(const ObCopyTabletStatus::STATUS &status) override;
   int get_copy_tablet_status(ObCopyTabletStatus::STATUS &status) const override;
-  int get_copy_tablet_record_extra_info(const ObCopyTabletRecordExtraInfo *&extra_info) const override;
+  int get_copy_tablet_record_extra_info(ObCopyTabletRecordExtraInfo *&extra_info) override;
   VIRTUAL_TO_STRING_KV(K_(tablet_id), K_(status));
 
 public:
