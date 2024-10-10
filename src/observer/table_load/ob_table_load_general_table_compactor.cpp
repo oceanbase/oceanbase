@@ -521,6 +521,8 @@ int ObTableLoadGeneralTableCompactor::build_result()
       LOG_WARN("fail to get table from table compactor", KR(ret), KPC(table_compactor));
     } else if (OB_FAIL(result.add_table(table))) {
       LOG_WARN("fail to add table", KR(ret));
+    } else {
+      LOG_INFO("finish compact", K(i), K(table->get_tablet_id()), K(table->get_row_count()));
     }
     if (OB_FAIL(ret)) {
       if (nullptr != table) {
