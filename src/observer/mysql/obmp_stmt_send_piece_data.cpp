@@ -72,27 +72,35 @@ int ObMPStmtSendPieceData::before_process()
   } else {
     const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
     const char* pos = pkt.get_cdata();
-    // stmt_id
-    ObMySQLUtil::get_int4(pos, stmt_id_);
-    ObMySQLUtil::get_uint2(pos, param_id_);
-    ObMySQLUtil::get_int1(pos, piece_mode_);
-    int8_t is_null = 0;
-    ObMySQLUtil::get_int1(pos, is_null);
-    is_null_ = (1 == is_null);
-    ObMySQLUtil::get_int8(pos, buffer_len_);
+    defender_.init(pos, pkt.get_clen() - 1);  // pkt.get_cdata() do not include 1 byte for `request command code`
+
+    PS_STATIC_DEFENSE_CHECK(&defender_, 4 + 2 + 1 + 1 + 8)
+    {
+      ObMySQLUtil::get_int4(pos, stmt_id_);
+      ObMySQLUtil::get_uint2(pos, param_id_);
+      ObMySQLUtil::get_int1(pos, piece_mode_);
+      int8_t is_null = 0;
+      ObMySQLUtil::get_int1(pos, is_null);
+      is_null_ = (1 == is_null);
+      ObMySQLUtil::get_int8(pos, buffer_len_);
+    }
+
     if (stmt_id_ < 1 || buffer_len_ < 0) {
       ret = OB_ERR_MALFORMED_PS_PACKET;
       LOG_WARN("send_piece receive unexpected params", K(ret), K(stmt_id_), K(buffer_len_));
     } else if (param_id_ >= OB_PARAM_ID_OVERFLOW_RISK_THRESHOLD) {
       LOG_WARN("param_id_ has the risk of overflow", K(ret), K(stmt_id_), K(param_id_));
     }
-    if (OB_SUCC(ret)) {
+
+    PS_STATIC_DEFENSE_CHECK(&defender_, buffer_len_)
+    {
       buffer_.assign_ptr(pos, static_cast<ObString::obstr_size_t>(buffer_len_));
       pos += buffer_len_;
       LOG_INFO("resolve send_piece protocol packet successfully",
                K(ret), K(stmt_id_), K(param_id_), K(buffer_len_));
       LOG_DEBUG("send_piece packet content", K(buffer_));
     }
+
     LOG_INFO("resolve send_piece protocol packet",
              K(ret), K(stmt_id_), K(param_id_), K(buffer_len_), K(piece_mode_), K(is_null_));
   }

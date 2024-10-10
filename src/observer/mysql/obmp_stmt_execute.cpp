@@ -558,7 +558,8 @@ int ObMPStmtExecute::before_process()
     }
     const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
     const char* pos = pkt.get_cdata();
-    analysis_checker_.init(pos, pkt.get_clen());
+    // pkt.get_cdata() do not include 1 byte for `request command code`
+    analysis_checker_.init(pos, pkt.get_clen() - 1);
     int32_t stmt_id = -1; //INVALID_STMT_ID
     uint32_t ps_stmt_checksum = 0;
     ObSQLSessionInfo *session = NULL;
@@ -903,19 +904,18 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
       }
     }
     if (OB_SUCC(ret) && params_num_ > 0) {
-      // Step1: 处理空值位图
-      int64_t bitmap_types = (params_num_ + 7) / 8;
-      const char *bitmap = pos;
-      pos += bitmap_types;
       ParamTypeArray &param_types = ps_session_info->get_param_types();
       ParamTypeInfoArray param_type_infos;
       ParamCastArray param_cast_infos;
-
       ParamTypeArray returning_param_types;
       ParamTypeInfoArray returning_param_type_infos;
-      int64_t len = bitmap_types + 1/*new_param_bound_flag*/;
-      PS_DEFENSE_CHECK(len) // bitmap_types
+
+      // Step1: 处理空值位图
+      const char *bitmap = pos;
+      int64_t bitmap_types = (params_num_ + 7) / 8;
+      PS_DEFENSE_CHECK(bitmap_types + 1)  // null value bitmap + new param bound flag
       {
+        pos += bitmap_types;
         // Step2: 获取new_param_bound_flag字段
         ObMySQLUtil::get_int1(pos, new_param_bound_flag);
         if (new_param_bound_flag == 1) {

@@ -69,9 +69,14 @@ int ObMPStmtSendLongData::before_process()
   } else {
     const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
     const char* pos = pkt.get_cdata();
-    // stmt_id
-    ObMySQLUtil::get_int4(pos, stmt_id_);
-    ObMySQLUtil::get_uint2(pos, param_id_);
+    defender_.init(pos, pkt.get_clen() - 1);  // pkt.get_cdata() do not include 1 byte for `request command code`
+
+    PS_STATIC_DEFENSE_CHECK(&defender_, 4 + 2)
+    {
+      ObMySQLUtil::get_int4(pos, stmt_id_);
+      ObMySQLUtil::get_uint2(pos, param_id_);
+    }
+
     if (OB_SUCC(ret) && stmt_id_ < 1) {
       ret = OB_ERR_PARAM_INVALID;
       LOG_WARN("send_long_data receive unexpected stmt_id_", K(ret), K(stmt_id_), K(param_id_));
