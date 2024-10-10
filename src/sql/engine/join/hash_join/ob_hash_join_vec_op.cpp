@@ -630,7 +630,7 @@ int ObHashJoinVecOp::process_left(bool &need_not_read_right)
   }
 
   if (OB_SUCC(ret)
-     && !is_shared_
+     && (!is_shared_ || 0 == cur_join_table_->get_row_count())
      && ((0 == num_left_rows
          && RIGHT_ANTI_JOIN != MY_SPEC.join_type_
          && RIGHT_OUTER_JOIN != MY_SPEC.join_type_
