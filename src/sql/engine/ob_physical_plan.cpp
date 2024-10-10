@@ -134,6 +134,8 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     append_table_id_(0),
     logical_plan_(),
     is_enable_px_fast_reclaim_(false),
+    is_inner_sql_(false),
+    is_batch_params_execute_(false),
     can_set_feedback_info_(true),
     dml_table_ids_()
 {
@@ -230,6 +232,8 @@ void ObPhysicalPlan::reset()
   need_record_plan_info_ = false;
   logical_plan_.reset();
   is_enable_px_fast_reclaim_ = false;
+  is_inner_sql_ = false;
+  is_batch_params_execute_ = false;
   dml_table_ids_.reset();
   can_set_feedback_info_.store(true);
 }
