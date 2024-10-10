@@ -124,6 +124,7 @@ ObTableLoadTransStoreWriter::ObTableLoadTransStoreWriter(ObTableLoadTransStore *
     allocator_("TLD_TSWriter"),
     table_data_desc_(nullptr),
     cast_mode_(CM_NONE),
+    session_ctx_array_(nullptr),
     lob_inrow_threshold_(0),
     ref_count_(0),
     is_inited_(false)
