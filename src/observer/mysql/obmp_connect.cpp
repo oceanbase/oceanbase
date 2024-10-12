@@ -334,10 +334,11 @@ int ObMPConnect::process()
   } else if (OB_ISNULL(GCTX.session_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("session mgr is NULL", K(ret));
+  } else if (OB_FAIL(conn->ret_)) {
+    LOG_WARN("connection fail at obsm_handle process", K(conn->ret_));
   } else {
-    if (OB_FAIL(conn->ret_)) {
-      LOG_WARN("connection fail at obsm_handle process", K(conn->ret_));
-    } else if (OB_FAIL(get_user_tenant(*conn))) {
+    ObDiagnosticInfoSwitchGuard di_guard(conn->di_);
+    if (OB_FAIL(get_user_tenant(*conn))) {
       LOG_WARN("get user name and tenant name failed", K(ret));
     } else if ((SS_INIT == GCTX.status_ || SS_STARTING == GCTX.status_)
                && !tenant_name_.empty()
@@ -2048,9 +2049,13 @@ int ObMPConnect::check_common_property(ObSMConnection &conn, ObMySQLCapabilityFl
     conn.client_addr_port_ = client_addr_port;
     conn.client_create_time_ = client_create_time;
     conn.sess_create_time_ = sess_create_time;
+    if (conn.di_ != nullptr) {
+      conn.di_->get_ash_stat().proxy_sid_ = proxy_sessid;
+    }
     int64_t code = 0;
-    LOG_INFO("yaojing construct session id", K(conn.client_sessid_), K(conn.sessid_),
-      K(conn.client_addr_port_), K(conn.client_create_time_) ,K(conn.proxy_sessid_));
+    LOG_INFO("construct session id", K(conn.client_sessid_), K(conn.sessid_),
+             K(conn.client_addr_port_), K(conn.client_create_time_) ,
+             K(conn.proxy_sessid_), KPC(ObLocalDiagnosticInfo::get()));
     if (conn.proxy_cap_flags_.is_ob_protocol_v2_support()) {
       // when used 2.0 protocol, do not use mysql compress
       client_cap.cap_flags_.OB_CLIENT_COMPRESS = 0;

@@ -197,6 +197,11 @@ int ObDiagnosticInfo::init(
   ash_stat_.tenant_id_ = tenant_id;
   ash_stat_.group_id_ = group_id_;
   ash_stat_.session_id_ = session_id;
+  //By default, the proxy_sid is consistent with the server session id.
+  //If this is a genuine proxy connection, the proxy_sid will be corrected by the deliver_mysql_request interface
+  ash_stat_.proxy_sid_ = session_id;
+  ash_stat_.last_touch_ts_ = rdtsc();
+  ash_stat_.last_inactive_ts_ = ash_stat_.last_touch_ts_;
   pool_ = &pool;
   events_.init(pool_);
   return ret;

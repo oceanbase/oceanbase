@@ -263,7 +263,7 @@ int ObWrCollector::collect_ash()
             "tm_delta_db_time, "
             "plsql_entry_object_id, plsql_entry_subprogram_id, plsql_entry_subprogram_name, "
             "plsql_object_id, "
-            "plsql_subprogram_id, plsql_subprogram_name, tablet_id, blocking_session_id  from "
+            "plsql_subprogram_id, plsql_subprogram_name, tablet_id, blocking_session_id, proxy_sid from "
             "__all_virtual_ash where tenant_id=%ld and is_wr_sample=true and "
             "sample_time between usec_to_time(%ld) and usec_to_time(%ld) and "
             "svr_ip='%s' and svr_port=%d";
@@ -351,6 +351,8 @@ int ObWrCollector::collect_ash()
               EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "tablet_id", ash.tablet_id_, int64_t,
                   skip_null_error, skip_column_error, default_value);
               EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "blocking_session_id", ash.blocking_session_id_, int64_t,
+                  skip_null_error, skip_column_error, default_value);
+              EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "proxy_sid", ash.proxy_sid_, int64_t,
                   skip_null_error, skip_column_error, default_value);
 
               char plan_hash_char[64] = "";
@@ -523,6 +525,8 @@ int ObWrCollector::collect_ash()
                 } else if (ash.blocking_session_id_ >= 0 &&
                           OB_FAIL(dml_splicer.add_column("blocking_session_id", ash.blocking_session_id_))) {
                   LOG_WARN("failed to add column blocking_session_id", KR(ret), K(ash));
+                } else if (OB_FAIL(dml_splicer.add_column("proxy_sid", ash.proxy_sid_))) {
+                  LOG_WARN("failed to add column proxy_sid", KR(ret), K(ash));
                 } else if (OB_FAIL(dml_splicer.finish_row())) {
                   LOG_WARN("failed to finish row", KR(ret));
                 }

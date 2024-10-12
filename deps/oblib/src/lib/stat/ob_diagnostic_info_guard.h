@@ -87,6 +87,8 @@ public:
   }
   static ObLatchStat *get_latch_stat(int64_t latch_id);
   static void set_thread_name(const char *name);
+  static void set_thread_name(uint64_t tenant_id, const char *name);
+  static void set_service_action(const char *program, const char *module, const char *action);
   static inline int inc_ref(ObDiagnosticInfo *di) __attribute__((always_inline))
   {
     int ret = OB_SUCCESS;

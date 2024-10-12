@@ -148,17 +148,21 @@ int ObVirtualASH::convert_node_to_row(const ObActiveSessionStatItem &node, ObNew
       }
       case SQL_ID: {
         if ('\0' == node.sql_id_[0]) {
-          cells[cell_idx].set_varchar("");
+          cells[cell_idx].set_null();
         } else {
           cells[cell_idx].set_varchar(node.sql_id_, static_cast<ObString::obstr_size_t>(OB_MAX_SQL_ID_LENGTH));
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
         }
-        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
         break;
       }
       case TRACE_ID: {
-        int len = node.trace_id_.to_string(trace_id_, sizeof(trace_id_));
-        cells[cell_idx].set_varchar(trace_id_, len);
-        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+        if (node.trace_id_.is_valid()) {
+          int len = node.trace_id_.to_string(trace_id_, sizeof(trace_id_));
+          cells[cell_idx].set_varchar(trace_id_, len);
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+        } else {
+          cells[cell_idx].set_null();
+        }
         break;
       }
       case EVENT_NO: {
@@ -439,6 +443,10 @@ int ObVirtualASH::convert_node_to_row(const ObActiveSessionStatItem &node, ObNew
         } else {
           cells[cell_idx].set_null();
         }
+        break;
+      }
+      case PROXY_SID: {
+        cells[cell_idx].set_int(node.proxy_sid_);
         break;
       }
       default: {

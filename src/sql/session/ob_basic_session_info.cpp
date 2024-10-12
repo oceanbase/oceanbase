@@ -2204,12 +2204,10 @@ void ObBasicSessionInfo::set_ash_stat_value(ObActiveSessionStat &ash_stat)
         min(sizeof(ash_stat.sql_id_), sizeof(sql_id_)));
     ash_stat.tenant_id_ = tenant_id_;
     ash_stat.user_id_ = get_user_id();
-    ash_stat.session_id_ = get_sessid();
     ash_stat.trace_id_ = get_current_trace_id();
     ash_stat.tid_ = GETTID();
     ash_stat.group_id_ = THIS_WORKER.get_group_id();
   }
-
 }
 
 void ObBasicSessionInfo::set_current_trace_id(common::ObCurTraceId::TraceId *trace_id)

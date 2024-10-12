@@ -36,7 +36,8 @@ public:
           tz_info(tz_info),
           is_html(false),
           user_input_ash_begin_time(0),
-          user_input_ash_end_time(0)
+          user_input_ash_end_time(0),
+          section_cnt_(0)
     {}
     int64_t ash_begin_time;
     int64_t ash_end_time;
@@ -50,6 +51,7 @@ public:
     bool is_html;
     int64_t user_input_ash_begin_time;
     int64_t user_input_ash_end_time;
+    mutable int64_t section_cnt_;
   };
 
 public:
@@ -77,6 +79,17 @@ public:
     const int64_t usec, char *buf, int64_t buf_len, int64_t &pos);
   static int append_fmt_ash_view_sql(
       const AshReportParams &ash_report_params, ObSqlString &sql_string);
+  static bool is_single_identifier(const char *sql_str);
+  static int append_time_model_view_sql(common::ObSqlString &sql_string,
+                                        const char *select_lists,
+                                        const common::ObArrayWrap<const char*> &timemodel_columns,
+                                        const common::ObArrayWrap<int32_t> &timemodel_fields,
+                                        const char *source_table,
+                                        bool with_sum);
+  static int unpivot_time_model_column_sql(common::ObSqlString &sql_string,
+                                           const char *select_lists,
+                                           const common::ObArrayWrap<const char*> &timemodel_columns,
+                                           const char *source_table);
   static int get_ash_begin_and_end_time(
       const AshReportParams &ash_report_params, int64_t &ash_begin_time, int64_t &ash_end_time);
   static int get_ash_num_samples_and_events(
@@ -122,7 +135,7 @@ public:
   static int print_subsection_header(const AshReportParams &ash_report_params, ObStringBuffer &buff, const char *str);
   static int print_section_column_header(const AshReportParams &ash_report_params,
       ObStringBuffer &buff, const int64_t column_size, const char *column_contents[],
-      const int64_t column_widths[]);
+      const int64_t column_widths[], bool need_merge_table = false);
   static int print_section_column_row(const AshReportParams &ash_report_params,
       ObStringBuffer &buff, const int64_t column_size, const char *column_contents[],
       const int64_t column_widths[], bool with_color = true);

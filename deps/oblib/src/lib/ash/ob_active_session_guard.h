@@ -84,7 +84,8 @@ public:
         tx_id_(0),
         stmt_type_(0),
         tablet_id_(0),
-        block_sessid_(0)
+        block_sessid_(0),
+        proxy_sid_(0)
   {
     sql_id_[0] = '\0';
     top_level_sql_id_[0] = '\0';
@@ -99,37 +100,6 @@ public:
     client_id_[0] = '\0';
   }
   ~ObActiveSessionStatItem() = default;
-  void reuse()
-  {
-    user_id_ = 0;
-    session_id_ = 0;
-    plan_id_ = 0;
-    sql_id_[0] = '\0';
-    top_level_sql_id_[0] = '\0';
-    time_model_ = 0;
-    plsql_entry_object_id_ = OB_INVALID_ID;
-    plsql_entry_subprogram_id_ = OB_INVALID_ID;
-    plsql_object_id_ = OB_INVALID_ID;
-    plsql_subprogram_id_ = OB_INVALID_ID;
-    plsql_entry_subprogram_name_[0] = '\0';
-    plsql_subprogram_name_[0] = '\0';
-    time_model_ = 0;
-#if !defined(NDEBUG) || defined(ENABLE_DEBUG_LOG)
-    bt_[0] = '\0';
-#endif
-    delta_time_ = 0;
-    delta_cpu_time_ = 0;
-    delta_db_time_ = 0;
-    group_id_ = 0;
-    program_[0] = '\0';
-    module_[0] = '\0';
-    action_[0] = '\0';
-    client_id_[0] = '\0';
-    tid_ = 0;
-    plan_hash_ = 0;
-    tx_id_ = 0;
-    stmt_type_ = 0;
-  }
 public:
   enum SessionType : bool
   {
@@ -173,6 +143,7 @@ public:
   int64_t stmt_type_;
   int64_t tablet_id_;
   int64_t block_sessid_;
+  uint64_t proxy_sid_; //proxy session id
   char program_[ASH_PROGRAM_STR_LEN];
   char module_[ASH_MODULE_STR_LEN];
   char action_[ASH_ACTION_STR_LEN];
@@ -198,7 +169,8 @@ struct ObActiveSessionStat : public ObActiveSessionStatItem
 public:
   ObActiveSessionStat()
       : ObActiveSessionStatItem(),
-        last_ts_(0),
+        last_touch_ts_(0),
+        last_inactive_ts_(0),
         wait_event_begin_ts_(0),
         total_idle_wait_time_(0),
         total_non_idle_wait_time_(0),
@@ -208,7 +180,7 @@ public:
         is_active_session_(false),
         inner_sql_wait_type_id_(ObInnerSqlWaitTypeId::NULL_INNER_SQL),
         pcode_(0),
-        extra_elapse_time_(0),
+        tm_idle_time_(0),
         prev_inner_sql_wait_type_id_(ObInnerSqlWaitTypeId::NULL_INNER_SQL),
         retry_wait_event_no_(0),
         retry_wait_event_p1_(0),
@@ -232,20 +204,6 @@ public:
     fixup_index_ = index;
   }
 
-  void reuse()
-  {
-    ObActiveSessionStatItem::reuse();
-    last_ts_ = 0;
-    wait_event_begin_ts_ = 0;
-    total_idle_wait_time_ = 0;
-    total_non_idle_wait_time_ = 0;
-    prev_idle_wait_time_ = 0;
-    prev_non_idle_wait_time_ = 0;
-    total_cpu_time_ = 0;
-    fixup_index_ = -1;
-    // NOTICE: reset of fixup_ash_buffer_ is in ObActiveSessionStat::fixup_last_stat
-    // fixup_ash_buffer_.reset();
-  }
   void set_event(int64_t event_no, uint64_t p1, uint64_t p2, uint64_t p3)
   {
     event_no_ = event_no;
@@ -272,7 +230,7 @@ public:
   }
   void set_sess_active();
   void set_sess_inactive();
-  void accumulate_elapse_time();
+  void accumulate_tm_idle_time();
   static void calc_db_time(
       ObDiagnosticInfo *di, const int64_t sample_time, const int64_t tsc_sample_time);
   // timestamp for last ash sample taken place. could be optimized to rdtsc()
@@ -322,7 +280,8 @@ private:
   inline void reset_retry_ash_diag_info_ptr() { query_retry_ash_diag_info_ptr_ = nullptr; }
 public:
   ObExecPhase &exec_phase();
-  int64_t last_ts_ CACHE_ALIGNED;
+  int64_t last_touch_ts_; CACHE_ALIGNED // the timestamp of the last sampling or creation
+  int64_t last_inactive_ts_ CACHE_ALIGNED; //the timestamp when the session was last in an inactive state
   int64_t wait_event_begin_ts_;
   uint64_t total_idle_wait_time_; // idle wait time in total
   uint64_t total_non_idle_wait_time_; // total non-idle wait time in total
@@ -332,7 +291,7 @@ public:
   bool is_active_session_ CACHE_ALIGNED;
   ObInnerSqlWaitTypeId inner_sql_wait_type_id_;
   int pcode_ CACHE_ALIGNED;
-  int64_t extra_elapse_time_; // record extra elapse time for current session.
+  int64_t tm_idle_time_; // the idle time between two sampling intervals.
   ObInnerSqlWaitTypeId prev_inner_sql_wait_type_id_;
   int64_t retry_wait_event_no_;
   int64_t retry_wait_event_p1_;
@@ -341,15 +300,16 @@ public:
   int64_t retry_plan_line_id_;
   bool need_calc_wait_event_end_;
   int64_t last_query_exec_use_time_us_;
-  int64_t curr_query_start_time_;
+  int64_t curr_query_start_time_; //only used to calc retry wait event time
   int64_t last_das_task_exec_use_time_us_;
   int64_t curr_das_task_start_time_;
 
-  INHERIT_TO_STRING_KV("ObActiveSessionStatItem", ObActiveSessionStatItem, K_(last_ts),
+  INHERIT_TO_STRING_KV("ObActiveSessionStatItem", ObActiveSessionStatItem, K_(last_touch_ts),
       K_(wait_event_begin_ts), K_(total_idle_wait_time), K_(total_non_idle_wait_time),
       K_(prev_idle_wait_time), K_(prev_non_idle_wait_time), K_(total_cpu_time),
       K_(is_active_session), K_(inner_sql_wait_type_id), K_(pcode),
-      K_(extra_elapse_time), K_(prev_inner_sql_wait_type_id), K_(fixup_index), K_(fixup_ash_buffer), K_(retry_wait_event_no), K_(retry_plan_line_id));
+      K_(tm_idle_time), K_(prev_inner_sql_wait_type_id), K_(fixup_index),
+      K_(fixup_ash_buffer), K_(retry_wait_event_no), K_(retry_plan_line_id));
 
 private:
 

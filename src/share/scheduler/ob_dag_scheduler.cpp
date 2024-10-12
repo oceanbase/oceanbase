@@ -1436,6 +1436,7 @@ void ObTenantDagWorker::run1()
         CONSUMER_GROUP_ID_GUARD(dag->get_consumer_group_id());
         ObCurTraceId::set(dag->get_dag_id());
         lib::set_thread_name(dag->get_dag_type_str(dag->get_type()));
+        ObLocalDiagnosticInfo::set_service_action("DAG", dag->get_dag_module_str(dag->get_type()), dag->get_dag_type_str(dag->get_type()));
         if (OB_UNLIKELY(lib::Worker::CompatMode::INVALID == (compat_mode = dag->get_compat_mode()))) {
           ret = OB_ERR_UNEXPECTED;
           COMMON_LOG(WARN, "invalid compat mode", K(ret), K(*dag));

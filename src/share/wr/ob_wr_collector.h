@@ -91,6 +91,7 @@ public:
     stmt_type_ = -1;
     tablet_id_ = -1;
     blocking_session_id_ = -1;
+    proxy_sid_ = 0;
   };
 
   TO_STRING_KV(K_(svr_ip), K_(svr_port), K_(sample_id), K_(session_id), K_(sample_time),
@@ -99,7 +100,7 @@ public:
       K_(module), K_(action), K_(client_id), K_(plan_id), K_(top_level_sql_id),
       K_(plsql_entry_object_id), K_(plsql_entry_subprogram_id), K_(plsql_entry_subprogram_name),
       K_(plsql_object_id), K_(plsql_subprogram_id), K_(plsql_subprogram_name), K_(plan_hash),
-      K_(thread_id), K_(stmt_type), K_(tablet_id), K_(blocking_session_id));
+      K_(thread_id), K_(stmt_type), K_(tablet_id), K_(blocking_session_id), K_(proxy_sid));
   char svr_ip_[OB_IP_STR_BUFF];
   int64_t svr_port_;
   int64_t sample_id_;
@@ -139,6 +140,7 @@ public:
   int64_t stmt_type_;
   int64_t tablet_id_;
   int64_t blocking_session_id_;
+  int64_t proxy_sid_;
 };
 
 

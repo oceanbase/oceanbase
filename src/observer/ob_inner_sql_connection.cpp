@@ -2253,9 +2253,9 @@ int ObInnerSQLConnection::create_session_by_mgr()
         inner_session_->set_ash_stat_value(di->get_ash_stat());
         di->get_ash_stat().tenant_id_ = tenant_id;
         di->get_ash_stat().session_type_ = ObActiveSessionStatItem::SessionType::BACKGROUND;
-        snprintf(di->get_ash_stat().module_, ASH_MODULE_STR_LEN, "LOCAL INNER SQL EXEC (%.*s)",
-            ASH_MODULE_STR_LEN - 18 /*INNER SQL EXEC ()*/,
-            inner_sql_wait_to_string(di->get_ash_stat().inner_sql_wait_type_id_));
+        MEMCPY(di->get_ash_stat().program_, ObActiveSessionGuard::get_stat().program_, ASH_PROGRAM_STR_LEN);
+        STRNCPY(di->get_ash_stat().module_, "LOCAL INNER SQL EXEC", ASH_MODULE_STR_LEN);
+        STRNCPY(di->get_ash_stat().action_, inner_sql_action_name(di->get_ash_stat().inner_sql_wait_type_id_), ASH_ACTION_STR_LEN);
         diagnostic_info_ = di;
       }
     }

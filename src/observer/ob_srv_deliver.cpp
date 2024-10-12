@@ -625,12 +625,14 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest &req)
       } else {
         di->get_ash_stat().pcode_ = pkt.get_pcode();
         di->get_ash_stat().session_type_ = ObActiveSessionStatItem::SessionType::BACKGROUND;
-        snprintf(di->get_ash_stat().program_, ASH_PROGRAM_STR_LEN, "RPC PROCESS (%d)",
-                          pkt.get_pcode());
+        snprintf(di->get_ash_stat().program_, ASH_PROGRAM_STR_LEN, "T%ld_RPC_PROCESS", tenant_id);
+        snprintf(di->get_ash_stat().module_, ASH_MODULE_STR_LEN, "%s",
+                 obrpc::ObRpcPacketSet::instance().name_of_pcode(pkt.get_pcode()));
         if (OB_NOT_NULL(req.get_diagnostic_info())) {
           LOG_ERROR("reuse diagnostic info wrongly.", K(&req), K(req.get_diagnostic_info()), K(di));
         }
         req.set_diagnostic_info(di);
+        di->get_ash_stat().trace_id_ = req.generate_trace_id(GCTX.self_addr());
         di->inner_begin_wait_event(ObWaitEventIds::NETWORK_QUEUE_WAIT, 0, pkt.get_pcode(), req.get_sql_request_level(), 0);
       }
     }
@@ -773,7 +775,7 @@ int ObSrvDeliver::deliver_mysql_request(ObRequest &req)
               // ignore error.
             } else {
               di->get_ash_stat().session_type_ = ObActiveSessionStatItem::SessionType::FOREGROUND;
-              snprintf(di->get_ash_stat().program_, ASH_PROGRAM_STR_LEN, "SQL CMD");
+              snprintf(di->get_ash_stat().program_, ASH_PROGRAM_STR_LEN, "T%ld_SQL_CMD", tenant_id);
               conn->di_ = di;
             }
             conn->mysql_pkt_context_.set_tenant_id(tenant_id);
@@ -821,6 +823,7 @@ int ObSrvDeliver::deliver_mysql_request(ObRequest &req)
       }*/
 
       if (OB_NOT_NULL(conn->di_)) {
+        conn->di_->get_ash_stat().trace_id_ = req.generate_trace_id(GCTX.self_addr());
         conn->di_->inner_begin_wait_event(ObWaitEventIds::NETWORK_QUEUE_WAIT, 0, 0, 0, 0);
       }
       if (OB_FAIL(ret)) {

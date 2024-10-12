@@ -80,9 +80,9 @@ enum ObInnerSqlWaitTypeId : int64_t
 #include "lib/wait_event/ob_inner_sql_wait_type.h"
 #undef DEF_INNER_SQL_WAIT
   };
-static inline const char* inner_sql_wait_to_string(ObInnerSqlWaitTypeId id)
+static inline const char* inner_sql_action_name(ObInnerSqlWaitTypeId id)
 {
-  static const char* const NULL_INNER_SQL = "no wait inner sql";
+  static const char* const NULL_INNER_SQL = "UNDEFINED";
   switch( id )
   {
 #define DEF_INNER_SQL_WAIT(def_name, enum_id)                                   \

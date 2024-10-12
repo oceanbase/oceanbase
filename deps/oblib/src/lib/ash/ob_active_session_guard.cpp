@@ -67,26 +67,27 @@ ObExecPhase &ObActiveSessionStat::exec_phase()
 void ObActiveSessionStat::set_sess_active()
 {
   if (!is_active_session_) {
-    last_ts_ = rdtsc();
     is_active_session_ = true;
-    trace_id_ = *common::ObCurTraceId::get_trace_id();
+    accumulate_tm_idle_time();
+    if (trace_id_.is_invalid()) {
+      trace_id_ = *common::ObCurTraceId::get_trace_id();
+    }
   }
 }
 
 void ObActiveSessionStat::set_sess_inactive()
 {
-  accumulate_elapse_time();
+  last_inactive_ts_ = rdtsc();
   is_active_session_ = false;
 }
 
-void ObActiveSessionStat::accumulate_elapse_time()
+void ObActiveSessionStat::accumulate_tm_idle_time()
 {
-  if (last_ts_ > 0) {
+  if (last_inactive_ts_ > 0) {
     // When set_sess_inactive() is called, there is some time left after last_ts_. So we mark it as
     // extra time to calculat in next round of calc_db_time when session is active again.
     const int64_t cur = rdtsc();
-    extra_elapse_time_ += cur - last_ts_;
-    last_ts_ = cur;
+    tm_idle_time_ += (cur - last_inactive_ts_) * 1000 / lib_get_cpu_khz();
   }
 }
 
@@ -95,20 +96,12 @@ void ObActiveSessionStat::calc_db_time(
 {
   if (oceanbase::lib::is_diagnose_info_enabled()) {
     ObActiveSessionStat &stat = di->get_ash_stat();
-    const int64_t delta_time = (tsc_sample_time - stat.last_ts_ + stat.extra_elapse_time_) * 1000 /
-                               lib_get_cpu_khz();
-    stat.extra_elapse_time_ = 0;
+    const int64_t delta_time = (tsc_sample_time - stat.last_touch_ts_) * 1000 / lib_get_cpu_khz();
     if (OB_UNLIKELY(delta_time <= 0)) {
       // ash sample happened before set_session_active
       if (delta_time < -ash_iteration_time) {
-        LOG_INFO("ash sample happened before set_session_active.", K(delta_time), K(sample_time), K_(stat.last_ts));
+        LOG_INFO("ash sample happened before set_session_active.", K(delta_time), K(sample_time), K_(stat.last_touch_ts));
       }
-      stat.delta_time_ = 0;
-      stat.delta_cpu_time_ = 0;
-      stat.delta_db_time_ = 0;
-    } else if (OB_UNLIKELY(stat.last_ts_ == 0)) {
-      // session is active, but last_ts_ is no set yet. see ObBasicSessionInfo::set_session_active()
-      // LOG_INFO("stat's last_ts is 0, no need to record", K(stat));
       stat.delta_time_ = 0;
       stat.delta_cpu_time_ = 0;
       stat.delta_db_time_ = 0;
@@ -135,16 +128,24 @@ void ObActiveSessionStat::calc_db_time(
          * delta time. Therefore a negative delta db time would happened.
          * Which is fine. the negative db time got fixed up in the next round of calc_db_time
          */
-        // LOG_WARN_RET(OB_SUCCESS, "negative db time happened, could be a race condition", K(stat),
-        //     K(delta_time), K(delta_non_idle_wait_time), K(delta_idle_wait_time));
+        stat.delta_time_ = 0;
+        stat.delta_db_time_ = 0;
+        stat.delta_cpu_time_ = 0;
       } else {
-        stat.last_ts_ = tsc_sample_time;
         stat.prev_non_idle_wait_time_ = stat.total_non_idle_wait_time_;
         stat.prev_idle_wait_time_ = stat.total_idle_wait_time_;
-        // TODO: verify cpu time
         stat.delta_time_ = delta_time;
-        stat.delta_cpu_time_ = delta_time - delta_non_idle_wait_time - delta_idle_wait_time;
-        stat.delta_db_time_ = delta_time - delta_idle_wait_time;
+        stat.delta_db_time_ = delta_time - stat.tm_idle_time_ - delta_idle_wait_time;
+        stat.delta_cpu_time_ = stat.delta_db_time_ - delta_non_idle_wait_time;
+        if (stat.delta_db_time_ < 0 || stat.delta_cpu_time_ < 0) {
+          //When delta_db_time < 0 or delta_cpu_time < 0,
+          //it indicates that the sampled db_time is invalid.
+          //A possible reason for this is that the ASH sampling encountered some concurrency issues.
+          //Therefore, the sampled delta time will be discarded and not recorded.
+          stat.delta_time_ = 0;
+          stat.delta_db_time_ = 0;
+          stat.delta_cpu_time_ = 0;
+        }
         // no need to lock, only this function modifies time model related stats.
         if (stat.session_type_ == ObActiveSessionStatItem::SessionType::BACKGROUND) {
           di->add_stat(ObStatEventIds::SYS_TIME_MODEL_BKGD_TIME, delta_time);
@@ -160,6 +161,8 @@ void ObActiveSessionStat::calc_db_time(
         }
       }
     }
+    stat.tm_idle_time_ = 0;
+    stat.last_touch_ts_ = tsc_sample_time;
   }
 }
 void ObActiveSessionStat::calc_retry_wait_event(ObActiveSessionStat &stat, const int64_t sample_time)

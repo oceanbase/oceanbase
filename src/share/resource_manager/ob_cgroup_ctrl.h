@@ -186,6 +186,13 @@ public:
                                  uint64_t group_id,
                                  share::ObGroupName &group_name);
 
+  int get_group_path(
+      char *group_path,
+      int path_bufsize,
+      const uint64_t tenant_id,
+      uint64_t group_id = OB_INVALID_GROUP_ID,
+      const char *base_path = "");
+
   class DirProcessor
   {
   public:
@@ -218,12 +225,7 @@ private:
   static int init_full_dir_(const char *curr_path);
   static int write_string_to_file_(const char *filename, const char *content);
   static int get_string_from_file_(const char *filename, char content[VALUE_BUFSIZE]);
-  int get_group_path(
-      char *group_path,
-      int path_bufsize,
-      const uint64_t tenant_id,
-      uint64_t group_id = OB_INVALID_GROUP_ID,
-      const char *base_path = "");
+
   enum { NOT_DIR = 0, LEAF_DIR, REGULAR_DIR };
   int which_type_dir_(const char *curr_path, int &result);
   int recursion_remove_group_(const char *curr_path);

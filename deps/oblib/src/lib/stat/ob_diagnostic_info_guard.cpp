@@ -181,6 +181,25 @@ void ObLocalDiagnosticInfo::set_thread_name(const char *name)
   instance.get_diagnostic_ptr()->get_ash_stat().program_[oceanbase::OB_THREAD_NAME_BUF_LEN] = '\0';
 }
 
+void ObLocalDiagnosticInfo::set_thread_name(uint64_t tenant_id, const char *name)
+{
+  ObLocalDiagnosticInfo &instance = get_instance();
+  if (tenant_id == 0) {
+    snprintf(instance.get_diagnostic_ptr()->get_ash_stat().program_, ASH_PROGRAM_STR_LEN, "%s", name);
+  } else {
+    snprintf(instance.get_diagnostic_ptr()->get_ash_stat().program_, ASH_PROGRAM_STR_LEN,
+            "T%ld_%s", tenant_id, name);
+  }
+}
+
+void ObLocalDiagnosticInfo::set_service_action(const char *program, const char *module, const char *action)
+{
+  ObLocalDiagnosticInfo &instance = get_instance();
+  set_thread_name(ob_get_tenant_id(), program);
+  snprintf(instance.get_diagnostic_ptr()->get_ash_stat().module_, ASH_MODULE_STR_LEN, "%s", module);
+  snprintf(instance.get_diagnostic_ptr()->get_ash_stat().action_, ASH_ACTION_STR_LEN, "%s", action);
+}
+
 ObLatchStat *ObLocalDiagnosticInfo::get_latch_stat(int64_t latch_id)
 {
   ObLocalDiagnosticInfo &instance = get_instance();

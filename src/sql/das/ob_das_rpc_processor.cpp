@@ -57,7 +57,6 @@ int ObDASBaseAccessP<pcode>::before_process()
     ObActiveSessionGuard::get_stat().tenant_id_ = task.get_task_op()->get_tenant_id();
     ObActiveSessionGuard::get_stat().trace_id_ = *ObCurTraceId::get_trace_id();
     ObActiveSessionGuard::get_stat().user_id_ = das_remote_info_.user_id_;
-    ObActiveSessionGuard::get_stat().session_id_ = das_remote_info_.session_id_;
     ObActiveSessionGuard::get_stat().plan_id_ = das_remote_info_.plan_id_;
     ObActiveSessionGuard::get_stat().plan_hash_ = das_remote_info_.plan_hash_;
     MEMCPY(ObActiveSessionGuard::get_stat().sql_id_, das_remote_info_.sql_id_,
@@ -122,6 +121,7 @@ int ObDASBaseAccessP<pcode>::process()
   } else {
     for (int i = 0; OB_SUCC(ret) && i < task_ops.count(); i++) {
       task_op = task_ops.at(i);
+      ObActiveSessionGuard::get_stat().plan_line_id_ = task_op->plan_line_id_;
       ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, task_op->get_ls_id().id());
       if (OB_FAIL(das_factory->create_das_task_result(task_op->get_type(), op_result))) {
         LOG_WARN("create das task result failed", K(ret));
