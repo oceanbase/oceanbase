@@ -25223,7 +25223,7 @@ SQL: select max(a), min(c) from pjt1,pjt2,pjt3;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -25336,7 +25336,7 @@ SQL: select max(a), min(c) from pjt1,pjt2,pjt3;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -25478,7 +25478,7 @@ SQL: select max(a), min(c) from pjt1,pjt2,pjt3;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     },
      {
@@ -25576,7 +25576,7 @@ SQL: select max(a), min(c) from pjt1,pjt2,pjt3;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -26919,7 +26919,7 @@ SQL: select count(distinct g), max(d), min(a) from pjt1,pjt2,pjt3,pjt4;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -27033,7 +27033,7 @@ SQL: select count(distinct g), max(d), min(a) from pjt1,pjt2,pjt3,pjt4;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -27147,7 +27147,7 @@ SQL: select count(distinct g), max(d), min(a) from pjt1,pjt2,pjt3,pjt4;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -27297,7 +27297,7 @@ SQL: select count(distinct g), max(d), min(a) from pjt1,pjt2,pjt3,pjt4;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     },
      {
@@ -27395,7 +27395,7 @@ SQL: select count(distinct g), max(d), min(a) from pjt1,pjt2,pjt3,pjt4;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     },
      {
@@ -27493,7 +27493,7 @@ SQL: select count(distinct g), max(d), min(a) from pjt1,pjt2,pjt3,pjt4;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -28837,7 +28837,7 @@ SQL: select sum(distinct a) from pjt1,pjt2,pjt3 where b=d;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -29271,7 +29271,7 @@ SQL: select sum(distinct a) from pjt1,pjt2,pjt3 where b=d;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -30725,7 +30725,7 @@ SQL: select max(a) from pjt1,pjt2,pjt3,pjt4 where b=d;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -31007,7 +31007,7 @@ SQL: select max(a) from pjt1,pjt2,pjt3,pjt4 where b=d;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -32007,7 +32007,7 @@ SQL: select avg(distinct c) from pjt1,pjt2,pjt3,pjt4 where a=e;
           "type":0
         },
         "linear_inter_expr":null,
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -32157,7 +32157,7 @@ SQL: select avg(distinct c) from pjt1,pjt2,pjt3,pjt4 where a=e;
         "type":0
       },
       "linear_inter_expr":null,
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     },
      {
@@ -32255,7 +32255,7 @@ SQL: select avg(distinct c) from pjt1,pjt2,pjt3,pjt4 where a=e;
         "type":0
       },
       "linear_inter_expr":null,
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     },
      {
@@ -32353,7 +32353,7 @@ SQL: select avg(distinct c) from pjt1,pjt2,pjt3,pjt4 where a=e;
         "type":0
       },
       "linear_inter_expr":null,
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -32835,7 +32835,7 @@ SQL: select sum(distinct a) from pjt1,pjt2,pjt3 where b=d;
               "dl":"",
               "type":0
             },
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
            {
@@ -32970,7 +32970,7 @@ SQL: select sum(distinct a) from pjt1,pjt2,pjt3 where b=d;
                   "dl":"",
                   "type":0
                 },
-                "is_nested_aggr":false,
+                "expr_in_inner_stmt":false,
                 "pl_agg_udf_expr":null
               },
                {
@@ -33301,7 +33301,7 @@ SQL: select sum(distinct a) from pjt1,pjt2,pjt3 where b=d;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     },
      {
@@ -33400,7 +33400,7 @@ SQL: select sum(distinct a) from pjt1,pjt2,pjt3 where b=d;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -34381,7 +34381,7 @@ SQL: select * from pjt1, (select min(d) as x from pjt2,pjt3) where a=x;
         "type":0
       },
       "linear_inter_expr":null,
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
 >>>>>>> de0eba8f08f... GIS sql syntax
@@ -35216,11 +35216,11 @@ SQL: select * from pjt1, (select min(d) as x from pjt2,pjt3) where a=x;
               "type":0
             },
 <<<<<<< HEAD
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
 =======
             "linear_inter_expr":null,
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           }
         ]
@@ -35566,7 +35566,7 @@ SQL: select * from pjt1, (select min(d) as x from pjt2,pjt3) where a=x;
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
 =======
           "is_lob_column":false,
@@ -37368,7 +37368,7 @@ SQL: select * from pjt1, (select count(distinct h)as x from pjt2,pjt3,pjt4 where
               "dl":"",
               "type":0
             },
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":true,
@@ -37645,7 +37645,7 @@ SQL: select * from pjt1, (select count(distinct h)as x from pjt2,pjt3,pjt4 where
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
       ],
@@ -38205,7 +38205,7 @@ SQL: select min(b) from pjt1, (select count(distinct h)as x from pjt2,pjt3,pjt4 
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
 =======
         "is_lob_column":false,
@@ -38822,7 +38822,7 @@ SQL: select min(b) from pjt1, (select count(distinct h)as x from pjt2,pjt3,pjt4 
               "type":0
             },
             "linear_inter_expr":null,
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":true,
@@ -39155,7 +39155,7 @@ SQL: select min(b) from pjt1, (select count(distinct h)as x from pjt2,pjt3,pjt4 
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -39937,7 +39937,7 @@ SQL: select min(b) from pjt1, (select count(distinct h)as x from pjt2,pjt3,pjt4 
           "type":0
         },
         "linear_inter_expr":null,
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -40195,7 +40195,7 @@ SQL: select min(b) from pjt1, (select count(distinct h)as x from pjt2,pjt3,pjt4 
         "type":0
       },
       "linear_inter_expr":null,
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -40595,7 +40595,7 @@ SQL: select min(b) from pjt1, (select count(distinct h)as x from pjt2,pjt3,pjt4 
               "dl":"",
               "type":0
             },
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":true,
@@ -40874,7 +40874,7 @@ SQL: select min(b) from pjt1, (select count(distinct h)as x from pjt2,pjt3,pjt4 
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
       ],
@@ -42296,7 +42296,7 @@ SQL: select distinct a from pjt1 where b>(select sum(distinct c) from pjt1,pjt2 
               "dl":"",
               "type":0
             },
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":false,
@@ -42553,7 +42553,7 @@ SQL: select distinct a from pjt1 where b>(select sum(distinct c) from pjt1,pjt2 
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
       ],
@@ -44218,7 +44218,7 @@ SQL: select distinct a from pjt1 where b>(select avg(distinct d) from pjt1,pjt2,
                   "dl":"",
                   "type":0
                 },
-                "is_nested_aggr":false,
+                "expr_in_inner_stmt":false,
                 "pl_agg_udf_expr":null
               },
                {
@@ -44354,7 +44354,7 @@ SQL: select distinct a from pjt1 where b>(select avg(distinct d) from pjt1,pjt2,
                       "dl":"",
                       "type":0
                     },
-                    "is_nested_aggr":false,
+                    "expr_in_inner_stmt":false,
                     "pl_agg_udf_expr":null
                   },
                    {
@@ -44796,7 +44796,7 @@ SQL: select distinct a from pjt1 where b>(select avg(distinct d) from pjt1,pjt2,
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         },
          {
@@ -44895,7 +44895,7 @@ SQL: select distinct a from pjt1 where b>(select avg(distinct d) from pjt1,pjt2,
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
       ],
@@ -45592,7 +45592,7 @@ SQL: select max(a) from pjt1,pjt2 where b > (select min(c) from pjt2,pjt3 where 
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -45911,7 +45911,7 @@ SQL: select max(a) from pjt1,pjt2 where b > (select min(c) from pjt2,pjt3 where 
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -46598,7 +46598,7 @@ SQL: select max(a) from pjt1,pjt2 where b > (select min(c) from pjt2,pjt3 where 
               "dl":"",
               "type":0
             },
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":false,
@@ -46997,7 +46997,7 @@ SQL: select max(a) from pjt1,pjt2 where b > (select min(c) from pjt2,pjt3 where 
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
       ],
@@ -47622,7 +47622,7 @@ SQL: select max(a) from pjt1,pjt2 where b > (select min(c) from pjt2,pjt3 where 
                   "dl":"",
                   "type":0
                 },
-                "is_nested_aggr":false,
+                "expr_in_inner_stmt":false,
                 "pl_agg_udf_expr":null
               },
               "is_alias":false,
@@ -47761,7 +47761,7 @@ SQL: select max(a) from pjt1,pjt2 where b > (select min(c) from pjt2,pjt3 where 
                 "dl":"",
                 "type":0
               },
-              "is_nested_aggr":false,
+              "expr_in_inner_stmt":false,
               "pl_agg_udf_expr":null
             }
           ],
@@ -48404,7 +48404,7 @@ SQL: (select count(distinct a) from pjt1,pjt2) union (select max(c) from pjt2 wh
               "dl":"",
               "type":0
             },
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":false,
@@ -48543,7 +48543,7 @@ SQL: (select count(distinct a) from pjt1,pjt2) union (select max(c) from pjt2 wh
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
       ],
@@ -49060,7 +49060,7 @@ SQL: (select count(distinct a) from pjt1,pjt2) union (select max(c) from pjt2 wh
                   "dl":"",
                   "type":0
                 },
-                "is_nested_aggr":false,
+                "expr_in_inner_stmt":false,
                 "pl_agg_udf_expr":null
               },
                {
@@ -49489,7 +49489,7 @@ SQL: (select count(distinct a) from pjt1,pjt2) union (select max(c) from pjt2 wh
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
       ],
@@ -50147,7 +50147,7 @@ SQL: (select count(distinct a) from pjt1,pjt2) union (select max(c) from pjt2 wh
                       "dl":"",
                       "type":0
                     },
-                    "is_nested_aggr":false,
+                    "expr_in_inner_stmt":false,
                     "pl_agg_udf_expr":null
                   },
                    {
@@ -50283,7 +50283,7 @@ SQL: (select count(distinct a) from pjt1,pjt2) union (select max(c) from pjt2 wh
                           "dl":"",
                           "type":0
                         },
-                        "is_nested_aggr":false,
+                        "expr_in_inner_stmt":false,
                         "pl_agg_udf_expr":null
                       },
                        {
@@ -50467,7 +50467,7 @@ SQL: (select count(distinct a) from pjt1,pjt2) union (select max(c) from pjt2 wh
                 "dl":"",
                 "type":0
               },
-              "is_nested_aggr":false,
+              "expr_in_inner_stmt":false,
               "pl_agg_udf_expr":null
             },
              {
@@ -50566,7 +50566,7 @@ SQL: (select count(distinct a) from pjt1,pjt2) union (select max(c) from pjt2 wh
                 "dl":"",
                 "type":0
               },
-              "is_nested_aggr":false,
+              "expr_in_inner_stmt":false,
               "pl_agg_udf_expr":null
             }
           ],
@@ -51261,7 +51261,7 @@ SQL: (select max(a) from pjt1, pjt2) minus (select distinct e from pjt3,pjt4);
               "dl":"",
               "type":0
             },
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":false,
@@ -51400,7 +51400,7 @@ SQL: (select max(a) from pjt1, pjt2) minus (select distinct e from pjt3,pjt4);
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
       ],
@@ -52649,7 +52649,7 @@ SQL: select sum(distinct b) from pjt1, (select distinct c from pjt2, pjt3) where
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -52924,7 +52924,7 @@ SQL: select sum(distinct b) from pjt1, (select distinct c from pjt2, pjt3) where
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -55035,7 +55035,7 @@ SQL: select distinct a from pjt1, pjt2 where b > (select max(e) from pjt3, pjt4)
               "dl":"",
               "type":0
             },
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":false,
@@ -55174,7 +55174,7 @@ SQL: select distinct a from pjt1, pjt2 where b > (select max(e) from pjt3, pjt4)
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
       ],
@@ -55871,7 +55871,7 @@ SQL: select count(distinct a) from pjt1,pjt2 where b in (select distinct c from 
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -56153,7 +56153,7 @@ SQL: select count(distinct a) from pjt1,pjt2 where b in (select distinct c from 
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -57637,7 +57637,7 @@ SQL: select count(distinct a) from pjt1,pjt2 where b in (select distinct c from 
                   "dl":"",
                   "type":0
                 },
-                "is_nested_aggr":false,
+                "expr_in_inner_stmt":false,
                 "pl_agg_udf_expr":null
               },
               "is_alias":false,
@@ -57776,7 +57776,7 @@ SQL: select count(distinct a) from pjt1,pjt2 where b in (select distinct c from 
                 "dl":"",
                 "type":0
               },
-              "is_nested_aggr":false,
+              "expr_in_inner_stmt":false,
               "pl_agg_udf_expr":null
             }
           ],
@@ -61594,7 +61594,7 @@ SQL: select avg(b) from pjt1, pjt2;
               "dl":"",
               "type":0
             },
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
            {
@@ -61730,7 +61730,7 @@ SQL: select avg(b) from pjt1, pjt2;
                   "dl":"",
                   "type":0
                 },
-                "is_nested_aggr":false,
+                "expr_in_inner_stmt":false,
                 "pl_agg_udf_expr":null
               },
                {
@@ -61914,7 +61914,7 @@ SQL: select avg(b) from pjt1, pjt2;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     },
      {
@@ -62013,7 +62013,7 @@ SQL: select avg(b) from pjt1, pjt2;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -62706,7 +62706,7 @@ SQL: select max(a), sum(b) from pjt1, pjt2;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -62820,7 +62820,7 @@ SQL: select max(a), sum(b) from pjt1, pjt2;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -62959,7 +62959,7 @@ SQL: select max(a), sum(b) from pjt1, pjt2;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     },
      {
@@ -63058,7 +63058,7 @@ SQL: select max(a), sum(b) from pjt1, pjt2;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -63836,7 +63836,7 @@ SQL: select max(a+c) from pjt1, pjt2;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -64060,7 +64060,7 @@ SQL: select max(a+c) from pjt1, pjt2;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -68657,7 +68657,7 @@ SQL: select sum(c1) from test_simp group by c2 ,c3;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -68894,7 +68894,7 @@ SQL: select sum(c1) from test_simp group by c2 ,c3;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -69318,7 +69318,7 @@ SQL: select sum(c1) from test_simp group by c2 ,c3, c4;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -69606,7 +69606,7 @@ SQL: select sum(c1) from test_simp group by c2 ,c3, c4;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],

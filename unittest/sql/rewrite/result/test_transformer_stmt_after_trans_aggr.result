@@ -200,7 +200,7 @@ SQL: select max(c1) from t1;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -335,7 +335,7 @@ SQL: select max(c1) from t1;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -880,7 +880,7 @@ SQL: select min(c1) from t1;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -1015,7 +1015,7 @@ SQL: select min(c1) from t1;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -1560,7 +1560,7 @@ SQL: select max(c1) as max from t1;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":true,
@@ -1695,7 +1695,7 @@ SQL: select max(c1) as max from t1;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -2240,7 +2240,7 @@ SQL: select min(c1) as min from t1;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":true,
@@ -2375,7 +2375,7 @@ SQL: select min(c1) as min from t1;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -2920,7 +2920,7 @@ SQL: select max(c2) from t9;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -3055,7 +3055,7 @@ SQL: select max(c2) from t9;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -3931,7 +3931,7 @@ SQL: select max(c3) from t10;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -4066,7 +4066,7 @@ SQL: select max(c3) from t10;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -5810,7 +5810,7 @@ SQL: select * from t9 where c2 = (select max(c2) from t9);
               "dl":"",
               "type":0
             },
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":false,
@@ -5945,7 +5945,7 @@ SQL: select * from t9 where c2 = (select max(c2) from t9);
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
       ],
@@ -6825,7 +6825,7 @@ SQL: select max(c1) from t1 as tmp;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -6960,7 +6960,7 @@ SQL: select max(c1) from t1 as tmp;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -7953,7 +7953,7 @@ SQL: select c1 from t1 where c1 > (select max(c1) from t1);
               "dl":"",
               "type":0
             },
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":false,
@@ -8088,7 +8088,7 @@ SQL: select c1 from t1 where c1 > (select max(c1) from t1);
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
       ],
@@ -8637,7 +8637,7 @@ SQL: select max(c1) as max from t1 having max(c1) > 1;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":true,
@@ -8803,7 +8803,7 @@ SQL: select max(c1) as max from t1 having max(c1) > 1;
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         },
          {
@@ -8938,7 +8938,7 @@ SQL: select max(c1) as max from t1 having max(c1) > 1;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -9483,7 +9483,7 @@ SQL: select min(c1) as min from t1 having min(c1) > 1;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":true,
@@ -9649,7 +9649,7 @@ SQL: select min(c1) as min from t1 having min(c1) > 1;
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         },
          {
@@ -9784,7 +9784,7 @@ SQL: select min(c1) as min from t1 having min(c1) > 1;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -10329,7 +10329,7 @@ SQL: select max(c1) as max from t1 having max(c1);
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":true,
@@ -10494,7 +10494,7 @@ SQL: select max(c1) as max from t1 having max(c1);
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
 =======
           "is_lob_column":false,
@@ -10606,7 +10606,7 @@ SQL: select max(c1) as max from t1 having max(c1);
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -11151,7 +11151,7 @@ SQL: select min(c1) as min from t1 having true;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":true,
@@ -11316,7 +11316,7 @@ SQL: select min(c1) as min from t1 having true;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -11867,7 +11867,7 @@ SQL: select max(c1) from t7 having false;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -12032,7 +12032,7 @@ SQL: select max(c1) from t7 having false;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -12644,7 +12644,7 @@ SQL: select max(c1) from pt2;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -12779,7 +12779,7 @@ SQL: select max(c1) from pt2;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -13380,7 +13380,7 @@ SQL: select max(c1) as max from pt2;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":true,
@@ -13515,7 +13515,7 @@ SQL: select max(c1) as max from pt2;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -14116,7 +14116,7 @@ SQL: select min(c1) from pt2;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -14251,7 +14251,7 @@ SQL: select min(c1) from pt2;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -14852,7 +14852,7 @@ SQL: select min(c1) as min from pt2;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":true,
@@ -14987,7 +14987,7 @@ SQL: select min(c1) as min from pt2;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -15588,7 +15588,7 @@ SQL: select * from (select max(c1) from pt2) as tmp_table;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -15723,7 +15723,7 @@ SQL: select * from (select max(c1) from pt2) as tmp_table;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -17028,7 +17028,7 @@ SQL: select * from t2 where t2.c1 > (select max(c1) from pt2);
               "dl":"",
               "type":0
             },
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":false,
@@ -17163,7 +17163,7 @@ SQL: select * from t2 where t2.c1 > (select max(c1) from pt2);
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
       ],
@@ -17768,7 +17768,7 @@ SQL: select * from (select min(c1) as min from pt2) as tmp_table;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -17903,7 +17903,7 @@ SQL: select * from (select min(c1) as min from pt2) as tmp_table;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -19208,7 +19208,7 @@ SQL: select * from t2 where t2.c1 > (select min(c1) as min from pt2);
               "dl":"",
               "type":0
             },
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":true,
@@ -19343,7 +19343,7 @@ SQL: select * from t2 where t2.c1 > (select min(c1) as min from pt2);
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
       ],
@@ -19948,7 +19948,7 @@ SQL: select * from (select max(c1) from t1) as tmp_table;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -20083,7 +20083,7 @@ SQL: select * from (select max(c1) from t1) as tmp_table;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -21332,7 +21332,7 @@ SQL: select * from t2 where t2.c1 > (select max(c1) from t1);
               "dl":"",
               "type":0
             },
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":false,
@@ -21467,7 +21467,7 @@ SQL: select * from t2 where t2.c1 > (select max(c1) from t1);
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
       ],
@@ -22016,7 +22016,7 @@ SQL: select * from (select max(c1) as max from t1) as tmp_table;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -22151,7 +22151,7 @@ SQL: select * from (select max(c1) as max from t1) as tmp_table;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -23400,7 +23400,7 @@ SQL: select * from t2 where t2.c1 > (select max(c1) as max from t1);
               "dl":"",
               "type":0
             },
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":true,
@@ -23535,7 +23535,7 @@ SQL: select * from t2 where t2.c1 > (select max(c1) as max from t1);
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
       ],
@@ -24084,7 +24084,7 @@ SQL: select * from (select min(c1) from t1) as tmp_table;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -24219,7 +24219,7 @@ SQL: select * from (select min(c1) from t1) as tmp_table;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -25468,7 +25468,7 @@ SQL: select * from t2 where t2.c1 > (select min(c1) from t1);
               "dl":"",
               "type":0
             },
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":false,
@@ -25603,7 +25603,7 @@ SQL: select * from t2 where t2.c1 > (select min(c1) from t1);
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
       ],
@@ -26152,7 +26152,7 @@ SQL: select * from (select min(c1) as min from t1) as tmp_table;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -26287,7 +26287,7 @@ SQL: select * from (select min(c1) as min from t1) as tmp_table;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -27536,7 +27536,7 @@ SQL: select * from t2 where t2.c1 > (select min(c1) as min from t1);
               "dl":"",
               "type":0
             },
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":true,
@@ -27671,7 +27671,7 @@ SQL: select * from t2 where t2.c1 > (select min(c1) as min from t1);
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
       ],
@@ -28220,7 +28220,7 @@ SQL: select max(c1) from t7;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -28355,7 +28355,7 @@ SQL: select max(c1) from t7;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -28991,7 +28991,7 @@ SQL: select min(c1) from t7;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -29126,7 +29126,7 @@ SQL: select min(c1) from t7;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -29833,7 +29833,7 @@ SQL: select max(c1 + 1) + 1 from t1 limit 1;
               "dl":"",
               "type":0
             },
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
            {
@@ -30070,7 +30070,7 @@ SQL: select max(c1 + 1) + 1 from t1 limit 1;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -30337,7 +30337,7 @@ SQL: select max(c1) from t1 limit 1;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -30472,7 +30472,7 @@ SQL: select max(c1) from t1 limit 1;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -31046,7 +31046,7 @@ SQL: select min(c1) from t1 limit 1;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -31181,7 +31181,7 @@ SQL: select min(c1) from t1 limit 1;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -31755,7 +31755,7 @@ SQL: select min(c1) as min from t1 limit 1;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":true,
@@ -31890,7 +31890,7 @@ SQL: select min(c1) as min from t1 limit 1;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -32565,7 +32565,7 @@ SQL: select min(c1 + 1) + 1 from t1 limit 1;
               "dl":"",
               "type":0
             },
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
            {
@@ -32802,7 +32802,7 @@ SQL: select min(c1 + 1) + 1 from t1 limit 1;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -33069,7 +33069,7 @@ SQL: select max(c1) as max from t1 limit 1;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":true,
@@ -33204,7 +33204,7 @@ SQL: select max(c1) as max from t1 limit 1;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -33879,7 +33879,7 @@ SQL: select max(c1 + 1) + 1 as max from t1 limit 1;
               "dl":"",
               "type":0
             },
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
            {
@@ -34116,7 +34116,7 @@ SQL: select max(c1 + 1) + 1 as max from t1 limit 1;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -34484,7 +34484,7 @@ SQL: select min(c1 + 1) + 1 as min from t1 limit 1;
               "dl":"",
               "type":0
             },
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
            {
@@ -34721,7 +34721,7 @@ SQL: select min(c1 + 1) + 1 as min from t1 limit 1;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -34988,7 +34988,7 @@ SQL: select max(c1) as max from t1 having min(c1) > 1;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":true,
@@ -35154,7 +35154,7 @@ SQL: select max(c1) as max from t1 having min(c1) > 1;
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         },
          {
@@ -35289,7 +35289,7 @@ SQL: select max(c1) as max from t1 having min(c1) > 1;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     },
      {
@@ -35388,7 +35388,7 @@ SQL: select max(c1) as max from t1 having min(c1) > 1;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -35626,7 +35626,7 @@ SQL: select min(c1) as min from t1 having max(c1) > 1;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":true,
@@ -35792,7 +35792,7 @@ SQL: select min(c1) as min from t1 having max(c1) > 1;
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         },
          {
@@ -35927,7 +35927,7 @@ SQL: select min(c1) as min from t1 having max(c1) > 1;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     },
      {
@@ -36026,7 +36026,7 @@ SQL: select min(c1) as min from t1 having max(c1) > 1;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -36264,7 +36264,7 @@ SQL: select max(c1) from t1 having 1 in (select c1 from t2);
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -36557,7 +36557,7 @@ SQL: select max(c1) from t1 having 1 in (select c1 from t2);
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -38864,7 +38864,7 @@ SQL: select max(c4) from t9;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -38999,7 +38999,7 @@ SQL: select max(c4) from t9;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -39279,7 +39279,7 @@ SQL: select min(999) from t7 having max(c1) > 0;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -39445,7 +39445,7 @@ SQL: select min(999) from t7 having max(c1) > 0;
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         },
          {
@@ -39561,7 +39561,7 @@ SQL: select min(999) from t7 having max(c1) > 0;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     },
      {
@@ -39660,7 +39660,7 @@ SQL: select min(999) from t7 having max(c1) > 0;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -40692,7 +40692,7 @@ SQL: select max(1+2) from t7 limit 10;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -40808,7 +40808,7 @@ SQL: select max(1+2) from t7 limit 10;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -41292,7 +41292,7 @@ SQL: select max(1+2) from t7;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -41408,7 +41408,7 @@ SQL: select max(1+2) from t7;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -41863,7 +41863,7 @@ SQL: select min(1+2) from t7 where c2 = 1;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -41979,7 +41979,7 @@ SQL: select min(1+2) from t7 where c2 = 1;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -42675,7 +42675,7 @@ SQL: select max(1+2), 3 from t7;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -42838,7 +42838,7 @@ SQL: select max(1+2), 3 from t7;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -42998,7 +42998,7 @@ SQL: select max(1+2) from t7,t8 where t7.c1 = t8.c1;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -43114,7 +43114,7 @@ SQL: select max(1+2) from t7,t8 where t7.c1 = t8.c1;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -43860,7 +43860,7 @@ SQL: select min(1+2) from t7 inner join t8 on t7.c1=t8.c1;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -43976,7 +43976,7 @@ SQL: select min(1+2) from t7 inner join t8 on t7.c1=t8.c1;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -44722,7 +44722,7 @@ SQL: select max(1+2) from t7 left join t8 using(c1);
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -44838,7 +44838,7 @@ SQL: select max(1+2) from t7 left join t8 using(c1);
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -49617,7 +49617,7 @@ SQL: select * from t7 where c1 in (select max(999+1) from t8);
               "dl":"",
               "type":0
             },
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":false,
@@ -49733,7 +49733,7 @@ SQL: select * from t7 where c1 in (select max(999+1) from t8);
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
       ],
@@ -50839,7 +50839,7 @@ SQL: select * from t7 where c1 in (select max(999+1) from t8 where t8.c1=2 and t
               "dl":"",
               "type":0
             },
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":false,
@@ -50955,7 +50955,7 @@ SQL: select * from t7 where c1 in (select max(999+1) from t8 where t8.c1=2 and t
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
       ],
@@ -52696,7 +52696,7 @@ SQL: select max(1) from t7 order by 1;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -52812,7 +52812,7 @@ SQL: select max(1) from t7 order by 1;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -52895,7 +52895,7 @@ SQL: select max(1) from t7 order by 1;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "ascending":"NULLs_first_asc"
@@ -53405,7 +53405,7 @@ SQL: select max(1+2) from t7 order by c1;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -53521,7 +53521,7 @@ SQL: select max(1+2) from t7 order by c1;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -54171,7 +54171,7 @@ SQL: select max(1+2) from t7 order by c2,c3;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -54287,7 +54287,7 @@ SQL: select max(1+2) from t7 order by c2,c3;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -56649,7 +56649,7 @@ SQL: select c1 from t1 where c1 < some (select c1 from t2);
               "type":0
             },
             "linear_inter_expr":null,
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":false,
@@ -58263,7 +58263,7 @@ SQL: select c1 from t1 where c1 < all (select c1 from t2);
               "type":0
             },
             "linear_inter_expr":null,
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":false,
@@ -58439,7 +58439,7 @@ SQL: select c1 from t1 where c1 < all (select c1 from t2);
             "type":0
           },
           "linear_inter_expr":null,
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
       ],
@@ -59496,7 +59496,7 @@ SQL: select c1 from t1 where c1 in (select c1 from t2 where c2 >= some(select c1
               "type":0
             },
             "linear_inter_expr":null,
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":false,
@@ -59664,7 +59664,7 @@ SQL: select c1 from t1 where c1 in (select c1 from t2 where c2 >= some(select c1
                 "type":0
               },
               "linear_inter_expr":null,
-              "is_nested_aggr":false,
+              "expr_in_inner_stmt":false,
               "pl_agg_udf_expr":null
             },
              {
@@ -59826,7 +59826,7 @@ SQL: select c1 from t1 where c1 in (select c1 from t2 where c2 >= some(select c1
             "type":0
           },
           "linear_inter_expr":null,
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
       ],
@@ -60907,7 +60907,7 @@ SQL: select c1 from t1 where c1 < all (select c1 from t2);
               "type":0
             },
             "linear_inter_expr":null,
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":false,
@@ -61075,7 +61075,7 @@ SQL: select c1 from t1 where c1 < all (select c1 from t2);
                 "type":0
               },
               "linear_inter_expr":null,
-              "is_nested_aggr":false,
+              "expr_in_inner_stmt":false,
               "pl_agg_udf_expr":null
             },
              {
@@ -61237,7 +61237,7 @@ SQL: select c1 from t1 where c1 < all (select c1 from t2);
             "type":0
           },
           "linear_inter_expr":null,
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
       ],
@@ -62829,7 +62829,7 @@ SQL: select c1 from t1 where c1 in (select c1 from t2 where c2 >= some(select c1
                   "type":0
                 },
                 "linear_inter_expr":null,
-                "is_nested_aggr":false,
+                "expr_in_inner_stmt":false,
                 "pl_agg_udf_expr":null
               },
               "is_alias":false,
@@ -63081,7 +63081,7 @@ SQL: select c1 from t1 where c1 + 1 > any (select c1 from t2);
                 "type":0
               },
               "linear_inter_expr":null,
-              "is_nested_aggr":false,
+              "expr_in_inner_stmt":false,
               "pl_agg_udf_expr":null
             }
           ],
@@ -64438,7 +64438,7 @@ SQL: select c1 from t1 where c1 > any (select c1 from t2 where c2 >= some(select
               "type":0
             },
             "linear_inter_expr":null,
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":false,
@@ -64711,7 +64711,7 @@ SQL: select c1 from t1 where c1 > any (select c1 from t2 where c2 >= some(select
             "type":0
           },
           "linear_inter_expr":null,
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
       ],
@@ -65216,7 +65216,7 @@ SQL: select c1 from t1 where c1 > any (select c1 from t2 where c2 >= some(select
                   "type":0
                 },
                 "linear_inter_expr":null,
-                "is_nested_aggr":false,
+                "expr_in_inner_stmt":false,
                 "pl_agg_udf_expr":null
               },
               "is_alias":false,
@@ -65394,7 +65394,7 @@ SQL: select c1 from t1 where c1 > any (select c1 from t2 where c2 >= some(select
                 "type":0
               },
               "linear_inter_expr":null,
-              "is_nested_aggr":false,
+              "expr_in_inner_stmt":false,
               "pl_agg_udf_expr":null
             }
           ],
@@ -66532,7 +66532,7 @@ SQL: select c1 from t1 group by c1 > any (select c1 from t2);
               "type":0
             },
             "linear_inter_expr":null,
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":false,
@@ -66670,7 +66670,7 @@ SQL: select c1 from t1 group by c1 > any (select c1 from t2);
             "type":0
           },
           "linear_inter_expr":null,
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
       ],
@@ -67745,7 +67745,7 @@ SQL: select c1 from t1 having c1 < any (select c1 from t2);
               "type":0
             },
             "linear_inter_expr":null,
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":false,
@@ -67883,7 +67883,7 @@ SQL: select c1 from t1 having c1 < any (select c1 from t2);
             "type":0
           },
           "linear_inter_expr":null,
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
       ],
@@ -68890,7 +68890,7 @@ SQL: select c1 from t1 order by c1 > all (select c1 from t2);
               "type":0
             },
             "linear_inter_expr":null,
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":false,
@@ -69058,7 +69058,7 @@ SQL: select c1 from t1 order by c1 > all (select c1 from t2);
                 "type":0
               },
               "linear_inter_expr":null,
-              "is_nested_aggr":false,
+              "expr_in_inner_stmt":false,
               "pl_agg_udf_expr":null
             },
              {
@@ -69220,7 +69220,7 @@ SQL: select c1 from t1 order by c1 > all (select c1 from t2);
             "type":0
           },
           "linear_inter_expr":null,
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
 >>>>>>> de0eba8f08f... GIS sql syntax
@@ -70620,7 +70620,7 @@ SQL: select c1 from t1 order by c1 > all (select c1 from t2);
                 "type":0
               },
               "linear_inter_expr":null,
-              "is_nested_aggr":false,
+              "expr_in_inner_stmt":false,
               "pl_agg_udf_expr":null
 >>>>>>> de0eba8f08f... GIS sql syntax
             },
@@ -71014,7 +71014,7 @@ SQL: select c1 from t1 where c1 > any (select c1 from t2 where c2 >= some(select
             "type":0
           },
           "linear_inter_expr":null,
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
       ],
@@ -73708,7 +73708,7 @@ SQL: select c1 from t1 group by c1 > any (select c1 from t2);
               "dl":"",
               "type":0
             },
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":false,
@@ -73843,7 +73843,7 @@ SQL: select c1 from t1 group by c1 > any (select c1 from t2);
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
       ],
@@ -75263,7 +75263,7 @@ SQL: select c1 from t1 order by c1 > all (select c1 from t2);
               "dl":"",
               "type":0
             },
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":false,
@@ -75427,7 +75427,7 @@ SQL: select c1 from t1 order by c1 > all (select c1 from t2);
                 "dl":"",
                 "type":0
               },
-              "is_nested_aggr":false,
+              "expr_in_inner_stmt":false,
               "pl_agg_udf_expr":null
             },
              {
@@ -75621,7 +75621,7 @@ SQL: select c1 from t1 order by c1 > all (select c1 from t2);
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
       ],
@@ -76557,7 +76557,7 @@ SQL: select c1 from t1 order by c1 < all (select c1 from t2);
               "dl":"",
               "type":0
             },
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":false,
@@ -76722,7 +76722,7 @@ SQL: select c1 from t1 order by c1 < all (select c1 from t2);
                 "dl":"",
                 "type":0
               },
-              "is_nested_aggr":false,
+              "expr_in_inner_stmt":false,
               "pl_agg_udf_expr":null
             },
              {
@@ -76895,7 +76895,7 @@ SQL: select c1 from t1 order by c1 < all (select c1 from t2);
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
 =======
             0
@@ -79596,7 +79596,7 @@ SQL: select c1 from t1 where c1 + (1 < any (select c1 from t2));
               "dl":"",
               "type":0
             },
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":false,
@@ -79731,7 +79731,7 @@ SQL: select c1 from t1 where c1 + (1 < any (select c1 from t2));
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
       ],
@@ -80774,7 +80774,7 @@ SQL: select c1 from t1 where c1 > any (select c2 from t9);
           "type":0
         },
         "linear_inter_expr":null,
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -80912,7 +80912,7 @@ SQL: select c1 from t1 where c1 > any (select c2 from t9);
         "type":0
       },
       "linear_inter_expr":null,
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -82374,7 +82374,7 @@ SQL: select max(c3) from t9 where c2 = 1;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -82509,7 +82509,7 @@ SQL: select max(c3) from t9 where c2 = 1;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -83717,7 +83717,7 @@ SQL: select max(c3) from t9 where c2 is TRUE;
           "type":0
         },
         "linear_inter_expr":null,
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -84163,7 +84163,7 @@ SQL: select max(c3) from t9 where 1 = c2;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -84298,7 +84298,7 @@ SQL: select max(c3) from t9 where 1 = c2;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -85488,7 +85488,7 @@ SQL: select max(c3) from t9 where c2 != 1;
           "type":0
         },
         "linear_inter_expr":null,
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -86018,7 +86018,7 @@ SQL: select max(c3) from t9 where c2 is TRUE;
           "type":0
         },
         "linear_inter_expr":null,
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -86366,7 +86366,7 @@ SQL: select max(c3) from t9 where c2 is TRUE;
         "type":0
       },
       "linear_inter_expr":null,
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -86701,11 +86701,11 @@ SQL: select max(c3) from t9 where c2 <1;
           "type":0
         },
 <<<<<<< HEAD
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
 =======
         "linear_inter_expr":null,
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -86959,7 +86959,7 @@ SQL: select max(c3) from t9 where c2 <1;
         "type":0
       },
       "linear_inter_expr":null,
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -87541,7 +87541,7 @@ SQL: select c1 from t1 where c1 > any (select c2 from t9);
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -87778,7 +87778,7 @@ SQL: select max(c3) from t9 where c2 = 1 and c1 = 1;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -87887,7 +87887,7 @@ SQL: select max(c3) from t9 where c2 = 1 and c1 = 1;
               "type":0
             },
             "linear_inter_expr":null,
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":false,
@@ -88089,7 +88089,7 @@ SQL: select max(c3) from t9 where c2 = 1 and c1 = 1;
         "type":0
       },
 <<<<<<< HEAD
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -90141,7 +90141,7 @@ SQL: select c1 from t1 where c1 > any (select c1 from t2 having c1 > 1);
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
 =======
         "is_lob_column":false,
@@ -90470,7 +90470,7 @@ SQL: select c1 from t1 where c1 > any (select c1 from t2 having c1 > 1);
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -90725,7 +90725,7 @@ SQL: select max(c3) from t9 where c2 >1;
               "type":0
             },
             "linear_inter_expr":null,
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
 >>>>>>> de0eba8f08f... GIS sql syntax
           },
@@ -91551,7 +91551,7 @@ SQL: select max(c3) from t9 where c2 >1;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -91802,7 +91802,7 @@ SQL: select max(c3) from t9 where c2 >1;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -92574,7 +92574,7 @@ SQL: select max(c3) from t9 where c2 <1;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -92686,7 +92686,7 @@ SQL: select max(c3) from t9 where c2 <1;
               "type":0
             },
             "linear_inter_expr":null,
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":false,
@@ -93274,7 +93274,7 @@ SQL: select max(c3) from t9 where c2 <1;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -98484,7 +98484,7 @@ SQL: select c1 from t1 where c1 > all (select c2 from t9);
                   "type":0
                 },
                 "linear_inter_expr":null,
-                "is_nested_aggr":false,
+                "expr_in_inner_stmt":false,
                 "pl_agg_udf_expr":null
               },
                {
@@ -98582,7 +98582,7 @@ SQL: select c1 from t1 where c1 > all (select c2 from t9);
                   "type":0
                 },
                 "linear_inter_expr":null,
-                "is_nested_aggr":false,
+                "expr_in_inner_stmt":false,
                 "pl_agg_udf_expr":null
               }
             ]
@@ -100022,7 +100022,7 @@ SQL: SELECT MIN(1) FROM agg_t2 ORDER BY (SELECT AVG(c2) FROM agg_t1);
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -100138,7 +100138,7 @@ SQL: SELECT MIN(1) FROM agg_t2 ORDER BY (SELECT AVG(c2) FROM agg_t1);
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     },
      {
@@ -100237,7 +100237,7 @@ SQL: SELECT MIN(1) FROM agg_t2 ORDER BY (SELECT AVG(c2) FROM agg_t1);
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     },
      {
@@ -100339,7 +100339,7 @@ SQL: SELECT MIN(1) FROM agg_t2 ORDER BY (SELECT AVG(c2) FROM agg_t1);
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -100566,7 +100566,7 @@ SQL: SELECT MIN(1) FROM agg_t2 ORDER BY (SELECT AVG(c2) FROM agg_t1);
                     "dl":"",
                     "type":0
                   },
-                  "is_nested_aggr":false,
+                  "expr_in_inner_stmt":false,
                   "pl_agg_udf_expr":null
                 },
                  {
@@ -100701,7 +100701,7 @@ SQL: SELECT MIN(1) FROM agg_t2 ORDER BY (SELECT AVG(c2) FROM agg_t1);
                         "dl":"",
                         "type":0
                       },
-                      "is_nested_aggr":false,
+                      "expr_in_inner_stmt":false,
                       "pl_agg_udf_expr":null
                     },
                      {
@@ -101280,7 +101280,7 @@ SQL: SELECT MIN(1) FROM agg_t2 ORDER BY (SELECT AVG(c2) FROM agg_t1);
                     "dl":"",
                     "type":0
                   },
-                  "is_nested_aggr":false,
+                  "expr_in_inner_stmt":false,
                   "pl_agg_udf_expr":null
                 },
                  {
@@ -101415,7 +101415,7 @@ SQL: SELECT MIN(1) FROM agg_t2 ORDER BY (SELECT AVG(c2) FROM agg_t1);
                         "dl":"",
                         "type":0
                       },
-                      "is_nested_aggr":false,
+                      "expr_in_inner_stmt":false,
                       "pl_agg_udf_expr":null
                     },
                      {
@@ -101889,7 +101889,7 @@ SQL: SELECT MIN(DISTINCT OUTR . `col_varchar_10`) AS X FROM B AS OUTR WHERE (OUT
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":true,
@@ -102054,7 +102054,7 @@ SQL: SELECT MIN(DISTINCT OUTR . `col_varchar_10`) AS X FROM B AS OUTR WHERE (OUT
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -105178,7 +105178,7 @@ SQL: select 5, max(c2) from t9;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -105313,7 +105313,7 @@ SQL: select 5, max(c2) from t9;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -106185,7 +106185,7 @@ SQL: select max(c2), 5 from t9;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -106367,7 +106367,7 @@ SQL: select max(c2), 5 from t9;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -107286,7 +107286,7 @@ SQL: select 5, min(c2) from t9;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -107421,7 +107421,7 @@ SQL: select 5, min(c2) from t9;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -108293,7 +108293,7 @@ SQL: select min(c2), 5 from t9;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -108475,7 +108475,7 @@ SQL: select min(c2), 5 from t9;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -109441,7 +109441,7 @@ SQL: select 5, 5, min(c2), 7 + 5, floor(5) from t9;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -109670,7 +109670,7 @@ SQL: select 5, 5, min(c2), 7 + 5, floor(5) from t9;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -110601,7 +110601,7 @@ SQL: select abs(-55), max(c2), 3 + 2, 5 from t9;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -110830,7 +110830,7 @@ SQL: select abs(-55), max(c2), 3 + 2, 5 from t9;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -112006,7 +112006,7 @@ SQL: select 5, max(c2), c1 from t9;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -112207,7 +112207,7 @@ SQL: select 5, max(c2), c1 from t9;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -112756,7 +112756,7 @@ SQL: select c1, min(c2), 233333 from t9;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -112938,7 +112938,7 @@ SQL: select c1, min(c2), 233333 from t9;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -113696,7 +113696,7 @@ SQL: select * from (select c1 as col from t1) as L where col = (select max(c1) f
               "dl":"",
               "type":0
             },
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":false,
@@ -113831,7 +113831,7 @@ SQL: select * from (select c1 as col from t1) as L where col = (select max(c1) f
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
       ],
@@ -116388,7 +116388,7 @@ SQL: select * from (select a.acctnbr as l1, a.timeuniqueextn as l2  from cb_loan
               "dl":"",
               "type":0
             },
-            "is_nested_aggr":false,
+            "expr_in_inner_stmt":false,
             "pl_agg_udf_expr":null
           },
           "is_alias":false,
@@ -116900,7 +116900,7 @@ SQL: select * from (select a.acctnbr as l1, a.timeuniqueextn as l2  from cb_loan
             "dl":"",
             "type":0
           },
-          "is_nested_aggr":false,
+          "expr_in_inner_stmt":false,
           "pl_agg_udf_expr":null
         }
 <<<<<<< HEAD

@@ -1824,7 +1824,7 @@
     "dl":"",
     "type":0
   },
-  "is_nested_aggr":false,
+  "expr_in_inner_stmt":false,
   "pl_agg_udf_expr":null,
   "expr_hash":0
 }
@@ -1919,7 +1919,7 @@
     "dl":"",
     "type":0
   },
-  "is_nested_aggr":false,
+  "expr_in_inner_stmt":false,
   "pl_agg_udf_expr":null,
   "expr_hash":0
 }

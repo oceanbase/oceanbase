@@ -3339,7 +3339,7 @@ public:
     order_items_(),
     separator_param_expr_(NULL),
     udf_meta_(),
-    is_nested_aggr_(false),
+    expr_in_inner_stmt_(false),
     is_need_deserialize_row_(false),
     pl_agg_udf_expr_(NULL)
   {
@@ -3353,7 +3353,7 @@ public:
     order_items_(),
     separator_param_expr_(NULL),
     udf_meta_(),
-    is_nested_aggr_(false),
+    expr_in_inner_stmt_(false),
     is_need_deserialize_row_(false),
     pl_agg_udf_expr_(NULL)
   {
@@ -3368,7 +3368,7 @@ public:
     order_items_(),
     separator_param_expr_(NULL),
     udf_meta_(),
-    is_nested_aggr_(false),
+    expr_in_inner_stmt_(false),
     is_need_deserialize_row_(false),
     pl_agg_udf_expr_(NULL)
   {
@@ -3387,8 +3387,8 @@ public:
   bool is_param_distinct() const;
   void set_param_distinct(bool is_distinct);
   void set_separator_param_expr(ObRawExpr *separator_param_expr);
-  bool is_nested_aggr() const;
-  void set_in_nested_aggr(bool is_nested);
+  bool in_inner_stmt() const;
+  void set_nested_aggr_inner_stmt(bool inner_stmt);
   int add_order_item(const OrderItem &order_item);
   virtual void clear_child() override;
   virtual void reset();
@@ -3447,9 +3447,10 @@ public:
                                             N_ORDER_BY, order_items_,
                                             N_SEPARATOR_PARAM_EXPR, separator_param_expr_,
                                             K_(udf_meta),
-                                            K_(is_nested_aggr),
+                                            K_(expr_in_inner_stmt),
                                             K_(pl_agg_udf_expr),
                                             K_(expr_hash));
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAggFunRawExpr);
   // real_param_exprs_.count() == 0 means '*'
@@ -3460,7 +3461,7 @@ private:
   ObRawExpr *separator_param_expr_;
   //use for udf function info
   share::schema::ObUDFMeta udf_meta_;
-  bool is_nested_aggr_;
+  bool expr_in_inner_stmt_;
   bool is_need_deserialize_row_;// for topk histogram and hybrid histogram computation
   ObRawExpr *pl_agg_udf_expr_;//for pl agg udf expr
 };
@@ -3511,9 +3512,9 @@ inline bool ObAggFunRawExpr::is_param_distinct() const
 {
   return distinct_;
 }
-inline bool ObAggFunRawExpr::is_nested_aggr() const
+inline bool ObAggFunRawExpr::in_inner_stmt() const
 {
-  return is_nested_aggr_;
+  return expr_in_inner_stmt_;
 }
 inline bool ObAggFunRawExpr::contain_nested_aggr() const
 {
@@ -3526,7 +3527,7 @@ inline bool ObAggFunRawExpr::contain_nested_aggr() const
   return ret;
 }
 inline void ObAggFunRawExpr::set_param_distinct(bool is_distinct) { distinct_ = is_distinct; }
-inline void ObAggFunRawExpr::set_in_nested_aggr(bool is_nested) { is_nested_aggr_ = is_nested; }
+inline void ObAggFunRawExpr::set_nested_aggr_inner_stmt(bool inner_stmt) { expr_in_inner_stmt_ = inner_stmt; }
 inline void ObAggFunRawExpr::set_separator_param_expr(ObRawExpr *separator_param_expr)
 {
   separator_param_expr_ = separator_param_expr;
