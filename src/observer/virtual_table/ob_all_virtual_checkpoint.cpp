@@ -194,7 +194,6 @@ int ObAllVirtualCheckpointInfo::process_curr_tenant(ObNewRow *&row)
                                               sizeof(service_type_buf_)))) {
             SERVER_LOG(WARN, "get service type buf failed", K(ret), K(checkpoint));
           } else {
-            service_type_buf_[MAX_SERVICE_TYPE_BUF_LENGTH - 1] = '\0';
             cur_row_.cells_[i].set_varchar(service_type_buf_);
             cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           }
