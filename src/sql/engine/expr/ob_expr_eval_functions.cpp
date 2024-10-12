@@ -1268,6 +1268,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprEnhancedAesEncrypt::eval_aes_encrypt                 /* 759 */
   NULL, // ObExprEnhancedAesDecrypt::eval_aes_decrypt                 /* 760 */
   NULL, // ObExprMysqlProcInfo::mysql_proc_info                       /* 761 */
+  NULL, // ObExprArrayOverlaps::eval_array_overlaps,                  /* 762 */
+  NULL, // ObExprArrayContainsAll::eval_array_contains_all,           /* 763 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1415,6 +1417,8 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   ObExprArrayContains::eval_array_contains_batch_double,              /* 141 */
   ObExprArrayContains::eval_array_contains_batch_ObString,            /* 142 */
   ObExprArrayContains::eval_array_contains_array_batch,               /* 143 */
+  NULL,// ObExprArrayOverlaps::eval_array_overlaps_batch,             /* 144 */
+  NULL,// ObExprArrayContainsAll::eval_array_contains_all_batch,      /* 145 */
 };
 
 static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
@@ -1543,6 +1547,8 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   ObExprCalcPartitionBase::fast_calc_partition_level_one_vector,/* 122 */
   NULL, // ObExprTrim::eval_trim_vector                         /* 123 */
   NULL, // ObExprEncodeSortkey::eval_encode_sortkey_vector      /* 124 */
+  NULL, // ObExprArrayOverlaps::eval_array_overlaps_vector,     /* 125 */
+  NULL, // ObExprArrayContainsAll::eval_array_contains_all_vector, /* 126 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
