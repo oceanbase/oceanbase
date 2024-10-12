@@ -233,7 +233,6 @@ int ObCSReplicaUtil::check_need_process_cs_replica_for_offline_ddl(
     // originally column store
   } else {
     ObSEArray<ObLSInfo, 8> ls_infos;
-    ls_infos.set_attr(ObMemAttr(tenant_id, "DDLLSInfos"));
     if (OB_ISNULL(GCTX.lst_operator_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("lst_operator is null", KR(ret), K(tenant_id));
