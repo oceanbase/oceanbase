@@ -784,6 +784,9 @@ int ObPartitionExecutorUtils::expr_cal_and_cast_with_check_varchar_len(
   const ObCollationType fun_collation_type = dst_res_type.get_collation_type();
   if (OB_FAIL(ObSQLUtils::wrap_expr_ctx(stmt_type, ctx, ctx.get_allocator(), expr_ctx))) {
     LOG_WARN("Failed to wrap expr ctx", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(ctx.get_my_session()->get_stmt_type(),
+                                                  ctx.get_my_session(), expr_ctx.cast_mode_))) {
+    LOG_WARN("get_default_cast_mode failed", K(ret));
   } else {
     //CREATE TABLE t1 (a date) PARTITION BY RANGE (TO_DAYS(a)) (PARTITION p311 VALUES LESS THAN (TO_DAYS('abc')))
     //TO_DAYS('abc')跟mysql兼容，不论session中设置的cast_mode是什么，这里都需要为WARN_ON_FAIL
@@ -824,9 +827,6 @@ int ObPartitionExecutorUtils::expr_cal_and_cast_with_check_varchar_len(
     //将计算后的obj转换成partition 表达式的类型
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(ctx.get_my_session()->get_stmt_type(),
-                                                  ctx.get_my_session(), expr_ctx.cast_mode_))) {
-      LOG_WARN("get_default_cast_mode failed", K(ret));
     } else {
       ObObjType expected_obj_type = fun_expr_type;
       //对value表达式类型进行cast的时候，要进行提升
