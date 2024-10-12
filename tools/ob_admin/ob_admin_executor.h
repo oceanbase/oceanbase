@@ -42,6 +42,7 @@ public:
 protected:
   ObIODevice *get_device_inner();
   int prepare_io();
+  int prepare_backup_validation();
   int init_slogger_mgr();
   int load_config();
   int set_s3_url_encode_type(const char *type_str) const;
@@ -51,6 +52,8 @@ protected:
   blocksstable::ObStorageEnv storage_env_;
   observer::ObServerReloadConfig reload_config_;
   common::ObConfigManager config_mgr_;
+  share::ObTenantDagScheduler *dag_scheduler_;
+  share::ObDagWarningHistoryManager *dag_history_mgr_;
   char data_dir_[common::OB_MAX_FILE_NAME_LENGTH] = {0};
   char slog_dir_[common::OB_MAX_FILE_NAME_LENGTH] = {0};
   char clog_dir_[common::OB_MAX_FILE_NAME_LENGTH] = {0};

@@ -54,6 +54,11 @@ add_executable(ob_admin
   backup_tool/ob_admin_dump_backup_data_executor.h
   backup_tool/ob_admin_dump_backup_data_executor.cpp
 
+  backup_tool/ob_admin_backup_validation_executor.cpp
+  backup_tool/ob_admin_backup_validation_task.cpp
+  backup_tool/ob_admin_backup_validation_util.cpp
+  backup_tool/ob_admin_backup_validation_ctx.cpp
+
   io_bench/task_executor.h
   io_bench/task_executor.cpp
   io_bench/ob_admin_io_adapter_bench.h
@@ -124,6 +129,11 @@ add_executable(ob_admin
 
   backup_tool/ob_admin_dump_backup_data_executor.h
   backup_tool/ob_admin_dump_backup_data_executor.cpp
+
+  backup_tool/ob_admin_backup_validation_executor.cpp
+  backup_tool/ob_admin_backup_validation_task.cpp
+  backup_tool/ob_admin_backup_validation_util.cpp
+  backup_tool/ob_admin_backup_validation_ctx.cpp
 
   io_bench/task_executor.h
   io_bench/task_executor.cpp

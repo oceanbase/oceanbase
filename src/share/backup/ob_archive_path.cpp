@@ -321,6 +321,21 @@ int ObArchivePathUtil::get_piece_ls_log_dir_path(const ObBackupDest &dest, const
   return ret;
 }
 
+// oss://[user_specified_path]/logstream_[ls_id]/log/
+int ObArchivePathUtil::get_piece_ls_log_dir_path(const ObBackupDest &dest, const ObLSID &ls_id, ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  path.reset();
+  if (OB_FAIL(path.init(dest.get_root_path()))) {
+    LOG_WARN("fail to init path", K(ret), K(dest));
+  } else if (OB_FAIL(path.join_ls(ls_id))) {
+    LOG_WARN("fail to join ls", K(ret), K(path), K(ls_id));
+  } else if (OB_FAIL(path.join("log", ObBackupFileSuffix::NONE))) {
+    LOG_WARN("failed to join log ", K(ret), K(path));
+  }
+  return ret;
+}
+
 // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/logstream_[ls_id]/file_info.obarc
 int ObArchivePathUtil::get_ls_file_info_path(const ObBackupDest &dest, const int64_t dest_id,
     const int64_t round_id, const int64_t piece_id, const ObLSID &ls_id, ObBackupPath &path)
@@ -358,6 +373,19 @@ int ObArchivePathUtil::get_piece_info_file_path(const ObBackupDest &dest, const 
     LOG_WARN("failed to get piece dir path", K(ret), K(dest), K(round_id), K(dest_id), K(piece_id));
   } else if (OB_FAIL(path.join("file_info", ObBackupFileSuffix::ARCHIVE))) {
     LOG_WARN("failed to join piece info file", K(ret), K(path));
+  }
+  return ret;
+}
+
+// oss://[user_specified_path]/file_info.obarc
+int ObArchivePathUtil::get_piece_info_file_path(const ObBackupDest &dest, ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  path.reset();
+  if (OB_FAIL(path.init(dest.get_root_path()))) {
+    LOG_WARN("fail to init path", K(ret), K(dest));
+  } else if (OB_FAIL(path.join("file_info", ObBackupFileSuffix::ARCHIVE))) {
+    LOG_WARN("failed to join ls file info ", K(ret), K(path));
   }
   return ret;
 }
@@ -401,6 +429,23 @@ int ObArchivePathUtil::get_ls_archive_file_path(const ObBackupDest &dest, const 
   return ret;
 }
 
+// oss://[user_specified_path]/logstream_[%ld]/log/[file_id]
+int ObArchivePathUtil::get_ls_archive_file_path(const ObBackupDest &dest, const share::ObLSID &ls_id, const int64_t file_id,
+    ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  path.reset();
+  if (OB_FAIL(path.init(dest.get_root_path()))) {
+    LOG_WARN("failed to assign dest path", K(ret), K(dest));
+  }else if(OB_FAIL(path.join_ls(ls_id))){
+    LOG_WARN("failed to join ls", K(ret), K(path), K(ls_id));
+  } else if (OB_FAIL(path.join("log", ObBackupFileSuffix::NONE))) {
+    LOG_WARN("failed to join log ", K(ret), K(path));
+  } else if (OB_FAIL(path.join(file_id, ObBackupFileSuffix::ARCHIVE))) {
+    LOG_WARN("failed to join file id", K(ret), K(path), K(file_id));
+  }
+  return ret;
+}
 
   // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/logstream_[%ld]/"meta_type"/
 int ObArchivePathUtil::get_ls_meta_record_prefix(const ObBackupDest &dest, const int64_t dest_id,
@@ -416,6 +461,22 @@ int ObArchivePathUtil::get_ls_meta_record_prefix(const ObBackupDest &dest, const
   return ret;
 }
 
+  // oss://[user_specified_path]/logstream_[%ld]/"meta_type"/
+int ObArchivePathUtil::get_ls_meta_record_prefix(const ObBackupDest &dest, const share::ObLSID &ls_id,
+      const ObArchiveLSMetaType &meta_type, ObBackupPath &prefix)
+{
+  int ret = OB_SUCCESS;
+  prefix.reset();
+  if (OB_FAIL(prefix.init(dest.get_root_path()))) {
+    LOG_WARN("fail to init path", K(ret), K(dest));
+  } else if (OB_FAIL(prefix.join_ls(ls_id))) {
+    LOG_WARN("fail to join ls", K(ret), K(prefix), K(ls_id));
+  } else if (OB_FAIL(prefix.join(meta_type.get_type_str(), ObBackupFileSuffix::NONE))) {
+    LOG_WARN("failed to join meta_type", K(ret), K(prefix));
+  }
+  return ret;
+}
+
   // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/logstream_[%ld]/"meta_type"/[file_id]
 int ObArchivePathUtil::get_ls_meta_record_path(const ObBackupDest &dest, const int64_t dest_id,
     const int64_t round_id, const int64_t piece_id, const share::ObLSID &ls_id,
@@ -425,6 +486,18 @@ int ObArchivePathUtil::get_ls_meta_record_path(const ObBackupDest &dest, const i
   if (OB_FAIL(get_ls_meta_record_prefix(dest, dest_id, round_id, piece_id, ls_id, meta_type, path))) {
     LOG_WARN("failed to get ls meta record perfix", K(ret), K(dest), K(round_id),
         K(dest_id), K(piece_id), K(ls_id), K(meta_type));
+  } else if (OB_FAIL(path.join(file_id, ObBackupFileSuffix::ARCHIVE))) {
+    LOG_WARN("failed to join file_id", K(ret), K(path));
+  }
+  return ret;
+}
+
+int ObArchivePathUtil::get_ls_meta_record_path(const ObBackupDest &dest, const share::ObLSID &ls_id,
+      const ObArchiveLSMetaType &meta_type, const int64_t file_id, ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_ls_meta_record_prefix(dest, ls_id, meta_type, path))) {
+    LOG_WARN("failed to get ls meta record perfix", K(ret), K(dest), K(ls_id), K(meta_type));
   } else if (OB_FAIL(path.join(file_id, ObBackupFileSuffix::ARCHIVE))) {
     LOG_WARN("failed to join file_id", K(ret), K(path));
   }

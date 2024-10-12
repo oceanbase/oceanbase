@@ -20,6 +20,8 @@
 #include "share/io/ob_io_manager.h"
 #include "share/config/ob_server_config.h"
 #include "share/ob_io_device_helper.h"
+#include "share/resource_manager/ob_resource_manager.h"
+#include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "common/storage/ob_io_device.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/blocksstable/ob_block_manager.h"
@@ -36,7 +38,9 @@ ObAdminExecutor::ObAdminExecutor()
     : mock_server_tenant_(OB_SERVER_TENANT_ID),
       storage_env_(),
       reload_config_(ObServerConfig::get_instance(), GCTX),
-      config_mgr_(ObServerConfig::get_instance(), reload_config_)
+      config_mgr_(ObServerConfig::get_instance(), reload_config_),
+      dag_scheduler_(nullptr),
+      dag_history_mgr_(nullptr)
 {
   // 设置MTL上下文
   share::ObTenantEnv::set_tenant(&mock_server_tenant_);
@@ -78,6 +82,14 @@ ObAdminExecutor::~ObAdminExecutor()
   OB_SERVER_BLOCK_MGR.wait();
   OB_SERVER_BLOCK_MGR.destroy();
   share::ObIODeviceWrapper::get_instance().destroy();
+  if (OB_NOT_NULL(dag_scheduler_)) {
+    dag_scheduler_->destroy();
+    dag_scheduler_ = nullptr;
+  }
+  if (OB_NOT_NULL(dag_history_mgr_)) {
+    dag_history_mgr_->~ObDagWarningHistoryManager();
+    dag_history_mgr_ = nullptr;
+  }
   LOG_INFO("destruct ObAdminExecutor");
 }
 
@@ -206,8 +218,35 @@ int ObAdminExecutor::set_s3_url_encode_type(const char *type_str) const
   return ret;
 }
 
-
-
-
+int ObAdminExecutor::prepare_backup_validation()
+{
+  int ret = OB_SUCCESS;
+  ObAddr mock_addr(ObAddr::IPV4, "127.0.0.1", 4016);
+  GCONF.self_addr_ = mock_addr;
+  if (OB_FAIL(common::ObClockGenerator::init())) {
+    LOG_WARN("fail to init clock generator", K(ret));
+  } else if (OB_FAIL(share::ObSysTaskStatMgr::get_instance().set_self_addr(mock_addr))) {
+    LOG_WARN("fail to set self addr", K(ret));
+  } else if (OB_ISNULL(dag_scheduler_ = OB_NEW(share::ObTenantDagScheduler, ObModIds::BACKUP))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to new dag scheduler", K(ret));
+  } else if (FALSE_IT(mock_server_tenant_.set(dag_scheduler_))) {
+  } else if (OB_ISNULL(dag_history_mgr_
+                       = OB_NEW(share::ObDagWarningHistoryManager, ObModIds::BACKUP))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to new dag history manager", K(ret));
+  } else if (FALSE_IT(mock_server_tenant_.set(dag_history_mgr_))) {
+  } else if (OB_FAIL(G_RES_MGR.init())) {
+    LOG_WARN("fail to init resource manager", K(ret));
+  } else if (OB_FAIL(OTC_MGR.add_tenant_config(OB_SYS_TENANT_ID))) {
+    LOG_WARN("fail to add tenant config", K(ret));
+  } else if (OB_FAIL(OTC_MGR.add_tenant_config(OB_SERVER_TENANT_ID))) {
+    LOG_WARN("fail to add tenant config", K(ret));
+  } else if (FALSE_IT(share::ObTenantEnv::set_tenant(&mock_server_tenant_))) {
+  } else if (OB_FAIL(mock_server_tenant_.init())) {
+    LOG_WARN("fail to init tenant", K(ret));
+  }
+  return ret;
 }
-}
+} // namespace tools
+} // namespace oceanbase

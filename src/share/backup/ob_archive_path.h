@@ -91,6 +91,9 @@ public:
   static int get_piece_ls_log_dir_path(const ObBackupDest &dest, const int64_t dest_id,
       const int64_t round_id, const int64_t piece_id, const ObLSID &ls_id, ObBackupPath &path);
 
+  // oss://[user_specified_path]/logstream_[ls_id]/log/
+  static int get_piece_ls_log_dir_path(const ObBackupDest &dest, const ObLSID &ls_id, ObBackupPath &path);
+
   // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/logstream_[ls_id]/file_info.obarc
   static int get_ls_file_info_path(const ObBackupDest &dest, const int64_t dest_id,
       const int64_t round_id, const int64_t piece_id, const ObLSID &ls_id, ObBackupPath &path);
@@ -102,6 +105,9 @@ public:
   static int get_piece_info_file_path(const ObBackupDest &dest, const int64_t dest_id, 
       const int64_t round_id, const int64_t piece_id, ObBackupPath &path);
   
+  // oss://[user_specified_path]/file_info.obarc
+  static int get_piece_info_file_path(const ObBackupDest &dest, ObBackupPath &path);
+
   // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/tenant_archive_piece_infos.obarc
   static int get_tenant_archive_piece_infos_file_path(const ObBackupDest &dest, const int64_t dest_id, 
       const int64_t round_id, const int64_t piece_id, ObBackupPath &path);
@@ -112,14 +118,26 @@ public:
   static int get_ls_archive_file_path(const ObBackupDest &dest, const int64_t dest_id, 
     const int64_t round_id, const int64_t piece_id, const share::ObLSID &ls_id, const int64_t file_id, ObBackupPath &path);
 
+  // oss://[user_specified_path]/logstream_[%ld]/log/[file_id]
+  static int get_ls_archive_file_path(const ObBackupDest &dest, const share::ObLSID &ls_id, const int64_t file_id,
+    ObBackupPath &path);
+
   // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/logstream_[%ld]/"meta_type"/
   static int get_ls_meta_record_prefix(const ObBackupDest &dest, const int64_t dest_id,
       const int64_t round_id, const int64_t piece_id, const share::ObLSID &ls_id,
       const ObArchiveLSMetaType &meta_type, ObBackupPath &path);
 
+  // oss://[user_specified_path]/logstream_[%ld]/"meta_type"/
+  static int get_ls_meta_record_prefix(const ObBackupDest &dest, const share::ObLSID &ls_id,
+      const ObArchiveLSMetaType &meta_type, ObBackupPath &path);
+
   // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/logstream_[%ld]/"meta_type"/[file_id]
   static int get_ls_meta_record_path(const ObBackupDest &dest, const int64_t dest_id,
       const int64_t round_id, const int64_t piece_id, const share::ObLSID &ls_id,
+      const ObArchiveLSMetaType &meta_type, const int64_t file_id, ObBackupPath &path);
+
+  // oss://[user_specified_path]/"meta_type"/[file_id]
+  static int get_ls_meta_record_path(const ObBackupDest &dest, const share::ObLSID &ls_id,
       const ObArchiveLSMetaType &meta_type, const int64_t file_id, ObBackupPath &path);
 
 private:
