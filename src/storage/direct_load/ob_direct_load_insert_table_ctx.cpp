@@ -958,7 +958,7 @@ int ObDirectLoadInsertTableContext::update_sql_statistics(ObTableLoadSqlStatisti
         const ObStorageDatum &datum = datum_row.storage_datums_[datum_idx];
         const ObCmpFunc &cmp_func = param_.cmp_funcs_->at(i).get_cmp_func();
         const ObColDesc &col_desc = param_.col_descs_->at(i);
-        const bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type());
+        const bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type(), true);
         if (is_valid) {
           if (OB_FAIL(sql_statistics.get_col_stat(col_stat_idx, col_stat))) {
             LOG_WARN("fail to get col stat", KR(ret), K(col_stat_idx));

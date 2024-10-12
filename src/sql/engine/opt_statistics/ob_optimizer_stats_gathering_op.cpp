@@ -358,7 +358,7 @@ int ObOptimizerStatsGatheringOp::calc_column_stats(ObExpr *expr, uint64_t column
   } else if (OB_ISNULL(global_col_stat)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (!ObColumnStatParam::is_valid_opt_col_type(expr->obj_meta_.get_type())) {
+  } else if (!ObColumnStatParam::is_valid_opt_col_type(expr->obj_meta_.get_type(), true)) {
     // do nothing yet, should use the plain stats.
   } else if (OB_FAIL(expr->eval(eval_ctx_, datum))) {
     LOG_WARN("failed to eval expr", K(*expr));

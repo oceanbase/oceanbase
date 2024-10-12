@@ -1230,11 +1230,16 @@ int ObDbmsStatsExecutor::gather_index_stats(ObExecContext &ctx,
   int ret = OB_SUCCESS;
   ObArray<ObOptTableStat *> all_index_stats;
   ObArray<ObOptTableStat *> part_index_stats;
-  ObArray<ObOptColumnStat *> empty_cstats;
+  ObArray<ObOptColumnStat *> all_column_stats;
+  ObSEArray<ObOptStat, 4> subpart_opt_stats;
+  ObSEArray<ObOptStat, 4> part_opt_stats;
+  ObSEArray<ObOptStat, 1> global_opt_stats;
+  ObOptStat global_opt_stat;
   ObOptStatGatherParam gather_param;
   PartitionIdBlockMap partition_id_block_map;
   bool use_column_store = false;
   bool use_split_part = false;
+  ObSEArray<ObOptColumnStat*, 4> copy_stats;
   LOG_TRACE("begin gather index stats", K(param));
   if (OB_FAIL(partition_id_block_map.create(10000,
                                             ObModIds::OB_HASH_BUCKET_TABLE_STATISTICS,
@@ -1260,7 +1265,7 @@ int ObDbmsStatsExecutor::gather_index_stats(ObExecContext &ctx,
       /*do nothing*/
     } else if (OB_FAIL(gather_param.partition_infos_.assign(param.subpart_infos_))) {
       LOG_WARN("failed to assign", K(ret));
-    } else if (OB_FAIL(ObDbmsStatsGather::gather_index_stats(ctx, gather_param, all_index_stats))) {
+    } else if (OB_FAIL(ObDbmsStatsGather::gather_index_stats(ctx, gather_param, subpart_opt_stats, all_index_stats, all_column_stats))) {
       LOG_WARN("failed to gather subpart index stats", K(ret));
     } else {/*do nothing*/}
   }
@@ -1272,12 +1277,26 @@ int ObDbmsStatsExecutor::gather_index_stats(ObExecContext &ctx,
       if (OB_UNLIKELY(all_index_stats.empty())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected error", K(ret), K(param.approx_part_infos_), K(all_index_stats));
-      } else if (OB_FAIL(ObIncrementalStatEstimator::derive_part_index_stat_by_subpart_index_stats(param,
-                                                                                                   all_index_stats,
-                                                                                                   part_index_stats))) {
-        LOG_WARN("failed to derive part index stat by subpart index stats", K(ret));
-      } else if (OB_FAIL(append(all_index_stats, part_index_stats))) {
-        LOG_WARN("failed to append", K(ret));
+      } else if (all_column_stats.empty()) {
+        if (OB_FAIL(ObIncrementalStatEstimator::derive_part_index_stat_by_subpart_index_stats(param,
+                                                                                              all_index_stats,
+                                                                                              part_index_stats))) {
+          LOG_WARN("failed to derive part index stat by subpart index stats", K(ret));
+        } else if (OB_FAIL(append(all_index_stats, part_index_stats))) {
+          LOG_WARN("failed to append", K(ret));
+        }
+      } else {
+        if (OB_FAIL(ObIncrementalStatEstimator::derive_part_index_column_stat_by_subpart_index(ctx,
+                                                                                               *param.allocator_,
+                                                                                               param,
+                                                                                               subpart_opt_stats,
+                                                                                               part_opt_stats))) {
+          LOG_WARN("failed to derived part");
+        } else if (OB_FAIL(ObDbmsStatsUtils::calssify_opt_stat(part_opt_stats,
+                                                               all_index_stats,
+                                                               all_column_stats))) {
+          LOG_WARN("failed to classify opt stat", K(ret));
+        }
       }
     } else if (OB_UNLIKELY(!param.approx_part_infos_.empty())) {
       ret = OB_ERR_UNEXPECTED;
@@ -1286,7 +1305,7 @@ int ObDbmsStatsExecutor::gather_index_stats(ObExecContext &ctx,
     if (OB_SUCC(ret) && !param.part_infos_.empty()) {
       if (OB_FAIL(gather_param.partition_infos_.assign(param.part_infos_))) {
         LOG_WARN("failed to assign", K(ret));
-      } else if (OB_FAIL(ObDbmsStatsGather::gather_index_stats(ctx, gather_param, part_index_stats))) {
+      } else if (OB_FAIL(ObDbmsStatsGather::gather_index_stats(ctx, gather_param, part_opt_stats, part_index_stats, all_column_stats))) {
         LOG_WARN("failed to gather part index stats", K(ret));
       } else if (OB_FAIL(append(all_index_stats, part_index_stats))) {
         LOG_WARN("failed to append", K(ret));
@@ -1297,17 +1316,70 @@ int ObDbmsStatsExecutor::gather_index_stats(ObExecContext &ctx,
     gather_param.stat_level_ = TABLE_LEVEL;
     gather_param.partition_infos_.reset();
     if (param.global_stat_param_.gather_approx_ && !part_index_stats.empty()) {//approx global stats base on part stats
-      if (OB_FAIL(ObIncrementalStatEstimator::derive_global_index_stat_by_part_index_stats(param,
-                                                                                           part_index_stats,
-                                                                                           all_index_stats))) {
-        LOG_WARN("failed to derive global index stat by part index stats", K(ret));
+      if (all_column_stats.empty()) {
+        if (OB_FAIL(ObIncrementalStatEstimator::derive_global_index_stat_by_part_index_stats(param,
+                                                                                             part_index_stats,
+                                                                                             all_index_stats))) {
+          LOG_WARN("failed to derive global index stat by part index stats", K(ret));
+        }
+      } else {
+        if (OB_FAIL(ObIncrementalStatEstimator::derive_global_index_column_stat_by_part_index(ctx,
+                                                                                                     *param.allocator_,
+                                                                                                     param,
+                                                                                                     part_opt_stats,
+                                                                                                     global_opt_stat))) {
+          LOG_WARN("failed to derive global index column stat by part index", K(ret));
+        } else if (OB_FAIL(global_opt_stats.push_back(global_opt_stat))) {
+          LOG_WARN("failed to push back opt stats", K(ret));
+        }else if (OB_FAIL(ObDbmsStatsUtils::calssify_opt_stat(global_opt_stats,
+                                                               all_index_stats,
+                                                               all_column_stats))) {
+          LOG_WARN("failed to classify opt stat", K(ret));
+        }
       }
-    } else if (OB_FAIL(ObDbmsStatsGather::gather_index_stats(ctx, gather_param, all_index_stats))) {
+    } else if (OB_FAIL(ObDbmsStatsGather::gather_index_stats(ctx, gather_param, global_opt_stats, all_index_stats, all_column_stats))) {
       LOG_WARN("failed to gather index stats", K(ret));
     }
   }
+
+  if (OB_FAIL(ret)) {
+  } else if (all_column_stats.empty()) {
+    // do nothing
+  } else if (param.is_global_index_ ) {
+    if (OB_FAIL(ObDbmsStatsUtils::copy_global_index_prefix_stats_to_text(
+                                    ctx.get_virtual_table_ctx().schema_guard_,
+                                    *param.allocator_,
+                                    all_column_stats,
+                                    param.prefix_column_pairs_,
+                                    param.tenant_id_,
+                                    param.data_table_id_,
+                                    copy_stats))) {
+      LOG_WARN("failed to copy global index prefix stats to text", K(ret));
+    } else if (OB_FAIL(append(all_column_stats, copy_stats))) {
+      LOG_WARN("failed to append copy stats", K(ret));
+    }
+  } else if (OB_FAIL(ObDbmsStatsUtils::deduce_index_column_stat_to_table(
+                                        ctx.get_virtual_table_ctx().schema_guard_,
+                                        param.tenant_id_,
+                                        param.table_id_,
+                                        param.data_table_id_,
+                                        param.part_level_,
+                                        all_column_stats))) {
+      LOG_WARN("failed to trans index column stat to table", K(ret));
+  } else if (param.prefix_column_pairs_.empty()) {
+    // do nothing
+  } else if (OB_FAIL(ObDbmsStatsUtils::copy_local_index_prefix_stats_to_text(
+                                       *param.allocator_,
+                                       all_column_stats,
+                                       param.prefix_column_pairs_,
+                                       copy_stats))) {
+    LOG_WARN("failed to copy local index prefix stats to text", K(ret));
+  } else if (OB_FAIL(append(all_column_stats, copy_stats))) {
+    LOG_WARN("failed to append copy stats", K(ret));
+  }
+
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObDbmsStatsUtils::split_batch_write(ctx, all_index_stats, empty_cstats, true))) {
+    if (OB_FAIL(ObDbmsStatsUtils::split_batch_write(ctx, all_index_stats, all_column_stats, true))) {
       LOG_WARN("failed to split batch write", K(ret));
     } else {/*do nothing*/}
   }

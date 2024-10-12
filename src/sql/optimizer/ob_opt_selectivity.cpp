@@ -270,6 +270,8 @@ int OptTableMeta::init_column_meta(const OptSelectivityCtx &ctx,
   int ret = OB_SUCCESS;
   ObGlobalColumnStat stat;
   bool is_single_pkey = (1 == pk_ids_.count() && pk_ids_.at(0) == column_id);
+  int64_t global_ndv = 0;
+  int64_t num_null = 0;
   if (is_single_pkey) {
     col_meta.set_ndv(rows_);
     col_meta.set_num_null(0);
@@ -288,14 +290,8 @@ int OptTableMeta::init_column_meta(const OptSelectivityCtx &ctx,
                                                                  scale_ratio_,
                                                                  stat))) {
     LOG_WARN("failed to get column stats", K(ret));
-  } else if (0 == stat.ndv_val_ && 0 == stat.null_val_) {
-    col_meta.set_default_meta(rows_);
-  } else if (0 == stat.ndv_val_ && stat.null_val_ > 0) {
-    col_meta.set_ndv(1);
-    col_meta.set_num_null(stat.null_val_);
-  } else {
-    col_meta.set_ndv(stat.ndv_val_);
-    col_meta.set_num_null(stat.null_val_);
+  } else if (OB_FAIL(refine_column_stat(stat, rows_, col_meta))) {
+    LOG_WARN("failed to refine column stat", K(ret));
   }
 
   if (OB_SUCC(ret)) {
@@ -367,6 +363,34 @@ const OptColumnMeta* OptTableMeta::get_column_meta(const uint64_t column_id) con
     }
   }
   return column_meta;
+}
+
+OptColumnMeta* OptTableMeta::get_column_meta(const uint64_t column_id)
+{
+  OptColumnMeta* column_meta = NULL;
+  for (int64_t i = 0; NULL == column_meta && i < column_metas_.count(); ++i) {
+    if (column_metas_.at(i).get_column_id() == column_id) {
+      column_meta = &column_metas_.at(i);
+    }
+  }
+  return column_meta;
+}
+
+int OptTableMeta::refine_column_stat(const ObGlobalColumnStat &stat,
+                                     double rows,
+                                     OptColumnMeta &col_meta)
+{
+  int ret = OB_SUCCESS;
+  if (0 == stat.ndv_val_ && 0 == stat.null_val_) {
+    col_meta.set_default_meta(rows);
+  } else if (0 == stat.ndv_val_ && stat.null_val_ > 0) {
+    col_meta.set_ndv(1);
+    col_meta.set_num_null(stat.null_val_);
+  } else {
+    col_meta.set_ndv(stat.ndv_val_);
+    col_meta.set_num_null(stat.null_val_);
+  }
+  return ret;
 }
 
 int OptTableMetas::copy_table_meta_info(const OptTableMeta &src_meta, OptTableMeta *&dst_meta)

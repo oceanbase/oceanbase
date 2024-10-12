@@ -556,7 +556,7 @@ int ObOptStatManager::check_opt_stat_validity(sql::ObExecContext &ctx,
   } else if (!is_valid) {
     //do nothing
   } else if (OB_FAIL(ObDbmsStatsUtils::check_is_stat_table(*ctx.get_virtual_table_ctx().schema_guard_,
-                                                           tenant_id, table_ref_id, is_valid))) {
+                                                           tenant_id, table_ref_id, true, is_valid))) {
     LOG_WARN("failed to check is stat table", K(ret));
   } else if (!is_valid) {
     //do nothing
