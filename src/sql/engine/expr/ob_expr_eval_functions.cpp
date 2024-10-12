@@ -1267,7 +1267,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprTokenize::eval_tokenize,                                      /* 758 */
   NULL, // ObExprEnhancedAesEncrypt::eval_aes_encrypt                 /* 759 */
   NULL, // ObExprEnhancedAesDecrypt::eval_aes_decrypt                 /* 760 */
-  NULL, // ObExprMysqlProcInfo::mysql_proc_info                       /* 761 */
+  NULL, // ObExprMysqlProcInfo::eval_mysql_proc_info                       /* 761 */
   NULL, // ObExprArrayOverlaps::eval_array_overlaps,                  /* 762 */
   NULL, // ObExprArrayContainsAll::eval_array_contains_all,           /* 763 */
   NULL, // ObExprInnerIsTrue::decimal_int_is_true_start,              /* 764 */
