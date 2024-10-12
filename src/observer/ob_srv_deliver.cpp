@@ -776,6 +776,8 @@ int ObSrvDeliver::deliver_mysql_request(ObRequest &req)
               snprintf(di->get_ash_stat().program_, ASH_PROGRAM_STR_LEN, "SQL CMD");
               conn->di_ = di;
             }
+            conn->mysql_pkt_context_.set_tenant_id(tenant_id);
+            conn->proto20_pkt_context_.set_tenant_id(tenant_id);
           }
         }
         ObTenantDiagnosticInfoSummaryGuard g(di == nullptr ? nullptr : di->get_summary_slot());
