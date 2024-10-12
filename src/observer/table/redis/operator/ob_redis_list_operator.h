@@ -317,6 +317,8 @@ private:
       const int64_t right_inx,
       int64_t &row_cnt);
   int del_key(const ObString &key, int64_t db, ObRedisListMeta *list_meta);
+  int64_t get_region_left_bord_idx(int64_t pivot_idx);
+  int64_t get_region_right_bord_idx(int64_t pivot_idx);
   static bool compare_ob_redis_ops(ObITableOp *&op_a, ObITableOp *&op_b);
 
 private:

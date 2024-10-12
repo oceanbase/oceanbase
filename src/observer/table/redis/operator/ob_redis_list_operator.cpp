@@ -1511,6 +1511,18 @@ int ListCommandOperator::do_redict_idx(
   return ret;
 }
 
+int64_t ListCommandOperator::get_region_left_bord_idx(int64_t pivot_idx)
+{
+  int64_t left_bord_idx = floor(pivot_idx / static_cast<double>(ObRedisListMeta::INDEX_STEP)) * ObRedisListMeta::INDEX_STEP;
+  return left_bord_idx;
+}
+
+int64_t ListCommandOperator::get_region_right_bord_idx(int64_t pivot_idx)
+{
+  return (pivot_idx / ObRedisListMeta::INDEX_STEP) * ObRedisListMeta::INDEX_STEP +
+         (pivot_idx > 0 ? ObRedisListMeta::INDEX_STEP : 0);
+}
+
 int ListCommandOperator::redict_idx(
     const int64_t db,
     const ObString &key,
@@ -1529,9 +1541,9 @@ int ListCommandOperator::redict_idx(
   int64_t right_bord_idx = 0;
   if (is_redict_left) {
     left_bord_idx = list_meta.left_idx_;
-    right_bord_idx = (pivot_idx / ObRedisListMeta::INDEX_STEP) * ObRedisListMeta::INDEX_STEP + ObRedisListMeta::INDEX_STEP;
+    right_bord_idx = get_region_right_bord_idx(pivot_idx);
   } else {
-    left_bord_idx = (pivot_idx / ObRedisListMeta::INDEX_STEP) * ObRedisListMeta::INDEX_STEP;
+    left_bord_idx = get_region_left_bord_idx(pivot_idx);
     right_bord_idx = list_meta.right_idx_;
   }
   int64_t rdt_beg_us = ObTimeUtility::fast_current_time();

@@ -131,7 +131,9 @@ public:
   ObRedisListMeta()
       : count_(0),
         left_idx_(INIT_INDEX),
-        right_idx_(INIT_INDEX)
+        right_idx_(INIT_INDEX),
+        ins_region_left_(INT64_MAX),
+        ins_region_right_(INT64_MIN)
   {
     has_meta_value_ = true;
     meta_col_name_ = ObRedisUtil::VALUE_PROPERTY_NAME;
@@ -144,6 +146,8 @@ public:
     count_ = 0;
     left_idx_ = INIT_INDEX;
     right_idx_ = INIT_INDEX;
+    ins_region_left_ = INT64_MAX;
+    ins_region_right_ = INT64_MIN;
     ttl_ = INT_MAX64;
     insert_ts_ = ObTimeUtility::fast_current_time();
   }
@@ -166,13 +170,13 @@ public:
 
   static const char META_SPLIT_FLAG = ObRedisUtil::INT_FLAG;
   // element count in list meta value
-  static const int64_t ELE_COUNT = 4;
-  static const int64_t RESERVED_SIZE = 2;
+  static const int64_t ELE_COUNT = 5;
 
   int64_t count_;
   int64_t left_idx_;
   int64_t right_idx_;
-  int64_t reserved_[RESERVED_SIZE];  // reserved for future
+  int64_t ins_region_left_;
+  int64_t ins_region_right_;
 };
 
 class ObRedisHashMeta : public ObRedisMeta

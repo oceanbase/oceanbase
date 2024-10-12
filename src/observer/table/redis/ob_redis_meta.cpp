@@ -26,7 +26,13 @@ namespace table
 {
 OB_SERIALIZE_MEMBER(ObRedisMeta, ttl_, reserved_);
 
-OB_SERIALIZE_MEMBER(ObRedisListMeta, count_, left_idx_, right_idx_, ttl_, reserved_);
+OB_SERIALIZE_MEMBER(
+    ObRedisListMeta,  // FARM COMPAT WHITELIST
+    count_,
+    left_idx_,
+    right_idx_,
+    ins_region_left_,
+    ins_region_right_);
 
 int ObRedisMeta::decode(const ObString &encoded_content)
 {
@@ -52,6 +58,8 @@ int ObRedisListMeta::decode(const ObString &encoded_content)
   // meta_value: count:left_idx:right_idx:ttl
   ObString left_idx_str;
   ObString right_idx_str;
+  ObString ins_region_left_str;
+  ObString ins_region_right_str;
   ObString count_str = meta_value.split_on(META_SPLIT_FLAG);
   if (count_str.empty()) {
     ret = OB_ERR_UNEXPECTED;
@@ -60,16 +68,28 @@ int ObRedisListMeta::decode(const ObString &encoded_content)
   } else if (left_idx_str.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid meta value", K(ret), K(meta_value));
-  } else if (OB_FALSE_IT(right_idx_str = meta_value)) {
+  } else if (OB_FALSE_IT(right_idx_str = meta_value.split_on(META_SPLIT_FLAG))) {
   } else if (right_idx_str.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid meta value", K(ret), K(meta_value));
-  } else if (OB_FAIL(ObRedisHelper::get_int_from_str<int64_t>(count_str, count_))) {
+  } else if (OB_FALSE_IT(ins_region_left_str = meta_value.split_on(META_SPLIT_FLAG))) {
+  } else if (ins_region_left_str.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid meta value", K(ret), K(meta_value));
+  } else if (OB_FALSE_IT(ins_region_right_str = meta_value)) {
+  } else if (ins_region_right_str.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid meta value", K(ret), K(meta_value));
+  }  else if (OB_FAIL(ObRedisHelper::get_int_from_str<int64_t>(count_str, count_))) {
     LOG_WARN("fail to get int from str", K(ret), K(count_str));
   } else if (OB_FAIL(ObRedisHelper::get_int_from_str<int64_t>(left_idx_str, left_idx_))) {
     LOG_WARN("fail to get int from str", K(ret), K(left_idx_str));
   } else if (OB_FAIL(ObRedisHelper::get_int_from_str<int64_t>(right_idx_str, right_idx_))) {
     LOG_WARN("fail to get int from str", K(ret), K(right_idx_str));
+  } else if (OB_FAIL(ObRedisHelper::get_int_from_str<int64_t>(ins_region_left_str, ins_region_left_))) {
+    LOG_WARN("fail to get int from str", K(ret), K(ins_region_left_));
+  } else if (OB_FAIL(ObRedisHelper::get_int_from_str<int64_t>(ins_region_right_str, ins_region_right_))) {
+    LOG_WARN("fail to get int from str", K(ret), K(ins_region_right_));
   }
 
 #else
@@ -96,15 +116,18 @@ int ObRedisListMeta::encode(ObIAllocator &allocator, ObString &encoded_content) 
   ObFastFormatInt right_idx_i(right_idx_);
   ObString right_idx_str(right_idx_i.length(), right_idx_i.ptr());
 
-  ObFastFormatInt ttl_i(ttl_);
-  ObString ttl_str(ttl_i.length(), ttl_i.ptr());
+  ObFastFormatInt ins_region_left_i(ins_region_left_);
+  ObString ins_region_left_str(ins_region_left_i.length(), ins_region_left_i.ptr());
+
+  ObFastFormatInt ins_region_right_i(ins_region_right_);
+  ObString ins_region_right_str(ins_region_right_i.length(), ins_region_right_i.ptr());
 
   const char flag = META_SPLIT_FLAG;
 
   ObStringBuffer buffer(&allocator);
   int split_flag_count = ObRedisListMeta::ELE_COUNT - 1;
   if (OB_FAIL(buffer.reserve(split_flag_count + count_i.length() + left_idx_i.length()
-                             + right_idx_i.length() + ttl_str.length()))) {
+                             + right_idx_i.length() + ins_region_left_i.length() + ins_region_right_i.length()))) {
     LOG_WARN("fail to reserve memory for string buffer", K(ret), KP(this));
   } else if (OB_FAIL(buffer.append(count_str))) {
     LOG_WARN("fail to append count_str", K(ret), K(count_str));
@@ -116,6 +139,14 @@ int ObRedisListMeta::encode(ObIAllocator &allocator, ObString &encoded_content) 
     LOG_WARN("fail to append flag", K(ret), K(flag));
   } else if (OB_FAIL(buffer.append(right_idx_str))) {
     LOG_WARN("fail to append right_idx_str", K(ret), K(right_idx_str));
+  } else if (OB_FAIL(buffer.append(&flag, ObRedisUtil::FLAG_LEN))) {
+    LOG_WARN("fail to append flag", K(ret), K(flag));
+  } else if (OB_FAIL(buffer.append(ins_region_left_str))) {
+    LOG_WARN("fail to append ins_region_left_str", K(ret), K(ins_region_left_));
+  } else if (OB_FAIL(buffer.append(&flag, ObRedisUtil::FLAG_LEN))) {
+    LOG_WARN("fail to append flag", K(ret), K(flag));
+  } else if (OB_FAIL(buffer.append(ins_region_right_str))) {
+    LOG_WARN("fail to append ins_region_right_str", K(ret), K(ins_region_right_str));
   } else if (OB_FAIL(buffer.get_result_string(encoded_content))) {
     LOG_WARN("fail to get result string", K(ret), KP(this));
   }
