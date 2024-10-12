@@ -445,11 +445,16 @@ int print_object_meta(AChunk *chunk, ABlock *block, AObject *object, char *buf,
   void *label = &object->label_[0];
   void *end = memchr(label, '\0', sizeof(object->label_));
   int len = end ? (char*)end - (char*)label : sizeof(object->label_);
+  char bt[MAX_BACKTRACE_LENGTH] = {'\0'};
+  if (object->on_malloc_sample_) {
+    parray(bt, sizeof(bt), (int64_t*)object->bt(), AOBJECT_BACKTRACE_COUNT);
+  }
+
   ret = databuff_printf(buf, buf_len, pos,
                         "        object: %p, offset: %04d, in_use: %d, is_large: %d, nobjs: %04d," \
-                        " label: \'%.*s\', alloc_bytes: %u\n",
+                        " label: \'%.*s\', alloc_bytes: %u, bt: %s\n",
                         object, offset, object->in_use_, object->is_large_, object->nobjs_,
-                        len, (char*)label, object->alloc_bytes_);
+                        len, (char*)label, object->alloc_bytes_, bt);
   return ret;
 }
 
