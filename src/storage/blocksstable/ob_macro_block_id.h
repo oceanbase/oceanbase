@@ -68,6 +68,8 @@ enum class ObStorageObjectType : uint8_t
   IS_SHARED_TABLET_DELETED              = 34,
   IS_SHARED_TENANT_DELETED              = 35,
   CHECKSUM_ERROR_DUMP_MACRO             = 36,
+  SHARED_MICRO_DATA_MACRO               = 37,
+  SHARED_MICRO_META_MACRO               = 38,
   MAX   // Forbid insert object type in the middle! Only allow the tail!
         // Add new object type notice:
         // 1. if the object type only store in local cache, must add is_pin_storage_object_type, if the object type only store in remote object storage, must add is_read_through_storage_object_type
@@ -120,6 +122,8 @@ static const char *get_storage_objet_type_str(const ObStorageObjectType type)
     "IS_SHARED_TABLET_DELETED",
     "IS_SHARED_TENANT_DELETED",
     "CHECKSUM_ERROR_DUMP_MACRO",
+    "SHARED_MICRO_DATA_MACRO",
+    "SHARED_MICRO_META_MACRO",
     "MAX"
   };
   const char *type_str = type_str_map_[static_cast<int32_t>(ObStorageObjectType::MAX)];

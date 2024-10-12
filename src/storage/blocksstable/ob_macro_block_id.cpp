@@ -208,6 +208,8 @@ bool MacroBlockId::is_shared_data_or_meta() const
 {
   return is_id_mode_share() &&
   (
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MICRO_DATA_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MICRO_META_MACRO) == storage_object_type_ ||
     static_cast<uint64_t>(ObStorageObjectType::SHARED_MINI_DATA_MACRO) == storage_object_type_ ||
     static_cast<uint64_t>(ObStorageObjectType::SHARED_MINI_META_MACRO) == storage_object_type_ ||
     static_cast<uint64_t>(ObStorageObjectType::SHARED_MINOR_DATA_MACRO) == storage_object_type_ ||
