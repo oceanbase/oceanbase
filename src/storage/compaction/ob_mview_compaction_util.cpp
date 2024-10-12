@@ -271,6 +271,7 @@ int ObMviewCompactionHelper::create_inner_session(
     session->set_inner_session();
     session->set_compatibility_mode(is_oracle_mode ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE);
     session->get_ddl_info().set_major_refreshing_mview(true);
+    session->get_ddl_info().set_refreshing_mview(true);
     LOG_INFO("[MVIEW COMPACTION]: Succ to create inner session", K(ret), K(tenant_id), K(database_id), KP(session));
   }
   if (OB_FAIL(ret)) {
@@ -284,6 +285,7 @@ void ObMviewCompactionHelper::release_inner_session(sql::ObFreeSessionCtx &free_
   if (nullptr != session) {
     LOG_INFO("[MVIEW COMPACTION]: Release inner session", KP(session));
     session->get_ddl_info().set_major_refreshing_mview(false);
+    session->get_ddl_info().set_refreshing_mview(false);
     session->set_session_sleep();
     GCTX.session_mgr_->revert_session(session);
     GCTX.session_mgr_->free_session(free_session_ctx);
