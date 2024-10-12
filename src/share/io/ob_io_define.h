@@ -109,7 +109,6 @@ public:
   void set_sys_module_id(const uint64_t sys_module_id);
   uint64_t get_sys_module_id() const;
   bool is_sys_module() const;
-  void set_func_type(const uint8_t func_type);
   uint8_t get_func_type() const;
   int64_t get_wait_event() const;
   void set_read();
@@ -128,6 +127,8 @@ public:
   TO_STRING_KV("mode", common::get_io_mode_string(static_cast<ObIOMode>(mode_)),
                K(group_id_), K(func_type_), K(wait_event_id_), K(is_sync_), K(is_unlimited_), K(reserved_), K(is_detect_), K(is_time_detect_));
 private:
+  friend struct ObIORequest;
+  void set_func_type(const uint8_t func_type);
   static constexpr int64_t IO_MODE_BIT = 4; // read, write, append
   static constexpr int64_t IO_WAIT_EVENT_BIT = 32; // for performance monitor
   static constexpr int64_t IO_SYNC_FLAG_BIT = 1; // indicate if the caller is waiting io finished

@@ -376,7 +376,8 @@ static int start_mysql_queue(QueueThread *&qthread)
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
   if (is_sys_tenant(tenant_id) || is_user_tenant(tenant_id)) {
-    qthread = OB_NEW(QueueThread, ObMemAttr(tenant_id, ObModIds::OB_RPC), "MysqlQueueTh", tenant_id);
+    qthread = OB_NEW(QueueThread, ObMemAttr(tenant_id, ObModIds::OB_RPC),
+                      "MysqlQueueTh", tenant_id, share::OBCG_MYSQL_LOGIN);
     if (OB_ISNULL(qthread)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new qthread", K(ret), K(tenant_id));
@@ -2655,17 +2656,6 @@ void ObMultiTenant::recycle_tenant_allocator(int64_t tenant_id)
   if (NULL != share_limiter && !share_limiter->has_child()) {
     del_share_tenant_limiter(share_limiter);
   }
-}
-
-int obmysql::sql_nio_add_cgroup(const uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  if (GCONF._enable_new_sql_nio && GCONF._enable_tenant_sql_net_thread &&
-      nullptr != GCTX.cgroup_ctrl_ &&
-      OB_LIKELY(GCTX.cgroup_ctrl_->is_valid())) {
-    ret = GCTX.cgroup_ctrl_->add_self_to_cgroup(tenant_id, OBCG_SQL_NIO);
-  }
-  return ret;
 }
 
 int ObSrvNetworkFrame::reload_tenant_sql_thread_config(const uint64_t tenant_id)

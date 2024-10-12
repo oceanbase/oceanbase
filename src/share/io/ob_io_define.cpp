@@ -194,10 +194,6 @@ void ObIOFlag::set_func_type(const uint8_t func_type)
   func_type_ = func_type;
 }
 
-uint8_t ObIOFlag::get_func_type() const
-{
-  return func_type_;
-}
 void ObIOFlag::set_wait_event(int64_t wait_event_id)
 {
   wait_event_id_ = wait_event_id;
@@ -223,6 +219,11 @@ bool ObIOFlag::is_sys_module() const
   return USER_RESOURCE_OTHER_GROUP_ID == group_id_
           && sys_module_id_ >= SYS_MODULE_START_ID
           && sys_module_id_ < SYS_MODULE_END_ID;
+}
+
+uint8_t ObIOFlag::get_func_type() const
+{
+  return func_type_;
 }
 
 int64_t ObIOFlag::get_wait_event() const
@@ -1375,7 +1376,7 @@ int ObTenantIOConfig::parse_group_config(const char *config_str)
 int ObTenantIOConfig::add_single_group_config(const uint64_t tenant_id, const int64_t group_id, int64_t min_percent, int64_t max_percent, int64_t weight_percent)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_user_group(group_id)) || !is_valid_tenant_id(tenant_id) ||
+  if (OB_UNLIKELY(!is_resource_manager_group(group_id)) || !is_valid_tenant_id(tenant_id) ||
       min_percent < 0 || min_percent > 100 ||
       max_percent < 0 || max_percent > 100 ||
       weight_percent < 0 || weight_percent > 100 ||

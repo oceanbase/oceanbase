@@ -41,13 +41,13 @@ enum ObFunctionType : uint8_t
   PRIO_CLOG_LOW = 10,
   PRIO_CLOG_MID = 11,
   PRIO_CLOG_HIGH = 12,
-  /* add new function type below, or you will have compatibility issues. */
   PRIO_OPT_STATS = 13,
+  PRIO_IMPORT = 14,
+  PRIO_EXPORT = 15,
+  /* add new function type here, or you will have compatibility issues. */
 
-  /* add new function type above */
   MAX_FUNCTION_NUM
 };
-
 ObString get_io_function_name(ObFunctionType function_type);
 
 // 为了便于作为 hash value，所以把 ObString 包一下

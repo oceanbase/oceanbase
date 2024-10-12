@@ -1184,8 +1184,7 @@ class ObPxWorkerEnvArgs
 public :
   typedef common::ObCurTraceId::TraceId TraceId;
   ObPxWorkerEnvArgs () : trace_id_(), log_level_(OB_LOG_LEVEL_NONE),
-  is_oracle_mode_(false), enqueue_timestamp_(-1), gctx_(nullptr),
-  group_id_(0) { }
+  is_oracle_mode_(false), enqueue_timestamp_(-1), gctx_(nullptr){ }
 
   virtual ~ObPxWorkerEnvArgs() { }
 
@@ -1195,7 +1194,6 @@ public :
     is_oracle_mode_ = other.is_oracle_mode_;
     enqueue_timestamp_ = other.enqueue_timestamp_;
     gctx_ = other.gctx_;
-    group_id_ = other.group_id_;
     return *this;
   }
 
@@ -1209,8 +1207,6 @@ public :
   int64_t get_enqueue_timestamp() const { return enqueue_timestamp_; }
   void set_gctx(const observer::ObGlobalContext *ctx) { gctx_ = ctx; }
   const observer::ObGlobalContext *get_gctx() { return gctx_; }
-  void set_group_id(int32_t v) { group_id_ = v; }
-  int32_t get_group_id() const { return group_id_; }
 
 private:
   TraceId trace_id_;
@@ -1218,7 +1214,6 @@ private:
   bool is_oracle_mode_;
   int64_t enqueue_timestamp_;
   const observer::ObGlobalContext *gctx_;
-  int32_t group_id_;
 };
 
 }

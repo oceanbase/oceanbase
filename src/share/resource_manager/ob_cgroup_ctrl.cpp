@@ -22,20 +22,49 @@
 #include "share/resource_manager/ob_resource_plan_info.h"
 #include "share/resource_manager/ob_resource_manager.h"
 #include "share/resource_manager/ob_cgroup_ctrl.h"
+#include "observer/omt/ob_tenant.h"
+#include "observer/omt/ob_multi_tenant.h"
 
 #include <stdlib.h>
 #include <stdio.h>
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
+using namespace oceanbase::omt;
 
 namespace oceanbase
 {
+
+namespace lib
+{
+
+int SET_GROUP_ID(uint64_t group_id, bool is_background)
+{
+  int ret = OB_SUCCESS;
+
+  // to do switch group
+
+  THIS_WORKER.set_group_id_(group_id);
+  int tmp_ret = OB_SUCCESS;
+  if (OB_NOT_NULL(GCTX.cgroup_ctrl_)
+      && OB_TMP_FAIL(GCTX.cgroup_ctrl_->add_self_to_cgroup_(MTL_ID(), group_id, is_background))) {
+    LOG_WARN("add self to cgroup fail", K(ret), K(MTL_ID()), K(group_id));
+  }
+  return ret;
+}
+
+int CONVERT_FUNCTION_TYPE_TO_GROUP_ID(const uint8_t function_type, uint64_t &group_id)
+{
+  return G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_function_type(MTL_ID(), function_type, group_id);
+}
+
+}  // namespace lib
+
 namespace share
 {
-ObCgSet ObCgSet::instance_; 
-}
-}
+ObCgSet ObCgSet::instance_;
+}  // namespace share
+}  // namespace oceanbase
 
 // cgroup config name
 static const char *CPU_SHARES_FILE = "cpu.shares";
@@ -45,6 +74,7 @@ static const char *CPU_CFS_QUOTA_FILE = "cpu.cfs_quota_us";
 static const char *CPU_CFS_PERIOD_FILE = "cpu.cfs_period_us";
 static const char *CPUACCT_USAGE_FILE = "cpuacct.usage";
 static const char *CPU_STAT_FILE = "cpu.stat";
+static const char *CGROUP_PROCS_FILE = "cgroup.procs";
 
 //集成IO参数
 int OBGroupIOInfo::init(int64_t min_percent, int64_t max_percent, int64_t weight_percent)
@@ -100,20 +130,15 @@ int ObCgroupCtrl::init()
     } else {
       LOG_ERROR("init cgroup dir failed", K(ret), K(root_cgroup_));
     }
-  } else if (OB_FAIL(init_dir_(other_cgroup_))) {
-    LOG_WARN("init other cgroup dir failed", K(ret), K_(other_cgroup));
   } else {
-    char procs_path[PATH_BUFSIZE];
     char pid_value[VALUE_BUFSIZE];
-    snprintf(procs_path, PATH_BUFSIZE, "%s/cgroup.procs", other_cgroup_);
     snprintf(pid_value, VALUE_BUFSIZE, "%d", getpid());
-    if(OB_FAIL(write_string_to_file_(procs_path, pid_value))) {
-      LOG_ERROR("add tid to cgroup failed", K(ret), K(procs_path), K(pid_value));
+    if (OB_FAIL(set_cgroup_config_(other_cgroup_, CGROUP_PROCS_FILE, pid_value))) {
+      LOG_ERROR("add tid to cgroup failed", K(ret), K(other_cgroup_), K(pid_value));
     } else {
       valid_ = true;
     }
   }
-
   return ret;
 }
 
@@ -287,8 +312,16 @@ int ObCgroupCtrl::get_group_path(
   char meta_tenant_path[PATH_BUFSIZE] = "";
   char group_name_path[PATH_BUFSIZE] = "";
   // gen root_cgroup_path
-  if (is_server_tenant(tenant_id)) {
-    // if tenant_id is 500, return "other"
+  if (!is_valid_tenant_id(tenant_id)) {
+    if (OB_NOT_NULL(base_path) && 0 != STRLEN(base_path)) {
+      // background base, return "cgroup/background"
+      snprintf(root_cgroup_path, path_bufsize, "%s", root_cgroup_);
+    } else {
+      // if tenant_id is invalid and not background, return "cgroup/other"
+      snprintf(root_cgroup_path, path_bufsize, "%s", other_cgroup_);
+    }
+  } else if (is_server_tenant(tenant_id)) {
+    // if tenant_id is 500, return "cgroup/other"
     snprintf(root_cgroup_path, path_bufsize, "%s", other_cgroup_);
   } else {
     snprintf(root_cgroup_path, path_bufsize, "%s", root_cgroup_);
@@ -323,7 +356,7 @@ int ObCgroupCtrl::get_group_path(
       const int WARN_LOG_INTERVAL = 10 * 1000 * 1000L;
       ObCgSet &set = ObCgSet::instance();
 
-      if (is_user_group(group_id)) {
+      if (is_resource_manager_group(group_id)) {
         // if group is resource group
         if (OB_TMP_FAIL(get_group_info_by_group_id(tenant_id, group_id, g_name))) {
           if (REACH_TIME_INTERVAL(WARN_LOG_INTERVAL)) {
@@ -356,7 +389,11 @@ int ObCgroupCtrl::get_group_path(
         }
       }
 
-      snprintf(group_name_path, path_bufsize, "%s", group_name);
+      if (OB_SUCCESS == tmp_ret && is_resource_manager_group(group_id)) {
+        snprintf(group_name_path, path_bufsize, "OBRM_%s", group_name); // resource manager
+      } else {
+        snprintf(group_name_path, path_bufsize, "%s", group_name);
+      }
     }
   }
   if (OB_SUCC(ret)) {
@@ -372,19 +409,26 @@ int ObCgroupCtrl::get_group_path(
   return ret;
 }
 
-int ObCgroupCtrl::add_self_to_cgroup(const uint64_t tenant_id, uint64_t group_id, const char *base_path)
+int ObCgroupCtrl::add_self_to_cgroup_(const uint64_t tenant_id, const uint64_t group_id, const bool is_background)
 {
   int ret = OB_SUCCESS;
-  char group_path[PATH_BUFSIZE];
-  char tid_value[VALUE_BUFSIZE + 1];
+  if (is_valid()) {
 
-  snprintf(tid_value, VALUE_BUFSIZE, "%ld", gettid());
-  if (OB_FAIL(get_group_path(group_path, PATH_BUFSIZE, tenant_id, group_id, base_path))) {
-    LOG_WARN("fail get group path", K(tenant_id), K(ret));
-  } else if (OB_FAIL(set_cgroup_config_(group_path, TASKS_FILE, tid_value))) {
-    LOG_WARN("add tid to cgroup failed", K(ret), K(group_path), K(tid_value), K(tenant_id));
-  } else {
-    LOG_INFO("add tid to cgroup success", K(group_path), K(tid_value), K(tenant_id), K(group_id));
+    const char *base_path =
+        (GCONF.enable_global_background_resource_isolation && is_background) ? BACKGROUND_CGROUP : "";
+    char group_path[PATH_BUFSIZE];
+    char tid_value[VALUE_BUFSIZE + 1];
+
+    snprintf(tid_value, VALUE_BUFSIZE, "%ld", gettid());
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(get_group_path(group_path, PATH_BUFSIZE, tenant_id, group_id, base_path))) {
+      LOG_WARN("fail get group path", K(tenant_id), K(ret));
+    } else if (OB_FAIL(set_cgroup_config_(group_path, TASKS_FILE, tid_value))) {
+      LOG_WARN("add tid to cgroup failed", K(ret), K(group_path), K(tid_value), K(tenant_id));
+    } else {
+      LOG_INFO("add tid to cgroup success", K(group_path), K(tid_value), K(tenant_id), K(group_id));
+    }
   }
   return ret;
 }
@@ -398,21 +442,9 @@ int ObCgroupCtrl::get_group_info_by_group_id(const uint64_t tenant_id,
   int ret = OB_SUCCESS;
   ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
   if (OB_FAIL(rule_mgr.get_group_name_by_id(tenant_id, group_id, group_name))) {
-    LOG_WARN("fail get group name", K(tenant_id), K(group_id), K(group_name));
-  }
-  return ret;
-}
-
-int ObCgroupCtrl::remove_self_from_cgroup(const uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  char tid_value[VALUE_BUFSIZE];
-  // 把该tid加入other_cgroup目录的tasks文件中就会从其它tasks中删除
-  snprintf(tid_value, VALUE_BUFSIZE, "%ld", gettid());
-  if (OB_FAIL(set_cgroup_config_(other_cgroup_, TASKS_FILE, tid_value))) {
-    LOG_WARN("remove tid to cgroup failed", K(ret), K(other_cgroup_), K(tid_value), K(tenant_id));
-  } else {
-    LOG_INFO("remove tid to cgroup success", K(other_cgroup_), K(tid_value), K(tenant_id));
+    if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
+      LOG_WARN("fail get group name", K(tenant_id), K(group_id), K(group_name));
+    }
   }
   return ret;
 }
@@ -818,7 +850,7 @@ int ObCgroupCtrl::reset_group_iops(const uint64_t tenant_id,
     } else {
       LOG_WARN("fail get group id", K(ret), K(group_id), K(group_name));
     }
-  } else if (OB_UNLIKELY(!is_user_group(group_id))) {
+  } else if (OB_UNLIKELY(!is_resource_manager_group(group_id))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid group id", K(ret), K(group_id), K(group_name));
   } else if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(tenant_id, tenant_holder))) {
@@ -851,7 +883,7 @@ int ObCgroupCtrl::delete_group_iops(const uint64_t tenant_id,
     } else {
       LOG_WARN("fail get group id", K(ret), K(group_id), K(group_name));
     }
-  } else if (OB_UNLIKELY(!is_user_group(group_id))) {
+  } else if (OB_UNLIKELY(!is_resource_manager_group(group_id))) {
     //OTHER_GROUPS and all cannot be deleted
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid group id", K(ret), K(group_id), K(group_name));

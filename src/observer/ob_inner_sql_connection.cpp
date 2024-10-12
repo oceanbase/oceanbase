@@ -749,7 +749,7 @@ int ObInnerSQLConnection::do_query(sqlclient::ObIExecutor &executor, ObInnerSQLR
     } else {
       ObSQLSessionInfo &session = res.result_set().get_session();
       session.set_expect_group_id(group_id_);
-      ResourceGroupGuard guard(consumer_group_id_, share::ObFunctionType::DEFAULT_FUNCTION);
+      CONSUMER_GROUP_ID_GUARD(consumer_group_id_);
       if (OB_ISNULL(res.sql_ctx().schema_guard_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("schema guard is null");

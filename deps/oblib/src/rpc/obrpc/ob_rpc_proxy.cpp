@@ -184,7 +184,7 @@ int ObRpcProxy::init_pkt(
     if (0 != get_group_id()) {
       pkt->set_group_id(get_group_id());
     } else if (this_worker().get_group_id() == OBCG_LQ ||
-               (is_user_group(this_worker().get_group_id()) && ob_get_tenant_id() != tenant_id_)) {
+               (is_resource_manager_group(this_worker().get_group_id()) && ob_get_tenant_id() != tenant_id_)) {
       pkt->set_group_id(0);
     } else {
       pkt->set_group_id(this_worker().get_group_id());

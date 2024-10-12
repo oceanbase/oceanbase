@@ -166,7 +166,7 @@ public:
   int64_t delta_time_;
   int64_t delta_cpu_time_;
   int64_t delta_db_time_;
-  int32_t group_id_;
+  uint64_t group_id_;
   int64_t tid_;  // record current tid for cpu time verification
   int64_t plan_hash_;
   int64_t tx_id_;
