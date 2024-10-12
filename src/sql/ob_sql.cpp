@@ -1022,6 +1022,7 @@ int ObSql::do_real_prepare(const ObString &sql,
   int ret = OB_SUCCESS;
   bool enable_udr = false;
   ParseResult parse_result;
+  MEMSET(&parse_result, 0, SIZEOF(ParseResult));
   ObStmt *basic_stmt = NULL;
   stmt::StmtType stmt_type = stmt::T_NONE;
   int64_t param_cnt = 0;
@@ -1279,6 +1280,7 @@ int ObSql::handle_pl_prepare(const ObString &sql,
   int64_t param_cnt = 0;
   ObString normalized_sql;
   ParseResult parse_result;
+  MEMSET(&parse_result, 0, SIZEOF(ParseResult));
   ObStmt *basic_stmt = NULL;
   int64_t cur_timeout_us = 0;
   stmt::StmtType stmt_type = stmt::T_NONE;
@@ -4669,6 +4671,7 @@ int ObSql::pc_add_udr_plan(const ObUDRItemMgr::UDRItemRefGuard &item_guard,
   int get_plan_err = OB_SUCCESS;
   bool add_plan_to_pc = false;
   ParseResult parse_result;
+  MEMSET(&parse_result, 0, SIZEOF(ParseResult));
   ObIAllocator &allocator = result.get_mem_pool();
   ObSQLSessionInfo &session = result.get_session();
   ObPlanCache *plan_cache = session.get_plan_cache();
@@ -4725,7 +4728,9 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
   ObString signature_sql;
   ObOutlineState outline_state;
   ParseResult parse_result;
+  MEMSET(&parse_result, 0, SIZEOF(ParseResult));
   ParseResult outline_parse_result;
+  MEMSET(&outline_parse_result, 0, SIZEOF(ParseResult));
   bool add_plan_to_pc = false;
   bool is_match_udr = false;
   ObUDRItemMgr::UDRItemRefGuard item_guard;
