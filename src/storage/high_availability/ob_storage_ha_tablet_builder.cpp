@@ -452,6 +452,8 @@ int ObStorageHATabletsBuilder::update_pending_tablets_with_remote()
         } else {
           LOG_INFO("update tablet restore status to UNDEFINED", K(tablet_info));
         }
+      } else if (OB_FAIL(update_tablet_with_major_flag_if_need_(tablet_handle, tablet_info))) {
+        LOG_WARN("fail to update tablet with_major_flag if need", K(ret), K(tablet_handle));
       } else if (OB_FAIL(create_or_update_tablet_(tablet_info, need_check_tablet_limit, ls))) {
         LOG_WARN("failed to create or update tablet", K(ret), K(tablet_info));
       } else {
@@ -1355,6 +1357,78 @@ int ObStorageHATabletsBuilder::get_minor_scn_before_4220_(
 
   if (OB_NOT_NULL(reader)) {
     free_tablet_info_reader_(reader);
+  }
+  return ret;
+}
+
+// when backup concurrent with ddl and migration, with_major_flag in tablet_meta may be incorrect
+// therefore need to read actual backup data to correct it
+int ObStorageHATabletsBuilder::update_tablet_with_major_flag_if_need_(
+    const ObTabletHandle &tablet_handle, ObCopyTabletInfo &tablet_info)
+{
+  int ret = OB_SUCCESS;
+  if (!tablet_handle.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tablet handle", K(ret), K(tablet_handle));
+  } else if (!tablet_info.param_.table_store_flag_.with_major_sstable()) {
+    bool has_backup_major = false;
+    if (OB_FAIL(check_tablet_has_major_sstables_in_backup_(tablet_handle, has_backup_major))) {
+      LOG_WARN("fail to check tablet has major sstable in backup", K(ret), K(tablet_handle));
+    } else if (has_backup_major) {
+      tablet_info.param_.table_store_flag_.set_with_major_sstable();
+      FLOG_INFO("update tablet with_major_flag to 1", K(tablet_info));
+    }
+  }
+  return ret;
+}
+
+int ObStorageHATabletsBuilder::check_tablet_has_major_sstables_in_backup_(
+    const ObTabletHandle &tablet_handle, bool &has_backup_major)
+{
+  int ret = OB_SUCCESS;
+  has_backup_major = false;
+  ObICopySSTableInfoReader *reader = nullptr;
+  common::ObArray<ObTabletHandle> tablet_handle_array;
+  obrpc::ObCopyTabletSSTableInfo sstable_info;
+  obrpc::ObCopyTabletSSTableHeader copy_header;
+
+  if (!tablet_handle.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tablet_handle is invalid", K(ret), K(tablet_handle));
+  } else if (OB_FAIL(tablet_handle_array.push_back(tablet_handle))) {
+    LOG_WARN("fail to push back", K(ret), K(tablet_handle));
+  } else if (OB_FAIL(get_tablets_sstable_reader_(tablet_handle_array, reader))) {
+    LOG_WARN("fail to get tablets sstable reader", K(ret), K(tablet_handle_array));
+  } else if (OB_ISNULL(reader)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablets sstable reader is null", K(ret), K(param_));
+  } else {
+    while (OB_SUCC(ret)) {
+      sstable_info.reset();
+      copy_header.reset();
+      if (OB_FAIL(reader->get_next_tablet_sstable_header(copy_header))) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          break;
+        } else {
+          LOG_WARN("fail to get next tablet sstable reader", K(ret), K(param_));
+        }
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < copy_header.sstable_count_; ++i) {
+          sstable_info.reset();
+          if (OB_FAIL(reader->get_next_sstable_info(sstable_info))) {
+            LOG_WARN("fail to get next sstable info", K(copy_header), K(param_));
+          } else if (sstable_info.param_.table_key_.is_major_sstable()) {
+            has_backup_major = true;
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  if (OB_NOT_NULL(reader)) {
+    free_sstable_info_reader_(reader);
   }
   return ret;
 }

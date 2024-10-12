@@ -1610,8 +1610,14 @@ int ObTabletTableStore::build_ddl_sstables(
     }
   }
 
-  if (OB_SUCC(ret) && !ddl_dump_sstables.empty() && major_tables_.empty()) {
-    if (OB_FAIL(ddl_sstables_.init(allocator, ddl_dump_sstables))) {
+  if (OB_SUCC(ret)) {
+    if (ddl_dump_sstables.empty()) {
+      //do nothing
+    } else if (!major_tables_.empty()) {
+      LOG_INFO("major sstables is not empty, no need update ddl sstable", K(ddl_dump_sstables), K(major_tables_));
+    } else if (tablet.get_tablet_meta().table_store_flag_.with_major_sstable()) {
+      LOG_INFO("tablet has with major sstable flag, no need update ddl sstable", K(tablet), K(ddl_dump_sstables));
+    } else if (OB_FAIL(ddl_sstables_.init(allocator, ddl_dump_sstables))) {
       LOG_WARN("failed to init ddl_sstables", K(ret));
     }
   }
@@ -2084,7 +2090,7 @@ int ObTabletTableStore::build_ha_ddl_tables_(
   bool need_add_ddl_tables = true;
   ObSSTableMetaHandle new_meta_handle;
 
-  if (!old_store.major_tables_.empty()) {
+  if (!old_store.major_tables_.empty() || tablet.get_tablet_meta().table_store_flag_.with_major_sstable()) {
     need_add_ddl_tables = false;
   }
 

@@ -362,8 +362,17 @@ int ObTabletMeta::init(
     }
 
     ObTabletTableStoreFlag table_store_flag = old_tablet_meta.table_store_flag_;
+    SCN ddl_checkpoint_scn = old_tablet_meta.ddl_checkpoint_scn_;
+    SCN ddl_commit_scn = old_tablet_meta.ddl_commit_scn_;
     if (!table_store_flag.with_major_sstable()) {
-      table_store_flag = OB_ISNULL(tablet_meta) ? table_store_flag : tablet_meta->table_store_flag_;
+      if (OB_ISNULL(tablet_meta)) {
+          //do nothing
+      } else if (tablet_meta->table_store_flag_.with_major_sstable()) {
+        table_store_flag.set_with_major_sstable();
+        ddl_checkpoint_scn = tablet_meta->ddl_checkpoint_scn_;
+        ddl_commit_scn = tablet_meta->ddl_commit_scn_;
+        FLOG_INFO("update tablet table store flag with major", KPC(tablet_meta), K(table_store_flag), K(ddl_checkpoint_scn), K(ddl_commit_scn));
+      }
     }
 
     // fuse restore status during migration, consider the following timeline
@@ -399,9 +408,9 @@ int ObTabletMeta::init(
       ha_status_ = new_ha_status;
       report_status_ = old_tablet_meta.report_status_; //old tablet meta report status already reset
       table_store_flag_ = table_store_flag;
-      ddl_checkpoint_scn_ = old_tablet_meta.ddl_checkpoint_scn_;
+      ddl_checkpoint_scn_ = ddl_checkpoint_scn;
       ddl_start_scn_ = old_tablet_meta.ddl_start_scn_;
-      ddl_commit_scn_ = old_tablet_meta.ddl_commit_scn_;
+      ddl_commit_scn_ = ddl_commit_scn;
       ddl_snapshot_version_ = old_tablet_meta.ddl_snapshot_version_;
       max_sync_storage_schema_version_ = max_sync_storage_schema_version;
       max_serialized_medium_scn_ = MAX(old_tablet_meta.max_serialized_medium_scn_,

@@ -165,6 +165,12 @@ private:
       const common::ObTabletID &tablet_id,
       share::SCN &start_scn,
       share::SCN &checkpoint_scn);
+  int update_tablet_with_major_flag_if_need_(
+      const ObTabletHandle &tablet_handle,
+      ObCopyTabletInfo &tablet_info);
+  int check_tablet_has_major_sstables_in_backup_(
+      const ObTabletHandle &tablet_handle,
+      bool &has_backup_major);
 
 private:
   bool is_inited_;

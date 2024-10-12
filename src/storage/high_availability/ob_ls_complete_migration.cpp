@@ -31,6 +31,7 @@ using namespace share;
 using namespace storage;
 
 ERRSIM_POINT_DEF(WAIT_CLOG_SYNC_FAILED);
+ERRSIM_POINT_DEF(SKIP_CHECK_WAIT_CLOG_SYNC);
 ERRSIM_POINT_DEF(SERVER_STOP_BEFORE_UPDATE_MIGRATION_STATUS);
 ERRSIM_POINT_DEF(COMPLETE_START_RUNNING_FAILED);
 /******************ObLSCompleteMigrationCtx*********************/
@@ -1601,6 +1602,11 @@ int ObStartCompleteMigrationTask::check_need_wait_(
   } else if (OB_ISNULL(ls)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check need wait log sync get invalid argument", K(ret), KP(ls));
+#ifdef ERRSIM
+  } else if (OB_FAIL(SKIP_CHECK_WAIT_CLOG_SYNC)) {
+    ret = OB_SUCCESS;
+    need_wait = false;
+#endif
   } else if (OB_FAIL(ls->get_restore_status(ls_restore_status))) {
     LOG_WARN("failed to get restore status", K(ret), KPC(ctx_));
   } else if (ls_restore_status.is_in_restore()) {

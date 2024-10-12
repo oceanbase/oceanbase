@@ -783,6 +783,13 @@ int ObDDLRedoLogWriter::write_ddl_start_log(ObLSHandle &ls_handle,
                                             SCN &start_scn)
 {
   int ret = OB_SUCCESS;
+
+#ifdef ERRSIM
+  SERVER_EVENT_SYNC_ADD("storage_ddl", "before_write_start_log",
+                        "table_key", log.get_table_key());
+  DEBUG_SYNC(BEFORE_DDL_WRITE_START_LOG);
+#endif
+
   start_scn.set_min();
   const enum ObReplayBarrierType replay_barrier_type = ObReplayBarrierType::STRICT_BARRIER;
   logservice::ObLogBaseHeader base_header(logservice::ObLogBaseType::DDL_LOG_BASE_TYPE,

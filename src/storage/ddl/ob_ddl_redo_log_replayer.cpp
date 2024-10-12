@@ -74,6 +74,7 @@ int ObDDLRedoLogReplayer::replay_start(const ObDDLStartLog &log, const SCN &scn)
   return ret;
 }
 
+ERRSIM_POINT_DEF(DDL_REPLAY_REDO_LOG_FAILED);
 int ObDDLRedoLogReplayer::replay_redo(const ObDDLRedoLog &log, const SCN &scn)
 {
   int ret = OB_SUCCESS;
@@ -81,7 +82,15 @@ int ObDDLRedoLogReplayer::replay_redo(const ObDDLRedoLog &log, const SCN &scn)
 
   DEBUG_SYNC(BEFORE_REPLAY_DDL_MACRO_BLOCK);
 
-  if (OB_UNLIKELY(!is_inited_)) {
+#ifdef ERRSIM
+  ret = DDL_REPLAY_REDO_LOG_FAILED ? : OB_SUCCESS;
+  if (OB_FAIL(ret)) {
+    LOG_WARN("fake DDL_REPLAY_REDO_LOG_FAILED", K(ret));
+  }
+#endif
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLRedoLogReplayer has not been inited", K(ret));
   } else if (OB_FAIL(replay_executor.init(ls_, log, scn))) {
