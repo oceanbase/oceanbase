@@ -1642,7 +1642,7 @@ int ObBackupTabletProvider::init(const ObLSBackupParam &param, const share::ObBa
 void ObBackupTabletProvider::reset()
 {
   ObMutexGuard guard(mutex_);
-  is_inited_ = true;
+  is_inited_ = false;
   ls_backup_ctx_ = NULL;
   free_queue_item_();
   fifo_allocator_.reset();
@@ -2720,7 +2720,7 @@ int ObBackupTabletProvider::get_tablet_status_(
 void ObBackupTabletProvider::free_queue_item_()
 {
   int ret = OB_SUCCESS;
-  while (OB_SUCC(ret)) {
+  while (OB_SUCC(ret) && lighty_queue_.is_inited()) {
     void *vp = NULL;
     ObBackupProviderItem *item_ptr = NULL;
     if (OB_FAIL(lighty_queue_.pop(vp))) {
