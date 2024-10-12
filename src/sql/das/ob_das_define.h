@@ -87,6 +87,7 @@ enum ObDASOpType
   DAS_OP_VID_MERGE,
   DAS_OP_INDEX_MERGE,
   DAS_OP_DOC_ID_MERGE,
+  DAS_OP_FUNC_LOOKUP,
   //append OpType before me
   DAS_OP_MAX
 };
