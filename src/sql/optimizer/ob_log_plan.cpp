@@ -15485,6 +15485,8 @@ int ObLogPlan::adjust_adaptive_join_structure(ObDMLStmt &stmt,
   ObSEArray<ObRawExpr *, 16> orig_pseudo_exprs;
   ObSEArray<ObRawExpr *, 16> new_exprs;
   ObRawExprCopier expr_copier(get_optimizer_context().get_expr_factory());
+  ObLogTableScan *hj_tsc_op = nullptr;
+  ObLogicalOperator *parent = op.get_parent();
   if (OB_FAIL(stmt.get_column_exprs(old_table_id, orig_col_exprs))) {
     LOG_WARN("get column exprs failed", K(ret));
   } else {
@@ -15492,6 +15494,16 @@ int ObLogPlan::adjust_adaptive_join_structure(ObDMLStmt &stmt,
     table_scan.get_table_name() = table_item.alias_name_.length() > 0 ?
                                    table_item.alias_name_ : table_item.table_name_;
     table_scan.set_is_adaptive_inner_scan(true);
+    if (OB_ISNULL(parent) || OB_UNLIKELY(parent->get_type() != LOG_JOIN)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected parent", K(ret), K(parent));
+    } else if (OB_ISNULL(parent->get_child(1)) ||
+               OB_UNLIKELY(parent->get_child(1)->get_type() != LOG_TABLE_SCAN)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected child", K(ret));
+    } else {
+      hj_tsc_op = static_cast<ObLogTableScan *>(parent->get_child(1));
+    }
   }
   // create raw expr replacer.
   for (int64_t i = 0; i < orig_col_exprs.count() && OB_SUCC(ret); i++) {
@@ -15524,7 +15536,7 @@ int ObLogPlan::adjust_adaptive_join_structure(ObDMLStmt &stmt,
       new_col_expr->get_relation_ids().reset();
       if (OB_FAIL(new_col_expr->add_relation_id(stmt.get_table_bit_index(new_table_id)))) {
         LOG_WARN("add relation id failed", K(ret));
-      } else if (!table_scan.check_expr_will_be_used(*col_expr)) {
+      } else if (!table_scan.check_expr_will_be_used(*col_expr) || !hj_tsc_op->check_expr_will_be_used(*col_expr)) {
         // do nothing.
       } else if (OB_FAIL(new_exprs.push_back(new_col_expr))) {
         LOG_WARN("new_exprs push back failed", K(ret));
@@ -15595,28 +15607,22 @@ int ObLogPlan::adjust_adaptive_join_structure(ObDMLStmt &stmt,
   }
   // generate map between output of right child of hash join and nlj.
   if (OB_SUCC(ret)) {
-    ObLogicalOperator *parent = op.get_parent();
-    if (OB_ISNULL(parent) || OB_UNLIKELY(parent->get_type() != LOG_JOIN)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected parent", K(ret), K(parent));
+    ObLogJoin *hj = static_cast<ObLogJoin *>(parent);
+    if (OB_FAIL(hj->get_adaptive_nlj_scan_cols().assign(new_exprs))) {
+      LOG_WARN("assign failed", K(ret));
+    } else if (OB_FAIL(hj->get_adaptive_hj_scan_cols().reserve(
+                orig_access_col_exprs.count() + orig_pseudo_exprs.count()))) {
+      LOG_WARN("reserve failed", K(ret));
     } else {
-      ObLogJoin *hj = static_cast<ObLogJoin *>(parent);
-      if (OB_FAIL(hj->get_adaptive_nlj_scan_cols().assign(new_exprs))) {
-        LOG_WARN("assign failed", K(ret));
-      } else if (OB_FAIL(hj->get_adaptive_hj_scan_cols().reserve(
-                  orig_access_col_exprs.count() + orig_pseudo_exprs.count()))) {
-        LOG_WARN("reserve failed", K(ret));
-      } else {
-        for (int64_t i = 0; i < orig_access_col_exprs.count() && OB_SUCC(ret); i++) {
-          ObColumnRefRawExpr *col_expr = orig_access_col_exprs.at(i);
-          if (OB_FAIL(hj->get_adaptive_hj_scan_cols().push_back(static_cast<ObRawExpr *>(col_expr)))) {
-            LOG_WARN("push back failed", K(ret));
-          }
+      for (int64_t i = 0; i < orig_access_col_exprs.count() && OB_SUCC(ret); i++) {
+        ObColumnRefRawExpr *col_expr = orig_access_col_exprs.at(i);
+        if (OB_FAIL(hj->get_adaptive_hj_scan_cols().push_back(static_cast<ObRawExpr *>(col_expr)))) {
+          LOG_WARN("push back failed", K(ret));
         }
-        for (int64_t i = 0; i < orig_pseudo_exprs.count() && OB_SUCC(ret); i++) {
-          if (OB_FAIL(hj->get_adaptive_hj_scan_cols().push_back(orig_pseudo_exprs.at(i)))) {
-            LOG_WARN("push back failed", K(ret));
-          }
+      }
+      for (int64_t i = 0; i < orig_pseudo_exprs.count() && OB_SUCC(ret); i++) {
+        if (OB_FAIL(hj->get_adaptive_hj_scan_cols().push_back(orig_pseudo_exprs.at(i)))) {
+          LOG_WARN("push back failed", K(ret));
         }
       }
     }

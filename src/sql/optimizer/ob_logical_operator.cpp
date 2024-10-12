@@ -2338,7 +2338,7 @@ int ObLogicalOperator::allocate_expr_post(ObAllocExprContext &ctx)
             LOG_TRACE("expr can be produced now", K(*expr), K(get_name()), K(id_));
           } else {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("expr can not be produced now", K(*expr), K(get_name()), K(id_), K(this));
+            LOG_WARN("expr can not be produced now", K(*expr), K(get_name()), K(id_), K(get_op_id()), K(this));
           }
         } else { /*do nothing*/ }
 
