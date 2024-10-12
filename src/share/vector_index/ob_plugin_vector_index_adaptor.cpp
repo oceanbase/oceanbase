@@ -1031,7 +1031,7 @@ int ObPluginVectorIndexAdaptor::write_into_delta_mem(ObVectorQueryAdaptorResultC
     LOG_WARN("check vsag mem used failed.", K(ret));
   } else {
     TCWLockGuard lock_guard(incr_data_->mem_data_rwlock_);
-    if (check_if_complete_delta(ctx->bitmaps_->insert_bitmap_)) {
+    if (check_if_complete_delta(ctx->bitmaps_->insert_bitmap_, count)) {
       if (OB_SUCC(ret)) {
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIBitmapADP"));
         TCWLockGuard lock_guard(incr_data_->bitmap_rwlock_);
@@ -1166,7 +1166,7 @@ int ObPluginVectorIndexAdaptor::check_index_id_table_readnext_status(ObVectorQue
   } else if (OB_ISNULL(ctx->bitmaps_) || OB_ISNULL(ctx->bitmaps_->insert_bitmap_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ctx bit map.", K(ret));
-  } else if (check_if_complete_delta(ctx->bitmaps_->insert_bitmap_)) {
+  } else if (check_if_complete_delta(ctx->bitmaps_->insert_bitmap_, i_vids.count())) {
     if (OB_FAIL(prepare_delta_mem_data(ctx->bitmaps_->insert_bitmap_, i_vids, ctx))) {
       LOG_WARN("failed to complete.", K(ret));
     } else {
@@ -1305,10 +1305,13 @@ int ObPluginVectorIndexAdaptor::complete_index_mem_data(SCN read_scn,
   return ret;
 }
 
-bool ObPluginVectorIndexAdaptor::check_if_complete_delta(roaring::api::roaring64_bitmap_t *gene_bitmap)
+bool ObPluginVectorIndexAdaptor::check_if_complete_delta(roaring::api::roaring64_bitmap_t *gene_bitmap, int64_t count)
 {
   bool res = false;
-  if (is_mem_data_init_atomic(VIRT_INC)) {
+  int64_t gene_vid_cnt = roaring64_bitmap_get_cardinality(gene_bitmap);
+  if (gene_vid_cnt == 0 && count > 0) {
+    res = true;
+  } else if (is_mem_data_init_atomic(VIRT_INC)) {
     roaring::api::roaring64_bitmap_t *delta_bitmap = ATOMIC_LOAD(&(incr_data_->bitmap_->insert_bitmap_));
     if (!roaring64_bitmap_is_subset(gene_bitmap, delta_bitmap)) {
       res = true;
@@ -1392,6 +1395,7 @@ int ObPluginVectorIndexAdaptor::prepare_delta_mem_data(roaring::api::roaring64_b
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocator.", K(ret), K(bitmap_cnt));
       } else {
+        is_continue = roaring64_iterator_has_value(bitmap_iter);
         for (int64_t i = 0; OB_SUCC(ret) && i < vector_cnt; i++) {
           ctx->vec_data_.vectors_[i].set_null();
         }
@@ -1665,7 +1669,7 @@ int ObPluginVectorIndexAdaptor::vsag_query_vids(ObVectorQueryAdaptorResultContex
   }
   if (OB_FAIL(ret)) {
   } else {
-    int64_t actual_res_cnt;
+    int64_t actual_res_cnt = 0;
     const ObVsagQueryResult delta_data = {delta_res_cnt, delta_vids, delta_distances};
     const ObVsagQueryResult snap_data = {snap_res_cnt, snap_vids, snap_distances};
     uint64_t tmp_result_cnt = delta_res_cnt + snap_res_cnt;
