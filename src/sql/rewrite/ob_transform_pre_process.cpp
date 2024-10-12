@@ -8672,13 +8672,13 @@ int ObTransformPreProcess::recursively_eliminate_full_join(ObDMLStmt &stmt,
     LOG_WARN("table item is null", K(ret), K(table_item), K(ctx_));
   } else if (!table_item->is_joined_table()) {
     /* do nothing */
-  } else if (OB_FAIL(recursively_eliminate_full_join(stmt,
-                                                     joined_table->left_table_,
-                                                     trans_happened))) {
+  } else if (OB_FAIL(SMART_CALL(recursively_eliminate_full_join(stmt,
+                                                                joined_table->left_table_,
+                                                                trans_happened)))) {
     LOG_WARN("failed to transform full nl join.", K(ret));
-  } else if (OB_FAIL(recursively_eliminate_full_join(stmt,
-                                                     joined_table->right_table_,
-                                                     trans_happened))) {
+  } else if (OB_FAIL(SMART_CALL(recursively_eliminate_full_join(stmt,
+                                                                joined_table->right_table_,
+                                                                trans_happened)))) {
     LOG_WARN("failed to transform full nl join.", K(ret));
   } else if (!joined_table->is_full_join()) {
     /* do nothing */
