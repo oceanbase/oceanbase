@@ -511,6 +511,7 @@ typedef enum ObItemType
   T_FUN_SYS_ENHANCED_AES_ENCRYPT = 779,
   T_FUN_SYS_ENHANCED_AES_DECRYPT = 780,
   T_FUNC_SYS_MYSQL_PROC_INFO = 781,
+  T_FUN_SYS_GET_MYSQL_ROUTINE_PARAMETER_TYPE_STR = 782,
   ///< @note add new mysql only function type before this line
   T_MYSQL_ONLY_SYS_MAX_OP = 800,
 

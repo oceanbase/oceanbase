@@ -1274,6 +1274,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprInnerIsTrue::decimal_int_is_true_end,                /* 765 */
   NULL, // ObExprInnerIsTrue::json_is_true_start,                     /* 766 */
   NULL, // ObExprInnerIsTrue::json_is_true_end,                       /* 767 */
+  NULL, // ObExprGetMySQLRoutineParameterTypeStr::get_mysql_routine_parameter_type_str /* 768 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
