@@ -349,7 +349,8 @@ private:
   static int do_describe(sql::ObExecContext &exec_ctx, ParamStore &params, DescribeType type);
   static int do_parse(sql::ObExecContext &exec_ctx,
                       ObDbmsCursorInfo *cursor,
-                      common::ObString &sql_stmt);
+                      common::ObString &sql_stmt,
+                      ObCollationType coll_type);
   static int parse_6p(sql::ObExecContext &exec_ctx,
                    ParamStore &params,
                    common::ObObj &result);

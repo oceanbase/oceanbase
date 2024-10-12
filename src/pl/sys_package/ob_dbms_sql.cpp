@@ -731,6 +731,7 @@ int ObPLDbmsSql::parse_6p(ObExecContext &exec_ctx, ParamStore &params, ObObj &re
   CK (sql_arr->get_count() >= upper_bound - low_bound);
   CK (low_bound <= upper_bound);
   ObSqlString sql_txt;
+  ObCollationType coll_type = CS_TYPE_INVALID;
   if (OB_SUCC(ret)) {
     ObString elem_txt;
     ObPLAssocArray *assoc_arr = static_cast<ObPLAssocArray *>(sql_arr);
@@ -796,6 +797,7 @@ int ObPLDbmsSql::parse_6p(ObExecContext &exec_ctx, ParamStore &params, ObObj &re
             if (elem.is_null()) {
               ret = OB_READ_NOTHING;
             } else {
+              coll_type = elem.get_collation_type();
               OZ (elem.get_varchar(elem_txt), elem);
               OZ (sql_txt.append(elem_txt));
               if (linefeed) {
@@ -814,7 +816,7 @@ int ObPLDbmsSql::parse_6p(ObExecContext &exec_ctx, ParamStore &params, ObObj &re
   OZ (get_cursor(exec_ctx, params, cursor));// 这儿只用了params的第一个参数，cursor id
   OZ (ob_write_string(exec_ctx.get_allocator(), sql_txt.string(), sql_stmt));
   LOG_DEBUG("parse 6p, concated sql stmt", K(sql_stmt), K(sql_txt.string()));
-  OZ (do_parse(exec_ctx, cursor, sql_stmt));
+  OZ (do_parse(exec_ctx, cursor, sql_stmt, coll_type));
   return ret;
 }
 
@@ -837,7 +839,7 @@ int ObPLDbmsSql::parse(ObExecContext &exec_ctx, ParamStore &params, ObObj &resul
       OZ (params.at(1).get_varchar(sql_stmt), params.at(1));
 
       OZ (get_cursor(exec_ctx, params, cursor));
-      OZ (do_parse(exec_ctx, cursor, sql_stmt));
+      OZ (do_parse(exec_ctx, cursor, sql_stmt, params.at(1).get_collation_type()));
     } else if (6 == param_count) {
       OZ (parse_6p(exec_ctx, params, result));
     } else {
@@ -848,13 +850,25 @@ int ObPLDbmsSql::parse(ObExecContext &exec_ctx, ParamStore &params, ObObj &resul
   return ret;
 }
 
-int ObPLDbmsSql::do_parse(ObExecContext &exec_ctx, ObDbmsCursorInfo *cursor, ObString &sql_stmt)
+int ObPLDbmsSql::do_parse(ObExecContext &exec_ctx,
+                          ObDbmsCursorInfo *cursor,
+                          ObString &sql_stmt,
+                          ObCollationType coll_type)
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(cursor));
   // do parse.
   ObSQLSessionInfo *session = exec_ctx.get_my_session();
-  OZ (cursor->parse(sql_stmt, *session), sql_stmt);
+  ObCollationType conn_coll_type = CS_TYPE_INVALID;
+  ObString sql_cs;
+  CK (OB_NOT_NULL(session));
+  OX (conn_coll_type = session->get_local_collation_connection());
+  OZ (ObCharset::charset_convert(exec_ctx.get_allocator(),
+                                 sql_stmt,
+                                 coll_type,
+                                 conn_coll_type,
+                                 sql_cs));
+  OZ (cursor->parse(sql_cs, *session), sql_cs);
   if (OB_SUCC(ret)) {
     ObString ps_sql;
     stmt::StmtType stmt_type = stmt::StmtType::T_NONE;
@@ -867,7 +881,7 @@ int ObPLDbmsSql::do_parse(ObExecContext &exec_ctx, ObDbmsCursorInfo *cursor, ObS
     ObPLExecCtx pl_ctx(cursor->get_allocator(), &exec_ctx, &dummy_params,
                      NULL/*result*/, &ret, NULL/*func*/, true);
     CK (OB_NOT_NULL(exec_ctx.get_my_session()));
-    OZ (sql_str.append(sql_stmt));
+    OZ (sql_str.append(sql_cs));
     OX (cursor->get_field_columns().set_allocator(&cursor->get_dbms_entity()->get_arena_allocator()));
     OZ (ObSPIService::prepare_dynamic(&pl_ctx,
                                       cursor->get_dbms_entity()->get_arena_allocator(),
