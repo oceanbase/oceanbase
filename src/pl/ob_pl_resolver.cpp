@@ -6515,6 +6515,18 @@ int ObPLResolver::resolve_interface_pragma(const ObStmtNodeTree *parse_tree, ObP
   CK (T_SP_PRAGMA_INTERFACE == parse_tree->type_);
   CK (1 == parse_tree->num_child_);
   CK (OB_NOT_NULL(name_node = parse_tree->children_[0]));
+
+  if (OB_SUCC(ret)) {
+    uint64_t pack_tenant_id = (ast.get_id() != OB_INVALID_ID) ? get_tenant_id_by_object_id(ast.get_id()) : resolve_ctx_.session_info_.get_effective_tenant_id();
+    uint64_t pack_database_id = (ast.get_database_id() != OB_INVALID_ID) ? ast.get_database_id() : resolve_ctx_.session_info_.get_database_id();
+    if (pack_tenant_id != OB_SYS_TENANT_ID || !is_oceanbase_sys_database_id(pack_database_id)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "PRAGMA INTERFACE used by Non-system users");
+    LOG_WARN("PRAGMA INTERFACE Only allowed to be used by sys user", K(ret),
+                                                                     K(pack_tenant_id),
+                                                                     K(pack_database_id));
+    }
+  }
   if (OB_SUCC(ret)
       && ast.get_package_type() != ObPackageType::PL_PACKAGE_BODY
       && ast.get_package_type() != ObPackageType::PL_UDT_OBJECT_BODY) {
