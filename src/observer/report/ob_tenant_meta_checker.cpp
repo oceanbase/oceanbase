@@ -704,7 +704,11 @@ int ObTenantMetaChecker::check_report_replicas_(
               local_replica,
               tablet_checksum,
               need_checksum))) {
-            LOG_WARN("fail to fill tablet replica", KR(ret), K_(tenant_id), K(ls_id), K(tablet_id));
+            if (OB_EAGAIN == ret) {
+              ret = OB_SUCCESS; // do not affect report of other tablets
+            } else {
+              LOG_WARN("fail to fill tablet replica", KR(ret), K_(tenant_id), K(ls_id), K(tablet_id));
+            }
           } else if (table_replica.is_equal_for_report(local_replica)) {
             continue;
           } else { // not equal

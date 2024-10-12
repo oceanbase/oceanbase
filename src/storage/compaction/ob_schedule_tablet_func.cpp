@@ -194,7 +194,9 @@ int ObScheduleTabletFunc::schedule_tablet_execute(
   const ObTabletID &tablet_id = tablet.get_tablet_id();
   bool can_merge = false;
   int64_t schedule_scn = 0;
-  if (OB_FAIL(get_schedule_execute_info(tablet, schedule_scn))) {
+  if (OB_FAIL(ObTenantTabletScheduler::check_ready_for_major_merge(ls_id, tablet, MEDIUM_MERGE))) {
+    LOG_WARN("failed to check ready for major merge", K(ret), K(ls_id), K(tablet_id));
+  } else if (OB_FAIL(get_schedule_execute_info(tablet, schedule_scn))) {
     if (OB_NO_NEED_MERGE == ret) {
       ret = OB_SUCCESS;
     } else {
