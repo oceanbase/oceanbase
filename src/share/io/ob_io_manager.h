@@ -308,7 +308,7 @@ public:
   void stop();
   bool is_working() const;
   int alloc_and_init_result(const ObIOInfo &info, ObIOResult *&io_result);
-  int alloc_req_and_result(const ObIOInfo &info, ObIOHandle &handle, ObIORequest *&io_request);
+  int alloc_req_and_result(const ObIOInfo &info, ObIOHandle &handle, ObIORequest *&io_request, RequestHolder &req_holder);
   int inner_aio(const ObIOInfo &info, ObIOHandle &handle);
   int detect_aio(const ObIOInfo &info, ObIOHandle &handle);
   int enqueue_callback(ObIORequest &req);
