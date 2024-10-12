@@ -4061,7 +4061,7 @@ int ObOptSelectivity::get_join_pred_rows(const ObHistogram &left_hist,
       if (IS_LEFT_SEMI_ANTI_JOIN(join_type)) {
         rows += left_hist.get(lidx).endpoint_repeat_count_;
       } else if (IS_RIGHT_SEMI_ANTI_JOIN(join_type)) {
-        rows += right_hist.get(lidx).endpoint_repeat_count_;
+        rows += right_hist.get(ridx).endpoint_repeat_count_;
       } else {
         rows += left_hist.get(lidx).endpoint_repeat_count_ * right_hist.get(ridx).endpoint_repeat_count_;
       }
