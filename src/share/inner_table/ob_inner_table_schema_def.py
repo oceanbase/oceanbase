@@ -15705,6 +15705,8 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15467'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15484', all_def_keywords['__all_virtual_function_io_stat'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15485', all_def_keywords['__all_virtual_temp_file']))
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15486', all_def_keywords['__all_ncomp_dll_v2']))
+# 15487: __all_virtual_logstore_service_status
+# 15488: __all_virtual_logstore_service_info
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
