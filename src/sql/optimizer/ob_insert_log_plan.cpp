@@ -84,8 +84,8 @@ int ObInsertLogPlan::generate_normal_raw_plan()
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "update values contain non onetime subquery");
         LOG_WARN("update values contain non onetime subquery", K(ret));
-      } else if (!subquery.empty() && OB_FAIL(candi_allocate_subplan_filter(subquery))) {
-        LOG_WARN("failed to allocate subplan", K(ret));
+      } else if (OB_FAIL(candi_allocate_subplan_filter_for_assignments(assign_exprs))) {
+        LOG_WARN("failed to allocate subplan filter for assignments", K(ret));
       } else { /*do nothing*/ }
     }
 
@@ -1838,6 +1838,28 @@ int ObInsertLogPlan::allocate_select_into_as_top_for_insert(ObLogicalOperator *&
         LOG_WARN("failed to compute equal set", K(ret));
       } else {
         old_top = select_into;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObInsertLogPlan::perform_vector_assign_expr_replacement(ObDelUpdStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo* session_info = optimizer_context_.get_session_info();
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is null", K(ret), K(stmt));
+  } else {
+    ObInsertTableInfo &table_info = static_cast<ObInsertStmt*>(stmt)->get_insert_table_info();
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_info.assignments_.count(); ++i) {
+      ObRawExpr *value = table_info.assignments_.at(i).expr_;
+      bool replace_happened = false;
+      if (OB_FAIL(replace_alias_ref_expr(value, replace_happened))) {
+        LOG_WARN("failed to replace alias ref expr", K(ret));
+      } else if (replace_happened && OB_FAIL(value->formalize(session_info))) {
+        LOG_WARN("failed to formalize expr", K(ret));
       }
     }
   }

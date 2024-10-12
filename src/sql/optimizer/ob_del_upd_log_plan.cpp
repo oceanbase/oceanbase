@@ -2394,3 +2394,100 @@ int ObDelUpdLogPlan::check_is_direct_load(const ObInsertStmt &insert_stmt, const
   }
   return ret;
 }
+
+int ObDelUpdLogPlan::perform_vector_assign_expr_replacement(ObDelUpdStmt *stmt)
+{
+  UNUSED(stmt);
+  int ret = OB_SUCCESS;
+  return ret;
+}
+
+int ObDelUpdLogPlan::replace_alias_ref_expr(ObRawExpr *&expr, bool &replace_happened)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null expr", K(ret));
+  } else if (expr->is_alias_ref_expr()) {
+    ObAliasRefRawExpr *alias = static_cast<ObAliasRefRawExpr *>(expr);
+    if (OB_UNLIKELY(!alias->is_ref_query_output())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid alias expr", K(ret), K(*alias));
+    } else {
+      expr = alias->get_ref_expr();
+      replace_happened = true;
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(replace_alias_ref_expr(expr->get_param_expr(i), replace_happened))) {
+        LOG_WARN("failed to replace alias ref expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDelUpdLogPlan::candi_allocate_subplan_filter_for_assignments(ObIArray<ObRawExpr*> &assign_exprs)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> normal_query_refs;
+  ObSEArray<ObRawExpr*, 4> alias_query_refs;
+  for (int64_t i = 0; OB_SUCC(ret) && i < assign_exprs.count(); ++i) {
+    if (OB_FAIL(extract_assignment_subqueries(assign_exprs.at(i),
+                                              normal_query_refs,
+                                              alias_query_refs))) {
+      LOG_WARN("failed to replace alias ref expr", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (!normal_query_refs.empty() &&
+              OB_FAIL(candi_allocate_subplan_filter(normal_query_refs, NULL, false))) {
+    // step. allocate subplan filter for "dml .. set c1 = (select)"
+    LOG_WARN("failed to allocate subplan", K(ret));
+  } else if (!alias_query_refs.empty() &&
+              OB_FAIL(candi_allocate_subplan_filter(alias_query_refs, NULL, true))) {
+    // step. allocate subplan filter for "dml .. set (a,b)=(select..), (c,d)=(select..)"
+    LOG_WARN("failed to allocate subplan filter", K(ret));
+  } else {
+    LOG_TRACE("succeed to allocate subplan filter for assignment", K(ret),
+                          K(normal_query_refs.count()), K(alias_query_refs.count()));
+  }
+  return ret;
+}
+
+int ObDelUpdLogPlan::extract_assignment_subqueries(ObRawExpr *expr,
+                                                   ObIArray<ObRawExpr*> &normal_query_refs,
+                                                   ObIArray<ObRawExpr*> &alias_query_refs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else if (expr->has_flag(CNT_ONETIME)
+             || expr->is_query_ref_expr()
+             || T_OP_EXISTS == expr->get_expr_type()
+             || T_OP_NOT_EXISTS == expr->get_expr_type()
+             || expr->has_flag(IS_WITH_ALL)
+             || expr->has_flag(IS_WITH_ANY)) {
+    if (OB_FAIL(add_var_to_array_no_dup(normal_query_refs, expr))) {
+      LOG_WARN("failed to add var to array no dup", K(ret));
+    }
+  } else if (expr->is_alias_ref_expr()) {
+    ObAliasRefRawExpr *alias = static_cast<ObAliasRefRawExpr *>(expr);
+    if (OB_UNLIKELY(!alias->is_ref_query_output())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid alias expr", K(ret), K(*alias));
+    } else if (OB_FAIL(add_var_to_array_no_dup(alias_query_refs, alias->get_param_expr(0)))) {
+      LOG_WARN("failed to add var to array with out duplicate", K(ret));
+    }
+  } else if (expr->has_flag(CNT_SUB_QUERY)) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(extract_assignment_subqueries(expr->get_param_expr(i),
+                                                           normal_query_refs,
+                                                           alias_query_refs)))) {
+        LOG_WARN("failed to extract query ref expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
