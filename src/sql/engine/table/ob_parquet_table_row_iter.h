@@ -126,6 +126,9 @@ public:
     int64_t cur_line_number_;
     ObString cur_file_url_;
     ObNewRow part_list_val_;
+    TO_STRING_KV(K(file_idx_), K(part_id_), K(row_group_idx_), K(cur_file_id_), K(cur_row_group_idx_),
+                 K(end_row_group_idx_), K(cur_row_group_read_row_count_), K(cur_row_group_row_count_),
+                 K(cur_line_number_), K(cur_file_url_));
   };
 public:
   ObParquetTableRowIterator() :
