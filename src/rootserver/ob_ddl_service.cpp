@@ -4306,6 +4306,17 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
           break;
         }
       }
+      if (OB_SUCC(ret)
+          && ObDDLType::DDL_TABLE_REDEFINITION == ddl_type
+          && alter_column_schema->is_identity_column()
+          && OB_DDL_DROP_COLUMN != op_type) {
+        if (nullptr == orig_column_schema) {
+          ddl_need_retry_at_executor = true;
+        } else if (orig_column_schema->is_nullable()) {
+          // only nullable column need generate value from sequence
+          ddl_need_retry_at_executor = true;
+        }
+      }
     }
   }
   if (OB_FAIL(ret)) {
