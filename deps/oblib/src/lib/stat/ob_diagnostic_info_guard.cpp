@@ -91,23 +91,21 @@ int ObLocalDiagnosticInfo::aggregate_diagnostic_info_summary(ObDiagnosticInfo *d
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(di)) {
-    if (oceanbase::lib::is_diagnose_info_enabled()) {
-      if (OB_NOT_NULL(di->get_summary_slot())) {
-        di->get_summary_slot()->accumulate_diagnostic_info(*di);
-      } else {
-        const int64_t tenant_id = di->get_tenant_id();
-        lib_mtl_switch(tenant_id, [&ret, &di, tenant_id](int switch_ret) -> void {
-          if (OB_SUCC(switch_ret)) {
-            if (OB_FAIL(MTL_DI_CONTAINER()->aggregate_diagnostic_info_summary(di))) {
-              LOG_WARN("failed to aggregate diagnostic info", KPC(di));
-            } else {
-              // do noting
-            }
+    if (OB_NOT_NULL(di->get_summary_slot())) {
+      di->get_summary_slot()->accumulate_diagnostic_info(*di);
+    } else {
+      const int64_t tenant_id = di->get_tenant_id();
+      lib_mtl_switch(tenant_id, [&ret, &di, tenant_id](int switch_ret) -> void {
+        if (OB_SUCC(switch_ret)) {
+          if (OB_NOT_NULL(MTL_DI_CONTAINER()) && OB_FAIL(MTL_DI_CONTAINER()->aggregate_diagnostic_info_summary(di))) {
+            LOG_WARN("failed to aggregate diagnostic info", KPC(di));
           } else {
-            LOG_ERROR("aggregate diagnostic info failed", K(tenant_id), KPC(di));
+            // do noting
           }
-        });
-      }
+        } else {
+          LOG_ERROR("aggregate diagnostic info failed", K(tenant_id), KPC(di));
+        }
+      });
     }
   }
   return ret;
