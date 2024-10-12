@@ -3029,6 +3029,8 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
         tenant_config->sql_plan_management_mode.get_value_string());
       // 7. print_sample_ppm_ for flt
       ATOMIC_STORE(&print_sample_ppm_, tenant_config->_print_sample_ppm);
+      // 8. _enable_enhanced_cursor_validation
+      ATOMIC_STORE(&enable_enhanced_cursor_validation_, tenant_config->_enable_enhanced_cursor_validation);
     }
     ATOMIC_STORE(&last_check_ec_ts_, cur_ts);
     session_->update_tenant_config_version(

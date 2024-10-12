@@ -1260,12 +1260,8 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback, co
     OX (ObTransDeadlockDetectorAdapter::maintain_deadlock_info_when_end_stmt(exec_ctx, rollback));
 
     // if stmt is dml, record its table_id set, used by cursor verify snapshot
-    if (OB_SUCC(ret) && !rollback && plan->is_dml_write_stmt()) {
-      const int64_t tenant_id = session->get_effective_tenant_id();
-      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-      if (tenant_config.is_valid() && tenant_config->_enable_enhanced_cursor_validation) {
-        OZ (tx_desc->add_modified_tables(plan->get_dml_table_ids()), plan->get_dml_table_ids());
-      }
+    if (OB_SUCC(ret) && !rollback && plan->is_dml_write_stmt() && session->enable_enhanced_cursor_validation()) {
+      OZ (tx_desc->add_modified_tables(plan->get_dml_table_ids()), plan->get_dml_table_ids());
     }
     ObTxExecResult &tx_result = session->get_trans_result();
     if (OB_E(EventTable::EN_TX_RESULT_INCOMPLETE, session->get_sessid()) tx_result.is_incomplete()) {
