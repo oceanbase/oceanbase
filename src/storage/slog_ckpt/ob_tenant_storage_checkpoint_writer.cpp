@@ -305,7 +305,7 @@ int ObTenantStorageCheckpointWriter::record_tablet_meta(ObLS &ls, MacroBlockId &
   const int64_t total_tablet_cnt = ls.get_tablet_svr()->get_tablet_count();
   int64_t processed_cnt = 0;
   ObMetaDiskAddr addr;
-  ObLSTabletIterator tablet_iter(ObMDSGetTabletMode::READ_ALL_COMMITED);
+  ObLSTabletAddrIterator tablet_iter;
   ObTabletMapKey tablet_key;
   char slog_buf[sizeof(ObUpdateTabletLog)];
 

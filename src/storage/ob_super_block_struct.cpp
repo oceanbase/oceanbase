@@ -14,6 +14,7 @@
 
 #include "storage/ob_super_block_struct.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
+#include "storage/blocksstable/ob_object_manager.h" // INVALID_TABLET_VERSION
 
 namespace oceanbase
 {
@@ -555,7 +556,22 @@ int64_t ObTenantSuperBlock::get_serialize_size_(void) const
 }
 
 
-OB_SERIALIZE_MEMBER(ObActiveTabletItem, tablet_id_,  tablet_meta_version_);
+OB_SERIALIZE_MEMBER(ObActiveTabletItem, tablet_id_,  union_id_);
+
+ObActiveTabletItem::ObActiveTabletItem() :
+  tablet_id_(ObTabletID::INVALID_TABLET_ID),
+  union_id_(0)
+{}
+ObActiveTabletItem::ObActiveTabletItem(const common::ObTabletID tablet_id, const int64_t union_id)
+  : tablet_id_(tablet_id), union_id_(union_id) {}
+
+bool ObActiveTabletItem::is_valid() const {
+  return tablet_id_.is_valid()
+      && get_transfer_seq() != share::OB_INVALID_TRANSFER_SEQ
+      && get_tablet_meta_version() != blocksstable::ObStorageObjectOpt::INVALID_TABLET_VERSION;
+}
+
+
 OB_SERIALIZE_MEMBER(ObLSActiveTabletArray, items_);
 
 int ObLSActiveTabletArray::assign(const ObLSActiveTabletArray &other)

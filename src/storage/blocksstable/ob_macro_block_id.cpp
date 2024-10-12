@@ -129,7 +129,7 @@ int64_t MacroBlockId::to_string(char *buf, const int64_t buf_len) const
         (uint64_t) second_id_,
         (uint64_t) third_id_,
         (int64_t) macro_transfer_seq_,
-        (int64_t) tenant_seq_);
+        (uint64_t) tenant_seq_);
     break;
   default:
     databuff_printf(buf, buf_len, pos,

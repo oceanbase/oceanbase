@@ -85,11 +85,13 @@ int ObTenantStorageMetaReplayer::ss_start_replay_(const ObTenantSuperBlock &supe
 
   for (int64_t i = 0; OB_SUCC(ret) && i < super_block.ls_cnt_; i++) {
     const ObLSItem &item = super_block.ls_item_arr_[i];
-    if (OB_FAIL(s2_replay_create_ls_(allocator, item))) {
+    if (OB_FAIL(ss_replay_create_ls_(allocator, item))) {
       LOG_WARN("fail to replay create ls", K(ret), K(item));
-    } else if (OB_FAIL(s2_replay_ls_dup_table_meta_(allocator, item))) {
+    } else if (OB_FAIL(ss_recover_ls_pending_free_list_(allocator, item))) {
+      LOG_WARN("fail to recover pending_free", );
+    } else if (OB_FAIL(ss_replay_ls_dup_table_meta_(allocator, item))) {
       LOG_WARN("fail to replay ls dup table meta", K(ret), K(item));
-    } else if (OB_FAIL(s2_replay_ls_tablets_for_trans_info_tmp_(allocator, item))) {
+    } else if (OB_FAIL(ss_replay_ls_tablets_for_trans_info_tmp_(allocator, item))) {
       LOG_WARN("fail to replay ls tablets", K(ret), K(item));
     }
     allocator.reuse();
@@ -97,7 +99,27 @@ int ObTenantStorageMetaReplayer::ss_start_replay_(const ObTenantSuperBlock &supe
   return ret;
 }
 
-int ObTenantStorageMetaReplayer::s2_replay_create_ls_(
+int ObTenantStorageMetaReplayer::ss_recover_ls_pending_free_list_(
+    ObArenaAllocator &allocator, const ObLSItem &item)
+{
+  int ret = OB_SUCCESS;
+
+  ObStorageObjectOpt deleting_opt;
+  bool is_deleting_tablets_exist = false;
+  deleting_opt.set_ss_ls_level_meta_object_opt(ObStorageObjectType::LS_PENDING_FREE_TABLET_ARRAY, item.ls_id_.id());
+
+  if (OB_FAIL(ObStorageMetaIOUtil::check_meta_existence(deleting_opt, item.epoch_, is_deleting_tablets_exist))) {
+    LOG_WARN("fail to check meta existence", K(ret), K(deleting_opt), K(item));
+  } else if (is_deleting_tablets_exist) {
+    if (OB_FAIL(TENANT_STORAGE_META_PERSISTER.ss_replay_ls_pending_free_arr(allocator, item.ls_id_, item.epoch_))) {
+      LOG_WARN("fail to replay ls_pending_free_tablet_arr", K(ret), K(item));
+    }
+  }
+
+  return ret;
+}
+
+int ObTenantStorageMetaReplayer::ss_replay_create_ls_(
     ObArenaAllocator &allocator, const ObLSItem &item)
 {
   int ret = OB_SUCCESS;
@@ -151,7 +173,7 @@ int ObTenantStorageMetaReplayer::s2_replay_create_ls_(
   return ret;
 }
 
-int ObTenantStorageMetaReplayer::s2_replay_ls_dup_table_meta_(
+int ObTenantStorageMetaReplayer::ss_replay_ls_dup_table_meta_(
     ObArenaAllocator &allocator, const ObLSItem &item)
 {
   int ret = OB_SUCCESS;
@@ -187,7 +209,7 @@ int ObTenantStorageMetaReplayer::s2_replay_ls_dup_table_meta_(
   return ret;
 }
 
-int ObTenantStorageMetaReplayer::s2_replay_ls_tablets_(
+int ObTenantStorageMetaReplayer::ss_replay_ls_tablets_(
     ObArenaAllocator &allocator, const ObLSItem &item)
 {
   int ret = OB_SUCCESS;
@@ -197,12 +219,9 @@ int ObTenantStorageMetaReplayer::s2_replay_ls_tablets_(
   } else if (ObLSItemStatus::CREATED == item.status_) {
     ObStorageObjectOpt active_opt;
     active_opt.set_ss_ls_level_meta_object_opt(ObStorageObjectType::LS_ACTIVE_TABLET_ARRAY, item.ls_id_.id());
-    ObStorageObjectOpt deleting_opt;
-    deleting_opt.set_ss_ls_level_meta_object_opt(ObStorageObjectType::LS_PENDING_FREE_TABLET_ARRAY, item.ls_id_.id());
     bool is_active_tablets_exist = false;
-    bool is_deleting_tablets_exist = false;
     ObLSActiveTabletArray active_tablets;
-    ObLSPendingFreeTabletArray deleting_tablets;
+    ObArray<ObPendingFreeTabletItem> deleting_tablets;
     ObLSTabletService *ls_tablet_svr;
     ObLSHandle ls_handle;
     ObLS *ls = nullptr;
@@ -222,16 +241,13 @@ int ObTenantStorageMetaReplayer::s2_replay_ls_tablets_(
     } else if (is_active_tablets_exist && OB_FAIL(ObStorageMetaIOUtil::read_storage_meta_object(
         active_opt, allocator, MTL_ID(), item.epoch_, active_tablets))) {
       LOG_WARN("fail to get active tablets", K(ret), K(active_opt), K(item));
-    } else if (OB_FAIL(ObStorageMetaIOUtil::check_meta_existence(deleting_opt, item.epoch_, is_deleting_tablets_exist))) {
-      LOG_WARN("fail to check meta existence", K(ret), K(deleting_opt), K(item));
-    } else if (is_deleting_tablets_exist && OB_FAIL(ObStorageMetaIOUtil::read_storage_meta_object(
-        deleting_opt, allocator, MTL_ID(), item.epoch_, deleting_tablets))) {
-      LOG_WARN("fail to get deleting tablets", K(ret), K(deleting_opt), K(item));
+    } else if (OB_FAIL(TENANT_STORAGE_META_PERSISTER.get_items_from_pending_free_tablet_array(ls_id, item.epoch_, deleting_tablets))) {
+      LOG_WARN("failed to get_items_from_pending_free_tablet_array", K(ret), K(item));
     }
 
     // 2. check and delete the un-deleted current_version file for tablets recorded in pending_free_tablet_arr
-    for (int64_t i = 0; OB_SUCC(ret) && i < deleting_tablets.items_.count(); i++) {
-      const ObPendingFreeTabletItem &deleting_item = deleting_tablets.items_.at(i);
+    for (int64_t i = 0; OB_SUCC(ret) && i < deleting_tablets.count(); i++) {
+      const ObPendingFreeTabletItem &deleting_item = deleting_tablets.at(i);
       if (OB_FAIL(TENANT_STORAGE_META_PERSISTER.ss_check_and_delete_tablet_current_version(deleting_item.tablet_id_,
                                                                                            ls->get_ls_id(),
                                                                                            ls->get_ls_epoch(),
@@ -248,10 +264,10 @@ int ObTenantStorageMetaReplayer::s2_replay_ls_tablets_(
     for (int64_t i = 0; OB_SUCC(ret) && i < active_tablets.items_.count(); i++) {
       const ObActiveTabletItem &active_item = active_tablets.items_.at(i);
       bool has_deleted = false;
-      for (int64_t j = 0; !has_deleted && OB_SUCC(ret) && j < deleting_tablets.items_.count(); j++) {
-        const ObPendingFreeTabletItem &deleting_item = deleting_tablets.items_.at(j);
-        if (active_item.tablet_id_ == deleting_item.tablet_id_) {
-          if (active_item.tablet_meta_version_ <= deleting_item.tablet_meta_version_) {
+      for (int64_t j = 0; !has_deleted && OB_SUCC(ret) && j < deleting_tablets.count(); j++) {
+        const ObPendingFreeTabletItem &deleting_item = deleting_tablets.at(j);
+        if (active_item.tablet_id_ == deleting_item.tablet_id_ && active_item.get_transfer_seq() == deleting_item.tablet_transfer_seq_) {
+          if (active_item.get_tablet_meta_version() <= deleting_item.tablet_meta_version_) {
             has_deleted = true;
           }
         }
@@ -267,7 +283,7 @@ int ObTenantStorageMetaReplayer::s2_replay_ls_tablets_(
           LOG_WARN("fail to get object id", K(ret), K(opt));
         } else if (OB_FAIL(inaccurate_addr.set_block_addr(object_id, 0/*offset*/, object_size, ObMetaDiskAddr::DiskType::RAW_BLOCK))) {
           LOG_WARN("fail to set initial tablet meta addr", K(ret), K(inaccurate_addr));
-        } else if (OB_FAIL(ls_tablet_svr->s2_replay_create_tablet(inaccurate_addr, active_item.tablet_id_))) {
+        } else if (OB_FAIL(ls_tablet_svr->ss_replay_create_tablet(inaccurate_addr, active_item.tablet_id_))) {
           LOG_WARN("fail to replay create tablet", K(ret), K(active_item), K(inaccurate_addr));
         }
       }
@@ -280,7 +296,7 @@ int ObTenantStorageMetaReplayer::s2_replay_ls_tablets_(
 }
 
 
-int ObTenantStorageMetaReplayer::s2_replay_ls_tablets_for_trans_info_tmp_(
+int ObTenantStorageMetaReplayer::ss_replay_ls_tablets_for_trans_info_tmp_(
     ObArenaAllocator &allocator, const ObLSItem &item)
 {
   int ret = OB_SUCCESS;
@@ -288,11 +304,8 @@ int ObTenantStorageMetaReplayer::s2_replay_ls_tablets_for_trans_info_tmp_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid item", K(ret), K(item));
   } else if (ObLSItemStatus::CREATED == item.status_) {
-    ObStorageObjectOpt deleting_opt;
-    deleting_opt.set_ss_ls_level_meta_object_opt(ObStorageObjectType::LS_PENDING_FREE_TABLET_ARRAY, item.ls_id_.id());
-    bool is_deleting_tablets_exist = false;
     ObSArray<int64_t> ls_tablets;
-    ObLSPendingFreeTabletArray deleting_tablets;
+    ObArray<ObPendingFreeTabletItem> deleting_tablets;
     ObLSTabletService *ls_tablet_svr;
     ObLSHandle ls_handle;
     ObLS *ls = nullptr;
@@ -314,16 +327,13 @@ int ObTenantStorageMetaReplayer::s2_replay_ls_tablets_for_trans_info_tmp_(
       LOG_WARN("fail to check meta existence", K(ret), K(item));
     } else if (OB_FAIL(file_manager->list_tablet_meta_dir(item.ls_id_.id(), item.epoch_, ls_tablets))) {
       LOG_WARN("failed to list all tablets under ls", K(ret), K(MTL_ID()), K(item), K(ls_tablets));
-    } else if (OB_FAIL(ObStorageMetaIOUtil::check_meta_existence(deleting_opt, item.epoch_, is_deleting_tablets_exist))) {
-      LOG_WARN("fail to check meta existence", K(ret), K(deleting_opt), K(item));
-    } else if (is_deleting_tablets_exist && OB_FAIL(ObStorageMetaIOUtil::read_storage_meta_object(
-        deleting_opt, allocator, MTL_ID(), item.epoch_, deleting_tablets))) {
-      LOG_WARN("fail to get deleting tablets", K(ret), K(deleting_opt), K(item));
+    } else if (OB_FAIL(TENANT_STORAGE_META_PERSISTER.get_items_from_pending_free_tablet_array(ls_id, item.epoch_, deleting_tablets))) {
+      LOG_WARN("failed to get_items_from_pending_free_tablet_array", K(ret), K(item.epoch_));
     }
 
     // 2. check and delete the un-deleted current_version file for tablets recorded in pending_free_tablet_arr
-    for (int64_t i = 0; OB_SUCC(ret) && i < deleting_tablets.items_.count(); i++) {
-      const ObPendingFreeTabletItem &deleting_item = deleting_tablets.items_.at(i);
+    for (int64_t i = 0; OB_SUCC(ret) && i < deleting_tablets.count(); i++) {
+      const ObPendingFreeTabletItem &deleting_item = deleting_tablets.at(i);
       if (OB_FAIL(TENANT_STORAGE_META_PERSISTER.ss_check_and_delete_tablet_current_version(deleting_item.tablet_id_,
                                                                                            ls->get_ls_id(),
                                                                                            ls->get_ls_epoch(),
@@ -338,8 +348,8 @@ int ObTenantStorageMetaReplayer::s2_replay_ls_tablets_for_trans_info_tmp_(
     for (int64_t i = 0; OB_SUCC(ret) && i < ls_tablets.count(); i++) {
       const uint64_t &tablet_id = ls_tablets.at(i);
       int64_t deleted_tablet_meta_version = ObStorageObjectOpt::INVALID_TABLET_VERSION;
-      for (int64_t j = 0; OB_SUCC(ret) && j < deleting_tablets.items_.count(); j++) {
-        const ObPendingFreeTabletItem &deleting_item = deleting_tablets.items_.at(j);
+      for (int64_t j = 0; OB_SUCC(ret) && j < deleting_tablets.count(); j++) {
+        const ObPendingFreeTabletItem &deleting_item = deleting_tablets.at(j);
         if (tablet_id == deleting_item.tablet_id_.id()) {
             deleted_tablet_meta_version = deleting_item.tablet_meta_version_;
             break;
@@ -361,7 +371,7 @@ int ObTenantStorageMetaReplayer::s2_replay_ls_tablets_for_trans_info_tmp_(
               && latest_addr.tablet_addr_.block_id().meta_version_id() <= deleted_tablet_meta_version) {
         ret = OB_ERR_UNEXPECTED;
         LOG_INFO("this tablet has been deleted, but current_version has not been deleted", K(ret), K(item), K(current_version_opt), K(latest_addr), K(deleted_tablet_meta_version));
-      } else if (OB_FAIL(ls_tablet_svr->s2_replay_create_tablet_for_trans_info_tmp(latest_addr.tablet_addr_, ls_handle, ObTabletID(tablet_id)))) {
+      } else if (OB_FAIL(ls_tablet_svr->ss_replay_create_tablet_for_trans_info_tmp(latest_addr.tablet_addr_, ls_handle, ObTabletID(tablet_id)))) {
         LOG_WARN("fail to replay create tablet", K(ret), K(tablet_id), K(latest_addr.tablet_addr_));
       }
     }

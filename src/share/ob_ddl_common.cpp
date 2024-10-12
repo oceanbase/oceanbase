@@ -3223,7 +3223,7 @@ int ObDDLUtil::update_tablet_gc_info(const ObTabletID &tablet_id, const int64_t 
     LOG_WARN("meta service should not be null", K(ret));
   } else if (pre_snapshot_version == new_snapshot_version) {
     /* skip */
-  } else if (OB_FAIL(ObTenantStorageMetaService::s2_is_meta_list_exist(tablet_id, is_exist))) {
+  } else if (OB_FAIL(ObTenantStorageMetaService::ss_is_meta_list_exist(tablet_id, is_exist))) {
     LOG_WARN("fail to check existence", K(ret), K(tablet_id));
   } else if (is_exist) {
     /* skip */
