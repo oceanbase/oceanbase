@@ -922,7 +922,7 @@ int SetCommandOperator::do_srem_inner(
     LOG_WARN("fail to process table batch op", K(ret));
   } else if (OB_FAIL(delete_results(results, rowkeys, del_num))) {
     LOG_WARN("fail to delete results", K(ret), K(results));
-  } else if (OB_FAIL(delete_empty_complex_key_meta(model, db, key))) {
+  } else if (OB_FAIL(fake_del_empty_key_meta(model, db, key))) {
     LOG_WARN("fail to delete empty key meta", K(ret), K(db), K(key));
   }
   return ret;
@@ -959,7 +959,7 @@ int SetCommandOperator::do_srem_inner(
     LOG_WARN("fail to process table batch op", K(ret));
   } else if (OB_FAIL(delete_results(results, rowkeys, del_num))) {
     LOG_WARN("fail to delete results", K(ret), K(results));
-  } else if (OB_FAIL(delete_empty_complex_key_meta(model, db, key))) {
+  } else if (OB_FAIL(fake_del_empty_key_meta(model, db, key))) {
     LOG_WARN("fail to delete empty key meta", K(ret), K(db), K(key));
   }
   return ret;

@@ -201,15 +201,15 @@ protected:
   int delete_results(const ResultFixedArray &results,
                      const ObArray<ObRowkey> &rowkeys,
                      int64_t &del_num);
-  int fake_delete_complex_type_meta(ObRedisModel model,
+  int fake_del_meta(ObRedisModel model,
                                     int64_t db,
                                     const ObString &key,
                                     ObRedisMeta *meta_info = nullptr);
   int get_complex_type_count(int64_t db, const common::ObString &key, int64_t &total_count);
-  int delete_empty_complex_key_meta(ObRedisModel model,
-                                    int64_t db,
-                                    const ObString &key,
-                                    ObRedisMeta *meta_info = nullptr);
+  int fake_del_empty_key_meta(ObRedisModel model,
+                              int64_t db,
+                              const ObString &key,
+                              ObRedisMeta *meta_info = nullptr);
   int get_tablet_id_by_rowkey(ObTableCtx &tb_ctx, const ObRowkey &rowkey, ObTabletID &tablet_id);
   int init_tablet_ids_by_ops(const ObIArray<ObITableOp *> &ops, ObArray<ObTabletID> *&tablet_ids);
   int is_row_expire(const ObNewRow *old_row, const ObRedisMeta *meta, bool &is_old_row_expire);

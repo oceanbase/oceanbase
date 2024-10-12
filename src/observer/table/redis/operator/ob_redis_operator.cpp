@@ -977,19 +977,16 @@ int CommandOperator::del_complex_key(
     LOG_WARN("fail to build del query", K(ret), K(db), K(key));
   } else if (OB_FAIL(build_del_ops(model, db, key, query, del_ops, meta))) {
     LOG_WARN("fail to build del ops", K(ret), K(query));
-  } else if (del_meta) {
-    ObITableEntity *new_meta_entity = nullptr;
-    // del meta
-    if (OB_FAIL(meta->build_meta_rowkey(db, key, redis_ctx_, new_meta_entity))) {
-      LOG_WARN("fail to gen entity with rowkey", K(ret));
-    } else if (OB_FAIL(del_ops.del(*new_meta_entity))) {
-      LOG_WARN("fail to push back", K(ret));
-    }
-  }
-  if (OB_SUCC(ret)) {
+  } else {
+    // del data
     ResultFixedArray results(op_temp_allocator_);
     if (OB_FAIL(process_table_batch_op(del_ops, results))) {
       LOG_WARN("fail to process table batch op", K(ret), K(del_ops));
+    } else if (del_meta) {
+      // del meta
+      if (OB_FAIL(fake_del_meta(model, db, key, meta))) {
+        LOG_WARN("fail to delete complex type meta", K(db), K(key), KPC(meta));
+      }
     }
   }
   return ret;
@@ -1028,7 +1025,7 @@ int CommandOperator::delete_results(const ResultFixedArray &results, const ObArr
   return ret;
 }
 
-int CommandOperator::fake_delete_complex_type_meta(
+int CommandOperator::fake_del_meta(
   ObRedisModel model, int64_t db, const ObString &key, ObRedisMeta *meta_info/* = nullptr*/)
 {
   int ret = OB_SUCCESS;
@@ -1074,15 +1071,22 @@ int CommandOperator::get_complex_type_count(int64_t db, const common::ObString &
   return ret;
 }
 
-int CommandOperator::delete_empty_complex_key_meta(
+int CommandOperator::fake_del_empty_key_meta(
     ObRedisModel model, int64_t db, const ObString &key, ObRedisMeta *meta_info/*= nullptr*/)
 {
   int ret = OB_SUCCESS;
   // check whether key is empty
   bool is_empty = false;
-  if (model == ObRedisModel::LIST || model == ObRedisModel::STRING) {
+  if (model == ObRedisModel::INVALID || model == ObRedisModel::STRING) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("model should be HASH/SET/ZSET", K(ret), K(model));
+    LOG_WARN("model should be HASH/SET/ZSET/LIST", K(ret), K(model));
+  } else if (model == ObRedisModel::LIST) {
+    if (OB_ISNULL(meta_info)) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("invalid null list meta", K(ret));
+    } else {
+      is_empty = reinterpret_cast<ObRedisListMeta *>(meta_info)->count_ == 0;
+    }
   } else {
     ObTableQuery query;
     if (OB_FAIL(add_complex_type_subkey_scan_range(db, key, query))) {
@@ -1108,7 +1112,7 @@ int CommandOperator::delete_empty_complex_key_meta(
 
   // delete meta if key is empty
   if (is_empty && OB_SUCC(ret)) {
-    if (OB_FAIL(fake_delete_complex_type_meta(model, db, key, meta_info))) {
+    if (OB_FAIL(fake_del_meta(model, db, key, meta_info))) {
       LOG_WARN("fail to delete complex type meta", K(db), K(key), K(meta_info));
     }
   }

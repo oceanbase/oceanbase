@@ -472,7 +472,7 @@ int HashCommandOperator::do_hdel(int64_t db, const ObString &key,
       LOG_WARN("fail to process table batch op", K(ret));
     } else if (OB_FAIL(delete_results(results, rowkeys, del_num))) {
       LOG_WARN("fail to delete results", K(ret), K(results));
-    } else if (OB_FAIL(delete_empty_complex_key_meta(ObRedisModel::HASH, db, key, meta_info))) {
+    } else if (OB_FAIL(fake_del_empty_key_meta(ObRedisModel::HASH, db, key, meta_info))) {
       LOG_WARN("fail to delete empty key meta", K(ret), K(db), K(key));
     }
   }

@@ -2153,24 +2153,20 @@ int ListCommandOperator::del_key(const ObString &key, int64_t db, ObRedisListMet
 
   ObTableBatchOperation del_ops;
   ObTableQuery query;
-  if (OB_FAIL(build_range_query(db, key, *list_meta, 0, -1, query))) {
+  if (OB_ISNULL(list_meta)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("invalid null list meta", K(ret));
+  } else if (OB_FAIL(build_range_query(db, key, *list_meta, 0, -1, query))) {
     LOG_WARN("fail to build range query", K(ret), K(key), K(*list_meta));
   } else if (OB_FAIL(build_del_ops(query, del_ops, list_meta))) {
     LOG_WARN("fail to build del ops", K(ret), K(query));
   } else {
-    ObITableEntity *new_meta_entity = nullptr;
-    // del meta
-    if (OB_FAIL(gen_entity_with_rowkey(
-            db, key, ObRedisListMeta::META_INDEX, false /*is_data*/, new_meta_entity, &op_entity_factory_))) {
-      LOG_WARN("fail to gen entity with rowkey", K(ret));
-    } else if (OB_FAIL(del_ops.del(*new_meta_entity))) {
-      LOG_WARN("fail to push back", K(ret));
-    } else {
-      // del elements
-      ResultFixedArray results(op_temp_allocator_);
-      if (OB_FAIL(process_table_batch_op(del_ops, results))) {
-        LOG_WARN("fail to process table batch op", K(ret), K(del_ops));
-      }
+    // del elements
+    ResultFixedArray results(op_temp_allocator_);
+    if (OB_FAIL(process_table_batch_op(del_ops, results))) {
+      LOG_WARN("fail to process table batch op", K(ret), K(del_ops));
+    } else if (OB_FAIL(fake_del_meta(ObRedisModel::LIST, db, key, list_meta))) {
+      LOG_WARN("fail to delete complex type meta", K(db), K(key), KPC(list_meta));
     }
   }
 
@@ -2196,14 +2192,6 @@ int ListCommandOperator::do_del(int64_t db, const ObString &key, bool &is_exist)
   } else if (FALSE_IT(list_meta = reinterpret_cast<ObRedisListMeta*>(meta))) {
   } else if (OB_FAIL(del_key(key, db, list_meta))) {
     LOG_WARN("fail to del key", K(ret), K(key));
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(reinterpret_cast<ObRedisSingleCtx &>(redis_ctx_).response_.set_fmt_res(ObRedisFmt::OK))) {
-      LOG_WARN("fail to set fmt res", K(ret), K(list_meta->count_));
-    }
-  } else if (ObRedisErr::is_redis_error(ret)) {
-    RESPONSE_REDIS_ERROR(reinterpret_cast<ObRedisSingleCtx &>(redis_ctx_).response_, fmt_redis_msg_.ptr());
   }
 
   return ret;
