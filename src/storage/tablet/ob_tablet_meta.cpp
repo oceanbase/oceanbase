@@ -64,7 +64,7 @@ ObTabletMeta::ObTabletMeta()
     last_persisted_committed_tablet_status_(),
     space_usage_(),
     create_schema_version_(0),
-    ddl_table_type_(ObITable::MAX_TABLE_TYPE),
+    ddl_replay_status_(CS_REPLICA_REPLAY_NONE),
     compat_mode_(lib::Worker::CompatMode::INVALID),
     has_next_tablet_(false),
     is_empty_shell_(false),
@@ -88,7 +88,8 @@ int ObTabletMeta::init(
     const ObTabletTableStoreFlag &table_store_flag,
     const int64_t create_schema_version,
     const bool micro_index_clustered,
-    const bool has_cs_replica)
+    const bool has_cs_replica,
+    const bool need_generate_cs_replica_cg_array)
 {
   int ret = OB_SUCCESS;
 
@@ -127,12 +128,21 @@ int ObTabletMeta::init(
     ddl_snapshot_version_ = 0;
     max_sync_storage_schema_version_ = create_schema_version;
     ddl_data_format_version_ = 0;
-    ddl_table_type_ = has_cs_replica ? ObITable::DDL_MERGE_CO_SSTABLE : ObITable::DDL_DUMP_SSTABLE;
     mds_checkpoint_scn_ = INIT_CLOG_CHECKPOINT_SCN;
     report_status_.merge_snapshot_version_ = snapshot_version;
     report_status_.cur_report_version_ = snapshot_version;
     report_status_.data_checksum_ = 0;
     report_status_.row_count_ = 0;
+
+    if (has_cs_replica) { // cs replica is visable when doing offline ddl
+      if (need_generate_cs_replica_cg_array) {
+        ddl_replay_status_ = CS_REPLICA_VISIBLE_AND_REPLAY_COLUMN; // need process cs replica locally
+      } else {
+        ddl_replay_status_ = CS_REPLICA_VISIBLE_AND_REPLAY_ROW; // do need not process cs replica locally
+      }
+    } else {
+      ddl_replay_status_ = CS_REPLICA_INVISILE; // cs replica is not visable when doing offline ddl
+    }
 
     if (OB_FAIL(ret)) {
     } else if (GCTX.is_shared_storage_mode()) {
@@ -210,7 +220,7 @@ int ObTabletMeta::init(
     ddl_snapshot_version_ = MAX(old_tablet_meta.ddl_snapshot_version_, ddl_info.ddl_snapshot_version_);
     ddl_execution_id_ = MAX(old_tablet_meta.ddl_execution_id_, ddl_info.ddl_execution_id_);
     ddl_data_format_version_ = MAX(old_tablet_meta.ddl_data_format_version_, ddl_info.data_format_version_);
-    ddl_table_type_ = (ObITable::MAX_TABLE_TYPE == ddl_info.ddl_table_type_) ? old_tablet_meta.ddl_table_type_ : ddl_info.ddl_table_type_;
+    ddl_replay_status_ = (CS_REPLICA_REPLAY_NONE == ddl_info.ddl_replay_status_) ? old_tablet_meta.ddl_replay_status_ : ddl_info.ddl_replay_status_;
     mds_checkpoint_scn_ = old_tablet_meta.mds_checkpoint_scn_;
     transfer_info_ = old_tablet_meta.transfer_info_;
     extra_medium_info_ = old_tablet_meta.extra_medium_info_;
@@ -253,7 +263,7 @@ int ObTabletMeta::init(
     create_scn_ = old_tablet_meta.create_scn_;
     create_schema_version_ = old_tablet_meta.create_schema_version_;
     micro_index_clustered_ = old_tablet_meta.micro_index_clustered_;
-    ddl_table_type_ = old_tablet_meta.ddl_table_type_;
+    ddl_replay_status_ = old_tablet_meta.ddl_replay_status_;
     start_scn_ = old_tablet_meta.start_scn_;
     clog_checkpoint_scn_ = old_tablet_meta.clog_checkpoint_scn_;
     ddl_checkpoint_scn_ = old_tablet_meta.ddl_checkpoint_scn_;
@@ -268,7 +278,7 @@ int ObTabletMeta::init(
     ddl_execution_id_ = old_tablet_meta.ddl_execution_id_;
     ddl_data_format_version_ = old_tablet_meta.ddl_data_format_version_;
     ddl_snapshot_version_ = old_tablet_meta.ddl_snapshot_version_;
-    ddl_table_type_ = old_tablet_meta.ddl_table_type_;
+    ddl_replay_status_ = old_tablet_meta.ddl_replay_status_;
     max_sync_storage_schema_version_ = old_tablet_meta.max_sync_storage_schema_version_;
     max_serialized_medium_scn_ = old_tablet_meta.max_serialized_medium_scn_;
     mds_checkpoint_scn_ = SCN::max(flush_scn, old_tablet_meta.mds_checkpoint_scn_);
@@ -329,7 +339,7 @@ int ObTabletMeta::init(
     max_serialized_medium_scn_ = param.max_serialized_medium_scn_;
     ddl_execution_id_ = param.ddl_execution_id_;
     ddl_data_format_version_ = param.ddl_data_format_version_;
-    ddl_table_type_ = param.ddl_table_type_;
+    ddl_replay_status_ = param.ddl_replay_status_;
     mds_checkpoint_scn_ = param.mds_checkpoint_scn_;
     transfer_info_ = param.transfer_info_;
     is_empty_shell_ = param.is_empty_shell_;
@@ -391,7 +401,7 @@ int ObTabletMeta::assign(const ObTabletMeta &other)
     max_sync_storage_schema_version_ = other.max_sync_storage_schema_version_;
     ddl_execution_id_ = other.ddl_execution_id_;
     ddl_data_format_version_ = other.ddl_data_format_version_;
-    ddl_table_type_ = other.ddl_table_type_;
+    ddl_replay_status_ = other.ddl_replay_status_;
     max_serialized_medium_scn_ = other.max_serialized_medium_scn_;
     ddl_commit_scn_ = other.ddl_commit_scn_;
     mds_checkpoint_scn_ = other.mds_checkpoint_scn_;
@@ -498,7 +508,7 @@ int ObTabletMeta::init(
       max_sync_storage_schema_version_ = max_sync_storage_schema_version;
       ddl_execution_id_ = old_tablet_meta.ddl_execution_id_;
       ddl_data_format_version_ = old_tablet_meta.ddl_data_format_version_;
-      ddl_table_type_ = old_tablet_meta.ddl_table_type_;
+      ddl_replay_status_ = old_tablet_meta.ddl_replay_status_;
       max_serialized_medium_scn_ = MAX(old_tablet_meta.max_serialized_medium_scn_,
           OB_ISNULL(tablet_meta) ? 0 : tablet_meta->max_serialized_medium_scn_);
       ddl_commit_scn_ = old_tablet_meta.ddl_commit_scn_;
@@ -554,7 +564,7 @@ void ObTabletMeta::reset()
   max_serialized_medium_scn_ = 0;
   ddl_execution_id_ = -1;
   ddl_data_format_version_ = 0;
-  ddl_table_type_ = ObITable::MAX_TABLE_TYPE;
+  ddl_replay_status_ = CS_REPLICA_REPLAY_NONE;
   mds_checkpoint_scn_.reset();
   transfer_info_.reset();
   is_empty_shell_ = false;
@@ -588,7 +598,7 @@ bool ObTabletMeta::is_valid() const
               && start_scn_ <= clog_checkpoint_scn_))
       && create_schema_version_ >= 0
       && space_usage_.is_valid()
-      && ObITable::is_valid_ddl_table_type(ddl_table_type_);
+      && is_valid_cs_replica_ddl_status(ddl_replay_status_);
 }
 
 int ObTabletMeta::serialize(char *buf, const int64_t len, int64_t &pos) const
@@ -674,8 +684,8 @@ int ObTabletMeta::serialize(char *buf, const int64_t len, int64_t &pos) const
     LOG_WARN("failed to serialize extra_medium_info", K(ret), K(len), K(new_pos), K_(extra_medium_info));
   } else if (new_pos - pos < length && OB_FAIL(last_persisted_committed_tablet_status_.serialize(buf, len, new_pos))) {
     LOG_WARN("failed to serialize last_persisted_committed_tablet_status", K(ret), K(len), K(new_pos), K_(last_persisted_committed_tablet_status));
-  } else if (new_pos - pos < length && OB_FAIL(serialization::encode(buf, len, new_pos, ddl_table_type_))) {
-    LOG_WARN("failed to serialize ddl table type", K(ret), K(len), K(new_pos), K_(ddl_table_type));
+  } else if (new_pos - pos < length && OB_FAIL(serialization::encode(buf, len, new_pos, ddl_replay_status_))) {
+    LOG_WARN("failed to serialize ddl replay status", K(ret), K(len), K(new_pos), K_(ddl_replay_status));
   } else if (new_pos - pos < length && OB_FAIL(serialization::encode_bool(buf, len, new_pos, is_empty_shell_))) {
     LOG_WARN("failed to serialize is_empty_shell", K(ret), K(len), K(new_pos), K_(is_empty_shell));
   } else if (new_pos - pos < length && OB_FAIL(serialization::encode_bool(buf, len, new_pos, micro_index_clustered_))) {
@@ -715,7 +725,7 @@ int ObTabletMeta::deserialize(
   } else if (TABLET_META_VERSION == version_) {
     int8_t compat_mode = -1;
     ddl_execution_id_ = 0;
-    ddl_table_type_ = ObITable::DDL_MEM_SSTABLE;
+    ddl_replay_status_ = CS_REPLICA_REPLAY_NONE;
     if (OB_UNLIKELY(length_ > len - pos)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("buffer's length is not enough", K(ret), K(length_), K(len - new_pos));
@@ -775,8 +785,8 @@ int ObTabletMeta::deserialize(
       LOG_WARN("failed to deserialize extra_medium_info", K(ret), K(len), K(new_pos));
     } else if (new_pos - pos < length_ && OB_FAIL(last_persisted_committed_tablet_status_.deserialize(buf, len, new_pos))) {
       LOG_WARN("failed to deserialize last_persisted_committed_tablet_status", K(ret), K(len), K(new_pos));
-    } else if (new_pos - pos < length_ && OB_FAIL(serialization::decode(buf, len, new_pos, ddl_table_type_))) {
-      LOG_WARN("failed to deserialize ddl table type", K(ret), K(len), K(new_pos));
+    } else if (new_pos - pos < length_ && OB_FAIL(serialization::decode(buf, len, new_pos, ddl_replay_status_))) {
+      LOG_WARN("failed to deserialize ddl replay status", K(ret), K(len), K(new_pos));
     } else if (new_pos - pos < length_ && OB_FAIL(serialization::decode_bool(buf, len, new_pos, &is_empty_shell_))) {
       LOG_WARN("failed to deserialize is_empty_shell", K(ret), K(len), K(new_pos));
     } else if (new_pos - pos < length_ && OB_FAIL(serialization::decode_bool(buf, len, new_pos, &micro_index_clustered_))) {
@@ -833,7 +843,7 @@ int64_t ObTabletMeta::get_serialize_size() const
   size += last_persisted_committed_tablet_status_.get_serialize_size();
   size += serialization::encoded_length_bool(is_empty_shell_);
   size += serialization::encoded_length_bool(micro_index_clustered_);
-  size += serialization::encoded_length(ddl_table_type_);
+  size += serialization::encoded_length(ddl_replay_status_);
   return size;
 }
 
@@ -1023,9 +1033,20 @@ int ObTabletMeta::update_meta_last_persisted_committed_tablet_status(
   return ret;
 }
 
-bool ObTabletMeta::is_cs_replica_global_visable_when_ddl() const
+bool ObTabletMeta::is_cs_replica_global_visible_when_ddl() const
 {
-  return ObITable::is_column_store_sstable(ddl_table_type_);
+  return is_cs_replica_global_visible_and_replay_row_store()
+      || is_cs_replica_global_visible_and_replay_column_store();
+}
+
+bool ObTabletMeta::is_cs_replica_global_visible_and_replay_row_store() const
+{
+  return CS_REPLICA_VISIBLE_AND_REPLAY_ROW == ddl_replay_status_;
+}
+
+bool ObTabletMeta::is_cs_replica_global_visible_and_replay_column_store() const
+{
+  return CS_REPLICA_VISIBLE_AND_REPLAY_COLUMN == ddl_replay_status_;
 }
 
 ObMigrationTabletParam::ObMigrationTabletParam()
@@ -1063,7 +1084,7 @@ ObMigrationTabletParam::ObMigrationTabletParam()
     create_schema_version_(0),
     micro_index_clustered_(false),
     major_ckm_info_(),
-    ddl_table_type_(ObITable::MAX_TABLE_TYPE),
+    ddl_replay_status_(CS_REPLICA_REPLAY_NONE),
     is_storage_schema_cs_replica_(false),
     allocator_("MigTblParam", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), ObCtxIds::DEFAULT_CTX_ID)
 {
@@ -1243,8 +1264,8 @@ int ObMigrationTabletParam::serialize(char *buf, const int64_t len, int64_t &pos
     LOG_WARN("failed to serialize extra_medium_info", K(ret), K(len), K(new_pos), K_(extra_medium_info));
   } else if (PARAM_VERSION_V3 <= version_ && new_pos - pos < length && OB_FAIL(last_persisted_committed_tablet_status_.serialize(buf, len, new_pos))) {
     LOG_WARN("failed to serialize last_persisted_committed_tablet_status", K(ret), K(len), K(new_pos), K_(last_persisted_committed_tablet_status));
-  } else if (PARAM_VERSION_V3 <= version_ && new_pos - pos < length && OB_FAIL(serialization::encode(buf, len, new_pos, ddl_table_type_))) {
-    LOG_WARN("failed to serialize ddk table type", K(ret), K(len), K(new_pos), K_(ddl_table_type));
+  } else if (PARAM_VERSION_V3 <= version_ && new_pos - pos < length && OB_FAIL(serialization::encode(buf, len, new_pos, ddl_replay_status_))) {
+    LOG_WARN("failed to serialize ddk replay status", K(ret), K(len), K(new_pos), K_(ddl_replay_status));
   } else if (PARAM_VERSION_V3 <= version_ && new_pos - pos < length && OB_FAIL(serialization::encode_bool(buf, len, new_pos, micro_index_clustered_))) {
     LOG_WARN("failed to serialize micro_index_clustered", K(ret), K(len), K(new_pos), K_(micro_index_clustered));
   } else if (PARAM_VERSION_V3 <= version_ && new_pos - pos < length && OB_FAIL(major_ckm_info_.serialize(buf, len, new_pos))) {
@@ -1338,8 +1359,8 @@ int ObMigrationTabletParam::deserialize_v2_v3(const char *buf, const int64_t len
     LOG_WARN("failed to deserialize extra_medium_info", K(ret), K(len), K(new_pos));
   } else if (PARAM_VERSION_V3 <= version_ && new_pos - pos < length && OB_FAIL(last_persisted_committed_tablet_status_.deserialize(buf, len, new_pos))) {
     LOG_WARN("failed to deserialize last_persisted_committed_tablet_status", K(ret), K(len), K(new_pos));
-  } else if (PARAM_VERSION_V3 <= version_ && new_pos - pos < length && OB_FAIL(serialization::decode(buf, len, new_pos, ddl_table_type_))) {
-    LOG_WARN("failed to deserialize ddl table type", K(ret), K(len), K(new_pos));
+  } else if (PARAM_VERSION_V3 <= version_ && new_pos - pos < length && OB_FAIL(serialization::decode(buf, len, new_pos, ddl_replay_status_))) {
+    LOG_WARN("failed to deserialize ddl replay status", K(ret), K(len), K(new_pos));
   } else if (PARAM_VERSION_V3 <= version_ && new_pos - pos < length && OB_FAIL(serialization::decode_bool(buf, len, new_pos, &micro_index_clustered_))) {
     LOG_WARN("failed to deserialize micro_index_clustered", K(ret), K(len));
   } else if (PARAM_VERSION_V3 <= version_ && new_pos - pos < length && OB_FAIL(major_ckm_info_.deserialize(allocator_, buf, len, new_pos))) {
@@ -1548,7 +1569,7 @@ int64_t ObMigrationTabletParam::get_serialize_size() const
     size += last_persisted_committed_tablet_status_.get_serialize_size();
     size += serialization::encoded_length_bool(micro_index_clustered_);
     size += major_ckm_info_.get_serialize_size();
-    size += serialization::encoded_length(ddl_table_type_);
+    size += serialization::encoded_length(ddl_replay_status_);
     size += serialization::encoded_length_bool(is_storage_schema_cs_replica_);
   }
   return size;
@@ -1591,7 +1612,7 @@ void ObMigrationTabletParam::reset()
   create_schema_version_ = 0;
   micro_index_clustered_ = false;
   major_ckm_info_.reset();
-  ddl_table_type_ = ObITable::MAX_TABLE_TYPE;
+  ddl_replay_status_ = CS_REPLICA_REPLAY_NONE;
   is_storage_schema_cs_replica_ = false;
   allocator_.reset();
 }
@@ -1632,7 +1653,7 @@ int ObMigrationTabletParam::assign(const ObMigrationTabletParam &param)
     ddl_execution_id_ = param.ddl_execution_id_;
     ddl_data_format_version_ = param.ddl_data_format_version_;
     ddl_commit_scn_ = param.ddl_commit_scn_;
-    ddl_table_type_ = param.ddl_table_type_;
+    ddl_replay_status_ = param.ddl_replay_status_;
     mds_checkpoint_scn_ = param.mds_checkpoint_scn_;
     transfer_info_ = param.transfer_info_;
     extra_medium_info_ = param.extra_medium_info_;

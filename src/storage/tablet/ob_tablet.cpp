@@ -372,7 +372,7 @@ int ObTablet::init_for_first_time_creation(
     LOG_WARN("failed to init shared params", K(ret), K(ls_id), K(tablet_id), K(compat_mode), KP(freezer));
   } else if (OB_FAIL(tablet_meta_.init(ls_id, tablet_id, data_tablet_id,
       create_scn, snapshot_version, compat_mode, table_store_flag, create_tablet_schema.get_schema_version()/*create_schema_version*/,
-      micro_index_clustered, has_cs_replica))) {
+      micro_index_clustered, has_cs_replica, need_generate_cs_replica_cg_array))) {
     LOG_WARN("failed to init tablet meta", K(ret), K(ls_id), K(tablet_id), K(data_tablet_id),
         K(create_scn), K(snapshot_version), K(compat_mode), K(table_store_flag));
   } else if (OB_FAIL(pull_memtables(allocator))) {
@@ -595,7 +595,8 @@ int ObTablet::init_for_shared_merge(
             old_tablet.tablet_meta_.table_store_flag_,
             old_tablet.tablet_meta_.create_schema_version_,
             old_tablet.tablet_meta_.micro_index_clustered_,
-            false /*has_cs_replica*/))) {
+            false /*has_cs_replica*/,
+            false /*need_generate_cs_replica_cg_array*/))) {
     LOG_WARN("failed to init tablet meta", K(ret), K(old_tablet), K(param));
   } else if (OB_FAIL(ObStorageSchemaUtil::alloc_storage_schema(allocator, storage_schema_addr_.ptr_))) {
     LOG_WARN("failed to alloc mem for tmp storage schema", K(ret));
@@ -5267,7 +5268,7 @@ int ObTablet::build_migration_tablet_param(
     mig_tablet_param.ddl_execution_id_ = tablet_meta_.ddl_execution_id_;
     mig_tablet_param.ddl_data_format_version_ = tablet_meta_.ddl_data_format_version_;
     mig_tablet_param.ddl_commit_scn_ = tablet_meta_.ddl_commit_scn_;
-    mig_tablet_param.ddl_table_type_ = tablet_meta_.ddl_table_type_;
+    mig_tablet_param.ddl_replay_status_ = tablet_meta_.ddl_replay_status_;
     mig_tablet_param.report_status_ = tablet_meta_.report_status_;
     mig_tablet_param.mds_checkpoint_scn_ = tablet_meta_.mds_checkpoint_scn_;
     mig_tablet_param.transfer_info_ = tablet_meta_.transfer_info_;
@@ -5887,7 +5888,7 @@ int ObTablet::inner_pre_process_cs_replica(
   if (is_row_store() || !is_ddl_direct_load(direct_load_type)) {
     // do not need to process cs replica
   } else if (is_cs_replica_compat) {
-    if (tablet_meta_.is_cs_replica_global_visable_when_ddl()) {
+    if (tablet_meta_.is_cs_replica_global_visible_and_replay_column_store()) {
       table_key.table_type_ = ObITable::COLUMN_ORIENTED_SSTABLE; // for passing defence
     } else {
       replay_normal_in_cs_replica = true;
@@ -6916,7 +6917,7 @@ int ObTablet::build_transfer_tablet_param_current_(
     mig_tablet_param.max_sync_storage_schema_version_ = mig_tablet_param.storage_schema_.schema_version_;
     mig_tablet_param.ddl_execution_id_ = tablet_meta_.ddl_execution_id_;
     mig_tablet_param.ddl_data_format_version_ = tablet_meta_.ddl_data_format_version_;
-    mig_tablet_param.ddl_table_type_ = tablet_meta_.ddl_table_type_;
+    mig_tablet_param.ddl_replay_status_ = tablet_meta_.ddl_replay_status_;
     mig_tablet_param.mds_checkpoint_scn_ = user_data.transfer_scn_;
     mig_tablet_param.report_status_.reset();
     mig_tablet_param.is_storage_schema_cs_replica_ = is_cs_replica_compat();
