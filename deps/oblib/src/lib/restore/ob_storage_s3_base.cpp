@@ -12,6 +12,7 @@
 
 #include "lib/restore/ob_storage.h"
 #include "ob_storage_s3_base.h"
+#include "lib/utility/ob_tracepoint.h"
 
 namespace oceanbase
 {
