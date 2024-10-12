@@ -10,6 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#ifdef  ARCH_DEF
+ARCH_DEF(OB_X86_ARCH_TYPE, "X86")
+ARCH_DEF(OB_ARM_ARCH_TYPE, "ARM")
+#endif
+
+
 #ifndef OCEANBASE_PL_ROUTINE_STORAGE_H_
 #define OCEANBASE_PL_ROUTINE_STORAGE_H_
 
@@ -39,8 +45,17 @@ namespace pl
 enum ObPLArchType
 {
   OB_INVALID_ARCH_TYPE = -1,
-  OB_X86_ARCH_TYPE,
-  OB_ARM_ARCH_TYPE,
+#define ARCH_DEF(type, name) type,
+#include "pl/ob_pl_persistent.h"
+#undef ARCH_DEF
+  ARCH_TYPE_IDX_NUM
+};
+
+static constexpr const char* ARCH_TYPE_DEF[ARCH_TYPE_IDX_NUM] =
+{
+#define ARCH_DEF(type, name) name,
+#include "pl/ob_pl_persistent.h"
+#undef ARCH_DEF
 };
 
 class ObRoutinePersistentInfo
@@ -60,9 +75,9 @@ public:
     compile_db_id_(OB_INVALID_ID),
     key_id_(OB_INVALID_ID),
 #if defined(__aarch64__)
-    arch_type_(ObPLArchType::OB_ARM_ARCH_TYPE),
+    arch_type_(ARCH_TYPE_DEF[ObPLArchType::OB_ARM_ARCH_TYPE]),
 #else
-    arch_type_(ObPLArchType::OB_X86_ARCH_TYPE),
+    arch_type_(ARCH_TYPE_DEF[ObPLArchType::OB_X86_ARCH_TYPE]),
 #endif
     allocator_(ObMemAttr(MTL_ID() == OB_INVALID_TENANT_ID ? OB_SYS_TENANT_ID : MTL_ID(), GET_PL_MOD_STRING(OB_PL_JIT)))
   {}
@@ -75,9 +90,9 @@ public:
     compile_db_id_(compile_db_id),
     key_id_(key_id),
 #if defined(__aarch64__)
-    arch_type_(ObPLArchType::OB_ARM_ARCH_TYPE),
+    arch_type_(ARCH_TYPE_DEF[ObPLArchType::OB_ARM_ARCH_TYPE]),
 #else
-    arch_type_(ObPLArchType::OB_X86_ARCH_TYPE),
+    arch_type_(ARCH_TYPE_DEF[ObPLArchType::OB_X86_ARCH_TYPE]),
 #endif
     allocator_(ObMemAttr(tenant_id_, GET_PL_MOD_STRING(OB_PL_JIT)))
   {}
@@ -141,7 +156,7 @@ private:
   uint64_t database_id_;
   uint64_t compile_db_id_;
   uint64_t key_id_;
-  ObPLArchType arch_type_;
+  ObString arch_type_;
 
   ObArenaAllocator allocator_;
 };

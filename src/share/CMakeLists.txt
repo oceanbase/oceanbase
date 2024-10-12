@@ -579,6 +579,11 @@ ob_set_subtarget(ob_share balance
   balance/ob_balance_task_helper_operator.cpp
   balance/ob_transfer_partition_task_table_operator.cpp
 )
+
+ob_set_subtarget(ob_share ncomp_dll
+  ncomp_dll/ob_flush_ncomp_dll_task.cpp
+)
+
 ob_set_subtarget(ob_share resource_limit_calculator
   resource_limit_calculator/ob_resource_commmon.cpp
   resource_limit_calculator/ob_resource_limit_calculator.cpp

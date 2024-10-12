@@ -308,6 +308,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 517	__all_storage_io_usage	0	201001	1
 518	__all_mview_dep	0	201001	1
 519	__all_scheduler_job_run_detail_v2	0	201001	1
+528	__all_ncomp_dll_v2	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
 10003	__tenant_virtual_table_index	2	201001	1
@@ -782,6 +783,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12500	__all_virtual_kv_client_info	2	201001	1
 12504	__all_virtual_function_io_stat	2	201001	1
 12505	__all_virtual_temp_file	2	201001	1
+12506	__all_virtual_ncomp_dll_v2	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1

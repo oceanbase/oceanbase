@@ -365,6 +365,7 @@
 # 517: __all_storage_io_usage
 # 518: __all_mview_dep
 # 519: __all_scheduler_job_run_detail_v2
+# 528: __all_ncomp_dll_v2
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
 # 10003: __tenant_virtual_table_index
@@ -1162,6 +1163,8 @@
 # 12500: __all_virtual_kv_client_info
 # 12504: __all_virtual_function_io_stat
 # 12505: __all_virtual_temp_file
+# 12506: __all_virtual_ncomp_dll_v2
+# 12506: __all_ncomp_dll_v2  # BASE_TABLE_NAME
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT
@@ -1790,6 +1793,8 @@
 # 15484: __all_virtual_function_io_stat  # BASE_TABLE_NAME
 # 15485: ALL_VIRTUAL_TEMP_FILE
 # 15485: __all_virtual_temp_file  # BASE_TABLE_NAME
+# 15486: ALL_VIRTUAL_NCOMP_DLL_V2_REAL_AGENT
+# 15486: __all_ncomp_dll_v2  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
 # 20002: GV$OB_PLAN_CACHE_PLAN_STAT
 # 20003: SCHEMATA
