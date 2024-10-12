@@ -6377,7 +6377,7 @@ int ObSPIService::convert_ext_null_params(ParamStore &params, ObSQLSessionInfo *
   bool is_ext_null = false;
 
   for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); i++) {
-    if (params.at(i).is_ext()) {
+    if (params.at(i).is_pl_extend()) {
       if (OB_FAIL(ObPLDataType::obj_is_null(params.at(i), is_ext_null))) {
         LOG_WARN("check obj_is_null failed", K(ret));
       } else if (is_ext_null) {
