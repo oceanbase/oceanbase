@@ -806,6 +806,7 @@ public:
                                  last_check_ec_ts_(0),
                                  sql_plan_management_mode_(0),
                                  enable_enum_set_subschema_(false),
+                                 enable_enhanced_cursor_validation_(false),
                                  session_(session)
     {
     }
@@ -831,6 +832,7 @@ public:
     bool get_enable_mysql_compatible_dates() const { return enable_mysql_compatible_dates_; }
     int64_t get_sql_plan_management_mode() const { return sql_plan_management_mode_; }
     bool enable_enum_set_subschema() const { return enable_enum_set_subschema_; }
+    bool enable_enhanced_cursor_validation() const { return enable_enhanced_cursor_validation_; }
   private:
     //租户级别配置项缓存session 上，避免每次获取都需要刷新
     bool enable_batched_multi_statement_;
@@ -856,6 +858,7 @@ public:
     int64_t last_check_ec_ts_;
     int64_t sql_plan_management_mode_;
     bool enable_enum_set_subschema_;
+    bool enable_enhanced_cursor_validation_;
     ObSQLSessionInfo *session_;
   };
 
@@ -1519,6 +1522,11 @@ public:
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.enable_enum_set_subschema();
+  }
+  bool enable_enhanced_cursor_validation()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.enable_enhanced_cursor_validation();
   }
   int get_tmp_table_size(uint64_t &size);
   int ps_use_stream_result_set(bool &use_stream);

@@ -9209,9 +9209,7 @@ int ObSPIService::setup_cursor_snapshot_verify_(ObPLCursorInfo *cursor, ObSPIRes
     }
     need_register_snapshot = true;
   } else if (cursor->is_streaming() && tx && tx->is_in_tx()) {
-    const int64_t tenant_id = exec_ctx.get_my_session()->get_effective_tenant_id();
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-    if (tenant_config.is_valid() && tenant_config->_enable_enhanced_cursor_validation) {
+    if (exec_ctx.get_my_session()->enable_enhanced_cursor_validation()) {
       need_register_snapshot = false;
       LOG_TRACE("enable cursor open check read uncommitted");
       const DependenyTableStore &tables = spi_result->get_result_set()->get_physical_plan()->get_dependency_table();
