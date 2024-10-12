@@ -1553,6 +1553,8 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprEncodeSortkey::eval_encode_sortkey_vector      /* 124 */
   NULL, // ObExprArrayOverlaps::eval_array_overlaps_vector,     /* 125 */
   NULL, // ObExprArrayContainsAll::eval_array_contains_all_vector, /* 126 */
+  NULL, // ObBitwiseExprOperator::calc_bitwise_result2_mysql_vector,     /* 127 */
+  NULL, // ObBitwiseExprOperator::calc_bitwise_result2_oracle_vector,    /* 128 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
