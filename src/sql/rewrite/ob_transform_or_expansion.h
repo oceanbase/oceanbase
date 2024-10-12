@@ -233,11 +233,11 @@ private:
                                       const ObRawExpr &expr,
                                       bool &using_same_cols);
 
-  int is_match_index(const ObDMLStmt *stmt,
-                     const ObRawExpr *expr,
-                     EqualSets &equal_sets,
-                     ObIArray<ObRawExpr*> &const_exprs,
-                     bool &is_match);
+  int may_expr_extract_query_range(const ObDMLStmt *stmt,
+                                   const ObRawExpr *expr,
+                                   EqualSets &equal_sets,
+                                   ObIArray<ObRawExpr*> &const_exprs,
+                                   bool &is_match);
 
   int is_valid_subquery_cond(const ObDMLStmt &stmt,
                              const ObRawExpr &expr,
@@ -369,8 +369,7 @@ private:
   int is_expected_multi_index_plan(ObLogicalOperator* op,
                                    ObCostBasedRewriteCtx &ctx,
                                    bool &is_valid);
-  int remove_filter_exprs(ObLogicalOperator* op,
-                          ObIArray<ObRawExpr*> &candi_exprs);
+  int get_range_exprs(ObLogicalOperator* op, ObIArray<ObRawExpr*> &candi_exprs);
   int is_candi_match_index_exprs(ObRawExpr *expr, bool &result);
   int get_candi_match_index_exprs(ObRawExpr *expr,
                                   ObIArray<ObRawExpr*> &candi_exprs);
