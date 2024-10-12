@@ -205,6 +205,19 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
       LOG_WARN("fields is null", K(ret), KP(fields));
     }
   }
+
+  ObCharsetType charset_type = CHARSET_INVALID;
+  ObCharsetType nchar = CHARSET_INVALID;
+
+  if (OB_SUCC(ret)) {
+    const ObSQLSessionInfo &my_session = result.get_session();
+    if (OB_FAIL(my_session.get_ncharacter_set_connection(nchar))) {
+      LOG_WARN("get ncharacter set connection failed", K(ret));
+    } else if (OB_FAIL(my_session.get_character_set_results(charset_type))) {
+      LOG_WARN("fail to get result charset", K(ret));
+    }
+  }
+
   while (OB_SUCC(ret) && row_num < limit_count && !OB_FAIL(result.get_next_row(result_row)) ) {
     ObNewRow *row = const_cast<ObNewRow*>(result_row);
     if (is_prexecute_ && row_num == limit_count - 1) {
@@ -252,12 +265,12 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
         //    remove locator
         if (ob_is_string_tc(value.get_type())
             && CS_TYPE_INVALID != value.get_collation_type()) {
-          OZ(convert_string_value_charset(value, result));
+          OZ(convert_string_value_charset(value, result, charset_type, nchar));
         } else if (value.is_clob_locator()
-                    && OB_FAIL(convert_lob_value_charset(value, result))) {
+                    && OB_FAIL(convert_lob_value_charset(value, result, charset_type, nchar))) {
           LOG_WARN("convert lob value charset failed", K(ret));
         } else if (ob_is_text_tc(value.get_type())
-                    && OB_FAIL(convert_text_value_charset(value, result))) {
+                    && OB_FAIL(convert_text_value_charset(value, result, charset_type, nchar))) {
           LOG_WARN("convert text value charset failed", K(ret));
         }
         if (OB_FAIL(ret)){
@@ -348,28 +361,19 @@ int ObQueryDriver::convert_field_charset(ObIAllocator& allocator,
   return ret;
 }
 
-int ObQueryDriver::convert_string_value_charset(ObObj& value, ObResultSet &result)
+int ObQueryDriver::convert_string_value_charset(ObObj& value, ObResultSet &result,
+                                                ObCharsetType charset_type, ObCharsetType nchar)
 {
   int ret = OB_SUCCESS;
-  ObCharsetType charset_type = CHARSET_INVALID;
-  const ObSQLSessionInfo &my_session = result.get_session();
-  ObArenaAllocator *allocator = NULL;
-  ObCollationType from_collation_type = value.get_collation_type();
-  ObCollationType to_collation_type = CS_TYPE_INVALID;
-  ObCharsetType nchar = CHARSET_INVALID;
-  if (OB_FAIL(my_session.get_ncharacter_set_connection(nchar))) {
-    LOG_WARN("get ncharacter set connection failed", K(ret));
-  } else if (lib::is_oracle_mode()
+  if (lib::is_oracle_mode()
             && (value.is_nchar() || value.is_nvarchar2())
             && nchar != CHARSET_INVALID
             && nchar != CHARSET_BINARY) {
-    to_collation_type = ObCharset::get_default_collation(nchar);
     charset_type = nchar;
-  } else if (OB_FAIL(my_session.get_character_set_results(charset_type))) {
-    LOG_WARN("fail to get result charset", K(ret));
-  } else {
-    to_collation_type = ObCharset::get_default_collation(charset_type);
   }
+  ObCollationType to_collation_type = ObCharset::get_default_collation(charset_type);
+  ObArenaAllocator *allocator = NULL;
+  ObCollationType from_collation_type = value.get_collation_type();
   if (OB_FAIL(ret)) {
   } else if (from_collation_type == to_collation_type) {
     const ObCharsetInfo *charset_info = ObCharset::get_charset(from_collation_type);
@@ -391,68 +395,24 @@ int ObQueryDriver::convert_string_value_charset(ObObj& value, ObResultSet &resul
   return ret;
 }
 
-int ObQueryDriver::convert_string_value_charset(ObObj& value, 
-                                                ObCharsetType charset_type, 
-                                                ObIAllocator &allocator)
+int ObQueryDriver::convert_lob_value_charset(common::ObObj& value, sql::ObResultSet &result,
+                                            ObCharsetType charset_type, ObCharsetType nchar)
 {
   int ret = OB_SUCCESS;
-  ObString str;
-  value.get_string(str);
-  if (ObCharset::is_valid_charset(charset_type) && CHARSET_BINARY != charset_type) {
-    ObCollationType collation_type = ObCharset::get_default_collation(charset_type);
-    const ObCharsetInfo *from_charset_info = ObCharset::get_charset(value.get_collation_type());
-    const ObCharsetInfo *to_charset_info = ObCharset::get_charset(collation_type);
-    if (OB_ISNULL(from_charset_info) || OB_ISNULL(to_charset_info)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("charsetinfo is null", K(ret), K(value.get_collation_type()), K(collation_type));
-    } else if (CS_TYPE_INVALID == value.get_collation_type() || CS_TYPE_INVALID == collation_type) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid collation", K(value.get_collation_type()), K(collation_type), K(ret));
-    } else if (CS_TYPE_BINARY != value.get_collation_type() && CS_TYPE_BINARY != collation_type
-        && strcmp(from_charset_info->csname, to_charset_info->csname) != 0) {
-      char *buf = NULL;
-      int32_t buf_len = str.length() * ObCharset::CharConvertFactorNum;
-      uint32_t result_len = 0;
-      if (0 == buf_len) {
-        //do noting
-      } else if (OB_UNLIKELY(NULL == (buf = static_cast<char *>(
-                allocator.alloc(buf_len))))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("alloc memory failed", K(ret), K(buf_len));
-      } else if (OB_FAIL(convert_string_charset(str, value.get_collation_type(),
-                                                collation_type, buf, buf_len, result_len))) {
-        LOG_WARN("convert string charset failed", K(ret));
-      } else {
-        value.set_string(value.get_type(), buf, static_cast<int32_t>(result_len));
-        value.set_collation_type(collation_type);
-      }
-    }
+
+  if (lib::is_oracle_mode()
+            && (value.is_nchar() || value.is_nvarchar2())
+            && nchar != CHARSET_INVALID
+            && nchar != CHARSET_BINARY) {
+    charset_type = nchar;
   }
-  return ret;
-}
 
-int ObQueryDriver::convert_lob_value_charset(common::ObObj& value, sql::ObResultSet &result)
-{
-  int ret = OB_SUCCESS;
-
-  ObCharsetType charset_type = CHARSET_INVALID;
-  ObCharsetType nchar = CHARSET_INVALID;
-  const ObSQLSessionInfo &my_session = result.get_session();
   ObArenaAllocator *allocator = NULL;
   if (OB_FAIL(result.get_exec_context().get_convert_charset_allocator(allocator))) {
     LOG_WARN("fail to get lob fake allocator", K(ret));
   } else if (OB_ISNULL(allocator)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lob fake allocator is null.", K(ret), K(value));
-  } else if (OB_FAIL(my_session.get_character_set_results(charset_type))) {
-    LOG_WARN("fail to get result charset", K(ret));
-  } else if (OB_FAIL(my_session.get_ncharacter_set_connection(nchar))) {
-    LOG_WARN("get ncharacter set connection failed", K(ret));
-  } else if (lib::is_oracle_mode()
-            && (value.is_nchar() || value.is_nvarchar2())
-            && nchar != CHARSET_INVALID
-            && nchar != CHARSET_BINARY) {
-    charset_type = nchar;
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(convert_lob_value_charset(value, charset_type, *allocator))) {
@@ -461,27 +421,25 @@ int ObQueryDriver::convert_lob_value_charset(common::ObObj& value, sql::ObResult
   return ret;
 }
 
-int ObQueryDriver::convert_text_value_charset(common::ObObj& value, sql::ObResultSet &result)
+int ObQueryDriver::convert_text_value_charset(common::ObObj& value, sql::ObResultSet &result,
+                                              ObCharsetType charset_type, ObCharsetType nchar)
 {
   int ret = OB_SUCCESS;
-  ObCharsetType charset_type = CHARSET_INVALID;
-  ObCharsetType nchar = CHARSET_INVALID;
+
   const ObSQLSessionInfo &my_session = result.get_session();
+  if (lib::is_oracle_mode()
+            && (value.is_nchar() || value.is_nvarchar2())
+            && nchar != CHARSET_INVALID
+            && nchar != CHARSET_BINARY) {
+    charset_type = nchar;
+  }
+
   ObArenaAllocator *allocator = NULL;
   if (OB_FAIL(result.get_exec_context().get_convert_charset_allocator(allocator))) {
     LOG_WARN("fail to get lob fake allocator", K(ret));
   } else if (OB_ISNULL(allocator)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("text fake allocator is null.", K(ret), K(value));
-  } else if (OB_FAIL(my_session.get_character_set_results(charset_type))) {
-    LOG_WARN("fail to get result charset", K(ret));
-    } else if (OB_FAIL(my_session.get_ncharacter_set_connection(nchar))) {
-    LOG_WARN("get ncharacter set connection failed", K(ret));
-  } else if (lib::is_oracle_mode()
-            && (value.is_nchar() || value.is_nvarchar2())
-            && nchar != CHARSET_INVALID
-            && nchar != CHARSET_BINARY) {
-    charset_type = nchar;
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(convert_text_value_charset(value, charset_type, *allocator, &my_session, &result.get_exec_context()))) {
