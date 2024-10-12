@@ -673,6 +673,8 @@ int ObDynamicSampling::add_basic_hint_info(ObSqlString &basic_hint_str,
   //Dynamic Sampling SQL shouldn't dynamic sampling
   } else if (OB_FAIL(basic_hint_str.append(" DYNAMIC_SAMPLING(0) "))) {
     LOG_WARN("failed to append", K(ret));
+  } else if (OB_FAIL(basic_hint_str.append(" DBMS_STATS "))) {
+    LOG_WARN("failed to append", K(ret));
   //add query timeout control Dynamic Sampling SQL execute time.
   } else if (OB_FAIL(basic_hint_str.append_fmt(" QUERY_TIMEOUT(%ld) ", query_timeout))) {
     LOG_WARN("failed to append", K(ret));
