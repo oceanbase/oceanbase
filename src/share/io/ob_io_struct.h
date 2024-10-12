@@ -340,6 +340,7 @@ public:
 
   int base_init(ObDeviceChannel *device_channel);
   int start_thread();
+  static int convert_sys_errno(const int system_errno);
   void destroy_thread();
   virtual int submit(ObIORequest &req) = 0;
   virtual void cancel(ObIORequest &req) = 0;
