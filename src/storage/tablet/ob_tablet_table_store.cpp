@@ -2034,7 +2034,7 @@ int ObTabletTableStore::check_ready_for_read(const ObReadyForReadParam &param)
   // don't return errcode so check invalid conditions before
   if (OB_SUCC(ret) && is_major_sstable_empty(param.ddl_commit_scn_)) {
     is_ready_for_read_ = false;
-    LOG_INFO("no valid major sstable, not ready for read", K(*this));
+    LOG_TRACE("no valid major sstable, not ready for read", K(*this));
   }
 
   if (OB_SUCC(ret) && get_table_count() > EMERGENCY_SSTABLE_CNT) {
