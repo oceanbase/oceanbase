@@ -279,6 +279,7 @@ int ObTenantArchiveRoundAttr::generate_next_round(const int64_t incarnation,
   next_round.used_piece_id_ = used_piece_id_ + 1;
   next_round.piece_switch_interval_ = piece_switch_interval;
   next_round.path_ = path;
+  next_round.comment_.reset();
 
   next_round.frozen_input_bytes_ = 0;
   next_round.frozen_output_bytes_ = 0;
