@@ -267,7 +267,7 @@ int ObBLService::do_black_list_check_(sqlclient::ObMySQLResult *result)
     } else if (ls_info.is_leader() && check_need_skip_leader_(bl_key.get_tenant_id())) {
       // cannot add leader into blacklist
       need_remove = true;
-    } else if (ls_info.weak_read_scn_ == 0) {
+    } else if (ls_info.weak_read_scn_ == 0 && ls_info.migrate_status_ == OB_MIGRATION_STATUS_NONE) {
       // log stream is initializing, should't be put into blacklist
       need_remove = true;
     } else if (OB_FAIL(OB_TS_MGR.get_gts(bl_key.get_tenant_id(), NULL, gts_scn))) {
