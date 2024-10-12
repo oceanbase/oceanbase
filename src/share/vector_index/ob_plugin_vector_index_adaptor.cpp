@@ -1083,10 +1083,10 @@ int ObPluginVectorIndexAdaptor::complete_delta_buffer_table_data(ObVectorQueryAd
         // do nothing
       } else if (ctx->vec_data_.vectors_[i].get_string().length() != dim * sizeof(float)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get invalid string.", K(ret), K(ctx->vec_data_.vectors_[i]), K(dim));
+        LOG_WARN("get invalid string.", K(ret), K(i), K(ctx->vec_data_.vectors_[i].get_string().length()), K(dim));
       } else if (OB_ISNULL(vector = reinterpret_cast<float *>(ctx->vec_data_.vectors_[i].get_string().ptr()))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to get float vector.", K(ret));
+        LOG_WARN("failed to get float vector.", K(ret), K(i));
       } else {
         vids[count] = ctx->get_vids()[i + ctx->get_curr_idx()].get_int();
         for (int j = 0; OB_SUCC(ret) && j < dim; j++) {

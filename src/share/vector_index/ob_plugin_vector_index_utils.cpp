@@ -169,7 +169,8 @@ int ObPluginVectorIndexUtils::read_object_from_vid_rowkey_table_iter(ObObj *inpu
       if (OB_ITER_END != ret) {
         LOG_WARN("failed to get next row from next table.", K(ret));
       } else {
-        ret = OB_SUCCESS;
+        // do nothing
+        LOG_INFO("vid is removed", K(ret), K(rowkey));
       }
     } else {
       const ObIArray<share::schema::ObColumnParam *> *out_col_param
@@ -302,6 +303,8 @@ int ObPluginVectorIndexUtils::read_vector_info(ObPluginVectorIndexAdaptor *adapt
         batch_temp_allocator.reuse();
         int64_t vec_cnt = ada_ctx.get_vec_cnt();
         for (int64_t i = 0; OB_SUCC(ret) && i < vec_cnt; i++) {
+          vid_id_scan_param.key_ranges_.pop_back();
+          data_scan_param.key_ranges_.pop_back();
           if (OB_FAIL(read_object_from_vid_rowkey_table_iter(&(ada_ctx.get_vids()[i+j]),
                                                   vid_id_table_table_id,
                                                   vid_id_scan_param,
@@ -310,7 +313,12 @@ int ObPluginVectorIndexUtils::read_vector_info(ObPluginVectorIndexAdaptor *adapt
                                                   batch_temp_allocator,
                                                   obj_ptr,
                                                   data_table_rowkey_count))) {
-            LOG_WARN("failed to read obj from 2nd table.", K(ret));
+            if (OB_ITER_END != ret) {
+              LOG_WARN("failed to read obj from 2nd table.", K(ret));
+            } else {
+              ret = OB_SUCCESS; // read next vid
+              output_obj[i].reset();
+            }
           } else if (OB_FAIL(read_object_from_data_table_iter(obj_ptr,
                                                               data_table_rowkey_count,
                                                               data_table_table_id,
@@ -321,9 +329,6 @@ int ObPluginVectorIndexUtils::read_vector_info(ObPluginVectorIndexAdaptor *adapt
                                                               output_obj[i],
                                                               get_data))) {
             LOG_WARN("failed to read obj from data table.", K(ret));
-          } else {
-            vid_id_scan_param.key_ranges_.pop_back();
-            data_scan_param.key_ranges_.pop_back();
           }
         }
 
