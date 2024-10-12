@@ -580,7 +580,7 @@ int ObLogTableScan::generate_access_exprs()
 int ObLogTableScan::replace_gen_col_op_exprs(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;
-  if (is_index_scan() && !(get_index_back())) {
+  if (!need_replace_gen_column()) {
     // do nothing.
   } else if (!replacer.empty()) {
     FOREACH_CNT_X(it, get_op_ordering(), OB_SUCC(ret)) {
@@ -4017,6 +4017,54 @@ int ObLogTableScan::prepare_rowkey_domain_id_dep_exprs()
           LOG_WARN("failed to build rowkey vec vid column expr", K(ret), K(vec_vid_col_id), KPC(col_schema));
         } else if (OB_FAIL(rowkey_id_exprs_.push_back(column_expr))) {
           LOG_WARN("failed to build rowkey doc id column expr", K(ret), K(vec_vid_col_id), KPC(col_schema));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogTableScan::copy_gen_col_range_exprs()
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> columns;
+  bool need_copy = false;
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (!need_replace_gen_column()) {
+    //no need replace in index table non-return table scenario.
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < range_conds_.count(); ++i) {
+      columns.reuse();
+      if (OB_ISNULL(range_conds_.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(range_conds_.at(i),
+                                                              columns, true))) {
+        LOG_WARN("failed to extract column exprs", K(ret));
+      } else {
+        need_copy = false;
+        for (int64_t j = 0; OB_SUCC(ret) && !need_copy && j < columns.count(); ++j) {
+          ObRawExpr *expr = columns.at(j);
+          if (OB_ISNULL(expr) ||
+              OB_UNLIKELY(!expr->is_column_ref_expr())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected null", K(ret));
+          } else if (!static_cast<ObColumnRefRawExpr*>(expr)->is_generalized_column()) {
+            // do nothing
+          } else {
+            need_copy = true;
+          }
+        }
+        if (OB_SUCC(ret) && need_copy) {
+          ObRawExprCopier copier(get_plan()->get_optimizer_context().get_expr_factory());
+          ObRawExpr *old_expr = range_conds_.at(i);
+          if (OB_FAIL(copier.add_skipped_expr(columns))) {
+            LOG_WARN("failed to add skipper expr", K(ret));
+          } else if (OB_FAIL(copier.copy(old_expr, range_conds_.at(i)))) {
+            LOG_WARN("failed to copy expr node", K(ret));
+          }
         }
       }
     }
