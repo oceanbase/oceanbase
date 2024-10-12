@@ -347,9 +347,6 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(
       CK (OB_NOT_NULL(pool = static_cast<ObInnerSQLConnectionPool *>(sql_proxy_->get_pool())));
       OX (session_info->set_job_info(&job_info));
       OZ (pool->acquire_spi_conn(session_info, conn));
-      if (OB_NOT_NULL(conn)) {
-        conn->set_check_priv(true);
-      }
       if (OB_SUCC(ret) && job_info.is_mysql_event_job_class()) {
         ObArenaAllocator allocator("MYSQL_EVENT_TMP");
         ObParser parser(allocator, session_info->get_sql_mode(), session_info->get_charsets4parser());
