@@ -48,6 +48,7 @@ enum table_type : int8_t {
   OB_JSON_TABLE = 1,
   OB_XML_TABLE = 2,
   OB_RB_ITERATE_TABLE = 3,
+  OB_UNNEST_TABLE = 4,
 };
 
 typedef enum JtNodeType {
