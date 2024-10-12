@@ -76,8 +76,8 @@ int ObTableLoadMemChunkManager::init(ObTableLoadStoreCtx *store_ctx, ObDirectLoa
       if (OB_ISNULL(node)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to allocate mem");
-      } else {
-        chunk_nodes_.push_back(node);
+      } else if (OB_FAIL(chunk_nodes_.push_back(node))) {
+        LOG_WARN("fail to push chunk node", KR(ret));
       }
     }
     if (OB_SUCC(ret)) {
@@ -102,7 +102,7 @@ int ObTableLoadMemChunkManager::alloc_chunk(ChunkType *&chunk)
             !(mem_ctx_->has_error_)) {
       usleep(50000);
     }
-    if (OB_SUCC(ret) && !mem_ctx_->has_error_) {
+    if (OB_SUCC(ret)) {
       chunk = OB_NEW(ChunkType, ObMemAttr(MTL_ID(), "TLD_MemChunkVal"));
       if (OB_ISNULL(chunk)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;

@@ -204,11 +204,6 @@ int ObTableLoadStoreCtx::init(
     LOG_WARN("fail to new ObTableLoadOpenInsertTableCtxManager", KR(ret));
   } else if (OB_FAIL(open_insert_tablet_ctx_manager_->init())) {
     LOG_WARN("fail to init open insert tablet ctx manager", KR(ret));
-  } else if (OB_ISNULL(error_row_handler_ = OB_NEWx(ObTableLoadErrorRowHandler, (&allocator_)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to new ObTableLoadErrorRowHandler", KR(ret));
-  } else if (OB_FAIL(error_row_handler_->init(ctx_->param_, result_info_, ctx_->job_stat_))) {
-    LOG_WARN("fail to init error row handler", KR(ret));
   }
   if (OB_FAIL(ret)) {
   }

@@ -47,7 +47,6 @@ private:
   static int abort_active_trans(ObTableLoadTableCtx *ctx);
 // table load ctrl interface
 public:
-
   int pre_begin();
   int confirm_begin();
 private:

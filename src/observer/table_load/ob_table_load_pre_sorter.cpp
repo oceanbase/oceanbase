@@ -23,7 +23,8 @@
 #include "storage/direct_load/ob_direct_load_multiple_sstable.h"
 #include "observer/table_load/ob_table_load_task.h"
 #include "observer/table_load/ob_table_load_task_scheduler.h"
-
+#include "observer/table_load/ob_table_load_table_compactor.h"
+#include "observer/table_load/ob_table_load_merger.h"
 namespace oceanbase
 {
 namespace observer
