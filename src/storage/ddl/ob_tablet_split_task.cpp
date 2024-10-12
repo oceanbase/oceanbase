@@ -1427,7 +1427,7 @@ int ObTabletSplitMergeTask::build_create_sstable_param(
     const ObSSTableBasicMeta &basic_meta = meta_handle.get_sstable_meta().get_basic_meta();
     create_sstable_param.table_key_ = src_table.get_key();
     create_sstable_param.table_key_.tablet_id_ = dst_tablet_id;
-    create_sstable_param.sstable_logic_seq_ = 0;
+    create_sstable_param.sstable_logic_seq_ = basic_meta.sstable_logic_seq_;
     create_sstable_param.filled_tx_scn_ = basic_meta.filled_tx_scn_;
     create_sstable_param.table_mode_ = basic_meta.table_mode_;
     create_sstable_param.index_type_ = static_cast<share::schema::ObIndexType> (basic_meta.index_type_);

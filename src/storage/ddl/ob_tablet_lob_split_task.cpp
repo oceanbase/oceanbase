@@ -1613,7 +1613,7 @@ int ObTabletLobWriteDataTask::create_sstable(ObSSTableIndexBuilder *sstable_inde
 
     create_sstable_param.create_snapshot_version_ = is_major_merge(merge_type) ? dst_major_snapshot_version : basic_meta.create_snapshot_version_;
 
-    create_sstable_param.sstable_logic_seq_ = 0;
+    create_sstable_param.sstable_logic_seq_ = write_sstable_ctx.data_seq_;
     create_sstable_param.filled_tx_scn_ = basic_meta.filled_tx_scn_;
     create_sstable_param.latest_row_store_type_ = basic_meta.latest_row_store_type_;
     create_sstable_param.recycle_version_ = basic_meta.recycle_version_;
