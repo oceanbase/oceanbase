@@ -912,7 +912,9 @@ int ObPLDbmsSql::do_parse(ObExecContext &exec_ctx,
   //  ret = OB_ERR_DBMS_SQL_INVALID_STMT;
   //}
   // execute if stmt is not dml nor select.
-  if (OB_SUCC(ret) && check_stmt_need_to_be_executed_when_parsing(*cursor)) {
+  bool flag = false;
+  OZ (check_stmt_need_to_be_executed_when_parsing(*cursor, flag));
+  if (OB_SUCC(ret) && true == flag) {
     OZ (do_execute(exec_ctx, *cursor));
     OX (cursor->get_ps_sql().reset());
     OX (cursor->get_sql_stmt().reset());
@@ -920,10 +922,16 @@ int ObPLDbmsSql::do_parse(ObExecContext &exec_ctx,
   return ret;
 }
 
-bool ObPLDbmsSql::check_stmt_need_to_be_executed_when_parsing(ObDbmsCursorInfo &cursor)
+int ObPLDbmsSql::check_stmt_need_to_be_executed_when_parsing(ObDbmsCursorInfo &cursor, bool& flag)
 {
-  bool flag = ObStmt::is_ddl_stmt(cursor.get_stmt_type(), true);
-  return flag;
+  int ret = OB_SUCCESS;
+  if (cursor.get_sql_stmt().empty()) {
+    ret = OB_NO_STMT_PARSE;
+    LOG_WARN("Cursor has not parsed any statement", K(ret));
+  } else {
+    flag = ObStmt::is_ddl_stmt(cursor.get_stmt_type(), true);
+  }
+  return ret;
 }
 
 int ObPLDbmsSql::bind_variable(ObExecContext &exec_ctx, ParamStore &params, ObObj &result)
@@ -1131,20 +1139,24 @@ int ObPLDbmsSql::execute(ObExecContext &exec_ctx, ParamStore &params, ObObj &res
       LOG_WARN("Cursor contains both regular and array defines which is illegal", K(ret));
     } else {
       // do execute.
-      if (!check_stmt_need_to_be_executed_when_parsing(*cursor)) {
-        OZ (do_execute(exec_ctx, *cursor, params, result));
-        //every ececute should reset current index of Array
-        for (ObDbmsCursorInfo::DefineArrays::iterator iter = cursor->get_define_arrays().begin();
-               OB_SUCC(ret) && iter != cursor->get_define_arrays().end();
-               ++iter) {
-          ObDbmsCursorInfo::ArrayDesc &array_info = iter->second;
-          array_info.cur_idx_ = 0;
+      bool flag = false;
+      OZ (check_stmt_need_to_be_executed_when_parsing(*cursor, flag));
+      if (OB_SUCC(ret)) {
+        if (false == flag) {
+          OZ (do_execute(exec_ctx, *cursor, params, result));
+          //every ececute should reset current index of Array
+          for (ObDbmsCursorInfo::DefineArrays::iterator iter = cursor->get_define_arrays().begin();
+                 OB_SUCC(ret) && iter != cursor->get_define_arrays().end();
+                 ++iter) {
+            ObDbmsCursorInfo::ArrayDesc &array_info = iter->second;
+            array_info.cur_idx_ = 0;
+          }
+        } else {
+          number::ObNumber num;
+          int64_t res_num = 0;
+          OZ (num.from(res_num, exec_ctx.get_allocator()));
+          result.set_number(num);
         }
-      } else {
-        number::ObNumber num;
-        int64_t res_num = 0;
-        OZ (num.from(res_num, exec_ctx.get_allocator()));
-        result.set_number(num);
       }
     }
   }
@@ -1572,11 +1584,14 @@ int ObPLDbmsSql::execute_and_fetch(ObExecContext &exec_ctx, ParamStore &params, 
   }
   // todo : when dbms_cursor support stream cursor need change here
   if (OB_SUCC(ret) && (!cursor->isopen()
-                        || (cursor->isopen() && cursor->get_rowcount() == cursor->get_spi_cursor()->cur_))
-                   && !check_stmt_need_to_be_executed_when_parsing(*cursor)) {
-    // do execute.
-    has_open = false;
-    OZ (do_execute(exec_ctx, *cursor, params, result));
+                        || (cursor->isopen() && cursor->get_rowcount() == cursor->get_spi_cursor()->cur_))) {
+    bool flag = false;
+    OZ (check_stmt_need_to_be_executed_when_parsing(*cursor, flag));
+    if (OB_SUCC(ret) && false == flag) {
+      // do execute.
+      has_open = false;
+      OZ (do_execute(exec_ctx, *cursor, params, result));
+    }
   }
   if (OB_SUCC(ret)) {
     if (2 == param_count) {
