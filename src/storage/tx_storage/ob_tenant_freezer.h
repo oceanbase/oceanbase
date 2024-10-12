@@ -144,10 +144,6 @@ public:
   // until timeout.
   int ls_freeze_all_unit(const share::ObLSID &ls_id);
   // freeze a tablet
-  int tablet_freeze(const common::ObTabletID &tablet_id,
-                    const bool is_sync,
-                    const int64_t max_retry_time,
-                    const bool need_rewrite_tablet_meta);
   int tablet_freeze(share::ObLSID ls_id,
                     const common::ObTabletID &tablet_id,
                     const bool is_sync,
