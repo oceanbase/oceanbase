@@ -33,6 +33,8 @@ namespace oceanbase
 using namespace memtable;
 namespace compaction
 {
+ERRSIM_POINT_DEF(EN_COMPACTION_DISABLE_CONVERT_CO);
+
 ObStaticMergeParam::ObStaticMergeParam(ObTabletMergeDagParam &dag_param)
   : dag_param_(dag_param),
     is_full_merge_(false),
@@ -1374,15 +1376,25 @@ int ObBasicTabletMergeCtx::get_convert_compaction_info()
   ObTablet *tablet = get_tablet();
   ObStorageSchema *schema_on_tablet = nullptr;
   ObStorageSchema *schema_for_merge = nullptr;
-  if (OB_FAIL(static_param_.tablet_schema_guard_.load(schema_on_tablet))) {
+  ObUpdateCSReplicaSchemaParam param;
+  bool generate_cs_replica_cg_array = false;
+
+  if (OB_FAIL(OB_UNLIKELY(EN_COMPACTION_DISABLE_CONVERT_CO))) {
+    LOG_INFO("EN_COMPACTION_DISABLE_CONVERT_CO: disable convert co merge", K(ret));
+  } else if (OB_FAIL(static_param_.tablet_schema_guard_.load(schema_on_tablet))) {
     LOG_WARN("failed to load schema on tablet", K(ret), KPC(tablet));
-  } else if (OB_UNLIKELY(!is_convert_co_major_merge(get_merge_type()) || OB_ISNULL(schema_on_tablet) || !schema_on_tablet->is_row_store())) {
+  } else if (OB_UNLIKELY(!is_convert_co_major_merge(get_merge_type()) || OB_ISNULL(schema_on_tablet) || OB_ISNULL(tablet))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected static param", K(ret), KPC(schema_on_tablet), K_(static_param));
+    LOG_WARN("get unexpected static param", K(ret), KPC(schema_on_tablet), K_(static_param), KPC(tablet));
   } else if (OB_FAIL(ObStorageSchemaUtil::alloc_storage_schema(mem_ctx_.get_allocator(), schema_for_merge))) {
     LOG_WARN("failed to alloc storage schema", K(ret));
+  } else if (schema_on_tablet->is_column_info_simplified() && OB_FAIL(param.init(*tablet))) {
+    LOG_WARN("failed to init param", K(ret), KPC(tablet));
+  } else if (FALSE_IT(generate_cs_replica_cg_array = (schema_on_tablet->is_row_store() || schema_on_tablet->is_column_info_simplified()))) {
+    // storage schema is column store but simplifed, it should become not simplified before it can be used for merge
   } else if (OB_FAIL(schema_for_merge->init(mem_ctx_.get_allocator(), *schema_on_tablet,
-                        false /*skip_column_info*/, nullptr /*column_group_schema*/, true /*generate_cs_replica_cg_array*/))) {
+                        false /*skip_column_info*/, nullptr /*column_group_schema*/, generate_cs_replica_cg_array,
+                        schema_on_tablet->is_column_info_simplified() ? &param : nullptr))) {
     LOG_WARN("failed to init storage schema for convert co major merge", K(ret), K(tablet), KPC(schema_on_tablet));
   } else {
     static_param_.schema_ = schema_for_merge;

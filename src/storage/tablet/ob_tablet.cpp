@@ -1352,7 +1352,7 @@ int ObTablet::init_with_replace_members(
     const ObTablet &old_tablet,
     const int64_t snapshot_version,
     const ObTabletDataStatus::STATUS &data_status,
-    bool need_generate_cs_replica_cg_array/*=false*/)
+    const bool need_generate_cs_replica_cg_array/*=false*/)
 {
   int ret = OB_SUCCESS;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
@@ -1403,6 +1403,22 @@ int ObTablet::init_with_replace_members(
   } else if (need_generate_cs_replica_cg_array) {
     if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, storage_schema_addr_.ptr_))) {
       LOG_WARN("fail to allocate and new object", K(ret));
+    } else if (old_storage_schema->is_column_info_simplified()) {
+      ObUpdateCSReplicaSchemaParam param;
+      ObStorageSchema *full_storage_schema = nullptr;
+      if (OB_FAIL(param.init(*this))) {
+        LOG_WARN("fail to init param", K(ret), KPC(this));
+      } else if (OB_FAIL(ObCSReplicaUtil::get_rebuild_storage_schema(allocator, param, *old_storage_schema, full_storage_schema))) {
+        LOG_WARN("failed to get rebuild storage schema", K(ret), K(param), KPC(old_storage_schema));
+      } else if (OB_ISNULL(full_storage_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null full storage schema", K(ret), KPC(old_storage_schema));
+      } else if (OB_FAIL(ObStorageSchemaUtil::update_tablet_storage_schema(
+          old_tablet.tablet_meta_.tablet_id_, allocator, *old_storage_schema,
+          *full_storage_schema, storage_schema_addr_.ptr_))) {
+        LOG_WARN("failed to choose and save storage schema", K(ret), K(old_tablet), K(param));
+      }
+      ObTabletObjLoadHelper::free(allocator, full_storage_schema);
     } else if (OB_FAIL(storage_schema_addr_.get_ptr()->init(allocator, *old_storage_schema, false /*skip_column_info*/,
                                                             nullptr /*column_group_schema*/, true /*need_generate_cs_replica_cg_array*/))) {
       LOG_WARN("fail to initialize tablet member", K(ret), K(storage_schema_addr_));

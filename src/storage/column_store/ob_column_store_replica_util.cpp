@@ -13,6 +13,7 @@
  #include "storage/tx_storage/ob_ls_service.h"
  #include "storage/tablet/ob_mds_schema_helper.h"
  #include "storage/column_store/ob_column_store_replica_util.h"
+ #include "storage/compaction/ob_medium_compaction_func.h"
  #include "share/ls/ob_ls_table_operator.h"
  #define USING_LOG_PREFIX STORAGE
 
@@ -367,6 +368,134 @@ int ObCSReplicaUtil::check_need_process_cs_replica(
       LOG_WARN("fail to check need process cs replica", K(ret), K(ls), K(tablet), KPC(storage_schema));
     }
     ObTabletObjLoadHelper::free(arena_allocator, storage_schema);
+  }
+  return ret;
+}
+
+int ObCSReplicaUtil::get_full_column_array_from_table_schema(
+    common::ObIAllocator &allocator,
+    const ObUpdateCSReplicaSchemaParam &update_param,
+    const ObStorageSchema &simplified_schema,
+    common::ObFixedArray<ObStorageColumnSchema, common::ObIAllocator> &column_array)
+{
+  int ret = OB_SUCCESS;
+  int64_t tenant_schema_version = OB_INVALID_VERSION;
+  uint64_t table_id = OB_INVALID_ID;
+  const ObTabletID tablet_id = update_param.tablet_id_;
+  const int64_t expected_stored_column_cnt = update_param.major_column_cnt_ - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+  const int64_t tenant_id = MTL_ID();
+  const ObTableSchema *table_schema = nullptr;
+  ObSchemaGetterGuard schema_guard;
+  ObMultiVersionSchemaService &schema_service = ObMultiVersionSchemaService::get_instance();
+  if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("failed to get schema guard", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, tenant_schema_version))) {
+    LOG_WARN("failed to get tenant schema version", K(ret), K(tenant_id));
+  } else if (OB_FAIL(compaction::ObMediumCompactionScheduleFunc::get_table_id(schema_service, tablet_id, tenant_schema_version, table_id))) {
+    LOG_WARN("failed to get table id", K(ret), K(tablet_id), K(tenant_schema_version));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_IS_DELETED;
+    LOG_WARN("table is deleted", K(ret), K(table_id));
+  } else {
+    ObStorageSchema *full_storage_schema = nullptr;
+    if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, full_storage_schema))) {
+      LOG_WARN("alloc and new failed", K(ret));
+    } else if (OB_FAIL(full_storage_schema->init(allocator, *table_schema, simplified_schema.get_compat_mode(),
+                  false/*skip_column_info*/, simplified_schema.get_schema_version(), true/*generate_cs_replica_cg_array*/))) {
+      LOG_WARN("failed to init storage schema", K(ret), K(table_id));
+    } else if (OB_FAIL(get_column_array_from_full_storage_schema(allocator, expected_stored_column_cnt, *full_storage_schema, column_array))) {
+      LOG_WARN("failed to get column array from full storage schema", K(ret), K(update_param), K(expected_stored_column_cnt), K(full_storage_schema));
+    } else {
+      LOG_INFO("[CS-Replica] Successfully get column array", K(ret), K(update_param), K(expected_stored_column_cnt), K(column_array));
+    }
+    ObTabletObjLoadHelper::free(allocator, full_storage_schema);
+  }
+  return ret;
+}
+
+// The count of reconstructed column array must be equal to the column count of the lastest major in tablet.
+// Otherwise, after convert co merge, the column count in co major will be diffrent with that in F replica, cause column data checksum check failed.
+int ObCSReplicaUtil::get_column_array_from_full_storage_schema(
+    common::ObIAllocator &allocator,
+    const int64_t expected_stored_column_cnt,
+    const ObStorageSchema &full_storage_schema,
+    common::ObFixedArray<ObStorageColumnSchema, common::ObIAllocator> &column_array)
+{
+  int ret = OB_SUCCESS;
+  int64_t column_cnt = 0;
+  int64_t stored_column_cnt = 0;
+
+  // make sure column array include all stored column in lastest major sstable
+  for (int64_t i = 0; i < full_storage_schema.column_array_.count(); ++i) {
+    const ObStorageColumnSchema &col_schema = full_storage_schema.column_array_.at(i);
+    if (col_schema.is_column_stored_in_sstable()) {
+      stored_column_cnt++;
+      if (stored_column_cnt == expected_stored_column_cnt) {
+        column_cnt = i + 1;
+        break;
+      }
+    }
+  }
+
+  if (OB_UNLIKELY(column_cnt <= 0 || column_cnt > full_storage_schema.column_array_.count()
+               || expected_stored_column_cnt <= 0 || expected_stored_column_cnt != stored_column_cnt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected column cnt", K(ret), K(column_cnt), K(stored_column_cnt), K(expected_stored_column_cnt), K(stored_column_cnt), K(full_storage_schema));
+  } else if (OB_FAIL(column_array.init(column_cnt))) {
+    LOG_WARN("failed to init column array", K(ret), K(column_cnt));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; ++i) {
+      ObStorageColumnSchema col_schema;
+      const ObStorageColumnSchema &src_col_schema = full_storage_schema.column_array_.at(i);
+      col_schema.info_ = src_col_schema.info_;
+      col_schema.default_checksum_ = src_col_schema.default_checksum_;
+      col_schema.meta_type_ = src_col_schema.meta_type_;
+      if (OB_FAIL(col_schema.deep_copy_default_val(allocator, src_col_schema.orig_default_value_))) {
+        STORAGE_LOG(WARN, "failed to deep copy col schema", K(ret), K(i), K(src_col_schema));
+      } else if (OB_FAIL(column_array.push_back(col_schema))) {
+        STORAGE_LOG(WARN, "failed to push back col schema", K(ret));
+        col_schema.destroy(allocator);
+      }
+    }
+    if (OB_FAIL(ret)) {
+      for (int64_t i = 0; i < column_array.count(); ++i) {
+        column_array.at(i).destroy(allocator);
+      }
+      column_array.reset();
+    }
+  }
+  return ret;
+}
+
+int ObCSReplicaUtil::get_rebuild_storage_schema(
+    common::ObIAllocator &allocator,
+    const ObUpdateCSReplicaSchemaParam &param,
+    const ObStorageSchema &simplified_schema,
+    ObStorageSchema *&full_storage_schema)
+{
+  int ret = OB_SUCCESS;
+  ObStorageSchema *schema = nullptr;
+  if (OB_UNLIKELY(OB_NOT_NULL(full_storage_schema) || !param.is_valid()
+                  || !simplified_schema.is_valid() || !simplified_schema.is_column_info_simplified())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KPC(full_storage_schema), K(param), K(simplified_schema));
+  } else if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, schema))) {
+    LOG_WARN("fail to alloc and new storage schema", K(ret));
+  } else if (OB_FAIL(schema->init(allocator, simplified_schema, false /*skip_column_info*/,
+                                  nullptr /*column_group_schema*/, true /*need_generate_cs_replica_cg_array*/, &param))) {
+    LOG_WARN("fail to init full storage schema", K(ret), K(simplified_schema));
+  }
+
+  if (OB_FAIL(ret)) {
+    ObTabletObjLoadHelper::free(allocator, schema);
+  } else if (OB_UNLIKELY(!schema->is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected invalid schema", K(ret), KPC(schema));
+    ObTabletObjLoadHelper::free(allocator, schema);
+  } else {
+    full_storage_schema = schema;
   }
   return ret;
 }

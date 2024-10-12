@@ -110,6 +110,21 @@ public:
       const ObLS &ls,
       const ObTablet &tablet,
       bool &need_process_cs_replica);
+  static int get_full_column_array_from_table_schema(
+      common::ObIAllocator &allocator,
+      const ObUpdateCSReplicaSchemaParam &update_param,
+      const ObStorageSchema &simplified_schema,
+      common::ObFixedArray<ObStorageColumnSchema, common::ObIAllocator> &column_array);
+  static int get_column_array_from_full_storage_schema(
+      common::ObIAllocator &allocator,
+      const int64_t expected_stored_column_cnt,
+      const ObStorageSchema &full_storage_schema,
+      common::ObFixedArray<ObStorageColumnSchema, common::ObIAllocator> &column_array);
+  static int get_rebuild_storage_schema(
+      common::ObIAllocator &allocator,
+      const ObUpdateCSReplicaSchemaParam &param,
+      const ObStorageSchema &simplified_schema,
+      ObStorageSchema *&full_storage_schema);
 public:
   static const int64_t DEFAULT_CHECK_LS_REPLICA_LOCATION_TIMEOUT = 10 * 1000 * 1000L; // 10s
 };

@@ -237,7 +237,7 @@ public:
       const ObTablet &old_tablet,
       const int64_t snapshot_version,
       const ObTabletDataStatus::STATUS &data_status,
-      bool need_generate_cs_replica_cg_array = false);
+      const bool need_generate_cs_replica_cg_array = false);
   // init for mds table mini merge
   int init_with_mds_sstable(
       common::ObArenaAllocator &allocator,
