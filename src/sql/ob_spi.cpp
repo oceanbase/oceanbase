@@ -1931,10 +1931,6 @@ int ObSPIService::spi_init_composite(ObIAllocator *current_allcator, int64_t add
       CK(OB_NOT_NULL(collection));
       OZ (collection->init_allocator(*current_allcator, need_allocator));
     }
-    // 内层复杂类型分配allocator失败时，在这里释放框架占用的内存
-    if (OB_FAIL(ret) && !need_allocator) {
-      current_allcator->free(reinterpret_cast<void *>(addr));
-    }
   }
   return ret;
 }

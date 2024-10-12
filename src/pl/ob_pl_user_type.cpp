@@ -196,49 +196,15 @@ int ObUserDefinedType::generate_new(ObPLCodeGenerator &generator,
                                           const pl::ObPLStmt *s) const
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObLLVMValue, 3> args;
-  ObLLVMValue var_idx, init_value, var_value;
-  ObLLVMValue composite_value, extend_ptr;
-  ObLLVMValue ret_err;
-  ObLLVMValue var_type, type_id;
-  ObLLVMType ptr_type;
+  ObLLVMValue composite_value;
   ObLLVMType ir_type;
   ObLLVMType ir_pointer_type;
-  ObLLVMValue stack, use_expr_alloc;
-  int64_t init_size = 0;
-  // Step 1: 初始化内存
-  OZ (generator.get_helper().stack_save(stack));
-  OZ (generator.get_helper().get_llvm_type(ObIntType, ptr_type));
-  OZ (generator.get_helper().create_alloca("alloc_composite_addr", ptr_type, extend_ptr));
-  OZ (args.push_back(generator.get_vars().at(generator.CTX_IDX)));
-  OZ (generator.get_helper().get_int8(type_, var_type));
-  OZ (args.push_back(var_type));
-  OZ (generator.get_helper().get_int64(user_type_id_, type_id));
-  OZ (args.push_back(type_id));
-  OZ (generator.get_helper().get_int64(OB_INVALID_INDEX, var_idx));
-  OZ (args.push_back(var_idx));
-  OZ (ns.get_size(PL_TYPE_INIT_SIZE, *this, init_size));
-  OZ (generator.get_helper().get_int32(init_size, init_value));
-  OZ (args.push_back(init_value));
-  OZ (args.push_back(extend_ptr));
-  OZ (args.push_back(allocator));
-  OZ (generator.get_helper().create_call(ObString("spi_alloc_complex_var"),
-                                         generator.get_spi_service().spi_alloc_complex_var_,
-                                         args,
-                                         ret_err));
-  OZ (generator.check_success(ret_err,
-                              s->get_stmt_id(),
-                              s->get_block()->in_notfound(),
-                              s->get_block()->in_warning()));
 
-  // Step 2: 初始化类型内容, 如Collection的rowsize,element type等
-  OZ (generator.get_helper().create_load("load_extend_ptr", extend_ptr, value));
   OZ (generator.get_llvm_type(*this, ir_type));
   OZ (ir_type.get_pointer_to(ir_pointer_type));
   OZ (generator.get_helper().create_int_to_ptr(ObString("ptr_to_user_type"), value, ir_pointer_type,
                                              composite_value));
   OZ (generate_construct(generator, ns, composite_value, allocator, is_top_level, s));
-  OZ (generator.get_helper().stack_restore(stack));
   return ret;
 }
 
@@ -386,7 +352,7 @@ int ObUserDefinedType::destruct_obj(ObObj &src, ObSQLSessionInfo *session, bool 
         CK (OB_NOT_NULL(pl_allocator));
         for (int64_t i = 0; OB_SUCC(ret) && i < record->get_count(); ++i) {
           ObObj &obj = record->get_element()[i];
-          OZ (SMART_CALL(destruct_objparam(*pl_allocator, obj, session)));
+          OZ (SMART_CALL(destruct_objparam(*pl_allocator, obj, session, true)));
           new(&obj)ObObj();
         }
       }
@@ -435,7 +401,7 @@ int ObUserDefinedType::destruct_obj(ObObj &src, ObSQLSessionInfo *session, bool 
           CK (OB_NOT_NULL(collection->get_data()));
           if (OB_SUCC(ret)) {
             ObObj &obj = collection->get_data()[i];
-            OZ (SMART_CALL(destruct_objparam(*pl_allocator, obj, session)));
+            OZ (SMART_CALL(destruct_objparam(*pl_allocator, obj, session, true)));
           }
         }
       }
@@ -1607,6 +1573,51 @@ int ObRecordType::newx(common::ObIAllocator &allocator, const ObPLINS *ns, int64
   return ret;
 }
 
+int ObRecordType::generate_alloc_complex_addr(ObPLCodeGenerator &generator,
+                                              int8_t type,
+                                              int64_t user_type_id,
+                                              int64_t init_size,
+                                              jit::ObLLVMValue &value, //返回值是一个int64_t，代表extend的值
+                                              jit::ObLLVMValue &allocator,
+                                              const pl::ObPLStmt *s)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObLLVMValue, 8> args;
+  ObLLVMValue var_idx, init_value;
+  ObLLVMValue extend_ptr;
+  ObLLVMValue ret_err;
+  ObLLVMValue var_type, type_id;
+  ObLLVMType ptr_type;
+  ObLLVMValue stack;
+
+  OZ (generator.get_helper().stack_save(stack));
+  OZ (generator.get_helper().get_llvm_type(ObIntType, ptr_type));
+  OZ (generator.get_helper().create_alloca("alloc_composite_addr", ptr_type, extend_ptr));
+  OZ (args.push_back(generator.get_vars().at(generator.CTX_IDX)));
+  OZ (generator.get_helper().get_int8(type, var_type));
+  OZ (args.push_back(var_type));
+  OZ (generator.get_helper().get_int64(user_type_id, type_id));
+  OZ (args.push_back(type_id));
+  OZ (generator.get_helper().get_int64(OB_INVALID_INDEX, var_idx));
+  OZ (args.push_back(var_idx));
+  OZ (generator.get_helper().get_int32(init_size, init_value));
+  OZ (args.push_back(init_value));
+  OZ (args.push_back(extend_ptr));
+  OZ (args.push_back(allocator));
+  OZ (generator.get_helper().create_call(ObString("spi_alloc_complex_var"),
+                                         generator.get_spi_service().spi_alloc_complex_var_,
+                                         args,
+                                         ret_err));
+  OZ (generator.check_success(ret_err,
+                              s->get_stmt_id(),
+                              s->get_block()->in_notfound(),
+                              s->get_block()->in_warning()));
+
+  OZ (generator.get_helper().create_load("load_extend_ptr", extend_ptr, value));
+  OZ (generator.get_helper().stack_restore(stack));
+  return ret;
+}
+
 int ObRecordType::generate_default_value(ObPLCodeGenerator &generator,
                                          const ObPLINS &ns,
                                          const ObPLStmt *stmt,
@@ -1748,11 +1759,18 @@ int ObRecordType::generate_default_value(ObPLCodeGenerator &generator,
             // null branch
             OZ (generator.set_current(null_branch));
             OZ (generator.extract_allocator_from_record(value, record_allocator));
-            OZ (SMART_CALL(member->member_type_.generate_new(generator, ns, extend_value, record_allocator, false, stmt)));
-            OZ (generator.get_helper().get_int8(member->member_type_.get_type(), type_value));
-            OZ (member->member_type_.get_size(PL_TYPE_INIT_SIZE, init_size));
+            OZ (ns.get_size(PL_TYPE_INIT_SIZE, member->member_type_, init_size));
             OZ (generator.get_helper().get_int32(init_size, init_value));
+            OZ (generate_alloc_complex_addr(generator,
+                                            member->member_type_.get_type(),
+                                            member->member_type_.get_user_type_id(),
+                                            init_size,
+                                            extend_value,
+                                            record_allocator,
+                                            stmt));
+            OZ (generator.get_helper().get_int8(member->member_type_.get_type(), type_value));
             OZ (generator.generate_set_extend(ptr_elem, type_value, init_value, extend_value));
+            OZ (SMART_CALL(member->member_type_.generate_new(generator, ns, extend_value, record_allocator, false, stmt)));
             OZ (generator.generate_null(ObIntType, record_allocator));
             OZ (generator.get_llvm_type(member->member_type_, ir_type));
             OZ (ir_type.get_pointer_to(ir_pointer_type));
@@ -1768,12 +1786,20 @@ int ObRecordType::generate_default_value(ObPLCodeGenerator &generator,
           ObLLVMValue init_value;
           ObLLVMValue record_allocator;
           int64_t init_size = OB_INVALID_SIZE;
+          int64_t size = OB_INVALID_SIZE;
           OZ (generator.extract_allocator_from_record(value, record_allocator));
-          OZ (SMART_CALL(member->member_type_.generate_new(generator, ns, extend_value, record_allocator, false, stmt)));
-          OZ (generator.get_helper().get_int8(member->member_type_.get_type(), type_value));
-          OZ (member->member_type_.get_size(PL_TYPE_INIT_SIZE, init_size));
+          OZ (ns.get_size(PL_TYPE_INIT_SIZE, member->member_type_, init_size));
           OZ (generator.get_helper().get_int32(init_size, init_value));
+          OZ (generate_alloc_complex_addr(generator,
+                                          member->member_type_.get_type(),
+                                          member->member_type_.get_user_type_id(),
+                                          init_size,
+                                          extend_value,
+                                          record_allocator,
+                                          stmt));
+          OZ (generator.get_helper().get_int8(member->member_type_.get_type(), type_value));
           OZ (generator.generate_set_extend(ptr_elem, type_value, init_value, extend_value));
+          OZ (SMART_CALL(member->member_type_.generate_new(generator, ns, extend_value, record_allocator, false, stmt)));
         }
       }
     }
@@ -3134,7 +3160,7 @@ int ObCollectionType::deserialize(ObSchemaGetterGuard &schema_guard,
             table->set_data(reinterpret_cast<ObObj*>(table_data));
             ObObj tmp;
             tmp.set_extend(reinterpret_cast<int64_t>(table), table->get_type());
-            ObUserDefinedType::destruct_obj(tmp, nullptr);
+            ObUserDefinedType::destruct_obj(tmp, nullptr, true);
           }
         }
       }

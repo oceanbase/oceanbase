@@ -429,6 +429,14 @@ public:
   int record_members_init(common::ObIAllocator *alloc, int64_t size);
   void reset_record_member() { record_members_.reset(); }
 
+  static int generate_alloc_complex_addr(ObPLCodeGenerator &generator,
+                                          int8_t type,
+                                          int64_t user_type_id,
+                                          int64_t init_size,
+                                          jit::ObLLVMValue &value, //返回值是一个int64_t，代表extend的值
+                                          jit::ObLLVMValue &allocator,
+                                          const pl::ObPLStmt *s);
+
   static int64_t get_notnull_offset();
   static int64_t get_meta_offset(int64_t count);
   static int64_t get_data_offset(int64_t count);
