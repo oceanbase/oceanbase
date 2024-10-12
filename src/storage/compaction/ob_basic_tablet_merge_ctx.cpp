@@ -263,7 +263,7 @@ int ObStaticMergeParam::cal_major_merge_param(
       LOG_WARN("failed to init progressive merge mgr", KR(ret), K_(is_full_merge), K(sstable_meta_hdl), KPC(schema_));
     } else if (is_full_merge_
       || (merge_level_ != MACRO_BLOCK_MERGE_LEVEL && is_schema_changed_)
-      || (data_version_ >= DATA_VERSION_4_3_3_0 && progressive_mgr.need_calc_progressive_merge())) {
+      || (data_version_ >= DATA_VERSION_4_3_3_0 && (progressive_mgr.need_calc_progressive_merge() || !get_tablet_id().is_user_tablet()))) {
       merge_level_ = MACRO_BLOCK_MERGE_LEVEL;
       // ATTENTION! Critical diagnostic log, DO NOT CHANGE!!!
       LOG_INFO("set merge_level to MACRO_BLOCK_MERGE_LEVEL", K_(is_schema_changed), K(force_full_merge),
@@ -1181,13 +1181,14 @@ int ObBasicTabletMergeCtx::get_medium_compaction_info()
     }
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
+  } else if (medium_info->medium_compat_version_ >= ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V4
+      && OB_FAIL(init_schema_changed(*medium_info))) {
+    LOG_WARN("failed to init schema changed", KR(ret), KPC(medium_info));
+  } else {
     static_param_.data_version_ = medium_info->data_version_;
     static_param_.is_rebuild_column_store_ = (medium_info->medium_merge_reason_ == ObAdaptiveMergePolicy::REBUILD_COLUMN_GROUP);
     static_param_.is_tenant_major_merge_ = medium_info->is_major_compaction();
-    if (medium_info->medium_compat_version_ >= ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V4) {
-      static_param_.is_schema_changed_ = medium_info->is_schema_changed_;
-    }
     static_param_.encoding_granularity_ = medium_info->encoding_granularity_;
     static_param_.merge_reason_ = (ObAdaptiveMergePolicy::AdaptiveMergeReason)medium_info->medium_merge_reason_;
     if (!static_param_.is_cs_replica_) {
@@ -1199,6 +1200,30 @@ int ObBasicTabletMergeCtx::get_medium_compaction_info()
   // always free medium info
   ObTabletObjLoadHelper::free(temp_allocator, medium_info);
 
+  return ret;
+}
+
+int ObBasicTabletMergeCtx::init_schema_changed(const ObMediumCompactionInfo &medium_info)
+{
+  int ret = OB_SUCCESS;
+  if (medium_info.is_schema_changed_) {
+    static_param_.is_schema_changed_ = true;
+  } else if (medium_info.data_version_ >= DATA_VERSION_4_3_3_0) {
+    bool is_schema_changed = false;
+    if (OB_FAIL(ObMediumCompactionScheduleFunc::check_if_schema_changed(*get_tablet(), medium_info, is_schema_changed))) {
+      LOG_WARN("failed to check if schema changed", "param", get_dag_param(), K(medium_info));
+    } else if (is_schema_changed) {
+      static_param_.is_schema_changed_ = true;
+      FLOG_INFO("found schema changed when compare sstable & schema", KR(ret), K(is_schema_changed), "param", get_dag_param(), K(medium_info));
+#ifdef ERRSIM
+      SERVER_EVENT_SYNC_ADD("merge_errsim", "found_schema_changed", "ls_id", get_ls_id(), "tablet_id", get_tablet_id());
+#endif
+    } else {
+      static_param_.is_schema_changed_ = false;
+    }
+  } else {
+    static_param_.is_schema_changed_ = false;
+  }
   return ret;
 }
 
