@@ -390,12 +390,22 @@ int64_t AChunkMgr::to_string(char *buf, const int64_t buf_len) const
   ret = databuff_printf(buf, buf_len, pos,
       "[CHUNK_MGR] limit=%'15ld hold=%'15ld total_hold=%'15ld used=%'15ld freelists_hold=%'15ld"
       " total_maps=%'15ld total_unmaps=%'15ld large_maps=%'15ld large_unmaps=%'15ld huge_maps=%'15ld huge_unmaps=%'15ld"
-      " memalign=%d resident_size=%'15ld"
-      " virtual_memory_used=%'15ld\n",
+      " resident_size=%'15ld"
+      " virtual_memory_used=%'15ld",
       limit_, hold_, total_hold_, get_used(), cache_hold_,
       total_maps, total_unmaps, large_maps, large_unmaps, get_maps(HUGE_ACHUNK_INDEX), get_unmaps(HUGE_ACHUNK_INDEX),
-      0, resident_size,
+      resident_size,
       get_virtual_memory_used(&resident_size));
+#ifdef ENABLE_SANITY
+  if (OB_SUCC(ret)) {
+    ret = databuff_printf(buf, buf_len, pos,
+        " sanity_min_addr=0x%lx sanity_max_addr=0x%lx max_used_addr=0x%lx",
+        sanity_min_addr, sanity_max_addr, get_global_addr());
+  }
+#endif
+  if (OB_SUCC(ret)) {
+    ret = databuff_printf(buf, buf_len, pos, "\n");
+  }
   for (int i = 0; OB_SUCC(ret) && i <= MAX_LARGE_ACHUNK_INDEX; ++i) {
     const AChunkList &free_list = get_freelist(i);
     ret = databuff_printf(buf, buf_len, pos,

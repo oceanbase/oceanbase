@@ -138,8 +138,14 @@ public:
     Bin *prev_;
     Bin *next_;
   };
+  struct FreeList
+  {
+    Bin *head_;
+    int64_t cnt_;
+  };
   BuddyMgr(int64_t full_size, int64_t bin_size)
-    : full_size_(full_size), bin_size_(bin_size), seg_mgr_(NULL)
+    : full_size_(full_size), bin_size_(bin_size),
+      seg_mgr_(NULL), kept_nseg_limit_(0)
   {
     abort_unless(0 == (bin_size & (bin_size - 1)));
     abort_unless(full_size > bin_size);
@@ -152,6 +158,8 @@ public:
   { return bin_size_; }
   void set_seg_mgr(ISegMgr *seg_mgr)
   { seg_mgr_ = seg_mgr; }
+  void set_kept_nseg_limit(int limit)
+  { kept_nseg_limit_ = limit; }
   Bin *alloc(int64_t size)
   {
     Bin *bin = NULL;
@@ -167,15 +175,14 @@ public:
         }
       }
     } else {
-      int avail_ind = -1;
+      Bin *avail_bin = NULL;
       for (int i = ind; i <= max_ind_; i++) {
-        if (freelists_[i]) {
-          avail_ind = i;
+        avail_bin = freelists_[i].head_;
+        if (avail_bin) {
           break;
         }
       }
-      if (avail_ind != -1) {
-        Bin *avail_bin = freelists_[avail_ind];
+      if (avail_bin != NULL) {
         take_off_free_bin(avail_bin);
         if (avail_bin->nbins_ > nbins) {
           Bin *next_bin = split_bin(avail_bin, nbins);
@@ -225,7 +232,8 @@ public:
         take_off_free_bin(phy_next);
         head = merge_bin(head, phy_next);
       }
-      if (max_nbins_ == head->nbins_) {
+      if (max_nbins_ == head->nbins_ &&
+          freelists_[max_ind_].cnt_ >= kept_nseg_limit_) {
         void *seg = head->seg_;
         free_bin(head);
         seg_mgr_->free_seg(seg);
@@ -288,7 +296,8 @@ private:
   }
   void add_free_bin(Bin *bin)
   {
-    Bin *&head = freelists_[calc_prev_ind(bin->nbins_)];
+    FreeList &freelist = freelists_[calc_prev_ind(bin->nbins_)];
+    Bin *&head = freelist.head_;
     if (!head) {
       bin->prev_ = bin->next_ = bin;
     } else {
@@ -298,10 +307,12 @@ private:
       head->prev_ = bin;
     }
     head = bin;
+    freelist.cnt_++;
   }
   void take_off_free_bin(Bin *bin)
   {
-    Bin *&head = freelists_[calc_prev_ind(bin->nbins_)];
+    FreeList &freelist = freelists_[calc_prev_ind(bin->nbins_)];
+    Bin *&head = freelist.head_;
     if (bin == bin->next_) {
       head = NULL;
     } else {
@@ -311,6 +322,7 @@ private:
         head = head->next_;
       }
     }
+    freelist.cnt_--;
   }
 private:
   int64_t full_size_;
@@ -318,9 +330,10 @@ private:
   int64_t max_nbins_;
   int max_ind_;
   ISegMgr *seg_mgr_;
+  int64_t kept_nseg_limit_;
   FixedAllocer<sizeof(Bin)> bin_allocer_;
   // [1,2), [2,4), [4,8) ...
-  Bin *freelists_[64];
+  FreeList freelists_[64];
 };
 
 extern int64_t global_addr;
@@ -332,6 +345,7 @@ public:
   {
     pthread_mutex_init(&mutex_, NULL);
     buddy_mgr_.set_seg_mgr(&seg_mgr_);
+    buddy_mgr_.set_kept_nseg_limit(16);
   }
   class SegMgr : public ISegMgr
   {
@@ -374,6 +388,11 @@ private:
 
 int64_t global_addr = 0;
 VMMgr *g_vm_mgr = NULL;
+
+int64_t get_global_addr()
+{
+  return ATOMIC_LOAD(&global_addr);
+}
 
 bool init_sanity()
 {

@@ -38,6 +38,7 @@
 #define SANITY_MMAP(args...) sanity_mmap(args)
 #define SANITY_MUNMAP(args...) sanity_munmap(args)
 
+extern int64_t get_global_addr();
 extern bool init_sanity();
 extern void *sanity_mmap(void *ptr, size_t size);
 extern void sanity_munmap(void *ptr, size_t size);
