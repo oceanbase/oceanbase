@@ -268,6 +268,41 @@ int ObSelEstimator::append_estimators(ObIArray<ObSelEstimator *> &sel_estimators
   return ret;
 }
 
+void ObSelEstimator::extract_default_eigen_expr(const ObRawExpr *expr)
+{
+  bool is_valid = true;
+  if (OB_NOT_NULL(expr) && !expr->is_const_expr()) {
+    eigen_expr_ = expr;
+  } else {
+    eigen_expr_ = NULL;
+  }
+  while (is_valid && OB_NOT_NULL(eigen_expr_) &&
+         OB_SUCCESS == ObOptSelectivity::remove_ignorable_func_for_est_sel(eigen_expr_) &&
+         eigen_expr_->get_param_count() > 0 &&
+         (IS_BOOL_OP(eigen_expr_->get_expr_type()) ||
+          T_OP_ADD == eigen_expr_->get_expr_type() ||
+          T_OP_MINUS == eigen_expr_->get_expr_type() ||
+          T_OP_ROW == eigen_expr_->get_expr_type())) {
+    is_valid = true;
+    const ObRawExpr *variable_expr = NULL;
+    for (int64_t i = 0; is_valid && i < eigen_expr_->get_param_count(); i ++) {
+      if (NULL == eigen_expr_->get_param_expr(i)) {
+        is_valid = false;
+      } else if (eigen_expr_->get_param_expr(i)->is_const_expr()) {
+        // do nothing
+      } else if (NULL != variable_expr) {
+        is_valid = false;
+      } else {
+        variable_expr = eigen_expr_->get_param_expr(i);
+      }
+    }
+    if (is_valid) {
+      eigen_expr_ = variable_expr;
+    }
+  }
+  return;
+}
+
 int ObDefaultSelEstimator::get_sel(const OptTableMetas &table_metas,
                                   const OptSelectivityCtx &ctx,
                                   double &selectivity,
@@ -1699,6 +1734,7 @@ int ObLikeSelEstimator::create_estimator(ObSelEstimatorFactory &factory,
                like_estimator->pattern_->is_static_const_expr() &&
                like_estimator->escape_->is_static_const_expr()) {
       bool is_start_with = false;
+      like_estimator->eigen_expr_ = like_estimator->variable_;
       if (OB_FAIL(ObOptEstUtils::if_expr_start_with_patten_sign(params, like_estimator->pattern_,
                                                                 like_estimator->escape_,
                                                                 ctx.get_opt_ctx().get_exec_ctx(),
@@ -1962,6 +1998,23 @@ int ObBoolOpSelEstimator::create_estimator(ObSelEstimatorFactory &factory,
         }
       }
     }
+    if (OB_SUCC(ret)) {
+      const ObRawExpr *eigen_expr = NULL;
+      bool inited = false;
+      for (int64_t i = 0; i < bool_estimator->child_estimators_.count(); i ++) {
+        ObSelEstimator *child_estimator = bool_estimator->child_estimators_.at(i);
+        if (ObSelEstType::CONST == child_estimator->get_type()) {
+          // do nothing
+        } else if (!inited) {
+          eigen_expr = child_estimator->get_eigen_expr();
+          inited = true;
+        } else if (eigen_expr != child_estimator->get_eigen_expr()) {
+          eigen_expr = NULL;
+          break;
+        }
+      }
+      bool_estimator->eigen_expr_ = eigen_expr;
+    }
   }
   return ret;
 }
@@ -2026,9 +2079,10 @@ int ObBoolOpSelEstimator::get_sel(const OptTableMetas &table_metas,
       // t_op_is, t_op_nseq , they are null safe exprs, don't consider null_sel.
       selectivity = 1.0 - tmp_selectivity;
     }
-  } else if (T_OP_AND == qual.get_expr_type() || T_OP_OR == qual.get_expr_type()) {
+  } else if (T_OP_OR == qual.get_expr_type()) {
     double tmp_selectivity = 1.0;
     ObSEArray<double, 4> selectivities;
+    bool is_mutex = (NULL != eigen_expr_);
     for (int64_t i = 0; OB_SUCC(ret) && i < child_estimators_.count(); ++i) {
       ObSelEstimator *estimator = NULL;
       if (OB_ISNULL(estimator = child_estimators_.at(i))) {
@@ -2040,12 +2094,8 @@ int ObBoolOpSelEstimator::get_sel(const OptTableMetas &table_metas,
         LOG_WARN("failed to push back", K(ret));
       }
     }
-    if (OB_FAIL(ret)) {
-    } else if (T_OP_OR == qual.get_expr_type()) {
-      bool is_mutex = false;;
-      if (OB_FAIL(ObOptSelectivity::check_mutex_or(qual, is_mutex))) {
-        LOG_WARN("failed to check mutex or", K(ret));
-      } else if (is_mutex) {
+    if (OB_SUCC(ret)) {
+      if (is_mutex) {
         selectivity = 0.0;
         for (int64_t i = 0; i < selectivities.count(); i ++) {
           selectivity += selectivities.at(i);
@@ -2059,8 +2109,11 @@ int ObBoolOpSelEstimator::get_sel(const OptTableMetas &table_metas,
         selectivity = ctx.get_correlation_model().combine_filters_selectivity(selectivities);
         selectivity = 1- selectivity;
       }
-    } else {
-      selectivity = ctx.get_correlation_model().combine_filters_selectivity(selectivities);
+    }
+  } else if (T_OP_AND == qual.get_expr_type()) {
+    if (OB_FAIL(ObOptSelectivity::calculate_selectivity(
+            table_metas, ctx, child_estimators_, selectivity, all_predicate_sel))) {
+      LOG_WARN("failed to calculate selectivity", K(ret));
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
@@ -2092,6 +2145,7 @@ int ObRangeSelEstimator::create_estimator(ObSelEstimatorFactory &factory,
     LOG_WARN("failed to create estimator ", K(ret));
   } else {
     range_estimator->column_expr_ = static_cast<ObColumnRefRawExpr *>(column_exprs.at(0));
+    range_estimator->eigen_expr_ = range_estimator->column_expr_;
     if (OB_FAIL(range_estimator->range_exprs_.push_back(const_cast<ObRawExpr *>(&expr)))) {
       LOG_WARN("failed to push back", K(ret));
     } else {
@@ -3212,6 +3266,7 @@ int ObCmpSelEstimator::create_estimator(ObSelEstimatorFactory &factory,
   } else {
     const ObRawExpr *left_expr = expr.get_param_expr(0);
     const ObRawExpr *right_expr = expr.get_param_expr(1);
+    ObCmpSelEstimator *cmp_estimator = static_cast<ObCmpSelEstimator*>(estimator);
     if (OB_ISNULL(left_expr) || OB_ISNULL(right_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null expr", K(ret), K(left_expr), K(right_expr));
@@ -3220,9 +3275,9 @@ int ObCmpSelEstimator::create_estimator(ObSelEstimatorFactory &factory,
       LOG_WARN("failed to get expr without lossless cast", K(ret));
     } else if ((left_expr->is_column_ref_expr() && right_expr->is_const_expr()) ||
                (left_expr->is_const_expr() && right_expr->is_column_ref_expr())) {
-      static_cast<ObCmpSelEstimator*>(estimator)->can_calc_sel_ = true;
-      static_cast<ObCmpSelEstimator*>(estimator)->col_expr_ = left_expr->is_column_ref_expr() ? static_cast<const ObColumnRefRawExpr*>(left_expr) :
-                                                                                               static_cast<const ObColumnRefRawExpr*>(right_expr);
+      cmp_estimator->can_calc_sel_ = true;
+      cmp_estimator->col_expr_ = left_expr->is_column_ref_expr() ? static_cast<const ObColumnRefRawExpr*>(left_expr) :
+                                                                   static_cast<const ObColumnRefRawExpr*>(right_expr);
     } else if (T_OP_ROW == left_expr->get_expr_type() && T_OP_ROW == right_expr->get_expr_type()) {
       //only deal (col1, xx, xx) CMP (const, xx, xx)
       if (left_expr->get_param_count() == 1 && OB_NOT_NULL(left_expr->get_param_expr(0)) &&
@@ -3245,10 +3300,13 @@ int ObCmpSelEstimator::create_estimator(ObSelEstimatorFactory &factory,
         LOG_WARN("get unexpected null", K(ret), K(left_expr), K(right_expr));
       } else if ((left_expr->is_column_ref_expr() && right_expr->is_const_expr()) ||
                  (left_expr->is_const_expr() && right_expr->is_column_ref_expr())) {
-        static_cast<ObCmpSelEstimator*>(estimator)->can_calc_sel_ = true;
-        static_cast<ObCmpSelEstimator*>(estimator)->col_expr_ = left_expr->is_column_ref_expr() ? static_cast<const ObColumnRefRawExpr*>(left_expr) :
-                                                                                                 static_cast<const ObColumnRefRawExpr*>(right_expr);
+        cmp_estimator->can_calc_sel_ = true;
+        cmp_estimator->col_expr_ = left_expr->is_column_ref_expr() ? static_cast<const ObColumnRefRawExpr*>(left_expr) :
+                                                                     static_cast<const ObColumnRefRawExpr*>(right_expr);
       } else { /* no dothing */ }
+    }
+    if (OB_SUCC(ret) && NULL != cmp_estimator->col_expr_) {
+      estimator->set_eigen_expr(cmp_estimator->col_expr_);
     }
   }
   return ret;
@@ -3409,6 +3467,7 @@ int ObUniformRangeSelEstimator::create_estimator(ObSelEstimatorFactory &factory,
     range_estimator->expr_ = param_expr;
     range_estimator->range_ = range;
     range_estimator->is_not_op_ = is_not_op;
+    range_estimator->eigen_expr_ = param_expr;
   }
   return ret;
 }

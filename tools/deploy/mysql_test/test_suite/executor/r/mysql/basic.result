@@ -351,7 +351,7 @@ Query Plan
 =========================================================================
 |ID|OPERATOR                           |NAME      |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT          |          |1       |42          |
+|0 |PX COORDINATOR MERGE SORT          |          |1       |43          |
 |1 |└─EXCHANGE OUT DISTR               |:EX10001  |1       |42          |
 |2 |  └─MERGE GROUP BY                 |          |1       |41          |
 |3 |    └─EXCHANGE IN MERGE SORT DISTR |          |20      |39          |
@@ -406,7 +406,7 @@ Query Plan
 =========================================================================
 |ID|OPERATOR                           |NAME      |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT          |          |1       |46          |
+|0 |PX COORDINATOR MERGE SORT          |          |1       |47          |
 |1 |└─EXCHANGE OUT DISTR               |:EX10001  |1       |46          |
 |2 |  └─MERGE GROUP BY                 |          |1       |46          |
 |3 |    └─EXCHANGE IN MERGE SORT DISTR |          |20      |43          |
@@ -461,7 +461,7 @@ Query Plan
 =========================================================================
 |ID|OPERATOR                           |NAME      |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT          |          |1       |44          |
+|0 |PX COORDINATOR MERGE SORT          |          |1       |45          |
 |1 |└─EXCHANGE OUT DISTR               |:EX10001  |1       |44          |
 |2 |  └─MERGE GROUP BY                 |          |1       |43          |
 |3 |    └─EXCHANGE IN MERGE SORT DISTR |          |20      |41          |
@@ -516,7 +516,7 @@ Query Plan
 =========================================================================
 |ID|OPERATOR                           |NAME      |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT          |          |1       |46          |
+|0 |PX COORDINATOR MERGE SORT          |          |1       |47          |
 |1 |└─EXCHANGE OUT DISTR               |:EX10001  |1       |46          |
 |2 |  └─MERGE GROUP BY                 |          |1       |46          |
 |3 |    └─EXCHANGE IN MERGE SORT DISTR |          |20      |43          |
@@ -571,7 +571,7 @@ Query Plan
 ============================================================================
 |ID|OPERATOR                           |NAME         |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT          |             |1       |59          |
+|0 |PX COORDINATOR MERGE SORT          |             |1       |60          |
 |1 |└─EXCHANGE OUT DISTR               |:EX10001     |1       |59          |
 |2 |  └─MERGE GROUP BY                 |             |1       |59          |
 |3 |    └─EXCHANGE IN MERGE SORT DISTR |             |19      |56          |
@@ -626,9 +626,9 @@ Query Plan
 ============================================================================
 |ID|OPERATOR                           |NAME         |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT          |             |1       |69          |
-|1 |└─EXCHANGE OUT DISTR               |:EX10001     |1       |68          |
-|2 |  └─MERGE GROUP BY                 |             |1       |68          |
+|0 |PX COORDINATOR MERGE SORT          |             |2       |70          |
+|1 |└─EXCHANGE OUT DISTR               |:EX10001     |2       |69          |
+|2 |  └─MERGE GROUP BY                 |             |2       |68          |
 |3 |    └─EXCHANGE IN MERGE SORT DISTR |             |21      |66          |
 |4 |      └─EXCHANGE OUT DISTR (HASH)  |:EX10000     |21      |57          |
 |5 |        └─MERGE GROUP BY           |             |21      |37          |
@@ -681,8 +681,8 @@ Query Plan
 ============================================================================
 |ID|OPERATOR                           |NAME         |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT          |             |1       |77          |
-|1 |└─EXCHANGE OUT DISTR               |:EX10001     |1       |77          |
+|0 |PX COORDINATOR MERGE SORT          |             |1       |78          |
+|1 |└─EXCHANGE OUT DISTR               |:EX10001     |1       |78          |
 |2 |  └─MERGE GROUP BY                 |             |1       |77          |
 |3 |    └─EXCHANGE IN MERGE SORT DISTR |             |20      |75          |
 |4 |      └─EXCHANGE OUT DISTR (HASH)  |:EX10000     |20      |66          |
@@ -736,9 +736,9 @@ Query Plan
 ============================================================================
 |ID|OPERATOR                           |NAME         |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT          |             |1       |91          |
-|1 |└─EXCHANGE OUT DISTR               |:EX10001     |1       |91          |
-|2 |  └─MERGE GROUP BY                 |             |1       |91          |
+|0 |PX COORDINATOR MERGE SORT          |             |2       |93          |
+|1 |└─EXCHANGE OUT DISTR               |:EX10001     |2       |92          |
+|2 |  └─MERGE GROUP BY                 |             |2       |91          |
 |3 |    └─EXCHANGE IN MERGE SORT DISTR |             |22      |89          |
 |4 |      └─EXCHANGE OUT DISTR (HASH)  |:EX10000     |22      |79          |
 |5 |        └─MERGE GROUP BY           |             |22      |59          |

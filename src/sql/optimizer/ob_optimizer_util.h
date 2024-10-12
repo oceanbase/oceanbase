@@ -326,6 +326,10 @@ public:
                               const ObRawExpr *expr,
                               int64_t &idx);
 
+  static bool find_equal_expr(const common::ObIArray<const ObRawExpr*> &exprs,
+                              const ObRawExpr *expr,
+                              int64_t &idx);
+
   static bool find_equal_expr(const common::ObIArray<ObRawExpr*> &exprs,
                               const ObRawExpr *expr,
                               const EqualSets &equal_sets)
