@@ -1521,6 +1521,7 @@ int ObTenantLSInfo::get_next_primary_zone(
   }
   return ret;
 }
+
 int ObLSServiceHelper::check_transfer_task_replay(const uint64_t tenant_id,
       const share::ObLSID &src_ls,
       const share::ObLSID &dest_ls,
@@ -1532,12 +1533,19 @@ int ObLSServiceHelper::check_transfer_task_replay(const uint64_t tenant_id,
   share::ObLSStatusInfo ls_status;
   SCN readble_scn;
   replay_finish = true;
+  uint64_t data_version = 0;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
         || !src_ls.is_valid() || !dest_ls.is_valid()
         || !transfer_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(src_ls),
         K(dest_ls), K(transfer_scn));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("failed to get min data version", KR(ret), K(tenant_id));
+  } else if (MOCK_DATA_VERSION_4_2_4_0 > data_version) {
+    //高版本是从4.3.0开始支持，兼容性不需要改变
+    replay_finish = true;
+    LOG_INFO("no need check all ls replica", K(tenant_id), K(data_version));
   } else if (OB_FAIL(check_ls_transfer_replay_(tenant_id, src_ls, transfer_scn, replay_finish))) {
     LOG_WARN("failed to check ls transfer replay", KR(ret), K(tenant_id), K(src_ls), K(transfer_scn));
   } else if (!replay_finish) {
@@ -1618,6 +1626,9 @@ int ObLSServiceHelper::get_ls_all_replica_readable_scn_(const uint64_t tenant_id
           K(timeout), K(arg));
     } else if (OB_FAIL(proxy.wait())) {
       LOG_WARN("failed to get wait all rpc", KR(ret), K(tenant_id), K(ls_id), K(leader));
+    } else if (1 != proxy.get_results().count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("result count not expected", KR(ret), "result", proxy.get_results());
     } else if (OB_ISNULL(proxy.get_results().at(0))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("result is null", KR(ret), K(tenant_id), K(leader), K(ls_id));

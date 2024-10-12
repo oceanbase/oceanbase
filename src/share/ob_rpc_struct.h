@@ -8648,12 +8648,12 @@ public:
   ObGetLSReplayedScnRes(): tenant_id_(OB_INVALID_TENANT_ID),
                            ls_id_(),
                            cur_readable_scn_(share::SCN::min_scn()),
-                           offline_scn_(),
-                           self_addr_() {}
+                           offline_scn_(), self_addr_() {}
   ~ObGetLSReplayedScnRes() {}
   bool is_valid() const;
-  int init(const uint64_t tenant_id, const share::ObLSID &ls_id, const share::SCN &cur_readable_scn,
-           const share::SCN &offline_scn, const common::ObAddr &server);
+  int init(const uint64_t tenant_id, const share::ObLSID &ls_id,
+      const share::SCN &cur_readable_scn,
+      const share::SCN &offline_scn, const common::ObAddr &server);
   int assign(const ObGetLSReplayedScnRes &other);
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(cur_readable_scn), K_(offline_scn), K(self_addr_));
   uint64_t get_tenant_id() const
@@ -8684,7 +8684,7 @@ private:
   share::ObLSID ls_id_;
   share::SCN cur_readable_scn_;
   share::SCN offline_scn_;//add in 4.2.2.0
-  common::ObAddr self_addr_;//add in 4.3.0
+  common::ObAddr self_addr_;//add in 4.2.3/4.3.0
 };
 
 

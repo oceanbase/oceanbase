@@ -39,6 +39,7 @@ private:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   int64_t timeout_;
+  rootserver::ObLSRecoveryGuard guard_;
 };
 
 } // logservice

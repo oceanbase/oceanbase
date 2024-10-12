@@ -81,6 +81,7 @@ public:
   LogConfigVersion();
   ~LogConfigVersion();
   void operator=(const LogConfigVersion &config_version);
+  static const int64_t CONFIG_VERSION_LEN = 128;
 
 public:
   int generate(const int64_t proposal_id, const int64_t config_seq);

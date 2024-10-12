@@ -102,6 +102,7 @@
 #include "storage/shared_storage/ob_disk_space_manager.h"
 #endif
 #include "storage/column_store/ob_column_store_replica_util.h"
+#include "rootserver/ob_ls_recovery_stat_handler.h"//get_all_replica_min_readable_scn
 
 namespace oceanbase
 {
@@ -3675,6 +3676,8 @@ int ObService::init_tenant_config(
   return OB_SUCCESS;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_GET_LS_READABLE_SCN_ERROR);
+ERRSIM_POINT_DEF(ERRSIM_GET_LS_READABLE_SCN_OLD);
 int ObService::get_ls_replayed_scn(
     const ObGetLSReplayedScnArg &arg,
     ObGetLSReplayedScnRes &result)
@@ -3692,6 +3695,9 @@ int ObService::get_ls_replayed_scn(
     LOG_WARN("arg is invaild", KR(ret), K(arg));
   } else if (arg.get_tenant_id() != MTL_ID() && OB_FAIL(guard.switch_to(arg.get_tenant_id()))) {
     LOG_WARN("switch tenant failed", KR(ret), K(arg));
+  } else if (ERRSIM_GET_LS_READABLE_SCN_ERROR) {
+    ret = ERRSIM_GET_LS_READABLE_SCN_ERROR;
+    LOG_WARN("failed to get ls replica readable scn for errsim", KR(ret), K(arg));
   }
   if (OB_SUCC(ret)) {
     ObLSService *ls_svr = MTL(ObLSService*);
@@ -3709,9 +3715,20 @@ int ObService::get_ls_replayed_scn(
     } else if (OB_FAIL(ls->get_max_decided_scn(cur_readable_scn))) {
       LOG_WARN("failed to get_max_decided_scn", KR(ret), K(arg), KPC(ls));
     } else if (arg.is_all_replica()) {
-      if (OB_FAIL(ls->get_all_replica_min_readable_scn(cur_readable_scn))) {
-        LOG_WARN("failed to get all replica readable scn", KR(ret));
+      if (OB_ISNULL(ls->get_ls_recovery_stat_handler())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get ls recovery stat", KR(ret), K(arg));
+      } else if (OB_FAIL(ls->get_ls_recovery_stat_handler()
+            ->get_all_replica_min_readable_scn(cur_readable_scn))) {
+        LOG_WARN("failed to get all replica min readable_scn", KR(ret), K(arg));
       }
+    }
+    if (OB_SUCC(ret) && ERRSIM_GET_LS_READABLE_SCN_OLD) {
+      const int64_t current_time = ObTimeUtility::current_time() -
+        GCONF.internal_sql_execute_timeout;
+      cur_readable_scn.convert_from_ts(current_time);
+      LOG_WARN("set ls replica readble_scn small", K(arg), K(cur_readable_scn),
+          K(current_time));
     }
     if (FAILEDx(ls->get_offline_scn(offline_scn))) {
       LOG_WARN("failed to get offline scn", KR(ret), K(arg), KPC(ls));
