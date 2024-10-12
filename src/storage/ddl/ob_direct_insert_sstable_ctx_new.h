@@ -390,7 +390,7 @@ public:
   virtual int wait_notify(const ObDirectLoadSliceWriter *slice_writer, const int64_t context_id, const share::SCN &start_scn);
   virtual int fill_column_group(const int64_t thread_cnt, const int64_t thread_id);
   virtual int notify_all();
-  virtual int calc_range(const int64_t thread_cnt);
+  virtual int calc_range(const int64_t context_id, const int64_t thread_cnt);
   int calc_cg_range(ObArray<ObDirectLoadSliceWriter *> &sorted_slices, const int64_t thread_cnt);
   const ObIArray<ObColumnSchemaItem> &get_column_info() const { return column_items_; };
   bool is_schema_item_ready() { return is_schema_item_ready_; }

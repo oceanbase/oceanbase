@@ -1837,7 +1837,30 @@ public:
   int &ret_code_; // is not use reference, the ret_code_ will lose when use ob_sort
 };
 
-int ObTabletDirectLoadMgr::calc_range(const int64_t thread_cnt)
+struct GetSliceWriterFn
+{
+public:
+  GetSliceWriterFn(const int64_t context_id, ObArray<ObDirectLoadSliceWriter *> &slice_writers)
+    : context_id_(context_id), slice_writers_(slice_writers) {}
+  int operator () (hash::HashMapPair<ObTabletDirectLoadBuildCtx::SliceKey, ObDirectLoadSliceWriter *> &entry) {
+    int ret = OB_SUCCESS;
+    if (entry.first.context_id_ == context_id_) {
+      if (OB_ISNULL(entry.second)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), KP(entry.second));
+      } else if (OB_FAIL(slice_writers_.push_back(entry.second))) {
+        LOG_WARN("push back slice writer failed", K(ret), KP(entry.second));
+      }
+    }
+    return ret;
+  }
+
+private:
+  int64_t context_id_;
+  ObArray<ObDirectLoadSliceWriter *> &slice_writers_;
+};
+
+int ObTabletDirectLoadMgr::calc_range(const int64_t context_id, const int64_t thread_cnt)
 {
   int ret = OB_SUCCESS;
   ObArray<ObDirectLoadSliceWriter *> sorted_slices;
@@ -1861,15 +1884,9 @@ int ObTabletDirectLoadMgr::calc_range(const int64_t thread_cnt)
   } else if (OB_FAIL(sorted_slices.reserve(sqc_build_ctx_.slice_mgr_map_.size()))) {
     LOG_WARN("reserve slice array failed", K(ret), K(sqc_build_ctx_.slice_mgr_map_.size()));
   } else {
-    for (ObTabletDirectLoadBuildCtx::SLICE_MGR_MAP::const_iterator iter = sqc_build_ctx_.slice_mgr_map_.begin();
-      OB_SUCC(ret) && iter != sqc_build_ctx_.slice_mgr_map_.end(); ++iter) {
-      ObDirectLoadSliceWriter *cur_slice = iter->second;
-      if (OB_ISNULL(cur_slice)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null", K(ret), KP(cur_slice));
-      } else if (OB_FAIL(sorted_slices.push_back(cur_slice))) {
-        LOG_WARN("push back slice failed", K(ret));
-      }
+    GetSliceWriterFn get_fn(context_id, sorted_slices);
+    if (OB_FAIL(sqc_build_ctx_.slice_mgr_map_.foreach_refactored(get_fn))) {
+      LOG_WARN("get slice writer failed", K(ret));
     }
     if (OB_SUCC(ret)) {
       CSSliceEndkeyCompareFunctor cmp(tablet_handle.get_obj()->get_rowkey_read_info().get_datum_utils(), ret);
@@ -2053,7 +2070,7 @@ int ObTabletDirectLoadMgr::close_sstable_slice(
             LOG_WARN("slice writer fill column group failed", K(ret));
           }
         } else {
-          if (OB_FAIL(calc_range(0))) {
+          if (OB_FAIL(calc_range(slice_info.context_id_, 0))) {
             LOG_WARN("calc range failed", K(ret));
           } else if (OB_FAIL(notify_all())) {
             LOG_WARN("notify all failed", K(ret));
@@ -2133,9 +2150,6 @@ int ObTabletDirectLoadMgr::fill_column_group(const int64_t thread_cnt, const int
   } else if (sqc_build_ctx_.sorted_slice_writers_.count() == 0 || thread_id > sqc_build_ctx_.sorted_slices_idx_.count() - 1) {
     //ignore
     FLOG_INFO("[DIRECT_LOAD_FILL_CG] idle thread", K(sqc_build_ctx_.sorted_slice_writers_.count()), K(thread_id), K(sqc_build_ctx_.sorted_slices_idx_.count()));
-  } else if (sqc_build_ctx_.sorted_slice_writers_.count() != sqc_build_ctx_.slice_mgr_map_.size()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("wrong slice writer num", K(ret), K(sqc_build_ctx_.sorted_slice_writers_.count()), K(sqc_build_ctx_.slice_mgr_map_.size()), K(common::lbt()));
   } else {
     const int64_t start_idx = sqc_build_ctx_.sorted_slices_idx_.at(thread_id).start_idx_;
     const int64_t last_idx = sqc_build_ctx_.sorted_slices_idx_.at(thread_id).last_idx_;

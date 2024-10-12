@@ -658,8 +658,8 @@ int ObDirectLoadInsertTabletContext::calc_range(const int64_t thread_cnt)
     ret = OB_CANCELED;
     LOG_WARN("task is cancel", KR(ret));
   } else {
-    if (OB_FAIL(ddl_agent_.calc_range(thread_cnt))) {
-      LOG_WARN("fail to calc range", KR(ret), K(tablet_id_));
+    if (OB_FAIL(ddl_agent_.calc_range(context_id_, thread_cnt))) {
+      LOG_WARN("fail to calc range", KR(ret), K(tablet_id_), K(context_id_), K(thread_cnt));
     } else {
       LOG_INFO("success to calc range", K(tablet_id_));
     }
