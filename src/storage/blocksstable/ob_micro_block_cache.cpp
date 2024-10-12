@@ -974,7 +974,6 @@ int ObIMicroBlockCache::prefetch(
     read_info.macro_block_id_ = macro_id;
     read_info.io_desc_.set_mode(ObIOMode::READ);
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-    read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
     read_info.io_desc_.set_sys_module_id(ObIOModule::MICRO_BLOCK_CACHE_IO);
     read_info.io_callback_ = &callback;
     read_info.offset_ = idx_row.get_block_offset();
@@ -1023,7 +1022,6 @@ int ObIMicroBlockCache::prefetch(
   read_info.macro_block_id_ = macro_id;
   read_info.io_desc_.set_mode(ObIOMode::READ);
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-  read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
   read_info.io_desc_.set_sys_module_id(ObIOModule::MICRO_BLOCK_CACHE_IO);
   read_info.io_callback_ = &callback;
   read_info.offset_ = offset;
@@ -1260,7 +1258,6 @@ int ObDataMicroBlockCache::load_block(
       macro_read_info.macro_block_id_ = micro_block_id.macro_id_;
       macro_read_info.io_desc_.set_mode(ObIOMode::READ);
       macro_read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-      macro_read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
       macro_read_info.io_desc_.set_sys_module_id(ObIOModule::MICRO_BLOCK_CACHE_IO);
       macro_read_info.io_callback_ = callback;
       macro_read_info.offset_ = micro_block_id.offset_;
@@ -1563,7 +1560,6 @@ int ObIndexMicroBlockCache::load_block(
       macro_read_info.macro_block_id_ = micro_block_id.macro_id_;
       macro_read_info.io_desc_.set_mode(ObIOMode::READ);
       macro_read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-      macro_read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
       macro_read_info.io_desc_.set_sys_module_id(ObIOModule::MICRO_BLOCK_CACHE_IO);
       macro_read_info.io_callback_ = callback;
       macro_read_info.offset_ = micro_block_id.offset_;

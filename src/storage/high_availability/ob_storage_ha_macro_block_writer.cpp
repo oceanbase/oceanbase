@@ -325,7 +325,6 @@ int ObStorageHALocalMacroBlockWriter::set_macro_write_info_(
     STORAGE_LOG(WARN, "failed to get tablet_transfer_seq", K(ret));
   } else {
     write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_MIGRATE_WRITE);
-    write_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
     write_info.io_desc_.set_sys_module_id(ObIOModule::HA_MACRO_BLOCK_WRITER_IO);
     write_info.io_desc_.set_sealed();
     write_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
@@ -381,7 +380,6 @@ int ObStorageHASharedMacroBlockWriter::set_macro_write_info_(
     LOG_WARN("macro tablet id in shared storage is not match", K(ret), K(macro_block_id), K(tablet_id), K(tablet_id_));
   } else {
     write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_MIGRATE_WRITE);
-    write_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
     write_info.io_desc_.set_sys_module_id(ObIOModule::SHARED_BLOCK_RW_IO);
     write_info.io_desc_.set_unsealed();
     write_info.mtl_tenant_id_ = MTL_ID();

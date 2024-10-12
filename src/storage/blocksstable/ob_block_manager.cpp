@@ -1649,7 +1649,6 @@ int ObBlockManager::InspectBadBlockTask::check_block(
     read_info.offset_ = 0;
     read_info.size_ = OB_STORAGE_OBJECT_MGR.get_macro_block_size();
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
-    read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
     read_info.io_desc_.set_sys_module_id(ObIOModule::INSPECT_BAD_BLOCK_IO);
 
     if (OB_ISNULL(read_info.buf_ = reinterpret_cast<char *>(

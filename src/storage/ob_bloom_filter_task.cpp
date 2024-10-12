@@ -157,7 +157,6 @@ int ObBloomFilterBuildTask::build_bloom_filter()
       read_info.size_ = OB_DEFAULT_MACRO_BLOCK_SIZE;
       read_info.io_desc_.set_mode(ObIOMode::READ);
       read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-      read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
       read_info.io_desc_.set_sys_module_id(ObIOModule::BLOOM_FILTER_IO);
       read_info.io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
       read_info.mtl_tenant_id_ = MTL_ID();

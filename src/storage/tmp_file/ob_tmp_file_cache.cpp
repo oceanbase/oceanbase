@@ -563,7 +563,6 @@ int ObTmpPageCache::async_read_(const blocksstable::MacroBlockId macro_block_id,
   read_info.io_desc_ = io_desc;
   read_info.io_timeout_ms_ = io_timeout_ms;
   read_info.io_callback_ = callback;
-  read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
   read_info.io_desc_.set_sys_module_id(ObIOModule::TMP_TENANT_MEM_BLOCK_IO);
 
   if (OB_FAIL(handle.async_read(read_info))) {

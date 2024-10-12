@@ -3192,7 +3192,6 @@ int ObDDLUtil::upload_block_for_ss(const char *buf, const int64_t len, const blo
     object_info.mtl_tenant_id_ = MTL_ID();
     object_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
     object_info.io_desc_.set_unsealed();
-    object_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
     object_info.io_desc_.set_sys_module_id(ObIOModule::SHARED_BLOCK_RW_IO);
     object_info.ls_epoch_id_ = 0;
 

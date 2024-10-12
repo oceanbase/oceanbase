@@ -42,7 +42,6 @@ int ObSSTableRebuildMicroBlockIter::prefetch()
       read_info.size_ = common::OB_DEFAULT_MACRO_BLOCK_SIZE;
       read_info.io_desc_.set_mode(ObIOMode::READ);
       read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
-      read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
       read_info.io_desc_.set_sys_module_id(ObIOModule::INDEX_BLOCK_MICRO_ITER_IO);
       read_info.io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
       read_info.macro_block_id_ = macro_id_array_.at(prefetch_idx_);

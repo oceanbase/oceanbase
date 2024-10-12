@@ -681,6 +681,7 @@ int ObIOResult::init(const ObIOInfo &info)
     size_ = info.size_;
     flag_ = info.flag_;
     flag_.set_func_type(GET_FUNC_TYPE());
+    flag_.set_resource_group_id(GET_GROUP_ID());
     timeout_us_ = info.timeout_us_;
     buf_ = info.buf_;
     user_data_buf_ = info.user_data_buf_;

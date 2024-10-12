@@ -262,7 +262,7 @@ int dispatch_req(const uint64_t tenant_id, ObRequest &req, QueueThread *global_m
   } else if (is_sys_tenant(tenant_id) || is_user_tenant(tenant_id)) {
     MTL_SWITCH(tenant_id) {
       QueueThread *mysql_queue = MTL(QueueThread *);
-      ObTenant *tenant = (ObTenant *)MTL_CTX();
+      ObTenant *tenant = static_cast<ObTenant *>(MTL_CTX());
       mysql_queue->queue_.inc_push_worker_count();
       if (OB_ISNULL(tenant)) {
         ret = OB_TENANT_NOT_IN_SERVER;

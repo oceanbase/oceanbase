@@ -313,7 +313,6 @@ int ObMacroBlockBackupReader::get_macro_read_info_(
   read_info.offset_ = block_info_.nested_offset_;
   read_info.size_ = block_info_.nested_size_;
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_MIGRATE_READ);
-  read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
   read_info.io_desc_.set_sys_module_id(ObIOModule::BACKUP_READER_IO);
   read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
   read_info.mtl_tenant_id_ = MTL_ID();

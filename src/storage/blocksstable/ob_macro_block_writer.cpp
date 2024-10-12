@@ -1563,7 +1563,6 @@ int ObMacroBlockWriter::check_write_complete(const MacroBlockId &macro_block_id)
   read_info.size_ = OB_STORAGE_OBJECT_MGR.get_macro_block_size();
   read_info.io_desc_.set_mode(ObIOMode::READ);
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
-  read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
   read_info.io_desc_.set_sys_module_id(ObIOModule::SSTABLE_MACRO_BLOCK_WRITE_IO);
   read_info.io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
   read_info.macro_block_id_ = macro_block_id;

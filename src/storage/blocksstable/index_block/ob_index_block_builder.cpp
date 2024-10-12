@@ -1744,7 +1744,6 @@ int ObSSTableIndexBuilder::rewrite_small_sstable(ObSSTableMergeRes &res)
   read_info.mtl_tenant_id_ = MTL_ID();
   read_info.io_timeout_ms_ =
       std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
-  read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
   read_info.io_desc_.set_sys_module_id(ObIOModule::SSTABLE_INDEX_BUILDER_IO);
 
   if (OB_ISNULL(read_info.buf_ = reinterpret_cast<char *>(
@@ -1862,7 +1861,6 @@ int ObSSTableIndexBuilder::load_single_macro_block(
   read_info.io_timeout_ms_ =
       std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
   read_info.mtl_tenant_id_ = MTL_ID();
-  read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
   read_info.io_desc_.set_sys_module_id(ObIOModule::SSTABLE_INDEX_BUILDER_IO);
 
   if (OB_ISNULL(read_info.buf_ = reinterpret_cast<char *>(

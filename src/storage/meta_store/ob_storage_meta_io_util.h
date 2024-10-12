@@ -55,7 +55,6 @@ public:
       write_info.buffer_ = buf;
       write_info.size_ = buf_len;
       write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
-      write_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
       write_info.io_desc_.set_sys_module_id(ObIOModule::SLOG_IO);
       write_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
       write_info.ls_epoch_id_ = ls_epoch;
@@ -98,7 +97,6 @@ public:
       read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
       read_info.buf_ = buf;
       read_info.macro_block_id_ = object_id;
-      read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
       read_info.io_desc_.set_sys_module_id(ObIOModule::SLOG_IO);
       read_info.offset_ = 0;
       read_info.size_ = object_size;

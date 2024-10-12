@@ -1274,7 +1274,6 @@ int ObCopyMacroBlockObProducer::prefetch_()
       read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
       read_info.buf_ = io_buf_[handle_idx_];
       read_info.mtl_tenant_id_ = MTL_ID();
-      read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
       read_info.io_desc_.set_sys_module_id(ObIOModule::HA_COPY_MACRO_BLOCK_IO);
       if (OB_FAIL(ObObjectManager::async_read_object(read_info, copy_macro_block_handle_[handle_idx_].read_handle_))) {
         STORAGE_LOG(WARN, "Fail to async read block, ", K(ret), K(read_info));
@@ -4315,7 +4314,6 @@ int ObCopyRemoteSSTableMacroBlockRestoreReader::read_local_macro_block_data_(
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_MIGRATE_READ);
   read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
   read_info.buf_ = local_macro_data_buffer_;
-  read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
   read_info.io_desc_.set_sys_module_id(ObIOModule::HA_COPY_MACRO_BLOCK_IO);
   read_info.mtl_tenant_id_ = MTL_ID();
   if (OB_FAIL(ObObjectManager::async_read_object(read_info, read_handle))) {

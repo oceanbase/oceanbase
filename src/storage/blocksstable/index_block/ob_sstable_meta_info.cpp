@@ -291,7 +291,6 @@ int ObRootBlockInfo::read_block_data(
     read_info.buf_ = buf;
     read_info.mtl_tenant_id_ = MTL_ID();
     read_info.bypass_micro_cache_ = true;
-    read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
     read_info.io_desc_.set_sys_module_id(ObIOModule::ROOT_BLOCK_IO);
     if (OB_FAIL(addr.get_block_addr(read_info.macro_block_id_, read_info.offset_, read_info.size_))) {
       LOG_WARN("fail to get block address", K(ret), K(addr));

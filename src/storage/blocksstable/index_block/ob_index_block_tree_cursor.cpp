@@ -1136,7 +1136,6 @@ int ObIndexBlockTreeCursor::load_micro_block_data(const MacroBlockId &macro_bloc
   read_info.size_ = idx_row_header.get_block_size();
   read_info.io_desc_.set_mode(ObIOMode::READ);
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-  read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
   read_info.io_desc_.set_sys_module_id(ObIOModule::INDEX_BLOCK_TREE_CURSOR_IO);
   read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
   read_info.mtl_tenant_id_ = MTL_ID();

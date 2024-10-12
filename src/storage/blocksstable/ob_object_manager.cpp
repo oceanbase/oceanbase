@@ -791,7 +791,6 @@ int ObObjectManager::ss_read_super_block_(
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
   read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
   read_info.buf_ = super_block_buf_holder_.get_buffer(),
-  read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
   read_info.io_desc_.set_sys_module_id(ObIOModule::SLOG_IO);
   read_info.offset_ = 0;
   read_info.size_ = super_block_buf_holder_.get_len();
@@ -828,7 +827,6 @@ int ObObjectManager::ss_write_super_block_(const ObServerSuperBlock &super_block
     write_info.buffer_ = super_block_buf_holder_.get_buffer();
     write_info.size_ = super_block_buf_holder_.get_len();
     write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
-    write_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
     write_info.io_desc_.set_sys_module_id(ObIOModule::SLOG_IO);
     write_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
     write_info.mtl_tenant_id_ = OB_SERVER_TENANT_ID;

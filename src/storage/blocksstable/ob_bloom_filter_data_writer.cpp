@@ -1,13 +1,13 @@
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
- * You can use this software according to the terms and conditions of the Mulan
- * PubL v2. You may obtain a copy of Mulan PubL v2 at:
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
  *          http://license.coscl.org.cn/MulanPubL-2.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
- * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
- * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE. See the
- * Mulan PubL v2 for more details.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
  */
 
 #define USING_LOG_PREFIX STORAGE
@@ -363,7 +363,6 @@ int ObBloomFilterMacroBlockWriter::flush_macro_block() {
     macro_write_info.offset_ = 0;
     macro_write_info.io_desc_.set_wait_event(
         ObWaitEventIds::DB_FILE_COMPACT_WRITE);
-    macro_write_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
     macro_write_info.io_desc_.set_sys_module_id(ObIOModule::BLOOM_FILTER_IO);
     macro_write_info.io_desc_.set_sealed();
     macro_write_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;

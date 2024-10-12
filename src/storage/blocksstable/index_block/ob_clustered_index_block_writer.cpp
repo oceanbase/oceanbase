@@ -293,7 +293,6 @@ int ObClusteredIndexBlockWriter::rewrite_and_append_clustered_index_micro_block(
     read_info.size_ = micro_size;
     read_info.io_desc_.set_mode(ObIOMode::READ);
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-    read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
     read_info.io_desc_.set_sys_module_id(ObIOModule::SSTABLE_INDEX_BUILDER_IO);
     read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
     read_info.mtl_tenant_id_ = MTL_ID();
