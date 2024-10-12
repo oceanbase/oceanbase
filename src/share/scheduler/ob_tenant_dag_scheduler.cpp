@@ -773,12 +773,18 @@ int ObIDag::remove_task(ObITask &task)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "dag is not inited", K(ret));
-  } else if (OB_ISNULL(task_list_.remove(&task))) {
-    ret = OB_ERR_UNEXPECTED;
-    COMMON_LOG(WARN, "failed to remove task from task_list", K_(id));
   } else {
-    task.~ObITask();
-    allocator_->free(&task);
+    {
+      ObMutexGuard guard(lock_);
+      if (OB_ISNULL(task_list_.remove(&task))) {
+        ret = OB_ERR_UNEXPECTED;
+        COMMON_LOG(WARN, "failed to remove task from task_list", K_(id));
+      }
+    }
+    if (OB_NOT_NULL(&task)) {
+      task.~ObITask();
+      allocator_->free(&task);
+    }
   }
   return ret;
 }
