@@ -2490,6 +2490,12 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("tenant data version is less than 4.1, spatial index is not supported", K(ret), K(tenant_data_version));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.1, spatial index");
+#ifdef OB_BUILD_SHARED_STORAGE
+        } else if (GCTX.is_shared_storage_mode() && FTS_KEY == index_keyname_) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("fulltext search index isn't supported in shared storage mode", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "fulltext search index in shared storage mode is");
+#endif
         } else if (tenant_data_version < DATA_VERSION_4_3_1_0 && index_keyname_ == FTS_KEY) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("tenant data version is less than 4.3.1, fulltext index not supported", K(ret), K(tenant_data_version));

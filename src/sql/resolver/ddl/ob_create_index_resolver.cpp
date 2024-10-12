@@ -241,6 +241,15 @@ int ObCreateIndexResolver::resolve_index_column_node(
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector and fts index in same main table");
         }
       }
+#ifdef OB_BUILD_SHARED_STORAGE
+      if (OB_SUCC(ret)) {
+        if (GCTX.is_shared_storage_mode() && FTS_KEY == index_keyname_) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("fulltext search index isn't supported in shared storage mode", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "fulltext search index in shared storage mode is");
+        }
+      }
+#endif
       if (OB_FAIL(ret)) {
         // do nothing
       } else if (index_keyname_ == MULTI_KEY || index_keyname_ == MULTI_UNIQUE_KEY) {
