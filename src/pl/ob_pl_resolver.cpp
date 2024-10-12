@@ -17550,7 +17550,9 @@ int ObPLResolver::resolve_goto(const ObStmtNodeTree *parse_tree,
     } else {
       stmt->set_dst_label(label);
       current_block_->set_is_contain_goto_stmt(true);
-      OX (push_goto_stmts(stmt));
+      if (OB_FAIL(push_goto_stmts(stmt))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
