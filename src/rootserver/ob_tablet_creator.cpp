@@ -224,12 +224,24 @@ int ObBatchCreateTabletHelper::add_table_schema_(
     ObCreateTabletSchema *create_tablet_schema = NULL;
     void *create_tablet_schema_ptr = batch_arg_.allocator_.alloc(sizeof(ObCreateTabletSchema));
     obrpc::ObCreateTabletExtraInfo create_tablet_extr_info;
+    int64_t storage_schema_version = ObStorageSchema::STORAGE_SCHEMA_VERSION_LATEST;
+    if (tenant_data_version < DATA_VERSION_4_3_0_0) {
+      storage_schema_version = ObStorageSchema::STORAGE_SCHEMA_VERSION_V2;
+    } else if (tenant_data_version < DATA_VERSION_4_3_4_0) {
+      storage_schema_version = ObStorageSchema::STORAGE_SCHEMA_VERSION_V3;
+    } else {
+      // why use v4 instead of latest?
+      // if we add new field in storage schema later, we don't need to change this version,
+      // just add a new branch here
+      storage_schema_version = ObStorageSchema::STORAGE_SCHEMA_VERSION_V4;
+    }
     if (OB_ISNULL(create_tablet_schema_ptr)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate storage schema", KR(ret), K(table_schema));
     } else if (FALSE_IT(create_tablet_schema = new (create_tablet_schema_ptr)ObCreateTabletSchema())) {
     } else if (OB_FAIL(create_tablet_schema->init(batch_arg_.allocator_, table_schema, compat_mode,
-         false/*skip_column_info*/, tenant_data_version < DATA_VERSION_4_3_0_0 ? ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_V2 : ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_LATEST))) {
+                                                  false /*skip_column_info*/,
+                                                  storage_schema_version))) {
       LOG_WARN("failed to init storage schema", KR(ret), K(table_schema));
     } else if (OB_FAIL(batch_arg_.create_tablet_schemas_.push_back(create_tablet_schema))) {
       LOG_WARN("failed to push back table schema", KR(ret), K(table_schema));
