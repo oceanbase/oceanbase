@@ -994,3 +994,12 @@ ParseNode *adjust_inner_join_inner(int *error_code, ParseNode *inner_join, Parse
   }
   return ret_node;
 }
+
+extern int ob_backtrace_c(void **buffer, int size);
+extern char *parray_c(char *buf, int64_t len, int64_t *array, int size);
+char *parser_lbt(void **addr_buff, const size_t addr_size,
+                 char *str_buff, const size_t str_size)
+{
+  int size = ob_backtrace_c(addr_buff, addr_size);
+  return parray_c(str_buff, str_size, (int64_t *)addr_buff, size);
+}
