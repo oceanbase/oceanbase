@@ -340,6 +340,7 @@ int MacroBlockId::memcpy_deserialize(const char* buf, const int64_t data_len, in
   }
   DESERIALIZE_MEMBER_WITH_MEMCPY(second_id_);
   DESERIALIZE_MEMBER_WITH_MEMCPY(third_id_);
+  version_ = MACRO_BLOCK_ID_VERSION_V2;
   fourth_id_  = 0;
   return ret;
 }
