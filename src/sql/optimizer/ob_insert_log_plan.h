@@ -53,6 +53,7 @@ public:
   bool is_direct_insert() const { return is_direct_insert_; }
   void set_is_insert_overwrite(const bool is_insert_overwrite) { is_insert_overwrite_ = is_insert_overwrite; }
   bool is_insert_overwrite() const { return is_insert_overwrite_; }
+  virtual int perform_vector_assign_expr_replacement(ObDelUpdStmt *stmt)override;
 protected:
   int allocate_insert_values_as_top(ObLogicalOperator *&top);
   int candi_allocate_insert(OSGShareInfo *osg_info);

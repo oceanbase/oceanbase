@@ -40,6 +40,7 @@ public:
   ObIArray<ObRawExpr *>& get_delete_condition() { return delete_condition_exprs_; }
   const ObIArray<ObRawExpr *>& get_delete_condition() const { return delete_condition_exprs_; }
   virtual int prepare_dml_infos() override;
+  virtual int perform_vector_assign_expr_replacement(ObDelUpdStmt *stmt)override;
 private:
   virtual int generate_normal_raw_plan() override;
   int candi_allocate_merge();

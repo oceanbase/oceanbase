@@ -337,9 +337,6 @@ int ObMergeLogPlan::candi_allocate_subplan_filter_for_merge()
     LOG_WARN("failed to get insert conditions", K(ret));
   } else if (OB_FAIL(merge_stmt->get_assignments_exprs(assign_exprs))) {
     LOG_WARN("failed to get table assignment", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::get_subquery_exprs(assign_exprs,
-                                                         target_subquery_exprs))) {
-    LOG_WARN("failed to get subquery exprs", K(ret));
   } else if (OB_FAIL(ObOptimizerUtil::get_subquery_exprs(merge_stmt->get_values_vector(),
                                                          target_subquery_exprs))) {
     LOG_WARN("failed to get target subquery exprs", K(ret));
@@ -349,6 +346,8 @@ int ObMergeLogPlan::candi_allocate_subplan_filter_for_merge()
   } else if (!get_subquery_filters().empty() &&
              candi_allocate_subplan_filter_for_where()) {
     LOG_WARN("failed to allocate subplan filter", K(ret));
+  } else if (OB_FAIL(candi_allocate_subplan_filter_for_assignments(assign_exprs))) {
+    LOG_WARN("failed to allocate subplan filter for assignments", K(ret));
   } else if (condition_subquery_exprs.empty() && target_subquery_exprs.empty() &&
              delete_subquery_exprs.empty()) {
     // do nothing
@@ -1032,6 +1031,28 @@ int ObMergeLogPlan::check_merge_stmt_need_multi_partition_dml(bool &is_multi_par
   } else { /*do nothing*/ }
   if (OB_SUCC(ret)) {
     LOG_TRACE("succeed to check insert_stmt need multi-partition-dml", K(is_multi_part_dml));
+  }
+  return ret;
+}
+
+int ObMergeLogPlan::perform_vector_assign_expr_replacement(ObDelUpdStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo* session_info = optimizer_context_.get_session_info();
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is null", K(ret), K(stmt));
+  } else {
+    ObMergeTableInfo &table_info = static_cast<ObMergeStmt*>(stmt)->get_merge_table_info();
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_info.assignments_.count(); ++i) {
+      ObRawExpr *value = table_info.assignments_.at(i).expr_;
+      bool replace_happened = false;
+      if (OB_FAIL(replace_alias_ref_expr(value, replace_happened))) {
+        LOG_WARN("failed to replace alias ref expr", K(ret));
+      } else if (replace_happened && OB_FAIL(value->formalize(session_info))) {
+        LOG_WARN("failed to formalize expr", K(ret));
+      }
+    }
   }
   return ret;
 }
