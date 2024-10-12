@@ -27,6 +27,7 @@
 #include "share/compaction/ob_schedule_batch_size_mgr.h"
 #include "storage/compaction/ob_compaction_schedule_util.h"
 #include "storage/compaction/ob_medium_loop.h"
+#include "storage/compaction/ob_mview_compaction_util.h"
 
 namespace oceanbase
 {
@@ -235,6 +236,7 @@ public:
     const bool is_rebuild_column_group);
   OB_INLINE int64_t get_schedule_batch_size() const { return batch_size_mgr_.get_schedule_batch_size(); }
   OB_INLINE int64_t get_checker_batch_size() const { return batch_size_mgr_.get_checker_batch_size(); }
+  OB_INLINE ObMviewCompactionValidation &get_mview_validation() { return mview_validation_; }
 private:
   friend struct ObTenantTabletSchedulerTaskMgr;
   int schedule_all_tablets_medium();
@@ -273,6 +275,7 @@ private:
   ObTenantTabletSchedulerTaskMgr timer_task_mgr_;
   ObScheduleBatchSizeMgr batch_size_mgr_;
   ObMediumLoop medium_loop_;
+  ObMviewCompactionValidation mview_validation_;
 };
 
 } // namespace compaction
