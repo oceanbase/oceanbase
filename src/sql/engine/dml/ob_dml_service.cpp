@@ -2288,13 +2288,14 @@ int ObDMLService::get_nested_dup_table_ctx(const uint64_t table_id,  DASDelCtxLi
 int ObDMLService::handle_after_processing_multi_row(ObDMLModifyRowsList *dml_modify_rows, ObTableModifyOp *dml_op)
 {
   int ret = OB_SUCCESS;
-  bool is_iter_end = dml_op->iter_end_;
+  bool is_iter_end = true;
   const ObDmlEventType t_insert = ObDmlEventType::DE_INSERTING;
   const ObDmlEventType t_update = ObDmlEventType::DE_UPDATING;
   const ObDmlEventType t_delete = ObDmlEventType::DE_DELETING;
   if (OB_ISNULL(dml_modify_rows) || OB_ISNULL(dml_op) || OB_ISNULL(dml_op->get_child())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dml operator or modify rows list is null", K(dml_modify_rows), K(dml_op));
+  } else if (FALSE_IT(is_iter_end = dml_op->iter_end_)) {
   } else if (!is_iter_end && OB_ISNULL(dml_op->last_store_row_.get_store_row()) &&
     OB_FAIL(dml_op->last_store_row_.init(dml_op->get_exec_ctx().get_allocator(), dml_op->get_child()->get_spec().output_.count()))) {
     LOG_WARN("failed to init shadow stored row", K(ret));
