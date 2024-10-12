@@ -5198,6 +5198,7 @@ int ObSPIService::spi_sub_nestedtable(ObPLExecCtx *ctx, int64_t src_idx, int64_t
         }
         int64_t i = 0;
         for (; OB_SUCC(ret) && i < count; ++i) {
+          OX (dst_data[i].reset());
           OZ (deep_copy_obj(*dst_coll->get_allocator(), data_ptr[i], dst_data[i]));
         }
         if (OB_FAIL(ret)) {

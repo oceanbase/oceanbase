@@ -2420,6 +2420,8 @@ int ObMySQLProcStatement::process_array_out_param(const pl::ObCollectionType *co
         int64_t i = 0;
         for (; OB_SUCC(ret) && i < array_size; ++i) {
           ObObj *current_obj = new_data + i;
+          CK (OB_NOT_NULL(current_obj));
+          OX (current_obj->reset());
           OX (current_obj->set_meta_type(coll->get_element_desc().get_meta_type()));
           OZ (process_array_element(i, *local_allocator, pl_array->buffer, *current_obj, tz_info));
         }
@@ -2494,6 +2496,8 @@ int ObMySQLProcStatement::process_array_out_param(const pl::ObCollectionType *co
                 }
               } // end for
             }
+            CK (OB_NOT_NULL(current_obj));
+            OX (current_obj->reset());
             OX (current_obj->set_extend(reinterpret_cast<int64_t>(ptr), pl::PL_RECORD_TYPE, init_size));
           } // end for array_size
           if (OB_SUCC(ret)) {
