@@ -478,7 +478,7 @@ int main(int argc, char **argv)
 {
   system("rm -rf test_co_sstable.log");
   OB_LOGGER.set_file_name("test_co_sstable.log", true);
-  OB_LOGGER.set_log_level("DEBUG");
+  OB_LOGGER.set_log_level("INFO");
   CLOG_LOG(INFO, "begin unittest: test_co_sstable");
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
