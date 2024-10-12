@@ -1733,7 +1733,8 @@ void ObTenant::check_worker_count()
 {
   int ret = OB_SUCCESS;
   if (OB_SUCC(workers_lock_.trylock())) {
-    int64_t token = min_worker_cnt();
+    int64_t ddl_token = 0;
+    int64_t token = 3;
     int64_t now = ObTimeUtility::current_time();
     bool enable_dynamic_worker = true;
     int64_t threshold = 3 * 1000;
@@ -1752,11 +1753,16 @@ void ObTenant::check_worker_count()
                  && ((0 != w->blocking_ts() && now - w->blocking_ts() >= threshold) || w->is_doing_ddl())
                  && w->is_default_worker()
                  && enable_dynamic_worker) {
-        ++token;
+        if (w->is_doing_ddl()) {
+          ddl_token++;
+        } else {
+          token++;
+        }
       }
     }
     int64_t succ_num = 0L;
     token = std::max(token, min_worker_cnt());
+    token = token + ddl_token;
     token = std::min(token, max_worker_cnt());
     int64_t diff = min_worker_cnt() - workers_.get_size();
 #ifdef ERRSIM
