@@ -295,6 +295,7 @@ int ObMergeJoinVecOp::ObMergeJoinCursor::get_next_batch_from_source()
   } else if (OB_NOT_NULL(cur_brs_) && cur_brs_->end_) {
     reach_end_ = true;
     ret = OB_ITER_END;
+  } else if (OB_FALSE_IT(mj_op_.clear_evaluated_flag())) {
   } else if (OB_FAIL(source_->get_next_batch(max_batch_size_, brs))) {
     if (ret == OB_ITER_END) {
       reach_end_ = true;
@@ -1278,6 +1279,7 @@ int ObMergeJoinVecOp::inner_get_next_batch(const int64_t max_row_cnt) {
       }
     }
   }
+  clear_evaluated_flag();
   return ret;
 }
 
@@ -1467,6 +1469,7 @@ int ObMergeJoinVecOp::calc_other_cond_and_output_directly(bool &can_output)
         can_ret = !brs_.skip_->is_all_true(row_cnt);
         can_output = can_ret;
       }
+      clear_evaluated_flag();
     }
   }
   return ret;
@@ -1611,6 +1614,7 @@ int ObMergeJoinVecOp::calc_other_cond_and_cache_rows()
           can_ret = true;
         }
       }
+      clear_evaluated_flag();
     }
   }
   return ret;
