@@ -196,10 +196,10 @@ struct ObDDLTaskSerializeField final
   OB_UNIS_VERSION(1);
 public:
   TO_STRING_KV(K_(task_version), K_(parallelism), K_(data_format_version), K_(consumer_group_id),
-               K_(is_abort), K_(sub_task_trace_id), K_(is_unique_index), K_(is_global_index) ,K_(is_pre_split));
+               K_(is_abort), K_(sub_task_trace_id), K_(is_unique_index), K_(is_global_index) ,K_(is_pre_split), K_(is_no_logging));
   ObDDLTaskSerializeField() : task_version_(0), parallelism_(0), data_format_version_(0),
                               consumer_group_id_(0), is_abort_(false), sub_task_trace_id_(0),
-                              is_unique_index_(false), is_global_index_(false), is_pre_split_(false) {}
+                              is_unique_index_(false), is_global_index_(false), is_pre_split_(false), is_no_logging_(false) {}
   ObDDLTaskSerializeField(const int64_t task_version,
                           const int64_t parallelism,
                           const uint64_t data_format_version,
@@ -221,6 +221,7 @@ public:
   bool is_unique_index_;
   bool is_global_index_;
   bool is_pre_split_;
+  bool is_no_logging_;
 };
 
 struct ObCreateDDLTaskParam final

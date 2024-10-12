@@ -184,6 +184,7 @@ ObDDLTaskSerializeField::ObDDLTaskSerializeField(const int64_t task_version,
   is_unique_index_ = is_unique_index;
   is_global_index_ = is_global_index;
   is_pre_split_ = is_pre_split;
+  is_no_logging_ = false;
 }
 
 void ObDDLTaskSerializeField::reset()
@@ -197,6 +198,7 @@ void ObDDLTaskSerializeField::reset()
   is_unique_index_ = false;
   is_global_index_ = false;
   is_pre_split_ = false;
+  is_no_logging_ = false;
 }
 
 OB_SERIALIZE_MEMBER(ObDDLTaskSerializeField,
@@ -208,7 +210,8 @@ OB_SERIALIZE_MEMBER(ObDDLTaskSerializeField,
                     sub_task_trace_id_,
                     is_unique_index_,
                     is_global_index_,
-                    is_pre_split_);
+                    is_pre_split_,
+                    is_no_logging_);
 
 ObCreateDDLTaskParam::ObCreateDDLTaskParam()
   : sub_task_trace_id_(0), tenant_id_(OB_INVALID_ID), object_id_(OB_INVALID_ID), schema_version_(0), parallelism_(0),
