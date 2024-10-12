@@ -25,6 +25,16 @@
           "name": "log_transport_compress_all",
           "value": 1,
           "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
+        },
+        {
+          "name": "default_load_mode",
+          "value": "DISABLED",
+          "comment": "for simple OLTP workloads, the default import is not-direct load"
+        },
+        {
+          "name": "direct_load_allow_fallback",
+          "value": 1,
+          "comment": "for simple OLTP workloads, fallback is allowed when direct load fails"
         }
       ]
     }
@@ -60,6 +70,16 @@
           "name": "log_transport_compress_all",
           "value": 1,
           "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
+        },
+        {
+          "name": "default_load_mode",
+          "value": "DISABLED",
+          "comment": "for complex OLTP workloads, the default import is not-direct load"
+        },
+        {
+          "name": "direct_load_allow_fallback",
+          "value": 1,
+          "comment": "for complex OLTP workloads, fallback is allowed when direct load fails"
         }
       ]
     }
@@ -110,6 +130,16 @@
           "name": "_io_read_redundant_limit_percentage",
           "value": "50",
           "comment": "Maximum percentage of redundant size in one read io request, redundant data means blocks in the middle of the batch that hit in cache or filtered by skipping index but must be read"
+        },
+        {
+          "name": "default_load_mode",
+          "value": "FULL_DIRECT_WRITE",
+          "comment": "for classic OLAP workloads, the default import is full direct load"
+        },
+        {
+          "name": "direct_load_allow_fallback",
+          "value": 0,
+          "comment": "for classic OLAP workloads, fallback is not allowed when direct load fails"
         }
       ]
     }
@@ -180,6 +210,16 @@
           "name": "log_transport_compress_all",
           "value": 1,
           "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
+        },
+        {
+          "name": "default_load_mode",
+          "value": "DISABLED",
+          "comment": "for classic HTAP workloads, the default import is not-direct load"
+        },
+        {
+          "name": "direct_load_allow_fallback",
+          "value": 1,
+          "comment": "for classic HTAP workloads, fallback is allowed when direct load fails"
         }
       ]
     }
