@@ -844,5 +844,46 @@ OB_DEF_SERIALIZE_SIZE(ObExternalFileFormat::StringData)
   return len;
 }
 
+int ObExternalFileFormat::StringList::store_strs(ObIArray<ObString> &strs)
+{
+  int ret = OB_SUCCESS;
+  ObString str;
+  OZ(strs_.init(strs.count()));
+  for (int64_t i = 0; OB_SUCC(ret) && i < strs.count(); i++) {
+    str.reset();
+    if (OB_FAIL(ob_write_string(allocator_, strs.at(i), str))) {
+      LOG_WARN("failed to deep copy string", K(ret));
+    } else if (OB_FAIL(strs_.push_back(str))) {
+      LOG_WARN("failed to push back string", K(ret));
+    }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE(ObExternalFileFormat::StringList)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE, strs_);
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObExternalFileFormat::StringList)
+{
+  int ret = OB_SUCCESS;
+  ObFixedArray<ObString, ObIAllocator> temp_strs(allocator_);
+  LST_DO_CODE(OB_UNIS_DECODE, temp_strs);
+  if (OB_SUCC(ret)) {
+    ret = store_strs(temp_strs);
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObExternalFileFormat::StringList)
+{
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN, strs_);
+  return len;
+}
+
 }
 }

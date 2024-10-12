@@ -607,6 +607,15 @@ struct ObExternalFileFormat
     OB_UNIS_VERSION(1);
   };
 
+  struct StringList {
+    StringList(common::ObIAllocator &alloc) : allocator_(alloc), strs_(alloc) {}
+    int store_strs(ObIArray<ObString> &strs);
+    common::ObIAllocator &allocator_;
+    common::ObFixedArray<common::ObString, common::ObIAllocator> strs_;
+    TO_STRING_KV(K_(strs));
+    OB_UNIS_VERSION(1);
+  };
+
   enum FormatType {
     INVALID_FORMAT = -1,
     CSV_FORMAT,

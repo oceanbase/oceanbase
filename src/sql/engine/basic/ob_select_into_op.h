@@ -77,7 +77,8 @@ public:
       buffer_size_(DEFAULT_BUFFER_SIZE),
       is_overwrite_(false),
       external_properties_(alloc),
-      external_partition_(alloc)
+      external_partition_(alloc),
+      alias_names_(alloc)
   {
     cs_type_ = ObCharset::get_system_collation();
   }
@@ -101,6 +102,7 @@ public:
   bool is_overwrite_;
   ObExternalFileFormat::StringData external_properties_;
   ObExternalFileFormat::StringData external_partition_;
+  ObExternalFileFormat::StringList alias_names_;
   static const int64_t DEFAULT_MAX_FILE_SIZE = 256LL * 1024 * 1024;
   static const int64_t DEFAULT_BUFFER_SIZE = 1LL * 1024 * 1024;
 };
