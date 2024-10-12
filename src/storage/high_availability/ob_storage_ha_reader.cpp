@@ -482,6 +482,7 @@ int ObCopyMacroBlockObReader::get_read_info_(const ObCopyMacroBlockHeader &heade
 ObCopyMacroBlockRestoreReader::ObCopyMacroBlockRestoreReader()
   : is_inited_(false),
     table_key_(),
+    tablet_handle_(),
     copy_macro_range_info_(nullptr),
     restore_base_info_(nullptr),
     meta_index_store_(nullptr),
@@ -507,6 +508,7 @@ ObCopyMacroBlockRestoreReader::~ObCopyMacroBlockRestoreReader()
     backup::ObLSBackupFactory::free(sec_meta_iterator_);
     sec_meta_iterator_ = nullptr;
   }
+  tablet_handle_.reset();
   allocator_.reset();
 }
 
@@ -517,7 +519,6 @@ int ObCopyMacroBlockRestoreReader::init(
   ObLSHandle ls_handle;
   ObLSService *ls_service = nullptr;
   ObLS *ls = nullptr;
-  ObTabletHandle tablet_handle;
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
@@ -537,7 +538,7 @@ int ObCopyMacroBlockRestoreReader::init(
   } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream should not be NULL", K(ret), K(param));
-  } else if (OB_FAIL(ls->ha_get_tablet(param.table_key_.get_tablet_id(), tablet_handle))) {
+  } else if (OB_FAIL(ls->ha_get_tablet(param.table_key_.get_tablet_id(), tablet_handle_))) {
     LOG_WARN("failed to get tablet handle", K(ret), K(param));
   } else if (OB_FAIL(alloc_buffers())) {
     LOG_WARN("failed to alloc buffers", K(ret));
@@ -557,7 +558,7 @@ int ObCopyMacroBlockRestoreReader::init(
       datum_range_.set_right_open();
       if (OB_FAIL(ObRestoreUtils::create_backup_sstable_sec_meta_iterator(param.tenant_id_,
                                                                           table_key_.get_tablet_id(),
-                                                                          tablet_handle,
+                                                                          tablet_handle_,
                                                                           table_key_,
                                                                           datum_range_,
                                                                           *restore_base_info_,
