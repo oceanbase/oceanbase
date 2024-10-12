@@ -255,7 +255,7 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
     } else if (OB_ISNULL(tenant)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tenant is null", K(ret));
-    } else if (tenant_config.is_valid() && tenant_config->_enable_ddl_worker_isolation
+    } else if (!my_session->is_inner() && tenant_config.is_valid() && tenant_config->_enable_ddl_worker_isolation
               && ObStmt::is_ddl_stmt(static_cast<stmt::StmtType>(cmd.get_cmd_type()), true)) {
       if (tenant->check_ddl_thread_is_limit()) {
         ret = OB_ERR_DDL_RESOURCE_NOT_ENOUGH;
@@ -1178,9 +1178,15 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
     }
   }
 
-  if (OB_NOT_NULL(THIS_THWORKER_SAFE) && THIS_THWORKER_SAFE->is_doing_ddl() && OB_NOT_NULL(tenant)) {
+  if (!my_session->is_inner() && OB_NOT_NULL(THIS_THWORKER_SAFE)
+      && THIS_THWORKER_SAFE->is_doing_ddl() && OB_NOT_NULL(tenant)) {
     lib::Thread::set_doing_ddl(false);
     tenant->dec_ddl_thread_count();
+    if (tenant->cur_ddl_thread_count() < 0) {
+      LOG_ERROR("tenant ddl count is less than 0, please check", K(MTL_ID()), K(tenant->cur_ddl_thread_count()));
+    } else {
+      LOG_TRACE("tenant ddl count", K(MTL_ID()), K(tenant->cur_ddl_thread_count()));
+    }
   }
 
   return ret;
