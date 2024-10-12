@@ -92,6 +92,7 @@ public:
   void inc_found_rows() { }
   void inc_changed_rows() { }
   int do_update();
+  int process_update_before_delete();
   int update_row_das();
   int delete_row_das();
   int do_insert();
