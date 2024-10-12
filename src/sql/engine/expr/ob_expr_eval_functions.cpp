@@ -1270,6 +1270,10 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprMysqlProcInfo::mysql_proc_info                       /* 761 */
   NULL, // ObExprArrayOverlaps::eval_array_overlaps,                  /* 762 */
   NULL, // ObExprArrayContainsAll::eval_array_contains_all,           /* 763 */
+  NULL, // ObExprInnerIsTrue::decimal_int_is_true_start,              /* 764 */
+  NULL, // ObExprInnerIsTrue::decimal_int_is_true_end,                /* 765 */
+  NULL, // ObExprInnerIsTrue::json_is_true_start,                     /* 766 */
+  NULL, // ObExprInnerIsTrue::json_is_true_end,                       /* 767 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
