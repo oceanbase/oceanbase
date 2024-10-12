@@ -273,7 +273,7 @@ public:
   int rescan();
   int reuse_iter();
   void reset_access_datums_ptr(int64_t capacity = 0);
-  void reset_access_datums_ptr(ObDASBaseRtDef *rtdef, int64_t capacity);
+  void reset_access_datums_ptr(const ObDASBaseCtDef *ctdef, ObEvalCtx &eval_ctx, int64_t capacity);
   ObLocalIndexLookupOp *get_lookup_op();
   bool is_contain_trans_info() {return NULL != scan_ctdef_->trans_info_expr_; }
   int do_table_scan();

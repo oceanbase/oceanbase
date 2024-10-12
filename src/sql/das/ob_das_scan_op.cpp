@@ -375,7 +375,7 @@ ObDASIterTreeType ObDASScanOp::get_iter_tree_type() const
     tree_type = OB_ISNULL(get_lookup_ctdef()) ? ObDASIterTreeType::ITER_TREE_PARTITION_SCAN
                                               : ObDASIterTreeType::ITER_TREE_LOCAL_LOOKUP;
   }
-  LOG_TRACE("get iter tree type", K(tree_type), K(scan_param_), KPC(attach_ctdef_));
+  LOG_TRACE("get iter tree type", K(tree_type), K(scan_param_.tablet_id_), KPC(attach_ctdef_));
   return tree_type;
 }
 
@@ -783,49 +783,49 @@ int ObDASScanOp::do_domain_index_lookup()
 //otherwise, get_next_row in the local das task maybe has a wrong status
 void ObDASScanOp::reset_access_datums_ptr(int64_t capacity)
 {
-  if (scan_rtdef_->p_pd_expr_op_->is_vectorized()) {
+  if (scan_rtdef_->p_pd_expr_op_->is_vectorized() && OB_NOT_NULL(scan_rtdef_->eval_ctx_)) {
     int64_t reset_batch_size = capacity > 0 ? capacity : scan_rtdef_->eval_ctx_->max_batch_size_;
     reset_batch_size = min(reset_batch_size, scan_rtdef_->eval_ctx_->max_batch_size_);
-    if (attach_rtdef_ != nullptr) {
-      reset_access_datums_ptr(attach_rtdef_, reset_batch_size);
+    if (attach_ctdef_ != nullptr) {
+      reset_access_datums_ptr(attach_ctdef_, *scan_rtdef_->eval_ctx_, reset_batch_size);
     } else {
-      reset_access_datums_ptr(scan_rtdef_, reset_batch_size);
-      if (get_lookup_rtdef() != nullptr) {
-        reset_access_datums_ptr(get_lookup_rtdef(), reset_batch_size);
+      reset_access_datums_ptr(scan_ctdef_, *scan_rtdef_->eval_ctx_, reset_batch_size);
+      if (get_lookup_ctdef() != nullptr) {
+        reset_access_datums_ptr(get_lookup_ctdef(), *scan_rtdef_->eval_ctx_, reset_batch_size);
       }
     }
   }
 }
 
-void ObDASScanOp::reset_access_datums_ptr(ObDASBaseRtDef *rtdef, int64_t capacity)
+void ObDASScanOp::reset_access_datums_ptr(const ObDASBaseCtDef *ctdef, ObEvalCtx &eval_ctx, int64_t capacity)
 {
-  if (rtdef != nullptr) {
-    if (rtdef->op_type_== DAS_OP_TABLE_SCAN) {
-      const ObDASScanCtDef *scan_ctdef = static_cast<const ObDASScanCtDef*>(rtdef->ctdef_);
+  if (ctdef != nullptr) {
+    if (ctdef->op_type_== DAS_OP_TABLE_SCAN) {
+      const ObDASScanCtDef *scan_ctdef = static_cast<const ObDASScanCtDef*>(ctdef);
       FOREACH_CNT(e, scan_ctdef->pd_expr_spec_.access_exprs_) {
-        (*e)->locate_datums_for_update(*rtdef->eval_ctx_, capacity);
-        ObEvalInfo &info = (*e)->get_eval_info(*rtdef->eval_ctx_);
+        (*e)->locate_datums_for_update(eval_ctx, capacity);
+        ObEvalInfo &info = (*e)->get_eval_info(eval_ctx);
         info.point_to_frame_ = true;
       }
       FOREACH_CNT(e, scan_ctdef->pd_expr_spec_.pd_storage_aggregate_output_) {
-        (*e)->locate_datums_for_update(*rtdef->eval_ctx_, capacity);
-        ObEvalInfo &info = (*e)->get_eval_info(*rtdef->eval_ctx_);
+        (*e)->locate_datums_for_update(eval_ctx, capacity);
+        ObEvalInfo &info = (*e)->get_eval_info(eval_ctx);
         info.point_to_frame_ = true;
       }
       FOREACH_CNT(e, scan_ctdef->pd_expr_spec_.ext_file_column_exprs_) {
-        (*e)->locate_datums_for_update(*rtdef->eval_ctx_, capacity);
-        ObEvalInfo &info = (*e)->get_eval_info(*rtdef->eval_ctx_);
+        (*e)->locate_datums_for_update(eval_ctx, capacity);
+        ObEvalInfo &info = (*e)->get_eval_info(eval_ctx);
         info.point_to_frame_ = true;
       }
       if (scan_ctdef->trans_info_expr_ != nullptr) {
         ObExpr *trans_expr = scan_ctdef->trans_info_expr_;
-        trans_expr->locate_datums_for_update(*rtdef->eval_ctx_, capacity);
-        ObEvalInfo &info = trans_expr->get_eval_info(*rtdef->eval_ctx_);
+        trans_expr->locate_datums_for_update(eval_ctx, capacity);
+        ObEvalInfo &info = trans_expr->get_eval_info(eval_ctx);
         info.point_to_frame_ = true;
       }
     } else {
-      for (int64_t i = 0; i < rtdef->children_cnt_; i++) {
-        reset_access_datums_ptr(rtdef->children_[i], capacity);
+      for (int64_t i = 0; i < ctdef->children_cnt_; i++) {
+        reset_access_datums_ptr(ctdef->children_[i], eval_ctx, capacity);
       }
     }
   }
