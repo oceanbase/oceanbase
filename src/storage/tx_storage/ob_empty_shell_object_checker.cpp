@@ -121,7 +121,9 @@ int ObDDLEmptyShellChecker::check_tablets_cnt_exceeds(
     bool &can_become_empty_shell)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObServerAutoSplitScheduler::check_tablet_creation_limit(0/*inc_tablet_cnt*/, 0.8/*safe_ratio*/))) {
+  int64_t unused_real_auto_split_size = OB_INVALID_NUMERIC;
+  int64_t unused_auto_split_size = 1;
+  if (OB_FAIL(ObServerAutoSplitScheduler::check_tablet_creation_limit(0/*inc_tablet_cnt*/, 0.8/*safe_ratio*/, unused_auto_split_size, unused_real_auto_split_size))) {
     if (OB_TOO_MANY_PARTITIONS_ERROR == ret) {
       ret = OB_SUCCESS;
       can_become_empty_shell = true;

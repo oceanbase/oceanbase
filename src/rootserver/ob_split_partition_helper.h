@@ -74,6 +74,8 @@ private:
       const ObIArray<ObTabletID> &src_tablet_ids,
       const ObIArray<ObArray<ObTabletID>> &dst_tablet_ids,
       const ObIArray<const share::schema::ObTableSchema *> &inc_table_schemas,
+      const share::schema::ObTableSchema &main_src_table_schema,
+      const share::ObDDLType split_type,
       ObIAllocator &allocator,
       ObTabletCreator *&tablet_creator,
       ObMySQLTransaction &trans);
@@ -126,6 +128,8 @@ private:
   uint64_t tenant_id_;
   uint64_t tenant_data_version_;
   share::ObDDLType split_type_;
+  const static int64_t MYSQL_MAX_NUM_TABLETS_IN_TABLE = 8L * 1024L;
+  const static int64_t ORACLE_MAX_NUM_TABLETS_IN_TABLE = 1024L * 1024L - 1L;
   const common::ObIArray<share::schema::ObTableSchema *> &new_table_schemas_;
   const common::ObIArray<share::schema::ObTableSchema *> &upd_table_schemas_;
   const common::ObIArray<const share::schema::ObTableSchema *> &inc_table_schemas_;

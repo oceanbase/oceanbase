@@ -10897,12 +10897,13 @@ struct ObFetchSplitTabletInfoRes final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObFetchSplitTabletInfoRes() : create_commit_versions_() {}
+  ObFetchSplitTabletInfoRes() : tablet_sizes_(), create_commit_versions_() {}
   ~ObFetchSplitTabletInfoRes() = default;
-  bool is_valid() const { return !create_commit_versions_.empty(); }
+  bool is_valid() const { return !create_commit_versions_.empty() && !tablet_sizes_.empty(); }
   int assign(const ObFetchSplitTabletInfoRes &other);
-  TO_STRING_KV(K_(create_commit_versions));
+  TO_STRING_KV(K_(tablet_sizes), K_(create_commit_versions));
 public:
+  common::ObSArray<int64_t> tablet_sizes_;
   common::ObSArray<int64_t> create_commit_versions_;
 };
 

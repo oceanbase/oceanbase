@@ -9376,13 +9376,15 @@ int ObFetchSplitTabletInfoRes::assign(const ObFetchSplitTabletInfoRes &other)
   if (OB_UNLIKELY(!other.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(other));
+  } else if (OB_FAIL(tablet_sizes_.assign(other.tablet_sizes_))) {
+    LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(create_commit_versions_.assign(other.create_commit_versions_))) {
     LOG_WARN("failed to assign", K(ret));
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObFetchSplitTabletInfoRes, create_commit_versions_);
+OB_SERIALIZE_MEMBER(ObFetchSplitTabletInfoRes, tablet_sizes_, create_commit_versions_);
 
 // === Functions for tablet split end. ===
 

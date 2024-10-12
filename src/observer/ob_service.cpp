@@ -2977,6 +2977,8 @@ int ObService::fetch_split_tablet_info(const ObFetchSplitTabletInfoArg &arg,
             LOG_WARN("failed to get tablet status", K(ret), K(arg.ls_id_), K(tablet_id));
           } else if (OB_FAIL(res.create_commit_versions_.push_back(user_data.create_commit_version_))) {
             LOG_WARN("failed to push back", K(ret));
+          } else if (OB_FAIL(res.tablet_sizes_.push_back(tablet_handle.get_obj()->get_tablet_meta().space_usage_.all_sstable_data_required_size_))) {
+            LOG_WARN("failed to push back", K(ret));
           }
         }
       }
