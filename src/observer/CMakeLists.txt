@@ -550,8 +550,6 @@ target_link_libraries(ob_main PUBLIC ob_base)
 add_executable(observer)
 target_link_libraries(observer
   PRIVATE
-  ${THIN_LTO_OPT}
-  ${THIN_LTO_CONCURRENCY_LINK}
   -Wl,--start-group
   ob_main
   ob_malloc

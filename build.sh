@@ -186,7 +186,7 @@ function build
         ln -sf ${TOPDIR}/build_clangd/compile_commands.json ${TOPDIR}/compile_commands.json
         ;;
       xperf)
-        do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_AUTO_FDO=ON -DENABLE_THIN_LTO=ON -DOB_USE_LLD=$LLD_OPTION -DENABLE_HOTFUNC=ON -DOB_USE_CCACHE=OFF
+        do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_AUTO_FDO=ON -DENABLE_THIN_LTO=ON -DOB_USE_LLD=$LLD_OPTION -DENABLE_HOTFUNC=ON
         ;;
       xdebug_asan)
         do_build "$@" -DCMAKE_BUILD_TYPE=Debug -DOB_USE_LLD=$LLD_OPTION -DOB_USE_ASAN=$ASAN_OPTION
