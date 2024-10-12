@@ -513,7 +513,8 @@ int ObUniqueIndexChecker::report_column_checksum(
 
     if (OB_SUCC(ret)) {
       int64_t data_format_version;
-      if (OB_FAIL(ObDDLUtil::get_data_format_version(tenant_id_, task_id_, data_format_version))) {
+      share::ObDDLTaskStatus unused_task_status = share::ObDDLTaskStatus::PREPARE;
+      if (OB_FAIL(ObDDLUtil::get_data_format_version(tenant_id_, task_id_, data_format_version, unused_task_status))) {
         LOG_WARN("get ddl cluster version failed", K(ret));
       } else if (OB_FAIL(ObDDLChecksumOperator::update_checksum(data_format_version, checksum_items, *GCTX.sql_proxy_))) {
         LOG_WARN("fail to update checksum", K(ret));

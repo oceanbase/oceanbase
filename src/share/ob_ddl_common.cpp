@@ -1731,9 +1731,12 @@ int64_t ObDDLUtil::get_default_ddl_tx_timeout()
 int ObDDLUtil::get_data_format_version(
     const uint64_t tenant_id,
     const uint64_t task_id,
-    int64_t &data_format_version)
+    int64_t &data_format_version,
+    share::ObDDLTaskStatus &task_status)
 {
   int ret = OB_SUCCESS;
+  data_format_version = 0;
+  task_status = share::ObDDLTaskStatus::PREPARE;
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || task_id <= 0
       || nullptr == GCTX.sql_proxy_)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1744,7 +1747,7 @@ int ObDDLUtil::get_data_format_version(
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       ObSqlString query_string;
       sqlclient::ObMySQLResult *result = NULL;
-      if (OB_FAIL(query_string.assign_fmt(" SELECT ddl_type, UNHEX(message) as message_unhex FROM %s WHERE task_id = %lu",
+      if (OB_FAIL(query_string.assign_fmt(" SELECT ddl_type, UNHEX(message) as message_unhex, status FROM %s WHERE task_id = %lu",
           OB_ALL_DDL_TASK_STATUS_TNAME, task_id))) {
         LOG_WARN("assign sql string failed", K(ret));
       } else if (OB_FAIL(GCTX.sql_proxy_->read(res, tenant_id, query_string.ptr()))) {
@@ -1756,13 +1759,24 @@ int ObDDLUtil::get_data_format_version(
         LOG_WARN("get next row failed", K(ret));
       } else {
         int64_t pos = 0;
+        int cur_task_status = 0;
         ObDDLType ddl_type = ObDDLType::DDL_INVALID;
         ObString task_message;
         EXTRACT_INT_FIELD_MYSQL(*result, "ddl_type", ddl_type, ObDDLType);
         EXTRACT_VARCHAR_FIELD_MYSQL(*result, "message_unhex", task_message);
+        EXTRACT_INT_FIELD_MYSQL(*result, "status", cur_task_status, int);
+        task_status = static_cast<share::ObDDLTaskStatus>(cur_task_status);
         if (OB_SUCC(ret)) {
           if (is_create_index(ddl_type)) {
             SMART_VAR(rootserver::ObIndexBuildTask, task) {
+              if (OB_FAIL(task.deserlize_params_from_message(tenant_id, task_message.ptr(), task_message.length(), pos))) {
+                LOG_WARN("deserialize from msg failed", K(ret));
+              } else {
+                data_format_version = task.get_data_format_version();
+              }
+            }
+          } else if (is_complement_data_relying_on_dag(ddl_type)) {
+            SMART_VAR(rootserver::ObColumnRedefinitionTask, task) {
               if (OB_FAIL(task.deserlize_params_from_message(tenant_id, task_message.ptr(), task_message.length(), pos))) {
                 LOG_WARN("deserialize from msg failed", K(ret));
               } else {

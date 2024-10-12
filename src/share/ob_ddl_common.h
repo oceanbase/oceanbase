@@ -293,6 +293,11 @@ static inline bool is_direct_load_retry_err(const int ret)
     ;
 }
 
+static inline bool is_replica_build_ddl_task_status(const ObDDLTaskStatus &task_status)
+{
+  return ObDDLTaskStatus::REPENDING == task_status || ObDDLTaskStatus::REDEFINITION == task_status;
+}
+
 enum ObCheckExistedDDLMode
 {
   INVALID_DDL_MODE          = 0,
@@ -528,7 +533,8 @@ public:
   static int get_data_format_version(
      const uint64_t tenant_id,
      const uint64_t task_id,
-     int64_t &data_format_version);
+     int64_t &data_format_version,
+     share::ObDDLTaskStatus &task_status);
 
   static int replace_user_tenant_id(
     const ObDDLType &ddl_type,
