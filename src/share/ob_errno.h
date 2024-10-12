@@ -1833,6 +1833,7 @@ constexpr int OB_ERR_EVENT_RECURSION_FORBIDDEN = -9780;
 constexpr int OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR = -9781;
 constexpr int OB_ERR_INVALID_CHARACTER = -9782;
 constexpr int OB_ERR_CURSOR_ATTR_APPLY = -9784;
+constexpr int OB_ERR_COMPILE_RESULT_NOT_ADD_CACHE = -9800;
 constexpr int OB_ERR_KV_GLOBAL_INDEX_ROUTE = -10500;
 constexpr int OB_TTL_NOT_ENABLE = -10501;
 constexpr int OB_TTL_COLUMN_NOT_EXIST = -10502;
@@ -4085,6 +4086,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR__USER_ERROR_MSG "Table has no partition for value"
 #define OB_ERR_INVALID_CHARACTER__USER_ERROR_MSG "invalid character"
 #define OB_ERR_CURSOR_ATTR_APPLY__USER_ERROR_MSG "cursor attribute may not be applied to non-cursor %.*s"
+#define OB_ERR_COMPILE_RESULT_NOT_ADD_CACHE__USER_ERROR_MSG "To be compatible with MySQL, if an exception occurs when compiling an OB PL object (such as the object does not exist or a parameter mismatch), the relevant statement will be converted to a statement that throws an exception, and compiled object cannot be added to the cache, which may cause performance problems. User should create or redefine the pl object of the problem indicated in the warning until the warning is eliminated. Problem object name: '%.*s'"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__USER_ERROR_MSG "incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__USER_ERROR_MSG "TTL feature is not enabled"
 #define OB_TTL_COLUMN_NOT_EXIST__USER_ERROR_MSG "TTL column '%.*s' not exists"
@@ -6337,6 +6339,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR__ORA_USER_ERROR_MSG "ORA-14400: inserted partition key does not map to any partition"
 #define OB_ERR_INVALID_CHARACTER__ORA_USER_ERROR_MSG "ORA-00911: invalid character"
 #define OB_ERR_CURSOR_ATTR_APPLY__ORA_USER_ERROR_MSG "PLS-00324: cursor attribute may not be applied to non-cursor %.*s"
+#define OB_ERR_COMPILE_RESULT_NOT_ADD_CACHE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9800, To be compatible with MySQL, if an exception occurs when compiling an OB PL object (such as the object does not exist or a parameter mismatch), the relevant statement will be converted to a statement that throws an exception, and compiled object cannot be added to the cache, which may cause performance problems. User should create or redefine the pl object of the problem indicated in the warning until the warning is eliminated. Problem object name: '%.*s'"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10501, TTL feature is not enabled"
 #define OB_TTL_COLUMN_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10502, TTL column '%.*s' not exists"
@@ -6384,7 +6387,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2248];
+extern int g_all_ob_errnos[2249];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
