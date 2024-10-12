@@ -1391,6 +1391,10 @@ int ObPluginVectorIndexAdaptor::prepare_delta_mem_data(roaring::api::roaring64_b
                                                       alloc(sizeof(ObObj) * vector_cnt)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocator.", K(ret), K(bitmap_cnt));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < vector_cnt; i++) {
+          ctx->vec_data_.vectors_[i].set_null();
+        }
       }
 
       while (OB_SUCC(ret) && is_continue) {
