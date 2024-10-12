@@ -31133,6 +31133,11 @@ int ObDDLService::grant_revoke_user(
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_2_4_0", K(ret), K(priv_set));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant or revoke references/create role/drop role/trigger");
+    } else if (compat_version < DATA_VERSION_4_2_5_0 && !is_ora_mode
+              && (0 != (priv_set & OB_PRIV_LOCK_TABLE))) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_2_5_0", K(ret), K(priv_set));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant or revoke lock tables privilege");
     } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
       LOG_WARN("Start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
     } else {
@@ -31630,6 +31635,11 @@ int ObDDLService::revoke_database(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_2_4_0", K(ret), K(priv_set));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "revoke references/trigger");
+  } else if (compat_version < DATA_VERSION_4_2_5_0 && !is_ora_mode
+             && (0 != (priv_set & OB_PRIV_LOCK_TABLE))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_2_5_0", K(ret), K(priv_set));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "revoke lock tables privilege");
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
     LOG_WARN("fail to get schema guard with version in inner table", K(ret), K(tenant_id));
   } else {

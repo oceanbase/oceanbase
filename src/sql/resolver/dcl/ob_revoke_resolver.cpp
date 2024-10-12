@@ -462,8 +462,11 @@ int ObRevokeResolver::resolve_mysql(const ParseNode &parse_tree)
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_2_4_0", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "revoke references/create role/drop role/trigger");
-          }
-          if (OB_FAIL(ret)) {
+          } else if (compat_version < DATA_VERSION_4_2_5_0
+                     && ((priv_set & OB_PRIV_LOCK_TABLE) != 0)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_2_5_0", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "revoke lock tables privilege");
           } else {
             revoke_stmt->set_priv_set(priv_set);
           }

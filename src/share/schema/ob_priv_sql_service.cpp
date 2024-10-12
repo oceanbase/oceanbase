@@ -1075,6 +1075,13 @@ int ObPrivSqlService::gen_db_priv_dml(
     LOG_WARN("priv references/priv trigger is not suppported when tenant's data version is below 4.2.4.0", KR(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant or revoke database level trigger privilege/references privilege");
   }
+  if (OB_FAIL(ret)) {
+  } else if (compat_version < DATA_VERSION_4_2_5_0 &&
+            ((priv_set & OB_PRIV_LOCK_TABLE) != 0)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("priv lock tables is not suppported when tenant's data version is below 4.2.5.0", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant or revoke database level lock tables privilege");
+  }
   return ret;
 }
 
