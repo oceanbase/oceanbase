@@ -1866,18 +1866,21 @@ int ObSharedNothingTmpFile::truncate_the_first_wbp_page_()
       if (flushed_data_page_num_ <= 0) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("flushed_data_page_num_ is unexpected", KR(ret), KPC(this));
-      } else {
-        flushed_data_page_num_--;
-        if (0 == flushed_data_page_num_) {
-          if (OB_UNLIKELY(flushed_page_id_ != begin_page_id_)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_ERROR("flushed_page_id_ or flushed_data_page_num_ is unexpected", KR(ret), KPC(this));
-          } else {
-            flushed_page_id_ = ObTmpFileGlobal::INVALID_PAGE_ID;
-            flushed_page_virtual_id_ = ObTmpFileGlobal::INVALID_VIRTUAL_PAGE_ID;
-            LOG_INFO("all flushed page has been truncated", KPC(this));
-          }
+      } else if (1 == flushed_data_page_num_) {
+        if (flushed_page_id_ != begin_page_id_ && wbp_->is_cached(fd_, flushed_page_id_,
+                                                        ObTmpFilePageUniqKey(flushed_page_virtual_id_))) {
+          // the page of flushed_page_id_ might not be flushed if it was the tail page of file and was appended.
+          // thus, only if the page is flushed, we can check the equality of flushed_page_id_ and begin_page_id_
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("flushed_page_id_ or flushed_data_page_num_ is unexpected", KR(ret), KPC(this));
+        } else if (flushed_page_id_ == begin_page_id_) {
+          flushed_page_id_ = ObTmpFileGlobal::INVALID_PAGE_ID;
+          flushed_page_virtual_id_ = ObTmpFileGlobal::INVALID_VIRTUAL_PAGE_ID;
+          LOG_INFO("all flushed page has been truncated", KPC(this));
         }
+      }
+      if (OB_SUCC(ret)) {
+        flushed_data_page_num_--;
       }
     } else if (is_write_back_page) {
       write_back_data_page_num_--;
@@ -1936,23 +1939,26 @@ int64_t ObSharedNothingTmpFile::get_dirty_data_page_size() const
 
   int64_t dirty_size = 0;
   // cached_page_nums == flushed_data_page_num + dirty_data_page_num
-  if (0 == cached_page_nums_ || flushed_data_page_num_ == cached_page_nums_) {
+  if (0 == cached_page_nums_ || flushed_data_page_num_ + write_back_data_page_num_ == cached_page_nums_) {
     dirty_size = 0;
+  } else if (OB_UNLIKELY(cached_page_nums_ < flushed_data_page_num_ + write_back_data_page_num_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("page num is invalid", KR(ret), K(cached_page_nums_), K(flushed_data_page_num_),
+              K(write_back_data_page_num_), KPC(this));
+    dirty_size = 0;
+  } else if (0 == file_size_ % ObTmpFileGlobal::PAGE_SIZE) {
+    dirty_size =
+      (cached_page_nums_ - flushed_data_page_num_ - write_back_data_page_num_) * ObTmpFileGlobal::PAGE_SIZE;
   } else {
-    if (0 == file_size_ % ObTmpFileGlobal::PAGE_SIZE) {
-      dirty_size =
-        (cached_page_nums_ - flushed_data_page_num_ - write_back_data_page_num_) * ObTmpFileGlobal::PAGE_SIZE;
-    } else {
-      dirty_size =
-        (cached_page_nums_ - flushed_data_page_num_ - write_back_data_page_num_ - 1) * ObTmpFileGlobal::PAGE_SIZE
-        + file_size_ % ObTmpFileGlobal::PAGE_SIZE;
-    }
+    dirty_size =
+      (cached_page_nums_ - flushed_data_page_num_ - write_back_data_page_num_ - 1) * ObTmpFileGlobal::PAGE_SIZE
+      + file_size_ % ObTmpFileGlobal::PAGE_SIZE;
   }
 
   if (dirty_size < 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("dirty_size is unexpected", KR(ret), K(dirty_size), KPC(this));
-    dirty_size = 1;
+    dirty_size = 0;
   }
   return dirty_size;
 }
@@ -2342,7 +2348,7 @@ int ObSharedNothingTmpFile::update_file_meta_after_flush_(const int64_t start_po
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid param", KR(ret), K(start_pos), K(end_pos), K(flush_infos_), KPC(this));
   } else if (OB_FAIL(remove_useless_page_in_data_flush_infos_(start_pos, end_pos, flushed_data_page_num,
-                                                         new_start_pos, new_flushed_data_page_num))) {
+                                                              new_start_pos, new_flushed_data_page_num))) {
     LOG_WARN("fail to remove useless page in flush infos", KR(ret), K(fd_), K(start_pos), K(end_pos),
              K(flushed_data_page_num), K(end_pos));
   } else if (0 == new_flushed_data_page_num) {
