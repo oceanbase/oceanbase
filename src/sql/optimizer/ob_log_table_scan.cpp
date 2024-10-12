@@ -136,19 +136,20 @@ int ObLogTableScan::do_re_est_cost(EstimateCostInfo &param, double &card, double
                                             limit_percent, limit_count, offset_count))) {
     LOG_WARN("failed to get limit offset value", K(ret));
   } else {
-    card = get_card();
+    card = get_output_row_count();
     int64_t part_count = est_cost_info_->index_meta_info_.index_part_count_;
+    double limit_count_double = static_cast<double>(limit_count);
+    double offset_count_double = static_cast<double>(offset_count);
     if (0 <= limit_count) {
       if (!use_das()) {
-        limit_count *= part_count;
-        offset_count *= part_count;
+        limit_count_double *= part_count;
+        offset_count_double *= part_count;
       }
-      double need_row_count = limit_count + offset_count;
-      need_row_count = std::min(need_row_count, card);
+      double need_row_count = limit_count_double + offset_count_double;
       if (param.need_row_count_ < 0) {
         param.need_row_count_ = need_row_count;
       } else {
-        param.need_row_count_ = std::min(param.need_row_count_, need_row_count);
+        param.need_row_count_ = std::min(param.need_row_count_ + offset_count_double, need_row_count);
       }
     }
     if (stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_3, COMPAT_VERSION_4_3_0,
@@ -157,7 +158,10 @@ int ObLogTableScan::do_re_est_cost(EstimateCostInfo &param, double &card, double
         (!est_cost_info_->postfix_filters_.empty() ||
         !est_cost_info_->table_filters_.empty() ||
         !est_cost_info_->ss_postfix_range_filters_.empty())) {
-      //full scan with table filters
+      // full scan with table filters
+      param.need_row_count_ = -1;
+    }
+    if (param.need_row_count_ > card) {
       param.need_row_count_ = -1;
     }
     if (OB_FAIL(AccessPath::re_estimate_cost(param,
@@ -169,6 +173,11 @@ int ObLogTableScan::do_re_est_cost(EstimateCostInfo &param, double &card, double
       LOG_WARN("failed to re estimate cost", K(ret));
     } else {
       cost = op_cost;
+      if (0 <= limit_count && param.need_row_count_ == -1) {
+        // full scan with table filters
+        card = std::min(limit_count_double + offset_count_double, card);
+      }
+      card = std::max(card - offset_count_double, 0.0);
     }
   }
   return ret;
@@ -2437,37 +2446,18 @@ int ObLogTableScan::set_limit_offset(ObRawExpr *limit, ObRawExpr *offset)
   EstimateCostInfo param;
   param.need_parallel_ = get_parallel();
 
-  double limit_percent = -1.0;
-  int64_t limit_count = -1;
-  int64_t offset_count = 0;
-  double index_back_cost = 0.0;
-  if (OB_ISNULL(est_cost_info_)) {
+  ENABLE_OPT_TRACE_COST_MODEL;
+  if (NULL == est_cost_info_) {
     //fake cte path
-  } else if (OB_FAIL(get_limit_offset_value(NULL, limit_count_expr_, limit_offset_expr_,
-                                            limit_percent, limit_count, offset_count))) {
-    LOG_WARN("failed to get limit offset value", K(ret));
+  } else if (OB_FAIL(do_re_est_cost(param, card, op_cost, cost))) {
+    LOG_WARN("failed to re est cost error", K(ret));
   } else {
-    int64_t part_count = est_cost_info_->index_meta_info_.index_part_count_;
-    if (0 <= limit_count) {
-      if (!use_das()) {
-        limit_count *= part_count;
-        offset_count *= part_count;
-      }
-      param.need_row_count_ = limit_count + offset_count;
-      param.need_row_count_ = std::min(param.need_row_count_, get_card());
-    }
-    ENABLE_OPT_TRACE_COST_MODEL;
-    if (OB_FAIL(do_re_est_cost(param, card, op_cost, cost))) {
-      LOG_WARN("failed to re est cost error", K(ret));
-    } else {
-      card = std::min(card, static_cast<double>(limit_count));
-      set_op_cost(op_cost);
-      set_cost(cost);
-      set_card(card);
-      LOG_TRACE("push limit into table scan", K(param), K(limit_count), K(part_count), K(card));
-    }
-    DISABLE_OPT_TRACE_COST_MODEL;
+    set_op_cost(op_cost);
+    set_cost(cost);
+    set_card(card);
+    LOG_TRACE("push limit into table scan", K(param), K(op_cost), K(cost), K(card));
   }
+  DISABLE_OPT_TRACE_COST_MODEL;
   return ret;
 }
 

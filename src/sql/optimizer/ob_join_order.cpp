@@ -3514,7 +3514,17 @@ int ObJoinOrder::revise_output_rows_after_creating_path(PathHelper &helper,
 {
   int ret = OB_SUCCESS;
   AccessPath *path = NULL;
-  if (!helper.is_inner_path_) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < access_paths.count(); ++i) {
+    if (OB_ISNULL(path = access_paths.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("access path is null", K(ret), K(i));
+    } else if (path->is_false_range()) {
+      path->set_output_row_count(0.0);
+    }
+  }
+  if (OB_FAIL(ret)) {
+    // dp nothing
+  } else if (!helper.is_inner_path_) {
     LOG_TRACE("OPT:output row count before revising", K(output_rows_));
     // get the minimal output row count
     int64_t maximum_count = -1;
@@ -3522,7 +3532,7 @@ int ObJoinOrder::revise_output_rows_after_creating_path(PathHelper &helper,
     if (helper.est_method_ & EST_STORAGE) {
       bool contain_false_range_path = false;
       for (int64_t i = 0; OB_SUCC(ret) && !contain_false_range_path && i < access_paths.count(); ++i) {
-        AccessPath *path = access_paths.at(i);
+        path = access_paths.at(i);
         if (OB_ISNULL(path)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("null path", K(ret));
@@ -6333,8 +6343,8 @@ int AccessPath::re_estimate_cost(const EstimateCostInfo &param,
         }
         phy_query_range_row_count = std::min(orign_phy_query_range_row_count, phy_query_range_row_count);
         logical_query_range_row_count = std::min(orign_logical_query_range_row_count, logical_query_range_row_count);
-        card = std::min(param.need_row_count_, card);
       }
+      card = std::min(param.need_row_count_, card);
     }
     est_cost_info.phy_query_range_row_count_ = phy_query_range_row_count;
     est_cost_info.logical_query_range_row_count_ = logical_query_range_row_count;

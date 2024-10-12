@@ -560,6 +560,7 @@ struct EstimateCostInfo {
     void set_is_get(bool is_get) { is_get_ = is_get; }
     double get_table_row_count() const
     { return est_cost_info_.table_meta_info_ == NULL ? 1.0 : est_cost_info_.table_meta_info_->table_row_count_; }
+    void set_output_row_count(double output_row_count) { est_cost_info_.output_row_count_ = output_row_count; }
     double get_output_row_count() const { return est_cost_info_.output_row_count_; }
     double get_logical_query_range_row_count() const { return est_cost_info_.logical_query_range_row_count_; }
     double get_phy_query_range_row_count() const { return est_cost_info_.phy_query_range_row_count_; }
