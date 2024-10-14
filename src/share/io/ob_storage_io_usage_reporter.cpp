@@ -151,8 +151,8 @@ int ObStorageIOUsageRepoter::UpdateIOUsageFunctor::
     int ret = OB_SUCCESS;
 
     if (entry.first.tenant_id_ == tenant_id_) {
-        int64_t tmp_storage_id = INT64_MAX;
-        int64_t tmp_dest_id = INT64_MAX;
+        uint64_t tmp_storage_id = OB_INVALID_ID;
+        uint64_t tmp_dest_id = OB_INVALID_ID;
         const ObStorageInfoType table_type = entry.first.id_.get_category();
         ObString storage_mod_str;
         // get storage id and storage str
@@ -170,7 +170,8 @@ int ObStorageIOUsageRepoter::UpdateIOUsageFunctor::
         entry.second.reset_total_size(usages);
 
         for (int64_t i = 0; i < ResourceType::ResourceTypeCnt; ++i) {
-            if (usages[i].type_ >= ResourceType::ResourceTypeCnt || (ResourceType::iops == usages[i].type_ || ResourceType::iobw == usages[i].type_)) {
+            if (usages[i].type_ >= ResourceType::ResourceTypeCnt ||
+                (ResourceType::iops == usages[i].type_ || ResourceType::iobw == usages[i].type_)) {
               // skip
             } else if (usages[i].total_ <= 0 ) {
               // skip
@@ -195,8 +196,8 @@ int ObStorageIOUsageRepoter::report_tenant_io_usage(const uint64_t tenant_id)
     int ret = OB_SUCCESS;
 
     if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
-        ret = OB_INVALID_CONFIG;
-        LOG_WARN("invalid config", K(ret), K(tenant_id));
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(ret), K(tenant_id));
     } else {
         // for each tenant and meta tenant to report io usage
         UpdateIOUsageFunctor fn(tenant_id);
@@ -204,8 +205,8 @@ int ObStorageIOUsageRepoter::report_tenant_io_usage(const uint64_t tenant_id)
         if (is_sys_tenant(tenant_id)) {
             // do nothing
         } else {
-            UpdateIOUsageFunctor meta_fn(tenant_id);
-            OB_IO_MANAGER.get_tc().foreach_record(fn);
+            UpdateIOUsageFunctor meta_fn(gen_meta_tenant_id(tenant_id));
+            OB_IO_MANAGER.get_tc().foreach_record(meta_fn);
         }
     }
 

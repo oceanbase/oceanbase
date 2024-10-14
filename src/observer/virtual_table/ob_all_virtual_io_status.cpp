@@ -911,9 +911,11 @@ int ObAllVirtualGroupIOStat::record_user_group_io_status(const int64_t tenant_id
           read_item.tenant_id_ = tenant_id;
           read_item.mode_ = ObIOMode::READ;
           read_item.group_id_ = io_config.group_configs_.at(local_group_config_index).group_id_;
+          const int64_t read_item_group_name_len = std::strlen(io_config.group_configs_.at(local_group_config_index).group_name_) + 1;
           memcpy(read_item.group_name_,
                  io_config.group_configs_.at(local_group_config_index).group_name_,
-                 std::strlen(io_config.group_configs_.at(local_group_config_index).group_name_));
+                 read_item_group_name_len);
+          read_item.group_name_[read_item_group_name_len] = '\0';
 
           read_item.min_iops_ = group_min_iops;
           read_item.max_iops_ = group_max_iops;
@@ -938,9 +940,11 @@ int ObAllVirtualGroupIOStat::record_user_group_io_status(const int64_t tenant_id
             write_item.tenant_id_ = tenant_id;
             write_item.mode_ = ObIOMode::WRITE;
             write_item.group_id_ = io_config.group_configs_.at(local_group_config_index).group_id_;
+            const int64_t write_item_group_name_len = std::strlen(io_config.group_configs_.at(local_group_config_index).group_name_) + 1;
             memcpy(write_item.group_name_,
                    io_config.group_configs_.at(local_group_config_index).group_name_,
-                   std::strlen(io_config.group_configs_.at(local_group_config_index).group_name_));
+                   write_item_group_name_len);
+            write_item.group_name_[write_item_group_name_len] = '\0';
 
             write_item.min_iops_ = group_min_iops;
             write_item.max_iops_ = group_max_iops;
@@ -1005,7 +1009,9 @@ int ObAllVirtualGroupIOStat::record_sys_group_io_status(const int64_t tenant_id,
           read_item.mode_ = ObIOMode::READ;
           read_item.group_id_ = sys_group_id;
           const char *tmp_name = get_io_sys_group_name(static_cast<common::ObIOModule>(sys_group_id));
-          memcpy(read_item.group_name_, tmp_name, std::strlen(tmp_name));
+          const int64_t read_item_group_name_len = std::strlen(tmp_name) + 1;
+          memcpy(read_item.group_name_, tmp_name, read_item_group_name_len);
+          read_item.group_name_[read_item_group_name_len] = '\0';
           read_item.min_iops_ = 0;
           read_item.max_iops_ = INT64_MAX;
           read_item.max_net_bandwidth_ = INT64_MAX;
@@ -1030,7 +1036,9 @@ int ObAllVirtualGroupIOStat::record_sys_group_io_status(const int64_t tenant_id,
             write_item.mode_ = ObIOMode::WRITE;
             write_item.group_id_ = sys_group_id;
             const char *tmp_name = get_io_sys_group_name(static_cast<common::ObIOModule>(sys_group_id));
+            const int64_t write_item_group_name_len = std::strlen(tmp_name) + 1;
             memcpy(write_item.group_name_, tmp_name, std::strlen(tmp_name));
+            write_item.group_name_[write_item_group_name_len] = '\0';
             write_item.min_iops_ = 0;
             write_item.max_iops_ = INT64_MAX;
             write_item.max_net_bandwidth_ = INT64_MAX;

@@ -2020,6 +2020,7 @@ ObTenantIOConfig::ObTenantIOConfig()
   for (uint8_t i = (uint8_t)ObIOMode::READ; i <= (uint8_t)ObIOMode::MAX_MODE; ++i) {
     tmp_group_config.mode_ = (ObIOMode)i;
     memcpy(tmp_group_config.group_name_, other_group_name.ptr(), other_group_name.length());
+    tmp_group_config.group_name_[other_group_name.length()] = '\0';
     if (OB_FAIL(group_configs_.push_back(tmp_group_config))) {
       LOG_WARN("push back group config failed", K(ret));
     }
