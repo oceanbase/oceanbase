@@ -1991,7 +1991,7 @@ int ObTenantIOManager::print_io_status()
     for (int64_t i = 0; i < info.count(); ++i) {
       if (OB_TMP_FAIL(transform_usage_index_to_group_config_index(i, group_config_index))) {
         continue;
-      } else if (group_config_index >= io_config_.group_configs_.count() || info.count() != failed_req_info.count() || info.count() != mem_stat.group_mem_infos_.count()) {
+      } else if (group_config_index >= io_config_.group_configs_.count() || io_clock_.get_group_clocks_count() || info.count() != failed_req_info.count() || info.count() != mem_stat.group_mem_infos_.count()) {
         continue;
       }
       mode = static_cast<ObIOMode>(group_config_index % MODE_COUNT);
