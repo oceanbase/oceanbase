@@ -203,6 +203,7 @@ public:
                                    : " AVG(SYS_OP_OPNSIZE(`%.*s`))";
   }
   virtual int decode(ObObj &obj) override;
+  virtual int gen_expr(char *buf, const int64_t buf_len, int64_t &pos) override;
 };
 
 class ObStatLlcBitmap : public ObStatColItem

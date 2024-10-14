@@ -290,6 +290,7 @@ public:
 private:
   int add_spm_stats_scheduler_job();
   int post_upgrade_for_persitent_routine();
+  int post_upgrade_for_optimizer_stats();
 };
 
 /* =========== special upgrade processor end   ============= */

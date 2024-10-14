@@ -183,7 +183,6 @@ int ObTableStatParam::assign(const ObTableStatParam &other)
   allocator_ = other.allocator_;
   ref_table_type_ = other.ref_table_type_;
   is_async_gather_ = other.is_async_gather_;
-  async_gather_sample_size_ = other.async_gather_sample_size_;
   async_full_table_size_ = other.async_full_table_size_;
   async_partition_ids_ = other.async_partition_ids_;
   hist_sample_info_.is_sample_ = other.hist_sample_info_.is_sample_;
@@ -194,6 +193,10 @@ int ObTableStatParam::assign(const ObTableStatParam &other)
   min_iops_ = other.min_iops_;
   max_iops_ = other.max_iops_;
   weight_iops_ = other.weight_iops_;
+  is_auto_gather_ = other.is_auto_gather_;
+  is_auto_sample_size_ = other.is_auto_sample_size_;
+  need_refine_min_max_ = other.need_refine_min_max_;
+  auto_sample_row_cnt_ = other.auto_sample_row_cnt_;
   if (OB_FAIL(part_infos_.assign(other.part_infos_))) {
     LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(subpart_infos_.assign(other.subpart_infos_))) {
@@ -244,6 +247,10 @@ int ObTableStatParam::assign_common_property(const ObTableStatParam &other)
   min_iops_ = other.min_iops_;
   max_iops_ = other.max_iops_;
   weight_iops_ = other.weight_iops_;
+  is_auto_gather_ = other.is_auto_gather_;
+  is_auto_sample_size_ = other.is_auto_sample_size_;
+  need_refine_min_max_ = other.need_refine_min_max_;
+  auto_sample_row_cnt_ = other.auto_sample_row_cnt_;
   return ret;
 }
 
@@ -280,6 +287,9 @@ int ObOptStatGatherParam::assign(const ObOptStatGatherParam &other)
   data_table_id_ = other.data_table_id_;
   is_global_index_ = other.is_global_index_;
   part_level_ = other.part_level_;
+  is_auto_sample_size_ = other.is_auto_sample_size_;
+  need_refine_min_max_ = other.need_refine_min_max_;
+  auto_sample_row_cnt_ = other.auto_sample_row_cnt_;
   if (OB_FAIL(partition_infos_.assign(other.partition_infos_))) {
     LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(column_params_.assign(other.column_params_))) {

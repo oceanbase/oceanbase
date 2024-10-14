@@ -22,6 +22,7 @@
 #include "pl/sys_package/ob_dbms_stats.h"
 #include "share/stat/ob_dbms_stats_history_manager.h"
 #include "share/rc/ob_tenant_base.h"
+#include "sql/optimizer/ob_opt_selectivity.h"
 
 namespace oceanbase {
 using namespace pl;
@@ -536,6 +537,7 @@ int ObIncrementalStatEstimator::derive_global_tbl_stat(ObIAllocator &alloc,
     } else {
       table_stat = new (ptr) ObOptTableStat();
       ObGlobalTableStat global_tstat;
+      int64_t sample_size = 0;
       for (int64_t i = 0; OB_SUCC(ret) && i < part_opt_stats.count(); ++i) {
         ObOptTableStat *opt_tbl_stat = part_opt_stats.at(i).table_stat_;
         if (OB_ISNULL(opt_tbl_stat)) {
@@ -547,6 +549,7 @@ int ObIncrementalStatEstimator::derive_global_tbl_stat(ObIAllocator &alloc,
                            opt_tbl_stat->get_data_size(),
                            opt_tbl_stat->get_macro_block_num(),
                            opt_tbl_stat->get_micro_block_num());
+          sample_size += opt_tbl_stat->get_sample_size();
         }
       }
       if (OB_SUCC(ret)) {
@@ -555,7 +558,7 @@ int ObIncrementalStatEstimator::derive_global_tbl_stat(ObIAllocator &alloc,
         table_stat->set_partition_id(partition_id);
         table_stat->set_object_type(approx_level);
         table_stat->set_row_count(global_tstat.get_row_count());
-        table_stat->set_sample_size(global_tstat.get_row_count());
+        table_stat->set_sample_size(sample_size);
         table_stat->set_avg_row_size(global_tstat.get_avg_row_size());
         table_stat->set_data_size(global_tstat.get_avg_data_size());
         table_stat->set_macro_block_num(global_tstat.get_macro_block_count());
@@ -603,6 +606,8 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
         ObGlobalNdvEval ndv_eval;
         ObGlobalAvglenEval avglen_eval;
         ObSEArray<ObHistogram, 4> all_part_histograms;
+        int64_t sample_size = 0;
+        int64_t total_row_cnt = 0;
         int64_t max_bucket_num = param.column_params_.at(i).bucket_num_;
         for (int64_t j = 0; OB_SUCC(ret) && j < part_cnt; ++j) {
           ObOptColumnStat *opt_col_stat = NULL;
@@ -623,6 +628,8 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get unexpected null", K(ret), K(part_opt_stats.at(j).column_stats_),
                                             K(param.column_params_.at(i)));
+          } else if (OB_FALSE_IT(sample_size += opt_tab_stat->get_sample_size())) {
+          } else if (OB_FALSE_IT(total_row_cnt += opt_tab_stat->get_row_count())) {
           } else if (opt_col_stat->get_num_distinct() == 0 && opt_col_stat->get_num_null() == 0) {
             /*do nothing*/
           } else if (need_derive_hist && opt_col_stat->get_histogram().is_valid() &&
@@ -642,6 +649,7 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
           }
         }
         if (OB_SUCC(ret)) {
+          int64_t num_distinct = ObOptSelectivity::scale_distinct(total_row_cnt, sample_size, ndv_eval.get());
           col_stat->set_table_id(param.column_params_.at(i).need_basic_stat() ? param.table_id_ : OB_INVALID_ID);
           col_stat->set_partition_id(partition_id);
           col_stat->set_column_id(param.column_params_.at(i).column_id_);
@@ -649,7 +657,7 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
           col_stat->set_num_null(null_eval.get());
           col_stat->set_num_not_null(not_null_eval.get());
           col_stat->get_histogram().set_sample_size(not_null_eval.get());
-          col_stat->set_num_distinct(ndv_eval.get());
+          col_stat->set_num_distinct(num_distinct);
           col_stat->set_avg_len(avglen_eval.get());
           ndv_eval.get_llc_bitmap(col_stat->get_llc_bitmap(), col_stat->get_llc_bitmap_size());
           col_stat->set_llc_bitmap_size(ObOptColumnStat::NUM_LLC_BUCKET);

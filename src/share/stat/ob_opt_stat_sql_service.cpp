@@ -77,7 +77,8 @@
                                                                "global_stats," \
                                                                "user_stats," \
                                                                "stattype_locked," \
-                                                               "stale_stats) VALUES " \
+                                                               "stale_stats," \
+                                                               "spare1) VALUES " \
 
 #define REPLACE_COL_STAT_SQL "REPLACE INTO __all_column_stat(tenant_id," \
                                                               "table_id," \
@@ -319,7 +320,8 @@ int ObOptStatSqlService::fetch_table_stat(const uint64_t tenant_id,
                                       "micro_blk_cnt as micro_block_num, "
                                       "stattype_locked as stattype_locked,"
                                       "stale_stats as stale_stats,"
-                                      "last_analyzed FROM %s ", share::OB_ALL_TABLE_STAT_TNAME))) {
+                                      "last_analyzed,"
+                                      "spare1 as sample_size FROM %s ", share::OB_ALL_TABLE_STAT_TNAME))) {
       LOG_WARN("fail to append SQL stmt string.", K(sql), K(ret));
     } else if (OB_FAIL(sql.append_fmt(" WHERE TENANT_ID = %ld AND TABLE_ID=%ld",
                                       ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
@@ -380,7 +382,8 @@ int ObOptStatSqlService::batch_fetch_table_stats(sqlclient::ObISQLConnection *co
                                         "micro_blk_cnt as micro_block_num, "
                                         "stattype_locked as stattype_locked,"
                                         "stale_stats as stale_stats,"
-                                        "last_analyzed FROM %s", share::OB_ALL_TABLE_STAT_TNAME))) {
+                                        "last_analyzed,"
+                                        "spare1 as sample_size FROM %s", share::OB_ALL_TABLE_STAT_TNAME))) {
         LOG_WARN("fail to append SQL stmt string.", K(sql), K(ret));
       } else if (OB_FAIL(generate_in_list(part_ids, part_list))) {
         LOG_WARN("failed to generate in list", K(ret));
@@ -887,7 +890,8 @@ int ObOptStatSqlService::get_table_stat_sql(const uint64_t tenant_id,
       OB_FAIL(dml_splicer.add_column("global_stats", 0)) ||
       OB_FAIL(dml_splicer.add_column("user_stats", 0)) ||
       OB_FAIL(dml_splicer.add_column("stattype_locked", stat.get_stattype_locked())) ||
-      OB_FAIL(dml_splicer.add_column("stale_stats", 0))) {
+      OB_FAIL(dml_splicer.add_column("stale_stats", 0)) ||
+      OB_FAIL(dml_splicer.add_column("spare1", stat.get_sample_size()))) {
     LOG_WARN("failed to add dml splicer column", K(ret));
   } else if (OB_FAIL(dml_splicer.splice_values(sql_string))) {
     LOG_WARN("failed to get sql string", K(ret));
@@ -1147,6 +1151,7 @@ int ObOptStatSqlService::fill_table_stat(common::sqlclient::ObMySQLResult &resul
     } else {
       stat.set_last_analyzed(static_cast<int64_t>(int_value));
     }
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_SKIP_RET(result, sample_size, stat, int64_t);
   }
   return ret;
 }
