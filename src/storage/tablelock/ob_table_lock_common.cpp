@@ -344,32 +344,32 @@ int ObTableLockOwnerID::get_data_version_(uint64_t &data_version) const
   const static int64_t CACHE_REFRESH_INTERVAL = 1_s;
   RLOCAL_INIT(int64_t, last_check_timestamp, 0);
   RLOCAL_INIT(uint64_t, last_result, 0);
+  RLOCAL_INIT(uint64_t, last_tenant_id, 0);
   uint64_t tenant_id = MTL_ID();
+  int64_t current_time = ObClockGenerator::getClock();
+  uint64_t tmp_data_version = 0;
   if (OB_UNLIKELY(!(is_user_tenant(tenant_id)
                     || is_meta_tenant(tenant_id)
                     || is_sys_tenant(tenant_id)))) {
     // internal process use sys tenant's data version
     // ob admin use OB_SERVER_TENANT_ID
     // create tenant use T0
-    LOG_INFO("internal process use data version of sys tenant", K(tenant_id));
+    FLOG_INFO("internal process use data version of sys tenant", K(tenant_id));
     tenant_id = OB_SYS_TENANT_ID;
   }
-  if (OB_UNLIKELY(OB_SYS_TENANT_ID == tenant_id)) {
-    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
-      LOG_WARN("get data version failed", K(ret), K(tenant_id), K(data_version));
-    }
-  } else {
-    int64_t current_time = ObClockGenerator::getClock();
-    uint64_t tmp_data_version = 0;
-    if (current_time - last_check_timestamp < CACHE_REFRESH_INTERVAL) {
-    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tmp_data_version))) {
-      LOG_WARN("get data version failed", K(ret), K(tenant_id));
-    } else {
-      last_result = tmp_data_version;
-      last_check_timestamp = current_time;
-    }
-    data_version = last_result;
+  if (last_tenant_id != tenant_id) {
+    FLOG_INFO("refresh the data version because of tenant changed", K(tenant_id), K(last_tenant_id));
   }
+  if (current_time - last_check_timestamp < CACHE_REFRESH_INTERVAL
+      && last_tenant_id == tenant_id) {
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tmp_data_version))) {
+    LOG_WARN("get data version failed", K(ret), K(tenant_id));
+  } else {
+    last_result = tmp_data_version;
+    last_check_timestamp = current_time;
+    last_tenant_id = tenant_id;
+  }
+  data_version = last_result;
   return ret;
 }
 
