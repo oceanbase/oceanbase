@@ -44,7 +44,8 @@ int obcharset_is_utf8_charset_of_collation(ObCollationType collation_type, bool 
     *is_utf8 = false;
     if (collation_type == CS_TYPE_UTF8MB4_GENERAL_CI ||
         collation_type == CS_TYPE_UTF8MB4_BIN ||
-        collation_type == CS_TYPE_UTF8MB4_UNICODE_CI ||
+        (collation_type >= CS_TYPE_UTF8MB4_UNICODE_CI &&
+         collation_type <= CS_TYPE_UTF8MB4_VIETNAMESE_CI) ||
         collation_type == CS_TYPE_BINARY ||
         (collation_type >= CS_TYPE_UTF8MB4_0900_AI_CI &&
          collation_type <= CS_TYPE_UTF8MB4_MN_CYRL_0900_AS_CS)
