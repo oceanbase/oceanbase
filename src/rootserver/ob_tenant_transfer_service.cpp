@@ -371,9 +371,15 @@ int ObTenantTransferService::check_if_need_wait_due_to_last_failure_(
     } else if (OB_UNLIKELY(!last_task.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("last task should be valid", KR(ret), K(task), K(last_task));
-    } else if (last_task.get_status().is_failed_status()
-        && ObTimeUtil::current_time() - finish_time < wait_interval) {
-      need_wait = true;
+    } else if (ObTimeUtil::current_time() - finish_time < wait_interval) {
+      if (last_task.get_status().is_failed_status()) { // last failed
+        need_wait = true;
+      } else if (last_task.get_tablet_list().empty()
+          && !last_task.get_lock_conflict_part_list().empty()) { // all part conflicted
+        need_wait = true;
+      }
+    }
+    if (need_wait) {
       LOG_TRACE("last task failed, need wait", KR(ret),
           K(task), K(last_task), K(finish_time), K(wait_interval));
     }
