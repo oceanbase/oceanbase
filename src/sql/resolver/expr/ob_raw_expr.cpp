@@ -726,7 +726,7 @@ bool ObRawExpr::same_as(const ObRawExpr &expr,
 #ifdef ENABLE_DEBUG_LOG
     if (bret && is_hash_different(expr, check_context)) {
       const ObFatalErrExtraInfoGuard *info = ObFatalErrExtraInfoGuard::get_thd_local_val_ptr();
-      LOG_WARN("expr hash should not be different", K(bret), KPC(this), K(expr), KPC(info));
+      LOG_ERROR("expr hash should not be different", K(bret), KPC(this), K(expr), KPC(info));
     }
 #endif
   }

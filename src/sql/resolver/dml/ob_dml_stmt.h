@@ -870,6 +870,7 @@ public:
   int formalize_child_stmt_expr_reference(ObRawExprFactory *expr_factory,
                                           ObSQLSessionInfo *session_info);
   int set_sharable_expr_reference(ObRawExpr &expr, ExplicitedRefType ref_type);
+  int calc_relation_expr_hash();
   int check_pseudo_column_valid();
   int get_ora_rowscn_column(const uint64_t table_id, ObPseudoColumnRawExpr *&ora_rowscn);
   virtual int remove_useless_sharable_expr(ObRawExprFactory *expr_factory,
