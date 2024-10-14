@@ -929,11 +929,7 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
   offset_ = is_ttl_table() ? 0 : query.get_offset();
   if (!tablet_id_.is_valid()) {
     if (simple_table_schema_->is_partitioned_table()) {
-      // trigger client to refresh table entry
-      // maybe drop a non-partitioned table and create a
-      // partitioned table with same name
-      ret = OB_SCHEMA_ERROR;
-      LOG_WARN("partitioned table should pass right tablet id from client", K(ret));
+      tablet_id_ = ObTabletID::INVALID_TABLET_ID;;
     } else {
       tablet_id_ = simple_table_schema_->get_tablet_id();
     }
@@ -941,11 +937,14 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
   // init is_index_scan_
   if (OB_FAIL(ret)) {
   } else if (index_name.empty() || 0 == index_name.case_compare(ObIndexHint::PRIMARY_KEY)) { // scan with primary key
-    index_table_id_ = ref_table_id_;
-    if (!index_tablet_id_.is_valid()) {
+    if (!tablet_id_.is_valid()) {
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("partitioned table should pass right tablet id from client", K(ret));
+    } else {
+      index_table_id_ = ref_table_id_;
       index_tablet_id_ = tablet_id_;
+      is_index_back_ = false;
     }
-    is_index_back_ = false;
   } else {
     is_index_scan_ = true;
     // init index_table_id_,index_schema_
