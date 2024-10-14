@@ -1553,3 +1553,34 @@ int ObLogJoin::check_use_child_ordering(bool &used, int64_t &inherit_child_order
   }
   return ret;
 }
+
+int ObLogJoin::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *left_child = NULL;
+  ObLogicalOperator *right_child = NULL;
+  is_fixed = false;
+  if (OB_ISNULL(expr) ||
+      OB_ISNULL(left_child = get_child(first_child)) ||
+      OB_ISNULL(right_child = get_child(second_child))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (LEFT_OUTER_JOIN == join_type_) {
+    is_fixed = expr->get_relation_ids().overlap(right_child->get_table_set());
+  } else if (RIGHT_OUTER_JOIN == join_type_) {
+    is_fixed = expr->get_relation_ids().overlap(left_child->get_table_set());
+  } else if (FULL_OUTER_JOIN == join_type_) {
+    is_fixed = expr->get_relation_ids().overlap(left_child->get_table_set()) ||
+               expr->get_relation_ids().overlap(right_child->get_table_set());
+  } else if (CONNECT_BY_JOIN == join_type_) {
+    is_fixed = ObOptimizerUtil::find_item(connect_by_root_exprs_, expr) ||
+               ObOptimizerUtil::find_item(sys_connect_by_path_exprs_, expr) ||
+               ObOptimizerUtil::find_item(prior_exprs_, expr) ||
+               ObOptimizerUtil::find_item(connect_by_pseudo_columns_, expr) ||
+               ObOptimizerUtil::find_item(connect_by_prior_exprs_, expr) ||
+               ObOptimizerUtil::find_item(connect_by_extra_exprs_, expr);
+  } else {
+    // do nothing for inner/semi/anti join
+  }
+  return ret;
+}

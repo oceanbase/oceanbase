@@ -400,9 +400,9 @@ Outputs & filters:
        DOUBLE(-1, -1)))]), filter(nil), rowset=16
       group([t1.c2]), agg_func([T_FUN_SUM(t1.c1)], [T_FUN_COUNT(t1.c1)], [T_FUN_SUM(t1.c2)], [T_FUN_COUNT(t1.c2)], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))],
        [T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))])
-  8 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+  8 - output([t1.c1], [t1.c2], [cast(t1.c3, DOUBLE(-1, -1))]), filter(nil), rowset=16
       force partition granule
-  9 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 < 10]), rowset=16
+  9 - output([t1.c1], [t1.c2], [cast(t1.c3, DOUBLE(-1, -1))]), filter([t1.c2 < 10]), rowset=16
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-1])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
@@ -448,9 +448,9 @@ Outputs & filters:
        DOUBLE(-1, -1)))]), filter(nil), rowset=16
       group([t1.c2]), agg_func([T_FUN_SUM(t1.c1)], [T_FUN_COUNT(t1.c1)], [T_FUN_SUM(t1.c2)], [T_FUN_COUNT(t1.c2)], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))],
        [T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))])
-  7 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+  7 - output([t1.c1], [t1.c2], [cast(t1.c3, DOUBLE(-1, -1))]), filter(nil), rowset=16
       force partition granule
-  8 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 < 10]), rowset=16
+  8 - output([t1.c1], [t1.c2], [cast(t1.c3, DOUBLE(-1, -1))]), filter([t1.c2 < 10]), rowset=16
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-1])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
@@ -486,9 +486,9 @@ Outputs & filters:
        DOUBLE(-1, -1)))]), filter(nil), rowset=16
       group(nil), agg_func([T_FUN_SUM(t1.c1)], [T_FUN_COUNT(t1.c1)], [T_FUN_SUM(t1.c2)], [T_FUN_COUNT(t1.c2)], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))],
        [T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))])
-  5 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+  5 - output([t1.c1], [t1.c2], [cast(t1.c3, DOUBLE(-1, -1))]), filter(nil), rowset=16
       force partition granule
-  6 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 < 10]), rowset=16
+  6 - output([t1.c1], [t1.c2], [cast(t1.c3, DOUBLE(-1, -1))]), filter([t1.c2 < 10]), rowset=16
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-1])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
@@ -541,7 +541,7 @@ Outputs & filters:
        DOUBLE(-1, -1)))]), filter(nil), rowset=16
       group([t1.c2]), agg_func([T_FUN_SUM(t1.c1)], [T_FUN_COUNT(t1.c1)], [T_FUN_SUM(t1.c2)], [T_FUN_COUNT(t1.c2)], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))],
        [T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))])
-  9 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+  9 - output([t1.c1], [t1.c2], [cast(t1.c3, DOUBLE(-1, -1))]), filter(nil), rowset=16
       lock tables(t1)
  10 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
       force partition granule
@@ -594,9 +594,9 @@ Outputs & filters:
        DOUBLE(-1, -1)))]), filter(nil), rowset=16
       group([t1.c2]), agg_func([T_FUN_SUM(t1.c1)], [T_FUN_COUNT(t1.c1)], [T_FUN_SUM(t1.c2)], [T_FUN_COUNT(t1.c2)], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))],
        [T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))])
-  8 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+  8 - output([t1.c1], [t1.c2], [cast(t1.c3, DOUBLE(-1, -1))]), filter(nil), rowset=16
       force partition granule
-  9 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 < 10]), rowset=16
+  9 - output([t1.c1], [t1.c2], [cast(t1.c3, DOUBLE(-1, -1))]), filter([t1.c2 < 10]), rowset=16
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-1])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
@@ -643,9 +643,9 @@ Outputs & filters:
        [T_FUN_COUNT(t1.c1)]), filter(nil), rowset=16
       group([t1.c2]), agg_func([T_FUN_SUM(t1.c2)], [T_FUN_COUNT(t1.c2)], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))], [T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))],
        [T_FUN_SUM(t1.c1)], [T_FUN_COUNT(t1.c1)])
-  8 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+  8 - output([t1.c1], [t1.c2], [cast(t1.c3, DOUBLE(-1, -1))]), filter(nil), rowset=16
       force partition granule
-  9 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 < 10]), rowset=16
+  9 - output([t1.c1], [t1.c2], [cast(t1.c3, DOUBLE(-1, -1))]), filter([t1.c2 < 10]), rowset=16
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-1])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
@@ -696,9 +696,9 @@ Outputs & filters:
        DOUBLE(-1, -1)))]), filter(nil), rowset=16
       group([t1.c2]), agg_func([T_FUN_SUM(t1.c1)], [T_FUN_COUNT(t1.c1)], [T_FUN_SUM(t1.c2)], [T_FUN_COUNT(t1.c2)], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))],
        [T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))])
-  8 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+  8 - output([t1.c1], [t1.c2], [cast(t1.c3, DOUBLE(-1, -1))]), filter(nil), rowset=16
       force partition granule
-  9 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 < 10]), rowset=16
+  9 - output([t1.c1], [t1.c2], [cast(t1.c3, DOUBLE(-1, -1))]), filter([t1.c2 < 10]), rowset=16
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-1])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
@@ -795,9 +795,9 @@ Outputs & filters:
        DOUBLE(-1, -1)))]), filter(nil), rowset=16
       group([t1.c2]), agg_func([T_FUN_SUM(t1.c1)], [T_FUN_COUNT(t1.c1)], [T_FUN_SUM(t1.c2)], [T_FUN_COUNT(t1.c2)], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))],
        [T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))])
- 13 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+ 13 - output([t1.c1], [t1.c2], [cast(t1.c3, DOUBLE(-1, -1))]), filter(nil), rowset=16
       force partition granule
- 14 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 < 10]), rowset=16
+ 14 - output([t1.c1], [t1.c2], [cast(t1.c3, DOUBLE(-1, -1))]), filter([t1.c2 < 10]), rowset=16
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-1])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true

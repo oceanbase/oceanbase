@@ -624,7 +624,7 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
   1 - output([t1.c1 + 1], [t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
       equal_conds([t1.c1 + 1 = t2.c2]), other_conds(nil)
-  2 - output([t1.c1]), filter([t1.c2 = 2]), rowset=16
+  2 - output([t1.c1 + 1]), filter([t1.c2 = 2]), rowset=16
       access([t1.c1], [t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
@@ -641,7 +641,7 @@ Outputs & filters:
       access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t2.c1]), range(MIN ; MAX)always true
-  7 - output([t1.c1]), filter(nil), rowset=16
+  7 - output([t1.c1 + 1]), filter(nil), rowset=16
   8 - output([t1.c1]), filter([t1.c2 = 2]), rowset=16
       access([t1.c1], [t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 

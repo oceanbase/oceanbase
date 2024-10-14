@@ -144,6 +144,23 @@ int ObLogMerge::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
   return ret;
 }
 
+int ObLogMerge::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(is_dml_fixed_expr(expr, get_index_dml_infos(), is_fixed))) {
+    LOG_WARN("failed to check is my fixed expr", K(ret));
+  } else if (is_fixed) {
+    // do nothing
+  } else if (OB_FAIL(is_dml_fixed_expr(expr, get_update_infos(), is_fixed))) {
+    LOG_WARN("failed to check is my fixed expr", K(ret));
+  } else if (is_fixed) {
+    // do nothing
+  } else if (OB_FAIL(is_dml_fixed_expr(expr, get_delete_infos(), is_fixed))) {
+    LOG_WARN("failed to check is my fixed expr", K(ret));
+  }
+  return ret;
+}
+
 int ObLogMerge::get_modified_index_id(common::ObIArray<uint64_t> &index_tids)
 {
   int ret = OB_SUCCESS;

@@ -1249,12 +1249,11 @@ public:
 
   int extract_non_const_exprs(const ObIArray<ObRawExpr*> &input_exprs,
                               ObIArray<ObRawExpr*> &non_const_exprs);
-  int check_need_pushdown_expr(const bool producer_id,
+  int check_need_pushdown_expr(const uint64_t producer_id,
                                bool &need_pushdown);
   int check_can_pushdown_expr(const ObRawExpr *expr, bool &can_pushdown);
   int get_pushdown_producer_id(const ObRawExpr *expr, uint64_t &producer_id);
 
-  int force_pushdown_exprs(ObAllocExprContext &ctx);
   int get_pushdown_producer_id(uint64_t &producer_id);
 
   int extract_shared_exprs(const ObIArray<ObRawExpr*> &exprs,
