@@ -2312,27 +2312,31 @@ int LogJoinHint::add_init_aj_table_hint(const ObDMLStmt &stmt,
   } else {
     aj_scan_hint_.table_ = table_item;
   }
-  for (int64_t i = 0 ; i < join_hint.get_aj_table_hints().count() && OB_SUCC(ret); i++) {
-    const ObHint *hint = join_hint.get_aj_table_hints().at(i);
-    if (OB_ISNULL(hint)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret), K(join_hint));
-    } else if (hint->is_access_path_hint()) {
-      const ObIndexHint *index_hint = static_cast<const ObIndexHint *>(hint);
-      if (T_USE_DAS_HINT == index_hint->get_hint_type()) {
-        if (NULL == aj_scan_hint_.use_das_hint_ || index_hint->is_enable_hint()) {
-          aj_scan_hint_.use_das_hint_ = index_hint;
+  // If ref_id_ is invalid, it is not a base table and hints such as use_das and use_index cannot be used.
+  if (aj_scan_hint_.table_->ref_id_ != OB_INVALID_ID) {
+    for (int64_t i = 0 ; i < join_hint.get_aj_table_hints().count() && OB_SUCC(ret); i++) {
+      const ObHint *hint = join_hint.get_aj_table_hints().at(i);
+      if (OB_ISNULL(hint)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), K(join_hint));
+      } else if (hint->is_access_path_hint()) {
+        const ObIndexHint *index_hint = static_cast<const ObIndexHint *>(hint);
+        if (T_USE_DAS_HINT == index_hint->get_hint_type()) {
+          if (NULL == aj_scan_hint_.use_das_hint_ || index_hint->is_enable_hint()) {
+            aj_scan_hint_.use_das_hint_ = index_hint;
+          }
+        } else if (OB_FAIL(aj_scan_hint_.index_hints_.push_back(index_hint))) {
+          LOG_WARN("failed to push back", K(ret));
         }
-      } else if (OB_FAIL(aj_scan_hint_.index_hints_.push_back(index_hint))) {
-        LOG_WARN("failed to push back", K(ret));
+      } else {
+        // do nothing. ignore none access path hint for adaptive join mock table.
       }
-    } else {
-      // do nothing. ignore none access path hint for adaptive join mock table.
     }
-  }
-  // init aj mock table hint
-  if (OB_SUCC(ret) && OB_FAIL(aj_scan_hint_.init_index_hints(schema_guard))) {
-    LOG_WARN("init index hints failed", K(ret));
+    // init aj mock table hint
+    if (OB_SUCC(ret) && OB_FAIL(aj_scan_hint_.init_index_hints(schema_guard))) {
+      LOG_WARN("init index hints failed", K(ret), K(aj_scan_hint_.table_->table_id_),
+              K(aj_scan_hint_.table_->ref_id_), K(aj_scan_hint_.table_->table_name_));
+    }
   }
   return ret;
 }
