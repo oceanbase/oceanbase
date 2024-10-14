@@ -123,6 +123,7 @@ ObTableLoadTransStoreWriter::ObTableLoadTransStoreWriter(ObTableLoadTransStore *
     allocator_("TLD_TSWriter", OB_MALLOC_NORMAL_BLOCK_SIZE, param_.tenant_id_),
     table_data_desc_(nullptr),
     cast_mode_(CM_NONE),
+    session_ctx_array_(nullptr),
     ref_count_(0),
     is_inited_(false)
 {
