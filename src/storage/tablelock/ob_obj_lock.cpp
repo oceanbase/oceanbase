@@ -49,7 +49,7 @@ static const int64_t MAX_LOCK_CNT_IN_BUCKET = 10;
 static const char *OB_TABLE_LOCK_NODE = "TableLockNode";
 static const char *OB_TABLE_LOCK_MAP_ELEMENT = "TableLockMapEle";
 static const char *OB_TABLE_LOCK_MAP = "TableLockMap";
-static const int64_t DEFAULT_RWLOCK_TIMEOUT_US = 100L * 1000L;  // 100ms
+static const int64_t DEFAULT_RWLOCK_TIMEOUT_US = 24L * 3600L * 1000L * 1000L;  // 1 day
 
 bool ObTableLockOpLinkNode::is_complete_outtrans_lock() const
 {
