@@ -94,6 +94,9 @@ public:
             int64_t &out_read_size);
   int truncate(const ObIOFd &fd, const int64_t offset);
 private:
+  int get_group_id_for_write_(uint64_t &group_id);
+  int get_group_id_for_read_(const LogIOContext &io_ctx, uint64_t &group_id);
+private:
   int64_t tenant_id_;
   share::ObLocalDevice *log_local_device_;
   share::ObResourceManager *resource_manager_;

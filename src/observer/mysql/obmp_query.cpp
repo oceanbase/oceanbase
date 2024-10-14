@@ -374,7 +374,7 @@ int ObMPQuery::process()
     IGNORE_RETURN record_flt_trace(session);
   }
 
-  if (is_conn_valid()) {
+  if (OB_UNLIKELY(NULL != GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid() && is_conn_valid()) {
     int tmp_ret = OB_SUCCESS;
     // Call setup_user_resource_group no matter OB_SUCC or OB_FAIL
     // because we have to reset conn.group_id_ according to user_name.

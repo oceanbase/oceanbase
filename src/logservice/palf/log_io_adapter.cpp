@@ -168,7 +168,7 @@ int LogIOAdapter::pwrite(const ObIOFd &io_fd,
 {
   int ret = OB_SUCCESS;
   write_size = 0;
-  CONSUMER_GROUP_FUNC_GUARD(share::ObFunctionType::PRIO_CLOG_HIGH);
+  uint64_t consumer_group_id = 0;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -176,6 +176,8 @@ int LogIOAdapter::pwrite(const ObIOFd &io_fd,
   } else if (!io_fd.is_valid() || OB_ISNULL(buf) || 0 >= count || 0 > offset) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", K(io_fd), KP(buf), K(count), K(offset));
+  } else if (OB_FAIL(get_group_id_for_write_(consumer_group_id))){
+    PALF_LOG(WARN, "get_group_id_for_write_ failed", K(ret), K(consumer_group_id));
   } else {
     ObIOInfo io_info;
     io_info.tenant_id_ = tenant_id_;
@@ -183,7 +185,7 @@ int LogIOAdapter::pwrite(const ObIOFd &io_fd,
     io_info.offset_ = offset;
     io_info.size_ = count;
     io_info.flag_.set_mode(ObIOMode::WRITE);
-    io_info.flag_.set_resource_group_id(GET_GROUP_ID());
+    io_info.flag_.set_resource_group_id(consumer_group_id);
     io_info.flag_.set_sys_module_id(ObIOModule::CLOG_IO);
     io_info.flag_.set_wait_event(ObWaitEventIds::PALF_WRITE);
     io_info.buf_ = buf;
@@ -210,7 +212,7 @@ int LogIOAdapter::pread(const ObIOFd &io_fd,
 {
   int ret = OB_SUCCESS;
   out_read_size = 0;
-  CONSUMER_GROUP_FUNC_GUARD(io_ctx.get_function_type());
+  uint64_t consumer_group_id = 0;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -218,6 +220,8 @@ int LogIOAdapter::pread(const ObIOFd &io_fd,
   } else if (!io_fd.is_valid() || OB_ISNULL(buf) || 0 > count || 0 > offset) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", K(io_fd), KP(buf), K(count), K(offset));
+  } else if (OB_FAIL(get_group_id_for_read_(io_ctx, consumer_group_id))){
+    PALF_LOG(WARN, "get_group_id_for_read_ failed", K(ret), K(io_ctx), K(consumer_group_id));
   } else {
     ObIOInfo io_info;
     io_info.tenant_id_ = tenant_id_;
@@ -225,7 +229,7 @@ int LogIOAdapter::pread(const ObIOFd &io_fd,
     io_info.offset_ = offset;
     io_info.size_ = count;
     io_info.flag_.set_mode(ObIOMode::READ);
-    io_info.flag_.set_resource_group_id(GET_GROUP_ID());
+    io_info.flag_.set_resource_group_id(consumer_group_id);
     io_info.flag_.set_sys_module_id(ObIOModule::CLOG_IO);
     io_info.flag_.set_wait_event(ObWaitEventIds::PALF_READ);
     io_info.buf_ = buf;
@@ -277,6 +281,33 @@ int LogIOAdapter::truncate(const ObIOFd &io_fd, const int64_t offset)
   } else if (0 != ftruncate(io_fd.second_id_, offset)) {
     ret = convert_sys_errno();
     PALF_LOG(WARN, "ftruncate failed", K(ret), K(errno), K(io_fd), K(offset));
+  }
+  return ret;
+}
+
+int LogIOAdapter::get_group_id_for_write_(uint64_t &consumer_group_id)
+{
+  int ret = OB_SUCCESS;
+  consumer_group_id = 0;
+  if (OB_FAIL(resource_manager_->get_mapping_rule_mgr().get_group_id_by_function_type(tenant_id_, share::ObFunctionType::PRIO_CLOG_HIGH, consumer_group_id))) {
+    PALF_LOG(WARN, "fail to get group_id by function", K(ret), K_(tenant_id), K(consumer_group_id));
+  } else if (FALSE_IT(SET_FUNCTION_TYPE(share::ObFunctionType::PRIO_CLOG_HIGH))) {
+  } else {
+    PALF_LOG(TRACE, "get group_id by function successfully", K_(tenant_id), K(consumer_group_id));
+  }
+  return ret;
+}
+
+int LogIOAdapter::get_group_id_for_read_(const LogIOContext &io_ctx, uint64_t &consumer_group_id)
+{
+  int ret = OB_SUCCESS;
+  consumer_group_id = 0;
+  const share::ObFunctionType function_type = io_ctx.get_function_type();
+  if (OB_FAIL(resource_manager_->get_mapping_rule_mgr().get_group_id_by_function_type(tenant_id_, function_type, consumer_group_id))) {
+    PALF_LOG(WARN, "fail to get group_id by function", K(ret), K_(tenant_id), K(function_type), K(consumer_group_id));
+  } else if (FALSE_IT(SET_FUNCTION_TYPE(function_type))) {
+  } else {
+    PALF_LOG(TRACE, "get group_id by function successfully", K_(tenant_id), K(function_type), K(consumer_group_id));
   }
   return ret;
 }

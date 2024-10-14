@@ -79,21 +79,24 @@ inline share::ObFunctionType log_io_user_prio(const LogIOUser &user_type)
 class LogIOContext
 {
 public:
-  LogIOContext() : user_(LogIOUser::DEFAULT) {}
-  LogIOContext(const LogIOUser &user) : user_(user) {}
+  LogIOContext() : user_(LogIOUser::DEFAULT), group_id_(0) {}
+  LogIOContext(const LogIOUser &user) : user_(user),group_id_(0) {}
   ~LogIOContext() { destroy(); }
   void destroy()
   {
     user_ = LogIOUser::DEFAULT;
+    group_id_ = 0;
   }
   share::ObFunctionType get_function_type() const
   {
     return log_io_user_prio(user_);
   }
-  TO_STRING_KV("user", log_io_user_str(user_));
+  uint64_t get_group_id() const { return group_id_; }
+  TO_STRING_KV("user", log_io_user_str(user_), K_(group_id));
 
 private:
   LogIOUser user_;
+  uint64_t group_id_;
 };
 }
 }

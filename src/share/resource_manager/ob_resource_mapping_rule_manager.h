@@ -63,11 +63,11 @@ public:
   }
 
   inline int get_group_id_by_function_type(const uint64_t tenant_id,
-                                           const int8_t function_type,
+                                           const ObFunctionType function_type,
                                            uint64_t &group_id)
   {
     int ret = common::OB_SUCCESS;
-    const ObString &func_name = share::get_io_function_name(static_cast<ObFunctionType>(function_type));
+    const ObString &func_name = share::get_io_function_name(function_type);
     if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
       ret = OB_INVALID_TENANT_ID;
       LOG_WARN("invalid config", K(ret), K(tenant_id));

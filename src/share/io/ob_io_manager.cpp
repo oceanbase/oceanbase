@@ -912,7 +912,7 @@ int ObTenantIOManager::init_group_index_map(const int64_t tenant_id,
 int ObTenantIOManager::get_group_index(const int64_t group_id, uint64_t &index)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_resource_manager_group(group_id))) {
+  if (OB_UNLIKELY(!is_user_group(group_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid group id", K(ret), K(group_id));
   } else if (OB_FAIL(group_id_index_map_.get_refactored(group_id, index))) {
@@ -930,7 +930,7 @@ int ObTenantIOManager::get_group_config(const int64_t group_id, ObTenantIOConfig
 {
   int ret = OB_SUCCESS;
   uint64_t index = INT64_MAX;
-  if (OB_UNLIKELY(!is_resource_manager_group(group_id))) {
+  if (OB_UNLIKELY(!is_user_group(group_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid group id", K(ret), K(group_id));
   } else if (OB_FAIL(group_id_index_map_.get_refactored(group_id, index))) {
@@ -1069,7 +1069,7 @@ int ObTenantIOManager::add_group_io_config(const int64_t group_id,
   } else if (OB_UNLIKELY(!is_working())) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("tenant not working", K(ret), K(tenant_id_));
-  } else if (OB_UNLIKELY(!is_resource_manager_group(group_id)) || min_percent < 0 || min_percent > 100 ||
+  } else if (OB_UNLIKELY(!is_user_group(group_id)) || min_percent < 0 || min_percent > 100 ||
              max_percent < 0 || max_percent > 100 || max_percent < min_percent ||
              weight_percent < 0 || weight_percent > 100) {
     ret = OB_INVALID_CONFIG;
@@ -1122,7 +1122,7 @@ int ObTenantIOManager::reset_consumer_group_config(const int64_t group_id)
   } else if (OB_UNLIKELY(!is_working())) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("tenant not working", K(ret), K(tenant_id_));
-  } else if (OB_UNLIKELY(!is_resource_manager_group(group_id))) {
+  } else if (OB_UNLIKELY(!is_user_group(group_id))) {
     ret = OB_INVALID_CONFIG;
     LOG_WARN("cannot reset other group io config", K(ret), K(group_id));
   } else {
@@ -1161,7 +1161,7 @@ int ObTenantIOManager::delete_consumer_group_config(const int64_t group_id)
   } else if (OB_UNLIKELY(!is_working())) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("tenant not working", K(ret), K(tenant_id_));
-  } else if (OB_UNLIKELY(!is_resource_manager_group(group_id))) {
+  } else if (OB_UNLIKELY(!is_user_group(group_id))) {
     ret = OB_INVALID_CONFIG;
     LOG_WARN("cannot delete other group io config", K(ret), K(group_id));
   } else {

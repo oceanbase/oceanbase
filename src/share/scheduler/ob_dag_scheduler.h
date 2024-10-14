@@ -22,7 +22,6 @@
 #include "lib/profile/ob_trace_id.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/scheduler/ob_dag_scheduler_config.h"
-#include "share/resource_manager/ob_resource_plan_info.h"
 #include "share/ob_table_range.h"
 #include "share/resource_manager/ob_resource_plan_info.h"
 #include "common/errsim_module/ob_errsim_module_type.h"
@@ -727,9 +726,11 @@ public:
   void yield();
   void set_task(ObITask *task) { task_ = task; }
   void set_function_type(const ObFunctionType function_type) { function_type_ = function_type; }
+  int set_dag_resource(const uint64_t group_id);
   bool need_wake_up() const;
   ObITask *get_task() const { return task_; }
   static ObTenantDagWorker *self() { return self_; }
+  uint64_t get_group_id() { return group_id_; }
 private:
   void notify(DagWorkerStatus status);
 private:
@@ -742,6 +743,7 @@ private:
   int64_t check_period_;
   int64_t last_check_time_;
   ObFunctionType function_type_;
+  uint64_t group_id_;
   int tg_id_;
   bool is_inited_;
 };
