@@ -882,6 +882,7 @@ int ObCreateHiddenTableRes::assign(const ObCreateHiddenTableRes &res)
   trace_id_ = res.trace_id_;
   task_id_ = res.task_id_;
   schema_version_ = res.schema_version_;
+  is_no_logging_ = res.is_no_logging_;
   return ret;
 }
 
@@ -892,7 +893,8 @@ OB_SERIALIZE_MEMBER(ObCreateHiddenTableRes,
                     dest_table_id_,
                     trace_id_,
                     task_id_,
-                    schema_version_);
+                    schema_version_,
+                    is_no_logging_);
 
 OB_SERIALIZE_MEMBER(ObStartRedefTableRes,
                     task_id_,

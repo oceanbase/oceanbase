@@ -1991,14 +1991,16 @@ public:
                K_(dest_table_id),
                K_(trace_id),
                K_(task_id),
-               K_(schema_version));
+               K_(schema_version),
+               K_(is_no_logging));
   ObCreateHiddenTableRes() :
     tenant_id_(common::OB_INVALID_ID),
     table_id_(common::OB_INVALID_ID),
     dest_tenant_id_(common::OB_INVALID_ID),
     dest_table_id_(common::OB_INVALID_ID),
     task_id_(0),
-    schema_version_(0) {}
+    schema_version_(0),
+    is_no_logging_(false) {}
   ~ObCreateHiddenTableRes() = default;
   void reset()
   {
@@ -2008,6 +2010,7 @@ public:
     dest_table_id_ = common::OB_INVALID_ID;
     task_id_ = 0;
     schema_version_ = 0;
+    is_no_logging_ = false;
   }
   int assign(const ObCreateHiddenTableRes &res);
 public:
@@ -2018,6 +2021,7 @@ public:
   int64_t task_id_;
   int64_t schema_version_;
   share::ObTaskId trace_id_;
+  bool is_no_logging_;
 };
 
 struct ObVectorIndexRebuildArg final : public ObDDLArg

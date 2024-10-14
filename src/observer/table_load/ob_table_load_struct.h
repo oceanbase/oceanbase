@@ -212,7 +212,8 @@ public:
       schema_version_(0),
       snapshot_version_(0),
       data_version_(0),
-      cluster_version_(0)
+      cluster_version_(0),
+      is_no_logging_(false)
   {
   }
   void reset()
@@ -223,6 +224,7 @@ public:
     snapshot_version_ = 0;
     data_version_ = 0;
     cluster_version_ = 0;
+    is_no_logging_ = false;
   }
   bool is_valid() const
   {
@@ -230,7 +232,7 @@ public:
            0 != snapshot_version_ && 0 != data_version_ && 0 != cluster_version_;
   }
   TO_STRING_KV(K_(dest_table_id), K_(task_id), K_(schema_version), K_(snapshot_version),
-               K_(data_version), K(cluster_version_));
+               K_(data_version), K(cluster_version_), K(is_no_logging_));
 public:
   uint64_t dest_table_id_;
   int64_t task_id_;
@@ -238,6 +240,7 @@ public:
   int64_t snapshot_version_;
   int64_t data_version_;
   uint64_t cluster_version_;
+  bool is_no_logging_;
 };
 
 class ObTableLoadMutexGuard
