@@ -406,7 +406,7 @@ int ObParquetTableRowIterator::next_row_group()
 {
   int ret = OB_SUCCESS;
   //init all meta
-  if (OB_SUCC(ret) && state_.cur_row_group_idx_ > state_.end_row_group_idx_) {
+  while (OB_SUCC(ret) && state_.cur_row_group_idx_ > state_.end_row_group_idx_) {
     if (OB_FAIL(next_file())) {
       if (OB_ITER_END != ret) {
         LOG_WARN("fail to next row group", K(ret));
@@ -707,19 +707,27 @@ int ObParquetTableRowIterator::DataLoader::to_numeric_hive(
     LOG_WARN("overflow", K(length), K(data_len));
   } else {
     //to little endian
-    MEMSET(buf, (*str >> 8), data_len);
-    int64_t pos = 0;
-    int64_t temp_len = length;
-    while (temp_len >= 8) {
-      uint64_t temp_v = *(pointer_cast<const uint64_t*>(str + temp_len - 8));
-      *(pointer_cast<uint64_t*>(buf + pos)) = ntohll(temp_v);
-      pos+=8;
-      temp_len-=8;
-    }
-    if (temp_len > 0) {
-      MEMCPY(buf + pos + 8 - temp_len, str, temp_len);
-      uint64_t temp_v = *(pointer_cast<uint64_t*>(buf + pos));
-      *(pointer_cast<uint64_t*>(buf + pos)) = ntohll(temp_v);
+    MEMSET(buf, (*str >> 8), data_len); // fill 1 when the input value is negetive, otherwise fill 0
+    if (data_len <= 4) {
+      //for precision <= 9
+      MEMCPY(buf + 4 - length, str, length);
+      uint32_t *res = pointer_cast<uint32_t*>(buf);
+      uint32_t temp_v = *res;
+      *res = ntohl(temp_v);
+    } else {
+      int64_t pos = 0;
+      int64_t temp_len = length;
+      while (temp_len >= 8) {
+        uint64_t temp_v = *(pointer_cast<const uint64_t*>(str + temp_len - 8));
+        *(pointer_cast<uint64_t*>(buf + pos)) = ntohll(temp_v);
+        pos+=8;
+        temp_len-=8;
+      }
+      if (temp_len > 0) {
+        MEMCPY(buf + pos + 8 - temp_len, str, temp_len);
+        uint64_t temp_v = *(pointer_cast<uint64_t*>(buf + pos));
+        *(pointer_cast<uint64_t*>(buf + pos)) = ntohll(temp_v);
+      }
     }
     decint = pointer_cast<ObDecimalInt *>(buf);
     val_len = static_cast<int32_t>(data_len);
@@ -1402,6 +1410,8 @@ int ObParquetTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
   if (OB_SUCC(ret)) {
     state_.cur_row_group_read_row_count_ += read_count;
     count = read_count;
+  } else {
+    LOG_WARN("fail to get next rows from parquet file", K(ret), K(state_));
   }
   return ret;
 }
