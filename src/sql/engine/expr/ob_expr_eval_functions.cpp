@@ -1556,6 +1556,21 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprArrayContainsAll::eval_array_contains_all_vector, /* 126 */
   NULL, // ObBitwiseExprOperator::calc_bitwise_result2_mysql_vector,     /* 127 */
   NULL, // ObBitwiseExprOperator::calc_bitwise_result2_oracle_vector,    /* 128 */
+  NULL, // ObExprDiv::decint_div_mysql_vec_fn<int32_t, int32_t>,         /* 129 */
+  NULL, // ObExprDiv::decint_div_mysql_vec_fn<int64_t, int32_t>,         /* 130 */
+  NULL, // ObExprDiv::decint_div_mysql_vec_fn<int64_t, int64_t>,         /* 131 */
+  NULL, // ObExprDiv::decint_div_mysql_vec_fn<int128_t, int32_t>,        /* 132 */
+  NULL, // ObExprDiv::decint_div_mysql_vec_fn<int128_t, int64_t>,        /* 133 */
+  NULL, // ObExprDiv::decint_div_mysql_vec_fn<int128_t, int128_t>,       /* 134 */
+  NULL, // ObExprDiv::decint_div_mysql_vec_fn<int256_t, int32_t>,        /* 135 */
+  NULL, // ObExprDiv::decint_div_mysql_vec_fn<int256_t, int64_t>,        /* 136 */
+  NULL, // ObExprDiv::decint_div_mysql_vec_fn<int256_t, int128_t>,       /* 137 */
+  NULL, // ObExprDiv::decint_div_mysql_vec_fn<int256_t, int256_t>,       /* 138 */
+  NULL, // ObExprDiv::decint_div_mysql_vec_fn<int512_t, int32_t>,        /* 139 */
+  NULL, // ObExprDiv::decint_div_mysql_vec_fn<int512_t, int64_t>,        /* 140 */
+  NULL, // ObExprDiv::decint_div_mysql_vec_fn<int512_t, int128_t>,       /* 141 */
+  NULL, // ObExprDiv::decint_div_mysql_vec_fn<int512_t, int256_t>,       /* 142 */
+  NULL, // ObExprDiv::decint_div_mysql_vec_fn<int512_t, int512_t>,       /* 143 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
@@ -1660,7 +1675,23 @@ static ObExpr::EvalFunc g_decimal_int_eval_functions[] = {
   ObExprMul::mul_decimalint128_int64_int64_oracle,
   ObExprMul::mul_decimalint128_int64_int128_oracle,
   ObExprMul::mul_decimalint128_int128_int64_oracle,
-  ObExprMul::mul_decimalint128_int128_int128_oracle
+  ObExprMul::mul_decimalint128_int128_int128_oracle,
+  // div functions of decimal int types in mysql mode
+  NULL, // ObExprDiv::decint_div_mysql_fn<int32_t, int32_t>,
+  NULL, // ObExprDiv::decint_div_mysql_fn<int64_t, int32_t>,
+  NULL, // ObExprDiv::decint_div_mysql_fn<int64_t, int64_t>,
+  NULL, // ObExprDiv::decint_div_mysql_fn<int128_t, int32_t>,
+  NULL, // ObExprDiv::decint_div_mysql_fn<int128_t, int64_t>,
+  NULL, // ObExprDiv::decint_div_mysql_fn<int128_t, int128_t>,
+  NULL, // ObExprDiv::decint_div_mysql_fn<int256_t, int32_t>,
+  NULL, // ObExprDiv::decint_div_mysql_fn<int256_t, int64_t>,
+  NULL, // ObExprDiv::decint_div_mysql_fn<int256_t, int128_t>,
+  NULL, // ObExprDiv::decint_div_mysql_fn<int256_t, int256_t>,
+  NULL, // ObExprDiv::decint_div_mysql_fn<int512_t, int32_t>,
+  NULL, // ObExprDiv::decint_div_mysql_fn<int512_t, int64_t>,
+  NULL, // ObExprDiv::decint_div_mysql_fn<int512_t, int128_t>,
+  NULL, // ObExprDiv::decint_div_mysql_fn<int512_t, int256_t>,
+  NULL, // ObExprDiv::decint_div_mysql_fn<int512_t, int512_t>,
 };
 
 static ObExpr::EvalBatchFunc g_decimal_int_eval_batch_functions[] = {
@@ -1754,7 +1785,23 @@ static ObExpr::EvalBatchFunc g_decimal_int_eval_batch_functions[] = {
   ObExprMul::mul_decimalint128_int64_int64_oracle_batch,
   ObExprMul::mul_decimalint128_int64_int128_oracle_batch,
   ObExprMul::mul_decimalint128_int128_int64_oracle_batch,
-  ObExprMul::mul_decimalint128_int128_int128_oracle_batch
+  ObExprMul::mul_decimalint128_int128_int128_oracle_batch,
+  // div functions of decimal int types in mysql mode
+  NULL, // ObExprDiv::decint_div_mysql_batch_fn<int32_t, int32_t>,
+  NULL, // ObExprDiv::decint_div_mysql_batch_fn<int64_t, int32_t>,
+  NULL, // ObExprDiv::decint_div_mysql_batch_fn<int64_t, int64_t>,
+  NULL, // ObExprDiv::decint_div_mysql_batch_fn<int128_t, int32_t>,
+  NULL, // ObExprDiv::decint_div_mysql_batch_fn<int128_t, int64_t>,
+  NULL, // ObExprDiv::decint_div_mysql_batch_fn<int128_t, int128_t>,
+  NULL, // ObExprDiv::decint_div_mysql_batch_fn<int256_t, int32_t>,
+  NULL, // ObExprDiv::decint_div_mysql_batch_fn<int256_t, int64_t>,
+  NULL, // ObExprDiv::decint_div_mysql_batch_fn<int256_t, int128_t>,
+  NULL, // ObExprDiv::decint_div_mysql_batch_fn<int256_t, int256_t>,
+  NULL, // ObExprDiv::decint_div_mysql_batch_fn<int512_t, int32_t>,
+  NULL, // ObExprDiv::decint_div_mysql_batch_fn<int512_t, int64_t>,
+  NULL, // ObExprDiv::decint_div_mysql_batch_fn<int512_t, int128_t>,
+  NULL, // ObExprDiv::decint_div_mysql_batch_fn<int512_t, int256_t>,
+  NULL, // ObExprDiv::decint_div_mysql_batch_fn<int512_t, int512_t>,
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_DECIMAL_INT_EXPR_EVAL,
