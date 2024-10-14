@@ -69,7 +69,7 @@ void* ObPLAllocator1::alloc(const int64_t size, const ObMemAttr &attr)
       if (use_ob_malloc > 0) {
         ptr = ob_malloc(size, attr);
       } else {
-        ptr = allocator_->alloc(size, attr);
+        SMART_CALL(OB_NOT_NULL(ptr = allocator_->alloc(size, attr)));
         int64_t addr = int64_t(ptr);
         //LOG_ERROR("===henry:alloc ptr===", K(addr));
       }
@@ -94,7 +94,7 @@ void* ObPLAllocator1::realloc(const void *ptr, const int64_t size, const ObMemAt
       if (use_ob_malloc > 0) {
         newptr = ob_realloc(const_cast<void *>(ptr), size, attr);
       } else {
-        newptr = allocator_->realloc(ptr, size, attr);
+        SMART_CALL(OB_NOT_NULL(newptr = allocator_->realloc(ptr, size, attr)));
       }
     }
   }
@@ -114,7 +114,7 @@ void ObPLAllocator1::free(void *ptr)
     if (use_ob_malloc > 0) {
       ob_free(ptr);
     } else {
-      allocator_->free(ptr);
+      SMART_CALL(FALSE_IT(allocator_->free(ptr)));
     }
   }
 }
