@@ -1510,7 +1510,6 @@ private:
       ObDDLOperator &ddl_operator,
       common::ObMySQLTransaction &trans,
       common::ObIAllocator &allocator,
-      const bool reorder_column_id,
       const ObString &index_name = ObString(""));
   int rebuild_triggers_on_hidden_table(
       const share::schema::ObTableSchema &orig_table_schema,
@@ -1554,7 +1553,7 @@ private:
   // @param [in] ddl_operator, the operator to remove unused columns from inner table, valid when need_remove_orig_table_unused_column = true.
   // @param [in] trans, the operator to remove unused columns from inner table, valid when need_remove_orig_table_unused_column = true.
   // @param [out] new_table_schema, exclude unused columns compared to the orig_table_schema.
-  int delete_unused_columns_from_schema(
+  int delete_unused_columns_and_redistribute_schema(
       const share::schema::ObTableSchema &orig_table_schema,
       const bool need_remove_orig_table_unused_column,
       const bool need_redistribute_column_id,

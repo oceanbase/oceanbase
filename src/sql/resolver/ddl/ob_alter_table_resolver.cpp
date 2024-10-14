@@ -1111,6 +1111,8 @@ int ObAlterTableResolver::resolve_column_options(const ParseNode &node,
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "invalid parse tree!", K(ret));
   } else {
+    bool has_add_column = false;
+    bool has_drop_column = false;
     for (int32_t i = 0; OB_SUCC(ret) && i < node.num_child_; ++i) {
       ParseNode *column_node = node.children_[i];
       if (OB_ISNULL(column_node)) {
@@ -1120,6 +1122,7 @@ int ObAlterTableResolver::resolve_column_options(const ParseNode &node,
         switch(column_node->type_) {
         //add column
         case T_COLUMN_ADD: {
+            has_add_column = true;
             if (OB_FAIL(resolve_add_column(*column_node, add_column_names_set))) {
               SQL_RESV_LOG(WARN, "Resolve add column error!", K(ret));
             }
@@ -1156,6 +1159,7 @@ int ObAlterTableResolver::resolve_column_options(const ParseNode &node,
             break;
           }
         case T_COLUMN_DROP: {
+          has_drop_column = true;
           if (lib::is_mysql_mode()) {
               is_drop_column = true;
             } else if (OB_FAIL(resolve_drop_column(*column_node, reduced_visible_col_set, drop_column_names_set))) {
@@ -1164,6 +1168,7 @@ int ObAlterTableResolver::resolve_column_options(const ParseNode &node,
             break;
           }
         case T_COLUMN_ADD_WITH_LOB_PARAMS: {
+            has_add_column = true;
             if (OB_FAIL(resolve_add_column(*column_node->children_[0], add_column_names_set))) {
               SQL_RESV_LOG(WARN, "Resolve column option error!", K(ret));
             } else if (OB_FAIL(resolve_lob_storage_parameters(column_node->children_[1]))) {
@@ -1187,6 +1192,27 @@ int ObAlterTableResolver::resolve_column_options(const ParseNode &node,
             break;
           }
         }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      uint64_t tenant_data_version = 0;
+      ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
+      if (OB_ISNULL(alter_table_stmt) || OB_ISNULL(table_schema_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("stmt or table_schema_ should not be null", KR(ret));
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(table_schema_->get_tenant_id(), tenant_data_version))) {
+        LOG_WARN("get data version failed", KR(ret), KPC(table_schema_));
+      // to keep the corrent of alter algorithm
+      // mysql mode only support add column instant in 425
+      } else if (lib::is_mysql_mode()
+                 && has_drop_column
+                 && tenant_data_version >= DATA_VERSION_4_2_5_0) {
+        alter_table_stmt->get_alter_table_arg().alter_algorithm_ = obrpc::ObAlterTableArg::AlterAlgorithm::INPLACE;
+      // orale mode only support drop column instant in 425
+      } else if (lib::is_oracle_mode()
+                  && has_add_column
+                  && tenant_data_version >= DATA_VERSION_4_2_5_0) {
+        alter_table_stmt->get_alter_table_arg().alter_algorithm_ = obrpc::ObAlterTableArg::AlterAlgorithm::INPLACE;
       }
     }
   }

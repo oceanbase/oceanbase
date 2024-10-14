@@ -3218,7 +3218,6 @@ int ObDDLService::create_hidden_table_with_pk_changed(
                                               ddl_operator,
                                               trans,
                                               allocator,
-                                              true/*reorder column id*/,
                                               index_name))) {
     LOG_WARN("failed to alter table offline", K(ret));
   }
@@ -3433,12 +3432,14 @@ int ObDDLService::check_is_add_column_online_(const ObTableSchema &table_schema,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("alter_type is not add column", KR(ret), K(alter_column_schema.alter_type_));
   } else if (algorithm == obrpc::ObAlterTableArg::AlterAlgorithm::INSTANT) {
-    if (tenant_data_version < DATA_VERSION_4_2_5_0) {
+    if (is_oracle_mode && tenant_data_version < DATA_VERSION_4_2_5_0) {
+      // oracle add column, drop column in one sql, algorithm is instant, in upgrade situation, ignore this
+    } else if (is_oracle_mode && tenant_data_version >= DATA_VERSION_4_2_5_0) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not supported to add column instant under version less than 425", KR(ret), K(tenant_data_version));
-    } else if (is_oracle_mode) {
+      LOG_WARN("in oracle mode not supported to add column instant", KR(ret), K(tenant_data_version));
+    } else if (!is_oracle_mode && tenant_data_version < DATA_VERSION_4_2_5_0) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not supported to add column instant under oracle mode", KR(ret));
+      LOG_WARN("in mysql mode not supported to add column instant under version less than 425", KR(ret), K(tenant_data_version));
     } else {
       add_column_instant = true;
     }
@@ -4224,8 +4225,7 @@ int ObDDLService::alter_table_partition_by(
                               schema_guard,
                               ddl_operator,
                               trans,
-                              alter_table_arg.allocator_,
-                              true/*reorder column id*/));
+                              alter_table_arg.allocator_));
   return ret;
 }
 
@@ -4384,8 +4384,7 @@ int ObDDLService::convert_to_character(
                                 schema_guard,
                                 ddl_operator,
                                 trans,
-                                alter_table_arg.allocator_,
-                                true/*reorder column id*/));
+                                alter_table_arg.allocator_));
   }
   return ret;
 }
@@ -8666,8 +8665,8 @@ int ObDDLService::redistribute_column_ids(
     LOG_WARN("failed to generate new column id map", K(ret));
   } else if (OB_FAIL(new_table_schema.convert_column_ids_for_ddl(column_id_map))) {
     LOG_WARN("failed to convert new table schema column id", K(ret));
-  } else {
-    // do nothing
+  } else if (OB_FAIL(new_table_schema.sort_column_array_by_column_id())) {
+    LOG_WARN("failed to sort column", KR(ret), K(new_table_schema));
   }
   return ret;
 }
@@ -9185,11 +9184,9 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
                              new_table_schema, *alter_column_schema, is_change_column_order))) {
                   LOG_WARN("failed to check is change column order", K(ret));
                 } else if (is_change_column_order) {
-                  if (alter_column_schema->get_column_id() != orig_column_schema->get_column_id()) {
-                    ret = OB_ERR_UNEXPECTED;
-                    LOG_WARN("invalid alter column schema column id", K(ret), K(*alter_column_schema),
-                             K(*orig_column_schema));
-                  } else if (OB_FAIL(new_table_schema.reorder_column(
+                  //in add column instant, same column name's column id is not the same
+                  //no need to check column schema's column id
+                  if (OB_FAIL(new_table_schema.reorder_column(
                                new_column_schema.get_column_name_str(),
                                alter_column_schema->is_first_,
                                alter_column_schema->get_prev_column_name(),
@@ -12822,26 +12819,6 @@ int ObDDLService::check_ddl_with_primary_key_operation(
   return ret;
 }
 
-int ObDDLService::reorder_column_after_add_column_instant_(const ObTableSchema &orig_table_schema,
-                                                           ObTableSchema &new_table_schema)
-{
-  int ret = OB_SUCCESS;
-  ObArray<uint64_t> add_instant_column_ids;
-  bool add_column_instant = false;
-  if (OB_FAIL(check_inner_stat())) {
-    LOG_WARN("variable is not init", KR(ret));
-  } else if (OB_FAIL(orig_table_schema.has_add_column_instant(add_column_instant))) {
-    LOG_WARN("failed to get add instant column ids", KR(ret), K(new_table_schema));
-  } else if (add_column_instant) {
-    if (OB_FAIL(redistribute_column_ids(new_table_schema))) {
-      LOG_WARN("redistribute column id failed", KR(ret));
-    } else if (OB_FAIL(new_table_schema.sort_column_array_by_column_id())) {
-      LOG_WARN("failed to sort column", KR(ret), K(new_table_schema));
-    }
-  }
-  return ret;
-}
-
 int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                           obrpc::ObAlterTableRes &res)
 {
@@ -12876,7 +12853,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
       LOG_WARN("fail to get and check table schema", K(ret));
     } else if (OB_FAIL(new_table_schema.assign(*orig_table_schema))) {
       LOG_WARN("fail to assign schema", K(ret));
-    } else if (OB_FAIL(delete_unused_columns_from_schema(*orig_table_schema,
+    } else if (OB_FAIL(delete_unused_columns_and_redistribute_schema(*orig_table_schema,
         false/*need_remove_orig_table_unused_column, no need to remove unused columns from inner table since it is a new table.*/,
         true/*need_redistribute_column_id, to redistribute columns id and index tables will be rebuilt with new column_id*/,
         nullptr/*ddl_operator*/, nullptr/*trans*/, new_table_schema))) {
@@ -12979,8 +12956,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
                                                 schema_guard,
                                                 ddl_operator,
                                                 trans,
-                                                alter_table_arg.allocator_,
-                                                true/*reorder column id*/))) {
+                                                alter_table_arg.allocator_))) {
             LOG_WARN("fail to create user hidden table", K(ret));
           }
         }
@@ -13037,10 +13013,8 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
                                     schema_guard,
                                     ddl_operator,
                                     trans,
-                                    alter_table_arg.allocator_,
-                                    true/*reorder column id*/));
+                                    alter_table_arg.allocator_));
       }
-
       if (OB_SUCC(ret) && need_redistribute_column_id) {
         if (OB_FAIL(redistribute_column_ids(new_table_schema))) {
           LOG_WARN("failed to redistribute column ids", K(ret));
@@ -13441,8 +13415,7 @@ int ObDDLService::create_hidden_table(
                   schema_guard,
                   ddl_operator,
                   trans,
-                  allocator,
-                  create_hidden_table_arg.get_need_reorder_column_id()))) {
+                  allocator))) {
           LOG_WARN("fail to create hidden table", K(ret));
         } else {
           LOG_INFO("create hidden table success!");
@@ -13579,7 +13552,7 @@ int ObDDLService::recover_restore_table_ddl_task(
         } else if (OB_FAIL(dst_table_schema.assign(arg.target_schema_))) {
           LOG_WARN("assign failed", K(ret), K(session_id), K(arg));
         } else if (OB_FAIL(create_user_hidden_table(*src_table_schema, dst_table_schema, nullptr/*sequence_ddl_arg*/,
-          false/*bind_tablets*/, *src_tenant_schema_guard, *dst_tenant_schema_guard, ddl_operator, dst_tenant_trans, allocator, true/*reorder column id*/))) {
+          false/*bind_tablets*/, *src_tenant_schema_guard, *dst_tenant_schema_guard, ddl_operator, dst_tenant_trans, allocator))) {
           LOG_WARN("create user hidden table failed", K(ret), K(arg));
         } else if (OB_FAIL(ddl_operator.update_table_attribute(dst_table_schema, dst_tenant_trans, OB_DDL_ALTER_TABLE))) {
           LOG_WARN("failed to update data table schema attribute", K(ret), K(arg));
@@ -16210,7 +16183,7 @@ int ObDDLService::is_foreign_key_name_prefix_match(const ObForeignKeyInfo &origi
   return ret;
 }
 
-int ObDDLService::delete_unused_columns_from_schema(
+int ObDDLService::delete_unused_columns_and_redistribute_schema(
     const ObTableSchema &orig_table_schema,
     const bool need_remove_orig_table_unused_column,
     const bool need_redistribute_column_id,
@@ -16252,9 +16225,18 @@ int ObDDLService::delete_unused_columns_from_schema(
       }
     }
   }
-  if (OB_SUCC(ret) && need_redistribute_column_id && unused_column_ids.count() > 0) {
-    if (OB_FAIL(redistribute_column_ids(new_table_schema))) {
-      LOG_WARN("redistribute column id failed", K(ret));
+  if (OB_SUCC(ret) && need_redistribute_column_id) {
+    bool add_column_instant = false;
+    if (OB_FAIL(orig_table_schema.has_add_column_instant(add_column_instant))) {
+      LOG_WARN("failed to get add instant column ids", KR(ret), K(orig_table_schema));
+    // these situations, we should redistribute_column_ids, to let column id in order
+    // 1.in oracle, column after drop column instant has unused column, after delete unused column, we should reorder column id
+    // 2.in mysql, column after add column instant，it's column id not suit logic position in __all_column, we should reorder column id
+    } else if (add_column_instant
+               || unused_column_ids.count() > 0) {
+      if (OB_FAIL(redistribute_column_ids(new_table_schema))) {
+        LOG_WARN("redistribute column id failed", KR(ret));
+      }
     }
   }
   return ret;
@@ -16447,7 +16429,6 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
                                            ObDDLOperator &ddl_operator,
                                            ObMySQLTransaction &trans,
                                            ObIAllocator &allocator,
-                                           const bool reorder_column_id,
                                            const ObString &index_name/*default ""*/)
 {
   int ret = OB_SUCCESS;
@@ -16463,8 +16444,6 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
   if (OB_ISNULL(GCTX.root_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("root service is null", KR(ret));
-  } else if (reorder_column_id && OB_FAIL(reorder_column_after_add_column_instant_(orig_table_schema, hidden_table_schema))) {
-    LOG_WARN("fail to reorder column id after add column instant", KR(ret));
   } else if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(tenant_id, frozen_scn))) {
     LOG_WARN("failed to get frozen status for create tablet", KR(ret), K(tenant_id));
   } else if (OB_FAIL(check_is_add_identity_column(orig_table_schema, hidden_table_schema, is_add_identity_column))) {
@@ -19909,7 +19888,7 @@ int ObDDLService::new_truncate_table_in_trans(const ObIArray<const ObTableSchema
     } else if (3 > gen_schema_version_array.count()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("gen schema array count is less than 3", KR(ret), K(tenant_id), K(table_name), K(task_id));
-    } else if (OB_FAIL(delete_unused_columns_from_schema(*orig_table_schemas.at(0),
+    } else if (OB_FAIL(delete_unused_columns_and_redistribute_schema(*orig_table_schemas.at(0),
       true/*need_remove_orig_table_unused_column, remove unused column from inner table.*/,
       false/*need_redistribute_column_id, to avoid column_id mismatched between data table and index ones.*/,
       &ddl_operator, &trans, *new_table_schemas.at(0)))) {
@@ -20506,7 +20485,7 @@ int ObDDLService::truncate_table(const ObTruncateTableArg &arg,
           ObTableSchema new_table_schema;
           if (OB_FAIL(new_table_schema.assign(*orig_table_schema))) {
             LOG_WARN("fail to assign schema", K(ret));
-          } else if (OB_FAIL(delete_unused_columns_from_schema(*orig_table_schema,
+          } else if (OB_FAIL(delete_unused_columns_and_redistribute_schema(*orig_table_schema,
             false/*need_remove_orig_table_unused_column, no need to remove unused column from inner table since it is a new table.*/,
             false/*need_redistribute_column_id, to avoid column_id mismatched between data table and index ones.*/,
             nullptr/*ddl_operator*/, nullptr/*trans*/, new_table_schema))) {
@@ -20854,7 +20833,7 @@ int ObDDLService::rebuild_table_schema_with_new_id(const ObTableSchema &orig_tab
   bool is_oracle_mode = false;
   if (OB_FAIL(new_table_schema.assign(orig_table_schema))) {
     LOG_WARN("fail to assign schema", K(ret));
-  } else if (OB_FAIL(delete_unused_columns_from_schema(orig_table_schema,
+  } else if (OB_FAIL(delete_unused_columns_and_redistribute_schema(orig_table_schema,
       false/*need_remove_orig_table_unused_column, no need to remove unused columns from inner table since it is a new table.*/,
       false/*need_redistribute_column_id, to avoid column_id mismatched between data table and index ones.*/,
       nullptr/*ddl_operator*/, nullptr/*trans*/, new_table_schema))) {
@@ -38648,12 +38627,9 @@ int ObDDLService::pre_rename_mysql_columns_offline(
     if (OB_FAIL(check_is_change_column_order(new_table_schema, *alter_column_schemas.at(i), is_change_column_order))) {
       LOG_WARN("failed to check is change column order", K(ret));
     } else if (is_change_column_order) {
-      if (alter_column_schemas.at(i)->get_column_id()
-          != orig_column_schemas.at(i)->get_column_id()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid alter column schema column id", K(ret), K(*alter_column_schemas.at(i)),
-                 K(*orig_column_schemas.at(i)));
-      } else if (OB_FAIL(new_table_schema.reorder_column(
+      //in add column instant, same column name's column id is not the same
+      //no need to check column schema's column id
+      if (OB_FAIL(new_table_schema.reorder_column(
                    alter_column_schemas.at(i)->get_column_name_str(),
                    alter_column_schemas.at(i)->is_first_,
                    alter_column_schemas.at(i)->get_prev_column_name(),

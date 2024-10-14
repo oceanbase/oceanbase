@@ -5415,6 +5415,8 @@ int ObTableSchema::has_add_column_instant(bool &add_column_instant) const
     } else if (OB_ISNULL(col)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("col is NULL, ", KR(ret));
+    } else if (col->get_column_id() < OB_APP_MIN_COLUMN_ID) {
+      // ignore hidden column
     } else if (col->get_column_id() < max_column_id) {
       add_column_instant = true;
       break;
