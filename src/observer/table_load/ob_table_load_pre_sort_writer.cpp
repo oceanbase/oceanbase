@@ -160,13 +160,6 @@ int ObTableLoadPreSortWriter::append_row(const ObTabletID &tablet_id,
   while (OB_SUCC(ret) && !success_write) {
     if (OB_ISNULL(chunk_) && OB_FAIL(chunks_manager_->get_chunk(chunk_node_id_, chunk_))) {
       LOG_WARN("fail to get chunk", KR(ret));
-    } else if (pre_sorter_->mem_ctx_.has_error_) {
-      if (OB_FAIL(close())) {
-        LOG_WARN("fail to close pre sort writer", KR(ret));
-      } else {
-        ret = OB_CANCELED;
-        LOG_WARN("direct load has error", KR(ret));
-      }
     } else {
       const_row = external_row_;
       ret = chunk_->add_item(const_row);
