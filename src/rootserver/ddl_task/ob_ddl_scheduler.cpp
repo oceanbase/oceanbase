@@ -2004,6 +2004,10 @@ int ObDDLScheduler::create_drop_fts_index_task(
     const ObFTSDDLChildTaskInfo doc_rowkey(doc_rowkey_name, doc_rowkey_table_id, 0/*task_id*/);
 
     if (OB_FAIL(ret)) {
+    } else if (ddl_type == ObDDLType::DDL_DROP_MULVALUE_INDEX
+      && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_4_0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("drop multivalue index not support min cluster version lower than 4.3.4", K(ret));
     } else if (OB_FAIL(index_task.init(drop_index_arg->tenant_id_,
                                 task_id,
                                 data_table_id,

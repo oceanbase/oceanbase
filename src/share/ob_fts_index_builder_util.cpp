@@ -2437,6 +2437,62 @@ int ObMulValueIndexBuilderUtil::inner_adjust_multivalue_arg(
   return ret;
 }
 
+bool ObMulValueIndexBuilderUtil::is_multivalue_index_column(const ObString& expr_string)
+{
+  bool bool_ret = false;
+  if (expr_string.length() == 0 || expr_string.length() > OB_MAX_COLUMN_NAMES_LENGTH) {
+  } else {
+    INIT_SUCC(ret);
+    SMART_VAR(char[OB_MAX_COLUMN_NAMES_LENGTH], buf) {
+      MEMCPY(buf, expr_string.ptr(), expr_string.length());
+      buf[expr_string.length()] = 0;
+
+      std::regex pattern(R"(JSON_QUERY\s*\(\s*.*\s*ASIS\s*.*\s*\))", std::regex_constants::icase);
+      if (std::regex_match(buf, pattern)) {
+        bool_ret = true;
+      }
+    }
+  }
+
+  return bool_ret;
+}
+
+bool ObMulValueIndexBuilderUtil::is_multivalue_array_column(const ObString& expr_string)
+{
+  bool bool_ret = false;
+  if (expr_string.length() == 0 || expr_string.length() > OB_MAX_COLUMN_NAMES_LENGTH) {
+  } else {
+    INIT_SUCC(ret);
+    SMART_VAR(char[OB_MAX_COLUMN_NAMES_LENGTH], buf) {
+      MEMCPY(buf, expr_string.ptr(), expr_string.length());
+      buf[expr_string.length()] = 0;
+
+      std::regex pattern(R"(JSON_QUERY\s*\(\s*.*\s*ASIS\s*.*\s*\s*multivalue\))", std::regex_constants::icase);
+      if (std::regex_match(buf, pattern)) {
+        bool_ret = true;
+      }
+    }
+  }
+
+  return bool_ret;
+}
+
+bool ObMulValueIndexBuilderUtil::is_multivalue_array_column(
+   const share::schema::ObColumnSchemaV2 &column_schema)
+{
+  const ObObj& default_value = column_schema.get_orig_default_value();
+  const ObString orig_str = default_value.get_string();
+  return is_multivalue_array_column(orig_str);
+}
+
+bool ObMulValueIndexBuilderUtil::is_multivalue_index_column(
+   const share::schema::ObColumnSchemaV2 &column_schema)
+{
+  const ObObj& default_value = column_schema.get_orig_default_value();
+  const ObString orig_str = default_value.get_string();
+  return is_multivalue_index_column(orig_str);
+}
+
 int ObMulValueIndexBuilderUtil::is_matched_budy_column(
    const share::schema::ObColumnSchemaV2 &ori_column_schema,
    const share::schema::ObColumnSchemaV2 &budy_column_schema,

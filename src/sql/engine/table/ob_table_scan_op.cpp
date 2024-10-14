@@ -3537,7 +3537,8 @@ int ObTableScanOp::inner_get_next_multivalue_index_row()
     }
   }
   if (OB_SUCC(ret)) {
-    if (domain_index_.domain_row_index_ >= domain_index_.dom_rows_->count()) {
+    while (OB_SUCC(ret) && domain_index_.domain_row_index_ >= domain_index_.dom_rows_->count()) {
+      need_ignore_null = false;
       if (OB_FAIL(ObTableScanOp::inner_get_next_row_implement())) {
         if (OB_ITER_END != ret) {
           LOG_WARN("get next row failed", K(ret), "op", op_name());
@@ -3586,12 +3587,24 @@ int ObTableScanOp::inner_get_next_multivalue_index_row()
               ObExpr *expr = exprs.at(j);
               if (j == multivalue_idx) {
                 ObObj tmp_obj;
+                tmp_obj.set_nop_value();
+                is_none_unique_done = true;
                 if (OB_FAIL(tmp_obj.deserialize(data, data_len, pos))) {
                   LOG_WARN("failed to deserialize datum.", K(ret), K(i), K(j));
-                } else if (OB_FAIL(domain_index_.rows_[i].storage_datums_[j].from_obj_enhance(tmp_obj))) {
-                  LOG_WARN("failed to convert datum from obj", K(ret), K(tmp_obj));
+                } else {
+                  ObObjMeta col_type = expr->obj_meta_;
+                  if (ob_is_number_or_decimal_int_tc(col_type.get_type()) || ob_is_temporal_type(col_type.get_type())) {
+                    col_type.set_collation_level(CS_LEVEL_NUMERIC);
+                  } else {
+                    col_type.set_collation_level(CS_LEVEL_IMPLICIT);
+                  }
+                  if (!tmp_obj.is_null()) {
+                    tmp_obj.set_meta_type(col_type);
+                  }
+                  if (OB_FAIL(domain_index_.rows_[i].storage_datums_[j].from_obj_enhance(tmp_obj))) {
+                    LOG_WARN("failed to convert datum from obj", K(ret), K(tmp_obj));
+                  }
                 }
-                is_none_unique_done = true;
               } else {
                 ObDatum *datum = nullptr;
                 if (OB_FAIL(expr->eval(eval_ctx_, datum))) {
@@ -3614,6 +3627,7 @@ int ObTableScanOp::inner_get_next_multivalue_index_row()
               LOG_WARN("failed to push back spatial index row", K(ret), K(domain_index_.rows_[i]));
             }
           }
+          break;
         }
       }
     }

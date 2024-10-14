@@ -597,7 +597,11 @@ int ObExprJsonQuery::set_multivalue_result(ObEvalCtx& ctx,
     tmp_obj.set_type(dest_type);
     tmp_obj.set_collation_type(dst_collation);
     tmp_obj.set_scale(scale);
-    tmp_obj.set_null();
+    if (ob_is_number_or_decimal_int_tc(dest_type)) {
+      tmp_obj.set_null();
+    } else {
+      tmp_obj.set_min_value();
+    }
 
     int64_t pos = str_buff.length();
 

@@ -10868,11 +10868,11 @@ int ObDDLOperator::drop_inner_generated_domain_extra_column(
   if (OB_ISNULL(ori_data_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, ori_data_schema is nullptr", K(ret));
-  } else if (ori_column_schema.is_multivalue_generated_array_column()) {
+  } else if (ObMulValueIndexBuilderUtil::is_multivalue_array_column(ori_column_schema)) {
   } else if (OB_ISNULL(budy_col = ori_data_schema->get_column_schema(tenant_id, ori_column_schema.get_column_id() + 1))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, budy column schema is nullptr", K(ret), K(ori_column_schema));
-  } else if (!budy_col->is_multivalue_generated_array_column()) {
+  } else if (!ObMulValueIndexBuilderUtil::is_multivalue_array_column(*budy_col)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, budy column schema not fould", K(ret), K(*budy_col));
   } else if (OB_FAIL(ObMulValueIndexBuilderUtil::is_matched_budy_column(ori_column_schema, *budy_col, is_match))) {

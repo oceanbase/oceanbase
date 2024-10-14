@@ -2477,7 +2477,7 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
           type = INDEX_TYPE_UNIQUE_LOCAL;
         }
 
-        if (index_keyname_ == MULTI_KEY) {
+        if (index_keyname_ == MULTI_KEY || index_keyname_ == MULTI_UNIQUE_KEY) {
           type = INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL;
           if (global_) {
             ret = OB_NOT_SUPPORTED;
