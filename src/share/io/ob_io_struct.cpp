@@ -3198,6 +3198,8 @@ int ObIOFaultDetector::record_read_failure(const ObIORequest &req)
     retry_task->io_info_ = req.io_info_;
     retry_task->io_info_.flag_.set_resource_group_id(THIS_WORKER.get_group_id());
     retry_task->io_info_.flag_.set_sys_module_id(ObIOModule::DETECT_IO);
+    // fix bug2024101100104667912, detect io failure asynchronously
+    retry_task->io_info_.flag_.set_async();
     retry_task->io_info_.callback_ = nullptr;
     retry_task->timeout_ms_ = 5000L; // 5s
     if (OB_FAIL(TG_PUSH_TASK(TGDefIDs::IO_HEALTH, retry_task))) {
