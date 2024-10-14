@@ -37,6 +37,7 @@ public:
            const storage::ObITable::TableKey &table_key,
            const share::ObBackupDest &backup_dest,
            const share::ObBackupSetDesc &backup_set_desc,
+           const common::ObStorageIdMod &mod,
            ObBackupMetaIndexStore &meta_index_store);
   int init(const common::ObTabletID &tablet_id,
            const storage::ObTabletHandle &tablet_handle,
@@ -44,6 +45,7 @@ public:
            const blocksstable::ObDatumRange &query_range,
            const share::ObBackupDest &backup_dest,
            const share::ObBackupSetDesc &backup_set_desc,
+           const common::ObStorageIdMod &mod,
            ObBackupMetaIndexStore &meta_index_store);
   int get_next(blocksstable::ObDataMacroBlockMeta &macro_meta);
 
@@ -62,6 +64,7 @@ private:
       const share::ObBackupDest &backup_dest,
       const share::ObBackupPath &backup_path,
       const ObBackupMetaIndex &meta_index,
+      const common::ObStorageIdMod &mod,
       common::ObIArray<ObBackupSSTableMeta> &sstable_meta_array);
   int get_backup_sstable_meta_ptr_(
       const storage::ObITable::TableKey &table_key,
@@ -75,21 +78,20 @@ private:
       const storage::ObITable::TableKey &table_key,
       const share::ObBackupDest &backup_dest,
       const share::ObBackupSetDesc &backup_set_desc,
+      const common::ObStorageIdMod &mod,
       ObBackupMetaIndexStore &meta_index_store);
   int deep_copy_query_range_(const blocksstable::ObDatumRange &query_range);
   int build_create_sstable_param_(
-      const storage::ObTabletHandle &tablet_handle,
       const ObBackupSSTableMeta &backup_sstable_meta,
       ObTabletCreateSSTableParam &param);
   int build_create_none_empty_sstable_param_(
       const ObBackupSSTableMeta &backup_sstable_meta,
       ObTabletCreateSSTableParam &param);
   int build_create_empty_sstable_param_(
-      const storage::ObTabletHandle &tablet_handle,
       const ObBackupSSTableMeta &backup_sstable_meta,
       ObTabletCreateSSTableParam &param);
   int create_tmp_sstable_(const ObTabletCreateSSTableParam &param);
-  int init_sstable_sec_meta_iter_(const ObTabletHandle &tablet_handle);
+  int init_sstable_sec_meta_iter_();
 
 private:
   bool is_inited_;
@@ -97,11 +99,10 @@ private:
   common::ObTabletID tablet_id_;
   storage::ObITable::TableKey table_key_;
   common::ObArenaAllocator allocator_;
+  storage::ObTabletHandle tablet_handle_;
   ObTableHandleV2 table_handle_;
   blocksstable::ObDatumRange datum_range_;
   blocksstable::ObSSTableSecMetaIterator sec_meta_iterator_;
-  // TODO: yangyi.yyy, 适配mod
-  common::ObStorageIdMod mod_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupSSTableSecMetaIterator);
 };
 

@@ -945,7 +945,7 @@ int ObBackupTabletSSTableIndexBuilderMgr::close_sstable_index_builder_(
   } else if (OB_FAIL(index_builder->close(sstable_merge_res,
                                           OB_DEFAULT_MACRO_BLOCK_SIZE/*nested_size*/,
                                           0/*nested_offset*/,
-                                          nullptr, // TODO: yangyi.yyy, 确认一下用null吗
+                                          nullptr,
                                           device_handle))) {
     LOG_WARN("failed to close sstable index builder", K(ret));
   }
