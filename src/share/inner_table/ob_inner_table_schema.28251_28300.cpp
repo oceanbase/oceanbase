@@ -210,7 +210,7 @@ int ObInnerTableSchema::gv_ob_res_mgr_sysstat_ora_schema(ObTableSchema &table_sc
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT CAST(TENANT_ID AS NUMBER) as CON_ID,            CAST(GROUP_ID AS NUMBER) as GROUP_ID,            SVR_IP as SVR_IP,            SVR_PORT as SVR_PORT,            CAST("STATISTIC#" AS NUMBER) as "STATISTIC#",            CAST(NAME AS VARCHAR2(64)) as NAME,            CAST(CLASS AS NUMBER) as CLASS,            CAST(VALUE AS NUMBER) as VALUE,            CAST(STAT_ID AS NUMBER) as STAT_ID     FROM SYS.ALL_VIRTUAL_RES_MGR_SYSSTAT )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT CAST(TENANT_ID AS NUMBER) as CON_ID,            CAST(GROUP_ID AS NUMBER) as GROUP_ID,            SVR_IP as SVR_IP,            SVR_PORT as SVR_PORT,            CAST("STATISTIC#" AS NUMBER) as "STATISTIC#",            CAST(NAME AS VARCHAR2(64)) as NAME,            CAST(CLASS AS NUMBER) as CLASS,            CAST(VALUE AS NUMBER) as VALUE,            CAST(VALUE_TYPE AS VARCHAR2(16)) as VALUE_TYPE,            CAST(STAT_ID AS NUMBER) as STAT_ID     FROM SYS.ALL_VIRTUAL_RES_MGR_SYSSTAT )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -260,7 +260,7 @@ int ObInnerTableSchema::v_ob_res_mgr_sysstat_ora_schema(ObTableSchema &table_sch
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT CON_ID,           GROUP_ID,           SVR_IP,           SVR_PORT,           "STATISTIC#",           NAME,           CLASS,           VALUE,           STAT_ID     FROM SYS.GV$OB_RES_MGR_SYSSTAT     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT CON_ID,           GROUP_ID,           SVR_IP,           SVR_PORT,           "STATISTIC#",           NAME,           CLASS,           VALUE,           VALUE_TYPE,           STAT_ID     FROM SYS.GV$OB_RES_MGR_SYSSTAT     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

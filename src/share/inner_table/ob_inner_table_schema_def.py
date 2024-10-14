@@ -66488,6 +66488,7 @@ def_table_schema(
            CAST(NAME AS VARCHAR2(64)) as NAME,
            CAST(CLASS AS NUMBER) as CLASS,
            CAST(VALUE AS NUMBER) as VALUE,
+           CAST(VALUE_TYPE AS VARCHAR2(16)) as VALUE_TYPE,
            CAST(STAT_ID AS NUMBER) as STAT_ID
     FROM SYS.ALL_VIRTUAL_RES_MGR_SYSSTAT
 """.replace("\n", " ")
@@ -66513,6 +66514,7 @@ def_table_schema(
           NAME,
           CLASS,
           VALUE,
+          VALUE_TYPE,
           STAT_ID
     FROM SYS.GV$OB_RES_MGR_SYSSTAT
     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
