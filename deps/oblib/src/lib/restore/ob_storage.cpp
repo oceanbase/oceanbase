@@ -105,6 +105,10 @@ bool is_storage_type_match(const common::ObString &uri, const ObStorageType &typ
       || (OB_STORAGE_FILE == type && uri.prefix_match(OB_FILE_PREFIX));
 }
 
+bool is_object_storage_type(const ObStorageType &type)
+{ return ObStorageType::OB_STORAGE_FILE != type
+      && ObStorageType::OB_STORAGE_MAX_TYPE != type;
+}
 bool is_io_error(const int result)
 {
   return OB_IO_ERROR == result || OB_OSS_ERROR == result || OB_COS_ERROR == result || OB_S3_ERROR == result;
