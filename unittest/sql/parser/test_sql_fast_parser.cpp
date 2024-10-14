@@ -65,17 +65,6 @@ bool check_stack_overflow_c()
 {
   return 0;
 }
-
-int ob_backtrace_c(void **buffer, int size)
-{
-  return 0;
-}
-
-char *parray_c(char *buf, int64_t len, int64_t *array, int size)
-{
-  snprintf(buf, 0, "oceanbase");
-  return buf;
-}
 }
 
 using namespace oceanbase::sql;

@@ -69,7 +69,6 @@ extern bool check_real_escape(const struct ObCharsetInfo *cs, char *str, int64_t
                               int64_t last_escape_check_pos);
 
 int add_alias_name(ParseNode *node, ParseResult *result, int end);
-extern char *parser_lbt(void **addr_buff, const size_t addr_size, char *str_buff, const size_t str_size);
 
 #define ISSPACE(c) ((c) == ' ' || (c) == '\n' || (c) == '\r' || (c) == '\t' || (c) == '\f' || (c) == '\v')
 
@@ -141,10 +140,10 @@ do {                                                                            
   if (OB_UNLIKELY(NULL == val_ptr))                                                \
   {                                                                                \
     ((ParseResult *)yyextra)->extra_errno_ = OB_PARSER_ERR_NO_MEMORY;              \
-    void *addrs[100];                                                              \
-    char buf[1024];                                                                \
-    char *print_str = parser_lbt(addrs, 100, buf, 1024);                           \
-    yyerror(yylloc, yyextra, "No more space for malloc, lbt: %s", print_str);      \
+    yyerror(yylloc, yyextra, "No more space for malloc, start_col:%d, end_col:%d, line:%d", \
+                             ((ParseResult *)yyextra)->start_col_,                  \
+                             ((ParseResult *)yyextra)->end_col_,                   \
+                             ((ParseResult *)yyextra)->line_);                     \
     return ERROR;                                                                  \
   }                                                                                \
 } while (0);
