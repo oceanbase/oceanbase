@@ -179,7 +179,7 @@ int ObTableLoadBackupTable_V_1_4::get_column_ids()
                                                                  file_length,
                                                                  read_size))) {
     LOG_WARN("fail to read_single_file", KR(ret), K(ObString(pos, buf)));
-  } else if (OB_FAIL(ObTableLoadBackupUtil_V_1_4::get_column_ids_from_create_table_sql(ObString(file_buf), column_ids_))) {
+  } else if (OB_FAIL(ObTableLoadBackupUtil_V_1_4::get_column_ids_from_create_table_sql(ObString(read_size, file_buf), column_ids_))) {
     LOG_WARN("fail to get_column_ids_from_create_table_sql", K(ret));
   }
   if (file_buf != nullptr) {
