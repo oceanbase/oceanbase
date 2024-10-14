@@ -223,6 +223,7 @@ public:
     }
     inline void set_stmt_type(stmt::StmtType stmt_type)
     {
+      GET_DIAGNOSTIC_INFO->get_ash_stat().stmt_type_ = stmt_type;
       stmt_type_ = stmt_type;
     }
     TO_STRING_KV(K(table_id_),
