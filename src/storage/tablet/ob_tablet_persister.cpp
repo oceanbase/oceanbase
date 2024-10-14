@@ -1353,7 +1353,7 @@ int ObTabletPersister::fetch_and_persist_large_co_sstable(
                                               sstable_persist_ctx.sstable_meta_write_ctxs_,
                                               sstable_persist_ctx.block_info_set_))) {
         LOG_WARN("failed to batch write sstable", K(ret));
-      } else if (OB_UNLIKELY(cg_addrs.count() != sstable_persist_ctx.cg_sstable_cnt_)) {
+      } else if (OB_UNLIKELY(cg_addrs.count() != cg_sstables.count())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected cg addrs count", K(ret), K(cg_addrs.count()), K(cg_sstables.count()));
       } else if (OB_FAIL(co_sstable->deep_copy(allocator, cg_addrs, tmp_co_sstable))) {
