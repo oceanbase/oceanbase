@@ -5342,6 +5342,13 @@ int ObAlterTableResolver::resolve_change_column(const ParseNode &node)
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "not support alter srid");
           LOG_WARN("not support alter srid now", K(ret),
                   K(origin_col_schema->get_srid()), K(alter_column_schema.get_srid()));
+        } else if (origin_col_schema->is_spatial_index_column()
+                   && ObGeometryType == origin_col_schema->get_data_type()
+                   && ObGeometryType != alter_column_schema.get_data_type()) {
+          ret = OB_ERR_SPATIAL_MUST_HAVE_GEOM_COL;
+          LOG_USER_ERROR(OB_ERR_SPATIAL_MUST_HAVE_GEOM_COL);
+          LOG_WARN("can't not alter geometry col with spatial index", K(ret), K(origin_col_schema->get_geo_type()),
+                  K(alter_column_schema.get_geo_type()));
         }
       }
       if (OB_SUCC(ret)) {
@@ -5606,6 +5613,13 @@ int ObAlterTableResolver::resolve_modify_column(const ParseNode &node,
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify geometry srid");
             LOG_WARN("can't not modify geometry srid", K(ret),
                     K(origin_col_schema->get_srid()), K(alter_column_schema.get_srid()));
+          } else if (origin_col_schema->is_spatial_index_column()
+                     && ObGeometryType == origin_col_schema->get_data_type()
+                     && ObGeometryType != alter_column_schema.get_data_type()) {
+            ret = OB_ERR_SPATIAL_MUST_HAVE_GEOM_COL;
+            LOG_USER_ERROR(OB_ERR_SPATIAL_MUST_HAVE_GEOM_COL);
+            LOG_WARN("can't not alter geometry col with spatial index", K(ret), K(origin_col_schema->get_geo_type()),
+                    K(alter_column_schema.get_geo_type()));
           }
         }
       }
