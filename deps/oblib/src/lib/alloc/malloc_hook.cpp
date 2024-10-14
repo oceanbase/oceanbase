@@ -11,6 +11,8 @@
  */
 
 #include "malloc_hook.h"
+#include <dlfcn.h>
+#include "lib/utility/utility.h"
 #include "lib/utility/ob_defer.h"
 #include "lib/allocator/ob_mem_leak_checker.h"
 #include "lib/allocator/ob_malloc.h"
@@ -240,7 +242,12 @@ __attribute__((visibility("default"))) int munmap(void *addr, size_t length) __a
 size_t malloc_usable_size(void *ptr)
 {
   size_t ret = 0;
-  if (OB_LIKELY(ptr != nullptr)) {
+  static const bool malloc_hook_disabled = glibc_prereq(2, 34);
+  if (malloc_hook_disabled) {
+    static int (*real_malloc_usable_size)(void *ptr) =
+        (typeof(real_malloc_usable_size))dlsym(RTLD_NEXT, "malloc_usable_size");
+    ret = real_malloc_usable_size(ptr);
+  } else if (OB_LIKELY(ptr != nullptr)) {
     auto *header = Header::ptr2header(ptr);
     abort_unless(header->check_magic_code());
     ret = header->data_size_;

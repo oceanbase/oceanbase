@@ -1333,6 +1333,9 @@ int extract_cert_expired_time(const char* cert, const int64_t cert_len, int64_t 
 
 int64_t parse_config_capacity(const char *str, bool &valid, bool check_unit = true, bool use_byte = false);
 
+void get_glibc_version(int &major, int &minor);
+
+bool glibc_prereq(int major, int minor);
 } // end namespace common
 } // end namespace oceanbase
 
