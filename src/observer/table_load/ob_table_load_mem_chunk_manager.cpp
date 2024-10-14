@@ -226,6 +226,11 @@ int ObTableLoadMemChunkManager::close_all_chunk()
     } else if (OB_FAIL(store_ctx_->task_scheduler_->add_task(thread_id, task))) {
       LOG_WARN("fail to add task", KR(ret));
     }
+    if (OB_FAIL(ret)) {
+      if (OB_NOT_NULL(task)) {
+        store_ctx_->ctx_->free_task(task);
+      }
+    }
   }
   return ret;
 }
