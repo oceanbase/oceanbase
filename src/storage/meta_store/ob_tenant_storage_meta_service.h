@@ -39,6 +39,7 @@ public:
   void stop();
   void wait();
   void destroy();
+  bool is_started() { return is_started_; }
   ObTenantStorageMetaPersister &get_persister() { return persister_; }
   ObTenantStorageMetaReplayer &get_replayer() { return replayer_; }
   ObTenantSeqGenerator &get_seq_generator() { return seq_generator_; }
@@ -138,6 +139,7 @@ private:
 #endif
 private:
   bool is_inited_;
+  bool is_started_;
   bool is_shared_storage_;
   ObTenantCheckpointSlogHandler ckpt_slog_handler_;
   storage::ObStorageLogger slogger_;

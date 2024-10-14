@@ -32,6 +32,7 @@ namespace storage
 
 ObTenantStorageMetaService::ObTenantStorageMetaService()
   : is_inited_(false),
+    is_started_(false),
     is_shared_storage_(false),
     ckpt_slog_handler_(),
     slogger_(),
@@ -106,6 +107,9 @@ int ObTenantStorageMetaService::start()
     MTL(checkpoint::ObTabletGCService*)->set_mtl_start_max_block_id(macro_block_id);
 #endif
   }
+  if (OB_SUCC(ret)) {
+    is_started_ = true;
+  }
   FLOG_INFO("finish start ObTenantStorageMetaService", K(ret));
   return ret;
 }
@@ -142,6 +146,7 @@ void ObTenantStorageMetaService::destroy()
   shared_object_rwriter_.reset();
   shared_object_raw_rwriter_.reset();
   is_shared_storage_ = false;
+  is_started_ = false;
   is_inited_ = false;
 }
 
