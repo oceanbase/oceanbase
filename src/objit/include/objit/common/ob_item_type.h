@@ -2614,13 +2614,14 @@ typedef enum ObItemType
   T_NO_TRANSFORM_DISTINCT_AGG = 4744,
 
   T_UNNEST_EXPRESSION = 4745,
-
   // orc related
   T_STRIPE_SIZE = 4746,
   T_COMPRESSION_BLOCK_SIZE = 4747,
   T_COLUMN_BLOOM_FILTER = 4748,
   T_ROW_INDEX_STRIDE = 4749,
 
+  T_GRANT_PROXY = 4750,
+  T_REVOKE_PROXY = 4751,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

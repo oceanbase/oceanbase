@@ -76,6 +76,7 @@ enum OB_PRIV_SHIFT
   OB_PRIV_LOCK_TABLE_SHIFT =            45,
   OB_PRIV_ENCRYPT_SHIFT =               46,
   OB_PRIV_DECRYPT_SHIFT =               47,
+  OB_PRIV_PROXY_SHIFT =                 48,
   OB_PRIV_MAX_SHIFT_PLUS_ONE,
   OB_PRIV_MAX_SHIFT_LIMIT =             65
 };
