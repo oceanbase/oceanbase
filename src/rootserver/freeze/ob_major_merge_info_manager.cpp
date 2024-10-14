@@ -122,7 +122,11 @@ int ObMajorMergeInfoManager::set_freeze_info(const ObMajorFreezeReason freeze_re
     } else if (GCTX.is_shared_storage_mode()
             && OB_FAIL(ObTenantBalanceService::lock_and_check_balance_job(trans, tenant_id_))) {
       if (OB_ENTRY_EXIST == ret) {
-        LOG_ERROR("exist balance job, can't update broadcast version now", KR(ret), K_(tenant_id));
+        LOG_WARN("exist balance job, can't update broadcast version now", KR(ret), K_(tenant_id));
+        ROOTSERVICE_EVENT_ADD("ss_major_merge", "root_major_freeze",
+                              K_(tenant_id),
+                              "disabled_reason", "exist balance job",
+                              "freeze_reason", major_freeze_reason_to_str(freeze_reason));
       } else {
         LOG_WARN("fail to check balance job", KR(ret), K_(tenant_id));
       }

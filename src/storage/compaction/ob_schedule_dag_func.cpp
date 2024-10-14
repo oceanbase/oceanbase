@@ -43,7 +43,7 @@ namespace compaction
     if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {                         \
       LOG_WARN("failed to create merge dag", K(ret), K(param));                \
     } else if (OB_EAGAIN == ret) {                                             \
-      LOG_WARN("exists same dag, wait the dag to finish", K(ret), K(param));   \
+      LOG_DEBUG("exists same dag, wait the dag to finish", K(ret), K(param));  \
     }                                                                          \
   } else {                                                                     \
     LOG_DEBUG("success to schedule tablet merge dag", K(ret), K(param));       \

@@ -102,7 +102,7 @@ public:
     ObMediumCompactionInfo &medium_info,
     bool &no_inc_data);
   int check_progressive_merge(
-    ObTablet &tablet,
+    const storage::ObTabletTableStore &table_store,
     const storage::ObStorageSchema &storage_schema,
     bool &is_progressive_merge);
 #endif
