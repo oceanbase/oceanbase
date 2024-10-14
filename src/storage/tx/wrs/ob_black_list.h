@@ -95,15 +95,19 @@ public:
   }
   int compare(const ObBLKey &other) const
   {
-    int ret = server_.compare(other.server_);
-    if (0 == ret) {
-      if (tenant_id_ > other.tenant_id_) {
-        ret = 1;
-      } else if (tenant_id_ < other.tenant_id_) {
-        ret = -1;
-      } else {
-        ret = ls_id_.compare(other.ls_id_);
-      }
+    int ret = 0;
+    if (this == &other) {
+      ret = 0;
+    } else if (0 != (ret = server_.compare(other.get_server()))) {
+      // do nothing
+    } else if (0 != (ret = ls_id_.compare(other.get_ls_id()))) {
+      // do nothing
+    } else if (tenant_id_ > other.tenant_id_) {
+      ret = 1;
+    } else if (tenant_id_ < other.tenant_id_) {
+      ret = -1;
+    } else {
+      ret = 0;
     }
     return ret;
   }
