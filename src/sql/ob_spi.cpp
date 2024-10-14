@@ -5084,9 +5084,14 @@ int ObSPIService::spi_sub_nestedtable(ObPLExecCtx *ctx, int64_t src_idx, int64_t
     if (OB_SUCC(ret)) {
       ObPLCollection *dst_coll = NULL;
       if (lower <= 0 // 检查是否越界, lower,upper从1开始
-          || lower > src_coll->get_count()
-          || upper > src_coll->get_count()) {
-        ret = OB_ARRAY_OUT_OF_RANGE;
+          || lower > src_coll->get_count()) {
+        ret = OB_ELEMENT_AT_GIVEN_INDEX_NOT_EXIST;
+        LOG_USER_ERROR(OB_ELEMENT_AT_GIVEN_INDEX_NOT_EXIST, static_cast<int64_t>(lower));
+        LOG_WARN("ORA-22160: element at index does not exist",
+                 K(lower), K(upper), K(src_coll->get_count()), K(ret));
+      } else if (upper > src_coll->get_count()) {
+        ret = OB_ELEMENT_AT_GIVEN_INDEX_NOT_EXIST;
+        LOG_USER_ERROR(OB_ELEMENT_AT_GIVEN_INDEX_NOT_EXIST, src_coll->get_count() + 1);
         LOG_WARN("OBE-22160: element at index does not exist",
                  K(lower), K(upper), K(src_coll->get_count()), K(ret));
       } else if (OB_ISNULL(dst_coll = static_cast<ObPLCollection*>(ctx->allocator_->alloc(sizeof(ObPLCollection))))) {
