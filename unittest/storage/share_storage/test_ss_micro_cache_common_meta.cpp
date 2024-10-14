@@ -109,12 +109,11 @@ TEST_F(TestSSMicroCacheCommonMeta, physical_block)
   ASSERT_EQ(1, phy_block.reuse_version_);
   ASSERT_EQ(1, phy_block.gc_reuse_version_);
   ASSERT_EQ(0, phy_block.valid_len_);
-  ASSERT_EQ(false, phy_block.is_internal_);
   ASSERT_EQ(false, phy_block.is_sealed_);
   ASSERT_EQ(true, phy_block.is_free_);
   ASSERT_EQ(0, phy_block.alloc_time_us_);
 
-  ASSERT_EQ(OB_SUCCESS, phy_block.set_first_used(false/*is_internal*/));
+  ASSERT_EQ(OB_SUCCESS, phy_block.set_first_used(ObSSPhyBlockType::SS_CACHE_DATA_BLK));
   ASSERT_EQ(2, phy_block.get_next_reuse_version());
   ASSERT_EQ(false, phy_block.can_reuse());
   phy_block.set_sealed(100/*valid_len*/);
@@ -147,7 +146,7 @@ TEST_F(TestSSMicroCacheCommonMeta, physical_block)
   phy_block.inc_ref_count();
   ASSERT_EQ(2, phy_block.get_ref_count());
 
-  ASSERT_NE(OB_SUCCESS, phy_block.set_first_used(false/*is_internal*/));
+  ASSERT_NE(OB_SUCCESS, phy_block.set_first_used(ObSSPhyBlockType::SS_CACHE_DATA_BLK));
   bool succ_free = false;
   phy_block.try_free(succ_free);
   ASSERT_EQ(false, succ_free);
@@ -193,7 +192,7 @@ TEST_F(TestSSMicroCacheCommonMeta, physical_block_common_header)
   ASSERT_EQ(ObSSPhyBlockCommonHeader::get_serialize_size(), common_header.header_size_);
   common_header.payload_size_ = 201;
   common_header.payload_checksum_ = 505;
-  common_header.set_block_type(ObSSPhyBlkType::SS_CACHE_DATA_BLK);
+  common_header.set_block_type(ObSSPhyBlockType::SS_CACHE_DATA_BLK);
   ASSERT_EQ(true, common_header.is_valid());
 
   const int64_t buf_size = sizeof(ObSSPhyBlockCommonHeader);
