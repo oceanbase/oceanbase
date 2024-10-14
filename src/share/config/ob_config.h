@@ -22,6 +22,16 @@
 
 namespace oceanbase
 {
+namespace omt
+{
+  class ObTenantConfig;
+}
+
+namespace rootserver
+{
+  class ObAdminSetConfig;
+}
+
 namespace common
 {
 
@@ -74,8 +84,16 @@ enum class ObConfigRangeOpts {
 };
 
 extern ObMemAttr g_config_mem_attr;
+class ObBaseConfig;
+class ObCommonConfig;
+class ObSystemConfig;
 class ObConfigItem
 {
+  friend class oceanbase::omt::ObTenantConfig;
+  friend class oceanbase::rootserver::ObAdminSetConfig;
+  friend class ObBaseConfig;
+  friend class ObCommonConfig;
+  friend class ObSystemConfig;
 public:
   ObConfigItem();
   virtual ~ObConfigItem();
@@ -100,40 +118,19 @@ public:
   }
   bool set_value(const common::ObString &string)
   {
-    int64_t pos = 0;
-    int ret = OB_SUCCESS;
-    ObLatchWGuard wr_guard(lock_, ObLatchIds::CONFIG_LOCK);
-    const char *ptr = value_ptr();
-    if (nullptr == ptr) {
-      value_valid_ = false;
-    } else if (OB_FAIL(databuff_printf(const_cast<char *>(ptr), value_len(), pos,
-                                       "%.*s", string.length(), string.ptr()))) {
-      value_valid_ = false;
-    } else {
-      value_valid_ = set(ptr);
-      if (inited_ && value_valid_) {
-        value_updated_ = true;
-      }
-    }
-    return value_valid_;
+#ifdef CONFIG_LOCK_EXEMPTION
+    return set_value_unsafe(string);
+#else
+    return set_value_with_lock(string);
+#endif
   }
   bool set_value(const char *str)
   {
-    int64_t pos = 0;
-    int ret = OB_SUCCESS;
-    ObLatchWGuard wr_guard(lock_, ObLatchIds::CONFIG_LOCK);
-    const char *ptr = value_ptr();
-    if (nullptr == ptr) {
-      value_valid_ = false;
-    } else if (OB_FAIL(databuff_printf(const_cast<char *>(ptr), value_len(), pos, "%s", str))) {
-      value_valid_ = false;
-    } else {
-      value_valid_ = set(str);
-      if (inited_ && value_valid_) {
-        value_updated_ = true;
-      }
-    }
-    return value_valid_;
+#ifdef CONFIG_LOCK_EXEMPTION
+    return set_value_unsafe(str);
+#else
+    return set_value_with_lock(str);
+#endif
   }
   // 重启生效的配置项，需要保存并dump到spfile中
   bool set_reboot_value(const char *str)
@@ -268,6 +265,13 @@ protected:
   const char* info_str_;
   const char* range_str_;
   common::ObLatch lock_;
+private:
+  // without lock, only used inner
+  bool set_value_unsafe(const common::ObString &string);
+  // without lock, only used inner
+  bool set_value_unsafe(const char *str);
+  bool set_value_with_lock(const common::ObString &string);
+  bool set_value_with_lock(const char *str);
 private:
   ObParameterAttr attr_;
   DISALLOW_COPY_AND_ASSIGN(ObConfigItem);

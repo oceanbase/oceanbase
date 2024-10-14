@@ -50,7 +50,6 @@ public:
   int read_config(const uint64_t tenant_id, const ObSystemConfigKey &key, ObConfigItem &item) const;
   int64_t to_string(char *buf, const int64_t len) const;
   int reload(FILE *fp);
-  int dump2file(const char *path) const;
   int64_t get_version() const { return version_; }
 
 private:

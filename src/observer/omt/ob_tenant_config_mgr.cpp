@@ -285,7 +285,7 @@ int ObTenantConfigMgr::init_tenant_config(const obrpc::ObTenantConfigArg &arg)
   } else {
     DRWLock::WRLockGuard guard(rwlock_);
     ObTenantConfig *config = nullptr;
-    if (OB_FAIL(dump2file())) {
+    if (OB_FAIL(dump2file_unsafe())) {
       LOG_WARN("fail to dump config to file", KR(ret), K(arg));
     } else if (OB_FAIL(config_map_.get_refactored(ObTenantID(arg.tenant_id_), config))) {
       LOG_WARN("No tenant config found", K(arg.tenant_id_), K(ret));
@@ -439,15 +439,21 @@ void ObTenantConfigMgr::print() const
   } // for
 }
 
-int ObTenantConfigMgr::dump2file()
+int ObTenantConfigMgr::dump2file_unsafe()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(sys_config_mgr_->dump2file())) {
+  if (OB_FAIL(sys_config_mgr_->dump2file_unsafe())) {
     LOG_WARN("failed to dump2file", K(ret));
   } else if (OB_FAIL(sys_config_mgr_->config_backup())) {
     LOG_WARN("failed to dump2file backup", K(ret));
   }
   return ret;
+}
+
+int ObTenantConfigMgr::dump2file()
+{
+  DRWLock::RDLockGuard guard(rwlock_);
+  return dump2file_unsafe();
 }
 
 int ObTenantConfigMgr::set_tenant_config_version(uint64_t tenant_id, int64_t version)
@@ -670,10 +676,10 @@ int ObTenantConfigMgr::add_config_to_existing_tenant(const char *config_str)
     for (; it != config_map_.end() && OB_SUCC(ret); ++it) {
       if (OB_NOT_NULL(it->second)) {
         int64_t version = ObTimeUtility::current_time();
-        if (OB_FAIL(it->second->add_extra_config(config_str, version))) {
+        if (OB_FAIL(it->second->add_extra_config_unsafe(config_str, version))) {
           LOG_WARN("add tenant extra config failed", "tenant_id", it->second->get_tenant_id(),
                    "config_str", config_str, KR(ret));
-        } else if (OB_FAIL(dump2file())) {
+        } else if (OB_FAIL(dump2file_unsafe())) {
           LOG_WARN("fail to dump config to file", KR(ret), K(config_str));
         } else if (OB_FAIL(it->second->publish_special_config_after_dump())) {
           LOG_WARN("fail to publish config after dump", KR(ret), K(config_str));
@@ -696,7 +702,7 @@ int ObTenantConfigMgr::add_extra_config(const obrpc::ObTenantConfigArg &arg)
     if (OB_FAIL(config_map_.get_refactored(ObTenantID(arg.tenant_id_), config))) {
       LOG_ERROR("failed to get tenant config", K(arg.tenant_id_), K(ret));
     } else {
-      ret = config->add_extra_config(arg.config_str_.ptr());
+      ret = config->add_extra_config_unsafe(arg.config_str_.ptr());
     }
   }
   FLOG_INFO("add tenant extra config", K(arg));
