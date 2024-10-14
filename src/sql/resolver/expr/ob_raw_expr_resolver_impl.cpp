@@ -2307,7 +2307,8 @@ int ObRawExprResolverImpl::process_sys_connect_by_path_node(const ParseNode *nod
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Subquery or aggregate function in sys_connect_by_path is");
   } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[1], param2)))) {
     LOG_WARN("fail to resolve param2 node", K(ret));
-  } else if (OB_FAIL(check_sys_connect_by_path_params(param1, param2))) {
+  } else if (!ctx_.session_info_->is_varparams_sql_prepare()
+             && OB_FAIL(check_sys_connect_by_path_params(param1, param2))) {
     LOG_WARN("fail to check sys_connect_by_path params", KPC(param1), KPC(param2), K(ret));
   } else if (OB_FAIL(path_expr->add_param_expr(param1))) {
     LOG_WARN("fail to push back param", KPC(param1));
