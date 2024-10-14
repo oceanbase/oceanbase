@@ -5426,7 +5426,10 @@ bool ObTablet::exist_memtable_with_end_scn(const ObITable *table, const SCN &end
   // we need to make sure duplicate memtable was not added to tablet,
   // and ensure active memtable could be added to tablet
   bool is_exist = false;
-  if (table->get_end_scn() == end_scn && memtable_count_ >= 1) {
+  if (0 >= memtable_count_) {
+  } else if (table->get_end_scn() == end_scn || end_scn.is_max()) {
+    // Pay Attention!!!
+    // The end scn of memtable can only be max or a certain value.
     for (int64_t i = memtable_count_ - 1; i >= 0 ; --i) {
       const ObIMemtable *memtable = memtables_[i];
       if (memtable == table) {

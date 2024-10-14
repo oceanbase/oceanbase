@@ -130,8 +130,8 @@ public:
     OB_INLINE bool is_table_with_scn_range() const { return ObITable::is_table_with_scn_range(table_type_); }
     OB_INLINE bool is_remote_logical_minor_sstable() const { return ObITable::is_remote_logical_minor_sstable(table_type_); }
     OB_INLINE const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
-    OB_INLINE share::SCN get_start_scn() const { return scn_range_.start_scn_; }
-    OB_INLINE share::SCN get_end_scn() const { return scn_range_.end_scn_; }
+    OB_INLINE share::SCN get_start_scn() const { return scn_range_.start_scn_.atomic_get(); }
+    OB_INLINE share::SCN get_end_scn() const { return scn_range_.end_scn_.atomic_get(); }
     OB_INLINE int64_t get_snapshot_version() const
     {
       OB_ASSERT(is_major_sstable() || is_meta_major_sstable());
