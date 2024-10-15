@@ -516,7 +516,6 @@ int ObCreateViewResolver::resolve_materialized_view_container_table(ParseNode *p
   container_table_schema.set_table_type(ObTableType::USER_TABLE);
   container_table_schema.get_view_schema().reset();
   container_table_schema.set_max_dependency_version(OB_INVALID_VERSION);
-  pctfree_ = 0; // set default pctfree value for non-sys table
   if (OB_FAIL(resolve_partition_option(partition_node, container_table_schema, true))) {
     LOG_WARN("fail to resolve_partition_option", KR(ret));
   } else if (OB_FAIL(set_table_option_to_schema(container_table_schema))) {
