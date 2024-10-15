@@ -112,7 +112,7 @@ int ObFtsIndexBuildTask::init(
     tenant_id_ = tenant_id;
     task_id_ = task_id;
     schema_version_ = schema_version;
-    parallelism_ = parallelism;
+    parallelism_ = std::max(parallelism, 1L);
     consumer_group_id_ = consumer_group_id;
     parent_task_id_ = parent_task_id;
     if (snapshot_version > 0) {
@@ -122,6 +122,7 @@ int ObFtsIndexBuildTask::init(
     target_object_id_ = index_schema->get_table_id();
     index_table_id_ = index_schema->get_table_id();
     create_index_arg_.exec_tenant_id_ = tenant_id;
+    create_index_arg_.parallelism_ = parallelism_;
     if (index_schema->is_rowkey_doc_id()) {
       rowkey_doc_aux_table_id_ = index_table_id_;
     } else if (index_schema->is_fts_index_aux()) {
