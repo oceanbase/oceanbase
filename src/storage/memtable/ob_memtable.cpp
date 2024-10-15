@@ -2781,6 +2781,10 @@ int ObMemtable::lock_(
     } else if (OB_UNLIKELY(!is_new_locked)) {
       TRANS_LOG(DEBUG, "lock twice, no need to store lock trans node");
     }
+    if (OB_SUCC(ret)) {
+      // for elr optimization
+      mem_ctx->set_row_updated();
+    }
   }
 
   return ret;
