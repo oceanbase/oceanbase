@@ -68,6 +68,7 @@ protected:
   int64_t consumers_[common::MAX_TABLE_CNT_IN_STORAGE];
   int64_t consumer_cnt_;
 private:
+  int64_t filt_del_count_;
   const blocksstable::ObDatumRange *range_;
   blocksstable::ObDatumRange cow_range_;
 

@@ -41,6 +41,11 @@ public:
       const storage::ObTableIterParam &param,
       storage::ObTableAccessContext &context,
       const blocksstable::ObSSTable *sstable);
+  OB_INLINE int64_t get_average_row_length() const
+  {
+    return nullptr != reader_ && 0 < reader_->row_count()  ?
+      reader_->original_data_length() / reader_->row_count() : 0;
+  }
 protected:
   int prepare_reader(const ObRowStoreType store_type);
   const storage::ObTableIterParam *param_;

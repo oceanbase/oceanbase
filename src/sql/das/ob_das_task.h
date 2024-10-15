@@ -100,7 +100,8 @@ public:
       user_id_(0),
       session_id_(0),
       plan_id_(0),
-      plan_hash_(0)
+      plan_hash_(0),
+      tsc_monitor_info_(nullptr)
   {
     sql_id_[0] = '\0';
   }
@@ -136,6 +137,8 @@ public:
   uint64_t plan_id_;
 private:
   uint64_t plan_hash_; // no use!!!
+public:
+  ObTSCMonitorInfo *tsc_monitor_info_;
 };
 
 class ObIDASTaskOp
@@ -343,7 +346,7 @@ public:
   virtual ~ObIDASTaskResult() { }
   virtual int init(const ObIDASTaskOp &task_op, common::ObIAllocator &alloc) = 0;
   virtual int reuse() = 0;
-  virtual int link_extra_result(ObDASExtraData &extra_result)
+  virtual int link_extra_result(ObDASExtraData &extra_result, ObIDASTaskOp *task_op)
   {
     UNUSED(extra_result);
     return common::OB_NOT_IMPLEMENT;
@@ -622,6 +625,7 @@ private:
   bool has_more_;
   bool enable_rich_format_;
   ObTempRowStore vec_row_store_;
+public:
   int64_t io_read_bytes_;
   int64_t ssstore_read_bytes_;
   int64_t ssstore_read_row_cnt_;

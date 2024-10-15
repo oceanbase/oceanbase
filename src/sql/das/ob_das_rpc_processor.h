@@ -58,6 +58,9 @@ protected:
   ObExprFrameInfo frame_info_;
   share::schema::ObSchemaGetterGuard schema_guard_;
   ObDASRemoteInfo das_remote_info_;
+  //tsc monitor info
+  int64_t monitor_val_[4];
+  ObTSCMonitorInfo tsc_monitor_info_;
 };
 
 class ObDASSyncAccessP final : public ObDASBaseAccessP<obrpc::OB_DAS_SYNC_ACCESS> {

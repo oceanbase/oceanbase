@@ -206,6 +206,7 @@ int ObMultipleGetMerge::inner_get_next_row(ObDatumRow &row)
           STORAGE_LOG(WARN, "tmp_row is NULL", K(ret));
         } else {
           // fuse working row and result row
+          REALTIME_MONITOR_INC_READ_ROW_CNT(iters_[i], access_ctx_);
           if (!final_result) {
             if (OB_FAIL(ObRowFuse::fuse_row(*tmp_row, fuse_row, nop_pos_, final_result))) {
               STORAGE_LOG(WARN, "failed to merge rows", K(*tmp_row), K(row), K(ret));

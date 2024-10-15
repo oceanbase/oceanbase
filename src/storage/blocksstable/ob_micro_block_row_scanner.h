@@ -47,6 +47,8 @@ public:
       storage::ObTableAccessContext &context,
       const blocksstable::ObSSTable *sstable);
   OB_INLINE bool is_valid() const { return is_inited_ && nullptr != range_; }
+  OB_INLINE int64_t get_data_length() const
+  { return nullptr == reader_ ? 0 : reader_->original_data_length(); }
   virtual int switch_context(
       const storage::ObTableIterParam &param,
       storage::ObTableAccessContext &context,

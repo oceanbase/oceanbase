@@ -138,7 +138,6 @@ protected:
   int64_t curr_scan_index_;
   blocksstable::ObDatumRowkey curr_rowkey_;
   ObNopPos nop_pos_;
-  ObRowStat row_stat_;
   int64_t scan_cnt_;
   bool need_padding_;
   bool need_fill_default_; // disabled by join mv scan

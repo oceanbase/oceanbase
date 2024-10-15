@@ -144,10 +144,13 @@ public:
       stmt_allocator_("StmtScanAlloc"),
       scan_allocator_("TableScanAlloc"),
       sample_info_(nullptr),
-      is_for_foreign_check_(false)
+      is_for_foreign_check_(false),
+      tsc_monitor_info_(nullptr)
   { }
+
   virtual ~ObDASScanRtDef();
   bool enable_rich_format() const { return scan_flag_.enable_rich_format_; }
+
   INHERIT_TO_STRING_KV("ObDASBaseRtDef", ObDASBaseRtDef,
                        K_(tenant_schema_version),
                        K_(limit_param),
@@ -159,8 +162,11 @@ public:
                        K_(timeout_ts),
                        K_(tx_lock_timeout),
                        K_(sql_mode),
-                       K_(scan_flag));
+                       K_(scan_flag),
+                       K_(tsc_monitor_info));
+
   int init_pd_op(ObExecContext &exec_ctx, const ObDASScanCtDef &scan_ctdef);
+
   storage::ObRow2ExprsProjector *p_row2exprs_projector_;
   ObPushdownOperator *p_pd_expr_op_;
   int64_t tenant_schema_version_;
@@ -180,6 +186,7 @@ public:
   common::ObWrapperAllocatorWithAttr scan_allocator_;
   const common::SampleInfo *sample_info_; //Block(Row)SampleScan, only support local das scan
   bool is_for_foreign_check_;
+  ObTSCMonitorInfo *tsc_monitor_info_;
 private:
   union {
     storage::ObRow2ExprsProjector row2exprs_projector_;
@@ -311,10 +318,18 @@ public:
   virtual int get_next_row() override;
   virtual int get_next_rows(int64_t &count, int64_t capacity) override;
   virtual void reset() override;
-  virtual int link_extra_result(ObDASExtraData &extra_result) override;
+  virtual int link_extra_result(ObDASExtraData &extra_result, ObIDASTaskOp *task_op) override;
   int init_result_iter(const ExprFixedArray *output_exprs, ObEvalCtx *eval_ctx);
   ObChunkDatumStore &get_datum_store() { return datum_store_; }
   ObTempRowStore &get_vec_row_store() { return vec_row_store_; }
+  void add_io_read_bytes(int64_t io_read_bytes) { io_read_bytes_ += io_read_bytes; }
+  int64_t get_io_read_bytes() { return io_read_bytes_; }
+  void add_ssstore_read_bytes(int64_t ssstore_read_bytes) { ssstore_read_bytes_ += ssstore_read_bytes; }
+  int64_t get_ssstore_read_bytes() { return ssstore_read_bytes_; }
+  void add_ssstore_read_row_cnt(int64_t ssstore_read_row_cnt) { ssstore_read_row_cnt_ += ssstore_read_row_cnt; }
+  int64_t get_ssstore_read_row_cnt() { return ssstore_read_row_cnt_; }
+  void add_memstore_read_row_cnt(int64_t memstore_read_row_cnt) { memstore_read_row_cnt_ += memstore_read_row_cnt; }
+  int64_t get_memstore_read_row_cnt() { return memstore_read_row_cnt_; }
   INHERIT_TO_STRING_KV("ObIDASTaskResult", ObIDASTaskResult,
                        K_(datum_store),
                        KPC_(output_exprs),
