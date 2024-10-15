@@ -717,6 +717,9 @@ int ObExprRangeConverter::convert_between_expr(const ObRawExpr *expr,
     LOG_WARN("failed to and range nodes");
   } else {
     ctx_.cur_is_precise_ = first_is_precise && ctx_.cur_is_precise_;
+    if (ctx_.cur_is_precise_) {
+      ctx_.refresh_max_offset_ = true;
+    }
   }
   return ret;
 }
@@ -752,6 +755,9 @@ int ObExprRangeConverter::convert_not_between_expr(const ObRawExpr *expr,
     LOG_WARN("failed to or range nodes");
   } else {
     ctx_.cur_is_precise_ = first_is_precise && ctx_.cur_is_precise_;
+    if (ctx_.cur_is_precise_) {
+      ctx_.refresh_max_offset_ = true;
+    }
   }
   return ret;
 }
