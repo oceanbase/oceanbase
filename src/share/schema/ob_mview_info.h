@@ -95,6 +95,8 @@ public:
                                              int64_t snapshot_for_tx, share::SCN &scn);
   static int contains_major_refresh_mview_in_creation(ObISQLClient &sql_client,
                                                       const uint64_t tenant_id, bool &contains);
+  static int contains_major_refresh_mview(ObISQLClient &sql_client,
+                                          const uint64_t tenant_id, bool &contains);
   TO_STRING_KV(K_(tenant_id),
                K_(mview_id),
                K_(build_mode),

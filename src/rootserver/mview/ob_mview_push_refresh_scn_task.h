@@ -12,10 +12,12 @@
 
 #pragma once
 
+#include "lib/mysqlclient/ob_mysql_transaction.h"
 #include "lib/task/ob_timer.h"
 #include "rootserver/mview/ob_mview_timer_task.h"
 #include "lib/container/ob_iarray.h"
 #include "share/ob_ls_id.h"
+#include "share/ob_table_range.h"
 
 namespace oceanbase
 {
@@ -83,11 +85,31 @@ private:
   static int get_major_mv_merge_info_(const uint64_t tenant_id,
                                ObISQLClient &sql_client,
                                ObIArray<ObMajorMVMergeInfo> &merge_info_array);
+  static int update_major_refresh_mview_scn_(
+      const uint64_t tenant_id,
+      const share::SCN &major_refresh_mview_scn,
+      ObMySQLTransaction &trans);
 private:
   bool is_inited_;
   bool in_sched_;
   bool is_stop_;
   uint64_t tenant_id_;
+};
+
+struct ObMajorRefreshMViewScnArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObMajorRefreshMViewScnArg()
+  : major_refresh_mview_scn_(share::ObScnRange::MIN_SCN)
+  {}
+  ~ObMajorRefreshMViewScnArg() = default;
+  bool is_valid() const { return major_refresh_mview_scn_.is_valid(); }
+  void reset() { return major_refresh_mview_scn_.set_min(); }
+
+  TO_STRING_KV(K_(major_refresh_mview_scn));
+
+  share::SCN major_refresh_mview_scn_;
 };
 
 

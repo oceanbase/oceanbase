@@ -900,6 +900,7 @@ int ObMVChecker::check_match_major_refresh_mv(const ObSelectStmt &stmt, bool &is
     LOG_WARN("failed to check broadcast table valid", KR(ret));
   } else if (is_match && OB_FAIL(check_column_store_valid(stmt, is_match))) {
     LOG_WARN("failed to check column store valid", KR(ret));
+  } else if (is_match && FALSE_IT(is_match = !GCTX.is_shared_storage_mode())) {
   }
 
   LOG_INFO("[MAJ_REF_MV] check match major refresh mv", K(is_match));

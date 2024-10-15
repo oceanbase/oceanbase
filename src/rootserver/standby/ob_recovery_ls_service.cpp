@@ -491,7 +491,10 @@ int ObRecoveryLSService::process_ls_tx_log_(ObTxLogBlock &tx_log_block, const SC
         ObLSRecoveryGuard guard;
         for (int64_t i = 0; OB_SUCC(ret) && i < source_data.count(); ++i) {
           const ObTxBufferNode &node = source_data.at(i);
-          if (OB_FAIL(try_cancel_clone_job_for_standby_tenant_(node))) {
+          if (ObTxDataSourceType::MV_UPDATE_SCN == node.get_data_source_type()) {
+            ret = OB_ITER_STOP;
+            LOG_ERROR("new mview has been create in primary tenant, stop", KR(ret), K(sync_scn));
+          } else if (OB_FAIL(try_cancel_clone_job_for_standby_tenant_(node))) {
             LOG_WARN("fail to cancel clone job for standby tenant", KR(ret), K(node));
           } else if (ObTxDataSourceType::STANDBY_UPGRADE == node.get_data_source_type()) {
             if (OB_FAIL(process_upgrade_log_(sync_scn, node))) {
