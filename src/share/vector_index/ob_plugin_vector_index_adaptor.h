@@ -508,7 +508,7 @@ private:
                                ObArray<uint64_t> &i_vids,
                                ObArray<uint64_t> &d_vids);
   bool check_if_complete_index(SCN read_scn);
-  bool check_if_complete_delta(roaring::api::roaring64_bitmap_t *gene_bitmap);
+  bool check_if_complete_delta(roaring::api::roaring64_bitmap_t *gene_bitmap, int64_t count);
   int write_into_delta_mem(ObVectorQueryAdaptorResultContext *ctx, int count, float *vectors,  uint64_t *vids);
   int write_into_index_mem(int64_t dim, SCN read_scn,
                            ObArray<uint64_t> &i_vids,
