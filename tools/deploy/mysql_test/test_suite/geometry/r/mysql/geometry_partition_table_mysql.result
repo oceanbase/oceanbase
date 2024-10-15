@@ -10,7 +10,7 @@ Query Plan
 ======================================================================
 |ID|OPERATOR                 |NAME             |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------
-|0 |PX COORDINATOR           |                 |1       |289         |
+|0 |PX COORDINATOR           |                 |1       |290         |
 |1 |└─EXCHANGE OUT DISTR     |:EX10000         |1       |289         |
 |2 |  └─PX PARTITION ITERATOR|                 |1       |289         |
 |3 |    └─TABLE FULL SCAN    |partition_t1(idx)|1       |289         |
@@ -61,7 +61,7 @@ Query Plan
 =============================================================
 |ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |PX COORDINATOR           |        |1       |289         |
+|0 |PX COORDINATOR           |        |1       |290         |
 |1 |└─EXCHANGE OUT DISTR     |:EX10000|1       |289         |
 |2 |  └─PX PARTITION ITERATOR|        |1       |289         |
 |3 |    └─TABLE FULL SCAN    |t1(idx) |1       |289         |
