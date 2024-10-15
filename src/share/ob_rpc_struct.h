@@ -11450,7 +11450,8 @@ public:
   ObSSARCInfo arc_info_;
 };
 
-struct ObClearSSMicroCacheArg {
+struct ObClearSSMicroCacheArg final
+{
   OB_UNIS_VERSION(1);
 
 public:
@@ -11465,8 +11466,69 @@ public:
 public:
   uint64_t tenant_id_;
 };
-#endif
 
+struct ObDelSSLocalTmpFileArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDelSSLocalTmpFileArg() : tenant_id_(OB_INVALID_TENANT_ID), macro_id_() {}
+  ~ObDelSSLocalTmpFileArg() {}
+  bool is_valid() const
+  {
+    return OB_INVALID_TENANT_ID != tenant_id_ && macro_id_.is_valid();
+  }
+  TO_STRING_KV(K_(tenant_id), K_(macro_id));
+public:
+  int64_t tenant_id_;
+  blocksstable::MacroBlockId macro_id_;
+};
+
+struct ObDelSSLocalMajorArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDelSSLocalMajorArg() : tenant_id_(OB_INVALID_TENANT_ID) {}
+  ~ObDelSSLocalMajorArg() {}
+  bool is_valid() const
+  {
+    return OB_INVALID_TENANT_ID != tenant_id_;
+  }
+  TO_STRING_KV(K_(tenant_id));
+public:
+  int64_t tenant_id_;
+};
+
+struct ObDelSSTabletMicroArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDelSSTabletMicroArg() : tenant_id_(OB_INVALID_TENANT_ID), tablet_id_() {}
+  ~ObDelSSTabletMicroArg() {}
+  bool is_valid() const
+  {
+    return OB_INVALID_TENANT_ID != tenant_id_ && tablet_id_.is_valid();
+  }
+  TO_STRING_KV(K_(tenant_id), K_(tablet_id));
+public:
+  int64_t tenant_id_;
+  ObTabletID tablet_id_;
+};
+
+struct ObCalibrateSSDiskSpaceArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCalibrateSSDiskSpaceArg() : tenant_id_(OB_INVALID_TENANT_ID){}
+  ~ObCalibrateSSDiskSpaceArg() {}
+  bool is_valid() const
+  {
+    return OB_INVALID_TENANT_ID != tenant_id_;
+  }
+  TO_STRING_KV(K_(tenant_id));
+public:
+  int64_t tenant_id_;
+};
+#endif
 struct ObRpcRemoteWriteDDLIncCommitLogArg final
 {
   OB_UNIS_VERSION(1);

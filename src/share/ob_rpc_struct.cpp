@@ -11370,6 +11370,10 @@ OB_SERIALIZE_MEMBER(ObEnableSSMicroCacheArg, tenant_id_, is_enabled_);
 OB_SERIALIZE_MEMBER(ObGetSSMicroCacheInfoArg, tenant_id_);
 OB_SERIALIZE_MEMBER(ObGetSSMicroCacheInfoResult, micro_cache_stat_, super_block_, arc_info_);
 OB_SERIALIZE_MEMBER(ObClearSSMicroCacheArg, tenant_id_);
+OB_SERIALIZE_MEMBER(ObDelSSLocalTmpFileArg, tenant_id_, macro_id_);
+OB_SERIALIZE_MEMBER(ObDelSSLocalMajorArg, tenant_id_);
+OB_SERIALIZE_MEMBER(ObCalibrateSSDiskSpaceArg, tenant_id_);
+OB_SERIALIZE_MEMBER(ObDelSSTabletMicroArg, tenant_id_, tablet_id_);
 #endif
 
 ObRpcRemoteWriteDDLIncCommitLogArg::ObRpcRemoteWriteDDLIncCommitLogArg()

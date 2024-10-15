@@ -1271,6 +1271,155 @@ DEF_COMMAND(SERVER, del_ss_tablet_meta, 1, "tenant_id:tablet_id:compaction_scn")
   return ret;
 }
 
+DEF_COMMAND(SERVER, del_ss_local_tmpfile, 1, "tenant_id:tmpfile_id")
+{
+  int ret = OB_SUCCESS;
+  string arg_str;
+  ObDelSSLocalTmpFileArg arg;
+  if (cmd_ == action_name_) {
+    ret = OB_INVALID_ARGUMENT;
+    ADMIN_WARN("should provide tenant_id, tmpfile_id");
+  } else {
+    arg_str = cmd_.substr(action_name_.length() + 1);
+  }
+
+  int64_t tmpfile_id = 0;
+  if (OB_FAIL(ret)) {
+  } else if (2 != sscanf(arg_str.c_str(), "%ld:%ld", &arg.tenant_id_, &tmpfile_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid arg", K(ret), K(arg_str.c_str()));
+  } else {
+    MacroBlockId macro_id;
+    macro_id.set_ss_version(MacroBlockId::MACRO_BLOCK_ID_VERSION_V2);
+    macro_id.set_ss_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+    macro_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+    macro_id.set_second_id(tmpfile_id);
+    arg.macro_id_ = macro_id;
+    const int64_t rpc_timeout = 60000000;
+    if (!arg.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      COMMON_LOG(WARN, "argument is invalid", K(ret), K(arg));
+    } else if (OB_FALSE_IT(client_->set_timeout(rpc_timeout))) {
+    } else if (OB_FAIL(client_->del_ss_local_tmpfile(arg))) {
+      COMMON_LOG(ERROR, "send req fail", K(ret));
+    } else {
+      fprintf(
+          stdout, "Successfully del_ss_local_tmpfile [tenant_id:%ld, tmpfile_id:%ld]", arg.tenant_id_, tmpfile_id);
+    }
+  }
+  if (OB_FAIL(ret)) {
+    fprintf(stderr, "fail to del_ss_local_tmpfile, ret=%s\n", ob_error_name(ret));
+  }
+  COMMON_LOG(INFO, "del_ss_local_tmpfile", K(arg));
+  return ret;
+}
+
+DEF_COMMAND(SERVER, del_ss_local_major, 1, "tenant_id")
+{
+  int ret = OB_SUCCESS;
+  string arg_str;
+  ObDelSSLocalMajorArg arg;
+  if (cmd_ == action_name_) {
+    ret = OB_INVALID_ARGUMENT;
+    ADMIN_WARN("should provide tenant_id");
+  } else {
+    arg_str = cmd_.substr(action_name_.length() + 1);
+  }
+
+  const int64_t rpc_timeout = 60000000;
+  if (OB_FAIL(ret)) {
+  } else if (1 != sscanf(arg_str.c_str(), "%ld", &arg.tenant_id_)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid arg", K(ret), K(arg_str.c_str()));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "argument is invalid", K(ret), K(arg));
+  } else if (OB_FALSE_IT(client_->set_timeout(rpc_timeout))) {
+  } else if (OB_FAIL(client_->del_ss_local_major(arg))) {
+    COMMON_LOG(ERROR, "send req fail", K(ret));
+  } else {
+    fprintf(stdout, "Successfully del_ss_local_major [tenant_id:%ld]", arg.tenant_id_);
+  }
+
+  if (OB_FAIL(ret)) {
+    fprintf(stderr, "fail to del_ss_local_major, ret=%s\n", ob_error_name(ret));
+  }
+  COMMON_LOG(INFO, "del_ss_local_major", K(arg));
+  return ret;
+}
+
+DEF_COMMAND(SERVER, calibrate_ss_disk_space, 1, "tenant_id")
+{
+  int ret = OB_SUCCESS;
+  string arg_str;
+  ObCalibrateSSDiskSpaceArg arg;
+  if (cmd_ == action_name_) {
+    ret = OB_INVALID_ARGUMENT;
+    ADMIN_WARN("should provide tenant_id");
+  } else {
+    arg_str = cmd_.substr(action_name_.length() + 1);
+  }
+
+  const int64_t rpc_timeout = 60000000;
+  if (OB_FAIL(ret)) {
+  } else if (1 != sscanf(arg_str.c_str(), "%ld", &arg.tenant_id_)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid arg", K(ret), K(arg_str.c_str()));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "argument is invalid", K(ret), K(arg));
+  } else if (OB_FALSE_IT(client_->set_timeout(rpc_timeout))) {
+  } else if (OB_FAIL(client_->calibrate_ss_disk_space(arg))) {
+    COMMON_LOG(ERROR, "send req fail", K(ret));
+  } else {
+    fprintf(stdout, "Successfully calibrate_ss_disk_space [tenant_id:%ld]", arg.tenant_id_);
+  }
+
+  if (OB_FAIL(ret)) {
+    fprintf(stderr, "fail to calibrate_ss_disk_space, ret=%s\n", ob_error_name(ret));
+  }
+  COMMON_LOG(INFO, "calibrate_ss_disk_space", K(arg));
+  return ret;
+}
+
+DEF_COMMAND(SERVER, del_ss_tablet_micro, 1, "tenant_id:tablet_id")
+{
+  int ret = OB_SUCCESS;
+  string arg_str;
+  ObDelSSTabletMicroArg arg;
+  if (cmd_ == action_name_) {
+    ret = OB_INVALID_ARGUMENT;
+    ADMIN_WARN("should provide tenant_id, tablet_id");
+  } else {
+    arg_str = cmd_.substr(action_name_.length() + 1);
+  }
+
+  int64_t tablet_id = 0;
+  const int64_t rpc_timeout = 1800000000; // 3min
+  if (OB_FAIL(ret)) {
+  } else if (2 != sscanf(arg_str.c_str(), "%ld:%ld", &arg.tenant_id_, &tablet_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid arg", K(ret), K(arg_str.c_str()));
+  } else {
+    arg.tablet_id_ = ObTabletID(tablet_id);
+    if (!arg.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      COMMON_LOG(WARN, "argument is invalid", K(ret), K(arg));
+    } else if (OB_FALSE_IT(client_->set_timeout(rpc_timeout))) {
+    } else if (OB_FAIL(client_->del_ss_tablet_micro(arg))) {
+      COMMON_LOG(ERROR, "send req fail", K(ret));
+    } else {
+      fprintf(stdout, "Successfully del_ss_tablet_micro [tenant_id:%ld, tablet_id:%ld]", arg.tenant_id_, arg.tablet_id_.id());
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    fprintf(stderr, "fail to del_ss_tablet_micro, ret=%s\n", ob_error_name(ret));
+  }
+  COMMON_LOG(INFO, "del_ss_tablet_micro", K(arg));
+  return ret;
+}
+
 DEF_COMMAND(SERVER, download_ss_macro_block, 1,  "tenant_id:ver:mode:obj_type:incar_id:cg_id:second_id:third_id:fourth_id #download ss_macro_block")
 {
   int ret = OB_SUCCESS;
