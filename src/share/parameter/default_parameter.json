@@ -54,8 +54,48 @@
     "comment" : "for high performance workloads like trade, payment core system, internet high throughput application, etc. no restrictions like foreign key, no stored procedure, no long transaction, no large transaction, no complex join, no complex subquery",
     "parameters": {
       "cluster": [
+        {
+          "name": "_enable_defensive_check",
+          "value": 0,
+          "comment": "disabling the defensive check feature in production environment can result in a 10% performance improvement for DML operations"
+        },
+        {
+          "name": "_enable_newsort",
+          "value": false,
+          "comment": "disabling the new sort algorithm can achieve 20% performance improvement for range query"
+        },
+        {
+          "name": "enable_record_trace_log",
+          "value": false,
+          "comment": "forbid recording sql and transaction trace event"
+        },
+        {
+          "name": "ignore_replay_checksum_error",
+          "value": true,
+          "comment": "ignore transaction data checksum validation when submitting redo/commit log"
+        },
+        {
+          "name": "micro_block_merge_verify_level",
+          "value": 0,
+          "comment": "accelating the process of minor/mini merge"
+        },
+        {
+          "name": "_lcl_op_interval",
+          "value": "0ms",
+          "comment": "closing deadlock detecting"
+        }
       ],
       "tenant": [
+        {
+          "name": "default_auto_increment_mode",
+          "value": "noorder",
+          "comment": "adjust the default auto-increment mode to avoid acquiring incremental id with rpc"
+        },
+        {
+          "name": "_enable_adaptive_compaction",
+          "value": false,
+          "comment": "close adaptive compaction to reduce cpu costs of tablet major compaction"
+        }
       ]
     }
   }
