@@ -600,8 +600,10 @@ int ObAdminDumpBackupDataExecutor::execute(int argc, char *argv[])
       STORAGE_LOG(WARN, "fail to check is table list dir", K(ret));
     }
     if (OB_FAIL(ret)) {
-    } else if (is_table_list_dir && OB_FAIL(handle_print_table_list_())) {
-      STORAGE_LOG(WARN, "fail to handle print table list", K(ret), K_(backup_path));
+    } else if (is_table_list_dir) {
+      if (OB_FAIL(handle_print_table_list_())) {
+        STORAGE_LOG(WARN, "fail to handle print table list", K(ret), K_(backup_path));
+      }
     } else if (OB_FAIL(check_file_exist_(backup_path_, storage_info_))) {
       STORAGE_LOG(WARN, "failed to check exist", K(ret), K_(backup_path), K_(storage_info));
     } else if (OB_FAIL(get_backup_file_type_())) {
@@ -618,7 +620,7 @@ int ObAdminDumpBackupDataExecutor::parse_cmd_(int argc, char *argv[])
   int ret = OB_SUCCESS;
   int opt = 0;
   int index = -1;
-  const char *opt_str = "h:d:s:o:l:qc:e:";
+  const char *opt_str = "h:d:s:o:l:qce:";
   struct option longopts[] = {{"help", 0, NULL, 'h'},
       {"backup_path", 1, NULL, 'd'},
       {"storage_info", 1, NULL, 's'},
@@ -1773,7 +1775,7 @@ int ObAdminDumpBackupDataExecutor::print_tenant_backup_set_infos_()
   } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_info_file(ObString(backup_path_), ObString(storage_info_), file_desc))) {
     STORAGE_LOG(WARN, "fail to read archive piece info file", K(ret), K(backup_path_), K(storage_info_));
   } else if(!file_desc.backup_set_infos_.empty()) {
-    if (OB_FAIL(dump_tenant_backup_set_infos_(file_desc.backup_set_infos_))) {
+    if (OB_FAIL(dump_tenant_backup_set_infos_file_(file_desc.backup_set_infos_))) {
         STORAGE_LOG(WARN, "fail to dump archive piece info file", K(ret), K(file_desc));
       }
   }
@@ -2529,6 +2531,27 @@ int ObAdminDumpBackupDataExecutor::dump_tenant_backup_set_infos_(const ObIArray<
         PrintHelper::print_dump_line(buf, str_buf);
       }
     }
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_tenant_backup_set_infos_file_(const ObIArray<oceanbase::share::ObBackupSetFileDesc> &backup_set_infos)
+{
+  int ret = OB_SUCCESS;
+  if (share::ObBackupFileType::BACKUP_TENANT_SET_INFOS == file_type_) {
+    PrintHelper::print_dump_title("tenant backup set infos");
+    ARRAY_FOREACH_X(backup_set_infos, i , cnt, OB_SUCC(ret)) {
+      const share::ObBackupSetFileDesc &backup_set_desc = backup_set_infos.at(i);
+      char buf[OB_MAX_CHAR_LEN] = { 0 };
+      char str_buf[OB_MAX_TEXT_LENGTH] = { 0 };
+      if (OB_FAIL(databuff_printf(buf, OB_MAX_CHAR_LEN, "%ld", i+1))) {
+        STORAGE_LOG(WARN, "fail to printf buf", K(ret), K(i));
+      } else if (OB_FALSE_IT(backup_set_desc.to_string(str_buf, OB_MAX_TEXT_LENGTH))) {
+      } else {
+        PrintHelper::print_dump_line(buf, str_buf);
+      }
+    }
+    PrintHelper::print_end_line();
   }
   return ret;
 }
