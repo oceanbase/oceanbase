@@ -1230,6 +1230,7 @@ int ObDDLRedoLogWriter::remote_write_ddl_macro_redo(
     const ObDDLMacroBlockRedoInfo &redo_info)
 {
   int ret = OB_SUCCESS;
+  const int64_t wait_timeout_us = MAX(ObDDLRedoLogHandle::DDL_REDO_LOG_TIMEOUT, GCONF.rpc_timeout);
   obrpc::ObSrvRpcProxy *srv_rpc_proxy = nullptr;
   if (OB_UNLIKELY(!redo_info.is_valid() || 0 == task_id)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1241,7 +1242,7 @@ int ObDDLRedoLogWriter::remote_write_ddl_macro_redo(
     obrpc::ObRpcRemoteWriteDDLRedoLogArg arg;
     if (OB_FAIL(arg.init(MTL_ID(), leader_ls_id_, redo_info, task_id))) {
       LOG_WARN("fail to init ObRpcRemoteWriteDDLRedoLogArg", K(ret));
-    } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr_).by(MTL_ID()).remote_write_ddl_redo_log(arg))) {
+    } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr_).by(MTL_ID()).timeout(wait_timeout_us).remote_write_ddl_redo_log(arg))) {
       LOG_WARN("fail to remote write ddl redo log", K(ret), K_(leader_addr), K(arg));
     }
   }
