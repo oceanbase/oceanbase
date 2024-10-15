@@ -7408,19 +7408,32 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
           LOG_WARN("sql udt type can not convert extend any type", K(ret));
         } else if (OB_FAIL(ObExprColumnConv::convert_with_null_check(tmp_obj, obj, result_type, is_strict, cast_ctx, type_info))) {
           LOG_WARN("fail to convert with null check", K(ret));
-        } else if (tmp_obj.is_null()
-                   && (current_type.at(i).get_meta_type().is_xml_sql_type()
-                      || (current_type.at(i).get_meta_type().is_ext() && current_type.at(i).get_accuracy().get_accuracy() == T_OBJ_XML))) {
-#ifdef OB_BUILD_ORACLE_PL
-          ObPLOpaque *opaque = reinterpret_cast<ObPLOpaque*>(cast_ctx.allocator_v2_->alloc(sizeof(ObPLOpaque)));;
-          if (OB_ISNULL(opaque)) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("failed to alloca memory for xml null value", K(ret));
-          } else {
-            new (opaque) ObPLOpaque();
-            tmp_obj.set_extend(reinterpret_cast<int64_t>(opaque), pl::PL_OPAQUE_TYPE);
+        } else if (tmp_obj.is_null()) {
+          if (current_type.at(i).get_meta_type().is_xml_sql_type()
+              || (current_type.at(i).get_meta_type().is_ext() && current_type.at(i).get_accuracy().get_accuracy() == T_OBJ_XML)) {
+  #ifdef OB_BUILD_ORACLE_PL
+            ObPLOpaque *opaque = reinterpret_cast<ObPLOpaque*>(cast_ctx.allocator_v2_->alloc(sizeof(ObPLOpaque)));;
+            if (OB_ISNULL(opaque)) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("failed to alloca memory for xml null value", K(ret));
+            } else {
+              new (opaque) ObPLOpaque();
+              tmp_obj.set_extend(reinterpret_cast<int64_t>(opaque), pl::PL_OPAQUE_TYPE);
+            }
+  #endif
+          } else if (result_types[i].get_meta_type().is_ext() &&
+                     (PL_RECORD_TYPE == result_types[i].get_meta_type().get_extend_type() ||
+                      PL_NESTED_TABLE_TYPE == result_types[i].get_meta_type().get_extend_type() ||
+                      PL_VARRAY_TYPE == result_types[i].get_meta_type().get_extend_type())) {
+            int64_t udt_id = result_types[i].get_udt_id();
+            const ObUserDefinedType *type = nullptr;
+            int64_t ptr = 0;
+            int64_t init_size = OB_INVALID_SIZE;
+            OZ (ctx->get_user_type(udt_id, type));
+            OZ (type->newx(*cast_ctx.allocator_v2_, ctx, ptr));
+            OZ (type->get_size(PL_TYPE_INIT_SIZE, init_size));
+            OX (tmp_obj.set_extend(ptr, type->get_type(), init_size));
           }
-#endif
         }
         if (OB_ERR_DATA_TOO_LONG == ret && lib::is_oracle_mode()) {
           LOG_WARN("change error code to value error", K(ret));

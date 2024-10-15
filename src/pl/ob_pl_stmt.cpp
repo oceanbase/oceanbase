@@ -3591,7 +3591,11 @@ int ObPLBlockNS::expand_data_type_once(const ObUserDefinedType *user_type,
       }
     } else {
       ObDataType ext_type;
-      ext_type.set_obj_type(ObExtendType);
+      ObObjMeta meta;
+      meta.set_type(ObExtendType);
+      meta.set_extend_type(member->get_type());
+      ext_type.set_meta_type(meta);
+      ext_type.set_udt_id(member->get_user_type_id());
       OZ (types.push_back(ext_type), i);
       if (OB_NOT_NULL(not_null_flags)) {
         OZ (not_null_flags->push_back(false));
