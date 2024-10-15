@@ -1037,7 +1037,7 @@ int ObTmpFileSwapTG::swap_fast_()
       STORAGE_LOG(WARN, "fail to calculate swap page num", KR(ret));
     } else if (OB_UNLIKELY(expect_swap_page_cnt <= 0)) {
       ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "cur expect swap page cnt is invalid", KR(ret), K(expect_swap_page_cnt));
+      STORAGE_LOG(ERROR, "cur expect swap page cnt is invalid", KR(ret), K(expect_swap_page_cnt));
     } else if (OB_FAIL(evict_mgr_.evict(expect_swap_page_cnt, actual_swap_page_cnt))) {
       STORAGE_LOG(WARN, "fail to swap out pages", KR(ret), K(expect_swap_page_cnt), K(actual_swap_page_cnt));
     }

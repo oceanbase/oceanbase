@@ -592,16 +592,17 @@ int64_t ObTmpWriteBufferPool::get_memory_limit()
   } else {
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
     if (!tenant_config.is_valid()) {
-      static const int64_t DEFAULT_MEMORY_LIMIT = 64 * 2 * 1024 * 1024; // 128MB
+      static const int64_t DEFAULT_MEMORY_LIMIT = 64 * WBP_BLOCK_SIZE; // 126.5MB
       memory_limit = wbp_memory_limit_ <= 0 ? DEFAULT_MEMORY_LIMIT : wbp_memory_limit_;
       LOG_INFO("failed to get tenant config", K(MTL_ID()), K(memory_limit), K(wbp_memory_limit_));
     } else if (0 == tenant_config->_temporary_file_io_area_size) {
-      memory_limit = 0;
+      memory_limit = WBP_BLOCK_SIZE;
     } else {
       int64_t config_memory_limit =
         lib::get_tenant_memory_limit(MTL_ID()) * tenant_config->_temporary_file_io_area_size / 100;
-      memory_limit = ((config_memory_limit + WBP_BLOCK_SIZE - 1) / WBP_BLOCK_SIZE) * WBP_BLOCK_SIZE;
+      memory_limit = config_memory_limit;
     }
+    memory_limit = ((memory_limit + WBP_BLOCK_SIZE - 1) / WBP_BLOCK_SIZE) * WBP_BLOCK_SIZE;
     ATOMIC_STORE(&wbp_memory_limit_, memory_limit);
     ATOMIC_STORE(&last_access_tenant_config_ts_, common::ObClockGenerator::getClock());
   }
