@@ -243,7 +243,8 @@ struct ObCostTableScanInfo
      batch_type_(common::ObSimpleBatch::ObBatchType::T_NONE),
      use_column_store_(false),
      at_most_one_range_(false),
-     index_back_with_column_store_(false)
+     index_back_with_column_store_(false),
+     limit_rows_(-1.0)
   { }
   virtual ~ObCostTableScanInfo()
   { }
@@ -260,6 +261,7 @@ struct ObCostTableScanInfo
                K_(prefix_filter_sel), K_(pushdown_prefix_filter_sel),
                K_(postfix_filter_sel), K_(table_filter_sel),
                K_(ss_prefix_ndv), K_(ss_postfix_range_filters_sel),
+               K_(limit_rows),
                K_(use_column_store),
                K_(index_back_with_column_store),
                K_(index_scan_column_group_infos),
@@ -312,6 +314,7 @@ struct ObCostTableScanInfo
   common::ObSEArray<ObCostColumnGroupInfo, 4, common::ModulePageAllocator, true> index_scan_column_group_infos_;
   common::ObSEArray<ObCostColumnGroupInfo, 4, common::ModulePageAllocator, true> index_back_column_group_infos_;
 
+  double limit_rows_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCostTableScanInfo);
 };
@@ -873,6 +876,7 @@ protected:
 
   int cost_index_back(const ObCostTableScanInfo &est_cost_info,
                       double row_count,
+                      double limit_count,
                       double &prefix_filter_sel,
                       double &cost);
 
@@ -883,6 +887,7 @@ protected:
 
   int cost_column_store_index_back(const ObCostTableScanInfo &est_cost_info,
                                     double row_count,
+                                    double limit_count,
                                     double &prefix_filter_sel,
                                     double &cost);
   int cost_row_store_index_scan(const ObCostTableScanInfo &est_cost_info,
@@ -891,6 +896,7 @@ protected:
 
   int cost_row_store_index_back(const ObCostTableScanInfo &est_cost_info,
                                 double row_count,
+                                double limit_count,
                                 double &cost);
   // estimate the network transform and rpc cost for global index
   int cost_global_index_back_with_rp(double row_count,
