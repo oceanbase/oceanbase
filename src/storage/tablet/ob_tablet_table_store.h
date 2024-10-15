@@ -344,6 +344,7 @@ private:
       common::ObArenaAllocator &allocator,
       const ObBatchUpdateTableStoreParam &param,
       const ObTabletTableStore &old_store,
+      const int64_t &multi_version_start,
       int64_t &inc_base_snapshot_version);
 
   int build_ha_minor_tables_(

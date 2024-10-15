@@ -2731,6 +2731,10 @@ int ObLSRestoreMajorState::do_restore()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+#ifdef ERRSIM
+  } else if (OB_FAIL(errsim_rebuild_before_restore_major_())) {
+    LOG_WARN("[ERRSIM] fail to errsim rebuild before restore major", K(ret), KPC(this));
+#endif
   } else if (OB_FAIL(update_role_())) {
     LOG_WARN("fail to update role and status", K(ret), KPC(this));
   } else if (!is_follower(role_) && OB_FAIL(leader_restore_major_data_())) {
@@ -2852,6 +2856,24 @@ int ObLSRestoreMajorState::do_restore_major_(
   }
   return ret;
 }
+
+#ifdef ERRSIM
+int ObLSRestoreMajorState::errsim_rebuild_before_restore_major_()
+{
+  int ret = OB_SUCCESS;
+  if (OB_SUCCESS != EN_REBUILD_BEFORE_RESTORE_MAJOR && !ls_->is_sys_ls() && is_follower(role_)) {
+    // trigger follower rebuild
+    ObRebuildService *rebuild_service = MTL(ObRebuildService *);
+    const ObLSRebuildType rebuild_type(ObLSRebuildType::TRANSFER);
+    if (OB_FAIL(rebuild_service->add_rebuild_ls(ls_->get_ls_id(), rebuild_type))) {
+      LOG_WARN("[ERRSIM] failed to add rebuild ls", K(ret), K(ls_->get_ls_id()), K(rebuild_type));
+    } else {
+      LOG_INFO("fake EN_REBUILD_BEFORE_RESTORE_MAJOR", K(ls_->get_ls_id()), K(rebuild_type));
+    }
+  }
+  return ret;
+}
+#endif
 
 //================================ObLSRestoreFinishState=======================================
 ObLSRestoreFinishState::ObLSRestoreFinishState()

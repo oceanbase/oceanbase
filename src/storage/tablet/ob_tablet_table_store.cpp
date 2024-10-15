@@ -2365,6 +2365,7 @@ int ObTabletTableStore::build_ha_new_table_store_(
 {
   int ret = OB_SUCCESS;
   const ObSSTableArray &meta_major_table = old_store.meta_major_tables_;
+  const int64_t multi_version_start = tablet.get_multi_version_start();
   int64_t inc_base_snapshot_version = 0;
 
   if (IS_NOT_INIT) {
@@ -2373,8 +2374,8 @@ int ObTabletTableStore::build_ha_new_table_store_(
   } else if (OB_UNLIKELY(!param.is_valid() || !old_store.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("build ha new table store get invalid argument", K(ret), K(param), K(old_store));
-  } else if (OB_FAIL(build_ha_major_tables_(allocator, param, old_store, inc_base_snapshot_version))) {
-    LOG_WARN("failed to build ha major tables", K(ret), K(param), K(old_store));
+  } else if (OB_FAIL(build_ha_major_tables_(allocator, param, old_store, multi_version_start, inc_base_snapshot_version))) {
+    LOG_WARN("failed to build ha major tables", K(ret), K(param), K(multi_version_start), K(old_store));
   } else if (OB_FAIL(build_ha_mds_tables_(allocator, tablet, param, old_store))) {
     LOG_WARN("failed to build ha mds tables", K(ret), K(param), K(old_store));
   } else if (OB_FAIL(build_ha_minor_tables_(allocator, tablet, param, old_store, inc_base_snapshot_version))) {
@@ -2410,13 +2411,13 @@ int ObTabletTableStore::build_ha_major_tables_(
     common::ObArenaAllocator &allocator,
     const ObBatchUpdateTableStoreParam &param,
     const ObTabletTableStore &old_store,
+    const int64_t &multi_version_start,
     int64_t &inc_base_snapshot_version)
 {
   int ret = OB_SUCCESS;
   inc_base_snapshot_version = -1;
   ObArray<ObITable *> major_tables;
   const bool allow_duplicate_sstable = true;
-  const int64_t multi_version_start = 0;
 
   if (!param.tables_handle_.empty() && OB_FAIL(param.tables_handle_.get_tables(major_tables))) {
     LOG_WARN("failed to get major tables from param", K(ret));

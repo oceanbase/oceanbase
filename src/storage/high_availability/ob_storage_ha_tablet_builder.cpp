@@ -2664,7 +2664,7 @@ int ObStorageHATabletBuilderUtil::inner_update_tablet_table_store_with_major_(
   } else {
     const ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
     const ObITable *table = table_handle.get_table();
-    const int64_t update_snapshot_version = table->get_key().get_snapshot_version();;
+    const int64_t update_snapshot_version = table->get_key().get_snapshot_version();
     const int64_t update_multi_version_start = multi_version_start;
     ObUpdateTableStoreParam param(
                             update_snapshot_version,

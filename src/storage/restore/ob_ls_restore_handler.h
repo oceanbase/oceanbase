@@ -420,6 +420,9 @@ private:
   int follower_restore_major_data_();
   int do_restore_major_(
       const ObLSRestoreTaskMgr::ToRestoreTabletGroup &tablet_need_restore);
+#ifdef ERRSIM
+  int errsim_rebuild_before_restore_major_();
+#endif
   DISALLOW_COPY_AND_ASSIGN(ObLSRestoreMajorState);
 };
 
