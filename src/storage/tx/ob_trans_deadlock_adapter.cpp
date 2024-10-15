@@ -271,6 +271,10 @@ int ObTransDeadlockDetectorAdapter::register_to_deadlock_detector_(const Session
   } else {
     MTL(ObDeadLockDetectorMgr*)->set_timeout(self_tx_id, query_timeout);
     if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->block(self_tx_id, blocked_resources))) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(MTL(ObDeadLockDetectorMgr*)->unregister_key(self_tx_id))) {
+        DETECT_LOG(WARN, "fail to unregister key", PRINT_WRAPPER, K(tmp_ret));
+      }
       DETECT_LOG(WARN, "block on resource failed", PRINT_WRAPPER);
     } else if (self_tx_scheduler != GCTX.self_addr()) {
       if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->add_parent(self_tx_id, self_tx_scheduler, self_tx_id))) {
@@ -824,8 +828,9 @@ int ObTransDeadlockDetectorAdapter::lock_wait_mgr_reconstruct_detector_waiting_f
   } else if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->check_detector_exist(self_trans_id, exist))) {
     DETECT_LOG(WARN, "fail to check detector exist", PRINT_WRAPPER);
   } else if (exist) {
-    if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->unregister_key(self_trans_id))) {
-      DETECT_LOG(WARN, "fail to unregister key", PRINT_WRAPPER);
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(MTL(ObDeadLockDetectorMgr*)->unregister_key(self_trans_id))) {
+      DETECT_LOG(WARN, "fail to unregister key", PRINT_WRAPPER, K(tmp_ret));
     }
   }
   if (OB_FAIL(ret)) {
@@ -833,6 +838,10 @@ int ObTransDeadlockDetectorAdapter::lock_wait_mgr_reconstruct_detector_waiting_f
   } else if (OB_FAIL(create_detector_node_and_set_parent_if_needed_(on_collect_op, on_fill_op, self_trans_id, sess_id_pair))) {
     DETECT_LOG(WARN, "fail to create detector node", PRINT_WRAPPER);
   } else if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->block(self_trans_id, func))) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(MTL(ObDeadLockDetectorMgr*)->unregister_key(self_trans_id))) {
+      DETECT_LOG(WARN, "fail to unregister key", PRINT_WRAPPER, K(tmp_ret));
+    }
     DETECT_LOG(WARN, "fail to block on call back function", PRINT_WRAPPER);
   } else {
     DETECT_LOG(TRACE, "local execution register to deadlock detector waiting for row success", PRINT_WRAPPER);
@@ -865,8 +874,9 @@ int ObTransDeadlockDetectorAdapter::lock_wait_mgr_reconstruct_detector_waiting_f
   } else if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->check_detector_exist(self_trans_id, exist))) {
     DETECT_LOG(WARN, "fail to check detector exist", PRINT_WRAPPER);
   } else if (exist) {
-    if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->unregister_key(self_trans_id))) {
-      DETECT_LOG(WARN, "fail to unregister key", PRINT_WRAPPER);
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(MTL(ObDeadLockDetectorMgr*)->unregister_key(self_trans_id))) {
+      DETECT_LOG(WARN, "fail to unregister key", PRINT_WRAPPER, K(tmp_ret));
     }
   }
   if (OB_FAIL(ret)) {
@@ -876,6 +886,10 @@ int ObTransDeadlockDetectorAdapter::lock_wait_mgr_reconstruct_detector_waiting_f
   } else if (OB_FAIL(create_detector_node_and_set_parent_if_needed_(on_collect_op, on_fill_op, self_trans_id, sess_id_pair))) {
     DETECT_LOG(WARN, "fail to create detector node", PRINT_WRAPPER);
   } else if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->block(self_trans_id, scheduler_addr, conflict_trans_id))) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(MTL(ObDeadLockDetectorMgr*)->unregister_key(self_trans_id))) {
+      DETECT_LOG(WARN, "fail to unregister key", PRINT_WRAPPER, K(tmp_ret));
+    }
     DETECT_LOG(WARN, "fail to block on conflict trans", PRINT_WRAPPER);
   } else {
     DETECT_LOG(TRACE, "local execution register to deadlock detector waiting for trans success", PRINT_WRAPPER);
@@ -909,8 +923,9 @@ int ObTransDeadlockDetectorAdapter::lock_wait_mgr_reconstruct_detector_waiting_f
   } else if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->check_detector_exist(self_trans_id, exist))) {
     DETECT_LOG(WARN, "fail to check detector exist", PRINT_WRAPPER);
   } else if (exist) {
-    if (MTL(ObDeadLockDetectorMgr*)->unregister_key(self_trans_id)) {
-      DETECT_LOG(WARN, "fail to unregister key", PRINT_WRAPPER);
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(MTL(ObDeadLockDetectorMgr*)->unregister_key(self_trans_id))) {
+      DETECT_LOG(WARN, "fail to unregister key", PRINT_WRAPPER, K(tmp_ret));
     }
   }
   if (OB_FAIL(ret)) {
@@ -923,6 +938,10 @@ int ObTransDeadlockDetectorAdapter::lock_wait_mgr_reconstruct_detector_waiting_f
                                                           query_timeout_us))) {
     DETECT_LOG(WARN, "fail to create detector node", PRINT_WRAPPER);
   } else if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->block(self_trans_id, func))) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(MTL(ObDeadLockDetectorMgr*)->unregister_key(self_trans_id))) {
+      DETECT_LOG(WARN, "fail to unregister key", PRINT_WRAPPER, K(tmp_ret));
+    }
     DETECT_LOG(WARN, "fail to block on call back function", PRINT_WRAPPER);
   } else {
     DETECT_LOG(INFO, "local execution register to deadlock detector waiting for row success", PRINT_WRAPPER);
@@ -957,8 +976,9 @@ int ObTransDeadlockDetectorAdapter::lock_wait_mgr_reconstruct_detector_waiting_f
   } else if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->check_detector_exist(self_trans_id, exist))) {
     DETECT_LOG(WARN, "fail to check detector exist", PRINT_WRAPPER);
   } else if (exist) {
-    if (MTL(ObDeadLockDetectorMgr*)->unregister_key(self_trans_id)) {
-      DETECT_LOG(WARN, "fail to unregister key", PRINT_WRAPPER);
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(MTL(ObDeadLockDetectorMgr*)->unregister_key(self_trans_id))) {
+      DETECT_LOG(WARN, "fail to unregister key", PRINT_WRAPPER, K(tmp_ret));
     }
   }
   if (OB_FAIL(ret)) {
@@ -968,6 +988,10 @@ int ObTransDeadlockDetectorAdapter::lock_wait_mgr_reconstruct_detector_waiting_f
   } else if (OB_FAIL(create_detector_node_without_session(on_collect_op, on_fill_op, self_trans_id, sess_id, trans_begin_ts, query_timeout_us))) {
     DETECT_LOG(WARN, "fail to create detector node", PRINT_WRAPPER);
   } else if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->block(self_trans_id, scheduler_addr, conflict_trans_id))) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(MTL(ObDeadLockDetectorMgr*)->unregister_key(self_trans_id))) {
+      DETECT_LOG(WARN, "fail to unregister key", PRINT_WRAPPER, K(tmp_ret));
+    }
     DETECT_LOG(WARN, "fail to block on conflict trans", PRINT_WRAPPER);
   } else {
     DETECT_LOG(TRACE, "local execution register to deadlock detector waiting for trans success", PRINT_WRAPPER);

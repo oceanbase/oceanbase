@@ -422,7 +422,7 @@ int ObLockWaitMgr::handle_inform_dst_enqueue_req(const ObLockWaitMgrDstEnqueueMs
                                                   delete_node,
                                                   resp_msg.get_enqueue_succ(),
                                                   is_placeholder))) {
-      TRANS_LOG(WARN, "handle remote execution side node fail", PRINT_WRAPPER, KPC(remote_exec_side_node));
+      TRANS_LOG(WARN, "handle remote execution side node fail", PRINT_WRAPPER, KP(remote_exec_side_node));
     }
   }
   if (NULL != delete_node) {
@@ -674,7 +674,7 @@ bool ObLockWaitMgr::post_process(bool need_retry, bool& need_wait)
       if (node->get_node_type() == Node::LOCAL) {
         // local lock conflict
         if (OB_FAIL(handle_local_node_(node, delete_node, wait_succ))) {
-          TRANS_LOG(WARN, "hanlde local node fail", KPC(node));
+          TRANS_LOG(WARN, "hanlde local node fail", KP(node));
         }
       } else if (node->get_node_type() == Node::REMOTE_CTRL_SIDE) {
         // remote execution lock conflict
@@ -682,7 +682,7 @@ bool ObLockWaitMgr::post_process(bool need_retry, bool& need_wait)
           wait_succ = false;
           need_wait = false;
         } else if (OB_FAIL(handle_remote_ctrl_side_node_(node, delete_node, wait_succ))) {
-          TRANS_LOG(WARN, "hanlde remote node fail", KPC(node));
+          TRANS_LOG(WARN, "hanlde remote node fail", KP(node));
         }
       } else {
         wait_succ = false;
@@ -690,7 +690,7 @@ bool ObLockWaitMgr::post_process(bool need_retry, bool& need_wait)
         ret = OB_NOT_SUPPORTED;
         TRANS_LOG(WARN, "not support node type", KPC(node));
       }
-      TRANS_LOG(LOG_LEVEL_FOR_LWM, "LockWaitMgr need retry request post process", KPC(node), K(need_retry), K(wait_succ), K(get_wait_node_cnt()));
+      TRANS_LOG(LOG_LEVEL_FOR_LWM, "LockWaitMgr need retry request post process", KP(node), K(need_retry), K(wait_succ), K(get_wait_node_cnt()));
       if (NULL != delete_node) {
         WaitQuiescent(get_qs());
       }
@@ -831,7 +831,7 @@ int ObLockWaitMgr::handle_local_node_(Node* node, Node*& delete_node, bool &wait
     if (OB_UNLIKELY(OB_FAIL(register_local_node_to_deadlock_(self_tx_id,
                                                              blocked_tx_id,
                                                              node)))) {
-      DETECT_LOG_RET(WARN, ret, "register to deadlock detector failed", K(ret), K(*node));
+      DETECT_LOG(WARN, "register to deadlock detector failed", K(ret), K(*node));
     } else {
       deadlock_registered = true;
       DETECT_LOG(TRACE, "register local node to deadlock detector success", K(ret), K(*node));
@@ -892,7 +892,7 @@ int ObLockWaitMgr::handle_remote_ctrl_side_node_(Node* remote_node, Node*& delet
   begin_row_lock_wait_event(remote_node);
   if (OB_LIKELY(ObDeadLockDetectorMgr::is_deadlock_enabled())) {
     if (OB_UNLIKELY(OB_FAIL(ObTransDeadlockDetectorAdapter::lock_wait_mgr_reconstruct_detector_waiting_remote_self_(*remote_node)))) {
-      DETECT_LOG_RET(WARN, ret, "register to deadlock detector failed", K(ret), KPC(remote_node));
+      DETECT_LOG(WARN, "register to deadlock detector failed", K(ret), KPC(remote_node));
     } else {
       deadlock_registered = true;
       DETECT_LOG(TRACE, "register remote node to deadlock detector success", K(ret), KPC(remote_node));
@@ -929,10 +929,10 @@ int ObLockWaitMgr::handle_remote_exec_side_node_(Node* remote_exec_side_node,
                                                             remote_exec_side_node,
                                                             query_sql,
                                                             query_timeout_us))) {
-      DETECT_LOG_RET(WARN, ret, "register remote execution side node to deadlock detector failed", K(ret), K(*remote_exec_side_node));
+      DETECT_LOG(WARN, "register remote execution side node to deadlock detector failed", K(ret), K(*remote_exec_side_node));
     } else {
       deadlock_registered = true;
-      DETECT_LOG_RET(TRACE, ret, "register remote execution side node to deadlock detector success", K(ret), K(*remote_exec_side_node));
+      DETECT_LOG(TRACE, "register remote execution side node to deadlock detector success", K(ret), K(*remote_exec_side_node));
     }
   }
   wait_succ = wait_(remote_exec_side_node, delete_node, is_placeholder);
