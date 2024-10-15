@@ -1543,7 +1543,7 @@ int ObPLExternalNS::add_dependency_obj(const ObSchemaType schema_type,
                                               schema_version))) {
     LOG_WARN("get schema version failed", K(resolve_ctx_.session_info_.get_effective_tenant_id()),
                                             K(schema_id), K(ret));
-  } else {
+  } else if (OB_NOT_NULL(dep_table)) {
     ObSchemaObjVersion ver(schema_id, schema_version, table_type);
     ver.is_db_explicit_ = is_db_expilicit;
     if (OB_FAIL(ObPLCompileUnitAST::add_dependency_object_impl(*dep_table, ver))) {
