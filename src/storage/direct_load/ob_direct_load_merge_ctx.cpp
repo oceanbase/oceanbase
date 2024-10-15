@@ -420,8 +420,7 @@ int ObDirectLoadTabletMergeCtx::build_merge_task(
       }
     } else if (!param_.is_heap_table_) {
       if (!is_multiple_mode) {
-        // 有主键表不排序也写成multiple sstable
-        if (OB_FAIL(build_pk_table_multiple_merge_task(table_array, col_descs, max_parallel_degree))) {
+        if (OB_FAIL(build_pk_table_merge_task(table_array, col_descs, max_parallel_degree))) {
           LOG_WARN("fail to build pk table merge task", KR(ret));
         }
       } else {
@@ -454,8 +453,10 @@ int ObDirectLoadTabletMergeCtx::build_empty_data_merge_task(const ObIArray<ObCol
   // only existing data, construct task by split range
   ObDirectLoadMergeRangeSplitter range_splitter;
   if (OB_FAIL(range_splitter.init(
+      tablet_id_,
       (merge_with_origin_data() ? &origin_table_ : nullptr),
-      sstable_array_,
+      multiple_sstable_array_,
+      param_.table_data_desc_,
       param_.datum_utils_,
       col_descs))) {
     LOG_WARN("fail to init range splitter", KR(ret));
@@ -488,7 +489,7 @@ int ObDirectLoadTabletMergeCtx::build_empty_data_merge_task(const ObIArray<ObCol
   return ret;
 }
 
-int ObDirectLoadTabletMergeCtx::build_pk_table_multiple_merge_task(
+int ObDirectLoadTabletMergeCtx::build_pk_table_merge_task(
   const ObIArray<ObIDirectLoadPartitionTable *> &table_array,
   const ObIArray<ObColDesc> &col_descs,
   int64_t max_parallel_degree)
@@ -497,9 +498,16 @@ int ObDirectLoadTabletMergeCtx::build_pk_table_multiple_merge_task(
   if (OB_FAIL(init_multiple_sstable_array(table_array))) {
     LOG_WARN("fail to init multiple sstable array", KR(ret));
   }
+  for (int64_t i = 0; OB_SUCC(ret) && i < multiple_sstable_array_.count(); ++i) {
+    ObDirectLoadMultipleSSTable *sstable = multiple_sstable_array_.at(i);
+    if (OB_UNLIKELY(sstable->get_tablet_id() != tablet_id_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected sstable is multiple mode", KR(ret), K(tablet_id_), KPC(sstable));
+    }
+  }
   // split range
   if (OB_SUCC(ret)) {
-    ObDirectLoadMultipleMergeTabletRangeSplitter range_splitter;
+    ObDirectLoadMergeRangeSplitter range_splitter;
     if (OB_FAIL(range_splitter.init(
           tablet_id_,
           (merge_with_origin_data() ? &origin_table_ : nullptr),
@@ -606,8 +614,10 @@ int ObDirectLoadTabletMergeCtx::build_heap_table_multiple_merge_task(
   if (OB_SUCC(ret)) {
     ObDirectLoadMergeRangeSplitter range_splitter;
     if (OB_FAIL(range_splitter.init(
+        tablet_id_,
         (merge_with_origin_data() ? &origin_table_ : nullptr),
-        sstable_array_,
+        multiple_sstable_array_,
+        param_.table_data_desc_,
         param_.datum_utils_,
         col_descs))) {
       LOG_WARN("fail to init range splitter", KR(ret));

@@ -304,6 +304,7 @@ ObDirectLoadMultipleSSTableIndexBlockTabletEndKeyIterator::
 }
 
 int ObDirectLoadMultipleSSTableIndexBlockTabletEndKeyIterator::init(
+  const ObTabletID &tablet_id,
   ObDirectLoadMultipleSSTableIndexBlockMetaIterator *index_block_meta_iter)
 {
   int ret = OB_SUCCESS;
@@ -311,10 +312,11 @@ int ObDirectLoadMultipleSSTableIndexBlockTabletEndKeyIterator::init(
     ret = OB_INIT_TWICE;
     LOG_WARN("ObDirectLoadMultipleSSTableIndexBlockTabletEndKeyIterator init twice", KR(ret),
              KP(this));
-  } else if (OB_ISNULL(index_block_meta_iter)) {
+  } else if (OB_UNLIKELY(!tablet_id.is_valid() || nullptr == index_block_meta_iter)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), KP(index_block_meta_iter));
+    LOG_WARN("invalid args", KR(ret), K(tablet_id), KP(index_block_meta_iter));
   } else {
+    tablet_id_ = tablet_id;
     index_block_meta_iter_ = index_block_meta_iter;
     is_inited_ = true;
   }
@@ -335,6 +337,9 @@ int ObDirectLoadMultipleSSTableIndexBlockTabletEndKeyIterator::get_next_rowkey(
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("fail to get next index block meta", KR(ret));
       }
+    } else if (OB_UNLIKELY(index_block_meta.end_key_.tablet_id_ != tablet_id_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected index block meta", KR(ret), K(tablet_id_), K(index_block_meta));
     } else if (OB_FAIL(index_block_meta.end_key_.get_rowkey(rowkey_))) {
       LOG_WARN("fail to get rowkey", KR(ret));
     } else {

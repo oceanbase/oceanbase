@@ -205,6 +205,7 @@ int ObTableLoadStoreTableCtx::init_table_data_desc()
   table_data_desc_.extra_buf_size_ = ObDirectLoadTableDataDesc::DEFAULT_EXTRA_BUF_SIZE;
   table_data_desc_.compressor_type_ = store_ctx_->ctx_->param_.compressor_type_;
   table_data_desc_.is_heap_table_ = schema_->is_heap_table_;
+  table_data_desc_.is_shared_storage_ = GCTX.is_shared_storage_mode();
   table_data_desc_.session_count_ = store_ctx_->ctx_->param_.session_count_;
   table_data_desc_.exe_mode_ = store_ctx_->ctx_->param_.exe_mode_;
 

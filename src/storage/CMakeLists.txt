@@ -872,6 +872,7 @@ ob_set_subtarget(ob_storage direct_load
   direct_load/ob_direct_load_multiple_sstable_index_block_compare.cpp
   direct_load/ob_direct_load_multiple_sstable_index_block_meta_scanner.cpp
   direct_load/ob_direct_load_multiple_sstable_index_entry_compare.cpp
+  direct_load/ob_direct_load_multiple_sstable_rowkey_scanner.cpp
   direct_load/ob_direct_load_multiple_sstable_scan_merge.cpp
   direct_load/ob_direct_load_multiple_sstable_scan_merge_loser_tree.cpp
   direct_load/ob_direct_load_multiple_sstable_scanner.cpp
