@@ -1079,12 +1079,12 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
       case DDL_DROP_MULVALUE_INDEX:
         drop_index_arg = static_cast<const obrpc::ObDropIndexArg *>(param.ddl_arg_);
         if (OB_FAIL(create_drop_fts_index_task(proxy,
-                                               param.type_,
                                                param.src_table_schema_,
                                                param.schema_version_,
                                                param.consumer_group_id_,
                                                param.aux_rowkey_doc_schema_,
                                                param.aux_doc_rowkey_schema_,
+                                               param.fts_index_aux_schema_,
                                                param.aux_doc_word_schema_,
                                                drop_index_arg,
                                                *param.allocator_,
@@ -1927,12 +1927,12 @@ int ObDDLScheduler::create_drop_index_task(
 
 int ObDDLScheduler::create_drop_fts_index_task(
     common::ObISQLClient &proxy,
-    const share::ObDDLType ddl_type,
     const share::schema::ObTableSchema *index_schema,
     const int64_t schema_version,
     const int64_t consumer_group_id,
     const share::schema::ObTableSchema *rowkey_doc_schema,
     const share::schema::ObTableSchema *doc_rowkey_schema,
+    const share::schema::ObTableSchema *domain_index_schema,
     const share::schema::ObTableSchema *doc_word_schema,
     const obrpc::ObDropIndexArg *drop_index_arg,
     ObIAllocator &allocator,
@@ -1941,37 +1941,38 @@ int ObDDLScheduler::create_drop_fts_index_task(
   int ret = OB_SUCCESS;
   int64_t task_id = 0;
   ObDropFTSIndexTask index_task;
+  common::ObString domain_index_name;
   common::ObString fts_doc_word_name;
   common::ObString rowkey_doc_name;
   common::ObString doc_rowkey_name;
-  uint64_t data_table_id = OB_INVALID_ID;
-
+  // multivalue index may run here, need calc index type first
+  bool is_fts_index = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_ISNULL(drop_index_arg)) {
+  } else if (OB_ISNULL(index_schema) || OB_ISNULL(drop_index_arg)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(index_schema), KP(drop_index_arg));
+  } else if (FALSE_IT(is_fts_index = index_schema->is_fts_index_aux())) {
   } else if (OB_UNLIKELY(schema_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(index_schema), K(schema_version));
-  } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service_->get_sql_proxy(), drop_index_arg->tenant_id_,
+  } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service_->get_sql_proxy(), index_schema->get_tenant_id(),
           task_id))) {
     LOG_WARN("fetch new task id failed", K(ret));
   } else {
+    if (OB_FAIL(ret) || OB_ISNULL(domain_index_schema)) {
+    } else if (OB_FAIL(domain_index_schema->get_index_name(domain_index_name))) {
+      LOG_WARN("fail to get fts index name", K(ret), KPC(domain_index_schema));
+    }
     if (OB_FAIL(ret) || OB_ISNULL(doc_word_schema)) {
     } else if (OB_FAIL(doc_word_schema->get_index_name(fts_doc_word_name))) {
       LOG_WARN("fail to get fts doc word name", K(ret), KPC(doc_word_schema));
-    } else {
-      data_table_id = doc_word_schema->get_data_table_id();
     }
     if (OB_FAIL(ret) || OB_ISNULL(rowkey_doc_schema)) {
     } else if (OB_FAIL(rowkey_doc_schema->get_index_name(rowkey_doc_name))) {
       LOG_WARN("fail to get rowkey doc name", K(ret), KPC(rowkey_doc_schema));
-    } else {
-      data_table_id = rowkey_doc_schema->get_data_table_id();
     }
-
     if (OB_FAIL(ret) || OB_ISNULL(doc_rowkey_schema)) {
     } else if (OB_FAIL(doc_rowkey_schema->get_index_name(doc_rowkey_name))) {
       LOG_WARN("fail to get doc rowkey name", K(ret), KPC(doc_rowkey_schema));
@@ -1988,27 +1989,20 @@ int ObDDLScheduler::create_drop_fts_index_task(
       }
     }
 
-    common::ObString domain_index_name = drop_index_arg->index_name_;
-    uint64_t domain_index_table_id = OB_ISNULL(index_schema) ? OB_INVALID_ID :
-                                   index_schema->get_table_id();
-    uint64_t rowkey_doc_table_id = OB_ISNULL(rowkey_doc_schema) ? OB_INVALID_ID :
-                                   rowkey_doc_schema->get_table_id();
-    uint64_t doc_rowkey_table_id = OB_ISNULL(doc_rowkey_schema) ? OB_INVALID_ID :
-                                   doc_rowkey_schema->get_table_id();
-    uint64_t doc_word_table_id = OB_ISNULL(doc_word_schema) ? OB_INVALID_ID :
-                                   doc_word_schema->get_table_id();
+    const uint64_t data_table_id = index_schema->get_data_table_id();
+    uint64_t domain_index_table_id = OB_ISNULL(domain_index_schema) ? OB_INVALID_ID : domain_index_schema->get_table_id();
+    uint64_t rowkey_doc_table_id = OB_ISNULL(rowkey_doc_schema) ? OB_INVALID_ID : rowkey_doc_schema->get_table_id();
+    uint64_t doc_rowkey_table_id = OB_ISNULL(doc_rowkey_schema) ? OB_INVALID_ID : doc_rowkey_schema->get_table_id();
+    uint64_t doc_word_table_id = OB_ISNULL(doc_word_schema) ? OB_INVALID_ID : doc_word_schema->get_table_id();
 
     const ObFTSDDLChildTaskInfo domain_index(domain_index_name, domain_index_table_id, 0/*task_id*/);
     const ObFTSDDLChildTaskInfo fts_doc_word(fts_doc_word_name, doc_word_table_id, 0/*task_id*/);
     const ObFTSDDLChildTaskInfo rowkey_doc(rowkey_doc_name, rowkey_doc_table_id, 0/*task_id*/);
     const ObFTSDDLChildTaskInfo doc_rowkey(doc_rowkey_name, doc_rowkey_table_id, 0/*task_id*/);
+    const ObDDLType ddl_type = is_fts_index ? DDL_DROP_FTS_INDEX : DDL_DROP_MULVALUE_INDEX;
 
     if (OB_FAIL(ret)) {
-    } else if (ddl_type == ObDDLType::DDL_DROP_MULVALUE_INDEX
-      && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_4_0) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("drop multivalue index not support min cluster version lower than 4.3.4", K(ret));
-    } else if (OB_FAIL(index_task.init(drop_index_arg->tenant_id_,
+    } else if (OB_FAIL(index_task.init(index_schema->get_tenant_id(),
                                 task_id,
                                 data_table_id,
                                 ddl_type,

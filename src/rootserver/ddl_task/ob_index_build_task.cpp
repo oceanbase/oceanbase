@@ -1074,7 +1074,9 @@ int ObIndexBuildTask::wait_data_complement()
     }
 #ifdef ERRSIM
     // when the major compaction is delayed, skip verify column checksum
-    need_verify_checksum = 0 == GCONF.errsim_ddl_major_delay_time;
+    if (0 != GCONF.errsim_ddl_major_delay_time) {
+      need_verify_checksum = false;
+    }
 #endif
     ObArray<int64_t> ignore_col_ids;
     if (doc_id_col_id_ != OB_INVALID &&

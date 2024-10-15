@@ -67,6 +67,24 @@ public:
       K(drop_index_task_submitted_), K(schema_version_), K(execution_id_),
       K(consumer_group_id_), K(trace_id_), K(parallelism_), K(create_index_arg_));
 
+public:
+  void set_rowkey_doc_aux_table_id(const uint64_t id) { rowkey_doc_aux_table_id_ = id; }
+  void set_doc_rowkey_aux_table_id(const uint64_t id) { doc_rowkey_aux_table_id_ = id; }
+  void set_fts_index_aux_table_id(const uint64_t id) { domain_index_aux_table_id_ = id; }
+  void set_fts_doc_word_aux_table_id(const uint64_t id) { fts_doc_word_aux_table_id_ = id; }
+  void set_drop_index_task_id(const uint64_t id) { drop_index_task_id_ = id; }
+  void set_rowkey_doc_task_submitted(const bool status) { rowkey_doc_task_submitted_ = status; }
+  void set_doc_rowkey_task_submitted(const bool status) { doc_rowkey_task_submitted_ = status; }
+  void set_fts_index_aux_task_submitted(const bool status) { domain_index_aux_task_submitted_ = status; }
+  void set_fts_doc_word_task_submitted(const bool status) { fts_doc_word_task_submitted_ = status; }
+  void set_drop_index_task_submitted(const bool status) { drop_index_task_submitted_ = status; }
+  void set_rowkey_doc_aux_task_id(const uint64_t id) { rowkey_doc_task_id_ = id; }
+  void set_doc_rowkey_aux_task_id(const uint64_t id) { doc_rowkey_task_id_ = id; }
+  void set_fts_index_aux_task_id(const uint64_t id) { domain_index_aux_task_id_ = id; }
+  void set_fts_doc_word_aux_task_id(const uint64_t id) { fts_doc_word_task_id_ = id; }
+
+  int update_task_message(common::ObISQLClient &proxy);
+
 private:
   bool is_fts_task() const { return task_type_ == DDL_CREATE_FTS_INDEX; }
   int get_next_status(share::ObDDLTaskStatus &next_status);

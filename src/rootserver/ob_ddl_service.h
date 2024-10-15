@@ -2241,7 +2241,7 @@ private:
       const uint64_t tenant_id,
       const uint64_t data_table_id,
       const uint64_t index_table_id,
-      const bool is_vec_inner_drop,
+      const bool is_parent_task_dropping_vec_index,
       const ObString &index_name,
       share::schema::ObSchemaGetterGuard &schema_guard,
       ObDDLOperator &ddl_operator,
