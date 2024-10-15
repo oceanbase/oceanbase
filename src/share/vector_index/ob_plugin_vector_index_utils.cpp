@@ -591,7 +591,8 @@ int ObPluginVectorIndexUtils::refresh_memdata(ObLSID &ls_id,
         LOG_WARN("fail to read local tablet", KR(ret), K(ls_id), K(INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL), KPC(adapter));
       } else {
         ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, adapter->get_tenant_id());
-        ObVectorQueryAdaptorResultContext ada_ctx(adapter->get_tenant_id(), &allocator, &tmp_allocator);
+        ObArenaAllocator batch_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, adapter->get_tenant_id());
+        ObVectorQueryAdaptorResultContext ada_ctx(adapter->get_tenant_id(), &allocator, &tmp_allocator, &batch_allocator);
         if (OB_FAIL(adapter->check_delta_buffer_table_readnext_status(&ada_ctx, delta_buf_iter, target_scn))) {
           LOG_WARN("fail to check_delta_buffer_table_readnext_status.", K(ret));
         }

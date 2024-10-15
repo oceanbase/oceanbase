@@ -177,14 +177,15 @@ struct ObVectorParamData
 class ObVectorQueryAdaptorResultContext {
 public:
   friend class ObPluginVectorIndexAdaptor;
-  ObVectorQueryAdaptorResultContext(uint64_t tenant_id, ObIAllocator *allocator, ObIAllocator *tmp_allocator)
+  ObVectorQueryAdaptorResultContext(uint64_t tenant_id, ObIAllocator *allocator, ObIAllocator *tmp_allocator, ObIAllocator *batch_allocator)
     : status_(PVQ_START),
       flag_(PVQP_MAX),
       tenant_id_(tenant_id),
       bitmaps_(nullptr),
       vec_data_(),
       allocator_(allocator),
-      tmp_allocator_(tmp_allocator) {};
+      tmp_allocator_(tmp_allocator),
+      batch_allocator_(batch_allocator) {};
   ~ObVectorQueryAdaptorResultContext();
   int init_bitmaps();
   int is_bitmaps_valid();
@@ -202,6 +203,7 @@ public:
   ObVectorQueryProcessFlag get_flag() { return flag_; }
   ObIAllocator *get_allocator() { return allocator_; }
   ObIAllocator *get_tmp_allocator() { return tmp_allocator_; }
+  ObIAllocator *get_batch_allocator() { return batch_allocator_; }
   int set_vector(int64_t index, const char *ptr, common::ObString::obstr_size_t size);
   int set_vector(int64_t index, ObObj &obj);
   void set_vectors(ObObj *vectors) { vec_data_.vectors_ = vectors; }
@@ -217,8 +219,9 @@ private:
   uint64_t tenant_id_;
   ObVectorIndexRoaringBitMap *bitmaps_;
   ObVectorParamData vec_data_;
-  ObIAllocator *allocator_;
-  ObIAllocator *tmp_allocator_;
+  ObIAllocator *allocator_;       // allocator for vec_lookup_op, used to allocate memory for final query result
+  ObIAllocator *tmp_allocator_;   // used to temporarily allocate memory during the query process and does not affect the final query results
+  ObIAllocator *batch_allocator_; // Used to complete_delta_buffer_data in batches, reuse after each batch of data is completed
 };
 
 struct ObVectorQueryConditions {
