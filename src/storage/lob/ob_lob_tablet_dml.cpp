@@ -183,6 +183,7 @@ int ObLobTabletDmlHelper::process_lob_column_after_update(
   ObLobCommon *new_lob_common = nullptr;
 
   ObLobDiskLocatorWrapper lob_disk_locator;
+  bool use_seq_pre_alloc = false;
   if (OB_FAIL(info.src_data_locator_.get_lob_data_byte_len(lob_param.update_len_))) {
     LOG_WARN("fail to get new lob byte len", K(ret), K(info));
   } else if (OB_FAIL(delete_lob_col(run_ctx, old_row, column, old_datum, old_lob_common, lob_param))) {
@@ -195,7 +196,9 @@ int ObLobTabletDmlHelper::process_lob_column_after_update(
   } else if (! lob_disk_locator.is_ext_info_log()) {
     lob_param.seq_no_st_ = lob_disk_locator.get_seq_no_st();
     lob_param.total_seq_cnt_ = lob_disk_locator.get_seq_no_cnt();
+    use_seq_pre_alloc = true;
   }
+
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(lob_disk_locator.reset_for_dml())) {
     LOG_WARN("reset_for_dml fail", K(ret), K(lob_disk_locator));
@@ -203,7 +206,8 @@ int ObLobTabletDmlHelper::process_lob_column_after_update(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("new lob common is null", K(ret), K(lob_disk_locator));
   } else if (data_tbl_rowkey_change) {
-    if (OB_FAIL(insert_lob_col(run_ctx, new_row, column, new_datum, nullptr, locator_data, &info.lob_meta_list_))) { // no need del_param
+    // need lob_param when use pre alloc seq no
+    if (OB_FAIL(insert_lob_col(run_ctx, new_row, column, new_datum, use_seq_pre_alloc ? &lob_param : nullptr, locator_data, &info.lob_meta_list_))) {
       LOG_WARN("[STORAGE_LOB]failed to insert new lob col.", K(ret), K(new_row));
     }
   } else if (OB_FAIL(insert_lob_col(run_ctx, new_row, column, new_datum, &lob_param, locator_data, &info.lob_meta_list_))) {
