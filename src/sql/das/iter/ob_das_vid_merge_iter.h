@@ -149,6 +149,7 @@ protected:
   int fill_vid_ids_in_data_table(const common::ObIArray<int64_t> &vid_ids);
 private:
   bool need_filter_rowkey_vid_;
+  bool is_block_sample_;
   storage::ObTableScanParam rowkey_vid_scan_param_;
   ObDASScanIter *rowkey_vid_iter_;
   ObDASScanIter *data_table_iter_;

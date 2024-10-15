@@ -45,6 +45,7 @@ ObDASVIdMergeIterParam::~ObDASVIdMergeIterParam()
 ObDASVIdMergeIter::ObDASVIdMergeIter()
   : ObDASIter(),
     need_filter_rowkey_vid_(true),
+    is_block_sample_(false),
     rowkey_vid_scan_param_(),
     rowkey_vid_iter_(nullptr),
     data_table_iter_(nullptr),
@@ -190,6 +191,7 @@ int ObDASVIdMergeIter::inner_release()
   data_table_iter_ = nullptr;
   rowkey_vid_iter_ = nullptr;
   need_filter_rowkey_vid_ = true;
+  is_block_sample_ = false;
   return ret;
 }
 
@@ -303,6 +305,7 @@ int ObDASVIdMergeIter::init_rowkey_vid_scan_param(
     }
     if (rtdef->sample_info_ != nullptr) {
       rowkey_vid_scan_param_.sample_info_ = *rtdef->sample_info_;
+      is_block_sample_ = (rowkey_vid_scan_param_.sample_info_.method_ != common::SampleInfo::NO_SAMPLE);
     }
   }
 
@@ -348,9 +351,10 @@ int ObDASVIdMergeIter::build_rowkey_vid_range()
       data_table_iter_->get_scan_param().sample_info_.method_ = common::SampleInfo::ROW_SAMPLE;
       rowkey_vid_scan_param_.sample_info_.method_ = common::SampleInfo::ROW_SAMPLE;
     }
+    is_block_sample_ = (rowkey_vid_scan_param_.sample_info_.method_ != common::SampleInfo::NO_SAMPLE);
     rowkey_vid_scan_param_.scan_flag_.scan_order_ = data_table_iter_->get_scan_param().scan_flag_.scan_order_;
   }
-  LOG_INFO("build rowkey vid range", K(ret), K(need_filter_rowkey_vid_), K(rowkey_vid_scan_param_.key_ranges_),
+  LOG_INFO("build rowkey vid range", K(ret), K(need_filter_rowkey_vid_), K(is_block_sample_), K(rowkey_vid_scan_param_.key_ranges_),
       K(rowkey_vid_scan_param_.ss_key_ranges_), K(rowkey_vid_scan_param_.sample_info_));
   return ret;
 }
@@ -359,7 +363,13 @@ int ObDASVIdMergeIter::concat_row()
 {
   int ret = OB_SUCCESS;
   int64_t vid_id;
-  if (OB_FAIL(data_table_iter_->get_next_row())) {
+  if (is_block_sample_) {
+    if (OB_FAIL(data_table_iter_->get_next_row())) {
+      if (OB_UNLIKELY(OB_ITER_END != ret)) {
+        LOG_WARN("fail to get next rows", K(ret));
+      }
+    }
+  } else if (OB_FAIL(data_table_iter_->get_next_row())) {
     if (OB_ITER_END == ret) {
       if (OB_FAIL(rowkey_vid_iter_->get_next_row())) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
@@ -373,6 +383,7 @@ int ObDASVIdMergeIter::concat_row()
         } else {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("row count isn't equal between data table and rowkey doc", K(ret), K(rowkey),
+              K(is_block_sample_),
               K(rowkey_vid_iter_->get_scan_param()), K(data_table_iter_->get_scan_param()));
         }
       }
@@ -402,6 +413,7 @@ int ObDASVIdMergeIter::concat_rows(int64_t &count, int64_t capacity)
     }
   }
   if (OB_FAIL(ret) && ret != OB_ITER_END) {
+  } else if (is_block_sample_) {
   } else { // whatever succ or iter_end, we should get from rowkey_vid_iter
     bool expect_iter_end = (ret == OB_ITER_END);
     int64_t real_cap = (data_row_cnt > 0 && !expect_iter_end) ? data_row_cnt : capacity;
@@ -436,14 +448,15 @@ int ObDASVIdMergeIter::concat_rows(int64_t &count, int64_t capacity)
       int tmp_ret = ret;
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("row count isn't equal between data table and rowkey vid",
-                K(ret), K(tmp_ret), K(capacity), K(vid_ids.count()), K(data_row_cnt));
+                K(ret), K(is_block_sample_), K(tmp_ret), K(capacity), K(vid_ids.count()), K(data_row_cnt));
     }
   }
   if (OB_FAIL(ret) && OB_ITER_END != ret) {
+  } else if (is_block_sample_) {
   } else if (OB_UNLIKELY(data_row_cnt != vid_ids.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("The row count of data table isn't equal to rowkey vid", K(ret), K(data_row_cnt), K(vid_ids),
-        K(data_table_iter_->get_scan_param()), K(rowkey_vid_iter_->get_scan_param()));
+        K(is_block_sample_), K(data_table_iter_->get_scan_param()), K(rowkey_vid_iter_->get_scan_param()));
   } else {
     count = data_row_cnt;
     if (count > 0 && data_table_ctdef_->vec_vid_idx_ != -1) {
@@ -467,6 +480,7 @@ int ObDASVIdMergeIter::sorted_merge_join_row()
   common::ObRowkey data_table_rowkey;
   if (OB_FAIL(data_table_iter_->get_next_row()) && OB_ITER_END != ret) {
     LOG_WARN("fail to get next data table row", K(ret));
+  } else if (is_block_sample_) {
   } else if (OB_ITER_END == ret) {
     while (OB_SUCC(rowkey_vid_iter_->get_next_row()));
     if (OB_ITER_END != ret) {
@@ -518,6 +532,7 @@ int ObDASVIdMergeIter::sorted_merge_join_rows(int64_t &count, int64_t capacity)
   } else if (OB_UNLIKELY(0 == data_table_cnt && OB_SUCCESS == ret)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, data table row count is 0, but ret code is success", K(ret), KPC(data_table_iter_));
+  } else if (is_block_sample_) {
   } else if (OB_ITER_END == ret && FALSE_IT(is_iter_end = true)) {
   } else if (OB_FAIL(get_rowkeys(data_table_cnt, allocator, data_table_ctdef_, data_table_rtdef_,
           rowkeys_in_data_table))) {
