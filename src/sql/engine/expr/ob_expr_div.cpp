@@ -954,16 +954,20 @@ struct ObDecimalIntBatchDivRaw : public ObArithOpRawType<L, L, R>
   {
     using val_type = typename common::wide::CommonType<L, R>::type;
     UNUSED(is_error_div_by_zero);
-    res = l / r;
-    const val_type round = l % r;
-    const val_type abs_right = r < 0 ? -r : r;
-    const val_type abs_round = round < 0 ? -round : round;
-    // if |right| is odd, |right|/2 < |r| => need_carry
-    // if |right| is even, |right|/2 <= |r| => need_carry
-    const bool need_carry = ((abs_right >> 1) + (abs_right & 1)) <= abs_round;
-    if (need_carry) {
-      const int32_t carry = res < 0 ? -1 : 1;
-      res = res + carry;
+    if (r == -1) {
+      res = -l;
+    } else {
+      res = l / r;
+      const val_type round = l % r;
+      const val_type abs_right = r < 0 ? -r : r;
+      const val_type abs_round = round < 0 ? -round : round;
+      // if |right| is odd, |right|/2 < |r| => need_carry
+      // if |right| is even, |right|/2 <= |r| => need_carry
+      const bool need_carry = ((abs_right >> 1) + (abs_right & 1)) <= abs_round;
+      if (need_carry) {
+        const int32_t carry = res < 0 ? -1 : 1;
+        res = res + carry;
+      }
     }
   }
 
