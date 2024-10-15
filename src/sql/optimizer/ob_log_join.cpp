@@ -78,14 +78,10 @@ int ObLogJoin::set_granule_repart_ref_table_id_recursively(ObLogicalOperator *op
   return ret;
 }
 
-int ObLogJoin::get_aj_hj_used_exprs(ObIArray<ObRawExpr*> &all_exprs)
+int ObLogJoin::get_aj_bypass_used_exprs(ObIArray<ObRawExpr*> &all_exprs)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(append(all_exprs, output_exprs_))) {
-    LOG_WARN("failed to append exprs", K(ret));
-  } else if (OB_FAIL(append_array_no_dup(all_exprs, join_conditions_))) {
-    LOG_WARN("failed to append exprs", K(ret));
-  } else if (OB_FAIL(append_array_no_dup(all_exprs, join_filters_))) {
     LOG_WARN("failed to append exprs", K(ret));
   } else if (OB_FAIL(append_array_no_dup(all_exprs, get_filter_exprs()))) {
     LOG_WARN("failed to append exprs", K(ret));
@@ -1549,7 +1545,7 @@ int ObLogJoin::check_and_remove_aj_dependance()
     ObLogicalOperator::PPDeps deps;
     ObSEArray<ObRawExpr*, 8> col_exprs;
     ObRawExprCheckDep dep_checker(get_adaptive_hj_scan_cols(), deps, false);
-    if (OB_FAIL(get_aj_hj_used_exprs(col_exprs))) {
+    if (OB_FAIL(get_aj_bypass_used_exprs(col_exprs))) {
       LOG_WARN("failed to get aj hj op exprs", K(ret));
     } else if (OB_FAIL(dep_checker.check(col_exprs))) {
       LOG_WARN("failed to check exprs", K(ret));

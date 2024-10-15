@@ -4904,8 +4904,7 @@ int ObStaticEngineCG::generate_spec(ObLogJoin &op, ObHashJoinSpec &spec, const b
 int ObStaticEngineCG::regenerate_adaptive_join_output_map(ObLogJoin &op, ObHashJoinSpec &spec)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(op.get_adaptive_hj_scan_cols().empty()
-      || op.get_adaptive_hj_scan_cols().count() != op.get_adaptive_nlj_scan_cols().count())) {
+  if (OB_UNLIKELY(op.get_adaptive_hj_scan_cols().count() != op.get_adaptive_nlj_scan_cols().count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected adaptive join scan columns", K(ret), K(op.get_adaptive_hj_scan_cols()),
              K(op.get_adaptive_nlj_scan_cols()));
@@ -4925,10 +4924,7 @@ int ObStaticEngineCG::regenerate_adaptive_join_output_map(ObLogJoin &op, ObHashJ
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_UNLIKELY(indexes.empty())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("indexes is empty", K(ret), K(adaptive_nlj_scan_cols), K(child_op->get_output_exprs()));
-      } else if (OB_FAIL(spec.adaptive_hj_scan_cols_.init(indexes.count()))) {
+      if (OB_FAIL(spec.adaptive_hj_scan_cols_.init(indexes.count()))) {
         LOG_WARN("init fixed array failed", K(ret));
       } else if (OB_FAIL(spec.adaptive_nlj_scan_cols_.init(indexes.count()))) {
         LOG_WARN("init fixed array failed", K(ret));

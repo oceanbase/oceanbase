@@ -188,7 +188,7 @@ namespace sql
     // 左侧的 GI 看到这个 partition id 后会以 producer 的身份生成列
     int generate_join_partition_id_expr();
     virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
-    int get_aj_hj_used_exprs(ObIArray<ObRawExpr*> &col_exprs);
+    int get_aj_bypass_used_exprs(ObIArray<ObRawExpr*> &col_exprs);
     int get_connect_by_exprs(ObIArray<ObRawExpr*> &all_exprs);
     virtual int allocate_granule_post(AllocGIContext &ctx) override;
     virtual int allocate_granule_pre(AllocGIContext &ctx) override;
