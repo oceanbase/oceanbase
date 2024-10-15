@@ -198,12 +198,16 @@ int ObComplementDataParam::prepare_task_ranges()
       if (OB_FAIL(split_task_ranges(orig_ls_id_, orig_tablet_id_, orig_schema_tablet_size_, user_parallelism_))) {
         LOG_WARN("fail to init task ranges", K(ret), KPC(this));
       }
-    } else if (OB_FAIL(split_task_ranges_remote(orig_tenant_id_,
-                                                orig_ls_id_,
-                                                orig_tablet_id_,
-                                                orig_schema_tablet_size_,
-                                                user_parallelism_))) {
-      LOG_WARN("fail to init task ranges", K(ret), KPC(this));
+    } else {
+      // TODO: chengxu need to fix parallel recover table partition.
+      ObDatumRange datum_range;
+      datum_range.set_whole_range();
+      if (OB_FAIL(ranges_.push_back(datum_range))) {
+        LOG_WARN("push back range failed", K(ret), K(datum_range));
+      } else {
+        concurrent_cnt_ = 1;
+        LOG_INFO("succeed to to init task ranges", K(ret), K(user_parallelism_), K(concurrent_cnt_), K(ranges_));
+      }
     }
   }
 
