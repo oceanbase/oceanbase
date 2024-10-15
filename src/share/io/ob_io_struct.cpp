@@ -2538,6 +2538,8 @@ int ObSyncIOChannel::do_sync_io(ObIORequest &req)
     } else {
       req.finish(OB_SUCCESS);
     }
+  } else {
+    req.finish(ret);
   }
   return ret;
 }
