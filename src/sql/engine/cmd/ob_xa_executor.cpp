@@ -77,7 +77,6 @@ int ObPlXaStartExecutor::execute(ObExecContext &ctx, ObXaStartStmt &stmt)
   } else if (FALSE_IT(tenant_id = my_session->get_effective_tenant_id())) {
   } else {
     ObSQLSessionInfo::LockGuard session_query_guard(my_session->get_query_lock());
-    ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
     const int64_t flags = stmt.get_flags();
     transaction::ObTxParam &tx_param = plan_ctx->get_trans_param();
     const bool is_readonly = ObXAFlag::contain_tmreadonly(flags);
@@ -95,7 +94,11 @@ int ObPlXaStartExecutor::execute(ObExecContext &ctx, ObXaStartStmt &stmt)
     tx_param.cluster_id_ = org_cluster_id;
     tx_param.timeout_us_ = tx_timeout;
 
-    ObTxDesc *&tx_desc = my_session->get_tx_desc();
+    ObTxDesc *tx_desc = my_session->get_tx_desc();
+    {
+      ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
+      my_session->get_tx_desc() = NULL;
+    }
     if (OB_FAIL(MTL(transaction::ObXAService*)->xa_start(xid,
                                                          flags,
                                                          my_session->get_xa_end_timeout_seconds(),
@@ -104,11 +107,15 @@ int ObPlXaStartExecutor::execute(ObExecContext &ctx, ObXaStartStmt &stmt)
                                                          tx_desc,
                                                          my_session->get_data_version()))) {
       LOG_WARN("xa start failed", K(ret), K(tx_param));
+      ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
+      my_session->get_tx_desc() = tx_desc;
       my_session->reset_tx_variable();
       my_session->set_early_lock_release(false);
       ctx.set_need_disconnect(false);
     } else {
       // associate xa with session
+      ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
+      my_session->get_tx_desc() = tx_desc;
       my_session->associate_xa(xid);
       my_session->get_raw_audit_record().trans_id_ = my_session->get_tx_id();
     }
@@ -218,13 +225,19 @@ int ObPlXaEndExecutor::execute(ObExecContext &ctx, ObXaEndStmt &stmt)
     TRANS_LOG(WARN, "xid not match", K(ret), K(xid));
   } else {
     ObSQLSessionInfo::LockGuard session_query_guard(my_session->get_query_lock());
-    ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
     int64_t flags = stmt.get_flags();
     flags = my_session->has_tx_level_temp_table() ? (flags | ObXAFlag::OBTEMPTABLE) : flags;
-    my_session->get_raw_audit_record().trans_id_ = my_session->get_tx_id();
+    ObTxDesc *tx_desc = my_session->get_tx_desc();
+    {
+      ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
+      my_session->get_raw_audit_record().trans_id_ = my_session->get_tx_id();
+      my_session->get_tx_desc() = NULL;
+    }
     if (OB_FAIL(MTL(transaction::ObXAService*)->xa_end(xid, flags,
-          my_session->get_tx_desc()))) {
+          tx_desc))) {
       LOG_WARN("xa end failed", K(ret), K(xid));
+      ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
+      my_session->get_tx_desc() = tx_desc;
       // if branch fail is returned, clean trans in session
       if (OB_TRANS_XA_BRANCH_FAIL == ret) {
         my_session->reset_tx_variable();
@@ -232,6 +245,8 @@ int ObPlXaEndExecutor::execute(ObExecContext &ctx, ObXaEndStmt &stmt)
         ctx.set_need_disconnect(false);
       }
     } else {
+      ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
+      my_session->get_tx_desc() = tx_desc;
       my_session->reset_tx_variable();
       my_session->disassociate_xa();
       ctx.set_need_disconnect(false);
