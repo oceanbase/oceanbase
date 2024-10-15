@@ -41,7 +41,7 @@ ObExprCast::ObExprCast(ObIAllocator &alloc)
     : ObFuncExprOperator::ObFuncExprOperator(alloc, T_FUN_SYS_CAST,
                                              N_CAST,
                                              2,
-                                             NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+                                             VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
   extra_serialize_ = 0;
   disable_operand_auto_cast();
@@ -1356,26 +1356,6 @@ int ObExprCast::do_implicit_cast(ObExprCtx &expr_ctx,
     dst_obj = *obj_ptr;
   }
   LOG_DEBUG("do_implicit_cast done", K(ret), K(dst_obj), K(src_obj), K(dst_type), K(cast_mode));
-  return ret;
-}
-
-int ObExprCast::is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const {
-  int ret = OB_SUCCESS;
-  if (exprs.count() != 2) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected param num", K(ret), K(exprs.count()));
-  } else if (OB_ISNULL(exprs.at(0)) || OB_ISNULL(exprs.at(1)) || OB_ISNULL(expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid param", K(ret), K(exprs.at(0)), K(exprs.at(1)));
-  } else {
-    ObObjType src = exprs.at(0)->get_result_type().get_type();
-    ObObjType dst = expr->get_result_type().get_type();
-    if (ObTimeType == src && ObTimeType != dst && ob_is_temporal_type(dst)) {
-      is_valid = false;
-    } else {
-      is_valid = true;
-    }
-  }
   return ret;
 }
 

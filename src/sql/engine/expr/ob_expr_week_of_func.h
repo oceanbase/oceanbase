@@ -36,7 +36,6 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int calc_weekofyear(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
-  virtual int is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const;
   DECLARE_SET_LOCAL_SESSION_VARS;
 
 private:
@@ -73,7 +72,6 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int calc_weekday(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
-  virtual int is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const;
   DECLARE_SET_LOCAL_SESSION_VARS;
 
 private:
@@ -113,7 +111,6 @@ public:
                       ObExpr &rt_expr) const override;
   static int calc_yearweek(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
 
-  virtual int is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const;
   DECLARE_SET_LOCAL_SESSION_VARS;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprYearWeek);
@@ -136,7 +133,6 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int calc_week(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
-  virtual int is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const;
   DECLARE_SET_LOCAL_SESSION_VARS;
 
 private:

@@ -160,21 +160,6 @@ int ObExprDateFormat::calc_date_format_invalid(const ObExpr &expr, ObEvalCtx &ct
   return ret;
 }
 
-int ObExprDateFormat::is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const {
-  int ret = OB_SUCCESS;
-  is_valid = true;
-  if (exprs.count() < 1) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected param num", K(ret), K(exprs.count()));
-  } else if (OB_ISNULL(exprs.at(0))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid param", K(ret), K(exprs.at(0)), K(exprs.at(1)));
-  } else if (ObTimeType == exprs.at(0)->get_result_type().get_type() || ObTimestampType == exprs.at(0)->get_result_type().get_type()) {
-    is_valid = false;
-  }
-  return ret;
-}
-
 DEF_SET_LOCAL_SESSION_VARS(ObExprDateFormat, raw_expr) {
   int ret = OB_SUCCESS;
   if (is_mysql_mode()) {
