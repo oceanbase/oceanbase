@@ -2581,7 +2581,7 @@ typedef enum ObItemType
   T_MICRO_INDEX_CLUSTERED = 4728,
 
   // Parquet related
-  T_PER_ROW_GROUP_SIZE = 4729,
+  T_ROW_GROUP_SIZE = 4729,
   T_COMPRESSION_ALGORITHM = 4730,
 
   // Erase micro cache
