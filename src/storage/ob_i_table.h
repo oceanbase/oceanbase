@@ -162,8 +162,8 @@ public:
     OB_INLINE bool is_true_major_sstable() const { return is_row_store_major_sstable() || is_column_store_major_sstable(); }
 
     OB_INLINE const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
-    share::SCN get_start_scn() const { return scn_range_.start_scn_; }
-    share::SCN get_end_scn() const { return scn_range_.end_scn_; }
+    share::SCN get_start_scn() const { return scn_range_.start_scn_.atomic_get(); }
+    share::SCN get_end_scn() const { return scn_range_.end_scn_.atomic_get(); }
     OB_INLINE int64_t get_snapshot_version() const
     {
       return version_range_.snapshot_version_;
