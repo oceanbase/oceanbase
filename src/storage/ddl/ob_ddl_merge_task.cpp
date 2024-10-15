@@ -981,10 +981,10 @@ int ObTabletDDLUtil::update_ddl_table_store(
         table_store_param.ddl_info_.ddl_checkpoint_scn_ = sstable->is_ddl_dump_sstable() ? sstable->get_end_scn() : ddl_param.commit_scn_;
         if (ddl_param.table_key_.is_ddl_dump_sstable()) {
           // data is not complete, now update ddl table store only for reducing count of ddl dump sstable.
-          table_store_param.ddl_info_.ddl_table_type_ = ddl_param.table_key_.table_type_;
+          table_store_param.ddl_info_.ddl_replay_status_ = tablet.get_tablet_meta().ddl_replay_status_;
         } else {
-          // data is complete, make ddl table type to major sstable instead of ddl dump sstable (mark ddl finished).
-          table_store_param.ddl_info_.ddl_table_type_ = ddl_param.table_key_.is_co_sstable() ? ObITable::COLUMN_ORIENTED_SSTABLE : ObITable::MAJOR_SSTABLE;
+          // data is complete, mark ddl replay status finished
+          table_store_param.ddl_info_.ddl_replay_status_ = ddl_param.table_key_.is_co_sstable() ? CS_REPLICA_REPLAY_COLUMN_FINISH : CS_REPLICA_REPLAY_ROW_STORE_FINISH;
         }
       } else { // incremental direct load
         table_store_param.compaction_info_.clog_checkpoint_scn_ = sstable->get_end_scn();

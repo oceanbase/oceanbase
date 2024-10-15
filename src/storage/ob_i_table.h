@@ -476,14 +476,6 @@ public:
   {
     return ObITable::TableType::COLUMN_ORIENTED_SSTABLE == table_type;
   }
-  static bool is_valid_ddl_table_type(const TableType table_type)
-  {
-    return ObITable::DDL_MEM_SSTABLE == table_type
-        || ObITable::MAJOR_SSTABLE == table_type
-        || ObITable::DDL_DUMP_SSTABLE == table_type
-        || ObITable::COLUMN_ORIENTED_SSTABLE == table_type
-        || ObITable::DDL_MERGE_CO_SSTABLE;
-  }
   static bool is_table_with_scn_range(const TableType table_type)
   {
     return is_multi_version_table(table_type) || is_meta_major_sstable(table_type);

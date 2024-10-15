@@ -40,6 +40,7 @@
 #include "storage/high_availability/ob_tablet_transfer_info.h"
 #include "storage/tablet/ob_tablet_space_usage.h"
 #include "storage/blocksstable/ob_major_checksum_info.h"
+#include "storage/column_store/ob_column_store_replica_ddl_helper.h"
 namespace oceanbase
 {
 namespace storage
@@ -71,7 +72,8 @@ public:
       const int64_t create_schema_version,
       const share::SCN &clog_checkpoint_scn,
       const bool micro_index_clustered,
-      const bool has_cs_replica);
+      const bool has_cs_replica,
+      const bool need_generate_cs_replica_cg_array);
   int init(
       const ObTabletMeta &old_tablet_meta,
       const int64_t snapshot_version,
@@ -108,7 +110,9 @@ public:
   // Note, if a new type of checkpoint scn is added, donot forget to modify the returned scn.
   share::SCN get_max_replayed_scn() const;
   // for column store replica
-  bool is_cs_replica_global_visable_when_ddl() const;
+  bool is_cs_replica_global_visible_when_ddl() const;
+  bool is_cs_replica_global_visible_and_replay_row_store() const;
+  bool is_cs_replica_global_visible_and_replay_column_store() const;
 public:
   static int deserialize_id(
       const char *buf,
@@ -159,7 +163,7 @@ public:
                K_(create_schema_version),
                K_(space_usage),
                K_(micro_index_clustered),
-               K_(ddl_table_type));
+               K_(ddl_replay_status));
 
 public:
   int32_t version_; // alignment: 4B, size: 4B
@@ -196,13 +200,26 @@ public:
                                    // alignment: 8B, size: 48B
   int64_t create_schema_version_; // add after 4.2, record schema_version when first create tablet. NEED COMPAT
                                   // alignment: 8B, size: 8B
-  // add after 4.3.3, is used to decide storage type for replaying ddl clog and create ddl dump sstable in cs replica.
-  // when offline ddl is concurrent with adding C-Replica, it may write row store clog, but storage schema in C-Replica is columnar.
-  // so need persist a field in tablet when replaying start log to decide table_type when restart from a checkpoint, or migrating, etc.
-  // - DDL_MEM_SSTABLE: initial state, tablet not doing offline ddl. only take this type for inital, unrelated to memtable.
-  // - DDL_DUMP_SSTABLE/DDL_MERGE_CO_SSTABLE: tablet is doing offline ddl, indicate target storage type for ddl dump sstable.
-  // - MAJOR_SSTABLE/COLUMN_ORIENTED_SSTABLE: tablet finish offline ddl, set when ddl merge task create major sstable.
-  ObITable::TableType ddl_table_type_;
+  // Add after 4.3.3, is used to decide storage type for replaying ddl redo log and create ddl dump sstable in C-Replica.
+  // ddl_replay_status only make sense when table schema is row store, originally column store table do not need be processed in C-Replica.
+  // The are some conditions the ddl_replay_status used:
+  //   1. When offline ddl is concurrent with adding C-Replica, it may write row store clog, but storage schema in C-Replica is columnar.
+  //      In this condition, need replay row store ddl clog in C-Replica.
+  //   2. When there are with_cs_replica ddl redo clogs, but tablet in C-Replica is migrated from a F/R-Replica and has replayed some row store redo log.
+  //      In this condition, need replay row store ddl clog in C-Replica continuely.
+  // So we need persist a field in tablet when creating user tablet to decide table_type when restart from a checkpoint, or migrating, etc.
+  // - CS_REPLICA_REPLAY_NONE: initial state, tablet not doing offline ddl. only take this type for inital.
+  // - CS_REPLICA_INVISILE/CS_REPLICA_VISIBLE_AND_REPLAY_COLUMN/CS_REPLICA_VISIBLE_AND_REPLAY_ROW: tablet is doing offline ddl.
+  // - CS_REPLICA_REPLAY_ROW_STORE_FINISH/CS_REPLICA_REPLAY_COLUMN_FINISH: tablet finish offline ddl, set when ddl merge task create major sstable.
+  //
+  // + -------------------- + -------------------------------- + ------------------------------------ +
+  // | C-Replica is visible | ls (the tablet in) is C-Replica  | when tablet created                  |
+  // + -------------------- + -------------------------------- + ------------------------------------ +
+  // | FALSE                | TRUE/FALSE                       | CS_REPLICA_INVISILE                  |
+  // | TRUE                 | FALSE                            | CS_REPLICA_VISIBLE_AND_REPLAY_ROW    |
+  // | TRUE                 | TRUE                             | CS_REPLICA_VISIBLE_AND_REPLAY_COLUMN |
+  // + -------------------- + --------------------------------- + ----------------------------------- +
+  ObCSReplicaDDLReplayStatus ddl_replay_status_;
   //ATTENTION : Add a new variable need consider ObMigrationTabletParam
   // and tablet meta init interface for migration.
   // yuque :
@@ -294,6 +311,7 @@ public:
                K_(create_schema_version),
                K_(micro_index_clustered),
                K_(major_ckm_info),
+               K_(ddl_replay_status),
                K_(is_storage_schema_cs_replica));
 private:
   int deserialize_v2_v3(const char *buf, const int64_t len, int64_t &pos);
@@ -347,7 +365,7 @@ public:
   int64_t create_schema_version_;
   bool micro_index_clustered_;
   blocksstable::ObMajorChecksumInfo major_ckm_info_; // from table store
-  ObITable::TableType ddl_table_type_;
+  ObCSReplicaDDLReplayStatus ddl_replay_status_;
   bool is_storage_schema_cs_replica_;
 
   // Add new serialization member before this line, below members won't serialize

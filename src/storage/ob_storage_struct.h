@@ -30,6 +30,7 @@
 #include "storage/high_availability/ob_tablet_ha_status.h"
 #include "storage/blocksstable/ob_major_checksum_info.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
+#include "storage/column_store/ob_column_store_replica_ddl_helper.h"
 
 namespace oceanbase
 {
@@ -342,7 +343,7 @@ public:
                K_(ddl_start_scn), K_(ddl_commit_scn), K_(ddl_checkpoint_scn),
                K_(ddl_snapshot_version), K_(ddl_execution_id),
                K_(data_format_version), KP_(ddl_redo_callback),
-               KP_(ddl_finish_callback), K_(ddl_table_type));
+               KP_(ddl_finish_callback), K_(ddl_replay_status));
 
 public:
   bool keep_old_ddl_sstable_;
@@ -355,8 +356,8 @@ public:
   int64_t data_format_version_;
   blocksstable::ObIMacroBlockFlushCallback *ddl_redo_callback_;
   blocksstable::ObIMacroBlockFlushCallback *ddl_finish_callback_;
-  // used to decide storage type for replaying ddl clog in cs replica, see ObTabletMeta::ddl_table_type_ for more detail
-  ObITable::TableType ddl_table_type_;
+  // used to decide storage type for replaying ddl clog in cs replica, see ObTabletMeta::ddl_replay_status_ for more detail
+  ObCSReplicaDDLReplayStatus ddl_replay_status_;
 };
 
 struct ObHATableStoreParam final
