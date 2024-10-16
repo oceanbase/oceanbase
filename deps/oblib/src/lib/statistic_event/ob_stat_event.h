@@ -781,6 +781,9 @@ STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_USED_DISK_SIZE, "ss_micro_cache total used dis
 STAT_EVENT_ADD_DEF(SS_MAJOR_MACRO_CACHE_HIT, "ss_major_macro_cache hit count", ObStatClassIds::CACHE, 240020, true, true, true)
 STAT_EVENT_ADD_DEF(SS_MAJOR_MACRO_CACHE_MISS, "ss_major_macro_cache miss count", ObStatClassIds::CACHE, 240021, true, true, true)
 
+STAT_EVENT_ADD_DEF(OBJECT_STORAGE_IO_HEAD_COUNT, "object storage io head count", ObStatClassIds::STORAGE, 240022, true, true, true)
+STAT_EVENT_ADD_DEF(OBJECT_STORAGE_IO_HEAD_FAIL_COUNT, "object storage io head fail count", ObStatClassIds::STORAGE, 240023, true, true, true)
+
 //end
 STAT_EVENT_ADD_DEF(STAT_EVENT_ADD_END, "event add end", ObStatClassIds::DEBUG, 1, false, false, true)
 

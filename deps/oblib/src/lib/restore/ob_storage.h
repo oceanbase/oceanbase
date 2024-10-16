@@ -353,6 +353,8 @@ private:
 
   int del_appendable_file(const common::ObString &uri);
 
+  int head_object_meta_(const ObString &uri, ObStorageObjectMetaBase &obj_meta);
+
   ObStorageFileUtil file_util_;
   ObStorageOssUtil oss_util_;
   ObStorageCosUtil cos_util_;

@@ -12,6 +12,7 @@
 
 #include "ob_i_storage.h"
 #include "lib/container/ob_se_array_iterator.h"
+#include "cos/ob_singleton.h"
 
 namespace oceanbase
 {
@@ -881,6 +882,25 @@ ObObjectStorageGuard::~ObObjectStorageGuard()
 {
   print_access_storage_log_();
   lib::ObMallocHookAttrGuard::~ObMallocHookAttrGuard();
+}
+
+/*--------------------------------ObObjectStorageTenantGuard--------------------------------*/
+thread_local uint64_t ObObjectStorageTenantGuard::tl_tenant_id_ = OB_SYS_TENANT_ID;
+thread_local int64_t ObObjectStorageTenantGuard::tl_timeout_us_ = OB_STORAGE_MAX_IO_TIMEOUT_US;
+
+ObObjectStorageTenantGuard::ObObjectStorageTenantGuard(
+    const uint64_t tenant_id, const int64_t timeout_us)
+    : old_tenant_id_(tl_tenant_id_),
+      old_timeout_us_(tl_timeout_us_)
+{
+  tl_tenant_id_ = tenant_id;
+  tl_timeout_us_ = timeout_us;
+}
+
+ObObjectStorageTenantGuard::~ObObjectStorageTenantGuard()
+{
+  tl_tenant_id_ = old_tenant_id_;
+  tl_timeout_us_ = old_timeout_us_;
 }
 
 }//common
