@@ -766,6 +766,9 @@ public:
                                             const ObProxyInfo &proxied_info,
                                             ObIArray<uint64_t> &new_role_id_array,
                                             ObIArray<uint64_t> &new_role_id_option_array);
+
+  static int get_strong_partition_replica_addr(const ObCandiTabletLoc &phy_part_loc_info,
+                                               ObAddr &selected_addr);
 private:
   static bool check_mysql50_prefix(common::ObString &db_name);
   static bool part_expr_has_virtual_column(const ObExpr *part_expr);

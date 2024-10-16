@@ -6331,3 +6331,17 @@ bool ObSQLUtils::is_data_version_ge_424_or_433(uint64_t data_version)
 {
   return ((MOCK_DATA_VERSION_4_2_4_0 <= data_version && data_version < DATA_VERSION_4_3_0_0) || data_version >= DATA_VERSION_4_3_3_0);
 }
+
+int ObSQLUtils::get_strong_partition_replica_addr(const ObCandiTabletLoc &phy_part_loc_info,
+                                                  ObAddr &selected_addr)
+{
+  int ret = OB_SUCCESS;
+  const ObOptTabletLoc &loc = phy_part_loc_info.get_partition_location();
+  share::ObLSReplicaLocation replica_location;
+  if (OB_FAIL(loc.get_strong_leader(replica_location))) {
+    LOG_WARN("failed to get strong leader", K(ret));
+  } else {
+    selected_addr = replica_location.get_server();
+  }
+  return ret;
+}
