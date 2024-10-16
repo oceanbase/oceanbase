@@ -27,7 +27,7 @@ void FakeAllocatorForLobExtInfoLog::init_throttle_config(int64_t &resource_limit
                                                    int64_t &trigger_percentage,
                                                    int64_t &max_duration)
 {
-  const int64_t LIMIT_PERCENTAGE = 20;
+  const int64_t LIMIT_PERCENTAGE = 10;
   const int64_t THROTTLE_TRIGGER_PERCENTAGE = 60;
   const int64_t THROTTLE_MAX_DURATION = 2LL * 60LL * 60LL * 1000LL * 1000LL;  // 2 hours
 
@@ -61,7 +61,7 @@ int64_t ObLobExtInfoLogAllocator::resource_unit_size()
 
 void ObLobExtInfoLogAllocator::init_throttle_config(int64_t &resource_limit, int64_t &trigger_percentage, int64_t &max_duration)
 {
-  const int64_t LIMIT_PERCENTAGE = 20;
+  const int64_t LIMIT_PERCENTAGE = 10;
   const int64_t THROTTLE_TRIGGER_PERCENTAGE = 60;
   const int64_t THROTTLE_MAX_DURATION = 2LL * 60LL * 60LL * 1000LL * 1000LL;  // 2 hours
 
