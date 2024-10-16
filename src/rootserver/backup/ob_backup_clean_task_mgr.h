@@ -76,8 +76,10 @@ private:
   int delete_backup_set_start_file_();
   int delete_backup_piece_start_file_();
   int delete_backup_set_inner_placeholder_();
+  int delete_user_data_info_dir_();
   int delete_minor_data_info_dir_();
   int delete_major_data_info_dir_();
+  int delete_table_list_dir_();
   int get_set_ls_ids_(common::ObIArray<share::ObLSID> &ls_ids);
   int get_piece_ls_ids_(common::ObIArray<share::ObLSID> &ls_ids);
   int get_ls_ids_(common::ObIArray<share::ObLSID> &ls_ids);
