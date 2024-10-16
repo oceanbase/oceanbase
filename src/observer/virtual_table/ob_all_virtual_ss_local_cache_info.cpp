@@ -382,6 +382,8 @@ int ObAllVirtualSSLocalCacheInfo::process_curr_tenant(common::ObNewRow *&row)
       row = &cur_row_;
       cur_idx_++;
     }
+  } else {
+    ret = OB_ITER_END;
   }
   return ret;
 }
