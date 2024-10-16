@@ -285,6 +285,7 @@ private:
 private:
   common::ObArray<ObPageEntry> fat_;   // file allocation table
   common::TCRWLock lock_;            // holds w-lock when expanding and shrinking fat_, holds r-lock when reading fat_
+  ObSpinLock free_list_lock_;        // holds lock when updating free page list
   common::ObFIFOAllocator allocator_;
   bool is_inited_;
   int64_t capacity_;                   // in bytes
