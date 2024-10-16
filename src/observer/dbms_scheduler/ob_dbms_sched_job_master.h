@@ -100,7 +100,6 @@ public:
       stoped_(true),
       is_leader_(false),
       tenant_id_(OB_INVALID_TENANT_ID),
-      trace_id_(NULL),
       rand_(),
       schema_service_(NULL),
       job_rpc_proxy_(NULL),
@@ -153,7 +152,6 @@ private:
   bool stoped_;
   bool is_leader_;
   uint64_t tenant_id_;
-  const uint64_t *trace_id_;
 
   common::ObRandom rand_; // for random pick server
   share::schema::ObMultiVersionSchemaService *schema_service_; // for got all tenant info
