@@ -1403,7 +1403,7 @@ int ObStorageUtil::batch_del_files(
   int64_t cur_deleted_pos = 0;
   failed_files_idx.reset();
   const bool use_batch_del_flag =
-      (OB_STORAGE_FILE != device_type_ && OB_STORAGE_OSS != device_type_);
+      (OB_STORAGE_FILE != device_type_);
 
   if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(!is_init())) {

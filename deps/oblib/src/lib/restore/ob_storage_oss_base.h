@@ -32,6 +32,7 @@
 #include "ob_i_storage.h"
 #include "common/storage/ob_device_common.h"
 #include "cos/ob_singleton.h"
+#include "lib/container/ob_se_array.h"
 
 namespace oceanbase
 {
@@ -68,8 +69,19 @@ int ob_oss_str_assign(aos_string_t &dst, const int64_t len, const char *src);
 class ObStorageOSSRetryStrategy : public ObStorageIORetryStrategy<aos_status_t *>
 {
 public:
-  ObStorageOSSRetryStrategy(const int64_t timeout_us = DO_NOT_RETRY);
+  ObStorageOSSRetryStrategy(const int64_t timeout_us = OB_STORAGE_MAX_IO_TIMEOUT_US);
   virtual ~ObStorageOSSRetryStrategy();
+
+  int set_retry_headers(apr_pool_t *p, apr_table_t *&headers);
+  int set_retry_buffer(aos_list_t *write_content_buffer);
+  // When batch deleting, the names of successfully deleted objects will be added to the deleted_object_list,
+  // so they need to be reset during retries.
+  // Only used for errsim cases.
+  int set_retry_deleted_object_list(aos_list_t *deleted_object_list);
+  // When listing, the names of successfully listed objects will be added to the params,
+  // so they need to be reset during retries.
+  // Only used for errsim cases.
+  int set_retry_list_object_params(oss_list_object_params_t *params);
 
   virtual void log_error(
       const RetType &outcome, const int64_t attempted_retries) const override;
@@ -77,6 +89,21 @@ public:
 protected:
   virtual bool should_retry_impl_(
       const RetType &outcome, const int64_t attempted_retries) const override;
+
+  int reinitialize_headers_() const;
+  int reinitialize_buffer_() const;
+
+private:
+  // When the OSS SDK sends a request, it modifies the header information,
+  // which results in the header containing additional fields during retries
+  aos_table_t *origin_headers_;
+  aos_table_t **ref_headers_;
+  // In the write phase, the OSS SDK will remove nodes from the aos list,
+  // so an array is used to record the initial list entries
+  ObSEArray<void *, 1> origin_list_entries_;
+  aos_list_t *ref_buffer_;
+  aos_list_t *deleted_object_list_;
+  oss_list_object_params_t *params_;
 };
 
 struct FrozenInfo
