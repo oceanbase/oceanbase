@@ -1406,6 +1406,7 @@ public:
     is_parent_task_dropping_multivalue_index_ = false;
     only_set_status_ = false;
     index_ids_.reset();
+    table_id_ = common::OB_INVALID_ID;
   }
   virtual ~ObDropIndexArg() {}
   void reset()
@@ -1421,6 +1422,7 @@ public:
     is_parent_task_dropping_multivalue_index_ = false;
     only_set_status_ = false;
     index_ids_.reset();
+    table_id_ = common::OB_INVALID_ID;
   }
   bool is_valid() const { return ObIndexArg::is_valid(); }
   uint64_t index_table_id_;
@@ -1433,6 +1435,7 @@ public:
   bool is_parent_task_dropping_multivalue_index_;
   bool only_set_status_;
   common::ObSEArray<int64_t, 5> index_ids_;
+  uint64_t table_id_;
 
   DECLARE_VIRTUAL_TO_STRING;
 };

@@ -3496,7 +3496,8 @@ DEF_TO_STRING(ObDropIndexArg) {
        K_(is_inner),
        K_(is_parent_task_dropping_vec_index),
        K_(only_set_status),
-       K_(index_ids));
+       K_(index_ids),
+       K_(table_id));
   J_OBJ_END();
   return pos;
 }
@@ -3515,7 +3516,8 @@ OB_SERIALIZE_MEMBER((ObDropIndexArg, ObIndexArg),
                     only_set_status_,
                     index_ids_,
                     is_parent_task_dropping_fts_index_,
-                    is_parent_task_dropping_multivalue_index_);
+                    is_parent_task_dropping_multivalue_index_,
+                    table_id_);
 
 OB_SERIALIZE_MEMBER(ObDropIndexRes, tenant_id_, index_table_id_, schema_version_, task_id_);
 
