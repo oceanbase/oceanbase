@@ -599,8 +599,8 @@ int ObDictDecoder::batch_decode_dict(
     } else {
       const ObIntArrayFuncTable &off_array = ObIntArrayFuncTable::instance(meta_header_->index_byte_);
       const char* end_of_col_meta = reinterpret_cast<const char *>(meta_header_) + meta_length;
-      const uint32_t last_dict_entry_len = reinterpret_cast<const char *>(meta_header_) + meta_length
-          - (var_data_ + off_array.at_(dict_payload - meta_header_->index_byte_, count - 1));
+      const uint32_t last_dict_offset = (count == 1) ? 0 : off_array.at_(dict_payload - meta_header_->index_byte_, count - 1);
+      const uint32_t last_dict_entry_len = end_of_col_meta - (var_data_ + last_dict_offset);
       for (int64_t i = 0; i < vector_ctx.row_cap_; ++i) {
         const int64_t curr_vec_offset = vector_ctx.vec_offset_ + i;
         const uint32_t ref = vector_ctx.len_arr_[i];
