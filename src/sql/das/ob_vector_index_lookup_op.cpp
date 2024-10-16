@@ -276,32 +276,8 @@ int ObVectorIndexLookupOp::init_base_idx_scan_param(const share::ObLSID &ls_id,
 int ObVectorIndexLookupOp::gen_scan_range(const int64_t col_cnt, common::ObTableID table_id, ObNewRange &scan_range)
 {
   int ret = OB_SUCCESS;
-  int64_t obj_cnt = col_cnt * 2;
-  ObObj *obj_ptr = nullptr;
-  void *buf = nullptr;
-  if (col_cnt <= 0) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected col_cnt", K(ret));
-  } else if (OB_ISNULL(allocator_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected nullptr", K(ret));
-  } else if (OB_ISNULL(buf = allocator_->alloc(sizeof(ObObj) * obj_cnt))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate memory for rowkey obj", K(ret));
-  } else if (OB_ISNULL(obj_ptr = new (buf) ObObj[obj_cnt])) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected nullptr", K(ret));
-  } else {
-    for (int i = 0; i < col_cnt; ++i) {
-      obj_ptr[i].set_min_value();
-      obj_ptr[i + col_cnt].set_max_value();
-    }
-    scan_range.table_id_ = table_id;
-    scan_range.start_key_.assign(obj_ptr, col_cnt);
-    scan_range.end_key_.assign(&obj_ptr[col_cnt], col_cnt);
-    scan_range.border_flag_.set_inclusive_start();
-    scan_range.border_flag_.set_inclusive_end();
-  }
+  scan_range.table_id_ = table_id;
+  scan_range.set_whole_range();
   return ret;
 }
 
@@ -477,9 +453,6 @@ int ObVectorIndexLookupOp::reuse_scan_iter(bool need_switch_param)
   if (OB_NOT_NULL(adaptor_vid_iter_)) { // maybe only reset vid iter when need need_switch_param ?
     adaptor_vid_iter_->reset();
     adaptor_vid_iter_->~ObVectorQueryVidIterator();
-    if (nullptr != allocator_) {
-      allocator_->reset();
-    }
     adaptor_vid_iter_ = nullptr;
   }
   if (OB_NOT_NULL(delta_buf_rtdef_)) {
@@ -533,6 +506,7 @@ int ObVectorIndexLookupOp::reuse_scan_iter(bool need_switch_param)
   } else if (OB_FAIL(tsc_service.reuse_scan_iter(doc_id_scan_param_.need_switch_param_, rowkey_iter_))) {
     LOG_WARN("failed to reuse scan iter", K(ret));
   }
+  vec_op_alloc_.reset();
   return ret;
 }
 
@@ -738,7 +712,7 @@ int ObVectorIndexLookupOp::prepare_state(const ObVidAdaLookupStatus& cur_state,
             LOG_WARN("get row column cnt invalid.", K(ret), K(datum_row->get_column_count()));
           } else if (OB_FALSE_IT(vector = datum_row->storage_datums_[0].get_string())) {
             LOG_WARN("failed to get vid.", K(ret));
-          } else if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(allocator_,
+          } else if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(&vec_op_alloc_,
                                                                             ObLongTextType,
                                                                             CS_TYPE_BINARY,
                                                                             com_aux_vec_ctdef_->result_output_.at(0)->obj_meta_.has_lob_header(),
@@ -893,7 +867,7 @@ int ObVectorIndexLookupOp::process_adaptor_state()
   ObVidAdaLookupStatus cur_state = ObVidAdaLookupStatus::STATES_INIT;
   ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()); // use for tmp query and data complement
   ObArenaAllocator batch_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()); // use for data complement for each batch
-  ObVectorQueryAdaptorResultContext ada_ctx(MTL_ID(), allocator_, &tmp_allocator, &batch_allocator);
+  ObVectorQueryAdaptorResultContext ada_ctx(MTL_ID(), &vec_op_alloc_, &tmp_allocator, &batch_allocator);
   share::ObVectorIndexAcquireCtx index_ctx;
   ObPluginVectorIndexAdapterGuard adaptor_guard;
   index_ctx.inc_tablet_id_ = delta_buf_tablet_id_;
@@ -1202,9 +1176,6 @@ int ObVectorIndexLookupOp::revert_iter()
   if (nullptr != adaptor_vid_iter_) {
     adaptor_vid_iter_->reset();
     adaptor_vid_iter_->~ObVectorQueryVidIterator();
-    if (nullptr != allocator_) {
-      allocator_->reset();
-    }
     adaptor_vid_iter_ = nullptr;
   }
 
@@ -1249,6 +1220,7 @@ int ObVectorIndexLookupOp::revert_iter()
       LOG_WARN("failed to revert local index lookup op iter", K(ret));
     }
   }
+  vec_op_alloc_.reset();
   return ret;
 }
 
@@ -1276,7 +1248,7 @@ int ObVectorIndexLookupOp::set_vector_query_condition(ObVectorQueryConditions &q
     } else if (OB_UNLIKELY(OB_FAIL(search_vec_->eval(*(sort_rtdef_->eval_ctx_), vec_datum)))) {
       LOG_WARN("eval vec arg failed", K(ret));
     } else if (OB_FALSE_IT(query_cond.query_vector_ = vec_datum->get_string())) {
-    } else if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(allocator_,
+    } else if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(&vec_op_alloc_,
                                                                       ObLongTextType,
                                                                       CS_TYPE_BINARY,
                                                                       search_vec_->obj_meta_.has_lob_header(),
