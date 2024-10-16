@@ -155,8 +155,7 @@ private:
       const int64_t buf_len,
       ObIArray<blocksstable::MacroBlockId> &tablet_block_list);
   int replay_new_tablet(const ObMetaDiskAddr &addr, const char *buf, const int64_t buf_len);
-  int update_tablet_meta_addr_and_block_list(
-      const bool is_replay_old, ObTenantStorageCheckpointWriter &ckpt_writer);
+  int update_tablet_meta_addr_and_block_list(ObTenantStorageCheckpointWriter &ckpt_writer);
   int replay_dup_table_ls_meta(const transaction::ObDupTableLSCheckpoint::ObLSDupTableMeta &dup_ls_meta);
   int replay_tenant_slog(const common::ObLogCursor &start_point);
   int inner_replay_update_ls_slog(const ObRedoModuleReplayParam &param);
@@ -206,7 +205,6 @@ private:
   ObWriteCheckpointTask write_ckpt_task_;
   ReplayTabletDiskAddrMap replay_tablet_disk_addr_map_;
   lib::ObMutex super_block_mutex_;
-  bool is_trivial_version_;
 };
 
 }  // end namespace storage
