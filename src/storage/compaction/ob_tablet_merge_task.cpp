@@ -148,7 +148,7 @@ int ObMergeParameter::init(
     if (OB_ISNULL(schema = get_schema())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("schema is null", K(ret), K(*this));;
-    } else if (schema->is_mv_major_refresh_table() && OB_FAIL(init_mview_merge_param(allocator))) {
+    } else if (schema->is_mv_major_refresh_table() && is_major_merge_type(static_param_.get_merge_type()) && OB_FAIL(init_mview_merge_param(allocator))) {
       STORAGE_LOG(WARN, "failed to init mview merge param", K(ret));
     }
   }

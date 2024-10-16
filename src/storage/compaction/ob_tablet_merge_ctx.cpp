@@ -192,6 +192,8 @@ void ObTabletMiniMergeCtx::try_schedule_compaction_after_mini(ObTabletHandle &ta
     if (get_tablet_id().is_ls_inner_tablet() ||
         0 == get_merge_info().get_merge_history().get_macro_block_count()) {
       // do nothing
+    } else if (nullptr != static_param_.schema_ && static_param_.schema_->is_mv_major_refresh_table()) {
+      // do nothing
     } else if (OB_TMP_FAIL(try_schedule_adaptive_merge(tablet_handle, create_dag))) {
       LOG_WARN_RET(tmp_ret, "failed to schedule meta merge", K(get_dag_param()));
     }
