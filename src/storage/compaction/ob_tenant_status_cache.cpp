@@ -48,13 +48,16 @@ int ObTenantStatusCache::init_or_refresh()
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
-    if (OB_FAIL(inner_refresh_remote_tenant())) {
-      if (OB_NEED_WAIT != ret) {
-        LOG_WARN("failed to refresh remote tenant", KR(ret));
+    if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
+      if (OB_FAIL(inner_refresh_restore_status())) {
+        LOG_WARN("failed to refresh tenant restore status ", KR(ret));
+      } else if (!during_restore_ && OB_FAIL(inner_refresh_remote_tenant())) {
+        if (OB_NEED_WAIT != ret) {
+          LOG_WARN("failed to refresh remote tenant", KR(ret));
+        }
       }
-    } else if (OB_FAIL(inner_refresh_restore_status())) {
-      LOG_WARN("failed to refresh tenant restore status ", KR(ret));
-    } else {
+    }
+    if (OB_SUCC(ret)) {
       IGNORE_RETURN refresh_data_version();
       is_inited_ = true;
     }

@@ -305,7 +305,7 @@ int ObCOMergePrepareTask::process()
   } else if (OB_FAIL(dag_net_->prepare_co_merge_ctx())) {
     LOG_WARN("failed to prepare merge ctx", K(ret), KPC(dag_net_));
   } else if (OB_FAIL(create_schedule_dag(*dag_net_->get_merge_ctx()))) {
-    LOG_WARN("failed to schedule minor dag", K(ret));
+    LOG_WARN("failed to create schedule dag", K(ret));
   }
 
   if (OB_FAIL(ret)) {

@@ -103,17 +103,13 @@ int64_t ObProgressiveMergeMgr::get_result_progressive_merge_step(
 
 #ifdef ERRSIM
     SERVER_EVENT_SYNC_ADD("merge_errsim", "progressive_merge_finish",
-                          "tablet_id", tablet_id,
+                          "tablet_id", tablet_id.id(),
                           "progressive_merge_round", progressive_merge_round_,
                           "progressive_merge_step", progressive_merge_step_,
                           "progressive_merge_num", progressive_merge_num_);
 #endif
     }
     result_step = progressive_merge_num_;
-#ifdef ERRSIM
-      SERVER_EVENT_SYNC_ADD("merge_errsim", "end_progressive", K(tablet_id),
-          K(result_step), K_(progressive_merge_num));
-#endif
   }
   return result_step;
 }
