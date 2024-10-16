@@ -67,6 +67,7 @@ double ObTmpWriteBufferPool::MAX_DATA_PAGE_USAGE_RATIO = 0.9;
 ObTmpWriteBufferPool::ObTmpWriteBufferPool()
     : fat_(),
       lock_(),
+      free_list_lock_(),
       allocator_(),
       is_inited_(false),
       capacity_(0),
@@ -147,15 +148,18 @@ int ObTmpWriteBufferPool::inner_alloc_page_(const int64_t fd,
   if (has_free_page_(page_key.type_)) {
     // fetch a page from the free list through CAS operation
     bool cas_succeed = false;
-    do {
-      curr_first_free_page_id = ATOMIC_LOAD(&first_free_page_id_);
-      if (!is_valid_page_id_(curr_first_free_page_id) || OB_ISNULL(fat_[curr_first_free_page_id].buf_)) {
-        ret = OB_SEARCH_NOT_FOUND;
-        break;
-      }
-      next_first_free_page_id = fat_[curr_first_free_page_id].next_page_id_;
-      cas_succeed = ATOMIC_BCAS(&first_free_page_id_, curr_first_free_page_id, next_first_free_page_id);
-    } while (OB_SUCC(ret) && !cas_succeed);
+    {
+      ObSpinLockGuard guard(free_list_lock_);
+      do {
+        curr_first_free_page_id = ATOMIC_LOAD(&first_free_page_id_);
+        if (!is_valid_page_id_(curr_first_free_page_id) || OB_ISNULL(fat_[curr_first_free_page_id].buf_)) {
+          ret = OB_SEARCH_NOT_FOUND;
+          break;
+        }
+        next_first_free_page_id = fat_[curr_first_free_page_id].next_page_id_;
+        cas_succeed = ATOMIC_BCAS(&first_free_page_id_, curr_first_free_page_id, next_first_free_page_id);
+      } while (OB_SUCC(ret) && !cas_succeed);
+    }
 
     if (OB_SUCC(ret) && is_valid_page_id_(curr_first_free_page_id)) {
       fat_[curr_first_free_page_id].fd_ = fd;
@@ -475,12 +479,15 @@ int ObTmpWriteBufferPool::free_page(
     fat_[page_id].switch_state(ObPageEntry::Ops::DELETE);
     fat_[page_id].page_key_.reset();
 
-    bool cas_succeed = false;
-    do {
-      uint32_t first_free_page_id_before = ATOMIC_LOAD(&first_free_page_id_);
-      ATOMIC_SET(&(fat_[page_id].next_page_id_), first_free_page_id_before);
-      cas_succeed = ATOMIC_BCAS(&first_free_page_id_, first_free_page_id_before, page_id);
-    } while (false == cas_succeed);
+    {
+      ObSpinLockGuard guard(free_list_lock_);
+      bool cas_succeed = false;
+      do {
+        uint32_t first_free_page_id_before = ATOMIC_LOAD(&first_free_page_id_);
+        ATOMIC_SET(&(fat_[page_id].next_page_id_), first_free_page_id_before);
+        cas_succeed = ATOMIC_BCAS(&first_free_page_id_, first_free_page_id_before, page_id);
+      } while (false == cas_succeed);
+    }
 
     ATOMIC_DEC(&used_page_num_);
 
