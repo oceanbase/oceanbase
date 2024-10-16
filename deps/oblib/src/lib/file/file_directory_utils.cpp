@@ -421,10 +421,10 @@ int FileDirectoryUtils::delete_directory_rec(const char *path)
   if (NULL == (dir = opendir(path))) {
     if (ENOENT != errno) {
       ret = OB_FILE_NOT_OPENED;
-      LIB_LOG(WARN, "fail to open dir", K(ret), K(path));
+      LIB_LOG(WARN, "fail to open dir", K(ret), K(path), K(errno), KERRMSG);
     } else {
       ret = OB_ENTRY_NOT_EXIST;
-      LIB_LOG(WARN, "dir does not exist", K(ret), K(path));
+      LIB_LOG(WARN, "dir does not exist", K(ret), K(path), K(errno), KERRMSG);
     }
   } else {
     char current_file_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
@@ -466,7 +466,7 @@ int FileDirectoryUtils::delete_tmp_file_or_directory_at(const char *path)
   struct dirent *entry = nullptr;
   if (NULL == (dir = opendir(path))) {
     ret = OB_ERR_SYS;
-    LIB_LOG(WARN, "opendir failed", K(path));
+    LIB_LOG(WARN, "opendir failed", K(path), K(errno), KERRMSG);
   } else {
     auto check_is_tmp_file = [](const char* file_name) -> bool {
       return NULL != strstr(file_name, ".tmp");

@@ -572,10 +572,10 @@ int ObZoneStorageManagerBase::alter_storage_authorization(const ObBackupDest &st
         if (ObZoneStorageState::ADDED != zone_storage_infos_.at(i).state_ &&
             ObZoneStorageState::CHANGED != zone_storage_infos_.at(i).state_) {
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("cannot support current storage state for changing", KR(ret),
+          LOG_WARN("cannot support changing current storage state when undergoing modification", KR(ret),
                    K(zone_storage_infos_.at(i)), K(i));
           LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                         "cannot support current storage state for changing, it is");
+                         "cannot support changing current storage state when undergoing modification, it is");
         } else if (OB_FAIL(target_storage_dest.set(zone_storage_infos_.at(i).dest_attr_.path_,
                                                    storage_dest.get_storage_info()))) {
           LOG_WARN("failed to set storage dest", KR(ret), K(storage_dest),
@@ -654,10 +654,10 @@ int ObZoneStorageManagerBase::alter_storage_attribute(const ObString &storage_pa
         if (ObZoneStorageState::ADDED != zone_storage_infos_.at(i).state_ &&
             ObZoneStorageState::CHANGED != zone_storage_infos_.at(i).state_) {
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("cannot support current storage state for changing", KR(ret),
+          LOG_WARN("cannot support changing current storage state when undergoing modification", KR(ret),
                    K(zone_storage_infos_.at(i)), K(i));
           LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                         "cannot support current storage state for changing, it is");
+                         "cannot support changing current storage state when undergoing modification, it is");
         } else if (OB_FAIL(target_storage_dest.set(zone_storage_infos_.at(i).dest_attr_.path_,
                                                    zone_storage_infos_.at(i).dest_attr_.endpoint_,
                                                    zone_storage_infos_.at(i).dest_attr_.authorization_,

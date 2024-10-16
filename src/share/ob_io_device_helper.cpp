@@ -366,10 +366,10 @@ int ObIODeviceLocalFileOp::scan_dir(const char *dir_name, int (*func)(const dire
   } else if (OB_ISNULL(open_dir = ::opendir(dir_name))) {
     if (ENOENT != errno) {
       ret = OB_FILE_NOT_OPENED;
-      SHARE_LOG(WARN, "Fail to open dir, ", K(ret), K(dir_name));
+      SHARE_LOG(WARN, "fail to open dir", K(ret), K(dir_name), K(errno), KERRMSG);
     } else {
       ret = OB_NO_SUCH_FILE_OR_DIRECTORY;
-      SHARE_LOG(WARN, "dir does not exist", K(ret), K(dir_name));
+      SHARE_LOG(WARN, "dir does not exist", K(ret), K(dir_name), K(errno), KERRMSG);
     }
   } else {
     while (OB_SUCC(ret) && NULL != open_dir) {
@@ -415,10 +415,10 @@ int ObIODeviceLocalFileOp::scan_dir(const char *dir_name, common::ObBaseDirEntry
   } else if (OB_ISNULL(open_dir = ::opendir(dir_name))) {
     if (ENOENT != errno) {
       ret = OB_FILE_NOT_OPENED;
-      SHARE_LOG(WARN, "Fail to open dir, ", K(ret), K(dir_name));
+      SHARE_LOG(WARN, "fail to open dir", K(ret), K(dir_name), K(errno), KERRMSG);
     } else {
       ret = OB_NO_SUCH_FILE_OR_DIRECTORY;
-      SHARE_LOG(WARN, "dir does not exist", K(ret), K(dir_name));
+      SHARE_LOG(WARN, "dir does not exist", K(ret), K(dir_name), K(errno), KERRMSG);
     }
   } else {
     while (OB_SUCC(ret) && NULL != open_dir) {

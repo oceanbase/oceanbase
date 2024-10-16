@@ -936,7 +936,7 @@ int ObDelFilesOp::clean_batch_files()
         && (OB_SUCCESS != tmp_ret || !failed_files_idx.empty()));
 
     if (OB_SUCCESS == tmp_ret && !failed_files_idx.empty()) {
-      ret = OB_UTL_FILE_DELETE_FAILED;
+      ret = OB_FILE_DELETE_FAILED;
     }
     ret = COVER_SUCC(tmp_ret);
   }

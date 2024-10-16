@@ -1589,6 +1589,7 @@ constexpr int OB_DIRECT_LOAD_COMMIT_ERROR = -9104;
 constexpr int OB_STORAGE_DEST_NOT_CONNECT = -9115;
 constexpr int OB_TABLET_IS_SPLIT_SRC = -9123;
 constexpr int OB_TABLET_STATUS_NO_NEED_TO_SPLIT = -9127;
+constexpr int OB_FILE_DELETE_FAILED = -9128;
 constexpr int OB_ERR_RESIZE_FILE_TO_SMALLER = -9200;
 constexpr int OB_MARK_BLOCK_INFO_TIMEOUT = -9201;
 constexpr int OB_NOT_READY_TO_EXTEND_FILE = -9202;
@@ -3914,6 +3915,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SS_MICRO_CACHE_DISABLED__USER_ERROR_MSG "ss_micro_cache is disabled"
 #define OB_SS_CACHE_REACH_MEM_LIMIT__USER_ERROR_MSG "ss_micro_cache has reached memory limit"
 #define OB_TABLET_STATUS_NO_NEED_TO_SPLIT__USER_ERROR_MSG "no need to split due to current tablet status"
+#define OB_FILE_DELETE_FAILED__USER_ERROR_MSG "fail to delete file"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__USER_ERROR_MSG "Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__USER_ERROR_MSG "Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__USER_ERROR_MSG "Auto extend param is not ready to start extending file"
@@ -8244,6 +8246,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SS_CACHE_REACH_MEM_LIMIT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9126, ss_micro_cache has reached memory limit"
 #define OB_TABLET_STATUS_NO_NEED_TO_SPLIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9127, no need to split due to current tablet status"
 #define OB_TABLET_STATUS_NO_NEED_TO_SPLIT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9127, no need to split due to current tablet status"
+#define OB_FILE_DELETE_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9128, fail to delete file"
+#define OB_FILE_DELETE_FAILED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9128, fail to delete file"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9201, Mark blocks timeout(5s) in auto extend process when alloc block fail"
@@ -9033,7 +9037,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2359];
+extern int g_all_ob_errnos[2360];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
