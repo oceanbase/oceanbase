@@ -639,12 +639,15 @@ int ObMviewScanInfo::init(
 int ObMviewScanInfo::check_and_update_version_range(const int64_t multi_version_start, common::ObVersionRange &origin_range)
 {
   int ret = OB_SUCCESS;
-  bool is_valid =  0 == origin_range.base_version_ &&
-                   (!is_end_valid() || end_version_ == origin_range.snapshot_version_) &&
-                   (!is_begin_valid() ||  (begin_version_ < origin_range.snapshot_version_ && begin_version_ >= multi_version_start));
-  if (OB_UNLIKELY(!is_valid)) {
+  bool is_verion_valid = 0 == origin_range.base_version_ &&
+                         (!is_end_valid() || end_version_ == origin_range.snapshot_version_) &&
+                         (!is_begin_valid() || begin_version_ < origin_range.snapshot_version_);
+  if (OB_UNLIKELY(!is_verion_valid)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid mview query version", K(ret), K(multi_version_start), K(origin_range), K(*this));
+  } else if (OB_UNLIKELY(is_begin_valid() && begin_version_ < multi_version_start)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "begin version is oldder than tablet's multi version start", K(ret), K(multi_version_start), K(origin_range), K(*this));
   } else {
     if (is_begin_valid()) {
       origin_range.base_version_ = begin_version_;
@@ -680,7 +683,7 @@ int decimal_or_number_to_int64(const ObDatum &datum,
   return ret;
 }
 
-// extract mview info from filter: [ora_rowscn > V0 and ora_rowscn <= V1] and $OLD_NEW='O|N'
+// extract mview info from filter: ora_rowscn > V0 and ora_rowscn <= V1 and $OLD_NEW='O|N|F'
 int build_mview_scan_info_if_need(
     const common::ObQueryFlag query_flag,
     const sql::ObExprPtrIArray *op_filters,
@@ -765,7 +768,7 @@ int build_mview_scan_info_if_need(
   } else if (OB_FAIL(mview_scan_info->init(query_flag.is_mr_mview_refresh_base_scan(), scan_type, begin_version, end_version, non_mview_filters))) {
     STORAGE_LOG(WARN, "Failed to init mview scan info", K(ret));
   }
-  STORAGE_LOG(INFO, "[MVIEW QUERY]: build mview scan info", K(ret), KPC(mview_scan_info));
+  STORAGE_LOG(TRACE, "[MVIEW QUERY]: build mview scan info", K(ret), KPC(mview_scan_info));
   return ret;
 }
 
