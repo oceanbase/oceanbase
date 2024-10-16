@@ -582,9 +582,6 @@ int ObSSTableArray::replace_twin_majors_and_build_new(
       if (OB_ISNULL(table = sstable_array_[i])) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null table", K(ret));
-      } else if (!table->get_key().is_row_store_major_sstable()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected sstable type", K(ret), KPC(table));
       } else if (ObITable::is_twin_major_sstable(table->get_key(), new_co_major->get_key())) {
         // skip the old row store major
       } else if (OB_FAIL(major_tables.push_back(table))) {

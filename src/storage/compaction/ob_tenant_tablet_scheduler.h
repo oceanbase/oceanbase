@@ -247,6 +247,7 @@ public:
       ObLSHandle &ls_handle,
       ObTabletHandle &tablet_handle,
       const ObGetMergeTablesResult &result);
+  // check whether major/medium could be scheduled. if not, will schedule convert co merge, or update storage schema if needed.
   static int check_ready_for_major_merge(
       const ObLSID &ls_id,
       const storage::ObTablet &tablet,
