@@ -660,7 +660,7 @@ class ObLSBackupComplementLogTask : public share::ObITask {
     BackupPieceFile();
     void reset();
     int set(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const share::ObLSID &ls_id,
-        const int64_t file_id, const share::SCN &start_scn, const ObBackupPathString &path);
+        const int64_t file_id, const share::SCN &start_scn, const share::SCN &checkpoint_scn, const ObBackupPathString &path);
     TO_STRING_KV(K_(dest_id), K_(round_id), K_(piece_id), K_(ls_id), K_(file_id), K_(path));
     int64_t dest_id_;
     int64_t round_id_;
@@ -668,6 +668,7 @@ class ObLSBackupComplementLogTask : public share::ObITask {
     share::ObLSID ls_id_;
     int64_t file_id_;
     share::SCN start_scn_;
+    share::SCN checkpoint_scn_;
     ObBackupPathString path_;
   };
 
@@ -744,6 +745,8 @@ private:
   int copy_round_start_file(const BackupPieceFile &piece_file, const share::ObArchiveStore &src_store, const share::ObArchiveStore &dest_store);
   // piece_start
   int copy_piece_start_file(const BackupPieceFile &piece_file, const share::ObBackupDest &src, const share::ObBackupDest &dest);
+  // piece_end
+  int copy_piece_end_file(const BackupPieceFile &piece_file, const share::ObBackupDest &src, const share::ObBackupDest &dest);
   int get_archive_backup_dest_(const ObBackupPathString &path, share::ObBackupDest &archive_dest);
 
 private:

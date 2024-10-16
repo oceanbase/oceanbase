@@ -4860,7 +4860,7 @@ int ObLSBackupFinishTask::process()
 /* ObLSBackupComplementLogTask */
 
 ObLSBackupComplementLogTask::BackupPieceFile::BackupPieceFile()
-    : dest_id_(-1), round_id_(-1), piece_id_(-1), ls_id_(), file_id_(-1), start_scn_(), path_()
+    : dest_id_(-1), round_id_(-1), piece_id_(-1), ls_id_(), file_id_(-1), start_scn_(), checkpoint_scn_(), path_()
 {}
 
 void ObLSBackupComplementLogTask::BackupPieceFile::reset()
@@ -4871,11 +4871,13 @@ void ObLSBackupComplementLogTask::BackupPieceFile::reset()
   ls_id_.reset();
   file_id_ = -1;
   start_scn_.reset();
+  checkpoint_scn_.reset();
   path_.reset();
 }
 
 int ObLSBackupComplementLogTask::BackupPieceFile::set(const int64_t dest_id, const int64_t round_id,
-    const int64_t piece_id, const share::ObLSID &ls_id, const int64_t file_id, const share::SCN &start_scn, const ObBackupPathString &path)
+    const int64_t piece_id, const share::ObLSID &ls_id, const int64_t file_id,
+    const share::SCN &start_scn, const share::SCN &checkpoint_scn, const ObBackupPathString &path)
 {
   int ret = OB_SUCCESS;
   if (dest_id <= 0 || round_id <= 0 || piece_id <= 0 || !ls_id.is_valid() || file_id <= 0) {
@@ -4890,6 +4892,7 @@ int ObLSBackupComplementLogTask::BackupPieceFile::set(const int64_t dest_id, con
     ls_id_ = ls_id;
     file_id_ = file_id;
     start_scn_ = start_scn;
+    checkpoint_scn_ = checkpoint_scn;
   }
   return ret;
 }
@@ -5413,6 +5416,7 @@ int ObLSBackupComplementLogTask::inner_get_piece_file_list_(const share::ObLSID 
   const int64_t round_id = piece_attr.key_.round_id_;
   const int64_t piece_id = piece_attr.key_.piece_id_;
   const share::SCN &start_scn = piece_attr.start_scn_;
+  const share::SCN &checkpoint_scn = piece_attr.checkpoint_scn_;
   if (OB_FAIL(get_src_backup_piece_dir_(ls_id, piece_attr, src_piece_dir_path))) {
     LOG_WARN("failed to get src backup piece dir", K(ret), K(round_id), K(piece_id), K(ls_id), K(piece_attr));
   } else if (OB_FAIL(util.adaptively_list_files(src_piece_dir_path.get_obstr(), archive_dest_.get_storage_info(), op))) {
@@ -5424,7 +5428,7 @@ int ObLSBackupComplementLogTask::inner_get_piece_file_list_(const share::ObLSID 
     for (int64_t i = 0; OB_SUCC(ret) && i < file_id_list.count(); ++i) {
       const int64_t file_id = file_id_list.at(i);
       piece_file.reset();
-      if (OB_FAIL(piece_file.set(dest_id, round_id, piece_id, ls_id, file_id, start_scn, piece_attr.path_))) {
+      if (OB_FAIL(piece_file.set(dest_id, round_id, piece_id, ls_id, file_id, start_scn, checkpoint_scn, piece_attr.path_))) {
         LOG_WARN("failed to set piece files", K(ret), K(tenant_id_), K(round_id), K(piece_id));
       } else if (OB_FAIL(file_list.push_back(piece_file))) {
         LOG_WARN("failed to push back", K(ret), K(piece_file));
@@ -5599,6 +5603,8 @@ int ObLSBackupComplementLogTask::backup_complement_log_(const common::ObIArray<B
       LOG_WARN("failed to get copy src and dest", K(ret), K(piece_file));
     } else if (OB_FAIL(copy_piece_start_file(piece_file, src, dest))) {
       LOG_WARN("failed to copy piece start file", K(ret), K(piece_file));
+    } else if (OB_FAIL(copy_piece_end_file(piece_file, src, dest))) {
+      LOG_WARN("failed to copy piece end file", K(ret), K(piece_file));
     }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < src_file_list.count(); ++i) {
@@ -5949,6 +5955,34 @@ int ObLSBackupComplementLogTask::copy_piece_start_file(const BackupPieceFile &pi
   } else if (OB_FAIL(src_store.read_piece_start(src_dest_id, round_id, piece_id, create_scn, desc))) {
     LOG_WARN("failed to read round start", K(ret), K(piece_file));
   } else if (OB_FAIL(dest_store.write_piece_start(dest_dest_id, round_id, piece_id, create_scn, desc))) {
+    LOG_WARN("failed to write round start", K(ret), K(piece_file));
+  }
+  return ret;
+}
+
+int ObLSBackupComplementLogTask::copy_piece_end_file(const BackupPieceFile &piece_file, const share::ObBackupDest &src, const share::ObBackupDest &dest)
+{
+  int ret = OB_SUCCESS;
+  ObArchiveStore src_store;
+  ObArchiveStore dest_store;
+  const int64_t src_dest_id = piece_file.dest_id_;
+  const int64_t dest_dest_id = dest_id_;
+  const int64_t round_id = piece_file.round_id_;
+  const int64_t piece_id = piece_file.piece_id_;
+  const share::SCN &create_scn = piece_file.checkpoint_scn_;
+  ObPieceEndDesc desc;
+  bool is_exist = false;
+  if (OB_FAIL(src_store.init(src))) {
+    LOG_WARN("failed to init src store", K(ret), K(src));
+  } else if (OB_FAIL(dest_store.init(dest))) {
+    LOG_WARN("failed to init dest store", K(ret), K(dest));
+  } else if (OB_FAIL(src_store.is_piece_end_file_exist(src_dest_id, round_id, piece_id, create_scn, is_exist))) {
+    LOG_WARN("failed to check is piece end file exist", K(ret), K(src_dest_id), K(round_id), K(piece_id));
+  } else if (!is_exist) {
+    // do nothing
+  } else if (OB_FAIL(src_store.read_piece_end(src_dest_id, round_id, piece_id, create_scn, desc))) {
+    LOG_WARN("failed to read round start", K(ret), K(piece_file));
+  } else if (OB_FAIL(dest_store.write_piece_end(dest_dest_id, round_id, piece_id, create_scn, desc))) {
     LOG_WARN("failed to write round start", K(ret), K(piece_file));
   }
   return ret;
