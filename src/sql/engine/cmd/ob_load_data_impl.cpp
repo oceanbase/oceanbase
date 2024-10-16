@@ -1683,7 +1683,8 @@ int ObLoadDataSPImpl::handle_returned_insert_task(ObExecContext &ctx,
       }
     } else if (is_server_down_error(err)
                || is_master_changed_error(err)
-               || is_partition_change_error(err)) {
+               || is_partition_change_error(err)
+               || is_schema_error(err)) {
       task_status = can_retry ? TASK_NEED_RETRY : TASK_FAILED;
       if (OB_FAIL(part_mgr->update_part_location(ctx))) {
         LOG_WARN("fail to update location cache", K(ret));
