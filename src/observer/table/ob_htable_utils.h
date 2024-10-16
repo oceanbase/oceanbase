@@ -145,22 +145,6 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObHTableFirstOnRowColCell);
 };
 
-class ObHTableFirstOnRowColTSCell: public ObHTableFirstOnRowCell
-{
-public:
-  ObHTableFirstOnRowColTSCell(const common::ObString &rowkey, const int64_t timestamp)
-      :ObHTableFirstOnRowCell(rowkey),
-       timestamp_(timestamp)
-  {}
-  virtual ~ObHTableFirstOnRowColTSCell() {}
-
-  virtual int64_t get_timestamp() const override { return timestamp_; }
-  virtual Type get_type() const { return Type::FIRST_ON_COL; }
-private:
-  int64_t timestamp_;
-  DISALLOW_COPY_AND_ASSIGN(ObHTableFirstOnRowColTSCell);
-};
-
 class ObHTableLastOnRowCell: public ObHTableEmptyCell
 {
 public:
@@ -340,7 +324,7 @@ public:
   /// Create a Cell that is smaller than all other possible Cells for the given Cell's rk:cf and passed qualifier.
   static int create_first_cell_on_row_col(common::ObIAllocator &allocator, const ObHTableCell &cell, const common::ObString &qualifier, ObHTableCell *&new_cell);
   /// Create a Cell that is smaller than all other possible Cells for the given Cell's rk:ts and passed timestamp.
-  static int create_first_cell_on_row_col_ts(common::ObArenaAllocator &allocator, const ObHTableCell &cell, const int64_t timestamp, ObHTableCell *&new_cell);
+  static int create_first_cell_on_row_col_ts(common::ObIAllocator &allocator, const ObHTableCell &cell, const int64_t timestamp, ObHTableCell *&new_cell);
   /// Create a Cell that is larger than all other possible Cells for the given Cell's row.
   static int create_last_cell_on_row(common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell);
   /// Create a Cell that is smaller than all other possible Cells for the given Cell's row.

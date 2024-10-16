@@ -1621,13 +1621,13 @@ int TimestampsFilter::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code
   return ret;
 }
 
-int TimestampsFilter::get_next_cell_hint(common::ObArenaAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell)
+int TimestampsFilter::get_next_cell_hint(common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell)
 {
   int ret = OB_SUCCESS;
   if (can_hint_) {
     ObTimestampNode key_node = ObTimestampNode(cell.get_timestamp());
     ObTimestampNode* found = nullptr;
-    if (OB_FAIL(timestamps_.psearch(&key_node, found))) {
+    if (OB_FAIL(timestamps_.nsearch(&key_node, found))) {
       OBLOG_LOG(WARN, "search node from tree failed", KR(ret), K(key_node));
     } else {
       if (found == NULL) {
@@ -1653,20 +1653,9 @@ int64_t TimestampsFilter::get_format_filter_string_length() const
 int TimestampsFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
-
-  if (OB_ISNULL(buf)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("buf is null", KR(ret));
-  } else {
-    int64_t n = snprintf(buf + pos, buf_len - pos, "TimestampsFilter");
-    if (n < 0) {
-      ret = OB_BUF_NOT_ENOUGH;
-      LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
-    } else {
-      pos += n;
-    }
+  if (OB_FAIL(ObHTableUtils::get_format_filter_string(buf, buf_len, pos, "TimestampsFilter"))) {
+    LOG_WARN("failed to format filter string", K(ret));
   }
-
   return ret;
 }
 
