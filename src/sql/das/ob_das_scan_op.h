@@ -165,7 +165,11 @@ public:
       tsc_monitor_info_(nullptr),
       key_ranges_(),
       ss_key_ranges_(),
-      mbr_filters_()
+      mbr_filters_(),
+      task_count_(1),
+      scan_op_id_(OB_INVALID_ID),
+      scan_rows_(OB_INVALID_ID),
+      row_width_(OB_INVALID_ID)
   { }
 
   virtual ~ObDASScanRtDef();
@@ -186,7 +190,11 @@ public:
                        K_(tsc_monitor_info),
                        K_(key_ranges),
                        K_(ss_key_ranges),
-                       K_(mbr_filters));
+                       K_(mbr_filters),
+                       K_(task_count),
+                       K_(scan_op_id),
+                       K_(scan_rows),
+                       K_(row_width));
   int init_pd_op(ObExecContext &exec_ctx, const ObDASScanCtDef &scan_ctdef);
 
   storage::ObRow2ExprsProjector *p_row2exprs_projector_;
@@ -212,6 +220,10 @@ public:
   common::ObSEArray<common::ObNewRange, 1> key_ranges_;
   common::ObSEArray<common::ObNewRange, 1> ss_key_ranges_;
   common::ObSEArray<common::ObSpatialMBR, 1> mbr_filters_;
+  int64_t task_count_;
+  uint64_t scan_op_id_;
+  int64_t scan_rows_;
+  int64_t row_width_;
 private:
   union {
     storage::ObRow2ExprsProjector row2exprs_projector_;
