@@ -4639,6 +4639,7 @@ int ObSql::pc_add_plan(ObPlanCacheCtx &pc_ctx,
     phy_plan->stat_.is_rewrite_sql_ = pc_ctx.is_rewrite_sql_;
     phy_plan->stat_.rule_version_ = rule_mgr->get_rule_version();
     phy_plan->stat_.enable_udr_ = enable_udr;
+    phy_plan->stat_.is_inner_ = result.get_session().is_inner();
 
     if (PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
       // pc_key_ may be modified elsewhere, so reset it before adding plan

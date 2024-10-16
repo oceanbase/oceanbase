@@ -2424,3 +2424,161 @@ int ObOptEstCostModel::calc_pred_cost_per_row(const ObRawExpr *expr,
   }
   return ret;
 }
+
+
+OB_SERIALIZE_MEMBER(ObCostTableScanSimpleInfo,
+                    is_index_back_,
+                    is_global_index_,
+                    part_count_,
+                    table_micro_blocks_,
+                    index_micro_blocks_,
+                    range_count_,
+                    table_row_count_,
+                    postix_filter_qual_cost_per_row_,
+                    table_filter_qual_cost_per_row_,
+                    index_scan_project_cost_per_row_,
+                    index_back_project_cost_per_row_,
+                    row_width_,
+                    is_spatial_index_,
+                    index_id_);
+
+int ObCostTableScanSimpleInfo::init(const ObCostTableScanInfo &est_cost_info)
+{
+  int ret = OB_SUCCESS;
+  const ObTableMetaInfo *table_meta_info = est_cost_info.table_meta_info_;
+  const ObIndexMetaInfo &index_meta_info = est_cost_info.index_meta_info_;
+  OptSystemStat default_stat;
+  default_stat.set_cpu_speed(DEFAULT_CPU_SPEED);
+  default_stat.set_disk_seq_read_speed(DEFAULT_DISK_SEQ_READ_SPEED);
+  default_stat.set_disk_rnd_read_speed(DEFAULT_DISK_RND_READ_SPEED);
+  default_stat.set_network_speed(DEFAULT_NETWORK_SPEED);
+  ObOptEstVectorCostModel vector_model(cost_params_vector, default_stat);
+  if (OB_ISNULL(table_meta_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret));
+  } else if (OB_FAIL(vector_model.cost_project(1,
+                                              est_cost_info.access_column_items_,
+                                              false,
+                                              false,
+                                              index_scan_project_cost_per_row_))) {
+    LOG_WARN("failed to cost project", K(ret));
+  } else if (OB_FAIL(vector_model.cost_project(1,
+                                  est_cost_info.index_access_column_items_,
+                                  true,
+                                  false,
+                                  index_back_project_cost_per_row_))) {
+    LOG_WARN("failed to cost project", K(ret));
+  } else {
+    is_index_back_ = est_cost_info.index_meta_info_.is_index_back_;
+    is_global_index_ = est_cost_info.index_meta_info_.is_global_index_;
+    part_count_ = est_cost_info.index_meta_info_.index_part_count_;
+    part_count_ = part_count_ < 1 ? 1 : part_count_;
+    index_micro_blocks_ = index_meta_info.get_micro_block_numbers() / part_count_;
+    index_micro_blocks_ = index_micro_blocks_ < 1 ? 1 : index_micro_blocks_;
+    range_count_ = est_cost_info.ranges_.count();
+    is_spatial_index_ = est_cost_info.index_meta_info_.is_geo_index_;
+    table_micro_blocks_ = table_meta_info->get_micro_block_numbers() / part_count_;
+    table_micro_blocks_ = table_micro_blocks_ < 1 ? 1 : table_micro_blocks_;
+    table_row_count_ = static_cast<double>(table_meta_info->table_row_count_) / part_count_;
+    postix_filter_qual_cost_per_row_ = vector_model.cost_quals(1, est_cost_info.postfix_filters_, false);
+    table_filter_qual_cost_per_row_ = vector_model.cost_quals(1, est_cost_info.table_filters_, false);
+    row_width_ = table_meta_info->average_row_size_;
+    index_id_ = est_cost_info.index_id_;
+  }
+  return ret;
+}
+
+int ObCostTableScanSimpleInfo::calculate_table_dop(double range_row_count,
+                          double index_back_row_count,
+                          int64_t part_cnt,
+                          int64_t cost_threshold_us,
+                          int64_t parallel_degree_limit,
+                          int64_t &table_dop) const
+{
+  int ret = OB_SUCCESS;
+  table_dop = ObGlobalHint::UNSET_PARALLEL;
+  double pre_cost = -1.0;
+  double cost = 0.0;
+  double px_cost = 0.0;
+  int64_t pre_parallel = ObGlobalHint::UNSET_PARALLEL;
+  int64_t cur_parallel = ObGlobalHint::DEFAULT_PARALLEL;
+  if (table_row_count_ <= 0 || part_count_ < 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect param", K(ret));
+  }
+  OPT_TRACE_TITLE("calculate table dop");
+  OPT_TRACE(KV_(is_index_back), KV_(is_global_index), KV_(part_count),
+            KV_(table_micro_blocks), KV_(index_micro_blocks), KV_(range_count),
+            KV_(table_row_count), KV_(postix_filter_qual_cost_per_row),
+            KV_(table_filter_qual_cost_per_row), KV_(index_scan_project_cost_per_row),
+            KV_(index_back_project_cost_per_row), KV_(row_width));
+  while (OB_SUCC(ret) && ObGlobalHint::UNSET_PARALLEL == table_dop) {
+    cost = calculate_table_scan_cost(range_row_count, index_back_row_count, part_cnt, cur_parallel);
+    px_cost = cur_parallel > 1 ? 0.1 * cur_parallel * cur_parallel : 0.0;
+    OPT_TRACE("dop:", cur_parallel, ", cost:", cost, ", px_cost:", px_cost);
+    if (cur_parallel >= parallel_degree_limit) {
+      table_dop = cur_parallel;
+    } else if (pre_cost > 0 && pre_cost <= cost) {
+      table_dop = pre_parallel;
+    } else if (cost - px_cost <= cost_threshold_us || px_cost >= cost - px_cost) {
+      table_dop = cur_parallel;
+    } else {
+      pre_cost = cost;
+      pre_parallel = cur_parallel;
+      ++cur_parallel;
+    }
+  }
+  OPT_TRACE("table dop:", table_dop, ", parallel_degree_limit:", parallel_degree_limit,
+            ", cost_threshold_us:", cost_threshold_us, ", range_row_count:", range_row_count,
+            ", part_cnt:", part_cnt);
+  return ret;
+}
+
+double ObCostTableScanSimpleInfo::calculate_table_scan_cost(double range_row_count,
+                                                     double index_back_row_count,
+                                                     int64_t part_cnt,
+                                                     int64_t parallel) const
+{
+  double cost = 0.0;
+  double part_count_per_dop = part_cnt * 1.0/parallel;
+  OptSystemStat default_stat;
+  default_stat.set_cpu_speed(DEFAULT_CPU_SPEED);
+  default_stat.set_disk_seq_read_speed(DEFAULT_DISK_SEQ_READ_SPEED);
+  default_stat.set_disk_rnd_read_speed(DEFAULT_DISK_RND_READ_SPEED);
+  default_stat.set_network_speed(DEFAULT_NETWORK_SPEED);
+  range_row_count /= part_cnt;
+  index_back_row_count /= part_cnt;
+  //calc index scan cost
+  {
+    int64_t num_micro_blocks_read = std::ceil(index_micro_blocks_ * range_row_count / table_row_count_);
+    double first_block_cost = cost_params_vector.get_micro_block_rnd_cost(default_stat);
+    double io_cost = first_block_cost + cost_params_vector.get_micro_block_seq_cost(default_stat) * (num_micro_blocks_read-1);
+    double range_cost = range_count_ * cost_params_vector.get_range_cost(default_stat);
+    double qual_cost = postix_filter_qual_cost_per_row_ * range_row_count;
+    if (!is_index_back_) {
+      qual_cost += table_filter_qual_cost_per_row_ * range_row_count;
+    }
+    double project_cost = index_scan_project_cost_per_row_ * range_row_count;
+    double cpu_cost = range_cost + qual_cost + project_cost;
+    cost = io_cost > cpu_cost ? io_cost : cpu_cost;
+  }
+  if (is_index_back_) {
+    //calc index back cost
+    int64_t num_micro_blocks_read = table_micro_blocks_;
+    if (OB_LIKELY(table_row_count_ > 0 && index_back_row_count <= table_row_count_)) {
+      num_micro_blocks_read = table_micro_blocks_ * (1.0 - std::pow((1.0 - index_back_row_count / table_row_count_), table_row_count_ / table_micro_blocks_));
+      num_micro_blocks_read = std::ceil(num_micro_blocks_read);
+    }
+    double io_cost = cost_params_vector.get_micro_block_rnd_cost(default_stat) * num_micro_blocks_read;
+    double qual_cost = table_filter_qual_cost_per_row_ * range_row_count;
+    double project_cost = index_back_project_cost_per_row_ * range_row_count;
+    double cpu_cost = qual_cost + project_cost;
+    cost += io_cost + cpu_cost;
+    if(is_global_index_) {
+      double network_cost = row_width_ * index_back_row_count * cost_params_vector.get_network_trans_per_byte_cost(default_stat) +
+              index_back_row_count * cost_params_vector.get_table_loopup_per_row_rpc_cost(default_stat);
+    }
+  }
+  cost *= part_count_per_dop;
+  return cost;
+}

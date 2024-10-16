@@ -325,6 +325,14 @@ public:
     return tsc_ctdef_.scan_ctdef_.table_param_.get_read_info().get_columns_desc(); }
   inline void set_spatial_ddl(bool is_spatial_ddl) { is_spatial_ddl_ = is_spatial_ddl; }
   inline bool is_spatial_ddl() const { return is_spatial_ddl_; }
+  void set_est_cost_simple_info(const ObCostTableScanSimpleInfo &info)
+  {
+    est_cost_simple_info_ = info;
+  }
+  ObCostTableScanSimpleInfo& get_est_cost_simple_info() { return est_cost_simple_info_; }
+  const ObCostTableScanSimpleInfo& get_est_cost_simple_info() const { return est_cost_simple_info_; }
+  ObQueryFlag get_query_flag() const { return tsc_ctdef_.scan_flags_; }
+
   DECLARE_VIRTUAL_TO_STRING;
 
 public:
@@ -421,6 +429,7 @@ public:
   int64_t partition_id_calc_type_;
 
   common::ObString parser_name_; // word segment for ddl.
+  ObCostTableScanSimpleInfo est_cost_simple_info_;
 };
 
 class ObTableScanOp : public ObOperator

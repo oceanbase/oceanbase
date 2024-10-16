@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "sql/ob_sql_utils.h"
+#include <algorithm>
 #include "sql/ob_sql.h"
 #include <sys/time.h>
 #include <openssl/md5.h>

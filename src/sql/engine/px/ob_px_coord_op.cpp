@@ -144,12 +144,12 @@ ObPxCoordOp::ObPxCoordOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInpu
   interrupt_id_(0),
   register_detectable_id_(false),
   detectable_id_(),
-  px_dop_(1),
   time_recorder_(0),
   batch_rescan_param_version_(0),
   server_alive_checker_(coord_info_.dfo_mgr_, exec_ctx.get_my_session()->get_process_query_time()),
   last_px_batch_rescan_size_(0),
-  query_sql_()
+  query_sql_(),
+  use_serial_scheduler_(false)
 {}
 
 
@@ -368,13 +368,31 @@ int ObPxCoordOp::setup_loop_proc()
   return OB_ERR_UNEXPECTED;
 }
 
+int64_t ObPxCoordOp::get_adaptive_px_dop(int64_t dop) const
+{
+  int ret = OB_SUCCESS;
+  int64_t px_dop = dop;
+  AutoDopHashMap &auto_dop_map = ctx_.get_auto_dop_map();
+  if (!auto_dop_map.created()) {
+    // do nothing
+  } else if (OB_FAIL(auto_dop_map.get_refactored(get_spec().get_id(), px_dop))) {
+    LOG_WARN("failed to get refactored", K(ret));
+  } else {
+    px_dop = px_dop >= 1 ? px_dop : dop;
+  }
+  LOG_TRACE("adaptive px dop", K(get_spec().get_id()), K(px_dop));
+  return px_dop;
+}
+
 int ObPxCoordOp::post_init_op_ctx()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(init_obrpc_proxy(coord_info_.rpc_proxy_))) {
     LOG_WARN("fail init rpc proxy", K(ret));
   } else {
-    px_dop_ = GET_PHY_PLAN_CTX(ctx_)->get_phy_plan()->get_px_dop();
+    int64_t plan_dop = GET_PHY_PLAN_CTX(ctx_)->get_phy_plan()->get_px_dop();
+    int64_t adaptive_dop = get_adaptive_px_dop(plan_dop);
+    use_serial_scheduler_ = ((1 == plan_dop && 1 == adaptive_dop) ? true : false);
     set_pruning_table_locations(&(static_cast<const ObPxCoordSpec&>(get_spec()).table_locations_));
   }
 

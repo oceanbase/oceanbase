@@ -472,7 +472,8 @@ ObTableScanSpec::ObTableScanSpec(ObIAllocator &alloc, const ObPhyOperatorType ty
     flags_(0),
     tenant_id_col_idx_(0),
     partition_id_calc_type_(0),
-    parser_name_()
+    parser_name_(),
+    est_cost_simple_info_()
 {
 }
 

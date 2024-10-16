@@ -30,6 +30,7 @@
 #include "pl/ob_pl_package_guard.h"
 #include "lib/udt/ob_udt_type.h"
 #include "lib/udt/ob_collection_type.h"
+#include "sql/plan_cache/ob_adaptive_auto_dop.h"
 
 #define GET_PHY_PLAN_CTX(ctx) ((ctx).get_physical_plan_ctx())
 #define GET_MY_SESSION(ctx) ((ctx).get_my_session())
@@ -548,6 +549,9 @@ public:
   int64_t get_autoinc_range_interval() { return autoinc_range_interval_; }
 
   int get_lob_access_ctx(ObLobAccessCtx *&lob_access_ctx);
+  AutoDopHashMap& get_auto_dop_map() { return auto_dop_map_; }
+  void set_force_gen_local_plan() { force_local_plan_ = true; }
+  bool is_force_gen_local_plan() const { return force_local_plan_; }
 
 private:
   int build_temp_expr_ctx(const ObTempExpr &temp_expr, ObTempExprCtx *&temp_expr_ctx);
@@ -740,6 +744,8 @@ protected:
   //---------------
 
   ObLobAccessCtx *lob_access_ctx_;
+  AutoDopHashMap auto_dop_map_;
+  bool force_local_plan_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExecContext);
 };

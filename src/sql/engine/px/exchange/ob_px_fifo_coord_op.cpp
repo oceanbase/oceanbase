@@ -70,7 +70,7 @@ int ObPxFifoCoordOp::inner_open()
       // use parallel scheduler for ddl to avoid large memory usage because
       // serial scheduler will hold the memory of intermediate result rows
       msg_proc_.set_scheduler(&parallel_scheduler_);
-    } else if (1 == px_dop_) {
+    } else if (use_serial_scheduler_) {
       msg_proc_.set_scheduler(&serial_scheduler_);
     } else {
       msg_proc_.set_scheduler(&parallel_scheduler_);

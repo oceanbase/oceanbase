@@ -543,6 +543,8 @@ public:
     direct_load_need_sort_ = direct_load_need_sort;
   }
   bool get_direct_load_need_sort() const { return direct_load_need_sort_; }
+  void set_is_use_auto_dop(bool use_auto_dop)  { stat_.is_use_auto_dop_ = use_auto_dop; }
+  bool get_is_use_auto_dop() const { return stat_.is_use_auto_dop_; }
 public:
   static const int64_t MAX_PRINTABLE_SIZE = 2 * 1024 * 1024;
 private:
