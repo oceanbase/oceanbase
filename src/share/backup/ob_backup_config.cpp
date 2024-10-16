@@ -854,7 +854,7 @@ int ObIBackupConfigItemParser::set_default_checksum_type(share::ObBackupPathStri
       if (OB_FAIL(tmp_dest.set(backup_dest))) {
         LOG_WARN("fail to set tmp backup dest", K(ret));
       } else if (is_object_storage_type(tmp_dest.get_storage_info()->get_type())) {
-        int64_t pos = backup_dest.size();
+        int64_t pos = 0;
         if (OB_FAIL(databuff_printf(tmp_str, OB_MAX_BACKUP_DEST_LENGTH, pos, "%s%s%s%s",
                                     backup_dest.ptr(), "&", CHECKSUM_TYPE, CHECKSUM_TYPE_MD5))) {
           LOG_WARN("fail to databuff printf", K(ret));
