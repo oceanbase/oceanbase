@@ -547,8 +547,8 @@ endif()
 add_library(ob_main OBJECT main.cpp)
 config_ccls_flag(ob_main)
 target_link_libraries(ob_main PUBLIC ob_base)
-add_executable(observer)
-target_link_libraries(observer
+add_executable(observer_without_bolt)
+target_link_libraries(observer_without_bolt
   PRIVATE
   -Wl,--start-group
   ob_main
@@ -584,9 +584,16 @@ if (OB_ENABLE_BOLT)
   add_custom_command(
     OUTPUT fake_observer_bolt
     COMMAND ${CMAKE_SOURCE_DIR}/cmake/script/do_bolt_opt --build_dir=${CMAKE_BINARY_DIR}
-    DEPENDS observer)
-  add_custom_target(observer_bolt ALL
+    DEPENDS observer_without_bolt)
+  add_custom_target(observer ALL
     DEPENDS fake_observer_bolt)
+else()
+  add_custom_command(
+    OUTPUT fake_observer
+    COMMAND mv ${CMAKE_BINARY_DIR}/src/observer/observer_without_bolt ${CMAKE_BINARY_DIR}/src/observer/observer
+    DEPENDS observer_without_bolt)
+  add_custom_target(observer ALL
+    DEPENDS fake_observer)
 endif()
 
 configure_file(../share/ob_version.cpp.in ob_version.cpp)

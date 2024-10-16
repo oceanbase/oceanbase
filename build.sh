@@ -154,6 +154,11 @@ function build_package
 # build - configurate project and prepare to compile, by calling make
 function build
 {
+    IS_X86_ARCH=OFF
+    architecture=$(uname -m)
+    if [ $architecture == "x86_64" ]; then
+      IS_X86_ARCH=ON
+    fi
 
     set -- "${BUILD_ARGS[@]}"
     case "x$1" in
@@ -186,7 +191,7 @@ function build
         ln -sf ${TOPDIR}/build_clangd/compile_commands.json ${TOPDIR}/compile_commands.json
         ;;
       xperf)
-        do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_AUTO_FDO=ON -DENABLE_THIN_LTO=ON -DOB_USE_LLD=$LLD_OPTION -DENABLE_HOTFUNC=ON
+        do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_AUTO_FDO=ON -DENABLE_THIN_LTO=ON -DOB_USE_LLD=$LLD_OPTION -DENABLE_HOTFUNC=ON -DENABLE_BOLT_AUTO=$IS_X86_ARCH
         ;;
       xdebug_asan)
         do_build "$@" -DCMAKE_BUILD_TYPE=Debug -DOB_USE_LLD=$LLD_OPTION -DOB_USE_ASAN=$ASAN_OPTION

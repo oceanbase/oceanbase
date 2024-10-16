@@ -140,19 +140,17 @@ def main():
     if architecture == "x86_64":
         print_log("download corebolt-17.0.6.1-7.alios7.x86_64.rpm")
         result = shell_run_command("wget http://yum.tbsite.net/taobao/7/x86_64/test/corebolt/corebolt-17.0.6.1-7.alios7.x86_64.rpm",
-                                False, False)
-        print_log("rpm2cpio alibaba-cloud-compiler | cpio -div -u")
+                                   False, False)
+        print_log("rpm2cpio corebolt | cpio -div -u")
         result = shell_run_command("rpm2cpio corebolt-17.0.6.1-7.alios7.x86_64.rpm | cpio -div -u", False, False)
         print_log("check llvm-bolt version")
         result = shell_run_command("./opt/corebolt/bin/llvm-bolt --version", True, True)
         print_log("do bolt opt")
-        result = shell_run_command("./opt/corebolt/bin/llvm-bolt "  + GLOBAL_CONF.build_dir + "/src/observer/observer " +
-                                    "-o " + GLOBAL_CONF.build_dir + "/src/observer/observer_bolt " +
+        result = shell_run_command("./opt/corebolt/bin/llvm-bolt "  + GLOBAL_CONF.build_dir + "/src/observer/observer_without_bolt " +
+                                    "-o " + GLOBAL_CONF.build_dir + "/src/observer/observer " +
                                     "-data=" + GLOBAL_CONF.build_dir + "/../perf.fdata " +
                                     "-reorder-blocks=ext-tsp -reorder-functions=cdsort -split-functions -split-all-cold -dyno-stats --use-gnu-stack --update-debug-sections --bolt-info=false",
                                     True, True)
-        result = shell_run_command("mv " + GLOBAL_CONF.build_dir + "/src/observer/observer " + GLOBAL_CONF.build_dir + "/src/observer/observer_before_bolt ", False, False)
-        result = shell_run_command("mv " + GLOBAL_CONF.build_dir + "/src/observer/observer_bolt " + GLOBAL_CONF.build_dir + "/src/observer/observer ", False, False)
         result = shell_run_command(GLOBAL_CONF.build_dir + "/src/observer/observer " + "--version", True, True)
         if len(result["return_message"]) < 11 or result["return_message"][1].split(" ")[0] != 'observer':
             print_log("bolt opt fail")
