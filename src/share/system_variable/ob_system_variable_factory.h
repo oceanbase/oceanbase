@@ -4421,6 +4421,20 @@ public:
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_AUTO_GENERATE_CERTS; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(605); }
 };
+class ObSysVarRangeIndexDiveLimit : public ObIntSysVar
+{
+public:
+  ObSysVarRangeIndexDiveLimit() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_RANGE_INDEX_DIVE_LIMIT; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(606); }
+};
+class ObSysVarPartitionIndexDiveLimit : public ObIntSysVar
+{
+public:
+  ObSysVarPartitionIndexDiveLimit() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_PARTITION_INDEX_DIVE_LIMIT; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(607); }
+};
 class ObSysVarObTableAccessPolicy : public ObEnumSysVar
 {
 public:
@@ -4428,7 +4442,7 @@ public:
 public:
   ObSysVarObTableAccessPolicy() : ObEnumSysVar(OB_TABLE_ACCESS_POLICY_NAMES, NULL, NULL, NULL, NULL, NULL) {}
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_TABLE_ACCESS_POLICY; }
-  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(606); }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(608); }
 };
 
 
@@ -4453,7 +4467,7 @@ private:
 
 public:
   const static int64_t MYSQL_SYS_VARS_COUNT = 99;
-  const static int64_t OB_SYS_VARS_COUNT = 508;
+  const static int64_t OB_SYS_VARS_COUNT = 510;
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
   const static int64_t INVALID_MAX_READ_STALE_TIME = -1;
 

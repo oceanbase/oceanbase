@@ -7523,8 +7523,8 @@
   "ndb_index_stat_option": {
     "id": 10436,
     "name": "ndb_index_stat_option",
-    "default_value": "loop_checkon=1000ms,loop_idle=1000ms,loop_busy=100ms, update_batch=1,read_batch=4,idle_batch=32,check_batch=32, check_delay=1m,delete_batch=8,clean_delay=0,error_batch=4, error_delay=1m,evict_batch=8,evict_delay=1m,cache_limit=32M, cache_lowpct=90",
-    "base_value": "loop_checkon=1000ms,loop_idle=1000ms,loop_busy=100ms, update_batch=1,read_batch=4,idle_batch=32,check_batch=32, check_delay=1m,delete_batch=8,clean_delay=0,error_batch=4, error_delay=1m,evict_batch=8,evict_delay=1m,cache_limit=32M, cache_lowpct=90",
+    "default_value": "loop_checkon=1000ms,loop_idle=1000ms,loop_busy=100ms, update_batch=1,read_batch=4,idle_batch=32,check_batch=32, check_delay=1m,delete_batch=8,clean_delay=0,error_batch=4, error_delay=1m,evict_batch=8,evict_delay=1m,cache_limit=32M, cache_lowpct=90",
+    "base_value": "loop_checkon=1000ms,loop_idle=1000ms,loop_busy=100ms, update_batch=1,read_batch=4,idle_batch=32,check_batch=32, check_delay=1m,delete_batch=8,clean_delay=0,error_batch=4, error_delay=1m,evict_batch=8,evict_delay=1m,cache_limit=32M, cache_lowpct=90",
     "data_type": "varchar",
     "info": "mock for mysql5.7",
     "flags": "SESSION | GLOBAL | MYSQL_ONLY",
@@ -9824,8 +9824,8 @@
   "named_pipe_full_access_group": {
     "id": 10599,
     "name": "named_pipe_full_access_group",
-    "default_value": "empty string",
-    "base_value": "empty string",
+    "default_value": "empty string",
+    "base_value": "empty string",
     "data_type": "varchar",
     "info": "mock for mysql5.7",
     "flags": "GLOBAL | READONLY | MYSQL_ONLY",
@@ -11838,8 +11838,7 @@
     "publish_version": "425",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "",
-    "placeholder": true
+    "ref_url": ""
   },
   "partition_index_dive_limit": {
     "id": 10741,
@@ -11852,8 +11851,7 @@
     "publish_version": "425",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "",
-    "placeholder": true
+    "ref_url": ""
   },
   "ob_table_access_policy": {
     "id": 10742,

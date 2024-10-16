@@ -1603,6 +1603,13 @@ public:
                                     const ObIArray<TableItem*> &table_items,
                                     const ObRawExpr *expr,
                                     bool &is_filter);
+  template<typename T>
+  static int choose_random_members(const uint64_t seed,
+                                   const ObIArray<T> &input_array,
+                                   int64_t choose_cnt,
+                                   ObIArray<T> &output_array,
+                                   ObSqlBitSet<> *priority_indices = NULL);
+
 private:
   //disallow construct
   ObOptimizerUtil();
@@ -1777,6 +1784,60 @@ uint64_t ObOptimizerUtil::hash_exprs(uint64_t seed, const ObIArray<T> &expr_arra
   return hash_value;
 }
 
+/**
+ * Select `choose_cnt` elements from the `input_array`. Preferentially selects elements
+ * at `priority_indices`, then randomly selects the remaining elements.
+ */
+template<typename T>
+int ObOptimizerUtil::choose_random_members(const uint64_t seed,
+                                           const ObIArray<T> &input_array,
+                                           int64_t choose_cnt,
+                                           ObIArray<T> &output_array,
+                                           ObSqlBitSet<> *priority_indices)
+{
+  int ret = OB_SUCCESS;
+  output_array.reuse();
+  if (choose_cnt <= 0) {
+    // do nothing
+  } else if (choose_cnt >= input_array.count()) {
+    if (OB_FAIL(output_array.assign(input_array))) {
+      SQL_OPT_LOG(WARN, "failed to assign", K(ret));
+    }
+  } else {
+    ObSEArray<int64_t, 8> indices; // shuffle indices and choose the first `choose_cnt` members
+    ObRandom r;
+    r.seed(seed);
+    int64_t already_choose = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < input_array.count(); i ++) {
+      if (OB_FAIL(indices.push_back(i))) {
+        SQL_OPT_LOG(WARN, "failed to push back", K(ret));
+      }
+    }
+    if (NULL != priority_indices) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < input_array.count() && already_choose < choose_cnt; i ++) {
+        if (priority_indices->has_member(i)) {
+          std::swap(indices.at(already_choose), indices.at(i));
+          already_choose ++;
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      for (int64_t i = already_choose; i < choose_cnt; i ++) {
+        int64_t rand_index = r.get(i, indices.count() - 1);
+        std::swap(indices.at(i), indices.at(rand_index));
+      }
+      lib::ob_sort(&indices.at(0), &indices.at(0) + choose_cnt);
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < choose_cnt; i ++) {
+      if (OB_FAIL(output_array.push_back(input_array.at(indices.at(i))))) {
+        SQL_OPT_LOG(WARN, "failed to push back", K(ret));
+      }
+    }
+  }
+  SQL_OPT_LOG(DEBUG, "succeed to choose random members",
+      K(choose_cnt), KPC(priority_indices), K(output_array));
+  return ret;
+}
 
 #define  HASH_ARRAY(items, seed) \
 do { \

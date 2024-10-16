@@ -32,6 +32,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/optimizer/ob_dynamic_sampling.h"
 #include "sql/optimizer/ob_skyline_prunning.h"
+#include "sql/optimizer/ob_access_path_estimation.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -742,7 +743,7 @@ int ObOptimizerTraceImpl::append(const ObShardingInfo *info)
   } else {
     new_line();
     append("location type:", info->get_location_type());
-    append(", partion count:", info->get_part_cnt());
+    append(", partition count:", info->get_part_cnt());
   }
   return ret;
 }
@@ -886,6 +887,89 @@ int ObOptimizerTraceImpl::append(const ObSkylineDim &dim)
     default: {
       append("unknown dim");
       break;
+    }
+  }
+  return ret;
+}
+
+int ObOptimizerTraceImpl::append(const ObNewRange &range)
+{
+  int ret = OB_SUCCESS;
+  char buf[1024] = {0};
+  int64_t length = 1024;
+  length = range.to_plain_string(buf, length);
+  ret = log_handle_.append(buf, length);
+  return ret;
+}
+
+int ObOptimizerTraceImpl::append(const ObOptTabletLoc& tablet_loc)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(append("(partition id:", tablet_loc.get_partition_id()))) {
+    LOG_WARN("failed to append", K(ret));
+  } else if (OB_FAIL(append("partition id:", tablet_loc.get_partition_id()))) {
+    LOG_WARN("failed to append", K(ret));
+  } else if (tablet_loc.get_first_level_part_id() >= 0 &&
+             OB_FAIL(append(", first level partition id:", tablet_loc.get_first_level_part_id()))) {
+    LOG_WARN("failed to append", K(ret));
+  } else if (OB_FAIL(append(", tablet id:"))) {
+    LOG_WARN("failed to append", K(ret));
+  } else if (OB_FAIL(append(tablet_loc.get_tablet_id().id()))) {
+    LOG_WARN("failed to append", K(ret));
+  } else if (OB_FAIL(append(")"))) {
+    LOG_WARN("failed to append", K(ret));
+  }
+  return ret;
+}
+
+int ObOptimizerTraceImpl::append(const ObCandiTabletLoc& candi_tablet_loc)
+{
+  return append(candi_tablet_loc.get_partition_location());
+}
+
+int ObOptimizerTraceImpl::append(const ObBatchEstTasks& task)
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<obrpc::ObEstPartArgElement> &params = task.arg_.index_params_;
+  const ObIArray<obrpc::ObEstPartResElement> &res = task.res_.index_param_res_;
+  int64_t cnt = MIN(params.count(), res.count());
+  for (int64_t i = 0; OB_SUCC(ret) && i < cnt; i ++) {
+    if (i != 0 && OB_FAIL(new_line())) {
+      LOG_WARN("failed to append", K(ret));
+    } else if (OB_FAIL(append("( index", params.at(i).index_id_))) {
+      LOG_WARN("failed to append", K(ret));
+    } else if (OB_FAIL(append(", tablet", params.at(i).tablet_id_.id()))) {
+      LOG_WARN("failed to append", K(ret));
+    } else if (OB_FAIL(append(") logical rows:", res.at(i).logical_row_count_))) {
+      LOG_WARN("failed to append", K(ret));
+    } else if (OB_FAIL(append(", physical rows:", res.at(i).physical_row_count_))) {
+      LOG_WARN("failed to append", K(ret));
+    } else if (!res.at(i).reliable_ && OB_FAIL(append(" [NOT RELIABLE]"))) {
+      LOG_WARN("failed to append", K(ret));
+    }
+  }
+  return ret;
+}
+
+template <>
+int ObOptimizerTraceImpl::append<ObDSResultItem>(const ObIArrayWrap<ObDSResultItem>& value)
+{
+  int ret = OB_SUCCESS;
+  for (int i = 0; OB_SUCC(ret) && i < value.count(); ++i) {
+    if (OB_FAIL(append(value.at(i)))) {
+    } else if (OB_FAIL(new_line())) {
+    }
+  }
+  return ret;
+}
+
+template <>
+int ObOptimizerTraceImpl::append<ColumnItem>(const ObIArrayWrap<ColumnItem>& value)
+{
+  int ret = OB_SUCCESS;
+  for (int i = 0; OB_SUCC(ret) && i < value.count(); ++i) {
+    if (OB_FAIL(append(value.at(i).column_name_))) {
+    } else if (i > 0 && OB_FAIL(new_line())) {
     }
   }
   return ret;
