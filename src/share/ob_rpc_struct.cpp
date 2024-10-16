@@ -8975,7 +8975,7 @@ OB_DEF_SERIALIZE(ObDDLBuildSingleReplicaRequestArg)
     parallelism_, tablet_task_id_, data_format_version_, consumer_group_id_, dest_tenant_id_,
     dest_ls_id_, dest_schema_version_,
     compaction_scn_, can_reuse_macro_block_, split_sstable_type_,
-    lob_col_idxs_, parallel_datum_rowkey_list_);
+    lob_col_idxs_, parallel_datum_rowkey_list_, is_no_logging_);
   return ret;
 }
 
@@ -8992,6 +8992,10 @@ OB_DEF_DESERIALIZE(ObDDLBuildSingleReplicaRequestArg)
         rowkey_allocator_, buf, data_len, pos, parallel_datum_rowkey_list_))) {
     LOG_WARN("deserialzie parallel info failed", K(ret));
   }
+
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(is_no_logging_)
+  }
   return ret;
 }
 
@@ -9003,7 +9007,7 @@ OB_DEF_SERIALIZE_SIZE(ObDDLBuildSingleReplicaRequestArg)
     parallelism_, tablet_task_id_, data_format_version_, consumer_group_id_, dest_tenant_id_,
     dest_ls_id_, dest_schema_version_,
     compaction_scn_, can_reuse_macro_block_, split_sstable_type_,
-    lob_col_idxs_, parallel_datum_rowkey_list_);
+    lob_col_idxs_, parallel_datum_rowkey_list_, is_no_logging_);
   return len;
 }
 
