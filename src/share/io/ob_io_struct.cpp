@@ -2502,7 +2502,6 @@ int ObSyncIOChannel::do_sync_io(ObIORequest &req)
         }
       }
     } else if ((ObStorageAccessType::OB_STORAGE_ACCESS_APPENDER == flag)
-               || (ObStorageAccessType::OB_STORAGE_ACCESS_RANDOMWRITER == flag)
                || (ObStorageAccessType::OB_STORAGE_ACCESS_MULTIPART_WRITER == flag)) {
       if (OB_FAIL(device_handle->pwrite(req.fd_, io_offset, req.io_result_->size_, req.calc_io_buf(), io_size))) {
         LOG_WARN("pwrite failed", K(ret), K(req));

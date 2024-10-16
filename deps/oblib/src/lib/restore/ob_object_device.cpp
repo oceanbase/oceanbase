@@ -19,8 +19,8 @@ namespace common
 
 const char *OB_STORAGE_ACCESS_TYPES_STR[] = {
     "reader", "nohead_reader", "adaptive_reader",
-    "overwriter", "appender", "random_write",
-    "multipart_writer", "direct_multipart_writer", "buffered_multipart_writer"};
+    "overwriter", "appender", "multipart_writer",
+    "direct_multipart_writer", "buffered_multipart_writer"};
 
 const char *get_storage_access_type_str(const ObStorageAccessType &type)
 {
@@ -162,8 +162,6 @@ int ObObjectDevice::get_access_type(ObIODOpts *opts, ObStorageAccessType& access
     access_type_flag = OB_STORAGE_ACCESS_OVERWRITER;
   } else if (0 == STRCMP(access_type , OB_STORAGE_ACCESS_TYPES_STR[OB_STORAGE_ACCESS_APPENDER])) {
     access_type_flag = OB_STORAGE_ACCESS_APPENDER;
-  } else if (0 == STRCMP(access_type , OB_STORAGE_ACCESS_TYPES_STR[OB_STORAGE_ACCESS_RANDOMWRITER])) {
-    access_type_flag = OB_STORAGE_ACCESS_RANDOMWRITER;
   } else if (0 == STRCMP(access_type , OB_STORAGE_ACCESS_TYPES_STR[OB_STORAGE_ACCESS_MULTIPART_WRITER])) {
     access_type_flag = OB_STORAGE_ACCESS_MULTIPART_WRITER;
   } else if (0 == STRCMP(access_type , OB_STORAGE_ACCESS_TYPES_STR[OB_STORAGE_ACCESS_DIRECT_MULTIPART_WRITER])) {
@@ -358,8 +356,7 @@ int ObObjectDevice::release_res(void *ctx, const ObIOFd &fd, ObStorageAccessType
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "ctx is null, invald para!");
   } else {
-    if (OB_STORAGE_ACCESS_APPENDER == access_type ||
-        OB_STORAGE_ACCESS_RANDOMWRITER == access_type) {
+    if (OB_STORAGE_ACCESS_APPENDER == access_type) {
       ObStorageAppender *appender = static_cast<ObStorageAppender*>(ctx);
       if (OB_FAIL(appender->close())) {
         OB_LOG(WARN, "fail to close the appender!", K(ret), K(access_type));
@@ -449,8 +446,7 @@ int ObObjectDevice::open(const char *pathname, const int flags, const mode_t mod
         ret = open_for_reader(pathname, ctx, false/*head_meta*/);
       } else if (OB_STORAGE_ACCESS_ADAPTIVE_READER == access_type) {
         ret = open_for_adaptive_reader_(pathname, ctx);
-      } else if (OB_STORAGE_ACCESS_APPENDER == access_type ||
-                OB_STORAGE_ACCESS_RANDOMWRITER == access_type) {
+      } else if (OB_STORAGE_ACCESS_APPENDER == access_type) {
         ret = open_for_appender(pathname, opts, ctx);
       } else if (OB_STORAGE_ACCESS_OVERWRITER == access_type) {
         ret = open_for_overwriter(pathname, ctx);
@@ -630,7 +626,7 @@ int ObObjectDevice::seal_for_adaptive(const ObIOFd &fd)
   } else if (OB_ISNULL(ctx)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "fd ctx is null!", K(flag), K(ret));
-  } else if ((OB_STORAGE_ACCESS_RANDOMWRITER == flag) || (OB_STORAGE_ACCESS_APPENDER == flag)) {
+  } else if (OB_STORAGE_ACCESS_APPENDER == flag) {
     ObStorageAppender *appender = static_cast<ObStorageAppender*>(ctx);
     if (OB_FAIL(appender->seal_for_adaptive())) {
       OB_LOG(WARN, "fail to seal!", K(ret), K(flag));
@@ -883,7 +879,7 @@ int ObObjectDevice::pwrite(const ObIOFd &fd, const int64_t offset, const int64_t
   } else if (OB_ISNULL(ctx)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "fd ctx is null!", K(flag), K(ret));
-  } else if ((OB_STORAGE_ACCESS_RANDOMWRITER == flag) || (OB_STORAGE_ACCESS_APPENDER == flag)) {
+  } else if (OB_STORAGE_ACCESS_APPENDER == flag) {
     ObStorageAppender *appender = static_cast<ObStorageAppender*>(ctx);
     if (OB_FAIL(appender->pwrite((char*)buf, size, offset))) {
       OB_LOG(WARN, "fail to do appender pwrite!", K(ret));

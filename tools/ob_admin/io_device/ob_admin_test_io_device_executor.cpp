@@ -230,7 +230,7 @@ int ObAdminTestIODeviceExecutor::test_appendable_check_file_(const char* check_f
   share::ObBackupStorageInfo storage_info;
   ObIOFd fd;
   ObIODevice *device_handle = NULL;
-  ObStorageAccessType access_type = OB_STORAGE_ACCESS_RANDOMWRITER;
+  ObStorageAccessType access_type = OB_STORAGE_ACCESS_APPENDER;
   bool is_exist = false;
   const char* appendable_check_file_name = "appendable_check_file.obbak";
   const char* appendable_check_file_content = "appendable check file";
@@ -629,7 +629,7 @@ int ObAdminTestIODeviceExecutor::test_partial_clog_file_()
   share::ObBackupStorageInfo storage_info;
   ObIOFd fd;
   ObIODevice *device_handle = NULL;
-  ObStorageAccessType access_type = OB_STORAGE_ACCESS_RANDOMWRITER;
+  ObStorageAccessType access_type = OB_STORAGE_ACCESS_APPENDER;
   char partial_log_file_path[OB_MAX_URI_LENGTH] = { 0 };
   const char* partial_log_file_name = "archive/logstream_1/log/2.obarc";
   int64_t offset = 0;

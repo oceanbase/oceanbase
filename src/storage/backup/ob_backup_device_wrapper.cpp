@@ -113,7 +113,7 @@ int ObBackupWrapperIODevice::setup_io_opts_for_backup_device(
       opts->opts_[2].set(SECOND_ID_STR, tmp_macro_id.second_id_);
       opts->opts_[3].set(THIRD_ID_STR, tmp_macro_id.third_id_);
       opts->opts_[4].set("AccessType", OB_STORAGE_ACCESS_TYPES_STR[access_type]);
-      if (access_type == OB_STORAGE_ACCESS_RANDOMWRITER)
+      if (access_type == OB_STORAGE_ACCESS_APPENDER)
       {
         opts->opts_[5].set("OpenMode", "CREATE_OPEN_NOLOCK");
       }
