@@ -367,6 +367,8 @@ int ObIOBenchRunner::do_benchmark(const ObIOBenchLoad &load, const int64_t threa
       sleep(BENCHMARK_TIMEOUT_S);
       TG_STOP(tg_id_);
       TG_WAIT(tg_id_);
+      TG_DESTROY(tg_id_);
+      tg_id_ = -1;
       if (io_count_ <= 0) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid io count", K(ret), K(io_count_));
@@ -388,6 +390,7 @@ void ObIOBenchRunner::destroy()
   if (tg_id_ >= 0) {
     TG_STOP(tg_id_);
     TG_WAIT(tg_id_);
+    TG_DESTROY(tg_id_);
     tg_id_ = -1;
   }
   if (nullptr != write_buf_) {
