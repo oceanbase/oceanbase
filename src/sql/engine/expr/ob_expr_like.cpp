@@ -430,7 +430,6 @@ int ObExprLike::check_pattern_valid(const T &pattern,
     bool is_char_escape = false;
     bool pre_char_is_escape = false;
     while (OB_SUCC(ret) && buf_start < buf_end && is_valid) {
-      LOG_INFO("hwx debug");
       char_len = static_cast<int32_t>(cs->cset->well_formed_len(cs, buf_start, buf_end, 1, &error));
       if (OB_UNLIKELY(0 != error)) {
         ret = OB_ERR_INVALID_CHARACTER_STRING;
