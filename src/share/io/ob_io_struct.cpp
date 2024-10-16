@@ -2563,6 +2563,7 @@ int64_t ObSyncIOChannel::cal_thread_count(const int64_t conf_thread_count)
       thread_count = cpu_num * 6;
     } else {
       thread_count = 16 * 6 + (cpu_num - 16) * 2;
+      thread_count = min(thread_count, 1024);
     }
   }
   return thread_count;
