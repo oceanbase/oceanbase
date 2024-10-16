@@ -44,6 +44,7 @@
 #include "storage/compaction/ob_tenant_medium_checker.h"
 #include "storage/compaction/ob_batch_freeze_tablets_dag.h"
 #include "storage/ob_gc_upper_trans_helper.h"
+#include "share/schema/ob_tenant_schema_service.h"
 
 namespace oceanbase
 {
@@ -238,6 +239,75 @@ void ObFastFreezeChecker::try_update_tablet_threshold(
       (void) store_map_.set_refactored(key, adaptive_threshold);
     }
   }
+}
+
+
+/*******************************************ObCSReplicaChecksumHelper impl*****************************************/
+int ObCSReplicaChecksumHelper::check_column_type(
+    const common::ObTabletID &tablet_id,
+    const int64_t compaction_scn,
+    const common::ObIArray<int64_t> &column_idxs,
+    bool &is_large_text_column)
+{
+  int ret = OB_SUCCESS;
+  share::ObFreezeInfo freeze_info;
+  uint64_t table_id = 0;
+  schema::ObMultiVersionSchemaService *schema_service = nullptr;
+  schema::ObSchemaGetterGuard schema_guard;
+  ObSEArray<ObColDesc, 16> column_descs;
+  int64_t save_schema_version = 0;
+  const ObTableSchema *table_schema = nullptr;
+  is_large_text_column = true;
+
+  if (OB_UNLIKELY(!tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid arguments", K(ret), K(tablet_id), K(column_idxs));
+  } else if (OB_UNLIKELY(column_idxs.empty())) {
+    // do nothing
+  } else if (OB_FAIL(MTL(ObTenantFreezeInfoMgr *)->get_freeze_info_by_snapshot_version(compaction_scn, freeze_info))) {
+    LOG_WARN("failed to get major freeze info", K(ret), K(compaction_scn));
+  } else if (FALSE_IT(save_schema_version = freeze_info.schema_version_)) {
+  } else if (OB_ISNULL(schema_service = MTL(ObTenantSchemaService *)->get_schema_service())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null schema service", K(ret));
+  } else if (OB_FAIL(ObMediumCompactionScheduleFunc::get_table_id(*schema_service,
+                                                                  tablet_id,
+                                                                  freeze_info.schema_version_,
+                                                                  table_id))) {
+    LOG_WARN("failed to get table id", K(ret), K(tablet_id));
+  } else if (OB_FAIL(MTL(ObTenantSchemaService *)->get_schema_service()->retry_get_schema_guard(MTL_ID(),
+                                                                                                freeze_info.schema_version_,
+                                                                                                table_id,
+                                                                                                schema_guard,
+                                                                                                save_schema_version))) {
+    LOG_WARN("failed to get schema guard", K(ret));
+  } else if (OB_UNLIKELY(save_schema_version < freeze_info.schema_version_)) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("can not use older schema version", K(ret), K(freeze_info), K(save_schema_version), K(table_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(MTL_ID(), table_id, table_schema))) {
+    LOG_WARN("Fail to get table schema", K(ret), K(table_id));
+  } else if (NULL == table_schema) {
+    ret = OB_TABLE_IS_DELETED;
+    LOG_WARN("table is deleted", K(ret), K(table_id));
+  } else if (OB_FAIL(table_schema->get_multi_version_column_descs(column_descs))) {
+    LOG_WARN("failed to get multi version column descs", K(ret), K(tablet_id), KPC(table_schema));
+  } else {
+    for (int64_t idx = 0; is_large_text_column && OB_SUCC(ret) && idx < column_idxs.count(); ++idx) {
+      const int64_t cur_col_idx = column_idxs.at(idx);
+      const int64_t column_id = column_descs.at(cur_col_idx).col_id_;
+      const ObColumnSchemaV2 *col_schema = table_schema->get_column_schema(column_id);
+
+      if (OB_ISNULL(col_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null col schema", K(ret));
+      } else {
+        is_large_text_column = ob_is_large_text(col_schema->get_data_type());
+        LOG_DEBUG("check column type for cs replica", K(cur_col_idx), KPC(col_schema),
+                  "rowkey_cnt", table_schema->get_rowkey_column_num(), KPC(table_schema));
+      }
+    }
+  }
+  return ret;
 }
 
 

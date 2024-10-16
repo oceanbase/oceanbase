@@ -339,11 +339,52 @@ int ObTabletReplicaChecksumItem::verify_checksum(const ObTabletReplicaChecksumIt
 int ObTabletReplicaChecksumItem::verify_column_checksum(const ObTabletReplicaChecksumItem &other) const
 {
   int ret = OB_SUCCESS;
-  if (compaction_scn_ == other.compaction_scn_) {
-    bool column_meta_equal = false;
-    if (OB_FAIL(column_meta_.check_equal(other.column_meta_, column_meta_equal))) {
-      LOG_WARN("fail to check column meta equal", KR(ret), K(other), K(*this));
-    } else if (!column_meta_equal) {
+  bool column_meta_equal = false;
+  bool is_cs_replica = false;
+
+  if (OB_UNLIKELY(compaction_scn_ != other.compaction_scn_)) {
+    // do nothing
+  } else if (OB_FAIL(column_meta_.check_equal(other.column_meta_, column_meta_equal))) {
+    LOG_WARN("fail to check column meta equal", KR(ret), K(other), K(*this));
+  } else if (column_meta_equal) {
+    // do nothing
+  } else if (OB_FAIL(check_data_checksum_type(is_cs_replica))) {
+    LOG_WARN("fail to check data checksum type", KR(ret), KPC(this));
+  } else if (is_cs_replica) {
+    // do nothing
+  } else if (OB_FAIL(other.check_data_checksum_type(is_cs_replica))) {
+    LOG_WARN("fail to check data checksum type", KR(ret), K(other));
+  } else if (is_cs_replica) {
+    // do nothing
+  } else {
+    ret = OB_CHECKSUM_ERROR;
+  }
+
+  bool is_large_text_column = false;
+  uint64_t compat_version = 0;
+  if (OB_FAIL(ret) || !is_cs_replica) {
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, compat_version))) {
+    LOG_WARN("failed to get min data version", K(ret), K(tenant_id_));
+  } else if (compat_version >= DATA_VERSION_4_3_4_0) {
+    // should not skip the validation of lob column between cs replica and row replica
+  } else {
+    ObSEArray<int64_t, 8> column_idxs;
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < column_meta_.column_checksums_.count(); ++idx) {
+      if (column_meta_.column_checksums_.at(idx) == other.column_meta_.column_checksums_.at(idx)) {
+        // do nothing
+      } else if (OB_FAIL(column_idxs.push_back(idx))) {
+        LOG_WARN("failed to add column idx", K(ret), K(idx));
+      }
+    }
+
+    if (FAILEDx(compaction::ObCSReplicaChecksumHelper::check_column_type(tablet_id_,
+                                                                         compaction_scn_.get_val_for_tx(),
+                                                                         column_idxs,
+                                                                         is_large_text_column))) {
+      LOG_WARN("failed to check column type for cs replica", K(ret), KPC(this), K(other));
+    } else if (is_large_text_column) {
+      // do nothing
+    } else {
       ret = OB_CHECKSUM_ERROR;
     }
   }

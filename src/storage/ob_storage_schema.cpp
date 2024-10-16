@@ -18,6 +18,7 @@
 #include "share/schema/ob_schema_struct.h"
 #include "storage/ob_storage_struct.h"
 #include "storage/column_store/ob_column_store_replica_util.h"
+#include "share/ob_cluster_version.h"
 
 namespace oceanbase
 {
@@ -1530,6 +1531,7 @@ int ObStorageSchema::generate_column_array(const ObTableSchema &input_schema)
   int ret = OB_SUCCESS;
   // build column schema map
   common::hash::ObHashMap<uint64_t, uint64_t> tmp_map; // column_id -> index
+
   if (OB_FAIL(tmp_map.create(input_schema.get_column_count(), "StorageSchema"))) {
     STORAGE_LOG(WARN, "failed to create map", K(ret));
   } else if (OB_FAIL(input_schema.check_column_array_sorted_by_column_id(true/*skip_rowkey*/))) {
@@ -1831,6 +1833,8 @@ int ObStorageSchema::init_column_meta_array(
 {
   int ret = OB_SUCCESS;
   ObArray<ObColDesc> columns;
+  uint64_t compat_version = 0;
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret), K_(is_inited));
@@ -1839,6 +1843,8 @@ int ObStorageSchema::init_column_meta_array(
     STORAGE_LOG(WARN, "not support get multi version column desc array when column simplified", K(ret), KPC(this));
   } else if (OB_FAIL(get_multi_version_column_descs(columns))) {
     STORAGE_LOG(WARN, "fail to get store column ids", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), compat_version))) {
+    STORAGE_LOG(WARN, "failed to get min data version", K(ret));
   } else {
     // build column schema map
     common::hash::ObHashMap<uint64_t, uint64_t> tmp_map; // column_id -> index
@@ -1873,6 +1879,13 @@ int ObStorageSchema::init_column_meta_array(
         if (!col_schema.is_column_stored_in_sstable_ && !is_storage_index_table()) {
           ret = OB_ERR_UNEXPECTED;
           STORAGE_LOG(WARN, "virtual generated column should be filtered already", K(ret), K(col_schema));
+        } else if (ob_is_large_text(col_schema.get_data_type()) && compat_version < DATA_VERSION_4_3_4_0) {
+          blocksstable::ObStorageDatum datum;
+          if (OB_FAIL(datum.from_obj_enhance(col_schema.get_orig_default_value()))) {
+            STORAGE_LOG(WARN, "Failed to transfer obj to datum", K(ret));
+          } else {
+            col_meta.column_default_checksum_ = datum.checksum(0);
+          }
         } else {
           col_meta.column_default_checksum_ = col_schema.default_checksum_;
         }
