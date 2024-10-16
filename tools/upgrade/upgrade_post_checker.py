@@ -122,6 +122,10 @@ def enable_major_freeze(cur, timeout):
   actions.set_tenant_parameter(cur, '_enable_adaptive_compaction', 'True', timeout)
   actions.do_resume_merge(cur, timeout)
 
+# 8 打开 direct load
+def enable_direct_load(cur, timeout):
+  actions.set_parameter(cur, '_ob_enable_direct_load', 'True', timeout)
+
 # 开始升级后的检查
 def do_check(conn, cur, query_cur, timeout):
   try:
@@ -132,6 +136,7 @@ def do_check(conn, cur, query_cur, timeout):
     enable_rebalance(cur, timeout)
     enable_rereplication(cur, timeout)
     enable_major_freeze(cur, timeout)
+    enable_direct_load(cur, timeout)
   except Exception as e:
     logging.exception('run error')
     raise
