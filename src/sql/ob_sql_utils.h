@@ -668,6 +668,9 @@ public:
   }
   static int check_ident_name(const common::ObCollationType cs_type, common::ObString &name,
                               const bool check_for_path_char, const int64_t max_ident_len);
+
+  static int get_strong_partition_replica_addr(const ObCandiTabletLoc &phy_part_loc_info,
+                                                ObAddr &selected_addr);
 private:
   static bool check_mysql50_prefix(common::ObString &db_name);
   static bool part_expr_has_virtual_column(const ObExpr *part_expr);
