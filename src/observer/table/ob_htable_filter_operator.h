@@ -289,7 +289,9 @@ class ObHTableRowIterator: public ObTableQueryResultIterator
 {
 public:
   ObHTableRowIterator(const ObTableQuery &query);
-  virtual ~ObHTableRowIterator() {};
+  virtual ~ObHTableRowIterator() {
+    allocator_.reset();
+  };
   /// Fetch next row
   virtual int get_next_result(ObTableQueryResult *&one_row) override;
   virtual int get_next_result(ObTableQueryIterableResult *&one_row) override;
