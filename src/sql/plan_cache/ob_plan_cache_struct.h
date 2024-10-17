@@ -56,7 +56,7 @@ struct ObPlanCacheKey : public ObILibCacheKey
         db_id_(common::OB_INVALID_ID),
         sessid_(0),
         mode_(PC_TEXT_MODE),
-        is_weak_read_(false),
+        flag_(0),
         sys_var_config_hash_val_(0) {}
 
   inline void reset()
@@ -71,6 +71,7 @@ struct ObPlanCacheKey : public ObILibCacheKey
     is_weak_read_ = false;
     namespace_ = NS_INVALID;
     sys_var_config_hash_val_ = 0;
+    enable_mysql_compatible_dates_ = false;
   }
 
   virtual inline int deep_copy(common::ObIAllocator &allocator,
@@ -96,6 +97,7 @@ struct ObPlanCacheKey : public ObILibCacheKey
       namespace_ = pc_key.namespace_;
       is_weak_read_ = pc_key.is_weak_read_;
       sys_var_config_hash_val_ = pc_key.sys_var_config_hash_val_;
+      enable_mysql_compatible_dates_ = pc_key.enable_mysql_compatible_dates_;
     }
     return ret;
   }
@@ -121,8 +123,8 @@ struct ObPlanCacheKey : public ObILibCacheKey
     hash_ret = common::murmurhash(&db_id_, sizeof(uint64_t), hash_ret);
     hash_ret = common::murmurhash(&sessid_, sizeof(uint32_t), hash_ret);
     hash_ret = common::murmurhash(&mode_, sizeof(PlanCacheMode), hash_ret);
+    hash_ret = common::murmurhash(&flag_, sizeof(flag_), hash_ret);
     hash_ret = common::murmurhash(&namespace_, sizeof(ObLibCacheNameSpace), hash_ret);
-
     return hash_ret;
   }
 
@@ -138,7 +140,8 @@ struct ObPlanCacheKey : public ObILibCacheKey
                    config_str_ == pc_key.config_str_ &&
                    is_weak_read_ == pc_key.is_weak_read_ &&
                    namespace_ == pc_key.namespace_ &&
-                   sys_var_config_hash_val_ == pc_key.sys_var_config_hash_val_;
+                   sys_var_config_hash_val_ == pc_key.sys_var_config_hash_val_ &&
+                   enable_mysql_compatible_dates_ == pc_key.enable_mysql_compatible_dates_;
 
     return cmp_ret;
   }
@@ -162,7 +165,16 @@ struct ObPlanCacheKey : public ObILibCacheKey
   PlanCacheMode mode_;
   common::ObString sys_vars_str_;
   common::ObString config_str_;
-  bool is_weak_read_;
+  union
+  {
+    uint16_t flag_;
+    struct
+    {
+      uint16_t is_weak_read_ : 1;
+      uint16_t enable_mysql_compatible_dates_ : 1;
+      uint16_t reserved_ : 14; // reserved
+    };
+  };
   uint64_t sys_var_config_hash_val_;
 };
 

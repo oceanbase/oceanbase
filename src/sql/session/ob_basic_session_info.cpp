@@ -468,6 +468,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
 //consistency_level_ = INVALID_CONSISTENCY;
   next_tx_read_only_ = -1;
   next_tx_isolation_ = transaction::ObTxIsolationLevel::INVALID;
+  enable_mysql_compatible_dates_ = false;
   log_id_level_map_valid_ = false;
   log_id_level_map_.reset_level();
   cur_phy_plan_ = NULL;
@@ -1155,6 +1156,8 @@ int ObBasicSessionInfo::init_system_variables(const bool print_info_log, const b
       LOG_INFO("fail to generate system config in pc str");
     } else {
       global_vars_version_ = 0;
+      set_enable_mysql_compatible_dates(
+        static_cast<ObSQLSessionInfo *>(this)->get_enable_mysql_compatible_dates_from_config());
     }
   }
   return ret;
@@ -4724,6 +4727,7 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
                 thread_data_.proxy_host_name_);
   }
   OB_UNIS_ENCODE(sys_var_config_hash_val_);
+  OB_UNIS_ENCODE(enable_mysql_compatible_dates_);
   return ret;
 }
 
@@ -5009,6 +5013,7 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
     }
   }
   OB_UNIS_DECODE(sys_var_config_hash_val_);
+  OB_UNIS_DECODE(enable_mysql_compatible_dates_);
   return ret;
 }
 
@@ -5153,6 +5158,8 @@ int ObBasicSessionInfo::load_all_sys_vars(const ObSysVariableSchema &sys_var_sch
   if (!is_deserialized_) {
     OZ (gen_sys_var_in_pc_str());
     OZ (gen_configs_in_pc_str());
+    set_enable_mysql_compatible_dates(
+      static_cast<ObSQLSessionInfo *>(this)->get_enable_mysql_compatible_dates_from_config());
   }
   return ret;
 }
@@ -5290,6 +5297,7 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
               thread_data_.proxy_user_name_,
               thread_data_.proxy_host_name_);
   OB_UNIS_ADD_LEN(sys_var_config_hash_val_);
+  OB_UNIS_ADD_LEN(enable_mysql_compatible_dates_);
   return len;
 }
 
