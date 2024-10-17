@@ -74,7 +74,7 @@ int ObAdminIOAdapterBenchmarkExecutor::parse_cmd_(int argc, char *argv[])
   int ret = OB_SUCCESS;
   int opt = 0;
   int index = -1;
-  const char *opt_str = "h:d:s:t:r:l:o:n:f:p:b:c:j:";
+  const char *opt_str = "h:d:s:t:r:l:o:n:f:p:b:c:j:e:";
   struct option longopts[] = {{"help", 0, NULL, 'h'},
       {"file-path-prefix", 1, NULL, 'd'},
       {"storage-info", 1, NULL, 's'},
@@ -88,6 +88,7 @@ int ObAdminIOAdapterBenchmarkExecutor::parse_cmd_(int argc, char *argv[])
       {"is-adaptive", 1, NULL, 'j'},
       {"clean-before-execution", 0, NULL, 'b'},
       {"clean-after-execution", 0, NULL, 'c'},
+      {"s3_url_encode_type", 0, NULL, 'e'},
       {NULL, 0, NULL, 0}};
   while (OB_SUCC(ret) && -1 != (opt = getopt_long(argc, argv, opt_str, longopts, &index))) {
     switch (opt) {
@@ -179,6 +180,12 @@ int ObAdminIOAdapterBenchmarkExecutor::parse_cmd_(int argc, char *argv[])
       }
       case 'c': {
         clean_after_execution_ = true;
+        break;
+      }
+      case 'e': {
+        if (OB_FAIL(set_s3_url_encode_type(optarg))) {
+          STORAGE_LOG(WARN, "failed to set s3 url encode type", KR(ret));
+        }
         break;
       }
       default: {
@@ -314,6 +321,7 @@ int ObAdminIOAdapterBenchmarkExecutor::print_usage_()
   printf(HELP_FMT, "-j, --is-adaptive", "use adative interface");
   printf(HELP_FMT, "-b, --clean-before-execution", "clean before execution");
   printf(HELP_FMT, "-c, --clean-after-execution", "clean after execution");
+  printf(HELP_FMT, "-e,--s3_url_encode_type", "set S3 protocol url encode type");
   printf("samples:\n");
   printf("  test nfs device: \n");
   printf("\tob_admin bench_io_adapter -dfile:///home/admin/backup_info \n");
@@ -323,7 +331,8 @@ int ObAdminIOAdapterBenchmarkExecutor::print_usage_()
   printf("\tob_admin bench_io_adapter -d'cos://home/admin/backup_info' "
          "-s'host=xxx.com&access_id=111&access_key=222&appid=333'\n");
   printf("\tob_admin bench_io_adapter -d's3://home/admin/backup_info' "
-         "-s'host=xxx.com&access_id=111&access_key=222&s3_region=333'\n");
+         "-s'host=xxx.com&access_id=111&access_key=222&region=333'\t"
+         "-e'compliantRfc3986Encoding'");
   return ret;
 }
 

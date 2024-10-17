@@ -315,6 +315,8 @@ int ObCGScanner::apply_filter(
     ret = OB_SUCCESS;
   }
   LOG_TRACE("[COLUMNSTORE] apply filter info in cg", K(ret), K_(query_index_range), K(row_count),
+            "tablet_id", iter_param_->tablet_id_, "cg_idx", iter_param_->cg_idx_,
+            "filter_type", filter_info.filter_->get_type(),
             "filter_constant_type", result_bitmap.get_filter_constant_type(),
             "filter_constant_id", result_bitmap.get_filter_constant_id(),
             "bitmap_size", result_bitmap.size(),  "popcnt", result_bitmap.popcnt());

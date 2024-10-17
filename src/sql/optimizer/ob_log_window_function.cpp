@@ -675,7 +675,7 @@ int ObLogWindowFunction::get_rd_sort_keys(common::ObIArray<OrderItem> &rd_sort_k
 
 int ObLogWindowFunction::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
 {
-  is_fixed = ObOptimizerUtil::find_item(win_exprs_, expr);
+  is_fixed = ObOptimizerUtil::find_item(win_exprs_, expr) || expr == wf_aggr_status_expr_;
   return OB_SUCCESS;
 }
 

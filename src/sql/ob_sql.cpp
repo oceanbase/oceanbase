@@ -1220,6 +1220,7 @@ int ObSql::do_real_prepare(const ObString &sql,
   int ret = OB_SUCCESS;
   bool enable_udr = false;
   ParseResult parse_result;
+  MEMSET(&parse_result, 0, SIZEOF(ParseResult));
   ObStmt *basic_stmt = NULL;
   stmt::StmtType stmt_type = stmt::T_NONE;
   int64_t param_cnt = 0;
@@ -1481,6 +1482,7 @@ int ObSql::handle_pl_prepare(const ObString &sql,
   int64_t param_cnt = 0;
   ObString normalized_sql;
   ParseResult parse_result;
+  MEMSET(&parse_result, 0, SIZEOF(ParseResult));
   ObStmt *basic_stmt = NULL;
   int64_t cur_timeout_us = 0;
   stmt::StmtType stmt_type = stmt::T_NONE;
@@ -1494,9 +1496,13 @@ int ObSql::handle_pl_prepare(const ObString &sql,
   if (OB_SUCC(ret)) {
     ObIAllocator &allocator = *pl_prepare_result.get_allocator();
     ObParser parser(allocator, sess.get_sql_mode(), sess.get_charsets4parser());
+    bool is_for_trigger = false;
+    if (NULL != pl_prepare_ctx.secondary_ns_) {
+      is_for_trigger = ObTriggerInfo::is_trigger_package_id(pl_prepare_ctx.secondary_ns_->get_package_id());
+    }
     ParseMode parse_mode = pl_prepare_ctx.is_dbms_sql_ ? DBMS_SQL_MODE :
                           pl_prepare_ctx.is_dynamic_sql_ ? DYNAMIC_SQL_MODE :
-                          sess.is_for_trigger_package() ? TRIGGER_MODE : STD_MODE;
+                          is_for_trigger ? TRIGGER_MODE : STD_MODE;
 
     context.is_dynamic_sql_ = pl_prepare_ctx.is_dynamic_sql_;
     context.is_dbms_sql_ = pl_prepare_ctx.is_dbms_sql_;
@@ -2388,7 +2394,6 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
     } else {
       const ObString &sql = !ps_info->get_no_param_sql().empty() ? ps_info->get_no_param_sql() : ps_info->get_ps_sql();
       context.cur_sql_ = sql;
-      context.raw_sql_ = ps_info->get_ps_sql();
 #ifndef NDEBUG
       LOG_INFO("Begin to handle execute statement", "sess_id", session.get_sessid(),
                "proxy_sess_id", session.get_proxy_sessid(), K(sql));
@@ -2397,7 +2402,9 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
       if (!ps_info->get_fixed_raw_params().empty()) {
         pctx->set_is_ps_rewrite_sql();
       }
-      if (OB_FAIL(session.store_query_string(sql))) {
+      if (OB_FAIL(ObPsSqlUtils::deep_copy_str(allocator, ps_info->get_ps_sql(), context.raw_sql_))) {
+        LOG_WARN("deep copy raw sql failed", K(ps_info->get_ps_sql()), K(ret));
+      } else if (OB_FAIL(session.store_query_string(sql))) {
         LOG_WARN("store query string fail", K(ret));
       } else if (FALSE_IT(generate_ps_sql_id(sql, context))) {
       } else if (OB_LIKELY(ObStmt::is_dml_stmt(stmt_type))) {
@@ -5015,6 +5022,7 @@ int ObSql::pc_add_udr_plan(const ObUDRItemMgr::UDRItemRefGuard &item_guard,
   int get_plan_err = OB_SUCCESS;
   bool add_plan_to_pc = false;
   ParseResult parse_result;
+  MEMSET(&parse_result, 0, SIZEOF(ParseResult));
   ObIAllocator &allocator = result.get_mem_pool();
   ObSQLSessionInfo &session = result.get_session();
   ObPlanCache *plan_cache = session.get_plan_cache();
@@ -5072,7 +5080,9 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
   ObString signature_format_sql;
   ObOutlineState outline_state;
   ParseResult parse_result;
+  MEMSET(&parse_result, 0, SIZEOF(ParseResult));
   ParseResult outline_parse_result;
+  MEMSET(&outline_parse_result, 0, SIZEOF(ParseResult));
   bool add_plan_to_pc = false;
   bool is_match_udr = false;
   ObUDRItemMgr::UDRItemRefGuard item_guard;

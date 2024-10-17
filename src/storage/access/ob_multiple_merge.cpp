@@ -813,7 +813,10 @@ int ObMultipleMerge::update_and_report_tablet_stat()
     access_ctx_->table_scan_stat_->row_cache_hit_cnt_ += access_ctx_->table_store_stat_.row_cache_hit_cnt_;
     access_ctx_->table_scan_stat_->row_cache_miss_cnt_ += access_ctx_->table_store_stat_.row_cache_miss_cnt_;
   }
-  if (compaction::ObBasicMergeScheduler::get_merge_scheduler()->enable_adaptive_compaction()) {
+  const compaction::ObBasicMergeScheduler *scheduler = nullptr;
+  if (OB_ISNULL(scheduler = compaction::ObBasicMergeScheduler::get_merge_scheduler())) {
+    // may be during the start phase
+  } else if (scheduler->enable_adaptive_compaction()) {
     report_tablet_stat();
   }
   access_ctx_->table_store_stat_.reuse();

@@ -444,6 +444,7 @@ static inline bool is_direct_load_retry_err(const int ret)
     || ret == OB_SCHEMA_NOT_UPTODATE
     || ret == OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH
     || ret == OB_ERR_REMOTE_SCHEMA_NOT_FULL
+    || ret == OB_SQL_RETRY_SPM
     ;
 }
 
@@ -574,11 +575,10 @@ public:
                                                  ObArray<ObColumnNameInfo> &insert_column_names,
                                                  ObArray<ObColumnNameInfo> &column_names,
                                                  ObArray<int64_t> &select_column_ids);
-  static int generate_multivalue_index_column_names(const share::schema::ObTableSchema &dest_table_schema,
-                                                   const share::schema::ObTableSchema &source_table_schema,
-                                                   ObArray<ObColumnNameInfo> &insert_column_names,
-                                                   ObArray<ObColumnNameInfo> &column_names,
-                                                   ObArray<int64_t> &select_column_ids);
+  static int append_multivalue_extra_column(const share::schema::ObTableSchema &dest_table_schema,
+                                            const share::schema::ObTableSchema &source_table_schema,
+                                            ObArray<ObColumnNameInfo> &column_names,
+                                            ObArray<int64_t> &select_column_ids);
   static int generate_build_replica_sql(
       const uint64_t tenant_id,
       const int64_t data_table_id,

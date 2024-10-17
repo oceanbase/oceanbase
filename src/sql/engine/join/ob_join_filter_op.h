@@ -92,7 +92,8 @@ public:
       runtime_filter_wait_time_ms_(0),
       runtime_filter_max_in_num_(0),
       runtime_bloom_filter_max_size_(0),
-      px_message_compression_(false) {}
+      px_message_compression_(false),
+      build_send_opt_{false} {}
   double bloom_filter_ratio_;
   int64_t each_group_size_;
   int64_t bf_piece_size_; // how many int64_t a piece bloom filter contains
@@ -100,6 +101,7 @@ public:
   int64_t runtime_filter_max_in_num_;
   int64_t runtime_bloom_filter_max_size_;
   bool px_message_compression_;
+  bool build_send_opt_;
 };
 
 class ObJoinFilterOpInput : public ObOpInput

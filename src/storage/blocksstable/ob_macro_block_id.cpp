@@ -129,7 +129,7 @@ int64_t MacroBlockId::to_string(char *buf, const int64_t buf_len) const
         (uint64_t) second_id_,
         (uint64_t) third_id_,
         (int64_t) macro_transfer_seq_,
-        (int64_t) tenant_seq_);
+        (uint64_t) tenant_seq_);
     break;
   default:
     databuff_printf(buf, buf_len, pos,
@@ -208,6 +208,8 @@ bool MacroBlockId::is_shared_data_or_meta() const
 {
   return is_id_mode_share() &&
   (
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MICRO_DATA_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MICRO_META_MACRO) == storage_object_type_ ||
     static_cast<uint64_t>(ObStorageObjectType::SHARED_MINI_DATA_MACRO) == storage_object_type_ ||
     static_cast<uint64_t>(ObStorageObjectType::SHARED_MINI_META_MACRO) == storage_object_type_ ||
     static_cast<uint64_t>(ObStorageObjectType::SHARED_MINOR_DATA_MACRO) == storage_object_type_ ||
@@ -351,6 +353,7 @@ int MacroBlockId::memcpy_deserialize(const char* buf, const int64_t data_len, in
   }
   DESERIALIZE_MEMBER_WITH_MEMCPY(second_id_);
   DESERIALIZE_MEMBER_WITH_MEMCPY(third_id_);
+  version_ = MACRO_BLOCK_ID_VERSION_V2;
   fourth_id_  = 0;
   return ret;
 }

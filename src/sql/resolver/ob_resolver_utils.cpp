@@ -2436,7 +2436,8 @@ stmt::StmtType ObResolverUtils::get_stmt_type_by_item_type(const ObItemType item
         type = stmt::T_INSERT;
       }
       break;
-      case T_SP_CREATE_TYPE: {
+      case T_SP_CREATE_TYPE:
+      case T_SP_CREATE_TYPE_BODY: {
         type = stmt::T_CREATE_TYPE;
       }
       break;
@@ -6942,6 +6943,7 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
       break;
     case ObCollectionSQLTC: {
       uint64_t tenant_data_version = 0;
+      length = 0;
       if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
         LOG_WARN("get tenant data version failed", K(ret));
       } else if (tenant_data_version < DATA_VERSION_4_3_3_0) {

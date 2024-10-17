@@ -59,6 +59,7 @@ public:
     return is_overwrite_;
   }
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
+  virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
   void set_insert_up(bool insert_up)
   {
     insert_up_ = insert_up;

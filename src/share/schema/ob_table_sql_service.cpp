@@ -5481,17 +5481,6 @@ int ObTableSqlService::check_table_options(const ObTableSchema &table)
   if (OB_FAIL(check_ddl_allowed(table))) {
     LOG_WARN("check ddl allowd failed", K(ret), K(table));
   }
-
-  if (OB_SUCC(ret)) {
-    if (table.is_auto_partitioned_table()
-        && OB_INVALID_ID != table.get_tablegroup_id()) {
-      ret = OB_OP_NOT_ALLOW;
-      LOG_WARN("auto part table in tablegroup not allowed",
-          K(ret), K(table));
-      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set atuo part table in tablegroup");
-
-    }
-  }
   return ret;
 }
 

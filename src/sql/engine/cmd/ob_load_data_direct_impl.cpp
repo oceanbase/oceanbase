@@ -43,7 +43,7 @@ using namespace omt;
  */
 
 ObLoadDataDirectImpl::DataAccessParam::DataAccessParam()
-  : file_column_num_(0), file_cs_type_(CS_TYPE_INVALID), compression_format_(ObLoadCompressionFormat::NONE)
+  : file_column_num_(0), file_cs_type_(CS_TYPE_INVALID), compression_format_(ObCSVGeneralFormat::ObCSVCompression::NONE)
 {
 }
 
@@ -820,7 +820,7 @@ int ObLoadDataDirectImpl::SimpleDataSplitUtils::split(const DataAccessParam &dat
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected data format", KR(ret), K(data_access_param));
   } else if (1 == count || (ObLoadFileLocation::CLIENT_DISK == data_access_param.file_location_)
-             || data_access_param.compression_format_ != ObLoadCompressionFormat::NONE) {
+             || data_access_param.compression_format_ != ObCSVGeneralFormat::ObCSVCompression::NONE) {
     if (OB_FAIL(data_desc_iter.add_data_desc(data_desc))) {
       LOG_WARN("fail to push back", KR(ret));
     }

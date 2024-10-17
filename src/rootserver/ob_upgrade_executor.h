@@ -114,6 +114,8 @@ private:
       const uint64_t current_data_version,
       const int64_t buf_len,
       char *buf);
+  int run_upgrade_processor_(const uint64_t tenant_id,
+      share::ObBaseUpgradeProcessor *processor, int64_t &version);
 private:
   bool inited_;
   bool stopped_;

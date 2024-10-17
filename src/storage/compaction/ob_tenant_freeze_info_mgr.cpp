@@ -686,7 +686,10 @@ void ObTenantFreezeInfoMgr::UpdateLSResvSnapshotTask::runTimerTask()
 {
   int tmp_ret = OB_SUCCESS;
   uint64_t compat_version = 0;
-  if (OB_TMP_FAIL(ObBasicMergeScheduler::get_merge_scheduler()->get_min_data_version(compat_version))) {
+  compaction::ObBasicMergeScheduler *scheduler = nullptr;
+  if (OB_ISNULL(scheduler = compaction::ObBasicMergeScheduler::get_merge_scheduler())) {
+    // may be during the start phase
+  } else if (OB_TMP_FAIL(scheduler->get_min_data_version(compat_version))) {
     LOG_WARN_RET(tmp_ret, "failed to get min data version", KR(tmp_ret));
   } else if (compat_version < DATA_VERSION_4_1_0_0) {
     // do nothing, should not update reserved snapshot

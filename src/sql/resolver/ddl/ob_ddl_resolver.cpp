@@ -43,6 +43,7 @@
 #include "sql/resolver/cmd/ob_load_data_stmt.h"
 #include "sql/resolver/dcl/ob_dcl_resolver.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/rewrite/ob_transform_pre_process.h"
 #include "pl/ob_pl_stmt.h"
 #include "share/table/ob_ttl_util.h"
 #include "share/ob_vec_index_builder_util.h"
@@ -3236,21 +3237,13 @@ int ObDDLResolver::resolve_file_format(const ParseNode *node, ObExternalFileForm
       }
       case T_COMPRESSION: {
         ObString string_v = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim();
-        ret = compression_format_from_string(string_v, format.compression_format_);
+        ret = compression_algorithm_from_string(string_v, format.csv_format_.compression_algorithm_);
         break;
       }
       default: {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid file format option", K(ret), K(node->type_));
       }
-    }
-
-    if (OB_SUCC(ret)
-        && format.format_type_ == ObExternalFileFormat::PARQUET_FORMAT
-        && format.compression_format_ != ObLoadCompressionFormat::NONE) {
-      LOG_WARN("parquet file doesn't support compression", K(format.compression_format_));
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "parquet file with compression");
     }
   }
   return ret;
@@ -6876,6 +6869,7 @@ int ObDDLResolver::check_default_value(ObObj &default_value,
     ObCastCtx cast_ctx(&allocator, &dtc_params, CM_NONE, collation_type);
     ObAccuracy res_acc = accuracy;
     cast_ctx.res_accuracy_ = &res_acc;
+    bool transform_happened = false;
     if (OB_FAIL(input_default_value.get_string(expr_str))) {
       LOG_WARN("get expr string from default value failed", K(ret), K(input_default_value));
     } else if (OB_FAIL(ObSQLUtils::convert_sql_text_from_schema_for_resolve(allocator,
@@ -6883,6 +6877,9 @@ int ObDDLResolver::check_default_value(ObObj &default_value,
       LOG_WARN("fail to convert for resolve", K(ret));
     } else if (OB_FAIL(ObResolverUtils::resolve_default_expr_v2_column_expr(params, expr_str, column, expr, allow_sequence))) {
       LOG_WARN("resolve expr_default expr failed", K(expr_str), K(column), K(ret));
+    } else if (OB_FAIL(ObTransformPreProcess::transform_expr(*params.expr_factory_,
+        *params.session_info_, expr, transform_happened))) {
+      LOG_WARN("transform_arg_case_recursively failed", K(ret));
     } else if (OB_FAIL(ObSQLUtils::calc_simple_expr_without_row(
         params.session_info_, expr, tmp_default_value, params.param_list_, allocator))) {
       LOG_WARN("Failed to get simple expr value", K(ret));

@@ -74,6 +74,7 @@ ob_unittest_observer(test_ob_simple_cluster test_ob_simple_cluster.cpp)
 ob_unittest_observer(test_ob_partition_balance test_ob_partition_balance.cpp)
 ob_unittest_observer(test_ls_status_operator test_ls_status_operator.cpp)
 ob_unittest_observer(test_balance_operator test_tenant_balance_operator.cpp)
+ob_unittest_observer(test_ls_recovery_stat test_ls_recovery_stat.cpp)
 ob_unittest_observer(test_transfer_partition_task test_transfer_partition_task.cpp)
 ob_unittest_observer(test_mds_table_checkpoint test_mds_table_checkpoint.cpp)
 ob_unittest_observer(test_ob_black_list_service test_ob_black_list_service.cpp)
@@ -133,7 +134,7 @@ ob_unittest_observer(test_tablet_to_ls_cache test_tablet_to_ls_cache.cpp)
 ####### freeze case #######
 #ob_freeze_observer(test_frequently_freeze freeze/test_frequently_freeze.cpp)
 # ofen timeout, modify and open later(gengli)
-ob_freeze_observer(test_ob_minor_freeze freeze/test_ob_minor_freeze.cpp)
+#ob_freeze_observer(test_ob_minor_freeze freeze/test_ob_minor_freeze.cpp)
 ####### freeze case #######
 
 

@@ -38,7 +38,8 @@ struct ObTenantStatusCache final
   int during_restore(bool &during_restore) const;
   bool is_inited() const { return is_inited_; }
   bool is_skip_merge_tenant() const;
-  bool enable_adaptive_compaction();
+  bool enable_adaptive_compaction() const { return enable_adaptive_compaction_; }
+  bool enable_adaptive_compaction_with_cpu_load() const;
   bool enable_adaptive_merge_schedule() const { return enable_adaptive_merge_schedule_; }
   int get_min_data_version(uint64_t &min_data_version);
 

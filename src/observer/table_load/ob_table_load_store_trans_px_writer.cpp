@@ -82,7 +82,10 @@ int ObTableLoadStoreTransPXWriter::init(ObTableLoadStoreCtx *store_ctx,
     trans_->inc_ref_count();
     writer_->inc_ref_count();
     ATOMIC_AAF(&store_ctx_->px_writer_count_, 1);
-    if (store_ctx_->enable_pre_sort_ && OB_FAIL(pre_sort_writer_.init(store_ctx_->pre_sorter_, writer_))) {
+    if (store_ctx_->enable_pre_sort_
+        && OB_FAIL(pre_sort_writer_.init(store_ctx_->pre_sorter_, writer_,
+                                         store_ctx_->error_row_handler_,
+                                        &(store_ctx_->data_store_table_ctx_->table_data_desc_)))) {
       LOG_WARN("fail to init pre sort wirter", KR(ret));
     }
     if (OB_SUCC(check_status())) {
@@ -234,7 +237,7 @@ int ObTableLoadStoreTransPXWriter::write(const blocksstable::ObDatumRow &row)
 int ObTableLoadStoreTransPXWriter::finish_write()
 {
   int ret = OB_SUCCESS;
-  if (store_ctx_->enable_pre_sort_ && OB_FAIL(pre_sort_writer_.close_chunk())) {
+  if (store_ctx_->enable_pre_sort_ && OB_FAIL(pre_sort_writer_.close())) {
     LOG_WARN("fail to push chunk", KR(ret));
   }
   return ret;

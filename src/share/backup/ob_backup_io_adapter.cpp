@@ -1330,7 +1330,6 @@ int ObBackupIoAdapter::async_io_manager_read(
   const int64_t real_timeout_ms = OB_IO_MANAGER.get_object_storage_io_timeout_ms(io_info.tenant_id_);
   io_info.timeout_us_ = real_timeout_ms * 1000L;
   io_info.flag_.set_sync();
-  io_info.flag_.set_resource_group_id(THIS_WORKER.get_group_id());
   io_info.flag_.set_sys_module_id(sys_module_id);
   io_info.flag_.set_wait_event(ObWaitEventIds::OBJECT_STORAGE_READ);
   io_info.flag_.set_read();
@@ -1357,7 +1356,6 @@ int ObBackupIoAdapter::io_manager_write(
   const int64_t real_timeout_ms = OB_IO_MANAGER.get_object_storage_io_timeout_ms(io_info.tenant_id_);
   io_info.timeout_us_ = real_timeout_ms * 1000L;
   io_info.flag_.set_sync();
-  io_info.flag_.set_resource_group_id(THIS_WORKER.get_group_id());
   // io_info.flag_.set_sys_module_id(OB_INVALID_ID);
   io_info.flag_.set_wait_event(ObWaitEventIds::OBJECT_STORAGE_WRITE);
   io_info.flag_.set_write();
@@ -1391,7 +1389,6 @@ int ObBackupIoAdapter::async_io_manager_upload(
   const int64_t real_timeout_ms = OB_IO_MANAGER.get_object_storage_io_timeout_ms(io_info.tenant_id_);
   io_info.timeout_us_ = real_timeout_ms * 1000L;
   io_info.flag_.set_sync();
-  io_info.flag_.set_resource_group_id(THIS_WORKER.get_group_id());
   io_info.flag_.set_sys_module_id(sys_module_id);
   io_info.flag_.set_wait_event(ObWaitEventIds::OBJECT_STORAGE_WRITE);
   io_info.flag_.set_write();

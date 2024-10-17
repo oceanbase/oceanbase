@@ -440,7 +440,7 @@ public:
   int add_column_meta_no_dup(const uint64_t column_id, const OptSelectivityCtx &ctx);
 
   const OptColumnMeta* get_column_meta(const uint64_t column_id) const;
-
+  OptColumnMeta* get_column_meta(const uint64_t column_id);
   uint64_t get_table_id() const { return table_id_; }
   void set_table_id(const uint64_t &table_id) { table_id_ = table_id; }
   uint64_t get_ref_table_id() const { return ref_table_id_; }
@@ -485,6 +485,10 @@ public:
     base_meta_info_ = NULL;
     real_rows_ = -1.0;
   }
+
+  static int refine_column_stat(const ObGlobalColumnStat &stat,
+                                double rows,
+                                OptColumnMeta &col_meta);
 
   TO_STRING_KV(K_(table_id), K_(ref_table_id), K_(table_type), K_(rows), K_(stat_type), K_(ds_level),
                K_(all_used_parts), K_(all_used_tablets), K_(pk_ids), K_(column_metas),
@@ -645,9 +649,10 @@ public:
   static int calculate_selectivity(const OptTableMetas &table_metas,
                                    const OptSelectivityCtx &ctx,
                                    ObIArray<ObSelEstimator *> &sel_estimators,
-                                   double &selectivity);
+                                   double &selectivity,
+                                   common::ObIArray<ObExprSelPair> &all_predicate_sel,
+                                   bool record_range_sel = false);
 
-  // @brief 计算一组条件的选择率，条件之间是and关系，基于独立性假设
   static int calculate_selectivity(const OptTableMetas &table_metas,
                                    const OptSelectivityCtx &ctx,
                                    const common::ObIArray<ObRawExpr*> &quals,

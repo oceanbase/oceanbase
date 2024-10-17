@@ -1837,7 +1837,30 @@ public:
   int &ret_code_; // is not use reference, the ret_code_ will lose when use ob_sort
 };
 
-int ObTabletDirectLoadMgr::calc_range(const int64_t thread_cnt)
+struct GetSliceWriterFn
+{
+public:
+  GetSliceWriterFn(const int64_t context_id, ObArray<ObDirectLoadSliceWriter *> &slice_writers)
+    : context_id_(context_id), slice_writers_(slice_writers) {}
+  int operator () (hash::HashMapPair<ObTabletDirectLoadBuildCtx::SliceKey, ObDirectLoadSliceWriter *> &entry) {
+    int ret = OB_SUCCESS;
+    if (entry.first.context_id_ == context_id_) {
+      if (OB_ISNULL(entry.second)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), KP(entry.second));
+      } else if (OB_FAIL(slice_writers_.push_back(entry.second))) {
+        LOG_WARN("push back slice writer failed", K(ret), KP(entry.second));
+      }
+    }
+    return ret;
+  }
+
+private:
+  int64_t context_id_;
+  ObArray<ObDirectLoadSliceWriter *> &slice_writers_;
+};
+
+int ObTabletDirectLoadMgr::calc_range(const int64_t context_id, const int64_t thread_cnt)
 {
   int ret = OB_SUCCESS;
   ObArray<ObDirectLoadSliceWriter *> sorted_slices;
@@ -1861,15 +1884,9 @@ int ObTabletDirectLoadMgr::calc_range(const int64_t thread_cnt)
   } else if (OB_FAIL(sorted_slices.reserve(sqc_build_ctx_.slice_mgr_map_.size()))) {
     LOG_WARN("reserve slice array failed", K(ret), K(sqc_build_ctx_.slice_mgr_map_.size()));
   } else {
-    for (ObTabletDirectLoadBuildCtx::SLICE_MGR_MAP::const_iterator iter = sqc_build_ctx_.slice_mgr_map_.begin();
-      OB_SUCC(ret) && iter != sqc_build_ctx_.slice_mgr_map_.end(); ++iter) {
-      ObDirectLoadSliceWriter *cur_slice = iter->second;
-      if (OB_ISNULL(cur_slice)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null", K(ret), KP(cur_slice));
-      } else if (OB_FAIL(sorted_slices.push_back(cur_slice))) {
-        LOG_WARN("push back slice failed", K(ret));
-      }
+    GetSliceWriterFn get_fn(context_id, sorted_slices);
+    if (OB_FAIL(sqc_build_ctx_.slice_mgr_map_.foreach_refactored(get_fn))) {
+      LOG_WARN("get slice writer failed", K(ret));
     }
     if (OB_SUCC(ret)) {
       CSSliceEndkeyCompareFunctor cmp(tablet_handle.get_obj()->get_rowkey_read_info().get_datum_utils(), ret);
@@ -2053,7 +2070,7 @@ int ObTabletDirectLoadMgr::close_sstable_slice(
             LOG_WARN("slice writer fill column group failed", K(ret));
           }
         } else {
-          if (OB_FAIL(calc_range(0))) {
+          if (OB_FAIL(calc_range(slice_info.context_id_, 0))) {
             LOG_WARN("calc range failed", K(ret));
           } else if (OB_FAIL(notify_all())) {
             LOG_WARN("notify all failed", K(ret));
@@ -2133,9 +2150,6 @@ int ObTabletDirectLoadMgr::fill_column_group(const int64_t thread_cnt, const int
   } else if (sqc_build_ctx_.sorted_slice_writers_.count() == 0 || thread_id > sqc_build_ctx_.sorted_slices_idx_.count() - 1) {
     //ignore
     FLOG_INFO("[DIRECT_LOAD_FILL_CG] idle thread", K(sqc_build_ctx_.sorted_slice_writers_.count()), K(thread_id), K(sqc_build_ctx_.sorted_slices_idx_.count()));
-  } else if (sqc_build_ctx_.sorted_slice_writers_.count() != sqc_build_ctx_.slice_mgr_map_.size()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("wrong slice writer num", K(ret), K(sqc_build_ctx_.sorted_slice_writers_.count()), K(sqc_build_ctx_.slice_mgr_map_.size()), K(common::lbt()));
   } else {
     const int64_t start_idx = sqc_build_ctx_.sorted_slices_idx_.at(thread_id).start_idx_;
     const int64_t last_idx = sqc_build_ctx_.sorted_slices_idx_.at(thread_id).last_idx_;
@@ -2432,7 +2446,7 @@ int ObTabletFullDirectLoadMgr::update(
     if (OB_ISNULL(sqc_build_ctx_.storage_schema_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null storage schema", K(ret));
-    } else if (OB_FAIL(ObCODDLUtil::need_column_group_store(*sqc_build_ctx_.storage_schema_, is_column_group_store))) {
+    } else if (OB_FAIL(check_need_replay_column_store(*sqc_build_ctx_.storage_schema_, build_param.common_param_.direct_load_type_, is_column_group_store))) {
       LOG_WARN("fail to get schema is column group store", K(ret));
     } else if (is_column_group_store && !replay_normal_in_cs_replica) {
       table_key_.table_type_ = ObITable::COLUMN_ORIENTED_SSTABLE;
@@ -3229,7 +3243,7 @@ int ObTabletFullDirectLoadMgr::init_ddl_table_store(
     LOG_WARN("get tablet handle failed", K(ret), K(ls_id_), K(tablet_id_));
   } else if (OB_FAIL(tablet_handle.get_obj()->load_storage_schema(tmp_arena, storage_schema))) {
     LOG_WARN("failed to load storage schema", K(ret), K(tablet_handle));
-  } else if (OB_FAIL(ObCODDLUtil::need_column_group_store(*storage_schema, is_column_group_store))) {
+  } else if (OB_FAIL(check_need_replay_column_store(*storage_schema, direct_load_type_, is_column_group_store))) {
     LOG_WARN("fail to check schema is column group store", K(ret));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -3301,13 +3315,10 @@ int ObTabletFullDirectLoadMgr::init_ddl_table_store(
         }
       }
     }
-    bool is_column_group_store = false;
     if (OB_FAIL(ret)) {
     } else if (FALSE_IT(param.sstable_ = static_cast<ObSSTable *>(sstable_handle.get_table()))) {
     } else if (OB_FAIL(ls_handle.get_ls()->update_tablet_table_store(tablet_id_, param, new_tablet_handle))) {
       LOG_WARN("failed to update tablet table store", K(ret), K(ls_id_), K(tablet_id_), K(param));
-    } else if (OB_FAIL(ObCODDLUtil::need_column_group_store(*storage_schema, is_column_group_store))) {
-      LOG_WARN("failed to check storage schema is column group store", K(ret));
     } else {
       LOG_INFO("update tablet success", K(ls_id_), K(tablet_id_),
           "is_column_store", is_column_group_store, K(ddl_param),
@@ -3383,6 +3394,24 @@ int ObTabletFullDirectLoadMgr::pre_process_cs_replica(
     LOG_WARN("tablet handle is invalid or nullptr", K(ret), K(tablet_handle), KP(tablet));
   } else if (OB_FAIL(tablet->pre_process_cs_replica(direct_load_type_, replay_normal_in_cs_replica))) {
     LOG_WARN("failed to pre process cs replica", K(ret), K(ls_id_), K(tablet_id));
+  }
+  return ret;
+}
+
+int ObTabletFullDirectLoadMgr::check_need_replay_column_store(
+    const ObStorageSchema &storage_schema,
+    const ObDirectLoadType &direct_load_type,
+    bool &need_replay_column_store)
+{
+  int ret = OB_SUCCESS;
+  need_replay_column_store = false;
+  if (OB_FAIL(ObCODDLUtil::need_column_group_store(storage_schema, need_replay_column_store))) {
+    LOG_WARN("failed to check need replay column store", K(ret), K(storage_schema));
+  } else if (!is_ddl_direct_load(direct_load_type) && need_replay_column_store) {
+    // if table is row store in F-replica and local ls is cs replica, storage schema in tablet will be column store.
+    // but full direct load will not write column store redo log.
+    // so when full direct load, is storage schema is column store and cs replica compat, need replay row store.
+    need_replay_column_store = !storage_schema.is_cs_replica_compat();
   }
   return ret;
 }

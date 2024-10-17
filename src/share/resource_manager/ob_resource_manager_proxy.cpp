@@ -732,7 +732,8 @@ int ObResourceManagerProxy::check_if_function_exist(const ObString &function_nam
       0 == function_name.compare("IMPORT") ||
       0 == function_name.compare("EXPORT") ||
       0 == function_name.compare("SQL_AUDIT") ||
-      0 == function_name.compare("GC_MACRO_BLOCK")) {
+      0 == function_name.compare("GC_MACRO_BLOCK") ||
+      0 == function_name.compare("MICRO_MINI_MERGE")) {
     exist = true;
   } else {
     exist = false;

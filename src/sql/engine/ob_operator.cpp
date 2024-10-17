@@ -1129,23 +1129,6 @@ int ObOperator::submit_op_monitor_node()
     // Reference document:
     op_monitor_info_.close_time_ = oceanbase::common::ObClockGenerator::getClock();
     ObPlanMonitorNodeList *list = MTL(ObPlanMonitorNodeList*);
-
-    // exclude time cost in children, but px receive have no real children in exec view
-    int64_t db_time = total_time_; // use temp var to avoid dis-order close
-    if (!spec_.is_receive()) {
-      for (int64_t i = 0; i < child_cnt_; i++) {
-        db_time -= children_[i]->total_time_;
-      }
-    }
-    if (db_time < 0) {
-      db_time = 0;
-    }
-    // exclude io time cost
-    // Change to divide by cpu_khz when generating the virtual table.
-    // Otherwise, the unit of this field is inconsistent during SQL execution and after SQL execution is completed.
-    op_monitor_info_.db_time_ = 1000 * db_time;
-    op_monitor_info_.block_time_ = 1000 * op_monitor_info_.block_time_;
-
     if (list && spec_.plan_ && ctx_.get_physical_plan_ctx()) {
       if (spec_.plan_->get_phy_plan_hint().monitor_
           || (ctx_.get_my_session()->is_user_session()

@@ -114,7 +114,6 @@ public:
   bool with_rows() const
   { return ObStmt::is_select_stmt(stmt_type_) || is_returning() || need_drive_dml_query_; }
   int copy_common_info(ObPhysicalPlan &src);
-  int extract_query_range(ObExecContext &ctx) const;
   //user var
   bool is_contains_assignment() const {return is_contains_assignment_;}
   void set_contains_assignment(bool v) {is_contains_assignment_ = v;}
@@ -466,11 +465,20 @@ public:
   inline bool is_insert_select() const { return is_insert_select_; }
   inline void set_is_plain_insert(bool v) { is_plain_insert_ = v; }
   inline bool is_plain_insert() const { return is_plain_insert_; }
+  inline void set_is_inner_sql(bool v) { is_inner_sql_ = v; }
+  inline void set_is_batch_params_execute(bool v) { is_batch_params_execute_ = v; }
   inline bool is_dml_write_stmt() const { return ObStmt::is_dml_write_stmt(stmt_type_); }
   inline bool should_add_baseline() const {
     return (ObStmt::is_dml_stmt(stmt_type_)
             && (stmt::T_INSERT != stmt_type_ || is_insert_select_)
-            && (stmt::T_REPLACE != stmt_type_ || is_insert_select_));
+            && (stmt::T_REPLACE != stmt_type_ || is_insert_select_)
+            // TODO:@yibo inner sql 先不用SPM? pl里面的执行的SQL也是inner sql,
+            && !is_inner_sql_
+            && !is_batch_params_execute_
+            // TODO:@yibo batch multi stmt relay get_plan to init some structure. But spm may not enter
+            // get_plan. Now we disable spm when batch multi stmt exists.
+            && !is_remote_plan()
+            && is_dep_base_table());
   }
   inline bool is_plain_select() const
   {
@@ -722,7 +730,8 @@ public:
   bool use_rich_format_;
   ObSubSchemaCtx subschema_ctx_;
   bool disable_auto_memory_mgr_;
-
+  bool is_inner_sql_;
+  bool is_batch_params_execute_;
 private:
   common::ObFixedArray<ObLocalSessionVar, common::ObIAllocator> all_local_session_vars_;
 public:

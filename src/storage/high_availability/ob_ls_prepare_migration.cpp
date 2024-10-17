@@ -27,6 +27,7 @@ using namespace common;
 using namespace share;
 using namespace storage;
 
+ERRSIM_POINT_DEF(PREPARE_START_RUNNING_FAILED);
 /******************ObLSMigrationPrepareCtx*********************/
 ObLSPrepareMigrationCtx::ObLSPrepareMigrationCtx()
   : ObIHADagNetCtx(),
@@ -175,6 +176,18 @@ int ObLSPrepareMigrationDagNet::start_running_for_migration_()
     LOG_WARN("failed to add initial dag into dag net", K(ret));
   } else if (OB_FAIL(initial_dag->create_first_task())) {
     LOG_WARN("failed to create first task", K(ret));
+  }
+
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = PREPARE_START_RUNNING_FAILED ? : OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        STORAGE_LOG(ERROR, "fake PREPARE_START_RUNNING_FAILED", K(ret));
+      }
+    }
+#endif
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(scheduler->add_dag(initial_dag))) {
     LOG_WARN("failed to add initial dag", K(ret), K(*initial_dag));
     if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
@@ -192,6 +205,12 @@ int ObLSPrepareMigrationDagNet::start_running_for_migration_()
     scheduler->free_dag(*initial_dag); // contain reset_children
   }
 
+  if (OB_FAIL(ret)) {
+    const bool need_retry = false;
+    if (OB_SUCCESS != (tmp_ret = ctx_.set_result(ret, need_retry))) {
+      LOG_ERROR("failed to set migration ctx result", K(ret), K(tmp_ret), K(ctx_));
+    }
+  }
   return ret;
 }
 

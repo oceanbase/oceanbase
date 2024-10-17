@@ -1840,8 +1840,6 @@ int ObLogicalOperator::allocate_expr_pre(ObAllocExprContext &ctx)
     LOG_WARN("failed to extract const exprs", K(ret));
   } else if (OB_FAIL(add_exprs_to_ctx(ctx, op_exprs_))) {
     LOG_WARN("failed to add exprs to ctx", K(ret));
-  } else if (OB_FAIL(force_pushdown_exprs(ctx))) {
-    LOG_WARN("failed to pushdown exprs", K(ret));
   } else {
     LOG_TRACE("succeed to allocate expr pre", K(id_), K(op_exprs_.count()),
         K(op_exprs_), K(get_name()), K(is_plan_root()));
@@ -2242,20 +2240,28 @@ int ObLogicalOperator::find_producer_id_for_shared_expr(const ObRawExpr *expr,
 }
 
 // check whether need pushdown expr according to the plan tree structure
-int ObLogicalOperator::check_need_pushdown_expr(const bool producer_id,
+int ObLogicalOperator::check_need_pushdown_expr(const uint64_t producer_id,
                                                 bool &need_pushdown)
 {
   int ret = OB_SUCCESS;
-  need_pushdown = true;
+  need_pushdown = false;
   if (producer_id < id_ ) {
-    need_pushdown = false;
+    // do nothing
   } else if (child_.empty()) {
-    need_pushdown = false;
-  } else if (OB_ISNULL(child_.at(0))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (child_.at(0)->is_expr_operator()) {
-    need_pushdown = false;
+    // do nothing
+  } else if (ObLogOpType::LOG_GROUP_BY == get_type() ||
+             ObLogOpType::LOG_SORT == get_type() ||
+             ObLogOpType::LOG_JOIN == get_type() ||
+             ObLogOpType::LOG_DISTINCT == get_type() ||
+             ObLogOpType::LOG_UPDATE == get_type() ||
+             ObLogOpType::LOG_DELETE == get_type() ||
+             ObLogOpType::LOG_INSERT == get_type() ||
+             ObLogOpType::LOG_WINDOW_FUNCTION == get_type() ||
+             ObLogOpType::LOG_SELECT_INTO == get_type() ||
+             ObLogOpType::LOG_TOPK == get_type() ||
+             ObLogOpType::LOG_COUNT == get_type() ||
+             ObLogOpType::LOG_MERGE == get_type()) {
+    need_pushdown = true;
   }
   return ret;
 }
@@ -2272,6 +2278,8 @@ int ObLogicalOperator::check_can_pushdown_expr(const ObRawExpr *expr,
     LOG_WARN("unexpected null expr", K(ret));
   } else if (expr->is_const_expr()) {
     // do nothing
+  } else if (child_.count() > 1 && expr->has_flag(CNT_OP_PSEUDO_COLUMN)) {
+    // do nothing, I have no idea to pushdown the op pseudo column into which child op
   } else if (OB_FAIL(contain_my_fixed_expr(expr, is_contain))) {
     LOG_WARN("failed to check contain my fixed expr", K(ret));
   } else if (!is_contain) {
@@ -2305,28 +2313,6 @@ int ObLogicalOperator::contain_my_fixed_expr(const ObRawExpr *expr,
   return ret;
 }
 
-int ObLogicalOperator::force_pushdown_exprs(ObAllocExprContext &ctx)
-{
-  int ret = OB_SUCCESS;
-  if (ObLogOpType::LOG_SORT != get_type()) {
-    // do nothing
-  } else {
-    ObSEArray<ObRawExpr*, 4> exprs;
-    uint64_t producer_id = OB_INVALID_ID;
-    if (OB_FAIL(static_cast<ObLogSort*>(this)->get_sort_exprs(exprs))) {
-      LOG_WARN("failed to get sort exprs", K(ret));
-    } else if (OB_FAIL(get_pushdown_producer_id(producer_id))) {
-      LOG_WARN("failed to get pushdown producer id", K(ret));
-    } else if (OB_INVALID_ID == producer_id) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unable to get pushdown producer id", K(producer_id), K(ret));
-    } else if (OB_FAIL(add_exprs_to_ctx(ctx, exprs, producer_id))) {
-      LOG_WARN("failed to add exprs to ctx");
-    }
-  }
-  return ret;
-}
-
 int ObLogicalOperator::get_pushdown_producer_id(const ObRawExpr *expr, uint64_t &producer_id)
 {
   int ret = OB_SUCCESS;
@@ -2341,6 +2327,8 @@ int ObLogicalOperator::get_pushdown_producer_id(const ObRawExpr *expr, uint64_t 
     if (OB_ISNULL(node)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null child op", K(ret));
+    } else if (node->is_expr_operator()) {
+      // do nothing
     } else if (!expr->get_relation_ids().is_subset(node->get_table_set())) {
       // do nothing
     } else if (OB_FAIL(get_next_producer_id(node, producer_id))) {

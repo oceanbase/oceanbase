@@ -28,7 +28,7 @@ namespace storage
 {
 void ObPrintTenantMemoryUsage::runTimerTask()
 {
-  GMEMCONF.check_500_tenant_hold(GCONF._ignore_system_memory_over_limit_error);
+  GMEMCONF.check_limit(GCONF._ignore_system_memory_over_limit_error);
   LOG_INFO("=== Run print tenant memory usage task ===");
   ObTenantMemoryPrinter &printer = ObTenantMemoryPrinter::get_instance();
   printer.print_tenant_usage();

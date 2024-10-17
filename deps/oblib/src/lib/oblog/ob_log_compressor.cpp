@@ -265,7 +265,7 @@ void ObLogCompressor::log_compress_loop_()
             }
             snprintf(syslog_file.file_name_, OB_MAX_SYSLOG_FILE_NAME_SIZE, "%s/%s", syslog_dir_, entry->d_name);
             if (stat(syslog_file.file_name_, &stat_info) == -1) {
-              ret = OB_ERR_SYS;
+              ret = OB_FILE_NOT_EXIST;
               LOG_WARN("failed to get file info", K(ret), K(errno), K(syslog_file.file_name_));
               continue;
             }
@@ -308,7 +308,7 @@ void ObLogCompressor::log_compress_loop_()
             }
             snprintf(syslog_file.file_name_, OB_MAX_SYSLOG_FILE_NAME_SIZE, "%s/%s", alert_log_dir_, entry->d_name);
             if (stat(syslog_file.file_name_, &stat_info) == -1) {
-              ret = OB_ERR_SYS;
+              ret = OB_FILE_NOT_EXIST;
               LOG_WARN("failed to get file info", K(ret), K(errno), K(syslog_file.file_name_));
               continue;
             }
@@ -349,7 +349,7 @@ void ObLogCompressor::log_compress_loop_()
               if (log_file_count[i] > min_uncompressed_count_) {
                 int64_t file_size = get_file_size_(compress_files[i]);
                 if (OB_FAIL(compress_single_file_(compress_files[i], src_buf, dest_buf))) {
-                  LOG_ERROR("failed to compress file", K(ret), K(compress_files[i]));
+                  LOG_WARN("failed to compress file", K(ret), K(compress_files[i]));
                 } else {
                   // estimated value
                   total_size -= file_size;
@@ -496,8 +496,8 @@ int ObLogCompressor::compress_single_file_(const char *file_name, char *src_buf,
           if (OB_FAIL(compress_single_block_(dest_buf, dest_size, src_buf, read_size, write_size))) {
             LOG_ERROR("failed to compress syslog block", K(ret));
           } else if (write_size != fwrite(dest_buf, 1, write_size, output_file)) {
-            ret = OB_ERR_SYS;
-            LOG_ERROR("failed to write file", K(ret), K(errno), K(compressed_file_name));
+            ret = OB_FILE_NOT_EXIST;
+            LOG_WARN("failed to write file", K(ret), K(errno), K(compressed_file_name));
           }
         }
         usleep(sleep_us);
@@ -525,8 +525,8 @@ int ObLogCompressor::set_last_modify_time_(const char *file_name, const time_t &
   if (OB_ISNULL(file_name)) {
     ret = OB_INVALID_ARGUMENT;
   } else if (utime(file_name, &newTimes) != 0) {
-    ret = OB_ERR_SYS;
-    LOG_ERROR("failed to set the file's last modified time", K(ret), K(file_name), K(newTime));
+    ret = OB_FILE_NOT_EXIST;
+    LOG_WARN("failed to set the file's last modified time", K(ret), K(strerror(errno)), K(file_name), K(newTime));
   }
 
   return ret;

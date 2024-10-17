@@ -66,7 +66,7 @@ struct ObLoadArgument
                     table_id_(OB_INVALID_INDEX_INT64),
                     is_csv_format_(false),
                     part_level_(share::schema::PARTITION_LEVEL_MAX),
-                    compression_format_(ObLoadCompressionFormat::NONE)
+                    compression_format_(ObCSVGeneralFormat::ObCSVCompression::NONE)
 
   {}
 
@@ -123,7 +123,7 @@ struct ObLoadArgument
   bool is_csv_format_;
   share::schema::ObPartitionLevel part_level_;
   ObLoadFileIterator file_iter_;
-  ObLoadCompressionFormat compression_format_;
+  ObCSVGeneralFormat::ObCSVCompression compression_format_;
 };
 
 struct ObDataInFileStruct

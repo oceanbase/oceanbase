@@ -1754,98 +1754,88 @@ int ObTransformOrExpansion::is_contain_join_cond(const ObDMLStmt *stmt,
   return ret;
 }
 
-int ObTransformOrExpansion::is_match_index(const ObDMLStmt *stmt,
-                                          const ObRawExpr *expr,
-                                          EqualSets &equal_sets,
-                                          ObIArray<ObRawExpr*> &const_exprs,
-                                          bool &is_match)
+// just wanna know this expr may extract query range
+int ObTransformOrExpansion::may_expr_extract_query_range(const ObDMLStmt *stmt,
+                                                         const ObRawExpr *expr,
+                                                         EqualSets &equal_sets,
+                                                         ObIArray<ObRawExpr*> &const_exprs,
+                                                         bool &is_match)
 {
   int ret = OB_SUCCESS;
+  const ObRawExpr *l_expr = NULL;
+  const ObRawExpr *r_expr = NULL;
+  const ObRawExpr *r2_expr = NULL;
+  const ObColumnRefRawExpr *col_expr = NULL;
+  bool is_right_const = false;
   is_match = false;
   if (OB_ISNULL(ctx_) || OB_ISNULL(stmt) || OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null ctx", K(ret));
-  } else if (expr->has_flag(IS_SIMPLE_COND) ||
-             expr->has_flag(IS_RANGE_COND) ||
-             T_OP_IS == expr->get_expr_type()) {
-    ObSEArray<ObRawExpr*, 2> column_exprs;
-    ObColumnRefRawExpr *col_expr = NULL;
-    if (OB_FAIL(ObRawExprUtils::extract_column_exprs(expr, column_exprs))) {
-      LOG_WARN("failed to extrace column exprs", K(ret));
-    } else if (1 != column_exprs.count()) {
-      //do nothing
-    } else if (OB_ISNULL(column_exprs.at(0))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null expr", K(ret));
-    } else if (!column_exprs.at(0)->is_column_ref_expr()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("expect column ref expr", K(*column_exprs.at(0)), K(ret));
-    } else if (OB_FALSE_IT(col_expr = static_cast<ObColumnRefRawExpr*>(column_exprs.at(0)))) {
-    } else if (OB_ISNULL(stmt->get_table_item_by_id(col_expr->get_table_id()))) {
-      //do nothing
-    } else if (OB_FAIL(ObTransformUtils::is_match_index(ctx_->sql_schema_guard_,
-                                                        stmt,
-                                                        col_expr,
-                                                        is_match,
-                                                        &equal_sets,
-                                                        &const_exprs))) {
-      LOG_WARN("failed to check is match index", K(ret));
+  } else if (T_OP_AND == expr->get_expr_type() || T_OP_OR == expr->get_expr_type()) {
+    for (int64_t i = 0; OB_SUCC(ret) && !is_match && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(may_expr_extract_query_range(stmt, expr->get_param_expr(i),
+                                                          equal_sets, const_exprs, is_match)))) {
+        LOG_WARN("failed to check is match index", K(ret));
+      }
     }
-  } else if (T_OP_IN == expr->get_expr_type()) {
-    const ObRawExpr *right_expr = NULL;
-      if (OB_UNLIKELY(2 != expr->get_param_count())) {
+  }
+  if (OB_SUCC(ret) && !is_match) {
+    const ObItemType com_type = expr->get_expr_type();
+    // EQ、NSEQ、LE、LT、GE、GT、NE、IS、IS_NOT
+    if ((T_OP_EQ <= com_type && T_OP_NE >= com_type) || T_OP_IS == com_type || T_OP_IS_NOT == com_type) {
+      if (OB_UNLIKELY(expr->get_param_count() != 2) ||
+          OB_ISNULL(l_expr = expr->get_param_expr(0)) || OB_ISNULL(r_expr = expr->get_param_expr(1))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("in expr should have 2 param", K(expr->get_param_count()), K(ret));
-      } else if (OB_ISNULL(right_expr = expr->get_param_expr(1))) {
+        LOG_WARN("unexpect null expr", K(ret));
+      } else if (T_OP_ROW == l_expr->get_expr_type()) {
+        /* do nothing, may support T_OP_ROW oneday*/
+      } else if (l_expr->is_const_expr()) {
+        l_expr = r_expr;
+        is_right_const = true;
+      } else if (r_expr->is_const_expr()) {
+        is_right_const = true;
+      }
+    } else if (T_OP_IN == com_type || T_OP_NOT_IN == com_type) {
+      if (OB_UNLIKELY(expr->get_param_count() != 2) ||
+          OB_ISNULL(l_expr = expr->get_param_expr(0)) || OB_ISNULL(r_expr = expr->get_param_expr(1))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("null expr", K(ret));
-      } else if (T_OP_ROW == right_expr->get_expr_type()) {
-        bool is_const = true;
-        for (int64_t i = 0;
-             OB_SUCC(ret) && is_const && i < right_expr->get_param_count(); i++) {
-          const ObRawExpr *temp_expr = right_expr->get_param_expr(i);
+        LOG_WARN("unexpect null expr", K(ret));
+      } else if (T_OP_ROW == r_expr->get_expr_type()) {
+        is_right_const = true;
+        for (int64_t i = 0; OB_SUCC(ret) && is_right_const && i < r_expr->get_param_count(); i++) {
+          const ObRawExpr *temp_expr = r_expr->get_param_expr(i);
           if (OB_ISNULL(temp_expr)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("null expr", K(ret));
           } else if (!temp_expr->is_const_expr()) {
-            is_const = false;
-          } else { /*do nothing*/ }
+            is_right_const = false;
+          }
         }
-        const ObColumnRefRawExpr *col_expr = NULL;
-        if (OB_FAIL(ret) || !is_const) {
-          //do nothing
-        } else if (OB_ISNULL(expr->get_param_expr(0))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpect null expr", K(ret));
-        } else if (!expr->get_param_expr(0)->is_column_ref_expr()) {
-          //do nothing
-        } else if (OB_FALSE_IT(col_expr = static_cast<const ObColumnRefRawExpr*>(expr->get_param_expr(0)))) {
-        } else if (OB_ISNULL(stmt->get_table_item_by_id(col_expr->get_table_id()))) {
-          //do nothing
-        } else if (OB_FAIL(ObTransformUtils::is_match_index(ctx_->sql_schema_guard_,
-                                                            stmt,
-                                                            col_expr,
-                                                            is_match,
-                                                            &equal_sets,
-                                                            &const_exprs))) {
-          LOG_WARN("failed to check is match index", K(ret));
-        }
-      } else { /*do nothing*/ }
-  } else if (T_OP_AND == expr->get_expr_type()) {
-    for (int64_t i = 0; OB_SUCC(ret) && !is_match && i < expr->get_param_count(); ++i) {
-      if (OB_FAIL(SMART_CALL(is_match_index(stmt,
-                                            expr->get_param_expr(i),
-                                            equal_sets,
-                                            const_exprs,
-                                            is_match)))) {
+      }
+    } else if (T_OP_BTW == com_type || T_OP_NOT_BTW == com_type || T_OP_LIKE == com_type) {
+      if (OB_UNLIKELY(expr->get_param_count() != 3) || OB_ISNULL(l_expr = expr->get_param_expr(0)) ||
+          OB_ISNULL(r_expr = expr->get_param_expr(1)) || OB_ISNULL(r2_expr = expr->get_param_expr(2))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null expr", K(ret));
+      } else if (r_expr->is_const_expr() && r2_expr->is_const_expr()) {
+        is_right_const = true;
+      }
+    } else if (expr->has_flag(CNT_COLUMN) &&
+               (expr->has_flag(IS_ROWID_SIMPLE_COND) || expr->has_flag(IS_ROWID_RANGE_COND))) {
+      //rowid = const or rowid belong const range can choose primary key.
+      is_match = true;
+    }
+    if (OB_SUCC(ret) && !is_match && is_right_const) {
+      if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(l_expr, l_expr))) {
+        LOG_WARN("failed to get lossless cast expr", K(ret));
+      } else if (!l_expr->is_column_ref_expr()) {
+      } else if (FALSE_IT(col_expr = static_cast<const ObColumnRefRawExpr*>(l_expr))) {
+      } else if (OB_ISNULL(stmt->get_table_item_by_id(col_expr->get_table_id()))) {
+      } else if (OB_FAIL(ObTransformUtils::is_match_index(ctx_->sql_schema_guard_,
+                         stmt, col_expr, is_match, &equal_sets, &const_exprs))) {
         LOG_WARN("failed to check is match index", K(ret));
       }
     }
-  } else if (expr->has_flag(CNT_COLUMN) &&
-             (expr->has_flag(IS_ROWID_SIMPLE_COND) ||
-              expr->has_flag(IS_ROWID_RANGE_COND))) {
-    //rowid = const or rowid belong const range can choose primary key.
-    is_match = true;
   }
   return ret;
 }
@@ -2126,7 +2116,7 @@ int ObTransformOrExpansion::is_condition_valid(const ObDMLStmt *stmt,
       }
 
       if (OB_SUCC(ret) && match_index &&
-          OB_FAIL(is_match_index(stmt, child_expr, equal_sets, const_exprs, match_index))) {
+          OB_FAIL(may_expr_extract_query_range(stmt, child_expr, equal_sets, const_exprs, match_index))) {
         LOG_WARN("failed to check is match index", K(ret));
       }
       if (OB_SUCC(ret) && !has_valid_subquery &&
@@ -2850,40 +2840,58 @@ int ObTransformOrExpansion::is_expected_multi_index_plan(ObLogicalOperator* op,
   int ret = OB_SUCCESS;
   is_valid = true;
   const int64_t N = ctx.expand_exprs_.count();
+  ObSEArray<ObRawExpr*, 4> range_exprs;
   ObSEArray<ObRawExpr*, 4> candi_exprs;
-  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < N; ++i) {
-    candi_exprs.reuse();
-    if (OB_FAIL(get_candi_match_index_exprs(ctx.expand_exprs_.at(i), candi_exprs))) {
-      LOG_WARN("failed to get candi match index exprs", K(ret));
-    } else if (OB_FAIL(remove_filter_exprs(op, candi_exprs))) {
-      LOG_WARN("failed to remove filter exprs", K(ret));
-    } else if (candi_exprs.empty()) {
-      is_valid = false;
+  ObSEArray<ObRawExpr*, 4> result_exprs;
+  if (OB_FAIL(get_range_exprs(op, range_exprs))) {
+    LOG_WARN("failed to get range exprs", K(ret));
+  } else if (range_exprs.empty()) {
+    is_valid = false;
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < N; ++i) {
+      candi_exprs.reuse();
+      result_exprs.reuse();
+      if (OB_FAIL(get_candi_match_index_exprs(ctx.expand_exprs_.at(i), candi_exprs))) {
+        LOG_WARN("failed to get candi match index exprs", K(ret));
+      } else if (candi_exprs.empty()) {
+        is_valid = false;
+        LOG_TRACE("expr is not candi match index expr", K(*ctx.expand_exprs_.at(i)));
+      } else if (OB_FAIL(ObOptimizerUtil::intersect_exprs(candi_exprs, range_exprs, result_exprs))) {
+        LOG_WARN("failed to intersect exprs", K(ret));
+      } else if (result_exprs.empty()) {
+        is_valid = false;
+      }
     }
   }
+  LOG_TRACE("is expand exprs match range exprs", K(range_exprs), K(ctx.expand_exprs_), K(is_valid));
   return ret;
 }
 
-int ObTransformOrExpansion::remove_filter_exprs(ObLogicalOperator* op,
-                                                ObIArray<ObRawExpr*> &candi_exprs)
+int ObTransformOrExpansion::get_range_exprs(ObLogicalOperator* op,
+                                            ObIArray<ObRawExpr*> &range_exprs)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(op) || candi_exprs.empty()) {
+  if (OB_ISNULL(op)) {
     /* do nothing */
-  } else if (!op->get_filter_exprs().empty() &&
-             OB_FAIL(ObOptimizerUtil::except_exprs(candi_exprs,
-                                                   op->get_filter_exprs(),
-                                                   candi_exprs))) {
-    LOG_WARN("failed to get except exprs", K(ret));
-  } else if (log_op_def::LOG_JOIN == op->get_type() &&
-             !static_cast<ObLogJoin*>(op)->get_join_filters().empty() &&
-             OB_FAIL(ObOptimizerUtil::except_exprs(candi_exprs,
-                                                   static_cast<ObLogJoin*>(op)->get_join_filters(),
-                                                   candi_exprs))) {
-    LOG_WARN("failed to get except exprs", K(ret));
+  } else if (log_op_def::LOG_TABLE_SCAN == op->get_type()) {
+    ObLogTableScan *table_scan = static_cast<ObLogTableScan*>(op);
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_scan->get_range_conditions().count(); i++) {
+      ObRawExpr *range_expr = table_scan->get_range_conditions().at(i);
+      if (OB_ISNULL(range_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("got unexpected null ptr", K(ret));
+      } else if (T_OP_OR == range_expr->get_expr_type() ||
+                 T_OP_AND == range_expr->get_expr_type()) {
+        if (OB_FAIL(ObRawExprUtils::get_exprs_inside_and_or(range_expr, range_exprs))) {
+          LOG_WARN("failed to get all expr inside and or", K(ret));
+        }
+      } else if (OB_FAIL(range_exprs.push_back(range_expr))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && !candi_exprs.empty() && i < op->get_num_of_child(); ++i) {
-      if (OB_FAIL(SMART_CALL(remove_filter_exprs(op->get_child(i), candi_exprs)))) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < op->get_num_of_child(); ++i) {
+      if (OB_FAIL(SMART_CALL(get_range_exprs(op->get_child(i), range_exprs)))) {
         LOG_WARN("failed to remove filter exprs", K(ret));
       }
     }
@@ -2895,21 +2903,18 @@ int ObTransformOrExpansion::is_candi_match_index_exprs(ObRawExpr *expr, bool &re
 {
   int ret = OB_SUCCESS;
   result = true;
+  ObItemType com_type = T_INVALID;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect NULL", K(ret));
-  } else if (expr->has_flag(IS_SIMPLE_COND) || expr->has_flag(IS_RANGE_COND)
-             || T_OP_IN == expr->get_expr_type()) {
+  } else if (FALSE_IT(com_type = expr->get_expr_type())) {
+  } else if ((T_OP_EQ <= com_type && T_OP_NE >= com_type) ||
+             T_OP_IS == com_type || T_OP_IS_NOT == com_type ||
+             T_OP_IN == com_type || T_OP_NOT_IN == com_type ||
+             T_OP_BTW == com_type || T_OP_NOT_BTW || T_OP_LIKE == com_type) {
     if (expr->get_relation_ids().is_empty()) {
       // can not use as range candition
       result = false;
-    }
-  } else if (T_OP_OR == expr->get_expr_type() || T_OP_AND == expr->get_expr_type()) {
-    for (int64_t i = 0; OB_SUCC(ret) && result && i < expr->get_param_count(); ++i) {
-      if (OB_FAIL(SMART_CALL(is_candi_match_index_exprs(expr->get_param_expr(i),
-                                                        result)))) {
-        LOG_WARN("failed to check is candi match index exprs", K(ret));
-      }
     }
   } else if (expr->has_flag(IS_ROWID_SIMPLE_COND) ||
              expr->has_flag(IS_ROWID_RANGE_COND)) {
@@ -2928,7 +2933,7 @@ int ObTransformOrExpansion::get_candi_match_index_exprs(ObRawExpr *expr,
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect NULL", K(ret));
-  } else if (T_OP_AND == expr->get_expr_type()) {
+  } else if (T_OP_AND == expr->get_expr_type() || T_OP_OR == expr->get_expr_type()) {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       if (OB_FAIL(SMART_CALL(get_candi_match_index_exprs(expr->get_param_expr(i),
                                                          candi_exprs)))) {

@@ -892,11 +892,15 @@ int ObTableLoadStore::write(const ObTableLoadTransId &trans_id, int32_t session_
     //  }
     } else if (store_ctx_->enable_pre_sort_) {
       ObTableLoadPreSortWriter pre_sort_writer;
-      if (OB_FAIL(pre_sort_writer.init(ctx_->store_ctx_->pre_sorter_, store_writer))) {
+      if (OB_FAIL(store_ctx_->check_status(ObTableLoadStatusType::LOADING))) {
+        LOG_WARN("fail to check store ctx status", KR(ret));
+      } else if (OB_FAIL(pre_sort_writer.init(ctx_->store_ctx_->pre_sorter_, store_writer,
+                                       store_ctx_->error_row_handler_,
+                                       &(store_ctx_->data_store_table_ctx_->table_data_desc_)))) {
         LOG_WARN("fail to init pre sort writer", KR(ret));
       } else if (OB_FAIL(pre_sort_writer.write(session_id, row_array))) {
         LOG_WARN("fail to write to chunk");
-      } else if (OB_FAIL(pre_sort_writer.close_chunk())) {
+      } else if (OB_FAIL(pre_sort_writer.close())) {
         LOG_WARN("fail to push chunk", KR(ret));
       }
     } else {

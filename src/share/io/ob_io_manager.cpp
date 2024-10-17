@@ -1288,7 +1288,7 @@ int ObTenantIOManager::alloc_and_init_result(const ObIOInfo &info, ObIOResult *&
 }
 
 //prepare request and result
-int ObTenantIOManager::alloc_req_and_result(const ObIOInfo &info, ObIOHandle &handle, ObIORequest *&io_request)
+int ObTenantIOManager::alloc_req_and_result(const ObIOInfo &info, ObIOHandle &handle, ObIORequest *&io_request, RequestHolder &req_holder)
 {
   int ret = OB_SUCCESS;
   ObIOResult *io_result = nullptr;
@@ -1334,9 +1334,13 @@ int ObTenantIOManager::alloc_req_and_result(const ObIOInfo &info, ObIOHandle &ha
     LOG_WARN("init io request failed", K(ret), KP(io_request));
   }
 
-  if (OB_FAIL(ret) && OB_NOT_NULL(io_request)) {
-    //free io_request manually
-    io_request->free();
+  if (OB_FAIL(ret)) {
+    if (OB_NOT_NULL(io_request)) {
+      //free io_request manually
+      io_request->free();
+    }
+  } else {
+    req_holder.hold(io_request);
   }
   return ret;
 }
@@ -1346,6 +1350,7 @@ int ObTenantIOManager::inner_aio(const ObIOInfo &info, ObIOHandle &handle)
   int ret = OB_SUCCESS;
   handle.reset();
   ObIORequest *req = nullptr;
+  RequestHolder req_holder;
   logservice::coordinator::ObFailureDetector *detector = MTL(logservice::coordinator::ObFailureDetector *);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -1357,7 +1362,7 @@ int ObTenantIOManager::inner_aio(const ObIOInfo &info, ObIOHandle &handle)
     ret = OB_DISK_HUNG;
     // for temporary positioning issue, get lbt of log replay
     LOG_DBA_ERROR(OB_DISK_HUNG, "msg", "disk has fatal error");
-  } else if (OB_FAIL(alloc_req_and_result(info, handle, req))) {
+  } else if (OB_FAIL(alloc_req_and_result(info, handle, req, req_holder))) {
     LOG_WARN("pre set io args failed", K(ret), K(info));
   } else if (OB_FAIL(io_scheduler_->schedule_request(*req))) {
     LOG_WARN("schedule request failed", K(ret), KPC(req));
@@ -1365,9 +1370,6 @@ int ObTenantIOManager::inner_aio(const ObIOInfo &info, ObIOHandle &handle)
   if (OB_FAIL(ret)) {
     // io callback should be freed by caller
     handle.clear_io_callback();
-    if (OB_NOT_NULL(req)) {
-      req->free();
-    }
     handle.reset();
   }
   return ret;
@@ -1378,6 +1380,7 @@ int ObTenantIOManager::detect_aio(const ObIOInfo &info, ObIOHandle &handle)
   int ret = OB_SUCCESS;
   handle.reset();
   ObIORequest *req = nullptr;
+  RequestHolder req_holder;
   ObDeviceChannel *device_channel = nullptr;
   ObTimeGuard time_guard("detect_aio_request", 100000); //100ms
 
@@ -1390,7 +1393,7 @@ int ObTenantIOManager::detect_aio(const ObIOInfo &info, ObIOHandle &handle)
   } else if (OB_UNLIKELY(info.callback_ != nullptr || info.user_data_buf_ != nullptr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("callback and user_data_bug should be nullptr", K(ret), K(info.callback_));
-  } else if (OB_FAIL(alloc_req_and_result(info, handle, req))) {
+  } else if (OB_FAIL(alloc_req_and_result(info, handle, req, req_holder))) {
     LOG_WARN("pre set io args failed", K(ret), K(info));
   } else if (OB_FAIL(req->prepare())) {
     LOG_WARN("prepare io request failed", K(ret), K(req));
@@ -1421,9 +1424,6 @@ int ObTenantIOManager::detect_aio(const ObIOInfo &info, ObIOHandle &handle)
     LOG_INFO("submit_detect_request cost too much time", K(ret), K(time_guard), K(req));
   }
   if (OB_FAIL(ret)) {
-    if (OB_NOT_NULL(req)) {
-      req->free();
-    }
     handle.reset();
   }
   return ret;
@@ -1991,7 +1991,7 @@ int ObTenantIOManager::print_io_status()
     for (int64_t i = 0; i < info.count(); ++i) {
       if (OB_TMP_FAIL(transform_usage_index_to_group_config_index(i, group_config_index))) {
         continue;
-      } else if (group_config_index >= io_config_.group_configs_.count() || info.count() != failed_req_info.count() || info.count() != mem_stat.group_mem_infos_.count()) {
+      } else if (group_config_index >= io_config_.group_configs_.count() || io_clock_.get_group_clocks_count() || info.count() != failed_req_info.count() || info.count() != mem_stat.group_mem_infos_.count()) {
         continue;
       }
       mode = static_cast<ObIOMode>(group_config_index % MODE_COUNT);

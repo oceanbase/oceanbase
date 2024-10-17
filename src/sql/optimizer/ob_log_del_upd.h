@@ -335,7 +335,7 @@ public:
   int replace_dml_info_exprs(
         ObRawExprReplacer &replacer,
         const ObIArray<IndexDMLInfo *> &index_dml_infos);
-  virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
+  virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override = 0;
   virtual int check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)override;
 protected:
   virtual int generate_rowid_expr_for_trigger() = 0;
@@ -359,6 +359,9 @@ protected:
                                     const ObIArray<ObRawExpr *> &dml_new_values,
                                     ObRawExpr *cur_value,
                                     ObRawExpr *&new_value);
+  int is_dml_fixed_expr(const ObRawExpr *expr,
+                        const ObIArray<IndexDMLInfo *> &index_dml_infos,
+                        bool &is_fixed);
 
   static int get_update_exprs(const IndexDMLInfo &dml_info,
                               ObIArray<ObRawExpr *> &dml_columns,

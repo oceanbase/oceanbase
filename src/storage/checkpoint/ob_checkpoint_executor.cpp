@@ -130,16 +130,17 @@ void ObCheckpointExecutor::get_min_rec_scn(int &log_type, SCN &min_rec_scn) cons
   }
 }
 
-inline void get_min_rec_scn_service_type_by_index_(int index, char* service_type)
+inline void get_min_rec_scn_service_type_by_index_(int index, char* service_type, const int64_t str_len)
 {
   int ret = OB_SUCCESS;
   if (index == 0) {
-    strncpy(service_type ,"MAX_DECIDED_SCN", common::MAX_SERVICE_TYPE_BUF_LENGTH);
-  } else if (OB_FAIL(log_base_type_to_string(ObLogBaseType(index),
-                     service_type,
-                     common::MAX_SERVICE_TYPE_BUF_LENGTH))) {
+    strncpy(service_type ,"MAX_DECIDED_SCN", str_len);
+  } else if (OB_FAIL(log_base_type_to_string(ObLogBaseType(index), service_type, str_len))) {
     STORAGE_LOG(WARN, "log_base_type_to_string failed", K(ret), K(index));
-    strncpy(service_type ,"UNKNOWN_SERVICE_TYPE", common::MAX_SERVICE_TYPE_BUF_LENGTH);
+    strncpy(service_type ,"UNKNOWN_SERVICE_TYPE", str_len);
+  }
+  if (str_len > 0) {
+    service_type[str_len - 1] = '\0';
   }
 }
 
@@ -175,9 +176,10 @@ int ObCheckpointExecutor::update_clog_checkpoint()
       } else {
         // used to record which handler provide the smallest rec_scn
         int min_rec_scn_service_type_index = 0;
-        char service_type[common::MAX_SERVICE_TYPE_BUF_LENGTH];
+        const int64_t buf_len = common::MAX_SERVICE_TYPE_BUF_LENGTH;
+        char service_type[buf_len];
         get_min_rec_scn(min_rec_scn_service_type_index, checkpoint_scn);
-        get_min_rec_scn_service_type_by_index_(min_rec_scn_service_type_index, service_type);
+        get_min_rec_scn_service_type_by_index_(min_rec_scn_service_type_index, service_type, buf_len);
 
         const SCN checkpoint_scn_in_ls_meta = ls_->get_clog_checkpoint_scn();
         const share::ObLSID ls_id = ls_->get_ls_id();

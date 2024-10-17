@@ -98,7 +98,6 @@ int ObLinkedMacroBlockWriter::write_block(
     write_info.size_ = buf_len;
     write_info.buffer_ = buf;
     write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
-    write_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
     write_info.io_desc_.set_sys_module_id(ObIOModule::LINKED_MACRO_BLOCK_IO);
     write_info.io_desc_.set_sealed();
     write_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;

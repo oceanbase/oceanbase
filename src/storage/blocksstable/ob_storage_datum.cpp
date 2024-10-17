@@ -232,12 +232,12 @@ int ObStorageDatumUtils::inner_init(
                                                                       precision);
     if (OB_UNLIKELY(nullptr == basic_funcs
                     || nullptr == basic_funcs->null_last_cmp_
-                    || nullptr == basic_funcs->murmur_hash_)) {
+                    || nullptr == basic_funcs->murmur_hash_v2_)) {
       ret = OB_ERR_SYS;
       STORAGE_LOG(ERROR, "Unexpected null basic funcs", K(ret), K(col_desc));
     } else {
       cmp_func.cmp_func_ = is_null_last ? basic_funcs->null_last_cmp_ : basic_funcs->null_first_cmp_;
-      hash_func.hash_func_ = basic_funcs->murmur_hash_;
+      hash_func.hash_func_ = basic_funcs->murmur_hash_v2_;
       if (OB_FAIL(hash_funcs_.push_back(hash_func))) {
         STORAGE_LOG(WARN, "Failed to push back hash func", K(ret), K(i), K(col_desc));
       } else if (is_ascending) {
@@ -252,11 +252,11 @@ int ObStorageDatumUtils::inner_init(
   }
   if (OB_SUCC(ret)) {
     sql::ObExprBasicFuncs *basic_funcs = ObDatumFuncs::get_basic_func(ObExtendType, CS_TYPE_BINARY);
-    if (OB_UNLIKELY(nullptr == basic_funcs || nullptr == basic_funcs->murmur_hash_)) {
+    if (OB_UNLIKELY(nullptr == basic_funcs || nullptr == basic_funcs->murmur_hash_v2_)) {
       ret = OB_ERR_SYS;
       STORAGE_LOG(ERROR, "Unexpected null basic funcs for extend type", K(ret));
     } else {
-      ext_hash_func_.hash_func_ = basic_funcs->murmur_hash_;
+      ext_hash_func_.hash_func_ = basic_funcs->murmur_hash_v2_;
       rowkey_cnt_ = mv_rowkey_col_cnt;
       is_inited_ = true;
     }

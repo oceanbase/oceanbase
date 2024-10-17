@@ -23,9 +23,11 @@
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 
+OB_SERIALIZE_MEMBER(ObJoinFilterNdv, valid_, count_);
 OB_SERIALIZE_MEMBER((ObJoinFilterCountRowPieceMsg, ObDatahubPieceMsg), each_sqc_has_full_data_, sqc_id_,
-                    total_rows_);
-OB_SERIALIZE_MEMBER((ObJoinFilterCountRowWholeMsg, ObDatahubWholeMsg), total_rows_);
+                    total_rows_, ndv_info_);
+OB_SERIALIZE_MEMBER((ObJoinFilterCountRowWholeMsg, ObDatahubWholeMsg), total_rows_, ndv_info_);
+
 
 int ObJoinFilterCountRowPieceMsgListener::on_message(ObJoinFilterCountRowPieceMsgCtx &piece_ctx,
                                                      common::ObIArray<ObPxSqcMeta *> &sqcs,

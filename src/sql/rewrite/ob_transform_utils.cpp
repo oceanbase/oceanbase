@@ -16412,7 +16412,12 @@ int ObTransformUtils::check_stmt_can_trans_as_exists(ObSelectStmt *stmt,
         match_index = has_index_matched;
         is_valid = (!need_match_index || has_index_matched) && is_valid;
       }
+    } else if (is_correlated) {
+      // If IN set subquery is already correlated, it can be beneficial
+      // to transform IN to EXISTS without introducing new correlated subquery
+      is_valid = true;
     } else {
+      // Otherwise, transform if one of set branches has a matching index
       is_valid = true;
       for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < stmt->get_set_query().count(); ++i) {
         has_index_matched = false;

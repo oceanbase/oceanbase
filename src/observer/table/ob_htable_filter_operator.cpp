@@ -1624,6 +1624,14 @@ int ObHTableFilterOperator::get_next_result_internal(ResultType *&next_result)
       // fetch next row
       continue;
     }
+
+    // if only check exist, just return row_count_ as 1
+    if (check_existence_only_) {
+      one_result_->save_row_count_only(1);
+      ret = OB_ITER_END;
+      break;
+    }
+
     /* @todo check batch limit and size limit */
     // We have got one hbase row, store it to this batch
     if (OB_FAIL(next_result->add_all_row(*htable_row))) {

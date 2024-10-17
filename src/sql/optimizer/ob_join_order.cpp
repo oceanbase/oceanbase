@@ -3514,7 +3514,17 @@ int ObJoinOrder::revise_output_rows_after_creating_path(PathHelper &helper,
 {
   int ret = OB_SUCCESS;
   AccessPath *path = NULL;
-  if (!helper.is_inner_path_) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < access_paths.count(); ++i) {
+    if (OB_ISNULL(path = access_paths.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("access path is null", K(ret), K(i));
+    } else if (path->is_false_range()) {
+      path->set_output_row_count(0.0);
+    }
+  }
+  if (OB_FAIL(ret)) {
+    // dp nothing
+  } else if (!helper.is_inner_path_) {
     LOG_TRACE("OPT:output row count before revising", K(output_rows_));
     // get the minimal output row count
     int64_t maximum_count = -1;
@@ -3522,7 +3532,7 @@ int ObJoinOrder::revise_output_rows_after_creating_path(PathHelper &helper,
     if (helper.est_method_ & EST_STORAGE) {
       bool contain_false_range_path = false;
       for (int64_t i = 0; OB_SUCC(ret) && !contain_false_range_path && i < access_paths.count(); ++i) {
-        AccessPath *path = access_paths.at(i);
+        path = access_paths.at(i);
         if (OB_ISNULL(path)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("null path", K(ret));
@@ -6333,8 +6343,8 @@ int AccessPath::re_estimate_cost(const EstimateCostInfo &param,
         }
         phy_query_range_row_count = std::min(orign_phy_query_range_row_count, phy_query_range_row_count);
         logical_query_range_row_count = std::min(orign_logical_query_range_row_count, logical_query_range_row_count);
-        card = std::min(param.need_row_count_, card);
       }
+      card = std::min(param.need_row_count_, card);
     }
     est_cost_info.phy_query_range_row_count_ = phy_query_range_row_count;
     est_cost_info.logical_query_range_row_count_ = logical_query_range_row_count;
@@ -13402,7 +13412,8 @@ int ObJoinOrder::fill_path_index_meta_info(const uint64_t table_id,
         } else if (OB_ISNULL(table_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("index schema should not be null", K(ret), K(index_id));
-        } else if (OB_FAIL(init_est_info_for_index(index_id,
+        } else if (OB_FAIL(init_est_info_for_index(table_id,
+                                                   index_id,
                                                    index_meta_info,
                                                    ap->table_partition_info_,
                                                    ap->is_global_index_ ? *index_schema : *table_schema,
@@ -13730,7 +13741,8 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
   return ret;
 }
 
-int ObJoinOrder::init_est_info_for_index(const uint64_t index_id,
+int ObJoinOrder::init_est_info_for_index(const uint64_t table_id,
+                                         const uint64_t index_id,
                                          ObIndexMetaInfo &index_meta_info,
                                          ObTablePartitionInfo *table_partition_info,
                                          const share::schema::ObTableSchema &index_schema,
@@ -13740,6 +13752,7 @@ int ObJoinOrder::init_est_info_for_index(const uint64_t index_id,
   has_opt_stat = false;
   ObSQLSessionInfo *session_info = NULL;
   ObSchemaGetterGuard *schema_guard = NULL;
+
   if (OB_UNLIKELY(OB_INVALID_ID == index_id) ||
       OB_ISNULL(table_partition_info) ||
       OB_ISNULL(session_info = OPT_CTX.get_session_info()) ||
@@ -13765,6 +13778,7 @@ int ObJoinOrder::init_est_info_for_index(const uint64_t index_id,
       bool use_global = false;
       ObSEArray<int64_t, 1> global_part_ids;
       double scale_ratio = 1.0;
+      double index_rows = 0.;
       if (OPT_CTX.use_default_stat()) {
         // do nothing
       } else if (OB_ISNULL(OPT_CTX.get_opt_stat_manager())) {
@@ -13800,7 +13814,6 @@ int ObJoinOrder::init_est_info_for_index(const uint64_t index_id,
       }
       LOG_TRACE("statistics (0: default, 1: user-gathered, 2: user_gathered_global_stat)",
                 K(stat_type), K(index_id), K(all_used_part_id));
-
       if (OB_SUCC(ret) && has_opt_stat) {
         ObGlobalTableStat stat;
         if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->get_table_stat(session_info->get_effective_tenant_id(),
@@ -13815,7 +13828,70 @@ int ObJoinOrder::init_est_info_for_index(const uint64_t index_id,
                                                       static_cast<double>(stat.get_avg_data_size() * all_used_part_id.count())
                                                       / origin_part_cnt;
           index_meta_info.index_micro_block_count_ = stat.get_micro_block_count();
+          index_rows = stat.get_row_count();
           LOG_TRACE("index table, use statistics", K(index_meta_info), K(stat));
+        }
+      }
+      if (OB_SUCC(ret) && has_opt_stat && index_schema.is_global_index_table()) {
+        OptTableMeta* table_meta = NULL;
+        ObSEArray<ObColumnRefRawExpr*, 16> column_exprs;
+        ObSEArray<uint64_t, 16> column_ids;
+        if (OB_FAIL(get_plan()->get_column_exprs(table_id, column_exprs))) {
+          LOG_WARN("failed to get column exprs", K(ret));
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs.count(); ++i) {
+          ObColumnRefRawExpr *col_expr = column_exprs.at(i);
+          if (OB_ISNULL(col_expr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null col expr", K(ret));
+          } else if (!col_expr->is_hidden_column()) {
+            // do nothing
+          } else if (OB_FAIL(column_ids.push_back(col_expr->get_column_id()))) {
+            LOG_WARN("failed to push back column id", K(ret));
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (column_ids.empty()) {
+          // do nothing
+        } else if (OB_ISNULL(table_meta = get_plan()->get_basic_table_metas()
+                                                     .get_table_meta_by_table_id(table_id))) {
+          // do nothing
+        } else {
+          double rows = table_meta->get_rows();
+          double function_index_scale_ratio = 1.0;
+          if (rows < index_rows) {
+            function_index_scale_ratio = rows / index_rows;
+          }
+          for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
+            int64_t global_ndv = 0;
+            int64_t num_null = 0;
+            ObGlobalColumnStat stat;
+            OptColumnMeta *col_meta = table_meta->get_column_meta(column_ids.at(i));
+            if (col_meta != NULL) {
+              if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->get_column_stat(OPT_CTX.get_session_info()->get_effective_tenant_id(),
+                                                                          index_id,
+                                                                          all_used_part_id,
+                                                                          column_ids.at(i),
+                                                                          global_part_ids,
+                                                                          index_rows,
+                                                                          function_index_scale_ratio,
+                                                                          stat,
+                                                                          &OPT_CTX.get_allocator()))) {
+                LOG_WARN("failed to get column stats", K(ret));
+              } else if (OB_FAIL(OptTableMeta::refine_column_stat(stat, rows, *col_meta))) {
+                LOG_WARN("failed to refine column stat", K(ret));
+              } else {
+                global_ndv = col_meta->get_ndv();
+                num_null = col_meta->get_num_null();
+                col_meta->set_ndv(rows < global_ndv ? rows : global_ndv);
+                col_meta->set_num_null(rows < num_null ? rows : num_null);
+                col_meta->set_avg_len(stat.avglen_val_);
+                col_meta->set_min_value(stat.min_val_);
+                col_meta->set_max_value(stat.max_val_);
+                col_meta->set_min_max_inited(true);
+              }
+            }
+          }
         }
       }
     }

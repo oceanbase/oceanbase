@@ -1047,7 +1047,6 @@ int ObSharedObjectReaderWriter::inner_write_block(
       object_info.mtl_tenant_id_ = MTL_ID();
       object_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
       object_info.io_desc_.set_unsealed();
-      object_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
       object_info.io_desc_.set_sys_module_id(ObIOModule::SHARED_BLOCK_RW_IO);
       object_info.ls_epoch_id_ = write_info.ls_epoch_;
 
@@ -1177,7 +1176,6 @@ int ObSharedObjectReaderWriter::async_read(
 #ifdef OB_BUILD_SHARED_STORAGE
   object_read_info.ls_epoch_id_ = read_info.ls_epoch_;
 #endif
-  object_read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
   object_read_info.io_desc_.set_sys_module_id(ObIOModule::SHARED_BLOCK_RW_IO);
   object_read_info.io_callback_ = read_info.io_callback_;
   object_read_info.mtl_tenant_id_ = MTL_ID();

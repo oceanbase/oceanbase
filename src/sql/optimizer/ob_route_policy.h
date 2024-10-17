@@ -178,7 +178,8 @@ public:
   int calculate_replica_priority(const ObAddr &local_server,
                                  const share::ObLSID &ls_id,
                                  common::ObIArray<CandidateReplica>& candi_replicas,
-                                 ObRoutePolicyCtx &ctx);
+                                 ObRoutePolicyCtx &ctx,
+                                 bool is_inner_table = false);
   int init_candidate_replicas(common::ObIArray<CandidateReplica> &candi_replicas);
   int select_replica_with_priority(const ObRoutePolicyCtx &route_policy_ctx,
                                    const common::ObIArray<CandidateReplica> &replica_array,

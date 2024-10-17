@@ -509,6 +509,10 @@ int ObMacroBlockWriter::open(
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid macro block writer input argument.", K(ret), K(data_store_desc), K(parallel_idx),
       K(macro_seq_param), K(pre_warm_param), KP(validator));
+  } else if (OB_UNLIKELY(nullptr != callback && !is_need_macro_buffer_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument, ddl callback should used with double buffer",
+             K(ret), KP(callback), K(is_need_macro_buffer_));
   } else {
     ObSSTableIndexBuilder *sstable_index_builder = data_store_desc.sstable_index_builder_;
     object_cleaner_ = &object_cleaner;
@@ -572,7 +576,7 @@ int ObMacroBlockWriter::open(
     }
     if (OB_FAIL(ret)) {
     } else if (OB_NOT_NULL(sstable_index_builder)) {
-      if (OB_FAIL(sstable_index_builder->new_index_builder(builder_, data_store_desc, allocator_, macro_seq_param, pre_warm_param))) {
+      if (OB_FAIL(sstable_index_builder->new_index_builder(builder_, data_store_desc, allocator_, macro_seq_param, pre_warm_param, callback))) {
         STORAGE_LOG(WARN, "fail to alloc index builder", K(ret));
       } else if (OB_ISNULL(builder_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1559,7 +1563,6 @@ int ObMacroBlockWriter::check_write_complete(const MacroBlockId &macro_block_id)
   read_info.size_ = OB_STORAGE_OBJECT_MGR.get_macro_block_size();
   read_info.io_desc_.set_mode(ObIOMode::READ);
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
-  read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
   read_info.io_desc_.set_sys_module_id(ObIOModule::SSTABLE_MACRO_BLOCK_WRITE_IO);
   read_info.io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
   read_info.macro_block_id_ = macro_block_id;
@@ -1601,7 +1604,8 @@ int ObMacroBlockWriter::wait_io_finish(ObStorageObjectHandle &macro_handle, ObMa
     macro_handle.reset();
   } else {
     if (!macro_handle.is_empty()) {
-      FLOG_INFO("wait io finish", K(macro_handle.get_macro_id()), K(data_store_desc_->get_table_cg_idx()), K(is_normal_cg));
+      FLOG_INFO("wait io finish", K(macro_handle.get_macro_id()), K(data_store_desc_->get_table_cg_idx()),
+                K(is_normal_cg), KP(macro_block));
       int64_t block_io_us;
       if (OB_SUCCESS == macro_handle.get_io_time_us(block_io_us)) {
         merge_block_info_.block_io_us_ += block_io_us;

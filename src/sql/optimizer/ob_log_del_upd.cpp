@@ -1696,15 +1696,21 @@ int ObLogDelUpd::print_used_hint(PlanText &plan_text)
   return ret;
 }
 
-int ObLogDelUpd::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
+int ObLogDelUpd::is_dml_fixed_expr(const ObRawExpr *expr,
+                                   const ObIArray<IndexDMLInfo *> &index_dml_infos,
+                                   bool &is_fixed)
 {
   int ret = OB_SUCCESS;
-  const ObIArray<IndexDMLInfo *> &index_dml_infos = get_index_dml_infos();
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && !is_fixed && i < index_dml_infos.count(); ++i) {
-    if (OB_ISNULL(index_dml_infos.at(i))) {
+    const IndexDMLInfo *index_dml_info = index_dml_infos.at(i);
+    if (OB_ISNULL(index_dml_info)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("index dml info is null", K(ret));
-    } else if (OB_FAIL(index_dml_infos.at(i)->is_new_row_expr(expr, is_fixed))) {
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(index_dml_info->is_new_row_expr(expr, is_fixed))) {
       LOG_WARN("failed to check is new row expr", K(ret));
     }
   }

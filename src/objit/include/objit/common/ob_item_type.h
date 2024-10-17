@@ -510,6 +510,8 @@ typedef enum ObItemType
   T_FUN_SYS_SM4_DECRYPT = 778,
   T_FUN_SYS_ENHANCED_AES_ENCRYPT = 779,
   T_FUN_SYS_ENHANCED_AES_DECRYPT = 780,
+  T_FUNC_SYS_MYSQL_PROC_INFO = 781,
+  T_FUN_SYS_GET_MYSQL_ROUTINE_PARAMETER_TYPE_STR = 782,
   ///< @note add new mysql only function type before this line
   T_MYSQL_ONLY_SYS_MAX_OP = 800,
 
@@ -868,6 +870,8 @@ typedef enum ObItemType
   T_FUN_SYS_VECTOR_DISTANCE = 1744,
   T_FUNC_SYS_ARRAY_CONTAINS = 1745,
   T_FUN_SYS_NEGATIVE_INNER_PRODUCT = 1746,
+  T_FUNC_SYS_ARRAY_OVERLAPS = 1747,
+  T_FUNC_SYS_ARRAY_CONTAINS_ALL = 1748,
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table
@@ -954,6 +958,7 @@ typedef enum ObItemType
   T_INNER_WF_AGGR_STAUTS = 3011,
   T_PSEUDO_ROW_TRANS_INFO_COLUMN = 3012, // trans_info, only for defensive check
   T_PSEUDO_IDENTIFY_SEQ = 3013,
+  T_PSEUDO_ROLLUP_GROUPING_ID = 3014,
   T_PSEUDO_GROUP_PARAM = 3040,
   T_PSEUDO_EXTERNAL_FILE_COL = 3041,
   T_PSEUDO_RELEVANCE_SCORE = 3042, // relecance score for sparse retireval
@@ -2582,7 +2587,7 @@ typedef enum ObItemType
   T_MICRO_INDEX_CLUSTERED = 4728,
 
   // Parquet related
-  T_PER_ROW_GROUP_SIZE = 4729,
+  T_ROW_GROUP_SIZE = 4729,
   T_COMPRESSION_ALGORITHM = 4730,
 
   // Erase micro cache
@@ -2605,6 +2610,18 @@ typedef enum ObItemType
 
   T_PSEUDO_OLD_NEW_COL = 4742,
 
+  T_TRANSFORM_DISTINCT_AGG = 4743,
+  T_NO_TRANSFORM_DISTINCT_AGG = 4744,
+
+  T_UNNEST_EXPRESSION = 4745,
+  // orc related
+  T_STRIPE_SIZE = 4746,
+  T_COMPRESSION_BLOCK_SIZE = 4747,
+  T_COLUMN_BLOOM_FILTER = 4748,
+  T_ROW_INDEX_STRIDE = 4749,
+
+  T_GRANT_PROXY = 4750,
+  T_REVOKE_PROXY = 4751,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

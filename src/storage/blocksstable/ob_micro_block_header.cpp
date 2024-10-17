@@ -318,7 +318,7 @@ int ObMicroBlockHeader::deserialize(const char *buf, int64_t buf_len, int64_t &p
 
 bool ObMicroBlockHeader::is_contain_hash_index() const
 {
-  return version_ >= MICRO_BLOCK_HEADER_VERSION_2 && contains_hash_index_ == 1;
+  return version_ >= MICRO_BLOCK_HEADER_VERSION_3 && contains_hash_index_ == 1;
 }
 
 }//end namespace blocksstable

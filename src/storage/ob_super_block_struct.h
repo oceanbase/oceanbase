@@ -24,6 +24,9 @@
 
 namespace oceanbase
 {
+namespace blocksstable {
+class ObStorageObjectOpt;
+}
 namespace storage
 {
 
@@ -284,18 +287,25 @@ public:
 struct ObActiveTabletItem
 {
 public:
-  ObActiveTabletItem() : tablet_id_(), tablet_meta_version_(0) {}
-  ObActiveTabletItem(const common::ObTabletID tablet_id, const int64_t tablet_meta_version)
-    : tablet_id_(tablet_id), tablet_meta_version_(tablet_meta_version) {}
+  ObActiveTabletItem();
+  ObActiveTabletItem(const common::ObTabletID tablet_id, const int64_t union_id);
+  bool is_valid() const;
+  int64_t get_transfer_seq() const { return meta_transfer_seq_; }
+  uint64_t get_tablet_meta_version() const { return meta_version_id_; }
 
-  bool is_valid() const { return tablet_id_.is_valid() && tablet_meta_version_ > 0; }
-
-  TO_STRING_KV(K_(tablet_id), K_(tablet_meta_version));
+  TO_STRING_KV(K_(tablet_id), K_(meta_transfer_seq), K_(meta_version_id));
   OB_UNIS_VERSION(1);
 
 public:
   common::ObTabletID tablet_id_;
-  int64_t tablet_meta_version_;
+  union {
+    int64_t union_id_;
+    // for PRIVATE_TABLET_META
+    struct {
+      int64_t meta_transfer_seq_  : blocksstable::MacroBlockId::SF_BIT_TRANSFER_SEQ;
+      uint64_t meta_version_id_   : blocksstable::MacroBlockId::SF_BIT_META_VERSION_ID;
+    };
+  };
 };
 
 struct ObLSActiveTabletArray

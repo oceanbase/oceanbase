@@ -7517,7 +7517,28 @@ def_table_schema(
 # 525: __wr_sql_plan
 # 526: __wr_res_mgr_sysstat
 # 527: __all_kv_redis_table
-# 528: __all_ncomp_dll_v2
+
+all_ncomp_dll_v2 = dict(
+  owner = 'hr351303',
+  table_name = '__all_ncomp_dll_v2',
+  table_id = '528',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('database_id', 'int', 'false'),
+    ('key_id', 'int'),
+    ('compile_db_id', 'int'),
+    ('arch_type', 'varchar:128'),
+    ('build_version', 'varchar:OB_SERVER_VERSION_LENGTH'),
+  ],
+  in_tenant_space = True,
+
+  normal_columns = [
+    ('merge_version', 'int'),
+    ('dll', 'longblob', 'false'),
+  ],
+)
+def_table_schema(**all_ncomp_dll_v2)
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -15160,7 +15181,10 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-# 12506: __all_virtual_ncomp_dll_v2
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12506',
+  table_name = '__all_virtual_ncomp_dll_v2',
+  keywords = all_def_keywords['__all_ncomp_dll_v2']))
 # 12507: __all_virtual_logstore_service_status
 # 12508: __all_virtual_logstore_service_info
 
@@ -15680,7 +15704,9 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15467'
 # 15483: __all_virtual_wr_res_mgr_sysstat
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15484', all_def_keywords['__all_virtual_function_io_stat'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15485', all_def_keywords['__all_virtual_temp_file']))
-# 15486: __all_ncomp_dll_v2
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15486', all_def_keywords['__all_ncomp_dll_v2']))
+# 15487: __all_virtual_logstore_service_status
+# 15488: __all_virtual_logstore_service_info
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -19018,9 +19044,9 @@ def_table_schema(
     TABLET_COUNT,
     FINISH_TABLET_COUNT,
     CASE
-      WHEN FINISH_TABLET_COUNT IS NULL
+      WHEN FINISH_BYTES IS NULL
         THEN NULL
-      ELSE CAST(TRUNCATE((FINISH_TABLET_COUNT / TABLET_COUNT) * 100, 2) AS DECIMAL(6, 2))
+      ELSE CAST(TRUNCATE((FINISH_BYTES / TOTAL_BYTES) * 100, 2) AS DECIMAL(6, 2))
       END AS RESTORE_PROGRESS,
     TOTAL_BYTES,
     CASE
@@ -27430,9 +27456,9 @@ def_table_schema(
     TABLET_COUNT,
     FINISH_TABLET_COUNT,
     CASE
-      WHEN FINISH_TABLET_COUNT IS NULL
+      WHEN FINISH_BYTES IS NULL
         THEN NULL
-      ELSE CAST(TRUNCATE((FINISH_TABLET_COUNT / TABLET_COUNT) * 100, 2) AS DECIMAL(6, 2))
+      ELSE CAST(TRUNCATE((FINISH_BYTES / TOTAL_BYTES) * 100, 2) AS DECIMAL(6, 2))
       END AS RESTORE_PROGRESS,
     TOTAL_BYTES,
     CASE
@@ -37980,6 +38006,9 @@ def_table_schema(
 # 21626 GV$OB_LOGSTORE_SERVICE_INFO
 # 21627 V$OB_LOGSTORE_SERVICE_INFO
 
+
+# 21628: proc
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
@@ -44659,7 +44688,7 @@ def_table_schema(
       CAST(DECODE(BITAND(R.FLAG, 8), 8, 'YES', 'NO') AS VARCHAR2(3)) AS PARALLEL,
       CAST('NO' AS VARCHAR2(3)) AS INTERFACE,
       CAST(DECODE(BITAND(R.FLAG, 4), 4, 'YES', 'NO') AS VARCHAR2(3)) AS DETERMINISTIC,
-      CAST(DECODE(BITAND(R.FLAG, 16), 16, 'INVOKER', 'DEFINER') AS VARCHAR2(12)) AS AUTHID,
+      CAST(DECODE(BITAND(R.FLAG, 16), 16, 'CURRENT_USER', 'DEFINER') AS VARCHAR2(12)) AS AUTHID,
       R.TENANT_ID AS ORIGIN_CON_ID
     FROM
       (SELECT * FROM SYS.ALL_VIRTUAL_ROUTINE_REAL_AGENT
@@ -44708,7 +44737,7 @@ def_table_schema(
     CAST(DECODE(BITAND(RS.FLAG, 8), 8, 'YES', 'NO') AS VARCHAR2(3)) AS PARALLEL,
     CAST('NO' AS VARCHAR2(3)) AS INTERFACE,
     CAST(DECODE(BITAND(RS.FLAG, 4), 4, 'YES', 'NO') AS VARCHAR2(3)) AS DETERMINISTIC,
-    CAST(DECODE(BITAND(RS.FLAG, 16), 16, 'INVOKER', 'DEFINER') AS VARCHAR2(12)) AS AUTHID,
+    CAST(DECODE(BITAND(RS.FLAG, 16), 16, 'CURRENT_USER', 'DEFINER') AS VARCHAR2(12)) AS AUTHID,
       RS.TENANT_ID AS ORIGIN_CON_ID
   FROM
     SYS.ALL_VIRTUAL_ROUTINE_SYS_AGENT RS
@@ -44993,7 +45022,7 @@ def_table_schema(
       CAST(DECODE(BITAND(R.FLAG, 8), 8, 'YES', 'NO') AS VARCHAR2(3)) AS PARALLEL,
       CAST('NO' AS VARCHAR2(3)) AS INTERFACE,
       CAST(DECODE(BITAND(R.FLAG, 4), 4, 'YES', 'NO') AS VARCHAR2(3)) AS DETERMINISTIC,
-      CAST(DECODE(BITAND(R.FLAG, 16), 16, 'INVOKER', 'DEFINER') AS VARCHAR2(12)) AS AUTHID,
+      CAST(DECODE(BITAND(R.FLAG, 16), 16, 'CURRENT_USER', 'DEFINER') AS VARCHAR2(12)) AS AUTHID,
       R.TENANT_ID AS ORIGIN_CON_ID
     FROM
       (SELECT * FROM SYS.ALL_VIRTUAL_ROUTINE_REAL_AGENT
@@ -45044,7 +45073,7 @@ def_table_schema(
     CAST(DECODE(BITAND(RS.FLAG, 8), 8, 'YES', 'NO') AS VARCHAR2(3)) AS PARALLEL,
     CAST('NO' AS VARCHAR2(3)) AS INTERFACE,
     CAST(DECODE(BITAND(RS.FLAG, 4), 4, 'YES', 'NO') AS VARCHAR2(3)) AS DETERMINISTIC,
-    CAST(DECODE(BITAND(RS.FLAG, 16), 16, 'INVOKER', 'DEFINER') AS VARCHAR2(12)) AS AUTHID,
+    CAST(DECODE(BITAND(RS.FLAG, 16), 16, 'CURRENT_USER', 'DEFINER') AS VARCHAR2(12)) AS AUTHID,
       RS.TENANT_ID AS ORIGIN_CON_ID
   FROM
     SYS.ALL_VIRTUAL_ROUTINE_SYS_AGENT RS
@@ -45341,7 +45370,7 @@ def_table_schema(
       CAST(DECODE(BITAND(R.FLAG, 8), 8, 'YES', 'NO') AS VARCHAR2(3)) AS PARALLEL,
       CAST('NO' AS VARCHAR2(3)) AS INTERFACE,
       CAST(DECODE(BITAND(R.FLAG, 4), 4, 'YES', 'NO') AS VARCHAR2(3)) AS DETERMINISTIC,
-      CAST(DECODE(BITAND(R.FLAG, 16), 16, 'INVOKER', 'DEFINER') AS VARCHAR2(12)) AS AUTHID,
+      CAST(DECODE(BITAND(R.FLAG, 16), 16, 'CURRENT_USER', 'DEFINER') AS VARCHAR2(12)) AS AUTHID,
       R.TENANT_ID AS ORIGIN_CON_ID
     FROM
       (SELECT * FROM SYS.ALL_VIRTUAL_ROUTINE_REAL_AGENT
@@ -54268,9 +54297,9 @@ def_table_schema(
     TABLET_COUNT,
     FINISH_TABLET_COUNT,
     CASE
-      WHEN FINISH_TABLET_COUNT IS NULL
+      WHEN FINISH_BYTES IS NULL
         THEN NULL
-      ELSE CAST(TRUNC((FINISH_TABLET_COUNT / TABLET_COUNT) * 100, 2) AS NUMBER(6, 2))
+      ELSE CAST(TRUNC((FINISH_BYTES / TOTAL_BYTES) * 100, 2) AS NUMBER(6, 2))
       END AS RESTORE_PROGRESS,
     TOTAL_BYTES,
     CASE

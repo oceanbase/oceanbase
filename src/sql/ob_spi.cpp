@@ -2212,11 +2212,7 @@ int ObSPIService::spi_resolve_prepare(common::ObIAllocator &allocator,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Argument passed in is NULL", K(sql), K(ret));
   } else {
-    bool is_dbms_sql = false;
-    if (NULL != session.get_cur_exec_ctx() && NULL != session.get_cur_exec_ctx()->get_sql_ctx()) {
-      is_dbms_sql =session.get_cur_exec_ctx()->get_sql_ctx()->is_dbms_sql_;
-    }
-    PLPrepareCtx pl_prepare_ctx(session, secondary_namespace, false, is_dbms_sql, is_cursor);
+    PLPrepareCtx pl_prepare_ctx(session, secondary_namespace, false, false, is_cursor);
     const int64_t start = ::oceanbase::common::ObTimeUtility::current_time();
 
     SMART_VAR(PLPrepareResult, pl_prepare_result) {
@@ -5088,9 +5084,14 @@ int ObSPIService::spi_sub_nestedtable(ObPLExecCtx *ctx, int64_t src_idx, int64_t
     if (OB_SUCC(ret)) {
       ObPLCollection *dst_coll = NULL;
       if (lower <= 0 // 检查是否越界, lower,upper从1开始
-          || lower > src_coll->get_count()
-          || upper > src_coll->get_count()) {
-        ret = OB_ARRAY_OUT_OF_RANGE;
+          || lower > src_coll->get_count()) {
+        ret = OB_ELEMENT_AT_GIVEN_INDEX_NOT_EXIST;
+        LOG_USER_ERROR(OB_ELEMENT_AT_GIVEN_INDEX_NOT_EXIST, static_cast<int64_t>(lower));
+        LOG_WARN("ORA-22160: element at index does not exist",
+                 K(lower), K(upper), K(src_coll->get_count()), K(ret));
+      } else if (upper > src_coll->get_count()) {
+        ret = OB_ELEMENT_AT_GIVEN_INDEX_NOT_EXIST;
+        LOG_USER_ERROR(OB_ELEMENT_AT_GIVEN_INDEX_NOT_EXIST, src_coll->get_count() + 1);
         LOG_WARN("OBE-22160: element at index does not exist",
                  K(lower), K(upper), K(src_coll->get_count()), K(ret));
       } else if (OB_ISNULL(dst_coll = static_cast<ObPLCollection*>(ctx->allocator_->alloc(sizeof(ObPLCollection))))) {
@@ -7665,7 +7666,21 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
 
       CK (!value.is_pl_extend());
       OX (value.set_param_meta());
-      OZ (spi_set_variable(ctx, static_cast<const ObSqlExpression*>(result_expr), &value, false, true));
+      if (OB_SUCC(ret)) {
+        // save session value
+        SMART_VAR(sql::ObSQLSessionInfo::StmtSavedValue, session_value) {
+          int64_t nested_count = 0;
+          OX (nested_count = ctx->exec_ctx_->get_my_session()->get_nested_count());
+          OZ (ctx->exec_ctx_->get_my_session()->save_session(session_value));
+          OZ (spi_set_variable(ctx, static_cast<const ObSqlExpression*>(result_expr), &value, false, true));
+          int tmp_ret = OB_SUCCESS;
+          if (OB_SUCCESS != (tmp_ret = ctx->exec_ctx_->get_my_session()->restore_session(session_value))) {
+            LOG_WARN("failed to restore session", K(tmp_ret));
+            ret = COVER_SUCC(tmp_ret);
+          }
+          ctx->exec_ctx_->get_my_session()->set_nested_count(nested_count);
+        }
+      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Invalid result address",
@@ -8932,9 +8947,7 @@ int ObSPIService::setup_cursor_snapshot_verify_(ObPLCursorInfo *cursor, ObSPIRes
     }
     need_register_snapshot = true;
   } else if (cursor->is_streaming() && tx && tx->is_in_tx()) {
-    const int64_t tenant_id = exec_ctx.get_my_session()->get_effective_tenant_id();
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-    if (tenant_config.is_valid() && tenant_config->_enable_enhanced_cursor_validation) {
+    if (exec_ctx.get_my_session()->enable_enhanced_cursor_validation()) {
       need_register_snapshot = false;
       LOG_TRACE("enable cursor open check read uncommitted");
       const DependenyTableStore &tables = spi_result->get_result_set()->get_physical_plan()->get_dependency_table();

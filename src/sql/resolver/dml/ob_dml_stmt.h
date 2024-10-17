@@ -1161,6 +1161,7 @@ public:
   int get_rownum_expr(ObRawExpr *&expr) const;
   int has_rownum(bool &has_rownum) const;
   bool has_ora_rowscn() const;
+  int has_special_expr(const ObExprInfoFlag flag, bool &has) const;
   int get_sequence_expr(ObRawExpr *&expr,
                         const common::ObString seq_name, // sequence object name
                         const common::ObString seq_action, // NEXTVAL or CURRVAL

@@ -337,7 +337,7 @@ private:
   static int get_cursor(sql::ObExecContext &exec_ctx,
                         ParamStore &params,
                         ObDbmsCursorInfo *&cursor);
-  static bool check_stmt_need_to_be_executed_when_parsing(ObDbmsCursorInfo &cursor);
+  static int check_stmt_need_to_be_executed_when_parsing(ObDbmsCursorInfo &cursor, bool &flag);
 
   enum DescribeType {
     DESCRIBE = 0,

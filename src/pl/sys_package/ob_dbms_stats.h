@@ -437,13 +437,16 @@ public:
                                           const ObObjParam &eavs,
                                           ObHistogramParam &hist_param);
 
-  static int parser_pl_numarray(const ObObjParam &numarray_param,
+  static int parser_pl_numarray(const ObString &func_name,
+                                const ObObjParam &numarray_param,
                                 ObIArray<int64_t> &num_array);
 
-  static int parser_pl_chararray(const ObObjParam &chararray_param,
+  static int parser_pl_chararray(const ObString &func_name,
+                                 const ObObjParam &chararray_param,
                                  ObIArray<ObString> &char_array);
 
-  static int parser_pl_rawarray(const ObObjParam &rawarray_param,
+  static int parser_pl_rawarray(const ObString &func_name,
+                                const ObObjParam &rawarray_param,
                                 ObIArray<ObString> &raw_array);
 
   static int find_selected_part_infos(const ObString &part_name,
@@ -654,6 +657,16 @@ private:
   static int adjust_async_gather_stat_option(ObExecContext &ctx,
                                              const ObIArray<int64_t> &async_partition_ids,
                                              ObTableStatParam &param);
+  static int adjust_index_column_params(ObExecContext &ctx,
+                                        ObTableStatParam &index_param,
+                                        ObIArray<uint64_t> &filter_column_ids);
+
+  static int get_no_deduce_basic_stats_column_ids(const ObTableStatParam &param, ObIArray<uint64_t> &column_ids);
+
+  static int adjust_text_column_basic_stats(ObExecContext &ctx,
+                                            const share::schema::ObTableSchema &schema,
+                                            ObTableStatParam &param);
+
 };
 
 }

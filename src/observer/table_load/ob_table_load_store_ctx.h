@@ -23,7 +23,6 @@
 #include "storage/direct_load/ob_direct_load_trans_param.h"
 #include "observer/table_load/ob_table_load_service.h"
 #include "observer/table_load/ob_table_load_assigned_memory_manager.h"
-#include "observer/table_load/ob_table_load_merger.h"
 
 namespace oceanbase
 {

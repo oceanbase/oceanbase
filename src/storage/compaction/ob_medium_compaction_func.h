@@ -86,6 +86,11 @@ public:
   int schedule_next_medium_for_leader(
     const int64_t major_snapshot,
     bool &medium_clog_submitted);
+  static int get_table_id(
+      ObMultiVersionSchemaService &schema_service,
+      const ObTabletID &tablet_id,
+      const int64_t schema_version,
+      uint64_t &table_id);
 #ifdef OB_BUILD_SHARED_STORAGE
   // medium compaction is not considered
   int prepare_ls_major_merge_info(
@@ -97,7 +102,7 @@ public:
     ObMediumCompactionInfo &medium_info,
     bool &no_inc_data);
   int check_progressive_merge(
-    ObTablet &tablet,
+    const storage::ObTabletTableStore &table_store,
     const storage::ObStorageSchema &storage_schema,
     bool &is_progressive_merge);
 #endif
@@ -173,11 +178,6 @@ protected:
     ObGetMergeTablesResult &result,
     int64_t &schema_version);
   int get_max_reserved_snapshot(int64_t &max_reserved_snapshot);
-  static int get_table_id(
-      ObMultiVersionSchemaService &schema_service,
-      const ObTabletID &tablet_id,
-      const int64_t schema_version,
-      uint64_t &table_id);
 
   int check_frequency(
     const int64_t max_reserved_snapshot,

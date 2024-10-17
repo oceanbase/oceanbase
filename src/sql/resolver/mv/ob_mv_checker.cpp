@@ -127,13 +127,25 @@ int ObMVChecker::check_mv_stmt_refresh_type_basic(const ObSelectStmt &stmt, bool
   if (OB_SUCC(ret)) {
     bool has_rownum = false;
     bool is_deterministic_query = true;
-    if (OB_FAIL(stmt.has_rownum(has_rownum))) {
+    bool has_cur_time = false;
+    if (OB_ISNULL(stmt.get_query_ctx())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("git unexpected null ptr", K(ret));
+    } else if (OB_FAIL(stmt.has_rownum(has_rownum))) {
       LOG_WARN("failed to check has rownum", K(ret));
+    } else if (has_rownum || stmt.has_ora_rowscn()) {
+      is_valid = false;
+      append_fast_refreshable_note("rownum/ora_rowscn not support");
     } else if (OB_FAIL(stmt.is_query_deterministic(is_deterministic_query))) {
       LOG_WARN("failed to check mv stmt use special expr", K(ret));
-    } else if (!is_deterministic_query || has_rownum || stmt.has_ora_rowscn()) {
+    } else if (!is_deterministic_query) {
       is_valid = false;
-      append_fast_refreshable_note("rownum/ora_rowscn/rand_func not support");
+      append_fast_refreshable_note("no deterministic query not support");
+    } else if (OB_FAIL(stmt.has_special_expr(CNT_CUR_TIME, has_cur_time))) {
+      LOG_WARN("failed to check stmt has special expr", K(ret));
+    } else if (has_cur_time) {
+      is_valid = false;
+      append_fast_refreshable_note("cur_time not support");
     }
   }
 

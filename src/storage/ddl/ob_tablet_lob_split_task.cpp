@@ -461,7 +461,7 @@ int ObTabletLobSplitDag::fill_info_param(compaction::ObIBasicInfoParam *&out_par
     ret = OB_NOT_INIT;
     LOG_WARN("ObTabletLobSplitDag has not been initialized", K(ret));
   } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
-      static_cast<int64_t>(param_.ori_lob_meta_tablet_id_.id()), param_.parallelism_))) {
+      static_cast<int64_t>(param_.ls_id_.id()), static_cast<int64_t>(param_.ori_lob_meta_tablet_id_.id())))) {
     LOG_WARN("failed to fill info param", K(ret));
   }
   return ret;
@@ -1613,7 +1613,7 @@ int ObTabletLobWriteDataTask::create_sstable(ObSSTableIndexBuilder *sstable_inde
 
     create_sstable_param.create_snapshot_version_ = is_major_merge(merge_type) ? dst_major_snapshot_version : basic_meta.create_snapshot_version_;
 
-    create_sstable_param.sstable_logic_seq_ = 0;
+    create_sstable_param.sstable_logic_seq_ = write_sstable_ctx.data_seq_;
     create_sstable_param.filled_tx_scn_ = basic_meta.filled_tx_scn_;
     create_sstable_param.latest_row_store_type_ = basic_meta.latest_row_store_type_;
     create_sstable_param.recycle_version_ = basic_meta.recycle_version_;

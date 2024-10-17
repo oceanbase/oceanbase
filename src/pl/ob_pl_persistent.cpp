@@ -18,6 +18,7 @@
 #include "observer/ob_inner_sql_result.h"
 #include "ob_pl_code_generator.h"
 #include "ob_pl_compile.h"
+#include "share/ob_version.h"
 
 namespace oceanbase
 {
@@ -310,11 +311,15 @@ int ObRoutinePersistentInfo::gen_routine_storage_dml(const uint64_t exec_tenant_
                                                 const ObString &binary)
 {
   int ret = OB_SUCCESS;
+  char build_version[common::OB_SERVER_VERSION_LENGTH] = {'\0'};
 
-  if (OB_FAIL(dml.add_pk_column("database_id", database_id_))
+  if (OB_FAIL(get_package_and_svn(build_version, sizeof(build_version)))) {
+      LOG_WARN("fail to get build_version", KR(ret));
+  } else if (OB_FAIL(dml.add_pk_column("database_id", database_id_))
     || OB_FAIL(dml.add_pk_column("key_id", key_id_))
     || OB_FAIL(dml.add_pk_column("compile_db_id", compile_db_id_))
     || OB_FAIL(dml.add_pk_column("arch_type", arch_type_))
+    || OB_FAIL(dml.add_pk_column("build_version", build_version))
     || OB_FAIL(dml.add_column("merge_version", merge_version))
     || OB_FAIL(dml.add_column("dll", ObHexEscapeSqlStr(binary)))) {
     LOG_WARN("add column failed", K(ret));
@@ -387,8 +392,8 @@ int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
   uint64_t data_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
     LOG_WARN("failed to get data version", K(ret));
-  } else if (!((GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0) || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_1_0) ||
-             !((data_version >= DATA_VERSION_4_2_2_0 && data_version < DATA_VERSION_4_3_0_0) || data_version >= DATA_VERSION_4_3_1_0)) {
+  } else if (!((GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_2_5_0 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0) || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_4_0) ||
+             !((data_version >= MOCK_DATA_VERSION_4_2_5_0 && data_version < DATA_VERSION_4_3_0_0) || data_version >= DATA_VERSION_4_3_4_0)) {
     // do nothing
   } else {
     uint64_t action = 0;
@@ -397,6 +402,7 @@ int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
     ObSqlString query_inner_sql;
     ObString binary;
     int64_t merge_version;
+    char build_version[common::OB_SERVER_VERSION_LENGTH] = {'\0'};
 
     if (OB_ISNULL(session_info)) {
       ret = OB_INVALID_ARGUMENT;
@@ -404,9 +410,12 @@ int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
     } else if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("sql proxy must not null", K(ret), KP(GCTX.sql_proxy_));
+    } else if (OB_FAIL(get_package_and_svn(build_version, sizeof(build_version)))) {
+      LOG_WARN("fail to get build_version", K(ret));
     } else if (OB_FAIL(query_inner_sql.assign_fmt(
-      "select merge_version, dll from OCEANBASE.%s where database_id = %ld and key_id = %ld and compile_db_id = %ld and arch_type = %d",
-                        OB_ALL_NCOMP_DLL_TNAME, database_id_, key_id_, compile_db_id_, arch_type_))) {
+      "select merge_version, dll from OCEANBASE.%s where database_id = %ld and key_id = %ld "
+      "and compile_db_id = %ld and arch_type = '%s' and build_version = '%s'",
+        OB_ALL_NCOMP_DLL_V2_TNAME, database_id_, key_id_, compile_db_id_, arch_type_.ptr(), build_version))) {
       LOG_WARN("assign format failed", K(ret));
     } else {
       SMART_VAR(ObMySQLProxy::MySQLResult, result) {
@@ -495,11 +504,11 @@ int ObRoutinePersistentInfo::insert_or_update_dll_to_disk(schema::ObSchemaGetter
       ObDMLExecHelper exec(*sql_proxy, exec_tenant_id);
       int64_t affected_rows = 0;
       if (ObPLOperation::UPDATE == op) {
-        if (OB_FAIL(exec.exec_update(OB_ALL_NCOMP_DLL_TNAME, dml, affected_rows))) {
+        if (OB_FAIL(exec.exec_update(OB_ALL_NCOMP_DLL_V2_TNAME, dml, affected_rows))) {
           LOG_WARN("execute update failed", K(ret));
         }
       } else {
-        if (OB_FAIL(exec.exec_insert(OB_ALL_NCOMP_DLL_TNAME, dml, affected_rows))) {
+        if (OB_FAIL(exec.exec_insert(OB_ALL_NCOMP_DLL_V2_TNAME, dml, affected_rows))) {
           LOG_WARN("execute insert failed", K(ret));
         }
       }
@@ -527,8 +536,8 @@ int ObRoutinePersistentInfo::process_storage_dll(ObIAllocator &alloc,
   uint64_t data_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
     LOG_WARN("failed to get data version", K(ret));
-  } else if (!((GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0) || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_1_0) ||
-             !((data_version >= DATA_VERSION_4_2_2_0 && data_version < DATA_VERSION_4_3_0_0) || data_version >= DATA_VERSION_4_3_1_0)) {
+  } else if (!((GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_2_5_0 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0) || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_4_0) ||
+             !((data_version >= MOCK_DATA_VERSION_4_2_5_0 && data_version < DATA_VERSION_4_3_0_0) || data_version >= DATA_VERSION_4_3_4_0)) {
     // do nothing
   } else if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
     // do nothing
@@ -572,8 +581,8 @@ int ObRoutinePersistentInfo::delete_dll_from_disk(common::ObISQLClient &trans,
   ObMySQLProxy *sql_proxy = nullptr;
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("failed to get data version", K(ret));
-  } else if (!((GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0) || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_1_0) ||
-             !((data_version >= DATA_VERSION_4_2_2_0 && data_version < DATA_VERSION_4_3_0_0) || data_version >= DATA_VERSION_4_3_1_0)) {
+  } else if (!((GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_2_5_0 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0) || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_4_0) ||
+             !((data_version >= MOCK_DATA_VERSION_4_2_5_0 && data_version < DATA_VERSION_4_3_0_0) || data_version >= DATA_VERSION_4_3_4_0)) {
     // do nothing
   } else if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -593,7 +602,7 @@ int ObRoutinePersistentInfo::delete_dll_from_disk(common::ObISQLClient &trans,
     if (OB_INVALID_ID == key_id) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected key id.", K(ret));
-    } else if (OB_FAIL(sql.assign_fmt("delete FROM %s where database_id = %ld and key_id = %ld", OB_ALL_NCOMP_DLL_TNAME, database_id, key_id))) {
+    } else if (OB_FAIL(sql.assign_fmt("delete FROM %s where database_id = %ld and key_id = %ld", OB_ALL_NCOMP_DLL_V2_TNAME, database_id, key_id))) {
       LOG_WARN("delete from __all_ncomp_dll table failed.", K(ret), K(key_id));
     } else {
       if (OB_FAIL(trans.write(exec_tenant_id, sql.ptr(), affected_rows))) {

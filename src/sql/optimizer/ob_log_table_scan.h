@@ -702,6 +702,8 @@ public:
   int get_index_name_list(ObIArray<ObString> &index_name_list) const;
   bool use_index_merge_by_hint() const;
 
+  int copy_gen_col_range_exprs();
+  inline bool need_replace_gen_column() { return !(is_index_scan() && !(get_index_back())); }
 private: // member functions
   //called when index_back_ set
   int pick_out_query_range_exprs();

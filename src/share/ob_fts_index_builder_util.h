@@ -241,6 +241,12 @@ public:
    const share::schema::ObColumnSchemaV2 &ori_column_schema,
    const share::schema::ObColumnSchemaV2 &budy_column_schema,
    bool& is_match);
+ static bool is_multivalue_array_column(const ObString& expr_string);
+ static bool is_multivalue_index_column(const ObString& expr_string);
+ static bool is_multivalue_array_column(
+   const share::schema::ObColumnSchemaV2 &budy_column_schema);
+ static bool is_multivalue_index_column(
+   const share::schema::ObColumnSchemaV2 &budy_column_schema);
 };
 
 }//end namespace share

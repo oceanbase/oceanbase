@@ -681,6 +681,7 @@ int ObIOResult::init(const ObIOInfo &info)
     size_ = info.size_;
     flag_ = info.flag_;
     flag_.set_func_type(GET_FUNC_TYPE());
+    flag_.set_resource_group_id(GET_GROUP_ID());
     timeout_us_ = info.timeout_us_;
     buf_ = info.buf_;
     user_data_buf_ = info.user_data_buf_;
@@ -2019,6 +2020,7 @@ ObTenantIOConfig::ObTenantIOConfig()
   for (uint8_t i = (uint8_t)ObIOMode::READ; i <= (uint8_t)ObIOMode::MAX_MODE; ++i) {
     tmp_group_config.mode_ = (ObIOMode)i;
     memcpy(tmp_group_config.group_name_, other_group_name.ptr(), other_group_name.length());
+    tmp_group_config.group_name_[other_group_name.length()] = '\0';
     if (OB_FAIL(group_configs_.push_back(tmp_group_config))) {
       LOG_WARN("push back group config failed", K(ret));
     }

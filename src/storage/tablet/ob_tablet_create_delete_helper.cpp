@@ -113,7 +113,7 @@ int ObTabletCreateDeleteHelper::try_get_current_version_tablet_(
   } else if (OB_ISNULL(ls_tablet_svr = ls->get_tablet_svr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet service is null", K(ret), K(key));
-  } else if (OB_FAIL(ls_tablet_svr->s2_replay_create_tablet(current_version.tablet_addr_, key.tablet_id_))) {
+  } else if (OB_FAIL(ls_tablet_svr->ss_replay_create_tablet(current_version.tablet_addr_, key.tablet_id_))) {
     LOG_WARN("fail to replay create tablet", K(ret), K(current_version));
   } else if (OB_FAIL(get_tablet(key, handle))) {
     if (OB_TABLET_NOT_EXIST == ret) {

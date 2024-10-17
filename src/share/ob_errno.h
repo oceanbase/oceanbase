@@ -1888,6 +1888,8 @@ constexpr int OB_UTL_SMTP_PERMANENT_ERROR = -9796;
 constexpr int OB_UTL_SMTP_UNSUPPORTED_SCHEME = -9797;
 constexpr int OB_UTL_SMTP_NO_SUPPORTED_SCHEME = -9798;
 constexpr int OB_DTL_WAIT_EAGAIN = -9799;
+constexpr int OB_ERR_COMPILE_RESULT_NOT_ADD_CACHE = -9800;
+constexpr int OB_ELEMENT_AT_GIVEN_INDEX_NOT_EXIST = -9801;
 constexpr int OB_ERR_KV_GLOBAL_INDEX_ROUTE = -10500;
 constexpr int OB_TTL_NOT_ENABLE = -10501;
 constexpr int OB_TTL_COLUMN_NOT_EXIST = -10502;
@@ -4213,6 +4215,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_UTL_SMTP_UNSUPPORTED_SCHEME__USER_ERROR_MSG "Authentication scheme '%.*s' not supported"
 #define OB_UTL_SMTP_NO_SUPPORTED_SCHEME__USER_ERROR_MSG "No supported authentication scheme found"
 #define OB_DTL_WAIT_EAGAIN__USER_ERROR_MSG "Px wait for dtl message again"
+#define OB_ERR_COMPILE_RESULT_NOT_ADD_CACHE__USER_ERROR_MSG "To be compatible with MySQL, if an exception occurs when compiling an OB PL object (such as the object does not exist or a parameter mismatch), the relevant statement will be converted to a statement that throws an exception, and compiled object cannot be added to the cache, which may cause performance problems. User should create or redefine the pl object of the problem indicated in the warning until the warning is eliminated. Problem object name: '%.*s'"
+#define OB_ELEMENT_AT_GIVEN_INDEX_NOT_EXIST__USER_ERROR_MSG "element at index [%ld] does not exist"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__USER_ERROR_MSG "incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__USER_ERROR_MSG "TTL feature is not enabled"
 #define OB_TTL_COLUMN_NOT_EXIST__USER_ERROR_MSG "TTL column '%.*s' not exists"
@@ -8842,6 +8846,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_UTL_SMTP_NO_SUPPORTED_SCHEME__OBE_USER_ERROR_MSG "OBE-24250: No supported authentication scheme found"
 #define OB_DTL_WAIT_EAGAIN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9799, Px wait for dtl message again"
 #define OB_DTL_WAIT_EAGAIN__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9799, Px wait for dtl message again"
+#define OB_ERR_COMPILE_RESULT_NOT_ADD_CACHE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9800, To be compatible with MySQL, if an exception occurs when compiling an OB PL object (such as the object does not exist or a parameter mismatch), the relevant statement will be converted to a statement that throws an exception, and compiled object cannot be added to the cache, which may cause performance problems. User should create or redefine the pl object of the problem indicated in the warning until the warning is eliminated. Problem object name: '%.*s'"
+#define OB_ERR_COMPILE_RESULT_NOT_ADD_CACHE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9800, To be compatible with MySQL, if an exception occurs when compiling an OB PL object (such as the object does not exist or a parameter mismatch), the relevant statement will be converted to a statement that throws an exception, and compiled object cannot be added to the cache, which may cause performance problems. User should create or redefine the pl object of the problem indicated in the warning until the warning is eliminated. Problem object name: '%.*s'"
+#define OB_ELEMENT_AT_GIVEN_INDEX_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-22160: element at index [%ld] does not exist"
+#define OB_ELEMENT_AT_GIVEN_INDEX_NOT_EXIST__OBE_USER_ERROR_MSG "OBE-22160: element at index [%ld] does not exist"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10501, TTL feature is not enabled"
@@ -9025,7 +9033,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2357];
+extern int g_all_ob_errnos[2359];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

@@ -93,7 +93,8 @@ struct ObCSVGeneralFormat {
     trim_space_(false),
     null_if_(),
     empty_field_as_null_(false),
-    file_column_nums_(0)
+    file_column_nums_(0),
+    compression_algorithm_(ObCSVCompression::NONE)
   {}
   static constexpr const char *OPTION_NAMES[] = {
     "LINE_DELIMITER",
@@ -106,6 +107,16 @@ struct ObCSVGeneralFormat {
     "TRIM_SPACE",
     "NULL_IF_EXETERNAL",
     "EMPTY_FIELD_AS_NULL",
+    "COMPRESSION"
+  };
+  enum ObCSVCompression
+  {
+    INVALID = -1,
+    NONE = 0,
+    AUTO = 1,
+    GZIP = 2,
+    DEFLATE = 3,
+    ZSTD = 4,
   };
   common::ObString line_start_str_;
   common::ObString line_term_str_;
@@ -121,6 +132,7 @@ struct ObCSVGeneralFormat {
   bool empty_field_as_null_;
 
   int64_t file_column_nums_;
+  ObCSVCompression compression_algorithm_;
 
   int init_format(const ObDataInFileStruct &format,
                   int64_t file_column_nums,
@@ -129,7 +141,7 @@ struct ObCSVGeneralFormat {
   int load_from_json_data(json::Pair *&node, common::ObIAllocator &allocator);
 
   TO_STRING_KV(K(cs_type_), K(file_column_nums_), K(line_start_str_), K(field_enclosed_char_),
-               K(field_escaped_char_), K(field_term_str_), K(line_term_str_));
+               K(field_escaped_char_), K(field_term_str_), K(line_term_str_), K(compression_algorithm_));
   OB_UNIS_VERSION(1);
 };
 
@@ -572,25 +584,17 @@ struct ObOriginFileFormat
   common::ObString origin_null_if_str_;
 };
 
-enum class ObLoadCompressionFormat
-{
-  INVALID,
-  NONE,
-  AUTO,
-  GZIP,
-  DEFLATE,
-  ZSTD,
-};
-
-const char *compression_format_to_string(ObLoadCompressionFormat compression_format);
-int compression_format_from_string(ObString compression_name, ObLoadCompressionFormat &compression_format);
+const char *compression_algorithm_to_string(ObCSVGeneralFormat::ObCSVCompression compression_algorithm);
+int compression_algorithm_from_string(ObString compression_name,
+                                      ObCSVGeneralFormat::ObCSVCompression &compression_algorithm);
 
 /**
  * guess compression format from filename suffix
  *
  * Return NONE if none of the known compression format matches.
  */
-int compression_format_from_suffix(ObString filename, ObLoadCompressionFormat &compression_format);
+int compression_algorithm_from_suffix(ObString filename,
+                                      ObCSVGeneralFormat::ObCSVCompression &compression_algorithm);
 
 struct ObExternalFileFormat
 {
@@ -600,6 +604,15 @@ struct ObExternalFileFormat
     common::ObString str_;
     common::ObIAllocator &allocator_;
     TO_STRING_KV(K_(str));
+    OB_UNIS_VERSION(1);
+  };
+
+  struct StringList {
+    StringList(common::ObIAllocator &alloc) : allocator_(alloc), strs_(alloc) {}
+    int store_strs(ObIArray<ObString> &strs);
+    common::ObIAllocator &allocator_;
+    common::ObFixedArray<common::ObString, common::ObIAllocator> strs_;
+    TO_STRING_KV(K_(strs));
     OB_UNIS_VERSION(1);
   };
 
@@ -617,7 +630,7 @@ struct ObExternalFileFormat
     OPT_BINARY_AS_TEXT = 1 << 1,
   };
 
-  ObExternalFileFormat() : format_type_(INVALID_FORMAT), compression_format_(ObLoadCompressionFormat::NONE) {}
+  ObExternalFileFormat() : format_type_(INVALID_FORMAT) {}
 
   int64_t to_string(char* buf, const int64_t buf_len) const;
   int load_from_string(const common::ObString &str, common::ObIAllocator &allocator);
@@ -627,7 +640,6 @@ struct ObExternalFileFormat
   FormatType format_type_;
   sql::ObCSVGeneralFormat csv_format_;
   sql::ObODPSGeneralFormat odps_format_;
-  ObLoadCompressionFormat compression_format_;
   uint64_t options_;
   static const char *FORMAT_TYPE_STR[];
 };

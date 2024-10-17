@@ -58,7 +58,7 @@ public:
       const ObDirectLoadSliceInfo &slice_info,
       ObInsertMonitor *insert_monitor,
       blocksstable::ObMacroDataSeq &next_seq);
-  int calc_range(const int64_t thread_cnt);
+  int calc_range(const int64_t context_id, const int64_t thread_cnt);
   int fill_column_group(
       const int64_t thread_cnt,
       const int64_t thread_id);

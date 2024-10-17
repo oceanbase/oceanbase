@@ -171,6 +171,7 @@ private:
 private:
   bool is_inited_;
   ObITable::TableKey table_key_;
+  ObTabletHandle tablet_handle_;
   const ObCopyMacroRangeInfo *copy_macro_range_info_;
   const ObRestoreBaseInfo *restore_base_info_;
   backup::ObBackupMetaIndexStoreWrapper *meta_index_store_;

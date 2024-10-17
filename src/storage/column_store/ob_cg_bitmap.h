@@ -48,6 +48,7 @@ public:
     } else if (bitmap.filter_constant_type_.is_constant()) {
       max_filter_constant_id_ = bitmap.max_filter_constant_id_;
       filter_constant_type_ = bitmap.filter_constant_type_;
+      bitmap_.reuse(filter_constant_type_.is_always_true());
     } else {
       if (OB_FAIL(bitmap_.copy_from(bitmap.bitmap_, 0, bitmap.bitmap_.size()))) {
         STORAGE_LOG(WARN, "Fail to set bitmap", K(ret), K(bitmap));
@@ -98,6 +99,9 @@ public:
   OB_INLINE int switch_context(const uint64_t count, const bool is_reverse)
   {
     is_reverse_scan_ = is_reverse;
+    filter_constant_type_.set_uncertain();
+    max_filter_constant_id_ = OB_INVALID_CS_ROW_ID;
+    start_row_id_ = OB_INVALID_CS_ROW_ID;
     return bitmap_.reserve(count);
   }
 
@@ -199,17 +203,18 @@ public:
   {
     OB_ASSERT(range.is_valid() && range.end_row_id_ >= start_row_id_);
     return filter_constant_type_.is_always_true() ||
-        bitmap_.is_all_true(MAX(range.start_row_id_ - start_row_id_, 0),
-                            MIN(range.end_row_id_ - start_row_id_, bitmap_.size() - 1));
-
+        (filter_constant_type_.is_uncertain() &&
+         bitmap_.is_all_true(MAX(range.start_row_id_ - start_row_id_, 0),
+                             MIN(range.end_row_id_ - start_row_id_, bitmap_.size() - 1)));
   }
 
   OB_INLINE bool is_all_false(const ObCSRange &range) const
   {
     OB_ASSERT(range.is_valid() && range.end_row_id_ >= start_row_id_);
     return filter_constant_type_.is_always_false() ||
-        bitmap_.is_all_false(MAX(range.start_row_id_ - start_row_id_, 0),
-                             MIN(range.end_row_id_ - start_row_id_, bitmap_.size() - 1));
+        (filter_constant_type_.is_uncertain() &&
+         bitmap_.is_all_false(MAX(range.start_row_id_ - start_row_id_, 0),
+                              MIN(range.end_row_id_ - start_row_id_, bitmap_.size() - 1)));
   }
 
   OB_INLINE void set_all_true()

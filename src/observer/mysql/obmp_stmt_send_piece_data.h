@@ -17,6 +17,7 @@
 #include "observer/mysql/obmp_base.h"
 #include "observer/mysql/ob_query_retry_ctrl.h"
 #include "lib/rc/context.h"
+#include "observer/mysql/obmp_stmt_execute.h"
 
 namespace oceanbase
 {
@@ -77,6 +78,7 @@ private:
   common::ObString buffer_;
   int8_t  piece_mode_;
   bool    is_null_;
+  ObPSAnalysisChecker defender_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMPStmtSendPieceData);

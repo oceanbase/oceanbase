@@ -3461,7 +3461,6 @@ int ObIOFaultDetector::record_timing_task(const int64_t first_id, const int64_t 
     retry_task->io_info_.user_data_buf_ = nullptr;
     retry_task->io_info_.buf_ = nullptr;
     retry_task->io_info_.flag_.set_mode(ObIOMode::READ);
-    retry_task->io_info_.flag_.set_resource_group_id(USER_RESOURCE_OTHER_GROUP_ID);
     retry_task->io_info_.flag_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
     retry_task->io_info_.flag_.set_time_detect();
     retry_task->io_info_.fd_.first_id_ = first_id;
@@ -3493,7 +3492,6 @@ int ObIOFaultDetector::set_detect_task_io_info_(
   io_info.flag_ = result.flag_;
   io_info.size_ = result.size_;
   io_info.offset_ = result.offset_;
-  io_info.flag_.set_resource_group_id(THIS_WORKER.get_group_id());
   io_info.flag_.set_sys_module_id(ObIOModule::DETECT_IO);
   io_info.fd_ = req.fd_;
   return ret;

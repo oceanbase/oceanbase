@@ -222,7 +222,8 @@ const char* ObCOMajorSSTableStatusStr[] = {
   "COL_ONLY_ALL",
   "PURE_COL",
   "PURE_COL_ONLY_ALL",
-  "COL_REPLICA_MAJOR"
+  "COL_REPLICA_MAJOR",
+  "DELAYED_TRANSFORM_MAJOR"
 };
 
 const char* co_major_sstable_status_to_str(const ObCOMajorSSTableStatus& major_sstable_status)
@@ -339,7 +340,6 @@ int ObCOSSTableV2::build_cs_meta_without_cgs()
     cs_meta_.original_size_ = basic_meta.original_size_;
     cs_meta_.data_checksum_ = basic_meta.data_checksum_;
     // cs_meta_.column_group_cnt_ and cs_meta_.full_column_cnt_ are assigned in ObCOSSTableV2::init
-    LOG_INFO("[RowColSwitch] finish build cs meta without cg sstables", K_(cs_meta), K(basic_meta), KPC(this));
   }
   return ret;
 }

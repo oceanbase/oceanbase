@@ -222,10 +222,11 @@ int ObDbmsStatsGather::init_opt_stat(ObIAllocator &allocator,
 
 int ObDbmsStatsGather::gather_index_stats(ObExecContext &ctx,
                                           const ObOptStatGatherParam &param,
-                                          ObIArray<ObOptTableStat *> &all_index_stats)
+                                          ObIArray<ObOptStat> &opt_stats,
+                                          ObIArray<ObOptTableStat *> &all_index_stats,
+                                          ObIArray<ObOptColumnStat *> &all_column_stats)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObOptStat, 4> opt_stats;
   LOG_TRACE("begin to gather index stats", K(param));
   if (OB_ISNULL(param.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -238,15 +239,10 @@ int ObDbmsStatsGather::gather_index_stats(ObExecContext &ctx,
     ObIndexStatsEstimator index_est(ctx, *param.allocator_);
     if (OB_FAIL(index_est.estimate(param, opt_stats))) {
       LOG_WARN("failed to estimate basic statistics", K(ret));
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < opt_stats.count(); ++i) {
-        if (OB_ISNULL(opt_stats.at(i).table_stat_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(ret), K(opt_stats.at(i).table_stat_));
-        } else if (OB_FAIL(all_index_stats.push_back(opt_stats.at(i).table_stat_))) {
-          LOG_WARN("failed to append", K(ret));
-        } else {/*do nothing*/}
-      }
+    } else if (OB_FAIL(ObDbmsStatsUtils::calssify_opt_stat(opt_stats,
+                                                           all_index_stats,
+                                                           all_column_stats))) {
+      LOG_WARN("failed to classify opt stat", K(ret));
     }
   }
   return ret;

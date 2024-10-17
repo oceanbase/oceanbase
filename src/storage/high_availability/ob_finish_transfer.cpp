@@ -376,13 +376,16 @@ int ObTxFinishTransfer::unlock_src_and_dest_ls_member_list_(const uint64_t tenan
   const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L;
   const int64_t lock_timeout = CONFIG_CHANGE_TIMEOUT;
   bool same_member_list = true;
-  const ObTransferLockStatus status(ObTransferLockStatus::START);
+  const ObTransferLockStatus start_status(ObTransferLockStatus::START);
+  const ObTransferLockStatus doing_status(ObTransferLockStatus::DOING);
   if (!src_ls_id.is_valid() || !dest_ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(src_ls_id), K(dest_ls_id));
-  } else if (OB_FAIL(unlock_ls_member_list_(tenant_id, src_ls_id, member_list, status, lock_timeout))) {
+  } else if (OB_FAIL(unlock_ls_member_list_(tenant_id, src_ls_id, member_list, start_status, lock_timeout))) {
     LOG_WARN("failed to unlock ls member list", K(ret), K(tenant_id), K(src_ls_id), K(dest_ls_id));
-  } else if (OB_FAIL(unlock_ls_member_list_(tenant_id, dest_ls_id, member_list, status, lock_timeout))) {
+  } else if (OB_FAIL(unlock_ls_member_list_(tenant_id, dest_ls_id, member_list, start_status, lock_timeout))) {
+    LOG_WARN("failed to unlock ls member list", K(ret), K(tenant_id), K(src_ls_id), K(dest_ls_id));
+  } else if (OB_FAIL(unlock_ls_member_list_(tenant_id, dest_ls_id, member_list, doing_status, lock_timeout))) {
     LOG_WARN("failed to unlock ls member list", K(ret), K(tenant_id), K(src_ls_id), K(dest_ls_id));
   } else {
     LOG_INFO(
@@ -628,6 +631,7 @@ int ObTxFinishTransfer::inner_check_ls_logical_table_replaced_(const uint64_t te
         LOG_WARN("response is null", K(ret));
       } else if (!response->backfill_finished_) {
         all_backfilled = false;
+        LOG_INFO("server has not finished backfill", K(idx), K(member_addr_list));
         break;
       }
     }

@@ -422,7 +422,7 @@ void ObSubSchemaCtx::reset() {
     used_subschema_id_ = MAX_NON_RESERVED_SUBSCHEMA_ID;
     reserved_ = 0;
     fields_ = NULL;
-    LOG_INFO("subschema ctx reset", KP(this), KP(this), K(lbt()));
+    LOG_DEBUG("subschema ctx reset", KP(this), K(lbt()));
   }
 }
 

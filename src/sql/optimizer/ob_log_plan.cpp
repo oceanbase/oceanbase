@@ -864,7 +864,8 @@ int ObLogPlan::weak_select_replicas(const ObAddr &local_server,
             } else if (OB_FAIL(route_policy.calculate_replica_priority(local_server,
                                                                        phy_part_loc_info.get_ls_id(),
                                                                        replica_array,
-                                                                       route_policy_ctx))) {
+                                                                       route_policy_ctx,
+                                                                       is_inner_table(phy_tbl_loc_info->get_ref_table_id())))) {
               LOG_WARN("fail to calculate replica priority", K(replica_array), K(route_policy_ctx), K(ret));
             } else if (OB_FAIL(route_policy.select_replica_with_priority(route_policy_ctx, replica_array, phy_part_loc_info))) {
               LOG_WARN("fail to select replica", K(replica_array), K(ret));
@@ -6940,6 +6941,7 @@ int ObLogPlan::allocate_group_by_as_top(ObLogicalOperator *&top,
   } else {
     const ObGlobalHint &global_hint = get_optimizer_context().get_global_hint();
     bool has_dbms_stats = global_hint.has_dbms_stats_hint();
+    bool is_first_stage = NULL != three_stage_info && three_stage_info->aggr_stage_ == ObThreeStageAggrStage::FIRST_STAGE;
     group_by->set_child(ObLogicalOperator::first_child, top);
     group_by->set_algo_type(algo);
     group_by->set_from_pivot(from_pivot);
@@ -6949,7 +6951,8 @@ int ObLogPlan::allocate_group_by_as_top(ObLogicalOperator *&top,
     group_by->set_origin_child_card(origin_child_card);
     group_by->set_rollup_status(rollup_status);
     group_by->set_is_partition_wise(is_partition_wise);
-    group_by->set_force_push_down((FORCE_GPD & get_optimizer_context().get_aggregation_optimization_settings()) || has_dbms_stats);
+    group_by->set_force_push_down((FORCE_GPD & get_optimizer_context().get_aggregation_optimization_settings()) ||
+                                  (!is_first_stage && has_dbms_stats));
     if (algo == MERGE_AGGREGATE && force_use_scalar) {
       group_by->set_pushdown_scalar_aggr();
     }
@@ -10608,6 +10611,8 @@ int ObLogPlan::replace_generate_column_exprs(ObLogicalOperator *op)
       LOG_WARN("failed to generate replace generated tsc expr", K(ret));
     } else if (OB_FAIL(scan_op->generate_ddl_output_column_ids())) {
       LOG_WARN("fail to generate ddl output column ids");
+    } else if (OB_FAIL(scan_op->copy_gen_col_range_exprs())) {
+      LOG_WARN("fail to copy gen col range exprs", K(ret));
     } else if (OB_FAIL(scan_op->replace_gen_col_op_exprs(gen_col_replacer_))) {
       LOG_WARN("failed to replace generated tsc expr", K(ret));
     }
@@ -10729,7 +10734,7 @@ int ObLogPlan::generate_tsc_replace_exprs_pair(ObLogTableScan *op)
   if (OB_ISNULL(op)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid op", K(ret));
-  } else if (op->is_index_scan() && !(op->get_index_back())) {
+  } else if (!op->need_replace_gen_column()) {
     //no need replace in index table non-return table scenario.
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < op->get_access_exprs().count(); ++i) {
@@ -10864,13 +10869,15 @@ int ObLogPlan::adjust_final_plan_info(ObLogicalOperator *&op)
         LOG_WARN("failed to allocate subquery id", K(ret));
       } else if (!subplan_filter->is_update_set()) {
         // do nothing
-      } else if (OB_UNLIKELY(!subplan_filter->get_stmt()->is_update_stmt())) {
+      } else if (OB_UNLIKELY(!subplan_filter->get_stmt()->is_insert_stmt() &&
+                              !subplan_filter->get_stmt()->is_merge_stmt() &&
+                              !subplan_filter->get_stmt()->is_update_stmt())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("update stmt is expected", K(ret));
       } else {
-        ObUpdateLogPlan *plan = static_cast<ObUpdateLogPlan *>(op->get_plan());
+        ObDelUpdLogPlan *plan = static_cast<ObDelUpdLogPlan *>(op->get_plan());
         // stmt is only allowed to be modified in the function;
-        ObUpdateStmt *stmt = const_cast<ObUpdateStmt* >(plan->get_stmt());
+        ObDelUpdStmt *stmt = const_cast<ObDelUpdStmt* >(plan->get_stmt());
         if (OB_FAIL(plan->perform_vector_assign_expr_replacement(stmt))) {
           LOG_WARN("failed to perform vector assgin expr replace", K(ret));
         }

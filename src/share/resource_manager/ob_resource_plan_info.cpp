@@ -71,6 +71,9 @@ ObString oceanbase::share::get_io_function_name(ObFunctionType function_type)
     case ObFunctionType::PRIO_SQL_AUDIT:
       ret_name = ObString("SQL_AUDIT");
       break;
+    case ObFunctionType::PRIO_MICRO_MINI_MERGE:
+      ret_name = ObString("MICRO_MINI_MERGE");
+      break;
     default:
       ret_name = ObString("OTHER_GROUPS");
       break;

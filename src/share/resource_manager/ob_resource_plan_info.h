@@ -47,6 +47,7 @@ enum ObFunctionType : uint8_t
   /* add new function type here, or you will have compatibility issues. */
   PRIO_SQL_AUDIT = 16,
 
+  PRIO_MICRO_MINI_MERGE = 17,
 
   /* add new function, can learn by "grep -rnI 'CLOG_HIGH' src/" */
   MAX_FUNCTION_NUM

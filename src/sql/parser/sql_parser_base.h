@@ -140,7 +140,10 @@ do {                                                                            
   if (OB_UNLIKELY(NULL == val_ptr))                                                \
   {                                                                                \
     ((ParseResult *)yyextra)->extra_errno_ = OB_PARSER_ERR_NO_MEMORY;              \
-    yyerror(yylloc, yyextra, "No more space for malloc\n");                        \
+    yyerror(yylloc, yyextra, "No more space for malloc, start_col:%d, end_col:%d, line:%d", \
+                             ((ParseResult *)yyextra)->start_col_,                  \
+                             ((ParseResult *)yyextra)->end_col_,                   \
+                             ((ParseResult *)yyextra)->line_);                     \
     return ERROR;                                                                  \
   }                                                                                \
 } while (0);

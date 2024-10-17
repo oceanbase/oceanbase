@@ -41,6 +41,36 @@ private:
   lib::MemoryContext mem_context_;
   bool inited_;
 };
+
+class ObSpmBaselineLoader
+{
+public:
+  ObSpmBaselineLoader()
+  : tenant_id_(0),
+    alloc_guard_(),
+    baseline_count_(0),
+    origin_(0),
+    flags_(0)
+   {}
+  virtual ~ObSpmBaselineLoader()  {}
+  int init_baseline_loader(const obrpc::ObLoadPlanBaselineArg &arg);
+  int add_one_plan_baseline(const ObPhysicalPlan &plan, bool &added);
+  int get_baseline_item_dml(ObSqlString &item_dml);
+  int get_baseline_info_dml(ObSqlString &info_dml);
+  inline uint64_t get_baseline_count() { return baseline_count_; }
+  ObIAllocator *get_allocator() { return alloc_guard_.get_allocator();  }
+private:
+  uint64_t tenant_id_;
+  SpmTmpAllocatorGuard alloc_guard_;
+  share::ObDMLSqlSplicer item_dml_splicer_;
+  share::ObDMLSqlSplicer info_dml_splicer_;
+  uint64_t baseline_count_;
+  // info same as ObPlanBaselineItem
+  int64_t origin_;  // baseline source, 1 for AUTO-CAPTURE, 2 for MANUAL-LOAD
+  common::ObString db_version_;  // database version when generate baseline
+  int64_t flags_;
+};
+
 class ObPlanBaselineRefreshTask : public common::ObTimerTask
 {
 public:
@@ -102,7 +132,7 @@ public:
                          const uint64_t plan_hash,
                          const bool with_plan_hash,
                          int64_t &baseline_affected);
-  int load_baseline(ObBaselineKey &key, ObPhysicalPlan* plan, const bool fixed, const bool enabled);
+  int load_baseline(ObSpmBaselineLoader &baseline_loader);
   int purge_baselines(const uint64_t tenant_id, int64_t baseline_affected);
   int evict_plan_baseline(ObSpmCacheCtx& spm_ctx);
   int check_evolution_task();

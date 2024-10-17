@@ -70,7 +70,8 @@ int ObClusteredIndexBlockWriter::init(const ObDataStoreDesc &data_store_desc,
                                       const blocksstable::ObMacroSeqParam &macro_seq_param,
                                       const share::ObPreWarmerParam &pre_warm_param,
                                       ObIndexTreeRootCtx *root_ctx,
-                                      common::ObIAllocator &task_allocator)
+                                      common::ObIAllocator &task_allocator,
+                                      ObIMacroBlockFlushCallback *ddl_callback)
 {
   int ret = OB_SUCCESS;
   // Shallow copy desc (let micro block size to 2MB and builder pointer to null).
@@ -98,16 +99,18 @@ int ObClusteredIndexBlockWriter::init(const ObDataStoreDesc &data_store_desc,
   ObSSTablePrivateObjectCleaner *object_cleaner = nullptr;
   if (OB_SUCC(ret)) {
     abort_unless(macro_writer_ == nullptr);
-    if (OB_ISNULL(macro_writer_ = OB_NEWx(ObMacroBlockWriter, task_allocator_))) {
+    if (OB_ISNULL(macro_writer_ = OB_NEWx(ObMacroBlockWriter, task_allocator_, true /* use double buffer */))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate and construct macro writer in clustered index block writer", K(ret));
-    } else if (OB_FAIL(ObSSTablePrivateObjectCleaner::get_cleaner_from_data_store_desc(
-                                                            leaf_block_desc, object_cleaner))) {
+    } else if (OB_FAIL(ObSSTablePrivateObjectCleaner::get_cleaner_from_data_store_desc(leaf_block_desc,
+                                                                                       object_cleaner))) {
       LOG_WARN("fail to get cleaner from data store desc", K(ret), K(leaf_block_desc), KP(object_cleaner));
-    } else if (OB_FAIL(macro_writer_->open(
-                   clustered_index_store_desc_, 0 /* parallel_idx */,
-                   macro_seq_param, pre_warm_param, *object_cleaner,
-                   nullptr /* callback */))) {
+    } else if (OB_FAIL(macro_writer_->open(clustered_index_store_desc_,
+                                           0 /* parallel_idx */,
+                                           macro_seq_param,
+                                           pre_warm_param,
+                                           *object_cleaner,
+                                           ddl_callback))) {
       LOG_WARN("fail to open macro writer in clustered index block writer",
                K(ret), K(leaf_block_desc), KPC(object_cleaner));
     }
@@ -290,7 +293,6 @@ int ObClusteredIndexBlockWriter::rewrite_and_append_clustered_index_micro_block(
     read_info.size_ = micro_size;
     read_info.io_desc_.set_mode(ObIOMode::READ);
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-    read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
     read_info.io_desc_.set_sys_module_id(ObIOModule::SSTABLE_INDEX_BUILDER_IO);
     read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
     read_info.mtl_tenant_id_ = MTL_ID();

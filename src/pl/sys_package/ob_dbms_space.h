@@ -157,6 +157,7 @@ private:
                                    uint64_t &alloc_size);
 
   static int estimate_index_table_size_by_opt_stats(ObMySQLProxy *sql_proxy,
+                                                    const ObTableSchema *table_schema,
                                                     const OptStats &opt_stats,
                                                     IndexCostInfo &info,
                                                     ObIArray<uint64_t> &table_size);

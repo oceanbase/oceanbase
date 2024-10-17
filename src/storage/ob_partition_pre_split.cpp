@@ -21,6 +21,7 @@
 #include "share/scheduler/ob_partition_auto_split_helper.h"
 #include "sql/resolver/ob_resolver_utils.h"
 #include "share/ob_index_builder_util.h"
+#include "src/share/scheduler/ob_partition_auto_split_helper.h"
 
 
 namespace oceanbase
@@ -56,11 +57,23 @@ void ObPartitionPreSplit::get_split_num(
     int64_t &split_num)
 {
   int ret = OB_SUCCESS;
+  int64_t tablet_limit_penalty = 0;
+  int64_t real_split_size = split_size;
   split_num = 0;
-  if (split_size > 0 && tablet_size > split_size) {
-    split_num = (tablet_size % split_size) == 0 ?
-          (tablet_size / split_size) :
-          (tablet_size / split_size + 1);
+  if (tablet_size < 0 || split_size < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arugument", K(ret), K(tablet_size), K(split_size));
+  } else if (OB_FAIL((ObServerAutoSplitScheduler::check_tablet_creation_limit(MAX_SPLIT_RANGE_NUM/*inc_tablet_cnt*/, 0.8/*safe ratio*/, split_size, real_split_size)))) {
+    if (OB_TOO_MANY_PARTITIONS_ERROR == ret) {
+      LOG_WARN("too many partitions in the observer, choose to not to do the pre split", K(ret));
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to check tablet creation limit", K(ret));
+    }
+  } else if (real_split_size > 0 && tablet_size > real_split_size) {
+    split_num = (tablet_size % real_split_size) == 0 ?
+          (tablet_size / real_split_size) :
+          (tablet_size / real_split_size + 1);
     split_num = split_num < MAX_SPLIT_RANGE_NUM ?
           split_num :
           MAX_SPLIT_RANGE_NUM;

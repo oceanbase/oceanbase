@@ -329,6 +329,7 @@ void ObTabletStatusCache::inner_destroy()
     allocator_.free((void *)medium_list_);
     medium_list_ = NULL;
   }
+  allocator_.reset(); // use this allocator to read mds, medium list may be null after read mds
   tablet_id_.reset();
   tablet_merge_finish_ = false;
   execute_state_ = EXECUTE_STATE_MAX;

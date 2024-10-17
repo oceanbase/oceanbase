@@ -44,6 +44,7 @@ WAIT_EVENT_DEF(PALF_READ, 11016, "palf read", "fd", "offset", "size", SYSTEM_IO,
 WAIT_EVENT_DEF(PALF_WRITE, 11017, "palf write", "fd", "offset", "size", SYSTEM_IO, false, true)
 WAIT_EVENT_DEF(OBJECT_STORAGE_WRITE, 11018, "object storage write", "fd", "offset", "size", SYSTEM_IO, true, true)
 WAIT_EVENT_DEF(OBJECT_STORAGE_READ, 11019, "object storage read", "fd", "offset", "size", SYSTEM_IO, true, true)
+WAIT_EVENT_DEF(TMP_FILE_WRITE, 11020, "tmp file write", "fd", "offset", "size", USER_IO, true, true)
 
 // SCHEDULER 12001-12999
 WAIT_EVENT_DEF(OMT_WAIT, 12001, "sched wait", "req type", "req start timestamp", "wait start timestamp", SCHEDULER, true, false)
@@ -129,6 +130,7 @@ WAIT_EVENT_DEF(STORAGE_HA_FINISH_TRANSFER, 20006, "sleep: finish transfer sleep 
 WAIT_EVENT_DEF(LOG_EXTERNAL_STORAGE_IO_TASK_WAIT, 20007, "latch: log external storage io task wait", "", "", "", SYSTEM_IO, true, true)
 WAIT_EVENT_DEF(LOG_EXTERNAL_STORAGE_HANDLER_RW_WAIT, 20008, "latch: log external storage handler rw wait", "", "", "", CONCURRENCY, true, false)
 WAIT_EVENT_DEF(LOG_EXTERNAL_STORAGE_HANDLER_WAIT, 20009, "latch: log external storage handler spin wait", "", "", "", CONCURRENCY, true, false)
+WAIT_EVENT_DEF(DH_LOCAL_SYNC_COND_WAIT, 20010, "datahub local sync conditional wait", "address", "", "", CONCURRENCY, true, true)
 
 // share storage 21001-21999
 WAIT_EVENT_DEF(ZONE_STORAGE_MANAGER_LOCK_WAIT, 21001, "latch: zone storage manager maintaince lock wait", "address", "number", "tries", CONCURRENCY, true, false)

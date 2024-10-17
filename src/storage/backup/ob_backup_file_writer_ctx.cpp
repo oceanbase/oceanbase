@@ -106,7 +106,7 @@ int ObBackupFileWriteCtx::write_buffer_(const char *buf, const int64_t len, cons
 
 bool ObBackupFileWriteCtx::check_can_flush_(const bool is_last_part) const
 {
-  return is_last_part || data_buffer_.length() >= OB_MAX_BACKUP_MEM_BUF_LEN;
+  return (is_last_part && data_buffer_.length() > 0) || data_buffer_.length() >= OB_MAX_BACKUP_MEM_BUF_LEN;
 }
 
 int ObBackupFileWriteCtx::flush_buffer_(const bool is_last_part)

@@ -61,6 +61,9 @@ public:
   static int get_async_gather_stats_job_for_upgrade(common::ObMySQLProxy *sql_proxy,
                                                     const uint64_t tenant_id,
                                                     ObSqlString &sql);
+  static int get_time_zone_offset(const share::schema::ObSysVariableSchema &sys_variable,
+                                  const uint64_t tenant_id,
+                                  int32_t &offset_sec);
 
 private:
   static int get_window_job_info(const int64_t current_time,
@@ -90,9 +93,6 @@ private:
 
   static bool is_work_day(int64_t now_wday) { return now_wday >= 1 && now_wday <= MAX_OF_WORK_DAY; }
 
-  static int get_time_zone_offset(const share::schema::ObSysVariableSchema &sys_variable,
-                                  const uint64_t tenant_id,
-                                  int32_t &offset_sec);
   static int check_date_validate(const ObString &job_name,
                                  const int64_t specify_time,
                                  const int64_t current_time,

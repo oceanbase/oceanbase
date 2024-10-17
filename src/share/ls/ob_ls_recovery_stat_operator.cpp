@@ -24,6 +24,7 @@
 #include "share/ob_share_util.h"
 #include "share/ls/ob_ls_status_operator.h"
 #include "share/scn.h"
+#include "logservice/palf/log_meta_info.h"//LogConfigVersion
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -536,11 +537,12 @@ int ObLSRecoveryStatOperator::update_ls_config_version(
       common::ObSqlString sql;
       ObString config_version_str;
       ObArenaAllocator allocator("VersionStr");
-      char config_version_val[128] = {0};
+      const int64_t CONFIG_LEN = palf::LogConfigVersion::CONFIG_VERSION_LEN + 1;//128 + \0
+      char config_version_val[CONFIG_LEN] = {0};
       if (OB_FAIL(type_to_hex_str(config_version, allocator,
                                   config_version_str))) {
         LOG_WARN("failed to type to hex", KR(ret), K(config_version));
-      } else if (0 > config_version.to_string(config_version_val, 128)) {
+      } else if (0 > config_version.to_string(config_version_val, CONFIG_LEN)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("config_version to string failed", KR(ret), K(config_version));
       } else if (OB_FAIL(sql.assign_fmt("UPDATE %s SET config_version = '%s', bconfig_version = '%.*s' "
@@ -569,7 +571,8 @@ int ObLSRecoveryStatOperator::update_ls_config_version(
 
 int ObLSRecoveryStatOperator::get_min_create_scn_(
     const uint64_t tenant_id, const common::ObSqlString &sql,
-    ObISQLClient &client, SCN &min_create_scn) {
+    ObISQLClient &client, SCN &min_create_scn)
+{
   int ret = OB_SUCCESS;
   min_create_scn = SCN::base_scn();
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {

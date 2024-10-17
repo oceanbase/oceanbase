@@ -181,6 +181,23 @@ int ObLogInsert::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
   return ret;
 }
 
+int ObLogInsert::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(is_dml_fixed_expr(expr, get_index_dml_infos(), is_fixed))) {
+    LOG_WARN("failed to check is my fixed expr", K(ret));
+  } else if (is_fixed) {
+    // do nothing
+  } else if (OB_FAIL(is_dml_fixed_expr(expr, get_replace_index_dml_infos(), is_fixed))) {
+    LOG_WARN("failed to check is my fixed expr", K(ret));
+  } else if (is_fixed) {
+    // do nothing
+  } else if (OB_FAIL(is_dml_fixed_expr(expr, get_insert_up_index_dml_infos(), is_fixed))) {
+    LOG_WARN("failed to check is my fixed expr", K(ret));
+  }
+  return ret;
+}
+
 int ObLogInsert::compute_sharding_info()
 {
   int ret = OB_SUCCESS;

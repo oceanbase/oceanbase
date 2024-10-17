@@ -450,14 +450,55 @@ ObRsAutoSplitScheduler &ObRsAutoSplitScheduler::get_instance()
   return instance;
 }
 
-int ObServerAutoSplitScheduler::check_tablet_creation_limit(const int64_t inc_tablet_cnt, const double safe_ratio)
+// since we don't want to do the auto split when the number of tablets is closed to the limit
+// we implicitly increase the auto split size, when the number of tablets approaches to the limit
+int ObServerAutoSplitScheduler::cal_real_auto_split_size(const double base_ratio, const double cur_ratio, const int64_t split_size, int64_t &real_split_size)
 {
   int ret = OB_SUCCESS;
+  int64_t tablet_limit_penalty = 1;
+  real_split_size = 0;
+  if (OB_UNLIKELY(base_ratio < 0 || base_ratio > 1.0 || cur_ratio < 0 || cur_ratio > 1.0 || split_size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(base_ratio), K(cur_ratio), K(split_size));
+  } else if (cur_ratio > base_ratio) {
+    // the tablet_limit_penalty is designed to fit large table(10pb)
+    // if we consider the base_ratio to be 0.5
+    // than cur_ratio | tablet_limit_penalty
+    //      0.55      |  2
+    //      0.65      |  32
+    //      0.75      |  256
+    //      0.85      |  2048
+    //      0.95      |  16384
+    //      1.00      |  65536
+    int64_t factor = static_cast<int64_t>(base_ratio >= cur_ratio ? 0 : (cur_ratio - base_ratio) / 0.03);
+    if (OB_UNLIKELY(factor >= 32 || factor < 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected value of factor", K(ret), K(factor));
+    } else if (OB_FALSE_IT(tablet_limit_penalty = 1<<factor)) {
+    } else if (tablet_limit_penalty > 0 && tablet_limit_penalty > INT64_MAX / split_size) {
+      ret = OB_NUMERIC_OVERFLOW;
+      LOG_WARN("multiplication overflow detected", K(ret), K(tablet_limit_penalty), K(split_size));
+    } else {
+      real_split_size = tablet_limit_penalty * split_size;
+    }
+  } else {
+    real_split_size = split_size;
+  }
+  return ret;
+}
+
+int ObServerAutoSplitScheduler::check_tablet_creation_limit(const int64_t inc_tablet_cnt, const double safe_ratio, const int64_t split_size, int64_t &real_split_size)
+{
+  int ret = OB_SUCCESS;
+  real_split_size = OB_INVALID_SIZE;
   const uint64_t tenant_id = MTL_ID();
   ObUnitInfoGetter::ObTenantConfig unit;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
   int64_t tablet_cnt_per_gb = ObServerAutoSplitScheduler::TABLET_CNT_PER_GB; // default value
-  {
+  if (OB_UNLIKELY(inc_tablet_cnt < 0 || safe_ratio > 1 || safe_ratio <= 0 || split_size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(inc_tablet_cnt), K(safe_ratio), K(split_size));
+  } else {
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
     if (OB_UNLIKELY(!tenant_config.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
@@ -478,10 +519,17 @@ int ObServerAutoSplitScheduler::check_tablet_creation_limit(const int64_t inc_ta
     const double memory_limit = unit.config_.memory_size();
     const int64_t max_tablet_cnt = static_cast<int64_t>(memory_limit / (1 << 30) * tablet_cnt_per_gb * safe_ratio);
     const int64_t cur_tablet_cnt = t3m->get_total_tablet_cnt();
+    double cur_ratio = 0.0;
     if (OB_UNLIKELY(cur_tablet_cnt + inc_tablet_cnt > max_tablet_cnt)) {
       ret = OB_TOO_MANY_PARTITIONS_ERROR;
       LOG_WARN("too many partitions of tenant", K(ret), K(tenant_id), K(memory_limit), K(tablet_cnt_per_gb),
           K(max_tablet_cnt), K(cur_tablet_cnt), K(inc_tablet_cnt));
+    } else if (OB_UNLIKELY(max_tablet_cnt <= 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected value of max_tablet_cnt", K(ret), K(max_tablet_cnt));
+    } else if (OB_FALSE_IT(cur_ratio = static_cast<double>(cur_tablet_cnt + inc_tablet_cnt) / max_tablet_cnt)) {
+    } else if (OB_FAIL(cal_real_auto_split_size(0.5/*base_ratio*/, cur_ratio, split_size, real_split_size))) {
+      LOG_WARN("failed to cal tablet limit penalty", K(ret));
     }
   }
   return ret;
@@ -583,6 +631,7 @@ int ObServerAutoSplitScheduler::check_and_fetch_tablet_split_info(const storage:
   int ret = OB_SUCCESS;
   int64_t used_disk_space = OB_INVALID_SIZE;
   int64_t auto_split_tablet_size = OB_INVALID_SIZE;
+  int64_t real_auto_split_size = OB_INVALID_SIZE;
   bool is_committed = false;
   ObTablet *tablet = nullptr;
   ObTabletPointer *tablet_ptr = nullptr;
@@ -620,23 +669,23 @@ int ObServerAutoSplitScheduler::check_and_fetch_tablet_split_info(const storage:
     LOG_WARN("fail to check sstable limit", K(ret), KPC(tablet));
   } else if (OB_FAIL(ls.get_ls_role(role))) {
     LOG_WARN("get role failed", K(ret), K(MTL_ID()), K(ls_id));
+  } else if (OB_FAIL(check_tablet_creation_limit(ObAutoSplitArgBuilder::get_max_split_partition_num(), 0.8/*safe_ratio*/, auto_split_tablet_size, real_auto_split_size))) {
+    LOG_WARN("check_create_new_tablets fail", K(ret));
+    if (OB_TOO_MANY_PARTITIONS_ERROR == ret) {
+      can_split = false;
+      ret = OB_SUCCESS;
+    }
   } else {
     can_split = tablet->get_major_table_count() > 0 && tablet->get_data_tablet_id() == tablet->get_tablet_id()
-        && common::ObRole::LEADER == role && !num_sstables_exceed_limit;
+        && common::ObRole::LEADER == role && !num_sstables_exceed_limit && MTL_ID() != OB_SYS_TENANT_ID;
     // TODO gaishun.gs resident_info
     const int64_t used_disk_space = tablet->get_tablet_meta().space_usage_.all_sstable_data_required_size_;
-    can_split &= (used_disk_space > auto_split_tablet_size);
+    can_split &= (used_disk_space > real_auto_split_size);
     if (OB_SUCC(ret) && can_split) {
       ObTabletCreateDeleteMdsUserData user_data;
       common::ObArenaAllocator allocator;
       const compaction::ObMediumCompactionInfoList *medium_info_list = nullptr;
-      if (OB_FAIL(check_tablet_creation_limit(ObAutoSplitArgBuilder::get_max_split_partition_num(), 0.8/*safe_ratio*/))) {
-        LOG_WARN("check_create_new_tablets fail", K(ret));
-        if (OB_TOO_MANY_PARTITIONS_ERROR == ret) {
-          can_split = false;
-          ret = OB_SUCCESS;
-        }
-      } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_tablet_status(share::SCN::max_scn(),
+      if (OB_FAIL(tablet->ObITabletMdsInterface::get_tablet_status(share::SCN::max_scn(),
           user_data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US))) {
         LOG_WARN("failed to get tablet status", K(ret), KP(tablet));
         can_split = false;

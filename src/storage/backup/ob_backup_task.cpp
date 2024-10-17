@@ -3027,7 +3027,6 @@ int ObLSBackupDataTask::do_backup_ddl_other_blocks_()
   } else {
     LOG_INFO("start backup ddl other blocks", K(macro_list));
     ObBufferReader buffer_reader;
-    // TODO: yangyi.yyy, do_backup_macro_block_data_还需要检查need copy，确认一下这里
     ObITable::TableKey table_key;
     ObLogicMacroBlockId unused_logic_id;
     MacroBlockId macro_id;
@@ -3239,7 +3238,6 @@ int ObLSBackupDataTask::get_sstable_meta_item_list_(common::ObIArray<ObBackupPro
   list.reset();
   for (int64_t i = 0; OB_SUCC(ret) && i < backup_items_.count(); ++i) {
     const ObBackupProviderItem &item = backup_items_.at(i);
-    // TODO: yangyi.yyy, 确认一下是不是使用PROVIDER_ITEM_TABLET_AND_SSTABLE_META
     if (PROVIDER_ITEM_TABLET_AND_SSTABLE_META == item.get_item_type()) {
       if (OB_FAIL(list.push_back(item))) {
         LOG_WARN("failed to push back", K(ret), K(item));

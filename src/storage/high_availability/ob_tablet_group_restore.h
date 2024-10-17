@@ -88,7 +88,7 @@ public:
   void reset();
   int set_copy_tablet_status(const ObCopyTabletStatus::STATUS &status) override;
   int get_copy_tablet_status(ObCopyTabletStatus::STATUS &status) const override;
-  int get_copy_tablet_record_extra_info(const ObCopyTabletRecordExtraInfo *&extra_info) const override;
+  int get_copy_tablet_record_extra_info(ObCopyTabletRecordExtraInfo *&extra_info) override;
   VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), KPC_(restore_base_info), K_(is_leader),
       K_(action), KP_(meta_index_store), KP_(second_meta_index_store), K_(replica_type), KP_(ha_table_info_mgr), K_(status));
 

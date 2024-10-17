@@ -1789,24 +1789,12 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
         LOG_WARN("failed to convert udf to agg expr", K(ret));
       }
     }
-    if (OB_SUCC(ret) && aggr_exprs.count() > 0) {
-      if (OB_FAIL(resolve_aggr_exprs(expr, aggr_exprs, need_analyze_aggr))) {
-        LOG_WARN("resolve aggr exprs failed", K(ret));
-      }
-    }
     // resolve sys var(s)
     if (OB_SUCC(ret) && sys_vars.count() > 0) {
       if (OB_FAIL(resolve_sys_vars(sys_vars))) {
         LOG_WARN("resolve system variables failed", K(ret));
       }
     }
-
-    if (OB_SUCC(ret) && win_exprs.count() > 0) {
-      if (OB_FAIL(resolve_win_func_exprs(expr, win_exprs))) {
-        LOG_WARN("resolve aggr exprs failed", K(ret));
-      }
-    }
-
     if (OB_SUCC(ret) && match_exprs.count() > 0) {
       if (OB_FAIL(resolve_match_against_exprs(expr, match_exprs, current_scope_))) { // resolve and add match expr
         LOG_WARN("failed to resolve match against expr", K(ret));
@@ -1823,6 +1811,16 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
                                                                                   ctx.session_info_,
                                                                                   op_exprs))) {
         LOG_WARN("implicit cast faild", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && aggr_exprs.count() > 0) {
+      if (OB_FAIL(resolve_aggr_exprs(expr, aggr_exprs, need_analyze_aggr))) {
+        LOG_WARN("resolve aggr exprs failed", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && win_exprs.count() > 0) {
+      if (OB_FAIL(resolve_win_func_exprs(expr, win_exprs))) {
+        LOG_WARN("resolve aggr exprs failed", K(ret));
       }
     }
     // resolve special expression, like functions, e.g abs, concat

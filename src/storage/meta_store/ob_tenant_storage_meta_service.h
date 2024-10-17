@@ -39,6 +39,7 @@ public:
   void stop();
   void wait();
   void destroy();
+  bool is_started() { return is_started_; }
   ObTenantStorageMetaPersister &get_persister() { return persister_; }
   ObTenantStorageMetaReplayer &get_replayer() { return replayer_; }
   ObTenantSeqGenerator &get_seq_generator() { return seq_generator_; }
@@ -89,7 +90,7 @@ public:
     const ObTabletID &tablet_id,
     const blocksstable::ObStorageObjectType obj_type,
     const ObGCTabletMetaInfoList &tablet_scn_arr);
-  static int s2_is_meta_list_exist(const ObTabletID tablet_id, bool &is_exist);
+  static int ss_is_meta_list_exist(const ObTabletID tablet_id, bool &is_exist);
   int update_shared_tablet_meta_list(
     const ObTabletID &tablet_id,
     const int64_t tablet_meta_version);
@@ -127,9 +128,9 @@ private:
   int inner_get_gc_tablet_scn_arr_(
     const blocksstable::ObStorageObjectOpt &opt,
     ObGCTabletMetaInfoList &gc_tablet_scn_arr) const;
-  int s2_write_gc_info_(
+  int ss_write_gc_info_(
      const ObTabletID tablet_id, const ObGCTabletMetaInfoList &gc_info_scn_arr);
-  int s2_write_meta_list_(
+  int ss_write_meta_list_(
      const ObTabletID tablet_id, const ObGCTabletMetaInfoList &meta_list_scn_arr);
   int force_write_gc_tablet_scn_arr_(
     const ObTabletID &tablet_id,
@@ -138,6 +139,7 @@ private:
 #endif
 private:
   bool is_inited_;
+  bool is_started_;
   bool is_shared_storage_;
   ObTenantCheckpointSlogHandler ckpt_slog_handler_;
   storage::ObStorageLogger slogger_;

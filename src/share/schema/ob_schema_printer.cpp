@@ -5731,7 +5731,7 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
     if (OB_SUCC(ret) && ObExternalFileFormat::CSV_FORMAT == format.format_type_) {
       const ObCSVGeneralFormat &csv = format.csv_format_;
       const ObOriginFileFormat &origin_format = format.origin_file_format_str_;
-      const char *compression_name = compression_format_to_string(format.compression_format_);
+      const char *compression_name = compression_algorithm_to_string(csv.compression_algorithm_);
       if (OB_FAIL(0 != csv.line_term_str_.case_compare(ObDataInFileStruct::DEFAULT_LINE_TERM_STR) &&
                         databuff_printf(buf, buf_len, pos, "\n  LINE_DELIMITER = %.*s,", origin_format.origin_line_term_str_.length(), origin_format.origin_line_term_str_.ptr()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print LINE_DELIMITER", K(ret));
@@ -5761,7 +5761,7 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
       } else if (OB_FAIL(0 != csv.null_if_.count() &&
                         databuff_printf(buf, buf_len, pos, "\n  NULL_IF = (%.*s),", origin_format.origin_null_if_str_.length(), origin_format.origin_null_if_str_.ptr()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print NULL_IF", K(ret));
-      } else if (ObLoadCompressionFormat::NONE != format.compression_format_ &&
+      } else if (ObCSVGeneralFormat::ObCSVCompression::NONE != csv.compression_algorithm_ &&
                  OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  COMPRESSION = %.*s,",
                                          static_cast<int>(STRLEN(compression_name)), compression_name))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print compression", K(ret));

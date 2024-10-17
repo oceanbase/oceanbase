@@ -62,7 +62,7 @@ int ObBasicScheduleTabletFunc::switch_ls(ObLSHandle &ls_handle)
 
 void ObBasicScheduleTabletFunc::update_tenant_cached_status()
 {
-  ObBasicMergeScheduler * scheduler = ObBasicMergeScheduler::get_merge_scheduler();
+  const ObBasicMergeScheduler * scheduler = ObBasicMergeScheduler::get_merge_scheduler();
   if (OB_NOT_NULL(scheduler)) {
     is_skip_merge_tenant_ = scheduler->get_tenant_status().is_skip_merge_tenant();
     ls_could_schedule_merge_ = scheduler->could_major_merge_start() && ls_status_.can_merge();

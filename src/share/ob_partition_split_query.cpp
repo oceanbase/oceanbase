@@ -233,6 +233,7 @@ int ObPartitionSplitQuery::get_tablet_split_ranges(
           LOG_WARN("Fail to get tabelt split range", K(ret), K(split_info_));
         } else if (OB_FAIL(datum_range.to_store_range(col_descs, allocator, tmp_range))) {
           LOG_WARN("fail to transfer to store range", K(ret), K(datum_range));
+        } else if (OB_FALSE_IT(tmp_range.set_table_id(ori_ranges.at(i).get_table_id()))) {
         } else if (OB_FAIL(new_ranges.push_back(tmp_range))) {
           LOG_WARN("Fail to push back to new ranges", K(ret), K(tmp_range));
         }

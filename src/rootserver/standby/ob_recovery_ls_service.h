@@ -35,6 +35,7 @@ class ObMySQLTransaction;
 namespace transaction
 {
 class ObTxBufferNode;
+class ObTxLogBlock;
 }
 namespace share
 {
@@ -49,14 +50,15 @@ class ObMultiVersionSchemaService;
 class ObTenantSchema;
 }
 }
+namespace storage
+{
+class ObLS;
+class ObLSHandle;
+}
 namespace logservice
 {
 class ObLogHandler;
 class ObGCLSLog;
-}
-namespace transaction
-{
-class ObTxLogBlock;
 }
 namespace palf
 {
@@ -143,6 +145,7 @@ private:
      bool &can_remove);
  int do_ls_balance_alter_task_(const share::ObBalanceTaskHelper &ls_balance_task,
                                common::ObMySQLTransaction &trans);
+ int get_ls_(storage::ObLSHandle &ls_handle, storage::ObLS *&ls);
  int reset_restore_proxy_(ObRestoreSourceServiceAttr &service_attr);
  int get_ls_all_replica_readable_scn_(const share::ObLSID &ls_id, share::SCN &reabable_scn);
 #ifdef OB_BUILD_LOG_STORAGE_COMPRESS

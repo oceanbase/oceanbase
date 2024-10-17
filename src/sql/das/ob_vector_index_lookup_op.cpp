@@ -393,7 +393,9 @@ int ObVectorIndexLookupOp::fetch_index_table_rowkey()
 {
   int ret = OB_SUCCESS;
   ObNewRow *row = nullptr;
-  if (OB_ISNULL(adaptor_vid_iter_)) {
+  if (limit_param_.limit_ + limit_param_.offset_ == 0) {
+    ret = OB_ITER_END;
+  } else if (OB_ISNULL(adaptor_vid_iter_)) {
     if (OB_FAIL(process_adaptor_state())) {
       LOG_WARN("failed to process_adaptor_state", K(ret));
     }
@@ -424,7 +426,9 @@ int ObVectorIndexLookupOp::fetch_index_table_rowkeys(int64_t &count, const int64
   int ret = OB_SUCCESS;
   ObNewRow *row = nullptr;
   int64_t index_scan_row_cnt = 0;
-  if (OB_ISNULL(adaptor_vid_iter_)) {
+  if (limit_param_.limit_ + limit_param_.offset_ == 0) {
+    ret = OB_ITER_END;
+  } else if (OB_ISNULL(adaptor_vid_iter_)) {
     if (OB_FAIL(process_adaptor_state())) {
       LOG_WARN("failed to process_adaptor_state", K(ret));
     }

@@ -405,7 +405,7 @@ int ObDirectLoadMgrAgent::close_sstable_slice_for_ss(
   return ret;
 }
 
-int ObDirectLoadMgrAgent::calc_range(const int64_t thread_cnt)
+int ObDirectLoadMgrAgent::calc_range(const int64_t context_id, const int64_t thread_cnt)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -414,7 +414,7 @@ int ObDirectLoadMgrAgent::calc_range(const int64_t thread_cnt)
   } else if (OB_UNLIKELY(!mgr_handle_.is_valid())) {
     ret = OB_ERR_SYS;
     LOG_WARN("error sys", K(ret), KPC(this));
-  } else if (OB_FAIL(mgr_handle_.get_obj()->calc_range(thread_cnt))) {
+  } else if (OB_FAIL(mgr_handle_.get_obj()->calc_range(context_id, thread_cnt))) {
     LOG_WARN("calc range failed", K(ret));
   }
   return ret;

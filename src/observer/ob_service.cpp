@@ -102,6 +102,7 @@
 #include "storage/shared_storage/ob_disk_space_manager.h"
 #endif
 #include "storage/column_store/ob_column_store_replica_util.h"
+#include "rootserver/ob_ls_recovery_stat_handler.h"//get_all_replica_min_readable_scn
 
 namespace oceanbase
 {
@@ -1311,6 +1312,7 @@ int ObService::check_memtable_cnt(
     LOG_WARN("invalid argument", K(ret), K(arg));
   } else {
     ObMinorFreezeArg minor_freeze_arg;
+    minor_freeze_arg.ls_id_ = arg.ls_id_;
     minor_freeze_arg.tablet_id_ = arg.tablet_id_;
     if (OB_FAIL(minor_freeze_arg.tenant_ids_.push_back(arg.tenant_id_))) {
       LOG_WARN("failed to push back tenant id", K(ret));
@@ -2975,6 +2977,8 @@ int ObService::fetch_split_tablet_info(const ObFetchSplitTabletInfoArg &arg,
             LOG_WARN("failed to get tablet status", K(ret), K(arg.ls_id_), K(tablet_id));
           } else if (OB_FAIL(res.create_commit_versions_.push_back(user_data.create_commit_version_))) {
             LOG_WARN("failed to push back", K(ret));
+          } else if (OB_FAIL(res.tablet_sizes_.push_back(tablet_handle.get_obj()->get_tablet_meta().space_usage_.all_sstable_data_required_size_))) {
+            LOG_WARN("failed to push back", K(ret));
           }
         }
       }
@@ -3173,7 +3177,7 @@ int ObService::inner_fill_tablet_info_(
   ObLSHandle ls_handle;
   ObTabletHandle tablet_handle;
   int ret = OB_SUCCESS;
-  bool need_wait_major_convert_in_cs_replica = false;
+  bool need_wait_for_report = false;
   ObTablet *tablet = nullptr;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -3200,14 +3204,11 @@ int ObService::inner_fill_tablet_info_(
   } else if (OB_ISNULL(gctx_.config_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("gctx_.config_ is null", KR(ret), K(tenant_id), K(tablet_id));
-  } else if (ls->is_cs_replica() && !tablet->get_tablet_meta().ha_status_.is_data_status_complete()) {
+  } else if (OB_FAIL(ObCSReplicaUtil::check_need_wait_for_report(*ls, *tablet, need_wait_for_report))) {
+    LOG_WARN("fail to check need wait report", K(ret), KPC(ls), KPC(tablet));
+  } else if (need_wait_for_report) {
     ret = OB_EAGAIN;
-    LOG_WARN("tablet is not complete in cs replica now, need retry later", KR(ret), KPC(ls), KPC(tablet));
-  } else if (OB_FAIL(ObCSReplicaUtil::check_need_wait_major_convert(*ls, tablet_id, *tablet, need_wait_major_convert_in_cs_replica))) {
-    LOG_WARN("fail to check need wait major convert in cs replica", K(ret), KPC(ls), KPC(tablet));
-  } else if (need_wait_major_convert_in_cs_replica) {
-    ret = OB_EAGAIN;
-    LOG_WARN("need wait major convert for cs replica", K(ret), K(tablet_id));
+    LOG_WARN("need wait report for cs replica", K(ret), K(tablet_id));
   } else if (OB_FAIL(tablet->get_tablet_report_info(
      gctx_.self_addr(), tablet_replica, tablet_checksum, need_checksum))) {
     LOG_WARN("fail to get tablet report info from tablet", KR(ret), K(tenant_id),
@@ -3677,6 +3678,8 @@ int ObService::init_tenant_config(
   return OB_SUCCESS;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_GET_LS_READABLE_SCN_ERROR);
+ERRSIM_POINT_DEF(ERRSIM_GET_LS_READABLE_SCN_OLD);
 int ObService::get_ls_replayed_scn(
     const ObGetLSReplayedScnArg &arg,
     ObGetLSReplayedScnRes &result)
@@ -3694,6 +3697,9 @@ int ObService::get_ls_replayed_scn(
     LOG_WARN("arg is invaild", KR(ret), K(arg));
   } else if (arg.get_tenant_id() != MTL_ID() && OB_FAIL(guard.switch_to(arg.get_tenant_id()))) {
     LOG_WARN("switch tenant failed", KR(ret), K(arg));
+  } else if (ERRSIM_GET_LS_READABLE_SCN_ERROR) {
+    ret = ERRSIM_GET_LS_READABLE_SCN_ERROR;
+    LOG_WARN("failed to get ls replica readable scn for errsim", KR(ret), K(arg));
   }
   if (OB_SUCC(ret)) {
     ObLSService *ls_svr = MTL(ObLSService*);
@@ -3711,9 +3717,20 @@ int ObService::get_ls_replayed_scn(
     } else if (OB_FAIL(ls->get_max_decided_scn(cur_readable_scn))) {
       LOG_WARN("failed to get_max_decided_scn", KR(ret), K(arg), KPC(ls));
     } else if (arg.is_all_replica()) {
-      if (OB_FAIL(ls->get_all_replica_min_readable_scn(cur_readable_scn))) {
-        LOG_WARN("failed to get all replica readable scn", KR(ret));
+      if (OB_ISNULL(ls->get_ls_recovery_stat_handler())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get ls recovery stat", KR(ret), K(arg));
+      } else if (OB_FAIL(ls->get_ls_recovery_stat_handler()
+            ->get_all_replica_min_readable_scn(cur_readable_scn))) {
+        LOG_WARN("failed to get all replica min readable_scn", KR(ret), K(arg));
       }
+    }
+    if (OB_SUCC(ret) && ERRSIM_GET_LS_READABLE_SCN_OLD) {
+      const int64_t current_time = ObTimeUtility::current_time() -
+        GCONF.internal_sql_execute_timeout;
+      cur_readable_scn.convert_from_ts(current_time);
+      LOG_WARN("set ls replica readble_scn small", K(arg), K(cur_readable_scn),
+          K(current_time));
     }
     if (FAILEDx(ls->get_offline_scn(offline_scn))) {
       LOG_WARN("failed to get offline scn", KR(ret), K(arg), KPC(ls));

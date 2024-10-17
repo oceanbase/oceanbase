@@ -808,16 +808,13 @@ int ObDDLUtil::generate_spatial_index_column_names(const ObTableSchema &dest_tab
 }
 
 
-int ObDDLUtil::generate_multivalue_index_column_names(const ObTableSchema &dest_table_schema,
-                                                   const ObTableSchema &source_table_schema,
-                                                   ObArray<ObColumnNameInfo> &insert_column_names,
-                                                   ObArray<ObColumnNameInfo> &column_names,
-                                                   ObArray<int64_t> &select_column_ids)
+int ObDDLUtil::append_multivalue_extra_column(const ObTableSchema &dest_table_schema,
+                                              const share::schema::ObTableSchema &source_table_schema,
+                                              ObArray<ObColumnNameInfo> &column_names,
+                                              ObArray<int64_t> &select_column_ids)
 {
   int ret = OB_SUCCESS;
   if (dest_table_schema.is_multivalue_index_aux()) {
-    uint64_t mulvalue_col_id = OB_INVALID_ID;
-    uint64_t mulvalue_array_col_id = OB_INVALID_ID;
     ObArray<ObColDesc> column_ids;
     const ObColumnSchemaV2 *column_schema = nullptr;
     const ObColumnSchemaV2 *array_column = nullptr;
@@ -827,20 +824,12 @@ int ObDDLUtil::generate_multivalue_index_column_names(const ObTableSchema &dest_
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
         const int64_t col_id =  column_ids.at(i).col_id_;
-        if (OB_ISNULL(column_schema = dest_table_schema.get_column_schema(col_id))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("error unexpected, column schema must not be nullptr", K(ret));
-        } else if (OB_FAIL(insert_column_names.push_back(ObColumnNameInfo(column_schema->get_column_name_str(), false)))) {
-          LOG_WARN("push back insert column name failed", K(ret));
-        } else if (OB_FAIL(column_names.push_back(ObColumnNameInfo(column_schema->get_column_name_str(), false)))) {
-          LOG_WARN("push back rowkey column name failed", K(ret));
-        } else if (OB_FAIL(select_column_ids.push_back(col_id))) {
-          LOG_WARN("push back select column id failed", K(ret), K(col_id));
-        } else if (OB_ISNULL(column_schema = source_table_schema.get_column_schema(col_id))) {
+        if (OB_ISNULL(column_schema = source_table_schema.get_column_schema(col_id))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("error unexpected, column schema must not be nullptr", K(ret));
         } else if (column_schema->is_multivalue_generated_column()) {
           array_column = source_table_schema.get_column_schema(col_id + 1);
+          break;
         }
       } // end for
 
@@ -915,11 +904,6 @@ int ObDDLUtil::generate_build_replica_sql(
     // get dest table column names
     if (dest_table_schema->is_spatial_index()) {
       if (OB_FAIL(ObDDLUtil::generate_spatial_index_column_names(*dest_table_schema, *source_table_schema, insert_column_names,
-                                                                 column_names, select_column_ids))) {
-        LOG_WARN("generate spatial index column names failed", K(ret));
-      }
-    } else if (dest_table_schema->is_multivalue_index_aux()) {
-      if (OB_FAIL(ObDDLUtil::generate_multivalue_index_column_names(*dest_table_schema, *source_table_schema, insert_column_names,
                                                                  column_names, select_column_ids))) {
         LOG_WARN("generate spatial index column names failed", K(ret));
       }
@@ -1013,6 +997,11 @@ int ObDDLUtil::generate_build_replica_sql(
           }
         }
       }
+    }
+
+    if (OB_SUCC(ret) && dest_table_schema->is_multivalue_index_aux()
+        && OB_FAIL(ObDDLUtil::append_multivalue_extra_column(*dest_table_schema, *source_table_schema, column_names, select_column_ids))) {
+      LOG_WARN("fail append extra column", K(ret));
     }
 
     // get dest table rowkey columns
@@ -3192,7 +3181,6 @@ int ObDDLUtil::upload_block_for_ss(const char *buf, const int64_t len, const blo
     object_info.mtl_tenant_id_ = MTL_ID();
     object_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
     object_info.io_desc_.set_unsealed();
-    object_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
     object_info.io_desc_.set_sys_module_id(ObIOModule::SHARED_BLOCK_RW_IO);
     object_info.ls_epoch_id_ = 0;
 
@@ -3224,7 +3212,7 @@ int ObDDLUtil::update_tablet_gc_info(const ObTabletID &tablet_id, const int64_t 
     LOG_WARN("meta service should not be null", K(ret));
   } else if (pre_snapshot_version == new_snapshot_version) {
     /* skip */
-  } else if (OB_FAIL(ObTenantStorageMetaService::s2_is_meta_list_exist(tablet_id, is_exist))) {
+  } else if (OB_FAIL(ObTenantStorageMetaService::ss_is_meta_list_exist(tablet_id, is_exist))) {
     LOG_WARN("fail to check existence", K(ret), K(tablet_id));
   } else if (is_exist) {
     /* skip */

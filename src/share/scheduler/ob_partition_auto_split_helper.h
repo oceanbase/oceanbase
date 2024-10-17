@@ -263,7 +263,8 @@ public:
   int push_task(const storage::ObTabletHandle &teblet_handle, storage::ObLS &ls);
   int init() { return polling_manager_.init(); }
   void reset() { polling_manager_.reset(); }
-  static int check_tablet_creation_limit(const int64_t inc_tablet_cnt, const double safe_ratio);
+  static int cal_real_auto_split_size(const double base_ratio, const double cur_ratio, const int64_t auto_split_size, int64_t &real_auto_split_size);
+  static int check_tablet_creation_limit(const int64_t inc_tablet_cnt, const double safe_ratio, const int64_t auto_split_size, int64_t &real_auto_split_size);
 private:
   ObServerAutoSplitScheduler ()
     : next_valid_time_(0), polling_manager_(false/*is_root_server*/)

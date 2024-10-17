@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "share/schema/ob_schema_utils.h"
-
 #include "lib/oblog/ob_log.h"
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_table_schema.h"
@@ -26,6 +25,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "observer/ob_server_struct.h"
 #include "sql/engine/cmd/ob_ddl_executor_util.h"
+#include "share/ob_fts_index_builder_util.h"
 namespace oceanbase
 {
 using namespace common;
@@ -143,9 +143,9 @@ int ObSchemaUtils::cascaded_generated_column(ObTableSchema &table_schema,
       } else if (T_FUN_SYS_SPATIAL_CELLID == root_expr_type || T_FUN_SYS_SPATIAL_MBR == root_expr_type) {
         column.add_column_flag(SPATIAL_INDEX_GENERATED_COLUMN_FLAG);
       } else if (T_FUN_SYS_JSON_QUERY == root_expr_type) {
-        if (strstr(col_def.ptr(), "multivalue)")) {
+        if (ObMulValueIndexBuilderUtil::is_multivalue_array_column(col_def)) {
           column.add_column_flag(MULTIVALUE_INDEX_GENERATED_ARRAY_COLUMN_FLAG);
-        } else {
+        } else if (ObMulValueIndexBuilderUtil::is_multivalue_index_column(col_def)) {
           column.add_column_flag(MULTIVALUE_INDEX_GENERATED_COLUMN_FLAG);
         }
       } else {

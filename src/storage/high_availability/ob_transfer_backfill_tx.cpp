@@ -151,6 +151,8 @@ int ObTransferWorkerMgr::get_need_backfill_tx_tablets_(ObTransferBackfillTXParam
         LOG_INFO("[TRANSFER_BACKFILL]skip tablet which restore status is not full.",
                 "tablet_id", tablet->get_tablet_meta().tablet_id_,
                 "ha_status", tablet->get_tablet_meta().ha_status_);
+      } else if (tablet->is_empty_shell()) {
+        LOG_INFO("tablet is already become empty shell, no need backfill", KPC(tablet));
       } else if (!tablet->get_tablet_meta().transfer_info_.ls_id_.is_valid()
           || !tablet->get_tablet_meta().transfer_info_.transfer_start_scn_.is_valid()) {
         ret = OB_TRANSFER_SYS_ERROR;

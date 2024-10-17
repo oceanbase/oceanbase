@@ -2741,6 +2741,12 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("vector index and fts coexist in main table is not support yet", K(ret), K(index_column_list_node->num_child_));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector index and fts coexist in main table is");
+#ifdef OB_BUILD_SHARED_STORAGE
+        } else if (GCTX.is_shared_storage_mode() && is_fts_index) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("fulltext search index isn't supported in shared storage mode", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "fulltext search index in shared storage mode is");
+#endif
         }
         for (int32_t i = 0; OB_SUCC(ret) && i < index_column_list_node->num_child_; ++i) {
           ObString &column_name = sort_item.column_name_;
@@ -3664,6 +3670,13 @@ int ObCreateTableResolver::check_max_row_data_length(const ObTableSchema &table_
         LOG_USER_ERROR(OB_ERR_TOO_LONG_COLUMN_LENGTH, column->get_column_name(),
             ObAccuracy::MAX_ACCURACY2[is_oracle_mode][column->get_data_type()].get_length());
       } else {
+        if (length <= 0) {  // Temporary workaround only for array/vector/roaringbitmap types.
+          if (column->is_roaringbitmap()) {
+            length = ObAccuracy::DDL_DEFAULT_ACCURACY[ObRoaringBitmapType].get_length();
+          } else if (column->is_collection()) {
+            length = ObAccuracy::DDL_DEFAULT_ACCURACY[ObCollectionSQLType].get_length();
+          }
+        }
         length = min(length, max(table_schema.get_lob_inrow_threshold(), OB_MAX_LOB_HANDLE_LENGTH));
       }
     }

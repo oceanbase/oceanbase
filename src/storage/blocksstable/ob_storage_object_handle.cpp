@@ -229,14 +229,12 @@ int ObStorageObjectHandle::sn_async_read(const ObStorageObjectReadInfo &read_inf
     io_info.fd_.second_id_ = read_info.macro_block_id_.second_id();
     io_info.fd_.third_id_ = read_info.macro_block_id_.third_id();
     io_info.fd_.device_handle_ = &LOCAL_DEVICE_INSTANCE;
-    io_info.flag_.set_resource_group_id(THIS_WORKER.get_group_id());
     io_info.flag_.set_sys_module_id(read_info.io_desc_.get_sys_module_id());
     const int64_t real_timeout_ms = min(read_info.io_timeout_ms_, GCONF._data_storage_io_timeout / 1000L);
     io_info.timeout_us_ = real_timeout_ms * 1000L;
     io_info.user_data_buf_ = read_info.buf_;
     io_info.buf_ = read_info.buf_; // for sync io
     // resource manager level is higher than default
-    io_info.flag_.set_resource_group_id(THIS_WORKER.get_group_id());
     io_info.flag_.set_sys_module_id(read_info.io_desc_.get_sys_module_id());
 
     io_info.flag_.set_read();
@@ -294,7 +292,6 @@ int ObStorageObjectHandle::sn_async_write(const ObStorageObjectWriteInfo &write_
     if (OB_FAIL(write_info.fill_io_info_for_backup(macro_id_, io_info))) {
       LOG_WARN("failed to fill io info for backup", K(ret), K_(macro_id));
     }
-    io_info.flag_.set_resource_group_id(THIS_WORKER.get_group_id());
     io_info.flag_.set_sys_module_id(write_info.io_desc_.get_sys_module_id());
     const int64_t real_timeout_ms = min(write_info.io_timeout_ms_, GCONF._data_storage_io_timeout / 1000L);
     io_info.timeout_us_ = real_timeout_ms * 1000L;

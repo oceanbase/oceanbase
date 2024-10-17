@@ -2873,7 +2873,7 @@ int ObServerCancelEvolveTaskP::process()
   MTL_SWITCH(arg.tenant_id_) {
     plan_cache = MTL(ObPlanCache*);
     if (evict_baseline && OB_FAIL(plan_cache->
-          cache_evict_baseline_by_sql_id(arg.database_id_, arg.sql_id_))) {
+          cache_evict_baseline(arg.database_id_, arg.sql_id_))) {
       LOG_WARN("failed to evict baseline by sql id", K(ret));
     } else if (evict_plan && OB_FAIL(plan_cache->
           cache_evict_plan_by_sql_id(arg.database_id_, arg.sql_id_))) {
@@ -2909,7 +2909,7 @@ int ObLoadBaselineV2P::process()
   MTL_SWITCH(arg_.tenant_id_) {
     ObPlanCache *plan_cache = MTL(ObPlanCache*);
     uint64_t load_count = 0;
-    if (OB_INVALID_ID == arg_.tenant_id_ || arg_.sql_id_.empty()) {  // load appointed tenant cache
+    if (OB_UNLIKELY(OB_INVALID_ID == arg_.tenant_id_)) {  // load appointed tenant cache
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K_(arg), K(ret));
     } else if (OB_FAIL(plan_cache->load_plan_baseline(arg_, load_count))) {

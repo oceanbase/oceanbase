@@ -85,6 +85,7 @@ class ObTableHandleV2;
 class ObTableScanIterator;
 class ObSingleRowGetter;
 class ObLSTabletIterator;
+class ObLSTabletAddrIterator;
 class ObHALSTabletIDIterator;
 class ObHALSTabletIterator;
 class ObLSTabletFastIter;
@@ -257,9 +258,9 @@ public:
     const common::ObTabletID &tablet_id,
     const ObUpdateTableStoreParam &param,
     const int64_t start_macro_seq);
-  int s2_replay_create_tablet(const ObMetaDiskAddr &disk_addr, const ObTabletID &tablet_id);
+  int ss_replay_create_tablet(const ObMetaDiskAddr &disk_addr, const ObTabletID &tablet_id);
   int write_tablet_id_set_to_pending_free();
-  int s2_replay_create_tablet_for_trans_info_tmp(
+  int ss_replay_create_tablet_for_trans_info_tmp(
     const ObMetaDiskAddr &current_disk_addr,
     const ObLSHandle &ls_handle,
     const ObTabletID &tablet_id);
@@ -433,6 +434,7 @@ public:
 
   // iterator
   int build_tablet_iter(ObLSTabletIterator &iter, const bool except_ls_inner_tablet = false);
+  int build_tablet_iter(ObLSTabletAddrIterator &iter);
   int build_tablet_iter(ObHALSTabletIDIterator &iter);
   int build_tablet_iter(ObHALSTabletIterator &iter);
   int build_tablet_iter(ObLSTabletFastIter &iter, const bool except_ls_inner_tablet = false);
@@ -997,6 +999,7 @@ private:
 
 private:
   friend class ObLSTabletIterator;
+  friend class ObLSTabletAddrIterator;
   friend class ObTabletCreateMdsHelper;
   friend class ObLSTabletFastIter;
 

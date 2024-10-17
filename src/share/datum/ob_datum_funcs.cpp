@@ -162,41 +162,13 @@ bool g_decint_basic_func_array_inited =
   ObArrayConstIniter<DECIMAL_INT_MAX, InitDecintBasicFuncArray>::init();
 bool g_basic_udt_array_inited = ObArrayConstIniter<1, InitUDTBasicFuncArray>::init();
 
-extern void __init_str_func0();
-extern void __init_str_func1();
-extern void __init_str_func2();
-extern void __init_str_func3();
-extern void __init_str_func4();
-extern void __init_str_func5();
-extern void __init_str_func6();
-extern void __init_str_func7();
-extern void __init_str_func8();
-extern void __init_str_func9();
-extern void __init_str_func10();
-extern void __init_str_func11();
-extern void __init_str_func12();
-extern void __init_str_func13();
-extern void __init_str_func14();
-extern void __init_str_func15();
+extern void __init_datum_funcs_all();
+extern void __init_all_str_funcs();
 
 static bool init_all_str_funcs()
 {
-  __init_str_func0();
-  __init_str_func1();
-  __init_str_func2();
-  __init_str_func3();
-  __init_str_func4();
-  __init_str_func5();
-  __init_str_func6();
-  __init_str_func7();
-  __init_str_func8();
-  __init_str_func9();
-  __init_str_func10();
-  __init_str_func11();
-  __init_str_func12();
-  __init_str_func13();
-  __init_str_func14();
-  __init_str_func15();
+  __init_datum_funcs_all();
+  __init_all_str_funcs();
   int64_t g_fill_type_with_tc_cmp_func = fill_type_with_tc_cmp_func();
   return true;
 }

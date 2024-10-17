@@ -167,6 +167,14 @@ void ObServerConfig::print() const
   OB_LOG(INFO, "===================== *stop server config report* =======================");
 }
 
+int ObServerConfig::add_extra_config(const char *config_str,
+                                     const int64_t version /* = 0 */,
+                                     const bool check_config /* = true */)
+{
+  DRWLock::WRLockGuard guard(OTC_MGR.rwlock_);
+  return add_extra_config_unsafe(config_str, version, check_config);
+}
+
 double ObServerConfig::get_sys_tenant_default_min_cpu()
 {
   double min_cpu = server_cpu_quota_min;
@@ -423,10 +431,10 @@ int ObServerMemoryConfig::reload_config(const ObServerConfig& server_config)
   return ret;
 }
 
-void ObServerMemoryConfig::check_500_tenant_hold(bool ignore_error)
+void ObServerMemoryConfig::check_limit(bool ignore_error)
 {
-  //check the hold memory of tenant 500
   int ret = OB_SUCCESS;
+  //check the hold memory of tenant 500
   int64_t hold = lib::get_tenant_memory_hold(OB_SERVER_TENANT_ID);
   int64_t reserved = system_memory_ - get_extra_memory();
   if (hold > reserved) {
@@ -436,6 +444,16 @@ void ObServerMemoryConfig::check_500_tenant_hold(bool ignore_error)
     } else {
       LOG_ERROR("the hold memory of tenant_500 is over the reserved memory",
               K(hold), K(reserved));
+    }
+  }
+  // check divisive memory size
+  const int64_t DIVISIVE_MEMORY_LIMIT = 2LL<<30;
+  int64_t divisive_memory_size = get_divisive_mem_size();
+  if (divisive_memory_size > DIVISIVE_MEMORY_LIMIT) {
+    if (ignore_error) {
+      LOG_WARN("divisive_memory_size is over the limit", K(divisive_memory_size), K(DIVISIVE_MEMORY_LIMIT));
+    } else {
+      LOG_ERROR("divisive_memory_size is over the limit", K(divisive_memory_size), K(DIVISIVE_MEMORY_LIMIT));
     }
   }
 }

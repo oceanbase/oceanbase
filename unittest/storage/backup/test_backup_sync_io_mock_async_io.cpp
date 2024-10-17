@@ -178,7 +178,7 @@ int prepare_macro_block_read_info(
   read_info.size_ = size;
   read_info.io_desc_.set_mode(ObIOMode::READ);
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-  // read_info.io_desc_.set_resource_group_id(ObIOModule::ROOT_BLOCK_IO);
+  read_info.io_desc_.set_sys_module_id(ObIOModule::ROOT_BLOCK_IO);
   return ret;
 }
 
@@ -240,7 +240,6 @@ int prepare_write_io_info(const ObBackupDeviceMacroBlockId &macro_id,
     write_io_info.fd_.fd_id_ = static_cast<ObBackupWrapperIODevice *>(device_handle)->simulated_fd_id();
     write_io_info.fd_.slot_version_ = static_cast<ObBackupWrapperIODevice *>(device_handle)->simulated_slot_version();
   }
-  write_io_info.flag_.set_resource_group_id(THIS_WORKER.get_group_id());
   write_io_info.flag_.set_write();
   return ret;
 }
@@ -268,7 +267,6 @@ int prepare_read_io_info(const ObBackupDeviceMacroBlockId &macro_id,
       read_io_info.buf_ = buf;
     }
   }
-  read_io_info.flag_.set_resource_group_id(THIS_WORKER.get_group_id());
   read_io_info.flag_.set_read();
   return ret;
 }

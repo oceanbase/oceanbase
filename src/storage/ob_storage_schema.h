@@ -172,6 +172,20 @@ public:
   uint16_t *column_idxs_; //free the memory with the allocator outside
 };
 
+struct ObUpdateCSReplicaSchemaParam
+{
+public:
+  ObUpdateCSReplicaSchemaParam();
+  ~ObUpdateCSReplicaSchemaParam();
+  int init(const ObTablet &tablet);
+  bool is_valid() const;
+  TO_STRING_KV(K_(tablet_id), K_(major_column_cnt), K_(is_inited));
+public:
+  ObTabletID tablet_id_;
+  int64_t major_column_cnt_;
+  bool is_inited_;
+};
+
 class ObStorageSchema : public share::schema::ObMergeSchema
 {
 public:
@@ -190,11 +204,16 @@ public:
       const ObStorageSchema &old_schema,
       const bool skip_column_info = false,
       const ObStorageSchema *column_group_schema = nullptr,
-      const bool generate_cs_replica_cg_array = false);
+      const bool generate_cs_replica_cg_array = false,
+      const ObUpdateCSReplicaSchemaParam *update_param = nullptr);
   int deep_copy_column_array(
       common::ObIAllocator &allocator,
       const ObStorageSchema &src_schema,
       const int64_t copy_array_cnt);
+  int rebuild_column_array(
+      common::ObIAllocator &allocator,
+      const ObStorageSchema &src_schema,
+      const ObUpdateCSReplicaSchemaParam &update_param);
   int deep_copy_column_group_array(
       common::ObIAllocator &allocator,
       const ObStorageSchema &src_schema);
@@ -297,6 +316,7 @@ public:
       const uint64_t &column_id,
       const int32_t &column_idx,
       int32_t &cg_idx) const;
+  bool is_cg_array_generated_in_cs_replica() const;
   // Use this comparison function to determine which schema has been updated later
   // true: input_schema is newer
   // false: current schema is newer
@@ -309,10 +329,11 @@ public:
   inline bool is_aux_lob_meta_table() const { return share::schema::is_aux_lob_meta_table(table_type_); }
   inline bool is_aux_lob_piece_table() const { return share::schema::is_aux_lob_piece_table(table_type_); }
   OB_INLINE bool is_user_hidden_table() const { return share::schema::TABLE_STATE_IS_HIDDEN_MASK & table_mode_.state_flag_; }
+  OB_INLINE bool is_cs_replica_compat() const { return is_cs_replica_compat_; }
 
   VIRTUAL_TO_STRING_KV(KP(this), K_(storage_schema_version), K_(version),
       K_(is_use_bloomfilter), K_(column_info_simplified), K_(compat_mode), K_(table_type), K_(index_type),
-      K_(row_store_type), K_(schema_version),
+      K_(row_store_type), K_(schema_version), K_(is_cs_replica_compat),
       K_(column_cnt), K_(store_column_cnt), K_(tablet_size), K_(pctfree), K_(block_size), K_(progressive_merge_round),
       K_(master_key_id), K_(compressor_type), K_(encryption), K_(encrypt_key),
       "rowkey_cnt", rowkey_array_.count(), K_(rowkey_array), "column_cnt", column_array_.count(), K_(column_array),
@@ -361,7 +382,7 @@ public:
   static const int32_t SS_ONE_BIT = 1;
   static const int32_t SS_HALF_BYTE = 4;
   static const int32_t SS_ONE_BYTE = 8;
-  static const int32_t SS_RESERVED_BITS = 18;
+  static const int32_t SS_RESERVED_BITS = 17;
 
   // STORAGE_SCHEMA_VERSION is for serde compatibility.
   // Currently we do not use "standard" serde function macro,
@@ -385,6 +406,7 @@ public:
       uint32_t compat_mode_         :SS_HALF_BYTE;
       uint32_t is_use_bloomfilter_  :SS_ONE_BIT;
       uint32_t column_info_simplified_ :SS_ONE_BIT;
+      uint32_t is_cs_replica_compat_ :SS_ONE_BIT; // for storage schema on tablet
       uint32_t reserved_            :SS_RESERVED_BITS;
     };
   };

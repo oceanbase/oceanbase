@@ -33,6 +33,7 @@
 #include "../../../src/sql/parser/sql_parser_base.h"
 
 extern void obsql_oracle_parse_fatal_error(int32_t errcode, yyscan_t yyscanner, yyconst char *msg, ...);
+extern int easy_vsnprintf(char *buf, size_t size, const char *fmt, va_list args);
 
 #define GEN_EXPLAN_STMT(no_use, explain_stmt, explain_type, display_type, stmt, into_table, set_statement_id) \
   (void)(no_use); \
@@ -11091,6 +11092,9 @@ global_hint
 }
 | error
 {
+  if (OB_PARSER_ERR_NO_MEMORY == result->extra_errno_) {
+    YYABORT_NO_MEMORY;
+  }
   $$ = NULL;
 }
 ;
@@ -24664,13 +24668,7 @@ void yyerror(void *yylloc, ParseResult *p, char *s, ...)
     p->result_tree_ = 0;
     va_list ap;
     va_start(ap, s);
-    char *escaped_s = NULL;
-    ESCAPE_PERCENT(p, s, escaped_s);
-    if (OB_NOT_NULL(escaped_s)) {
-      vsnprintf(p->error_msg_, MAX_ERROR_MSG, escaped_s, ap);
-    } else {
-      vsnprintf(p->error_msg_, MAX_ERROR_MSG, s, ap);
-    }
+    easy_vsnprintf(p->error_msg_, MAX_ERROR_MSG, s, ap);
     if (OB_LIKELY(NULL != yylloc)) {
       YYLTYPE *yylloc_pointer = (YYLTYPE *)yylloc;
       if (OB_LIKELY(NULL != p->input_sql_) && p->input_sql_[yylloc_pointer->first_column - 1] != '\'') {

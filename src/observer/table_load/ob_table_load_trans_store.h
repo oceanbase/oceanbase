@@ -75,18 +75,15 @@ public:
   // 只在对应工作线程中调用, 串行执行
   int write(int32_t session_id, const table::ObTableLoadTabletObjRowArray &row_array);
   int px_write(const ObTabletID &tablet_id, const blocksstable::ObDatumRow &row);
+  int cast_row(int32_t session_id,
+               const ObNewRow &new_row,
+               const blocksstable::ObDatumRow *&datum_row);
   int flush(int32_t session_id);
   int clean_up(int32_t session_id);
 public:
   int64_t get_ref_count() const { return ATOMIC_LOAD(&ref_count_); }
   int64_t inc_ref_count() { return ATOMIC_AAF(&ref_count_, 1); }
   int64_t dec_ref_count() { return ATOMIC_AAF(&ref_count_, -1); }
-  int cast_row(common::ObArenaAllocator &cast_allocator, ObDataTypeCastParams cast_params,
-               const common::ObNewRow &row, blocksstable::ObDatumRow &datum_row,
-               int32_t session_id);
-  int cast_row(int32_t session_id,
-               const ObNewRow &new_row,
-               blocksstable::ObDatumRow &datum_row);
 private:
   int init_session_ctx_array();
   int init_column_schemas_and_lob_info();
@@ -96,6 +93,9 @@ private:
                   const common::ObObj &obj,
                   blocksstable::ObStorageDatum &datum,
                   int32_t session_id);
+  int cast_row(common::ObArenaAllocator &cast_allocator, ObDataTypeCastParams cast_params,
+               const common::ObNewRow &row, blocksstable::ObDatumRow &datum_row,
+               int32_t session_id);
   int handle_autoinc_column(const share::schema::ObColumnSchemaV2 *column_schema,
                             const common::ObObj &obj,
                             blocksstable::ObStorageDatum &datum,

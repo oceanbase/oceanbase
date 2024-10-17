@@ -100,7 +100,7 @@ int ObTabletCopyFinishTask::process()
   int ret = OB_SUCCESS;
   bool only_contain_major = false;
   ObCopyTabletStatus::STATUS status = ObCopyTabletStatus::MAX_STATUS;
-  const ObCopyTabletRecordExtraInfo *extra_info = nullptr;
+  ObCopyTabletRecordExtraInfo *extra_info = nullptr;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -144,6 +144,7 @@ int ObTabletCopyFinishTask::process()
     LOG_WARN("failed to get copy tablet record extra info", K(tmp_ret), KP(extra_info));
   } else if (OB_ISNULL(extra_info)) {
     LOG_WARN("copy tablet record extra info is NULL", K(extra_info));
+  } else if (FALSE_IT(extra_info->set_restore_action(restore_action_))) {
   } else if (OB_SUCCESS != (tmp_ret = common::databuff_printf(extra_info_str, MAX_ROOTSERVICE_EVENT_EXTRA_INFO_LENGTH, "%s", to_cstring(*extra_info)))) {
     LOG_WARN("failed to print extra info", K(tmp_ret), K(extra_info));
   }
@@ -636,52 +637,6 @@ int ObTabletCopyFinishTask::check_log_replay_to_mds_sstable_end_scn_()
 
   LOG_INFO("finish check_log_replay_to_mds_sstable_end_scn_",
       K(ret), K(tablet_id_), "cost", ObTimeUtil::current_time() - start_ts);
-  return ret;
-}
-
-/******************ObCopyTabletRecordExtraInfo*********************/
-ObCopyTabletRecordExtraInfo::ObCopyTabletRecordExtraInfo()
-  : cost_time_ms_(0),
-    total_data_size_(0),
-    write_data_size_(0),
-    major_count_(0),
-    macro_count_(0),
-    major_macro_count_(0),
-    reuse_macro_count_(0),
-    max_reuse_mgr_size_(0)
-{
-}
-
-ObCopyTabletRecordExtraInfo::~ObCopyTabletRecordExtraInfo()
-{
-}
-
-void ObCopyTabletRecordExtraInfo::reset()
-{
-  cost_time_ms_ = 0;
-  total_data_size_ = 0;
-  write_data_size_ = 0;
-  major_count_ = 0;
-  macro_count_ = 0;
-  major_macro_count_ = 0;
-  reuse_macro_count_ = 0;
-  max_reuse_mgr_size_ = 0;
-}
-
-int ObCopyTabletRecordExtraInfo::update_max_reuse_mgr_size(ObMacroBlockReuseMgr *&reuse_mgr)
-{
-  int ret = OB_SUCCESS;
-  int64_t count = 0;
-
-  if (OB_ISNULL(reuse_mgr)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("update max reuse mgr size get invalid argument", K(ret), KP(reuse_mgr));
-  } else if (OB_FAIL(reuse_mgr->count(count))) {
-    LOG_WARN("failed to count reuse mgr", K(ret), KP(reuse_mgr));
-  } else {
-    max_reuse_mgr_size_ = MAX(count * reuse_mgr->get_item_size(), max_reuse_mgr_size_);
-  }
-
   return ret;
 }
 

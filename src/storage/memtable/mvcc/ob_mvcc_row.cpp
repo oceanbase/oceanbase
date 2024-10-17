@@ -517,6 +517,7 @@ int ObMvccRow::insert_trans_node(ObIMvccCtx &ctx,
             TRANS_LOG(ERROR, "meet unexpected index_node", KR(ret), K(*prev), K(node), K(*index_node), K(*this));
             abort_unless(0);
           } else if (prev->tx_id_ == node.tx_id_
+                     && prev->seq_no_.support_branch()
                      && OB_UNLIKELY(prev->seq_no_ > node.seq_no_)
                      // exclude the concurrently update uk case, which always in branch 0
                      && !(prev->seq_no_.get_branch() == 0 && node.seq_no_.get_branch() == 0)) {
@@ -561,7 +562,10 @@ int ObMvccRow::insert_trans_node(ObIMvccCtx &ctx,
         }
       }
       if (OB_SUCC(ret) && OB_NOT_NULL(tmp) && tmp->tx_id_ == node.tx_id_) {
-        if (OB_UNLIKELY(tmp->seq_no_ > node.seq_no_)) {
+        if (tmp->seq_no_.support_branch()
+            && OB_UNLIKELY(tmp->seq_no_ > node.seq_no_)
+            // exclude the concurrently update uk case, which always in branch 0
+            && !(tmp->seq_no_.get_branch() == 0 && node.seq_no_.get_branch() == 0)) {
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(ERROR, "prev node seq_no > this node", KR(ret), "prev", PC(tmp), K(node), KPC(this));
           usleep(1000);

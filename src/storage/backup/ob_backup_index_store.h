@@ -70,7 +70,7 @@ protected:
   int decode_index_from_block_(const int64_t data_zlength, const int64_t original_size, const ObCompressorType &compressor_type,
       blocksstable::ObBufferReader &buffer_reader, common::ObIArray<IndexType> &index_list);
   int fetch_block_(const ObBackupFileType &backup_file_type, const int64_t offset, const int64_t length,
-      common::ObIAllocator &allocator, blocksstable::ObBufferReader &buffer_reader);
+      common::ObIAllocator &allocator, ObKVCacheHandle &handle, blocksstable::ObBufferReader &buffer_reader);
   int do_on_cache_miss_(const ObBackupFileType &backup_file_type, const int64_t offset, const int64_t length,
       common::ObIAllocator &allocator, blocksstable::ObBufferReader &buffer_reader);
   int put_block_to_cache_(const ObBackupFileType &backup_file_type, const int64_t offset, const int64_t length,

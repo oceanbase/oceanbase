@@ -286,6 +286,10 @@ int log_base_type_to_string(const ObLogBaseType log_type,
   } else {
     ret = OB_INVALID_ARGUMENT;
   }
+
+  if (str_len > 0) {
+    str[str_len - 1] = '\0';
+  }
   return ret;
 }
 

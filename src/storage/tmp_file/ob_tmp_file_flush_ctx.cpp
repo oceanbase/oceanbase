@@ -406,8 +406,7 @@ int ObTmpFileFlushTask::write_one_block()
   if (OB_SUCC(ret)) {
     blocksstable::ObMacroBlockWriteInfo write_info;
     write_info.io_desc_.set_wait_event(2); // TODO: 检查是否需要用临时文件自己的event
-    write_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
-    write_info.io_desc_.set_sys_module_id(ObIOModule::TMP_TENANT_MEM_BLOCK_IO);
+      write_info.io_desc_.set_sys_module_id(ObIOModule::TMP_TENANT_MEM_BLOCK_IO);
     write_info.buffer_ = get_data_buf();
     write_info.size_ = upper_align(get_data_length(), ObTmpFileGlobal::PAGE_SIZE);
     write_info.offset_ = 0;

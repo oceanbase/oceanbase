@@ -21,7 +21,7 @@ namespace oceanbase
 namespace logservice
 {
 
-ObReconfigCheckerAdapter::ObReconfigCheckerAdapter()
+ObReconfigCheckerAdapter::ObReconfigCheckerAdapter() : guard_()
 {
   tenant_id_ = OB_INVALID_TENANT_ID;
   ls_id_.reset();
@@ -43,8 +43,8 @@ int ObReconfigCheckerAdapter::init(const uint64_t tenant_id,
     tenant_id_ = tenant_id;
     ls_id_ = ls_id;
     timeout_ = timeout;
+    ret = guard_.init(tenant_id, ls_id, timeout);
   }
-
   return ret;
 }
 
@@ -71,6 +71,10 @@ int ObReconfigCheckerAdapter::check_can_add_member(const ObAddr &server,
     }
   } while (OB_FAIL(ret) && ret != OB_TIMEOUT);
 
+  if (OB_SUCC(ret)) {
+    ret = guard_.check_can_add_member(server, timeout_us);
+  }
+
   return ret;
 }
 
@@ -78,9 +82,7 @@ int ObReconfigCheckerAdapter::check_can_change_memberlist(const ObMemberList &ne
                                                           const int64_t paxos_replica_num,
                                                           const int64_t timeout_us)
 {
-  int ret = OB_SUCCESS;
-  UNUSEDx(new_member_list, paxos_replica_num, timeout_us);
-  return ret;
+  return guard_.check_can_change_member(new_member_list, paxos_replica_num, timeout_us);
 }
 
 } // end namespace logservice

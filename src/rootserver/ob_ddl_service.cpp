@@ -3230,13 +3230,9 @@ int ObDDLService::set_raw_table_options(
             uint64_t tablegroup_id = OB_INVALID_ID;
             uint64_t tenant_id = alter_table_schema.get_tenant_id();
             //tablegroup_id not set in resolver, only record tablegroup name
-            if (new_table_schema.is_auto_partitioned_table()) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("not support to add auto-partitioned table to tablegroup", KR(ret), K(new_table_schema));
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "add auto-partitioned table to tablegroup is");
-            } else if (OB_FAIL(schema_guard.get_tablegroup_id(tenant_id,
-                                                              tablegroup_name,
-                                                              tablegroup_id))) {
+            if (OB_FAIL(schema_guard.get_tablegroup_id(tenant_id,
+                                                       tablegroup_name,
+                                                       tablegroup_id))) {
               LOG_WARN("failed to get tablegroup id", K(ret), K(tablegroup_name));
             } else if (OB_INVALID_ID == tablegroup_id) {
               ret = OB_TABLEGROUP_NOT_EXIST;
@@ -4308,6 +4304,17 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("unhandled operator type!", K_(alter_column_schema->alter_type));
           break;
+        }
+      }
+      if (OB_SUCC(ret)
+          && ObDDLType::DDL_TABLE_REDEFINITION == ddl_type
+          && alter_column_schema->is_identity_column()
+          && OB_DDL_DROP_COLUMN != op_type) {
+        if (nullptr == orig_column_schema) {
+          ddl_need_retry_at_executor = true;
+        } else if (orig_column_schema->is_nullable()) {
+          // only nullable column need generate value from sequence
+          ddl_need_retry_at_executor = true;
         }
       }
     }
@@ -13401,8 +13408,7 @@ int ObDDLService::alter_table_partitions(const obrpc::ObAlterTableArg &alter_tab
                K(orig_table_schema), K(inc_table_schema));
     }
   }
-
-  if (OB_SUCC(ret) && !is_add_and_drop_partition(op_type)) {
+  if (OB_SUCC(ret) && !is_add_and_drop_partition(op_type) && !alter_table_arg.is_split_partition()) {
     if (OB_FAIL(check_alter_partition_with_tablegroup(&orig_table_schema, new_table_schema, schema_guard))) {
       LOG_WARN("fail to check alter partition with tablegroup", KR(ret), K(orig_table_schema), K(new_table_schema));
     }
@@ -13567,6 +13573,42 @@ int ObDDLService::update_tables_attribute(ObIArray<ObTableSchema*> &new_table_sc
   return ret;
 }
 
+int ObDDLService::check_need_add_progressive_round(
+  const uint64_t tenant_data_version,
+  const ObTableSchema &table_schema,
+  const AlterTableSchema &alter_table_schema,
+  bool &need_add_progressive_round)
+{
+  int ret = OB_SUCCESS;
+  need_add_progressive_round = true;
+  bool is_column_store_schema = false;
+  bool has_all_column_group = false;
+  if (tenant_data_version < DATA_VERSION_4_3_4_0) {
+    // do nothing
+  } else if (OB_FAIL(table_schema.get_is_column_store(is_column_store_schema))) {
+    LOG_WARN("failed to get is column store", KR(ret));
+  } else if (!is_column_store_schema) {
+  } else if (OB_FAIL(table_schema.has_all_column_group(has_all_column_group))) {
+    LOG_WARN("failed to check has all column group", KR(ret));
+  } else if (!has_all_column_group) {
+    // for pure column store table
+    AlterColumnSchema *alter_column_schema = nullptr;
+    ObTableSchema::const_column_iterator it_begin = alter_table_schema.column_begin();
+    ObTableSchema::const_column_iterator it_end = alter_table_schema.column_end();
+    need_add_progressive_round = false;
+    for (;OB_SUCC(ret) && it_begin != it_end; it_begin++) {
+      if (OB_ISNULL(alter_column_schema = static_cast<AlterColumnSchema *>(*it_begin))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("*it_begin is NULL", K(ret));
+      } else if (OB_DDL_ADD_COLUMN != alter_column_schema->alter_type_) {
+        need_add_progressive_round = true;
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 //fix me :Check whether the newly added index column covers the partition column --by rongxuan.lc
 // It can be repaired after the featrue that add index in alter_table statement
 int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
@@ -13679,21 +13721,31 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
     } else {
       bool need_update_index_table = false;
       AlterLocalityOp alter_locality_op = ALTER_LOCALITY_OP_INVALID;
-
-      if (alter_table_arg.is_alter_columns_
-          || (alter_table_arg.is_alter_options_
-          && alter_table_arg.need_progressive_merge())) {
+      bool need_progressive_merge = false;
+      if (alter_table_arg.is_alter_columns_) {
+        if (OB_FAIL(check_need_add_progressive_round(
+            tenant_data_version,
+            *orig_table_schema,
+            alter_table_arg.alter_table_schema_,
+            need_progressive_merge))) {
+          LOG_WARN("failed to check need progressive round", KR(ret));
+        }
+      } else if (alter_table_arg.is_alter_options_
+          && alter_table_arg.need_progressive_merge()) {
         if (alter_table_arg.alter_table_schema_.alter_option_bitset_.
             has_member(ObAlterTableArg::ENCRYPTION) &&
             alter_table_arg.alter_table_schema_.is_equal_encryption(*orig_table_schema)) {
           // If the values before and after changing the encryption algorithm in the table are the same,
           // the merge is not marked
         } else {
-          alter_table_arg.is_alter_options_ = true;
-          alter_table_arg.alter_table_schema_.set_progressive_merge_round(orig_table_schema->get_progressive_merge_round() + 1);
-          if (OB_FAIL(alter_table_arg.alter_table_schema_.alter_option_bitset_.add_member(ObAlterTableArg::PROGRESSIVE_MERGE_ROUND))) {
-            LOG_WARN("fail to add member progressive merge round", K(ret));
-          }
+          need_progressive_merge = true;
+        }
+      }
+      if (OB_SUCC(ret) && need_progressive_merge) {
+        alter_table_arg.is_alter_options_ = true;
+        alter_table_arg.alter_table_schema_.set_progressive_merge_round(orig_table_schema->get_progressive_merge_round() + 1);
+        if (OB_FAIL(alter_table_arg.alter_table_schema_.alter_option_bitset_.add_member(ObAlterTableArg::PROGRESSIVE_MERGE_ROUND))) {
+          LOG_WARN("fail to add member progressive merge round", K(ret));
         }
       }
       if (OB_SUCC(ret)) {

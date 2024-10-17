@@ -390,7 +390,7 @@ public:
   virtual int wait_notify(const ObDirectLoadSliceWriter *slice_writer, const int64_t context_id, const share::SCN &start_scn);
   virtual int fill_column_group(const int64_t thread_cnt, const int64_t thread_id);
   virtual int notify_all();
-  virtual int calc_range(const int64_t thread_cnt);
+  virtual int calc_range(const int64_t context_id, const int64_t thread_cnt);
   int calc_cg_range(ObArray<ObDirectLoadSliceWriter *> &sorted_slices, const int64_t thread_cnt);
   const ObIArray<ObColumnSchemaItem> &get_column_info() const { return column_items_; };
   bool is_schema_item_ready() { return is_schema_item_ready_; }
@@ -542,6 +542,7 @@ private:
   int init_ddl_table_store(const share::SCN &start_scn, const int64_t snapshot_version, const share::SCN &ddl_checkpoint_scn);
   int update_major_sstable();
   int pre_process_cs_replica(const ObTabletID &tablet_id, bool &replay_normal_in_cs_replica);
+  int check_need_replay_column_store(const ObStorageSchema &storage_schema, const ObDirectLoadType &direct_load_type, bool &need_replay_column_store);
 
 private:
   share::SCN start_scn_;

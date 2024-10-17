@@ -18,7 +18,9 @@
 #include <map>
 #include "share/ob_define.h"
 #include "share/parameter/ob_parameter_macro.h"
+#define CONFIG_LOCK_EXEMPTION
 #include "share/config/ob_common_config.h"    // ObInitConfigContainer
+#undef CONFIG_LOCK_EXEMPTION
 
 ////////////// Define member variables of type INT, no limit on maximum value //////////////
 // DEF: default value

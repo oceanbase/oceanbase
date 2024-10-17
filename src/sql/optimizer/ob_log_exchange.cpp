@@ -1043,10 +1043,24 @@ int ObLogExchange::allocate_startup_expr_post()
 int ObLogExchange::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
 {
   int ret = OB_SUCCESS;
-  is_fixed = expr == calc_part_id_expr_ ||
-             expr == partition_id_expr_ ||
-             expr == ddl_slice_id_expr_ ||
-             expr == random_expr_;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else {
+    is_fixed = expr == calc_part_id_expr_ ||
+               expr == partition_id_expr_ ||
+               expr == ddl_slice_id_expr_ ||
+               expr == random_expr_ ||
+               T_OP_OUTPUT_PACK == expr->get_expr_type();
+    for (int64_t i = 0; OB_SUCC(ret) && !is_fixed && i < hash_dist_exprs_.count(); i++) {
+      if (OB_ISNULL(hash_dist_exprs_.at(i).expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else {
+        is_fixed = expr == hash_dist_exprs_.at(i).expr_;
+      }
+    }
+  }
   return OB_SUCCESS;
 }
 

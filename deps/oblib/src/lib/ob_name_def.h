@@ -1187,4 +1187,5 @@
 #define N_SPLIT_PART                        "split_part"
 #define N_RB_ITERATE                        "rb_iterate"
 #define N_RB_SELECT                         "rb_select"
+#define N_GET_MYSQL_ROUTINE_PARAMETER_TYPE_STR   "get_mysql_routine_parameter_type_str"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

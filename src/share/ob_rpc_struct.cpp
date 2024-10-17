@@ -882,6 +882,7 @@ int ObCreateHiddenTableRes::assign(const ObCreateHiddenTableRes &res)
   trace_id_ = res.trace_id_;
   task_id_ = res.task_id_;
   schema_version_ = res.schema_version_;
+  is_no_logging_ = res.is_no_logging_;
   return ret;
 }
 
@@ -892,7 +893,8 @@ OB_SERIALIZE_MEMBER(ObCreateHiddenTableRes,
                     dest_table_id_,
                     trace_id_,
                     task_id_,
-                    schema_version_);
+                    schema_version_,
+                    is_no_logging_);
 
 OB_SERIALIZE_MEMBER(ObStartRedefTableRes,
                     task_id_,
@@ -7424,6 +7426,8 @@ bool ObGetLSReplayedScnRes::is_valid() const
   return OB_INVALID_TENANT_ID != tenant_id_
          && ls_id_.is_valid()
          && cur_readable_scn_.is_valid_and_not_min();
+  //no need check offline_scn,offline_scn可能没有并且有升级兼容性问题
+  //no need check server valid
 }
 int ObGetLSReplayedScnRes::init(
     const uint64_t tenant_id,
@@ -7437,7 +7441,7 @@ int ObGetLSReplayedScnRes::init(
                   || !ls_id.is_valid()
                   || !cur_readable_scn.is_valid_and_not_min()
                   || !server.is_valid())) {
-    //不用校验offline_scn，可能就是一个非法的
+                  //不用校验offline_scn，可能就是一个非法的
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(cur_readable_scn), K(server));
   } else {
@@ -9374,13 +9378,15 @@ int ObFetchSplitTabletInfoRes::assign(const ObFetchSplitTabletInfoRes &other)
   if (OB_UNLIKELY(!other.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(other));
+  } else if (OB_FAIL(tablet_sizes_.assign(other.tablet_sizes_))) {
+    LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(create_commit_versions_.assign(other.create_commit_versions_))) {
     LOG_WARN("failed to assign", K(ret));
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObFetchSplitTabletInfoRes, create_commit_versions_);
+OB_SERIALIZE_MEMBER(ObFetchSplitTabletInfoRes, tablet_sizes_, create_commit_versions_);
 
 // === Functions for tablet split end. ===
 

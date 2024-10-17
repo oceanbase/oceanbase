@@ -293,13 +293,23 @@ int ObTableApiExecuteP::process_group_commit()
   ObLSID ls_id(ObLSID::INVALID_LS_ID);
 
   if (!tablet_id_.is_valid()) {
-    tablet_id_ = simple_table_schema_->get_tablet_id();
+    if (!simple_table_schema_->is_partitioned_table()) {
+      tablet_id_ = simple_table_schema_->get_tablet_id();
+    } else {
+      // In auto-split scene, non-partiion table may convert to partition table.
+      // trigger client to refresh table entry
+      // maybe drop a non-partitioned table and create a
+      // partitioned table with same name
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("partitioned table should pass right tablet id from client", K(ret));
+    }
   }
-  if (OB_NOT_NULL(group_single_op_)) {
+  if (OB_SUCC(ret) && OB_NOT_NULL(group_single_op_)) {
     group_single_op_->tablet_id_ = tablet_id_;
   }
 
-  if (OB_FAIL(GCTX.location_service_->get(tenant_id,
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(GCTX.location_service_->get(tenant_id,
                                           tablet_id_,
                                           0, /* expire_renew_time */
                                           is_cache_hit,

@@ -32,6 +32,7 @@ namespace storage
 
 ObTenantStorageMetaService::ObTenantStorageMetaService()
   : is_inited_(false),
+    is_started_(false),
     is_shared_storage_(false),
     ckpt_slog_handler_(),
     slogger_(),
@@ -106,6 +107,9 @@ int ObTenantStorageMetaService::start()
     MTL(checkpoint::ObTabletGCService*)->set_mtl_start_max_block_id(macro_block_id);
 #endif
   }
+  if (OB_SUCC(ret)) {
+    is_started_ = true;
+  }
   FLOG_INFO("finish start ObTenantStorageMetaService", K(ret));
   return ret;
 }
@@ -142,6 +146,7 @@ void ObTenantStorageMetaService::destroy()
   shared_object_rwriter_.reset();
   shared_object_raw_rwriter_.reset();
   is_shared_storage_ = false;
+  is_started_ = false;
   is_inited_ = false;
 }
 
@@ -529,10 +534,10 @@ int ObTenantStorageMetaService::write_gc_tablet_scn_arr(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tablet_id), K(obj_type));
   } else if (blocksstable::ObStorageObjectType::SHARED_MAJOR_GC_INFO == obj_type &&
-      OB_FAIL(s2_write_gc_info_(tablet_id, tablet_scn_arr))) {
+      OB_FAIL(ss_write_gc_info_(tablet_id, tablet_scn_arr))) {
     LOG_WARN("failed to write gc_info", K(ret), K(tablet_id), K(tablet_scn_arr));
   } else if (blocksstable::ObStorageObjectType::SHARED_MAJOR_META_LIST == obj_type &&
-      OB_FAIL(s2_write_meta_list_(tablet_id, tablet_scn_arr))) {
+      OB_FAIL(ss_write_meta_list_(tablet_id, tablet_scn_arr))) {
     LOG_WARN("failed to write meta_list", K(ret), K(tablet_id), K(tablet_scn_arr));
   }
   return ret;
@@ -621,7 +626,7 @@ int ObTenantStorageMetaService::update_shared_tablet_meta_list(
   FLOG_INFO("finish update_shared_tablet_meta_list", K(ret), K(tablet_id), K(new_tablet_meta_scn), K(new_tablet_meta_version_list));
   return ret;
 }
-int ObTenantStorageMetaService::s2_write_gc_info_(
+int ObTenantStorageMetaService::ss_write_gc_info_(
     const ObTabletID tablet_id, const ObGCTabletMetaInfoList &gc_info_scn_arr)
 {
   int ret = OB_SUCCESS;
@@ -634,7 +639,7 @@ int ObTenantStorageMetaService::s2_write_gc_info_(
   }
   return ret;
 }
-int ObTenantStorageMetaService::s2_write_meta_list_(
+int ObTenantStorageMetaService::ss_write_meta_list_(
     const ObTabletID tablet_id, const ObGCTabletMetaInfoList &meta_list_scn_arr)
 {
   int ret = OB_SUCCESS;
@@ -647,7 +652,7 @@ int ObTenantStorageMetaService::s2_write_meta_list_(
   }
   return ret;
 }
-int ObTenantStorageMetaService::s2_is_meta_list_exist(const ObTabletID tablet_id, bool &is_exist)
+int ObTenantStorageMetaService::ss_is_meta_list_exist(const ObTabletID tablet_id, bool &is_exist)
 {
   int ret = OB_SUCCESS;
   blocksstable::ObStorageObjectOpt opt;

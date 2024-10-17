@@ -221,6 +221,8 @@ int ObCOSSTableRowsFilter::apply(const ObCSRange &range)
     adjust_batch_size();
     prepared_ = false;
     LOG_DEBUG("[COLUMNSTORE] apply filter info", K(range),
+              "tablet_id", iter_param_->tablet_id_,
+              "cg_idx", iter_param_->cg_idx_,
               "filter_constant_type", bitmap_buffer_[0]->get_filter_constant_type(),
               "filter_constant_id", bitmap_buffer_[0]->get_filter_constant_id(),
               "bitmap_size", bitmap_buffer_[0]->size(),

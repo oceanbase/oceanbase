@@ -99,6 +99,24 @@ struct ObMviewMergeParameter
   ObSqlString validation_sql_;
 };
 
+// 1. 默认最少校验1个合并任务，最多2个
+// 2. 保证第N=1个进来的合并任务进行校验
+// 3. 从第N=2个开始，如果当前只校验了一次，那么以 1/RANDOM_SELECT_BASE 概率选择第N个是否校验
+// 4. 另外如果有开tracepoint被选中校验，那么就校验，但默认不开启tracepoint
+class ObMviewCompactionValidation
+{
+public:
+  ObMviewCompactionValidation();
+  ~ObMviewCompactionValidation() = default;
+  void refresh(const int64_t new_version);
+  bool need_do_validation();
+private:
+  static const int64_t RANDOM_SELECT_BASE = 10;
+  bool first_validated_;
+  bool second_validated_;
+  int64_t merge_version_;
+};
+
 class ObMviewCompactionHelper
 {
 public:

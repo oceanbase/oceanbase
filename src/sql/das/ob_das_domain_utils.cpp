@@ -461,27 +461,32 @@ int ObDASDomainUtils::generate_multivalue_index_rows(ObIAllocator &allocator,
               // TODO: change obj to datum when do deserialize@xuanxi
               ObObj obj;
               obj.set_nop_value();
-              if (ob_is_number_or_decimal_int_tc(col_type.get_type()) || ob_is_temporal_type(col_type.get_type())) {
-                col_type.set_collation_level(CS_LEVEL_NUMERIC);
-              } else {
-                col_type.set_collation_level(CS_LEVEL_IMPLICIT);
-              }
-              obj.set_meta_type(col_type);
               if (OB_FAIL(obj.deserialize(data, data_len, pos))) {
                 LOG_WARN("failed to deserialize datum", K(ret), K(json_str));
-              } else if (OB_FAIL(rows[i].storage_datums_[j].from_obj_enhance(obj))) {
-                LOG_WARN("failed to convert datum from obj", K(ret), K(obj));
               } else {
                 is_none_unique_done = true;
+                if (ob_is_number_or_decimal_int_tc(col_type.get_type()) || ob_is_temporal_type(col_type.get_type())) {
+                  col_type.set_collation_level(CS_LEVEL_NUMERIC);
+                } else {
+                  col_type.set_collation_level(CS_LEVEL_IMPLICIT);
+                }
+                if (!obj.is_null()) {
+                  obj.set_meta_type(col_type);
+                }
+                if (OB_FAIL(rows[i].storage_datums_[j].from_obj_enhance(obj))) {
+                  LOG_WARN("failed to convert datum from obj", K(ret), K(obj));
+                }
               }
-            } else if (!is_save_rowkey && (rowkey_column_start >= j && j < rowkey_column_end)) {
+            } else if (!is_save_rowkey && (j >= rowkey_column_start && j < rowkey_column_end)) {
               rows[i].storage_datums_[j].set_null();
             } else if (multivalue_arr_idx == projector_idx) {
               rows[i].storage_datums_[j].set_null();
             } else {
               rows[i].storage_datums_[j].shallow_copy_from_datum(dml_row.cells()[projector_idx]);
             }
-            if (OB_SUCC(ret) && OB_FAIL(ObDASUtils::reshape_datum_value(col_type, col_accuracy, true, allocator, rows[i].storage_datums_[j]))) {
+
+            if (rows[i].storage_datums_[j].is_null()) {  // do nothing
+            } else if (OB_SUCC(ret) && OB_FAIL(ObDASUtils::reshape_datum_value(col_type, col_accuracy, true, allocator, rows[i].storage_datums_[j]))) {
               LOG_WARN("reshape storage value failed", K(ret), K(col_type), K(projector_idx), K(j));
             }
           }

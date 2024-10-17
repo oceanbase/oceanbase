@@ -1991,14 +1991,16 @@ public:
                K_(dest_table_id),
                K_(trace_id),
                K_(task_id),
-               K_(schema_version));
+               K_(schema_version),
+               K_(is_no_logging));
   ObCreateHiddenTableRes() :
     tenant_id_(common::OB_INVALID_ID),
     table_id_(common::OB_INVALID_ID),
     dest_tenant_id_(common::OB_INVALID_ID),
     dest_table_id_(common::OB_INVALID_ID),
     task_id_(0),
-    schema_version_(0) {}
+    schema_version_(0),
+    is_no_logging_(false) {}
   ~ObCreateHiddenTableRes() = default;
   void reset()
   {
@@ -2008,6 +2010,7 @@ public:
     dest_table_id_ = common::OB_INVALID_ID;
     task_id_ = 0;
     schema_version_ = 0;
+    is_no_logging_ = false;
   }
   int assign(const ObCreateHiddenTableRes &res);
 public:
@@ -2018,6 +2021,7 @@ public:
   int64_t task_id_;
   int64_t schema_version_;
   share::ObTaskId trace_id_;
+  bool is_no_logging_;
 };
 
 struct ObVectorIndexRebuildArg final : public ObDDLArg
@@ -8648,12 +8652,12 @@ public:
   ObGetLSReplayedScnRes(): tenant_id_(OB_INVALID_TENANT_ID),
                            ls_id_(),
                            cur_readable_scn_(share::SCN::min_scn()),
-                           offline_scn_(),
-                           self_addr_() {}
+                           offline_scn_(), self_addr_() {}
   ~ObGetLSReplayedScnRes() {}
   bool is_valid() const;
-  int init(const uint64_t tenant_id, const share::ObLSID &ls_id, const share::SCN &cur_readable_scn,
-           const share::SCN &offline_scn, const common::ObAddr &server);
+  int init(const uint64_t tenant_id, const share::ObLSID &ls_id,
+      const share::SCN &cur_readable_scn,
+      const share::SCN &offline_scn, const common::ObAddr &server);
   int assign(const ObGetLSReplayedScnRes &other);
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(cur_readable_scn), K_(offline_scn), K(self_addr_));
   uint64_t get_tenant_id() const
@@ -8684,7 +8688,7 @@ private:
   share::ObLSID ls_id_;
   share::SCN cur_readable_scn_;
   share::SCN offline_scn_;//add in 4.2.2.0
-  common::ObAddr self_addr_;//add in 4.3.0
+  common::ObAddr self_addr_;//add in 4.2.3/4.3.0
 };
 
 
@@ -10897,12 +10901,13 @@ struct ObFetchSplitTabletInfoRes final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObFetchSplitTabletInfoRes() : create_commit_versions_() {}
+  ObFetchSplitTabletInfoRes() : tablet_sizes_(), create_commit_versions_() {}
   ~ObFetchSplitTabletInfoRes() = default;
-  bool is_valid() const { return !create_commit_versions_.empty(); }
+  bool is_valid() const { return !create_commit_versions_.empty() && !tablet_sizes_.empty(); }
   int assign(const ObFetchSplitTabletInfoRes &other);
-  TO_STRING_KV(K_(create_commit_versions));
+  TO_STRING_KV(K_(tablet_sizes), K_(create_commit_versions));
 public:
+  common::ObSArray<int64_t> tablet_sizes_;
   common::ObSArray<int64_t> create_commit_versions_;
 };
 

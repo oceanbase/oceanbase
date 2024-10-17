@@ -181,7 +181,7 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   OLD_MAJOR is pure col, need mock one row_store read_info to read row from pure_col(use query interface)
 */
   ObTableReadInfo mocked_row_store_table_read_info_; // read info for merge from col store to row store
-  ObSSTableMergeHistory dag_net_merge_history_; // TODO, record info for dag net
+  ObSSTableMergeHistory dag_net_merge_history_; // record info for dag net
 };
 
 #ifdef OB_BUILD_SHARED_STORAGE

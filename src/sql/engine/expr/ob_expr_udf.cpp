@@ -242,9 +242,13 @@ int ObExprUDF::process_in_params(const ObObj *objs_stack,
             OZ (deep_in_objs->push_back(param));
           }
         } else {
-          param.set_extend(objs_stack[i].get_ext(),
+          if (!objs_stack[i].is_null()) {
+            param.set_extend(objs_stack[i].get_ext(),
                          objs_stack[i].get_meta().get_extend_type(), objs_stack[i].get_val_len());
-          param.set_param_meta();
+            param.set_param_meta();
+          } else {
+            objs_stack[i].copy_value_or_obj(param, true);
+          }
         }
       } else {
         objs_stack[i].copy_value_or_obj(param, true);

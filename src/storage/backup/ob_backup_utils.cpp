@@ -1642,7 +1642,7 @@ int ObBackupTabletProvider::init(const ObLSBackupParam &param, const share::ObBa
 void ObBackupTabletProvider::reset()
 {
   ObMutexGuard guard(mutex_);
-  is_inited_ = true;
+  is_inited_ = false;
   ls_backup_ctx_ = NULL;
   free_queue_item_();
   fifo_allocator_.reset();
@@ -1867,8 +1867,6 @@ int ObBackupTabletProvider::prepare_tablet_(const uint64_t tenant_id, const shar
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table should not be null", K(ret));
       } else {
-        // TODO: yangyi.yyy, 检查一下这里解的对不对
-        // TODO(COLUMN_STORE) Attention !!! MajorSSTable in column store canbe COSSTable, maybe should adapt here.
         const ObITable::TableKey &table_key = sstable_ptr->get_key();
         if (GCTX.is_shared_storage_mode() && table_key.is_ddl_dump_sstable()) {
           if (OB_FAIL(fetch_ddl_macro_id_in_ss_mode_(tablet_id, tablet_ref->tablet_handle_, table_key, *sstable_ptr, total_count))) {
@@ -2405,7 +2403,6 @@ int ObBackupTabletProvider::fetch_ddl_macro_id_in_ss_mode_(const common::ObTable
           LOG_WARN("failed to get next id", K(ret));
         }
       }
-      // TODO: yangyi.yyy, 确认一下这里是使用push_item_to_queue_吗？之前用的是external_sort_
       if (OB_SUCC(ret)) {
         if (OB_FAIL(item.set_for_ss_ddl(macro_id, table_key, tablet_id))) {
           LOG_WARN("failed to set for ss ddl", K(ret), K(macro_id), K(table_key), K(tablet_id));
@@ -2720,7 +2717,7 @@ int ObBackupTabletProvider::get_tablet_status_(
 void ObBackupTabletProvider::free_queue_item_()
 {
   int ret = OB_SUCCESS;
-  while (OB_SUCC(ret)) {
+  while (OB_SUCC(ret) && lighty_queue_.is_inited()) {
     void *vp = NULL;
     ObBackupProviderItem *item_ptr = NULL;
     if (OB_FAIL(lighty_queue_.pop(vp))) {

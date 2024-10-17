@@ -588,14 +588,6 @@ int ObPluginVectorIndexUtils::refresh_memdata(ObLSID &ls_id,
           LOG_WARN("fail to check_delta_buffer_table_readnext_status.", K(ret));
         }
 
-        if (OB_NOT_NULL(delta_buf_iter) && OB_NOT_NULL(tsc_service)) {
-          int tmp_ret = tsc_service->revert_scan_iter(delta_buf_iter);
-          if (tmp_ret != OB_SUCCESS) {
-            LOG_WARN("revert delta_buf_iter failed", K(tmp_ret));
-          }
-          delta_buf_iter = nullptr;
-        }
-
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(try_sync_vbitmap_memdata(ls_id, adapter, target_scn, allocator, ada_ctx))) {
           LOG_WARN("failed to sync vbitmap", KR(ret));
@@ -611,8 +603,13 @@ int ObPluginVectorIndexUtils::refresh_memdata(ObLSID &ls_id,
           }
         }
       }
-
-
+      if (OB_NOT_NULL(delta_buf_iter) && OB_NOT_NULL(tsc_service)) {
+        int tmp_ret = tsc_service->revert_scan_iter(delta_buf_iter);
+        if (tmp_ret != OB_SUCCESS) {
+          LOG_WARN("revert delta_buf_iter failed", K(tmp_ret));
+        }
+        delta_buf_iter = nullptr;
+      }
     }
   }
   return ret;

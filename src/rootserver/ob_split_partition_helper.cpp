@@ -14,6 +14,7 @@
 
 #include "rootserver/ob_split_partition_helper.h"
 #include "share/tablet/ob_tablet_to_table_history_operator.h"
+#include "src/share/scheduler/ob_partition_auto_split_helper.h"
 
 namespace oceanbase
 {
@@ -62,6 +63,8 @@ int ObSplitPartitionHelper::execute(ObDDLTaskRecord &task_record)
                                                  src_tablet_ids_,
                                                  dst_tablet_ids_,
                                                  inc_table_schemas_,
+                                                 *upd_table_schemas_.at(0),
+                                                 split_type_,
                                                  allocator_,
                                                  tablet_creator_,
                                                  trans_))) {
@@ -260,6 +263,8 @@ int ObSplitPartitionHelper::prepare_dst_tablet_creator_(
     const ObIArray<ObTabletID> &src_tablet_ids,
     const ObIArray<ObArray<ObTabletID>> &dst_tablet_ids,
     const ObIArray<const ObTableSchema *> &inc_table_schemas,
+    const share::schema::ObTableSchema &main_src_table_schema,
+    const share::ObDDLType split_type,
     ObIAllocator &allocator,
     ObTabletCreator *&tablet_creator,
     ObMySQLTransaction &trans)
@@ -282,10 +287,11 @@ int ObSplitPartitionHelper::prepare_dst_tablet_creator_(
     }
   }
 
-  // fetch split src create_commit_versions
+  // fetch split src tablet size and create_commit_versions
   if (OB_SUCC(ret)) {
     // FIXME: timeout ctx
     const int64_t timeout_us = THIS_WORKER.is_timeout_ts_valid() ? THIS_WORKER.get_timeout_remain() : GCONF.rpc_timeout;
+    int64_t data_tablet_size = OB_INVALID_SIZE;
     obrpc::ObFetchSplitTabletInfoArg arg;
     obrpc::ObFetchSplitTabletInfoRes res;
     arg.tenant_id_ = tenant_id;
@@ -299,6 +305,29 @@ int ObSplitPartitionHelper::prepare_dst_tablet_creator_(
       LOG_WARN("failed to freeze src tablet", KR(ret), K(leader_addr));
     } else if (OB_FAIL(create_commit_versions.assign(res.create_commit_versions_))) {
       LOG_WARN("failed to assign", K(ret));
+    } else if (OB_FALSE_IT(data_tablet_size = res.tablet_sizes_.at(0))) {
+    } else if (data_tablet_size < 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid data tablet size", K(ret), K(data_tablet_size));
+    } else {
+      const ObPartitionOption &part_option = main_src_table_schema.get_part_option();
+      const int64_t cur_part_num = part_option.get_part_num();
+      const int64_t auto_split_size = part_option.get_auto_part_size();
+      double cur_ratio = 0;
+      int64_t real_auto_split_size = 0;
+      int64_t tablets_limit_per_table = lib::is_oracle_mode() ? OB_MAX_PARTITION_NUM_ORACLE : OB_MAX_PARTITION_NUM_MYSQL;
+      if (cur_part_num  > tablets_limit_per_table) {
+        ret = OB_TOO_MANY_PARTITIONS_ERROR;
+        LOG_WARN("doesn't support splitting the tablet, when the number of tablets of the table is greater than the limit", K(ret), K(tablets_limit_per_table));
+      } else if ((!is_auto_split(split_type))) {
+        //manual split skip checking
+      } else if (OB_FALSE_IT(cur_ratio = static_cast<double>(cur_part_num) / tablets_limit_per_table)) {
+      } else if (OB_FAIL(ObServerAutoSplitScheduler::cal_real_auto_split_size(0.5/*base_ratio*/, cur_ratio, auto_split_size, real_auto_split_size))) {
+        LOG_WARN("failed to calculate tablet limit penalty", K(ret), K(cur_ratio));
+      } else if (data_tablet_size < real_auto_split_size) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_DEBUG("tablet size is smaller than increased split size threshold", K(ret), K(auto_split_size), K(real_auto_split_size), K(data_tablet_size));
+      }
     }
   }
 

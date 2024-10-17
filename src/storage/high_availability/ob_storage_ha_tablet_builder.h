@@ -408,6 +408,11 @@ private:
       const ObTablesHandleArray &co_tables,
       const BatchBuildTabletTablesExtraParam &extra_batch_param);
   static int append_sstable_array_(ObTablesHandleArray &dest_array, const ObTablesHandleArray &src_array);
+  // only allow column store storage schema with row store major tables
+  static int check_hybrid_store(
+      const ObStorageSchema &storage_schema,
+      const ObTablesHandleArray &major_tables,
+      bool &is_hybrid_store);
 };
 
 

@@ -614,7 +614,8 @@ protected:
       guard.set_batch_idx(start_output_idx + i);
       agg_cell = nullptr;
       agg_cell_len = 0;
-      agg_ctx.get_agg_payload(agg_col_id, start_gid + i, agg_cell, agg_cell_len);
+      const char* agg_row = agg_ctx.agg_rows_.at(start_gid + i);
+      agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_id, agg_row);
       if (helper::has_extra_info(aggr_info)) {
         VecExtraResult *&extra = agg_ctx.get_extra(agg_col_id, agg_cell);
         if (!extra->is_evaluated()
@@ -623,6 +624,7 @@ protected:
         }
       }
       if (OB_FAIL(ret)) {
+      } else if (FALSE_IT(agg_cell_len = agg_ctx.row_meta().get_cell_len(agg_col_id, agg_row))) {
       } else if (OB_FAIL(static_cast<Derived *>(this)->template collect_group_result<ResultFmt>(
                    agg_ctx, *agg_expr, agg_col_id, agg_cell, agg_cell_len))) {
         SQL_LOG(WARN, "collect group result failed", K(ret));
@@ -670,10 +672,6 @@ protected:
         } else {
           const char *agg_row = static_cast<const char *>(row->get_extra_payload(row_meta));
           agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_id, agg_row);
-          agg_cell_len = agg_ctx.row_meta().get_cell_len(agg_col_id, agg_row);
-          SQL_LOG(DEBUG, "collect group results", K(agg_col_id), K(output_start_idx), K(i), K(batch_size),
-                  K(row_start_idx), K(agg_ctx.aggr_infos_.at(agg_col_id).get_expr_type()), KP(agg_cell),
-                  K(agg_cell_len), K(agg_cell), K(row_meta), KP(row), KP(agg_expr), KPC(agg_expr));
           if (helper::has_extra_info(aggr_info)) {
             VecExtraResult *&extra = agg_ctx.get_extra(agg_col_id, agg_cell);
             if (!extra->is_evaluated()
@@ -682,9 +680,17 @@ protected:
             }
           }
           if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(static_cast<Derived *>(this)->template collect_group_result<ResultFmt>(
-                       agg_ctx, *agg_expr, agg_col_id, agg_cell, agg_cell_len))) {
-            SQL_LOG(WARN, "collect group result failed", K(ret));
+          } else {
+            agg_cell_len = agg_ctx.row_meta().get_cell_len(agg_col_id, agg_row);
+            SQL_LOG(DEBUG, "collect group results", K(agg_col_id), K(output_start_idx), K(i),
+                    K(batch_size), K(row_start_idx),
+                    K(agg_ctx.aggr_infos_.at(agg_col_id).get_expr_type()), KP(agg_cell),
+                    K(agg_cell_len), K(agg_cell), K(row_meta), KP(row), KP(agg_expr),
+                    KPC(agg_expr));
+            if (OB_FAIL(static_cast<Derived *>(this)->template collect_group_result<ResultFmt>(
+                  agg_ctx, *agg_expr, agg_col_id, agg_cell, agg_cell_len))) {
+              SQL_LOG(WARN, "collect group result failed", K(ret));
+            }
           }
         }
       }

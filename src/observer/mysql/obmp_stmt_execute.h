@@ -78,8 +78,8 @@ public:
 
 #define PS_STATIC_DEFENSE_CHECK(checker, len)              \
   if (OB_FAIL(ret)) {                                      \
-  } else if (nullptr != checker                            \
-    && OB_FAIL(checker->detection(len))) {                 \
+  } else if (nullptr != (checker)                          \
+    && OB_FAIL((checker)->detection(len))) {               \
     LOG_WARN("memory access out of bounds", K(ret));       \
   } else
 

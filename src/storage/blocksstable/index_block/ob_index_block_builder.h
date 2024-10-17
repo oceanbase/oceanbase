@@ -383,7 +383,8 @@ public:
   int init(const ObDataStoreDesc &data_store_desc,
            ObSSTableIndexBuilder &sstable_builder,
            const blocksstable::ObMacroSeqParam &macro_seq_param,
-           const share::ObPreWarmerParam &pre_warm_param);
+           const share::ObPreWarmerParam &pre_warm_param,
+           ObIMacroBlockFlushCallback *ddl_callback);
   int append_row(const ObMicroBlockDesc &micro_block_desc,
                  const ObMacroBlock &macro_block);
   int generate_macro_row(ObMacroBlock &macro_block, const MacroBlockId &id, const int64_t ddl_start_row_offset);
@@ -606,7 +607,8 @@ public:
                         const ObDataStoreDesc &data_store_desc,
                         ObIAllocator &data_allocator,
                         const blocksstable::ObMacroSeqParam &macro_seq_param,
-                        const share::ObPreWarmerParam &pre_warm_param);
+                        const share::ObPreWarmerParam &pre_warm_param,
+                        ObIMacroBlockFlushCallback *callback);
   int init_builder_ptrs(
       ObSSTableIndexBuilder *&sstable_builder,
       ObDataStoreDesc *&data_store_desc,

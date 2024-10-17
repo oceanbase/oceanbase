@@ -73,6 +73,7 @@ public:
   int64_t get_max_proportion_ts();
   bool is_unlimited_config(const ObMClock &clock, const ObTenantIOConfig::GroupConfig &cur_config);
   void stop_clock(const uint64_t index);
+  int64_t get_group_clocks_count() { return group_clocks_.count(); }
   int64_t get_group_limit(const int64_t idx) const { return group_clocks_.at(idx).get_limit(); }
   int64_t get_unit_limit(const ObIOMode mode) const { return unit_clocks_[static_cast<int>(mode)].iops_; }
   TO_STRING_KV(K(is_inited_), K(io_config_), K(io_usage_), K(group_clocks_));

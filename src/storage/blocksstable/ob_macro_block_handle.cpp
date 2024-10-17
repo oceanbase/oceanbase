@@ -148,7 +148,6 @@ int ObMacroBlockHandle::async_read(const ObMacroBlockReadInfo &read_info)
     io_info.user_data_buf_ = read_info.buf_;
     io_info.buf_ = read_info.buf_; // for sync io
     // resource manager level is higher than default
-    io_info.flag_.set_resource_group_id(THIS_WORKER.get_group_id());
     io_info.flag_.set_sys_module_id(read_info.io_desc_.get_sys_module_id());
 
     io_info.flag_.set_read();
@@ -207,7 +206,6 @@ int ObMacroBlockHandle::async_write(const ObMacroBlockWriteInfo &write_info)
     }
     const int64_t real_timeout_ms = min(write_info.io_timeout_ms_, GCONF._data_storage_io_timeout / 1000L);
     io_info.timeout_us_ = real_timeout_ms * 1000L;
-    io_info.flag_.set_resource_group_id(THIS_WORKER.get_group_id());
     io_info.flag_.set_sys_module_id(write_info.io_desc_.get_sys_module_id());
 
     io_info.flag_.set_write();

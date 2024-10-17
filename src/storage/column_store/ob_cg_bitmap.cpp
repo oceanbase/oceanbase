@@ -34,12 +34,15 @@ int ObCGBitmap::get_first_valid_idx(const ObCSRange &range, ObCSRowId &row_idx) 
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(range), K_(start_row_id), K(bitmap_.size()));
   } else if (is_all_false(range)) {
+  } else if (filter_constant_type_.is_always_true()) {
+    valid_offset = is_reverse_scan_ ? bitmap_.size() - 1 : 0;
   } else if (OB_FAIL(bitmap_.next_valid_idx(range.start_row_id_ - start_row_id_,
                                             range.get_row_count(),
                                             is_reverse_scan_,
                                             valid_offset))){
     LOG_WARN("Fail to get next valid idx", K(ret), K(range), KPC(this));
-  } else if (-1 != valid_offset) {
+  }
+  if (OB_SUCC(ret) && -1 != valid_offset) {
     row_idx = start_row_id_ + valid_offset;
   }
   return ret;
@@ -51,6 +54,10 @@ int ObCGBitmap::set_bitmap(const ObCSRowId start, const int64_t row_count, const
   if (OB_UNLIKELY(start < start_row_id_ || row_count != bitmap.size())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(start), K_(start_row_id), K(row_count), K(bitmap));
+  } else if (filter_constant_type_.is_constant()) {
+    if (OB_FAIL(bitmap.set_bitmap_batch(0, row_count, filter_constant_type_.is_always_true()))) {
+      LOG_WARN("Fail to set bitmap batch", K(ret), K(row_count));
+    }
   } else if (!is_reverse) {
     if (OB_FAIL(bitmap.copy_from(bitmap_, start - start_row_id_, row_count))) {
       LOG_WARN("Fail to copy bitmap", K(ret), K(start), K(row_count), KPC(this));

@@ -658,8 +658,8 @@ int ObDirectLoadInsertTabletContext::calc_range(const int64_t thread_cnt)
     ret = OB_CANCELED;
     LOG_WARN("task is cancel", KR(ret));
   } else {
-    if (OB_FAIL(ddl_agent_.calc_range(thread_cnt))) {
-      LOG_WARN("fail to calc range", KR(ret), K(tablet_id_));
+    if (OB_FAIL(ddl_agent_.calc_range(context_id_, thread_cnt))) {
+      LOG_WARN("fail to calc range", KR(ret), K(tablet_id_), K(context_id_), K(thread_cnt));
     } else {
       LOG_INFO("success to calc range", K(tablet_id_));
     }
@@ -958,7 +958,7 @@ int ObDirectLoadInsertTableContext::update_sql_statistics(ObTableLoadSqlStatisti
         const ObStorageDatum &datum = datum_row.storage_datums_[datum_idx];
         const ObCmpFunc &cmp_func = param_.cmp_funcs_->at(i).get_cmp_func();
         const ObColDesc &col_desc = param_.col_descs_->at(i);
-        const bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type());
+        const bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type(), true);
         if (is_valid) {
           if (OB_FAIL(sql_statistics.get_col_stat(col_stat_idx, col_stat))) {
             LOG_WARN("fail to get col stat", KR(ret), K(col_stat_idx));

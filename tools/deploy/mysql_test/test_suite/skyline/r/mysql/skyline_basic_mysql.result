@@ -3756,7 +3756,7 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
@@ -3807,7 +3807,7 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
@@ -4003,7 +4003,7 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
@@ -4262,7 +4262,7 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
@@ -4311,7 +4311,7 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
@@ -4360,7 +4360,7 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
@@ -4410,7 +4410,7 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
@@ -4463,7 +4463,7 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
@@ -4513,7 +4513,7 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
@@ -4565,7 +4565,7 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
@@ -4664,7 +4664,7 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
@@ -4718,7 +4718,7 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
@@ -4768,7 +4768,7 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t12i1, t12i2, t12]

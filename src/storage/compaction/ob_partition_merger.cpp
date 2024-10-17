@@ -652,6 +652,7 @@ int ObPartitionMajorMerger::merge_partition(
     } else if (OB_FAIL(close())){
       STORAGE_LOG(WARN, "failed to close partition merger", K(ret));
     } else if (merge_param_.is_mv_merge() &&
+          MTL(ObTenantTabletScheduler*)->get_mview_validation().need_do_validation() &&
           OB_FAIL(ObMviewCompactionHelper::validate_row_count(merge_param_, macro_writer_->get_merge_block_info().total_row_count_))) {
       STORAGE_LOG(WARN, "failed to validate mv result", K(ret));
     }

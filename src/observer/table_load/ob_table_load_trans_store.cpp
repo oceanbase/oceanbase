@@ -124,6 +124,7 @@ ObTableLoadTransStoreWriter::ObTableLoadTransStoreWriter(ObTableLoadTransStore *
     allocator_("TLD_TSWriter"),
     table_data_desc_(nullptr),
     cast_mode_(CM_NONE),
+    session_ctx_array_(nullptr),
     lob_inrow_threshold_(0),
     ref_count_(0),
     is_inited_(false)
@@ -301,10 +302,12 @@ int ObTableLoadTransStoreWriter::write(int32_t session_id,
     for (int64_t i = 0; OB_SUCC(ret) && i < row_array.count(); ++i) {
       const ObTableLoadTabletObjRow &row = row_array.at(i);
       ObNewRow new_row(row.obj_row_.cells_, row.obj_row_.count_);
-      if (OB_FAIL(cast_row(session_ctx.cast_allocator_, session_ctx.cast_params_, new_row, session_ctx.datum_row_,
-                           session_id))) {
-        if (OB_UNLIKELY(OB_EAGAIN != ret)) {
-          LOG_WARN("fail to cast row", KR(ret), K(session_id), K(row.tablet_id_), K(i));
+      if (OB_FAIL(cast_row(session_ctx.cast_allocator_, session_ctx.cast_params_,
+                           new_row, session_ctx.datum_row_, session_id))) {
+        ObTableLoadErrorRowHandler *error_row_handler =
+          trans_ctx_->ctx_->store_ctx_->error_row_handler_;
+        if (OB_FAIL(error_row_handler->handle_error_row(ret))) {
+          LOG_WARN("failed to handle error row", K(ret), K(row));
         } else {
           ret = OB_SUCCESS;
         }
@@ -405,32 +408,20 @@ int ObTableLoadTransStoreWriter::cast_row(ObArenaAllocator &cast_allocator,
       LOG_WARN("fail to cast column", KR(ret), K(i), K(obj), KPC(column_schema));
     }
   }
-  if (OB_FAIL(ret)) {
-    ObTableLoadErrorRowHandler *error_row_handler =
-      trans_ctx_->ctx_->store_ctx_->error_row_handler_;
-    if (OB_FAIL(error_row_handler->handle_error_row(ret))) {
-      LOG_WARN("failed to handle error row", K(ret), K(row));
-    } else {
-      ret = OB_EAGAIN;
-    }
-  }
   return ret;
 }
 
 int ObTableLoadTransStoreWriter::cast_row(int32_t session_id,
                                           const ObNewRow &new_row,
-                                          ObDatumRow &datum_row)
+                                          const ObDatumRow *&datum_row)
 {
   int ret = OB_SUCCESS;
   SessionContext &session_ctx = session_ctx_array_[session_id - 1];
   session_ctx.cast_allocator_.reuse();
-  if (OB_FAIL(cast_row(session_ctx.cast_allocator_, session_ctx.cast_params_, new_row, datum_row,
+  if (OB_FAIL(cast_row(session_ctx.cast_allocator_, session_ctx.cast_params_, new_row, session_ctx.datum_row_,
                         session_id))) {
-    if (OB_UNLIKELY(OB_EAGAIN != ret)) {
-      LOG_WARN("fail to cast row", KR(ret), K(session_id));
-    } else {
-      ret = OB_SUCCESS;
-    }
+  } else {
+    datum_row = &session_ctx.datum_row_;
   }
   return ret;
 }

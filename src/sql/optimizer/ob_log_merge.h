@@ -29,6 +29,7 @@ public:
   { }
   virtual ~ObLogMerge() {}
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
+  virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
   virtual int compute_sharding_info() override;
   const common::ObIArray<ObRawExpr *> &get_insert_condition() const;
 

@@ -461,6 +461,8 @@ int64_t ObCSVGeneralFormat::to_json_kv_string(char *buf, const int64_t buf_len) 
     J_ARRAY_END();
   J_COMMA();
   databuff_printf(buf, buf_len, pos, "\"%s\":%s", OPTION_NAMES[idx++], STR_BOOL(empty_field_as_null_));
+  J_COMMA();
+  databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[idx++], compression_algorithm_to_string(compression_algorithm_));
   return pos;
 }
 
@@ -554,6 +556,14 @@ int ObCSVGeneralFormat::load_from_json_data(json::Pair *&node, ObIAllocator &all
     }
     node = node->get_next();
   }
+  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[idx++])
+      && json::JT_STRING == node->value_->get_type()) {
+    if (OB_FAIL(compression_algorithm_from_string(node->value_->get_string(), compression_algorithm_))) {
+      LOG_WARN("failed to convert string to compression", K(ret));
+    } else {
+      node = node->get_next();
+    }
+  }
   return ret;
 }
 
@@ -631,51 +641,53 @@ int ObOriginFileFormat::load_from_json_data(json::Pair *&node, ObIAllocator &all
   return ret;
 }
 
-const char *compression_format_to_string(ObLoadCompressionFormat compression_format)
+const char *compression_algorithm_to_string(ObCSVGeneralFormat::ObCSVCompression compression_algorithm)
 {
-  switch (compression_format) {
-    case ObLoadCompressionFormat::NONE:    return "NONE";
-    case ObLoadCompressionFormat::AUTO:    return "AUTO";
-    case ObLoadCompressionFormat::GZIP:    return "GZIP";
-    case ObLoadCompressionFormat::DEFLATE: return "DEFLATE";
-    case ObLoadCompressionFormat::ZSTD:    return "ZSTD";
+  switch (compression_algorithm) {
+    case ObCSVGeneralFormat::ObCSVCompression::NONE:    return "NONE";
+    case ObCSVGeneralFormat::ObCSVCompression::AUTO:    return "AUTO";
+    case ObCSVGeneralFormat::ObCSVCompression::GZIP:    return "GZIP";
+    case ObCSVGeneralFormat::ObCSVCompression::DEFLATE: return "DEFLATE";
+    case ObCSVGeneralFormat::ObCSVCompression::ZSTD:    return "ZSTD";
     default:                               return "INVALID";
   }
 }
 
-int compression_format_from_string(ObString compression_name, ObLoadCompressionFormat &compression_format)
+int compression_algorithm_from_string(ObString compression_name,
+                                      ObCSVGeneralFormat::ObCSVCompression &compression_algorithm)
 {
   int ret = OB_SUCCESS;
 
   if (compression_name.length() == 0 ||
       0 == compression_name.case_compare("none")) {
-    compression_format = ObLoadCompressionFormat::NONE;
+    compression_algorithm = ObCSVGeneralFormat::ObCSVCompression::NONE;
   } else if (0 == compression_name.case_compare("gzip")) {
-    compression_format = ObLoadCompressionFormat::GZIP;
+    compression_algorithm = ObCSVGeneralFormat::ObCSVCompression::GZIP;
   } else if (0 == compression_name.case_compare("deflate")) {
-    compression_format = ObLoadCompressionFormat::DEFLATE;
+    compression_algorithm = ObCSVGeneralFormat::ObCSVCompression::DEFLATE;
   } else if (0 == compression_name.case_compare("zstd")) {
-    compression_format = ObLoadCompressionFormat::ZSTD;
+    compression_algorithm = ObCSVGeneralFormat::ObCSVCompression::ZSTD;
   } else if (0 == compression_name.case_compare("auto")) {
-    compression_format = ObLoadCompressionFormat::AUTO;
+    compression_algorithm = ObCSVGeneralFormat::ObCSVCompression::AUTO;
   } else {
     ret = OB_INVALID_ARGUMENT;
-    compression_format = ObLoadCompressionFormat::INVALID;
+    compression_algorithm = ObCSVGeneralFormat::ObCSVCompression::INVALID;
   }
   return ret;
 }
 
-int compression_format_from_suffix(ObString filename, ObLoadCompressionFormat &compression_format)
+int compression_algorithm_from_suffix(ObString filename,
+                                      ObCSVGeneralFormat::ObCSVCompression &compression_algorithm)
 {
   int ret = OB_SUCCESS;
   if (filename.suffix_match_ci(".gz")) {
-    compression_format = ObLoadCompressionFormat::GZIP;
+    compression_algorithm = ObCSVGeneralFormat::ObCSVCompression::GZIP;
   } else if (filename.suffix_match_ci(".deflate")) {
-    compression_format = ObLoadCompressionFormat::DEFLATE;
+    compression_algorithm = ObCSVGeneralFormat::ObCSVCompression::DEFLATE;
   } else if (filename.suffix_match_ci(".zst") || filename.suffix_match_ci(".zstd")) {
-    compression_format = ObLoadCompressionFormat::ZSTD;
+    compression_algorithm = ObCSVGeneralFormat::ObCSVCompression::ZSTD;
   } else {
-    compression_format = ObLoadCompressionFormat::NONE;
+    compression_algorithm = ObCSVGeneralFormat::ObCSVCompression::NONE;
   }
   return ret;
 }
@@ -698,11 +710,6 @@ int64_t ObExternalFileFormat::to_string(char *buf, const int64_t buf_len) const
       break;
     default:
       pos += 0;
-  }
-
-  if (compression_format_ != ObLoadCompressionFormat::NONE) {
-    J_COMMA();
-    databuff_print_kv(buf, buf_len, pos, "\"COMPRESSION\"", compression_format_to_string(compression_format_));
   }
 
   J_OBJ_END();
@@ -754,13 +761,6 @@ int ObExternalFileFormat::load_from_string(const ObString &str, ObIAllocator &al
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid format type", K(ret), K(format_type_str));
           break;
-      }
-
-      if (OB_SUCC(ret) && OB_NOT_NULL(format_type_node)
-          && 0 == format_type_node->name_.case_compare("COMPRESSION")
-          && format_type_node->value_->get_type() == json::JT_STRING) {
-        ObString compression_format_str = format_type_node->value_->get_string();
-        OZ(compression_format_from_string(compression_format_str, compression_format_));
       }
     }
   }
@@ -841,6 +841,47 @@ OB_DEF_SERIALIZE_SIZE(ObExternalFileFormat::StringData)
 {
   int64_t len = 0;
   LST_DO_CODE(OB_UNIS_ADD_LEN, str_);
+  return len;
+}
+
+int ObExternalFileFormat::StringList::store_strs(ObIArray<ObString> &strs)
+{
+  int ret = OB_SUCCESS;
+  ObString str;
+  OZ(strs_.init(strs.count()));
+  for (int64_t i = 0; OB_SUCC(ret) && i < strs.count(); i++) {
+    str.reset();
+    if (OB_FAIL(ob_write_string(allocator_, strs.at(i), str))) {
+      LOG_WARN("failed to deep copy string", K(ret));
+    } else if (OB_FAIL(strs_.push_back(str))) {
+      LOG_WARN("failed to push back string", K(ret));
+    }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE(ObExternalFileFormat::StringList)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE, strs_);
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObExternalFileFormat::StringList)
+{
+  int ret = OB_SUCCESS;
+  ObFixedArray<ObString, ObIAllocator> temp_strs(allocator_);
+  LST_DO_CODE(OB_UNIS_DECODE, temp_strs);
+  if (OB_SUCC(ret)) {
+    ret = store_strs(temp_strs);
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObExternalFileFormat::StringList)
+{
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN, strs_);
   return len;
 }
 

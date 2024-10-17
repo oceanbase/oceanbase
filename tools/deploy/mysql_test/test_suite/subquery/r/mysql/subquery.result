@@ -624,7 +624,7 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
   1 - output([t1.c1 + 1], [t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
       equal_conds([t1.c1 + 1 = t2.c2]), other_conds(nil)
-  2 - output([t1.c1]), filter([t1.c2 = 2]), rowset=16
+  2 - output([t1.c1 + 1]), filter([t1.c2 = 2]), rowset=16
       access([t1.c1], [t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
@@ -641,7 +641,7 @@ Outputs & filters:
       access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t2.c1]), range(MIN ; MAX)always true
-  7 - output([t1.c1]), filter(nil), rowset=16
+  7 - output([t1.c1 + 1]), filter(nil), rowset=16
   8 - output([t1.c1]), filter([t1.c2 = 2]), rowset=16
       access([t1.c1], [t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
@@ -736,36 +736,52 @@ Outputs & filters:
       range_key([t1.c1]), range(MIN ; MAX)always true
 explain select * from t1 where t1.c2 in (select avg(c1) from t2 where t2.c1 = t1.c1 union select count(1) from t3 where t3.c1 = t1.c1);
 Query Plan
-===========================================================
-|ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------------------
-|0 |SUBPLAN FILTER             |    |1       |75          |
-|1 |├─TABLE FULL SCAN          |t1  |2       |3           |
-|2 |└─MERGE UNION DISTINCT     |    |2       |36          |
-|3 |  ├─SCALAR GROUP BY        |    |1       |18          |
-|4 |  │ └─DISTRIBUTED TABLE GET|t2  |1       |18          |
-|5 |  └─SCALAR GROUP BY        |    |1       |18          |
-|6 |    └─DISTRIBUTED TABLE GET|t3  |1       |18          |
-===========================================================
+====================================================================
+|ID|OPERATOR                           |NAME |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------
+|0 |SUBPLAN FILTER                     |     |1       |75          |
+|1 |├─TABLE FULL SCAN                  |t1   |2       |3           |
+|2 |└─LIMIT                            |     |1       |36          |
+|3 |  └─SUBPLAN SCAN                   |VIEW1|1       |36          |
+|4 |    └─LIMIT                        |     |1       |36          |
+|5 |      └─MERGE UNION DISTINCT       |     |1       |36          |
+|6 |        ├─LIMIT                    |     |1       |18          |
+|7 |        │ └─SCALAR GROUP BY        |     |1       |18          |
+|8 |        │   └─DISTRIBUTED TABLE GET|t2   |1       |18          |
+|9 |        └─LIMIT                    |     |1       |18          |
+|10|          └─SCALAR GROUP BY        |     |1       |18          |
+|11|            └─DISTRIBUTED TABLE GET|t3   |1       |18          |
+====================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t1.c3]), filter([cast(t1.c2, DECIMAL(11, 0)) = ANY(subquery(1))]), rowset=16
-      exec_params_([t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter([(T_OP_EXISTS, subquery(1))]), rowset=16
+      exec_params_([t1.c1(:0)], [cast(t1.c2, DECIMAL(11, 0))(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
   1 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
-  2 - output([UNION([1])]), filter(nil), rowset=16
-  3 - output([cast(cast(T_FUN_SUM(t2.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t2.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  2 - output([1]), filter(nil), rowset=16
+      limit(1), offset(nil)
+  3 - output(nil), filter(nil), rowset=16
+      access(nil)
+  4 - output([UNION([1])]), filter(nil), rowset=16
+      limit(1), offset(nil)
+  5 - output([UNION([1])]), filter(nil), rowset=16
+  6 - output([cast(cast(T_FUN_SUM(t2.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t2.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+      limit(1), offset(nil)
+  7 - output([cast(cast(T_FUN_SUM(t2.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t2.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter([cast(cast(T_FUN_SUM(t2.c1),
+       DECIMAL(33, 0)) / cast(T_FUN_COUNT(t2.c1), DECIMAL(20, 0)), DECIMAL(15, 4)) = :1]), rowset=16
       group(nil), agg_func([T_FUN_SUM(t2.c1)], [T_FUN_COUNT(t2.c1)])
-  4 - output([t2.c1]), filter(nil), rowset=16
+  8 - output([t2.c1]), filter(nil), rowset=16
       access([t2.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, keep_ordering=true, 
       range_key([t2.c1]), range(MIN ; MAX)always true, 
       range_cond([t2.c1 = :0])
-  5 - output([cast(T_FUN_COUNT(*), DECIMAL(24, 4))]), filter(nil), rowset=16
+  9 - output([cast(T_FUN_COUNT(*), DECIMAL(24, 4))]), filter(nil), rowset=16
+      limit(1), offset(nil)
+ 10 - output([cast(T_FUN_COUNT(*), DECIMAL(24, 4))]), filter([cast(T_FUN_COUNT(*), DECIMAL(24, 4)) = :1]), rowset=16
       group(nil), agg_func([T_FUN_COUNT(*)])
-  6 - output(nil), filter(nil), rowset=16
+ 11 - output(nil), filter(nil), rowset=16
       access(nil), partitions(p0)
       is_index_back=false, is_global_index=false, keep_ordering=true, 
       range_key([t3.c1]), range(MIN ; MAX)always true, 

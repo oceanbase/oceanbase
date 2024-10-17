@@ -82,7 +82,7 @@ class ObSelEstimatorFactory;
 class ObSelEstimator
 {
 public:
-  ObSelEstimator(ObSelEstType type) : type_(type) {}
+  ObSelEstimator(ObSelEstType type) : type_(type), eigen_expr_(NULL) {}
   virtual ~ObSelEstimator() = default;
 
   static int append_estimators(ObIArray<ObSelEstimator *> &sel_estimators, ObSelEstimator *new_estimator);
@@ -100,10 +100,15 @@ public:
   virtual bool tend_to_use_ds() = 0;
   inline ObSelEstType get_type() const { return type_; }
 
+  const ObRawExpr *get_eigen_expr() const { return eigen_expr_; }
+  void set_eigen_expr(const ObRawExpr *expr) { eigen_expr_ = expr; }
+  void extract_default_eigen_expr(const ObRawExpr *expr);
+
   VIRTUAL_TO_STRING_KV(K_(type));
 
 protected:
   ObSelEstType type_;
+  const ObRawExpr *eigen_expr_; // Used to check whether two estimators are fully correlated
 
 private:
   DISABLE_COPY_ASSIGN(ObSelEstimator);
@@ -189,6 +194,7 @@ int create_simple_estimator(ObSelEstimatorFactory &factory,
     LOG_WARN("failed to create estimator ", K(ret));
   } else {
     temp_estimator->set_expr(&expr);
+    temp_estimator->extract_default_eigen_expr(&expr);
     estimator = temp_estimator;
   }
   return ret;

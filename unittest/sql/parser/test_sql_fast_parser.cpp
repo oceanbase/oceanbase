@@ -284,6 +284,9 @@ void start_test_token_offset(const char *test_sqls[],
     ParseResult parse_result;
     int tmp_ptr = 1;
     setup_parse_result(parse_result, tmp_ptr);
+    if (2151678466 == sql_mode) {
+      parse_result.connection_collation_ = 45;
+    }
     parse_result.sql_mode_ = sql_mode;
     const char *input_sql = test_sqls[i];
 
