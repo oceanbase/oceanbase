@@ -86,13 +86,15 @@ private:
 class ObSPIExecEnvGuard
 {
 public:
-  ObSPIExecEnvGuard(ObSQLSessionInfo &session_info, ObSPIResultSet &spi_result);
+  ObSPIExecEnvGuard(
+    ObSQLSessionInfo &session_info, ObSPIResultSet &spi_result, bool is_ps_cursor = false);
   ~ObSPIExecEnvGuard();
 private:
   ObSQLSessionInfo &session_info_;
   ObSPIResultSet &spi_result_;
   int64_t query_start_time_bk_;
   pl::ObPLSqlCodeInfo *sqlcode_info_bk_;
+  bool is_ps_cursor_;
 };
 
 struct ObSPICursor
