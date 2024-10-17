@@ -51,7 +51,9 @@ public:
                              bool &is_drop_column,
                              ObColumnNameSet &add_column_names_set,
                              ObReducedVisibleColSet &reduced_visible_col_set,
-                             ObReducedVisibleColSet &drop_column_names_set);
+                             ObReducedVisibleColSet &drop_column_names_set,
+                             bool &has_add_column,
+                             bool &has_drop_column);
   int resolve_index_options_oracle(const ParseNode &node);
   int resolve_index_options(const ParseNode &action_node_list, const ParseNode &node,
                             bool &is_add_index);
