@@ -108,8 +108,12 @@ int LogReader::pread(const block_id_t block_id,
     }
   }
 
-  if (io_fd.is_valid() && OB_FAIL(io_adapter_->close(io_fd))) {
-    PALF_LOG(ERROR, "close io_fd failed", K(ret), K(io_fd));
+  if (io_fd.is_valid()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(io_adapter_->close(io_fd))) {
+      PALF_LOG(WARN, "close io_fd failed", K(tmp_ret), K(io_fd));
+    }
+    ret = OB_SUCCESS == ret ? tmp_ret : ret;
   }
   return ret;
 }
@@ -137,15 +141,25 @@ int LogReader::inner_pread_(const ObIOFd &read_io_fd,
   } else if (limited_and_aligned_in_read_size > read_buf_len) {
     ret = OB_BUF_NOT_ENOUGH;
     PALF_LOG(WARN, "buffer not enough to hold read result");
-  } else if (OB_FAIL(io_adapter_->pread(read_io_fd, limited_and_aligned_in_read_size, aligned_start_offset, read_buf, out_read_size, io_ctx))) {
-    PALF_LOG(WARN, "pread failed, maybe concurrently with truncate", K(ret), K(read_io_fd), K(aligned_start_offset),
-        K(limited_and_aligned_in_read_size), K(backoff), K(errno), K(out_read_size));
   } else {
+    int64_t retry_interval = 10 * 1000L;
+    do {
+      if (OB_FAIL(io_adapter_->pread(read_io_fd, limited_and_aligned_in_read_size, aligned_start_offset, read_buf, out_read_size, io_ctx))) {
+        PALF_LOG(WARN, "pread failed", K(ret), K(read_io_fd), K(aligned_start_offset), K(limited_and_aligned_in_read_size), K(backoff), K(errno), K(out_read_size));
+        if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+          ret = OB_EAGAIN;
+          ob_usleep(retry_interval);
+        }
+      }
+    } while (OB_EAGAIN == ret);
+
+    if (OB_SUCC(ret)) {
       out_read_size = MIN(out_read_size - static_cast<int32_t>(backoff), in_read_size);
       MEMMOVE(read_buf, read_buf + backoff, in_read_size);
       PALF_LOG(TRACE, "inner_read_ success", K(ret), K(read_io_fd), K(aligned_start_offset),
           K(limited_and_aligned_in_read_size), K(backoff), KP(read_buf),
           K(in_read_size), K(out_read_size));
+    }
   }
   return ret;
 }
