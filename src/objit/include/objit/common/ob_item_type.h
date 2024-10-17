@@ -508,6 +508,7 @@ typedef enum ObItemType
   T_FUN_SYS_SM3 = 776,
   T_FUN_SYS_SM4_ENCRYPT = 777,
   T_FUN_SYS_SM4_DECRYPT = 778,
+  T_FUN_SYS_HELLO_REPEAT = 798, // hello_repeat() function
   ///< @note add new mysql only function type before this line
   T_MYSQL_ONLY_SYS_MAX_OP = 800,
 

@@ -76,7 +76,7 @@ int get_marker_and_dir_path(
   const int64_t dir_buf_size)
 {
   int ret = OB_SUCCESS;
-  char *last_forward_slash_ptr = NULL;
+  const char *last_forward_slash_ptr = NULL;
   int64_t chars_after_last_forward_slash_ptr = 0;
   int64_t uri_len = uri.length();
   if (uri.empty() || OB_ISNULL(marker) || 0 >= marker_size || OB_ISNULL(dir_buf) || 0 >= dir_buf_size) {
