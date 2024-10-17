@@ -309,6 +309,7 @@ int ObClusteredIndexBlockWriter::rewrite_and_append_clustered_index_micro_block(
     LOG_DEBUG("succeed to make clustered index micro block in rebuilder",
               K(ret), K(macro_meta));
   }
+  object_handle.reset();
   // Recycle buffer.
   if (OB_NOT_NULL(micro_buf)) {
     macro_block_io_allocator_.free(micro_buf);

@@ -65,6 +65,9 @@ int ObLinkedMacroBlockReader::init(const MacroBlockId &entry_block, const ObMemA
 int ObLinkedMacroBlockReader::get_meta_blocks(const MacroBlockId &entry_block)
 {
   int ret = OB_SUCCESS;
+  // Need to pay attention!!!
+  // The allocator is used to allocate io data buffer, and its memory life cycle needs to be longer than the object handle.
+  common::ObArenaAllocator allocator;
   ObMacroBlockCommonHeader common_header;
   ObStorageObjectReadInfo read_info;
   read_info.offset_ = 0;
@@ -81,7 +84,6 @@ int ObLinkedMacroBlockReader::get_meta_blocks(const MacroBlockId &entry_block)
     int64_t handle_pos = 0;
     MacroBlockId previous_block_id;
     handles_[handle_pos].reset();
-    common::ObArenaAllocator allocator;
     if (OB_ISNULL(read_info.buf_ = reinterpret_cast<char*>(allocator.alloc(read_info.size_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed to alloc macro read info buffer", K(ret), K(read_info.size_));
