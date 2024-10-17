@@ -80,7 +80,7 @@ TEST(ObObjectStorageInfo, oss)
   storage_info = "host=xxx.com&access_id=111&access_key=222&delete_mode=delete";
   info1.reset();
   ASSERT_EQ(OB_SUCCESS, info1.set(uri, storage_info));
-  ASSERT_EQ(OB_MD5_ALGO, info1.checksum_type_);
+  ASSERT_EQ(OB_NO_CHECKSUM_ALGO, info1.checksum_type_);
 
   storage_info = "host=xxx.com&access_id=111&access_key=222&delete_mode=delete&checksum_type=no_checksum";
   info1.reset();
@@ -121,7 +121,7 @@ TEST(ObObjectStorageInfo, cos)
   storage_info = "host=xxx.com&access_id=111&access_key=222&appid=333&delete_mode=delete";
   info1.reset();
   ASSERT_EQ(OB_SUCCESS, info1.set(uri, storage_info));
-  ASSERT_EQ(OB_MD5_ALGO, info1.checksum_type_);
+  ASSERT_EQ(OB_NO_CHECKSUM_ALGO, info1.checksum_type_);
 
   storage_info = "host=xxx.com&access_id=111&access_key=222&appid=333&delete_mode=delete&checksum_type=no_checksum";
   info1.reset();
@@ -170,7 +170,7 @@ TEST(ObObjectStorageInfo, s3)
 
   storage_info = "host=xxx.com&access_id=111&access_key=222&s3_region=333&delete_mode=delete&checksum_type=no_checksum";
   info1.reset();
-  ASSERT_EQ(OB_CHECKSUM_TYPE_NOT_SUPPORTED, info1.set(uri, storage_info));
+  ASSERT_EQ(OB_SUCCESS, info1.set(uri, storage_info));
 
   storage_info = "host=xxx.com&access_id=111&access_key=222&s3_region=333&delete_mode=delete&checksum_type=md5";
   info1.reset();
