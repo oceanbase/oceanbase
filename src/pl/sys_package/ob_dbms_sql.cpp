@@ -925,7 +925,7 @@ int ObPLDbmsSql::do_parse(ObExecContext &exec_ctx,
 int ObPLDbmsSql::check_stmt_need_to_be_executed_when_parsing(ObDbmsCursorInfo &cursor, bool& flag)
 {
   int ret = OB_SUCCESS;
-  if (cursor.get_sql_stmt().empty()) {
+  if (stmt::T_NONE == cursor.get_stmt_type()) {
     ret = OB_NO_STMT_PARSE;
     LOG_WARN("Cursor has not parsed any statement", K(ret));
   } else {
