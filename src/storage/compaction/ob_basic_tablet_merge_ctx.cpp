@@ -1378,6 +1378,7 @@ int ObBasicTabletMergeCtx::get_convert_compaction_info()
   ObStorageSchema *schema_for_merge = nullptr;
   ObUpdateCSReplicaSchemaParam param;
   bool generate_cs_replica_cg_array = false;
+  bool is_heap_table_out_of_order = false;
 
   if (OB_FAIL(OB_UNLIKELY(EN_COMPACTION_DISABLE_CONVERT_CO))) {
     LOG_INFO("EN_COMPACTION_DISABLE_CONVERT_CO: disable convert co merge", K(ret));
@@ -1390,7 +1391,11 @@ int ObBasicTabletMergeCtx::get_convert_compaction_info()
     LOG_WARN("failed to alloc storage schema", K(ret));
   } else if (schema_on_tablet->is_column_info_simplified() && OB_FAIL(param.init(*tablet))) {
     LOG_WARN("failed to init param", K(ret), KPC(tablet));
-  } else if (FALSE_IT(generate_cs_replica_cg_array = (schema_on_tablet->is_row_store() || schema_on_tablet->is_column_info_simplified()))) {
+  } else if (OB_FAIL(schema_on_tablet->check_is_column_array_out_of_order_for_heap_table(is_heap_table_out_of_order))) {
+    LOG_WARN("failed to check is column array out of order", K(ret), KPC(schema_on_tablet));
+  } else if (FALSE_IT(generate_cs_replica_cg_array = (schema_on_tablet->is_row_store()
+                                                   || is_heap_table_out_of_order // need re-generate column group array
+                                                   || schema_on_tablet->is_column_info_simplified()))) {
     // storage schema is column store but simplifed, it should become not simplified before it can be used for merge
   } else if (OB_FAIL(schema_for_merge->init(mem_ctx_.get_allocator(), *schema_on_tablet,
                         false /*skip_column_info*/, nullptr /*column_group_schema*/, generate_cs_replica_cg_array,
