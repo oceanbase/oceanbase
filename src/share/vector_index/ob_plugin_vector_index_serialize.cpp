@@ -29,6 +29,9 @@ std::streamsize ObOStreamBuf::xsputn(const char* s, std::streamsize count)
 {
   std::streamsize written_size = 0;
   std::streamsize left_size = 0;
+  if (OB_ISNULL(s)) {
+    last_error_code_ = OB_INVALID_ARGUMENT;
+  }
   while (is_valid() && is_success() && written_size < count) {
     left_size = epptr() - pptr();
     std::streamsize sub_size = std::min(count - written_size, left_size);
@@ -122,7 +125,9 @@ std::streamsize ObIStreamBuf::xsgetn(char* s, std::streamsize n)
 {
   std::streamsize get_size = 0;
   std::streamsize data_size = 0;
-  if (is_success() && !is_valid()) {
+  if (OB_ISNULL(s)) {
+    last_error_code_ = OB_INVALID_ARGUMENT;
+  } else if (is_success() && !is_valid()) {
     last_error_code_ = do_callback();
   }
   while (is_valid() && is_success() && get_size < n) {
@@ -172,7 +177,7 @@ int ObIStreamBuf::do_callback()
 /*
  * ObVectorIndexSerializer implement
  * */
-int ObVectorIndexSerializer::serialize(void *index, ObOStreamBuf::CbParam &cb_param, ObOStreamBuf::Callback &cb, const int64_t capacity)
+int ObVectorIndexSerializer::serialize(void *index, ObOStreamBuf::CbParam &cb_param, ObOStreamBuf::Callback &cb, uint64_t tenant_id, const int64_t capacity)
 {
   int ret = OB_SUCCESS;
   char *data = nullptr;
@@ -185,7 +190,9 @@ int ObVectorIndexSerializer::serialize(void *index, ObOStreamBuf::CbParam &cb_pa
   } else {
     ObOStreamBuf streambuf(data, capacity, cb_param, cb);
     std::ostream out(&streambuf);
+    lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "VIndexVsagADP"));
     if (OB_FAIL(obvectorutil::fserialize(index, out))) {
+      ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
       LOG_WARN("fail to do vsag serialize", K(ret));
     } else {
       streambuf.check_finish(); // do last callback to ensure all the data is written
@@ -197,7 +204,7 @@ int ObVectorIndexSerializer::serialize(void *index, ObOStreamBuf::CbParam &cb_pa
   return ret;
 }
 
-int ObVectorIndexSerializer::deserialize(void *&index, ObIStreamBuf::CbParam &cb_param, ObIStreamBuf::Callback &cb)
+int ObVectorIndexSerializer::deserialize(void *&index, ObIStreamBuf::CbParam &cb_param, ObIStreamBuf::Callback &cb, uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   char *data = nullptr;
@@ -214,8 +221,14 @@ int ObVectorIndexSerializer::deserialize(void *&index, ObIStreamBuf::CbParam &cb
       } else {
         LOG_WARN("failed to init istreambuf", K(ret));
       }
-    } else if (OB_FAIL(obvectorutil::fdeserialize(index, in))) {
-      LOG_WARN("fail to do vsag deserialize", K(ret));
+    } else {
+      lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "VIndexVsagADP"));
+      if (OB_FAIL(obvectorutil::fdeserialize(index, in))) {
+        ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
+        LOG_WARN("fail to do vsag deserialize", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(streambuf.get_error_code())) {
       if (ret == OB_ITER_END) {
         LOG_INFO("[vec index deserialize] read table finish, just return");
@@ -237,7 +250,7 @@ int ObHNSWDeserializeCallback::operator()(char*& data, const int64_t data_size, 
   ObDatum data_datum;
   ObHNSWDeserializeCallback::CbParam &param = static_cast<ObHNSWDeserializeCallback::CbParam&>(cb_param);
   ObTableScanIterator *row_iter = static_cast<ObTableScanIterator *>(param.iter_);
-  ObIAllocator *alloactor = param.allocator_;
+  ObIAllocator *allocator = param.allocator_;
   ObTextStringIter *&str_iter = param.str_iter_;
   ObTextStringIterState state;
   ObString src_block_data;
@@ -259,18 +272,18 @@ int ObHNSWDeserializeCallback::operator()(char*& data, const int64_t data_size, 
           // current lob is end, need to switch to next lob
           // release current str iter
           str_iter->~ObTextStringIter();
-          alloactor->free(str_iter);
+          allocator->free(str_iter);
           str_iter = nullptr;
-          alloactor->reuse();
+          allocator->reuse();
         } else {
           ret = (str_iter->get_inner_ret() != OB_SUCCESS) ?
                 str_iter->get_inner_ret() : OB_INVALID_DATA;
           LOG_WARN("iter state invalid", K(ret), K(state), KPC(str_iter));
           // return error, release current str iter
           str_iter->~ObTextStringIter();
-          alloactor->free(str_iter);
+          allocator->free(str_iter);
           str_iter = nullptr;
-          alloactor->reuse();
+          allocator->reuse();
         }
       }
       if (OB_SUCC(ret) && OB_ISNULL(str_iter)) {
@@ -284,10 +297,10 @@ int ObHNSWDeserializeCallback::operator()(char*& data, const int64_t data_size, 
           key_datum = row->storage_datums_[0];
           data_datum = row->storage_datums_[1];
           LOG_INFO("[vec index debug] show key and data for vsag deserialize", K(key_datum), K(data_datum));
-          if (OB_ISNULL(str_iter = OB_NEWx(ObTextStringIter, alloactor, ObLongTextType, CS_TYPE_BINARY, data_datum.get_string(), true))) {
+          if (OB_ISNULL(str_iter = OB_NEWx(ObTextStringIter, allocator, ObLongTextType, CS_TYPE_BINARY, data_datum.get_string(), true))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("fail to new ObTextStringIter", KR(ret));
-          } else if (OB_FAIL(str_iter->init(0, NULL, alloactor))) {
+          } else if (OB_FAIL(str_iter->init(0, NULL, allocator))) {
             LOG_WARN("init lob str iter failed ", K(ret));
           }
         }
@@ -320,9 +333,14 @@ int ObHNSWSerializeCallback::operator()(const char *data, const int64_t data_siz
   lob_param.sql_mode_ = SMO_DEFAULT;
   lob_param.timeout_ = param.timeout_;
   lob_param.lob_common_ = nullptr;
-  lob_param.snapshot_ = *reinterpret_cast<transaction::ObTxReadSnapshot*>(param.snapshot_);
-  lob_param.tx_desc_ = reinterpret_cast<transaction::ObTxDesc*>(param.tx_desc_);
-  if (OB_ISNULL(lob_mngr)) {
+  ret = lob_param.snapshot_.assign(*reinterpret_cast<transaction::ObTxReadSnapshot*>(param.snapshot_));
+  if (OB_FAIL(ret)) {
+    LOG_WARN("assign snapshot fail", K(ret));
+  } else {
+    lob_param.tx_desc_ = reinterpret_cast<transaction::ObTxDesc*>(param.tx_desc_);
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(lob_mngr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get lob manager nullptr", K(ret));
   } else if (OB_FAIL(lob_mngr->append(lob_param, src_lob))) {

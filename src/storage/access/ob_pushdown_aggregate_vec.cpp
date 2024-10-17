@@ -366,7 +366,7 @@ int ObAggCellVec::read_agg_datum(
     skip_index_datum_.reuse();
     skip_index_datum_.set_null();
     blocksstable::ObSkipIndexColMeta meta;
-    // TODO: @luhaopeng.lhp fix col_index in cg, use 0 temporarily
+    // TODO: @baichangmin.bcm fix col_index in cg, use 0 temporarily
     meta.col_idx_ = col_index;
     switch (agg_type_) {
       case PD_COUNT: {
@@ -471,7 +471,7 @@ int ObCountAggCellVec::eval_batch(
     int64_t &data = *reinterpret_cast<int64_t *>(agg_cell);
     if (!exclude_null_) {
       data += row_count;
-    } else if (nullptr == reader) { // row scan or group by pushdown or has other aggregate in one column
+    } else if (nullptr == reader) { // row scan or group by pushdown
       if (OB_FAIL(ObAggCellVec::eval_batch(reader, col_offset, row_ids, row_count, row_offset, agg_row_idx))) {
         LOG_WARN("Failed to aggregate batch rows", K(ret));
       }

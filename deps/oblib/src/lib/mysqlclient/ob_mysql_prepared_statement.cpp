@@ -1095,17 +1095,17 @@ int ObMySQLPreparedStatement::get_ob_type(ObObjType &ob_type, obmysql::EMySQLFie
   return ret;
 }
 
-int ObMySQLPreparedStatement::init(ObMySQLConnection &conn, const char *sql, int64_t param_count)
+int ObMySQLPreparedStatement::init(ObMySQLConnection &conn, const ObString &sql, int64_t param_count)
 {
   int ret = OB_SUCCESS;
   conn_ = &conn;
-  if (OB_ISNULL(sql)) {
+  if (sql.empty()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid sql", KP(sql), K(ret));
+    LOG_WARN("invalid sql", K(sql), K(ret));
   } else if (OB_ISNULL(stmt_ = mysql_stmt_init(conn_->get_handler()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("fail to init stmt", K(ret));
-  } else if (0 != mysql_stmt_prepare(stmt_, sql, STRLEN(sql))) {
+  } else if (0 != mysql_stmt_prepare(stmt_, sql.ptr(), sql.length())) {
     ret = -mysql_errno(conn_->get_handler());
     LOG_WARN("fail to prepare stmt", "info", mysql_error(conn_->get_handler()), K(ret));
   } else if (OB_FAIL(param_.init())) {
@@ -1669,7 +1669,7 @@ int ObMySQLProcStatement::process_proc_output_params(ObIAllocator &allocator,
 }
 
 int ObMySQLProcStatement::init(ObMySQLConnection &conn,
-                               const char *sql,
+                               const ObString &sql,
                                int64_t param_count)
 {
   int ret = OB_SUCCESS;
@@ -1679,9 +1679,9 @@ int ObMySQLProcStatement::init(ObMySQLConnection &conn,
   conn_ = &conn;
   stmt_param_count_ = param_count;
   in_out_map_.reset();
-  if (OB_ISNULL(proc_ = sql)) {
+  if (OB_ISNULL(proc_ = sql.ptr())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid sql", KCSTRING(sql), K(ret));
+    LOG_WARN("invalid sql", K(sql), K(ret));
   } else if (OB_ISNULL(conn_) || OB_ISNULL(conn_->get_handler())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("conn_ is NULL", K(ret));
@@ -1691,7 +1691,7 @@ int ObMySQLProcStatement::init(ObMySQLConnection &conn,
   } else if (OB_ISNULL(stmt_ = mysql_stmt_init(conn_->get_handler()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("fail to init stmt", K(ret));
-  } else if (0 != mysql_stmt_prepare_v2(stmt_, sql, STRLEN(sql), &stmt_param_count_)) {
+  } else if (0 != mysql_stmt_prepare_v2(stmt_, sql.ptr(), sql.length(), &stmt_param_count_)) {
     ret = -mysql_errno(conn_->get_handler());
     LOG_WARN("fail to prepare stmt", "info", mysql_error(conn_->get_handler()), K(ret));
   } else if (OB_FAIL(param_.init())) {
@@ -1856,6 +1856,10 @@ int ObMySQLProcStatement::execute_proc()
         }
       }
     }
+  }
+  if (NULL != res) {
+    mysql_free_result(res);
+    res = NULL;
   }
   int tmp_ret = OB_SUCCESS;
   if (OB_SUCCESS != (tmp_ret = close())) {

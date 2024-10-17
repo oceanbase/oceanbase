@@ -51,14 +51,14 @@ public:
   ObMySQLConnection();
   ~ObMySQLConnection();
   int connect(const char *user, const char *pass, const char *db,
-                                 oceanbase::common::ObAddr &addr, int64_t timeout, bool read_write_no_timeout = false, int64_t sql_req_level = 0);
+              const char *domin_name, int32_t port, int64_t timeout, bool read_write_no_timeout = false, int64_t sql_req_level = 0);
   int connect(const char *user, const char *pass, const char *db, const bool use_ssl, bool read_write_no_timeout = false, int64_t sql_req_level = 0);
   void close();
   virtual bool is_closed() const;
   // use user provided the statement
   template<typename T>
-  int create_statement(T &stmt, const uint64_t tenant_id, const char *sql, int64_t param_count = 0);
-  int prepare_statement(ObMySQLPreparedStatement &stmt, const char *sql);
+  int create_statement(T &stmt, const uint64_t tenant_id, const ObString &sql, int64_t param_count = 0);
+  int prepare_statement(ObMySQLPreparedStatement &stmt, const ObString &sql);
   int escape(const char *from, const int64_t from_size, char *to,
       const int64_t to_size, int64_t &out_size);
   void init(ObServerConnectionPool *root);
@@ -70,7 +70,7 @@ public:
   void set_last_error(int err_code);
   int get_last_error(void) const;
 
-  virtual int execute_read(const uint64_t tenant_id, const char *sql,
+  virtual int execute_read(const uint64_t tenant_id, const ObString &sql,
       ObISQLClient::ReadResult &res, bool is_user_sql = false,
       const common::ObAddr *sql_exec_addr = nullptr) override;
 
@@ -82,9 +82,6 @@ public:
       int64_t &affected_rows, bool is_user_sql = false,
       const common::ObAddr *sql_exec_addr = nullptr) override;
 
-  virtual int execute_write(const uint64_t tenant_id, const char *sql,
-                            int64_t &affected_rows, bool is_user_sql = false,
-                            const common::ObAddr *sql_exec_addr = nullptr) override;
   virtual int execute_proc(const uint64_t tenant_id,
                         ObIAllocator &allocator,
                         ParamStore &params,
@@ -123,8 +120,8 @@ public:
   // dblink.
   virtual int connect_dblink(const bool use_ssl, int64_t sql_request_level);
 
-  int prepare(const char *sql, int64_t param_count, ObIAllocator *allocator);
-  int prepare_proc_stmt(const char *sql, int64_t param_count, ObIAllocator *allocator);
+  int prepare(const ObString &sql, int64_t param_count, ObIAllocator *allocator);
+  int prepare_proc_stmt(const ObString &sql, int64_t param_count, ObIAllocator *allocator);
   int bind_basic_type_by_pos(uint64_t position,
                              void *param,
                              int64_t param_size,
@@ -199,7 +196,7 @@ inline int64_t ObMySQLConnection::connection_version() const
 }
 
 template<typename T>
-int ObMySQLConnection::create_statement(T &stmt, const uint64_t tenant_id, const char *sql, int64_t param_count)
+int ObMySQLConnection::create_statement(T &stmt, const uint64_t tenant_id, const ObString &sql, int64_t param_count)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(switch_tenant(tenant_id))) {

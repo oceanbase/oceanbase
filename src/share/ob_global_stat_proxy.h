@@ -108,6 +108,10 @@ public:
                                                const uint64_t tenant_id,
                                                int64_t &ddl_epoch);
   int get_ddl_epoch(int64_t &ddl_epoch);
+  // for major refresh mv
+  int update_major_refresh_mv_merge_scn(const share::SCN &scn, bool is_incremental = true);
+  int get_major_refresh_mv_merge_scn(const bool for_update, share::SCN &scn);
+
 private:
   static int inner_get_snapshot_gc_scn_(common::ObISQLClient &sql_client,
                                         const uint64_t tenant_id,

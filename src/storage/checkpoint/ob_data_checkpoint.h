@@ -17,6 +17,7 @@
 #include "storage/checkpoint/ob_common_checkpoint.h"
 #include "lib/lock/ob_spin_lock.h"
 #include "storage/checkpoint/ob_freeze_checkpoint.h"
+#include "storage/ls/ob_freezer_define.h"
 #include "share/scn.h"
 #include "share/ob_errno.h"
 
@@ -146,6 +147,10 @@ public:
   static void reset_tenant_freeze() { is_tenant_freeze_for_flush_ = false; }
   static bool is_tenant_freeze() { return is_tenant_freeze_for_flush_; }
 
+  static void set_freeze_source(const ObFreezeSourceFlag source) { freeze_source_ = source; }
+  static void reset_freeze_source() { freeze_source_ = ObFreezeSourceFlag::INVALID_SOURCE; }
+  static ObFreezeSourceFlag get_freeze_source() { return freeze_source_; }
+
 private:
   // traversal prepare_list to flush memtable
   // case1: some memtable flush failed when ls freeze
@@ -215,6 +220,7 @@ private:
   bool ls_freeze_finished_;
 
   static __thread bool is_tenant_freeze_for_flush_;
+  static __thread ObFreezeSourceFlag freeze_source_;
 };
 
 // list lock for DataChcekpoint

@@ -427,8 +427,7 @@ int ObChecksumValidator::verify_tablet_replica_checksum()
   if (OB_UNLIKELY(replica_ckm_items_.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(replica_ckm_items_));
-  } else if (OB_FAIL(ObMediumCompactionScheduleFunc::check_replica_checksum_items(
-    replica_ckm_items_, ls_locality_cache_.get_cs_replica_cache(), false /*is_medium_checker*/))) {
+  } else if (OB_FAIL(ObMediumCompactionScheduleFunc::check_replica_checksum_items(replica_ckm_items_, false /*is_medium_checker*/))) {
     LOG_WARN("failed to verify tablet replica checksum", K(ret));
   }
   return ret;

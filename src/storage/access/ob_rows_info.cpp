@@ -165,7 +165,7 @@ void ObRowsInfo::reuse()
 }
 
 //not only checking duplicate, but also assign rowkeys
-int ObRowsInfo::check_duplicate(ObDatumRow *rows, const int64_t row_count, ObRelativeTable &table)
+int ObRowsInfo::check_duplicate(ObDatumRow *rows, const int64_t row_count, ObRelativeTable &table, bool check_dup)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -207,7 +207,7 @@ int ObRowsInfo::check_duplicate(ObDatumRow *rows, const int64_t row_count, ObRel
     }
     if (OB_SUCC(ret)) {
       if (row_count > 1) {
-        RowsCompare rows_cmp(*datum_utils_, min_key_, true, ret);
+        RowsCompare rows_cmp(*datum_utils_, min_key_, check_dup, ret);
         lib::ob_sort(rowkeys_.begin(), rowkeys_.end(), rows_cmp);
       }
       if (OB_SUCC(ret)) {

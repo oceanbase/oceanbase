@@ -59,7 +59,7 @@ int ObTabletGCService::mtl_init(ObTabletGCService* &m)
 int ObTabletGCService::init()
 {
   int ret = OB_SUCCESS;
-  bool is_shared_storage = GCTX.is_shared_storage_mode();
+  const bool is_shared_storage = GCTX.is_shared_storage_mode();
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObTabletGCService init twice.", KR(ret));
@@ -707,6 +707,12 @@ int ObTabletGCHandler::gc_tablets(const common::ObIArray<ObTabletHandle> &delete
           STORAGE_LOG(WARN, "failed to remove tablet", K(ret), K(tablet_handle));
         }
       } else {
+#ifdef ERRSIM
+        SERVER_EVENT_SYNC_ADD("tablet_gc", "gc_tablet_finish",
+                              "ls_id", tablet_handle.get_obj()->get_tablet_meta().ls_id_.id(),
+                              "tablet_id", tablet_handle.get_obj()->get_tablet_meta().tablet_id_.id(),
+                              "transfer_seq", tablet_handle.get_obj()->get_tablet_meta().transfer_info_.transfer_seq_);
+#endif
         STORAGE_LOG(INFO, "gc tablet finish", K(ret),
                           "ls_id", tablet_handle.get_obj()->get_tablet_meta().ls_id_,
                           "tablet_id", tablet_handle.get_obj()->get_tablet_meta().tablet_id_);

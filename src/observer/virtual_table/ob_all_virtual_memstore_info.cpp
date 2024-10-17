@@ -30,7 +30,7 @@ ObAllVirtualMemstoreInfo::ObAllVirtualMemstoreInfo()
     addr_(),
     ls_id_(share::ObLSID::INVALID_LS_ID),
     ls_iter_guard_(),
-    ls_tablet_iter_(ObMDSGetTabletMode::READ_READABLE_COMMITED),
+    ls_tablet_iter_(ObMDSGetTabletMode::READ_ALL_COMMITED),
     tables_handle_(),
     memtable_array_pos_(0)
 {

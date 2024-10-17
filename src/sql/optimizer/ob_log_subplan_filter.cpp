@@ -381,7 +381,8 @@ int ObLogSubPlanFilter::compute_sharding_info()
     }
   } else if (DistAlgo::DIST_PULL_TO_LOCAL == dist_algo_) {
     strong_sharding_ = get_plan()->get_optimizer_context().get_local_sharding();
-  } else if (DistAlgo::DIST_NONE_ALL == dist_algo_) {
+  } else if (DistAlgo::DIST_NONE_ALL == dist_algo_||
+             DistAlgo::DIST_HASH_ALL == dist_algo_) {
     ObShardingInfo *sharding = NULL;
     if (OB_ISNULL(get_child(0)) ||
         OB_ISNULL(sharding = get_child(0)->get_sharding())) {
@@ -393,6 +394,8 @@ int ObLogSubPlanFilter::compute_sharding_info()
       strong_sharding_ = get_child(0)->get_strong_sharding();
       inherit_sharding_index_ = 0;
     }
+  } else if (DistAlgo::DIST_RANDOM_ALL == dist_algo_) {
+    strong_sharding_ = get_plan()->get_optimizer_context().get_distributed_sharding();
   } else if (DistAlgo::DIST_PARTITION_WISE == dist_algo_) {
     for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); i++) {
       ObShardingInfo *sharding = NULL;
@@ -455,6 +458,8 @@ int ObLogSubPlanFilter::check_if_match_das_group_rescan(ObLogicalOperator *root,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret));
     } else if (!tsc->use_das()) {
+      group_rescan = false;
+    } else if (tsc->use_index_merge()) {
       group_rescan = false;
     }
     if (OB_SUCC(ret) && group_rescan) {
@@ -525,6 +530,9 @@ int ObLogSubPlanFilter::check_and_set_das_group_rescan()
   ObSQLSessionInfo *session_info = NULL;
   ObQueryCtx *query_ctx = NULL;
   ObLogPlan *plan = NULL;
+  const ObRawExpr *ref_expr = NULL;
+  bool contains_invalid_startup = false;
+  bool has_ref_assign_user_var = false;
   if (OB_ISNULL(plan = get_plan())
       || OB_ISNULL(session_info = plan->get_optimizer_context().get_session_info())
       || OB_ISNULL(query_ctx = plan->get_optimizer_context().get_query_ctx())) {
@@ -540,9 +548,9 @@ int ObLogSubPlanFilter::check_and_set_das_group_rescan()
     ObLogicalOperator *child = get_child(i);
     bool contains_invalid_startup = false;
     bool contains_limit = false;
-    if (OB_ISNULL(child)) {
+    if (OB_ISNULL(child) || OB_ISNULL(child->get_stmt())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret));
+      LOG_WARN("unexpected null", K(ret), K(child));
     } else if (get_initplan_idxs().has_member(i) || get_onetime_idxs().has_member(i)) {
       enable_das_group_rescan_ = false;
     } else if (!(child->get_type() == log_op_def::LOG_TABLE_SCAN
@@ -550,25 +558,28 @@ int ObLogSubPlanFilter::check_and_set_das_group_rescan()
       enable_das_group_rescan_ = false;
     } else if (OB_FAIL(check_if_match_das_group_rescan(child, enable_das_group_rescan_))) {
       LOG_WARN("failed to check match das batch rescan", K(ret));
-    } else if (enable_das_group_rescan_) {
-      if (OB_FAIL(plan->contains_startup_with_exec_param(child, contains_invalid_startup))) {
-        LOG_WARN("failed to check contains invalid startup", K(ret));
-      } else if (contains_invalid_startup) {
-        enable_das_group_rescan_ = false;
-      }
+    } else if (!enable_das_group_rescan_) {
+      /* do nothing */
+    } else if (OB_FAIL(plan->contains_startup_with_exec_param(child, contains_invalid_startup))) {
+      LOG_WARN("failed to check contains invalid startup", K(ret));
+    } else if (contains_invalid_startup) {
+      enable_das_group_rescan_ = false;
+    } else if (OB_FAIL(child->get_stmt()->has_ref_assign_user_var(has_ref_assign_user_var))) {
+      LOG_WARN("faield to check stmt has assignment ref user var", K(ret));
+    } else if (has_ref_assign_user_var) {
+      enable_das_group_rescan_ = false;
     }
   }
   if (OB_SUCC(ret) && enable_das_group_rescan_ &&
       OB_FAIL(ObOptimizerUtil::check_ancestor_node_support_skip_scan(this, enable_das_group_rescan_))) {
       LOG_WARN("failed to check whether ancestor node support skip read", K(ret));
   }
-  // check if exec params contain sub_query
+  // check if exec params contain sub_query or rownum
   for (int64_t i = 0; OB_SUCC(ret) && enable_das_group_rescan_ && i < exec_params_.count(); i++) {
-    const ObExecParamRawExpr *exec_param = exec_params_.at(i);
-    if (OB_ISNULL(exec_param)) {
+    if (OB_ISNULL(exec_params_.at(i)) || OB_ISNULL(ref_expr = exec_params_.at(i)->get_ref_expr())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("exec param is nullptr", K(ret), K(i));
-    } else if (OB_NOT_NULL(exec_param->get_ref_expr()) && exec_param->get_ref_expr()->has_flag(CNT_SUB_QUERY)) {
+      LOG_WARN("unexpected null", K(ret), K(i), K(ref_expr), KPC(exec_params_.at(i)));
+    } else if (ref_expr->has_flag(CNT_SUB_QUERY) || ref_expr->has_flag(CNT_ROWNUM)) {
       enable_das_group_rescan_ = false;
     }
   }

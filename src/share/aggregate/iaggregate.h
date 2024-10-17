@@ -277,22 +277,22 @@ public:
       VecValueTypeClass vec_tc = param_expr->get_vec_value_tc();
       switch(fmt) {
       case common::VEC_UNIFORM: {
-        ret = inner_add_for_multi_groups<ObUniformFormat<false>>(
+        ret = inner_add_for_multi_groups<uniform_fmt<Derived::IN_TC, false>>(
           agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_vec);
         break;
       }
       case common::VEC_UNIFORM_CONST: {
-        ret = inner_add_for_multi_groups<ObUniformFormat<true>>(
+        ret = inner_add_for_multi_groups<uniform_fmt<Derived::IN_TC, true>>(
           agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_vec);
         break;
       }
       case common::VEC_DISCRETE: {
-        ret = inner_add_for_multi_groups<ObDiscreteFormat>(
+        ret = inner_add_for_multi_groups<discrete_fmt<Derived::IN_TC>>(
           agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_vec);
         break;
       }
       case common::VEC_CONTINUOUS: {
-        ret = inner_add_for_multi_groups<ObContinuousFormat>(
+        ret = inner_add_for_multi_groups<continuous_fmt<Derived::IN_TC>>(
           agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_vec);
         break;
       }
@@ -319,7 +319,8 @@ public:
   int collect_batch_group_results(RuntimeContext &agg_ctx, const int32_t agg_col_id,
                                   const int32_t cur_group_id, const int32_t output_start_idx,
                                   const int32_t expect_batch_size, int32_t &output_size,
-                                  const ObBitVector *skip = nullptr) override
+                                  const ObBitVector *skip = nullptr,
+                                  const bool init_vector = true) override
   {
     int ret = OB_SUCCESS;
     OB_ASSERT(agg_col_id < agg_ctx.aggr_infos_.count());
@@ -332,7 +333,7 @@ public:
       SQL_LOG(DEBUG, "no need to collect", K(ret), K(agg_ctx.agg_rows_.count()), K(cur_group_id));
     } else {
       output_size = 0;
-      if (OB_FAIL(agg_expr.init_vector_for_write(
+      if (init_vector && OB_FAIL(agg_expr.init_vector_for_write(
             agg_ctx.eval_ctx_, agg_expr.get_default_res_format(), expect_batch_size))) {
         SQL_LOG(WARN, "init vector for write failed", K(ret));
       } else {
@@ -459,6 +460,13 @@ protected:
       }
     }
     return ret;
+  }
+  template <>
+  int inner_add_for_multi_groups<ObVectorBase>(RuntimeContext &agg_ctx, AggrRowPtr *agg_rows,
+                                               RowSelector &row_sel, const int64_t batch_size,
+                                               const int32_t agg_col_id, ObIVector *ivec)
+  {
+    return OB_NOT_IMPLEMENT;
   }
   template <typename ColumnFmt>
   int add_batch_rows(RuntimeContext &agg_ctx, const sql::ObBitVector &skip,
@@ -836,6 +844,8 @@ public:
         || !rollup_result->is_inited()) {
       ret = OB_ERR_UNEXPECTED;
       SQL_LOG(WARN, "distinct set is NULL", K(ret));
+    } else if (OB_FAIL(ad_result->init_vector_default(ctx, ctx.max_batch_size_))) {
+      SQL_LOG(WARN, "failed to init vector default", K(ret));
     } else if (OB_FAIL(ad_result->brs_holder_.save(ctx.max_batch_size_))) {
       SQL_LOG(WARN, "backup datum failed", K(ret));
     } else {
@@ -883,6 +893,8 @@ public:
     if (OB_ISNULL(ad_result) || !ad_result->is_inited()) {
       ret = OB_ERR_UNEXPECTED;
       SQL_LOG(WARN, "invalid null extra", K(ret));
+    } else if (OB_FAIL(ad_result->init_vector_default(ctx, ctx.max_batch_size_))) {
+      SQL_LOG(WARN, "failed to init vector default", K(ret));
     } else if (OB_FAIL(ad_result->brs_holder_.save(ctx.max_batch_size_))) {
       SQL_LOG(WARN, "backup datum failed", K(ret));
     } else if (agg_ctx.has_rollup_ && group_id > 0) {

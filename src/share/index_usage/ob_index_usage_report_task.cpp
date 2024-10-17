@@ -15,6 +15,8 @@
 #include "share/ob_dml_sql_splicer.h"
 #include "share/rc/ob_tenant_base.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
+#include "observer/ob_server_struct.h"
+#include "share/schema/ob_schema_utils.h"
 
 #define USING_LOG_PREFIX SERVER
 

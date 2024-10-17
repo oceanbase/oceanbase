@@ -301,6 +301,8 @@ public:
   // record which equal cond is null safe equal
   common::ObFixedArray<bool, common::ObIAllocator> is_ns_equal_cond_;
   ObJoinFilterMaterialControlInfo jf_material_control_info_;
+  // record build row expr, because has key not in left output
+  ExprFixedArray build_rows_output_;
 };
 
 // hash join has no expression result overwrite problem:

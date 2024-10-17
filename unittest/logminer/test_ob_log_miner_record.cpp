@@ -65,6 +65,35 @@ TEST(test_ob_log_miner_record, InitObLogMinerRecord)
   destroy_miner_br(br);
   record.destroy();
 
+  br = build_logminer_br(new_buf, old_buf, EUPDATE, lib::Worker::CompatMode::MYSQL,
+      "tenant2.db2", "tbl2", 8, "id", "1", "2",
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING),
+      "name", nullptr, nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
+  EXPECT_EQ(OB_SUCCESS, record.init(*br));
+  EXPECT_STREQ("tenant2", record.tenant_name_.ptr());
+  EXPECT_STREQ("db2", record.database_name_.ptr());
+  EXPECT_STREQ("tbl2", record.table_name_.ptr());
+  EXPECT_EQ(OB_SUCCESS, record.build_stmts(*br));
+  EXPECT_STREQ("UPDATE `db2`.`tbl2` SET `id`='1', `name`=NULL WHERE `id`='2' AND `name` IS NULL LIMIT 1;", record.redo_stmt_.ptr());
+  EXPECT_STREQ("UPDATE `db2`.`tbl2` SET `id`='2', `name`=NULL WHERE `id`='1' AND `name` IS NULL LIMIT 1;", record.undo_stmt_.ptr());
+  destroy_miner_br(br);
+  record.destroy();
+
+  br = build_logminer_br(new_buf, old_buf, EUPDATE, lib::Worker::CompatMode::MYSQL,
+      "tenant2.db2", "tbl2", 8, "id", "1", "2",
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING),
+      "name", nullptr, nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
+  old_buf[1].m_origin = VALUE_ORIGIN::PADDING;
+  EXPECT_EQ(OB_SUCCESS, record.init(*br));
+  EXPECT_STREQ("tenant2", record.tenant_name_.ptr());
+  EXPECT_STREQ("db2", record.database_name_.ptr());
+  EXPECT_STREQ("tbl2", record.table_name_.ptr());
+  EXPECT_EQ(OB_SUCCESS, record.build_stmts(*br));
+  EXPECT_STREQ("UPDATE `db2`.`tbl2` SET `id`='1', `name`=NULL WHERE `id`='2' AND `name` IS NULL LIMIT 1;/* POTENTIALLY INACCURATE */", record.redo_stmt_.ptr());
+  EXPECT_STREQ("UPDATE `db2`.`tbl2` SET `id`='2', `name`=NULL WHERE `id`='1' AND `name` IS NULL LIMIT 1;/* POTENTIALLY INACCURATE */", record.undo_stmt_.ptr());
+  destroy_miner_br(br);
+  record.destroy();
+
   br = build_logminer_br(new_buf, old_buf, EDELETE, lib::Worker::CompatMode::MYSQL,
       "tenant2.db2", "tbl2", 8, "id", nullptr , "2",
       static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING),
@@ -76,6 +105,35 @@ TEST(test_ob_log_miner_record, InitObLogMinerRecord)
   EXPECT_EQ(OB_SUCCESS, record.build_stmts(*br));
   EXPECT_STREQ("DELETE FROM `db2`.`tbl2` WHERE `id`='2' AND `name`='bbb' LIMIT 1;", record.redo_stmt_.ptr());
   EXPECT_STREQ("INSERT INTO `db2`.`tbl2` (`id`, `name`) VALUES ('2', 'bbb');", record.undo_stmt_.ptr());
+  destroy_miner_br(br);
+  record.destroy();
+
+  br = build_logminer_br(new_buf, old_buf, EDELETE, lib::Worker::CompatMode::MYSQL,
+      "tenant2.db2", "tbl2", 8, "id", nullptr , "2",
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING),
+      "name", nullptr, nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
+  EXPECT_EQ(OB_SUCCESS, record.init(*br));
+  EXPECT_STREQ("tenant2", record.tenant_name_.ptr());
+  EXPECT_STREQ("db2", record.database_name_.ptr());
+  EXPECT_STREQ("tbl2", record.table_name_.ptr());
+  EXPECT_EQ(OB_SUCCESS, record.build_stmts(*br));
+  EXPECT_STREQ("DELETE FROM `db2`.`tbl2` WHERE `id`='2' AND `name` IS NULL LIMIT 1;", record.redo_stmt_.ptr());
+  EXPECT_STREQ("INSERT INTO `db2`.`tbl2` (`id`, `name`) VALUES ('2', NULL);", record.undo_stmt_.ptr());
+  destroy_miner_br(br);
+  record.destroy();
+
+   br = build_logminer_br(new_buf, old_buf, EDELETE, lib::Worker::CompatMode::MYSQL,
+      "tenant2.db2", "tbl2", 8, "id", nullptr , "2",
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING),
+      "name", nullptr, nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
+  old_buf[1].m_origin = VALUE_ORIGIN::PADDING;
+  EXPECT_EQ(OB_SUCCESS, record.init(*br));
+  EXPECT_STREQ("tenant2", record.tenant_name_.ptr());
+  EXPECT_STREQ("db2", record.database_name_.ptr());
+  EXPECT_STREQ("tbl2", record.table_name_.ptr());
+  EXPECT_EQ(OB_SUCCESS, record.build_stmts(*br));
+  EXPECT_STREQ("DELETE FROM `db2`.`tbl2` WHERE `id`='2' AND `name` IS NULL LIMIT 1;/* POTENTIALLY INACCURATE */", record.redo_stmt_.ptr());
+  EXPECT_STREQ("INSERT INTO `db2`.`tbl2` (`id`, `name`) VALUES ('2', NULL);/* POTENTIALLY INACCURATE */", record.undo_stmt_.ptr());
   destroy_miner_br(br);
   record.destroy();
 
@@ -442,6 +500,8 @@ TEST(test_ob_log_miner_record, LobTypeInMySqlMode)
       "tenant2.db2", "tbl2", "utf8mb4", 8,
       "col1", "{\"key\": \"new\"}", nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_JSON),
       "col2", "POINT(0 1)", "POINT(2 3)", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_GEOMETRY));
+  new_buf[0].m_origin = VALUE_ORIGIN::PADDING;
+  old_buf[0].m_origin = VALUE_ORIGIN::PADDING;
   EXPECT_EQ(OB_SUCCESS, record.init(*br));
   EXPECT_STREQ("tenant2", record.tenant_name_.ptr());
   EXPECT_STREQ("db2", record.database_name_.ptr());
@@ -459,6 +519,8 @@ TEST(test_ob_log_miner_record, LobTypeInMySqlMode)
       "col2", "POINT(0 1)", "POINT(2 3)", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_GEOMETRY),
       "col3", "1", nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_LONG));
   br->get_br()->getTableMeta()->setUKs("col3");
+  new_buf[0].m_origin = VALUE_ORIGIN::PADDING;
+  old_buf[0].m_origin = VALUE_ORIGIN::PADDING;
   EXPECT_EQ(OB_SUCCESS, record.init(*br));
   EXPECT_STREQ("tenant2", record.tenant_name_.ptr());
   EXPECT_STREQ("db2", record.database_name_.ptr());
@@ -466,6 +528,110 @@ TEST(test_ob_log_miner_record, LobTypeInMySqlMode)
   EXPECT_EQ(OB_SUCCESS, record.build_stmts(*br));
   EXPECT_STREQ("UPDATE `db2`.`tbl2` SET `col1`='{\"key\": \"new\"}', `col2`=ST_GeomFromText('POINT(0 1)'), `col3`=1 WHERE `col3` IS NULL LIMIT 1;", record.redo_stmt_.ptr());
   EXPECT_STREQ("UPDATE `db2`.`tbl2` SET `col1`=NULL, `col2`=ST_GeomFromText('POINT(2 3)'), `col3`=NULL WHERE `col3`=1 LIMIT 1;/* POTENTIALLY INACCURATE */", record.undo_stmt_.ptr());
+  destroy_miner_br(br);
+  record.destroy();
+
+  // delete without key
+  br = build_logminer_br(new_buf, old_buf, EDELETE, lib::Worker::CompatMode::MYSQL,
+      "tenant2.db2", "tbl2", "utf8mb4", 8,
+      "col1", nullptr, "{\"key\": \"old\"}", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_JSON),
+      "col2", nullptr, "POINT(2 3)", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_GEOMETRY));
+  new_buf[0].m_origin = VALUE_ORIGIN::PADDING;
+  old_buf[0].m_origin = VALUE_ORIGIN::PADDING;
+  EXPECT_EQ(OB_SUCCESS, record.init(*br));
+  EXPECT_STREQ("tenant2", record.tenant_name_.ptr());
+  EXPECT_STREQ("db2", record.database_name_.ptr());
+  EXPECT_STREQ("tbl2", record.table_name_.ptr());
+  EXPECT_EQ(OB_SUCCESS, record.build_stmts(*br));
+  EXPECT_STREQ("DELETE FROM `db2`.`tbl2` WHERE `col1`=cast('{\"key\": \"old\"}'as json) AND ST_Equals(`col2`, ST_GeomFromText('POINT(2 3)')) LIMIT 1;", record.redo_stmt_.ptr());
+  EXPECT_STREQ("INSERT INTO `db2`.`tbl2` (`col1`, `col2`) VALUES ('{\"key\": \"old\"}', ST_GeomFromText('POINT(2 3)'));", record.undo_stmt_.ptr());
+  destroy_miner_br(br);
+  record.destroy();
+
+  // delete with key
+  br = build_logminer_br(new_buf, old_buf, EDELETE, lib::Worker::CompatMode::MYSQL,
+      "tenant2.db2", "tbl2", "utf8mb4", 12,
+      "col1", nullptr, "{\"key\": \"old\"}", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_JSON),
+      "col2", nullptr, "POINT(2 3)", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_GEOMETRY),
+      "col3", nullptr, "2", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_LONG));
+  br->get_br()->getTableMeta()->setUKs("col3");
+  new_buf[1].m_origin = VALUE_ORIGIN::PADDING;
+  old_buf[1].m_origin = VALUE_ORIGIN::PADDING;
+  EXPECT_EQ(OB_SUCCESS, record.init(*br));
+  EXPECT_STREQ("tenant2", record.tenant_name_.ptr());
+  EXPECT_STREQ("db2", record.database_name_.ptr());
+  EXPECT_STREQ("tbl2", record.table_name_.ptr());
+  EXPECT_EQ(OB_SUCCESS, record.build_stmts(*br));
+  EXPECT_STREQ("DELETE FROM `db2`.`tbl2` WHERE `col3`=2 LIMIT 1;", record.redo_stmt_.ptr());
+  EXPECT_STREQ("INSERT INTO `db2`.`tbl2` (`col1`, `col2`, `col3`) VALUES ('{\"key\": \"old\"}', ST_GeomFromText('POINT(2 3)'), 2);", record.undo_stmt_.ptr());
+  destroy_miner_br(br);
+  record.destroy();
+
+  // null value delete without key
+  br = build_logminer_br(new_buf, old_buf, EDELETE, lib::Worker::CompatMode::MYSQL,
+      "tenant2.db2", "tbl2", "utf8mb4", 8,
+      "col1", nullptr, nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_JSON),
+      "col2", nullptr, "POINT(2 3)", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_GEOMETRY));
+  new_buf[0].m_origin = VALUE_ORIGIN::PADDING;
+  old_buf[0].m_origin = VALUE_ORIGIN::PADDING;
+  EXPECT_EQ(OB_SUCCESS, record.init(*br));
+  EXPECT_STREQ("tenant2", record.tenant_name_.ptr());
+  EXPECT_STREQ("db2", record.database_name_.ptr());
+  EXPECT_STREQ("tbl2", record.table_name_.ptr());
+  EXPECT_EQ(OB_SUCCESS, record.build_stmts(*br));
+  EXPECT_STREQ("DELETE FROM `db2`.`tbl2` WHERE `col1` IS NULL AND ST_Equals(`col2`, ST_GeomFromText('POINT(2 3)')) LIMIT 1;/* POTENTIALLY INACCURATE */",record.redo_stmt_.ptr());
+  EXPECT_STREQ("INSERT INTO `db2`.`tbl2` (`col1`, `col2`) VALUES (NULL, ST_GeomFromText('POINT(2 3)'));/* POTENTIALLY INACCURATE */", record.undo_stmt_.ptr());
+  destroy_miner_br(br);
+  record.destroy();
+
+  // null value delete with key
+  br = build_logminer_br(new_buf, old_buf, EDELETE, lib::Worker::CompatMode::MYSQL,
+      "tenant2.db2", "tbl2", "utf8mb4", 12,
+      "col1", nullptr, nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_JSON),
+      "col2", nullptr, "POINT(2 3)", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_GEOMETRY),
+      "col3", nullptr, "1", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_LONG));
+  new_buf[0].m_origin = VALUE_ORIGIN::PADDING;
+  old_buf[0].m_origin = VALUE_ORIGIN::PADDING;
+  br->get_br()->getTableMeta()->setUKs("col3");
+  EXPECT_EQ(OB_SUCCESS, record.init(*br));
+  EXPECT_STREQ("tenant2", record.tenant_name_.ptr());
+  EXPECT_STREQ("db2", record.database_name_.ptr());
+  EXPECT_STREQ("tbl2", record.table_name_.ptr());
+  EXPECT_EQ(OB_SUCCESS, record.build_stmts(*br));
+  EXPECT_STREQ("DELETE FROM `db2`.`tbl2` WHERE `col3`=1 LIMIT 1;", record.redo_stmt_.ptr());
+  EXPECT_STREQ("INSERT INTO `db2`.`tbl2` (`col1`, `col2`, `col3`) VALUES (NULL, ST_GeomFromText('POINT(2 3)'), 1);/* POTENTIALLY INACCURATE */", record.undo_stmt_.ptr());
+  destroy_miner_br(br);
+  record.destroy();
+
+  // null value update without key
+  br = build_logminer_br(new_buf, old_buf, EUPDATE, lib::Worker::CompatMode::MYSQL,
+      "tenant2.db2", "tbl2", "utf8mb4", 8,
+      "col1", "{\"key\": \"new\"}", nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_JSON),
+      "col2", "POINT(0 1)", "POINT(2 3)", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_GEOMETRY));
+  EXPECT_EQ(OB_SUCCESS, record.init(*br));
+  EXPECT_STREQ("tenant2", record.tenant_name_.ptr());
+  EXPECT_STREQ("db2", record.database_name_.ptr());
+  EXPECT_STREQ("tbl2", record.table_name_.ptr());
+  EXPECT_EQ(OB_SUCCESS, record.build_stmts(*br));
+  EXPECT_STREQ("UPDATE `db2`.`tbl2` SET `col1`='{\"key\": \"new\"}', `col2`=ST_GeomFromText('POINT(0 1)') WHERE `col1` IS NULL AND ST_Equals(`col2`, ST_GeomFromText('POINT(2 3)')) LIMIT 1;",record.redo_stmt_.ptr());
+  EXPECT_STREQ("UPDATE `db2`.`tbl2` SET `col1`=NULL, `col2`=ST_GeomFromText('POINT(2 3)') WHERE `col1`=cast('{\"key\": \"new\"}'as json) AND ST_Equals(`col2`, ST_GeomFromText('POINT(0 1)')) LIMIT 1;", record.undo_stmt_.ptr());
+  destroy_miner_br(br);
+  record.destroy();
+
+  // null value update with key
+  br = build_logminer_br(new_buf, old_buf, EUPDATE, lib::Worker::CompatMode::MYSQL,
+      "tenant2.db2", "tbl2", "utf8mb4", 12,
+      "col1", "{\"key\": \"new\"}", nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_JSON),
+      "col2", "POINT(0 1)", "POINT(2 3)", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_GEOMETRY),
+      "col3", "1", nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_LONG));
+  br->get_br()->getTableMeta()->setUKs("col3");
+  EXPECT_EQ(OB_SUCCESS, record.init(*br));
+  EXPECT_STREQ("tenant2", record.tenant_name_.ptr());
+  EXPECT_STREQ("db2", record.database_name_.ptr());
+  EXPECT_STREQ("tbl2", record.table_name_.ptr());
+  EXPECT_EQ(OB_SUCCESS, record.build_stmts(*br));
+  EXPECT_STREQ("UPDATE `db2`.`tbl2` SET `col1`='{\"key\": \"new\"}', `col2`=ST_GeomFromText('POINT(0 1)'), `col3`=1 WHERE `col3` IS NULL LIMIT 1;", record.redo_stmt_.ptr());
+  EXPECT_STREQ("UPDATE `db2`.`tbl2` SET `col1`=NULL, `col2`=ST_GeomFromText('POINT(2 3)'), `col3`=NULL WHERE `col3`=1 LIMIT 1;", record.undo_stmt_.ptr());
   destroy_miner_br(br);
   record.destroy();
 
@@ -511,8 +677,8 @@ TEST(test_ob_log_miner_record, LobTypeInMySqlMode)
   EXPECT_STREQ("db2", record.database_name_.ptr());
   EXPECT_STREQ("tbl2", record.table_name_.ptr());
   EXPECT_EQ(OB_SUCCESS, record.build_stmts(*br));
-  EXPECT_STREQ("DELETE FROM `db2`.`tbl2` WHERE `col1` IS NULL AND ST_Equals(`col2`, ST_GeomFromText('POINT(2 3)')) LIMIT 1;/* POTENTIALLY INACCURATE */",record.redo_stmt_.ptr());
-  EXPECT_STREQ("INSERT INTO `db2`.`tbl2` (`col1`, `col2`) VALUES (NULL, ST_GeomFromText('POINT(2 3)'));/* POTENTIALLY INACCURATE */", record.undo_stmt_.ptr());
+  EXPECT_STREQ("DELETE FROM `db2`.`tbl2` WHERE `col1` IS NULL AND ST_Equals(`col2`, ST_GeomFromText('POINT(2 3)')) LIMIT 1;",record.redo_stmt_.ptr());
+  EXPECT_STREQ("INSERT INTO `db2`.`tbl2` (`col1`, `col2`) VALUES (NULL, ST_GeomFromText('POINT(2 3)'));", record.undo_stmt_.ptr());
   destroy_miner_br(br);
   record.destroy();
 
@@ -529,7 +695,7 @@ TEST(test_ob_log_miner_record, LobTypeInMySqlMode)
   EXPECT_STREQ("tbl2", record.table_name_.ptr());
   EXPECT_EQ(OB_SUCCESS, record.build_stmts(*br));
   EXPECT_STREQ("DELETE FROM `db2`.`tbl2` WHERE `col3`=1 LIMIT 1;", record.redo_stmt_.ptr());
-  EXPECT_STREQ("INSERT INTO `db2`.`tbl2` (`col1`, `col2`, `col3`) VALUES (NULL, ST_GeomFromText('POINT(2 3)'), 1);/* POTENTIALLY INACCURATE */", record.undo_stmt_.ptr());
+  EXPECT_STREQ("INSERT INTO `db2`.`tbl2` (`col1`, `col2`, `col3`) VALUES (NULL, ST_GeomFromText('POINT(2 3)'), 1);", record.undo_stmt_.ptr());
   destroy_miner_br(br);
   record.destroy();
 }
@@ -673,6 +839,8 @@ TEST(test_ob_log_miner_record, LobTypeInOracleMode)
       "col2", "SRID=NULL;POINT(0 1)", nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_GEOMETRY),
       "col3", nullptr, nullptr, drcmsg_field_types::DRCMSG_TYPE_ORA_XML,
       "col4", "AABB1122", "1122", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_CLOB));
+  new_buf[1].m_origin = VALUE_ORIGIN::PADDING;
+  old_buf[1].m_origin = VALUE_ORIGIN::PADDING;
   EXPECT_EQ(OB_SUCCESS, record.init(*br));
   EXPECT_STREQ("tenant2", record.tenant_name_.ptr());
   EXPECT_STREQ("db2", record.database_name_.ptr());
@@ -749,6 +917,8 @@ TEST(test_ob_log_miner_record, LobTypeInOracleMode)
       "col2", nullptr, nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_GEOMETRY),
       "col3", nullptr, "<a>abc</a>", drcmsg_field_types::DRCMSG_TYPE_ORA_XML,
       "col4", nullptr, "AABB1122", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_CLOB));
+  new_buf[1].m_origin = VALUE_ORIGIN::PADDING;
+  old_buf[1].m_origin = VALUE_ORIGIN::PADDING;
   EXPECT_EQ(OB_SUCCESS, record.init(*br));
   EXPECT_STREQ("tenant2", record.tenant_name_.ptr());
   EXPECT_STREQ("db2", record.database_name_.ptr());
@@ -777,6 +947,7 @@ TEST(test_ob_log_miner_record, LobTypeInOracleMode)
   EXPECT_STREQ("INSERT INTO \"db2\".\"tbl2\" (\"col1\", \"col2\", \"col3\", \"col4\", \"col5\") VALUES ('{\"key\": \"value\"}', SDO_GEOMETRY('POINT(0 1)', NULL), '<a>abc</a>', 'AABB1122', 1);", record.undo_stmt_.ptr());
   destroy_miner_br(br);
   record.destroy();
+
 }
 
 }

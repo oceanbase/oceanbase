@@ -449,7 +449,7 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
       switch (table_item->json_table_def_->table_type_) {
         case MulModeTableType::OB_ORA_JSON_TABLE_TYPE : {
           DATA_PRINTF("JSON_TABLE(");
-          OZ (expr_printer_.do_print(table_item->json_table_def_->doc_expr_, T_FROM_SCOPE));
+          OZ (expr_printer_.do_print(table_item->json_table_def_->doc_exprs_.at(0), T_FROM_SCOPE));
           OZ (print_json_table(table_item));
           DATA_PRINTF(")");
           DATA_PRINTF(" %.*s", LEN_AND_PTR(table_item->alias_name_));
@@ -460,6 +460,20 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
           OZ (print_xml_table(table_item));
           DATA_PRINTF(")");
           DATA_PRINTF(" %.*s", LEN_AND_PTR(table_item->alias_name_));
+          break;
+        }
+        case MulModeTableType::OB_RB_ITERATE_TABLE_TYPE : {
+          if (table_item->json_table_def_->doc_exprs_.count() > 1 ) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "print rb_iterate table with more than 1 params");
+          } else {
+            DATA_PRINTF("RB_ITERATE(");
+            if (OB_FAIL(expr_printer_.do_print(table_item->json_table_def_->doc_exprs_.at(0), T_FROM_SCOPE))) {
+              LOG_WARN("failed to print expr", K(ret));
+            }
+            DATA_PRINTF(")");
+            DATA_PRINTF(" %.*s", LEN_AND_PTR(table_item->alias_name_));
+          }
           break;
         }
         default : {
@@ -1618,7 +1632,7 @@ int ObDMLStmtPrinter::print_xml_table(const TableItem *table_item)
   }
   DATA_PRINTF(" PASSING ");
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(expr_printer_.do_print(table_item->json_table_def_->doc_expr_, T_FROM_SCOPE))) {
+  } else if (OB_FAIL(expr_printer_.do_print(table_item->json_table_def_->doc_exprs_.at(0), T_FROM_SCOPE))) {
     LOG_WARN("fail to print xml doc", K(ret));
   } else if (root_def->col_base_info_.allow_scalar_) {
     DATA_PRINTF(" RETURNING SEQUENCE BY REF");

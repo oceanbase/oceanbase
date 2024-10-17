@@ -571,12 +571,12 @@ Query Plan
 ============================================================================
 |ID|OPERATOR                           |NAME         |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT          |             |1       |61          |
-|1 |└─EXCHANGE OUT DISTR               |:EX10001     |1       |60          |
-|2 |  └─MERGE GROUP BY                 |             |1       |60          |
-|3 |    └─EXCHANGE IN MERGE SORT DISTR |             |20      |58          |
-|4 |      └─EXCHANGE OUT DISTR (HASH)  |:EX10000     |20      |50          |
-|5 |        └─MERGE GROUP BY           |             |20      |31          |
+|0 |PX COORDINATOR MERGE SORT          |             |1       |59          |
+|1 |└─EXCHANGE OUT DISTR               |:EX10001     |1       |59          |
+|2 |  └─MERGE GROUP BY                 |             |1       |59          |
+|3 |    └─EXCHANGE IN MERGE SORT DISTR |             |19      |56          |
+|4 |      └─EXCHANGE OUT DISTR (HASH)  |:EX10000     |19      |48          |
+|5 |        └─MERGE GROUP BY           |             |19      |31          |
 |6 |          └─SORT                   |             |20      |29          |
 |7 |            └─PX PARTITION ITERATOR|             |20      |27          |
 |8 |              └─TABLE FULL SCAN    |t_h3_r4_01_20|20      |27          |
@@ -626,15 +626,15 @@ Query Plan
 ============================================================================
 |ID|OPERATOR                           |NAME         |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT          |             |1       |67          |
-|1 |└─EXCHANGE OUT DISTR               |:EX10001     |1       |67          |
-|2 |  └─MERGE GROUP BY                 |             |1       |67          |
-|3 |    └─EXCHANGE IN MERGE SORT DISTR |             |20      |64          |
-|4 |      └─EXCHANGE OUT DISTR (HASH)  |:EX10000     |20      |56          |
-|5 |        └─MERGE GROUP BY           |             |20      |37          |
-|6 |          └─SORT                   |             |20      |35          |
-|7 |            └─PX PARTITION ITERATOR|             |20      |33          |
-|8 |              └─TABLE FULL SCAN    |t_h3_r5_09_28|20      |33          |
+|0 |PX COORDINATOR MERGE SORT          |             |1       |69          |
+|1 |└─EXCHANGE OUT DISTR               |:EX10001     |1       |68          |
+|2 |  └─MERGE GROUP BY                 |             |1       |68          |
+|3 |    └─EXCHANGE IN MERGE SORT DISTR |             |21      |66          |
+|4 |      └─EXCHANGE OUT DISTR (HASH)  |:EX10000     |21      |57          |
+|5 |        └─MERGE GROUP BY           |             |21      |37          |
+|6 |          └─SORT                   |             |21      |35          |
+|7 |            └─PX PARTITION ITERATOR|             |21      |33          |
+|8 |              └─TABLE FULL SCAN    |t_h3_r5_09_28|21      |33          |
 ============================================================================
 Outputs & filters:
 -------------------------------------
@@ -736,15 +736,15 @@ Query Plan
 ============================================================================
 |ID|OPERATOR                           |NAME         |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT          |             |1       |88          |
-|1 |└─EXCHANGE OUT DISTR               |:EX10001     |1       |88          |
-|2 |  └─MERGE GROUP BY                 |             |1       |88          |
-|3 |    └─EXCHANGE IN MERGE SORT DISTR |             |20      |85          |
-|4 |      └─EXCHANGE OUT DISTR (HASH)  |:EX10000     |20      |77          |
-|5 |        └─MERGE GROUP BY           |             |20      |58          |
-|6 |          └─SORT                   |             |20      |56          |
-|7 |            └─PX PARTITION ITERATOR|             |20      |54          |
-|8 |              └─TABLE FULL SCAN    |t_h5_r5_09_28|20      |54          |
+|0 |PX COORDINATOR MERGE SORT          |             |1       |91          |
+|1 |└─EXCHANGE OUT DISTR               |:EX10001     |1       |91          |
+|2 |  └─MERGE GROUP BY                 |             |1       |91          |
+|3 |    └─EXCHANGE IN MERGE SORT DISTR |             |22      |89          |
+|4 |      └─EXCHANGE OUT DISTR (HASH)  |:EX10000     |22      |79          |
+|5 |        └─MERGE GROUP BY           |             |22      |59          |
+|6 |          └─SORT                   |             |23      |57          |
+|7 |            └─PX PARTITION ITERATOR|             |23      |54          |
+|8 |              └─TABLE FULL SCAN    |t_h5_r5_09_28|23      |54          |
 ============================================================================
 Outputs & filters:
 -------------------------------------
@@ -1239,11 +1239,11 @@ Query Plan
 ====================================================================
 |ID|OPERATOR                   |NAME         |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT  |             |12      |39          |
-|1 |└─EXCHANGE OUT DISTR       |:EX10000     |12      |36          |
-|2 |  └─SORT                   |             |12      |28          |
-|3 |    └─PX PARTITION ITERATOR|             |12      |26          |
-|4 |      └─TABLE RANGE SCAN   |t_h3_r4_01_20|12      |26          |
+|0 |PX COORDINATOR MERGE SORT  |             |14      |41          |
+|1 |└─EXCHANGE OUT DISTR       |:EX10000     |14      |37          |
+|2 |  └─SORT                   |             |14      |28          |
+|3 |    └─PX PARTITION ITERATOR|             |14      |26          |
+|4 |      └─TABLE RANGE SCAN   |t_h3_r4_01_20|14      |26          |
 ====================================================================
 Outputs & filters:
 -------------------------------------
@@ -1282,11 +1282,11 @@ Query Plan
 ====================================================================
 |ID|OPERATOR                   |NAME         |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT  |             |12      |46          |
-|1 |└─EXCHANGE OUT DISTR       |:EX10000     |12      |42          |
-|2 |  └─SORT                   |             |12      |34          |
-|3 |    └─PX PARTITION ITERATOR|             |12      |33          |
-|4 |      └─TABLE RANGE SCAN   |t_h3_r5_09_28|12      |33          |
+|0 |PX COORDINATOR MERGE SORT  |             |11      |44          |
+|1 |└─EXCHANGE OUT DISTR       |:EX10000     |11      |41          |
+|2 |  └─SORT                   |             |11      |34          |
+|3 |    └─PX PARTITION ITERATOR|             |11      |33          |
+|4 |      └─TABLE RANGE SCAN   |t_h3_r5_09_28|11      |33          |
 ====================================================================
 Outputs & filters:
 -------------------------------------
@@ -1325,11 +1325,11 @@ Query Plan
 ====================================================================
 |ID|OPERATOR                   |NAME         |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT  |             |12      |56          |
-|1 |└─EXCHANGE OUT DISTR       |:EX10000     |12      |53          |
-|2 |  └─SORT                   |             |12      |44          |
-|3 |    └─PX PARTITION ITERATOR|             |12      |43          |
-|4 |      └─TABLE RANGE SCAN   |t_h5_r4_01_20|12      |43          |
+|0 |PX COORDINATOR MERGE SORT  |             |14      |59          |
+|1 |└─EXCHANGE OUT DISTR       |:EX10000     |14      |54          |
+|2 |  └─SORT                   |             |14      |45          |
+|3 |    └─PX PARTITION ITERATOR|             |14      |43          |
+|4 |      └─TABLE RANGE SCAN   |t_h5_r4_01_20|14      |43          |
 ====================================================================
 Outputs & filters:
 -------------------------------------
@@ -1368,11 +1368,11 @@ Query Plan
 ====================================================================
 |ID|OPERATOR                   |NAME         |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT  |             |12      |67          |
-|1 |└─EXCHANGE OUT DISTR       |:EX10000     |12      |63          |
-|2 |  └─SORT                   |             |12      |55          |
-|3 |    └─PX PARTITION ITERATOR|             |12      |54          |
-|4 |      └─TABLE RANGE SCAN   |t_h5_r5_09_28|12      |54          |
+|0 |PX COORDINATOR MERGE SORT  |             |10      |64          |
+|1 |└─EXCHANGE OUT DISTR       |:EX10000     |10      |61          |
+|2 |  └─SORT                   |             |10      |55          |
+|3 |    └─PX PARTITION ITERATOR|             |10      |53          |
+|4 |      └─TABLE RANGE SCAN   |t_h5_r5_09_28|10      |53          |
 ====================================================================
 Outputs & filters:
 -------------------------------------
@@ -2251,7 +2251,7 @@ Query Plan
 |ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------
 |0 |PX COORDINATOR                   |        |4       |54          |
-|1 |└─EXCHANGE OUT DISTR             |:EX10001|4       |48          |
+|1 |└─EXCHANGE OUT DISTR             |:EX10001|4       |47          |
 |2 |  └─HASH JOIN                    |        |4       |33          |
 |3 |    ├─PX PARTITION ITERATOR      |        |4       |9           |
 |4 |    │ └─TABLE FULL SCAN          |t1      |4       |9           |
@@ -2297,7 +2297,7 @@ Query Plan
 |ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------
 |0 |PX COORDINATOR                   |        |4       |54          |
-|1 |└─EXCHANGE OUT DISTR             |:EX10001|4       |48          |
+|1 |└─EXCHANGE OUT DISTR             |:EX10001|4       |47          |
 |2 |  └─HASH JOIN                    |        |4       |33          |
 |3 |    ├─PX PARTITION ITERATOR      |        |4       |9           |
 |4 |    │ └─TABLE FULL SCAN          |t1      |4       |9           |
@@ -4044,7 +4044,7 @@ Query Plan
 |ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------
 |0 |PX COORDINATOR                   |        |4       |54          |
-|1 |└─EXCHANGE OUT DISTR             |:EX10001|4       |48          |
+|1 |└─EXCHANGE OUT DISTR             |:EX10001|4       |47          |
 |2 |  └─HASH JOIN                    |        |4       |33          |
 |3 |    ├─PX PARTITION ITERATOR      |        |4       |9           |
 |4 |    │ └─TABLE FULL SCAN          |t1      |4       |9           |
@@ -4090,7 +4090,7 @@ Query Plan
 |ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------
 |0 |PX COORDINATOR                   |        |4       |54          |
-|1 |└─EXCHANGE OUT DISTR             |:EX10001|4       |48          |
+|1 |└─EXCHANGE OUT DISTR             |:EX10001|4       |47          |
 |2 |  └─HASH JOIN                    |        |4       |33          |
 |3 |    ├─PX PARTITION ITERATOR      |        |4       |9           |
 |4 |    │ └─TABLE FULL SCAN          |t1      |4       |9           |

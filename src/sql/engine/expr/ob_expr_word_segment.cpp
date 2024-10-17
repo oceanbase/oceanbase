@@ -141,7 +141,7 @@ int ObExprWordSegment::cg_expr(
         if (OB_SUCC(ret)) {
           ObString str(res_str_len, ptr);
           expr_datum.set_string(str);
-          LOG_INFO("generate fulltext column", K(str), K(raw_ctx), K(eval_ctx), K(expr_datum));
+          LOG_TRACE("generate fulltext column", K(str), K(raw_ctx), K(eval_ctx), K(expr_datum));
         }
       }
     }

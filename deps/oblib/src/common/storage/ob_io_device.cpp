@@ -16,8 +16,6 @@
 namespace oceanbase {
 namespace common {
 
-ObIODevice *THE_IO_DEVICE = nullptr;
-
 /**
  * -------------------------------------ObIOFd--------------------------------------------
  */

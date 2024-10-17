@@ -803,7 +803,7 @@ int ObPxFifoReceiveOp::fetch_rows(const int64_t row_cnt)
         metric_.mark_eof();
         LOG_TRACE("Got eof row from channel", K(ret));
         break;
-      } else if (OB_EAGAIN == ret) {
+      } else if (OB_DTL_WAIT_EAGAIN == ret) {
         // no data for now, wait and try again
         if (ObTimeUtility::current_time() >= timeout_ts) {
           ret = OB_TIMEOUT;
@@ -825,7 +825,7 @@ int ObPxFifoReceiveOp::fetch_rows(const int64_t row_cnt)
         LOG_WARN("fail get row from channels", K(ret));
         break;
       }
-    } while (OB_EAGAIN == ret);
+    } while (OB_DTL_WAIT_EAGAIN == ret);
   }
   if (OB_ITER_END == ret) {
     iter_end_ = true;
@@ -894,15 +894,15 @@ int ObPxFifoReceiveOp::get_rows_from_channels(const int64_t row_cnt, int64_t tim
       break;
     }
     if (OB_FAIL(msg_loop_.process_any())) {
-      if (OB_EAGAIN != ret) {
+      if (OB_DTL_WAIT_EAGAIN != ret) {
         LOG_WARN("fail pop sqc execution result from channel", K(ret));
       } else {
-        ret = OB_EAGAIN;
+        ret = OB_DTL_WAIT_EAGAIN;
       }
     }
   }
   if (OB_SUCC(ret) && !got_row) {
-    ret = OB_EAGAIN;
+    ret = OB_DTL_WAIT_EAGAIN;
   }
   return ret;
 }
@@ -939,15 +939,15 @@ int ObPxFifoReceiveOp::get_rows_from_channels_vec(const int64_t row_cnt, int64_t
       break;
     }
     if (OB_FAIL(msg_loop_.process_any())) {
-      if (OB_EAGAIN != ret) {
+      if (OB_DTL_WAIT_EAGAIN != ret) {
         LOG_WARN("fail pop sqc execution result from channel", K(ret));
       } else {
-        ret = OB_EAGAIN;
+        ret = OB_DTL_WAIT_EAGAIN;
       }
     }
   }
   if (OB_SUCC(ret) && !got_row) {
-    ret = OB_EAGAIN;
+    ret = OB_DTL_WAIT_EAGAIN;
   }
   return ret;
 }

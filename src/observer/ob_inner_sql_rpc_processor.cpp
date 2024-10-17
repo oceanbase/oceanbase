@@ -419,8 +419,8 @@ int ObInnerSqlRpcP::process()
           case ObInnerSQLTransmitArg::OPERATION_TYPE_LOCK_ALONE_TABLET:
           case ObInnerSQLTransmitArg::OPERATION_TYPE_UNLOCK_ALONE_TABLET:
           case ObInnerSQLTransmitArg::OPERATION_TYPE_LOCK_OBJS:
-          case ObInnerSQLTransmitArg::OPERATION_TYPE_UNLOCK_OBJS: {
-
+          case ObInnerSQLTransmitArg::OPERATION_TYPE_UNLOCK_OBJS:
+          case ObInnerSQLTransmitArg::OPERATION_TYPE_REPLACE_LOCK: {
             if (OB_FAIL(ObInnerConnectionLockUtil::process_lock_rpc(transmit_arg, conn))) {
               LOG_WARN("process lock rpc failed", K(ret), K(transmit_arg.get_operation_type()));
             }

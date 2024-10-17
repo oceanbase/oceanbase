@@ -318,7 +318,8 @@ void ObTableApiSessPool::destroy()
   }
 
   // clear retired_nodes_
-  DLIST_FOREACH(node, retired_nodes_) {
+  ObLockGuard<ObSpinLock> guard(retired_nodes_lock_); // lock retired_nodes_
+  DLIST_FOREACH_REMOVESAFE_X(node, retired_nodes_, OB_SUCC(ret)) {
     if (OB_NOT_NULL(node)) {
       node->destroy();
       allocator_.free(node);

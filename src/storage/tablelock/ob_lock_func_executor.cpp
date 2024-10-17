@@ -522,7 +522,7 @@ int ObLockFuncExecutor::unlock_obj_(ObTxDesc *tx_desc,
 {
   int ret = OB_SUCCESS;
   ObTableLockService *lock_service = MTL(ObTableLockService *);
-  if (OB_FAIL(lock_service->unlock_obj(*tx_desc, tx_param, arg))) {
+  if (OB_FAIL(lock_service->unlock(*tx_desc, tx_param, arg))) {
     LOG_WARN("unlock obj failed", K(ret), KPC(tx_desc), K(arg));
   }
   return ret;
@@ -778,7 +778,7 @@ int ObGetLockExecutor::lock_obj_(sql::ObSQLSessionInfo *session,
                session, LOCK_OBJECT, arg, /*for_dbms_lock*/ false, need_record_to_lock_table))) {
     LOG_WARN("record_detect_info_to_inner_table failed", K(ret), K(arg));
   } else if (need_record_to_lock_table) {
-    if (OB_FAIL(lock_service->lock_obj(*tx_desc, tx_param, arg))) {
+    if (OB_FAIL(lock_service->lock(*tx_desc, tx_param, arg))) {
       LOG_WARN("lock obj failed", K(ret), KPC(tx_desc), K(arg));
     }
   }

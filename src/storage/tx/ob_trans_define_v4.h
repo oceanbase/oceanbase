@@ -233,14 +233,19 @@ typedef ObRefList<ObTxPart, 4> ObTxPartRefList;
 typedef ObPair<share::ObLSID, int64_t> ObTxLSEpochPair;
 
 // internal core snapshot for read data
-struct ObTxSnapshot
+class ObTxSnapshot
 {
+  friend class ObTxReadSnapshot;
+  friend class ObTransService;
+public:
   share::SCN version_;
   ObTransID tx_id_;
   ObTxSEQ scn_;
   bool elr_;
+public:
   TO_STRING_KV(K_(version), K_(tx_id), K_(scn));
   ObTxSnapshot();
+  ObTxSnapshot(const share::SCN &version);
   ~ObTxSnapshot();
   void reset();
   ObTxSnapshot &operator=(const ObTxSnapshot &r);
@@ -254,8 +259,10 @@ struct ObTxSnapshot
 };
 
 // snapshot used to consistency read
-struct ObTxReadSnapshot
+class ObTxReadSnapshot
 {
+  friend class ObTransService;
+public:
   bool valid_;              // used by cursor check snapshot state
   bool committed_;          // used by cursor check snapshot state
   ObTxSnapshot core_;
@@ -273,7 +280,7 @@ struct ObTxReadSnapshot
   ObAddr snapshot_acquire_addr_;    // snapshot version acquired from which server
   int64_t uncertain_bound_; // for source_ GLOBAL
   ObSEArray<ObTxLSEpochPair, 1> parts_;
-
+public:
   void init_weak_read(const share::SCN snapshot);
   void init_special_read(const share::SCN snapshot);
   void init_none_read() { valid_ = true; source_ = SRC::NONE; }
@@ -291,11 +298,61 @@ struct ObTxReadSnapshot
   bool is_special() const { return SRC::SPECIAL == source_; }
   bool is_ls_snapshot() const { return SRC::LS == source_; }
   bool is_valid() const { return valid_; }
+  void invalid() { valid_ = false; }
   bool is_committed() const { return committed_; }
   int format_source_for_display(char *buf, const int64_t buf_len) const;
   const ObAddr get_snapshot_acquire_addr() const { return snapshot_acquire_addr_; }
   void reset();
   int assign(const ObTxReadSnapshot &);
+
+  /**
+   * only used for lob, other situation DONOT use
+   *
+   * special serialize interface for lob to avoid lob locator too large
+   */
+  int serialize_for_lob(const share::ObLSID &ls_id, SERIAL_PARAMS) const;
+  int deserialize_for_lob(DESERIAL_PARAMS);
+  int64_t get_serialize_size_for_lob(const share::ObLSID &ls_id) const;
+  /**
+   * deprecated interface, DONOT use !
+   *
+   * only used for lob, other situation DONOT use
+   *
+   * offline ddl with lob can only get ObTxSnapshot
+   * so provide one interface to build ObTxReadSnapshot from ObTxSnapshot
+   * master no need use this
+   */
+  int build_snapshot_for_lob(const ObTxSnapshot &core, const share::ObLSID &ls_id);
+  /**
+   * deprecated interface, DONOT use !
+   *
+   * only used for lob, other situation DONOT use
+   *
+   * in upgarge, old lob locator will use ObMemLobTxInfo store tx info
+   * so provide one interface to build ObTxReadSnapshot from ObMemLobTxInfo
+   */
+  int build_snapshot_for_lob(
+      const int64_t snapshot_version,
+      const int64_t snapshot_tx_id,
+      const int64_t snapshot_seq,
+      const share::ObLSID &ls_id);
+  /**
+   * only used for lob, other situation DONOT use
+   *
+   * determine whether the current snapshot is within a transaction
+   *
+   * Return:
+   * true  - not in tx
+   */
+  bool is_not_in_tx_snapshot() const
+  {
+    return ! core_.tx_id_.is_valid() && ! core_.scn_.is_valid() && core_.version_.is_valid();
+  }
+  /**
+   * refresh snapshot's tx_seq_no to current time
+   */
+  int refresh_seq_no(const int64_t tx_seq_base);
+
   void convert_to_out_tx();
 
   ObTxReadSnapshot();
@@ -311,6 +368,7 @@ struct ObTxReadSnapshot
                K_(parts),
                K_(committed));
   OB_UNIS_VERSION(1);
+  DISABLE_COPY_ASSIGN(ObTxReadSnapshot);
 };
 
 class ObTxSavePoint
@@ -386,6 +444,7 @@ public:
   int merge_result(const ObTxExecResult &r);
   int assign(const ObTxExecResult &r);
   const ObSArray<ObTransIDAndAddr> &get_conflict_txs() const { return conflict_txs_; }
+  DISABLE_COPY_ASSIGN(ObTxExecResult);
 };
 
 class RollbackMaskSet
@@ -779,7 +838,7 @@ public:
   bool is_tx_active() const { return state_ >= State::ACTIVE && state_ < State::IN_TERMINATE; }
   void print_trace();
   void dump_and_print_trace();
-  bool in_tx_or_has_extra_state();
+  bool in_tx_or_has_extra_state() const;
   bool in_tx_for_free_route();
   const ObTransID &get_tx_id() const { return tx_id_; }
   ObITxCallback *get_end_tx_cb() { return commit_cb_; }
@@ -836,6 +895,7 @@ LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);
   int64_t get_seq_base() const { return seq_base_; }
   int add_modified_tables(const ObIArray<uint64_t> &tables);
   bool has_modify_table(const uint64_t table_id) const;
+  DISABLE_COPY_ASSIGN(ObTxDesc);
 };
 
 // Is used to store and travserse all TxScheduler's Stat information;

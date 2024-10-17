@@ -23,6 +23,36 @@ namespace oceanbase
 namespace sql
 {
 
+class ObFTIndexRowCache final
+{
+public:
+  static ObObjDatumMapType FTS_INDEX_TYPES[4];
+  static ObObjDatumMapType FTS_DOC_WORD_TYPES[4];
+
+  ObFTIndexRowCache();
+  ~ObFTIndexRowCache();
+  int init(
+      const bool is_fts_index_aux,
+      const common::ObString &parser_name);
+  int segment(
+      const common::ObObjMeta &ft_obj_meta,
+      const common::ObString &doc_id,
+      const common::ObString &fulltext);
+  int get_next_row(blocksstable::ObDatumRow *&row);
+  void reset();
+  void reuse();
+  TO_STRING_KV(K_(row_idx), K_(is_fts_index_aux), K_(helper), K_(is_inited), K_(rows));
+private:
+  lib::MemoryContext merge_memctx_;
+  ObDomainIndexRow rows_;
+  uint64_t row_idx_;
+  bool is_fts_index_aux_;
+  storage::ObFTParseHelper helper_;
+  bool is_inited_;
+
+  DISALLOW_COPY_AND_ASSIGN(ObFTIndexRowCache);
+};
+
 class ObDASDomainUtils final
 {
 public:

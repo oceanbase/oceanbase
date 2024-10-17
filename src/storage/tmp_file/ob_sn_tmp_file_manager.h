@@ -56,22 +56,22 @@ public:
   void destroy();
 
   int alloc_dir(int64_t &dir_id);
-  int open(int64_t &fd, const int64_t &dir_id, const char* const label = nullptr);
+  int open(int64_t &fd, const int64_t &dir_id, const char* const label);
   int remove(const int64_t fd);
 
   void refresh_meta_memory_limit();
 
 public:
-  int aio_read(const ObTmpFileIOInfo &io_info, ObSNTmpFileIOHandle &io_handle);
-  int aio_pread(const ObTmpFileIOInfo &io_info, const int64_t offset, ObSNTmpFileIOHandle &io_handle);
-  int read(const ObTmpFileIOInfo &io_info, ObSNTmpFileIOHandle &io_handle);
-  int pread(const ObTmpFileIOInfo &io_info, const int64_t offset, ObSNTmpFileIOHandle &io_handle);
+  int aio_read(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, ObSNTmpFileIOHandle &io_handle);
+  int aio_pread(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, const int64_t offset, ObSNTmpFileIOHandle &io_handle);
+  int read(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, ObSNTmpFileIOHandle &io_handle);
+  int pread(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, const int64_t offset, ObSNTmpFileIOHandle &io_handle);
   // NOTE:
   //   only support append write.
-  int aio_write(const ObTmpFileIOInfo &io_info, ObSNTmpFileIOHandle &io_handle);
+  int aio_write(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, ObSNTmpFileIOHandle &io_handle);
   // NOTE:
   //   only support append write.
-  int write(const ObTmpFileIOInfo &io_info);
+  int write(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info);
   int truncate(const int64_t fd, const int64_t offset);
 
 public:
@@ -116,8 +116,8 @@ private:
   ObTmpFileBlockManager tmp_file_block_manager_;
   ObTmpFilePageCacheController page_cache_controller_;
 
-  int64_t current_fd_;
-  int64_t current_dir_id_;
+  static int64_t current_fd_;
+  static int64_t current_dir_id_;
 };
 
 }  // end namespace tmp_file

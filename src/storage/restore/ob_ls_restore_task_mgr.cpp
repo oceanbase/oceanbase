@@ -18,6 +18,7 @@
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "storage/restore/ob_restore_compatibility_util.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
 
 using namespace oceanbase;
 using namespace share;
@@ -601,6 +602,7 @@ int ObLSRestoreTaskMgr::reload_tablets_()
   ObLS *ls = nullptr;
   bool is_follower = is_follower_();
   int64_t unfinished_tablet_cnt = 0;
+  int64_t unfinished_bytes = 0;
   if (OB_ISNULL(ls = restore_state_handler_->get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls is null", K(ret));
@@ -618,6 +620,7 @@ int ObLSRestoreTaskMgr::reload_tablets_()
 
     while (OB_SUCC(ret)) {
       bool discard = false;
+      int64_t tablet_size = 0;
       if (OB_FAIL(iterator.get_next_tablet(tablet_handle))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
@@ -632,8 +635,13 @@ int ObLSRestoreTaskMgr::reload_tablets_()
       } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tablet is nullptr", K(ret), K(tablet_handle));
+      } else if (OB_FAIL(ObStorageHAUtils::get_tablet_size_in_bytes(
+                 ls->get_ls_id(), tablet->get_tablet_id(), tablet_size))) {
+        LOG_WARN("fail to get tablet size in bytes", K(ret),
+                 "ls_id", ls->get_ls_id(), "tablet_id", tablet->get_tablet_id());
       } else {
         ++unfinished_tablet_cnt;
+        unfinished_bytes += tablet_size;
         const ObTabletMeta &tablet_meta = tablet->get_tablet_meta();
         const ObTabletID &tablet_id = tablet_meta.tablet_id_;
         if (tablet_meta.has_transfer_table() && ls_restore_status.is_quick_restore()) {
@@ -670,8 +678,13 @@ int ObLSRestoreTaskMgr::reload_tablets_()
       }
     }
 
-    if (ls_restore_status.is_restore_major_data() && FAILEDx(restore_state_handler_->report_unfinished_tablet_cnt(unfinished_tablet_cnt))) {
-      LOG_WARN("failed to report unfinished tablet cnt", K(ret), K_(ls_id), K(unfinished_tablet_cnt));
+    if (OB_SUCC(ret) && ls_restore_status.is_restore_major_data()) {
+      if (OB_FAIL(restore_state_handler_->report_unfinished_tablet_cnt(unfinished_tablet_cnt))) {
+        LOG_WARN("failed to report unfinished tablet cnt", K(ret), K_(ls_id), K(unfinished_tablet_cnt));
+      } else if (OB_FAIL(restore_state_handler_->report_unfinished_bytes(unfinished_bytes))) {
+        LOG_WARN("fail to report unfinished bytes", K(ret), K_(ls_id), K(unfinished_tablet_cnt));
+      }
+
     }
   }
 
@@ -802,8 +815,7 @@ int ObLSRestoreTaskMgr::check_tablet_is_deleted_(
     } else {
       LOG_WARN("failed to get latest tablet status", K(ret), KPC(tablet));
     }
-  } else if (ObTabletStatus::DELETED == data.tablet_status_
-             || ObTabletStatus::TRANSFER_OUT_DELETED == data.tablet_status_) {
+  } else if (data.tablet_status_.is_deleted_for_gc()) {
     is_deleted = true;
   }
   return ret;

@@ -241,10 +241,13 @@ int ObStorageObjectHandle::sn_async_read(const ObStorageObjectReadInfo &read_inf
 
     io_info.flag_.set_read();
     if (io_info.fd_.is_backup_block_file()) {
+      ObStorageIdMod mod;
+      mod.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_RESTORE;
       if (OB_FAIL(backup::ObBackupDeviceHelper::get_device_and_fd(io_info.tenant_id_,
                                                                   io_info.fd_.first_id_,
                                                                   io_info.fd_.second_id_,
                                                                   io_info.fd_.third_id_,
+                                                                  mod,
                                                                   backup_device,
                                                                   io_info.fd_))) {
         LOG_WARN("failed to get backup device and fd", K(ret), K(read_info));
@@ -301,7 +304,7 @@ int ObStorageObjectHandle::sn_async_write(const ObStorageObjectWriteInfo &write_
       LOG_WARN("Fail to aio_write", K(ret), K_(macro_id), K(write_info));
     } else {
       int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(OB_SERVER_BLOCK_MGR.update_write_time(macro_id_))) {
+      if (macro_id_.is_id_mode_local() && OB_TMP_FAIL(OB_SERVER_BLOCK_MGR.update_write_time(macro_id_))) {
         LOG_WARN("fail to update write time for macro block", K(tmp_ret), K(macro_id_));
       }
       FLOG_INFO("Async write macro block", K(macro_id_));

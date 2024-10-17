@@ -3325,10 +3325,38 @@ int ObPLResolver::resolve_dblink_row_type_with_synonym(ObPLResolveCtx &resolve_c
   uint64_t syn_id = OB_INVALID_ID;
   ObString empty_str;
   int64_t cnt = access_idxs.count();
-  int64_t syn_idx = cnt - (is_row_type ? 1 : 2);
+  int64_t syn_idx = -1;
+  ObSqlString full_name;
+  for (int64_t i = 0; OB_SUCC(ret) && i < access_idxs.count(); i++) {
+    if (ObObjAccessIdx::IS_DBLINK_PKG_NS == access_idxs.at(i).access_type_) {
+      syn_idx = i;
+    }
+    OZ (full_name.append_fmt((i == 0 ? "%.*s" : ".%.*s"),
+                              access_idxs.at(i).var_name_.length(),
+                              access_idxs.at(i).var_name_.ptr()));
+  }
   OZ (checker.init(resolve_ctx.schema_guard_, resolve_ctx.session_info_.get_sessid()));
-  OV (is_row_type ? cnt >= 1 : cnt >= 2, OB_ERR_UNEXPECTED, K(is_row_type), K(cnt));
   OX (syn_id = static_cast<uint64_t>(access_idxs.at(syn_idx).var_index_));
+  OV (OB_INVALID_ID != syn_id, OB_ERR_UNEXPECTED, syn_id, syn_idx);
+  if (OB_FAIL(ret)) {
+  } else if (is_row_type) {
+    if (cnt < 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cnt is error", K(ret), K(cnt));
+    } else if (syn_idx < (access_idxs.count() - 1)) {
+      ret = OB_ERR_WRONG_ROWTYPE;
+      LOG_USER_ERROR(OB_ERR_WRONG_ROWTYPE, full_name.string().length(), full_name.string().ptr());
+    }
+  } else {
+    if (syn_idx >= (access_idxs.count() - 1)) {
+      ret = OB_ERR_TYPE_DECL_ILLEGAL;
+      LOG_USER_ERROR(OB_ERR_TYPE_DECL_ILLEGAL,
+                     full_name.string().length(), full_name.string().ptr());
+    } else if (cnt < 2) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("access idx count error", K(ret), K(cnt));
+    }
+  }
   OZ (ObPLDblinkUtil::separate_name_from_synonym(checker, resolve_ctx.allocator_,
                                                  resolve_ctx.session_info_.get_effective_tenant_id(),
                                                  resolve_ctx.session_info_.get_database_name(),
@@ -3397,15 +3425,21 @@ int ObPLResolver::resolve_dblink_row_type(const ObString &db_name,
         OX (pl_type.set_type_from_orgin(pl_type.get_type_from()));
         OX (pl_type.set_type_from(PL_TYPE_ATTR_ROWTYPE));
       } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < record_type->get_member_count(); i++) {
+        bool find = false;
+        for (int64_t i = 0; OB_SUCC(ret) && !find && i < record_type->get_member_count(); i++) {
           const ObString *mem_name = record_type->get_record_member_name(i);
           CK (OB_NOT_NULL(mem_name));
           if (OB_SUCC(ret) && 0 == mem_name->case_compare(col_name)) {
+            find = true;
             CK (OB_NOT_NULL(record_type->get_record_member_type(i)));
             OX (pl_type = *(record_type->get_record_member_type(i)));
             break;
           }
         } // end for
+        if (!find) {
+          ret = OB_ERR_COMPONENT_UNDECLARED;
+          LOG_USER_ERROR(OB_ERR_COMPONENT_UNDECLARED, col_name.length(), col_name.ptr());
+        }
       } // end if
     }
   }
@@ -6764,12 +6798,19 @@ int ObPLResolver::resolve_declare_handler(const ObStmtNodeTree *parse_tree, ObPL
         }
       }
     }
-
+    if (OB_FAIL(ret) && OB_NOT_NULL(desc)) {
+      desc->ObPLDeclareHandlerStmt::DeclareHandler::HandlerDesc::~HandlerDesc();
+    }
     if (OB_SUCC(ret)) {
       if (desc->is_continue() || handler_analyzer_.in_continue()) {
         //如果自己是continue或者已经在continue里，把自己压栈
         if (OB_FAIL(handler_analyzer_.set_handler(desc, current_level_))) {
+          desc->ObPLDeclareHandlerStmt::DeclareHandler::HandlerDesc::~HandlerDesc();
           LOG_WARN("failed to set handler", K(ret));
+        } else if (desc->is_continue()
+                   && OB_FAIL(func.get_continue_handler_desc_bodys().push_back(desc->get_body()))) {
+          desc->ObPLDeclareHandlerStmt::DeclareHandler::HandlerDesc::~HandlerDesc();
+          LOG_WARN("failed to save continue handler body", K(ret));
         }
       }
     }
@@ -6787,6 +6828,7 @@ int ObPLResolver::resolve_declare_handler(const ObStmtNodeTree *parse_tree, ObPL
       ObPLDeclareHandlerStmt::DeclareHandler handler;
       handler.set_desc(desc);
       if (OB_FAIL(stmt->add_handler(handler))) {
+        desc->ObPLDeclareHandlerStmt::DeclareHandler::HandlerDesc::~HandlerDesc();
         LOG_WARN("failed to add handler", K(ret));
       }
     }
@@ -8467,8 +8509,8 @@ int ObPLResolver::convert_cursor_actual_params(
     } else if (convert_expr->get_result_type().is_ext()) {
       CK (OB_NOT_NULL(current_block_));
       OZ (check_composite_compatible(current_block_->get_namespace(),
-                                     pl_data_type.get_user_type_id(),
                                      convert_expr->get_result_type().get_udt_id(),
+                                     pl_data_type.get_user_type_id(),
                                      is_compatible));
     }
     if (OB_SUCC(ret) && !is_compatible) {
@@ -12746,7 +12788,7 @@ int ObPLResolver::resolve_udf_info(
       CK (OB_NOT_NULL(udf_raw_expr = udf_info.ref_expr_));
       OX (udf_raw_expr->set_is_udt_cons(udf_info.is_udf_udt_cons()));
       OX (udf_raw_expr->set_is_udt_udf(routine_info->is_udt_routine()));
-      OX (udf_raw_expr->set_is_deterministic(routine_info->is_deterministic()));
+      OX (udf_raw_expr->set_udf_deterministic(routine_info->is_deterministic()));
     }
   }
   return ret;
@@ -14181,7 +14223,7 @@ int ObPLResolver::resolve_routine(ObObjAccessIdent &access_ident,
     ObObjAccessIdx access_idx;
     if (expr_params.count() != 2 && expr_params.count() != 3) {
       ret = OB_ERR_WRONG_TYPE_FOR_VAR;
-      LOG_WARN("PLS-00306: wrong number or types of arguments in call to 'RAISE_APPLICATION_ERROR'", K(ret));;
+      LOG_WARN("PLS-00306: wrong number or types of arguments in call to 'RAISE_APPLICATION_ERROR'", K(ret));
       LOG_USER_ERROR(OB_ERR_WRONG_TYPE_FOR_VAR, routine_name.length(), routine_name.ptr());
     } else {
       ObPLDataType invalid_pl_data_type;
@@ -15599,11 +15641,16 @@ int ObPLResolver::resolve_condition_value(const ObStmtNodeTree *parse_tree,
       LOG_WARN("Invalid condition type", K(parse_tree->children_[0]->type_), K(ret));
     }
   } else {
+
     if (T_INT == parse_tree->type_
         || (T_VARCHAR == parse_tree->type_ && is_sys_db)) {
-      value.error_code_ = (T_INT == parse_tree->type_ 
-        ? parse_tree->value_ : static_cast<int64_t>(strtoll(parse_tree->str_value_, NULL, 10)));
-      if (value.error_code_ >= 0) {
+      if (T_INT == parse_tree->type_) {
+        value.error_code_ = parse_tree->value_;
+      } else if (T_VARCHAR == parse_tree->type_ && is_sys_db) {
+        CK (parse_tree->str_value_ != nullptr);
+        OX (value.error_code_ = static_cast<int64_t>(strtoll(parse_tree->str_value_, NULL, 10)));
+      }
+      if (OB_SUCC(ret) && value.error_code_ >= 0) {
         ret = OB_ERR_ILLEGAL_ERROR_NUM;
         LOG_WARN("illega error number for PRAGMA EXCEPTION_INIT", K(ret));
       }

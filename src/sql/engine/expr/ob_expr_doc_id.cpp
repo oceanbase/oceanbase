@@ -54,9 +54,15 @@ int ObExprDocID::cg_expr(
     ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(rt_expr.arg_cnt_ != 1) || OB_ISNULL(rt_expr.args_) || ObVarcharType != rt_expr.datum_meta_.type_) {
+  if (OB_UNLIKELY(ObVarcharType != rt_expr.datum_meta_.type_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected params", K(rt_expr.arg_cnt_), K(rt_expr.args_), K(rt_expr.type_));
+    LOG_WARN("unexpected error, expr type isn't varchar", K(ret), K(rt_expr.datum_meta_.type_));
+  } else if (OB_UNLIKELY(rt_expr.arg_cnt_ != 1 && rt_expr.arg_cnt_ != 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param count", K(rt_expr.arg_cnt_), K(rt_expr.args_), K(rt_expr.type_));
+  } else if (OB_UNLIKELY(rt_expr.arg_cnt_ == 1) && OB_ISNULL(rt_expr.args_) ) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, rt_expr.args_ is nullptr", K(rt_expr.arg_cnt_), K(rt_expr.args_), K(rt_expr.type_));
   } else {
     rt_expr.eval_func_ = generate_doc_id;
   }
@@ -69,18 +75,18 @@ int ObExprDocID::cg_expr(
     ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
-  common::ObDatum *datum = nullptr;
-  if (OB_UNLIKELY(1 != raw_ctx.arg_cnt_) || OB_ISNULL(raw_ctx.args_)) {
+  ObObjectID partition_id = OB_INVALID_ID;
+  ObTabletID tablet_id;
+  if (raw_ctx.arg_cnt_ == 0) {
+    //expr_datum.set_null();
+    LOG_TRACE("succeed to genearte empty document id", KP(&raw_ctx), K(raw_ctx), K(expr_datum), K(eval_ctx), K(lbt()));
+  } else if (OB_UNLIKELY(1 != raw_ctx.arg_cnt_) || OB_ISNULL(raw_ctx.args_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(raw_ctx), KP(raw_ctx.args_));
-  } else if (OB_FAIL(raw_ctx.args_[0]->eval(eval_ctx, datum))) {
-    LOG_WARN("fail to eval tablet id", K(ret), K(raw_ctx), K(eval_ctx));
-  } else if (OB_ISNULL(datum)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null datum ptr", K(ret), KP(datum));
+  } else if (OB_FAIL(ObExprCalcPartitionBase::calc_part_and_tablet_id(raw_ctx.args_[0], eval_ctx, partition_id, tablet_id))) {
+    LOG_WARN("fail to calc part and tablet id by expr", K(ret));
   } else {
     share::ObTabletAutoincrementService &auto_inc = share::ObTabletAutoincrementService::get_instance();
-    const ObTabletID tablet_id(datum->get_int());
     uint64_t seq_id = 0;
     uint64_t buf_len = sizeof(ObDocId);
     uint64_t *buf = reinterpret_cast<uint64_t *>(raw_ctx.get_str_res_mem(eval_ctx, buf_len));
@@ -92,7 +98,7 @@ int ObExprDocID::cg_expr(
     } else {
       ObDocId *doc_id = new (buf) ObDocId(tablet_id.id(), seq_id);
       expr_datum.set_string(doc_id->get_string());
-      FLOG_INFO("succeed to genearte document id", K(tablet_id), K(seq_id));
+      LOG_TRACE("succeed to genearte document id", K(tablet_id), K(seq_id));
     }
   }
   return ret;

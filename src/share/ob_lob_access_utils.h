@@ -44,6 +44,16 @@ OB_INLINE bool ob_enable_lob_locator_v2()
   return bret;
 }
 
+OB_INLINE void ob_use_old_lob_tx_info_if_need(ObMemLobExternFlags &flags)
+{
+  uint64_t cluster_version = GET_MIN_CLUSTER_VERSION();
+  // [, 4,2.4) or [4.3.0, 4.3.4)
+  if (flags.has_read_snapshot_ == 1 && (cluster_version < MOCK_CLUSTER_VERSION_4_2_4_0 || (cluster_version >= CLUSTER_VERSION_4_3_0_0 && cluster_version < CLUSTER_VERSION_4_3_4_0))) {
+    flags.has_read_snapshot_ = 0;
+    flags.has_tx_info_ = 1;
+  }
+}
+
 OB_INLINE bool ob_enable_datum_cast_debug_log()
 {
   return false;

@@ -118,6 +118,7 @@ int ObTableLoadRedefTable::finish(const ObTableLoadRedefTableFinishArg &arg,
       finish_redef_table_arg.task_id_ = arg.task_id_;
       finish_redef_table_arg.tenant_id_ = arg.tenant_id_;
 
+      ObAddr rs_addr;
       ObDDLBuildSingleReplicaResponseArg build_single_replica_response_arg;
       build_single_replica_response_arg.task_id_             = arg.task_id_;
       build_single_replica_response_arg.tenant_id_           = arg.tenant_id_;
@@ -132,6 +133,7 @@ int ObTableLoadRedefTable::finish(const ObTableLoadRedefTableFinishArg &arg,
       build_single_replica_response_arg.snapshot_version_    = 1;
       build_single_replica_response_arg.execution_id_        = 1;
       build_single_replica_response_arg.ret_code_            = ret;
+      build_single_replica_response_arg.server_addr_ = GCTX.self_addr();
       if (OB_FAIL(ObDDLServerClient::finish_redef_table(
             finish_redef_table_arg, build_single_replica_response_arg, session_info))) {
         LOG_WARN("failed to finish redef table", KR(ret), K(finish_redef_table_arg));

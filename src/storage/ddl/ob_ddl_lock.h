@@ -59,6 +59,33 @@ public:
       const transaction::tablelock::ObTableLockOwnerID lock_owner,
       ObMySQLTransaction &trans);
 
+  static int lock_for_split_partition(
+      const share::schema::ObTableSchema &table_schema,
+      const share::ObLSID *ls_id,
+      const ObIArray<ObTabletID> *src_tablet_ids,
+      const ObIArray<ObTabletID> &dst_tablet_ids,
+      const transaction::tablelock::ObTableLockOwnerID lock_owner,
+      ObMySQLTransaction &trans);
+  static int unlock_for_split_partition(
+      const share::schema::ObTableSchema &table_schema,
+      const ObIArray<ObTabletID> &src_tablet_ids,
+      const ObIArray<ObTabletID> &dst_tablet_ids,
+      const transaction::tablelock::ObTableLockOwnerID lock_owner,
+      ObMySQLTransaction &trans);
+  static int replace_lock_for_split_partition(
+    const share::schema::ObTableSchema &table_schema,
+    const ObIArray<ObTabletID> &src_tablet_ids,
+    const ObIArray<ObTabletID> &dst_tablet_ids,
+    const transaction::tablelock::ObTableLockOwnerID old_lock_owner,
+    const transaction::tablelock::ObTableLockOwnerID new_lock_owner,
+    ObMySQLTransaction &trans);
+
+  static int lock_for_modify_auto_part_size_in_trans(
+      const uint64_t tenant_id,
+      const uint64_t data_table_id,
+      const ObIArray<uint64_t> &global_index_table_ids,
+      ObMySQLTransaction &trans);
+
   static int lock_for_add_lob_in_trans(
       const share::schema::ObTableSchema &data_table_schema,
       ObMySQLTransaction &trans);
@@ -93,6 +120,7 @@ public:
   static int unlock_for_offline_ddl(
       const uint64_t tenant_id,
       const uint64_t table_id,
+      const ObIArray<ObTabletID> *hidden_tablet_ids_alone,
       const transaction::tablelock::ObTableLockOwnerID lock_owner,
       ObMySQLTransaction &trans);
 
@@ -125,6 +153,33 @@ private:
       const share::schema::ObTableSchema &lhs_schema,
       const share::schema::ObTableSchema &rhs_schema,
       ObMySQLTransaction &trans);
+  static int replace_table_lock(
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    const transaction::tablelock::ObTableLockMode old_lock_mode,
+    const transaction::tablelock::ObTableLockOwnerID old_lock_owner,
+    const transaction::tablelock::ObTableLockMode new_lock_mode,
+    const transaction::tablelock::ObTableLockOwnerID new_lock_owner,
+    const int64_t timeout_us,
+    ObMySQLTransaction &trans);
+  static int replace_table_lock(
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    const ObIArray<ObTabletID> &tablet_ids,
+    const transaction::tablelock::ObTableLockMode old_lock_mode,
+    const transaction::tablelock::ObTableLockOwnerID old_lock_owner,
+    const transaction::tablelock::ObTableLockMode new_lock_mode,
+    const transaction::tablelock::ObTableLockOwnerID new_lock_owner,
+    const int64_t timeout_us,
+    ObMySQLTransaction &trans);
+  static int get_unlock_alone_tablet_request_args(
+    const uint64_t tenant_id,
+    const transaction::tablelock::ObTableLockMode lock_mode,
+    const transaction::tablelock::ObTableLockOwnerID lock_owner,
+    const int64_t timeout_us,
+    const ObIArray<ObTabletID> &tablet_ids,
+    ObArray<transaction::tablelock::ObUnLockAloneTabletRequest> &unlock_args,
+    ObMySQLTransaction &trans);
   static constexpr int64_t DEFAULT_TIMEOUT = 0;
 };
 

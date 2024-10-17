@@ -2212,7 +2212,7 @@ int ObSqlPlan::format_plan_to_json(ObIArray<ObSqlPlanItem*> &sql_plan_infos, Pla
     plan_text.pos_ += tidy.to_string(plan_text.buf_ + plan_text.pos_,
                                      plan_text.buf_len_ - plan_text.pos_);
     if (plan_text.buf_len_ - plan_text.pos_ > 0) {
-      plan_text.buf_[plan_text.pos_ + 1] = '\0';
+      plan_text.buf_[plan_text.pos_] = '\0';
     } else {
       plan_text.buf_[plan_text.buf_len_ - 1] = '\0';
     }

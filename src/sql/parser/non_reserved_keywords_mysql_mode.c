@@ -741,6 +741,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"replica_num", REPLICA_NUM},
   {"replica_type", REPLICA_TYPE},
   {"duplicate_scope", DUPLICATE_SCOPE},
+  {"duplicate_read_consistency", DUPLICATE_READ_CONSISTENCY},
   {"replication", REPLICATION},
   {"report", REPORT},
   {"require", REQUIRE},
@@ -1084,6 +1085,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"rb_build_agg", RB_BUILD_AGG},
   {"rb_or_agg", RB_OR_AGG},
   {"rb_and_agg", RB_AND_AGG},
+  {"rb_iterate", RB_ITERATE},
   {"optimizer_costs", OPTIMIZER_COSTS},
   {"micro_index_clustered", MICRO_INDEX_CLUSTERED}
 };

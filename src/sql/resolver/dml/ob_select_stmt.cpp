@@ -1520,3 +1520,52 @@ int ObSelectStmt::check_is_simple_lock_stmt(bool &is_valid) const
   }
   return ret;
 }
+
+int ObSelectStmt::is_query_deterministic(bool &is_deterministic) const
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObRawExpr *> relation_exprs;
+  is_deterministic = true;
+  if (OB_FAIL(get_relation_exprs(relation_exprs))) {
+    LOG_WARN("failed to get relation exprs", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && is_deterministic && i < relation_exprs.count(); i++) {
+      if (OB_ISNULL(relation_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("got null expr");
+      } else {
+        is_deterministic = relation_exprs.at(i)->is_deterministic();
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && is_deterministic && i < set_query_.count(); i++) {
+      if (OB_ISNULL(set_query_.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("got null expr");
+      } else if (OB_FAIL(SMART_CALL(set_query_.at(i)->is_query_deterministic(is_deterministic)))) {
+        LOG_WARN("failed to check set query deterministic", K(ret));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && is_deterministic && i < get_table_size(); ++i) {
+      const TableItem *table_item = get_table_item(i);
+      if (OB_ISNULL(table_item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table_item is null", K(i));
+      } else if (table_item->is_basic_table() ||
+                 table_item->is_values_table() ||
+                 table_item->is_json_table() ||
+                 table_item->is_function_table() ||
+                 table_item->is_fake_cte_table()) {
+        /* do nothing */
+      } else if (table_item->is_generated_table() ||
+                 table_item->is_lateral_table() ||
+                 table_item->is_temp_table()) {
+        if (OB_FAIL(SMART_CALL(table_item->ref_query_->is_query_deterministic(is_deterministic)))) {
+          LOG_WARN("failed to check table item deterministic", K(ret));
+        }
+      } else {
+        is_deterministic = false;
+      }
+    }
+  }
+  return ret;
+}

@@ -11,6 +11,9 @@
  */
 
 #include "ob_admin_dump_backup_data_executor.h"
+
+#include "src/share/io/ob_io_manager.h"
+#include "src/share/ob_device_manager.h"
 #include "share/backup/ob_backup_io_adapter.h"
 #include "lib/container/ob_array.h"
 #include "storage/blocksstable/ob_data_buffer.h"
@@ -568,7 +571,12 @@ int ObAdminDumpBackupDataExecutor::execute(int argc, char *argv[])
     OB_LOGGER.set_log_level("INFO");
   }
 
-  if (OB_FAIL(ret)) {
+  if (FAILEDx(ObDeviceManager::get_instance().init_devices_env())) {
+    STORAGE_LOG(WARN, "init device manager failed", KR(ret));
+  } else if (OB_FAIL(ObIOManager::get_instance().init())) {
+    STORAGE_LOG(WARN, "failed to init io manager", K(ret));
+  } else if (OB_FAIL(ObIOManager::get_instance().start())) {
+    STORAGE_LOG(WARN, "failed to start io manager", K(ret));
   } else if (check_exist_) {
     // ob_admin dump_backup -d'xxxxx' -c
     if (OB_FAIL(do_check_exist_())) {

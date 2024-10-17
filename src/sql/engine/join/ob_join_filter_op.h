@@ -233,11 +233,6 @@ public:
     return use_realistic_runtime_bloom_filter_size() && jf_material_control_info_.is_controller_;
   }
 
-  inline bool is_under_material_control() const
-  {
-    return use_realistic_runtime_bloom_filter_size() && !jf_material_control_info_.is_controller_;
-  }
-
   inline int16_t under_control_join_filter_count() const
   {
     return jf_material_control_info_.join_filter_count_;
@@ -282,7 +277,7 @@ public:
   template<typename FUNC, typename... ARGS>
   int apply(FUNC func, ARGS&&... args) {
     int ret = OB_SUCCESS;
-    for (int64_t i = 0; i < group_count_ && OB_SUCC(ret); ++i) {
+    for (int64_t i = 0; i < join_filter_ops_.count() && OB_SUCC(ret); ++i) {
       ObJoinFilterOp *join_filter_op = join_filter_ops_.at(i);
       if (OB_FAIL(func(join_filter_op, std::forward<ARGS>(args)...))) {
         SQL_LOG(WARN, "failed to do op");

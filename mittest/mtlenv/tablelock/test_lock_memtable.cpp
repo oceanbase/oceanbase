@@ -561,7 +561,8 @@ TEST_F(TestLockMemtable, pre_check_lock)
   LOG_INFO("TestLockMemtable::pre_check_lock 1.2");
   ret = memtable_.check_lock_conflict(mem_ctx,
                                       DEFAULT_IN_TRANS_LOCK_OP,
-                                      conflict_tx_set);
+                                      conflict_tx_set,
+                                      expired_time);
   ASSERT_EQ(OB_SUCCESS, ret);
   // 1.3 lock
   LOG_INFO("TestLockMemtable::pre_check_lock 1.3");
@@ -575,7 +576,8 @@ TEST_F(TestLockMemtable, pre_check_lock)
   LOG_INFO("TestLockMemtable::pre_check_lock 1.4");
   ret = memtable_.check_lock_conflict(mem_ctx,
                                       DEFAULT_IN_TRANS_LOCK_OP,
-                                      conflict_tx_set);
+                                      conflict_tx_set,
+                                      expired_time);
   ASSERT_EQ(OB_SUCCESS, ret);
   // 1.5 check allow lock
   LOG_INFO("TestLockMemtable::pre_check_lock 1.5");
@@ -583,7 +585,8 @@ TEST_F(TestLockMemtable, pre_check_lock)
   lock_op.lock_mode_ = ROW_SHARE;
   ret = memtable_.check_lock_conflict(mem_ctx,
                                       lock_op,
-                                      conflict_tx_set);
+                                      conflict_tx_set,
+                                      expired_time);
   ASSERT_EQ(OB_SUCCESS, ret);
   // 1.6 remove lock op at memtable.
   LOG_INFO("TestLockMemtable::pre_check_lock 1.6");
@@ -1161,7 +1164,7 @@ TEST_F(TestLockMemtable, test_lock_retry_lock_conflict)
 
   ObTableLockOp lock_first = DEFAULT_OUT_TRANS_LOCK_OP; // RX, owner 0
   ObTableLockOp lock_second = DEFAULT_OUT_TRANS_LOCK_OP;
-  lock_second.lock_mode_ = DEFAULT_COFLICT_LOCK_MODE; // X
+  lock_second.lock_mode_ = DEFAULT_CONFLICT_LOCK_MODE; // X
   lock_second.owner_id_ = CONFLICT_OWNER_ID; // owner 1
 
   MyTxCtx default_ctx;
@@ -1296,6 +1299,157 @@ TEST_F(TestLockMemtable, test_lock_retry_lock_conflict)
   memtable_.obj_lock_map_.print();
   min_commited_scn = memtable_.obj_lock_map_.get_min_ddl_committed_scn(flushed_scn);
   ASSERT_EQ(min_commited_scn, share::SCN::max_scn());
+}
+
+TEST_F(TestLockMemtable, test_replace)
+{
+  LOG_INFO("TestLockMemtable::test_replace");
+  int ret = OB_SUCCESS;
+  bool is_try_lock = false;
+  int64_t expired_time = ObClockGenerator::getClock() + 10 * 1000 * 1000;
+  ObReplaceLockParam param;
+  ObMemtableCtx *mem_ctx = nullptr;
+  bool lock_exist = false;
+  share::SCN min_commited_scn;
+  share::SCN flushed_scn;
+  uint64_t lock_mode_cnt_in_same_trans[TABLE_LOCK_MODE_COUNT] = {0, 0, 0, 0, 0};
+
+  ObTableLockOp lock_first = DEFAULT_OUT_TRANS_LOCK_OP;  // RX, owner 0
+  ObTableLockOp lock_second = DEFAULT_OUT_TRANS_LOCK_OP;
+  lock_second.lock_mode_ = DEFAULT_CONFLICT_LOCK_MODE;  // X
+  lock_second.owner_id_ = CONFLICT_OWNER_ID;            // owner 1
+
+  ObTableLockOp unlock_first = DEFAULT_OUT_TRANS_UNLOCK_OP;
+  ObTableLockOp unlock_second = DEFAULT_OUT_TRANS_UNLOCK_OP;
+  unlock_second.lock_mode_ = DEFAULT_CONFLICT_LOCK_MODE;
+  unlock_second.owner_id_ = CONFLICT_OWNER_ID;
+
+  MyTxCtx ctx1;
+  ObStoreCtx store_ctx1;
+  MyTxCtx ctx2;
+  ObStoreCtx store_ctx2;
+
+  start_tx(DEFAULT_TRANS_ID, ctx1);
+  get_store_ctx(ctx1, store_ctx1);
+  ctx1.tx_ctx_.change_to_leader();
+  start_tx(TRANS_ID2, ctx2);
+  get_store_ctx(ctx2, store_ctx2);
+  ctx2.tx_ctx_.change_to_leader();
+
+  LOG_INFO("TestLockMemtable::test_replace 1");
+  // 1.1 lock first
+  LOG_INFO("TestLockMemtable::test_replace 1.1");
+  param.is_try_lock_ = is_try_lock;
+  param.expired_time_ = expired_time;
+  ret = memtable_.lock(param,
+                       store_ctx1,
+                       lock_first);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // 1.2 check lock exist at memctx.
+  LOG_INFO("TestLockMemtable::test_replace 1.2");
+  mem_ctx = store_ctx1.mvcc_acc_ctx_.mem_ctx_;
+  ret = mem_ctx->check_lock_exist(lock_first.lock_id_,
+                                  lock_first.owner_id_,
+                                  lock_first.lock_mode_,
+                                  lock_first.op_type_,
+                                  lock_exist,
+                                  lock_mode_cnt_in_same_trans);
+  ASSERT_EQ(lock_exist, true);
+
+  // 1.3 commit out trans lock
+  LOG_INFO("TestLockMemtable::test_replace 1.3");
+  share::SCN commit_version;
+  share::SCN commit_scn;
+  commit_version.set_base();
+  commit_scn.set_base();
+  ret = memtable_.update_lock_status(lock_first,
+                                     commit_version,
+                                     commit_scn,
+                                     COMMIT_LOCK_OP_STATUS);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  min_commited_scn = memtable_.obj_lock_map_.get_min_ddl_committed_scn(
+                            flushed_scn);
+  ASSERT_EQ(min_commited_scn, commit_scn);
+  memtable_.obj_lock_map_.print();
+
+  // 2. replace lock_first with lock_second
+  LOG_INFO("TestLockMemtable::test_replace 2");
+  // 2.1 replace to owner 1
+  LOG_INFO("TestLockMemtable::test_replace 2.1");
+  param.is_for_replace_ = true;
+  ret = memtable_.replace(store_ctx2, param, unlock_first, lock_second);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  memtable_.obj_lock_map_.print();
+
+  // 2.2 check lock exist at memctx
+  LOG_INFO("TestLockMemtable::test_replace 2.2");
+  mem_ctx = store_ctx2.mvcc_acc_ctx_.mem_ctx_;
+  ret = mem_ctx->check_lock_exist(lock_second.lock_id_,
+                                  lock_second.owner_id_,
+                                  lock_second.lock_mode_,
+                                  lock_second.op_type_,
+                                  lock_exist,
+                                  lock_mode_cnt_in_same_trans);
+  ASSERT_EQ(lock_exist, true);
+
+  // 2.3 commit replace lock
+  // We should commit all lock_ops in the same tx,
+  // so we commit unlock_op and lock_op together here
+  LOG_INFO("TestLockMemtable::test_replace 2.3");
+  commit_version.set_base();
+  commit_scn.set_base();
+  ret = memtable_.update_lock_status(unlock_first,
+                                     commit_version,
+                                     commit_scn,
+                                     COMMIT_LOCK_OP_STATUS);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = memtable_.update_lock_status(lock_second,
+                                     commit_version,
+                                     commit_scn,
+                                     COMMIT_LOCK_OP_STATUS);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  min_commited_scn = memtable_.obj_lock_map_.get_min_ddl_committed_scn(
+                            flushed_scn);
+  ASSERT_EQ(min_commited_scn, commit_scn);
+  memtable_.obj_lock_map_.print();
+
+  // 3. unlock
+  LOG_INFO("TestLockMemtable::test_replace 3");
+  MyTxCtx ctx3;
+  ObStoreCtx unlock_store_ctx3;
+  start_tx(TRANS_ID3, ctx3);
+  get_store_ctx(ctx3, unlock_store_ctx3);
+  ctx3.tx_ctx_.change_to_leader();
+  // 3.1 unlock with owner 0: should be OB_OBJ_LOCK_NOT_EXIST.
+  LOG_INFO("TestLockMemtable::test_replace 3.1");
+  ret = memtable_.unlock(unlock_store_ctx3,
+                         unlock_first,
+                         is_try_lock,
+                         expired_time);
+  ASSERT_EQ(OB_OBJ_LOCK_NOT_EXIST, ret);
+
+  // 3.2 unlock with owner 1: should be success
+  LOG_INFO("TestLockMemtable::test_replace 3.2");
+  ret = memtable_.unlock(unlock_store_ctx3,
+                         unlock_second,
+                         is_try_lock,
+                         expired_time);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // 3.3 commit unlock
+  LOG_INFO("TestLockMemtable::test_replace 3.3");
+  commit_version.set_base();
+  commit_scn.set_base();
+  ret = memtable_.update_lock_status(unlock_second,
+                                     commit_version,
+                                     commit_scn,
+                                     COMMIT_LOCK_OP_STATUS);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  min_commited_scn = memtable_.obj_lock_map_.get_min_ddl_committed_scn(
+                            flushed_scn);
+  ASSERT_EQ(min_commited_scn, share::SCN::max_scn());
+  memtable_.obj_lock_map_.print();
 }
 
 } // tablelock

@@ -231,7 +231,7 @@ public:
       const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info = NULL) = 0;
   // Parse the column data based on ObTableSchema
   virtual int parse_cols( const ObCDCLobAuxTableSchemaInfo &lob_aux_table_schema_info) = 0;
-  virtual int parse_ext_info_log(ObString &ext_info_log) = 0;
+  virtual int parse_ext_info_log(ObLobId &lob_id, ObString &ext_info_log) = 0;
   int get_cols(
       ColValueList **rowkey_cols,
       ColValueList **new_cols,
@@ -368,7 +368,7 @@ public:
       const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info = NULL);
   // Parse the column data based on ObTableSchema
   int parse_cols(const ObCDCLobAuxTableSchemaInfo &lob_aux_table_schema_info);
-  int parse_ext_info_log(ObString &ext_info_log);
+  int parse_ext_info_log(ObLobId &lob_id, ObString &ext_info_log);
   uint64_t hash(const uint64_t hash) const { return row_key_.murmurhash(hash); }
   void set_table_id(const uint64_t table_id) { table_id_ = table_id; }
   uint64_t get_table_id() const { return table_id_; }
@@ -438,7 +438,7 @@ public:
 
   // Parse the column data based on ObTableSchema
   int parse_cols(const ObCDCLobAuxTableSchemaInfo &lob_aux_table_schema_info);
-  int parse_ext_info_log(ObString &ext_info_log);
+  int parse_ext_info_log(ObLobId &lob_id, ObString &ext_info_log);
   uint64_t hash(const uint64_t hash) const { return rowkey_.murmurhash(hash); }
   uint64_t get_table_id() const { return table_id_; }
   blocksstable::ObDmlRowFlag get_dml_flag() const { return dml_flag_; }
@@ -1357,7 +1357,18 @@ private:
       const MultiDataSourceNode &multi_data_source_node,
       ObCDCTabletChangeInfo &tablet_change_info);
 
+  int treeify_redo_list_(); // try to convert sorted_redo_list and fetched_log_entry_arr to tree
+  int untreeify_redo_list_(); // try to convert sorted_redo_list and fetched_log_entry_arr to list
+
 private:
+
+  // allocator used to alloc:
+  // LogEntryNode/RollbackNode
+  // DdlRedoLogNode/DmlRedoLogNode/mutator_row_data
+  // trace_id/trace_info/part_trans_info_str_/participant_
+  // MutatorRow(DDL)/DdlStmtTask
+  ObSmallArena            allocator_;
+  ObLfFIFOAllocator       log_entry_task_base_allocator_;
   ServedState             serve_state_;
   // trans basic info
   uint64_t                cluster_id_;            // cluster ID
@@ -1438,14 +1449,6 @@ private:
   int64_t                 output_br_count_by_turn_; // sorted br count in each statistic round
 
   ObArray<TICUpdateInfo>  tic_update_infos_; // table id cache update info
-
-  // allocator used to alloc:
-  // LogEntryNode/RollbackNode
-  // DdlRedoLogNode/DmlRedoLogNode/mutator_row_data
-  // trace_id/trace_info/part_trans_info_str_/participant_
-  // MutatorRow(DDL)/DdlStmtTask
-  ObSmallArena            allocator_;
-  ObLfFIFOAllocator       log_entry_task_base_allocator_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(PartTransTask);

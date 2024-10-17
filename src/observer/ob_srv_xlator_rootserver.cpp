@@ -114,6 +114,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcCreateAuxIndexP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreateIndexP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcDropIndexP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcDropIndexOnFailedP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreateMLogP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreateTableLikeP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcExecuteBootstrapP, *gctx_.root_service_);
@@ -274,7 +275,9 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcCloneTenantP, *gctx_.root_service_);
 
     // auto part ddl
-
+    RPC_PROCESSOR(rootserver::ObRpcCleanSplittedTabletP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObAutoSplitTabletTaskP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObSplitGlobalIndexTabletTaskP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcFlushOptStatMonitoringInfoP, *gctx_.root_service_);
 
     RPC_PROCESSOR(rootserver::ObRpcCreateDirectoryP, *gctx_.root_service_);

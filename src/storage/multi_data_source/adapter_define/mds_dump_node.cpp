@@ -479,8 +479,8 @@ int MdsDumpNode::deserialize(common::ObIAllocator &allocator, const char *buf, c
     int64_t seq_no = 0;
     LST_DO_CODE(OB_UNIS_DECODE, seq_no);
     if (OB_SUCC(ret)) {
-      // compat logic
-      seq_no_ = (0 == seq_no ? ObTxSEQ::MIN_VAL() : ObTxSEQ::mk_v0(seq_no));
+      // compat logic, seq_no can be 0 or -1(transfer tablet status committed node) in 431
+      seq_no_ = ((0 == seq_no || -1 == seq_no) ? ObTxSEQ::MIN_VAL() : ObTxSEQ::mk_v0(seq_no));
     }
   } else {
     LST_DO_CODE(OB_UNIS_DECODE, seq_no_);

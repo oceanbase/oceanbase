@@ -54,18 +54,21 @@ int ObVectorIndexRefresher::init(sql::ObExecContext &ctx,
 
 int ObVectorIndexRefresher::refresh() {
   int ret = OB_SUCCESS;
-  const ObVectorRefreshMethod refresh_type = refresh_ctx_->refresh_method_;
-  if (ObVectorRefreshMethod::REBUILD_COMPLETE == refresh_type) {
-    if (OB_FAIL(do_rebuild())) {
-      LOG_WARN("fail to rebuild index", KR(ret));
+  CK(OB_NOT_NULL(refresh_ctx_));
+  if (OB_SUCC(ret)) {
+    const ObVectorRefreshMethod refresh_type = refresh_ctx_->refresh_method_;
+    if (ObVectorRefreshMethod::REBUILD_COMPLETE == refresh_type) {
+      if (OB_FAIL(do_rebuild())) {
+        LOG_WARN("fail to rebuild index", KR(ret));
+      }
+    } else if (ObVectorRefreshMethod::REFRESH_DELTA == refresh_type) {
+      if (OB_FAIL(do_refresh())) {
+        LOG_WARN("fail to refresh index", KR(ret));
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("refresh type is not supported", KR(ret), K(refresh_type));
     }
-  } else if (ObVectorRefreshMethod::REFRESH_DELTA == refresh_type) {
-    if (OB_FAIL(do_refresh())) {
-      LOG_WARN("fail to refresh index", KR(ret));
-    }
-  } else {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("refresh type is not supported", KR(ret), K(refresh_type));
   }
   return ret;
 }
@@ -144,30 +147,36 @@ int ObVectorIndexRefresher::get_table_row_count(const ObString &db_name,
                                                 const share::SCN &scn,
                                                 int64_t &row_cnt) {
   int ret = OB_SUCCESS;
-  const uint64_t exec_tenant_id =
-      ObSchemaUtils::get_exec_tenant_id(refresh_ctx_->tenant_id_);
-  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-    common::sqlclient::ObMySQLResult *result = nullptr;
-    ObSqlString sql;
-    if (OB_FAIL(sql.assign_fmt(
-            "SELECT COUNT(*) AS CNT FROM `%.*s`.`%.*s` AS OF SNAPSHOT %ld",
-            static_cast<int>(db_name.length()), db_name.ptr(),
-            static_cast<int>(table_name.length()), table_name.ptr(),
-            scn.get_val_for_tx()))) {
-      LOG_WARN("fail to assign sql", KR(ret));
-    } else if (OB_FAIL(refresh_ctx_->trans_->read(res, refresh_ctx_->tenant_id_,
-                                                  sql.ptr()))) {
-      LOG_WARN("execute sql failed", KR(ret), K(sql));
-    } else if (OB_ISNULL(result = res.get_result())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("result is null", KR(ret));
-    } else if (OB_FAIL(result->next())) {
-      LOG_WARN("fail to get count", KR(ret));
-    } else {
-      EXTRACT_INT_FIELD_MYSQL(*result, "CNT", row_cnt, int64_t);
-      LOG_DEBUG("############# DBMS_VECTOR ############### get delta_buf_table "
-                "row cnt ",
-                K(table_name), K(row_cnt));
+  CK(OB_NOT_NULL(refresh_ctx_));
+  if (OB_SUCC(ret)) {
+    const uint64_t exec_tenant_id =
+        ObSchemaUtils::get_exec_tenant_id(refresh_ctx_->tenant_id_);
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      common::sqlclient::ObMySQLResult *result = nullptr;
+      ObSqlString sql;
+      if (OB_FAIL(sql.assign_fmt(
+              "SELECT COUNT(*) AS CNT FROM `%.*s`.`%.*s` AS OF SNAPSHOT %ld",
+              static_cast<int>(db_name.length()), db_name.ptr(),
+              static_cast<int>(table_name.length()), table_name.ptr(),
+              scn.get_val_for_tx()))) {
+        LOG_WARN("fail to assign sql", KR(ret));
+      } else if (OB_ISNULL(refresh_ctx_->trans_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("trans is null", K(ret));
+      } else if (OB_FAIL(refresh_ctx_->trans_->read(res, refresh_ctx_->tenant_id_,
+                                                    sql.ptr()))) {
+        LOG_WARN("execute sql failed", KR(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", KR(ret));
+      } else if (OB_FAIL(result->next())) {
+        LOG_WARN("fail to get count", KR(ret));
+      } else {
+        EXTRACT_INT_FIELD_MYSQL(*result, "CNT", row_cnt, int64_t);
+        LOG_DEBUG("############# DBMS_VECTOR ############### get delta_buf_table "
+                  "row cnt ",
+                  K(table_name), K(row_cnt));
+      }
     }
   }
   return ret;
@@ -252,27 +261,30 @@ int ObVectorIndexRefresher::get_vector_index_col_names(
 
 int ObVectorIndexRefresher::lock_delta_buf_table_for_refresh() {
   int ret = OB_SUCCESS;
-  const uint64_t tenant_id = refresh_ctx_->tenant_id_;
-  const uint64_t delta_buf_tb_id = refresh_ctx_->delta_buf_tb_id_;
-  int64_t retries = 0;
+  CK(OB_NOT_NULL(refresh_ctx_));
   CK(OB_NOT_NULL(refresh_ctx_->trans_));
-  while (OB_SUCC(ret) && OB_SUCC(ctx_->check_status())) {
-    if (OB_FAIL(ObVectorIndexRefresher::lock_delta_buf_tb(
-            *(refresh_ctx_->trans_), tenant_id, delta_buf_tb_id, true))) {
-      if (OB_UNLIKELY(OB_TRY_LOCK_ROW_CONFLICT != ret)) {
-        LOG_WARN("fail to lock delta_buf_table for refresh", KR(ret),
-                 K(tenant_id), K(delta_buf_tb_id));
-      } else {
-        ret = OB_SUCCESS;
-        ++retries;
-        if (retries % 10 == 0) {
-          LOG_WARN("retry too many times", K(retries), K(tenant_id),
-                   K(delta_buf_tb_id));
+  if (OB_SUCC(ret)) {
+    const uint64_t tenant_id = refresh_ctx_->tenant_id_;
+    const uint64_t delta_buf_tb_id = refresh_ctx_->delta_buf_tb_id_;
+    int64_t retries = 0;
+    while (OB_SUCC(ret) && OB_SUCC(ctx_->check_status())) {
+      if (OB_FAIL(ObVectorIndexRefresher::lock_delta_buf_tb(
+              *(refresh_ctx_->trans_), tenant_id, delta_buf_tb_id, true))) {
+        if (OB_UNLIKELY(OB_TRY_LOCK_ROW_CONFLICT != ret)) {
+          LOG_WARN("fail to lock delta_buf_table for refresh", KR(ret),
+                  K(tenant_id), K(delta_buf_tb_id));
+        } else {
+          ret = OB_SUCCESS;
+          ++retries;
+          if (retries % 10 == 0) {
+            LOG_WARN("retry too many times", K(retries), K(tenant_id),
+                    K(delta_buf_tb_id));
+          }
+          ob_usleep(100LL * 1000);
         }
-        ob_usleep(100LL * 1000);
+      } else {
+        break;
       }
-    } else {
-      break;
     }
   }
   return ret;
@@ -280,8 +292,7 @@ int ObVectorIndexRefresher::lock_delta_buf_table_for_refresh() {
 
 int ObVectorIndexRefresher::do_refresh() {
   int ret = OB_SUCCESS;
-  const uint64_t tenant_id = refresh_ctx_->tenant_id_;
-  ObVectorRefreshIdxTransaction &trans = *(refresh_ctx_->trans_);
+  uint64_t tenant_id = OB_INVALID_ID;
   ObSQLSessionInfo *session_info = nullptr;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *delta_table_schema = nullptr;
@@ -293,8 +304,19 @@ int ObVectorIndexRefresher::do_refresh() {
   ObTimeoutCtx timeout_ctx;
   const int64_t DDL_INNER_SQL_EXECUTE_TIMEOUT =
       ObDDLUtil::calc_inner_sql_execute_timeout();
+
   ObArray<uint64_t> col_ids;
-  if (OB_FAIL(lock_delta_buf_table_for_refresh())) {
+  if (OB_ISNULL(refresh_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("refresh_ctx is null", K(ret));
+  } else if (OB_ISNULL(refresh_ctx_->trans_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("trans is null", K(ret));
+  } else if (OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx is null", K(ret));
+  } else if (OB_FALSE_IT(tenant_id = refresh_ctx_->tenant_id_)) {
+  } else if (OB_FAIL(lock_delta_buf_table_for_refresh())) {
     LOG_WARN("fail to lock delta_buf_table for refresh", KR(ret));
   } else if (OB_ISNULL(session_info = ctx_->get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
@@ -308,9 +330,12 @@ int ObVectorIndexRefresher::do_refresh() {
   } else if (OB_FAIL(
                  ObVectorIndexRefresher::get_current_scn(refresh_ctx_->scn_))) {
     LOG_WARN("fail to get current scn", KR(ret));
+  } else {
+    DEBUG_SYNC(BEFORE_DBMS_VECTOR_REFRESH);
   }
   // get delta_buf_table row count
-  else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
                                                  refresh_ctx_->delta_buf_tb_id_,
                                                  delta_table_schema))) {
     LOG_WARN("fail to get delta buf table schema", KR(ret), K(tenant_id),
@@ -328,6 +353,20 @@ int ObVectorIndexRefresher::do_refresh() {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("index_id_table not exist", KR(ret), K(tenant_id),
              K(refresh_ctx_->index_id_tb_id_));
+  } else if (OB_UNLIKELY(INDEX_STATUS_AVAILABLE != delta_table_schema->get_index_status() ||
+                         INDEX_STATUS_AVAILABLE != index_id_tb_schema->get_index_status())) {
+    if ((INDEX_STATUS_AVAILABLE == delta_table_schema->get_index_status() ||
+         INDEX_STATUS_UNAVAILABLE == delta_table_schema->get_index_status()) &&
+        (INDEX_STATUS_AVAILABLE == index_id_tb_schema->get_index_status() ||
+         INDEX_STATUS_UNAVAILABLE == index_id_tb_schema->get_index_status())) {
+      // Return OB_EAGAIN for dbms_vector.refresh_index_inner to do inner retry.
+      // For dbms_vector.refresh_index, the error code will return to user.
+      ret = OB_EAGAIN;
+      LOG_WARN("delta buffer table or index id table is not available", K(ret), K(delta_table_schema->get_index_status()),
+              K(index_id_tb_schema->get_index_status()));
+    } else {
+      ret = OB_ERR_INDEX_UNAVAILABLE;
+    }
   } else if (OB_FAIL(schema_guard.get_database_schema(
                  tenant_id, delta_table_schema->get_database_id(),
                  db_schema))) {
@@ -336,6 +375,11 @@ int ObVectorIndexRefresher::do_refresh() {
   } else if (OB_ISNULL(db_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("database not exist", KR(ret));
+  } else if (OB_UNLIKELY(db_schema->is_in_recyclebin() ||
+                         delta_table_schema->is_in_recyclebin() ||
+                         index_id_tb_schema->is_in_recyclebin())) {
+    // do nothing
+    LOG_DEBUG("table or db in recyclebin");
   } else if (OB_FAIL(get_table_row_count(
                  db_schema->get_database_name_str(),
                  delta_table_schema->get_table_name_str(), refresh_ctx_->scn_,
@@ -445,8 +489,7 @@ int ObVectorIndexRefresher::do_refresh() {
 
 int ObVectorIndexRefresher::do_rebuild() {
   int ret = OB_SUCCESS;
-  const uint64_t tenant_id = refresh_ctx_->tenant_id_;
-  ObVectorRefreshIdxTransaction &trans = *(refresh_ctx_->trans_);
+  uint64_t tenant_id = OB_INVALID_ID;
   ObSQLSessionInfo *session_info = nullptr;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *base_table_schema = nullptr;
@@ -458,7 +501,17 @@ int ObVectorIndexRefresher::do_rebuild() {
   int64_t index_id_table_row_cnt = 0;
   bool triggered = true;
   // refresh_ctx_->delta_rate_threshold_ = 0; // yjl, for test
-  if (OB_FAIL(lock_delta_buf_table_for_refresh())) {
+  if (OB_ISNULL(refresh_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("refresh_ctx is null", K(ret));
+  } else if (OB_ISNULL(refresh_ctx_->trans_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("trans is null", K(ret));
+  } else if (OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx is null", K(ret));
+  } else if (OB_FALSE_IT(tenant_id = refresh_ctx_->tenant_id_)) {
+  } else if (OB_FAIL(lock_delta_buf_table_for_refresh())) {
     LOG_WARN("fail to lock delta_buf_table for refresh", KR(ret));
   } else if (OB_ISNULL(session_info = ctx_->get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
@@ -472,11 +525,14 @@ int ObVectorIndexRefresher::do_rebuild() {
   } else if (OB_FAIL(
                  ObVectorIndexRefresher::get_current_scn(refresh_ctx_->scn_))) {
     LOG_WARN("fail to get current scn", KR(ret));
+  } else {
+    DEBUG_SYNC(BEFORE_DBMS_VECTOR_REBUILD);
   }
   // 1. get base_table row count
   // 2. get delta_buf_table row count
   // 3. get index_id_table row count
-  else if (OB_FAIL(schema_guard.get_table_schema(
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(schema_guard.get_table_schema(
                tenant_id, refresh_ctx_->base_tb_id_, base_table_schema))) {
     LOG_WARN("fail to get base table schema", KR(ret), K(tenant_id),
              K(refresh_ctx_->base_tb_id_));
@@ -502,6 +558,20 @@ int ObVectorIndexRefresher::do_rebuild() {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("index_id_table not exist", KR(ret), K(tenant_id),
              K(refresh_ctx_->index_id_tb_id_));
+  } else if (OB_UNLIKELY(INDEX_STATUS_AVAILABLE != delta_table_schema->get_index_status() ||
+                         INDEX_STATUS_AVAILABLE != index_id_tb_schema->get_index_status())) {
+    if ((INDEX_STATUS_AVAILABLE == delta_table_schema->get_index_status() ||
+         INDEX_STATUS_UNAVAILABLE == delta_table_schema->get_index_status()) &&
+        (INDEX_STATUS_AVAILABLE == index_id_tb_schema->get_index_status() ||
+         INDEX_STATUS_UNAVAILABLE == index_id_tb_schema->get_index_status())) {
+      // Return OB_EAGAIN for dbms_vector.rebuild_index_inner to do inner retry.
+      // For dbms_vector.rebuild_index, the error code will return to user.
+      ret = OB_EAGAIN;
+      LOG_WARN("delta buffer table or index id table is not available", K(ret), K(delta_table_schema->get_index_status()),
+              K(index_id_tb_schema->get_index_status()));
+    } else {
+      ret = OB_ERR_INDEX_UNAVAILABLE;
+    }
   } else if (OB_FAIL(schema_guard.get_database_schema(
                  tenant_id, delta_table_schema->get_database_id(),
                  db_schema))) {
@@ -510,6 +580,12 @@ int ObVectorIndexRefresher::do_rebuild() {
   } else if (OB_ISNULL(db_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("database not exist", KR(ret));
+  } else if (OB_UNLIKELY(db_schema->is_in_recyclebin() ||
+                         delta_table_schema->is_in_recyclebin() ||
+                         index_id_tb_schema->is_in_recyclebin())) {
+    // do nothing
+    triggered = false;
+    LOG_DEBUG("table or db in recyclebin");
   } else if (OB_UNLIKELY(0 == refresh_ctx_->delta_rate_threshold_)) {
     // do nothing
   } else if (OB_FAIL(
@@ -559,6 +635,9 @@ int ObVectorIndexRefresher::do_rebuild() {
     rebuild_index_arg.parallelism_ = refresh_ctx_->idx_parallel_creation_;
     if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(timeout_ctx, DEFAULT_TIMEOUT_US))) {
       LOG_WARN("fail to set default timeout ctx", KR(ret));
+    } else if (OB_ISNULL(GCTX.rs_mgr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("GCTX.rs_mgr is null", K(ret));
     } else if (OB_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_addr))) {
       LOG_WARN("fail to rootservice address", KR(ret));
     } else if (OB_ISNULL(common_rpc_proxy)) {

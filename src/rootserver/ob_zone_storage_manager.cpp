@@ -233,6 +233,10 @@ int ObZoneStorageManagerBase::add_storage(const ObString &storage_path, const Ob
     } else if (OB_UNLIKELY(storage_path.empty() || zone.is_empty() || attribute.empty())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", KR(ret), K(storage_path), K(zone), K(attribute));
+    } else if (ObStorageUsedType::TYPE::USED_TYPE_ALL != use_for) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("adding storage only supports used for all", KR(ret), K(use_for));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "adding storage only supports used for all");
     } else if (OB_FAIL(ObZoneTableOperation::get_zone_info(zone, *proxy_, zone_info))) {
       LOG_WARN("failed get zone, zone not exist", "zone", zone, KR(ret));
     } else {

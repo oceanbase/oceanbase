@@ -56,6 +56,8 @@ if (OB_BUILD_ORACLE_PARSER)
     sql_parser_oracle_single_byte_mode_lex.h
     sql_parser_oracle_single_byte_mode_tab.c
     sql_parser_oracle_single_byte_mode_tab.h
+    sql_parser_oracle_hkscs_mode_lex.c
+    sql_parser_oracle_hkscs_mode_tab.c
   )
 
   set(ob_inner_sql_parser_object_list
@@ -63,6 +65,7 @@ if (OB_BUILD_ORACLE_PARSER)
     non_reserved_keywords_oracle_utf8_mode.c
     non_reserved_keywords_oracle_gbk_mode.c
     non_reserved_keywords_oracle_single_byte_mode.c
+    non_reserved_keywords_oracle_hkscs_mode.c
   )
 endif()
 
@@ -89,6 +92,7 @@ set(ob_inner_sql_parser_object_list
   ob_char_type.h
   ob_fast_parser.h
   ob_fast_parser.cpp
+  ob_parser_charset_utils.cpp
   sql_parser_base.c
   sql_parser_base.h
   sql_parser_base.h

@@ -161,6 +161,9 @@ private:
       int64_t &active_trans_count);
   int check_start_status_transfer_tablets_(
       const share::ObTransferTaskInfo &task_info);
+  int get_dest_ls_mv_merge_scn_(
+      const share::ObTransferTaskInfo &task_info,
+      share::SCN &new_mv_merge_scn);
   int get_ls_leader_(
       const share::ObLSID &ls_id,
       common::ObAddr &addr);

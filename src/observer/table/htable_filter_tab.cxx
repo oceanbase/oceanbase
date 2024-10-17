@@ -10,6 +10,49 @@
  * See the Mulan PubL v2 for more details.
  */
 
+/* A Bison parser, made by GNU Bison 2.4.1.  */
+
+/* Skeleton implementation for Bison's Yacc-like parsers in C
+
+      Copyright (C) 1984, 1989, 1990, 2000, 2001, 2002, 2003, 2004, 2005, 2006
+   Free Software Foundation, Inc.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+/* As a special exception, you may create a larger work that contains
+   part or all of the Bison parser skeleton and distribute that work
+   under terms of your choice, so long as that work isn't itself a
+   parser generator using the skeleton or a modified version thereof
+   as a parser skeleton.  Alternatively, if you modify or redistribute
+   the parser skeleton itself, you may (at your option) remove this
+   special exception, which will cause the skeleton and the resulting
+   Bison output files to be licensed under the GNU General Public
+   License without this special exception.
+
+   This special exception was added by the Free Software Foundation in
+   version 2.2 of Bison.  */
+
+/* C LALR(1) parser skeleton written by Richard Stallman, by
+   simplifying the original so-called "semantic" parser.  */
+
+/* All symbols defined below should begin with yy or YY, to avoid
+   infringing on user name space.  This should be done even for local
+   variables, as they might otherwise be expanded by user macros.
+   There are some unavoidable exceptions within include files to
+   define necessary library symbols; they are noted "INFRINGES ON
+   USER NAME SPACE" below.  */
+
 /* Identify Bison output.  */
 #define YYBISON 1
 
@@ -93,28 +136,34 @@ using namespace oceanbase::common;
      SingleColumnValueFilter = 261,
      PageFilter = 262,
      ColumnCountGetFilter = 263,
-     CheckAndMutateFilter = 264,
-     PrefixFilter = 265,
-     TableCompareFilter = 266,
-     LESS = 267,
-     LESS_OR_EQUAL = 268,
-     EQUAL = 269,
-     NOT_EQUAL = 270,
-     GREATER = 271,
-     GREATER_OR_EQUAL = 272,
-     NO_OP = 273,
-     IS = 274,
-     IS_NOT = 275,
-     BOOL_VALUE = 276,
-     STRING_VALUE = 277,
-     INT_VALUE = 278,
-     OR = 279,
-     AND = 280,
-     T_OR = 281,
-     T_AND = 282,
-     WHILE = 283,
-     SKIP = 284,
-     ERROR = 285
+     ColumnPrefixFilter = 264,
+     ColumnPaginationFilter = 265,
+     CheckAndMutateFilter = 266,
+     PrefixFilter = 267,
+     FirstKeyOnlyFilter = 268,
+     KeyOnlyFilter = 269,
+     TimestampsFilter = 270,
+     TableCompareFilter = 271,
+     RandomRowFilter = 272,
+     LESS = 273,
+     LESS_OR_EQUAL = 274,
+     EQUAL = 275,
+     NOT_EQUAL = 276,
+     GREATER = 277,
+     GREATER_OR_EQUAL = 278,
+     NO_OP = 279,
+     IS = 280,
+     IS_NOT = 281,
+     BOOL_VALUE = 282,
+     STRING_VALUE = 283,
+     INT_VALUE = 284,
+     OR = 285,
+     AND = 286,
+     T_OR = 287,
+     T_AND = 288,
+     WHILE = 289,
+     SKIP = 290,
+     ERROR = 291
    };
 #endif
 
@@ -132,11 +181,12 @@ typedef union YYSTYPE
     oceanbase::table::hfilter::CompareOperator cmp_op;
     oceanbase::table::ObHTableFilterParser::SimpleString sval;
     oceanbase::table::hfilter::Filter *fval;
+    oceanbase::common::ObSEArray<int64_t, 8> *array;
 
 
 
 /* Line 214 of yacc.c  */
-#line 172 "../../../src/observer/table/htable_filter_tab.cxx"
+#line 179 "../../../src/observer/table/htable_filter_tab.cxx"
 } YYSTYPE;
 # define YYSTYPE_IS_TRIVIAL 1
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
@@ -161,7 +211,7 @@ typedef struct YYLTYPE
 
 
 /* Line 264 of yacc.c  */
-#line 197 "../../../src/observer/table/htable_filter_tab.cxx"
+#line 204 "../../../src/observer/table/htable_filter_tab.cxx"
 
 #ifdef short
 # undef short
@@ -376,22 +426,22 @@ union yyalloc
 #endif
 
 /* YYFINAL -- State number of the termination state.  */
-#define YYFINAL  28
+#define YYFINAL  40
 /* YYLAST -- Last index in YYTABLE.  */
-#define YYLAST   98
+#define YYLAST   135
 
 /* YYNTOKENS -- Number of terminals.  */
-#define YYNTOKENS  34
+#define YYNTOKENS  40
 /* YYNNTS -- Number of nonterminals.  */
-#define YYNNTS  8
+#define YYNNTS  9
 /* YYNRULES -- Number of rules.  */
-#define YYNRULES  32
+#define YYNRULES  41
 /* YYNRULES -- Number of states.  */
-#define YYNSTATES  96
+#define YYNSTATES  127
 
 /* YYTRANSLATE(YYLEX) -- Bison symbol number corresponding to YYLEX.  */
 #define YYUNDEFTOK  2
-#define YYMAXUTOK   285
+#define YYMAXUTOK   291
 
 #define YYTRANSLATE(YYX)						\
   ((unsigned int) (YYX) <= YYMAXUTOK ? yytranslate[YYX] : YYUNDEFTOK)
@@ -403,7 +453,7 @@ static const yytype_uint8 yytranslate[] =
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
-      31,    32,     2,     2,    33,     2,     2,     2,     2,     2,
+      37,    38,     2,     2,    39,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
@@ -427,7 +477,8 @@ static const yytype_uint8 yytranslate[] =
        2,     2,     2,     2,     2,     2,     1,     2,     3,     4,
        5,     6,     7,     8,     9,    10,    11,    12,    13,    14,
       15,    16,    17,    18,    19,    20,    21,    22,    23,    24,
-      25,    26,    27,    28,    29,    30
+      25,    26,    27,    28,    29,    30,    31,    32,    33,    34,
+      35,    36
 };
 
 #if YYDEBUG
@@ -437,36 +488,43 @@ static const yytype_uint8 yyprhs[] =
 {
        0,     0,     3,     6,    10,    14,    18,    22,    25,    28,
       30,    34,    41,    48,    55,    60,    75,    86,    91,    96,
-     109,   116,   118,   120,   122,   124,   126,   128,   130,   132,
-     134,   136,   138
+     101,   108,   115,   119,   124,   131,   136,   149,   156,   158,
+     160,   162,   164,   166,   168,   170,   172,   174,   176,   178,
+     180,   182
 };
 
 /* YYRHS -- A `-1'-separated list of the rules' RHS.  */
 static const yytype_int8 yyrhs[] =
 {
-      35,     0,    -1,    36,     0,    -1,    36,    25,    36,    -1,
-      36,    24,    36,    -1,    36,    27,    36,    -1,    36,    26,
-      36,    -1,    29,    36,    -1,    28,    36,    -1,    37,    -1,
-      31,    36,    32,    -1,     3,    31,    40,    33,    41,    32,
-      -1,     5,    31,    40,    33,    41,    32,    -1,     4,    31,
-      40,    33,    41,    32,    -1,    10,    31,    22,    32,    -1,
-       6,    31,    38,    33,    39,    33,    40,    33,    41,    33,
-      21,    33,    21,    32,    -1,     6,    31,    38,    33,    39,
-      33,    40,    33,    41,    32,    -1,     7,    31,    23,    32,
-      -1,     8,    31,    23,    32,    -1,     9,    31,    40,    33,
-      41,    33,    38,    33,    39,    33,    21,    32,    -1,    11,
-      31,    40,    33,    41,    32,    -1,    22,    -1,    22,    -1,
-      12,    -1,    13,    -1,    14,    -1,    15,    -1,    16,    -1,
-      17,    -1,    18,    -1,    19,    -1,    20,    -1,    22,    -1
+      41,     0,    -1,    42,     0,    -1,    42,    31,    42,    -1,
+      42,    30,    42,    -1,    42,    33,    42,    -1,    42,    32,
+      42,    -1,    35,    42,    -1,    34,    42,    -1,    43,    -1,
+      37,    42,    38,    -1,     3,    37,    46,    39,    47,    38,
+      -1,     5,    37,    46,    39,    47,    38,    -1,     4,    37,
+      46,    39,    47,    38,    -1,    12,    37,    28,    38,    -1,
+       6,    37,    44,    39,    45,    39,    46,    39,    47,    39,
+      27,    39,    27,    38,    -1,     6,    37,    44,    39,    45,
+      39,    46,    39,    47,    38,    -1,     7,    37,    29,    38,
+      -1,    17,    37,    29,    38,    -1,     9,    37,    28,    38,
+      -1,    10,    37,    29,    39,    29,    38,    -1,    10,    37,
+      29,    39,    28,    38,    -1,    13,    37,    38,    -1,    14,
+      37,    27,    38,    -1,    15,    37,    48,    39,    27,    38,
+      -1,     8,    37,    29,    38,    -1,    11,    37,    46,    39,
+      47,    39,    44,    39,    45,    39,    27,    38,    -1,    16,
+      37,    46,    39,    47,    38,    -1,    28,    -1,    28,    -1,
+      18,    -1,    19,    -1,    20,    -1,    21,    -1,    22,    -1,
+      23,    -1,    24,    -1,    25,    -1,    26,    -1,    28,    -1,
+      29,    -1,    48,    39,    29,    -1
 };
 
 /* YYRLINE[YYN] -- source line where rule number YYN was defined.  */
 static const yytype_uint16 yyrline[] =
 {
-       0,    55,    55,    62,    83,   104,   125,   146,   161,   176,
-     183,   185,   207,   229,   251,   273,   301,   329,   344,   359,
-     383,   405,   408,   411,   412,   413,   414,   415,   416,   417,
-     418,   419,   422
+       0,    57,    57,    64,    85,   106,   127,   148,   163,   178,
+     185,   187,   209,   231,   253,   275,   303,   331,   346,   362,
+     377,   395,   413,   428,   443,   458,   473,   497,   519,   522,
+     525,   526,   527,   528,   529,   530,   531,   532,   533,   536,
+     540,   556
 };
 #endif
 
@@ -477,13 +535,15 @@ static const char *const yytname[] =
 {
   "\"end of file\"", "error", "$undefined", "RowFilter", "ValueFilter",
   "QualifierFilter", "SingleColumnValueFilter", "PageFilter",
-  "ColumnCountGetFilter", "CheckAndMutateFilter", "PrefixFilter",
-  "TableCompareFilter", "LESS", "LESS_OR_EQUAL", "EQUAL", "NOT_EQUAL",
+  "ColumnCountGetFilter", "ColumnPrefixFilter", "ColumnPaginationFilter",
+  "CheckAndMutateFilter", "PrefixFilter", "FirstKeyOnlyFilter",
+  "KeyOnlyFilter", "TimestampsFilter", "TableCompareFilter",
+  "RandomRowFilter", "LESS", "LESS_OR_EQUAL", "EQUAL", "NOT_EQUAL",
   "GREATER", "GREATER_OR_EQUAL", "NO_OP", "IS", "IS_NOT", "BOOL_VALUE",
   "STRING_VALUE", "INT_VALUE", "OR", "AND", "T_OR", "T_AND", "WHILE",
   "SKIP", "ERROR", "'('", "')'", "','", "$accept", "result_filter",
   "filter", "simple_filter", "family", "qualifier", "compare_op",
-  "comparator", 0
+  "comparator", "timestamp_list", 0
 };
 #endif
 
@@ -495,26 +555,28 @@ static const yytype_uint16 yytoknum[] =
        0,   256,   257,   258,   259,   260,   261,   262,   263,   264,
      265,   266,   267,   268,   269,   270,   271,   272,   273,   274,
      275,   276,   277,   278,   279,   280,   281,   282,   283,   284,
-     285,    40,    41,    44
+     285,   286,   287,   288,   289,   290,   291,    40,    41,    44
 };
 # endif
 
 /* YYR1[YYN] -- Symbol number of symbol that rule YYN derives.  */
 static const yytype_uint8 yyr1[] =
 {
-       0,    34,    35,    36,    36,    36,    36,    36,    36,    36,
-      37,    37,    37,    37,    37,    37,    37,    37,    37,    37,
-      37,    38,    39,    40,    40,    40,    40,    40,    40,    40,
-      40,    40,    41
+       0,    40,    41,    42,    42,    42,    42,    42,    42,    42,
+      43,    43,    43,    43,    43,    43,    43,    43,    43,    43,
+      43,    43,    43,    43,    43,    43,    43,    43,    44,    45,
+      46,    46,    46,    46,    46,    46,    46,    46,    46,    47,
+      48,    48
 };
 
 /* YYR2[YYN] -- Number of symbols composing right hand side of rule YYN.  */
 static const yytype_uint8 yyr2[] =
 {
        0,     2,     2,     3,     3,     3,     3,     2,     2,     1,
-       3,     6,     6,     6,     4,    14,    10,     4,     4,    12,
-       6,     1,     1,     1,     1,     1,     1,     1,     1,     1,
-       1,     1,     1
+       3,     6,     6,     6,     4,    14,    10,     4,     4,     4,
+       6,     6,     3,     4,     6,     4,    12,     6,     1,     1,
+       1,     1,     1,     1,     1,     1,     1,     1,     1,     1,
+       1,     3
 };
 
 /* YYDEFACT[STATE-NAME] -- Default rule to reduce with in state
@@ -523,44 +585,50 @@ static const yytype_uint8 yyr2[] =
 static const yytype_uint8 yydefact[] =
 {
        0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
-       0,     0,     0,     0,     0,     9,     0,     0,     0,     0,
-       0,     0,     0,     0,     0,     8,     7,     0,     1,     2,
-       0,     0,     0,     0,    23,    24,    25,    26,    27,    28,
-      29,    30,    31,     0,     0,     0,    21,     0,     0,     0,
-       0,     0,     0,    10,     4,     3,     6,     5,     0,     0,
-       0,     0,    17,    18,     0,    14,     0,    32,     0,     0,
-       0,    22,     0,     0,     0,    11,    13,    12,     0,     0,
-      20,     0,     0,     0,     0,     0,     0,    16,     0,     0,
-       0,     0,     0,    19,     0,    15
+       0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,     9,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,     0,     0,     0,     0,     0,     0,     8,     7,     0,
+       1,     2,     0,     0,     0,     0,    30,    31,    32,    33,
+      34,    35,    36,    37,    38,     0,     0,     0,    28,     0,
+       0,     0,     0,     0,     0,     0,    22,     0,    40,     0,
+       0,     0,    10,     4,     3,     6,     5,     0,     0,     0,
+       0,    17,    25,    19,     0,     0,    14,    23,     0,     0,
+      18,    39,     0,     0,     0,    29,     0,     0,     0,     0,
+       0,    41,     0,    11,    13,    12,     0,    21,    20,     0,
+      24,    27,     0,     0,     0,     0,     0,     0,    16,     0,
+       0,     0,     0,     0,    26,     0,    15
 };
 
 /* YYDEFGOTO[NTERM-NUM].  */
 static const yytype_int8 yydefgoto[] =
 {
-      -1,    13,    14,    15,    47,    72,    43,    68
+      -1,    19,    20,    21,    59,    96,    55,    92,    69
 };
 
 /* YYPACT[STATE-NUM] -- Index in YYTABLE of the portion describing
    STATE-NUM.  */
-#define YYPACT_NINF -43
+#define YYPACT_NINF -77
 static const yytype_int8 yypact[] =
 {
-       5,   -25,    -8,     4,    15,    16,    17,    18,    23,    24,
-       5,     5,     5,    25,     2,   -43,    50,    50,    50,    22,
-      33,    34,    50,    36,    50,   -43,   -43,    13,   -43,   -43,
-       5,     5,     5,     5,   -43,   -43,   -43,   -43,   -43,   -43,
-     -43,   -43,   -43,    26,    27,    38,   -43,    39,    41,    42,
-      43,    45,    46,   -43,    -6,   -23,    -6,   -23,    53,    53,
-      53,    56,   -43,   -43,    53,   -43,    53,   -43,    48,    49,
-      51,   -43,    52,    54,    57,   -43,   -43,   -43,    50,    22,
-     -43,    55,    58,    53,    56,    10,    59,   -43,    61,    63,
-      60,    62,    65,   -43,    64,   -43
+      11,   -32,    16,    17,    31,    32,    33,    34,    35,    36,
+      37,    38,    39,    40,    42,    43,    11,    11,    11,    52,
+       4,   -77,    41,    41,    41,    50,    53,    55,    57,    58,
+      41,    60,    48,    54,    61,    41,    62,   -77,   -77,     9,
+     -77,   -77,    11,    11,    11,    11,   -77,   -77,   -77,   -77,
+     -77,   -77,   -77,   -77,   -77,    56,    59,    63,   -77,    64,
+      51,    66,    67,    68,    69,    71,   -77,    72,   -77,    73,
+      74,    76,   -77,    18,   -22,    18,   -22,    65,    65,    65,
+      78,   -77,   -77,   -77,    15,    65,   -77,   -77,   -21,    65,
+     -77,   -77,    77,    79,    80,   -77,    81,    83,    84,    85,
+      87,   -77,    88,   -77,   -77,   -77,    41,   -77,   -77,    50,
+     -77,   -77,    89,    90,    65,    78,    -6,    91,   -77,    70,
+      92,    93,    95,    96,   -77,    97,   -77
 };
 
 /* YYPGOTO[NTERM-NUM].  */
 static const yytype_int8 yypgoto[] =
 {
-     -43,   -43,    20,   -43,    11,    14,   -17,   -42
+     -77,   -77,    13,   -77,   -17,   -19,   -23,   -76,   -77
 };
 
 /* YYTABLE[YYPACT[STATE-NUM]].  What to do in state STATE-NUM.  If
@@ -570,30 +638,38 @@ static const yytype_int8 yypgoto[] =
 #define YYTABLE_NINF -1
 static const yytype_uint8 yytable[] =
 {
-      44,    45,    29,    32,    33,    50,    16,    52,     1,     2,
-       3,     4,     5,     6,     7,     8,     9,    69,    70,    31,
-      32,    33,    73,    17,    74,    28,    30,    31,    32,    33,
-      25,    26,    27,    10,    11,    18,    12,    30,    31,    32,
-      33,    85,    87,    88,    46,    53,    19,    20,    21,    22,
-      54,    55,    56,    57,    23,    24,    48,    49,    51,    58,
-      59,    81,    34,    35,    36,    37,    38,    39,    40,    41,
-      42,    60,    61,    62,    63,    67,    64,    65,    71,    66,
-      75,    76,    90,    77,    91,    78,    94,    79,    83,    80,
-      82,    84,    89,    92,    93,     0,    95,     0,    86
+      56,    57,    93,    94,    41,    22,   100,    64,   101,    99,
+      44,    45,    70,   102,     1,     2,     3,     4,     5,     6,
+       7,     8,     9,    10,    11,    12,    13,    14,    15,    37,
+      38,    39,   118,   119,    42,    43,    44,    45,   116,    42,
+      43,    44,    45,    97,    98,    16,    17,    72,    18,    43,
+      44,    45,    40,    23,    24,    73,    74,    75,    76,    46,
+      47,    48,    49,    50,    51,    52,    53,    54,    25,    26,
+      27,    28,    29,    30,    31,    32,    33,    34,    58,    35,
+      36,    67,    60,   112,    61,    62,    66,    63,    65,    81,
+      68,    71,   113,    91,     0,    77,   117,   121,    78,     0,
+       0,     0,    79,    80,    82,    83,    95,    84,    85,    86,
+      87,     0,    88,    89,    90,   103,     0,   104,   105,   122,
+     106,   107,   108,   125,   109,   110,   111,     0,   114,   115,
+     120,     0,   123,   124,     0,   126
 };
 
 static const yytype_int8 yycheck[] =
 {
-      17,    18,     0,    26,    27,    22,    31,    24,     3,     4,
-       5,     6,     7,     8,     9,    10,    11,    59,    60,    25,
-      26,    27,    64,    31,    66,     0,    24,    25,    26,    27,
-      10,    11,    12,    28,    29,    31,    31,    24,    25,    26,
-      27,    83,    32,    33,    22,    32,    31,    31,    31,    31,
-      30,    31,    32,    33,    31,    31,    23,    23,    22,    33,
-      33,    78,    12,    13,    14,    15,    16,    17,    18,    19,
-      20,    33,    33,    32,    32,    22,    33,    32,    22,    33,
-      32,    32,    21,    32,    21,    33,    21,    33,    33,    32,
-      79,    33,    33,    33,    32,    -1,    32,    -1,    84
+      23,    24,    78,    79,     0,    37,    27,    30,    29,    85,
+      32,    33,    35,    89,     3,     4,     5,     6,     7,     8,
+       9,    10,    11,    12,    13,    14,    15,    16,    17,    16,
+      17,    18,    38,    39,    30,    31,    32,    33,   114,    30,
+      31,    32,    33,    28,    29,    34,    35,    38,    37,    31,
+      32,    33,     0,    37,    37,    42,    43,    44,    45,    18,
+      19,    20,    21,    22,    23,    24,    25,    26,    37,    37,
+      37,    37,    37,    37,    37,    37,    37,    37,    28,    37,
+      37,    27,    29,   106,    29,    28,    38,    29,    28,    38,
+      29,    29,   109,    28,    -1,    39,   115,    27,    39,    -1,
+      -1,    -1,    39,    39,    38,    38,    28,    39,    39,    38,
+      38,    -1,    39,    39,    38,    38,    -1,    38,    38,    27,
+      39,    38,    38,    27,    39,    38,    38,    -1,    39,    39,
+      39,    -1,    39,    38,    -1,    38
 };
 
 /* YYSTOS[STATE-NUM] -- The (internal number of the) accessing
@@ -601,15 +677,18 @@ static const yytype_int8 yycheck[] =
 static const yytype_uint8 yystos[] =
 {
        0,     3,     4,     5,     6,     7,     8,     9,    10,    11,
-      28,    29,    31,    35,    36,    37,    31,    31,    31,    31,
-      31,    31,    31,    31,    31,    36,    36,    36,     0,     0,
-      24,    25,    26,    27,    12,    13,    14,    15,    16,    17,
-      18,    19,    20,    40,    40,    40,    22,    38,    23,    23,
-      40,    22,    40,    32,    36,    36,    36,    36,    33,    33,
-      33,    33,    32,    32,    33,    32,    33,    22,    41,    41,
-      41,    22,    39,    41,    41,    32,    32,    32,    33,    33,
-      32,    40,    38,    33,    33,    41,    39,    32,    33,    33,
-      21,    21,    33,    32,    21,    32
+      12,    13,    14,    15,    16,    17,    34,    35,    37,    41,
+      42,    43,    37,    37,    37,    37,    37,    37,    37,    37,
+      37,    37,    37,    37,    37,    37,    37,    42,    42,    42,
+       0,     0,    30,    31,    32,    33,    18,    19,    20,    21,
+      22,    23,    24,    25,    26,    46,    46,    46,    28,    44,
+      29,    29,    28,    29,    46,    28,    38,    27,    29,    48,
+      46,    29,    38,    42,    42,    42,    42,    39,    39,    39,
+      39,    38,    38,    38,    39,    39,    38,    38,    39,    39,
+      38,    28,    47,    47,    47,    28,    45,    28,    29,    47,
+      27,    29,    47,    38,    38,    38,    39,    38,    38,    39,
+      38,    38,    46,    44,    39,    39,    47,    45,    38,    39,
+      39,    27,    27,    39,    38,    27,    38
 };
 
 #define yyerrok		(yyerrstatus = 0)
@@ -1463,7 +1542,7 @@ yyreduce:
         case 2:
 
 /* Line 1455 of yacc.c  */
-#line 55 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 57 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                    parse_ctx->set_result_filter((yyvsp[(1) - (2)].fval));
                    YYACCEPT;
@@ -1473,7 +1552,7 @@ yyreduce:
   case 3:
 
 /* Line 1455 of yacc.c  */
-#line 63 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 65 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     hfilter::FilterListBase *filter_list = nullptr;
@@ -1499,7 +1578,7 @@ yyreduce:
   case 4:
 
 /* Line 1455 of yacc.c  */
-#line 84 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 86 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     hfilter::FilterListBase *filter_list = nullptr;
@@ -1525,7 +1604,7 @@ yyreduce:
   case 5:
 
 /* Line 1455 of yacc.c  */
-#line 105 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 107 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     hfilter::FilterListBase *filter_list = nullptr;
@@ -1551,7 +1630,7 @@ yyreduce:
   case 6:
 
 /* Line 1455 of yacc.c  */
-#line 126 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 128 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     hfilter::FilterListBase *filter_list = nullptr;
@@ -1577,7 +1656,7 @@ yyreduce:
   case 7:
 
 /* Line 1455 of yacc.c  */
-#line 147 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 149 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     (yyval.fval) = OB_NEWx(hfilter::SkipFilter, parse_ctx->allocator(), (yyvsp[(2) - (2)].fval));
@@ -1597,7 +1676,7 @@ yyreduce:
   case 8:
 
 /* Line 1455 of yacc.c  */
-#line 162 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 164 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     (yyval.fval) = OB_NEWx(hfilter::WhileMatchFilter, parse_ctx->allocator(), (yyvsp[(2) - (2)].fval));
@@ -1617,7 +1696,7 @@ yyreduce:
   case 9:
 
 /* Line 1455 of yacc.c  */
-#line 177 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 179 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     (yyval.fval) = (yyvsp[(1) - (1)].fval);
                 ;}
@@ -1626,14 +1705,14 @@ yyreduce:
   case 10:
 
 /* Line 1455 of yacc.c  */
-#line 184 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 186 "../../../src/observer/table/htable_filter_tab.yxx"
     { (yyval.fval) = (yyvsp[(2) - (3)].fval); ;}
     break;
 
   case 11:
 
 /* Line 1455 of yacc.c  */
-#line 186 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 188 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     hfilter::Comparable *comparable = nullptr;
@@ -1660,7 +1739,7 @@ yyreduce:
   case 12:
 
 /* Line 1455 of yacc.c  */
-#line 208 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 210 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     hfilter::Comparable *comparable = nullptr;
@@ -1687,7 +1766,7 @@ yyreduce:
   case 13:
 
 /* Line 1455 of yacc.c  */
-#line 230 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 232 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     hfilter::Comparable *comparable = nullptr;
@@ -1714,7 +1793,7 @@ yyreduce:
   case 14:
 
 /* Line 1455 of yacc.c  */
-#line 252 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 254 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     hfilter::Comparable *comparable = nullptr;
@@ -1741,7 +1820,7 @@ yyreduce:
   case 15:
 
 /* Line 1455 of yacc.c  */
-#line 274 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 276 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     hfilter::Comparable *comparable = nullptr;
@@ -1774,7 +1853,7 @@ yyreduce:
   case 16:
 
 /* Line 1455 of yacc.c  */
-#line 302 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 304 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     hfilter::Comparable *comparable = nullptr;
@@ -1807,7 +1886,7 @@ yyreduce:
   case 17:
 
 /* Line 1455 of yacc.c  */
-#line 330 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 332 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     (yyval.fval) = OB_NEWx(hfilter::PageFilter, parse_ctx->allocator(), (yyvsp[(3) - (4)].lval));
@@ -1827,7 +1906,154 @@ yyreduce:
   case 18:
 
 /* Line 1455 of yacc.c  */
-#line 345 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 347 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    float_t chance = *(reinterpret_cast<float_t*>(&((yyvsp[(3) - (4)].lval))));
+                    (yyval.fval) = OB_NEWx(hfilter::RandomRowFilter, parse_ctx->allocator(), chance);
+                    if (nullptr == (yyval.fval)) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter((yyval.fval)))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse RandomRowFilter");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 19:
+
+/* Line 1455 of yacc.c  */
+#line 363 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    (yyval.fval) = OB_NEWx(hfilter::ColumnPrefixFilter, parse_ctx->allocator(), parse_ctx->create_ob_string((yyvsp[(3) - (4)].sval)));
+                    if (nullptr == (yyval.fval)) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter((yyval.fval)))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse ColumnPrefixFilter");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 20:
+
+/* Line 1455 of yacc.c  */
+#line 378 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    (yyval.fval) = OB_NEWx(hfilter::ColumnPaginationFilter, parse_ctx->allocator(), (yyvsp[(3) - (6)].lval), (yyvsp[(5) - (6)].lval));
+                    if (nullptr == (yyval.fval)) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter((yyval.fval)))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    } else if ((yyvsp[(3) - (6)].lval) < 0 || (yyvsp[(5) - (6)].lval) < 0) {
+                        ret = OB_INVALID_ARGUMENT;
+                        LOG_WARN("arguments must be positive", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse ColumnPaginationFilter");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 21:
+
+/* Line 1455 of yacc.c  */
+#line 396 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    (yyval.fval) = OB_NEWx(hfilter::ColumnPaginationFilter, parse_ctx->allocator(), (yyvsp[(3) - (6)].lval), parse_ctx->create_ob_string((yyvsp[(5) - (6)].sval)));
+                    if (nullptr == (yyval.fval)) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter((yyval.fval)))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    } else if ((yyvsp[(3) - (6)].lval) < 0) {
+                        ret = OB_INVALID_ARGUMENT;
+                        LOG_WARN("arguments must be positive", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse ColumnPaginationFilter");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 22:
+
+/* Line 1455 of yacc.c  */
+#line 414 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    (yyval.fval) = OB_NEWx(hfilter::FirstKeyOnlyFilter, parse_ctx->allocator());
+                    if (nullptr == (yyval.fval)) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter((yyval.fval)))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse FirstKeyOnlyFilter");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 23:
+
+/* Line 1455 of yacc.c  */
+#line 429 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    (yyval.fval) = OB_NEWx(hfilter::KeyOnlyFilter, parse_ctx->allocator(), (yyvsp[(3) - (4)].ival));
+                    if (nullptr == (yyval.fval)) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter((yyval.fval)))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse KeyOnlyFilter");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 24:
+
+/* Line 1455 of yacc.c  */
+#line 444 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    (yyval.fval) = OB_NEWx(hfilter::TimestampsFilter, parse_ctx->allocator(), (yyvsp[(3) - (6)].array), (yyvsp[(5) - (6)].ival));
+                    if (nullptr == (yyval.fval)) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter((yyval.fval)))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse TimestampsFilter");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 25:
+
+/* Line 1455 of yacc.c  */
+#line 459 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     (yyval.fval) = OB_NEWx(hfilter::ColumnCountGetFilter, parse_ctx->allocator(), (yyvsp[(3) - (4)].lval));
@@ -1844,10 +2070,10 @@ yyreduce:
                 ;}
     break;
 
-  case 19:
+  case 26:
 
 /* Line 1455 of yacc.c  */
-#line 360 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 474 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     hfilter::Comparable *comparable = nullptr;
@@ -1873,10 +2099,10 @@ yyreduce:
                 ;}
     break;
 
-  case 20:
+  case 27:
 
 /* Line 1455 of yacc.c  */
-#line 384 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 498 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     hfilter::Comparable *comparable = nullptr;
@@ -1898,94 +2124,132 @@ yyreduce:
                 ;}
     break;
 
-  case 21:
-
-/* Line 1455 of yacc.c  */
-#line 405 "../../../src/observer/table/htable_filter_tab.yxx"
-    { (yyval.sval) = (yyvsp[(1) - (1)].sval); ;}
-    break;
-
-  case 22:
-
-/* Line 1455 of yacc.c  */
-#line 408 "../../../src/observer/table/htable_filter_tab.yxx"
-    { (yyval.sval) = (yyvsp[(1) - (1)].sval); ;}
-    break;
-
-  case 23:
-
-/* Line 1455 of yacc.c  */
-#line 411 "../../../src/observer/table/htable_filter_tab.yxx"
-    { (yyval.cmp_op) = hfilter::CompareOperator::LESS; ;}
-    break;
-
-  case 24:
-
-/* Line 1455 of yacc.c  */
-#line 412 "../../../src/observer/table/htable_filter_tab.yxx"
-    { (yyval.cmp_op) = hfilter::CompareOperator::LESS_OR_EQUAL; ;}
-    break;
-
-  case 25:
-
-/* Line 1455 of yacc.c  */
-#line 413 "../../../src/observer/table/htable_filter_tab.yxx"
-    { (yyval.cmp_op) = hfilter::CompareOperator::EQUAL; ;}
-    break;
-
-  case 26:
-
-/* Line 1455 of yacc.c  */
-#line 414 "../../../src/observer/table/htable_filter_tab.yxx"
-    { (yyval.cmp_op) = hfilter::CompareOperator::NOT_EQUAL; ;}
-    break;
-
-  case 27:
-
-/* Line 1455 of yacc.c  */
-#line 415 "../../../src/observer/table/htable_filter_tab.yxx"
-    { (yyval.cmp_op) = hfilter::CompareOperator::GREATER; ;}
-    break;
-
   case 28:
 
 /* Line 1455 of yacc.c  */
-#line 416 "../../../src/observer/table/htable_filter_tab.yxx"
-    { (yyval.cmp_op) = hfilter::CompareOperator::GREATER_OR_EQUAL; ;}
+#line 519 "../../../src/observer/table/htable_filter_tab.yxx"
+    { (yyval.sval) = (yyvsp[(1) - (1)].sval); ;}
     break;
 
   case 29:
 
 /* Line 1455 of yacc.c  */
-#line 417 "../../../src/observer/table/htable_filter_tab.yxx"
-    { (yyval.cmp_op) = hfilter::CompareOperator::NO_OP; ;}
+#line 522 "../../../src/observer/table/htable_filter_tab.yxx"
+    { (yyval.sval) = (yyvsp[(1) - (1)].sval); ;}
     break;
 
   case 30:
 
 /* Line 1455 of yacc.c  */
-#line 418 "../../../src/observer/table/htable_filter_tab.yxx"
-    { (yyval.cmp_op) = hfilter::CompareOperator::IS; ;}
+#line 525 "../../../src/observer/table/htable_filter_tab.yxx"
+    { (yyval.cmp_op) = hfilter::CompareOperator::LESS; ;}
     break;
 
   case 31:
 
 /* Line 1455 of yacc.c  */
-#line 419 "../../../src/observer/table/htable_filter_tab.yxx"
-    { (yyval.cmp_op) = hfilter::CompareOperator::IS_NOT; ;}
+#line 526 "../../../src/observer/table/htable_filter_tab.yxx"
+    { (yyval.cmp_op) = hfilter::CompareOperator::LESS_OR_EQUAL; ;}
     break;
 
   case 32:
 
 /* Line 1455 of yacc.c  */
-#line 423 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 527 "../../../src/observer/table/htable_filter_tab.yxx"
+    { (yyval.cmp_op) = hfilter::CompareOperator::EQUAL; ;}
+    break;
+
+  case 33:
+
+/* Line 1455 of yacc.c  */
+#line 528 "../../../src/observer/table/htable_filter_tab.yxx"
+    { (yyval.cmp_op) = hfilter::CompareOperator::NOT_EQUAL; ;}
+    break;
+
+  case 34:
+
+/* Line 1455 of yacc.c  */
+#line 529 "../../../src/observer/table/htable_filter_tab.yxx"
+    { (yyval.cmp_op) = hfilter::CompareOperator::GREATER; ;}
+    break;
+
+  case 35:
+
+/* Line 1455 of yacc.c  */
+#line 530 "../../../src/observer/table/htable_filter_tab.yxx"
+    { (yyval.cmp_op) = hfilter::CompareOperator::GREATER_OR_EQUAL; ;}
+    break;
+
+  case 36:
+
+/* Line 1455 of yacc.c  */
+#line 531 "../../../src/observer/table/htable_filter_tab.yxx"
+    { (yyval.cmp_op) = hfilter::CompareOperator::NO_OP; ;}
+    break;
+
+  case 37:
+
+/* Line 1455 of yacc.c  */
+#line 532 "../../../src/observer/table/htable_filter_tab.yxx"
+    { (yyval.cmp_op) = hfilter::CompareOperator::IS; ;}
+    break;
+
+  case 38:
+
+/* Line 1455 of yacc.c  */
+#line 533 "../../../src/observer/table/htable_filter_tab.yxx"
+    { (yyval.cmp_op) = hfilter::CompareOperator::IS_NOT; ;}
+    break;
+
+  case 39:
+
+/* Line 1455 of yacc.c  */
+#line 537 "../../../src/observer/table/htable_filter_tab.yxx"
     { (yyval.sval) = (yyvsp[(1) - (1)].sval); ;}
+    break;
+
+  case 40:
+
+/* Line 1455 of yacc.c  */
+#line 541 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    typedef ObSEArray<int64_t, 8> i64_array;
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    (yyval.array) = OB_NEWx(i64_array, parse_ctx->allocator());
+                    if (nullptr == (yyval.array)) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL((yyval.array)->push_back((yyvsp[(1) - (1)].lval)))) {
+                        LOG_WARN("failed to push back", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse timestamp list");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 41:
+
+/* Line 1455 of yacc.c  */
+#line 557 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    if (OB_FAIL((yyvsp[(1) - (3)].array)->push_back((yyvsp[(3) - (3)].lval)))) {
+                        LOG_WARN("failed to push back", K(ret));
+                    }
+                    (yyval.array) = (yyvsp[(1) - (3)].array);
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse timestamp list");
+                        YYABORT;
+                    }
+                ;}
     break;
 
 
 
 /* Line 1455 of yacc.c  */
-#line 2021 "../../../src/observer/table/htable_filter_tab.cxx"
+#line 2242 "../../../src/observer/table/htable_filter_tab.cxx"
       default: break;
     }
   YY_SYMBOL_PRINT ("-> $$ =", yyr1[yyn], &yyval, &yyloc);
@@ -2204,6 +2468,6 @@ yyreturn:
 
 
 /* Line 1675 of yacc.c  */
-#line 425 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 569 "../../../src/observer/table/htable_filter_tab.yxx"
 
 

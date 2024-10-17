@@ -39,6 +39,8 @@ public:
       ls_key_(),
       total_tablet_cnt_(0),
       unfinished_tablet_cnt_(0),
+      total_bytes_(0),
+      unfinished_bytes_(0),
       last_report_ts_(0) {}
 
   int init(const share::ObLSRestoreJobPersistKey &ls_key);
@@ -49,7 +51,11 @@ public:
   int report_unfinished_tablet_cnt(const int64_t unfinished_tablet_cnt);
   int load_restore_stat();
   int get_finished_tablet_cnt(int64_t &finished_tablet_cnt) const;
-
+  int set_total_bytes(const int64_t bytes);
+  int increase_total_bytes_by(const int64_t bytes);
+  int decrease_total_bytes_by(const int64_t bytes);
+  int add_finished_bytes(const int64_t bytes);
+  int report_unfinished_bytes(const int64_t bytes);
   void reset();
 
   TO_STRING_KV(K_(is_inited),
@@ -61,13 +67,17 @@ public:
 private:
   static const int64_t REPORT_INTERVAL = 30_s;
   int do_report_finished_tablet_cnt_(const int64_t finished_tablet_cnt);
+  int do_report_finished_bytes_(const int64_t finished_bytes);
   int64_t get_finished_tablet_cnt_() const;
+  int64_t get_finished_bytes() const;
 
 private:
   bool is_inited_;
   share::ObLSRestoreJobPersistKey ls_key_;
   int64_t total_tablet_cnt_;
   int64_t unfinished_tablet_cnt_;
+  int64_t total_bytes_;
+  int64_t unfinished_bytes_;
   int64_t last_report_ts_;
   mutable lib::ObMutex mtx_;
 
@@ -197,6 +207,9 @@ public:
   int report_finish_replay_clog_lsn_();
   int add_finished_tablet_cnt(const int64_t cnt);
   int report_unfinished_tablet_cnt(const int64_t cnt);
+
+  int add_finished_bytes(const int64_t bytes);
+  int report_unfinished_bytes(const int64_t bytes);
 
   TO_STRING_KV(K_(*ls), K_(ls_restore_status));
 protected:
@@ -364,6 +377,7 @@ private:
       const ObLSRestoreTaskMgr::ToRestoreTabletGroup &tablet_need_restore);
   int check_clog_replay_finish_(bool &is_finish);
   int check_tablet_checkpoint_();
+  int calc_and_report_total_bytes_to_restore_();
   // Force reload all tablets and check is restored.
   bool has_rechecked_after_clog_recovered_;
   DISALLOW_COPY_AND_ASSIGN(ObLSQuickRestoreState);

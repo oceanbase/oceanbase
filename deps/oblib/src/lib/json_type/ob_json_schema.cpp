@@ -4182,13 +4182,16 @@ int ObJsonSchemaCache::find_and_add_cache(ObIJsonBase*& out_schema, ObString& in
       LOG_WARN("fail to get json base", K(ret), K(in_type));
     } else {
       ObJsonSchemaTree json_schema(allocator_);
+      ObString dst_str;
       if (OB_FAIL(json_schema.build_schema_tree(in_json))) {
         LOG_WARN("invalid json schema", K(ret));
       } else if (OB_ISNULL(out_schema = json_schema.get_schema_map())) {
         ret = OB_BAD_NULL_ERROR;
         LOG_WARN("should not be null", K(ret));
+      } else if (OB_FAIL(ob_write_string(*allocator_, in_str, dst_str))) {
+        LOG_WARN("fail to copy string", K(ret));
       } else {
-        ret = set_schema(out_schema, in_str, arg_idx, arg_idx);
+        ret = set_schema(out_schema, dst_str, arg_idx, arg_idx);
       }
     }
   } else {

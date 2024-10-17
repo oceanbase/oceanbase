@@ -58,6 +58,14 @@ private:
   static int do_parse_skip_tablet_result_(sqlclient::ObMySQLResult &result, ObBackupSkipTabletAttr &backup_set_desc);
 };
 
+class ObBackupMViewOperator {
+public:
+  static int get_all_major_compaction_mview_dep_tablet_list(common::ObMySQLProxy &proxy,
+                                                            const uint64_t tenant_id,
+                                                            const share::SCN &snapshot,
+                                                            common::ObIArray<common::ObTabletID> &tablet_list);
+};
+
 class ObBackupSetFileOperator : public ObBackupBaseTableOperator
 {
 public:

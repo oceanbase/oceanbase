@@ -81,7 +81,7 @@ int ObAllVirtualTmpFileInfo::get_next_tmp_file_info_(tmp_file::ObSNTmpFileInfo &
       if (fd_idx_ >= fd_arr_.count()) {
         ret = OB_ITER_END;
         SERVER_LOG(INFO, "iterate current tenant reach end", K(fd_idx_), K(fd_arr_.count()));
-      } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.get_tmp_file_info(fd_arr_.at(fd_idx_), tmp_file_info))) {
+      } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.get_tmp_file_info(MTL_ID(), fd_arr_.at(fd_idx_), tmp_file_info))) {
         if (OB_ENTRY_NOT_EXIST == ret || OB_TIMEOUT == ret) {
           SERVER_LOG(INFO, "tmp file does not exist or is locked by others", KR(ret), K(fd_arr_.at(fd_idx_)));
           ret = OB_SUCCESS;
@@ -111,7 +111,7 @@ int ObAllVirtualTmpFileInfo::process_curr_tenant(common::ObNewRow *&row)
     if (OB_UNLIKELY(!fd_arr_.empty())) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "unexpected fd_arr_", KR(ret), K(fd_arr_));
-    } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.get_tmp_file_fds(fd_arr_))) {
+    } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.get_tmp_file_fds(MTL_ID(), fd_arr_))) {
       SERVER_LOG(WARN, "fail to get tmp file fd arr", KR(ret));
       if (OB_NOT_INIT == ret) {
         ret = OB_SUCCESS;

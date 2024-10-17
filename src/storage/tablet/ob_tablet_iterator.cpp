@@ -187,7 +187,7 @@ int ObHALSTabletIDIterator::sort_tablet_ids_if_need()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get next tablet id before sort", K(ret), K_(idx));
   } else {
-    std::sort(tablet_ids_.begin(), tablet_ids_.end());
+    lib::ob_sort(tablet_ids_.begin(), tablet_ids_.end());
     LOG_INFO("sort tablet ids if need");
   }
   return ret;

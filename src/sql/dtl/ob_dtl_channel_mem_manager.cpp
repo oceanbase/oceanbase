@@ -99,12 +99,20 @@ ObDtlLinkedBuffer *ObDtlChannelMemManager::alloc(int64_t chid, int64_t size)
 {
   int ret = OB_SUCCESS;
   ObDtlLinkedBuffer *allocated_buf = NULL;
+  const int64_t size_per_buffer = size_per_buffer_;
   void *buf = nullptr;
-  if (size <= size_per_buffer_) {
+  if (size <= size_per_buffer) {
     if (OB_SUCC(free_queue_.pop(buf, 0)) && NULL != buf) {
-      allocated_buf = new (buf) ObDtlLinkedBuffer(
-        static_cast<char *>(buf) + sizeof (ObDtlLinkedBuffer), size_per_buffer_);
-      allocated_buf->allocated_chid() = chid;
+      int64_t real_size = (static_cast<ObDtlLinkedBuffer *> (buf))->size();
+      if (real_size >= size_per_buffer) {
+        allocated_buf = new (buf) ObDtlLinkedBuffer(
+        static_cast<char *>(buf) + sizeof (ObDtlLinkedBuffer), real_size);
+        allocated_buf->allocated_chid() = chid;
+      } else {
+        real_free(static_cast<ObDtlLinkedBuffer *> (buf));
+        increase_free_cnt();
+        buf = nullptr;
+      }
     } else {
       if (OB_ENTRY_NOT_EXIST == ret) {
         LOG_TRACE("queue has no element", K(ret), K(seqno_), K(free_queue_.size()));
@@ -122,7 +130,7 @@ ObDtlLinkedBuffer *ObDtlChannelMemManager::alloc(int64_t chid, int64_t size)
       K(max_mem_percent_), K_(memstore_limit_percent), K(allocated_buf), K(size));
   } else {
     const int64_t alloc_size = sizeof (ObDtlLinkedBuffer)
-        + std::max(size, size_per_buffer_);
+        + std::max(size, size_per_buffer);
     char *buf = reinterpret_cast<char*>(allocator_.alloc(alloc_size));
     if (nullptr == buf) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -161,7 +169,7 @@ int ObDtlChannelMemManager::free(ObDtlLinkedBuffer *buf, bool auto_free)
   int ret = OB_SUCCESS;
   if (NULL != buf) {
     buf->reset_batch_info();
-    if (auto_free && buf->size() <= size_per_buffer_) {
+    if (auto_free && buf->size() == size_per_buffer_) {
       if (OB_FAIL(free_queue_.push(buf))) {
         LOG_TRACE("failed to push back buffer", K(ret), K(seqno_), K(free_queue_.size()));
       } else {

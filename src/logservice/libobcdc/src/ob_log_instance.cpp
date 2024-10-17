@@ -850,6 +850,8 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
     // init self addr
     } else if (OB_FAIL(init_self_addr_())) {
       LOG_ERROR("init self addr error", KR(ret));
+    } else if (OB_FAIL(global_poc_server.start_net_client(TCONF.io_thread_num))) {
+      LOG_ERROR("start net client failed", KR(ret));
     }
   }
 
@@ -1405,6 +1407,7 @@ void ObLogInstance::destroy_components_()
   if (is_data_dict_refresh_mode(refresh_mode_)) {
     ObLogMetaDataService::get_instance().destroy();
   }
+  global_poc_server.destroy();
 
   LOG_INFO("destroy all components end");
 }

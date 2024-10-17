@@ -30,7 +30,8 @@ ObIndexInfoCache::~ObIndexInfoCache()
 
 int ObIndexInfoCache::get_index_info_entry(const uint64_t table_id,
                                            const uint64_t index_id,
-                                           IndexInfoEntry *&entry) const
+                                           IndexInfoEntry *&entry,
+                                           int64_t *idx) const
 {
   int ret = OB_SUCCESS;
   entry = NULL;
@@ -45,6 +46,9 @@ int ObIndexInfoCache::get_index_info_entry(const uint64_t table_id,
         LOG_WARN("entry should not be null", K(ret));
       } else if (index_entrys_[i]->get_index_id() == index_id) {
         entry = index_entrys_[i];
+        if (idx != nullptr) {
+          *idx = i;
+        }
         break;
       }
     }
@@ -106,9 +110,17 @@ int ObIndexInfoCache::get_access_path_ordering(const uint64_t table_id,
 int ObIndexInfoCache::add_index_info_entry(IndexInfoEntry *entry)
 {
   int ret = OB_SUCCESS;
+  IndexInfoEntry *old_entry;
+  int64_t idx = OB_INVALID_INDEX;
   if (OB_ISNULL(entry)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("entry should not be null", K(ret));
+  } else if (OB_FAIL(get_index_info_entry(table_id_, entry->get_index_id(), old_entry, &idx))) {
+    LOG_WARN("failed to get index info entry", KPC(entry), K(ret));
+  } else if (old_entry != nullptr) {
+    // update index info entry
+    old_entry->~IndexInfoEntry();
+    index_entrys_[idx] = entry;
   } else if (entry_count_ >= common::OB_MAX_INDEX_PER_TABLE + 1) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid entry count", K(ret), K_(entry_count),

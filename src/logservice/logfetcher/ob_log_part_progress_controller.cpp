@@ -321,8 +321,8 @@ void PartProgressController::update_execution_time_(int64_t execution_time)
       last_global_count_and_timeval_.lo = global_count_and_timeval.lo;
       last_global_count_and_timeval_.hi = global_count_and_timeval.hi;
 
-       _LOG_INFO("[STAT] [GET_MIN_PROGRESS] AVG_TIME=%lu LS_COUNT=%ld SCAN_COUNT=%lu",
-                 time, part_cnt, scan_cnt);
+      _LOG_INFO("[STAT] [GET_MIN_PROGRESS] AVG_TIME=%lu LS_COUNT=%ld SCAN_COUNT=%lu",
+                time, part_cnt, scan_cnt);
     }
   }
 }

@@ -168,6 +168,7 @@ public:
   int inc_stat(const int16_t stat_no);
   int update_stat(const int16_t stat_no, const int64_t delta);
   int set_stat(const int16_t stat_no, const int64_t value);
+  int get_stat(const int16_t stat_no, int64_t &value);
   static ObDiagnoseTenantInfo *get_local_diagnose_info();
   inline ObWaitEventStatArray &get_event_stats()  { return event_stats_; }
   inline ObStatEventAddStatArray &get_add_stat_stats()  { return stat_add_stats_; }

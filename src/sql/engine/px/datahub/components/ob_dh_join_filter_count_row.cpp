@@ -39,7 +39,7 @@ int ObJoinFilterCountRowPieceMsgListener::on_message(ObJoinFilterCountRowPieceMs
   } else if (piece_ctx.received_ >= piece_ctx.task_cnt_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("receive too much piece msg", K(pkt), K(piece_ctx.received_), K(piece_ctx.task_cnt_));
-  } else if (FALSE_IT(++piece_ctx.received_)) {
+  } else if (FALSE_IT(piece_ctx.received_ += pkt.piece_count_)) {
   } else if (!pkt.each_sqc_has_full_data_) {
     // if each sqc only has partial data of left, gather all k(k=dop) thread's result
     piece_ctx.total_rows_ += pkt.total_rows_;
@@ -61,7 +61,8 @@ int ObJoinFilterCountRowPieceMsgListener::on_message(ObJoinFilterCountRowPieceMs
           LOG_WARN("receive too much piece msg for one sqc", K(pkt), K(sqc_row_info.received_),
                    K(sqc_row_info.expected_));
         } else if (FALSE_IT(sqc_row_info.total_rows_ += pkt.total_rows_)) {
-        } else if (sqc_row_info.expected_ == ++sqc_row_info.received_) {
+        } else if (FALSE_IT(sqc_row_info.received_ += pkt.piece_count_)) {
+        } else if (sqc_row_info.expected_ == sqc_row_info.received_) {
           LOG_TRACE("send whole msg to one sqc", K(pkt), K(sqc_row_info.total_rows_));
           if (OB_FAIL(piece_ctx.send_whole_msg_to_one_sqc(sqcs.at(i), sqc_row_info.total_rows_))) {
             LOG_WARN("send whole msg failed", K(ret));

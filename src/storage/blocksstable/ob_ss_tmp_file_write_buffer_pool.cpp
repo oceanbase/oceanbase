@@ -236,6 +236,8 @@ int ObSSTmpWriteBufferPool::expand()
     SpinWLockGuard guard(lock_);
     current_capacity = ATOMIC_LOAD(&capacity_);
     if (current_capacity < expect_capacity) {
+      int64_t old_fat_size = fat_.count();
+      int64_t cur_expand_capacity = 0;
       char * new_expand_buf = nullptr;
       // allocate `BLOCK_SIZE` memory each iteration.
       if (OB_ISNULL(new_expand_buf = static_cast<char *>(allocator_.alloc(BLOCK_SIZE)))) {
@@ -249,12 +251,29 @@ int ObSSTmpWriteBufferPool::expand()
                   -1, INVALID_PAGE_ID, new_expand_buf + count * PAGE_SIZE)))) {
             LOG_WARN("wbp fail to push back page into fat", K(ret), K(count), K(new_page_id));
           } else {
-            fat_[new_page_id].next_page_id_ = ATOMIC_LOAD(&first_free_page_id_);
-            ATOMIC_SET(&first_free_page_id_, new_page_id);
-            ATOMIC_FAA(&capacity_, PAGE_SIZE);
+            if (count > 0) {
+              fat_[new_page_id].next_page_id_ = new_page_id - 1;
+            } else {
+              fat_[new_page_id].next_page_id_ = first_free_page_id_;
+              fat_[new_page_id].is_block_beginning_ = true;
+            }
+            cur_expand_capacity += PAGE_SIZE;
           }
         }
         current_capacity += BLOCK_SIZE;
+      }
+
+      if (OB_SUCC(ret)) {
+        int64_t new_free_page_id = fat_.count() - 1;
+        ATOMIC_SET(&first_free_page_id_, new_free_page_id); // first_free_page_id_ points to the last page of this new block
+        ATOMIC_FAA(&capacity_, cur_expand_capacity);
+      } else {
+        while (fat_.count() > old_fat_size) {
+          fat_.pop_back();
+        }
+        if (OB_NOT_NULL(new_expand_buf)) {
+          allocator_.free(new_expand_buf);
+        }
       }
     } else {
       // maybe another thread has finish allocation, do nothing.
@@ -273,7 +292,15 @@ int ObSSTmpWriteBufferPool::reduce()
   SpinWLockGuard guard(lock_);
   for (int64_t i = 0; i < fat_.count(); i += BLOCK_PAGE_NUMS) {
     char * buf = fat_.at(i).buf_;
-    allocator_.free(buf);
+    if (OB_ISNULL(buf)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("wbp get unexpected page buffer", KR(ret), K(i), KP(buf));
+    } else if (!fat_[i].is_block_beginning_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("wbp try to free a buf_ which is not the address of a block", KR(ret), K(i), KP(buf), K(fat_[i]));
+    } else {
+      allocator_.free(buf);
+    }
   }
   return ret;
 }

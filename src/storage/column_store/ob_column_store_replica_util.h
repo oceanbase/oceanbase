@@ -53,11 +53,20 @@ public:
       const ObTablet &tablet,
       bool &need_wait_major_convert);
   // whole ls replica set need process column store replica for specific tablet
-  static int check_replica_set_need_process_cs_replica(
-      const ObLS &ls,
-      const ObTabletID &tablet_id,
+  static int check_need_process_for_cs_replica_for_ddl(
+      const ObTablet &tablet,
       const ObStorageSchema &schema,
       bool &need_process_cs_replica);
+  static int check_cs_replica_global_visible(
+      const ObLSInfo &ls_info,
+      bool &is_global_visible);
+  static int get_cs_replica_ls_set(
+      const ObIArray<share::ObLSID> &ls_id_array,
+      int64_t tenant_id,
+      hash::ObHashSet<share::ObLSID> &contain_cs_replica_ls_id_set);
+  static int check_need_process_cs_replica_for_offline_ddl(
+      const ObTableSchema &orig_table_schema,
+      bool &need_process);
 public:
   static const int64_t DEFAULT_CHECK_LS_REPLICA_LOCATION_TIMEOUT = 10 * 1000 * 1000L; // 10s
 };
@@ -78,6 +87,21 @@ private:
     DISALLOW_COPY_AND_ASSIGN(ObCSReplicaStorageSchemaGuard);
 };
 
+class ObGlobalCSReplicaMgr final
+{
+public:
+  ObGlobalCSReplicaMgr();
+  ~ObGlobalCSReplicaMgr();
+  int try_init(const int64_t tenant_id, const ObIArray<share::ObLSID> &ls_id_array);
+  int check_cs_replica_global_visible(const share::ObLSID &ls_id, bool &is_global_visible) const;
+  TO_STRING_KV(K_(is_inited));
+public:
+  static const int64_t CS_REPLICA_LS_ID_SET_BUCKET_NUM = 31;
+private:
+  hash::ObHashSet<share::ObLSID> cs_replica_ls_id_set_;
+  bool is_inited_;
+  DISALLOW_COPY_AND_ASSIGN(ObGlobalCSReplicaMgr);
+};
 
 } // namespace storage
 } // namespace oceanbase

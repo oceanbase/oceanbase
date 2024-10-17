@@ -96,6 +96,10 @@ private:
       const uint64_t tenant_id,
       const common::ObTabletID &tablet_id,
       bool &tablet_deleted);
+  int check_tablet_reorganized_(
+      const uint64_t tenant_id,
+      const common::ObTabletID &tablet_id,
+      bool &tablet_reoragnized);
   int fetch_tablet_meta_in_user_data_(
       const ObBackupMetaIndex &meta_index,
       ObMigrationTabletParam &tablet_param);

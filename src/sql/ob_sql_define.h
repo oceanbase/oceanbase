@@ -124,6 +124,7 @@ enum JtColType {
   COL_TYPE_VAL_EXTRACT_XML, // 7
   COL_TYPE_XMLTYPE_XML, // 8
   COL_TYPE_ORDINALITY_XML = 9,
+  COL_TYPE_RB_ITERATE = 10,
 };
 
 enum ObNameTypeClass
@@ -672,6 +673,27 @@ inline const ObString &ob_match_against_mode_str(const ObMatchAgainstMode mode)
   } else {
     return ma_mode_str[ObMatchAgainstMode::MAX_MATCH_AGAINST_MODE];
   }
+}
+
+static bool is_fixed_length_storage(ObObjType type) {
+  bool is_fixed = true;
+  ObObjTypeClass tc = ob_obj_type_class(type);
+  OB_ASSERT(tc >= ObNullTC && tc < ObMaxTC);
+  if (ObNumberTC == tc
+      || ObExtendTC == tc
+      || ObTextTC == tc
+      || ObEnumSetInnerTC == tc
+      || ObRawTC == tc
+      || ObRowIDTC == tc
+      || ObLobTC == tc
+      || ObJsonTC == tc
+      || ObGeometryTC == tc
+      || ObUserDefinedSQLTC == tc
+      || ObDecimalIntTC == tc
+      || ObRoaringBitmapTC == tc) {
+    is_fixed = false;
+  }
+  return is_fixed;
 }
 
 static bool is_fixed_length(ObObjType type) {

@@ -547,6 +547,8 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
     LOG_WARN("fail to check enable column store replica", K(ret));
   } else if (OB_FAIL(init_correlation_model(stmt, *session_info))) {
     LOG_WARN("failed to init correlation model", K(ret));
+  } else if (OB_FAIL(init_table_access_policy(stmt, *session_info))) {
+    LOG_WARN("failed to init table access policy", K(ret));
   }
   return ret;
 }
@@ -563,6 +565,8 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
   bool has_cursor_expr = false;
   int64_t link_stmt_count = 0;
   bool push_join_pred_into_view_enabled = true;
+  bool partition_wise_plan_enabled = true;
+  bool exists_partition_wise_plan_enabled_hint = false;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session.get_effective_tenant_id()));
   bool rowsets_enabled = tenant_config.is_valid() && tenant_config->_rowsets_enabled;
   ctx_.set_is_online_ddl(session.get_ddl_info().is_ddl());  // set is online ddl first, is used by other extract operations
@@ -625,6 +629,10 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     LOG_WARN("failed to get opt param enable spf batch rescan", K(ret));
   } else if (OB_FAIL(ctx_.get_global_hint().opt_params_.get_bool_opt_param(ObOptParamHint::_PUSH_JOIN_PREDICATE, push_join_pred_into_view_enabled))) {
     LOG_WARN("fail to check rowsets enabled", K(ret));
+  } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::PARTITION_WISE_PLAN_ENABLED,
+                                                   partition_wise_plan_enabled,
+                                                   exists_partition_wise_plan_enabled_hint))) {
+    LOG_WARN("failed to check partition wise plan enabled", K(ret));
   } else {
     ctx_.set_storage_estimation_enabled(storage_estimation_enabled);
     ctx_.set_serial_set_order(force_serial_set_order);
@@ -653,6 +661,12 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
       ctx_.set_hash_join_enabled(hash_join_enabled);
       ctx_.set_merge_join_enabled(optimizer_sortmerge_join_enabled);
       ctx_.set_nested_join_enabled(nested_loop_join_enabled);
+    }
+    if (tenant_config.is_valid()) {
+      ctx_.set_partition_wise_plan_enabled(tenant_config->_partition_wise_plan_enabled);
+    }
+    if (exists_partition_wise_plan_enabled_hint) {
+      ctx_.set_partition_wise_plan_enabled(partition_wise_plan_enabled);
     }
     if (!session.is_inner() && stmt.get_query_ctx()->get_injected_random_status()) {
       ctx_.set_generate_random_plan(true);
@@ -758,21 +772,31 @@ int ObOptimizer::init_correlation_model(ObDMLStmt &stmt, const ObSQLSessionInfo 
   int ret = OB_SUCCESS;
   ObEstCorrelationModel* correlation_model = NULL;
   int64_t type = 0;
-  bool has_hint = false;
+  bool has_new_hint = false;
   if (OB_ISNULL(ctx_.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null ctx", K(ret));
   } else if (!ctx_.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_4, COMPAT_VERSION_4_3_0,
                                                              COMPAT_VERSION_4_3_3)) {
     type = static_cast<int64_t>(ObEstCorrelationType::INDEPENDENT);
-  } else if (OB_FAIL(ctx_.get_global_hint().opt_params_.has_opt_param(ObOptParamHint::CORRELATION_FOR_CARDINALITY_ESTIMATION, has_hint))) {
+  } else if (OB_FAIL(ctx_.get_global_hint().opt_params_.has_opt_param(ObOptParamHint::CARDINALITY_ESTIMATION_MODEL, has_new_hint))) {
     LOG_WARN("failed to check whether has hint param", K(ret));
-  } else if (has_hint) {
-    if (OB_FAIL(ctx_.get_global_hint().opt_params_.get_enum_opt_param(ObOptParamHint::CORRELATION_FOR_CARDINALITY_ESTIMATION, type))) {
-      LOG_WARN("failed to get bool hint param", K(ret));
+  } else {
+    /**
+     * 'cardinality_estimation_model' is same as the name of the system variable.
+     * 'correlation_for_cardinality_estimation' should be deprecated.
+     * So the former has a higher priority.
+    */
+    ObOptParamHint::OptParamType opt_param_type = ObOptParamHint::CORRELATION_FOR_CARDINALITY_ESTIMATION;
+    if (has_new_hint) {
+      opt_param_type = ObOptParamHint::CARDINALITY_ESTIMATION_MODEL;
     }
-  } else if (OB_FAIL(session.get_sys_variable(share::SYS_VAR_CARDINALITY_ESTIMATION_MODEL, type))) {
-    LOG_WARN("failed to get sys variable", K(ret));
+    if (OB_FAIL(ctx_.get_global_hint().opt_params_.get_enum_sys_var(opt_param_type,
+                                                                    &session,
+                                                                    share::SYS_VAR_CARDINALITY_ESTIMATION_MODEL,
+                                                                    type))) {
+      LOG_WARN("failed to get hint param", K(ret));
+    }
   }
   if (OB_SUCC(ret)) {
     if (OB_UNLIKELY(type < 0) ||
@@ -781,6 +805,35 @@ int ObOptimizer::init_correlation_model(ObDMLStmt &stmt, const ObSQLSessionInfo 
       LOG_WARN("unexpected correlation type", K(type));
     } else {
       ctx_.set_correlation_type(static_cast<ObEstCorrelationType>(type));
+    }
+  }
+  return ret;
+}
+
+int ObOptimizer::init_table_access_policy(ObDMLStmt &stmt, const ObSQLSessionInfo &session)
+{
+  int ret = OB_SUCCESS;
+  int64_t policy = 0;
+  bool has_hint = false;
+  if (OB_ISNULL(ctx_.get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ctx", K(ret));
+  } else if (OB_FAIL(ctx_.get_global_hint().opt_params_.has_opt_param(ObOptParamHint::OB_TABLE_ACCESS_POLICY, has_hint))) {
+    LOG_WARN("failed to check whether has hint param", K(ret));
+  } else if (has_hint) {
+    if (OB_FAIL(ctx_.get_global_hint().opt_params_.get_enum_opt_param(ObOptParamHint::OB_TABLE_ACCESS_POLICY, policy))) {
+      LOG_WARN("failed to get enum hint param", K(ret));
+    }
+  } else if (OB_FAIL(session.get_sys_variable(share::SYS_VAR_OB_TABLE_ACCESS_POLICY, policy))) {
+    LOG_WARN("failed to get sys variable", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_UNLIKELY(policy < 0) ||
+        OB_UNLIKELY(policy >= static_cast<int64_t>(ObTableAccessPolicy::MAX))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected table access polisy", K(policy));
+    } else {
+      ctx_.set_table_access_policy(static_cast<ObTableAccessPolicy>(policy));
     }
   }
   return ret;

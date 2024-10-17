@@ -26,6 +26,7 @@
 #include "logservice/ob_log_base_header.h"
 #include "share/scn.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/tx_storage/ob_tx_leak_checker.h"
 #include "storage/checkpoint/ob_checkpoint_diagnose.h"
 
 namespace oceanbase
@@ -51,7 +52,6 @@ int ObLSTxService::init(const ObLSID &ls_id,
     ls_id_ = ls_id;
     mgr_ = mgr;
     trans_service_ = trans_service;
-
   }
   return ret;
 }
@@ -186,6 +186,8 @@ int ObLSTxService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
     ret = trans_service_->get_read_store_ctx(snapshot, read_latest, lock_timeout, store_ctx);
     if (OB_FAIL(ret)) {
       mgr_->end_readonly_request();
+    } else {
+      READ_CHECKER_RECORD(store_ctx);
     }
   }
   return ret;
@@ -228,9 +230,12 @@ int ObLSTxService::get_read_store_ctx(const SCN &snapshot,
   } else {
     store_ctx.ls_id_ = ls_id_;
     store_ctx.is_read_store_ctx_ = true;
+
     ret = trans_service_->get_read_store_ctx(snapshot, lock_timeout, store_ctx);
     if (OB_FAIL(ret)) {
       mgr_->end_readonly_request();
+    } else {
+      READ_CHECKER_RECORD(store_ctx);
     }
   }
   return ret;
@@ -290,6 +295,7 @@ int ObLSTxService::revert_store_ctx(storage::ObStoreCtx &store_ctx) const
       tmp_ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "mgr is null", K(tmp_ret), KP(this));
     } else {
+      READ_CHECKER_RELEASE(store_ctx);
       (void)mgr_->end_readonly_request();
     }
   }
@@ -344,6 +350,7 @@ int ObLSTxService::check_all_readonly_tx_clean_up() const
     if (REACH_TIME_INTERVAL(5000000)) {
       TRANS_LOG(INFO, "readonly requests are active", K(active_readonly_request_count));
       mgr_->dump_readonly_request(3);
+      READ_CHECKER_PRINT(ls_id_);
     }
     ret = OB_EAGAIN;
   } else if ((total_request_by_transfer_dest = mgr_->get_total_request_by_transfer_dest()) > 0) {

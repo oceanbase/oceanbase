@@ -118,7 +118,7 @@ int ObDirectLoadOriginTable::prepare_tables()
   table_iter_.reset();
   if (OB_FAIL(table_iter_.set_tablet_handle(tablet_handle_))) {
     LOG_WARN("Failed to set tablet handle to tablet table iter", K(ret));
-  } else if (OB_FAIL(table_iter_.refresh_read_tables_from_tablet(INT64_MAX, false /*allow_not_ready*/))) {
+  } else if (OB_FAIL(table_iter_.refresh_read_tables_from_tablet(INT64_MAX, false /*allow_not_ready*/, false /*major_sstable_only*/, false /*need_split_src_table*/, false/*need_split_dst_table*/))) {
     LOG_WARN("fail to get read tables", KR(ret), K(tablet_handle_));
   }
   // find major sstable or ddl sstables
@@ -375,7 +375,7 @@ int ObDirectLoadOriginTableScanner::init_get_table_param()
   int ret = OB_SUCCESS;
   if (OB_FAIL(get_table_param_.tablet_iter_.set_tablet_handle(origin_table_->get_tablet_handle()))) {
     LOG_WARN("Failed to set tablet handle to tablet table iter", K(ret));
-  } else if (OB_FAIL(get_table_param_.tablet_iter_.refresh_read_tables_from_tablet(INT64_MAX, false /*allow_not_ready*/))) {
+  } else if (OB_FAIL(get_table_param_.tablet_iter_.refresh_read_tables_from_tablet(INT64_MAX, false /*allow_not_ready*/, false /*major_sstable_only*/, false /*need_split_src_table*/, false /*need_split_dst_table*/))) {
     LOG_WARN("fail to copy table iter", KR(ret));
   }
   return ret;

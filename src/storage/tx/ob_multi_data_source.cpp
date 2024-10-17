@@ -378,19 +378,7 @@ int ObMulSourceTxDataNotifier::notify_ddl_barrier(const NotifyType type,
                                                   const ObMulSourceDataNotifyArg &arg)
 {
   int ret = OB_SUCCESS;
-  int64_t pos = 0;
-  ObDDLBarrierLog log;
-  if (OB_FAIL(log.deserialize(buf, len, pos))) {
-    TRANS_LOG(WARN, "failed to deserialize buf", K(ret));
-  } else if (OB_UNLIKELY(!log.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(ERROR, "invalid ddl barrier log", K(ret), K(type), K(arg));
-  } else {
-    TRANS_LOG(INFO, "notify ddl barrier", K(type), K(arg), K(log));
-  }
-
   ob_abort_log_cb_notify_(type, ret, arg.for_replay_);
-
   return ret;
 }
 

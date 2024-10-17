@@ -41,8 +41,9 @@ ObTxLogTypeChecker::need_replay_barrier(const ObTxLogType log_type,
         || data_source_type == ObTxDataSourceType::START_TRANSFER_OUT
         || data_source_type == ObTxDataSourceType::START_TRANSFER_OUT_PREPARE
         || data_source_type == ObTxDataSourceType::FINISH_TRANSFER_OUT
-        || data_source_type == ObTxDataSourceType::TABLET_BINDING) {
-
+        || data_source_type == ObTxDataSourceType::TABLET_SPLIT
+        || data_source_type == ObTxDataSourceType::TABLET_BINDING
+        || data_source_type == ObTxDataSourceType::MV_NOTICE_SAFE) {
       barrier_flag = logservice::ObReplayBarrierType::PRE_BARRIER;
 
     } else if (data_source_type == ObTxDataSourceType::FINISH_TRANSFER_IN

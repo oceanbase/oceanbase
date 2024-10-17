@@ -95,7 +95,7 @@ int ObRbUtils::check_binary(const ObString &rb_bin)
           LOG_WARN("invalid roaringbitmap binary length", K(ret), K(rb_bin.length()), K(bin_type));
         } else if (OB_FALSE_IT(value_count = *(rb_bin.ptr() + offset))) {
         } else if (OB_FALSE_IT(offset += RB_VALUE_COUNT_SIZE)) {
-        } else if (value_count < 0 || value_count > MAX_BITMAP_SET_VALUES) {
+        } else if (value_count < 2 || value_count > MAX_BITMAP_SET_VALUES) {
           ret = OB_INVALID_DATA;
           LOG_WARN("invalid roaringbitmap value_count", K(ret), K(bin_type), K(value_count));
         } else if (rb_bin.length() != offset + value_count * sizeof(uint32_t)) {
@@ -111,7 +111,7 @@ int ObRbUtils::check_binary(const ObString &rb_bin)
           LOG_WARN("invalid roaringbitmap binary length", K(ret), K(rb_bin.length()), K(bin_type));
         } else if (OB_FALSE_IT(value_count = *(rb_bin.ptr() + offset))) {
         } else if (OB_FALSE_IT(offset += RB_VALUE_COUNT_SIZE)) {
-        } else if (value_count < 0 || value_count > MAX_BITMAP_SET_VALUES) {
+        } else if (value_count < 2 || value_count > MAX_BITMAP_SET_VALUES) {
           ret = OB_INVALID_DATA;
           LOG_WARN("invalid roaringbitmap value_count", K(ret), K(bin_type), K(value_count));
         } else if (rb_bin.length() != offset + value_count * sizeof(uint64_t)) {

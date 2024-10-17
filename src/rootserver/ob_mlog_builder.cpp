@@ -645,7 +645,8 @@ int ObMLogBuilder::set_basic_infos(
       mlog_schema.set_table_mode_flag(ObTableModeFlag::TABLE_MODE_QUEUING_EXTREME);
       mlog_schema.set_table_type(MATERIALIZED_VIEW_LOG);
       mlog_schema.set_index_status(ObIndexStatus::INDEX_STATUS_UNAVAILABLE);
-      mlog_schema.set_duplicate_scope(base_table_schema.get_duplicate_scope());
+      mlog_schema.set_duplicate_attribute(base_table_schema.get_duplicate_scope(),
+                                          base_table_schema.get_duplicate_read_consistency());
       mlog_schema.set_table_state_flag(base_table_schema.get_table_state_flag());
       mlog_schema.set_table_id(create_mlog_arg.mlog_table_id_);
       mlog_schema.set_data_table_id(base_table_schema.get_table_id());

@@ -311,10 +311,7 @@ void ObGlobalHint::merge_opt_features_version_hint(uint64_t opt_features_version
 
 void ObGlobalHint::merge_direct_load_hint(const ObDirectLoadHint &other)
 {
-  direct_load_hint_.flags_ |= other.flags_;
-  direct_load_hint_.max_error_row_count_ =
-      std::max(direct_load_hint_.max_error_row_count_, other.max_error_row_count_);
-  direct_load_hint_.load_method_ = other.load_method_;
+  direct_load_hint_.merge(other);
 }
 
 // use the first resource group hint now.
@@ -624,7 +621,7 @@ bool ObGlobalHint::get_direct_load_need_sort() const
   if (has_direct_load()) {
     // if direct(need_sort, max_allowed_error_rows) hint is provided,
     // use its need_sort param, otherwise need_sort = true
-    need_sort = direct_load_hint_.is_enable() ?
+    need_sort = direct_load_hint_.has_direct() ?
                     direct_load_hint_.need_sort() : true;
   }
   return need_sort;
@@ -898,7 +895,8 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
       is_valid = val.is_int() && (0 <= val.get_int() && val.get_int() <= 4);
       break;
     }
-    case CORRELATION_FOR_CARDINALITY_ESTIMATION: {
+    case CORRELATION_FOR_CARDINALITY_ESTIMATION:
+    case CARDINALITY_ESTIMATION_MODEL: {
       if (val.is_int()) {
         is_valid = 0 <= val.get_int() && val.get_int() < static_cast<int64_t>(ObEstCorrelationType::MAX);
       } else if (val.is_varchar()) {
@@ -909,6 +907,25 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
       break;
     }
     case _PUSH_JOIN_PREDICATE: {
+      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
+                                      || 0 == val.get_varchar().case_compare("false"));
+      break;
+    }
+    case RANGE_INDEX_DIVE_LIMIT:
+    case PARTITION_INDEX_DIVE_LIMIT:
+      is_valid = val.is_int();
+      break;
+    case OB_TABLE_ACCESS_POLICY: {
+      if (val.is_int()) {
+        is_valid = 0 <= val.get_int() && val.get_int() < static_cast<int64_t>(ObTableAccessPolicy::MAX);
+      } else if (val.is_varchar()) {
+        int64_t type = OB_INVALID_ID;
+        ObSysVarObTableAccessPolicy sv;
+        is_valid = (OB_SUCCESS == sv.find_type(val.get_varchar(), type));
+      }
+      break;
+    }
+    case PARTITION_WISE_PLAN_ENABLED: {
       is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
                                       || 0 == val.get_varchar().case_compare("false"));
       break;
@@ -1036,8 +1053,16 @@ int ObOptParamHint::get_enum_opt_param(const OptParamType param_type, int64_t &v
     val = obj.get_int();
   } else if (obj.is_varchar()) {
     switch (param_type) {
-      case CORRELATION_FOR_CARDINALITY_ESTIMATION: {
+      case CORRELATION_FOR_CARDINALITY_ESTIMATION:
+      case CARDINALITY_ESTIMATION_MODEL: {
         ObSysVarCardinalityEstimationModel sv;
+        if (OB_FAIL(sv.find_type(obj.get_varchar(), val))) {
+          LOG_WARN("param obj is invalid", K(ret), K(obj));
+        }
+        break;
+      }
+      case OB_TABLE_ACCESS_POLICY: {
+        ObSysVarObTableAccessPolicy sv;
         if (OB_FAIL(sv.find_type(obj.get_varchar(), val))) {
           LOG_WARN("param obj is invalid", K(ret), K(obj));
         }
@@ -1078,6 +1103,56 @@ int ObOptParamHint::check_and_get_bool_opt_param(const OptParamType param_type, 
     LOG_WARN("get opt param value failed", K(ret));
   }
   return ret;
+}
+
+template<typename T, ObOptParamHint::GET_PARAM_FUNC<T> PARAM_FUNC>
+int ObOptParamHint::inner_get_sys_var(const OptParamType param_type,
+                                      const ObSQLSessionInfo *session,
+                                      const share::ObSysVarClassType sys_var_id,
+                                      T &val) const
+{
+  int ret = OB_SUCCESS;
+  bool has_hint = false;
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(session));
+  } else if (OB_FAIL(has_opt_param(param_type, has_hint))) {
+    LOG_WARN("failed to check whether has hint param", K(ret));
+  } else if (has_hint) {
+    if (OB_FAIL((this->*PARAM_FUNC)(param_type, val))) {
+      LOG_WARN("failed to get bool hint param", K(ret));
+    }
+  } else if (OB_FAIL(session->get_sys_variable(sys_var_id, val))) {
+    LOG_WARN("failed to get sys variable", K(ret));
+  }
+  return ret;
+}
+
+int ObOptParamHint::get_sys_var(const OptParamType param_type,
+                                const ObSQLSessionInfo *session,
+                                const share::ObSysVarClassType sys_var_id,
+                                int64_t &val) const
+{
+  return inner_get_sys_var<int64_t, &ObOptParamHint::get_integer_opt_param>
+            (param_type, session, sys_var_id, val);
+}
+
+int ObOptParamHint::get_sys_var(const OptParamType param_type,
+                                const ObSQLSessionInfo *session,
+                                const share::ObSysVarClassType sys_var_id,
+                                bool &val) const
+{
+  return inner_get_sys_var<bool, &ObOptParamHint::get_bool_opt_param>
+            (param_type, session, sys_var_id, val);
+}
+
+int ObOptParamHint::get_enum_sys_var(const OptParamType param_type,
+                                     const ObSQLSessionInfo *session,
+                                     const share::ObSysVarClassType sys_var_id,
+                                     int64_t &val) const
+{
+  return inner_get_sys_var<int64_t, &ObOptParamHint::get_enum_opt_param>
+            (param_type, session, sys_var_id, val);
 }
 
 void ObOptParamHint::reset()
@@ -1188,6 +1263,7 @@ const char* ObHint::get_hint_name(ObItemType type, bool is_enable_hint /* defaul
     case T_FULL_HINT:           return "FULL";
     case T_NO_INDEX_HINT:       return "NO_INDEX";
     case T_USE_DAS_HINT:        return is_enable_hint ? "USE_DAS" : "NO_USE_DAS";
+    case T_UNION_MERGE_HINT:    return "UNION_MERGE";
     case T_USE_COLUMN_STORE_HINT: return is_enable_hint ? "USE_COLUMN_TABLE" : "NO_USE_COLUMN_TABLE";
     case T_INDEX_SS_HINT:       return "INDEX_SS";
     case T_INDEX_SS_ASC_HINT:   return "INDEX_SS_ASC";
@@ -1291,6 +1367,7 @@ int ObHint::deep_copy_hint_contain_table(ObIAllocator *allocator, ObHint *&hint)
     case HINT_JOIN_FILTER:  DEEP_COPY_NORMAL_HINT(ObJoinFilterHint); break;
     case HINT_WIN_MAGIC: DEEP_COPY_NORMAL_HINT(ObWinMagicHint); break;
     case HINT_COALESCE_AGGR: DEEP_COPY_NORMAL_HINT(ObCoalesceAggrHint); break;
+    case HINT_UNION_MERGE: DEEP_COPY_NORMAL_HINT(ObUnionMergeHint); break;
     default:  {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected hint type to deep copy", K(ret), K(hint_class_));
@@ -2203,6 +2280,37 @@ int ObIndexHint::print_hint_desc(PlanText &plan_text) const
   return ret;
 }
 
+int ObUnionMergeHint::assign(const ObUnionMergeHint &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(table_.assign(other.table_))) {
+    LOG_WARN("failed to assign table", K(ret));
+  } else if (OB_FAIL(index_name_list_.assign(other.index_name_list_))) {
+    LOG_WARN("failed to assign index name list", K(ret));
+  } else if  (OB_FAIL(ObOptHint::assign(other))) {
+    LOG_WARN("fail to assign hint", K(ret));
+  }
+  return ret;
+}
+
+int ObUnionMergeHint::print_hint_desc(PlanText &plan_text) const
+{
+  int ret = OB_SUCCESS;
+  char *buf = plan_text.buf_;
+  int64_t &buf_len = plan_text.buf_len_;
+  int64_t &pos = plan_text.pos_;
+  if (OB_FAIL(table_.print_table_in_hint(plan_text))) {
+    LOG_WARN("fail to print table in hint", K(ret));
+  } else {
+    for (int64_t i = 0; i < index_name_list_.count(); i++) {
+      if (OB_FAIL(BUF_PRINTF(" \"%.*s\"", index_name_list_.at(i).length(), index_name_list_.at(i).ptr()))) {
+        LOG_WARN("fail to print index name", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObJoinHint::assign(const ObJoinHint &other)
 {
   int ret = OB_SUCCESS;
@@ -2270,6 +2378,8 @@ const char *ObJoinHint::get_dist_algo_str(DistAlgo dist_algo)
     case DistAlgo::DIST_EXT_PARTITION_WISE: return  "NONE NONE";
     case DistAlgo::DIST_NONE_ALL:           return  "NONE ALL";
     case DistAlgo::DIST_ALL_NONE:           return  "ALL NONE";
+    case DistAlgo::DIST_RANDOM_ALL:         return  "RANDOM ALL";
+    case DistAlgo::DIST_HASH_ALL:           return  "HASH ALL";
     default:  return NULL;
   }
   return  NULL;
@@ -3185,27 +3295,42 @@ void ObDirectLoadHint::reset()
   load_method_ = INVALID_LOAD_METHOD;
 }
 
-int ObDirectLoadHint::assign(const ObDirectLoadHint &other)
+void ObDirectLoadHint::merge(const ObDirectLoadHint &other)
 {
-  int ret = OB_SUCCESS;
-  flags_ = other.flags_;
+  has_direct_ = other.has_direct_;
+  need_sort_ = other.need_sort_;
+  has_no_direct_ |= other.has_no_direct_;
   max_error_row_count_ = other.max_error_row_count_;
   load_method_ = other.load_method_;
-  return ret;
 }
 
 int ObDirectLoadHint::print_direct_load_hint(PlanText &plan_text) const
 {
-  int ret = OB_SUCCESS;
   const char* outline_indent = ObQueryHint::get_outline_indent(plan_text.is_oneline_);
   char *buf = plan_text.buf_;
   int64_t &buf_len = plan_text.buf_len_;
   int64_t &pos = plan_text.pos_;
-  if (is_enable_) {
+
+  return print_direct_load_hint_(buf, buf_len, pos, outline_indent);
+}
+
+int ObDirectLoadHint::print_direct_load_hint(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  return print_direct_load_hint_(buf, buf_len, pos, ""/*indent*/);
+}
+
+int ObDirectLoadHint::print_direct_load_hint_(char *buf, int64_t buf_len, int64_t &pos, const char *indent) const
+{
+  int ret = OB_SUCCESS;
+  if (has_no_direct_) {
+    if (OB_FAIL(BUF_PRINTF("%sNO_DIRECT", indent))) {
+      LOG_WARN("failed to print no_direct hint", KR(ret));
+    }
+  } else if (has_direct_) {
     const char *need_sort_str = need_sort_ ? "TRUE" : "FALSE";
     const char *load_method_str = get_load_method_string(load_method_);
     if (OB_FAIL(BUF_PRINTF("%sDIRECT(%s, %ld, '%s')",
-        outline_indent, need_sort_str, max_error_row_count_, load_method_str))) {
+                           indent, need_sort_str, max_error_row_count_, load_method_str))) {
       LOG_WARN("failed to print direct load hint", KR(ret));
     }
   }

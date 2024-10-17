@@ -51,6 +51,11 @@ function echo_err() {
 function get_os_release() {
   if [[ "${OS_ARCH}x" == "x86_64x" ]]; then
     case "$ID" in
+      rhel)
+        version_ge "9.0" && compat_centos9 && return
+        version_ge "8.0" && compat_centos8 && return
+        version_ge "7.0" && compat_centos7 && return
+        ;;
       alinux)
         version_ge "3.0" && compat_centos9 && return
         version_ge "2.1903" && compat_centos7 && return
@@ -111,6 +116,11 @@ function get_os_release() {
     esac
   elif [[ "${OS_ARCH}x" == "aarch64x" ]]; then
     case "$ID" in
+      rhel)
+        version_ge "9.0" && compat_centos9 && return
+        version_ge "8.0" && compat_centos8 && return
+        version_ge "7.0" && compat_centos7 && return
+        ;;
       alios)
         version_ge "8.0" && compat_centos8 && return
         version_ge "7.0" && compat_centos7 && return

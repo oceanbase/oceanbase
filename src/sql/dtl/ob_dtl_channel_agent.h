@@ -39,7 +39,8 @@ public:
     tenant_id_(500),
     buffer_(nullptr),
     msg_writer_(nullptr),
-    meta_(nullptr)
+    meta_(nullptr),
+    size_per_buffer_(-1)
   {}
   ~ObDtlBufEncoder() {}
   void set_tenant_id(int64_t tenant_id) {
@@ -76,6 +77,7 @@ public:
   { msg_writer_->write_msg_type(buffer); }
   ObDtlLinkedBuffer *get_buffer() { return buffer_; }
   void set_row_meta(RowMeta &meta) { meta_ = &meta; }
+  void set_size_per_buffer(const int64_t size) { size_per_buffer_ = size; }
 private:
   int64_t use_row_store_;
   int64_t tenant_id_;
@@ -88,6 +90,7 @@ private:
   ObDtlVectorFixedMsgWriter vector_fixed_msg_writer_;
   ObDtlChannelEncoder *msg_writer_;
   RowMeta *meta_;
+  int64_t size_per_buffer_;
 };
 
 class ObDtlBcastService
@@ -143,6 +146,7 @@ public:
            int64_t timeout_ts);
   int destroy();
   void set_row_meta(RowMeta &meta) { dtl_buf_encoder_.set_row_meta(meta); }
+  void set_size_per_buffer(const int64_t size) { dtl_buf_encoder_.set_size_per_buffer(size); }
 private:
   int switch_buffer(int64_t need_size);
   int send_last_buffer(ObDtlLinkedBuffer *&last_buffer);

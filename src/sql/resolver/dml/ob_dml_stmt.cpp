@@ -906,11 +906,15 @@ int ObDMLStmt::iterate_stmt_expr(ObStmtExprVisitor &visitor)
                OB_FAIL(visitor.visit(table_items_.at(i)->flashback_query_expr_,
                                      SCOPE_FROM))) {
       LOG_WARN("failed to visit flashback query expr", K(ret));
-    } else if (NULL != table_items_.at(i)->json_table_def_ &&
-               NULL != table_items_.at(i)->json_table_def_->doc_expr_ &&
-               OB_FAIL(visitor.visit(table_items_.at(i)->json_table_def_->doc_expr_,
-                                     SCOPE_FROM))) {
-      LOG_WARN("failed to add json table doc expr", K(ret));
+    } else if (NULL != table_items_.at(i)->json_table_def_) {
+      for (int64_t j = 0; OB_SUCC(ret) && j < table_items_.at(i)->json_table_def_->doc_exprs_.count(); ++j) {
+        if (NULL != table_items_.at(i)->json_table_def_->doc_exprs_.at(j) &&
+            OB_FAIL(visitor.visit(table_items_.at(i)->json_table_def_->doc_exprs_.at(j), SCOPE_FROM))) {
+          LOG_WARN("failed to add json table doc expr", K(ret));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (table_items_.at(i)->is_values_table() &&
                NULL != table_items_.at(i)->values_table_def_) {
       if (OB_FAIL(visitor.visit(table_items_.at(i)->values_table_def_->access_exprs_, SCOPE_FROM))) {
@@ -1558,8 +1562,12 @@ int ObDMLStmt::get_json_table_exprs(ObIArray<ObRawExpr *> &json_table_exprs) con
       LOG_WARN("table item is null", K(ret));
     } else if (!table_items_.at(i)->is_json_table()) {
       // do nothing
-    } else if (OB_FAIL(json_table_exprs.push_back(table_items_.at(i)->json_table_def_->doc_expr_))) {
-      LOG_WARN("failed to push back json table doc expr", K(ret));
+    } else {
+      for (int64_t j = 0; OB_SUCC(ret) && j < table_items_.at(i)->json_table_def_->doc_exprs_.count(); ++j) {
+        if (OB_FAIL(json_table_exprs.push_back(table_items_.at(i)->json_table_def_->doc_exprs_.at(j)))) {
+          LOG_WARN("failed to push back json table doc expr", K(ret));
+        }
+      }
     }
   }
   return ret;
@@ -2007,13 +2015,14 @@ int ObDMLStmt::check_pseudo_column_valid()
       LOG_WARN("get null expr", K(ret));
     } else {
       switch (expr->get_expr_type()) {
-        case T_ORA_ROWSCN: {
-          ObPseudoColumnRawExpr *ora_rowscn = static_cast<ObPseudoColumnRawExpr*>(expr);
+        case T_ORA_ROWSCN:
+        case T_PSEUDO_OLD_NEW_COL: {
+          ObPseudoColumnRawExpr *pseudo_col = static_cast<ObPseudoColumnRawExpr*>(expr);
           const TableItem *table = NULL;
-          if (OB_ISNULL(table = get_table_item_by_id(ora_rowscn->get_table_id()))
+          if (OB_ISNULL(table = get_table_item_by_id(pseudo_col->get_table_id()))
               || OB_UNLIKELY(!table->is_basic_table())) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("failed to find basic table for ora_rowscn", K(ret), K(table), K(*expr));
+            LOG_WARN("failed to find basic table for pseudo column", K(ret), K(table), K(*expr));
           }
           break;
         }
@@ -3910,46 +3919,6 @@ int ObDMLStmt::check_if_table_exists(uint64_t table_id, bool &is_existed) const
   return ret;
 }
 
-int ObDMLStmt::has_special_expr(const ObExprInfoFlag flag, bool &has) const
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr*, 16> exprs;
-  has = false;
-  if (OB_FAIL(get_relation_exprs(exprs))) {
-    LOG_WARN("failed to get relation exprs", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && !has && i < exprs.count(); i++) {
-      if (OB_ISNULL(exprs.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (exprs.at(i)->has_flag(flag)) {
-        has = true;
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDMLStmt::has_special_exprs(const ObSqlBitSet<> &flags, bool &has) const
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr*, 16> exprs;
-  has = false;
-  if (OB_FAIL(get_relation_exprs(exprs))) {
-    LOG_WARN("failed to get relation exprs", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && !has && i < exprs.count(); i++) {
-      if (OB_ISNULL(exprs.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (exprs.at(i)->get_expr_info().overlap(flags)) {
-        has = true;
-      }
-    }
-  }
-  return ret;
-}
-
 int ObDMLStmt::rebuild_tables_hash()
 {
   int ret = OB_SUCCESS;
@@ -4549,18 +4518,20 @@ int ObDMLStmt::collect_temp_table_infos(ObIArray<TempTableInfo> &temp_table_info
   return ret;
 }
 
-int ObDMLStmt::get_ora_rowscn_column(const uint64_t table_id, ObPseudoColumnRawExpr *&ora_rowscn)
+int ObDMLStmt::get_target_pseudo_column(const ObItemType target_type,
+                                        const uint64_t table_id,
+                                        ObPseudoColumnRawExpr *&pseudo_col)
 {
   int ret = OB_SUCCESS;
-  ora_rowscn = NULL;
+  pseudo_col = NULL;
   ObRawExpr *expr = NULL;
-  for (int64_t i = 0; OB_SUCC(ret) && NULL == ora_rowscn && i < pseudo_column_like_exprs_.count(); ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && NULL == pseudo_col && i < pseudo_column_like_exprs_.count(); ++i) {
     if (OB_ISNULL(expr = pseudo_column_like_exprs_.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr is NULL", K(i), K(ret));
-    } else if (T_ORA_ROWSCN == expr->get_expr_type() &&
+    } else if (target_type == expr->get_expr_type() &&
                static_cast<ObPseudoColumnRawExpr *>(expr)->get_table_id() == table_id) {
-      ora_rowscn = static_cast<ObPseudoColumnRawExpr *>(expr);
+      pseudo_col = static_cast<ObPseudoColumnRawExpr *>(expr);
     }
   }
   return ret;
@@ -5332,10 +5303,22 @@ int ObJsonTableDef::deep_copy(const ObJsonTableDef& src, ObIRawExprCopier &expr_
 {
   int ret = OB_SUCCESS;
   table_type_ = src.table_type_;
-  if (OB_FAIL(expr_copier.copy(src.doc_expr_, doc_expr_))) {
-    LOG_WARN("failed to deep copy raw expr", K(ret));
+  for (size_t i = 0; OB_SUCC(ret) && i < src.doc_exprs_.count(); ++i) {
+    if (OB_ISNULL(src.doc_exprs_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get doc expr, expr is null", K(ret));
+    } else {
+      ObRawExpr* doc_expr = nullptr;
+      if (OB_ISNULL(doc_expr = static_cast<ObRawExpr*>(allocator->alloc(sizeof(ObRawExpr))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate json table ObRawExpr struct", K(ret));
+      } else if (OB_FAIL(expr_copier.copy(src.doc_exprs_.at(i), doc_expr))) {
+        LOG_WARN("failed to deep copy raw expr", K(ret));
+      } else if (OB_FAIL(doc_exprs_.push_back(doc_expr))) {
+        LOG_WARN("fail to store doc_expr", K(ret));
+      }
+    }
   }
-
   for (size_t i = 0; OB_SUCC(ret) && i < src.all_cols_.count(); ++i) {
     if (OB_ISNULL(src.all_cols_.at(i))) {
       ret = OB_ERR_UNEXPECTED;
@@ -5372,10 +5355,10 @@ int ObJsonTableDef::assign(const ObJsonTableDef& src)
 {
   int ret = OB_SUCCESS;
 
-  doc_expr_ = src.doc_expr_;
-  table_type_ = src.table_type_;
-
-  if (OB_FAIL(all_cols_.assign(src.all_cols_))) {
+  if (OB_FAIL(doc_exprs_.assign(src.doc_exprs_))) {
+    LOG_WARN("fail to assign doc exprs.", K(ret));
+  } else if (OB_FALSE_IT(table_type_ = src.table_type_)) {
+  } else if (OB_FAIL(all_cols_.assign(src.all_cols_))) {
     LOG_WARN("fail to assign all cols.", K(ret));
   }
   for (size_t i = 0; OB_SUCC(ret) && i < src.namespace_arr_.count(); i ++) {

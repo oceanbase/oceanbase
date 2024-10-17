@@ -508,6 +508,8 @@ typedef enum ObItemType
   T_FUN_SYS_SM3 = 776,
   T_FUN_SYS_SM4_ENCRYPT = 777,
   T_FUN_SYS_SM4_DECRYPT = 778,
+  T_FUN_SYS_ENHANCED_AES_ENCRYPT = 779,
+  T_FUN_SYS_ENHANCED_AES_DECRYPT = 780,
   T_FUN_SYS_HELLO_REPEAT = 798, // hello_repeat() function
   ///< @note add new mysql only function type before this line
   T_MYSQL_ONLY_SYS_MAX_OP = 800,
@@ -866,6 +868,7 @@ typedef enum ObItemType
   T_FUN_SYS_VECTOR_NORM = 1743,
   T_FUN_SYS_VECTOR_DISTANCE = 1744,
   T_FUNC_SYS_ARRAY_CONTAINS = 1745,
+  T_FUN_SYS_NEGATIVE_INNER_PRODUCT = 1746,
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table
@@ -898,14 +901,12 @@ typedef enum ObItemType
   T_FUN_SYS_END = 2000,
   T_FUN_SYS_ALIGN_DATE4CMP = 2010,
   T_FUN_SYS_INNER_ROW_CMP_VALUE = 2011,
-
   T_FUN_SYS_GTID_SUBSET = 2012,
   T_FUN_SYS_GTID_SUBTRACT = 2013,
   T_FUN_SYS_WAIT_FOR_EXECUTED_GTID_SET = 2014,
   T_FUN_SYS_WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS = 2015,
   T_FUN_SYS_LAST_REFRESH_SCN = 2016,
   T_FUN_SUM_OPNSIZE = 2017,
-
   T_FUN_SYS_GET_LOCK = 2018,
   T_FUN_SYS_IS_FREE_LOCK = 2019,
   T_FUN_SYS_IS_USED_LOCK = 2020,
@@ -937,6 +938,8 @@ typedef enum ObItemType
   T_FUN_SYS_RB_TO_STRING = 2046,
   T_FUN_SYS_RB_FROM_STRING = 2047,
   T_FUN_SYS_RB_ITERATE = 2048,
+  T_FUN_SYS_RB_SELECT = 2049,
+  T_FUN_TOKENIZE = 2050,
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id
@@ -2595,6 +2598,13 @@ typedef enum ObItemType
   T_DISTRIBUTE_BASIC = 4736,
 
   T_RB_ITERATE_EXPRESSION = 4737,
+  T_MODULE_DATA = 4738,
+  T_MODULE_NAME = 4739,
+
+  T_UNION_MERGE_HINT = 4740,
+  T_UNION_MERGE_LIST = 4741,
+
+  T_PSEUDO_OLD_NEW_COL = 4742,
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;

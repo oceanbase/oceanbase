@@ -1886,6 +1886,7 @@ int ObCOSliceWriter::init(const ObStorageSchema *storage_schema, const int64_t c
                                 table_key.get_snapshot_version(),
                                 data_format_version,
                                 tablet_direct_load_mgr->get_micro_index_clustered(),
+                                tablet_direct_load_mgr->get_tablet_transfer_seq(),
                                 SCN::min_scn(),
                                 &cg_schema,
                                 cg_idx,

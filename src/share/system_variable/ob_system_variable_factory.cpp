@@ -508,6 +508,12 @@ const char *ObSysVarUpdatableViewsWithLimit::UPDATABLE_VIEWS_WITH_LIMIT_NAMES[] 
   "YES",
   0
 };
+const char *ObSysVarObTableAccessPolicy::OB_TABLE_ACCESS_POLICY_NAMES[] = {
+  "ROW_STORE",
+  "COLUMN_STORE",
+  "AUTO",
+  0
+};
 
 const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_aggregation_optimization_settings",
@@ -612,6 +618,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "disabled_storage_engines",
   "disconnect_on_expired_password",
   "div_precision_increment",
+  "enable_sql_plan_monitor",
   "enforce_gtid_consistency",
   "eq_range_index_dive_limit",
   "error_count",
@@ -935,6 +942,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "ob_sql_audit_percentage",
   "ob_sql_work_area_percentage",
   "ob_statement_trace_id",
+  "ob_table_access_policy",
   "ob_tcp_invited_nodes",
   "ob_temp_tablespace_size_percentage",
   "ob_trace_info",
@@ -960,6 +968,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "parallel_min_scan_time_threshold",
   "parallel_servers_target",
   "parser_max_mem_size",
+  "partition_index_dive_limit",
   "performance_schema",
   "performance_schema_show_processlist",
   "plsql_ccflags",
@@ -987,6 +996,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "rand_seed1",
   "rand_seed2",
   "range_alloc_block_size",
+  "range_index_dive_limit",
   "range_optimizer_max_mem_size",
   "rbr_exec_mode",
   "read_only",
@@ -1220,6 +1230,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_DISABLED_STORAGE_ENGINES,
   SYS_VAR_DISCONNECT_ON_EXPIRED_PASSWORD,
   SYS_VAR_DIV_PRECISION_INCREMENT,
+  SYS_VAR_ENABLE_SQL_PLAN_MONITOR,
   SYS_VAR_ENFORCE_GTID_CONSISTENCY,
   SYS_VAR_EQ_RANGE_INDEX_DIVE_LIMIT,
   SYS_VAR_ERROR_COUNT,
@@ -1543,6 +1554,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_OB_SQL_AUDIT_PERCENTAGE,
   SYS_VAR_OB_SQL_WORK_AREA_PERCENTAGE,
   SYS_VAR_OB_STATEMENT_TRACE_ID,
+  SYS_VAR_OB_TABLE_ACCESS_POLICY,
   SYS_VAR_OB_TCP_INVITED_NODES,
   SYS_VAR_OB_TEMP_TABLESPACE_SIZE_PERCENTAGE,
   SYS_VAR_OB_TRACE_INFO,
@@ -1568,6 +1580,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_PARALLEL_MIN_SCAN_TIME_THRESHOLD,
   SYS_VAR_PARALLEL_SERVERS_TARGET,
   SYS_VAR_PARSER_MAX_MEM_SIZE,
+  SYS_VAR_PARTITION_INDEX_DIVE_LIMIT,
   SYS_VAR_PERFORMANCE_SCHEMA,
   SYS_VAR_PERFORMANCE_SCHEMA_SHOW_PROCESSLIST,
   SYS_VAR_PLSQL_CCFLAGS,
@@ -1595,6 +1608,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_RAND_SEED1,
   SYS_VAR_RAND_SEED2,
   SYS_VAR_RANGE_ALLOC_BLOCK_SIZE,
+  SYS_VAR_RANGE_INDEX_DIVE_LIMIT,
   SYS_VAR_RANGE_OPTIMIZER_MAX_MEM_SIZE,
   SYS_VAR_RBR_EXEC_MODE,
   SYS_VAR_READ_ONLY,
@@ -2137,6 +2151,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "innodb_sync_debug",
   "default_collation_for_utf8mb4",
   "_enable_old_charset_aggregation",
+  "enable_sql_plan_monitor",
   "insert_id",
   "join_buffer_size",
   "max_join_size",
@@ -2330,7 +2345,10 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "validate_password_dictionary_file",
   "delayed_insert_limit",
   "ndb_version",
-  "auto_generate_certs"
+  "auto_generate_certs",
+  "range_index_dive_limit",
+  "partition_index_dive_limit",
+  "ob_table_access_policy"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -2946,6 +2964,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarInnodbSyncDebug)
         + sizeof(ObSysVarDefaultCollationForUtf8mb4)
         + sizeof(ObSysVarEnableOldCharsetAggregation)
+        + sizeof(ObSysVarEnableSqlPlanMonitor)
         + sizeof(ObSysVarInsertId)
         + sizeof(ObSysVarJoinBufferSize)
         + sizeof(ObSysVarMaxJoinSize)
@@ -3140,6 +3159,9 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarDelayedInsertLimit)
         + sizeof(ObSysVarNdbVersion)
         + sizeof(ObSysVarAutoGenerateCerts)
+        + sizeof(ObSysVarRangeIndexDiveLimit)
+        + sizeof(ObSysVarPartitionIndexDiveLimit)
+        + sizeof(ObSysVarObTableAccessPolicy)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -6848,6 +6870,15 @@ int ObSysVarFactory::create_all_sys_vars()
       }
     }
     if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEnableSqlPlanMonitor())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarEnableSqlPlanMonitor", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_ENABLE_SQL_PLAN_MONITOR))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarEnableSqlPlanMonitor));
+      }
+    }
+    if (OB_SUCC(ret)) {
       if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInsertId())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarInsertId", K(ret));
@@ -8591,6 +8622,33 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_AUTO_GENERATE_CERTS))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarAutoGenerateCerts));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRangeIndexDiveLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRangeIndexDiveLimit", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_RANGE_INDEX_DIVE_LIMIT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarRangeIndexDiveLimit));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPartitionIndexDiveLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPartitionIndexDiveLimit", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PARTITION_INDEX_DIVE_LIMIT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPartitionIndexDiveLimit));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObTableAccessPolicy())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObTableAccessPolicy", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_TABLE_ACCESS_POLICY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObTableAccessPolicy));
       }
     }
 
@@ -13124,6 +13182,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       }
       break;
     }
+    case SYS_VAR_ENABLE_SQL_PLAN_MONITOR: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarEnableSqlPlanMonitor)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarEnableSqlPlanMonitor)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEnableSqlPlanMonitor())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarEnableSqlPlanMonitor", K(ret));
+      }
+      break;
+    }
     case SYS_VAR_INSERT_ID: {
       void *ptr = NULL;
       if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInsertId)))) {
@@ -15255,6 +15324,39 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarAutoGenerateCerts())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarAutoGenerateCerts", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_RANGE_INDEX_DIVE_LIMIT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarRangeIndexDiveLimit)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarRangeIndexDiveLimit)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRangeIndexDiveLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRangeIndexDiveLimit", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PARTITION_INDEX_DIVE_LIMIT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPartitionIndexDiveLimit)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPartitionIndexDiveLimit)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPartitionIndexDiveLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPartitionIndexDiveLimit", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OB_TABLE_ACCESS_POLICY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObTableAccessPolicy)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObTableAccessPolicy)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObTableAccessPolicy())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObTableAccessPolicy", K(ret));
       }
       break;
     }

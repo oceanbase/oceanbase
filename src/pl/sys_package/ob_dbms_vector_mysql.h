@@ -30,6 +30,8 @@ public:
 
   DECLARE_FUNC(refresh_index);
   DECLARE_FUNC(rebuild_index);
+  DECLARE_FUNC(refresh_index_inner);
+  DECLARE_FUNC(rebuild_index_inner);
 
 #undef DECLARE_FUNC
 };

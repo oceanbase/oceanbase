@@ -1924,6 +1924,24 @@ int ObSysVarOnCheckFuncs::check_and_convert_charset(ObExecContext &ctx,
       ret = OB_INVALID_ARGUMENT;
       LOG_ERROR("invalid type", K(ret), K(in_val));
     }
+    if (OB_SUCC(ret)) {
+      if (0 == set_var.var_name_.case_compare(OB_SV_CHARACTER_SET_CLIENT)
+        || 0 == set_var.var_name_.case_compare(OB_SV_CHARACTER_SET_CONNECTION)
+        || 0 == set_var.var_name_.case_compare(OB_SV_CHARACTER_SET_RESULTS)) {
+        ObCollationType cstype = static_cast<ObCollationType>(out_val.get_int());
+        if (!ObCharset::is_valid_collation(cstype)) {
+          ret = OB_ERR_UNKNOWN_CHARSET;
+          LOG_USER_ERROR(OB_ERR_UNKNOWN_CHARSET, in_val.get_string().length(), in_val.get_string().ptr());
+        } else if(ObCharset::get_charset(cstype)->mbminlen > 1) {
+          ret = OB_ERR_WRONG_VALUE_FOR_VAR;
+          LOG_USER_ERROR(OB_ERR_WRONG_VALUE_FOR_VAR,
+                      set_var.var_name_.length(),
+                      set_var.var_name_.ptr(),
+                      in_val.get_string().length(),
+                      in_val.get_string().ptr());
+        }
+      }
+    }
   }
   return ret;
 }
@@ -1996,6 +2014,23 @@ int ObSysVarOnCheckFuncs::check_and_convert_collation_not_null(ObExecContext &ct
     } else {
       ret = OB_INVALID_ARGUMENT;
       LOG_ERROR("invalid type", K(ret), K(in_val));
+    }
+
+    if (OB_SUCC(ret)) {
+      if (0 == set_var.var_name_.case_compare(OB_SV_COLLATION_CONNECTION)) {
+        ObCollationType cstype = static_cast<ObCollationType>(out_val.get_int());
+        if (!ObCharset::is_valid_collation(cstype)) {
+          ret = OB_ERR_UNKNOWN_CHARSET;
+          LOG_USER_ERROR(OB_ERR_UNKNOWN_CHARSET, in_val.get_string().length(), in_val.get_string().ptr());
+        } else if(ObCharset::get_charset(cstype)->mbminlen > 1) {
+          ret = OB_ERR_WRONG_VALUE_FOR_VAR;
+          LOG_USER_ERROR(OB_ERR_WRONG_VALUE_FOR_VAR,
+                      set_var.var_name_.length(),
+                      set_var.var_name_.ptr(),
+                      in_val.get_string().length(),
+                      in_val.get_string().ptr());
+        }
+      }
     }
   }
   return ret;
@@ -2107,10 +2142,11 @@ int ObSysVarOnCheckFuncs::check_and_convert_tx_isolation(ObExecContext &ctx,
                    in_val.get_string().length(), in_val.get_string().ptr());
     LOG_WARN("invalid tx_isolation value", K(ret));
   } else if (ObTransIsolation::READ_UNCOMMITTED == isolation) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                   "Isolation level READ-UNCOMMITTED");
-    LOG_WARN("isolation level read-uncommitted not supported", K(ret), K(in_val));
+    if (lib::is_oracle_mode()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "isolation level READ-UNCOMMITTED");
+      LOG_WARN("isolation level read-uncommitted not supported", K(ret), K(in_val));
+    }
   } else {
     if (OB_FAIL(ob_write_obj(ctx.get_allocator(), in_val, out_val))) {
       LOG_WARN("deep copy out_val obj failed", K(ret));
@@ -2799,6 +2835,8 @@ int ObSysVarOnUpdateFuncs::update_tx_isolation(ObExecContext &ctx,
   const ObString &var_val = val.get_string();
   ObTxIsolationLevel isolation = transaction::tx_isolation_from_str(var_val);
   bool for_next_trans = (set_var.set_scope_ == ObSetVar::SET_SCOPE_NEXT_TRANS);
+
+  LOG_INFO("update tx_isolation", K(var_name), K(var_val), K(for_next_trans), K(isolation));
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get session info", K(ret));
@@ -2808,10 +2846,14 @@ int ObSysVarOnUpdateFuncs::update_tx_isolation(ObExecContext &ctx,
                    var_name.length(), var_name.ptr(), var_val.length(), var_val.ptr());
     LOG_WARN("isolation level is invalid", K(ret), K(var_val), K(var_name));
   } else if (ObTxIsolationLevel::RU == isolation) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                   "Isolation level READ-UNCOMMITTED");
-    LOG_WARN("isolation level read-uncommitted not supported", K(ret), K(var_val), K(var_name));
+    // only supports RU syntax, the actual behavior is RC
+    if (lib::is_mysql_mode()) {
+      isolation = ObTxIsolationLevel::RC;
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "isolation level READ-UNCOMMITTED");
+      LOG_WARN("isolation level read-uncommitted not supported", K(ret), K(var_val), K(var_name));
+    }
   } else if (for_next_trans && FALSE_IT(session->set_tx_isolation(isolation))) {
     // nothing.
   } else if (lib::is_oracle_mode()) {

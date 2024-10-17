@@ -226,7 +226,8 @@ void ObReadInfoStruct::reset()
   is_oracle_mode_ = false;
   allocator_ = nullptr;
   schema_column_count_ = 0;
-  compat_version_ = READ_INFO_VERSION_V2;
+  compat_version_ = READ_INFO_VERSION_V3;
+  is_cs_replica_compat_ = false;
   reserved_ = 0;
   schema_rowkey_cnt_ = 0;
   rowkey_cnt_ = 0;
@@ -239,12 +240,14 @@ void ObReadInfoStruct::reset()
 void ObReadInfoStruct::init_basic_info(const int64_t schema_column_count,
                      const int64_t schema_rowkey_cnt,
                      const bool is_oracle_mode,
-                     const bool is_cg_sstable) {
+                     const bool is_cg_sstable,
+                     const bool is_cs_replica_compat) {
   const int64_t extra_rowkey_cnt = is_cg_sstable ? 0 : storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
   schema_column_count_ = schema_column_count;
   schema_rowkey_cnt_ = schema_rowkey_cnt;
   rowkey_cnt_ = schema_rowkey_cnt + extra_rowkey_cnt;
   is_oracle_mode_ = is_oracle_mode;
+  is_cs_replica_compat_ = is_cs_replica_compat;
 }
 
 int ObReadInfoStruct::generate_for_column_store(ObIAllocator &allocator,
@@ -282,6 +285,7 @@ int64_t ObReadInfoStruct::to_string(char *buf, const int64_t buf_len) const
   } else {
     J_OBJ_START();
     J_KV(K_(is_inited), K_(compat_version), K_(is_oracle_mode),
+        K_(is_cs_replica_compat),
         K_(schema_column_count),
         K_(schema_rowkey_cnt),
         K_(rowkey_cnt),
@@ -302,8 +306,10 @@ int ObReadInfoStruct::init_compat_version()
     LOG_WARN("fail to get data version", K(ret));
   } else if (compat_version < DATA_VERSION_4_3_0_0) {
     compat_version_ = READ_INFO_VERSION_V1;
-  } else {
+  } else if (compat_version < DATA_VERSION_4_3_4_0) {
     compat_version_ = READ_INFO_VERSION_V2;
+  } else {
+    compat_version_ = READ_INFO_VERSION_V3;
   }
   return ret;
 }
@@ -315,6 +321,7 @@ ObTableReadInfo::ObTableReadInfo()
   : ObReadInfoStruct(false/*rowkey_mode*/),
     trans_col_index_(OB_INVALID_INDEX),
     group_idx_col_index_(OB_INVALID_INDEX),
+    mview_old_new_col_index_(OB_INVALID_INDEX),
     seq_read_column_count_(0),
     max_col_index_(-1),
     cols_param_(),
@@ -346,7 +353,7 @@ int ObTableReadInfo::mock_for_sstable_query(
     LOG_WARN("failed to pre check", K(ret));
   } else if (OB_FAIL(init_compat_version())) { // init compat verion
     LOG_WARN("failed to init compat version", KR(ret));
-  } else if (FALSE_IT(init_basic_info(schema_column_count, schema_rowkey_cnt, is_oracle_mode, is_cg_sstable))) { // init basic info
+  } else if (FALSE_IT(init_basic_info(schema_column_count, schema_rowkey_cnt, is_oracle_mode, is_cg_sstable, false /*is_cs_replica_compat*/))) { // init basic info
   } else if (OB_FAIL(cols_desc_.init_and_assign(cols_desc, allocator))) {
     LOG_WARN("Fail to assign cols_desc", K(ret));
   } else if (OB_FAIL(cols_index_.init_and_assign(storage_cols_index, allocator))) {
@@ -417,7 +424,7 @@ int ObTableReadInfo::init(
     LOG_WARN("failed to pre check", K(ret));
   } else if (OB_FAIL(init_compat_version())) { // init compat verion
     LOG_WARN("failed to init compat version", KR(ret));
-  } else if (FALSE_IT(init_basic_info(schema_column_count, schema_rowkey_cnt, is_oracle_mode, is_cg_sstable))) { // init basic info
+  } else if (FALSE_IT(init_basic_info(schema_column_count, schema_rowkey_cnt, is_oracle_mode, is_cg_sstable, false /*is_cs_replica_compat*/))) { // init basic info
   } else if (OB_FAIL(ObReadInfoStruct::prepare_arrays(allocator, cols_desc, cols_desc.count()))) {
     LOG_WARN("failed to prepare arrays", K(ret), K(cols_desc.count()));
   } else if (nullptr != cols_param && OB_FAIL(cols_param_.init_and_assign(*cols_param, allocator))) {
@@ -467,6 +474,9 @@ void ObTableReadInfo::inner_gene_cols_index_by_col_descs(
       } else if (common::OB_HIDDEN_GROUP_IDX_COLUMN_ID == cols_desc.at(i).col_id_) {
         group_idx_col_index_ = i;
         col_index = -1;
+      } else if (common::OB_MAJOR_REFRESH_MVIEW_OLD_NEW_COLUMN_ID == cols_desc.at(i).col_id_) {
+         mview_old_new_col_index_ = i;
+         col_index = -1;
       } else {
         col_index = -1;
       }
@@ -526,6 +536,7 @@ void ObTableReadInfo::reset()
   ObReadInfoStruct::reset();
   trans_col_index_ = OB_INVALID_INDEX;
   group_idx_col_index_ = OB_INVALID_INDEX;
+  mview_old_new_col_index_ = OB_INVALID_INDEX;
   seq_read_column_count_ = 0;
   max_col_index_ = -1;
   cols_param_.reset();
@@ -574,6 +585,11 @@ int ObTableReadInfo::serialize(
 
   if (OB_SUCC(ret) && compat_version_ >= READ_INFO_VERSION_V2) {
     LST_DO_CODE(OB_UNIS_ENCODE, cg_idxs_, cols_extend_, has_all_column_group_);
+  }
+  if (OB_SUCC(ret) && compat_version_ >= READ_INFO_VERSION_V3) {
+    if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, mview_old_new_col_index_))) {
+      LOG_WARN("Fail to encode mview old new col index", K(ret));
+    }
   }
   return ret;
 }
@@ -652,6 +668,15 @@ int ObTableReadInfo::deserialize(
       has_all_column_group_ = true;
     }
   }
+  if (OB_SUCC(ret)) {
+    if (compat_version_ >= READ_INFO_VERSION_V3) {
+      if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &mview_old_new_col_index_))) {
+        LOG_WARN("Fail to decode mview old new col index", K(ret));
+      }
+    } else {
+      mview_old_new_col_index_ = OB_INVALID_INDEX;
+    }
+  }
 
   if (OB_SUCC(ret) && cols_desc_.count() > 0) {
     const bool is_cg_sstable = ObCGReadInfo::is_cg_sstable(schema_rowkey_cnt_, schema_column_count_);
@@ -709,6 +734,9 @@ int64_t ObTableReadInfo::get_serialize_size() const
   if (OB_SUCC(ret) && compat_version_ >= READ_INFO_VERSION_V2) {
     LST_DO_CODE(OB_UNIS_ADD_LEN, cg_idxs_, cols_extend_, has_all_column_group_);
   }
+  if (OB_SUCC(ret) && compat_version_ >= READ_INFO_VERSION_V3) {
+    len += serialization::encoded_length_vi64(mview_old_new_col_index_);
+  }
   return len;
 }
 
@@ -722,6 +750,8 @@ int64_t ObTableReadInfo::to_string(char *buf, const int64_t buf_len) const
         K_(schema_rowkey_cnt),
         K_(rowkey_cnt),
         K_(trans_col_index),
+        K_(mview_old_new_col_index),
+        K_(group_idx_col_index),
         K_(seq_read_column_count),
         K_(max_col_index),
         K_(is_oracle_mode),
@@ -758,7 +788,8 @@ int ObRowkeyReadInfo::init(
     const bool is_oracle_mode,
     const common::ObIArray<ObColDesc> &rowkey_col_descs,
     const bool is_cg_sstable,
-    const bool use_default_compat_version)
+    const bool use_default_compat_version,
+    const bool is_cs_replica_compat)
 {
   int ret = OB_SUCCESS;
   const int64_t extra_rowkey_cnt = is_cg_sstable ? 0: storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
@@ -777,7 +808,7 @@ int ObRowkeyReadInfo::init(
     LOG_WARN("failed to init compat version", KR(ret));
   }
   if (OB_SUCC(ret)) {
-    init_basic_info(schema_column_count, schema_rowkey_cnt, is_oracle_mode, is_cg_sstable); // init basic info
+    init_basic_info(schema_column_count, schema_rowkey_cnt, is_oracle_mode, is_cg_sstable, is_cs_replica_compat); // init basic info
     if (OB_FAIL(prepare_arrays(allocator, rowkey_col_descs, out_cols_cnt))) {
       LOG_WARN("failed to prepare arrays", K(ret), K(out_cols_cnt));
     } else if (OB_FAIL(datum_utils_.init(cols_desc_, schema_rowkey_cnt_, is_oracle_mode_, allocator, is_cg_sstable))) {
@@ -1144,7 +1175,8 @@ int ObTenantCGReadInfoMgr::construct_index_read_info(ObIAllocator &allocator, Ob
                                           lib::is_oracle_mode(),
                                           idx_cols_desc,
                                           true, /* is_cg_sstable */
-                                          true /* use_default_compat_version */))) {
+                                          true /* use_default_compat_version */,
+                                          false /* is_cs_replica_compat */))) {
     STORAGE_LOG(WARN, "Fail to init mtl index read info", K(ret));
   }
 

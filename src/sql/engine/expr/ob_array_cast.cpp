@@ -14,13 +14,12 @@
 #include "ob_array_cast.h"
 #include "lib/json_type/ob_json_tree.h"
 #include "lib/json_type/ob_json_parse.h"
-#include "share/object/ob_obj_cast.h"
 
 namespace oceanbase {
 namespace sql {
 
 int ObVectorDataCast::cast(common::ObIAllocator &alloc, ObIArrayType *src, const ObCollectionTypeBase *elem_type,
-                           ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type)
+                           ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type, ObCastMode mode)
 {
   int ret = OB_SUCCESS;
   const ObCollectionBasicType *src_type = dynamic_cast<const ObCollectionBasicType *>(elem_type);
@@ -43,7 +42,7 @@ int ObVectorDataCast::cast(common::ObIAllocator &alloc, ObIArrayType *src, const
     } else {
       ObObjType dst_obj_type = dst_type->basic_meta_.get_obj_type();
       ObObj res;
-      ObCastCtx cast_ctx(&alloc, NULL, CM_NONE, ObCharset::get_system_collation());
+      ObCastCtx cast_ctx(&alloc, NULL, mode, ObCharset::get_system_collation());
       if (OB_FAIL(ObObjCaster::to_type(dst_obj_type, cast_ctx, src_elem, res))) {
         LOG_WARN("failed to cast number to double type", K(ret));
       } else {
@@ -58,7 +57,7 @@ int ObVectorDataCast::cast(common::ObIAllocator &alloc, ObIArrayType *src, const
 }
 
 int ObArrayFixedSizeCast::cast(common::ObIAllocator &alloc, ObIArrayType *src, const ObCollectionTypeBase *elem_type,
-                               ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type)
+                               ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type, ObCastMode mode)
 {
   int ret = OB_SUCCESS;
   const ObCollectionBasicType *src_type = dynamic_cast<const ObCollectionBasicType *>(elem_type);
@@ -75,7 +74,7 @@ int ObArrayFixedSizeCast::cast(common::ObIAllocator &alloc, ObIArrayType *src, c
       }
     } else if (OB_FAIL(ObArrayCastUtils::cast_get_element(src, src_type, i, src_elem))) {
       LOG_WARN("failed to get cast element", K(ret), K(i));
-    } else if (OB_FAIL(ObArrayCastUtils::cast_add_element(alloc, src_elem, dst, dst_type))) {
+    } else if (OB_FAIL(ObArrayCastUtils::cast_add_element(alloc, src_elem, dst, dst_type, mode))) {
       LOG_WARN("failed to cast and add element", K(ret));
     }
   }
@@ -174,10 +173,10 @@ int ObArrayCastUtils::cast_get_element(ObIArrayType *src, const ObCollectionBasi
 }
 
 int ObArrayCastUtils::cast_add_element(common::ObIAllocator &alloc, ObObj &src_elem,
-                                       ObIArrayType *dst, const ObCollectionBasicType *dst_elem_type)
+                                       ObIArrayType *dst, const ObCollectionBasicType *dst_elem_type, ObCastMode mode)
 {
   int ret = OB_SUCCESS;
-  ObCastCtx cast_ctx(&alloc, NULL, CM_NONE, ObCharset::get_system_collation());
+  ObCastCtx cast_ctx(&alloc, NULL, mode, ObCharset::get_system_collation());
   ObObjType dst_obj_type = dst_elem_type->basic_meta_.get_obj_type();
   ObObj res;
   if (OB_FAIL(ObObjCaster::to_type(dst_obj_type, cast_ctx, src_elem, res))) {
@@ -443,7 +442,7 @@ int ObArrayCastUtils::string_cast(common::ObIAllocator &alloc, ObString &arr_tex
 }
 
 int ObArrayBinaryCast::cast(common::ObIAllocator &alloc, ObIArrayType *src, const ObCollectionTypeBase *elem_type,
-                            ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type)
+                            ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type, ObCastMode mode)
 {
   int ret = OB_SUCCESS;
   const ObCollectionBasicType *src_type = dynamic_cast<const ObCollectionBasicType *>(elem_type);
@@ -468,7 +467,7 @@ int ObArrayBinaryCast::cast(common::ObIAllocator &alloc, ObIArrayType *src, cons
       }else if (elem_len_max < src_elem.get_string_len()) {
         ret = OB_ERR_DATA_TOO_LONG;
         LOG_WARN("varchar type length is too long", K(ret), K(i), K(elem_len_max), K(src_elem.get_string_len()));
-      } else if (OB_FAIL(ObArrayCastUtils::cast_add_element(alloc, src_elem, dst, dst_type))) {
+      } else if (OB_FAIL(ObArrayCastUtils::cast_add_element(alloc, src_elem, dst, dst_type, mode))) {
         LOG_WARN("failed to cast and add element", K(ret));
       }
     }
@@ -477,7 +476,7 @@ int ObArrayBinaryCast::cast(common::ObIAllocator &alloc, ObIArrayType *src, cons
 }
 
 int ObArrayNestedCast::cast(common::ObIAllocator &alloc, ObIArrayType *src, const ObCollectionTypeBase *elem_type,
-                            ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type)
+                            ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type, ObCastMode mode)
 {
   int ret = OB_SUCCESS;
   const ObCollectionArrayType *src_type = dynamic_cast<const ObCollectionArrayType *>(elem_type);

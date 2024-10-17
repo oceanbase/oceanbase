@@ -196,6 +196,18 @@ int ObAllVirtualLSInfo::process_curr_tenant(ObNewRow *&row)
           // required_data_disk_size
           cur_row_.cells_[i].set_int(ls_info.required_data_disk_size_);
           break;
+        case OB_APP_MIN_COLUMN_ID + 17:
+          // mv_major_merge_scn
+          cur_row_.cells_[i].set_uint64(!ls_info.mv_major_merge_scn_.is_valid() ? 0 : ls_info.mv_major_merge_scn_.get_val_for_inner_table_field());
+          break;
+        case OB_APP_MIN_COLUMN_ID + 18:
+          // mv_publish_scn
+          cur_row_.cells_[i].set_uint64(!ls_info.mv_publish_scn_.is_valid() ? 0 : ls_info.mv_publish_scn_.get_val_for_inner_table_field());
+          break;
+        case OB_APP_MIN_COLUMN_ID + 19:
+          // mv_publish_scn
+          cur_row_.cells_[i].set_uint64(!ls_info.mv_safe_scn_.is_valid() ? 0 : ls_info.mv_safe_scn_.get_val_for_inner_table_field());
+          break;
         default:
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid col_id", K(ret), K(col_id));

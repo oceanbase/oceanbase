@@ -743,6 +743,7 @@ int ObTenantTransferService::add_table_lock_(
         LOG_WARN("lock partition failed", KR(ret), K(part_lock_arg));
       }
     } else if (PARTITION_LEVEL_TWO == table_schema.get_part_level()) {
+      part_lock_arg.is_sub_part_ = true;
       if (OB_FAIL(ObInnerConnectionLockUtil::lock_subpartition(tenant_id_, part_lock_arg, conn))) {
         LOG_WARN("lock subpartition failed", KR(ret), K(part_lock_arg));
       }
@@ -1541,6 +1542,7 @@ int ObTenantTransferService::unlock_table_lock_(
         LOG_WARN("unlock partition failed", KR(ret), K(unlock_part_arg));
       }
     } else if (PARTITION_LEVEL_TWO == table_schema.get_part_level()) {
+      unlock_part_arg.is_sub_part_ = true;
       if (OB_FAIL(ObInnerConnectionLockUtil::unlock_subpartition(tenant_id_, unlock_part_arg, conn))) {
         LOG_WARN("unlock subpartition failed", KR(ret), K(unlock_part_arg));
       }

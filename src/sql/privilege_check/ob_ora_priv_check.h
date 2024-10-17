@@ -335,7 +335,8 @@ private:
       const uint64_t obj_id,
       const uint64_t col_id,
       const uint64_t obj_type,
-      const uint64_t obj_owner_id);
+      const uint64_t obj_owner_id,
+      const ObIArray<uint64_t> &role_id_array);
 
   static int check_p1_with_plist_info(
       share::schema::ObSchemaGetterGuard &guard,

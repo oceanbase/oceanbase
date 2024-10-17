@@ -15,6 +15,7 @@
 
 #include "logservice/restoreservice/ob_remote_log_iterator.h" // ObRemoteLogGroupEntryIterator
 #include "share/backup/ob_backup_struct.h" // ObBackupPathString
+#include "ob_cdc_req_struct.h"
 #include "share/ob_ls_id.h" // ObLSID
 
 namespace oceanbase
@@ -117,13 +118,6 @@ enum class FetchMode {
   FETCHMODE_MAX
 };
 
-enum class FetchLogProtocolType
-{
-  Unknown = -1,
-  LogGroupEntryProto = 0,
-  RawLogDataProto = 1,
-};
-
 class ClientLSCtx: public common::LinkHashValue<ClientLSKey>
 {
 public:
@@ -131,7 +125,7 @@ public:
   ~ClientLSCtx();
 
 public:
-  int init(const int64_t client_progress, const FetchLogProtocolType proto);
+  int init(const int64_t client_progress, const obrpc::ObCdcFetchLogProtocolType proto);
 
   // thread safe method,
   // OB_INIT_TWICE: archive source has been inited;
@@ -167,14 +161,14 @@ public:
   // make sure only one thread would call this method.
   void reset();
 
-  void set_proto_type(const FetchLogProtocolType type) {
-    FetchLogProtocolType from = proto_type_, to = type;
+  void set_proto_type(const obrpc::ObCdcFetchLogProtocolType type) {
+    obrpc::ObCdcFetchLogProtocolType from = proto_type_, to = type;
     proto_type_ = type;
     EXTLOG_LOG(INFO, "set fetch protocol ", K(from), K(to));
   }
 
   // non-thread safe method
-  FetchLogProtocolType get_proto_type() const {
+  obrpc::ObCdcFetchLogProtocolType get_proto_type() const {
     return proto_type_;
   }
 
@@ -221,7 +215,7 @@ private:
   logservice::ObRemoteLogParent *source_;
   // stat, it's ok even if it's not correct.
   // only set when init, can hardly be wrong
-  FetchLogProtocolType proto_type_;
+  obrpc::ObCdcFetchLogProtocolType proto_type_;
   // it concerns about the thread num of log_ext_storage_handler,
   // should be eventually correct.
   FetchMode fetch_mode_;

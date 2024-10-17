@@ -13,6 +13,8 @@
 #ifndef OCEANBASE_LOG_FETCHER_LOG_HANDLER_H_
 #define OCEANBASE_LOG_FETCHER_LOG_HANDLER_H_
 
+#include "logservice/palf/log_group_entry.h"
+#include "logservice/palf/lsn.h"
 #include "share/ob_ls_id.h"  // ObLSID
 #include "ob_log_fetcher_switch_info.h"  // KickOutInfo
 #include "ob_log_fetch_stat_info.h"  // TransStatInfo

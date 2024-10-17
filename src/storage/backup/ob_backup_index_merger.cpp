@@ -172,7 +172,9 @@ ObIBackupMultiLevelIndexBuilder::ObIBackupMultiLevelIndexBuilder()
       allocator_(),
       buffer_writer_(ObModIds::BACKUP),
       compressor_type_()
-{}
+{
+  allocator_.set_attr(lib::ObMemAttr(MTL_ID(), ObModIds::BACKUP));
+}
 
 ObIBackupMultiLevelIndexBuilder::~ObIBackupMultiLevelIndexBuilder()
 {
@@ -1739,6 +1741,7 @@ ObBackupUnorderdMacroBlockIndexMerger::ObBackupUnorderdMacroBlockIndexMerger()
 
 ObBackupUnorderdMacroBlockIndexMerger::~ObBackupUnorderdMacroBlockIndexMerger()
 {
+  external_sort_.clean_up();
 }
 
 int ObBackupUnorderdMacroBlockIndexMerger::init(

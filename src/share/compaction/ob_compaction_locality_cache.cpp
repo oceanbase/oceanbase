@@ -23,347 +23,12 @@ namespace oceanbase
 namespace share
 {
 
-/****************************** ObLSReplicaUniItem ******************************/
-ObLSReplicaUniItem::ObLSReplicaUniItem()
-  : ls_id_(),
-    server_()
-{}
-
-ObLSReplicaUniItem::ObLSReplicaUniItem(const ObLSID &ls_id, const common::ObAddr &server)
-  : ls_id_(ls_id),
-    server_(server)
-{}
-
-ObLSReplicaUniItem::~ObLSReplicaUniItem()
-{
-  reset();
-}
-
-void ObLSReplicaUniItem::reset() {
-  ls_id_.reset();
-  server_.reset();
-}
-
-uint64_t ObLSReplicaUniItem::hash() const
-{
-  uint64_t hash_val = 0;
-  hash_val += ls_id_.hash();
-  hash_val += server_.hash();
-  return hash_val;
-}
-
-int ObLSReplicaUniItem::hash(uint64_t &hash_val) const
-{
-  hash_val = hash();
-  return OB_SUCCESS;
-}
-
-bool ObLSReplicaUniItem::is_valid() const
-{
-  return ls_id_.is_valid() && server_.is_valid();
-}
-
-bool ObLSReplicaUniItem::operator == (const ObLSReplicaUniItem &other) const
-{
-  bool bret = true;
-  if (this == &other) {
-  } else if (ls_id_ != other.ls_id_ || server_ != other.server_) {
-    bret = false;
-  }
-  return bret;
-}
-
-bool ObLSReplicaUniItem::operator != (const ObLSReplicaUniItem &other) const
-{
-  return !(*this == other);
-}
-
-/****************************** ObLSColumnReplicaCache ******************************/
-ObLSColumnReplicaCache::ObLSColumnReplicaCache()
-  : is_inited_(false),
-    ls_id_set_(),
-    ls_replica_set_(),
-    ls_infos_()
-{}
-
-ObLSColumnReplicaCache::~ObLSColumnReplicaCache()
-{
-  destroy();
-}
-
-// init
-int ObLSColumnReplicaCache::init()
-{
-  int ret = OB_SUCCESS;
-  if (IS_INIT) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("init twice", K(ret));
-  } else if (OB_FAIL(ls_id_set_.create(BUCKET_NUM_OF_LS_ID_SET, ObMemAttr(MTL_ID(), "LSIDsForCkm")))) {
-    LOG_WARN("fail to create ls id set", K(ret));
-  } else if (OB_FAIL(ls_replica_set_.create(BUCKET_NUM_OF_LS_REPLICA_SET, ObMemAttr(MTL_ID(), "LSReplTypes")))) {
-    LOG_WARN("fail to create ls replica type map", K(ret));
-  } else {
-    is_inited_ = true;
-  }
-  return ret;
-}
-
-void ObLSColumnReplicaCache::destroy()
-{
-  int ret = OB_SUCCESS; // only for log
-  if (ls_replica_set_.created() && OB_FAIL(ls_replica_set_.destroy())) {
-    LOG_WARN("fail to destroy ls replica set", K(ret));
-  }
-  if (ls_id_set_.created() && OB_FAIL(ls_id_set_.destroy())) {
-    LOG_WARN("fail to destroy ls replica set", K(ret));
-  }
-  ls_infos_.reset();
-  is_inited_ = false;
-}
-
-void ObLSColumnReplicaCache::reuse()
-{
-  ls_id_set_.reuse();
-  ls_replica_set_.reuse();
-  ls_infos_.reuse();
-}
-
-int ObLSColumnReplicaCache::check_contains_ls(const ObLSID &ls_id, bool &contained) const
-{
-  int ret = OB_SUCCESS;
-  contained = false;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else if (OB_FAIL(ls_id_set_.exist_refactored(ls_id))) {
-    if (OB_HASH_EXIST == ret || OB_HASH_NOT_EXIST == ret) {
-      contained = (OB_HASH_EXIST == ret);
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("fail to check contains ls", K(ret), K(ls_id), KPC(this));
-    }
-  }
-  return ret;
-}
-
-int ObLSColumnReplicaCache::mark_ls_finished(const ObLSID &ls_id)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else if (OB_FAIL(ls_id_set_.set_refactored(ls_id))) {
-    if (OB_HASH_EXIST == ret) {
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("fail to mark ls finish", K(ret), K(ls_id), KPC(this));
-    }
-  }
-  return ret;
-}
-
-int ObLSColumnReplicaCache::add_cs_replica(const ObLSReplicaUniItem &ls_item)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else if (OB_FAIL(ls_replica_set_.set_refactored(ls_item))) {
-    LOG_WARN("fail to add col replica", K(ret), K(ls_item), KPC(this));
-  }
-  return ret;
-}
-
-int ObLSColumnReplicaCache::assign(const ObLSColumnReplicaCache &other)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else if (OB_FAIL(other.deep_fetch(ls_id_set_, ls_replica_set_, ls_infos_))) {
-    LOG_WARN("fail to assign", K(ret), K(other));
-  }
-  return ret;
-}
-
-int ObLSColumnReplicaCache::deep_fetch(
-    hash::ObHashSet<ObLSID> &target_ls_id_set,
-    hash::ObHashSet<ObLSReplicaUniItem> &target_ls_replica_set,
-    common::ObIArray<ObLSInfo> &target_ls_infos) const
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else {
-    target_ls_id_set.reuse();
-    target_ls_replica_set.reuse();
-    target_ls_infos.reuse();
-
-    for (hash::ObHashSet<ObLSID>::const_iterator it = ls_id_set_.begin(); OB_SUCC(ret) && it != ls_id_set_.end(); ++it) {
-      if (OB_FAIL(target_ls_id_set.set_refactored(it->first))) {
-        LOG_WARN("fail to add ls id", K(ret));
-      }
-    }
-    for (hash::ObHashSet<ObLSReplicaUniItem>::const_iterator it = ls_replica_set_.begin(); OB_SUCC(ret) && it != ls_replica_set_.end(); ++it) {
-      if (OB_FAIL(target_ls_replica_set.set_refactored(it->first))) {
-        LOG_WARN("fail to add ls replica", K(ret));
-      }
-    }
-    for (int64_t idx = 0; OB_SUCC(ret) && idx < ls_infos_.count(); ++idx) {
-      if (OB_FAIL(target_ls_infos.push_back(ls_infos_.at(idx)))) {
-        LOG_WARN("fail to push back ls info", K(ret), K(idx), K_(ls_infos));
-      }
-    }
-  }
-  return ret;
-}
-
-
-int ObLSColumnReplicaCache::update(const ObLSID &ls_id)
-{
-  int ret = OB_SUCCESS;
-  const int64_t cluster_id = GCONF.cluster_id;
-  bool is_contained = false;
-  ObLSInfo ls_info;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else if (OB_FAIL(check_contains_ls(ls_id, is_contained))) {
-    LOG_WARN("fail to check exist for ls", K(ls_id), KPC(this));
-  } else if (is_contained) {
-    // do nothing
-  } else if (OB_ISNULL(GCTX.lst_operator_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("lst operator is null", K(ret));
-  } else if (OB_FAIL(GCTX.lst_operator_->get(cluster_id, MTL_ID(), ls_id, ObLSTable::DEFAULT_MODE, ls_info))) {
-    LOG_WARN("fail to get ls info", K(ret), K(ls_id), K(cluster_id), K(MTL_ID()));
-  } else if (OB_FAIL(update_with_ls_info(ls_info))) {
-    LOG_WARN("failed to try add cs replica info", K(ret), K(ls_id), K(ls_info));
-  }
-  return ret;
-}
-
-int ObLSColumnReplicaCache::update_with_ls_info(const ObLSInfo &ls_info)
-{
-  int ret = OB_SUCCESS;
-  const ObLSID &ls_id = ls_info.get_ls_id();
-  bool replica_has_leader = false;
-
-  for (int64_t idx = 0; OB_SUCC(ret) && idx < ls_info.get_replicas().count(); ++idx) {
-    const ObLSReplica &replica = ls_info.get_replicas().at(idx);
-    if (ObRole::LEADER == replica.get_role()) {
-      replica_has_leader = true;
-    }
-
-    if (!replica.is_column_replica()) {
-      // do nothing
-    } else if (OB_FAIL(add_cs_replica(ObLSReplicaUniItem(ls_id, replica.get_server())))) {
-      LOG_WARN("failed to add cs replica", K(ret), K(ls_id), K(replica), K(ls_info));
-    } else {
-      LOG_INFO("success to add cs replica", K(ls_id), K(replica), K(ls_info));
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (!replica_has_leader) {
-    ret = OB_LEADER_NOT_EXIST;
-    LOG_WARN("ls has no leader, ls column replica cache cannot read", K(ret), K(ls_id));
-  } else if (OB_FAIL(mark_ls_finished(ls_id))) {
-    LOG_WARN("fail to make ls finished", K(ret));
-  } else if (OB_FAIL(ls_infos_.push_back(ls_info))) {
-    LOG_WARN("failed to add ls info", K(ret), K(ls_info));
-  } else {
-    LOG_INFO("success to update with ls info", KPC(this)); // debug log, remove later
-  }
-  return ret;
-}
-
-int ObLSColumnReplicaCache::check_can_skip(
-    const ObLSReplicaUniItem &ls_item,
-    bool &can_skip) const
-{
-  int ret = OB_SUCCESS;
-  can_skip = false;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret), KPC(this));
-  } else if (OB_UNLIKELY(!ls_item.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(ls_item));
-  } else {
-    const ObLSInfo *ls_info = nullptr;
-    for (int64_t idx = 0; OB_SUCC(ret) && idx < ls_infos_.count(); ++idx) {
-      if (ls_item.ls_id_ == ls_infos_.at(idx).get_ls_id()) {
-        ls_info = &ls_infos_.at(idx);
-        break;
-      }
-    }
-    if (OB_ISNULL(ls_info)) {
-      ret = OB_ENTRY_NOT_EXIST;
-      LOG_WARN("ls info not found", K(ret), K(ls_item), K(ls_infos_));
-    } else {
-      const ObLSInfo::ReplicaArray &replicas = ls_info->get_replicas();
-      for (int64_t idx = 0; OB_SUCC(ret) && idx < replicas.count(); ++idx) {
-        const ObLSReplica &curr_replica = replicas.at(idx);
-        ObMember learner;
-
-        if (ObRole::LEADER != curr_replica.get_role()) {
-          continue; // follower replica, do nothing
-        } else if (curr_replica.server_is_in_member_list(curr_replica.get_member_list(), ls_item.server_)) {
-          // item is in member list, need to check
-        } else if (OB_FAIL(curr_replica.get_learner_list().get_learner_by_addr(ls_item.server_, learner))) {
-          if (OB_ENTRY_NOT_EXIST == ret) {
-            ret = OB_SUCCESS;
-            can_skip = true; // item not in member list && not in learner list, skip to check
-          } else {
-            LOG_WARN("faile to get learner", K(ret), K(ls_item), KPC(this));
-          }
-        } else {
-          // both R replica and CS replica need to check
-        }
-        break; // found leader replica, stop checking another replica
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLSColumnReplicaCache::check_is_cs_replica(const ObLSReplicaUniItem &ls_item, bool &is_cs_replica) const
-{
-  int ret = OB_SUCCESS;
-  is_cs_replica = false;
-  bool is_contained = false;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else if (OB_FAIL(check_contains_ls(ls_item.ls_id_, is_contained))) {
-    LOG_WARN("fail to check exist for ls", K(ls_item), KPC(this));
-  } else if (OB_UNLIKELY(!is_contained)) {
-    ret = OB_LEADER_NOT_EXIST;
-    LOG_WARN("ls has no leader, ls column replica cache cannot read", K(ret));
-  } else if (OB_FAIL(ls_replica_set_.exist_refactored(ls_item))) {
-    if (OB_HASH_EXIST == ret || OB_HASH_NOT_EXIST == ret) {
-      is_cs_replica = (OB_HASH_EXIST == ret);
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("fail to check contains ls", K(ret), K(ls_item), KPC(this));
-    }
-  }
-  LOG_TRACE("[CS-Replica] check current ls is cs replica", K(ret), K(ls_item), K(is_cs_replica), KPC(this));
-  return ret;
-}
-
 /****************************** ObCompactionLocalityCache ******************************/
 ObCompactionLocalityCache::ObCompactionLocalityCache()
   : is_inited_(false),
     tenant_id_(OB_INVALID_TENANT_ID),
     merge_info_mgr_(nullptr),
-    ls_infos_map_(),
-    ls_cs_replica_cache_()
+    ls_infos_map_()
 {}
 
 ObCompactionLocalityCache::~ObCompactionLocalityCache()
@@ -382,8 +47,6 @@ int ObCompactionLocalityCache::init(const uint64_t tenant_id, rootserver::ObMajo
     LOG_WARN("invalid argument", K(ret), K(tenant_id));
   } else if (OB_FAIL(ls_infos_map_.create(OB_MAX_LS_NUM_PER_TENANT_PER_SERVER, "CaLsInfoMap", "CaLsInfoNode", tenant_id))) {
     LOG_WARN("fail to create ls info map", K(ret));
-  } else if (OB_FAIL(ls_cs_replica_cache_.init())) {
-     LOG_WARN("fail to init col replica cache", K(ret));
   }
   if (OB_FAIL(ret)) {
     destroy();
@@ -435,13 +98,11 @@ int ObCompactionLocalityCache::inner_refresh_ls_locality()
 
   if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(zone_list.empty())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("zone list is empty, skip get ls locality", K(ret), K_(tenant_id));
+    LOG_INFO("zone list is empty, skip get ls locality", K(ret), K_(tenant_id));
     MTL(compaction::ObDiagnoseTabletMgr *)->add_diagnose_tablet(UNKNOW_LS_ID, UNKNOW_TABLET_ID, ObDiagnoseTabletType::TYPE_MEDIUM_MERGE);
   } else {
     // 1. clear ls_infos cached in memory
     ls_infos_map_.reuse();
-    ls_cs_replica_cache_.reuse();
     // 2. load ls_infos from __all_ls_meta_table
     ObArray<ObLSInfo> ls_infos;
     ls_infos.set_attr(ObMemAttr(tenant_id_, "RefLSInfos"));
@@ -575,10 +236,8 @@ int ObCompactionLocalityCache::refresh_by_zone(
     }
     if (FAILEDx(ls_infos_map_.set_refactored(ls_id, tmp_ls_info, 1/*overwrite*/))) {
       LOG_WARN("fail to set refactored", KR(ret), K(ls_id), K(tmp_ls_info));
-    } else if (OB_FAIL(ls_cs_replica_cache_.update_with_ls_info(tmp_ls_info))) {
-      LOG_WARN("failed to update with ls info", K(ret), K(tmp_ls_info));
     } else {
-      FLOG_INFO("success to refresh cached ls_info", K(ret), K(tmp_ls_info), K(zone_list), K_(ls_cs_replica_cache));
+      FLOG_INFO("success to refresh cached ls_info", K(ret), K(tmp_ls_info), K(zone_list));
     }
   }
   return ret;

@@ -51,6 +51,7 @@ class ObIMicroBlockRowScanner;
 namespace sql
 {
 class ObRawExpr;
+class ObPseudoColumnRawExpr;
 class ObOpRawExpr;
 class ObExprOperatorCtx;
 class ObStaticEngineCG;
@@ -146,6 +147,11 @@ struct ObBoolMask
   {
     return ObBoolMaskType::PROBABILISTIC == bmt_;
   }
+  OB_INLINE bool is_constant() const
+  {
+    return ObBoolMaskType::ALWAYS_TRUE == bmt_ ||
+        ObBoolMaskType::ALWAYS_FALSE == bmt_;
+  }
   OB_INLINE void set_always_true()
   {
     bmt_ = ObBoolMaskType::ALWAYS_TRUE;
@@ -157,6 +163,10 @@ struct ObBoolMask
   OB_INLINE void set_uncertain()
   {
     bmt_ = ObBoolMaskType::PROBABILISTIC;
+  }
+  OB_INLINE void set(ObBoolMaskType bmt)
+  {
+    bmt_ = bmt;
   }
   TO_STRING_KV(K_(bmt));
 
@@ -460,7 +470,6 @@ public:
             ObPushdownFilterNode &filter_node,
             ObPushdownFilterExecutor *&filter_executor,
             ObPushdownOperator &op);
-  int convert_white_filter_to_black(ObPushdownFilterExecutor *&filter);
 
 private:
   // pushdown filter
@@ -662,6 +671,10 @@ public:
   OB_INLINE void set_filter_rewrited() { is_rewrited_ = true; }
   OB_INLINE bool is_filter_rewrited() const { return is_rewrited_; }
   OB_INLINE int64_t get_skipped_rows() const { return skipped_rows_; }
+  OB_INLINE bool can_pushdown_decoder()
+  {
+    return 1 == get_col_count() && common::OB_HIDDEN_TRANS_VERSION_COLUMN_ID != get_col_ids().at(0);
+  }
   OB_INLINE void clear_skipped_rows() { skipped_rows_ = 0; }
   OB_INLINE common::ObIAllocator &get_allocator() { return allocator_; }
   inline int get_child(uint32_t nth_child, ObPushdownFilterExecutor *&filter_executor)
@@ -696,7 +709,7 @@ public:
   int pull_up_common_node(
       const common::ObIArray<uint32_t> &filter_indexes,
       ObPushdownFilterExecutor *&common_filter_executor);
-  virtual int init_evaluated_datums(common::ObIAllocator *allocator, bool &need_convert) { return common::OB_NOT_SUPPORTED; }
+  virtual int init_evaluated_datums(bool &is_valid) { return common::OB_NOT_SUPPORTED; }
   int execute(
       ObPushdownFilterExecutor *parent,
       PushdownFilterInfo &filter_info,
@@ -762,7 +775,7 @@ public:
   {}
   virtual ~ObPhysicalFilterExecutor();
   int filter(blocksstable::ObStorageDatum *datums, int64_t col_cnt, const sql::ObBitVector &skip_bit, bool &ret_val);
-  virtual int init_evaluated_datums(common::ObIAllocator *allocator, bool &need_convert) override;
+  virtual int init_evaluated_datums(bool &is_valid) override;
   virtual int filter(ObEvalCtx &eval_ctx, const sql::ObBitVector &skip_bit, bool &filtered) = 0;
   INHERIT_TO_STRING_KV("ObPhysicalFilterExecutor", ObPushdownFilterExecutor,
                        K_(n_eval_infos), KP_(eval_infos));
@@ -1000,7 +1013,7 @@ public:
   OB_INLINE virtual common::ObIArray<uint64_t> &get_col_ids() override
   { return filter_.get_col_ids(); }
   virtual const common::ObIArray<ObExpr *> *get_cg_col_exprs() const override { return &filter_.column_exprs_; }
-  virtual int init_evaluated_datums(common::ObIAllocator *allocator, bool &need_convert) override;
+  virtual int init_evaluated_datums(bool &is_valid) override;
   OB_INLINE const common::ObIArray<common::ObDatum> &get_datums() const
   { return datum_params_; }
   OB_INLINE const common::ObDatum &get_min_param() const
@@ -1054,7 +1067,7 @@ public:
   OB_INLINE ObPushdownAndFilterNode &get_filter_node() { return filter_; }
   OB_INLINE virtual common::ObIArray<uint64_t> &get_col_ids() override
   { return filter_.get_col_ids(); }
-  virtual int init_evaluated_datums(common::ObIAllocator *allocator, bool &need_convert) override;
+  virtual int init_evaluated_datums(bool &is_valid) override;
   INHERIT_TO_STRING_KV("ObPushdownAndFilterExecutor", ObPushdownFilterExecutor, K_(filter));
 private:
   ObPushdownAndFilterNode &filter_;
@@ -1072,7 +1085,7 @@ public:
   OB_INLINE ObPushdownOrFilterNode &get_filter_node() { return filter_; }
   OB_INLINE virtual common::ObIArray<uint64_t> &get_col_ids() override
   { return filter_.get_col_ids(); }
-  virtual int init_evaluated_datums(common::ObIAllocator *allocator, bool &need_convert) override;
+  virtual int init_evaluated_datums(bool &is_valid) override;
   INHERIT_TO_STRING_KV("ObPushdownOrFilterExecutor", ObPushdownFilterExecutor, K_(filter));
 private:
   ObPushdownOrFilterNode &filter_;
@@ -1104,7 +1117,7 @@ public:
   {
     return static_cast<const ObPushdownDynamicFilterNode &>(filter_);
   }
-  virtual int init_evaluated_datums(common::ObIAllocator *allocator, bool &need_convert) override;
+  virtual int init_evaluated_datums(bool &is_valid) override;
   int check_runtime_filter(ObPushdownFilterExecutor* parent_filter, bool &is_needed);
   void filter_on_bypass(ObPushdownFilterExecutor* parent_filter);
   void filter_on_success(ObPushdownFilterExecutor* parent_filter);

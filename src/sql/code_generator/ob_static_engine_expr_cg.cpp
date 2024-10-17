@@ -1721,7 +1721,7 @@ ObStaticEngineExprCG::ObExprBatchSize ObStaticEngineExprCG::get_expr_execute_siz
       has_usr_var_expr = true;
     } else if (T_FUN_UDF == type) {
       has_udf_expr = true;
-      if (!(static_cast<ObUDFRawExpr*>(raw_exprs.at(i))->is_deterministic())) {
+      if (!(static_cast<ObUDFRawExpr*>(raw_exprs.at(i))->is_udf_deterministic())) {
         size = ObExprBatchSize::one;
         break;
       }
@@ -1923,6 +1923,21 @@ int ObStaticEngineExprCG::generate_partial_expr_frame(
       begin = cnt;
       inc = exprs.count() - cnt;
     } while (OB_SUCC(ret) && inc > 0);
+  }
+
+  // flatten attr_exprs
+  if (OB_SUCC(ret)) {
+    const int64_t cnt = exprs.count();
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < cnt; idx++) {
+      ObExpr *expr = exprs.at(idx);
+      for (int64_t i = 0 ; OB_SUCC(ret) && i < expr->attrs_cnt_; i++) {
+        ObExpr *e = expr->attrs_[i];
+        if (!expr_is_added(*e)) {
+          OZ(exprs.push_back(e));
+          mark_expr_is_added(*e);
+        }
+      }
+    }
   }
 
   // always clear expr is added flag

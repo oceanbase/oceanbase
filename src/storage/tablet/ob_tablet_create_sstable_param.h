@@ -89,6 +89,7 @@ public:
   // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
   // This is used to create remote sstable
   int init_for_remote(const blocksstable::ObMigrationSSTableParam &migration_param);
+
   int init_for_mds(const compaction::ObBasicTabletMergeCtx &ctx,
                    const blocksstable::ObSSTableMergeRes &res,
                    const ObStorageSchema &mds_schema);
@@ -142,6 +143,7 @@ public:
 private:
   static const int64_t DEFAULT_MACRO_BLOCK_CNT = 64;
   int inner_init_with_merge_res(const blocksstable::ObSSTableMergeRes &res);
+  int inner_init_with_shared_sstable(const blocksstable::ObMigrationSSTableParam &migration_param);
 public:
   ObITable::TableKey table_key_;
   int16_t sstable_logic_seq_;
@@ -176,6 +178,7 @@ public:
   int64_t max_merged_trans_version_;
   share::SCN ddl_scn_; // saved into sstable meta
   share::SCN filled_tx_scn_;
+  share::SCN tx_data_recycle_scn_;
   bool is_co_table_without_cgs_; // only used for creating co sstable without cg sstables
   bool contain_uncommitted_row_;
   bool is_meta_root_;

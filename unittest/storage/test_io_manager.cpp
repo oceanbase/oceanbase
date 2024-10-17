@@ -111,7 +111,7 @@ static void get_random_io_info(ObIOInfo &io_info)
   io_info.tenant_id_ = OB_SERVER_TENANT_ID;
   io_info.fd_.first_id_ = ObRandom::rand(0, 10000);
   io_info.fd_.second_id_ = ObRandom::rand(0, 10000);
-  io_info.fd_.device_handle_ = THE_IO_DEVICE;
+  io_info.fd_.device_handle_ = &LOCAL_DEVICE_INSTANCE;
   io_info.flag_.set_mode(static_cast<ObIOMode>(ObRandom::rand(0, (int)ObIOMode::MAX_MODE - 1)));
   io_info.flag_.set_resource_group_id(USER_RESOURCE_OTHER_GROUP_ID); // 0 means default
   io_info.flag_.set_wait_event(ObRandom::rand(1, 9999));
@@ -208,7 +208,7 @@ TEST_F(TestIOStruct, IOInfo)
   ObIOFd fd;
   fd.first_id_ = 0;
   fd.second_id_ = 0;
-  fd.device_handle_ = THE_IO_DEVICE;
+  fd.device_handle_ = &LOCAL_DEVICE_INSTANCE;
   info.tenant_id_ = OB_SERVER_TENANT_ID;
   info.fd_ = fd;
   info.flag_.set_mode(ObIOMode::READ);
@@ -305,7 +305,7 @@ TEST_F(TestIOStruct, IORequest)
   ObIOFd fd;
   fd.first_id_ = 0;
   fd.second_id_ = 1;
-  fd.device_handle_ = THE_IO_DEVICE;
+  fd.device_handle_ = &LOCAL_DEVICE_INSTANCE;
   // default invalid
   ObIOResult result;
   ASSERT_FALSE(result.is_inited_);
@@ -694,7 +694,7 @@ TEST_F(TestIOStruct, IOResult)
   ObIOFd fd;
   fd.first_id_ = 0;
   fd.second_id_ = 1;
-  fd.device_handle_ = THE_IO_DEVICE;
+  fd.device_handle_ = &LOCAL_DEVICE_INSTANCE;
 
   void *result_buf = holder.get_ptr()->io_allocator_.alloc(sizeof(ObIOResult));
   ObIOResult *result = new (result_buf) ObIOResult;
@@ -878,7 +878,7 @@ public:
     ASSERT_SUCC(OB_IO_MANAGER.start());
 
     // add io device
-    ASSERT_SUCC(OB_IO_MANAGER.add_device_channel(THE_IO_DEVICE, 16, 2, 1024));
+    ASSERT_SUCC(OB_IO_MANAGER.add_device_channel(&LOCAL_DEVICE_INSTANCE, 16, 2, 1024));
 
     // add tenant io manager
     const uint64_t tenant_id = OB_SERVER_TENANT_ID;
@@ -941,16 +941,16 @@ TEST_F(TestIOManager, memory_pool)
 TEST_F(TestIOManager, simple)
 {
   ObIOFd fd;
-  ASSERT_SUCC(THE_IO_DEVICE->open(TEST_ROOT_DIR "/test_io_file", O_CREAT | O_DIRECT | O_TRUNC | O_RDWR, 0644, fd));
+  ASSERT_SUCC(LOCAL_DEVICE_INSTANCE.open(TEST_ROOT_DIR "/test_io_file", O_CREAT | O_DIRECT | O_TRUNC | O_RDWR, 0644, fd));
   ASSERT_TRUE(fd.is_valid());
   ObIOManager &io_mgr = ObIOManager::get_instance();
 
   // fallocate
   const int64_t FILE_SIZE = 4 * 1024 * 1024;
-  ASSERT_SUCC(THE_IO_DEVICE->fallocate(fd, 0, 0, FILE_SIZE)); // 4M
+  ASSERT_SUCC(LOCAL_DEVICE_INSTANCE.fallocate(fd, 0, 0, FILE_SIZE)); // 4M
   {
     oceanbase::common::ObIODFileStat stat_buf;
-    ASSERT_SUCC(THE_IO_DEVICE->stat(TEST_ROOT_DIR "/test_io_file", stat_buf));
+    ASSERT_SUCC(LOCAL_DEVICE_INSTANCE.stat(TEST_ROOT_DIR "/test_io_file", stat_buf));
     ASSERT_EQ(FILE_SIZE, stat_buf.size_);
   }
 
@@ -960,7 +960,7 @@ TEST_F(TestIOManager, simple)
   ObIOInfo io_info;
   io_info.tenant_id_ = OB_SERVER_TENANT_ID;
   io_info.fd_ = fd;
-  io_info.fd_.device_handle_ = THE_IO_DEVICE;
+  io_info.fd_.device_handle_ = &LOCAL_DEVICE_INSTANCE;
   io_info.flag_.set_write();
   io_info.flag_.set_resource_group_id(USER_RESOURCE_OTHER_GROUP_ID);
   io_info.flag_.set_wait_event(100);
@@ -978,7 +978,7 @@ TEST_F(TestIOManager, simple)
   // check size
   {
     oceanbase::common::ObIODFileStat stat_buf;
-    ASSERT_SUCC(THE_IO_DEVICE->stat(TEST_ROOT_DIR "/test_io_file", stat_buf));
+    ASSERT_SUCC(LOCAL_DEVICE_INSTANCE.stat(TEST_ROOT_DIR "/test_io_file", stat_buf));
     ASSERT_EQ(FILE_SIZE, stat_buf.size_);
   }
 
@@ -1029,7 +1029,7 @@ TEST_F(TestIOManager, simple)
   io_handle.reset();
   // ASSERT_EQ(10, tmp_number); // callback destructor called
 
-  ASSERT_SUCC(THE_IO_DEVICE->close(fd));
+  ASSERT_SUCC(LOCAL_DEVICE_INSTANCE.close(fd));
 }
 
 
@@ -1307,7 +1307,7 @@ TEST_F(TestIOManager, tenant)
   device.device_id_ = 1;
   strcpy(device.file_path_, "./perf_test");
   device.file_size_ = 1024L * 1024L * 1024L;
-  device.device_handle_ = static_cast<ObLocalDevice *>(THE_IO_DEVICE);
+  device.device_handle_ = static_cast<ObLocalDevice *>(&LOCAL_DEVICE_INSTANCE);
   prepare_file(device.file_path_, device.file_size_, device.fd_);
   load.device_ = &device;
   load.device_id_ = 1; // unused

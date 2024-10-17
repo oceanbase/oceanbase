@@ -94,14 +94,20 @@ int ObTableGroupHelp::add_tables_to_tablegroup(ObMySQLTransaction &trans,
         ret = OB_OP_NOT_ALLOW;
         LOG_WARN("sys table's tablegroup should be oceanbase", KR(ret), K(arg), KPC(table_schema));
         LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set the tablegroup of system table besides oceanbase");
-      } else if (table_schema->has_mlog_table()) {
+      } else if (table_schema->required_by_mview_refresh()) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("alter tablegroup of table with materialized view log is not supported", KR(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter tablegroup of table with materialized view log is");
+        LOG_WARN("alter tablegroup of table required by materialized view refresh is not supported",
+                 KR(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                       "alter tablegroup of table required by materialized view refresh is");
       } else if (table_schema->is_mlog_table()) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("alter tablegroup of materialized view log is not supported", KR(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter tablegroup of materialized view log is");
+      } else if (table_schema->is_auto_partitioned_table()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support to add auto-partitioned table to tablegroup", KR(ret), K(arg), KPC(table_schema));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "add auto-partitioned table to tablegroup");
       } else if (table_schema->is_external_table()) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter tablegroup of external table is");
@@ -225,6 +231,10 @@ int ObTableGroupHelp::check_table_partition_in_tablegroup(const ObTableSchema *f
   } else if (is_sys_tablegroup_id(tablegroup_id)) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("can not handle with sys tablegroup", KR(ret), K(tablegroup_id));
+  } else if (table.is_auto_partitioned_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support to add auto-partitioned table to tablegroup", KR(ret), K(table));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "add auto-partitioned table to tablegroup");
   } else if (OB_FAIL(schema_guard.get_tablegroup_schema(tenant_id, tablegroup_id, tablegroup))) {
     LOG_WARN("fail to get tablegroup schema", KR(ret), K(tenant_id), KT(tablegroup_id));
   } else if (OB_ISNULL(tablegroup)) {

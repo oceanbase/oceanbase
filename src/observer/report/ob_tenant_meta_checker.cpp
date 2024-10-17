@@ -644,7 +644,7 @@ int ObTenantMetaChecker::check_report_replicas_(
     LOG_WARN("failed to get ls iter", KR(ret));
   } else {
     ObLS *ls = NULL;
-    ObLSTabletIterator tablet_iter(ObMDSGetTabletMode::READ_READABLE_COMMITED);
+    ObLSTabletIterator tablet_iter(ObMDSGetTabletMode::READ_ALL_COMMITED);
     while(OB_SUCC(ret)) {
       if (OB_UNLIKELY(stopped_)) {
         ret = OB_CANCELED;

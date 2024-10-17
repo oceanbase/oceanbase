@@ -42,13 +42,37 @@ int ObTmpFileFlushPriorityManager::init()
 
 void ObTmpFileFlushPriorityManager::destroy()
 {
+  // int ret = OB_SUCCESS;
+  // ObSharedNothingTmpFile *file = nullptr;
   is_inited_ = false;
   for (int64_t i = 0; i < FileList::MAX; i++) {
     ObSpinLockGuard guard(data_list_locks_[i]);
+    // while (!data_flush_lists_[i].is_empty()) {
+    //   ObTmpFileHandle file_handle;
+    //   if (OB_ISNULL(file = &data_flush_lists_[i].remove_first()->file_)) {
+    //     ret = OB_ERR_UNEXPECTED;
+    //     LOG_WARN("file is null", KR(ret));
+    //   } else if (OB_FAIL(file_handle.init(file))) {
+    //     LOG_WARN("fail to init file handle", KR(ret), KP(file));
+    //   } else {
+    //     file->dec_ref_cnt();
+    //   }
+    // }
     data_flush_lists_[i].reset();
   }
   for (int64_t i = 0; i < FileList::MAX; i++) {
     ObSpinLockGuard guard(meta_list_locks_[i]);
+    // while (!meta_flush_lists_[i].is_empty()) {
+    //   ObTmpFileHandle file_handle;
+    //   if (OB_ISNULL(file = &meta_flush_lists_[i].remove_first()->file_)) {
+    //     ret = OB_ERR_UNEXPECTED;
+    //     LOG_WARN("file is null", KR(ret));
+    //   } else if (OB_FAIL(file_handle.init(file))) {
+    //     LOG_WARN("fail to init file handle", KR(ret), KP(file));
+    //   } else {
+    //     file->dec_ref_cnt();
+    //   }
+    // }
     meta_flush_lists_[i].reset();
   }
 }

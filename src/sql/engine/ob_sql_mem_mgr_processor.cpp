@@ -316,7 +316,7 @@ int ObSqlMemMgrProcessor::alloc_dir_id(int64_t &dir_id)
 {
   int ret = OB_SUCCESS;
   if (0 == dir_id_) {
-    if (OB_FAIL(ObChunkStoreUtil::alloc_dir_id(dir_id_))) {
+    if (OB_FAIL(ObChunkStoreUtil::alloc_dir_id(tenant_id_, dir_id_))) {
       LOG_WARN("failed to alloc dir id", K(ret));
     }
   }

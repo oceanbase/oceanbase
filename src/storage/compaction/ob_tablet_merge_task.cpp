@@ -15,6 +15,7 @@
 #include "storage/compaction/ob_partition_merger.h"
 #include "share/rc/ob_tenant_base.h"
 #include "lib/stat/ob_session_stat.h"
+#include "storage/blocksstable/index_block/ob_index_block_builder.h"
 #include "storage/tablet/ob_tablet_common.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/compaction/ob_partition_merge_progress.h"
@@ -29,7 +30,7 @@
 #include "storage/compaction/ob_sstable_merge_info_mgr.h"
 #include "storage/compaction/ob_compaction_diagnose.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
-#include "storage/compaction/ob_tablet_merge_checker.h"
+#include "storage/compaction/ob_schedule_status_cache.h"
 #include "share/ob_get_compat_mode.h"
 #include "share/resource_manager/ob_cgroup_ctrl.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
@@ -40,6 +41,7 @@
 #include "storage/compaction/ob_basic_tablet_merge_ctx.h"
 #include "storage/compaction/ob_tenant_compaction_progress.h"
 #include "storage/checkpoint/ob_checkpoint_diagnose.h"
+#include "storage/compaction/ob_mview_compaction_util.h"
 
 namespace oceanbase
 {
@@ -62,6 +64,7 @@ ObMergeParameter::ObMergeParameter(
     cg_rowkey_read_info_(nullptr),
     trans_state_mgr_(nullptr),
     error_location_(nullptr),
+    mview_merge_param_(nullptr),
     allocator_(nullptr)
 {
 }
@@ -81,6 +84,11 @@ void ObMergeParameter::reset()
     cg_rowkey_read_info_->~ObITableReadInfo();
     allocator_->free(cg_rowkey_read_info_);
     cg_rowkey_read_info_ = nullptr;
+  }
+  if (nullptr != mview_merge_param_) {
+    mview_merge_param_->~ObMviewMergeParameter();
+    allocator_->free(mview_merge_param_);
+    mview_merge_param_ = nullptr;
   }
   allocator_ = nullptr;
 }
@@ -136,6 +144,15 @@ int ObMergeParameter::init(
     }
   }
   if (OB_SUCC(ret)) {
+    const ObStorageSchema *schema = nullptr;
+    if (OB_ISNULL(schema = get_schema())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("schema is null", K(ret), K(*this));;
+    } else if (schema->is_mv_major_refresh_table() && OB_FAIL(init_mview_merge_param(allocator))) {
+      STORAGE_LOG(WARN, "failed to init mview merge param", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
     FLOG_INFO("success to init ObMergeParameter", K(ret), K(idx), K_(static_param_.merge_scn), K_(merge_version_range), K_(merge_rowid_range));
   }
   return ret;
@@ -160,6 +177,18 @@ int ObMergeParameter::set_merge_rowid_range(ObIAllocator *allocator)
     STORAGE_LOG(WARN, "failed to get cs range", K(ret), K(merge_range_));
   }
 
+  return ret;
+}
+
+int ObMergeParameter::init_mview_merge_param(ObIAllocator *allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(mview_merge_param_ = OB_NEWx(ObMviewMergeParameter, allocator))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to alloc mview merge param", K(ret));
+  } else if (OB_FAIL(mview_merge_param_->init(*this))) {
+     STORAGE_LOG(WARN, "Failed to init mview merge param", K(ret));
+  }
   return ret;
 }
 
@@ -238,7 +267,7 @@ ObTabletMergeDagParam::ObTabletMergeDagParam()
      exec_mode_(ObExecMode::EXEC_MODE_LOCAL),
      merge_type_(INVALID_MERGE_TYPE),
      merge_version_(0),
-     transfer_seq_(-1),
+     schedule_transfer_seq_(-1),
      ls_id_(),
      tablet_id_()
 {
@@ -248,14 +277,14 @@ ObTabletMergeDagParam::ObTabletMergeDagParam(
     const compaction::ObMergeType merge_type,
     const share::ObLSID &ls_id,
     const ObTabletID &tablet_id,
-    const int64_t transfer_seq)
+    const int64_t schedule_transfer_seq)
   :  skip_get_tablet_(false),
      need_swap_tablet_flag_(false),
      is_reserve_mode_(false),
      exec_mode_(ObExecMode::EXEC_MODE_LOCAL),
      merge_type_(merge_type),
      merge_version_(0),
-     transfer_seq_(transfer_seq),
+     schedule_transfer_seq_(schedule_transfer_seq),
      ls_id_(ls_id),
      tablet_id_(tablet_id)
 {
@@ -307,14 +336,14 @@ int ObTabletMergeDag::get_tablet_and_compat_mode()
   } else if (OB_FAIL(tmp_ls_handle.get_ls()->get_tablet_svr()->get_tablet(
       tablet_id_, tmp_tablet_handle, 0/*timeout_us*/, storage::ObMDSGetTabletMode::READ_ALL_COMMITED))) {
     LOG_WARN("failed to get tablet", K(ret), K(ls_id_), K(tablet_id_));
-  } else if (OB_FAIL(ObTabletMergeChecker::check_need_merge(merge_type_, *tmp_tablet_handle.get_obj()))) {
+  } else if (OB_FAIL(ObTabletStatusCache::check_could_execute(merge_type_, *tmp_tablet_handle.get_obj()))) {
     if (OB_NO_NEED_MERGE != ret) {
       LOG_WARN("failed to check need merge", K(ret));
     }
-  } else if (OB_FAIL(ObTablet::check_transfer_seq_equal(*tmp_tablet_handle.get_obj(), param_.transfer_seq_))) {
+  } else if (OB_FAIL(ObTablet::check_transfer_seq_equal(*tmp_tablet_handle.get_obj(), param_.schedule_transfer_seq_))) {
     LOG_WARN("tmp tablet transfer seq not eq with old transfer seq", K(ret),
         "tmp_tablet_meta", tmp_tablet_handle.get_obj()->get_tablet_meta(),
-        "old_transfer_seq", param_.transfer_seq_);
+        "old_transfer_seq", param_.schedule_transfer_seq_);
   } else if (FALSE_IT(compat_mode_ = tmp_tablet_handle.get_obj()->get_tablet_meta().compat_mode_)) {
   } else if (is_mini_merge(merge_type_)) {
     int64_t inc_sstable_cnt = 0;
@@ -965,8 +994,8 @@ int ObTabletMergeFinishTask::report_checkpoint_diagnose_info(ObTabletMergeCtx &c
               merge_history.running_info_.merge_start_time_, merge_history.running_info_.merge_finish_time_,
               merge_history.block_info_.occupy_size_, merge_history.static_info_.concurrent_cnt_));
       } else {
-        ObIMemtable *memtable = nullptr;
-        memtable = static_cast<ObIMemtable*>(table);
+        storage::ObIMemtable *memtable = nullptr;
+        memtable = static_cast<storage::ObIMemtable*>(table);
         REPORT_CHECKPOINT_DIAGNOSE_INFO(update_merge_info_for_checkpoint_unit, memtable)
       }
     }

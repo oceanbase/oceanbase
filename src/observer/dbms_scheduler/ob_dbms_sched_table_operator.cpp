@@ -255,6 +255,35 @@ int ObDBMSSchedTableOperator::update_for_missed(ObDBMSSchedJobInfo &job_info)
   return ret;
 }
 
+int ObDBMSSchedTableOperator::update_for_zone_not_exist(ObDBMSSchedJobInfo &job_info)
+{
+  int ret = OB_SUCCESS;
+  ObMySQLTransaction trans;
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  const int64_t now = ObTimeUtility::current_time();
+  bool need_record = true;
+  int64_t tenant_id = job_info.tenant_id_;
+  CK (OB_NOT_NULL(sql_proxy_));
+  CK (OB_LIKELY(tenant_id != OB_INVALID_ID));
+  CK (OB_LIKELY(job_info.job_ != OB_INVALID_ID));
+  OZ (_check_need_record(job_info, need_record));
+
+  if (OB_SUCC(ret) && need_record) {
+    OZ (_build_job_log_dml(now, job_info, 0, "zone info not exist", sql));
+    OZ (trans.start(sql_proxy_, tenant_id, true));
+    OZ (trans.write(tenant_id, sql.ptr(), affected_rows));
+  }
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    }
+  }
+  return ret;
+}
+
 int ObDBMSSchedTableOperator::update_for_rollback(ObDBMSSchedJobInfo &job_info)
 {
   int ret = OB_SUCCESS;
@@ -321,9 +350,7 @@ int ObDBMSSchedTableOperator::update_for_end(ObDBMSSchedJobInfo &job_info, int e
   OZ (_check_need_record(job_info, need_record, err == 0 ? false : true));
 
   if (OB_FAIL(ret)) {
-  } else if (job_info.is_date_expression_job_class() && now >= job_info.end_date_ && true == job_info.auto_drop_) {
-    OZ (_build_job_drop_dml(now, job_info, sql1));
-  } else if ((now >= job_info.end_date_ || job_info.get_interval_ts() == 0) && (true == job_info.auto_drop_)) {
+  } else if ((now >= job_info.end_date_ || (job_info.get_interval_ts() == 0 && (job_info.get_repeat_interval().empty() || 0 == job_info.get_repeat_interval().case_compare("null")))) && (true == job_info.auto_drop_)) {
     job_info.state_ = ObString("COMPLETED");
     OZ (_build_job_drop_dml(now, job_info, sql1));
   } else {
@@ -533,7 +560,7 @@ do {                                                                  \
   //job_type not used
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "job_action", job_info_local.job_action_);
   //number_of_argument not used
-  //repeat_interval not used
+  EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "repeat_interval", job_info_local.repeat_interval_);
   EXTRACT_BOOL_FIELD_MYSQL_SKIP_RET(result, "enabled", job_info_local.enabled_);
   EXTRACT_BOOL_FIELD_MYSQL_SKIP_RET(result, "auto_drop", job_info_local.auto_drop_);
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "state", job_info_local.state_);

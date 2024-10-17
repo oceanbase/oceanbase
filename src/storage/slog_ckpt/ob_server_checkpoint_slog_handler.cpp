@@ -595,22 +595,23 @@ int ObServerCheckpointSlogHandler::replay_update_tenant_unit(const char *buf, co
   int64_t pos = 0;
   share::ObUnitInfoGetter::ObTenantConfig unit;
   ObUpdateTenantUnitLog log_entry(unit);
-  omt::ObTenantMeta tenant_meta;
-
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObServerCheckpointSlogHandler is not initialized", K(ret));
-  } else if (OB_ISNULL(buf) || buf_len <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(buf), K(buf_len));
-  } else if (OB_FAIL(log_entry.deserialize(buf, buf_len, pos))) {
-    LOG_WARN("failed to decode log entry", K(ret));
-  } else if (OB_FAIL(tenant_meta_map_for_replay_->get_refactored(unit.tenant_id_, tenant_meta))) {
-    LOG_WARN("failed to get tenant meta", K(ret), K(unit));
-  } else if (FALSE_IT(tenant_meta.unit_ = unit)) {
-  } else if (OB_FAIL(tenant_meta_map_for_replay_->set_refactored(unit.tenant_id_, tenant_meta, 1))) {
-    LOG_WARN("failed to set tenant meta map", K(ret), K(unit));
+  SMART_VAR(omt::ObTenantMeta, tenant_meta) {
+    if (OB_UNLIKELY(!is_inited_)) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("ObServerCheckpointSlogHandler is not initialized", K(ret));
+    } else if (OB_ISNULL(buf) || buf_len <= 0) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), KP(buf), K(buf_len));
+    } else if (OB_FAIL(log_entry.deserialize(buf, buf_len, pos))) {
+      LOG_WARN("failed to decode log entry", K(ret));
+    } else if (OB_FAIL(tenant_meta_map_for_replay_->get_refactored(unit.tenant_id_, tenant_meta))) {
+      LOG_WARN("failed to get tenant meta", K(ret), K(unit));
+    } else if (FALSE_IT(tenant_meta.unit_ = unit)) {
+    } else if (OB_FAIL(tenant_meta_map_for_replay_->set_refactored(unit.tenant_id_, tenant_meta, 1))) {
+      LOG_WARN("failed to set tenant meta map", K(ret), K(unit));
+    }
   }
+
   return ret;
 }
 

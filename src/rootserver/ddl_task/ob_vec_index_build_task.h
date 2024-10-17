@@ -69,6 +69,27 @@ public:
       K(drop_index_task_submitted_), K(schema_version_), K(execution_id_),
       K(consumer_group_id_), K(trace_id_), K(parallelism_), K(create_index_arg_));
 
+public:
+  void set_rowkey_vid_aux_table_id(const uint64_t id) { rowkey_vid_aux_table_id_ = id; }
+  void set_vid_rowkey_aux_table_id(const uint64_t id) { vid_rowkey_aux_table_id_ = id; }
+  void set_delta_buffer_table_id(const uint64_t id) { delta_buffer_table_id_ = id; }
+  void set_index_id_table_id(const uint64_t id) { index_id_table_id_ = id; }
+  void set_index_snapshot_data_table_id(const uint64_t id) { index_snapshot_data_table_id_ = id; }
+  void set_drop_index_task_id(const uint64_t id) { drop_index_task_id_ = id; }
+  void set_rowkey_vid_task_submitted(const bool status) { rowkey_vid_task_submitted_ = status; }
+  void set_vid_rowkey_task_submitted(const bool status) { vid_rowkey_task_submitted_ = status; }
+  void set_delta_buffer_task_submitted(const bool status) { delta_buffer_task_submitted_ = status; }
+  void set_index_id_task_submitted(const bool status) { index_id_task_submitted_ = status; }
+  void set_index_snapshot_data_task_submitted(const bool status) { index_snapshot_data_task_submitted_ = status; }
+  void set_drop_index_task_submitted(const bool status) { drop_index_task_submitted_ = status; }
+  void set_rowkey_vid_task_id(const uint64_t id) { rowkey_vid_task_id_ = id; }
+  void set_vid_rowkey_task_id(const uint64_t id) { vid_rowkey_task_id_ = id; }
+  void set_delta_buffer_task_id(const uint64_t id) { delta_buffer_task_id_ = id; }
+  void set_index_id_task_id(const uint64_t id) { index_id_task_id_ = id; }
+  void set_index_snapshot_task_id(const uint64_t id) { index_snapshot_task_id_ = id; }
+
+  int update_task_message(common::ObISQLClient &proxy);
+
 private:
   int get_next_status(share::ObDDLTaskStatus &next_status);
   int prepare_aux_table(const ObIndexType index_type,
@@ -85,6 +106,7 @@ private:
   int construct_delta_buffer_arg(obrpc::ObCreateIndexArg &arg);
   int construct_index_id_arg(obrpc::ObCreateIndexArg &arg);
   int construct_index_snapshot_data_arg(obrpc::ObCreateIndexArg &arg);
+
   int record_index_table_id(
       const obrpc::ObCreateIndexArg *create_index_arg_,
       uint64_t &aux_table_id);
@@ -108,16 +130,16 @@ private:
       const obrpc::ObCreateIndexArg &source_arg,
       obrpc::ObCreateIndexArg &dest_arg);
   int print_child_task_ids(char *buf, int64_t len);
-  int update_task_message();
 
 private:
   struct ChangeTaskStatusFn final
   {
   public:
-    ChangeTaskStatusFn(common::hash::ObHashMap<uint64_t, share::ObDomainDependTaskStatus> &dependent_task_result_map, const uint64_t tenant_id, ObRootService *root_service) :
+    ChangeTaskStatusFn(common::hash::ObHashMap<uint64_t, share::ObDomainDependTaskStatus> &dependent_task_result_map, const uint64_t tenant_id, ObRootService *root_service, int64_t &not_finished_cnt) :
       dependent_task_result_map_(dependent_task_result_map),
       rt_service_(root_service),
-      dest_tenant_id_(tenant_id)
+      dest_tenant_id_(tenant_id),
+      not_finished_cnt_(not_finished_cnt)
     {}
   public:
     ~ChangeTaskStatusFn() = default;
@@ -126,6 +148,7 @@ private:
     common::hash::ObHashMap<uint64_t, share::ObDomainDependTaskStatus> &dependent_task_result_map_;
     ObRootService *rt_service_;
     uint64_t dest_tenant_id_;
+    int64_t &not_finished_cnt_;
   };
   struct CheckTaskStatusFn final
   {

@@ -92,6 +92,7 @@ public:
     const ObLSID &ls_id,
     const uint64_t ls_epoch,
     const int64_t deleted_tablet_version,
+    const int64_t deleted_tablet_transfer_seq,
     ObArenaAllocator &allocator);
   int ss_delete_tenant_ls_item(
     const share::ObLSID ls_id, const int64_t ls_epoch)

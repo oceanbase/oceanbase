@@ -39,8 +39,51 @@ struct ObICopyTabletCtx
 public:
   virtual int set_copy_tablet_status(const ObCopyTabletStatus::STATUS &status) = 0;
   virtual int get_copy_tablet_status(ObCopyTabletStatus::STATUS &status) const = 0;
+  virtual int get_copy_tablet_record_extra_info(const ObCopyTabletRecordExtraInfo *&extra_info) const = 0;
 };
 
+class ObCopyTabletRecordExtraInfo final
+{
+public:
+  ObCopyTabletRecordExtraInfo();
+  ~ObCopyTabletRecordExtraInfo();
+  void reset();
+public:
+  OB_INLINE void add_cost_time_ms(const int64_t &time_cost_ms) { ATOMIC_FAA(&cost_time_ms_, time_cost_ms); }
+  OB_INLINE void add_total_data_size(const int64_t &total_data_size) { ATOMIC_FAA(&total_data_size_, total_data_size); }
+  OB_INLINE void add_write_data_size(const int64_t &write_data_size) { ATOMIC_FAA(&write_data_size_, write_data_size); }
+  OB_INLINE void inc_major_count() { ATOMIC_INC(&major_count_); }
+  OB_INLINE void add_macro_count(const int64_t &macro_count) { ATOMIC_FAA(&macro_count_, macro_count); }
+  OB_INLINE void add_major_macro_count(const int64_t &major_macro_count) { ATOMIC_FAA(&major_macro_count_, major_macro_count); }
+  OB_INLINE void add_reuse_macro_count(const int64_t &reuse_macro_count) { ATOMIC_FAA(&reuse_macro_count_, reuse_macro_count); }
+  OB_INLINE int get_major_count() const { return ATOMIC_LOAD(&major_count_); }
+  // not atomic, but only called when major sstable copy finish, which is sequential
+  int update_max_reuse_mgr_size(
+    ObMacroBlockReuseMgr *&reuse_mgr);
+
+  TO_STRING_KV(K_(cost_time_ms), K_(total_data_size), K_(write_data_size), K_(major_count), K_(macro_count),
+      K_(major_macro_count), K_(reuse_macro_count), K_(max_reuse_mgr_size));
+private:
+  // The following 3 member variables are updated when writer of physical copy task finish
+  // time cost of tablet copy (fully migration / restore of a single tablet)
+  int64_t cost_time_ms_;
+  // total data size reading from copy source (Byte)
+  int64_t total_data_size_;
+  // data size writing to dst (Byte) (only count the data size of new macro block)
+  int64_t write_data_size_;
+
+  // The following 5 member variables are updated when sstable copy finish
+  // number of major sstable
+  int64_t major_count_;
+  // number of all macro block
+  int64_t macro_count_;
+  // number of major macro block
+  int64_t major_macro_count_;
+  // number of the macro block that is reused
+  int64_t reuse_macro_count_;
+  // max reuse mgr size
+  int64_t max_reuse_mgr_size_;
+};
 
 struct ObPhysicalCopyCtx final
 {
@@ -66,7 +109,11 @@ struct ObPhysicalCopyCtx final
                K_(need_sort_macro_meta),
                K_(need_check_seq),
                K_(ls_rebuild_seq),
-               K_(table_key));
+               K_(table_key),
+               KP_(macro_block_reuse_mgr),
+               K_(total_macro_count),
+               K_(reuse_macro_count),
+               KPC_(extra_info));
 
 
   common::SpinRWLock lock_;
@@ -88,6 +135,10 @@ struct ObPhysicalCopyCtx final
   bool need_check_seq_;
   int64_t ls_rebuild_seq_;
   ObITable::TableKey table_key_;
+  ObMacroBlockReuseMgr *macro_block_reuse_mgr_;
+  int total_macro_count_; // total macro block count of single sstable
+  int reuse_macro_count_; // reuse macro block count of single sstable
+  ObCopyTabletRecordExtraInfo *extra_info_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPhysicalCopyCtx);

@@ -67,7 +67,7 @@
  *         call stored callable object, make sure ObFunction is valid before call this.
  *
  *  - CAUTION:
- *      + DO check is_valid() after ObFuntion contructed, cause store big callable object may alloc
+ *      + DO check is_valid() after ObFunction constructed, cause store big callable object may alloc
  *        memory, set ObFunction to a invalid state if alloc memory failed.
  *      + MAKE SURE ObFunction is valid before call it, or will CRASH.
  *
@@ -234,7 +234,7 @@ public:
   }
   // normal constructor
   // ObFunction is a callable class also, so enable_if(SFINAE) condition is needed here,
-  // to making ObFunction copy and move constructor avaliable
+  // to making ObFunction copy and move constructor available
   template <typename Fn,
   typename std::enable_if<
   !std::is_same<typename std::decay<Fn>::type, ObFunction<Ret(Args...)>>::value &&
@@ -312,7 +312,7 @@ public:
     int ret = OB_SUCCESS;
     if ((&allocator_ == &rhs.allocator_) && !is_local_obj_() && !rhs.is_local_obj_()) {
       // same allocator, both self and rhs are big obj
-      // just swap pointer, rhs will destory and destruct this->base_
+      // just swap pointer, rhs will destroy and destruct this->base_
       Abstract *temp = base_;
       base_ = rhs.base_;
       rhs.base_ = temp;

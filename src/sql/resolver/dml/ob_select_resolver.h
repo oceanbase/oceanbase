@@ -275,6 +275,8 @@ protected:
   int do_check_node_in_cte_recursive_union(const ParseNode* node, bool &recursive_union);
   int resolve_fetch_clause(const ParseNode *node);
   int resolve_check_option_clause(const ParseNode *node);
+  int transfer_rb_iterate_items();
+
 private:
   int parameterize_fields_name(const ParseNode *project_node,
                                const ObString &org_alias_name,

@@ -1100,8 +1100,8 @@ public:
   ObWkbGeomInnerPoint const &max_corner() const { return max_p_; }
   ObWkbGeomInnerPoint &max_corner() { return max_p_; }
   bool is_empty()
-  { return std::isnan(min_p_.get<0>()) && std::isnan(min_p_.get<1>())
-           && std::isnan(max_p_.get<0>()) && std::isnan(max_p_.get<1>()); }
+  { return (std::isnan(min_p_.get<0>()) && std::isnan(max_p_.get<0>()))
+           || (std::isnan(min_p_.get<1>()) && std::isnan(max_p_.get<1>())); }
   int64_t to_string(char *buf, const int64_t buf_len) const
   {
     int64_t pos = 0;

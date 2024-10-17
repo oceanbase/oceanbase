@@ -124,6 +124,7 @@ private:
   int init_session_ctx_array();
   int generate_autoinc_params(share::AutoincParam &autoinc_param);
   int init_sequence();
+  void add_to_all_server_event();
 public:
   ObTableLoadTableCtx * const ctx_;
   common::ObArenaAllocator allocator_;

@@ -23,6 +23,7 @@
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_disk_space_manager.h"
+#include "storage/tx_storage/ob_tablet_gc_service.h"
 #endif
 
 namespace oceanbase
@@ -180,6 +181,10 @@ int ObServerStorageMetaReplayer::handle_tenant_create_commit_(const ObTenantMeta
 #ifdef OB_BUILD_SHARED_STORAGE
   if (OB_FAIL(ret)) {
   } else if (GCTX.is_shared_storage_mode()) {
+    MTL_SWITCH(tenant_id) {
+      // for macro check in observer start
+      MTL(checkpoint::ObTabletGCService*)->set_observer_start_macro_block_id_trigger();
+    }
     // when restart observer, if current sys tenant is hidden, hidden_sys_data_disk_size is hidden_sys_data_disk_config_size
     const bool is_hidden = tenant_meta.super_block_.is_hidden_;
     if ((OB_SYS_TENANT_ID == tenant_id) && is_hidden) {

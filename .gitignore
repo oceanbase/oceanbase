@@ -148,6 +148,11 @@ src/sql/parser/sql_parser_oracle_gbk_mode_lex.c
 src/sql/parser/sql_parser_oracle_gbk_mode_lex.h
 src/sql/parser/sql_parser_oracle_gbk_mode_tab.c
 src/sql/parser/sql_parser_oracle_gbk_mode_tab.h
+src/sql/parser/sql_parser_oracle_hkscs_mode_lex.c
+src/sql/parser/sql_parser_oracle_hkscs_mode_lex.h
+src/sql/parser/sql_parser_oracle_hkscs_mode_tab.c
+src/sql/parser/sql_parser_oracle_hkscs_mode_tab.h
+src/sql/parser/non_reserved_keywords_oracle_hkscs_mode.c
 src/sql/parser/sql_parser_oracle_utf8_mode_lex.c
 src/sql/parser/sql_parser_oracle_utf8_mode_lex.h
 src/sql/parser/sql_parser_oracle_utf8_mode_tab.c

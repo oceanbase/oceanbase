@@ -202,14 +202,25 @@ int ObRestoreCompatibilityUtil::is_tablet_restore_phase_done_prev_v4_(
 
     case ObLSRestoreStatus::RESTORE_MAJOR_DATA : {
       is_finish = !ha_status.is_restore_status_minor_and_major_meta();
+      if (!is_finish && GCTX.is_shared_storage_mode()) {
+        bool is_deleted = false;
+        // follower may not see tablet deletion, check before restore major
+        if (OB_FAIL(ObStorageHAUtils::check_tablet_is_deleted(tablet_handle, is_deleted))) {
+          LOG_WARN("failed to check tablet is deleted", K(ret), K(tablet_meta));
+        } else {
+          is_finish = is_deleted;
+          LOG_INFO("skip tablet restore major when it has been deleted", K(tablet_meta), K(is_deleted));
+        }
+      }
       break;
     }
 
     case ObLSRestoreStatus::WAIT_RESTORE_MAJOR_DATA : {
       if (ha_status.is_restore_status_full()) {
         is_finish = true;
-      } else if (ha_status.is_restore_status_undefined()) {
+      } else if (ha_status.is_restore_status_undefined() || ha_status.is_restore_status_minor_and_major_meta()) {
         // UNDEFINED should be deleted after log has been recovered.
+        // MINOR_AND_MAJOR_DATA may because this tablet has been deleted before restore major
         bool is_deleted = true;
         if (OB_FAIL(ObStorageHAUtils::check_tablet_is_deleted(tablet_handle, is_deleted))) {
           LOG_WARN("failed to check tablet is deleted", K(ret), K(tablet_meta));

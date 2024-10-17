@@ -510,6 +510,7 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
     bool has_invisible_column = false;
     bool has_unused_column = false;
     bool has_roaringbitmap_column = false;
+    bool has_non_normal_local_index = false;
     // check if it is a user table
     const char *tmp_prefix = ObDirectLoadMode::is_insert_overwrite(load_mode) ? InsertOverwritePrefix : EmptyPrefix;
 
@@ -594,10 +595,10 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
       FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has roaringbitmap column", tmp_prefix);
     }
     // check if table has mlog
-    else if (table_schema->has_mlog_table()) {
+    else if (table_schema->required_by_mview_refresh()) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("direct-load does not support table with materialized view log", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table with materialized view log", tmp_prefix);
+      LOG_WARN("direct-load does not support table required by materialized view refresh", KR(ret));
+      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table required by materialized view refresh", tmp_prefix);
     } else if (ObDirectLoadMethod::is_incremental(method)) { // incremental direct-load
       if (!ObDirectLoadInsertMode::is_valid_for_incremental_method(insert_mode)) {
         ret = OB_NOT_SUPPORTED;
@@ -607,10 +608,24 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("version lower than 4.3.1.0 does not support incremental direct-load", KR(ret));
         FORWARD_USER_ERROR_MSG(ret, "version lower than 4.3.1.0 does not support incremental direct-load");
-      } else if (table_schema->get_index_tid_count() > 0) {
+      } else if (table_schema->get_simple_index_infos().count() > 0 &&
+                 OB_FAIL(ObTableLoadSchema::check_has_non_local_index(
+                   schema_guard, table_schema, has_non_normal_local_index))) {
+        LOG_WARN("fail to check support direct load for local index", KR(ret));
+      } else if (has_non_normal_local_index) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("incremental direct-load does not support table with indexes", KR(ret));
-        FORWARD_USER_ERROR_MSG(ret, "incremental direct-load does not support table with indexes");
+        LOG_WARN("incremental direct-load does not support table with non-normal local index",
+                 KR(ret));
+        FORWARD_USER_ERROR_MSG(
+          ret, "incremental direct-load does not support table with global index or unique index");
+      } else if (table_schema->get_simple_index_infos().count() > 0 && !has_non_normal_local_index && compat_version < DATA_VERSION_4_3_4_0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN(
+          "version lower than 4.3.4.0 incremental direct-load does not support table with non-normal local index",
+          KR(ret));
+        FORWARD_USER_ERROR_MSG(
+          ret,
+          "version lower than 4.3.4.0 incremental direct-load does not support table with non-normal local index");
       } else if (table_schema->get_foreign_key_infos().count() > 0) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("incremental direct-load does not support table with foreign keys", KR(ret));

@@ -158,6 +158,7 @@ int ObTabletCrossLSMdsMinorMergeCtx::get_merge_tables(ObGetMergeTablesResult &ge
     get_merge_table_result.scn_range_.start_scn_ = static_param_.tables_handle_.get_table(0)->get_start_scn();
     get_merge_table_result.scn_range_.end_scn_ = static_param_.tables_handle_.get_table(static_param_.tables_handle_.get_count() - 1)->get_end_scn();
     get_merge_table_result.version_range_.snapshot_version_ = tablet->get_snapshot_version();
+    get_merge_table_result.transfer_seq_ = tablet->get_transfer_seq();
   }
   return ret;
 }

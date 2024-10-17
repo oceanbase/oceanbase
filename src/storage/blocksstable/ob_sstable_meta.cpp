@@ -66,7 +66,8 @@ ObSSTableBasicMeta::ObSSTableBasicMeta()
     latest_row_store_type_(ObRowStoreType::MAX_ROW_STORE),
     table_backup_flag_(),
     table_shared_flag_(),
-    root_macro_seq_(0)
+    root_macro_seq_(0),
+    tx_data_recycle_scn_(SCN::min_scn())
 {
   MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
 }
@@ -121,7 +122,8 @@ bool ObSSTableBasicMeta::check_basic_meta_equality(const ObSSTableBasicMeta &oth
       && latest_row_store_type_ == other.latest_row_store_type_
       && table_backup_flag_ == other.table_backup_flag_
       && table_shared_flag_ == other.table_shared_flag_
-      && root_macro_seq_ == other.root_macro_seq_;
+      && root_macro_seq_ == other.root_macro_seq_
+      && tx_data_recycle_scn_ == other.tx_data_recycle_scn_;
 }
 
 bool ObSSTableBasicMeta::is_valid() const
@@ -151,7 +153,8 @@ bool ObSSTableBasicMeta::is_valid() const
            && is_latest_row_store_type_valid()
            && table_backup_flag_.is_valid()
            && table_shared_flag_.is_valid()
-           && root_macro_seq_ >= 0;
+           && root_macro_seq_ >= 0
+           && tx_data_recycle_scn_.is_valid();
   return ret;
 }
 
@@ -194,6 +197,7 @@ void ObSSTableBasicMeta::reset()
   table_backup_flag_.reset();
   table_shared_flag_.reset();
   root_macro_seq_ = 0;
+  tx_data_recycle_scn_.set_min();
 }
 
 DEFINE_SERIALIZE(ObSSTableBasicMeta)
@@ -252,7 +256,8 @@ DEFINE_SERIALIZE(ObSSTableBasicMeta)
                   latest_row_store_type_,
                   table_backup_flag_,
                   table_shared_flag_,
-                  root_macro_seq_);
+                  root_macro_seq_,
+                  tx_data_recycle_scn_);
       if (OB_FAIL(ret)) {
       } else if (OB_UNLIKELY(length_ != pos - start_pos)) {
         ret = OB_ERR_UNEXPECTED;
@@ -335,7 +340,8 @@ int ObSSTableBasicMeta::decode_for_compat(const char *buf, const int64_t data_le
               latest_row_store_type_,
               table_backup_flag_,
               table_shared_flag_,
-              root_macro_seq_);
+              root_macro_seq_,
+              tx_data_recycle_scn_);
   return ret;
 }
 
@@ -379,7 +385,8 @@ DEFINE_GET_SERIALIZE_SIZE(ObSSTableBasicMeta)
               latest_row_store_type_,
               table_backup_flag_,
               table_shared_flag_,
-              root_macro_seq_);
+              root_macro_seq_,
+              tx_data_recycle_scn_);
   return len;
 }
 
@@ -657,6 +664,7 @@ int ObSSTableMeta::init_base_meta(
     basic_meta_.table_backup_flag_ = param.table_backup_flag_;
     basic_meta_.table_shared_flag_ = param.table_shared_flag_;
     basic_meta_.root_macro_seq_ = param.root_macro_seq_;
+    basic_meta_.tx_data_recycle_scn_ = param.tx_data_recycle_scn_;
     basic_meta_.length_ = basic_meta_.get_serialize_size();
     if (OB_FAIL(column_ckm_struct_.assign(allocator, param.column_checksums_))) {
       LOG_WARN("fail to prepare column checksum", K(ret), K(param));
@@ -949,6 +957,12 @@ int ObSSTableMeta::deep_copy(
   return ret;
 }
 
+bool ObSSTableMeta::is_shared_table() const
+{
+  return basic_meta_.table_shared_flag_.is_shared_sstable()
+      || basic_meta_.table_backup_flag_.is_shared_sstable();
+}
+
 //================================== ObMigrationSSTableParam ==================================
 ObMigrationSSTableParam::ObMigrationSSTableParam()
   : allocator_("SSTableParam", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
@@ -1052,12 +1066,15 @@ bool ObMigrationSSTableParam::is_empty_sstable() const
 
 bool ObMigrationSSTableParam::is_shared_sstable() const
 {
-  return basic_meta_.table_shared_flag_.is_shared_sstable();
+  return basic_meta_.table_shared_flag_.is_shared_sstable()
+      || basic_meta_.table_backup_flag_.is_shared_sstable();
 }
 
+//shared sstable contain shared macro blocks
 bool ObMigrationSSTableParam::is_shared_macro_blocks_sstable() const
 {
-  return basic_meta_.table_shared_flag_.is_shared_macro_blocks();
+  return basic_meta_.table_shared_flag_.is_shared_macro_blocks()
+      || basic_meta_.table_backup_flag_.is_shared_sstable();
 }
 
 bool ObMigrationSSTableParam::is_only_shared_macro_blocks_sstable() const
@@ -1216,13 +1233,9 @@ int ObMigrationSSTableParam::deserialize_(const char *buf, const int64_t data_le
 
   LST_DO_CODE(OB_UNIS_DECODE, is_meta_root_);
 
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObSSTableMetaCompactUtil::fix_filled_tx_scn_value_for_compact(table_key_, basic_meta_.filled_tx_scn_))) {
-    LOG_WARN("failed to fix filled tx scn value for compact", K(ret), K(table_key_), K(basic_meta_));
-  }
-
   return ret;
 }
+
 
 DEFINE_GET_SERIALIZE_SIZE(ObMigrationSSTableParam)
 {

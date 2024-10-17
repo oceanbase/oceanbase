@@ -209,6 +209,8 @@ public:
   /// @retval Other error codes   Failed
   int next_server(common::ObAddr &request_svr);
 
+  int get_server_count(int64_t &server_count);
+
   void mark_svr_list_update_flag(const bool need_update);
 
   uint64_t hash() const;

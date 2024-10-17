@@ -52,6 +52,10 @@ int ObMockExecutor::execute(ObExecContext &exec_ctx, ObMockStmt &stmt)
     LOG_USER_WARN(OB_NOT_SUPPORTED, "Repair table Statement just mocks the syntax of MySQL without supporting specific realization");
   } else if (stmt::T_CHECKSUM_TABLE == stmt.get_stmt_type()) {
     LOG_USER_WARN(OB_NOT_SUPPORTED, "Checksum table Statement just mocks the syntax of MySQL without supporting specific realization");
+  } else if (stmt::T_CACHE_INDEX == stmt.get_stmt_type()) {
+    LOG_USER_WARN(OB_NOT_SUPPORTED, "Cache index Statement just mocks the syntax of MySQL without supporting specific realization");
+  } else if (stmt::T_LOAD_INDEX_INTO_CACHE == stmt.get_stmt_type()) {
+    LOG_USER_WARN(OB_NOT_SUPPORTED, "Load index into cache Statement just mocks the syntax of MySQL without supporting specific realization");
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_USER_WARN(OB_NOT_SUPPORTED, "unknown stmt type");

@@ -115,14 +115,11 @@ public:
   }
 
   // sql execute interface
-  virtual int execute_read(const uint64_t tenant_id, const char *sql,
+  virtual int execute_read(const uint64_t tenant_id, const ObString &sql,
       ObISQLClient::ReadResult &res, bool is_user_sql = false,
       const common::ObAddr *sql_exec_addr = nullptr) = 0;
   virtual int execute_read(const int64_t cluster_id, const uint64_t tenant_id, const ObString &sql,
       ObISQLClient::ReadResult &res, bool is_user_sql = false,
-      const common::ObAddr *sql_exec_addr = nullptr) = 0;
-  virtual int execute_write(const uint64_t tenant_id, const char *sql,
-      int64_t &affected_rows, bool is_user_sql = false,
       const common::ObAddr *sql_exec_addr = nullptr) = 0;
   virtual int execute_write(const uint64_t tenant_id, const ObString &sql,
       int64_t &affected_rows, bool is_user_sql = false,
@@ -137,7 +134,7 @@ public:
                         const ObTimeZoneInfo *tz_info,
                         ObObj *result,
                         bool is_sql) = 0;
-  virtual int prepare(const char *sql, int64_t param_count, ObIAllocator *allocator = NULL) {
+  virtual int prepare(const ObString &sql, int64_t param_count, ObIAllocator *allocator = NULL) {
     UNUSED(sql);
     return OB_NOT_SUPPORTED;
   }

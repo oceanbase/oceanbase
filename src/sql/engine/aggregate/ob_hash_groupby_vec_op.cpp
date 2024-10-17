@@ -1065,10 +1065,6 @@ int ObHashGroupByVecOp::inner_get_next_batch(const int64_t max_row_cnt)
         bypass_ctrl_.reset_state();
         by_pass_vec_holder_.restore();
         calc_avg_group_mem();
-        if (llc_est_.enabled_ && llc_est_.est_cnt_ != agged_group_cnt_) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected est_cnt number", K(ret), K(agged_group_cnt_), K(agged_row_cnt_), K(llc_est_.est_cnt_));
-        }
       }
 
       // restart cond1 : a normal new round
@@ -2314,6 +2310,8 @@ int ObHashGroupByVecOp::by_pass_prepare_one_batch(const int64_t batch_size)
         max(SKEW_TEST_STEP_SIZE * total_load_rows_, MIN_CHECK_POPULAR_VALID_ROWS), agged_row_cnt_,
         agged_group_cnt_, batch_old_rows_, batch_new_rows_, &popular_map_))) {
       LOG_WARN("fail to by_pass_process_value_batch", K(ret));
+    } else if (OB_FAIL(aggr_processor_.eval_aggr_param_batch(brs_))) {
+      LOG_WARN("fail to eval aggr param batch", K(ret), K(brs_));
     }
     //batch calc aggr for each group
     int32_t start_agg_id = -1;

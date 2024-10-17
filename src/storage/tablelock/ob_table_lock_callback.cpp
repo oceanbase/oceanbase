@@ -30,12 +30,12 @@ namespace transaction
 namespace tablelock
 {
 
-bool ObOBJLockCallback::on_memtable(const ObIMemtable * const memtable)
+bool ObOBJLockCallback::on_memtable(const storage::ObIMemtable * const memtable)
 {
   return memtable == memtable_;
 }
 
-ObIMemtable* ObOBJLockCallback::get_memtable() const
+storage::ObIMemtable* ObOBJLockCallback::get_memtable() const
 {
   return memtable_;
 }

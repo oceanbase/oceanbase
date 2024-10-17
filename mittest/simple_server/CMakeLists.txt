@@ -35,6 +35,11 @@ function(ob_freeze_observer case)
   target_link_libraries(${case} PRIVATE gtest gmock observer_test oceanbase)
 endfunction()
 
+function(ob_farm_observer case)
+  ob_unittest(${ARGV})
+  target_link_libraries(${case} PRIVATE gtest gmock observer_test oceanbase)
+endfunction()
+
 function(ob_offline_observer case case_file)
   add_executable(${case}
     EXCLUDE_FROM_ALL
@@ -60,6 +65,7 @@ endfunction()
 ob_offline_observer(test_simple_ob test_ob_simple_cluster.cpp)
 ob_offline_observer(test_transfer_tx test_transfer_tx.cpp)
 ob_offline_observer(test_tx_data test_tx_data.cpp)
+ob_offline_observer(test_collect_mv test_collect_mv.cpp)
 
 ob_unittest_observer(test_transfer_no_kill_tx test_transfer_tx.cpp)
 ob_unittest_observer(test_standby_balance test_standby_balance_ls_group.cpp)
@@ -77,6 +83,7 @@ ob_unittest_observer(test_ob_obj_lock_garbage_collector test_ob_obj_lock_garbage
 ob_unittest_observer(test_observer_expand_shrink test_observer_expand_shrink.cpp)
 ob_unittest_observer(test_replay_from_middle test_replay_from_middle.cpp)
 ob_unittest_observer(test_special_tablet_flush test_special_tablet_flush.cpp)
+ob_unittest_observer(test_table_lock_split test_table_lock_split.cpp)
 ob_unittest_observer(test_tx_data_table_mit test_tx_data_table_mit.cpp)
 ob_unittest_observer(test_tx_ctx_table_mit test_tx_ctx_table_mit.cpp)
 ob_unittest_observer(test_lock_table_persistence test_lock_table_persistence.cpp)
@@ -106,6 +113,7 @@ ob_unittest_observer(test_get_stopped_zone_list test_get_stopped_zone_list.cpp)
 ob_unittest_observer(test_lock_table_with_tx test_lock_table_with_tx.cpp)
 ob_unittest_observer(test_ob_detect_manager_in_simple_server test_ob_detect_manager_in_simple_server.cpp)
 ob_unittest_observer(test_transfer_lock_info_operator storage_ha/test_transfer_lock_info_operator.cpp)
+ob_unittest_observer(test_tablet_reorganize_history_table_operator storage_ha/test_backup_tablet_reorganize_helper.cpp)
 ob_unittest_observer(test_mds_recover test_mds_recover.cpp)
 ob_unittest_observer(test_keep_alive_min_start_scn test_keep_alive_min_start_scn.cpp)
 ob_unittest_observer(test_ls_replica test_ls_replica.cpp)
@@ -140,3 +148,5 @@ ob_ha_unittest_observer(test_transfer_complete_restart_with_mds_flush storage_ha
 ob_ha_unittest_observer(test_transfer_with_empty_shell storage_ha/test_transfer_with_empty_shell.cpp)
 ob_ha_unittest_observer(test_mds_transaction test_mds_transaction.cpp)
 errsim_ha_unittest_observer(errsim_test_transfer_handler errsim/storage_ha/errsim_test_transfer_handler.cpp)
+
+ob_farm_observer(test_collect_mv_farm test_collect_mv.cpp)

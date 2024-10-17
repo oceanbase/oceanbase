@@ -151,7 +151,7 @@ int ObDatumRowStore::Iterator::get_next_row(ObDatumRow &row)
 
 ////////////////////////////////////////////////////////////////
 ObDatumRowStore::ObDatumRowStore()
-:   inner_alloc_("DatumRowStore", MTL_ID()),
+:   inner_alloc_("DatumRowStore", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), ObCtxIds::DEFAULT_CTX_ID),
     blocks_(),
     row_count_(0),
     col_count_(0)
@@ -164,22 +164,12 @@ ObDatumRowStore::~ObDatumRowStore()
   clear_rows();
 }
 
-// method for ObAggregateFunction::prepare()
-// prepare need to reuse ObDatumRowStore for WRITE,
-// it needs to reuse reserved_columns_ which should not be cleared
 void ObDatumRowStore::clear_rows()
 {
   row_count_ = 0;
   col_count_ = 0;
 
-  // free all blocks
-  BlockInfo *block = blocks_.get_first();
-  while (NULL != block) {
-    BlockInfo *next = block->get_next_block();
-    block->~BlockInfo();
-    inner_alloc_.free(block);
-    block = next;
-  }
+  inner_alloc_.reset();
   blocks_.reset();
 }
 
@@ -195,12 +185,12 @@ int ObDatumRowStore::new_block(int64_t block_size, ObDatumRowStore::BlockInfo *&
     block_size = NORMAL_BLOCK_SIZE;
   }
   // make sure all memory allocated under the right tenant
-  block = static_cast<BlockInfo *>(inner_alloc_.alloc(block_size));
+  block = static_cast<BlockInfo *>(inner_alloc_.alloc(block_size + sizeof(BlockInfo)));
   if (OB_ISNULL(block)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    STORAGE_LOG(WARN, "failed to alloc block memory", K(ret), K(block_size + sizeof(BlockInfo)));
+    STORAGE_LOG(WARN, "failed to alloc block memory", K(ret), K(block_size), K(sizeof(BlockInfo)));
   } else {
-    block = new(block) BlockInfo(block_size - sizeof(BlockInfo));
+    block = new(block) BlockInfo(block_size);
     if (OB_FAIL(blocks_.add_last(block))) {
       STORAGE_LOG(WARN, "failed to add a new block to block list", K(ret));
     }

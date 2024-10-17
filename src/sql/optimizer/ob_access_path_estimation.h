@@ -32,7 +32,7 @@ struct ObBatchEstTasks
 
   bool check_result_reliable() const;
 
-  TO_STRING_KV(K_(addr));
+  TO_STRING_KV(K_(addr), K_(arg), K_(res));
 };
 
 class ObAccessPathEstimation
@@ -59,6 +59,7 @@ public:
                                           uint64_t ref_table_id,
                                           bool &can_use);
 private:
+  static const int STORAGE_EST_SAMPLE_SEED = 1;
   static int inner_estimate_rowcount(ObOptimizerContext &ctx,
                                      common::ObIArray<AccessPath *> &paths,
                                      const bool is_inner_path,
@@ -133,6 +134,24 @@ private:
   static int process_storage_estimation(ObOptimizerContext &ctx,
                                         ObIArray<AccessPath *> &paths,
                                         bool &is_success);
+  static int get_storage_estimation_task(ObOptimizerContext &ctx,
+                                         ObIAllocator &arena,
+                                         const ObCandiTabletLoc &partition,
+                                         const ObTableMetaInfo &table_meta,
+                                         ObIArray<ObAddr> &prefer_addrs,
+                                         ObIArray<ObBatchEstTasks *> &tasks,
+                                         EstimatedPartition &best_index_part,
+                                         ObBatchEstTasks *&task);
+
+  static int process_storage_estimation_result(ObIArray<ObBatchEstTasks *> &tasks,
+                                               bool &is_reliable);
+
+  static int choose_storage_estimation_partitions(const int64_t partition_limit,
+                                                  const ObCandiTabletLocIArray &partitions,
+                                                  ObCandiTabletLocIArray &chosen_partitions);
+  static int choose_storage_estimation_ranges(const int64_t range_limit,
+                                              AccessPath *ap,
+                                              ObIArray<common::ObNewRange> &scan_ranges);
 
   static int process_dynamic_sampling_estimation(ObOptimizerContext &ctx,
                                                  ObIArray<AccessPath *> &paths,
@@ -170,7 +189,8 @@ private:
                             ObIAllocator &allocator,
                             ObBatchEstTasks *task,
                             const EstimatedPartition &part,
-                            AccessPath *ap);
+                            AccessPath *ap,
+                            const ObIArray<common::ObNewRange> &chosen_scan_ranges);
 
   static int construct_scan_range_batch(ObIAllocator &allocator,
                                         const ObIArray<ObNewRange> &scan_ranges,
@@ -183,7 +203,9 @@ private:
   static bool is_multi_geo_range(const ObNewRange &range);
 
   static int estimate_prefix_range_rowcount(
-      const obrpc::ObEstPartResElement &result,
+      const int64_t res_logical_row_count,
+      const int64_t res_physical_row_count,
+      const int64_t sample_partition_cnt,
       ObCostTableScanInfo &est_cost_info);
 
   static int fill_cost_table_scan_info(ObCostTableScanInfo &est_cost_info);
@@ -213,6 +235,9 @@ private:
                                            ObIArray<common::ObNewRange> &new_ranges);
   static int storage_estimate_full_table_rowcount(ObOptimizerContext &ctx,
                                                   const ObCandiTabletLoc &part_loc_info,
+                                                  ObTableMetaInfo &meta);
+  static int storage_estimate_full_table_rowcount(ObOptimizerContext &ctx,
+                                                  const ObCandiTabletLocIArray &part_loc_infos,
                                                   ObTableMetaInfo &meta);
 
   static int estimate_full_table_rowcount_by_meta_table(ObOptimizerContext &ctx,

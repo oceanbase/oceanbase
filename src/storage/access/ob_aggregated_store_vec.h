@@ -69,7 +69,7 @@ public:
       blocksstable::ObIMicroBlockReader *reader,
       const int32_t *row_ids,
       const int64_t row_count,
-      const bool projected) override;
+      const bool reserve_memory) override;
   int can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info, bool &can_agg) override;
   int fill_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg) override;
   int collect_result();
@@ -146,7 +146,7 @@ private:
   void release_agg_group();
   int init_agg_groups(const ObTableAccessParam &param);
   int check_agg_store_valid();
-  int do_aggregate(blocksstable::ObIMicroBlockReader *reader = nullptr);
+  int do_aggregate(blocksstable::ObIMicroBlockReader *reader, const bool reserve_memory);
   OB_INLINE void reset_after_aggregate()
   {
     count_ = 0;

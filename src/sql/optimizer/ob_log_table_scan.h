@@ -11,7 +11,7 @@
  */
 
 #ifndef OCEANBASE_SQL_OB_LOG_TABLE_SCAN_H
-#define OCEANBASE_SQL_OB_LOG_TABLE_SCAN_H 1
+#define OCEANBASE_SQL_OB_LOG_TABLE_SCAN_H
 #include "sql/optimizer/ob_logical_operator.h"
 #include "sql/optimizer/ob_log_operator_factory.h"
 #include "sql/optimizer/ob_join_order.h"
@@ -217,8 +217,15 @@ public:
         vector_index_info_(),
         das_keep_ordering_(false),
         filter_monotonicity_(),
+        auto_split_filter_type_(OB_INVALID_ID),
+        auto_split_filter_(NULL),
+        is_tsc_with_doc_id_(false),
+        rowkey_doc_tid_(common::OB_INVALID_ID),
+        multivalue_col_idx_(common::OB_INVALID_ID),
+        multivalue_type_(-1),
         is_tsc_with_vid_(false),
-        rowkey_vid_tid_(common::OB_INVALID_ID)
+        rowkey_vid_tid_(common::OB_INVALID_ID),
+        mr_mv_scan_(common::ObQueryFlag::NormalMode)
   {
   }
 
@@ -565,6 +572,9 @@ public:
 
   bool is_need_feedback() const;
   int set_table_scan_filters(const common::ObIArray<ObRawExpr *> &filters);
+  // for index merge, we need to set range conds and filters for each index scan
+  int set_index_merge_scan_filters(const AccessPath *path);
+  int set_index_table_scan_filters(ObIndexMergeNode *node);
   inline common::ObIArray<ObRawExpr*> &get_range_conditions() { return range_conds_; }
   const common::ObIArray<ObRawExpr*> &get_range_conditions() const { return range_conds_; }
   inline void set_diverse_path_count(int64_t count) { diverse_path_count_ = count; }
@@ -622,13 +632,24 @@ public:
                                ObIArray<ObRawExpr*> &scan_pushdown_filters,
                                ObIArray<ObRawExpr*> &lookup_pushdown_filters,
                                bool ignore_pd_filter = false) const;
+  int extract_nonpushdown_filters(const ObIArray<ObRawExpr*> &filters,
+                                  ObIArray<ObRawExpr*> &nonpushdown_filters,
+                                  ObIArray<ObRawExpr*> &pushdown_filters) const;
   int has_nonpushdown_filter(bool &has_npd_filter);
   int replace_index_back_pushdown_filters(ObRawExprReplacer &replacer);
+  int replace_index_merge_pushdown_filters(ObIndexMergeNode *node, ObRawExprReplacer &replacer);
   int extract_virtual_gen_access_exprs(ObIArray<ObRawExpr*> &access_exprs,
                                       uint64_t scan_table_id);
   int adjust_print_access_info(ObIArray<ObRawExpr*> &access_exprs);
   static int replace_gen_column(ObLogPlan *plan, ObRawExpr *part_expr, ObRawExpr *&new_part_expr);
   int extract_file_column_exprs_recursively(ObRawExpr *expr);
+  int generate_auto_split_filter();
+  int construct_table_split_range_filter(ObSQLSessionInfo *session, const int64_t filter_type);
+  int create_exec_param_for_auto_split(const ObExprResType &type, ObRawExpr *&expr);
+  uint64_t get_auto_split_filter_type() const { return auto_split_filter_type_; };
+  const ObRawExpr *get_auto_split_filter() const { return auto_split_filter_; };
+  const ObIArray<ObRawExpr *> &get_auto_split_params() const { return auto_split_params_; };
+  inline bool is_tsc_with_doc_id() const { return is_tsc_with_doc_id_; }
   inline bool is_tsc_with_vid() const { return is_tsc_with_vid_; }
   inline bool is_text_retrieval_scan() const { return is_index_scan() && NULL != text_retrieval_info_.match_expr_; }
   inline bool is_multivalue_index_scan() const { return is_multivalue_index_; }
@@ -641,7 +662,10 @@ public:
   inline void set_doc_id_index_table_id(const uint64_t doc_id_index_table_id) { doc_id_table_id_ = doc_id_index_table_id; }
   inline uint64_t get_doc_id_index_table_id() const { return doc_id_table_id_; }
   inline uint64_t get_rowkey_vid_table_id() const { return rowkey_vid_tid_; }
-  inline const common::ObIArray<ObRawExpr *> &get_rowkey_vid_exprs() const { return rowkey_vid_exprs_; }
+  inline uint64_t get_rowkey_doc_table_id() const { return rowkey_doc_tid_; }
+  inline uint64_t get_multivalue_col_idx() const { return multivalue_col_idx_; }
+  inline int32_t get_multivalue_type() const { return multivalue_type_; }
+  inline const common::ObIArray<ObRawExpr *> &get_rowkey_id_exprs() const { return rowkey_id_exprs_; }
   virtual int get_card_without_filter(double &card) override;
   inline ObRawExpr *get_identify_seq_expr() { return identify_seq_expr_; }
   inline int has_exec_param(bool &bool_ret) const
@@ -656,7 +680,7 @@ public:
   inline bool das_need_keep_ordering() const { return das_keep_ordering_; }
 
   int check_das_need_keep_ordering();
-  int check_das_need_scan_with_vid();
+  int check_das_need_scan_with_domain_id();
 
   const ObIArray<ObRawFilterMonotonicity>& get_filter_monotonicity() const
   { return filter_monotonicity_; }
@@ -664,6 +688,20 @@ public:
                               const ObColumnRefRawExpr *col_expr,
                               PushdownFilterMonotonicity &mono,
                               ObIArray<ObRawExpr *> &assist_exprs) const;
+  void set_for_mr_mv_refresh()  { mr_mv_scan_ = common::ObQueryFlag::RefreshMode;  }
+  void set_for_mr_rt_mv()  { mr_mv_scan_ = common::ObQueryFlag::RealTimeMode;  }
+  common::ObQueryFlag::MRMVScanMode get_mr_mv_scan() const { return mr_mv_scan_; }
+
+  bool use_index_merge() const;
+  const ObIArray<ObRawExpr*> &get_full_filters() const { return full_filters_; }
+  const ObIArray<ObRawExpr*> &get_index_range_conds(int64_t idx) const { return index_range_conds_.at(idx); }
+  const ObIArray<ObRawExpr*> &get_index_filters(int64_t idx) const { return index_filters_.at(idx); }
+  int get_index_range_conds(int64_t idx, ObIArray<ObRawExpr *> &index_range_conds) const;
+  int get_index_filters(int64_t idx, ObIArray<ObRawExpr *> &index_filters) const;
+  int get_index_tids(ObIArray<ObTableID> &index_tids) const;
+  int get_index_name_list(ObIArray<ObString> &index_name_list) const;
+  bool use_index_merge_by_hint() const;
+
 private: // member functions
   //called when index_back_ set
   int pick_out_query_range_exprs();
@@ -679,6 +717,9 @@ private: // member functions
   int add_mapping_columns_for_vt(ObIArray<ObRawExpr*> &access_exprs);
   int get_mbr_column_exprs(const uint64_t table_id, ObIArray<ObRawExpr *> &mbr_exprs);
   int allocate_lookup_trans_info_expr();
+  static int check_need_table_split_range_filter(share::schema::ObSchemaGetterGuard &schema_guard,
+                                                 const share::schema::ObTableSchema &table_schema,
+                                                 bool &need_filter);
   int allocate_group_id_expr();
   int extract_doc_id_index_back_expr(ObIArray<ObRawExpr *> &exprs, bool is_vec_scan = false);
   int extract_text_retrieval_access_expr(ObIArray<ObRawExpr *> &exprs);
@@ -689,7 +730,7 @@ private: // member functions
   int find_nearest_rcte_op(ObLogSet *&rcte_op);
   int generate_filter_monotonicity();
   int get_filter_assist_exprs(ObIArray<ObRawExpr *> &assist_exprs);
-  int prepare_rowkey_vid_dep_exprs();
+  int prepare_rowkey_domain_id_dep_exprs();
 protected: // memeber variables
   // basic info
   uint64_t table_id_; //table id or alias table id
@@ -717,6 +758,29 @@ protected: // memeber variables
   const common::ObIArray<int64_t> *part_ids_;
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> range_conds_;
 
+  // for index merge, we need to prepare range conds and filters for each index scan, and we need
+  // to store full query filters for final check.
+  // for example, consider following query:
+  // create table t1(c1 int primary key, c2 int, c3 int, c4 int);
+  // create index c2 on t1(c2) local;
+  // create index c3 on t1(c3) local;
+  // create index c4 on t1(c4) local;
+  //     select /*+union_merge(t1 c2 c3 c4)*/ * from t1 where c1=1 or c2=1 or c4<1;
+  // when we choose index merge plan, range conds and filters need to be prepared, thus:
+  //  ---------------------------------------------------------
+  //  |  index table  |     range conds     |      filters    |
+  //  ---------------------------------------------------------
+  //  |      c2       |         NULL       |      c1 = 1      |
+  //  |      c3       |         NULL        |       NULL      |
+  //  |      c4       |        c4 < 1       |       NULL      |
+  //  ---------------------------------------------------------
+  // NOTE: only filters before index back can be pushed down to index scan.
+  // and full filters 'c1=1 or c2=1 or c4<1' will be used after lookup for final check.
+  typedef common::ObSEArray<ObRawExpr *, 2, common::ModulePageAllocator, true> ExprSEArray;
+  common::ObSEArray<ExprSEArray, 2, common::ModulePageAllocator, true> index_range_conds_;
+  common::ObSEArray<ExprSEArray, 2, common::ModulePageAllocator, true> index_filters_;
+  ExprSEArray full_filters_;
+
   // index primary key columns.
   // indicates use which columns to extract query range
   common::ObSEArray<ColumnItem, 4, common::ModulePageAllocator, true> range_columns_;
@@ -742,6 +806,8 @@ protected: // memeber variables
   common::ObSEArray<bool, 4, common::ModulePageAllocator, true> filter_before_index_back_;
 // // removal these in cg layer, up to opt layer.
   common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> ddl_output_column_ids_;
+  // auto split param
+  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> auto_split_params_;
 // removal these in cg layer, up to opt layer end.
   // table partition locations
   ObTablePartitionInfo *table_partition_info_; //this member is not in copy_without_child,
@@ -810,11 +876,22 @@ protected: // memeber variables
   typedef common::ObSEArray<ObRawFilterMonotonicity, 4, common::ModulePageAllocator, true> FilterMonotonicity;
   FilterMonotonicity filter_monotonicity_;
 
+  uint64_t auto_split_filter_type_;
+  ObRawExpr *auto_split_filter_;
+  // begin for table scan with doc id
+  bool is_tsc_with_doc_id_;
+  uint64_t rowkey_doc_tid_;
+  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> rowkey_id_exprs_;
+  uint64_t multivalue_col_idx_;
+  int32_t multivalue_type_;
+  // end for table scan with doc id
+
   // begin for table scan with vid
   bool is_tsc_with_vid_;
   uint64_t rowkey_vid_tid_;
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> rowkey_vid_exprs_;
   // end for table scan with vid
+
+  common::ObQueryFlag::MRMVScanMode mr_mv_scan_; // used for major refresh mview fast refresh and real-time mview
 
   // disallow copy and assign
   DISALLOW_COPY_AND_ASSIGN(ObLogTableScan);

@@ -88,7 +88,7 @@ public:
   int64_t get_inv_agg_idx() const { return has_inv_agg_ ? 1 : -1; }
   int64_t get_doc_agg_idx() const { return has_doc_id_agg_ ? (1 + has_inv_agg_) : -1; }
   int64_t get_fwd_agg_idx() const { return has_fwd_agg_ ? (1 + has_inv_agg_ + has_doc_id_agg_) : -1; }
-  bool need_do_total_doc_cnt() const { return need_calc_relevance() && 0 == estimated_total_doc_cnt_; }
+  bool need_estimate_total_doc_cnt() const { return 0 != estimated_total_doc_cnt_; }
 
   INHERIT_TO_STRING_KV("ObDASBaseCtDef", ObDASBaseCtDef,
                        K_(flags),

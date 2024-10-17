@@ -100,7 +100,8 @@ private:
   int resolve_mv_options(const ObSelectStmt *stmt,
                          ParseNode *options_node,
                          ObMVRefreshInfo &refresh_info,
-                         ObTableSchema &table_schema);
+                         ObTableSchema &table_schema,
+                         ObTableSchema &container_table_schema);
   int resolve_mv_refresh_info(ParseNode *refresh_info_node,
                               ObMVRefreshInfo &refresh_info);
 

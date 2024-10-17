@@ -858,8 +858,7 @@ int ObAllVirtualProxySchema::get_next_tablet_location_(
     }
   }
   if (OB_SUCC(ret)) { // dump each location
-    DupReplicaType dup_replica_type = ObDuplicateScope::DUPLICATE_SCOPE_CLUSTER
-                                      == table_schema->get_duplicate_scope() ?
+    DupReplicaType dup_replica_type = table_schema->is_duplicate_table() ?
                                       DupReplicaType::DUP_REPLICA :
                                       DupReplicaType::NON_DUP_REPLICA;
     const uint64_t table_id = table_schema->get_table_id();

@@ -74,12 +74,13 @@ ObMerger::ObMerger(
   : merger_arena_(allocator),
     merge_ctx_(nullptr),
     task_idx_(0),
-    force_flat_format_(false),
     merge_param_(static_param),
     partition_fuser_(nullptr),
     merge_helper_(nullptr),
     base_iter_(nullptr),
-    trans_state_mgr_(merger_arena_)
+    trans_state_mgr_(merger_arena_),
+    start_time_(ObTimeUtility::current_time()),
+    force_flat_format_(false)
 {
 }
 
@@ -287,10 +288,11 @@ int ObPartitionMerger::close()
   int ret = OB_SUCCESS;
   if (OB_FAIL(macro_writer_->close())) {
     STORAGE_LOG(WARN, "Failed to close macro block writer", K(ret));
-  } else if (OB_FAIL(merge_ctx_->update_block_info(macro_writer_->get_merge_block_info()))) {
+  } else if (OB_FAIL(merge_ctx_->update_block_info(
+    macro_writer_->get_merge_block_info(),
+    ObTimeUtility::fast_current_time() - start_time_))) {
     STORAGE_LOG(WARN, "Failed to add macro blocks", K(ret));
   }
-
   return ret;
 }
 
@@ -649,6 +651,9 @@ int ObPartitionMajorMerger::merge_partition(
       }
     } else if (OB_FAIL(close())){
       STORAGE_LOG(WARN, "failed to close partition merger", K(ret));
+    } else if (merge_param_.is_mv_merge() &&
+          OB_FAIL(ObMviewCompactionHelper::validate_row_count(merge_param_, macro_writer_->get_merge_block_info().total_row_count_))) {
+      STORAGE_LOG(WARN, "failed to validate mv result", K(ret));
     }
 
     if (OB_SUCC(ret)) {

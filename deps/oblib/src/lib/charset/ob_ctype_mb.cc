@@ -238,6 +238,28 @@ int ob_wildcmp_mb_impl(const ObCharsetInfo *cs,
   return (str != str_end ? 1 : 0);
 }
 
+/*
+  ob_strcasecmp_mb() returns 0 if strings are equal, non-zero otherwise.
+ */
+
+int ob_strcasecmp_mb(const ObCharsetInfo *cs, const char *s, const char *t) {
+  uint32 l;
+  const uchar *map = cs->to_upper;
+
+  while (*s && *t) {
+    /* Pointing after the '\0' is safe here. */
+    if ((l = ob_ismbchar(cs, s, s + cs->mbmaxlen))) {
+      while (l--)
+        if (*s++ != *t++) return 1;
+    } else if (ob_mbcharlen(cs, *t) != 1 ||
+               map[(uchar)*s++] != map[(uchar)*t++])
+      return 1;
+  }
+  /* At least one of '*s' and '*t' is zero here. */
+  assert(!*t || !*s);
+  return (*t != *s);
+}
+
 unsigned int __attribute__ ((noinline)) ob_instr_mb_help(size_t s_length, ob_match_t *match, unsigned int nmatch)
 {
   if (!s_length) {
@@ -439,7 +461,7 @@ size_t ob_lengthsp_8bit(const ObCharsetInfo *cs __attribute__((unused)),
                         const char *ptr, size_t length)
 {
   const char *end;
-  end= (const char *) skip_trailing_space((const unsigned char *)ptr, length, 0);
+  end = (const char *) cs->cset->skip_trailing_space(cs, (const unsigned char *)ptr, length); // 8bit not utf16
   return (size_t) (end-ptr);
 }
 
@@ -693,7 +715,7 @@ static int ob_wildcmp_mb_bin_impl(const ObCharsetInfo *cs, const char *str,
               str += mb_len;
               break;
             }
-          } else if (!ob_ismbchar(cs, str, str_end) && *str == cmp) {
+          } else if (!ob_ismbchar(cs, str, str_end) && static_cast<unsigned char>(*str) == cmp) {
             str++;
             break;
           }
@@ -723,14 +745,14 @@ int ob_wildcmp_mb_bin(const ObCharsetInfo *cs,
                                 escape_char, w_one, w_many, 1);
 }
 
-void ob_hash_sort_mb_bin(const ObCharsetInfo *cs __attribute__((unused)),
+void ob_hash_sort_mb_bin(const ObCharsetInfo *cs,
                     const unsigned char *key, size_t len,unsigned long int *nr1, unsigned long int *nr2,
                     const bool calc_end_space, hash_algo hash_algo)
 {
   const unsigned char *pos = key;
 
   if (!calc_end_space) {
-    key= skip_trailing_space(key, len, 0);
+    key = cs->cset->skip_trailing_space(cs, key, len);  // use in utf8 not utf16
   } else {
     key += len;
   }

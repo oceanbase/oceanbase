@@ -238,6 +238,7 @@ public:
   int allocate_link_dml_as_top(ObLogicalOperator *&old_top);
   bool use_pdml() const { return use_pdml_; }
   int compute_dml_parallel();
+  int check_is_direct_load(const ObInsertStmt &insert_stmt, const int64_t dml_parallel);
   int get_parallel_info_from_candidate_plans(int64_t &dop) const;
   int get_pdml_parallel_degree(const int64_t target_part_cnt, int64_t &dop) const;
 

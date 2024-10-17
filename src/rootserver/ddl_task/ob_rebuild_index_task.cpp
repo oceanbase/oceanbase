@@ -19,6 +19,7 @@
 #include "rootserver/ob_root_service.h"
 #include "lib/timezone/ob_timezone_info.h"                     // for  ObTimeZoneInfoWrap
 #include "observer/omt/ob_tenant_timezone_mgr.h"               // for OTTZ_MGR
+#include "share/vector_index/ob_vector_index_util.h"
 
 using namespace oceanbase::rootserver;
 using namespace oceanbase::common;
@@ -220,6 +221,8 @@ int ObRebuildIndexTask::rebuild_index_impl()
   bool is_db_in_recyclebin = false;
   const ObTableSchema *table_schema = nullptr;
   const ObTableSchema *index_schema = nullptr;
+  ObArenaAllocator dbms_vector_job_info_allocator;
+  dbms_scheduler::ObDBMSSchedJobInfo job_info;
   if (OB_ISNULL(root_service_)) {
     ret = OB_ERR_SYS;
     LOG_WARN("error sys, root_service is nullptr", KR(ret));
@@ -231,6 +234,13 @@ int ObRebuildIndexTask::rebuild_index_impl()
   } else if (OB_ISNULL(index_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("index schema is null", KR(ret), K(target_object_id_));
+  } else if (index_schema->is_vec_delta_buffer_type() &&
+             OB_FAIL(ObVectorIndexUtil::get_dbms_vector_job_info(root_service_->get_sql_proxy(), tenant_id_,
+                                                                 index_schema->get_table_id(),
+                                                                 dbms_vector_job_info_allocator,
+                                                                 schema_guard,
+                                                                 job_info))) {
+    LOG_WARN("fail to get dbms_vector job info", K(ret), K(tenant_id_), K(index_schema->get_table_id()));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, index_schema->get_data_table_id(), table_schema))) {
     LOG_WARN("get data table schema failed", KR(ret), K(index_schema->get_data_table_id()));
   } else if (OB_ISNULL(table_schema)) {
@@ -273,6 +283,7 @@ int ObRebuildIndexTask::rebuild_index_impl()
       create_index_arg.index_option_.block_size_ = 1;
       create_index_arg.index_option_.index_status_ = INDEX_STATUS_UNAVAILABLE;
       create_index_arg.index_option_.progressive_merge_num_ = 1;
+      create_index_arg.vidx_refresh_info_.exec_env_ = job_info.get_exec_env();
 
       if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, target_object_id_, ddl_rpc_timeout))) {
         LOG_WARN("get ddl rpc timeout failed", K(ret));

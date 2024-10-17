@@ -90,7 +90,7 @@ OB_DEF_SERIALIZE_SIZE_SIMPLE(ObDirectLoadExternalMultiPartitionRow)
  */
 
 ObDirectLoadConstExternalMultiPartitionRow::ObDirectLoadConstExternalMultiPartitionRow()
-  : buf_size_(0), buf_(nullptr)
+  : is_deleted_(false), buf_size_(0), buf_(nullptr)
 {
 }
 
@@ -104,6 +104,7 @@ void ObDirectLoadConstExternalMultiPartitionRow::reset()
   rowkey_datum_array_.reset();
   seq_no_.reset();
   buf_size_ = 0;
+  is_deleted_ = false;
   buf_ = nullptr;
 }
 
@@ -116,6 +117,7 @@ ObDirectLoadConstExternalMultiPartitionRow &ObDirectLoadConstExternalMultiPartit
     rowkey_datum_array_ = other.rowkey_datum_array_;
     buf_size_ = other.buf_size_;
     seq_no_ = other.seq_no_;
+    is_deleted_ = other.is_deleted_;
     buf_ = other.buf_;
   }
   return *this;
@@ -128,6 +130,7 @@ ObDirectLoadConstExternalMultiPartitionRow &ObDirectLoadConstExternalMultiPartit
   rowkey_datum_array_ = other.external_row_.rowkey_datum_array_;
   buf_size_ = other.external_row_.buf_size_;
   seq_no_ = other.external_row_.seq_no_;
+  is_deleted_ = other.external_row_.is_deleted_;
   buf_ = other.external_row_.buf_;
   return *this;
 }
@@ -158,6 +161,7 @@ int ObDirectLoadConstExternalMultiPartitionRow::deep_copy(
     } else {
       buf_size_ = src.buf_size_;
       seq_no_ = src.seq_no_;
+      is_deleted_ = src.is_deleted_;
       buf_ = buf + pos;
       MEMCPY(buf + pos, src.buf_, buf_size_);
       pos += buf_size_;

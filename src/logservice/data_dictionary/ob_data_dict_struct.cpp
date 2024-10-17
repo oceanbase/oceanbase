@@ -19,6 +19,7 @@
 #include "share/schema/ob_column_schema.h"
 #include "share/schema/ob_table_schema.h"
 #include "share/schema/ob_table_param.h"
+#include "sql/session/ob_local_session_var.h"
 
 #define DEFINE_DESERIALIZE_DATA_DICT(TypeName) \
   int TypeName::deserialize(const ObDictMetaHeader &header, const char* buf, const int64_t data_len, int64_t& pos)
@@ -588,7 +589,7 @@ int ObDictDatabaseMeta::assign_(DATABASE_SCHEMA &database_schema)
 }
 
 ObDictColumnMeta::ObDictColumnMeta(ObIAllocator *allocator)
-  : allocator_(allocator), column_name_()
+  : allocator_(allocator), column_name_(), local_session_vars_(allocator)
 {
   reset();
 }
@@ -614,6 +615,8 @@ void ObDictColumnMeta::reset()
   column_ref_ids_.reset();
   udt_set_id_ = 0;
   sub_type_ = 0;
+  srs_id_ = 0;
+  local_session_vars_.reset();
 }
 
 DEFINE_EQUAL(ObDictColumnMeta)
@@ -633,7 +636,9 @@ DEFINE_EQUAL(ObDictColumnMeta)
       orig_default_value_,
       cur_default_value_,
       udt_set_id_,
-      sub_type_
+      sub_type_,
+      srs_id_,
+      local_session_vars_
       );
   IS_OBARRAY_EQUAL(extended_type_info_);
   IS_OBARRAY_EQUAL(column_ref_ids_);
@@ -662,7 +667,9 @@ DEFINE_SERIALIZE(ObDictColumnMeta)
       extended_type_info_,
       column_ref_ids_,
       udt_set_id_,
-      sub_type_);
+      sub_type_,
+      srs_id_,
+      local_session_vars_);
   }
 
   return ret;
@@ -714,6 +721,14 @@ DEFINE_DESERIALIZE_DATA_DICT(ObDictColumnMeta)
           DDLOG(WARN, "deserialize sub_type failed", KR(ret));
         }
       }
+      if (OB_SUCC(ret) && header.get_version() > 3) {
+        // srs_id_ and local_session_vars are serialized when version >= 4
+        if (OB_FAIL(NS_::decode(buf, data_len, pos, srs_id_))) {
+          DDLOG(WARN, "deserialize srs_id failed", KR(ret));
+        } else if (OB_FAIL(NS_::decode(buf, data_len, pos, local_session_vars_))) {
+          DDLOG(WARN, "deserialize local_session_var failed", KR(ret));
+        }
+      }
     }
   }
 
@@ -739,7 +754,9 @@ DEFINE_GET_SERIALIZE_SIZE(ObDictColumnMeta)
       extended_type_info_,
       column_ref_ids_,
       udt_set_id_,
-      sub_type_);
+      sub_type_,
+      srs_id_,
+      local_session_vars_);
   return len;
 }
 
@@ -774,6 +791,8 @@ int ObDictColumnMeta::assign_(COLUMN_META &column_schema)
     DDLOG(WARN, "assign extended_type_info failed", KR(ret), K(column_schema), KPC(this));
   } else if (OB_FAIL(column_schema.get_cascaded_column_ids(column_ref_ids_))) {
     DDLOG(WARN, "get_cascaded_column_ids failed", KR(ret), K(column_schema));
+  } else if (OB_FAIL(local_session_vars_.deep_copy(column_schema.get_local_session_var()))) {
+    DDLOG(WARN, "copy_local_session_vars failed", KR(ret), K(column_schema), KPC(this));
   } else {
     column_id_ = column_schema.get_column_id();
     rowkey_position_ = column_schema.get_rowkey_position();
@@ -790,6 +809,7 @@ int ObDictColumnMeta::assign_(COLUMN_META &column_schema)
     collation_type_ = column_schema.get_collation_type();
     udt_set_id_ = column_schema.get_udt_set_id();
     sub_type_ = column_schema.get_sub_data_type();
+    srs_id_ = column_schema.get_srs_id();
   }
 
   return ret;

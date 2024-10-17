@@ -75,6 +75,7 @@ private:
   int build_result();
 private:
   ObTableLoadStoreCtx *store_ctx_;
+  ObTableLoadStoreTableCtx * store_table_ctx_;
   const ObTableLoadParam *param_;
   common::ObArenaAllocator allocator_;
   common::ObArray<storage::ObIDirectLoadTabletTableCompactor *> all_compactor_array_;

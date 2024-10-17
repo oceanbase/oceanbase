@@ -102,26 +102,6 @@ int ObResourceMappingRuleManager::refresh_resource_mapping_rule(
   return ret;
 }
 
-int ObResourceMappingRuleManager::reset_mapping_rules()
-{
-  int ret = OB_SUCCESS;
-  for (common::hash::ObHashMap<sql::ObTenantUserKey, uint64_t>::const_iterator user_iter = user_rule_map_.begin();
-      OB_SUCC(ret) && user_iter != user_rule_map_.end(); ++user_iter) {
-    if (OB_FAIL(user_rule_map_.set_refactored(user_iter->first, 0, 1/*overwrite*/))) {
-      LOG_WARN("failed to reset user map", K(ret), K(user_iter->first));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    for (common::hash::ObHashMap<share::ObTenantFunctionKey, uint64_t>::const_iterator func_iter = function_rule_map_.begin();
-        OB_SUCC(ret) && func_iter != function_rule_map_.end(); ++func_iter) {
-      if (OB_FAIL(function_rule_map_.set_refactored(func_iter->first, 0, 1/*overwrite*/))) {
-        LOG_WARN("failed to reset user map", K(ret), K(func_iter->first));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObResourceMappingRuleManager::refresh_resource_user_mapping_rule(
     ObResourceManagerProxy &proxy,
     const uint64_t tenant_id,

@@ -249,14 +249,14 @@ void TestTmpFileStress::write_data_(const int64_t write_size)
     io_info.buf_ = buf_ + already_write;
     if (this_turn_write_size % ObTmpFileGlobal::PAGE_SIZE == 0 && i == 0) {
       io_info.size_ = this_turn_write_size - 2 * 1024;
-      ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->write(io_info));
+      ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->write(MTL_ID(), io_info));
 
       io_info.size_ = 2 * 1024;
       io_info.buf_ = buf_ + already_write + this_turn_write_size - 2 * 1024;
-      ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->write(io_info));
+      ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->write(MTL_ID(), io_info));
     } else {
       io_info.size_ = this_turn_write_size;
-      ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->write(io_info));
+      ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->write(MTL_ID(), io_info));
     }
     already_write += this_turn_write_size;
   }
@@ -278,7 +278,7 @@ void TestTmpFileStress::read_data_(const int64_t read_offset, const int64_t read
   io_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
   io_info.buf_ = read_buf;
   io_info.disable_block_cache_ = disable_block_cache_;
-  ret = MTL(ObTenantTmpFileManager *)->pread(io_info, read_offset, handle);
+  ret = MTL(ObTenantTmpFileManager *)->pread(MTL_ID(), io_info, read_offset, handle);
   int cmp = memcmp(handle.get_buffer(), buf_ + read_offset, io_info.size_);
   if (cmp != 0 || OB_FAIL(ret)) {
     STORAGE_LOG(WARN, "TestTmpFileStress read thread failed", KR(ret), K(fd_), K(cmp), K(thread_idx_), KP(buf_), K(read_offset), K(read_size));
@@ -312,7 +312,7 @@ void TestTmpFileStress::truncate_data_()
   io_info.size_ = size_;
   io_info.buf_ = read_buf;
   ObTmpFileIOHandle handle;
-  ret = MTL(ObTenantTmpFileManager *)->pread(io_info, offset_, handle);
+  ret = MTL(ObTenantTmpFileManager *)->pread(MTL_ID(), io_info, offset_, handle);
   int cmp = memcmp(handle.get_buffer()+invalid_size, buf_ + truncate_offset, valid_size);
   if (cmp != 0 || OB_FAIL(ret)) {
     STORAGE_LOG(INFO, "TestTmpFileStress truncate thread failed. "
@@ -341,7 +341,7 @@ void TestTmpFileStress::truncate_data_()
   MEMSET(zero_buf, 0, size_);
   read_buf = new char[size_];
   io_info.buf_ = read_buf;
-  ret = MTL(ObTenantTmpFileManager *)->pread(io_info, offset_, handle);
+  ret = MTL(ObTenantTmpFileManager *)->pread(MTL_ID(), io_info, offset_, handle);
   cmp = memcmp(handle.get_buffer(), zero_buf, size_);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(0, cmp);
@@ -445,7 +445,7 @@ void TestMultiTmpFileStress::run1()
   int64_t fd = 0;
   ObTenantEnv::set_tenant(tenant_ctx_);
 
-  ret = MTL(ObTenantTmpFileManager *)->open(fd, dir_id_);
+  ret = MTL(ObTenantTmpFileManager *)->open(fd, dir_id_, "");
   std::cout << "normal case, fd: " << fd << std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
   STORAGE_LOG(INFO, "open file success", K(fd));

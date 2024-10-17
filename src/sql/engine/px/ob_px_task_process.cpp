@@ -827,7 +827,8 @@ int ObPxTaskProcess::OpPostparation::apply(ObExecContext &ctx, ObOpSpec &op)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("input not found for op", "op_id", op.id_, K(ret));
       } else if (hj_spec.is_shared_ht_ && OB_SUCCESS != ret_) {
-        input->set_error_code(ret_);
+        // set error_code = OB_GOT_SIGNAL_ABORTING if this error code is used to interrupt other tasks.
+        input->set_error_code(OB_GOT_SIGNAL_ABORTING);
         LOG_TRACE("debug post apply info", K(ret_));
       } else {
         LOG_TRACE("debug post apply info", K(ret_));
@@ -844,7 +845,7 @@ int ObPxTaskProcess::OpPostparation::apply(ObExecContext &ctx, ObOpSpec &op)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("input not found for op", "op_id", op.id_, K(ret));
       } else if (hj_spec.is_shared_ht_ && OB_SUCCESS != ret_) {
-        input->set_error_code(ret_);
+        input->set_error_code(OB_GOT_SIGNAL_ABORTING);
         LOG_TRACE("debug post apply info", K(ret_));
       } else {
         LOG_TRACE("debug post apply info", K(ret_));
@@ -861,7 +862,7 @@ int ObPxTaskProcess::OpPostparation::apply(ObExecContext &ctx, ObOpSpec &op)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("input not found for op", "op_id", op.id_, K(ret));
       } else if (wf_spec.is_participator() && OB_SUCCESS != ret_) {
-        input->set_error_code(ret_);
+        input->set_error_code(OB_GOT_SIGNAL_ABORTING);
         LOG_TRACE("debug post apply info", K(ret_));
       } else {
         LOG_TRACE("debug post apply info", K(ret_));
@@ -878,7 +879,7 @@ int ObPxTaskProcess::OpPostparation::apply(ObExecContext &ctx, ObOpSpec &op)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("input is null", K(ret));
       } else if (wf_spec.is_participator() && OB_SUCCESS != ret_) {
-        input->set_error_code(ret_);
+        input->set_error_code(OB_GOT_SIGNAL_ABORTING);
         LOG_TRACE("debug post apply info", K(ret_));
       } else {
         LOG_TRACE("debug post apply info", K(ret_));

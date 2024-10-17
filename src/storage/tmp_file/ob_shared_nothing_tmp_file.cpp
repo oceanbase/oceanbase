@@ -286,7 +286,7 @@ ObSharedNothingTmpFile::ObSharedNothingTmpFile()
 
 ObSharedNothingTmpFile::~ObSharedNothingTmpFile()
 {
-  destroy();
+  reset();
 }
 
 int ObSharedNothingTmpFile::init(const uint64_t tenant_id, const int64_t fd, const int64_t dir_id,
@@ -313,7 +313,7 @@ int ObSharedNothingTmpFile::init(const uint64_t tenant_id, const int64_t fd, con
   } else if (OB_FAIL(page_idx_cache_.init(fd, &pc_ctrl->get_write_buffer_pool(),
                                           wbp_index_cache_allocator, wbp_index_cache_bkt_allocator))) {
     LOG_WARN("fail to init page idx array", KR(ret), K(fd));
-  } else if (OB_FAIL(meta_tree_.init(fd, &pc_ctrl->get_write_buffer_pool(), callback_allocator))) {
+  } else if (OB_FAIL(meta_tree_.init(fd, &pc_ctrl->get_write_buffer_pool(), callback_allocator, block_manager))) {
     LOG_WARN("fail to init meta tree", KR(ret), K(fd));
   } else {
     is_inited_ = true;
@@ -344,13 +344,13 @@ int ObSharedNothingTmpFile::init(const uint64_t tenant_id, const int64_t fd, con
   return ret;
 }
 
-int ObSharedNothingTmpFile::destroy()
+int ObSharedNothingTmpFile::release_resource()
 {
   int ret = OB_SUCCESS;
   int64_t fd_backup = fd_;
   int64_t free_cnt = 0;
 
-  LOG_INFO("tmp file destroy start", KR(ret), K(fd_), KPC(this));
+  LOG_INFO("tmp file release_resource start", KR(ret), K(fd_), KPC(this));
 
   if (cached_page_nums_ > 0) {
     uint32_t cur_page_id = begin_page_id_;
@@ -360,7 +360,7 @@ int ObSharedNothingTmpFile::destroy()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("begin page virtual id is invalid", KR(ret), K(fd_), K(begin_page_virtual_id_));
       } else if (OB_FAIL(wbp_->free_page(fd_, cur_page_id, ObTmpFilePageUniqKey(begin_page_virtual_id_), next_page_id))) {
-        LOG_WARN("fail to free page", KR(ret), K(fd_), K(cur_page_id), K(begin_page_virtual_id_));
+        LOG_ERROR("fail to free page", KR(ret), K(fd_), K(cur_page_id), K(begin_page_virtual_id_));
       } else {
         free_cnt++;
         cur_page_id = next_page_id;
@@ -369,22 +369,16 @@ int ObSharedNothingTmpFile::destroy()
     }
   }
   if (OB_SUCC(ret) && cached_page_nums_ != free_cnt) {
-    LOG_ERROR("tmp file destroy, cached_page_nums_ and free_cnt are not equal", KR(ret), K(fd_), K(free_cnt), KPC(this));
+    LOG_ERROR("tmp file release resource, cached_page_nums_ and free_cnt are not equal", KR(ret), K(fd_), K(free_cnt), KPC(this));
   }
 
-  LOG_INFO("tmp file destroy, free wbp page phase over", KR(ret), K(fd_), KPC(this));
+  LOG_INFO("tmp file release resource, free wbp page phase over", KR(ret), K(fd_), KPC(this));
 
   if (FAILEDx(meta_tree_.clear(truncated_offset_, file_size_))) {
-    LOG_WARN("fail to clear", KR(ret), K(fd_), K(truncated_offset_), K(file_size_));
+    LOG_ERROR("fail to clear meta tree", KR(ret), K(fd_), K(truncated_offset_), K(file_size_));
   }
 
-  LOG_INFO("tmp file destroy, meta_tree_ clear phase over", KR(ret), K(fd_), KPC(this));
-
-  if (OB_SUCC(ret)) {
-    reset();
-  }
-
-  LOG_INFO("tmp file destroy over", KR(ret), "fd", fd_backup);
+  LOG_INFO("tmp file release resource over", KR(ret), "fd", fd_);
   return ret;
 }
 
@@ -2511,10 +2505,13 @@ int ObSharedNothingTmpFile::generate_data_flush_info_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("flush sequence not match",
         KR(ret), K(inner_flush_ctx_.flush_seq_), K(flush_task), KPC(this));
-  } else if (OB_FAIL(copy_flush_data_from_wbp_(flush_task, info, data_flush_context,
-                                               copy_begin_page_id, copy_begin_page_virtual_id,
-                                               copy_end_page_id,
-                                               flush_sequence, need_flush_tail))) {
+  } else if (ObTmpFileFlushTask::TaskType::META == flush_task.get_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("flush task type is unexpected", KR(ret), K(flush_task), K(data_flush_context), KPC(this));
+  } else if (OB_FAIL(collect_flush_data_page_id_(flush_task, info, data_flush_context,
+                                                 copy_begin_page_id, copy_begin_page_virtual_id,
+                                                 copy_end_page_id,
+                                                 flush_sequence, need_flush_tail))) {
     LOG_WARN("fail to copy flush data from wbp", KR(ret),
         K(flush_task), K(info), K(data_flush_context), KPC(this));
   }
@@ -2555,7 +2552,7 @@ int ObSharedNothingTmpFile::generate_data_flush_info(
   return ret;
 }
 
-int ObSharedNothingTmpFile::copy_flush_data_from_wbp_(
+int ObSharedNothingTmpFile::collect_flush_data_page_id_(
     ObTmpFileFlushTask &flush_task,
     ObTmpFileFlushInfo &info,
     ObTmpFileDataFlushContext &data_flush_context,
@@ -2577,12 +2574,14 @@ int ObSharedNothingTmpFile::copy_flush_data_from_wbp_(
   uint32_t cur_flushed_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
   uint32_t cur_page_id = copy_begin_page_id;
   int64_t cur_page_virtual_id = copy_begin_page_virtual_id;
+  int64_t collected_page_cnt = 0;
 
-  if (OB_ISNULL(buf) || OB_UNLIKELY(OB_STORAGE_OBJECT_MGR.get_macro_object_size() <= write_offset)) {
+  if (OB_UNLIKELY(OB_STORAGE_OBJECT_MGR.get_macro_object_size() <= write_offset)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid buf or write_offset", KR(ret), KP(buf), K(write_offset), K(flush_task), KPC(this));
   } else if (OB_FAIL(inner_flush_ctx_.data_flush_infos_.push_back(InnerFlushInfo()))) {
     LOG_WARN("fail to push back empty flush info", KR(ret), K(fd_), K(info), K(flush_task), KPC(this));
+    ret = OB_ITER_END; // override error code, we will handle this err code in flush mgr
   }
   while (OB_SUCC(ret) && cur_page_id != copy_end_page_id && write_offset < OB_STORAGE_OBJECT_MGR.get_macro_object_size()) {
     if (need_flush_tail && cur_page_id == end_page_id_ && file_size_ % ObTmpFileGlobal::PAGE_SIZE != 0) {
@@ -2601,21 +2600,21 @@ int ObSharedNothingTmpFile::copy_flush_data_from_wbp_(
       LOG_WARN("fail to read page", KR(ret), K(fd_), K(cur_page_id));
     } else if (OB_FAIL(wbp_->notify_write_back(fd_, cur_page_id, ObTmpFilePageUniqKey(cur_page_virtual_id)))) {
       LOG_WARN("fail to notify write back", KR(ret), K(fd_), K(cur_page_id));
-    } else if (OB_UNLIKELY(!flush_task.check_buf_range_valid(buf, ObTmpFileGlobal::PAGE_SIZE))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid buffer range", KR(ret), K(fd_), K(write_offset), KP(buf));
+    } else if (OB_FAIL(flush_task.get_flush_page_id_arr().push_back(cur_page_id))) {
+      LOG_ERROR("fail to push back flush page id", KR(ret), K(fd_), K(cur_page_id), KPC(this));
+      ret = OB_ITER_END; // override error code
     } else {
       // ObTmpPageCacheKey cache_key(flush_task.get_block_index(),
       //                             write_offset / ObTmpFileGlobal::PAGE_SIZE, tenant_id_);
       // ObTmpPageCacheValue cache_value(page_buf);
       // ObTmpPageCache::get_instance().try_put_page_to_cache(cache_key, cache_value);
 
-      MEMCPY(buf + write_offset, page_buf, ObTmpFileGlobal::PAGE_SIZE);
       write_offset += ObTmpFileGlobal::PAGE_SIZE;
       flushing_page_num += 1;
       cur_flushed_page_id = cur_page_id;
       cur_page_id = next_page_id;
       cur_page_virtual_id += 1;
+      collected_page_cnt += 1;
       if (original_state_is_dirty) {
         write_back_data_page_num_++;
       }
@@ -2663,11 +2662,16 @@ int ObSharedNothingTmpFile::copy_flush_data_from_wbp_(
       data_flush_context.set_has_flushed_last_partially_written_page(true);
     }
     flush_task.set_data_length(write_offset);
+    flush_task.set_buffer_pool_ptr(wbp_);
+    flush_task.set_type(ObTmpFileFlushTask::DATA);
 
     inner_flush_ctx_.flush_seq_ = flush_sequence;
   } else {
     LOG_WARN("fail to generate data flush info", KR(ret), K(fd_), K(need_flush_tail),
         K(flush_sequence), K(data_flush_context), K(info), K(flush_task), KPC(this));
+    for (int32_t i = 0; i < collected_page_cnt; ++i) {
+      flush_task.get_flush_page_id_arr().pop_back();
+    }
     if (inner_flush_ctx_.data_flush_infos_.size() == origin_info_num + 1) {
       inner_flush_ctx_.data_flush_infos_.pop_back();
     }
@@ -2702,11 +2706,15 @@ int ObSharedNothingTmpFile::generate_meta_flush_info_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("flush sequence not match", KR(ret), K(flush_sequence), K(inner_flush_ctx_.flush_seq_),
              K(flush_task), KPC(this));
+  } else if (ObTmpFileFlushTask::TaskType::DATA == flush_task.get_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("flush task type is unexpected", KR(ret), K(flush_task), K(meta_flush_context), KPC(this));
   } else if (OB_ISNULL(buf) || OB_UNLIKELY(OB_STORAGE_OBJECT_MGR.get_macro_object_size() <= write_offset)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid buf or write_offset", KR(ret), KP(buf), K(write_offset), K(flush_task), KPC(this));
   } else if (OB_FAIL(flush_infos_.push_back(InnerFlushInfo()))) {
     LOG_WARN("fail to push back empty flush info", KR(ret), K(fd_), K(info), K(flush_task), KPC(this));
+    ret = OB_ITER_END; // override error code, we will handle this err code in flush mgr
   } else if (OB_FAIL(meta_tree_.flush_meta_pages_for_block(block_index, flush_type, buf, write_offset,
                                                            meta_flush_context, info.flush_meta_page_array_))) {
     LOG_WARN("fail to flush meta pages for block", KR(ret), K(fd_), K(flush_task), K(meta_flush_context), KPC(this));
@@ -2729,6 +2737,7 @@ int ObSharedNothingTmpFile::generate_meta_flush_info_(
 
   if (OB_SUCC(ret)) {
     flush_task.set_data_length(write_offset);
+    flush_task.set_type(ObTmpFileFlushTask::META);
     inner_flush_ctx_.flush_seq_ = flush_sequence;
   } else {
     LOG_WARN("fail to generate meta flush info", KR(ret), K(fd_), K(flush_task),
@@ -2792,9 +2801,6 @@ int ObSharedNothingTmpFile::insert_meta_tree_item(const ObTmpFileFlushInfo &info
       last_page_lock_.unlock();
     }
 
-    if (OB_SUCC(ret)) {
-      truncate_lock_.unlock();
-    }
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("flush info does not contain data info", KR(ret), K(info), KPC(this));
@@ -2827,6 +2833,13 @@ int ObSharedNothingTmpFile::insert_meta_tree_item(const ObTmpFileFlushInfo &info
   }
 
   LOG_DEBUG("insert_meta_tree_item end", KR(ret), KPC(this));
+  return ret;
+}
+
+int ObSharedNothingTmpFile::copy_finish()
+{
+  int ret = OB_SUCCESS;
+  truncate_lock_.unlock();
   return ret;
 }
 

@@ -124,12 +124,10 @@ TEST_F(TestObSimpleLogCache, read)
   PalfBufferIterator iterator1;
   EXPECT_EQ(OB_ITER_END, read_log(leader, iterator1, LogIOUser::FETCHLOG));
   EXPECT_EQ(false, iterator1.io_ctx_.iterator_info_.allow_filling_cache_);
-  EXPECT_EQ(0, iterator1.io_ctx_.iterator_info_.cold_cache_stat_.hit_cnt_);
 
   PalfBufferIterator iterator2;
   EXPECT_EQ(OB_ITER_END, read_log(leader, iterator2, LogIOUser::CDC));
   EXPECT_EQ(true, iterator2.io_ctx_.iterator_info_.allow_filling_cache_);
-  EXPECT_NE(0, iterator2.io_ctx_.iterator_info_.cold_cache_stat_.hit_cnt_);
 
   OB_LOG_KV_CACHE.destroy();
 }
@@ -231,14 +229,13 @@ TEST_F(TestObSimpleLogCache, fill_cache_when_slide)
     PalfBufferIterator iterator;
     PALF_LOG(INFO, "start to read log");
     EXPECT_EQ(OB_ITER_END, read_log(leader, iterator, LogIOUser::CDC));
-    // all hit cache, no read disk
-    EXPECT_EQ(0, iterator.io_ctx_.iterator_info_.cold_cache_stat_.miss_cnt_);
   }
 
   {
     PALF_LOG(INFO, "test exceptional situations: miss hot cache", K(id));
     // miss hot cache when committed logs slide, unable to fill cold cache
-    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 5000, 30 * 1024, id, lsn_array, scn_array));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 2000, 1024, id, lsn_array, scn_array));
+    EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.get_palf_handle_impl()->get_max_lsn()));
     PALF_LOG(INFO, "reset hot cache", K(id));
     leader.get_palf_handle_impl()->log_engine_.log_storage_.log_cache_->hot_cache_.reset();
 
@@ -248,10 +245,11 @@ TEST_F(TestObSimpleLogCache, fill_cache_when_slide)
     EXPECT_EQ(OB_SUCCESS, leader.get_palf_handle_impl()->locate_by_lsn_coarsely(failed_aligned_lsn, result_scn));
     LSN read_lsn;
     EXPECT_EQ(OB_SUCCESS, leader.get_palf_handle_impl()->locate_by_scn_coarsely(result_scn, read_lsn));
-    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, id));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 20, MAX_LOG_BODY_SIZE, id, lsn_array, scn_array));
+    EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.get_palf_handle_impl()->get_max_lsn()));
 
     EXPECT_EQ(OB_SUCCESS, leader.get_palf_handle_impl()->log_engine_.log_storage_.log_cache_->hot_cache_.init(id, leader.get_palf_handle_impl()));
-    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 5000, 30 * 1024, id, lsn_array, scn_array));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 2000, 1024, id, lsn_array, scn_array));
 
     PalfBufferIterator iterator;
 

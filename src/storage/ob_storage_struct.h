@@ -29,6 +29,7 @@
 #include "storage/ddl/ob_ddl_struct.h"
 #include "storage/high_availability/ob_tablet_ha_status.h"
 #include "storage/blocksstable/ob_major_checksum_info.h"
+#include "storage/meta_mem/ob_tablet_handle.h"
 
 namespace oceanbase
 {
@@ -313,6 +314,7 @@ struct ObGetMergeTablesResult
   //for backfill
   bool is_backfill_;
   share::SCN backfill_scn_;
+  int64_t transfer_seq_; // is_used for write_macro_block in ss, used for all compaction.
   ObGetMergeTablesResult();
   bool is_valid() const;
   void reset_handle_and_range();
@@ -322,7 +324,7 @@ struct ObGetMergeTablesResult
   int copy_basic_info(const ObGetMergeTablesResult &src);
   share::SCN get_merge_scn() const;
   TO_STRING_KV(K_(version_range), K_(scn_range), K_(merge_version), K_(is_simplified),
-      K_(handle), K_(update_tablet_directly), K_(schedule_major), K_(is_backfill), K_(backfill_scn));
+      K_(handle), K_(update_tablet_directly), K_(schedule_major), K_(is_backfill), K_(backfill_scn), K_(transfer_seq));
 };
 
 OB_INLINE bool is_valid_migrate_status(const ObMigrateStatus &status)
@@ -468,6 +470,23 @@ struct ObUpdateTableStoreParam
   const blocksstable::ObSSTable *sstable_;
   bool allow_duplicate_sstable_;
   UpdateUpperTransParam upper_trans_param_; // set upper_trans_param_ only when update upper_trans_version
+  bool need_replace_remote_sstable_;
+};
+
+struct ObSplitTableStoreParam final
+{
+public:
+  ObSplitTableStoreParam();
+  ~ObSplitTableStoreParam();
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(snapshot_version), K_(multi_version_start), K_(update_with_major_tables));
+
+public:
+  int64_t snapshot_version_;
+  int64_t multi_version_start_;
+  bool update_with_major_tables_;
+  bool need_replace_remote_sstable_; // only true for restore replace sstable.
 };
 
 struct ObBatchUpdateTableStoreParam final
@@ -480,7 +499,7 @@ struct ObBatchUpdateTableStoreParam final
   int get_max_clog_checkpoint_scn(share::SCN &clog_checkpoint_scn) const;
 
   TO_STRING_KV(K_(tables_handle), K_(rebuild_seq), K_(is_transfer_replace),
-      K_(start_scn), KP_(tablet_meta), K_(restore_status), K_(need_replace_remote_sstable));
+      K_(start_scn), KP_(tablet_meta), K_(restore_status), K_(tablet_split_param), K_(need_replace_remote_sstable));
 
   ObTablesHandleArray tables_handle_;
 #ifdef ERRSIM
@@ -491,6 +510,7 @@ struct ObBatchUpdateTableStoreParam final
   share::SCN start_scn_;
   const ObMigrationTabletParam *tablet_meta_;
   ObTabletRestoreStatus::STATUS restore_status_;
+  ObSplitTableStoreParam tablet_split_param_;
   bool need_replace_remote_sstable_;
 
   DISALLOW_COPY_AND_ASSIGN(ObBatchUpdateTableStoreParam);
@@ -596,6 +616,35 @@ public:
   bool on_partition_rebuild();
 private:
   transaction::ObLSTxCtxMgr& ls_tx_ctx_mgr_;
+};
+
+
+enum class ObTabletSplitType : int64_t {
+  RANGE,
+  NONE_RANGE,
+  MAX_TYPE,
+};
+
+struct ObTabletSplitTscInfo final
+{
+public:
+  ObTabletSplitTscInfo();
+  ~ObTabletSplitTscInfo() = default;
+
+  bool is_valid() const;
+  void reset();
+  int assign(const ObTabletSplitTscInfo &param);
+
+  TO_STRING_KV(K_(start_partkey),
+    K_(end_partkey), K_(src_tablet_handle), K_(split_type), K_(split_cnt), K_(partkey_is_rowkey_prefix));
+
+public:
+  blocksstable::ObDatumRowkey start_partkey_;
+  blocksstable::ObDatumRowkey end_partkey_;
+  ObTabletHandle src_tablet_handle_;
+  int64_t split_cnt_;
+  ObTabletSplitType split_type_;
+  bool partkey_is_rowkey_prefix_;
 };
 
 

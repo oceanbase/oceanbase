@@ -550,12 +550,14 @@ public:
   int assign(const ObTransferTabletInfoArg &other);
   void reset();
 
-  TO_STRING_KV(K_(tenant_id), K_(src_ls_id), K_(dest_ls_id), K_(tablet_list), K_(data_version));
+  TO_STRING_KV(K_(tenant_id), K_(src_ls_id), K_(dest_ls_id),
+       K_(tablet_list), K_(data_version), K_(new_mv_merge_scn));
   uint64_t tenant_id_;
   share::ObLSID src_ls_id_;
   share::ObLSID dest_ls_id_;
   common::ObSArray<share::ObTransferTabletInfo> tablet_list_;
   uint64_t data_version_;
+  share::SCN new_mv_merge_scn_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransferTabletInfoArg);
 };
@@ -772,12 +774,12 @@ public:
 
 #ifdef OB_BUILD_SHARED_STORAGE
 // migration micro cache related
-struct ObGetMicroBlockCacheSizeArg final
+struct ObGetMicroBlockCacheInfoArg final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObGetMicroBlockCacheSizeArg();
-  ~ObGetMicroBlockCacheSizeArg() {}
+  ObGetMicroBlockCacheInfoArg();
+  ~ObGetMicroBlockCacheInfoArg() {}
   bool is_valid() const;
   void reset();
 
@@ -787,18 +789,18 @@ public:
   share::ObLSID ls_id_;
 };
 
-struct ObGetMicroBlockCacheSizeRes final
+struct ObGetMicroBlockCacheInfoRes final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObGetMicroBlockCacheSizeRes();
-  ~ObGetMicroBlockCacheSizeRes() {}
+  ObGetMicroBlockCacheInfoRes();
+  ~ObGetMicroBlockCacheInfoRes() {}
   bool is_valid() const;
   void reset();
 
-  TO_STRING_KV(K_(cache_size));
+  TO_STRING_KV(K_(ls_cache_info));
 public:
-  uint64_t cache_size_;
+  ObSSLSCacheInfo ls_cache_info_;
 };
 
 struct ObGetMigrationCacheJobInfoArg final
@@ -939,7 +941,7 @@ public:
   RPC_S(PR5 fetch_ls_member_and_learner_list, OB_HA_FETCH_LS_MEMBER_AND_LEARNER_LIST, (ObFetchLSMemberAndLearnerListArg), ObFetchLSMemberAndLearnerListInfo);
 #ifdef OB_BUILD_SHARED_STORAGE
   RPC_S(PR5 fetch_micro_block_keys, OB_HA_FETCH_MICRO_BLOCK_KEYS, (ObGetMicroBlockKeyArg), ObCopyMicroBlockKeySetRes);
-  RPC_S(PR5 get_micro_block_cache_size, OB_HA_GET_MICRO_BLOCK_CACHE_SIZE, (ObGetMicroBlockCacheSizeArg), ObGetMicroBlockCacheSizeRes);
+  RPC_S(PR5 get_micro_block_cache_info, OB_HA_GET_MICRO_BLOCK_CACHE_INFO, (ObGetMicroBlockCacheInfoArg), ObGetMicroBlockCacheInfoRes);
   RPC_S(PR5 get_migration_cache_job_info, OB_HA_GET_MIGRATION_CACHE_JOB_INFO, (ObGetMigrationCacheJobInfoArg), ObGetMigrationCacheJobInfoRes);
 #endif
 
@@ -1117,6 +1119,7 @@ public:
 private:
   int check_start_transfer_out_tablets_();
   int check_start_transfer_in_tablets_();
+  int check_start_transfer_in_mv_tablets_();
   // Major sstable or ddl sstable needs to exist in src_tablet
   int check_transfer_out_tablet_sstable_(const ObTablet *tablet);
 
@@ -1342,12 +1345,12 @@ protected:
   int process();
 };
 
-class ObGetMicroBlockCacheSizeP:
-    public ObStorageRpcProxy::Processor<OB_HA_GET_MICRO_BLOCK_CACHE_SIZE>
+class ObGetMicroBlockCacheInfoP:
+    public ObStorageRpcProxy::Processor<OB_HA_GET_MICRO_BLOCK_CACHE_INFO>
 {
 public:
-  ObGetMicroBlockCacheSizeP() = default;
-  virtual ~ObGetMicroBlockCacheSizeP() {}
+  ObGetMicroBlockCacheInfoP() = default;
+  virtual ~ObGetMicroBlockCacheInfoP() {}
 protected:
   int process();
 };
@@ -1590,11 +1593,11 @@ public:
       const ObStorageHASrcInfo &src_info,
       obrpc::ObFetchLSMemberAndLearnerListInfo &member_info);
 #ifdef OB_BUILD_SHARED_STORAGE
-  virtual int get_ls_micro_block_cache_size(
+  virtual int get_ls_micro_block_cache_info(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
       const ObStorageHASrcInfo &src_info,
-      int64_t &cache_size);
+      ObSSLSCacheInfo &cache_info);
   virtual int get_ls_migration_cache_job_info(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,

@@ -68,6 +68,8 @@ private:
       const obrpc::ObInnerSQLTransmitArg::InnerSQLOperationType operation_type,
       const obrpc::ObInnerSQLTransmitArg &arg,
       observer::ObInnerSQLConnection *conn);
+  static int process_replace_lock_(const obrpc::ObInnerSQLTransmitArg &arg,
+                                   observer::ObInnerSQLConnection *conn);
 // --------------------- interface for inner connection client -----------------------
 public:
   static int lock_table(
@@ -146,6 +148,10 @@ public:
       const uint64_t tenant_id,
       const ObUnLockObjsRequest &arg,
       observer::ObInnerSQLConnection *conn);
+  static int replace_lock(
+      const uint64_t tenant_id,
+      const ObReplaceLockRequest &req,
+      observer::ObInnerSQLConnection *conn);
   static int create_inner_conn(sql::ObSQLSessionInfo *session_info,
                                common::ObMySQLProxy *sql_proxy,
                                observer::ObInnerSQLConnection *&inner_conn);
@@ -156,12 +162,22 @@ public:
   static int build_tx_param(sql::ObSQLSessionInfo *session_info, ObTxParam &tx_param, const bool *readonly = nullptr);
 
 private:
+  static int replace_lock_(
+      const uint64_t tenant_id,
+      const ObReplaceLockRequest &req,
+      observer::ObInnerSQLConnection *conn,
+      observer::ObInnerSQLResult &res);
   static int do_obj_lock_(
       const uint64_t tenant_id,
       const ObLockRequest &arg,
       const obrpc::ObInnerSQLTransmitArg::InnerSQLOperationType operation_type,
       observer::ObInnerSQLConnection *conn,
       observer::ObInnerSQLResult &res);
+  static int handle_request_by_operation_type_(
+    ObTxDesc &tx_desc,
+    const ObTxParam &tx_param,
+    const ObLockRequest &arg,
+    const obrpc::ObInnerSQLTransmitArg::InnerSQLOperationType operation_type);
   static int request_lock_(
       const uint64_t tenant_id,
       const uint64_t table_id,
@@ -175,6 +191,7 @@ private:
       const ObLockRequest &arg,
       const obrpc::ObInnerSQLTransmitArg::InnerSQLOperationType operation_type,
       observer::ObInnerSQLConnection *conn);
+  static bool is_unlock_operation(obrpc::ObInnerSQLTransmitArg::InnerSQLOperationType type);
   static int get_org_cluster_id_(sql::ObSQLSessionInfo *session, int64_t &org_cluster_id);
   static int set_to_mysql_compat_mode_(observer::ObInnerSQLConnection *conn,
                                        bool &need_reset_sess_mode,

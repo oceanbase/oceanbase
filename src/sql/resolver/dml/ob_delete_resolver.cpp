@@ -455,14 +455,7 @@ int ObDeleteResolver::generate_delete_table_info(const TableItem &table_item)
     }
     if (OB_SUCC(ret)) {
       TableItem *rowkey_doc = NULL;
-      if (OB_FAIL(try_add_join_table_for_fts(&table_item, rowkey_doc))) {
-        LOG_WARN("fail to try add join table for fts", K(ret), K(table_item));
-      } else if (OB_NOT_NULL(rowkey_doc) && OB_FAIL(try_update_column_expr_for_fts(
-                                                                      table_item,
-                                                                      rowkey_doc,
-                                                                      table_info->column_exprs_))) {
-        LOG_WARN("fail to try update column expr for fts", K(ret), K(table_item));
-      } else if (OB_FAIL(delete_stmt->get_delete_table_info().push_back(table_info))) {
+      if (OB_FAIL(delete_stmt->get_delete_table_info().push_back(table_info))) {
         LOG_WARN("failed to push back table info", K(ret));
       } else if (gindex_cnt > 0) {
         delete_stmt->set_has_global_index(true);

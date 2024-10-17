@@ -532,6 +532,7 @@ GLOBAL_ERRSIM_POINT_DEF(1188, EN_SESS_CLEAN_KILL_MAP_TIME, "Used to clean up kil
       // sql audit background thread stuck
 GLOBAL_ERRSIM_POINT_DEF(1189, EN_SQL_AUDIT_RELEASE_BACK_THREAD_STUCK, "");
 GLOBAL_ERRSIM_POINT_DEF(1190, EN_SQL_AUDIT_CONSTRUCT_BACK_THREAD_STUCK, "");
+GLOBAL_ERRSIM_POINT_DEF(1199, EN_DISABLE_ENCODESORTKEY_OPT, "Used for disable encode sortkey simd optimization");
 GLOBAL_ERRSIM_POINT_DEF(1200, EN_ENABLE_NEWSORT_FORCE, "");
 
 // Transaction // 2001 - 2100
@@ -589,5 +590,6 @@ GLOBAL_ERRSIM_POINT_DEF(2453, EN_ENABLE_NEW_RESULT_META_DATA, "For testing enabl
 // Protocol end
 
 GLOBAL_ERRSIM_POINT_DEF(2501, EN_CHECK_SORT_CMP, "Used to check the legality of the compare method for std::sort");
+GLOBAL_ERRSIM_POINT_DEF(2502, EN_ENABLE_SHARED_STORAGE_COLUMN_GROUP, "whether to enable column group under shared storage mode");
 
 #endif /*GLOBAL_ERRSIM_POINT_DEF*/

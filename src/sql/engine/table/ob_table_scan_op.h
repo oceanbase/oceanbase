@@ -32,6 +32,8 @@
 #include "sql/das/iter/ob_das_iter.h"
 #include "sql/das/iter/ob_das_merge_iter.h"
 #include "sql/das/iter/ob_das_group_fold_iter.h"
+#include "sql/das/ob_das_domain_utils.h"
+#include "share/ob_fts_index_builder_util.h"
 
 namespace oceanbase
 {
@@ -67,28 +69,40 @@ public:
   bool fq_read_tx_uncommitted_; // whether read uncommitted changes in transaction
 };
 
-struct ObSpatialIndexCache
+
+struct ObDomainIndexCache
 {
 public:
-  ObSpatialIndexCache() :
-      spat_rows_(nullptr),
+  ObDomainIndexCache() :
+      dom_rows_(nullptr),
       rows_(nullptr),
-      spat_row_index_(0),
+      domain_row_index_(0),
       mbr_buffer_(nullptr),
+      docid_buffer_(nullptr),
       geo_idx_(0),
       cell_idx_(0),
-      mbr_idx_(0)
+      mbr_idx_(0),
+      rowkey_count_(0),
+      column_count_(0),
+      record_count_(0),
+      domain_column_idx_(-1),
+      alloc_()
   {}
-  ~ObSpatialIndexCache() {};
-  ObDomainIndexRow *spat_rows_;
+  ~ObDomainIndexCache() { alloc_.reset();  };
+  ObDomainIndexRow *dom_rows_;
   blocksstable::ObDatumRow *rows_;
-  uint8_t spat_row_index_;
+  uint32_t domain_row_index_;
   void *mbr_buffer_;
+  ObDocId* docid_buffer_;
   uint32_t geo_idx_;
   uint32_t cell_idx_;
   uint32_t mbr_idx_;
-};
-
+  uint32_t rowkey_count_;
+  uint32_t column_count_;
+  uint32_t record_count_;
+  int32_t domain_column_idx_;
+  ObArenaAllocator alloc_;
+ };
 //for the oracle virtual agent table access the real table
 struct AgentVtAccessMeta
 {
@@ -137,6 +151,7 @@ struct GroupRescanParamInfo
   common::ObObjParam cur_param_; //current param in param store, used to restore paramstore state after the completion of group rescan.
 };
 typedef common::ObFixedArray<GroupRescanParamInfo, common::ObIAllocator> GroupRescanParamArray;
+
 struct ObTableScanCtDef
 {
   OB_UNIS_VERSION(1);
@@ -158,7 +173,9 @@ public:
   { }
   const ExprFixedArray &get_das_output_exprs() const
   {
-    return lookup_ctdef_ != nullptr ? lookup_ctdef_->result_output_ : scan_ctdef_.result_output_;
+    return attach_spec_.attach_ctdef_ != nullptr ? attach_spec_.get_result_output()
+                                                 : lookup_ctdef_ != nullptr ? lookup_ctdef_->result_output_
+                                                 : scan_ctdef_.result_output_;
   }
   const UIntFixedArray &get_full_acccess_cids() const
   {
@@ -168,6 +185,8 @@ public:
   }
   int allocate_dppr_table_loc();
   ObDASScanCtDef *get_lookup_ctdef();
+  const ObDASScanCtDef *get_lookup_ctdef() const;
+  ObDASScanCtDef *get_rowkey_doc_ctdef();
   ObDASScanCtDef *get_rowkey_vid_ctdef();
   TO_STRING_KV(K_(pre_query_range),
                K_(flashback_item),
@@ -179,7 +198,9 @@ public:
                KPC_(das_dppr_tbl),
                KPC_(calc_part_id_expr),
                K_(global_index_rowkey_exprs),
-               K_(attach_spec));
+               K_(attach_spec),
+               K_(is_das_keep_order),
+               K_(use_index_merge));
   //the query range of index scan/table scan
   ObQueryRange pre_query_range_;
   FlashBackItem flashback_item_;
@@ -211,7 +232,8 @@ public:
     uint64_t flags_;
     struct {
       uint64_t is_das_keep_order_            : 1; // whether das need keep ordering
-      uint64_t reserved_                     : 63;
+      uint64_t use_index_merge_              : 1; // whether use index merge
+      uint64_t reserved_                     : 62;
     };
   };
 };
@@ -226,7 +248,8 @@ struct ObTableScanRtDef
       range_buffer_idx_(0),
       group_size_(0),
       max_group_size_(0),
-      attach_rtinfo_(nullptr)
+      attach_rtinfo_(nullptr),
+      dynamic_selected_tablet_id_()
   { }
 
   void prepare_multi_part_limit_param();
@@ -247,6 +270,13 @@ struct ObTableScanRtDef
   int64_t group_size_;
   int64_t max_group_size_;
   ObDASAttachRtInfo *attach_rtinfo_;
+  // dynamic partition pruning is used for two cases:
+  // 1. dynamic parameter as partitioned key
+  //    In this case, we need to calculate tablet ids every time we get new parameters
+  // 2. prefer to select local replica
+  //    In this case, tablet id only needs to be calculated once. dynamic_selected_tablet_id_
+  //    is used to store it to avoid duplicate calculations
+  ObTabletID dynamic_selected_tablet_id_;
 };
 
 // table scan operator input
@@ -325,6 +355,8 @@ public:
     return tsc_ctdef_.scan_ctdef_.table_param_.get_read_info().get_columns_desc(); }
   inline void set_spatial_ddl(bool is_spatial_ddl) { is_spatial_ddl_ = is_spatial_ddl; }
   inline bool is_spatial_ddl() const { return is_spatial_ddl_; }
+  inline void set_multivalue_ddl(bool is_multivalue_ddl) { is_multivalue_ddl_ = is_multivalue_ddl; }
+  inline bool is_multivalue_ddl() const { return is_multivalue_ddl_; }
   DECLARE_VIRTUAL_TO_STRING;
 
 public:
@@ -485,7 +517,8 @@ protected:
   int single_equal_scan_check_type(const ParamStore &param_store, bool& is_same_type);
   bool need_extract_range() const { return MY_SPEC.tsc_ctdef_.pre_query_range_.has_range(); }
   int prepare_single_scan_range(int64_t group_idx = 0);
-
+  int prepare_index_merge_scan_range(int64_t group_idx = 0);
+  int prepare_range_for_each_index(int64_t group_idx, ObIAllocator &allocator, ObDASBaseRtDef *rtdef);
   int reuse_table_rescan_allocator();
 
   int local_iter_rescan();
@@ -505,15 +538,26 @@ protected:
                                 ObNewRange &part_range);
 
   int fill_storage_feedback_info();
-  void fill_sql_plan_monitor_info();
   //int extract_scan_ranges();
   void fill_table_scan_stat(const ObTableScanStatistic &statistic,
                             ObTableScanStat &scan_stat) const;
+  void init_scan_monitor_info();
   void set_cache_stat(const ObPlanStat &plan_stat);
   int inner_get_next_row_implement();
   int fill_generated_cellid_mbr(const ObStorageDatum &cellid, const ObStorageDatum &mbr);
   int inner_get_next_spatial_index_row();
   int init_spatial_index_rows();
+  int init_multivalue_index_rows();
+  int extend_domain_obj_buffer(uint32_t size);
+  int fill_generated_multivalue_column(ObStorageDatum* store_datums);
+  int multivalue_get_pure_data(ObIAllocator& tmp_allocator,
+                               const char*& data,
+                               int64_t& data_len,
+                               uint32_t& rowkey_start,
+                               uint32_t& rowkey_end,
+                               uint32_t& record_num,
+                               bool& is_save_rowkey);
+  int inner_get_next_multivalue_index_row();
   void set_real_rescan_cnt(int64_t real_rescan_cnt) { group_rescan_cnt_ = real_rescan_cnt; }
   int64_t get_real_rescan_cnt() { return group_rescan_cnt_; }
 
@@ -639,6 +683,10 @@ private:
   void gen_rand_size_and_skip_bits(const int64_t batch_size, int64_t &rand_size, int64_t &skip_bits);
 
   void adjust_rand_output_brs(const int64_t rand_skip_bits);
+  int inner_get_next_fts_index_row();
+  int fetch_next_fts_index_rows();
+  int fill_generated_fts_cols(ObDatumRow *row);
+  int64_t get_part_dep_col_cnt();
 protected:
   DASOpResultIter scan_result_;
   ObTableScanRtDef tsc_rtdef_;
@@ -666,7 +714,8 @@ protected:
   int64_t scan_task_id_;
   bool report_checksum_;
   bool in_rescan_;
-  ObSpatialIndexCache spat_index_;
+  ObDomainIndexCache domain_index_;
+  ObFTIndexRowCache fts_index_;
 
   // output_ is used to output data, TSC operator directly invokes output_::get_next_row(s),
   // it points to fold_iter_ in group rescan and iter_tree_ in normal scan.
@@ -684,6 +733,7 @@ protected:
   ObDASMergeIter *scan_iter_;
   int64_t group_rescan_cnt_;
   int64_t group_id_;
+  ObTSCMonitorInfo tsc_monitor_info_;
  };
 
 } // end namespace sql

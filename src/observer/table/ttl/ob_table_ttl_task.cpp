@@ -35,14 +35,17 @@ using namespace oceanbase::rootserver;
  */
 ObTableTTLDeleteTask::ObTableTTLDeleteTask():
     ObITask(ObITaskType::TASK_TYPE_TTL_DELETE),
+    rowkey_allocator_(ObMemAttr(MTL_ID(), "TTLDelTaskRKey")),
     is_inited_(false),
     param_(),
     info_(),
+    sess_guard_(),
+    schema_guard_(),
+    simple_table_schema_(nullptr),
     allocator_(ObMemAttr(MTL_ID(), "TTLDelTaskCtx")),
     rowkey_(),
-    ttl_tablet_mgr_(NULL),
-    hbase_cur_version_(0),
-    rowkey_allocator_(ObMemAttr(MTL_ID(), "TTLDelTaskRKey"))
+    ttl_tablet_scheduler_(NULL),
+    hbase_cur_version_(0)
 {
 }
 
@@ -50,7 +53,7 @@ ObTableTTLDeleteTask::~ObTableTTLDeleteTask()
 {
 }
 
-int ObTableTTLDeleteTask::init(ObTenantTabletTTLMgr *ttl_tablet_mgr,
+int ObTableTTLDeleteTask::init(ObTabletTTLScheduler *ttl_tablet_scheduler,
                                const ObTTLTaskParam &ttl_para,
                                ObTTLTaskInfo &ttl_info)
 {
@@ -58,9 +61,10 @@ int ObTableTTLDeleteTask::init(ObTenantTabletTTLMgr *ttl_tablet_mgr,
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", KR(ret));
-  } else if (OB_ISNULL(ttl_tablet_mgr) || ttl_info.table_id_ == OB_INVALID_ID || !ttl_info.ls_id_.is_valid() || !ttl_info.is_valid() || ttl_para.tenant_id_ == OB_INVALID_ID) {
+  } else if (OB_ISNULL(ttl_tablet_scheduler) || ttl_info.table_id_ == OB_INVALID_ID ||
+            !ttl_info.ls_id_.is_valid() || !ttl_info.is_valid() || ttl_para.tenant_id_ == OB_INVALID_ID) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(ttl_tablet_mgr), K(ttl_info), K(ttl_para));
+    LOG_WARN("invalid argument", KR(ret), K(ttl_tablet_scheduler), K(ttl_info), K(ttl_para));
   } else {
     if (ttl_info.row_key_.empty()) {
       rowkey_.reset();
@@ -74,13 +78,67 @@ int ObTableTTLDeleteTask::init(ObTenantTabletTTLMgr *ttl_tablet_mgr,
   if (OB_SUCC(ret)) {
     if (OB_FAIL(init_credential(ttl_para))) {
       LOG_WARN("fail to init credential", KR(ret));
+    } else if (OB_FAIL(init_sess_info())) {
+      LOG_WARN("fail to init sess info guard", K(ret));
+    } else if (OB_FAIL(init_schema_info(ttl_info.tenant_id_, ttl_info.table_id_))) {
+      LOG_WARN("fail to init schema info", K(ttl_info), K(ttl_para));
     } else {
       param_ = ttl_para;
       info_ = ttl_info;
+      info_.reset_cnt();
       info_.err_code_ = OB_SUCCESS;
-      ttl_tablet_mgr_ = ttl_tablet_mgr;
+      ttl_tablet_scheduler_ = ttl_tablet_scheduler;
       is_inited_ = true;
     }
+  }
+  return ret;
+}
+
+int ObTableTTLDeleteTask::init_sess_info()
+{
+  int ret = OB_SUCCESS;
+  // try get session from session pool
+  if (OB_FAIL(TABLEAPI_SESS_POOL_MGR->get_sess_info(credential_, sess_guard_))) {
+    LOG_WARN("fail to get session info", K(ret), K(credential_));
+  } else if (OB_ISNULL(sess_guard_.get_sess_node_val())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is null", K(ret), K(credential_));
+  }
+  return ret;
+}
+
+int ObTableTTLDeleteTask::init_schema_info(int64_t tenant_id, uint64_t table_id)
+{
+  int ret = OB_SUCCESS;
+  if (schema_guard_.is_inited()) {
+    // skip and do nothing
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid schema service", K(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard_))) {
+    LOG_WARN("fail to get schema guard", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard_.get_simple_table_schema(tenant_id,
+                                                           table_id,
+                                                           simple_table_schema_))) {
+    LOG_WARN("fail to get simple table schema", K(ret), K(tenant_id), K(table_id));
+  } else if (OB_ISNULL(simple_table_schema_) || simple_table_schema_->get_table_id() == OB_INVALID_ID) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get simple table schema", K(ret), K(table_id), KP(simple_table_schema_));
+  }
+  return ret;
+}
+
+int ObTableTTLDeleteTask::init_kv_schema_guard(ObKvSchemaCacheGuard &schema_cache_guard)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(schema_cache_guard.init(credential_.tenant_id_,
+                                             simple_table_schema_->get_table_id(),
+                                             simple_table_schema_->get_schema_version(),
+                                             schema_guard_))) {
+    LOG_WARN("fail to init schema cache guard", K(ret), K_(credential_.tenant_id));
   }
   return ret;
 }
@@ -95,7 +153,7 @@ int ObTableTTLDeleteTask::init_credential(const ObTTLTaskParam &ttl_param)
   schema::ObSchemaGetterGuard schema_guard;
   if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("fail to get schema guard", K(ret), K(tenant_id));
-  } else if(OB_FAIL(schema_guard.get_user_info(tenant_id, user_id, user_info))) {
+  } else if (OB_FAIL(schema_guard.get_user_info(tenant_id, user_id, user_info))) {
     LOG_WARN("fail to get user id", KR(ret), K(tenant_id), K(user_id));
   } else if (OB_ISNULL(user_info)) {
     ret = OB_USER_NOT_EXIST;
@@ -112,7 +170,6 @@ int ObTableTTLDeleteTask::init_credential(const ObTTLTaskParam &ttl_param)
   return ret;
 }
 
-
 int ObTableTTLDeleteTask::process()
 {
   int ret = OB_SUCCESS;
@@ -123,7 +180,7 @@ int ObTableTTLDeleteTask::process()
     bool need_stop = false;
     // pre-check to quick cancel/suspend current task in case of tenant ttl state changed
     // since it maybe wait in dag queue for too long
-    if (OB_FAIL(ttl_tablet_mgr_->report_task_status(info_, param_, need_stop, false))) {
+    if (OB_FAIL(ttl_tablet_scheduler_->report_task_status(info_, param_, need_stop, false))) {
       LOG_WARN("fail to report ttl task status", KR(ret));
     }
     // explicit cover retcode
@@ -138,14 +195,14 @@ int ObTableTTLDeleteTask::process()
           }
         }
         // explicit cover retcode
-        if (OB_FAIL(ttl_tablet_mgr_->report_task_status(info_, param_, need_stop))) {
+        if (OB_FAIL(ttl_tablet_scheduler_->report_task_status(info_, param_, need_stop))) {
           LOG_WARN("fail to report ttl task status", KR(ret));
         }
         allocator_.reuse();
       }
     }
   }
-  ttl_tablet_mgr_->dec_dag_ref();
+  ttl_tablet_scheduler_->dec_dag_ref();
   return ret;
 }
 
@@ -153,12 +210,12 @@ int ObTableTTLDeleteTask::process_one()
 {
   int ret = OB_SUCCESS;
   int64_t start_time = ObTimeUtil::current_time();
-  ObTxDesc *trans_desc = nullptr;
-  ObTxReadSnapshot tx_snapshot;
-  TransState trans_state;
+  sql::TransState trans_state;
+  ObTableTransParam trans_param;
   ObTableTTLOperationResult result;
   ObTableApiSpec *scan_spec = nullptr;
   observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
+  ObKvSchemaCacheGuard schema_cache_guard;
   ObTableApiCacheGuard cache_guard;
   ObTableTTLOperation ttl_operation(info_.tenant_id_,
                                     info_.table_id_,
@@ -166,20 +223,31 @@ int ObTableTTLDeleteTask::process_one()
                                     PER_TASK_DEL_ROWS,
                                     rowkey_,
                                     hbase_cur_version_);
+  ObSchemaGetterGuard *schema_guard = nullptr;
+  const ObTableSchema *table_schema = nullptr;
+
   SMART_VAR(ObTableCtx, scan_ctx, allocator_) {
-    if (OB_FAIL(init_scan_tb_ctx(scan_ctx, cache_guard))) {
+    if (OB_FAIL(init_kv_schema_guard(schema_cache_guard))) {
+      LOG_WARN("fail to init kv schema cache guard", K(ret));
+    } else if (OB_FAIL(init_scan_tb_ctx(schema_cache_guard, scan_ctx, cache_guard))) {
       LOG_WARN("fail to init tb ctx", KR(ret));
-    } else if (OB_FAIL(ObTableApiProcessorBase::start_trans_(
-                        false,
-                        trans_desc,
-                        tx_snapshot,
-                        ObTableConsistencyLevel::STRONG,
-                        &trans_state,
-                        scan_ctx.get_table_id(),
-                        scan_ctx.get_ls_id(),
-                        get_timeout_ts()))) {
-      LOG_WARN("fail to start trans", KR(ret));
-    } else if (OB_FAIL(scan_ctx.init_trans(trans_desc, tx_snapshot))) {
+    } else if (OB_ISNULL(schema_guard = scan_ctx.get_schema_guard())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema guard is NULL", K(ret));
+    } else if (OB_FAIL(schema_guard->get_table_schema(info_.tenant_id_, info_.table_id_, table_schema))) {
+      LOG_WARN("failed to get simple schema", KR(ret), K(info_.table_id_));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("table schema is null", KR(ret), K(info_.table_id_), K(info_.tenant_id_));
+    } else if (OB_FAIL(trans_param.init(false,
+                                        ObTableConsistencyLevel::STRONG,
+                                        scan_ctx.get_ls_id(),
+                                        get_timeout_ts(),
+                                        scan_ctx.need_dist_das()))) {
+      LOG_WARN("fail to init trans param", K(ret));
+    } else if (OB_FAIL(ObTableTransUtils::start_trans(trans_param))) {
+      LOG_WARN("fail to start transaction", K(ret), K(scan_ctx));
+    } else if (OB_FAIL(scan_ctx.init_trans(trans_param.trans_desc_, trans_param.tx_snapshot_))) {
       LOG_WARN("fail to init trans", KR(ret));
     } else if (OB_FAIL(cache_guard.get_spec<TABLE_API_EXEC_SCAN>(&scan_ctx, scan_spec))) {
       LOG_WARN("fail to get scan spec from cache", KR(ret));
@@ -188,11 +256,15 @@ int ObTableTTLDeleteTask::process_one()
       ObTableApiExecutor *executor = nullptr;
       if (OB_FAIL(scan_spec->create_executor(scan_ctx, executor))) {
         LOG_WARN("fail to generate executor", KR(ret), K(scan_ctx));
-      } else if (OB_FAIL(row_iter.init(*scan_ctx.get_table_schema(), ttl_operation))){
+      } else if (OB_FAIL(row_iter.init(*table_schema, ttl_operation))) {
         LOG_WARN("fail to init ttl row iterator", KR(ret));
       } else if (OB_FAIL(row_iter.open(static_cast<ObTableApiScanExecutor*>(executor)))) {
         LOG_WARN("fail to open scan row iterator", KR(ret));
-      } else if (OB_FAIL(execute_ttl_delete(row_iter, result, trans_desc, tx_snapshot))) {
+      } else if (OB_FAIL(execute_ttl_delete(schema_cache_guard,
+                                            row_iter,
+                                            result,
+                                            trans_param.trans_desc_,
+                                            trans_param.tx_snapshot_))) {
         LOG_WARN("fail to execute ttl table", KR(ret));
       }
 
@@ -209,11 +281,13 @@ int ObTableTTLDeleteTask::process_one()
     }
   }
 
-  if (trans_state.is_start_trans_executed() && trans_state.is_start_trans_success()) {
+  if (OB_NOT_NULL(trans_param.trans_state_ptr_)
+      && trans_param.trans_state_ptr_->is_start_trans_executed()
+      && trans_param.trans_state_ptr_->is_start_trans_success()) {
     int tmp_ret = ret;
-    if (OB_FAIL(ObTableApiProcessorBase::sync_end_trans_(OB_SUCCESS != ret, trans_desc, get_timeout_ts(),
-                                                         nullptr, &ObTableUtils::get_kv_ttl_trace_info()))) {
-      LOG_WARN("fail to end trans", KR(ret));
+    trans_param.is_rollback_ = (OB_SUCCESS != ret);
+    if (OB_FAIL(ObTableTransUtils::sync_end_trans(trans_param))) {
+      LOG_WARN("fail to end trans", KR(ret), K(trans_param));
     }
     ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;
   }
@@ -237,20 +311,26 @@ int ObTableTTLDeleteTask::process_one()
   return ret;
 }
 
-int ObTableTTLDeleteTask::init_scan_tb_ctx(ObTableCtx &tb_ctx, ObTableApiCacheGuard &cache_guard)
+int ObTableTTLDeleteTask::init_scan_tb_ctx(ObKvSchemaCacheGuard &schema_cache_guard,
+                                           ObTableCtx &tb_ctx, ObTableApiCacheGuard &cache_guard)
 {
   int ret = OB_SUCCESS;
   ObExprFrameInfo *expr_frame_info = nullptr;
   tb_ctx.set_scan(true);
+  tb_ctx.set_schema_cache_guard(&schema_cache_guard);
+  tb_ctx.set_schema_guard(&schema_guard_);
+  tb_ctx.set_simple_table_schema(simple_table_schema_);
+  tb_ctx.set_sess_guard(&sess_guard_);
+  ObSEArray<ObNewRange, 4> ranges;
+
   if (tb_ctx.is_init()) {
     LOG_INFO("tb ctx has been inited", K(tb_ctx));
-  } else if (OB_FAIL(tb_ctx.init_common(credential_,
-                                        get_tablet_id(),
-                                        get_table_id(),
-                                        get_timeout_ts()))) {
+  } else if (OB_FAIL(get_scan_ranges(ranges))) {
+    LOG_WARN("fail to get scan ranges", K(ret));
+  } else if (OB_FAIL(tb_ctx.init_common(credential_, get_tablet_id(), get_timeout_ts()))) {
     LOG_WARN("fail to init table ctx common part", KR(ret), "table_id", get_table_id(),
       "tablet_id", get_tablet_id(), "timeout_ts", get_timeout_ts());
-  } else if (OB_FAIL(tb_ctx.init_ttl_delete(get_start_rowkey()))) {
+  } else if (OB_FAIL(tb_ctx.init_ttl_delete(ranges))) {
     LOG_WARN("fail to init delete ctx", KR(ret), K(tb_ctx));
   } else if (OB_FAIL(cache_guard.init(&tb_ctx))) {
     LOG_WARN("fail to init cache guard", K(ret));
@@ -268,7 +348,8 @@ int ObTableTTLDeleteTask::init_scan_tb_ctx(ObTableCtx &tb_ctx, ObTableApiCacheGu
   return ret;
 }
 
-int ObTableTTLDeleteTask::process_ttl_delete(const ObITableEntity &new_entity,
+int ObTableTTLDeleteTask::process_ttl_delete(ObKvSchemaCacheGuard &schema_cache_guard,
+                                             const ObITableEntity &new_entity,
                                              int64_t &affected_rows,
                                              transaction::ObTxDesc *trans_desc,
                                              transaction::ObTxReadSnapshot &snapshot)
@@ -278,7 +359,7 @@ int ObTableTTLDeleteTask::process_ttl_delete(const ObITableEntity &new_entity,
   ObTableApiExecutor *executor = nullptr;
   ObTableOperationResult op_result;
   SMART_VAR(ObTableCtx, delete_ctx, allocator_) {
-    if (OB_FAIL(init_tb_ctx(new_entity, delete_ctx))) {
+    if (OB_FAIL(init_tb_ctx(schema_cache_guard, new_entity, delete_ctx))) {
       LOG_WARN("fail to init table ctx", K(ret), K(new_entity));
     } else if (FALSE_IT(delete_ctx.set_skip_scan(true))) {
     } else if (OB_FAIL(delete_ctx.init_trans(trans_desc, snapshot))) {
@@ -292,7 +373,8 @@ int ObTableTTLDeleteTask::process_ttl_delete(const ObITableEntity &new_entity,
   return ret;
 }
 
-int ObTableTTLDeleteTask::init_tb_ctx(const ObITableEntity &entity,
+int ObTableTTLDeleteTask::init_tb_ctx(ObKvSchemaCacheGuard &schema_cache_guard,
+                                      const ObITableEntity &entity,
                                       ObTableCtx &ctx)
 {
   int ret = OB_SUCCESS;
@@ -300,12 +382,12 @@ int ObTableTTLDeleteTask::init_tb_ctx(const ObITableEntity &entity,
   ctx.set_entity_type(ObTableEntityType::ET_KV);
   ctx.set_operation_type(ObTableOperationType::DEL);
   ctx.set_batch_operation(NULL);
-
+  ctx.set_schema_cache_guard(&schema_cache_guard);
+  ctx.set_schema_guard(&schema_guard_);
+  ctx.set_simple_table_schema(simple_table_schema_);
+  ctx.set_sess_guard(&sess_guard_);
   if (!ctx.is_init()) {
-    if (OB_FAIL(ctx.init_common(credential_,
-                                get_tablet_id(),
-                                get_table_id(),
-                                get_timeout_ts()))) {
+    if (OB_FAIL(ctx.init_common(credential_, get_tablet_id(), get_timeout_ts()))) {
       LOG_WARN("fail to init table ctx common part", K(ret), "table_id", get_table_id(),
         "tablet_id", get_tablet_id(), "timeout_ts", get_timeout_ts());
     } else if (OB_FAIL(ctx.init_delete())) {
@@ -314,6 +396,87 @@ int ObTableTTLDeleteTask::init_tb_ctx(const ObITableEntity &entity,
       LOG_WARN("fail to init exec ctx", K(ret), K(ctx));
     } else {
       ctx.set_is_ttl_table(false);
+    }
+  }
+
+  return ret;
+}
+
+/**
+ * ---------------------------------------- ObTableHRowKeyTTLDelTask ----------------------------------------
+ */
+
+ObTableHRowKeyTTLDelTask::ObTableHRowKeyTTLDelTask()
+  : hrowkey_alloc_(ObMemAttr(MTL_ID(), "HRowkeyTaskAlc")),
+    rowkeys_()
+{
+  rowkeys_.set_attr(ObMemAttr(MTL_ID(), "HRowkeyTaskRks"));
+}
+
+ObTableHRowKeyTTLDelTask::~ObTableHRowKeyTTLDelTask()
+{}
+
+int ObTableHRowKeyTTLDelTask::init(ObTabletTTLScheduler *ttl_tablet_scheduler,
+                                   const table::ObTTLHRowkeyTaskParam &ttl_para,
+                                   table::ObTTLTaskInfo &ttl_info)
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<ObString> &rowkeys = ttl_para.get_rowkeys();
+  int64_t rowkey_size = rowkeys.count();
+  if (OB_FAIL(rowkeys_.prepare_allocate(rowkey_size))) {
+    LOG_WARN("fail to reserve rowkeys", K(ret), K(rowkey_size));
+  }
+
+  for (int i = 0; OB_SUCC(ret) && i < rowkey_size; i++) {
+    if (OB_FAIL(ob_write_string(hrowkey_alloc_, rowkeys.at(i), rowkeys_.at(i)))) {
+      LOG_WARN("fail to write hbase rowkey string", K(ret), K(rowkeys.at(i)));
+    }
+  }
+
+  if (OB_SUCC(ret) && OB_FAIL(ObTableTTLDeleteTask::init(ttl_tablet_scheduler, ttl_para, ttl_info))) {
+    LOG_WARN("fail to init ObTableTTLDeleteTask", KR(ret), K(ttl_para), K(ttl_info));
+  }
+  return ret;
+}
+
+int ObTableHRowKeyTTLDelTask::get_scan_range(ObIArray<ObNewRange> &ranges)
+{
+  int ret = OB_SUCCESS;
+  if (rowkeys_.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rowkeys is empty", K(ret));
+  } else {
+    ObRowkey &start_rowkey = get_start_rowkey();
+    uint64 rowkey_size = rowkeys_.count();
+    ObString start_rowkey_str;
+    if (!start_rowkey.is_valid()) {
+      start_rowkey_str = rowkeys_.at(0);
+    } else {
+      ObObj *obj_ptr = const_cast<ObObj *>(start_rowkey.get_obj_ptr());
+      start_rowkey_str = obj_ptr[ObHTableConstants::COL_IDX_K].get_string();
+    }
+    for (int i = 0; OB_SUCC(ret) && i < rowkeys_.count(); i++) {
+      if (start_rowkey_str.compare(rowkeys_.at(i))) {
+        // continue
+      } else {
+        ObString rowkey = rowkeys_[i];
+        // make range [rowkey, min, min], [rowkey, max, max]
+        // push range in ranges
+        ObNewRange range;
+        ObObj start_key[3];
+        start_key[ObHTableConstants::COL_IDX_K].set_varbinary(rowkey);
+        start_key[ObHTableConstants::COL_IDX_Q].set_min_value();
+        start_key[ObHTableConstants::COL_IDX_T].set_min_value();
+        ObObj end_key[3];
+        start_key[ObHTableConstants::COL_IDX_K].set_varbinary(rowkey);
+        end_key[ObHTableConstants::COL_IDX_Q].set_max_value();
+        end_key[ObHTableConstants::COL_IDX_T].set_max_value();
+        range.start_key_.assign(start_key, 3);
+        range.end_key_.assign(end_key, 3);
+        if (OB_FAIL(ranges.push_back(range))) {
+          LOG_WARN("fail to add scan range", K(ret));
+        }
+      }
     }
   }
 
@@ -593,7 +756,8 @@ int ObTableTTLDeleteRowIterator::get_next_row(ObNewRow*& row)
   return ret;
 }
 
-int ObTableTTLDeleteTask::execute_ttl_delete(ObTableTTLDeleteRowIterator &ttl_row_iter,
+int ObTableTTLDeleteTask::execute_ttl_delete(ObKvSchemaCacheGuard &schema_cache_guard,
+                                             ObTableTTLDeleteRowIterator &ttl_row_iter,
                                              ObTableTTLOperationResult &result,
                                              transaction::ObTxDesc *trans_desc,
                                              transaction::ObTxReadSnapshot &snapshot)
@@ -622,7 +786,7 @@ int ObTableTTLDeleteTask::execute_ttl_delete(ObTableTTLDeleteRowIterator &ttl_ro
 
       if (OB_SUCC(ret)) {
         int64_t tmp_affect_rows = 0;
-        if (OB_FAIL(process_ttl_delete(delete_entity_, tmp_affect_rows, trans_desc, snapshot))) {
+        if (OB_FAIL(process_ttl_delete(schema_cache_guard, delete_entity_, tmp_affect_rows, trans_desc, snapshot))) {
           LOG_WARN("fail to execute table delete", K(ret));
         } else {
           affected_rows += tmp_affect_rows;
@@ -721,5 +885,26 @@ int ObTableTTLDeleteTask::execute_ttl_delete(ObTableTTLDeleteRowIterator &ttl_ro
     }
   }
   LOG_DEBUG("execute ttl delete", K(ret), K(result));
+  return ret;
+}
+
+int ObTableTTLDeleteTask::get_scan_ranges(ObIArray<ObNewRange> &ranges)
+{
+  int ret = OB_SUCCESS;
+  ObNewRange range;
+  range.end_key_.set_max_row();
+  ObRowkey real_start_key;
+  ObRowkey &start_rowkey = get_start_rowkey();
+  if (!start_rowkey.is_valid()) {
+    real_start_key.set_min_row();
+  } else {
+    real_start_key = start_rowkey;
+  }
+  range.start_key_ = real_start_key;
+
+  if (OB_FAIL(ranges.push_back(range))) {
+    LOG_WARN("fail to add scan range", K(ret), K(range));
+  }
+
   return ret;
 }

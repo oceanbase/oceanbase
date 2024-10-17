@@ -47,6 +47,8 @@ public:
       storage::ObTableAccessContext &context,
       const blocksstable::ObSSTable *sstable);
   OB_INLINE bool is_valid() const { return is_inited_ && nullptr != range_; }
+  OB_INLINE int64_t get_data_length() const
+  { return nullptr == reader_ ? 0 : reader_->original_data_length(); }
   virtual int switch_context(
       const storage::ObTableIterParam &param,
       storage::ObTableAccessContext &context,
@@ -96,7 +98,7 @@ public:
       const int32_t col_idx,
       const int32_t *row_ids,
       const int64_t row_cap,
-      const bool projected,
+      const bool reserve_memory,
       ObAggGroupBase &agg_group);
   int advance_to_border(
       const ObDatumRowkey &rowkey,
@@ -202,6 +204,25 @@ protected:
   ObIAllocator &allocator_;
   bool can_ignore_multi_version_;
   storage::ObBlockRowStore *block_row_store_;
+};
+
+// tablet split ddl task scan bared row without multi-merge.
+class ObMicroBlockRowDirectScanner final : public ObIMicroBlockRowScanner
+{
+public:
+  ObMicroBlockRowDirectScanner(common::ObIAllocator &allocator)
+    : ObIMicroBlockRowScanner(allocator)
+  {}
+  virtual ~ObMicroBlockRowDirectScanner() {}
+  virtual int init(
+      const storage::ObTableIterParam &param,
+      storage::ObTableAccessContext &context,
+      const blocksstable::ObSSTable *sstable) override final;
+  virtual int open(
+      const MacroBlockId &macro_id,
+      const ObMicroBlockData &block_data,
+      const bool is_left_border,
+      const bool is_right_border) override final;
 };
 
 // major sstable micro block scanner for query and merge

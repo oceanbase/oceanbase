@@ -113,7 +113,7 @@ public:
     OK(ObIOManager::get_instance().start());
 
     // add io device
-    OK(OB_IO_MANAGER.add_device_channel(THE_IO_DEVICE, 16, 2, 1024));
+    OK(OB_IO_MANAGER.add_device_channel(&LOCAL_DEVICE_INSTANCE, 16, 2, 1024));
 
     static ObTenantBase tenant_ctx(OB_SYS_TENANT_ID);
     ObTenantEnv::set_tenant(&tenant_ctx);

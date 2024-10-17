@@ -68,7 +68,8 @@ int ObTabletPointerMap::erase(const ObTabletMapKey &key, ObMetaObjGuard<ObTablet
 int ObTabletPointerMap::inner_erase(const ObTabletMapKey &key)
 {
   int ret = common::OB_SUCCESS;
-  ObResourceValueStore<ObTabletPointer> *ptr = NULL;
+  ObResourceValueStore<ObTabletPointer> *ptr = nullptr;
+  ObTabletPointer *tablet_ptr = nullptr;
   uint64_t hash_val = 0;
   if (OB_UNLIKELY(!key.is_valid())) {
     ret = common::OB_INVALID_ARGUMENT;
@@ -79,11 +80,16 @@ int ObTabletPointerMap::inner_erase(const ObTabletMapKey &key)
     common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
     if (OB_FAIL(ResourceMap::map_.get_refactored(key, ptr))) {
       STORAGE_LOG(WARN, "fail to get from map", K(ret));
+    } else if (OB_ISNULL(ptr)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "ptr should not be nullptr", K(ret), K(key), KP(ptr));
+    } else if (OB_ISNULL(tablet_ptr = ptr->get_value_ptr())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "value should not be nullptr", K(ret), K(key), KP(tablet_ptr));
     } else if (OB_FAIL(ResourceMap::map_.erase_refactored(key))) {
       STORAGE_LOG(WARN, "fail to erase from map", K(ret));
     } else {
-      ObTabletPointer *value = ptr->get_value_ptr();
-      value->reset_obj();
+      tablet_ptr->reset_obj();
       if (OB_FAIL(ResourceMap::dec_handle_ref(ptr))) {
         STORAGE_LOG(WARN, "fail to dec handle ref", K(ret));
       }
@@ -631,6 +637,7 @@ int ObTabletPointerMap::get_meta_obj_with_external_memory(
         if (OB_FAIL(load_meta_obj(key, t_ptr, allocator, disk_addr, t))) {
           STORAGE_LOG(WARN, "load obj from disk fail", K(ret), K(key), KPC(t_ptr), K(lbt()));
         } else {
+          ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
           ObTabletPointerHandle tmp_ptr_hdl(*this);
           common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
           // some other thread finish loading
@@ -660,13 +667,12 @@ int ObTabletPointerMap::get_meta_obj_with_external_memory(
             }
           } else if (OB_FAIL(t->deserialize_post_work(allocator))) {
             STORAGE_LOG(WARN, "fail to deserialize post work", K(ret), KP(t));
-          } else {
-            ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-            guard.set_obj(t, &allocator, t3m);
+          } else if (OB_FAIL(t3m->inc_external_tablet_cnt(t->get_tablet_id().id(), t->get_transfer_seq()))) {
             // TODO FEIDU t->pointer_hdl_.reset(); (external tablet should not hold tablet_pointer)
-            if (OB_FAIL(t3m->inc_external_tablet_cnt(t->get_tablet_id().id(), t->get_transfer_seq()))) {
-              STORAGE_LOG(WARN, "fail to inc external tablet cnt", K(ret), KP(t), KPC(t));
-            }
+            // !CAUTION: t3m->inc_external_tablet_cnt must be the last step which can modify ret; or, we have to dec_external_tablet_cnt in the failure process
+            STORAGE_LOG(WARN, "fail to inc external tablet cnt", K(ret), KP(t), KPC(t));
+          } else {
+            guard.set_obj(t, &allocator, t3m);
           }
         }  // write lock end
         if ((OB_FAIL(ret) && OB_NOT_NULL(t)) || need_free_obj) {

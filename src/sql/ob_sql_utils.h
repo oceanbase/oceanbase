@@ -417,7 +417,8 @@ public:
                               common::ObString &outline_key,
                               share::schema::ObMaxConcurrentParam::FixParamStore &fixed_param_store,
                               ParseMode mode,
-                              bool &has_questionmark_in_sql);
+                              bool &has_questionmark_in_sql,
+                              bool need_format);
   static int md5(const common::ObString &stmt, char *sql_id, int32_t len);
   static int filter_hint_in_query_sql(common::ObIAllocator &allocator,
                                       const ObSQLSessionInfo &session,
@@ -601,6 +602,7 @@ public:
                                  ObString &out);
   //检查参数是否为Oracle模式下的''
   static bool is_oracle_empty_string(const common::ObObjParam &param);
+  static bool is_oracle_null_with_normal_type(const common::ObObjParam &param);
   static int convert_sql_text_from_schema_for_resolve(common::ObIAllocator &allocator,
                                                     const common::ObDataTypeCastParams &dtc_params,
                                                     ObString &sql_text,
@@ -1223,7 +1225,9 @@ struct ObPreCalcExprConstraint : public common::ObDLinkBase<ObPreCalcExprConstra
     {
     }
     virtual int assign(const ObPreCalcExprConstraint &other, common::ObIAllocator &allocator);
-    virtual int check_is_match(const ObObjParam &obj_param, bool &is_match) const;
+    virtual int check_is_match(ObDatumObjParam &datum_param,
+                               ObExecContext &exec_ctx,
+                               bool &is_match) const;
     ObPreCalcExprFrameInfo pre_calc_expr_info_;
     PreCalcExprExpectResult expect_result_;
 };
@@ -1239,7 +1243,9 @@ struct ObRowidConstraint : public ObPreCalcExprConstraint
     }
     virtual int assign(const ObPreCalcExprConstraint &other,
                        common::ObIAllocator &allocator) override;
-    virtual int check_is_match(const ObObjParam &obj_param, bool &is_match) const override;
+    virtual int check_is_match(ObDatumObjParam &datum_param,
+                               ObExecContext &exec_ctx,
+                               bool &is_match) const override;
     uint8_t rowid_version_;
     ObFixedArray<ObObjType, common::ObIAllocator> rowid_type_array_;
 };

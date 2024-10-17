@@ -241,7 +241,6 @@ TEST_F(TestTabletStatusCache, get_transfer_out_tablet)
   ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, tablet_handle, 1_s,
       ObMDSGetTabletMode::READ_READABLE_COMMITED, ObTransVersion::MAX_TRANS_VERSION/*snapshot*/);
   //ASSERT_EQ(OB_SCHEMA_EAGAIN, ret);
-  ASSERT_EQ(OB_TABLET_NOT_EXIST, ret);
   ASSERT_TRUE(!tablet->tablet_status_cache_.is_valid());
 
   // mode is READ_ALL_COMMITED, allow to get TRANSFER_OUT status tablet
@@ -755,6 +754,47 @@ TEST_F(TestTabletStatusCache, read_all_committed)
   ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, tablet_handle, 1_s,
     ObMDSGetTabletMode::READ_ALL_COMMITED, ObTransVersion::MAX_TRANS_VERSION/*snapshot*/);
   ASSERT_EQ(OB_SUCCESS, ret);
+}
+
+TEST_F(TestTabletStatusCache, transfer_out_not_commited_read_from_src_ls)
+{
+  int ret = OB_SUCCESS;
+
+  // create tablet
+  const common::ObTabletID tablet_id(ObTimeUtility::fast_current_time() % 10000000000000);
+  const ObTabletMapKey key(LS_ID, tablet_id);
+  ObTabletHandle tablet_handle;
+  ret = create_tablet(tablet_id, tablet_handle, ObTabletStatus::MAX, share::SCN::invalid_scn());
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObTablet *tablet = tablet_handle.get_obj();
+  ASSERT_NE(nullptr, tablet);
+
+  // disable cache
+  {
+    SpinWLockGuard guard(tablet->mds_cache_lock_);
+    tablet->tablet_status_cache_.reset();
+  }
+
+  ObTabletCreateDeleteMdsUserData user_data;
+  share::SCN min_scn;
+  min_scn.set_min();
+  share::SCN commit_scn;
+
+  // start transfer in not commited
+  user_data.tablet_status_ = ObTabletStatus::TRANSFER_OUT;
+  user_data.data_type_ = ObTabletMdsUserDataType::START_TRANSFER_OUT;
+  user_data.create_commit_scn_.set_min();
+  user_data.create_commit_version_ = ObTransVersion::INVALID_TRANS_VERSION;
+  user_data.transfer_scn_.set_min();
+
+  mds::MdsCtx ctx3(mds::MdsWriter(transaction::ObTransID(2023062803)));
+  ret = tablet->set(user_data, ctx3);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, tablet_handle, 1_s,
+    ObMDSGetTabletMode::READ_READABLE_COMMITED, ObTransVersion::MAX_TRANS_VERSION/*snapshot*/);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_TRUE(!tablet->tablet_status_cache_.is_valid());
 }
 
 // TODO(@gaishun.gs): refactor test cases to cover all scene

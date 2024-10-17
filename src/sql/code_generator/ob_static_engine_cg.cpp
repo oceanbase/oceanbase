@@ -53,6 +53,7 @@
 #include "sql/optimizer/ob_insert_log_plan.h"
 #include "sql/optimizer/ob_log_stat_collector.h"
 #include "sql/optimizer/ob_log_optimizer_stats_gathering.h"
+#include "sql/optimizer/ob_direct_load_optimizer.h"
 #include "share/datum/ob_datum_funcs.h"
 #include "share/schema/ob_schema_mgr.h"
 #include "sql/engine/ob_operator_factory.h"
@@ -386,7 +387,8 @@ int ObStaticEngineCG::disable_use_rich_format(const ObLogicalOperator &op, ObOpS
         || (NULL != spec.get_parent() && PHY_UPDATE == spec.get_parent()->type_)
         || (NULL != spec.get_parent() && PHY_DELETE == spec.get_parent()->type_)
         || (static_cast<ObTableScanSpec &>(spec)).tsc_ctdef_.scan_ctdef_.is_get_
-        || tsc.is_text_retrieval_scan()) {
+        || tsc.is_text_retrieval_scan()
+        || tsc.is_tsc_with_doc_id()) {
       use_rich_format = false;
       LOG_DEBUG("tsc disable use rich format", K(tsc.get_index_back()), K(tsc.use_batch()),
                 K(is_virtual_table(tsc.get_ref_table_id())));
@@ -930,9 +932,10 @@ int ObStaticEngineCG::generate_calc_exprs(
             && T_PSEUDO_EXTERNAL_FILE_COL != raw_expr->get_expr_type()
             && T_PSEUDO_EXTERNAL_FILE_URL != raw_expr->get_expr_type()
             && T_PSEUDO_PARTITION_LIST_COL != raw_expr->get_expr_type()
+            && T_ORA_ROWSCN != raw_expr->get_expr_type()
             && !(raw_expr->is_const_expr() || raw_expr->has_flag(IS_DYNAMIC_USER_VARIABLE))
             && !(T_FUN_SYS_PART_HASH == raw_expr->get_expr_type() || T_FUN_SYS_PART_KEY == raw_expr->get_expr_type())
-            && !(T_FUN_SYS_L2_DISTANCE == raw_expr->get_expr_type())) {
+            && !(raw_expr->is_vector_sort_expr())) {
           if (raw_expr->is_calculated()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("expr is not from the child_op_output but it has been caculated already",
@@ -2307,15 +2310,15 @@ int ObStaticEngineCG::generate_spec(ObLogSort &op, ObSortSpec &spec, const bool 
 int ObStaticEngineCG::fill_compress_type(ObLogSort &op, ObCompressorType &compr_type)
 {
   int ret = OB_SUCCESS;
+  compr_type = NONE_COMPRESSOR;
   int64_t tenant_id = op.get_plan()->get_optimizer_context().get_session_info()->get_effective_tenant_id();
   // for normal sort we use default compress type. for online ddl, we use the compress type in source table
   ObLogicalOperator *child_op = op.get_child(0);
-  ObCompressorType tmp_compr_type = NONE_COMPRESSOR;
+  const share::schema::ObTableSchema *table_schema = nullptr;
   while(OB_SUCC(ret) && OB_NOT_NULL(child_op) && child_op->get_type() != log_op_def::LOG_TABLE_SCAN ) {
     child_op = child_op->get_child(0);
     if (OB_NOT_NULL(child_op) && child_op->get_type() == log_op_def::LOG_TABLE_SCAN ) {
       share::schema::ObSchemaGetterGuard *schema_guard = nullptr;
-      const share::schema::ObTableSchema *table_schema = nullptr;
       uint64_t table_id = static_cast<ObLogTableScan*>(child_op)->get_ref_table_id();
       if (OB_ISNULL(schema_guard = opt_ctx_->get_schema_guard())) {
         ret = OB_ERR_UNEXPECTED;
@@ -2325,13 +2328,11 @@ int ObStaticEngineCG::fill_compress_type(ObLogSort &op, ObCompressorType &compr_
       } else if (OB_ISNULL(table_schema)) {
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("can't find table schema", K(ret), K(table_id));
-      } else {
-        tmp_compr_type = table_schema->get_compressor_type();
       }
     }
   }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(tmp_compr_type,
+  if (OB_SUCC(ret) && OB_NOT_NULL(table_schema)) {
+    if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(table_schema,
                                               op.get_parallel(),
                                               compr_type))) {
       LOG_WARN("fail to get compress type", K(ret));
@@ -2973,16 +2974,6 @@ int ObStaticEngineCG::generate_insert_with_das(ObLogInsert &op, ObTableInsertSpe
   }
 
   if (OB_SUCC(ret)) {
-    bool is_insert_overwrite = false;
-    if (OB_FAIL(check_is_insert_overwrite_stmt(log_plan, is_insert_overwrite))) {
-      LOG_WARN("check is insert overwrite failed", K(ret));
-    } else if (is_insert_overwrite) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "please explain extended for why, insert overwrite need open pdml");
-    }
-  }
-
-  if (OB_SUCC(ret)) {
     if (OB_FAIL(spec.ins_ctdefs_.allocate_array(phy_plan_->get_allocator(), 1))) {
       LOG_WARN("allocate insert ctdef array failed", K(ret), K(1));
     } else if (OB_FAIL(spec.ins_ctdefs_.at(0).allocate_array(phy_plan_->get_allocator(),
@@ -3164,6 +3155,8 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableReplaceSpec &spec, c
     OZ(schema_guard->get_table_schema(MTL_ID(), primary_dml_info->ref_table_id_, table_schema));
     CK(OB_NOT_NULL(table_schema));
     OZ(check_only_one_unique_key(*log_plan, table_schema, spec.only_one_unique_key_));
+    uint64_t ft_col_id = OB_INVALID_ID;
+    OZ(table_schema->get_fulltext_column_ids(spec.doc_id_col_id_, ft_col_id));
 
     // 记录当前主表的rowkey的column_ref表达式和column_id
     CK(primary_dml_info->column_exprs_.count() == primary_dml_info->column_convert_exprs_.count());
@@ -5324,12 +5317,17 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
             op.is_table_scan()) {
           if (expr->get_expr_type() == T_REF_COLUMN) {
             const ObColumnRefRawExpr *column_expr = static_cast<const ObColumnRefRawExpr*>(expr);
-            if (OB_NOT_NULL(column_expr->get_dependant_expr())
-                && column_expr->get_dependant_expr()->get_expr_type() == T_FUN_SYS_SPATIAL_CELLID) {
+            if (OB_ISNULL(column_expr->get_dependant_expr())) {
+            } else if (column_expr->get_dependant_expr()->get_expr_type() == T_FUN_SYS_SPATIAL_CELLID) {
               spec.set_spatial_ddl(true);
             }
           } else if (expr->get_expr_type() == T_FUN_SYS_SPATIAL_CELLID) {
             spec.set_spatial_ddl(true);
+          } else if (expr->get_expr_type() == T_FUN_SYS_JSON_QUERY && expr->is_multivalue_index_column_expr()) {
+            // TODO: @yunyi, remove me later after support post-building multivalue index vectorization.
+            spec.max_batch_size_ = 0;
+            spec.set_multivalue_ddl(true);
+
           }
         }
       } else if (OB_FAIL(generate_rt_expr(*expr, rt_expr))) {
@@ -5346,6 +5344,32 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
     spec.is_external_table_ = true;
   }
 
+  if (OB_SUCC(ret) && opt_ctx_->is_insert_stmt_in_online_ddl()) {
+    const TableItem *insert_table_item = opt_ctx_->get_root_stmt()->get_table_item(0);
+    if (OB_ISNULL(insert_table_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect error, insert table item is nullptr", K(ret), K(opt_ctx_->get_root_stmt()->get_table_items()));
+    } else {
+      const uint64_t ddl_table_id = insert_table_item->ddl_table_id_;
+      const schema::ObTableSchema *ddl_table_schema = nullptr;
+      if (OB_FAIL(schema_guard->get_table_schema(ddl_table_id, ddl_table_schema))) {
+        LOG_WARN("fail to get ddl table id", K(ret), K(ddl_table_id));
+      } else if (OB_ISNULL(ddl_table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error, ddl table schema is nullptr", K(ret), KP(ddl_table_schema));
+      } else if (ddl_table_schema->is_fts_index_aux() || ddl_table_schema->is_fts_doc_word_aux()) {
+        spec.is_fts_ddl_ = true;
+        spec.is_fts_index_aux_ = ddl_table_schema->is_fts_index_aux();
+        spec.max_batch_size_ = 0; // TODO: @jinzhu, remove me later after support post-building fts index vectorization.
+        if (OB_UNLIKELY(ddl_table_schema->get_parser_name_str().empty())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error, parser name is empty", K(ret), KPC(ddl_table_schema));
+        } else {
+          OZ(ob_write_string(phy_plan_->get_allocator(), ddl_table_schema->get_parser_name_str(), spec.parser_name_));
+        }
+      }
+    }
+  }
   return ret;
 }
 
@@ -6730,13 +6754,14 @@ int ObStaticEngineCG::generate_spec(
   if (OB_SUCC(ret)) {
     //add all right children there
     int64_t subquery_cnt = spec.get_child_cnt() - 1;
+    bool is_all_subquery_deterministic = true;
     if (OB_FAIL(spec.exec_param_array_.init(subquery_cnt))) {
       LOG_WARN("failed to init exec param array", K(ret));
     } else {
-       ObFixedArray<ObExpr *, ObIAllocator> cache_vec(phy_plan_->get_allocator());
-       for (int64_t child_idx = 1; OB_SUCC(ret) && child_idx < spec.get_child_cnt(); ++child_idx) {
-         SubPlanInfo *sp_info = nullptr;
-         ObLogicalOperator *curr_child = nullptr;
+      ObFixedArray<ObExpr *, ObIAllocator> cache_vec(phy_plan_->get_allocator());
+      for (int64_t child_idx = 1; OB_SUCC(ret) && child_idx < spec.get_child_cnt(); ++child_idx) {
+        SubPlanInfo *sp_info = nullptr;
+        ObLogicalOperator *curr_child = nullptr;
         if (OB_ISNULL(curr_child = op.get_child(child_idx))
               || OB_ISNULL(curr_child->get_stmt())) {
             ret = OB_ERR_UNEXPECTED;
@@ -6750,6 +6775,8 @@ int ObStaticEngineCG::generate_spec(
           cache_vec.reset();
           if (OB_FAIL(cache_vec.init(sp_info->init_expr_->get_param_count()))) {
             LOG_WARN("failed to init tmp_vec", K(ret));
+          } else if (!sp_info->init_expr_->is_deterministic()) {
+            is_all_subquery_deterministic = false;
           }
           for (int64_t j = 0; OB_SUCC(ret) && j < sp_info->init_expr_->get_param_count(); ++j) {
             ObExecParamRawExpr *exec_param = sp_info->init_expr_->get_exec_param(j);
@@ -6764,7 +6791,9 @@ int ObStaticEngineCG::generate_spec(
           }
         }
       }
-      OX(spec.exec_param_idxs_inited_ = true);
+      if (OB_SUCC(ret) && is_all_subquery_deterministic) {
+        spec.exec_param_idxs_inited_ = true;
+      }
     }
   }
 
@@ -6955,32 +6984,29 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op,
     spec.is_pdml_index_maintain_ = op.is_index_maintenance();
     spec.table_location_uncertain_ = op.is_table_location_uncertain(); // row-movement target table
     spec.is_pdml_update_split_ = op.is_pdml_update_split();
-    if (GCONF._ob_enable_direct_load) {
-      const ObGlobalHint &global_hint = op.get_plan()->get_optimizer_context().get_global_hint();
-      spec.plan_->set_append_table_id(op.get_append_table_id());
-      spec.plan_->set_enable_append(global_hint.has_direct_load());
-      spec.plan_->set_enable_inc_direct_load(global_hint.has_inc_direct_load());
-      spec.plan_->set_enable_replace(global_hint.has_replace());
-      spec.plan_->set_online_sample_percent(op.get_plan()->get_optimizer_context()
-                                                           .get_exec_ctx()->get_table_direct_insert_ctx()
-                                                           .get_online_sample_percent());
-      spec.plan_->set_direct_load_need_sort(global_hint.get_direct_load_need_sort());
-      // check is insert overwrite
-      bool is_insert_overwrite = false;
-      ObExecContext *exec_ctx = NULL;
-      ObPhysicalPlanCtx *plan_ctx = NULL;
-      if (OB_FAIL(check_is_insert_overwrite_stmt(log_plan, is_insert_overwrite))) {
-        LOG_WARN("check is insert overwrite failed", K(ret));
-      } else if (OB_FALSE_IT(spec.plan_->set_is_insert_overwrite(is_insert_overwrite))) {
-      } else if (OB_ISNULL(exec_ctx = log_plan->get_optimizer_context().get_exec_ctx())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexcepted null exec ctx", KR(ret), KP(exec_ctx));
-      } else if (OB_ISNULL(plan_ctx = exec_ctx->get_physical_plan_ctx())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null plan ctx", KR(ret), KP(plan_ctx));
-      } else {
-        plan_ctx->set_is_direct_insert_plan(ObTableDirectInsertService::is_direct_insert(*(spec.plan_)));
-      }
+    ObDirectLoadOptimizerCtx &direct_load_optimizer_ctx = op.get_plan()->get_optimizer_context().get_direct_load_optimizer_ctx();
+    spec.plan_->set_append_table_id(op.get_append_table_id());
+    spec.plan_->set_enable_append(direct_load_optimizer_ctx.use_direct_load());
+    spec.plan_->set_enable_inc_direct_load(ObDirectLoadMethod::is_incremental(direct_load_optimizer_ctx.load_method_));
+    spec.plan_->set_enable_replace(direct_load_optimizer_ctx.insert_mode_ == ObDirectLoadInsertMode::INC_REPLACE);
+    spec.plan_->set_online_sample_percent(op.get_plan()->get_optimizer_context()
+                                                         .get_exec_ctx()->get_table_direct_insert_ctx()
+                                                         .get_online_sample_percent());
+    // check is insert overwrite
+    bool is_insert_overwrite = false;
+    ObExecContext *exec_ctx = NULL;
+    ObPhysicalPlanCtx *plan_ctx = NULL;
+    if (OB_FAIL(check_is_insert_overwrite_stmt(log_plan, is_insert_overwrite))) {
+      LOG_WARN("check is insert overwrite failed", K(ret));
+    } else if (OB_FALSE_IT(spec.plan_->set_is_insert_overwrite(is_insert_overwrite))) {
+    } else if (OB_ISNULL(exec_ctx = log_plan->get_optimizer_context().get_exec_ctx())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexcepted null exec ctx", KR(ret), KP(exec_ctx));
+    } else if (OB_ISNULL(plan_ctx = exec_ctx->get_physical_plan_ctx())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null plan ctx", KR(ret), KP(plan_ctx));
+    } else {
+      plan_ctx->set_is_direct_insert_plan(direct_load_optimizer_ctx.use_direct_load());
     }
     int64_t partition_expr_idx = OB_INVALID_INDEX;
     if (OB_FAIL(ret)) {
@@ -7710,8 +7736,6 @@ int ObStaticEngineCG::generate_spec(ObLogWindowFunction &op, ObWindowFunctionSpe
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(check_window_functions_order(op.get_window_exprs()))) {
-    LOG_WARN("failed to check window functions order", K(ret));
   } else if (OB_FAIL(spec.wf_infos_.prepare_allocate(op.get_window_exprs().count()))) {
     LOG_WARN("failed to prepare_allocate the window function.", K(ret));
   } else if (OB_FAIL(append_array_no_dup(all_expr, spec.get_child()->output_))) {
@@ -8310,15 +8334,14 @@ int ObStaticEngineCG::generate_spec(ObLogJsonTable &op, ObJsonTableSpec &spec,
 {
   UNUSED(in_root_job);
   ObIAllocator &alloc = phy_plan_->get_allocator();
-  ObRawExpr *value_raw_expr = nullptr;
   ObArray<ObString> ns_arr;
-  ObExpr *value_expr = nullptr;
   ObString ns_prefix_str;
   int ret = OB_SUCCESS;
   if (OB_ISNULL(op.get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get stmt", K(ret));
-  } else if (OB_FAIL(spec.column_exprs_.init(op.get_stmt()->get_column_size()))
+  } else if (OB_FAIL(spec.value_exprs_.init(op.get_value_expr().count()))
+          || OB_FAIL(spec.column_exprs_.init(op.get_stmt()->get_column_size()))
           || OB_FAIL(spec.emp_default_exprs_.init(op.get_stmt()->get_column_size()))
           || OB_FAIL(spec.err_default_exprs_.init(op.get_stmt()->get_column_size()))
           || OB_FAIL(spec.cols_def_.init(op.get_origin_cols_def().count()))
@@ -8327,14 +8350,29 @@ int ObStaticEngineCG::generate_spec(ObLogJsonTable &op, ObJsonTableSpec &spec,
   } else if (OB_UNLIKELY(op.get_num_of_child() > 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected count of children", K(ret), K(op.get_num_of_child()));
-  } else if (OB_ISNULL(value_raw_expr = op.get_value_expr())) {
+  } else if (op.get_value_expr().empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get value raw expr", K(ret));
-  } else if (OB_FAIL(generate_rt_expr(*value_raw_expr, value_expr))) {
-    LOG_WARN("failed to generate rt expr", K(ret));
   } else {
-    spec.has_correlated_expr_ = value_raw_expr->has_flag(CNT_DYNAMIC_PARAM);
-    spec.value_expr_ = value_expr;
+    for (int64_t i = 0; OB_SUCC(ret) && i < op.get_value_expr().count(); ++i) {
+      ObRawExpr *value_raw_expr = nullptr;
+      ObExpr *value_expr = nullptr;
+      if (OB_ISNULL(value_raw_expr = op.get_value_expr().at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get value raw expr", K(ret), K(i));
+      } else if (OB_FAIL(generate_rt_expr(*value_raw_expr, value_expr))) {
+        LOG_WARN("failed to generate rt expr", K(ret), K(i));
+      } else if (OB_ISNULL(value_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("value_expr is null", K(ret), K(i), KPC(value_expr));
+      } else if (OB_FAIL(spec.value_exprs_.push_back(value_expr))) {
+        LOG_WARN("failed to push back value expr", K(ret), K(i));
+      } else {
+        spec.has_correlated_expr_ |= value_raw_expr->has_flag(CNT_DYNAMIC_PARAM);
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
     spec.table_type_ = op.get_table_type();  // table func type
 
     if (OB_FAIL(spec.dup_origin_column_defs(op.get_origin_cols_def()))) {
@@ -8381,10 +8419,10 @@ int ObStaticEngineCG::generate_spec(ObLogJsonTable &op, ObJsonTableSpec &spec,
 
         if (OB_FAIL(ret)) {
         } else if (col_item->col_idx_ == common::OB_INVALID_ID
-                   || col_item->col_idx_ >= spec.cols_def_.count()) {
+                  || col_item->col_idx_ >= spec.cols_def_.count()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to get origin column info", K(ret), K(col_item->col_idx_),
-                   K(col_item->column_name_));
+                  K(col_item->column_name_));
         } else {
           ObJtColInfo* col_info = spec.cols_def_.at(col_item->col_idx_);
           col_info->output_column_idx_ = spec.column_exprs_.count() - 1;
@@ -9804,27 +9842,6 @@ int ObStaticEngineCG::set_batch_exec_param(const ObIArray<ObExecParamRawExpr *> 
           LOG_WARN("fail to remove batch nl param caches", K(ret));
         }
       }
-    }
-  }
-  return ret;
-}
-
-int ObStaticEngineCG::check_window_functions_order(const ObIArray<ObWinFunRawExpr *> &winfunc_exprs)
-{
-  int ret = OB_SUCCESS;
-  int64_t partition_count = 0;
-  for (int64_t i = 0; OB_SUCC(ret) && i < winfunc_exprs.count(); ++i) {
-    ObWinFunRawExpr * win_expr = winfunc_exprs.at(i);
-    if (OB_ISNULL(win_expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else if (i == 0) {
-      partition_count = win_expr->get_partition_exprs().count();
-    } else if (partition_count < win_expr->get_partition_exprs().count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("earlier partition by exprs must be subsets of the later partition by exprs", K(ret));
-    } else {
-      partition_count = win_expr->get_partition_exprs().count();
     }
   }
   return ret;

@@ -1229,7 +1229,7 @@ int ObWindowFunctionOp::init()
     func_alloc.local_allocator_ = &local_allocator_;
     int64_t prev_pushdown_pby_col_count = -1;
     WFInfoFixedArray &wf_infos = *const_cast<WFInfoFixedArray *>(&MY_SPEC.wf_infos_);
-    if (OB_FAIL(ObChunkStoreUtil::alloc_dir_id(dir_id_))) {
+    if (OB_FAIL(ObChunkStoreUtil::alloc_dir_id(tenant_id, dir_id_))) {
       LOG_WARN("failed to alloc dir id", K(ret));
     } else if (OB_FAIL(curr_row_collect_values_.prepare_allocate(wf_infos.count()))) {
       LOG_WARN("cur row collect values prepare allocate failed", K(ret));

@@ -27,6 +27,7 @@
 #include "share/schema/ob_security_audit_sql_service.h"
 #include "share/schema/ob_sequence_sql_service.h"
 #include "share/schema/ob_multi_version_schema_service.h"
+#include "share/vector_index/ob_vector_index_util.h"
 #include "sql/resolver/ob_resolver_utils.h"
 
 using namespace oceanbase::lib;
@@ -1148,6 +1149,11 @@ int ObCreateTableHelper::generate_table_schema_()
     }
   }
 
+  // check auto_partition validity
+  if (FAILEDx(new_table.check_validity_for_auto_partition())) {
+    LOG_WARN("fail to check auto partition setting", KR(ret), K(new_table), K(arg_));
+  }
+
   if (FAILEDx(new_tables_.push_back(new_table))) {
     LOG_WARN("fail to push back table", KR(ret));
   }
@@ -1196,7 +1202,8 @@ int ObCreateTableHelper::generate_aux_table_schemas_()
       index_schema.reset();
       obrpc::ObCreateIndexArg &index_arg = const_cast<obrpc::ObCreateIndexArg&>(arg_.index_arg_list_.at(i));
       if (!index_arg.index_schema_.is_partitioned_table()
-          && !data_table->is_partitioned_table()) {
+          && !data_table->is_partitioned_table()
+          && !data_table->is_auto_partitioned_table()) {
         if (INDEX_TYPE_NORMAL_GLOBAL == index_arg.index_type_) {
           index_arg.index_type_ = INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE;
         } else if (INDEX_TYPE_UNIQUE_GLOBAL == index_arg.index_type_) {
@@ -2231,6 +2238,11 @@ int ObCreateTableHelper::create_tables_()
       } else if (OB_FAIL(schema_service_impl->get_table_sql_service().insert_temp_table_info(
                  trans_, new_table))) {
         LOG_WARN("insert_temp_table_info failed", KR(ret), K(new_table));
+      } else if (new_table.is_vec_delta_buffer_type() &&
+                 OB_FAIL(ObVectorIndexUtil::add_dbms_vector_jobs(trans_, new_table.get_tenant_id(),
+                                                                 new_table.get_table_id(),
+                                                                 new_table.get_exec_env()))) {
+        LOG_WARN("failed to add dbms_vector jobs", K(ret), K(new_table.get_tenant_id()), K(new_table));
       }
     } // end for
   }

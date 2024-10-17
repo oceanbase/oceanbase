@@ -133,7 +133,7 @@ void TestTableScanPureDataTable::insert_data_to_tablet(MockObAccessService *acce
   dml_param.schema_version_ = share::OB_CORE_SCHEMA_VERSION + 1;
   dml_param.tenant_schema_version_ = share::OB_CORE_SCHEMA_VERSION + 1;
   dml_param.encrypt_meta_ = &dml_param.encrypt_meta_legacy_;
-  dml_param.snapshot_ = read_snapshot;
+  ASSERT_EQ(OB_SUCCESS, dml_param.snapshot_.assign(read_snapshot));
   dml_param.store_ctx_guard_ = &store_ctx_guard;
 
   ObArenaAllocator allocator;

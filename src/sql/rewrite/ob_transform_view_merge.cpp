@@ -621,14 +621,11 @@ int ObTransformViewMerge::check_can_be_merged(ObDMLStmt *parent_stmt,
       }
     }
   }
-  //stmt不能包含rand函数
   if (OB_SUCC(ret) && can_be) {
-    bool has_rand = false;
-    if (OB_FAIL(child_stmt->has_rand(has_rand))) {
+    if (OB_FAIL(child_stmt->is_query_deterministic(can_be))) {
       LOG_WARN("failed to get rand flag", K(ret));
-    } else if (has_rand) {
-      can_be = false;
-      OPT_TRACE("view has random expr, can not merge");
+    } else if (!can_be) {
+      OPT_TRACE("view is not deterministic, can not merge");
     }
   }
   if (OB_SUCC(ret) && can_be) {

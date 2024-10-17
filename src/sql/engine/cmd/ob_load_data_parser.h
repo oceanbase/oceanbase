@@ -213,6 +213,19 @@ public:
       ret = scan_proto<common::CHARSET_GB18030, handle_func, NEED_ESCAPED_RESULT>(
             str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
       break;
+    case common::CHARSET_SJIS:
+      ret = scan_proto<common::CHARSET_SJIS, handle_func, NEED_ESCAPED_RESULT>(
+            str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+      break;
+    case common::CHARSET_BIG5:
+      ret = scan_proto<common::CHARSET_BIG5, handle_func, NEED_ESCAPED_RESULT>(
+            str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+      break;
+    case common::CHARSET_HKSCS:
+    case common::CHARSET_HKSCS31:
+      ret = scan_proto<common::CHARSET_HKSCS, handle_func, NEED_ESCAPED_RESULT>(
+            str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+      break;
     default:
       ret = scan_proto<common::CHARSET_BINARY, handle_func, NEED_ESCAPED_RESULT>(
             str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
@@ -330,6 +343,27 @@ inline int ObCSVGeneralParser::mbcharlen<common::CHARSET_GBK>(const char *ptr, c
   UNUSED(end);
   unsigned char c = *ptr;
   return (0x81 <= c && c <= 0xFE) ? 2 : 1;
+}
+
+template<>
+inline int ObCSVGeneralParser::mbcharlen<common::CHARSET_SJIS>(const char *ptr, const char *end) {
+  UNUSED(end);
+  unsigned char c = *ptr;
+  return ((0x81 <= (c) && (c) <= 0x9f) || ((0xe0 <= (c)) && (c) <= 0xfc)) ? 2 : 1;
+}
+
+template<>
+inline int ObCSVGeneralParser::mbcharlen<common::CHARSET_BIG5>(const char *ptr, const char *end) {
+  UNUSED(end);
+  unsigned char c = *ptr;
+  return (0xa1 <= c && c <= 0xf9) ? 2 : 1;
+}
+
+template<>
+inline int ObCSVGeneralParser::mbcharlen<common::CHARSET_HKSCS>(const char *ptr, const char *end) {
+  UNUSED(end);
+  unsigned char c = *ptr;
+  return (0x81 <= c && c <= 0xfe) ? 2 : 1;
 }
 
 template<>

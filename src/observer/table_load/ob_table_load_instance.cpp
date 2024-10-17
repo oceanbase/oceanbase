@@ -35,6 +35,7 @@ using namespace storage;
 using namespace table;
 using namespace transaction;
 using namespace transaction::tablelock;
+using namespace common;
 
 ObTableLoadInstance::ObTableLoadInstance()
   : execute_ctx_(nullptr),
@@ -210,7 +211,7 @@ int ObTableLoadInstance::start_stmt(
   }
   if (OB_SUCC(ret)) {
     stmt_ctx_.is_started_ = true;
-    LOG_INFO("start stmt succeed", KR(ret), K(stmt_ctx_));
+    LOG_INFO("start stmt succeed", KR(ret), K(stmt_ctx_), K(param));
   }
   return ret;
 }
@@ -373,7 +374,7 @@ int ObTableLoadInstance::lock_table_in_tx()
   while (OB_SUCC(ret) && !lock_succeed) {
     if (OB_FAIL(execute_ctx_->check_status())) {
       LOG_WARN("failed to check status", KR(ret));
-    } else if (OB_FAIL(table_lock_service->lock_table(*tx_desc, stmt_ctx_.tx_param_, lock_table_arg))) {
+    } else if (OB_FAIL(table_lock_service->lock(*tx_desc, stmt_ctx_.tx_param_, lock_table_arg))) {
       if (OB_EAGAIN == ret) {
         ob_usleep(sleep_time);
         ret = OB_SUCCESS;
@@ -499,7 +500,7 @@ int ObTableLoadInstance::start_direct_load(const ObTableLoadParam &param,
   } else if (OB_ISNULL(table_ctx = ObTableLoadService::alloc_ctx())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc table ctx", KR(ret), K(param));
-  } else if (OB_FAIL(table_ctx->init(param, stmt_ctx_.ddl_param_, session_info, execute_ctx_->exec_ctx_))) {
+  } else if (OB_FAIL(table_ctx->init(param, stmt_ctx_.ddl_param_, session_info, ObString::make_string("")))) {
     LOG_WARN("fail to init table ctx", KR(ret));
   } else if (OB_FAIL(ObTableLoadCoordinator::init_ctx(table_ctx, column_ids, execute_ctx_))) {
     LOG_WARN("fail to coordinator init ctx", KR(ret));

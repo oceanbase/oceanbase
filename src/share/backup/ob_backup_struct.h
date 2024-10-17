@@ -176,6 +176,7 @@ const char *const OB_STR_PREV_INC_BACKUP_SET_ID = "prev_inc_backup_set_id";
 const char *const OB_STRING_MJAOR_DATA = "major_data";
 const char *const OB_STRING_MINOR_DATA = "minor_data";
 const char *const OB_STR_COMMENT = "comment";
+const char *const OB_STR_COMPLETION_TS = "completion_ts";
 const char *const OB_STR_RETRY_ID = "retry_id";
 const char *const OB_STR_START_TURN_ID = "start_turn_id";
 const char *const OB_STR_FILE_COUNT = "file_count";
@@ -431,6 +432,7 @@ const char *const OB_STR_MAX_BANDWIDTH = "max_bandwidth";
 const char *const OB_STR_MAX_IOPS_AND_MAX_BANDWIDTH = "max_iops, max_bandwidth";
 const char *const OB_STR_TABLE_LIST = "table_list";
 const char *const OB_STR_TABLE_LIST_META_INFO = "table_list_meta_info";
+const char *const OB_STR_MAJOR_COMPACTION_MVIEW_DEP_TABLET_LIST = "major_compaction_mview_dep_tablet_list";
 
 enum ObBackupFileType
 {
@@ -474,6 +476,7 @@ enum ObBackupFileType
   BACKUP_TABLET_METAS_INFO = 37,
   BACKUP_TABLE_LIST_FILE = 38,
   BACKUP_TABLE_LIST_META_FILE = 39,
+  BACKUP_MVIEW_DEP_TABLET_LIST_FILE = 40,
   // type <=255 is write header struct to disk directly
   // type > 255 is use serialization to disk
   BACKUP_MAX_DIRECT_WRITE_TYPE = 255,

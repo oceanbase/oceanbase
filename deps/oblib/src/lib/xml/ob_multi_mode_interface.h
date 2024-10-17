@@ -211,7 +211,7 @@ public:
         new (dst_buf) T(*reinterpret_cast<T*>(src_buf));
       }
     } else {
-      OB_LOG(WARN, "failed to construct ObStack", K(ret), K(length));;
+      OB_LOG(WARN, "failed to construct ObStack", K(ret), K(length));
     }
   }
 

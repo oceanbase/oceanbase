@@ -1037,6 +1037,10 @@ int ObLogDeliver::handle_req_(rpc::ObRequest &req)
       // modify_pkt.set_tenant_id(node_id_);
       BATCH_RPC_PROCESS()
     }
+    case obrpc::OB_LOG_PROBE_RS: {
+      //modify_pkt.set_tenant_id(node_id_);
+      PROCESS(LogProbeRsP);
+    }
     case obrpc::OB_LOG_SYNC_BASE_LSN_REQ: {
       PROCESS(logservice::LogSyncBaseLSNReqP)
     }

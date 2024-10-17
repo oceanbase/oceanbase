@@ -122,6 +122,8 @@ private:
                 common::ObMemberList &member_list,
                 common::ObMember &arbitration_service,
                 common::GlobalLearnerList &learner_list);
+ int check_tenant_mv_merge_info_(const share::ObAllTenantInfo &tenant_info,
+                                 storage::ObMajorMVMergeInfo &major_mv_merge_info);
  int check_member_list_and_learner_list_all_in_meta_table_(
                 const common::ObMemberList &member_list,
                 const common::GlobalLearnerList &learner_list);

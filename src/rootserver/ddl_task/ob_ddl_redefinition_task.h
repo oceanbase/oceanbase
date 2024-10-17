@@ -140,6 +140,7 @@ public:
   virtual int process() = 0;
   virtual int update_complete_sstable_job_status(
       const common::ObTabletID &tablet_id,
+      const ObAddr &addr,
       const int64_t snapshot_version,
       const int64_t execution_id,
       const int ret_code,
@@ -148,7 +149,6 @@ public:
       const uint64_t child_task_key,
       const int ret_code) override;
   int notify_update_autoinc_finish(const uint64_t autoinc_val, const int ret_code);
-  virtual int cleanup_impl() override;
   int reap_old_replica_build_task(bool &need_exec_new_inner_sql);
   INHERIT_TO_STRING_KV("ObDDLTask", ObDDLTask,
       K(wait_trans_ctx_), K(sync_tablet_autoinc_seq_ctx_), K(build_replica_request_time_),
@@ -174,6 +174,8 @@ protected:
   virtual int check_and_cancel_complement_data_dag(bool &all_complement_dag_exit); // wait dag exit before unlock table.
   virtual int fail();
   virtual int success();
+  int hold_snapshot(const int64_t snapshot_version);
+  int release_snapshot(const int64_t snapshot_version);
   int add_constraint_ddl_task(const int64_t constraint_id);
   int add_fk_ddl_task(const int64_t fk_id);
   int sync_auto_increment_position();
@@ -258,7 +260,18 @@ protected:
   int get_child_task_ids(char *buf, int64_t len);
   int get_estimated_timeout(const share::schema::ObTableSchema *dst_table_schema, int64_t &estimated_timeout);
   int get_orig_all_index_tablet_count(ObSchemaGetterGuard &schema_guard, int64_t &all_tablet_count);
+
+  int generate_rebuild_index_arg_list(const int64_t tenant_id,
+                                      const int64_t table_id,
+                                      ObSchemaGetterGuard &schema_guard,
+                                      obrpc::ObAlterTableArg &alter_table_arg);
   int64_t get_build_replica_request_time();
+private:
+  int add_table_tablets_for_snapshot_(const uint64_t table_id, ObSchemaGetterGuard &schema_guard,
+                                      common::ObIArray<common::ObTabletID> &tablet_ids);
+  int hold_snapshot_for_major_refresh_mv_(const int64_t snapshot_version);
+
+  virtual int cleanup_impl() override;
 protected:
   static const int64_t MAP_BUCKET_NUM = 1024;
   struct DependTaskStatus final
@@ -291,7 +304,7 @@ protected:
   int64_t check_table_empty_job_time_;
   bool is_sstable_complete_task_submitted_;
   int64_t sstable_complete_request_time_;
-  ObDDLSingleReplicaExecutor replica_builder_;
+  ObDDLReplicaBuildExecutor replica_builder_;
   common::hash::ObHashMap<common::ObTabletID, common::ObTabletID> check_dag_exit_tablets_map_; // for dag complement data ddl only.
   int64_t check_dag_exit_retry_cnt_;
 };

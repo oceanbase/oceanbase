@@ -968,16 +968,13 @@ int ObDbmsStatsExecutor::do_set_table_stats(const ObSetTableStatParam &param,
   if (OB_ISNULL(table_stat)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(table_stat));
-  } else if (param.numrows_ < 0 ||
-             param.avgrlen_ < 0 ||
-             param.nummacroblks_ < 0 ||
-             param.nummicroblks_ < 0) {
+  } else if (param.is_invalid()) {
     ret = OB_ERR_DBMS_STATS_PL;
     LOG_WARN("Invalid or inconsistent input values", K(ret), K(param));
     LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"Invalid or inconsistent input values");
   } else {
     //1.set numrows_
-    if (param.numrows_ > 0) {
+    if (param.numrows_ != ObSetTableStatParam::NULLOPT) {
       table_stat->set_row_count(param.numrows_);
     }
     //2.set numblks_
@@ -985,13 +982,13 @@ int ObDbmsStatsExecutor::do_set_table_stats(const ObSetTableStatParam &param,
     //   table_stat->set_macro_block_num(param.numrows_);
     // }
     //3.avgrlen_
-    if (param.avgrlen_ > 0) {
+    if (param.avgrlen_ != ObSetTableStatParam::NULLOPT) {
       table_stat->set_avg_row_size(param.avgrlen_);
     }
-    if (param.nummacroblks_ > 0) {
+    if (param.nummacroblks_ != ObSetTableStatParam::NULLOPT) {
       table_stat->set_macro_block_num(param.nummacroblks_);
     }
-    if (param.nummicroblks_ > 0) {
+    if (param.nummicroblks_ != ObSetTableStatParam::NULLOPT) {
       table_stat->set_micro_block_num(param.nummicroblks_);
     }
     //other options support later.
@@ -1009,33 +1006,35 @@ int ObDbmsStatsExecutor::do_set_column_stats(ObIAllocator &allocator,
   if (OB_ISNULL(column_stat)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(column_stat));
-  } else if (param.distcnt_ < 0 ||
-             param.density_ < 0 ||
-             param.nullcnt_ < 0 ||
-             param.avgclen_ < 0) {
+  } else if (param.is_invalid()) {
     ret = OB_ERR_DBMS_STATS_PL;
     LOG_WARN("Invalid or inconsistent input values", K(ret), K(param));
     LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"Invalid or inconsistent input values");
   } else {
     //1.set distcnt_
-    if (param.distcnt_ > 0) {
+    if (param.distcnt_ != ObSetColumnStatParam::NULLOPT) {
       column_stat->set_num_distinct(param.distcnt_);
     }
     //2.set density_
-    if (param.density_ > 0) {
+    if (param.density_ != ObSetColumnStatParam::NULLOPT) {
       column_stat->get_histogram().set_density(param.density_);
     }
     //3.nullcnt_
-    if (param.nullcnt_ > 0) {
+    if (param.nullcnt_ != ObSetColumnStatParam::NULLOPT) {
       column_stat->set_num_null(param.nullcnt_);
     }
     //4.avgclen_
-    if (param.avgclen_ > 0) {
+    if (param.avgclen_ != ObSetColumnStatParam::NULLOPT) {
       column_stat->set_avg_len(param.avgclen_);
     }
     //5.set max/val value
     if (param.hist_param_.minval_ != NULL || param.hist_param_.maxval_ != NULL) {
       ObCastCtx cast_ctx(&allocator, &dtc_params, CM_NONE, param.col_meta_.get_collation_type());
+      ObAccuracy res_acc;
+      if (param.col_meta_.is_decimal_int()) {
+        res_acc = param.col_accuracy_;
+        cast_ctx.res_accuracy_ = &res_acc;
+      }
       if ((param.hist_param_.minval_ != NULL &&
            OB_FAIL(ObObjCaster::to_type(param.col_meta_.get_type(), cast_ctx, *param.hist_param_.minval_, column_stat->get_min_value()))) ||
           (param.hist_param_.maxval_ != NULL &&

@@ -291,8 +291,8 @@ int ObTenantMajorFreeze::clear_merge_error()
         if (OB_ISNULL(tenant_ls_merge_checker = MTL(compaction::ObTenantLSMergeChecker *))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("ls merge checker is unexpected null", K(ret), K_(tenant_id));
-        } else {
-          tenant_ls_merge_checker->clear_merge_error();
+        } else if (OB_FAIL(tenant_ls_merge_checker->clear_merge_error())) {
+          LOG_WARN("failed to clear merge error", K(ret));
         }
       } else {
         LOG_WARN("fail to switch tenant", K(ret), K_(tenant_id));

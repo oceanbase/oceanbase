@@ -762,7 +762,7 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
       }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(loop.process_one_if(&control_channels, nth_channel))) {
-        if (OB_EAGAIN == ret) {
+        if (OB_DTL_WAIT_EAGAIN == ret) {
           LOG_DEBUG("no message, waiting sqc report", K(ret));
           ret = OB_SUCCESS;
         } else if (OB_ITER_END != ret) {

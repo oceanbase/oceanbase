@@ -278,12 +278,18 @@ const ObCharsetWrapper ObCharset::charset_wrap_arr_[ObCharset::VALID_CHARSET_TYP
   {CHARSET_BINARY, "Binary pseudo charset", CS_TYPE_BINARY, 1},
   {CHARSET_UTF8MB4, "UTF-8 Unicode", CS_TYPE_UTF8MB4_GENERAL_CI, 4},
   {CHARSET_GBK, "GBK charset", CS_TYPE_GBK_CHINESE_CI, 2},
-  {CHARSET_UTF16, "UTF-16 Unicode", CS_TYPE_UTF16_GENERAL_CI, 2},
+  {CHARSET_UTF16, "UTF-16 Unicode", CS_TYPE_UTF16_GENERAL_CI, 4},
   {CHARSET_GB18030, "GB18030 charset", CS_TYPE_GB18030_CHINESE_CI, 4},
   {CHARSET_LATIN1, "cp1252 West European", CS_TYPE_LATIN1_SWEDISH_CI, 1},
   {CHARSET_GB18030_2022, "GB18030-2022 charset", CS_TYPE_GB18030_2022_PINYIN_CI, 4},
   {CHARSET_ASCII, "US ASCII", CS_TYPE_ASCII_GENERAL_CI, 1},
   {CHARSET_TIS620, "TIS620 Thai", CS_TYPE_TIS620_THAI_CI, 1},
+  {CHARSET_UTF16LE, "UTF-16LE Unicode", CS_TYPE_UTF16LE_GENERAL_CI, 4},
+  {CHARSET_SJIS, "SJIS", CS_TYPE_SJIS_JAPANESE_CI, 2},
+  {CHARSET_BIG5, "BIG5", CS_TYPE_BIG5_CHINESE_CI, 2},
+  {CHARSET_HKSCS, "HKSCS", CS_TYPE_HKSCS_BIN, 2},
+  {CHARSET_HKSCS31, "HKSCS-ISO UNICODE 31", CS_TYPE_HKSCS31_BIN, 2},
+  {CHARSET_DEC8, "DEC West European", CS_TYPE_DEC8_SWEDISH_CI, 1},
 };
 
 const ObCollationWrapper ObCharset::collation_wrap_arr_[ObCharset::VALID_COLLATION_TYPES] =
@@ -295,9 +301,6 @@ const ObCollationWrapper ObCharset::collation_wrap_arr_[ObCharset::VALID_COLLATI
   {CS_TYPE_GBK_BIN, CHARSET_GBK, CS_TYPE_GBK_BIN, false, true, 1},
   {CS_TYPE_UTF16_GENERAL_CI, CHARSET_UTF16, CS_TYPE_UTF16_GENERAL_CI, true, true, 1},
   {CS_TYPE_UTF16_BIN, CHARSET_UTF16, CS_TYPE_UTF16_BIN, false, true, 1},
-  //{CS_TYPE_UTF8MB4_ZH_0900_AS_CS, CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_ZH_0900_AS_CS, false, true, 0},
-  {CS_TYPE_UTF8MB4_UNICODE_CI, CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_UNICODE_CI, false, true, 8},
-  {CS_TYPE_UTF16_UNICODE_CI, CHARSET_UTF16, CS_TYPE_UTF16_UNICODE_CI, false, true, 8},
   {CS_TYPE_GB18030_CHINESE_CI, CHARSET_GB18030, CS_TYPE_GB18030_CHINESE_CI, true, true, 2},
   {CS_TYPE_GB18030_BIN, CHARSET_GB18030, CS_TYPE_GB18030_BIN, false, true, 1},
   {CS_TYPE_LATIN1_SWEDISH_CI, CHARSET_LATIN1, CS_TYPE_LATIN1_SWEDISH_CI,true, true, 1},
@@ -309,20 +312,145 @@ const ObCollationWrapper ObCharset::collation_wrap_arr_[ObCharset::VALID_COLLATI
   {CS_TYPE_GB18030_2022_RADICAL_CS, CHARSET_GB18030_2022, CS_TYPE_GB18030_2022_RADICAL_CS, false, true, 1},
   {CS_TYPE_GB18030_2022_STROKE_CI, CHARSET_GB18030_2022, CS_TYPE_GB18030_2022_STROKE_CI, false, true, 1},
   {CS_TYPE_GB18030_2022_STROKE_CS, CHARSET_GB18030_2022, CS_TYPE_GB18030_2022_STROKE_CS, false, true, 1},
-  {CS_TYPE_UTF8MB4_CROATIAN_CI, CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_CROATIAN_CI, false, true, 8},
-  {CS_TYPE_UTF8MB4_UNICODE_520_CI, CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_UNICODE_520_CI, false, true, 8},
-  {CS_TYPE_UTF8MB4_CZECH_CI, CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_CZECH_CI, false, true, 8},
   {CS_TYPE_ASCII_GENERAL_CI, CHARSET_ASCII, CS_TYPE_ASCII_GENERAL_CI,true, true, 1},
   {CS_TYPE_ASCII_BIN, CHARSET_ASCII, CS_TYPE_ASCII_BIN,false, true, 1},
   {CS_TYPE_TIS620_THAI_CI, CHARSET_TIS620, CS_TYPE_TIS620_THAI_CI,true, true, 1},
   {CS_TYPE_TIS620_BIN, CHARSET_TIS620, CS_TYPE_TIS620_BIN,false, true, 1},
-  {CS_TYPE_UTF8MB4_0900_AI_CI, CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_0900_AI_CI, false, true, 1},
-  };
+  {CS_TYPE_UTF16LE_GENERAL_CI, CHARSET_UTF16LE, CS_TYPE_UTF16LE_GENERAL_CI, true, true, 1},
+  {CS_TYPE_UTF16LE_BIN, CHARSET_UTF16LE, CS_TYPE_UTF16LE_BIN, false, true, 1},
+  {CS_TYPE_SJIS_JAPANESE_CI, CHARSET_SJIS, CS_TYPE_SJIS_JAPANESE_CI, true, true, 1},
+  {CS_TYPE_SJIS_BIN,  CHARSET_SJIS, CS_TYPE_SJIS_BIN, false, true, 1},
+  {CS_TYPE_BIG5_CHINESE_CI, CHARSET_BIG5, CS_TYPE_BIG5_CHINESE_CI, true, true, 1},
+  {CS_TYPE_BIG5_BIN, CHARSET_BIG5, CS_TYPE_BIG5_BIN, false, true, 1},
+  {CS_TYPE_HKSCS_BIN, CHARSET_HKSCS, CS_TYPE_HKSCS_BIN, true, true, 1},
+  {CS_TYPE_HKSCS31_BIN, CHARSET_HKSCS31, CS_TYPE_HKSCS31_BIN, true, true, 1},
+
+  {CS_TYPE_UTF16_UNICODE_CI, CHARSET_UTF16, CS_TYPE_UTF16_UNICODE_CI, false, true, 8},
+  {CS_TYPE_UTF16_ICELANDIC_UCA_CI , CHARSET_UTF16,   CS_TYPE_UTF16_ICELANDIC_UCA_CI, false, true, 8},
+  {CS_TYPE_UTF16_LATVIAN_UCA_CI , CHARSET_UTF16,   CS_TYPE_UTF16_LATVIAN_UCA_CI, false, true, 8},
+  {CS_TYPE_UTF16_ROMANIAN_UCA_CI , CHARSET_UTF16,   CS_TYPE_UTF16_ROMANIAN_UCA_CI, false, true, 8},
+  {CS_TYPE_UTF16_SLOVENIAN_UCA_CI , CHARSET_UTF16,   CS_TYPE_UTF16_SLOVENIAN_UCA_CI, false, true, 8},
+  {CS_TYPE_UTF16_POLISH_UCA_CI , CHARSET_UTF16,   CS_TYPE_UTF16_POLISH_UCA_CI, false, true, 8},
+  {CS_TYPE_UTF16_ESTONIAN_UCA_CI , CHARSET_UTF16,   CS_TYPE_UTF16_ESTONIAN_UCA_CI, false, true, 8},
+  {CS_TYPE_UTF16_SPANISH_UCA_CI , CHARSET_UTF16,   CS_TYPE_UTF16_SPANISH_UCA_CI, false, true, 8},
+  {CS_TYPE_UTF16_SWEDISH_UCA_CI , CHARSET_UTF16,   CS_TYPE_UTF16_SWEDISH_UCA_CI, false, true, 8},
+  {CS_TYPE_UTF16_TURKISH_UCA_CI , CHARSET_UTF16,   CS_TYPE_UTF16_TURKISH_UCA_CI, false, true, 8},
+  {CS_TYPE_UTF16_CZECH_UCA_CI , CHARSET_UTF16,   CS_TYPE_UTF16_CZECH_UCA_CI, false, true, 8},
+  {CS_TYPE_UTF16_DANISH_UCA_CI , CHARSET_UTF16,   CS_TYPE_UTF16_DANISH_UCA_CI, false, true, 8},
+  {CS_TYPE_UTF16_LITHUANIAN_UCA_CI , CHARSET_UTF16,   CS_TYPE_UTF16_LITHUANIAN_UCA_CI, false, true, 8},
+  {CS_TYPE_UTF16_SLOVAK_UCA_CI , CHARSET_UTF16,   CS_TYPE_UTF16_SLOVAK_UCA_CI, false, true, 8},
+  {CS_TYPE_UTF16_SPANISH2_UCA_CI , CHARSET_UTF16,   CS_TYPE_UTF16_SPANISH2_UCA_CI, false, true, 8},
+  {CS_TYPE_UTF16_ROMAN_UCA_CI , CHARSET_UTF16,   CS_TYPE_UTF16_ROMAN_UCA_CI, false, true, 8},
+  {CS_TYPE_UTF16_PERSIAN_UCA_CI , CHARSET_UTF16,   CS_TYPE_UTF16_PERSIAN_UCA_CI, false, true, 8},
+  {CS_TYPE_UTF16_ESPERANTO_UCA_CI , CHARSET_UTF16,   CS_TYPE_UTF16_ESPERANTO_UCA_CI, false, true, 8},
+  {CS_TYPE_UTF16_HUNGARIAN_UCA_CI , CHARSET_UTF16,   CS_TYPE_UTF16_HUNGARIAN_UCA_CI, false, true, 8},
+  {CS_TYPE_UTF16_SINHALA_UCA_CI , CHARSET_UTF16,   CS_TYPE_UTF16_SINHALA_UCA_CI, false, true, 8},
+  {CS_TYPE_UTF16_GERMAN2_UCA_CI , CHARSET_UTF16,   CS_TYPE_UTF16_GERMAN2_UCA_CI, false, true, 8},
+  {CS_TYPE_UTF16_CROATIAN_UCA_CI , CHARSET_UTF16,   CS_TYPE_UTF16_CROATIAN_UCA_CI, false, true, 8},
+  {CS_TYPE_UTF16_UNICODE_520_CI , CHARSET_UTF16,   CS_TYPE_UTF16_UNICODE_520_CI, false, true, 8},
+  {CS_TYPE_UTF16_VIETNAMESE_CI  , CHARSET_UTF16,   CS_TYPE_UTF16_VIETNAMESE_CI , false, true, 8},
+
+  {CS_TYPE_UTF8MB4_UNICODE_CI, CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_UNICODE_CI, false, true, 8},
+  {CS_TYPE_UTF8MB4_ICELANDIC_UCA_CI,  CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_ICELANDIC_UCA_CI, false, true, 8},
+  {CS_TYPE_UTF8MB4_LATVIAN_UCA_CI ,   CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_LATVIAN_UCA_CI ,  false, true, 8},
+  {CS_TYPE_UTF8MB4_ROMANIAN_UCA_CI ,  CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_ROMANIAN_UCA_CI , false, true, 8},
+  {CS_TYPE_UTF8MB4_SLOVENIAN_UCA_CI,  CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_SLOVENIAN_UCA_CI, false, true, 8},
+  {CS_TYPE_UTF8MB4_POLISH_UCA_CI  ,   CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_POLISH_UCA_CI  ,  false, true, 8},
+  {CS_TYPE_UTF8MB4_ESTONIAN_UCA_CI ,  CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_ESTONIAN_UCA_CI , false, true, 8},
+  {CS_TYPE_UTF8MB4_SPANISH_UCA_CI ,   CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_SPANISH_UCA_CI ,  false, true, 8},
+  {CS_TYPE_UTF8MB4_SWEDISH_UCA_CI ,   CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_SWEDISH_UCA_CI ,  false, true, 8},
+  {CS_TYPE_UTF8MB4_TURKISH_UCA_CI ,   CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_TURKISH_UCA_CI ,  false, true, 8},
+  {CS_TYPE_UTF8MB4_CZECH_UCA_CI  ,    CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_CZECH_UCA_CI  ,   false, true, 8},
+  {CS_TYPE_UTF8MB4_DANISH_UCA_CI  ,   CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_DANISH_UCA_CI  ,  false, true, 8},
+  {CS_TYPE_UTF8MB4_LITHUANIAN_UCA_CI, CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_LITHUANIAN_UCA_CI, false, true, 8},
+  {CS_TYPE_UTF8MB4_SLOVAK_UCA_CI  ,   CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_SLOVAK_UCA_CI  ,  false, true, 8},
+  {CS_TYPE_UTF8MB4_SPANISH2_UCA_CI,   CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_SPANISH2_UCA_CI,  false, true, 8},
+  {CS_TYPE_UTF8MB4_ROMAN_UCA_CI,      CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_ROMAN_UCA_CI,     false, true, 8},
+  {CS_TYPE_UTF8MB4_PERSIAN_UCA_CI ,   CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_PERSIAN_UCA_CI ,  false, true, 8},
+  {CS_TYPE_UTF8MB4_ESPERANTO_UCA_CI,  CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_ESPERANTO_UCA_CI, false, true, 8},
+  {CS_TYPE_UTF8MB4_HUNGARIAN_UCA_CI,  CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_HUNGARIAN_UCA_CI, false, true, 8},
+  {CS_TYPE_UTF8MB4_SINHALA_UCA_CI ,   CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_SINHALA_UCA_CI ,  false, true, 8},
+  {CS_TYPE_UTF8MB4_GERMAN2_UCA_CI ,   CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_GERMAN2_UCA_CI ,  false, true, 8},
+  {CS_TYPE_UTF8MB4_CROATIAN_UCA_CI,   CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_CROATIAN_UCA_CI,  false, true, 8},
+  {CS_TYPE_UTF8MB4_UNICODE_520_CI ,   CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_UNICODE_520_CI ,  false, true, 8},
+  {CS_TYPE_UTF8MB4_VIETNAMESE_CI  ,   CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_VIETNAMESE_CI  ,  false, true, 8},
+
+  {CS_TYPE_DEC8_SWEDISH_CI, CHARSET_DEC8, CS_TYPE_DEC8_SWEDISH_CI, true, true, 8},
+  {CS_TYPE_DEC8_BIN, CHARSET_DEC8, CS_TYPE_DEC8_BIN, false, true, 8},
+
+  { CS_TYPE_UTF8MB4_0900_AI_CI         , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_0900_AI_CI         , false, true, 0},
+  { CS_TYPE_UTF8MB4_DE_PB_0900_AI_CI   , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_DE_PB_0900_AI_CI   , false, true, 0},
+  { CS_TYPE_UTF8MB4_IS_0900_AI_CI      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_IS_0900_AI_CI      , false, true, 0},
+  { CS_TYPE_UTF8MB4_LV_0900_AI_CI      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_LV_0900_AI_CI      , false, true, 0},
+  { CS_TYPE_UTF8MB4_RO_0900_AI_CI      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_RO_0900_AI_CI      , false, true, 0},
+  { CS_TYPE_UTF8MB4_SL_0900_AI_CI      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_SL_0900_AI_CI      , false, true, 0},
+  { CS_TYPE_UTF8MB4_PL_0900_AI_CI      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_PL_0900_AI_CI      , false, true, 0},
+  { CS_TYPE_UTF8MB4_ET_0900_AI_CI      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_ET_0900_AI_CI      , false, true, 0},
+  { CS_TYPE_UTF8MB4_ES_0900_AI_CI      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_ES_0900_AI_CI      , false, true, 0},
+  { CS_TYPE_UTF8MB4_SV_0900_AI_CI      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_SV_0900_AI_CI      , false, true, 0},
+  { CS_TYPE_UTF8MB4_TR_0900_AI_CI      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_TR_0900_AI_CI      , false, true, 0},
+  { CS_TYPE_UTF8MB4_CS_0900_AI_CI      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_CS_0900_AI_CI      , false, true, 0},
+  { CS_TYPE_UTF8MB4_DA_0900_AI_CI      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_DA_0900_AI_CI      , false, true, 0},
+  { CS_TYPE_UTF8MB4_LT_0900_AI_CI      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_LT_0900_AI_CI      , false, true, 0},
+  { CS_TYPE_UTF8MB4_SK_0900_AI_CI      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_SK_0900_AI_CI      , false, true, 0},
+  { CS_TYPE_UTF8MB4_ES_TRAD_0900_AI_CI , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_ES_TRAD_0900_AI_CI , false, true, 0},
+  { CS_TYPE_UTF8MB4_LA_0900_AI_CI      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_LA_0900_AI_CI      , false, true, 0},
+  { CS_TYPE_UTF8MB4_EO_0900_AI_CI      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_EO_0900_AI_CI      , false, true, 0},
+  { CS_TYPE_UTF8MB4_HU_0900_AI_CI      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_HU_0900_AI_CI      , false, true, 0},
+  { CS_TYPE_UTF8MB4_HR_0900_AI_CI      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_HR_0900_AI_CI      , false, true, 0},
+  { CS_TYPE_UTF8MB4_VI_0900_AI_CI      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_VI_0900_AI_CI      , false, true, 0},
+  { CS_TYPE_UTF8MB4_0900_AS_CS         , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_0900_AS_CS         , false, true, 0},
+  { CS_TYPE_UTF8MB4_DE_PB_0900_AS_CS   , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_DE_PB_0900_AS_CS   , false, true, 0},
+  { CS_TYPE_UTF8MB4_IS_0900_AS_CS      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_IS_0900_AS_CS      , false, true, 0},
+  { CS_TYPE_UTF8MB4_LV_0900_AS_CS      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_LV_0900_AS_CS      , false, true, 0},
+  { CS_TYPE_UTF8MB4_RO_0900_AS_CS      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_RO_0900_AS_CS      , false, true, 0},
+  { CS_TYPE_UTF8MB4_SL_0900_AS_CS      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_SL_0900_AS_CS      , false, true, 0},
+  { CS_TYPE_UTF8MB4_PL_0900_AS_CS      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_PL_0900_AS_CS      , false, true, 0},
+  { CS_TYPE_UTF8MB4_ET_0900_AS_CS      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_ET_0900_AS_CS      , false, true, 0},
+  { CS_TYPE_UTF8MB4_ES_0900_AS_CS      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_ES_0900_AS_CS      , false, true, 0},
+  { CS_TYPE_UTF8MB4_SV_0900_AS_CS      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_SV_0900_AS_CS      , false, true, 0},
+  { CS_TYPE_UTF8MB4_TR_0900_AS_CS      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_TR_0900_AS_CS      , false, true, 0},
+  { CS_TYPE_UTF8MB4_CS_0900_AS_CS      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_CS_0900_AS_CS      , false, true, 0},
+  { CS_TYPE_UTF8MB4_DA_0900_AS_CS      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_DA_0900_AS_CS      , false, true, 0},
+  { CS_TYPE_UTF8MB4_LT_0900_AS_CS      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_LT_0900_AS_CS      , false, true, 0},
+  { CS_TYPE_UTF8MB4_SK_0900_AS_CS      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_SK_0900_AS_CS      , false, true, 0},
+  { CS_TYPE_UTF8MB4_ES_TRAD_0900_AS_CS , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_ES_TRAD_0900_AS_CS , false, true, 0},
+  { CS_TYPE_UTF8MB4_LA_0900_AS_CS      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_LA_0900_AS_CS      , false, true, 0},
+  { CS_TYPE_UTF8MB4_EO_0900_AS_CS      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_EO_0900_AS_CS      , false, true, 0},
+  { CS_TYPE_UTF8MB4_HU_0900_AS_CS      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_HU_0900_AS_CS      , false, true, 0},
+  { CS_TYPE_UTF8MB4_HR_0900_AS_CS      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_HR_0900_AS_CS      , false, true, 0},
+  { CS_TYPE_UTF8MB4_VI_0900_AS_CS      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_VI_0900_AS_CS      , false, true, 0},
+  { CS_TYPE_UTF8MB4_JA_0900_AS_CS      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_JA_0900_AS_CS      , false, true, 0},
+  { CS_TYPE_UTF8MB4_JA_0900_AS_CS_KS   , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_JA_0900_AS_CS_KS   , false, true, 24},
+  { CS_TYPE_UTF8MB4_0900_AS_CI         , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_0900_AS_CI         , false, true, 0},
+  { CS_TYPE_UTF8MB4_RU_0900_AI_CI      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_RU_0900_AI_CI      , false, true, 0},
+  { CS_TYPE_UTF8MB4_RU_0900_AS_CS      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_RU_0900_AS_CS      , false, true, 0},
+  { CS_TYPE_UTF8MB4_ZH_0900_AS_CS      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_ZH_0900_AS_CS      , false, true, 0},
+  { CS_TYPE_UTF8MB4_0900_BIN           , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_0900_BIN           , false, true, 1},
+  { CS_TYPE_UTF8MB4_NB_0900_AI_CI      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_NB_0900_AI_CI      , false, true, 0},
+  { CS_TYPE_UTF8MB4_NB_0900_AS_CS      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_NB_0900_AS_CS      , false, true, 0},
+  { CS_TYPE_UTF8MB4_NN_0900_AI_CI      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_NN_0900_AI_CI      , false, true, 0},
+  { CS_TYPE_UTF8MB4_NN_0900_AS_CS      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_NN_0900_AS_CS      , false, true, 0},
+  { CS_TYPE_UTF8MB4_SR_LATN_0900_AI_CI , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_SR_LATN_0900_AI_CI , false, true, 0},
+  { CS_TYPE_UTF8MB4_SR_LATN_0900_AS_CS , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_SR_LATN_0900_AS_CS , false, true, 0},
+  { CS_TYPE_UTF8MB4_BS_0900_AI_CI      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_BS_0900_AI_CI      , false, true, 0},
+  { CS_TYPE_UTF8MB4_BS_0900_AS_CS      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_BS_0900_AS_CS      , false, true, 0},
+  { CS_TYPE_UTF8MB4_BG_0900_AI_CI      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_BG_0900_AI_CI      , false, true, 0},
+  { CS_TYPE_UTF8MB4_BG_0900_AS_CS      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_BG_0900_AS_CS      , false, true, 0},
+  { CS_TYPE_UTF8MB4_GL_0900_AI_CI      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_GL_0900_AI_CI      , false, true, 0},
+  { CS_TYPE_UTF8MB4_GL_0900_AS_CS      , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_GL_0900_AS_CS      , false, true, 0},
+  { CS_TYPE_UTF8MB4_MN_CYRL_0900_AI_CI , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_MN_CYRL_0900_AI_CI , false, true, 0},
+  { CS_TYPE_UTF8MB4_MN_CYRL_0900_AS_CS , CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_MN_CYRL_0900_AS_CS , false, true, 0},
+};
+
+ObCharsetType ObCharset::collation_charset_map[CS_TYPE_MAX] = {CHARSET_INVALID};
 
 ObCharsetInfo *ObCharset::charset_arr[CS_TYPE_MAX] = {
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,                 // 0 ~ 7
-  &ob_charset_latin1, NULL, NULL, NULL, NULL, NULL, NULL, NULL,   // 8
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,                 // 16
+  NULL, &ob_charset_big5_chinese_ci, NULL, NULL, NULL, NULL, NULL, NULL,    // 0 ~ 7
+  &ob_charset_latin1, NULL, NULL, NULL, NULL,                     // 8
+  &ob_charset_sjis_japanese_ci, NULL, NULL,                       // 13
+  NULL, NULL,                                                     // 16
+  &ob_charset_tis620_thai_ci, NULL, NULL, NULL, NULL, NULL,       // 18
   NULL, NULL, NULL, NULL, &ob_charset_gbk_chinese_ci,             // 24
                                 NULL, NULL, NULL,                 // 29
   NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,                 // 32
@@ -333,13 +461,16 @@ ObCharsetInfo *ObCharset::charset_arr[CS_TYPE_MAX] = {
   NULL, NULL, NULL, NULL, NULL, NULL,                             // 48
                                      &ob_charset_utf16_general_ci,// 54
                                      &ob_charset_utf16_bin,       // 55
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL,                       // 56
+  &ob_charset_utf16le_general_ci,                                 // 56
+  NULL, NULL, NULL, NULL, NULL,                                   // 57
+  &ob_charset_utf16le_bin,                                        // 62
                                             &ob_charset_bin,      // 63
   NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,                 // 64
   NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,                 // 72
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL,                       // 80
+  NULL, NULL, NULL, NULL, &ob_charset_big5_bin, NULL, NULL,       // 80
                                            &ob_charset_gbk_bin,   // 87
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,                 // 88
+  &ob_charset_sjis_bin,                                           // 88
+  &ob_charset_tis620_bin, NULL, NULL, NULL, NULL, NULL, NULL,     // 89
   NULL, NULL, NULL, NULL, NULL,                                   // 96
                                 &ob_charset_utf16_unicode_ci,     // 101
                                       NULL, NULL,                 // 102
@@ -349,7 +480,8 @@ ObCharsetInfo *ObCharset::charset_arr[CS_TYPE_MAX] = {
   NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,                 // 128
   NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,                 // 136
   NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,                 // 144
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,                 // 152
+  &ob_charset_hkscs_bin, &ob_charset_hkscs31_bin,                 // 152
+  NULL, NULL, NULL, NULL, NULL, NULL,                             // 154
   NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,                 // 160
   NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,                 // 168
   NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,                 // 176
@@ -370,11 +502,12 @@ ObCharsetInfo *ObCharset::charset_arr[CS_TYPE_MAX] = {
                                             NULL,                 // 247
   &ob_charset_gb18030_chinese_ci,                                 // 248
   &ob_charset_gb18030_bin,                                        // 249
-              NULL, &ob_charset_gb18030_chinese_cs,    		  // 250
-  NULL, NULL, NULL, NULL,                 			  // 252
+              NULL, &ob_charset_gb18030_chinese_cs,    		        // 250
+  NULL, NULL, NULL, NULL,                 			                  // 252
   NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,                 // 256
   NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,                 // 264
-  NULL                                                            // 272
+  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,                 // 272
+  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL                  // 280
 };
 
 double ObCharset::strntodv2(const char *str,
@@ -1379,63 +1512,29 @@ int ObCharset::wc_mb(ObCollationType collation_type, int32_t wc, char *buff, int
 
 const char *ObCharset::charset_name(ObCharsetType charset_type)
 {
-  const char *ret_name = "invalid_type";
-  switch(charset_type) {
-    case CHARSET_BINARY: {
-      ret_name = "binary";
-      break;
-    }
-    case CHARSET_UTF8MB4: {
-      ret_name = "utf8mb4";
-      break;
-    }
-    case CHARSET_GBK: {
-      ret_name = "gbk";
-      break;
-    }
-    case CHARSET_UTF16: {
-      ret_name = "utf16";
-      break;
-    }
-    case CHARSET_GB18030: {
-      ret_name = "gb18030";
-      break;
-    }
-    case CHARSET_LATIN1: {
-      ret_name = "latin1";
-      break;
-    }
-    case CHARSET_GB18030_2022: {
-      ret_name = "gb18030_2022";
-      break;
-    }
-    case CHARSET_ASCII: {
-      ret_name = "ascii";
-      break;
-    }
-    case CHARSET_TIS620: {
-      ret_name = "tis620";
-      break;
-    }
-    default: {
-      break;
-    }
-  }
+  const char *ret_name = charset_name(get_default_collation(charset_type));
   return ret_name;
 }
 
 const char *ObCharset::charset_name(ObCollationType collation_type)
 {
-  return charset_name(charset_type_by_coll(collation_type));
+  const ObCharsetInfo* cs_info = get_charset(collation_type);
+  if (cs_info == NULL) {
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid collation type", K(collation_type));
+    return NULL;
+  } else {
+    return cs_info->csname;
+  }
 }
 
 const char *ObCharset::collation_name(ObCollationType collation_type)
 {
-  ObCharsetInfo *cs = NULL;
-  if (collation_type < CS_TYPE_MAX && collation_type >= CS_TYPE_INVALID) {
-    cs = static_cast<ObCharsetInfo *>(ObCharset::charset_arr[collation_type]);
+  const ObCharsetInfo *cs = get_charset(collation_type);
+  if (cs == NULL) {
+    return "invalid_type";
+  } else {
+    return cs->name;
   }
-  return (NULL == cs) ? "invalid_type" : cs->name;
 }
 
 int ObCharset::check_valid_implicit_convert(ObCollationType src_type, ObCollationType dst_type)
@@ -1535,6 +1634,18 @@ ObCharsetType ObCharset::charset_type(const ObString &cs_name)
     charset_type = CHARSET_ASCII;
   } else if (0 == cs_name.case_compare(ob_charset_tis620_bin.csname)) {
     charset_type = CHARSET_TIS620;
+  } else if (0 == cs_name.case_compare(ob_charset_utf16le_general_ci.csname)) {
+    charset_type = CHARSET_UTF16LE;
+  } else if (0 == cs_name.case_compare(ob_charset_sjis_japanese_ci.csname)) {
+    charset_type = CHARSET_SJIS;
+  } else if (0 == cs_name.case_compare(ob_charset_big5_chinese_ci.csname)) {
+    charset_type = CHARSET_BIG5;
+  } else if (0 == cs_name.case_compare(ob_charset_hkscs_bin.csname)) {
+    charset_type = CHARSET_HKSCS;
+  } else if (0 == cs_name.case_compare(ob_charset_hkscs31_bin.csname)) {
+    charset_type = CHARSET_HKSCS31;
+  } else if (0 == cs_name.case_compare(ob_charset_dec8_swedish_ci.csname)) {
+    charset_type = CHARSET_DEC8;
   }
   return charset_type;
 }
@@ -1559,6 +1670,12 @@ ObCharsetType ObCharset::charset_type_by_name_oracle(const ObString &cs_name)
     charset_type = CHARSET_ASCII;
   } else if (0 == cs_name.case_compare("TH8TISASCII")) {
     charset_type = CHARSET_TIS620;
+  } else if (0 == cs_name.case_compare("AL16UTF16LE")) {
+    charset_type = CHARSET_UTF16LE;
+  } else if (0 == cs_name.case_compare("ZHT16HKSCS")) {
+    charset_type = CHARSET_HKSCS;
+  } else if (0 == cs_name.case_compare("ZHT16HKSCS31")) {
+    charset_type = CHARSET_HKSCS31;
   }
   return charset_type;
 }
@@ -1579,80 +1696,34 @@ ObCharsetType ObCharset::charset_type(const char *cs_name)
 ObCollationType ObCharset::collation_type(const ObString &cs_name)
 {
   ObCollationType collation_type = CS_TYPE_INVALID;
-  if (0 == cs_name.case_compare("utf8_bin") ||
-      0 == cs_name.case_compare("utf8mb3_bin")) {
-    collation_type = CS_TYPE_UTF8MB4_BIN;
-  } else if (0 == cs_name.case_compare("utf8_general_ci") ||
-             0 == cs_name.case_compare("utf8mb3_general_ci")) {
-    collation_type = CS_TYPE_UTF8MB4_GENERAL_CI;
-  } else if (0 == cs_name.case_compare(ob_charset_utf8mb4_bin.name)) {
-    collation_type = CS_TYPE_UTF8MB4_BIN;
-  } else if (0 == cs_name.case_compare(ob_charset_utf8mb4_general_ci.name)) {
-    collation_type = CS_TYPE_UTF8MB4_GENERAL_CI;
-  } else if (0 == cs_name.case_compare(ob_charset_bin.name)) {
-    collation_type = CS_TYPE_BINARY;
-  } else if (0 == cs_name.case_compare(ob_charset_gbk_chinese_ci.name)) {
-    collation_type = CS_TYPE_GBK_CHINESE_CI;
-  } else if (0 == cs_name.case_compare(ob_charset_gbk_bin.name)) {
-    collation_type = CS_TYPE_GBK_BIN;
-  } else if (0 == cs_name.case_compare(ob_charset_utf16_general_ci.name)) {
-    collation_type = CS_TYPE_UTF16_GENERAL_CI;
-  } else if (0 == cs_name.case_compare(ob_charset_utf16_bin.name)) {
-    collation_type = CS_TYPE_UTF16_BIN;
-  } else if (0 == cs_name.case_compare("utf8_unicode_ci")) {
-    collation_type = CS_TYPE_UTF8MB4_UNICODE_CI;
-  } else if (0 == cs_name.case_compare("utf8mb4_0900_ai_ci")) {
-    collation_type = CS_TYPE_UTF8MB4_0900_AI_CI;
-  } else if (0 == cs_name.case_compare(ob_charset_utf16_unicode_ci.name)) {
-    collation_type = CS_TYPE_UTF16_UNICODE_CI;
-  } else if (0 == cs_name.case_compare(ob_charset_utf8mb4_unicode_ci.name)) {
-    collation_type = CS_TYPE_UTF8MB4_UNICODE_CI;
-  } else if (0 == cs_name.case_compare(ob_charset_gb18030_bin.name)) {
-    collation_type = CS_TYPE_GB18030_BIN;
-  } else if (0 == cs_name.case_compare(ob_charset_gb18030_chinese_ci.name)) {
-    collation_type = CS_TYPE_GB18030_CHINESE_CI;
-  } else if (0 == cs_name.case_compare(ob_charset_latin1_bin.name)) {
-    collation_type = CS_TYPE_LATIN1_BIN;
-  } else if (0 == cs_name.case_compare(ob_charset_latin1.name)) {
-    collation_type = CS_TYPE_LATIN1_SWEDISH_CI;
-  } else if (0 == cs_name.case_compare(ob_charset_gb18030_chinese_cs.name)) {
-    collation_type = CS_TYPE_GB18030_CHINESE_CS;
-  } else if (0 == cs_name.case_compare("any_cs")) {
-    collation_type = CS_TYPE_ANY;
-  } else if (0 == cs_name.case_compare(ob_charset_gb18030_2022_bin.name)) {
-    collation_type = CS_TYPE_GB18030_2022_BIN;
-  } else if (0 == cs_name.case_compare(ob_charset_gb18030_2022_pinyin_ci.name)) {
-    collation_type = CS_TYPE_GB18030_2022_PINYIN_CI;
-  } else if (0 == cs_name.case_compare(ob_charset_gb18030_2022_pinyin_cs.name)) {
-    collation_type = CS_TYPE_GB18030_2022_PINYIN_CS;
-  } else if (0 == cs_name.case_compare(ob_charset_gb18030_2022_radical_ci.name)) {
-    collation_type = CS_TYPE_GB18030_2022_RADICAL_CI;
-  } else if (0 == cs_name.case_compare(ob_charset_gb18030_2022_radical_cs.name)) {
-    collation_type = CS_TYPE_GB18030_2022_RADICAL_CS;
-  } else if (0 == cs_name.case_compare(ob_charset_gb18030_2022_stroke_ci.name)) {
-    collation_type = CS_TYPE_GB18030_2022_STROKE_CI;
-  } else if (0 == cs_name.case_compare(ob_charset_gb18030_2022_stroke_cs.name)) {
-    collation_type = CS_TYPE_GB18030_2022_STROKE_CS;
-  } else if (0 == cs_name.case_compare("utf8_croatian_ci")) {
-    collation_type = CS_TYPE_UTF8MB4_CROATIAN_CI;
-  } else if (0 == cs_name.case_compare(ob_charset_utf8mb4_croatian_uca_ci.name)) {
-    collation_type = CS_TYPE_UTF8MB4_CROATIAN_CI;
-  } else if (0 == cs_name.case_compare("utf8_unicode_520_ci")) {
-    collation_type = CS_TYPE_UTF8MB4_UNICODE_520_CI;
-  } else if (0 == cs_name.case_compare(ob_charset_utf8mb4_unicode_520_ci.name)) {
-    collation_type = CS_TYPE_UTF8MB4_UNICODE_520_CI;
-  } else if (0 == cs_name.case_compare("utf8_czech_ci")) {
-    collation_type = CS_TYPE_UTF8MB4_CZECH_CI;
-  } else if (0 == cs_name.case_compare(ob_charset_utf8mb4_czech_uca_ci.name)) {
-    collation_type = CS_TYPE_UTF8MB4_CZECH_CI;
-  } else if (0 == cs_name.case_compare(ob_charset_ascii_bin.name)) {
-    collation_type = CS_TYPE_ASCII_BIN;
-  } else if (0 == cs_name.case_compare(ob_charset_ascii.name)) {
-    collation_type = CS_TYPE_ASCII_GENERAL_CI;
-  } else if (0 == cs_name.case_compare(ob_charset_tis620_bin.name)) {
-    collation_type = CS_TYPE_TIS620_BIN;
-  } else if (0 == cs_name.case_compare(ob_charset_tis620_thai_ci.name)) {
-    collation_type = CS_TYPE_TIS620_THAI_CI;
+  int ret = OB_SUCCESS;
+  static char utf8mb4_colname[50];
+  ObString act_name(50, 0, utf8mb4_colname);
+  if (cs_name.prefix_match_ci("utf8_")) {
+    act_name.write("utf8mb4_", 8);
+    act_name.write(cs_name.ptr() + 5, cs_name.length() - 5);
+  } else if (cs_name.prefix_match_ci("utf8mb3_")) {
+    act_name.write("utf8mb4_", 8);
+    act_name.write(cs_name.ptr() + 8, cs_name.length() - 8);
+  } else {
+    act_name = cs_name;
+  }
+  for (int64_t i = CS_TYPE_INVALID + 1; i < CS_TYPE_PINYIN_BEGIN_MARK; ++i) {
+    ObCollationType coll_type = static_cast<ObCollationType>(i);
+    if (is_valid_collation(coll_type)) {
+      const ObCharsetInfo *cs = get_charset(coll_type);
+      if (OB_ISNULL(cs) || OB_ISNULL(cs->name)) {
+        collation_type = CS_TYPE_INVALID;
+      } else if (*(cs->name) != '\0' && 0 == act_name.case_compare(cs->name)) {
+        collation_type = coll_type;
+        break;
+      }
+    }
+  }
+  if (CS_TYPE_INVALID == collation_type) {
+    if (0 == cs_name.case_compare("any_cs")) {
+      collation_type = CS_TYPE_ANY;
+    }
   }
   return collation_type;
 }
@@ -1666,53 +1737,29 @@ ObCollationType ObCharset::collation_type(const char* cs_name)
 bool ObCharset::is_valid_collation(ObCharsetType charset_type, ObCollationType collation_type)
 {
   bool ret = false;
-  if (CHARSET_UTF8MB4 == charset_type) {
-    if (CS_TYPE_UTF8MB4_BIN == collation_type
-        || CS_TYPE_UTF8MB4_GENERAL_CI == collation_type
-        || CS_TYPE_UTF8MB4_UNICODE_CI == collation_type
-        || CS_TYPE_UTF8MB4_CROATIAN_CI == collation_type
-        || CS_TYPE_UTF8MB4_UNICODE_520_CI == collation_type
-        || CS_TYPE_UTF8MB4_CZECH_CI == collation_type
-        || CS_TYPE_UTF8MB4_0900_AI_CI == collation_type
-        ) {
-      ret = true;
-    }
-  } else if (CHARSET_BINARY == charset_type
-      && CS_TYPE_BINARY == collation_type) {
-    ret = true;
-  } else if (CHARSET_GBK == charset_type) {
-    if (CS_TYPE_GBK_BIN == collation_type || CS_TYPE_GBK_CHINESE_CI == collation_type) {
-      ret = true;
-    }
-  } else if (CHARSET_UTF16 == charset_type) {
-    if (CS_TYPE_UTF16_GENERAL_CI == collation_type
-        || CS_TYPE_UTF16_BIN == collation_type
-        || CS_TYPE_UTF16_UNICODE_CI == collation_type
-        ) {
-      ret = true;
-    }
-  } else if (CHARSET_GB18030 == charset_type) {
-    if (CS_TYPE_GB18030_CHINESE_CI == collation_type
-        || CS_TYPE_GB18030_BIN == collation_type) {
-      ret = true;
-    }
-  } else if (CHARSET_LATIN1 == charset_type) {
-    if (CS_TYPE_LATIN1_SWEDISH_CI == collation_type || CS_TYPE_LATIN1_BIN == collation_type) {
-      ret = true;
-    }
-  } else if (CHARSET_GB18030_2022 == charset_type) {
-    ret = is_gb18030_2022(collation_type);
-  } else if (CHARSET_ASCII == charset_type) {
-    if (CS_TYPE_ASCII_GENERAL_CI == collation_type || CS_TYPE_ASCII_BIN == collation_type) {
-      ret = true;
-    }
-  } else if (CHARSET_TIS620 == charset_type) {
-    if (CS_TYPE_TIS620_THAI_CI == collation_type || CS_TYPE_TIS620_BIN == collation_type) {
+  if (is_valid_collation(collation_type)) {
+    ObCharsetType cstype = charset_type_by_coll(collation_type);
+    if (cstype != CHARSET_INVALID && cstype == charset_type) {
       ret = true;
     }
   }
   return ret;
 }
+
+bool ObCharset::is_valid_charset(int64_t cs_type_int)
+{
+  ObCharsetType charset_type = static_cast<ObCharsetType>(cs_type_int);
+  return charset_type > CHARSET_INVALID && charset_type < CHARSET_MAX;
+}
+
+static ObCollationType non_bin_coll_marks[NLS_COLLATION_MAX] = {
+  CS_TYPE_INVALID,
+  CS_TYPE_PINYIN_BEGIN_MARK,
+  CS_TYPE_RADICAL_BEGIN_MARK,
+  CS_TYPE_STROKE_BEGIN_MARK,
+};
+
+#define CHARSET_OFFSET(cstype) (cstype - CHARSET_BINARY)
 
 ObCollationType ObCharset::get_coll_type_by_nlssort_param(ObCharsetType charset_type,
                                                           const ObString &nlssort_param)
@@ -1730,13 +1777,15 @@ ObCollationType ObCharset::get_coll_type_by_nlssort_param(ObCharsetType charset_
     CS_TYPE_GB18030_2022_BIN,
     CS_TYPE_ASCII_BIN,
     CS_TYPE_TIS620_BIN,
+    CS_TYPE_UTF16LE_BIN,
+    CS_TYPE_SJIS_BIN,
+    CS_TYPE_BIG5_BIN,
+    CS_TYPE_HKSCS_BIN,
+    CS_TYPE_HKSCS31_BIN,
+    CS_TYPE_DEC8_BIN
   };
-  static ObCollationType non_bin_coll_marks[NLS_COLLATION_MAX] = {
-    CS_TYPE_INVALID,
-    CS_TYPE_PINYIN_BEGIN_MARK,
-    CS_TYPE_RADICAL_BEGIN_MARK,
-    CS_TYPE_STROKE_BEGIN_MARK,
-  };
+
+
   if (0 == nlssort_param.case_compare("SCHINESE_PINYIN_M")) {
     nls_coll_type = NLS_COLLATION_SCHINESE_PINYIN_M;
   } else if (0 == nlssort_param.case_compare("SCHINESE_PINYIN2_M")) {
@@ -1766,7 +1815,7 @@ ObCollationType ObCharset::get_coll_type_by_nlssort_param(ObCharsetType charset_
     } else if (nls_coll_type == NLS_COLLATION_SCHINESE_STROKE2_M) {
       coll_type = CS_TYPE_GB18030_2022_STROKE_CS;
     } else {
-      coll_type = static_cast<ObCollationType>(non_bin_coll_marks[nls_coll_type] + (charset_type - CHARSET_BINARY));
+      coll_type = static_cast<ObCollationType>(non_bin_coll_marks[nls_coll_type] + CHARSET_OFFSET(charset_type));
     }
   }
   return coll_type;
@@ -1775,31 +1824,7 @@ ObCollationType ObCharset::get_coll_type_by_nlssort_param(ObCharsetType charset_
 bool ObCharset::is_valid_collation(int64_t collation_type_int)
 {
   ObCollationType collation_type = static_cast<ObCollationType>(collation_type_int);
-  return CS_TYPE_UTF8MB4_GENERAL_CI == collation_type
-    || CS_TYPE_UTF8MB4_BIN == collation_type
-    || CS_TYPE_BINARY == collation_type
-    || CS_TYPE_GBK_BIN == collation_type
-    || CS_TYPE_GBK_CHINESE_CI == collation_type
-    || CS_TYPE_UTF16_BIN == collation_type
-    || CS_TYPE_UTF16_GENERAL_CI == collation_type
-    || CS_TYPE_GB18030_BIN == collation_type
-    || CS_TYPE_GB18030_CHINESE_CI == collation_type
-    || CS_TYPE_GB18030_CHINESE_CS == collation_type
-    || CS_TYPE_LATIN1_SWEDISH_CI == collation_type
-    || CS_TYPE_LATIN1_BIN == collation_type
-    || is_gb18030_2022(collation_type)
-    || CS_TYPE_UTF8MB4_UNICODE_CI == collation_type
-    || CS_TYPE_UTF8MB4_0900_AI_CI == collation_type
-    || CS_TYPE_UTF16_UNICODE_CI == collation_type
-    || CS_TYPE_UTF8MB4_CROATIAN_CI == collation_type
-    || CS_TYPE_UTF8MB4_UNICODE_520_CI == collation_type
-    || CS_TYPE_UTF8MB4_CZECH_CI == collation_type
-    || CS_TYPE_ASCII_GENERAL_CI == collation_type
-    || CS_TYPE_ASCII_BIN == collation_type
-    || CS_TYPE_TIS620_THAI_CI == collation_type
-    || CS_TYPE_TIS620_BIN == collation_type
-    || (CS_TYPE_EXTENDED_MARK < collation_type && collation_type < CS_TYPE_MAX)
-    ;
+  return collation_type < CS_TYPE_MAX && CS_TYPE_INVALID < collation_type && OB_NOT_NULL(get_charset(collation_type));
 }
 
 ObCharsetType ObCharset::charset_type_by_coll(ObCollationType collation_type)
@@ -1807,16 +1832,7 @@ ObCharsetType ObCharset::charset_type_by_coll(ObCollationType collation_type)
   ObCharsetType charset_type = CHARSET_INVALID;
   switch(collation_type) {
     case CS_TYPE_UTF8MB4_GENERAL_CI:
-      //fall through
-    case CS_TYPE_UTF8MB4_BIN:
-    case CS_TYPE_UTF8MB4_ZH_0900_AS_CS:
-    case CS_TYPE_UTF8MB4_ZH2_0900_AS_CS:
-    case CS_TYPE_UTF8MB4_ZH3_0900_AS_CS:
-    case CS_TYPE_UTF8MB4_CROATIAN_CI:
-    case CS_TYPE_UTF8MB4_UNICODE_520_CI:
-    case CS_TYPE_UTF8MB4_CZECH_CI:
-    case CS_TYPE_UTF8MB4_0900_AI_CI:
-    case CS_TYPE_UTF8MB4_UNICODE_CI: {
+    case CS_TYPE_UTF8MB4_BIN: {
       charset_type = CHARSET_UTF8MB4;
       break;
     }
@@ -1824,71 +1840,13 @@ ObCharsetType ObCharset::charset_type_by_coll(ObCollationType collation_type)
       charset_type = CHARSET_BINARY;
       break;
     }
-    case CS_TYPE_GBK_CHINESE_CI:
-    case CS_TYPE_GBK_ZH_0900_AS_CS:
-    case CS_TYPE_GBK_ZH2_0900_AS_CS:
-    case CS_TYPE_GBK_ZH3_0900_AS_CS:
-    case CS_TYPE_GBK_BIN: {
-      charset_type = CHARSET_GBK;
-      break;
-    }
-    case CS_TYPE_UTF16_BIN:
-    case CS_TYPE_UTF16_ZH_0900_AS_CS:
-    case CS_TYPE_UTF16_ZH2_0900_AS_CS:
-    case CS_TYPE_UTF16_ZH3_0900_AS_CS:
-    case CS_TYPE_UTF16_GENERAL_CI:
-    case CS_TYPE_UTF16_UNICODE_CI: {
-      charset_type = CHARSET_UTF16;
-      break;
-    }
-    case CS_TYPE_GB18030_ZH_0900_AS_CS:
-    case CS_TYPE_GB18030_ZH2_0900_AS_CS:
-    case CS_TYPE_GB18030_ZH3_0900_AS_CS:
-    case CS_TYPE_GB18030_CHINESE_CS:
-    case CS_TYPE_GB18030_CHINESE_CI:
-    case CS_TYPE_GB18030_BIN: {
-      charset_type = CHARSET_GB18030;
-      break;
-    }
-    case CS_TYPE_LATIN1_SWEDISH_CI:
-    case CS_TYPE_LATIN1_BIN:
-    case CS_TYPE_LATIN1_ZH_0900_AS_CS:
-    case CS_TYPE_LATIN1_ZH2_0900_AS_CS:
-    case CS_TYPE_LATIN1_ZH3_0900_AS_CS: {
-      charset_type = CHARSET_LATIN1;
-      break;
-    }
-    case CS_TYPE_GB18030_2022_BIN:
-    case CS_TYPE_GB18030_2022_PINYIN_CI:
-    case CS_TYPE_GB18030_2022_PINYIN_CS:
-    case CS_TYPE_GB18030_2022_RADICAL_CI:
-    case CS_TYPE_GB18030_2022_RADICAL_CS:
-    case CS_TYPE_GB18030_2022_STROKE_CI:
-    case CS_TYPE_GB18030_2022_STROKE_CS:
-    case CS_TYPE_GB18030_2022_ZH_0900_AS_CS:
-    case CS_TYPE_GB18030_2022_ZH2_0900_AS_CS:
-    case CS_TYPE_GB18030_2022_ZH3_0900_AS_CS: {
-      charset_type = CHARSET_GB18030_2022;
-      break;
-    }
-    case CS_TYPE_ASCII_GENERAL_CI:
-    case CS_TYPE_ASCII_BIN:
-    case CS_TYPE_ASCII_ZH_0900_AS_CS:
-    case CS_TYPE_ASCII_ZH2_0900_AS_CS:
-    case CS_TYPE_ASCII_ZH3_0900_AS_CS: {
-      charset_type = CHARSET_ASCII;
-      break;
-    }
-    case CS_TYPE_TIS620_THAI_CI:
-    case CS_TYPE_TIS620_BIN:
-    case CS_TYPE_TIS620_ZH_0900_AS_CS:
-    case CS_TYPE_TIS620_ZH2_0900_AS_CS:
-    case CS_TYPE_TIS620_ZH3_0900_AS_CS: {
-      charset_type = CHARSET_TIS620;
-      break;
-    }
     default: {
       break;
+    }
+  }
+  if (charset_type == CHARSET_INVALID) {
+    if (is_valid_collation(collation_type)) {
+      charset_type = ObCharset::collation_charset_map[collation_type];
     }
   }
   return charset_type;
@@ -1922,6 +1880,15 @@ ObNlsCharsetId ObCharset::charset_type_to_ora_charset_id(ObCharsetType cs_type)
     break;
   case CHARSET_TIS620:
     cs_id = CHARSET_TH8TISASCII_ID;
+    break;
+  case CHARSET_UTF16LE:
+    cs_id = CHARSET_AL16UTF16LE_ID;
+    break;
+  case CHARSET_HKSCS:
+    cs_id = CHARSET_ZHT16HKSCS_ID;
+    break;
+  case CHARSET_HKSCS31:
+    cs_id = CHARSET_ZHT16HKSCS31_ID;
     break;
   default:
     break;
@@ -1959,6 +1926,15 @@ ObCharsetType ObCharset::ora_charset_type_to_charset_type(ObNlsCharsetId charset
     case CHARSET_TH8TISASCII_ID:
       cs_type = CHARSET_TIS620;
       break;
+    case CHARSET_AL16UTF16LE_ID:
+      cs_type = CHARSET_UTF16LE;
+      break;
+    case CHARSET_ZHT16HKSCS_ID:
+      cs_type = CHARSET_HKSCS;
+      break;
+    case CHARSET_ZHT16HKSCS31_ID:
+      cs_type = CHARSET_HKSCS31;
+      break;
     default:
       break;
   }
@@ -1994,6 +1970,15 @@ ObCollationType ObCharset::ora_charset_type_to_coll_type(ObNlsCharsetId charset_
       break;
     case CHARSET_TH8TISASCII_ID:
       coll_type = CS_TYPE_TIS620_BIN;
+      break;
+    case CHARSET_AL16UTF16LE_ID:
+      coll_type = CS_TYPE_UTF16LE_BIN;
+      break;
+    case CHARSET_ZHT16HKSCS_ID:
+      coll_type = CS_TYPE_HKSCS_BIN;
+      break;
+    case CHARSET_ZHT16HKSCS31_ID:
+      coll_type = CS_TYPE_HKSCS31_BIN;
       break;
     default:
       break;
@@ -2186,6 +2171,14 @@ int ObCharset::aggregate_collation_old(
           // utf16_unicode_ci和utf16_general_ci直接报错，不应该出现这种情况
           ret = OB_CANT_AGGREGATE_2COLLATIONS;
         }
+      } else if (charset_type_by_coll(collation_type1) == CHARSET_UTF16LE) {
+        if (collation_type1 == CS_TYPE_UTF16LE_BIN || collation_type2 == CS_TYPE_UTF16LE_BIN) {
+          res_type = CS_TYPE_UTF16LE_BIN;
+          res_level = (CS_TYPE_UTF16LE_BIN == collation_type1) ? collation_level1 : collation_level2;
+        } else {
+          // utf16le_unicode_ci和utf16le_general_ci直接报错，不应该出现这种情况
+          ret = OB_CANT_AGGREGATE_2COLLATIONS;
+        }
       } else if (charset_type_by_coll(collation_type1) == CHARSET_GB18030) {
         res_type = CS_TYPE_GB18030_BIN;
         res_level = (CS_TYPE_GB18030_BIN == collation_type1) ? collation_level1 : collation_level2;
@@ -2206,6 +2199,21 @@ int ObCharset::aggregate_collation_old(
       } else if (charset_type_by_coll(collation_type1) == CHARSET_TIS620) {
         res_type = CS_TYPE_TIS620_BIN;
         res_level = (CS_TYPE_TIS620_BIN == collation_type1) ? collation_level1 : collation_level2;
+      } else if (charset_type_by_coll(collation_type1) == CHARSET_SJIS) {
+        res_type = CS_TYPE_SJIS_BIN;
+        res_level = (CS_TYPE_SJIS_BIN == collation_type1) ? collation_level1 : collation_level2;
+      } else if (charset_type_by_coll(collation_type1) == CHARSET_BIG5) {
+        res_type = CS_TYPE_BIG5_BIN;
+        res_level = (CS_TYPE_BIG5_BIN == collation_type1) ? collation_level1 : collation_level2;
+      } else if (charset_type_by_coll(collation_type1) == CHARSET_HKSCS) {
+        res_type = CS_TYPE_HKSCS_BIN;
+        res_level = (CS_TYPE_HKSCS_BIN == collation_type1) ? collation_level1 : collation_level2;
+      } else if (charset_type_by_coll(collation_type1) == CHARSET_HKSCS31) {
+        res_type = CS_TYPE_HKSCS31_BIN;
+        res_level = (CS_TYPE_HKSCS31_BIN == collation_type1) ? collation_level1 : collation_level2;
+      } else if (charset_type_by_coll(collation_type1) == CHARSET_DEC8) {
+        res_type = CS_TYPE_DEC8_BIN;
+        res_level = (CS_TYPE_DEC8_BIN == collation_type1) ? collation_level1 : collation_level2;
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected charset", K(ret), K(collation_type1), K(collation_type2), KCSTRING(lbt()));
@@ -2489,6 +2497,30 @@ ObCollationType ObCharset::get_default_collation(ObCharsetType charset_type)
       collation_type = CS_TYPE_TIS620_THAI_CI;
       break;
     }
+    case CHARSET_UTF16LE: {
+      collation_type = CS_TYPE_UTF16LE_GENERAL_CI;
+      break;
+    }
+    case CHARSET_SJIS: {
+      collation_type = CS_TYPE_SJIS_JAPANESE_CI;
+      break;
+    }
+    case CHARSET_BIG5: {
+      collation_type = CS_TYPE_BIG5_CHINESE_CI;
+      break;
+    }
+    case CHARSET_HKSCS: {
+      collation_type = CS_TYPE_HKSCS_BIN;
+      break;
+    }
+    case CHARSET_HKSCS31: {
+      collation_type = CS_TYPE_HKSCS31_BIN;
+      break;
+    }
+    case CHARSET_DEC8: {
+      collation_type = CS_TYPE_DEC8_SWEDISH_CI;
+      break;
+    }
     default: {
       break;
     }
@@ -2543,6 +2575,22 @@ ObCollationType ObCharset::get_default_collation_oracle(ObCharsetType charset_ty
       collation_type = CS_TYPE_TIS620_BIN;
       break;
     }
+    case CHARSET_UTF16LE: {
+      collation_type = CS_TYPE_UTF16LE_BIN;
+      break;
+    }
+    case CHARSET_BIG5: {
+      collation_type = CS_TYPE_BIG5_BIN;
+      break;
+    }
+    case CHARSET_HKSCS: {
+      collation_type = CS_TYPE_HKSCS_BIN;
+      break;
+    }
+    case CHARSET_HKSCS31: {
+      collation_type = CS_TYPE_HKSCS31_BIN;
+      break;
+    }
     default: {
       break;
     }
@@ -2588,6 +2636,30 @@ int ObCharset::get_default_collation(ObCharsetType charset_type, ObCollationType
     }
     case CHARSET_TIS620: {
       collation_type = CS_TYPE_TIS620_THAI_CI;
+      break;
+    }
+    case CHARSET_UTF16LE: {
+      collation_type = CS_TYPE_UTF16LE_GENERAL_CI;
+      break;
+    }
+    case CHARSET_SJIS: {
+      collation_type = CS_TYPE_SJIS_JAPANESE_CI;
+      break;
+    }
+    case CHARSET_BIG5: {
+      collation_type = CS_TYPE_BIG5_CHINESE_CI;
+      break;
+    }
+    case CHARSET_HKSCS: {
+      collation_type = CS_TYPE_HKSCS_BIN;
+      break;
+    }
+    case CHARSET_HKSCS31: {
+      collation_type = CS_TYPE_HKSCS31_BIN;
+      break;
+    }
+    case CHARSET_DEC8: {
+      collation_type = CS_TYPE_DEC8_SWEDISH_CI;
       break;
     }
     default: {
@@ -2637,6 +2709,30 @@ ObCollationType ObCharset::get_bin_collation(ObCharsetType charset_type)
     }
     case CHARSET_TIS620: {
       collation_type = CS_TYPE_TIS620_BIN;
+      break;
+    }
+    case CHARSET_UTF16LE: {
+      collation_type = CS_TYPE_UTF16LE_BIN;
+      break;
+    }
+    case CHARSET_SJIS: {
+      collation_type = CS_TYPE_SJIS_BIN;
+      break;
+    }
+    case CHARSET_BIG5: {
+      collation_type = CS_TYPE_BIG5_BIN;
+      break;
+    }
+    case CHARSET_HKSCS: {
+      collation_type = CS_TYPE_HKSCS_BIN;
+      break;
+    }
+    case CHARSET_HKSCS31: {
+      collation_type = CS_TYPE_HKSCS31_BIN;
+      break;
+    }
+    case CHARSET_DEC8: {
+      collation_type = CS_TYPE_DEC8_BIN;
       break;
     }
     default: {
@@ -2752,11 +2848,10 @@ int ObCharset::check_and_fill_info(ObCharsetType &charset_type, ObCollationType 
     charset_type = ObCharset::charset_type_by_coll(collation_type);
   } else if (collation_type == CS_TYPE_INVALID) {
     collation_type = ObCharset::get_default_collation(charset_type);
-  } else {
-    if (!ObCharset::is_valid_collation(charset_type, collation_type)) {
-      ret = OB_ERR_COLLATION_MISMATCH;
-      LOG_WARN("invalid collation info", K(charset_type), K(collation_type));
-    }
+  }
+  if (!ObCharset::is_valid_collation(charset_type, collation_type)) { // cs type any will return charset invalid
+    ret = OB_ERR_COLLATION_MISMATCH;
+    LOG_WARN("invalid collation info", K(charset_type), K(collation_type));
   }
   return ret;
 }
@@ -2774,7 +2869,13 @@ bool ObCharset::is_default_collation(ObCollationType collation_type)
     case CS_TYPE_ASCII_GENERAL_CI:
     case CS_TYPE_TIS620_THAI_CI:
     case CS_TYPE_GB18030_2022_PINYIN_CI:
-    case CS_TYPE_BINARY: {
+    case CS_TYPE_BINARY:
+    case CS_TYPE_UTF16LE_GENERAL_CI:
+    case CS_TYPE_SJIS_JAPANESE_CI:
+    case CS_TYPE_BIG5_CHINESE_CI:
+    case CS_TYPE_HKSCS_BIN:
+    case CS_TYPE_HKSCS31_BIN:
+    case CS_TYPE_DEC8_SWEDISH_CI:{
       ret = true;
       break;
     }
@@ -3218,7 +3319,13 @@ int ObCharset::get_aggregate_len_unit(const ObCollationType collation_type, bool
       || CHARSET_UTF16 == res_charset
       || CHARSET_GBK == res_charset
       || CHARSET_GB18030 == res_charset
-      || CHARSET_GB18030_2022 == res_charset) {
+      || CHARSET_GB18030_2022 == res_charset
+      || CHARSET_UTF16LE == res_charset
+      || CHARSET_SJIS == res_charset
+      || CHARSET_BIG5 == res_charset
+      || CHARSET_HKSCS == res_charset
+      || CHARSET_HKSCS31 == res_charset
+      || CHARSET_DEC8 == res_charset) {
     len_in_byte = false;
   } else if (CHARSET_BINARY == res_charset) {
     len_in_byte = true;
@@ -3393,6 +3500,34 @@ int ObCharset::charset_convert(ObIAllocator &alloc,
   return ret;
 }
 
+int ObCharset::trim_end_of_str(const char *buf, int length, char *&trim_end, ObCharsetType ctype)
+{
+  int ret = OB_SUCCESS;
+  if (buf == NULL || length < 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid argument", K(ret), K(buf), K(length));
+  } else {
+    const char *end = buf + length;
+    if (ctype == CHARSET_UTF16) {
+      while (end - buf > 1 && end[-2] == OB_PADDING_BINARY && end[-1] == OB_PADDING_CHAR) {
+        end -= 2;
+      }
+    } else if (ctype == CHARSET_UTF16LE) {
+      while (end - buf > 1 && end[-2] == OB_PADDING_CHAR && end[-1] == OB_PADDING_BINARY) {
+        end -= 2;
+      }
+    } else {
+      while (end > buf && end[-1] == OB_PADDING_CHAR) {
+        end -= 1;
+      }
+    }
+    if (trim_end != end) {
+      trim_end = const_cast<char*>(end);
+    }
+  }
+  return OB_SUCCESS;
+}
+
 int ObCharset::whitespace_padding(ObIAllocator &allocator,
                                   const ObCollationType coll_type,
                                   const ObString &input,
@@ -3402,7 +3537,8 @@ int ObCharset::whitespace_padding(ObIAllocator &allocator,
   int ret = OB_SUCCESS;
   char *buf = NULL;
   bool is_utf16 = charset_type_by_coll(coll_type) == CHARSET_UTF16;
-  int32_t buf_len = input.length() + pad_whitespace_length * (is_utf16 ? 2 : 1);
+  bool is_utf16le = charset_type_by_coll(coll_type) == CHARSET_UTF16LE;
+  int32_t buf_len = input.length() + pad_whitespace_length * (is_utf16 || is_utf16le ? 2 : 1);
   if (OB_UNLIKELY(pad_whitespace_length <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid len", K(ret), K(pad_whitespace_length));
@@ -3411,15 +3547,22 @@ int ObCharset::whitespace_padding(ObIAllocator &allocator,
     LOG_WARN("no memory", K(ret), K(buf_len));
   } else {
     MEMMOVE(buf, input.ptr(), input.length());
-    if (!is_utf16) {
+    if (!is_utf16 && !is_utf16le) {
       MEMSET(buf + input.length(), OB_PADDING_CHAR, pad_whitespace_length);
-    } else {
+    } else if (is_utf16) {
       //UTF16 space is 0x0020
       for (int i = input.length(); i + 1 < buf_len; i+=2) {
-        buf[i] = '\0';
+        buf[i] = OB_PADDING_BINARY;
         buf[i+1] = OB_PADDING_CHAR;
       }
       LOG_DEBUG("UTF16 padding", K(pad_whitespace_length), K(input));
+    } else if (is_utf16le) {
+      //UTF16le space is 0x2000
+      for (int i = input.length(); i + 1 < buf_len; i+=2) {
+        buf[i] = OB_PADDING_CHAR;
+        buf[i+1] = OB_PADDING_BINARY;
+      }
+      LOG_DEBUG("UTF16le padding", K(pad_whitespace_length), K(input));
     }
     result = ObString(buf_len, buf_len, buf);
   }
@@ -3473,7 +3616,11 @@ bool ObCharset::is_cjk_charset(ObCollationType collation_type)
   ObCharsetType cs_type = ObCharset::charset_type_by_coll(collation_type);
   bool is_cjk_charset = (cs_type == CHARSET_GBK ||
                          cs_type == CHARSET_GB18030 ||
-                         cs_type == CHARSET_GB18030_2022);
+                         cs_type == CHARSET_GB18030_2022 ||
+                         cs_type == CHARSET_SJIS ||
+                         cs_type == CHARSET_BIG5 ||
+                         cs_type == CHARSET_HKSCS ||
+                         cs_type == CHARSET_HKSCS31);
   return is_cjk_charset;
 }
 
@@ -3487,7 +3634,12 @@ bool ObCharset::is_valid_connection_collation(ObCollationType collation_type)
       || cs_type == CHARSET_GBK
       || cs_type == CHARSET_GB18030
       || cs_type == CHARSET_GB18030_2022
-      || cs_type == CHARSET_BINARY;
+      || cs_type == CHARSET_BINARY
+      || cs_type == CHARSET_SJIS
+      || cs_type == CHARSET_BIG5
+      || cs_type == CHARSET_HKSCS
+      || cs_type == CHARSET_HKSCS31
+      || cs_type == CHARSET_DEC8;
 }
 
 const char *ObCharset::get_oracle_charset_name_by_charset_type(ObCharsetType charset_type)
@@ -3517,6 +3669,15 @@ const char *ObCharset::get_oracle_charset_name_by_charset_type(ObCharsetType cha
     break;
   case CHARSET_TIS620:
     ret = "TH8TISASCII";
+    break;
+  case CHARSET_UTF16LE:
+    ret = "AL16UTF16LE";
+    break;
+  case CHARSET_HKSCS:
+    ret = "ZHT16HKSCS";
+    break;
+  case CHARSET_HKSCS31:
+    ret = "ZHT16HKSCS31";
     break;
   default:
     break;
@@ -3551,6 +3712,15 @@ int ObCharset::get_nls_charset_id_by_charset_type(ObCharsetType charset_type)
     break;
   case CHARSET_TIS620:
     ret_id = ObNlsCharsetId::CHARSET_TH8TISASCII_ID;
+    break;
+  case CHARSET_UTF16LE:
+    ret_id = ObNlsCharsetId::CHARSET_AL16UTF16LE_ID;
+    break;
+  case CHARSET_HKSCS:
+    ret_id = ObNlsCharsetId::CHARSET_ZHT16HKSCS_ID;
+    break;
+  case CHARSET_HKSCS31:
+    ret_id = ObNlsCharsetId::CHARSET_ZHT16HKSCS31_ID;
     break;
   default:
     break;
@@ -3609,7 +3779,8 @@ void ob_charset_loader_init_mysys(ObCharsetLoader *loader)
   loader->add_collation = NULL;
 }
 
-int ObCharset::copy_zh_cs(ObCharsetInfo *from_cs, ObCollationType to_coll_type, ObCharsetInfo *&to_cs)
+// use before is valid
+int ObCharset::copy_zh_cs(ObCharsetInfo *from_cs, ObCharsetType charset_type, ObCharsetInfo *&to_cs)
 {
   int ret = OB_SUCCESS;
   to_cs = NULL;
@@ -3617,28 +3788,47 @@ int ObCharset::copy_zh_cs(ObCharsetInfo *from_cs, ObCollationType to_coll_type, 
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc charset", K(ret));
   } else {
-    ObCollationType bin_coll = get_default_collation_oracle(charset_type_by_coll(to_coll_type));
-    if (!is_valid_collation(to_coll_type) || !is_valid_collation(bin_coll)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected bin coll", K(ret), K(to_coll_type), K(bin_coll));
-    } else {
-      *to_cs = *charset_arr[bin_coll];
-      to_cs->uca = from_cs->uca;
-      to_cs->tailoring = from_cs->tailoring;
-      to_cs->coll_param = from_cs->coll_param;
-      to_cs->levels_for_compare = 3;
-      to_cs->coll = from_cs->coll;
-      to_cs->pad_attribute = NO_PAD;
-      //TODO
-      //for now, the collations are used for nlssort and not exposed to user
-      //the cs attributes are not all correct, such as names and number
-    }
+    ObCollationType bin_coll = get_bin_collation(charset_type);
+
+    *to_cs = *charset_arr[bin_coll];
+    to_cs->uca = from_cs->uca;
+    to_cs->tailoring = from_cs->tailoring;
+    to_cs->coll_param = from_cs->coll_param;
+    to_cs->levels_for_compare = 3;
+    to_cs->coll = from_cs->coll;
+    to_cs->pad_attribute = NO_PAD;
+    to_cs->name = "";
+    //TODO
+    //for now, the collations are used for nlssort and not exposed to user
+    //the cs attributes are not all correct, such as names and number
   }
   return ret;
 }
 
-int ObCharset::init_charset()
+
+int ObCharset::init_charset_info_coll_info(ObCharsetInfo *cs, ObCharsetLoader& loader)
 {
+  int ret = OB_SUCCESS;
+  ObCharsetHandler *charset_handler = cs->cset;
+  ObCollationHandler *coll_handler = cs->coll;
+  if (OB_ISNULL(cs) || OB_ISNULL(coll_handler) || OB_ISNULL(charset_handler)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null ptr", K(cs));
+  } else if(OB_NOT_NULL(charset_handler->init) &&
+            charset_handler->init(cs, &loader)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to init charset handler", K(ret));
+  } else if (OB_NOT_NULL(coll_handler->init)  && OB_NOT_NULL(cs->tailoring) && coll_handler->init(cs, &loader)) {
+    LOG_WARN("fail to init collation", K(ret));
+  }
+  return ret;
+}
+
+/*
+  charset_arr is depend on this init process
+  all func use charset_arr should after init charset
+*/
+int ObCharset::init_charset_and_arr() {
   int ret = OB_SUCCESS;
   if (OB_FAIL(init_gb18030_2022())) {
     LOG_WARN("failed to init gb18030 2022", K(ret));
@@ -3646,7 +3836,7 @@ int ObCharset::init_charset()
 
   auto add_coll = [&ret](ObCollationType coll_type, ObCharsetInfo *cs)->void {
     if (OB_SUCC(ret)) {
-      if (OB_ISNULL(cs) || !is_valid_collation(coll_type)) {
+      if (OB_ISNULL(cs)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid argument", K(ret), K(cs), K(coll_type));
       } else {
@@ -3659,67 +3849,63 @@ int ObCharset::init_charset()
 
   ObCharsetLoader loader;
   ob_charset_loader_init_mysys(&loader);
+  if (ob_charset_hkscs_bin.cset
+    && ob_charset_hkscs_bin.cset->init
+    && !ob_charset_hkscs_bin.cset->init(&ob_charset_hkscs_bin, &loader)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to init collation hkscs", K(ret));
+  }
+  else if (ob_charset_hkscs31_bin.cset
+    && ob_charset_hkscs31_bin.cset->init
+    && !ob_charset_hkscs31_bin.cset->init(&ob_charset_hkscs31_bin, &loader)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to init collation hkscs31", K(ret));
+  }
 
-  add_coll(CS_TYPE_UTF8MB4_0900_BIN, &ob_charset_utf8mb4_0900_bin);
-  add_coll(CS_TYPE_UTF8MB4_0900_AI_CI, &ob_charset_utf8mb4_0900_ai_ci);
-  add_coll(CS_TYPE_TIS620_BIN, &ob_charset_tis620_bin);
-  add_coll(CS_TYPE_TIS620_THAI_CI, &ob_charset_tis620_thai_ci);
-  //init charset_handler&collation_handler for some special charset
-  ObCharsetInfo *special_charset[] = {&ob_charset_ascii,&ob_charset_ascii_bin};
-  for (int i = 0; OB_SUCC(ret) && i < array_elements(special_charset); i++) {
-    ObCharsetInfo *cs = special_charset[i];
-    ObCharsetHandler *charset_handler = cs->cset;
-    ObCollationHandler *coll_handler = cs->coll;
-    if  (OB_ISNULL(charset_handler) || OB_ISNULL(coll_handler)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null pointer", K(charset_handler), K(coll_handler), K(ret));
-    } else if (charset_handler->init &&
-               charset_handler->init(cs, &loader)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fail to init charset handler", K(ret));
-    } else {
-      add_coll((ObCollationType)cs->number, cs);
-      /*debug
-      if (cs->tab_from_uni) {
-        OB_UNI_IDX test = cs->tab_from_uni[0];
-        //int size = sizeof(test->tab)/sizeof(test->tab[0]);
-        LOG_INFO("charset debug", K(cs->name),K(test.from), K(test.to));
-        for (int i=0;i<255;i++) {
-         LOG_INFO("charset debug",K(i),K(test.tab[i]));
-        }
+  if (OB_SUCC(ret)) {
+    for (int i = 0; OB_SUCC(ret) && i < array_elements(euro_collations); ++i) {
+      ObCharsetInfo *cs = euro_collations[i];
+      if (OB_FAIL(init_charset_info_coll_info(cs, loader))) {
+        LOG_WARN("fail to init collation", K(ret));
+      } else {
+        add_coll((ObCollationType)cs->number, cs);
       }
-      */
     }
   }
   if (OB_SUCC(ret)) {
-    auto *utf8_pinyin = &ob_charset_utf8mb4_zh_0900_as_cs;
-    ObCollationHandler *pinyin_coll = ob_charset_utf8mb4_zh_0900_as_cs.coll;
-
-    if (pinyin_coll->init(utf8_pinyin, &loader)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fail to init charset", K(ret));
-    } else {
-      ObCollationType pinyin_colls[] = {
-        CS_TYPE_GBK_ZH_0900_AS_CS, CS_TYPE_UTF8MB4_ZH_0900_AS_CS,
-        CS_TYPE_GB18030_ZH_0900_AS_CS, CS_TYPE_UTF16_ZH_0900_AS_CS,
-        CS_TYPE_GB18030_2022_ZH_0900_AS_CS, CS_TYPE_LATIN1_ZH_0900_AS_CS,
-        CS_TYPE_ASCII_ZH_0900_AS_CS,CS_TYPE_TIS620_ZH_0900_AS_CS
-      };
-      add_coll(CS_TYPE_UTF8MB4_ZH_0900_AS_CS, utf8_pinyin);
-
-      for (int i = 0; OB_SUCC(ret) && i < array_elements(pinyin_colls); i++) {
-        if (NULL == charset_arr[pinyin_colls[i]]) {
-          ObCharsetInfo *new_cs = NULL;
-          if (OB_FAIL(copy_zh_cs(utf8_pinyin, pinyin_colls[i], new_cs))) {
-            LOG_WARN("fail to copy zh cs", K(ret));
-          } else {
-            add_coll(pinyin_colls[i], new_cs);
-          }
-        }
+    for (int i = 0; OB_SUCC(ret) && i < array_elements(uca900_collations); ++i) {
+      ObCharsetInfo *cs = uca900_collations[i];
+      if (OB_FAIL(init_charset_info_coll_info(cs, loader))) {
+        LOG_WARN("fail to init collation", K(ret));
+      } else {
+        add_coll((ObCollationType)cs->number, cs);
       }
     }
   }
+  //init charset_handler&collation_handler for some special charset
+  ObCharsetInfo *special_charset[] = {&ob_charset_ascii,&ob_charset_ascii_bin,&ob_charset_dec8_swedish_ci,&ob_charset_dec8_bin};
+  for (int i = 0; OB_SUCC(ret) && i < array_elements(special_charset); ++i) {
+    ObCharsetInfo *cs = special_charset[i];
+    if (OB_FAIL(init_charset_info_coll_info(cs, loader))) {
+        LOG_WARN("fail to init collation", K(ret));
+    } else {
+      add_coll((ObCollationType)cs->number, cs);
+    }
+  }
 
+  ObCharsetInfo *charset_infos[] = {
+    NULL,
+    &ob_charset_utf8mb4_zh_0900_as_cs,
+    &ob_charset_utf8mb4_zh2_0900_as_cs,
+    &ob_charset_utf8mb4_zh3_0900_as_cs
+  };
+
+  if (OB_SUCC(ret)) {
+    auto *utf8_pinyin = &ob_charset_utf8mb4_zh_0900_as_cs;
+    ObCollationHandler *pinyin_coll = ob_charset_utf8mb4_zh_0900_as_cs.coll;
+    // uca 900 init it
+    add_coll(CS_TYPE_UTF8MB4_ZH_0900_AS_CS_CPY, utf8_pinyin);
+  }
   if (OB_SUCC(ret)) {
     auto *utf8_radical = &ob_charset_utf8mb4_zh2_0900_as_cs;
     ObCollationHandler *radical_coll = ob_charset_utf8mb4_zh2_0900_as_cs.coll;
@@ -3727,27 +3913,9 @@ int ObCharset::init_charset()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to init charset", K(ret));
     } else {
-      ObCollationType radical_colls[] = {
-        CS_TYPE_GBK_ZH2_0900_AS_CS, CS_TYPE_UTF8MB4_ZH2_0900_AS_CS,
-        CS_TYPE_GB18030_ZH2_0900_AS_CS, CS_TYPE_UTF16_ZH2_0900_AS_CS,
-        CS_TYPE_GB18030_2022_ZH2_0900_AS_CS,CS_TYPE_LATIN1_ZH2_0900_AS_CS,
-        CS_TYPE_ASCII_ZH2_0900_AS_CS,CS_TYPE_TIS620_ZH2_0900_AS_CS
-      };
       add_coll(CS_TYPE_UTF8MB4_ZH2_0900_AS_CS, utf8_radical);
-
-      for (int i = 0; OB_SUCC(ret) && i < array_elements(radical_colls); i++) {
-        if (NULL == charset_arr[radical_colls[i]]) {
-          ObCharsetInfo *new_cs = NULL;
-          if (OB_FAIL(copy_zh_cs(utf8_radical, radical_colls[i], new_cs))) {
-            LOG_WARN("fail to copy zh cs", K(ret));
-          } else {
-            add_coll(radical_colls[i], new_cs);
-          }
-        }
-      }
     }
   }
-
   if (OB_SUCC(ret)) {
     auto *utf8_stroke = &ob_charset_utf8mb4_zh3_0900_as_cs;
     ObCollationHandler *stroke_coll = ob_charset_utf8mb4_zh3_0900_as_cs.coll;
@@ -3755,38 +3923,49 @@ int ObCharset::init_charset()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to init charset", K(ret));
     } else {
-      ObCollationType stroke_colls[] = {
-        CS_TYPE_GBK_ZH3_0900_AS_CS, CS_TYPE_UTF8MB4_ZH3_0900_AS_CS,
-        CS_TYPE_GB18030_ZH3_0900_AS_CS, CS_TYPE_UTF16_ZH3_0900_AS_CS,
-        CS_TYPE_GB18030_2022_ZH3_0900_AS_CS, CS_TYPE_LATIN1_ZH3_0900_AS_CS,
-        CS_TYPE_ASCII_ZH3_0900_AS_CS,CS_TYPE_TIS620_ZH3_0900_AS_CS
-      };
       add_coll(CS_TYPE_UTF8MB4_ZH3_0900_AS_CS, utf8_stroke);
-
-      for (int i = 0; OB_SUCC(ret) && i < array_elements(stroke_colls); i++) {
-        if (NULL == charset_arr[stroke_colls[i]]) {
+    }
+  }
+  ObCharsetType charset_types[] = {
+    CHARSET_GBK, CHARSET_UTF8MB4, CHARSET_GB18030, CHARSET_UTF16,
+    CHARSET_GB18030_2022, CHARSET_LATIN1, CHARSET_ASCII, CHARSET_TIS620,
+    CHARSET_UTF16LE,CHARSET_SJIS, CHARSET_BIG5,CHARSET_HKSCS,CHARSET_HKSCS31,
+    CHARSET_DEC8
+  };
+  if (OB_SUCC(ret)) {
+    for (int j = 1; j <= 3; ++j) {
+      for (int i = 0; OB_SUCC(ret) && i < array_elements(charset_types); ++i) {
+        int offset = CHARSET_OFFSET(charset_types[i]);
+        if (NULL == charset_arr[non_bin_coll_marks[j] + offset]) {
           ObCharsetInfo *new_cs = NULL;
-          if (OB_FAIL(copy_zh_cs(utf8_stroke, stroke_colls[i], new_cs))) {
+          if (OB_FAIL(copy_zh_cs(charset_infos[j], charset_types[i], new_cs))) {
             LOG_WARN("fail to copy zh cs", K(ret));
           } else {
-            add_coll(stroke_colls[i], new_cs);
+            add_coll(static_cast<ObCollationType>(non_bin_coll_marks[j] + offset), new_cs);
           }
         }
       }
     }
   }
+  return ret;
+}
 
-  //init utf8_0900_binary
-  add_coll(CS_TYPE_UTF8MB4_0900_BIN, &ob_charset_utf8mb4_0900_bin);
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ob_charset_utf8mb4_croatian_uca_ci.coll->init(&ob_charset_utf8mb4_croatian_uca_ci, &loader))) {
-      LOG_WARN("fail to init collation", K(ret));
-    } else if (OB_FAIL(ob_charset_utf8mb4_czech_uca_ci.coll->init(&ob_charset_utf8mb4_czech_uca_ci, &loader))) {
-      LOG_WARN("fail to init collation", K(ret));
+int ObCharset::init_charset()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(init_charset_and_arr())) {
+    LOG_WARN("fail to init charset", K(ret));
+  } else {
+    // after add all pointer get_charset can be used
+    for (int i = CS_TYPE_INVALID + 1; i < CS_TYPE_MAX; ++i) {
+      ObCharsetType ctype = CHARSET_INVALID;
+      if (is_valid_collation(i)) {
+        const ObCharsetInfo* info = ObCharset::get_charset(static_cast<ObCollationType>(i));
+        ctype = ObCharset::charset_type(info->csname);
+        collation_charset_map[i] = ctype;
+      }
     }
   }
-
   return ret;
 }
 
@@ -3794,14 +3973,11 @@ int ObCharset::init_charset()
 ObString ObCharsetUtils::const_str_for_ascii_[CHARSET_MAX][INT8_MAX + 1];
 
 int ObCharsetUtils::remove_char_endspace(ObString &str,
-                                         const ObCharsetType &charset_type) {
+                                         const ObCharsetInfo *charsetInfo) {
   int ret = OB_SUCCESS;
   const char *end = str.ptr() + str.length();
-  if ((CHARSET_UTF16 == charset_type)) {
-    end= (const char *) skip_trailing_space((const unsigned char *)str.ptr(), str.length(), 1);
-  } else {
-    end= (const char *) skip_trailing_space((const unsigned char *)str.ptr(), str.length(), 0);
-  }
+  end = (const char *) charsetInfo->cset->skip_trailing_space(charsetInfo, (const unsigned char *)str.ptr(), str.length());
+
   if (end >= str.ptr()) {
     str.assign_ptr(str.ptr(), end - str.ptr());
   } else {
@@ -3810,6 +3986,7 @@ int ObCharsetUtils::remove_char_endspace(ObString &str,
   }
   return ret;
 }
+
 
 int ObCharsetUtils::init(ObIAllocator &allocator)
 {

@@ -295,6 +295,21 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupTableListMetaInfoDesc);
 };
 
+class ObBackupMajorCompactionMViewDepTabletListDesc final : public ObExternBackupDataDesc
+{
+public:
+  static const uint8_t FILE_VERSION = 1;
+  OB_UNIS_VERSION(1);
+public:
+  ObBackupMajorCompactionMViewDepTabletListDesc();
+  ~ObBackupMajorCompactionMViewDepTabletListDesc() {}
+  bool is_valid() const override;
+  TO_STRING_KV(K_(tablet_id_list));
+public:
+  ObSArray<common::ObTabletID> tablet_id_list_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObBackupMajorCompactionMViewDepTabletListDesc);
+};
 
 class ObBackupSetFilter : public ObBaseDirEntryOperator
 {
@@ -383,6 +398,9 @@ public:
   int write_table_list_meta_info(const share::SCN &scn, const ObBackupTableListMetaInfoDesc &desc);
   int read_table_list_file(const char* file_name, ObBackupPartialTableListDesc &desc);
   int is_table_list_meta_exist(const share::SCN &scn, bool &is_exist);
+  // mview dep tablet list
+  int write_major_compaction_mview_dep_tablet_list(const ObBackupMajorCompactionMViewDepTabletListDesc &desc);
+  int read_major_compaction_mview_dep_tablet_list(ObBackupMajorCompactionMViewDepTabletListDesc &desc);
   TO_STRING_KV(K_(backup_desc));
 
 public:

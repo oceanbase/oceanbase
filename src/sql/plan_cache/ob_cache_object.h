@@ -107,7 +107,7 @@ struct ObParamInfo
   : scale_(0),
     type_(common::ObNullType),
     ext_real_type_(common::ObNullType),
-    is_oracle_empty_string_(false),
+    is_oracle_null_value_(false),
     col_type_(common::CS_TYPE_INVALID),
     precision_(PRECISION_UNKNOWN_YET)
   {}
@@ -118,7 +118,7 @@ struct ObParamInfo
                K_(scale),
                K_(type),
                K_(ext_real_type),
-               K_(is_oracle_empty_string),
+               K_(is_oracle_null_value),
                K_(col_type),
                K_(precision));
 
@@ -128,8 +128,8 @@ struct ObParamInfo
   common::ObScale scale_;
   common::ObObjType type_;
   common::ObObjType ext_real_type_; // use as high 4 bytes of udt id if type is sql udt
-  //处理Oracle模式空串在plan_cache中的匹配
-  bool is_oracle_empty_string_;
+  //处理 Oracle 模式带类型 null 值在 plan_cache 中的匹配
+  bool is_oracle_null_value_;
   common::ObCollationType col_type_;
   common::ObPrecision precision_;
 

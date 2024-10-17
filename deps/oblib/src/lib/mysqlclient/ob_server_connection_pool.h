@@ -45,6 +45,8 @@ public:
   void set_server_gone(bool gone);
   const char *get_db_user() const;   const char *get_db_pass() const;
   const char *get_db_name() const;
+  const char *get_host_name() const;
+  int32_t get_port() const;
   common::ObAddr &get_server();
   ObMySQLConnectionPool *get_root();
   void close_all_connection();
@@ -53,7 +55,7 @@ public:
                K_(free_conn_count),
                K_(busy_conn_count));
   // dblink.
-  int init_dblink(uint64_t tenant_id, uint64_t dblink_id, const ObAddr &server,
+  int init_dblink(uint64_t tenant_id, uint64_t dblink_id, const ObString &host_name, int32_t port,
                   const ObString &db_tenant, const ObString &db_user,
                   const ObString &db_pass, const ObString &db_name,
                   const common::ObString &conn_str,
@@ -73,6 +75,8 @@ private:
   char db_user_[OB_MAX_USER_NAME_LENGTH + OB_MAX_TENANT_NAME_LENGTH + OB_MAX_CLUSTER_NAME_LENGTH + 1];
   char db_pass_[OB_MAX_PASSWORD_LENGTH];
   char db_name_[OB_MAX_DATABASE_NAME_LENGTH];
+  char host_name_[OB_MAX_DOMIN_NAME_LENGTH + 1]; // used by dblink to connect, instead of using server_ to connect
+  int32_t port_; // used by dblink to connect, instead of using server_ to connect
   common::ObAddr server_; // shared by connections in this pool
   common::ObSpinLock pool_lock_;
   int64_t last_renew_timestamp_;
@@ -81,6 +85,14 @@ private:
   bool server_not_available_;
 };
 
+inline const char *ObServerConnectionPool::get_host_name() const
+{
+  return host_name_;
+}
+inline int32_t ObServerConnectionPool::get_port() const
+{
+  return port_;
+}
 
 inline void ObServerConnectionPool::set_server_gone(bool gone)
 {

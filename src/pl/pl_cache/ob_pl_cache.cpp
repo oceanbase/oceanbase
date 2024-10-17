@@ -967,10 +967,10 @@ int ObPLObjectValue::match_param_info(const ObPlParamInfo &param_info,
         LOG_WARN("fail to match complex type info", K(ret), K(param), K(param_info));
       }
       LOG_DEBUG("ext match param info", K(data_type), K(param_info), K(is_same), K(ret));
-    } else if (param_info.is_oracle_empty_string_ && !param.is_null()) { //Plain strings do not match the scheme of the empty string
+    } else if (param_info.is_oracle_null_value_ && !param.is_null()) {
       is_same = false;
-    } else if (ObSQLUtils::is_oracle_empty_string(param)
-               &&!param_info.is_oracle_empty_string_) { //Empty strings do not match the scheme of ordinary strings
+    } else if (ObSQLUtils::is_oracle_null_with_normal_type(param)
+               &&!param_info.is_oracle_null_value_) { //Typed nulls can only match plans with the same type of nulls.
       is_same = false;
     } else if (param_info.flag_.is_boolean_ != param.is_boolean()) { //bool type not match int type
       is_same = false;

@@ -536,13 +536,18 @@ int ObExprJsonQuery::set_multivalue_result(ObEvalCtx& ctx,
       if (OB_ISNULL(last_obj)) {
         ++real_store_count;
         last_obj = tmp_obj;
-      } else if (OB_FAIL(last_obj->compare(*tmp_obj, obj_cmp_ret))) {
-        LOG_WARN("failed compare bin data", K(ret));
-      } else if (obj_cmp_ret == 0) { // ObCmpRes::CR_EQ
-        continue;
       } else {
-        last_obj = tmp_obj;
-        ++real_store_count;
+        bool is_case_comp = last_obj->is_string_type() && tmp_obj->is_string_type();
+        if (is_case_comp && OB_FAIL(last_obj->compare(*tmp_obj, CS_TYPE_UTF8MB4_GENERAL_CI, obj_cmp_ret))) {
+          LOG_WARN("failed compare obobj data", K(ret), K(*last_obj), K(*tmp_obj));
+        } else if (!is_case_comp && OB_FAIL(last_obj->compare(*tmp_obj, obj_cmp_ret))) {
+          LOG_WARN("failed compare obobj data", K(ret), K(*last_obj), K(*tmp_obj));
+        } else if (obj_cmp_ret == 0) { // ObCmpRes::CR_EQ
+          continue;
+        } else {
+          last_obj = tmp_obj;
+          ++real_store_count;
+        }
       }
 
       if (OB_FAIL(ret)) {
@@ -592,7 +597,8 @@ int ObExprJsonQuery::set_multivalue_result(ObEvalCtx& ctx,
     tmp_obj.set_type(dest_type);
     tmp_obj.set_collation_type(dst_collation);
     tmp_obj.set_scale(scale);
-    tmp_obj.set_min_value();
+    tmp_obj.set_null();
+
     int64_t pos = str_buff.length();
 
     uint64_t reserve_len = 0;
@@ -717,7 +723,7 @@ int ObExprJsonQuery::append_binary_node_into_res(ObIJsonBase*& jb_res,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(bin_agg.serialize())) {
     LOG_WARN("failed to serialize bin agg.", K(ret));
-  } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, bin_agg.get_buffer()->string(), ObJsonInType::JSON_BIN, ObJsonInType::JSON_BIN, jb_res, ObJsonParser::JSN_RELAXED_FLAG))) {
+  } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, bin_agg.get_buffer()->string(), ObJsonInType::JSON_BIN, ObJsonInType::JSON_BIN, jb_res, ObJsonParser::JSN_RELAXED_FLAG, ObJsonExprHelper::get_json_max_depth_config()))) {
     LOG_WARN("failed to get json base.", K(ret));
   }
   return ret;

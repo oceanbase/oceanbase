@@ -678,7 +678,6 @@ private:
   int get_rowkey_for_single_table(ObSelectStmt* stmt,
                                   ObIArray<ObRawExpr*> &unique_keys,
                                   bool &is_valid);
-  int disable_complex_dml_for_fulltext_index(ObDMLStmt *stmt);
   int try_gen_straight_join_leading(ObDMLStmt *stmt, bool &trans_happened);
   int get_flattened_tables_of_pure_straight_join(ObDMLStmt* stmt,
                                                  ObIArray<TableItem*> &flattened_tables);

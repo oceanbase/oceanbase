@@ -1966,9 +1966,9 @@ int ObLogRawPathPieceContext::get_ls_piece_info(const int64_t curr_index, bool &
   } else if (OB_FAIL(archive_store.init(dest))) {
     CLOG_LOG(WARN, "archive store init failed", K(ret), K_(id));
   } else if (OB_FAIL(archive_store.read_single_ls_info(ls_id, desc))
-      && OB_BACKUP_FILE_NOT_EXIST != ret) {
+      && OB_OBJECT_NOT_EXIST != ret) {
     CLOG_LOG(WARN, "get single piece file failed", K(ret), K_(id));
-  } else if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+  } else if (OB_OBJECT_NOT_EXIST == ret) {
     exist = false;
     ret = OB_SUCCESS;
     CLOG_LOG(INFO, "ls not exist in cur piece", K_(id));
@@ -2074,9 +2074,9 @@ int ObLogRawPathPieceContext::get_max_archive_log_(const ObLogRawPathPieceContex
   } else if (OB_FAIL(archive_store.init(dest))) {
     CLOG_LOG(WARN, "fail to init archive store", K(ret), K_(id));
   } else if (OB_FAIL(archive_store.read_single_ls_info(id_, ls_info_desc))
-      && OB_BACKUP_FILE_NOT_EXIST != ret) {
+      && OB_OBJECT_NOT_EXIST != ret) {
     CLOG_LOG(WARN, "get single ls info failed", K(ret), K_(id));
-  } else if (OB_BACKUP_FILE_NOT_EXIST == ret) {  // active piece
+  } else if (OB_OBJECT_NOT_EXIST == ret) {  // active piece
     CLOG_LOG(WARN, "ls not exist in cur piece", K_(id));
     ret = get_max_log_in_file_(origin, max_file_id_, archive_lsn, archive_scn);
   } else if (OB_UNLIKELY(!ls_info_desc.is_valid())) {

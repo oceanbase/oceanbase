@@ -56,6 +56,7 @@ public:
   virtual bool can_batch_scan() const override
   {
      return can_blockscan() &&
+            !access_ctx_->is_mview_query() &&
             iter_param_->vectorized_enabled_ &&
             iter_param_->enable_pd_filter();
   }

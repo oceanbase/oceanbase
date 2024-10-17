@@ -59,6 +59,8 @@ public:
   virtual void reuse();
   // used for global cached query iterator
   virtual void reclaim();
+  // used for mview table scan
+  virtual int open(ObTableScanRange &table_scan_range) { return OB_NOT_SUPPORTED; }
 
   void disable_padding() { need_padding_ = false; }
   void disable_fill_default() { need_fill_default_ = false; }
@@ -67,7 +69,9 @@ public:
   OB_INLINE bool is_inited() { return inited_; }
   OB_INLINE bool is_read_memtable_only() const { return read_memtable_only_; }
   OB_INLINE const common::ObIArray<share::schema::ObColDesc> &get_out_project_cells() { return out_project_cols_; }
-
+  OB_INLINE ObNopPos &get_nop_pos() { return nop_pos_; }
+  OB_INLINE void set_iter_del_row(const bool iter_del_row) { iter_del_row_ = iter_del_row; }
+  OB_INLINE blocksstable::ObDatumRow &get_unprojected_row() { return unprojected_row_; }
 protected:
   int open();
   virtual int calc_scan_range() = 0;
@@ -77,6 +81,8 @@ protected:
   virtual int inner_get_next_row(blocksstable::ObDatumRow &row) = 0;
   virtual int inner_get_next_rows() { return OB_SUCCESS; };
   virtual int can_batch_scan(bool &can_batch) { can_batch = false; return OB_SUCCESS; }
+  virtual int64_t generate_read_tables_version() const;
+  virtual bool check_table_need_read(const ObITable &table, int64_t &major_version) const;
   int add_iterator(ObStoreRowIterator &iter); // for unit test
   const ObTableIterParam * get_actual_iter_param(const ObITable *table) const;
   int project_row(const blocksstable::ObDatumRow &unprojected_row,
@@ -138,13 +144,13 @@ protected:
   int64_t curr_scan_index_;
   blocksstable::ObDatumRowkey curr_rowkey_;
   ObNopPos nop_pos_;
-  ObRowStat row_stat_;
   int64_t scan_cnt_;
   bool need_padding_;
   bool need_fill_default_; // disabled by join mv scan
   bool need_fill_virtual_columns_; // disabled by join mv scan
   bool need_output_row_with_nop_; // for sampling increment data
   bool inited_;
+  bool iter_del_row_;
   int64_t range_idx_delta_;
   ObGetTableParam *get_table_param_;
   bool read_memtable_only_;

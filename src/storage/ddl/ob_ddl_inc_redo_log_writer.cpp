@@ -146,8 +146,6 @@ int ObDDLIncRedoLogWriter::write_inc_start_log(
     LOG_WARN("fail to init DDLIncStartLog", K(ret), K(log_basic));
   } else if (OB_FAIL(local_write_inc_start_log(log, tx_desc, start_scn))) {
     LOG_WARN("local write inc start log fail", K(ret));
-  } else {
-    LOG_INFO("local write inc start log success", K(tablet_id_), K(lob_meta_tablet_id));
   }
 
   return ret;
@@ -206,15 +204,11 @@ int ObDDLIncRedoLogWriter::write_inc_commit_log(
       } else {
         LOG_WARN("local write inc commit log fail", K(ret), K(tablet_id_));
       }
-    } else {
-      LOG_INFO("local write inc commit log success", K(tablet_id_), K(lob_meta_tablet_id));
     }
   }
   if (OB_SUCC(ret) && remote_write_) {
     if (OB_FAIL(retry_remote_write_inc_commit_log(lob_meta_tablet_id, tx_desc))) {
       LOG_WARN("remote write inc commit log fail", K(ret), K(tablet_id_));
-    } else {
-      LOG_INFO("remote write inc commit log success", K(tablet_id_), K(lob_meta_tablet_id), K(leader_addr_));
     }
   }
 
@@ -414,14 +408,23 @@ int ObDDLIncRedoLogWriter::local_write_inc_start_log(
   } else if (OB_ISNULL(ls) || !tablet_id_.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KP(ls), K(tablet_id_));
-  } else if (OB_FAIL(ls->tablet_freeze(tablet_id_, is_sync, abs_timeout_ts))) {
+  } else if (OB_FAIL(ls->tablet_freeze(tablet_id_,
+                                       is_sync,
+                                       abs_timeout_ts,
+                                       false, /*need_rewrite_meta*/
+                                       ObFreezeSourceFlag::DIRECT_INC_START))) {
     LOG_WARN("sync tablet freeze failed", K(ret), K(tablet_id_));
-  } else if (lob_meta_tablet_id.is_valid() && OB_FAIL(ls->tablet_freeze(lob_meta_tablet_id, is_sync, abs_timeout_ts))) {
+  } else if (lob_meta_tablet_id.is_valid() &&
+             OB_FAIL(ls->tablet_freeze(lob_meta_tablet_id,
+                                       is_sync,
+                                       abs_timeout_ts,
+                                       false, /*need_rewrite_meta*/
+                                       ObFreezeSourceFlag::DIRECT_INC_START))) {
     LOG_WARN("sync tablet freeze failed", K(ret), K(lob_meta_tablet_id));
   } else if (OB_ISNULL(cb = OB_NEW(ObDDLIncStartClogCb, ObMemAttr(MTL_ID(), "DDL_IRLW")))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", K(ret));
-  } else if (OB_FAIL(cb->init(log.get_log_basic()))) {
+  } else if (OB_FAIL(cb->init(ls_id_, log.get_log_basic()))) {
     LOG_WARN("failed to init cb", K(ret));
   } else if (OB_ISNULL(trans_ctx = ctx_guard.get_store_ctx().mvcc_acc_ctx_.tx_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -749,9 +752,6 @@ int ObDDLIncRedoLogWriterCallback::write(
     redo_info_.parallel_cnt_ = parallel_cnt_;
     redo_info_.cg_cnt_ = cg_cnt_;
     redo_info_.with_cs_replica_ = false; // TODO(chengkong): placeholder for column store replica feature
-    redo_info_.parallel_cnt_ = 0; // TODO @zhuoran.zzr, place holder for shared storage
-    redo_info_.cg_cnt_ = 0;
-    redo_info_.macro_block_id_ = MacroBlockId::mock_valid_macro_id();
     if (OB_FAIL(ddl_inc_writer_.write_inc_redo_log_with_retry(redo_info_, macro_block_id_, task_id_, tx_desc_))) {
       LOG_WARN("write ddl inc redo log fail", K(ret));
     }

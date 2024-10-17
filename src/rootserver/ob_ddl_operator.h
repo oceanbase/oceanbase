@@ -259,6 +259,9 @@ public:
   int update_boundary_schema_version(const uint64_t &tenant_id,
                                      const uint64_t &boundary_schema_version,
                                      common::ObMySQLTransaction &trans);
+  int inc_table_schema_version(ObMySQLTransaction &trans,
+                               const uint64_t tenant_id,
+                               const uint64_t table_id);
   int truncate_table_partitions(const share::schema::ObTableSchema &orig_table_schema,
                                 share::schema::ObTableSchema &inc_table_schema,
                                 share::schema::ObTableSchema &del_table_schema,
@@ -275,6 +278,14 @@ public:
                               share::schema::ObTableSchema &inc_table_schema,
                               share::schema::ObTableSchema &new_table_schema,
                               common::ObMySQLTransaction &trans);
+  int split_table_partitions(const share::schema::ObTableSchema &orig_table_schema,
+                             share::schema::ObTableSchema &inc_table_schema,
+                             share::schema::ObTableSchema &new_table_schema,
+                             share::schema::ObTableSchema &upd_table_schema,
+                             common::ObMySQLTransaction &trans);
+  int drop_table_splitted_partitions(const share::schema::ObTableSchema &orig_table_schema,
+                                     share::schema::ObTableSchema &inc_table_schema,
+                                     common::ObMySQLTransaction &trans);
   int drop_table_partitions(const share::schema::ObTableSchema &orig_table_schema,
                             share::schema::ObTableSchema &inc_table_schema,
                             share::schema::ObTableSchema &new_table_schema,
@@ -417,6 +428,10 @@ public:
       share::schema::ObSchemaGetterGuard &schema_guard,
       const share::schema::ObTableSchema &index_schema,
       share::schema::ObTableSchema &new_data_table_schema);
+  virtual int drop_inner_generated_domain_extra_column(common::ObMySQLTransaction &trans,
+      const share::schema::ObTableSchema *ori_data_schema,
+      const share::schema::ObColumnSchemaV2 &ori_column_schema,
+      share::schema::ObTableSchema &new_data_table_schema);
 
 //  virtual int log_ddl_operation(share::schema::ObSchemaOperation &ddl_operation,
 //                                       common::ObMySQLTransaction &trans);
@@ -548,6 +563,16 @@ public:
               const bool in_offline_ddl_white_list,
               common::ObMySQLTransaction &trans,
               const common::ObString *ddl_stmt_str);
+  virtual int update_index_type(const ObTableSchema &data_table_schema,
+                                const uint64_t index_table_id,
+                                const share::schema::ObIndexType index_type,
+                                const common::ObString *ddl_stmt_str,
+                                common::ObMySQLTransaction &trans);
+  virtual int update_indexes_type(const ObTableSchema &data_table_schema,
+                                 const ObIArray<uint64_t> &index_table_ids,
+                                 const ObIArray<ObIndexType> &index_types,
+                                 const common::ObString *ddl_stmt_str,
+                                 common::ObMySQLTransaction &trans);
 
   // tablespace
   virtual int create_tablespace(share::schema::ObTablespaceSchema &tablespace_schema,
@@ -1024,6 +1049,9 @@ public:
                                  const ObColumnSchemaV2 &new_column_schema);
   int update_partition_option(common::ObMySQLTransaction &trans,
                               share::schema::ObTableSchema &table_schema);
+  int update_partition_option(common::ObMySQLTransaction &trans,
+                              share::schema::ObTableSchema &table_schema,
+                              const common::ObString &ddl_stmt_str);
   int update_check_constraint_state(common::ObMySQLTransaction &trans,
                                     const share::schema::ObTableSchema &table,
                                     share::schema::ObConstraint &cst);

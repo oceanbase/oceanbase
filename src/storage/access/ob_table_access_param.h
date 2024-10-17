@@ -49,7 +49,7 @@ public:
   void reset();
   bool is_valid() const;
   int refresh_lob_column_out_status();
-  bool enable_fuse_row_cache(const ObQueryFlag &query_flag) const;
+  bool enable_fuse_row_cache(const ObQueryFlag &query_flag, const StorageScanType scan_type) const;
   //temp solution
   int get_cg_column_param(const share::schema::ObColumnParam *&column_param) const;
   int build_index_filter_for_row_store(common::ObIAllocator *allocator);
@@ -110,6 +110,10 @@ public:
   OB_INLINE int64_t get_group_idx_col_index() const
   {
     return (read_info_ != nullptr && read_info_ != rowkey_read_info_) ? read_info_->get_group_idx_col_index() : common::OB_INVALID_INDEX;
+  }
+  OB_INLINE int64_t get_mview_old_new_col_index() const
+  {
+    return (read_info_ != nullptr && read_info_ != rowkey_read_info_) ? read_info_->get_mview_old_new_col_index() : common::OB_INVALID_INDEX;
   }
   bool can_be_reused(const uint32_t cg_idx, const common::ObIArray<sql::ObExpr*> &exprs, const bool is_aggregate)
   {
@@ -183,6 +187,7 @@ public:
 public:
   uint64_t table_id_;
   common::ObTabletID tablet_id_;
+  share::ObLSID ls_id_;
   uint32_t cg_idx_;
   const ObITableReadInfo *read_info_;
   const ObITableReadInfo *rowkey_read_info_;
@@ -263,6 +268,8 @@ public:
   OB_INLINE void set_use_global_iter_pool() { iter_param_.set_use_global_iter_pool(); }
   OB_INLINE void diable_use_global_iter_pool() { iter_param_.diable_use_global_iter_pool(); }
   OB_INLINE bool is_use_global_iter_pool() const { return iter_param_.is_use_global_iter_pool(); }
+private:
+  int check_valid_before_query_init(const ObTableParam &table_param, const ObTabletHandle &tablet_handle);
 public:
   DECLARE_TO_STRING;
 public:
@@ -284,6 +291,7 @@ public:
 
 //TODO @hanhui remove this func
 int set_row_scn(
+    const bool use_fuse_row_cache,
     const ObTableIterParam &iter_param,
     const blocksstable::ObDatumRow *store_row);
 

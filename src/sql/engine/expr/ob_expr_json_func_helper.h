@@ -246,7 +246,10 @@ public:
       ObIJsonBase *&j_base);
 
 
-  static int cast_to_json_tree(ObString &text, common::ObIAllocator *allocator, uint32_t parse_flag = 0);
+  static int cast_to_json_tree(ObString &text,
+                               common::ObIAllocator *allocator,
+                               uint32_t parse_flag = 0,
+                               uint32_t max_depth_config = JSON_DOCUMENT_MAX_DEPTH);
   /*
   get json value to JsonBase in static_typing_engine
   @param[in]  expr       the input arguments
@@ -475,6 +478,11 @@ public:
   static int get_clause_opt(ObExpr *expr,
                             ObEvalCtx &ctx,
                             int8_t &type);
+  static bool is_json_depth_exceed_limit(uint32_t depth)
+  {
+    return depth > JSON_DOCUMENT_MAX_DEPTH && depth > get_json_max_depth_config();
+  }
+  static int32_t get_json_max_depth_config();
 
   static int is_allow_partial_update(const ObExpr &expr, ObEvalCtx &ctx, const ObString &locator_str, bool &allow_partial_update);
   static bool is_json_partial_update_mode(const ObExpr &expr);

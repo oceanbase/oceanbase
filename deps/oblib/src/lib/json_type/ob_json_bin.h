@@ -78,6 +78,8 @@ enum ObJBVerType:uint8_t {
   J_OYEARMONTH_V0 = 29,
   J_DOC_HEADER_V0 = 30,
   J_FORWARD_V0 = 31,
+  J_MYSQL_DATE_V0 = 32,
+  J_MYSQL_DATETIME_V0 = 33,
 
   J_ERROR_V0 = 200
 };

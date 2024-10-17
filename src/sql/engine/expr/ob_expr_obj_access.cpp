@@ -189,7 +189,11 @@ int ObExprObjAccess::ExtraInfo::init_param_array(const ParamStore &param_store,
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < param_num; ++i) {
     const ObObj &obj = objs_stack[i];
-    GET_VALID_INT64_PARAM(obj, (i == param_num - 1 && pl::ObCollectionType::NEXT_PROPERTY == property_type_));
+    GET_VALID_INT64_PARAM(obj,
+      (i == param_num - 1
+        && (pl::ObCollectionType::NEXT_PROPERTY == property_type_
+            || pl::ObCollectionType::EXISTS_PROPERTY == property_type_
+            || pl::ObCollectionType::PRIOR_PROPERTY == property_type_)));
   }
   return ret;
 }

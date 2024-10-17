@@ -1128,7 +1128,8 @@ public:
               bool in_function = false,
               uint64_t loc = 0,
               bool is_called_from_sql = false,
-              uint64_t dblink_id = OB_INVALID_ID);
+              uint64_t dblink_id = OB_INVALID_ID,
+              const ObRoutineInfo *dblink_routine_info = NULL);
   int check_exec_priv(sql::ObExecContext &ctx,
                       const ObString &database_name,
                       ObPLFunction *routine);

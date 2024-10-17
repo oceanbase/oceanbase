@@ -25,6 +25,7 @@ namespace checkpoint
 {
 
 __thread bool ObDataCheckpoint::is_tenant_freeze_for_flush_ = false;
+__thread ObFreezeSourceFlag ObDataCheckpoint::freeze_source_ = ObFreezeSourceFlag::INVALID_SOURCE;
 
 // ** ObCheckpointDList **
 void ObCheckpointDList::reset()
@@ -262,7 +263,10 @@ int ObDataCheckpoint::flush(SCN recycle_scn, int64_t trace_id, bool need_freeze)
   if (is_tenant_freeze()) {
     const bool is_sync = true;
     const bool abs_timeout_ts = ObClockGenerator::getClock() + 10LL * 1000LL * 1000LL; // retry at most 10 seconds
-    if (OB_FAIL(ls_->logstream_freeze(trace_id, is_sync, abs_timeout_ts))) {
+    if (OB_FAIL(ls_->logstream_freeze(trace_id,
+                                      is_sync,
+                                      abs_timeout_ts,
+                                      get_freeze_source()))) {
       STORAGE_LOG(WARN, "minor freeze failed", K(ret), K(ls_->get_ls_id()));
     }
   } else if (need_freeze) {
@@ -916,10 +920,18 @@ int ObDataCheckpoint::freeze_base_on_needs_(const int64_t trace_id,
     const bool abs_timeout_ts = 0;  // async freeze do not need
     if (OB_FAIL(ret)) {
     } else if (logstream_freeze) {
-      if (OB_FAIL(ls_->logstream_freeze(trace_id, is_sync, abs_timeout_ts))) {
+      if (OB_FAIL(ls_->logstream_freeze(trace_id,
+                                        is_sync,
+                                        abs_timeout_ts,
+                                        get_freeze_source()))) {
         STORAGE_LOG(WARN, "minor freeze failed", K(ret), K(ls_->get_ls_id()));
       }
-    } else if (OB_FAIL(ls_->tablet_freeze(trace_id, need_flush_tablets, is_sync))) {
+    } else if (OB_FAIL(ls_->tablet_freeze(trace_id,
+                                          need_flush_tablets,
+                                          is_sync,
+                                          abs_timeout_ts,
+                                          false, /*need_rewrite_meta*/
+                                          get_freeze_source()))) {
       STORAGE_LOG(WARN, "batch tablet freeze failed", K(ret), K(ls_->get_ls_id()), K(need_flush_tablets));
     }
   }

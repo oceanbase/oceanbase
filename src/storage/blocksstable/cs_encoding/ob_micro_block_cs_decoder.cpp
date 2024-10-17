@@ -1340,6 +1340,7 @@ int ObMicroBlockCSDecoder::filter_pushdown_filter(
     LOG_WARN("Failed to validate filter info", K(ret));
   } else {
     int64_t col_count = filter.get_col_count();
+    const ObColumnIndexArray &cols_index = read_info_->get_columns_index();
     const common::ObIArray<int32_t> &col_offsets = filter.get_col_offsets(pd_filter_info.is_pd_to_cg_);
     const sql::ColumnParamFixedArray &col_params = filter.get_col_params();
     decoder_allocator_.reuse();
@@ -1356,6 +1357,10 @@ int ObMicroBlockCSDecoder::filter_pushdown_filter(
             datum.reuse();
             if (OB_FAIL(decoders_[col_offsets.at(i)].decode(row_idx, datum))) {
               LOG_WARN("decode cell failed", K(ret), K(row_idx), K(i), K(datum));
+            } else if (OB_UNLIKELY(transform_helper_.get_micro_block_header()->is_trans_version_column_idx(cols_index.at(col_offsets.at(i))))) {
+              if (OB_FAIL(storage::reverse_trans_version_val(datum))) {
+                LOG_WARN("Failed to reverse trans version val", K(ret));
+              }
             } else if (nullptr == col_params.at(i) || datum.is_null()) {
             } else if (col_params.at(i)->get_meta_type().is_fixed_len_char_type()) {
               if (OB_FAIL(storage::pad_column(col_params.at(i)->get_meta_type(),
@@ -1745,6 +1750,7 @@ int ObMicroBlockCSDecoder::get_aggregate_result(
     ObAggCellVec &agg_cell)
 {
   int ret = OB_SUCCESS;
+  decoder_allocator_.reuse();
   ObColumnCSDecoder *column_decoder = nullptr;
   if (OB_UNLIKELY(nullptr == row_ids || row_cap <= 0)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1784,6 +1790,13 @@ int ObMicroBlockCSDecoder::get_col_datums(
   } else if (OB_FAIL(decoders_[col_id].batch_decode(row_ids, row_cap, col_datums))) {
     LOG_WARN("fail to get datums from decoder", K(ret), K(col_id), K(row_cap),
              "row_ids", common::ObArrayWrap<const int32_t>(row_ids, row_cap));
+  }
+  if (OB_SUCC(ret)) {
+    const ObColumnIndexArray &cols_index = read_info_->get_columns_index();
+    if (OB_UNLIKELY(transform_helper_.get_micro_block_header()->is_trans_version_column_idx(cols_index.at(col_id)) &&
+        OB_FAIL(storage::reverse_trans_version_val(col_datums, row_cap)))) {
+      LOG_WARN("Failed to reverse trans version val", K(ret));
+    }
   }
   return ret;
 }
@@ -2007,11 +2020,15 @@ int ObMicroBlockCSDecoder::get_rows(
 int ObMicroBlockCSDecoder::get_col_data(const int32_t col_id, ObVectorDecodeCtx &vector_ctx)
 {
   int ret = OB_SUCCESS;
+  const ObColumnIndexArray &cols_index = read_info_->get_columns_index();
   if (OB_UNLIKELY(col_id >= column_count_)) {
     ret = OB_INDEX_OUT_OF_RANGE;
     LOG_WARN("Vector store col id greate than store cnt", KR(ret), K(column_count_), K(col_id));
   } else if (OB_FAIL(decoders_[col_id].decode_vector(vector_ctx))) {
     LOG_WARN("fail to get datums from decoder", K(ret), K(col_id), K(vector_ctx));
+  } else if (OB_UNLIKELY(transform_helper_.get_micro_block_header()->is_trans_version_column_idx(cols_index.at(col_id))) &&
+             OB_FAIL(storage::reverse_trans_version_val(vector_ctx.get_vector(), vector_ctx.row_cap_))) {
+     LOG_WARN("Failed to reverse trans version val", K(ret));
   }
   return ret;
 }

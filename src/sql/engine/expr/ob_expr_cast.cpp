@@ -446,18 +446,18 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
             : (OB_NOT_NULL(type_ctx.get_session())
                 ? type_ctx.get_session()->get_actual_nls_length_semantics()
                 : LS_BYTE));
-        if (len < 0 && !is_called_in_sql() && lib::is_oracle_mode()) {
-          if (dst_type.is_char() || dst_type.is_nchar()) {
-            type.set_full_length(OB_MAX_ORACLE_PL_CHAR_LENGTH_BYTE, length_semantics);
-          } else if (dst_type.is_nvarchar2() || dst_type.is_varchar()) {
-            type.set_full_length(OB_MAX_ORACLE_VARCHAR_LENGTH, length_semantics);
-          }
-        } else if (len > 0) { // cast(1 as char(10))
+        if (len > 0) { // cast(1 as char(10))
           type.set_full_length(len, length_semantics);
         } else if (OB_FAIL(get_cast_string_len(type1, dst_type, type_ctx, len, length_semantics,
                                                collation_connection,
                                                cast_raw_expr->get_extra()))) { // cast (1 as char)
           LOG_WARN("fail to get cast string length", K(ret));
+        } else if (len < 0 && !is_called_in_sql() && lib::is_oracle_mode()) {
+          if (dst_type.is_char() || dst_type.is_nchar()) {
+            type.set_full_length(OB_MAX_ORACLE_PL_CHAR_LENGTH_BYTE, dst_type.get_length_semantics());
+          } else if (dst_type.is_nvarchar2() || dst_type.is_varchar()) {
+            type.set_full_length(OB_MAX_ORACLE_VARCHAR_LENGTH, dst_type.get_length_semantics());
+          }
         } else {
           type.set_full_length(len, length_semantics);
         }
@@ -656,8 +656,8 @@ int ObExprCast::get_cast_type(const bool enable_decimal_int,
       dst_type.set_udt_id(param_type2.get_udt_id());
       if (ob_is_collection_sql_type(obj_type)) {
         // recover subschema id
-        dst_type.set_collation_type(static_cast<ObCollationType>(parse_node.int16_values_[OB_NODE_CAST_COLL_IDX]));
-        dst_type.set_collation_level(static_cast<ObCollationLevel>(parse_node.int16_values_[OB_NODE_CAST_CS_LEVEL_IDX]));
+        dst_type.set_cs_type(static_cast<ObCollationType>(parse_node.int16_values_[OB_NODE_CAST_COLL_IDX]));
+        dst_type.set_cs_level(static_cast<ObCollationLevel>(parse_node.int16_values_[OB_NODE_CAST_CS_LEVEL_IDX]));
       }
     } else if (lib::is_mysql_mode() && ob_is_json(obj_type)) {
       dst_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);

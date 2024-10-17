@@ -270,6 +270,8 @@ STAT_EVENT_ADD_DEF(LOG_KV_CACHE_HIT, "log kv cache hit", ObStatClassIds::CACHE, 
 STAT_EVENT_ADD_DEF(LOG_KV_CACHE_MISS, "log kv cache miss", ObStatClassIds::CACHE, 50066, false, true, true)
 STAT_EVENT_ADD_DEF(DATA_BLOCK_CACHE_MISS, "data block cache miss", ObStatClassIds::CACHE, 50067, true, true, true)
 STAT_EVENT_ADD_DEF(INDEX_BLOCK_CACHE_MISS, "index block cache miss", ObStatClassIds::CACHE, 50068, true, true, true)
+STAT_EVENT_ADD_DEF(MULTI_VERSION_FUSE_ROW_CACHE_HIT, "multi version fuse row cache hit", ObStatClassIds::CACHE, 50069, true, true, true)
+STAT_EVENT_ADD_DEF(MULTI_VERSION_FUSE_ROW_CACHE_MISS, "multi version fuse row cache miss", ObStatClassIds::CACHE, 50070, true, true, true)
 
 // STORAGE
 STAT_EVENT_ADD_DEF(MEMSTORE_LOGICAL_READS, "MEMSTORE_LOGICAL_READS", STORAGE, "MEMSTORE_LOGICAL_READS", true, true, false)
@@ -312,7 +314,6 @@ STAT_EVENT_ADD_DEF(STORAGE_INSERT_ROW_COUNT, "storage insert row count", ObStatC
 STAT_EVENT_ADD_DEF(STORAGE_UPDATE_ROW_COUNT, "storage update row count", ObStatClassIds::STORAGE, 60034, false, true, true)
 STAT_EVENT_ADD_DEF(MEMSTORE_ROW_PURGE_COUNT, "memstore row purge count", ObStatClassIds::STORAGE, 60037, false, true, true)
 STAT_EVENT_ADD_DEF(MEMSTORE_ROW_COMPACTION_COUNT, "memstore row compaction count", ObStatClassIds::STORAGE, 60038, false, true, true)
-
 STAT_EVENT_ADD_DEF(IO_READ_QUEUE_DELAY, "io read queue delay", ObStatClassIds::STORAGE, 60039, false, true, true)
 STAT_EVENT_ADD_DEF(IO_WRITE_QUEUE_DELAY, "io write queue delay", ObStatClassIds::STORAGE, 60040, false, true, true)
 STAT_EVENT_ADD_DEF(IO_READ_CB_QUEUE_DELAY, "io read callback queuing delay", ObStatClassIds::STORAGE, 60041, false, true, true)
@@ -321,6 +322,7 @@ STAT_EVENT_ADD_DEF(BANDWIDTH_IN_THROTTLE, "bandwidth in throttle size", ObStatCl
 STAT_EVENT_ADD_DEF(BANDWIDTH_OUT_THROTTLE, "bandwidth out throttle size", ObStatClassIds::STORAGE, 60052, false, true, true)
 STAT_EVENT_ADD_DEF(MEMSTORE_READ_ROW_COUNT, "memstore read row count", ObStatClassIds::STORAGE, 60056, true, true, true)
 STAT_EVENT_ADD_DEF(SSSTORE_READ_ROW_COUNT, "ssstore read row count", ObStatClassIds::STORAGE, 60057, true, true, true)
+STAT_EVENT_ADD_DEF(MEMSTORE_WRITE_BYTES, "memstore write bytes", ObStatClassIds::STORAGE, 60058, true, true, true)
 
 STAT_EVENT_ADD_DEF(MEMSTORE_WRITE_LOCK_WAKENUP_COUNT, "memstore write lock wakenup count in lock_wait_mgr", ObStatClassIds::STORAGE, 60068, false, true, true)
 
@@ -346,6 +348,8 @@ STAT_EVENT_ADD_DEF(PUSHDOWN_STORAGE_FILTER_ROW_CNT, "storage filtered row count"
 STAT_EVENT_ADD_DEF(MINOR_SSSTORE_READ_ROW_COUNT, "minor ssstore read row count", ObStatClassIds::STORAGE, 60091, true, true, true)
 STAT_EVENT_ADD_DEF(MAJOR_SSSTORE_READ_ROW_COUNT, "major ssstore read row count", ObStatClassIds::STORAGE, 60092, true, true, true)
 STAT_EVENT_ADD_DEF(STORAGE_WRITING_THROTTLE_TIME, "storage waiting throttle time", ObStatClassIds::STORAGE, 60093, true, true, true)
+STAT_EVENT_ADD_DEF(IO_READ_DEVICE_TIME, "io read execute time", ObStatClassIds::STORAGE, 60094, true, true, true)
+STAT_EVENT_ADD_DEF(IO_WRITE_DEVICE_TIME, "io write execute time", ObStatClassIds::STORAGE, 60095, true, true, true)
 
 // backup & restore
 STAT_EVENT_ADD_DEF(BACKUP_IO_READ_COUNT, "backup io read count", ObStatClassIds::STORAGE, 69000, true, true, true)
@@ -531,6 +535,11 @@ STAT_EVENT_ADD_DEF(TABLEAPI_MULTI_PUT_COUNT, "multi put execute count", ObStatCl
 STAT_EVENT_ADD_DEF(TABLEAPI_MULTI_PUT_TIME, "multi put execute time", ObStatClassIds::TABLEAPI, 191304, true, true, true)
 STAT_EVENT_ADD_DEF(TABLEAPI_MULTI_PUT_ROW, "multi put rows", ObStatClassIds::TABLEAPI, 191305, true, true, true)
 
+// -- table trigger 1914xx
+STAT_EVENT_ADD_DEF(TABLEAPI_GROUP_TRIGGER_COUNT, "group commit trigger execute count", ObStatClassIds::TABLEAPI, 191401, true, true, true)
+STAT_EVENT_ADD_DEF(TABLEAPI_GROUP_TRIGGER_TIME, "group commit trigger execute execute time", ObStatClassIds::TABLEAPI, 191402, true, true, true)
+STAT_EVENT_ADD_DEF(TABLEAPI_GROUP_TRIGGER_ROW, "group commit trigger execute rows", ObStatClassIds::TABLEAPI, 191403, true, true, true)
+
 // sys_time_model related (20xxxx)
 STAT_EVENT_ADD_DEF(SYS_TIME_MODEL_DB_TIME, "DB time", ObStatClassIds::SYS, 200001, false, true, true)
 STAT_EVENT_ADD_DEF(SYS_TIME_MODEL_DB_CPU, "DB CPU", ObStatClassIds::SYS, 200002, false, true, true)
@@ -650,6 +659,7 @@ STAT_EVENT_SET_DEF(SYSTEM_MEMORY, "effective system memory", ObStatClassIds::RES
 STAT_EVENT_SET_DEF(HIDDEN_SYS_MEMORY, "effective hidden sys memory", ObStatClassIds::RESOURCE, 140016, false, true, true)
 STAT_EVENT_SET_DEF(MAX_SESSION_NUM, "max session num", ObStatClassIds::RESOURCE, 140017, false, true, true)
 STAT_EVENT_SET_DEF(KV_CACHE_HOLD, "kvcache hold", ObStatClassIds::RESOURCE, 140018, false, true, true)
+STAT_EVENT_SET_DEF(DIVISIVE_MEMORY_USED, "divisive memory used", ObStatClassIds::RESOURCE, 140019, false, true, true)
 
 //CLOG
 

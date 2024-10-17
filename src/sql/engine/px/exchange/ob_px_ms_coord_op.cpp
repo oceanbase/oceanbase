@@ -390,7 +390,7 @@ int ObPxMSCoordOp::inner_get_next_row()
     } else if (OB_FAIL(ctx_.fast_check_status())) {
       LOG_WARN("fail check status, maybe px query timeout", K(ret));
     } else if (OB_FAIL(msg_loop_.process_one_if(&receive_order_, nth_channel))) {
-      if (OB_EAGAIN == ret) {
+      if (OB_DTL_WAIT_EAGAIN == ret) {
         LOG_TRACE("no message, try again", K(ret));
         ret = OB_SUCCESS;
         // if no data, then unblock blocked data channel, if not, dtl maybe hang

@@ -516,8 +516,8 @@ TEST_F(TestPushdownAggregate, test_decide_use_group_by2)
 
   int64_t true_count = row_count / ObGroupByCell::USE_GROUP_BY_FILTER_FACTOR - 2;
   ObCGBitmap bitmap(allocator_);
-  bitmap.init(row_count);
-  bitmap.reuse(0);
+  bitmap.init(row_count, false);
+  bitmap.reuse(0, false);
   for (int64_t i = 0; i < row_count; i++) {
     if (i < true_count) {
       bitmap.set(i);
@@ -529,7 +529,7 @@ TEST_F(TestPushdownAggregate, test_decide_use_group_by2)
   ASSERT_TRUE(nullptr == group_by_cell.distinct_projector_buf_);
   ASSERT_TRUE(nullptr == group_by_cell.tmp_group_by_datum_buf_);
 
-  bitmap.reuse(0);
+  bitmap.reuse(0, false);
   true_count = row_count / ObGroupByCell::USE_GROUP_BY_FILTER_FACTOR + 2;
   for (int64_t i = 0; i < row_count; i++) {
     if (i < true_count) {

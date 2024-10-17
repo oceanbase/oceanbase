@@ -357,10 +357,14 @@ int ObDropIndexTask::process()
         }
         break;
       case ObDDLTaskStatus::WAIT_TRANS_END_FOR_UNUSABLE:
-        if (OB_FAIL(wait_trans_end(wait_trans_ctx_, DROP_SCHEMA))) {
+        {
+        ObDDLTaskStatus next_status = drop_index_arg_.only_set_status_?
+                                      SUCCESS : DROP_SCHEMA;
+        if (OB_FAIL(wait_trans_end(wait_trans_ctx_, next_status))) {
           LOG_WARN("wait trans end failed", K(ret));
         }
         break;
+        }
       case ObDDLTaskStatus::DROP_SCHEMA:
         if (OB_FAIL(drop_index(SUCCESS))) {
           LOG_WARN("drop index failed", K(ret));

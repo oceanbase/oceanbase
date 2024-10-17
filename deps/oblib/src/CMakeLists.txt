@@ -21,7 +21,7 @@ target_include_directories(
   ${DEP_DIR}/include/apr-1/
   ${DEP_DIR}/include/icu/common
   ${DEP_DIR}/include/apache-arrow
-  # ${DEP_DIR}/include/apache-orc
+  ${DEP_DIR}/include/apache-orc
   ${USSL_INCLUDE_DIRS}
 )
 
@@ -216,12 +216,12 @@ target_link_libraries(oblib_base_base_base
   ${DEP_DIR}/lib64/libarrow.a
   ${DEP_DIR}/lib64/libparquet.a
   ${DEP_DIR}/lib64/libarrow_bundled_dependencies.a
-  # ${DEP_DIR}/lib64/liborc.a
-  # ${DEP_DIR}/lib64/libsnappy.a
-  # ${DEP_DIR}/lib64/libprotoc.a
-  # ${DEP_DIR}/lib64/libprotobuf.a
-  # ${DEP_DIR}/lib64/liblz4.a
-  # ${DEP_DIR}/lib64/libzstd.a
+  ${DEP_DIR}/lib64/liborc.a
+  ${DEP_DIR}/lib64/libsnappy.a
+  ${DEP_DIR}/lib64/libprotoc.a
+  ${DEP_DIR}/lib64/libprotobuf.a
+  ${DEP_DIR}/lib64/liblz4.a
+  ${DEP_DIR}/lib64/libzstd.a
   -L${DEP_DIR}/var/usr/lib64
   -L${DEP_DIR}/var/usr/lib
   -L${DEP_3RD_DIR}/usr/lib
@@ -251,12 +251,12 @@ target_link_libraries(oblib_base_base_base
   ${DEP_DIR}/lib64/libarrow.a
   ${DEP_DIR}/lib64/libparquet.a
   ${DEP_DIR}/lib64/libarrow_bundled_dependencies.a
-  # ${DEP_DIR}/lib64/liborc.a
-  # ${DEP_DIR}/lib64/libsnappy.a
-  # ${DEP_DIR}/lib64/libprotoc.a
-  # ${DEP_DIR}/lib64/libprotobuf.a
-  # ${DEP_DIR}/lib64/liblz4.a
-  # ${DEP_DIR}/lib64/libzstd.a
+  ${DEP_DIR}/lib64/liborc.a
+  ${DEP_DIR}/lib64/libsnappy.a
+  ${DEP_DIR}/lib64/libprotoc.a
+  ${DEP_DIR}/lib64/libprotobuf.a
+  ${DEP_DIR}/lib64/liblz4.a
+  ${DEP_DIR}/lib64/libzstd.a
   -L${DEP_DIR}/var/usr/lib64
   -L${DEP_DIR}/var/usr/lib
   -L${DEP_3RD_DIR}/usr/lib

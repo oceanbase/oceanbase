@@ -2150,6 +2150,11 @@ int ObBasicSessionInfo::get_sys_variable(const ObSysVarClassType sys_var_id, uin
   return ret;
 }
 
+int ObBasicSessionInfo::get_sys_variable(const ObSysVarClassType sys_var_id, bool &val) const
+{
+  return get_bool_sys_var(sys_var_id, val);
+}
+
 int ObBasicSessionInfo::sys_variable_exists(const ObString &var, bool &is_exists) const
 {
   int ret = OB_SUCCESS;
@@ -2182,6 +2187,7 @@ int ObBasicSessionInfo::set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan)
   } else {
     cur_phy_plan_ = cur_phy_plan;
     plan_id_ = cur_phy_plan->get_plan_id();
+    ash_stat_.plan_id_ = plan_id_;
     int64_t len = cur_phy_plan->stat_.sql_id_.length();
     MEMCPY(sql_id_, cur_phy_plan->stat_.sql_id_.ptr(), len);
     sql_id_[len] = '\0';
@@ -2868,6 +2874,12 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       OX (sys_vars_cache_.set_compat_version(uint_val));
       break;
     }
+    case SYS_VAR_ENABLE_SQL_PLAN_MONITOR: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set_enable_sql_plan_monitor(int_val != 0));
+      break;
+    }
     case SYS_VAR_OB_ENABLE_PARAMETER_ANONYMOUS_BLOCK: {
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
@@ -3363,6 +3375,11 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
             get_runtime_filter_type(str.ptr(), str.length());
         sys_vars_cache.set_base_runtime_filter_type(run_time_filter_type);
       }
+    }
+    case SYS_VAR_ENABLE_SQL_PLAN_MONITOR: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache.set_enable_sql_plan_monitor(int_val != 0));
       break;
     }
     default: {
@@ -6645,7 +6662,8 @@ int ObBasicSessionInfo::set_time_zone(const ObString &str_val, const bool is_ora
       int64_t start_service_time = GCTX.start_service_time_;
       if (OB_FAIL(tz_info_mgr->find_time_zone_info(val_no_sp,
                                                    tz_info_wrap_.get_tz_info_pos()))) {
-        LOG_WARN("fail to find time zone", K(str_val), K(val_no_sp), K(ret));
+        LOG_WARN("fail to find time zone", K(str_val), K(val_no_sp), K(ret), K(tenant_id_),
+                 K(effective_tenant_id_));
         tz_info_wrap_.set_cur_version(orig_version);
       } else {
         tz_info_wrap_.set_tz_info_position();
@@ -6662,6 +6680,17 @@ int ObBasicSessionInfo::set_time_zone(const ObString &str_val, const bool is_ora
             if (ret != OB_ERR_UNKNOWN_TIME_ZONE) {
               LOG_WARN("fail to convert time zone", K(str_val), K(ret));
             }
+          } else {
+            tz_info_wrap_.set_tz_info_offset(offset);
+          }
+        } else if (is_tenant_changed()) {
+          // sys tenant doest not load timezone info and user tenant set global time_zone = 'Asia/Shanghai'.
+          // when execute inner sql, value of sys var time_zone may be +08:00 or Asia/Shanghai.
+          // The reason is that px use tenant_id_ and das/remote use effective_tenant_id_ create session.
+          offset = 0;
+          if (OB_FAIL(ObTimeConverter::str_to_offset(ObString("+8:00"), offset, ret_more,
+                                                    is_oralce_mode, check_timezone_valid))) {
+            LOG_WARN("fail to convert time zone", K(str_val), K(ret));
           } else {
             tz_info_wrap_.set_tz_info_offset(offset);
           }

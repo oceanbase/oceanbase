@@ -19,6 +19,7 @@
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
+using namespace oceanbase::share;
 using namespace oceanbase::table;
 ////////////////////////////////////////////////////////////////
 
@@ -80,7 +81,7 @@ int ObTableMoveResponseSender::init(const uint64_t table_id,
 
       // set move pcode
       response_sender_.set_pcode(obrpc::OB_TABLE_API_MOVE);
-      LOG_INFO("move response init successfully", K(replica));
+      LOG_DEBUG("move response init successfully", K(replica));
     }
   }
 

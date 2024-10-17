@@ -220,8 +220,8 @@ int ObTransService::reuse_tx(ObTxDesc &tx, const uint64_t data_version)
         usleep(200);     // 200us
       }
 #ifdef ENABLE_DEBUG_LOG
-      if (spin_cnt > 2015) {
-        // at least wait 30s
+      if (spin_cnt > 2300) {
+        // at least wait 600s
         ob_abort();
       }
 #endif

@@ -104,6 +104,9 @@ void ObLobDataGetCtx::reset(
   } else if (lob_data_out_row_ctx->is_diff()) {
     type_ = ObLobDataGetTaskType::EXT_INFO_LOG;
     LOG_DEBUG("lob_data_out_row_ctx is diff", K(column_id), KPC(new_lob_data_), KPC(lob_data_out_row_ctx));
+  } else if (ObLobDataOutRowCtx::OpType::EXT_INFO_LOG == lob_data_out_row_ctx->op_) {
+    type_ = ObLobDataGetTaskType::EXT_INFO_LOG;
+    LOG_DEBUG("lob_data_out_row_ctx is outrow ext", K(column_id), KPC(new_lob_data_), KPC(lob_data_out_row_ctx));
   }
 }
 
@@ -120,21 +123,36 @@ int ObLobDataGetCtx::get_lob_out_row_ctx(const ObLobDataOutRowCtx *&lob_data_out
   return ret;
 }
 
-ObLobId ObLobDataGetCtx::get_lob_id() const
+int ObLobDataGetCtx::get_lob_id(const bool is_new_col, ObLobId &lob_id) const
 {
-  ObLobId lob_id;
-  switch (get_type()) {
-    case ObLobDataGetTaskType::FULL_LOB:
-      if (OB_NOT_NULL(new_lob_data_)) {
-        lob_id = new_lob_data_->id_;
-      } else {
-        LOG_DEBUG("new_lob_data_ is null", KPC(this));
+  int ret = OB_SUCCESS;
+  const ObLobData *lob_data = nullptr;
+  if (OB_ISNULL(lob_data = get_lob_data(is_new_col))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("lob_data is nullptr", KR(ret), K(is_new_col), KPC(this));
+  } else {
+    switch (get_type()) {
+      case ObLobDataGetTaskType::FULL_LOB: {
+        lob_id = lob_data->id_;
+        break;
       }
-      break;
-    default:
-      break;
+      case ObLobDataGetTaskType::EXT_INFO_LOG: {
+        const ObLobDataOutRowCtx *lob_data_out_row_ctx = reinterpret_cast<const ObLobDataOutRowCtx *>(lob_data->buffer_);
+        if (OB_ISNULL(lob_data_out_row_ctx)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("lob_data_out_row_ctx is nullptr", KR(ret), K(is_new_col), KPC(lob_data), KPC(this));
+        } else if (lob_data_out_row_ctx->is_diff_v1()) {
+          // old diff ext info log no lob id
+        } else {
+          lob_id = lob_data->id_;
+        }
+        break;
+      }
+      default:
+        break;
+    }
   }
-  return lob_id;
+  return ret;
 }
 
 int ObLobDataGetCtx::get_data_length(const bool is_new_col, uint64_t &data_length) const

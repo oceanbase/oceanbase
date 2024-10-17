@@ -128,7 +128,9 @@ int ObStorageTableGuard::refresh_and_protect_memtable_for_write(ObRelativeTable 
         // snapshot_for_tables filters the tables during get_read_tables
         store_ctx_.mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx(),
         iter,
-        relative_table.allow_not_ready()))) {
+        relative_table.allow_not_ready(),
+        true/*need_split_src_table*/,
+        false/*need_split_dst_table*/))) {
       LOG_WARN("fail to get read tables", K(ret), K(ls_id), K(remain_timeout),
            "table_id", relative_table.get_table_id());
     } else {

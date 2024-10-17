@@ -34,6 +34,7 @@ namespace storage
 
 //errsim def
 ERRSIM_POINT_DEF(PHYSICAL_COPY_TASK_GET_TABLET_FAILED);
+ERRSIM_POINT_DEF(SSTABLE_COPY_FINISH_TASK_FAILED);
 
 // ObPhysicalCopyTaskInitParam
 ObPhysicalCopyTaskInitParam::ObPhysicalCopyTaskInitParam()
@@ -359,9 +360,9 @@ int ObCopiedSSTableCreator::check_sstable_param_for_init_(const ObMigrationSSTab
   if (src_sstable_param->is_empty_sstable()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("sstable is empty", K(ret), KPC(src_sstable_param));
-  } else if (src_sstable_param->is_shared_macro_blocks_sstable()) {
+  } else if (src_sstable_param->basic_meta_.table_shared_flag_.is_shared_macro_blocks()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("sstable has shared macro blocks", K(ret), KPC(src_sstable_param));
+    LOG_WARN("sstable has shared macro blocks and it's not shared backup table", K(ret), KPC(src_sstable_param));
   }
 
   return ret;
@@ -369,8 +370,8 @@ int ObCopiedSSTableCreator::check_sstable_param_for_init_(const ObMigrationSSTab
 
 
 #ifdef OB_BUILD_SHARED_STORAGE
-// ObCopiedSharedSSTableCreator
-int ObCopiedSharedSSTableCreator::create_sstable()
+// ObRestoredSharedSSTableCreator
+int ObRestoredSharedSSTableCreator::create_sstable()
 {
   int ret = OB_SUCCESS;
   ObSSTableMergeRes res;
@@ -403,12 +404,12 @@ int ObCopiedSharedSSTableCreator::create_sstable()
     }
   }
 
-  LOG_INFO("create shared sstable with index builder", K(ret), K(table_handle));
+  LOG_INFO("create restore shared sstable with index builder", K(ret), K(table_handle));
 
   return ret;
 }
 
-int ObCopiedSharedSSTableCreator::check_sstable_param_for_init_(const ObMigrationSSTableParam *src_sstable_param) const
+int ObRestoredSharedSSTableCreator::check_sstable_param_for_init_(const ObMigrationSSTableParam *src_sstable_param) const
 {
   int ret = OB_SUCCESS;
   if (!src_sstable_param->is_shared_sstable()) {
@@ -494,8 +495,43 @@ int ObCopiedSharedMacroBlocksSSTableCreator::get_shared_macro_id_list_(common::O
 
   return ret;
 }
-
 #endif
+
+// ObCopiedSharedSSTableCreator
+int ObCopiedSharedSSTableCreator::create_sstable()
+{
+  int ret = OB_SUCCESS;
+  ObSSTableMergeRes res;
+  ObTableHandleV2 table_handle;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObCopiedSSTableCreator not init", K(ret));
+  } else {
+    SMART_VAR(ObTabletCreateSSTableParam, param) {
+      if (OB_FAIL(init_create_sstable_param_(param))) {
+        LOG_WARN("fail to init create sstable param", K(ret));
+      } else if (OB_FAIL(do_create_sstable_(param, table_handle))) {
+        LOG_WARN("failed to create sstable", K(ret), K(param));
+      } else if (OB_FAIL(finish_task_->add_sstable(table_handle))) {
+        LOG_WARN("fail to add sstable", K(ret), K(table_handle));
+      }
+    }
+  }
+  LOG_INFO("create shared sstable with index builder", K(ret), K(table_handle));
+  return ret;
+}
+
+int ObCopiedSharedSSTableCreator::check_sstable_param_for_init_(const ObMigrationSSTableParam *src_sstable_param) const
+{
+  int ret = OB_SUCCESS;
+  if (!src_sstable_param->is_shared_sstable()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("sstable is not shared", K(ret), KPC(src_sstable_param));
+  }
+
+  return ret;
+}
 
 
 // ObSSTableCopyFinishTask
@@ -566,6 +602,8 @@ int ObSSTableCopyFinishTask::init(const ObPhysicalCopyTaskInitParam &init_param)
     copy_ctx_.need_check_seq_ = init_param.need_check_seq_;
     copy_ctx_.ls_rebuild_seq_ = init_param.ls_rebuild_seq_;
     copy_ctx_.table_key_ = init_param.sstable_param_->table_key_;
+    copy_ctx_.macro_block_reuse_mgr_ = init_param.macro_block_reuse_mgr_;
+    copy_ctx_.extra_info_ = init_param.extra_info_;
     macro_range_info_index_ = 0;
     ls_ = init_param.ls_;
     sstable_param_ = init_param.sstable_param_;
@@ -691,21 +729,31 @@ int ObSSTableCopyFinishTask::process()
     LOG_WARN("failed to get tablet status", K(ret), K(copy_ctx_));
   } else if (ObCopyTabletStatus::TABLET_NOT_EXIST == status) {
     //do nothing
-#ifdef OB_BUILD_SHARED_STORAGE
-  } else if (is_shared_sstable_without_copy_(sstable_param_)) {
-    if (OB_FAIL(tablet_copy_finish_task_->add_shared_sstable(copy_ctx_.table_key_))) {
-      LOG_WARN("failed to add shared sstable", K(ret), K(copy_ctx_));
-    } else {
-      LOG_INFO("succeed sstable copy finish", K(copy_ctx_));
-    }
-#endif
   } else if (OB_FAIL(create_sstable_())) {
     LOG_WARN("failed to create sstable", K(ret), K(copy_ctx_));
   } else if (OB_FAIL(check_sstable_valid_())) {
     LOG_WARN("failed to check sstable valid", K(ret), K(copy_ctx_));
+  } else if (OB_FAIL(update_major_sstable_reuse_info_())) {
+    LOG_WARN("failed to update major sstable reuse info", K(ret), K(copy_ctx_));
+  } else if (OB_FAIL(update_copy_tablet_record_extra_info_())) {
+    LOG_WARN("failed to update copy tablet record extra info", K(ret), K(copy_ctx_));
   } else {
     LOG_INFO("succeed sstable copy finish", K(copy_ctx_));
   }
+
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    if (GCONF.errsim_migration_tablet_id == copy_ctx_.tablet_id_.id()
+      && ObITable::is_major_sstable(copy_ctx_.table_key_.table_type_)
+    ) {
+      // inject error when finish copying 3rd major sstable
+      if (3 == copy_ctx_.extra_info_->get_major_count()) {
+        ret = SSTABLE_COPY_FINISH_TASK_FAILED ? : OB_SUCCESS;
+        LOG_ERROR("fake SSTABLE_COPY_FINISH_TASK_FAILED", K(ret), K(copy_ctx_));
+      }
+    }
+  }
+#endif
 
   if (OB_FAIL(ret)) {
     if (OB_TABLET_NOT_EXIST == ret) {
@@ -723,6 +771,81 @@ int ObSSTableCopyFinishTask::process()
       LOG_WARN("failed to deal with fo", K(ret), K(tmp_ret), K(copy_ctx_));
     }
   }
+  return ret;
+}
+
+
+int ObSSTableCopyFinishTask::update_major_sstable_reuse_info_()
+{
+  int ret = OB_SUCCESS;
+  int64_t snapshot_version = 0;
+  int64_t copy_snapshot_version = 0;
+  int64_t reuse_info_count = 0;
+  ObTabletHandle tablet_handle;
+  ObTableHandleV2 table_handle;
+  ObSSTable *sstable = nullptr;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("sstable copy finish task do not init", K(ret));
+  } else if (!ObITable::is_major_sstable(copy_ctx_.table_key_.table_type_)) {
+    // sstable is not major or is meta major, skip reuse
+    LOG_INFO("sstable is not major, skip update major sstable reuse info", K(ret), K(copy_ctx_));
+  } else if (OB_ISNULL(copy_ctx_.macro_block_reuse_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("macro block reuse mgr should not be NULL when migrate or restore major sstable", K(ret), KP(copy_ctx_.macro_block_reuse_mgr_), K(copy_ctx_));
+  } else if (OB_FAIL(ls_->ha_get_tablet(copy_ctx_.tablet_id_, tablet_handle))) {
+    LOG_WARN("failed to get tablet", K(ret), K(copy_ctx_));
+  } else if (OB_FAIL(tablet_copy_finish_task_->get_sstable(sstable_param_->table_key_, table_handle))) {
+    LOG_WARN("failed to get sstable", K(ret), KPC(sstable_param_));
+  } else if (OB_FAIL(table_handle.get_sstable(sstable))) {
+    LOG_WARN("failed to get sstable", K(ret), KPC(sstable_param_));
+  } else if (OB_ISNULL(sstable)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sstable should not be NULL", K(ret), KP(sstable), K(tablet_handle));
+  } else {
+    if (OB_FAIL(copy_ctx_.macro_block_reuse_mgr_->update_single_reuse_map(copy_ctx_.table_key_, tablet_handle, *sstable))) {
+      LOG_WARN("failed to update single reuse map", K(ret), K(copy_ctx_));
+    } else if (OB_FAIL(copy_ctx_.macro_block_reuse_mgr_->count(reuse_info_count))) {
+      LOG_WARN("failed to count reuse info", K(ret), K(copy_ctx_));
+    } else {
+      LOG_INFO("succeed update major sstable reuse info", K(ret), K(copy_ctx_), K(reuse_info_count));
+    }
+
+    // if build or count reuse map failed, reset reuse map
+    if (OB_FAIL(ret)) {
+      copy_ctx_.macro_block_reuse_mgr_->reset();
+    }
+  }
+
+  return ret;
+}
+
+int ObSSTableCopyFinishTask::update_copy_tablet_record_extra_info_()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(copy_ctx_.extra_info_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("copy ctx extra info is NULL", K(ret), K(copy_ctx_));
+  } else {
+    copy_ctx_.extra_info_->add_macro_count(copy_ctx_.total_macro_count_);
+    copy_ctx_.extra_info_->add_reuse_macro_count(copy_ctx_.reuse_macro_count_);
+
+    if (!ObITable::is_major_sstable(copy_ctx_.table_key_.table_type_)) {
+      // skip
+    } else if (OB_FAIL(copy_ctx_.extra_info_->update_max_reuse_mgr_size(copy_ctx_.macro_block_reuse_mgr_))) {
+      LOG_WARN("failed to update max reuse mgr size", K(ret), K(copy_ctx_));
+    } else {
+      copy_ctx_.extra_info_->inc_major_count();
+      copy_ctx_.extra_info_->add_major_macro_count(copy_ctx_.total_macro_count_);
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    LOG_DEBUG("succeed update copy tablet record extra info", K(copy_ctx_));
+  }
+
   return ret;
 }
 
@@ -792,6 +915,7 @@ int ObSSTableCopyFinishTask::prepare_data_store_desc_(
         tablet->get_snapshot_version(),
         0/*cluster_version*/,
         tablet_handle.get_obj()->get_tablet_meta().micro_index_clustered_,
+        tablet->get_transfer_seq(),
         sstable_param->table_key_.get_end_scn(),
         cg_schema,
         cg_idx,
@@ -839,8 +963,7 @@ int ObSSTableCopyFinishTask::get_cluster_version_(
 bool ObSSTableCopyFinishTask::is_sstable_should_rebuild_index_(const ObMigrationSSTableParam *sstable_param) const
 {
   return !sstable_param->is_empty_sstable()
-         && !is_shared_sstable_without_copy_(sstable_param)
-         && !ObTabletRestoreAction::is_restore_remote_sstable(copy_ctx_.restore_action_);
+         && !is_shared_sstable_without_copy_(sstable_param);
 }
 
 bool ObSSTableCopyFinishTask::is_shared_sstable_without_copy_(const ObMigrationSSTableParam *sstable_param) const
@@ -932,6 +1055,9 @@ int ObSSTableCopyFinishTask::build_restore_macro_block_id_mgr_(
   ObRestoreMacroBlockIdMgr *restore_macro_block_id_mgr = nullptr;
 
   if (!init_param.is_leader_restore_) {
+    restore_macro_block_id_mgr_ = nullptr;
+  } else if (ObTabletRestoreAction::is_restore_remote_sstable(init_param.restore_action_)) {
+    // restore index/meta tree for backup sstable, macro blocks should be got by iterator.
     restore_macro_block_id_mgr_ = nullptr;
   } else if (ObTabletRestoreAction::is_restore_replace_remote_sstable(init_param.restore_action_)) {
     restore_macro_block_id_mgr_ = nullptr;
@@ -1035,18 +1161,29 @@ int ObSSTableCopyFinishTask::alloc_and_init_sstable_creator_(ObCopiedSSTableCrea
 {
   int ret = OB_SUCCESS;
   ObCopiedSSTableCreatorImpl *tmp_creator = nullptr;
+  const bool is_shared_storage = GCTX.is_shared_storage_mode();
   if (sstable_param_->is_empty_sstable()) {
     tmp_creator = MTL_NEW(ObCopiedEmptySSTableCreator, "CopySSTCreator");
-  } else if (ObTabletRestoreAction::is_restore_remote_sstable(copy_ctx_.restore_action_)) {
-    tmp_creator = MTL_NEW(ObBackupSSTableCreator, "CopySSTCreator");
-#ifdef OB_BUILD_SHARED_STORAGE
-  } else if (sstable_param_->is_shared_sstable()) {
-    tmp_creator = MTL_NEW(ObCopiedSharedSSTableCreator, "CopySSTCreator");
-  } else if (sstable_param_->is_shared_macro_blocks_sstable()) {
-    tmp_creator = MTL_NEW(ObCopiedSharedMacroBlocksSSTableCreator, "CopySSTCreator");
-#endif
+  } else if (!is_shared_storage) {
+    if (sstable_param_->is_shared_sstable() && is_shared_sstable_without_copy_(sstable_param_)) {
+      tmp_creator = MTL_NEW(ObCopiedSharedSSTableCreator, "CopySSTCreator");
+    } else {
+      tmp_creator = MTL_NEW(ObCopiedSSTableCreator, "CopySSTCreator");
+    }
   } else {
-    tmp_creator = MTL_NEW(ObCopiedSSTableCreator, "CopySSTCreator");
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (sstable_param_->is_shared_sstable()) {
+      if (is_shared_sstable_without_copy_(sstable_param_)) {
+        tmp_creator = MTL_NEW(ObCopiedSharedSSTableCreator, "CopySSTCreator");
+      } else {
+        tmp_creator = MTL_NEW(ObRestoredSharedSSTableCreator, "CopySSTCreator");
+      }
+    } else if (sstable_param_->is_shared_macro_blocks_sstable()) {
+      tmp_creator = MTL_NEW(ObCopiedSharedMacroBlocksSSTableCreator, "CopySSTCreator");
+    } else {
+      tmp_creator = MTL_NEW(ObCopiedSSTableCreator, "CopySSTCreator");
+    }
+#endif
   }
 
   if (OB_ISNULL(tmp_creator)) {

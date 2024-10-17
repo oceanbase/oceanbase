@@ -788,6 +788,10 @@ int ObExecContext::init_physical_plan_ctx(const ObPhysicalPlan &plan)
       } else {
         consistency = STRONG;
       }
+      if (stmt::T_INSERT == plan.get_stmt_type()) {
+        bool is_direct_load = plan.get_enable_append();
+        phy_plan_ctx_->set_is_direct_insert_plan(is_direct_load);
+      }
       phy_plan_ctx_->set_consistency_level(consistency);
       phy_plan_ctx_->set_timeout_timestamp(start_time + plan_timeout);
       phy_plan_ctx_->set_rich_format(my_session_->use_rich_format());

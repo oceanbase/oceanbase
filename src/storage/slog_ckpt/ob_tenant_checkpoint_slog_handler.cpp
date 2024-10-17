@@ -730,10 +730,9 @@ int ObTenantCheckpointSlogHandler::write_checkpoint(bool is_force)
   int64_t min_interval = ObWriteCheckpointTask::RETRY_WRITE_CHECKPOINT_MIN_INTERVAL;
 
   uint64_t tenant_id = MTL_ID();
-  ObTenantStorageCheckpointWriter tenant_storage_ckpt_writer;
   omt::ObTenant *tenant = static_cast<omt::ObTenant*>(share::ObTenantEnv::get_tenant());
 
-  HEAP_VARS_2((ObTenantSuperBlock, super_block, tenant_id), (ObTenantSuperBlock, last_super_block)) {
+  HEAP_VARS_3((ObTenantSuperBlock, super_block, tenant_id), (ObTenantSuperBlock, last_super_block), (ObTenantStorageCheckpointWriter, tenant_storage_ckpt_writer)) {
     last_super_block = tenant->get_super_block();
     //Don't compare to MERGE_SCHEDULER_PTR->get_frozen_version(), because we expect to do
     //checkpoint after merge finish.

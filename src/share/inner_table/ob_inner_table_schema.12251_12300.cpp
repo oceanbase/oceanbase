@@ -2267,6 +2267,25 @@ int ObInnerTableSchema::all_virtual_tablet_replica_checksum_schema(ObTableSchema
       true, //is_nullable
       false); //is_autoincrement
   }
+
+  if (OB_SUCC(ret)) {
+    ObObj data_checksum_type_default;
+    data_checksum_type_default.set_int(0);
+    ADD_COLUMN_SCHEMA_T("data_checksum_type", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      data_checksum_type_default,
+      data_checksum_type_default); //default_value
+  }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
   table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
@@ -9896,6 +9915,63 @@ int ObInnerTableSchema::all_virtual_ls_info_schema(ObTableSchema &table_schema)
       false, //is_autoincrement
       required_data_disk_size_default,
       required_data_disk_size_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj mv_major_merge_scn_default;
+    mv_major_merge_scn_default.set_uint64(0);
+    ADD_COLUMN_SCHEMA_T("mv_major_merge_scn", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObUInt64Type, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(uint64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      mv_major_merge_scn_default,
+      mv_major_merge_scn_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj mv_publish_scn_default;
+    mv_publish_scn_default.set_uint64(0);
+    ADD_COLUMN_SCHEMA_T("mv_publish_scn", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObUInt64Type, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(uint64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      mv_publish_scn_default,
+      mv_publish_scn_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj mv_safe_scn_default;
+    mv_safe_scn_default.set_uint64(0);
+    ADD_COLUMN_SCHEMA_T("mv_safe_scn", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObUInt64Type, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(uint64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      mv_safe_scn_default,
+      mv_safe_scn_default); //default_value
   }
   if (OB_SUCC(ret)) {
     table_schema.get_part_option().set_part_num(1);

@@ -19,6 +19,7 @@
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/resolver/mv/ob_mv_checker.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
+#include "sql/resolver/mv/ob_mv_printer.h"
 
 namespace oceanbase
 {
@@ -35,7 +36,8 @@ public:
       inited_(false),
       refreshable_type_(OB_MV_REFRESH_INVALID),
       operators_(&inner_alloc_),
-      dependency_infos_(&inner_alloc_)
+      dependency_infos_(&inner_alloc_),
+      major_refresh_info_(NULL)
     {}
   ~ObMVProvider() {}
 
@@ -45,10 +47,19 @@ public:
                        const share::SCN &refresh_scn,
                        ObSchemaGetterGuard *schema_guard,
                        ObSQLSessionInfo *session_info);
+  int init_mv_provider(const share::SCN &last_refresh_scn,
+                       const share::SCN &refresh_scn,
+                       ObSchemaGetterGuard *schema_guard,
+                       ObSQLSessionInfo *session_info,
+                       int64_t part_idx,
+                       int64_t sub_part_idx,
+                       ObNewRange &range);
   int check_mv_refreshable(bool &can_fast_refresh) const;
   int get_fast_refresh_operators(const ObIArray<ObString> *&operators) const;
   int get_real_time_mv_expand_view(ObIAllocator &alloc, ObString &expand_view) const;
   int get_mv_dependency_infos(ObIArray<ObDependencyInfo> &dep_infos) const;
+  OB_INLINE const common::ObIArray<ObString> &get_operators() const
+  { return operators_; }
   static int check_mview_dep_session_vars(const ObTableSchema &mv_schema,
                                           const ObSQLSessionInfo &session,
                                           const bool gen_error,
@@ -66,10 +77,11 @@ private:
                        ObSQLSessionInfo &session_info,
                        const uint64_t mv_id,
                        const ObTableSchema *&mv_schema,
+                       const ObTableSchema *&mv_container_schema,
                        const ObSelectStmt *&view_stmt);
 
   TO_STRING_KV(K_(mview_id), K_(for_rt_expand), K_(inited), K_(refreshable_type),
-                K_(operators), K_(dependency_infos));
+                K_(operators), K_(dependency_infos), K_(major_refresh_info));
 
 private:
   common::ObArenaAllocator inner_alloc_;
@@ -79,6 +91,7 @@ private:
   ObMVRefreshableType refreshable_type_;
   common::ObFixedArray<ObString, common::ObIAllocator> operators_;  // refresh or real time access operator for mv
   common::ObFixedArray<ObDependencyInfo, common::ObIAllocator> dependency_infos_;
+  const MajorRefreshInfo *major_refresh_info_;
 };
 
 }

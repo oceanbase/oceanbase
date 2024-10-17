@@ -81,7 +81,19 @@ public:
   static int append_tablet_list(
       const common::ObIArray<ObLogicTabletID> &logic_tablet_id_array,
       common::ObIArray<ObTabletID> &tablet_id_array);
+  static int build_major_sstable_reuse_info(
+      const ObTabletHandle &tablet_handle,
+      ObMacroBlockReuseMgr &macro_block_reuse_mgr,
+      const bool &is_restore);
+  static void sort_table_key_array_by_snapshot_version(common::ObArray<ObITable::TableKey> &table_key_array);
+  static int get_tablet_size_in_bytes(const ObLSID &ls_id, const ObTabletID &tablet_id, int64_t &tablet_size);
 private:
+  struct TableKeySnapshotVersionComparator final
+  {
+    bool operator()(const ObITable::TableKey &lhs, const ObITable::TableKey &rhs) {
+      return lhs.get_snapshot_version() < rhs.get_snapshot_version();
+    }
+  };
   static int check_merge_error_(const uint64_t tenant_id, common::ObISQLClient &sql_client);
   static int fetch_src_tablet_meta_info_(const uint64_t tenant_id, const common::ObTabletID &tablet_id,
     const share::ObLSID &ls_id, const common::ObAddr &src_addr, common::ObISQLClient &sql_client,
@@ -89,6 +101,12 @@ private:
   static int check_tablet_replica_checksum_(const uint64_t tenant_id, const common::ObTabletID &tablet_id,
     const share::ObLSID &ls_id, const share::SCN &compaction_scn, common::ObISQLClient &sql_client);
   static int get_readable_scn_(share::SCN &readable_scn);
+  static int get_latest_major_sstable_array_(const ObITable *latest_major, common::ObArray<const ObSSTable *> &major_sstables);
+  static int build_reuse_info_(
+    const common::ObArray<const ObSSTable *> &major_sstabls,
+    const ObTabletHandle &tablet_handle,
+    ObMacroBlockReuseMgr &macro_block_reuse_mgr);
+  static int get_latest_available_major_(const storage::ObSSTableArray & major_sstables, ObITable *&latest_major);
 };
 
 struct ObTransferUtils

@@ -379,7 +379,8 @@ OB_SERIALIZE_MEMBER(ObIDASTaskOp,
                     related_tablet_ids_,
                     attach_ctdef_,
                     attach_rtdef_,
-                    das_gts_opt_info_);
+                    das_gts_opt_info_,
+                    plan_line_id_);
 
 OB_DEF_SERIALIZE(ObDASGTSOptInfo)
 {

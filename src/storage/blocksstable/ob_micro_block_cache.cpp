@@ -11,7 +11,6 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-
 #include "storage/blocksstable/ob_micro_block_cache.h"
 #include "storage/blocksstable/ob_block_manager.h"
 #include "storage/blocksstable/ob_macro_block_handle.h"

@@ -269,7 +269,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|4       |879         |
+|0 |TABLE FULL SCAN|t(idx)|4       |868         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -394,7 +394,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |163         |
+|0 |TABLE FULL SCAN|t(idx)|2       |471         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -437,10 +437,10 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:8
-      physical_range_rows:1
-      logical_range_rows:1
-      index_back_rows:0
-      output_rows:0
+      physical_range_rows:12
+      logical_range_rows:12
+      index_back_rows:3
+      output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
@@ -972,7 +972,7 @@ Query Plan
 ===========================================================
 |ID|OPERATOR       |NAME            |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
-|0 |TABLE FULL SCAN|geo_table2(geom)|1       |218         |
+|0 |TABLE FULL SCAN|geo_table2(geom)|1       |215         |
 ===========================================================
 Outputs & filters:
 -------------------------------------
@@ -1042,7 +1042,7 @@ Query Plan
 ===========================================================
 |ID|OPERATOR       |NAME            |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
-|0 |TABLE FULL SCAN|geo_table2(geom)|1       |218         |
+|0 |TABLE FULL SCAN|geo_table2(geom)|1       |215         |
 ===========================================================
 Outputs & filters:
 -------------------------------------
@@ -1127,8 +1127,8 @@ Query Plan
 ============================================================
 |ID|OPERATOR         |NAME           |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------
-|0 |SORT             |               |1       |218         |
-|1 |└─TABLE FULL SCAN|geo_table(geom)|1       |218         |
+|0 |SORT             |               |1       |159         |
+|1 |└─TABLE FULL SCAN|geo_table(geom)|1       |159         |
 ============================================================
 Outputs & filters:
 -------------------------------------
@@ -1172,8 +1172,8 @@ Optimization Info:
 -------------------------------------
   geo_table:
       table_rows:6
-      physical_range_rows:3
-      logical_range_rows:3
+      physical_range_rows:1
+      logical_range_rows:1
       index_back_rows:0
       output_rows:0
       table_dop:1
@@ -1534,7 +1534,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|5       |1128        |
+|0 |TABLE FULL SCAN|t(idx)|4       |1016        |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -1578,10 +1578,10 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:14
-      physical_range_rows:35
-      logical_range_rows:35
-      index_back_rows:8
-      output_rows:4
+      physical_range_rows:31
+      logical_range_rows:31
+      index_back_rows:7
+      output_rows:3
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
@@ -1660,7 +1660,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|4       |1032        |
+|0 |TABLE FULL SCAN|t(idx)|4       |835         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -1703,10 +1703,10 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:14
-      physical_range_rows:32
-      logical_range_rows:32
-      index_back_rows:8
-      output_rows:4
+      physical_range_rows:25
+      logical_range_rows:25
+      index_back_rows:6
+      output_rows:3
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
@@ -1960,7 +1960,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |304         |
+|0 |TABLE FULL SCAN|t(idx)|1       |299         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2022,7 +2022,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |304         |
+|0 |TABLE FULL SCAN|t(idx)|1       |299         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2084,7 +2084,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |304         |
+|0 |TABLE FULL SCAN|t(idx)|1       |299         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2146,7 +2146,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|7       |1526        |
+|0 |TABLE FULL SCAN|t(idx)|7       |1596        |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2189,9 +2189,9 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:14
-      physical_range_rows:49
-      logical_range_rows:49
-      index_back_rows:12
+      physical_range_rows:52
+      logical_range_rows:52
+      index_back_rows:13
       output_rows:6
       table_dop:1
       dop_method:Table DOP
@@ -2209,7 +2209,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |304         |
+|0 |TABLE FULL SCAN|t(idx)|1       |299         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2271,7 +2271,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |314         |
+|0 |TABLE FULL SCAN|t(idx)|4       |1032        |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2314,10 +2314,10 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:14
-      physical_range_rows:6
-      logical_range_rows:6
-      index_back_rows:1
-      output_rows:0
+      physical_range_rows:32
+      logical_range_rows:32
+      index_back_rows:8
+      output_rows:4
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
@@ -2397,7 +2397,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |304         |
+|0 |TABLE FULL SCAN|t(idx)|1       |299         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2645,7 +2645,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|5       |1128        |
+|0 |TABLE FULL SCAN|t(idx)|4       |1016        |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2689,10 +2689,10 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:14
-      physical_range_rows:35
-      logical_range_rows:35
-      index_back_rows:8
-      output_rows:4
+      physical_range_rows:31
+      logical_range_rows:31
+      index_back_rows:7
+      output_rows:3
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
@@ -2771,7 +2771,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|4       |1032        |
+|0 |TABLE FULL SCAN|t(idx)|4       |835         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2814,10 +2814,10 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:14
-      physical_range_rows:32
-      logical_range_rows:32
-      index_back_rows:8
-      output_rows:4
+      physical_range_rows:25
+      logical_range_rows:25
+      index_back_rows:6
+      output_rows:3
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
@@ -3173,7 +3173,7 @@ Query Plan
 ========================================================================================
 |ID|OPERATOR       |NAME                                         |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------------------
-|0 |TABLE FULL SCAN|spatial_point_in_line(index_spatial_line_geo)|1       |324         |
+|0 |TABLE FULL SCAN|spatial_point_in_line(index_spatial_line_geo)|2       |392         |
 ========================================================================================
 Outputs & filters:
 -------------------------------------

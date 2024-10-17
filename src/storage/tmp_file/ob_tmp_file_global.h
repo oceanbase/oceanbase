@@ -51,6 +51,7 @@ struct ObTmpFileGlobal final
     FSM_FINISHED = 5
   };
   static const int64_t INVALID_FLUSH_SEQUENCE = -1;
+  static const int32_t FLUSH_TIMER_CNT = 4;
 };
 
 

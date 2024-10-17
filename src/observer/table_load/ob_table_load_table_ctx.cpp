@@ -56,28 +56,37 @@ ObTableLoadTableCtx::~ObTableLoadTableCtx()
   destroy();
 }
 
-int ObTableLoadTableCtx::new_exec_ctx()
+int ObTableLoadTableCtx::new_exec_ctx(const ObString &exec_ctx_serialized_str)
 {
   int ret = OB_SUCCESS;
-  exec_ctx_ = OB_NEWx(sql::ObDesExecContext, &allocator_, allocator_, GCTX.session_mgr_);
-  if (exec_ctx_ == nullptr) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate des_exec_ctx", KR(ret));
+  if (!exec_ctx_serialized_str.empty()) {
+    ObString tmp_str;
+    exec_ctx_ = OB_NEWx(ObDesExecContext, &allocator_, allocator_, GCTX.session_mgr_);
+    int64_t pos = 0;
+
+    if (exec_ctx_ == nullptr) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to deserialize exe ctx", KR(ret));
+    } else if (OB_FAIL(ob_write_string(allocator_, exec_ctx_serialized_str, tmp_str))) {
+      LOG_WARN("fail to copy string", KR(ret));
+    } else if (OB_FAIL(exec_ctx_->deserialize(tmp_str.ptr(), tmp_str.length(), pos))) {
+      LOG_WARN("fail to deserialize exec ctx", KR(ret));
+    }
   }
   return ret;
 }
 
 int ObTableLoadTableCtx::init(const ObTableLoadParam &param, const ObTableLoadDDLParam &ddl_param,
                                                             sql::ObSQLSessionInfo *session_info,
-                                                            sql::ObExecContext *ctx)
+                                                            const common::ObString &exec_ctx_serialized_str)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableLoadTableCtx init twice", KR(ret));
-  } else if (OB_UNLIKELY(!param.is_valid() || !ddl_param.is_valid() || nullptr == session_info || ctx == nullptr)) {
+  } else if (OB_UNLIKELY(!param.is_valid() || !ddl_param.is_valid() || nullptr == session_info)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(param), K(ddl_param), KP(ctx));
+    LOG_WARN("invalid args", KR(ret), K(param), K(ddl_param));
   } else {
     param_ = param;
     ddl_param_ = ddl_param;
@@ -94,19 +103,14 @@ int ObTableLoadTableCtx::init(const ObTableLoadParam &param, const ObTableLoadDD
       LOG_WARN("fail to create session info", KR(ret));
     } else if (OB_FAIL(ObTableLoadUtils::deep_copy(*session_info, *session_info_, allocator_))) {
       LOG_WARN("fail to deep copy", KR(ret));
-    } else if (OB_FAIL(new_exec_ctx())) {
+    } else if (OB_FAIL(new_exec_ctx(exec_ctx_serialized_str))) {
       LOG_WARN("fail to new exec ctx", KR(ret));
-    } else if (OB_FAIL(ObTableLoadUtils::deep_copy(*ctx, *exec_ctx_, allocator_))) {
-      LOG_WARN("fail to deep copy", KR(ret));
     } else {
       is_inited_ = true;
     }
   }
   if (OB_SUCC(ret)) {
-    if (exec_ctx_ == nullptr || session_info_ == nullptr) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("cur exec ctx is null", KR(ret), KP(session_info_), KP(exec_ctx_));
-    } else {
+    if (exec_ctx_ != nullptr && session_info_ != nullptr) {
       ObSQLSessionInfo::ExecCtxSessionRegister(*session_info_, *exec_ctx_);
     }
   }
@@ -277,14 +281,14 @@ void ObTableLoadTableCtx::destroy()
     allocator_.free(store_ctx_);
     store_ctx_ = nullptr;
   }
-  if (nullptr != session_info_) {
-    observer::ObTableLoadUtils::free_session_info(session_info_, free_session_ctx_);
-    session_info_ = nullptr;
-  }
   if (nullptr != exec_ctx_) {
     exec_ctx_->~ObDesExecContext();
     allocator_.free(exec_ctx_);
     exec_ctx_ = nullptr;
+  }
+  if (nullptr != session_info_) {
+    observer::ObTableLoadUtils::free_session_info(session_info_, free_session_ctx_);
+    session_info_ = nullptr;
   }
   unregister_job_stat();
   is_inited_ = false;

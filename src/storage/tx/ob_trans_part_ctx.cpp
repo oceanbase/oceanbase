@@ -514,7 +514,7 @@ int ObPartTransCtx::trans_kill_()
   return ret;
 }
 
-int ObPartTransCtx::trans_clear_()
+int ObPartTransCtx::trans_clear_(const share::SCN log_ts)
 {
   int ret = OB_SUCCESS;
 
@@ -531,8 +531,11 @@ int ObPartTransCtx::trans_clear_()
   // What's more, we need not to care about the retain tx_ctx, because it has
   // already meet the durability requirement and is just used for multi-source
   // data.
+  share::SCN rec_log_ts = get_rec_log_ts_() == share::SCN::max_scn() ?
+    log_ts : get_rec_log_ts_();
+
   if (is_ctx_table_merged_
-      && OB_FAIL(ls_tx_ctx_mgr_->update_aggre_log_ts_wo_lock(get_rec_log_ts_()))) {
+      && OB_FAIL(ls_tx_ctx_mgr_->update_aggre_log_ts_wo_lock(rec_log_ts))) {
     TRANS_LOG(ERROR, "update aggre log ts wo lock failed", KR(ret), "context", *this);
   } else {
     ret = mt_ctx_.trans_clear();
@@ -1814,21 +1817,23 @@ int ObPartTransCtx::serialize_tx_ctx_to_buffer(ObTxLocalBuffer &buffer, int64_t 
 
 const SCN ObPartTransCtx::get_rec_log_ts() const
 {
-  CtxLockGuard guard(lock_);
   return get_rec_log_ts_();
 }
 
 const SCN ObPartTransCtx::get_rec_log_ts_() const
 {
-  SCN log_ts = SCN::max_scn();
+  share::SCN log_ts = SCN::max_scn();;
+
+  share::SCN rec_log_ts = rec_log_ts_.atomic_load();
+  share::SCN prev_rec_log_ts = prev_rec_log_ts_.atomic_load();
 
   // Before the checkpoint of the tx ctx table is succeed, we should still use
   // the prev_log_ts. And after successfully checkpointed, we can use the new
   // rec_log_ts if exist
-  if (prev_rec_log_ts_.is_valid()) {
-    log_ts = prev_rec_log_ts_;
-  } else if (rec_log_ts_.is_valid()) {
-    log_ts = rec_log_ts_;
+  if (prev_rec_log_ts.is_valid()) {
+    log_ts = prev_rec_log_ts;
+  } else if (rec_log_ts.is_valid()) {
+    log_ts = rec_log_ts;
   }
 
   TRANS_LOG(DEBUG, "part ctx get rec log ts", K(*this), K(log_ts));
@@ -1841,7 +1846,7 @@ int ObPartTransCtx::on_tx_ctx_table_flushed()
   int ret = OB_SUCCESS;
   CtxLockGuard guard(lock_);
   // To mark the checkpoint is succeed, we reset the prev_rec_log_ts
-  prev_rec_log_ts_.reset();
+  prev_rec_log_ts_.atomic_store(share::SCN::invalid_scn());
 
   return ret;
 }
@@ -5023,10 +5028,6 @@ int ObPartTransCtx::check_replay_avaliable_(const palf::LSN &offset,
     if (need_replay && !create_ctx_scn_.is_valid()) {
       create_ctx_scn_ = timestamp;
     }
-
-    if (need_replay) {
-      update_rec_log_ts_(true/*for_replay*/, timestamp);
-    }
   }
 
   return ret;
@@ -5083,6 +5084,8 @@ int ObPartTransCtx::push_replayed_log_ts(const SCN log_ts_ns,
     // of last leader, set the next_log_entry_no for new leader
     exec_info_.next_log_entry_no_ = log_entry_no + 1;
   }
+
+  update_rec_log_ts_(true/*for_replay*/, log_ts_ns);
 
   if (OB_SUCC(ret)) {
     if (big_segment_info_.segment_buf_.is_completed()
@@ -5279,7 +5282,7 @@ void ObPartTransCtx::force_no_need_replay_checksum_(const bool parallel_replay,
   if (ATOMIC_LOAD(&exec_info_.need_checksum_)) {
     TRANS_LOG(INFO, "set skip calc checksum", K_(trans_id), K_(ls_id), KP(this), K(parallel_replay), K(log_ts));
     if (parallel_replay) {
-      update_rec_log_ts_(true, log_ts);
+      update_rec_log_ts_(true/*for_replay*/, log_ts);
     }
     ATOMIC_STORE(&exec_info_.need_checksum_, false);
     mt_ctx_.set_skip_checksum_calc();
@@ -5385,27 +5388,6 @@ int ObPartTransCtx::replay_redo_in_ctx(const ObTxRedoLog &redo_log,
       ret = correct_cluster_version_(redo_log.get_cluster_version());
     }
 
-    // if we need calc checksum, must don't recycle redo log ts before they were replayed
-    // otherwise the checksum scn in TxCtx checkpoint will be lag behind recovery scn
-    // and after the restart, the txn's checksum verify will be skipped
-    //
-    // example:
-    //
-    // Log sequence of Txn is : 1 -> 2 -> 3 -> 4
-    // where 1, 4 in queue 0 (aka tx-log-queue), 2 in queue 2 and 3 in queue 3
-    // because of parallel replaying, assume queue 0 replayed 4, queue 2 and 3 not
-    // replayed 2, 3 yet, then in this moment, a checkpoint are issued, the checksum
-    // calculate for queue 2 and queue 3 will missing data of log 2 and 3
-    // after checkpoint, and 2, 3 replayed, the system will recycle logs 1-4,
-    // after a restart, recovery from log queue after 4, and 2,3 will not be replayed
-    // finally the checksum of queue 2,3 not include log sequence 2,3
-    //
-    // the cons of this choice is after restart, the log recycle position
-    // will be more older, which cause do more times checkpoint of TxCtx
-    //
-    if (OB_SUCC(ret) && !is_tx_log_queue && exec_info_.need_checksum_) {
-      update_rec_log_ts_(true, timestamp);
-    }
     // if this is serial final redo log
     // change the logging to parallel logging
     if (OB_SUCC(ret) && serial_final) {
@@ -6039,7 +6021,7 @@ int ObPartTransCtx::replay_commit(const ObTxCommitLog &commit_log,
     } else if ((!ctx_tx_data_.is_read_only()) && OB_FAIL(ctx_tx_data_.insert_into_tx_table())) {
       TRANS_LOG(WARN, "insert to tx table failed", KR(ret), K(*this));
     } else if (is_local_tx_()) {
-      if (OB_FAIL(trans_clear_())) {
+      if (OB_FAIL(trans_clear_(timestamp))) {
         TRANS_LOG(WARN, "transaction clear error or trans_type is sp_trans", KR(ret), "context", *this);
       } else {
         set_exiting_();
@@ -6084,7 +6066,7 @@ int ObPartTransCtx::replay_clear(const ObTxClearLog &clear_log,
   } else if (!need_replay) {
     TRANS_LOG(INFO, "need not replay log", K(clear_log), K(timestamp), K(offset), K(*this));
     // no need to replay
-    if (OB_FAIL(trans_clear_())) {
+    if (OB_FAIL(trans_clear_(timestamp))) {
       TRANS_LOG(WARN, "transaction clear error", KR(ret), "context", *this);
     }
   } else if (OB_FAIL(update_replaying_log_no_(timestamp, part_log_no))) {
@@ -6092,7 +6074,7 @@ int ObPartTransCtx::replay_clear(const ObTxClearLog &clear_log,
   } else if (OB_FAIL(exec_info_.incremental_participants_.assign(
                  clear_log.get_incremental_participants()))) {
     TRANS_LOG(WARN, "set incremental_participants error", K(ret), K(*this));
-  } else if (OB_FAIL(trans_clear_())) {
+  } else if (OB_FAIL(trans_clear_(timestamp))) {
     TRANS_LOG(WARN, "transaction clear error", KR(ret), "context", *this);
   } else {
     if (is_local_tx_()) {
@@ -6225,7 +6207,7 @@ int ObPartTransCtx::replay_abort(const ObTxAbortLog &abort_log,
       TRANS_LOG(WARN, "transaction replay end error", KR(ret), "context", *this);
     } else if (OB_FAIL(TX_REPLAY_ABORT_FAIL_AFTER_ABORT)) {
       TRANS_LOG(WARN, "errsim error", K(ret));
-    } else if (OB_FAIL(trans_clear_())) {
+    } else if (OB_FAIL(trans_clear_(timestamp))) {
       TRANS_LOG(WARN, "transaction clear error", KR(ret), "context", *this);
     } else if (OB_FAIL(TX_REPLAY_ABORT_FAIL_AFTER_CLEAR)) {
       TRANS_LOG(WARN, "errsim error", K(ret));
@@ -6453,7 +6435,8 @@ int ObPartTransCtx::switch_to_leader(const SCN &start_working_ts)
     const bool contain_mds_transfer_out = is_contain_mds_type_(ObTxDataSourceType::START_TRANSFER_OUT)
                            || is_contain_mds_type_(ObTxDataSourceType::START_TRANSFER_OUT_PREPARE)
                            || is_contain_mds_type_(ObTxDataSourceType::START_TRANSFER_OUT_V2);
-    const bool need_kill_tx = contain_mds_table_lock || contain_mds_transfer_out;
+    const bool contain_mds_tablet_split = is_contain_mds_type_(ObTxDataSourceType::TABLET_SPLIT);
+    const bool need_kill_tx = contain_mds_table_lock || contain_mds_transfer_out || contain_mds_tablet_split;
     bool kill_by_append_mode_initial_scn = false;
     if (append_mode_initial_scn.is_valid()) {
       kill_by_append_mode_initial_scn = exec_info_.max_applying_log_ts_ <= append_mode_initial_scn;
@@ -6461,21 +6444,21 @@ int ObPartTransCtx::switch_to_leader(const SCN &start_working_ts)
 
     if (ObTxState::INIT == exec_info_.state_) {
       if (exec_info_.data_complete_ && !contain_mds_table_lock && !contain_mds_transfer_out
-          && !kill_by_append_mode_initial_scn) {
+          && !contain_mds_tablet_split && !kill_by_append_mode_initial_scn) {
         if (OB_FAIL(mt_ctx_.replay_to_commit(false /*is_resume*/))) {
           TRANS_LOG(WARN, "replay to commit failed", KR(ret), K(*this));
         }
       } else {
         TRANS_LOG(WARN, "txn data incomplete, will be aborted", K(contain_mds_table_lock),
-                  K(contain_mds_transfer_out), K(kill_by_append_mode_initial_scn),
+                  K(contain_mds_transfer_out), K(contain_mds_tablet_split), K(kill_by_append_mode_initial_scn),
                   K(append_mode_initial_scn), KPC(this));
         if (has_persisted_log_()) {
           if (ObPartTransAction::COMMIT == part_trans_action_
               || get_upstream_state() >= ObTxState::REDO_COMPLETE) {
 
             TRANS_LOG(WARN, "abort self instantly with a tx_commit request",
-                      K(contain_mds_table_lock), K(contain_mds_transfer_out), K(need_kill_tx),
-                      K(kill_by_append_mode_initial_scn), K(append_mode_initial_scn), KPC(this));
+                      K(contain_mds_table_lock), K(contain_mds_transfer_out), K(contain_mds_tablet_split),
+                      K(need_kill_tx), K(kill_by_append_mode_initial_scn), K(append_mode_initial_scn), KPC(this));
             if (OB_FAIL(do_local_tx_end_(TxEndAction::ABORT_TX))) {
               //Temporary fix:
               //The transaction cannot be killed temporarily, waiting for handle_timeout to retry abort.
@@ -6878,6 +6861,37 @@ int ObPartTransCtx::check_with_tx_data(ObITxDataCheckFunctor &fn)
   return ret;
 }
 
+int ObPartTransCtx::update_rec_log_ts_for_parallel_replay(const SCN &rec_scn)
+{
+  int ret = OB_SUCCESS;
+  CtxLockGuard guard(lock_);
+  // NB: If we need calculate the checksum, we cannot allow them to recycle the
+  // logs before the checksum of the logs are computed. Otherwise, we may not be
+  // able to calculate the checksum for the concurrent replay portion of the log
+  // after a restart.
+  //
+  // Let's see the example:
+  //
+  // The log sequence of the Txn is : 1 -> 2 -> 3 -> 4
+  //
+  // The 1, 4 is in the queue 0(aka tx-log-queue), 2 is in the queue 2 and 3 is
+  // in the queue 3 because of the parallel replay. Assuming the queue 0 has
+  // replayed 4, and the queue 2 and 3 has not replayed 2, 3 yet. At the moment,
+  // a checkpoint is issued, and the checksum calculation for queue 2 and queue
+  // 3 will miss the portion of the log 2 and 3 during the checkpoint. And if we
+  // donot update the rec_scn, After 2, 3 has replayed, the checkpoint will
+  // later recycle the logs 1-4. And the restart will miss to calculate the
+  // checksum of 2 and 3 forever.
+  //
+  // The cons of this choice is that after restart, the log recycle position
+  // will be somehow older which will cause more checkpoint of the tx ctx table.
+  //
+  if (exec_info_.need_checksum_) {
+    update_rec_log_ts_(true/*for_replay*/, rec_scn);
+  }
+  return ret;
+}
+
 int ObPartTransCtx::update_rec_log_ts_(bool for_replay, const SCN &rec_log_ts)
 {
   int ret = OB_SUCCESS;
@@ -6889,9 +6903,9 @@ int ObPartTransCtx::update_rec_log_ts_(bool for_replay, const SCN &rec_log_ts)
   if (for_replay) {
     // follower may support parallel replay redo, so must do dec update
     if (!rec_log_ts_.is_valid()) {
-      rec_log_ts_ = rec_log_ts;
+      rec_log_ts_.atomic_store(rec_log_ts);
     } else if (rec_log_ts_ > rec_log_ts){
-      rec_log_ts_ = rec_log_ts;
+      rec_log_ts_.atomic_store(rec_log_ts);
     }
   } else {
     if (!rec_log_ts_.is_valid()) {
@@ -6907,7 +6921,7 @@ int ObPartTransCtx::update_rec_log_ts_(bool for_replay, const SCN &rec_log_ts)
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(ERROR, "unexpected null ptr", K(*this));
         } else {
-          rec_log_ts_ = log_cb->get_log_ts();
+          rec_log_ts_.atomic_store(log_cb->get_log_ts());
         }
       } else {
         // there may exits if log cbs is empty
@@ -6917,9 +6931,9 @@ int ObPartTransCtx::update_rec_log_ts_(bool for_replay, const SCN &rec_log_ts)
 
 
   if (min_big_segment_rec_scn.is_valid() && !rec_log_ts_.is_valid()) {
-    rec_log_ts_ = min_big_segment_rec_scn;
+    rec_log_ts_.atomic_store(min_big_segment_rec_scn);
   } else if (min_big_segment_rec_scn.is_valid() && rec_log_ts_.is_valid()) {
-    rec_log_ts_ = share::SCN::min(min_big_segment_rec_scn, rec_log_ts_);
+    rec_log_ts_.atomic_store(share::SCN::min(min_big_segment_rec_scn, rec_log_ts_));
   }
 
   return ret;
@@ -6936,18 +6950,17 @@ int ObPartTransCtx::refresh_rec_log_ts_()
   if (!prev_rec_log_ts_.is_valid()) {
     // We should remember the rec_log_ts before the tx ctx table is successfully
     // checkpointed
-    prev_rec_log_ts_ = rec_log_ts_;
+    prev_rec_log_ts_.atomic_store(rec_log_ts_);
 
     if (is_follower_()) {
-      // Case 1: As follower, the replay is indead in order, while we cannot
-      // simply reset it because the replay is not atomic, and it may be in the
-      // middle stage that the replay is currently on-going. So the necessary
-      // state before the log ts that is replaying may not be contained, so we
-      // need replay from the on-going log ts.
-      if (exec_info_.max_applied_log_ts_ != exec_info_.max_applying_log_ts_) {
-        rec_log_ts_ = exec_info_.max_applying_log_ts_;
-      } else if (busy_cbs_.is_empty()) {
-        rec_log_ts_.reset();
+      // Case 1: As follower, the replay may involve both serial and concurrent
+      // replay. While regardless of how the replay occurs, we update the
+      // rec_scn after the replay is completed. Therefore, as long as we ensure
+      // that the state of the txn of the rec_scn is complete before updating
+      // the rec_scn(indicated by ObTxReplayExecutor::finish_replay_), it is
+      // safe to clear the rec_scn during the refresh_rec_scn.
+      if (busy_cbs_.is_empty()) {
+        rec_log_ts_.atomic_store(share::SCN::invalid_scn());
       } else {
         // Case 1.1: As follower, there may also exist log which is proposed
         // while not committed because of the current leader's switch mechinism
@@ -6959,7 +6972,7 @@ int ObPartTransCtx::refresh_rec_log_ts_()
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(ERROR, "unexpected null ptr", K(*this));
         } else {
-          rec_log_ts_ = log_cb->get_log_ts();
+          rec_log_ts_.atomic_store(log_cb->get_log_ts());
         }
       }
     } else {
@@ -6968,19 +6981,18 @@ int ObPartTransCtx::refresh_rec_log_ts_()
       // rec_log_ts if exists or reset it if not because all log of the txn with
       // its log ts in front of the FCL must be contained in the checkpoint.
       if (busy_cbs_.is_empty()) {
-        rec_log_ts_.reset();
+        rec_log_ts_.atomic_store(share::SCN::invalid_scn());
       } else {
         const ObTxLogCb *log_cb = busy_cbs_.get_first();
         if (OB_ISNULL(log_cb)) {
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(ERROR, "unexpected null ptr", K(*this));
         } else {
-          rec_log_ts_ = log_cb->get_log_ts();
+          rec_log_ts_.atomic_store(log_cb->get_log_ts());
         }
       }
     }
   } else {
-    // TODO(handora.qc): change to ERROR or enabling the exception
     TRANS_LOG(WARN, "we should not allow concurrent merge of tx ctx table", K(*this));
   }
 
@@ -8707,8 +8719,10 @@ int ObPartTransCtx::rollback_to_savepoint(const int64_t op_sn,
 
     if (input_transfer_epoch != output_transfer_epoch) {
       need_downstream = true;
-      TRANS_LOG(INFO, "transfer between rollback to happened", K(ret),
-                K(input_transfer_epoch), K(output_transfer_epoch), KPC(this));
+      if (-1 != input_transfer_epoch) {
+        TRANS_LOG(INFO, "transfer between rollback to happened", K(ret),
+                  K(input_transfer_epoch), K(output_transfer_epoch), KPC(this));
+      }
     } else {
       need_downstream = false;
       TRANS_LOG(INFO, "no transfer between rollback to happened", K(ret),
@@ -9162,7 +9176,7 @@ int ObPartTransCtx::do_force_kill_tx_()
     // Force kill cannot guarantee the consistency, so we just set end_log_ts
     // to zero
     end_log_ts_.set_min();
-    (void)trans_clear_();
+    (void)trans_clear_(share::SCN::invalid_scn());
     if (OB_FAIL(unregister_timeout_task_())) {
       TRANS_LOG(WARN, "unregister timer task error", KR(ret), "context", *this);
     }
@@ -9190,7 +9204,7 @@ int ObPartTransCtx::on_local_commit_tx_()
   } else if (OB_FAIL(tx_end_(true /*commit*/))) {
     TRANS_LOG(WARN, "trans end error", KR(ret), "context", *this);
   } else if (FALSE_IT(elr_handler_.reset_elr_state())) {
-  } else if (OB_FAIL(trans_clear_())) {
+  } else if (OB_FAIL(trans_clear_(ctx_tx_data_.get_end_log_ts()))) {
     TRANS_LOG(WARN, "local tx clear error", KR(ret), K(*this));
   } else if (OB_FAIL(notify_data_source_(NotifyType::ON_COMMIT, ctx_tx_data_.get_end_log_ts(),
                                          false, exec_info_.multi_data_source_))) {
@@ -9232,7 +9246,7 @@ int ObPartTransCtx::on_local_abort_tx_()
 
   if (OB_FAIL(tx_end_(false /*commit*/))) {
     TRANS_LOG(WARN, "trans end error", KR(ret), "context", *this);
-  } else if (OB_FAIL(trans_clear_())) {
+  } else if (OB_FAIL(trans_clear_(ctx_tx_data_.get_end_log_ts()))) {
     TRANS_LOG(WARN, "local tx clear error", KR(ret), K(*this));
   } else if (OB_FAIL(mds_cache_.generate_final_notify_array(exec_info_.multi_data_source_,
                                                              true /*need_merge_cache*/,
@@ -9889,8 +9903,12 @@ int ObPartTransCtx::do_transfer_out_tx_op(const SCN data_end_scn,
   } else if (NotifyType::REGISTER_SUCC == op_type) {
     // blocking active tx which start_scn <= data_end_scn
     // when register modify memory state only
-    sub_state_.set_transfer_blocking();
-    is_operated = true;
+    if (exec_info_.max_applying_log_ts_.is_valid() && exec_info_.max_applying_log_ts_ >= op_scn) {
+      // do nothing
+    } else {
+      sub_state_.set_transfer_blocking();
+      is_operated = true;
+    }
   } else if (NotifyType::ON_REDO == op_type) {
     if (exec_info_.max_applying_log_ts_.is_valid() && exec_info_.max_applying_log_ts_ >= op_scn) {
       // do nothing
@@ -10152,7 +10170,9 @@ int ObPartTransCtx::move_tx_op(const ObTransferMoveTxParam &move_tx_param,
     ret = OB_NEED_RETRY;
     TRANS_LOG(WARN, "has state log submitting need retry", KR(ret), K(trans_id_), K(sub_state_));
   } else if (NotifyType::REGISTER_SUCC == move_tx_param.op_type_) {
-    if (exec_info_.state_ >= ObTxState::ABORT) {
+    if (exec_info_.max_applying_log_ts_.is_valid() && exec_info_.max_applying_log_ts_ >= move_tx_param.op_scn_) {
+      // do nothing
+    } else if (exec_info_.state_ >= ObTxState::ABORT) {
       // this ctx may be recycled soon
       // a. RetainCtx recycle
       // b. get_tx_ctx and abort/clear log callback concurrent

@@ -26,7 +26,6 @@ namespace storage
 {
 class ObDirectLoadSSTable;
 class ObDirectLoadMultipleSSTable;
-
 struct ObDirectLoadConflictCheckParam
 {
 public:

@@ -238,13 +238,13 @@ struct ObDirectInsertCommonParam final
 {
 public:
   ObDirectInsertCommonParam()
-    : ls_id_(), tablet_id_(), direct_load_type_(DIRECT_LOAD_INVALID), data_format_version_(0), read_snapshot_(0), replay_normal_in_cs_replica_(false)
+    : ls_id_(), tablet_id_(), direct_load_type_(DIRECT_LOAD_INVALID), data_format_version_(0), read_snapshot_(0)
   {}
   ~ObDirectInsertCommonParam() = default;
   bool is_valid() const { return ls_id_.is_valid() && tablet_id_.is_valid()
       && data_format_version_ >= 0 && read_snapshot_ >= 0 && DIRECT_LOAD_INVALID <= direct_load_type_ && direct_load_type_ <= DIRECT_LOAD_MAX;
   }
-  TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(direct_load_type), K_(data_format_version), K_(read_snapshot), K_(replay_normal_in_cs_replica));
+  TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(direct_load_type), K_(data_format_version), K_(read_snapshot));
 public:
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
@@ -253,7 +253,6 @@ public:
   // read_snapshot_ is used to scan the source data.
   // For full direct load task, it is also the commit version of the target macro block.
   int64_t read_snapshot_;
-  bool replay_normal_in_cs_replica_; // when ddl and add cs replica are concurrent, leader may write normal clog
 };
 
 // only used in runtime execution
@@ -341,7 +340,7 @@ private:
 
 // for ddl insert row.
 class ObDirectLoadMgrAgent;
-class ObDDLInsertRowIterator : public ObIStoreRowIterator
+class ObDDLInsertRowIterator : public ObIDirectLoadRowIterator
 {
 public:
   ObDDLInsertRowIterator();
@@ -361,7 +360,7 @@ public:
     // const bool skip_lob = false;
     return get_next_row(is_skip_lob_, row);
   }
-  int get_next_row(const bool skip_lob, const blocksstable::ObDatumRow *&row);
+  int get_next_row(const bool skip_lob, const blocksstable::ObDatumRow *&row) override;
   TO_STRING_KV(K_(is_inited), K_(ls_id), K_(current_tablet_id), K_(context_id), K_(macro_seq),
       K_(lob_id_generator), K_(lob_id_cache), K_(lob_slice_id), K_(lob_cols_cnt), K_(is_skip_lob));
 public:

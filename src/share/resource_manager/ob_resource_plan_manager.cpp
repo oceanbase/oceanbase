@@ -62,12 +62,6 @@ int ObResourcePlanManager::switch_resource_plan(const uint64_t tenant_id, ObStri
     if (OB_FAIL(GCTX.cgroup_ctrl_->reset_all_group_iops(tenant_id))) {
       LOG_ERROR("reset old plan group directive failed", K(tenant_id), K(ret));
     }
-    if (OB_SUCC(ret) && plan_name.empty()) {
-      // reset user and function hashmap
-      if (OB_FAIL(proxy.reset_all_mapping_rules())) {
-        LOG_WARN("fail reset all group rules",K(ret));
-      }
-    }
 
     if (OB_SUCC(ret)) {
       if (OB_FAIL(tenant_plan_map_.set_refactored(tenant_id, cur_plan, 1))) {  // overrite
@@ -232,7 +226,7 @@ int ObResourcePlanManager::normalize_iops_directives(const uint64_t tenant_id,
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < directives.count(); ++i) {
       ObPlanDirective &cur_directive = directives.at(i);
-      if (OB_UNLIKELY(!is_user_group(cur_directive.group_id_))) {
+      if (OB_UNLIKELY(!is_resource_manager_group(cur_directive.group_id_))) {
         ret = OB_ERR_UNEXPECTED;
         // 理论上不应该出现
         LOG_WARN("unexpected error!!!", K(cur_directive));
@@ -277,7 +271,7 @@ int ObResourcePlanManager::normalize_net_bandwidth_directives(const uint64_t ten
     // step 1. sum total net bandwidth weight
     for (int64_t i = 0; OB_SUCC(ret) && i < directives.count(); ++i) {
       ObPlanDirective &cur_directive = directives.at(i);
-      if (OB_UNLIKELY(!is_user_group(cur_directive.group_id_))) {
+      if (OB_UNLIKELY(!is_resource_manager_group(cur_directive.group_id_))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error!!!", K(cur_directive));
       } else if (OB_UNLIKELY(!cur_directive.is_valid())) {

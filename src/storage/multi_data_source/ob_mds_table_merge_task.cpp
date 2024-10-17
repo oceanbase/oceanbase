@@ -73,7 +73,7 @@ int ObMdsTableMergeTask::init()
 
 int ObMdsTableMergeTask::process()
 {
-  TIMEGUARD_INIT(STORAGE, 10_ms);
+  TIMEGUARD_INIT(STORAGE, 30_ms);
   int ret = OB_SUCCESS;
   ObTabletMergeCtx *ctx_ptr = nullptr;
   DEBUG_SYNC(AFTER_EMPTY_SHELL_TABLET_CREATE);
@@ -124,7 +124,7 @@ int ObMdsTableMergeTask::process()
     } else if (OB_ISNULL(tablet = ctx.get_tablet())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet is null", K(ret), K(ls_id), K(tablet_id));
-    } else if (OB_FAIL(tablet->get_mds_table_for_dump(mds_table))) {
+    } else if (CLICK_FAIL(tablet->get_mds_table_for_dump(mds_table))) {
       LOG_WARN("fail to get mds table", K(ret), K(ls_id), K(tablet_id));
     } else if (OB_UNLIKELY(!mds_table.get_mds_table_ptr()->is_construct_sequence_matched(mds_construct_sequence))) {
       ret = OB_NO_NEED_MERGE;
@@ -138,9 +138,10 @@ int ObMdsTableMergeTask::process()
       ctx.time_guard_click(ObStorageCompactionTimeGuard::EXECUTE);
       share::dag_yield();
     } else if (FALSE_IT(ctx.static_param_.scn_range_.start_scn_ = tablet->get_mds_checkpoint_scn())) {
+    } else if (FALSE_IT(ctx.static_desc_.tablet_transfer_seq_ = tablet->get_transfer_seq())) {
     } else if (MDS_FAIL(build_mds_sstable(ctx, mds_construct_sequence, table_handle))) {
       LOG_WARN("fail to build mds sstable", K(ret), K(ls_id), K(tablet_id), KPC(mds_merge_dag_));
-    } else if (MDS_FAIL(ls->build_new_tablet_from_mds_table(
+    } else if (CLICK_FAIL(ls->build_new_tablet_from_mds_table(
         ctx,
         tablet_id,
         table_handle,
@@ -175,12 +176,13 @@ void ObMdsTableMergeTask::try_schedule_compaction_after_mds_mini(compaction::ObT
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = ctx.get_ls_id();
   const common::ObTabletID &tablet_id = ctx.get_tablet_id();
+  bool during_restore = false;
   if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || !tablet_handle.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(ls_id), K(tablet_id), K(tablet_handle), KPC(mds_merge_dag_));
   // when restoring, some log stream may be not ready,
   // thus the inner sql in ObTenantFreezeInfoMgr::try_update_info may timeout
-  } else if (!MTL(ObTenantTabletScheduler *)->is_restore()) {
+  } else if (OB_SUCCESS == ObBasicMergeScheduler::get_merge_scheduler()->during_restore(during_restore) && !during_restore) {
     if (0 == ctx.get_merge_info().get_merge_history().block_info_.macro_block_count_) {
       // no need to schedule mds minor merge
     } else if (OB_FAIL(ObTenantTabletScheduler::schedule_tablet_minor_merge<ObTabletMergeExecuteDag>(

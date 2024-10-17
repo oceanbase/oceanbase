@@ -63,7 +63,9 @@ ObCreateTableResolver::ObCreateTableResolver(ObResolverParams &params)
       index_arg_(),
       current_index_name_set_(),
       cur_udt_set_id_(0),
-      vec_index_col_ids_()
+      vec_index_col_ids_(),
+      has_vec_index_(false),
+      has_fts_index_(false)
 {
 }
 
@@ -833,6 +835,41 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
             }
           }
         }
+
+        if (OB_SUCC(ret)) {
+          ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
+          ParseNode *partition_node = create_table_node->children_[5];
+          if (table_schema.is_user_table()) {
+            if (nullptr != partition_node) {
+              // acquire partition_node with similar logic like resolve_partition_option()
+              const bool is_partition_option_node_with_opt = !is_mysql_mode || 1 != create_table_node->reserved_;
+              if (!is_partition_option_node_with_opt) {
+                // current node is partition node
+              } else if (T_VERTICAL_COLUMNS_PARTITION == partition_node->type_) {
+                // no need to resolve, partition node doesn't exist
+                partition_node = nullptr;
+              } else if (T_PARTITION_OPTION != partition_node->type_) {
+                ret = OB_INVALID_ARGUMENT;
+                SQL_RESV_LOG(WARN, "node type is invalid.", K(ret), K(partition_node->type_));
+              } else if (OB_UNLIKELY(partition_node->num_child_ < 1 || partition_node->num_child_ > 2)) {
+                ret = OB_INVALID_ARGUMENT;
+                SQL_RESV_LOG(WARN, "node number is invalid.", K(ret), K(partition_node->num_child_));
+              } else if (OB_ISNULL(partition_node->children_[0])) {
+                ret = OB_ERR_UNEXPECTED;
+                SQL_RESV_LOG(WARN, "partition node is null.", K(ret));
+              } else {
+                partition_node = partition_node->children_[0];
+              }
+            }
+
+            if (FAILEDx(resolve_auto_partition_with_tenant_config(create_table_stmt,
+                                                                  partition_node,
+                                                                  table_schema))) {
+              LOG_WARN("fail to resolve auto partition with tenant config",
+                                                  KR(ret), KPC(create_table_stmt), K(create_table_node));
+            }
+          }
+        }
       }
     }
     // checking uk-pk and uk-uk duplicate in oracle mode
@@ -973,12 +1010,10 @@ int ObCreateTableResolver::resolve_partition_option(
   }
   if (OB_SUCC(ret) && (OB_NOT_NULL(node) || table_schema.is_external_table() || is_oracle_temp_table_)) {
     if (OB_FAIL(check_generated_partition_column(table_schema))) {
-      LOG_WARN("Failed to check generate partiton column", KR(ret));
+      LOG_WARN("Failed to check generate partition column", KR(ret));
     } else if (OB_FAIL(table_schema.check_primary_key_cover_partition_column())) {
       SQL_RESV_LOG(WARN, "fail to check primary key cover partition column", KR(ret));
-    } else if (OB_FAIL(table_schema.check_auto_partition_valid())) {
-      LOG_WARN("failed to check auto partition valid", KR(ret));
-    } else { }//do nothing
+    }
   }
   return ret;
 }
@@ -2414,7 +2449,7 @@ int ObCreateTableResolver::generate_index_arg()
           LOG_WARN("not support global fts index now", K(ret));
         } else {
           // set type to fts_doc_rowkey first, append other fts arg later
-          type = INDEX_TYPE_DOC_ID_ROWKEY_LOCAL;
+          type = INDEX_TYPE_FTS_INDEX_LOCAL;
         }
       } else if (MULTI_KEY == index_keyname_) {
         if (tenant_data_version < DATA_VERSION_4_3_1_0) {
@@ -2446,6 +2481,7 @@ int ObCreateTableResolver::generate_index_arg()
       index_arg_.index_option_.index_status_ = INDEX_STATUS_AVAILABLE;
       index_arg_.index_option_.index_attributes_set_ = index_attributes_set_;
       index_arg_.sql_mode_ = session_info_->get_sql_mode();
+      index_arg_.is_index_scope_specified_ = !(NOT_SPECIFIED == index_scope_);
     }
     if (OB_FAIL(ret)) {
       // skip
@@ -2618,6 +2654,8 @@ int ObCreateTableResolver::resolve_index(
     SQL_RESV_LOG(WARN, "invalid argument.", K(ret), K(node->children_));
   } else {
     vec_index_col_ids_.reset();
+    has_vec_index_ = false;
+    has_fts_index_ = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < index_node_position_list.size(); ++i) {
       reset();
       index_attributes_set_ = OB_DEFAULT_INDEX_ATTRIBUTES_SET;
@@ -2693,11 +2731,16 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
         bool cnt_func_index_mysql = false;
         bool is_multi_value_index = false;
         const bool is_vec_index = (index_keyname_ == INDEX_KEYNAME::VEC_KEY);
+        const bool is_fts_index = (index_keyname_ == INDEX_KEYNAME::FTS_KEY);
         if (OB_FAIL(ret)) {
         } else if (is_vec_index && index_column_list_node->num_child_ >= 2) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("multi column of vector index is not support yet", K(ret), K(index_column_list_node->num_child_));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "multi vector index column is");
+        } else if ((is_vec_index && has_fts_index_) || (is_fts_index && has_vec_index_)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("vector index and fts coexist in main table is not support yet", K(ret), K(index_column_list_node->num_child_));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector index and fts coexist in main table is");
         }
         for (int32_t i = 0; OB_SUCC(ret) && i < index_column_list_node->num_child_; ++i) {
           ObString &column_name = sort_item.column_name_;
@@ -2750,6 +2793,7 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
                 ObColumnSchemaV2 *budy_column_schema = NULL;
                 bool force_rebuild = true;
                 if (OB_FAIL(ObMulValueIndexBuilderUtil::build_and_generate_multivalue_column(
+                                                                                  *allocator_,
                                                                                   sort_item,
                                                                                   *params_.expr_factory_,
                                                                                   *session_info_,
@@ -3114,6 +3158,8 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
               LOG_WARN("failed to append vec args", K(ret));
             } else if (OB_FAIL(vec_index_col_ids_.push_back(vec_index_col_id))) {
               LOG_WARN("fail to push back vec index col id", K(ret));
+            } else {
+              has_vec_index_ = true;
             }
           } else if (is_fts_index(index_arg_.index_type_)) {
             if (OB_FAIL(ObDDLResolver::append_fts_args(resolve_result,
@@ -3123,6 +3169,8 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
                                                        index_arg_list,
                                                        allocator_))) {
               LOG_WARN("failed to append fts args", K(ret));
+            } else {
+              has_fts_index_ = true;
             }
           } else if (is_multivalue_index(index_arg_.index_type_)) {
             if (OB_FAIL(ObDDLResolver::append_multivalue_args(resolve_result,
@@ -3312,6 +3360,95 @@ int ObCreateTableResolver::resolve_table_charset_info(const ParseNode *node) {
     }
   }
 
+  return ret;
+}
+
+/*
+* only when default columns store is column_store
+* have to add each column group
+*/
+int ObCreateTableResolver::resolve_column_group(const ParseNode *cg_node)
+{
+  int ret = OB_SUCCESS;
+  ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt *>(stmt_);
+  ObArray<uint64_t> column_ids; // not include virtual column
+  uint64_t compat_version = 0;
+  ObTableStoreType table_store_type = OB_TABLE_STORE_INVALID;
+
+  if (OB_ISNULL(create_table_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "create_table_stmt should not be null", KR(ret));
+  } else {
+    ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
+    const uint64_t tenant_id = table_schema.get_tenant_id();
+    const int64_t column_cnt = table_schema.get_column_count();
+    if (OB_FAIL(column_ids.reserve(column_cnt))) {
+      LOG_WARN("fail to reserve", KR(ret), K(column_cnt));
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+      LOG_WARN("fail to get min data version", KR(ret), K(tenant_id));
+    } else if (!(compat_version >= DATA_VERSION_4_3_0_0)) {
+      if (OB_NOT_NULL(cg_node) && (T_COLUMN_GROUP == cg_node->type_)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("can't support column store if version less than 4_1_0_0", KR(ret), K(compat_version));
+      }
+    } else {
+      table_schema.set_column_store(true);
+      bool is_each_cg_exist = false;
+      if (OB_NOT_NULL(cg_node)) {
+        if (OB_FAIL(parse_column_group(cg_node, table_schema, table_schema))) {
+          LOG_WARN("fail to parse column group", K(ret));
+        }
+      }
+
+      /* build column group when cg node is null && tenant cg valid*/
+      ObTenantConfigGuard tenant_config(TENANT_CONF(session_info_->get_effective_tenant_id()));
+      if (OB_FAIL(ret)) {
+      } else if ( OB_LIKELY(tenant_config.is_valid()) && nullptr == cg_node) {
+        /* force to build each cg*/
+        if (!ObSchemaUtils::can_add_column_group(table_schema)) {
+        } else if (OB_FAIL(ObTableStoreFormat::find_table_store_type(
+                    tenant_config->default_table_store_format.get_value_string(),
+                    table_store_type))) {
+          LOG_WARN("fail to get table store format", K(ret), K(table_store_type));
+        } else if (ObTableStoreFormat::is_with_column(table_store_type)) {
+          /* for default is column store, must add each column group*/
+          if (OB_FAIL(ObSchemaUtils::build_add_each_column_group(table_schema, table_schema))) {
+            LOG_WARN("fail to add each column group", K(ret));
+          }
+        }
+
+        /* force to build all cg*/
+        ObColumnGroupSchema all_cg;
+        if (OB_FAIL(ret)) {
+        } else if (!ObSchemaUtils::can_add_column_group(table_schema)) {
+        } else if (ObTableStoreFormat::is_row_with_column_store(table_store_type)) {
+          if (OB_FAIL(ObSchemaUtils::build_all_column_group(table_schema, table_schema.get_tenant_id(),
+                                                                   table_schema.get_max_used_column_group_id() + 1, all_cg))) {
+            LOG_WARN("fail to add all column group", K(ret));
+          } else if (OB_FAIL(table_schema.add_column_group(all_cg))) {
+            LOG_WARN("fail to build all column group", K(ret));
+          }
+        }
+      }
+
+      // add default_type column_group, build a empty and then use alter_deafult_cg
+      if (OB_SUCC(ret)) {
+        ObColumnGroupSchema tmp_cg;
+        column_ids.reuse();
+        if (OB_FAIL(build_column_group(table_schema, ObColumnGroupType::DEFAULT_COLUMN_GROUP,
+            OB_DEFAULT_COLUMN_GROUP_NAME, column_ids, DEFAULT_TYPE_COLUMN_GROUP_ID, tmp_cg))) {
+          LOG_WARN("fail to build default type column_group", KR(ret), K(table_store_type),
+                   "table_id", table_schema.get_table_id());
+        } else if (OB_FAIL(table_schema.add_column_group(tmp_cg))) {
+          LOG_WARN("fail to add default column group", KR(ret), "table_id", table_schema.get_table_id());
+        } else if (OB_FAIL(ObSchemaUtils::alter_rowkey_column_group(table_schema))) {
+          LOG_WARN("fail to adjust rowkey column group when add column group", K(ret));
+        } else if (OB_FAIL(ObSchemaUtils::alter_default_column_group(table_schema))) {
+          LOG_WARN("fail to adjust default column group", K(ret));
+        }
+      }
+    }
+  }
   return ret;
 }
 

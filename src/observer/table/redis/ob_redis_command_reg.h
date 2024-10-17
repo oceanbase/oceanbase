@@ -1,0 +1,108 @@
+/**
+ * Copyright (c) 2024 OceanBase
+ * OceanBase is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
+
+#pragma once
+
+#include "share/table/ob_redis_common.h"
+#include "cmd/ob_redis_list_cmd.h"
+#include "cmd/ob_redis_set_cmd.h"
+#include "cmd/ob_redis_zset_cmd.h"
+#include "cmd/ob_redis_hash_cmd.h"
+#include "cmd/ob_redis_string_cmd.h"
+
+namespace oceanbase
+{
+namespace table
+{
+template <int>
+struct ObRedisCommandTypeTraits {
+  constexpr static bool registered_ = false;
+  constexpr static const char *cmd_name_ = nullptr;
+  typedef char RedisCommand;
+};
+
+template <typename T>
+struct ObRedisCommandTraits {
+  constexpr static int type_ = 0;
+};
+
+#define REGISTER_REDIS_COMMAND(type, command, cmd_name) \
+  template <>                                           \
+  struct ObRedisCommandTypeTraits<type> {               \
+    constexpr static bool registered_ = true;           \
+    constexpr static const char *cmd_name_ = cmd_name;  \
+    typedef command RedisCommand;                       \
+  };                                                    \
+  template <>                                           \
+  struct ObRedisCommandTraits<command> {                \
+    constexpr static int type_ = type;                  \
+  };
+
+// REGISTER_REDIS_COMMAND(method_type, command)
+// regeister command here, cmd name need to be all capitalized！
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_LPUSH, LPush, "LPUSH");
+// Set
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_SDIFF, SDiff, "SDIFF");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_SINTER, SInter, "SINTER");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_SUNION, SUnion, "SUNION");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_SADD, SAdd, "SADD");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_SDIFFSTORE, SDiffStore, "SDIFFSTORE");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_SINTERSTORE, SInterStore, "SINTERSTORE");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_SUNIONSTORE, SUnionStore, "SUNIONSTORE");
+
+// ZSet
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_ZADD, ZAdd, "ZADD");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_ZCARD, ZCard, "ZCARD");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_ZREM, ZRem, "ZREM");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_ZINCRBY, ZIncrBy, "ZINCRBY");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_ZSCORE, ZScore, "ZSCORE");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_ZRANK, ZRank, "ZRANK");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_ZREVRANK, ZRevRank, "ZREVRANK");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_ZRANGE, ZRange, "ZRANGE");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_ZREVRANGE, ZRevRange, "ZREVRANGE");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_ZCOUNT, ZCount, "ZCOUNT");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_ZREMRANGEBYRANK, ZRemRangeByRank, "ZREMRANGEBYRANK");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_ZRANGEBYSCORE, ZRangeByScore, "ZRANGEBYSCORE");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_ZREVRANGEBYSCORE, ZRevRangeByScore, "ZREVRANGEBYSCORE");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_ZREMRANGEBYSCORE, ZRemRangeByScore, "ZREMRANGEBYSCORE");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_ZINTERSTORE, ZInterStore, "ZINTERSTORE");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_ZUNIONSTORE, ZUnionStore, "ZUNIONSTORE");
+// Hash
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_HSET, HSet, "HSET");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_HMSET, HMSet, "HMSET");
+
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_LPUSHX, LPushX, "LPUSHX");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_RPUSH, RPush, "RPUSH");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_RPUSHX, RPushX, "RPUSHX");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_LPOP, LPop, "LPOP");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_RPOP, RPop, "RPOP");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_LINDEX, LIndex, "LINDEX");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_LSET, LSet, "LSET");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_LRANGE, LRange, "LRANGE");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_LTRIM, LTrim, "LTRIM");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_LINSERT, LInsert, "LINSERT");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_LLEN, LLen, "LLEN");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_LREM, LRem, "LREM");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_RPOPLPUSH, RpopLpush, "RPOPLPUSH");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_LDEL, LDel, "LDEL");
+
+// String
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_GETSET, GetSet, "GETSET");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_SETBIT, SetBit, "SETBIT");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_INCR, Incr, "INCR");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_INCRBY, IncrBy, "INCRBY");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_DECR, Decr, "DECR");
+REGISTER_REDIS_COMMAND(REDIS_COMMAND_DECRBY, DecrBy, "DECRBY");
+#undef REGISTER_REDIS_COMMAND
+
+}  // end namespace table
+}  // end namespace oceanbase

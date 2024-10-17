@@ -318,18 +318,18 @@ namespace unittest
                K(ObTimeUtility::fast_current_time() - start_time));                              \
   }
 
-#define MINOR_FREEZE_LS(ls)                                                             \
-  {                                                                                     \
-    TRANS_LOG(INFO, "minor freeze ls begin");                                           \
-    share::ObTenantSwitchGuard tenant_guard;                                            \
-    ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(ls->get_tenant_id()));                 \
-    oceanbase::storage::checkpoint::ObCheckpointExecutor *checkpoint_executor =         \
-        ls->get_checkpoint_executor();                                                  \
-    ASSERT_NE(nullptr, checkpoint_executor);                                            \
-    ASSERT_EQ(OB_SUCCESS,                                                               \
-              checkpoint_executor->advance_checkpoint_by_flush(share::SCN::max_scn())); \
-    TRANS_LOG(INFO, "minor freeze ls end");                                             \
-  }
+#define MINOR_FREEZE_LS(ls)                                             \
+  {                                                                     \
+    TRANS_LOG(INFO, "minor freeze ls begin");                           \
+    share::ObTenantSwitchGuard tenant_guard;                            \
+    ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(ls->get_tenant_id())); \
+    oceanbase::storage::checkpoint::ObCheckpointExecutor *checkpoint_executor = \
+      ls->get_checkpoint_executor();                                    \
+    ASSERT_NE(nullptr, checkpoint_executor);                            \
+    ASSERT_EQ(OB_SUCCESS,                                               \
+      checkpoint_executor->advance_checkpoint_by_flush(share::SCN::max_scn())); \
+    TRANS_LOG(INFO, "minor freeze ls end");                                 \
+}
 
 template <typename T>
 class EventArgSerTool

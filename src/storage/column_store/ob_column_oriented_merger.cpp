@@ -371,11 +371,18 @@ int ObCOMerger::close()
       }
     }
   }
+  if (OB_SUCC(ret) && OB_NOT_NULL(merge_infos[start_cg_idx_])) {
+    merge_infos[start_cg_idx_]->get_merge_history().update_execute_time(ObTimeUtility::fast_current_time() - start_time_);
+  }
 
   return ret;
 }
 
-int ObCOMerger::build_mergelog(const blocksstable::ObDatumRow &row, ObMergeLog &merge_log, bool &need_replay, bool &row_store_iter_need_move)
+int ObCOMerger::build_mergelog(
+    const blocksstable::ObDatumRow &row,
+    ObMergeLog &merge_log,
+    bool &need_replay,
+    bool &row_store_iter_need_move)
 {
   int ret = OB_SUCCESS;
   int64_t cmp_ret = 0;

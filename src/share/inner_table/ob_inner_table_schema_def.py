@@ -319,7 +319,8 @@ all_table_def = dict(
       ('local_session_vars', 'longtext', 'true'),
       ('duplicate_read_consistency', 'int', 'false', '0'),
       ('index_params', 'varchar:OB_MAX_INDEX_PARAMS_LENGTH', 'false', ''),
-      ('micro_index_clustered', 'bool', 'false', 'false')
+      ('micro_index_clustered', 'bool', 'false', 'false'),
+      ('mv_mode', 'int', 'false', '0')
     ],
 )
 
@@ -4272,6 +4273,7 @@ def_table_schema(
     ('data_checksum', 'int'),
     ('column_checksums', 'longtext', 'true'),
     ('b_column_checksums', 'varbinary:OB_MAX_VARBINARY_LENGTH', 'true'),
+    ('data_checksum_type', 'int', 'false', 0)
   ],
 )
 
@@ -6059,6 +6061,7 @@ def_table_schema(
     ('thread_id', 'int', 'true'),
     ('stmt_type', 'int', 'true'),
     ('tablet_id', 'int', 'true'),
+    ('proxy_sid', 'int', 'true')
   ],
 )
 
@@ -6846,7 +6849,29 @@ def_table_schema(
 
 
 # 481 : __all_import_stmt_exec_history
-# 482 : __all_tablet_reorganize_history
+
+def_table_schema(
+    owner = 'hanxuan.gzh',
+    table_name = '__all_tablet_reorganize_history',
+    table_id      = '482',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = [],
+    rowkey_columns = [
+        ('tenant_id', 'int'),
+        ('ls_id', 'int'),
+        ('src_tablet_id', 'int'),
+        ('dest_tablet_id', 'int'),
+    ],
+    is_cluster_private = False,
+    in_tenant_space = True,
+
+    normal_columns = [
+      ('type', 'int'),
+      ('create_time', 'timestamp'),
+      ('finish_time', 'timestamp'),
+    ],
+)
+
 def_table_schema(
   owner = 'zhixing.yh',
   table_name    = '__all_storage_ha_error_diagnose_history',
@@ -7492,6 +7517,7 @@ def_table_schema(
 # 525: __wr_sql_plan
 # 526: __wr_res_mgr_sysstat
 # 527: __all_kv_redis_table
+# 528: __all_ncomp_dll_v2
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -10058,7 +10084,12 @@ def_table_schema(
       ('end_cg_id', 'int'),
       ('kept_snapshot', 'varchar:OB_COMPACTION_INFO_LENGTH'),
       ('merge_level', 'varchar:OB_MERGE_LEVEL_STR_LENGTH'),
-      ('exec_mode', 'varchar:OB_MERGE_TYPE_STR_LENGTH')
+      ('exec_mode', 'varchar:OB_MERGE_TYPE_STR_LENGTH'),
+      ('is_full_merge', 'bool'),
+      ('io_cost_time_percentage', 'int'),
+      ('merge_reason', 'varchar:OB_MERGE_REASON_STR_LENGTH'),
+      ('base_major_status', 'varchar:OB_MERGE_TYPE_STR_LENGTH'),
+      ('co_merge_type', 'varchar:OB_MERGE_TYPE_STR_LENGTH')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -10536,7 +10567,7 @@ def_table_schema(
 )
 
 def_table_schema(
-    owner = 'luhaopeng.lhp',
+    owner = 'baichangmin.bcm',
     table_name    = '__all_virtual_table_mgr',
     table_id      = '12034',
     table_type = 'VIRTUAL_TABLE',
@@ -12553,6 +12584,9 @@ def_table_schema(
   ('transfer_scn', 'uint'),
   ('tx_blocked', 'int'),
   ('required_data_disk_size', 'int', 'false', 0),
+  ('mv_major_merge_scn', 'uint', 'false', 0),
+  ('mv_publish_scn', 'uint', 'false', 0),
+  ('mv_safe_scn', 'uint', 'false', 0),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -12828,6 +12862,7 @@ def_table_schema(
     ('THREAD_ID', 'int', 'true'),
     ('STMT_TYPE', 'int', 'true'),
     ('TABLET_ID', 'int', 'true'),
+    ('PROXY_SID', 'int', 'true'),
   ],
   partition_columns = ['SVR_IP', 'SVR_PORT'],
   vtable_route_policy = 'distributed',
@@ -13322,7 +13357,8 @@ def_table_schema(
     ('enable_sync', 'bool'),
     ('enable_vote', 'bool'),
     ('arb_srv_info', 'varchar:1024'),
-    ('parent', 'varchar:1024')
+    ('parent', 'varchar:1024'),
+    ('readonly_tx', 'varchar:1024'),
   ],
 
   partition_columns = ['svr_ip', 'svr_port'],
@@ -14799,7 +14835,10 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_name = '__all_virtual_user_proxy_role_info_history',
   keywords = all_def_keywords['__all_user_proxy_role_info_history']))
 
-# 12478: __all_virtual_tablet_reorganize_history
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12478',
+  table_name = '__all_virtual_tablet_reorganize_history',
+  keywords = all_def_keywords['__all_tablet_reorganize_history']))
 
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12479',
@@ -14956,8 +14995,31 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-# 12493: __all_virtual_kv_group_commit_status
-
+def_table_schema(
+  owner      = 'wuguangxin.wgx',
+  table_name = '__all_virtual_kv_group_commit_status',
+  table_id = '12493',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  in_tenant_space = True,
+  rowkey_columns = [
+  ],
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('group_type', 'varchar:32'),
+    ('ls_id', 'int'),
+    ('table_id', 'int'),
+    ('schema_version', 'int'),
+    ('queue_size', 'int'),
+    ('batch_size', 'int'),
+    ('create_time', 'timestamp'),
+    ('update_time', 'timestamp'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 # 12494: __all_virtual_session_sys_variable
 # 12495: __all_virtual_spm_evo_result
 def_table_schema(
@@ -14999,12 +15061,60 @@ def_table_schema(
 # 12497: __all_virtual_pkg_type
 # 12498: __all_virtual_pkg_type_attr
 # 12499: __all_virtual_pkg_coll_type
-# 12500: __all_virtual_kv_client_info
+
+def_table_schema(
+  owner      = 'wuguangxin.wgx',
+  table_name = '__all_virtual_kv_client_info',
+  table_id = '12500',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  in_tenant_space = True,
+  rowkey_columns = [],
+  normal_columns = [
+    ('client_id', 'uint'),
+    ('client_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('client_port', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('user_name', 'varchar:OB_MAX_USER_NAME_LENGTH'),
+    ('first_login_ts', 'timestamp'),
+    ('last_login_ts', 'timestamp'),
+    ('client_info', 'varchar:2048')
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 # 12501: __all_virtual_wr_sql_plan
 # 12502: __all_virtual_wr_res_mgr_sysstat
 # 12503: __all_virtual_kv_redis_table
 
-# 12504: __all_virtual_function_io_stat
+def_table_schema(
+  owner             = 'zz412656',
+  table_name        = '__all_virtual_function_io_stat',
+  table_id          = '12504',
+  table_type        = 'VIRTUAL_TABLE',
+  gm_columns        = [],
+  rowkey_columns    = [
+    ('svr_ip',              'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port',            'int'),
+    ('tenant_id',           'int'),
+    ('function_name',       'varchar:32'),
+    ('mode',                'varchar:32')
+  ],
+  in_tenant_space   = True,
+  normal_columns    = [
+    ('size',                'int'),
+    ('real_iops',           'int'),
+    ('real_mbps',           'int'),
+    ('schedule_us',         'int'),
+    ('io_delay_us',         'int'),
+    ('total_us',            'int'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 
 def_table_schema(
   owner = 'wuyuefei.wyf',
@@ -15049,6 +15159,10 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
 )
+
+# 12506: __all_virtual_ncomp_dll_v2
+# 12507: __all_virtual_logstore_service_status
+# 12508: __all_virtual_logstore_service_info
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -15564,9 +15678,9 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15467'
 # 15481: __all_virtual_wr_sql_plan
 # 15482: __all_virtual_res_mgr_sysstat
 # 15483: __all_virtual_wr_res_mgr_sysstat
-# 15484: __all_virtual_function_io_stat
-
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15484', all_def_keywords['__all_virtual_function_io_stat'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15485', all_def_keywords['__all_virtual_temp_file']))
+# 15486: __all_ncomp_dll_v2
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -16004,7 +16118,11 @@ def_table_schema(
                     cast(NULL as unsigned) as CHECKSUM,
                     cast(NULL as char(255)) as CREATE_OPTIONS,
                     cast(case when a.table_type = 4 then 'VIEW'
-                             else a.comment end as char(2048)) as TABLE_COMMENT
+                             else a.comment end as char(2048)) as TABLE_COMMENT,
+                    cast(case when a.auto_part = 1 then 'TRUE'
+                              else 'FALSE' end as char(16)) as AUTO_SPLIT,
+                    cast(case when a.auto_part = 1 then a.auto_part_size
+                              else 0 end as unsigned) as AUTO_SPLIT_TABLET_SIZE
                     from
                     (
                     select cast(0 as signed) as tenant_id,
@@ -16016,7 +16134,9 @@ def_table_schema(
                            usec_to_time(d.schema_version) as gmt_create,
                            usec_to_time(c.schema_version) as gmt_modified,
                            c.comment,
-                           c.store_format
+                           c.store_format,
+                           c.auto_part,
+                           c.auto_part_size
                     from oceanbase.__all_virtual_core_all_table c
                     join oceanbase.__all_virtual_core_all_table d
                       on c.tenant_id = d.tenant_id and d.table_name = '__all_core_table'
@@ -16031,7 +16151,9 @@ def_table_schema(
                            gmt_create,
                            gmt_modified,
                            comment,
-                           store_format
+                           store_format,
+                           auto_part,
+                           auto_part_size
                     from oceanbase.__all_table where table_mode >> 12 & 15 in (0,1)) a
                     join oceanbase.__all_database b
                     on a.database_id = b.database_id
@@ -17118,6 +17240,7 @@ def_table_schema(
                          flt_trace_id as FLT_TRACE_ID,
                          pl_trace_id as PL_TRACE_ID,
                          plsql_exec_time as PLSQL_EXEC_TIME,
+                         format_sql_id as FORMAT_SQL_ID,
                          stmt_type as STMT_TYPE,
                          total_memstore_read_row_count as TOTAL_MEMSTORE_READ_ROW_COUNT,
                          total_ssstore_read_row_count as TOTAL_SSSTORE_READ_ROW_COUNT,
@@ -17528,6 +17651,7 @@ def_table_schema(
     FLT_TRACE_ID,
     PL_TRACE_ID,
     PLSQL_EXEC_TIME,
+    FORMAT_SQL_ID,
     stmt_type as STMT_TYPE,
     TOTAL_MEMSTORE_READ_ROW_COUNT,
     TOTAL_SSSTORE_READ_ROW_COUNT,
@@ -18740,7 +18864,7 @@ WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 )
 
 def_table_schema(
-owner = 'luhaopeng.lhp',
+owner = 'baichangmin.bcm',
 table_name      = 'GV$OB_SSTABLES',
 table_id        = '21100',
 table_type      = 'SYSTEM_VIEW',
@@ -18781,7 +18905,7 @@ FROM
 )
 
 def_table_schema(
-owner = 'luhaopeng.lhp',
+owner = 'baichangmin.bcm',
 table_name      = 'V$OB_SSTABLES',
 table_id        = '21101',
 table_type      = 'SYSTEM_VIEW',
@@ -21149,7 +21273,7 @@ def_table_schema(
       , 0 AS NAMESPACE
       ,NULL AS EDITION_NAME
       FROM OCEANBASE.__ALL_VIRTUAL_TABLE T JOIN OCEANBASE.__ALL_VIRTUAL_PART P ON T.TABLE_ID = P.TABLE_ID
-      WHERE T.TENANT_ID = P.TENANT_ID AND T.TABLE_MODE >> 12 & 15 in (0,1)
+      WHERE T.TENANT_ID = P.TENANT_ID AND T.TABLE_MODE >> 12 & 15 in (0,1) AND P.PARTITION_TYPE = 0
 
       UNION ALL
 
@@ -21175,6 +21299,8 @@ def_table_schema(
       FROM OCEANBASE.__ALL_VIRTUAL_TABLE T, OCEANBASE.__ALL_VIRTUAL_PART P,OCEANBASE.__ALL_VIRTUAL_SUB_PART SUBP
       WHERE T.TABLE_ID =P.TABLE_ID AND P.TABLE_ID=SUBP.TABLE_ID AND P.PART_ID =SUBP.PART_ID
       AND T.TENANT_ID = P.TENANT_ID AND P.TENANT_ID = SUBP.TENANT_ID AND T.TABLE_MODE >> 12 & 15 in (0,1)
+      AND P.PARTITION_TYPE = 0
+      AND SUBP.PARTITION_TYPE = 0
 
       UNION ALL
 
@@ -21516,7 +21642,9 @@ SELECT
   CAST(NULL AS CHAR(3)) AS HAS_SENSITIVE_COLUMN,
   CAST(NULL AS CHAR(3)) AS ADMIT_NULL,
   CAST(NULL AS CHAR(3)) AS DATA_LINK_DML_ENABLED,
-  CAST(NULL AS CHAR(8)) AS LOGICAL_REPLICATION
+  CAST(NULL AS CHAR(8)) AS LOGICAL_REPLICATION,
+  CAST(CASE WHEN T.AUTO_PART = 1 THEN 'TRUE' ELSE 'FALSE' END AS CHAR(16)) AS AUTO_SPLIT,
+  CAST(CASE WHEN T.AUTO_PART = 1 THEN T.AUTO_PART_SIZE ELSE 0 END AS SIGNED) AS AUTO_SPLIT_TABLET_SIZE
 FROM
   (SELECT
      TENANT_ID,
@@ -21537,7 +21665,9 @@ FROM
      PCTFREE,
      PART_LEVEL,
      TABLE_TYPE,
-     TABLESPACE_ID
+     TABLESPACE_ID,
+     AUTO_PART,
+     AUTO_PART_SIZE
    FROM
      OCEANBASE.__ALL_VIRTUAL_CORE_ALL_TABLE
 
@@ -21551,7 +21681,9 @@ FROM
      PCTFREE,
      PART_LEVEL,
      TABLE_TYPE,
-     TABLESPACE_ID
+     TABLESPACE_ID,
+     AUTO_PART,
+     AUTO_PART_SIZE
    FROM OCEANBASE.__ALL_VIRTUAL_TABLE
    WHERE TABLE_MODE >> 12 & 15 in (0,1)) T
   ON
@@ -22320,6 +22452,7 @@ def_table_schema(
                    LIST_VAL,
                    COMPRESS_FUNC_NAME,
                    TABLESPACE_ID,
+                   PARTITION_TYPE,
                    ROW_NUMBER() OVER (
                      PARTITION BY TENANT_ID, TABLE_ID
                      ORDER BY PART_IDX, PART_ID ASC
@@ -22330,6 +22463,7 @@ def_table_schema(
       LEFT JOIN OCEANBASE.__ALL_VIRTUAL_TENANT_TABLESPACE TP
       ON TP.TABLESPACE_ID = PART.TABLESPACE_ID AND TP.TENANT_ID = PART.TENANT_ID
 
+      WHERE PART.PARTITION_TYPE = 0
 """.replace("\n", " ")
 )
 
@@ -22428,6 +22562,7 @@ def_table_schema(
                TABLE_ID,
                PART_ID,
                PART_NAME,
+               PARTITION_TYPE,
                ROW_NUMBER() OVER (
                  PARTITION BY TENANT_ID, TABLE_ID
                  ORDER BY PART_IDX, PART_ID ASC
@@ -22442,6 +22577,7 @@ def_table_schema(
                LIST_VAL,
                COMPRESS_FUNC_NAME,
                TABLESPACE_ID,
+               PARTITION_TYPE,
                ROW_NUMBER() OVER (
                  PARTITION BY TENANT_ID, TABLE_ID, PART_ID
                  ORDER BY SUB_PART_IDX, SUB_PART_ID ASC
@@ -22449,7 +22585,9 @@ def_table_schema(
              FROM OCEANBASE.__ALL_VIRTUAL_SUB_PART) S_PART
        WHERE P_PART.PART_ID = S_PART.PART_ID
              AND P_PART.TABLE_ID = S_PART.TABLE_ID
-             AND P_PART.TENANT_ID = S_PART.TENANT_ID) PART
+             AND P_PART.TENANT_ID = S_PART.TENANT_ID
+             AND P_PART.PARTITION_TYPE = 0
+             AND S_PART.PARTITION_TYPE = 0) PART
       ON DB_TB.TABLE_ID = PART.TABLE_ID AND DB_TB.TENANT_ID = PART.TENANT_ID
 
       LEFT JOIN
@@ -22885,6 +23023,7 @@ def_table_schema(
                  HIGH_BOUND_VAL,
                  LIST_VAL,
                  COMPRESS_FUNC_NAME,
+                 PARTITION_TYPE,
                  ROW_NUMBER() OVER (
                    PARTITION BY TENANT_ID, TABLE_ID
                    ORDER BY PART_IDX, PART_ID ASC
@@ -22892,6 +23031,7 @@ def_table_schema(
           FROM OCEANBASE.__ALL_VIRTUAL_PART) PART
     ON I.TENANT_ID = PART.TENANT_ID
        AND I.TABLE_ID = PART.TABLE_ID
+    WHERE PART.PARTITION_TYPE = 0
 """.replace("\n", " ")
 )
 
@@ -22976,6 +23116,7 @@ def_table_schema(
              TABLE_ID,
              PART_ID,
              PART_NAME,
+             PARTITION_TYPE,
              ROW_NUMBER() OVER (
                PARTITION BY TENANT_ID, TABLE_ID
                ORDER BY PART_IDX, PART_ID ASC
@@ -22989,6 +23130,7 @@ def_table_schema(
              HIGH_BOUND_VAL,
              LIST_VAL,
              COMPRESS_FUNC_NAME,
+             PARTITION_TYPE,
              ROW_NUMBER() OVER (
                PARTITION BY TENANT_ID, TABLE_ID, PART_ID
                ORDER BY SUB_PART_IDX, SUB_PART_ID ASC
@@ -22996,7 +23138,9 @@ def_table_schema(
            FROM OCEANBASE.__ALL_VIRTUAL_SUB_PART) S_PART
      WHERE P_PART.PART_ID = S_PART.PART_ID AND
            P_PART.TABLE_ID = S_PART.TABLE_ID
-           AND P_PART.TENANT_ID = S_PART.TENANT_ID) PART
+           AND P_PART.TENANT_ID = S_PART.TENANT_ID
+           AND P_PART.PARTITION_TYPE = 0
+           AND S_PART.PARTITION_TYPE = 0) PART
     ON I.TABLE_ID = PART.TABLE_ID AND I.TENANT_ID = PART.TENANT_ID
 """.replace("\n", " ")
 )
@@ -23181,6 +23325,7 @@ def_table_schema(
       ,NULL AS EDITION_NAME
       FROM OCEANBASE.__ALL_TABLE T JOIN OCEANBASE.__ALL_PART P ON T.TABLE_ID = P.TABLE_ID
       WHERE T.TENANT_ID = 0 AND T.TENANT_ID = P.TENANT_ID AND T.TABLE_MODE >> 12 & 15 in (0,1)
+      AND P.PARTITION_TYPE = 0
 
       UNION ALL
 
@@ -23206,6 +23351,7 @@ def_table_schema(
       FROM OCEANBASE.__ALL_TABLE T, OCEANBASE.__ALL_PART P,OCEANBASE.__ALL_SUB_PART SUBP
       WHERE T.TABLE_ID =P.TABLE_ID AND P.TABLE_ID=SUBP.TABLE_ID AND P.PART_ID =SUBP.PART_ID
       AND T.TENANT_ID = 0 AND T.TENANT_ID = P.TENANT_ID AND P.TENANT_ID = SUBP.TENANT_ID AND T.TABLE_MODE >> 12 & 15 in (0,1)
+      AND SUBP.PARTITION_TYPE = 0 AND P.PARTITION_TYPE = 0
 
       UNION ALL
 
@@ -23728,6 +23874,7 @@ def_table_schema(
                    LIST_VAL,
                    COMPRESS_FUNC_NAME,
                    TABLESPACE_ID,
+                   PARTITION_TYPE,
                    ROW_NUMBER() OVER (
                      PARTITION BY TENANT_ID, TABLE_ID
                      ORDER BY PART_IDX, PART_ID ASC
@@ -23739,6 +23886,7 @@ def_table_schema(
       ON TP.TABLESPACE_ID = PART.TABLESPACE_ID AND TP.TENANT_ID = PART.TENANT_ID
 
       WHERE DB_TB.TENANT_ID = 0
+            AND PART.PARTITION_TYPE = 0
 """.replace("\n", " ")
 )
 
@@ -23837,6 +23985,7 @@ def_table_schema(
                TABLE_ID,
                PART_ID,
                PART_NAME,
+               PARTITION_TYPE,
                ROW_NUMBER() OVER (
                  PARTITION BY TENANT_ID, TABLE_ID
                  ORDER BY PART_IDX, PART_ID ASC
@@ -23851,6 +24000,7 @@ def_table_schema(
                LIST_VAL,
                COMPRESS_FUNC_NAME,
                TABLESPACE_ID,
+               PARTITION_TYPE,
                ROW_NUMBER() OVER (
                  PARTITION BY TENANT_ID, TABLE_ID, PART_ID
                  ORDER BY SUB_PART_IDX, SUB_PART_ID ASC
@@ -23858,7 +24008,9 @@ def_table_schema(
              FROM OCEANBASE.__ALL_SUB_PART) S_PART
        WHERE P_PART.PART_ID = S_PART.PART_ID AND
              P_PART.TABLE_ID = S_PART.TABLE_ID
-             AND P_PART.TENANT_ID = S_PART.TENANT_ID) PART
+             AND P_PART.TENANT_ID = S_PART.TENANT_ID
+             AND P_PART.PARTITION_TYPE = 0
+             AND S_PART.PARTITION_TYPE = 0) PART
       ON DB_TB.TABLE_ID = PART.TABLE_ID AND DB_TB.TENANT_ID = PART.TENANT_ID
 
       LEFT JOIN
@@ -24170,6 +24322,7 @@ def_table_schema(
                  HIGH_BOUND_VAL,
                  LIST_VAL,
                  COMPRESS_FUNC_NAME,
+                 PARTITION_TYPE,
                  ROW_NUMBER() OVER (
                    PARTITION BY TENANT_ID, TABLE_ID
                    ORDER BY PART_IDX, PART_ID ASC
@@ -24179,7 +24332,8 @@ def_table_schema(
        AND I.TABLE_ID = PART.TABLE_ID
 
     WHERE I.TENANT_ID = 0
-    AND I.TABLE_MODE >> 12 & 15 in (0,1)
+        AND I.TABLE_MODE >> 12 & 15 in (0,1)
+        AND PART.PARTITION_TYPE = 0
 """.replace("\n", " ")
 )
 
@@ -24263,6 +24417,7 @@ def_table_schema(
              TABLE_ID,
              PART_ID,
              PART_NAME,
+             PARTITION_TYPE,
              ROW_NUMBER() OVER (
                PARTITION BY TENANT_ID, TABLE_ID
                ORDER BY PART_IDX, PART_ID ASC
@@ -24276,6 +24431,7 @@ def_table_schema(
              HIGH_BOUND_VAL,
              LIST_VAL,
              COMPRESS_FUNC_NAME,
+             PARTITION_TYPE,
              ROW_NUMBER() OVER (
                PARTITION BY TENANT_ID, TABLE_ID, PART_ID
                ORDER BY SUB_PART_IDX, SUB_PART_ID ASC
@@ -24283,7 +24439,9 @@ def_table_schema(
            FROM OCEANBASE.__ALL_SUB_PART) S_PART
      WHERE P_PART.PART_ID = S_PART.PART_ID AND
            P_PART.TABLE_ID = S_PART.TABLE_ID
-           AND P_PART.TENANT_ID = S_PART.TENANT_ID) PART
+           AND P_PART.TENANT_ID = S_PART.TENANT_ID
+           AND P_PART.PARTITION_TYPE = 0
+           AND S_PART.PARTITION_TYPE = 0) PART
     ON I.TABLE_ID = PART.TABLE_ID AND I.TENANT_ID = PART.TENANT_ID
     WHERE I.TENANT_ID = 0
     AND I.TABLE_MODE >> 12 & 15 in (0,1)
@@ -24936,7 +25094,14 @@ def_table_schema(
       END_CG_ID,
       KEPT_SNAPSHOT,
       MERGE_LEVEL,
-      EXEC_MODE
+      EXEC_MODE,
+      (CASE IS_FULL_MERGE
+           WHEN false THEN "FALSE"
+           ELSE "TRUE" END) AS IS_FULL_MERGE,
+      IO_COST_TIME_PERCENTAGE,
+      MERGE_REASON,
+      BASE_MAJOR_STATUS,
+      CO_MERGE_TYPE
     FROM oceanbase.__all_virtual_tablet_compaction_history
 """.replace("\n", " ")
 )
@@ -24981,7 +25146,12 @@ def_table_schema(
       END_CG_ID,
       KEPT_SNAPSHOT,
       MERGE_LEVEL,
-      EXEC_MODE
+      EXEC_MODE,
+      IS_FULL_MERGE,
+      IO_COST_TIME_PERCENTAGE,
+      MERGE_REASON,
+      BASE_MAJOR_STATUS,
+      CO_MERGE_TYPE
     FROM oceanbase.GV$OB_TABLET_COMPACTION_HISTORY
     WHERE
         SVR_IP=HOST_IP()
@@ -25540,7 +25710,8 @@ def_table_schema(
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
         WHERE T.TABLE_TYPE IN (0,2,3,6,14,15)
-        AND T.TABLE_MODE >> 12 & 15 in (0,1)
+              AND T.TABLE_MODE >> 12 & 15 in (0,1)
+              AND (P.PARTITION_TYPE = 0 OR P.PARTITION_TYPE IS NULL)
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -25564,7 +25735,9 @@ def_table_schema(
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
         WHERE T.TABLE_TYPE IN (0,2,3,6,14,15)
-        AND T.TABLE_MODE >> 12 & 15 in (0,1)
+              AND T.TABLE_MODE >> 12 & 15 in (0,1)
+              AND (P.PARTITION_TYPE = 0 OR P.PARTITION_TYPE IS NULL)
+              AND (SP.PARTITION_TYPE = 0 OR SP.PARTITION_TYPE IS NULL)
     ) V
     JOIN
         oceanbase.__all_database DB
@@ -25709,6 +25882,7 @@ WHERE
   c.is_hidden = 0
   AND t.table_type in (0,3,6,14)
   AND t.table_mode >> 12 & 15 in (0,1)
+  AND part.partition_type = 0
 """.replace("\n", " ")
 )
 
@@ -25767,6 +25941,7 @@ WHERE
   c.is_hidden = 0
   AND t.table_type in (0,3,6,14)
   AND t.table_mode >> 12 & 15 in (0,1)
+  AND subpart.partition_type = 0
 """.replace("\n", " ")
 )
 
@@ -25866,6 +26041,7 @@ def_table_schema(
     c.is_hidden = 0
     AND t.table_type in (0,3,6,14)
     AND t.table_mode >> 12 & 15 in (0,1)
+    AND part.partition_type = 0
   """.replace("\n", " ")
 )
 
@@ -25913,6 +26089,7 @@ def_table_schema(
     c.is_hidden = 0
     AND t.table_type in (0,3,6,14)
     AND t.table_mode >> 12 & 15 in (0,1)
+    AND subpart.partition_type = 0
   """.replace("\n", " ")
 )
 
@@ -26105,7 +26282,9 @@ def_table_schema(
             oceanbase.__all_part P
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
-        WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
+        WHERE T.TABLE_TYPE = 5
+              AND P.PARTITION_TYPE = 0
+              AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -26129,7 +26308,10 @@ def_table_schema(
             ON T.TENANT_ID = SP.TENANT_ID
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
-        WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
+        WHERE T.TABLE_TYPE = 5
+              AND P.PARTITION_TYPE = 0
+              AND SP.PARTITION_TYPE = 0
+              AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
     ) V
     JOIN oceanbase.__all_table T
          ON T.TABLE_ID = V.DATA_TABLE_ID
@@ -27138,7 +27320,7 @@ def_table_schema(
       A.SQL_ID,
       A.OUTLINE_CONTENT
     FROM oceanbase.__tenant_virtual_outline A, oceanbase.__all_outline B
-    WHERE A.OUTLINE_ID = B.OUTLINE_ID
+    WHERE A.OUTLINE_ID = B.OUTLINE_ID AND B.FORMAT_OUTLINE = 0
 """.replace("\n", " "),
 
     normal_columns = [
@@ -28878,6 +29060,7 @@ FROM (
       FROM OCEANBASE.__ALL_TABLE T JOIN OCEANBASE.__ALL_PART P
            ON T.TABLE_ID = P.TABLE_ID AND T.TENANT_ID = P.TENANT_ID
       WHERE T.PART_LEVEL = 1 AND T.TENANT_ID = 0
+            AND P.PARTITION_TYPE = 0
 
       UNION ALL
 
@@ -28898,6 +29081,8 @@ FROM (
       WHERE T.TABLE_ID =P.TABLE_ID AND P.TABLE_ID=Q.TABLE_ID AND P.PART_ID = Q.PART_ID
       AND T.TENANT_ID = P.TENANT_ID AND P.TENANT_ID = Q.TENANT_ID AND T.PART_LEVEL = 2
       AND T.TENANT_ID = 0
+      AND P.PARTITION_TYPE = 0
+      AND Q.PARTITION_TYPE = 0
     ) A
     JOIN OCEANBASE.DBA_OB_TABLET_TO_LS B ON A.TABLET_ID = B.TABLET_ID
     JOIN OCEANBASE.DBA_OB_LS_LOCATIONS C ON B.LS_ID = C.LS_ID
@@ -29020,7 +29205,7 @@ FROM (
       TABLEGROUP_ID
       FROM OCEANBASE.__ALL_VIRTUAL_TABLE T JOIN OCEANBASE.__ALL_VIRTUAL_PART P ON T.TABLE_ID = P.TABLE_ID
       WHERE T.TENANT_ID = P.TENANT_ID AND T.PART_LEVEL = 1
-
+            AND P.PARTITION_TYPE = 0
       UNION ALL
 
       SELECT
@@ -29040,6 +29225,7 @@ FROM (
       FROM OCEANBASE.__ALL_VIRTUAL_TABLE T, OCEANBASE.__ALL_VIRTUAL_PART P,OCEANBASE.__ALL_VIRTUAL_SUB_PART Q
       WHERE T.TABLE_ID =P.TABLE_ID AND P.TABLE_ID=Q.TABLE_ID AND P.PART_ID =Q.PART_ID
       AND T.TENANT_ID = P.TENANT_ID AND P.TENANT_ID = Q.TENANT_ID AND T.PART_LEVEL = 2
+      AND P.PARTITION_TYPE = 0 AND Q.PARTITION_TYPE = 0
     ) A
     JOIN OCEANBASE.CDB_OB_TABLET_TO_LS B ON A.TABLET_ID = B.TABLET_ID AND A.TENANT_ID = B.TENANT_ID
     JOIN OCEANBASE.CDB_OB_LS_LOCATIONS C ON B.LS_ID = C.LS_ID AND A.TENANT_ID = C.TENANT_ID
@@ -30874,6 +31060,7 @@ FROM
         TABLESPACE_ID,
         GMT_CREATE,
         COMMENT,
+        PARTITION_TYPE,
         PART_IDX,
         ROW_NUMBER() OVER(PARTITION BY TENANT_ID,TABLE_ID ORDER BY PART_IDX) AS PART_POSITION
       FROM OCEANBASE.__ALL_PART
@@ -30890,6 +31077,7 @@ FROM
         TABLESPACE_ID,
         GMT_CREATE,
         COMMENT,
+        PARTITION_TYPE,
         SUB_PART_IDX,
         ROW_NUMBER() OVER(PARTITION BY TENANT_ID,TABLE_ID,PART_ID ORDER BY SUB_PART_IDX) AS SUB_PART_POSITION
     FROM OCEANBASE.__ALL_SUB_PART
@@ -30911,6 +31099,8 @@ FROM
                 IDX_STAT.DATA_TABLE_ID = T.TABLE_ID AND
                 CASE T.PART_LEVEL WHEN 0 THEN 1 WHEN 1 THEN P.PART_IDX = IDX_STAT.PART_IDX WHEN 2 THEN P.PART_IDX = IDX_STAT.PART_IDX AND SP.SUB_PART_IDX = IDX_STAT.SUB_PART_IDX END
 WHERE T.TABLE_TYPE IN (3,6,8,9,14,15)
+      AND (P.PARTITION_TYPE = 0 OR P.PARTITION_TYPE is NULL)
+      AND (SP.PARTITION_TYPE = 0 OR SP.PARTITION_TYPE is NULL)
   """.replace("\n", " "),
 
 )
@@ -34041,7 +34231,35 @@ WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 #21482: CDB_WR_SYSTEM_EVENT
 #21483: DBA_WR_EVENT_NAME
 #21484: CDB_WR_EVENT_NAME
-#21485: DBA_OB_FORMAT_OUTLINES
+def_table_schema(
+    owner = 'guoyun.lgy',
+    table_name     = 'DBA_OB_FORMAT_OUTLINES',
+    table_id       = '21485',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+    SELECT
+      B.GMT_CREATE AS CREATE_TIME,
+      B.GMT_MODIFIED AS MODIFY_TIME,
+      A.TENANT_ID,
+      A.DATABASE_ID,
+      A.OUTLINE_ID,
+      A.DATABASE_NAME,
+      A.OUTLINE_NAME,
+      A.VISIBLE_SIGNATURE,
+      A.FORMAT_SQL_TEXT,
+      A.OUTLINE_TARGET,
+      A.OUTLINE_SQL,
+      A.FORMAT_SQL_ID,
+      A.OUTLINE_CONTENT
+    FROM oceanbase.__tenant_virtual_outline A, oceanbase.__all_outline B
+    WHERE A.OUTLINE_ID = B.OUTLINE_ID AND B.FORMAT_OUTLINE != 0
+""".replace("\n", " "),
+    normal_columns = [
+   ],
+)
 
 def_table_schema(
   owner = 'mingye.swj',
@@ -34953,8 +35171,9 @@ def_table_schema(
           WHEN 1 THEN 'DEMAND'
           WHEN 2 THEN 'COMMIT'
           WHEN 3 THEN 'STATEMENT'
+          WHEN 4 THEN 'MAJOR_COMPACTION'
           ELSE NULL
-        END AS CHAR(6)
+        END AS CHAR(32)
       ) AS REFRESH_MODE,
       CAST(
         CASE C.REFRESH_METHOD
@@ -35055,8 +35274,9 @@ def_table_schema(
           WHEN 1 THEN 'DEMAND'
           WHEN 2 THEN 'COMMIT'
           WHEN 3 THEN 'STATEMENT'
+          WHEN 4 THEN 'MAJOR_COMPACTION'
           ELSE NULL
-        END AS CHAR(6)
+        END AS CHAR(32)
       ) AS REFRESH_MODE,
       CAST(
         CASE C.REFRESH_METHOD
@@ -35980,10 +36200,102 @@ AND
 """.replace("\n", " ")
 )
 
-# 21554: INNODB_LOCK_WAITS
-# 21555: INNODB_LOCKS
-# 21556: INNODB_TRX
-# 21557: ndb_transid_mysql_connection_map
+def_table_schema(
+  owner           = 'yangyifei.yyf',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_LOCK_WAITS',
+  table_id        = '21554',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT '0' as REQUESTING_TRX_ID,
+           '0' as REQUESTED_LOCK_ID,
+           '0' as BLOCKING_TRX_ID,
+           '0' as BLOCKING_LOCK_ID
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'yangyifei.yyf',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_LOCKS',
+  table_id        = '21555',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT '0' as LOCK_ID,
+           '0' as LOCK_TRX_ID,
+           '0' as LOCK_MODE,
+           '0' as LOCK_TYPE,
+           '0' as LOCK_TABLE,
+           '0' as LOCK_INDEX,
+           0 as LOCK_SPACE,
+           0 as LOCK_PAGE,
+           0 as LOCK_REC,
+           '0' as LOCK_DATA
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'yangyifei.yyf',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_TRX',
+  table_id        = '21556',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT '0' as TRX_ID,
+           '0' as TRX_STATE,
+           now() as TRX_STARTED,
+           '0' as TRX_REQUESTED_LOCK_ID,
+           now() as TRX_WAIT_STARTED,
+           0 as TRX_WEIGHT,
+           0 as TRX_MYSQL_THREAD_ID,
+           '0' as TRX_QUERY,
+           '0' as TRX_OPERATION_STATE,
+           0 as TRX_TABLE_IN_USE,
+           0 as TRX_TABLES_LOCKED,
+           0 as TRX_LOCK_STRUCTS,
+           0 as TRX_LOCK_MEMORY_BYTES,
+           0 as TRX_ROWS_LOCKED,
+           0 as TRX_ROWS_MODIFIED,
+           0 as TRX_CONCURRENCY_TICKETS,
+           '0' as TRX_ISOLATION_LEVEL,
+           0 as TRX_UNIQUE_CHECKS,
+           0 as TRX_FOREIGN_KEY_CHECKS,
+           '0' as TRX_LAST_FOREIGN_KEY_ERROR,
+           0 as TRX_ADAPTIVE_HASH_LATCHED,
+           0 as TRX_ADAPTIVE_HASH_TIMEOUT,
+           0 as TRX_IS_READ_ONLY,
+           0 as TRX_AUTOCOMMIT_NON_LOCKING
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'yangyifei.yyf',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'NDB_TRANSID_MYSQL_CONNECTION_MAP',
+  table_id        = '21557',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT 0 as MYSQL_CONNECTION_ID,
+           0 as NODE_ID,
+           0 as NDB_TRANSID
+""".replace("\n", " ")
+)
 
 def_table_schema(
   owner           = 'wyh329796',
@@ -36145,26 +36457,6 @@ def_table_schema(
   )
 """.replace("\n", " ")
 )
-
-# 21562: TABLESPACES
-# 21563: INNODB_BUFFER_PAGE
-# 21564: INNODB_BUFFER_PAGE_LRU
-# 21565: INNODB_BUFFER_POOL_STATS
-# 21566: INNODB_CMP
-# 21567: INNODB_CMP_PER_INDEX
-# 21568: INNODB_CMP_PER_INDEX_RESET
-# 21569: INNODB_CMP_RESET
-# 21570: INNODB_CMPMEM
-# 21571: INNODB_CMPMEM_RESET
-# 21572: INNODB_SYS_DATAFILES
-# 21573: INNODB_SYS_INDEXES
-# 21574: INNODB_SYS_TABLES
-# 21575: INNODB_SYS_TABLESPACES
-# 21576: INNODB_SYS_TABLESTATS
-# 21577: INNODB_SYS_VIRTUAL
-# 21578: INNODB_TEMP_TABLE_INFO
-# 21579: INNODB_METRICS
-# 21580: EVENTS
 
 def_table_schema(
   owner = 'chaser.ch',
@@ -37100,14 +37392,224 @@ SELECT
 """.replace("\n", " ")
 )
 
-#
-# 21591 - 21596 placeholder by gaishun.gs
 # 21591: DBA_OB_SERVER_SPACE_USAGE
-# 21592: CDB_OB_SERVER_SPACE_USAGE
+
+def_table_schema(
+  owner = 'gaishun.gs',
+  table_name      = 'CDB_OB_SERVER_SPACE_USAGE',
+  table_id        = '21592',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+    select
+      CASE
+        WHEN atnt.tenant_name LIKE 'META$%' THEN REPLACE(atnt.tenant_name, 'META$', '')
+        ELSE atnt.tenant_id
+      END AS TENANT_ID,
+      CASE
+        WHEN atnt.tenant_name LIKE 'META$%' THEN
+          (SELECT t.tenant_name
+          FROM oceanbase.__all_tenant t
+          WHERE t.tenant_id = REPLACE(atnt.tenant_name, 'META$', ''))
+        ELSE atnt.tenant_name
+      END AS TENANT_NAME,
+      asu.svr_ip as SERVER_IP,
+      asu.svr_port as SERVER_PORT,
+      CASE
+        WHEN asu.file_type IN ('tenant tmp data')
+                          THEN 'Tmp Data'
+        WHEN asu.file_type IN ('tenant clog data')
+                          THEN 'Clog Data'
+        WHEN asu.file_type IN ('tenant meta data')
+                          THEN 'Meta Data'
+        WHEN asu.file_type IN ('tenant slog data')
+                          THEN 'Slog Data'
+      END AS SPACE_TYPE,
+      sum(asu.data_size) as DATA_BYTES,
+      sum(asu.used_size) as USAGE_BYTES
+    from oceanbase.__all_space_usage asu
+    INNER JOIN oceanbase.__all_tenant atnt
+      ON    atnt.tenant_id = asu.tenant_id
+        AND asu.file_type in ('tenant tmp data',
+                              'tenant clog data',
+                              'tenant meta data',
+                              'tenant slog data')
+    group by TENANT_ID, SERVER_IP, SERVER_PORT, SPACE_TYPE
+    UNION
+    select
+      CASE
+        WHEN atnt.tenant_name LIKE 'META$%' THEN REPLACE(atnt.tenant_name, 'META$', '')
+        ELSE atnt.tenant_id
+      END AS TENANT_ID,
+      CASE
+        WHEN atnt.tenant_name LIKE 'META$%' THEN
+          (SELECT t.tenant_name
+          FROM oceanbase.__all_tenant t
+          WHERE t.tenant_id = REPLACE(atnt.tenant_name, 'META$', ''))
+        ELSE atnt.tenant_name
+      END AS TENANT_NAME,
+      avtps.svr_ip as SERVER_IP,
+      avtps.svr_port as SERVER_PORT,
+      'Index Data' as SPACE_TYPE,
+      sum(avtps.occupy_size) as DATA_BYTES,
+      sum(avtps.required_size) as USAGE_BYTES
+    from
+    oceanbase.__all_virtual_tablet_pointer_status avtps
+    INNER JOIN oceanbase.__all_virtual_tablet_to_ls avttl
+      ON      avttl.tenant_id = avtps.tenant_id
+        AND 	avttl.tablet_id = avtps.tablet_id
+    INNER JOIN oceanbase.__all_tenant atnt
+      ON      atnt.tenant_id = avttl.tenant_id
+    INNER JOIN oceanbase.__all_virtual_table avt
+      ON      avt.table_type = 5
+        AND 	avt.table_id = avttl.table_id
+    INNER JOIN oceanbase.__all_virtual_ls_meta_table avlmt
+      ON      avtps.tenant_id = avlmt.tenant_id
+        AND  avtps.ls_id = avlmt.ls_id
+        AND  avtps.svr_ip = avlmt.svr_ip
+        AND  avtps.svr_port = avlmt.svr_port
+        AND  avlmt.role = 1
+    group by TENANT_ID, SERVER_IP, SERVER_PORT, SPACE_TYPE
+    UNION
+    select
+      CASE
+        WHEN atnt.tenant_name LIKE 'META$%' THEN REPLACE(atnt.tenant_name, 'META$', '')
+        ELSE atnt.tenant_id
+      END AS TENANT_ID,
+      CASE
+        WHEN atnt.tenant_name LIKE 'META$%' THEN
+          (SELECT t.tenant_name
+          FROM oceanbase.__all_tenant t
+          WHERE t.tenant_id = REPLACE(atnt.tenant_name, 'META$', ''))
+        ELSE atnt.tenant_name
+      END AS TENANT_NAME,
+      avtps.svr_ip as SERVER_IP,
+      avtps.svr_port as SERVER_PORT,
+      'Table Data' as SPACE_TYPE,
+      sum(avtps.occupy_size) as DATA_BYTES,
+      sum(avtps.required_size) as USAGE_BYTES
+    from
+    oceanbase.__all_virtual_tablet_pointer_status avtps
+    INNER JOIN oceanbase.__all_virtual_tablet_to_ls avttl
+      ON      avttl.tenant_id = avtps.tenant_id
+        AND 	avttl.tablet_id = avtps.tablet_id
+    INNER JOIN oceanbase.__all_tenant atnt
+      ON      atnt.tenant_id = avttl.tenant_id
+    INNER JOIN oceanbase.__all_virtual_table avt
+      ON      avt.table_id = avttl.table_id
+        AND  avt.table_type in (3, 12, 13)
+    INNER JOIN oceanbase.__all_virtual_ls_meta_table avlmt
+      ON      avtps.tenant_id = avlmt.tenant_id
+        AND  avtps.ls_id = avlmt.ls_id
+        AND  avtps.svr_ip = avlmt.svr_ip
+        AND  avtps.svr_port = avlmt.svr_port
+        AND  avlmt.role = 1
+    group by TENANT_ID, SERVER_IP, SERVER_PORT, SPACE_TYPE
+    order by TENANT_ID, SERVER_IP, SERVER_PORT, SPACE_TYPE;
+""".replace("\n", " ")
+)
+
 # 21593: DBA_OB_SPACE_USAGE
-# 21594: CDB_OB_SPACE_USAGE
+
+def_table_schema(
+  owner = 'gaishun.gs',
+  table_name      = 'CDB_OB_SPACE_USAGE',
+  table_id        = '21594',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+    SELECT
+      CASE
+        WHEN atnt.tenant_name LIKE 'META$%' THEN REPLACE(atnt.tenant_name, 'META$', '')
+        ELSE atnt.tenant_id
+      END AS TENANT_ID,
+      CASE
+        WHEN atnt.tenant_name LIKE 'META$%' THEN
+          (SELECT t.tenant_name
+          FROM oceanbase.__all_tenant t
+          WHERE t.tenant_id = REPLACE(atnt.tenant_name, 'META$', ''))
+        ELSE atnt.tenant_name
+      END AS TENANT_NAME,
+      azs.endpoint AS ENDPOINT,
+      azs.path AS PATH,
+      CASE
+        WHEN asu.file_type IN ('tenant local data',
+                              'tenant tmp data')
+                          THEN 'Local Data'
+        WHEN asu.file_type IN ('tenant shared_major data')
+                          THEN 'Shared Data'
+        WHEN asu.file_type IN ('tenant clog data')
+                          THEN 'Clog Data'
+      END AS SPACE_TYPE,
+      SUM(asu.used_size) AS USAGE_BYTES
+    FROM oceanbase.__all_tenant atnt
+    LEFT JOIN oceanbase.__all_zone_storage azs
+      ON LOCATE(azs.zone, atnt.primary_zone) > 0
+        OR atnt.primary_zone = 'RANDOM'
+    INNER JOIN oceanbase.__all_space_usage asu
+      ON atnt.tenant_id = asu.tenant_id
+    where asu.file_type in ('tenant shared_major data',
+                            'tenant local data',
+                            'tenant clog data',
+                            'tenant tmp data')
+    GROUP BY tenant_id, space_type
+    ORDER BY tenant_id
+""".replace("\n", " ")
+)
+
 # 21595: DBA_OB_TABLE_SPACE_USAGE
-# 21596: CDB_OB_TABLE_SPACE_USAGE
+
+def_table_schema(
+  owner = 'gaishun.gs',
+  table_name      = 'CDB_OB_TABLE_SPACE_USAGE',
+  table_id        = '21596',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+    select
+      CASE
+        WHEN atnt.tenant_name LIKE 'META$%' THEN REPLACE(atnt.tenant_name, 'META$', '')
+        ELSE atnt.tenant_id
+      END AS TENANT_ID,
+      avttl.table_id as TABLE_ID,
+      CASE
+        WHEN atnt.tenant_name LIKE 'META$%' THEN
+          (SELECT t.tenant_name
+          FROM oceanbase.__all_tenant t
+          WHERE t.tenant_id = REPLACE(atnt.tenant_name, 'META$', ''))
+        ELSE atnt.tenant_name
+      END AS TENANT_NAME,
+      ad.database_name as DATABASE_NAME,
+      avt.table_name as TABLE_NAME,
+      sum(avtps.occupy_size) as OCCUPY_SIZE,
+      sum(avtps.required_size) as REQUIRED_SIZE
+    from
+    oceanbase.__all_virtual_tablet_pointer_status avtps
+    INNER JOIN oceanbase.__all_virtual_tablet_to_ls avttl
+      ON      avttl.tenant_id = avtps.tenant_id
+        AND 	avttl.tablet_id = avtps.tablet_id
+    INNER JOIN oceanbase.__all_tenant atnt
+      ON      atnt.tenant_id = avttl.tenant_id
+    INNER JOIN oceanbase.__all_virtual_table avt
+      ON      avt.table_id = avttl.table_id
+    INNER JOIN oceanbase.__all_database ad
+      ON      ad.database_id = avt.database_id
+    INNER JOIN oceanbase.__all_virtual_ls_meta_table avlmt
+      ON      avtps.tenant_id = avlmt.tenant_id
+        AND  avtps.ls_id = avlmt.ls_id
+        AND  avtps.svr_ip = avlmt.svr_ip
+        AND  avtps.svr_port = avlmt.svr_port
+        AND  avlmt.role = 1
+    group by tenant_id, table_id
+    order by tenant_id, table_id
+""".replace("\n", " ")
+)
 
 
 def_table_schema(
@@ -37169,8 +37671,54 @@ def_table_schema(
 # 21598: V$OB_LOG_TRANSPORT_DEST_STAT
 # 21599: GV$OB_SS_LOCAL_CACHE
 # 21600: V$OB_SS_LOCAL_CACHE
-# 21601: GV$OB_KV_GROUP_COMMIT_STATUS
-# 21602: V$OB_KV_GROUP_COMMIT_STATUS
+
+def_table_schema(
+  owner = 'wuguangxin.wgx',
+  table_name      = 'GV$OB_KV_GROUP_COMMIT_STATUS',
+  table_id        = '21601',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    svr_ip AS SVR_IP,
+    svr_port AS SVR_PORT,
+    tenant_id AS TENANT_ID,
+    table_id AS TABLE_ID,
+    ls_id AS LS_ID,
+    schema_version AS SCHEMA_VERSION,
+    group_type AS GROUP_TYPE,
+    queue_size AS QUEUE_SIZE,
+    batch_size AS BATCH_SIZE,
+    create_time AS CREATE_TIME,
+    update_time AS UPDATE_TIME
+    FROM oceanbase.__all_virtual_kv_group_commit_status
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'wuguangxin.wgx',
+  table_name      = 'V$OB_KV_GROUP_COMMIT_STATUS',
+  table_id        = '21602',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP, SVR_PORT, TENANT_ID, TABLE_ID, LS_ID, SCHEMA_VERSION,
+    GROUP_TYPE, QUEUE_SIZE, BATCH_SIZE, CREATE_TIME, UPDATE_TIME
+  FROM
+     oceanbase.GV$OB_KV_GROUP_COMMIT_STATUS
+  WHERE
+    SVR_IP=HOST_IP()
+  AND
+    SVR_PORT=RPC_PORT()
+  """.replace("\n", " ")
+)
 
 def_table_schema(
   owner = 'zhenjiang.xzj',
@@ -37245,8 +37793,61 @@ def_table_schema(
 )
 
 # 21606: GV$OB_VARIABLES_BY_SESSION
-# 21607: GV$OB_KV_CLIENT_INFO
-# 21608: V$OB_KV_CLIENT_INFO
+def_table_schema(
+  owner = 'wuguangxin.wgx',
+  table_name      = 'GV$OB_KV_CLIENT_INFO',
+  table_id        = '21607',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    client_id AS CLIENT_ID,
+    client_ip AS CLIENT_IP,
+    client_port AS CLIENT_PORT,
+    svr_ip AS SVR_IP,
+    svr_port AS SVR_PORT,
+    tenant_id AS TENANT_ID,
+    user_name AS USER_NAME,
+    first_login_ts AS FIRST_LOGIN_TS,
+    last_login_ts AS LAST_LOGIN_TS,
+    client_info AS CLIENT_INFO
+  FROM
+    oceanbase.__all_virtual_kv_client_info
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'wuguangxin.wgx',
+  table_name      = 'V$OB_KV_CLIENT_INFO',
+  table_id        = '21608',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    client_id AS CLIENT_ID,
+    client_ip AS CLIENT_IP,
+    client_port AS CLIENT_PORT,
+    svr_ip AS SVR_IP,
+    svr_port AS SVR_PORT,
+    tenant_id AS TENANT_ID,
+    user_name AS USER_NAME,
+    first_login_ts AS FIRST_LOGIN_TS,
+    last_login_ts AS LAST_LOGIN_TS,
+    client_info AS CLIENT_INFO
+  FROM
+     oceanbase.GV$OB_KV_CLIENT_INFO
+  WHERE
+    SVR_IP=HOST_IP()
+  AND
+    SVR_PORT=RPC_PORT()
+  """.replace("\n", " ")
+)
 # 21609: V$OB_VARIABLES_BY_SESSION
 # 21610: GV$OB_RES_MGR_SYSSTAT
 # 21611: V$OB_RES_MGR_SYSSTAT
@@ -37258,8 +37859,62 @@ def_table_schema(
 # 21617: CDB_OB_SPM_EVO_RESULT
 # 21618: DBA_OB_KV_REDIS_TABLE
 # 21619: CDB_OB_KV_REDIS_TABLE
-# 21620: GV$OB_FUNCTION_IO_STAT
-# 21621: V$OB_FUNCTION_IO_STAT
+
+def_table_schema(
+  owner           = 'zz412656',
+  table_name      = 'GV$OB_FUNCTION_IO_STAT',
+  table_id        = '21620',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    FUNCTION_NAME,
+    MODE,
+    SIZE,
+    REAL_IOPS,
+    REAL_MBPS,
+    SCHEDULE_US,
+    IO_DELAY_US,
+    TOTAL_US
+  FROM
+    oceanbase.__all_virtual_function_io_stat;
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner           = 'zz412656',
+  table_name      = 'V$OB_FUNCTION_IO_STAT',
+  table_id        = '21621',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    FUNCTION_NAME,
+    MODE,
+    SIZE,
+    REAL_IOPS,
+    REAL_MBPS,
+    SCHEDULE_US,
+    IO_DELAY_US,
+    TOTAL_US
+  FROM
+    OCEANBASE.GV$OB_FUNCTION_IO_STAT
+  WHERE
+    SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " "),
+)
 
 def_table_schema(
   owner = 'wuyuefei.wyf',
@@ -37319,6 +37974,11 @@ def_table_schema(
   FROM oceanbase.__all_virtual_temp_file
 """.replace("\n", " ")
 )
+
+# 21624 GV$OB_LOGSTORE_SERVICE_STATUS
+# 21625 V$OB_LOGSTORE_SERVICE_STATUS
+# 21626 GV$OB_LOGSTORE_SERVICE_INFO
+# 21627 V$OB_LOGSTORE_SERVICE_INFO
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -37560,6 +38220,7 @@ def_table_schema(
       ,NULL AS EDITION_NAME
       FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T JOIN SYS.ALL_VIRTUAL_PART_REAL_AGENT P ON T.TABLE_ID = P.TABLE_ID
       WHERE T.TENANT_ID = EFFECTIVE_TENANT_ID() AND P.TENANT_ID = EFFECTIVE_TENANT_ID() AND T.TABLE_TYPE != 12 AND T.TABLE_TYPE != 13
+      AND P.PARTITION_TYPE = 0
       AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
       UNION ALL
 
@@ -37586,6 +38247,7 @@ def_table_schema(
       WHERE T.TABLE_ID =P.TABLE_ID AND P.TABLE_ID=SUBP.TABLE_ID AND P.PART_ID =SUBP.PART_ID
       AND T.TENANT_ID = EFFECTIVE_TENANT_ID() AND P.TENANT_ID = EFFECTIVE_TENANT_ID() AND SUBP.TENANT_ID = EFFECTIVE_TENANT_ID()
       AND T.TABLE_TYPE != 12 AND T.TABLE_TYPE != 13 AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
+      AND SUBP.PARTITION_TYPE = 0 AND P.PARTITION_TYPE = 0
 
       UNION ALL
 
@@ -38058,6 +38720,7 @@ def_table_schema(
       ,NULL AS EDITION_NAME
       FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T JOIN SYS.ALL_VIRTUAL_PART_REAL_AGENT P ON T.TABLE_ID = P.TABLE_ID
       WHERE T.TENANT_ID = EFFECTIVE_TENANT_ID() AND P.TENANT_ID = EFFECTIVE_TENANT_ID() AND T.TABLE_TYPE != 12 AND T.TABLE_TYPE != 13 AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
+      AND P.PARTITION_TYPE = 0
 
       UNION ALL
 
@@ -38085,6 +38748,7 @@ def_table_schema(
       WHERE T.TABLE_ID =P.TABLE_ID AND P.TABLE_ID=SUBP.TABLE_ID AND P.PART_ID =SUBP.PART_ID
       AND T.TENANT_ID = EFFECTIVE_TENANT_ID() AND P.TENANT_ID = EFFECTIVE_TENANT_ID() AND SUBP.TENANT_ID = EFFECTIVE_TENANT_ID()
       AND T.TABLE_TYPE != 12 AND T.TABLE_TYPE != 13 AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
+      AND SUBP.PARTITION_TYPE = 0 AND P.PARTITION_TYPE = 0
 
       UNION ALL
 
@@ -38566,6 +39230,7 @@ def_table_schema(
       ,NULL AS EDITION_NAME
       FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T JOIN SYS.ALL_VIRTUAL_PART_REAL_AGENT P ON T.TABLE_ID = P.TABLE_ID
       WHERE T.TENANT_ID = EFFECTIVE_TENANT_ID() AND P.TENANT_ID = EFFECTIVE_TENANT_ID() AND T.TABLE_TYPE != 12 AND T.TABLE_TYPE != 13 AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
+      AND P.PARTITION_TYPE = 0
 
       UNION ALL
 
@@ -38592,6 +39257,7 @@ def_table_schema(
       WHERE T.TABLE_ID =P.TABLE_ID AND P.TABLE_ID=SUBP.TABLE_ID AND P.PART_ID =SUBP.PART_ID
       AND T.TENANT_ID = EFFECTIVE_TENANT_ID() AND P.TENANT_ID = EFFECTIVE_TENANT_ID() AND SUBP.TENANT_ID = EFFECTIVE_TENANT_ID()
       AND T.TABLE_TYPE != 12 AND T.TABLE_TYPE != 13 AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
+      AND SUBP.PARTITION_TYPE = 0 AND P.PARTITION_TYPE = 0
 
       UNION ALL
 
@@ -41155,7 +41821,9 @@ SELECT
   CAST(NULL AS VARCHAR2(3)) AS HAS_SENSITIVE_COLUMN,
   CAST(NULL AS VARCHAR2(3)) AS ADMIT_NULL,
   CAST(NULL AS VARCHAR2(3)) AS DATA_LINK_DML_ENABLED,
-  CAST(NULL AS VARCHAR2(8)) AS LOGICAL_REPLICATION
+  CAST(NULL AS VARCHAR2(8)) AS LOGICAL_REPLICATION,
+  CAST(CASE WHEN T.AUTO_PART = 1 THEN 'TRUE' ELSE 'FALSE' END AS VARCHAR2(16)) AS AUTO_SPLIT,
+  CAST(CASE WHEN T.AUTO_PART = 1 THEN T.AUTO_PART_SIZE ELSE 0 END AS VARCHAR2(128)) AS AUTO_SPLIT_TABLET_SIZE
 FROM
   (SELECT
      TENANT_ID,
@@ -41177,7 +41845,9 @@ FROM
      "PCTFREE",
      PART_LEVEL,
      TABLE_TYPE,
-     TABLESPACE_ID
+     TABLESPACE_ID,
+     AUTO_PART,
+     AUTO_PART_SIZE
    FROM
      SYS.ALL_VIRTUAL_CORE_ALL_TABLE
 
@@ -41191,7 +41861,9 @@ FROM
      "PCTFREE",
      PART_LEVEL,
      TABLE_TYPE,
-     TABLESPACE_ID
+     TABLESPACE_ID,
+     AUTO_PART,
+     AUTO_PART_SIZE
    FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
    AND bitand((TABLE_MODE / 4096), 15) IN (0,1)
@@ -41329,7 +42001,9 @@ SELECT
   CAST(NULL AS VARCHAR2(3)) AS HAS_SENSITIVE_COLUMN,
   CAST(NULL AS VARCHAR2(3)) AS ADMIT_NULL,
   CAST(NULL AS VARCHAR2(3)) AS DATA_LINK_DML_ENABLED,
-  CAST(NULL AS VARCHAR2(8)) AS LOGICAL_REPLICATION
+  CAST(NULL AS VARCHAR2(8)) AS LOGICAL_REPLICATION,
+  CAST(CASE WHEN T.AUTO_PART = 1 THEN 'TRUE' ELSE 'FALSE' END AS VARCHAR2(16)) AS AUTO_SPLIT,
+  CAST(CASE WHEN T.AUTO_PART = 1 THEN T.AUTO_PART_SIZE ELSE 0 END AS VARCHAR2(128)) AS AUTO_SPLIT_TABLET_SIZE
 FROM
   (SELECT
      TENANT_ID,
@@ -41351,7 +42025,9 @@ FROM
      "PCTFREE",
      PART_LEVEL,
      TABLE_TYPE,
-     TABLESPACE_ID
+     TABLESPACE_ID,
+     AUTO_PART,
+     AUTO_PART_SIZE
    FROM
      SYS.ALL_VIRTUAL_CORE_ALL_TABLE
 
@@ -41365,7 +42041,9 @@ FROM
      "PCTFREE",
      PART_LEVEL,
      TABLE_TYPE,
-     TABLESPACE_ID
+     TABLESPACE_ID,
+     AUTO_PART,
+     AUTO_PART_SIZE
    FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
    WHERE TENANT_ID = EFFECTIVE_TENANT_ID() AND TABLE_TYPE != 12 AND TABLE_TYPE != 13
    AND bitand((TABLE_MODE / 4096), 15) IN (0,1)
@@ -41500,7 +42178,9 @@ SELECT
   CAST(NULL AS VARCHAR2(3)) AS HAS_SENSITIVE_COLUMN,
   CAST(NULL AS VARCHAR2(3)) AS ADMIT_NULL,
   CAST(NULL AS VARCHAR2(3)) AS DATA_LINK_DML_ENABLED,
-  CAST(NULL AS VARCHAR2(8)) AS LOGICAL_REPLICATION
+  CAST(NULL AS VARCHAR2(8)) AS LOGICAL_REPLICATION,
+  CAST(CASE WHEN T.AUTO_PART = 1 THEN 'TRUE' ELSE 'FALSE' END AS VARCHAR2(16)) AS AUTO_SPLIT,
+  CAST(CASE WHEN T.AUTO_PART = 1 THEN T.AUTO_PART_SIZE ELSE 0 END AS VARCHAR2(128)) AS AUTO_SPLIT_TABLET_SIZE
 FROM
   (SELECT
      TENANT_ID,
@@ -41522,7 +42202,9 @@ FROM
      "PCTFREE",
      PART_LEVEL,
      TABLE_TYPE,
-     TABLESPACE_ID
+     TABLESPACE_ID,
+     AUTO_PART,
+     AUTO_PART_SIZE
    FROM
      SYS.ALL_VIRTUAL_CORE_ALL_TABLE
 
@@ -41536,7 +42218,9 @@ FROM
      "PCTFREE",
      PART_LEVEL,
      TABLE_TYPE,
-     TABLESPACE_ID
+     TABLESPACE_ID,
+     AUTO_PART,
+     AUTO_PART_SIZE
    FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
    WHERE TENANT_ID = EFFECTIVE_TENANT_ID() AND TABLE_TYPE != 12 AND TABLE_TYPE != 13
    AND bitand((TABLE_MODE / 4096), 15) IN (0,1)
@@ -42641,6 +43325,7 @@ def_table_schema(
           WHERE T.PART_LEVEL = 1
                 AND T.TABLE_TYPE IN (0, 3, 5, 8, 9)
                 AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
+                AND P.PARTITION_TYPE = 0
 
       UNION ALL
 
@@ -42676,6 +43361,7 @@ def_table_schema(
           WHERE T.PART_LEVEL = 2
                 AND T.TABLE_TYPE IN (0, 3, 5, 8, 9)
                 AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
+                AND SUBP.PARTITION_TYPE = 0 AND P.PARTITION_TYPE = 0
     )A WHERE DATABASE_ID=USERENV('SCHEMAID')
 """.replace("\n", " ")
 )
@@ -42800,6 +43486,7 @@ def_table_schema(
           WHERE T.PART_LEVEL = 1
                 AND T.TABLE_TYPE IN (0, 3, 5, 8, 9)
                 AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
+                AND P.PARTITION_TYPE = 0
 
       UNION ALL
 
@@ -42835,6 +43522,7 @@ def_table_schema(
           WHERE T.PART_LEVEL = 2
                 AND T.TABLE_TYPE IN (0, 3, 5, 8, 9)
                 AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
+                AND SUBP.PARTITION_TYPE =0 AND P.PARTITION_TYPE = 0
     )A JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT B
       ON A.DATABASE_ID = B.DATABASE_ID
       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -45528,6 +46216,7 @@ def_table_schema(
                    LIST_VAL,
                    COMPRESS_FUNC_NAME,
                    TABLESPACE_ID,
+                   PARTITION_TYPE,
                    ROW_NUMBER() OVER (
                      PARTITION BY TENANT_ID, TABLE_ID
                      ORDER BY PART_IDX, PART_ID ASC
@@ -45540,6 +46229,7 @@ def_table_schema(
       ON TP.TABLESPACE_ID = PART.TABLESPACE_ID AND TP.TENANT_ID = PART.TENANT_ID
 
       WHERE DB_TB.TENANT_ID = EFFECTIVE_TENANT_ID()
+            AND PART.PARTITION_TYPE = 0
 """.replace("\n", " ")
 )
 
@@ -45641,6 +46331,7 @@ def_table_schema(
                TABLE_ID,
                PART_ID,
                PART_NAME,
+               PARTITION_TYPE,
                ROW_NUMBER() OVER (
                  PARTITION BY TENANT_ID, TABLE_ID
                  ORDER BY PART_IDX, PART_ID ASC
@@ -45655,6 +46346,7 @@ def_table_schema(
                LIST_VAL,
                COMPRESS_FUNC_NAME,
                TABLESPACE_ID,
+               PARTITION_TYPE,
                ROW_NUMBER() OVER (
                  PARTITION BY TENANT_ID, TABLE_ID, PART_ID
                  ORDER BY SUB_PART_IDX, SUB_PART_ID ASC
@@ -45662,7 +46354,9 @@ def_table_schema(
              FROM SYS.ALL_VIRTUAL_SUB_PART_REAL_AGENT) S_PART
        WHERE P_PART.PART_ID = S_PART.PART_ID AND
              P_PART.TABLE_ID = S_PART.TABLE_ID
-             AND P_PART.TENANT_ID = S_PART.TENANT_ID) PART
+             AND P_PART.TENANT_ID = S_PART.TENANT_ID
+             AND P_PART.PARTITION_TYPE = 0
+             AND S_PART.PARTITION_TYPE = 0) PART
       ON DB_TB.TABLE_ID = PART.TABLE_ID AND DB_TB.TENANT_ID = PART.TENANT_ID
 
       LEFT JOIN
@@ -46125,6 +46819,7 @@ def_table_schema(
                    LIST_VAL,
                    COMPRESS_FUNC_NAME,
                    TABLESPACE_ID,
+                   PARTITION_TYPE,
                    ROW_NUMBER() OVER (
                      PARTITION BY TENANT_ID, TABLE_ID
                      ORDER BY PART_IDX, PART_ID ASC
@@ -46137,6 +46832,7 @@ def_table_schema(
       ON TP.TABLESPACE_ID = PART.TABLESPACE_ID AND TP.TENANT_ID = PART.TENANT_ID
 
       WHERE DB_TB.TENANT_ID = EFFECTIVE_TENANT_ID()
+            AND PART.PARTITION_TYPE = 0
 """.replace("\n", " ")
 )
 
@@ -46250,6 +46946,7 @@ def_table_schema(
                    LIST_VAL,
                    COMPRESS_FUNC_NAME,
                    TABLESPACE_ID,
+                   PARTITION_TYPE,
                    ROW_NUMBER() OVER (
                      PARTITION BY TENANT_ID, TABLE_ID
                      ORDER BY PART_IDX, PART_ID ASC
@@ -46262,6 +46959,7 @@ def_table_schema(
       ON TP.TABLESPACE_ID = PART.TABLESPACE_ID AND TP.TENANT_ID = PART.TENANT_ID
 
       WHERE DB_TB.TENANT_ID = EFFECTIVE_TENANT_ID()
+            AND PART.PARTITION_TYPE = 0
 """.replace("\n", " ")
 )
 
@@ -46361,6 +47059,7 @@ def_table_schema(
                TABLE_ID,
                PART_ID,
                PART_NAME,
+               PARTITION_TYPE,
                ROW_NUMBER() OVER (
                  PARTITION BY TENANT_ID, TABLE_ID
                  ORDER BY PART_IDX, PART_ID ASC
@@ -46375,6 +47074,7 @@ def_table_schema(
                LIST_VAL,
                COMPRESS_FUNC_NAME,
                TABLESPACE_ID,
+               PARTITION_TYPE,
                ROW_NUMBER() OVER (
                  PARTITION BY TENANT_ID, TABLE_ID, PART_ID
                  ORDER BY SUB_PART_IDX, SUB_PART_ID ASC
@@ -46382,7 +47082,9 @@ def_table_schema(
              FROM SYS.ALL_VIRTUAL_SUB_PART_REAL_AGENT) S_PART
        WHERE P_PART.PART_ID = S_PART.PART_ID AND
              P_PART.TABLE_ID = S_PART.TABLE_ID
-             AND P_PART.TENANT_ID = S_PART.TENANT_ID) PART
+             AND P_PART.TENANT_ID = S_PART.TENANT_ID
+             AND P_PART.PARTITION_TYPE = 0
+             AND S_PART.PARTITION_TYPE = 0) PART
       ON DB_TB.TABLE_ID = PART.TABLE_ID AND DB_TB.TENANT_ID = PART.TENANT_ID
 
       LEFT JOIN
@@ -46489,6 +47191,7 @@ def_table_schema(
                TABLE_ID,
                PART_ID,
                PART_NAME,
+               PARTITION_TYPE,
                ROW_NUMBER() OVER (
                  PARTITION BY TENANT_ID, TABLE_ID
                  ORDER BY PART_IDX, PART_ID ASC
@@ -46503,6 +47206,7 @@ def_table_schema(
                LIST_VAL,
                COMPRESS_FUNC_NAME,
                TABLESPACE_ID,
+               PARTITION_TYPE,
                ROW_NUMBER() OVER (
                  PARTITION BY TENANT_ID, TABLE_ID, PART_ID
                  ORDER BY SUB_PART_IDX, SUB_PART_ID ASC
@@ -46510,7 +47214,9 @@ def_table_schema(
              FROM SYS.ALL_VIRTUAL_SUB_PART_REAL_AGENT) S_PART
        WHERE P_PART.PART_ID = S_PART.PART_ID AND
              P_PART.TABLE_ID = S_PART.TABLE_ID
-             AND P_PART.TENANT_ID = S_PART.TENANT_ID) PART
+             AND P_PART.TENANT_ID = S_PART.TENANT_ID
+             AND P_PART.PARTITION_TYPE = 0
+             AND S_PART.PARTITION_TYPE = 0) PART
       ON DB_TB.TABLE_ID = PART.TABLE_ID AND DB_TB.TENANT_ID = PART.TENANT_ID
 
       LEFT JOIN
@@ -48663,6 +49369,7 @@ def_table_schema(
                  HIGH_BOUND_VAL,
                  LIST_VAL,
                  COMPRESS_FUNC_NAME,
+                 PARTITION_TYPE,
                  ROW_NUMBER() OVER (
                    PARTITION BY TENANT_ID, TABLE_ID
                    ORDER BY PART_IDX, PART_ID ASC
@@ -48672,6 +49379,7 @@ def_table_schema(
        AND I.TABLE_ID = PART.TABLE_ID
 
     WHERE I.TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND PART.PARTITION_TYPE = 0
 """.replace("\n", " ")
 )
 
@@ -48759,6 +49467,7 @@ def_table_schema(
                  HIGH_BOUND_VAL,
                  LIST_VAL,
                  COMPRESS_FUNC_NAME,
+                 PARTITION_TYPE,
                  ROW_NUMBER() OVER (
                    PARTITION BY TENANT_ID, TABLE_ID
                    ORDER BY PART_IDX, PART_ID ASC
@@ -48768,6 +49477,7 @@ def_table_schema(
        AND I.TABLE_ID = PART.TABLE_ID
 
     WHERE I.TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND PART.PARTITION_TYPE = 0
 """.replace("\n", " ")
 )
 
@@ -48856,6 +49566,7 @@ def_table_schema(
                  HIGH_BOUND_VAL,
                  LIST_VAL,
                  COMPRESS_FUNC_NAME,
+                 PARTITION_TYPE,
                  ROW_NUMBER() OVER (
                    PARTITION BY TENANT_ID, TABLE_ID
                    ORDER BY PART_IDX, PART_ID ASC
@@ -48865,6 +49576,7 @@ def_table_schema(
        AND I.TABLE_ID = PART.TABLE_ID
 
     WHERE I.TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND PART.PARTITION_TYPE = 0
 """.replace("\n", " ")
 )
 
@@ -48951,6 +49663,7 @@ def_table_schema(
              TABLE_ID,
              PART_ID,
              PART_NAME,
+             PARTITION_TYPE,
              ROW_NUMBER() OVER (
                PARTITION BY TENANT_ID, TABLE_ID
                ORDER BY PART_IDX, PART_ID ASC
@@ -48964,6 +49677,7 @@ def_table_schema(
              HIGH_BOUND_VAL,
              LIST_VAL,
              COMPRESS_FUNC_NAME,
+             PARTITION_TYPE,
              ROW_NUMBER() OVER (
                PARTITION BY TENANT_ID, TABLE_ID, PART_ID
                ORDER BY SUB_PART_IDX, SUB_PART_ID ASC
@@ -48971,7 +49685,9 @@ def_table_schema(
            FROM SYS.ALL_VIRTUAL_SUB_PART_REAL_AGENT) S_PART
      WHERE P_PART.PART_ID = S_PART.PART_ID AND
            P_PART.TABLE_ID = S_PART.TABLE_ID
-           AND P_PART.TENANT_ID = S_PART.TENANT_ID) PART
+           AND P_PART.TENANT_ID = S_PART.TENANT_ID
+           AND P_PART.PARTITION_TYPE = 0
+           AND S_PART.PARTITION_TYPE = 0) PART
     ON I.TABLE_ID = PART.TABLE_ID AND I.TENANT_ID = PART.TENANT_ID
     WHERE I.TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " ")
@@ -49056,6 +49772,7 @@ def_table_schema(
              TABLE_ID,
              PART_ID,
              PART_NAME,
+             PARTITION_TYPE,
              ROW_NUMBER() OVER (
                PARTITION BY TENANT_ID, TABLE_ID
                ORDER BY PART_IDX, PART_ID ASC
@@ -49069,6 +49786,7 @@ def_table_schema(
              HIGH_BOUND_VAL,
              LIST_VAL,
              COMPRESS_FUNC_NAME,
+             PARTITION_TYPE,
              ROW_NUMBER() OVER (
                PARTITION BY TENANT_ID, TABLE_ID, PART_ID
                ORDER BY SUB_PART_IDX, SUB_PART_ID ASC
@@ -49076,7 +49794,9 @@ def_table_schema(
            FROM SYS.ALL_VIRTUAL_SUB_PART_REAL_AGENT) S_PART
      WHERE P_PART.PART_ID = S_PART.PART_ID AND
            P_PART.TABLE_ID = S_PART.TABLE_ID
-           AND P_PART.TENANT_ID = S_PART.TENANT_ID) PART
+           AND P_PART.TENANT_ID = S_PART.TENANT_ID
+           AND P_PART.PARTITION_TYPE = 0
+           AND S_PART.PARTITION_TYPE = 0) PART
     ON I.TABLE_ID = PART.TABLE_ID AND I.TENANT_ID = PART.TENANT_ID
     WHERE I.TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " ")
@@ -49159,6 +49879,7 @@ def_table_schema(
              TABLE_ID,
              PART_ID,
              PART_NAME,
+             PARTITION_TYPE,
              ROW_NUMBER() OVER (
                PARTITION BY TENANT_ID, TABLE_ID
                ORDER BY PART_IDX, PART_ID ASC
@@ -49172,6 +49893,7 @@ def_table_schema(
              HIGH_BOUND_VAL,
              LIST_VAL,
              COMPRESS_FUNC_NAME,
+             PARTITION_TYPE,
              ROW_NUMBER() OVER (
                PARTITION BY TENANT_ID, TABLE_ID, PART_ID
                ORDER BY SUB_PART_IDX, SUB_PART_ID ASC
@@ -49179,7 +49901,9 @@ def_table_schema(
            FROM SYS.ALL_VIRTUAL_SUB_PART_REAL_AGENT) S_PART
      WHERE P_PART.PART_ID = S_PART.PART_ID AND
            P_PART.TABLE_ID = S_PART.TABLE_ID
-           AND P_PART.TENANT_ID = S_PART.TENANT_ID) PART
+           AND P_PART.TENANT_ID = S_PART.TENANT_ID
+           AND P_PART.PARTITION_TYPE = 0
+           AND S_PART.PARTITION_TYPE = 0) PART
     ON I.TABLE_ID = PART.TABLE_ID AND I.TENANT_ID = PART.TENANT_ID
     WHERE I.TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " ")
@@ -51265,6 +51989,7 @@ def_table_schema(
         WHEN 'USER_TAB_PRIVS' THEN ''
         WHEN 'STMT_AUDIT_OPTION_MAP' THEN ''
         WHEN 'DBA_OB_OUTLINES' THEN ''
+        WHEN 'DBA_OB_FORMAT_OUTLINES' THEN ''
         WHEN 'GV$OB_SQL_AUDIT' THEN ''
         WHEN 'V$OB_SQL_AUDIT' THEN ''
         WHEN 'DBA_AUDIT_SESSION' THEN ''
@@ -52448,7 +53173,9 @@ def_table_schema(
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
             AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
-        WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
+        WHERE T.TABLE_TYPE = 5
+              AND P.PARTITION_TYPE = 0
+              AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -52473,7 +53200,10 @@ def_table_schema(
             ON T.TENANT_ID = SP.TENANT_ID
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
-        WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
+        WHERE T.TABLE_TYPE = 5
+              AND P.PARTITION_TYPE = 0
+              AND SP.PARTITION_TYPE = 0
+              AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
     ) V
     JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
          ON T.TABLE_ID = V.DATA_TABLE_ID
@@ -52586,7 +53316,9 @@ def_table_schema(
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
             AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
-        WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
+        WHERE T.TABLE_TYPE = 5
+              AND P.PARTITION_TYPE = 0
+              AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -52611,7 +53343,10 @@ def_table_schema(
             ON T.TENANT_ID = SP.TENANT_ID
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
-        WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
+        WHERE T.TABLE_TYPE = 5
+              AND P.PARTITION_TYPE = 0
+              AND SP.PARTITION_TYPE = 0
+              AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
     ) V
     JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
          ON T.TABLE_ID = V.DATA_TABLE_ID
@@ -52704,7 +53439,9 @@ def_table_schema(
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
             AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
-        WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22) AND T.DATABASE_ID = USERENV('SCHEMAID')
+        WHERE T.TABLE_TYPE = 5 AND T.DATABASE_ID = USERENV('SCHEMAID')
+              AND P.PARTITION_TYPE = 0
+              AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -52729,7 +53466,10 @@ def_table_schema(
             ON T.TENANT_ID = SP.TENANT_ID
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
-        WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22) AND T.DATABASE_ID = USERENV('SCHEMAID')
+        WHERE T.TABLE_TYPE = 5 AND T.DATABASE_ID = USERENV('SCHEMAID')
+              AND P.PARTITION_TYPE = 0
+              AND SP.PARTITION_TYPE = 0
+              AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
     ) V
     JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
          ON T.TABLE_ID = V.DATA_TABLE_ID
@@ -56377,7 +57117,39 @@ def_table_schema(
 # 25269: DBA_WR_SYSTEM_EVENT
 # 25270: DBA_WR_EVENT_NAME
 # 25271: DBA_SCHEDULER_RUNNING_JOBS
-# 25272: DBA_OB_FORMAT_OUTLINES
+
+def_table_schema(
+    owner = 'guoyun.lgy',
+    table_name     = 'DBA_OB_FORMAT_OUTLINES',
+    name_postfix    = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '25272',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+    SELECT
+      CAST(B.GMT_CREATE AS TIMESTAMP(6)) AS CREATE_TIME,
+      CAST(B.GMT_MODIFIED AS TIMESTAMP(6)) AS MODIFY_TIME,
+      A.TENANT_ID,
+      A.DATABASE_ID,
+      A.OUTLINE_ID,
+      A.DATABASE_NAME,
+      A.OUTLINE_NAME,
+      A.VISIBLE_SIGNATURE,
+      A.FORMAT_SQL_TEXT,
+      A.OUTLINE_TARGET,
+      A.OUTLINE_SQL,
+      A.FORMAT_SQL_ID,
+      A.OUTLINE_CONTENT
+    FROM SYS.TENANT_VIRTUAL_OUTLINE_AGENT A, SYS.ALL_VIRTUAL_OUTLINE_REAL_AGENT B
+    WHERE A.OUTLINE_ID = B.OUTLINE_ID AND B.FORMAT_OUTLINE != 0;
+""".replace("\n", " "),
+   normal_columns = [
+   ],
+)
+
 # 25273: DBA_WR_SQLSTAT
 # 25274: DBA_WR_SYS_TIME_MODEL
 def_table_schema(
@@ -56762,8 +57534,9 @@ def_table_schema(
                                1, 'DEMAND',
                                2, 'COMMIT',
                                3, 'STATEMENT',
+                               4, 'MAJOR_COMPACTION',
                                   NULL
-        ) AS VARCHAR2(6)
+        ) AS VARCHAR2(32)
       ) AS REFRESH_MODE,
       CAST(
         DECODE(C.REFRESH_METHOD, 0, 'NEVER',
@@ -56864,8 +57637,9 @@ def_table_schema(
                                1, 'DEMAND',
                                2, 'COMMIT',
                                3, 'STATEMENT',
+                               4, 'MAJOR_COMPACTION',
                                   NULL
-        ) AS VARCHAR2(6)
+        ) AS VARCHAR2(32)
       ) AS REFRESH_MODE,
       CAST(
         DECODE(C.REFRESH_METHOD, 0, 'NEVER',
@@ -56968,8 +57742,9 @@ def_table_schema(
                                1, 'DEMAND',
                                2, 'COMMIT',
                                3, 'STATEMENT',
+                               4, 'MAJOR_COMPACTION',
                                   NULL
-        ) AS VARCHAR2(6)
+        ) AS VARCHAR2(32)
       ) AS REFRESH_MODE,
       CAST(
         DECODE(C.REFRESH_METHOD, 0, 'NEVER',
@@ -57728,7 +58503,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -57878,6 +58652,7 @@ def_table_schema(
                          flt_trace_id as FLT_TRACE_ID,
                          pl_trace_id as PL_TRACE_ID,
                          plsql_exec_time as PLSQL_EXEC_TIME,
+                         format_sql_id as FORMAT_SQL_ID,
                          stmt_type as STMT_TYPE,
                          total_memstore_read_row_count as TOTAL_MEMSTORE_READ_ROW_COUNT,
                          total_ssstore_read_row_count as TOTAL_SSSTORE_READ_ROW_COUNT,
@@ -57992,6 +58767,7 @@ TX_STATE_VERSION,
 FLT_TRACE_ID,
 PL_TRACE_ID,
 PLSQL_EXEC_TIME,
+FORMAT_SQL_ID,
 STMT_TYPE,
 TOTAL_MEMSTORE_READ_ROW_COUNT,
 TOTAL_SSSTORE_READ_ROW_COUNT,
@@ -59417,7 +60193,7 @@ SVR_PORT
 )
 
 def_table_schema(
-owner = 'luhaopeng.lhp',
+owner = 'baichangmin.bcm',
 table_name      = 'GV$OB_SSTABLES',
 name_postfix    = '_ORA',
 database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -59457,7 +60233,7 @@ FROM
 )
 
 def_table_schema(
-owner = 'luhaopeng.lhp',
+owner = 'baichangmin.bcm',
 table_name      = 'V$OB_SSTABLES',
 name_postfix    = '_ORA',
 database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -60321,6 +61097,7 @@ WHERE
   c.is_hidden = 0
   AND t.table_type in (0,2,3,8,9,14)
   AND bitand((t.TABLE_MODE / 4096), 15) IN (0,1)
+  AND part.partition_type = 0
 """.replace("\n", " ")
 )
 
@@ -60383,6 +61160,7 @@ WHERE
   c.is_hidden = 0
   AND t.table_type in (0,2,3,8,9,14)
   AND bitand((t.TABLE_MODE / 4096), 15) IN (0,1)
+  AND part.partition_type = 0
 """.replace("\n", " ")
 )
 
@@ -60440,6 +61218,7 @@ WHERE
   AND t.table_type in (0,2,3,8,9,14)
   AND t.database_id = USERENV('SCHEMAID')
   AND bitand((t.TABLE_MODE / 4096), 15) IN (0,1)
+  AND part.partition_type = 0
 """.replace("\n", " ")
 )
 
@@ -60504,6 +61283,7 @@ WHERE
   c.is_hidden = 0
   AND t.table_type in (0,2,3,8,9,14)
   AND bitand((t.TABLE_MODE / 4096), 15) IN (0,1)
+  AND subpart.partition_type = 0
 """.replace("\n", " ")
 )
 
@@ -60566,6 +61346,7 @@ WHERE
   c.is_hidden = 0
   AND t.table_type in (0,2,3,8,9,14)
   AND bitand((t.TABLE_MODE / 4096), 15) IN (0,1)
+  AND subpart.partition_type = 0
 """.replace("\n", " ")
 )
 
@@ -60623,6 +61404,7 @@ WHERE
   AND t.table_type in (0,2,3,8,9,14)
   AND t.database_id = USERENV('SCHEMAID')
   AND bitand((t.TABLE_MODE / 4096), 15) IN (0,1)
+  AND subpart.partition_type = 0
 """.replace("\n", " ")
 )
 
@@ -60831,6 +61613,7 @@ WHERE
   c.is_hidden = 0
   AND t.table_type in (0,2,3,8,9,14)
   AND bitand((t.TABLE_MODE / 4096), 15) IN (0,1)
+  AND part.partition_type = 0
 """.replace("\n", " ")
 )
 
@@ -60882,6 +61665,7 @@ WHERE
   c.is_hidden = 0
   AND t.table_type in (0,2,3,8,9,14)
   AND bitand((t.TABLE_MODE / 4096), 15) IN (0,1)
+  AND part.partition_type = 0
 """.replace("\n", " ")
 )
 def_table_schema(
@@ -60926,6 +61710,7 @@ WHERE
   AND t.table_type in (0,2,3,8,9,14)
   AND t.database_id = USERENV('SCHEMAID')
   AND bitand((t.TABLE_MODE / 4096), 15) IN (0,1)
+  AND part.partition_type = 0
 """.replace("\n", " ")
 )
 
@@ -60979,6 +61764,7 @@ WHERE
   c.is_hidden = 0
   AND t.table_type in (0,2,3,8,9,14)
   AND bitand((t.TABLE_MODE / 4096), 15) IN (0,1)
+  AND subpart.partition_type = 0
 """.replace("\n", " ")
 )
 
@@ -61030,6 +61816,7 @@ WHERE
   c.is_hidden = 0
   AND t.table_type in (0,2,3,8,9,14)
   AND bitand((t.TABLE_MODE / 4096), 15) IN (0,1)
+  AND subpart.partition_type = 0
 """.replace("\n", " ")
 )
 
@@ -61075,6 +61862,7 @@ WHERE
   AND t.table_type in (0,2,3,8,9,14)
   AND t.database_id = USERENV('SCHEMAID')
   AND bitand((t.TABLE_MODE / 4096), 15) IN (0,1)
+  AND subpart.partition_type = 0
 """.replace("\n", " ")
 )
 
@@ -61166,7 +61954,8 @@ def_table_schema(
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
         WHERE T.TABLE_TYPE IN (0,2,3,8,9,14,15)
-            AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
+              AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
+              AND P.PARTITION_TYPE = 0
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -61191,6 +61980,8 @@ def_table_schema(
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
         WHERE T.TABLE_TYPE IN (0,2,3,8,9,14,15)
+              AND P.PARTITION_TYPE = 0
+              AND SP.PARTITION_TYPE = 0
     ) V
     JOIN
         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
@@ -61297,6 +62088,7 @@ def_table_schema(
             AND T.TABLE_ID = P.TABLE_ID
         WHERE T.TABLE_TYPE IN (0,2,3,8,9,14,15)
             AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
+            AND P.PARTITION_TYPE = 0
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -61321,6 +62113,8 @@ def_table_schema(
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
         WHERE T.TABLE_TYPE IN (0,2,3,8,9,14,15)
+              AND P.PARTITION_TYPE = 0
+              AND SP.PARTITION_TYPE = 0
     ) V
     JOIN
         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT db
@@ -61412,6 +62206,7 @@ def_table_schema(
         WHERE T.TABLE_TYPE IN (0,2,3,8,9,14,15)
             AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
             AND t.database_id = USERENV('SCHEMAID')
+            AND P.PARTITION_TYPE = 0
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -61437,6 +62232,8 @@ def_table_schema(
             AND P.PART_ID = SP.PART_ID
         WHERE T.TABLE_TYPE IN (0,2,3,8,9,14,15)
             AND t.database_id = USERENV('SCHEMAID')
+            AND P.PARTITION_TYPE = 0
+            AND SP.PARTITION_TYPE = 0
     ) V
     LEFT JOIN
         SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT STAT
@@ -62798,7 +63595,12 @@ def_table_schema(
       END_CG_ID,
       KEPT_SNAPSHOT,
       MERGE_LEVEL,
-      EXEC_MODE
+      EXEC_MODE,
+      CASE WHEN IS_FULL_MERGE = 0 THEN 'FALSE' ELSE 'TRUE' END AS IS_FULL_MERGE,
+      IO_COST_TIME_PERCENTAGE,
+      MERGE_REASON,
+      BASE_MAJOR_STATUS,
+      CO_MERGE_TYPE
     FROM SYS.ALL_VIRTUAL_TABLET_COMPACTION_HISTORY
 """.replace("\n", " ")
 )
@@ -62845,7 +63647,12 @@ def_table_schema(
       END_CG_ID,
       KEPT_SNAPSHOT,
       MERGE_LEVEL,
-      EXEC_MODE
+      EXEC_MODE,
+      IS_FULL_MERGE,
+      IO_COST_TIME_PERCENTAGE,
+      MERGE_REASON,
+      BASE_MAJOR_STATUS,
+      CO_MERGE_TYPE
     FROM SYS.GV$OB_TABLET_COMPACTION_HISTORY
     WHERE
         SVR_IP=HOST_IP()
@@ -63405,7 +64212,7 @@ def_table_schema(
                           A.SQL_ID,
                           A.OUTLINE_CONTENT
                    FROM SYS.TENANT_VIRTUAL_OUTLINE_AGENT A, SYS.ALL_VIRTUAL_OUTLINE_REAL_AGENT B
-                   WHERE A.OUTLINE_ID = B.OUTLINE_ID
+                   WHERE A.OUTLINE_ID = B.OUTLINE_ID AND B.FORMAT_OUTLINE = 0
 """.replace("\n", " ")
 )
 
@@ -63792,6 +64599,7 @@ FROM (
       FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T JOIN SYS.ALL_VIRTUAL_PART_REAL_AGENT P
            ON T.TABLE_ID = P.TABLE_ID AND T.TENANT_ID = P.TENANT_ID
       WHERE T.PART_LEVEL = 1 AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
+            AND P.PARTITION_TYPE = 0
 
       UNION ALL
 
@@ -63813,6 +64621,8 @@ FROM (
            JOIN SYS.ALL_VIRTUAL_PART_REAL_AGENT P ON P.PART_ID =Q.PART_ID AND Q.TENANT_ID = P.TENANT_ID
            JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T ON T.TABLE_ID =P.TABLE_ID AND T.TENANT_ID = Q.TENANT_ID
       WHERE T.PART_LEVEL = 2 AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
+            AND Q.PARTITION_TYPE = 0
+            AND P.PARTITION_TYPE = 0
     ) A
     JOIN SYS.DBA_OB_TABLET_TO_LS B ON A.TABLET_ID = B.TABLET_ID
     JOIN SYS.DBA_OB_LS_LOCATIONS C ON B.LS_ID = C.LS_ID
@@ -65661,7 +66471,7 @@ left join
 """.replace("\n", " ")
 )
 #
-# 28235 - 28237 placeholder by gaishun.gs for oracle
+# 28235 - 28237 placeholder by gaishun.gs for SPACE_USAGE_VIEW of oracle
 # 28235: DBA_OB_SERVER_SPACE_USAGE
 # 28236: DBA_OB_SPACE_USAGE
 # 28237: DBA_OB_TABLE_SPACE_USAGE
@@ -65747,8 +66557,68 @@ def_table_schema(
 # 28259: DBA_WR_SQL_PLAN
 # 28260: DBA_WR_RES_MGR_SYSSTAT
 # 28261: DBA_OB_SPM_EVO_RESULT
-# 28262: GV$OB_FUNCTION_IO_STAT
-# 28263: V$OB_FUNCTION_IO_STAT
+
+def_table_schema(
+  owner           = 'zz412656',
+  table_name      = 'GV$OB_FUNCTION_IO_STAT',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28262',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    A.SVR_IP AS SVR_IP,
+    A.SVR_PORT AS SVR_PORT,
+    A.TENANT_ID AS TENANT_ID,
+    A.FUNCTION_NAME AS FUNCTION_NAME,
+    A."MODE" AS "MODE",
+    A."SIZE" AS "SIZE",
+    A.REAL_IOPS AS REAL_IOPS,
+    A.REAL_MBPS AS REAL_MBPS,
+    A.SCHEDULE_US AS SCHEDULE_US,
+    A.IO_DELAY_US AS IO_DELAY_US,
+    A.TOTAL_US AS TOTAL_US
+  FROM
+    SYS.ALL_VIRTUAL_FUNCTION_IO_STAT A
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner           = 'zz412656',
+  table_name      = 'V$OB_FUNCTION_IO_STAT',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28263',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    A.SVR_IP AS SVR_IP,
+    A.SVR_PORT AS SVR_PORT,
+    A.TENANT_ID AS TENANT_ID,
+    A.FUNCTION_NAME AS FUNCTION_NAME,
+    A."MODE" AS "MODE",
+    A."SIZE" AS "SIZE",
+    A.REAL_IOPS AS REAL_IOPS,
+    A.REAL_MBPS AS REAL_MBPS,
+    A.SCHEDULE_US AS SCHEDULE_US,
+    A.IO_DELAY_US AS IO_DELAY_US,
+    A.TOTAL_US AS TOTAL_US
+  FROM
+    SYS.GV$OB_FUNCTION_IO_STAT A
+  WHERE
+    SVR_IP=HOST_IP()
+    AND
+    SVR_PORT=RPC_PORT()
+""".replace("\n", " "),
+)
 
 def_table_schema(
   owner = 'wuyuefei.wyf',
@@ -65781,6 +66651,11 @@ def_table_schema(
   WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " "),
 )
+
+# 28265 GV$OB_LOGSTORE_SERVICE_STATUS
+# 28266 V$OB_LOGSTORE_SERVICE_STATUS
+# 28267 GV$OB_LOGSTORE_SERVICE_INFO
+# 28268 V$OB_LOGSTORE_SERVICE_INFO
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -65815,6 +66690,7 @@ def_table_schema(
 #       * # 100001: idx_data_table_id
 #       * # 100001: __all_table
 ################################################################################
+
 
 ################################################################################
 # Lob Table (50000, 70000)
@@ -66605,7 +67481,13 @@ def_sys_index_table(
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   keywords = all_def_keywords['__all_dbms_lock_allocated'])
 
-# 101092: __all_tablet_reorganize_history
+def_sys_index_table(
+  index_name = 'idx_tablet_his_table_id_src',
+  index_table_id = 101092,
+  index_columns = ['tenant_id', 'src_tablet_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tablet_reorganize_history'])
 
 def_sys_index_table(
   index_name = 'idx_kv_ttl_task_table_id',
@@ -66760,6 +67642,14 @@ def_sys_index_table(
 #       * # 100001: idx_data_table_id
 #       * # 100001: __all_table
 ################################################################################
+
+def_sys_index_table(
+  index_name = 'idx_tablet_his_table_id_dest',
+  index_table_id = 101104,
+  index_columns = ['tenant_id', 'dest_tablet_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tablet_reorganize_history'])
 
 ################################################################################
 # Oracle Agent table Index

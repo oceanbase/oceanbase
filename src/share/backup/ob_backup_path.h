@@ -63,6 +63,7 @@ public:
   int join_table_list_dir();
   int join_table_list_part_file(const share::SCN &scn, const int64_t part_no);
   int join_table_list_meta_info_file(const share::SCN &scn);
+  int join_major_compaction_mview_dep_tablet_list_file();
   static int parse_checkpoint(const char *entry_d_name, const common::ObString &file_name, const ObBackupFileSuffix &type, uint64_t &checkpoint);
   static int parse_partial_table_list_file_name(const char *entry_d_name, const share::SCN &scn, int64_t &part_no);
   static int parse_table_list_meta_file_name(const char *entry_d_name, share::SCN &scn);
@@ -287,6 +288,10 @@ struct ObBackupPathUtil
   // file:///obbackup/backup_set_1_full/infos/table_list/table_list.[scn].[part_no].obbak
   static int get_table_list_part_file_path(const share::ObBackupDest &backup_set_dest,
       const share::SCN &scn, const int64_t part_no, share::ObBackupPath &path);
+
+  // file:///obbackup/backup_set_1_full/infos/major_compaction_mview_dep_tablet_list
+  static int get_major_compaction_mview_dep_tablet_list_path(const share::ObBackupDest &backup_set_dest, share::ObBackupPath &path);
+
   static int construct_backup_set_dest(const share::ObBackupDest &backup_tenant_dest, 
       const share::ObBackupSetDesc &backup_desc, share::ObBackupDest &backup_set_dest);
   static int construct_backup_complement_log_dest(const share::ObBackupDest &backup_tenant_dest,

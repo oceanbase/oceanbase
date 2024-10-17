@@ -162,6 +162,7 @@ struct ObEvalCtx
 {
   friend struct ObExpr;
   friend class ObOperator;
+  friend class ObDASScanOp;
   friend class ObSubPlanFilterOp; // FIXME qubin.qb: remove this line from friend
   friend class oceanbase::storage::ObVectorStore;
   friend class oceanbase::storage::ObAggregatedStoreVec;
@@ -651,6 +652,12 @@ public:
 
   inline bool is_const_expr() const { return is_static_const_ || is_dynamic_const_; }
 
+  inline bool is_vector_sort_expr() const {
+    return type_ == T_FUN_SYS_L2_DISTANCE ||
+           type_ == T_FUN_SYS_INNER_PRODUCT ||
+           type_ == T_FUN_SYS_NEGATIVE_INNER_PRODUCT;
+  }
+
   // Evaluate all parameters, assign the first sizeof...(args) parameters to %args.
   //
   // e.g.:
@@ -742,8 +749,8 @@ public:
   OB_INLINE void unset_null(ObEvalCtx &ctx, int64_t batch_idx) {
     get_nulls(ctx).unset(batch_idx);
   }
-  void reset_attr_datums_ptr(char *frame, const int64_t size);
-  void reset_attrs_datums(char *frame, const int64_t size) const;
+
+  void reset_attrs_datums(ObEvalCtx &ctx) const;
   OB_INLINE bool is_nested_expr() const { return attrs_cnt_ > 0; }
 
 

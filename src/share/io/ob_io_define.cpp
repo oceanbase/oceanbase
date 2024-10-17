@@ -1114,6 +1114,11 @@ void ObIORequest::reset() //only for test, not dec resut_ref
 {
   int ret = OB_SUCCESS;
   retry_count_ = 0;
+  // only read need destroy here
+  // TODO(yanfeng): works now, need refactor
+  if (fd_.is_backup_block_file() && nullptr != io_result_ && io_result_->flag_.is_read()) {
+    backup::ObLSBackupFactory::free(static_cast<backup::ObBackupWrapperIODevice *>(fd_.device_handle_));
+  }
   if (nullptr != control_block_ && nullptr != fd_.device_handle_) {
     fd_.device_handle_->free_iocb(control_block_);
     control_block_ = nullptr;
@@ -1403,7 +1408,9 @@ int ObIORequest::prepare(char *next_buffer, int64_t next_size, int64_t next_offs
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("io result is null", K(ret));
   } else {
-    if (io_result_->flag_.is_read()) {
+    if (fd_.is_backup_block_file()) {
+      // ignore
+    } else if (io_result_->flag_.is_read()) {
       if (OB_FAIL(fd_.device_handle_->io_prepare_pread(
               fd_,
               io_buf,
@@ -1819,8 +1826,11 @@ int ObIOHandle::wait(const int64_t wait_timeout_ms)
   } else if (0 == wait_timeout_ms) {
     ret = OB_EAGAIN;
   } else if (UINT64_MAX == wait_timeout_ms) {
-    const int64_t timeout_ms = ((result_->time_log_.begin_ts_ > 0 ? result_->time_log_.begin_ts_ + result_->timeout_us_ : 0)
-                                - ObTimeUtility::current_time()) / 1000L;
+    const int64_t timeout_ms =
+        ((result_->time_log_.begin_ts_ > 0
+                ? result_->time_log_.begin_ts_ + result_->timeout_us_ - ObTimeUtility::current_time()
+                : 0)) /
+        1000L;
     ObWaitEventGuard wait_guard(result_->flag_.get_wait_event(),
                                 timeout_ms,
                                 result_->size_);
@@ -2175,7 +2185,7 @@ int ObTenantIOConfig::add_single_group_config(const uint64_t tenant_id,
                                               int64_t weight_percent)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_user_group(key.group_id_)) || !is_valid_tenant_id(tenant_id) ||
+  if (OB_UNLIKELY(!is_resource_manager_group(key.group_id_)) || !is_valid_tenant_id(tenant_id) ||
       min_percent < 0 || min_percent > 100 ||
       max_percent < 0 || max_percent > 100 ||
       weight_percent < 0 || weight_percent > 100 ||

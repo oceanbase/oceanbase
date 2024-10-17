@@ -1080,7 +1080,7 @@ int ObLLVMHelper::create_icmp_eq(ObLLVMValue &value, int64_t i, ObLLVMValue &res
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(create_icmp(value, i, ICMP_EQ, result))) {
-    LOG_WARN("failed to get int64", K(i), K(ret));
+    LOG_WARN("failed to create_icmp", K(value), K(i), K(ret));
   }
   return ret;
 }
@@ -1089,7 +1089,7 @@ int ObLLVMHelper::create_icmp_slt(ObLLVMValue &value, int64_t i, ObLLVMValue &re
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(create_icmp(value, i, ICMP_SLT, result))) {
-    LOG_WARN("failed to get int64", K(i), K(ret));
+    LOG_WARN("failed to create_icmp", K(value), K(i), K(ret));
   }
   return ret;
 }
@@ -2259,10 +2259,16 @@ ObDWARFHelper::~ObDWARFHelper() {
 int ObLLVMHelper::add_compiled_object(size_t length, const char *ptr)
 {
   int ret = OB_SUCCESS;
+
   CK (OB_NOT_NULL(jit_));
   CK (OB_NOT_NULL(ptr));
   CK (OB_LIKELY(length > 0));
-  OZ (jit_->add_compiled_object(length, ptr));
+
+  if (OB_SUCC(ret)) {
+    OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
+    OZ (jit_->add_compiled_object(length, ptr));
+  }
+
   return ret;
 }
 

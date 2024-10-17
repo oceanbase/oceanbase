@@ -111,7 +111,11 @@ struct ObMergeStaticInfo
   TO_STRING_KV(K_(ls_id), K_(tablet_id), "merge_type", merge_type_to_str(merge_type_),
     K_(compaction_scn), K_(is_full_merge), K_(concurrent_cnt),
     "merge_level", merge_level_to_str(merge_level_),
-    "exec_mode", exec_mode_to_str(exec_mode_), K_(kept_snapshot_info), K_(participant_table_info),
+    "exec_mode", exec_mode_to_str(exec_mode_),
+    "merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(merge_reason_),
+    "base_major_status", co_major_sstable_status_to_str(base_major_status_),
+    "co_major_merge_type", ObCOMajorMergePolicy::co_major_merge_type_to_str(co_major_merge_type_),
+    K_(kept_snapshot_info), K_(participant_table_info),
     K_(progressive_merge_round), K_(progressive_merge_num), K_(is_fake));
 
   share::ObLSID ls_id_;
@@ -125,6 +129,9 @@ struct ObMergeStaticInfo
   PartTableInfo participant_table_info_;
   ObMergeLevel merge_level_;
   ObExecMode exec_mode_;
+  ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason_;
+  ObCOMajorSSTableStatus base_major_status_;
+  ObCOMajorMergePolicy::ObCOMajorMergeType co_major_merge_type_;
   bool is_full_merge_;
   bool is_fake_;
 };
@@ -138,14 +145,16 @@ struct ObMergeRunningInfo
   void shallow_copy(const ObMergeRunningInfo &other);
 
   static const int64_t MERGE_INFO_COMMENT_LENGTH = 256;
-  TO_STRING_KV(K_(merge_start_time), K_(merge_finish_time), K_(dag_id),
-               "merge_cost_time", merge_finish_time_ - merge_start_time_,
-               K_(start_cg_idx), K_(end_cg_idx), K_(parallel_merge_info));
+  TO_STRING_KV(K_(merge_start_time), K_(merge_finish_time), K_(execute_time), K_(dag_id),
+               K_(start_cg_idx), K_(end_cg_idx), K_(io_percentage), K_(parallel_merge_info));
 
   int64_t merge_start_time_;
   int64_t merge_finish_time_;
+  // for parallel merge & column store, finish_time-start_time can't show the real execute time
+  int64_t execute_time_;
   int64_t start_cg_idx_;
   int64_t end_cg_idx_;
+  int64_t io_percentage_;
   common::ObCurTraceId::TraceId dag_id_;
   ObParalleMergeInfo parallel_merge_info_;
   char comment_[MERGE_INFO_COMMENT_LENGTH];
@@ -160,6 +169,7 @@ public:
   bool is_valid() const;
   void shallow_copy(const ObMergeBlockInfo &other);
   void add(const ObMergeBlockInfo &block_info);
+  void add_without_row_cnt(const ObMergeBlockInfo &block_info);
   void add_index_block_info(const ObMergeBlockInfo &block_info);
   TO_STRING_KV(K_(occupy_size), K_(original_size), K_(macro_block_count), K_(multiplexed_macro_block_count),
     K_(new_micro_count_in_new_macro), K_(multiplexed_micro_count_in_new_macro),
@@ -205,8 +215,8 @@ struct ObSSTableMergeHistory : public ObIDiagnoseInfo
   bool is_valid() const;
   void reset();
   virtual void shallow_copy(ObIDiagnoseInfo *other) override;
-  int update_block_info(const ObMergeBlockInfo &block_info);
-
+  int update_block_info(const ObMergeBlockInfo &block_info, const bool without_row_cnt);
+  void update_execute_time(const int64_t cost_time) { running_info_.execute_time_ += cost_time; }
   int64_t get_macro_block_count() const { return block_info_.macro_block_count_; }
   int64_t get_multiplexed_macro_block_count() const { return block_info_.multiplexed_macro_block_count_; }
   bool is_major_merge_type() const { return compaction::is_major_merge_type(static_info_.merge_type_); }

@@ -189,6 +189,7 @@ private:
     int64_t deserialize_datum_cnt_;
     share::ObTabletCacheInterval pk_interval_;
     ObDirectLoadDMLRowHandler *dml_row_handler_;
+    ObTabletID tablet_id_;
   };
 private:
   ObDirectLoadExternalTable *external_table_;
@@ -229,6 +230,7 @@ private:
     int64_t deserialize_datum_cnt_;
     share::ObTabletCacheInterval pk_interval_;
     ObDirectLoadDMLRowHandler *dml_row_handler_;
+    ObTabletID tablet_id_;
   };
 private:
   ObDirectLoadMultipleHeapTable *heap_table_;

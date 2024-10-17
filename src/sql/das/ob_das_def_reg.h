@@ -142,10 +142,18 @@ struct ObDASSortCtDef;
 struct ObDASSortRtDef;
 REGISTER_DAS_ATTACH_OP(DAS_OP_SORT, ObDASSortCtDef, ObDASSortRtDef);
 
+struct ObDASDocIdMergeCtDef;
+struct ObDASDocIdMergeRtDef;
+REGISTER_DAS_ATTACH_OP(DAS_OP_DOC_ID_MERGE, ObDASDocIdMergeCtDef, ObDASDocIdMergeRtDef);
+
 struct ObDASVIdMergeCtDef;
 struct ObDASVIdMergeRtDef;
 REGISTER_DAS_ATTACH_OP(DAS_OP_VID_MERGE, ObDASVIdMergeCtDef, ObDASVIdMergeRtDef);
 
+
+struct ObDASIndexMergeCtDef;
+struct ObDASIndexMergeRtDef;
+REGISTER_DAS_ATTACH_OP(DAS_OP_INDEX_MERGE, ObDASIndexMergeCtDef, ObDASIndexMergeRtDef);
 
 #undef REGISTER_DAS_ATTACH_OP
 }  // namespace sql

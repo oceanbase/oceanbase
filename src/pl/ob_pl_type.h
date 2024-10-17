@@ -318,7 +318,7 @@ public:
   {
     type_from_origin_ = type_from_origin;
   }
-
+  inline ObPLTypeFrom get_type_from_origin() const { return type_from_origin_; }
   const common::ObDataType *get_data_type() const { return is_obj_type() ? &obj_type_ : NULL; }
   common::ObDataType *get_data_type() { return is_obj_type() ? &obj_type_ : NULL; }
   const common::ObObjMeta *get_meta_type() const { return  is_obj_type() ? &(obj_type_.meta_) : NULL; }
@@ -603,6 +603,8 @@ public:
                                   int64_t &sequence,
                                   share::schema::ObRoutineInfo &routine_info);
   static int deep_copy_pl_type(ObIAllocator &allocator, const ObPLDataType &src, ObPLDataType *&dst);
+
+  static int datum_is_null(ObDatum* param, bool is_udt_type, bool &is_null);
 
   DECLARE_TO_STRING;
 

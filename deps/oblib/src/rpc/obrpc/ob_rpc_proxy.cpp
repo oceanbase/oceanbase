@@ -47,6 +47,14 @@ Handle::Handle()
       first_pkt_id_(INVALID_RPC_PKT_ID)
 {}
 
+Handle::~Handle()
+{
+  if (!has_more_ && first_pkt_id_ != INVALID_RPC_PKT_ID) {
+    LOG_WARN_RET(OB_RPC_PACKET_TOO_LONG, "stream rpc is forgotten to abort", K_(pcode), K_(first_pkt_id));
+    stream_rpc_unregister(first_pkt_id_);
+  }
+}
+
 int ObRpcProxy::init(const ObReqTransport *transport,
     const oceanbase::common::ObAddr &dst)
 {
@@ -184,7 +192,7 @@ int ObRpcProxy::init_pkt(
     if (0 != get_group_id()) {
       pkt->set_group_id(get_group_id());
     } else if (this_worker().get_group_id() == OBCG_LQ ||
-               (is_user_group(this_worker().get_group_id()) && ob_get_tenant_id() != tenant_id_)) {
+               (is_resource_manager_group(this_worker().get_group_id()) && ob_get_tenant_id() != tenant_id_)) {
       pkt->set_group_id(0);
     } else {
       pkt->set_group_id(this_worker().get_group_id());
@@ -350,6 +358,7 @@ void ObRpcProxy::set_handle_attr(Handle* handle, const ObRpcPacketCode& pcode, c
     handle->transport_ = NULL;
     if (is_stream_next) {
       handle->first_pkt_id_ = pkt_id;
+      LOG_TRACE("stream rpc register", K(pcode), K(pkt_id));
       stream_rpc_register(pkt_id, send_ts);
     }
   }

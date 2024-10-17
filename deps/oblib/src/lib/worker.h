@@ -242,11 +242,15 @@ public:
     : thread_group_id_(GET_GROUP_ID()), thread_func_type_(GET_FUNC_TYPE()), group_changed_(false), ret_(OB_SUCCESS)
   {
     THIS_WORKER.set_func_type_(func_type);
-    uint64_t group_id = 0;
-    ret_ = CONVERT_FUNCTION_TYPE_TO_GROUP_ID(func_type, group_id);
-    if (OB_SUCCESS == ret_ && is_user_group(group_id) && group_id != thread_group_id_) {
-      group_changed_ = true;
-      ret_ = SET_GROUP_ID(group_id, true /* is_background */);
+    if (is_resource_manager_group(thread_group_id_)) {
+      // has set group id. do nothing.
+    } else {
+      uint64_t group_id = 0;
+      ret_ = CONVERT_FUNCTION_TYPE_TO_GROUP_ID(func_type, group_id);
+      if (OB_SUCCESS == ret_ && group_id != thread_group_id_) {
+        group_changed_ = true;
+        ret_ = SET_GROUP_ID(group_id, true /* is_background */);
+      }
     }
   }
   ~ConsumerGroupFuncGuard()
@@ -327,7 +331,30 @@ private:
 };
 #endif
 
-// used to check compatibility mode.
+struct ObExtraRpcHeader {
+  OB_UNIS_VERSION(1);
+public:
+  ObExtraRpcHeader()
+      : src_addr_()
+  {}
+  ObExtraRpcHeader(const ObAddr &addr)
+      : src_addr_(addr)
+  {}
+  int assign(const ObExtraRpcHeader &arg)
+  {
+    int ret = OB_SUCCESS;
+    src_addr_ = arg.src_addr_;
+    return ret;
+  }
+  void reset()
+  {
+    src_addr_.reset();
+  }
+  ObAddr src_addr_;
+  TO_STRING_KV(K(src_addr_));
+};
+
+// used to check compatibility mode and save extra rpc packet header.
 class ObRuntimeContext
 {
   OB_UNIS_VERSION(1);
@@ -341,6 +368,7 @@ public:
   ObErrsimModuleType module_type_;
 #endif
   LogReductionMode log_reduction_mode_;
+  ObExtraRpcHeader extra_rpc_header_;
 };
 
 inline ObRuntimeContext &get_ob_runtime_context()
@@ -394,6 +422,11 @@ OB_INLINE void Worker::set_log_reduction_mode(const LogReductionMode log_reducti
   set_log_reduction(log_reduction_mode);
 }
 
+
+OB_INLINE ObAddr &get_rpc_src_addr()
+{
+  return get_ob_runtime_context().extra_rpc_header_.src_addr_;
+}
 
 #ifdef ERRSIM
 OB_INLINE void Worker::set_module_type(const ObErrsimModuleType &module_type)

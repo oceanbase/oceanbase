@@ -644,6 +644,23 @@ bool ObRawExpr::is_multivalue_expr() const
   return IS_MULTIVALUE_EXPR(expr->get_expr_type());
 }
 
+bool ObRawExpr::is_multivalue_index_column_expr() const
+{
+  bool bool_ret = false;
+  const ObRawExpr *param_asis = nullptr;
+  const ObRawExpr *param_multi = nullptr;
+  if (get_expr_type() == T_FUN_SYS_JSON_QUERY &&
+      get_param_count() >= 13 &&
+      OB_NOT_NULL(param_asis = get_param_expr(8)) && param_asis->is_const_raw_expr() &&
+      OB_NOT_NULL(param_multi = get_param_expr(12)) && param_multi->is_const_raw_expr())
+  {
+    common::ObObj value_asis = (static_cast<const ObConstRawExpr *>(param_asis))->get_value();
+    common::ObObj value_multi = (static_cast<const ObConstRawExpr *>(param_multi))->get_value();
+    bool_ret = value_asis.get_int() == 1 && value_multi.get_int() == 0;
+  }
+  return bool_ret;
+}
+
 ObRawExpr* ObRawExpr::get_json_domain_param_expr()
 {
   ObRawExpr* param_expr = nullptr;
@@ -960,7 +977,7 @@ int ObRawExpr::is_const_inherit_expr(bool &is_const_inherit,
       || T_FUN_SYS_AUDIT_LOG_SET_USER == type_
       || T_FUN_SYS_AUDIT_LOG_REMOVE_USER == type_
       || (T_FUN_UDF == type_
-          && !static_cast<const ObUDFRawExpr*>(this)->is_deterministic())
+          && !static_cast<const ObUDFRawExpr*>(this)->is_udf_deterministic())
       || T_FUN_SYS_GET_LOCK == type_
       || T_FUN_SYS_IS_FREE_LOCK == type_
       || T_FUN_SYS_IS_USED_LOCK == type_
@@ -980,6 +997,26 @@ int ObRawExpr::is_const_inherit_expr(bool &is_const_inherit,
         is_const_inherit = false;
       }
     }
+  }
+  return ret;
+}
+
+bool ObRawExpr::check_is_deterministic_expr() const
+{
+  bool ret = true;
+  if (has_flag(CNT_VOLATILE_CONST)
+      || has_flag(CNT_ASSIGN_EXPR)
+      || has_flag(CNT_RAND_FUNC)
+      || has_flag(CNT_SEQ_EXPR)
+      || has_flag(CNT_STATE_FUNC)
+      || has_flag(CNT_DYNAMIC_USER_VARIABLE)
+      || has_flag(CNT_SO_UDF)
+      // unclear performance expr type
+      || T_FUN_SYS_STMT_ID == type_
+      || T_FUN_LABEL_SE_SESSION_LABEL == type_
+      || T_FUN_LABEL_SE_SESSION_ROW_LABEL == type_
+      || IS_LABEL_SE_POLICY_FUNC(type_)) {
+    ret = false; // lost expr deterministic
   }
   return ret;
 }
@@ -1937,6 +1974,7 @@ int ObExecParamRawExpr::assign(const ObRawExpr &other)
       outer_expr_ = tmp.outer_expr_;
       is_onetime_ = tmp.is_onetime_;
       ref_same_dblink_ = tmp.ref_same_dblink_;
+      eval_by_storage_ = tmp.eval_by_storage_;
     }
   }
   return ret;
@@ -2004,7 +2042,11 @@ int ObExecParamRawExpr::get_name_internal(char *buf,
                                           ExplainType type) const
 {
   int ret = OB_SUCCESS;
-  if (EXPLAIN_DBLINK_STMT != type) {
+  if (eval_by_storage_) {
+    if (OB_FAIL(BUF_PRINTF("?"))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    }
+  } else if (EXPLAIN_DBLINK_STMT != type) {
     if (OB_FAIL(ObConstRawExpr::get_name_internal(buf, buf_len, pos, type))) {
       LOG_WARN("failed to print const raw expr", K(ret));
     }
@@ -2025,7 +2067,8 @@ int64_t ObExecParamRawExpr::to_string(char *buf, const int64_t buf_len) const
        N_EXPR_INFO, info_,
        N_VALUE, value_,
        K_(outer_expr),
-       K_(is_onetime));
+       K_(is_onetime),
+       K_(eval_by_storage));
   J_OBJ_END();
   return pos;
 }
@@ -5279,6 +5322,7 @@ int ObUDFRawExpr::assign(const ObRawExpr &other)
       params_type_ = tmp.params_type_;
       database_name_ = tmp.database_name_;
       package_name_ = tmp.package_name_;
+      has_deterministic_attribute_ = tmp.has_deterministic_attribute_;
       is_parallel_enable_ = tmp.is_parallel_enable_;
       is_udt_udf_ = tmp.is_udt_udf_;
       is_pkg_body_udf_ = tmp.is_pkg_body_udf_;
@@ -5366,7 +5410,7 @@ bool ObUDFRawExpr::inner_same_as(const ObRawExpr &expr,
   bool bool_ret = true;
   if (this == &expr) {
     // do nothing
-  } else if (!is_deterministic() && (NULL == check_context ||
+  } else if (!is_udf_deterministic() && (NULL == check_context ||
                                      (NULL != check_context && check_context->need_check_deterministic_))) {
     bool_ret = false;
   } else if (!ObSysFunRawExpr::inner_same_as(expr, check_context)) {
@@ -5379,7 +5423,7 @@ bool ObUDFRawExpr::inner_same_as(const ObRawExpr &expr,
                 pls_type_ == other->get_pls_type() &&
                 database_name_.compare(other->get_database_name()) == 0 &&
                 package_name_.compare(other->get_package_name()) == 0 &&
-                is_deterministic() == other->is_deterministic() &&
+                is_udf_deterministic() == other->is_udf_deterministic() &&
                 is_parallel_enable_ == other->is_parallel_enable() &&
                 is_udt_udf_ == other->get_is_udt_udf() &&
                 is_pkg_body_udf_ == other->is_pkg_body_udf() &&
@@ -5473,6 +5517,12 @@ int ObUDFRawExpr::get_schema_object_version(share::schema::ObSchemaGetterGuard &
     OZ (obj_versions.push_back(obj_version));
   }
   return ret;
+}
+
+void ObUDFRawExpr::set_udf_deterministic(bool is_deterministic)
+{
+  has_deterministic_attribute_ = is_deterministic;
+  is_deterministic_ = is_deterministic;
 }
 
 int ObPLIntegerCheckerRawExpr::assign(const ObRawExpr &other)
@@ -6334,6 +6384,11 @@ int ObPseudoColumnRawExpr::get_name_internal(char *buf, const int64_t buf_len, i
       break;
     case T_ORA_ROWSCN:
       if (OB_FAIL(BUF_PRINTF("ORA_ROWSCN"))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+      break;
+    case T_PSEUDO_OLD_NEW_COL:
+      if (OB_FAIL(BUF_PRINTF(OB_MLOG_OLD_NEW_COLUMN_NAME))) {
         LOG_WARN("failed to print", K(ret));
       }
       break;

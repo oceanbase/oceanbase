@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_merge_ctx.h"
+#include "observer/table_load/ob_table_load_store_ctx.h"
 #include "share/ob_tablet_autoincrement_service.h"
 #include "storage/direct_load/ob_direct_load_external_table.h"
 #include "storage/direct_load/ob_direct_load_multiple_heap_table.h"

@@ -131,6 +131,7 @@ int ObRecoverRestoreTableTask::obtain_snapshot(const ObDDLTaskStatus next_task_s
 
 // update sstable complement status for all leaders
 int ObRecoverRestoreTableTask::update_complete_sstable_job_status(const common::ObTabletID &tablet_id,
+                                                                 const ObAddr &addr,
                                                                  const int64_t snapshot_version,
                                                                  const int64_t execution_id,
                                                                  const int ret_code,
@@ -147,10 +148,12 @@ int ObRecoverRestoreTableTask::update_complete_sstable_job_status(const common::
     LOG_WARN("snapshot version not match", K(ret), K(snapshot_version), K(snapshot_version_));
   } else if (execution_id < execution_id_) {
     LOG_INFO("receive a mismatch execution result, ignore", K(ret_code), K(execution_id), K(execution_id_));
-  } else if (OB_FAIL(replica_builder_.set_partition_task_status(tablet_id,
-                                                                ret_code,
-                                                                addition_info.row_scanned_,
-                                                                addition_info.row_inserted_))) {
+  } else if (OB_FAIL(replica_builder_.update_build_progress(tablet_id,
+                                                            addr,
+                                                            ret_code,
+                                                            addition_info.row_scanned_,
+                                                            addition_info.row_inserted_,
+                                                            addition_info.physical_row_count_))) {
     LOG_WARN("fail to set partition task status", K(ret));
   }
   return ret;

@@ -1208,7 +1208,9 @@ int ObDMLService::init_dml_param(const ObDASDMLBaseCtDef &base_ctdef,
   dml_param.prelock_ = base_rtdef.prelock_;
   dml_param.is_batch_stmt_ = base_ctdef.is_batch_stmt_;
   dml_param.dml_allocator_ = &das_alloc;
-  dml_param.snapshot_ = snapshot;
+  if (OB_FAIL(dml_param.snapshot_.assign(snapshot))) {
+    LOG_WARN("assign snapshot fail", K(ret));
+  }
   dml_param.branch_id_ = write_branch_id;
   dml_param.store_ctx_guard_ = &store_ctx_gurad;
   if (base_ctdef.is_batch_stmt_) {

@@ -31,6 +31,8 @@ public:
       leaf_query_range_(),
       filter_bitmap_(nullptr),
       micro_data_prewarm_idx_(0),
+      filter_constant_type_(),
+      max_filter_constant_id_(OB_INVALID_CS_ROW_ID),
       cur_micro_data_read_idx_(-1),
       agg_group_(nullptr),
       sstable_index_filter_(nullptr)
@@ -73,18 +75,47 @@ public:
   {
     return index_info.has_agg_data() && index_info.is_filter_uncertain();
   }
+  OB_INLINE bool is_cg_scanner() const
+  { return ObICGIterator::OB_CG_SCANNER == cg_iter_type_; }
   void recycle_block_data();
   void set_agg_group(ObAggGroupBase *agg_group) { agg_group_ = agg_group; }
   void set_project_type(const bool project_without_filter) { is_project_without_filter_ = project_without_filter; }
+  OB_INLINE sql::ObBoolMask get_filter_constant_type() const
+  {
+    return filter_constant_type_;
+  }
+  OB_INLINE ObCSRowId get_max_filter_constant_id() const
+  {
+    return max_filter_constant_id_;
+  }
   INHERIT_TO_STRING_KV("ObCGPrefetcher", ObIndexTreeMultiPassPrefetcher,
                        K_(is_reverse_scan), K_(is_project_without_filter), K_(need_prewarm),
                        K_(query_index_range), K_(query_range), K_(cg_iter_type),
                        K_(micro_data_prewarm_idx), K_(cur_micro_data_read_idx), KP_(filter_bitmap),
-                       KP_(agg_group), KP_(sstable_index_filter));
+                       KP_(agg_group), KP_(sstable_index_filter), K_(filter_constant_type), K_(max_filter_constant_id));
 protected:
   int get_prefetch_depth(int64_t &depth, const int64_t prefetching_idx);
 private:
   int prewarm();
+  int refresh_constant_filter_info();
+  bool is_constant_filter_continuous(const ObMicroIndexInfo &index_info)
+  {
+    return index_info.is_filter_constant() &&
+        ((is_reverse_scan_ && 0 == index_info.get_row_range().compare(max_filter_constant_id_ - 1)) ||
+         (!is_reverse_scan_ && 0 == index_info.get_row_range().compare(max_filter_constant_id_ + 1)));
+  }
+  bool check_and_update_constant_filter(const ObMicroIndexInfo &index_info)
+  {
+    bool can_continuous = false;
+    if (is_constant_filter_continuous(index_info) &&
+        (filter_constant_type_.is_uncertain() ||
+         index_info.get_filter_constant_type() == filter_constant_type_.bmt_)) {
+      filter_constant_type_.set(index_info.get_filter_constant_type());
+      max_filter_constant_id_ = is_reverse_scan_ ? index_info.get_row_range().start_row_id_ : index_info.get_row_range().end_row_id_;
+      can_continuous = true;
+    }
+    return can_continuous;
+  }
   struct ObCSIndexTreeLevelHandle : public ObIndexTreeLevelHandle {
   public:
     int prefetch(const int64_t level, ObCGPrefetcher &prefetcher);
@@ -120,6 +151,12 @@ private:
   ObDatumRange leaf_query_range_;
   const ObCGBitmap *filter_bitmap_;
   int64_t micro_data_prewarm_idx_;
+  // filter_constant_type_ and max_filter_constant_id_ only avaliable in filter scanner
+  // when filter_constant_type_ is always_true,  max_filter_constant_id_ means the max continuous rowid that selected by the filter;
+  // when filter_constant_type_ is always_false, max_filter_constant_id_ means the max continuose rowid that filtered;
+  // when filter_constant_type_ is probablistic, means nothing
+  sql::ObBoolMask filter_constant_type_;
+  ObCSRowId max_filter_constant_id_;
 public:
   int64_t cur_micro_data_read_idx_;
   ObAggGroupBase *agg_group_;

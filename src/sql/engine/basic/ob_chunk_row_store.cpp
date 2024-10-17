@@ -242,7 +242,7 @@ ObChunkRowStore::ObChunkRowStore(common::ObIAllocator *alloc /* = NULL */)
 }
 
 int ObChunkRowStore::init(int64_t mem_limit,
-    uint64_t tenant_id /* = common::OB_SERVER_TENANT_ID */,
+    uint64_t tenant_id,
     int64_t mem_ctx_id /* = common::ObCtxIds::DEFAULT_CTX_ID */,
     const char *label /* = common::ObNewModIds::OB_SQL_CHUNK_ROW_STORE) */,
     bool enable_dump /* = true */,
@@ -278,7 +278,6 @@ int ObChunkRowStore::init(int64_t mem_limit,
 void ObChunkRowStore::reset()
 {
   int ret = OB_SUCCESS;
-  tenant_id_ = common::OB_SERVER_TENANT_ID;
   label_ = common::ObModIds::OB_SQL_ROW_STORE;
   ctx_id_ = common::ObCtxIds::DEFAULT_CTX_ID;
 
@@ -286,13 +285,14 @@ void ObChunkRowStore::reset()
   row_cnt_ = 0;
 
   if (is_file_open()) {
-    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.remove(io_.fd_))) {
+    if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.remove(tenant_id_, io_.fd_))) {
       LOG_WARN("remove file failed", K(ret), K_(io_.fd));
     } else {
       LOG_TRACE("close file success", K(ret), K_(io_.fd));
     }
     io_.fd_ = -1;
   }
+  tenant_id_ = common::OB_SERVER_TENANT_ID;
   n_block_in_file_ = 0;
 
   while (!blocks_.is_empty()) {
@@ -348,7 +348,7 @@ void ObChunkRowStore::reuse()
 {
   int ret = OB_SUCCESS;
   if (is_file_open()) {
-    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.remove(io_.fd_))) {
+    if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.remove(tenant_id_, io_.fd_))) {
       LOG_WARN("remove file failed", K(ret), K_(io_.fd));
     } else {
       LOG_TRACE("close file success", K(ret), K_(io_.fd));
@@ -1598,7 +1598,7 @@ int ObChunkRowStore::get_timeout(int64_t &timeout_ms)
 int ObChunkRowStore::alloc_dir_id()
 {
   int ret = OB_SUCCESS;
-  if (-1 == io_.dir_id_ && OB_FAIL(ObChunkStoreUtil::alloc_dir_id(io_.dir_id_))) {
+  if (-1 == io_.dir_id_ && OB_FAIL(ObChunkStoreUtil::alloc_dir_id(tenant_id_, io_.dir_id_))) {
     LOG_WARN("allocate file directory failed", K(ret));
   }
   return ret;
@@ -1621,7 +1621,7 @@ int ObChunkRowStore::write_file(void *buf, int64_t size)
       if (-1 == io_.dir_id_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("temp file dir id is not init", K(ret), K(io_.dir_id_));
-      } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.open(io_.fd_, io_.dir_id_))) {
+      } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.open(tenant_id_, io_.fd_, io_.dir_id_))) {
         LOG_WARN("open file failed", K(ret));
       } else {
         file_size_ = 0;
@@ -1634,7 +1634,7 @@ int ObChunkRowStore::write_file(void *buf, int64_t size)
   }
   if (OB_SUCC(ret) && size > 0) {
     set_io(size, static_cast<char *>(buf));
-    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.write(io_))) {
+    if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.write(tenant_id_, io_))) {
       LOG_WARN("write to file failed", K(ret), K_(io), K(timeout_ms));
     }
   }
@@ -1673,9 +1673,9 @@ int ObChunkRowStore::read_file(void *buf, const int64_t size, const int64_t offs
     io_.io_timeout_ms_ = timeout_ms;
     tmp_file::ObTmpFileIOHandle handle;
     if (0 == read_size
-        && OB_FAIL(FILE_MANAGER_INSTANCE_V2.get_tmp_file_size(io_.fd_, tmp_file_size))) {
+        && OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.get_tmp_file_size(tenant_id_, io_.fd_, tmp_file_size))) {
       LOG_WARN("failed to get tmp file size", K(ret));
-    } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.pread(io_, offset, handle))) {
+    } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.pread(tenant_id_, io_, offset, handle))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("read form file failed", K(ret), K(io_), K(offset), K(timeout_ms));
       }
@@ -1701,11 +1701,11 @@ bool ObChunkRowStore::need_dump(int64_t extra_size)
   return dump;
 }
 
-int ObChunkStoreUtil::alloc_dir_id(int64_t &dir_id)
+int ObChunkStoreUtil::alloc_dir_id(const uint64_t tenant_id, int64_t &dir_id)
 {
   int ret = OB_SUCCESS;
   dir_id = 0;
-  if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.alloc_dir(dir_id))) {
+  if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.alloc_dir(tenant_id, dir_id))) {
     LOG_WARN("allocate file directory failed", K(ret));
   }
   return ret;

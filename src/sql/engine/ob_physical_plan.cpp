@@ -551,42 +551,6 @@ void ObPhysicalPlan::update_plan_stat(const ObAuditRecordData &record,
       ATOMIC_STORE(&(stat_.slowest_exec_time_), current_time);
     }
 
-    if (stat_.table_row_count_first_exec_ != NULL && table_row_count_list != NULL) {
-      int64_t access_table_num = stat_.access_table_num_;
-      int64_t max_index = std::min(access_table_num,
-                                   std::min(table_row_count_list->count(),
-                                   OB_MAX_TABLE_NUM_PER_STMT));
-      if (is_first) {
-        for (int64_t i = 0; i < max_index; ++i) {
-          ATOMIC_STORE(&(stat_.table_row_count_first_exec_[i].op_id_),
-                       table_row_count_list->at(i).op_id_);
-          ATOMIC_STORE(&(stat_.table_row_count_first_exec_[i].row_count_),
-                       table_row_count_list->at(i).row_count_);
-          LOG_DEBUG("first add row stat", K(table_row_count_list->at(i)));
-        } // for end
-      } else if (record.get_elapsed_time() > SLOW_QUERY_TIME_FOR_PLAN_EXPIRE) {
-        for (int64_t i = 0; !is_expired() && i < max_index; ++i) {
-          for (int64_t j = 0; !is_expired() && j < max_index; ++j) {
-            // 一些场景比如并行执行时，不同次执行表的行信息存储的顺序可能不同
-            if (table_row_count_list->at(i).op_id_ ==
-                stat_.table_row_count_first_exec_[j].op_id_) {
-              int64_t first_exec_row_count = ATOMIC_LOAD(&stat_.table_row_count_first_exec_[j]
-                                                               .row_count_);
-              if (first_exec_row_count == -1) {
-                // do nothing
-              } else if (check_if_is_expired(first_exec_row_count,
-                                             table_row_count_list->at(i).row_count_)) {
-                set_is_expired(true);
-                LOG_INFO("plan is expired", K(first_exec_row_count),
-                                            K(table_row_count_list->at(i)),
-                                            "current_elapsed_time", record.get_elapsed_time(),
-                                            "plan_stat", stat_);
-              }
-            }
-          } // for max_index end
-        } // for max_index end
-      }
-    }
     ATOMIC_STORE(&(stat_.last_active_time_), current_time);
     if (ATOMIC_LOAD(&stat_.is_evolution_)) { //for spm
       ATOMIC_INC(&(stat_.evolution_stat_.executions_));
@@ -608,44 +572,149 @@ void ObPhysicalPlan::update_plan_stat(const ObAuditRecordData &record,
     }
   } // long route stat ends
 
-  if (!is_expired() && stat_.enable_plan_expiration_) {
-    if (record.is_timeout() || record.status_ == OB_SESSION_KILLED) {
-      set_is_expired(true);
-      LOG_INFO("query plan is expired due to execution timeout", K(stat_));
-    } else if (is_first) {
+  update_plan_expired_info(record, is_first, table_row_count_list);
+}
+
+void ObPhysicalPlan::update_plan_expired_info(const ObAuditRecordData &record,
+                                              const bool is_first,
+                                              const ObIArray<ObTableRowCount> *table_row_count_list)
+{
+  bool bret = false;
+  bool is_evolution = ATOMIC_LOAD(&stat_.is_evolution_);
+  bool info_inited = ATOMIC_LOAD(&(stat_.first_exec_row_count_)) >= 0;
+  if (is_expired()) {
+    /* do nothing */
+  } else if (!is_evolution && stat_.enable_plan_expiration_
+             && (record.is_timeout() || OB_SESSION_KILLED == record.status_)) {
+    set_is_expired(true);
+    LOG_INFO("query plan is expired due to execution timeout", K(stat_));
+  } else if (is_first) {
+    if (stat_.enable_plan_expiration_) {
       ATOMIC_STORE(&(stat_.sample_times_), 0);
-      ATOMIC_STORE(&(stat_.first_exec_row_count_),
-                    record.exec_record_.get_memstore_read_row_count() +
-                    record.exec_record_.get_ssstore_read_row_count());
-      ATOMIC_STORE(&(stat_.first_exec_usec_), record.get_elapsed_time() - record.exec_record_.wait_time_end_
-                                  - (record.exec_timestamp_.run_ts_ - record.exec_timestamp_.receive_ts_));
-    } else if (0 == stat_.sample_times_) { // first sample query
-      ATOMIC_INC(&(stat_.sample_times_));
-      ATOMIC_STORE(&(stat_.sample_exec_row_count_),
-                   record.exec_record_.get_memstore_read_row_count() +
-                   record.exec_record_.get_ssstore_read_row_count());
-      ATOMIC_STORE(&(stat_.sample_exec_usec_), record.get_elapsed_time() - record.exec_record_.wait_time_end_
-                                   - (record.exec_timestamp_.run_ts_ - record.exec_timestamp_.receive_ts_));
+      ATOMIC_STORE(&(stat_.first_exec_row_count_), record.exec_record_.get_memstore_read_row_count() + record.exec_record_.get_ssstore_read_row_count());
+      ATOMIC_STORE(&(stat_.first_exec_usec_), record.exec_timestamp_.executor_t_);
     } else {
-      int64_t sample_count = ATOMIC_AAF(&(stat_.sample_times_), 1);
-      int64_t sample_exec_row_count = ATOMIC_AAF(&(stat_.sample_exec_row_count_),
-                                        record.exec_record_.get_memstore_read_row_count() +
-                                        record.exec_record_.get_ssstore_read_row_count());
-      int64_t sample_exec_usec = ATOMIC_AAF(&(stat_.sample_exec_usec_),
-                                    record.get_elapsed_time() - record.exec_record_.wait_time_end_
-                                    - (record.exec_timestamp_.run_ts_ - record.exec_timestamp_.receive_ts_));
-      if (sample_count < SLOW_QUERY_SAMPLE_SIZE) {
-        // do nothing when query execution samples are not enough
-      } else {
-        if (stat_.cpu_time_ <= SLOW_QUERY_TIME_FOR_PLAN_EXPIRE * stat_.execute_times_) {
-        // do nothing for fast query
-        } else if (is_plan_unstable(sample_count, sample_exec_row_count, sample_exec_usec)) {
-          set_is_expired(true);
+      ATOMIC_STORE(&(stat_.first_exec_row_count_), 0);
+    }
+    if (stat_.table_row_count_first_exec_ != NULL && table_row_count_list != NULL) {
+      fill_row_count_info(true, stat_.access_table_num_, stat_.table_row_count_first_exec_, *table_row_count_list);
+    }
+  } else if (info_inited && is_evolution) {
+    /* do nothing */
+  } else if (!info_inited && is_evolution) {
+    /* in evolution, sampling infos */
+    ATOMIC_INC(&(stat_.sample_times_));
+    if (stat_.enable_plan_expiration_) {
+      ATOMIC_AAF(&(stat_.sample_exec_row_count_), record.exec_record_.get_memstore_read_row_count() + record.exec_record_.get_ssstore_read_row_count());
+      ATOMIC_AAF(&(stat_.sample_exec_usec_), record.exec_timestamp_.executor_t_);
+    }
+    if (stat_.table_row_count_first_exec_ != NULL && table_row_count_list != NULL) {
+      fill_row_count_info(false, stat_.access_table_num_, stat_.table_row_count_first_exec_, *table_row_count_list);
+    }
+  } else if (!info_inited && !is_evolution) {
+    /* finish evolution, init use sampling infos */
+    int64_t first_exec_row_count = 0;
+    do {
+      first_exec_row_count = ATOMIC_LOAD(&(stat_.first_exec_row_count_));
+    } while (first_exec_row_count != ATOMIC_VCAS(&(stat_.first_exec_row_count_), first_exec_row_count, 0));
+    if (-1 == first_exec_row_count) {  // only one thread can init first exec infos by get sample_count
+      int64_t sample_count = ATOMIC_LOAD(&(stat_.sample_times_));
+      if (stat_.enable_plan_expiration_) {
+        if (sample_count <= 0) {
+          sample_count = 1;
         }
-        ATOMIC_STORE(&(stat_.sample_times_), 0);
+        stat_.first_exec_row_count_ = stat_.sample_exec_row_count_ / sample_count;
+        stat_.first_exec_usec_ = stat_.sample_exec_usec_ / sample_count;
+      }
+      ATOMIC_STORE(&(stat_.sample_exec_row_count_), 0);
+      ATOMIC_STORE(&(stat_.sample_exec_usec_), 0);
+      ATOMIC_STORE(&(stat_.sample_times_), 0);
+      if (stat_.table_row_count_first_exec_ != NULL && table_row_count_list != NULL && sample_count > 0) {
+        int64_t max_index = std::min(stat_.access_table_num_, OB_MAX_TABLE_NUM_PER_STMT);
+        for (int64_t i = 0; i < max_index; ++i) {
+          if (stat_.table_row_count_first_exec_[i].row_count_ >= 0) {
+            stat_.table_row_count_first_exec_[i].row_count_ /= sample_count;
+          }
+          LOG_DEBUG("init first row stat for spm plan", K(i), K(stat_.table_row_count_first_exec_[i]));
+        }
+      }
+      LOG_DEBUG("init first exec info for spm plan", K(stat_.enable_plan_expiration_), K(sample_count),
+                                                    K(stat_.first_exec_row_count_), K(stat_.first_exec_usec_));
+    }
+  } else if (stat_.table_row_count_first_exec_ != NULL && table_row_count_list != NULL
+             && record.get_elapsed_time() > SLOW_QUERY_TIME_FOR_PLAN_EXPIRE
+             && check_if_is_expired(record.get_elapsed_time(), stat_.access_table_num_, stat_.table_row_count_first_exec_, *table_row_count_list)) {
+    /* expire plan by range scan row count */
+    set_is_expired(true);
+  } else if (stat_.enable_plan_expiration_) {
+    /* expire plan by local plan row count and dist plan exec time */
+    int64_t sample_count = ATOMIC_AAF(&(stat_.sample_times_), 1);
+    int64_t sample_exec_row_count = ATOMIC_AAF(&(stat_.sample_exec_row_count_),
+                                              record.exec_record_.get_memstore_read_row_count() + record.exec_record_.get_ssstore_read_row_count());
+    int64_t sample_exec_usec = ATOMIC_AAF(&(stat_.sample_exec_usec_), record.exec_timestamp_.executor_t_);
+    if (sample_count >= SLOW_QUERY_SAMPLE_SIZE) {
+      ATOMIC_STORE(&(stat_.sample_times_), 0);
+      ATOMIC_STORE(&(stat_.sample_exec_row_count_), 0);
+      ATOMIC_STORE(&(stat_.sample_exec_usec_), 0);
+      if (stat_.elapsed_time_ > SLOW_QUERY_TIME_FOR_PLAN_EXPIRE * stat_.execute_times_
+          && is_plan_unstable(sample_count, sample_exec_row_count, sample_exec_usec)) {
+        set_is_expired(true);
       }
     }
   }
+}
+
+void ObPhysicalPlan::fill_row_count_info(const bool is_first,
+                                         const int64_t access_table_num,
+                                         ObTableRowCount *table_row_count_first_exec,
+                                         const ObIArray<ObTableRowCount> &table_row_count_list)
+{
+  int64_t max_index = std::min(access_table_num, std::min(table_row_count_list.count(), OB_MAX_TABLE_NUM_PER_STMT));
+  if (max_index <= 0) {
+    /* do nothing */
+  } else if (is_first || OB_INVALID_ID == ATOMIC_LOAD(&table_row_count_first_exec[0].op_id_)) {
+    for (int64_t i = 0; i < max_index; ++i) {
+      ATOMIC_STORE(&(table_row_count_first_exec[i].op_id_), table_row_count_list.at(i).op_id_);
+      ATOMIC_STORE(&(table_row_count_first_exec[i].row_count_), table_row_count_list.at(i).row_count_);
+      LOG_DEBUG("first add row stat", K(table_row_count_list.at(i)));
+    }
+  } else {
+    bool finish = false;
+    for (int64_t i = 0; i < max_index; ++i) {
+      finish = false;
+      for (int64_t j = 0; !finish && j < max_index; ++j) {
+        if (table_row_count_list.at(j).op_id_ == table_row_count_first_exec[i].op_id_) {
+          finish = true;
+          ATOMIC_AAF(&(table_row_count_first_exec[i].row_count_), table_row_count_list.at(j).row_count_);
+        }
+      }
+    }
+  }
+}
+
+bool ObPhysicalPlan::check_if_is_expired(const int64_t elapsed_time,
+                                         const int64_t access_table_num,
+                                         const ObTableRowCount *table_row_count_first_exec,
+                                         const ObIArray<ObTableRowCount> &table_row_count_list)
+{
+  bool bret = false;
+  int64_t max_index = std::min(access_table_num, std::min(table_row_count_list.count(), OB_MAX_TABLE_NUM_PER_STMT));
+  for (int64_t i = 0; !bret && i < max_index; ++i) {
+    for (int64_t j = 0; !bret && j < max_index; ++j) {
+      // 一些场景比如并行执行时，不同次执行表的行信息存储的顺序可能不同
+      if (table_row_count_list.at(i).op_id_ == table_row_count_first_exec[j].op_id_) {
+        int64_t first_exec_row_count = ATOMIC_LOAD(&table_row_count_first_exec[j].row_count_);
+        if (inner_check_if_is_expired(first_exec_row_count, table_row_count_list.at(i).row_count_)) {
+          bret = true;
+          LOG_INFO("plan is expired", K(first_exec_row_count),
+                                      K(table_row_count_list.at(i)),
+                                      "current_elapsed_time", elapsed_time,
+                                      "plan_stat", stat_);
+        }
+      } // for max_index end
+    } // for max_index end
+  }
+  return bret;
 }
 
 bool ObPhysicalPlan::is_plan_unstable(const int64_t sample_count,
@@ -663,8 +732,7 @@ bool ObPhysicalPlan::is_plan_unstable(const int64_t sample_count,
       // the average sample query range row count increases great
       bret = true;
       LOG_INFO("local query plan is expired due to unstable performance",
-               K(bret), K(stat_.execute_times_),
-               K(first_query_range_rows), K(sample_exec_row_count), K(sample_count));
+               K(first_query_range_rows), K(sample_exec_row_count), K(sample_count), K(stat_));
     }
   } else if ( OB_PHY_PLAN_DISTRIBUTED == plan_type_) {
     int64_t first_exec_usec = ATOMIC_LOAD(&stat_.first_exec_usec_);
@@ -672,8 +740,7 @@ bool ObPhysicalPlan::is_plan_unstable(const int64_t sample_count,
       // the average sample query execute time increases great
       bret = true;
       LOG_INFO("distribute query plan is expired due to unstable performance",
-               K(bret), K(stat_.execute_times_), K(first_exec_usec),
-               K(sample_exec_usec), K(sample_count));
+               K(first_exec_usec), K(sample_exec_usec), K(sample_count), K(stat_));
     }
   } else {
     // do nothing
@@ -702,11 +769,13 @@ int64_t ObPhysicalPlan::get_evo_perf() const {
  *     可能会保持在一个较低的值，这时候计划淘汰会很频繁，
  *     设置一个阈值的可以在很大程度上缓解计划淘汰的频率
  */
-inline bool ObPhysicalPlan::check_if_is_expired(const int64_t first_exec_row_count,
-                                                const int64_t current_row_count) const
+inline bool ObPhysicalPlan::inner_check_if_is_expired(const int64_t first_exec_row_count,
+                                                      const int64_t current_row_count) const
 {
   bool ret_bool = false;
-  if (current_row_count <= EXPIRED_PLAN_TABLE_ROW_THRESHOLD) { // 100 行
+  if (first_exec_row_count < 0) {
+    /* do nothing */
+  } else if (current_row_count <= EXPIRED_PLAN_TABLE_ROW_THRESHOLD) { // 100 行
     ret_bool = false;
   } else {
     ret_bool =  ((first_exec_row_count == 0  && current_row_count > 0)
@@ -1250,7 +1319,7 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
                                   stat_.stmt_))) {
         SQL_PC_LOG(WARN, "fail to set truncate string", K(ret));
       }
-      stat_.ps_stmt_id_ = pc_ctx.fp_result_.pc_key_.key_id_;
+      stat_.ps_stmt_id_ = pc_ctx.sql_ctx_.statement_id_;
     } else {
       ObTruncatedString trunc_stmt(pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_, sql_length);
       if (OB_FAIL(ob_write_string(get_allocator(),

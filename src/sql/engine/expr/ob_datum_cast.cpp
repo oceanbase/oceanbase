@@ -4014,7 +4014,9 @@ static int common_string_json(const ObExpr &expr,
         }
       } else if (is_oracle && (OB_ISNULL(j_text.ptr()) || j_text.length() == 0)) {
         j_base = &j_null;
-      } else if (OB_FAIL(ObJsonParser::get_tree(&temp_allocator, j_text, j_tree, parse_flag))) {
+      } else if (OB_FAIL(ObJsonParser::get_tree(&temp_allocator, j_text, j_tree,
+                                                parse_flag,
+                                                ObJsonExprHelper::get_json_max_depth_config()))) {
         if (!is_oracle && CM_IS_IMPLICIT_CAST(expr.extra_) && !CM_IS_COLUMN_CONVERT(expr.extra_)) {
           ret = OB_SUCCESS;
           j_base = &j_string;
@@ -4253,8 +4255,9 @@ CAST_FUNC_NAME(text, string)
     common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
     ObExprStrResAlloc res_alloc(expr, ctx);
     ObTextStringIter instr_iter(in_type, in_cs_type, child_res->get_string(), has_lob_header);
-    const ObLobCommon& lob = child_res->get_lob_data();
-    if (child_res->len_ != 0 && !lob.is_mem_loc_ && lob.in_row_ && has_lob_header) {
+    // fast path for disk inrow lob
+    if (has_lob_header && child_res->len_ != 0 && ! child_res->get_lob_data().is_mem_loc_ && child_res->get_lob_data().in_row_) {
+      const ObLobCommon& lob = child_res->get_lob_data();
       data.assign_ptr(lob.get_inrow_data_ptr(), static_cast<int32_t>(lob.get_byte_size(child_res->len_)));
     } else if (OB_FAIL(ObTextStringHelper::build_text_iter(instr_iter, &ctx.exec_ctx_, ctx.exec_ctx_.get_my_session(),
                                 is_same_charset ? reinterpret_cast<ObIAllocator *>(&res_alloc) : &temp_allocator,
@@ -9634,7 +9637,7 @@ CAST_FUNC_NAME(collection, collection)
       } else if (OB_FAIL(ObArrayTypeCastFactory::alloc(temp_allocator, *arr_type,
                                                        *dst_arr_type, arr_cast))) {
         LOG_WARN("alloc array cast failed", K(ret), K(src_coll_info));
-      } else if (OB_FAIL(arr_cast->cast(temp_allocator, arr_src, elem_type, arr_dst, dst_elem_type))) {
+      } else if (OB_FAIL(arr_cast->cast(temp_allocator, arr_src, elem_type, arr_dst, dst_elem_type, expr.extra_))) {
         LOG_WARN("array element cast failed", K(ret), K(*src_coll_info), K(*dst_coll_info));
         if (ret == OB_ERR_ARRAY_TYPE_MISMATCH) {
           ObString dst_def = dst_coll_info->get_def_string();

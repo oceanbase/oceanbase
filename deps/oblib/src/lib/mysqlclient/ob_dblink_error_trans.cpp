@@ -142,7 +142,7 @@ int ObTenantDblinkKeeper::clean_dblink_conn(uint32_t sessid, bool force_disconne
       connection = next;
     }
     if (OB_SUCC(ret) && OB_FAIL(dblink_conn_map_.erase_refactored(sessid))) {
-      LOG_WARN("failed to erase_refactored", K(tenant_id_), K(sessid), K(ret));;
+      LOG_WARN("failed to erase_refactored", K(tenant_id_), K(sessid), K(ret));
     }
   }
   return ret;

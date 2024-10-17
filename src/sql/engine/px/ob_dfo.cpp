@@ -68,7 +68,8 @@ OB_SERIALIZE_MEMBER(ObPxSqcMeta,
                     sqc_count_,
                     monitoring_info_,
                     branch_id_base_,
-                    partition_random_affinitize_);
+                    partition_random_affinitize_,
+                    locations_order_);
 OB_SERIALIZE_MEMBER(ObPxTask,
                     qc_id_,
                     dfo_id_,
@@ -151,6 +152,8 @@ int ObPxSqcMeta::assign(const ObPxSqcMeta &other)
     LOG_WARN("fail to assign p2p dh map info", K(ret));
   } else if (OB_FAIL(monitoring_info_.assign(other.monitoring_info_))) {
     LOG_WARN("fail to assign qc monitoring info", K(ret));
+  } else if (OB_FAIL(locations_order_.assign(other.locations_order_))) {
+    LOG_WARN("fail to assign qc locations order", K(ret));
   } else {
     execution_id_ = other.execution_id_;
     qc_id_ = other.qc_id_;

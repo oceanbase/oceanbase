@@ -154,6 +154,26 @@ int get_lock_id(const ObTabletID &tablet,
   return ret;
 }
 
+int get_lock_id(const ObIArray<ObTabletID> &tablets,
+                ObIArray<ObLockID> &lock_ids)
+{
+  int ret = OB_SUCCESS;
+  ObTabletID tablet;
+  ObLockID lock_id;
+  for (int64_t i = 0; OB_SUCC(ret) && i < tablets.count(); i++) {
+    tablet = tablets.at(i);
+    if (!tablet.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument ", K(ret), K(tablet));
+    } else if (OB_FAIL(lock_id.set(ObLockOBJType::OBJ_TYPE_TABLET, tablet.id()))) {
+      LOG_WARN("create lock id failed.", K(ret), K(tablet));
+    } else if (OB_FAIL(lock_ids.push_back(lock_id))) {
+      LOG_WARN("push back lock id failed.", K(ret), K(tablet));
+    }
+  }
+  return ret;
+}
+
 ObTableLockOwnerID ObTableLockOwnerID::default_owner()
 {
   ObTableLockOwnerID owner;
@@ -294,7 +314,9 @@ void ObTableLockOp::set(
 bool ObTableLockOp::is_valid() const
 {
   bool is_valid = false;
-  if (is_out_trans_lock_op() && owner_id_.id() == 0) {
+  if (TABLET_SPLIT == op_type_) {
+    is_valid = commit_scn_.is_valid() && !commit_scn_.is_min() && lock_id_.is_valid();
+  } else if (is_out_trans_lock_op() && owner_id_.id() == 0) {
     is_valid = false;
     LOG_ERROR_RET(OB_INVALID_ARGUMENT, "owner_id should not be 0 in out_trans lock", K_(owner_id));
   } else {

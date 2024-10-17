@@ -693,6 +693,7 @@ public:
   void set_select_straight_join(bool flag) { is_select_straight_join_ = flag; }
   bool is_select_straight_join() const { return is_select_straight_join_; }
   virtual int check_is_simple_lock_stmt(bool &is_valid) const override;
+  int is_query_deterministic(bool &is_deterministic) const;
 
 private:
   SetOperator set_op_;

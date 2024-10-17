@@ -16,6 +16,7 @@
 #include "share/backup/ob_backup_path.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/backup/ob_backup_operator.h"
+#include "share/backup/ob_backup_tablet_reorganize_helper.h"
 
 using namespace oceanbase::share;
 
@@ -673,6 +674,26 @@ int ObBackupTabletFuseTask::check_tablet_deleted_(
   return ret;
 }
 
+int ObBackupTabletFuseTask::check_tablet_reorganized_(
+    const uint64_t tenant_id,
+    const common::ObTabletID &tablet_id,
+    bool &tablet_reoragnized)
+{
+  int ret = OB_SUCCESS;
+  share::ObLSID tmp_ls_id;
+  int64_t tablet_count = 0;
+  if (OB_ISNULL(sql_proxy_)) {
+    ret = OB_ERR_UNDEFINED;
+    LOG_WARN("sql proxy should not be null", K(ret));
+  } else if (OB_FAIL(ObBackupTabletReorganizeHelper::check_tablet_has_reorganized(
+      *sql_proxy_, tenant_id, tablet_id, tmp_ls_id, tablet_reoragnized))) {
+    LOG_WARN("failed to check tablet has reoragnized", K(ret), K(tenant_id), K(tablet_id));
+  } else {
+    LOG_INFO("check tablet has reorganized", K(tenant_id), K(tablet_id), K(tmp_ls_id), K(tablet_reoragnized));
+  }
+  return ret;
+}
+
 int ObBackupTabletFuseTask::fetch_tablet_meta_in_user_data_(
     const ObBackupMetaIndex &meta_index,
     ObMigrationTabletParam &tablet_param)
@@ -735,9 +756,16 @@ int ObBackupTabletFuseTask::fuse_tablet_item_(
       fuse_type_ = ObBackupFuseTabletType::FUSE_TABLET_LS_INNER_TABLET;
     } else {
       bool is_deleted = false;
+      bool is_reorganized = false;
       if (OB_ISNULL(group_ctx_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("group ctx should not be null", K(ret));
+      } else if (OB_FAIL(check_tablet_reorganized_(
+          group_ctx_->param_.tenant_id_, fuse_item.tablet_id_, is_reorganized))) {
+        LOG_WARN("failed to check tablet has reorganized", K(ret));
+      } else if (is_reorganized) {
+        fuse_type_ = ObBackupFuseTabletType::FUSE_TABLET_META_REORGANIZED;
+        output_param.ha_status_.set_restore_status(ObTabletRestoreStatus::UNDEFINED);
       } else if (OB_FAIL(check_tablet_deleted_(
           group_ctx_->param_.tenant_id_, fuse_item.tablet_id_, is_deleted))) {
         LOG_WARN("failed to check tablet deleted", K(ret));

@@ -18,6 +18,8 @@
 #include "storage/ddl/ob_ddl_clog.h"
 #include "storage/ddl/ob_ddl_inc_clog.h"
 #include "storage/ddl/ob_ddl_struct.h"
+#include "storage/ddl/ob_tablet_split_task.h"
+#include "storage/ddl/ob_tablet_lob_split_task.h"
 #include "storage/ddl/ob_direct_load_struct.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 
@@ -31,9 +33,8 @@ class ObTabletHandle;
 class ObDDLReplayExecutor : public logservice::ObTabletReplayExecutor
 {
 public:
-
   ObDDLReplayExecutor();
-
+  ~ObDDLReplayExecutor() = default;
 protected:
   bool is_replay_update_tablet_status_() const override final
   {
@@ -79,6 +80,7 @@ class ObDDLStartReplayExecutor final : public ObDDLReplayExecutor
 {
 public:
   ObDDLStartReplayExecutor();
+  ~ObDDLStartReplayExecutor() = default;
 
   virtual bool is_replay_ddl_control_log_() const override final { return true; }
 
@@ -108,6 +110,7 @@ class ObDDLRedoReplayExecutor final : public ObDDLReplayExecutor
 {
 public:
   ObDDLRedoReplayExecutor();
+  ~ObDDLRedoReplayExecutor() = default;
 
   int init(
       ObLS *ls,
@@ -120,7 +123,7 @@ protected:
   // @return OB_EAGAIN, failed to replay, need retry.
   // @return OB_NO_NEED_UPDATE, this log needs to be ignored.
   // @return other error codes, failed to replay.
-  int do_replay_(ObTabletHandle &handle) override;
+  virtual int do_replay_(ObTabletHandle &handle) override;
 
 #ifdef OB_BUILD_SHARED_STORAGE
   int write_ss_block(blocksstable::ObStorageObjectWriteInfo &write_info, blocksstable::ObStorageObjectHandle &macro_handle);
@@ -146,6 +149,7 @@ class ObDDLCommitReplayExecutor final : public ObDDLReplayExecutor
 {
 public:
   ObDDLCommitReplayExecutor();
+  ~ObDDLCommitReplayExecutor() = default;
 
   virtual bool is_replay_ddl_control_log_() const override final { return true; }
 
@@ -232,10 +236,93 @@ private:
   const ObDDLIncCommitLog *log_;
 };
 
+class ObSplitStartReplayExecutor final : public ObDDLReplayExecutor
+{
+public:
+  ObSplitStartReplayExecutor();
+  ~ObSplitStartReplayExecutor() = default;
+
+  int init(
+      ObLS *ls,
+      const ObTabletSplitStartLog &log,
+      const share::SCN &scn);
+  static int prepare_param_from_log(
+      const share::ObLSID &ls_id,
+      const ObTabletSplitInfo &info,
+      ObTabletSplitParam &param);
+  static int prepare_param_from_log(
+      const share::ObLSID &ls_id,
+      const ObTabletSplitInfo &info,
+      ObLobSplitParam &param);
+
+protected:
+  // replay to the tablet
+  // @return OB_SUCCESS, replay successfully, data has written to tablet.
+  // @return OB_EAGAIN, failed to replay, need retry.
+  // @return OB_NO_NEED_UPDATE, this log needs to be ignored.
+  // @return other error codes, failed to replay.
+  virtual int do_replay_(ObTabletHandle &handle) override;
+
+private:
+  const ObTabletSplitStartLog *log_;
+};
+
+class ObSplitFinishReplayExecutor final : public ObDDLReplayExecutor
+{
+public:
+  ObSplitFinishReplayExecutor();
+  ~ObSplitFinishReplayExecutor() = default;
+
+  int init(
+      ObLS *ls,
+      const ObTabletSplitFinishLog &log,
+      const share::SCN &scn);
+
+protected:
+  // replay to the tablet
+  // @return OB_SUCCESS, replay successfully, data has written to tablet.
+  // @return OB_EAGAIN, failed to replay, need retry.
+  // @return OB_NO_NEED_UPDATE, this log needs to be ignored.
+  // @return other error codes, failed to replay.
+  virtual int do_replay_(ObTabletHandle &handle) override;
+private:
+  static int modify_tablet_restore_status_if_need(
+      const ObIArray<ObTabletID> &dest_tablet_ids,
+      const ObTabletHandle &src_tablet_handle,
+      ObLS* ls);
+private:
+  const ObTabletSplitFinishLog *log_;
+};
+
+class ObTabletFreezeReplayExecutor final : public ObDDLReplayExecutor
+{
+public:
+  ObTabletFreezeReplayExecutor();
+  ~ObTabletFreezeReplayExecutor() = default;
+
+  int init(
+      ObLS *ls,
+      const ObTabletFreezeLog &log,
+      const share::SCN &scn);
+
+protected:
+   // replay to the tablet
+  // @return OB_SUCCESS, replay successfully, data has written to tablet.
+  // @return OB_EAGAIN, failed to replay, need retry.
+  // @return OB_NO_NEED_UPDATE, this log needs to be ignored.
+  // @return other error codes, failed to replay.
+  virtual int do_replay_(ObTabletHandle &handle) override;
+
+private:
+  const ObTabletFreezeLog *log_;
+};
+
+
 class ObSchemaChangeReplayExecutor final : public logservice::ObTabletReplayExecutor
 {
 public:
   ObSchemaChangeReplayExecutor();
+  ~ObSchemaChangeReplayExecutor() = default;
 
   int init(
       const ObTabletSchemaVersionChangeLog &log,
@@ -253,7 +340,7 @@ protected:
   // @return OB_NO_NEED_UPDATE, this log needs to be ignored.
   // @return OB_TASK_EXPIRED, ddl task expired.
   // @return other error codes, failed to replay.
-  int do_replay_(ObTabletHandle &handle) override;
+  virtual int do_replay_(ObTabletHandle &handle) override;
 
   virtual bool is_replay_update_mds_table_() const override
   {

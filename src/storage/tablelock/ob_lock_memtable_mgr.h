@@ -68,7 +68,6 @@ private:
 private:
   virtual int release_head_memtable_(storage::ObIMemtable *imemtable,
                                      const bool force = false) override;
-  int unregister_from_common_checkpoint_(const ObLockMemtable *memtable);
 
 private:
   share::ObLSID ls_id_;

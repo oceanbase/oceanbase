@@ -76,7 +76,7 @@ public:
       const int64_t delete_commit_version,
       const int64_t snapshot_version,
       const ObTabletStatus &tablet_status);
-  static int check_read_snapshot_for_normal(
+  static int check_read_snapshot_for_normal_or_split_dst(
       ObTablet &tablet,
       const int64_t snapshot_version,
       const int64_t timeout_us,
@@ -100,6 +100,15 @@ public:
   static int check_read_snapshot_for_transfer_out_deleted(
       ObTablet &tablet,
       const int64_t snapshot_version,
+      const ObTabletCreateDeleteMdsUserData &user_data,
+      const bool is_committed);
+  static int check_read_snapshot_for_split_src(
+      ObTablet &tablet,
+      const int64_t snapshot_version,
+      const ObTabletCreateDeleteMdsUserData &user_data,
+      const bool is_committed);
+  static int check_read_snapshot_for_split_src_deleted(
+      ObTablet &tablet,
       const ObTabletCreateDeleteMdsUserData &user_data,
       const bool is_committed);
   static int check_read_snapshot_by_commit_version(

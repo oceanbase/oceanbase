@@ -131,22 +131,26 @@ int ObExprFuncPartHash::calc_hash_value_with_seed(const ObObj &obj, int64_t seed
     ObObj obj_trimmed;
     int32_t val_len = obj.get_val_len();
     const char* obj1_str = obj.get_string_ptr();
-    bool is_utf16 = ObCharset::charset_type_by_coll(obj.get_collation_type()) == CHARSET_UTF16;
-    while (val_len >= (is_utf16 ? 2 : 1)) {
-      if (is_utf16
-          && OB_PADDING_CHAR == *(obj1_str + val_len - 1)
-          && OB_PADDING_BINARY == *(obj1_str + val_len - 2)) {
-          val_len -= 2;
-      } else if (OB_PADDING_CHAR == *(obj1_str + val_len - 1)) {
-        --val_len;
+    char* real_end = NULL;
+    // oracle hash test
+    if (OB_FAIL(common::ObCharset::trim_end_of_str(obj1_str, val_len, real_end,
+                                                   ObCharset::charset_type_by_coll(obj.get_collation_type())))){
+      LOG_WARN("fail to trim end of str", K(ret));
+    } else if (OB_ISNULL(real_end)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null ptr", K(ret));
+    } else {
+      val_len = real_end - obj1_str;
+      if (val_len < 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected length", K(val_len));
       } else {
-        break;
+        obj_trimmed.set_collation_type(obj.get_collation_type());
+        obj_trimmed.set_string(ObCharType, obj.get_string_ptr(), val_len);
+        if (OB_FAIL(obj_trimmed.hash_murmur(res, seed))) {
+          LOG_WARN("fail to do hash", K(ret));
+        }
       }
-    }
-    obj_trimmed.set_collation_type(obj.get_collation_type());
-    obj_trimmed.set_string(ObCharType, obj.get_string_ptr(), val_len);
-    if (OB_FAIL(obj_trimmed.hash_murmur(res, seed))) {
-      LOG_WARN("fail to do hash", K(ret));
     }
   } else if (obj.is_decimal_int()) {
     ret = wide::PartitionHash<ObMurmurHash, ObObj>::calculate(obj, seed, res);
@@ -338,21 +342,20 @@ int ObExprFuncPartHash::eval_oracle_part_hash(
       if (ObCharType == arg.datum_meta_.type_
           || ObNCharType == arg.datum_meta_.type_) {
         ObDatum str = *d;
-        const bool is_utf16 = CHARSET_UTF16 == ObCharset::charset_type_by_coll(
-            arg.datum_meta_.cs_type_);
-        const char *end = str.ptr_ + str.len_;
-        while (end - str.ptr_ >= (is_utf16 ? 2 : 1)) {
-          if (is_utf16 && OB_PADDING_CHAR == *(end - 1) && OB_PADDING_BINARY == *(end - 2)) {
-            end -= 2;
-          } else if (OB_PADDING_CHAR == *(end - 1)) {
-            end -= 1;
-          } else {
-            break;
+        char *end = NULL;
+        if (OB_FAIL(common::ObCharset::trim_end_of_str(str.ptr_, str.len_, end, ObCharset::charset_type_by_coll(arg.datum_meta_.cs_type_)))) {
+          LOG_WARN("failed to trim str end");
+        } else if (OB_ISNULL(end)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to get end of string", K(ret));
+        } else {
+          str.len_ = end - str.ptr_;
+          if (str.len_ < 0) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to get end of string", K(str.len_));
+          } else if (OB_FAIL(arg.basic_funcs_->murmur_hash_(str, hash_val, hash_val))) {
+            LOG_WARN("hash failed", K(ret));
           }
-        }
-        str.len_ = end - str.ptr_;
-        if (OB_FAIL(arg.basic_funcs_->murmur_hash_(str, hash_val, hash_val))) {
-          LOG_WARN("hash failed", K(ret));
         }
       } else if (arg.datum_meta_.type_ == ObDecimalIntType) {
         ret = wide::PartitionHash<ObMurmurHash, ObDatum>::calculate(*d, hash_val, hash_val);

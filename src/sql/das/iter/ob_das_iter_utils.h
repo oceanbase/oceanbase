@@ -22,7 +22,9 @@
 #include "sql/das/iter/ob_das_sort_iter.h"
 #include "sql/das/iter/ob_das_text_retrieval_iter.h"
 #include "sql/das/iter/ob_das_text_retrieval_merge_iter.h"
+#include "sql/das/iter/ob_das_doc_id_merge_iter.h"
 #include "sql/das/iter/ob_das_vid_merge_iter.h"
+#include "sql/das/iter/ob_das_index_merge_iter.h"
 #include "sql/engine/table/ob_table_scan_op.h"
 
 namespace oceanbase
@@ -73,6 +75,11 @@ public:
                                             const ObLSID &ls_id,
                                             ObDASIter *root_iter);
 
+  static int set_index_merge_related_ids(const ObDASBaseCtDef *attach_ctdef,
+                                         const ObDASRelatedTabletID &related_tablet_ids,
+                                         const ObLSID &ls_id,
+                                         ObDASIter *root_iter);
+
 private:
   static int create_partition_scan_tree(ObTableScanParam &scan_param,
                                         common::ObIAllocator &alloc,
@@ -91,6 +98,8 @@ private:
                                       ObDASScanRtDef *scan_rtdef,
                                       const ObDASScanCtDef *lookup_ctdef,
                                       ObDASScanRtDef *lookup_rtdef,
+                                      const ObDASBaseCtDef *attach_ctdef,
+                                      ObDASBaseRtDef *attach_rtdef,
                                       const ObDASRelatedTabletID &related_tablet_ids,
                                       transaction::ObTxDesc *trans_desc,
                                       transaction::ObTxReadSnapshot *snapshot,
@@ -111,6 +120,15 @@ private:
                                         transaction::ObTxReadSnapshot *snapshot,
                                         ObDASIter *&iter_tree);
 
+  static int create_doc_id_scan_sub_tree(ObTableScanParam &scan_param,
+                                         common::ObIAllocator &alloc,
+                                         const ObDASDocIdMergeCtDef *merge_ctdef,
+                                         ObDASDocIdMergeRtDef *merge_rtdef,
+                                         const ObDASRelatedTabletID &related_tablet_ids,
+                                         transaction::ObTxDesc *trans_desc,
+                                         transaction::ObTxReadSnapshot *snapshot,
+                                         ObDASIter *&iter_tree);
+
   static int create_vid_scan_sub_tree(ObTableScanParam &scan_param,
                                       common::ObIAllocator &alloc,
                                       const ObDASVIdMergeCtDef *merge_ctdef,
@@ -120,11 +138,14 @@ private:
                                       transaction::ObTxReadSnapshot *snapshot,
                                       ObDASIter *&iter_tree);
 
-  static int create_domain_lookup_sub_tree(const ObLSID &ls_id,
+  static int create_domain_lookup_sub_tree(ObTableScanParam &scan_param,
+                                           const ObLSID &ls_id,
                                            common::ObIAllocator &alloc,
                                            const ObDASTableLookupCtDef *table_lookup_ctdef,
                                            ObDASTableLookupRtDef *table_lookup_rtdef,
                                            const ObDASRelatedTabletID &related_tablet_ids,
+                                           const bool &doc_id_lookup_keep_order,
+                                           const bool &main_lookup_keep_order,
                                            transaction::ObTxDesc *trans_desc,
                                            transaction::ObTxReadSnapshot *snapshot,
                                            ObDASIter *doc_id_iter,
@@ -142,6 +163,7 @@ private:
   static int create_sort_sub_tree(common::ObIAllocator &alloc,
                                   const ObDASSortCtDef *sort_ctdef,
                                   ObDASSortRtDef *sort_rtdef,
+                                  const bool need_rewind,
                                   ObDASIter *sort_input,
                                   ObDASIter *&sort_result);
 
@@ -162,6 +184,24 @@ private:
                                             bool can_retry,
                                             ObDASMergeIter *&scan_iter,
                                             ObDASIter *&iter_tree);
+
+  static int create_index_merge_iter_tree(ObTableScanParam &scan_param,
+                                          common::ObIAllocator &alloc,
+                                          const ObDASBaseCtDef *attach_ctdef,
+                                          ObDASBaseRtDef *attach_rtdef,
+                                          const ObDASRelatedTabletID &related_tablet_ids,
+                                          transaction::ObTxDesc *tx_desc,
+                                          transaction::ObTxReadSnapshot *snapshot,
+                                          ObDASIter *&iter_tree);
+
+  static int create_index_merge_sub_tree(const ObLSID &ls_id,
+                                         common::ObIAllocator &alloc,
+                                         const ObDASBaseCtDef *ctdef,
+                                         ObDASBaseRtDef *rtdef,
+                                         const ObDASRelatedTabletID &related_tablet_ids,
+                                         transaction::ObTxDesc *tx_desc,
+                                         transaction::ObTxReadSnapshot *snapshot,
+                                         ObDASIter *&iter);
 
   static int create_iter_children_array(const int64_t children_cnt,
                                         common::ObIAllocator &alloc,

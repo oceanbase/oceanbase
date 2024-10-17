@@ -296,26 +296,30 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
       ObObj result;
       int64_t pkg_id = call_proc_info->is_udt_routine()
                ? share::schema::ObUDTObjectType::mask_object_id(package_id) : package_id;
-      if (OB_ISNULL(stmt.get_dblink_routine_info())) {
-        if (OB_FAIL(ctx.get_pl_engine()->execute(ctx,
-                                                ctx.get_allocator(),
-                                                pkg_id,
-                                                routine_id,
-                                                path,
-                                                params,
-                                                nocopy_params,
-                                                result))) {
-          LOG_WARN("failed to execute pl", K(package_id), K(routine_id), K(ret), K(pkg_id));
-        }
-#ifdef OB_BUILD_ORACLE_PL
-      } else if (OB_FAIL(ObSPIService::spi_execute_dblink(ctx,
-                                                          ctx.get_allocator(),
-                                                          NULL,
-                                                          stmt.get_dblink_routine_info(),
-                                                          params,
-                                                          NULL))) {
-        LOG_WARN("failed to execute dblink pl", K(ret), KP(stmt.get_dblink_routine_info()));
-#endif
+      const ObRoutineInfo *dblink_routine_info = NULL;
+      uint64_t dblink_id = OB_INVALID_ID;
+      if (OB_NOT_NULL(stmt.get_dblink_routine_info())) {
+        dblink_routine_info = stmt.get_dblink_routine_info();
+        pkg_id = dblink_routine_info->get_package_id();
+        routine_id = dblink_routine_info->get_routine_id();
+        dblink_id = dblink_routine_info->get_dblink_id();
+      }
+      if (OB_FAIL(ctx.get_pl_engine()->execute(ctx,
+                                              ctx.get_allocator(),
+                                              pkg_id,
+                                              routine_id,
+                                              path,
+                                              params,
+                                              nocopy_params,
+                                              result,
+                                              NULL,
+                                              false,
+                                              false,
+                                              0,
+                                              false,
+                                              dblink_id,
+                                              dblink_routine_info))) {
+        LOG_WARN("failed to execute pl",  K(ret), K(package_id), K(routine_id), K(pkg_id), K(dblink_id));
       }
       if (OB_READ_NOTHING == ret
           && lib::is_oracle_mode()

@@ -175,6 +175,8 @@ TABLE_COLLATION	varchar(32)	NO
 CHECKSUM	bigint(0) unsigned	NO			
 CREATE_OPTIONS	varchar(255)	NO			
 TABLE_COMMENT	text	NO			
+AUTO_SPLIT	varchar(16)	NO			
+AUTO_SPLIT_TABLET_SIZE	bigint(20) unsigned	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.TABLES limit 1);
 cnt
 1
@@ -705,6 +707,7 @@ TX_STATE_VERSION	bigint(20) unsigned	NO		NULL
 FLT_TRACE_ID	varchar(1024)	NO		NULL	
 PL_TRACE_ID	varchar(128)	YES		NULL	
 PLSQL_EXEC_TIME	bigint(20)	NO		NULL	
+FORMAT_SQL_ID	varchar(32)	NO		NULL	
 STMT_TYPE	varchar(128)	YES		NULL	
 TOTAL_MEMSTORE_READ_ROW_COUNT	bigint(20)	NO		NULL	
 TOTAL_SSSTORE_READ_ROW_COUNT	bigint(20)	NO		NULL	
@@ -1024,6 +1027,7 @@ TX_STATE_VERSION	bigint(20) unsigned	NO
 FLT_TRACE_ID	varchar(1024)	NO			
 PL_TRACE_ID	varchar(128)	NO			
 PLSQL_EXEC_TIME	bigint(20)	NO			
+FORMAT_SQL_ID	varchar(32)	NO			
 STMT_TYPE	varchar(128)	NO			
 TOTAL_MEMSTORE_READ_ROW_COUNT	bigint(20)	NO			
 TOTAL_SSSTORE_READ_ROW_COUNT	bigint(20)	NO			
@@ -2887,6 +2891,8 @@ HAS_SENSITIVE_COLUMN	varchar(3)	NO
 ADMIT_NULL	varchar(3)	NO			
 DATA_LINK_DML_ENABLED	varchar(3)	NO			
 LOGICAL_REPLICATION	varchar(8)	NO			
+AUTO_SPLIT	varchar(16)	NO			
+AUTO_SPLIT_TABLET_SIZE	bigint(20)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_TABLES limit 1);
 cnt
 1
@@ -4237,6 +4243,11 @@ END_CG_ID	bigint(20)	NO		NULL
 KEPT_SNAPSHOT	varchar(128)	NO		NULL	
 MERGE_LEVEL	varchar(64)	NO		NULL	
 EXEC_MODE	varchar(64)	NO		NULL	
+IS_FULL_MERGE	varchar(5)	NO		NULL	
+IO_COST_TIME_PERCENTAGE	bigint(20)	NO		NULL	
+MERGE_REASON	varchar(32)	NO		NULL	
+BASE_MAJOR_STATUS	varchar(64)	NO		NULL	
+CO_MERGE_TYPE	varchar(64)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_TABLET_COMPACTION_HISTORY limit 1);
 cnt
 1
@@ -4273,6 +4284,11 @@ END_CG_ID	bigint(20)	NO
 KEPT_SNAPSHOT	varchar(128)	NO			
 MERGE_LEVEL	varchar(64)	NO			
 EXEC_MODE	varchar(64)	NO			
+IS_FULL_MERGE	varchar(5)	NO			
+IO_COST_TIME_PERCENTAGE	bigint(20)	NO			
+MERGE_REASON	varchar(32)	NO			
+BASE_MAJOR_STATUS	varchar(64)	NO			
+CO_MERGE_TYPE	varchar(64)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_TABLET_COMPACTION_HISTORY limit 1);
 cnt
 1
@@ -8472,6 +8488,24 @@ CGROUP_PATH	varchar(256)	NO
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_CGROUP_CONFIG limit 1);
 cnt
 1
+desc oceanbase.DBA_OB_FORMAT_OUTLINES;
+Field	Type	Null	Key	Default	Extra
+CREATE_TIME	timestamp(6)	YES			
+MODIFY_TIME	timestamp(6)	YES			
+TENANT_ID	bigint(20)	NO		NULL	
+DATABASE_ID	bigint(20)	NO		NULL	
+OUTLINE_ID	bigint(20)	NO		NULL	
+DATABASE_NAME	varchar(128)	NO			
+OUTLINE_NAME	varchar(128)	NO			
+VISIBLE_SIGNATURE	longtext	NO		NULL	
+FORMAT_SQL_TEXT	longtext	YES		NULL	
+OUTLINE_TARGET	longtext	NO		NULL	
+OUTLINE_SQL	longtext	NO		NULL	
+FORMAT_SQL_ID	varbinary(32)	NO			
+OUTLINE_CONTENT	longtext	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_FORMAT_OUTLINES limit 1);
+cnt
+1
 desc mysql.procs_priv;
 Field	Type	Null	Key	Default	Extra
 Host	varchar(60)	NO			
@@ -8918,7 +8952,7 @@ MASTER_ROLLBACK_SEG	varchar(128)	NO
 MASTER_LINK	varchar(128)	NO			
 REWRITE_ENABLED	varchar(1)	NO			
 REWRITE_CAPABILITY	varchar(9)	NO			
-REFRESH_MODE	varchar(6)	NO			
+REFRESH_MODE	varchar(32)	NO			
 REFRESH_METHOD	varchar(8)	NO			
 BUILD_MODE	varchar(9)	NO			
 FAST_REFRESHABLE	varchar(18)	NO			
@@ -8961,7 +8995,7 @@ MASTER_ROLLBACK_SEG	varchar(128)	NO
 MASTER_LINK	varchar(128)	NO			
 REWRITE_ENABLED	varchar(1)	NO			
 REWRITE_CAPABILITY	varchar(9)	NO			
-REFRESH_MODE	varchar(6)	NO			
+REFRESH_MODE	varchar(32)	NO			
 REFRESH_METHOD	varchar(8)	NO			
 BUILD_MODE	varchar(9)	NO			
 FAST_REFRESHABLE	varchar(18)	NO			
@@ -9352,6 +9386,67 @@ RESOURCE_NAME	varchar(128)	NO
 LIMIT_TYPE	varchar(128)	NO			
 LIMIT_VALUE	bigint(20)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_TENANT_RESOURCE_LIMIT_DETAIL limit 1);
+cnt
+1
+desc information_schema.INNODB_LOCK_WAITS;
+Field	Type	Null	Key	Default	Extra
+REQUESTING_TRX_ID	varchar(1)	NO			
+REQUESTED_LOCK_ID	varchar(1)	NO			
+BLOCKING_TRX_ID	varchar(1)	NO			
+BLOCKING_LOCK_ID	varchar(1)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_LOCK_WAITS limit 1);
+cnt
+1
+desc information_schema.INNODB_LOCKS;
+Field	Type	Null	Key	Default	Extra
+LOCK_ID	varchar(1)	NO			
+LOCK_TRX_ID	varchar(1)	NO			
+LOCK_MODE	varchar(1)	NO			
+LOCK_TYPE	varchar(1)	NO			
+LOCK_TABLE	varchar(1)	NO			
+LOCK_INDEX	varchar(1)	NO			
+LOCK_SPACE	bigint(1)	NO			
+LOCK_PAGE	bigint(1)	NO			
+LOCK_REC	bigint(1)	NO			
+LOCK_DATA	varchar(1)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_LOCKS limit 1);
+cnt
+1
+desc information_schema.INNODB_TRX;
+Field	Type	Null	Key	Default	Extra
+TRX_ID	varchar(1)	NO			
+TRX_STATE	varchar(1)	NO			
+TRX_STARTED	datetime	NO			
+TRX_REQUESTED_LOCK_ID	varchar(1)	NO			
+TRX_WAIT_STARTED	datetime	NO			
+TRX_WEIGHT	bigint(1)	NO			
+TRX_MYSQL_THREAD_ID	bigint(1)	NO			
+TRX_QUERY	varchar(1)	NO			
+TRX_OPERATION_STATE	varchar(1)	NO			
+TRX_TABLE_IN_USE	bigint(1)	NO			
+TRX_TABLES_LOCKED	bigint(1)	NO			
+TRX_LOCK_STRUCTS	bigint(1)	NO			
+TRX_LOCK_MEMORY_BYTES	bigint(1)	NO			
+TRX_ROWS_LOCKED	bigint(1)	NO			
+TRX_ROWS_MODIFIED	bigint(1)	NO			
+TRX_CONCURRENCY_TICKETS	bigint(1)	NO			
+TRX_ISOLATION_LEVEL	varchar(1)	NO			
+TRX_UNIQUE_CHECKS	bigint(1)	NO			
+TRX_FOREIGN_KEY_CHECKS	bigint(1)	NO			
+TRX_LAST_FOREIGN_KEY_ERROR	varchar(1)	NO			
+TRX_ADAPTIVE_HASH_LATCHED	bigint(1)	NO			
+TRX_ADAPTIVE_HASH_TIMEOUT	bigint(1)	NO			
+TRX_IS_READ_ONLY	bigint(1)	NO			
+TRX_AUTOCOMMIT_NON_LOCKING	bigint(1)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_TRX limit 1);
+cnt
+1
+desc information_schema.NDB_TRANSID_MYSQL_CONNECTION_MAP;
+Field	Type	Null	Key	Default	Extra
+MYSQL_CONNECTION_ID	bigint(1)	NO			
+NODE_ID	bigint(1)	NO			
+NDB_TRANSID	bigint(1)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.NDB_TRANSID_MYSQL_CONNECTION_MAP limit 1);
 cnt
 1
 desc oceanbase.V$OB_GROUP_IO_STAT;
@@ -9847,6 +9942,41 @@ GMT_MODIFIED	timestamp(6)	NO		NULL
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_SCHEDULER_JOB_RUN_DETAILS limit 1);
 cnt
 1
+desc oceanbase.CDB_OB_SERVER_SPACE_USAGE;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	varchar(128)	NO		NULL	
+TENANT_NAME	varchar(128)	NO		NULL	
+SERVER_IP	varchar(46)	NO		NULL	
+SERVER_PORT	bigint(20)	NO		NULL	
+SPACE_TYPE	varchar(9)	NO			
+DATA_BYTES	decimal(42,0)	NO		NULL	
+USAGE_BYTES	decimal(42,0)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_SERVER_SPACE_USAGE limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_SPACE_USAGE;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	varchar(128)	NO		NULL	
+TENANT_NAME	varchar(128)	NO		NULL	
+ENDPOINT	varchar(1024)	NO		NULL	
+PATH	varchar(1024)	NO		NULL	
+SPACE_TYPE	varchar(11)	NO			
+USAGE_BYTES	decimal(42,0)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_SPACE_USAGE limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_TABLE_SPACE_USAGE;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	varchar(128)	NO		NULL	
+TABLE_ID	bigint(20)	NO		NULL	
+TENANT_NAME	varchar(128)	NO		NULL	
+DATABASE_NAME	varchar(128)	NO			
+TABLE_NAME	varchar(256)	NO			
+OCCUPY_SIZE	decimal(42,0)	NO			
+REQUIRED_SIZE	decimal(42,0)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_TABLE_SPACE_USAGE limit 1);
+cnt
+1
 desc oceanbase.GV$OB_SS_LOCAL_CACHE;
 Field	Type	Null	Key	Default	Extra
 SVR_IP	varchar(46)	NO		NULL	
@@ -9881,6 +10011,38 @@ USED_MEM_SIZE	bigint(20)	NO
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_SS_LOCAL_CACHE limit 1);
 cnt
 1
+desc oceanbase.GV$OB_KV_GROUP_COMMIT_STATUS;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+TENANT_ID	bigint(20)	NO		NULL	
+TABLE_ID	bigint(20)	NO		NULL	
+LS_ID	bigint(20)	NO		NULL	
+SCHEMA_VERSION	bigint(20)	NO		NULL	
+GROUP_TYPE	varchar(32)	NO		NULL	
+QUEUE_SIZE	bigint(20)	NO		NULL	
+BATCH_SIZE	bigint(20)	NO		NULL	
+CREATE_TIME	timestamp(6)	NO		NULL	
+UPDATE_TIME	timestamp(6)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_KV_GROUP_COMMIT_STATUS limit 1);
+cnt
+1
+desc oceanbase.V$OB_KV_GROUP_COMMIT_STATUS;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO			
+SVR_PORT	bigint(20)	NO			
+TENANT_ID	bigint(20)	NO			
+TABLE_ID	bigint(20)	NO			
+LS_ID	bigint(20)	NO			
+SCHEMA_VERSION	bigint(20)	NO			
+GROUP_TYPE	varchar(32)	NO			
+QUEUE_SIZE	bigint(20)	NO			
+BATCH_SIZE	bigint(20)	NO			
+CREATE_TIME	timestamp(6)	NO			
+UPDATE_TIME	timestamp(6)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_KV_GROUP_COMMIT_STATUS limit 1);
+cnt
+1
 desc information_schema.INNODB_SYS_FIELDS;
 Field	Type	Null	Key	Default	Extra
 INDEX_ID	bigint(0) unsigned	NO			
@@ -9906,6 +10068,68 @@ FOR_COL_NAME	varchar(0)	NO
 REF_COL_NAME	varchar(0)	NO			
 POS	bigint(0) unsigned	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_SYS_FOREIGN_COLS limit 1);
+cnt
+1
+desc oceanbase.GV$OB_KV_CLIENT_INFO;
+Field	Type	Null	Key	Default	Extra
+CLIENT_ID	bigint(20) unsigned	NO		NULL	
+CLIENT_IP	varchar(46)	NO		NULL	
+CLIENT_PORT	bigint(20)	NO		NULL	
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+TENANT_ID	bigint(20)	NO		NULL	
+USER_NAME	varchar(64)	NO		NULL	
+FIRST_LOGIN_TS	timestamp(6)	NO		NULL	
+LAST_LOGIN_TS	timestamp(6)	NO		NULL	
+CLIENT_INFO	varchar(2048)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_KV_CLIENT_INFO limit 1);
+cnt
+1
+desc oceanbase.V$OB_KV_CLIENT_INFO;
+Field	Type	Null	Key	Default	Extra
+CLIENT_ID	bigint(20) unsigned	NO			
+CLIENT_IP	varchar(46)	NO			
+CLIENT_PORT	bigint(20)	NO			
+SVR_IP	varchar(46)	NO			
+SVR_PORT	bigint(20)	NO			
+TENANT_ID	bigint(20)	NO			
+USER_NAME	varchar(64)	NO			
+FIRST_LOGIN_TS	timestamp(6)	NO			
+LAST_LOGIN_TS	timestamp(6)	NO			
+CLIENT_INFO	varchar(2048)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_KV_CLIENT_INFO limit 1);
+cnt
+1
+desc oceanbase.GV$OB_FUNCTION_IO_STAT;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+TENANT_ID	bigint(20)	NO		NULL	
+FUNCTION_NAME	varchar(32)	NO		NULL	
+MODE	varchar(32)	NO		NULL	
+SIZE	bigint(20)	NO		NULL	
+REAL_IOPS	bigint(20)	NO		NULL	
+REAL_MBPS	bigint(20)	NO		NULL	
+SCHEDULE_US	bigint(20)	NO		NULL	
+IO_DELAY_US	bigint(20)	NO		NULL	
+TOTAL_US	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_FUNCTION_IO_STAT limit 1);
+cnt
+1
+desc oceanbase.V$OB_FUNCTION_IO_STAT;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO			
+SVR_PORT	bigint(20)	NO			
+TENANT_ID	bigint(20)	NO			
+FUNCTION_NAME	varchar(32)	NO			
+MODE	varchar(32)	NO			
+SIZE	bigint(20)	NO			
+REAL_IOPS	bigint(20)	NO			
+REAL_MBPS	bigint(20)	NO			
+SCHEDULE_US	bigint(20)	NO			
+IO_DELAY_US	bigint(20)	NO			
+TOTAL_US	bigint(20)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_FUNCTION_IO_STAT limit 1);
 cnt
 1
 desc oceanbase.DBA_OB_TEMP_FILES;

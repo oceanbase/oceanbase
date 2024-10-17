@@ -1932,7 +1932,7 @@ int ObTransformPredicateMoveAround::pullup_predicates_from_const_select(ObSelect
                                                               got_result,
                                                               *ctx_->allocator_))) {
           LOG_WARN("failed to calc const or caculable expr", K(ret));
-        } else if (!got_result || (!result.is_null()
+        } else if (!got_result || result.is_ext() || (!result.is_null()
                   && !(lib::is_oracle_mode() && result.is_null_oracle()))) {
           //do nothing
         } else if (OB_FAIL(ObRawExprUtils::build_is_not_null_expr(*ctx_->expr_factory_,
@@ -3584,7 +3584,7 @@ int ObTransformPredicateMoveAround::create_equal_exprs_for_insert(ObDelUpdStmt *
                                                               got_result,
                                                               *ctx_->allocator_))) {
           LOG_WARN("failed to calc const or caculable expr", K(ret));
-        } else if (!got_result || (!result.is_null()
+        } else if (!got_result || result.is_ext() || (!result.is_null()
                   && !(lib::is_oracle_mode() && result.is_null_oracle()))) {
           //do nothing
         } else {
@@ -3707,7 +3707,7 @@ int ObTransformPredicateMoveAround::generate_pullup_predicates_for_dual_stmt(
                                                               got_result,
                                                               *ctx_->allocator_))) {
           LOG_WARN("failed to calc const or caculable expr", K(ret));
-        } else if (!got_result || (!result.is_null()
+        } else if (!got_result || result.is_ext() || (!result.is_null()
                   && !(lib::is_oracle_mode() && result.is_null_oracle()))) {
           //do nothing
         } else if (OB_ISNULL(column_expr = stmt.get_column_expr_by_id(view.table_id_,
@@ -3893,7 +3893,7 @@ int ObTransformPredicateMoveAround::is_column_expr_null(ObDMLStmt *stmt,
                                                             got_result,
                                                             *ctx_->allocator_))) {
         LOG_WARN("failed to calc const or caculable expr", K(ret));
-      } else if (got_result && (result.is_null()
+      } else if (got_result && !result.is_ext() && (result.is_null()
                 || (lib::is_oracle_mode() && result.is_null_oracle()))) {
         is_null = true;
         if (!child_expr->is_const_raw_expr() && OB_FAIL(constraints.push_back(child_expr))) {

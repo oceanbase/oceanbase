@@ -228,6 +228,13 @@ int ObPxTransmitOp::inner_open()
       }
     }
     if (OB_SUCC(ret) && get_spec().use_rich_format_) {
+      if (dtl::ObDtlMsgType::PX_VECTOR_FIXED == data_msg_type_) {
+        int64_t size_per_buffer = GCONF.dtl_buffer_size;
+        chs_agent_.set_size_per_buffer(size_per_buffer);
+        for (int64_t i = 0; i < task_channels_.count(); ++i) {
+          task_channels_.at(i)->set_send_buffer_size(size_per_buffer);
+        }
+      }
       if (OB_FAIL(params_.init_keep_order_params(get_spec().max_batch_size_,
                                                  task_channels_.count(),
                                                  get_spec().output_.count(),
@@ -241,9 +248,9 @@ int ObPxTransmitOp::inner_open()
 
 int ObPxTransmitOp::transmit()
 {
-  int64_t cpu_begin_time = rdtsc();
+  begin_cpu_time_counting();
   int ret = do_transmit();
-  total_time_ += (rdtsc() - cpu_begin_time_);
+  end_cpu_time_counting();
   return ret;
 }
 

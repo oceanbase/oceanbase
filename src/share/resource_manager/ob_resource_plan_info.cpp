@@ -11,7 +11,6 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-
 #include "ob_resource_plan_info.h"
 
 using namespace oceanbase::common;
@@ -48,8 +47,8 @@ ObString oceanbase::share::get_io_function_name(ObFunctionType function_type)
     case ObFunctionType::PRIO_DDL_HIGH:
       ret_name = ObString("DDL_HIGH");
       break;
-    case ObFunctionType::PRIO_SERVER_BACKGROUND_LOW:
-      ret_name = ObString("SERVER_BACKGROUND_LOW");
+    case ObFunctionType::PRIO_GC_MACRO_BLOCK:
+      ret_name = ObString("GC_MACRO_BLOCK");
       break;
     case ObFunctionType::PRIO_CLOG_LOW:
       ret_name = ObString("CLOG_LOW");
@@ -59,6 +58,18 @@ ObString oceanbase::share::get_io_function_name(ObFunctionType function_type)
       break;
     case ObFunctionType::PRIO_CLOG_HIGH:
       ret_name = ObString("CLOG_HIGH");
+      break;
+    case ObFunctionType::PRIO_OPT_STATS:
+      ret_name = ObString("OPT_STATS");
+      break;
+    case ObFunctionType::PRIO_IMPORT:
+      ret_name = ObString("IMPORT");
+      break;
+    case ObFunctionType::PRIO_EXPORT:
+      ret_name = ObString("EXPORT");
+      break;
+    case ObFunctionType::PRIO_SQL_AUDIT:
+      ret_name = ObString("SQL_AUDIT");
       break;
     default:
       ret_name = ObString("OTHER_GROUPS");

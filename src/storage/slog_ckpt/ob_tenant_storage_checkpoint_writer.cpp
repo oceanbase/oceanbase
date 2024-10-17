@@ -94,7 +94,7 @@ int ObTenantStorageCheckpointWriter::record_meta(MacroBlockId &ls_meta_entry)
     LOG_WARN("ObTenantStorageCheckpointWriter not inited", K(ret));
   } else if (OB_FAIL(record_ls_meta(ls_meta_entry))) {
     LOG_WARN("fail to construct ls ckpt linked list", K(ret));
-  } else if (OB_FAIL(THE_IO_DEVICE->fsync_block())) {
+  } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.fsync_block())) {
     LOG_WARN("fail to fsync_block", K(ret));
   }
   return ret;
@@ -305,7 +305,7 @@ int ObTenantStorageCheckpointWriter::record_tablet_meta(ObLS &ls, MacroBlockId &
   const int64_t total_tablet_cnt = ls.get_tablet_svr()->get_tablet_count();
   int64_t processed_cnt = 0;
   ObMetaDiskAddr addr;
-  ObLSTabletIterator tablet_iter(ObMDSGetTabletMode::READ_READABLE_COMMITED);
+  ObLSTabletIterator tablet_iter(ObMDSGetTabletMode::READ_ALL_COMMITED);
   ObTabletMapKey tablet_key;
   char slog_buf[sizeof(ObUpdateTabletLog)];
 
@@ -381,7 +381,8 @@ int ObTenantStorageCheckpointWriter::persist_and_copy_tablet(
   slog.ls_id_ = tablet_key.ls_id_;
   slog.tablet_id_ = tablet_key.tablet_id_;
   bool has_slog = false;
-  const ObTabletPersisterParam param(tablet_key.ls_id_, 0, tablet_key.tablet_id_);
+  int64_t transfer_seq = 0; // useless in shared_nothing
+  const ObTabletPersisterParam param(tablet_key.ls_id_, 0, tablet_key.tablet_id_, transfer_seq);
 
   if (OB_FAIL(OB_E(EventTable::EN_SLOG_CKPT_ERROR) OB_SUCCESS)) {
   } else if (OB_FAIL(ckpt_slog_handler_->check_slog(tablet_key, has_slog))) {
@@ -456,7 +457,8 @@ int ObTenantStorageCheckpointWriter::copy_tablet(
   slog.ls_id_ = tablet_key.ls_id_;
   slog.tablet_id_ = tablet_key.tablet_id_;
   ObMetaDiskAddr old_addr;
-  const ObTabletPersisterParam param(tablet_key.ls_id_, 0, tablet_key.tablet_id_);
+  int64_t transfer_seq = 0; // useless in shared_nothing
+  const ObTabletPersisterParam param(tablet_key.ls_id_, 0, tablet_key.tablet_id_, transfer_seq);
 
   if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->get_tablet_with_allocator(WashTabletPriority::WTP_LOW, tablet_key, allocator, tablet_handle))) {
     if (OB_ENTRY_NOT_EXIST == ret) {

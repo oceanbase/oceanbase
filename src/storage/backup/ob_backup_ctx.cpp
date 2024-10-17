@@ -25,6 +25,7 @@
 #include "storage/blocksstable/ob_logic_macro_id.h"
 #include "share/backup/ob_backup_data_table_operator.h"
 #include "common/storage/ob_device_common.h"
+#include "storage/backup/ob_backup_data_store.h"
 
 #include <algorithm>
 
@@ -929,7 +930,7 @@ int ObBackupRetryCtx::check_and_sort_retry_list_(
   }
   if (OB_SUCC(ret)) {
     BackupRetryCmp cmp;
-    std::sort(retry_list.begin(), retry_list.end(), cmp);
+    lib::ob_sort(retry_list.begin(), retry_list.end(), cmp);
   }
   return ret;
 }
@@ -1171,7 +1172,7 @@ int ObBackupRetryCtx::inner_recover_need_reuse_macro_block_(
     }
   }
   if (OB_SUCC(ret)) {
-    std::sort(reused_pair_list_.begin(), reused_pair_list_.end());
+    lib::ob_sort(reused_pair_list_.begin(), reused_pair_list_.end());
   }
   return ret;
 }
@@ -1233,7 +1234,9 @@ ObLSBackupCtx::ObLSBackupCtx()
       check_tablet_info_cost_time_(),
       backup_tx_table_filled_tx_scn_(share::SCN::min_scn()),
       index_builder_mgr_(),
-      bandwidth_throttle_(NULL)
+      bandwidth_throttle_(NULL),
+      mview_dep_tablet_set_(),
+      wait_reuse_across_sstable_time_(0)
 {}
 
 ObLSBackupCtx::~ObLSBackupCtx()
@@ -1275,6 +1278,8 @@ int ObLSBackupCtx::open(
     LOG_WARN("failed to init index builder mg", K(ret), K(param));
   } else if (OB_FAIL(param_.assign(param))) {
     LOG_WARN("failed to assign param", K(ret), K(param));
+  } else if (OB_FAIL(mview_dep_tablet_set_.create(DEFAULT_MVIEW_DEP_TABLET_SET_SIZE))) {
+    LOG_WARN("failed to create mveiw dep tablet set", K(ret));
   } else {
     max_file_id_ = 0;
     prefetch_task_id_ = 0;
@@ -1289,6 +1294,10 @@ int ObLSBackupCtx::open(
       LOG_WARN("failed to prepare tablet id reader", K(ret), K(param));
     } else if (OB_FAIL(get_all_tablet_id_list_(reader, tablet_list))) {
       LOG_WARN("failed to get all tablet id list", K(ret));
+    } else if (OB_FAIL(prepare_mview_dep_tablet_set_(param, backup_data_type))) {
+      LOG_WARN("failed to prepare mview dep tablet set", K(ret), K(param), K(backup_data_type));
+    } else if (OB_FAIL(check_mview_tablet_set_(param.tenant_id_, sql_proxy))) {
+      LOG_WARN("failed to check mview tablet set", K(ret), K(param));
     } else if (tablet_list.empty()) {
       ret = OB_NO_TABLET_NEED_BACKUP;
       LOG_WARN("no tablet in log stream need to backup", K(ret), K(param));
@@ -1299,7 +1308,7 @@ int ObLSBackupCtx::open(
     } else {
       ObBackupMacroBlockIdPairComparator compare;
       // TODO(yanfeng): consider the list size in extreme conditions
-      std::sort(backup_retry_ctx_.reused_pair_list_.begin(),
+      lib::ob_sort(backup_retry_ctx_.reused_pair_list_.begin(),
                 backup_retry_ctx_.reused_pair_list_.end(),
                 compare);
       is_inited_ = true;
@@ -1509,6 +1518,34 @@ int ObLSBackupCtx::finish_task(const int64_t file_id)
   return ret;
 }
 
+int ObLSBackupCtx::check_is_major_compaction_mview_dep_tablet(const common::ObTabletID &tablet_id, bool &is_dep) const
+{
+  int ret = OB_SUCCESS;
+  is_dep = false;
+  if (!tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(tablet_id));
+  } else {
+    int hash_ret = mview_dep_tablet_set_.exist_refactored(tablet_id);
+    if (OB_HASH_EXIST == hash_ret) {
+      is_dep = true;
+      LOG_INFO("is mview dependent tablet", K(tablet_id));
+    } else if (OB_HASH_NOT_EXIST == hash_ret) {
+      is_dep = false;
+    } else {
+      ret = hash_ret;
+      LOG_WARN("failed to check is mview dep tablet", K(ret), K(tablet_id));
+    }
+  }
+  return ret;
+}
+
+void ObLSBackupCtx::add_wait_reuse_across_sstable_time(int64_t cost_time)
+{
+  ObMutexGuard guard(mutex_);
+  wait_reuse_across_sstable_time_ += cost_time;
+}
+
 int ObLSBackupCtx::recover_last_retry_ctx_()
 {
   int ret = OB_SUCCESS;
@@ -1566,9 +1603,73 @@ int ObLSBackupCtx::get_all_tablet_id_list_(
   return ret;
 }
 
+int ObLSBackupCtx::get_backup_scn_(const ObLSBackupParam &param,
+    const share::ObBackupDataType &backup_data_type, share::SCN &backup_scn)
+{
+  int ret = OB_SUCCESS;
+  ObBackupDataStore store;
+  ObBackupDataLSAttrDesc ls_info;
+  ObBackupSetTaskAttr task_attr;
+  if (OB_ISNULL(sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy should not be null", K(ret));
+  } else if (OB_FAIL(ObBackupTaskOperator::get_backup_task(
+      *sql_proxy_, param.job_id_, param.tenant_id_, false, task_attr))) {
+    LOG_WARN("failed to get backup task", K(ret), K_(param));
+  } else if (OB_FAIL(store.init(param.backup_dest_, param.backup_set_desc_))) {
+    LOG_WARN("failed to init backup data source", K(ret), K(param));
+  } else if (OB_FAIL(store.read_ls_attr_info(task_attr.meta_turn_id_, ls_info))) {
+    LOG_WARN("failed to read ls attr info", K(ret));
+  } else {
+    backup_scn = ls_info.backup_scn_;
+    LOG_INFO("get backup scn", K(param), K(backup_data_type), K(backup_scn));
+  }
+  return ret;
+}
+
+int ObLSBackupCtx::prepare_mview_dep_tablet_set_(const ObLSBackupParam &param,
+    const share::ObBackupDataType &backup_data_type)
+{
+  int ret = OB_SUCCESS;
+  ObBackupDataStore store;
+  ObBackupMajorCompactionMViewDepTabletListDesc desc;
+  if (backup_data_type.is_sys_backup()) {
+    // do nothing
+  } else if (OB_FAIL(store.init(param.backup_dest_, param.backup_set_desc_))) {
+    LOG_WARN("failed to init backup data source", K(ret), K(param));
+  } else if (OB_FAIL(store.read_major_compaction_mview_dep_tablet_list(desc))) {
+    LOG_WARN("failed to read mview dep tablet list", K(ret));
+  } else {
+    const common::ObSArray<common::ObTabletID> &mview_tablet_list = desc.tablet_id_list_;;
+    ARRAY_FOREACH_X(mview_tablet_list, idx, cnt, OB_SUCC(ret)) {
+      const ObTabletID &tablet_id = mview_tablet_list.at(idx);
+      const int flag = 1;
+      if (OB_FAIL(mview_dep_tablet_set_.set_refactored(tablet_id, flag))) {
+        LOG_WARN("failed to set refactored", K(ret), K(tablet_id));
+      }
+    }
+  }
+  return ret;
+}
+
+// This is only a best effort defense, which do not consider primary-standby switching during backup
+int ObLSBackupCtx::check_mview_tablet_set_(const uint64_t tenant_id, common::ObMySQLProxy &sql_proxy)
+{
+  int ret = OB_SUCCESS;
+  ObAllTenantInfo tenant_info;
+  if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, &sql_proxy, false/*for update*/, tenant_info))) {
+    LOG_WARN("failed to get tenant info", K(ret), K(tenant_id));
+  } else if (tenant_info.is_primary()) {
+    LOG_INFO("tenant is primary", K(tenant_id), K(tenant_info));
+  } else if (!mview_dep_tablet_set_.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant not primary but mview dep tablet is not empty", K(tenant_id), K(tenant_info));
+  }
+  return ret;
+}
+
 int ObLSBackupCtx::seperate_tablet_id_list_(const common::ObIArray<common::ObTabletID> &tablet_id_list,
-    common::ObIArray<common::ObTabletID> &sys_tablet_id_list,
-    common::ObIArray<common::ObTabletID> &data_tablet_id_list)
+    common::ObArray<common::ObTabletID> &sys_tablet_id_list, common::ObArray<common::ObTabletID> &data_tablet_id_list)
 {
   int ret = OB_SUCCESS;
   sys_tablet_id_list.reset();
@@ -1584,6 +1685,10 @@ int ObLSBackupCtx::seperate_tablet_id_list_(const common::ObIArray<common::ObTab
         LOG_WARN("failed to push back", K(ret), K(tablet_id));
       }
     }
+  }
+  if (OB_SUCC(ret)) {
+    lib::ob_sort(sys_tablet_id_list.begin(), sys_tablet_id_list.end());
+    lib::ob_sort(data_tablet_id_list.begin(), data_tablet_id_list.end());
   }
   return ret;
 }

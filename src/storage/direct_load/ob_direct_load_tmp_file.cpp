@@ -195,8 +195,8 @@ int ObDirectLoadTmpFileIOHandle::open(const ObDirectLoadTmpFileHandle &file_hand
   if (OB_UNLIKELY(!file_handle.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(file_handle));
-  } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.get_tmp_file_size(tmp_file->get_file_id().fd_,
-                                                                file_size))) {
+  } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.get_tmp_file_size(
+                     MTL_ID(), tmp_file->get_file_id().fd_, file_size))) {
     LOG_WARN("fail to get tmp file size", KR(ret), KPC(tmp_file));
   } else if (OB_UNLIKELY(file_size != tmp_file->get_file_size())) {
     ret = OB_ERR_UNEXPECTED;
@@ -251,7 +251,7 @@ int ObDirectLoadTmpFileIOHandle::pread(char *buf, int64_t size, int64_t offset)
     while (OB_SUCC(ret)) {
       if (OB_FAIL(check_status())) {
         LOG_WARN("fail to check status", KR(ret));
-      } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.pread(io_info_, offset, file_io_handle_))) {
+      } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.pread(MTL_ID(), io_info_, offset, file_io_handle_))) {
         LOG_WARN("fail to do pread from tmp file", KR(ret), K_(io_info), K(offset));
         if (OB_LIKELY(is_retry_err(ret))) {
           if (++retry_cnt <= MAX_RETRY_CNT) {
@@ -290,14 +290,14 @@ int ObDirectLoadTmpFileIOHandle::write(char *buf, int64_t size)
         LOG_WARN("fail to check status", KR(ret));
       }
       // TODO(suzhi.yt): 先保留原来的调用, aio_write提交成功就相当于写成功了
-      else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.aio_write(io_info_, file_io_handle_))) {
+      else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.aio_write(MTL_ID(), io_info_, file_io_handle_))) {
         LOG_WARN("fail to do aio write to tmp file", KR(ret), K_(io_info));
         if (OB_LIKELY(is_retry_err(ret))) {
           if (++retry_cnt <= MAX_RETRY_CNT) {
             ret = OB_SUCCESS;
             int64_t new_file_size = 0;
-            if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.get_tmp_file_size(tmp_file_->get_file_id().fd_,
-                                                                   new_file_size))) {
+            if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.get_tmp_file_size(
+                        MTL_ID(), tmp_file_->get_file_id().fd_, new_file_size))) {
               LOG_WARN("fail to get tmp file size", KR(ret), KPC_(tmp_file));
             } else {
               const int64_t write_size = new_file_size - tmp_file_->get_file_size();
@@ -342,7 +342,7 @@ int ObDirectLoadTmpFileIOHandle::aio_pread(char *buf, int64_t size, int64_t offs
     while (OB_SUCC(ret)) {
       if (OB_FAIL(check_status())) {
         LOG_WARN("fail to check status", KR(ret));
-      } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.aio_pread(io_info_, offset, file_io_handle_))) {
+      } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.aio_pread(MTL_ID(), io_info_, offset, file_io_handle_))) {
         LOG_WARN("fail to do aio pread from tmp file", KR(ret), K_(io_info), K(offset));
         if (OB_LIKELY(is_retry_err(ret))) {
           if (++retry_cnt <= MAX_RETRY_CNT) {
@@ -381,14 +381,14 @@ int ObDirectLoadTmpFileIOHandle::aio_write(char *buf, int64_t size)
         LOG_WARN("fail to check status", KR(ret));
       }
       // aio_write提交成功就相当于写成功了
-      else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.aio_write(io_info_, file_io_handle_))) {
+      else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.aio_write(MTL_ID(), io_info_, file_io_handle_))) {
         LOG_WARN("fail to do aio write to tmp file", KR(ret), K_(io_info));
         if (OB_LIKELY(is_retry_err(ret))) {
           if (++retry_cnt <= MAX_RETRY_CNT) {
             ret = OB_SUCCESS;
             int64_t new_file_size = 0;
-            if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.get_tmp_file_size(tmp_file_->get_file_id().fd_,
-                                                                   new_file_size))) {
+            if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.get_tmp_file_size(
+                        MTL_ID(), tmp_file_->get_file_id().fd_, new_file_size))) {
               LOG_WARN("fail to get tmp file size", KR(ret), KPC_(tmp_file));
             } else {
               const int64_t write_size = new_file_size - tmp_file_->get_file_size();
@@ -478,7 +478,7 @@ int ObDirectLoadTmpFileManager::alloc_dir(int64_t &dir_id)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDirectLoadTmpFileManager not init", KR(ret), KP(this));
-  } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.alloc_dir(dir_id))) {
+  } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.alloc_dir(MTL_ID(), dir_id))) {
     LOG_WARN("fail to alloc dir", KR(ret));
   }
   return ret;
@@ -498,7 +498,7 @@ int ObDirectLoadTmpFileManager::alloc_file(int64_t dir_id,
     ObDirectLoadTmpFile *tmp_file = nullptr;
     ObDirectLoadTmpFileId file_id;
     file_id.dir_id_ = dir_id;
-    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.open(file_id.fd_, file_id.dir_id_))) {
+    if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.open(MTL_ID(), file_id.fd_, file_id.dir_id_))) {
       LOG_WARN("fail to open file", KR(ret));
     } else if (OB_ISNULL(tmp_file = file_allocator_.alloc(this, file_id))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -512,7 +512,7 @@ int ObDirectLoadTmpFileManager::alloc_file(int64_t dir_id,
         tmp_file = nullptr;
       }
       if (file_id.is_valid()) {
-        FILE_MANAGER_INSTANCE_V2.remove(file_id.fd_);
+        FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.remove(MTL_ID(), file_id.fd_);
       }
     }
   }
@@ -531,7 +531,7 @@ void ObDirectLoadTmpFileManager::put_file(ObDirectLoadTmpFile *tmp_file)
   } else {
     const int64_t ref_count = tmp_file->get_ref_count();
     if (0 == ref_count) {
-      FILE_MANAGER_INSTANCE_V2.remove(tmp_file->get_file_id().fd_);
+      FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.remove(MTL_ID(), tmp_file->get_file_id().fd_);
       file_allocator_.free(tmp_file);
     } else {
       LOG_ERROR("tmp file ref count must be zero", K(ref_count));

@@ -104,7 +104,7 @@ void ObLogReadFdHandle::reset()
   if (nullptr != fd_item_) {
     fd_item_->dec_ref();
     if (is_local_) {
-      THE_IO_DEVICE->close(fd_item_->io_fd_);
+      LOCAL_DEVICE_INSTANCE.close(fd_item_->io_fd_);
       fd_item_->reset();
       OB_DELETE(ObLogReadFdCacheItem, MEMORY_LABEL, fd_item_);
       is_local_ = false;
@@ -195,7 +195,7 @@ void ObLogFileReader2::destroy()
   ObLogReadFdCacheItem *cur = tail_;
   while (nullptr != cur) {
     ObLogReadFdCacheItem *prev = cur->prev_;
-    THE_IO_DEVICE->close(cur->io_fd_);
+    LOCAL_DEVICE_INSTANCE.close(cur->io_fd_);
     cur->reset();
     OB_DELETE(ObLogReadFdCacheItem, MEMORY_LABEL, cur);
     cur = prev;
@@ -226,7 +226,7 @@ int ObLogFileReader2::pread(
     if (!target_io_fd.is_normal_file()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid fd", K(ret), K(target_io_fd));
-    } else if (OB_FAIL(THE_IO_DEVICE->pread(target_io_fd, offset, count, buf, read_size))) {
+    } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.pread(target_io_fd, offset, count, buf, read_size))) {
       LOG_ERROR("fail to pread", K(ret), K(target_io_fd), K(offset), K(count), K(errno), KERRMSG);
     }
   }
@@ -422,7 +422,7 @@ int ObLogFileReader2::do_clear_work()
     } // lock end
 
     if (OB_SUCC(ret) && nullptr != recycle_item) {
-      THE_IO_DEVICE->close(recycle_item->io_fd_);
+      LOCAL_DEVICE_INSTANCE.close(recycle_item->io_fd_);
       recycle_item->reset();
       OB_DELETE(ObLogReadFdCacheItem, MEMORY_LABEL, recycle_item);
     }
@@ -485,7 +485,7 @@ int ObLogFileReader2::put_new_item(
         LOG_WARN("set new item fail", K(ret), K(fd_key), K(*new_item));
       } else if (OB_HASH_EXIST == ret) {
         // some thread already put new, close self and get from cache again
-        THE_IO_DEVICE->close(open_io_fd);
+        LOCAL_DEVICE_INSTANCE.close(open_io_fd);
         if (nullptr != new_item) {
           new_item->reset();
           OB_DELETE(ObLogReadFdCacheItem, MEMORY_LABEL, new_item);
@@ -512,7 +512,7 @@ int ObLogFileReader2::put_new_item(
 
   if (OB_FAIL(ret)) {
     if (open_io_fd.is_normal_file()) {
-      THE_IO_DEVICE->close(open_io_fd); // ignore ret
+      LOCAL_DEVICE_INSTANCE.close(open_io_fd); // ignore ret
     }
     if (nullptr != new_item) {
       new_item->reset();

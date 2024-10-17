@@ -638,7 +638,8 @@ public:
   virtual void test(ObRetryParam &v) const override
   {
     int ret = OB_SUCCESS;
-    if (v.session_.get_ddl_info().is_ddl() && !v.session_.get_ddl_info().is_retryable_ddl()) {
+    if (v.session_.get_ddl_info().is_ddl() && (!v.session_.get_ddl_info().is_retryable_ddl()
+                                              || v.session_.get_ddl_info().is_mview_complete_refresh())) {
       v.client_ret_ = v.err_;
       v.retry_type_ = RETRY_TYPE_NONE;
       v.no_more_test_ = true;

@@ -583,8 +583,13 @@ int ObMemtable::set(
                 context,
                 memtable_key_generator,
                 nullptr /*mvcc_row*/);
-      TRANS_LOG(WARN, "[xuanxi] set row", K(ret), K(row), K(check_exist), K(memtable_key_generator.get_memtable_key()));
       guard.set_memtable(this);
+    }
+    if (OB_SUCC(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(try_report_dml_stat_(param.table_id_))) {
+        TRANS_LOG_RET(WARN, tmp_ret, "fail to report dml stat", K_(reported_dml_stat));
+      }
     }
   }
   return ret;
@@ -641,6 +646,13 @@ int ObMemtable::set(
                 memtable_key_generator,
                 nullptr /*mvcc_row*/);
       guard.set_memtable(this);
+    }
+
+    if (OB_SUCC(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(try_report_dml_stat_(param.table_id_))) {
+        TRANS_LOG_RET(WARN, tmp_ret, "fail to report dml stat", K_(reported_dml_stat));
+      }
     }
   }
   return ret;
@@ -2938,6 +2950,12 @@ int ObMemtable::mvcc_write_(
     } else if (blocksstable::ObDmlFlag::DF_DELETE == dml_flag) {
       ++mt_stat_.delete_row_count_;
     }
+
+    // TODO(handora.qc): after finishing the cherrypick of batch_dml_opt_425 to
+    // the master, integrate the event into mvcc_write_statistic_.
+    EVENT_ADD(ObStatEventIds::MEMSTORE_WRITE_BYTES,
+              key.get_rowkey()->get_deep_copy_size() +
+              arg.data_->dup_size());
   }
   return ret;
 }

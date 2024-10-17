@@ -423,11 +423,17 @@ public:
       const ObRestoreJobPersistKey &key,
       ObRestoreProgressPersistInfo &persist_info) const;
 
-  int update_restore_process(
+  int update_restore_progress_by_tablet_cnt(
       common::ObISQLClient &proxy,
       const ObRestoreJobPersistKey &key,
       const int64_t total_tablet_cnt,
       const int64_t finish_tablet_cnt) const;
+
+  int update_restore_progress_by_bytes(
+      common::ObISQLClient &proxy,
+      const ObRestoreJobPersistKey &key,
+      const int64_t total_bytes,
+      const int64_t finish_bytes) const;
 
   //__all_restore_job_history
   int insert_restore_job_history(
@@ -506,6 +512,19 @@ public:
       common::ObISQLClient &proxy,
       int64_t &job_id,
       ObPhysicalRestoreBackupDestList &backup_dest_list) const;
+
+  int set_ls_total_bytes(
+      common::ObISQLClient &proxy, const ObLSRestoreJobPersistKey &ls_key,
+      const int64_t total_bytes) const;
+  int get_ls_total_bytes(
+    common::ObISQLClient &proxy, const ObLSRestoreJobPersistKey &ls_key,
+    int64_t &total_bytes) const;
+  int set_ls_finish_bytes(
+      common::ObISQLClient &proxy, const ObLSRestoreJobPersistKey &ls_key,
+      const int64_t finish_bytes) const;
+  int increase_ls_finish_bytes_by(
+      common::ObISQLClient &proxy, const ObLSRestoreJobPersistKey &ls_key,
+      const int64_t finish_bytes) const;
 
   TO_STRING_KV(K_(is_inited), K_(tenant_id));
 

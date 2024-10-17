@@ -156,6 +156,7 @@ enum MulModeTableType {
   INVALID_TABLE_TYPE = 0,
   OB_ORA_JSON_TABLE_TYPE, // 1
   OB_ORA_XML_TABLE_TYPE = 2,
+  OB_RB_ITERATE_TABLE_TYPE = 3,
 };
 
 typedef struct ObJtColBaseInfo
@@ -199,14 +200,14 @@ typedef struct ObJtColBaseInfo
 typedef struct ObJsonTableDef {
   ObJsonTableDef()
     : all_cols_(),
-      doc_expr_(nullptr),
+      doc_exprs_(),
       table_type_(MulModeTableType::INVALID_TABLE_TYPE),
       namespace_arr_() {}
 
   int deep_copy(const ObJsonTableDef& src, ObIRawExprCopier &expr_copier, ObIAllocator* allocator);
   int assign(const ObJsonTableDef& src);
   common::ObSEArray<ObJtColBaseInfo*, 4, common::ModulePageAllocator, true> all_cols_;
-  ObRawExpr *doc_expr_;
+  common::ObSEArray<ObRawExpr*, 1, common::ModulePageAllocator, true> doc_exprs_;
   MulModeTableType table_type_;
   common::ObSEArray<ObString, 16, common::ModulePageAllocator, true> namespace_arr_;
 } ObJsonTableDef;
@@ -874,7 +875,9 @@ public:
                                           ObSQLSessionInfo *session_info);
   int set_sharable_expr_reference(ObRawExpr &expr, ExplicitedRefType ref_type);
   int check_pseudo_column_valid();
-  int get_ora_rowscn_column(const uint64_t table_id, ObPseudoColumnRawExpr *&ora_rowscn);
+  int get_target_pseudo_column(const ObItemType target_type,
+                               const uint64_t table_id,
+                               ObPseudoColumnRawExpr *&pseudo_col);
   virtual int remove_useless_sharable_expr(ObRawExprFactory *expr_factory,
                                            ObSQLSessionInfo *session_info,
                                            bool explicit_for_col);
@@ -1164,9 +1167,6 @@ public:
                         const uint64_t seq_id) const;
   int get_sequence_exprs(common::ObIArray<ObRawExpr *> &exprs) const;
   int get_udf_exprs(common::ObIArray<ObRawExpr *> &exprs) const;
-  int has_rand(bool &has_rand) const { return has_special_expr(CNT_RAND_FUNC, has_rand); }
-  virtual int has_special_expr(const ObExprInfoFlag, bool &has) const;
-  int has_special_exprs(const ObSqlBitSet<> &flags, bool &has) const;
   const TransposeItem *get_transpose_item() const { return transpose_item_; }
   void set_transpose_item(const TransposeItem *transpose_item) { transpose_item_ = transpose_item; }
   const ObUnpivotInfo get_unpivot_info() const

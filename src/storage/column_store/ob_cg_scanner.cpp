@@ -193,7 +193,7 @@ int ObCGScanner::locate(
     if (nullptr != bitmap) {
       if (bitmap->is_all_true()) {
         locate_bitmap = nullptr;
-      } else if (OB_FAIL(bitmap->get_first_valid_idx(range, is_reverse_scan_, current_))) {
+      } else if (OB_FAIL(bitmap->get_first_valid_idx(range, current_))) {
         LOG_WARN("Fail to get first valid idx", K(ret), K_(is_reverse_scan), K(range));
       } else {
         if (is_reverse_scan_) {
@@ -315,6 +315,8 @@ int ObCGScanner::apply_filter(
     ret = OB_SUCCESS;
   }
   LOG_TRACE("[COLUMNSTORE] apply filter info in cg", K(ret), K_(query_index_range), K(row_count),
+            "filter_constant_type", result_bitmap.get_filter_constant_type(),
+            "filter_constant_id", result_bitmap.get_filter_constant_id(),
             "bitmap_size", result_bitmap.size(),  "popcnt", result_bitmap.popcnt());
   return ret;
 }
@@ -330,32 +332,62 @@ int ObCGScanner::get_next_valid_block(sql::ObPushdownFilterExecutor *parent,
       LOG_DEBUG("Calc to end of prefetched data", K(ret), K(prefetcher_.cur_micro_data_fetch_idx_),
                 K(prefetcher_.micro_data_prefetch_idx_));
     } else {
-      if (prefetcher_.cur_micro_data_fetch_idx_ > -1) {
-        prefetcher_.current_micro_handle().reset();
+      if (result_bitmap.get_filter_constant_type().is_constant()) {
+        result_bitmap.set_filter_uncertain();
+        ObCSRowId prefetch_constant_id = prefetcher_.get_max_filter_constant_id();
+        sql::ObBoolMask prefetch_constant_type = prefetcher_.get_filter_constant_type();
+        // reset bitmap when bits not consistent with filter constant type after set by prefetcher
+        // filter info
+        // bitmap set value could be decided by the logic op type of filter root in the iter param
+        bool need_reset = is_reverse_scan_ ?
+            prefetch_constant_id <= query_index_range_.end_row_id_ :
+            prefetch_constant_id >= query_index_range_.start_row_id_;
+        if (!need_reset) {
+        } else if (is_reverse_scan_) {
+          if (OB_FAIL(result_bitmap.set_bitmap_batch(
+                      MAX(query_index_range_.start_row_id_, prefetch_constant_id),
+                      query_index_range_.end_row_id_,
+                      prefetch_constant_type.is_always_true()))) {
+            LOG_WARN("Fail to set bitmap batch", K(ret), K_(query_index_range), K(prefetch_constant_id));
+          }
+        } else {
+          if (OB_FAIL(result_bitmap.set_bitmap_batch(
+                      query_index_range_.start_row_id_,
+                      MIN(query_index_range_.end_row_id_, prefetch_constant_id),
+                      prefetch_constant_type.is_always_true()))) {
+            LOG_WARN("Fail to set bitmap batch", K(ret), K_(query_index_range), K(prefetch_constant_id));
+          }
+        }
       }
-      ++prefetcher_.cur_micro_data_fetch_idx_;
-      ++prefetcher_.cur_micro_data_read_idx_;
-      const ObMicroIndexInfo &index_info = prefetcher_.current_micro_info();
-      const ObCSRange &row_range = index_info.get_row_range();
-      if (index_info.is_filter_always_false()) {
-        if (OB_FAIL(result_bitmap.set_bitmap_batch(
-                    MAX(query_index_range_.start_row_id_, row_range.start_row_id_),
-                    MIN(query_index_range_.end_row_id_, row_range.end_row_id_),
-                    false))) {
-          LOG_WARN("Fail to set bitmap batch", K(ret), K(row_range));
+
+      if (OB_SUCC(ret)) {
+        if (prefetcher_.cur_micro_data_fetch_idx_ > -1) {
+          prefetcher_.current_micro_handle().reset();
         }
-      } else if (index_info.is_filter_always_true()) {
-        if (OB_FAIL(result_bitmap.set_bitmap_batch(
-                    MAX(query_index_range_.start_row_id_, row_range.start_row_id_),
-                    MIN(query_index_range_.end_row_id_, row_range.end_row_id_),
-                    true))) {
-          LOG_WARN("Fail to set bitmap batch", K(ret), K(row_range));
+        ++prefetcher_.cur_micro_data_fetch_idx_;
+        ++prefetcher_.cur_micro_data_read_idx_;
+        const ObMicroIndexInfo &index_info = prefetcher_.current_micro_info();
+        const ObCSRange &row_range = index_info.get_row_range();
+        if (index_info.is_filter_always_false()) {
+          if (OB_FAIL(result_bitmap.set_bitmap_batch(
+                      MAX(query_index_range_.start_row_id_, row_range.start_row_id_),
+                      MIN(query_index_range_.end_row_id_, row_range.end_row_id_),
+                      false))) {
+            LOG_WARN("Fail to set bitmap batch", K(ret), K(row_range));
+          }
+        } else if (index_info.is_filter_always_true()) {
+          if (OB_FAIL(result_bitmap.set_bitmap_batch(
+                      MAX(query_index_range_.start_row_id_, row_range.start_row_id_),
+                      MIN(query_index_range_.end_row_id_, row_range.end_row_id_),
+                      true))) {
+            LOG_WARN("Fail to set bitmap batch", K(ret), K(row_range));
+          }
+        } else if (nullptr != parent && ObCGScanner::can_skip_filter(
+                *parent, *parent_bitmap, prefetcher_.current_micro_info().get_row_range())) {
+          continue;
+        } else {
+          break;
         }
-      } else if (nullptr != parent && ObCGScanner::can_skip_filter(
-              *parent, *parent_bitmap, prefetcher_.current_micro_info().get_row_range())) {
-        continue;
-      } else {
-        break;
       }
     }
   }
@@ -379,38 +411,48 @@ int ObCGScanner::inner_filter(
   int ret = OB_SUCCESS;
   int64_t access_count = 0;
   const common::ObBitmap *bitmap = nullptr;
+  sql::ObBoolMask prefetch_constant_type = prefetcher_.get_filter_constant_type();
+  ObCSRowId prefetch_constant_id = prefetcher_.get_max_filter_constant_id();
   while (OB_SUCC(ret)) {
     if (end_of_scan()) {
       ret = OB_ITER_END;
-    } else if (is_new_range_ || OB_ITER_END == micro_scanner_->end_of_block()) {
-      if (OB_FAIL(get_next_valid_block(parent, parent_bitmap, result_bitmap))) {
-        if (OB_UNLIKELY(OB_ITER_END != ret)) {
-          LOG_WARN("Fail to get next valid index", K(ret));
-        }
-      } else if (OB_FAIL(open_cur_data_block())) {
-        if (OB_UNLIKELY(OB_ITER_END != ret)) {
-          LOG_WARN("Fail to open cur data block", K(ret));
+    } else if (prefetch_constant_type.is_constant() &&
+               ((is_reverse_scan_ && prefetch_constant_id <= current_) ||
+                (!is_reverse_scan_ && prefetch_constant_id >= current_))) {
+      current_ = is_reverse_scan_ ? prefetch_constant_id - 1 : prefetch_constant_id + 1;
+      result_bitmap.set_constant_filter_info(prefetch_constant_type, prefetch_constant_id);
+      LOG_DEBUG("Set constant filter info", K(ret), K(prefetch_constant_type), K(prefetch_constant_id));
+    } else {
+      if (is_new_range_ || OB_ITER_END == micro_scanner_->end_of_block()) {
+        if (OB_FAIL(get_next_valid_block(parent, parent_bitmap, result_bitmap))) {
+          if (OB_UNLIKELY(OB_ITER_END != ret)) {
+            LOG_WARN("Fail to get next valid index", K(ret));
+          }
+        } else if (OB_FAIL(open_cur_data_block())) {
+          if (OB_UNLIKELY(OB_ITER_END != ret)) {
+            LOG_WARN("Fail to open cur data block", K(ret));
+          }
         }
       }
-    }
-    if (OB_SUCC(ret)) {
-      ObMicroIndexInfo &index_info = prefetcher_.current_micro_info();
-      const ObCSRange &row_range = index_info.get_row_range();
-      uint32_t offset = row_range.start_row_id_ > query_index_range_.start_row_id_ ? (row_range.start_row_id_ - query_index_range_.start_row_id_) : 0;
+      if (OB_SUCC(ret)) {
+        ObMicroIndexInfo &index_info = prefetcher_.current_micro_info();
+        const ObCSRange &row_range = index_info.get_row_range();
+        uint32_t offset = row_range.start_row_id_ > query_index_range_.start_row_id_ ? (row_range.start_row_id_ - query_index_range_.start_row_id_) : 0;
 
-      index_info.pre_process_filter(*filter_info.filter_);
-      if (OB_FAIL(micro_scanner_->filter_micro_block_in_cg(
-                  parent, filter_info, parent_bitmap, row_range.start_row_id_, access_count))) {
-        LOG_WARN("Fail to apply filter", K(ret));
-      } else if (OB_ISNULL(bitmap = filter_info.filter_->get_result()) || bitmap->size() != access_count) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Unexpected null filter bitmap", K(ret), KPC(filter_info.filter_), K(access_count));
-      } else if (OB_FAIL(result_bitmap.append_bitmap(*bitmap, offset, false))) {
-        LOG_WARN("Fail to append bitmap", K(ret), K(offset), KPC(bitmap), K(result_bitmap));
-      } else {
-        current_ = is_reverse_scan_ ? current_ - access_count : current_ + access_count;
+        index_info.pre_process_filter(*filter_info.filter_);
+        if (OB_FAIL(micro_scanner_->filter_micro_block_in_cg(
+                    parent, filter_info, parent_bitmap, row_range.start_row_id_, access_count))) {
+          LOG_WARN("Fail to apply filter", K(ret));
+        } else if (OB_ISNULL(bitmap = filter_info.filter_->get_result()) || bitmap->size() != access_count) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected null filter bitmap", K(ret), KPC(filter_info.filter_), K(access_count));
+        } else if (OB_FAIL(result_bitmap.append_bitmap(*bitmap, offset, false))) {
+          LOG_WARN("Fail to append bitmap", K(ret), K(offset), KPC(bitmap), K(result_bitmap));
+        } else {
+          current_ = is_reverse_scan_ ? current_ - access_count : current_ + access_count;
+        }
+        index_info.post_process_filter(*filter_info.filter_);
       }
-      index_info.post_process_filter(*filter_info.filter_);
     }
   }
   return ret;

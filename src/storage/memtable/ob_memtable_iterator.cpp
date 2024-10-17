@@ -70,7 +70,7 @@ ObMemtableGetIterator::~ObMemtableGetIterator()
 int ObMemtableGetIterator::init(
     const storage::ObTableIterParam &param,
     storage::ObTableAccessContext &context,
-    ObIMemtable &memtable)
+    storage::ObIMemtable &memtable)
 {
   int ret = OB_SUCCESS;
   char *trans_info_ptr = nullptr;
@@ -194,7 +194,7 @@ ObMemtableScanIterator::~ObMemtableScanIterator()
   while(ITER_END != scan_iter.get_next_row());
  */
 int ObMemtableScanIterator::init(
-    ObIMemtable* memtable,
+    storage::ObIMemtable* memtable,
     const storage::ObTableIterParam &param,
     storage::ObTableAccessContext &context)
 {

@@ -108,7 +108,6 @@ public:
   virtual int serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const override;
   virtual int deserialize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t buf_size, int64_t &pos) override;
   virtual int64_t get_serialize_param_size() const override;
-  virtual int cleanup_impl() override;
 private:
   int hold_snapshot(const int64_t snapshot_version);
   int release_snapshot(const int64_t snapshot_version);
@@ -116,6 +115,7 @@ private:
   int validate_constraint_valid();
   int fail();
   int succ();
+  virtual int cleanup_impl() override;
   int send_check_constraint_request();
   int send_fk_constraint_request();
   int set_foreign_key_constraint_validated();

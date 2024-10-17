@@ -68,6 +68,7 @@ public:
   bool has_local() const { return ObTableHasLocalFlag::HAS_LOCAL == has_local_flag_; }
   void set_has_local() { has_local_flag_ = ObTableHasLocalFlag::HAS_LOCAL; }
   void set_no_local() { has_local_flag_ = ObTableHasLocalFlag::NO_LOCAL; }
+  bool is_shared_sstable() const { return has_backup() && !has_local(); }
 
 private:
   static const uint64_t SF_BIT_HAS_BACKUP = 1;

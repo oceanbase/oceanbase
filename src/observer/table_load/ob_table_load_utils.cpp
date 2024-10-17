@@ -19,7 +19,6 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "storage/blocksstable/ob_datum_range.h"
 #include "storage/blocksstable/ob_datum_row.h"
-#include "sql/engine/ob_des_exec_context.h"
 
 namespace oceanbase
 {
@@ -189,32 +188,6 @@ int ObTableLoadUtils::deep_copy(const ObDatumRange &src, ObDatumRange &dest, ObI
   }
   return ret;
 }
-
-int ObTableLoadUtils::deep_copy(const sql::ObExecContext &src, sql::ObDesExecContext &dest, ObIAllocator &allocator)
-{
-  int ret = OB_SUCCESS;
-  char *buf = nullptr;
-  int64_t buf_size = src.get_serialize_size();
-  int64_t data_len = 0;
-  int64_t pos = 0;
-  if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(buf_size)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate buffer", KR(ret), K(buf_size));
-  } else if (OB_FAIL(src.serialize(buf, buf_size, pos))) {
-    LOG_WARN("serialize session info failed", KR(ret));
-  } else {
-    data_len = pos;
-    pos = 0;
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(dest.deserialize(buf, data_len, pos))) {
-      LOG_WARN("deserialize session info failed", KR(ret));
-    }
-  }
-  return ret;
-}
-
-
 
 int ObTableLoadUtils::deep_copy(const sql::ObSQLSessionInfo &src, sql::ObSQLSessionInfo &dest, ObIAllocator &allocator)
 {

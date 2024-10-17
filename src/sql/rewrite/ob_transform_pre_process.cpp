@@ -70,7 +70,7 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
     LOG_WARN("failed to transform right join as left", K(ret));
   } else if (parent_stmts.empty() && lib::is_oracle_mode() &&
               OB_FAIL(formalize_limit_expr(*stmt))) {
-    LOG_WARN("formalize stmt fialed", K(ret));
+    LOG_WARN("formalize stmt failed", K(ret));
   } else if (OB_FAIL(stmt->adjust_duplicated_table_names(*ctx_->allocator_, is_happened))) {
     LOG_WARN("failed to adjust duplicated table names", K(ret));
   } else {
@@ -336,10 +336,6 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
         LOG_TRACE("succeed to transform for preserve order for fulltext search",K(is_happened), K(ret));
       }
     }
-    if (OB_SUCC(ret) && OB_FAIL(disable_complex_dml_for_fulltext_index(stmt))) {
-      LOG_WARN("disable complex dml for fulltext index", K(ret));
-      // jinmao TODO: table scan 能吐出正确的 doc_id 后，可删除此限制
-    }
     if (OB_SUCC(ret) && OB_FAIL(reset_view_base_item(stmt))) {
       LOG_WARN("failed to reset view base item", K(ret));
     }
@@ -378,6 +374,7 @@ int ObTransformPreProcess::expand_materialized_view(ObDMLStmt *stmt, bool &trans
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null", K(ret), K(stmt), K(ctx_));
   } else if (ctx_->session_info_->get_ddl_info().is_refreshing_mview()
+             || ctx_->session_info_->get_ddl_info().is_major_refreshing_mview()
              || stmt->get_query_ctx()->get_global_hint().has_dbms_stats_hint()) {
     // 1. when refresh mview, do not expand rt-mv
     // 2. when gather stat, do not expand rt-mv
@@ -844,7 +841,7 @@ int ObTransformPreProcess::create_cte_for_groupby_items(ObSelectStmt &stmt)
   bool is_correlated = false;
   ObSelectStmt *view_stmt = NULL;
   if (OB_FAIL(check_pre_aggregate(stmt, can_pre_aggregate))) {
-    LOG_WARN("fialed to check pre aggregate", K(ret));
+    LOG_WARN("failed to check pre aggregate", K(ret));
   } else if (!can_pre_aggregate) {
     if (OB_FAIL(ObTransformUtils::create_simple_view(ctx_, &stmt, view_stmt))) {
       LOG_WARN("failed to create simple view", K(ret), K(stmt));
@@ -10017,12 +10014,16 @@ int ObTransformPreProcess::expand_correlated_cte(ObDMLStmt *stmt, bool& trans_ha
     bool is_correlated = false;
     bool can_expand = true;
     ObSEArray<ObSelectStmt *, 4> dummy;
-    if (OB_FAIL(check_is_correlated_cte(temp_table_infos.at(i).temp_table_query_, dummy, is_correlated))) {
+    ObSelectStmt *temp_query = temp_table_infos.at(i).temp_table_query_;
+    if (OB_ISNULL(temp_query)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("got unexpected null ptr", K(ret));
+    } else if (OB_FAIL(check_is_correlated_cte(temp_query, dummy, is_correlated))) {
       LOG_WARN("failed to check is correlated cte", K(ret));
     } else if (!is_correlated) {
       //do nothing
-    } else if (OB_FAIL(ObTransformUtils::check_expand_temp_table_valid(temp_table_infos.at(i).temp_table_query_, can_expand))) {
-      LOG_WARN("failed to check expand temp table valid", K(ret));
+    } else if (OB_FAIL(temp_query->is_query_deterministic(can_expand))) {
+      LOG_WARN("failed to check stmt is deterministic", K(ret));
     } else if (!can_expand) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("Correlated CTE Not Supported", K(ret));
@@ -10592,75 +10593,6 @@ int ObTransformPreProcess::get_rowkey_for_single_table(ObSelectStmt* stmt,
     LOG_WARN("failed to generate unique key", K(ret));
   } else {
     is_valid = true;
-  }
-  return ret;
-}
-
-int ObTransformPreProcess::disable_complex_dml_for_fulltext_index(ObDMLStmt *stmt)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<TableItem*, 4> tables_to_check;
-  bool has_table_with_fulltext_index = false;
-  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->schema_checker_) ||
-      OB_ISNULL(ctx_->session_info_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret));
-  } else if (stmt->is_insert_stmt()) {
-    ObInsertStmt *insert_stmt = static_cast<ObInsertStmt*>(stmt);
-    ObInsertTableInfo table_info = insert_stmt->get_insert_table_info();
-    if (table_info.is_replace_ || table_info.assignments_.count() != 0) {
-      TableItem* table = stmt->get_table_item_by_id(table_info.table_id_);
-      if (OB_FAIL(tables_to_check.push_back(table))) {
-        LOG_WARN("failed to push back table", K(ret));
-      }
-    }
-  } else if (stmt->is_delete_stmt() || stmt->is_update_stmt()) {
-    ObDelUpdStmt *del_upd_stmt = static_cast<ObDelUpdStmt*>(stmt);
-    ObSEArray<ObDmlTableInfo*, 4> table_infos;
-    TableItem* table = NULL;
-    if (OB_FAIL(del_upd_stmt->get_dml_table_infos(table_infos))) {
-      LOG_WARN("failed to get dml table infos", K(ret));
-    } else if (table_infos.count() == 1 && del_upd_stmt->get_from_item_size() == 1) {
-      if (OB_ISNULL(table_infos.at(0))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null", K(ret));
-      } else if (OB_ISNULL(table = stmt->get_table_item_by_id(table_infos.at(0)->table_id_))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null", K(ret));
-      } else if (!table->is_generated_table() && !table->is_temp_table()) {
-        // do nothing
-      } else if (OB_FAIL(tables_to_check.push_back(table))) {
-        LOG_WARN("failed to push back table", K(ret));
-      }
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < table_infos.count(); ++i) {
-        if (OB_ISNULL(table_infos.at(i))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected null", K(ret));
-        } else if (OB_ISNULL(table = stmt->get_table_item_by_id(table_infos.at(i)->table_id_))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected null", K(ret));
-        } else if (OB_FAIL(tables_to_check.push_back(table))) {
-          LOG_WARN("failed to push back table", K(ret));
-        }
-      }
-    }
-  }
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && !has_table_with_fulltext_index && i < tables_to_check.count(); ++i) {
-      if (OB_FAIL(ObTransformUtils::check_table_with_fts_or_multivalue_recursively(tables_to_check.at(i),
-                                                                          ctx_->schema_checker_,
-                                                                          ctx_->session_info_,
-                                                                          has_table_with_fulltext_index))) {
-        LOG_WARN("failed to check table with fulltext or mutivalue recursively", K(ret));
-      } else if (has_table_with_fulltext_index) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "complex dml operations on table with fulltext or multivalue index");
-        LOG_WARN("not supported complex dml operations on table with fulltext or mutivalue index", K(ret));
-      }
-    }
   }
   return ret;
 }

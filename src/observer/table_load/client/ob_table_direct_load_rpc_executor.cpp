@@ -304,13 +304,14 @@ int ObTableDirectLoadInsertExecutor::decode_payload(const ObString &payload,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(payload));
   } else {
-    ObTableLoadSharedAllocatorHandle allocator_handle =
-      ObTableLoadSharedAllocatorHandle::make_handle("TLD_share_alloc", OB_MALLOC_NORMAL_BLOCK_SIZE,
-                                                    MTL_ID());
+    ObTableLoadSharedAllocatorHandle allocator_handle;
     const int64_t data_len = payload.length();
     char *buf = nullptr;
     int64_t pos = 0;
-    if (OB_ISNULL(buf = static_cast<char *>(allocator_handle->alloc(data_len)))) {
+    if (OB_FAIL(ObTableLoadSharedAllocatorHandle::make_handle(
+          allocator_handle, "TLD_share_alloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()))) {
+      LOG_WARN("fail to make allocator handle", KR(ret));
+    } else if (OB_ISNULL(buf = static_cast<char *>(allocator_handle->alloc(data_len)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate memory", KR(ret), K(data_len));
     } else {

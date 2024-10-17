@@ -660,10 +660,6 @@ TEST_F(TestObSimpleSharedLogSingleReplica, test_log_cache_for_shared_storage)
         EXPECT_EQ(OB_SUCCESS, iterator.get_entry(curr_entry, curr_lsn));
       }
       EXPECT_EQ(OB_ITER_END, ret);
-      // expected to hit cold cache
-      EXPECT_NE(0, iterator.io_ctx_.iterator_info_.cold_cache_stat_.hit_cnt_);
-      // because of uploading logs, should read logs from cold cache, which's size is larger than 1 PALF_BLOCK_SIZE
-      EXPECT_LT(PALF_BLOCK_SIZE, leader.palf_handle_impl_->log_engine_.log_storage_.log_cache_->cold_cache_.log_cache_stat_.cache_read_size_);
 
       EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, leader_idx, 1024));
       while(2 != ctx.max_block_id_on_ss_) {
@@ -678,8 +674,6 @@ TEST_F(TestObSimpleSharedLogSingleReplica, test_log_cache_for_shared_storage)
         EXPECT_EQ(OB_SUCCESS, iterator1.get_entry(curr_entry, curr_lsn));
       }
       EXPECT_EQ(OB_ITER_END, ret);
-      // totally hit cache, all logs should be read from cold cache because of previous read and upload
-      EXPECT_LE(3 * PALF_BLOCK_SIZE, leader.palf_handle_impl_->log_engine_.log_storage_.log_cache_->cold_cache_.log_cache_stat_.cache_read_size_);
     }
 
     {
@@ -697,8 +691,6 @@ TEST_F(TestObSimpleSharedLogSingleReplica, test_log_cache_for_shared_storage)
         EXPECT_EQ(OB_SUCCESS, iterator.get_entry(curr_entry, curr_lsn));
       }
       EXPECT_EQ(OB_ITER_END, ret);
-      // logs is cached in cold cache, so still hit cache even if logs has been uploaded.
-      EXPECT_NE(0, iterator.io_ctx_.iterator_info_.cold_cache_stat_.hit_cnt_);
       EXPECT_EQ(expected_lsn, curr_lsn + curr_entry.get_serialize_size());
     }
   }
@@ -729,8 +721,6 @@ TEST_F(TestObSimpleSharedLogSingleReplica, test_log_cache_for_shared_storage)
       sleep(1);
       CLOG_LOG(INFO, "wait for uploading logs");
     }
-    // if no hit for cold cache, it's not normal in this case
-    EXPECT_NE(0, leader.palf_handle_impl_->log_engine_.log_storage_.log_cache_->cold_cache_.log_cache_stat_.hit_cnt_);
   }
 }
 

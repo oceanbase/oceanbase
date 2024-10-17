@@ -301,6 +301,38 @@ int ObGlobalStatProxy::get_finish_data_version(uint64_t &finish_data_version,
   return ret;
 }
 
+int ObGlobalStatProxy::update_major_refresh_mv_merge_scn(const share::SCN &scn, bool is_incremental)
+{
+  int ret = OB_SUCCESS;
+  ObGlobalStatItem::ItemList list;
+  ObGlobalStatItem scn_item(list, "major_refresh_mv_merge_scn",
+                            scn.get_val_for_inner_table_field());
+  if (!is_valid() || !scn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), "valid", is_valid(), K(scn));
+  } else if (OB_FAIL(update(list, is_incremental))) {
+    LOG_WARN("update failed", KR(ret), K(list));
+  }
+  return ret;
+}
+
+int ObGlobalStatProxy::get_major_refresh_mv_merge_scn(const bool for_update, share::SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  scn.reset();
+  ObGlobalStatItem::ItemList list;
+  ObGlobalStatItem scn_item(list, "major_refresh_mv_merge_scn", OB_INVALID_SCN_VAL);
+  if (!is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), "self valid", is_valid());
+  } else if (OB_FAIL(get(list, for_update))) {
+    LOG_WARN("get failed", KR(ret));
+  } else {
+    scn.convert_for_inner_table_field(static_cast<uint64_t>(scn_item.value_));
+  }
+  return ret;
+}
+
 int ObGlobalStatProxy::get_target_data_version_ora_rowscn(
   const uint64_t tenant_id,
   share::SCN &target_data_version_ora_rowscn)

@@ -14,6 +14,7 @@
 
 #include "ob_object_manager.h"
 #include "ob_block_manager.h"
+#include "share/ob_io_device_helper.h"
 #include "storage/meta_store/ob_tenant_seq_generator.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_file_manager.h"
@@ -32,10 +33,10 @@ int64_t ObStorageObjectOpt::to_string(char *buf, const int64_t buf_len) const
   switch (object_type_) {
   case ObStorageObjectType::PRIVATE_DATA_MACRO:
   case ObStorageObjectType::PRIVATE_META_MACRO: {
-    if(OB_FAIL(databuff_printf(buf, buf_len, pos, "object_type:%s (tablet_id=%lu)",
-               get_storage_objet_type_str(object_type_), private_opt_.tablet_id_))) {
+    if(OB_FAIL(databuff_printf(buf, buf_len, pos, "object_type:%s (tablet_id=%lu, transfer_seq=%lu)",
+               get_storage_objet_type_str(object_type_), private_opt_.tablet_id_, private_opt_.tablet_trasfer_seq_))) {
       LOG_WARN("failed to print data into buf", K(ret), K(buf_len), K(pos), K(get_storage_objet_type_str(object_type_)),
-                                                K(private_opt_.tablet_id_));
+                                                K(private_opt_.tablet_id_), K(private_opt_.tablet_trasfer_seq_));
     }
     break;
   }
@@ -87,11 +88,13 @@ int64_t ObStorageObjectOpt::to_string(char *buf, const int64_t buf_len) const
     break;
   }
   case ObStorageObjectType::PRIVATE_TABLET_META: {
-    if(OB_FAIL(databuff_printf(buf, buf_len, pos, "object_type=%s (ls_id=%lu,tablet_id=%lu,version=%lu)",
+    if(OB_FAIL(databuff_printf(buf, buf_len, pos, "object_type=%s (ls_id=%lu,tablet_id=%lu,version=%lu,transfer_seq=%lu)",
                get_storage_objet_type_str(object_type_),
-               ss_private_tablet_opt_.ls_id_, ss_private_tablet_opt_.tablet_id_,  ss_private_tablet_opt_.version_))) {
+               ss_private_tablet_opt_.ls_id_, ss_private_tablet_opt_.tablet_id_,
+               ss_private_tablet_opt_.version_, ss_private_tablet_opt_.tablet_transfer_seq_))) {
       LOG_WARN("failed to print data into buf", K(ret), K(buf_len), K(pos), K(get_storage_objet_type_str(object_type_)),
-                                                K(ss_private_tablet_opt_.ls_id_), K(ss_private_tablet_opt_.tablet_id_), K(ss_private_tablet_opt_.version_));
+                                                K(ss_private_tablet_opt_.ls_id_), K(ss_private_tablet_opt_.tablet_id_),
+                                                K(ss_private_tablet_opt_.version_), K(ss_private_tablet_opt_.tablet_transfer_seq_));
     }
     break;
   }
@@ -197,19 +200,6 @@ int64_t ObStorageObjectOpt::to_string(char *buf, const int64_t buf_len) const
   return pos;
 }
 
-int ObStorageObjectOpt::get_tablet_version(const MacroBlockId &tablet_object_id, int64_t &version)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!tablet_object_id.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("object id is invalid", K(ret), K(tablet_object_id));
-  } else if (OB_UNLIKELY(0 > (version = tablet_object_id.fourth_id()))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid tablet version", K(ret), K(version));
-  }
-  return ret;
-}
-
 //================================ ObObjectManager =====================================//
 
 ObObjectManager &ObObjectManager::ObObjectManager::get_instance()
@@ -240,7 +230,7 @@ int ObObjectManager::init(const bool is_shared_storage, const int64_t macro_obje
   if (OB_FAIL(super_block_buf_holder_.init(ObServerSuperBlockHeader::OB_MAX_SUPER_BLOCK_SIZE))) {
     LOG_WARN("fail to init super block buffer holder, ", K(ret));
   } else if (!is_shared_storage) {
-    if (OB_FAIL(OB_SERVER_BLOCK_MGR.init(THE_IO_DEVICE, macro_object_size))) {
+    if (OB_FAIL(OB_SERVER_BLOCK_MGR.init(&LOCAL_DEVICE_INSTANCE, macro_object_size))) {
       LOG_WARN("fail to init block manager", K(ret), K(macro_object_size));
     }
   } else {
@@ -501,7 +491,7 @@ int ObObjectManager::update_super_block(const common::ObLogCursor &replay_start_
       tmp_super_block.construct_header();
       if (OB_FAIL(OB_SERVER_BLOCK_MGR.write_super_block(tmp_super_block, super_block_buf_holder_))) {
         LOG_WARN("fail to write server super block", K(ret));
-      } else if (OB_FAIL(THE_IO_DEVICE->fsync_block())) {
+      } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.fsync_block())) {
         LOG_WARN("failed to fsync_block", K(ret));
       } else {
         super_block_ = tmp_super_block;
@@ -623,7 +613,8 @@ int ObObjectManager::ss_get_object_id(const ObStorageObjectOpt &opt, MacroBlockI
       if (OB_FAIL(TENANT_SEQ_GENERATOR.get_private_object_seq(seq))) {
         LOG_WARN("fail to get private object seq", K(ret), K(opt));
       } else {
-        object_id.set_fourth_id(seq);
+        object_id.set_tenant_seq(seq);
+        object_id.set_macro_transfer_seq(opt.private_opt_.tablet_trasfer_seq_);
       }
       break;
     }
@@ -669,7 +660,8 @@ int ObObjectManager::ss_get_object_id(const ObStorageObjectOpt &opt, MacroBlockI
       set_ss_object_first_id_(obj_type, default_incarnation_id, default_cg_id, object_id);
       object_id.set_second_id(opt.ss_private_tablet_opt_.ls_id_);
       object_id.set_third_id(opt.ss_private_tablet_opt_.tablet_id_);
-      object_id.set_fourth_id(opt.ss_private_tablet_opt_.version_);
+      object_id.set_meta_version_id(opt.ss_private_tablet_opt_.version_);
+      object_id.set_meta_transfer_seq(opt.ss_private_tablet_opt_.tablet_transfer_seq_);
       break;
     }
     case ObStorageObjectType::PRIVATE_TABLET_CURRENT_VERSION: {

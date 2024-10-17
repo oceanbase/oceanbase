@@ -121,6 +121,12 @@ _ASCII                       { REPUT_TOKEN_NEG_SIGN(_ASCII); }
 _TIS620                       { REPUT_TOKEN_NEG_SIGN(_TIS620); }
 _BINARY                       { REPUT_TOKEN_NEG_SIGN(_BINARY); }
 _UTF16                        { REPUT_TOKEN_NEG_SIGN(_UTF16); }
+_UTF16LE                      { REPUT_TOKEN_NEG_SIGN(_UTF16LE); }
+_SJIS                         { REPUT_TOKEN_NEG_SIGN(_SJIS); }
+_BIG5                         { REPUT_TOKEN_NEG_SIGN(_BIG5); }
+_HKSCS                      { REPUT_TOKEN_NEG_SIGN(_HKSCS); }
+_HKSCS31                     { REPUT_TOKEN_NEG_SIGN(_HKSCS31); }
+_DEC8                        { REPUT_TOKEN_NEG_SIGN(_DEC8); }
 NOT {
   int32_t token_ret = NOT; /*fast parameterize don't care NOT or NOT2*/
   if (!(IS_FAST_PARAMETERIZE)) {
@@ -993,6 +999,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
 }
 <hint>INDEX { return INDEX_HINT; }
 <hint>NO_INDEX { return NO_INDEX_HINT; }
+<hint>UNION_MERGE { return UNION_MERGE_HINT; }
 <hint>USE_DAS { return USE_DAS_HINT; }
 <hint>NO_USE_DAS { return NO_USE_DAS_HINT; }
 <hint>INDEX_SS { return INDEX_SS_HINT; }
@@ -1056,6 +1063,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>NO_USE_LATE_MATERIALIZATION  { return NO_USE_LATE_MATERIALIZATION; }
 <hint>TRACE_LOG { return TRACE_LOG; }
 <hint>LOAD_BATCH_SIZE { return LOAD_BATCH_SIZE; }
+<hint>NO_DIRECT { return NO_DIRECT; }
 <hint>DIRECT { return DIRECT; }
 <hint>APPEND { return APPEND; }
 <hint>TRACING { return TRACING; }

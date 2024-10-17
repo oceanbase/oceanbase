@@ -34,8 +34,8 @@ ObMultipleScanMerge::ObMultipleScanMerge()
     simple_merge_(nullptr),
     loser_tree_(nullptr),
     rows_merger_(nullptr),
-    iter_del_row_(false),
     consumer_cnt_(0),
+    filt_del_count_(0),
     range_(NULL),
     cow_range_()
 {
@@ -307,8 +307,8 @@ void ObMultipleScanMerge::reset()
   loser_tree_ = nullptr;
   rows_merger_ = nullptr;
   tree_cmp_.reset();
-  iter_del_row_ = false;
   consumer_cnt_ = 0;
+  filt_del_count_ = 0;
   range_ = NULL;
   cow_range_.reset();
   ObMultipleMerge::reset();
@@ -317,15 +317,14 @@ void ObMultipleScanMerge::reset()
 void ObMultipleScanMerge::reuse()
 {
   ObMultipleMerge::reuse();
-  iter_del_row_ = false;
   consumer_cnt_ = 0;
+  filt_del_count_ = 0;
 }
 
 void ObMultipleScanMerge::reclaim()
 {
   rows_merger_ = nullptr;
   tree_cmp_.reset();
-  iter_del_row_ = false;
   consumer_cnt_ = 0;
   range_ = NULL;
   ObMultipleMerge::reclaim();
@@ -363,10 +362,7 @@ int ObMultipleScanMerge::supply_consume()
           STORAGE_LOG(WARN, "loser tree push error", K(ret));
         }
       }
-
-      // TODO: Ambiguous here, typically base_row only means row in major sstable.
-      //       And iter_idx==0 doesn't necessarily mean iterator for memtable.
-      0 == iter_idx ? ++row_stat_.inc_row_count_ : ++row_stat_.base_row_count_;
+      REALTIME_MONITOR_INC_READ_ROW_CNT(iter, access_ctx_);
     }
   }
 
@@ -426,7 +422,7 @@ int ObMultipleScanMerge::inner_get_next_row(ObDatumRow &row)
             } else {
               consumer_cnt_ = 0;
               need_supply_consume = false;
-              ++row_stat_.inc_row_count_;
+              REALTIME_MONITOR_INC_READ_ROW_CNT(iter, access_ctx_);
             }
           } else if (OB_FAIL(ObRowFuse::fuse_row(*(item.row_), row, nop_pos_, final_result))) {
             STORAGE_LOG(WARN, "failed to merge rows", K(ret), KPC(item.row_), K(row));
@@ -435,13 +431,12 @@ int ObMultipleScanMerge::inner_get_next_row(ObDatumRow &row)
             need_supply_consume = false;
             row.scan_index_ = item.row_->scan_index_;
             row.fast_filter_skipped_ = item.row_->fast_filter_skipped_;
-            ++row_stat_.result_row_count_;
-            ++row_stat_.base_row_count_;
+            REALTIME_MONITOR_INC_READ_ROW_CNT(iter, access_ctx_);
             break;
           } else {
             //need retry
             consumer_cnt_ = 1;
-            ++row_stat_.filt_del_count_;
+            ++filt_del_count_;
             continue;
           }
         }
@@ -458,12 +453,11 @@ int ObMultipleScanMerge::inner_get_next_row(ObDatumRow &row)
           //check row
           if (row.row_flag_.is_exist_without_delete() || (iter_del_row_ && row.row_flag_.is_delete())) {
             //success to get row
-            ++row_stat_.result_row_count_;
             break;
           } else {
             //need retry
-            ++row_stat_.filt_del_count_;
-            if (0 == (row_stat_.filt_del_count_ % 10000) && !access_ctx_->query_flag_.is_daily_merge()) {
+            ++filt_del_count_;
+            if (0 == (filt_del_count_ % 10000) && !access_ctx_->query_flag_.is_daily_merge()) {
               if (OB_FAIL(THIS_WORKER.check_status())) {
                 STORAGE_LOG(WARN, "query interrupt, ", K(ret));
               }
@@ -510,8 +504,6 @@ int ObMultipleScanMerge::inner_merge_row(ObDatumRow &row)
         if (OB_FAIL(ObRowFuse::fuse_row(*(top_item->row_), row, nop_pos_, final_result))) {
           STORAGE_LOG(WARN, "failed to merge rows", K(ret), "first_row", *(top_item->row_),
               "second_row", row);
-        } else if (!first_row) {
-          ++row_stat_.merge_row_count_;
         }
       }
 

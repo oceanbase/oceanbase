@@ -109,6 +109,7 @@ public:
     DDL_MEM_MINI_SSTABLE = 25,
     MDS_MINI_SSTABLE = 26,
     MDS_MINOR_SSTABLE = 27,
+    MICRO_MINI_SSTABLE = 28,
     // < add new sstable before here, See is_sstable()
 
     MAX_TABLE_TYPE
@@ -178,7 +179,8 @@ public:
       return *this;
     }
 
-    TO_STRING_KV(K_(tablet_id), K_(column_group_idx), "table_type", get_table_type_name(table_type_), K_(scn_range));
+    TO_STRING_KV(K_(tablet_id), K_(column_group_idx), "table_type", get_table_type_name(table_type_),
+        K_(scn_range));
 
   public:
     common::ObTabletID tablet_id_;

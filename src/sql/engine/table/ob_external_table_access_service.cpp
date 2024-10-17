@@ -90,7 +90,7 @@ int ObExternalDataAccessDriver::get_file_size(const ObString &url, int64_t &file
 {
   int ret = OB_SUCCESS;
   file_size = -1;
-  CONSUMER_GROUP_FUNC_GUARD(PRIO_EXTERNAL);
+  CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_IMPORT);
   ObString url_cstring;
   ObArenaAllocator allocator;
 
@@ -125,7 +125,7 @@ int ObExternalDataAccessDriver::pread(void *buf, const int64_t count, const int6
 {
   int ret = OB_SUCCESS;
   ObIOHandle io_handle;
-  CONSUMER_GROUP_FUNC_GUARD(PRIO_EXTERNAL);
+  CONSUMER_GROUP_FUNC_GUARD(PRIO_IMPORT);
   if (OB_FAIL(ObBackupIoAdapter::async_pread(*device_handle_, fd_,
       static_cast<char *>(buf), offset, count, io_handle))) {
     LOG_WARN("fail to async pread", KR(ret),
@@ -268,7 +268,7 @@ int ObExternalDataAccessDriver::get_file_list(const ObString &path,
   ObExprRegexContext regexp_ctx;
   ObExternalPathFilter filter(regexp_ctx, allocator);
   ObString path_cstring;
-  CONSUMER_GROUP_FUNC_GUARD(PRIO_EXTERNAL);
+  CONSUMER_GROUP_FUNC_GUARD(PRIO_IMPORT);
 
   if (OB_UNLIKELY(!access_info_.is_valid())) {
     ret = OB_NOT_INIT;
@@ -379,6 +379,8 @@ int ObExternalStreamFileReader::open(const ObString &filename)
   } else if (OB_FAIL(data_access_driver_.get_file_size(filename.ptr(), file_size_))) {
     LOG_WARN("failed to get file size", K(ret), K(filename));
   } else {
+    is_file_end_ = false;
+
     ObLoadCompressionFormat this_file_compression_format = compression_format_;
     if (this_file_compression_format == ObLoadCompressionFormat::AUTO
         && OB_FAIL(compression_format_from_suffix(filename, this_file_compression_format))) {
@@ -440,6 +442,7 @@ int ObExternalStreamFileReader::read(char *buf, int64_t buf_len, int64_t &read_s
     LOG_DEBUG("read file", K(is_file_end_), K(file_offset_), K(file_size_), K(read_size));
   } else {
     ret = read_decompress(buf, buf_len, read_size);
+    is_file_end_ = (file_offset_ >= file_size_) && (consumed_data_size_ >= compress_data_size_);
   }
   return ret;
 }

@@ -1152,3 +1152,53 @@ int ObPhysicalRestoreTableOperator::check_finish_restore_to_target_status(
   }
   return ret;
 }
+
+int ObPhysicalRestoreTableOperator::check_all_ls_finish_quick_restore(bool &is_finish)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  const uint64_t exec_tenant_id = get_exec_tenant_id(tenant_id_);
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (is_sys_tenant(exec_tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant id cannot be sys", KR(ret), K_(tenant_id));
+  } else {
+    is_finish = true;
+    SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
+      ObSqlString sql;
+      common::sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(sql.assign_fmt("select a.ls_id, b.restore_status, b.replica_status from %s as a "
+              "left join %s as b on a.ls_id = b.ls_id",
+              OB_ALL_LS_STATUS_TNAME, OB_ALL_LS_META_TABLE_TNAME))) {
+        LOG_WARN("failed to assign sql", K(ret));
+      } else if (OB_FAIL(sql_client_->read(res, exec_tenant_id, sql.ptr(), group_id_))) {
+        LOG_WARN("execute sql failed", KR(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", KR(ret), K(sql));
+      } else {
+        int64_t ls_id = 0;
+        share::ObLSRestoreStatus ls_restore_status;
+        int32_t restore_status = -1;
+        while (OB_SUCC(ret) && OB_SUCC(result->next())) {
+          EXTRACT_INT_FIELD_MYSQL(*result, "ls_id", ls_id, int64_t);
+          EXTRACT_INT_FIELD_MYSQL(*result, "restore_status", restore_status, int32_t);
+
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(ls_restore_status.set_status(restore_status))) {
+            LOG_WARN("failed to set status", KR(ret), K(restore_status));
+          } else if (ObLSRestoreStatus::Status::RESTORE_START <= ls_restore_status
+                     &&  ObLSRestoreStatus::Status::QUICK_RESTORE >= ls_restore_status) {
+            is_finish = false;
+          }
+        } // while
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        }
+      }
+    }
+  }
+  return ret;
+}

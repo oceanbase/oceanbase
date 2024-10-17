@@ -16,11 +16,14 @@
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "observer/table_load/ob_table_load_autoinc_nextval.h"
 #include "observer/table_load/ob_table_load_error_row_handler.h"
+#include "observer/table_load/ob_table_load_data_row_handler.h"
+#include "storage/direct_load/ob_direct_load_dml_row_handler.h"
 #include "observer/table_load/ob_table_load_stat.h"
 #include "observer/table_load/ob_table_load_store_ctx.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "observer/table_load/ob_table_load_trans_ctx.h"
 #include "observer/table_load/ob_table_load_utils.h"
+#include "observer/table_load/ob_table_load_store_table_ctx.h"
 #include "sql/engine/cmd/ob_load_data_utils.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/ob_sql_utils.h"
@@ -157,8 +160,8 @@ int ObTableLoadTransStoreWriter::init()
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KPC(trans_store_));
   } else {
-    table_data_desc_ = &store_ctx_->table_data_desc_;
-    collation_type_ = trans_ctx_->ctx_->schema_.collation_type_;
+    table_data_desc_ = &store_ctx_->data_store_table_ctx_->table_data_desc_;
+    collation_type_ = store_ctx_->data_store_table_ctx_->schema_->collation_type_;
     if (OB_FAIL(ObSQLUtils::get_default_cast_mode(store_ctx_->ctx_->session_info_, cast_mode_))) {
       LOG_WARN("fail to get_default_cast_mode", KR(ret));
     } else if (OB_FAIL(init_session_ctx_array())) {
@@ -175,7 +178,7 @@ int ObTableLoadTransStoreWriter::init()
 int ObTableLoadTransStoreWriter::init_column_schemas_and_lob_info()
 {
   int ret = OB_SUCCESS;
-  const ObIArray<ObColDesc> &column_descs = store_ctx_->ctx_->schema_.column_descs_;
+  const ObIArray<ObColDesc> &column_descs = store_ctx_->data_store_table_ctx_->schema_->column_descs_;
   const ObTableSchema *table_schema = nullptr;
   if (OB_FAIL(ObTableLoadSchema::get_table_schema(param_.tenant_id_, param_.table_id_, schema_guard_,
                                                   table_schema))) {
@@ -215,12 +218,12 @@ int ObTableLoadTransStoreWriter::init_session_ctx_array()
   }
   ObDirectLoadTableStoreParam param;
   param.table_data_desc_ = *table_data_desc_;
-  param.datum_utils_ = &(trans_ctx_->ctx_->schema_.datum_utils_);
-  param.file_mgr_ = trans_ctx_->ctx_->store_ctx_->tmp_file_mgr_;
-  param.is_multiple_mode_ = trans_ctx_->ctx_->store_ctx_->is_multiple_mode_;
-  param.is_fast_heap_table_ = trans_ctx_->ctx_->store_ctx_->is_fast_heap_table_;
-  param.insert_table_ctx_ = trans_ctx_->ctx_->store_ctx_->insert_table_ctx_;
-  param.dml_row_handler_ = trans_ctx_->ctx_->store_ctx_->error_row_handler_;
+  param.datum_utils_ = &(store_ctx_->data_store_table_ctx_->schema_->datum_utils_);
+  param.file_mgr_ = store_ctx_->tmp_file_mgr_;
+  param.is_multiple_mode_ = store_ctx_->data_store_table_ctx_->is_multiple_mode_;
+  param.is_fast_heap_table_ = store_ctx_->data_store_table_ctx_->is_fast_heap_table_;
+  param.insert_table_ctx_ = store_ctx_->data_store_table_ctx_->insert_table_ctx_;
+  param.dml_row_handler_ = store_ctx_->data_store_table_ctx_->row_handler_;
   for (int64_t i = 0; OB_SUCC(ret) && i < session_count; ++i) {
     SessionContext *session_ctx = session_ctx_array_ + i;
     if (param_.px_mode_) {
@@ -405,10 +408,28 @@ int ObTableLoadTransStoreWriter::cast_row(ObArenaAllocator &cast_allocator,
   if (OB_FAIL(ret)) {
     ObTableLoadErrorRowHandler *error_row_handler =
       trans_ctx_->ctx_->store_ctx_->error_row_handler_;
-    if (OB_FAIL(error_row_handler->handle_error_row(ret, row))) {
+    if (OB_FAIL(error_row_handler->handle_error_row(ret))) {
       LOG_WARN("failed to handle error row", K(ret), K(row));
     } else {
       ret = OB_EAGAIN;
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadTransStoreWriter::cast_row(int32_t session_id,
+                                          const ObNewRow &new_row,
+                                          ObDatumRow &datum_row)
+{
+  int ret = OB_SUCCESS;
+  SessionContext &session_ctx = session_ctx_array_[session_id - 1];
+  session_ctx.cast_allocator_.reuse();
+  if (OB_FAIL(cast_row(session_ctx.cast_allocator_, session_ctx.cast_params_, new_row, datum_row,
+                        session_id))) {
+    if (OB_UNLIKELY(OB_EAGAIN != ret)) {
+      LOG_WARN("fail to cast row", KR(ret), K(session_id));
+    } else {
+      ret = OB_SUCCESS;
     }
   }
   return ret;
@@ -535,12 +556,13 @@ int ObTableLoadTransStoreWriter::write_row_to_table_store(ObDirectLoadTableStore
   if (OB_FAIL(ret)) {
     ObTableLoadErrorRowHandler *error_row_handler =
       trans_ctx_->ctx_->store_ctx_->error_row_handler_;
+    ObDirectLoadDMLRowHandler *data_row_handler = trans_ctx_->ctx_->store_ctx_->data_store_table_ctx_->row_handler_;
     if (OB_LIKELY(OB_ERR_PRIMARY_KEY_DUPLICATE == ret)) {
-      if (OB_FAIL(error_row_handler->handle_update_row(datum_row))) {
+      if (OB_FAIL(data_row_handler->handle_update_row(datum_row))) {
         LOG_WARN("fail to handle update row", KR(ret), K(datum_row));
       }
     } else if (OB_LIKELY(OB_ROWKEY_ORDER_ERROR == ret)) {
-      if (OB_FAIL(error_row_handler->handle_error_row(ret, datum_row))) {
+      if (OB_FAIL(error_row_handler->handle_error_row(ret))) {
         LOG_WARN("fail to handle error row", KR(ret), K(tablet_id), K(datum_row));
       }
     }

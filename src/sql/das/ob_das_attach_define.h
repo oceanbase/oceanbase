@@ -19,6 +19,7 @@
 #include "share/ob_define.h"
 #include "sql/engine/expr/ob_expr.h"
 #include "sql/engine/sort/ob_sort_basic_info.h"
+#include "sql/optimizer/ob_join_order.h"
 
 namespace oceanbase
 {
@@ -121,6 +122,29 @@ public:
   virtual ~ObDASSortRtDef() {}
 };
 
+struct ObDASDocIdMergeCtDef final : ObDASAttachCtDef
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDASDocIdMergeCtDef(common::ObIAllocator &alloc)
+    : ObDASAttachCtDef(alloc, DAS_OP_DOC_ID_MERGE)
+  {}
+  ~ObDASDocIdMergeCtDef() = default;
+  INHERIT_TO_STRING_KV("ObDASDocIdMergeCtDef", ObDASAttachCtDef, KP(this));
+
+};
+
+struct ObDASDocIdMergeRtDef final : ObDASAttachRtDef
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDASDocIdMergeRtDef()
+    : ObDASAttachRtDef(DAS_OP_DOC_ID_MERGE)
+  {}
+  ~ObDASDocIdMergeRtDef() = default;
+  INHERIT_TO_STRING_KV("ObDASDocIdMergeRtDef", ObDASAttachRtDef, KP(this));
+};
+
 struct ObDASVIdMergeCtDef final : ObDASAttachCtDef
 {
   OB_UNIS_VERSION(1);
@@ -144,6 +168,36 @@ public:
   INHERIT_TO_STRING_KV("ObDASVIdMergeRtDef", ObDASAttachRtDef, KP(this));
 };
 
+struct ObDASIndexMergeCtDef : ObDASAttachCtDef
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDASIndexMergeCtDef(common::ObIAllocator &alloc)
+    : ObDASAttachCtDef(alloc, DAS_OP_INDEX_MERGE),
+      merge_type_(INDEX_MERGE_INVALID),
+      is_left_child_leaf_node_(false),
+      is_reverse_(false)
+  {}
+
+  virtual ~ObDASIndexMergeCtDef() {}
+  const ObDASBaseCtDef *get_left_ctdef() const;
+  const ObDASBaseCtDef *get_right_ctdef() const;
+public:
+  ObIndexMergeType merge_type_;
+  bool is_left_child_leaf_node_;
+  bool is_reverse_;
+};
+
+struct ObDASIndexMergeRtDef : ObDASAttachRtDef
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDASIndexMergeRtDef()
+    : ObDASAttachRtDef(DAS_OP_INDEX_MERGE) {}
+
+  virtual ~ObDASIndexMergeRtDef() {}
+};
+
 struct ObDASAttachSpec
 {
   OB_UNIS_VERSION(1);
@@ -162,6 +216,12 @@ public:
 
   const ObDASTableLocMeta *get_attach_loc_meta(int64_t table_location_id, int64_t ref_table_id) const;
   int set_calc_exprs(const ExprFixedArray &calc_exprs, const int64_t max_batch_size);
+  const ExprFixedArray &get_result_output() const
+  {
+    OB_ASSERT(attach_ctdef_ != nullptr);
+    return static_cast<const ObDASAttachCtDef*>(attach_ctdef_)->result_output_;
+  }
+
   TO_STRING_KV(K_(attach_loc_metas),
                K_(attach_ctdef));
 private:

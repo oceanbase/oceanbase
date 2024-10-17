@@ -217,7 +217,13 @@ public:
   }
   void free_value(Value *value)
   {
-    static_cast<decltype(this)>(value->hash_node_->host_)->alloc_handle_.free_value(value);
+    if (OB_NOT_NULL(value->hash_node_)) {
+      if (value->hash_node_->host_ != this) {
+        COMMON_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "not free within the original hashmap",
+                        K(value->hash_node_->host_), K(this), K(lbt()));
+      }
+    }
+    alloc_handle_.free_value(value);
   }
   int create(const Key &key, Value *&value)
   {

@@ -163,7 +163,7 @@ public:
             || pcode == OB_OUT_TRANS_LOCK_TABLE || pcode == OB_OUT_TRANS_UNLOCK_TABLE
             || pcode == OB_TABLE_LOCK_TASK
             || pcode == OB_HIGH_PRIORITY_TABLE_LOCK_TASK || pcode == OB_BATCH_TABLE_LOCK_TASK
-            || pcode == OB_HIGH_PRIORITY_BATCH_TABLE_LOCK_TASK
+            || pcode == OB_HIGH_PRIORITY_BATCH_TABLE_LOCK_TASK || pcode == OB_BATCH_REPLACE_TABLE_LOCK_TASK
             || pcode == OB_REGISTER_TX_DATA
             || pcode == OB_REFRESH_SYNC_VALUE || pcode == OB_CLEAR_AUTOINC_CACHE
             || pcode == OB_CLEAN_SEQUENCE_CACHE || pcode == OB_FETCH_TABLET_AUTOINC_SEQ_CACHE
@@ -291,6 +291,7 @@ class Handle {
 
 public:
   Handle();
+  ~Handle();
   const common::ObAddr &get_dst_addr() const { return dst_; }
 
 protected:

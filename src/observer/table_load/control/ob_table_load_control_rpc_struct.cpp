@@ -14,7 +14,7 @@
 
 #include "ob_table_load_control_rpc_struct.h"
 #include "observer/table_load/ob_table_load_utils.h"
-#include "sql/engine/ob_des_exec_context.h"
+#include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
 {
@@ -23,6 +23,7 @@ namespace observer
 using namespace sql;
 using namespace storage;
 using namespace table;
+using namespace common;
 
 OB_SERIALIZE_MEMBER(ObDirectLoadControlRequest,
                     command_type_,
@@ -71,9 +72,7 @@ ObDirectLoadControlPreBeginArg::ObDirectLoadControlPreBeginArg()
     load_mode_(ObDirectLoadMode::INVALID_MODE),
     compressor_type_(ObCompressorType::INVALID_COMPRESSOR),
     online_sample_percent_(1.),
-    exec_ctx_(nullptr),
-    allocator_("TLD_pre_begin"),
-    des_exec_ctx_(nullptr)
+    allocator_("TLD_pre_begin")
 {
   free_session_ctx_.sessid_ = ObSQLSessionInfo::INVALID_SESSID;
 }
@@ -86,12 +85,25 @@ ObDirectLoadControlPreBeginArg::~ObDirectLoadControlPreBeginArg()
     }
     session_info_ = nullptr;
   }
+}
 
-  if (nullptr != des_exec_ctx_) {
-    des_exec_ctx_->~ObDesExecContext();
-    allocator_.free(des_exec_ctx_);
-    des_exec_ctx_ = nullptr;
+int ObDirectLoadControlPreBeginArg::set_exec_ctx_serialized_str(const sql::ObExecContext &exec_ctx)
+{
+  int ret = OB_SUCCESS;
+  int64_t size = exec_ctx.get_serialize_size();
+  char *buf = (char *)allocator_.alloc(size);
+  int64_t pos = 0;
+
+  if (buf == nullptr) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc buf", KR(ret), K(size));
+  } else if (OB_FAIL(exec_ctx.serialize(buf, size, pos))) {
+    LOG_WARN("fail to serialize exec ctx", KR(ret));
+  } else {
+    exec_ctx_serialized_str_.assign(buf, pos);
   }
+
+  return ret;
 }
 
 OB_DEF_SERIALIZE(ObDirectLoadControlPreBeginArg)
@@ -123,16 +135,8 @@ OB_DEF_SERIALIZE(ObDirectLoadControlPreBeginArg)
               insert_mode_,
               load_mode_,
               compressor_type_,
-              online_sample_percent_);
-  if (OB_SUCC(ret)) {
-    if (OB_ISNULL(exec_ctx_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("exec ctx is null", KR(ret));
-    } else {
-      OB_UNIS_ENCODE(*exec_ctx_);
-    }
-  }
-
+              online_sample_percent_,
+              exec_ctx_serialized_str_);
   return ret;
 }
 
@@ -164,15 +168,12 @@ OB_DEF_DESERIALIZE(ObDirectLoadControlPreBeginArg)
               insert_mode_,
               load_mode_,
               compressor_type_,
-              online_sample_percent_);
-  if (OB_SUCC(ret)) {
-    des_exec_ctx_ = OB_NEWx(sql::ObDesExecContext, &allocator_, allocator_, GCTX.session_mgr_);
+              online_sample_percent_,
+              exec_ctx_serialized_str_);
 
-    if (des_exec_ctx_ == nullptr) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to allocate des_exec_ctx", KR(ret));
-    } else {
-      LST_DO_CODE(OB_UNIS_DECODE, *des_exec_ctx_);
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ob_write_string(allocator_, exec_ctx_serialized_str_, exec_ctx_serialized_str_))) {
+      LOG_WARN("fail to copy string", KR(ret));
     }
   }
   return ret;
@@ -208,17 +209,8 @@ OB_DEF_SERIALIZE_SIZE(ObDirectLoadControlPreBeginArg)
               insert_mode_,
               load_mode_,
               compressor_type_,
-              online_sample_percent_);
-
-  if (OB_SUCC(ret)) {
-    if (OB_ISNULL(exec_ctx_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("exec ctx is null", KR(ret));
-    } else {
-      OB_UNIS_ADD_LEN(*exec_ctx_);
-    }
-  }
-
+              online_sample_percent_,
+              exec_ctx_serialized_str_);
   return len;
 }
 

@@ -41,7 +41,6 @@ namespace table
 namespace sql
 {
 class ObSQLSessionInfo;
-class ObDesExecContext;
 } // namespace sql
 namespace observer
 {
@@ -61,7 +60,6 @@ public:
   static int deep_copy(const blocksstable::ObDatumRowkey &src, blocksstable::ObDatumRowkey &dest, common::ObIAllocator &allocator);
   static int deep_copy(const blocksstable::ObDatumRange &src, blocksstable::ObDatumRange &dest, common::ObIAllocator &allocator);
   static int deep_copy(const sql::ObSQLSessionInfo &src, sql::ObSQLSessionInfo &dest, common::ObIAllocator &allocator);
-  static int deep_copy(const sql::ObExecContext &src, sql::ObDesExecContext &dest, common::ObIAllocator &allocator);
 
   template<class T>
   static int deep_copy(const table::ObTableLoadArray<T> &src, table::ObTableLoadArray<T> &dest, common::ObIAllocator &allocator);

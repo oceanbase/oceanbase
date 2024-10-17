@@ -711,8 +711,8 @@ int ObTransformMVRewrite::pre_process_quals(const ObIArray<ObRawExpr*> &input_co
     if (OB_ISNULL(cond)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("condition expr is null", K(ret));
-    } else if (cond->has_flag(CNT_ROWNUM) || cond->has_flag(CNT_SUB_QUERY) || cond->has_flag(CNT_RAND_FUNC)
-               || cond->has_flag(CNT_DYNAMIC_USER_VARIABLE) || cond->is_const_expr()) {
+    } else if (cond->has_flag(CNT_ROWNUM) || cond->has_flag(CNT_SUB_QUERY) ||
+               !cond->is_deterministic() || cond->is_const_expr()) {
       if (OB_FAIL(other_conds.push_back(cond))) {
         LOG_WARN("failed to push back other conds", K(ret));
       }

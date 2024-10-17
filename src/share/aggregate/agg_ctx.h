@@ -464,7 +464,8 @@ public:
                                                  const int32_t output_start_idx,
                                                  const int32_t expect_batch_size,
                                                  int32_t &output_size,
-                                                 const ObBitVector *skip = nullptr) = 0;
+                                                 const ObBitVector *skip = nullptr,
+                                                 const bool init_vector = true) = 0;
 
   inline virtual int collect_batch_group_results(RuntimeContext &agg_ctx,
                                                  const int32_t agg_col_id,

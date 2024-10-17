@@ -40,6 +40,7 @@
 #include "ob_expr_hello_repeat.h"
 #include "ob_expr_host_ip.h"
 #include "ob_expr_trim.h"
+#include "ob_expr_tokenize.h"
 #include "ob_expr_insert.h"
 #include "ob_expr_int2ip.h"
 #include "ob_expr_int_div.h"
@@ -387,6 +388,7 @@
 #include "ob_expr_func_ceil.h"
 #include "ob_expr_topn_filter.h"
 #include "ob_expr_sdo_relate.h"
+#include "ob_expr_gtid.h"
 #include "ob_expr_inner_table_option_printer.h"
 #include "ob_expr_password.h"
 #include "ob_expr_decode_trace_id.h"
@@ -399,6 +401,7 @@
 #include "ob_expr_rb_calc.h"
 #include "ob_expr_rb_to_string.h"
 #include "ob_expr_rb_from_string.h"
+#include "ob_expr_rb_select.h"
 #include "ob_expr_array_contains.h"
 #include "ob_expr_audit_log_func.h"
 #include "ob_expr_can_access_trigger.h"
@@ -1190,17 +1193,17 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprIsUsedLock::is_used_lock,                                     /* 683 */
   ObExprReleaseLock::release_lock,                                    /* 684 */
   ObExprReleaseAllLocks::release_all_locks,                           /* 685 */
-  NULL, // ObExprGTIDSubset::eval_subset,                             /* 686 */
-  NULL, // ObExprGTIDSubtract::eval_subtract,                         /* 687 */
-  NULL, // ObExprWaitForExecutedGTIDSet::eval_wait_for_executed_gtid_set, /* 688 */
-  NULL, // ObExprWaitUntilSQLThreadAfterGTIDs::eval_wait_until_sql_thread_after_gtids /* 689 */
+  ObExprGTIDSubset::eval_subset,                                      /* 686 */
+  ObExprGTIDSubtract::eval_subtract,                                  /* 687 */
+  ObExprWaitForExecutedGTIDSet::eval_wait_for_executed_gtid_set,      /* 688 */
+  ObExprWaitUntilSQLThreadAfterGTIDs::eval_wait_until_sql_thread_after_gtids, /* 689 */
   ObExprLastRefreshScn::eval_last_refresh_scn,                        /* 690 */
   ObExprDocLength::generate_doc_length,                               /* 691 */
   ObExprTopNFilter::eval_topn_filter,                                 /* 692 */
   ObExprIsEnabledRole::eval_is_enabled_role,                          /* 693 */
   ObExprCanAccessTrigger::can_access_trigger,                         /* 694 */
-  NULL, //ObRelationalExprOperator::eval_min_max_compare,             /* 695 */
-  NULL, //ObRelationalExprOperator::min_max_row_eval,                 /* 696 */
+  ObRelationalExprOperator::eval_min_max_compare,                     /* 695 */
+  ObRelationalExprOperator::min_max_row_eval,                         /* 696 */
   ObExprRbBuildEmpty::eval_rb_build_empty,                            /* 697 */
   ObExprRbIsEmpty::eval_rb_is_empty,                                  /* 698 */
   ObExprRbBuildVarbinary::eval_rb_build_varbinary,                    /* 699 */
@@ -1260,7 +1263,12 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprArrayContains::eval_array_contains_ObString,                  /* 753 */
   ObExprArrayContains::eval_array_contains_array,                     /* 754 */
   ObExprSplitPart::calc_split_part_expr,                              /* 755 */
-  ObExprHelloRepeat::eval,                                                  /* 756 */
+  ObExprRbSelect::eval_rb_select,                                     /* 756 */
+  ObExprVectorNegativeIPDistance::calc_negative_inner_product,        /* 757 */
+  ObExprTokenize::eval_tokenize,                                      /* 758 */
+  NULL, // ObExprEnhancedAesEncrypt::eval_aes_encrypt                 /* 759 */
+  NULL, // ObExprEnhancedAesDecrypt::eval_aes_decrypt                 /* 760 */
+  ObExprHelloRepeat::eval,                                            /* 761 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1395,8 +1403,8 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   ObBatchCast::implicit_batch_cast<ObDecimalIntTC, ObNumberTC>,       /* 128 */
   ObExprDecodeTraceId::calc_decode_trace_id_expr_batch,               /* 129 */
   ObExprTopNFilter::eval_topn_filter_batch,                           /* 130 */
-  NULL,//ObRelationalExprOperator::eval_batch_min_max_compare,        /* 131 */
-  NULL,//ObExprBM25::eval_batch_bm25_relevance_expr,                  /* 132 */
+  ObRelationalExprOperator::eval_batch_min_max_compare,               /* 131 */
+  ObExprBM25::eval_batch_bm25_relevance_expr,                  /* 132 */
   NULL,// ObExprAdd::add_vec_vec_batch,                               /* 133 */
   NULL,// ObExprMinus::minus_vec_vec_batch,                           /* 134 */
   ObExprMul::mul_vec_vec_batch,                                       /* 135 */
@@ -1524,7 +1532,7 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   ObExprInOrNotIn::eval_vector_in_without_row,                  /* 110 */
   NULL,//ObExprDecodeTraceId::calc_decode_trace_id_expr_vector  /* 111 */
   ObExprTopNFilter::eval_topn_filter_vector,                    /* 112 */
-  NULL,//ObRelationalExprOperator::eval_vector_min_max_compare, /* 113 */
+  ObRelationalExprOperator::eval_vector_min_max_compare,        /* 113 */
   ObExprCeilFloor::calc_ceil_floor_vector,                      /* 114 */
   ObExprRepeat::eval_repeat_vector,                             /* 115 */
   ObExprRegexpReplace::eval_hs_regexp_replace_vector,           /* 116 */
@@ -1535,6 +1543,7 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   ObExprArrayContains::eval_array_contains_array_vector,        /* 121 */
   ObExprCalcPartitionBase::fast_calc_partition_level_one_vector,/* 122 */
   NULL, // ObExprTrim::eval_trim_vector                         /* 123 */
+  NULL, // ObExprEncodeSortkey::eval_encode_sortkey_vector      /* 124 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,

@@ -1373,6 +1373,7 @@ int ObSchemaRetrieveUtils::fill_table_schema(
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, progressive_merge_round, table_schema, int64_t, true, ObSchemaService::g_ignore_column_retrieve_error_, 0);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, storage_format_version, table_schema, int64_t, true, ObSchemaService::g_ignore_column_retrieve_error_, 0);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, table_mode, table_schema, int32_t, true, ObSchemaService::g_ignore_column_retrieve_error_, 0);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, mv_mode, table_schema, int64_t, true, true, 0);
     if (OB_SUCC(ret)) {
       if (OB_FAIL(table_schema.set_expire_info(expire_info))) {
         SHARE_SCHEMA_LOG(WARN, "set expire info failed", K(ret));
@@ -1405,9 +1406,18 @@ int ObSchemaRetrieveUtils::fill_table_schema(
         SHARE_SCHEMA_LOG(WARN, "set part expr failed", K(ret));
       }
     }
-
+    //duplicate attribute
     const ObDuplicateScope duplicate_scope_default = ObDuplicateScope::DUPLICATE_SCOPE_NONE;
-    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, duplicate_scope, table_schema, int64_t, true, ObSchemaService::g_ignore_column_retrieve_error_, duplicate_scope_default);
+    const ObDuplicateReadConsistency duplicate_read_consistency_default = ObDuplicateReadConsistency::STRONG;
+    ObDuplicateScope duplicate_scope = duplicate_scope_default;
+    ObDuplicateReadConsistency duplicate_read_consistency = duplicate_read_consistency_default;
+    EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, "duplicate_scope", duplicate_scope, ObDuplicateScope, true /* skip null error*/,
+                                                ObSchemaService::g_ignore_column_retrieve_error_, duplicate_scope_default);
+    EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, "duplicate_read_consistency", duplicate_read_consistency, ObDuplicateReadConsistency, true /* skip null error*/,
+                                               true, duplicate_read_consistency_default);
+    if (OB_SUCC(ret)) {
+      table_schema.set_duplicate_attribute(duplicate_scope, duplicate_read_consistency);
+    }
     //encrypt
     ObString encryption_default("");
     ObString encryption;
@@ -2388,6 +2398,7 @@ int ObSchemaRetrieveUtils::fill_outline_schema(
   is_deleted  = false;
   int ret = common::OB_SUCCESS;
   outline_info.set_tenant_id(tenant_id);
+  bool ignore_column_error = true;
   EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID(result, outline_id, outline_info, tenant_id);
   EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
   if (!is_deleted) {
@@ -2407,6 +2418,12 @@ int ObSchemaRetrieveUtils::fill_outline_schema(
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, format, outline_info, ObHintFormat);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, outline_params, outline_info);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, outline_target, outline_info);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+        result, format_sql_text, outline_info, true, ignore_column_error, ObString::make_string(""));
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+        result, format_sql_id, outline_info, true, ignore_column_error, ObString::make_string(""));
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+        result, format_outline, outline_info, bool, true, ignore_column_error, false);
   }
   return ret;
 }
@@ -4450,10 +4467,18 @@ int ObSchemaRetrieveUtils::fill_table_schema(
     }
     if (OB_SUCC(ret)) {
       EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, table_name, table_schema);
+      // duplicate attribute
       const ObDuplicateScope duplicate_scope_default = ObDuplicateScope::DUPLICATE_SCOPE_NONE;
-      EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
-          result, duplicate_scope, table_schema, int64_t, true /* skip null error*/,
-          ObSchemaService::g_ignore_column_retrieve_error_, duplicate_scope_default);
+      const ObDuplicateReadConsistency duplicate_read_consistency_default = ObDuplicateReadConsistency::STRONG;
+      ObDuplicateScope duplicate_scope = duplicate_scope_default;
+      ObDuplicateReadConsistency duplicate_read_consistency = duplicate_read_consistency_default;
+      EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, "duplicate_scope", duplicate_scope, ObDuplicateScope, true /* skip null error*/,
+                                                 ObSchemaService::g_ignore_column_retrieve_error_, duplicate_scope_default);
+      EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, "duplicate_read_consistency", duplicate_read_consistency, ObDuplicateReadConsistency, true /* skip null error*/,
+                                                 true, duplicate_read_consistency_default);
+      if (OB_SUCC(ret)) {
+        table_schema.set_duplicate_attribute(duplicate_scope, duplicate_read_consistency);
+      }
       ObString encryption_default("");
       ObString encryption;
       EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(
@@ -4560,6 +4585,7 @@ int ObSchemaRetrieveUtils::fill_outline_schema(
     bool &is_deleted)
 {
   int ret = common::OB_SUCCESS;
+  bool ignore_column_error = true;
   outline_schema.reset();
   is_deleted = false;
 
@@ -4573,6 +4599,10 @@ int ObSchemaRetrieveUtils::fill_outline_schema(
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, signature, outline_schema);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
       result, sql_id, outline_schema, true, ObSchemaService::g_ignore_column_retrieve_error_, ObString::make_string(""));
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+      result, format_sql_id, outline_schema, true, ignore_column_error, ObString::make_string(""));
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+        result, format_outline, outline_schema, bool, true, ignore_column_error, false);
   }
   return ret;
 }

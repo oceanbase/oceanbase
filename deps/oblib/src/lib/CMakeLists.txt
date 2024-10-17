@@ -35,6 +35,10 @@ ob_set_subtarget(oblib_lib charset
   charset/uca900_zh2_tbls.cc
   charset/uca900_zh3_tbls.cc
   charset/ob_charset.cpp
+  charset/ob_ctype_sjis.cc
+  charset/ob_ctype_big5.cc
+  charset/ob_ctype_hkscs.cc
+  charset/ob_ctype_extra.cc
 )
 
 ob_set_subtarget(oblib_lib common
@@ -415,6 +419,7 @@ target_link_libraries(oblib_lib
   ${DEP_DIR}/lib/liblzma.a
 )
 
+if (NOT OB_BUILD_CDC)
 # vsag vector library
 target_link_directories(
   oblib_lib PUBLIC ${DEP_DIR}/lib ${DEP_DIR}/lib/vsag_lib
@@ -431,7 +436,7 @@ if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
     libdiskann.a
     libopenblas.a
     libgfortran_static.a
-    libquadmath.a
+    libquadmath_static.a
     libgomp_static.a
     libroaring.a
   )
@@ -450,4 +455,6 @@ elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
   )
 else()
     message(FATAL_ERROR "Unsupported architecture: ${CMAKE_SYSTEM_PROCESSOR}")
+endif()
+
 endif()

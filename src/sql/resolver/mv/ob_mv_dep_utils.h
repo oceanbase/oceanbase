@@ -76,6 +76,14 @@ public:
       const uint64_t tenant_id,
       const uint64_t mview_table_id,
       common::ObIArray<uint64_t> &ref_table_ids);
+  static int get_table_ids_only_referenced_by_given_fast_lsm_mv(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const uint64_t mview_table_id,
+      common::ObIArray<uint64_t> &ref_table_ids);
+  static int get_referring_mv_of_base_table(ObISQLClient &sql_client, const uint64_t tenant_id,
+                                            const uint64_t base_table_id,
+                                            ObIArray<uint64_t> &mview_ids);
 };
 } // end of sql
 } // end of oceanbase

@@ -29,7 +29,11 @@ class ObFtsIndexBuilderUtil
 public:
   static const int64_t OB_FTS_INDEX_TABLE_INDEX_COL_CNT = 2;
   static const int64_t OB_FTS_DOC_WORD_TABLE_INDEX_COL_CNT = 2;
+  static const int64_t OB_FTS_INDEX_OR_DOC_WORD_TABLE_COL_CNT = 4;
 public:
+  static int get_doc_id_column_id(
+      const ObTableSchema *data_schema,
+      uint64_t &doc_id_col_id);
   static int append_fts_rowkey_doc_arg(
       const obrpc::ObCreateIndexArg &index_arg,
       ObIAllocator *allocator,
@@ -75,8 +79,9 @@ public:
   static int get_doc_id_col(
       const ObTableSchema &data_schema,
       const ObColumnSchemaV2 *&doc_id_col);
-  static int check_fts_or_multivalue_index_allowed(
-      ObTableSchema &data_schema);
+  static int generate_fts_parser_name(
+      obrpc::ObCreateIndexArg &arg,
+      ObIAllocator *allocator);
 private:
   static int check_ft_cols(
       const obrpc::ObCreateIndexArg *index_arg,
@@ -155,9 +160,6 @@ private:
       ObIArray<const ObColumnSchemaV2 *> &cols,
       const ObColumnSchemaV2 *existing_col,
       ObColumnSchemaV2 *generated_col);
-  static int generate_fts_parser_name(
-      obrpc::ObCreateIndexArg &arg,
-      ObIAllocator *allocator);
   static int get_index_column_ids(
       const ObTableSchema &data_schema,
       const obrpc::ObCreateIndexArg &arg,
@@ -200,13 +202,18 @@ public:
  static int adjust_mulvalue_index_args(
    obrpc::ObCreateIndexArg &index_arg,
    ObTableSchema &data_schema, // not const since will add column to data schema
-   ObIArray<ObColumnSchemaV2 *> &gen_columns);
+   ObIAllocator &allocator,
+   ObIArray<ObColumnSchemaV2 *> &gen_columns,
+   bool forece_rebuild = false);
  static int build_and_generate_multivalue_column_raw(
    obrpc::ObCreateIndexArg &arg,
    ObTableSchema &data_schema,
+   ObIAllocator &allocator,
    ObColumnSchemaV2 *&mulvalue_col,
-   ObColumnSchemaV2 *&budy_col);
+   ObColumnSchemaV2 *&budy_col,
+   bool force_rebuild = false);
  static int build_and_generate_multivalue_column(
+   ObIAllocator &allocator,
    obrpc::ObColumnSortItem& sort_item,
    sql::ObRawExprFactory &expr_factory,
    const sql::ObSQLSessionInfo &session_info,
@@ -230,6 +237,10 @@ public:
    const obrpc::ObCreateIndexArg &arg,
    const ObTableSchema &data_schema,
    ObTableSchema &index_schema);
+ static int is_matched_budy_column(
+   const share::schema::ObColumnSchemaV2 &ori_column_schema,
+   const share::schema::ObColumnSchemaV2 &budy_column_schema,
+   bool& is_match);
 };
 
 }//end namespace share

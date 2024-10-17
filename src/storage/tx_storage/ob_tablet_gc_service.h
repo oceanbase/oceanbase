@@ -165,6 +165,12 @@ public:
   }
   ObPrivateBlockGCThread* get_private_block_gc_thread()
   { return &private_block_gc_thread_; }
+  void set_mtl_start_max_block_id(const uint64_t mtl_start_max_block_id)
+  { private_block_gc_task_.set_mtl_start_max_block_id(mtl_start_max_block_id); }
+  void set_observer_start_macro_block_id_trigger()
+  { private_block_gc_task_.set_observer_start_macro_block_id_trigger(); }
+  uint64_t get_mtl_start_max_block_id()
+  { return private_block_gc_task_.get_mtl_start_max_block_id(); }
 #endif
 
 private:

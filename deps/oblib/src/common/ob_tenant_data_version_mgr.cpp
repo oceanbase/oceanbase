@@ -182,6 +182,7 @@ int ObTenantDataVersionMgr::load_from_file()
       ret = OB_ALLOCATE_MEMORY_FAILED;
       COMMON_LOG(ERROR, "fail to alloc buf", K(ret), K(buf_size));
     } else {
+      MEMSET(load_buf, 0, buf_size);
       size_t read_len = ::read(fd, load_buf, buf_size);
       if (read_len < 0) {
         ret = OB_IO_ERROR;
@@ -211,7 +212,7 @@ int ObTenantDataVersionMgr::load_from_file()
           } else if (OB_FAIL(header.check_payload_checksum(p_data, data_length))) {
             COMMON_LOG(ERROR, "check data checksum failed", K(ret));
           } else {
-            while (OB_SUCC(ret)) {
+            while (OB_SUCC(ret) && pos < read_len) {
               ret = load_data_version_(load_buf, pos);
             }
             if (OB_ITER_END == ret) {
@@ -309,6 +310,7 @@ int ObTenantDataVersionMgr::set_and_dump_to_file_(const uint64_t tenant_id,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     COMMON_LOG(ERROR, "fail to alloc buf", K(ret), K(tenant_id), K(buf_length));
   } else {
+    MEMSET(dump_buf, 0, buf_length);
     int64_t pos = 0;
     const int64_t data_pos = pos + header_length;
     pos += header_length;
@@ -368,6 +370,7 @@ int ObTenantDataVersionMgr::remove_and_dump_to_file_(const uint64_t tenant_id,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     COMMON_LOG(ERROR, "fail to alloc buf", K(ret), K(tenant_id), K(buf_length));
   } else {
+    MEMSET(dump_buf, 0, buf_length);
     int64_t pos = 0;
     const int64_t data_pos = pos + header_length;
     pos += header_length;

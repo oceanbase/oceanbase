@@ -566,6 +566,220 @@ int check_skip_by_monotonicity(
   return ret;
 }
 
+int reverse_trans_version_val(common::ObDatum *datums, const int64_t count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(nullptr == datums || count < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid argument", K(ret), KP(datums), K(count));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
+      common::ObDatum &datum = datums[i];
+      if (OB_UNLIKELY(datum.is_nop() || datum.is_null() || datum.get_int() > 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "Unexpected datum value", K(ret), K(datum));
+      } else {
+        datum.set_int(-datum.get_int());
+      }
+    }
+  }
+  return ret;
+}
+
+int reverse_trans_version_val(ObIVector *vector, const int64_t count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(nullptr == vector || count < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid argument", K(ret), KP(vector), K(count));
+  } else if (OB_UNLIKELY(vector->get_format() != VectorFormat::VEC_FIXED)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "Unexpected vector format for trans version col", K(ret), K(vector->get_format()));
+  } else {
+    ObFixedLengthBase *fixed_length_base = static_cast<ObFixedLengthBase *>(vector);
+    if (OB_UNLIKELY(fixed_length_base->has_null() || fixed_length_base->get_length() != sizeof(int64_t))) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "Unexpected vector", K(ret), K(fixed_length_base->has_null()), K(fixed_length_base->get_length()));
+    } else {
+      int64_t *ver_ptr = reinterpret_cast<int64_t *>(fixed_length_base->get_data());
+      for (int64_t i = 0; i < count; ++i) {
+        ver_ptr[i] = -ver_ptr[i];
+      }
+    }
+  }
+  return ret;
+}
+
+const char *ObMviewScanInfo::OLD_ROW = "O";
+const char *ObMviewScanInfo::NEW_ROW = "N";
+const char *ObMviewScanInfo::FINAL_ROW = "F";
+int ObMviewScanInfo::init(
+    const bool is_mv_refresh_query,
+    const StorageScanType scan_type,
+    const int64_t begin_version,
+    const int64_t end_version,
+    const common::ObIArray<sql::ObExpr *> &non_mview_filters)
+{
+  int ret = OB_SUCCESS;
+  if (non_mview_filters.count() > 0 && OB_FAIL(op_filters_.reserve(non_mview_filters.count()))) {
+    STORAGE_LOG(WARN, "Failed to reserve op filters", K(ret));
+  } else {
+    is_mv_refresh_query_ = is_mv_refresh_query;
+    scan_type_ = scan_type;
+    begin_version_ = begin_version;
+    end_version_ = end_version;
+    for (int64_t i = 0; OB_SUCC(ret) && i < non_mview_filters.count(); ++i) {
+      if (OB_FAIL(op_filters_.push_back(non_mview_filters.at(i)))) {
+        STORAGE_LOG(WARN, "Failed to push back", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+int ObMviewScanInfo::check_and_update_version_range(const int64_t multi_version_start, common::ObVersionRange &origin_range)
+{
+  int ret = OB_SUCCESS;
+  bool is_valid =  0 == origin_range.base_version_ &&
+                   (!is_end_valid() || end_version_ == origin_range.snapshot_version_) &&
+                   (!is_begin_valid() ||  (begin_version_ < origin_range.snapshot_version_ && begin_version_ >= multi_version_start));
+  if (OB_UNLIKELY(!is_valid)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid mview query version", K(ret), K(multi_version_start), K(origin_range), K(*this));
+  } else {
+    if (is_begin_valid()) {
+      origin_range.base_version_ = begin_version_;
+    }
+  }
+  return ret;
+}
+
+int decimal_or_number_to_int64(const ObDatum &datum,
+                               const ObDatumMeta &datum_meta,
+                               int64_t &res)
+{
+  int ret = OB_SUCCESS;
+  ObObjType ob_type = datum_meta.get_type();
+  if (ObNumberType == ob_type) {
+    const number::ObNumber nmb(datum.get_number());
+    if (OB_FAIL(nmb.extract_valid_int64_with_trunc(res))) {
+      STORAGE_LOG(WARN, "failed to cast number to int64", K(ret));
+    }
+  } else if (ObDecimalIntType == ob_type) {
+    int32_t int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(datum_meta.precision_);
+    bool is_valid;
+    if (OB_FAIL(wide::check_range_valid_int64(datum.get_decimal_int(), int_bytes, is_valid, res))) {
+      STORAGE_LOG(WARN, "failed to check decimal int", K(int_bytes), K(ret));
+    } else if (!is_valid) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "decimal int is not valid int64", K(ret));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpected type", K(ob_type), K(ret));
+  }
+  return ret;
+}
+
+// extract mview info from filter: [ora_rowscn > V0 and ora_rowscn <= V1] and $OLD_NEW='O|N'
+int build_mview_scan_info_if_need(
+    const common::ObQueryFlag query_flag,
+    const sql::ObExprPtrIArray *op_filters,
+    sql::ObEvalCtx &eval_ctx,
+    common::ObIAllocator *alloc,
+    ObMviewScanInfo *&mview_scan_info)
+{
+  int ret = OB_SUCCESS;
+  StorageScanType scan_type = StorageScanType::NORMAL;
+  int64_t begin_version = -1;
+  int64_t end_version = -1;
+  common::ObSEArray<sql::ObExpr *, 4> non_mview_filters;
+  if (OB_UNLIKELY(nullptr == alloc || nullptr != mview_scan_info ||
+                  nullptr == op_filters || op_filters->count() < 1)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid argument", K(ret), KP(alloc), KP(mview_scan_info), KP(op_filters));
+  } else {
+    sql::ObExpr *e = nullptr;
+    ObDatum *datum = NULL;
+    ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx);
+    batch_info_guard.set_batch_size(1);
+    for (int64_t i = 0; OB_SUCC(ret) && i < op_filters->count(); ++i) {
+      if (OB_ISNULL(e = op_filters->at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "expr is null", K(ret), K(i));
+      } else if (T_OP_EQ == e->type_  && 2 == e->arg_cnt_ &&
+                 T_PSEUDO_OLD_NEW_COL == e->args_[0]->type_ && e->args_[1]->is_static_const_) {
+        if (OB_FAIL(e->args_[1]->eval(eval_ctx, datum))) {
+          STORAGE_LOG(WARN, "Failed to eval const expr", K(ret));
+        } else if (0 == ObString::make_string(ObMviewScanInfo::OLD_ROW).case_compare(datum->get_string())) {
+          scan_type = StorageScanType::MVIEW_FIRST_DELETE;
+        } else if (0 == ObString::make_string(ObMviewScanInfo::NEW_ROW).case_compare(datum->get_string())) {
+          scan_type = StorageScanType::MVIEW_LAST_INSERT;
+        } else if (0 == ObString::make_string(ObMviewScanInfo::FINAL_ROW).case_compare(datum->get_string())) {
+          scan_type = StorageScanType::MVIEW_FINAL_ROW;
+        } else {
+          ret = OB_NOT_SUPPORTED;
+          STORAGE_LOG(WARN, "Not supported OLD_NEW type", K(ret), KPC(datum));
+        }
+      } else if (OB_FAIL(non_mview_filters.push_back(e))) {
+        STORAGE_LOG(WARN, "Failed to push back non mview filter", K(ret), K(i));
+      } else if ((T_OP_GT == e->type_ || T_OP_LE == e->type_) && 2 == e->arg_cnt_) {
+        sql::ObExpr *left = e->args_[0];
+        sql::ObExpr *right = e->args_[1];
+        int64_t rowscn = -1;
+        if (T_ORA_ROWSCN != left->type_ && lib::is_oracle_mode()) {
+          if (T_FUN_SYS_CAST == left->type_ &&
+              2 == left->arg_cnt_ &&
+              T_ORA_ROWSCN == left->args_[0]->type_ ) {
+            left = left->args_[0];
+          } else {
+            left = nullptr;
+          }
+        }
+        if (nullptr != left &&
+            T_ORA_ROWSCN == left->type_ && (right->is_static_const_ || T_FUN_SYS_LAST_REFRESH_SCN == right->type_)) {
+          if (OB_FAIL(right->eval(eval_ctx, datum))) {
+            STORAGE_LOG(WARN, "Failed to eval const expr", K(ret));
+          } else if (lib::is_oracle_mode()) {
+            if (OB_FAIL(decimal_or_number_to_int64(*datum, right->datum_meta_, rowscn))) {
+              STORAGE_LOG(WARN, "Failed to get rowscn", K(ret));
+            }
+          } else {
+            rowscn = datum->get_int();
+          }
+          if (OB_FAIL(ret)) {
+          } else if (T_OP_GT == e->type_) {
+            begin_version = rowscn;
+          } else {
+            end_version = rowscn;
+          }
+        }
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (StorageScanType::NORMAL == scan_type) {
+    STORAGE_LOG(INFO, "no need use mview scan", K(scan_type), K(begin_version), K(end_version));
+  } else if (OB_ISNULL(mview_scan_info = OB_NEWx(ObMviewScanInfo, alloc, alloc))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "Failed to alloc memory for mview scan info", K(ret));
+  } else if (OB_FAIL(mview_scan_info->init(query_flag.is_mr_mview_refresh_base_scan(), scan_type, begin_version, end_version, non_mview_filters))) {
+    STORAGE_LOG(WARN, "Failed to init mview scan info", K(ret));
+  }
+  STORAGE_LOG(INFO, "[MVIEW QUERY]: build mview scan info", K(ret), KPC(mview_scan_info));
+  return ret;
+}
+
+void release_mview_scan_info(common::ObIAllocator *alloc, ObMviewScanInfo *&mview_scan_info)
+{
+  if (nullptr != mview_scan_info) {
+    mview_scan_info->~ObMviewScanInfo();
+    if (nullptr != alloc) {
+      alloc->free(mview_scan_info);
+    }
+    mview_scan_info = nullptr;
+  }
+}
+
 }
 }
 

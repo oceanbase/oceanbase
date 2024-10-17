@@ -165,7 +165,7 @@ int ObDirectLoadMultipleSSTableBuilder::append_row(const ObTabletID &tablet_id,
     LOG_WARN("invalid args", KR(ret), K(param_), K(datum_row));
   } else {
     if (OB_FAIL(row_.from_datums(tablet_id, datum_row.storage_datums_, datum_row.count_,
-                                 param_.table_data_desc_.rowkey_column_num_, seq_no))) {
+                                 param_.table_data_desc_.rowkey_column_num_, seq_no, datum_row.row_flag_.is_delete()))) {
       LOG_WARN("fail to from datum row", KR(ret));
     } else if (OB_FAIL(append_row(row_))) {
       LOG_WARN("fail to append row", KR(ret), K(row_));

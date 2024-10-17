@@ -538,8 +538,30 @@ ObJoinFilterSpec::ObJoinFilterSpec(common::ObIAllocator &alloc, const ObPhyOpera
 int ObJoinFilterSpec::register_to_datahub(ObExecContext &ctx) const
 {
   int ret = OB_SUCCESS;
-  if (!is_shared_join_filter()) {
-    // not shared join filter, no need to register datahub to sync rows
+  bool need_register_to_datahub = false;
+  if (!is_material_controller()) {
+    // only the material controller needs to register datahub to sync rows
+  } else {
+    const ObOpSpec *cur_spec = this;
+    int64_t join_filter_count = under_control_join_filter_count();
+    // if at least one join filter is shared join filter, we need to send datahub msg to synchronize
+    // row count
+    for (int64_t i = 0; i < join_filter_count && OB_NOT_NULL(cur_spec) && OB_SUCC(ret); ++i) {
+      if (cur_spec->get_type() != PHY_JOIN_FILTER) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("must be join filter bellow");
+      } else {
+        const ObJoinFilterSpec &spec = static_cast<const ObJoinFilterSpec &>(*cur_spec);
+        if (spec.is_shared_join_filter()) {
+          need_register_to_datahub = true;
+          break;
+        }
+        cur_spec = cur_spec->get_child();
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (!need_register_to_datahub) {
   } else if (OB_ISNULL(ctx.get_sqc_handler())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null unexpected", K(ret));
@@ -1322,9 +1344,10 @@ int ObJoinFilterOp::init_material_parameters()
                            OB_NEWx(ObJoinFilterPartitionSplitter, &ctx_.get_allocator()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory for ObJoinFilterPartitionSplitter");
-  } else if (partition_splitter_->init(tenant_id, mem_context_, eval_ctx_, &sql_mem_processor_,
-                                       MY_SPEC.full_hash_join_keys_, MY_SPEC.output_,
-                                       extra_hash_count, max_batch_size, compress_type)) {
+  } else if (OB_FAIL(partition_splitter_->init(tenant_id, mem_context_, eval_ctx_,
+                                               &sql_mem_processor_, MY_SPEC.full_hash_join_keys_,
+                                               MY_SPEC.output_, extra_hash_count, max_batch_size,
+                                               compress_type))) {
     LOG_WARN("failed to init partition splitter");
   } else if (OB_FAIL(partition_splitter_->prepare_join_partitions(
                  &io_event_observer_, worker_row_count, worker_memory_size))) {
@@ -1414,18 +1437,19 @@ int ObJoinFilterOp::init_material_group_exec_info()
   if (OB_SUCC(ret)) {
     ObOperator *cur_op = this;
     ObJoinFilterOp *join_filter_op = nullptr;
-    if (OB_FAIL(group_controller_->join_filter_ops_.prepare_allocate(join_filter_count))) {
-      LOG_WARN("failed to prepare_allocate op_mat_exec_info_");
+    if (OB_FAIL(group_controller_->join_filter_ops_.init(join_filter_count))) {
+      LOG_WARN("failed to init join_filter_ops_");
     }
     for (int64_t i = 0; i < join_filter_count && OB_SUCC(ret); ++i) {
       if (cur_op->get_spec().get_type() != PHY_JOIN_FILTER) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("must be join filter bellow");
+      } else if (FALSE_IT(join_filter_op = static_cast<ObJoinFilterOp *>(cur_op))) {
+      } else if (OB_FAIL(group_controller_->join_filter_ops_.push_back(join_filter_op))) {
+        LOG_WARN("failed to push back join_filter_op");
       } else {
-        join_filter_op = static_cast<ObJoinFilterOp *>(cur_op);
         const ObJoinFilterSpec &spec = get_my_spec(*join_filter_op);
         uint16_t hash_id = spec.jf_material_control_info_.hash_id_;
-        group_controller_->join_filter_ops_.at(i) = join_filter_op;
         group_controller_->group_join_filter_hash_values_[i] = join_filter_op->get_join_filter_hash_values();
         group_controller_->hash_id_map_[i] = hash_id;
         cur_op = cur_op->get_child();
@@ -1515,6 +1539,7 @@ int ObJoinFilterOp::send_datahub_count_row_msg(int64_t &total_row_count,
     piece_msg.thread_id_ = GETTID();
     piece_msg.source_dfo_id_ = handler->get_sqc_proxy().get_dfo_id();
     piece_msg.target_dfo_id_ = handler->get_sqc_proxy().get_dfo_id();
+    piece_msg.piece_count_ = 1;
     piece_msg.total_rows_ = partition_splitter_->get_total_row_count();
     piece_msg.sqc_id_ = handler->get_sqc_proxy().get_sqc_id();
     piece_msg.each_sqc_has_full_data_ = MY_SPEC.jf_material_control_info_.each_sqc_has_full_data_;

@@ -497,7 +497,7 @@ int ObDASInsertResult::get_next_row(ObDatumRow *&row)
   return ret;
 }
 
-int ObDASInsertResult::link_extra_result(ObDASExtraData &extra_result)
+int ObDASInsertResult::link_extra_result(ObDASExtraData &extra_result, ObIDASTaskOp *task_op)
 {
   UNUSED(extra_result);
   return OB_NOT_IMPLEMENT;

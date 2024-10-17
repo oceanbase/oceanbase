@@ -427,7 +427,6 @@ int ObTransformWinMagic::create_window_function(ObAggFunRawExpr *agg_expr,
 int ObTransformWinMagic::check_view_table_basic(ObSelectStmt *stmt, bool &is_valid) 
 {
   int ret = OB_SUCCESS;
-  bool has_rand = false;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret));
@@ -441,10 +440,10 @@ int ObTransformWinMagic::check_view_table_basic(ObSelectStmt *stmt, bool &is_val
             || stmt->get_table_size() < 1
             || stmt->get_user_var_size() > 0) {
     is_valid = false;
-  } else if (OB_FAIL(stmt->has_rand(has_rand))) {
+  } else if (OB_FAIL(stmt->is_query_deterministic(is_valid))) {
     LOG_WARN("has rand failed", K(ret));
-  } else if (has_rand) {
-    is_valid = false;
+  } else if (!is_valid) {
+    /* do nothing */
   } else if (OB_FAIL(check_select_expr_validity(*stmt, is_valid))) {
     LOG_WARN("check view select expr validity failed");
   }

@@ -729,6 +729,7 @@ int ObLogicalOperator::compute_normal_multi_child_parallel_and_server_info()
   int ret = OB_SUCCESS;
   const ObLogicalOperator *max_parallel_child = NULL;
   bool max_parallel_from_exch = false;
+  ObPQDistributeMethod::Type child_distribute_method_type = ObPQDistributeMethod::NONE;
   int64_t max_available_parallel = ObGlobalHint::DEFAULT_PARALLEL;
   const ObLogicalOperator *child = NULL;
   for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); ++i) {
@@ -739,12 +740,11 @@ int ObLogicalOperator::compute_normal_multi_child_parallel_and_server_info()
       max_parallel_child = child;
       max_available_parallel = max_parallel_child->get_available_parallel();
       max_parallel_from_exch = LOG_EXCHANGE == max_parallel_child->get_type();
-    } else if (!max_parallel_from_exch &&
-               LOG_EXCHANGE == child->get_type()) {
-      //do nothing
+    } else if (!max_parallel_from_exch && LOG_EXCHANGE == child->get_type()) {
+      // do nothing
     } else {
       if (max_parallel_child->get_parallel() < child->get_parallel() ||
-          (max_parallel_from_exch && LOG_EXCHANGE != child->get_type())) {
+          (max_parallel_from_exch && LOG_EXCHANGE != child->get_type() && !child->is_match_all())) {
         max_available_parallel = child->get_available_parallel();
         max_parallel_child = child;
         max_parallel_from_exch = LOG_EXCHANGE == max_parallel_child->get_type();
@@ -5654,10 +5654,8 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
             join_filter_create->set_is_use_filter_shuffle(true);
             join_filter_use->set_is_use_filter_shuffle(true);
           }
-          if ((is_partition_wise_ || DistAlgo::DIST_PARTITION_NONE == join_dist_algo) && !right_has_exchange) {
-            join_filter_create->set_is_non_shared_join_filter();
-            join_filter_use->set_is_non_shared_join_filter();
-          } else {
+
+          if ((DistAlgo::DIST_BC2HOST_NONE == join_dist_algo) || right_has_exchange) {
             join_filter_create->set_is_shared_join_filter();
             join_filter_use->set_is_shared_join_filter();
             int64_t max_wait_time_ms = 0;
@@ -5666,6 +5664,9 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
             } else {
               join_filter_use->set_rf_max_wait_time(max_wait_time_ms);
             }
+          } else {
+            join_filter_create->set_is_non_shared_join_filter();
+            join_filter_use->set_is_non_shared_join_filter();
           }
 
           if (OB_FAIL(ret)) {
@@ -6672,15 +6673,4 @@ int ObLogicalOperator::check_op_orderding_used_by_parent(bool &used)
     }
   }
   return ret;
-}
-
-bool ObLogicalOperator::is_parallel_more_than_part_cnt() const
-{
-  if (NULL == strong_sharding_) {
-    return false;
-  } else if (strong_sharding_->get_part_cnt() < 1) {
-    return false;
-  } else {
-    return get_parallel() > strong_sharding_->get_part_cnt();
-  }
 }

@@ -178,8 +178,8 @@ struct ObPluginVectorIndexTaskCtx
       in_queue_(false),
       task_status_(ObVectorIndexTaskStatus::OB_TTL_TASK_PREPARE)
   {}
-  TO_STRING_KV(K_(index_tablet_id), K_(index_table_id), K_(task_start_time), K_(last_modify_time),
-               K_(failure_times), K_(in_queue), K_(task_status));
+  TO_STRING_KV(K_(index_table_id), K_(index_tablet_id), K_(task_start_time), K_(last_modify_time),
+               K_(failure_times), K_(err_code), K_(in_queue), K_(task_status));
   ObTabletID index_tablet_id_;
   uint64_t index_table_id_;
   int64_t task_start_time_;
@@ -201,7 +201,7 @@ class ObPluginVectorIndexLoadScheduler : public common::ObTimerTask,
 public:
   ObPluginVectorIndexLoadScheduler()
     : is_inited_(false),
-      is_leader_(true),
+      is_leader_(false),
       need_do_for_switch_(false),
       is_stopped_(false),
       tenant_id_(OB_INVALID_TENANT_ID),
@@ -250,7 +250,7 @@ public:
                                   bool &is_vector_index_table,
                                   bool &is_shared_index_table);
   void clean_deprecated_adapters();
-  int check_parital_index_adpter_exist(ObPluginVectorIndexMgr *mgr);
+  int check_index_adpter_exist(ObPluginVectorIndexMgr *mgr);
 
   int log_tablets_need_memdata_sync(ObPluginVectorIndexMgr *mgr);
   int execute_all_memdata_sync_task(ObPluginVectorIndexMgr *mgr);
@@ -421,6 +421,51 @@ private:
   lib::Worker::CompatMode compat_mode_;
   DISALLOW_COPY_AND_ASSIGN(ObVectorIndexDag);
 };
+
+typedef common::hash::ObHashMap<common::ObTabletID, ObPluginVectorIndexTaskCtx*> VectorIndexMemSyncMap;
+typedef common::hash::ObHashMap<common::ObTabletID, ObPluginVectorIndexAdaptor*> VectorIndexAdaptorMap;
+class ObVectorIndexMemSyncInfo
+{
+public:
+  ObVectorIndexMemSyncInfo(uint64_t tenant_id) :
+    processing_first_mem_sync_(true),
+    first_mem_sync_map_(),
+    second_mem_sync_map_(),
+    first_task_allocator_(ObMemAttr(tenant_id, "VecIdxTask")),
+    second_task_allocator_(ObMemAttr(tenant_id, "VecIdxTask"))
+  {}
+
+  ~ObVectorIndexMemSyncInfo(){}
+
+  int init(int64_t hash_capacity, uint64_t tenant_id, ObLSID &ls_id);
+  void destroy();
+
+  int add_task_to_waiting_map(ObVectorIndexSyncLog &ls_log);
+  int add_task_to_waiting_map(VectorIndexAdaptorMap &adapter_map);
+  int count_processing_finished(bool &is_finished,
+                                uint32_t &total_count,
+                                uint32_t &finished_count);
+  void check_and_switch_if_needed(bool &need_sync, bool &all_finished);
+  VectorIndexMemSyncMap &get_processing_map() { return processing_first_mem_sync_ ? first_mem_sync_map_ : second_mem_sync_map_; }
+
+private:
+  VectorIndexMemSyncMap &get_waiting_map() { return processing_first_mem_sync_ ? second_mem_sync_map_ : first_mem_sync_map_; }
+  ObIAllocator &get_processing_allocator() { return processing_first_mem_sync_ ? first_task_allocator_ : second_task_allocator_; }
+  ObIAllocator &get_waiting_allocator() { return processing_first_mem_sync_ ? second_task_allocator_ : first_task_allocator_; }
+  void switch_processing_map();
+
+  TO_STRING_KV(K_(processing_first_mem_sync), K(first_mem_sync_map_.size()), K(second_mem_sync_map_.size()));
+
+private:
+  // pingpong map/allocator for follower receive memdata sync task from log
+  bool processing_first_mem_sync_;
+  common::ObSpinLock switch_lock_;
+  VectorIndexMemSyncMap first_mem_sync_map_;
+  VectorIndexMemSyncMap second_mem_sync_map_;
+  ObArenaAllocator first_task_allocator_;
+  ObArenaAllocator second_task_allocator_;
+};
+
 
 } // namespace share
 } // namespace oceanbase

@@ -40,9 +40,8 @@ ObVectorStore::ObVectorStore(
     default_row_(),
     group_by_cell_(nullptr),
     iter_param_(nullptr),
-    skip_bit_(skip_bit),
-    need_check_group_by_(false)
-  {}
+    skip_bit_(skip_bit)
+{}
 
 ObVectorStore::~ObVectorStore()
 {
@@ -66,7 +65,6 @@ void ObVectorStore::reset()
     context_.stmt_allocator_->free(group_by_cell_);
     group_by_cell_ = nullptr;
   }
-  need_check_group_by_ = false;
 }
 
 int ObVectorStore::init(const ObTableAccessParam &param, common::hash::ObHashSet<int32_t> *agg_col_mask)
@@ -194,6 +192,7 @@ int ObVectorStore::check_agg_mask(
   return ret;
 }
 
+// TODO wenye: remove this func by disable group by in SQL layer or support first row in storage layer.
 int ObVectorStore::check_need_group_by(const ObTableAccessParam &param)
 {
   int ret = OB_SUCCESS;
@@ -203,7 +202,6 @@ int ObVectorStore::check_need_group_by(const ObTableAccessParam &param)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(param));
   } else {
-    need_check_group_by_ = true;
     ObMemAttr attr(MTL_ID(), common::ObModIds::OB_HASH_BUCKET);
     common::hash::ObHashSet<int32_t> col_offset_set;
     const int32_t group_by_col_offset = param.iter_param_.group_by_cols_project_->at(0);
@@ -213,11 +211,11 @@ int ObVectorStore::check_need_group_by(const ObTableAccessParam &param)
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < agg_expr_cnt; ++i) {
       int32_t col_offset = param.iter_param_.agg_cols_project_->at(i);
-      if (OB_FAIL(col_offset_set.set_refactored(col_offset, 0/*deduplicated*/))) {
+      if (OB_FAIL(col_offset_set.set_refactored(col_offset))) {
         LOG_WARN("Failed to add column offset", K(ret), K(i), K(col_offset));
       }
     }
-    for (int64_t i = 0; OB_SUCC(ret) && need_check_group_by_ && i < param.output_exprs_->count(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < param.output_exprs_->count(); ++i) {
       if (T_PSEUDO_GROUP_ID == param.output_exprs_->at(i)->type_) {
       } else if (nullptr == param.output_sel_mask_ || param.output_sel_mask_->at(i)) {
         int32_t col_offset = param.iter_param_.out_cols_project_->at(i);
@@ -226,8 +224,8 @@ int ObVectorStore::check_need_group_by(const ObTableAccessParam &param)
           if (OB_HASH_EXIST == ret) {
             ret = OB_SUCCESS;
           } else if (OB_HASH_NOT_EXIST == ret) {
-            need_check_group_by_ = false;
-            ret = OB_SUCCESS;
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("Invalid group by pushdown status", K(ret), K(i), K(col_offset));
           } else {
             LOG_WARN("Failed to search in hashset", K(ret), K(col_offset));
           }
@@ -260,7 +258,7 @@ int ObVectorStore::alloc_group_by_cell(const ObTableAccessParam &param)
         LOG_WARN("Failed to init group by cell", K(ret));
       }
     }
-    if (OB_SUCC(ret) && check_need_group_by(param)) {
+    if (OB_SUCC(ret) && OB_FAIL(check_need_group_by(param))) {
       LOG_WARN("Failed to check need group by", K(ret), K(param));
     }
   }
@@ -323,7 +321,7 @@ int ObVectorStore::fill_rows(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected vector store count", K(ret), K_(count), KP_(group_by_cell));
   } else if (FALSE_IT(reader = scanner.get_reader())) {
-  } else if (need_check_group_by_ && OB_FAIL(check_can_group_by(reader, begin_index, end_index, res, can_group_by))) {
+  } else if (OB_FAIL(check_can_group_by(reader, begin_index, end_index, res, can_group_by))) {
     LOG_WARN("Failed to checkout pushdown group by", K(ret));
   } else if (can_group_by) {
     if (OB_FAIL(fill_group_by_rows(group_idx, reader, begin_index, end_index, res))) {

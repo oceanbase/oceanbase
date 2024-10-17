@@ -31,7 +31,7 @@ int ObTabletTransferInfo::init()
   int ret = OB_SUCCESS;
   ls_id_ = TRANSFER_INIT_LS_ID;
   transfer_start_scn_.set_min();
-  transfer_seq_ = 0;
+  transfer_seq_ = TRANSFER_INIT_SEQ;
   has_transfer_table_ = false;
   return ret;
 }

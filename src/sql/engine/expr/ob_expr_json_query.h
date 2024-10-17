@@ -167,8 +167,12 @@ struct ObJsonObjectCompare {
   int operator()(const ObObj &left, const ObObj &right)
   {
     int result = 0;
-    left.compare(right, result);
-    return result > 0 ? 1 : 0;
+    if (left.is_string_type() && right.is_string_type()) {
+      left.compare(right, CS_TYPE_UTF8MB4_GENERAL_CI, result);
+    } else {
+      left.compare(right, result);
+    }
+    return result <= 0 ? 0 : 1;
   }
 };
 

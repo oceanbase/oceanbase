@@ -140,34 +140,28 @@ int ObPxSubCoord::try_start_tasks(int64_t &dispatch_worker_count, bool is_fast_s
 
 void ObPxSubCoord::notify_dispatched_task_exit(int64_t dispatched_worker_count)
 {
-  (void) thread_worker_factory_.join();
+  (void)thread_worker_factory_.join();
   auto &tasks = sqc_ctx_.get_tasks();
-  bool is_interrupted = false;
-  for (int64_t idx = 0;
-       idx < dispatched_worker_count && dispatched_worker_count <= tasks.count() && !is_interrupted;
+  for (int64_t idx = 0; idx < dispatched_worker_count && dispatched_worker_count <= tasks.count();
        ++idx) {
     int tick = 1;
     ObPxTask &task = tasks.at(idx);
-    while (false == task.is_task_state_set(SQC_TASK_EXIT) && !is_interrupted) {
+    while (false == task.is_task_state_set(SQC_TASK_EXIT)) {
       // 每秒给当前 sqc 中未完成的 tasks 发送一次中断
       // 首次发中断的时间为 100ms 时。定这个时间是为了
       // cover px pool 调度 task 的延迟
       if (tick % 1000 == 100) {
         ObPxSqcMeta &sqc = sqc_arg_.sqc_;
-        (void) ObInterruptUtil::interrupt_tasks(sqc, OB_GOT_SIGNAL_ABORTING);
+        (void)ObInterruptUtil::interrupt_tasks(sqc, OB_GOT_SIGNAL_ABORTING);
       }
       // 如果 10s 还没有退出，则打印一条日志。按照设计，不会出现这种情况
       if (tick++ % 10000 == 0) {
-        is_interrupted = IS_INTERRUPTED();
-        LOG_INFO("waiting for task exit", K(idx), K(dispatched_worker_count), K(tick), K(is_interrupted));
+        LOG_INFO("waiting for task exit", K(idx), K(dispatched_worker_count), K(tick));
       }
       ob_usleep(1000);
     }
-    LOG_TRACE("task exit",
-              K(idx), K(tasks.count()), K(dispatched_worker_count),
-              "dfo_id", task.dfo_id_,
-              "sqc_id", task.sqc_id_,
-              "task_id", task.task_id_);
+    LOG_TRACE("task exit", K(idx), K(tasks.count()), K(dispatched_worker_count), "dfo_id",
+              task.dfo_id_, "sqc_id", task.sqc_id_, "task_id", task.task_id_);
   }
 }
 
@@ -251,12 +245,13 @@ int ObPxSubCoord::setup_gi_op_input(ObExecContext &ctx,
           if (OB_FAIL(sqc_ctx.gi_pump_.init_pump_args(&ctx, scan_ops, tablets_array,
               sqc_ctx.partitions_info_, sqc.get_access_external_table_files(),
               dml_op, sqc.get_task_count(),
-              gi_op->get_tablet_size(), gi_op->get_gi_flags()))) {
+              gi_op->get_tablet_size(), gi_op->get_gi_flags(), sqc.get_locations_order()))) {
             LOG_WARN("fail to init pump args", K(ret));
           } else {
             gi_input->set_granule_pump(&sqc_ctx.gi_pump_);
             gi_input->add_table_location_keys(scan_ops);
-            LOG_TRACE("setup gi op input", K(gi_input), K(&sqc_ctx.gi_pump_), K(gi_op->id_), K(sqc_ctx.gi_pump_.get_task_array_map()));
+            LOG_TRACE("setup gi op input", K(gi_input), K(&sqc_ctx.gi_pump_), K(gi_op->id_),
+                      K(sqc_ctx.gi_pump_.get_task_array_map()), K(sqc.get_locations_order()));
           }
         }
       }
@@ -909,9 +904,12 @@ int ObPxSubCoord::start_ddl()
     const int64_t ref_table_id = location_keys.at(0).ref_table_id_;
     const int64_t ddl_table_id = phy_plan->get_ddl_table_id();
     const int64_t ddl_task_id = phy_plan->get_ddl_task_id();
-    const int64_t schema_version = phy_plan->get_ddl_schema_version();
     const int64_t ddl_execution_id = phy_plan->get_ddl_execution_id();
-    if (OB_FAIL(ObDDLUtil::get_data_information(tenant_id, ddl_task_id, data_format_version, snapshot_version, unused_task_status))) {
+
+    uint64_t unused_taget_object_id = OB_INVALID_ID;
+    int64_t schema_version = OB_INVALID_VERSION;
+
+    if (OB_FAIL(ObDDLUtil::get_data_information(tenant_id, ddl_task_id, data_format_version, snapshot_version, unused_task_status, unused_taget_object_id, schema_version))) {
       LOG_WARN("get ddl cluster version failed", K(ret));
     } else if (OB_UNLIKELY(snapshot_version <= 0)) {
       ret = OB_NEED_RETRY;
@@ -925,13 +923,13 @@ int ObPxSubCoord::start_ddl()
 
       ObTabletDirectLoadInsertParam direct_load_param;
       direct_load_param.is_replay_ = false;
-      direct_load_param.common_param_.direct_load_type_ = ddl_ctrl_.direct_load_type_;;
+      direct_load_param.common_param_.direct_load_type_ = ddl_ctrl_.direct_load_type_;
       direct_load_param.common_param_.data_format_version_ = data_format_version;
       direct_load_param.common_param_.read_snapshot_ = snapshot_version;
       direct_load_param.runtime_only_param_.exec_ctx_ = exec_ctx;
       direct_load_param.runtime_only_param_.task_id_ = ddl_task_id;
       direct_load_param.runtime_only_param_.table_id_ = ddl_table_id;
-      direct_load_param.runtime_only_param_.schema_version_ = schema_version;
+      direct_load_param.runtime_only_param_.schema_version_ = schema_version; /* set schema version as get from ddl record which is a fixed val */
       direct_load_param.runtime_only_param_.task_cnt_ = sqc_arg_.sqc_.get_task_count();
       if (OB_FAIL(tenant_direct_load_mgr->alloc_execution_context_id(ddl_ctrl_.context_id_))) {
         LOG_WARN("alloc execution context id failed", K(ret));

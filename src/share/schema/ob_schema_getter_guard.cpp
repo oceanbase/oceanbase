@@ -2870,6 +2870,53 @@ int ObSchemaGetterGuard::check_activate_all_role_var(const uint64_t tenant_id, b
   return ret;
 }
 
+int ObSchemaGetterGuard::is_user_empty_passwd(const ObUserLoginInfo &login_info, bool &is_empty_passwd_account) {
+  int ret = OB_SUCCESS;
+  lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
+  uint64_t tenant_id = OB_INVALID_ID;
+  is_empty_passwd_account = false;
+  if (OB_FAIL(get_tenant_id(login_info.tenant_name_,tenant_id))) {
+    LOG_WARN("Invalid tenant", "tenant_name", login_info.tenant_name_, KR(ret));
+  } else if (OB_FAIL(check_tenant_schema_guard(tenant_id))) {
+    LOG_WARN("fail to check tenant schema guard", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(get_tenant_compat_mode(tenant_id, compat_mode))) {
+    LOG_WARN("fail to get tenant compat mode", K(ret));
+  } else {
+    const int64_t DEFAULT_SAME_USERNAME_COUNT = 4;
+    ObSEArray<const ObUserInfo *, DEFAULT_SAME_USERNAME_COUNT> users_info;
+    if (OB_FAIL(get_user_info(tenant_id, login_info.user_name_, users_info))) {
+      LOG_WARN("get user info failed", KR(ret), K(tenant_id), K(login_info));
+    } else if (users_info.empty()) {
+      ret = OB_PASSWORD_WRONG;
+      LOG_WARN("No tenant user", K(login_info), KR(ret));
+    } else {
+      const ObUserInfo *user_info = NULL;
+      const ObUserInfo *matched_user_info = NULL;
+      for (int64_t i = 0; i < users_info.count() && OB_SUCC(ret); ++i) {
+        user_info = users_info.at(i);
+        if (NULL == user_info) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("user info is null", K(login_info), KR(ret));
+        } else if (user_info->is_role() && lib::Worker::CompatMode::ORACLE == compat_mode) {
+          ret = OB_PASSWORD_WRONG;
+          LOG_INFO("password error", "tenant_name", login_info.tenant_name_,
+              "user_name", login_info.user_name_,
+              "client_ip_", login_info.client_ip_, KR(ret));
+        } else if (!obsys::ObNetUtil::is_match(login_info.client_ip_, user_info->get_host_name_str())) {
+          LOG_TRACE("account not matched, try next", KPC(user_info), K(login_info));
+        } else {
+          matched_user_info = user_info;
+          if (0 == login_info.passwd_.length() && 0 == user_info->get_passwd_str().length()) {
+            is_empty_passwd_account = true;
+            break;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 // for privilege
 int ObSchemaGetterGuard::check_user_access(
     const ObUserLoginInfo &login_info,
@@ -6501,6 +6548,7 @@ int ObSchemaGetterGuard::check_outline_exist_with_name(
     const uint64_t tenant_id,
     const uint64_t database_id,
     const common::ObString &name,
+    const bool is_format,
     uint64_t &outline_id,
     bool &exist)
 {
@@ -6524,7 +6572,7 @@ int ObSchemaGetterGuard::check_outline_exist_with_name(
   } else {
     const ObSimpleOutlineSchema *schema = NULL;
     if (OB_FAIL(mgr->outline_mgr_.get_outline_schema_with_name(tenant_id, database_id,
-        name, schema))) {
+        name, is_format, schema))) {
       LOG_WARN("get outline schema failed", KR(ret),
                K(tenant_id), K(database_id), K(name));
     } else if (NULL != schema) {
@@ -6540,6 +6588,7 @@ int ObSchemaGetterGuard::check_outline_exist_with_sql_id(
     const uint64_t tenant_id,
     const uint64_t database_id,
     const common::ObString &sql_id,
+    const bool is_format,
     bool &exist)
 {
   int ret= OB_SUCCESS;
@@ -6561,7 +6610,7 @@ int ObSchemaGetterGuard::check_outline_exist_with_sql_id(
   } else {
     const ObSimpleOutlineSchema *schema = NULL;
     if (OB_FAIL(mgr->outline_mgr_.get_outline_schema_with_sql_id(tenant_id, database_id,
-        sql_id, schema))) {
+        sql_id, is_format, schema))) {
       LOG_WARN("get outline schema failed", KR(ret),
                K(tenant_id), K(database_id), K(sql_id));
     } else if (NULL != schema) {
@@ -6576,6 +6625,7 @@ int ObSchemaGetterGuard::check_outline_exist_with_sql(
     const uint64_t tenant_id,
     const uint64_t database_id,
     const common::ObString &paramlized_sql,
+    const bool is_format,
     bool &exist)
 {
   int ret= OB_SUCCESS;
@@ -6597,7 +6647,7 @@ int ObSchemaGetterGuard::check_outline_exist_with_sql(
   } else {
     const ObSimpleOutlineSchema *schema = NULL;
     if (OB_FAIL(mgr->outline_mgr_.get_outline_schema_with_signature(tenant_id, database_id,
-        paramlized_sql, schema))) {
+        paramlized_sql, is_format, schema))) {
       LOG_WARN("get outline schema failed", KR(ret),
                K(tenant_id), K(database_id), K(paramlized_sql));
     } else if (NULL != schema) {
@@ -7020,6 +7070,7 @@ int ObSchemaGetterGuard::get_outline_info_with_name(
     const uint64_t tenant_id,
     const uint64_t database_id,
     const common::ObString &name,
+    const bool is_format,
     const ObOutlineInfo *&outline_info)
 {
   int ret = OB_SUCCESS;
@@ -7040,7 +7091,7 @@ int ObSchemaGetterGuard::get_outline_info_with_name(
   } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) {
     LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
   } else if (OB_FAIL(mgr->outline_mgr_.get_outline_schema_with_name(tenant_id,
-      database_id, name, simple_outline))) {
+      database_id, name, is_format, simple_outline))) {
     LOG_WARN("get simple outline failed", KR(ret), K(tenant_id), K(database_id), K(name));
   } else if (NULL == simple_outline) {
     LOG_INFO("outline not exist", K(tenant_id), K(database_id), K(name));
@@ -7062,6 +7113,7 @@ int ObSchemaGetterGuard::get_outline_info_with_name(
     const uint64_t tenant_id,
     const ObString &db_name,
     const ObString &outline_name,
+    const bool is_format,
     const ObOutlineInfo *&outline_info)
 {
   int ret = OB_SUCCESS;
@@ -7087,7 +7139,7 @@ int ObSchemaGetterGuard::get_outline_info_with_name(
   } else if (OB_INVALID_ID == database_id) {
     // do-nothing
   } else if (OB_FAIL(mgr->outline_mgr_.get_outline_schema_with_name(tenant_id,
-      database_id, outline_name, simple_outline))) {
+      database_id, outline_name, is_format, simple_outline))) {
     LOG_WARN("get simple outline failed", KR(ret), K(tenant_id), K(database_id), K(outline_name));
   } else if (NULL == simple_outline) {
     LOG_TRACE("outline not exist", K(tenant_id), K(database_id), K(outline_name));
@@ -7108,6 +7160,7 @@ int ObSchemaGetterGuard::get_outline_info_with_signature(
     const uint64_t tenant_id,
     const uint64_t database_id,
     const common::ObString &signature,
+    const bool is_format,
     const ObOutlineInfo *&outline_info)
 {
   int ret = OB_SUCCESS;
@@ -7128,10 +7181,10 @@ int ObSchemaGetterGuard::get_outline_info_with_signature(
   } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) {
     LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
   } else if (OB_FAIL(mgr->outline_mgr_.get_outline_schema_with_signature(tenant_id,
-      database_id, signature, simple_outline))) {
+      database_id, signature, is_format, simple_outline))) {
     LOG_WARN("get simple outline failed", KR(ret), K(tenant_id), K(database_id), K(signature));
   } else if (NULL == simple_outline) {
-    LOG_TRACE("outline not exist", K(tenant_id), K(database_id), K(signature));
+    LOG_TRACE("outline not exist", K(tenant_id), K(is_format), K(database_id), K(signature));
   } else if (OB_FAIL(get_schema(OUTLINE_SCHEMA,
                                 simple_outline->get_tenant_id(),
                                 simple_outline->get_outline_id(),
@@ -7695,6 +7748,7 @@ int ObSchemaGetterGuard::get_outline_info_with_sql_id(
     const uint64_t tenant_id,
     const uint64_t database_id,
     const common::ObString &sql_id,
+    const bool is_format,
     const ObOutlineInfo *&outline_info)
 {
   int ret = OB_SUCCESS;
@@ -7715,10 +7769,10 @@ int ObSchemaGetterGuard::get_outline_info_with_sql_id(
   } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) {
     LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
   } else if (OB_FAIL(mgr->outline_mgr_.get_outline_schema_with_sql_id(tenant_id,
-      database_id, sql_id, simple_outline))) {
+      database_id, sql_id, is_format, simple_outline))) {
     LOG_WARN("get simple outline failed", KR(ret), K(tenant_id), K(database_id), K(sql_id));
   } else if (NULL == simple_outline) {
-    LOG_DEBUG("outline not exist", K(tenant_id), K(database_id), K(sql_id));
+    LOG_TRACE("outline not exist", K(tenant_id), K(database_id), K(sql_id));
   } else if (OB_FAIL(get_schema(OUTLINE_SCHEMA,
                                 simple_outline->get_tenant_id(),
                                 simple_outline->get_outline_id(),
@@ -9990,6 +10044,57 @@ int ObSchemaGetterGuard::check_global_index_exist(const uint64_t tenant_id, cons
     }
   }
 
+  return ret;
+}
+
+// TODO YIREN, remove it when MDS prepare.
+int ObSchemaGetterGuard::get_range_part_high_bound(
+    const ObTableSchema &table_schema,
+    const common::ObTabletID &tablet_id,
+    ObIAllocator &allocator,
+    common::ObRowkey &high_bound)
+{
+  int ret = OB_SUCCESS;
+  high_bound.reset();
+  if (OB_UNLIKELY(!table_schema.is_valid() || !tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(tablet_id), K(table_schema));
+  } else if (OB_UNLIKELY((PARTITION_LEVEL_ONE == table_schema.get_part_level()
+        && !is_range_part(table_schema.get_part_option().get_part_func_type()))
+    || (PARTITION_LEVEL_TWO == table_schema.get_part_level()
+        && !is_range_part(table_schema.get_sub_part_option().get_part_func_type())))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(table_schema));
+  } else if (OB_UNLIKELY(get_tenant_id() != table_schema.get_tenant_id())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("tenant_id is not match with schema_guard", K(ret), K(tenant_id_), "tenant_id", table_schema.get_tenant_id());
+  } else if (!table_schema.has_tablet()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("this table do not have tablet", K(ret), K(table_schema));
+  } else {
+    ObPartitionSchemaIter::Info part_info;
+    ObPartitionSchemaIter iter(table_schema, ObCheckPartitionMode::CHECK_PARTITION_MODE_ALL);
+    while (OB_SUCC(ret) && (OB_SUCC(iter.next_partition_info(part_info)))) {
+      if (OB_ISNULL(part_info.partition_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("the part_info.partition_ is nullptr", K(ret), K(part_info));
+      } else if (part_info.partition_->get_tablet_id() == tablet_id) {
+        const common::ObRowkey &part_high_bound = part_info.partition_->get_high_bound_val();
+        if (OB_UNLIKELY(!part_high_bound.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected err", K(ret));
+        } else if (OB_FAIL(part_high_bound.deep_copy(high_bound, allocator))) {
+          LOG_WARN("deep copy failed", K(ret), K(part_high_bound));
+        } else {
+          break;
+        }
+      }
+    }
+    if (OB_SUCC(ret) && !high_bound.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected err", K(ret), K(tablet_id), K(table_schema));
+    }
+  }
   return ret;
 }
 

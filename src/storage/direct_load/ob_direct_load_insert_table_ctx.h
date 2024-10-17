@@ -140,6 +140,8 @@ public:
 
   const ObLobId &get_min_insert_lob_id() const { return min_insert_lob_id_; }
 
+  OB_INLINE bool is_incremental() const {return nullptr != param_ ? param_->is_incremental_ : false;};
+
 public:
   int init(ObDirectLoadInsertTableContext *table_ctx,
            const share::ObLSID &ls_id,
@@ -252,7 +254,7 @@ public:
 
   OB_INLINE bool need_rescan() const { return (!param_.is_incremental_ && param_.is_column_store_); }
   OB_INLINE bool need_del_lob() const { return (param_.is_incremental_ && param_.lob_column_count_ > 0); }
-
+  OB_INLINE TABLET_CTX_MAP &get_tablet_ctx_map() { return tablet_ctx_map_; }
   int64_t get_sql_stat_column_count() const;
   int get_sql_statistics(table::ObTableLoadSqlStatistics *&sql_statistics);
   int update_sql_statistics(table::ObTableLoadSqlStatistics &sql_statistics,

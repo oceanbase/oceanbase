@@ -31,7 +31,7 @@ public:
   const ObDASScanCtDef *scan_ctdef_;
   virtual bool is_valid() const override
   {
-    return nullptr != scan_ctdef_;
+    return nullptr != scan_ctdef_ && ObDASIterParam::is_valid();
   }
 };
 

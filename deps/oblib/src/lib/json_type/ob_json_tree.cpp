@@ -279,7 +279,7 @@ int ObJsonNode::merge_tree(ObIAllocator *allocator, ObIJsonBase *other, ObIJsonB
     }
     
     if (OB_SUCC(ret)) {
-      if (this_arr->consume(allocator, other_arr)) {
+      if (OB_FAIL(this_arr->consume(allocator, other_arr))) {
         LOG_WARN("fail to consume array", K(ret), K(*this_arr), K(*other_arr));
       } else {
         result = this_arr;

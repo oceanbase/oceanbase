@@ -25,6 +25,7 @@ select name from __all_virtual_sys_parameter_stat where name not like "module_te
 name
 alert_log_level
 all_server_list
+arbitration_degradation_policy
 arbitration_timeout
 archive_lag_target
 audit_log_buffer_size
@@ -40,6 +41,7 @@ audit_log_strategy
 audit_sys_operations
 audit_trail
 autoinc_cache_refresh_interval
+auto_split_tablet_size
 backup_data_file_size
 balancer_idle_time
 balancer_log_interval
@@ -81,15 +83,18 @@ default_auto_increment_mode
 default_compress
 default_compress_func
 default_enable_extended_rowid
+default_load_mode
 default_progressive_merge_num
 default_row_format
 default_table_store_format
 devname
 diag_syslog_per_error_limit
+direct_load_allow_fallback
 disk_io_thread_count
 dtl_buffer_size
 dump_data_dictionary_to_log_interval
 enable_async_syslog
+enable_auto_split
 enable_cgroup
 enable_crazy_medium_compaction
 enable_dblink
@@ -131,6 +136,12 @@ ignore_replay_checksum_error
 index_block_cache_priority
 internal_sql_execute_timeout
 job_queue_processes
+json_document_max_depth
+kv_group_commit_batch_size
+kv_group_commit_rw_mode
+kv_hbase_client_scanner_timeout_period
+kv_transport_compress_func
+kv_transport_compress_threshold
 kv_ttl_duty_duration
 kv_ttl_history_recycle_interval
 large_query_threshold
@@ -182,12 +193,14 @@ obconfig_url
 observer_id
 ob_compaction_schedule_interval
 ob_enable_batched_multi_statement
+ob_encoding_granularity
 ob_event_history_recycle_interval
 ob_proxy_readonly_transaction_routing_policy
 ob_query_switch_leader_retry_timeout
 ob_ratelimit_stat_period
 ob_ssl_invited_common_names
 ob_startup_mode
+ob_storage_s3_url_encode_type
 ob_vector_memory_limit_percentage
 open_cursors
 optimizer_index_cost_adj
@@ -251,7 +264,6 @@ system_memory
 sys_bkgd_migration_change_member_list_timeout
 sys_bkgd_migration_retry_num
 sys_bkgd_net_percentage
-tableapi_transport_compress_func
 tablet_ls_cache_priority
 tablet_meta_table_check_interval
 tablet_meta_table_scan_batch_count
@@ -299,6 +311,7 @@ _datafile_usage_lower_bound_percentage
 _datafile_usage_upper_bound_percentage
 _data_storage_io_timeout
 _delay_resource_recycle_after_correctness_issue
+_display_mysql_version
 _enable_active_txn_transfer
 _enable_adaptive_compaction
 _enable_adaptive_merge_schedule
@@ -413,6 +426,7 @@ _ob_enable_dynamic_worker
 _ob_enable_fast_freeze
 _ob_enable_fast_parser
 _ob_enable_prepared_statement
+_ob_enable_standby_db_parallel_log_transport
 _ob_get_gts_ahead_interval
 _ob_max_thread_num
 _ob_obj_dep_maint_task_interval
@@ -432,6 +446,7 @@ _parallel_max_active_sessions
 _parallel_min_message_pool
 _parallel_redo_logging_trigger
 _parallel_server_sleep_time
+_partition_wise_plan_enabled
 _pdml_thread_cache_size
 _pipelined_table_function_memory_limit
 _preserve_order_for_pagination
@@ -490,6 +505,7 @@ _transfer_start_trans_timeout
 _transfer_task_retry_interval
 _transfer_task_tablet_count_threshold
 _tx_data_memory_limit_percentage
+_tx_debug_level
 _tx_result_retention
 _tx_share_memory_limit_percentage
 _upgrade_stage

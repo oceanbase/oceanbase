@@ -85,6 +85,8 @@ enum ObDASOpType
   DAS_OP_SORT,
   DAS_OP_VEC_SCAN,
   DAS_OP_VID_MERGE,
+  DAS_OP_INDEX_MERGE,
+  DAS_OP_DOC_ID_MERGE,
   //append OpType before me
   DAS_OP_MAX
 };
@@ -177,6 +179,7 @@ public:
   TO_STRING_KV(K_(tablet_id),
                K_(ls_id),
                K_(server),
+               K_(loc_meta),
                K_(in_retry),
                K_(partition_id),
                K_(first_level_part_id));

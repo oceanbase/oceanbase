@@ -75,7 +75,9 @@ public:
   static int check_has_unused_column(const share::schema::ObTableSchema *table_schema, bool &bret);
   static int check_has_roaringbitmap_column(const share::schema::ObTableSchema *table_schema, bool &bret);
   static int check_has_lob_column(const share::schema::ObTableSchema *table_schema, bool &bret);
-
+  static int check_has_non_local_index(share::schema::ObSchemaGetterGuard &schema_guard,
+                                       const share::schema::ObTableSchema *table_schema,
+                                       bool &bret);
   static int get_tenant_optimizer_gather_stats_on_load(const uint64_t tenant_id, bool &value);
 
 public:
@@ -112,6 +114,7 @@ public:
   share::schema::ObPartitionLevel part_level_;
   int64_t schema_version_;
   uint64_t lob_meta_table_id_;
+  int64_t index_table_count_;
   common::ObArray<int64_t> lob_column_idxs_;
   // if it is a heap table, it contains hidden primary key column
   // does not contain virtual generated columns

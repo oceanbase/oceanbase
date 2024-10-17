@@ -34,6 +34,8 @@ class ObLSTabletIterator final
 {
   friend class ObLSTabletService;
 public:
+  // mode only affect get_next_tablet interface, the other three get_xxx interfaces
+  // retrieve data from ObTabletPointer thus doesn't need ObMDSGetTabletMode
   explicit ObLSTabletIterator(const ObMDSGetTabletMode mode);
   ~ObLSTabletIterator();
   ObLSTabletIterator(const ObLSTabletIterator&) = delete;

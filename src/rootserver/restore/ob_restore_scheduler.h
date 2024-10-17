@@ -119,6 +119,9 @@ private:
   int update_tenant_restore_data_mode_to_normal_(const uint64_t tenant_id);
   int update_tenant_restore_data_mode_(const uint64_t tenant_id, const share::ObRestoreDataMode &new_restore_data_mode);
   int wait_sys_job_ready_(const ObPhysicalRestoreJob &job, bool &is_ready);
+  int wait_restore_safe_mview_merge_info_();
+  int try_collect_ls_mv_merge_scn_(const share::SCN &tenant_mv_merge_scn);
+  int update_restore_progress_by_bytes_(const ObPhysicalRestoreJob &job, const int64_t total_bytes, const int64_t finish_bytes);
 private:
   bool inited_;
   share::schema::ObMultiVersionSchemaService *schema_service_;

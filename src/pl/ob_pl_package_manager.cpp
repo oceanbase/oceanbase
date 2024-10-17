@@ -475,6 +475,7 @@ static const ObSysPackageFile oracle_syspack_file_list[] = {
   {"json_object_t", "json_object_type.sql", "json_object_type_body.sql"},
   {"dbms_mview", "dbms_mview.sql", "dbms_mview_body.sql"},
   {"dbms_mview_stats", "dbms_mview_stats.sql", "dbms_mview_stats_body.sql"},
+  {"dbms_space", "dbms_space.sql", "dbms_space_body.sql"},
   {"json_array_t", "json_array_type.sql", "json_array_type_body.sql"},
   {"xmlsequence", "xml_sequence_type.sql", nullptr},
   {"utl_recomp", "utl_recomp.sql", "utl_recomp_body.sql"},
@@ -492,8 +493,8 @@ static const ObSysPackageFile mysql_syspack_file_list[] = {
   {"dbms_session", "dbms_session_mysql.sql", "dbms_session_body_mysql.sql"},
   {"dbms_monitor", "dbms_monitor_mysql.sql", "dbms_monitor_body_mysql.sql"},
   {"dbms_resource_manager", "dbms_resource_manager_mysql.sql", "dbms_resource_manager_body_mysql.sql"},
-#ifdef OB_BUILD_ORACLE_PL
   {"dbms_xplan", "dbms_xplan_mysql.sql", "dbms_xplan_mysql_body.sql"},
+#ifdef OB_BUILD_ORACLE_PL
   {"dbms_spm", "dbms_spm_mysql.sql", "dbms_spm_body_mysql.sql"},
 #endif
   {"dbms_udr", "dbms_udr_mysql.sql", "dbms_udr_body_mysql.sql"},
@@ -504,7 +505,8 @@ static const ObSysPackageFile mysql_syspack_file_list[] = {
   {"dbms_ob_limit_calculator", "dbms_ob_limit_calculator_mysql.sql", "dbms_ob_limit_calculator_body_mysql.sql"},
   {"dbms_external_table", "dbms_external_table_mysql.sql", "dbms_external_table_body_mysql.sql"},
   {"external_table_alert_log", "external_table_alert_log.sql", nullptr},
-  {"dbms_vector", "dbms_vector_mysql.sql", "dbms_vector_body_mysql.sql"}
+  {"dbms_vector", "dbms_vector_mysql.sql", "dbms_vector_body_mysql.sql"},
+  {"dbms_space", "dbms_space_mysql.sql", "dbms_space_body_mysql.sql"}
 };
 
 // for now! we only have one special system package "__DBMS_UPGRADE"

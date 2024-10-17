@@ -377,8 +377,10 @@ LATCH_DEF(DI_COLLECTOR_LOCK, 342, "diagnostic info collector lock", LATCH_FIFO, 
 LATCH_DEF(DAG_NET_SCHEDULER, 343, "dag net scheduler lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(DAG_PRIO_SCHEDULER, 344, "dag prio scheduler lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(LS_RESERVED_SNAPSHOT_LOCK, 345, "ls reserved snapshot lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(STORAGE_CLOG_RECORDER_LOCK, 346, "storage clog recorder lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(SPM_SET_LOCK, 347, "spm set latch", LATCH_FIFO, 2000, 0, true)
 
-LATCH_DEF(LATCH_END, 346, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(LATCH_END, 348, "latch end", LATCH_FIFO, 2000, 0, true)
 
 
 #endif

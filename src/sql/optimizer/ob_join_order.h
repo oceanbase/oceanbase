@@ -539,7 +539,9 @@ struct EstimateCostInfo {
         for_update_(false),
         use_skip_scan_(OptSkipScanState::SS_UNSET),
         use_column_store_(false),
-        is_valid_inner_path_(false)
+        is_valid_inner_path_(false),
+        is_index_merge_(false),
+        is_ror_(false)
     {
     }
     virtual ~AccessPath() {
@@ -636,7 +638,9 @@ struct EstimateCostInfo {
                  K_(use_das),
                  K_(use_skip_scan),
                  K_(use_column_store),
-                 K_(is_valid_inner_path));
+                 K_(is_valid_inner_path),
+                 K_(is_index_merge),
+                 K_(is_ror));
   public:
     //member variables
     uint64_t table_id_;
@@ -661,8 +665,85 @@ struct EstimateCostInfo {
     bool use_column_store_;
     // mark this access path is inner path and contribute query range
     bool is_valid_inner_path_;
+    bool is_index_merge_; // whether used for index merge
+    bool is_ror_; // indicate whether result from index table scan is ordered by primary key
   private:
     DISALLOW_COPY_AND_ASSIGN(AccessPath);
+  };
+
+  enum ObIndexMergeType : uint32_t
+  {
+    INDEX_MERGE_INVALID = 0,
+    INDEX_MERGE_UNION,
+    INDEX_MERGE_INTERSECT,
+    INDEX_HASH_UNON,
+    INDEX_HASH_INTERSECT
+  };
+
+  struct ObIndexMergeNode
+  {
+  public:
+    ObIndexMergeNode()
+      : merge_type_(INDEX_MERGE_INVALID),
+        left_node_(nullptr),
+        right_node_(nullptr),
+        ap_(nullptr),
+        is_leaf_node_(false),
+        index_tid_(OB_INVALID_ID),
+        idx_(OB_INVALID_ID),
+        is_ror_(false)
+    {}
+
+    bool is_valid() const;
+    int set_scan_direction(const ObOrderDirection &direction);
+    TO_STRING_KV(K_(merge_type),
+                 K_(left_node),
+                 K_(right_node),
+                 K_(is_leaf_node),
+                 K_(index_tid),
+                 K_(is_ror));
+
+  public:
+    ObIndexMergeType merge_type_;
+    ObIndexMergeNode *left_node_;
+    ObIndexMergeNode *right_node_;
+
+    /*** for leaf node, which is, the index scan node ***/
+    AccessPath *ap_;
+    bool is_leaf_node_;
+    uint64_t index_tid_; // the table id of index table
+    int64_t idx_;        // a unique identifier for each index node
+    bool is_ror_;
+  };
+
+  class IndexMergePath : public AccessPath
+  {
+  public:
+    IndexMergePath()
+      : AccessPath(OB_INVALID_ID, OB_INVALID_ID, OB_INVALID_ID, nullptr, NULLS_FIRST_ASC),
+        root_(nullptr),
+        index_cnt_(0),
+        filters_(),
+        force_used_by_hint_(false)
+    {}
+
+    int init(ObIndexMergeNode *node, common::ObIAllocator *allocator);
+    int add_index_scan_node(const ObIndexMergeType merge_type, AccessPath *ap, common::ObIAllocator *allocator);
+    bool is_valid() const;
+    int set_scan_direction(const ObOrderDirection &direction);
+    static bool is_disjunctive_clause(const ObRawExpr *root);
+    static bool is_simple_conjunctive_clause(const ObRawExpr *root);
+
+  public:
+    ObIndexMergeNode *root_;
+    int64_t index_cnt_;
+    common::ObSEArray<ObTableID, 2, common::ModulePageAllocator, true> index_table_ids_;
+    common::ObSEArray<ObString, 2, common::ModulePageAllocator, true> index_name_list_;
+    common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> filters_;
+    bool force_used_by_hint_;
+
+  private:
+    DISALLOW_COPY_AND_ASSIGN(IndexMergePath);
   };
 
   class JoinPath : public Path
@@ -896,15 +977,16 @@ struct EstimateCostInfo {
       }
       return ret;
     }
-    static int compute_join_path_parallel_and_server_info(const common::ObAddr &local_server_addr,
-                                                          const Path *left_path,
-                                                          const Path *right_path,
-                                                          const DistAlgo join_dist_algo,
-                                                          bool const is_slave_mapping,
-                                                          int64_t &parallel,
-                                                          int64_t &available_parallel,
-                                                          int64_t &server_cnt,
-                                                          ObIArray<common::ObAddr> &server_list);
+    static int compute_join_path_parallel_and_server_info(ObOptimizerContext *opt_ctx,
+                                                         const Path *left_path,
+                                                         const Path *right_path,
+                                                         const DistAlgo join_dist_algo,
+                                                         const JoinAlgo join_algo,
+                                                         bool const is_slave_mapping,
+                                                         int64_t &parallel,
+                                                         int64_t &available_parallel,
+                                                         int64_t &server_cnt,
+                                                         ObIArray<common::ObAddr> &server_list);
   private:
     int compute_hash_hash_sharding_info();
     int compute_join_path_ordering();
@@ -912,6 +994,7 @@ struct EstimateCostInfo {
     int compute_join_path_sharding();
     int compute_join_path_plan_type();
     int compute_join_path_parallel_and_server_info();
+    int re_adjust_sharding_ordering_info();
     int can_use_batch_nlj(bool &use_batch_nlj);
     int can_use_batch_nlj(ObLogPlan *plan, const AccessPath *access_path, bool &use_batch_nlj);
     int can_use_das_batch_nlj(ObLogicalOperator* root, bool &use_batch_nlj);
@@ -1035,7 +1118,7 @@ struct EstimateCostInfo {
     JsonTablePath()
       : Path(NULL),
         table_id_(OB_INVALID_ID),
-        value_expr_(NULL),
+        value_exprs_(),
         column_param_default_exprs_() {}
     virtual ~JsonTablePath() {}
     int assign(const JsonTablePath &other, common::ObIAllocator *allocator);
@@ -1050,7 +1133,7 @@ struct EstimateCostInfo {
     }
   public:
     uint64_t table_id_;
-    ObRawExpr* value_expr_;
+    common::ObSEArray<ObRawExpr*, 1, common::ModulePageAllocator, true> value_exprs_;
     common::ObSEArray<ObColumnDefault, 1, common::ModulePageAllocator, true> column_param_default_exprs_;
   private:
       DISALLOW_COPY_AND_ASSIGN(JsonTablePath);
@@ -1346,7 +1429,11 @@ struct NullAwareAntiJoinInfo {
     int get_matched_inv_index_tid(ObMatchFunRawExpr *match_expr,
                                   uint64_t ref_table_id,
                                   uint64_t &inv_idx_tid);
-
+    int temp_prune_candidate_multivalue_index(ObSqlSchemaGuard *schema_guard,
+                                              const uint64_t table_id,
+                                              uint64_t *index_tid_array,
+                                              int64_t &size,
+                                              ObIArray<uint64_t> &valid_index_ids);
     int get_vector_inv_index_tid(ObSqlSchemaGuard *schema_guard,
                                  ObRawExpr *vector_expr,
                                  const uint64_t table_id,
@@ -1365,7 +1452,7 @@ struct NullAwareAntiJoinInfo {
                                 ObIArray<ObExecParamRawExpr *> &nl_params,
                                 ObIArray<ObRawExpr*> &subquery_exprs);
 
-    int param_json_table_expr(ObRawExpr* &json_table_expr,
+    int param_json_table_expr(ObIArray<ObRawExpr*> &json_table_exprs,
                               ObIArray<ObExecParamRawExpr *> &nl_params,
                               ObIArray<ObRawExpr*> &subquery_exprs);
     int generate_json_table_default_val(ObIArray<ObExecParamRawExpr *> &nl_param,
@@ -1522,6 +1609,29 @@ struct NullAwareAntiJoinInfo {
                                bool use_das,
                                bool use_column_store,
                                OptSkipScanState use_skip_scan);
+
+    int check_can_use_index_merge(const uint64_t table_id,
+                                  const uint64_t ref_table_id,
+                                  PathHelper &helper,
+                                  bool &use_index_merge,
+                                  ObIArray<uint64_t> &index_merge_list,
+                                  ObRawExpr *&index_merge_root);
+
+    int check_index_merge_list(const uint64_t table_id,
+                               const uint64_t ref_table_id,
+                               const ObIArray<uint64_t> &index_merge_list,
+                               bool &contains_invalid_index,
+                               bool &is_all_local_index,
+                               bool &is_all_global_index,
+                               common::ObIArray<common::ObArray<uint64_t>> &merge_index_column_ids);
+
+    int create_index_merge_path(const uint64_t table_id,
+                                const uint64_t ref_table_id,
+                                PathHelper &helper,
+                                ObIArray<AccessPath *> &access_paths,
+                                ObIndexInfoCache &index_info_cache,
+                                const ObIArray<uint64_t> &index_merge_list,
+                                ObRawExpr *index_merge_root);
 
     int init_sample_info_for_access_path(AccessPath *ap,
                                          const uint64_t table_id,

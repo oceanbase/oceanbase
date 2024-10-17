@@ -221,7 +221,7 @@ int ObPxOrderedCoordOp::inner_get_next_row()
     } else if (OB_FAIL(THIS_WORKER.check_status())) {
       LOG_WARN("fail check status, maybe px query timeout", K(ret));
     } else if (OB_FAIL(msg_loop_.process_one_if(&receive_order_, nth_channel))) {
-      if (OB_EAGAIN == ret) {
+      if (OB_DTL_WAIT_EAGAIN == ret) {
         LOG_TRACE("no message, try again", K(ret));
         ret = OB_SUCCESS;
         if (channel_idx_ < task_ch_set_.count() && first_row_sent_) {
@@ -379,7 +379,7 @@ int ObPxOrderedCoordOp::inner_get_next_batch(const int64_t max_row_cnt)
     } else if (OB_FAIL(THIS_WORKER.check_status())) {
       LOG_WARN("fail check status, maybe px query timeout", K(ret));
     } else if (OB_FAIL(msg_loop_.process_one_if(&receive_order_, nth_channel))) {
-      if (OB_EAGAIN == ret) {
+      if (OB_DTL_WAIT_EAGAIN == ret) {
         LOG_TRACE("no message, try again", K(ret));
         ret = OB_SUCCESS;
         if (channel_idx_ < task_ch_set_.count() && first_row_sent_) {

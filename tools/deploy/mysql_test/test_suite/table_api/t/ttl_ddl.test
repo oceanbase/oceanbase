@@ -88,6 +88,7 @@ CREATE TABLE test_kv_attr(
     V varbinary(1024) DEFAULT NULL,
     PRIMARY KEY (K, Q, T)
 ) kv_attributes ='{"Hbase": {"TimeToLive": 10, "MaxVersions": 2}}' partition by key(K) partitions 3;
+show create table test_kv_attr;
 
 --error 1235
 alter table test_kv_attr kv_attributes '{"HColumnDescriptor": {"TimeToLive": 5, "MaxVersions": 2}}';

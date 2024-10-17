@@ -21,6 +21,7 @@ namespace oceanbase
 namespace storage
 {
 ERRSIM_POINT_DEF(EN_ALL_STATE_DETERMINISTIC_FALSE);
+ERRSIM_POINT_DEF(EN_DISABLE_WAITING_CONVERT_CO_WHEN_MIGRATION);
 
 /*----------------------------- ObTabletCOConvertCtx -----------------------------*/
 ObTabletCOConvertCtx::ObTabletCOConvertCtx()
@@ -28,6 +29,7 @@ ObTabletCOConvertCtx::ObTabletCOConvertCtx()
     co_dag_net_id_(),
     status_(Status::MAX_STATUS),
     retry_cnt_(0),
+    eagain_cnt_(0),
     is_inited_(false)
 {
 }
@@ -63,6 +65,7 @@ void ObTabletCOConvertCtx::reset()
   co_dag_net_id_.reset();
   status_ = Status::MAX_STATUS;
   retry_cnt_ = 0;
+  eagain_cnt_ = 0;
   is_inited_ = false;
 }
 
@@ -73,6 +76,7 @@ bool ObTabletCOConvertCtx::is_valid() const
       && status_ >= Status::UNKNOWN
       && status_ < Status::MAX_STATUS
       && retry_cnt_ >= 0
+      && eagain_cnt_ >= 0
       && is_inited_;
 }
 
@@ -258,7 +262,9 @@ int ObHATabletGroupCOConvertCtx::check_need_convert(const ObTablet &tablet, bool
   need_convert = false;
   common::ObArenaAllocator tmp_allocator; // for schema_on_tablet
   ObStorageSchema *schema_on_tablet = nullptr;
-  if (OB_FAIL(tablet.load_storage_schema(tmp_allocator, schema_on_tablet))) {
+  if (0 == tablet.get_last_major_snapshot_version()) {
+    // no major, may be doing ddl, do not need to convert
+  } else if (OB_FAIL(tablet.load_storage_schema(tmp_allocator, schema_on_tablet))) {
     LOG_WARN("failed to load storage schema", K(ret),K(tablet));
   } else {
     need_convert = ObCSReplicaUtil::check_need_convert_cs_when_migration(tablet, *schema_on_tablet);
@@ -325,6 +331,7 @@ int ObHATabletGroupCOConvertCtx::inner_get_valid_convert_ctx_idx(const ObTabletI
 int ObHATabletGroupCOConvertCtx::inner_check_and_schedule(ObLS &ls, const ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
+  int schedule_ret = OB_SUCCESS;
   int64_t idx = 0;
   const ObLSID &ls_id = ls.get_ls_id();
   ObTabletHandle tablet_handle;
@@ -370,8 +377,14 @@ int ObHATabletGroupCOConvertCtx::inner_check_and_schedule(ObLS &ls, const ObTabl
   } else if (OB_FAIL(MTL(ObTenantDagScheduler *)->check_dag_net_exist(convert_ctxs_[idx].co_dag_net_id_, is_dag_net_exist))) {
     LOG_WARN("failed to check dag exists", K(ret), K(convert_ctxs_[idx]), K(tablet_id));
   } else if (is_dag_net_exist) {
-  } else if (OB_FAIL(compaction::ObTenantTabletScheduler::schedule_convert_co_merge_dag_net(ls_id, *tablet, convert_ctxs_[idx].retry_cnt_, convert_ctxs_[idx].co_dag_net_id_))) {
+  } else if (OB_FAIL(compaction::ObTenantTabletScheduler::schedule_convert_co_merge_dag_net(ls_id, *tablet, convert_ctxs_[idx].retry_cnt_, convert_ctxs_[idx].co_dag_net_id_, schedule_ret))) {
     LOG_WARN("failed to schedule convert co merge", K(ret), K(ls_id), K(tablet_id));
+  } else if (OB_EAGAIN == schedule_ret && !convert_ctxs_[idx].is_eagain_exhausted()) {
+    if (REACH_TENANT_TIME_INTERVAL(10 * 60 * 1000 * 1000L /*10min*/)) {
+      LOG_INFO("[CS-Replica] convert co merge is doing now, please wait for a while, or set EN_DISABLE_WAITING_CONVERT_CO_WHEN_MIGRATION tracepoint to skip it",
+        K(schedule_ret), K(ls_id), K(tablet_id), K(convert_ctxs_[idx]));
+    }
+    convert_ctxs_[idx].inc_eagain_cnt();
   } else {
     convert_ctxs_[idx].inc_retry_cnt();
     if (convert_ctxs_[idx].is_retry_exhausted()) {
@@ -444,6 +457,10 @@ int ObDataTabletsCheckCOConvertDag::inner_check_can_schedule(
 #ifdef ERRSIM
     LOG_INFO("migration dag net failed, make check dag schedule");
 #endif
+  } else if (EN_DISABLE_WAITING_CONVERT_CO_WHEN_MIGRATION) {
+    can_schedule = true;
+    reason = ObCheckScheduleReason::CONVERT_DISABLED;
+    FLOG_INFO("[CS-Replica] schedule check convert dag right now since waiting convert is disabled", K(ret), K(reason), K(migration_ctx.tablet_group_mgr_));
   } else {
     const int64_t tablet_group_cnt = migration_ctx.tablet_group_mgr_.get_tablet_group_ctx_count();
     ObHATabletGroupCtx *ctx = nullptr;
@@ -477,9 +494,9 @@ int ObDataTabletsCheckCOConvertDag::inner_check_can_schedule(
 
   const int64_t cost_time = ObTimeUtility::current_time() - current_time;
   if (REACH_TENANT_TIME_INTERVAL(OB_DATA_TABLETS_NOT_CHECK_CONVERT_THRESHOLD)) {
-    LOG_INFO("[CS-Replica] finish check_can_schedule", K(ret), K(can_schedule), K(reason), K(wait_one_round_time), K(total_wait_time), K(cost_time), KPC(this), K(migration_ctx.tablet_group_mgr_));
+    LOG_INFO("[CS-Replica] finish check_can_schedule", K(ret), K(can_schedule), K(reason), K(wait_one_round_time), K(total_wait_time), K(cost_time), K(migration_ctx.tablet_group_mgr_));
   } else {
-    LOG_TRACE("[CS-Replica] finish check_can_schedule", K(ret), K(can_schedule), K(reason), K(wait_one_round_time), K(total_wait_time), K(cost_time), KPC(this), K(migration_ctx.tablet_group_mgr_));
+    LOG_TRACE("[CS-Replica] finish check_can_schedule", K(ret), K(can_schedule), K(reason), K(wait_one_round_time), K(total_wait_time), K(cost_time), K(migration_ctx.tablet_group_mgr_));
   }
   return ret;
 }
@@ -543,6 +560,17 @@ int ObDataTabletsCheckCOConvertDag::create_first_task()
     LOG_WARN("failed to create tablet check convert task", K(ret));
   } else {
     LOG_INFO("[CS-Replica] Success to create tablet check convert task", K(ret), KPC(this), KPC(task));
+  }
+  return ret;
+}
+
+int ObDataTabletsCheckCOConvertDag::report_result()
+{
+  int ret = OB_SUCCESS;
+  if (OB_EAGAIN == dag_ret_) {
+    // ignore waiting convert co error code, prevent migration dag net retry
+  } else if (OB_FAIL(ObStorageHADag::report_result())) {
+    LOG_WARN("failed to report result", K(ret), KPC(this));
   }
   return ret;
 }
@@ -682,8 +710,12 @@ int ObDataTabletsCheckConvertTask::process()
     LOG_INFO("migration dag net failed, make check dag exit");
 #endif
   } else if (!all_state_deterministic) {
-    ret = OB_EAGAIN;
-    LOG_WARN("not wait all tablets convert finish, failed this task, make dag retry", K(ret), K(all_state_deterministic), KPC_(ctx));
+    if (EN_DISABLE_WAITING_CONVERT_CO_WHEN_MIGRATION) {
+      FLOG_INFO("[CS-Replica] stop waiting convert co when migration if there are too many tablets", K(ret));
+    } else {
+      ret = OB_EAGAIN;
+      LOG_WARN("not wait all tablets convert finish, failed this task, make dag retry", K(ret), K(all_state_deterministic), KPC_(ctx));
+    }
   }
   LOG_TRACE("[CS-Replica] Finish process check data tablets convert to column store", K(ret), KPC_(ls), KPC_(ctx));
   return ret;

@@ -52,8 +52,8 @@ int ObTransformLateMaterialization::transform_one_stmt(ObIArray<ObParentDMLStmt>
     OPT_TRACE("there is no need to late materialization");
   } else if (OB_FAIL(generate_late_materialization_info(*select_stmt, info, check_ctx))) {
     LOG_WARN("failed to check if table need late materialization", K(ret));
-  } else if (info.candi_indexs_.empty()) {
-    OPT_TRACE("not accept transform because candidate index is empty");
+  } else if (info.candi_indexs_.empty() && !info.is_allow_column_table_) {
+    /* do nothing */
   } else if (OB_FAIL(inner_accept_transform(parent_stmts, stmt, force_trans, info, check_ctx,
                                             trans_happened))) {
     LOG_WARN("failed to do inner accept transform", K(ret));
@@ -170,7 +170,6 @@ int ObTransformLateMaterialization::generate_late_materialization_info(
   ObSEArray<uint64_t, 4> select_col_ids;
   ObSEArray<uint64_t, 4> index_column_ids;
   ObSEArray<uint64_t, 4> common_select_cols;
-  ObSEArray<const ObTableSchema *, 4> index_schemas;
   if (OB_ISNULL(ctx_) || OB_ISNULL(schema_guard = ctx_->sql_schema_guard_) ||
       OB_ISNULL(table_item = select_stmt.get_table_item(0))) {
     ret = OB_ERR_UNEXPECTED;
@@ -184,10 +183,39 @@ int ObTransformLateMaterialization::generate_late_materialization_info(
                                                   filter_col_ids, orderby_col_ids,
                                                   select_col_ids))) {
     LOG_WARN("failed to extract column ids", K(ret));
-  } else if (OB_FAIL(get_accessible_index(select_stmt, *table_item, index_schemas))) {
-    LOG_WARN("get valid index schema", K(ret));
-  } else if (OB_FAIL(common_select_cols.assign(select_col_ids))) {
+  } else if (OB_FAIL(gen_trans_info_for_row_store(select_stmt, key_col_ids,
+                                                  filter_col_ids, orderby_col_ids,
+                                                  select_col_ids, table_item,
+                                                  table_schema, info, check_ctx))) {
+    LOG_WARN("failed to gen trans info for row store", K(ret));
+  } else if (!info.candi_indexs_.empty()) {
+    /* do nothing */
+  } else if (OB_FAIL(gen_trans_info_for_column_store(select_stmt, key_col_ids, filter_col_ids,
+                                                     orderby_col_ids, select_col_ids, table_item,
+                                                     table_schema, info, check_ctx))) {
+    LOG_WARN("failed to gen trans info for column store", K(ret));
+  }
+  return ret;
+}
+
+int ObTransformLateMaterialization::gen_trans_info_for_row_store(const ObSelectStmt &stmt,
+                                                                 const ObIArray<uint64_t> &key_col_ids,
+                                                                 const ObIArray<uint64_t> &filter_col_ids,
+                                                                 const ObIArray<uint64_t> &orderby_col_ids,
+                                                                 const ObIArray<uint64_t> &select_col_ids,
+                                                                 const TableItem *table_item,
+                                                                 const ObTableSchema *table_schema,
+                                                                 ObLateMaterializationInfo &info,
+                                                                 ObCostBasedLateMaterializationCtx &check_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<uint64_t, 4> index_column_ids;
+  ObSEArray<uint64_t, 4> common_select_cols;
+  ObSEArray<const ObTableSchema *, 4> index_schemas;
+  if (OB_FAIL(common_select_cols.assign(select_col_ids))) {
     LOG_WARN("failed to assign predicate col in view", K(ret));
+  } else if (OB_FAIL(get_accessible_index(stmt, *table_item, index_schemas))) {
+    LOG_WARN("get valid index schema", K(ret));
   } else {
     bool is_partition_table = table_schema->get_part_level() != PARTITION_LEVEL_ZERO;
     for (int64_t i = 0; OB_SUCC(ret) && i < index_schemas.count(); ++i) {
@@ -213,7 +241,7 @@ int ObTransformLateMaterialization::generate_late_materialization_info(
         LOG_WARN("failed to get index name", K(ret));
       } else if (OB_FAIL(info.candi_index_names_.push_back(index_name))) {
         LOG_WARN("failed to push back", K(ret));
-      } else if (select_stmt.has_order_by() &&
+      } else if (stmt.has_order_by() &&
                  !(is_partition_table && index_schema->is_global_index_table()) &&
                  OB_FAIL(check_ctx.check_sort_indexs_.push_back(index_schema->get_table_id()))) {
         LOG_WARN("failed to push back", K(ret));
@@ -226,14 +254,18 @@ int ObTransformLateMaterialization::generate_late_materialization_info(
         }
       }
     }
-    if (OB_SUCC(ret) && !info.candi_indexs_.empty()) {
-      if (OB_FAIL(info.project_col_in_view_.assign(key_col_ids))) {
+    if (OB_SUCC(ret)) {
+      if (info.candi_indexs_.empty()) {
+        OPT_TRACE("candidate index is empty");
+        LOG_TRACE("there is no candidate index to late materialize");
+      } else if (OB_FAIL(info.project_col_in_view_.assign(key_col_ids))) {
         LOG_WARN("failed to assign predicate col in view", K(ret));
       } else if (OB_FAIL(append_array_no_dup(info.project_col_in_view_, orderby_col_ids))) {
         LOG_WARN("failed to append array no dup", K(ret));
       } else if (OB_FAIL(append_array_no_dup(info.project_col_in_view_, common_select_cols))) {
         LOG_WARN("failed to append array no dup", K(ret));
       } else {
+        info.is_allow_column_table_ = false;
         check_ctx.late_table_id_ = table_item->table_id_;
       }
     }
@@ -920,7 +952,7 @@ int ObTransformLateMaterialization::generate_late_materialization_hint(
       }
     }
     // index hint
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && !info.is_allow_column_table_) {
       ObIArray<ObHint*> &opt_hints = select_stmt.get_stmt_hint().other_opt_hints_;
       for (int64_t i = opt_hints.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
         ObHint* hint = opt_hints.at(i);
@@ -979,6 +1011,25 @@ int ObTransformLateMaterialization::generate_late_materialization_hint(
                                                            conflict_hints))) {
             LOG_WARN("merge index hint failed", K(ret));
           }
+        }
+      }
+    }
+    if (OB_SUCC(ret) && info.is_allow_column_table_) {
+      ObTableInHint table_in_hint(table_item_inner->qb_name_,
+                                  table_item_inner->database_name_,
+                                  table_item_inner->get_object_name());
+      ObIndexHint *index_hint = NULL;
+      if (OB_FAIL(ObQueryHint::create_hint(ctx_->allocator_, T_USE_COLUMN_STORE_HINT, index_hint))) {
+        LOG_WARN("failed to create hint", K(ret));
+      } else if (OB_FAIL(index_hint->get_table().assign(table_in_hint))) {
+        LOG_WARN("assign table in hint failed", K(ret));
+      } else {
+        index_hint->set_qb_name(view_qb_name);
+        index_hint->set_trans_added(true);
+        if (OB_FAIL(view_stmt.get_stmt_hint().merge_hint(*index_hint,
+                                                        HINT_DOMINATED_EQUAL,
+                                                        conflict_hints))) {
+          LOG_WARN("merge index hint failed", K(ret));
         }
       }
     }
@@ -1120,51 +1171,63 @@ int ObTransformLateMaterialization::check_transform_plan_expected(ObLogicalOpera
         is_expected = false;
         LOG_TRACE("not table scan, reject transform");
       } else if (FALSE_IT(index_scan = static_cast<ObLogTableScan *>(join_left_branch))) {
-      } else if (!index_scan->is_index_scan() || index_scan->use_column_store()) {
-        is_expected = false;
-        LOG_TRACE("not index scan, reject transform", K(index_scan->use_column_store()), K(index_scan->is_index_scan()));
-      } else if (NULL == sort_op &&
-                 ObOptimizerUtil::find_item(ctx.check_sort_indexs_, index_scan->get_index_table_id())) {
-        is_expected = false;
-        LOG_TRACE("check sort op, reject transform");
-      } else if (index_scan->get_index_back()) {
-        if (ObOptimizerUtil::find_item(ctx.late_material_indexs_, index_scan->get_index_table_id())) {
+      } else if (!ctx.check_column_store_) {
+        // row store table
+        if (!index_scan->is_index_scan()) {
           is_expected = false;
-          LOG_TRACE("index back, reject transform");
-        } else {
-          // inside evaluate_cost, the index back tag is inaccurate. Then do double check here
-          ObSEArray<ObRawExpr*, 4> temp_exprs;
-          ObSEArray<uint64_t, 4> used_column_ids;
-          const ObTableSchema *index_schema = NULL;
-          ObSqlSchemaGuard *schema_guard = ctx_->sql_schema_guard_;
-          ObSEArray<uint64_t, 4> index_column_ids;
-          if (sort_op != NULL && OB_FAIL(sort_op->get_sort_exprs(temp_exprs))) {
-            LOG_WARN("failed to get sort exprs", K(ret));
-          } else if (index_scan != NULL && OB_FAIL(append(temp_exprs, index_scan->get_filter_exprs()))) {
-            LOG_WARN("failed to get sort exprs", K(ret));
-          } else if (OB_FAIL(ObRawExprUtils::extract_column_ids(temp_exprs, used_column_ids))) {
-            LOG_WARN("failed to extract column ids", K(ret));
-          } else if (OB_FAIL(schema_guard->get_table_schema(index_scan->get_index_table_id(), index_schema))) {
-            LOG_WARN("fail to get index schema", K(ret));
-          } else if (OB_FAIL(index_schema->get_column_ids(index_column_ids))) {
-            LOG_WARN("failed to get column ids", K(ret));
-          } else if (ObOptimizerUtil::is_subset(used_column_ids, index_column_ids)) {
-            is_expected = true;
-          } else {
+          LOG_TRACE("not index scan, reject transform", K(index_scan->is_index_scan()));
+        } else if (NULL == sort_op &&
+                   ObOptimizerUtil::find_item(ctx.check_sort_indexs_, index_scan->get_index_table_id())) {
+          is_expected = false;
+          LOG_TRACE("check sort op, reject transform");
+        } else if (index_scan->get_index_back()) {
+          if (ObOptimizerUtil::find_item(ctx.late_material_indexs_, index_scan->get_index_table_id())) {
             is_expected = false;
             LOG_TRACE("index back, reject transform");
+          } else {
+            // inside evaluate_cost, the index back tag is inaccurate. Then do double check here
+            ObSEArray<ObRawExpr*, 4> temp_exprs;
+            ObSEArray<uint64_t, 4> used_column_ids;
+            const ObTableSchema *index_schema = NULL;
+            ObSqlSchemaGuard *schema_guard = ctx_->sql_schema_guard_;
+            ObSEArray<uint64_t, 4> index_column_ids;
+            if (sort_op != NULL && OB_FAIL(sort_op->get_sort_exprs(temp_exprs))) {
+              LOG_WARN("failed to get sort exprs", K(ret));
+            } else if (index_scan != NULL && OB_FAIL(append(temp_exprs, index_scan->get_filter_exprs()))) {
+              LOG_WARN("failed to get sort exprs", K(ret));
+            } else if (OB_FAIL(ObRawExprUtils::extract_column_ids(temp_exprs, used_column_ids))) {
+              LOG_WARN("failed to extract column ids", K(ret));
+            } else if (OB_FAIL(schema_guard->get_table_schema(index_scan->get_index_table_id(), index_schema))) {
+              LOG_WARN("fail to get index schema", K(ret));
+            } else if (OB_FAIL(index_schema->get_column_ids(index_column_ids))) {
+              LOG_WARN("failed to get column ids", K(ret));
+            } else if (ObOptimizerUtil::is_subset(used_column_ids, index_column_ids)) {
+              is_expected = true;
+            } else {
+              is_expected = false;
+              LOG_TRACE("index back, reject transform");
+            }
           }
         }
-      }
-      if (OB_SUCC(ret) && is_expected && NULL != index_scan) {
-        // check table range scan
-        bool is_get = false;
-        if (OB_FAIL(index_scan->is_table_get(is_get))) {
-          LOG_WARN("failed to consider is table get", K(ret));
-        } else if (!is_get && index_scan->get_range_conditions().empty()) {
-          // if there is no range, then there is no need to late material
+        if (OB_SUCC(ret) && is_expected && NULL != index_scan) {
+          // check table range scan
+          bool is_get = false;
+          if (OB_FAIL(index_scan->is_table_get(is_get))) {
+            LOG_WARN("failed to consider is table get", K(ret));
+          } else if (!is_get && index_scan->get_range_conditions().empty()) {
+            // if there is no range, then there is no need to late material
+            is_expected = false;
+            LOG_TRACE("there is no range", K(ret));
+          }
+        }
+      } else {
+        // column store table
+        if (!index_scan->use_column_store()) {
           is_expected = false;
-          LOG_TRACE("there is no range", K(ret));
+          LOG_TRACE("not use column store, reject transform");
+        } else if (NULL == sort_op) {
+          is_expected = false;
+          LOG_TRACE("check sort op, reject transform");
         }
       }
     }
@@ -1184,6 +1247,88 @@ int ObTransformLateMaterialization::contain_enum_set_rowkeys(const ObRowkeyInfo 
       LOG_WARN("unexpected null", K(ret));
     } else if (ob_is_enumset_tc(col->get_meta_type().get_type())) {
       contain = true;
+    }
+  }
+  return ret;
+}
+
+/* select * from t1 where c1 > 10 order by c2 limit 3;
+    -->
+    select t1.* from (select / *+use_column_table(t1)* /key_col_ids from t1 where c1 > 10 order by c2 limit 3) v,
+                    t1
+                where v.pk = t1.pk order by t1.c2;
+*/
+int ObTransformLateMaterialization::gen_trans_info_for_column_store(const ObSelectStmt &stmt,
+                                                                    const ObIArray<uint64_t> &key_col_ids,
+                                                                    const ObIArray<uint64_t> &filter_col_ids,
+                                                                    const ObIArray<uint64_t> &orderby_col_ids,
+                                                                    const ObIArray<uint64_t> &select_col_ids,
+                                                                    const TableItem *table_item,
+                                                                    const ObTableSchema *table_schema,
+                                                                    ObLateMaterializationInfo &info,
+                                                                    ObCostBasedLateMaterializationCtx &check_ctx)
+{
+  int ret = OB_SUCCESS;
+  bool is_allow_column_store = false;
+  if (OB_FAIL(check_is_allow_column_store(stmt, table_item, table_schema, is_allow_column_store))) {
+    LOG_WARN("failed to check is allow column store", K(ret));
+  } else if (!is_allow_column_store) {
+    OPT_TRACE("not allow column store late materialization");
+  } else if (OB_FAIL(info.project_col_in_view_.assign(key_col_ids))) {
+    LOG_WARN("failed to assign predicate col in view", K(ret));
+  } else {
+    info.is_allow_column_table_ = true;
+    check_ctx.late_table_id_ = table_item->table_id_;
+    check_ctx.check_column_store_ = true;
+  }
+  return ret;
+}
+
+int ObTransformLateMaterialization::check_is_allow_column_store(const ObSelectStmt &stmt,
+                                                                const TableItem *table_item,
+                                                                const ObTableSchema *table_schema,
+                                                                bool &is_allow)
+{
+  int ret = OB_SUCCESS;
+  int64_t route_policy_type = 0;
+  bool has_all_column_group = false;
+  bool has_normal_column_group = false;
+  const ObQueryHint *query_hint = NULL;
+  is_allow = true;
+  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_) || OB_ISNULL(table_item) ||
+      OB_ISNULL(table_schema) || OB_ISNULL(query_hint = stmt.get_stmt_hint().query_hint_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("got unexpected NULL ptr", K(ret));
+  } else if (table_item->is_link_table()) {
+    is_allow = false;
+  } else if (OB_FAIL(table_schema->has_all_column_group(has_all_column_group))) {
+    LOG_WARN("failed to check has row store", K(ret));
+  } else if (OB_FAIL(table_schema->get_is_column_store(has_normal_column_group))) {
+    LOG_WARN("failed to get is column store", K(ret));
+  } else if (!ctx_->session_info_->is_enable_column_store()) {
+    if (has_all_column_group) {
+      is_allow = false;
+    }
+  } else {
+    is_allow = has_normal_column_group;
+  }
+  if (OB_SUCC(ret) && is_allow) {
+    const ObIArray<ObHint*> &opt_hints = stmt.get_stmt_hint().other_opt_hints_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < opt_hints.count(); ++i) {
+      ObIndexHint *index_hint = NULL;
+      int64_t index_schema_i = 0;
+      if (OB_ISNULL(opt_hints.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (!opt_hints.at(i)->is_access_path_hint()) {
+        /* do nothing */
+      } else if (FALSE_IT(index_hint = static_cast<ObIndexHint *>(opt_hints.at(i)))) {
+        /* do nothing */
+      } else if (T_NO_USE_COLUMN_STORE_HINT == index_hint->get_hint_type()) {
+        if (index_hint->get_table().is_match_table_item(query_hint->cs_type_, *table_item)) {
+          is_allow = false;
+        }
+      }
     }
   }
   return ret;

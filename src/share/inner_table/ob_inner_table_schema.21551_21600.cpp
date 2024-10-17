@@ -229,6 +229,210 @@ int ObInnerTableSchema::v_ob_tenant_resource_limit_detail_schema(ObTableSchema &
   return ret;
 }
 
+int ObInnerTableSchema::innodb_lock_waits_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_INFORMATION_SCHEMA_ID);
+  table_schema.set_table_id(OB_INNODB_LOCK_WAITS_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_INNODB_LOCK_WAITS_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT '0' as REQUESTING_TRX_ID,            '0' as REQUESTED_LOCK_ID,            '0' as BLOCKING_TRX_ID,            '0' as BLOCKING_LOCK_ID )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::innodb_locks_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_INFORMATION_SCHEMA_ID);
+  table_schema.set_table_id(OB_INNODB_LOCKS_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_INNODB_LOCKS_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT '0' as LOCK_ID,            '0' as LOCK_TRX_ID,            '0' as LOCK_MODE,            '0' as LOCK_TYPE,            '0' as LOCK_TABLE,            '0' as LOCK_INDEX,            0 as LOCK_SPACE,            0 as LOCK_PAGE,            0 as LOCK_REC,            '0' as LOCK_DATA  )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::innodb_trx_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_INFORMATION_SCHEMA_ID);
+  table_schema.set_table_id(OB_INNODB_TRX_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_INNODB_TRX_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT '0' as TRX_ID,            '0' as TRX_STATE,            now() as TRX_STARTED,            '0' as TRX_REQUESTED_LOCK_ID,            now() as TRX_WAIT_STARTED,            0 as TRX_WEIGHT,            0 as TRX_MYSQL_THREAD_ID,            '0' as TRX_QUERY,            '0' as TRX_OPERATION_STATE,            0 as TRX_TABLE_IN_USE,            0 as TRX_TABLES_LOCKED,            0 as TRX_LOCK_STRUCTS,            0 as TRX_LOCK_MEMORY_BYTES,            0 as TRX_ROWS_LOCKED,            0 as TRX_ROWS_MODIFIED,            0 as TRX_CONCURRENCY_TICKETS,            '0' as TRX_ISOLATION_LEVEL,            0 as TRX_UNIQUE_CHECKS,            0 as TRX_FOREIGN_KEY_CHECKS,            '0' as TRX_LAST_FOREIGN_KEY_ERROR,            0 as TRX_ADAPTIVE_HASH_LATCHED,            0 as TRX_ADAPTIVE_HASH_TIMEOUT,            0 as TRX_IS_READ_ONLY,            0 as TRX_AUTOCOMMIT_NON_LOCKING )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::ndb_transid_mysql_connection_map_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_INFORMATION_SCHEMA_ID);
+  table_schema.set_table_id(OB_NDB_TRANSID_MYSQL_CONNECTION_MAP_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_NDB_TRANSID_MYSQL_CONNECTION_MAP_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT 0 as MYSQL_CONNECTION_ID,            0 as NODE_ID,            0 as NDB_TRANSID )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
 int ObInnerTableSchema::v_ob_group_io_stat_schema(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
@@ -1795,6 +1999,159 @@ int ObInnerTableSchema::cdb_scheduler_job_run_details_schema(ObTableSchema &tabl
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(table_schema.set_view_definition(R"__(   (   SELECT                         CAST(NULL AS NUMBER) AS LOG_ID,                         CAST(NULL AS DATETIME) AS LOG_DATE,                         CAST(NULL AS CHAR(128)) AS OWNER,                         CAST(NULL AS CHAR(128)) AS JOB_NAME,                         CAST(NULL AS CHAR(128)) AS JOB_SUBNAME,                         CAST(NULL AS CHAR(128)) AS STATUS,                         CODE,                         CAST(NULL AS DATETIME) AS REQ_START_DATE,                         CAST(NULL AS DATETIME) AS ACTUAL_START_DATE,                         CAST(NULL AS NUMBER) AS RUN_DURATION,                         CAST(NULL AS CHAR(128)) AS INSTANCE_ID,                         CAST(NULL AS NUMBER) AS SESSION_ID,                         CAST(NULL AS CHAR(128)) AS SLAVE_PID,                         CAST(NULL AS NUMBER) AS CPU_USED,                         CAST(NULL AS CHAR(128)) AS CREDENTIAL_OWNER,                         CAST(NULL AS CHAR(128)) AS CREDENTIAL_NAME,                         CAST(NULL AS CHAR(128)) AS DESTINATION_OWNER,                         CAST(NULL AS CHAR(128)) AS DESTINATION,                         MESSAGE,                         TENANT_ID,                         JOB,                         TIME,                         JOB_CLASS,                         GMT_CREATE,                         GMT_MODIFIED                        FROM OCEANBASE.__ALL_VIRTUAL_TENANT_SCHEDULER_JOB_RUN_DETAIL ) UNION ALL ( SELECT                         LOG_ID,                         LOG_DATE,                         OWNER,                         JOB_NAME,                         JOB_SUBNAME,                         STATUS,                         CODE,                         REQ_START_DATE,                         ACTUAL_START_DATE,                         RUN_DURATION,                         INSTANCE_ID,                         SESSION_ID,                         SLAVE_PID,                         CPU_USED,                         CREDENTIAL_OWNER,                         CREDENTIAL_NAME,                         DESTINATION_OWNER,                         DESTINATION,                         MESSAGE,                         TENANT_ID,                         JOB,                         TIME,                         JOB_CLASS,                         GMT_CREATE,                         GMT_MODIFIED                        FROM OCEANBASE.__ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2 ) )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::cdb_ob_server_space_usage_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_CDB_OB_SERVER_SPACE_USAGE_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_CDB_OB_SERVER_SPACE_USAGE_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     select        CASE          WHEN atnt.tenant_name LIKE 'META$%' THEN REPLACE(atnt.tenant_name, 'META$', '')          ELSE atnt.tenant_id        END AS TENANT_ID,       CASE          WHEN atnt.tenant_name LIKE 'META$%' THEN            (SELECT t.tenant_name            FROM oceanbase.__all_tenant t            WHERE t.tenant_id = REPLACE(atnt.tenant_name, 'META$', ''))         ELSE atnt.tenant_name        END AS TENANT_NAME,       asu.svr_ip as SERVER_IP,        asu.svr_port as SERVER_PORT,        CASE          WHEN asu.file_type IN ('tenant tmp data')                            THEN 'Tmp Data'         WHEN asu.file_type IN ('tenant clog data')                            THEN 'Clog Data'         WHEN asu.file_type IN ('tenant meta data')                            THEN 'Meta Data'         WHEN asu.file_type IN ('tenant slog data')                            THEN 'Slog Data'       END AS SPACE_TYPE,       sum(asu.data_size) as DATA_BYTES,        sum(asu.used_size) as USAGE_BYTES     from oceanbase.__all_space_usage asu     INNER JOIN oceanbase.__all_tenant atnt       ON    atnt.tenant_id = asu.tenant_id         AND asu.file_type in ('tenant tmp data',                                'tenant clog data',                                'tenant meta data',                               'tenant slog data')     group by TENANT_ID, SERVER_IP, SERVER_PORT, SPACE_TYPE     UNION     select        CASE          WHEN atnt.tenant_name LIKE 'META$%' THEN REPLACE(atnt.tenant_name, 'META$', '')          ELSE atnt.tenant_id        END AS TENANT_ID,       CASE          WHEN atnt.tenant_name LIKE 'META$%' THEN            (SELECT t.tenant_name            FROM oceanbase.__all_tenant t            WHERE t.tenant_id = REPLACE(atnt.tenant_name, 'META$', ''))         ELSE atnt.tenant_name        END AS TENANT_NAME,       avtps.svr_ip as SERVER_IP,        avtps.svr_port as SERVER_PORT,        'Index Data' as SPACE_TYPE,       sum(avtps.occupy_size) as DATA_BYTES,       sum(avtps.required_size) as USAGE_BYTES     from      oceanbase.__all_virtual_tablet_pointer_status avtps     INNER JOIN oceanbase.__all_virtual_tablet_to_ls avttl       ON      avttl.tenant_id = avtps.tenant_id         AND 	avttl.tablet_id = avtps.tablet_id     INNER JOIN oceanbase.__all_tenant atnt       ON      atnt.tenant_id = avttl.tenant_id     INNER JOIN oceanbase.__all_virtual_table avt       ON      avt.table_type = 5          AND 	avt.table_id = avttl.table_id     INNER JOIN oceanbase.__all_virtual_ls_meta_table avlmt       ON      avtps.tenant_id = avlmt.tenant_id         AND  avtps.ls_id = avlmt.ls_id         AND  avtps.svr_ip = avlmt.svr_ip         AND  avtps.svr_port = avlmt.svr_port         AND  avlmt.role = 1     group by TENANT_ID, SERVER_IP, SERVER_PORT, SPACE_TYPE     UNION     select        CASE          WHEN atnt.tenant_name LIKE 'META$%' THEN REPLACE(atnt.tenant_name, 'META$', '')          ELSE atnt.tenant_id        END AS TENANT_ID,       CASE          WHEN atnt.tenant_name LIKE 'META$%' THEN            (SELECT t.tenant_name            FROM oceanbase.__all_tenant t            WHERE t.tenant_id = REPLACE(atnt.tenant_name, 'META$', ''))         ELSE atnt.tenant_name        END AS TENANT_NAME,       avtps.svr_ip as SERVER_IP,        avtps.svr_port as SERVER_PORT,        'Table Data' as SPACE_TYPE,       sum(avtps.occupy_size) as DATA_BYTES,       sum(avtps.required_size) as USAGE_BYTES     from      oceanbase.__all_virtual_tablet_pointer_status avtps     INNER JOIN oceanbase.__all_virtual_tablet_to_ls avttl       ON      avttl.tenant_id = avtps.tenant_id         AND 	avttl.tablet_id = avtps.tablet_id     INNER JOIN oceanbase.__all_tenant atnt       ON      atnt.tenant_id = avttl.tenant_id     INNER JOIN oceanbase.__all_virtual_table avt       ON      avt.table_id = avttl.table_id         AND  avt.table_type in (3, 12, 13)      INNER JOIN oceanbase.__all_virtual_ls_meta_table avlmt       ON      avtps.tenant_id = avlmt.tenant_id         AND  avtps.ls_id = avlmt.ls_id         AND  avtps.svr_ip = avlmt.svr_ip         AND  avtps.svr_port = avlmt.svr_port         AND  avlmt.role = 1     group by TENANT_ID, SERVER_IP, SERVER_PORT, SPACE_TYPE     order by TENANT_ID, SERVER_IP, SERVER_PORT, SPACE_TYPE; )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::cdb_ob_space_usage_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_CDB_OB_SPACE_USAGE_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_CDB_OB_SPACE_USAGE_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT        CASE          WHEN atnt.tenant_name LIKE 'META$%' THEN REPLACE(atnt.tenant_name, 'META$', '')          ELSE atnt.tenant_id        END AS TENANT_ID,       CASE          WHEN atnt.tenant_name LIKE 'META$%' THEN            (SELECT t.tenant_name            FROM oceanbase.__all_tenant t            WHERE t.tenant_id = REPLACE(atnt.tenant_name, 'META$', ''))         ELSE atnt.tenant_name        END AS TENANT_NAME,       azs.endpoint AS ENDPOINT,       azs.path AS PATH,       CASE          WHEN asu.file_type IN ('tenant local data',                                'tenant tmp data')                            THEN 'Local Data'         WHEN asu.file_type IN ('tenant shared_major data')                            THEN 'Shared Data'         WHEN asu.file_type IN ('tenant clog data')                            THEN 'Clog Data'       END AS SPACE_TYPE,       SUM(asu.used_size) AS USAGE_BYTES     FROM oceanbase.__all_tenant atnt     LEFT JOIN oceanbase.__all_zone_storage azs       ON LOCATE(azs.zone, atnt.primary_zone) > 0         OR atnt.primary_zone = 'RANDOM'     INNER JOIN oceanbase.__all_space_usage asu       ON atnt.tenant_id = asu.tenant_id     where asu.file_type in ('tenant shared_major data',                              'tenant local data',                              'tenant clog data',                              'tenant tmp data')     GROUP BY tenant_id, space_type     ORDER BY tenant_id )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::cdb_ob_table_space_usage_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_CDB_OB_TABLE_SPACE_USAGE_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_CDB_OB_TABLE_SPACE_USAGE_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     select        CASE          WHEN atnt.tenant_name LIKE 'META$%' THEN REPLACE(atnt.tenant_name, 'META$', '')          ELSE atnt.tenant_id        END AS TENANT_ID,       avttl.table_id as TABLE_ID,       CASE          WHEN atnt.tenant_name LIKE 'META$%' THEN            (SELECT t.tenant_name            FROM oceanbase.__all_tenant t            WHERE t.tenant_id = REPLACE(atnt.tenant_name, 'META$', ''))         ELSE atnt.tenant_name        END AS TENANT_NAME,       ad.database_name as DATABASE_NAME,       avt.table_name as TABLE_NAME,       sum(avtps.occupy_size) as OCCUPY_SIZE,       sum(avtps.required_size) as REQUIRED_SIZE     from      oceanbase.__all_virtual_tablet_pointer_status avtps     INNER JOIN oceanbase.__all_virtual_tablet_to_ls avttl       ON      avttl.tenant_id = avtps.tenant_id         AND 	avttl.tablet_id = avtps.tablet_id     INNER JOIN oceanbase.__all_tenant atnt       ON      atnt.tenant_id = avttl.tenant_id     INNER JOIN oceanbase.__all_virtual_table avt       ON      avt.table_id = avttl.table_id     INNER JOIN oceanbase.__all_database ad       ON      ad.database_id = avt.database_id     INNER JOIN oceanbase.__all_virtual_ls_meta_table avlmt       ON      avtps.tenant_id = avlmt.tenant_id         AND  avtps.ls_id = avlmt.ls_id         AND  avtps.svr_ip = avlmt.svr_ip         AND  avtps.svr_port = avlmt.svr_port         AND  avlmt.role = 1     group by tenant_id, table_id     order by tenant_id, table_id )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

@@ -78,7 +78,8 @@ public:
   void reset();
   void reuse();
   int prepare_sstable_index_builders(const common::ObTabletID &tablet_id,
-      const common::ObIArray<storage::ObITable::TableKey> &table_keys);
+      const common::ObIArray<storage::ObITable::TableKey> &table_keys,
+      const bool is_major_compaction_mview_dep_tablet);
   int open_sstable_index_builder(const common::ObTabletID &tablet_id, const ObTabletHandle &tablet_handle,
       const storage::ObITable::TableKey &table_key, blocksstable::ObSSTable *sstable, const bool is_empty);
   int get_sstable_index_builder_mgr(const common::ObTabletID &tablet_id, ObBackupTabletSSTableIndexBuilderMgr *&builder_mgr);
@@ -113,7 +114,8 @@ public:
   ~ObBackupTabletSSTableIndexBuilderMgr();
   void reset();
   int init(const uint64_t tenant_id, const common::ObTabletID &tablet_id,
-      const common::ObIArray<storage::ObITable::TableKey> &table_key_array);
+      const common::ObIArray<storage::ObITable::TableKey> &table_key_array,
+      const bool is_major_compaction_mview_dep_tablet);
   int add_sstable_index_builder(const share::ObLSID &ls_id, const ObTabletHandle &tablet_handle,
       const storage::ObITable::TableKey &table_key, blocksstable::ObSSTable *sstable, const bool is_empty);
   int get_sstable_index_builder(const storage::ObITable::TableKey &table_key,
@@ -122,6 +124,7 @@ public:
   int get_sstable_index_builders(common::ObIArray<blocksstable::ObSSTableIndexBuilder *> &builders);
   int free_sstable_index_builder(const storage::ObITable::TableKey &table_key);
   int close_sstable_index_builder(const storage::ObITable::TableKey &table_key, ObIODevice *device_handle);
+  bool is_major_compaction_mview_dep_tablet() const { return is_major_compaction_mview_dep_tablet_; }
   TO_STRING_KV(K_(tablet_id), K_(table_keys), K_(builders), K_(merge_results), K_(sstable_ready_list));
 
 private:
@@ -136,6 +139,15 @@ private:
   int close_sstable_index_builder_(blocksstable::ObSSTableIndexBuilder *index_builder,
       ObIODevice *device_handle, blocksstable::ObSSTableMergeRes &merge_res);
 
+public:
+  int insert_place_holder_macro_index(const blocksstable::ObLogicMacroBlockId &logic_id);
+  int update_logic_id_to_macro_index(const blocksstable::ObLogicMacroBlockId &logic_id, const ObBackupMacroBlockIndex &index);
+  int check_place_holder_macro_index_exist(const blocksstable::ObLogicMacroBlockId &logic_id, bool &exist);
+  int check_real_macro_index_exist(const blocksstable::ObLogicMacroBlockId &logic_id, bool &exist, ObBackupMacroBlockIndex &index);
+
+private:
+  static const int64_t BUCKET_NUM = 10000;
+
 private:
   bool is_inited_;
   lib::ObMutex mutex_;
@@ -144,6 +156,8 @@ private:
   common::ObArray<blocksstable::ObSSTableIndexBuilder *> builders_;
   common::ObArray<blocksstable::ObSSTableMergeRes> merge_results_;
   common::ObArray<bool> sstable_ready_list_;
+  common::hash::ObHashMap<blocksstable::ObLogicMacroBlockId, ObBackupMacroBlockIndex> local_reuse_map_;
+  bool is_major_compaction_mview_dep_tablet_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupTabletSSTableIndexBuilderMgr);
 };
 

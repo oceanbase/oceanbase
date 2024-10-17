@@ -138,6 +138,9 @@ namespace table
   class ObTTLService;
   class ObHTableLockMgr;
   class ObTableApiSessPoolMgr;
+  class ObTableGroupCommitMgr;
+  class ObHTableRowkeyMgr;
+  class ObTableClientInfoMgr;
 }
 namespace logservice
 {
@@ -193,6 +196,7 @@ namespace rootserver
   class ObBackupCleanService;
   class ObArchiveSchedulerService;
   class ObArbitrationService;
+  class ObDBMSSchedService;
   class ObHeartbeatService;
   class ObStandbySchemaRefreshTrigger;
   class ObTenantSnapshotScheduler;
@@ -207,6 +211,7 @@ namespace observer
   class ObTableLoadResourceService;
   class ObStartupAccelTaskHandler;
   class ObTabletTableUpdater;
+  class ObTableQueryASyncMgr;
 }
 
 // for ObTenantSwitchGuard 临时使用>>>>>>>>
@@ -239,6 +244,7 @@ class ObIndexUsageInfoMgr;
 class ObStorageIOUsageRepoter;
 class ObResourceLimitCalculator;
 class ObPluginVectorIndexService;
+class ObAutoSplitTaskCache;
 namespace schema
 {
   class ObTenantSchemaService;
@@ -396,6 +402,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       oceanbase::common::sqlclient::ObTenantOciEnvs*, \
       rootserver::ObHeartbeatService*,              \
       storage::ObEmptyReadBucket*,                  \
+      rootserver::ObDBMSSchedService*,              \
       TenantErrsimModule                            \
       TenantErrsimEvent                             \
       storage::ObTenantDirectLoadMgr*,              \
@@ -417,11 +424,16 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       storage::ObStorageHADiagMgr*,                  \
       common::sqlclient::ObTenantDblinkKeeper*,      \
       storage::ObGlobalIteratorPool*,                \
-      share::ObPluginVectorIndexService*,            \
       common::ObRbMemMgr*,                           \
+      share::ObPluginVectorIndexService*,            \
       storage::ObTenantRestoreInfoMgr*,              \
+      share::ObAutoSplitTaskCache*    ,              \
       sql::ObAuditLogger*,                           \
-      sql::ObAuditLogUpdater*                        \
+      sql::ObAuditLogUpdater*,                       \
+      table::ObTableGroupCommitMgr*,                 \
+      observer::ObTableQueryASyncMgr*,               \
+      table::ObTableClientInfoMgr*,                  \
+      table::ObHTableRowkeyMgr*                      \
   )
 
 

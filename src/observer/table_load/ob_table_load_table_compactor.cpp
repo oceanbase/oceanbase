@@ -23,6 +23,7 @@
 #include "observer/table_load/ob_table_load_multiple_heap_table_compactor.h"
 #include "observer/table_load/ob_table_load_trans_store.h"
 #include "observer/table_load/ob_table_load_parallel_merge_table_compactor.h"
+#include "observer/table_load/ob_table_load_store_table_ctx.h"
 
 namespace oceanbase
 {
@@ -111,6 +112,10 @@ void ObTableLoadTableCompactResult::release_all_table_data()
 /**
  * ObTableLoadTableCompactConfig
  */
+ObTableLoadTableCompactConfig::~ObTableLoadTableCompactConfig()
+{
+
+}
 
 int ObTableLoadTableCompactConfigMainTable::handle_table_compact_success()
 {
@@ -176,11 +181,50 @@ int ObTableLoadTableCompactConfigMainTable::init(ObTableLoadStoreCtx *store_ctx,
   return ret;
 }
 
-ObTableLoadTableCompactConfigLobIdTable::ObTableLoadTableCompactConfigLobIdTable() : merger_(nullptr)
+
+ObTableLoadTableCompactConfigIndexTable::ObTableLoadTableCompactConfigIndexTable() : merger_(nullptr)
+{
+}
+
+ObTableLoadTableCompactConfigIndexTable::~ObTableLoadTableCompactConfigIndexTable()
 {
 
 }
 
+int ObTableLoadTableCompactConfigIndexTable::init(ObTableLoadMerger &merger)
+{
+  int ret = OB_SUCCESS;
+  merger_ = &merger;
+  is_sort_lobid_ = false;
+  return ret;
+}
+
+int ObTableLoadTableCompactConfigIndexTable::handle_table_compact_success()
+{
+// notify merger
+  return merger_->handle_table_compact_success();
+}
+
+int ObTableLoadTableCompactConfigIndexTable::get_tables(common::ObIArray<storage::ObIDirectLoadPartitionTable *> &table_array,
+               common::ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(merger_) || OB_ISNULL(merger_->store_table_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("merger is null", KR(ret));
+  }
+  FOREACH_X(item, merger_->store_table_ctx_->get_index_table_builder_map(), OB_SUCC(ret)) {
+    if (OB_FAIL(item->second->get_tables(table_array, allocator))) {
+      LOG_WARN("fail to get tables", KR(ret));
+    }
+  }
+  return ret;
+}
+
+ObTableLoadTableCompactConfigLobIdTable::ObTableLoadTableCompactConfigLobIdTable() : merger_(nullptr)
+{
+
+}
 
 ObTableLoadTableCompactConfigLobIdTable::~ObTableLoadTableCompactConfigLobIdTable()
 {
@@ -225,10 +269,10 @@ ObTableLoadTableCompactCtx::~ObTableLoadTableCompactCtx()
 {
 }
 
-int ObTableLoadTableCompactCtx::init(ObTableLoadStoreCtx *store_ctx, ObTableLoadTableCompactConfig *compact_config)
+int ObTableLoadTableCompactCtx::init(ObTableLoadStoreCtx *store_ctx, ObTableLoadStoreTableCtx * store_table_ctx, ObTableLoadTableCompactConfig *compact_config)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(nullptr == store_ctx || nullptr == compact_config)) {
+  if (OB_UNLIKELY(nullptr == store_ctx || nullptr == store_table_ctx || nullptr == compact_config)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(store_ctx), KP(compact_config));
   } else {
@@ -236,6 +280,7 @@ int ObTableLoadTableCompactCtx::init(ObTableLoadStoreCtx *store_ctx, ObTableLoad
       LOG_WARN("fail to init result", KR(ret));
     } else {
       store_ctx_ = store_ctx;
+      store_table_ctx_ = store_table_ctx;
       compact_config_ = compact_config;
     }
   }
@@ -258,8 +303,8 @@ int ObTableLoadTableCompactCtx::new_compactor(ObTableLoadTableCompactorHandle &c
     if (compact_config_->is_sort_lobid_) {
       compactor = OB_NEW(ObTableLoadMemCompactor, attr);
     } else {
-      if (store_ctx_->is_multiple_mode_) {
-        if (store_ctx_->table_data_desc_.is_heap_table_) {
+      if (store_table_ctx_->is_multiple_mode_) {
+        if (store_table_ctx_->table_data_desc_.is_heap_table_) {
           compactor = OB_NEW(ObTableLoadMultipleHeapTableCompactor, attr);
         } else {
           compactor = OB_NEW(ObTableLoadMemCompactor, attr);

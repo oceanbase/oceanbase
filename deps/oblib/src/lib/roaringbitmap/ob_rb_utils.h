@@ -63,7 +63,7 @@ public:
 
 private:
   inline static void str_skip_space_(const char *&str, const char *end) {
-    while (str < end && (*str == ' ' || *str == '\0')) {
+    while (str < end && (isspace(*str) || *str == '\0')) {
       str++;
     }
     return;

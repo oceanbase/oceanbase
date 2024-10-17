@@ -2056,6 +2056,7 @@ int ObDagPrioScheduler::inner_add_dag_(
   } else {
     add_added_info_(dag->get_type());
     COMMON_LOG(INFO, "add dag success", KP(dag), "id", dag->get_dag_id(), K(dag->hash()), "dag_cnt", scheduler_->get_cur_dag_cnt(),
+        "dag_type", OB_DAG_TYPES[dag->get_type()].dag_type_str_,
         "dag_type_cnts", scheduler_->get_type_dag_cnt(dag->get_type()));
 
     dag = nullptr;
@@ -2287,7 +2288,7 @@ int ObDagPrioScheduler::rank_compaction_dags_()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   const int64_t batch_size = adaptive_task_limit_ * COMPACTION_DAG_RERANK_FACTOR;
-  const bool need_adaptive_schedule = MTL(compaction::ObTenantTabletScheduler *)->enable_adaptive_merge_schedule();
+  const bool need_adaptive_schedule = ObBasicMergeScheduler::get_merge_scheduler()->enable_adaptive_merge_schedule();
 
   if (!check_need_compaction_rank_()) {
     // ready list has plenty of dags, no need to rank new dags
@@ -3180,30 +3181,6 @@ int ObDagPrioScheduler::diagnose_compaction_dags()
   return ret;
 }
 
-int ObDagPrioScheduler::get_complement_data_dag_progress(const ObIDag &dag,
-    int64_t &row_scanned,
-    int64_t &row_inserted)
-{
-  int ret = OB_SUCCESS;
-  ObMutexGuard guard(prio_lock_);
-  ObIDag *stored_dag = nullptr;
-  if (dag.get_type() != ObDagType::DAG_TYPE_DDL) {
-    ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "invalid arugment", K(ret), K(dag));
-  } else if (OB_FAIL(dag_map_.get_refactored(&dag, stored_dag))) {
-    if (OB_HASH_NOT_EXIST != ret) {
-      LOG_WARN("failed to get from dag map", K(ret));
-    }
-  } else if (OB_ISNULL(stored_dag)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("dag is null", K(ret));
-  } else {
-    row_scanned = static_cast<ObComplementDataDag*>(stored_dag)->get_context().row_scanned_;
-    row_inserted = static_cast<ObComplementDataDag*>(stored_dag)->get_context().row_inserted_;
-  }
-  return ret;
-}
-
 int ObDagPrioScheduler::deal_with_finish_task(
     ObITask &task,
     ObTenantDagWorker &worker,
@@ -3406,11 +3383,11 @@ bool ObDagPrioScheduler::try_switch(ObTenantDagWorker &worker)
 bool ObDagPrioScheduler::check_need_load_shedding_(const bool for_schedule)
 {
   bool need_shedding = false;
-  compaction::ObTenantTabletScheduler *tablet_scheduler = nullptr;
+  compaction::ObBasicMergeScheduler *scheduler = nullptr;
 
-  if (OB_ISNULL(tablet_scheduler = MTL(compaction::ObTenantTabletScheduler *))) {
+  if (OB_ISNULL(scheduler = ObBasicMergeScheduler::get_merge_scheduler())) {
     // may be during the start phase
-  } else if (tablet_scheduler->enable_adaptive_merge_schedule()) {
+  } else if (scheduler->enable_adaptive_merge_schedule()) {
     ObTenantTabletStatMgr *stat_mgr = MTL(ObTenantTabletStatMgr *);
     int64_t load_shedding_factor = 1;
     const int64_t extra_limit = for_schedule ? 0 : 1;
@@ -5079,23 +5056,6 @@ int ObTenantDagScheduler::cancel_dag_net(const ObDagId &dag_id)
     LOG_WARN("fail to cancel dag net", K(ret), K(dag_id));
   } else {
     notify();
-  }
-  return ret;
-}
-
-int ObTenantDagScheduler::get_complement_data_dag_progress(const ObIDag *dag,
-                                                           int64_t &row_scanned,
-                                                           int64_t &row_inserted)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    COMMON_LOG(WARN, "ObDagScheduler is not inited", K(ret));
-  } else if (OB_ISNULL(dag) || dag->get_type() != ObDagType::DAG_TYPE_DDL) {
-    ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "invalid arugment", K(ret), KP(dag));
-  } else if (OB_FAIL(prio_sche_[dag->get_priority()].get_complement_data_dag_progress(*dag, row_scanned, row_inserted))) {
-    COMMON_LOG(WARN, "fail to get complement data dag progress", K(ret), KPC(dag));
   }
   return ret;
 }

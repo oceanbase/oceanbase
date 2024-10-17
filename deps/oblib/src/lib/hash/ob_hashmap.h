@@ -85,6 +85,10 @@ public:
   {
     return ht_.bucket_end();
   };
+  int get_bucket_iterator(const int64_t bucket_pos, bucket_iterator &iterator)
+  {
+    return ht_.get_bucket_iterator(bucket_pos, iterator);
+  }
   iterator begin()
   {
     return ht_.begin();

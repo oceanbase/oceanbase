@@ -1851,8 +1851,8 @@ int ObWhereSubQueryPullup::check_can_split(ObSelectStmt *subquery,
   } else if (subquery->has_subquery()) {
     can_split = false;
     OPT_TRACE("can not split cartesian tables, contain subquery");
-  } else if (OB_FAIL(ObTransformUtils::check_contain_cannot_duplicate_expr(semi_conditions,
-                                                                           is_contain))) {
+  } else if (OB_FAIL(ObTransformUtils::check_contain_lost_deterministic_expr(semi_conditions,
+                                                                             is_contain))) {
     LOG_WARN("failed to check contain can not duplicate expr", K(ret));
   } else if (is_contain) {
     can_split = false;
