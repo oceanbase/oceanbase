@@ -968,9 +968,13 @@ struct EstimateCostInfo {
     }
     inline bool is_partition_wise() const
     {
-      return (join_dist_algo_ == DistAlgo::DIST_PARTITION_WISE ||
-              join_dist_algo_ == DistAlgo::DIST_EXT_PARTITION_WISE) &&
+      return (get_real_dist_method() == DistAlgo::DIST_PARTITION_WISE ||
+              get_real_dist_method() == DistAlgo::DIST_EXT_PARTITION_WISE) &&
               !is_slave_mapping_;
+    }
+    inline DistAlgo get_real_dist_method() const {
+      return is_adaptive_ && adaptive_dist_algo_ != DistAlgo::DIST_INVALID_METHOD ?
+             adaptive_dist_algo_ : join_dist_algo_;
     }
     inline SlaveMappingType get_slave_mapping_type() const
     {
