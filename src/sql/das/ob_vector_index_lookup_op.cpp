@@ -584,13 +584,12 @@ int ObVectorIndexLookupOp::revert_iter_for_complete_data()
   ObITabletScan &tsc_service = get_tsc_service();
   if (OB_FAIL(tsc_service.revert_scan_iter(com_aux_vec_iter_))) {
     LOG_WARN("revert scan iterator failed", K(ret));
-  } else {
-    com_aux_vec_scan_param_.key_ranges_.reuse();
-    com_aux_vec_scan_param_.ss_key_ranges_.reuse();
-    doc_id_scan_param_.key_ranges_.reuse();
-    doc_id_scan_param_.ss_key_ranges_.reuse();
   }
 
+  com_aux_vec_scan_param_.key_ranges_.reuse();
+  com_aux_vec_scan_param_.ss_key_ranges_.reuse();
+  doc_id_scan_param_.key_ranges_.reuse();
+  doc_id_scan_param_.ss_key_ranges_.reuse();
   com_aux_vec_iter_ = NULL;
   com_aux_vec_scan_param_.destroy_schema_guard();
   com_aux_vec_scan_param_.~ObTableScanParam();
@@ -1176,6 +1175,7 @@ void ObVectorIndexLookupOp::do_clear_evaluated_flag()
 int ObVectorIndexLookupOp::revert_iter()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObITabletScan &tsc_service = get_tsc_service();
   if (nullptr != adaptor_vid_iter_) {
     adaptor_vid_iter_->reset();
@@ -1207,22 +1207,45 @@ int ObVectorIndexLookupOp::revert_iter()
 
   if (OB_FAIL(tsc_service.revert_scan_iter(delta_buf_iter_))) {
     LOG_WARN("revert scan iterator failed", K(ret));
-  } else if (OB_FAIL(tsc_service.revert_scan_iter(index_id_iter_))) {
+    tmp_ret = ret;
+    ret = OB_SUCCESS;
+  }
+  // revert all scan iter anyway
+  if (OB_FAIL(tsc_service.revert_scan_iter(index_id_iter_))) {
     LOG_WARN("revert scan iterator failed", K(ret));
-  } else if (OB_FAIL(tsc_service.revert_scan_iter(snapshot_iter_))) {
+    tmp_ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
+    ret = OB_SUCCESS;
+  }
+
+  if (OB_FAIL(tsc_service.revert_scan_iter(snapshot_iter_))) {
     LOG_WARN("revert scan iterator failed", K(ret));
-  } else if (OB_FAIL(tsc_service.revert_scan_iter(aux_lookup_iter_))) {
+    tmp_ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
+    ret = OB_SUCCESS;
+  }
+
+  if (OB_FAIL(tsc_service.revert_scan_iter(aux_lookup_iter_))) {
     LOG_WARN("revert index table scan iterator (opened by dasop) failed", K(ret));
-  } else if (OB_FAIL(revert_iter_for_complete_data())) {
+    tmp_ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
+    ret = OB_SUCCESS;
+  }
+
+  if (OB_FAIL(revert_iter_for_complete_data())) {
     LOG_WARN("failed to revert iter for complete data.", K(ret));
-  } else {
-    delta_buf_iter_ = nullptr;
-    index_id_iter_ = nullptr;
-    snapshot_iter_ = nullptr;
-    aux_lookup_iter_ = nullptr;
-    if (OB_FAIL(ObDomainIndexLookupOp::revert_iter())) {
-      LOG_WARN("failed to revert local index lookup op iter", K(ret));
-    }
+    tmp_ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
+    ret = OB_SUCCESS;
+  }
+
+  delta_buf_iter_ = nullptr;
+  index_id_iter_ = nullptr;
+  snapshot_iter_ = nullptr;
+  aux_lookup_iter_ = nullptr;
+  if (OB_FAIL(ObDomainIndexLookupOp::revert_iter())) {
+    LOG_WARN("failed to revert local index lookup op iter", K(ret));
+    tmp_ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
+  }
+  // return first error code
+  if (tmp_ret != OB_SUCCESS) {
+    ret = tmp_ret;
   }
   vec_op_alloc_.reset();
   return ret;
