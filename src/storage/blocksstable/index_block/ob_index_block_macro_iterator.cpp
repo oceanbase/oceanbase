@@ -735,9 +735,12 @@ int ObIndexBlockMacroIterator::get_cs_range(
   int64_t data_begin = 0;
   int64_t data_end = 0;
   int64_t micro_start_row_offset = 0;
+
+  // Need to pay attention!!!
+  // The allocator is used to allocate io data buffer, and its memory life cycle needs to be longer than the object handle.
+  common::ObArenaAllocator io_allocator("cs_range");
   ObStorageObjectHandle macro_handle;
   ObStorageObjectReadInfo read_info;
-  common::ObArenaAllocator io_allocator("cs_range");
 
   read_info.offset_ = sstable_->get_macro_offset();
   read_info.size_ = sstable_->get_macro_read_size();
