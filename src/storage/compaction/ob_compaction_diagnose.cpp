@@ -1285,6 +1285,8 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_major_merge(
     // including DATA_NOT_COMPLETE / NO_MAJOR_SSTABLE
     ADD_MAJOR_WAIT_SCHEDULE(compaction_scn + WAIT_MEDIUM_SCHEDULE_INTERVAL * 2,
       ObTabletStatusCache::tablet_execute_state_to_str(tablet_status.get_execute_state()));
+  } else if (OB_ISNULL(tablet_status.medium_list())) {
+    // tablet status has null medium list, cannot check sycn medium scn
   } else if (OB_FAIL(ObMediumCompactionScheduleFunc::get_max_sync_medium_scn(
       tablet, *tablet_status.medium_list(), max_sync_medium_scn))) {
     LOG_WARN("failed to get max sync medium scn", K(ret), K(ls_id), K(tablet_id));
