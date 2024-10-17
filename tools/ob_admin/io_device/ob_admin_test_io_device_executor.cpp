@@ -140,6 +140,10 @@ int ObAdminTestIODeviceExecutor::run_all_tests_()
     STORAGE_LOG(WARN, "test consume clog file failed", K(ret));
   } else if (OB_FAIL(test_clean_backup_file_())) {
     STORAGE_LOG(WARN, "test clean backup file failed", K(ret), K_(backup_path));
+  } else if (OB_FAIL(test_object_storage_interface_())) {
+    STORAGE_LOG(WARN, "test object storage interface failed", K(ret), K_(backup_path));
+  } else if (OB_FAIL(test_list_before_complete_multipart_write_())) {
+    STORAGE_LOG(WARN, "test list before complete multipart write failed", K(ret), K_(backup_path));
   }
   return ret;
 }
