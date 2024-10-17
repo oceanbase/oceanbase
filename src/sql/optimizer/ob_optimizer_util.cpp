@@ -10166,7 +10166,11 @@ int ObOptimizerUtil::check_can_batch_rescan_compat(ObLogicalOperator *op,
     }
   } else if (!for_nlj) {
     /* do nothing */
-  } else if (1 == op->get_num_of_child() || log_op_def::LOG_SET == op->get_type()) {
+  } else if (1 == op->get_num_of_child()) {
+    if (OB_FAIL(SMART_CALL(check_can_batch_rescan_compat(op->get_child(0), rescan_params, for_nlj, can_batch_rescan)))) {
+      LOG_WARN("failed to smart call check check op can batch", K(ret));
+    }
+  } else if (log_op_def::LOG_SET == op->get_type()) {
     can_batch_rescan = ObSelectStmt::UNION == static_cast<const ObLogSet*>(op)->get_set_op()
                       || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_3_0;
     for (int64_t i = 0; OB_SUCC(ret) && can_batch_rescan && i < op->get_num_of_child(); ++i) {
