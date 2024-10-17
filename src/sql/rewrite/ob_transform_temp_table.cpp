@@ -2637,7 +2637,8 @@ int ObTransformTempTable::accept_cte_transform_v2(ObDMLStmt &origin_root_stmt,
     LOG_TRACE("not accept transform because large set stmt", K(ctx_->is_set_stmt_oversize_));
   } else if (OB_FAIL(pick_out_stmts_in_blacklist(ctx_->materialize_blacklist_,
                                                  origin_stmts,
-                                                 trans_stmts))) {
+                                                 trans_stmts,
+                                                 stmt_ptrs))) {
     LOG_WARN("failed to pick out stmts in blacklist", K(ret));
   } else if (origin_stmts.count() < 2) {
     OPT_TRACE("reject materialize CTE due to blacklist");
@@ -2714,6 +2715,7 @@ int ObTransformTempTable::evaluate_cte_cost_partially(ObDMLStmt *root_stmt,
   int ret = OB_SUCCESS;
   ObEvalCostHelper eval_cost_helper;
   temp_table_cost = 0.0;
+  bool can_eval = false;
   if (OB_ISNULL(ctx_) || OB_UNLIKELY(!ctx_->is_valid()) || OB_ISNULL(root_stmt)
       || OB_ISNULL(ctx_->exec_ctx_->get_physical_plan_ctx())
       || OB_ISNULL(ctx_->exec_ctx_->get_stmt_factory())
@@ -2742,6 +2744,24 @@ int ObTransformTempTable::evaluate_cte_cost_partially(ObDMLStmt *root_stmt,
                                         trans.get_max_iteration_count(),
                                         trans_happended))) {
       LOG_WARN("failed to transform heuristic rule", K(ret));
+    } else if (OB_FAIL(check_evaluate_after_transform(root_stmt, stmts, can_eval))) {
+      LOG_WARN("failed to check after transform", K(ret));
+    } else if (!can_eval) {
+      temp_table_cost = std::numeric_limits<double>::max();
+      for (int64_t i = 0; OB_SUCC(ret) && i < stmts.count(); i++) {
+        if (OB_FAIL(costs.push_back(0.0))) {
+          LOG_WARN("failed to push back", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(eval_cost_helper.recover_context(*ctx_->exec_ctx_->get_physical_plan_ctx(),
+                                                    *ctx_->exec_ctx_->get_stmt_factory()->get_query_ctx(),
+                                                    *ctx_))) {
+          LOG_WARN("failed to recover context", K(ret));
+        } else if (OB_FAIL(ObTransformUtils::free_stmt(*ctx_->stmt_factory_, root_stmt))) {
+          LOG_WARN("failed to free stmt", K(ret));
+        }
+      }
     } else {
       CREATE_WITH_TEMP_CONTEXT(param) {
         ObRawExprFactory tmp_expr_factory(CURRENT_CONTEXT->get_arena_allocator());
@@ -3891,11 +3911,18 @@ int ObTransformTempTable::copy_and_replace_trans_root(ObDMLStmt &root_stmt,
 
 int ObTransformTempTable::pick_out_stmts_in_blacklist(const ObIArray<ObString> &blacklist,
                                                       ObIArray<ObSelectStmt *> &origin_stmts,
-                                                      ObIArray<ObSelectStmt *> &trans_stmts)
+                                                      ObIArray<ObSelectStmt *> &trans_stmts,
+                                                      ObIArray<ObSelectStmtPointer> &stmt_ptrs)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObSelectStmt*, 4> picked_origin_stmts;
   ObSEArray<ObSelectStmt*, 4> picked_trans_stmts;
+  ObSEArray<ObSelectStmtPointer, 4> picked_stmt_ptrs;
+  if (OB_UNLIKELY(origin_stmts.count() != trans_stmts.count() ||
+                  origin_stmts.count() != stmt_ptrs.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected stmt count", K(ret), K(origin_stmts.count()), K(trans_stmts.count()), K(stmt_ptrs.count()));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < origin_stmts.count(); i++) {
     ObSelectStmt *origin_stmt = origin_stmts.at(i);
     ObString qb_name;
@@ -3910,6 +3937,8 @@ int ObTransformTempTable::pick_out_stmts_in_blacklist(const ObIArray<ObString> &
       LOG_WARN("failed to push back", K(ret));
     } else if (OB_FAIL(picked_trans_stmts.push_back(trans_stmts.at(i)))) {
       LOG_WARN("failed to push back", K(ret));
+    } else if (OB_FAIL(picked_stmt_ptrs.push_back(stmt_ptrs.at(i)))) {
+      LOG_WARN("failed to push back", K(ret));
     }
   }
   if (OB_FAIL(ret) || origin_stmts.count() == picked_origin_stmts.count()) {
@@ -3917,6 +3946,8 @@ int ObTransformTempTable::pick_out_stmts_in_blacklist(const ObIArray<ObString> &
   } else if (OB_FAIL(origin_stmts.assign(picked_origin_stmts))) {
     LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(trans_stmts.assign(picked_trans_stmts))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else if (OB_FAIL(stmt_ptrs.assign(picked_stmt_ptrs))) {
     LOG_WARN("failed to assign", K(ret));
   }
   return ret;
@@ -4014,6 +4045,44 @@ int ObTransformTempTable::check_stmt_in_blacklist(const ObSelectStmt *stmt,
       for (int64_t i = 0; OB_SUCC(ret) && !in_blacklist && i < qb_names.count(); i++) {
         if (ObOptimizerUtil::find_item(blacklist, qb_names.at(i))) {
           in_blacklist = true;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformTempTable::check_evaluate_after_transform(ObDMLStmt *root_stmt,
+                                                         ObIArray<ObSelectStmt *> &stmts,
+                                                         bool &can_eval)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<TempTableInfo, 4> root_cte_infos;
+  ObSEArray<ObSelectStmt*, 4> all_ctes;
+  can_eval = true;
+  if (OB_ISNULL(root_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret));
+  } else if (OB_FAIL(root_stmt->collect_temp_table_infos(root_cte_infos))) {
+    LOG_WARN("failed to collect temp table infos", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < root_cte_infos.count(); ++i) {
+      if (OB_FAIL(all_ctes.push_back(root_cte_infos.at(i).temp_table_query_))) {
+        LOG_WARN("failed to add var to array", K(ret));
+      }
+    }
+  }
+  for (int64_t i = 0; can_eval && OB_SUCC(ret) && i < stmts.count(); ++i) {
+    ObSEArray<TempTableInfo, 4> tmp_cte_infos;
+    if (OB_ISNULL(stmts.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null stmt", K(ret));
+    } else if (OB_FAIL(stmts.at(i)->collect_temp_table_infos(tmp_cte_infos))) {
+      LOG_WARN("failed to collect temp table infos", K(ret));
+    } else {
+      for (int64_t j = 0; can_eval && OB_SUCC(ret) && j < tmp_cte_infos.count(); ++j) {
+        if (!ObOptimizerUtil::find_item(all_ctes, tmp_cte_infos.at(j).temp_table_query_)) {
+          can_eval = false;
         }
       }
     }

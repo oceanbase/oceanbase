@@ -329,12 +329,16 @@ public:
                                         ObIArray<int64_t> &choosed_materialize_idxs);
   int pick_out_stmts_in_blacklist(const ObIArray<ObString> &blacklist,
                                   ObIArray<ObSelectStmt *> &origin_stmts,
-                                  ObIArray<ObSelectStmt *> &trans_stmts);
+                                  ObIArray<ObSelectStmt *> &trans_stmts,
+                                  ObIArray<ObSelectStmtPointer> &stmt_ptrs);
   int gather_materialize_blacklist(ObLogicalOperator *op, ObIArray<uint64_t> &blacklist);
   int get_all_view_stmts(ObDMLStmt *stmt, ObIArray<ObSelectStmt*> &view_stmts);
   int check_stmt_in_blacklist(const ObSelectStmt *stmt,
                               const ObIArray<ObString> &blacklist,
                               bool &in_blacklist);
+  int check_evaluate_after_transform(ObDMLStmt *root_stmt,
+                                     ObIArray<ObSelectStmt *> &stmts,
+                                     bool &can_eval);
 private:
   ObArenaAllocator allocator_;
   TempTableTransParam *trans_param_;
