@@ -470,6 +470,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
 //consistency_level_ = INVALID_CONSISTENCY;
   next_tx_read_only_ = -1;
   next_tx_isolation_ = transaction::ObTxIsolationLevel::INVALID;
+  enable_mysql_compatible_dates_ = false;
   log_id_level_map_valid_ = false;
   log_id_level_map_.reset_level();
   cur_phy_plan_ = NULL;
@@ -4770,6 +4771,7 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
                 enable_role_ids_);
   }
   OB_UNIS_ENCODE(sys_var_config_hash_val_);
+  OB_UNIS_ENCODE(enable_mysql_compatible_dates_);
   return ret;
 }
 
@@ -5055,6 +5057,7 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
     }
   }
   OB_UNIS_DECODE(sys_var_config_hash_val_);
+  OB_UNIS_DECODE(enable_mysql_compatible_dates_);
   return ret;
 }
 
@@ -5337,6 +5340,7 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
               thread_data_.proxy_host_name_,
               enable_role_ids_);
   OB_UNIS_ADD_LEN(sys_var_config_hash_val_);
+  OB_UNIS_ADD_LEN(enable_mysql_compatible_dates_);
   return len;
 }
 

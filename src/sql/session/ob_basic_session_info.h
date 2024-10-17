@@ -1259,6 +1259,10 @@ public:
   void set_tx_isolation(transaction::ObTxIsolationLevel isolation);
   bool get_tx_read_only() const;
   void set_tx_read_only(const bool last_tx_read_only, const bool cur_tx_read_only);
+  bool enable_mysql_compatible_dates() const { return enable_mysql_compatible_dates_; }
+  void set_enable_mysql_compatible_dates(const bool enable_mysql_compatible_dates) {
+    enable_mysql_compatible_dates_ = enable_mysql_compatible_dates;
+  }
   int reset_tx_variable_if_remote_trans(const ObPhyPlanType& type);
   int check_tx_read_only_privilege(const ObSqlTraits &sql_traits);
   int get_group_concat_max_len(uint64_t &group_concat_max_len) const;
@@ -2336,6 +2340,7 @@ private:
   ObTimeZoneInfoWrap tz_info_wrap_;
   int64_t next_tx_read_only_;
   transaction::ObTxIsolationLevel next_tx_isolation_;
+  bool enable_mysql_compatible_dates_;
   //===============================================================
 
   //==============系统变量相关的变量，不需序列化到远端==============
