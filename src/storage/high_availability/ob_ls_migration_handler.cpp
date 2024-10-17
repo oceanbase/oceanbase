@@ -1098,6 +1098,7 @@ int ObLSMigrationHandler::check_before_do_task_()
 int ObLSMigrationHandler::check_disk_space_(const ObMigrationOpArg &arg)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   int64_t required_size = 0;
 
   if (!is_inited_) {
@@ -1108,9 +1109,10 @@ int ObLSMigrationHandler::check_disk_space_(const ObMigrationOpArg &arg)
         K(arg));
   } else if (!ObReplicaTypeCheck::is_replica_with_ssstore(arg.dst_.get_replica_type())) {
     LOG_INFO("dst has no ssstore, no need check disk space", K(arg));
-  } else if (OB_FAIL(get_ls_required_size_(arg, required_size))) {
-    LOG_WARN("failed to get ls required size", K(ret), K(arg));
-  } else if (required_size > 0) {
+  } else if (OB_TMP_FAIL(get_ls_required_size_(arg, required_size))) {
+    LOG_WARN("failed to get ls required size", KR(tmp_ret), K(arg));
+  }
+  if (required_size > 0) {
     if (OB_FAIL(LOCAL_DEVICE_INSTANCE.check_space_full(required_size))) {
       if (OB_SERVER_OUTOF_DISK_SPACE == ret) {
         ret = OB_SERVER_MIGRATE_IN_DENIED;
@@ -1155,7 +1157,8 @@ int ObLSMigrationHandler::get_ls_required_size_(
   } else {
     HEAP_VAR(ObMySQLProxy::MySQLResult, res) {
       common::sqlclient::ObMySQLResult *result = NULL;
-      if (OB_FAIL(GCTX.sql_proxy_->read(res, tenant_id, sql.ptr()))) {
+      // TODO@jingyu.cr: need to avoid reading virtual table during migration, get ls required size through RPC
+      if (OB_FAIL(GCTX.sql_proxy_->read(res, OB_SYS_TENANT_ID, sql.ptr()))) {
         LOG_WARN("failed to read", KR(ret), K(tenant_id), K(sql));
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
