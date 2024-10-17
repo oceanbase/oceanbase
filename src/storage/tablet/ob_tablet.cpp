@@ -142,6 +142,7 @@ ObTableStoreCache::ObTableStoreCache()
     minor_table_cnt_(0),
     recycle_version_(0),
     last_major_column_count_(0),
+    last_major_macro_block_cnt_(0),
     is_row_store_(true),
     last_major_compressor_type_(ObCompressorType::INVALID_COMPRESSOR),
     last_major_latest_row_store_type_(ObRowStoreType::MAX_ROW_STORE)
@@ -155,6 +156,7 @@ void ObTableStoreCache::reset()
   minor_table_cnt_ = 0;
   recycle_version_ = 0;
   last_major_column_count_ = 0;
+  last_major_macro_block_cnt_ = 0;
   is_row_store_ = true;
   last_major_compressor_type_ = ObCompressorType::INVALID_COMPRESSOR;
   last_major_latest_row_store_type_ = ObRowStoreType::MAX_ROW_STORE;
@@ -167,6 +169,7 @@ void ObTableStoreCache::assign(const ObTableStoreCache &other)
   minor_table_cnt_ = other.minor_table_cnt_;
   recycle_version_ = other.recycle_version_;
   last_major_column_count_ = other.last_major_column_count_;
+  last_major_macro_block_cnt_ = other.last_major_macro_block_cnt_;
   is_row_store_ = other.is_row_store_;
   last_major_compressor_type_ = other.last_major_compressor_type_;
   last_major_latest_row_store_type_ = other.last_major_latest_row_store_type_;
@@ -197,6 +200,7 @@ int ObTableStoreCache::init(
       const ObSSTableMeta &sstable_meta = sst_meta_hdl.get_sstable_meta();
       last_major_snapshot_version_ = last_major->get_snapshot_version();
       recycle_version_ = last_major_snapshot_version_;
+      last_major_macro_block_cnt_ = sstable_meta.get_basic_meta().get_total_macro_block_count();
       last_major_compressor_type_ = sstable_meta.get_basic_meta().get_compressor_type();
       last_major_latest_row_store_type_ = sstable_meta.get_basic_meta().get_latest_row_store_type();
       if (last_major->is_co_sstable()) {
@@ -263,7 +267,7 @@ ObTablet::ObTablet(const bool is_external_tablet)
     is_external_tablet_(is_external_tablet)
 {
 #if defined(__x86_64__) && !defined(ENABLE_OBJ_LEAK_CHECK)
-  check_size<ObTablet, ObRowkeyReadInfo, 1448>();
+  check_size<ObTablet, ObRowkeyReadInfo, 1456>();
 #endif
   MEMSET(memtables_, 0x0, sizeof(memtables_));
 }

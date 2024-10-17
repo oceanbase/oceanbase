@@ -1575,7 +1575,7 @@ int ObTenantTabletScheduler::schedule_all_tablets_medium()
   } else {
     const int64_t merge_version = get_frozen_version();
     if (merge_version > merged_version_) {
-      update_merge_progress(merge_version);
+      try_finish_merge_progress(merge_version);
       mview_validation_.refresh(merge_version);
     }
     if (OB_FAIL(medium_loop_.init(get_schedule_batch_size()))) {

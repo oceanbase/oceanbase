@@ -117,7 +117,8 @@ public:
       const bool is_row_store);
   void assign(const ObTableStoreCache &other);
   TO_STRING_KV(K_(last_major_snapshot_version), K_(major_table_cnt),
-      K_(minor_table_cnt), K_(recycle_version), K_(last_major_column_count), K_(is_row_store),
+      K_(minor_table_cnt), K_(recycle_version), K_(last_major_column_count),
+      K_(last_major_macro_block_cnt), K_(is_row_store),
       K_(last_major_compressor_type), K_(last_major_latest_row_store_type));
 
 public:
@@ -126,6 +127,7 @@ public:
   int64_t minor_table_cnt_;
   int64_t recycle_version_;
   int64_t last_major_column_count_;
+  int64_t last_major_macro_block_cnt_;
   bool is_row_store_;
   // TODO(chengkong): add bool is_user_tablet_;
   common::ObCompressorType last_major_compressor_type_;
@@ -169,6 +171,7 @@ public:
   inline int64_t get_minor_table_count() const { return table_store_cache_.minor_table_cnt_; }
   inline int64_t get_recycle_version() const { return table_store_cache_.recycle_version_; }
   inline int64_t get_last_major_column_count() const { return table_store_cache_.last_major_column_count_; }
+  inline int64_t get_last_major_total_macro_block_count() const { return table_store_cache_.last_major_macro_block_cnt_; }
   inline common::ObCompressorType get_last_major_compressor_type() const { return table_store_cache_.last_major_compressor_type_; }
   inline common::ObRowStoreType get_last_major_latest_row_store_type() const { return table_store_cache_.last_major_latest_row_store_type_; }
   inline share::ObLSID get_ls_id() const { return tablet_meta_.ls_id_; }
