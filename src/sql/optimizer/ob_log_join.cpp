@@ -1300,7 +1300,8 @@ int ObLogJoin::set_use_batch(ObLogicalOperator* root)
       }
     }
     if (OB_SUCC(ret)) {
-      if (ts->has_index_scan_filter() && ts->get_index_back() && ts->get_is_index_global()) {
+      if ((ts->has_index_scan_filter() && ts->get_index_back() && ts->get_is_index_global()) ||
+           ts->is_text_retrieval_scan()) {
         // For the global index lookup, if there is a pushdown filter when scanning the index,
         // batch cannot be used.
         ts->set_use_batch(false);
