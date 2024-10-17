@@ -19118,6 +19118,12 @@ int ObDDLService::prepare_hidden_table_schema(const ObTableSchema &orig_table_sc
       hidden_table_schema.set_association_table_id(orig_table_schema.get_table_id());
       // set the hidden attributes of the table
       hidden_table_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_HIDDEN_OFFLINE_DDL);
+      if (hidden_table_schema.is_ctas_tmp_table()) {
+        // for CTAS table, clear its session id, otherwise this table schema will not be visble
+        // to the index rebuiding phase.
+        hidden_table_schema.set_session_id(0);
+        LOG_INFO("clear session_id of hidden table copied from CTAS table", K(hidden_table_schema));
+      }
       if (orig_table_schema.get_tenant_id() != hidden_table_schema.get_tenant_id()) {
         // recover restore table, do not sync log to cdc.
         hidden_table_schema.set_ddl_ignore_sync_cdc_flag(ObDDLIgnoreSyncCdcFlag::DONT_SYNC_LOG_FOR_CDC);
