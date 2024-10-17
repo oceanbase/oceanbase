@@ -2044,6 +2044,13 @@ int ObMPStmtExecute::process()
     }
 
     record_flt_trace(session);
+    // clear thread-local variables used for queue waiting
+    // to prevent async callbacks from finishing before
+    // request_finish_callback, which may free the request.
+    // this operation should be protected by the session lock.
+    if (async_resp_used) {
+      request_finish_callback();
+    }
   }
 
   if (OB_NOT_NULL(sess) && !sess->get_in_transaction()) {
@@ -2065,7 +2072,6 @@ int ObMPStmtExecute::process()
   if (!THIS_WORKER.need_retry()) {
     if (async_resp_used) {
       async_resp_used_ = true;
-      request_finish_callback();
       packet_sender_.disable_response();
     } else {
       flush_ret = flush_buffer(true);
