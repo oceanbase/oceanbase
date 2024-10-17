@@ -40,6 +40,7 @@ int ObPluginVectorIndexLoadScheduler::init(uint64_t tenant_id, ObLS *ls, int ttl
     is_inited_ = true;
     ttl_tablet_timer_tg_id_ = ttl_timer_tg_id;
     basic_period_ = VEC_INDEX_SCHEDULAR_BASIC_PERIOD;
+    cb_.scheduler_ = this;
     if (OB_FAIL(TG_SCHEDULE(ttl_timer_tg_id, *this, basic_period_, true))) {
       LOG_WARN("fail to schedule periodic task", KR(ret), K(ttl_timer_tg_id));
     }
@@ -877,41 +878,54 @@ int ObPluginVectorIndexLoadScheduler::log_tablets_need_memdata_sync(ObPluginVect
 {
   // Notice: only sync complete adapter, partial adapter will be merged to complete next timer schedule
   int ret = OB_SUCCESS;
-  cb_.table_id_array_.reuse();
-  cb_.tablet_id_array_.reuse();
+  bool need_submit_log = false;
+  if (OB_SUCC(ret)) {
+    // lock to avoid concurrent modify tablet_id_array and tablet_id_array;
+    common::ObSpinLockGuard ctx_guard(logging_lock_);
+    if (is_logging_) {
+      // do-nothing
+      FLOG_INFO("vector index memdata sync is logging");
+    } else {
+      table_id_array_.reuse();
+      tablet_id_array_.reuse();
 
-  // follower just refresh adapter statistics, leader submit log need memdata sync
+      // follower just refresh adapter statistics, leader submit log need memdata sync
 
-  FOREACH_X(iter, mgr->get_complete_adapter_map(), OB_SUCC(ret)) {
-    ObPluginVectorIndexAdaptor *adapter = iter->second;
-    bool need_sync = false;
-    if (OB_ISNULL(adapter)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get null adapter", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
-    } else if (iter->first != adapter->get_inc_tablet_id()) {
-      // do nothing
-    } else if (cb_.tablet_id_array_.count() >= ObVectorIndexSyncLogCb::VECTOR_INDEX_MAX_SYNC_COUNT) {
-      // do nothing, wait for next schedule
-    } else if (OB_FAIL(adapter->check_need_sync_to_follower(need_sync))) {
-      LOG_WARN("fail to check need memdata sync", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
-    } else if (need_sync && is_leader_) {
-      if (OB_FAIL(cb_.tablet_id_array_.push_back(iter->first))) {
-        LOG_WARN("fail to push tablet id need memdata sync", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
-      } else if (OB_FAIL(cb_.table_id_array_.push_back(adapter->get_inc_table_id()))) {
-        LOG_WARN("fail to push table id need memdata sync", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
+      FOREACH_X(iter, mgr->get_complete_adapter_map(), OB_SUCC(ret)) {
+        ObPluginVectorIndexAdaptor *adapter = iter->second;
+        bool need_sync = false;
+        if (OB_ISNULL(adapter)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null adapter", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
+        } else if (iter->first != adapter->get_inc_tablet_id()) {
+          // do nothing
+        } else if (tablet_id_array_.count() >= ObVectorIndexSyncLogCb::VECTOR_INDEX_MAX_SYNC_COUNT) {
+          // do nothing, wait for next schedule
+        } else if (OB_FAIL(adapter->check_need_sync_to_follower(need_sync))) {
+          LOG_WARN("fail to check need memdata sync", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
+        } else if (need_sync && is_leader_) {
+          if (OB_FAIL(tablet_id_array_.push_back(iter->first))) {
+            LOG_WARN("fail to push tablet id need memdata sync", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
+          } else if (OB_FAIL(table_id_array_.push_back(adapter->get_inc_table_id()))) {
+            LOG_WARN("fail to push table id need memdata sync", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
+          } else {
+            need_submit_log = true;
+          }
+        }
       }
     }
   }
 
   if (OB_FAIL(ret) || !is_leader_) {
     // do nothing
-  } else if (cb_.tablet_id_array_.count() > 0) {
+  } else if (need_submit_log) {
     if (OB_FAIL(submit_log_())) {
       TRANS_LOG(WARN, "fail to submit vector index memdata sync log",KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
     } else {
       TRANS_LOG(INFO, "submit vector index memdata sync log success", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
     }
   }
+
   return ret;
 }
 
@@ -1072,11 +1086,18 @@ OB_SERIALIZE_MEMBER(ObVectorIndexSyncLog, flags_, tablet_id_array_, table_id_arr
 int ObPluginVectorIndexLoadScheduler::submit_log_()
 {
   int ret = OB_SUCCESS;
-  if (cb_.tablet_id_array_.count() == 0) {
+  common::ObSpinLockGuard ctx_guard(logging_lock_);
+  if (is_logging_) {
+    // do-nothing
+    FLOG_INFO("vector index memdata sync is logging");
+  } else if (OB_ISNULL(cb_.scheduler_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("scheduler point is null, not inited?", KR(ret));
+  } else if (tablet_id_array_.count() == 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get empty tablet id array", KR(ret));
   } else {
-    ObVectorIndexSyncLog ls_log(cb_.tablet_id_array_, cb_.table_id_array_);
+    ObVectorIndexSyncLog ls_log(tablet_id_array_, table_id_array_);
     palf::LSN lsn;
     SCN base_scn = SCN::min_scn();
     SCN scn;
@@ -1086,28 +1107,31 @@ int ObPluginVectorIndexLoadScheduler::submit_log_()
     uint32_t log_size = base_header.get_serialize_size() + ls_log.get_serialize_size();
     if (log_size > ObVectorIndexSyncLogCb::VECTOR_INDEX_SYNC_LOG_MAX_LENGTH) {
       ret = OB_SIZE_OVERFLOW;
-      LOG_WARN("log size is too large", KR(ret), K(log_size), K(cb_.tablet_id_array_.count()));
+      LOG_WARN("log size is too large", KR(ret), K(log_size), K(tablet_id_array_.count()));
     } else if (OB_ISNULL(cb_.log_buffer_)) {
       cb_.log_buffer_ = static_cast<char *>(ob_malloc(ObVectorIndexSyncLogCb::VECTOR_INDEX_SYNC_LOG_MAX_LENGTH,
                                                       ObMemAttr(tenant_id_,
                                                       "VEC_INDEX_LOG")));
-      cb_.log_buffer_len_ = ObVectorIndexSyncLogCb::VECTOR_INDEX_SYNC_LOG_MAX_LENGTH;
       if (OB_ISNULL(cb_.log_buffer_)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to alloc vec index memdata sync log buffer", KR(ret), K(log_size));
       }
     }
 
-    cb_.pos_ = 0;
+    int64_t pos = 0;
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(base_header.serialize(cb_.log_buffer_, cb_.log_buffer_len_, cb_.pos_))) {
+    } else if (OB_FAIL(base_header.serialize(cb_.log_buffer_,
+                                             ObVectorIndexSyncLogCb::VECTOR_INDEX_SYNC_LOG_MAX_LENGTH,
+                                             pos))) {
       TRANS_LOG(WARN, "ObVectorIndexSyncLog serialize base header error",
-        KR(ret), KP(cb_.log_buffer_), K(cb_.log_buffer_len_), K(cb_.pos_));
-    } else if (OB_FAIL(ls_log.serialize(cb_.log_buffer_, cb_.log_buffer_len_, cb_.pos_))) {
+        KR(ret), KP(cb_.log_buffer_), K(pos));
+    } else if (OB_FAIL(ls_log.serialize(cb_.log_buffer_,
+                                        ObVectorIndexSyncLogCb::VECTOR_INDEX_SYNC_LOG_MAX_LENGTH,
+                                        pos))) {
       TRANS_LOG(WARN, "ObVectorIndexSyncLog serialize vec index memdata sync log error",
-        KR(ret), KP(cb_.log_buffer_), K(cb_.log_buffer_len_), K(cb_.pos_));
+        KR(ret), KP(cb_.log_buffer_), K(pos));
     } else if (OB_FAIL(ls_->get_log_handler()->append(cb_.log_buffer_,
-                                                      cb_.pos_,
+                                                      pos,
                                                       base_scn,
                                                       false,
                                                       false,
@@ -1116,21 +1140,25 @@ int ObPluginVectorIndexLoadScheduler::submit_log_()
                                                       scn))) {
       cb_.reset();
       TRANS_LOG(WARN, "vector index memdata sync log submit error",
-        KR(ret), KP(cb_.log_buffer_), K(cb_.pos_));
+        KR(ret), KP(cb_.log_buffer_), K(pos));
     } else {
+      is_logging_ = true;
       TRANS_LOG(INFO, "submit vector index memdata sync log success",
         K(tenant_id_), K(ls_->get_ls_id()), K(base_scn), K(lsn), K(scn));
     }
-    cb_.tablet_id_array_.reuse();
-    cb_.table_id_array_.reuse();
+    tablet_id_array_.reuse();
+    table_id_array_.reuse();
   }
   return ret;
 }
 
-// may not need
-int ObPluginVectorIndexLoadScheduler::handle_submit_callback(const bool success, const share::SCN log_ts)
+int ObPluginVectorIndexLoadScheduler::handle_submit_callback(const bool success)
 {
   int ret = OB_SUCCESS;
+  common::ObSpinLockGuard ctx_guard(logging_lock_);
+  is_logging_ = false;
+  TRANS_LOG(INFO, "submit vector index memdata sync log success",
+            K(tenant_id_), K(ls_->get_ls_id()), K(success));
   return ret;
 }
 
@@ -1161,9 +1189,9 @@ int ObPluginVectorIndexLoadScheduler::replay(const void *buffer,
   logservice::ObLogBaseHeader base_header;
   int64_t tmp_pos = 0;
   const char *log_buf = static_cast<const char *>(buffer);
-  ObVectorIndexTabletIDArray tmp_tablet_id_array_;
-  ObVectorIndexTableIDArray tmp_table_id_array_;
-  ObVectorIndexSyncLog ls_log(tmp_tablet_id_array_, tmp_table_id_array_);
+  ObVectorIndexTabletIDArray tmp_tablet_id_array;
+  ObVectorIndexTableIDArray tmp_table_id_array;
+  ObVectorIndexSyncLog ls_log(tmp_tablet_id_array, tmp_table_id_array);
 
   // need ls, and mgr
   if (OB_FAIL(base_header.deserialize(log_buf, buf_size, tmp_pos))) {
@@ -1596,6 +1624,25 @@ void ObVectorIndexMemSyncInfo::check_and_switch_if_needed(bool &need_sync, bool 
       K(get_waiting_map().size()));
   }
   // both map empty, do nothing
+}
+
+int ObVectorIndexSyncLogCb::on_success()
+{
+  ATOMIC_SET(&is_success_, true);
+  if (OB_NOT_NULL(scheduler_)) {
+    scheduler_->handle_submit_callback(true);
+  }
+  ATOMIC_SET(&is_callback_invoked_, true);
+  return OB_SUCCESS;
+}
+
+int ObVectorIndexSyncLogCb::on_failure()
+{
+  if (OB_NOT_NULL(scheduler_)) {
+    scheduler_->handle_submit_callback(false);
+  }
+  ATOMIC_SET(&is_callback_invoked_, true);
+  return OB_SUCCESS;
 }
 
 }

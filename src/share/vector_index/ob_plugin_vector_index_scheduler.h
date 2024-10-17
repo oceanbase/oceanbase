@@ -29,6 +29,7 @@ namespace share
 
 class ObPluginVectorIndexService;
 class ObPluginVectorIndexMgr;
+class ObPluginVectorIndexLoadScheduler;
 
 static const int64_t VECTOR_INDEX_TABLET_ID_COUNT = 100;
 typedef ObSEArray<ObTabletID, VECTOR_INDEX_TABLET_ID_COUNT> ObVectorIndexTabletIDArray;
@@ -58,9 +59,8 @@ class ObVectorIndexSyncLogCb : public logservice::AppendCb
 {
 public:
   ObVectorIndexSyncLogCb()
-    : log_buffer_(nullptr),
-      log_buffer_len_(0),
-      pos_(0)
+    : scheduler_(nullptr),
+      log_buffer_(nullptr)
   {
     reset();
   }
@@ -83,32 +83,19 @@ public:
     }
   }
 
-  virtual int on_success() override
-  {
-    ATOMIC_SET(&is_success_, true);
-    MEM_BARRIER();
-    ATOMIC_SET(&is_callback_invoked_, true);
-    return OB_SUCCESS;
-  }
-  virtual int on_failure() override
-  {
-    ATOMIC_SET(&is_callback_invoked_, true);
-    return OB_SUCCESS;
-  }
+  int on_success();
 
-  TO_STRING_KV(K_(is_callback_invoked), K_(is_success), K_(tablet_id_array), K_(table_id_array),
-               KP_(log_buffer), K_(log_buffer_len), K_(pos));
+  int on_failure();
+
+  TO_STRING_KV(K_(is_callback_invoked), K_(is_success), KP_(log_buffer));
   OB_INLINE bool is_invoked() const { return ATOMIC_LOAD(&is_callback_invoked_); }
   OB_INLINE bool is_success() const { return ATOMIC_LOAD(&is_success_); }
 
 public:
-  ObVectorIndexTabletIDArray tablet_id_array_;
-  ObVectorIndexTableIDArray table_id_array_;
   static const uint32 VECTOR_INDEX_SYNC_LOG_MAX_LENGTH = 16 * 1024; // Max 16KB each log
   static const uint32_t VECTOR_INDEX_MAX_SYNC_COUNT = 512;
+  ObPluginVectorIndexLoadScheduler *scheduler_;
   char *log_buffer_;
-  uint32_t log_buffer_len_;
-  int64_t pos_;
 
 private:
   bool is_callback_invoked_;
@@ -204,6 +191,7 @@ public:
       is_leader_(false),
       need_do_for_switch_(false),
       is_stopped_(false),
+      is_logging_(false),
       tenant_id_(OB_INVALID_TENANT_ID),
       ttl_tablet_timer_tg_id_(0),
       interval_factor_(1),
@@ -265,7 +253,7 @@ public:
   int generate_vec_idx_memdata_dag(ObPluginVectorIndexMgr *mgr, ObPluginVectorIndexTaskCtx *task_ctx);
 
   // logger interfaces
-  int handle_submit_callback(const bool success, const share::SCN log_ts);
+  int handle_submit_callback(const bool success);
   int handle_replay_result(ObVectorIndexSyncLog &ls_log);
   int replay(const void *buffer, const int64_t buf_size, const palf::LSN &lsn, const share::SCN &log_scn);
 
@@ -288,7 +276,7 @@ public:
 
   int safe_to_destroy(bool &is_safe);
 
-  TO_STRING_KV(K_(is_inited), K_(is_leader), K_(need_do_for_switch), K_(is_stopped),
+  TO_STRING_KV(K_(is_inited), K_(is_leader), K_(need_do_for_switch), K_(is_stopped), K_(is_logging),
                K_(tenant_id), K_(ttl_tablet_timer_tg_id), K_(interval_factor),
                K_(basic_period), K_(current_memory_config), K_(dag_ref_cnt),
                KP_(vector_index_service), KP_(ls),
@@ -316,6 +304,9 @@ private:
   bool is_leader_;
   bool need_do_for_switch_;
   bool is_stopped_;
+
+  bool is_logging_;
+  common::ObSpinLock logging_lock_;
   uint64_t tenant_id_;
   int ttl_tablet_timer_tg_id_;
   int interval_factor_;
@@ -327,6 +318,8 @@ private:
   int64_t local_schema_version_;
   ObPluginVectorIndexTenantTaskCtx local_tenant_task_;
   ObVectorIndexSyncLogCb cb_;
+  ObVectorIndexTabletIDArray tablet_id_array_;
+  ObVectorIndexTableIDArray table_id_array_;
 };
 
 class ObVectorIndexTask : public share::ObITask
