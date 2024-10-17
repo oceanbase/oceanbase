@@ -186,7 +186,7 @@ int ObVectorQueryAdaptorResultContext::set_vector(int64_t index, const char *ptr
 {
   INIT_SUCC(ret);
   char *copy_str = nullptr;
-  if (OB_ISNULL(tmp_allocator_)) {
+  if (OB_ISNULL(batch_allocator_)) {
     ret = OB_BAD_NULL_ERROR;
     LOG_WARN("get invalid allocator.", K(ret));
   } else if (index >= get_count()) {
@@ -197,7 +197,7 @@ int ObVectorQueryAdaptorResultContext::set_vector(int64_t index, const char *ptr
   } else if (size / sizeof(float) != get_dim()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid vector str.", K(ret), K(size), K(ptr), K(get_dim()));
-  } else if (OB_ISNULL(copy_str = static_cast<char *>(tmp_allocator_->alloc(sizeof(char*) * size)))) {
+  } else if (OB_ISNULL(copy_str = static_cast<char *>(batch_allocator_->alloc(sizeof(char*) * size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocator.", K(ret));
   } else {
@@ -1059,7 +1059,7 @@ int ObPluginVectorIndexAdaptor::complete_delta_buffer_table_data(ObVectorQueryAd
   uint64_t *vids = nullptr;
   int count = 0;
   ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_);
-  if (OB_ISNULL(ctx)) {
+  if (OB_ISNULL(ctx) || OB_ISNULL(ctx->batch_allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid ctx.", K(ret));
   } else if (ctx->get_vec_cnt() == 0) {
@@ -1102,6 +1102,7 @@ int ObPluginVectorIndexAdaptor::complete_delta_buffer_table_data(ObVectorQueryAd
   } else if (OB_FAIL(write_into_delta_mem(ctx, count, vectors, vids))) {
     LOG_WARN("failed to write into delta mem.", K(ret), KP(ctx));
   } else {
+    ctx->batch_allocator_->reuse();
     ctx->do_next_batch();
     if (ctx->if_next_batch()) {
       ctx->status_ = PVQ_COM_DATA;
@@ -1350,9 +1351,10 @@ int ObPluginVectorIndexAdaptor::prepare_delta_mem_data(roaring::api::roaring64_b
   roaring::api::roaring64_bitmap_t *delta_bitmap = nullptr;
   if (OB_FAIL(try_init_mem_data(VIRT_INC))) {
     LOG_WARN("failed to init mem data incr.", K(ret));
-  } else if (OB_ISNULL(gene_bitmap) || OB_ISNULL(delta_bitmap = incr_data_->bitmap_->insert_bitmap_)) {
+  } else if (OB_ISNULL(gene_bitmap) || OB_ISNULL(delta_bitmap = incr_data_->bitmap_->insert_bitmap_)
+            || OB_ISNULL(ctx) || OB_ISNULL(ctx->tmp_allocator_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get invalid bitmap.", K(ret), KP(gene_bitmap), KP(delta_bitmap), KP(ctx->tmp_allocator_));
+    LOG_WARN("get invalid bitmap.", K(ret), KP(gene_bitmap), KP(delta_bitmap), KP(ctx));
   } else {
     roaring::api::roaring64_bitmap_t *andnot_bitmap = nullptr;
     if (OB_SUCC(ret)) {

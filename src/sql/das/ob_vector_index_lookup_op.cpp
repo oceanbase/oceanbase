@@ -896,7 +896,8 @@ int ObVectorIndexLookupOp::process_adaptor_state()
   ObVidAdaLookupStatus last_state = ObVidAdaLookupStatus::STATES_ERROR;
   ObVidAdaLookupStatus cur_state = ObVidAdaLookupStatus::STATES_INIT;
   ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()); // use for tmp query and data complement
-  ObVectorQueryAdaptorResultContext ada_ctx(MTL_ID(), allocator_, &tmp_allocator);
+  ObArenaAllocator batch_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()); // use for data complement for each batch
+  ObVectorQueryAdaptorResultContext ada_ctx(MTL_ID(), allocator_, &tmp_allocator, &batch_allocator);
   share::ObVectorIndexAcquireCtx index_ctx;
   ObPluginVectorIndexAdapterGuard adaptor_guard;
   index_ctx.inc_tablet_id_ = delta_buf_tablet_id_;
