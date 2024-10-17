@@ -83,6 +83,7 @@ protected:
   virtual int can_batch_scan(bool &can_batch) { can_batch = false; return OB_SUCCESS; }
   virtual int64_t generate_read_tables_version() const;
   virtual bool check_table_need_read(const ObITable &table, int64_t &major_version) const;
+  virtual int alloc_row_store(ObTableAccessContext &context, const ObTableAccessParam &param);
   int add_iterator(ObStoreRowIterator &iter); // for unit test
   const ObTableIterParam * get_actual_iter_param(const ObITable *table) const;
   int project_row(const blocksstable::ObDatumRow &unprojected_row,
@@ -117,7 +118,6 @@ private:
   int save_curr_rowkey();
   int reset_tables();
   int check_filtered(const blocksstable::ObDatumRow &row, bool &filtered);
-  int alloc_row_store(ObTableAccessContext &context, const ObTableAccessParam &param);
   int process_fuse_row(const bool not_using_static_engine,
                        blocksstable::ObDatumRow &in_row,
                        blocksstable::ObDatumRow *&out_row);
