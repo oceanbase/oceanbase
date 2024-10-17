@@ -1616,7 +1616,7 @@ int ObStorageSchema::generate_column_array(const ObTableSchema &input_schema)
       } else {
         col_schema.default_checksum_ = datum.checksum(0);
       }
-      if (OB_FAIL(col_schema.deep_copy_default_val(*allocator_, col->get_orig_default_value()))) {
+      if (FAILEDx(col_schema.deep_copy_default_val(*allocator_, col->get_orig_default_value()))) {
         STORAGE_LOG(WARN, "failed to deep copy", K(ret), K(col->get_orig_default_value()));
       } else if (OB_FAIL(column_array_.push_back(col_schema))) {
         STORAGE_LOG(WARN, "Fail to push into column array", K(ret), K(col_schema));
