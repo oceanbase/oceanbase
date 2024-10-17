@@ -37,6 +37,7 @@
 #include "ob_expr_from_unix_time.h"
 #include "ob_expr_func_partition_key.h"
 #include "ob_expr_greatest.h"
+#include "ob_expr_hello_repeat.h"
 #include "ob_expr_host_ip.h"
 #include "ob_expr_trim.h"
 #include "ob_expr_tokenize.h"
@@ -1267,6 +1268,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprTokenize::eval_tokenize,                                      /* 758 */
   NULL, // ObExprEnhancedAesEncrypt::eval_aes_encrypt                 /* 759 */
   NULL, // ObExprEnhancedAesDecrypt::eval_aes_decrypt                 /* 760 */
+  ObExprHelloRepeat::eval,                                            /* 761 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
