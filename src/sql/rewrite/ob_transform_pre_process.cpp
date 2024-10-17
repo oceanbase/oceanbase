@@ -5754,16 +5754,27 @@ int ObTransformPreProcess::transform_in_or_notin_expr_without_row(ObRawExprFacto
   ObRawExpr *right_expr = in_expr->get_param_expr(1);
   ObSEArray<DistinctObjMeta, 4> distinct_types;
   for (int i = 0; OB_SUCC(ret) && i < right_expr->get_param_count(); i++) {
-    if (OB_ISNULL(right_expr->get_param_expr(i))) {
+    ObRawExpr *param_expr = right_expr->get_param_expr(i);
+    if (OB_ISNULL(param_expr)) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid null param expr", K(ret), K(right_expr->get_param_expr(i)));
+      LOG_WARN("invalid null param expr", K(ret), K(param_expr));
     } else {
-      ObObjType obj_type = right_expr->get_param_expr(i)->get_result_type().get_type();
-      ObCollationType coll_type = right_expr->get_param_expr(i)
-                                              ->get_result_type().get_collation_type();
-      ObCollationLevel coll_level = right_expr->get_param_expr(i)
-                                              ->get_result_type().get_collation_level();
-      if (OB_UNLIKELY(obj_type == ObMaxType)) {
+      ObObjType obj_type = param_expr->get_result_type().get_type();
+      ObCollationType coll_type = param_expr->get_result_type().get_collation_type();
+      ObCollationLevel coll_level = param_expr->get_result_type().get_collation_level();
+      if (param_expr->is_enum_set_with_subschema()) {
+        ObObjMeta obj_meta;
+        if (OB_FAIL(ObRawExprUtils::extract_enum_set_collation(param_expr->get_result_type(),
+                                                               &session,
+                                                               obj_meta))) {
+          LOG_WARN("fail to extract enum set cs type", K(ret));
+        } else {
+          coll_type = obj_meta.get_collation_type();
+          coll_level = obj_meta.get_collation_level();
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_UNLIKELY(obj_type == ObMaxType)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected obj type", K(ret), K(obj_type), K(*in_expr));
       } else if (OB_FAIL(add_var_to_array_no_dup(distinct_types,
@@ -5795,13 +5806,24 @@ int ObTransformPreProcess::transform_in_or_notin_expr_without_row(ObRawExprFacto
       same_type_exprs.reuse();
       DistinctObjMeta obj_meta = distinct_types.at(i);
       for (int j = 0; OB_SUCC(ret) && j < right_expr->get_param_count(); j++) {
-        ObObjType obj_type = right_expr->get_param_expr(j)->get_result_type().get_type();
-        ObCollationType coll_type = right_expr->get_param_expr(j)
-                                                ->get_result_type().get_collation_type();
-        ObCollationLevel coll_level = right_expr->get_param_expr(j)
-                                                ->get_result_type().get_collation_level();
+        ObRawExpr *param_expr = right_expr->get_param_expr(j);
+        ObObjType obj_type = param_expr->get_result_type().get_type();
+        ObCollationType coll_type = param_expr->get_result_type().get_collation_type();
+        ObCollationLevel coll_level = param_expr->get_result_type().get_collation_level();
+        if (param_expr->is_enum_set_with_subschema()) {
+          ObObjMeta enum_set_obj_meta;
+          if (OB_FAIL(ObRawExprUtils::extract_enum_set_collation(param_expr->get_result_type(),
+                                                                &session,
+                                                                enum_set_obj_meta))) {
+            LOG_WARN("fail to extract enum set cs type", K(ret));
+          } else {
+            coll_type = enum_set_obj_meta.get_collation_type();
+            coll_level = enum_set_obj_meta.get_collation_level();
+          }
+        }
         DistinctObjMeta tmp_meta(obj_type, coll_type, coll_level);
-        if (obj_meta == tmp_meta
+        if (OB_FAIL(ret)) {
+        } else if (obj_meta == tmp_meta
             && OB_FAIL(same_type_exprs.push_back(right_expr->get_param_expr(j)))) {
           LOG_WARN("failed to add param expr", K(ret));
         } else { /* do nothing */ }

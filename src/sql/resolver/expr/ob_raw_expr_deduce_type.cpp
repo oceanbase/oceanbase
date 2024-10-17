@@ -127,14 +127,9 @@ int ObRawExprDeduceType::visit(ObQueryRefRawExpr &expr)
       } else {/*do nothing*/}
     }
   } else {
-    if (1 == expr.get_output_column()
-          && expr.get_column_types().at(0).is_enum_set_with_subschema()) {
-      expr.set_result_type(expr.get_column_types().at(0));
-    } else {
-      // for enumset query ref `is_set`, need warp enum_to_str/set_to_str expr at
-      // `ObRawExprWrapEnumSet::visit_query_ref_expr`
-      expr.set_data_type(ObIntType);
-    }
+    // for enumset query ref `is_set`, need warp enum_to_str/set_to_str expr at
+    // `ObRawExprWrapEnumSet::visit_query_ref_expr`
+    expr.set_data_type(ObIntType);
   }
   return ret;
 }

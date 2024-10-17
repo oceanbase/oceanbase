@@ -37,7 +37,7 @@ struct DistinctObjMeta
   DistinctObjMeta(ObObjType obj_type, ObCollationType coll_type, ObCollationLevel coll_level)
     : obj_type_(obj_type), coll_type_(coll_type), coll_level_(coll_level)
   {
-    if (!ObDatumFuncs::is_string_type(obj_type_)) {
+    if (!ObDatumFuncs::is_string_type(obj_type_) && !ob_is_enum_or_set_type(obj_type_)) {
       coll_type_ = CS_TYPE_MAX;
       coll_level_ = CS_LEVEL_INVALID;
     }
