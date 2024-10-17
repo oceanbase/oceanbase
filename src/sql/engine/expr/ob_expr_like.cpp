@@ -1644,9 +1644,9 @@ int ObExprLike::eval_like_expr_vector_only_text_vectorized(VECTOR_EVAL_FUNC_ARG_
   ObExpr &escape = *expr.args_[2];
   int64_t const_skip = 0;
   const ObBitVector *param_skip = to_bit_vector(&const_skip);
-  if (OB_FAIL(pattern.eval_vector(ctx, *param_skip, bound))) {
+  if (OB_FAIL(pattern.eval_vector(ctx, *param_skip, EvalBound(1)))) {
     LOG_WARN("eval pattern failed", K(ret));
-  } else if (OB_FAIL(escape.eval_vector(ctx, *param_skip, bound))) {
+  } else if (OB_FAIL(escape.eval_vector(ctx, *param_skip, EvalBound(1)))) {
     LOG_WARN("eval escape failed", K(ret));
   // the third arg escape must be varchar
   } else if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
