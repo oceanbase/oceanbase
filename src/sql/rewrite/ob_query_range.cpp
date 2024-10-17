@@ -6242,16 +6242,21 @@ OB_NOINLINE int ObQueryRange::cold_cast_cur_node(const ObKeyPart *cur,
                                                                 cur_val.get_type(),
                                                                 dest_val->get_type()))) {
         LOG_WARN("get compare type failed", K(ret));
-      } else if (OB_FAIL(ObRelationalExprOperator::compare_nullsafe(cmp, cur_val, *dest_val,
-                                                                    cast_ctx, cmp_type,
-                                                                    cur->pos_.column_type_.get_collation_type()))) {
-        LOG_WARN("compare obj value failed", K(ret));
-      } else if (0 == cmp) {
-        cur_val = *dest_val;
-        cur_val.set_collation_type(cur->pos_.column_type_.get_collation_type());
       } else {
-        //always false
-        always_false = true;
+        if (cmp_type == ObTimestampType && cur_val.get_type() == ObMySQLDateType) {
+          cmp_type = ObMySQLDateType;
+        }
+        if (OB_FAIL(ObRelationalExprOperator::compare_nullsafe(cmp, cur_val, *dest_val,
+                                                                      cast_ctx, cmp_type,
+                                                                      cur->pos_.column_type_.get_collation_type()))) {
+          LOG_WARN("compare obj value failed", K(ret));
+        } else if (0 == cmp) {
+          cur_val = *dest_val;
+          cur_val.set_collation_type(cur->pos_.column_type_.get_collation_type());
+        } else {
+          //always false
+          always_false = true;
+        }
       }
     }
   }
@@ -7012,14 +7017,19 @@ if (OB_SUCC(ret) ) { \
       ObObjType cmp_type = ObMaxType; \
       if (OB_FAIL(ObExprResultTypeUtil::get_relational_cmp_type(cmp_type, start.get_type(), dest_val->get_type()))) { \
         LOG_WARN("get compare type failed", K(ret)); \
-      } else if (OB_FAIL(ObRelationalExprOperator::compare_nullsafe(cmp, start, *dest_val, cast_ctx, \
-                                                                    cmp_type, column_type.get_collation_type()))) { \
-        LOG_WARN("compare obj value failed", K(ret)); \
-      } else if (cmp < 0) { \
-        /* 转换后精度发生变化，结果更大，需要将原来的开区间变为闭区间 */ \
-        include_start = true; \
-      } else if (cmp > 0) { \
-        include_start = false; \
+      } else { \
+        if (cmp_type == ObTimestampType && start.get_type() == ObMySQLDateType) { \
+          cmp_type = ObMySQLDateType; \
+        }  \
+        if (OB_FAIL(ObRelationalExprOperator::compare_nullsafe(cmp, start, *dest_val, cast_ctx, \
+                                                                      cmp_type, column_type.get_collation_type()))) { \
+          LOG_WARN("compare obj value failed", K(ret)); \
+        } else if (cmp < 0) { \
+          /* 转换后精度发生变化，结果更大，需要将原来的开区间变为闭区间 */ \
+          include_start = true; \
+        } else if (cmp > 0) { \
+          include_start = false; \
+        } \
       } \
       start = *dest_val; \
     } \
@@ -7040,14 +7050,19 @@ if (OB_SUCC(ret) ) { \
         ObObjType cmp_type = ObMaxType; \
         if (OB_FAIL(ObExprResultTypeUtil::get_relational_cmp_type(cmp_type, end.get_type(), dest_val->get_type()))) { \
           LOG_WARN("get compare type failed", K(ret)); \
-        } else if (OB_FAIL(ObRelationalExprOperator::compare_nullsafe(cmp, end, *dest_val, cast_ctx, \
-                                                                      cmp_type, column_type.get_collation_type()))) { \
-          LOG_WARN("compare obj value failed", K(ret)); \
-        } else if (cmp > 0) { \
-          /* 转换后精度发生变化，结果变为更小，需要将原来的开区间变为闭区间 */ \
-          include_end = true; \
-        } else if (cmp < 0) { \
-          include_end = false; \
+        } else { \
+          if (cmp_type == ObTimestampType && start.get_type() == ObMySQLDateType) { \
+            cmp_type = ObMySQLDateType; \
+          }  \
+          if (OB_FAIL(ObRelationalExprOperator::compare_nullsafe(cmp, end, *dest_val, cast_ctx, \
+                                                                        cmp_type, column_type.get_collation_type()))) { \
+            LOG_WARN("compare obj value failed", K(ret)); \
+          } else if (cmp > 0) { \
+            /* 转换后精度发生变化，结果变为更小，需要将原来的开区间变为闭区间 */ \
+            include_end = true; \
+          } else if (cmp < 0) { \
+            include_end = false; \
+          } \
         } \
         end = *dest_val; \
       } \

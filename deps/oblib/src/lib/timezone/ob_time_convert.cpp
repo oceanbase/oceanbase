@@ -1724,17 +1724,34 @@ int ObTimeConverter::mdate_to_datetime(ObMySQLDate md_value, const ObTimeConvert
   int ret = OB_SUCCESS;
   ObTime ob_time(DT_TYPE_DATETIME);
   ObDateSqlMode temp_sql_mode;
+  bool evaluated = false;
   if (!cvrt_ctx.is_timestamp_) {
     temp_sql_mode = date_sql_mode;
   }
   if (MYSQL_ZERO_DATE == md_value.date_) {
     dt_value = ZERO_DATETIME;
+    evaluated = true;
   } else if (OB_FAIL(mdate_to_ob_time(md_value, ob_time))) {
     LOG_WARN("failed to convert date to ob time", K(ret));
   } else if (OB_FAIL(validate_datetime(ob_time, temp_sql_mode))) {
     ret = OB_SUCCESS;
-    dt_value = ZERO_DATETIME;
-  } else {
+    if (cvrt_ctx.is_timestamp_) {
+      if (ob_time.parts_[DT_MON] == 0) {
+        ob_time.parts_[DT_MON] = 1;
+        ob_time.parts_[DT_MDAY] = 1;
+      } else if (ob_time.parts_[DT_MDAY] == 0) {
+        ob_time.parts_[DT_MDAY] = 1;
+      } else {
+        ob_time.parts_[DT_MON] += 1;
+        ob_time.parts_[DT_MDAY] = 1;
+      }
+    } else {
+      dt_value = ZERO_DATETIME;
+      evaluated = true;
+    }
+  }
+
+  if (OB_SUCC(ret) && !evaluated) {
     ob_time.parts_[DT_DATE] = ob_time_to_date(ob_time);
     if (OB_FAIL(ob_time_to_datetime(ob_time, cvrt_ctx, dt_value))) {
       LOG_WARN("failed to convert ob time to datetime", K(ret));

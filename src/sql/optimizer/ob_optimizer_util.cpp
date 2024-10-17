@@ -6169,7 +6169,7 @@ bool ObOptimizerUtil::is_lossless_type_conv(const ObExprResType &child_type, con
       }
     } else if (ObTimestampType == child_type.get_type() || ObDateTimeType == child_type.get_type()) {
       if (ObDateTimeType == dst_type.get_type() || ObTimestampType == dst_type.get_type()
-            || ObMySQLDateTimeType == dst_type.get_type()) {
+            || ObMySQLDateTimeType == dst_type.get_type() || ObMySQLDateType == dst_type.get_type()) {
         if (child_type.get_accuracy().get_precision() == dst_acc.get_precision() &&
             child_type.get_accuracy().get_scale() == dst_acc.get_scale()) {
           is_lossless = true;
@@ -6189,7 +6189,7 @@ bool ObOptimizerUtil::is_lossless_type_conv(const ObExprResType &child_type, con
          }
        }
     } else if (ObMySQLDateTC == child_tc) {
-      if (child_tc == dst_tc || ObMySQLDateTimeType == dst_type.get_type()) {
+      if (child_tc == dst_tc || ObMySQLDateTimeType == dst_type.get_type() ||  ObDateTimeType == dst_type.get_type() || ObTimestampType == dst_type.get_type()) {
         if (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale()) {
            is_lossless = true;
          }
@@ -6310,7 +6310,7 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_los
         // do nothing
       } else if (ObTimestampType == child_type.get_type()) {
         if (child_tc == dst_tc || ObDateTimeType == dst_type.get_type()
-              || ObMySQLDateTimeType == dst_type.get_type()) {
+              || ObMySQLDateTimeType == dst_type.get_type() || ObMySQLDateType == dst_type.get_type()) {
           if (child_type.get_accuracy().get_precision() == dst_acc.get_precision() &&
               child_type.get_accuracy().get_scale() == dst_acc.get_scale()) {
             is_lossless = true;
@@ -6325,7 +6325,7 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_los
           }
         }
       } else if (ObMySQLDateTC == child_tc) {
-        if (child_tc == dst_tc || ObMySQLDateTimeType == dst_type.get_type()) {
+        if (child_tc == dst_tc || ObMySQLDateTimeType == dst_type.get_type() || ObDateTimeType == dst_type.get_type() || ObTimestampType == dst_type.get_type()) {
           if (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale()) {
             is_lossless = true;
           }
