@@ -17526,8 +17526,14 @@ int ObDMLResolver::resolve_values_table_for_select(const ParseNode &table_node,
                 insert_stmt = upper_insert_resolver_->get_insert_stmt();
                 ObInsertTableInfo &table_info = insert_stmt->get_insert_table_info();
                 ColumnItem *column_item = NULL;
-                uint64_t column_id = table_info.values_desc_.at(j)->get_column_id();
-                if (OB_ISNULL(column_item = insert_stmt->get_column_item_by_id(table_info.table_id_,
+                uint64_t column_id = 0;
+                uint64_t column_count = table_info.values_desc_.count();
+                if (column_count != vector_node->num_child_) {
+                  ret = OB_ERR_COULUMN_VALUE_NOT_MATCH;
+                  LOG_WARN("column count doesn't match value count", KR(ret), K(column_count), K(vector_node->num_child_));
+                } else if (FALSE_IT(column_id = table_info.values_desc_.at(j)->get_column_id())) {
+                  //do nothing
+                } else if (OB_ISNULL(column_item = insert_stmt->get_column_item_by_id(table_info.table_id_,
                                                                               column_id))) {
                   ret = OB_ERR_UNEXPECTED;
                   LOG_WARN("get column item by id failed", K(table_info.table_id_), K(column_id), K(ret));
