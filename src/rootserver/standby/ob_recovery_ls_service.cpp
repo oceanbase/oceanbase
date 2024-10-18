@@ -489,9 +489,16 @@ int ObRecoveryLSService::process_ls_tx_log_(ObTxLogBlock &tx_log_block, const SC
         const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id_);
         ObMySQLTransaction trans;
         ObLSRecoveryGuard guard;
+
+        share::ObTenantRole::Role tenant_role = MTL_GET_TENANT_ROLE_CACHE();
+        if (is_invalid_tenant(tenant_role)) {
+          ret = OB_EAGAIN;
+          LOG_WARN("tenant role cache is invalid", KR(ret));
+        }
         for (int64_t i = 0; OB_SUCC(ret) && i < source_data.count(); ++i) {
           const ObTxBufferNode &node = source_data.at(i);
-          if (ObTxDataSourceType::MV_UPDATE_SCN == node.get_data_source_type()) {
+          if (is_standby_tenant(tenant_role)
+              && ObTxDataSourceType::MV_UPDATE_SCN == node.get_data_source_type()) {
             ret = OB_ITER_STOP;
             LOG_ERROR("new mview has been create in primary tenant, stop", KR(ret), K(sync_scn));
           } else if (OB_FAIL(try_cancel_clone_job_for_standby_tenant_(node))) {
