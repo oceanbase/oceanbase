@@ -1929,6 +1929,10 @@ int ObBackupUnorderdMacroBlockIndexMerger::alloc_merge_iter_(const bool tenant_l
       LOG_WARN("failed to init macro block index iterator", K(ret), K(merge_param), K(ls_id), K(turn_id));
     } else {
       iter = tmp_iter;
+      tmp_iter = NULL;
+    }
+    if (OB_NOT_NULL(tmp_iter)) {
+      ObLSBackupFactory::free(tmp_iter);
     }
   }
   return ret;
@@ -1992,7 +1996,11 @@ int ObBackupUnorderdMacroBlockIndexMerger::prepare_prev_backup_set_index_iter_(
     LOG_WARN("failed to init backup macro range index iterator", K(ret), K(merge_param), K(prev_backup_set_desc), K(prev_tenant_index_retry_id));
   } else {
     iter = tmp_iter;
+    tmp_iter = NULL;
     LOG_INFO("prepare prev backup set index iter", K(prev_backup_set_desc), K(merge_param));
+  }
+  if(OB_NOT_NULL(tmp_iter)){
+    ObLSBackupFactory::free(tmp_iter);
   }
   return ret;
 }

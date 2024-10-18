@@ -275,6 +275,16 @@ void ObLSBackupFactory::free(ObBackupTabletCtx *&ctx)
   OB_DELETE(ObBackupTabletCtx, ObModIds::BACKUP, ctx);
 }
 
+void ObLSBackupFactory::free(ObBackupOrderedMacroBlockIndexIterator *&iterator)
+{
+  OB_DELETE(ObBackupOrderedMacroBlockIndexIterator, ObModIds::BACKUP, iterator);
+}
+
+void ObLSBackupFactory::free(ObBackupUnorderedMacroBlockIndexIterator *&iterator)
+{
+  OB_DELETE(ObBackupUnorderedMacroBlockIndexIterator, ObModIds::BACKUP, iterator);
+}
+
 void ObLSBackupFactory::free(ObBackupSSTableSecMetaIterator *&iterator)
 {
   OB_DELETE(ObBackupSSTableSecMetaIterator, ObModIds::BACKUP, iterator);
