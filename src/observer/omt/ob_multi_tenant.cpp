@@ -1859,7 +1859,11 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &remove_tenant_s
       LOG_INFO("removed_tenant begin to kill tenant session",
           K(tenant_id), K(prepare_unit_gc_ts), K(need_force_kill_session), K(GCONF._enable_unit_gc_wait));
       if (OB_FAIL(GCTX.session_mgr_->kill_tenant(tenant_id, need_force_kill_session))) {
-        LOG_ERROR("fail to kill tenant session", K(ret), K(tenant_id));
+        if (OB_EAGAIN == ret) {
+	  LOG_INFO("fail to kill tenant session", K(ret), K(tenant_id));
+	} else {
+          LOG_WARN("fail to kill tenant session", K(ret), K(tenant_id));
+	}
         {
           SpinWLockGuard guard(lock_);
           removed_tenant->start();
