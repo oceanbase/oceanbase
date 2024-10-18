@@ -872,6 +872,11 @@ typedef enum ObItemType
   T_FUN_SYS_NEGATIVE_INNER_PRODUCT = 1746,
   T_FUNC_SYS_ARRAY_OVERLAPS = 1747,
   T_FUNC_SYS_ARRAY_CONTAINS_ALL = 1748,
+  T_FUNC_SYS_ARRAY_AGG = 1749,
+  T_FUNC_SYS_ARRAY_DISTINCT = 1750,
+  T_FUNC_SYS_ARRAY_REMOVE = 1751,
+  T_FUNC_SYS_ARRAY_MAP = 1752,
+  T_FUNC_SYS_LAMBDA = 1753,
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table

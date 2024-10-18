@@ -1275,6 +1275,13 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprInnerIsTrue::json_is_true_start,                     /* 766 */
   NULL, // ObExprInnerIsTrue::json_is_true_end,                       /* 767 */
   NULL, // ObExprGetMySQLRoutineParameterTypeStr::get_mysql_routine_parameter_type_str /* 768 */
+  NULL, // ObExprArrayDistinct::eval_array_distinct,                  /* 769 */
+  NULL, // ObExprArrayRemove::eval_array_remove_int64_t,              /* 770 */
+  NULL, // ObExprArrayRemove::eval_array_remove_float,                /* 771 */
+  NULL, // ObExprArrayRemove::eval_array_remove_double,               /* 772 */
+  NULL, // ObExprArrayRemove::eval_array_remove_ObString,             /* 773 */
+  NULL, // ObExprArrayRemove::eval_array_remove_array,                /* 774 */
+  NULL, // ObExprArrayMap::eval_array_map,                            /* 775 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1424,6 +1431,12 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   ObExprArrayContains::eval_array_contains_array_batch,               /* 143 */
   NULL,// ObExprArrayOverlaps::eval_array_overlaps_batch,             /* 144 */
   NULL,// ObExprArrayContainsAll::eval_array_contains_all_batch,      /* 145 */
+  NULL,// ObExprArrayDistinct::eval_array_distinct_batch,             /* 146 */
+  NULL,// ObExprArrayRemove::eval_array_remove_batch_int64_t,         /* 147 */
+  NULL,// ObExprArrayRemove::eval_array_remove_batch_float,           /* 148 */
+  NULL,// ObExprArrayRemove::eval_array_remove_batch_double,          /* 149 */
+  NULL,// ObExprArrayRemove::eval_array_remove_batch_ObString,        /* 150 */
+  NULL,// ObExprArrayRemove::eval_array_remove_array_batch,           /* 151 */
 };
 
 static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
@@ -1571,6 +1584,12 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprDiv::decint_div_mysql_vec_fn<int512_t, int128_t>,       /* 141 */
   NULL, // ObExprDiv::decint_div_mysql_vec_fn<int512_t, int256_t>,       /* 142 */
   NULL, // ObExprDiv::decint_div_mysql_vec_fn<int512_t, int512_t>,       /* 143 */
+  NULL, // ObExprArrayRemove::eval_array_remove_vector_int64_t,          /* 144 */
+  NULL, // ObExprArrayRemove::eval_array_remove_vector_float,            /* 145 */
+  NULL, // ObExprArrayRemove::eval_array_remove_vector_double,           /* 146 */
+  NULL, // ObExprArrayRemove::eval_array_remove_vector_ObString,         /* 147 */
+  NULL, // ObExprArrayRemove::eval_array_remove_array_vector,            /* 148 */
+  NULL, // ObExprArrayDistinct::eval_array_distinct_vector,              /* 149 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
