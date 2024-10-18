@@ -65,7 +65,10 @@ int ObTextStringDatumResult::init_with_batch_idx(int64_t res_len, int64_t batch_
     LOG_WARN("Lob: calc buffer len failed", K(ret), K(type_), KP(expr_), KP(ctx_), KP(res_datum_));
   } else {
     buffer_ = expr_->get_str_res_mem(*ctx_, buff_len_, batch_idx);
-    if (OB_FAIL(fill_temp_lob_header(res_len))) {
+    if (OB_ISNULL(buffer_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("Lob: alloc buffer failed", K(ret), KP(expr_), K(buff_len_), K(res_len), K(batch_idx));
+    } else if (OB_FAIL(fill_temp_lob_header(res_len))) {
       LOG_WARN("Lob: fill_temp_lob_header failed", K(ret), K(type_));
     }
   }
