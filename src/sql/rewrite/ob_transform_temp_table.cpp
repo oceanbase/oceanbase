@@ -2622,6 +2622,9 @@ int ObTransformTempTable::accept_cte_transform_v2(ObDMLStmt &origin_root_stmt,
     LOG_WARN("unexpected param", K(ret), K(ctx_));
   } else if (OB_FAIL(get_stmt_pointers(origin_root_stmt, origin_stmts, parent_map, stmt_ptrs))) {
     LOG_WARN("failed to get stmt pointers", K(ret));
+  } else if (origin_stmts.count() != stmt_ptrs.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected stmt pointers", K(ret), K(origin_stmts.count()), K(stmt_ptrs.count()));
   } else if (force_accept) {
     OPT_TRACE("accept cte because of the hint");
     trans_happened = true;
@@ -2683,7 +2686,7 @@ int ObTransformTempTable::accept_cte_transform_v2(ObDMLStmt &origin_root_stmt,
       if (OB_UNLIKELY(stmt_idx < 0 || stmt_idx >= origin_stmts.count())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected idx", K(ret), K(stmt_idx));
-      } else if (OB_FAIL(stmt_ptrs.at(i).set(trans_stmts.at(stmt_idx)))) {
+      } else if (OB_FAIL(stmt_ptrs.at(stmt_idx).set(trans_stmts.at(stmt_idx)))) {
         LOG_WARN("failed to set ptr", K(ret));
       } else if (OB_FAIL(accept_stmts.push_back(origin_stmts.at(stmt_idx)))) {
         LOG_WARN("failed to push back", K(ret));
