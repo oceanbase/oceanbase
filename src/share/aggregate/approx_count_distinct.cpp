@@ -62,7 +62,7 @@ int init_approx_count_distinct_aggregate(RuntimeContext &agg_ctx, const int64_t 
     VecValueTypeClass in_tc =
       get_vec_value_tc(param_meta.type_, param_meta.scale_, param_meta.precision_);
     if (in_tc != VEC_TC_STRING) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid input type", K(in_tc), K(param_meta));
     } else {
       switch (in_tc) {
