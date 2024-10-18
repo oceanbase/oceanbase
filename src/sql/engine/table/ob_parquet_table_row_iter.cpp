@@ -1401,6 +1401,9 @@ int ObParquetTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
           OZ(to->init_vector(eval_ctx, VEC_UNIFORM, read_count));
         } else {
           to_vec_header = from_vec_header;
+          if (from->is_nested_expr()) {
+            OZ(to->assign_nested_vector(*from, eval_ctx));
+          }
         }
         column_exprs_.at(i)->set_evaluated_projected(eval_ctx);
       }
