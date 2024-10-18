@@ -740,7 +740,7 @@ int ObTabletSplitWriteTask::generate_next_task(ObITask *&next_task)
   } else if (FALSE_IT(dag = static_cast<ObTabletSplitDag *> (tmp_dag))) {
   } else if (param_->can_reuse_macro_block_) {
     ret = OB_ITER_END;
-  } else if (next_task_id == context_->data_split_ranges_.count()) {
+  } else if (next_task_id >= context_->data_split_ranges_.count()) {
     ret = OB_ITER_END;
   } else if (OB_FAIL(dag->alloc_task(next_write_task))) {
     LOG_WARN("alloc task failed", K(ret));
