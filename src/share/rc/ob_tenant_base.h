@@ -923,8 +923,30 @@ inline ObTenantSwitchGuard _make_tenant_switch_guard()
     } while(0)
 
 
+#ifdef ENABLE_DEBUG_LOG
+#define mtl_sop_borrow(type)                                                                                    \
+  ({                                                                                                            \
+    type *iter = MTL(common::ObServerObjectPool<type>*)->borrow_object();                                       \
+    if (OB_NOT_NULL(iter)) {                                                                                    \
+      storage::ObStorageLeakChecker::get_instance().handle_hold(iter, storage::ObStorageCheckID::STORAGE_ITER); \
+    }                                                                                                           \
+    (iter);                                                                                                     \
+  })
+#else
 #define mtl_sop_borrow(type) MTL(common::ObServerObjectPool<type>*)->borrow_object()
+#endif
+
+#ifdef ENABLE_DEBUG_LOG
+#define mtl_sop_return(type, ptr)                                                                               \
+  do {                                                                                                          \
+    if (OB_NOT_NULL(ptr)) {                                                                                     \
+      storage::ObStorageLeakChecker::get_instance().handle_reset(ptr, storage::ObStorageCheckID::STORAGE_ITER); \
+    }                                                                                                           \
+    MTL(common::ObServerObjectPool<type>*)->return_object(ptr);                                                 \
+  } while (false)
+#else
 #define mtl_sop_return(type, ptr) MTL(common::ObServerObjectPool<type>*)->return_object(ptr)
+#endif
 
 } // end of namespace share
 
