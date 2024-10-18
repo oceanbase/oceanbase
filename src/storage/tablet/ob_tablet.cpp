@@ -5880,7 +5880,9 @@ int ObTablet::get_kept_snapshot_info(
     const bool is_new_mv_in_restore = ObSnapShotType::SNAPSHOT_FOR_MAJOR_REFRESH_MV == snapshot_info.snapshot_type_ &&
                                       0 == snapshot_info.snapshot_;
     // if exist new mv in restore, use special snapshot info
-    if (min_reserved_snapshot_on_ls > 0) {
+    if (!tablet_meta_.ha_status_.is_data_status_complete()) {
+      use_multi_version_start_on_tablet = true;
+    } else if (min_reserved_snapshot_on_ls > 0) {
       snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_FOR_LS_RESERVED, min_reserved_snapshot_on_ls);
       snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_FOR_MIN_MEDIUM, min_medium_snapshot);
       if (snapshot_info.snapshot_ < get_multi_version_start()) {
