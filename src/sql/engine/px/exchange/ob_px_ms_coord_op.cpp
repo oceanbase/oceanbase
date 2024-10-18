@@ -136,7 +136,7 @@ int ObPxMSCoordOp::inner_open()
   } else if (OB_FAIL(setup_loop_proc())) {
     LOG_WARN("fail setup loop proc", K(ret));
   } else {
-    if (1 == px_dop_) {
+    if (use_serial_scheduler_) {
       msg_proc_.set_scheduler(&serial_scheduler_);
     } else {
       msg_proc_.set_scheduler(&parallel_scheduler_);

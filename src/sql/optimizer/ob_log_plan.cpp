@@ -2843,6 +2843,8 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
     LOG_ERROR("failed to allocate table/index operator", K(ret));
   } else if (OB_FAIL(scan->set_est_row_count_record(ap->est_records_))) {
     LOG_WARN("failed to set estimation info", K(ret));
+  } else if (OB_FAIL(scan->init_est_cost_simple_info(ap->get_cost_table_scan_info()))) {
+    LOG_WARN("failed to init est cost simple info", K(ret));
   } else {
     scan->set_est_cost_info(&ap->get_cost_table_scan_info());
     scan->set_flashback_query_expr(table_item->flashback_query_expr_);

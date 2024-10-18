@@ -130,6 +130,7 @@ protected:
   // send rpc to clean dtl interm result of not scheduled dfos.
   virtual void clean_dfos_dtl_interm_result() = 0;
   int try_clear_p2p_dh_info();
+  int64_t get_adaptive_px_dop(int64_t dop) const;
 protected:
   common::ObArenaAllocator allocator_;
   common::ObArenaAllocator row_allocator_;
@@ -151,12 +152,12 @@ protected:
   ObInterruptibleTaskID interrupt_id_;
   bool register_detectable_id_;
   ObDetectableId detectable_id_;
-  int px_dop_;
   int64_t time_recorder_;
   int64_t batch_rescan_param_version_;
   ObExtraServerAliveCheck server_alive_checker_;
   int64_t last_px_batch_rescan_size_;
   ObString query_sql_;
+  bool use_serial_scheduler_;
 };
 
 class ObPxCoordSpec : public ObPxReceiveSpec

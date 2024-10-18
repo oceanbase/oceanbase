@@ -23,6 +23,7 @@
 #include "share/ob_i_sql_expression.h"          // ObISqlExpression,ObExprCtx
 #include "share/schema/ob_table_param.h"        // ObColDesc
 #include "share/schema/ob_multi_version_schema_service.h"     // ObMultiVersionSchemaService
+#include "share/ob_simple_batch.h"
 #include "sql/ob_phy_table_location.h"
 #include "sql/ob_sql_define.h"
 #include "sql/parser/parse_node.h"
