@@ -36,7 +36,7 @@
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
-
+#include "storage/compaction/ob_compaction_schedule_util.h"
 namespace oceanbase
 {
 
@@ -469,10 +469,13 @@ int ObTenantFreezeInfoMgr::get_min_reserved_snapshot(
         snapshot_info.update_by_smaller_snapshot(snapshot.snapshot_type_, snapshot.snapshot_scn_.get_val_for_tx());
         if (ObSnapShotType::SNAPSHOT_FOR_MAJOR_REFRESH_MV == snapshot.snapshot_type_) {
           // if exist mview snapshot type and tenant in restore
-          if (MTL_TENANT_ROLE_CACHE_IS_RESTORE()) {
+          // if not init merge scheduler, use 0 as multi_version_start
+          bool during_restore = false;
+          int tmp_ret = ObBasicMergeScheduler::get_merge_scheduler()->during_restore(during_restore);
+          if (OB_TMP_FAIL(tmp_ret) || (OB_SUCCESS == tmp_ret && during_restore)) {
             exist_mview_snapshot_type = true;
             snapshot_info.update_by_smaller_snapshot(ObSnapShotType::SNAPSHOT_FOR_MAJOR_REFRESH_MV, static_cast<int64_t>(0));
-            LOG_INFO("exist new mv in restore", K(ret), K(snapshot_info), K(tablet_id), K(merged_version));
+            LOG_INFO("exist new mv in restore", K(ret), K(tmp_ret), K(snapshot_info), K(tablet_id), K(merged_version));
           }
         }
       }
