@@ -94,6 +94,7 @@
 #include "storage/ob_direct_load_table_guard.h"
 #include "share/ob_tablet_replica_checksum_operator.h"
 #include "storage/blocksstable/ob_datum_row_utils.h"
+#include "storage/compaction/ob_partition_merge_policy.h"
 
 namespace oceanbase
 {
@@ -5843,45 +5844,65 @@ int ObTablet::get_kept_snapshot_info(
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   snapshot_info.reset();
-  int64_t max_merged_snapshot = 0;
-  int64_t min_medium_snapshot = INT64_MAX;
-  int64_t old_min_reserved_snapshot = 0;
   const share::ObLSID &ls_id = tablet_meta_.ls_id_;
   const common::ObTabletID &tablet_id = tablet_meta_.tablet_id_;
 
-  if (0 < get_major_table_count()) {
-    max_merged_snapshot = get_last_major_snapshot_version();
+  const int64_t last_major_snapshot_version = get_last_major_snapshot_version();
+  bool need_check_medium_info = false;
+  int64_t max_merged_snapshot = 0;
+  if (0 == last_major_snapshot_version) {
+    // do nothing
+  } else if (!GCTX.is_shared_storage_mode() || last_major_snapshot_version >= MERGE_SCHEDULER_PTR->get_inner_table_merged_scn()) {
+    max_merged_snapshot = last_major_snapshot_version;
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else {
+    max_merged_snapshot = MERGE_SCHEDULER_PTR->get_inner_table_merged_scn();
+    need_check_medium_info = true;
+#endif
   }
 
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(MTL(ObTenantFreezeInfoMgr*)->get_min_reserved_snapshot(
-      tablet_id, max_merged_snapshot, snapshot_info))) {
-    LOG_WARN("failed to get multi version from freeze info mgr", K(ret), K(tablet_id));
-  } else if (!is_ls_inner_tablet()) {
+  int64_t min_medium_snapshot = INT64_MAX;
+  if (!is_ls_inner_tablet()) {
     common::ObArenaAllocator allocator;
     SMART_VARS_2((ObTableScanParam, scan_param), (ObTabletMediumInfoReader, medium_info_reader)) {
-      if (OB_FAIL(ObMdsScanParamHelper::build_medium_info_scan_param(
-          allocator,
-          ls_id,
-          tablet_id,
-          scan_param))) {
+      if (OB_FAIL(ObMdsScanParamHelper::build_medium_info_scan_param(allocator, ls_id, tablet_id, scan_param))) {
         LOG_WARN("fail to build scan param", K(ret), K(ls_id), K(tablet_id));
       } else if (OB_FAIL(medium_info_reader.init(*this, scan_param))) {
         LOG_WARN("failed to init medium info reader", K(ret));
-      } else if (OB_FAIL(medium_info_reader.get_min_medium_snapshot(max_merged_snapshot, min_medium_snapshot))) {
+      } else if (need_check_medium_info) {
+        ObMediumCompactionInfoKey medium_info_key(max_merged_snapshot);
+        ObMediumCompactionInfo *medium_info = nullptr;
+        if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, medium_info))) {
+          LOG_WARN("fail to alloc and new", K(ret));
+        } else if (OB_FAIL(medium_info_reader.get_specified_medium_info(allocator, medium_info_key, *medium_info))) {
+          if (OB_ENTRY_NOT_EXIST == ret) {
+            ret = OB_SUCCESS;
+            max_merged_snapshot = last_major_snapshot_version;
+          } else {
+            LOG_WARN("failed to get specified scn info", K(ret), K(max_merged_snapshot));
+          }
+        } else if (ObAdaptiveMergePolicy::DURING_DDL != medium_info->medium_merge_reason_) {
+          max_merged_snapshot = last_major_snapshot_version;
+        }
+      }
+
+      if (FAILEDx(medium_info_reader.get_min_medium_snapshot(max_merged_snapshot, min_medium_snapshot))) {
         LOG_WARN("failed to get min medium snapshot", K(ret), K(tablet_id));
       }
     }
   }
 
-  if (OB_SUCC(ret)) {
+  ObStorageSnapshotInfo old_snapshot_info;
+  if (FAILEDx(MTL(ObTenantFreezeInfoMgr*)->get_min_reserved_snapshot(tablet_id, max_merged_snapshot, snapshot_info))) {
+    LOG_WARN("failed to get multi version from freeze info mgr", K(ret), K(tablet_id));
+  } else {
+    old_snapshot_info = snapshot_info;
     bool use_multi_version_start_on_tablet = false;
-    old_min_reserved_snapshot = snapshot_info.snapshot_;
-    const bool is_new_mv_in_restore = ObSnapShotType::SNAPSHOT_FOR_MAJOR_REFRESH_MV == snapshot_info.snapshot_type_ &&
-                                      0 == snapshot_info.snapshot_;
-    // if exist new mv in restore, use special snapshot info
+
     if (!tablet_meta_.ha_status_.is_data_status_complete()) {
       use_multi_version_start_on_tablet = true;
+    } else if (ObSnapShotType::SNAPSHOT_FOR_MAJOR_REFRESH_MV == snapshot_info.snapshot_type_ && 0 == snapshot_info.snapshot_) {
+      use_multi_version_start_on_tablet = true; // if exist new mv in restore, use special snapshot info
     } else if (min_reserved_snapshot_on_ls > 0) {
       snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_FOR_LS_RESERVED, min_reserved_snapshot_on_ls);
       snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_FOR_MIN_MEDIUM, min_medium_snapshot);
@@ -5892,7 +5913,7 @@ int ObTablet::get_kept_snapshot_info(
       // if not sync ls_reserved_snapshot yet, should use multi_version_start on tablet
       use_multi_version_start_on_tablet = true;
     }
-    if (use_multi_version_start_on_tablet || is_new_mv_in_restore) {
+    if (use_multi_version_start_on_tablet) {
       snapshot_info.snapshot_type_ = ObStorageSnapshotInfo::SNAPSHOT_MULTI_VERSION_START_ON_TABLET;
       snapshot_info.snapshot_ = get_multi_version_start();
     }
@@ -5902,9 +5923,9 @@ int ObTablet::get_kept_snapshot_info(
     if (current_time - (snapshot_info.snapshot_ / 1000 /*use microsecond here*/) > 2_hour) {
       if (REACH_TENANT_TIME_INTERVAL(10_s)) {
         LOG_INFO("tablet multi version start not advance for a long time", K(ret),
-          "ls_id", get_tablet_meta().ls_id_, K(tablet_id),
-          K(snapshot_info), K(old_min_reserved_snapshot), K(min_medium_snapshot),
-          K(min_reserved_snapshot_on_ls));
+                 "ls_id", get_tablet_meta().ls_id_, K(tablet_id),
+                 K(snapshot_info), K(old_snapshot_info), K(min_medium_snapshot),
+                 K(min_reserved_snapshot_on_ls));
       }
     }
   }
@@ -5913,8 +5934,8 @@ int ObTablet::get_kept_snapshot_info(
     LOG_WARN("snapshot info is invalid", KR(ret), K(snapshot_info));
   }
   LOG_INFO("get multi version start", "ls_id", get_tablet_meta().ls_id_, K(tablet_id),
-      K(snapshot_info), K(old_min_reserved_snapshot),
-      K(min_medium_snapshot), K(min_reserved_snapshot_on_ls), K(max_merged_snapshot));
+           K(snapshot_info), K(old_snapshot_info),
+           K(min_medium_snapshot), K(min_reserved_snapshot_on_ls), K(max_merged_snapshot));
   return ret;
 }
 

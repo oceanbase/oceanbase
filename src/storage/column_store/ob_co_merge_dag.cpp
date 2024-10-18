@@ -1293,7 +1293,9 @@ int ObCOMergeDagNet::inner_create_and_schedule_dags(ObIDag *parent_dag)
     if (EN_COMPACTION_ADD_CO_MREGE_FINISH_DAG_INTO_DAG_NET_FAILED) {
       ret = EN_COMPACTION_ADD_CO_MREGE_FINISH_DAG_INTO_DAG_NET_FAILED;
       LOG_INFO("ERRSIM EN_COMPACTION_ADD_CO_MREGE_FINISH_DAG_INTO_DAG_NET_FAILED", K(ret), KPC(parent_dag));
+      SERVER_EVENT_SYNC_ADD("merge_errsim", "co_merge_finish_dag_add_failed", "ret_code", ret);
     }
+
 #endif
     ObCOMergeFinishDag *tmp_finish_dag = nullptr;
     // add into dag_scheduler after parent-child relation generated
