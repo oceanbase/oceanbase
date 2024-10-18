@@ -27619,6 +27619,9 @@ int ObDDLService::alter_system_table_column_(
         }
       } // end for
 
+      // increase progressive_merge_round to update schema in sstable
+      new_table_schema.set_progressive_merge_round(orig_table_schema->get_progressive_merge_round() + 1);
+
       if (FAILEDx(ddl_operator.batch_update_system_table_columns(trans,
           *orig_table_schema, new_table_schema, add_column_ids, alter_column_ids, NULL))) {
         LOG_WARN("fail to batch update columns", KR(ret), K(new_table_schema));
