@@ -2888,7 +2888,7 @@ int ObLSRestoreWaitState::leader_wait_follower_()
     next_status = ObLSRestoreStatus::Status::RESTORE_NONE;
   }
   LOG_INFO("leader is wait follower", "leader current status", ls_restore_status_, "next status", next_status, KPC(ls_));
-  if (OB_FAIL(require_multi_replica_sync_ && check_all_follower_restore_finish_(all_finish))) {
+  if (require_multi_replica_sync_ && OB_FAIL(check_all_follower_restore_finish_(all_finish))) {
     LOG_WARN("fail to request follower restore meta result", K(ret), KPC(ls_));
   } else if (require_multi_replica_sync_ && !all_finish) {
   } else if (OB_FAIL(check_can_advance_status_(can_advance))) {
