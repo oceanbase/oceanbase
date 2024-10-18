@@ -7540,6 +7540,8 @@ all_ncomp_dll_v2 = dict(
 )
 def_table_schema(**all_ncomp_dll_v2)
 
+# 529: __all_tenant_object_balance_weight
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -15187,6 +15189,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
   keywords = all_def_keywords['__all_ncomp_dll_v2']))
 # 12507: __all_virtual_logstore_service_status
 # 12508: __all_virtual_logstore_service_info
+# 12509: __all_virtual_tenant_object_balance_weight
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -15708,6 +15711,7 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15486', all_def_ke
 # 15487: __all_virtual_logstore_service_status
 # 15488: __all_virtual_logstore_service_info
 # 15489: __all_virtual_tablet_pointer_status
+# 15490: __all_tenant_object_balance_weight
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -38009,6 +38013,8 @@ def_table_schema(
 
 
 # 21628: proc
+# 21629: DBA_OB_OBJECT_BALANCE_WEIGHT
+# 21630: CDB_OB_OBJECT_BALANCE_WEIGHT
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -58532,6 +58538,8 @@ def_table_schema(
   )
 """.replace("\n", " ")
 )
+
+# 25304: DBA_OB_OBJECT_BALANCE_WEIGHT
 
 #
 # 余留位置（此行之前占位）
