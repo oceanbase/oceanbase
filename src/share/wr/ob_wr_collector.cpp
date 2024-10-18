@@ -304,9 +304,9 @@ int ObWrCollector::collect_ash()
               EXTRACT_INT_FIELD_MYSQL(*result, "sample_time", ash.sample_time_, int64_t);
               EXTRACT_INT_FIELD_MYSQL(*result, "user_id", ash.user_id_, int64_t);
               EXTRACT_BOOL_FIELD_MYSQL(*result, "session_type", ash.session_type_);
-              EXTRACT_STRBUF_FIELD_MYSQL(
+              EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(
                   *result, "sql_id", ash.sql_id_, sizeof(ash.sql_id_), tmp_real_str_len);
-              EXTRACT_STRBUF_FIELD_MYSQL(
+              EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(
                   *result, "trace_id", ash.trace_id_, sizeof(ash.trace_id_), tmp_real_str_len);
               EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "event_no", ash.event_no_, int64_t, skip_null_error, skip_column_error, default_value);
               EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "event_id", ash.event_id_, int64_t, skip_null_error, skip_column_error, default_value);

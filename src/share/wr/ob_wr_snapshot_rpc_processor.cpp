@@ -242,6 +242,10 @@ int ObWrAsyncSnapshotTaskP::process()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("wrong op type", KR(ret), K(arg.get_task_type()));
   }
+
+  if (OB_FAIL(ret)) {
+    LOG_ERROR("failed to collect wr data", K(ret), K(MTL_ID()), K(arg));
+  }
   return ret;
 }
 int ObWrAsyncPurgeSnapshotTaskP::process()
