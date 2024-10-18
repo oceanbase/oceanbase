@@ -6061,7 +6061,11 @@ def_table_schema(
     ('thread_id', 'int', 'true'),
     ('stmt_type', 'int', 'true'),
     ('tablet_id', 'int', 'true'),
-    ('proxy_sid', 'int', 'true')
+    ('proxy_sid', 'int', 'true'),
+    ('io_read_count', 'int', 'true', '0'),
+    ('io_read_size', 'int', 'true', '0'),
+    ('io_write_count', 'int', 'true', '0'),
+    ('io_write_size', 'int', 'true', '0')
   ],
 )
 
@@ -12886,6 +12890,10 @@ def_table_schema(
     ('STMT_TYPE', 'int', 'true'),
     ('TABLET_ID', 'int', 'true'),
     ('PROXY_SID', 'int', 'true'),
+    ('IO_READ_COUNT', 'int', 'false', '0'),
+    ('IO_READ_SIZE', 'int', 'false', '0'),
+    ('IO_WRITE_COUNT', 'int', 'false', '0'),
+    ('IO_WRITE_SIZE', 'int', 'false', '0')
   ],
   partition_columns = ['SVR_IP', 'SVR_PORT'],
   vtable_route_policy = 'distributed',
@@ -31948,7 +31956,11 @@ def_table_schema(
       ASH.PLSQL_ENTRY_SUBPROGRAM_NAME AS PLSQL_ENTRY_SUBPROGRAM_NAME,
       ASH.PLSQL_OBJECT_ID AS PLSQL_OBJECT_ID,
       ASH.PLSQL_SUBPROGRAM_ID AS PLSQL_SUBPROGRAM_ID,
-      ASH.PLSQL_SUBPROGRAM_NAME AS PLSQL_SUBPROGRAM_NAME
+      ASH.PLSQL_SUBPROGRAM_NAME AS PLSQL_SUBPROGRAM_NAME,
+      ASH.IO_READ_COUNT AS IO_READ_COUNT,
+      ASH.IO_READ_SIZE AS IO_READ_SIZE,
+      ASH.IO_WRITE_COUNT AS IO_WRITE_COUNT,
+      ASH.IO_WRITE_SIZE AS IO_WRITE_SIZE
   FROM
     (
       OCEANBASE.__ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY ASH
@@ -32027,7 +32039,11 @@ def_table_schema(
       ASH.PLSQL_ENTRY_SUBPROGRAM_NAME AS PLSQL_ENTRY_SUBPROGRAM_NAME,
       ASH.PLSQL_OBJECT_ID AS PLSQL_OBJECT_ID,
       ASH.PLSQL_SUBPROGRAM_ID AS PLSQL_SUBPROGRAM_ID,
-      ASH.PLSQL_SUBPROGRAM_NAME AS PLSQL_SUBPROGRAM_NAME
+      ASH.PLSQL_SUBPROGRAM_NAME AS PLSQL_SUBPROGRAM_NAME,
+      ASH.IO_READ_COUNT AS IO_READ_COUNT,
+      ASH.IO_READ_SIZE AS IO_READ_SIZE,
+      ASH.IO_WRITE_COUNT AS IO_WRITE_COUNT,
+      ASH.IO_WRITE_SIZE AS IO_WRITE_SIZE
   FROM
     (
       OCEANBASE.__ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY ASH
@@ -55999,7 +56015,11 @@ def_table_schema(
       ASH.PLSQL_ENTRY_SUBPROGRAM_NAME AS PLSQL_ENTRY_SUBPROGRAM_NAME,
       ASH.PLSQL_OBJECT_ID AS PLSQL_OBJECT_ID,
       ASH.PLSQL_SUBPROGRAM_ID AS PLSQL_SUBPROGRAM_ID,
-      ASH.PLSQL_SUBPROGRAM_NAME AS PLSQL_SUBPROGRAM_NAME
+      ASH.PLSQL_SUBPROGRAM_NAME AS PLSQL_SUBPROGRAM_NAME,
+      ASH.IO_READ_COUNT AS IO_READ_COUNT,
+      ASH.IO_READ_SIZE AS IO_READ_SIZE,
+      ASH.IO_WRITE_COUNT AS IO_WRITE_COUNT,
+      ASH.IO_WRITE_SIZE AS IO_WRITE_SIZE
   FROM
     SYS.ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY ASH,
     SYS.ALL_VIRTUAL_WR_SNAPSHOT SNAP

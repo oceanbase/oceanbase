@@ -361,6 +361,22 @@ int ObVirtualASH::convert_node_to_row(const ActiveSessionStat &node, ObNewRow *&
         cells[cell_idx].set_null();
         break;
       }
+      case IO_READ_COUNT: {
+        cells[cell_idx].set_null();
+        break;
+      }
+      case IO_READ_SIZE: {
+        cells[cell_idx].set_null();
+        break;
+      }
+      case IO_WRITE_COUNT: {
+        cells[cell_idx].set_null();
+        break;
+      }
+      case IO_WRITE_SIZE: {
+        cells[cell_idx].set_null();
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "invalid column id", K(column_id), K(cell_idx),

@@ -5175,6 +5175,10 @@ PLSQL_ENTRY_SUBPROGRAM_NAME	varchar(32)	YES		NULL
 PLSQL_OBJECT_ID	bigint(20)	YES		NULL	
 PLSQL_SUBPROGRAM_ID	bigint(20)	YES		NULL	
 PLSQL_SUBPROGRAM_NAME	varchar(32)	YES		NULL	
+IO_READ_COUNT	bigint(20)	YES			
+IO_READ_SIZE	bigint(20)	YES			
+IO_WRITE_COUNT	bigint(20)	YES			
+IO_WRITE_SIZE	bigint(20)	YES			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_WR_ACTIVE_SESSION_HISTORY limit 1);
 cnt
 1

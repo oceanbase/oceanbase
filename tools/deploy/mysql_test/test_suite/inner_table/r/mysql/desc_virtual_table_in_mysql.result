@@ -3179,6 +3179,10 @@ THREAD_ID	bigint(20)	YES		NULL
 STMT_TYPE	bigint(20)	YES		NULL	
 TABLET_ID	bigint(20)	YES		NULL	
 PROXY_SID	bigint(20)	YES		NULL	
+IO_READ_COUNT	bigint(20)	NO		0	
+IO_READ_SIZE	bigint(20)	NO		0	
+IO_WRITE_COUNT	bigint(20)	NO		0	
+IO_WRITE_SIZE	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ash;
 IF(count(*) >= 0, 1, 0)
 1
@@ -3973,6 +3977,10 @@ thread_id	bigint(20)	YES		NULL
 stmt_type	bigint(20)	YES		NULL	
 tablet_id	bigint(20)	YES		NULL	
 proxy_sid	bigint(20)	YES		NULL	
+io_read_count	bigint(20)	YES		0	
+io_read_size	bigint(20)	YES		0	
+io_write_count	bigint(20)	YES		0	
+io_write_size	bigint(20)	YES		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_wr_active_session_history;
 IF(count(*) >= 0, 1, 0)
 1
