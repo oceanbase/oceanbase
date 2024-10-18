@@ -1168,7 +1168,7 @@ int ObPluginVectorIndexAdaptor::check_index_id_table_readnext_status(ObVectorQue
   } else if (check_if_complete_delta(ctx->bitmaps_->insert_bitmap_, i_vids.count())) {
     if (OB_FAIL(prepare_delta_mem_data(ctx->bitmaps_->insert_bitmap_, i_vids, ctx))) {
       LOG_WARN("failed to complete.", K(ret));
-    } else {
+    } else if (ctx->vec_data_.count_ > 0) {
       ctx->status_ = PVQ_COM_DATA;
     }
   }
@@ -1314,28 +1314,11 @@ bool ObPluginVectorIndexAdaptor::check_if_complete_delta(roaring::api::roaring64
     roaring::api::roaring64_bitmap_t *delta_bitmap = ATOMIC_LOAD(&(incr_data_->bitmap_->insert_bitmap_));
     if (!roaring64_bitmap_is_subset(gene_bitmap, delta_bitmap)) {
       res = true;
-#if 0 // ToDo: debug, remove later
-    if (gene_bitmap != nullptr) {
-      uint32_t gene_bitmap_count = roaring64_bitmap_get_cardinality(gene_bitmap);
-      uint64_t *gene_bitmap_out = (uint64_t *)malloc(gene_bitmap_count * sizeof(uint64_t));
-      roaring64_bitmap_to_uint64_array(gene_bitmap, gene_bitmap_out);
-      for (int i = 0; i < gene_bitmap_count; i++) {
-        LOG_INFO("gene_bitmap_out", K(i), K(gene_bitmap_out[i]));
+    } else if (count > 0 && is_mem_data_init_atomic(VIRT_BITMAP)) { // andnot_bitmap is null, if count = 0, do nothing
+      roaring::api::roaring64_bitmap_t *index_bitmap = ATOMIC_LOAD(&(vbitmap_data_->bitmap_->insert_bitmap_));
+      if (!roaring64_bitmap_is_subset(index_bitmap, delta_bitmap)) {
+        res = true;
       }
-    } else {
-      LOG_INFO("gene_bitmap is emptry");
-    }
-    if (delta_bitmap != nullptr) {
-      uint32_t delta_bitmap_count = roaring64_bitmap_get_cardinality(delta_bitmap);
-      uint64_t *delta_bitmap_out = (uint64_t *)malloc(delta_bitmap_count * sizeof(uint64_t));
-      roaring64_bitmap_to_uint64_array(delta_bitmap, delta_bitmap_out);
-      for (int i = 0; i < delta_bitmap_count; i++) {
-        LOG_INFO("delta_bitmap_out", K(i), K(delta_bitmap_out[i]));
-      }
-    } else {
-      LOG_INFO("delta_bitmap is emptry");
-    }
-#endif
     }
   } else if (roaring64_bitmap_get_cardinality(gene_bitmap) > 0) {
     res = true;
@@ -1367,7 +1350,10 @@ int ObPluginVectorIndexAdaptor::prepare_delta_mem_data(roaring::api::roaring64_b
         LOG_WARN("failed to create andnot bitmap", K(ret));
       }
     }
-    if (OB_SUCC(ret)) {
+    if (OB_FAIL(ret)) {
+    } else if (0 == roaring64_bitmap_get_cardinality(andnot_bitmap) + i_vids.count()) {
+      ctx->vec_data_.count_ = 0;
+    } else {
       uint64_t bitmap_cnt = roaring64_bitmap_get_cardinality(andnot_bitmap) + i_vids.count();
       // uint64_t use roaring64_bitmap_to_uint64_array(andnot_bitmap, bitmap_out);
       bool is_continue = true;
