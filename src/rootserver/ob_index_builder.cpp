@@ -351,7 +351,7 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &arg, obrpc::ObDropIndexRes 
       const bool is_inner_and_fts_index = arg.is_inner_ && !arg.is_parent_task_dropping_fts_index_ && index_table_schema->is_fts_index();
       const bool need_check_fts_index_conflict = !arg.is_inner_ && index_table_schema->is_fts_index();
       const bool is_inner_and_multivalue_index = arg.is_inner_ && index_table_schema->is_multivalue_index();
-      const bool is_inner_and_vec_index = arg.is_inner_ && !arg.is_parent_task_dropping_vec_index_ && index_table_schema->is_vec_index();
+      const bool is_inner_and_vec_index = arg.is_inner_ && !arg.is_vec_inner_drop_ && index_table_schema->is_vec_index();
       const bool need_check_vec_index_conflict = !arg.is_inner_ && index_table_schema->is_vec_index();
       const bool is_inner_and_fts_or_mulvalue_or_vector_index = is_inner_and_fts_index || is_inner_and_multivalue_index || is_inner_and_vec_index;
       bool has_index_task = false;
@@ -646,7 +646,7 @@ int ObIndexBuilder::submit_build_index_task(
 // if index_schemas has delta_buffer_table, than index_ith = domain_index_ith, ohterwide, index_ith = 0;
 int ObIndexBuilder::recognize_vec_index_schemas(
       const common::ObIArray<share::schema::ObTableSchema> &index_schemas,
-      const bool is_parent_task_dropping_vec_index,
+      const bool is_vec_inner_drop,
       int64_t &index_ith,
       int64_t &rowkey_vid_ith,
       int64_t &vid_rowkey_ith,
@@ -663,7 +663,7 @@ int ObIndexBuilder::recognize_vec_index_schemas(
   snapshot_data_ith = -1;
   const int64_t VEC_DOMAIN_INDEX_TABLE_COUNT = 1; // delta_buffer_table
   const int64_t VEC_INDEX_TABLE_COUNT = 5;
-  if (OB_UNLIKELY(!is_parent_task_dropping_vec_index &&
+  if (OB_UNLIKELY(!is_vec_inner_drop &&
                   VEC_DOMAIN_INDEX_TABLE_COUNT != index_schemas.count() &&
                   VEC_INDEX_TABLE_COUNT != index_schemas.count())) {
     ret = OB_INVALID_ARGUMENT;
@@ -867,13 +867,13 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
   if (OB_UNLIKELY(index_schemas.count() != NORMAL_INDEX_COUNT &&
                   !arg.is_parent_task_dropping_fts_index_ && index_schemas.count() != FTS_INDEX_COUNT &&
                   !arg.is_parent_task_dropping_multivalue_index_ && index_schemas.count() != FTS_OR_MULTIVALUE_INDEX_COUNT &&
-                  !arg.is_parent_task_dropping_vec_index_ && index_schemas.count() != VEC_INDEX_COUNT)) {
+                  !arg.is_vec_inner_drop_ && index_schemas.count() != VEC_INDEX_COUNT)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid index schema count", K(ret), K(index_schemas));
   } else if (index_schemas.at(0).is_fts_index() && OB_FAIL(recognize_fts_index_schemas(index_schemas, arg.is_parent_task_dropping_fts_index_, index_ith, aux_doc_word_ith,
           aux_rowkey_doc_ith, fts_domain_index_ith, aux_doc_rowkey_ith, aux_multivalue_ith))) {
     LOG_WARN("fail to recognize index and aux table from schema array", K(ret));
-  } else if (index_schemas.at(0).is_vec_index() && OB_FAIL(recognize_vec_index_schemas(index_schemas, arg.is_parent_task_dropping_vec_index_, index_ith, vec_rowkey_vid_ith,
+  } else if (index_schemas.at(0).is_vec_index() && OB_FAIL(recognize_vec_index_schemas(index_schemas, arg.is_vec_inner_drop_, index_ith, vec_rowkey_vid_ith,
           vec_vid_rowkey_ith, vec_domain_index_ith, vec_index_id_ith, vec_snapshot_data_ith))) {
     LOG_WARN("fail to recognize index and aux table from schema array", K(ret));
   } else if (OB_ISNULL(GCTX.root_service_)) {
@@ -884,7 +884,7 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
     LOG_WARN("unexpected error, invalid array index", K(ret), K(index_ith));
   } else {
     const ObTableSchema &index_schema = index_schemas.at(index_ith);
-    const bool is_drop_vec_task = (!arg.is_inner_ && index_schema.is_vec_delta_buffer_type()) || arg.is_parent_task_dropping_vec_index_;  // inner drop or user drop
+    const bool is_drop_vec_task = (!arg.is_inner_ && index_schema.is_vec_delta_buffer_type()) || arg.is_vec_inner_drop_;  // inner drop or user drop
     const bool is_drop_fts_task = (!arg.is_inner_ && index_schema.is_fts_index_aux()) || arg.is_parent_task_dropping_fts_index_;
     const bool is_drop_multivalue_task = (!arg.is_inner_ && index_schema.is_multivalue_index_aux()) || arg.is_parent_task_dropping_multivalue_index_;
     const bool is_drop_fts_or_multivalue_task = is_drop_fts_task || is_drop_multivalue_task;
@@ -892,7 +892,7 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
     if (OB_UNLIKELY(!index_schema.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid arguments", K(ret), K(index_schema));
-    } else if (OB_UNLIKELY(is_drop_vec_task && !arg.is_parent_task_dropping_vec_index_ // if is inner_drop, because drop count no necessary equal to five, so ith maybe equal to -1
+    } else if (OB_UNLIKELY(is_drop_vec_task && !arg.is_vec_inner_drop_ // if is inner_drop, because drop count no necessary equal to five, so ith maybe equal to -1
                                             && (vec_rowkey_vid_ith < 0 || vec_rowkey_vid_ith >= index_schemas.count()
                                              || vec_vid_rowkey_ith < 0 || vec_vid_rowkey_ith >= index_schemas.count()
                                              || vec_index_id_ith < 0 || vec_index_id_ith >= index_schemas.count()

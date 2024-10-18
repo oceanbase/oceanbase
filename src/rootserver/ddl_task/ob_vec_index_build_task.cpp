@@ -1809,7 +1809,7 @@ int ObVecIndexBuildTask::submit_drop_vec_index_task()
     drop_index_arg.session_id_        = data_table_schema->get_session_id();
     drop_index_arg.table_name_        = data_table_schema->get_table_name();
     drop_index_arg.database_name_     = database_schema->get_database_name_str();
-    drop_index_arg.is_parent_task_dropping_vec_index_ = true;  // if want to drop only one index, is_parent_task_dropping_vec_index_ should be false, else should be true.
+    drop_index_arg.is_vec_inner_drop_ = true;  // if want to drop only one index, is_vec_inner_drop_ should be false, else should be true.
     if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(data_table_schema->get_all_part_num() + data_table_schema->get_all_part_num(), ddl_rpc_timeout))) {
       LOG_WARN("failed to get ddl rpc timeout", KR(ret));
     } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, DROP_INDEX_RPC_FAILED))) {

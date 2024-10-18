@@ -114,7 +114,7 @@ public:
 private:
   int recognize_vec_index_schemas(
       const common::ObIArray<share::schema::ObTableSchema> &index_schemas,
-      const bool is_parent_task_dropping_vec_index,
+      const bool is_vec_inner_drop,
       int64_t &index_ith,
       int64_t &rowkey_vid_ith,
       int64_t &vid_rowkey_ith,

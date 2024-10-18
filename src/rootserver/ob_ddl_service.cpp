@@ -8128,10 +8128,10 @@ int ObDDLService::rename_dropping_index_name(
     } else if (OB_FAIL(new_index_schemas.push_back(*index_table_schema))) {
       LOG_WARN("fail to push back index schema", K(ret), KPC(index_table_schema));
     }
-  } else if ((!drop_index_arg.is_inner_ || drop_index_arg.is_parent_task_dropping_vec_index_) && index_table_schema->is_vec_delta_buffer_type()) {
+  } else if ((!drop_index_arg.is_inner_ || drop_index_arg.is_vec_inner_drop_) && index_table_schema->is_vec_delta_buffer_type()) {
     // This task is the parent task of drop vec index, no need to rename.
     if (OB_FAIL(get_dropping_vec_index_invisiable_table_schema_(index_table_schema->get_tenant_id(), data_table_id,
-       index_table_schema->get_table_id(), drop_index_arg.is_parent_task_dropping_vec_index_, index_table_schema->get_table_name_str(), schema_guard, ddl_operator,
+       index_table_schema->get_table_id(), drop_index_arg.is_vec_inner_drop_, index_table_schema->get_table_name_str(), schema_guard, ddl_operator,
        trans, new_index_schemas))) {
       LOG_WARN("fail to get dropping vec index table schema", K(ret), K(data_table_id), K(index_table_schema));
     } else if (OB_FAIL(new_index_schemas.push_back(*index_table_schema))) {
@@ -8256,7 +8256,7 @@ int ObDDLService::get_dropping_vec_index_invisiable_table_schema_(
     const uint64_t tenant_id,
     const uint64_t data_table_id,
     const uint64_t index_table_id,
-    const bool is_parent_task_dropping_vec_index,
+    const bool is_vec_inner_drop,
     const ObString &index_name,
     share::schema::ObSchemaGetterGuard &schema_guard,
     ObDDLOperator &ddl_operator,
@@ -8353,7 +8353,7 @@ int ObDDLService::get_dropping_vec_index_invisiable_table_schema_(
             already_get_snapshot_data_table_schema = true;
           }
         }
-        if (OB_TABLE_NOT_EXIST == ret && is_parent_task_dropping_vec_index) {
+        if (OB_TABLE_NOT_EXIST == ret && is_vec_inner_drop) {
           ret = OB_SUCCESS;
           LOG_WARN("table is not exist, maybe index table have been drop already", K(ret));
         }

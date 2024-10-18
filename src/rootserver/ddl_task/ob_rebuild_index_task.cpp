@@ -197,7 +197,7 @@ int ObRebuildIndexTask::drop_index_impl(const bool is_drop_old_index)
     drop_index_arg.is_add_to_scheduler_ = true;
     drop_index_arg.task_id_             = task_id_;
     if(index_schema->is_vec_index()) {
-      drop_index_arg.is_parent_task_dropping_vec_index_ = true;
+      drop_index_arg.is_vec_inner_drop_ = true;
     } else if (index_schema->is_fts_index()) {
       drop_index_arg.is_parent_task_dropping_fts_index_ = true;
     } else if (index_schema->is_multivalue_index()) {

@@ -1401,7 +1401,7 @@ public:
     is_hidden_ = false;
     is_in_recyclebin_ = false;
     is_inner_ = false;
-    is_parent_task_dropping_vec_index_ = false;
+    is_vec_inner_drop_ = false;
     is_parent_task_dropping_fts_index_ = false;
     is_parent_task_dropping_multivalue_index_ = false;
     only_set_status_ = false;
@@ -1417,7 +1417,7 @@ public:
     is_hidden_ = false;
     is_in_recyclebin_ = false;
     is_inner_ = false;
-    is_parent_task_dropping_vec_index_ = false;
+    is_vec_inner_drop_ = false;
     is_parent_task_dropping_fts_index_ = false;
     is_parent_task_dropping_multivalue_index_ = false;
     only_set_status_ = false;
@@ -1430,7 +1430,7 @@ public:
   bool is_hidden_;
   bool is_in_recyclebin_;
   bool is_inner_;
-  bool is_parent_task_dropping_vec_index_;
+  bool is_vec_inner_drop_;
   bool is_parent_task_dropping_fts_index_;
   bool is_parent_task_dropping_multivalue_index_;
   bool only_set_status_;
