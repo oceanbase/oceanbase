@@ -55,7 +55,8 @@ public:
   static void free(ObBackupSSTableSecMetaIterator *&iterator);
   static void free(ObBackupWrapperIODevice *device);
   static void free(ObIBackupTabletMetaIterator *device);
-
+  static void free(ObBackupUnorderedMacroBlockIndexIterator *&iterator);
+  static void free(ObBackupOrderedMacroBlockIndexIterator *&iterator);
 private:
   template <class IT>
   static void component_free(IT *component)
