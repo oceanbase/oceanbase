@@ -3174,6 +3174,8 @@ void ObIOFaultDetector::record_failure(const ObIORequest &req)
     LOG_WARN("io fault detector not init", K(ret), KP(is_inited_));
   } else if (req.get_flag().is_detect()) {
     //reach max retry time, ignore
+  } else if (req.get_flag().is_sync()) {
+    LOG_INFO("ignore fault detect for sync io", K(req));
   } else if (req.is_finished_ && OB_IO_ERROR != req.ret_code_.io_ret_) {
     // ignore, do nothing here
   } else if (req.get_flag().is_read()) {
