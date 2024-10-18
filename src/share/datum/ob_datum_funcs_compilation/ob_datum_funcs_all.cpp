@@ -21,30 +21,14 @@ extern void __init_datum_func4();
 extern void __init_datum_func5();
 extern void __init_datum_func6();
 extern void __init_datum_func7();
-extern void __init_datum_func8();
-extern void __init_datum_func9();
-extern void __init_datum_func10();
-extern void __init_datum_func11();
-extern void __init_datum_func12();
-extern void __init_datum_func13();
-extern void __init_datum_func14();
-extern void __init_datum_func15();
-extern void __init_datum_func16();
-extern void __init_datum_func17();
-extern void __init_datum_func18();
-extern void __init_datum_func19();
-extern void __init_datum_func20();
-extern void __init_datum_func21();
-extern void __init_datum_func22();
-extern void __init_datum_func23();
-extern void __init_datum_func24();
-extern void __init_datum_func25();
-extern void __init_datum_func26();
-extern void __init_datum_func27();
-extern void __init_datum_func28();
-extern void __init_datum_func29();
-extern void __init_datum_func30();
-extern void __init_datum_func31();
+// extern void __init_datum_func8();
+// extern void __init_datum_func9();
+// extern void __init_datum_func10();
+// extern void __init_datum_func11();
+// extern void __init_datum_func12();
+// extern void __init_datum_func13();
+// extern void __init_datum_func14();
+// extern void __init_datum_func15();
 
 void __init_datum_funcs_all()
 {
@@ -56,30 +40,14 @@ void __init_datum_funcs_all()
   __init_datum_func5();
   __init_datum_func6();
   __init_datum_func7();
-  __init_datum_func8();
-  __init_datum_func9();
-  __init_datum_func10();
-  __init_datum_func11();
-  __init_datum_func12();
-  __init_datum_func13();
-  __init_datum_func14();
-  __init_datum_func15();
-  __init_datum_func16();
-  __init_datum_func17();
-  __init_datum_func18();
-  __init_datum_func19();
-  __init_datum_func20();
-  __init_datum_func21();
-  __init_datum_func22();
-  __init_datum_func23();
-  __init_datum_func24();
-  __init_datum_func25();
-  __init_datum_func26();
-  __init_datum_func27();
-  __init_datum_func28();
-  __init_datum_func29();
-  __init_datum_func30();
-  __init_datum_func31();
+  // __init_datum_func8();
+  // __init_datum_func9();
+  // __init_datum_func10();
+  // __init_datum_func11();
+  // __init_datum_func12();
+  // __init_datum_func13();
+  // __init_datum_func14();
+  // __init_datum_func15();
 }
 } // end common
 } // end oceanbase

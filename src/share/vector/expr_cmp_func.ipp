@@ -499,7 +499,7 @@ namespace oceanbase
 namespace common
 {
 
-static const int COMPILATION_UNIT = 16;
+static const int COMPILATION_UNIT = 8;
 
 #define DEF_EXPR_CMP_FUNC_PART(unit_idx)                                                           \
   void __expr_cmp_func_compilation##unit_idx()                                                     \

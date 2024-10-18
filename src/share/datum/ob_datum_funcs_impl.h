@@ -579,8 +579,12 @@ extern ObExprBasicFuncs EXPR_BASIC_UDT_FUNCS[1];
 extern ObExprBasicFuncs DECINT_BASIC_FUNCS[DECIMAL_INT_MAX];
 extern ObExprBasicFuncs EXPR_BASIC_COLLECTION_FUNCS[2];
 
+struct DummyIniter
+{
+  static void init_array() {}
+};
 
-template <int X, int Y>
+template <int X, int Y, bool defined = true>
 struct InitTypeCmpArray
 {
   template <bool... args>
@@ -594,8 +598,14 @@ struct InitTypeCmpArray
   }
 };
 
+template<int X, int Y>
+struct InitTypeCmpArray<X, Y, false>: public DummyIniter {};
+
+template<int X, int Y>
+using TypeCmpIniter = InitTypeCmpArray<X, Y, datum_cmp::ObDatumTypeCmp<static_cast<ObObjType>(X), static_cast<ObObjType>(Y)>::defined_>;
+
 // init type class compare function array
-template <int X, int Y>
+template <int X, int Y, bool defined = true>
 struct InitTCCmpArray
 {
   template <bool... args>
@@ -610,6 +620,12 @@ struct InitTCCmpArray
     NULLSAFE_TC_CMP_FUNCS[X][Y][1] = Def::defined_ ? &Cmp<1>::cmp : NULL;
   }
 };
+
+template<int X, int Y>
+struct InitTCCmpArray<X, Y, false>: public DummyIniter {};
+
+template<int X, int Y>
+using TCCmpIniter = InitTCCmpArray<X, Y, datum_cmp::ObDatumTCCmp<static_cast<ObObjTypeClass>(X),static_cast<ObObjTypeClass>(Y)>::defined_>;
 
 // init basic function array
 template <int X>
@@ -660,7 +676,7 @@ struct InitBasicFuncArray
 template<ObCollationType col>
 struct CollationDefined
 {
-  static const bool value_ = datum_cmp::SupportedCollections::liner_search(col);
+  static const bool value_ = datum_cmp::SupportedCollection<col>::defined_;
 };
 
 // init basic string function array
@@ -694,7 +710,7 @@ struct InitBasicStrFuncArray<X, Y, true>
       static_cast<bool>(Y)>;
   static void init_array()
   {
-    if (datum_cmp::SupportedCollections::liner_search(static_cast<ObCollationType>(X))) {
+    if (datum_cmp::SupportedCollection<static_cast<ObCollationType>(X)>::defined_) {
       auto &basic_funcs = EXPR_BASIC_STR_FUNCS;
       basic_funcs[X][Y][0].default_hash_ = Hash<ObDefaultHash, false>::hash;
       basic_funcs[X][Y][0].default_hash_batch_ = Hash<ObDefaultHash, false>::hash_batch;
@@ -713,10 +729,10 @@ struct InitBasicStrFuncArray<X, Y, true>
       basic_funcs[X][Y][1].default_hash_batch_ = Hash<ObDefaultHash, true>::hash_batch;
       basic_funcs[X][Y][1].murmur_hash_ = Hash<ObMurmurHash, true>::hash;
       basic_funcs[X][Y][1].murmur_hash_batch_ = Hash<ObMurmurHash, true>::hash_batch;
-      basic_funcs[X][Y][1].xx_hash_ = Hash<ObXxHash, true>::hash;
-      basic_funcs[X][Y][1].xx_hash_batch_ = Hash<ObXxHash, true>::hash_batch;
-      basic_funcs[X][Y][1].wy_hash_ = Hash<ObWyHash, true>::hash;
-      basic_funcs[X][Y][1].wy_hash_batch_ = Hash<ObWyHash, true>::hash_batch;
+      // basic_funcs[X][Y][1].xx_hash_ = Hash<ObXxHash, true>::hash;
+      // basic_funcs[X][Y][1].xx_hash_batch_ = Hash<ObXxHash, true>::hash_batch;
+      // basic_funcs[X][Y][1].wy_hash_ = Hash<ObWyHash, true>::hash;
+      // basic_funcs[X][Y][1].wy_hash_batch_ = Hash<ObWyHash, true>::hash_batch;
 
       // Notice: ObLobType cannot compare, but is_locator = 1 used for other lob types
       basic_funcs[X][Y][1].null_first_cmp_ = DefText::defined_ ? &TextCmp<1>::cmp : NULL;
@@ -868,10 +884,10 @@ struct InitBasicJsonFuncArray
     basic_funcs[1].default_hash_batch_= Hash<ObDefaultHash, true>::hash_batch;
     basic_funcs[1].murmur_hash_ = Hash<ObMurmurHash, true>::hash;
     basic_funcs[1].murmur_hash_batch_ = Hash<ObMurmurHash, true>::hash_batch;
-    basic_funcs[1].xx_hash_ = Hash<ObXxHash, true>::hash;
-    basic_funcs[1].xx_hash_batch_ = Hash<ObXxHash, true>::hash_batch;
-    basic_funcs[1].wy_hash_ = Hash<ObWyHash, true>::hash;
-    basic_funcs[1].wy_hash_batch_ = Hash<ObWyHash, true>::hash_batch;
+    // basic_funcs[1].xx_hash_ = Hash<ObXxHash, true>::hash;
+    // basic_funcs[1].xx_hash_batch_ = Hash<ObXxHash, true>::hash_batch;
+    // basic_funcs[1].wy_hash_ = Hash<ObWyHash, true>::hash;
+    // basic_funcs[1].wy_hash_batch_ = Hash<ObWyHash, true>::hash_batch;
     basic_funcs[1].null_first_cmp_ = TypeDef::defined_
         ? &TypeCmp<1, 1>::cmp
         : TCDef::defined_ ? &TCCmp<1>::cmp : NULL;
@@ -933,10 +949,10 @@ struct InitBasicGeoFuncArray
     basic_funcs[0].default_hash_batch_= Hash<ObDefaultHash, false>::hash_batch;
     basic_funcs[0].murmur_hash_ = Hash<ObMurmurHash, false>::hash;
     basic_funcs[0].murmur_hash_batch_ = Hash<ObMurmurHash, false>::hash_batch;
-    basic_funcs[0].xx_hash_ = Hash<ObXxHash, false>::hash;
-    basic_funcs[0].xx_hash_batch_ = Hash<ObXxHash, false>::hash_batch;
-    basic_funcs[0].wy_hash_ = Hash<ObWyHash, false>::hash;
-    basic_funcs[0].wy_hash_batch_ = Hash<ObWyHash, false>::hash_batch;
+    // basic_funcs[0].xx_hash_ = Hash<ObXxHash, false>::hash;
+    // basic_funcs[0].xx_hash_batch_ = Hash<ObXxHash, false>::hash_batch;
+    // basic_funcs[0].wy_hash_ = Hash<ObWyHash, false>::hash;
+    // basic_funcs[0].wy_hash_batch_ = Hash<ObWyHash, false>::hash_batch;
     basic_funcs[0].null_first_cmp_ = TypeDef::defined_
         ? &TypeCmp<1, 0>::cmp
         : TCDef::defined_ ? &TCCmp<1>::cmp : NULL;
