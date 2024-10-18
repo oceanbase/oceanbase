@@ -37,6 +37,7 @@
 #include "observer/ob_inner_sql_connection.h"
 #include "share/backup/ob_backup_server_mgr.h"
 #include "rootserver/backup/ob_backup_table_list_mgr.h"
+#include "rootserver/backup/ob_backup_param_operator.h"
 
 using namespace oceanbase;
 using namespace omt;
@@ -1115,6 +1116,44 @@ int ObBackupSetTaskMgr::get_backup_end_scn_(share::SCN &end_scn) const
   return ret;
 }
 
+int ObBackupSetTaskMgr::get_resource_pool_infos_(
+  ObIArray<ObBackupResourcePool> &resource_pool_infos) const
+{
+  int ret = OB_SUCCESS;
+  share::ObUnitTableOperator unit_op;
+  common::ObArray<share::ObResourcePool> pools;
+  common::ObArray<uint64_t> unit_config_ids;
+  common::ObArray<ObUnitConfig> unit_configs;
+  storage::ObBackupResourcePool resource_pool_info;
+
+  if (OB_FAIL(backup_service_->check_leader())) {
+    LOG_WARN("failed to check leader", K(ret));
+  } else if (OB_FAIL(unit_op.init(*sql_proxy_))) {
+    LOG_WARN("failed to init proxy", K(ret));
+  } else if (OB_FAIL(unit_op.get_resource_pools(job_attr_->tenant_id_, pools))) {
+    LOG_WARN("failed to get resource pool", K(ret), K(job_attr_->tenant_id_));
+  }
+  ARRAY_FOREACH(pools, i) {
+    unit_config_ids.reset();
+    unit_configs.reset();
+    resource_pool_info.reset();
+    const share::ObResourcePool &pool = pools.at(i);
+    if (OB_FAIL(unit_config_ids.push_back(pool.unit_config_id_))) {
+      LOG_WARN("failed to push back unit config id", K(ret));
+    } else if (OB_FAIL(unit_op.get_unit_configs(unit_config_ids, unit_configs))) {
+      LOG_WARN("failed to get unit configs", K(ret));
+    } else if (unit_configs.size() != 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected unit configs size", K(ret), K(unit_configs));
+    } else if (OB_FAIL(resource_pool_info.set(pool, unit_configs.at(0)))) {
+      LOG_WARN("failed to set unit_config", K(ret), K(unit_configs));
+    } else if (OB_FAIL(resource_pool_infos.push_back(resource_pool_info))) {
+      LOG_WARN("failed to push back resource pool info", K(ret), K(resource_pool_info));
+    }
+  }
+  return ret;
+}
+
 int ObBackupSetTaskMgr::backup_data_finish_(
     const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks,
     const ObBackupLSTaskAttr &build_index_attr)
@@ -1916,6 +1955,8 @@ int ObBackupSetTaskMgr::write_extern_infos_()
       LOG_WARN("failed to write log format file", K(ret));
     } else if (OB_FAIL(write_extern_locality_info_(locality_info))) {
       LOG_WARN("[DATA_BACKUP]failed to write extern tenant locality info", K(ret), KPC(job_attr_));
+    } else if (OB_FAIL(write_extern_tenant_param_info_())) {
+      LOG_WARN("[DATA_BACKUP]failed to write extern tenant parameters info", K(ret), KPC(job_attr_));
     } else if (OB_FAIL(write_backup_set_info_(set_task_attr_, backup_set_info))) { 
       LOG_WARN("[DATA_BACKUP]failed to write backup set info", K(ret), KPC(job_attr_));
     } else if (OB_FAIL(write_tenant_backup_set_infos_())) {
@@ -2122,6 +2163,8 @@ int ObBackupSetTaskMgr::write_extern_locality_info_(ObExternTenantLocalityInfoDe
                                                                   locality_info.sys_time_zone_,
                                                                   locality_info.sys_time_zone_wrap_))) {
     LOG_WARN("failed to get tenant sys time zone wrap", K(ret));
+  } else if(OB_FAIL(get_resource_pool_infos_(locality_info.resource_pool_infos_))) {
+    LOG_WARN("failed to get tenant resource pool infos", K(ret));
   } else {
     locality_info.tenant_id_ = job_attr_->tenant_id_;
     locality_info.backup_set_id_ = job_attr_->backup_set_id_;
@@ -2133,6 +2176,22 @@ int ObBackupSetTaskMgr::write_extern_locality_info_(ObExternTenantLocalityInfoDe
   } else if (OB_FAIL(store_.write_tenant_locality_info(locality_info))) {
     LOG_WARN("[DATA_BACKUP]failed to write backup set start place holder", K(ret), K(locality_info));
   } 
+  return ret;
+}
+
+int ObBackupSetTaskMgr::write_extern_tenant_param_info_()
+{
+  int ret = OB_SUCCESS;
+  ObExternParamInfoDesc tenant_param_info;
+  if (OB_FAIL(ObBackupParamOperator::get_backup_parameters_info(
+    job_attr_->tenant_id_, tenant_param_info, *sql_proxy_))) {
+    LOG_WARN("[DATA_BACKUP]failed to get tenant parameter info", K(ret), KPC(job_attr_));
+  } else {
+    tenant_param_info.tenant_id_ = job_attr_->tenant_id_;
+  }
+  if (FAILEDx(store_.write_tenant_param_info(tenant_param_info))) {
+    LOG_WARN("[DATA_BACKUP]failed to write backup tenant parameter info", K(ret), K(tenant_param_info));
+  }
   return ret;
 }
 

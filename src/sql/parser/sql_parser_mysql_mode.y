@@ -16046,6 +16046,11 @@ ALTER SYSTEM CANCEL BACKUP opt_backup_tenant_list
   malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_MANAGE, 4, type, value, tenant, $5);
 }
 |
+ALTER SYSTEM BACKUP CLUSTER PARAMETERS TO STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_CLUSTER_PARAMETERS, 1, $7);
+}
+|
 ALTER SYSTEM CANCEL RESTORE relation_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_CANCEL_RESTORE, 1, $5);

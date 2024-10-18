@@ -77,10 +77,49 @@ bool ObBackupDeletedTabletToLSDesc::is_valid() const
 }
 
 /*
+ *------------------------------ObBackupResourcePool----------------------------------------
+ */
+OB_SERIALIZE_MEMBER(ObBackupResourcePool, resource_pool_, unit_config_);
+
+int ObBackupResourcePool::assign(const ObBackupResourcePool &that)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(resource_pool_.assign(that.resource_pool_))) {
+    LOG_WARN("failed to assign resource pool", K(ret));
+  } else if (OB_FAIL(unit_config_.assign(that.unit_config_))) {
+    LOG_WARN("failed to assign unit config", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupResourcePool::set(const share::ObResourcePool &resource_pool, const share::ObUnitConfig &unit_config)
+{
+  int ret = OB_SUCCESS;
+  if (!resource_pool.is_valid() || !unit_config.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(resource_pool), K(unit_config));
+  } else if (OB_FAIL(resource_pool_.assign(resource_pool))) {
+    LOG_WARN("failed to assign resource pool", K(ret));
+  } else if (OB_FAIL(unit_config_.assign(unit_config))) {
+    LOG_WARN("failed to assign unit config", K(ret));
+  }
+  return ret;
+}
+
+void ObBackupResourcePool::reset()
+{
+  resource_pool_.reset();
+  unit_config_.reset();
+}
+
+/*
  *------------------------------ObExternTenantLocalityInfo----------------------------
  */
-OB_SERIALIZE_MEMBER(ObExternTenantLocalityInfoDesc, tenant_id_, backup_set_id_, cluster_id_, compat_mode_,
-    tenant_name_, cluster_name_, locality_, primary_zone_, sys_time_zone_, sys_time_zone_wrap_);
+OB_SERIALIZE_MEMBER(ObExternTenantLocalityInfoDesc, tenant_id_, backup_set_id_, cluster_id_,
+  compat_mode_, tenant_name_, cluster_name_, locality_, primary_zone_, sys_time_zone_,
+  sys_time_zone_wrap_,
+  resource_pool_infos_ // FARM COMPAT WHITELIST
+);
 
 bool ObExternTenantLocalityInfoDesc::is_valid() const
 {
@@ -92,6 +131,8 @@ bool ObExternTenantLocalityInfoDesc::is_valid() const
       && !cluster_name_.is_empty()
       && !locality_.is_empty()
       && !primary_zone_.is_empty();
+      /** remove resource_pool_infos empty check for compat 4.2.5 previous version
+        * do not include resource_pool_infos. */
 }
 
 int ObExternTenantLocalityInfoDesc::assign(const ObExternTenantLocalityInfoDesc &that)
@@ -99,6 +140,8 @@ int ObExternTenantLocalityInfoDesc::assign(const ObExternTenantLocalityInfoDesc 
   int ret = OB_SUCCESS;
   if (OB_FAIL(sys_time_zone_wrap_.deep_copy(that.sys_time_zone_wrap_))) {
     LOG_WARN("failed to deep copy", K(ret));
+  } else if (OB_FAIL(resource_pool_infos_.assign(that.resource_pool_infos_))) {
+    LOG_WARN("failed to assign resource pool configs", K(ret));
   } else {
     tenant_id_ = that.tenant_id_;
     backup_set_id_ = that.backup_set_id_;
@@ -114,8 +157,96 @@ int ObExternTenantLocalityInfoDesc::assign(const ObExternTenantLocalityInfoDesc 
 }
 
 /*
+ *------------------------------ObBackupParam-----------------------------
+ */
+OB_SERIALIZE_MEMBER(ObBackupParam, name_, value_);
+
+void ObBackupParam::reset()
+{
+  name_.reset();
+  value_.reset();
+}
+
+bool ObBackupParam::is_valid() const
+{
+  return !name_.is_empty() && !value_.empty();
+}
+
+int ObBackupParam::assign(const ObBackupParam &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(name_.assign(other.name_))) {
+    LOG_WARN("failed to assign parameter name", K(ret));
+  } else {
+    value_ = other.value_;
+  }
+  return ret;
+}
+
+int ObBackupParam::deep_copy(common::ObIAllocator &allocator, ObBackupParam &target) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(target.name_.assign(name_))) {
+    LOG_WARN("failed to assign parameter name", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, value_, target.value_))) {
+    LOG_WARN("failed to deep copy parameter value", K(ret));
+  }
+  return ret;
+}
+
+/*
+ *------------------------------ObExternParamInfoDesc-----------------------------
+ */
+
+OB_SERIALIZE_MEMBER(ObExternParamInfoDesc, tenant_id_, param_array_);
+
+void ObExternParamInfoDesc::reset()
+{
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  allocator_.reset();
+  param_array_.reset();
+}
+
+bool ObExternParamInfoDesc::is_valid() const
+{
+  return OB_INVALID_TENANT_ID != tenant_id_;
+}
+
+int ObExternParamInfoDesc::assign(const ObExternParamInfoDesc &other)
+{
+  int ret = OB_SUCCESS;
+  reset();
+  tenant_id_ = other.tenant_id_;
+  const ObSArray<ObBackupParam> &param_array = other.param_array();
+  ARRAY_FOREACH(param_array, i) {
+    if (OB_FAIL(push(param_array.at(i)))) {
+      LOG_WARN("failed to push parameter", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObExternParamInfoDesc::push(const ObBackupParam &param)
+{
+  int ret = OB_SUCCESS;
+  ObBackupParam target;
+  if (OB_FAIL(param.deep_copy(allocator_, target))) {
+    LOG_WARN("failed to deep copy parameter", K(ret));
+  } else if (OB_FAIL(param_array_.push_back(target))) {
+    LOG_WARN("failed to push parameter", K(ret));
+  }
+  return ret;
+}
+
+const common::ObSArray<ObBackupParam> &ObExternParamInfoDesc::param_array() const
+{
+  return param_array_;
+}
+
+/*
  *------------------------------ObExternBackupSetInfo----------------------------
  */
+
 OB_SERIALIZE_MEMBER(ObExternBackupSetInfoDesc, backup_set_file_);
 
 bool ObExternBackupSetInfoDesc::is_valid() const
@@ -663,6 +794,45 @@ int ObBackupDataStore::read_tenant_locality_info(ObExternTenantLocalityInfoDesc 
   } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
     LOG_WARN("fail to assign full path", K(ret));
   } else if (OB_FAIL(read_single_file(full_path, locality_info))) {
+    LOG_WARN("failed to read single file", K(ret), K(full_path));
+  }
+  return ret;
+}
+
+int ObBackupDataStore::write_tenant_param_info(const ObExternParamInfoDesc &tenant_param_info)
+{
+  int ret = OB_SUCCESS;
+  ObBackupPathString full_path;
+  share::ObBackupPath path;
+
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data extern mgr not init", K(ret));
+  } else if (OB_FAIL(ObBackupPathUtil::get_tenant_parameters_info_path(backup_set_dest_, path))) {
+    LOG_WARN("fail to get tenant parameter info path", K(ret));
+  } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
+    LOG_WARN("fail to assign full path", K(ret));
+  } else if (OB_FAIL(write_single_file(full_path, tenant_param_info))) {
+    LOG_WARN("fail to write single file", K(ret));
+  }
+
+  return ret;
+}
+
+int ObBackupDataStore::read_tenant_param_info(ObExternParamInfoDesc &tenant_param_info)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupPath path;
+  ObBackupPathString full_path;
+
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObBackupDataStore not init", K(ret));
+  } else if (OB_FAIL(ObBackupPathUtil::get_tenant_parameters_info_path(backup_set_dest_, path))) {
+    LOG_WARN("fail to get tenant tenant parameter info path", K(ret));
+  } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
+    LOG_WARN("fail to assign full path", K(ret));
+  } else if (OB_FAIL(read_single_file(full_path, tenant_param_info))) {
     LOG_WARN("failed to read single file", K(ret), K(full_path));
   }
   return ret;
@@ -1435,6 +1605,25 @@ int ObBackupDataStore::is_table_list_meta_exist(const share::SCN &scn, bool &is_
     LOG_WARN("failed to get format file path", K(ret));
   } else if (OB_FAIL(util.is_exist(full_path.get_obstr(), storage_info, is_exist))) {
     LOG_WARN("failed to check format file exist.", K(ret), K(full_path));
+  }
+  return ret;
+}
+
+int ObBackupDataStore::write_cluster_param_info(const ObExternParamInfoDesc &cluster_param_info)
+{
+  int ret = OB_SUCCESS;
+  ObBackupPathString full_path;
+  share::ObBackupPath path;
+  int64_t time_sec = ObTimeUtility::current_time() / 1000 / 1000;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObBackupStore not init", K(ret));
+  } else if (OB_FAIL(ObBackupPathUtil::get_cluster_parameters_info_path(get_backup_dest(), time_sec, path))) {
+    LOG_WARN("fail to get cluster parameters info path", K(ret));
+  } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
+    LOG_WARN("fail to assign full path", K(ret));
+  } else if (OB_FAIL(write_single_file(full_path, cluster_param_info))) {
+    LOG_WARN("fail to write single file", K(ret));
   }
   return ret;
 }

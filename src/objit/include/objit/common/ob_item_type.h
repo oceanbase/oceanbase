@@ -2400,6 +2400,7 @@ typedef enum ObItemType
   T_REPAIR_TABLE,
   T_CHECKSUM_TABLE,
   T_SERVICE_NAME,
+  T_BACKUP_CLUSTER_PARAMETERS = 4693,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

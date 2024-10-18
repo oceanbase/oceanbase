@@ -389,6 +389,8 @@ const char *const OB_STR_TENANT_BACKUP_SET_INFOS = "tenant_backup_set_infos";
 const char *const OB_STR_FORMAT_FILE_NAME = "format";
 const char *const OB_STR_DIAGNOSE_INFO = "diagnose_info";
 const char *const OB_STR_LOCALITY_INFO = "locality_info";
+const char *const OB_STR_TENANT_PARAMETER_INFO = "tenant_parameter";
+const char *const OB_STR_CLUSTER_PARAMETER_INFO = "cluster_parameter";
 const char *const OB_STR_DEST_TYPE = "dest_type";
 const char *const OB_STR_RETRY_COUNT = "retry_count";
 const char *const OB_STR_DELETED = "DELETED";
@@ -462,6 +464,7 @@ enum ObBackupFileType
   BACKUP_TABLET_METAS_INFO = 37,
   BACKUP_TABLE_LIST_FILE = 38,
   BACKUP_TABLE_LIST_META_FILE = 39,
+  BACKUP_PARAMETERS_INFO = 40,
   // type <=255 is write header struct to disk directly
   // type > 255 is use serialization to disk
   BACKUP_MAX_DIRECT_WRITE_TYPE = 255,
