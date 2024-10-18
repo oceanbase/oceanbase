@@ -187,8 +187,6 @@ public:
                                const int64_t schema_version,
                                const int64_t precise_schema_version);
   const ObTableSchema *get_all_core_table() const;
-  const ObSimpleTenantSchema *get_simple_gts_tenant() const;
-  const ObTenantSchema *get_full_gts_tenant() const;
 
 
   // @param[in]:
@@ -213,7 +211,6 @@ private:
                     const int64_t schema_version) const;
   bool need_use_sys_cache(const ObSchemaCacheKey &cache_key) const;
   int init_all_core_table();
-  int init_gts_tenant_schema();
   int put_sys_schema(
       const ObSchemaCacheKey &cache_key,
       const ObSchema &schema);

@@ -182,11 +182,6 @@ public:
                         const uint64_t schema_id,
                         const ObSchema *&schema);
 
-  const ObSimpleTenantSchema* get_simple_gts_tenant() const
-  {
-    return schema_cache_.get_simple_gts_tenant();
-  }
-
   // Get pairs of tablet-table with specific tenant_id/schema_version.
   // If local cache miss, this function will fetch pairs of tablet-table from __all_tablet_to_table_history.
   //

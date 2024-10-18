@@ -30348,9 +30348,6 @@ int ObDDLService::check_grant_pools_permitted(
   const uint64_t tenant_id = tenant_schema.get_tenant_id();
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", K(ret));
-  } else if (OB_GTS_TENANT_ID == tenant_id) {
-    // gts tenant, pass
-    is_permitted = true;
   } else {
     if (OB_UNLIKELY(nullptr == unit_mgr_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -30373,32 +30370,12 @@ int ObDDLService::check_revoke_pools_permitted(
   const uint64_t tenant_id = tenant_schema.get_tenant_id();
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", K(ret));
-  } else if (OB_GTS_TENANT_ID == tenant_id) {
-    if (OB_FAIL(check_gts_tenant_revoke_pools_permitted(
-            schema_guard, new_pool_name_list, tenant_schema, is_permitted))) {
-      LOG_WARN("fail to check gts tenant revoke pools permitted", K(ret));
-    }
   } else {
     if (OB_FAIL(check_normal_tenant_revoke_pools_permitted(
             schema_guard, new_pool_name_list, tenant_schema, is_permitted))) {
       LOG_WARN("fail to check normal tenant revoke pools permitted", K(ret));
     }
   }
-  return ret;
-}
-
-int ObDDLService::check_gts_tenant_revoke_pools_permitted(
-    share::schema::ObSchemaGetterGuard &schema_guard,
-    const common::ObIArray<share::ObResourcePoolName> &new_pool_name_list,
-    const share::schema::ObTenantSchema &tenant_schema,
-    bool &is_permitted)
-{
-  int ret = OB_SUCCESS;
-  UNUSED(schema_guard);
-  UNUSED(new_pool_name_list);
-  UNUSED(tenant_schema);
-  UNUSED(is_permitted);
-  is_permitted = false; // TODO: wenduo
   return ret;
 }
 
@@ -30591,11 +30568,7 @@ int ObDDLService::modify_tenant(const ObModifyTenantArg &arg)
 int ObDDLService::modify_tenant_inner_phase(const ObModifyTenantArg &arg, const ObTenantSchema *orig_tenant_schema, ObSchemaGetterGuard &schema_guard, bool is_restore)
 {
   int ret = OB_SUCCESS;
-  if (OB_GTS_TENANT_ID == orig_tenant_schema->get_tenant_id()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("modify gts tenant not supported", KR(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter gts tenant");
-  } else if (0 != arg.sys_var_list_.count()) {
+  if (0 != arg.sys_var_list_.count()) {
     // modify system variable
     const ObSysVariableSchema *orig_sys_variable = NULL;
     const uint64_t tenant_id = orig_tenant_schema->get_tenant_id();

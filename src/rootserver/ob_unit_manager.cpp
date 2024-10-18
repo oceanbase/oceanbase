@@ -4078,9 +4078,7 @@ int ObUnitManager::inner_get_pool_ids_of_tenant(const uint64_t tenant_id,
         LOG_DEBUG("get_pools_by_tenant failed", K(tenant_id), K(ret));
       } else {
         // just return empty pool_ids
-        if (OB_GTS_TENANT_ID != tenant_id) {
-          LOG_INFO("tenant doesn't own any pool", K(tenant_id), KR(ret));
-        }
+        LOG_INFO("tenant doesn't own any pool", K(tenant_id), KR(ret));
         ret = OB_SUCCESS;
       }
     } else if (NULL == pools) {
@@ -7378,8 +7376,6 @@ int ObUnitManager::check_shrink_granted_pool_allowed(
   if (OB_UNLIKELY(NULL == pool || alter_unit_num <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(pool), K(alter_unit_num));
-  } else if (OB_GTS_TENANT_ID == pool->tenant_id_) {
-    is_allowed = true;
   } else if (OB_FAIL(check_shrink_granted_pool_allowed_by_migrate_unit(pool, alter_unit_num, is_allowed))) {
     LOG_WARN("fail to check by migrate unit", K(ret));
   } else if (!is_allowed) {
@@ -9284,7 +9280,7 @@ int ObUnitManager::admin_migrate_unit(
         can_migrate_in))) {
       LOG_WARN("fail to check server can_migrate_in", KR(ret), K(unit_info.unit_.migrate_from_server_));
     } else if (OB_FAIL(cancel_migrate_unit(
-            unit_info.unit_, can_migrate_in, unit_info.pool_.tenant_id_ == OB_GTS_TENANT_ID))) {
+            unit_info.unit_, can_migrate_in))) {
 		LOG_WARN("failed to cancel migrate unit", KR(ret), K(unit_info), K(can_migrate_in));
     }
   } else if (OB_FAIL(SVR_TRACER.get_server_zone(unit_info.unit_.server_, src_zone))) {
@@ -9340,11 +9336,10 @@ int ObUnitManager::admin_migrate_unit(
 
 int ObUnitManager::cancel_migrate_unit(
     const share::ObUnit &unit,
-    const bool migrate_from_server_can_migrate_in,
-    const bool is_gts_unit)
+    const bool migrate_from_server_can_migrate_in)
 {
   int ret = OB_SUCCESS;
-  if (!migrate_from_server_can_migrate_in && !is_gts_unit) {
+  if (!migrate_from_server_can_migrate_in) {
     ret = OB_SERVER_MIGRATE_IN_DENIED;
     LOG_WARN("server can not migrate in", K(unit.migrate_from_server_), K(migrate_from_server_can_migrate_in), KR(ret));
   } else {

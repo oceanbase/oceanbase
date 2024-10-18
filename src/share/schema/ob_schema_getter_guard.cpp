@@ -406,8 +406,6 @@ int ObSchemaGetterGuard::get_tenant_id(const ObString &tenant_name,
   } else if (tenant_name.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(tenant_name), KR(ret));
-  } else if (0 == tenant_name.case_compare(OB_GTS_TENANT_NAME)) {
-    tenant_id = OB_GTS_TENANT_ID;
   } else {
     // FIXME: just compatible old code for lock, can it be moved to upper level?
     const ObTenantSchema *tenant_info = NULL;
@@ -1938,8 +1936,6 @@ int ObSchemaGetterGuard::get_tenant_info(uint64_t tenant_id,
     LOG_WARN("invalid argument", K(tenant_id), KR(ret));
   } else if (OB_FAIL(check_lazy_guard(OB_SYS_TENANT_ID, mgr))) {
     LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
-  } else if (OB_GTS_TENANT_ID == tenant_id) {
-    tenant_schema = schema_service_->get_simple_gts_tenant();
   } else {
     ret = mgr->get_tenant_schema(tenant_id, tenant_schema);
   }
@@ -2128,10 +2124,6 @@ int ObSchemaGetterGuard::get_tenant_info(const ObString &tenant_name,
     LOG_WARN("invalid argument", K(tenant_name), KR(ret));
   } else if (OB_FAIL(check_lazy_guard(OB_SYS_TENANT_ID, mgr))) {
     LOG_WARN("fail to check lazy guard", KR(ret));
-  } else if (0 == tenant_name.case_compare(OB_GTS_TENANT_NAME)) {
-     if (OB_FAIL(get_tenant_info(OB_GTS_TENANT_ID, tenant_info))) {
-       LOG_WARN("fail to get gts tenant schema", KR(ret));
-     }
   } else if (OB_FAIL(mgr->get_tenant_schema(tenant_name, simple_tenant))) {
      LOG_WARN("get simple tenant failed", KR(ret), K(tenant_name));
   } else if (NULL == simple_tenant) {
