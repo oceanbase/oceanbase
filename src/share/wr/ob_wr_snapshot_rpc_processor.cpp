@@ -238,14 +238,15 @@ int ObWrAsyncSnapshotTaskP::process()
       MTL(ObWorkloadRepositoryContext*)->release_lock();
     }
     THIS_WORKER.set_timeout_ts(origin_worker_timeout);
+
+    if (OB_FAIL(ret) && LAST_SNAPSHOT_RECORD_SNAP_ID != snapshot_arg.get_snap_id()) {
+      LOG_ERROR("failed to collect wr data", K(ret), K(MTL_ID()), K(arg));
+    }
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("wrong op type", KR(ret), K(arg.get_task_type()));
   }
 
-  if (OB_FAIL(ret)) {
-    LOG_ERROR("failed to collect wr data", K(ret), K(MTL_ID()), K(arg));
-  }
   return ret;
 }
 int ObWrAsyncPurgeSnapshotTaskP::process()
