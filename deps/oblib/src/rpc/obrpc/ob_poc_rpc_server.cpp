@@ -83,7 +83,7 @@ int ObPocServerHandleContext::create(int64_t resp_id, const char* buf, int64_t s
     }
     IGNORE_RETURN snprintf(rpc_timeguard_str, sizeof(rpc_timeguard_str), "sz=%ld,pcode=%x,id=%ld", sz, pcode, tenant_id);
     timeguard.click(rpc_timeguard_str);
-    ObRpcMemPool* pool = ObRpcMemPool::create(tenant_id, pcode_label, pool_size);
+    ObRpcMemPool* pool = ObRpcMemPool::create(tenant_id, pcode_label, pool_size, ObRpcMemPool::RPC_CACHE_SIZE);
     void *temp = NULL;
 
 #ifdef ERRSIM
