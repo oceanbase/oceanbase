@@ -555,7 +555,7 @@ int64_t ObTenantSuperBlock::get_serialize_size_(void) const
 }
 
 
-OB_SERIALIZE_MEMBER(ObActiveTabletItem, tablet_id_,  tablet_meta_version_);
+OB_SERIALIZE_MEMBER(ObActiveTabletItem, tablet_id_,  union_id_);
 OB_SERIALIZE_MEMBER(ObLSActiveTabletArray, items_);
 
 int ObLSActiveTabletArray::assign(const ObLSActiveTabletArray &other)

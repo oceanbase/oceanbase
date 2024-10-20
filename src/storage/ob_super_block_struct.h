@@ -284,18 +284,18 @@ public:
 struct ObActiveTabletItem
 {
 public:
-  ObActiveTabletItem() : tablet_id_(), tablet_meta_version_(0) {}
-  ObActiveTabletItem(const common::ObTabletID tablet_id, const int64_t tablet_meta_version)
-    : tablet_id_(tablet_id), tablet_meta_version_(tablet_meta_version) {}
+  ObActiveTabletItem() : tablet_id_(), union_id_(0) {}
+  ObActiveTabletItem(const common::ObTabletID tablet_id, const int64_t union_id)
+    : tablet_id_(tablet_id), union_id_(union_id) {}
 
-  bool is_valid() const { return tablet_id_.is_valid() && tablet_meta_version_ > 0; }
+  bool is_valid() const { return tablet_id_.is_valid() && union_id_ > 0; }
 
-  TO_STRING_KV(K_(tablet_id), K_(tablet_meta_version));
+  TO_STRING_KV(K_(tablet_id), K_(union_id));
   OB_UNIS_VERSION(1);
 
 public:
   common::ObTabletID tablet_id_;
-  int64_t tablet_meta_version_;
+  int64_t union_id_; // tablet_meta_version in SS, rename to union_id for compat of 4.3.4;
 };
 
 struct ObLSActiveTabletArray

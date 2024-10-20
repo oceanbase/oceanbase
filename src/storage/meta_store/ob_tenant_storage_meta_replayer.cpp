@@ -248,7 +248,7 @@ int ObTenantStorageMetaReplayer::s2_replay_ls_tablets_(
       for (int64_t j = 0; !has_deleted && OB_SUCC(ret) && j < deleting_tablets.items_.count(); j++) {
         const ObPendingFreeTabletItem &deleting_item = deleting_tablets.items_.at(j);
         if (active_item.tablet_id_ == deleting_item.tablet_id_) {
-          if (active_item.tablet_meta_version_ <= deleting_item.tablet_meta_version_) {
+          if (active_item.union_id_ <= deleting_item.tablet_meta_version_) {
             has_deleted = true;
           }
         }
