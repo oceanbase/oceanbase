@@ -550,6 +550,8 @@ public:
   void inc_ref(const char *msg = nullptr);
   void dec_ref(const char *msg = nullptr);
 
+  int64_t get_remained_io_timeout_us();
+
   TO_STRING_KV(K(is_inited_), K(tenant_id_), KP(control_block_), K(ref_cnt_), KP(raw_buf_), K(fd_),
                K(trace_id_), K(retry_count_), K(tenant_io_mgr_), K_(storage_accesser),
                KPC(io_result_), K_(part_id));

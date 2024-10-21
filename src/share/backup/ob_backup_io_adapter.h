@@ -218,6 +218,8 @@ public:
       const common::ObString &uri,
       const share::ObBackupStorageInfo *storage_info);
 
+  static uint64_t get_tenant_id();
+
 private:
   static int async_io_manager_read(
       char *buf, const int64_t offset, const int64_t size,
@@ -248,7 +250,6 @@ private:
       ObIOHandle &io_handle,
       const bool is_complete_mode,
       const uint64_t sys_module_id=OB_INVALID_ID);
-  static uint64_t get_tenant_id();
   
   DISALLOW_COPY_AND_ASSIGN(ObBackupIoAdapter);
 };

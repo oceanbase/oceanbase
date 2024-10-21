@@ -1608,6 +1608,16 @@ void ObIORequest::dec_ref(const char *msg)
   }
 }
 
+int64_t ObIORequest::get_remained_io_timeout_us()
+{
+  int64_t cur_remained_timeout_us = 0;
+  if (OB_NOT_NULL(io_result_)) {
+    cur_remained_timeout_us = io_result_->timeout_us_
+                            - (ObTimeUtility::current_time() - io_result_->time_log_.begin_ts_);
+  }
+  return MAX(0, cur_remained_timeout_us);
+}
+
 int ObIORequest::set_block_handle(const ObIOInfo &info)
 {
   // do nothing

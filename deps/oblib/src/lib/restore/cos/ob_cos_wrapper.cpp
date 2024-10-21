@@ -32,6 +32,10 @@ namespace oceanbase
 {
 namespace common
 {
+
+thread_local uint64_t ObObjectStorageTenantGuard::tl_tenant_id_ = OB_SERVER_TENANT_ID;
+thread_local int64_t ObObjectStorageTenantGuard::tl_timeout_us_ = OB_STORAGE_MAX_IO_TIMEOUT_US;
+
 namespace qcloud_cos
 {
 using namespace oceanbase::common;
@@ -185,7 +189,7 @@ int ob_set_retry_headers(
 class ObStorageCOSRetryStrategy : public ObStorageIORetryStrategyBase<cos_status_t *>
 {
 public:
-  ObStorageCOSRetryStrategy(const int64_t timeout_us = OB_STORAGE_MAX_IO_TIMEOUT_US)
+  ObStorageCOSRetryStrategy(const int64_t timeout_us = ObObjectStorageTenantGuard::tl_tenant_id_)
       : ObStorageIORetryStrategyBase<cos_status_t *>(timeout_us),
         origin_headers_(nullptr),
         ref_headers_(nullptr),

@@ -168,6 +168,41 @@ FuncRetType<FuncType, Args...> execute_until_timeout(
   return func_ret;
 }
 
+class ObObjectStorageTenantGuard
+{
+public:
+  ObObjectStorageTenantGuard(const uint64_t tenant_id, const int64_t timeout_us)
+      : old_tenant_id_(tl_tenant_id_),
+        old_timeout_us_(tl_timeout_us_)
+  {
+    tl_tenant_id_ = tenant_id;
+    tl_timeout_us_ = timeout_us;
+  }
+
+  virtual ~ObObjectStorageTenantGuard()
+  {
+    tl_tenant_id_ = old_tenant_id_;
+    tl_timeout_us_ = old_timeout_us_;
+  }
+
+  static uint64_t get_tenant_id()
+  {
+    return tl_tenant_id_;
+  }
+
+  static int64_t get_timeout_us()
+  {
+    return tl_timeout_us_;
+  }
+
+public:
+  static thread_local uint64_t tl_tenant_id_;
+  uint64_t old_tenant_id_;
+
+  static thread_local int64_t tl_timeout_us_;
+  int64_t old_timeout_us_;
+};
+
 } // common
 } // oceanbase
 

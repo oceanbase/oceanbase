@@ -294,7 +294,7 @@ public:
   using ObStorageIORetryStrategy<OutcomeType>::start_time_us_;
   using ObStorageIORetryStrategy<OutcomeType>::timeout_us_;
 
-  ObStorageS3RetryStrategy(const int64_t timeout_us = OB_STORAGE_MAX_IO_TIMEOUT_US)
+  ObStorageS3RetryStrategy(const int64_t timeout_us = ObObjectStorageTenantGuard::get_timeout_us())
       : ObStorageIORetryStrategy<OutcomeType>(timeout_us)
   {}
   virtual ~ObStorageS3RetryStrategy() {}
