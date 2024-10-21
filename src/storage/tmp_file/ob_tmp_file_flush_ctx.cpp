@@ -280,6 +280,10 @@ ObTmpFileFlushTask::ObTmpFileFlushTask()
 void ObTmpFileFlushTask::destroy()
 {
   flush_write_block_task_.~ObTmpFileWriteBlockTask();
+  // flush task io buffer is allocated in kv cache, and we hold its memory by keeping block_handle_.
+  // since buffer's memory life cycle must be longer than the object handle,
+  // the handle_ must be reset before block_handle_.
+  handle_.reset();
   block_handle_.reset();
   flush_page_id_arr_.reset();
   inst_handle_.reset();
@@ -297,7 +301,6 @@ void ObTmpFileFlushTask::destroy()
   type_ = TaskType::INVALID;
   task_state_ = ObTmpFileFlushTaskState::TFFT_INITED;
   tmp_file_block_handle_.reset();
-  handle_.reset();
   flush_infos_.reset();
 }
 

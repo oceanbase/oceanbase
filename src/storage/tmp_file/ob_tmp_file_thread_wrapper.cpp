@@ -919,11 +919,6 @@ void ObTmpFileSwapTG::run1()
       file_mgr_->refresh_meta_memory_limit();
     }
   }
-
-  if (has_set_stop()) {
-    flush_tg_ref_.clean_up_lists();
-    clean_up_lists_();
-  }
 }
 
 void ObTmpFileSwapTG::clean_up_lists_()
