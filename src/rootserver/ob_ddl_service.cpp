@@ -3439,8 +3439,6 @@ int ObDDLService::check_locality_compatible_(
   } else if (OB_FAIL(ObShareUtil::check_compat_version_for_columnstore_replica(
                        tenant_id, is_compatible_with_columnstore_replica))) {
     LOG_WARN("fail to check compatible with columnstore replica", KR(ret), K(schema));
-  } else if (is_compatible_with_readonly_replica && is_compatible_with_columnstore_replica) {
-    // check pass
   } else if (OB_FAIL(schema.get_zone_replica_attr_array(zone_locality))) {
     LOG_WARN("fail to get locality from schema", K(ret), K(schema));
   } else {
@@ -3459,6 +3457,11 @@ int ObDDLService::check_locality_compatible_(
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("can not create tenant with column-store replica below data version 4.3.3", KR(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Create tenant with C-replica in locality below data version 4.3.3");
+      } else if (GCTX.is_shared_storage_mode()
+                  && 0 != this_set.get_columnstore_replica_num()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("can not create tenant with column-store replica in shared-storage mode", KR(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "In shared-storage mode, C-replica is");
       }
     }
   }

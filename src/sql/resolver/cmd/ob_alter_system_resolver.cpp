@@ -176,6 +176,10 @@ int ObAlterSystemResolverUtil::check_compatibility_for_replica_type(const ObRepl
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("data_version lower than 4.3.3, C-replica not supported");
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "data_version is lower than 4.3.3, C-replica");
+    } else if (GCTX.is_shared_storage_mode()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("column-store replica not supported in shared-storage mode", KR(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "In shared-storage mode, C-replica is");
     }
   }
   return ret;
