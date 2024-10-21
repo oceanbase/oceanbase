@@ -248,6 +248,11 @@ int ObTableApiExecuteP::before_process()
     ret = ParentType::before_process();
   }
 
+  if (OB_FAIL(ret) && OB_NOT_NULL(group_single_op_)) {
+    TABLEAPI_GROUP_COMMIT_MGR->free_op(group_single_op_);
+    group_single_op_ = nullptr;
+  }
+
   return ret;
 }
 
@@ -291,7 +296,7 @@ int ObTableApiExecuteP::process_group_commit()
   int64_t schema_version = -1;
   bool is_cache_hit = false;
   ObLSID ls_id(ObLSID::INVALID_LS_ID);
-
+  ObTableGroupCtx ctx;
   if (!tablet_id_.is_valid()) {
     if (!simple_table_schema_->is_partitioned_table()) {
       tablet_id_ = simple_table_schema_->get_tablet_id();
@@ -321,7 +326,6 @@ int ObTableApiExecuteP::process_group_commit()
     LOG_WARN("fail to get schema version", K(ret), K(tenant_id), K_(table_id));
   } else {
     ObTableGroupCommitKey key(ls_id, table_id_, schema_version, op.type());
-    ObTableGroupCtx ctx;
     bool is_insup_use_put = false;
     int64_t binlog_row_image_type = ObBinlogRowImage::FULL;
     ctx.key_ = &key;
@@ -351,12 +355,16 @@ int ObTableApiExecuteP::process_group_commit()
     } else if (OB_FAIL(ObTableGroupService::process(ctx, group_single_op_))) {
       LOG_WARN("fail to process group commit", K(ret)); // can not K(ctx) or KPC_(group_single_op), cause req may have been free
     }
+  }
 
-    if (ctx.add_group_success_) {
-      this->set_req_has_wokenup(); // do not response packet
-    } else {
-      LOG_WARN("group commit op is not added success", K(ret), KPC(group_single_op_), K(ctx));
+  if (ctx.add_group_success_) {
+    this->set_req_has_wokenup(); // do not response packet
+  } else {
+    if (OB_NOT_NULL(group_single_op_)) {
+      TABLEAPI_GROUP_COMMIT_MGR->free_op(group_single_op_);
+      group_single_op_ = nullptr;
     }
+    LOG_WARN("group commit op is not added success", K(ret), KPC(group_single_op_), K(ctx));
   }
 
   return ret;
@@ -426,6 +434,13 @@ int ObTableApiExecuteP::try_process()
     LOG_WARN("fail to init schema guard", K(ret), K(arg_.table_name_));
   } else if (OB_FAIL(check_arg2())) {
     LOG_WARN("fail to check arg", K(ret));
+  }
+
+  if (OB_FAIL(ret)) {
+    if (OB_NOT_NULL(group_single_op_)) {
+      TABLEAPI_GROUP_COMMIT_MGR->free_op(group_single_op_);
+      group_single_op_ = nullptr;
+    }
   } else if (is_group_commit_) {
     if (OB_FAIL(process_group_commit())) {
       LOG_WARN("fail to process group commit", K(ret));
