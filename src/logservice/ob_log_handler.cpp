@@ -2033,8 +2033,10 @@ int ObLogHandler::handle_acquire_log_rebuild_info_msg(const LogAcquireRebuildInf
     } else if (msg.rebuild_replica_end_lsn_ > leader_begin_lsn) {
       CLOG_LOG(INFO, "stale msg, ignore", K(ret), K_(id), K(msg), K(leader_begin_lsn));
     } else {
-      const LogRebuildType type = (leader_end_lsn.val_ - msg.rebuild_replica_end_lsn_.val_ > FAST_REBUILD_THRESHOLD)?
-          LogRebuildType::FULL_REBUILD: LogRebuildType::FAST_REBUILD;
+      // const LogRebuildType type = (leader_end_lsn.val_ - msg.rebuild_replica_end_lsn_.val_ > FAST_REBUILD_THRESHOLD)?
+      //     LogRebuildType::FULL_REBUILD: LogRebuildType::FAST_REBUILD;
+      // always execute fast rebuild
+      const LogRebuildType type = LogRebuildType::FAST_REBUILD;
       palf::LSN base_lsn;
       palf::PalfBaseInfo base_info;
       if (OB_FAIL(palf_handle_.get_base_lsn(base_lsn))) {
