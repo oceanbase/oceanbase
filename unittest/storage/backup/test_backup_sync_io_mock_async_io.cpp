@@ -285,7 +285,7 @@ TEST_F(TestBackupMockAsyncIO, test_sync_io_mock_async_io)
   ObIOInfo write_io_info;
   ObIOHandle write_io_handle;
   ObIOFd write_io_fd;
-  const ObStorageAccessType writer_access_type = OB_STORAGE_ACCESS_RANDOMWRITER;
+  const ObStorageAccessType writer_access_type = OB_STORAGE_ACCESS_APPENDER;
 
   EXPECT_TRUE(ObBackupDeviceMacroBlockId::is_backup_block_file(macro_id.first_id()));
   // mock write

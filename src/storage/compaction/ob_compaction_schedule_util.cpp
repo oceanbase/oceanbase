@@ -112,12 +112,7 @@ void ObBasicMergeScheduler::update_frozen_version_and_merge_progress(const int64
       obsys::ObWLockGuard frozen_version_guard(frozen_version_lock_);
       frozen_version_ = broadcast_version;
     }
-
-    // init merge progress
     int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(MTL(ObTenantCompactionProgressMgr *)->add_progress(broadcast_version))) {
-      LOG_WARN_RET(tmp_ret, "failed to add progress", K(broadcast_version));
-    }
     if (OB_TMP_FAIL(MTL(ObTenantCompactionProgressMgr *)->init_progress(broadcast_version))) {
       LOG_WARN_RET(tmp_ret, "failed to init progress", K(broadcast_version));
     }
@@ -129,7 +124,7 @@ void ObBasicMergeScheduler::update_merged_version(const int64_t merged_version)
    merged_version_ = merged_version;
 }
 
-void ObBasicMergeScheduler::update_merge_progress(const int64_t merge_version)
+void ObBasicMergeScheduler::try_finish_merge_progress(const int64_t merge_version)
 {
   int ret = OB_SUCCESS;
   const int64_t merged_scn = get_inner_table_merged_scn();
@@ -139,11 +134,7 @@ void ObBasicMergeScheduler::update_merge_progress(const int64_t merge_version)
     merged_version_ = merged_scn;
   }
 
-  const share::ObIDag::ObDagStatus dag_status = merged_version_ >= merge_version
-                                              ? share::ObIDag::DAG_STATUS_FINISH
-                                              : share::ObIDag::DAG_STATUS_NODE_RUNNING;
-  if (merged_version_ > INIT_COMPACTION_SCN
-      && OB_FAIL(MTL(ObTenantCompactionProgressMgr *)->update_progress_status(merged_version_, dag_status))) {
+  if (merged_version_ > merge_version && OB_FAIL(MTL(ObTenantCompactionProgressMgr *)->finish_progress(merged_version_))) {
     LOG_WARN("failed to finish progress", KR(ret), K(merge_version), K(merged_version_));
   }
 }

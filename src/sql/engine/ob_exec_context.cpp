@@ -139,7 +139,9 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     table_level_slice_idx_(0),
     slice_row_idx_(0),
     autoinc_range_interval_(0),
-    lob_access_ctx_(nullptr)
+    lob_access_ctx_(nullptr),
+    auto_dop_map_(),
+    force_local_plan_(false)
 {
 }
 
@@ -212,6 +214,7 @@ ObExecContext::~ObExecContext()
     lob_access_ctx_->~ObLobAccessCtx();
     lob_access_ctx_ = nullptr;
   }
+  auto_dop_map_.destroy();
 }
 
 void ObExecContext::clean_resolve_ctx()

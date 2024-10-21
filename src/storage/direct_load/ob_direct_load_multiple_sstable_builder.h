@@ -65,10 +65,23 @@ private:
   public:
     DataBlockFlushCallback();
     virtual ~DataBlockFlushCallback();
-    int init(ObDirectLoadSSTableIndexBlockWriter *index_block_writer);
+    int init(ObDirectLoadSSTableIndexBlockWriter *index_block_writer,
+             ObDirectLoadSSTableDataBlockWriter<RowType> *data_block_writer,
+             ObDirectLoadSSTableDataBlockWriter<RowkeyType> *rowkey_block_writer,
+             const int64_t data_block_count_per_rowkey,
+             const bool need_write_rowkey);
     int write(char *buf, int64_t buf_size, int64_t offset) override;
+    void mark_close() { is_mark_close_ = true; }
+    int64_t get_rowkey_count() const { return rowkey_count_; }
   private:
     ObDirectLoadSSTableIndexBlockWriter *index_block_writer_;
+    ObDirectLoadSSTableDataBlockWriter<RowType> *data_block_writer_;
+    ObDirectLoadSSTableDataBlockWriter<RowkeyType> *rowkey_block_writer_;
+    int64_t data_block_count_per_rowkey_;
+    int64_t data_block_count_;
+    int64_t rowkey_count_;
+    bool need_write_rowkey_;
+    bool is_mark_close_;
     bool is_inited_;
   };
 private:
@@ -80,8 +93,10 @@ private:
   common::ObArenaAllocator last_rowkey_allocator_;
   ObDirectLoadTmpFileHandle index_file_handle_;
   ObDirectLoadTmpFileHandle data_file_handle_;
+  ObDirectLoadTmpFileHandle rowkey_file_handle_;
   ObDirectLoadSSTableIndexBlockWriter index_block_writer_;
   ObDirectLoadSSTableDataBlockWriter<RowType> data_block_writer_;
+  ObDirectLoadSSTableDataBlockWriter<RowkeyType> rowkey_block_writer_;
   DataBlockFlushCallback callback_;
   int64_t row_count_;
   bool is_closed_;

@@ -514,7 +514,11 @@ int ObLogSubPlanFilter::set_use_das_batch(ObLogicalOperator* root)
   } else if (root->is_table_scan()) {
     ObLogTableScan *ts = static_cast<ObLogTableScan*>(root);
     if (!ts->get_range_conditions().empty()) {
-      ts->set_use_batch(enable_das_group_rescan_);
+      if (ts->is_text_retrieval_scan()) {
+        ts->set_use_batch(false);
+      } else {
+        ts->set_use_batch(enable_das_group_rescan_);
+      }
     }
   } else if (root->get_num_of_child() == 1) {
     if(OB_FAIL(SMART_CALL(set_use_das_batch(root->get_child(first_child))))) {

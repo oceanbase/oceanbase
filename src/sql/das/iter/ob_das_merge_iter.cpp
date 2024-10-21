@@ -760,23 +760,25 @@ int ObDASMergeIter::prepare_sort_merge_info()
         }
       }
 
-      // init store rows for each das task
-      if (merge_store_rows_arr_.empty()) {
-        if (OB_FAIL(merge_store_rows_arr_.reserve(das_tasks_arr_.count()))) {
-          LOG_WARN("failed to reserve merge store rows array", K(ret));
-        } else {
-          for (int64_t i = 0; OB_SUCC(ret) && i < das_tasks_arr_.count(); i++) {
-            if (OB_FAIL(merge_store_rows_arr_.push_back(
-                MergeStoreRows(output_, eval_ctx_, group_id_idx_, max_size_)))) {
-              LOG_WARN("failed to push back merge store rows", K(ret));
-            } else if (OB_FAIL(merge_store_rows_arr_.at(i).init(*iter_alloc_))) {
-              LOG_WARN("failed to init merge store rows", K(ret));
+      if (OB_SUCC(ret)) {
+        // init store rows for each das task
+        if (merge_store_rows_arr_.empty()) {
+          if (OB_FAIL(merge_store_rows_arr_.reserve(das_tasks_arr_.count()))) {
+            LOG_WARN("failed to reserve merge store rows array", K(ret));
+          } else {
+            for (int64_t i = 0; OB_SUCC(ret) && i < das_tasks_arr_.count(); i++) {
+              if (OB_FAIL(merge_store_rows_arr_.push_back(
+                  MergeStoreRows(output_, eval_ctx_, group_id_idx_, max_size_)))) {
+                LOG_WARN("failed to push back merge store rows", K(ret));
+              } else if (OB_FAIL(merge_store_rows_arr_.at(i).init(*iter_alloc_))) {
+                LOG_WARN("failed to init merge store rows", K(ret));
+              }
             }
           }
-        }
-      } else {
-        for (int64_t i = 0; i < merge_store_rows_arr_.count(); i++) {
-          merge_store_rows_arr_.at(i).reuse();
+        } else {
+          for (int64_t i = 0; i < merge_store_rows_arr_.count(); i++) {
+            merge_store_rows_arr_.at(i).reuse();
+          }
         }
       }
     }

@@ -23,6 +23,7 @@
 #include "share/ob_i_sql_expression.h"          // ObISqlExpression,ObExprCtx
 #include "share/schema/ob_table_param.h"        // ObColDesc
 #include "share/schema/ob_multi_version_schema_service.h"     // ObMultiVersionSchemaService
+#include "share/ob_simple_batch.h"
 #include "sql/ob_phy_table_location.h"
 #include "sql/ob_sql_define.h"
 #include "sql/parser/parse_node.h"
@@ -766,6 +767,9 @@ public:
                                             const ObProxyInfo &proxied_info,
                                             ObIArray<uint64_t> &new_role_id_array,
                                             ObIArray<uint64_t> &new_role_id_option_array);
+
+  static int get_strong_partition_replica_addr(const ObCandiTabletLoc &phy_part_loc_info,
+                                               ObAddr &selected_addr);
 private:
   static bool check_mysql50_prefix(common::ObString &db_name);
   static bool part_expr_has_virtual_column(const ObExpr *part_expr);

@@ -82,7 +82,7 @@ int ObDropFTSIndexTask::init(
     set_gmt_create(ObTimeUtility::current_time());
     tenant_id_ = tenant_id;
     object_id_ = data_table_id;
-    target_object_id_ = target_object_id;
+    target_object_id_ = target_object_id; // not use this id
     schema_version_ = schema_version;
     task_id_ = task_id;
     parent_task_id_ = 0; // no parent task
@@ -267,17 +267,17 @@ int ObDropFTSIndexTask::check_switch_succ()
     LOG_WARN("refresh schema version failed", K(ret));
   } else if (OB_FAIL(root_service_->get_schema_service().get_tenant_schema_guard(tenant_id_, schema_guard))) {
     LOG_WARN("fail to get tenant schema", K(ret), K(tenant_id_));
-  } else if (domain_index_.is_valid() &&
-    OB_FAIL(schema_guard.check_table_exist(tenant_id_, domain_index_.table_id_, is_domain_index_exist))) {
+  } else if (domain_index_.is_valid()
+          && OB_FAIL(schema_guard.check_table_exist(tenant_id_, domain_index_.table_id_, is_domain_index_exist))) {
     LOG_WARN("fail to check table exist", K(ret), K(tenant_id_), K(domain_index_));
-  } else if (fts_doc_word_.is_valid() &&
-    OB_FAIL(schema_guard.check_table_exist(tenant_id_, fts_doc_word_.table_id_, is_doc_word_exist))) {
+  } else if (fts_doc_word_.is_valid()
+          && OB_FAIL(is_fts_task() && schema_guard.check_table_exist(tenant_id_, fts_doc_word_.table_id_, is_doc_word_exist))) {
     LOG_WARN("fail to check table exist", K(ret), K(tenant_id_), K(fts_doc_word_));
-  } else if (doc_rowkey_.is_valid() &&
-    OB_FAIL(schema_guard.check_table_exist(tenant_id_, doc_rowkey_.table_id_, is_doc_rowkey_exist))) {
+  } else if (doc_rowkey_.is_valid()
+          && OB_FAIL(schema_guard.check_table_exist(tenant_id_, doc_rowkey_.table_id_, is_doc_rowkey_exist))) {
     LOG_WARN("fail to check table exist", K(ret), K(tenant_id_), K(doc_rowkey_));
-  } else if (rowkey_doc_.is_valid() &&
-    OB_FAIL(schema_guard.check_table_exist(tenant_id_, rowkey_doc_.table_id_, is_rowkey_doc_exist))) {
+  } else if (rowkey_doc_.is_valid()
+          && OB_FAIL(schema_guard.check_table_exist(tenant_id_, rowkey_doc_.table_id_, is_rowkey_doc_exist))) {
     LOG_WARN("fail to check table exist", K(ret), K(tenant_id_), K(rowkey_doc_));
   } else if (!is_domain_index_exist && !is_doc_word_exist && !is_rowkey_doc_exist && !is_doc_rowkey_exist) {
     task_status_ = ObDDLTaskStatus::SUCCESS;

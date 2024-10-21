@@ -3110,7 +3110,7 @@ int ObService::check_and_cancel_ddl_complement_data_dag(const ObDDLBuildSingleRe
       LOG_WARN("fail to init complement data dag", K(ret), K(arg));
     } else if (OB_FAIL(dag_scheduler->check_dag_exist(dag, is_dag_exist))) {
       LOG_WARN("check dag exist failed", K(ret));
-    } else if (is_dag_exist && OB_FAIL(dag_scheduler->cancel_dag(dag))) {
+    } else if (is_dag_exist && OB_FAIL(dag_scheduler->cancel_dag(dag, true/*force_cancel, to cancel running dag by yield.*/))) {
       // sync to cancel ready dag only, not including running dag.
       LOG_WARN("cancel dag failed", KP(dag), K(ret));
     }

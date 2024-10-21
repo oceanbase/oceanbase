@@ -61,6 +61,12 @@ bool ObMviewBaseMerge::check_table_need_read(const ObITable &table, int64_t &maj
   return need_read;
 }
 
+int ObMviewBaseMerge::alloc_row_store(ObTableAccessContext &context, const ObTableAccessParam &param)
+{
+  // ObMviewBaseMerge is an internal ObSingleMerge, no need alloc
+  return OB_SUCCESS;
+}
+
 ObMviewIncrMerge::ObMviewIncrMerge()
   : base_data_merge_(nullptr),
     base_access_info_(nullptr),

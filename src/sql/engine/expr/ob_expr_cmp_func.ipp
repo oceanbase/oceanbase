@@ -814,7 +814,12 @@ struct ExtraExprCmpIniter
   }
 };
 
-template<int X, int Y>
+struct ExprDummyIniter
+{
+  static void init_array() {}
+};
+
+template<int X, int Y, bool defined = true>
 struct TypeExprCmpFuncIniter
 {
   using Def = datum_cmp::ObDatumTypeCmp<
@@ -850,6 +855,12 @@ struct TypeExprCmpFuncIniter
 };
 
 template<int X, int Y>
+struct TypeExprCmpFuncIniter<X, Y, false>: public ExprDummyIniter {};
+
+template<int X, int Y>
+using TypeExprCmpIniter = TypeExprCmpFuncIniter<X, Y, datum_cmp::ObDatumTypeCmp<static_cast<ObObjType>(X),static_cast<ObObjType>(Y)>::defined_>;
+
+template<int X, int Y, bool defined = true>
 struct TCExprCmpFuncIniter
 {
   using Def = datum_cmp::ObDatumTCCmp<
@@ -894,6 +905,12 @@ struct TCExprCmpFuncIniter
     DATUM_TC_CMP_FUNCS[X][Y] = Def::defined_ ? &Def::cmp : NULL;
   }
 };
+
+template<int X, int Y>
+struct TCExprCmpFuncIniter<X, Y, false>: public ExprDummyIniter{};
+
+template<int X, int Y>
+using TCExprCmpIniter = TCExprCmpFuncIniter<X, Y, datum_cmp::ObDatumTCCmp<static_cast<ObObjTypeClass>(X),static_cast<ObObjTypeClass>(Y)>::defined_>;
 
 template<int X, int Y>
 struct StrExprFuncIniter

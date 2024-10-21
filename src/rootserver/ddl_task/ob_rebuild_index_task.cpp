@@ -185,18 +185,24 @@ int ObRebuildIndexTask::drop_index_impl(const bool is_drop_old_index)
     int64_t ddl_rpc_timeout = 0;
     obrpc::ObDropIndexArg drop_index_arg;
     obrpc::ObDropIndexRes drop_index_res;
-    drop_index_arg.is_inner_          = true;          // send to rs and set is_inner_ is true to submit drop vec index ddl task。RS need get all assistant index table to drop
-    drop_index_arg.tenant_id_         = tenant_id_;
-    drop_index_arg.exec_tenant_id_    = tenant_id_;
-    drop_index_arg.index_table_id_    = drop_index_id;  // The ID of table 3 in the vector index needs to be deleted.
-    drop_index_arg.session_id_        = data_table_schema->get_session_id();
-    drop_index_arg.index_name_        = index_name;
-    drop_index_arg.table_name_        = data_table_schema->get_table_name();
-    drop_index_arg.database_name_     = database_schema->get_database_name_str();
-    drop_index_arg.index_action_type_ = obrpc::ObIndexArg::DROP_INDEX;
+    drop_index_arg.is_inner_            = true;          // send to rs and set is_inner_ is true to submit drop vec index ddl task。RS need get all assistant index table to drop
+    drop_index_arg.tenant_id_           = tenant_id_;
+    drop_index_arg.exec_tenant_id_      = tenant_id_;
+    drop_index_arg.index_table_id_      = drop_index_id;  // The ID of table 3 in the vector index needs to be deleted.
+    drop_index_arg.session_id_          = data_table_schema->get_session_id();
+    drop_index_arg.index_name_          = index_name;
+    drop_index_arg.table_name_          = data_table_schema->get_table_name();
+    drop_index_arg.database_name_       = database_schema->get_database_name_str();
+    drop_index_arg.index_action_type_   = obrpc::ObIndexArg::DROP_INDEX;
     drop_index_arg.is_add_to_scheduler_ = true;
-    drop_index_arg.task_id_           = task_id_;
-    drop_index_arg.is_vec_inner_drop_ = true;
+    drop_index_arg.task_id_             = task_id_;
+    if(index_schema->is_vec_index()) {
+      drop_index_arg.is_vec_inner_drop_ = true;
+    } else if (index_schema->is_fts_index()) {
+      drop_index_arg.is_parent_task_dropping_fts_index_ = true;
+    } else if (index_schema->is_multivalue_index()) {
+      drop_index_arg.is_parent_task_dropping_multivalue_index_ = true;
+    }
     if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(index_schema->get_all_part_num() + data_table_schema->get_all_part_num(), ddl_rpc_timeout))) {
       LOG_WARN("failed to get ddl rpc timeout", KR(ret));
     } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, DROP_INDEX_RPC_FAILED))) {

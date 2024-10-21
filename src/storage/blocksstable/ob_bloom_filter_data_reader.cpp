@@ -34,6 +34,7 @@ ObBloomFilterMacroBlockReader::ObBloomFilterMacroBlockReader(const bool is_sys_r
 
 ObBloomFilterMacroBlockReader::~ObBloomFilterMacroBlockReader()
 {
+  reset();
 }
 
 void ObBloomFilterMacroBlockReader::reset()

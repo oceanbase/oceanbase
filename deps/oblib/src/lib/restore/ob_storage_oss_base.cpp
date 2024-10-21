@@ -284,12 +284,70 @@ int get_bucket_object_name_for_list(const ObString &uri, ObString &bucket, ObStr
 }
 
 ObStorageOSSRetryStrategy::ObStorageOSSRetryStrategy(const int64_t timeout_us)
-    : ObStorageIORetryStrategy<aos_status_t *>(timeout_us)
+    : ObStorageIORetryStrategy<aos_status_t *>(timeout_us),
+      origin_headers_(nullptr),
+      ref_headers_(nullptr),
+      origin_list_entries_(),
+      ref_buffer_(nullptr),
+      deleted_object_list_(nullptr),
+      params_(nullptr)
 {
 }
 
 ObStorageOSSRetryStrategy::~ObStorageOSSRetryStrategy()
 {
+  origin_list_entries_.reset();
+}
+
+int ObStorageOSSRetryStrategy::set_retry_headers(apr_pool_t *p, apr_table_t *&headers)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(qcloud_cos::ob_set_retry_headers(p, headers, origin_headers_, ref_headers_))) {
+    OB_LOG(WARN, "fail to deep copy headers", K(ret), KP(p), KP(headers));
+  }
+  return ret;
+}
+
+int ObStorageOSSRetryStrategy::set_retry_buffer(aos_list_t *write_content_buffer)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(write_content_buffer)) {
+    aos_list_t *entry = write_content_buffer->next;
+    // aos_list_t/cos_list_t is a doubly circular linked list
+    while (OB_SUCC(ret) && entry != write_content_buffer) {
+      if (OB_ISNULL(entry)) {
+        ret = OB_INVALID_ARGUMENT;
+        OB_LOG(WARN, "fail to store list entries", K(ret), KP(write_content_buffer), KP(entry));
+      } else if (OB_FAIL(origin_list_entries_.push_back(entry))) {
+        OB_LOG(WARN, "fail to store list entries",
+            K(ret), KP(write_content_buffer), KP(entry), K(origin_list_entries_.count()));
+      } else {
+        entry = entry->next;
+      }
+    }
+    if (OB_SUCC(ret) && !origin_list_entries_.empty()) {
+      ref_buffer_ = write_content_buffer;
+    }
+  }
+  return ret;
+}
+
+int ObStorageOSSRetryStrategy::set_retry_deleted_object_list(aos_list_t *deleted_object_list)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(deleted_object_list)) {
+    deleted_object_list_ = deleted_object_list;
+  }
+  return ret;
+}
+
+int ObStorageOSSRetryStrategy::set_retry_list_object_params(oss_list_object_params_t *params)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(params)) {
+    params_ = params;
+  }
+  return ret;
 }
 
 bool ObStorageOSSRetryStrategy::should_retry_impl_(
@@ -302,8 +360,85 @@ bool ObStorageOSSRetryStrategy::should_retry_impl_(
     bret = false;
   } else if (aos_should_retry(outcome)) {
     bret = true;
+  } else {
+    const int code = outcome->code;
+    const char *error_code = outcome->error_code;
+    const char *req_id = outcome->req_id;
+    if (OB_NOT_NULL(error_code) && 0 == strcmp(error_code, AOS_HTTP_IO_ERROR_CODE)) {
+      bret = true;
+    } else if (code / 100 != 2 && (OB_ISNULL(req_id) || req_id[0] == '\0')) {
+      bret = true;
+    }
   }
+
+  if (bret) {
+    int ret = OB_SUCCESS;
+    if (OB_NOT_NULL(deleted_object_list_)) {
+      aos_list_init(deleted_object_list_);
+    }
+    if (OB_NOT_NULL(params_)) {
+      // reuse params
+      aos_list_init(&params_->object_list);
+      aos_list_init(&params_->common_prefix_list);
+    }
+
+    if (FAILEDx(reinitialize_headers_())) {
+      OB_LOG(WARN, "fail to reinitialize headers", K(ret), KP(origin_headers_), KP(ref_headers_));
+    } else if (OB_FAIL(reinitialize_buffer_())) {
+      OB_LOG(WARN, "fail to reinitialize buffer", K(ret), KP(ref_buffer_), K(origin_list_entries_));
+    }
+
+    if (OB_FAIL(ret)) {
+      bret = false;
+    }
+  }
+
   return bret;
+}
+
+int ObStorageOSSRetryStrategy::reinitialize_headers_() const
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(ref_headers_)
+      && OB_FAIL(qcloud_cos::ob_copy_apr_tables(*ref_headers_, origin_headers_))) {
+    // Note: We cannot directly set *ref_headers_ = origin_headers_.
+    // For example, in the function:
+    // oss_put_object_from_buffer(const oss_request_options_t *options,
+    //                            const aos_string_t *bucket,
+    //                            const aos_string_t *object,
+    //                            aos_list_t *buffer,
+    //                            aos_table_t *headers,
+    //                            aos_table_t **resp_headers)
+    //
+    // The 'headers' parameter in the SDK points to a memory address.
+    // When we do *ref_headers_ points to the same memory location.
+    // However, if we set *ref_headers_ = origin_headers_, *ref_headers_ will point to
+    // a new memory allocation, but the 'headers' parameter
+    // in the oss_put_object_from_buffer function will still refer to the old memory address.
+    OB_LOG(WARN, "fail to reset headers", K(ret), KP(ref_headers_), KP(origin_headers_));
+  }
+  return ret;
+}
+
+int ObStorageOSSRetryStrategy::reinitialize_buffer_() const
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(ref_buffer_)) {
+    aos_list_init(ref_buffer_);
+    aos_buf_t *tmp_aos_buf = nullptr;
+    for (int64_t i = 0; OB_SUCC(ret) && i < origin_list_entries_.count(); i++) {
+      if (OB_ISNULL(tmp_aos_buf = static_cast<aos_buf_t *>(origin_list_entries_[i]))) {
+        ret = OB_ERR_UNEXPECTED;
+        OB_LOG(WARN, "stored entry is null", K(ret), K(i),
+            KP(origin_list_entries_[i]), K(origin_list_entries_.count()), K(origin_list_entries_));
+      } else {
+        // When sending the request, the pos field will be changed, so it needs to be reset
+        tmp_aos_buf->pos = tmp_aos_buf->start;
+        aos_list_add_tail(static_cast<aos_list_t *>(origin_list_entries_[i]), ref_buffer_);
+      }
+    }
+  }
+  return ret;
 }
 
 void ObStorageOSSRetryStrategy::log_error(
@@ -736,12 +871,11 @@ int ObStorageOssBase::get_oss_file_meta(const ObString &bucket_ob_string,
     aos_str_set(&object, object_ob_string.ptr());
     aos_table_t *resp_headers = NULL;
     aos_status_t *aos_ret = NULL;
-    aos_table_t *headers = NULL;
     char *file_length_ptr = NULL;
 
     ObStorageOSSRetryStrategy strategy;
     if (OB_ISNULL(aos_ret = execute_until_timeout(
-            strategy, oss_head_object, oss_option_, &bucket, &object, headers, &resp_headers))
+            strategy, oss_head_object, oss_option_, &bucket, &object, nullptr/*headers*/, &resp_headers))
         || !aos_status_is_ok(aos_ret)) {
       if (OB_NOT_NULL(aos_ret) && OSS_OBJECT_NOT_EXIST == aos_ret->code) {
         is_file_exist = false;
@@ -849,7 +983,6 @@ int ObStorageOssMultiPartWriter::open(const ObString &uri, common::ObObjectStora
     aos_string_t object;
     aos_str_set(&bucket, bucket_.ptr());
     aos_str_set(&object, object_.ptr());
-    aos_table_t *headers = nullptr;
     aos_table_t *resp_headers = nullptr;
     aos_status_t *aos_ret = nullptr;
     ObStorageOSSRetryStrategy strategy;
@@ -857,12 +990,9 @@ int ObStorageOssMultiPartWriter::open(const ObString &uri, common::ObObjectStora
     if (OB_ISNULL(base_buf_ = static_cast<char *>(allocator_.alloc(OSS_BASE_BUFFER_SIZE)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         OB_LOG(WARN, "fail to alloc memory", K(OSS_BASE_BUFFER_SIZE), K(ret));
-    } else if (OB_ISNULL(headers = aos_table_make(aos_pool_, AOS_TABLE_INIT_SIZE))) {
-      ret = OB_OSS_ERROR;
-      OB_LOG(WARN, "fail to make apr table", K(ret));
     } else if (OB_ISNULL(aos_ret = execute_until_timeout(
             strategy, oss_init_multipart_upload,
-            oss_option_, &bucket, &object, &upload_id_, headers, &resp_headers))
+            oss_option_, &bucket, &object, &upload_id_, nullptr/*headers*/, &resp_headers))
         || !aos_status_is_ok(aos_ret)) {
       convert_io_error(aos_ret, ret);
       OB_LOG(WARN, "oss init multipart upload error", K(uri), K(ret));
@@ -1041,7 +1171,11 @@ int ObStorageOssMultiPartWriter::write_single_part()
       const char *etag_header_str = nullptr;
       ObStorageOSSRetryStrategy strategy;
 
-      if (OB_ISNULL(aos_ret = execute_until_timeout(
+      if (OB_FAIL(strategy.set_retry_headers(aos_pool_, headers))) {
+        OB_LOG(WARN, "fail to set headers", K(ret), K_(bucket), K_(object));
+      } else if (OB_FAIL(strategy.set_retry_buffer(&buffer))) {
+        OB_LOG(WARN, "fail to set buffer", K(ret), K_(bucket), K_(object));
+      } else if (OB_ISNULL(aos_ret = execute_until_timeout(
               strategy, oss_do_upload_part_from_buffer,
               oss_option_, &bucket, &object, &upload_id_, partnum_,
               &buffer, nullptr, headers, nullptr, &resp_headers, nullptr))
@@ -1169,7 +1303,12 @@ int ObStorageOssMultiPartWriter::abort()
             oss_option_, &bucket, &object, &upload_id_, &resp_headers))
         || !aos_status_is_ok(aos_ret)) {
       convert_io_error(aos_ret, ret);
-      OB_LOG(WARN, "Abort the multipart error", K_(bucket), K_(object), K(ret));
+      if (OB_OBJECT_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        print_oss_info(resp_headers, aos_ret, ret);
+        OB_LOG(WARN, "Abort the multipart error", K_(bucket), K_(object), K(ret));
+      }
     }
   }
   return ret;
@@ -1210,17 +1349,13 @@ int ObStorageParallelOssMultiPartWriter::open(const ObString &uri, ObObjectStora
     aos_string_t object;
     aos_str_set(&bucket, bucket_.ptr());
     aos_str_set(&object, object_.ptr());
-    aos_table_t *headers = nullptr;
     aos_table_t *resp_headers = nullptr;
     aos_status_t *aos_ret = nullptr;
     ObStorageOSSRetryStrategy strategy;
 
-    if (OB_ISNULL(headers = aos_table_make(aos_pool_, AOS_TABLE_INIT_SIZE))) {
-      ret = OB_OSS_ERROR;
-      OB_LOG(WARN, "fail to make apr table", K(ret), K(uri));
-    } else if (OB_ISNULL(aos_ret = execute_until_timeout(
+    if (OB_ISNULL(aos_ret = execute_until_timeout(
             strategy, oss_init_multipart_upload,
-            oss_option_, &bucket, &object, &upload_id_, headers, &resp_headers))
+            oss_option_, &bucket, &object, &upload_id_, nullptr/*headers*/, &resp_headers))
         || !aos_status_is_ok(aos_ret)) {
       convert_io_error(aos_ret, ret);
       OB_LOG(WARN, "oss init multipart upload error", K(uri), K(ret));
@@ -1291,7 +1426,11 @@ int ObStorageParallelOssMultiPartWriter::upload_part(
       const char *etag_header_str = nullptr;
       ObStorageOSSRetryStrategy strategy;
 
-      if (OB_ISNULL(aos_ret = execute_until_timeout(
+      if (OB_FAIL(strategy.set_retry_headers(tmp_aos_pool, headers))) {
+        OB_LOG(WARN, "fail to set headers", K(ret), K_(bucket), K_(object));
+      } else if (OB_FAIL(strategy.set_retry_buffer(&buffer))) {
+        OB_LOG(WARN, "fail to set buffer", K(ret), K_(bucket), K_(object));
+      } else if (OB_ISNULL(aos_ret = execute_until_timeout(
               strategy, oss_do_upload_part_from_buffer,
               tmp_oss_option, &bucket, &object, &upload_id_, part_id,
               &buffer, nullptr/*progress_callback*/, headers, nullptr/*params*/,
@@ -1393,8 +1532,12 @@ int ObStorageParallelOssMultiPartWriter::abort()
             oss_option_, &bucket, &object, &upload_id_, &resp_headers))
         || !aos_status_is_ok(aos_ret)) {
       convert_io_error(aos_ret, ret);
-      OB_LOG(WARN, "Abort the multipart error", K_(bucket), K_(object), K(ret));
-      print_oss_info(resp_headers, aos_ret, ret);
+      if (OB_OBJECT_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        print_oss_info(resp_headers, aos_ret, ret);
+        OB_LOG(WARN, "Abort the multipart error", K_(bucket), K_(object), K(ret));
+      }
     }
   }
   return ret;
@@ -1471,8 +1614,8 @@ int ObStorageOssReader::pread(
 {
   int ret = OB_SUCCESS;
   ObExternalIOCounterGuard io_guard;
-  aos_pool_t *aos_pool = NULL;
-  oss_request_options_t *oss_option = NULL;
+  aos_pool_t *tmp_aos_pool = nullptr;
+  oss_request_options_t *tmp_oss_option = nullptr;
 
   if (!is_inited()) {
     ret = OB_NOT_INIT;
@@ -1483,11 +1626,11 @@ int ObStorageOssReader::pread(
   } else if (!is_opened_) {
     ret = OB_OSS_ERROR;
     OB_LOG(WARN, "oss reader cannot read before it is opened", K(ret));
-  } else if (OB_FAIL(init_oss_options(aos_pool, oss_option))) {
-    OB_LOG(WARN, "fail to init oss options", K(aos_pool), K(oss_option), K(ret));
-  } else if (OB_ISNULL(aos_pool) || OB_ISNULL(oss_option)) {
+  } else if (OB_FAIL(init_oss_options(tmp_aos_pool, tmp_oss_option))) {
+    OB_LOG(WARN, "fail to init oss options", K(tmp_aos_pool), K(tmp_oss_option), K(ret));
+  } else if (OB_ISNULL(tmp_aos_pool) || OB_ISNULL(tmp_oss_option)) {
     ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "aos pool or oss option is NULL", K(aos_pool), K(oss_option), K(ret));
+    OB_LOG(WARN, "aos pool or oss option is NULL", K(tmp_aos_pool), K(tmp_oss_option), K(ret));
   } else {
     // When is_range_read is true, it indicates that only a part of the data is read.
     // When false, it indicates that the entire object is read
@@ -1519,7 +1662,6 @@ int ObStorageOssReader::pread(
       aos_table_t *resp_headers = NULL;
       aos_status_t *aos_ret = NULL;
       aos_table_t *headers = NULL;
-      aos_table_t *params = NULL;
       aos_list_t buffer;
       aos_buf_t *content = NULL;
       int64_t len = 0;
@@ -1529,7 +1671,7 @@ int ObStorageOssReader::pread(
       const char *const OSS_RANGE_KEY = "Range";
 
       char range_size[OSS_RANGE_SIZE];
-      if (NULL == (headers = aos_table_make(aos_pool, AOS_TABLE_INIT_SIZE))) {
+      if (OB_ISNULL(headers = aos_table_make(tmp_aos_pool, AOS_TABLE_INIT_SIZE))) {
         ret = OB_OSS_ERROR;
         OB_LOG(WARN, "fail to make oss headers", K(ret));
       } else {
@@ -1546,10 +1688,11 @@ int ObStorageOssReader::pread(
         }
 
         ObStorageOSSRetryStrategy strategy;
-        if (OB_FAIL(ret)) {
+        if (FAILEDx(strategy.set_retry_headers(tmp_aos_pool, headers))) {
+          OB_LOG(WARN, "fail to set headers", K(ret), K_(bucket), K_(object));
         } else if (OB_ISNULL(aos_ret = execute_until_timeout(
                 strategy, oss_get_object_to_buffer,
-                oss_option, &bucket, &object, headers, params, &buffer, &resp_headers))
+                tmp_oss_option, &bucket, &object, headers, nullptr/*params*/, &buffer, &resp_headers))
             ||  !aos_status_is_ok(aos_ret)) {
           convert_io_error(aos_ret, ret);
           OB_LOG(WARN, "fail to get object to buffer", K_(bucket), K_(object), K(ret));
@@ -1605,8 +1748,8 @@ int ObStorageOssReader::pread(
       }
     }//if(file_length_ - file_offset_ > 0)
   }
-  if (NULL != aos_pool) {
-    aos_pool_destroy(aos_pool);
+  if (OB_NOT_NULL(tmp_aos_pool)) {
+    aos_pool_destroy(tmp_aos_pool);
   }
 
   return ret;
@@ -1852,6 +1995,7 @@ int ObStorageOssUtil::tagging_object_(
     aos_list_add_tail(&tag_content->node, &tag_list);
     ObStorageOSSRetryStrategy strategy;
 
+    // tag_list won't be modified in oss_get_object_tagging
     if (OB_ISNULL(aos_ret = execute_until_timeout(
             strategy, oss_put_object_tagging,
             oss_base.oss_option_, &bucket, &object, &tag_list, &head_resp_headers))
@@ -1948,7 +2092,8 @@ int ObStorageOssUtil::batch_del_files(
     }
 
     ObStorageOSSRetryStrategy strategy;
-    if (OB_FAIL(ret)) {
+    if (FAILEDx(strategy.set_retry_deleted_object_list(&deleted_object_list))) {
+      OB_LOG(WARN, "fail to set deleted_object_list", K(ret), K(uri));
     } else if (OB_ISNULL(aos_ret = execute_until_timeout(
             strategy, oss_delete_objects,
             oss_base.oss_option_, &bucket, &object_list,
@@ -2040,7 +2185,8 @@ int ObStorageOssUtil::do_list_(ObStorageOssBase &oss_base,
     }
 
     ObStorageOSSRetryStrategy strategy;
-    if (OB_FAIL(ret)) {
+    if (FAILEDx(strategy.set_retry_list_object_params(params))) {
+      OB_LOG(WARN, "fail to set list object params", K(ret), K(bucket_str), K(full_dir_path));
     } else if (OB_ISNULL(aos_ret = execute_until_timeout(
             strategy, oss_list_object,
             oss_base.oss_option_, &bucket, params, &resp_headers))
@@ -2736,7 +2882,11 @@ int ObStorageOssWriter::write(const char *buf, const int64_t size)
     } else {
       aos_list_add_tail(&content->node, &buffer);
       ObStorageOSSRetryStrategy strategy;
-      if (OB_ISNULL(aos_ret = execute_until_timeout(
+      if (OB_FAIL(strategy.set_retry_headers(aos_pool_, headers))) {
+        OB_LOG(WARN, "fail to set headers", K(ret), K_(bucket), K_(object));
+      } else if (OB_FAIL(strategy.set_retry_buffer(&buffer))) {
+        OB_LOG(WARN, "fail to set buffer", K(ret), K_(bucket), K_(object));
+      } else if (OB_ISNULL(aos_ret = execute_until_timeout(
               strategy, oss_put_object_from_buffer,
               oss_option_, &bucket, &object, &buffer, headers, &resp_headers))
           || !aos_status_is_ok(aos_ret)) {

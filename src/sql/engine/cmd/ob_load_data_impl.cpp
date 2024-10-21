@@ -927,9 +927,6 @@ ObShuffleTaskHandle::~ObShuffleTaskHandle()
   if (OB_NOT_NULL(data_buffer)) {
     ob_free(data_buffer);
   }
-  if (OB_NOT_NULL(escape_buffer)) {
-    ob_free(escape_buffer);
-  }
 }
 
 int ObShuffleTaskHandle::expand_buf(const int64_t max_size, const int64_t to_buffer_size)
@@ -940,21 +937,16 @@ int ObShuffleTaskHandle::expand_buf(const int64_t max_size, const int64_t to_buf
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("buffer size not enough", K(ret));
   } else {
-    void *buf1 = NULL;
-    void *buf2 = NULL;
-    if (OB_ISNULL(buf1 = ob_malloc(new_size, attr))
-        || OB_ISNULL(buf2 = ob_malloc(new_size, attr))) {
+    char *buf = NULL;
+    if (OB_ISNULL(buf = static_cast<char*>(ob_malloc(new_size * 2, attr)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else {
       if (OB_NOT_NULL(data_buffer)) {
         ob_free(data_buffer);
       }
-      data_buffer = new(buf1) ObLoadFileBuffer(
+      data_buffer = new(buf) ObLoadFileBuffer(
             new_size - sizeof(ObLoadFileBuffer));
-      if (OB_NOT_NULL(escape_buffer)) {
-        ob_free(escape_buffer);
-      }
-      escape_buffer = new(buf2) ObLoadFileBuffer(
+      escape_buffer = new(buf + new_size) ObLoadFileBuffer(
             new_size - sizeof(ObLoadFileBuffer));
     }
   }
@@ -1683,7 +1675,8 @@ int ObLoadDataSPImpl::handle_returned_insert_task(ObExecContext &ctx,
       }
     } else if (is_server_down_error(err)
                || is_master_changed_error(err)
-               || is_partition_change_error(err)) {
+               || is_partition_change_error(err)
+               || is_schema_error(err)) {
       task_status = can_retry ? TASK_NEED_RETRY : TASK_FAILED;
       if (OB_FAIL(part_mgr->update_part_location(ctx))) {
         LOG_WARN("fail to update location cache", K(ret));
@@ -3011,6 +3004,13 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
               ptr->set_collation_type(load_args.file_cs_type_);
             }
             handle->row_in_file.assign(obj_array, num_of_file_column);
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(MTL_ID(), handle->schema_guard))) {
+            LOG_WARN("get tenant schema guard failed", KR(ret));
+          } else  {
+            handle->exec_ctx.get_sql_ctx()->schema_guard_ = &handle->schema_guard;
           }
         }
 

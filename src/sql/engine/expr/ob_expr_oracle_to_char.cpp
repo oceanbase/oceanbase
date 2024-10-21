@@ -639,11 +639,9 @@ int ObExprToCharCommon::eval_oracle_to_char_batch(
       ObString nlsparam;
       ObEvalCtx::TempAllocGuard alloc_guard(ctx);
       ObIAllocator &alloc = alloc_guard.get_allocator();
-      // convert the fmt && nlsparam to utf8 first.
+      // convert the nlsparam to utf8 first.
       if (NULL != fmt_datum) {
-        OZ(ObExprUtil::convert_string_collation(fmt_datum->get_string(),
-                                                expr.args_[1]->datum_meta_.cs_type_,
-                                                fmt, CS_TYPE_UTF8MB4_BIN, alloc));
+        fmt = fmt_datum->get_string();
       }
       if (OB_SUCC(ret) && NULL != nlsparam_datum) {
         OZ(ObExprUtil::convert_string_collation(nlsparam_datum->get_string(),

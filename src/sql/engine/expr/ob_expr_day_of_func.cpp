@@ -29,7 +29,7 @@ namespace sql
 {
 
 ObExprDayOfMonth::ObExprDayOfMonth(ObIAllocator &alloc)
-    : ObExprTimeBase(alloc, DT_MDAY, T_FUN_SYS_DAY_OF_MONTH, N_DAY_OF_MONTH, NOT_VALID_FOR_GENERATED_COL) {};
+    : ObExprTimeBase(alloc, DT_MDAY, T_FUN_SYS_DAY_OF_MONTH, N_DAY_OF_MONTH, VALID_FOR_GENERATED_COL) {};
 
 ObExprDayOfMonth::~ObExprDayOfMonth() {}
 
@@ -39,12 +39,12 @@ int ObExprDayOfMonth::calc_dayofmonth(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
 }
 
 ObExprDay::ObExprDay(ObIAllocator &alloc)
-    : ObExprTimeBase(alloc, DT_MDAY, T_FUN_SYS_DAY, N_DAY, NOT_VALID_FOR_GENERATED_COL) {};
+    : ObExprTimeBase(alloc, DT_MDAY, T_FUN_SYS_DAY, N_DAY, VALID_FOR_GENERATED_COL) {};
 
 ObExprDay::~ObExprDay() {}
 
 ObExprDayOfWeek::ObExprDayOfWeek(ObIAllocator &alloc)
-    : ObExprTimeBase(alloc, DT_WDAY, T_FUN_SYS_DAY_OF_WEEK, N_DAY_OF_WEEK, NOT_VALID_FOR_GENERATED_COL) {};
+    : ObExprTimeBase(alloc, DT_WDAY, T_FUN_SYS_DAY_OF_WEEK, N_DAY_OF_WEEK, VALID_FOR_GENERATED_COL) {};
 
 ObExprDayOfWeek::~ObExprDayOfWeek() {}
 
@@ -60,7 +60,7 @@ int ObExprDayOfWeek::calc_dayofweek(const ObExpr &expr, ObEvalCtx &ctx, ObDatum 
 }
 
 ObExprDayOfYear::ObExprDayOfYear(ObIAllocator &alloc)
-    : ObExprTimeBase(alloc, DT_YDAY, T_FUN_SYS_DAY_OF_YEAR, N_DAY_OF_YEAR, NOT_VALID_FOR_GENERATED_COL) {};
+    : ObExprTimeBase(alloc, DT_YDAY, T_FUN_SYS_DAY_OF_YEAR, N_DAY_OF_YEAR, VALID_FOR_GENERATED_COL) {};
 
 ObExprDayOfYear::~ObExprDayOfYear() { }
 
@@ -694,7 +694,7 @@ DEF_SET_LOCAL_SESSION_VARS(ObExprSubAddtime, raw_expr) {
 }
 
 ObExprDayName::ObExprDayName(ObIAllocator &alloc)
-    : ObExprTimeBase(alloc, DT_WDAY, T_FUN_SYS_DAY_NAME, N_DAY_NAME, NOT_VALID_FOR_GENERATED_COL) {};
+    : ObExprTimeBase(alloc, DT_WDAY, T_FUN_SYS_DAY_NAME, N_DAY_NAME, VALID_FOR_GENERATED_COL) {};
 ObExprDayName::~ObExprDayName() {}
 
 int ObExprDayName::calc_dayname(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)

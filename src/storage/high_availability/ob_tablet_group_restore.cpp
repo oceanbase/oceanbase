@@ -23,6 +23,7 @@
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
+#include "logservice/ob_log_service.h"
 
 namespace oceanbase
 {
@@ -781,29 +782,13 @@ int ObInitialTabletGroupRestoreTask::process()
                         "ls_id", ctx_->arg_.ls_id_);
     DEBUG_SYNC(BEFORE_LEADER_RESTORE_GROUP_TABLET);
   }
-#ifdef ERRSIM
-  if (ObTabletRestoreAction::is_restore_replace_remote_sstable(ctx_->arg_.action_)) {
-    logservice::ObLogService *log_srv = nullptr;
-    ObRole role = ObRole::INVALID_ROLE;
-    int64_t proposal_id = 0;
-
-    SERVER_EVENT_SYNC_ADD("storage_ha", "before_follower_replace_remote_sstable",
-                        "ls_id", ctx_->arg_.ls_id_);
-    LOG_INFO("[ERRSIM] before replace remote sstable", KPC(ctx_));
-
-    if (OB_ISNULL(log_srv = MTL(logservice::ObLogService *))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("[ERRSIM] log service should not be NULL", K(ret), KP(log_srv));
-    } else if (OB_FAIL(log_srv->get_palf_role(ctx_->arg_.ls_id_, role, proposal_id))) {
-      LOG_WARN("[ERRSIM] failed to get palf role", K(ret), KPC(ctx_));
-    } else if (is_follower(role)) {
-      DEBUG_SYNC(BEFORE_FOLLOWER_REPLACE_REMOTE_SSTABLE);
-    }
-  }
-#endif
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("initial tablet group restore task do not init", K(ret));
+#ifdef ERRSIM
+  } else if (OB_FAIL(errsim_debug_sync_before_follower_replace_remote_sstable_())) {
+    LOG_WARN("failed to errsim debug sync before follower replace remote sstable", K(ret), KPC(ctx_));
+#endif
   } else if (OB_FAIL(check_local_ls_restore_status_())) {
     LOG_WARN("failed to check local ls restore status", K(ret), KPC(ctx_));
   } else if (OB_FAIL(check_local_tablets_restore_status_())) {
@@ -1158,6 +1143,34 @@ int ObInitialTabletGroupRestoreTask::record_server_event_()
   }
   return ret;
 }
+
+#ifdef ERRSIM
+int ObInitialTabletGroupRestoreTask::errsim_debug_sync_before_follower_replace_remote_sstable_()
+{
+  int ret = OB_SUCCESS;
+  if (ObTabletRestoreAction::is_restore_replace_remote_sstable(ctx_->arg_.action_)) {
+    logservice::ObLogService *log_srv = nullptr;
+    ObRole role = ObRole::INVALID_ROLE;
+    int64_t proposal_id = 0;
+
+    SERVER_EVENT_SYNC_ADD("storage_ha", "before_follower_replace_remote_sstable",
+                        "ls_id", ctx_->arg_.ls_id_);
+    LOG_INFO("[ERRSIM] before replace remote sstable", KPC(ctx_));
+
+    if (OB_ISNULL(log_srv = MTL(logservice::ObLogService *))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("[ERRSIM] log service should not be NULL", K(ret), KP(log_srv));
+    } else if (OB_FAIL(log_srv->get_palf_role(ctx_->arg_.ls_id_, role, proposal_id))) {
+      LOG_WARN("[ERRSIM] failed to get palf role", K(ret), KPC(ctx_));
+    } else if (!is_follower(role)) {
+      // skip, only trigger followers' debug sync
+    } else {
+      DEBUG_SYNC(BEFORE_FOLLOWER_REPLACE_REMOTE_SSTABLE);
+    }
+  }
+  return ret;
+}
+#endif
 
 /******************ObStartTabletGroupRestoreDag*********************/
 ObStartTabletGroupRestoreDag::ObStartTabletGroupRestoreDag()

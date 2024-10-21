@@ -62,14 +62,6 @@ extern void __expr_cmp_func_compilation4();
 extern void __expr_cmp_func_compilation5();
 extern void __expr_cmp_func_compilation6();
 extern void __expr_cmp_func_compilation7();
-extern void __expr_cmp_func_compilation8();
-extern void __expr_cmp_func_compilation9();
-extern void __expr_cmp_func_compilation10();
-extern void __expr_cmp_func_compilation11();
-extern void __expr_cmp_func_compilation12();
-extern void __expr_cmp_func_compilation13();
-extern void __expr_cmp_func_compilation14();
-extern void __expr_cmp_func_compilation15();
 
 static bool init_all_expr_cmp_funcs()
 {
@@ -81,14 +73,6 @@ static bool init_all_expr_cmp_funcs()
   __expr_cmp_func_compilation5();
   __expr_cmp_func_compilation6();
   __expr_cmp_func_compilation7();
-  __expr_cmp_func_compilation8();
-  __expr_cmp_func_compilation9();
-  __expr_cmp_func_compilation10();
-  __expr_cmp_func_compilation11();
-  __expr_cmp_func_compilation12();
-  __expr_cmp_func_compilation13();
-  __expr_cmp_func_compilation14();
-  __expr_cmp_func_compilation15();
   return true;
 }
 

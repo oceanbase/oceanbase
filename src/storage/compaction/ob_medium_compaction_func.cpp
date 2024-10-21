@@ -1562,12 +1562,6 @@ int ObMediumCompactionScheduleFunc::prepare_ls_major_merge_info(
 
   if (last_major_snapshot >= merge_version) {
     ret = OB_NO_NEED_MERGE;
-  } else if (last_major_snapshot <= 0) {
-    // tablet has no major, waiting for ddl kv merge finish
-    merge_reason = ObAdaptiveMergePolicy::DURING_DDL;
-  } else if (OB_ISNULL(MTL(ObTenantSchemaService *)->get_schema_service())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null schema service from MTL", K(ret));
   } else if (OB_FAIL(MERGE_SCHEDULER_PTR->get_min_data_version(compat_version))) {
     LOG_WARN("failed to get min data version", KR(ret));
   } else if (OB_UNLIKELY(compat_version < DATA_VERSION_4_3_4_0)) {
@@ -1575,6 +1569,12 @@ int ObMediumCompactionScheduleFunc::prepare_ls_major_merge_info(
     LOG_WARN("get unexpected compact version", K(ret), K(compat_version));
   } else if (OB_FAIL(medium_info.init_data_version(compat_version))) {
     LOG_WARN("failed to init medium info", K(ret));
+  } else if (last_major_snapshot <= 0) {
+    // tablet has no major, waiting for ddl kv merge finish
+    merge_reason = ObAdaptiveMergePolicy::DURING_DDL;
+  } else if (OB_ISNULL(MTL(ObTenantSchemaService *)->get_schema_service())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null schema service from MTL", K(ret));
   // Attention! will skip merge for DDL executing tablet
   // if call get_freeze_info_behind_snapshot_version, this tablet will always have old tale schema in DDL
   // DDL snapshot(100) - freeze_info(200) - DDL finish(gene 100 major)

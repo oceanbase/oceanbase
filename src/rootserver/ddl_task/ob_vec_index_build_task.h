@@ -87,7 +87,6 @@ public:
   void set_delta_buffer_task_id(const uint64_t id) { delta_buffer_task_id_ = id; }
   void set_index_id_task_id(const uint64_t id) { index_id_task_id_ = id; }
   void set_index_snapshot_task_id(const uint64_t id) { index_snapshot_task_id_ = id; }
-
   int update_task_message(common::ObISQLClient &proxy);
 
 private:

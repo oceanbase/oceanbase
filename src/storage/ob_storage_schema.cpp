@@ -18,6 +18,7 @@
 #include "share/schema/ob_schema_struct.h"
 #include "storage/ob_storage_struct.h"
 #include "storage/column_store/ob_column_store_replica_util.h"
+#include "share/ob_cluster_version.h"
 
 namespace oceanbase
 {
@@ -647,6 +648,10 @@ int ObStorageSchema::deep_copy_column_array(
       col_schema.destroy(allocator);
     }
   }
+  // for heap table, the column array is out of order when tablet firstly created, need sort it.
+  if (FAILEDx(sort_out_of_order_column_array_for_heap_table())) {
+    STORAGE_LOG(WARN, "failed to sort out of order column array for heap table", K(ret));
+  }
   return ret;
 }
 
@@ -666,6 +671,36 @@ int ObStorageSchema::rebuild_column_array(
     column_cnt_ = column_array_.count();
     store_column_cnt_ = update_param.major_column_cnt_ - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
     STORAGE_LOG(INFO, "rebuild column array from table schema", K(ret), K(update_param), K(src_schema), K_(column_array));
+  }
+  return ret;
+}
+
+int ObStorageSchema::sort_out_of_order_column_array_for_heap_table()
+{
+  int ret = OB_SUCCESS;
+  bool is_out_of_order = false;
+  const int64_t rowkey_cnt = rowkey_array_.count();
+  const int64_t column_cnt = column_array_.count();
+  if (!is_heap_table() || is_column_info_simplified()) {
+  } else if (column_cnt < 2 || rowkey_cnt != 1) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "invalid column cnt or rowkey cnt for heap table", K(ret), K(column_cnt), K(rowkey_cnt));
+  } else if (OB_FAIL(check_is_column_array_out_of_order_for_heap_table(is_out_of_order))) {
+    STORAGE_LOG(WARN, "failed to check is column array out of order", K(ret));
+  } else if (is_out_of_order) {
+    // sort rowkey array. heap table only has one rowkey.
+    rowkey_array_[0].column_idx_ = common::OB_APP_MIN_COLUMN_ID;
+    // sort column array
+    ObStorageColumnSchema pk_increment_schema = column_array_[column_cnt - 1];
+    for (int64_t i = column_cnt - 1 ; i > 0; --i) {
+      column_array_[i] = column_array_[i - 1];
+    }
+    column_array_[0] = pk_increment_schema;
+    // sort skip idx attr array
+    for (int64_t i = 0; i < skip_idx_attr_array_.count(); ++i) {
+      skip_idx_attr_array_[i].col_idx_++;
+    }
+    STORAGE_LOG(INFO, "Finsih sort out of order column array for heap table", K(ret), KPC(this));
   }
   return ret;
 }
@@ -1066,6 +1101,10 @@ int ObStorageSchema::deserialize_column_array(
         column.destroy(allocator);
       }
     }
+    // for heap table, the column array is out of order when tablet firstly created, need sort it.
+    if (FAILEDx(sort_out_of_order_column_array_for_heap_table())) {
+      STORAGE_LOG(WARN, "failed to sort out of order column array for heap table", K(ret));
+    }
   }
   return ret;
 }
@@ -1413,6 +1452,22 @@ bool ObStorageSchema::is_cg_array_generated_in_cs_replica() const
   return bret;
 }
 
+int ObStorageSchema::check_is_column_array_out_of_order_for_heap_table(bool &is_out_of_order) const
+{
+  int ret = OB_SUCCESS;
+  is_out_of_order = false;
+  const int64_t column_cnt = column_array_.count();
+  if (!is_heap_table() || is_column_info_simplified()) {
+  } else if (column_cnt <= 1) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "invalid count of column array", KPC(this));
+  } else if (column_array_[column_cnt - 1].is_rowkey_column()) {
+    is_out_of_order = true; // the __pk_increment column should be the first column of heap table
+    STORAGE_LOG(INFO, "find a out of order heap table", K(ret), KPC(this));
+  }
+  return ret;
+}
+
 int ObStorageSchema::deserialize_column_group_array(ObIAllocator &allocator,
                                                     const char *buf,
                                                     const int64_t data_len,
@@ -1530,6 +1585,7 @@ int ObStorageSchema::generate_column_array(const ObTableSchema &input_schema)
   int ret = OB_SUCCESS;
   // build column schema map
   common::hash::ObHashMap<uint64_t, uint64_t> tmp_map; // column_id -> index
+
   if (OB_FAIL(tmp_map.create(input_schema.get_column_count(), "StorageSchema"))) {
     STORAGE_LOG(WARN, "failed to create map", K(ret));
   } else if (OB_FAIL(input_schema.check_column_array_sorted_by_column_id(true/*skip_rowkey*/))) {
@@ -1571,7 +1627,7 @@ int ObStorageSchema::generate_column_array(const ObTableSchema &input_schema)
       } else {
         col_schema.default_checksum_ = datum.checksum(0);
       }
-      if (OB_FAIL(col_schema.deep_copy_default_val(*allocator_, col->get_orig_default_value()))) {
+      if (FAILEDx(col_schema.deep_copy_default_val(*allocator_, col->get_orig_default_value()))) {
         STORAGE_LOG(WARN, "failed to deep copy", K(ret), K(col->get_orig_default_value()));
       } else if (OB_FAIL(column_array_.push_back(col_schema))) {
         STORAGE_LOG(WARN, "Fail to push into column array", K(ret), K(col_schema));
@@ -1635,6 +1691,10 @@ int ObStorageSchema::generate_column_array(const ObTableSchema &input_schema)
     }
   }
 
+  // for heap table, the column array is out of order when tablet firstly created, need sort it.
+  if (FAILEDx(sort_out_of_order_column_array_for_heap_table())) {
+    STORAGE_LOG(WARN, "failed to sort out of order column array for heap table", K(ret));
+  }
   if (tmp_map.created()) {
     tmp_map.destroy();
   }
@@ -1831,6 +1891,8 @@ int ObStorageSchema::init_column_meta_array(
 {
   int ret = OB_SUCCESS;
   ObArray<ObColDesc> columns;
+  uint64_t compat_version = 0;
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret), K_(is_inited));
@@ -1839,6 +1901,8 @@ int ObStorageSchema::init_column_meta_array(
     STORAGE_LOG(WARN, "not support get multi version column desc array when column simplified", K(ret), KPC(this));
   } else if (OB_FAIL(get_multi_version_column_descs(columns))) {
     STORAGE_LOG(WARN, "fail to get store column ids", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), compat_version))) {
+    STORAGE_LOG(WARN, "failed to get min data version", K(ret));
   } else {
     // build column schema map
     common::hash::ObHashMap<uint64_t, uint64_t> tmp_map; // column_id -> index
@@ -1873,6 +1937,13 @@ int ObStorageSchema::init_column_meta_array(
         if (!col_schema.is_column_stored_in_sstable_ && !is_storage_index_table()) {
           ret = OB_ERR_UNEXPECTED;
           STORAGE_LOG(WARN, "virtual generated column should be filtered already", K(ret), K(col_schema));
+        } else if (ob_is_large_text(col_schema.get_data_type()) && compat_version < DATA_VERSION_4_3_4_0) {
+          blocksstable::ObStorageDatum datum;
+          if (OB_FAIL(datum.from_obj_enhance(col_schema.get_orig_default_value()))) {
+            STORAGE_LOG(WARN, "Failed to transfer obj to datum", K(ret));
+          } else {
+            col_meta.column_default_checksum_ = datum.checksum(0);
+          }
         } else {
           col_meta.column_default_checksum_ = col_schema.default_checksum_;
         }

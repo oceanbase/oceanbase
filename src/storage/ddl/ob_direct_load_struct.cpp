@@ -1424,7 +1424,9 @@ int ObDirectLoadSliceWriter::fill_sstable_slice(
     while (OB_SUCC(ret)) {
       arena.reuse();
       const blocksstable::ObDatumRow *cur_row = nullptr;
-      if (OB_FAIL(THIS_WORKER.check_status())) {
+      if (OB_FAIL(share::dag_yield())) {
+        LOG_WARN("dag yield failed", K(ret), K(affected_rows)); // exit for dag task as soon as possible after canceled.
+      } else if (OB_FAIL(THIS_WORKER.check_status())) {
         LOG_WARN("check status failed", K(ret));
       } else if (ATOMIC_LOAD(&is_canceled_)) {
         ret = OB_CANCELED;

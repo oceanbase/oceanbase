@@ -104,6 +104,10 @@ bool is_storage_type_match(const common::ObString &uri, const ObStorageType &typ
       || (OB_STORAGE_FILE == type && uri.prefix_match(OB_FILE_PREFIX));
 }
 
+bool is_object_storage_type(const ObStorageType &type)
+{ return ObStorageType::OB_STORAGE_FILE != type
+      && ObStorageType::OB_STORAGE_MAX_TYPE != type;
+}
 bool is_io_error(const int result)
 {
   return OB_IO_ERROR == result || OB_OSS_ERROR == result || OB_COS_ERROR == result || OB_S3_ERROR == result;
@@ -249,10 +253,12 @@ int DelAppendableObjectFragmentOp::func(const dirent *entry)
              "%s%s%s", uri_.ptr(), delemiter_str, entry->d_name))) {
     OB_LOG(WARN, "fail to construct appendable obj fragment path", K(ret), K_(uri), K(delemiter_str), K(entry->d_name));
   } else if (OB_FAIL(util_.del_file(obj_fragment_path))) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_DEL_FAIL_COUNT);
     OB_LOG(WARN, "fail to del appendable object fragment", K(ret), K(obj_fragment_path));
   } else {
     OB_LOG(DEBUG, "succ to del appendable object fragment", K(obj_fragment_path));
   }
+  EVENT_INC(ObStatEventIds::BACKUP_DELETE_COUNT);
   return ret;
 }
 
@@ -557,6 +563,25 @@ void ObStorageUtil::close()
   }
 }
 
+// inner func
+int ObStorageUtil::head_object_meta_(const ObString &uri, ObStorageObjectMetaBase &obj_meta)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_init())) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "util is not inited", K(ret), K(uri));
+  } else if (OB_UNLIKELY(!is_storage_type_match(uri, device_type_))) {
+    ret = OB_INVALID_BACKUP_DEST;
+    STORAGE_LOG(WARN, "uri prefix does not match the expected device type",
+        K(ret), K(uri), K_(device_type));
+  } else if (OB_FAIL(util_->head_object_meta(uri, obj_meta))) {
+    EVENT_INC(ObStatEventIds::OBJECT_STORAGE_IO_HEAD_FAIL_COUNT);
+    STORAGE_LOG(WARN, "fail to head object meta", K(ret), K(uri));
+  }
+  EVENT_INC(ObStatEventIds::OBJECT_STORAGE_IO_HEAD_COUNT);
+  return ret;
+}
+
 /*---------------------------------- NEW ADAPTIVE INTERFACE ----------------------------------*/
 int ObStorageUtil::detect_storage_obj_meta(
     const common::ObString &uri,
@@ -578,7 +603,7 @@ int ObStorageUtil::detect_storage_obj_meta(
     ret = OB_INVALID_BACKUP_DEST;
     STORAGE_LOG(WARN, "uri prefix does not match the expected device type",
         K(ret), K(uri), K_(device_type));
-  } else if (OB_FAIL(util_->head_object_meta(uri, obj_meta))) {
+  } else if (OB_FAIL(head_object_meta_(uri, obj_meta))) {
     STORAGE_LOG(WARN, "fail to head object meta", K(ret), K(uri));
   } else if (obj_meta.is_exist_) {
     if (ObStorageObjectMetaType::OB_FS_DIR != obj_meta.type_) {
@@ -610,7 +635,7 @@ int ObStorageUtil::detect_storage_obj_meta(
       if (OB_FAIL(construct_fragment_full_name(uri, OB_S3_APPENDABLE_FORMAT_META,
                                                format_meta_uri, sizeof(format_meta_uri)))) {
         OB_LOG(WARN, "fail to construct s3 format_meta name", K(ret), K(uri));
-      } else if (OB_FAIL(util_->head_object_meta(format_meta_uri, obj_meta))) {
+      } else if (OB_FAIL(head_object_meta_(format_meta_uri, obj_meta))) {
         STORAGE_LOG(WARN, "fail to head object meta", K(ret), K(format_meta_uri));
       } else if (obj_meta.is_exist_) {
         obj_meta.type_ = ObStorageObjectMetaType::OB_OBJ_SIMULATE_APPEND;
@@ -792,7 +817,11 @@ int ObStorageUtil::del_file(const common::ObString &uri, const bool is_adaptive)
     }
   } else {
     if (OB_FAIL(util_->del_file(uri))) {
+      EVENT_INC(ObStatEventIds::BACKUP_IO_DEL_FAIL_COUNT);
       OB_LOG(WARN, "fail to delete file", K(ret), K(uri));
+    } else {
+      EVENT_INC(ObStatEventIds::BACKUP_DELETE_COUNT);
+      EVENT_ADD(ObStatEventIds::BACKUP_DELETE_DELAY, ObTimeUtility::current_time() - start_ts);
     }
   }
 
@@ -807,12 +836,6 @@ int ObStorageUtil::del_file(const common::ObString &uri, const bool is_adaptive)
     ret = OB_E(EventTable::EN_BACKUP_IO_AFTER_DEL_FILE) OB_SUCCESS;
   }
 #endif
-
-  if (OB_FAIL(ret)) {
-    EVENT_INC(ObStatEventIds::BACKUP_IO_DEL_FAIL_COUNT);
-  }
-  EVENT_INC(ObStatEventIds::BACKUP_DELETE_COUNT);
-  EVENT_ADD(ObStatEventIds::BACKUP_DELETE_DELAY, ObTimeUtility::current_time() - start_ts);
   return ret;
 }
 
@@ -1220,6 +1243,11 @@ int ObStorageUtil::list_directories(
   } else if (OB_FAIL(util_->list_directories(uri_buf, op))) {
     STORAGE_LOG(WARN, "failed to list_files", K(ret), K(uri), K(uri_buf));
   }
+
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_LS_FAIL_COUNT);
+  }
+  EVENT_INC(ObStatEventIds::BACKUP_IO_LS_COUNT);
   return ret;
 }
 
@@ -1251,6 +1279,10 @@ int ObStorageUtil::is_exist(const common::ObString &uri, bool &exist)
     STORAGE_LOG(WARN, "failed to check is exist", K(ret), K(uri));
   }
 
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::OBJECT_STORAGE_IO_HEAD_FAIL_COUNT);
+  }
+  EVENT_INC(ObStatEventIds::OBJECT_STORAGE_IO_HEAD_COUNT);
   return ret;
 }
 
@@ -1292,6 +1324,10 @@ int ObStorageUtil::get_file_length(const common::ObString &uri, int64_t &file_le
     }
   }
 
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::OBJECT_STORAGE_IO_HEAD_FAIL_COUNT);
+  }
+  EVENT_INC(ObStatEventIds::OBJECT_STORAGE_IO_HEAD_COUNT);
   return ret;
 }
 
@@ -1403,7 +1439,7 @@ int ObStorageUtil::batch_del_files(
   int64_t cur_deleted_pos = 0;
   failed_files_idx.reset();
   const bool use_batch_del_flag =
-      (OB_STORAGE_FILE != device_type_ && OB_STORAGE_OSS != device_type_);
+      (OB_STORAGE_FILE != device_type_);
 
   if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(!is_init())) {
@@ -1511,6 +1547,11 @@ int ObStorageUtil::batch_del_files(
     }
   }
 
+  if (OB_FAIL(ret)) {
+    EVENT_ADD(ObStatEventIds::BACKUP_IO_DEL_FAIL_COUNT, n_files_to_delete - failed_files_idx.count());
+  }
+  EVENT_ADD(ObStatEventIds::BACKUP_DELETE_COUNT, n_files_to_delete);
+  EVENT_ADD(ObStatEventIds::BACKUP_DELETE_DELAY, ObTimeUtility::current_time() - start_ts);
   return ret;
 }
 

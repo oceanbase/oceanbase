@@ -4777,7 +4777,6 @@ int ObDDLOperator::batch_update_system_table_columns(
   const uint64_t table_id = new_table_schema.get_table_id();
   int64_t new_schema_version = OB_INVALID_VERSION;
   ObSchemaService *schema_service_impl = schema_service_.get_schema_service();
-  const bool update_object_status_ignore_version = false;
   if (OB_ISNULL(schema_service_impl)) {
     ret = OB_ERR_SYS;
     LOG_WARN("schema_service_impl must not null", KR(ret));
@@ -4810,9 +4809,9 @@ int ObDDLOperator::batch_update_system_table_columns(
       }
     } // end for
 
-    if (FAILEDx(schema_service_impl->get_table_sql_service().update_table_attribute(
-        trans, new_table_schema, OB_DDL_ALTER_TABLE, update_object_status_ignore_version, ddl_stmt_str))) {
-      LOG_WARN("failed to update table attribute", KR(ret), K(tenant_id), K(table_id));
+    if (FAILEDx(schema_service_impl->get_table_sql_service().update_table_options(trans,
+            orig_table_schema, new_table_schema, OB_DDL_ALTER_TABLE, ddl_stmt_str))) {
+      LOG_WARN("failed to update table options", KR(ret), K(tenant_id), K(table_id));
     }
   }
   return ret;

@@ -162,9 +162,8 @@ public:
   int64_t get_result_progressive_merge_step(const int64_t column_group_idx) const
   {
     return progressive_merge_mgr_.is_inited()
-               ? progressive_merge_mgr_.get_result_progressive_merge_step(
-                     get_tablet_id(), column_group_idx)
-               : 0;
+         ? progressive_merge_mgr_.get_result_progressive_merge_step(get_tablet_id(), column_group_idx)
+         : 0;
   }
   OB_INLINE int filter(const blocksstable::ObDatumRow &row, ObICompactionFilter::ObFilterRet &filter_ret)
   {

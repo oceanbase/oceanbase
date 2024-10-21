@@ -977,7 +977,6 @@ int ObLSTabletService::update_tablet_checkpoint(
     const ObTabletMapKey &key,
     const ObMetaDiskAddr &old_addr,
     const ObMetaDiskAddr &new_addr,
-    const bool is_replay_old,
     ObTabletHandle &new_handle)
 {
   int ret = OB_SUCCESS;
@@ -990,7 +989,7 @@ int ObLSTabletService::update_tablet_checkpoint(
                       || !old_addr.is_valid()
                       || !new_addr.is_valid()
                       || !new_addr.is_block()
-                      || (!is_replay_old && !new_handle.is_valid()))) {
+                      || !new_handle.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(key), K(new_addr), K(new_handle));
   } else {
@@ -1005,7 +1004,7 @@ int ObLSTabletService::update_tablet_checkpoint(
         ret = OB_TABLET_NOT_EXIST;
       }
       LOG_WARN("fail to get old tablet addr", K(ret), K(key));
-    } else if (!is_replay_old) {
+    } else {
       ObUpdateTabletPointerParam param;
       if (OB_FAIL(t3m->get_tablet(WashTabletPriority::WTP_LOW, key, tablet_handle))) {
         LOG_WARN("fail to get tablet", K(ret), K(key));
@@ -1018,21 +1017,11 @@ int ObLSTabletService::update_tablet_checkpoint(
       } else if (OB_FAIL(t3m->compare_and_swap_tablet(key, tablet_handle, new_handle, param))) {
         LOG_WARN("fail to compare and swap tablet", K(ret), K(tablet_handle), K(new_handle), K(param));
       }
-    } else {
-      time_guard.click("GetOld");
-      if (OB_UNLIKELY(addr != old_addr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("the old tablet has been replaced, which is not allowed during upgrade",
-            K(ret), K(addr), K(old_addr));
-      } else if (OB_FAIL(t3m->compare_and_swap_tablet(key, old_addr, new_addr))) {
-        LOG_WARN("fail to compare and swap tablet", K(ret), K(old_addr), K(new_addr));
-      }
     }
 
     if (OB_SUCC(ret)) {
       time_guard.click("CASwap");
-      FLOG_INFO("succeeded to update tablet ckpt", K(key), K(old_addr), K(new_addr),
-          K(is_replay_old));
+      FLOG_INFO("succeeded to update tablet ckpt", K(key), K(old_addr), K(new_addr));
     }
   }
   return ret;

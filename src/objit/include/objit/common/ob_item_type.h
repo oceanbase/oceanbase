@@ -872,6 +872,11 @@ typedef enum ObItemType
   T_FUN_SYS_NEGATIVE_INNER_PRODUCT = 1746,
   T_FUNC_SYS_ARRAY_OVERLAPS = 1747,
   T_FUNC_SYS_ARRAY_CONTAINS_ALL = 1748,
+  T_FUNC_SYS_ARRAY_AGG = 1749,
+  T_FUNC_SYS_ARRAY_DISTINCT = 1750,
+  T_FUNC_SYS_ARRAY_REMOVE = 1751,
+  T_FUNC_SYS_ARRAY_MAP = 1752,
+  T_FUNC_SYS_LAMBDA = 1753,
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table
@@ -2786,7 +2791,7 @@ extern const char *get_type_name(int type);
 
 #define IS_KEEP_AGGR_FUN(op) ((op) >= T_FUN_KEEP_MAX && (op) <= T_FUN_KEEP_STDDEV)
 
-
+#define IS_JSON_COMPATIBLE_OP(op) (IS_COMMON_COMPARISON_OP(op) || (op) == T_OP_ROW || (op) == T_OP_LIKE)
 /**
  * @notice: 目前只支持IS_BASIC_CMP_OP这个宏里定义的op type，如果有在这之外的需求，请扩展这个接口的实现
  * */

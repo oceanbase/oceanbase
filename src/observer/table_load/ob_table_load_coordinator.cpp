@@ -302,7 +302,7 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
         int64_t coordinator_session_count = 0;
         int64_t write_session_count = 0;
         int64_t min_session_count = MAX(ctx_->param_.parallel_, 2);
-        int64_t max_session_count = (int64_t)tenant->unit_max_cpu() * 2;
+        int64_t max_session_count = MIN((int64_t)tenant->unit_max_cpu() * 2, oceanbase::ObMacroDataSeq::MAX_PARALLEL_IDX + 1);  // 节点内不能超过这个并行度
         int64_t total_session_count = MIN(ctx_->param_.parallel_, max_session_count * store_server_count);
         int64_t remain_session_count = total_session_count;
         partitions.set_tenant_id(MTL_ID());

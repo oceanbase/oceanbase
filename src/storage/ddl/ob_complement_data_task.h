@@ -203,7 +203,6 @@ public:
   // report replica build status to RS.
   int report_replica_build_status();
   int calc_total_row_count();
-  int check_and_exit_on_demand();
 private:
   bool is_inited_;
   ObComplementDataParam param_;

@@ -40,7 +40,7 @@ const char *get_storage_checksum_type_str(const ObStorageChecksumType &type)
 ObObjectStorageInfo::ObObjectStorageInfo()
   : delete_mode_(ObStorageDeleteMode::STORAGE_DELETE_MODE),
     device_type_(ObStorageType::OB_STORAGE_MAX_TYPE),
-    checksum_type_(ObStorageChecksumType::OB_MD5_ALGO)
+    checksum_type_(ObStorageChecksumType::OB_NO_CHECKSUM_ALGO)
 {
   endpoint_[0] = '\0';
   access_id_[0] = '\0';
@@ -59,7 +59,7 @@ void ObObjectStorageInfo::reset()
 {
   delete_mode_ = ObStorageDeleteMode::STORAGE_DELETE_MODE;
   device_type_ = ObStorageType::OB_STORAGE_MAX_TYPE;
-  checksum_type_ = ObStorageChecksumType::OB_MD5_ALGO;
+  checksum_type_ = ObStorageChecksumType::OB_NO_CHECKSUM_ALGO;
   endpoint_[0] = '\0';
   access_id_[0] = '\0';
   access_key_[0] = '\0';
@@ -337,7 +337,8 @@ bool is_cos_supported_checksum(const ObStorageChecksumType checksum_type)
 bool is_s3_supported_checksum(const ObStorageChecksumType checksum_type)
 {
   return checksum_type == ObStorageChecksumType::OB_CRC32_ALGO
-      || checksum_type == ObStorageChecksumType::OB_MD5_ALGO;
+      || checksum_type == ObStorageChecksumType::OB_MD5_ALGO
+      || checksum_type == ObStorageChecksumType::OB_NO_CHECKSUM_ALGO;
 }
 
 int ObObjectStorageInfo::set_checksum_type_(const char *checksum_type_str)

@@ -151,6 +151,7 @@ int ObLogTableScan::do_re_est_cost(EstimateCostInfo &param, double &card, double
       } else {
         param.need_row_count_ = std::min(param.need_row_count_ + offset_count_double, need_row_count);
       }
+      est_cost_info_->limit_rows_ = limit_count;
     }
     if (stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_3, COMPAT_VERSION_4_3_0,
                                                         COMPAT_VERSION_4_3_2) &&

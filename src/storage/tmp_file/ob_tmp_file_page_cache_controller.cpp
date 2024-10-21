@@ -131,7 +131,9 @@ int ObTmpFilePageCacheController::invoke_swap_and_wait(int64_t expect_swap_size,
   int ret = OB_SUCCESS;
 
   int64_t mem_limit = write_buffer_pool_.get_memory_limit();
-  expect_swap_size = min(expect_swap_size, static_cast<int64_t>(0.2 * mem_limit));
+  int64_t min_swap_size =
+      max(ObTmpFileGlobal::PAGE_SIZE, min(expect_swap_size, static_cast<int64_t>(0.2 * mem_limit)));
+  expect_swap_size = upper_align(min_swap_size, ObTmpFileGlobal::PAGE_SIZE);
 
   void *task_buf = nullptr;
   ObTmpFileSwapJob *swap_job = nullptr;

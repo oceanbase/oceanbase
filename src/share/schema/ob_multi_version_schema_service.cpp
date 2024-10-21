@@ -457,8 +457,6 @@ int ObMultiVersionSchemaService::get_schema(const ObSchemaMgr *mgr,
         }
       }
     }
-  } else if (TENANT_SCHEMA == schema_type && OB_GTS_TENANT_ID == schema_id) {
-    schema = schema_cache_.get_full_gts_tenant();
   } else if (OB_FAIL(schema_cache_.get_schema(schema_type,
                                               tenant_id,
                                               schema_id,

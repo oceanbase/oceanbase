@@ -86,6 +86,26 @@ struct ObMVNoticeSafeHelper
       mds::BufferCtx &ctx);
 };
 
+struct ObMVUpdateSCNHelper
+{
+  static int on_register(
+      const char *buf,
+      const int64_t len,
+      mds::BufferCtx &ctx)
+  {
+    return OB_SUCCESS;
+  }
+
+  static int on_replay(
+      const char *buf,
+      const int64_t len,
+      const share::SCN scn,
+      mds::BufferCtx &ctx)
+  {
+    return OB_SUCCESS;
+  }
+};
+
 struct ObMVCheckReplicaHelper
 {
   static int get_and_update_merge_info(

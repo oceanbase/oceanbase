@@ -3496,7 +3496,8 @@ DEF_TO_STRING(ObDropIndexArg) {
        K_(is_inner),
        K_(is_vec_inner_drop),
        K_(only_set_status),
-       K_(index_ids));
+       K_(index_ids),
+       K_(table_id));
   J_OBJ_END();
   return pos;
 }
@@ -3513,7 +3514,10 @@ OB_SERIALIZE_MEMBER((ObDropIndexArg, ObIndexArg),
                     is_inner_,
                     is_vec_inner_drop_,
                     only_set_status_,
-                    index_ids_);
+                    index_ids_,
+                    is_parent_task_dropping_fts_index_,
+                    is_parent_task_dropping_multivalue_index_,
+                    table_id_);
 
 OB_SERIALIZE_MEMBER(ObDropIndexRes, tenant_id_, index_table_id_, schema_version_, task_id_);
 
@@ -8971,7 +8975,7 @@ OB_DEF_SERIALIZE(ObDDLBuildSingleReplicaRequestArg)
     parallelism_, tablet_task_id_, data_format_version_, consumer_group_id_, dest_tenant_id_,
     dest_ls_id_, dest_schema_version_,
     compaction_scn_, can_reuse_macro_block_, split_sstable_type_,
-    lob_col_idxs_, parallel_datum_rowkey_list_);
+    lob_col_idxs_, parallel_datum_rowkey_list_, is_no_logging_);
   return ret;
 }
 
@@ -8988,6 +8992,10 @@ OB_DEF_DESERIALIZE(ObDDLBuildSingleReplicaRequestArg)
         rowkey_allocator_, buf, data_len, pos, parallel_datum_rowkey_list_))) {
     LOG_WARN("deserialzie parallel info failed", K(ret));
   }
+
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(is_no_logging_)
+  }
   return ret;
 }
 
@@ -8999,7 +9007,7 @@ OB_DEF_SERIALIZE_SIZE(ObDDLBuildSingleReplicaRequestArg)
     parallelism_, tablet_task_id_, data_format_version_, consumer_group_id_, dest_tenant_id_,
     dest_ls_id_, dest_schema_version_,
     compaction_scn_, can_reuse_macro_block_, split_sstable_type_,
-    lob_col_idxs_, parallel_datum_rowkey_list_);
+    lob_col_idxs_, parallel_datum_rowkey_list_, is_no_logging_);
   return len;
 }
 
@@ -11368,6 +11376,10 @@ OB_SERIALIZE_MEMBER(ObEnableSSMicroCacheArg, tenant_id_, is_enabled_);
 OB_SERIALIZE_MEMBER(ObGetSSMicroCacheInfoArg, tenant_id_);
 OB_SERIALIZE_MEMBER(ObGetSSMicroCacheInfoResult, micro_cache_stat_, super_block_, arc_info_);
 OB_SERIALIZE_MEMBER(ObClearSSMicroCacheArg, tenant_id_);
+OB_SERIALIZE_MEMBER(ObDelSSLocalTmpFileArg, tenant_id_, macro_id_);
+OB_SERIALIZE_MEMBER(ObDelSSLocalMajorArg, tenant_id_);
+OB_SERIALIZE_MEMBER(ObCalibrateSSDiskSpaceArg, tenant_id_);
+OB_SERIALIZE_MEMBER(ObDelSSTabletMicroArg, tenant_id_, tablet_id_);
 #endif
 
 ObRpcRemoteWriteDDLIncCommitLogArg::ObRpcRemoteWriteDDLIncCommitLogArg()

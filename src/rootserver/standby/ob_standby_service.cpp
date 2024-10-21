@@ -467,8 +467,8 @@ int ObStandbyService::do_recover_tenant(
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_version))) {
     LOG_WARN("failed to get tenant min version", KR(ret), K(tenant_id));
   } else if (tenant_version >= DATA_VERSION_4_3_4_0
-              && OB_FAIL(ObMViewInfo::contains_major_refresh_mview_in_creation(*sql_proxy_, tenant_id, is_contains_new_mv_tenant))) {
-    LOG_WARN("failed to contains_major_refresh_mview_in_creation", KR(ret), K(tenant_id), K(tenant_version));
+              && OB_FAIL(ObMViewInfo::contains_major_refresh_mview(*sql_proxy_, tenant_id, is_contains_new_mv_tenant))) {
+    LOG_WARN("failed to contains_major_refresh_mview", KR(ret), K(tenant_id), K(tenant_version));
   } else if (is_contains_new_mv_tenant) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("there is new mv in this tenant", K(tenant_id));

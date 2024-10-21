@@ -25,14 +25,6 @@ ob_set_subtarget(ob_share ALONE
   vector/expr_cmp_func_parts/expr_cmp_func_part_5.cpp
   vector/expr_cmp_func_parts/expr_cmp_func_part_6.cpp
   vector/expr_cmp_func_parts/expr_cmp_func_part_7.cpp
-  vector/expr_cmp_func_parts/expr_cmp_func_part_8.cpp
-  vector/expr_cmp_func_parts/expr_cmp_func_part_9.cpp
-  vector/expr_cmp_func_parts/expr_cmp_func_part_10.cpp
-  vector/expr_cmp_func_parts/expr_cmp_func_part_11.cpp
-  vector/expr_cmp_func_parts/expr_cmp_func_part_12.cpp
-  vector/expr_cmp_func_parts/expr_cmp_func_part_13.cpp
-  vector/expr_cmp_func_parts/expr_cmp_func_part_14.cpp
-  vector/expr_cmp_func_parts/expr_cmp_func_part_15.cpp
   aggregate/approx_count_distinct_synopsis.cpp
 
   datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_0.cpp
@@ -43,30 +35,6 @@ ob_set_subtarget(ob_share ALONE
   datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_5.cpp
   datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_6.cpp
   datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_7.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_8.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_9.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_10.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_11.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_12.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_13.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_14.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_15.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_16.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_17.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_18.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_19.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_20.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_21.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_22.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_23.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_24.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_25.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_26.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_27.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_28.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_29.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_30.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_31.cpp
   datum/ob_datum_funcs_compilation/ob_datum_funcs_all.cpp
 
   datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_0.cpp
@@ -77,46 +45,6 @@ ob_set_subtarget(ob_share ALONE
   datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_5.cpp
   datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_6.cpp
   datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_7.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_8.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_9.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_10.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_11.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_12.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_13.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_14.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_15.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_16.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_17.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_18.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_19.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_20.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_21.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_22.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_23.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_24.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_25.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_26.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_27.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_28.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_29.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_30.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_31.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_32.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_33.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_34.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_35.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_36.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_37.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_38.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_39.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_40.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_41.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_42.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_43.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_44.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_45.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_46.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_47.cpp
   datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_all.cpp
 )
 

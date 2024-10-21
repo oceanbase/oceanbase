@@ -314,20 +314,33 @@ int ObHTableUtils::create_last_cell_on_row(
   return ret;
 }
 
-int ObHTableUtils::create_first_cell_on_row_col_ts(common::ObArenaAllocator &allocator,
+int ObHTableUtils::create_first_cell_on_row_col_ts(common::ObIAllocator &allocator,
                                                 const ObHTableCell &cell,
                                                 const int64_t timestamp,
                                                 ObHTableCell *&new_cell)
 {
   int ret = OB_SUCCESS;
   ObString rowkey_clone;
+  ObString qualifier_clone;
+  ObObj *last_cell = nullptr;
+  ObNewRow *ob_row = nullptr;
   if (OB_FAIL(ob_write_string(allocator, cell.get_rowkey(), rowkey_clone))) {
     LOG_WARN("failed to clone rowkey", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, cell.get_qualifier(), qualifier_clone))) {
+    LOG_WARN("failed to clone qualifier", K(ret));
+  } else if (OB_ISNULL(last_cell = static_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * 3)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory for start_obj failed", K(ret));
   } else {
-    new_cell = OB_NEWx(ObHTableFirstOnRowColTSCell, (&allocator), rowkey_clone, timestamp);
-    if (NULL == new_cell) {
+    last_cell[ObHTableConstants::COL_IDX_K].set_varbinary(rowkey_clone);
+    last_cell[ObHTableConstants::COL_IDX_Q].set_varbinary(qualifier_clone);
+    last_cell[ObHTableConstants::COL_IDX_T].set_int(timestamp);
+    if (OB_ISNULL(ob_row = OB_NEWx(ObNewRow, (&allocator), last_cell, 3))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("no memory", K(ret));
+      LOG_WARN("failed to allocator last NewRow on column timestamp.", K(ret));
+    } else if (OB_ISNULL(new_cell = OB_NEWx(ObHTableCellEntity, (&allocator), ob_row, ObHTableCell::Type::NORMAL))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocator first entity on column timestamp.", K(ret));
     }
   }
   return ret;

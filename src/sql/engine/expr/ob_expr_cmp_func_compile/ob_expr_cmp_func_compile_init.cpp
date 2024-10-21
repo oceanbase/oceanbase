@@ -22,30 +22,14 @@ extern void __init_expr_cmp_func4();
 extern void __init_expr_cmp_func5();
 extern void __init_expr_cmp_func6();
 extern void __init_expr_cmp_func7();
-extern void __init_expr_cmp_func8();
-extern void __init_expr_cmp_func9();
-extern void __init_expr_cmp_func10();
-extern void __init_expr_cmp_func11();
-extern void __init_expr_cmp_func12();
-extern void __init_expr_cmp_func13();
-extern void __init_expr_cmp_func14();
-extern void __init_expr_cmp_func15();
-extern void __init_expr_cmp_func16();
-extern void __init_expr_cmp_func17();
-extern void __init_expr_cmp_func18();
-extern void __init_expr_cmp_func19();
-extern void __init_expr_cmp_func20();
-extern void __init_expr_cmp_func21();
-extern void __init_expr_cmp_func22();
-extern void __init_expr_cmp_func23();
-extern void __init_expr_cmp_func24();
-extern void __init_expr_cmp_func25();
-extern void __init_expr_cmp_func26();
-extern void __init_expr_cmp_func27();
-extern void __init_expr_cmp_func28();
-extern void __init_expr_cmp_func29();
-extern void __init_expr_cmp_func30();
-extern void __init_expr_cmp_func31();
+// extern void __init_expr_cmp_func8();
+// extern void __init_expr_cmp_func9();
+// extern void __init_expr_cmp_func10();
+// extern void __init_expr_cmp_func11();
+// extern void __init_expr_cmp_func12();
+// extern void __init_expr_cmp_func13();
+// extern void __init_expr_cmp_func14();
+// extern void __init_expr_cmp_func15();
 
 void __init_all_expr_cmp_funcs()
 {
@@ -57,30 +41,14 @@ void __init_all_expr_cmp_funcs()
   __init_expr_cmp_func5();
   __init_expr_cmp_func6();
   __init_expr_cmp_func7();
-  __init_expr_cmp_func8();
-  __init_expr_cmp_func9();
-  __init_expr_cmp_func10();
-  __init_expr_cmp_func11();
-  __init_expr_cmp_func12();
-  __init_expr_cmp_func13();
-  __init_expr_cmp_func14();
-  __init_expr_cmp_func15();
-  __init_expr_cmp_func16();
-  __init_expr_cmp_func17();
-  __init_expr_cmp_func18();
-  __init_expr_cmp_func19();
-  __init_expr_cmp_func20();
-  __init_expr_cmp_func21();
-  __init_expr_cmp_func22();
-  __init_expr_cmp_func23();
-  __init_expr_cmp_func24();
-  __init_expr_cmp_func25();
-  __init_expr_cmp_func26();
-  __init_expr_cmp_func27();
-  __init_expr_cmp_func28();
-  __init_expr_cmp_func29();
-  __init_expr_cmp_func30();
-  __init_expr_cmp_func31();
+  // __init_expr_cmp_func8();
+  // __init_expr_cmp_func9();
+  // __init_expr_cmp_func10();
+  // __init_expr_cmp_func11();
+  // __init_expr_cmp_func12();
+  // __init_expr_cmp_func13();
+  // __init_expr_cmp_func14();
+  // __init_expr_cmp_func15();
 }
 } // end sq
 } // end oceanbase

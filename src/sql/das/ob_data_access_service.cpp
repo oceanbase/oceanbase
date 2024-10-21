@@ -430,7 +430,9 @@ int ObDataAccessService::do_async_remote_das_task(
   remote_info.user_id_ = session->get_user_id();
   remote_info.session_id_ = session->get_sessid();
   remote_info.plan_id_ = session->get_current_plan_id();
-
+  if (OB_NOT_NULL(plan_ctx->get_phy_plan())) {
+    remote_info.need_subschema_ctx_ = plan_ctx->is_subschema_ctx_inited();
+  }
   task_arg.set_remote_info(&remote_info);
   ObDASRemoteInfo::get_remote_info() = &remote_info;
   ObIDASTaskResult *op_result = nullptr;
@@ -526,6 +528,9 @@ int ObDataAccessService::do_sync_remote_das_task(
   remote_info.user_id_ = session->get_user_id();
   remote_info.session_id_ = session->get_sessid();
   remote_info.plan_id_ = session->get_current_plan_id();
+  if (OB_NOT_NULL(plan_ctx->get_phy_plan())) {
+    remote_info.need_subschema_ctx_ = plan_ctx->is_subschema_ctx_inited();
+  }
 
   task_arg.set_remote_info(&remote_info);
   ObDASRemoteInfo::get_remote_info() = &remote_info;
@@ -711,6 +716,7 @@ int ObDataAccessService::collect_das_task_info(ObDASTaskArg &task_arg, ObDASRemo
       remote_info.has_expr_ |= task_op->get_ctdef()->has_expr();
       remote_info.need_calc_expr_ |= task_op->get_ctdef()->has_pdfilter_or_calc_expr();
       remote_info.need_calc_udf_ |= task_op->get_ctdef()->has_pl_udf();
+      remote_info.need_subschema_ctx_ &= remote_info.need_calc_expr_;
       if (OB_FAIL(add_var_to_array_no_dup(remote_info.ctdefs_, task_op->get_ctdef()))) {
         LOG_WARN("store remote ctdef failed", K(ret));
       }
@@ -745,6 +751,7 @@ int ObDataAccessService::collect_das_task_attach_info(ObDASRemoteInfo &remote_in
       remote_info.has_expr_ |= attach_rtdef->ctdef_->has_expr();
       remote_info.need_calc_expr_ |= attach_rtdef->ctdef_->has_pdfilter_or_calc_expr();
       remote_info.need_calc_udf_ |= attach_rtdef->ctdef_->has_pl_udf();
+      remote_info.need_subschema_ctx_ &= remote_info.need_calc_expr_;
       if (OB_FAIL(add_var_to_array_no_dup(remote_info.ctdefs_, attach_rtdef->ctdef_))) {
         LOG_WARN("store remote ctdef failed", K(ret));
       }

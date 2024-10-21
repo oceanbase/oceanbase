@@ -44,6 +44,7 @@ enum ObPDAggType
   PD_FIRST_ROW,
   PD_HLL,
   PD_SUM_OP_SIZE,
+  PD_RB_BUILD,
   PD_MAX_TYPE
 };
 

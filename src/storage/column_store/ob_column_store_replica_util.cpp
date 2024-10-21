@@ -120,7 +120,7 @@ int ObCSReplicaUtil::check_need_process_for_cs_replica_for_ddl(
 {
   int ret = OB_SUCCESS;
   const ObTabletMeta &tablet_meta = tablet.get_tablet_meta();
-  const bool cs_replica_visable = tablet_meta.is_cs_replica_global_visable_when_ddl();
+  const bool cs_replica_visable = tablet_meta.is_cs_replica_global_visible_when_ddl();
   need_process_cs_replica = cs_replica_visable
                          && tablet_meta.tablet_id_.is_user_tablet()
                          && schema.is_row_store()

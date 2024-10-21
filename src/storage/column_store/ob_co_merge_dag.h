@@ -275,14 +275,6 @@ public:
   {
     return ATOMIC_LOAD(&finish_added_);
   }
-  virtual int deal_with_cancel() override
-  {
-    if (!inner_check_finished() && OB_NOT_NULL(finish_dag_)) {
-      (void)MTL(share::ObTenantDagScheduler*)->free_dag(*finish_dag_);
-      finish_dag_ = nullptr;
-    }
-    return OB_SUCCESS;
-  }
   void cancel_dag_net(const int error_code);
   int create_co_execute_dags(share::ObIDag &schedule_dag);
   bool check_merge_finished();

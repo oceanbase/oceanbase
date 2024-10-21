@@ -190,7 +190,7 @@ private:
     const common::ObIArray<ObIDirectLoadPartitionTable *> &table_array);
   int build_empty_data_merge_task(const common::ObIArray<share::schema::ObColDesc> &col_descs,
                                   int64_t max_parallel_degree);
-  int build_pk_table_multiple_merge_task(
+  int build_pk_table_merge_task(
     const common::ObIArray<ObIDirectLoadPartitionTable *> &table_array,
     const common::ObIArray<share::schema::ObColDesc> &col_descs,
     int64_t max_parallel_degree);

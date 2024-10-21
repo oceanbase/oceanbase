@@ -621,6 +621,8 @@ struct ObPlanStat
   common::ObString outline_data_;
   common::ObString hints_info_;
   bool hints_all_worked_;
+  bool is_inner_;
+  bool is_use_auto_dop_;
 
 
   ObPlanStat()
@@ -697,7 +699,9 @@ struct ObPlanStat
       block_cache_miss_cnt_(0),
       pre_cal_expr_handler_(NULL),
       plan_hash_value_(0),
-      hints_all_worked_(true)
+      hints_all_worked_(true),
+      is_inner_(false),
+      is_use_auto_dop_(false)
 {
   exact_mode_sql_id_[0] = '\0';
 }
@@ -775,7 +779,9 @@ struct ObPlanStat
       block_cache_miss_cnt_(rhs.block_cache_miss_cnt_),
       pre_cal_expr_handler_(rhs.pre_cal_expr_handler_),
       plan_hash_value_(rhs.plan_hash_value_),
-      hints_all_worked_(rhs.hints_all_worked_)
+      hints_all_worked_(rhs.hints_all_worked_),
+      is_inner_(rhs.is_inner_),
+      is_use_auto_dop_(rhs.is_use_auto_dop_)
   {
     exact_mode_sql_id_[0] = '\0';
     MEMCPY(plan_sel_info_str_, rhs.plan_sel_info_str_, rhs.plan_sel_info_str_len_);

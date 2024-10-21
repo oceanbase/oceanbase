@@ -7755,6 +7755,82 @@ int ObInnerTableSchema::all_virtual_wr_active_session_history_schema(ObTableSche
       true, //is_nullable
       false); //is_autoincrement
   }
+
+  if (OB_SUCC(ret)) {
+    ObObj io_read_count_default;
+    io_read_count_default.set_int(0);
+    ADD_COLUMN_SCHEMA_T("io_read_count", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false, //is_autoincrement
+      io_read_count_default,
+      io_read_count_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj io_read_size_default;
+    io_read_size_default.set_int(0);
+    ADD_COLUMN_SCHEMA_T("io_read_size", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false, //is_autoincrement
+      io_read_size_default,
+      io_read_size_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj io_write_count_default;
+    io_write_count_default.set_int(0);
+    ADD_COLUMN_SCHEMA_T("io_write_count", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false, //is_autoincrement
+      io_write_count_default,
+      io_write_count_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj io_write_size_default;
+    io_write_size_default.set_int(0);
+    ADD_COLUMN_SCHEMA_T("io_write_size", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false, //is_autoincrement
+      io_write_size_default,
+      io_write_size_default); //default_value
+  }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
   table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);

@@ -1126,7 +1126,6 @@ int ObStartMigrationTask::deal_with_local_ls_()
 #ifdef ERRSIM
   } else if (FALSE_IT(SERVER_EVENT_SYNC_ADD("storage_ha", "before_migration_ls_offline",
     "tenant_id", ctx_->tenant_id_, "ls_id", ctx_->arg_.ls_id_.id()))) {
-
   } else if (FALSE_IT(DEBUG_SYNC(BEFORE_MIGRATION_LS_OFFLINE))) {
 #endif
   } else if (OB_FAIL(ls->offline())) {
@@ -1597,6 +1596,8 @@ int ObStartMigrationTask::inner_build_ls_(bool &is_rpc_not_support)
     LOG_WARN("failed to update local ls", K(ret), KPC(ctx_));
   } else if (OB_FAIL(create_all_tablets_(ob_reader))) {
     LOG_WARN("failed to create all tablets", K(ret), KPC(ctx_));
+  } else {
+    DEBUG_SYNC(AFTER_MIGRATION_CREATE_ALL_TABLET);
   }
 
   if (OB_NOT_NULL(ob_reader)) {

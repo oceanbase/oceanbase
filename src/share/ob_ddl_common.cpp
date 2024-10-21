@@ -3267,9 +3267,8 @@ int64_t ObDDLUtil::get_real_parallelism(const int64_t parallelism, const bool is
   if (is_mv_refresh) {
     real_parallelism = std::max(2L, parallelism);
   } else {
-    real_parallelism = std::max(1L, parallelism);
+    real_parallelism = std::min(oceanbase::ObMacroDataSeq::MAX_PARALLEL_IDX + 1, std::max(1L, parallelism));
   }
-  real_parallelism = std::min(oceanbase::ObMacroDataSeq::MAX_PARALLEL_IDX + 1, real_parallelism);
   return real_parallelism;
 }
 

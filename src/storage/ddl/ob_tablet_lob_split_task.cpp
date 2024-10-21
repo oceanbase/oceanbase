@@ -690,7 +690,7 @@ int ObTabletLobBuildMapTask::generate_next_task(ObITask *&next_task)
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTabletLobBuildMapTask has not been inited", K(ret));
-  } else if (next_task_id == param_->parallelism_) {
+  } else if (next_task_id >= param_->parallelism_) {
     ret = OB_ITER_END;
   } else if (OB_ISNULL(tmp_dag)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1092,7 +1092,7 @@ int ObTabletLobWriteDataTask::generate_next_task(ObITask *&next_task)
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTabletLobWriteDataTask has not been inited", K(ret));
-  } else if (true || next_task_id == param_->parallelism_) { // not allow para now
+  } else if (true || next_task_id >= param_->parallelism_) { // not allow para now
     ret = OB_ITER_END;
   } else if (OB_ISNULL(tmp_dag)) {
     ret = OB_ERR_UNEXPECTED;

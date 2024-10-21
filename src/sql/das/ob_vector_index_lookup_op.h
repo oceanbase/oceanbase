@@ -33,6 +33,7 @@ class ObVectorIndexLookupOp : public ObDomainIndexLookupOp
 public:
   ObVectorIndexLookupOp(ObIAllocator &allocator)
   : ObDomainIndexLookupOp(allocator),
+    vec_op_alloc_("VecIdxLookupOp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     aux_lookup_iter_(nullptr),
     adaptor_vid_iter_(nullptr),
     search_vec_(nullptr),
@@ -141,6 +142,7 @@ private:
   static const int64_t SNAPSHOT_PRI_KEY_CNT = 1;
   static const uint64_t MAX_VSAG_QUERY_RES_SIZE = 16384;
 private:
+  common::ObArenaAllocator vec_op_alloc_;
   common::ObNewRowIterator *aux_lookup_iter_;
   ObVectorQueryVidIterator* adaptor_vid_iter_;
   ObExpr* search_vec_;

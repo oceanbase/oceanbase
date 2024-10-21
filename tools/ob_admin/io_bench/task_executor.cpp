@@ -498,7 +498,7 @@ int AppendWriteTaskExecutor::execute()
     ObBackupIoAdapter adapter;
     ObIOFd fd;
     ObIODevice *device_handle = nullptr;
-    ObStorageAccessType access_type = OB_STORAGE_ACCESS_RANDOMWRITER;
+    ObStorageAccessType access_type = OB_STORAGE_ACCESS_APPENDER;
 
     const int64_t open_start_time_us = ObTimeUtility::current_time();
     if (OB_FAIL(adapter.open_with_access_type(

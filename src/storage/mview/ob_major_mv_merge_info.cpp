@@ -143,10 +143,11 @@ int ObMVPublishSCNHelper::on_replay(
     ret = OB_EAGAIN;
     LOG_WARN("tenant role cache is invalid", KR(ret));
   } else if (is_standby_tenant(tenant_role)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("new mview are temporarily not support in standy tenant", KR(ret));
+    // ret = OB_NOT_SUPPORTED;
+    LOG_INFO("new mview skip in standy tenant", KR(ret));
+  } else {
+    SET_MERGE_SCN(set_major_mv_merge_scn_publish);
   }
-  SET_MERGE_SCN(set_major_mv_merge_scn_publish);
   return ret;
 }
 
@@ -172,10 +173,10 @@ int ObMVNoticeSafeHelper::on_replay(
     ret = OB_EAGAIN;
     LOG_WARN("tenant role cache is invalid", KR(ret));
   } else if (is_standby_tenant(tenant_role)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("new mview are temporarily not support in standy tenant", KR(ret));
+    LOG_INFO("new mview skip in standy tenant", KR(ret));
+  } else {
+    SET_MERGE_SCN(set_major_mv_merge_scn_safe_calc);
   }
-  SET_MERGE_SCN(set_major_mv_merge_scn_safe_calc);
   return ret;
 }
 

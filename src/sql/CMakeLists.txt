@@ -305,7 +305,7 @@ ob_set_subtarget(ob_sql engine_dml
   engine/dml/ob_fk_checker.cpp
 )
 
-ob_set_subtarget(ob_sql engine_expr0
+ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_batch_eval_util.cpp
   engine/expr/ob_expr.cpp
   engine/expr/ob_expr_acos.cpp
@@ -322,9 +322,6 @@ ob_set_subtarget(ob_sql engine_expr0
   engine/expr/ob_expr_atan2.cpp
   engine/expr/ob_expr_audit_log_func.cpp
   engine/expr/ob_expr_autoinc_nextval.cpp
-)
-
-ob_set_subtarget(ob_sql engine_expr1
   engine/expr/ob_expr_benchmark.cpp
   engine/expr/ob_expr_between.cpp
   engine/expr/ob_expr_bit_and.cpp
@@ -341,9 +338,6 @@ ob_set_subtarget(ob_sql engine_expr1
   engine/expr/ob_expr_calc_urowid.cpp
   engine/expr/ob_expr_cardinality.cpp
   engine/expr/ob_expr_case.cpp
-)
-
-ob_set_subtarget(ob_sql engine_expr2
   engine/expr/ob_expr_char.cpp
   engine/expr/ob_expr_char_length.cpp
   engine/expr/ob_expr_char_to_rowid.cpp
@@ -360,9 +354,6 @@ ob_set_subtarget(ob_sql engine_expr2
   engine/expr/ob_expr_connect_by_root.cpp
   engine/expr/ob_expr_connection_id.cpp
   engine/expr/ob_expr_conv.cpp
-)
-
-ob_set_subtarget(ob_sql engine_expr3
   engine/expr/ob_expr_convert.cpp
   engine/expr/ob_expr_convert_tz.cpp
   engine/expr/ob_expr_cos.cpp
@@ -379,9 +370,6 @@ ob_set_subtarget(ob_sql engine_expr3
   engine/expr/ob_expr_date_format.cpp
   engine/expr/ob_expr_day_of_func.cpp
   engine/expr/ob_expr_dbms_crypto.cpp
-)
-
-ob_set_subtarget(ob_sql engine_expr4
   engine/expr/ob_expr_degrees.cpp
   engine/expr/ob_expr_des_hex_str.cpp
   engine/expr/ob_expr_func_ceil.cpp
@@ -398,9 +386,6 @@ ob_set_subtarget(ob_sql engine_expr4
   engine/expr/ob_expr_estimate_ndv.cpp
   engine/expr/ob_expr_exists.cpp
   engine/expr/ob_expr_exp.cpp
-)
-
-ob_set_subtarget(ob_sql engine_expr5
   engine/expr/ob_expr_export_set.cpp
   engine/expr/ob_expr_extra_info_factory.cpp
   engine/expr/ob_expr_extract.cpp
@@ -417,9 +402,6 @@ ob_set_subtarget(ob_sql engine_expr5
   engine/expr/ob_expr_fun_values.cpp
   engine/expr/ob_expr_func_dump.cpp
   engine/expr/ob_expr_func_part_hash.cpp
-)
-
-ob_set_subtarget(ob_sql engine_expr6
   engine/expr/ob_expr_func_partition_key.cpp
   engine/expr/ob_expr_func_round.cpp
   engine/expr/ob_expr_func_sleep.cpp
@@ -436,9 +418,6 @@ ob_set_subtarget(ob_sql engine_expr6
   engine/expr/ob_expr_host_ip.cpp
   engine/expr/ob_expr_icu_version.cpp
   engine/expr/ob_expr_ifnull.cpp
-)
-
-ob_set_subtarget(ob_sql engine_expr7
   engine/expr/ob_expr_inet.cpp
   engine/expr/ob_expr_initcap.cpp
   engine/expr/ob_expr_inner_trim.cpp
@@ -455,9 +434,6 @@ ob_set_subtarget(ob_sql engine_expr7
   engine/expr/ob_expr_json_extract.cpp
   engine/expr/ob_expr_json_schema_valid.cpp
   engine/expr/ob_expr_json_schema_validation_report.cpp
-)
-
-ob_set_subtarget(ob_sql engine_expr8
   engine/expr/ob_expr_json_schema_validation_report.cpp
   engine/expr/ob_expr_json_contains.cpp
   engine/expr/ob_expr_json_contains_path.cpp
@@ -474,9 +450,6 @@ ob_set_subtarget(ob_sql engine_expr8
   engine/expr/ob_expr_json_merge.cpp
   engine/expr/ob_expr_json_pretty.cpp
   engine/expr/ob_expr_json_object.cpp
-)
-
-ob_set_subtarget(ob_sql engine_expr9
   engine/expr/ob_expr_json_search.cpp
   engine/expr/ob_expr_json_array.cpp
   engine/expr/ob_expr_json_array_append.cpp
@@ -493,9 +466,6 @@ ob_set_subtarget(ob_sql engine_expr9
   engine/expr/ob_expr_json_length.cpp
   engine/expr/ob_expr_json_storage_size.cpp
   engine/expr/ob_expr_json_storage_free.cpp
-)
-
-ob_set_subtarget(ob_sql engine_expr10
   engine/expr/ob_expr_json_set.cpp
   engine/expr/ob_expr_is_json.cpp
   engine/expr/ob_expr_json_equal.cpp
@@ -511,9 +481,6 @@ ob_set_subtarget(ob_sql engine_expr10
   engine/expr/ob_expr_less_equal.cpp
   engine/expr/ob_expr_less_than.cpp
   engine/expr/ob_expr_like.cpp
-)
-
-ob_set_subtarget(ob_sql engine_expr11
   engine/expr/ob_expr_ln.cpp
   engine/expr/ob_expr_lnnvl.cpp
   engine/expr/ob_expr_locate.cpp
@@ -530,9 +497,6 @@ ob_set_subtarget(ob_sql engine_expr11
   engine/expr/ob_expr_mid.cpp
   engine/expr/ob_expr_mod.cpp
   engine/expr/ob_expr_multiset.cpp
-)
-
-ob_set_subtarget(ob_sql engine_expr12
   engine/expr/ob_expr_tokenize.cpp
   engine/expr/ob_expr_gtid.cpp
   engine/expr/ob_expr_inner_table_option_printer.cpp
@@ -550,9 +514,6 @@ ob_set_subtarget(ob_sql engine_expr12
   engine/expr/ob_expr_array_contains.cpp
   engine/expr/ob_expr_decode_trace_id.cpp
   engine/expr/ob_expr_split_part.cpp
-)
-
-ob_set_subtarget(ob_sql engine_expr13
   engine/expr/ob_expr_extract_cert_expired_time.cpp
   engine/expr/ob_expr_transaction_id.cpp
   engine/expr/ob_expr_inner_row_cmp_val.cpp
@@ -569,9 +530,6 @@ ob_set_subtarget(ob_sql engine_expr13
   engine/expr/ob_expr_vec_key.cpp
   engine/expr/ob_expr_vec_data.cpp
   engine/expr/ob_expr_topn_filter.cpp
-)
-
-ob_set_subtarget(ob_sql engine_expr14
   engine/expr/ob_expr_priv_st_makeenvelope.cpp
   engine/expr/ob_expr_priv_st_clipbybox2d.cpp
   engine/expr/ob_expr_priv_st_pointonsurface.cpp
@@ -588,9 +546,6 @@ ob_set_subtarget(ob_sql engine_expr14
   engine/expr/ob_expr_priv_st_makevalid.cpp
   engine/expr/ob_expr_temp_table_ssid.cpp
   engine/expr/ob_expr_lock_func.cpp
-)
-
-ob_set_subtarget(ob_sql engine_expr15
   engine/expr/ob_expr_extract_value.cpp
   engine/expr/ob_expr_extract_xml.cpp
   engine/expr/ob_expr_xmlcast.cpp
@@ -607,9 +562,6 @@ ob_set_subtarget(ob_sql engine_expr15
   engine/expr/ob_expr_priv_st_iscollection.cpp
   engine/expr/ob_expr_priv_st_equals.cpp
   engine/expr/ob_expr_priv_st_touches.cpp
-)
-
-ob_set_subtarget(ob_sql engine_expr16
   engine/expr/ob_expr_st_dwithin.cpp
   engine/expr/ob_expr_st_aswkb.cpp
   engine/expr/ob_expr_priv_st_asewkb.cpp
@@ -626,9 +578,6 @@ ob_set_subtarget(ob_sql engine_expr16
   engine/expr/ob_expr_xml_attributes.cpp
   engine/expr/ob_expr_xml_serialize.cpp
   engine/expr/ob_expr_priv_xml_binary.cpp
-)
-
-ob_set_subtarget(ob_sql engine_expr17
   engine/expr/ob_expr_priv_st_transform.cpp
   engine/expr/ob_expr_st_covers.cpp
   engine/expr/ob_expr_st_bestsrid.cpp
@@ -645,9 +594,6 @@ ob_set_subtarget(ob_sql engine_expr17
   engine/expr/ob_expr_st_srid.cpp
   engine/expr/ob_expr_st_distance.cpp
   engine/expr/ob_expr_st_isvalid.cpp
-)
-
-ob_set_subtarget(ob_sql engine_expr18
   engine/expr/ob_expr_errno.cpp
   engine/expr/ob_expr_lob_utils.cpp
   engine/expr/ob_expr_format_bytes.cpp
@@ -664,9 +610,6 @@ ob_set_subtarget(ob_sql engine_expr18
   engine/expr/ob_expr_st_area.cpp
   engine/expr/ob_expr_st_x.cpp
   engine/expr/ob_expr_st_transform.cpp
-)
-
-ob_set_subtarget(ob_sql engine_expr19
   engine/expr/ob_expr_width_bucket.cpp
   engine/expr/ob_expr_word_count.cpp
   engine/expr/ob_expr_word_segment.cpp
@@ -683,9 +626,6 @@ ob_set_subtarget(ob_sql engine_expr19
   engine/expr/ob_expr_hash.cpp
   engine/expr/ob_expr_timestamp_to_scn.cpp
   engine/expr/ob_expr_scn_to_timestamp.cpp
-)
-
-ob_set_subtarget(ob_sql engine_expr20
   engine/expr/ob_expr_unix_timestamp.cpp
   engine/expr/ob_expr_upper.cpp
   engine/expr/ob_expr_usec_to_time.cpp
@@ -702,9 +642,6 @@ ob_set_subtarget(ob_sql engine_expr20
   engine/expr/ob_expr_vsize.cpp
   engine/expr/ob_expr_week_of_func.cpp
   engine/expr/ob_expr_weight_string.cpp
-)
-
-ob_set_subtarget(ob_sql engine_expr21
   engine/expr/ob_expr_to_interval.cpp
   engine/expr/ob_expr_to_multi_byte.cpp
   engine/expr/ob_expr_to_number.cpp
@@ -721,9 +658,6 @@ ob_set_subtarget(ob_sql engine_expr21
   engine/expr/ob_expr_uid.cpp
   engine/expr/ob_expr_unhex.cpp
   engine/expr/ob_expr_unistr.cpp
-)
-
-ob_set_subtarget(ob_sql engine_expr22
   engine/expr/ob_expr_tablet_autoinc_nextval.cpp
   engine/expr/ob_expr_tan.cpp
   engine/expr/ob_expr_tanh.cpp
@@ -740,9 +674,6 @@ ob_set_subtarget(ob_sql engine_expr22
   engine/expr/ob_expr_to_blob.cpp
   engine/expr/ob_expr_to_clob.cpp
   engine/expr/ob_expr_to_days.cpp
-)
-
-ob_set_subtarget(ob_sql engine_expr23
   engine/expr/ob_expr_subquery_not_equal.cpp
   engine/expr/ob_expr_subquery_ns_equal.cpp
   engine/expr/ob_expr_subquery_ref.cpp
@@ -759,9 +690,6 @@ ob_set_subtarget(ob_sql engine_expr23
   engine/expr/ob_expr_sys_op_opnsize.cpp
   engine/expr/ob_expr_sys_privilege_check.cpp
   engine/expr/ob_expr_sys_view_bigint_param.cpp
-)
-
-ob_set_subtarget(ob_sql engine_expr24
   engine/expr/ob_expr_shadow_uk_project.cpp
   engine/expr/ob_expr_sign.cpp
   engine/expr/ob_expr_sin.cpp
@@ -778,9 +706,6 @@ ob_set_subtarget(ob_sql engine_expr24
   engine/expr/ob_expr_subquery_greater_than.cpp
   engine/expr/ob_expr_subquery_less_equal.cpp
   engine/expr/ob_expr_subquery_less_than.cpp
-)
-
-ob_set_subtarget(ob_sql engine_expr25
   engine/expr/ob_expr_remove_const.cpp
   engine/expr/ob_expr_repeat.cpp
   engine/expr/ob_expr_replace.cpp
@@ -797,9 +722,6 @@ ob_set_subtarget(ob_sql engine_expr25
   engine/expr/ob_expr_seq_nextval.cpp
   engine/expr/ob_expr_set.cpp
   engine/expr/ob_expr_sha.cpp
-)
-
-ob_set_subtarget(ob_sql engine_expr26
   engine/expr/ob_expr_quarter.cpp
   engine/expr/ob_expr_quote.cpp
   engine/expr/ob_expr_radians.cpp
@@ -816,9 +738,6 @@ ob_set_subtarget(ob_sql engine_expr26
   engine/expr/ob_expr_regexp_replace.cpp
   engine/expr/ob_expr_regexp_substr.cpp
   engine/expr/ob_expr_remainder.cpp
-)
-
-ob_set_subtarget(ob_sql engine_expr27
   engine/expr/ob_expr_part_id.cpp
   engine/expr/ob_expr_part_id_pseudo_column.cpp
   engine/expr/ob_expr_password.cpp
@@ -835,9 +754,6 @@ ob_set_subtarget(ob_sql engine_expr27
   engine/expr/ob_expr_power.cpp
   engine/expr/ob_expr_prior.cpp
   engine/expr/ob_expr_promotion_util.cpp
-)
-
-ob_set_subtarget(ob_sql engine_expr28
   engine/expr/ob_expr_nvl.cpp
   engine/expr/ob_expr_nvl2_oracle.cpp
   engine/expr/ob_expr_obj_access.cpp
@@ -853,9 +769,6 @@ ob_set_subtarget(ob_sql engine_expr28
   engine/expr/ob_expr_oracle_trunc.cpp
   engine/expr/ob_expr_orahash.cpp
   engine/expr/ob_expr_output_pack.cpp
-)
-
-ob_set_subtarget(ob_sql engine_expr29
   engine/expr/ob_expr_pad.cpp
   engine/expr/ob_expr_mysql_port.cpp
   engine/expr/ob_expr_name_const.cpp
@@ -869,9 +782,6 @@ ob_set_subtarget(ob_sql engine_expr29
   engine/expr/ob_expr_not_in.cpp
   engine/expr/ob_expr_null_safe_equal.cpp
   engine/expr/ob_expr_nullif.cpp
-)
-
-ob_set_subtarget(ob_sql engine_expr30
   engine/expr/ob_expr_div.cpp
   engine/expr/ob_expr_abs.cpp
   engine/expr/ob_expr_add.cpp
@@ -893,30 +803,6 @@ ob_set_subtarget(ob_sql ALONE
   engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part5.cpp
   engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part6.cpp
   engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part7.cpp
-  engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part8.cpp
-  engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part9.cpp
-  engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part10.cpp
-  engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part11.cpp
-  engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part12.cpp
-  engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part13.cpp
-  engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part14.cpp
-  engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part15.cpp
-  engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part16.cpp
-  engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part17.cpp
-  engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part18.cpp
-  engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part19.cpp
-  engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part20.cpp
-  engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part21.cpp
-  engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part22.cpp
-  engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part23.cpp
-  engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part24.cpp
-  engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part25.cpp
-  engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part26.cpp
-  engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part27.cpp
-  engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part28.cpp
-  engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part29.cpp
-  engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part30.cpp
-  engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part31.cpp
   engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_compile_init.cpp
 
   engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_0.cpp
@@ -927,46 +813,6 @@ ob_set_subtarget(ob_sql ALONE
   engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_5.cpp
   engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_6.cpp
   engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_7.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_8.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_9.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_10.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_11.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_12.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_13.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_14.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_15.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_16.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_17.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_18.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_19.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_20.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_21.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_22.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_23.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_24.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_25.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_26.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_27.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_28.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_29.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_30.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_31.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_32.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_33.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_34.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_35.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_36.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_37.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_38.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_39.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_40.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_41.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_42.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_43.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_44.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_45.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_46.cpp
-  engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_47.cpp
   engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_all.cpp
 
   engine/expr/vector_cast/vector_cast_compile/vector_cast_part0.cpp
@@ -977,30 +823,6 @@ ob_set_subtarget(ob_sql ALONE
   engine/expr/vector_cast/vector_cast_compile/vector_cast_part5.cpp
   engine/expr/vector_cast/vector_cast_compile/vector_cast_part6.cpp
   engine/expr/vector_cast/vector_cast_compile/vector_cast_part7.cpp
-  engine/expr/vector_cast/vector_cast_compile/vector_cast_part8.cpp
-  engine/expr/vector_cast/vector_cast_compile/vector_cast_part9.cpp
-  engine/expr/vector_cast/vector_cast_compile/vector_cast_part10.cpp
-  engine/expr/vector_cast/vector_cast_compile/vector_cast_part11.cpp
-  engine/expr/vector_cast/vector_cast_compile/vector_cast_part12.cpp
-  engine/expr/vector_cast/vector_cast_compile/vector_cast_part13.cpp
-  engine/expr/vector_cast/vector_cast_compile/vector_cast_part14.cpp
-  engine/expr/vector_cast/vector_cast_compile/vector_cast_part15.cpp
-  engine/expr/vector_cast/vector_cast_compile/vector_cast_part16.cpp
-  engine/expr/vector_cast/vector_cast_compile/vector_cast_part17.cpp
-  engine/expr/vector_cast/vector_cast_compile/vector_cast_part18.cpp
-  engine/expr/vector_cast/vector_cast_compile/vector_cast_part19.cpp
-  engine/expr/vector_cast/vector_cast_compile/vector_cast_part20.cpp
-  engine/expr/vector_cast/vector_cast_compile/vector_cast_part21.cpp
-  engine/expr/vector_cast/vector_cast_compile/vector_cast_part22.cpp
-  engine/expr/vector_cast/vector_cast_compile/vector_cast_part23.cpp
-  engine/expr/vector_cast/vector_cast_compile/vector_cast_part24.cpp
-  engine/expr/vector_cast/vector_cast_compile/vector_cast_part25.cpp
-  engine/expr/vector_cast/vector_cast_compile/vector_cast_part26.cpp
-  engine/expr/vector_cast/vector_cast_compile/vector_cast_part27.cpp
-  engine/expr/vector_cast/vector_cast_compile/vector_cast_part28.cpp
-  engine/expr/vector_cast/vector_cast_compile/vector_cast_part29.cpp
-  engine/expr/vector_cast/vector_cast_compile/vector_cast_part30.cpp
-  engine/expr/vector_cast/vector_cast_compile/vector_cast_part31.cpp
   engine/expr/vector_cast/vector_cast_compile/vector_cast_all.cpp
   engine/expr/vector_cast/vector_cast.cpp
 )
@@ -1300,6 +1122,7 @@ ob_set_subtarget(ob_sql plan_cache
   plan_cache/ob_lib_cache_node_factory.cpp
   plan_cache/ob_plan_match_helper.cpp
   plan_cache/ob_values_table_compression.cpp
+  plan_cache/ob_adaptive_auto_dop.cpp
 )
 
 ob_set_subtarget(ob_sql printer

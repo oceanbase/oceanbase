@@ -45,7 +45,9 @@ bool ObDirectLoadMultipleSSTableCompactParam::is_valid() const
 ObDirectLoadMultipleSSTableCompactor::ObDirectLoadMultipleSSTableCompactor()
   : index_block_count_(0),
     data_block_count_(0),
+    rowkey_block_count_(0),
     row_count_(0),
+    rowkey_count_(0),
     max_data_block_size_(0),
     start_key_allocator_("TLD_SRowkey"),
     end_key_allocator_("TLD_ERowkey"),
@@ -96,7 +98,9 @@ int ObDirectLoadMultipleSSTableCompactor::add_table(ObIDirectLoadPartitionTable 
       const ObDirectLoadMultipleSSTableMeta &table_meta = sstable->get_meta();
       index_block_count_ += table_meta.index_block_count_;
       data_block_count_ += table_meta.data_block_count_;
+      rowkey_block_count_ += table_meta.rowkey_block_count_;
       row_count_ += table_meta.row_count_;
+      rowkey_count_ += table_meta.rowkey_count_;
       max_data_block_size_ = MAX(max_data_block_size_, table_meta.max_data_block_size_);
       for (int64_t i = 0; OB_SUCC(ret) && i < sstable->get_fragments().count(); ++i) {
         if (OB_FAIL(fragments_.push_back(sstable->get_fragments().at(i)))) {
@@ -130,7 +134,8 @@ int ObDirectLoadMultipleSSTableCompactor::check_table_compactable(
           table_meta.rowkey_column_num_ != param_.table_data_desc_.rowkey_column_num_ ||
           table_meta.column_count_ != param_.table_data_desc_.column_count_ ||
           table_meta.index_block_size_ != param_.table_data_desc_.sstable_index_block_size_ ||
-          table_meta.data_block_size_ != param_.table_data_desc_.sstable_data_block_size_)) {
+          table_meta.data_block_size_ != param_.table_data_desc_.sstable_data_block_size_ ||
+          table_meta.rowkey_block_size_ != param_.table_data_desc_.sstable_data_block_size_)) {
       ret = OB_ITEM_NOT_MATCH;
       LOG_WARN("table meta not match", KR(ret), K(param_), K(table_meta));
     } else if (!sstable->is_empty()) {
@@ -173,9 +178,12 @@ int ObDirectLoadMultipleSSTableCompactor::get_table(ObIDirectLoadPartitionTable 
     create_param.column_count_ = param_.table_data_desc_.column_count_;
     create_param.index_block_size_ = param_.table_data_desc_.sstable_index_block_size_;
     create_param.data_block_size_ = param_.table_data_desc_.sstable_data_block_size_;
+    create_param.rowkey_block_size_ = param_.table_data_desc_.sstable_data_block_size_;
     create_param.index_block_count_ = index_block_count_;
     create_param.data_block_count_ = data_block_count_;
+    create_param.rowkey_block_count_ = rowkey_block_count_;
     create_param.row_count_ = row_count_;
+    create_param.rowkey_count_ = rowkey_count_;
     create_param.max_data_block_size_ = max_data_block_size_;
     create_param.start_key_ = start_key_;
     create_param.end_key_ = end_key_;

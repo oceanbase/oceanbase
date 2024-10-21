@@ -2502,7 +2502,6 @@ int ObSyncIOChannel::do_sync_io(ObIORequest &req)
         }
       }
     } else if ((ObStorageAccessType::OB_STORAGE_ACCESS_APPENDER == flag)
-               || (ObStorageAccessType::OB_STORAGE_ACCESS_RANDOMWRITER == flag)
                || (ObStorageAccessType::OB_STORAGE_ACCESS_MULTIPART_WRITER == flag)) {
       if (OB_FAIL(device_handle->pwrite(req.fd_, io_offset, req.io_result_->size_, req.calc_io_buf(), io_size))) {
         LOG_WARN("pwrite failed", K(ret), K(req));
@@ -2563,6 +2562,7 @@ int64_t ObSyncIOChannel::cal_thread_count(const int64_t conf_thread_count)
       thread_count = cpu_num * 6;
     } else {
       thread_count = 16 * 6 + (cpu_num - 16) * 2;
+      thread_count = min(thread_count, 1024);
     }
   }
   return thread_count;

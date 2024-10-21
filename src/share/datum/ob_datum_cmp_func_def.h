@@ -15,6 +15,8 @@
 
 #include <type_traits>
 
+#include "ob_defined_collations.h"
+
 #include "common/object/ob_obj_type.h"
 #include "lib/charset/ob_charset.h"
 #include "lib/number/ob_number_v2.h"
@@ -467,150 +469,6 @@ struct ObDatumCollectionCmp : public ObDefined<>
 ///////////////////////////////////////////////////////////////////////////////
 // begin define string compare functions
 ///////////////////////////////////////////////////////////////////////////////
-typedef ObConstIntMapping<0,
-    CS_TYPE_GBK_CHINESE_CI, 1,
-    CS_TYPE_UTF8MB4_GENERAL_CI, 1,
-    CS_TYPE_UTF8MB4_BIN, 1,
-    CS_TYPE_UTF16_GENERAL_CI, 1,
-    CS_TYPE_UTF16_BIN, 1,
-    CS_TYPE_BINARY, 1,
-    CS_TYPE_GBK_BIN, 1,
-    CS_TYPE_UTF16_UNICODE_CI, 1,
-    CS_TYPE_UTF8MB4_UNICODE_CI, 1,
-    CS_TYPE_GB18030_CHINESE_CI, 1,
-    CS_TYPE_GB18030_BIN, 1,
-    CS_TYPE_LATIN1_SWEDISH_CI,1,
-    CS_TYPE_LATIN1_BIN,1,
-    CS_TYPE_GB18030_2022_BIN, 1,
-    CS_TYPE_GB18030_2022_PINYIN_CI, 1,
-    CS_TYPE_GB18030_2022_PINYIN_CS, 1,
-    CS_TYPE_GB18030_2022_RADICAL_CI, 1,
-    CS_TYPE_GB18030_2022_RADICAL_CS, 1,
-    CS_TYPE_GB18030_2022_STROKE_CI, 1,
-    CS_TYPE_GB18030_2022_STROKE_CS, 1,
-    CS_TYPE_ASCII_GENERAL_CI,1,
-    CS_TYPE_ASCII_BIN,1,
-    CS_TYPE_TIS620_THAI_CI,1,
-    CS_TYPE_TIS620_BIN,1,
-    CS_TYPE_UTF16LE_GENERAL_CI, 1,
-    CS_TYPE_UTF16LE_BIN, 1,
-    CS_TYPE_SJIS_JAPANESE_CI, 1,
-    CS_TYPE_SJIS_BIN, 1,
-    CS_TYPE_BIG5_CHINESE_CI, 1,
-    CS_TYPE_BIG5_BIN, 1,
-    CS_TYPE_HKSCS_BIN, 1,
-    CS_TYPE_HKSCS31_BIN, 1,
-    CS_TYPE_UTF8MB4_ICELANDIC_UCA_CI, 1,
-    CS_TYPE_UTF8MB4_LATVIAN_UCA_CI , 1,
-    CS_TYPE_UTF8MB4_ROMANIAN_UCA_CI , 1,
-    CS_TYPE_UTF8MB4_SLOVENIAN_UCA_CI, 1,
-    CS_TYPE_UTF8MB4_POLISH_UCA_CI  , 1,
-    CS_TYPE_UTF8MB4_ESTONIAN_UCA_CI , 1,
-    CS_TYPE_UTF8MB4_SPANISH_UCA_CI , 1,
-    CS_TYPE_UTF8MB4_SWEDISH_UCA_CI , 1,
-    CS_TYPE_UTF8MB4_TURKISH_UCA_CI , 1,
-    CS_TYPE_UTF8MB4_CZECH_UCA_CI  , 1,
-    CS_TYPE_UTF8MB4_DANISH_UCA_CI  , 1,
-    CS_TYPE_UTF8MB4_LITHUANIAN_UCA_CI, 1,
-    CS_TYPE_UTF8MB4_SLOVAK_UCA_CI  , 1,
-    CS_TYPE_UTF8MB4_SPANISH2_UCA_CI , 1,
-    CS_TYPE_UTF8MB4_ROMAN_UCA_CI  , 1,
-    CS_TYPE_UTF8MB4_PERSIAN_UCA_CI , 1,
-    CS_TYPE_UTF8MB4_ESPERANTO_UCA_CI, 1,
-    CS_TYPE_UTF8MB4_HUNGARIAN_UCA_CI, 1,
-    CS_TYPE_UTF8MB4_SINHALA_UCA_CI , 1,
-    CS_TYPE_UTF8MB4_GERMAN2_UCA_CI , 1,
-    CS_TYPE_UTF8MB4_CROATIAN_UCA_CI , 1,
-    CS_TYPE_UTF8MB4_UNICODE_520_CI , 1,
-    CS_TYPE_UTF8MB4_VIETNAMESE_CI  , 1,
-    CS_TYPE_UTF16_ICELANDIC_UCA_CI , 1,
-    CS_TYPE_UTF16_LATVIAN_UCA_CI  , 1,
-    CS_TYPE_UTF16_ROMANIAN_UCA_CI  , 1,
-    CS_TYPE_UTF16_SLOVENIAN_UCA_CI , 1,
-    CS_TYPE_UTF16_POLISH_UCA_CI   , 1,
-    CS_TYPE_UTF16_ESTONIAN_UCA_CI  , 1,
-    CS_TYPE_UTF16_SPANISH_UCA_CI  , 1,
-    CS_TYPE_UTF16_SWEDISH_UCA_CI  , 1,
-    CS_TYPE_UTF16_TURKISH_UCA_CI  , 1,
-    CS_TYPE_UTF16_CZECH_UCA_CI    , 1,
-    CS_TYPE_UTF16_DANISH_UCA_CI   , 1,
-    CS_TYPE_UTF16_LITHUANIAN_UCA_CI , 1,
-    CS_TYPE_UTF16_SLOVAK_UCA_CI   , 1,
-    CS_TYPE_UTF16_SPANISH2_UCA_CI  , 1,
-    CS_TYPE_UTF16_ROMAN_UCA_CI    , 1,
-    CS_TYPE_UTF16_PERSIAN_UCA_CI  , 1,
-    CS_TYPE_UTF16_ESPERANTO_UCA_CI , 1,
-    CS_TYPE_UTF16_HUNGARIAN_UCA_CI , 1,
-    CS_TYPE_UTF16_SINHALA_UCA_CI  , 1,
-    CS_TYPE_UTF16_GERMAN2_UCA_CI  , 1,
-    CS_TYPE_UTF16_CROATIAN_UCA_CI  , 1,
-    CS_TYPE_UTF16_UNICODE_520_CI  , 1,
-    CS_TYPE_UTF16_VIETNAMESE_CI   , 1,
-    CS_TYPE_UTF8MB4_0900_AI_CI , 1,
-    CS_TYPE_UTF8MB4_DE_PB_0900_AI_CI , 1,
-    CS_TYPE_UTF8MB4_IS_0900_AI_CI, 1,
-    CS_TYPE_UTF8MB4_LV_0900_AI_CI, 1,
-    CS_TYPE_UTF8MB4_RO_0900_AI_CI, 1,
-    CS_TYPE_UTF8MB4_SL_0900_AI_CI, 1,
-    CS_TYPE_UTF8MB4_PL_0900_AI_CI, 1,
-    CS_TYPE_UTF8MB4_ET_0900_AI_CI, 1,
-    CS_TYPE_UTF8MB4_ES_0900_AI_CI, 1,
-    CS_TYPE_UTF8MB4_SV_0900_AI_CI, 1,
-    CS_TYPE_UTF8MB4_TR_0900_AI_CI, 1,
-    CS_TYPE_UTF8MB4_CS_0900_AI_CI, 1,
-    CS_TYPE_UTF8MB4_DA_0900_AI_CI, 1,
-    CS_TYPE_UTF8MB4_LT_0900_AI_CI, 1,
-    CS_TYPE_UTF8MB4_SK_0900_AI_CI, 1,
-    CS_TYPE_UTF8MB4_ES_TRAD_0900_AI_CI, 1,
-    CS_TYPE_UTF8MB4_LA_0900_AI_CI, 1,
-    CS_TYPE_UTF8MB4_EO_0900_AI_CI, 1,
-    CS_TYPE_UTF8MB4_HU_0900_AI_CI, 1,
-    CS_TYPE_UTF8MB4_HR_0900_AI_CI, 1,
-    CS_TYPE_UTF8MB4_VI_0900_AI_CI, 1,
-    CS_TYPE_UTF8MB4_0900_AS_CS, 1,
-    CS_TYPE_UTF8MB4_DE_PB_0900_AS_CS , 1,
-    CS_TYPE_UTF8MB4_IS_0900_AS_CS, 1,
-    CS_TYPE_UTF8MB4_LV_0900_AS_CS, 1,
-    CS_TYPE_UTF8MB4_RO_0900_AS_CS, 1,
-    CS_TYPE_UTF8MB4_SL_0900_AS_CS, 1,
-    CS_TYPE_UTF8MB4_PL_0900_AS_CS, 1,
-    CS_TYPE_UTF8MB4_ET_0900_AS_CS, 1,
-    CS_TYPE_UTF8MB4_ES_0900_AS_CS, 1,
-    CS_TYPE_UTF8MB4_SV_0900_AS_CS, 1,
-    CS_TYPE_UTF8MB4_TR_0900_AS_CS, 1,
-    CS_TYPE_UTF8MB4_CS_0900_AS_CS, 1,
-    CS_TYPE_UTF8MB4_DA_0900_AS_CS, 1,
-    CS_TYPE_UTF8MB4_LT_0900_AS_CS, 1,
-    CS_TYPE_UTF8MB4_SK_0900_AS_CS, 1,
-    CS_TYPE_UTF8MB4_ES_TRAD_0900_AS_CS, 1,
-    CS_TYPE_UTF8MB4_LA_0900_AS_CS  , 1,
-    CS_TYPE_UTF8MB4_EO_0900_AS_CS  , 1,
-    CS_TYPE_UTF8MB4_HU_0900_AS_CS, 1,
-    CS_TYPE_UTF8MB4_HR_0900_AS_CS, 1,
-    CS_TYPE_UTF8MB4_VI_0900_AS_CS  , 1,
-    CS_TYPE_UTF8MB4_JA_0900_AS_CS , 1,
-    CS_TYPE_UTF8MB4_JA_0900_AS_CS_KS , 1,
-    CS_TYPE_UTF8MB4_0900_AS_CI, 1,
-    CS_TYPE_UTF8MB4_RU_0900_AI_CI, 1,
-    CS_TYPE_UTF8MB4_RU_0900_AS_CS, 1,
-    CS_TYPE_UTF8MB4_ZH_0900_AS_CS, 1,
-    CS_TYPE_UTF8MB4_0900_BIN, 1,
-    CS_TYPE_UTF8MB4_NB_0900_AI_CI, 1,
-    CS_TYPE_UTF8MB4_NB_0900_AS_CS, 1,
-    CS_TYPE_UTF8MB4_NN_0900_AI_CI, 1,
-    CS_TYPE_UTF8MB4_NN_0900_AS_CS, 1,
-    CS_TYPE_UTF8MB4_SR_LATN_0900_AI_CI, 1,
-    CS_TYPE_UTF8MB4_SR_LATN_0900_AS_CS, 1,
-    CS_TYPE_UTF8MB4_BS_0900_AI_CI, 1,
-    CS_TYPE_UTF8MB4_BS_0900_AS_CS, 1,
-    CS_TYPE_UTF8MB4_BG_0900_AI_CI, 1,
-    CS_TYPE_UTF8MB4_BG_0900_AS_CS, 1,
-    CS_TYPE_UTF8MB4_GL_0900_AI_CI, 1,
-    CS_TYPE_UTF8MB4_GL_0900_AS_CS, 1,
-    CS_TYPE_UTF8MB4_MN_CYRL_0900_AI_CI, 1,
-    CS_TYPE_UTF8MB4_MN_CYRL_0900_AS_CS, 1,
-    CS_TYPE_DEC8_SWEDISH_CI, 1,
-    CS_TYPE_DEC8_BIN, 1> SupportedCollections;
 
 // bool is_calc_with_end_space(ObObjType type1, ObObjType type2,
 //                            bool is_oracle_mode,
@@ -623,8 +481,9 @@ typedef ObConstIntMapping<0,
 //                             || (ObNVarchar2Type == type2) );
 // }
 //
+
 template <ObCollationType CS_TYPE, bool WITH_END_SPACE>
-struct ObDatumStrCmp : public ObDefined<SupportedCollections::liner_search(CS_TYPE)>
+struct ObDatumStrCmp : public ObDefined<SupportedCollection<CS_TYPE>::defined_>
 {
   inline static int cmp(const ObDatum &l, const ObDatum &r, int &cmp_ret)
   { // ToDo: @gehao need to handle ObDatum has_lob_header flags ?
@@ -636,7 +495,7 @@ struct ObDatumStrCmp : public ObDefined<SupportedCollections::liner_search(CS_TY
 };
 
 template <ObCollationType CS_TYPE, bool WITH_END_SPACE>
-struct ObDatumTextCmp : public ObDefined<SupportedCollections::liner_search(CS_TYPE)>
+struct ObDatumTextCmp : public ObDefined<SupportedCollection<CS_TYPE>::defined_>
 {
   inline static int cmp(const ObDatum &l, const ObDatum &r, int &cmp_ret)
   {
@@ -675,7 +534,7 @@ struct ObDatumTextCmp : public ObDefined<SupportedCollections::liner_search(CS_T
 };
 
 template <ObCollationType CS_TYPE, bool WITH_END_SPACE>
-struct ObDatumTextStringCmp : public ObDefined<SupportedCollections::liner_search(CS_TYPE)>
+struct ObDatumTextStringCmp : public ObDefined<SupportedCollection<CS_TYPE>::defined_>
 {
   inline static int cmp(const ObDatum &l, const ObDatum &r, int &cmp_ret)
   {
@@ -706,7 +565,7 @@ struct ObDatumTextStringCmp : public ObDefined<SupportedCollections::liner_searc
 };
 
 template <ObCollationType CS_TYPE, bool WITH_END_SPACE>
-struct ObDatumStringTextCmp : public ObDefined<SupportedCollections::liner_search(CS_TYPE)>
+struct ObDatumStringTextCmp : public ObDefined<SupportedCollection<CS_TYPE>::defined_>
 {
   inline static int cmp(const ObDatum &l, const ObDatum &r, int &cmp_ret)
   {

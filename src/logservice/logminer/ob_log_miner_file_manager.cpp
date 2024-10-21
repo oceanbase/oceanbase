@@ -500,7 +500,7 @@ int ObLogMinerFileManager::append_file_(const ObString &uri,
   if (nullptr == data || 0 == data_len) {
     // do nothing
   } else if (OB_FAIL(utils.open_with_access_type(device_handle, fd, output_dest_.get_storage_info(),
-      uri, common::OB_STORAGE_ACCESS_RANDOMWRITER, mod))) {
+      uri, common::OB_STORAGE_ACCESS_APPENDER, mod))) {
     LOG_ERROR("failed to open device", K(uri), K(output_dest_), K(uri));
   } else if (OB_FAIL(device_handle->pwrite(fd, offset, data_len, data, write_size))) {
     LOG_ERROR("failed to write data into file", K(uri), K(output_dest_),

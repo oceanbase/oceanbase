@@ -880,8 +880,17 @@ int ObTenantStorageMetaPersister::ss_check_and_delete_tablet_current_version(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet version in current_version is the last version of tablet, should equal to the version in pending_free_arr",
         K(ret), K(ls_id), K(tablet_id), K(deleted_tablet_version), K(latest_addr));
-  } else if (OB_FAIL(ss_delete_tablet_current_version_(tablet_id, ls_id, ls_epoch))) {
-    LOG_WARN("failed to delete tablet current version", K(ret), K(tablet_id), K(ls_id), K(ls_epoch));
+  } else {
+    uint64_t retry_count = 0;
+    while (OB_FAIL(ss_delete_tablet_current_version_(tablet_id, ls_id, ls_epoch))) {
+      LOG_WARN("try delete tablet current version failed", K(ret), K(tablet_id), K(ls_id), K(ls_epoch), K(retry_count));
+      retry_count++;
+      usleep(1000 * 1000); // sleep 1s for each time
+      if (retry_count > 60) { // 1min
+        LOG_ERROR("failed to delete tablet current version", K(ret), K(tablet_id), K(ls_id), K(ls_epoch), K(retry_count));
+        break;
+      }
+    }
   }
 
   return ret;

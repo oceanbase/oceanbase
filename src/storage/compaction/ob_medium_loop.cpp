@@ -183,9 +183,7 @@ void ObMediumLoop::add_event_and_diagnose(const ObScheduleTabletFunc &func)
     LOG_INFO("all tablet major merge finish", K(merged_version), K_(loop_cnt));
 
     DEL_SUSPECT_INFO(MEDIUM_MERGE, UNKNOW_LS_ID, UNKNOW_TABLET_ID, share::ObDiagnoseTabletType::TYPE_MEDIUM_MERGE);
-    if (OB_TMP_FAIL(MTL(ObTenantCompactionProgressMgr *)->update_progress_status(
-        merge_version_,
-        share::ObIDag::DAG_STATUS_FINISH))) {
+    if (OB_TMP_FAIL(MTL(ObTenantCompactionProgressMgr *)->finish_progress(merge_version_))) {
       LOG_WARN("failed to finish progress", K(tmp_ret), K_(merge_version));
     }
 

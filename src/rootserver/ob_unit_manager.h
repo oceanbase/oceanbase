@@ -893,8 +893,7 @@ private:
       share::ObResourcePool *resource_pool);
   int cancel_migrate_unit(
       const share::ObUnit &unit,
-      const bool migrate_from_server_can_migrate_in,
-      const bool is_gts_unit);
+      const bool migrate_from_server_can_migrate_in);
   int check_split_pool_name_condition(
       const common::ObIArray<share::ObResourcePoolName> &split_pool_name_list);
   int check_split_pool_zone_condition(

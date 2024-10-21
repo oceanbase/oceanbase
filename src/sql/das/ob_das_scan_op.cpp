@@ -92,7 +92,11 @@ OB_DEF_SERIALIZE(ObDASScanRtDef)
     is_for_foreign_check_,
     fb_read_tx_uncommitted_,
     key_ranges_,
-    ss_key_ranges_);
+    ss_key_ranges_,
+    task_count_,
+    scan_op_id_,
+    scan_rows_,
+    row_width_);
   return ret;
 }
 
@@ -115,7 +119,11 @@ OB_DEF_DESERIALIZE(ObDASScanRtDef)
     is_for_foreign_check_,
     fb_read_tx_uncommitted_,
     key_ranges_,
-    ss_key_ranges_);
+    ss_key_ranges_,
+    task_count_,
+    scan_op_id_,
+    scan_rows_,
+    row_width_);
   if (OB_SUCC(ret)) {
     (void)ObSQLUtils::adjust_time_by_ntp_offset(timeout_ts_);
   }
@@ -141,7 +149,11 @@ OB_DEF_SERIALIZE_SIZE(ObDASScanRtDef)
     is_for_foreign_check_,
     fb_read_tx_uncommitted_,
     key_ranges_,
-    ss_key_ranges_);
+    ss_key_ranges_,
+    task_count_,
+    scan_op_id_,
+    scan_rows_,
+    row_width_);
   return len;
 }
 

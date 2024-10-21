@@ -169,7 +169,8 @@ int ObPluginVectorIndexUtils::read_object_from_vid_rowkey_table_iter(ObObj *inpu
       if (OB_ITER_END != ret) {
         LOG_WARN("failed to get next row from next table.", K(ret));
       } else {
-        ret = OB_SUCCESS;
+        // do nothing
+        LOG_INFO("vid is removed", K(ret), K(rowkey));
       }
     } else {
       const ObIArray<share::schema::ObColumnParam *> *out_col_param
@@ -251,6 +252,7 @@ int ObPluginVectorIndexUtils::read_vector_info(ObPluginVectorIndexAdaptor *adapt
                (storage::ObTableScanParam, data_scan_param)) {
     ObArenaAllocator vid_id_scan_allocator("VecIdxTaskSC1", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObArenaAllocator data_scan_allocator("VecIdxTaskSC2", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    ObArenaAllocator batch_temp_allocator("VecIdxTaskSC3", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     uint32_t alloc_size = (ada_ctx.get_count() > ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE)
                           ? ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE
                           : ada_ctx.get_count();
@@ -298,30 +300,35 @@ int ObPluginVectorIndexUtils::read_vector_info(ObPluginVectorIndexAdaptor *adapt
       }
 
       for (int64_t j = 0; OB_SUCC(ret) && j < ada_ctx.get_count(); j += ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE) {
+        batch_temp_allocator.reuse();
         int64_t vec_cnt = ada_ctx.get_vec_cnt();
         for (int64_t i = 0; OB_SUCC(ret) && i < vec_cnt; i++) {
+          vid_id_scan_param.key_ranges_.pop_back();
+          data_scan_param.key_ranges_.pop_back();
           if (OB_FAIL(read_object_from_vid_rowkey_table_iter(&(ada_ctx.get_vids()[i+j]),
                                                   vid_id_table_table_id,
                                                   vid_id_scan_param,
                                                   vid_id_iter,
                                                   type,
-                                                  allocator,
+                                                  batch_temp_allocator,
                                                   obj_ptr,
                                                   data_table_rowkey_count))) {
-            LOG_WARN("failed to read obj from 2nd table.", K(ret));
+            if (OB_ITER_END != ret) {
+              LOG_WARN("failed to read obj from 2nd table.", K(ret));
+            } else {
+              ret = OB_SUCCESS; // read next vid
+              output_obj[i].reset();
+            }
           } else if (OB_FAIL(read_object_from_data_table_iter(obj_ptr,
                                                               data_table_rowkey_count,
                                                               data_table_table_id,
                                                               data_scan_param,
                                                               data_iter,
                                                               INDEX_TYPE_IS_NOT,
-                                                              allocator,
+                                                              batch_temp_allocator,
                                                               output_obj[i],
                                                               get_data))) {
             LOG_WARN("failed to read obj from data table.", K(ret));
-          } else {
-            vid_id_scan_param.key_ranges_.pop_back();
-            data_scan_param.key_ranges_.pop_back();
           }
         }
 
@@ -341,7 +348,8 @@ int ObPluginVectorIndexUtils::read_vector_info(ObPluginVectorIndexAdaptor *adapt
     }
     LOG_INFO("memdata sync scan_allocator_usage",
       K(vid_id_scan_allocator.used()), K(vid_id_scan_allocator.total()),
-      K(data_scan_allocator.used()), K(data_scan_allocator.total()));
+      K(data_scan_allocator.used()), K(data_scan_allocator.total()),
+      K(batch_temp_allocator.used()), K(batch_temp_allocator.total()));
   }
 
   if (OB_NOT_NULL(tsc_service)) {
@@ -583,7 +591,8 @@ int ObPluginVectorIndexUtils::refresh_memdata(ObLSID &ls_id,
         LOG_WARN("fail to read local tablet", KR(ret), K(ls_id), K(INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL), KPC(adapter));
       } else {
         ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, adapter->get_tenant_id());
-        ObVectorQueryAdaptorResultContext ada_ctx(adapter->get_tenant_id(), &allocator, &tmp_allocator);
+        ObArenaAllocator batch_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, adapter->get_tenant_id());
+        ObVectorQueryAdaptorResultContext ada_ctx(adapter->get_tenant_id(), &allocator, &tmp_allocator, &batch_allocator);
         if (OB_FAIL(adapter->check_delta_buffer_table_readnext_status(&ada_ctx, delta_buf_iter, target_scn))) {
           LOG_WARN("fail to check_delta_buffer_table_readnext_status.", K(ret));
         }

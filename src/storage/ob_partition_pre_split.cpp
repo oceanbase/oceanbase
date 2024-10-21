@@ -793,7 +793,7 @@ int ObPartitionPreSplit::generate_all_partition_schema(
             if (OB_FAIL(tmp_part.assign(*ori_part))) {
               LOG_WARN("[PRE_SPLIT] fail to assign original part", K(ret), K(cur_part_idx));
             } else if (FALSE_IT(tmp_part.set_part_idx(cur_part_idx))){
-            } else if (FALSE_IT(tmp_part.set_is_empty_partition_name(true))) { // generate new name for not split part
+            } else if (FALSE_IT(tmp_part.set_is_empty_partition_name(false))) { // not generate new name for not split part
             } else if (OB_FAIL(all_partition_schema.add_partition(tmp_part))) {
               LOG_WARN("[PRE_SPLIT] fail to add new partition", K(ret), K(tmp_part), K(cur_part_idx));
             } else {
@@ -992,6 +992,10 @@ int ObPartitionPreSplit::modify_partition_func_type_if_need(ObTableSchema &new_t
   return ret;
 }
 
+/*
+  目前只有创建全局索引表，need_generate_part_name才会为true
+  如果是重建全局索引表，need_generate_part_name为false
+*/
 int ObPartitionPreSplit::build_split_tablet_partition_schema(
     const int64_t tenant_id,
     const ObTabletID &source_tablet_id,
@@ -1344,6 +1348,7 @@ int ObPartitionPreSplit::build_tablet_pre_split_ranges(
 {
   int ret = OB_SUCCESS;
 
+  split_ranges_.reset(); // reset range
   ObSplitSampler range_builder;
   ObArray<ObNewRange> tmp_ranges;
   ObArray<ObString> part_columns_name;

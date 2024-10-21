@@ -36,6 +36,8 @@ public:
   int init(int64_t data_block_size, common::ObCompressorType compressor_type);
   template <typename T>
   int write_item(const T &item);
+  template <typename T>
+  int read_item(int64_t pos, T &item);
   bool has_item() const { return pos_ > header_size_; }
   int64_t get_pos() const { return pos_; }
   Header &get_header() { return header_; }
@@ -224,6 +226,25 @@ int ObDirectLoadDataBlockEncoder<Header, align>::write_item(const T &item)
       ret = common::OB_BUF_NOT_ENOUGH;
     } else if (OB_FAIL(item.serialize(buf_, buf_size_, pos_))) {
       STORAGE_LOG(WARN, "fail to serialize item", KR(ret));
+    }
+  }
+  return ret;
+}
+
+template <typename Header, bool align>
+template <typename T>
+int ObDirectLoadDataBlockEncoder<Header, align>::read_item(int64_t pos, T &item)
+{
+  int ret = common::OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = common::OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObDirectLoadDataBlockEncoder not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(pos < header_size_ || pos >= pos_)) {
+    ret = common::OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid args", KR(ret), K(header_size_), K(pos_), K(pos));
+  } else {
+    if (OB_FAIL(item.deserialize(buf_, pos_, pos))) {
+      STORAGE_LOG(WARN, "fail to deserialize item", KR(ret), K(pos_), K(pos));
     }
   }
   return ret;

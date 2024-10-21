@@ -235,7 +235,18 @@ int ObExprReplace::eval_replace(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &exp
   } else if (text->is_null()
              || (is_mysql && from->is_null())
              || (is_mysql && NULL != to && to->is_null())) {
-    if (is_mysql && !from->is_null() && 0 == from->len_) {
+    ObExpr *from_expr = expr.args_[1];
+    int64_t from_len = 0;
+    if (!ob_is_text_tc(from_expr->datum_meta_.type_)) {
+      from_len = from->len_;
+    } else {
+      ObLobLocatorV2 locator(from->get_string(), from_expr->obj_meta_.has_lob_header());
+      if (OB_FAIL(locator.get_lob_data_byte_len(from_len))) {
+        LOG_WARN("get lob data byte length failed", K(ret), K(locator));
+      }
+    }
+    if (OB_FAIL(ret)){
+    } else if (is_mysql && !from->is_null() && 0 == from_len) {
       ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
       const ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
       uint64_t compat_version = 0;

@@ -47,7 +47,8 @@ public:
       int16_t t_count_  : 1;
       int16_t t_minmax_ : 1;
       int16_t t_sum_    : 1;
-      int16_t reserved_ : 13;
+      int16_t t_rb_build_agg_ : 1;
+      int16_t reserved_ : 12;
     };
     int16_t t_flag_;
   };

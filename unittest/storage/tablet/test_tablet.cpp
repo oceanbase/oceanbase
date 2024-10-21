@@ -609,6 +609,13 @@ TEST_F(TestTablet, reproducing_bug_53174886)
   reproducing_bug();
 }
 
+TEST_F(TestTablet, test_ddl_replay_status_compat)
+{
+  ObITable::TableType ddl_table_type;
+  ObCSReplicaDDLReplayStatus ddl_replay_status;
+  ASSERT_EQ(serialization::encoded_length(ddl_table_type), serialization::encoded_length(ddl_replay_status));
+}
+
 }  // end namespace unittest
 }  // end namespace oceanbase
 

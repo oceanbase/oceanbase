@@ -172,7 +172,7 @@ int ObIndexBuilder::drop_index_on_failed(const ObDropIndexArg &arg, obrpc::ObDro
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected index table nullptr", K(ret), K(index_id));
         } else if (OB_FAIL(new_index_schemas.push_back(*index_table_schema))) {
-          LOG_WARN("fail to push vec rowkey vid table schema", K(ret), KPC(index_table_schema));
+          LOG_WARN("fail to push index table schema", K(ret), KPC(index_table_schema));
         }
       }
       if (OB_FAIL(ret)) {
@@ -348,7 +348,7 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &arg, obrpc::ObDropIndexRes 
       ObDDLTaskRecord task_record;
       bool has_other_domain_index = false;
       const bool is_vec_or_fts_or_multivalue_index = index_table_schema->is_fts_or_multivalue_index() || index_table_schema->is_vec_index();
-      const bool is_inner_and_fts_index = arg.is_inner_ && index_table_schema->is_fts_index();
+      const bool is_inner_and_fts_index = arg.is_inner_ && !arg.is_parent_task_dropping_fts_index_ && index_table_schema->is_fts_index();
       const bool need_check_fts_index_conflict = !arg.is_inner_ && index_table_schema->is_fts_index();
       const bool is_inner_and_multivalue_index = arg.is_inner_ && index_table_schema->is_multivalue_index();
       const bool is_inner_and_vec_index = arg.is_inner_ && !arg.is_vec_inner_drop_ && index_table_schema->is_vec_index();
@@ -770,22 +770,26 @@ int ObIndexBuilder::submit_rebuild_index_task(
 
 int ObIndexBuilder::recognize_fts_index_schemas(
       const common::ObIArray<share::schema::ObTableSchema> &index_schemas,
+      const bool is_parent_task_dropping_fts_index,
       int64_t &index_ith,
       int64_t &aux_doc_word_ith,
       int64_t &aux_rowkey_doc_ith,
-      int64_t &aux_doc_rowkey_ith)
+      int64_t &domain_index_ith,
+      int64_t &aux_doc_rowkey_ith,
+      int64_t &aux_multivalue_ith)
 {
   int ret = OB_SUCCESS;
-  index_ith = -1;
-  if (OB_UNLIKELY(1 != index_schemas.count() && 4 != index_schemas.count() && 3 != index_schemas.count())) {
+  index_ith = 0;
+  aux_doc_word_ith = -1;
+  aux_rowkey_doc_ith = -1;
+  domain_index_ith = -1;
+  aux_doc_rowkey_ith = -1;
+  aux_multivalue_ith = -1;
+
+  if (OB_UNLIKELY(!is_parent_task_dropping_fts_index && 1 != index_schemas.count() && 4 != index_schemas.count() && 3 != index_schemas.count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(index_schemas));
-  } else if (index_schemas.count() == 1) {
-    index_ith = 0;
   } else {
-    aux_doc_word_ith = -1;
-    aux_rowkey_doc_ith = -1;
-    aux_doc_rowkey_ith = -1;
     for (int64_t i = 0; OB_SUCC(ret) && i < index_schemas.count(); ++i) {
       if (index_schemas.at(i).is_rowkey_doc_id()) {
         if (OB_UNLIKELY(-1 != aux_rowkey_doc_ith)) {
@@ -801,6 +805,14 @@ int ObIndexBuilder::recognize_fts_index_schemas(
         } else {
           aux_doc_rowkey_ith = i;
         }
+      } else if (index_schemas.at(i).is_fts_index_aux()) {
+        if (OB_UNLIKELY(-1 != domain_index_ith)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpeted error, there are multiple aux fts index tables", K(ret), K(index_schemas));
+        } else {
+          domain_index_ith = i;
+          index_ith = domain_index_ith;
+        }
       } else if (index_schemas.at(i).is_fts_doc_word_aux()) {
         if (OB_UNLIKELY(-1 != aux_doc_word_ith)) {
           ret = OB_ERR_UNEXPECTED;
@@ -808,11 +820,17 @@ int ObIndexBuilder::recognize_fts_index_schemas(
         } else {
           aux_doc_word_ith = i;
         }
-      } else if (OB_UNLIKELY(-1 != index_ith)) {
+      } else if (index_schemas.at(i).is_multivalue_index_aux()) {
+        if (OB_UNLIKELY(-1 != aux_multivalue_ith)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpeted error, there are multiple aux doc word tables", K(ret), K(index_schemas));
+        } else {
+          aux_multivalue_ith = i;
+          index_ith = aux_multivalue_ith;
+        }
+      } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpeted error, there are multiple user index tables", K(ret), K(index_schemas));
-      } else {
-        index_ith = i;
       }
     }
   }
@@ -833,6 +851,7 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
   int64_t index_ith = 0;
   int64_t aux_doc_word_ith = -1;
   int64_t aux_rowkey_doc_ith = -1;
+  int64_t fts_domain_index_ith = -1;
   int64_t aux_doc_rowkey_ith = -1;
   int64_t aux_multivalue_ith = -1;
   int64_t vec_rowkey_vid_ith = -1;
@@ -845,15 +864,14 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
   const int64_t FTS_INDEX_COUNT = 4;
   const int64_t FTS_OR_MULTIVALUE_INDEX_COUNT = 3;
   const int64_t VEC_INDEX_COUNT = 5;
-
   if (OB_UNLIKELY(index_schemas.count() != NORMAL_INDEX_COUNT &&
-                  index_schemas.count() != FTS_INDEX_COUNT &&
-                  index_schemas.count() != FTS_OR_MULTIVALUE_INDEX_COUNT &&
+                  !arg.is_parent_task_dropping_fts_index_ && index_schemas.count() != FTS_INDEX_COUNT &&
+                  !arg.is_parent_task_dropping_multivalue_index_ && index_schemas.count() != FTS_OR_MULTIVALUE_INDEX_COUNT &&
                   !arg.is_vec_inner_drop_ && index_schemas.count() != VEC_INDEX_COUNT)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid index schema count", K(ret), K(index_schemas));
-  } else if (index_schemas.at(0).is_fts_index() && OB_FAIL(recognize_fts_index_schemas(index_schemas, index_ith, aux_doc_word_ith,
-          aux_rowkey_doc_ith, aux_doc_rowkey_ith))) {
+  } else if (index_schemas.at(0).is_fts_index() && OB_FAIL(recognize_fts_index_schemas(index_schemas, arg.is_parent_task_dropping_fts_index_, index_ith, aux_doc_word_ith,
+          aux_rowkey_doc_ith, fts_domain_index_ith, aux_doc_rowkey_ith, aux_multivalue_ith))) {
     LOG_WARN("fail to recognize index and aux table from schema array", K(ret));
   } else if (index_schemas.at(0).is_vec_index() && OB_FAIL(recognize_vec_index_schemas(index_schemas, arg.is_vec_inner_drop_, index_ith, vec_rowkey_vid_ith,
           vec_vid_rowkey_ith, vec_domain_index_ith, vec_index_id_ith, vec_snapshot_data_ith))) {
@@ -867,8 +885,8 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
   } else {
     const ObTableSchema &index_schema = index_schemas.at(index_ith);
     const bool is_drop_vec_task = (!arg.is_inner_ && index_schema.is_vec_delta_buffer_type()) || arg.is_vec_inner_drop_;  // inner drop or user drop
-    const bool is_drop_fts_task = !arg.is_inner_ && index_schema.is_fts_index_aux();
-    const bool is_drop_multivalue_task = !arg.is_inner_ && index_schema.is_multivalue_index_aux();
+    const bool is_drop_fts_task = (!arg.is_inner_ && index_schema.is_fts_index_aux()) || arg.is_parent_task_dropping_fts_index_;
+    const bool is_drop_multivalue_task = (!arg.is_inner_ && index_schema.is_multivalue_index_aux()) || arg.is_parent_task_dropping_multivalue_index_;
     const bool is_drop_fts_or_multivalue_task = is_drop_fts_task || is_drop_multivalue_task;
 
     if (OB_UNLIKELY(!index_schema.is_valid())) {
@@ -880,15 +898,16 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
                                              || vec_index_id_ith < 0 || vec_index_id_ith >= index_schemas.count()
                                              || vec_snapshot_data_ith < 0 || vec_snapshot_data_ith >= index_schemas.count()))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected error, invalid aux table id for fts index", K(ret), K(is_drop_vec_task),
+      LOG_WARN("unexpected error, invalid aux table id for vec index", K(ret), K(is_drop_vec_task),
           K(vec_rowkey_vid_ith), K(vec_vid_rowkey_ith), K(vec_index_id_ith), K(vec_snapshot_data_ith), K(index_schemas.count()));
-    } else if (OB_UNLIKELY(is_drop_fts_task && (aux_rowkey_doc_ith < 0 || aux_rowkey_doc_ith >= index_schemas.count()
+    } else if (OB_UNLIKELY(is_drop_fts_task && !arg.is_parent_task_dropping_fts_index_
+                                            && (aux_rowkey_doc_ith < 0 || aux_rowkey_doc_ith >= index_schemas.count()
                                              || aux_doc_rowkey_ith < 0 || aux_doc_rowkey_ith >= index_schemas.count()
                                              || aux_doc_word_ith < 0 || aux_doc_word_ith >= index_schemas.count()))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error, invalid aux table id for fts index", K(ret), K(is_drop_fts_task),
           K(aux_rowkey_doc_ith), K(aux_doc_rowkey_ith), K(aux_doc_word_ith), K(index_schemas.count()));
-    } else if (OB_UNLIKELY(is_drop_multivalue_task && (aux_rowkey_doc_ith < 0 || aux_rowkey_doc_ith >= index_schemas.count()
+    } else if (OB_UNLIKELY(is_drop_multivalue_task && !arg.is_parent_task_dropping_multivalue_index_ && (aux_rowkey_doc_ith < 0 || aux_rowkey_doc_ith >= index_schemas.count()
                                                       || aux_doc_rowkey_ith < 0 || aux_doc_rowkey_ith >= index_schemas.count()))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error, invalid aux table id for multivalue index", K(ret), K(is_drop_multivalue_task),
@@ -936,13 +955,14 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
                                  arg.consumer_group_id_,
                                  &allocator,
                                  &arg);
-
-      param.aux_rowkey_doc_schema_ = &(index_schemas.at(aux_rowkey_doc_ith));
-      param.aux_doc_rowkey_schema_ = &(index_schemas.at(aux_doc_rowkey_ith));
-      if (is_drop_fts_task) {
-        param.aux_doc_word_schema_ = &(index_schemas.at(aux_doc_word_ith));
+      param.aux_rowkey_doc_schema_ = (-1 == aux_rowkey_doc_ith) ? nullptr : &(index_schemas.at(aux_rowkey_doc_ith));
+      param.aux_doc_rowkey_schema_ = (-1 == aux_doc_rowkey_ith) ? nullptr : &(index_schemas.at(aux_doc_rowkey_ith));
+      if (is_drop_multivalue_task) {
+        param.fts_index_aux_schema_ = (-1 == aux_multivalue_ith) ? nullptr : &(index_schemas.at(aux_multivalue_ith));
+      } else if (is_drop_fts_task) {
+        param.fts_index_aux_schema_ = (-1 == fts_domain_index_ith) ? nullptr : &(index_schemas.at(fts_domain_index_ith));
+        param.aux_doc_word_schema_ = (-1 == aux_doc_word_ith) ? nullptr : &(index_schemas.at(aux_doc_word_ith));
       }
-
       if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().create_ddl_task(param, trans, task_record))) {
         LOG_WARN("fail to create drop fts index task", K(ret), K(param));
       }

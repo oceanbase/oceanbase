@@ -310,6 +310,7 @@ int ObMviewCompactionHelper::create_inner_session(
     session->set_compatibility_mode(is_oracle_mode ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE);
     session->get_ddl_info().set_major_refreshing_mview(true);
     session->get_ddl_info().set_refreshing_mview(true);
+    session->set_database_id(database_id);
     LOG_INFO("[MVIEW COMPACTION]: Succ to create inner session", K(ret), K(tenant_id), K(database_id), KP(session));
   }
   if (OB_FAIL(ret)) {

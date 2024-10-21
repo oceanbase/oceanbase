@@ -6167,6 +6167,9 @@ int ObSelectResolver::resolve_win_func_exprs(ObRawExpr *&expr, common::ObIArray<
       if (OB_ISNULL(win_expr)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid arg", K(ret), K(win_expr));
+      } else if (OB_UNLIKELY(select_stmt->is_set_stmt())) {
+        ret = OB_ERR_AGGREGATE_ORDER_FOR_UNION;
+        LOG_WARN("can't use window function in union stmt", K(ret));
       } else if (OB_ISNULL(agg_expr)) {
       } else if (OB_FAIL(agg_expr->formalize(session_info_))) {
         LOG_WARN("formalize agg expr failed", K(ret));

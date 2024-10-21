@@ -191,6 +191,10 @@ _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENU
                                           ::oceanbase::storage::ObUnUseCtx, \
                                           36,\
                                           MV_NOTICE_SAFE)
+  GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObMVUpdateSCNHelper,\
+                                          ::oceanbase::storage::ObUnUseCtx, \
+                                          37,\
+                                          MV_UPDATE_SCN)
   // # 余留位置（此行之前占位）
 #undef GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION
 #endif

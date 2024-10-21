@@ -71,7 +71,6 @@ int ObDBMSSchedJobMaster::init(common::ObMySQLProxy *sql_proxy,
     LOG_WARN("trace id is null", K(ret));
   } else {
     tenant_server_cache_.reset();
-    trace_id_ = ObCurTraceId::get();
     self_addr_ = GCONF.self_addr_;
     schema_service_ = schema_service;
     job_rpc_proxy_ = GCTX.dbms_sched_job_rpc_proxy_;
@@ -175,11 +174,7 @@ int ObDBMSSchedJobMaster::scheduler()
   if (!inited_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("not init yet", K(ret));
-  } else if (OB_ISNULL(trace_id_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("null trace_id_ ptr", K(ret), K(trace_id_));
   } else {
-    ObCurTraceId::set(trace_id_);
     while (OB_SUCC(ret) && !stoped_) {
       bool is_leader = is_leader_;
       ObLink* ptr = NULL;

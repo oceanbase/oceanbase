@@ -604,20 +604,45 @@ int ObDDLRedoReplayExecutor::filter_redo_log_(
   bool is_cs_replica = ls_->is_cs_replica();
   can_skip = false;
   if (redo_info.is_not_compat_cs_replica()) {
-    // normal
+    /*
+     * The redo log is write when cs replica is not visible or no need to process when doing offline ddl. It may be:
+     *   CASE 1: DATA_VERSION < 4.3.3, cs replica is not supported at all.
+     *   CASE 2: Execute offline ddl when the 1st C replica is adding into the cluster.
+     *   CASE 3: It is full direct load.
+     *   CASE 4: The table schema is column store originally.
+     *
+     * And if redo_info.is_commpat_cs_replica(), tablet will be cs_replica_global_visible_when_ddl
+     */
   } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tablet handle", K(ret), K(tablet_handle));
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet is null", K(ret), K(tablet_handle));
-  } else if (is_cs_replica && redo_info.is_cs_replica_row_store()) {
-    can_skip = true;
-  } else if (!is_cs_replica && redo_info.is_cs_replica_column_store()) {
-    can_skip = true;
-  } else if (is_cs_replica && redo_info.is_cs_replica_column_store() && tablet->is_row_store()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected tablet status", K(ret), K(redo_info), "ls_meta", ls_->get_ls_meta(), KPC(tablet));
+  } else if (is_cs_replica) {
+    const ObTabletMeta &tablet_meta = tablet->get_tablet_meta();
+    if (tablet_meta.is_cs_replica_global_visible_when_ddl()) {
+      if (tablet_meta.is_cs_replica_global_visible_and_replay_row_store()) {
+        // row store redo log is replayed in migration src, so need continue replay row store redo log even local is cs replica
+        if (redo_info.is_cs_replica_column_store()) {
+          can_skip = true;
+        }
+      } else if (tablet_meta.is_cs_replica_global_visible_and_replay_column_store()) {
+        if (redo_info.is_cs_replica_row_store()) {
+          can_skip = true;
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected ddl replay status when replaying ddl redo", K(ret), KPC(tablet));
+      }
+    } else {
+      // ddl replay status is not cs replica visible, means that ls leader only write row store redo log.
+      // so redo info is not compat_cs_replica() and has been processed above
+    }
+  } else { // ls is not cs replica, only replay row store redo log (table schema is row store)
+    if (redo_info.is_cs_replica_column_store()) {
+      can_skip = true;
+    }
   }
   LOG_TRACE("[CS-Replica] Finish filter redo log", K(ret), K(redo_info), K(is_cs_replica), K(can_skip), KPC(tablet), K(ls_));
 #ifdef ERRSIM

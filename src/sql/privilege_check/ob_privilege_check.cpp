@@ -2468,8 +2468,7 @@ int get_drop_tenant_stmt_need_privs(
     if (OB_SYS_TENANT_ID != session_priv.tenant_id_) {
       ret = OB_ERR_NO_PRIVILEGE;
       LOG_WARN("Only sys tenant can do this operation", K(ret));
-    } else if (stmt->get_tenant_name() == OB_SYS_TENANT_NAME
-        || stmt->get_tenant_name() == OB_GTS_TENANT_NAME) {
+    } else if (stmt->get_tenant_name() == OB_SYS_TENANT_NAME) {
       ret = OB_ERR_NO_PRIVILEGE;
       LOG_WARN("Can not drop sys or gts tenant", K(ret));
     } else {

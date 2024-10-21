@@ -13,12 +13,41 @@
 #ifndef OB_ADMIN_TEST_IO_DEVICE_EXECUTOR_H_
 #define OB_ADMIN_TEST_IO_DEVICE_EXECUTOR_H_
 #include <gtest/gtest.h>
+#include "share/backup/ob_backup_io_adapter.h"
 #include "../ob_admin_executor.h"
 #include "deps/oblib/src/lib/ob_define.h"                    // OB_MAX_URI_LENGTH
 #include "share/backup/ob_backup_struct.h"                  // OB_MAX_BACKUP_STORAGE_INFO_LENGTH
 
 namespace oceanbase {
 namespace tools {
+
+struct TestObjectStorageInterfaceContext
+{
+  TestObjectStorageInterfaceContext();
+
+  ObBackupIoAdapter util_;
+  share::ObBackupStorageInfo storage_info_;
+
+  const char *test_dir_name_ = "test_dir_path";
+  const char *single_file_name_ = "single_file.txt";
+  const char *appendable_file_name_ = "appendable_file.txt";
+  const char *upload_file_name_ = "upload_file.txt";
+  const int64_t SINGLE_FILE_LENGTH = 2L * 1024 * 1024;
+  const int64_t APPENDABLE_FILE_LENGTH = 32L * 1024 * 1024;
+  const int64_t UPLOAD_FILE_LENGTH = 6L * 1024 * 1024;
+  const int64_t S3_FILE_COUNT = 10;
+  const int64_t OTHER_FILE_COUNT = 3;
+  char *single_file_content_;
+  char *appendable_file_content_;
+  char *upload_file_content_;
+  bool single_file_is_exist_;
+  bool appendable_file_is_exist_;
+  bool upload_file_is_exist_;
+  char test_dir_path_[OB_MAX_URI_LENGTH];
+  char single_file_path_[OB_MAX_URI_LENGTH];
+  char appendable_file_path_[OB_MAX_URI_LENGTH];
+  char upload_file_path_[OB_MAX_URI_LENGTH];
+};
 
 class ObAdminTestIODeviceExecutor : public ObAdminExecutor
 {
@@ -41,6 +70,17 @@ private:
   int test_partial_clog_file_();
   int test_consume_clog_file_();
   int test_restore_data_();
+  int test_object_storage_interface_();
+  int test_object_storage_interface_prepare_(TestObjectStorageInterfaceContext &ctx);
+  int test_object_storage_interface_async_upload_(TestObjectStorageInterfaceContext &ctx);
+  int test_object_storage_interface_is_exist_(TestObjectStorageInterfaceContext &ctx);
+  int test_object_storage_interface_list_file_(TestObjectStorageInterfaceContext &ctx);
+  int test_object_storage_interface_list_directories_(TestObjectStorageInterfaceContext &ctx);
+  int test_object_storage_interface_get_file_length_(TestObjectStorageInterfaceContext &ctx);
+  int test_object_storage_interface_read_(TestObjectStorageInterfaceContext &ctx);
+  int test_object_storage_interface_del_(TestObjectStorageInterfaceContext &ctx);
+  int test_multi_step_write_appendable_file_(TestObjectStorageInterfaceContext &ctx);
+  int test_list_before_complete_multipart_write_();
   int generate_random_str_(char *&buf, const int64_t size);
   int print_usage_();
 

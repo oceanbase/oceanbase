@@ -683,6 +683,25 @@ int ObBackupCleanTaskMgr::delete_tenant_diagnose_info_()
   return ret;
 }
 
+// file:///obbackup/backup_set_1_full/infos/major_compaction_mview_dep_tablet_list.obbak
+int ObBackupCleanTaskMgr::delete_major_compaction_mview_dep_tablet_list_()
+{
+  int ret = OB_SUCCESS;
+  ObBackupPath path;
+  ObBackupSetDesc desc;
+  ObBackupDest backup_set_dest;
+  desc.backup_set_id_ = backup_set_info_.backup_set_id_;
+  desc.backup_type_ = backup_set_info_.backup_type_;
+  if (OB_FAIL(ObBackupPathUtil::construct_backup_set_dest(backup_dest_, desc, backup_set_dest))) {
+    LOG_WARN("fail to construct backup set dest", K(ret));
+  } else if (OB_FAIL(ObBackupPathUtil::get_major_compaction_mview_dep_tablet_list_path(backup_set_dest, path))) {
+    LOG_WARN("failed to get major compaction mview dep tablet list path", K(ret));
+  }  else if (OB_FAIL(share::ObBackupCleanUtil::delete_backup_file(path, backup_dest_.get_storage_info()))) {
+    LOG_WARN("failed to delete backup file", K(ret), K(task_attr_), K(path));
+  }
+  return ret;
+}
+
 // file:///obbackup/backup_set_1_full/infos/meta_info/
 int ObBackupCleanTaskMgr::delete_meta_info_dir_()
 {
@@ -731,6 +750,41 @@ int ObBackupCleanTaskMgr::delete_minor_data_info_dir_()
   if (OB_FAIL(ObBackupPathUtil::get_ls_info_data_info_dir_path(backup_dest_, desc,
       backup_data_type, backup_set_info_.minor_turn_id_, path))) {
     LOG_WARN("failed to get ls info data info path", K(ret));
+  } else if (OB_FAIL(share::ObBackupCleanUtil::delete_backup_dir_files(path, backup_dest_.get_storage_info()))) {
+    LOG_WARN("failed to delete backup file", K(ret), K(task_attr_), K(path));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/infos/user_data_info_turn_X/
+int ObBackupCleanTaskMgr::delete_user_data_info_dir_()
+{
+  int ret = OB_SUCCESS;
+  ObBackupPath path;
+  ObBackupSetDesc desc;
+  desc.backup_set_id_ = backup_set_info_.backup_set_id_;
+  desc.backup_type_ = backup_set_info_.backup_type_;
+  share::ObBackupDataType backup_data_type;
+  backup_data_type.set_user_data_backup();
+  if (OB_FAIL(ObBackupPathUtil::get_ls_info_data_info_dir_path(backup_dest_, desc,
+      backup_data_type, backup_set_info_.minor_turn_id_, path))) {
+    LOG_WARN("failed to get ls info data info path", K(ret));
+  } else if (OB_FAIL(share::ObBackupCleanUtil::delete_backup_dir_files(path, backup_dest_.get_storage_info()))) {
+    LOG_WARN("failed to delete backup file", K(ret), K(task_attr_), K(path));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/infos/table_list/
+int ObBackupCleanTaskMgr::delete_table_list_dir_()
+{
+  int ret = OB_SUCCESS;
+  ObBackupPath path;
+  ObBackupSetDesc desc;
+  desc.backup_set_id_ = backup_set_info_.backup_set_id_;
+  desc.backup_type_ = backup_set_info_.backup_type_;
+  if (OB_FAIL(ObBackupPathUtil::get_table_list_dir_path(backup_dest_, desc, path))) {
+    LOG_WARN("failed to get table list dir path", K(ret));
   } else if (OB_FAIL(share::ObBackupCleanUtil::delete_backup_dir_files(path, backup_dest_.get_storage_info()))) {
     LOG_WARN("failed to delete backup file", K(ret), K(task_attr_), K(path));
   }
@@ -882,6 +936,10 @@ int ObBackupCleanTaskMgr::delete_backup_set_meta_info_files_()
     LOG_WARN("failed to delete major data info file", K(ret));
   } else if (OB_FAIL(delete_minor_data_info_dir_())) {
     LOG_WARN("failed to delete minor data info file", K(ret));
+  } else if (OB_FAIL(delete_user_data_info_dir_())) {
+    LOG_WARN("failed to delete minor data info file", K(ret));
+  } else if (OB_FAIL(delete_table_list_dir_())) {
+    LOG_WARN("failed to delete table list dir", K(ret));
   } else if (OB_FAIL(ObBackupPathUtil::get_ls_info_dir_path(backup_dest_, desc, infos_path))) {
     LOG_WARN("failed to get backup log stream info path", K(ret));
   } else if (OB_FAIL(delete_data_info_turn_files_(infos_path))) {
@@ -890,6 +948,8 @@ int ObBackupCleanTaskMgr::delete_backup_set_meta_info_files_()
     LOG_WARN("failed to delete tenant locality info", K(ret)); 
   } else if (OB_FAIL(delete_tenant_diagnose_info_())) {
     LOG_WARN("failed to delete tenant diagnose info", K(ret));
+  } else if (OB_FAIL(delete_major_compaction_mview_dep_tablet_list_())) {
+    LOG_WARN("failed to delete major compaction mview dep tablet list", K(ret));
   } else if (OB_FAIL(delete_backup_dir_(infos_path))) {
     LOG_WARN("failed to delete backup infos dir", K(ret));
   } else if (OB_FAIL(delete_single_backup_set_info_())) {

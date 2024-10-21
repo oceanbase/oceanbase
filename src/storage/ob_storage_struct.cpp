@@ -350,7 +350,7 @@ ObDDLTableStoreParam::ObDDLTableStoreParam()
     data_format_version_(0),
     ddl_redo_callback_(nullptr),
     ddl_finish_callback_(nullptr),
-    ddl_table_type_(ObITable::MAX_TABLE_TYPE)
+    ddl_replay_status_(CS_REPLICA_REPLAY_NONE)
 {
 
 }
@@ -363,7 +363,7 @@ bool ObDDLTableStoreParam::is_valid() const
     && ddl_snapshot_version_ >= 0
     && ddl_execution_id_ >= 0
     && data_format_version_ >= 0
-    && ObITable::is_valid_ddl_table_type(ddl_table_type_);
+    && is_valid_cs_replica_ddl_status(ddl_replay_status_);
 }
 
 UpdateUpperTransParam::UpdateUpperTransParam()

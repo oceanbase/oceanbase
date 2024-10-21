@@ -105,29 +105,21 @@ enum ObStorageAccessType
   OB_STORAGE_ACCESS_NOHEAD_READER = 1,
   OB_STORAGE_ACCESS_ADAPTIVE_READER = 2,
   OB_STORAGE_ACCESS_OVERWRITER = 3,
-  // OB_STORAGE_ACCESS_APPENDER and OB_STORAGE_ACCESS_RANDOMWRITER both correspond to ObStorageAppender.
+  // OB_STORAGE_ACCESS_APPENDER correspond to ObStorageAppender.
   // In cases where the destination is S3, a special format is utilized to emulate the append interface.
   // Upon completion of data writing,
   // it is recommended to invoke the seal_file interface to write a seal meta file.
   // This step is designed to enhance subsequent access performance to the object.
   // Skipping this step does not compromise data integrity but may impact performance.
   OB_STORAGE_ACCESS_APPENDER = 4,
-  // TODO @fangdan: remove this type
-  // OB_STORAGE_ACCESS_APPENDER and OB_STORAGE_ACCESS_RANDOMWRITER both correspond to ObStorageAppender.
-  // In cases where the destination is S3, a special format is utilized to emulate the append interface.
-  // Upon completion of data writing,
-  // it is recommended to invoke the seal_file interface to write a seal meta file.
-  // This step is designed to enhance subsequent access performance to the object.
-  // Skipping this step does not compromise data integrity but may impact performance.
-  OB_STORAGE_ACCESS_RANDOMWRITER = 5,
   // When utilizing the multipart writer interface,
   // it is crucial to invoke the complete interface upon successful data upload to ensure object visibility.
   // The object remains invisible until the complete interface responds successfully.
   // If an error occur before invoking complete or during its execution,
   // it is imperative to call the abort interface to delete the already uploaded data.
-  OB_STORAGE_ACCESS_MULTIPART_WRITER = 6,
-  OB_STORAGE_ACCESS_DIRECT_MULTIPART_WRITER = 7,
-  OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER = 8,
+  OB_STORAGE_ACCESS_MULTIPART_WRITER = 5,
+  OB_STORAGE_ACCESS_DIRECT_MULTIPART_WRITER = 6,
+  OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER = 7,
   OB_STORAGE_ACCESS_MAX_TYPE
 };
 

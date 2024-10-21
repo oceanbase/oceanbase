@@ -166,12 +166,11 @@ namespace oceanbase
 {
 namespace sql
 {
-DEF_COMPILE_STR_FUNC_INIT(%COLL_NAME0%, %idx0%);
-DEF_COMPILE_STR_FUNC_INIT(%COLL_NAME1%, %idx1%);
-DEF_COMPILE_STR_FUNC_INIT(%COLL_NAME2%, %idx2%);
+%COMPILE_FUN_LIST%
 } // end sql
 } // end oceanbase'''
 
+COMPILE_UNIT_CNT = 8
 
 def rm_compile_part():
   rm_str = "rm -rf ob_expr_str_cmp_func_part_*.cpp"
@@ -182,17 +181,21 @@ def rm_compile_part():
 
 def generate_compile_parts():
   fname_temp = "ob_expr_str_cmp_func_part_%d.cpp"
-  for start in range(0, len(DEFINED_COLLS), 3):
-    text = compile_template
-    for i in range(3):
+  fn_cnt = int((len(DEFINED_COLLS) + COMPILE_UNIT_CNT  - 1) / COMPILE_UNIT_CNT)
+  fn_list_text = ""
+  for i in range(fn_cnt):
+    fn_list_text += "DEF_COMPILE_STR_FUNC_INIT(%COLL_NAME" + str(i) + "%, %unit_idx" + str(i) + "%);\n"
+  for start in range(0, len(DEFINED_COLLS), fn_cnt):
+    text = compile_template.replace("%COMPILE_FUN_LIST%", fn_list_text)
+    for i in range(fn_cnt):
       coll_temp = "%COLL_NAME" + str(i) + "%"
-      idx_temp = "%idx" + str(i) + "%"
+      idx_temp = "%unit_idx" + str(i) + "%"
       if start + i >= len(DEFINED_COLLS):
         text = text.replace(coll_temp, "CS_TYPE_MAX")
       else:
         text = text.replace(coll_temp, DEFINED_COLLS[start + i])
       text = text.replace(idx_temp, str(start + i))
-    f_name = fname_temp % (start / 3)
+    f_name = fname_temp % (start / fn_cnt)
     with open(f_name, 'a') as f:
       f.write(text)
 

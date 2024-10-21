@@ -220,7 +220,12 @@ int ObTableDirectInsertCtx::get_tablet_ids(
       break;
     }
   }
-  if (OB_SUCC(ret) && OB_NOT_NULL(table_part_info)) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(table_part_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null table_part_info",
+        KP(table_part_info), K(table_id), K(sql_ctx));
+  } else {
     const ObCandiTableLoc &loc = table_part_info->get_phy_tbl_location_info();
     const ObCandiTabletLocIArray &tablet_locs = loc.get_phy_part_loc_info_list();
     for (int64_t i = 0; OB_SUCC(ret) && (i < tablet_locs.count()); ++i) {
@@ -228,6 +233,11 @@ int ObTableDirectInsertCtx::get_tablet_ids(
       if (OB_FAIL(tablet_ids.push_back(tablet_id))) {
         LOG_WARN("failed to add tablet id", KR(ret), K(tablet_id));
       }
+    }
+    if (OB_SUCC(ret) && OB_UNLIKELY(tablet_ids.empty())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected empty tablet_ids",
+          K(tablet_ids), K(table_id), KPC(table_part_info), K(tablet_locs), K(sql_ctx));
     }
   }
   return ret;

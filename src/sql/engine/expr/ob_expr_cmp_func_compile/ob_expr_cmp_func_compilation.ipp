@@ -17,7 +17,7 @@ namespace oceanbase
 namespace sql
 {
 
-static const int COMPILATION_UNIT = 32;
+static const int COMPILATION_UNIT = 8;
 
 #define DEF_COMPILATION_VARS(name, max_val, unit_idx)                                              \
   constexpr int name##_unit_size =                                                                 \
@@ -32,8 +32,8 @@ static const int COMPILATION_UNIT = 32;
   {                                                                                                \
     DEF_COMPILATION_VARS(ty, ObMaxType, unit_idx);                                                 \
     DEF_COMPILATION_VARS(tc, ObMaxTC, unit_idx);                                                   \
-    Ob2DArrayConstIniter<ty_end, ObMaxType, TypeExprCmpFuncIniter, ty_start, 0>::init();           \
-    Ob2DArrayConstIniter<tc_end, ObMaxTC, TCExprCmpFuncIniter, tc_start, 0>::init();               \
+    Ob2DArrayConstIniter<ty_end, ObMaxType, TypeExprCmpIniter, ty_start, 0>::init();           \
+    Ob2DArrayConstIniter<tc_end, ObMaxTC, TCExprCmpIniter, tc_start, 0>::init();               \
   }
 
 } // end sql

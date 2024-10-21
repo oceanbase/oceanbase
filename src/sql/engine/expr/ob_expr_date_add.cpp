@@ -305,14 +305,6 @@ int ObExprDateAdjust::calc_date_adjust(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   return ret;
 }
 
-int ObExprDateAdjust::is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const {
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(check_first_param_not_time(exprs, is_valid))) {
-    LOG_WARN("fail to check if first param is time", K(ret), K(exprs));
-  }
-  return ret;
-}
-
 DEF_SET_LOCAL_SESSION_VARS(ObExprDateAdjust, raw_expr) {
   int ret = OB_SUCCESS;
   if (is_mysql_mode()) {

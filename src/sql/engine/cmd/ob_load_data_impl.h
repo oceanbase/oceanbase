@@ -511,6 +511,7 @@ struct ObShuffleTaskHandle {
   ObShuffleResult result;
   ObSEArray<ObParserErrRec, 16> err_records;
   common::ObMemAttr attr;
+  share::schema::ObSchemaGetterGuard schema_guard;
   TO_STRING_KV("task_id", result.task_id_);
 };
 

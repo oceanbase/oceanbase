@@ -19,6 +19,7 @@
 #include "rootserver/ob_root_service.h"
 #include "rootserver/ob_index_builder.h"
 #include "storage/ddl/ob_ddl_lock.h"
+#include "share/ob_ddl_sim_point.h"
 
 using namespace oceanbase::share;
 
@@ -111,7 +112,7 @@ int ObFtsIndexBuildTask::init(
     tenant_id_ = tenant_id;
     task_id_ = task_id;
     schema_version_ = schema_version;
-    parallelism_ = parallelism;
+    parallelism_ = std::max(parallelism, 1L);
     consumer_group_id_ = consumer_group_id;
     parent_task_id_ = parent_task_id;
     if (snapshot_version > 0) {
@@ -121,6 +122,7 @@ int ObFtsIndexBuildTask::init(
     target_object_id_ = index_schema->get_table_id();
     index_table_id_ = index_schema->get_table_id();
     create_index_arg_.exec_tenant_id_ = tenant_id;
+    create_index_arg_.parallelism_ = parallelism_;
     if (index_schema->is_rowkey_doc_id()) {
       rowkey_doc_aux_table_id_ = index_table_id_;
     } else if (index_schema->is_fts_index_aux()) {
@@ -358,7 +360,6 @@ int ObFtsIndexBuildTask::check_health()
         ret = check_errsim_error();
       }
     #endif
-
     if (OB_FAIL(ret) && !ObIDDLTask::in_ddl_retry_white_list(ret)
       && static_cast<ObDDLTaskStatus>(task_status_) != ObDDLTaskStatus::FAIL) {
       const ObDDLTaskStatus old_status = static_cast<ObDDLTaskStatus>(task_status_);
@@ -644,51 +645,76 @@ int ObFtsIndexBuildTask::prepare_aux_index_tables()
   const ObIndexType domain_index_aux_type = is_fts_task() ?
     ObIndexType::INDEX_TYPE_FTS_INDEX_LOCAL : ObIndexType::INDEX_TYPE_NORMAL_MULTIVALUE_LOCAL ;
   const ObIndexType fts_doc_word_type = ObIndexType::INDEX_TYPE_FTS_DOC_WORD_LOCAL;
-  if (OB_UNLIKELY(!is_inited_)) {
+  ObDDLTaskStatus next_status;
+  if(OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(get_next_status(next_status))) {
+    LOG_WARN("failed to get next status", K(ret));
   } else if (ObDDLTaskStatus::GENERATE_DOC_AUX_SCHEMA != task_status_) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("task status not match", K(ret), K(task_status_));
-  } else if (OB_FAIL(prepare_aux_table(doc_rowkey_type,
+  } else {
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = OB_E(EventTable::EN_FTS_INDEX_BUILD_DOC_ROWKEY_FAILED) OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        LOG_WARN("errsim ddl execute building fts index failed", KR(ret));
+      }
+    }
+#endif
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(prepare_aux_table(doc_rowkey_type,
                                        doc_rowkey_task_submitted_,
                                        doc_rowkey_aux_table_id_,
                                        doc_rowkey_task_id_))) {
-    LOG_WARN("failed to prepare aux table", K(ret),
-        K(doc_rowkey_task_submitted_), K(doc_rowkey_aux_table_id_));
-  } else if (OB_FAIL(prepare_aux_table(domain_index_aux_type,
+      LOG_WARN("failed to prepare aux table", K(ret),
+          K(doc_rowkey_task_submitted_), K(doc_rowkey_aux_table_id_));
+    } else {
+#ifdef ERRSIM
+      if (OB_SUCC(ret)) {
+        ret = OB_E(EventTable::EN_FTS_INDEX_BUILD_INDEX_FAILED) OB_SUCCESS;
+        if (OB_FAIL(ret)) {
+          LOG_WARN("errsim ddl execute building fts index failed", KR(ret));
+        }
+      }
+#endif
+     if (OB_FAIL(ret)) {
+     } else if (OB_FAIL(prepare_aux_table(domain_index_aux_type,
                                        domain_index_aux_task_submitted_,
                                        domain_index_aux_table_id_,
                                        domain_index_aux_task_id_))) {
-    LOG_WARN("failed to prepare aux table", K(ret),
-        K(domain_index_aux_task_submitted_), K(domain_index_aux_table_id_));
-  } else if (!is_fts_task()) {
-    fts_doc_word_task_submitted_ = true;
-  } else if (OB_FAIL(prepare_aux_table(fts_doc_word_type,
+       LOG_WARN("failed to prepare aux table", K(ret),
+           K(domain_index_aux_task_submitted_), K(domain_index_aux_table_id_));
+    } else if (!is_fts_task()) {
+      fts_doc_word_task_submitted_ = true;
+    } else {
+#ifdef ERRSIM
+      if (OB_SUCC(ret)) {
+        ret = OB_E(EventTable::EN_FTS_INDEX_BUILD_DOC_WORD_FAILED) OB_SUCCESS;
+        if (OB_FAIL(ret)) {
+          LOG_WARN("errsim ddl execute building fts index failed", KR(ret));
+        }
+      }
+#endif
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(prepare_aux_table(fts_doc_word_type,
                                        fts_doc_word_task_submitted_,
                                        fts_doc_word_aux_table_id_,
                                        fts_doc_word_task_id_))) {
-    LOG_WARN("failed to prepare aux table", K(ret),
-        K(fts_doc_word_task_submitted_), K(fts_doc_word_aux_table_id_));
+        LOG_WARN("failed to prepare aux table", K(ret),
+            K(fts_doc_word_task_submitted_), K(fts_doc_word_aux_table_id_));
+        }
+      }
+    }
   }
   if (OB_SUCC(ret) && doc_rowkey_task_submitted_ &&
       domain_index_aux_task_submitted_ && fts_doc_word_task_submitted_) {
     state_finished = true;
   }
-
   if (state_finished || OB_FAIL(ret)) {
-    ObDDLTaskStatus next_status = static_cast<ObDDLTaskStatus>(task_status_);
-    ObDDLTaskStatus old_status = static_cast<ObDDLTaskStatus>(task_status_);
-    if (OB_FAIL(ret)) {
-      next_status = ObIDDLTask::in_ddl_retry_white_list(ret) ? next_status : ObDDLTaskStatus::FAIL;
-    } else if (OB_FAIL(get_next_status(next_status))) {
-      next_status = ObDDLTaskStatus::FAIL;
-      LOG_WARN("failed to get next status", K(ret), K(next_status));
-    }
-    (void)switch_status(next_status, next_status != ObDDLTaskStatus::FAIL, ret);
-    LOG_WARN("generate schema finished", K(ret), K(parent_task_id_), K(task_id_), K(old_status), K(next_status), K(*this));
-
-    ret = OB_SUCCESS;
+    (void)switch_status(next_status, true, ret);
+    LOG_INFO("generate schema finished", K(ret), K(parent_task_id_), K(task_id_), K(*this));
   }
   return ret;
 }
@@ -1492,6 +1518,7 @@ int ObFtsIndexBuildTask::clean_on_failed()
     LOG_WARN("task status not match", K(ret), K(task_status_));
   } else {
     // 1. cancel ongoing build index task
+    int64_t not_finished_cnt = 0;
     for (task_iter iter = dependent_task_result_map_.begin();
         OB_SUCC(ret) && iter != dependent_task_result_map_.end(); ++iter) {
       const uint64_t task_key = iter->first;
@@ -1514,6 +1541,7 @@ int ObFtsIndexBuildTask::clean_on_failed()
             if (OB_ENTRY_NOT_EXIST == ret) {
               // ongoing child task
               ret = OB_SUCCESS;
+              not_finished_cnt++;
               ObMySQLTransaction trans;
               if (OB_FAIL(trans.start(&root_service_->get_sql_proxy(),
                                       dst_tenant_id_))) {
@@ -1539,6 +1567,8 @@ int ObFtsIndexBuildTask::clean_on_failed()
     }
     // 2. drop already built index
     if (OB_FAIL(ret)) {
+    } else if (not_finished_cnt > 0) {
+      LOG_INFO("child task not finished, not submit drop fts index task.", K(not_finished_cnt));
     } else if (!drop_index_task_submitted_) {
       if (OB_FAIL(submit_drop_fts_index_task())) {
         LOG_WARN("failed to drop fts index", K(ret));
@@ -1565,112 +1595,73 @@ int ObFtsIndexBuildTask::submit_drop_fts_index_task()
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
-  const ObTableSchema *domain_index_aux_schema = nullptr;
-  const ObTableSchema *rowkey_doc_schema = nullptr;
-  const ObTableSchema *doc_rowkey_schema = nullptr;
-  const ObTableSchema *fts_doc_word_schema = nullptr;
-  const ObTableSchema *data_table_schema = nullptr;
+  const ObTableSchema *index_table_schema = nullptr;
   const ObDatabaseSchema *database_schema = nullptr;
+  const ObTableSchema *data_table_schema = nullptr;
+
+  obrpc::ObDropIndexArg drop_index_arg;
+  obrpc::ObDropIndexRes drop_index_res;
+
   ObString index_name;
+  ObSqlString drop_index_sql;
+  bool is_index_exist = true;
+  ObMultiVersionSchemaService &schema_service = root_service_->get_schema_service();
+  bool has_aux_table = (domain_index_aux_table_id_ != OB_INVALID_ID);
+  uint64_t index_table_id = has_aux_table ? domain_index_aux_table_id_ : index_table_id_;
 
-  if (OB_FAIL(get_task_status())) {
-    LOG_WARN("failed to get fts index status", K(ret));
-  } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().
-                                           get_tenant_schema_guard(tenant_id_,
-                                                                   schema_guard))) {
-    LOG_WARN("fail to get schema guard", K(ret));
-  } else if (OB_FAIL(schema_guard.check_formal_guard())) {
-    LOG_WARN("schema_guard is not formal", K(ret));
+  if (OB_ISNULL(root_service_)) {
+    ret = OB_BAD_NULL_ERROR;
+    LOG_WARN("should not be null", K(ret));
+  } else if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
+    LOG_WARN("get tenant schema guard failed", K(ret), K(tenant_id_));
+  } else if (OB_INVALID_ID != rowkey_doc_aux_table_id_ &&
+             OB_FAIL(drop_index_arg.index_ids_.push_back(rowkey_doc_aux_table_id_))) {
+    LOG_WARN("fail to push back rowkey_doc_aux_table_id_", K(ret), K(rowkey_doc_aux_table_id_));
+  } else if (OB_INVALID_ID != doc_rowkey_aux_table_id_ &&
+             OB_FAIL(drop_index_arg.index_ids_.push_back(doc_rowkey_aux_table_id_))) {
+    LOG_WARN("fail to push back doc_rowkey_aux_table_id_", K(ret), K(doc_rowkey_aux_table_id_));
+  } else if (OB_INVALID_ID != domain_index_aux_table_id_ &&
+             OB_FAIL(drop_index_arg.index_ids_.push_back(domain_index_aux_table_id_))) {
+    LOG_WARN("fail to push back domain_index_aux_table_id_", K(ret), K(domain_index_aux_table_id_));
+  } else if (OB_INVALID_ID != fts_doc_word_aux_table_id_ &&
+             OB_FAIL(drop_index_arg.index_ids_.push_back(fts_doc_word_aux_table_id_))) {
+    LOG_WARN("fail to push back fts_doc_word_aux_table_id_", K(ret), K(fts_doc_word_aux_table_id_));
+  } else if (drop_index_arg.index_ids_.count() <= 0) {
+    LOG_INFO("no table need to be drop, skip", K(ret)); // no table exist, skip drop
+  } else if (schema_guard.get_table_schema(tenant_id_, object_id_, data_table_schema)) {
+    LOG_WARN("fail to get table schema", K(ret), K(object_id_));
+  } else if (OB_ISNULL(data_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("data table schema is null", K(ret), KP(data_table_schema));
+  } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id_, data_table_schema->get_database_id(), database_schema))) {
+    LOG_WARN("get database schema failed", KR(ret), K(data_table_schema->get_database_id()));
+  } else if(OB_ISNULL(database_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("database schema is null", KR(ret), KP(database_schema), KP(data_table_schema));
   } else {
-    if (OB_FAIL(schema_guard.get_table_schema(tenant_id_,
-                                              domain_index_aux_table_id_,
-                                              domain_index_aux_schema))) {
-      if (OB_TABLE_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("fail to get table schema", K(ret), K(domain_index_aux_table_id_));
-      }
-    } else if (OB_INVALID_ID != rowkey_doc_aux_table_id_ &&
-               OB_FAIL(schema_guard.get_table_schema(tenant_id_,
-                                                     rowkey_doc_aux_table_id_,
-                                                     rowkey_doc_schema))) {
-      if (OB_TABLE_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("fail to get table schema", K(ret), K(rowkey_doc_aux_table_id_));
-      }
-    } else if (OB_INVALID_ID != doc_rowkey_aux_table_id_ &&
-               OB_FAIL(schema_guard.get_table_schema(tenant_id_,
-                                                     doc_rowkey_aux_table_id_,
-                                                     doc_rowkey_schema))) {
-      if (OB_TABLE_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("fail to get table schema", K(ret), K(doc_rowkey_aux_table_id_));
-      }
-    } else if (is_fts_task() &&
-               OB_INVALID_ID != fts_doc_word_aux_table_id_ &&
-               OB_FAIL(schema_guard.get_table_schema(tenant_id_,
-                                                     fts_doc_word_aux_table_id_,
-                                                     fts_doc_word_schema))) {
-      if (OB_TABLE_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("fail to get table schema", K(ret), K(fts_doc_word_aux_table_id_));
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(domain_index_aux_schema)) {
-    // TODO yunshan.tys fix create drop fts index when fts index schema is not generated
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fts index aux schema is nullptr, fail to roll back", K(ret));
-    } else if (OB_FAIL(domain_index_aux_schema->get_index_name(index_name))) {
-      LOG_WARN("fail to get domain index name", K(ret), KPC(domain_index_aux_schema));
-    } else if (!is_rowkey_doc_succ_ && !is_doc_rowkey_succ_ && !is_fts_doc_word_succ_ && !is_domain_aux_succ_) {
-      drop_index_task_submitted_ = true;
-      LOG_WARN("all aux table not create success, needn't submit task", K(ret), K(is_fts_task()), K(*this));
+    int64_t ddl_rpc_timeout = 0;
+    drop_index_arg.is_inner_          = true;
+    drop_index_arg.tenant_id_         = tenant_id_;
+    drop_index_arg.exec_tenant_id_    = tenant_id_;
+    drop_index_arg.index_table_id_    = index_table_id;
+    drop_index_arg.index_name_        = data_table_schema->get_table_name();  // not in used
+    drop_index_arg.index_action_type_ = obrpc::ObIndexArg::DROP_INDEX;
+    drop_index_arg.is_add_to_scheduler_ = true;
+    drop_index_arg.task_id_           = task_id_; // parent task
+    drop_index_arg.session_id_        = data_table_schema->get_session_id();
+    drop_index_arg.table_name_        = data_table_schema->get_table_name();
+    drop_index_arg.database_name_     = database_schema->get_database_name_str();
+    drop_index_arg.is_parent_task_dropping_fts_index_ = true;  // if want to drop only one index, is_parent_task_dropping_fts_index_ should be false, else should be true.
+    if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(data_table_schema->get_all_part_num() + data_table_schema->get_all_part_num(), ddl_rpc_timeout))) {
+      LOG_WARN("failed to get ddl rpc timeout", KR(ret));
+    } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, DROP_INDEX_RPC_FAILED))) {
+      LOG_WARN("ddl sim failure", KR(ret), K(tenant_id_), K(task_id_));
+    } else if (OB_FAIL(root_service_->get_common_rpc_proxy().timeout(ddl_rpc_timeout).drop_index_on_failed(drop_index_arg, drop_index_res))) {
+      LOG_WARN("drop index failed", KR(ret), K(ddl_rpc_timeout));
     } else {
-      ObDDLType ddl_type = is_fts_task() ? ObDDLType::DDL_DROP_FTS_INDEX : ObDDLType::DDL_DROP_MULVALUE_INDEX;
-      ObDDLTaskRecord task_record;
-      obrpc::ObDropIndexArg drop_index_arg;
-      drop_index_arg.index_name_ = index_name;
-      drop_index_arg.tenant_id_ = domain_index_aux_schema->get_tenant_id();
-      drop_index_arg.index_table_id_ = domain_index_aux_schema->get_table_id();
-
-      ObCreateDDLTaskParam param(tenant_id_,
-                                 ddl_type,
-                                 is_domain_aux_succ_? domain_index_aux_schema : nullptr,
-                                 nullptr,
-                                 0/*object_id*/,
-                                 domain_index_aux_schema->get_schema_version(),
-                                 parallelism_,
-                                 consumer_group_id_,
-                                 &allocator_,
-                                 &drop_index_arg);
-      param.tenant_data_version_ = data_format_version_;
-      param.aux_rowkey_doc_schema_ = is_rowkey_doc_succ_ ? rowkey_doc_schema : nullptr;
-      param.aux_doc_rowkey_schema_ = is_doc_rowkey_succ_ ? doc_rowkey_schema : nullptr;
-      param.aux_doc_word_schema_ = is_fts_doc_word_succ_ ? fts_doc_word_schema : nullptr;
-      if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().
-                  create_ddl_task(param, *GCTX.sql_proxy_, task_record))) {
-        if (OB_ENTRY_EXIST == ret) {
-          ret = OB_SUCCESS;
-        } else {
-          LOG_WARN("submit drop fts index ddl task failed", K(ret));
-        }
-      } else if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().
-                         schedule_ddl_task(task_record))) {
-        LOG_WARN("fail to schedule ddl task", K(ret), K(task_record));
-      } else {
-        if (OB_SUCC(ret)) {
-          drop_index_task_submitted_ = true;
-          drop_index_task_id_ = task_record.task_id_;
-          LOG_INFO("add drop fts index task", K(ret), K(domain_index_aux_table_id_),
-              K(rowkey_doc_aux_table_id_), K(doc_rowkey_aux_table_id_),
-              K(fts_doc_word_aux_table_id_), K(create_index_arg_.index_name_),
-              K(domain_index_aux_schema->get_schema_version()), K(param.schema_version_));
-        }
-      }
+      drop_index_task_submitted_ = true;
+      drop_index_task_id_ = drop_index_res.task_id_;
+      LOG_INFO("success submit drop fts index task", K(ret), K(drop_index_task_id_));
     }
   }
   return ret;
@@ -1749,7 +1740,88 @@ int ObFtsIndexBuildTask::validate_checksum()
 
 int ObFtsIndexBuildTask::collect_longops_stat(ObLongopsValue &value)
 {
-  return OB_SUCCESS;
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  const ObDDLTaskStatus status = static_cast<ObDDLTaskStatus>(task_status_);
+  databuff_printf(stat_info_.message_, MAX_LONG_OPS_MESSAGE_LENGTH, pos, "TENANT_ID: %ld, TASK_ID: %ld, ", tenant_id_, task_id_);
+  switch(status) {
+    case ObDDLTaskStatus::PREPARE: {
+      if (OB_FAIL(OB_FAIL(databuff_printf(stat_info_.message_,
+                                          MAX_LONG_OPS_MESSAGE_LENGTH,
+                                          pos,
+                                          "STATUS: PREPARE")))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+      break;
+    }
+    case ObDDLTaskStatus::GENERATE_ROWKEY_DOC_SCHEMA: {
+      if (OB_FAIL(databuff_printf(stat_info_.message_,
+                                  MAX_LONG_OPS_MESSAGE_LENGTH,
+                                  pos,
+                                  "STATUS: GENERATE_ROWKEY_DOC_SCHEMA, ROWKEY_DOC_TASK_ID: %ld", rowkey_doc_task_id_))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+      break;
+    }
+    case ObDDLTaskStatus::WAIT_ROWKEY_DOC_TABLE_COMPLEMENT: {
+      if (OB_FAIL(databuff_printf(stat_info_.message_,
+                  MAX_LONG_OPS_MESSAGE_LENGTH,
+                  pos,
+                  "STATUS: WAIT_ROWKEY_DOC_TABLE_COMPLEMENT, \
+                  DOC_ROWKEY_TASK_ID: %ld, DOMAIN_INDEX_AUX_TASK_ID: %ld, FTS_DOC_WORD_TASK_ID: %ld", \
+                  doc_rowkey_task_id_, domain_index_aux_task_id_, fts_doc_word_task_id_))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+      break;
+    }
+    case ObDDLTaskStatus::GENERATE_DOC_AUX_SCHEMA: {
+      if (OB_FAIL(databuff_printf(stat_info_.message_,
+                          MAX_LONG_OPS_MESSAGE_LENGTH,
+                          pos,
+                          "STATUS: GENERATE_DOC_AUX_SCHEMA"))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+      break;
+    }
+    case ObDDLTaskStatus::VALIDATE_CHECKSUM: {
+      if (OB_FAIL(databuff_printf(stat_info_.message_,
+                          MAX_LONG_OPS_MESSAGE_LENGTH,
+                          pos,
+                          "STATUS: VALIDATE_CHECKSUM"))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+      break;
+    }
+    case ObDDLTaskStatus::FAIL: {
+      if (OB_FAIL(databuff_printf(stat_info_.message_,
+                          MAX_LONG_OPS_MESSAGE_LENGTH,
+                          pos,
+                          "STATUS: CLEAN ON FAIL"))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+      break;
+    }
+    case ObDDLTaskStatus::SUCCESS: {
+      if (OB_FAIL(databuff_printf(stat_info_.message_,
+                          MAX_LONG_OPS_MESSAGE_LENGTH,
+                          pos,
+                          "STATUS: CLEAN ON SUCCESS"))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+      break;
+    }
+    default:
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("not expected status", K(ret), K(status), K(*this));
+      break;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, DDL_TASK_COLLECT_LONGOPS_STAT_FAILED))) {
+    LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
+  } else if (OB_FAIL(copy_longops_stat(value))) {
+    LOG_WARN("failed to collect common longops stat", K(ret));
+  }
+  return ret;
 }
 
 int ObFtsIndexBuildTask::cleanup_impl()
@@ -1869,6 +1941,29 @@ int ObFtsIndexBuildTask::check_column_checksum(const ColumnChecksumInfo &a, cons
   }
   if (b_table_column_checksums.created()) {
     b_table_column_checksums.destroy();
+  }
+  return ret;
+}
+
+int ObFtsIndexBuildTask::update_task_message(common::ObISQLClient &proxy)
+{
+  int ret = OB_SUCCESS;
+  char *buf = nullptr;
+  int64_t pos = 0;
+  ObString msg;
+  common::ObArenaAllocator allocator("ObFtsIndexBuild");
+  const int64_t serialize_param_size = get_serialize_param_size();
+
+  if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(serialize_param_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory", KR(ret), K(serialize_param_size));
+  } else if (OB_FAIL(serialize_params_to_message(buf, serialize_param_size, pos))) {
+    LOG_WARN("failed to serialize params to message", KR(ret));
+  } else {
+    msg.assign(buf, serialize_param_size);
+    if (OB_FAIL(ObDDLTaskRecordOperator::update_message(proxy, tenant_id_, task_id_, msg))) {
+      LOG_WARN("failed to update message", KR(ret));
+    }
   }
   return ret;
 }

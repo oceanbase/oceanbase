@@ -53,6 +53,7 @@ const char *ObMultiDataSourcePrinter::to_str_mds_type(const ObTxDataSourceType &
     TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, TABLET_BINDING);
     TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, MV_PUBLISH_SCN);
     TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, MV_NOTICE_SAFE);
+    TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, MV_UPDATE_SCN);
 
     TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, MAX_TYPE);
   }

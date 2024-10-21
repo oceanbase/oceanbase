@@ -393,6 +393,11 @@ public:
   ObCostTableScanInfo *get_est_cost_info()
   { return est_cost_info_; }
 
+  int init_est_cost_simple_info(const ObCostTableScanInfo &est_info)
+  { return est_cost_simple_info_.init(est_info); }
+  ObCostTableScanSimpleInfo& get_est_cost_simple_info() { return est_cost_simple_info_; }
+  const ObCostTableScanSimpleInfo& get_est_cost_simple_info() const { return est_cost_simple_info_; }
+
   int set_update_info();
 
   void set_part_ids(const common::ObIArray<int64_t> *part_ids) { part_ids_ = part_ids; }
@@ -825,6 +830,7 @@ protected: // memeber variables
   // 记录该表是否采样、采样方式、比例等信息
   SampleInfo sample_info_;
   ObCostTableScanInfo *est_cost_info_;
+  ObCostTableScanSimpleInfo est_cost_simple_info_;
   BaseTableOptInfo *table_opt_info_;
   common::ObSEArray<common::ObEstRowCountRecord, 4, common::ModulePageAllocator, true> est_records_;
 

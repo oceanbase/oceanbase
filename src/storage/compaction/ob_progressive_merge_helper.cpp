@@ -90,29 +90,23 @@ int ObProgressiveMergeMgr::init(
 }
 
 int64_t ObProgressiveMergeMgr::get_result_progressive_merge_step(
-  const ObTabletID &tablet_id,
-  const int64_t column_group_idx) const // parameters are used for print log
+    const ObTabletID &tablet_id,
+    const int64_t column_group_idx) const // parameters are used for print log
 {
   int64_t result_step = MIN(progressive_merge_num_, progressive_merge_step_ + 1);
-  if (data_version_ >= DATA_VERSION_4_3_3_0
-    && finish_cur_round_
-    && result_step < progressive_merge_num_) {
+
+  if (data_version_ >= DATA_VERSION_4_3_3_0 && finish_cur_round_ && result_step < progressive_merge_num_) {
     if (0 == column_group_idx) { // only print once
       FLOG_INFO("finish cur progressive_merge_round", K(tablet_id), K(result_step), K_(progressive_merge_round),
         K_(progressive_merge_step), K_(progressive_merge_num));
-
+    }
+    result_step = progressive_merge_num_; // this result will be used to update pregressive merge step on sstable meta
 #ifdef ERRSIM
     SERVER_EVENT_SYNC_ADD("merge_errsim", "progressive_merge_finish",
-                          "tablet_id", tablet_id,
+                          "tablet_id", tablet_id.id(),
                           "progressive_merge_round", progressive_merge_round_,
-                          "progressive_merge_step", progressive_merge_step_,
+                          "progressive_merge_step", result_step,
                           "progressive_merge_num", progressive_merge_num_);
-#endif
-    }
-    result_step = progressive_merge_num_;
-#ifdef ERRSIM
-      SERVER_EVENT_SYNC_ADD("merge_errsim", "end_progressive", K(tablet_id),
-          K(result_step), K_(progressive_merge_num));
 #endif
   }
   return result_step;

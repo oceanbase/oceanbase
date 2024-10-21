@@ -22,6 +22,34 @@ namespace oceanbase
 using namespace common;
 namespace sql
 {
+
+int _eval_arg_vec_cast(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
+                                   const EvalBound &bound)
+{
+#define SET_NULLS(out_vec_type)                                                                    \
+  for (int i = bound.start(); i < bound.end(); i++) {                                              \
+    if (eval_flags.at(i) || skip.at(i)) {                                                          \
+      continue;                                                                                    \
+    } else {                                                                                       \
+      static_cast<out_vec_type *>(output_vector)->set_null(i);                                     \
+      eval_flags.set(i);                                                                           \
+    }                                                                                              \
+  }
+  int ret = OB_SUCCESS;
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  VectorFormat out_fmt = expr.get_format(ctx);
+  ObIVector *output_vector = expr.get_vector(ctx);
+  if (out_fmt == VEC_UNIFORM) {
+    SET_NULLS(ObUniformFormat<false>);
+  } else if (out_fmt == VEC_UNIFORM_CONST) {
+    SET_NULLS(ObUniformFormat<true>);
+  } else {
+    SET_NULLS(ObBitmapNullVectorBase);
+  }
+  return ret;
+#undef SET_NULLS
+}
+
 extern int __init_all_vec_cast_funcs();
 
 static int init_vector_cast_ret = __init_all_vec_cast_funcs();

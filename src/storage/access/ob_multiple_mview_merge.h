@@ -46,6 +46,7 @@ public:
     return tables_.empty();
   }
   virtual bool check_table_need_read(const ObITable &table, int64_t &major_version) const override;
+  virtual int alloc_row_store(ObTableAccessContext &context, const ObTableAccessParam &param) override;
 };
 
 // incremental iterator to get incremental row in version range

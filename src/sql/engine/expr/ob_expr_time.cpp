@@ -280,16 +280,6 @@ int ObExprTimeBase::calc(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum
   return ret;
 }
 
-int ObExprTimeBase::is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const {
-  int ret = OB_SUCCESS;
-  if (is_valid_for_generated_col_) {
-    is_valid = is_valid_for_generated_col_;
-  } else if (OB_FAIL(check_first_param_not_time(exprs, is_valid))) {
-    LOG_WARN("fail to check if first param is time", K(ret), K(exprs));
-  }
-  return ret;
-}
-
 DEF_SET_LOCAL_SESSION_VARS(ObExprTimeBase, raw_expr) {
   int ret = OB_SUCCESS;
   if (is_mysql_mode()) {
@@ -341,7 +331,7 @@ int ObExprMicrosecond::calc_microsecond(const ObExpr &expr, ObEvalCtx &ctx, ObDa
 }
 
 ObExprYear::ObExprYear(ObIAllocator &alloc)
-    : ObExprTimeBase(alloc, DT_YEAR, T_FUN_SYS_YEAR, N_YEAR, NOT_VALID_FOR_GENERATED_COL) {};
+    : ObExprTimeBase(alloc, DT_YEAR, T_FUN_SYS_YEAR, N_YEAR, VALID_FOR_GENERATED_COL) {};
 
 ObExprYear::~ObExprYear() {}
 
@@ -351,7 +341,7 @@ int ObExprYear::calc_year(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datu
 }
 
 ObExprMonth::ObExprMonth(ObIAllocator &alloc)
-    : ObExprTimeBase(alloc, DT_MON, T_FUN_SYS_MONTH, N_MONTH, NOT_VALID_FOR_GENERATED_COL) {};
+    : ObExprTimeBase(alloc, DT_MON, T_FUN_SYS_MONTH, N_MONTH, VALID_FOR_GENERATED_COL) {};
 
 ObExprMonth::~ObExprMonth() {}
 
@@ -362,7 +352,7 @@ int ObExprMonth::calc_month(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_da
 }
 
 ObExprMonthName::ObExprMonthName(ObIAllocator &alloc)
-    : ObExprTimeBase(alloc, DT_MON_NAME, T_FUN_SYS_MONTH_NAME, N_MONTH_NAME, NOT_VALID_FOR_GENERATED_COL) {};
+    : ObExprTimeBase(alloc, DT_MON_NAME, T_FUN_SYS_MONTH_NAME, N_MONTH_NAME, VALID_FOR_GENERATED_COL) {};
 
 ObExprMonthName::~ObExprMonthName() {}
 

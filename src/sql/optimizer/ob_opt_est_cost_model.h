@@ -243,7 +243,8 @@ struct ObCostTableScanInfo
      batch_type_(common::ObSimpleBatch::ObBatchType::T_NONE),
      use_column_store_(false),
      at_most_one_range_(false),
-     index_back_with_column_store_(false)
+     index_back_with_column_store_(false),
+     limit_rows_(-1.0)
   { }
   virtual ~ObCostTableScanInfo()
   { }
@@ -260,6 +261,7 @@ struct ObCostTableScanInfo
                K_(prefix_filter_sel), K_(pushdown_prefix_filter_sel),
                K_(postfix_filter_sel), K_(table_filter_sel),
                K_(ss_prefix_ndv), K_(ss_postfix_range_filters_sel),
+               K_(limit_rows),
                K_(use_column_store),
                K_(index_back_with_column_store),
                K_(index_scan_column_group_infos),
@@ -312,6 +314,7 @@ struct ObCostTableScanInfo
   common::ObSEArray<ObCostColumnGroupInfo, 4, common::ModulePageAllocator, true> index_scan_column_group_infos_;
   common::ObSEArray<ObCostColumnGroupInfo, 4, common::ModulePageAllocator, true> index_back_column_group_infos_;
 
+  double limit_rows_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCostTableScanInfo);
 };
@@ -873,6 +876,7 @@ protected:
 
   int cost_index_back(const ObCostTableScanInfo &est_cost_info,
                       double row_count,
+                      double limit_count,
                       double &prefix_filter_sel,
                       double &cost);
 
@@ -883,6 +887,7 @@ protected:
 
   int cost_column_store_index_back(const ObCostTableScanInfo &est_cost_info,
                                     double row_count,
+                                    double limit_count,
                                     double &prefix_filter_sel,
                                     double &cost);
   int cost_row_store_index_scan(const ObCostTableScanInfo &est_cost_info,
@@ -891,6 +896,7 @@ protected:
 
   int cost_row_store_index_back(const ObCostTableScanInfo &est_cost_info,
                                 double row_count,
+                                double limit_count,
                                 double &cost);
   // estimate the network transform and rpc cost for global index
   int cost_global_index_back_with_rp(double row_count,
@@ -927,6 +933,58 @@ protected:
   const ObOptCostModelParameter &cost_params_;
   const OptSystemStat &sys_stat_;
   DISALLOW_COPY_AND_ASSIGN(ObOptEstCostModel);
+};
+
+class ObCostTableScanSimpleInfo {
+  OB_UNIS_VERSION_V(1);
+public:
+  ObCostTableScanSimpleInfo()
+  :is_index_back_(false),
+  is_global_index_(false),
+  part_count_(1),
+  table_micro_blocks_(0),
+  index_micro_blocks_(0),
+  range_count_(1),
+  table_row_count_(1),
+  postix_filter_qual_cost_per_row_(0),
+  table_filter_qual_cost_per_row_(0),
+  index_scan_project_cost_per_row_(0),
+  index_back_project_cost_per_row_(0),
+  row_width_(0),
+  is_spatial_index_(false),
+  index_id_(0)
+  { }
+  ~ObCostTableScanSimpleInfo()=default;
+  int init(const ObCostTableScanInfo &est_cost_info);
+  int calculate_table_dop(double range_row_count,
+                          double index_back_row_count,
+                          int64_t part_cnt,
+                          int64_t cost_threshold_us,
+                          int64_t parallel_degree_limit,
+                          int64_t &table_dop) const;
+  int64_t get_range_columns_count() const { return range_count_; }
+  bool get_is_spatial_index() const { return is_spatial_index_; }
+  int64_t get_index_id() const { return index_id_; }
+
+private:
+  double calculate_table_scan_cost(double range_row_count,
+                                   double index_back_row_count,
+                                   int64_t part_cnt,
+                                   int64_t parallel) const;
+  bool is_index_back_;
+  bool is_global_index_;
+  int64_t part_count_;
+  int64_t table_micro_blocks_;
+  int64_t index_micro_blocks_;
+  int64_t range_count_;
+  double table_row_count_;
+  double postix_filter_qual_cost_per_row_;
+  double table_filter_qual_cost_per_row_;
+  double index_scan_project_cost_per_row_;
+  double index_back_project_cost_per_row_;
+  double row_width_;
+  bool is_spatial_index_;
+  int64_t index_id_;
 };
 
 }

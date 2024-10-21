@@ -11871,5 +11871,47 @@
     "info_cn": "",
     "background_cn": "",
     "ref_url": ""
+  },
+  "pid_file": {
+    "id": 10743,
+    "name": "pid_file",
+    "default_value": "3",
+    "base_value": "3",
+    "data_type": "varchar",
+    "info": "The path name of the file in which the server writes its process ID",
+    "flags": "GLOBAL | READONLY | MYSQL_ONLY",
+    "publish_version": "42110",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html",
+    "placeholder": true
+  },
+  "port": {
+    "id": 10744,
+    "name": "port",
+    "default_value": "3",
+    "base_value": "3",
+    "data_type": "int",
+    "info": "The number of the port on which the server listens for TCP/IP connections",
+    "flags": "GLOBAL | READONLY | MYSQL_ONLY",
+    "publish_version": "42110",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html",
+    "placeholder": true
+  },
+  "socket": {
+    "id": 10745,
+    "name": "socket",
+    "default_value": "3",
+    "base_value": "3",
+    "data_type": "varchar",
+    "info": "the name of the socket file that is used for local client connections",
+    "flags": "GLOBAL | READONLY | MYSQL_ONLY",
+    "publish_version": "42110",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html",
+    "placeholder": true
   }
 }

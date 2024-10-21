@@ -699,9 +699,11 @@ int ObOptimizer::init_parallel_policy(ObDMLStmt &stmt, const ObSQLSessionInfo &s
   int64_t session_force_parallel_dop = ObGlobalHint::UNSET_PARALLEL;
   bool session_enable_auto_dop = false;
   bool session_enable_manual_dop = false;
-  if (OB_ISNULL(ctx_.get_query_ctx())) {
+  if (OB_ISNULL(ctx_.get_query_ctx()) || OB_ISNULL(ctx_.get_exec_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("query ctx is nul", K(ret));
+  } else if (ctx_.get_exec_ctx()->is_force_gen_local_plan()) {
+     ctx_.set_parallel_rule(PXParallelRule::PL_UDF_DAS_FORCE_SERIALIZE);
   } else if (ctx_.has_pl_udf()) {
     //following above rule, but if stmt contain pl_udf, force das, parallel should be 1
     ctx_.set_parallel_rule(PXParallelRule::PL_UDF_DAS_FORCE_SERIALIZE);

@@ -224,7 +224,7 @@ int ObPwjComparer::is_partition_equal(const ObPartition *l_partition,
     if (OB_FAIL(is_row_equal(l_partition->get_high_bound_val(),
                              r_partition->get_high_bound_val(),
                              is_equal))) {
-      LOG_WARN("failed to check is row equal", K(ret));
+      LOG_WARN("failed to check is row equal", K(ret), K(*l_partition), K(*r_partition));
     }
   } else if (OB_FAIL(is_list_partition_equal(l_partition, r_partition, is_equal))) {
     LOG_WARN("failed to check is list partition equal", K(ret));

@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX RS
 
-#include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
 #include "observer/ob_server_struct.h"
 #include "observer/omt/ob_multi_tenant.h"
 #include "rootserver/mview/ob_mview_push_refresh_scn_task.h"
@@ -23,6 +22,7 @@
 #include "share/ob_freeze_info_proxy.h"
 #include "share/backup/ob_backup_data_table_operator.h"
 #include "storage/mview/ob_mview_refresh_stats_purge.h"
+#include "observer/ob_inner_sql_connection.h"
 
 namespace oceanbase {
 namespace rootserver {
@@ -137,10 +137,8 @@ void ObMViewPushRefreshScnTask::runTimerTask()
     } else if (!backup_jobs.empty()) {
       LOG_INFO("[MAJ_REF_MV] backup jobs exist, skip push major refresh mv scn", KR(ret),
                K(tenant_id_));
-    } else if (OB_FAIL(ObMViewInfo::update_major_refresh_mview_scn(trans, tenant_id_,
-                                                                   major_refresh_mv_merge_scn))) {
-      LOG_WARN("fail to update major_refresh_mview_scn", KR(ret), K(tenant_id_),
-                K(major_refresh_mv_merge_scn));
+    } else if (OB_FAIL(update_major_refresh_mview_scn_(tenant_id_, major_refresh_mv_merge_scn, trans))) {
+      LOG_WARN("fail to update major_refresh_mview_scn", KR(ret), K(tenant_id_), K(major_refresh_mv_merge_scn));
     } else {
       LOG_INFO("[MAJ_REF_MV] successfully push major refresh mview refresh scn", K(tenant_id_),
                 K(major_refresh_mv_merge_scn));
@@ -215,6 +213,44 @@ int ObMViewPushRefreshScnTask::check_major_mv_refresh_scn_safety(const uint64_t 
   return ret;
 }
 
+int ObMViewPushRefreshScnTask::update_major_refresh_mview_scn_(
+    const uint64_t tenant_id,
+    const share::SCN &major_refresh_mview_scn,
+    ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  share::SCN min_major_refresh_mview_scn;
+  if (OB_FAIL(OB_FAIL(ObMViewInfo::get_min_major_refresh_mview_scn(trans, tenant_id, INT64_MAX, min_major_refresh_mview_scn)))) {
+    LOG_WARN("fail to get_min_major_refresh_mview_scn", KR(ret), K(tenant_id), K(major_refresh_mview_scn));
+  } else if (!min_major_refresh_mview_scn.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to min_major_refresh_mview_scn is invalid", KR(ret), K(tenant_id), K(major_refresh_mview_scn));
+  } else if (major_refresh_mview_scn <= min_major_refresh_mview_scn) {
+    LOG_INFO("skip update_major_refresh_mview_scn", KR(ret), K(tenant_id), K(major_refresh_mview_scn), K(min_major_refresh_mview_scn));
+  } else {
+    ObMajorRefreshMViewScnArg arg;
+    arg.major_refresh_mview_scn_ = major_refresh_mview_scn;
+    observer::ObInnerSQLConnection *conn = NULL;
+    int MAX_MULTI_BUF_SIZE = 64;
+    char buf[MAX_MULTI_BUF_SIZE];
+    int64_t pos = 0;
+    int64_t buf_len = arg.get_serialize_size();
+    if (OB_ISNULL(conn = dynamic_cast<observer::ObInnerSQLConnection *>
+                         (trans.get_connection()))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("conn is NULL", KR(ret));
+    } else if (OB_FAIL(arg.serialize(buf, buf_len, pos))) {
+      LOG_WARN("fail to serialize", KR(ret), K(arg));
+    } else if (OB_FAIL(conn->register_multi_data_source(MTL_ID(), share::SYS_LS,
+            transaction::ObTxDataSourceType::MV_UPDATE_SCN, buf, buf_len))) {
+      LOG_WARN("fail to register_tx_data", KR(ret), K(arg), K(buf_len));
+    } else if (OB_FAIL(ObMViewInfo::update_major_refresh_mview_scn(trans, tenant_id, major_refresh_mview_scn))) {
+      LOG_WARN("fail to update major_refresh_mview_scn", KR(ret), K(tenant_id), K(major_refresh_mview_scn), K(min_major_refresh_mview_scn));
+    }
+  }
+  return ret;
+}
+
 int ObMViewPushRefreshScnTask::get_major_mv_merge_info_(const uint64_t tenant_id,
                                                         ObISQLClient &sql_client,
                                                         ObIArray<ObMajorMVMergeInfo> &merge_info_array)
@@ -280,6 +316,8 @@ int ObMViewPushRefreshScnTask::get_major_mv_merge_info_(const uint64_t tenant_id
   }
   return ret;
 }
+
+OB_SERIALIZE_MEMBER(ObMajorRefreshMViewScnArg, major_refresh_mview_scn_);
 
 } // namespace rootserver
 } // namespace oceanbase

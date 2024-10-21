@@ -143,7 +143,11 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
     bool can_expand_star = true;
     if (is_materialized_view) {
       uint64_t tenant_data_version = 0;
-      if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+      if (GCTX.is_shared_storage_mode()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("in share storage mode, create materialized view is not supported", KR(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "in share storage mode, create materialized view is");
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
         LOG_WARN("get tenant data version failed", KR(ret));
       } else if (tenant_data_version < DATA_VERSION_4_3_0_0){
         ret = OB_NOT_SUPPORTED;
@@ -516,7 +520,6 @@ int ObCreateViewResolver::resolve_materialized_view_container_table(ParseNode *p
   container_table_schema.set_table_type(ObTableType::USER_TABLE);
   container_table_schema.get_view_schema().reset();
   container_table_schema.set_max_dependency_version(OB_INVALID_VERSION);
-  pctfree_ = 0; // set default pctfree value for non-sys table
   if (OB_FAIL(resolve_partition_option(partition_node, container_table_schema, true))) {
     LOG_WARN("fail to resolve_partition_option", KR(ret));
   } else if (OB_FAIL(set_table_option_to_schema(container_table_schema))) {

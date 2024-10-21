@@ -600,7 +600,11 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
       LOG_WARN("direct-load does not support table required by materialized view refresh", KR(ret));
       FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table required by materialized view refresh", tmp_prefix);
     } else if (ObDirectLoadMethod::is_incremental(method)) { // incremental direct-load
-      if (!ObDirectLoadInsertMode::is_valid_for_incremental_method(insert_mode)) {
+      if (GCTX.is_shared_storage_mode()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("in share storage mode, using incremental direct-load is not supported", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "in share storage mode, using incremental direct-load is not supported");
+      } else if (!ObDirectLoadInsertMode::is_valid_for_incremental_method(insert_mode)) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("using incremental direct-load without inc_replace or normal is not supported", KR(ret));
         FORWARD_USER_ERROR_MSG(ret, "using incremental direct-load without inc_replace or normal is not supported");

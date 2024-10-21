@@ -752,6 +752,7 @@ public:
 
   void reset_attrs_datums(ObEvalCtx &ctx) const;
   OB_INLINE bool is_nested_expr() const { return attrs_cnt_ > 0; }
+  int assign_nested_vector(const ObExpr &other, ObEvalCtx &ctx);
 
 
   OB_INLINE void set_all_not_null(ObEvalCtx &ctx, const int64_t size) {

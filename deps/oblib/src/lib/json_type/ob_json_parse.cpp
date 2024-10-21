@@ -36,7 +36,7 @@ int ObJsonParser::get_tree(ObIAllocator *allocator, const ObString &text, ObJson
 
   if (OB_FAIL(parse_json_text(allocator, text.ptr(), text.length(),
                               syntaxerr, &offset, j_tree, parse_flag, max_depth_config))) {
-    LOG_WARN("fail to parse json text", K(ret), K(text), KCSTRING(syntaxerr));
+    LOG_WARN("fail to parse json text", K(ret), K(text), K(offset), KCSTRING(syntaxerr));
   }
 
   return ret;

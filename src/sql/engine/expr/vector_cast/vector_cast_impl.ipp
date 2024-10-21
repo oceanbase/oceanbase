@@ -68,6 +68,9 @@ struct _eval_arg_impl
   }
 };
 
+OB_NOINLINE int _eval_arg_vec_cast(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
+                                   const EvalBound &bound);
+
 template <VecValueTypeClass in_tc, VecValueTypeClass out_tc, bool implicit>
 struct EvalArgCasterImpl
 {};
@@ -83,28 +86,7 @@ struct EvalArgCasterImpl<VEC_TC_NULL, out_tc, IMPLICIT_CAST_FLAG>
   static int eval_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
                          const EvalBound &bound)
   {
-#define SET_NULLS(out_vec_type)                                                                    \
-  for (int i = bound.start(); i < bound.end(); i++) {                                              \
-    if (eval_flags.at(i) || skip.at(i)) {                                                          \
-      continue;                                                                                    \
-    } else {                                                                                       \
-      static_cast<out_vec_type *>(output_vector)->set_null(i);                                     \
-      eval_flags.set(i);                                                                           \
-    }                                                                                              \
-  }
-    int ret = OB_SUCCESS;
-    ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
-    VectorFormat out_fmt = expr.get_format(ctx);
-    ObIVector *output_vector = expr.get_vector(ctx);
-    if (out_fmt == VEC_UNIFORM) {
-      SET_NULLS(ObUniformFormat<false>);
-    } else if (out_fmt == VEC_UNIFORM_CONST) {
-      SET_NULLS(ObUniformFormat<true>);
-    } else {
-      SET_NULLS(ObBitmapNullVectorBase);
-    }
-    return ret;
-#undef SET_NULLS
+    return _eval_arg_vec_cast(expr, ctx, skip, bound);
   }
 };
 
@@ -192,7 +174,7 @@ extern int expr_default_eval_vector_func(const ObExpr &, ObEvalCtx &, const ObBi
 extern ObExpr::EvalVectorFunc VECTOR_CAST_FUNCS[MAX_VEC_TC][MAX_VEC_TC][2];
 extern ObExpr::EvalVectorFunc VECTOR_EVAL_ARG_CAST_FUNCS[MAX_VEC_TC][MAX_VEC_TC][2];
 
-template<int N, int M>
+template<int N, int M, bool defined = true>
 struct VectorCastFuncInit
 {
   static void init_array()
@@ -209,15 +191,71 @@ struct VectorCastFuncInit
         VectorCaster<in_tc, out_tc, EXPLICIT_CAST_FLAG>::eval_vector :
         expr_default_eval_vector_func;
     // eval arg funcs
-    VECTOR_EVAL_ARG_CAST_FUNCS[N][M][IMPLICIT_CAST_FLAG] =
-      EvalArgCasterImpl<in_tc, out_tc, IMPLICIT_CAST_FLAG>::eval_vector;
+    // VECTOR_EVAL_ARG_CAST_FUNCS[N][M][IMPLICIT_CAST_FLAG] =
+    //   EvalArgCasterImpl<in_tc, out_tc, IMPLICIT_CAST_FLAG>::eval_vector;
     // accuracy checking will happend after explicit eval arg funcs,
     // if accuracy checker not defined, use `eval_default_eval_vector_func` otherwise
-    VECTOR_EVAL_ARG_CAST_FUNCS[N][M][EXPLICIT_CAST_FLAG] =
-      ValueRangeChecker<out_tc, ObVectorBase>::defined_ ?
-        EvalArgCasterImpl<in_tc, out_tc, EXPLICIT_CAST_FLAG>::eval_vector :
-        expr_default_eval_vector_func;
+    // VECTOR_EVAL_ARG_CAST_FUNCS[N][M][EXPLICIT_CAST_FLAG] =
+    //   ValueRangeChecker<out_tc, ObVectorBase>::defined_ ?
+    //     EvalArgCasterImpl<in_tc, out_tc, EXPLICIT_CAST_FLAG>::eval_vector :
+    //     expr_default_eval_vector_func;
   }
 };
+
+template<int N, int M>
+struct VectorCastFuncInit<N, M, false>
+{
+  static void init_array()
+  {
+    constexpr VecValueTypeClass in_tc = static_cast<VecValueTypeClass>(N);
+    constexpr VecValueTypeClass out_tc = static_cast<VecValueTypeClass>(M);
+    VECTOR_CAST_FUNCS[N][M][IMPLICIT_CAST_FLAG] = expr_default_eval_vector_func;
+    VECTOR_CAST_FUNCS[N][M][EXPLICIT_CAST_FLAG] = expr_default_eval_vector_func;
+    // VECTOR_EVAL_ARG_CAST_FUNCS[N][M][IMPLICIT_CAST_FLAG] =
+    //   EvalArgCasterImpl<in_tc, out_tc, IMPLICIT_CAST_FLAG>::eval_vector;
+    // VECTOR_EVAL_ARG_CAST_FUNCS[N][M][EXPLICIT_CAST_FLAG] =
+    //   ValueRangeChecker<out_tc, ObVectorBase>::defined_ ?
+    //     EvalArgCasterImpl<in_tc, out_tc, EXPLICIT_CAST_FLAG>::eval_vector :
+    //     expr_default_eval_vector_func;
+  }
+};
+
+template<int N, int M, bool defined = true>
+struct EvalArgVecCasterFuncInit
+{
+  static void init_array()
+  {
+    constexpr VecValueTypeClass in_tc = static_cast<VecValueTypeClass>(N);
+    constexpr VecValueTypeClass out_tc = static_cast<VecValueTypeClass>(M);
+    VECTOR_EVAL_ARG_CAST_FUNCS[N][M][IMPLICIT_CAST_FLAG] =
+      EvalArgCasterImpl<in_tc, out_tc, IMPLICIT_CAST_FLAG>::eval_vector;
+    VECTOR_EVAL_ARG_CAST_FUNCS[N][M][EXPLICIT_CAST_FLAG] =
+      EvalArgCasterImpl<in_tc, out_tc, EXPLICIT_CAST_FLAG>::eval_vector;
+  }
+};
+
+template<int N, int M>
+struct EvalArgVecCasterFuncInit<N, M, false>
+{
+  static void init_array()
+  {
+    constexpr VecValueTypeClass in_tc = static_cast<VecValueTypeClass>(N);
+    constexpr VecValueTypeClass out_tc = static_cast<VecValueTypeClass>(M);
+    VECTOR_EVAL_ARG_CAST_FUNCS[N][M][IMPLICIT_CAST_FLAG] =
+      EvalArgCasterImpl<in_tc, out_tc, IMPLICIT_CAST_FLAG>::eval_vector;
+    VECTOR_EVAL_ARG_CAST_FUNCS[N][M][EXPLICIT_CAST_FLAG] = expr_default_eval_vector_func;
+  }
+};
+
+template<int N, int M>
+using VectorCastIniter = VectorCastFuncInit<N, M,
+                                            VectorCaster<static_cast<VecValueTypeClass>(N),
+                                            static_cast<VecValueTypeClass>(M), IMPLICIT_CAST_FLAG>::defined_>;
+
+template<int N, int M>
+using EvalArgVecCasterIniter = EvalArgVecCasterFuncInit<N, M,
+                                                        ValueRangeChecker<static_cast<VecValueTypeClass>(M),
+                                                                          ObVectorBase>::defined_>;
+
 } // end sql
 } // end oceanbase

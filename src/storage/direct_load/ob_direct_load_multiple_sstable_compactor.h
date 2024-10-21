@@ -49,7 +49,9 @@ private:
   ObDirectLoadMultipleSSTableCompactParam param_;
   int64_t index_block_count_;
   int64_t data_block_count_;
+  int64_t rowkey_block_count_;
   int64_t row_count_;
+  int64_t rowkey_count_;
   int64_t max_data_block_size_;
   common::ObArenaAllocator start_key_allocator_;
   common::ObArenaAllocator end_key_allocator_;

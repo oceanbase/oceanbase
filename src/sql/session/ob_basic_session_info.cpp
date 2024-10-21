@@ -470,6 +470,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
 //consistency_level_ = INVALID_CONSISTENCY;
   next_tx_read_only_ = -1;
   next_tx_isolation_ = transaction::ObTxIsolationLevel::INVALID;
+  enable_mysql_compatible_dates_ = false;
   log_id_level_map_valid_ = false;
   log_id_level_map_.reset_level();
   cur_phy_plan_ = NULL;
@@ -4770,6 +4771,7 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
                 enable_role_ids_);
   }
   OB_UNIS_ENCODE(sys_var_config_hash_val_);
+  OB_UNIS_ENCODE(enable_mysql_compatible_dates_);
   return ret;
 }
 
@@ -5055,6 +5057,7 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
     }
   }
   OB_UNIS_DECODE(sys_var_config_hash_val_);
+  OB_UNIS_DECODE(enable_mysql_compatible_dates_);
   return ret;
 }
 
@@ -5337,6 +5340,7 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
               thread_data_.proxy_host_name_,
               enable_role_ids_);
   OB_UNIS_ADD_LEN(sys_var_config_hash_val_);
+  OB_UNIS_ADD_LEN(enable_mysql_compatible_dates_);
   return len;
 }
 
@@ -6402,6 +6406,8 @@ int ObBasicSessionInfo::base_save_session(BaseSavedValue &saved_value, bool skip
                                                                  ObModIds::OB_SQL_SESSION_QUERY_SQL)));
     if (OB_ISNULL(saved_value.cur_query_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
+      saved_value.cur_query_buf_len_ = 0;
+      LOG_WARN("failed to alloc memory for cur query", K(ret));
     } else {
       saved_value.cur_query_buf_len_ = len;
     }
@@ -6459,7 +6465,7 @@ int ObBasicSessionInfo::base_restore_session(BaseSavedValue &saved_value)
   // 4013 scene, len may be -1, illegal.
   int64_t len = MAX(MIN(saved_value.cur_query_len_, thread_data_.cur_query_buf_len_ - 1), 0);
   OX (thread_data_.cur_query_len_ = len);
-  if (thread_data_.cur_query_ != nullptr) {
+  if (thread_data_.cur_query_ != nullptr && saved_value.cur_query_ != nullptr) {
     OX (MEMCPY(thread_data_.cur_query_, saved_value.cur_query_, len));
     thread_data_.cur_query_[len] = '\0';
   }

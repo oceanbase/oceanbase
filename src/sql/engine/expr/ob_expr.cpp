@@ -1131,6 +1131,30 @@ int ObExpr::nested_cast_to_uniform(const int64_t size, ObEvalCtx &ctx, const ObB
   return ret;
 }
 
+int ObExpr::assign_nested_vector(const ObExpr &other, ObEvalCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+  if (!is_nested_expr() || !other.is_nested_expr()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected expr type", K(ret));
+  } else if (attrs_cnt_ != other.attrs_cnt_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected expr type", K(ret), K(attrs_cnt_), K(other.attrs_cnt_ ));
+  }
+  for (uint32_t i = 0; OB_SUCC(ret) && i < attrs_cnt_; ++i) {
+    VectorHeader &to_attr_vec_header = attrs_[i]->get_vector_header(ctx);
+    VectorHeader &from_attr_vec_header = other.attrs_[i]->get_vector_header(ctx);
+    if (is_uniform_format(from_attr_vec_header.format_)
+        || is_uniform_format(to_attr_vec_header.format_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected format type", K(ret), K(from_attr_vec_header.format_), K(to_attr_vec_header.format_));
+    } else {
+      to_attr_vec_header = from_attr_vec_header;
+    }
+  }
+  return ret;
+}
+
 int VectorHeader::init_uniform_const_vector(VecValueTypeClass vec_value_tc,
                                             ObDatum *datum,
                                             ObEvalInfo *eval_info)

@@ -59,7 +59,7 @@ int ObArchiveIO::push_log(const ObString &uri,
       }
     } else {
       if (OB_FAIL(io_adapter.pwrite(uri, storage_info, data, offset, data_len,
-          common::ObStorageAccessType::OB_STORAGE_ACCESS_RANDOMWRITER, write_size, is_can_seal,
+          common::ObStorageAccessType::OB_STORAGE_ACCESS_APPENDER, write_size, is_can_seal,
           common::ObStorageIdMod(backup_dest_id, common::ObStorageUsedMod::STORAGE_USED_ARCHIVE)))) {
         ARCHIVE_LOG(WARN, "fail to write file", K(ret), K(uri), KP(storage_info), K(data), K(data_len));
       }

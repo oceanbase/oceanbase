@@ -253,9 +253,6 @@ void ObTableLoadStoreCtx::stop()
   if (nullptr != merger_manager_) {
     merger_manager_->stop();
   }
-  if (nullptr != pre_sorter_) {
-    pre_sorter_->stop();
-  }
   if (nullptr != task_scheduler_) {
     task_scheduler_->stop();
     task_scheduler_->wait();

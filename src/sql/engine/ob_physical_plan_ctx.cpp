@@ -1101,7 +1101,7 @@ int ObPhysicalPlanCtx::get_sqludt_meta_by_subschema_id(uint16_t subschema_id, Ob
   if (OB_SUCC(ret)
       && (OB_ISNULL(phy_plan_) || !is_subschema_inited_in_plan)) {
     if (!subschema_ctx_.is_inited()) { // no phy plan
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_ISNULL(phy_plan_) ? OB_NOT_INIT : OB_ERR_UNEXPECTED;
       LOG_WARN("invalid subschema id", K(ret), K(subschema_id), K(lbt()));
     } else {
       if (OB_FAIL(subschema_ctx_.get_subschema(subschema_id, sub_meta))) {

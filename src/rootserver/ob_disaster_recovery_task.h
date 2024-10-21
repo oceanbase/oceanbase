@@ -85,6 +85,7 @@ public:
     COMPLETED,
     FAILED,
     CANCELED,
+    WAITING,
     MAX_STATUS,
   };
 public:

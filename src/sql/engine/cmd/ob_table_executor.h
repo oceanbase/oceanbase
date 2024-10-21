@@ -89,8 +89,9 @@ private:
                       ObSchemaGetterGuard *schema_guard,
                       const ParamStore *param_store,
                       ObSqlString &ins_sql);
-  int prepare_alter_arg(ObCreateTableStmt &stmt, const ObSQLSessionInfo *my_session, const ObString &create_table_name, obrpc::ObAlterTableArg &alter_table_arg);
+  int prepare_alter_arg(ObCreateTableStmt &stmt, const ObSQLSessionInfo *my_session, const ObString &create_table_name, bool is_full_direct_insert, obrpc::ObAlterTableArg &alter_table_arg);
   int prepare_drop_arg(const ObCreateTableStmt &stmt, const ObSQLSessionInfo *my_session, obrpc::ObTableItem &table_item, obrpc::ObDropTableArg &drop_table_arg);
+  int check_if_ctas_use_full_direct_insert(ObCreateTableStmt &stmt, bool &is_full_direct_insert);
 };
 
 class ObAlterTableStmt;

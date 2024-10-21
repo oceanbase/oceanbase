@@ -717,42 +717,6 @@ int ObComplementDataDag::fill_dag_key(char *buf, const int64_t buf_len) const
   return ret;
 }
 
-int ObComplementDataDag::check_and_exit_on_demand()
-{
-  int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("dag has not been initialized", K(ret));
-  } else {
-    DEBUG_SYNC(HOLD_DDL_COMPLEMENT_DAG_WHEN_APPEND_ROW);
-    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-      ObSqlString sql_string;
-      sqlclient::ObMySQLResult *result = nullptr;
-      if (OB_TMP_FAIL(sql_string.assign_fmt("SELECT status FROM %s WHERE task_id = %lu", share::OB_ALL_DDL_TASK_STATUS_TNAME, param_.task_id_))) {
-        LOG_WARN("assign sql string failed", K(tmp_ret), K(param_));
-      } else if (OB_TMP_FAIL(GCTX.sql_proxy_->read(res, param_.dest_tenant_id_, sql_string.ptr()))) {
-        LOG_WARN("fail to execute sql", K(tmp_ret), K(sql_string));
-      } else if (OB_ISNULL(result = res.get_result())) {
-        tmp_ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("error unexpected, query result must not be NULL", K(tmp_ret));
-      } else if (OB_TMP_FAIL(result->next())) {
-        if (OB_ENTRY_NOT_EXIST == tmp_ret) {
-          ret = OB_CANCELED;
-        }
-        LOG_WARN("iterate next failed", K(ret), K(tmp_ret));
-      } else {
-        int task_status = 0;
-        EXTRACT_INT_FIELD_MYSQL(*result, "status", task_status, int);
-        if (OB_SUCC(ret)) {
-          ret = task_status == ObDDLTaskStatus::REDEFINITION ? ret : OB_CANCELED;
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 ObComplementPrepareTask::ObComplementPrepareTask()
   : ObITask(TASK_TYPE_COMPLEMENT_PREPARE), is_inited_(false), param_(nullptr), context_(nullptr)
 {
@@ -901,7 +865,7 @@ int ObComplementWriteTask::generate_next_task(ObITask *&next_task)
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObComplementWriteTask has not been inited", K(ret));
-  } else if (next_task_id == param_->concurrent_cnt_) {
+  } else if (next_task_id >= param_->concurrent_cnt_) {
     ret = OB_ITER_END;
   } else if (OB_ISNULL(tmp_dag)) {
     ret = OB_ERR_UNEXPECTED;

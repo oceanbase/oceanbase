@@ -1230,17 +1230,22 @@ int ObLobManager::append(ObLobAccessParam& param, ObLobLocatorV2& lob, ObLobMeta
 
       // prepare read full lob
       if (OB_SUCC(ret)) {
+        ObLobLocatorV2* copy_locator = nullptr;
         ObLobAccessParam *read_param = reinterpret_cast<ObLobAccessParam*>(param.allocator_->alloc(sizeof(ObLobAccessParam)));
         if (OB_ISNULL(read_param)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("alloc read param failed.", K(ret), K(sizeof(ObLobAccessParam)));
+        } else if (OB_ISNULL(copy_locator = OB_NEWx(ObLobLocatorV2, param.allocator_))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("alloc ObLobLocatorV2 failed.", K(ret), K(sizeof(ObLobLocatorV2)));
         } else {
           read_param = new(read_param)ObLobAccessParam();
           read_param->tx_desc_ = param.tx_desc_;
           read_param->tenant_id_ = param.src_tenant_id_;
+          *copy_locator = lob;
           if (OB_FAIL(build_lob_param(*read_param, *param.allocator_, param.coll_type_,
-                      0, UINT64_MAX, param.timeout_, lob))) {
-            LOG_WARN("fail to build read param", K(ret), K(lob));
+                      0, UINT64_MAX, param.timeout_, *copy_locator))) {
+            LOG_WARN("fail to build read param", K(ret), K(lob), KPC(copy_locator));
           } else {
             ObLobQueryIter *qiter = nullptr;
             if (OB_FAIL(query(*read_param, qiter))) {

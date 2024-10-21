@@ -225,6 +225,7 @@ int ObStaticEngineCG::generate(const ObLogPlan &log_plan, ObPhysicalPlan &phy_pl
     LOG_WARN("generated root spec is NULL", K(ret));
   } else {
     phy_plan.set_root_op_spec(root_spec);
+    phy_plan.set_is_use_auto_dop(opt_ctx_->is_use_auto_dop());
     if (OB_FAIL(set_other_properties(log_plan, phy_plan))) {
       LOG_WARN("set other properties failed", K(ret));
     }
@@ -5154,6 +5155,7 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
     }
   }
   OZ(generate_tsc_flags(op, spec));
+  OX(spec.set_est_cost_simple_info(op.get_est_cost_simple_info()));
 
   bool is_equal_and = true;
   ObKeyPart* root = spec.tsc_ctdef_.pre_query_range_.get_table_grapth().key_part_head_;

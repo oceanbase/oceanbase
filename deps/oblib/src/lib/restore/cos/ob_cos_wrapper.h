@@ -17,6 +17,7 @@
 #include "ob_singleton.h"
 #include <dirent.h>
 #include "apr_pools.h"
+#include "apr_tables.h"
 
 namespace oceanbase
 {
@@ -49,6 +50,13 @@ private:
   bool is_inited_;
   Conf conf_;
 };
+
+OB_PUBLIC_API int ob_copy_apr_tables(apr_table_t *dst, const apr_table_t *src);
+OB_PUBLIC_API int ob_set_retry_headers(
+    apr_pool_t *p,
+    apr_table_t *&headers,
+    apr_table_t *&origin_headers_,
+    apr_table_t **&ref_headers_);
 
 static constexpr int MAX_TAGGING_STR_LEN = 16;
 

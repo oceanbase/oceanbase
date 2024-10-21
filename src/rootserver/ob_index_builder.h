@@ -123,10 +123,13 @@ private:
       int64_t &snapshot_data_ith);
   int recognize_fts_index_schemas(
       const common::ObIArray<share::schema::ObTableSchema> &index_schemas,
+      const bool is_parent_task_dropping_fts_index,
       int64_t &index_ith,
       int64_t &aux_doc_word_ith,
       int64_t &aux_rowkey_doc_ith,
-      int64_t &aux_doc_rowkey_ith);
+      int64_t &domain_index_ith,
+      int64_t &aux_doc_rowkey_ith,
+      int64_t &aux_multivalue_ith);
   int set_basic_infos(const obrpc::ObCreateIndexArg &arg,
                       const share::schema::ObTableSchema &data_schema,
                       share::schema::ObTableSchema &schema);

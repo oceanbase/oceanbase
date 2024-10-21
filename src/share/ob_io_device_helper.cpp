@@ -23,6 +23,7 @@
 #include "share/ob_force_print_log.h"
 #include "share/ob_io_device_helper.h"
 #include "observer/ob_server_struct.h"
+#include "common/ob_smart_call.h"
 
 using namespace oceanbase::common;
 
@@ -101,6 +102,27 @@ int ObGetFileSizeFunctor::func(const dirent *entry)
         LOG_WARN("unexpected file type", K(full_path), K(statbuf));
       }
     }
+  }
+  return ret;
+}
+
+/**
+ * --------------------------------ObScanDirOp------------------------------------
+ */
+int ObScanDirOp::func(const dirent *entry)
+{
+  int ret = OB_SUCCESS;
+  return ret;
+}
+
+int ObScanDirOp::set_dir(const char *dir)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(dir == nullptr || strlen(dir) >= common::MAX_PATH_SIZE)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(dir));
+  } else {
+    dir_ = dir;
   }
   return ret;
 }
@@ -336,7 +358,7 @@ int ObIODeviceLocalFileOp::scan_dir(const char *dir_name, int (*func)(const dire
   int ret = OB_SUCCESS;
   DIR *open_dir = nullptr;
   struct dirent entry;
-  struct dirent *result;
+  struct dirent *result = nullptr;
 
   if (OB_ISNULL(dir_name)) {
     ret = OB_INVALID_ARGUMENT;
@@ -344,10 +366,10 @@ int ObIODeviceLocalFileOp::scan_dir(const char *dir_name, int (*func)(const dire
   } else if (OB_ISNULL(open_dir = ::opendir(dir_name))) {
     if (ENOENT != errno) {
       ret = OB_FILE_NOT_OPENED;
-      SHARE_LOG(WARN, "Fail to open dir, ", K(ret), K(dir_name));
+      SHARE_LOG(WARN, "fail to open dir", K(ret), K(dir_name), K(errno), KERRMSG);
     } else {
       ret = OB_NO_SUCH_FILE_OR_DIRECTORY;
-      SHARE_LOG(WARN, "dir does not exist", K(ret), K(dir_name));
+      SHARE_LOG(WARN, "dir does not exist", K(ret), K(dir_name), K(errno), KERRMSG);
     }
   } else {
     while (OB_SUCC(ret) && NULL != open_dir) {
@@ -367,6 +389,7 @@ int ObIODeviceLocalFileOp::scan_dir(const char *dir_name, int (*func)(const dire
     //close dir
     if (NULL != open_dir) {
       ::closedir(open_dir);
+      open_dir = nullptr;
     }
   }
   return ret;
@@ -384,7 +407,7 @@ int ObIODeviceLocalFileOp::scan_dir(const char *dir_name, common::ObBaseDirEntry
   int ret = OB_SUCCESS;
   DIR *open_dir = nullptr;
   struct dirent entry;
-  struct dirent *result;
+  struct dirent *result = nullptr;
 
   if (OB_ISNULL(dir_name)) {
     ret = OB_INVALID_ARGUMENT;
@@ -392,10 +415,10 @@ int ObIODeviceLocalFileOp::scan_dir(const char *dir_name, common::ObBaseDirEntry
   } else if (OB_ISNULL(open_dir = ::opendir(dir_name))) {
     if (ENOENT != errno) {
       ret = OB_FILE_NOT_OPENED;
-      SHARE_LOG(WARN, "Fail to open dir, ", K(ret), K(dir_name));
+      SHARE_LOG(WARN, "fail to open dir", K(ret), K(dir_name), K(errno), KERRMSG);
     } else {
       ret = OB_NO_SUCH_FILE_OR_DIRECTORY;
-      SHARE_LOG(WARN, "dir does not exist", K(ret), K(dir_name));
+      SHARE_LOG(WARN, "dir does not exist", K(ret), K(dir_name), K(errno), KERRMSG);
     }
   } else {
     while (OB_SUCC(ret) && NULL != open_dir) {
@@ -415,7 +438,89 @@ int ObIODeviceLocalFileOp::scan_dir(const char *dir_name, common::ObBaseDirEntry
     //close dir
     if (NULL != open_dir) {
       ::closedir(open_dir);
+      open_dir = nullptr;
     }
+  }
+  return ret;
+}
+
+/*
+ * scan_dir_rec is scan directory recursion,
+ * you need to provide file_op and dir_op, dir_op is used to operate directory, file_op is used to operate other files, for example reg file, link file.
+ */
+int ObIODeviceLocalFileOp::scan_dir_rec(const char *dir_name,
+                                        ObScanDirOp &file_op,
+                                        ObScanDirOp &dir_op)
+{
+  int ret = OB_SUCCESS;
+  DIR *open_dir = nullptr;
+  struct dirent entry;
+  struct dirent *result = nullptr;
+  if (OB_ISNULL(dir_name)) {
+    ret = OB_INVALID_ARGUMENT;
+    SHARE_LOG(WARN, "invalid argument", K(ret), K(dir_name));
+  } else if (OB_ISNULL(open_dir = ::opendir(dir_name))) {
+    if (ENOENT != errno) {
+      ret = OB_FILE_NOT_OPENED;
+      SHARE_LOG(WARN, "fail to open dir", K(ret), K(dir_name));
+    } else {
+      ret = OB_NO_SUCH_FILE_OR_DIRECTORY;
+      SHARE_LOG(WARN, "dir does not exist", K(ret), K(dir_name));
+    }
+  } else if (OB_FAIL(file_op.set_dir(dir_name))) {
+    SHARE_LOG(WARN, "fail to set dir", K(ret), K(dir_name));
+  } else if (OB_FAIL(dir_op.set_dir(dir_name))) {
+    SHARE_LOG(WARN, "fail to set dir", K(ret), K(dir_name));
+  } else {
+    char current_file_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+    while (OB_SUCC(ret) && nullptr != open_dir) {
+      if (0 != ::readdir_r(open_dir, &entry, &result)) {
+        ret = convert_sys_errno();
+        SHARE_LOG(WARN, "read dir error", K(ret), KERRMSG);
+      } else if (nullptr != result
+          && 0 != STRCMP(entry.d_name, ".")
+          && 0 != STRCMP(entry.d_name, "..")) {
+        bool is_dir = false;
+        MEMSET(current_file_path, '\0', OB_MAX_FILE_NAME_LENGTH);
+        int pret = snprintf(current_file_path, OB_MAX_FILE_NAME_LENGTH, "%s/%s", dir_name, entry.d_name);
+        if (pret <= 0 || pret >= OB_MAX_FILE_NAME_LENGTH) {
+          ret = OB_BUF_NOT_ENOUGH;
+          SHARE_LOG(WARN, "snprintf failed", K(ret), K(current_file_path), K(dir_name), K(entry.d_name));
+        } else if (DT_DIR == entry.d_type) {
+          is_dir = true;
+        } else if (DT_UNKNOWN == entry.d_type) {
+          ObIODFileStat statbuf;
+          if (OB_FAIL(ObIODeviceLocalFileOp::stat(current_file_path, statbuf))) {
+            SHARE_LOG(WARN, "fail to stat file", K(ret), K(current_file_path));
+          } else if (S_ISDIR(statbuf.mode_)) {
+            is_dir = true;
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (false == is_dir) {
+          if (OB_FAIL(file_op.func(&entry))) {
+            SHARE_LOG(WARN, "fail to operate file entry", K(ret), K(dir_name), K(entry.d_name));
+          }
+        } else if (true == is_dir) {
+          if (OB_FAIL(SMART_CALL(scan_dir_rec(current_file_path, file_op, dir_op)))) {
+            SHARE_LOG(WARN, "scan directory failed", K(ret), K(current_file_path));
+          } else if (OB_FAIL(file_op.set_dir(dir_name))) {
+            SHARE_LOG(WARN, "fail to set dir", K(ret), K(dir_name));
+          } else if (OB_FAIL(dir_op.set_dir(dir_name))) {
+            SHARE_LOG(WARN, "fail to set dir", K(ret), K(dir_name));
+          } else if (OB_FAIL(dir_op.func(&entry))) {
+            SHARE_LOG(WARN, "fail to operate dir entry", K(ret), K(dir_name), K(entry.d_name));
+          }
+        }
+      } else if (NULL == result) {
+        break; //end file
+      }
+    }
+  }
+  //close dir
+  if (nullptr != open_dir) {
+    ::closedir(open_dir);
+    open_dir = nullptr;
   }
   return ret;
 }

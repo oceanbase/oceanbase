@@ -276,32 +276,8 @@ int ObVectorIndexLookupOp::init_base_idx_scan_param(const share::ObLSID &ls_id,
 int ObVectorIndexLookupOp::gen_scan_range(const int64_t col_cnt, common::ObTableID table_id, ObNewRange &scan_range)
 {
   int ret = OB_SUCCESS;
-  int64_t obj_cnt = col_cnt * 2;
-  ObObj *obj_ptr = nullptr;
-  void *buf = nullptr;
-  if (col_cnt <= 0) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected col_cnt", K(ret));
-  } else if (OB_ISNULL(allocator_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected nullptr", K(ret));
-  } else if (OB_ISNULL(buf = allocator_->alloc(sizeof(ObObj) * obj_cnt))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate memory for rowkey obj", K(ret));
-  } else if (OB_ISNULL(obj_ptr = new (buf) ObObj[obj_cnt])) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected nullptr", K(ret));
-  } else {
-    for (int i = 0; i < col_cnt; ++i) {
-      obj_ptr[i].set_min_value();
-      obj_ptr[i + col_cnt].set_max_value();
-    }
-    scan_range.table_id_ = table_id;
-    scan_range.start_key_.assign(obj_ptr, col_cnt);
-    scan_range.end_key_.assign(&obj_ptr[col_cnt], col_cnt);
-    scan_range.border_flag_.set_inclusive_start();
-    scan_range.border_flag_.set_inclusive_end();
-  }
+  scan_range.table_id_ = table_id;
+  scan_range.set_whole_range();
   return ret;
 }
 
@@ -481,9 +457,6 @@ int ObVectorIndexLookupOp::reuse_scan_iter(bool need_switch_param)
   if (OB_NOT_NULL(adaptor_vid_iter_)) { // maybe only reset vid iter when need need_switch_param ?
     adaptor_vid_iter_->reset();
     adaptor_vid_iter_->~ObVectorQueryVidIterator();
-    if (nullptr != allocator_) {
-      allocator_->free(adaptor_vid_iter_);
-    }
     adaptor_vid_iter_ = nullptr;
   }
   if (OB_NOT_NULL(delta_buf_rtdef_)) {
@@ -537,6 +510,7 @@ int ObVectorIndexLookupOp::reuse_scan_iter(bool need_switch_param)
   } else if (OB_FAIL(tsc_service.reuse_scan_iter(doc_id_scan_param_.need_switch_param_, rowkey_iter_))) {
     LOG_WARN("failed to reuse scan iter", K(ret));
   }
+  vec_op_alloc_.reset();
   return ret;
 }
 
@@ -610,13 +584,12 @@ int ObVectorIndexLookupOp::revert_iter_for_complete_data()
   ObITabletScan &tsc_service = get_tsc_service();
   if (OB_FAIL(tsc_service.revert_scan_iter(com_aux_vec_iter_))) {
     LOG_WARN("revert scan iterator failed", K(ret));
-  } else {
-    com_aux_vec_scan_param_.key_ranges_.reuse();
-    com_aux_vec_scan_param_.ss_key_ranges_.reuse();
-    doc_id_scan_param_.key_ranges_.reuse();
-    doc_id_scan_param_.ss_key_ranges_.reuse();
   }
 
+  com_aux_vec_scan_param_.key_ranges_.reuse();
+  com_aux_vec_scan_param_.ss_key_ranges_.reuse();
+  doc_id_scan_param_.key_ranges_.reuse();
+  doc_id_scan_param_.ss_key_ranges_.reuse();
   com_aux_vec_iter_ = NULL;
   com_aux_vec_scan_param_.destroy_schema_guard();
   com_aux_vec_scan_param_.~ObTableScanParam();
@@ -742,7 +715,7 @@ int ObVectorIndexLookupOp::prepare_state(const ObVidAdaLookupStatus& cur_state,
             LOG_WARN("get row column cnt invalid.", K(ret), K(datum_row->get_column_count()));
           } else if (OB_FALSE_IT(vector = datum_row->storage_datums_[0].get_string())) {
             LOG_WARN("failed to get vid.", K(ret));
-          } else if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(allocator_,
+          } else if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(&vec_op_alloc_,
                                                                             ObLongTextType,
                                                                             CS_TYPE_BINARY,
                                                                             com_aux_vec_ctdef_->result_output_.at(0)->obj_meta_.has_lob_header(),
@@ -896,7 +869,8 @@ int ObVectorIndexLookupOp::process_adaptor_state()
   ObVidAdaLookupStatus last_state = ObVidAdaLookupStatus::STATES_ERROR;
   ObVidAdaLookupStatus cur_state = ObVidAdaLookupStatus::STATES_INIT;
   ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()); // use for tmp query and data complement
-  ObVectorQueryAdaptorResultContext ada_ctx(MTL_ID(), allocator_, &tmp_allocator);
+  ObArenaAllocator batch_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()); // use for data complement for each batch
+  ObVectorQueryAdaptorResultContext ada_ctx(MTL_ID(), &vec_op_alloc_, &tmp_allocator, &batch_allocator);
   share::ObVectorIndexAcquireCtx index_ctx;
   ObPluginVectorIndexAdapterGuard adaptor_guard;
   index_ctx.inc_tablet_id_ = delta_buf_tablet_id_;
@@ -1201,13 +1175,11 @@ void ObVectorIndexLookupOp::do_clear_evaluated_flag()
 int ObVectorIndexLookupOp::revert_iter()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObITabletScan &tsc_service = get_tsc_service();
   if (nullptr != adaptor_vid_iter_) {
     adaptor_vid_iter_->reset();
     adaptor_vid_iter_->~ObVectorQueryVidIterator();
-    if (nullptr != allocator_) {
-      allocator_->free(adaptor_vid_iter_);
-    }
     adaptor_vid_iter_ = nullptr;
   }
 
@@ -1235,23 +1207,47 @@ int ObVectorIndexLookupOp::revert_iter()
 
   if (OB_FAIL(tsc_service.revert_scan_iter(delta_buf_iter_))) {
     LOG_WARN("revert scan iterator failed", K(ret));
-  } else if (OB_FAIL(tsc_service.revert_scan_iter(index_id_iter_))) {
-    LOG_WARN("revert scan iterator failed", K(ret));
-  } else if (OB_FAIL(tsc_service.revert_scan_iter(snapshot_iter_))) {
-    LOG_WARN("revert scan iterator failed", K(ret));
-  } else if (OB_FAIL(tsc_service.revert_scan_iter(aux_lookup_iter_))) {
-    LOG_WARN("revert index table scan iterator (opened by dasop) failed", K(ret));
-  } else if (OB_FAIL(revert_iter_for_complete_data())) {
-    LOG_WARN("failed to revert iter for complete data.", K(ret));
-  } else {
-    delta_buf_iter_ = nullptr;
-    index_id_iter_ = nullptr;
-    snapshot_iter_ = nullptr;
-    aux_lookup_iter_ = nullptr;
-    if (OB_FAIL(ObDomainIndexLookupOp::revert_iter())) {
-      LOG_WARN("failed to revert local index lookup op iter", K(ret));
-    }
+    tmp_ret = ret;
+    ret = OB_SUCCESS;
   }
+  // revert all scan iter anyway
+  if (OB_FAIL(tsc_service.revert_scan_iter(index_id_iter_))) {
+    LOG_WARN("revert scan iterator failed", K(ret));
+    tmp_ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
+    ret = OB_SUCCESS;
+  }
+
+  if (OB_FAIL(tsc_service.revert_scan_iter(snapshot_iter_))) {
+    LOG_WARN("revert scan iterator failed", K(ret));
+    tmp_ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
+    ret = OB_SUCCESS;
+  }
+
+  if (OB_FAIL(tsc_service.revert_scan_iter(aux_lookup_iter_))) {
+    LOG_WARN("revert index table scan iterator (opened by dasop) failed", K(ret));
+    tmp_ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
+    ret = OB_SUCCESS;
+  }
+
+  if (OB_FAIL(revert_iter_for_complete_data())) {
+    LOG_WARN("failed to revert iter for complete data.", K(ret));
+    tmp_ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
+    ret = OB_SUCCESS;
+  }
+
+  delta_buf_iter_ = nullptr;
+  index_id_iter_ = nullptr;
+  snapshot_iter_ = nullptr;
+  aux_lookup_iter_ = nullptr;
+  if (OB_FAIL(ObDomainIndexLookupOp::revert_iter())) {
+    LOG_WARN("failed to revert local index lookup op iter", K(ret));
+    tmp_ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
+  }
+  // return first error code
+  if (tmp_ret != OB_SUCCESS) {
+    ret = tmp_ret;
+  }
+  vec_op_alloc_.reset();
   return ret;
 }
 
@@ -1279,7 +1275,7 @@ int ObVectorIndexLookupOp::set_vector_query_condition(ObVectorQueryConditions &q
     } else if (OB_UNLIKELY(OB_FAIL(search_vec_->eval(*(sort_rtdef_->eval_ctx_), vec_datum)))) {
       LOG_WARN("eval vec arg failed", K(ret));
     } else if (OB_FALSE_IT(query_cond.query_vector_ = vec_datum->get_string())) {
-    } else if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(allocator_,
+    } else if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(&vec_op_alloc_,
                                                                       ObLongTextType,
                                                                       CS_TYPE_BINARY,
                                                                       search_vec_->obj_meta_.has_lob_header(),

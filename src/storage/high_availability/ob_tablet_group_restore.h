@@ -222,7 +222,9 @@ private:
   int init_ha_tablets_builder_();
   int build_tablet_group_ctx_();
   int record_server_event_();
-
+#ifdef ERRSIM
+  int errsim_debug_sync_before_follower_replace_remote_sstable_();
+#endif
 private:
   bool is_inited_;
   ObTabletGroupRestoreCtx *ctx_;

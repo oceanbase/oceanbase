@@ -666,7 +666,7 @@ public:
   }
   int init();
   virtual int filter_cell(const ObHTableCell &cell, ReturnCode &ret_code) override;
-  int get_next_cell_hint(common::ObArenaAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell);
+  virtual int get_next_cell_hint(common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell) override;
   virtual bool is_hinting_filter() override { return can_hint_; }
   virtual int64_t get_format_filter_string_length() const override;
   virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const override;

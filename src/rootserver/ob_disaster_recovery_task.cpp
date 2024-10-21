@@ -52,6 +52,7 @@ static const char* dr_ls_replica_task_status_strs[] = {
   "COMPLETED",
   "FAILED",
   "CANCELED",
+  "WAITING",
 };
 
 const char* ObDRLSReplicaTaskStatus::get_status_str() const {

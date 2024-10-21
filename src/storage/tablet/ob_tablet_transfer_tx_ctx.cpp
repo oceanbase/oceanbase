@@ -443,14 +443,14 @@ int ObStartTransferMoveTxHelper::on_replay(const char* buf, const int64_t len, c
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", KR(ret), K(collect_tx_info), KP(ls));
   } else if (OB_FAIL(ls->get_transfer_status().update_status(tx_id, collect_tx_info.task_id_, scn,
-          NotifyType::ON_REDO, ObTxDataSourceType::TRANSFER_MOVE_TX_CTX))) {
+          NotifyType::REGISTER_SUCC, ObTxDataSourceType::TRANSFER_MOVE_TX_CTX))) {
     LOG_WARN("update transfer status failed", KR(ret), K(tx_id));
   } else {
     ObTransferMoveTxParam move_tx_param(collect_tx_info.src_ls_id_,
                                         collect_tx_info.transfer_epoch_,
                                         collect_tx_info.transfer_scn_,
                                         scn,
-                                        transaction::NotifyType::ON_REDO,
+                                        transaction::NotifyType::REGISTER_SUCC,
                                         true,
                                         transfer_move_tx_ctx.is_incomplete_replay());
     if (OB_FAIL(ls->move_tx_op(move_tx_param, collect_tx_info.args_))) {
@@ -511,7 +511,7 @@ void ObTransferMoveTxCtx::on_redo(const share::SCN &redo_scn)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls should not be NULL", KR(ret), K(collect_tx_info), KP(ls));
     } else if (OB_FAIL(ls->get_transfer_status().update_status(tx_id, collect_tx_info.task_id_, redo_scn,
-          NotifyType::REGISTER_SUCC, ObTxDataSourceType::TRANSFER_MOVE_TX_CTX))) {
+          NotifyType::ON_REDO, ObTxDataSourceType::TRANSFER_MOVE_TX_CTX))) {
       LOG_WARN("update transfer status failed", KR(ret), K(tx_id));
     } else {
       ObTransferMoveTxParam move_tx_param(collect_tx_info.src_ls_id_,
@@ -681,7 +681,7 @@ int ObStartTransferDestPrepareHelper::on_replay(
   } else if (OB_FAIL(MTL(ObLSService*)->get_ls(info.dest_ls_id_, ls_handle, ObLSGetMod::TABLET_MOD))) {
     LOG_WARN("get ls failed", KR(ret), K(info));
   } else if (OB_FAIL(ls_handle.get_ls()->get_transfer_status().update_status(tx_id, info.task_id_, scn,
-          NotifyType::ON_REDO, ObTxDataSourceType::TRANSFER_DEST_PREPARE))) {
+          NotifyType::REGISTER_SUCC, ObTxDataSourceType::TRANSFER_DEST_PREPARE))) {
     LOG_WARN("update transfer status failed", KR(ret), K(tx_id));
   }
   return ret;
