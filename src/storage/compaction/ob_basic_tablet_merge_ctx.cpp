@@ -279,7 +279,8 @@ int ObStaticMergeParam::cal_major_merge_param(
       LOG_WARN("failed to init progressive merge mgr", KR(ret), K_(is_full_merge), K(sstable_meta_hdl), KPC(schema_));
     } else if (is_full_merge_
       || (merge_level_ != MACRO_BLOCK_MERGE_LEVEL && is_schema_changed_)
-      || (data_version_ >= DATA_VERSION_4_3_3_0 && progressive_mgr.need_calc_progressive_merge())) {
+      || (data_version_ >= DATA_VERSION_4_3_3_0 && progressive_mgr.need_calc_progressive_merge())
+      || (data_version_ >= DATA_VERSION_4_3_3_0 && data_version_ < DATA_VERSION_4_3_4_0 && !get_tablet_id().is_user_tablet())) {
       merge_level_ = MACRO_BLOCK_MERGE_LEVEL;
       // ATTENTION! Critical diagnostic log, DO NOT CHANGE!!!
       LOG_INFO("set merge_level to MACRO_BLOCK_MERGE_LEVEL", K_(is_schema_changed), K(force_full_merge),
@@ -1221,6 +1222,30 @@ int ObBasicTabletMergeCtx::get_medium_compaction_info()
   // always free medium info
   ObTabletObjLoadHelper::free(temp_allocator, medium_info);
 
+  return ret;
+}
+
+int ObBasicTabletMergeCtx::cal_major_merge_param(
+  const bool force_full_merge,
+  ObProgressiveMergeMgr &progressive_mgr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(static_param_.cal_major_merge_param(force_full_merge,
+                                                  progressive_mgr))) {
+    LOG_WARN("failed to calc major param", KR(ret), K_(static_param));
+  } else if (!progressive_merge_mgr_.need_calc_progressive_merge() && static_param_.data_version_ >= DATA_VERSION_4_3_3_0) {
+    bool is_schema_changed = false;
+    if (OB_FAIL(ObMediumCompactionScheduleFunc::check_if_schema_changed(*get_tablet(), *get_schema(), is_schema_changed))) {
+      LOG_WARN("failed to check is schema changed", KR(ret), K_(static_param), KPC(get_schema()));
+    } else if (is_schema_changed && !static_param_.is_schema_changed_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("found schema changed when compare sstable & schema but progressive merge round is not increasing", KR(ret),
+        K(is_schema_changed), "param", get_dag_param(), KPC(get_schema()));
+#ifdef ERRSIM
+      SERVER_EVENT_SYNC_ADD("merge_errsim", "found_schema_changed", "ls_id", get_ls_id(), "tablet_id", get_tablet_id());
+#endif
+    }
+  }
   return ret;
 }
 

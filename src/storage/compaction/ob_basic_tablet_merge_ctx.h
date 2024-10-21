@@ -261,6 +261,8 @@ public:
   VIRTUAL_TO_STRING_KV(K_(static_param), K_(static_desc), K_(parallel_merge_ctx), K_(tablet_handle),
     K_(info_collector), KP_(merge_dag));
 protected:
+  int cal_major_merge_param(const bool force_full_merge,
+                            ObProgressiveMergeMgr &progressive_mgr);
   virtual int get_merge_tables(ObGetMergeTablesResult &get_merge_table_result);
   virtual int try_swap_tablet(ObGetMergeTablesResult &get_merge_table_result)
   {

@@ -549,7 +549,6 @@ int ObTabletMajorMergeCtx::prepare_schema()
   return ret;
 }
 
-
 #ifdef OB_BUILD_SHARED_STORAGE
 /*
  *  ----------------------------------------------ObSSMergeCtx--------------------------------------------------

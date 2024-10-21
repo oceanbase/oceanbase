@@ -304,7 +304,7 @@ int ObCOTabletMergeCtx::cal_merge_param()
     force_full_merge = true;
     static_param_.is_rebuild_column_store_ = true;
   }
-  if (FAILEDx(static_param_.cal_major_merge_param(force_full_merge, progressive_merge_mgr_))) {
+  if (FAILEDx(ObBasicTabletMergeCtx::cal_major_merge_param(force_full_merge, progressive_merge_mgr_))) {
     LOG_WARN("failed to calc major merge param", KR(ret), K(force_full_merge));
   }
   return ret;

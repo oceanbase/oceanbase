@@ -93,6 +93,7 @@ public:
     DURING_SPLIT,
     NEED_CHECK_LAST_MEDIUM_CKM,
     EXIST_UNFINISH_MEDIUM,
+    SCHEDULE_CONFLICT,
     DIAGNOSE_NORMAL, // for diagnose
     NEW_ROUND_STATE_MAX,
   };
@@ -131,6 +132,8 @@ public:
   bool need_diagnose() const;
   bool could_schedule_new_round() const { return can_merge() && inner_check_new_round_state(); }
   bool tablet_merge_finish() const { return tablet_merge_finish_; }
+
+  // CAREFUL! medium list may be NULL for some situation
   const compaction::ObMediumCompactionInfoList *medium_list() const { return medium_list_; }
   TabletExecuteState get_execute_state() const { return execute_state_; }
   TabletScheduleNewRoundState get_new_round_state() const { return new_round_state_; }
