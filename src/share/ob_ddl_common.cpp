@@ -1749,7 +1749,7 @@ int ObDDLUtil::check_and_cancel_single_replica_dag(
 }
 
 int ObDDLUtil::ddl_get_tablet(
-    ObLSHandle &ls_handle,
+    const ObLSHandle &ls_handle,
     const ObTabletID &tablet_id,
     storage::ObTabletHandle &tablet_handle,
     storage::ObMDSGetTabletMode mode)

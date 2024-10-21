@@ -639,7 +639,7 @@ public:
                                              ObSqlString &rowkey_column_sql_string);
 
   static int ddl_get_tablet(
-      storage::ObLSHandle &ls_handle,
+      const storage::ObLSHandle &ls_handle,
       const ObTabletID &tablet_id,
       storage::ObTabletHandle &tablet_handle,
       const storage::ObMDSGetTabletMode mode = storage::ObMDSGetTabletMode::READ_WITHOUT_CHECK);

@@ -875,6 +875,10 @@ private:
   int wait_release_memtables_();
   int mark_mds_table_switched_to_empty_shell_();
   int handle_transfer_replace_(const ObBatchUpdateTableStoreParam &param);
+
+  // DDL.
+  int update_restore_status_for_split_(const ObBatchUpdateTableStoreParam &param);
+
   // NOTICE:
   // - Because the `calc_tablet_attr()` may has I/O operations, you can bypass it if wantn't to update it.
   int get_updating_tablet_pointer_param(

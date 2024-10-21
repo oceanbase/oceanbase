@@ -1549,7 +1549,8 @@ int ObTabletLobWriteDataTask::create_sstables(
                 ctx_->lob_meta_tablet_handle_,
                 ctx_->new_lob_tablet_ids_.at(i),
                 batch_sstables_handle.at(i),
-                split_sstable_type))) {
+                split_sstable_type,
+                false/*can_reuse_macro_block*/))) {
       LOG_WARN("update table store with batch tables failed", K(ret), K(batch_sstables_handle.at(i)), K(split_sstable_type));
     }
   }

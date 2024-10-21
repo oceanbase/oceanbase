@@ -1393,7 +1393,8 @@ int ObTabletSplitMergeTask::create_sstable(
                 context_->tablet_handle_,
                 dest_tablet_id,
                 batch_sstables_handle,
-                split_sstable_type))) {
+                split_sstable_type,
+                param_->can_reuse_macro_block_))) {
             LOG_WARN("update table store with batch tables failed", K(ret), K(batch_sstables_handle), K(split_sstable_type));
           }
         }
@@ -1466,6 +1467,7 @@ int ObTabletSplitMergeTask::build_create_sstable_param(
     create_sstable_param.data_block_ids_ = res.data_block_ids_;
     create_sstable_param.other_block_ids_ = res.other_block_ids_;
     create_sstable_param.ddl_scn_.set_min();
+    create_sstable_param.table_backup_flag_ = res.table_backup_flag_; // to tag whether there is any remote macro block.
     MEMCPY(create_sstable_param.encrypt_key_, res.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
     if (src_table.is_major_sstable()) {
       if (OB_FAIL(create_sstable_param.column_checksums_.assign(res.data_column_checksums_))) {
@@ -1571,7 +1573,8 @@ int ObTabletSplitMergeTask::update_table_store_with_batch_tables(
     const ObTabletHandle &src_tablet_handle,
     const ObTabletID &dst_tablet_id,
     const ObTablesHandleArray &tables_handle,
-    const share::ObSplitSSTableType &split_sstable_type)
+    const share::ObSplitSSTableType &split_sstable_type,
+    const bool can_reuse_macro_block)
 {
   int ret = OB_SUCCESS;
   ObBatchUpdateTableStoreParam param;
@@ -1620,6 +1623,13 @@ int ObTabletSplitMergeTask::update_table_store_with_batch_tables(
     }
   }
 
+  if (OB_SUCC(ret) && can_reuse_macro_block && share::ObSplitSSTableType::SPLIT_MAJOR == split_sstable_type) {
+    // iterate all major and minors, to determine the dest restore status.
+    if (OB_FAIL(check_and_determine_restore_status(ls_handle, dst_tablet_id, param.tables_handle_, param.restore_status_))) {
+      LOG_WARN("check and determine restore status failed", K(ret), K(dst_tablet_id));
+    }
+  }
+
   if (OB_SUCC(ret)) {
     param.tablet_split_param_.snapshot_version_         = src_tablet_handle.get_obj()->get_tablet_meta().snapshot_version_;
     param.tablet_split_param_.multi_version_start_      = src_tablet_handle.get_obj()->get_multi_version_start();
@@ -1629,6 +1639,73 @@ int ObTabletSplitMergeTask::update_table_store_with_batch_tables(
       LOG_WARN("failed to update tablet table store", K(ret), K(dst_tablet_id), K(param));
     }
     FLOG_INFO("update batch sstables", K(ret), K(dst_tablet_id), K(batch_tables), K(param));
+  }
+  return ret;
+}
+
+int ObTabletSplitMergeTask::check_and_determine_restore_status(
+    const ObLSHandle &ls_handle,
+    const ObTabletID &dst_tablet_id,
+    const ObTablesHandleArray &major_handles_array,
+    ObTabletRestoreStatus::STATUS &restore_status)
+{
+  int ret = OB_SUCCESS;
+  restore_status = ObTabletRestoreStatus::FULL;
+  ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> major_tables_array;
+  if (OB_UNLIKELY(!ls_handle.is_valid() || !dst_tablet_id.is_valid() || major_handles_array.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(ls_handle), K(dst_tablet_id), K(major_handles_array));
+  } else if (OB_FAIL(major_handles_array.get_tables(major_tables_array))) {
+    LOG_WARN("get batch sstables failed", K(ret));
+  } else {
+    // 1. to check if there is any remote macro block in major tables.
+    for (int64_t i = 0; OB_SUCC(ret) && ObTabletRestoreStatus::is_full(restore_status) && i < major_tables_array.count(); i++) {
+      ObITable *table = major_tables_array.at(i);
+      ObSSTableMetaHandle sstable_meta_handle;
+      if (OB_UNLIKELY(nullptr == table || !table->is_major_sstable())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null table", K(ret), K(dst_tablet_id), KPC(table), K(major_handles_array));
+      } else if (OB_FAIL(static_cast<ObSSTable *>(table)->get_meta(sstable_meta_handle))) {
+        LOG_WARN("get sstable meta failed", K(ret));
+      } else {
+        restore_status = sstable_meta_handle.get_sstable_meta().get_basic_meta().table_backup_flag_.has_backup() ?
+          ObTabletRestoreStatus::REMOTE : restore_status;
+        LOG_TRACE("with backup macro block sstable is found", K(ret), K(dst_tablet_id), KPC(table));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && ObTabletRestoreStatus::is_full(restore_status)) {
+    // 2. to check if there is any remote macro block in minor tables.
+    ObTabletHandle tablet_handle;
+    ObTableStoreIterator table_iter;
+    if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, dst_tablet_id, tablet_handle, ObMDSGetTabletMode::READ_ALL_COMMITED))) {
+      LOG_WARN("get tablet failed", K(ret), K(dst_tablet_id));
+    } else if (OB_FAIL(tablet_handle.get_obj()->get_all_sstables(table_iter, true/*need_unpack*/))) {
+      LOG_WARN("get all sstables failed", K(ret));
+    } else {
+      while (OB_SUCC(ret) && ObTabletRestoreStatus::is_full(restore_status)) {
+        ObITable *table = nullptr;
+        ObSSTableMetaHandle sstable_meta_handle;
+        if (OB_FAIL(table_iter.get_next(table))) {
+          if (OB_UNLIKELY(OB_ITER_END != ret)) {
+            LOG_WARN("iterate tables failed", K(ret), K(dst_tablet_id));
+          } else {
+            ret = OB_SUCCESS;
+            break;
+          }
+        } else if (OB_UNLIKELY(nullptr == table || table->is_major_sstable())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("sstable should not be NULL", K(ret), KPC(table), K(table_iter));
+        } else if (OB_FAIL(static_cast<ObSSTable *>(table)->get_meta(sstable_meta_handle))) {
+          LOG_WARN("get sstable meta failed", K(ret));
+        } else {
+          restore_status = sstable_meta_handle.get_sstable_meta().get_basic_meta().table_backup_flag_.has_backup() ?
+            ObTabletRestoreStatus::REMOTE : restore_status;
+          LOG_TRACE("with backup macro block sstable is found", K(ret), K(dst_tablet_id), KPC(table));
+        }
+      }
+    }
   }
   return ret;
 }
