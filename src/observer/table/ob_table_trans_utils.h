@@ -29,14 +29,15 @@ struct ObTableTransParam final
 {
 public:
   ObTableTransParam()
-      : trans_state_(),
-        trans_state_ptr_(&trans_state_) // refer to inner trans_state_ default
+      : trans_state_()
   {
     reset();
   }
   virtual ~ObTableTransParam() {}
   void reset()
   {
+    trans_state_.reset();
+    trans_state_ptr_ = &trans_state_; // refer to inner trans_state_ default
     trans_desc_ = nullptr;
     had_do_response_ = false;
     req_ = nullptr;
@@ -50,9 +51,6 @@ public:
     create_cb_functor_ = nullptr;
     timeout_ts_ = -1;
     did_async_commit_ = false;
-    if (OB_NOT_NULL(trans_state_ptr_)) {
-      trans_state_ptr_->reset();
-    }
   }
   TO_STRING_KV(KPC_(trans_desc),
                K_(tx_snapshot),
