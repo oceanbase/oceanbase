@@ -15975,7 +15975,32 @@ int ObDDLService::recover_restore_table_ddl_task(
       } else {
         ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
         bool is_dest_table_column_store = false;
-        if (OB_FAIL(dst_tenant_trans.start(sql_proxy_, dst_tenant_id, refreshed_dst_tenant_version))) {
+
+        if (tenant_data_version >= DATA_VERSION_4_3_3_0) {
+          const share::schema::ObTenantSchema *dst_tenant_schema = nullptr;
+          if (OB_FAIL(dst_tenant_schema_guard->get_tenant_info(dst_tenant_id, dst_tenant_schema))) {
+            LOG_WARN("fail to get tenant schema", K(ret), K(dst_tenant_id));
+          } else if (OB_UNLIKELY(OB_ISNULL(dst_tenant_schema) || !dst_tenant_schema->is_valid())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("tenant schema is null or invalid", K(ret), K(dst_tenant_id), KPC(dst_tenant_schema));
+          } else {
+            common::ObArray<share::ObZoneReplicaAttrSet> zone_locality;
+            if (OB_FAIL(dst_tenant_schema->get_zone_replica_attr_array(zone_locality))) {
+              LOG_WARN("fail to get locality from schema", K(ret), KPC(dst_tenant_schema));
+            } else {
+              for (int64_t i = 0; OB_SUCC(ret) && i < zone_locality.count(); ++i) {
+                const share::ObZoneReplicaAttrSet &this_set = zone_locality.at(i);
+                if (0 != this_set.get_columnstore_replica_num()) {
+                  ret = OB_NOT_SUPPORTED;
+                  LOG_WARN("not supported to retore table with tenant with column store replica", K(ret), K(arg));
+                  LOG_USER_ERROR(OB_NOT_SUPPORTED, "Can not restore table with tenant with C-Replica");
+                }
+              }
+            }
+          }
+        }
+
+        if (FAILEDx(dst_tenant_trans.start(sql_proxy_, dst_tenant_id, refreshed_dst_tenant_version))) {
           LOG_WARN("start transaction failed", K(ret), K(dst_tenant_id), K(refreshed_dst_tenant_version));
         } else if (OB_FAIL(dst_table_schema.assign(arg.target_schema_))) {
           LOG_WARN("assign failed", K(ret), K(session_id), K(arg));
