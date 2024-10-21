@@ -2122,96 +2122,110 @@ int ObPLCursorInfo::deep_copy(ObPLCursorInfo &src, common::ObIAllocator *allocat
   if (NULL == copy_allocator) {
     copy_allocator = get_allocator();
   }
-  CK (OB_NOT_NULL(copy_allocator));
-  if (OB_SUCC(ret)) {
-    id_ = src.id_;
-    is_explicit_ = src.is_explicit_;
-    for_update_ = src.for_update_;
-    has_hidden_rowid_ = src.has_hidden_rowid_;
-    is_streaming_ = src.is_streaming_;
-    isopen_ = src.isopen_;
-    fetched_ = src.fetched_;
-    fetched_with_row_ = src.fetched_with_row_;
-    rowcount_  = src.rowcount_;
-    current_position_ = src.current_position_;
-    in_forall_ = src.in_forall_;
-    save_exception_ = src.save_exception_;
-    forall_rollback_ = src.forall_rollback_;
-    trans_id_ = src.trans_id_;
-    is_scrollable_ = src.is_scrollable_;
-    OZ (snapshot_.assign(src.snapshot_));
-    is_need_check_snapshot_ = src.is_need_check_snapshot_;
-    last_execute_time_ = src.last_execute_time_;
-    sql_trace_id_ = src.sql_trace_id_;
-    //these should not be copied ..
-    //    lib::MemoryContext entity_;
-    //    ObIAllocator *allocator_;
-  }
-  OZ (ob_write_row(*copy_allocator, src.current_row_, current_row_));
-  OZ (ob_write_row(*copy_allocator, src.first_row_, first_row_));
-  OZ (ob_write_row(*copy_allocator, src.last_row_, last_row_));
-  OZ (bulk_rowcount_.assign(src.bulk_rowcount_));
-  OZ (bulk_exceptions_.assign(src.bulk_exceptions_));
-
-  //copy row store
   if (is_streaming_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("streaming cursor can not be copy", K(src), K(ret));
   } else {
     ObSPICursor *src_cursor = src.get_spi_cursor();
     ObSPICursor *dest_cursor = NULL;
-    const ObNewRow *row = NULL;
-    int64_t cur = 0;
+    CK (OB_NOT_NULL(copy_allocator));
     CK (OB_NOT_NULL(src_cursor));
-    // it will happend not in ps cursor.
-    OZ (prepare_spi_cursor(dest_cursor,
-                            src_cursor->row_store_.get_tenant_id(),
-                            src_cursor->row_store_.get_mem_limit(),
-                            false,
-                            src_cursor->session_info_));
-    CK (OB_NOT_NULL(dest_cursor));
-    OZ (dest_cursor->row_desc_.assign(src_cursor->row_desc_));
-#ifdef OB_BUILD_ORACLE_PL
-    if (OB_SUCC(ret) && src_cursor->fields_.count() > 0) {
-      OZ (ObDbmsCursorInfo::deep_copy_field_columns(*copy_allocator,
-                                                    &(src_cursor->fields_),
-                                                    dest_cursor->fields_));
+    if (OB_SUCC(ret)) {
+      id_ = src.id_;
+      is_explicit_ = src.is_explicit_;
+      for_update_ = src.for_update_;
+      has_hidden_rowid_ = src.has_hidden_rowid_;
+      is_streaming_ = src.is_streaming_;
+      isopen_ = src.isopen_;
+      fetched_ = src.fetched_;
+      fetched_with_row_ = src.fetched_with_row_;
+      rowcount_  = src.rowcount_;
+      current_position_ = src.current_position_;
+      in_forall_ = src.in_forall_;
+      save_exception_ = src.save_exception_;
+      forall_rollback_ = src.forall_rollback_;
+      trans_id_ = src.trans_id_;
+      is_scrollable_ = src.is_scrollable_;
+      OZ (snapshot_.assign(src.snapshot_));
+      is_need_check_snapshot_ = src.is_need_check_snapshot_;
+      last_execute_time_ = src.last_execute_time_;
+      sql_trace_id_ = src.sql_trace_id_;
+      //these should not be copied ..
+      //    lib::MemoryContext entity_;
+      //    ObIAllocator *allocator_;
     }
-#endif
-    OX (dest_cursor->cur_ = src_cursor->cur_);
+    //copy row store
+    if (OB_SUCC(ret)) {
+      const ObNewRow *row = NULL;
+      int64_t cur = 0;
+      // it will happend not in ps cursor.
+      OZ (prepare_spi_cursor(dest_cursor,
+                              src_cursor->row_store_.get_tenant_id(),
+                              src_cursor->row_store_.get_mem_limit(),
+                              false,
+                              src_cursor->session_info_));
+      CK (OB_NOT_NULL(dest_cursor));
+      if (OB_SUCC(ret)) {
+        OZ (dest_cursor->row_desc_.assign(src_cursor->row_desc_));
+    #ifdef OB_BUILD_ORACLE_PL
+        if (OB_SUCC(ret) && src_cursor->fields_.count() > 0) {
+          OZ (ObDbmsCursorInfo::deep_copy_field_columns(*copy_allocator,
+                                                        &(src_cursor->fields_),
+                                                        dest_cursor->fields_));
+        }
+    #endif
+        OX (dest_cursor->cur_ = src_cursor->cur_);
 
-    while (OB_SUCC(ret) && cur < src_cursor->row_store_.get_row_cnt()) {
-      if (OB_FAIL(src_cursor->row_store_.get_row(cur, row))) {
-        //do nothing
-      } else if (OB_ISNULL(row)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("row is null", K(ret));
-      } else {
-        ObNewRow tmp_row = *row;
-        for (int64_t i = 0; OB_SUCC(ret) && i < tmp_row.get_count(); ++i) {
-          ObObj& obj = tmp_row.get_cell(i);
-          ObObj tmp;
-          if (obj.is_pl_extend()) {
-            if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(*(dest_cursor->allocator_), obj, tmp))) {
-              LOG_WARN("failed to copy pl extend", K(ret));
-            } else {
-              obj = tmp;
-              dest_cursor->complex_objs_.push_back(tmp);
+        while (OB_SUCC(ret) && cur < src_cursor->row_store_.get_row_cnt()) {
+          if (OB_FAIL(src_cursor->row_store_.get_row(cur, row))) {
+            //do nothing
+          } else if (OB_ISNULL(row)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("row is null", K(ret));
+          } else {
+            ObNewRow tmp_row = *row;
+            for (int64_t i = 0; OB_SUCC(ret) && i < tmp_row.get_count(); ++i) {
+              ObObj& obj = tmp_row.get_cell(i);
+              ObObj tmp;
+              if (obj.is_pl_extend()) {
+                if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(*(dest_cursor->allocator_), obj, tmp))) {
+                  LOG_WARN("failed to copy pl extend", K(ret));
+                } else {
+                  obj = tmp;
+                  dest_cursor->complex_objs_.push_back(tmp);
+                }
+              }
+            }
+            if (OB_SUCC(ret)) {
+              if (OB_FAIL(dest_cursor->row_store_.add_row(tmp_row))) {
+                LOG_WARN("failed to add row to row store", K(ret));
+              } else {
+                ++cur;
+              }
             }
           }
         }
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(dest_cursor->row_store_.add_row(tmp_row))) {
-            LOG_WARN("failed to add row to row store", K(ret));
-          } else {
-            ++cur;
-          }
+
+        OX (dest_cursor->row_store_.finish_add_row());
+
+        OZ (ob_write_row(*copy_allocator, src.current_row_, current_row_));
+        OZ (ob_write_row(*copy_allocator, src.first_row_, first_row_));
+        OZ (ob_write_row(*copy_allocator, src.last_row_, last_row_));
+        OZ (bulk_rowcount_.assign(src.bulk_rowcount_));
+        OZ (bulk_exceptions_.assign(src.bulk_exceptions_));
+
+        if (OB_FAIL(ret)) {
+          common::ObIAllocator *old_allocator = get_allocator();
+          dest_cursor->~ObSPICursor();
+          this->~ObPLCursorInfo();
+          new(this) ObPLCursorInfo(old_allocator);
+          this->reset();
+          this->set_ref_count(1);
         }
       }
     }
-
-    OX (dest_cursor->row_store_.finish_add_row());
   }
+
   return ret;
 }
 
