@@ -287,7 +287,7 @@ public:
 
   void set_flushed_scn(const share::SCN &flushed_scn) { flushed_scn_ = flushed_scn; }
 
-  void enable_check_tablet_status(const bool need_check) { ATOMIC_STORE(&need_check_tablet_status_, need_check); }
+  void enable_check_tablet_status(const bool need_check);
 
   INHERIT_TO_STRING_KV("ObITable", ObITable, KP(this), K_(snapshot_version), K_(ls_id));
 private:
@@ -338,7 +338,9 @@ private:
                                        const ObTableLockOp &lock_op);
   int unregister_from_deadlock_detector_(const ObTableLockOp &lock_op);
 
-  int check_tablet_write_allow_(const ObTableLockOp &lock_op);
+  int check_tablet_write_allow_(const ObTableLockOp &lock_op,
+                                const int64_t input_transfer_counter,
+                                int64_t &output_transfer_counter);
   int get_lock_wait_expire_ts_(const int64_t lock_wait_start_ts);
   int check_and_set_tx_lock_timeout_(const memtable::ObMvccAccessCtx &acc_ctx);
 private:
@@ -360,8 +362,10 @@ private:
   share::SCN pre_rec_scn_;
   share::SCN max_committed_scn_;
   bool is_frozen_;
-  // for tablet transfer enable check tablet status
+  // for transfer to enable tablet status check
   bool need_check_tablet_status_;
+  // for detect the transfer between the table lock operation
+  int64_t transfer_counter_;
 
   storage::ObFreezer *freezer_;
   RWLock flush_lock_;        // lock before change ts

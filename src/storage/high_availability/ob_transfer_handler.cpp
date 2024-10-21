@@ -1191,8 +1191,10 @@ int ObTransferHandler::wait_tablet_write_end_(
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ls->get_lock_table()->enable_check_tablet_status(true))) {
       LOG_WARN("failed to enable check tablet status", KR(ret), K(task_info));
-    } else if (OB_FAIL(ls->wait_tx_write_end(timeout_ctx))) {
-      LOG_WARN("failed to wait tx_write end", KR(ret), K(task_info));
+    // Instead of wait table lock write end, we choose to use double check
+    // during table lock callback register
+    // } else if (OB_FAIL(ls->wait_tx_write_end(timeout_ctx))) {
+    //   LOG_WARN("failed to wait tx_write end", KR(ret), K(task_info));
     } else if (OB_FAIL(ls->get_tx_svr()->traverse_trans_to_submit_redo_log(failed_tx_id))) {
       LOG_WARN("failed to submit tx log", KR(ret), K(task_info));
     } else if (OB_FAIL(ls->tablet_freeze(checkpoint::INVALID_TRACE_ID,
