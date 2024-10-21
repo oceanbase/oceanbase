@@ -137,7 +137,8 @@ int ObDASIndexMergeIter::inner_init(ObDASIterParam &param)
     tx_desc_ = index_merge_param.tx_desc_;
     snapshot_ = index_merge_param.snapshot_;
     is_reverse_ = index_merge_param.is_reverse_;
-    if (merge_ctdef_->is_left_child_leaf_node_) {
+    is_left_child_leaf_node_ = index_merge_param.is_left_child_leaf_node_;
+    if (is_left_child_leaf_node_) {
       OB_ASSERT(merge_rtdef_->children_[0]->op_type_ == DAS_OP_TABLE_SCAN ||
                 (merge_rtdef_->children_[0]->op_type_ == DAS_OP_SORT &&
                  merge_rtdef_->children_[0]->children_[0]->op_type_ == DAS_OP_TABLE_SCAN));
@@ -284,7 +285,7 @@ void ObDASIndexMergeIter::reset_datum_ptr(const common::ObIArray<ObExpr*> *exprs
 int ObDASIndexMergeIter::do_table_scan()
 {
   int ret = OB_SUCCESS;
-  if (merge_ctdef_->is_left_child_leaf_node_) {
+  if (is_left_child_leaf_node_) {
     OB_ASSERT(left_scan_ctdef_ != nullptr && left_scan_rtdef_ != nullptr);
     if (OB_FAIL(init_scan_param(ls_id_, left_tablet_id_, left_scan_ctdef_, left_scan_rtdef_, left_scan_param_))) {
       LOG_WARN("failed to init left scan param", K(ret));
@@ -308,7 +309,7 @@ int ObDASIndexMergeIter::do_table_scan()
 int ObDASIndexMergeIter::rescan()
 {
   int ret = OB_SUCCESS;
-  if (merge_ctdef_->is_left_child_leaf_node_) {
+  if (is_left_child_leaf_node_) {
     left_scan_param_.tablet_id_ = left_tablet_id_;
     left_scan_param_.ls_id_ = ls_id_;
     if (OB_FAIL(prepare_scan_ranges(left_scan_param_, left_scan_rtdef_))) {
@@ -341,7 +342,7 @@ int ObDASIndexMergeIter::set_ls_tablet_ids(const ObLSID &ls_id, const ObDASRelat
 {
   int ret = OB_SUCCESS;
   ls_id_ = ls_id;
-  if (merge_ctdef_->is_left_child_leaf_node_) {
+  if (is_left_child_leaf_node_) {
     OB_ASSERT(left_scan_ctdef_ != nullptr);
     left_tablet_id_ = related_tablet_ids.index_merge_tablet_ids_.at(left_scan_ctdef_->index_merge_idx_);
   }
@@ -353,7 +354,7 @@ int ObDASIndexMergeIter::set_ls_tablet_ids(const ObLSID &ls_id, const ObDASRelat
 int ObDASIndexMergeIter::inner_reuse()
 {
   int ret = OB_SUCCESS;
-  if (merge_ctdef_->is_left_child_leaf_node_) {
+  if (is_left_child_leaf_node_) {
     const ObTabletID &old_left_tablet_id = left_scan_param_.tablet_id_;
     left_scan_param_.need_switch_param_ = left_scan_param_.need_switch_param_ ||
         (old_left_tablet_id.is_valid() && old_left_tablet_id != left_tablet_id_);

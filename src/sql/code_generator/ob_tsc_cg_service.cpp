@@ -1884,7 +1884,6 @@ int ObTscCgService::generate_index_merge_node_ctdef(const ObLogTableScan &op,
       merge_ctdef->children_[1] = right_ctdef;
       merge_ctdef->children_cnt_ = 2;
       merge_ctdef->merge_type_ = node->merge_type_;
-      merge_ctdef->is_left_child_leaf_node_ = (left_ctdef->op_type_ != DAS_OP_INDEX_MERGE);
       merge_ctdef->is_reverse_ = is_descending_direction(op.get_scan_direction());
       node_ctdef = merge_ctdef;
     }

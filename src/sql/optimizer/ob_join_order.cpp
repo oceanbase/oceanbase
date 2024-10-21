@@ -3009,7 +3009,7 @@ int ObJoinOrder::check_can_use_index_merge(const uint64_t table_id,
       }
     }
   }
-
+  use_index_merge = false;
   OPT_TRACE("index merge list", index_merge_list, "use_index_merge", use_index_merge,
     "index_merge_root", index_merge_root);
   OPT_TRACE_TITLE("END CHECK USE INDEX MERGE");

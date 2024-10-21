@@ -95,7 +95,7 @@ const ObDASBaseCtDef *ObDASIndexMergeCtDef::get_right_ctdef() const
   return children_[1];
 }
 
-OB_SERIALIZE_MEMBER((ObDASIndexMergeCtDef, ObDASAttachCtDef), merge_type_, is_left_child_leaf_node_, is_reverse_);
+OB_SERIALIZE_MEMBER((ObDASIndexMergeCtDef, ObDASAttachCtDef), merge_type_, is_reverse_);
 
 OB_SERIALIZE_MEMBER((ObDASIndexMergeRtDef, ObDASAttachRtDef));
 

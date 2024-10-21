@@ -40,7 +40,8 @@ public:
       rtdef_(nullptr),
       tx_desc_(nullptr),
       snapshot_(nullptr),
-      is_reverse_(false)
+      is_reverse_(false),
+      is_left_child_leaf_node_(false)
   {}
 
   ObIndexMergeType merge_type_;
@@ -54,6 +55,7 @@ public:
   transaction::ObTxDesc *tx_desc_;
   transaction::ObTxReadSnapshot *snapshot_;
   bool is_reverse_;
+  bool is_left_child_leaf_node_;
 
   virtual bool is_valid() const
   {
@@ -147,7 +149,8 @@ public:
       right_scan_rtdef_(nullptr),
       tx_desc_(nullptr),
       snapshot_(nullptr),
-      is_reverse_(false)
+      is_reverse_(false),
+      is_left_child_leaf_node_(false)
   {}
 
   virtual ~ObDASIndexMergeIter() {}
@@ -219,6 +222,7 @@ private:
   transaction::ObTxDesc *tx_desc_;
   transaction::ObTxReadSnapshot *snapshot_;
   bool is_reverse_;
+  bool is_left_child_leaf_node_;
 };
 
 }  // namespace sql
