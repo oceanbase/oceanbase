@@ -1272,6 +1272,11 @@ inline int obj_print_plain_str<ObHexStringType>(const ObObj &obj, char *buffer,
       } else {                                                                              \
         ret = databuff_printf(buffer, length, pos, "%.*s", obj.get_string_len(), obj.get_string_ptr()); \
       }                                                                                     \
+      if (OB_SUCC(ret) && params.refine_range_max_value_) {                                 \
+        int64_t tails = 0;                                                                  \
+        while (pos > 0 && (char)(0xff) == buffer[pos-1]) { pos--; tails++; }                \
+        if (tails > 0) { ret = databuff_printf(buffer, length, pos, "<FF><repeat %ld times>", tails); } \
+      }                                                                                     \
     } else {                                                                                \
       uint32_t result_len = 0;                                                              \
       if (OB_FAIL(ObCharset::charset_convert(obj.get_collation_type(),                      \

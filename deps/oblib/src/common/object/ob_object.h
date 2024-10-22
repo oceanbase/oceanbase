@@ -1289,7 +1289,8 @@ struct ObObjPrintParams
       uint32_t need_print_converter_:1;
       uint32_t print_const_expr_type_:1;
       uint32_t print_null_string_value_:1;
-      uint32_t reserved_:22;
+      uint32_t refine_range_max_value_:1;
+      uint32_t reserved_:21;
     };
   };
 
