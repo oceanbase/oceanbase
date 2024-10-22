@@ -9772,7 +9772,7 @@ int ObTableSchema::get_column_group_index(
     LOG_WARN("No column group exist", K(ret), K(need_calculate_cg_idx), K_(is_column_store_supported), K_(column_group_cnt));
   } else if (param.is_virtual_gen_col()) {
     cg_idx = -1;
-  } else if (column_id < OB_END_RESERVED_COLUMN_ID_NUM &&
+  } else if ((column_id < OB_END_RESERVED_COLUMN_ID_NUM || common::OB_MAJOR_REFRESH_MVIEW_OLD_NEW_COLUMN_ID == column_id) &&
       common::OB_HIDDEN_SESS_CREATE_TIME_COLUMN_ID != column_id &&
       common::OB_HIDDEN_SESSION_ID_COLUMN_ID != column_id &&
       common::OB_HIDDEN_PK_INCREMENT_COLUMN_ID != column_id) { // this has its own column group now
