@@ -752,6 +752,13 @@ int ObBackupMetaKey::get_backup_index_file_type(ObBackupFileType &backup_file_ty
   return ret;
 }
 
+uint64_t ObBackupMetaKey::calc_hash(uint64_t seed) const {
+  uint64_t hash_code = 0;
+  hash_code = murmurhash(&tablet_id_, sizeof(tablet_id_), seed);
+  hash_code = murmurhash(&meta_type_, sizeof(meta_type_), hash_code);
+  return hash_code;
+}
+
 /* ObBackupTabletMeta */
 
 OB_SERIALIZE_MEMBER(ObBackupTabletMeta, tablet_id_, tablet_meta_);
@@ -1156,6 +1163,20 @@ bool ObBackupMetaIndex::operator==(const ObBackupMetaIndex &other) const
   return meta_key_ == other.meta_key_ && backup_set_id_ == other.backup_set_id_ && ls_id_ == other.ls_id_ &&
          turn_id_ == other.turn_id_ && retry_id_ == other.retry_id_ && file_id_ == other.file_id_ &&
          offset_ == other.offset_ && length_ == other.length_;
+}
+
+uint64_t ObBackupMetaIndex::calc_hash(uint64_t seed) const
+{
+  uint64_t hash_code = 0;
+  hash_code = meta_key_.calc_hash(seed);
+  hash_code = murmurhash(&backup_set_id_, sizeof(backup_set_id_), hash_code);
+  hash_code = murmurhash(&ls_id_, sizeof(ls_id_), hash_code);
+  hash_code = murmurhash(&turn_id_, sizeof(turn_id_), hash_code);
+  hash_code = murmurhash(&retry_id_, sizeof(retry_id_), hash_code);
+  hash_code = murmurhash(&file_id_, sizeof(file_id_), hash_code);
+  hash_code = murmurhash(&offset_, sizeof(offset_), hash_code);
+  hash_code = murmurhash(&length_, sizeof(length_), hash_code);
+  return hash_code;
 }
 
 /* ObBackupMetaIndexIndex */

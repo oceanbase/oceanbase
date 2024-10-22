@@ -17,6 +17,7 @@
 #include "share/backup/ob_backup_io_adapter.h"
 #include "share/io/ob_io_struct.h"
 #include "share/backup/ob_backup_store.h"
+#include "storage/backup/ob_backup_meta_cache.h"
 
 using namespace oceanbase::share;
 namespace oceanbase {
@@ -65,24 +66,24 @@ int ObLSBackupRestoreUtil::read_tablet_meta(const common::ObString &path, const 
 }
 
 int ObLSBackupRestoreUtil::read_sstable_metas(const common::ObString &path, const share::ObBackupStorageInfo *storage_info, const common::ObStorageIdMod &mod,
-    const ObBackupMetaIndex &meta_index, common::ObIArray<ObBackupSSTableMeta> &sstable_metas)
+    const ObBackupMetaIndex &meta_index, ObBackupMetaKVCache *kv_cache, common::ObIArray<ObBackupSSTableMeta> &sstable_metas)
 {
   int ret = OB_SUCCESS;
-  char *buf = NULL;
   common::ObArenaAllocator allocator(ObModIds::RESTORE);
-  if (!meta_index.is_valid()) {
+  ObBackupMetaCacheReader cache_reader;
+  ObKVCacheHandle cache_handle;
+  blocksstable::ObBufferReader buffer_reader;
+  if (!meta_index.is_valid() || OB_ISNULL(kv_cache)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(meta_index));
+    LOG_WARN("get invalid args", K(meta_index), KP(kv_cache));
   } else if (BACKUP_SSTABLE_META != meta_index.meta_key_.meta_type_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("meta type do not match", K(meta_index));
-  } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(meta_index.length_)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to alloc read buf", K(ret), K(meta_index));
-  } else if (OB_FAIL(pread_file(path, storage_info, mod, meta_index.offset_, meta_index.length_, buf))) {
-    LOG_WARN("failed to pread buffer", K(ret), K(path), K(meta_index));
+  } else if (OB_FAIL(cache_reader.init(MTL_ID(), path, storage_info, mod, *kv_cache))) {
+    LOG_WARN("failed to init cache reader", K(ret), "tenant_id", MTL_ID(), K(path));
+  } else if (OB_FAIL(cache_reader.fetch_block(meta_index, allocator, cache_handle, buffer_reader))) {
+    LOG_WARN("failedto fetch block", K(ret), K(meta_index));
   } else {
-    blocksstable::ObBufferReader buffer_reader(buf, meta_index.length_);
     const ObBackupCommonHeader *common_header = NULL;
     if (OB_FAIL(buffer_reader.get(common_header))) {
       LOG_WARN("failed to get common_header", K(ret), K(path), K(meta_index), K(buffer_reader));
@@ -324,7 +325,7 @@ int ObLSBackupRestoreUtil::prepare_ddl_sstable_other_block_id_reader_(
   if (!meta_index.is_valid() || !table_key.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(path), K(meta_index), K(table_key));
-  } else if (OB_FAIL(read_sstable_metas(path, storage_info, mod, meta_index, backup_sstable_metas))) {
+  } else if (OB_FAIL(read_sstable_metas(path, storage_info, mod, meta_index, &OB_BACKUP_META_CACHE, backup_sstable_metas))) {
     LOG_WARN("failed to read sstable metas", K(ret), K(path), K(meta_index));
   } else {
     ObBackupSSTableMeta *sstable_meta_ptr = NULL;

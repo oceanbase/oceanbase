@@ -56,6 +56,7 @@
 #include "storage/column_store/ob_column_oriented_sstable.h"
 #include "common/storage/ob_device_common.h"
 #include "share/ob_get_compat_mode.h"
+#include "storage/backup/ob_backup_meta_cache.h"
 
 using namespace oceanbase::blocksstable;
 using namespace oceanbase::storage;
@@ -4975,7 +4976,7 @@ int ObLSBackupPrepareTask::get_backup_tx_data_table_filled_tx_scn_(SCN &filled_t
       meta_index.retry_id_, meta_index.file_id_, backup_path))) {
     LOG_WARN("failed to get ls meta index backup path", K(ret), K_(param), K(sys_backup_data_type), K(meta_index));
   } else if (OB_FAIL(ObLSBackupRestoreUtil::read_sstable_metas(
-      backup_path.get_obstr(), param_.backup_dest_.get_storage_info(), mod, meta_index, meta_array))) {
+      backup_path.get_obstr(), param_.backup_dest_.get_storage_info(), mod, meta_index, &OB_BACKUP_META_CACHE, meta_array))) {
     LOG_WARN("failed to read sstable metas", K(ret), K(backup_path), K(meta_index));
   } else if (meta_array.empty()) {
     filled_tx_scn = SCN::min_scn();

@@ -274,6 +274,8 @@ STAT_EVENT_ADD_DEF(MULTI_VERSION_FUSE_ROW_CACHE_HIT, "multi version fuse row cac
 STAT_EVENT_ADD_DEF(MULTI_VERSION_FUSE_ROW_CACHE_MISS, "multi version fuse row cache miss", ObStatClassIds::CACHE, 50070, true, true, true)
 STAT_EVENT_ADD_DEF(BACKUP_INDEX_CACHE_HIT, "backup index cache hit", ObStatClassIds::CACHE, 50071, true, true, true)
 STAT_EVENT_ADD_DEF(BACKUP_INDEX_CACHE_MISS, "backup index cache miss", ObStatClassIds::CACHE, 50072, true, true, true)
+STAT_EVENT_ADD_DEF(BACKUP_META_CACHE_HIT, "backup meta cache hit", ObStatClassIds::CACHE, 50073, true, true, true)
+STAT_EVENT_ADD_DEF(BACKUP_META_CACHE_MISS, "backup meta cache miss", ObStatClassIds::CACHE, 50074, true, true, true)
 
 // STORAGE
 STAT_EVENT_ADD_DEF(MEMSTORE_LOGICAL_READS, "MEMSTORE_LOGICAL_READS", STORAGE, "MEMSTORE_LOGICAL_READS", true, true, false)

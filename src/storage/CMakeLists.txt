@@ -311,6 +311,7 @@ ob_set_subtarget(ob_storage backup
   backup/ob_backup_fuse_tablet_ctx.cpp
   backup/ob_backup_fuse_tablet_task.cpp
   backup/ob_backup_fuse_tablet_dag.cpp
+  backup/ob_backup_meta_cache.cpp
 )
 
 ob_set_subtarget(ob_storage tablet

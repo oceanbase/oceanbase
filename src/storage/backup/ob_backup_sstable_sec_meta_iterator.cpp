@@ -17,6 +17,7 @@
 #include "storage/high_availability/ob_storage_restore_struct.h"
 #include "storage/tablet/ob_tablet_create_sstable_param.h"
 #include "storage/blocksstable/index_block/ob_index_block_builder.h"
+#include "storage/backup/ob_backup_meta_cache.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -245,6 +246,7 @@ int ObBackupSSTableSecMetaIterator::read_backup_sstable_metas_(
                                                         backup_dest.get_storage_info(),
                                                         mod,
                                                         meta_index,
+                                                        &OB_BACKUP_META_CACHE,
                                                         sstable_meta_array))) {
     LOG_WARN("failed to read tablet meta", K(ret), K(backup_path),
              K(meta_index));
