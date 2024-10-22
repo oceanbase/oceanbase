@@ -509,6 +509,7 @@ typedef enum ObItemType
   T_FUN_SYS_SM3 = 776,
   T_FUN_SYS_SM4_ENCRYPT = 777,
   T_FUN_SYS_SM4_DECRYPT = 778,
+  T_FUN_SYS_GET_MYSQL_ROUTINE_PARAMETER_TYPE_STR = 782,
   ///< @note add new mysql only function type before this line
   T_MYSQL_ONLY_SYS_MAX_OP = 800,
 
@@ -2578,7 +2579,7 @@ typedef enum ObItemType
   T_MICRO_INDEX_CLUSTERED = 4728,
 
   // Parquet related
-  T_PER_ROW_GROUP_SIZE = 4729,
+  T_ROW_GROUP_SIZE = 4729,
   T_COMPRESSION_ALGORITHM = 4730,
 
   // Erase micro cache

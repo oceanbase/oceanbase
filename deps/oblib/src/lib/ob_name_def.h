@@ -1133,4 +1133,5 @@
 #define N_AUDIT_LOG_FILTER_SET_USER         "audit_log_filter_set_user"
 #define N_AUDIT_LOG_FILTER_REMOVE_USER      "audit_log_filter_remove_user"
 #define N_CAN_ACCESS_TRIGGER                "can_access_trigger"
+#define N_GET_MYSQL_ROUTINE_PARAMETER_TYPE_STR   "get_mysql_routine_parameter_type_str"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

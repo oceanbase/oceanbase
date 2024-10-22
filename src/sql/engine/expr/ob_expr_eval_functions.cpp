@@ -376,6 +376,7 @@
 #include "ob_expr_inner_decimal_to_year.h"
 #include "ob_expr_audit_log_func.h"
 #include "ob_expr_can_access_trigger.h"
+#include "ob_expr_get_mysql_routine_parameter_type_str.h"
 
 namespace oceanbase
 {
@@ -1204,6 +1205,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprSm3::eval_sm3,                                                /* 730 */
   ObExprSm4Encrypt::eval_sm4_encrypt,                                 /* 731 */
   ObExprSm4Decrypt::eval_sm4_decrypt,                                 /* 732 */
+  ObExprGetMySQLRoutineParameterTypeStr::get_mysql_routine_parameter_type_str,       /* 768 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
