@@ -170,6 +170,9 @@ int ObGranuleUtil::split_block_ranges(ObExecContext &exec_ctx,
     // 按照partition粒度切分任务的情况下，任务的个数等于partition的个数（`tablets.count()`)
     int64_t pk_idx = 0;
     FOREACH_CNT_X(tablet, tablets, OB_SUCC(ret)) {
+      if (OB_ISNULL(*tablet)) {
+        abort();
+      }
       FOREACH_CNT_X(range, ranges, OB_SUCC(ret)) {
         if (OB_FAIL(granule_tablets.push_back(*tablet))) {
           LOG_WARN("push basck tablet failed", K(ret));
@@ -493,6 +496,8 @@ int ObGranuleUtil::get_tasks_for_partition(ObExecContext &exec_ctx,
   if (expected_task_cnt < 1) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(expected_task_cnt));
+  } else if (OB_ISNULL(&tablet)) {
+    abort();
   } else if (expected_task_cnt == 1) {
     // no need to split the input_ranges, if the expected count of task.
     for (int i = 0; i < input_storage_ranges.count() && OB_SUCC(ret); i++) {
