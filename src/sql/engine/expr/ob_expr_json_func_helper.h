@@ -253,6 +253,12 @@ public:
   }
 
   static int32_t get_json_max_depth_config();
+
+  static bool is_json_special_same_as_expr(ObItemType type, int64_t index);
+  static bool check_json_inner_same_as(const ObSysFunRawExpr *expr1,
+                                       const ObSysFunRawExpr *expr2,
+                                       int64_t index,
+                                       ObExprEqualCheckContext *check_context);
 private:
   const static uint32_t RESERVE_MIN_BUFF_SIZE = 32;
   DISALLOW_COPY_AND_ASSIGN(ObJsonExprHelper);

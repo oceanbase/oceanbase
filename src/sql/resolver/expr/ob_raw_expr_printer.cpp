@@ -1839,25 +1839,23 @@ int ObRawExprPrinter::print_json_value(ObSysFunRawExpr *expr)
       int64_t type = static_cast<ObConstRawExpr*>(expr->get_param_expr(5))->get_value().get_int();
       switch (type) {
         case 0:
-          DATA_PRINTF(" error");
+          DATA_PRINTF(" error on empty");
           break;
         case 1:
         case 3:
           if (lib::is_mysql_mode() || type == 1) {
-            DATA_PRINTF(" null");
+            DATA_PRINTF(" null on empty");
           }
           break;
         case 2:
           DATA_PRINTF(" default ");
           PRINT_EXPR(expr->get_param_expr(6));
+          DATA_PRINTF(" on empty");
           break;
         default:
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid type value.", K(type));
           break;
-      }
-      if (OB_SUCC(ret) && (lib::is_mysql_mode() || type < 3)) {
-        DATA_PRINTF(" on empty");
       }
     }
   }

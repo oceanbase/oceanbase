@@ -30,6 +30,7 @@
 #include "sql/engine/expr/ob_pl_expr_subquery.h"
 #include "share/config/ob_server_config.h"
 #include "sql/resolver/expr/ob_raw_expr_copier.h"
+#include "sql/engine/expr/ob_expr_json_func_helper.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -3759,6 +3760,9 @@ bool ObSysFunRawExpr::inner_same_as(
             } else {
               bool_ret = false;
             }
+
+          } else if (ObJsonExprHelper::is_json_special_same_as_expr(get_expr_type(), i)) {
+            bool_ret = ObJsonExprHelper::check_json_inner_same_as(this, s_expr, i, check_context);
           } else if (!this->get_param_expr(i)->same_as(*s_expr->get_param_expr(i),
                       check_context)) {
             bool_ret = false;

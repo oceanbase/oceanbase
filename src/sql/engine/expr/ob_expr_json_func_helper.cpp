@@ -1793,5 +1793,74 @@ int ObJsonExprHelper::get_json_max_depth_config()
   return json_max_depth;
 }
 
+bool ObJsonExprHelper::is_json_special_same_as_expr(ObItemType type, int64_t index)
+{
+  bool is_special = false;
+  // json value:
+  // empty on empty :5
+  // error on error 8
+  // json query
+  // empty on emtpy 8
+  // error on error 9
+  // on mismatch 10
+  // returning type 2
+
+  if (T_FUN_SYS_JSON_VALUE == type) {
+    if (2 == index || 5 == index || 8 == index) {
+      is_special = true;
+    }
+  } else if (T_FUN_SYS_JSON_QUERY == type) {
+    if (2 == index || 8 == index || 9 == index || 10 == index) {
+      is_special = true;
+    }
+  }
+  return is_special;
+}
+
+bool ObJsonExprHelper::check_json_inner_same_as(const ObSysFunRawExpr *expr1,
+                                                const ObSysFunRawExpr *expr2,
+                                                int64_t index,
+                                                ObExprEqualCheckContext *check_context)
+{
+  bool bool_ret = true;
+  if (!expr1->get_param_expr(index)->same_as(*expr2->get_param_expr(index), check_context)) {
+    if (T_INT == expr1->get_param_expr(index)->get_expr_type()
+        && T_INT == expr2->get_param_expr(index)->get_expr_type()) {
+      const ObConstRawExpr* val1 = static_cast<const ObConstRawExpr*>(expr1->get_param_expr(index));
+      const ObConstRawExpr* val2 = static_cast<const ObConstRawExpr*>(expr2->get_param_expr(index));
+      int64_t int_value1 = val1->get_value().get_int();
+      int64_t int_value2 = val2->get_value().get_int();
+      if (index == 2) {
+        ParseNode pnode1, pnode2;
+        pnode1.value_ = int_value1;
+        pnode2.value_ = int_value2;
+        ObObjType obj_type1 = static_cast<ObObjType>(pnode1.int16_values_[OB_NODE_CAST_TYPE_IDX]);
+        ObObjType obj_type2 = static_cast<ObObjType>(pnode2.int16_values_[OB_NODE_CAST_TYPE_IDX]);
+        if (ob_is_number_tc(obj_type1) && ob_is_number_tc(obj_type2)) {
+          bool_ret = (
+            (pnode1.int16_values_[OB_NODE_CAST_N_PREC_IDX] == pnode2.int16_values_[OB_NODE_CAST_N_PREC_IDX])
+            && pnode1.int16_values_[OB_NODE_CAST_N_SCALE_IDX] == pnode2.int16_values_[OB_NODE_CAST_N_SCALE_IDX]);
+        } else {
+          bool_ret = false;
+        }
+      } else if (T_FUN_SYS_JSON_VALUE == expr1->get_expr_type()) {
+        if (!((int_value1 == 1 && int_value2 == 3) || (int_value1 == 3 && int_value2 == 1))) {
+          bool_ret = false;
+        }
+      } else if (T_FUN_SYS_JSON_QUERY == expr1->get_expr_type()) {
+        if ((8 == index || 9 == index) && !((int_value1 == 1 && int_value2 == 5) || (int_value1 == 5 && int_value2 == 1))) {
+          bool_ret = false;
+        } else if (10 == index && !((int_value1 == 1 && int_value2 == 2) || (int_value1 == 2 && int_value2 == 1)))   {
+          bool_ret = false;
+        }
+      }
+    } else {
+      bool_ret = false;
+    }
+  }
+
+  return bool_ret;
+}
+
 }
 }
