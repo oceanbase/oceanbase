@@ -3069,9 +3069,9 @@ Query Plan
 |ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
 |0 |NESTED-LOOP JOIN CARTESIAN |    |0       |8           |
-|1 |├─TABLE FULL SCAN          |a   |0       |4           |
+|1 |├─TABLE RANGE SCAN         |a   |0       |4           |
 |2 |└─MATERIAL                 |    |0       |4           |
-|3 |  └─TABLE FULL SCAN        |b   |0       |4           |
+|3 |  └─TABLE RANGE SCAN       |b   |0       |4           |
 ===========================================================
 Outputs & filters:
 -------------------------------------
