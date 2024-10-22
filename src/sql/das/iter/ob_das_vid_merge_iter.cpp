@@ -416,10 +416,15 @@ int ObDASVIdMergeIter::concat_rows(int64_t &count, int64_t capacity)
   }
   if (OB_FAIL(ret) && ret != OB_ITER_END) {
   } else if (is_block_sample_) {
+    int tmp_ret = ret;
+    ret = OB_SUCCESS;
     for (int64_t i = 0; i < data_row_cnt && OB_SUCC(ret); i++) {
       if (OB_FAIL(vid_ids.push_back(0))) {
         LOG_WARN("fail to push back mock vid into array", K(ret), K(i), K(data_row_cnt));
       }
+    }
+    if (OB_SUCC(ret)) {
+      ret = tmp_ret; // recover when succ
     }
   } else { // whatever succ or iter_end, we should get from rowkey_vid_iter
     bool expect_iter_end = (ret == OB_ITER_END);
@@ -487,9 +492,12 @@ int ObDASVIdMergeIter::sorted_merge_join_row()
   if (OB_FAIL(data_table_iter_->get_next_row()) && OB_ITER_END != ret) {
     LOG_WARN("fail to get next data table row", K(ret));
   } else if (is_block_sample_) {
-    int64_t vid_id = 0;
-    if (OB_FAIL(fill_vid_id_in_data_table(vid_id, true))) {
-      LOG_WARN("fail to fill null vid id in data table", K(ret), K(vid_id));
+    if (ret == OB_ITER_END) { // do nothing
+    } else {
+      int64_t vid_id = 0;
+      if (OB_FAIL(fill_vid_id_in_data_table(vid_id, true))) {
+        LOG_WARN("fail to fill null vid id in data table", K(ret), K(vid_id));
+      }
     }
   } else if (OB_ITER_END == ret) {
     while (OB_SUCC(rowkey_vid_iter_->get_next_row()));
@@ -542,7 +550,9 @@ int ObDASVIdMergeIter::sorted_merge_join_rows(int64_t &count, int64_t capacity)
   } else if (OB_UNLIKELY(0 == data_table_cnt && OB_SUCCESS == ret)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, data table row count is 0, but ret code is success", K(ret), KPC(data_table_iter_));
+  } else if (OB_ITER_END == ret && FALSE_IT(is_iter_end = true)) {
   } else if (is_block_sample_) {
+    ret = OB_SUCCESS;
     for (int64_t i = 0; i < data_table_cnt && OB_SUCC(ret); i++) {
       if (OB_FAIL(vid_ids.push_back(0))) {
         LOG_WARN("fail to push back mock vid into array", K(ret), K(i), K(data_table_cnt));
@@ -554,7 +564,6 @@ int ObDASVIdMergeIter::sorted_merge_join_rows(int64_t &count, int64_t capacity)
       count = data_table_cnt;
       ret = is_iter_end ? OB_ITER_END : ret;
     }
-  } else if (OB_ITER_END == ret && FALSE_IT(is_iter_end = true)) {
   } else if (OB_FAIL(get_rowkeys(data_table_cnt, allocator, data_table_ctdef_, data_table_rtdef_,
           rowkeys_in_data_table))) {
     LOG_WARN("fail to get data table rowkeys", K(ret), K(data_table_cnt));
