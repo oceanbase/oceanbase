@@ -594,7 +594,7 @@ int ObCGPrefetcher::can_agg_micro_index(const blocksstable::ObMicroIndexInfo &in
             index_range.start_row_id_ >= query_index_range_.start_row_id_ &&
             index_range.end_row_id_ <= query_index_range_.end_row_id_ &&
             (nullptr == filter_bitmap_ || filter_bitmap_->is_all_true(index_range));
-  if (can_agg && OB_FAIL(agg_group_->can_use_index_info(index_info, can_agg))) {
+  if (can_agg && OB_FAIL(agg_group_->can_use_index_info(index_info, 0/*col_idx*/, can_agg))) {
     LOG_WARN("fail to check index info", K(ret), K(index_info), KPC_(agg_group));
   }
   return ret;

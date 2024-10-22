@@ -167,7 +167,7 @@ int ObVirtualCGScanner::get_next_rows(uint64_t &count, const uint64_t capacity)
       ret = OB_ITER_END;
     }
   } else {
-    if (OB_FAIL(agg_group_->eval_batch(iter_param_, access_ctx_, 0/*col_idx*/, nullptr/*reader*/,
+    if (OB_FAIL(agg_group_->eval_batch(iter_param_, access_ctx_, 0/*col_offset*/, nullptr/*reader*/,
                                        nullptr/*row_ids*/, current_group_size_, false/*reserve_memory*/))) {
       LOG_WARN("Fail to eval batch rows", K(ret));
     } else {
@@ -197,7 +197,6 @@ int ObVirtualCGScanner::init_agg_group(const ObTableIterParam &iter_param, ObTab
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected agg group", K(ret));
     } else {
-      agg_group_vec->set_cg_offset_and_index();
       agg_group_ = agg_group_vec;
     }
   } else {
@@ -322,7 +321,6 @@ int ObDefaultCGScanner::init_agg_group(const ObTableIterParam &iter_param, ObTab
     } else if (OB_FAIL(agg_store_vec->get_agg_group(output_expr, agg_group_vec))) {
       LOG_WARN("Failed to get aggregate group", K(ret));
     } else {
-      agg_group_vec->set_cg_offset_and_index();
       agg_group_ = agg_group_vec;
     }
   } else {
