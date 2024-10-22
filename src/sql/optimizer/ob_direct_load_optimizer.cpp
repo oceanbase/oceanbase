@@ -136,8 +136,8 @@ int ObDirectLoadOptimizer::optimize(
     if (OB_ISNULL(session_info = exec_ctx->get_my_session())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected session info is null", K(ret));
-    } else if (0 != table_id && (stmt.is_overwrite() || stmt.value_from_select())) {
-      if (stmt.is_overwrite()) {
+    } else if (0 != table_id && (stmt.value_from_select() && !stmt.is_external_table_overwrite())) {
+      if (stmt.is_normal_table_overwrite()) {
         if (OB_FAIL(check_support_insert_overwrite(global_hint))) {
           LOG_WARN("fail to check support insert overwrite", K(ret), K(global_hint));
         } else {
@@ -147,11 +147,14 @@ int ObDirectLoadOptimizer::optimize(
         // do nothing
       } else if (direct_load_hint.has_direct()) {
         enable_by_direct_load_hint(direct_load_hint);
+        direct_load_optimizer_ctx_.load_mode_ = ObDirectLoadMode::INSERT_INTO;
       } else if (global_hint.has_append()) {
         enable_by_append_hint();
+        direct_load_optimizer_ctx_.load_mode_ = ObDirectLoadMode::INSERT_INTO;
       } else if (!session_info->is_inner()) {
         if (stmt.get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_3_4) {
           enable_by_config();
+          direct_load_optimizer_ctx_.load_mode_ = ObDirectLoadMode::INSERT_INTO;
         }
       }
       if (OB_FAIL(ret)) {
@@ -170,7 +173,6 @@ int ObDirectLoadOptimizer::optimize(
         }
         if (OB_SUCC(ret)) {
           direct_load_optimizer_ctx_.table_id_ = table_id;
-          direct_load_optimizer_ctx_.load_mode_ = ObDirectLoadMode::INSERT_INTO;
           direct_load_optimizer_ctx_.dup_action_ = direct_load_optimizer_ctx_.insert_mode_ == ObDirectLoadInsertMode::INC_REPLACE ?
               ObLoadDupActionType::LOAD_REPLACE : ObLoadDupActionType::LOAD_STOP_ON_DUP;
           ObIArray<ObTablePartitionInfo *> & table_partition_infos = optimizer_ctx.get_table_partition_info();
