@@ -1188,4 +1188,5 @@
 #define N_RB_ITERATE                        "rb_iterate"
 #define N_RB_SELECT                         "rb_select"
 #define N_GET_MYSQL_ROUTINE_PARAMETER_TYPE_STR   "get_mysql_routine_parameter_type_str"
+#define N_ORA_LOGIN_USER                    "ora_login_user"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

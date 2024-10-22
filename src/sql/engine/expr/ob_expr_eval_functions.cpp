@@ -1282,6 +1282,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprArrayRemove::eval_array_remove_ObString,             /* 773 */
   NULL, // ObExprArrayRemove::eval_array_remove_array,                /* 774 */
   NULL, // ObExprArrayMap::eval_array_map,                            /* 775 */
+  NULL, // ObExprOraLoginUser::eval_ora_login_user,                   /* 776 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

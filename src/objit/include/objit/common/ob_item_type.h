@@ -877,6 +877,7 @@ typedef enum ObItemType
   T_FUNC_SYS_ARRAY_REMOVE = 1751,
   T_FUNC_SYS_ARRAY_MAP = 1752,
   T_FUNC_SYS_LAMBDA = 1753,
+  T_FUN_SYS_ORA_LOGIN_USER = 1754,
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table
@@ -2627,6 +2628,10 @@ typedef enum ObItemType
 
   T_GRANT_PROXY = 4750,
   T_REVOKE_PROXY = 4751,
+  T_TG_DB_SCHEMA = 4752,
+  T_TG_SYS_EVENT_OPTION = 4753,
+  T_TG_SYS_EVENT = 4754,
+  T_TG_DB_EVENT_LIST = 4755,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
