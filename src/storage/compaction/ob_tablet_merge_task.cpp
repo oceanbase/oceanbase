@@ -1140,7 +1140,7 @@ int ObTabletMergeTask::process()
   }
   ret = SPECIFIED_SERVER_STOP_COMPACTION;
   if (OB_FAIL(ret)) {
-    if (-ret == GCTX.server_id_) {
+    if (-ret == GCTX.get_server_id()) {
       STORAGE_LOG(INFO, "ERRSIM SPECIFIED_SERVER_STOP_COMPACTION", K(ret));
       return OB_EAGAIN;
     } else {

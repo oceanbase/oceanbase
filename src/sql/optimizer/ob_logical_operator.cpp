@@ -5546,7 +5546,7 @@ int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterI
       join_filter_create->set_tablet_id_expr(info.calc_part_id_expr_);
       OZ(join_filter_create->compute_property());
       OZ(bf_info.init(get_plan()->get_optimizer_context().get_session_info()->get_effective_tenant_id(),
-          filter_id, GCTX.server_id_,
+          filter_id, GCTX.get_server_id(),
           join_filter_create->is_shared_join_filter(),
           info.skip_subpart_,
           join_filter_create->get_p2p_sequence_ids().at(0),

@@ -460,7 +460,7 @@ int ObExprSysContext::eval_instance(const ObExpr &expr, common::ObDatum &res,
   int ret = OB_SUCCESS;
   UNUSED(arg1);
   UNUSED(arg2);
-  uint64_t instance_id = GCTX.server_id_;
+  uint64_t instance_id = GCTX.get_server_id();
   //OZ(uint_string(expr, ctx, instance_id, res));
   char out_id[256];
   sprintf(out_id, "%lu", instance_id);

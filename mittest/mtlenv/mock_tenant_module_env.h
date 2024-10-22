@@ -635,7 +635,7 @@ void MockTenantModuleEnv::init_gctx_gconf()
   GCTX.session_mgr_ = &session_mgr_;
   GCTX.scramble_rand_ = &scramble_rand_;
   GCTX.locality_manager_ = &locality_manager_;
-  GCTX.server_id_ = 1;
+  (void) GCTX.set_server_id(1);
   GCTX.rs_rpc_proxy_ = &rs_rpc_proxy_;
   GCTX.srv_rpc_proxy_ = &srv_rpc_proxy_;
   GCTX.rs_mgr_ = &rs_mgr_;

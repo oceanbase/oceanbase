@@ -699,7 +699,7 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
                                               dfo->get_interrupt_id()))) {
           LOG_WARN("fail gen dfo int id", K(ret));
         } else {
-          dfo->set_qc_server_id(GCTX.server_id_);
+          dfo->set_qc_server_id(GCTX.get_server_index());
           dfo->set_parent_dfo_id(parent_dfo->get_dfo_id());
           LOG_TRACE("cur dfo dop",
                     "dfo_id", dfo->get_dfo_id(),

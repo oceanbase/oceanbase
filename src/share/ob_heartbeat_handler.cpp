@@ -119,8 +119,8 @@ int ObHeartbeatHandler::handle_heartbeat(
   } else {
     // const uint64_t server_id = hb_request.get_server_id();
     const share::RSServerStatus rs_server_status = hb_request.get_rs_server_status();
-    // if (GCTX.server_id_ != server_id) {
-    //   LOG_INFO("receive new server id", "old server_id_", GCTX.server_id_, "new server_id_", server_id);
+    // if (GCTX.get_server_id() != server_id) {
+    //   LOG_INFO("receive new server id", "old server_id_", GCTX.get_server_id(), "new server_id_", server_id);
     //   GCTX.server_id_ = server_id;
     // }
     if (GCTX.rs_server_status_ != rs_server_status) {
@@ -168,7 +168,7 @@ int ObHeartbeatHandler::init_hb_response_(share::ObHBResponse &hb_response)
     share::ObServerInfoInTable::ObBuildVersion build_version;
     common::ObZone zone;
     int64_t test_id = ERRSIM_DISK_ERROR ? 2 : OB_INVALID_ID;
-    if (test_id == GCTX.server_id_) {
+    if (test_id == GCTX.get_server_id()) {
       server_health_status.reset();
       server_health_status.init(ObServerHealthStatus::DATA_DISK_STATUS_ERROR);
     }

@@ -78,10 +78,14 @@ public:
   static int interrupt_qc(ObPxSqcMeta &sqc, int code, ObExecContext *exec_ctx);
   static int interrupt_qc(ObPxTask &task, int code, ObExecContext *exec_ctx);
   // 将server_id、execution_id、qc_id共同组成中断id
-  static int generate_query_interrupt_id(const uint32_t server_id,
+  // Suggest using GCTX.get_server_index() instead of GCTX.get_server_id(),
+  // as it guarantees uniqueness within the cluster and is constrained to a maximum value of MAX_SERVER_COUNT.
+  static int generate_query_interrupt_id(const uint32_t server_index,
                                          const uint64_t px_sequence_id,
                                          common::ObInterruptibleTaskID &interrupt_id);
-  static int generate_px_interrupt_id(const uint32_t server_id,
+  // Suggest using GCTX.get_server_index() instead of GCTX.get_server_id(),
+  // as it guarantees uniqueness within the cluster and is constrained to a maximum value of MAX_SERVER_COUNT.
+  static int generate_px_interrupt_id(const uint32_t server_index,
                                       const uint32_t qc_id,
                                       const uint64_t px_sequence_id,
                                       const int64_t dfo_id,

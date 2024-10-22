@@ -523,7 +523,7 @@ void write_wrong_row(const ObTabletID &tablet_id, const ObDatumRow &row)
   ret = OB_E(EventTable::EN_MAKE_DATA_CKM_ERROR_BY_WRITE_WRONG_ROW) ret;
   if (OB_FAIL(ret)
       && tablet_id.id() > ObTabletID::MIN_USER_TABLET_ID
-      && (OB_CHECKSUM_ERROR == ret || GCTX.server_id_ == -ret)) {
+      && (OB_CHECKSUM_ERROR == ret || GCTX.get_server_id() == -ret)) {
     ObDatumRow &tmp_row = const_cast<ObDatumRow &>(row);
     tmp_row.storage_datums_[tmp_row.get_column_count() - 1].set_int(999);
     LOG_ERROR("ERRSIM EN_MAKE_DATA_CKM_ERROR_BY_WRITE_WRONG_ROW", K(ret), K(tablet_id), K(row));

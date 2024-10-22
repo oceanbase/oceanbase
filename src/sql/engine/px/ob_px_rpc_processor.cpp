@@ -607,8 +607,8 @@ int ObPxTenantTargetMonitorP::process()
   const uint64_t tenant_id = arg_.get_tenant_id();
   const uint64_t follower_version = arg_.get_version();
   // server id of the leader that the follower sync with previously.
-  const uint64_t prev_leader_server_id = ObPxTenantTargetMonitor::get_server_id(follower_version);
-  const uint64_t leader_server_id  = GCTX.server_id_;
+  const uint64_t prev_leader_server_index = ObPxTenantTargetMonitor::get_server_index(follower_version);
+  const uint64_t leader_server_index  = GCTX.get_server_index();
   bool is_leader;
   uint64_t leader_version;
   result_.set_tenant_id(tenant_id);
@@ -616,7 +616,7 @@ int ObPxTenantTargetMonitorP::process()
     LOG_ERROR("get is_leader failed", K(ret), K(tenant_id));
   } else if (!is_leader) {
     result_.set_status(MONITOR_NOT_MASTER);
-  } else if (arg_.need_refresh_all_ || prev_leader_server_id != leader_server_id) {
+  } else if (arg_.need_refresh_all_ || prev_leader_server_index != leader_server_index) {
     if (OB_FAIL(OB_PX_TARGET_MGR.reset_leader_statistics(tenant_id))) {
       LOG_ERROR("reset leader statistics failed", K(ret));
     } else if (OB_FAIL(OB_PX_TARGET_MGR.get_version(tenant_id, leader_version))) {
@@ -625,7 +625,7 @@ int ObPxTenantTargetMonitorP::process()
       result_.set_status(MONITOR_VERSION_NOT_MATCH);
       result_.set_version(leader_version);
       LOG_INFO("need refresh all", K(tenant_id), K(arg_.need_refresh_all_),
-               K(follower_version), K(prev_leader_server_id), K(leader_server_id));
+               K(follower_version), K(prev_leader_server_index), K(leader_server_index));
     }
   } else if (OB_FAIL(OB_PX_TARGET_MGR.get_version(tenant_id, leader_version))) {
     LOG_WARN("get master_version failed", K(ret), K(tenant_id));

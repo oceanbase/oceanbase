@@ -209,7 +209,7 @@ typedef ObPreciseDateTime ObCreateTime;
 typedef uint64_t ObPsStmtId;
 
 const int32_t NOT_CHECK_FLAG = 0;
-const int64_t MAX_SERVER_COUNT = 1024;
+const int64_t MAX_SERVER_COUNT = 4095;
 const uint64_t OB_SERVER_USER_ID = 0;
 const int64_t OB_MAX_INDEX_PER_TABLE = 128;
 const int64_t OB_MAX_SSTABLE_PER_TABLE = OB_MAX_INDEX_PER_TABLE + 1;
@@ -2069,6 +2069,12 @@ OB_INLINE bool is_valid_idx(const int64_t idx)
 OB_INLINE bool is_valid_server_id(const uint64_t server_id)
 {
   return (0 < server_id) && (OB_INVALID_ID != server_id);
+}
+
+// check whether a server_index is valid
+OB_INLINE bool is_valid_server_index(const uint64_t server_index)
+{
+  return (0 < server_index) && (server_index <= MAX_SERVER_COUNT);
 }
 
 //check whether an tenant_id is valid

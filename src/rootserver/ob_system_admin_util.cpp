@@ -1753,6 +1753,7 @@ int ObAdminUpgradeCmd::execute(const Bool &upgrade)
 int ObAdminRollingUpgradeCmd::execute(const obrpc::ObAdminRollingUpgradeArg &arg)
 {
   int ret = OB_SUCCESS;
+  uint64_t max_server_id = 0;
   HEAP_VAR(ObAdminSetConfigItem, item) {
     obrpc::ObAdminSetConfigArg set_config_arg;
     set_config_arg.is_inner_ = true;
@@ -1807,6 +1808,14 @@ int ObAdminRollingUpgradeCmd::execute(const obrpc::ObAdminRollingUpgradeArg &arg
             break;
           }
         } // end while
+      }
+      if (OB_FAIL(ret) || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_4_0) {
+      } else if (OB_FAIL(ObServerTableOperator::get_clusters_max_server_id(max_server_id))) {
+        LOG_WARN("fail to get max server id", KR(ret));
+      } else if (OB_UNLIKELY(!is_valid_server_index(max_server_id))) {
+        ret = OB_OP_NOT_ALLOW;
+        LOG_WARN("max_server_id should be a valid server index", KR(ret), K(max_server_id));
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "max server id in the cluster cannot be larget than MAX_SERVER_COUNT, UPGRADE is");
       }
       // end rolling upgrade, should raise min_observer_version
       const char *min_obs_version_name = "min_observer_version";

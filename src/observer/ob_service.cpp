@@ -1692,13 +1692,13 @@ int ObService::set_server_id_(const int64_t server_id)
   if (OB_UNLIKELY(!is_valid_server_id(server_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid server_id", KR(ret), K(server_id));
-  } else if (is_valid_server_id(GCTX.server_id_) || is_valid_server_id(GCONF.observer_id)) {
+  } else if (is_valid_server_id(GCTX.get_server_id()) || is_valid_server_id(GCONF.observer_id)) {
     ret = OB_ERR_UNEXPECTED;
     uint64_t server_id_in_gconf = GCONF.observer_id;
     LOG_WARN("server_id is only expected to be set once", KR(ret),
-             K(server_id), K(GCTX.server_id_), K(server_id_in_gconf));
+             K(server_id), K(GCTX.get_server_id()), K(server_id_in_gconf));
   } else {
-    GCTX.server_id_ = server_id;
+    (void) GCTX.set_server_id(server_id);
     GCONF.observer_id = server_id;
     if (OB_ISNULL(GCTX.config_mgr_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -1822,10 +1822,10 @@ int ObService::prepare_server_for_adding_server(
       // If adding server during bootstrap, server is expected to be not empty.
       // Just check this server_id same to the server_id set before.
       const uint64_t server_id_in_GCONF = GCONF.observer_id;
-      if (server_id != GCTX.server_id_ || server_id != server_id_in_GCONF) {
+      if (server_id != GCTX.get_server_id() || server_id != server_id_in_GCONF) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("server_id not same to that set before.", KR(ret),
-                  "server_id_for_adding_server", server_id, K(GCTX.server_id_), K(server_id_in_GCONF));
+                  "server_id_for_adding_server", server_id, K(GCTX.get_server_id()), K(server_id_in_GCONF));
       } else {
         server_empty = false;
       }
@@ -2275,9 +2275,9 @@ int ObService::check_server_empty(bool &is_empty)
   } else {
     uint64_t server_id_in_GCONF = GCONF.observer_id;
     if (is_empty) {
-      if (is_valid_server_id(GCTX.server_id_) || is_valid_server_id(server_id_in_GCONF)) {
+      if (is_valid_server_id(GCTX.get_server_id()) || is_valid_server_id(server_id_in_GCONF)) {
         is_empty = false;
-        FLOG_WARN("[CHECK_SERVER_EMPTY] server_id exists", K(GCTX.server_id_), K(server_id_in_GCONF));
+        FLOG_WARN("[CHECK_SERVER_EMPTY] server_id exists", K(GCTX.get_server_id()), K(server_id_in_GCONF));
       }
     }
     if (is_empty) {

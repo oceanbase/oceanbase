@@ -78,7 +78,7 @@ void ObDiskUsageReportTask::runTimerTask()
   int ret = OB_SUCCESS;
 
   const ObAddr addr = GCTX.self_addr();
-  const int64_t self_svr_seq = GCTX.server_id_;
+  const int64_t self_svr_seq = GCTX.get_server_id();
   char addr_buffer[MAX_IP_ADDR_LENGTH] = {};
 
   if (OB_UNLIKELY(!is_inited_)) {

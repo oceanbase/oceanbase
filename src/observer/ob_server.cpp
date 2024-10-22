@@ -2987,9 +2987,9 @@ int ObServer::init_global_context()
   gctx_.startup_accel_handler_ = &startup_accel_handler_;
 
   gctx_.flashback_scn_ = opts_.flashback_scn_;
-  gctx_.server_id_ = config_.observer_id;
-  if (is_valid_server_id(gctx_.server_id_)) {
-    LOG_INFO("this observer has had a valid server_id", K(gctx_.server_id_));
+  (void) gctx_.set_server_id(config_.observer_id);
+  if (is_valid_server_id(gctx_.get_server_id())) {
+    LOG_INFO("this observer has had a valid server_id", K(gctx_.get_server_id()));
   }
   if ((PHY_FLASHBACK_MODE == gctx_.startup_mode_ || PHY_FLASHBACK_VERIFY_MODE == gctx_.startup_mode_)
       && 0 >= gctx_.flashback_scn_) {
