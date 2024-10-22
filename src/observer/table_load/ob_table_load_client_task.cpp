@@ -199,9 +199,12 @@ public:
     while (OB_SUCC(ret)) {
       ObTableLoadClientStatus status = client_task_->get_status();
       if (ObTableLoadClientStatus::RUNNING == status) {
-        ob_usleep(100LL * 1000); // sleep 100ms
+        ob_usleep(100_ms);
       } else if (ObTableLoadClientStatus::COMMITTING == status) {
         break;
+      } else if (ObTableLoadClientStatus::ABORT == status) {
+        ret = client_task_->get_error_code();
+        LOG_WARN("client task is abort", KR(ret));
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected client status", KR(ret), K(status));
@@ -404,7 +407,7 @@ public:
     if (OB_UNLIKELY(OB_SUCCESS != ret_code)) {
       client_task_->set_status_error(ret_code);
     }
-    task->~ObTableLoadTask();
+    OB_DELETE(ObTableLoadTask, "TLD_CTExecTask", task);
   }
 
 private:
@@ -426,6 +429,7 @@ ObTableLoadClientTask::ObTableLoadClientTask()
     client_status_(ObTableLoadClientStatus::MAX_STATUS),
     error_code_(OB_SUCCESS),
     ref_count_(0),
+    is_in_map_(false),
     is_inited_(false)
 {
   allocator_.set_tenant_id(MTL_ID());
@@ -573,8 +577,9 @@ int ObTableLoadClientTask::start()
   } else if (OB_FAIL(set_status_initializing())) {
     LOG_WARN("fail to set status initializing", KR(ret));
   } else {
+    ObMemAttr attr(param_.get_tenant_id(), "TLD_CTExecTask");
     ObTableLoadTask *task = nullptr;
-    if (OB_ISNULL(task = OB_NEWx(ObTableLoadTask, &allocator_, param_.get_tenant_id()))) {
+    if (OB_ISNULL(task = OB_NEW(ObTableLoadTask, attr, param_.get_tenant_id()))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObTableLoadTask", KR(ret));
     } else if (OB_FAIL(task->set_processor<ClientTaskExectueProcessor>(this))) {
@@ -587,8 +592,7 @@ int ObTableLoadClientTask::start()
     if (OB_FAIL(ret)) {
       set_status_error(ret);
       if (nullptr != task) {
-        task->~ObTableLoadTask();
-        allocator_.free(task);
+        OB_DELETE(ObTableLoadTask, attr, task);
         task = nullptr;
       }
     }
@@ -644,14 +648,14 @@ int ObTableLoadClientTask::commit()
   return ret;
 }
 
-void ObTableLoadClientTask::abort()
+void ObTableLoadClientTask::abort(int error_code)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadClientTask not init", KR(ret));
   } else {
-    set_status_abort();
+    set_status_abort(error_code);
     if (nullptr != session_info_ && OB_FAIL(session_info_->kill_query())) {
       LOG_WARN("fail to kill query", KR(ret));
     }
@@ -758,6 +762,12 @@ ObTableLoadClientStatus ObTableLoadClientTask::get_status() const
 {
   obsys::ObRLockGuard guard(rw_lock_);
   return client_status_;
+}
+
+int ObTableLoadClientTask::get_error_code() const
+{
+  obsys::ObRLockGuard guard(rw_lock_);
+  return error_code_;
 }
 
 void ObTableLoadClientTask::get_status(ObTableLoadClientStatus &client_status,
