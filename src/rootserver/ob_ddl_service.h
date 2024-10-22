@@ -2822,6 +2822,10 @@ private:
                                ObDDLOperator &ddl_operator,
                                obrpc::ObAlterTableRes &res,
                                ObIArray<ObDDLTaskRecord> &ddl_tasks);
+  template <class TTableSchema>
+  int get_tablets_with_table_id_(const ObArray<TTableSchema *> &table_schemas,
+                                 const int table_id,
+                                 ObArray<ObTabletID> &tablet_ids);
 public:
   //not check belong to the same table
   int check_same_partition(const bool is_oracle_mode, const ObPartition &l, const ObPartition &r,

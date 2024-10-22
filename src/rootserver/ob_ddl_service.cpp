@@ -14267,33 +14267,25 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
           ObIndexBuilder index_builder(*this);
           const ObSArray<ObIndexArg *> &index_arg_list = alter_table_arg.index_arg_list_;
           int tmp_ret = OB_SUCCESS;
+          const int64_t new_table_id = new_table_schema.get_table_id();
           ObArray<ObTabletID> inc_tablet_ids;
           ObArray<ObTabletID> del_tablet_ids;
-          if (obrpc::ObAlterTableArg::TRUNCATE_PARTITION == alter_table_arg.alter_part_type_
-              || obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == alter_table_arg.alter_part_type_) {
-            for (int64_t i = 0; OB_SUCC(ret) && i < inc_table_schemas.count(); i++) {
-              ObTableSchema *inc_table_schema = inc_table_schemas[i];
-              if (inc_table_schema->get_table_id() == new_table_schema.get_table_id()) {
-                if (OB_FAIL(inc_table_schema->get_tablet_ids(inc_tablet_ids))) {
-                  LOG_WARN("failed to get del tablet ids", KR(ret));
-                }
-                break;
+          if (index_arg_list.count() > 0) {
+            if (obrpc::ObAlterTableArg::TRUNCATE_PARTITION == alter_table_arg.alter_part_type_
+                || obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == alter_table_arg.alter_part_type_) {
+              if (OB_FAIL(get_tablets_with_table_id_(inc_table_schemas, new_table_id, inc_tablet_ids))) {
+                LOG_WARN("fail to get tablets with table id", KR(ret), K(inc_table_schemas), K(new_table_id));
               }
             }
-          }
-          if (obrpc::ObAlterTableArg::DROP_PARTITION == alter_table_arg.alter_part_type_
-              || obrpc::ObAlterTableArg::DROP_SUB_PARTITION == alter_table_arg.alter_part_type_
-              || obrpc::ObAlterTableArg::TRUNCATE_PARTITION == alter_table_arg.alter_part_type_
-              || obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == alter_table_arg.alter_part_type_) {
-            for (int64_t i = 0; OB_SUCC(ret) && i < del_table_schemas.count(); i++) {
-              ObTableSchema *del_table_schema = del_table_schemas[i];
-              if (del_table_schema->get_table_id() == new_table_schema.get_table_id()) {
-                if (OB_FAIL(del_table_schema->get_tablet_ids(del_tablet_ids))) {
-                  LOG_WARN("failed to get del tablet ids", KR(ret));
-                }
-                break;
+            if (obrpc::ObAlterTableArg::DROP_PARTITION == alter_table_arg.alter_part_type_
+                || obrpc::ObAlterTableArg::DROP_SUB_PARTITION == alter_table_arg.alter_part_type_
+                || obrpc::ObAlterTableArg::TRUNCATE_PARTITION == alter_table_arg.alter_part_type_
+                || obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == alter_table_arg.alter_part_type_) {
+              if (FAILEDx(get_tablets_with_table_id_(del_table_schemas, new_table_id, del_tablet_ids))) {
+                LOG_WARN("fail to get tablets with table id", KR(ret), K(inc_table_schemas), K(new_table_id));
               }
             }
+
           }
           for (int64_t i = 0; OB_SUCC(ret) && i < index_arg_list.size(); ++i) {
             ObIndexArg *index_arg = const_cast<ObIndexArg *>(index_arg_list.at(i));
@@ -14336,6 +14328,8 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                   LOG_WARN("failed to push back ddl res array", KR(ret));
                 }
               }
+            // TODO @wenyu alter table drop index submit drop index task in alter_table_index() now.
+            //             should be unified here
             } else if (ObIndexArg::DROP_INDEX == index_arg->index_action_type_ && !alter_table_arg.is_alter_indexs_) {
               ObDropIndexArg *drop_index_arg = static_cast<ObDropIndexArg *>(index_arg);
               if (OB_ISNULL(drop_index_arg)) {
@@ -43655,6 +43649,30 @@ int ObDDLService::drop_index_to_scheduler_(ObMySQLTransaction &trans,
         }
       }
       } // end smart var
+    }
+  }
+  return ret;
+}
+
+template <class TTableSchema>
+int ObDDLService:: get_tablets_with_table_id_(const ObArray<TTableSchema *> &table_schemas,
+                                              const int table_id,
+                                              ObArray<ObTabletID> &tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  tablet_ids.reset();
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count(); i++) {
+    ObTableSchema *table_schema = table_schemas[i];
+    if (OB_ISNULL(table_schema)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("table schema is null ptr", KR(ret));
+    } else if (table_schema->get_table_id() == table_id) {
+      // some table types don't have tablet like external table
+      if (table_schema->has_tablet()
+          && OB_FAIL(table_schema->get_tablet_ids(tablet_ids))) {
+        LOG_WARN("failed to get table tablet ids", KR(ret), KPC(table_schema));
+      }
+      break;
     }
   }
   return ret;
