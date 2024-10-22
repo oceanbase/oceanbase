@@ -3303,9 +3303,11 @@ int ObCreateTableResolver::resolve_external_table_format_early(const ParseNode *
     } else {
       ParseNode *option_node = NULL;
       int32_t num = node->num_child_;
+      bool is_format_exist = false;
       for (int32_t i = 0; OB_SUCC(ret) && i < num; ++i) {
         option_node = node->children_[i];
         if (OB_NOT_NULL(option_node) && (T_EXTERNAL_FILE_FORMAT == option_node->type_ || T_EXTERNAL_PROPERTIES == option_node->type_)) {
+          is_format_exist = true;
           ObExternalFileFormat format;
           for (int32_t j = 0; OB_SUCC(ret) && j < option_node->num_child_; ++j) {
             if (OB_NOT_NULL(option_node->children_[j])
@@ -3318,6 +3320,10 @@ int ObCreateTableResolver::resolve_external_table_format_early(const ParseNode *
             }
           }
         }
+      }
+      if (OB_SUCC(ret) && !is_format_exist) {
+        ret = OB_EXTERNAL_TABLE_FORMAT_ERROR;
+        LOG_WARN("missing format in DDL", K(ret));
       }
     }
   }
