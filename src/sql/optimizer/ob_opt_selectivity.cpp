@@ -263,7 +263,8 @@ int OptTableMeta::init_column_meta(const OptSelectivityCtx &ctx,
 {
   int ret = OB_SUCCESS;
   ObGlobalColumnStat stat;
-  bool is_single_pkey = (1 == pk_ids_.count() && pk_ids_.at(0) == column_id);
+  bool is_single_pkey = (1 == pk_ids_.count() && pk_ids_.at(0) == column_id) ||
+                         column_id == OB_HIDDEN_PK_INCREMENT_COLUMN_ID;
   int64_t global_ndv = 0;
   int64_t num_null = 0;
   if (is_single_pkey) {

@@ -8769,6 +8769,10 @@ int ObLogPlan::allocate_sort_as_top(ObLogicalOperator *&top,
     } else {
       top = sort;
     }
+    if (OB_SUCC(ret) && NULL != topn_expr &&
+        OB_FAIL(construct_startup_filter_for_limit(topn_expr, sort))) {
+      LOG_WARN("failed to construct startup filter", KPC(topn_expr));
+    }
   }
   return ret;
 }
