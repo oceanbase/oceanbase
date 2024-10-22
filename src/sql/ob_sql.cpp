@@ -1451,7 +1451,8 @@ int ObSql::set_timeout_for_pl(ObSQLSessionInfo &session_info, int64_t &abs_timeo
 
 int ObSql::handle_pl_prepare(const ObString &sql,
                              ObSPIService::PLPrepareCtx &pl_prepare_ctx,
-                             ObSPIService::PLPrepareResult &pl_prepare_result)
+                             ObSPIService::PLPrepareResult &pl_prepare_result,
+                             ParamStore *params)
 {
   int ret = OB_SUCCESS;
   ObString cur_query;
@@ -1514,6 +1515,13 @@ int ObSql::handle_pl_prepare(const ObString &sql,
           } else if (FALSE_IT(context.schema_guard_ = &schema_guard)) {
           } else if (OB_FAIL(init_result_set(context, result))) {
             LOG_WARN("failed to init result set", K(ret));
+          } else if (OB_ISNULL(result.get_exec_context().get_physical_plan_ctx())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("physical plan ctx is null", K(ret));
+          } else if (OB_NOT_NULL(params) &&
+                     OB_FAIL(construct_param_store(*params,
+                                                   result.get_exec_context().get_physical_plan_ctx()->get_param_store_for_update()))) {
+            LOG_WARN("construct param store failed", K(ret));
           } else if (OB_FAIL(sess.store_query_string(sql))) {
             LOG_WARN("store query string fail", K(ret));
           } else if (OB_FAIL(parser.parse(sql, parse_result, parse_mode,

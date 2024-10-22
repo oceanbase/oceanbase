@@ -2331,17 +2331,53 @@ int ObSPIService::spi_resolve_prepare(common::ObIAllocator &allocator,
                                       prepare_result.has_dup_column_name_));
           } else {
             PLPrepareCtx tmp_pl_prepare_ctx(session, secondary_namespace, false, false, false);
-            const ObString &route_sql = pl_prepare_result.result_set_->get_stmt_ps_sql().empty() ?
-                                          pl_prepare_result.result_set_->get_route_sql() :
-                                          pl_prepare_result.result_set_->get_stmt_ps_sql();
-
-            SMART_VAR(PLPrepareResult, tmp_pl_prepare_result) {
+            const ObString &route_sql = pl_prepare_result.result_set_->get_stmt_ps_sql();
+            ParamStore *params = NULL;
+            ObRawExpr *expr = NULL;
+            ObObjParam exec_param;
+            ObExprResType result_type;
+            if (OB_ISNULL(params = reinterpret_cast<ParamStore *>(allocator.alloc(sizeof(ParamStore))))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("failed to alloc memory for exec params", K(ret));
+            }
+            OX (new (params) ParamStore( (ObWrapperAllocator(allocator)) ) );
+            OZ (params->reserve(pl_prepare_result.result_set_->get_external_params().count()));
+            for (int64_t i = 0; OB_SUCC(ret) &&
+                  i < pl_prepare_result.result_set_->get_external_params().count(); ++i) {
+              OX (expr = pl_prepare_result.result_set_->get_external_params().at(i));
+              if (OB_ISNULL(expr)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("failed to copy expr, expr is NULL", K(expr), K(ret));
+              } else {
+                OX (exec_param.reset());
+                OX (exec_param.ObObj::reset());
+                OX (exec_param.set_type(ObNullType));
+                OX (result_type.reset());
+                OX (exec_param.set_param_meta(expr->get_result_meta()));
+                OX (result_type = expr->get_result_type());
+                OX (exec_param.set_accuracy(result_type.get_accuracy()));
+                if (result_type.is_ext()) {
+                  if (ob_is_xml_pl_type(result_type.get_type(), result_type.get_udt_id())) {
+                    const ObDataTypeCastParams dtc_params = sql::ObBasicSessionInfo::create_dtc_params(&session);
+                    ObCastCtx cast_ctx(&allocator, &dtc_params, CM_NONE, ObCharset::get_system_collation());
+                    if (OB_FAIL(ObObjCaster::to_type(ObUserDefinedSQLType, cast_ctx, exec_param, exec_param))) {
+                      LOG_WARN("failed to_type", K(ret), K(exec_param));
+                    }
+                  }
+                }
+                if (OB_FAIL(params->push_back(exec_param))) {
+                  LOG_WARN("failed to push back param", K(ret));
+                }
+              }
+            }
+            if (OB_SUCC(ret)) {
+              SMART_VAR(PLPrepareResult, tmp_pl_prepare_result) {
               CK (OB_NOT_NULL(GCTX.sql_engine_));
               OZ (tmp_pl_prepare_result.init(session));
               CK (OB_NOT_NULL(tmp_pl_prepare_result.result_set_));
               // 如果当前语句含有INTO, 则resultset中没有输出列, 我们使用reconstruct的route_sql来构造recordtype
               CK (!pl_prepare_result.result_set_->get_route_sql().empty());
-              OZ(GCTX.sql_engine_->handle_pl_prepare(route_sql, tmp_pl_prepare_ctx, tmp_pl_prepare_result));
+              OZ(GCTX.sql_engine_->handle_pl_prepare(route_sql, tmp_pl_prepare_ctx, tmp_pl_prepare_result, params));
               CK (OB_NOT_NULL(tmp_pl_prepare_result.result_set_->get_field_columns()));
               OZ (spi_build_record_type(allocator,
                                         session,
@@ -2352,6 +2388,7 @@ int ObSPIService::spi_resolve_prepare(common::ObIAllocator &allocator,
                                         prepare_result.rowid_table_id_,
                                         secondary_namespace,
                                         prepare_result.has_dup_column_name_));
+              }
             }
           }
         }
@@ -2625,7 +2662,7 @@ int ObSPIService::dynamic_out_params(
           && param_store->at(i).get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
         OZ (pl::ObUserDefinedType::deep_copy_obj(allocator, param_store->at(i), obj, true));
       } else {
-        OZ (deep_copy_obj(allocator, param_store->at(i), obj));
+        OZ (deep_copy_objparam(allocator, param_store->at(i), obj));
       }
     }
   }
