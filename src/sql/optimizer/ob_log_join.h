@@ -209,7 +209,9 @@ namespace sql
     bool find_leading_info(const ObIArray<LeadingInfo> &leading_infos,
                            const ObRelIds &l_set,
                            const ObRelIds &r_set);
+    ObLogicalOperator *get_left_child_ignore_aj_nlj() const;
     const ObLogicalOperator *find_child_join_or_scan(const ObLogicalOperator *input_op) const;
+    const ObLogicalOperator *find_child_join_or_scan_ignore_aj_nlj(const ObLogicalOperator *input_op) const;
     bool is_scan_operator(log_op_def::ObLogOpType type) const;
     int append_used_join_hint(ObIArray<const ObHint*> &used_hints);
     int append_used_join_filter_hint(ObIArray<const ObHint*> &used_hints);

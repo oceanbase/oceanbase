@@ -719,7 +719,7 @@ int ObLogJoin::add_used_leading_hint(ObIArray<const ObHint*> &used_hints)
   } else {
     get_plan()->set_added_leading();
     bool used_hint = false;
-    const ObLogicalOperator *op = is_adaptive() && HASH_JOIN == join_algo_ ? find_child_join_or_scan(get_child(first_child)) : this;
+    const ObLogicalOperator *op = this;
     while (OB_SUCC(ret) && NULL != op) {
       if (op->get_table_set().equal(leading_hint->leading_tables_)) {
         used_hint = 1 == leading_hint->leading_tables_.num_members();  // leading hint with single table like leading(t1)
@@ -730,7 +730,7 @@ int ObLogJoin::add_used_leading_hint(ObIArray<const ObHint*> &used_hints)
           op = NULL;
         }
       } else if (LOG_JOIN == op->get_type()) {
-        op = find_child_join_or_scan(op->get_child(first_child)); // only check left table recursively
+        op = find_child_join_or_scan_ignore_aj_nlj(op->get_child(first_child)); // only check left table recursively
       } else {
         op = NULL;
       }
@@ -751,12 +751,19 @@ int ObLogJoin::check_used_leading(const ObIArray<LeadingInfo> &leading_infos,
   used_hint = true;
   ObLogicalOperator *l_child = NULL;
   ObLogicalOperator *r_child = NULL;
-  if (OB_ISNULL(op = find_child_join_or_scan(op))
+  if (OB_ISNULL(op = find_child_join_or_scan_ignore_aj_nlj(op))
       || OB_UNLIKELY(LOG_JOIN != op->get_type())
-      || OB_ISNULL(l_child = op->get_child(first_child))
       || OB_ISNULL(r_child = op->get_child(second_child))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected op", K(ret), K(op), K(l_child), K(r_child));
+    LOG_WARN("unexpected op", K(ret), K(op), K(r_child));
+  } else {
+    const ObLogJoin *join_op = static_cast<const ObLogJoin *>(op);
+    if (OB_ISNULL(l_child = join_op->get_left_child_ignore_aj_nlj())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected op", K(ret), K(op), K(l_child));
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (!find_leading_info(leading_infos,
                                 l_child->get_table_set(),
                                 r_child->get_table_set())) {
@@ -769,6 +776,25 @@ int ObLogJoin::check_used_leading(const ObIArray<LeadingInfo> &leading_infos,
     LOG_WARN("failed to check used leading", K(ret));
   }
   return ret;
+}
+
+ObLogicalOperator *ObLogJoin::get_left_child_ignore_aj_nlj() const
+{
+  ObLogicalOperator *op = get_child(first_child);
+  if (is_adaptive() && get_join_algo() == HASH_JOIN) {
+    while (NULL != op) {
+      if (LOG_JOIN == op->get_type()) {
+        const ObLogJoin *join_op = static_cast<const ObLogJoin *>(op);
+        if (join_op->is_adaptive() && join_op->get_join_algo() == NESTED_LOOP_JOIN) {
+          // the NLJ in the adaptive join.
+          op = op->get_child(first_child);
+          break;
+        }
+      }
+      op = op->get_child(first_child);
+    }
+  }
+  return op;
 }
 
 bool ObLogJoin::find_leading_info(const ObIArray<LeadingInfo> &leading_infos,
@@ -787,6 +813,24 @@ bool ObLogJoin::find_leading_info(const ObIArray<LeadingInfo> &leading_infos,
 
 const ObLogicalOperator *ObLogJoin::find_child_join_or_scan(const ObLogicalOperator *op) const {
   while (NULL != op && !is_scan_operator(op->get_type()) && LOG_JOIN != op->get_type()) {
+    op = op->get_child(first_child);
+  }
+  return op;
+}
+
+const ObLogicalOperator *ObLogJoin::find_child_join_or_scan_ignore_aj_nlj(const ObLogicalOperator *op) const
+{
+  while (NULL != op) {
+    if (is_scan_operator(op->get_type())) {
+      break;
+    } else if (LOG_JOIN == op->get_type()) {
+      const ObLogJoin *join_op = static_cast<const ObLogJoin *>(op);
+      if (join_op->is_adaptive() && join_op->get_join_algo() == NESTED_LOOP_JOIN) {
+        // Ignore the NLJ in the adaptive join.
+      } else {
+        break;
+      }
+    }
     op = op->get_child(first_child);
   }
   return op;
