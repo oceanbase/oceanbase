@@ -206,6 +206,7 @@ public:
               qc_id_(common::OB_INVALID_ID),
               sqc_id_(common::OB_INVALID_ID),
               dfo_id_(common::OB_INVALID_ID),
+              branch_id_base_(0),
               access_table_locations_(),
               qc_ch_info_(),
               sqc_ch_info_(),
@@ -244,7 +245,8 @@ public:
               px_detectable_ids_(),
               interrupt_by_dm_(false),
               p2p_dh_map_info_(),
-              sqc_order_gi_tasks_(false)
+              sqc_order_gi_tasks_(false),
+              locations_order_()
   {}
   ~ObPxSqcMeta() = default;
   int assign(const ObPxSqcMeta &other);
@@ -367,6 +369,7 @@ public:
   bool sqc_order_gi_tasks() const { return sqc_order_gi_tasks_; }
   ObQCMonitoringInfo &get_monitoring_info() { return monitoring_info_; }
   const ObQCMonitoringInfo &get_monitoring_info() const { return monitoring_info_; }
+  ObIArray<std::pair<int64_t, bool>> &get_locations_order() { return locations_order_; }
   // Do not change the follow log about the second K_(need_report) and K_(exec_addr), becacue it will use in obdiag tool
   TO_STRING_KV(K_(need_report), K_(execution_id), K_(qc_id), K_(sqc_id), K_(dfo_id), K_(need_report), K_(exec_addr), K_(qc_addr),
                K_(qc_ch_info), K_(sqc_ch_info),
@@ -380,6 +383,9 @@ private:
   uint64_t qc_id_;
   int64_t sqc_id_;
   int64_t dfo_id_;
+  // branch id is used to distinguish datas written concurrently by px-workers
+  // for replace and insert update operator, they need branch_id to rollback writes by one px-worker
+  int16_t branch_id_base_;
   ObQCMonitoringInfo monitoring_info_;
   // The partition location information of the all table_scan op and dml op
   // used for px worker execution
@@ -443,6 +449,9 @@ private:
   ObP2PDhMapInfo p2p_dh_map_info_;
   int64_t sqc_count_;
   bool sqc_order_gi_tasks_;
+  bool partition_random_affinitize_{true}; // whether do partition random in gi task split
+  // record ordering of locations. first is operator id of table scan and second is asc.
+  ObSEArray<std::pair<int64_t, bool>, 18> locations_order_;
 };
 
 class ObDfo

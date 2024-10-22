@@ -66,7 +66,10 @@ OB_SERIALIZE_MEMBER(ObPxSqcMeta,
                     px_detectable_ids_,
                     p2p_dh_map_info_,
                     sqc_count_,
-                    monitoring_info_);
+                    monitoring_info_,
+                    branch_id_base_,
+                    partition_random_affinitize_,
+                    locations_order_);
 OB_SERIALIZE_MEMBER(ObPxTask,
                     qc_id_,
                     dfo_id_,
@@ -148,6 +151,8 @@ int ObPxSqcMeta::assign(const ObPxSqcMeta &other)
     LOG_WARN("fail to assign p2p dh map info", K(ret));
   } else if (OB_FAIL(monitoring_info_.assign(other.monitoring_info_))) {
     LOG_WARN("fail to assign qc monitoring info", K(ret));
+  } else if (OB_FAIL(locations_order_.assign(other.locations_order_))) {
+    LOG_WARN("fail to assign qc locations order", K(ret));
   } else {
     execution_id_ = other.execution_id_;
     qc_id_ = other.qc_id_;
@@ -647,6 +652,9 @@ OB_DEF_SERIALIZE(ObPxRpcInitSqcArgs)
   // can reuse cache from now on
   (const_cast<ObSqcSerializeCache &>(ser_cache_)).cache_serialized_ = ser_cache_.enable_serialize_cache_;
   LST_DO_CODE(OB_UNIS_ENCODE, qc_order_gi_tasks_);
+  if (OB_SUCC(ret) && sqc_.is_fulltree()) {
+    ret = exec_ctx_->serialize_group_pwj_map(buf, buf_len, pos);
+  }
   LOG_TRACE("serialize sqc", K_(sqc));
   LOG_DEBUG("end trace sqc args", K(pos), K(buf_len), K(this->get_serialize_size()));
   return ret;
@@ -697,6 +705,9 @@ OB_DEF_SERIALIZE_SIZE(ObPxRpcInitSqcArgs)
     // always serialize
     LST_DO_CODE(OB_UNIS_ADD_LEN, sqc_);
     LST_DO_CODE(OB_UNIS_ADD_LEN, qc_order_gi_tasks_);
+  }
+  if (OB_SUCC(ret) && sqc_.is_fulltree()) {
+    len += exec_ctx_->get_group_pwj_map_serialize_size();
   }
   return len;
 }
@@ -782,6 +793,9 @@ int ObPxRpcInitSqcArgs::do_deserialize(int64_t &pos, const char *net_buf, int64_
     // if version of qc is old, qc_order_gi_tasks_ will not be serialized and the value will be false.
     qc_order_gi_tasks_ = false;
     LST_DO_CODE(OB_UNIS_DECODE, qc_order_gi_tasks_);
+    if (OB_SUCC(ret) && sqc_.is_fulltree() && pos < data_len) {
+      ret = exec_ctx_->deserialize_group_pwj_map(buf, data_len, pos);
+    }
     LOG_TRACE("deserialize qc order gi tasks", K(qc_order_gi_tasks_), K(sqc_), K(this));
   }
   return ret;
@@ -1002,7 +1016,12 @@ int ObPxRpcInitTaskArgs::deep_copy_assign(ObPxRpcInitTaskArgs &src,
     // PLACE_HOLDER: if want multiple px worker share trans_desc
     // set exec_ctx_->session->set_effective_trans_desc(src.exec_ctx_->session->get_effective_trans_desc());
   }
-
+  if (OB_SUCC(ret)) {
+    if (sqc_handler_->get_sqc_init_arg().sqc_.is_fulltree()
+        && nullptr != src.exec_ctx_->get_group_pwj_map()) {
+      exec_ctx_->deep_copy_group_pwj_map(src.exec_ctx_->get_group_pwj_map());
+    }
+  }
   return ret;
 }
 
