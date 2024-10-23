@@ -36,8 +36,7 @@ bash build.sh release --init --make
 ./tools/deploy/obd.sh prepare -p /tmp/obtest
 ./tools/deploy/obd.sh deploy -c ./tools/deploy/single.yaml
 ```
-
-OceanBase 服务程序会监听 10000 端口。
+你可以通过查看 `./tools/deploy/single.yaml` 文件中的`mysql_port`来查看监听端口，通常情况下，如果你用root用户部署，那么OceanBase 服务程序会监听 10000 端口，下文中的示例也是基于这个端口。
 
 ## 连接
 
