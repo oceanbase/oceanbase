@@ -89,6 +89,10 @@ public:
   // print all config to log file
   void print() const;
 
+  int add_extra_config(const char *config_str,
+                       const int64_t version = 0,
+                       const bool check_config = true);
+
   double get_sys_tenant_default_min_cpu();
   double get_sys_tenant_default_max_cpu();
 

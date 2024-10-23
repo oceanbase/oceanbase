@@ -167,6 +167,14 @@ void ObServerConfig::print() const
   OB_LOG(INFO, "===================== *stop server config report* =======================");
 }
 
+int ObServerConfig::add_extra_config(const char *config_str,
+                                     const int64_t version /* = 0 */,
+                                     const bool check_config /* = true */)
+{
+  DRWLock::WRLockGuard guard(OTC_MGR.rwlock_);
+  return add_extra_config_unsafe(config_str, version, check_config);
+}
+
 double ObServerConfig::get_sys_tenant_default_min_cpu()
 {
   double min_cpu = server_cpu_quota_min;

@@ -946,7 +946,7 @@ int ObAdminSetConfig::verify_config(obrpc::ObAdminSetConfigArg &arg)
         } else if (!ci->check_unit(item->value_.ptr())) {
           ret = OB_INVALID_CONFIG;
           LOG_ERROR("invalid config", "item", *item, KR(ret));
-        } else if (!ci->set_value(item->value_.ptr())) {
+        } else if (!ci->set_value_unsafe(item->value_.ptr())) {
           ret = OB_INVALID_CONFIG;
           LOG_WARN("invalid config", "item", *item, KR(ret));
         } else if (!ci->check()) {

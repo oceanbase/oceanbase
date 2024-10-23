@@ -18,7 +18,9 @@
 #include <map>
 #include "share/ob_define.h"
 #include "share/parameter/ob_parameter_macro.h"
+#define CONFIG_LOCK_EXEMPTION
 #include "share/config/ob_common_config.h"    // ObInitConfigContainer
+#undef CONFIG_LOCK_EXEMPTION
 
 #include "ob_log_common.h"
 #include "ob_log_fake_common_config.h"        // ObLogFakeCommonConfig

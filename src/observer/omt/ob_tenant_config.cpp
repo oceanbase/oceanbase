@@ -308,7 +308,7 @@ int ObTenantConfig::update_local(int64_t expected_version, ObMySQLProxy::MySQLRe
   if (OB_SUCC(ret)) {
     if (OB_FAIL(read_config())) {
       LOG_ERROR("Read tenant config failed", K_(tenant_id), K(ret));
-    } else if (save2file && OB_FAIL(config_mgr_->dump2file())) {
+    } else if (save2file && OB_FAIL(config_mgr_->dump2file_unsafe())) {
       LOG_WARN("Dump to file failed", K(ret));
     } else if (OB_FAIL(publish_special_config_after_dump())) {
       LOG_WARN("publish special config after dump failed", K(tenant_id_), K(ret));
@@ -334,7 +334,7 @@ int ObTenantConfig::publish_special_config_after_dump()
     LOG_WARN("Invalid config string", K(tenant_id_), K(ret));
   } else if (!(*pp_item)->dump_value_updated()) {
     LOG_INFO("config dump value is not set, no need read", K(tenant_id_), K((*pp_item)->spfile_str()));
-  } else if (!(*pp_item)->set_value((*pp_item)->spfile_str())) {
+  } else if (!(*pp_item)->set_value_unsafe((*pp_item)->spfile_str())) {
     ret = OB_INVALID_CONFIG;
     LOG_WARN("Invalid config value", K(tenant_id_), K((*pp_item)->spfile_str()), K(ret));
   } else {
@@ -350,7 +350,7 @@ int ObTenantConfig::publish_special_config_after_dump()
   return ret;
 }
 
-int ObTenantConfig::add_extra_config(const char *config_str,
+int ObTenantConfig::add_extra_config_unsafe(const char *config_str,
                                      int64_t version /* = 0 */ ,
                                      bool check_config /* = true */)
 {
@@ -432,7 +432,7 @@ int ObTenantConfig::add_extra_config(const char *config_str,
                           "dump_value", (*pp_item)->spfile_str(),
                           "dump_value_updated", (*pp_item)->dump_value_updated());
               }
-            } else if (!(*pp_item)->set_value(value)) {
+            } else if (!(*pp_item)->set_value_unsafe(value)) {
               ret = OB_INVALID_CONFIG;
               LOG_WARN("Invalid config value", K(name), K(value), K(ret));
             } else if (check_config && (!(*pp_item)->check_unit(value) || !(*pp_item)->check())) {
