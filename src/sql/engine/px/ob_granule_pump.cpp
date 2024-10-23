@@ -1319,7 +1319,7 @@ int ObPartitionWiseGranuleSplitter::split_granule(ObGranulePumpArgs &args,
   // 处理 tsc的任务划分
   if(OB_SUCC(ret)) {
     ObSEArray<DASTabletLocArray, 4> tsc_tablet_arrays;
-    for (int i = tsc_begin_idx; i < tablet_arrays.count(); i++) {
+    for (int i = tsc_begin_idx; i < tablet_arrays.count() && OB_SUCC(ret); i++) {
       if (OB_FAIL(tsc_tablet_arrays.push_back(tablet_arrays.at(i)))) {
         LOG_WARN("failed to push back tsc tablet arrays", K(ret));
       }
