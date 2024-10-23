@@ -84,6 +84,7 @@ enum ObVectorIndexAlgorithmLib
 enum ObVectorIndexAlgorithmType
 {
   VIAT_HNSW = 0,
+  VIAT_HNSW_SQ,
   VIAT_MAX
 };
 
