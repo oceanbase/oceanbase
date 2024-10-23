@@ -1145,7 +1145,7 @@ int ObTableInsertUpOp::fetch_conflict_rowkey(int64_t row_cnt)
         } else if (!snapshot->is_valid()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected invalid snaopshot", K(ret), KPC(snapshot));
-        } else if (conflict_checker_.collect_all_snapshot(*snapshot, ins_op->get_tablet_loc())) {
+        } else if (OB_FAIL(conflict_checker_.collect_all_snapshot(*snapshot, ins_op->get_tablet_loc()))) {
           LOG_WARN("fail to collect snapshot", K(ret), KPC(snapshot), KPC(ins_op));
         }
       ++task_iter;
