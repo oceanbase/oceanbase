@@ -1763,7 +1763,7 @@ int ObWindowFunctionOp::compute_push_down_by_pass(WinFuncCell &wf_cell, common::
 }
 
 int ObWindowFunctionOp::compute(RowsReader &row_reader, WinFuncCell &wf_cell,
-    const int64_t row_idx, ObDatum &val)
+    const int64_t row_idx, const bool can_reuse_frame, ObDatum &val)
 {
   int ret = OB_SUCCESS;
   const ObRADatumStore::StoredRow *row = NULL;
@@ -1775,6 +1775,8 @@ int ObWindowFunctionOp::compute(RowsReader &row_reader, WinFuncCell &wf_cell,
   } else if (FALSE_IT(clear_evaluated_flag())) {
   } else if (OB_FAIL(row->to_expr(get_all_expr(), eval_ctx_))) {
     LOG_WARN("Failed to to_expr", K(ret));
+  } else if (can_reuse_frame && wf_cell.last_valid_frame_.in_frame(row_idx)) {
+    new_frame = wf_cell.last_valid_frame_;
   } else if (OB_FAIL(get_pos(row_reader,
                              wf_cell,
                              row_idx,
@@ -1791,6 +1793,8 @@ int ObWindowFunctionOp::compute(RowsReader &row_reader, WinFuncCell &wf_cell,
                              new_frame.tail_,
                              lower_has_null))) {
     LOG_WARN("get pos failed", K(ret));
+  }
+  if (OB_FAIL(ret)) {
   } else {
     Frame &last_valid_frame = wf_cell.last_valid_frame_;
     // 这里的part_frame仅仅用于裁剪, 只有上边界是准确的
@@ -3330,6 +3334,10 @@ int ObWindowFunctionOp::compute_wf_values(const WinFuncCell *end, int64_t &check
     }
     bool is_pushdown_bypass = false;
     bool is_result_datum_null = false;
+    const bool can_reuse_last_frame =
+      ((wf->wf_info_.upper_.is_unbounded_)
+       || (!wf->wf_info_.upper_.is_unbounded_ && !wf->wf_info_.lower_.is_unbounded_))
+      && (!wf->wf_info_.upper_.is_nmb_literal_) && (!wf->wf_info_.lower_.is_nmb_literal_);
     for (int64_t i = wf->part_first_row_idx_;
          OB_SUCC(ret) && i < input_rows_.cur_->count();
          ++i) {
@@ -3353,7 +3361,8 @@ int ObWindowFunctionOp::compute_wf_values(const WinFuncCell *end, int64_t &check
           // don't need to compute, if aggr is count, res is 1; else res is param
           LOG_WARN("compute_push_down_by_pass failed", K(ret));
         }
-      } else if (OB_FAIL(compute(row_reader, *wf, i, result_datum))) { // real compute
+      } else if (OB_FAIL(compute(row_reader, *wf, i, can_reuse_last_frame,
+                                 result_datum))) { // real compute
         LOG_WARN("compute failed", K(ret));
       }
       if (OB_FAIL(ret)) {
