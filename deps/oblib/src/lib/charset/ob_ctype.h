@@ -36,6 +36,12 @@
 
 #define OB_LATIN1 "latin1"
 #define OB_LATIN1_SWEDISH_CI OB_LATIN1 "_swedish_ci"
+#define OB_LATIN1_GERMAN1_CI OB_LATIN1 "_german1_ci"
+#define OB_LATIN1_DANISH_CI OB_LATIN1 "_danish_ci"
+#define OB_LATIN1_GENERAL_CI OB_LATIN1 "_general_ci"
+#define OB_LATIN1_GENERAL_CS OB_LATIN1 "_general_cs"
+#define OB_LATIN1_SPANISH_CI OB_LATIN1 "_spanish_ci"
+#define OB_LATIN1_GERMAN2_CI OB_LATIN1 "_german2_ci"
 #define OB_LATIN1_BIN OB_LATIN1 "_bin"
 
 /* wm_wc and wc_mb return codes */
@@ -88,7 +94,7 @@
 #define OB_STRXFRM_LEVEL5          0x00000010
 #define OB_STRXFRM_LEVEL6          0x00000020
 #define OB_STRXFRM_LEVEL_ALL       0x0000003F
-#define OB_STRXFRM_NLEVELS         6         
+#define OB_STRXFRM_NLEVELS         6
 
 #define OB_STRXFRM_PAD_WITH_SPACE  0x00000040
 #define OB_STRXFRM_PAD_TO_MAXLEN   0x00000080
@@ -112,14 +118,14 @@
 #define OB_STRXFRM_REVERSE_LEVEL6  0x00200000
 #define OB_STRXFRM_REVERSE_SHIFT   16
 
-#define	_MY_U	01	  
-#define	_MY_L	02	  
-#define	_MY_NMR	04	
-#define	_MY_SPC	010	
-#define	_MY_PNT	020	
-#define	_MY_CTR	040	
-#define	_MY_B	0100	
-#define	_MY_X	0200	
+#define	_MY_U	01
+#define	_MY_L	02
+#define	_MY_NMR	04
+#define	_MY_SPC	010
+#define	_MY_PNT	020
+#define	_MY_CTR	040
+#define	_MY_B	0100
+#define	_MY_X	0200
 
 #define ob_toupper(s, c) (unsigned char)((s)->to_upper[(unsigned char)(c)])
 #define ob_tolower(s, c) (unsigned char)((s)->to_lower[(unsigned char)(c)])
@@ -450,7 +456,6 @@ extern ObUnicaseInfo ob_unicase_unicode520;
 extern ObCharsetInfo ob_charset_bin;
 extern ObCharsetInfo ob_charset_utf8mb4_bin;
 extern ObCharsetInfo ob_charset_utf8mb4_general_ci;
-extern ObCharsetInfo ob_charset_latin1;
 extern ObCharsetInfo ob_charset_gbk_chinese_ci;
 extern ObCharsetInfo ob_charset_gbk_bin;
 extern ObCharsetInfo ob_charset_utf16_general_ci;
@@ -475,6 +480,12 @@ extern ObCharsetInfo ob_charset_utf8mb4_0900_bin;
 extern ObCharsetInfo ob_charset_utf8mb4_0900_ai_ci;
 extern ObCharsetInfo ob_charset_utf16_unicode_ci;
 extern ObCharsetInfo ob_charset_latin1;
+extern ObCharsetInfo ob_charset_latin1_german1_ci;
+extern ObCharsetInfo ob_charset_latin1_danish_ci;
+extern ObCharsetInfo ob_charset_latin1_general_ci;
+extern ObCharsetInfo ob_charset_latin1_general_cs;
+extern ObCharsetInfo ob_charset_latin1_spanish_ci;
+extern ObCharsetInfo ob_charset_latin1_german2_ci;
 extern ObCharsetInfo ob_charset_latin1_bin;
 extern ObCharsetInfo ob_charset_utf8mb4_croatian_uca_ci;
 extern ObCharsetInfo ob_charset_utf8mb4_unicode_520_ci;
