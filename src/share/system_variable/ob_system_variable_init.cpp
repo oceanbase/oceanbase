@@ -3407,13 +3407,52 @@ static struct VarsInit{
     ObSysVars[240].alias_ = "OB_SV_PARTITION_INDEX_DIVE_LIMIT" ;
     }();
 
+    [&] (){
+      ObSysVars[241].default_value_ = "/run/observer.pid" ;
+      ObSysVars[241].info_ = "The path name of the file in which the server writes its process ID" ;
+      ObSysVars[241].name_ = "pid_file" ;
+      ObSysVars[241].data_type_ = ObVarcharType ;
+      ObSysVars[241].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[241].id_ = SYS_VAR_PID_FILE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PID_FILE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PID_FILE] = 241 ;
+      ObSysVars[241].base_value_ = "/run.observer.pid" ;
+    ObSysVars[241].alias_ = "OB_SV_PID_FILE" ;
+    }();
+
+    [&] (){
+      ObSysVars[242].default_value_ = "3306" ;
+      ObSysVars[242].info_ = "The number of the port on which the server listens for TCP/IP connections" ;
+      ObSysVars[242].name_ = "port" ;
+      ObSysVars[242].data_type_ = ObIntType ;
+      ObSysVars[242].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[242].id_ = SYS_VAR_PORT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PORT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PORT] = 242 ;
+      ObSysVars[242].base_value_ = "3306" ;
+    ObSysVars[242].alias_ = "OB_SV_PORT" ;
+    }();
+
+    [&] (){
+      ObSysVars[243].default_value_ = "/run/sql.sock" ;
+      ObSysVars[243].info_ = "the name of the socket file that is used for local client connections" ;
+      ObSysVars[243].name_ = "socket" ;
+      ObSysVars[243].data_type_ = ObVarcharType ;
+      ObSysVars[243].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[243].id_ = SYS_VAR_SOCKET ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SOCKET)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SOCKET] = 243 ;
+      ObSysVars[243].base_value_ = "/run/sql.sock" ;
+    ObSysVars[243].alias_ = "OB_SV_SOCKET" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 241;
+static int64_t var_amount = 244;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}
