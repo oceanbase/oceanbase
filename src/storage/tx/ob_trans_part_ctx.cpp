@@ -10133,8 +10133,12 @@ int ObPartTransCtx::do_transfer_out_tx_op(const SCN data_end_scn,
   } else if (NotifyType::REGISTER_SUCC == op_type) {
     // blocking active tx which start_scn <= data_end_scn
     // when register modify memory state only
-    sub_state_.set_transfer_blocking();
-    is_operated = true;
+    if (op_scn.is_valid()) {
+      // replay do nothing
+    } else {
+      sub_state_.set_transfer_blocking();
+      is_operated = true;
+    }
   } else if (NotifyType::ON_REDO == op_type) {
     if (exec_info_.max_applying_log_ts_.is_valid() && exec_info_.max_applying_log_ts_ >= op_scn) {
       // do nothing
@@ -10401,7 +10405,9 @@ int ObPartTransCtx::move_tx_op(const ObTransferMoveTxParam &move_tx_param,
     ret = OB_NEED_RETRY;
     TRANS_LOG(WARN, "has state log submitting need retry", KR(ret), K(trans_id_), K(sub_state_));
   } else if (NotifyType::REGISTER_SUCC == move_tx_param.op_type_) {
-    if (exec_info_.state_ >= ObTxState::ABORT) {
+    if (move_tx_param.op_scn_.is_valid()) {
+      // replay do nothing
+    } else if (exec_info_.state_ >= ObTxState::ABORT) {
       // this ctx may be recycled soon
       // a. RetainCtx recycle
       // b. get_tx_ctx and abort/clear log callback concurrent
@@ -10444,7 +10450,7 @@ int ObPartTransCtx::move_tx_op(const ObTransferMoveTxParam &move_tx_param,
       sub_state_.set_transfer_blocking();
     }
   } else if (NotifyType::ON_REDO == move_tx_param.op_type_) {
-    if (exec_info_.max_applying_log_ts_.is_valid() && exec_info_.max_applying_log_ts_ >=move_tx_param.op_scn_) {
+    if (exec_info_.max_applying_log_ts_.is_valid() && exec_info_.max_applying_log_ts_ >= move_tx_param.op_scn_) {
       // do nothing
     } else {
       if (is_new_created && is_follower_()) {
@@ -10567,8 +10573,7 @@ int ObPartTransCtx::move_tx_op(const ObTransferMoveTxParam &move_tx_param,
       // leader register fail to clean
       sub_state_.clear_transfer_blocking();
       exec_info_.is_transfer_blocking_ = false;
-    } else if (exec_info_.max_applying_log_ts_.is_valid() &&
-               exec_info_.max_applying_log_ts_ >= move_tx_param.op_scn_) {
+    } else if (exec_info_.max_applying_log_ts_.is_valid() && exec_info_.max_applying_log_ts_ >= move_tx_param.op_scn_) {
       // replay filter
     } else {
       sub_state_.clear_transfer_blocking();
