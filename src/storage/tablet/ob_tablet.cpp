@@ -275,6 +275,7 @@ int ObTablet::calc_tablet_data_usage()
   }
   int64_t occupy_bytes = 0;
   int64_t required_bytes = 0;
+  bool multi_version = false;
   while (OB_SUCC(ret)) {
     ObITable *table = nullptr;
     ObSSTable *sstable = nullptr;
@@ -301,6 +302,11 @@ int ObTablet::calc_tablet_data_usage()
       const ObSSTableMeta &sstable_meta = meta_handle.get_sstable_meta();
       occupy_bytes += sstable_meta.get_occupy_size();
       required_bytes += sstable_meta.get_total_macro_block_count() * OB_DEFAULT_MACRO_BLOCK_SIZE;
+      if (multi_version && sstable->is_major_sstable()) {
+        required_bytes -= sstable_meta.get_total_use_old_macro_block_count() * OB_DEFAULT_MACRO_BLOCK_SIZE;
+      } else if (sstable->is_major_sstable()) {
+        multi_version = true;
+      }
     }
   }
   if (OB_SUCC(ret)) {
