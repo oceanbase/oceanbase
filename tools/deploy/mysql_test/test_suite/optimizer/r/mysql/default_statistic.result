@@ -221,60 +221,60 @@ Outputs & filters:
       range_cond([t2.c1 > 1], [t2.c1 < 10])
 explain select * from t2 where c1 = 1 and c2 < 1;
 Query Plan
-================================================
-|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------------
-|0 |TABLE RANGE SCAN|t2  |1       |4           |
-================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t2(k2)|1       |7           |
+==================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), filter([t2.c2 < 1]), rowset=16
+  0 - output([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), filter(nil), rowset=16
       access([t2.c1], [t2.c6], [t2.c7], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c8], [t2.c9], [t2.c10]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([t2.c1], [t2.c6], [t2.c7]), range(1,MIN,MIN ; 1,MAX,MAX), 
-      range_cond([t2.c1 = 1])
+      is_index_back=true, is_global_index=false, 
+      range_key([t2.c1], [t2.c2], [t2.c6], [t2.c7]), range(1,NULL,MAX,MAX ; 1,1,MIN,MIN), 
+      range_cond([t2.c1 = 1], [t2.c2 < 1])
 explain select * from t2 where c1 = 1 and c2 = 1;
 Query Plan
-================================================
-|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------------
-|0 |TABLE RANGE SCAN|t2  |1       |5           |
-================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t2(k2)|1       |7           |
+==================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), filter([t2.c2 = 1]), rowset=16
+  0 - output([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), filter(nil), rowset=16
       access([t2.c1], [t2.c6], [t2.c7], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c8], [t2.c9], [t2.c10]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([t2.c1], [t2.c6], [t2.c7]), range(1,MIN,MIN ; 1,MAX,MAX), 
-      range_cond([t2.c1 = 1])
+      is_index_back=true, is_global_index=false, 
+      range_key([t2.c1], [t2.c2], [t2.c6], [t2.c7]), range(1,1,MIN,MIN ; 1,1,MAX,MAX), 
+      range_cond([t2.c1 = 1], [t2.c2 = 1])
 explain select * from t2 where c1 = 1 and c2 = 1 and c3 < 1;
 Query Plan
-================================================
-|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------------
-|0 |TABLE RANGE SCAN|t2  |1       |4           |
-================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t2(k3)|1       |8           |
+==================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), filter([t2.c3 < 1], [t2.c2 = 1]), rowset=16
+  0 - output([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), filter(nil), rowset=16
       access([t2.c1], [t2.c6], [t2.c7], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c8], [t2.c9], [t2.c10]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
-      range_key([t2.c1], [t2.c6], [t2.c7]), range(1,MIN,MIN ; 1,MAX,MAX), 
-      range_cond([t2.c1 = 1])
+      is_index_back=true, is_global_index=false, 
+      range_key([t2.c1], [t2.c2], [t2.c3], [t2.c6], [t2.c7]), range(1,1,NULL,MAX,MAX ; 1,1,1,MIN,MIN), 
+      range_cond([t2.c1 = 1], [t2.c2 = 1], [t2.c3 < 1])
 explain select * from t2 where c1 = 1 and c2 = 1 and c3 = 1;
 Query Plan
-================================================
-|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------------
-|0 |TABLE RANGE SCAN|t2  |1       |5           |
-================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t2(k3)|1       |8           |
+==================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), filter([t2.c2 = 1], [t2.c3 = 1]), rowset=16
+  0 - output([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), filter(nil), rowset=16
       access([t2.c1], [t2.c6], [t2.c7], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c8], [t2.c9], [t2.c10]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
-      range_key([t2.c1], [t2.c6], [t2.c7]), range(1,MIN,MIN ; 1,MAX,MAX), 
-      range_cond([t2.c1 = 1])
+      is_index_back=true, is_global_index=false, 
+      range_key([t2.c1], [t2.c2], [t2.c3], [t2.c6], [t2.c7]), range(1,1,1,MIN,MIN ; 1,1,1,MAX,MAX), 
+      range_cond([t2.c1 = 1], [t2.c2 = 1], [t2.c3 = 1])
 explain select count(*) from t3;
 Query Plan
 ===================================================
@@ -377,29 +377,29 @@ Outputs & filters:
       range_cond([t3.c1 = 1], [t3.c2 = 1])
 explain select * from t3 where c1 = 1 and c2 = 1 and c3 < 1;
 Query Plan
-================================================
-|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------------
-|0 |TABLE RANGE SCAN|t3  |1       |4           |
-================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t3(k3)|1       |7           |
+==================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t3.c1], [t3.c2], [t3.c3], [t3.c4], [t3.c5], [t3.c6], [t3.c7], [t3.c8], [t3.c9], [t3.c10]), filter([t3.c3 < 1]), rowset=16
+  0 - output([t3.c1], [t3.c2], [t3.c3], [t3.c4], [t3.c5], [t3.c6], [t3.c7], [t3.c8], [t3.c9], [t3.c10]), filter(nil), rowset=16
       access([t3.c1], [t3.c2], [t3.c6], [t3.c3], [t3.c4], [t3.c5], [t3.c7], [t3.c8], [t3.c9], [t3.c10]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([t3.c1], [t3.c2], [t3.c6]), range(1,1,MIN ; 1,1,MAX), 
-      range_cond([t3.c1 = 1], [t3.c2 = 1])
+      is_index_back=true, is_global_index=false, 
+      range_key([t3.c1], [t3.c2], [t3.c3], [t3.c6]), range(1,1,NULL,MAX ; 1,1,1,MIN), 
+      range_cond([t3.c1 = 1], [t3.c2 = 1], [t3.c3 < 1])
 explain select * from t3 where c1 = 1 and c2 = 1 and c3 = 1;
 Query Plan
-================================================
-|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------------
-|0 |TABLE RANGE SCAN|t3  |1       |5           |
-================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t3(k3)|1       |7           |
+==================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t3.c1], [t3.c2], [t3.c3], [t3.c4], [t3.c5], [t3.c6], [t3.c7], [t3.c8], [t3.c9], [t3.c10]), filter([t3.c3 = 1]), rowset=16
+  0 - output([t3.c1], [t3.c2], [t3.c3], [t3.c4], [t3.c5], [t3.c6], [t3.c7], [t3.c8], [t3.c9], [t3.c10]), filter(nil), rowset=16
       access([t3.c1], [t3.c2], [t3.c6], [t3.c3], [t3.c4], [t3.c5], [t3.c7], [t3.c8], [t3.c9], [t3.c10]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([t3.c1], [t3.c2], [t3.c6]), range(1,1,MIN ; 1,1,MAX), 
-      range_cond([t3.c1 = 1], [t3.c2 = 1])
+      is_index_back=true, is_global_index=false, 
+      range_key([t3.c1], [t3.c2], [t3.c3], [t3.c6]), range(1,1,1,MIN ; 1,1,1,MAX), 
+      range_cond([t3.c1 = 1], [t3.c2 = 1], [t3.c3 = 1])
