@@ -1490,12 +1490,11 @@ public:
   }
   bool is_enable_mysql_compatible_dates()
   {
-    cached_tenant_config_info_.refresh(); // refresh configuration for the next create session
     return enable_mysql_compatible_dates();
   }
   bool get_enable_mysql_compatible_dates_from_config()
   {
-    // Already refreshed in is_enable_mysql_compatible_dates()
+    cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.get_enable_mysql_compatible_dates();
   }
   bool enable_audit_log()

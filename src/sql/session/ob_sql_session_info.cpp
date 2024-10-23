@@ -2996,10 +2996,14 @@ int ObSQLSessionInfo::set_enable_role_array(const ObIArray<uint64_t> &role_id_ar
 void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
 {
   int tmp_ret = OB_SUCCESS;
-  const uint64_t effective_tenant_id = session_->get_effective_tenant_id();
   int64_t cur_ts = ObClockGenerator::getClock();
-  const bool change_tenant = (saved_tenant_info_ != effective_tenant_id);
-  if (change_tenant || cur_ts - last_check_ec_ts_ > 5000000) {
+  if (OB_ISNULL(session_)) {
+    tmp_ret = OB_ERR_UNEXPECTED;
+    LOG_WARN_RET(tmp_ret, "session_ is null");
+  } else if ((saved_tenant_info_ != session_->get_effective_tenant_id())
+             || cur_ts - last_check_ec_ts_ > 5000000) {
+    const uint64_t effective_tenant_id = session_->get_effective_tenant_id();
+    const bool change_tenant = (saved_tenant_info_ != effective_tenant_id);
     if (change_tenant) {
       LOG_DEBUG("refresh tenant config where tenant changed",
                   K_(saved_tenant_info), K(effective_tenant_id));
