@@ -37514,12 +37514,6 @@ def_table_schema(
     INNER JOIN oceanbase.__all_virtual_table avt
       ON      avt.table_type = 5
         AND 	avt.table_id = avttl.table_id
-    INNER JOIN oceanbase.__all_virtual_ls_meta_table avlmt
-      ON      avtps.tenant_id = avlmt.tenant_id
-        AND  avtps.ls_id = avlmt.ls_id
-        AND  avtps.svr_ip = avlmt.svr_ip
-        AND  avtps.svr_port = avlmt.svr_port
-        AND  avlmt.role = 1
     group by TENANT_ID, SERVER_IP, SERVER_PORT, SPACE_TYPE
     UNION
     select
@@ -37549,14 +37543,8 @@ def_table_schema(
     INNER JOIN oceanbase.__all_virtual_table avt
       ON      avt.table_id = avttl.table_id
         AND  avt.table_type in (3, 12, 13)
-    INNER JOIN oceanbase.__all_virtual_ls_meta_table avlmt
-      ON      avtps.tenant_id = avlmt.tenant_id
-        AND  avtps.ls_id = avlmt.ls_id
-        AND  avtps.svr_ip = avlmt.svr_ip
-        AND  avtps.svr_port = avlmt.svr_port
-        AND  avlmt.role = 1
     group by TENANT_ID, SERVER_IP, SERVER_PORT, SPACE_TYPE
-    order by TENANT_ID, SERVER_IP, SERVER_PORT, SPACE_TYPE;
+    order by TENANT_ID, SERVER_IP, SERVER_PORT, SPACE_TYPE
 """.replace("\n", " ")
 )
 
@@ -37595,18 +37583,20 @@ def_table_schema(
                           THEN 'Clog Data'
       END AS SPACE_TYPE,
       SUM(asu.used_size) AS USAGE_BYTES
-    FROM oceanbase.__all_tenant atnt
-    LEFT JOIN oceanbase.__all_zone_storage azs
-      ON LOCATE(azs.zone, atnt.primary_zone) > 0
-        OR atnt.primary_zone = 'RANDOM'
-    INNER JOIN oceanbase.__all_space_usage asu
+    from oceanbase.__all_space_usage asu
+    INNER JOIN oceanbase.__all_tenant atnt
       ON atnt.tenant_id = asu.tenant_id
+    INNER JOIN oceanbase.__all_server alls
+      ON alls.svr_ip = asu.svr_ip
+        and alls.svr_port = asu.svr_port
+    LEFT JOIN oceanbase.__all_zone_storage azs
+      ON azs.zone = alls.zone
     where asu.file_type in ('tenant shared_major data',
                             'tenant local data',
                             'tenant clog data',
                             'tenant tmp data')
-    GROUP BY tenant_id, space_type
-    ORDER BY tenant_id
+    GROUP BY TENANT_ID, ENDPOINT, PATH, SPACE_TYPE
+    ORDER BY TENANT_ID
 """.replace("\n", " ")
 )
 
@@ -37647,7 +37637,7 @@ def_table_schema(
       ON      atnt.tenant_id = avttl.tenant_id
     INNER JOIN oceanbase.__all_virtual_table avt
       ON      avt.table_id = avttl.table_id
-    INNER JOIN oceanbase.__all_database ad
+    INNER JOIN oceanbase.__all_virtual_database ad
       ON      ad.database_id = avt.database_id
     INNER JOIN oceanbase.__all_virtual_ls_meta_table avlmt
       ON      avtps.tenant_id = avlmt.tenant_id
