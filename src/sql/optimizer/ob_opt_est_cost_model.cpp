@@ -21,6 +21,7 @@
 #include "sql/optimizer/ob_opt_selectivity.h"
 #include "ob_opt_cost_model_parameter.h"
 #include <math.h>
+#define DEFAULT_BATCH_SIZE  256
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase;
@@ -1701,6 +1702,12 @@ int ObOptEstCostModel::range_scan_cpu_cost(const ObCostTableScanInfo &est_cost_i
     OPT_TRACE_COST_MODEL(KV(cpu_cost), "+=", KV(range_cost), "+", KV(qual_cost), "+", KV(project_cost));
     cpu_cost += row_count * cost_params_.get_table_scan_cpu_tuple_cost(sys_stat_);
     OPT_TRACE_COST_MODEL(KV(cpu_cost), "+=", KV(row_count), "*", cost_params_.get_table_scan_cpu_tuple_cost(sys_stat_));
+    if (est_cost_info.index_id_ == est_cost_info.ref_table_id_ &&
+        table_meta_info->has_opt_stat_ &&
+        table_meta_info->micro_block_count_ > 100 &&
+        table_meta_info->table_row_count_ / table_meta_info->micro_block_count_ < DEFAULT_BATCH_SIZE) {
+      cpu_cost *= 2 * (1-0.002 * (table_meta_info->table_row_count_ / table_meta_info->micro_block_count_));
+    }
     LOG_TRACE("OPT: [RANGE SCAN CPU COST]", K(is_scan_index), K(is_get),
             K(cpu_cost), K(qual_cost), K(project_cost), K(range_cost), K(row_count));
   }
