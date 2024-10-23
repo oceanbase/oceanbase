@@ -142,7 +142,6 @@ public:
     : inited_(false),
       stoped_(false),
       running_(false),
-      trace_id_(NULL),
       rand_(),
       schema_service_(NULL),
       job_rpc_proxy_(NULL),
@@ -238,7 +237,6 @@ private:
   bool stoped_;
   bool running_;
 
-  const uint64_t *trace_id_;
 
   common::ObRandom rand_; // for random pick server
   rootserver::ObUnitManager *unit_mgr_;

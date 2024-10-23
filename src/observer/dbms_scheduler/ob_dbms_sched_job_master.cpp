@@ -206,7 +206,6 @@ int ObDBMSSchedJobMaster::init(ObUnitManager *unit_mgr,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("trace id is null", K(ret));
   } else {
-    trace_id_ = ObCurTraceId::get();
     self_addr_ = GCONF.self_addr_;
     unit_mgr_ = unit_mgr;
     schema_service_ = schema_service;
@@ -298,11 +297,7 @@ int ObDBMSSchedJobMaster::scheduler()
   if (!inited_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("not init yet", K(ret));
-  } else if (OB_ISNULL(trace_id_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("null trace_id_ ptr", K(ret), K(trace_id_));
   } else {
-    ObCurTraceId::set(trace_id_);
     running_ = true;
     LOG_INFO("NOTICE: DBMS Sched Job master start running!", K(ret), K(running_));
     lib::set_thread_name("DBMS_SCHEDULER");
