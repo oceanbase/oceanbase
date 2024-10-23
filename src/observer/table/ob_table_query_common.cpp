@@ -101,6 +101,9 @@ int ObTableQueryUtils::generate_htable_result_iterator(ObIAllocator &allocator,
 
   if (OB_SUCC(ret)) {
     result_iter = htable_result_iter;
+  } else if (OB_NOT_NULL(htable_result_iter)) {
+    htable_result_iter->~ObHTableFilterOperator();
+    allocator.free(htable_result_iter);
   }
 
   return ret;
@@ -148,8 +151,8 @@ int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
           table_result_iter->init_aggregation();
           table_result_iter->get_agg_calculator().set_projs(tb_ctx.get_agg_projs());
         }
-        tmp_result_iter = table_result_iter;
       }
+      tmp_result_iter = table_result_iter;
     }
   } else { // no filter
     ObNormalTableQueryResultIterator *normal_result_iter = nullptr;
@@ -170,12 +173,14 @@ int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
         normal_result_iter->init_aggregation();
         normal_result_iter->get_agg_calculator().set_projs(tb_ctx.get_agg_projs());
       }
-      tmp_result_iter = normal_result_iter;
     }
+    tmp_result_iter = normal_result_iter;
   }
 
   if (OB_SUCC(ret)) {
     result_iter = tmp_result_iter;
+  } else if (OB_NOT_NULL(tmp_result_iter)) {
+    destroy_result_iterator(tmp_result_iter);
   }
 
   return ret;
