@@ -424,7 +424,7 @@ int ObMPPacketSender::send_error_packet(int err,
         client_cs_type = session->get_local_collation_connection();
         if (OB_UNLIKELY(OB_SUCCESS != ObCharset::charset_convert(allocator,
                                                                  message,
-                                                                 CS_TYPE_UTF8MB4_BIN,
+                                                                 session->get_nls_collation(),
                                                                  client_cs_type,
                                                                  new_message,
                                                                  ObCharset::REPLACE_UNKNOWN_CHARACTER))) {
