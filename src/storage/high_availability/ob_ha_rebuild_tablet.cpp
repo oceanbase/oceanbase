@@ -1179,6 +1179,7 @@ int ObTabletRebuildMajorDag::init(
   ObCopyTabletStatus::STATUS status = ObCopyTabletStatus::MAX_STATUS;
   ObRebuildTabletCtx *ctx = nullptr;
   ObTabletHandle tablet_handle;
+  DEBUG_SYNC(BEFORE_REBUILD_TABLET_INIT_DAG);
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
@@ -1205,16 +1206,16 @@ int ObTabletRebuildMajorDag::init(
     }
   } else {
     status = ObCopyTabletStatus::TABLET_EXIST;
+    copy_tablet_ctx_.tablet_handle_ = tablet_handle;
+    compat_mode_ = tablet_handle.get_obj()->get_tablet_meta().compat_mode_;
   }
 
   if (OB_FAIL(ret)) {
   } else if (FALSE_IT(copy_tablet_ctx_.tablet_id_ = tablet_id)) {
-  } else if (FALSE_IT(copy_tablet_ctx_.tablet_handle_ = tablet_handle)) {
   } else if (OB_FAIL(copy_tablet_ctx_.set_copy_tablet_status(status))) {
     LOG_WARN("failed to set copy tablet status", K(ret), K(status), K(tablet_id));
   } else if (FALSE_IT(ha_dag_net_ctx_ = ctx)) {
   } else {
-    compat_mode_ = copy_tablet_ctx_.tablet_handle_.get_obj()->get_tablet_meta().compat_mode_;
     finish_dag_ = finish_dag;
     is_inited_ = true;
   }
