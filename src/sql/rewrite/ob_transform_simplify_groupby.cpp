@@ -955,6 +955,7 @@ int ObTransformSimplifyGroupby::convert_valid_count_aggr(ObSelectStmt *select_st
         LOG_WARN("failed to add const param constraints", K(ret));
       } else {
         aggr->get_real_param_exprs_for_update().reuse();
+        aggr->calc_hash();
       }
     }
     if (OB_FAIL(ret)) {
