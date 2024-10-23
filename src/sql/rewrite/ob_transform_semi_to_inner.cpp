@@ -530,11 +530,10 @@ int ObTransformSemiToInner::check_basic_validity(ObDMLStmt *root_stmt,
   int64_t invalid_conds_count = 0;
   int64_t other_conds_count = 0;
 
-  if (OB_ISNULL(root_stmt)) {
+  if (OB_ISNULL(root_stmt) || OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(root_stmt));
   }
-
   for (int64_t i = 0; OB_SUCC(ret) && i < left_table_ids.count(); i++) {
     TableItem* temp_table = NULL;
     if (OB_ISNULL(temp_table = stmt.get_table_item_by_id(left_table_ids.at(i)))) {
@@ -649,6 +648,9 @@ int ObTransformSemiToInner::check_basic_validity(ObDMLStmt *root_stmt,
       need_check_cost = true;
       ctx.is_multi_join_cond_ = is_multi_join_cond;
     }
+  }
+  if (OB_SUCC(ret) && is_valid && need_check_cost && ctx_->in_accept_transform_) {
+    is_valid = false;
   }
   return ret;
 }
