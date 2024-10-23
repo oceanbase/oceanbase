@@ -7544,7 +7544,7 @@ all_ncomp_dll_v2 = dict(
 )
 def_table_schema(**all_ncomp_dll_v2)
 
-# 529: __all_tenant_object_balance_weight
+# 529: __all_object_balance_weight
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -15197,7 +15197,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
   keywords = all_def_keywords['__all_ncomp_dll_v2']))
 # 12507: __all_virtual_logstore_service_status
 # 12508: __all_virtual_logstore_service_info
-# 12509: __all_virtual_tenant_object_balance_weight
+# 12509: __all_virtual_object_balance_weight
 # 12510: __all_virtual_standby_log_transport_stat
 
 # 余留位置（此行之前占位）
@@ -15720,7 +15720,7 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15486', all_def_ke
 # 15487: __all_virtual_logstore_service_status
 # 15488: __all_virtual_logstore_service_info
 # 15489: __all_virtual_tablet_pointer_status
-# 15490: __all_tenant_object_balance_weight
+# 15490: __all_object_balance_weight
 # 15491: __all_virtual_standby_log_transport_stat
 
 # 余留位置（此行之前占位）
