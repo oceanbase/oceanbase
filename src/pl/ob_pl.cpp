@@ -2913,7 +2913,7 @@ int ObPLExecState::set_var(int64_t var_idx, const ObObjParam& value)
               && value.get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
     OZ (ObUserDefinedType::deep_copy_obj(*get_allocator(), value, copy_value));
   } else {
-    OZ (deep_copy_obj(*get_allocator(), value, copy_value));
+    OZ (deep_copy_objparam(*get_allocator(), value, copy_value));
   }
 
   if (OB_FAIL(ret)) {
