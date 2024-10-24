@@ -1612,6 +1612,8 @@ int ObBackupTabletProvider::init(const ObLSBackupParam &param, const share::ObBa
     ObLSBackupCtx &ls_backup_ctx, ObBackupIndexKVCache &index_kv_cache, common::ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
+  const lib::ObLabel label(ObModIds::BACKUP);
+  const uint64_t tenant_id = param.tenant_id_;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("provider init twice", K(ret));
@@ -1620,11 +1622,11 @@ int ObBackupTabletProvider::init(const ObLSBackupParam &param, const share::ObBa
     LOG_WARN("get invalid args", K(ret), K(param), K(backup_data_type));
   } else if (OB_FAIL(param_.assign(param))) {
     LOG_WARN("failed to assign param", K(ret), K(param));
-  } else if (OB_FAIL(lighty_queue_.init(QUEUE_SIZE))) {
+  } else if (OB_FAIL(lighty_queue_.init(QUEUE_SIZE, label, tenant_id))) {
     LOG_WARN("failed to init lighty queue", K(ret));
   } else if (OB_FAIL(fifo_allocator_.init(ObMallocAllocator::get_instance(),
                                           PAGE_SIZE,
-                                          lib::ObMemAttr(param.tenant_id_, ObModIds::BACKUP)))) {
+                                          lib::ObMemAttr(tenant_id, label)))) {
     LOG_WARN("failed to init allocator", K(ret));
   } else {
     backup_data_type_ = backup_data_type;
