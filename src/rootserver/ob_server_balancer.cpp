@@ -333,7 +333,7 @@ int ObServerBalancer::distribute_for_standalone_sys_unit()
   } else if (!enable_sys_unit_standalone) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("sys unit standalone deployment is disabled", K(ret));
-  } else if (OB_FAIL(unit_mgr_->get_tenant_unit_servers(
+  } else if (OB_FAIL(unit_mgr_->get_tenant_unit_servers_(
           OB_SYS_TENANT_ID, empty_zone, sys_unit_server_array))) {
     LOG_WARN("fail to get tenant unit server array", K(ret));
   } else {
@@ -1240,7 +1240,7 @@ int ObServerBalancer::generate_available_servers(
       LOG_WARN("zone is not in active", K(ret), K(zone_info));
     } else if (OB_FAIL(SVR_TRACER.get_servers_of_zone(zone, server_list))) {
       LOG_WARN("fail to get servers of zone", K(ret), K(zone));
-    } else if (OB_FAIL(unit_mgr_->get_tenant_unit_servers(
+    } else if (OB_FAIL(unit_mgr_->get_tenant_unit_servers_(
             OB_SYS_TENANT_ID, zone, sys_unit_server_array))) {
       LOG_WARN("fail to get tenant unit server array", K(ret));
     } else {

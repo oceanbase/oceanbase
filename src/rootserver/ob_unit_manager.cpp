@@ -5043,6 +5043,19 @@ int ObUnitManager::get_tenant_unit_servers(
     common::ObIArray<common::ObAddr> &server_array) const
 {
   int ret = OB_SUCCESS;
+  SpinRLockGuard guard(lock_);
+  if (OB_FAIL(get_tenant_unit_servers_(tenant_id, zone, server_array))) {
+    LOG_WARN("fail to get_tenant_unit_servers_", KR(ret), K(tenant_id), K(zone));
+  }
+  return ret;
+}
+
+int ObUnitManager::get_tenant_unit_servers_(
+    const uint64_t tenant_id,
+    const common::ObZone &zone,
+    common::ObIArray<common::ObAddr> &server_array) const
+{
+  int ret = OB_SUCCESS;
   ObArray<share::ObResourcePool *> *pools = nullptr;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
@@ -5348,14 +5361,14 @@ int ObUnitManager::get_excluded_servers(const uint64_t resource_pool_id,
     }
   }
   // get all tenant resource pool related servers on target zone
-  else if (OB_FAIL(get_tenant_unit_servers(tenant_id, zone, excluded_servers))) {
+  else if (OB_FAIL(get_tenant_unit_servers_(tenant_id, zone, excluded_servers))) {
     LOG_WARN("get tennat unit server fail", KR(ret), K(tenant_id), K(zone));
   }
 
   if (OB_SUCC(ret) && GCONF.enable_sys_unit_standalone) {
     // When the system tenant is deployed independently,
     // the server where the unit of the system tenant is located is also required as the executed servers
-    if (OB_FAIL(get_tenant_unit_servers(OB_SYS_TENANT_ID, zone, sys_standalone_servers))) {
+    if (OB_FAIL(get_tenant_unit_servers_(OB_SYS_TENANT_ID, zone, sys_standalone_servers))) {
       LOG_WARN("fail to get tenant unit servers", KR(ret), K(zone));
     } else if (OB_FAIL(append(excluded_servers, sys_standalone_servers))) {
       LOG_WARN("fail to append other excluded servers", K(ret));

@@ -381,6 +381,10 @@ private:
                        const bool is_manual = false);
   int get_zone_units(const common::ObArray<share::ObResourcePool *> &pools,
                      common::ObArray<ZoneUnit> &zone_units) const;
+  int get_tenant_unit_servers_(
+      const uint64_t tenant_id,
+      const common::ObZone &zone,
+      common::ObIArray<common::ObAddr> &server_array) const;
   virtual int end_migrate_unit(const uint64_t unit_id, const EndMigrateOp end_migrate_op = COMMIT);
   int get_excluded_servers(
       const share::ObUnit &unit,
