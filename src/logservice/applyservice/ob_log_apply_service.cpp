@@ -700,10 +700,7 @@ int ObApplyStatus::get_max_applied_scn(SCN &scn)
     palf::LSN apply_end_lsn;
     bool is_done = false;
     const SCN cur_palf_committed_end_scn = palf_committed_end_scn_.atomic_load();
-    if (max_applied_cb_scn_ > cur_palf_committed_end_scn) {
-      ret = OB_ERR_UNEXPECTED;
-      CLOG_LOG(ERROR, "invalid max_applied_cb_scn", KPC(this));
-    } else if (max_applied_cb_scn_ == cur_palf_committed_end_scn) {
+    if (max_applied_cb_scn_ == cur_palf_committed_end_scn) {
       //no need to push up
     } else if (OB_FAIL(is_apply_done(is_done, apply_end_lsn))) {
       CLOG_LOG(WARN, "check is_apply_done failed", K(ret), KPC(this));
