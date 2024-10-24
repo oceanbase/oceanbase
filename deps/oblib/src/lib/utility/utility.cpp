@@ -14,6 +14,7 @@
 
 #include "dirent.h"
 #include <dlfcn.h>
+#include <gnu/libc-version.h>
 #include "lib/utility/utility.h"
 #include "lib/ob_define.h"
 #include "util/easy_inet.h"
@@ -1903,6 +1904,24 @@ int64_t get_level3_cache_size()
   return l3_cache_size;
 }
 
+
+void get_glibc_version(int &major, int &minor)
+{
+  major = 0;
+  minor = 0;
+  const char *glibc_version = gnu_get_libc_version();
+  if (NULL != glibc_version) {
+    sscanf(glibc_version, "%d.%d", &major, &minor);
+  }
+}
+
+bool glibc_prereq(int major, int minor)
+{
+  int cur_major = 0;
+  int cur_minor = 0;
+  get_glibc_version(cur_major, cur_minor);
+  return (cur_major > major) || (cur_major == major && cur_minor >= minor);
+}
 
 } // end namespace common
 } // end namespace oceanbase
