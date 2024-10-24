@@ -107,16 +107,20 @@ int ObCreateTableExecutor::ObInsSQLPrinter::inner_print(char *buf, int64_t buf_l
   const ObSelectStmt *select_stmt = NULL;
   int64_t pos1 = 0;
   uint64_t insert_mode = 0;
+  const uint64_t tenant_id = MTL_ID();
+  uint64_t data_version = 0;
   if (OB_ISNULL(stmt_) || OB_ISNULL(select_stmt= stmt_->get_sub_select())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null stmt", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
   } else {
     const char *insert_str = NULL;
     const int64_t parallel_str_max_len = 256;
     char parallel_str[parallel_str_max_len] = {0};
     int64_t parallel_str_pos = 0;
     const char *osg_str = NULL;
-    const char *append_str = NULL;
+    const char *append_str = "";
     const int64_t direct_str_max_len = 256;
     char direct_str[direct_str_max_len] = {0};
     int64_t direct_str_pos = 0;
@@ -129,16 +133,17 @@ int ObCreateTableExecutor::ObInsSQLPrinter::inner_print(char *buf, int64_t buf_l
     } else {
       insert_str = insert_mode == 0 ? "insert" : insert_mode == 1 ? "insert ignore" : "replace";
       osg_str = do_osg_ ? "GATHER_OPTIMIZER_STATISTICS" : "NO_GATHER_OPTIMIZER_STATISTICS";
-      append_str = stmt_->get_has_append_hint() ? "append" : "";
-      const bool has_parallel_hint = stmt_->get_has_parallel_hint();
-      const ObDirectLoadHint &direct_load_hint = stmt_->get_direct_load_hint();
-      if (has_parallel_hint &&
+      if (stmt_->get_has_parallel_hint() &&
           OB_FAIL(databuff_printf(parallel_str, parallel_str_max_len, parallel_str_pos,
                                   "PARALLEL(%lu)", stmt_->get_parallelism()))) {
         LOG_WARN("fail to print parallel hint", K(ret), K(stmt_->get_parallelism()));
-      } else if (OB_FAIL(direct_load_hint.print_direct_load_hint(direct_str, direct_str_max_len,
-                                                                 direct_str_pos))) {
-        LOG_WARN("fail to print direct load hint", K(ret), K(direct_load_hint));
+      } else if (DATA_VERSION_4_3_4_0 <= data_version) {
+        append_str = stmt_->get_has_append_hint() ? "append" : "";
+        const ObDirectLoadHint &direct_load_hint = stmt_->get_direct_load_hint();
+        if (OB_FAIL(direct_load_hint.print_direct_load_hint(direct_str, direct_str_max_len,
+                                                                   direct_str_pos))) {
+          LOG_WARN("fail to print direct load hint", K(ret), K(direct_load_hint));
+        }
       }
     }
     if (OB_FAIL(ret)) {
@@ -289,7 +294,6 @@ int ObCreateTableExecutor::prepare_ins_arg(ObCreateTableStmt &stmt,
 int ObCreateTableExecutor::prepare_alter_arg(ObCreateTableStmt &stmt,
                                              const ObSQLSessionInfo *my_session,
                                              const ObString &create_table_name,
-                                             bool is_full_direct_insert,
                                              obrpc::ObAlterTableArg &alter_table_arg) //out, 最终的alter table arg, set session_id = 0;
 {
   int ret = OB_SUCCESS;
@@ -313,7 +317,6 @@ int ObCreateTableExecutor::prepare_alter_arg(ObCreateTableStmt &stmt,
   } else if (OB_FAIL(alter_table_schema->assign(table_schema))) {
     LOG_WARN("failed to assign alter table schema", K(ret));
   } else if (!table_schema.is_mysql_tmp_table()
-             && !is_full_direct_insert
              && FALSE_IT(alter_table_schema->set_session_id(0))) {
     //impossible
   } else if (OB_FAIL(alter_table_schema->set_origin_table_name(stmt.get_table_name()))) {
@@ -325,7 +328,6 @@ int ObCreateTableExecutor::prepare_alter_arg(ObCreateTableStmt &stmt,
   } else if (OB_FAIL(alter_table_schema->set_database_name(stmt.get_database_name()))) {
     LOG_WARN("failed to set database name", K(ret));
   } else if (!table_schema.is_mysql_tmp_table()
-             && !is_full_direct_insert
              && OB_FAIL(alter_table_schema->alter_option_bitset_.add_member(obrpc::ObAlterTableArg::SESSION_ID))) {
     LOG_WARN("failed to add member SESSION_ID for alter table schema", K(ret), K(alter_table_arg));
   } else if (OB_FAIL(alter_table_schema->alter_option_bitset_.add_member(obrpc::ObAlterTableArg::TABLE_NAME))) {
@@ -361,34 +363,6 @@ int ObCreateTableExecutor::prepare_drop_arg(const ObCreateTableStmt &stmt,
     LOG_WARN("failed to add table item!", K(table_item), K(ret));
   }
   LOG_DEBUG("drop table arg preparation complete!", K(drop_table_arg), K(table_item), K(ret));
-  return ret;
-}
-
-int ObCreateTableExecutor::check_if_ctas_use_full_direct_insert(ObCreateTableStmt &stmt,
-                                                                bool &is_full_direct_insert)
-{
-  int ret = OB_SUCCESS;
-  const uint64_t tenant_id = MTL_ID();
-  uint64_t data_version = 0;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-  const ObString &config_str = tenant_config->default_load_mode.get_value_string();
-  is_full_direct_insert = false;
-
-  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
-    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
-  } else if (stmt.get_direct_load_hint().has_no_direct()) {
-    // when no_direct hint is set, ctas will not use direct load
-  } else if (stmt.get_has_parallel_hint() && 1 == stmt.get_parallelism()) {
-    // when user explictly set parallel hint to 1, ctas will not use direct load
-  } else if ((stmt.get_has_append_hint() || stmt.get_direct_load_hint().is_full_load_method()) &&
-             stmt.get_parallelism() > 1) {
-    is_full_direct_insert = true;
-  } else if (DATA_VERSION_4_3_4_0 <= data_version &&
-             tenant_config.is_valid() &&
-             0 == config_str.case_compare("FULL_DIRECT_WRITE")) {
-    is_full_direct_insert = true;
-  }
-
   return ret;
 }
 
@@ -429,19 +403,16 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
     }
     if (OB_SUCC(ret)) {
       ObInnerSQLConnectionPool *pool = static_cast<observer::ObInnerSQLConnectionPool*>(sql_proxy->get_pool());
-      bool is_full_direct_insert = false;
       if (OB_ISNULL(pool)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("pool is null", K(ret));
       } else if (OB_FAIL(oracle_sql_proxy.init(pool))) {
         LOG_WARN("init oracle sql proxy failed", K(ret));
-      } else if (OB_FAIL(check_if_ctas_use_full_direct_insert(stmt, is_full_direct_insert))) {
-        LOG_WARN("failed to check if ctas use full direct insert", K(ret));
       } else if (OB_FAIL(prepare_stmt(stmt, *my_session, create_table_name))) {
         LOG_WARN("failed to prepare stmt", K(ret));
       } else if (OB_FAIL(prepare_ins_arg(stmt, my_session, ctx.get_sql_ctx()->schema_guard_, &plan_ctx->get_param_store(), ins_sql))) { //1, 参数准备;
         LOG_WARN("failed to prepare insert table arg", K(ret));
-      } else if (OB_FAIL(prepare_alter_arg(stmt, my_session, create_table_name, is_full_direct_insert, alter_table_arg))) {
+      } else if (OB_FAIL(prepare_alter_arg(stmt, my_session, create_table_name, alter_table_arg))) {
         LOG_WARN("failed to prepare alter table arg", K(ret));
       } else if (OB_FAIL(prepare_drop_arg(stmt, my_session, table_item, drop_table_arg))) {
         LOG_WARN("failed to prepare drop table arg", K(ret));
@@ -484,7 +455,8 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
         if (OB_SUCC(ret)) {
           bool is_mysql_temp_table = stmt.get_create_table_arg().schema_.is_mysql_tmp_table();
           bool in_trans = my_session->is_in_transaction();
-          bool need_start_trans = !is_full_direct_insert && (!is_mysql_temp_table || !in_trans);
+          bool need_set_autocommit = (!is_mysql_temp_table || !in_trans);
+          bool original_autocommit = false;
           ObBasicSessionInfo::UserScopeGuard user_scope_guard(my_session->get_sql_scope_flags());
           common::sqlclient::ObISQLConnection *conn = NULL;
           const uint64_t tenant_id = my_session->get_effective_tenant_id();
@@ -493,42 +465,32 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
           } else {
             user_sql_proxy = sql_proxy;
           }
-          if (OB_FAIL(pool->acquire(my_session, conn))) {
-            LOG_WARN("failed to acquire inner connection", K(ret));
-          } else if (OB_ISNULL(conn)) {
-            ret = OB_INNER_STAT_ERROR;
-            LOG_WARN("connection can not be NULL", K(ret));
-          } else if (need_start_trans && OB_FAIL(conn->start_transaction(tenant_id))) {
-            LOG_WARN("failed start transaction", K(ret), K(tenant_id));
+          if (OB_FAIL(my_session->get_autocommit(original_autocommit))) {
+            LOG_WARN("failed to get autocommit", K(ret));
+          } else if (need_set_autocommit &&
+                     !original_autocommit && OB_FAIL(my_session->set_autocommit(true))) {
+            LOG_WARN("failed to set autocommit", K(ret));
           } else {
-            if (OB_FAIL(conn->execute_write(tenant_id, ins_sql.ptr(),
-                                            affected_rows, true))) {
+            if (OB_FAIL(pool->acquire(my_session, conn))) {
+              LOG_WARN("failed to acquire inner connection", K(ret));
+            } else if (OB_ISNULL(conn)) {
+              ret = OB_INNER_STAT_ERROR;
+              LOG_WARN("connection can not be NULL", K(ret));
+            } else if (OB_FAIL(
+                           conn->execute_write(tenant_id, ins_sql.ptr(), affected_rows, true))) {
               LOG_WARN("failed to exec sql", K(tenant_id), K(ins_sql), K(ret));
             }
-            // transaction started, must commit or rollback
-            int tmp_ret = OB_SUCCESS;
-            if (need_start_trans) {
-              if (OB_LIKELY(OB_SUCCESS == ret)) {
-                tmp_ret = conn->commit();
-              } else {
-                int64_t MIN_ROLLBACK_TIMEOUT = 10 * 1000 * 1000;// 10s
-                int64_t origin_timeout_ts = THIS_WORKER.get_timeout_ts();
-                if (INT64_MAX != origin_timeout_ts &&
-                    origin_timeout_ts < ObTimeUtility::current_time() + MIN_ROLLBACK_TIMEOUT) {
-                  THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + MIN_ROLLBACK_TIMEOUT);
-                  LOG_INFO("set timeout for rollback", K(origin_timeout_ts),
-                      K(ObTimeUtility::current_time() + MIN_ROLLBACK_TIMEOUT));
-                }
-                tmp_ret = conn->rollback();
-              }
-              if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
+
+            if (need_set_autocommit && !original_autocommit) {
+              int tmp_ret = OB_SUCCESS;
+              if (OB_TMP_FAIL(my_session->set_autocommit(original_autocommit))) {
                 ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
-                LOG_WARN("fail to end transaction", K(ret), K(tmp_ret));
+                LOG_WARN("failed to set autocommit", K(ret), K(tmp_ret), K(original_autocommit));
               }
             }
-          }
-          if (OB_NOT_NULL(conn)) {
-            user_sql_proxy->close(conn, true);
+            if (OB_NOT_NULL(conn)) {
+              user_sql_proxy->close(conn, true);
+            }
           }
         }
 

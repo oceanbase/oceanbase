@@ -1687,6 +1687,15 @@ private:
       common::ObIAllocator &allocator,
       share::schema::ObTableSchema &hidden_table_schema,
       const ObString &index_name);
+  int clear_ctas_hidden_table_session_id_(
+      share::schema::ObTableSchema &hidden_table_schema);
+  int swap_ctas_hidden_table_session_id_(
+      const share::schema::ObTableSchema &orig_table_schema,
+      const share::schema::ObTableSchema &hidden_table_schema,
+      share::schema::ObTableSchema &new_orig_table_schema,
+      share::schema::ObTableSchema &new_hidden_table_schema,
+      ObDDLOperator &ddl_operator,
+      common::ObMySQLTransaction &trans);
   int rebuild_hidden_table_priv(
       const share::schema::ObTableSchema &orig_table_schema,
       const share::schema::ObTableSchema &hidden_table_schema,

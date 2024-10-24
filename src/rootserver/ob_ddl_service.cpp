@@ -19135,6 +19135,12 @@ int ObDDLService::prepare_hidden_table_schema(const ObTableSchema &orig_table_sc
       LOG_WARN("fail to generate object_id for partition schema", KR(ret), K(hidden_table_schema));
     } else if (OB_FAIL(generate_tablet_id(hidden_table_schema))) {
       LOG_WARN("fail to generate tablet id for hidden table", K(ret), K(hidden_table_schema));
+    } else if (orig_table_schema.is_ctas_tmp_table() &&
+               OB_FAIL(clear_ctas_hidden_table_session_id_(hidden_table_schema))) {
+      // for CTAS table, clear its session id, otherwise this table schema will not be visble
+      // to the index rebuiding phase.
+      LOG_WARN("fail to clear ctas hidden table session id", K(ret), K(orig_table_schema),
+               K(hidden_table_schema));
     } else {
       // offline ddl change table_id, so we need to reset truncate_version
       hidden_table_schema.set_truncate_version(OB_INVALID_VERSION);
@@ -19143,12 +19149,6 @@ int ObDDLService::prepare_hidden_table_schema(const ObTableSchema &orig_table_sc
       hidden_table_schema.set_association_table_id(orig_table_schema.get_table_id());
       // set the hidden attributes of the table
       hidden_table_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_HIDDEN_OFFLINE_DDL);
-      if (hidden_table_schema.is_ctas_tmp_table()) {
-        // for CTAS table, clear its session id, otherwise this table schema will not be visble
-        // to the index rebuiding phase.
-        hidden_table_schema.set_session_id(0);
-        LOG_INFO("clear session_id of hidden table copied from CTAS table", K(hidden_table_schema));
-      }
       if (orig_table_schema.get_tenant_id() != hidden_table_schema.get_tenant_id()) {
         // recover restore table, do not sync log to cdc.
         hidden_table_schema.set_ddl_ignore_sync_cdc_flag(ObDDLIgnoreSyncCdcFlag::DONT_SYNC_LOG_FOR_CDC);
@@ -19190,6 +19190,54 @@ int ObDDLService::prepare_hidden_table_schema(const ObTableSchema &orig_table_sc
       }
     }
   }
+  return ret;
+}
+
+int ObDDLService::clear_ctas_hidden_table_session_id_(share::schema::ObTableSchema &hidden_table_schema)
+{
+  int ret = OB_SUCCESS;
+
+  if (!hidden_table_schema.is_ctas_tmp_table()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("hidden table is not a CTAS tmp table", K(ret), K(hidden_table_schema));
+  } else {
+    hidden_table_schema.set_session_id(0);
+    hidden_table_schema.set_create_host("");
+    LOG_INFO("clear session_id of hidden table copied from CTAS table", K(hidden_table_schema));
+  }
+
+  return ret;
+}
+
+int ObDDLService::swap_ctas_hidden_table_session_id_(
+    const share::schema::ObTableSchema &orig_table_schema,
+    const share::schema::ObTableSchema &hidden_table_schema,
+    share::schema::ObTableSchema &new_orig_table_schema,
+    share::schema::ObTableSchema &new_hidden_table_schema,
+    ObDDLOperator &ddl_operator,
+    common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+
+  if (!orig_table_schema.is_ctas_tmp_table() || hidden_table_schema.is_ctas_tmp_table()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("origin table or hidden table state is not valid", K(ret), K(orig_table_schema),
+             K(hidden_table_schema));
+  } else {
+    new_orig_table_schema.set_session_id(hidden_table_schema.get_session_id());
+    new_hidden_table_schema.set_session_id(orig_table_schema.get_session_id());
+    new_orig_table_schema.set_create_host(hidden_table_schema.get_create_host());
+    new_hidden_table_schema.set_create_host(orig_table_schema.get_create_host());
+    // since the session id is cleared when we create the hidden table, the temp table info
+    // won't be added at the creation time, so we should add it here
+    new_hidden_table_schema.set_in_offline_ddl_white_list(true);
+    if (OB_FAIL(ddl_operator.insert_temp_table_info(trans, new_hidden_table_schema))) {
+      LOG_WARN("failed to insert temp table info", K(ret), K(new_hidden_table_schema));
+    }
+    LOG_INFO("restore session_id of hidden table copied from CTAS table",
+             K(new_hidden_table_schema), K(new_orig_table_schema));
+  }
+
   return ret;
 }
 
@@ -21507,8 +21555,17 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
           new_hidden_table_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_OFFLINE_DDL);
           new_orig_table_schema.set_table_name(hidden_table_schema->get_table_name_str());
           new_hidden_table_schema.set_table_name(orig_table_schema->get_table_name_str());
-          if (OB_FAIL(table_schemas.push_back(new_orig_table_schema))
-              || OB_FAIL(table_schemas.push_back(new_hidden_table_schema))) {
+          // in prepare_hidden_table_schema, we clear the session id for hidden table of
+          // CTAS tmp table. now, data loading stage is finished, we are ready to swap hidden table
+          // with CTAS tmp table. we should exchange the session id(and create_host) property to
+          // ensure the new CTAS tmp table has correct state.
+          if (orig_table_schema->is_ctas_tmp_table() &&
+              OB_FAIL(swap_ctas_hidden_table_session_id_(
+                  *orig_table_schema, *hidden_table_schema, new_orig_table_schema,
+                  new_hidden_table_schema, ddl_operator, trans))) {
+            LOG_WARN("failed to swap ctas hidden table session id", K(ret));
+          } else if (OB_FAIL(table_schemas.push_back(new_orig_table_schema)) ||
+                     OB_FAIL(table_schemas.push_back(new_hidden_table_schema))) {
             LOG_WARN("failed to add table schema!", K(ret));
           }
         }
