@@ -31,7 +31,6 @@
 #include "lib/compress/ob_compressor_pool.h"
 #include "ob_i_storage.h"
 #include "common/storage/ob_device_common.h"
-#include "cos/ob_singleton.h"
 #include "lib/container/ob_se_array.h"
 
 namespace oceanbase

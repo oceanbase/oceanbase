@@ -19,6 +19,7 @@
 #include "lib/container/ob_se_array.h"
 #include "common/storage/ob_device_common.h"
 #include "ob_storage_info.h"
+#include "ob_object_storage_base.h"
 
 namespace oceanbase
 {
