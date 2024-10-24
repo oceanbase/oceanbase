@@ -1104,7 +1104,7 @@ int ObMediumCompactionScheduleFunc::get_table_schema_to_merge(
   bool is_cs_replica = false;
   int64_t storage_schema_version =  ObStorageSchema::STORAGE_SCHEMA_VERSION_LATEST;
 
-  if (data_version < DATA_VERSION_4_3_3_0) {
+  if (data_version < DATA_VERSION_4_3_4_0) {
     storage_schema_version = ObStorageSchema::STORAGE_SCHEMA_VERSION_V3;
   } else {
     storage_schema_version = ObStorageSchema::STORAGE_SCHEMA_VERSION_V4;
