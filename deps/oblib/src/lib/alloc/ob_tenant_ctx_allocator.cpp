@@ -84,12 +84,20 @@ int ObTenantCtxAllocator::iter_label(VisitFunc func) const
       int tcr_cnt = mem_dump.r_stat_->tcr_cnt_;
       auto it = std::lower_bound(tcrs, tcrs + tcr_cnt, std::make_pair(tenant_id_, ctx_id_),
                                   &ObMemoryDump::TenantCtxRange::compare);
-      items[item_cnt].label_ = ObNewModIds::OB_KVSTORE_CACHE_MB;
-      int len = strlen(ObNewModIds::OB_KVSTORE_CACHE_MB);
-      MEMCPY(mb_item.str_, ObNewModIds::OB_KVSTORE_CACHE_MB, len);
-      mb_item.str_[len] = '\0';
-      mb_item.str_len_ = len;
-      items[item_cnt++].item_ = &mb_item;
+      if (ObCtxIds::KVSTORE_CACHE_ID == ctx_id_) {
+        items[item_cnt].label_ = ObNewModIds::OB_KVSTORE_CACHE_MB;
+        int len = strlen(ObNewModIds::OB_KVSTORE_CACHE_MB);
+        MEMCPY(mb_item.str_, ObNewModIds::OB_KVSTORE_CACHE_MB, len);
+        mb_item.str_[len] = '\0';
+        mb_item.str_len_ = len;
+
+        IGNORE_RETURN with_resource_handle_invoke([&](const ObTenantMemoryMgr *mgr) {
+          mb_item.hold_ += mgr->get_cache_hold();
+          mb_item.count_ += mgr->get_cache_item_count();
+          return OB_SUCCESS;
+        });
+        items[item_cnt++].item_ = &mb_item;
+      }
       if (it != tcrs + tcr_cnt &&
           it->tenant_id_ == tenant_id_ &&
           it->ctx_id_ == ctx_id_) {
@@ -108,15 +116,7 @@ int ObTenantCtxAllocator::iter_label(VisitFunc func) const
             {
               return (l.item_->hold_  > r.item_->hold_);
             });
-        ObLabel label(ObNewModIds::OB_KVSTORE_CACHE_MB);
         for (int64_t i = 0; OB_SUCC(ret) && i < item_cnt; ++i) {
-          if (ObCtxIds::KVSTORE_CACHE_ID == ctx_id_ && label == items[i].label_) {
-            IGNORE_RETURN with_resource_handle_invoke([&](const ObTenantMemoryMgr *mgr) {
-              items[i].item_->hold_ += mgr->get_cache_hold();
-              items[i].item_->count_ += mgr->get_cache_item_count();
-              return OB_SUCCESS;
-            });
-          }
           ret = func(items[i].label_, items[i].item_);
         }
       }
