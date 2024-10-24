@@ -1621,6 +1621,7 @@ int ObTabletLobWriteDataTask::create_sstable(ObSSTableIndexBuilder *sstable_inde
     create_sstable_param.ddl_scn_ = basic_meta.ddl_scn_;
     create_sstable_param.progressive_merge_round_ = basic_meta.progressive_merge_round_;
     create_sstable_param.progressive_merge_step_ = basic_meta.progressive_merge_step_;
+    create_sstable_param.co_base_snapshot_version_ = basic_meta.co_base_snapshot_version_;
 
     create_sstable_param.ddl_scn_.set_min();
 

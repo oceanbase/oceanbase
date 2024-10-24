@@ -1440,6 +1440,7 @@ int ObTabletSplitMergeTask::build_create_sstable_param(
     create_sstable_param.ddl_scn_ = basic_meta.ddl_scn_;
     create_sstable_param.progressive_merge_round_ = basic_meta.progressive_merge_round_;
     create_sstable_param.progressive_merge_step_ = basic_meta.progressive_merge_step_;
+    create_sstable_param.co_base_snapshot_version_ = basic_meta.co_base_snapshot_version_;
 
     ObSSTableMergeRes::fill_addr_and_data(res.root_desc_,
         create_sstable_param.root_block_addr_, create_sstable_param.root_block_data_);
@@ -1547,6 +1548,7 @@ int ObTabletSplitMergeTask::build_create_empty_sstable_param(
     create_sstable_param.progressive_merge_step_ = basic_meta.progressive_merge_step_;
     create_sstable_param.column_cnt_ = basic_meta.column_cnt_;
     create_sstable_param.master_key_id_ = basic_meta.master_key_id_;
+    create_sstable_param.co_base_snapshot_version_ = basic_meta.co_base_snapshot_version_;
     MEMCPY(create_sstable_param.encrypt_key_, basic_meta.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
 
     create_sstable_param.root_block_addr_.set_none_addr();

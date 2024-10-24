@@ -3100,6 +3100,7 @@ int ObLSTabletService::build_create_sstable_param_for_migration(
     param.data_block_macro_meta_addr_.set_none_addr();;
     param.table_backup_flag_             = mig_param.basic_meta_.table_backup_flag_;
     param.table_shared_flag_             = mig_param.basic_meta_.table_shared_flag_;
+    param.co_base_snapshot_version_      = mig_param.basic_meta_.co_base_snapshot_version_;
     if (OB_FAIL(param.column_checksums_.assign(mig_param.column_checksums_))) {
       LOG_WARN("fail to assign column checksums", K(ret), K(mig_param));
     }
