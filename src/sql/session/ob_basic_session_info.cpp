@@ -6383,6 +6383,8 @@ int ObBasicSessionInfo::base_save_session(BaseSavedValue &saved_value, bool skip
                                                                  ObModIds::OB_SQL_SESSION_QUERY_SQL)));
     if (OB_ISNULL(saved_value.cur_query_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
+      saved_value.cur_query_buf_len_ = 0;
+      LOG_WARN("failed to alloc memory for cur query", K(ret));
     } else {
       saved_value.cur_query_buf_len_ = len;
     }
@@ -6440,7 +6442,7 @@ int ObBasicSessionInfo::base_restore_session(BaseSavedValue &saved_value)
   // 4013 scene, len may be -1, illegal.
   int64_t len = MAX(MIN(saved_value.cur_query_len_, thread_data_.cur_query_buf_len_ - 1), 0);
   OX (thread_data_.cur_query_len_ = len);
-  if (thread_data_.cur_query_ != nullptr) {
+  if (thread_data_.cur_query_ != nullptr && saved_value.cur_query_ != nullptr) {
     OX (MEMCPY(thread_data_.cur_query_, saved_value.cur_query_, len));
     thread_data_.cur_query_[len] = '\0';
   }
