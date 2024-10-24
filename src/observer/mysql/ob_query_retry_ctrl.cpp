@@ -578,6 +578,10 @@ public:
       if (v.local_retry_times_ <= 1 || !v.session_.get_pl_can_retry()) {
         v.no_more_test_ = true;
         v.retry_type_ = RETRY_TYPE_LOCAL;
+        sleep_before_local_retry(v,
+                    RETRY_SLEEP_TYPE_LINEAR,
+                    WAIT_RETRY_SHORT_US,
+                    THIS_WORKER.get_timeout_ts());
       } else {
         v.no_more_test_ = true;
         v.retry_type_ = RETRY_TYPE_NONE;
@@ -587,6 +591,10 @@ public:
       // for DDL etc
       v.no_more_test_ = true;
       v.retry_type_ = RETRY_TYPE_LOCAL;
+      sleep_before_local_retry(v,
+                    RETRY_SLEEP_TYPE_LINEAR,
+                    WAIT_RETRY_SHORT_US,
+                    THIS_WORKER.get_timeout_ts());
     }
   }
 };
