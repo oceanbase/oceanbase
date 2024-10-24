@@ -3363,43 +3363,59 @@ int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, 
              && formal_param_type.is_cursor_type()) {
     // skip check
   } else {  // user defined type
-    uint64_t formal_udt_id = OB_INVALID_ID;
     uint64_t actual_udt_id = OB_INVALID_ID;
+    uint64_t formal_udt_id = OB_INVALID_ID;
+    const pl::ObPLComposite *actual_composite = reinterpret_cast<const ObPLComposite *>(actual_param.get_ext());
 
-    OV (formal_param_type.is_composite_type(), OB_INVALID_ARGUMENT, formal_param_type);
-    OX (formal_udt_id = formal_param_type.get_user_type_id());
-    OV (OB_INVALID_ID != formal_udt_id, OB_ERR_UNEXPECTED, formal_param_type);
-
+    // get actual param type id
+    CK (OB_NOT_NULL(actual_composite));
     OX (actual_udt_id = actual_param.get_udt_id());
     if (OB_SUCC(ret) && OB_INVALID_ID == actual_udt_id) {
       if (PL_RECORD_TYPE == actual_param.get_meta().get_extend_type()
           || PL_NESTED_TABLE_TYPE == actual_param.get_meta().get_extend_type()
           || PL_ASSOCIATIVE_ARRAY_TYPE == actual_param.get_meta().get_extend_type()
           || PL_VARRAY_TYPE == actual_param.get_meta().get_extend_type()) {
-        const pl::ObPLComposite *actual_composite = nullptr;
-        CK (OB_NOT_NULL(actual_composite = reinterpret_cast<const ObPLComposite *>(actual_param.get_ext())));
         OX (actual_udt_id = actual_composite->get_id());
-        OV (OB_INVALID_ID != actual_udt_id || actual_composite->is_collection(),  // anonymous array has invalid udt id
-            OB_ERR_UNEXPECTED, KPC(actual_composite), actual_param);
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected extend type without udt id", K(ret), K(actual_param));
       }
     }
+    // get formal param type id
+    OV (formal_param_type.is_composite_type(), OB_INVALID_ARGUMENT, formal_param_type);
+    OX (formal_udt_id = formal_param_type.get_user_type_id());
+    OV (OB_INVALID_ID != formal_udt_id, OB_ERR_UNEXPECTED, formal_param_type);
 
     if (OB_FAIL(ret)) {
-    } else if (OB_INVALID_ID == actual_udt_id || formal_udt_id == actual_udt_id) {
-      // skip anonymous array & same udt id
+    } else if (OB_INVALID_ID != actual_udt_id && formal_udt_id == actual_udt_id) {
+      // skip same valid udt id
+    } else if (OB_INVALID_ID == actual_udt_id || actual_composite->is_collection()) {
+      // check compatible for anonymous array which has invalid udt id
+      bool dummy;
+      OZ (check_anonymous_collection_compatible(*actual_composite, formal_param_type, dummy));
     } else {
+      const ObUserDefinedType *actual_type = nullptr;
+      const ObUserDefinedType *formal_type = nullptr;
       bool is_compatible = true;
-      OZ (ObPLResolver::check_composite_compatible(ctx_, actual_udt_id, formal_udt_id, is_compatible));
-      if (OB_INVALID_ARGUMENT == ret) {
-        LOG_INFO("the type of actual param is not found in the current procedure's lexical scope, "
-                 "should search caller's scope",
-                 K(ret), K(actual_udt_id), K(formal_udt_id));
+
+      OZ (get_exec_ctx().get_user_type(actual_udt_id, actual_type));
+      if (OB_FAIL(ret) || OB_ISNULL(actual_type)) {
+        // The type of the actual argument may not exist in the current function's lexical scope, an error needs to be
+        // reported to the upper level to search in the caller's lexical scope. Consider case below:
+        // ```
+        //   declare
+        //     cursor cur is select * from some_table;
+        //   begin
+        //     for v in cur loop
+        //       some_proc(v);
+        //     end loop;
+        //   end;
+        // ```
+        // The type of actual param V passed to SOME_PROC can not be found in SOME_PROC's scope, it is recorded in the caller
+        // anonymous block's scope.
+        LOG_TRACE("the type of actual param is not found in the current procedure's lexical scope, "
+                  "should search caller's scope", K(ret), K(actual_udt_id), K(formal_udt_id));
         ret = OB_SUCCESS;
-        const ObUserDefinedType *actual_type = nullptr;
-        const ObUserDefinedType *formal_type = nullptr;
         ObPLContext *pl_ctx = nullptr;
         ObPLExecState *caller = nullptr;
         CK (OB_NOT_NULL(ctx_.exec_ctx_));
@@ -3409,11 +3425,11 @@ int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, 
         CK (OB_NOT_NULL(caller = pl_ctx->get_exec_stack().at(pl_ctx->get_exec_stack().count() - 2)));
         // fetch actual param type from caller
         OZ (caller->get_exec_ctx().get_user_type(actual_udt_id, actual_type));
-        // fetch formal param type from callee
-        OZ (get_exec_ctx().get_user_type(formal_udt_id, formal_type));
-        OV (OB_NOT_NULL(actual_type) && OB_NOT_NULL(formal_type), OB_ERR_UNEXPECTED, actual_udt_id, formal_udt_id);
-        OZ (ObPLResolver::check_composite_compatible(actual_type, formal_type, is_compatible));
       }
+      // fetch formal param type from callee
+      OZ (get_exec_ctx().get_user_type(formal_udt_id, formal_type));
+      OV (OB_NOT_NULL(formal_type) && OB_NOT_NULL(actual_type), OB_ERR_UNEXPECTED, formal_udt_id, actual_udt_id);
+      OZ (ObPLResolver::check_composite_compatible(actual_type, formal_type, is_compatible));
       OV (is_compatible, OB_INVALID_ARGUMENT, formal_udt_id, actual_udt_id, formal_param_type, actual_param);
     }
   }
@@ -3428,7 +3444,7 @@ int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, 
   return ret;
 }
 
-int ObPLExecState::check_anonymous_collection_compatible(ObPLComposite &composite, const ObPLDataType &dest_type, bool &need_cast)
+int ObPLExecState::check_anonymous_collection_compatible(const ObPLComposite &composite, const ObPLDataType &dest_type, bool &need_cast)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator tmp_allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
