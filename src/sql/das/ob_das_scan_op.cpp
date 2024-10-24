@@ -434,6 +434,7 @@ int ObDASScanOp::do_local_index_lookup()
       } else {
         op->set_tablet_id(related_tablet_ids_.at(0));
         op->set_ls_id(ls_id_);
+        op->set_index_tablet_id(scan_param_.tablet_id_);
       }
     }
   } else {
@@ -455,6 +456,7 @@ int ObDASScanOp::do_local_index_lookup()
       } else {
         op->set_tablet_id(related_tablet_ids_.at(0));
         op->set_ls_id(ls_id_);
+        op->set_index_tablet_id(scan_param_.tablet_id_);
       }
     }
   }
@@ -663,6 +665,7 @@ int ObDASScanOp::rescan()
   } else if (lookup_op != nullptr) {
     lookup_op->set_tablet_id(related_tablet_ids_.at(0));
     lookup_op->set_ls_id(ls_id_);
+    lookup_op->set_index_tablet_id(scan_param_.tablet_id_);
     //lookup op's table_rescan will be drive by its get_next_row()
     //so will can not call it here
   }
@@ -904,6 +907,7 @@ int ObLocalIndexLookupOp::get_next_rows(int64_t &count, int64_t capacity)
 
 int ObLocalIndexLookupOp::get_next_row_from_index_table()
 {
+  ObActiveSessionGuard::get_stat().tablet_id_ = index_tablet_id_.id();
   int ret = OB_SUCCESS;
   bool got_row = false;
   do {
@@ -1049,6 +1053,7 @@ int ObLocalIndexLookupOp::do_index_lookup()
 
 int ObLocalIndexLookupOp::get_next_row_from_data_table()
 {
+  ObActiveSessionGuard::get_stat().tablet_id_ = tablet_id_.id();
   int ret = OB_SUCCESS;
   do_clear_evaluated_flag();
   if (scan_param_.key_ranges_.empty()) {
@@ -1066,6 +1071,7 @@ int ObLocalIndexLookupOp::get_next_row_from_data_table()
 
 int ObLocalIndexLookupOp::get_next_rows_from_data_table(int64_t &count, int64_t capacity)
 {
+  ObActiveSessionGuard::get_stat().tablet_id_ = tablet_id_.id();
   int ret = OB_SUCCESS;
   LOG_DEBUG("local index lookup output rows", K(lookup_row_cnt_), K(get_index_group_cnt()), K(get_lookup_group_cnt()), K(lookup_rowkey_cnt_));
   lookup_rtdef_->p_pd_expr_op_->clear_evaluated_flag();
@@ -1164,6 +1170,7 @@ int ObLocalIndexLookupOp::do_index_table_scan_for_rows(const int64_t max_row_cnt
                                                        const int64_t start_group_idx,
                                                        const int64_t default_row_batch_cnt)
 {
+  ObActiveSessionGuard::get_stat().tablet_id_ = index_tablet_id_.id();
   int ret = OB_SUCCESS;
   int64_t rowkey_count = 0;
   while (OB_SUCC(ret) && lookup_rowkey_cnt_ < default_row_batch_cnt) {

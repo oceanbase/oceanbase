@@ -23,6 +23,8 @@ namespace observer
 int ObVirtualDataAccessService::table_scan(ObVTableScanParam &param, ObNewRowIterator *&result)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
+  const common::ObTabletID &data_tablet_id = param.tablet_id_;
+  common::ObASHTabletIdSetterGuard ash_tablet_id_guard(data_tablet_id.id());
   int ret = OB_SUCCESS;
   ObVirtualTableIterator *vt_iter = NULL;
   if (OB_FAIL(vt_iter_factory_.create_virtual_table_iterator(param, vt_iter))) {
@@ -57,6 +59,7 @@ int ObVirtualDataAccessService::table_scan(ObVTableScanParam &param, ObNewRowIte
 int ObVirtualDataAccessService::revert_scan_iter(ObNewRowIterator *result)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
+  ObActiveSessionGuard::get_stat().tablet_id_ = 0;
   int ret = OB_SUCCESS;
   if (NULL == result) {
     COMMON_LOG(DEBUG, "reuslt is null", K(ret), K(result));

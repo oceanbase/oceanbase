@@ -43,6 +43,7 @@ public:
         plan_line_id_(-1),
         session_type_(false),
         is_wr_sample_(false),
+        tablet_id_(0),
         last_stat_(nullptr)
   {
     sql_id_[0] = '\0';
@@ -118,6 +119,7 @@ public:
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
   bool session_type_; // false=0, FOREGROUND, true=1, BACKGROUND
   bool is_wr_sample_;  // true represents this node should be sampled into wr.
+  int64_t tablet_id_;
 #ifndef NDEBUG
   char bt_[256];
 #endif
@@ -191,6 +193,18 @@ private:
   ObBackgroundSessionIdGenerator *generator_;
   uint64_t local_seq_;
 };
+
+class ObASHTabletIdSetterGuard {
+public:
+  ObASHTabletIdSetterGuard(const int64_t tablet_id) {
+    ObActiveSessionGuard::get_stat().tablet_id_ = tablet_id;
+  }
+
+  ~ObASHTabletIdSetterGuard() {
+    ObActiveSessionGuard::get_stat().tablet_id_ = 0;
+  }
+};
+
 }
 }
 #endif /* _OB_SHARE_ASH_ACTIVE_SESSION_GUARD_H_ */

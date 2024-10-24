@@ -293,7 +293,8 @@ public:
       ls_id_(),
       scan_param_(),
       lookup_memctx_(),
-      status_(0)
+      status_(0),
+      index_tablet_id_()
   {}
   ObLocalIndexLookupOp(const ObNewRowIterator::IterType iter_type)
     : ObNewRowIterator(iter_type),
@@ -310,7 +311,8 @@ public:
       ls_id_(),
       scan_param_(),
       lookup_memctx_(),
-      status_(0)
+      status_(0),
+      index_tablet_id_()
   {}
 
   virtual ~ObLocalIndexLookupOp();
@@ -364,6 +366,7 @@ public:
   // for lookup group scan end
 
   void set_tablet_id(const common::ObTabletID &tablet_id) { tablet_id_ = tablet_id; }
+  void set_index_tablet_id(const common::ObTabletID &tablet_id) { index_tablet_id_ = tablet_id; }
   void set_ls_id(const share::ObLSID &ls_id) { ls_id_ = ls_id; }
   void set_rowkey_iter(common::ObNewRowIterator *rowkey_iter) {rowkey_iter_ = rowkey_iter;}
   common::ObNewRowIterator *get_rowkey_iter() { return rowkey_iter_; }
@@ -429,6 +432,7 @@ protected:
       //add status here
     };
   };
+  common::ObTabletID index_tablet_id_;
 };
 }  // namespace sql
 }  // namespace oceanbase

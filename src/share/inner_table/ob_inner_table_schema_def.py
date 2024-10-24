@@ -11697,6 +11697,28 @@ def_table_schema(
     ('IN_STORAGE_READ', 'bool'),
     ('IN_STORAGE_WRITE', 'bool'),
     ('IN_REMOTE_DAS_EXECUTION', 'bool'),
+    ('PROGRAM','varchar:64', 'true'),
+    ('TM_DELTA_TIME', 'int', 'true'),
+    ('TM_DELTA_CPU_TIME', 'int', 'true'),
+    ('TM_DELTA_DB_TIME', 'int', 'true'),
+    ('TOP_LEVEL_SQL_ID', 'varchar:OB_MAX_SQL_ID_LENGTH', 'true'),
+    ('IN_PLSQL_COMPILATION', 'bool', 'false', 'false'),
+    ('IN_PLSQL_EXECUTION', 'bool', 'false', 'false'),
+    ('PLSQL_ENTRY_OBJECT_ID', 'int', 'true'),
+    ('PLSQL_ENTRY_SUBPROGRAM_ID', 'int', 'true'),
+    ('PLSQL_ENTRY_SUBPROGRAM_NAME', 'varchar:32', 'true'),
+    ('PLSQL_OBJECT_ID', 'int', 'true'),
+    ('PLSQL_SUBPROGRAM_ID', 'int', 'true'),
+    ('PLSQL_SUBPROGRAM_NAME', 'varchar:32', 'true'),
+    ('EVENT_ID', 'int', 'true'),
+    ('IN_FILTER_ROWS', 'bool', 'false', 'false'),
+    ('GROUP_ID', 'int', 'true'),
+    ('TX_ID', 'int', 'true'),
+    ('BLOCKING_SESSION_ID', 'int', 'true'),
+    ('PLAN_HASH', 'uint', 'true'),
+    ('THREAD_ID', 'int', 'true'),
+    ('STMT_TYPE', 'int', 'true'),
+    ('TABLET_ID', 'int', 'true'),
   ],
   partition_columns = ['SVR_IP', 'SVR_PORT'],
   vtable_route_policy = 'distributed',
@@ -23457,7 +23479,8 @@ def_table_schema(
       CAST(MODULE AS CHAR(64)) AS MODULE,
       CAST(ACTION AS CHAR(64)) AS ACTION,
       CAST(CLIENT_ID AS CHAR(64)) AS CLIENT_ID,
-      CAST(BACKTRACE AS CHAR(512)) AS BACKTRACE
+      CAST(BACKTRACE AS CHAR(512)) AS BACKTRACE,
+      CAST(TABLET_ID AS SIGNED) AS TABLET_ID
   FROM oceanbase.__all_virtual_ash LEFT JOIN oceanbase.v$event_name on EVENT_NO = `event#`
 """.replace("\n", " "),
   normal_columns  = [],
@@ -54664,7 +54687,8 @@ def_table_schema(
       CAST(MODULE AS VARCHAR2(64)) AS MODULE,
       CAST(ACTION AS VARCHAR2(64)) AS ACTION,
       CAST(CLIENT_ID AS VARCHAR2(64)) AS CLIENT_ID,
-      CAST(BACKTRACE AS VARCHAR2(512)) AS BACKTRACE
+      CAST(BACKTRACE AS VARCHAR2(512)) AS BACKTRACE,
+      CAST(TABLET_ID AS NUMBER) AS TABLET_ID
     FROM SYS.ALL_VIRTUAL_ASH LEFT JOIN SYS.V$EVENT_NAME on EVENT_NO = "EVENT#"
 """.replace("\n", " "),
 )

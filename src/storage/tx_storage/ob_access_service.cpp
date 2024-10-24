@@ -217,6 +217,7 @@ int ObAccessService::table_scan(
     ObNewRowIterator *&result)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
+  common::ObASHTabletIdSetterGuard ash_tablet_id_guard(vparam.tablet_id_.id());
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = vparam.ls_id_;
   const common::ObTabletID &data_tablet_id = vparam.tablet_id_;
@@ -278,6 +279,7 @@ int ObAccessService::table_rescan(
     ObNewRowIterator *result)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
+  common::ObASHTabletIdSetterGuard ash_tablet_id_guard(vparam.tablet_id_.id());
   int ret = OB_SUCCESS;
   ObTableScanParam &param = static_cast<ObTableScanParam &>(vparam);
   ObTabletHandle tablet_handle;
@@ -643,6 +645,7 @@ int ObAccessService::delete_rows(
     int64_t &affected_rows)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_write);
+  common::ObASHTabletIdSetterGuard ash_tablet_id_guard(tablet_id.id());
   int ret = OB_SUCCESS;
   ObStoreCtxGuard ctx_guard;
   ObLS *ls = nullptr;
@@ -697,6 +700,7 @@ int ObAccessService::put_rows(
     int64_t &affected_rows)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_write);
+  common::ObASHTabletIdSetterGuard ash_tablet_id_guard(tablet_id.id());
   int ret = OB_SUCCESS;
   ObStoreCtxGuard ctx_guard;
   ObLS *ls = nullptr;
@@ -751,6 +755,7 @@ int ObAccessService::insert_rows(
     int64_t &affected_rows)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_write);
+  common::ObASHTabletIdSetterGuard ash_tablet_id_guard(tablet_id.id());
   int ret = OB_SUCCESS;
   ObStoreCtxGuard ctx_guard;
   ObLS *ls = nullptr;
@@ -808,6 +813,7 @@ int ObAccessService::insert_row(
     common::ObNewRowIterator *&duplicated_rows)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_write);
+  common::ObASHTabletIdSetterGuard ash_tablet_id_guard(tablet_id.id());
   int ret = OB_SUCCESS;
   ObStoreCtxGuard ctx_guard;
   ObLS *ls = nullptr;
@@ -877,6 +883,7 @@ int ObAccessService::update_rows(
     int64_t &affected_rows)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_write);
+  common::ObASHTabletIdSetterGuard ash_tablet_id_guard(tablet_id.id());
   int ret = OB_SUCCESS;
   ObStoreCtxGuard ctx_guard;
   ObLS *ls = nullptr;
@@ -933,6 +940,7 @@ int ObAccessService::lock_rows(
     int64_t &affected_rows)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_write);
+  common::ObASHTabletIdSetterGuard ash_tablet_id_guard(tablet_id.id());
   int ret = OB_SUCCESS;
   ObStoreCtxGuard ctx_guard;
   ObLS *ls = nullptr;
@@ -988,6 +996,7 @@ int ObAccessService::lock_row(
     const ObLockFlag lock_flag)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_write);
+  common::ObASHTabletIdSetterGuard ash_tablet_id_guard(tablet_id.id());
   int ret = OB_SUCCESS;
   ObStoreCtxGuard ctx_guard;
   ObLS *ls = nullptr;
@@ -1153,6 +1162,7 @@ int ObAccessService::reuse_scan_iter(const bool switch_param, ObNewRowIterator *
 int ObAccessService::revert_scan_iter(ObNewRowIterator *iter)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
+  ObActiveSessionGuard::get_stat().tablet_id_ = 0;
   int ret = OB_SUCCESS;
   NG_TRACE(S_revert_iter_begin);
   if (IS_NOT_INIT) {
