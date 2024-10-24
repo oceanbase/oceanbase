@@ -4286,7 +4286,8 @@ void ObRawExprUtils::need_extra_cast(const ObExprResType &src_type,
       need_extra_cast_for_src_type = true;
     }
   } else if (nonstr_to_str) {
-    if (CHARSET_BINARY != dst_cs && ObCharset::get_default_charset() != dst_cs && !src_type.is_bit()) {
+    if (CHARSET_BINARY != dst_cs && ObCharset::get_default_charset() != dst_cs && !src_type.is_bit()
+          && !src_type.is_enum_set_with_subschema()) {
       need_extra_cast_for_dst_type = true;
     }
   }

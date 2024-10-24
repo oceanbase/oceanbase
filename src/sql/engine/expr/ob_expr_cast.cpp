@@ -425,11 +425,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
       ObCollationType collation_nation = session->get_nls_collation_nation();
       type1.set_calc_type(get_calc_cast_type(type1.get_type(), dst_type.get_type()));
       int32_t length = 0;
-      if (ob_is_enumset_tc(type1.get_type()) && ob_is_string_or_lob_type(dst_type.get_type())) {
-        type.set_collation_type(type1.get_collation_type());
-        type.set_collation_level(CS_LEVEL_IMPLICIT);
-        type.set_length(type1.get_length());
-      } else if (ob_is_string_or_lob_type(dst_type.get_type()) || ob_is_raw(dst_type.get_type())
+      if (ob_is_string_or_lob_type(dst_type.get_type()) || ob_is_raw(dst_type.get_type())
                                          || ob_is_json(dst_type.get_type())
                                          || ob_is_geometry(dst_type.get_type())) {
         type.set_collation_level(dst_type.get_collation_level());
