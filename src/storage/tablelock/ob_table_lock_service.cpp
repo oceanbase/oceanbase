@@ -1270,7 +1270,7 @@ int ObTableLockService::process_lock_task_(ObTableLockCtx &ctx,
   } else if (!ctx.is_enable_lock_priority_ && ObTableLockPriority::NORMAL != ctx.lock_priority_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("priority should be NORMAL when disable lock_priority", K(ret), K(ctx));
-  } else if (ctx.is_enable_lock_priority_ && OB_FAIL(check_cluster_version_after_(CLUSTER_VERSION_4_2_4_0))) {
+  } else if (ctx.is_enable_lock_priority_ && OB_FAIL(check_data_version_after_(DATA_VERSION_4_2_5_0))) {
     LOG_WARN("cluster not support lock_priority", K(ret), K(ctx));
   } else if (ctx.is_obj_lock_task()) {
     if (OB_FAIL(process_obj_lock_task_(ctx, lock_mode, lock_owner))) {
