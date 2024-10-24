@@ -3354,6 +3354,8 @@ int ObTableSqlService::update_table_attribute(ObISQLClient &sql_client,
         "" : new_table_schema.get_table_name_str().ptr();
   const ObPartitionOption &part_option = new_table_schema.get_part_option();
   uint64_t data_version = 0;
+  ObString local_session_var;
+  ObArenaAllocator allocator(ObModIds::OB_SCHEMA_OB_SCHEMA_ARENA);
   if (OB_FAIL(check_ddl_allowed(new_table_schema))) {
     LOG_WARN("check ddl allowd failed", K(ret), K(new_table_schema));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
@@ -3376,6 +3378,9 @@ int ObTableSqlService::update_table_attribute(ObISQLClient &sql_client,
     LOG_WARN(QUEUING_MODE_NOT_COMPAT_WARN_STR, K(ret), K(new_table_schema));
   } else if (OB_FAIL(check_column_store_valid(new_table_schema, data_version))) {
     LOG_WARN("fail to check column store valid", KR(ret), K(tenant_id), K(new_table_schema));
+  } else if (new_table_schema.is_materialized_view() && data_version >= DATA_VERSION_4_3_3_0
+             && OB_FAIL(new_table_schema.get_local_session_var().gen_local_session_var_str(allocator, local_session_var))) {
+    LOG_WARN("fail to gen local session var str", K(ret));
   } else if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
                                              exec_tenant_id, tenant_id)))
       || OB_FAIL(dml.add_pk_column("table_id", ObSchemaUtils::get_extract_schema_id(
@@ -3405,7 +3410,9 @@ int ObTableSqlService::update_table_attribute(ObISQLClient &sql_client,
       || (data_version >= DATA_VERSION_4_1_0_0
           && OB_FAIL(dml.add_column("truncate_version", new_table_schema.get_truncate_version())))
       || (data_version >= DATA_VERSION_4_3_0_0
-          && OB_FAIL(dml.add_column("max_used_column_group_id", new_table_schema.get_max_used_column_group_id())))) {
+          && OB_FAIL(dml.add_column("max_used_column_group_id", new_table_schema.get_max_used_column_group_id())))
+      || (data_version >= DATA_VERSION_4_3_3_0
+          && OB_FAIL(dml.add_column("local_session_vars", ObHexEscapeSqlStr(local_session_var))))) {
             LOG_WARN("add column failed", K(ret));
   } else {
     if (new_table_schema.is_interval_part()) {
