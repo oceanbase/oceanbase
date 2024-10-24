@@ -503,7 +503,6 @@ int ObTmpFileFlushTG::retry_task_()
         push_retry_list_(flush_task);
         if (FlushState::TFFT_INSERT_META_TREE == state && OB_ALLOCATE_TMP_FILE_PAGE_FAILED == ret) {
           STORAGE_LOG(WARN, "fail to retry insert meta item in TFFT_INSERT_META_TREE", KPC(flush_task));
-          is_fast_flush_meta_ = true;
           if (OB_FAIL(special_flush_meta_tree_page_())) {
             STORAGE_LOG(WARN, "fail to flush meta tree page", KR(ret));
           }
