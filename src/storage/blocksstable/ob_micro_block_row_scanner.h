@@ -95,7 +95,7 @@ public:
       uint32_t *len_array,
       const bool init_vector_header = true);
   int get_aggregate_result(
-      const int32_t col_idx,
+      const int32_t col_offset,
       const int32_t *row_ids,
       const int64_t row_cap,
       const bool projected,

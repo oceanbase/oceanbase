@@ -40,8 +40,9 @@ bool ObCGAggCells::check_finished() const
   return finised;
 }
 
-int ObCGAggCells::can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info, bool &can_agg)
+int ObCGAggCells::can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info, const int32_t col_index, bool &can_agg)
 {
+  UNUSED(col_index);
   int ret = OB_SUCCESS;
   can_agg = true;
   for (int i = 0; OB_SUCC(ret) && can_agg && i < agg_cells_.count(); ++i) {
