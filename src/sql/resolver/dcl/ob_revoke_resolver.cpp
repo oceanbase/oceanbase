@@ -364,28 +364,6 @@ int ObRevokeResolver::resolve_mysql(const ParseNode &parse_tree)
                         grant_level,
                         *allocator_))) {
               LOG_WARN("Resolve priv_level node error", K(ret));
-            } else if (priv_object_node != NULL) {
-              uint64_t compat_version = 0;
-              if (grant_level != OB_PRIV_TABLE_LEVEL) {
-                ret = OB_ILLEGAL_GRANT_FOR_TABLE;
-                LOG_WARN("illegal grant", K(ret));
-              } else if (priv_object_node->value_ == 1) {
-                grant_level = OB_PRIV_TABLE_LEVEL;
-              } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
-                LOG_WARN("fail to get data version", K(tenant_id));
-              } else if (compat_version < DATA_VERSION_4_2_2_0) {
-                ret = OB_NOT_SUPPORTED;
-                LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_2_2_0", K(ret));
-              } else if (priv_object_node->value_ == 2) {
-                grant_level = OB_PRIV_ROUTINE_LEVEL;
-                revoke_stmt->set_object_type(ObObjectType::PROCEDURE);
-              } else if (priv_object_node->value_ == 3) {
-                grant_level = OB_PRIV_ROUTINE_LEVEL;
-                revoke_stmt->set_object_type(ObObjectType::FUNCTION);
-              } else {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("unexpected obj type", K(ret), K(priv_object_node->value_));
-              }
             }
 
             if (OB_FAIL(ret)) {
@@ -417,6 +395,30 @@ int ObRevokeResolver::resolve_mysql(const ParseNode &parse_tree)
                   revoke_stmt->set_object_id(object_id);
                 }
               }
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (priv_object_node != NULL) {
+            uint64_t compat_version = 0;
+            if (grant_level != OB_PRIV_TABLE_LEVEL) {
+              ret = OB_ILLEGAL_GRANT_FOR_TABLE;
+              LOG_WARN("illegal grant", K(ret));
+            } else if (priv_object_node->value_ == 1) {
+              grant_level = OB_PRIV_TABLE_LEVEL;
+            } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+              LOG_WARN("fail to get data version", K(tenant_id));
+            } else if (compat_version < DATA_VERSION_4_2_2_0) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_2_2_0", K(ret));
+            } else if (priv_object_node->value_ == 2) {
+              grant_level = OB_PRIV_ROUTINE_LEVEL;
+              revoke_stmt->set_object_type(ObObjectType::PROCEDURE);
+            } else if (priv_object_node->value_ == 3) {
+              grant_level = OB_PRIV_ROUTINE_LEVEL;
+              revoke_stmt->set_object_type(ObObjectType::FUNCTION);
+            }
+            if (OB_SUCC(ret)) {
+              revoke_stmt->set_grant_level(grant_level);
             }
           }
         } else if (T_REVOKE_ALL == node->type_ && REVOKE_ALL_NUM_CHILD == node->num_child_) {

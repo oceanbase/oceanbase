@@ -2341,7 +2341,7 @@ int ObSqlParameterization::get_related_user_vars(const ParseNode *tree, common::
     // do nothing
   } else {
     if (T_USER_VARIABLE_IDENTIFIER == tree -> type_) {
-      if (OB_ISNULL(tree -> str_value_) || tree -> str_len_ <= 0) {
+      if (OB_ISNULL(tree -> str_value_) || tree -> str_len_ < 0) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid argument", K(ret), K(tree -> str_value_), K(tree -> str_len_));
       } else {
