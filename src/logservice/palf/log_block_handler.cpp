@@ -457,7 +457,7 @@ int LogBlockHandler::inner_write_impl_(const ObIOFd &io_fd, const char *buf, con
     if (OB_FAIL(io_adapter_->pwrite(io_fd, buf, count, offset, write_size))) {
       if (palf_reach_time_interval(1000 * 1000, time_interval)) {
         PALF_LOG(ERROR, "io_adapter pwrite failed", K(ret), K(io_fd), K(offset), K(count), K(write_size));
-        LOG_DBA_ERROR_V2(OB_LOG_PWRITE_FAIL, ret, "ob_pwrite failed, please check the output of dmesg");
+        LOG_DBA_ERROR_V2(OB_LOG_PWRITE_FAIL, ret, "io_adapter pwrite failed, please check the output of dmesg");
       }
       ob_usleep(RETRY_INTERVAL);
     } else {
