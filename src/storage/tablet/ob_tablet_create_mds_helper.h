@@ -155,6 +155,7 @@ private:
       mds::BufferCtx &ctx,
       const bool for_old_mds);
   static void handle_ret_for_replay(int &ret);
+  static int convert_schemas(obrpc::ObBatchCreateTabletArg &arg);
 };
 } // namespace storage
 } // namespace oceanbase

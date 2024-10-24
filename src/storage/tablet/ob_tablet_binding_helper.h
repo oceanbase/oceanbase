@@ -113,7 +113,7 @@ public:
   // common
   template<typename F>
   static int modify_tablet_binding_new_mds(ObLS &ls, const ObTabletID &tablet_id, const share::SCN &replay_scn, mds::BufferCtx &ctx, const bool for_old_mds, F op);
-  static bool has_lob_tablets(const obrpc::ObBatchCreateTabletArg &arg, const obrpc::ObCreateTabletInfo &info);
+  static int has_lob_tablets(const obrpc::ObBatchCreateTabletArg &arg, const obrpc::ObCreateTabletInfo &info, bool &has_lob);
   static int get_ls(const share::ObLSID &ls_id, ObLSHandle &ls_handle);
 private:
   const ObLS &ls_;

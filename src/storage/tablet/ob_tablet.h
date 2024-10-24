@@ -156,6 +156,17 @@ public:
       const ObTabletTableStoreFlag &store_flag,
       blocksstable::ObSSTable *sstable,
       ObFreezer *freezer);
+  int init_for_first_time_creation(
+      common::ObArenaAllocator &allocator,
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id,
+      const common::ObTabletID &data_tablet_id,
+      const share::SCN &create_scn,
+      const int64_t snapshot_version,
+      const ObStorageSchema &storage_schema,
+      const ObTabletTableStoreFlag &store_flag,
+      blocksstable::ObSSTable *sstable,
+      ObFreezer *freezer);
   // dump/merge build new multi version tablet
   int init_for_merge(
       common::ObArenaAllocator &allocator,

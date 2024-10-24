@@ -75,6 +75,8 @@
 #include "share/location_cache/ob_location_update_task.h"
 #include "share/ob_heartbeat_handler.h"
 #include "share/ob_service_name_proxy.h"
+#include "storage/ob_storage_schema.h"  // ObCreateTabletSchema
+
 namespace oceanbase
 {
 namespace rootserver
@@ -3548,7 +3550,8 @@ struct ObBatchCreateTabletArg
 {
   OB_UNIS_VERSION(1);
 public:
-  ObBatchCreateTabletArg() { reset(); }
+  ObBatchCreateTabletArg()
+  { reset(); }
   ~ObBatchCreateTabletArg() {}
   bool is_valid() const;
   bool is_inited() const;
@@ -3564,6 +3567,13 @@ public:
   static int skip_unis_array_len(const char *buf,
       int64_t data_len,
       int64_t &pos);
+  int serialize_for_create_tablet_schemas(char *buf,
+      const int64_t data_len,
+      int64_t &pos) const;
+  int64_t get_serialize_size_for_create_tablet_schemas() const;
+  int deserialize_create_tablet_schemas(const char *buf,
+      const int64_t data_len,
+      int64_t &pos);
   DECLARE_TO_STRING;
 
 public:
@@ -3573,6 +3583,8 @@ public:
   common::ObSArray<ObCreateTabletInfo> tablets_;
   bool need_check_tablet_cnt_;
   bool is_old_mds_;
+  common::ObSArray<storage::ObCreateTabletSchema*> create_tablet_schemas_;
+  ObArenaAllocator allocator_;
 };
 
 struct ObBatchRemoveTabletArg

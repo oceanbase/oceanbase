@@ -185,8 +185,7 @@ public:
       const common::ObTabletID &data_tablet_id,
       const share::SCN &create_scn,
       const int64_t snapshot_version,
-      const share::schema::ObTableSchema &table_schema,
-      const lib::Worker::CompatMode &compat_mode,
+      const ObCreateTabletSchema &create_tablet_schema,
       ObTabletHandle &tablet_handle);
   int create_transfer_in_tablet(
       const share::ObLSID &ls_id,

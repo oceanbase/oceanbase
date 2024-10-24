@@ -127,8 +127,16 @@ public:
       const ObTabletMapKey &key,
       ObTabletHandle &handle);
   static int check_need_create_empty_major_sstable(
-      const share::schema::ObTableSchema &table_schema,
+      const ObCreateTabletSchema &create_tablet_schema,
       bool &need_create_sstable);
+  static int check_need_create_empty_major_sstable(
+      const ObTableSchema &table_schema,
+      bool &need_create_sstable);
+  static int build_create_sstable_param(
+      const ObCreateTabletSchema &create_tablet_schema,
+      const common::ObTabletID &tablet_id,
+      const int64_t snapshot_version,
+      ObTabletCreateSSTableParam &param);
   static int build_create_sstable_param(
       const share::schema::ObTableSchema &table_schema,
       const common::ObTabletID &tablet_id,

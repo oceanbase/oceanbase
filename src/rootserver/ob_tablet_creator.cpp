@@ -121,7 +121,7 @@ int ObBatchCreateTabletHelper::init(
                   || OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_key));
-  } else if (OB_FAIL(arg_.init_create_tablet(ls_key, major_frozen_scn, need_check_tablet_cnt))) {
+  } else if (OB_FAIL(batch_arg_.init_create_tablet(ls_key, major_frozen_scn, need_check_tablet_cnt))) {
     LOG_WARN("failed to init create tablet", KR(ret), K(tenant_id), K(ls_key), K(major_frozen_scn));
   } else if (OB_FAIL(table_schemas_map_.create(bucket_count, "CreateTablet", "CreateTablet"))) {
     LOG_WARN("failed to create hashmap", KR(ret));
@@ -144,11 +144,11 @@ int ObBatchCreateTabletHelper::add_arg_to_batch_arg(
       if (OB_ISNULL(table_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table schema is null", KR(ret), K(i), K(tablet_arg));
-      } else if (OB_FAIL(try_add_table_schema(table_schema, index))) {
-        LOG_WARN("failed to add table schema to batch", KR(ret), K(table_schema), K(index), K(arg_));
+      } else if (OB_FAIL(try_add_table_schema(table_schema, index, tablet_arg.compat_mode_))) {
+        LOG_WARN("failed to add table schema to batch", KR(ret), K(table_schema), K(index), K(batch_arg_));
       } else if (OB_UNLIKELY(OB_INVALID_INDEX == index)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("index can not be invalid", KR(ret), K(index), K(tablet_arg), K(arg_));
+        LOG_WARN("index can not be invalid", KR(ret), K(index), K(tablet_arg), K(batch_arg_));
       } else if (OB_FAIL(index_array.push_back(index))) {
         LOG_WARN("failed to push back index", KR(ret), K(index));
       }
@@ -161,7 +161,7 @@ int ObBatchCreateTabletHelper::add_arg_to_batch_arg(
                             tablet_arg.compat_mode_,
                             tablet_arg.is_create_bind_hidden_tablets_))) {
         LOG_WARN("failed to init create tablet info", KR(ret), K(index_array), K(tablet_arg));
-      } else if (OB_FAIL(arg_.tablets_.push_back(info))) {
+      } else if (OB_FAIL(batch_arg_.tablets_.push_back(info))) {
         LOG_WARN("failed to push back info", KR(ret), K(info));
       }
     }
@@ -169,8 +169,42 @@ int ObBatchCreateTabletHelper::add_arg_to_batch_arg(
   return ret;
 }
 
+int ObBatchCreateTabletHelper::add_table_schema_(const share::schema::ObTableSchema &table_schema,
+    const lib::Worker::CompatMode compat_mode,
+    int64_t &index)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(table_schema.get_tenant_id(), data_version))) {
+    LOG_WARN("failed to get data version", KR(ret), K(table_schema));
+  } else if (data_version < DATA_VERSION_4_2_1_10) {
+    // compatibility with DATA_VERSION_4_2_1_9.
+    index = batch_arg_.table_schemas_.count();
+    if (OB_FAIL(batch_arg_.table_schemas_.push_back(table_schema))) {
+      LOG_WARN("failed to push back table schema", KR(ret), K(table_schema));
+    }
+  } else {
+    index = batch_arg_.create_tablet_schemas_.count();
+    ObCreateTabletSchema *create_tablet_schema = NULL;
+    void *create_tablet_schema_ptr = batch_arg_.allocator_.alloc(sizeof(ObCreateTabletSchema));
+    if (OB_ISNULL(create_tablet_schema_ptr)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate storage schema", KR(ret), K(table_schema));
+    } else if (FALSE_IT(create_tablet_schema = new (create_tablet_schema_ptr)ObCreateTabletSchema())) {
+    } else if (OB_FAIL(create_tablet_schema->init(batch_arg_.allocator_, table_schema, compat_mode,
+         false/*skip_column_info*/, ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_V2))) {
+      LOG_WARN("failed to init storage schema", KR(ret), K(table_schema));
+    } else if (OB_FAIL(batch_arg_.create_tablet_schemas_.push_back(create_tablet_schema))) {
+      LOG_WARN("failed to push back table schema", KR(ret), K(table_schema));
+    }
+  }
+  return ret;
+}
+
 int ObBatchCreateTabletHelper::try_add_table_schema(
-    const share::schema::ObTableSchema *table_schema, int64_t &index)
+    const share::schema::ObTableSchema *table_schema,
+    int64_t &index,
+    const lib::Worker::CompatMode compat_mode)
 {
   int ret = OB_SUCCESS;
   index = OB_INVALID_INDEX;
@@ -182,12 +216,11 @@ int ObBatchCreateTabletHelper::try_add_table_schema(
     //nothing
   } else if(OB_HASH_NOT_EXIST == ret)  {
     ret = OB_SUCCESS;
-    index = arg_.table_schemas_.count();
     HEAP_VAR(ObTableSchema, temp_table_schema) {
       if (OB_FAIL(temp_table_schema.assign(*table_schema))) {
         LOG_WARN("failed to assign temp_table_schema", KR(ret), KPC(table_schema));
       } else if (FALSE_IT(temp_table_schema.reset_partition_schema())) {
-      } else if (OB_FAIL(arg_.table_schemas_.push_back(temp_table_schema))) {
+      } else if (OB_FAIL(add_table_schema_(temp_table_schema, compat_mode, index))) {
         LOG_WARN("failed to push back table schema", KR(ret), K(temp_table_schema));
       } else if (OB_FAIL(table_schemas_map_.set_refactored(temp_table_schema.get_table_id(), index))) {
         LOG_WARN("failed to set table schema map", KR(ret), K(index), K(temp_table_schema));
@@ -202,7 +235,7 @@ int ObBatchCreateTabletHelper::try_add_table_schema(
 DEF_TO_STRING(ObBatchCreateTabletHelper)
 {
   int64_t pos = 0;
-  J_KV(K_(arg), K_(result));
+  J_KV(K_(batch_arg), K_(result));
   return pos;
 
 }
@@ -262,7 +295,8 @@ int ObTabletCreator::add_create_tablet_arg(const ObTabletCreatorArg &arg)
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate new arg", KR(ret), KP(batch_arg));
     } else if (FALSE_IT(batch_arg = new (arg_buf)ObBatchCreateTabletHelper())) {
-    } else if (OB_FAIL(batch_arg->init(arg.ls_key_, tenant_id_, major_frozen_scn_, need_check_tablet_cnt_))) {
+    } else if (OB_FAIL(batch_arg->init(arg.ls_key_, tenant_id_, major_frozen_scn_,
+            need_check_tablet_cnt_))) {
       LOG_WARN("failed to init batch arg helper", KR(ret), K(arg));
     } else if (OB_FAIL(args_map_.set_refactored(arg.ls_key_, batch_arg, 0/*not overwrite*/))) {
       LOG_WARN("fail to set refactored", KR(ret), K(arg));
@@ -274,15 +308,16 @@ int ObTabletCreator::add_create_tablet_arg(const ObTabletCreatorArg &arg)
   }
 
   if (OB_FAIL(ret)) {
-  } else if (batch_arg->arg_.get_serialize_size() > BATCH_ARG_SIZE) {
-    LOG_INFO("batch arg is more than 1M", KR(ret), K(batch_arg->arg_.tablets_.count()), K(batch_arg->arg_));
+  } else if (batch_arg->batch_arg_.get_serialize_size() > BATCH_ARG_SIZE) {
+    LOG_INFO("batch arg is more than 1M", KR(ret), K(batch_arg->batch_arg_.tablets_.count()), K(batch_arg->batch_arg_));
     void *arg_buf = allocator_.alloc(sizeof(ObBatchCreateTabletHelper));
     ObBatchCreateTabletHelper *new_arg = NULL;
     if (OB_ISNULL(arg_buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate new arg", KR(ret));
     } else if (FALSE_IT(new_arg = new (arg_buf)ObBatchCreateTabletHelper())) {
-    } else if (OB_FAIL(new_arg->init(arg.ls_key_, tenant_id_, major_frozen_scn_, need_check_tablet_cnt_))) {
+    } else if (OB_FAIL(new_arg->init(arg.ls_key_, tenant_id_, major_frozen_scn_,
+            need_check_tablet_cnt_))) {
       LOG_WARN("failed to init batch arg helper", KR(ret), K(arg));
     } else if (FALSE_IT(new_arg->next_ = batch_arg)) {
     } else if (OB_FAIL(args_map_.set_refactored(arg.ls_key_, new_arg, 1/*not overwrite*/))) {
@@ -324,14 +359,14 @@ int ObTabletCreator::execute()
         LOG_WARN("batch arg not be null", KR(ret));
       } else {
         while (OB_SUCC(ret) && OB_NOT_NULL(batch_arg)) {
-          int64_t buf_len = batch_arg->arg_.get_serialize_size();
+          int64_t buf_len = batch_arg->batch_arg_.get_serialize_size();
           int64_t pos = 0;
           char *buf = (char*)allocator_.alloc(buf_len);
           if (OB_ISNULL(buf)) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("fail alloc memory", KR(ret));
-          } else if (OB_FAIL(batch_arg->arg_.serialize(buf, buf_len, pos))) {
-            LOG_WARN("fail to serialize", KR(ret), K(batch_arg->arg_));
+          } else if (OB_FAIL(batch_arg->batch_arg_.serialize(buf, buf_len, pos))) {
+            LOG_WARN("fail to serialize", KR(ret), K(batch_arg->batch_arg_));
           } else if (OB_FAIL(share::ObShareUtil::set_default_timeout_ctx(ctx, default_timeout_ts))) {
             LOG_WARN("fail to set timeout ctx", KR(ret), K(default_timeout_ts));
           } else {
@@ -343,15 +378,15 @@ int ObTabletCreator::execute()
               } else if (OB_FAIL(conn->register_multi_data_source(tenant_id_, iter->first,
                                  transaction::ObTxDataSourceType::CREATE_TABLET_NEW_MDS, buf, buf_len))) {
                 if (need_retry(ret)) {
-                  LOG_INFO("fail to register_tx_data, try again", KR(ret), K_(tenant_id), K(batch_arg->arg_));
+                  LOG_INFO("fail to register_tx_data, try again", KR(ret), K_(tenant_id), K(batch_arg->batch_arg_));
                   ob_usleep(SLEEP_INTERVAL);
                 } else {
-                  LOG_WARN("fail to register_tx_data", KR(ret), K(batch_arg->arg_), K(buf), K(buf_len));
+                  LOG_WARN("fail to register_tx_data", KR(ret), K(batch_arg->batch_arg_), K(buf), K(buf_len));
                 }
               }
               int64_t end_time = ObTimeUtility::current_time();
-              LOG_INFO("generate create arg", KR(ret), K(buf_len), K(batch_arg->arg_.tablets_.count()),
-                                              K(batch_arg->arg_), "cost_ts", end_time - start_time);
+              LOG_INFO("generate create arg", KR(ret), K(buf_len), K(batch_arg->batch_arg_.tablets_.count()),
+                                              K(batch_arg->batch_arg_), "cost_ts", end_time - start_time);
             } while (need_retry(ret));
           }
           batch_arg = batch_arg->next_;

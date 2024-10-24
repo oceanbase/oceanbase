@@ -581,6 +581,22 @@ bool ObTabletCreateDeleteHelper::is_pure_hidden_tablets(const ObCreateTabletInfo
 }
 
 int ObTabletCreateDeleteHelper::check_need_create_empty_major_sstable(
+    const ObCreateTabletSchema &create_table_schema,
+    bool &need_create_sstable)
+{
+  int ret = OB_SUCCESS;
+  need_create_sstable = false;
+  if (OB_UNLIKELY(!create_table_schema.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(create_table_schema));
+  } else {
+    need_create_sstable = !(create_table_schema.is_user_hidden_table()
+        || (create_table_schema.is_index_table() && !create_table_schema.can_read_index()));
+  }
+  return ret;
+}
+
+int ObTabletCreateDeleteHelper::check_need_create_empty_major_sstable(
     const ObTableSchema &table_schema,
     bool &need_create_sstable)
 {
@@ -595,6 +611,68 @@ int ObTabletCreateDeleteHelper::check_need_create_empty_major_sstable(
   return ret;
 }
 
+int ObTabletCreateDeleteHelper::build_create_sstable_param(
+    const ObCreateTabletSchema &create_tablet_schema,
+    const ObTabletID &tablet_id,
+    const int64_t snapshot_version,
+    ObTabletCreateSSTableParam &param)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!create_tablet_schema.is_valid()
+      || !tablet_id.is_valid()
+      || OB_INVALID_VERSION == snapshot_version)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(create_tablet_schema), K(snapshot_version));
+  } else if (OB_FAIL(create_tablet_schema.get_encryption_id(param.encrypt_id_))) {
+    LOG_WARN("fail to get_encryption_id", K(ret), K(create_tablet_schema));
+  } else {
+    param.master_key_id_ = create_tablet_schema.get_master_key_id();
+    MEMCPY(param.encrypt_key_, create_tablet_schema.get_encrypt_key_str(), create_tablet_schema.get_encrypt_key_len());
+
+    const int64_t multi_version_col_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+    param.table_key_.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
+    param.table_key_.tablet_id_ = tablet_id;
+    param.table_key_.version_range_.snapshot_version_ = snapshot_version;
+    param.max_merged_trans_version_ = snapshot_version;
+
+    param.schema_version_ = create_tablet_schema.get_schema_version();
+    param.create_snapshot_version_ = 0;
+    param.progressive_merge_round_ = create_tablet_schema.get_progressive_merge_round();
+    param.progressive_merge_step_ = 0;
+
+    param.table_mode_ = create_tablet_schema.get_table_mode_struct();
+    param.index_type_ = create_tablet_schema.get_index_type();
+    param.rowkey_column_cnt_ = create_tablet_schema.get_rowkey_column_num()
+            + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+    param.root_block_addr_.set_none_addr();
+    param.data_block_macro_meta_addr_.set_none_addr();
+    param.root_row_store_type_ = (ObRowStoreType::ENCODING_ROW_STORE == create_tablet_schema.get_row_store_type()
+        ? ObRowStoreType::SELECTIVE_ENCODING_ROW_STORE : create_tablet_schema.get_row_store_type());
+    param.latest_row_store_type_ = create_tablet_schema.get_row_store_type();
+    param.data_index_tree_height_ = 0;
+    param.index_blocks_cnt_ = 0;
+    param.data_blocks_cnt_ = 0;
+    param.micro_block_cnt_ = 0;
+    param.use_old_macro_block_count_ = 0;
+    param.data_checksum_ = 0;
+    param.occupy_size_ = 0;
+    param.ddl_scn_.set_min();
+    param.filled_tx_scn_.set_min();
+    param.original_size_ = 0;
+    param.ddl_scn_.set_min();
+    param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
+    if (OB_FAIL(create_tablet_schema.get_store_column_count(param.column_cnt_, true/*is_full*/))) {
+      LOG_WARN("fail to get stored col cnt of table schema", K(ret), K(create_tablet_schema));
+    } else if (FALSE_IT(param.column_cnt_ += multi_version_col_cnt)) {
+    } else if (OB_FAIL(ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_,
+        param.column_checksums_))) {
+      LOG_WARN("fail to fill column checksum for empty major", K(ret), K(param));
+    }
+  }
+
+  return ret;
+}
 int ObTabletCreateDeleteHelper::build_create_sstable_param(
     const ObTableSchema &table_schema,
     const ObTabletID &tablet_id,

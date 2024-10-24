@@ -188,6 +188,10 @@ public:
     return store_column_cnt_ < input_schema.store_column_cnt_;
   }
 
+  inline bool is_aux_lob_meta_table() const { return share::schema::is_aux_lob_meta_table(table_type_); }
+  inline bool is_aux_lob_piece_table() const { return share::schema::is_aux_lob_piece_table(table_type_); }
+  OB_INLINE bool is_user_hidden_table() const { return share::schema::TABLE_STATE_IS_HIDDEN_MASK & table_mode_.state_flag_; }
+
   VIRTUAL_TO_STRING_KV(KP(this), K_(storage_schema_version), K_(version),
       K_(is_use_bloomfilter), K_(column_info_simplified), K_(compat_mode), K_(table_type), K_(index_type),
       K_(index_status), K_(row_store_type), K_(schema_version),
@@ -254,6 +258,7 @@ public:
   share::schema::ObTableMode table_mode_;
   share::schema::ObIndexType index_type_;
   share::schema::ObIndexStatus index_status_;
+
   ObRowStoreType row_store_type_;
   int64_t schema_version_;
   int64_t column_cnt_; // include virtual generated column
@@ -272,6 +277,47 @@ public:
   bool is_inited_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageSchema);
+};
+
+class ObCreateTabletSchema : public ObStorageSchema
+{
+public:
+  ObCreateTabletSchema()
+    : ObStorageSchema(),
+      table_id_(common::OB_INVALID_ID),
+      index_status_(share::schema::ObIndexStatus::INDEX_STATUS_UNAVAILABLE),
+      truncate_version_(OB_INVALID_VERSION)
+      {}
+
+  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int deserialize(common::ObIAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);
+  int64_t get_serialize_size() const;
+
+  inline bool can_read_index() const
+  { return share::schema::INDEX_STATUS_AVAILABLE == index_status_; }
+  uint64_t get_table_id () const
+  { return table_id_; }
+  int64_t get_truncate_version() const
+  { return truncate_version_; }
+  bool is_valid() const
+  {
+    return ObStorageSchema::is_valid() && common::OB_INVALID_ID != table_id_;
+  }
+  int init(common::ObIAllocator &allocator,
+      const share::schema::ObTableSchema &input_schema,
+      const lib::Worker::CompatMode compat_mode,
+      const bool skip_column_info,
+      const int64_t compat_version);
+  int init(common::ObIAllocator &allocator,
+      const ObCreateTabletSchema &old_schema);
+  INHERIT_TO_STRING_KV("ObStorageSchema", ObStorageSchema, K_(table_id), K_(index_status), K_(truncate_version));
+private:
+  // for cdc
+  uint64_t table_id_;
+  // for create index
+  share::schema::ObIndexStatus index_status_;
+  // for tablet throttling
+  int64_t truncate_version_;
 };
 
 template <typename T>

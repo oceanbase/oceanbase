@@ -1927,8 +1927,7 @@ int ObLSTabletService::create_tablet(
     const common::ObTabletID &data_tablet_id,
     const share::SCN &create_scn,
     const int64_t snapshot_version,
-    const share::schema::ObTableSchema &table_schema,
-    const lib::Worker::CompatMode &compat_mode,
+    const ObCreateTabletSchema &create_tablet_schema,
     ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
@@ -1958,14 +1957,14 @@ int ObLSTabletService::create_tablet(
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("new tablet is null", K(ret), KP(tablet), KP(allocator), K(tablet_handle));
     } else if (OB_FAIL(ObTabletCreateDeleteHelper::check_need_create_empty_major_sstable(
-        table_schema, need_create_empty_major_sstable))) {
+        create_tablet_schema, need_create_empty_major_sstable))) {
       LOG_WARN("failed to check need create sstable", K(ret));
     } else if (!need_create_empty_major_sstable) {
       table_store_flag.set_without_major_sstable();
-      LOG_INFO("no need to create sstable", K(ls_id), K(tablet_id), K(table_schema));
-    } else if (OB_FAIL(ObTabletCreateDeleteHelper::build_create_sstable_param(table_schema, tablet_id, snapshot_version, param))) {
+      LOG_INFO("no need to create sstable", K(ls_id), K(tablet_id), K(create_tablet_schema));
+    } else if (OB_FAIL(ObTabletCreateDeleteHelper::build_create_sstable_param(create_tablet_schema, tablet_id, snapshot_version, param))) {
       LOG_WARN("failed to build create sstable param", K(ret), K(tablet_id),
-          K(table_schema), K(snapshot_version), K(param));
+          K(create_tablet_schema), K(snapshot_version), K(param));
     } else if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable(param, tmp_allocator, new_sstable))) {
       LOG_WARN("failed to create sstable", K(ret), K(param));
     } else {
@@ -1973,9 +1972,9 @@ int ObLSTabletService::create_tablet(
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(tablet->init_for_first_time_creation(*allocator, ls_id, tablet_id, data_tablet_id,
-        create_scn, snapshot_version, table_schema, compat_mode, table_store_flag, sstable, freezer))) {
+        create_scn, snapshot_version, create_tablet_schema, table_store_flag, sstable, freezer))) {
       LOG_WARN("failed to init tablet", K(ret), K(ls_id), K(tablet_id), K(data_tablet_id),
-          K(create_scn), K(snapshot_version), K(table_schema), K(compat_mode), K(table_store_flag));
+          K(create_scn), K(snapshot_version), K(create_tablet_schema), K(table_store_flag));
     } else if (OB_FAIL(t3m->compare_and_swap_tablet(key, tablet_handle, tablet_handle))) {
       LOG_WARN("failed to compare and swap tablet", K(ret), K(key), K(tablet_handle));
     } else if (OB_FAIL(tablet_id_set_.set(tablet_id))) {

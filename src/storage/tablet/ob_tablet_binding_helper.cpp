@@ -219,16 +219,20 @@ int ObTabletBindingHelper::get_tablet_for_new_mds(const ObLS &ls, const ObTablet
   return ret;
 }
 
-bool ObTabletBindingHelper::has_lob_tablets(const obrpc::ObBatchCreateTabletArg &arg, const obrpc::ObCreateTabletInfo &info)
+int ObTabletBindingHelper::has_lob_tablets(const obrpc::ObBatchCreateTabletArg &arg, const obrpc::ObCreateTabletInfo &info, bool &has_lob)
 {
-  bool has_lob = false;
-  for (int64_t i = 0; !has_lob && i < info.tablet_ids_.count(); i++) {
-    const ObTableSchema &table_schema = arg.table_schemas_.at(info.table_schema_index_.at(i));
-    if (table_schema.is_aux_lob_meta_table() || table_schema.is_aux_lob_piece_table()) {
+  int ret = OB_SUCCESS;
+  has_lob = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !has_lob && i < info.tablet_ids_.count(); i++) {
+    const ObCreateTabletSchema *create_tablet_schema = arg.create_tablet_schemas_.at(info.table_schema_index_.at(i));
+    if (OB_ISNULL(create_tablet_schema)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("storage is NULL", KR(ret), K(arg));
+    } else if (create_tablet_schema->is_aux_lob_meta_table() || create_tablet_schema->is_aux_lob_piece_table()) {
       has_lob = true;
     }
   }
-  return has_lob;
+  return ret;
 }
 
 int ObTabletBindingHelper::modify_tablet_binding_for_new_mds_create(const ObBatchCreateTabletArg &arg, const share::SCN &replay_scn, mds::BufferCtx &ctx)
@@ -241,13 +245,16 @@ int ObTabletBindingHelper::modify_tablet_binding_for_new_mds_create(const ObBatc
   } else {
     const ObArray<ObTabletID> empty_array;
     ObLS &ls = *ls_handle.get_ls();
+    bool has_lob = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < arg.tablets_.count(); i++) {
       const ObCreateTabletInfo &info = arg.tablets_[i];
       if (ObTabletCreateDeleteHelper::is_pure_hidden_tablets(info)) {
         if (CLICK_FAIL(bind_hidden_tablet_to_orig_tablet(ls, info, replay_scn, ctx, arg.is_old_mds_))) {
           LOG_WARN("failed to add hidden tablet", K(ret));
         }
-      } else if (ObTabletBindingHelper::has_lob_tablets(arg, info)) {
+      } else if (OB_FAIL(ObTabletBindingHelper::has_lob_tablets(arg, info, has_lob))) {
+        LOG_WARN("failed to has_lob_tablets", KR(ret));
+      } else if (has_lob) {
         if (CLICK_FAIL(bind_lob_tablet_to_data_tablet(ls, arg, info, replay_scn, ctx))) {
           LOG_WARN("failed to add lob tablet", K(ret));
         }
@@ -290,9 +297,13 @@ int ObTabletBindingHelper::bind_lob_tablet_to_data_tablet(
     for (int64_t i = 0; OB_SUCC(ret) && i < info.tablet_ids_.count(); i++) {
       const ObTabletID &tablet_id = info.tablet_ids_.at(i);
       if (tablet_id != data_tablet_id) {
-        if (arg.table_schemas_.at(info.table_schema_index_.at(i)).is_aux_lob_meta_table()) {
+        const ObCreateTabletSchema *create_tablet_schema = arg.create_tablet_schemas_.at(info.table_schema_index_.at(i));
+        if (OB_ISNULL(create_tablet_schema)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("storage is NULL", KR(ret), K(arg));
+        } else if (create_tablet_schema->is_aux_lob_meta_table()) {
           data.lob_meta_tablet_id_ = tablet_id;
-        } else if (arg.table_schemas_.at(info.table_schema_index_.at(i)).is_aux_lob_piece_table()) {
+        } else if (create_tablet_schema->is_aux_lob_piece_table()) {
           data.lob_piece_tablet_id_ = tablet_id;
         } else {
           // do not maintain index tablet ids

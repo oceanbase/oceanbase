@@ -135,7 +135,9 @@ int ObCDCTabletChangeInfo::parse_create_tablet_op_(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ObBatchCreateTabletArg is invalid", KR(ret), K(tls_id), K(create_tablet_arg));
   } else {
+    // the schema in create tablet arg is ObCreateTabletSchema after 4.2.1.10, the previous is ObTableSchema
     const common::ObSArray<share::schema::ObTableSchema> &table_schemas = create_tablet_arg.table_schemas_;
+    const ObSArray<ObCreateTabletSchema*> &create_tablet_schemas = create_tablet_arg.create_tablet_schemas_;
     const common::ObSArray<obrpc::ObCreateTabletInfo> &tablets_info = create_tablet_arg.tablets_;
 
     for (int64_t create_tablet_idx = 0; OB_SUCC(ret) && create_tablet_idx < tablets_info.count(); create_tablet_idx++) {
@@ -146,13 +148,28 @@ int ObCDCTabletChangeInfo::parse_create_tablet_op_(
       for (int64_t tablet_id_idx = 0; OB_SUCC(ret) && tablet_id_idx < tablet_ids.count(); tablet_id_idx++) {
         const common::ObTabletID &tablet_id = tablet_ids.at(tablet_id_idx);
         const int64_t table_schema_idx = tb_schema_index_arr.at(tablet_id_idx);
-        if (OB_UNLIKELY(0 > table_schema_idx || table_schemas.count() <= table_schema_idx)) {
+        uint64_t table_id = common::OB_INVALID_ID;
+        share::schema::ObTableType table_type = share::schema::MAX_TABLE_TYPE;
+        if (OB_UNLIKELY(0 > table_schema_idx
+              || (create_tablet_schemas.count() <= table_schema_idx && table_schemas.count() <= table_schema_idx))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("invalid table_schema_index", KR(ret), K(tls_id), K(ob_create_tablet_info), K(table_schemas), K(table_schema_idx));
-        } else {
+        } else if (create_tablet_schemas.count() > 0) {
+          const ObCreateTabletSchema *create_tablet_schema = create_tablet_schemas.at(table_schema_idx);
+          if (OB_ISNULL(create_tablet_schema)) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_ERROR("create_tablet_schema is NULL", KR(ret), K(tls_id), K(create_tablet_idx), K(tablet_id_idx),
+                K(table_schema_idx), K(ob_create_tablet_info), K(tablet_ids), K(tb_schema_index_arr));
+          } else {
+            table_id = create_tablet_schema->get_table_id();
+            table_type = create_tablet_schema->get_table_type();
+          }
+        } else if (table_schemas.count() > 0) {
           const ObTableSchema &table_schema = table_schemas.at(table_schema_idx);
-          const uint64_t table_id = table_schema.get_table_id();
-          const share::schema::ObTableType table_type = table_schema.get_table_type();
+          table_id = table_schema.get_table_id();
+          table_type = table_schema.get_table_type();
+        }
+        if (OB_SUCC(ret)) {
           ObCDCTableInfo table_info;
           table_info.reset(table_id, table_type);
           CreateTabletOp create_tablet_op;
