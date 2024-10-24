@@ -312,28 +312,15 @@ int ObExtInfoCbRegister::register_cb(
     ObString data;
     int cb_cnt = 0;
     while (OB_SUCC(ret) && OB_SUCC(get_data(data))) {
-      storage::ObExtInfoCallback *cb = nullptr;
-      // each append one callback will write auth once
-      memtable::ObMvccWriteGuard guard(false);
-      if (OB_ISNULL(cb = mvcc_ctx_->alloc_ext_info_callback())) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("alloc row callback failed", K(ret));
-      } else if (OB_FAIL(cb->set(tmp_allocator_, dml_flag, seq_no_cur, lob_id, data))) {
-        LOG_WARN("set row callback failed", K(ret), K(*cb));
-      } else if (OB_FAIL(guard.write_auth(store_ctx))) {
-        LOG_WARN("write_auth fail", K(ret), K(store_ctx));
-      } else if (OB_FAIL(mvcc_ctx_->append_callback(cb))) {
-        LOG_WARN("register ext info callback failed", K(ret), K(*this),K(*cb));
+      // need throttle for each append, or may be too fash if has very large lob
+      // each data is as most 1.5MB, so not affect performance
+      ObLobExtInfoLogThrottleGuard throttle_guard(timeout, &(lob_mngr->get_ext_info_log_throttle_tool()));
+      if (OB_FAIL(append_callback(store_ctx, dml_flag, seq_no_cur, lob_id, data))) {
+        LOG_WARN("set row callback failed", K(ret), K(cb_cnt));
       } else {
-        guard.set_is_lob_ext_info_log(true);
         seq_no_cur = seq_no_cur + 1;
         ++cb_cnt;
-        LOG_DEBUG("register ext info callback success", K(*cb), K(cb_cnt), K(seq_no_cur));
-      }
-      if (OB_FAIL(ret) && OB_NOT_NULL(cb)) {
-        // append callback fail, need free to avoid memory leak
-        mvcc_ctx_->free_ext_info_callback(cb);
-        LOG_WARN("append fail, free callback", K(ret), K(seq_no_cur), K(cb_cnt));
+        LOG_DEBUG("register ext info callback success", K(cb_cnt), K(seq_no_cur));
       }
     }
     if (OB_ITER_END == ret) {
@@ -524,6 +511,37 @@ int ObExtInfoCbRegister::get_lob_id(ObObj &index_data, ObLobId &lob_id)
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support type", K(ret), K(index_data));
+  }
+  return ret;
+}
+
+int ObExtInfoCbRegister::append_callback(
+    storage::ObStoreCtx &store_ctx,
+    const blocksstable::ObDmlFlag dml_flag,
+    const transaction::ObTxSEQ &seq_no_cur,
+    const ObLobId &lob_id,
+    ObString &data)
+{
+  int ret = OB_SUCCESS;
+  memtable::ObMvccWriteGuard guard(false);
+  storage::ObExtInfoCallback *cb = nullptr;
+  if (OB_ISNULL(cb = mvcc_ctx_->alloc_ext_info_callback())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc row callback failed", K(ret));
+  } else if (OB_FAIL(cb->set(tmp_allocator_, dml_flag, seq_no_cur, lob_id, data))) {
+    LOG_WARN("set row callback failed", K(ret), K(*cb));
+  } else if (OB_FAIL(guard.write_auth(store_ctx))) {
+    LOG_WARN("write_auth fail", K(ret), K(store_ctx));
+  } else if (OB_FAIL(mvcc_ctx_->append_callback(cb))) {
+    LOG_WARN("register ext info callback failed", K(ret), K(*this),K(*cb));
+  } else {
+    guard.set_is_lob_ext_info_log(true);
+    LOG_DEBUG("append ext info callback success", KPC(cb), K(seq_no_cur));
+  }
+  if (OB_FAIL(ret) && OB_NOT_NULL(cb)) {
+    // append callback fail, need free to avoid memory leak
+    mvcc_ctx_->free_ext_info_callback(cb);
+    LOG_WARN("append fail, free callback", K(ret), K(seq_no_cur));
   }
   return ret;
 }

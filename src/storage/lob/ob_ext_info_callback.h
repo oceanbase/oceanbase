@@ -184,6 +184,13 @@ private:
 
   int get_lob_id(ObObj &index_data, ObLobId &lob_id);
 
+  int append_callback(
+      storage::ObStoreCtx &store_ctx,
+      const blocksstable::ObDmlFlag dml_flag,
+      const transaction::ObTxSEQ &seq_no_cur,
+      const ObLobId &lob_id,
+      ObString &data);
+
 public:
   TO_STRING_KV(K(timeout_), K(data_size_), K(seq_no_st_), K(seq_no_cnt_), K(header_writed_));
 
