@@ -112,7 +112,13 @@ public:
       TRANS_LOG(TRACE, "LockWaitMgr setup", K(node), KP(node.next_), K(get_wait_node_cnt()));
     }
     node.reset_need_wait();
-    node.recv_ts_ = recv_ts;
+    if (node.recv_ts_ != 0 && node.recv_ts_ != recv_ts) {
+      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "ObRequest recv ts should not change",
+        K(node), KP(node.next_), K(get_wait_node_cnt()));
+    }
+    if (node.recv_ts_ == 0) {
+      node.recv_ts_ = recv_ts;
+    }
     get_thread_node() = &node;
     get_thread_last_wait_hash_() = node.last_wait_hash_;
     get_thread_last_wait_addr_() = node.get_exec_addr();

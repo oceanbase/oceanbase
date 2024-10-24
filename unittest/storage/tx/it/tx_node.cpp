@@ -1173,8 +1173,10 @@ int ObTxNode::write_req_with_lock_wait(ObTxDesc &tx,
   retry_ctrl.last_cflict_key_= retry_ctrl.cflict_key_;
   retry_ctrl.last_cflict_addr_ = node->exec_addr_;
   retry_ctrl.cflict_key_= 0;
+  int64_t recv_ts = ObTimeUtility::current_time();
+  node->recv_ts_ = 0;
   // node->last_wait_hash_ = hash_rowkey(memtable_->get_tablet_id(), retry_ctrl.last_cflict_key_);
-  setup(*node, ObTimeUtility::current_time());
+  setup(*node, recv_ts);
   ObTxSEQ sp;
   OZ(create_implicit_savepoint(tx, tx_param, sp, true));
   tx_map_[tx.tid().get_id()] = &tx;
