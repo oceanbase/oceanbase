@@ -623,6 +623,8 @@ private:
     ReplicaDescArray() : common::ObSEArrayImpl<ReplicaDesc, 7>(),
                          is_readonly_all_server_(false),
                          readonly_memstore_percent_(100) {}
+    INHERIT_TO_STRING_KV("replica_desc_array", common::ObIArray<ReplicaDesc>,
+        K_(is_readonly_all_server), K_(readonly_memstore_percent));
   public:
     bool is_readonly_all_server_;
     int64_t readonly_memstore_percent_;

@@ -1932,7 +1932,17 @@ int ObDRWorker::check_ls_locality_match_(
   } else if (0 != locality_alignment.get_task_array_cnt()) {
     locality_is_matched = false;
   } else {
-    locality_is_matched = true;
+    // for dup-ls, add C/R replica task is not in task_array, also need to try getting next LA task
+    const LATask *task = nullptr;
+    if (OB_TMP_FAIL(locality_alignment.get_next_locality_alignment_task(task))) {
+      if (OB_ITER_END == tmp_ret) {
+        locality_is_matched = true;
+      } else {
+        LOG_WARN("fail to get next locality alignment task", KR(tmp_ret));
+      }
+    } else {
+      locality_is_matched = false;
+    }
   }
   ObTaskController::get().allow_next_syslog();
   LOG_INFO("the locality matched check for this logstream", KR(ret), K(locality_is_matched),
