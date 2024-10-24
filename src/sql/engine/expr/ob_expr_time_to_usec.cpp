@@ -23,7 +23,7 @@ namespace sql
 {
 
 ObExprTimeToUsec::ObExprTimeToUsec(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_TIME_TO_USEC, N_TIME_TO_USEC, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_TIME_TO_USEC, N_TIME_TO_USEC, 1, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {}
 
 ObExprTimeToUsec::~ObExprTimeToUsec()

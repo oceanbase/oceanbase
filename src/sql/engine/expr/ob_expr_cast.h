@@ -138,7 +138,6 @@ public:
   static int eval_cast_multiset(const sql::ObExpr &expr,
                                 sql::ObEvalCtx &ctx,
                                 sql::ObDatum &res_datum);
-  virtual int is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const;
   DECLARE_SET_LOCAL_SESSION_VARS;
 private:
   int get_cast_type(const ObExprResType param_type2,

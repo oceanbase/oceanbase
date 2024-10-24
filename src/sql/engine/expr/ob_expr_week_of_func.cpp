@@ -33,7 +33,7 @@ ObExprWeekOfYear::ObExprWeekOfYear(ObIAllocator& alloc)
     : ObFuncExprOperator(alloc,
                          T_FUN_SYS_WEEK_OF_YEAR,
                          N_WEEK_OF_YEAR,
-                         1, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+                         1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 ObExprWeekOfYear::~ObExprWeekOfYear() {}
@@ -102,14 +102,6 @@ int ObExprWeekOfYear::calc_weekofyear(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
   return ret;
 }
 
-int ObExprWeekOfYear::is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const {
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(check_first_param_not_time(exprs, is_valid))) {
-    LOG_WARN("fail to check if first param is time", K(ret), K(exprs));
-  }
-  return ret;
-}
-
 DEF_SET_LOCAL_SESSION_VARS(ObExprWeekOfYear, raw_expr) {
   int ret = OB_SUCCESS;
   SET_LOCAL_SYSVAR_CAPACITY(2);
@@ -122,7 +114,7 @@ ObExprWeekDay::ObExprWeekDay(ObIAllocator& alloc)
     : ObFuncExprOperator(alloc,
                          T_FUN_SYS_WEEKDAY_OF_DATE,
                          N_WEEKDAY_OF_DATE,
-                         1, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+                         1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 ObExprWeekDay::~ObExprWeekDay() {}
@@ -191,14 +183,6 @@ int ObExprWeekDay::calc_weekday(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &exp
   return ret;
 }
 
-int ObExprWeekDay::is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const {
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(check_first_param_not_time(exprs, is_valid))) {
-    LOG_WARN("fail to check if first param is time", K(ret), K(exprs));
-  }
-  return ret;
-}
-
 DEF_SET_LOCAL_SESSION_VARS(ObExprWeekDay, raw_expr) {
   int ret = OB_SUCCESS;
   SET_LOCAL_SYSVAR_CAPACITY(2);
@@ -212,7 +196,7 @@ ObExprYearWeek::ObExprYearWeek(ObIAllocator& alloc)
                          T_FUN_SYS_YEARWEEK_OF_DATE,
                          N_YEARWEEK_OF_DATE,
                          ONE_OR_TWO,
-                         NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+                         VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 ObExprYearWeek::~ObExprYearWeek() {}
@@ -384,14 +368,6 @@ int ObExprYearWeek::calc_yearweek(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &e
   return ret;
 }
 
-int ObExprYearWeek::is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const {
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(check_first_param_not_time(exprs, is_valid))) {
-    LOG_WARN("fail to check if first param is time", K(ret), K(exprs));
-  }
-  return ret;
-}
-
 DEF_SET_LOCAL_SESSION_VARS(ObExprYearWeek, raw_expr) {
   int ret = OB_SUCCESS;
   SET_LOCAL_SYSVAR_CAPACITY(2);
@@ -404,7 +380,7 @@ ObExprWeek::ObExprWeek(ObIAllocator& alloc)
     : ObFuncExprOperator(alloc,
                          T_FUN_SYS_WEEK,
                          N_WEEK,
-                         ONE_OR_TWO, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+                         ONE_OR_TWO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 ObExprWeek::~ObExprWeek() {}
@@ -520,14 +496,6 @@ int ObExprWeek::calc_week(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datu
         expr_datum.set_int(week);
       }
     }
-  }
-  return ret;
-}
-
-int ObExprWeek::is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const {
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(check_first_param_not_time(exprs, is_valid))) {
-    LOG_WARN("fail to check if first param is time", K(ret), K(exprs));
   }
   return ret;
 }
