@@ -628,6 +628,9 @@ const char *ASH_VIEW_SQL_425 =
 "  ASH.PLSQL_OBJECT_ID AS PLSQL_OBJECT_ID,"
 "  ASH.PLSQL_SUBPROGRAM_ID AS PLSQL_SUBPROGRAM_ID,"
 "  ASH.PLSQL_SUBPROGRAM_NAME AS PLSQL_SUBPROGRAM_NAME,"
+"  ASH.IN_SQL_EXECUTION AS IN_SQL_EXECUTION,"
+"  ASH.IN_PLSQL_COMPILATION AS IN_PLSQL_COMPILATION,"
+"  ASH.IN_PLSQL_EXECUTION AS IN_PLSQL_EXECUTION,"
 "  ASH.BLOCKING_SESSION_ID AS BLOCKING_SESSION_ID,"
 "  ASH.TABLET_ID AS TABLET_ID,"
 "  ASH.TIME_MODEL AS TIME_MODEL,"
@@ -678,6 +681,9 @@ const char *ASH_VIEW_SQL_424 =
 "  ASH.PLSQL_OBJECT_ID AS PLSQL_OBJECT_ID,"
 "  ASH.PLSQL_SUBPROGRAM_ID AS PLSQL_SUBPROGRAM_ID,"
 "  ASH.PLSQL_SUBPROGRAM_NAME AS PLSQL_SUBPROGRAM_NAME,"
+"  ASH.IN_SQL_EXECUTION AS IN_SQL_EXECUTION,"
+"  ASH.IN_PLSQL_COMPILATION AS IN_PLSQL_COMPILATION,"
+"  ASH.IN_PLSQL_EXECUTION AS IN_PLSQL_EXECUTION,"
 "  ASH.TIME_MODEL AS TIME_MODEL"
 " %s"
 " WHERE sample_time between '%.*s' and '%.*s'";
@@ -722,6 +728,9 @@ const char *ASH_VIEW_SQL_423 =
 "  ASH.PLSQL_OBJECT_ID AS PLSQL_OBJECT_ID,"
 "  ASH.PLSQL_SUBPROGRAM_ID AS PLSQL_SUBPROGRAM_ID,"
 "  ASH.PLSQL_SUBPROGRAM_NAME AS PLSQL_SUBPROGRAM_NAME,"
+"  ASH.IN_SQL_EXECUTION AS IN_SQL_EXECUTION,"
+"  ASH.IN_PLSQL_COMPILATION AS IN_PLSQL_COMPILATION,"
+"  ASH.IN_PLSQL_EXECUTION AS IN_PLSQL_EXECUTION,"
 "  0 AS TIME_MODEL"
 " %s"
 " WHERE sample_time between '%.*s' and '%.*s'";
@@ -766,6 +775,9 @@ const char *ASH_VIEW_SQL_422 =
 "  ASH.PLSQL_OBJECT_ID AS PLSQL_OBJECT_ID,"
 "  ASH.PLSQL_SUBPROGRAM_ID AS PLSQL_SUBPROGRAM_ID,"
 "  ASH.PLSQL_SUBPROGRAM_NAME AS PLSQL_SUBPROGRAM_NAME,"
+"  ASH.IN_SQL_EXECUTION AS IN_SQL_EXECUTION,"
+"  ASH.IN_PLSQL_COMPILATION AS IN_PLSQL_COMPILATION,"
+"  ASH.IN_PLSQL_EXECUTION AS IN_PLSQL_EXECUTION,"
 "  0 AS TIME_MODEL"
 " %s"
 " WHERE sample_time between '%.*s' and '%.*s'";
@@ -810,6 +822,9 @@ const char *ASH_VIEW_SQL_421 =
 "  NULL AS PLSQL_OBJECT_ID,"
 "  NULL AS PLSQL_SUBPROGRAM_ID,"
 "  NULL AS PLSQL_SUBPROGRAM_NAME,"
+"  ASH.IN_SQL_EXECUTION AS IN_SQL_EXECUTION,"
+"  NULL AS IN_PLSQL_COMPILATION,"
+"  NULL AS IN_PLSQL_EXECUTION,"
 "  0 AS TIME_MODEL"
 " %s"
 " WHERE sample_time between '%.*s' and '%.*s'";
@@ -3544,20 +3559,21 @@ int ObDbmsWorkloadRepository::print_top_plsql(const AshReportParams &ash_report_
                      "PLSQL_ENTRY_SUBPROGRAM_NAME) ash "))) {
         LOG_WARN("append sql failed", K(ret));
       } else if (OB_FAIL(sql_string.append_fmt(
-                     "LEFT JOIN (select database_name owner, routine_name object_name, routine_id "
-                     "object_id from %s db, %s r where r.database_id = db.database_id "
-                     "union select database_name owner, package_name object_name, package_id "
-                     "object_id from %s db, %s p where p.database_id = db.database_id) obj "
+                     "LEFT JOIN (%s) obj "
                      " ON ash.plsql_entry_object_id = obj.object_id "
                      "ORDER BY ENTRY_CNT DESC) v1 ",
-                     lib::is_oracle_mode() ? "SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT"
-                                           : "oceanbase.__all_database",
-                     lib::is_oracle_mode() ? "SYS.ALL_VIRTUAL_ROUTINE_REAL_AGENT"
-                                           : "oceanbase.__all_routine",
-                     lib::is_oracle_mode() ? "SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT"
-                                           : "oceanbase.__all_database",
-                     lib::is_oracle_mode() ? "SYS.ALL_VIRTUAL_PACKAGE_REAL_AGENT"
-                                           : "oceanbase.__all_package"))) {
+                     lib::is_oracle_mode() ? "SELECT DATABASE_NAME OWNER, ROUTINE_NAME OBJECT_NAME, ROUTINE_ID OBJECT_ID FROM SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB, SYS.ALL_VIRTUAL_ROUTINE_REAL_AGENT R WHERE R.DATABASE_ID = DB.DATABASE_ID "
+                                             "UNION SELECT DATABASE_NAME OWNER, PACKAGE_NAME OBJECT_NAME, PACKAGE_ID OBJECT_ID FROM SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB, SYS.ALL_VIRTUAL_PACKAGE_REAL_AGENT P WHERE P.DATABASE_ID = DB.DATABASE_ID "
+                                             "UNION SELECT DATABASE_NAME OWNER, T.TYPE_NAME OBJECT_NAME, T.TYPE_ID OBJECT_ID FROM SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB, SYS.ALL_VIRTUAL_TYPE_REAL_AGENT T WHERE T.DATABASE_ID = DB.DATABASE_ID "
+                                             "UNION SELECT DATABASE_NAME OWNER, TRG.TRIGGER_NAME OBJECT_NAME, TRG.TRIGGER_ID OBJECT_ID FROM SYS.ALL_VIRTUAL_TENANT_TRIGGER_REAL_AGENT TRG INNER JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB ON TRG.DATABASE_ID = DB.DATABASE_ID "
+                                           :
+                                             "select database_name owner, routine_name object_name, routine_id object_id from "
+                                             "oceanbase.__all_database db, oceanbase.__all_routine r where r.database_id = db.database_id "
+                                             "union select database_name owner, package_name object_name, package_id object_id from "
+                                             "oceanbase.__all_database db, oceanbase.__all_package p where p.database_id = db.database_id "
+                                             "union select database_name owner, trigger_name object_name, trigger_id object_id from "
+                                             "oceanbase.__all_tenant_trigger trg JOIN oceanbase.__all_database db on trg.database_id = db.database_id JOIN oceanbase.__all_table t on trg.base_object_id = t.table_id"
+                                            ))) {
         LOG_WARN("append sql failed", K(ret));
       } else if (lib::is_oracle_mode() && OB_FAIL(sql_string.append(" WHERE ROWNUM <= 50 "))) {
         LOG_WARN("append sql failed", K(ret));
@@ -3651,13 +3667,15 @@ int ObDbmsWorkloadRepository::print_top_plsql(const AshReportParams &ash_report_
                 } else if (OB_FAIL(sub_sql_string.append(plsql_entry_subprogram_id_char))) {
                   LOG_WARN("append sql failed", K(ret));
                 } else if (!lib::is_oracle_mode() &&
-                           OB_FAIL(sql_string.append(" AND PLSQL_OBJECT_ID > 0 AND ((time_model & "
-                                                     "4096) > 0 OR (time_model & 2048) > 0 ) "))) {
+                           OB_FAIL(sub_sql_string.append(" AND PLSQL_OBJECT_ID > 0"
+                                                         " AND (IN_PLSQL_COMPILATION = 'Y' OR IN_PLSQL_EXECUTION = 'Y')"
+                                                         " AND ((time_model & 4096) > 0 OR (time_model & 2048) > 0 ) "))) {
                   LOG_WARN("append sql failed", K(ret));
                 } else if (lib::is_oracle_mode() &&
                            OB_FAIL(
-                               sql_string.append(" AND PLSQL_OBJECT_ID > 0 AND (BITAND(TIME_MODEL, "
-                                                 "4096) > 0 OR BITAND(TIME_MODEL, 2048) > 0) "))) {
+                               sub_sql_string.append(" AND PLSQL_OBJECT_ID > 0"
+                                                     " AND (IN_PLSQL_COMPILATION = 'Y' OR IN_PLSQL_EXECUTION = 'Y')"
+                                                     " AND (BITAND(TIME_MODEL, 4096) > 0 OR BITAND(TIME_MODEL, 2048) > 0) "))) {
                   LOG_WARN("append sql failed", K(ret));
                 } else if (OB_FAIL(sub_sql_string.append(
                                ") top_event GROUP BY PLSQL_OBJECT_ID, PLSQL_SUBPROGRAM_ID, "
@@ -3665,25 +3683,25 @@ int ObDbmsWorkloadRepository::print_top_plsql(const AshReportParams &ash_report_
                   LOG_WARN("append sql failed", K(ret));
                 } else if (OB_FAIL(sub_sql_string.append_fmt(
                                " LEFT JOIN "
-                               " (select database_name owner, routine_name object_name, routine_id "
-                               "object_id from %s db, %s r where r.database_id = db.database_id "
-                               "union select database_name owner, package_name object_name, "
-                               "package_id object_id from %s db, %s p where p.database_id = "
-                               "db.database_id) obj "
+                               " (%s) obj "
                                " ON ash.plsql_object_id = obj.object_id ORDER BY SUB_CNT DESC) v1 ",
-                               lib::is_oracle_mode() ? "SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT"
-                                                     : "oceanbase.__all_database",
-                               lib::is_oracle_mode() ? "SYS.ALL_VIRTUAL_ROUTINE_REAL_AGENT"
-                                                     : "oceanbase.__all_routine",
-                               lib::is_oracle_mode() ? "SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT"
-                                                     : "oceanbase.__all_database",
-                               lib::is_oracle_mode() ? "SYS.ALL_VIRTUAL_PACKAGE_REAL_AGENT"
-                                                     : "oceanbase.__all_package"))) {
+                               lib::is_oracle_mode() ? "SELECT DATABASE_NAME OWNER, ROUTINE_NAME OBJECT_NAME, ROUTINE_ID OBJECT_ID FROM SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB, SYS.ALL_VIRTUAL_ROUTINE_REAL_AGENT R WHERE R.DATABASE_ID = DB.DATABASE_ID "
+                                                       "UNION SELECT DATABASE_NAME OWNER, PACKAGE_NAME OBJECT_NAME, PACKAGE_ID OBJECT_ID FROM SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB, SYS.ALL_VIRTUAL_PACKAGE_REAL_AGENT P WHERE P.DATABASE_ID = DB.DATABASE_ID "
+                                                       "UNION SELECT DATABASE_NAME OWNER, T.TYPE_NAME OBJECT_NAME, T.TYPE_ID OBJECT_ID FROM SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB, SYS.ALL_VIRTUAL_TYPE_REAL_AGENT T WHERE T.DATABASE_ID = DB.DATABASE_ID "
+                                                       "UNION SELECT DATABASE_NAME OWNER, TRG.TRIGGER_NAME OBJECT_NAME, TRG.TRIGGER_ID OBJECT_ID FROM SYS.ALL_VIRTUAL_TENANT_TRIGGER_REAL_AGENT TRG INNER JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB ON TRG.DATABASE_ID = DB.DATABASE_ID "
+                                                     :
+                                                       "select database_name owner, routine_name object_name, routine_id object_id from "
+                                                       "oceanbase.__all_database db, oceanbase.__all_routine r where r.database_id = db.database_id "
+                                                       "union select database_name owner, package_name object_name, package_id object_id from "
+                                                       "oceanbase.__all_database db, oceanbase.__all_package p where p.database_id = db.database_id "
+                                                       "union select database_name owner, trigger_name object_name, trigger_id object_id from "
+                                                       "oceanbase.__all_tenant_trigger trg JOIN oceanbase.__all_database db on trg.database_id = db.database_id JOIN oceanbase.__all_table t on trg.base_object_id = t.table_id"
+                                                     ))) {
                   LOG_WARN("append sql failed", K(ret));
                 } else if (lib::is_oracle_mode() &&
-                           OB_FAIL(sql_string.append(" WHERE ROWNUM <= 50 "))) {
+                           OB_FAIL(sub_sql_string.append(" WHERE ROWNUM <= 50 "))) {
                   LOG_WARN("append sql failed", K(ret));
-                } else if (!lib::is_oracle_mode() && OB_FAIL(sql_string.append(" LIMIT 50 "))) {
+                } else if (!lib::is_oracle_mode() && OB_FAIL(sub_sql_string.append(" LIMIT 50 "))) {
                   LOG_WARN("append sql failed", K(ret));
                 } else if (OB_FAIL(sql_proxy->read(sub_res, tenant_id, sub_sql_string.ptr()))) {
                   LOG_WARN("failed to execute sql", KR(ret), K(tenant_id), K(sql_string));
@@ -3729,9 +3747,9 @@ int ObDbmsWorkloadRepository::print_top_plsql(const AshReportParams &ash_report_
 
                       char sub_pl_name[common::OB_MAX_ASH_PL_NAME_LENGTH * 3 + 1] = "\0";
                       if ('\0' == subpro_name[0]) {
-                        sprintf(sub_pl_name, "%s.%s", obj_owner, obj_name);
+                        sprintf(sub_pl_name, "%s.%s", sub_obj_owner, sub_obj_name);
                       } else {
-                        sprintf(sub_pl_name, "%s.%s.%s", obj_owner, obj_name, subpro_name);
+                        sprintf(sub_pl_name, "%s.%s.%s", sub_obj_owner, sub_obj_name, subpro_name);
                       }
 
                       if (OB_SUCC(ret) && sub_event_cnt > 0) {
@@ -3759,15 +3777,14 @@ int ObDbmsWorkloadRepository::print_top_plsql(const AshReportParams &ash_report_
                       LOG_WARN("append sql failed", K(ret));
                     } else if (OB_FAIL(sub_sql_string.append(plsql_entry_subprogram_id_char))) {
                       LOG_WARN("append sql failed", K(ret));
-                    } else if (lib::is_oracle_mode() &&
-                               OB_FAIL(
-                                   sql_string.append(" AND (time_model & 16) > 0 AND (time_model & "
-                                                     "4096) = 0 AND (time_model & 2048) = 0 "))) {
-                      LOG_WARN("append sql failed", K(ret));
                     } else if (!lib::is_oracle_mode() &&
-                               OB_FAIL(sql_string.append(
-                                   " AND BITAND(TIME_MODEL, 16) > 0 AND BITAND(TIME_MODEL, 4096) = "
-                                   "0 AND BITAND(TIME_MODEL, 4096) = 0 "))) {
+                               OB_FAIL(
+                                   sub_sql_string.append(" AND (IN_PLSQL_COMPILATION = 'N' AND IN_PLSQL_EXECUTION = 'N' AND IN_SQL_EXECUTION = 'Y')"
+                                                        " AND (time_model & 16) > 0 AND (time_model & 4096) = 0 AND (time_model & 2048) = 0 "))) {
+                      LOG_WARN("append sql failed", K(ret));
+                    } else if (lib::is_oracle_mode() &&
+                               OB_FAIL(sub_sql_string.append(" AND (IN_PLSQL_COMPILATION = 'N' AND IN_PLSQL_EXECUTION = 'N' AND IN_SQL_EXECUTION = 'Y')"
+                                                            " AND BITAND(TIME_MODEL, 16) > 0 AND BITAND(TIME_MODEL, 4096) = 0 AND BITAND(TIME_MODEL, 4096) = 0 "))) {
                       LOG_WARN("append sql failed", K(ret));
                     } else if (OB_FAIL(sql_proxy->read(sub_res, tenant_id, sub_sql_string.ptr()))) {
                       LOG_WARN("failed to execute sql", KR(ret), K(tenant_id), K(sql_string));

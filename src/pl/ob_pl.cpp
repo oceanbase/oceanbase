@@ -2277,6 +2277,15 @@ int ObPL::execute(ObExecContext &ctx,
         routine = static_cast<ObPLFunction*>(cacheobj_guard.get_cache_obj());
       }
       CK (OB_NOT_NULL(routine));
+      if (OB_SUCC(ret) && guard.is_set_entry_info()) { // update package_id
+        uint64_t pack_id = routine->get_package_id();
+        if (ObTriggerInfo::is_trigger_package_id(pack_id)) {
+          pack_id = ObTriggerInfo::get_package_trigger_id(pack_id);
+        } else if (ObUDTObjectType::is_object_id(pack_id)) {
+          pack_id = ObUDTObjectType::clear_object_id_mask(pack_id);
+        }
+        ObActiveSessionGuard::get_stat().plsql_entry_object_id_ = OB_INVALID_ID != routine->get_package_id() ? pack_id : routine->get_routine_id();
+      }
       CK (OB_NOT_NULL(ctx.get_my_session()));
       OZ (ObPLContext::check_routine_legal(*routine, in_function,
                                           ctx.get_my_session()->is_for_trigger_package()));
@@ -5172,7 +5181,14 @@ ObPLASHGuard::ObPLASHGuard(int64_t package_id, int64_t routine_id)
   ObActiveSessionGuard::get_stat().exec_phase().in_plsql_execution_ = 1;
   pl_ash_status_ = INVALID_ASH_STATUS;
 
-  if (ObActiveSessionGuard::get_stat().plsql_entry_object_id_ == OB_INVALID_ID) {
+  if (ObTriggerInfo::is_trigger_package_id(package_id)) {
+    package_id = ObTriggerInfo::get_package_trigger_id(package_id);
+  } else if (ObUDTObjectType::is_object_id(package_id)) {
+    package_id = ObUDTObjectType::clear_object_id_mask(package_id);
+  }
+
+  if (ObActiveSessionGuard::get_stat().plsql_entry_object_id_ == OB_INVALID_ID ||
+      ObActiveSessionGuard::get_stat().plsql_entry_object_id_ == ObPLResolver::ANONYMOUS_VIRTUAL_OBJECT_ID) {
     set_entry_info_ = true;
     ObActiveSessionGuard::get_stat().plsql_entry_object_id_ = OB_INVALID_ID == package_id ? routine_id : package_id;
     ObActiveSessionGuard::get_stat().plsql_entry_subprogram_id_ = OB_INVALID_ID == package_id ? OB_INVALID_ID : routine_id;
@@ -5216,6 +5232,9 @@ ObPLASHGuard::ObPLASHGuard(int64_t package_id,
       MEMCPY(ObActiveSessionGuard::get_stat().plsql_subprogram_name_, routine_name.ptr(), size);
       ObActiveSessionGuard::get_stat().plsql_subprogram_name_[size] = '\0';
     }
+  } else { // curr routine is not package sub routine
+    ObActiveSessionGuard::get_stat().plsql_subprogram_name_[0] = '\0';
+    set_current_name_ = false;
   }
 }
 
