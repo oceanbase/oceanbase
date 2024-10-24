@@ -3595,14 +3595,14 @@ int ObDbmsWorkloadRepository::print_top_plsql(const AshReportParams &ash_report_
             }
           } else {
             int64_t tmp_real_str_len = 0;
-            char obj_owner[common::OB_MAX_ASH_PL_NAME_LENGTH + 1] = "";
+            char obj_owner[common::OB_MAX_DATABASE_NAME_LENGTH + 1] = "";
             EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "OBJ_OWNER", obj_owner,
-                common::OB_MAX_ASH_PL_NAME_LENGTH, tmp_real_str_len);
+                common::OB_MAX_DATABASE_NAME_LENGTH, tmp_real_str_len);
 
             tmp_real_str_len = 0;
-            char obj_name[common::OB_MAX_ASH_PL_NAME_LENGTH + 1] = "";
+            char obj_name[common::OB_MAX_ROUTINE_NAME_LENGTH + 1] = "";
             EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(
-                *result, "OBJ_NAME", obj_name, common::OB_MAX_ASH_PL_NAME_LENGTH, tmp_real_str_len);
+                *result, "OBJ_NAME", obj_name, common::OB_MAX_ROUTINE_NAME_LENGTH, tmp_real_str_len);
 
             tmp_real_str_len = 0;
             char subpro_name[common::OB_MAX_ASH_PL_NAME_LENGTH + 1] = "\0";
@@ -3719,14 +3719,14 @@ int ObDbmsWorkloadRepository::print_top_plsql(const AshReportParams &ash_report_
                       }
                     } else {
                       int64_t tmp_real_str_len = 0;
-                      char sub_obj_owner[common::OB_MAX_ASH_PL_NAME_LENGTH + 1] = "\0";
+                      char sub_obj_owner[common::OB_MAX_DATABASE_NAME_LENGTH + 1] = "\0";
                       EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*sub_result, "OBJ_OWNER", sub_obj_owner,
-                          common::OB_MAX_ASH_PL_NAME_LENGTH, tmp_real_str_len);
+                          common::OB_MAX_DATABASE_NAME_LENGTH, tmp_real_str_len);
 
                       tmp_real_str_len = 0;
-                      char sub_obj_name[common::OB_MAX_ASH_PL_NAME_LENGTH + 1] = "\0";
+                      char sub_obj_name[common::OB_MAX_ROUTINE_NAME_LENGTH + 1] = "\0";
                       EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*sub_result, "OBJ_NAME", sub_obj_name,
-                          common::OB_MAX_ASH_PL_NAME_LENGTH, tmp_real_str_len);
+                          common::OB_MAX_ROUTINE_NAME_LENGTH, tmp_real_str_len);
 
                       tmp_real_str_len = 0;
                       char subpro_name[common::OB_MAX_ASH_PL_NAME_LENGTH + 1] = "\0";
