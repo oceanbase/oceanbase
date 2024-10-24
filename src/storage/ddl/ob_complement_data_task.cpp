@@ -976,7 +976,7 @@ int ObComplementWriteTask::generate_next_task(ObITask *&next_task)
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObComplementWriteTask has not been inited", K(ret));
-  } else if (next_task_id == param_->concurrent_cnt_) {
+  } else if (next_task_id >= param_->concurrent_cnt_) {
     ret = OB_ITER_END;
   } else if (OB_ISNULL(tmp_dag)) {
     ret = OB_ERR_UNEXPECTED;
