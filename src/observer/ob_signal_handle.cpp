@@ -31,10 +31,13 @@
 #include "storage/tx_storage/ob_tenant_memory_printer.h"
 #include "lib/ash/ob_active_session_guard.h"
 
+extern void switch_check_io_hang_errsim();
+
 namespace oceanbase
 {
 using namespace common;
 using namespace storage;
+
 namespace observer
 {
 
@@ -186,6 +189,7 @@ int ObSignalHandle::deal_signals(int signum)
       //GARL_PRINT();
       PC_REPORT();
       ObTenantMemoryPrinter::get_instance().print_tenant_usage();
+      switch_check_io_hang_errsim();
       break;
     }
     case 50: {

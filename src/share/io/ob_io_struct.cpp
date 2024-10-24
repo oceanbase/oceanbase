@@ -28,6 +28,7 @@
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
 
+static int clear_io_hang_errsim;
 
 /******************             IOConfig              **********************/
 
@@ -2053,6 +2054,41 @@ int ObIOChannel::convert_sys_errno(const int system_errno)
   return ret;
 }
 
+void switch_check_io_hang_errsim()
+{
+  ATOMIC_FAA(&clear_io_hang_errsim, 1);
+}
+
+static inline int check_io_hang_errsim()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_E(EventTable::EN_IO_HANG_ERROR) OB_SUCCESS;
+
+  STATIC_ASSERT(0 == OB_SUCCESS, "OB_SUCCESS is not 0");
+
+  if (OB_SUCCESS != tmp_ret) {
+    int errsim = -tmp_ret;
+    int hang_ms = (errsim / 10) * 10;
+    int errcode = (errsim % 10);
+    if (0 == errcode) {
+      ret = OB_SUCCESS;
+    } else {
+      ret = OB_IO_ERROR;
+    }
+    if (0 == clear_io_hang_errsim % 2) {
+      LOG_WARN("errsim: EN_IO_HANG_ERROR", K(ret), K(tmp_ret), K(hang_ms));
+    } else {
+      LOG_WARN("errsim: EN_IO_HANG_ERROR is ignored", K(ret), K(tmp_ret), K(hang_ms));
+    }
+    while (hang_ms > 0 && 0 == ATOMIC_LOAD(&clear_io_hang_errsim) % 2) {
+      oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
+      ObClockGenerator::msleep(10);
+      hang_ms = hang_ms - 10;
+    }
+  }
+  return ret;
+}
+
 /******************             AsyncIOChannel              **********************/
 ObAsyncIOChannel::ObAsyncIOChannel()
   : io_context_(nullptr),
@@ -2517,11 +2553,13 @@ int ObSyncIOChannel::do_sync_io(ObIORequest &req)
     ret = OB_ERR_SYS;
     LOG_WARN("device handle is null", K(ret));
   } else if (req.get_flag().is_read()) {
-    if (OB_FAIL(device_handle_->pread(req.io_info_.fd_, req.io_info_.offset_, req.io_info_.size_, req.io_buf_, req.complete_size_))) {
+    if (OB_FAIL(check_io_hang_errsim())) {
+    } else if (OB_FAIL(device_handle_->pread(req.io_info_.fd_, req.io_info_.offset_, req.io_info_.size_, req.io_buf_, req.complete_size_))) {
       LOG_WARN("pread failed", K(ret), K(req));
     }
   } else if (req.get_flag().is_write()) {
-    if (OB_FAIL(device_handle_->pwrite(req.io_info_.fd_, req.io_info_.offset_, req.io_info_.size_, req.io_buf_, req.complete_size_))) {
+    if (OB_FAIL(check_io_hang_errsim())) {
+    } else if (OB_FAIL(device_handle_->pwrite(req.io_info_.fd_, req.io_info_.offset_, req.io_info_.size_, req.io_buf_, req.complete_size_))) {
       LOG_WARN("pread failed", K(ret), K(req));
     }
   } else {
@@ -3208,6 +3246,8 @@ int ObIOFaultDetector::record_read_failure(const ObIORequest &req)
     retry_task->timeout_ms_ = 5000L; // 5s
     if (OB_FAIL(TG_PUSH_TASK(TGDefIDs::IO_HEALTH, retry_task))) {
       LOG_WARN("io fault detector push task failed", K(ret), KP(retry_task));
+    } else {
+      LOG_INFO("io fault detector push task", KP(retry_task));
     }
     if (OB_FAIL(ret)) {
       op_free(retry_task);
