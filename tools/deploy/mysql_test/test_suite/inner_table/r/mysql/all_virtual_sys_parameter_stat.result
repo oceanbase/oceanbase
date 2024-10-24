@@ -321,6 +321,7 @@ _enable_dbms_job_package
 _enable_dbms_lob_partial_update
 _enable_ddl_worker_isolation
 _enable_defensive_check
+_enable_drop_and_add_index
 _enable_easy_keepalive
 _enable_enhanced_cursor_validation
 _enable_enum_set_subschema

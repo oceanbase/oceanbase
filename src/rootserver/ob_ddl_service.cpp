@@ -3908,12 +3908,16 @@ int ObDDLService::check_support_alter_pk_and_columns(
 }
 
 int ObDDLService::check_alter_table_index(const obrpc::ObAlterTableArg &alter_table_arg,
-                                          ObDDLType &ddl_type)
+                                          ObDDLType &ddl_type,
+                                          bool &has_drop_and_add_index)
 {
   int ret = OB_SUCCESS;
   char err_msg[number::ObNumber::MAX_PRINTABLE_SIZE] = {0};
   ObIndexArg::IndexActionType last_type = ObIndexArg::INVALID_ACTION;
   const ObSArray<ObIndexArg *> &index_arg_list = alter_table_arg.index_arg_list_;
+  bool has_drop_index = false;
+  bool has_create_index = false;
+  has_drop_and_add_index = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < index_arg_list.size(); ++i) {
     ObIndexArg *index_arg = const_cast<ObIndexArg *>(index_arg_list.at(i));
     if (OB_ISNULL(index_arg)) {
@@ -4008,6 +4012,17 @@ int ObDDLService::check_alter_table_index(const obrpc::ObAlterTableArg &alter_ta
         default: {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Unknown index action type!", K(type), K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (!has_drop_index) {
+          has_drop_index = ObIndexArg::DROP_INDEX == type;
+        }
+        if (!has_create_index) {
+          has_create_index = ObIndexArg::ADD_INDEX == type;
+        }
+        if (!has_drop_and_add_index) {
+          has_drop_and_add_index = has_drop_index && has_create_index;
         }
       }
     }
@@ -12479,6 +12494,7 @@ int ObDDLService::check_is_offline_ddl(const uint64_t tenant_data_version,
       ddl_type = unused_column_ids.empty() ? ObDDLType::DDL_NORMAL_TYPE : ObDDLType::DDL_DROP_COLUMN;
     }
   } else {
+    bool has_drop_and_add_index = false;
     char err_msg[number::ObNumber::MAX_PRINTABLE_SIZE] = {0};
     if (OB_SUCC(ret) && alter_table_arg.is_alter_columns_
         && OB_FAIL(check_alter_table_column(alter_table_arg,
@@ -12491,7 +12507,7 @@ int ObDDLService::check_is_offline_ddl(const uint64_t tenant_data_version,
     }
     const ObDDLType alter_table_ddl_type = ddl_type;
     if (OB_SUCC(ret) && alter_table_arg.is_alter_indexs_
-        && OB_FAIL(check_alter_table_index(alter_table_arg, ddl_type))) {
+        && OB_FAIL(check_alter_table_index(alter_table_arg, ddl_type, has_drop_and_add_index))) {
       LOG_WARN("fail to check alter table index", K(ret));
     }
     if (OB_SUCC(ret) && alter_table_arg.is_alter_partitions_
@@ -12600,6 +12616,16 @@ int ObDDLService::check_is_offline_ddl(const uint64_t tenant_data_version,
       } else if (is_adding_constraint) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "The DDL cannot be run concurrently with adding constraint.");
+      }
+    }
+    if (OB_SUCC(ret) && DDL_NORMAL_TYPE == ddl_type && has_drop_and_add_index) {
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+      if (OB_UNLIKELY(!tenant_config.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tenant config is invalid", K(ret), K(tenant_id));
+      } else if (!tenant_config->_enable_drop_and_add_index) {
+        ret = OB_OP_NOT_ALLOW;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Dropping and adding indexes at the same time is a high-risk operation, which is");
       }
     }
   }
