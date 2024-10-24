@@ -5423,7 +5423,6 @@ int ObSQLUtils::get_one_group_params(int64_t &actual_pos, ParamStore &src, Param
     pl::ObPLCollection *coll = NULL;
     ObObj *data = NULL;
     if (OB_UNLIKELY(!obj.is_ext())) {
-      OZ (obj_params.push_back(obj));
       OZ (ObSql::add_param_to_param_store(obj, obj_params));
     } else {
       CK (OB_NOT_NULL(coll = reinterpret_cast<pl::ObPLCollection*>(obj.get_ext())));
