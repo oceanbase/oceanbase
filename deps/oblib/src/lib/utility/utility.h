@@ -1365,6 +1365,10 @@ void call_dtor(T *&ptr)
 //      OB_IO_ERROR Error executing system call
 //      OB_SUCCESS successfully executed
 int is_dir_empty(const char *dirname, bool &is_empty);
+
+void get_glibc_version(int &major, int &minor);
+
+bool glibc_prereq(int major, int minor);
 } // end namespace common
 } // end namespace oceanbase
 
