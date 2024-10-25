@@ -2689,21 +2689,38 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
             LOG_WARN("unexpected child num", K(option_node->num_child_));
           } else {
             ObString url = ObString(string_node->str_len_, string_node->str_value_).trim_space_only();
-            ObSqlString tmp_location;
-            ObSqlString prefix;
+
             ObBackupStorageInfo storage_info;
             char storage_info_buf[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
-            OZ (resolve_file_prefix(url, prefix, storage_info.device_type_));
-            OZ (tmp_location.append(prefix.string()));
-            url = url.trim_space_only();
 
-            if (OB_STORAGE_FILE != storage_info.device_type_) {
-              OZ (ObSQLUtils::split_remote_object_storage_url(url, storage_info));
+            ObString path = url.split_on('?');
+
+            if (path.empty()) {
+              // url like: oss://ak:sk@host/bucket/...
+              ObSqlString tmp_location;
+              ObSqlString prefix;
+              OZ (resolve_file_prefix(url, prefix, storage_info.device_type_));
+              OZ (tmp_location.append(prefix.string()));
+              url = url.trim_space_only();
+
+              if (OB_STORAGE_FILE != storage_info.device_type_) {
+                OZ (ObSQLUtils::split_remote_object_storage_url(url, storage_info));
+              }
+              OZ (tmp_location.append(url));
+              OZ (storage_info.get_storage_info_str(storage_info_buf, sizeof(storage_info_buf)));
+              OZ (arg.schema_.set_external_file_location(tmp_location.string()));
+              OZ (arg.schema_.set_external_file_location_access_info(storage_info_buf));
+            } else {
+              // url like: oss://bucket/...?host=xxxx&access_id=xxx&access_key=xxx
+              ObString uri_cstr;
+              ObString storage_info_cstr;
+              OZ (ob_write_string(*params_.allocator_, path, uri_cstr, true));
+              OZ (ob_write_string(*params_.allocator_, url, storage_info_cstr, true));
+              OZ (storage_info.set(uri_cstr.ptr(), storage_info_cstr.ptr()));
+              OZ (storage_info.get_storage_info_str(storage_info_buf, sizeof(storage_info_buf)));
+              OZ (arg.schema_.set_external_file_location(path));
+              OZ (arg.schema_.set_external_file_location_access_info(storage_info_buf));
             }
-            OZ (tmp_location.append(url));
-            OZ (storage_info.get_storage_info_str(storage_info_buf, sizeof(storage_info_buf)));
-            OZ (arg.schema_.set_external_file_location(tmp_location.string()));
-            OZ (arg.schema_.set_external_file_location_access_info(storage_info_buf));
           }
 
           if (OB_SUCC(ret)) {
