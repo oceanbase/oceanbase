@@ -555,7 +555,7 @@ int ObTableQueryAsyncP::init_tb_ctx(ObTableCtx& ctx, ObTableSingleQueryInfo& que
     ObObjectID tmp_object_id = OB_INVALID_ID;
     ObObjectID tmp_first_level_part_id = OB_INVALID_ID;
     ObTabletID real_tablet_id;
-    if (query_ctx.part_idx_ == OB_INVALID_ID && query_ctx.subpart_idx_ == OB_INVALID_ID) { // 非分区表
+    if (query_ctx.part_idx_ == OB_INVALID_INDEX && query_ctx.subpart_idx_ == OB_INVALID_INDEX) { // 非分区表
       real_tablet_id = query_info.simple_schema_->get_tablet_id();
     } else if (OB_FAIL(query_info.simple_schema_->get_part_id_and_tablet_id_by_idx(query_ctx.part_idx_,
                                                                                     query_ctx.subpart_idx_,

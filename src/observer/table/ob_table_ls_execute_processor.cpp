@@ -250,40 +250,50 @@ int ObTableLSExecuteP::add_new_op(ObIArray<std::pair<uint64_t, ObTableTabletOp>>
 int ObTableLSExecuteP::partition_single_op(ObTableTabletOp& origin_tablet_op, ObIArray<std::pair<uint64_t, ObTableTabletOp>>& tablet_ops)
 {
   int ret = OB_SUCCESS;
+
   uint64_t real_table_id = OB_INVALID;
-  uint64_t real_tablet_id = OB_INVALID;
-  int64_t now_ms = -ObHTableUtils::current_time_millis();
-  for (int32_t i = 0; OB_SUCC(ret) && i < origin_tablet_op.count(); ++i) {
-    ObTableSingleOp& single_op = origin_tablet_op.at(i);
-    ObString tablegroup_name = arg_.ls_op_.get_table_name();
-    ObObj qualifier;
-    ObTableSingleOpEntity& single_entity = single_op.get_entities().at(0);
-    if (OB_FAIL(single_entity.get_rowkey_value(ObHTableConstants::COL_IDX_Q, qualifier))) {
-      LOG_WARN("fail to get qualifier value", K(ret));
-    } else {
-      ObSqlString real_table_name;
-      ObString family = qualifier.get_string().split_on('.');
-      if (OB_FAIL(real_table_name.append(tablegroup_name))) {
-        LOG_WARN("fail to append tablegroup name", K(ret), K(tablegroup_name));
-      } else if (OB_FAIL(real_table_name.append("$"))) {
-        LOG_WARN("fail to append $", K(ret));
-      } else if (OB_FAIL(real_table_name.append(family))) {
-        LOG_WARN("fail to append family name", K(ret), K(family));
-      } else if (OB_FAIL(modify_htable_quailfier_and_timestamp(&single_entity,
-                                                                qualifier.get_string().after('.'),
-                                                                now_ms,
-                                                                single_op.get_op_type()))) {
-        LOG_WARN("fail to modify hbase entity", K(ret));
-      } else if (OB_FAIL(get_table_id(real_table_name.string(), OB_INVALID, real_table_id))) {
-        LOG_WARN("failed to get_table_id by table_name", K(ret), K(real_table_name), K(qualifier), K(family));
-      } else if (OB_FAIL(get_tablet_id_by_rowkey(real_table_id, single_entity.get_rowkey(), real_tablet_id))) {
-        LOG_WARN("failed to get_tablet_id_by_rowkey ", K(ret), K(real_table_id), K(single_entity.get_rowkey()));
+  ObTabletID real_tablet_id;
+  int64_t part_idx = OB_INVALID_INDEX;
+  int64_t subpart_idx = OB_INVALID_INDEX;
+  int64_t arg_table_id = arg_.ls_op_.get_table_id();
+  ObTabletID arg_tablet_id = arg_.ls_op_.at(0).get_tablet_id();
+
+  if (OB_FAIL(get_idx_by_table_tablet_id(arg_table_id, arg_tablet_id, part_idx, subpart_idx))) {
+    LOG_WARN("fail to get part idx", K(ret), K(arg_table_id), K(arg_tablet_id));
+  } else {
+    int64_t now_ms = -ObHTableUtils::current_time_millis();
+    for (int32_t i = 0; OB_SUCC(ret) && i < origin_tablet_op.count(); ++i) {
+      ObTableSingleOp& single_op = origin_tablet_op.at(i);
+      ObString tablegroup_name = arg_.ls_op_.get_table_name();
+      ObObj qualifier;
+      ObTableSingleOpEntity& single_entity = single_op.get_entities().at(0);
+      if (OB_FAIL(single_entity.get_rowkey_value(ObHTableConstants::COL_IDX_Q, qualifier))) {
+        LOG_WARN("fail to get qualifier value", K(ret));
       } else {
-        bool is_found = false;
-        if (OB_FAIL(find_and_add_op(tablet_ops, real_table_id, single_op, is_found))) {
-          LOG_WARN("fail to add op to single_op", K(ret));
-        } else if (!is_found && OB_FAIL(add_new_op(tablet_ops, real_table_id, real_tablet_id, origin_tablet_op, single_op))) {
-          LOG_WARN("fail to push new tablet op", K(ret));
+        ObSqlString real_table_name;
+        ObString family = qualifier.get_string().split_on('.');
+        if (OB_FAIL(real_table_name.append(tablegroup_name))) {
+          LOG_WARN("fail to append tablegroup name", K(ret), K(tablegroup_name));
+        } else if (OB_FAIL(real_table_name.append("$"))) {
+          LOG_WARN("fail to append $", K(ret));
+        } else if (OB_FAIL(real_table_name.append(family))) {
+          LOG_WARN("fail to append family name", K(ret), K(family));
+        } else if (OB_FAIL(modify_htable_quailfier_and_timestamp(&single_entity,
+                                                                  qualifier.get_string().after('.'),
+                                                                  now_ms,
+                                                                  single_op.get_op_type()))) {
+          LOG_WARN("fail to modify hbase entity", K(ret));
+        } else if (OB_FAIL(get_table_id(real_table_name.string(), OB_INVALID, real_table_id))) {
+          LOG_WARN("failed to get_table_id by table_name", K(ret), K(real_table_name), K(qualifier), K(family));
+        } else if (OB_FAIL(get_tablet_by_idx(real_table_id, part_idx, subpart_idx, real_tablet_id))) {
+          LOG_WARN("failed to get_tablet_id_by_rowkey ", K(ret), K(real_table_id));
+        } else {
+          bool is_found = false;
+          if (OB_FAIL(find_and_add_op(tablet_ops, real_table_id, single_op, is_found))) {
+            LOG_WARN("fail to add op to single_op", K(ret));
+          } else if (!is_found && OB_FAIL(add_new_op(tablet_ops, real_table_id, real_tablet_id.id(), origin_tablet_op, single_op))) {
+            LOG_WARN("fail to push new tablet op", K(ret));
+          }
         }
       }
     }
@@ -297,13 +307,18 @@ int ObTableLSExecuteP::construct_delete_family_op(const ObTableSingleOp &single_
                                                   ObTableTabletOp &tablet_op) {
   int ret = OB_SUCCESS;
 
-  ObTableLSOp &ls_op = arg_.ls_op_;
-  uint64_t real_tablet_id = OB_INVALID_ID;
-  const ObRowkey& rowkey = single_op.get_entities().at(0).get_rowkey();
-  if OB_FAIL(get_tablet_id_by_rowkey(mutation_info.table_id_, rowkey, real_tablet_id)) {
+  ObTabletID real_tablet_id;
+  int64_t part_idx;
+  int64_t subpart_idx;
+  int64_t arg_table_id = arg_.ls_op_.get_table_id();
+  ObTabletID arg_tablet_id = arg_.ls_op_.at(0).get_tablet_id();
+
+  if (OB_FAIL(get_idx_by_table_tablet_id(arg_table_id, arg_tablet_id, part_idx, subpart_idx))) {
+    LOG_WARN("fail to get part idx", K(ret), K(arg_table_id), K(arg_tablet_id));
+  } else if (OB_FAIL(get_tablet_by_idx(mutation_info.table_id_, part_idx, subpart_idx, real_tablet_id))) {
     LOG_WARN("fail to get tablet id", K(ret));
   } else {
-    tablet_op.set_tablet_id(real_tablet_id);
+    tablet_op.set_tablet_id(real_tablet_id.id());
     tablet_op.set_dictionary(single_op.get_all_rowkey_names(), single_op.get_all_properties_names());
     ObTableSingleOp new_single_op;
     new_single_op.set_op_query(const_cast<ObTableSingleOpQuery*>(single_op.get_query()));
@@ -355,7 +370,9 @@ int ObTableLSExecuteP::init_multi_schema_info(const ObString& arg_tablegroup_nam
                                           schema_guard_))) {
         LOG_WARN("fail to init shcema_cache_guard", K(ret));
       } else {
-        hbase_infos_.push_back(mutation_info);
+        if (OB_FAIL(hbase_infos_.push_back(mutation_info))) {
+          LOG_WARN("fail to push mutation info", K(ret), K(mutation_info));
+        }
       }
     }
   }
@@ -386,17 +403,31 @@ int ObTableLSExecuteP::try_process()
         LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(db), to_cstring(tablegroup_name));
       }
       LOG_WARN("fail to init schema info", K(ret), K(ls_op.get_table_name()));
-    } else if (OB_FAIL(get_ls_id(ls_id, hbase_infos_.at(0)->simple_schema_))) {
-      LOG_WARN("fail to get ls id", K(ret));
-    } else if (OB_FAIL(check_table_has_global_index(exist_global_index, hbase_infos_.at(0)->schema_cache_guard_))) {
-      LOG_WARN("fail to check global index", K(ret), K(ls_op.get_table_name()));
-    } else if (need_all_prop) {
-      ObSEArray<ObString, 8> all_prop_name;
-      const ObIArray<ObTableColumnInfo *> &column_info_array = hbase_infos_.at(0)->schema_cache_guard_.get_column_info_array();
-      if (OB_FAIL(ObTableApiUtil::expand_all_columns(column_info_array, all_prop_name))) {
-        LOG_WARN("fail to expand all columns", K(ret));
-      } else if (OB_FAIL(cb_result->assign_properties_names(all_prop_name))) {
-        LOG_WARN("fail to assign property names to result", K(ret));
+    } else if (hbase_infos_.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table info is empty", K(ret));
+    } else {
+      const share::schema::ObSimpleTableSchemaV2 *simple_schema = NULL;
+      for (int i = 0; OB_ISNULL(simple_schema) && i < hbase_infos_.count(); ++i) {
+        if (hbase_infos_.at(i)->table_id_ == ls_op.get_table_id()) {
+          simple_schema = hbase_infos_.at(i)->simple_schema_;
+        }
+      }
+      if (OB_ISNULL(simple_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null simple_schema", K(ret), K(ls_op.get_table_id()));
+      } else if (OB_FAIL(get_ls_id(ls_id, simple_schema))) {
+        LOG_WARN("fail to get ls id", K(ret));
+      } else if (OB_FAIL(check_table_has_global_index(exist_global_index, hbase_infos_.at(0)->schema_cache_guard_))) {
+        LOG_WARN("fail to check global index", K(ret), K(ls_op.get_table_name()));
+      } else if (need_all_prop) {
+        ObSEArray<ObString, 8> all_prop_name;
+        const ObIArray<ObTableColumnInfo *> &column_info_array = hbase_infos_.at(0)->schema_cache_guard_.get_column_info_array();
+        if (OB_FAIL(ObTableApiUtil::expand_all_columns(column_info_array, all_prop_name))) {
+          LOG_WARN("fail to expand all columns", K(ret));
+        } else if (OB_FAIL(cb_result->assign_properties_names(all_prop_name))) {
+          LOG_WARN("fail to assign property names to result", K(ret));
+        }
       }
     }
 
