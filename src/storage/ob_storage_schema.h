@@ -214,7 +214,6 @@ public:
       common::ObIAllocator &allocator,
       const ObStorageSchema &src_schema,
       const ObUpdateCSReplicaSchemaParam &update_param);
-  int sort_out_of_order_column_array_for_heap_table();
   int deep_copy_column_group_array(
       common::ObIAllocator &allocator,
       const ObStorageSchema &src_schema);
@@ -317,12 +316,6 @@ public:
       const uint64_t &column_id,
       const int32_t &column_idx,
       int32_t &cg_idx) const;
-  /*
-   * For heap table (no pk, only has __pk_increment), the column array is out of order when tablet firstly created.
-   * The the __pk_increment column is in the LAST of column array in ObCreateTableSchema,
-   * but in the FIRST in ObTableSchema read by schema guard from inner table.
-   */
-  int check_is_column_array_out_of_order_for_heap_table(bool &is_out_of_order) const;
   bool is_cg_array_generated_in_cs_replica() const;
   // Use this comparison function to determine which schema has been updated later
   // true: input_schema is newer
@@ -336,7 +329,6 @@ public:
   inline bool is_aux_lob_meta_table() const { return share::schema::is_aux_lob_meta_table(table_type_); }
   inline bool is_aux_lob_piece_table() const { return share::schema::is_aux_lob_piece_table(table_type_); }
   OB_INLINE bool is_user_hidden_table() const { return share::schema::TABLE_STATE_IS_HIDDEN_MASK & table_mode_.state_flag_; }
-  OB_INLINE bool is_heap_table() const { return share::schema::TOM_HEAP_ORGANIZED == (enum share::schema::ObTableOrganizationMode)table_mode_.organization_mode_; }
   OB_INLINE bool is_cs_replica_compat() const { return is_cs_replica_compat_; }
 
   VIRTUAL_TO_STRING_KV(KP(this), K_(storage_schema_version), K_(version),
