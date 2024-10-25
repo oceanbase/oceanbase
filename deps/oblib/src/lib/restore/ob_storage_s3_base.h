@@ -52,7 +52,6 @@
 #include <aws/core/client/DefaultRetryStrategy.h>
 #include <aws/s3/model/DeleteObjectsRequest.h>
 #pragma pop_macro("private")
-#include "cos/ob_singleton.h"
 
 namespace oceanbase
 {
