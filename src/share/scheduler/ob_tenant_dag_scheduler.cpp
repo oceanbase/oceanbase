@@ -486,7 +486,6 @@ ObIDag::ObIDag(const ObDagType::ObDagTypeEnum type)
     dag_status_(ObIDag::DAG_STATUS_INITING),
     running_task_cnt_(0),
     is_stop_(false),
-    force_cancel_flag_(false),
     max_retry_times_(0),
     running_times_(0),
     dag_net_(nullptr),
@@ -555,7 +554,6 @@ void ObIDag::reset()
   type_ = ObDagType::DAG_TYPE_MAX;
   priority_ = ObDagPrio::DAG_PRIO_MAX;
   is_stop_ = false;
-  force_cancel_flag_ = false;
   dag_net_ = nullptr;
   list_idx_ = DAG_LIST_MAX;
 }
@@ -702,6 +700,9 @@ bool ObIDag::has_finished()
   } else {
     bret = 0 == running_task_cnt_;
   }
+  if (bret) { // when return true, this dag will finish soon
+    is_stop_ = true;
+  }
   return bret;
 }
 
@@ -711,7 +712,7 @@ int ObIDag::get_next_ready_task(ObITask *&task)
   bool found = false;
 
   ObMutexGuard guard(lock_);
-  if (ObIDag::DAG_STATUS_NODE_RUNNING == dag_status_) {
+  if (!is_stop_ && ObIDag::DAG_STATUS_NODE_RUNNING == dag_status_) {
     ObITask *cur_task = task_list_.get_first();
     const ObITask *head = task_list_.get_header();
     while (!found && head != cur_task && nullptr != cur_task) {
@@ -844,7 +845,7 @@ void ObIDag::reset_task_running_status(ObITask &task, ObITask::ObITaskStatus tas
 int64_t ObIDag::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
-  if (OB_ISNULL(buf) || buf_len <= 0) {
+  if (OB_ISNULL(buf) || buf_len <= 0 || !is_inited_ || is_stop_) {
   } else {
     J_OBJ_START();
     J_KV(KP(this), K_(is_inited), K_(type), "name", get_dag_type_str(type_), K_(id), KPC_(dag_net), K_(dag_ret), K_(dag_status),
@@ -909,9 +910,10 @@ int ObIDag::finish(const ObDagStatus status, bool &dag_net_finished)
   return ret;
 }
 
-void ObIDag::set_force_cancel_flag()
+void ObIDag::set_stop()
 {
-  force_cancel_flag_ = true;
+  ObMutexGuard guard(lock_);
+  is_stop_ = true;
   // dag_net and dags in the same dag net should be canceled too.
   if (OB_NOT_NULL(dag_net_)) {
     dag_net_->set_cancel();
@@ -1700,7 +1702,7 @@ bool ObTenantDagWorker::get_force_cancel_flag()
     // ignore ret
     COMMON_LOG(WARN, "task does not belong to dag");
   } else {
-    flag = dag->get_force_cancel_flag();
+    flag = dag->has_set_stop();
   }
   return flag;
 }
@@ -2062,7 +2064,7 @@ int ObDagPrioScheduler::inner_add_dag_(
   } else {
     add_added_info_(dag->get_type());
     COMMON_LOG(INFO, "add dag success", KP(dag), "id", dag->get_dag_id(), K(dag->hash()), "dag_cnt", scheduler_->get_cur_dag_cnt(),
-        "dag_type", OB_DAG_TYPES[dag->get_type()].dag_type_str_,
+        K(emergency), "dag_type", OB_DAG_TYPES[dag->get_type()].dag_type_str_,
         "dag_type_cnts", scheduler_->get_type_dag_cnt(dag->get_type()));
 
     dag = nullptr;
@@ -2433,7 +2435,7 @@ int ObDagPrioScheduler::pop_task_from_ready_list_(ObITask *&task)
         if (OB_FAIL(schedule_dag_(*cur, move_dag_to_waiting_list))) {
           COMMON_LOG(WARN, "failed to schedule dag", K(ret), KPC(cur));
         }
-      } else if (ObIDag::DAG_STATUS_NODE_FAILED == dag_status
+      } else if ((ObIDag::DAG_STATUS_NODE_FAILED == dag_status || cur->has_set_stop())
           && 0 == cur->get_running_task_count()) { // no task running failed dag, need free
         tmp_dag = cur;
         cur = cur->get_next();
@@ -2557,6 +2559,9 @@ int ObDagPrioScheduler::finish_dag_(
   if (OB_UNLIKELY(dag.get_priority() != priority_ || OB_ISNULL(scheduler_))) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(WARN, "unexpect value", K(ret), K(dag.get_priority()), K_(priority), KP_(scheduler));
+  } else if (OB_UNLIKELY(dag.get_running_task_count() > 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(ERROR, "exist running task", K(ret), K(dag.get_priority()), K(dag), KP_(scheduler));
   } else if (FALSE_IT(add_dag_warning_info_into_dag_net_(dag, need_add))) {
   } else if (OB_FAIL(dag.finish(status, dag_net_finished))) { // dag record will be erase, making this dag_net could be free.
     COMMON_LOG(WARN, "dag finished failed", K(ret), K(dag), "dag_ret", dag.get_dag_ret());
@@ -2569,7 +2574,7 @@ int ObDagPrioScheduler::finish_dag_(
         "runtime", ObTimeUtility::fast_current_time() - dag.get_start_time(),
         "dag_cnt", scheduler_->get_cur_dag_cnt(), "dag_type_cnt", scheduler_->get_type_dag_cnt(dag.get_type()),
         K(&dag), K(dag));
-    if (OB_TMP_FAIL(ObSysTaskStatMgr::get_instance().del_task(dag.get_dag_id()))) {
+    if (dag.get_dag_id().is_valid() && OB_TMP_FAIL(ObSysTaskStatMgr::get_instance().del_task(dag.get_dag_id()))) {
       STORAGE_LOG(WARN, "failed to del sys task", K(tmp_ret), K(dag.get_dag_id()));
     }
     if (OB_TMP_FAIL(dag.report_result())) {
@@ -2672,7 +2677,7 @@ int ObDagPrioScheduler::deal_with_fail_dag_(ObIDag &dag, bool &retry_flag)
 {
   int ret = OB_SUCCESS;
   // dag retry is triggered by last finish task
-  if (OB_UNLIKELY(dag.get_force_cancel_flag())) {
+  if (OB_UNLIKELY(dag.has_set_stop())) {
   } else if (1 == dag.get_running_task_count() && dag.check_can_retry()) {
     COMMON_LOG(INFO, "dag retry", K(ret), K(dag));
     if (OB_FAIL(dag.reset_status_for_retry())) { // clear task/running_info and init again
@@ -3017,7 +3022,7 @@ int ObDagPrioScheduler::check_ls_compaction_dag_exist_with_cancel(
           }
         } else { // for running dag
           exist = true;
-          cur->set_force_cancel_flag(); // dag exists before finding force_cancel_flag, need check exists again
+          cur->set_stop(); // dag exists before finding stop, need check exists again
           cur = cur->get_next();
         }
       } else {
@@ -3290,7 +3295,7 @@ int ObDagPrioScheduler::cancel_dag(const ObIDag &dag, const bool force_cancel)
       }
     } else if (force_cancel && cur_dag->get_dag_status() == ObIDag::DAG_STATUS_NODE_RUNNING) {
       LOG_INFO("cancel running dag", K(ret), KP(cur_dag), K(force_cancel));
-      cur_dag->set_force_cancel_flag();
+      cur_dag->set_stop();
     }
   }
   return ret;
