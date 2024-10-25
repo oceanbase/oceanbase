@@ -99,10 +99,10 @@ protected:
     STMT_TYPE,
     TABLET_ID,
     PROXY_SID,
-    IO_READ_COUNT,
-    IO_READ_SIZE,
-    IO_WRITE_COUNT,
-    IO_WRITE_SIZE,
+    DELTA_READ_IO_REQUESTS,
+    DELTA_READ_IO_BYTES,
+    DELTA_WRITE_IO_REQUESTS,
+    DELTA_WRITE_IO_BYTES,
   };
   DISALLOW_COPY_AND_ASSIGN(ObVirtualASH);
   share::ObActiveSessHistList::Iterator iterator_;

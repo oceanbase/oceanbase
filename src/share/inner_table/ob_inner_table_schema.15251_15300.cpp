@@ -11840,7 +11840,7 @@ int ObInnerTableSchema::all_virtual_wr_active_session_history_ora_schema(ObTable
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("IO_READ_COUNT", //column_name
+    ADD_COLUMN_SCHEMA("DELTA_READ_IO_REQUESTS", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
@@ -11855,7 +11855,7 @@ int ObInnerTableSchema::all_virtual_wr_active_session_history_ora_schema(ObTable
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("IO_READ_SIZE", //column_name
+    ADD_COLUMN_SCHEMA("DELTA_READ_IO_BYTES", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
@@ -11870,7 +11870,7 @@ int ObInnerTableSchema::all_virtual_wr_active_session_history_ora_schema(ObTable
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("IO_WRITE_COUNT", //column_name
+    ADD_COLUMN_SCHEMA("DELTA_WRITE_IO_REQUESTS", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
@@ -11885,7 +11885,7 @@ int ObInnerTableSchema::all_virtual_wr_active_session_history_ora_schema(ObTable
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("IO_WRITE_SIZE", //column_name
+    ADD_COLUMN_SCHEMA("DELTA_WRITE_IO_BYTES", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
