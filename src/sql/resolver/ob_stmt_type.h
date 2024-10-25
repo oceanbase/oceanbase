@@ -367,6 +367,7 @@ OB_STMT_TYPE_DEF_UNKNOWN_AT(T_MODULE_DATA, get_sys_tenant_alter_system_priv, 366
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_REDIS, err_stmt_type_priv, 367)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_GRANT_PROXY, no_priv_needed, 368)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_REVOKE_PROXY, no_priv_needed, 369)
+//370 for admin_alter_ls
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_MAX, err_stmt_type_priv, 500)
 #endif
 

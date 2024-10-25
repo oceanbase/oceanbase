@@ -2633,6 +2633,9 @@ typedef enum ObItemType
   T_TG_SYS_EVENT = 4754,
   T_TG_DB_EVENT_LIST = 4755,
   T_FILE_EXTENSION = 4756,
+  T_LS_ATTR_LIST = 4757,
+  T_ALTER_LS = 4758,
+  T_UNIT_GROUP = 4759,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
