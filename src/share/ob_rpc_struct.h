@@ -10548,7 +10548,9 @@ public:
       schema_version_(0), snapshot_version_(0), ddl_type_(0), task_id_(0), parallelism_(0), execution_id_(-1), tablet_task_id_(0),
       data_format_version_(0), consumer_group_id_(0), dest_tenant_id_(OB_INVALID_ID), dest_ls_id_(), dest_schema_version_(0),
       compaction_scn_(0), can_reuse_macro_block_(false), split_sstable_type_(share::ObSplitSSTableType::SPLIT_BOTH),
-      lob_col_idxs_(), parallel_datum_rowkey_list_(), is_no_logging_(false)
+      lob_col_idxs_(), parallel_datum_rowkey_list_(), is_no_logging_(false),
+      min_split_start_scn_()
+
   {}
   bool is_valid() const;
   int assign(const ObDDLBuildSingleReplicaRequestArg &other);
@@ -10557,7 +10559,7 @@ public:
     K_(task_id), K_(parallelism), K_(execution_id), K_(tablet_task_id), K_(data_format_version),
     K_(consumer_group_id), K_(dest_tenant_id), K_(dest_ls_id), K_(dest_schema_version),
     K_(compaction_scn), K_(can_reuse_macro_block), K_(split_sstable_type), K_(lob_col_idxs),
-    K_(parallel_datum_rowkey_list), K_(is_no_logging));
+    K_(parallel_datum_rowkey_list), K_(is_no_logging), K_(min_split_start_scn));
 public:
   common::ObArenaAllocator rowkey_allocator_; // alloc buf for datum rowkey.
   uint64_t tenant_id_;
@@ -10584,6 +10586,7 @@ public:
   ObSArray<uint64_t> lob_col_idxs_;
   common::ObSArray<blocksstable::ObDatumRowkey> parallel_datum_rowkey_list_;
   bool is_no_logging_;
+  share::SCN min_split_start_scn_;
 };
 
 struct ObDDLBuildSingleReplicaRequestResult final
@@ -10719,7 +10722,7 @@ public:
       schema_version_(0), task_id_(0), source_tablet_id_(),
       dest_tablets_id_(), compaction_scn_(0), data_format_version_(0),
       consumer_group_id_(0), can_reuse_macro_block_(false), split_sstable_type_(share::ObSplitSSTableType::SPLIT_BOTH),
-      lob_col_idxs_(), parallel_datum_rowkey_list_()
+      lob_col_idxs_(), parallel_datum_rowkey_list_(), min_split_start_scn_()
   {}
   ~ObTabletSplitArg() = default;
   bool is_valid() const;
@@ -10728,7 +10731,7 @@ public:
                K_(schema_version), K_(task_id), K_(source_tablet_id),
                K_(dest_tablets_id), K_(compaction_scn), K_(data_format_version),
                K_(consumer_group_id), K_(can_reuse_macro_block), K_(split_sstable_type),
-               K_(lob_col_idxs), K_(parallel_datum_rowkey_list));
+               K_(lob_col_idxs), K_(parallel_datum_rowkey_list), K_(min_split_start_scn));
 public:
   common::ObArenaAllocator rowkey_allocator_; // alloc buf for datum rowkey.
   share::ObLSID ls_id_;
@@ -10745,6 +10748,7 @@ public:
   share::ObSplitSSTableType split_sstable_type_;
   common::ObSEArray<uint64_t, 16> lob_col_idxs_;
   common::ObSArray<blocksstable::ObDatumRowkey> parallel_datum_rowkey_list_;
+  share::SCN min_split_start_scn_;
 };
 
 struct ObTabletSplitStartArg final
@@ -10767,13 +10771,14 @@ struct ObTabletSplitStartResult final
     OB_UNIS_VERSION(1);
 public:
   ObTabletSplitStartResult()
-    : ret_codes_()
+    : ret_codes_(), min_split_start_scn_()
   {}
   ~ObTabletSplitStartResult() = default;
   int assign(const ObTabletSplitStartResult &other);
-  TO_STRING_KV(K_(ret_codes));
+  TO_STRING_KV(K_(ret_codes), K_(min_split_start_scn));
 public:
   common::ObSArray<int> ret_codes_;
+  share::SCN min_split_start_scn_;
 };
 
 struct ObTabletSplitFinishArg final
