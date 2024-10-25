@@ -245,6 +245,17 @@ int ObScheduleTabletFunc::get_schedule_execute_info(
     // TODO replace with new func on tablet later @lana
       LOG_WARN("failed to load storage schema", K(ret), K(tablet));
   } else if (FALSE_IT(is_mv_major_refresh_tablet = storage_schema->is_mv_major_refresh())) {
+  } else if (is_mv_major_refresh_tablet &&
+             ObBasicMergeScheduler::INIT_COMPACTION_SCN == last_major_snapshot) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(ADD_SUSPECT_INFO(MEDIUM_MERGE, share::ObDiagnoseTabletType::TYPE_MEDIUM_MERGE,
+                                     ls_id, tablet_id, ObSuspectInfoType::SUSPECT_MV_IN_CREATION,
+                                     last_major_snapshot,
+                                     static_cast<int64_t>(tablet.is_row_store())))) {
+      LOG_WARN("failed to add suspect info", K(tmp_ret));
+    }
+    LOG_INFO("mv creation has not finished, can not schedule mv tablet", K(ret),
+             K(last_major_snapshot));
   } else if (OB_FAIL(tablet_status_.medium_list()->get_next_schedule_info(
     last_major_snapshot, merge_version_, is_mv_major_refresh_tablet, compaction_type, schedule_scn))) {
     if (OB_NO_NEED_MERGE != ret) {
