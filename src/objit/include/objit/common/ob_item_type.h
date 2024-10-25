@@ -878,6 +878,12 @@ typedef enum ObItemType
   T_FUNC_SYS_ARRAY_MAP = 1752,
   T_FUNC_SYS_LAMBDA = 1753,
   T_FUN_SYS_ORA_LOGIN_USER = 1754,
+  T_FUNC_SYS_ARRAY_TO_STRING = 1755,
+  T_FUNC_SYS_STRING_TO_ARRAY = 1756,
+  T_FUNC_SYS_ARRAY_APPEND = 1757,
+  T_FUNC_SYS_ELEMENT_AT = 1758,
+  T_FUNC_SYS_ARRAY_CARDINALITY = 1759,
+  T_FUNC_SYS_RB_BUILD = 1760,
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table
