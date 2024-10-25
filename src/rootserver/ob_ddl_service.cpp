@@ -42922,22 +42922,22 @@ int ObDDLService::generate_partition_info_from_partitioned_table_(const ObTableS
         for (int64_t i = 0; OB_SUCC(ret) && i < ori_part_num + inc_part_num; ++i) {
           ObPartition* part = sort_part_array[i];
           int tmp_ret = source_tablet_id_set.exist_refactored(part->get_tablet_id().id());
-
           if (tmp_ret == OB_HASH_NOT_EXIST) { // not source splitting part
             if (part->get_part_idx() != part_idx) {
               bool is_inc_part = part->get_split_source_tablet_id().is_valid();
               if (is_inc_part) { // inc part
-                part->set_part_idx(part_idx++);
+                part->set_part_idx(part_idx);
               } else { // origin part
                 ObPartition upd_part;
                 if (OB_FAIL(upd_part.assign(*part))) {
                   LOG_WARN("fail to assign part", KR(ret), KPC(part));
-                } else if (FALSE_IT(upd_part.set_part_idx(part_idx++))) {
+                } else if (FALSE_IT(upd_part.set_part_idx(part_idx))) {
                 } else if (OB_FAIL(upd_table_schema.add_partition(upd_part))) {
                   LOG_WARN("add partition fail", KR(ret), K(upd_part));
                 }
               }
             }
+            part_idx++;
           } else if (tmp_ret != OB_HASH_EXIST) {
             ret = tmp_ret;
             LOG_WARN("fail to call exist_refactored", KR(ret));
