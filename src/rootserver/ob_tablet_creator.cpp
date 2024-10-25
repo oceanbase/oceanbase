@@ -177,8 +177,9 @@ int ObBatchCreateTabletHelper::add_table_schema_(const share::schema::ObTableSch
   uint64_t data_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(table_schema.get_tenant_id(), data_version))) {
     LOG_WARN("failed to get data version", KR(ret), K(table_schema));
-  } else if (data_version < DATA_VERSION_4_2_2_0) {
-    // compatibility with DATA_VERSION_4_2_1.
+  } else if (data_version < MOCK_DATA_VERSION_4_2_1_10) {
+    // compatibility with MOCK_DATA_VERSION_4_2_1_9.
+    // it has been in more than DATA_VERSION_4_2_1_10.
     index = batch_arg_.table_schemas_.count();
     if (OB_FAIL(batch_arg_.table_schemas_.push_back(table_schema))) {
       LOG_WARN("failed to push back table schema", KR(ret), K(table_schema));
