@@ -1591,6 +1591,25 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprArrayRemove::eval_array_remove_vector_ObString,         /* 147 */
   NULL, // ObExprArrayRemove::eval_array_remove_array_vector,            /* 148 */
   NULL, // ObExprArrayDistinct::eval_array_distinct_vector,              /* 149 */
+  NULL, // ObExprDateFormat::calc_date_format_vector,                    /* 150 */
+  NULL, // ObExprYear::calc_year_vector,                                 /* 151 */
+  NULL, // ObExprMonth::calc_month_vector,                               /* 152 */
+  NULL, // ObExprMonthName::calc_month_name_vector,                      /* 153 */
+  NULL, // ObExprHour::calc_hour_vector,                                 /* 154 */
+  NULL, // ObExprMinute::calc_minute_vector,                             /* 155 */
+  NULL, // ObExprDayOfYear::calc_dayofyear_vector,                       /* 156 */
+  NULL, // ObExprDayOfMonth::calc_dayofmonth_vector,                     /* 157 */
+  NULL, // ObExprDayOfWeek::calc_dayofweek_vector,                       /* 158 */
+  NULL, // ObExprDayName::calc_dayname_vector,                           /* 159 */
+  NULL, // ObExprWeek::calc_week_vector,                                 /* 160 */
+  NULL, // ObExprWeekOfYear::calc_weekofyear_vector,                     /* 161 */
+  NULL, // ObExprDate::eval_date_vector,                                 /* 162 */
+  NULL, // ObExprDateDiff::eval_date_diff_vector,                        /* 163 */
+  NULL, // ObExprDateAdd::calc_date_add_vector,                          /* 164 */
+  NULL, // ObExprDateSub::calc_date_sub_vector,                          /* 165 */
+  NULL, // ObExprFromDays::calc_fromdays_vector,                         /* 166 */
+  NULL, // ObExprTimeStampDiff::eval_timestamp_diff_vector,              /* 167 */
+  NULL, // ObExprTimeStampAdd::calc_timestamp_add_vector,                /* 168 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
