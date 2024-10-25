@@ -1514,7 +1514,8 @@ private:
                                          const obrpc::ObIndexArg::IndexActionType &index_action_type,
                                          bool &is_support);
   int check_alter_table_index(const obrpc::ObAlterTableArg &alter_table_arg,
-                              share::ObDDLType &ddl_type);
+                              share::ObDDLType &ddl_type,
+                              bool &has_drop_and_add_index);
   int check_is_change_column_order(const share::schema::ObTableSchema &table_schema,
                                    const share::schema::AlterColumnSchema &alter_column_schema,
                                    bool &is_change_column_order) const;
