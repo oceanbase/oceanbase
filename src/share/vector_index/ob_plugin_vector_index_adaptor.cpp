@@ -192,7 +192,7 @@ int ObVectorQueryAdaptorResultContext::set_vector(int64_t index, const char *ptr
   } else if (index >= get_count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid index.", K(ret), K(index), K(get_count()));
-  } else if (size == 0) {
+  } else if (size == 0 || OB_ISNULL(ptr)) {
     vec_data_.vectors_[index].reset();
   } else if (size / sizeof(float) != get_dim()) {
     ret = OB_ERR_UNEXPECTED;

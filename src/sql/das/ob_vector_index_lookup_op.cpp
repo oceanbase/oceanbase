@@ -679,7 +679,6 @@ int ObVectorIndexLookupOp::prepare_state(const ObVidAdaLookupStatus& cur_state,
       ObObj *vids = nullptr;
       ObSEArray<uint64_t, 1> vector_column_ids;
       int64_t dim = ada_ctx.get_dim();
-      int64_t res_count = 0;
       int64_t vec_cnt = ada_ctx.get_vec_cnt();
 
       if (OB_ISNULL(vids = ada_ctx.get_vids())) {
@@ -695,6 +694,7 @@ int ObVectorIndexLookupOp::prepare_state(const ObVidAdaLookupStatus& cur_state,
           if (ret != OB_ITER_END) {
             LOG_WARN("do aux index lookup failed", K(ret));
           } else {
+            ada_ctx.set_vector(i, nullptr, 0);
             ret = OB_SUCCESS;
           }
         } else if (OB_FAIL(vector_do_index_lookup())) {
@@ -708,6 +708,7 @@ int ObVectorIndexLookupOp::prepare_state(const ObVidAdaLookupStatus& cur_state,
             if (OB_ITER_END != ret) {
               LOG_WARN("failed to get next row from next table.", K(ret));
             } else {
+              ada_ctx.set_vector(i, nullptr, 0);
               ret = OB_SUCCESS;
             }
           } else if (datum_row->get_column_count() != 1) {
@@ -722,7 +723,7 @@ int ObVectorIndexLookupOp::prepare_state(const ObVidAdaLookupStatus& cur_state,
                                                                             vector))) {
             LOG_WARN("failed to get real data.", K(ret));
           } else {
-            ada_ctx.set_vector(res_count++, vector.ptr(), vector.length());
+            ada_ctx.set_vector(i, vector.ptr(), vector.length());
           }
         }
         reuse_scan_param_complete_data();
