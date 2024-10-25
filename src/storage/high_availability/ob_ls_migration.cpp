@@ -2517,7 +2517,8 @@ int ObTabletMigrationTask::process()
   if (OB_SUCC(ret) && is_inited_) {
     SERVER_EVENT_ADD("storage_ha", "check_log_need_rebuild_before_migration_sstable",
                      "tenant_id", ctx_->tenant_id_,
-                     "ls_id", ctx_->arg_.ls_id_.id());
+                     "ls_id", ctx_->arg_.ls_id_.id(),
+                     "tablet_id", copy_tablet_ctx_->tablet_id_.id());
   }
 #endif
       DEBUG_SYNC(BEFORE_MIGRATION_TABLET_COPY_SSTABLE);
