@@ -224,6 +224,17 @@ struct ReadAutoIncSeqOp
   share::ObTabletAutoincSeq &auto_inc_seq_;
 };
 
+struct ReadAutoIncSeqValueOp
+{
+  ReadAutoIncSeqValueOp(uint64_t &auto_inc_seq_value)
+    : auto_inc_seq_value_(auto_inc_seq_value) {}
+  int operator()(const share::ObTabletAutoincSeq &data)
+  {
+    return data.get_autoinc_seq_value(auto_inc_seq_value_);
+  }
+  uint64_t &auto_inc_seq_value_;
+};
+
 struct ReadSplitDataOp
 {
   ReadSplitDataOp(ObTabletSplitMdsUserData &split_data) : split_data_(split_data) {}

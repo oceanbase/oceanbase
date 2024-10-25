@@ -278,7 +278,8 @@ int ObDASMLogDMLIterator::get_next_row(blocksstable::ObDatumRow *&row)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("row cannot be null", KR(ret), KP(row));
   } else {
-    if (OB_FAIL(ObDASUtils::generate_mlog_row(tablet_id_,
+    if (OB_FAIL(ObDASUtils::generate_mlog_row(ls_id_,
+                                              tablet_id_,
                                               dml_param_,
                                               *row,
                                               op_type_,

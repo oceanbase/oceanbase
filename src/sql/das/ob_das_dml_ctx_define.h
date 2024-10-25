@@ -511,11 +511,13 @@ class ObDASMLogDMLIterator : public blocksstable::ObDatumRowIterator
 public:
   // support get next datum row
   ObDASMLogDMLIterator(
+      const share::ObLSID &ls_id,
       const ObTabletID &tablet_id,
       const storage::ObDMLBaseParam &dml_param,
       ObDatumRowIterator *iter,
       ObDASOpType op_type)
-    : tablet_id_(tablet_id),
+    : ls_id_(ls_id),
+      tablet_id_(tablet_id),
       dml_param_(dml_param),
       row_iter_(iter),
       op_type_(op_type),
@@ -530,6 +532,7 @@ public:
   virtual int get_next_row(blocksstable::ObDatumRow *&datum_row) override;
 
 private:
+  const share::ObLSID &ls_id_;
   const ObTabletID &tablet_id_;
   const storage::ObDMLBaseParam &dml_param_;
   ObDatumRowIterator *row_iter_;
