@@ -1617,6 +1617,15 @@ int ObLoadDataSPImpl::log_failed_insert_task(ToolBox &box, ObInsertTask &task)
   return ret;
 }
 
+bool ObLoadDataSPImpl::is_schema_error_need_retry_for_load_data(const int ret_code)
+{
+  return OB_SCHEMA_ERROR == ret_code
+      || OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH == ret_code
+      || OB_ERR_REMOTE_SCHEMA_NOT_FULL == ret_code
+      || OB_SCHEMA_EAGAIN == ret_code
+      || OB_SCHEMA_NOT_UPTODATE == ret_code;
+}
+
 int ObLoadDataSPImpl::handle_returned_insert_task(ObExecContext &ctx,
                                                   ToolBox &box,
                                                   ObInsertTask &insert_task,
@@ -1678,6 +1687,10 @@ int ObLoadDataSPImpl::handle_returned_insert_task(ObExecContext &ctx,
                || is_partition_change_error(err)
                || is_schema_error(err)) {
       task_status = can_retry ? TASK_NEED_RETRY : TASK_FAILED;
+      task_status = is_schema_error_need_retry_for_load_data(err) ? TASK_NEED_RETRY : task_status;
+      if (is_schema_error_need_retry_for_load_data(err) && insert_task.retry_times_ % 1000) {
+        LOG_INFO("load data retry for schema error", K(err));
+      }
       if (OB_FAIL(part_mgr->update_part_location(ctx))) {
         LOG_WARN("fail to update location cache", K(ret));
       }
