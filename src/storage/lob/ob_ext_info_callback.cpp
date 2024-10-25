@@ -307,7 +307,6 @@ int ObExtInfoCbRegister::register_cb(
                                                  seq_no_st_))) {
     LOG_WARN("get and inc tx seq failed", K(ret), K_(seq_no_cnt));
   } else {
-    ObLobExtInfoLogThrottleGuard throttle_guard(timeout, &(lob_mngr->get_ext_info_log_throttle_tool()));
     transaction::ObTxSEQ seq_no_cur = seq_no_st_;
     ObString data;
     int cb_cnt = 0;
