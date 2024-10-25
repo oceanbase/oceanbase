@@ -328,7 +328,9 @@ int ObTenantStorageMetaService::inner_get_blocks_for_tablet_(
   char *buf = nullptr;
   int64_t buf_len = 0;
   int64_t pos = 0;
-  ObSEArray<blocksstable::MacroBlockId, 100> tmp_print_arr;
+  // TODO (gaishun.gs): remove debug log tmp arr once get tablet block ids is stable
+  const int64_t max_print_id_count = 30;
+  ObSEArray<blocksstable::MacroBlockId, max_print_id_count> tmp_print_arr;
 
   if (OB_FAIL(MTL(ObTenantStorageMetaService*)->read_from_disk(tablet_addr, ls_epoch, allocator, buf, buf_len))) {
     LOG_WARN("fail to read tablet buf from disk", K(ret), K(tablet_addr), K(ls_epoch));
@@ -357,7 +359,9 @@ int ObTenantStorageMetaService::inner_get_blocks_for_tablet_(
           } else {
             ret = OB_SUCCESS;
             if (0 != tmp_print_arr.count()) {
+#ifndef OB_BUILD_PACKAGE
               FLOG_INFO("iter get blocks", K(ret), K(ls_epoch), K(tablet_addr), K(is_shared), K(tmp_print_arr));
+#endif
               tmp_print_arr.reuse();
             }
             break;
@@ -376,8 +380,10 @@ int ObTenantStorageMetaService::inner_get_blocks_for_tablet_(
           LOG_WARN("fail to push shared macro id", K(ret), K(block_info));
         } else if (OB_FAIL(tmp_print_arr.push_back(block_info.macro_id_))) {
           LOG_WARN("fail to push shared macro id", K(ret), K(block_info));
-        } else if (30 == tmp_print_arr.count()) {
+        } else if (max_print_id_count == tmp_print_arr.count()) {
+#ifndef OB_BUILD_PACKAGE
           FLOG_INFO("iter get blocks", K(ret), K(ls_epoch), K(tablet_addr), K(is_shared), K(tmp_print_arr));
+#endif
           tmp_print_arr.reuse();
         }
       }
