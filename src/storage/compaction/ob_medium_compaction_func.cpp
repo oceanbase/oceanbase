@@ -1359,6 +1359,7 @@ int ObMediumCompactionScheduleFunc::check_replica_checksum_items(
     error_pairs.set_attr(ObMemAttr(MTL_ID(), "MedCkmErrs"));
 
     // [start_idx, end_idx share same tablet_id
+    bool found_checksum_error = false;
     while (OB_SUCC(ret) && end_idx < count) {
       while (end_idx < count && tablet_id == checksum_items.at(end_idx).tablet_id_) {
         end_idx++;
@@ -1383,6 +1384,9 @@ int ObMediumCompactionScheduleFunc::check_replica_checksum_items(
           }
         }
 
+        if (OB_CHECKSUM_ERROR == check_ret) {
+          found_checksum_error = true;
+        }
         // refresh sliding windows
         if (OB_SUCC(ret) && end_idx < count) {
           start_idx = end_idx;
@@ -1398,6 +1402,10 @@ int ObMediumCompactionScheduleFunc::check_replica_checksum_items(
         LOG_WARN("fail to batch set info status", KR(tmp_ret));
       } else {
         LOG_INFO("succ to batch set info status", K(ret), K(affected_rows), K(error_pairs));
+      }
+
+      if (!is_medium_checker && found_checksum_error) {
+        ret = OB_CHECKSUM_ERROR;
       }
     }
 
@@ -1679,8 +1687,14 @@ int ObMediumCompactionScheduleFunc::check_progressive_merge(
         // start a new round of progressive merge
         is_progressive_merge = true;
 #ifdef ERRSIM
-      LOG_INFO("schema changed", K(progressive_merge_round_on_schema), K(progressive_merge_round_on_sstable),
+        FLOG_INFO("schema changed", K(progressive_merge_round_on_schema), K(progressive_merge_round_on_sstable),
                "tablet_id", last_major->get_key().get_tablet_id());
+        if (OB_UNLIKELY(EN_COMPACTION_SKIP_INIT_SCHEMA_CHANGED)) {
+          is_progressive_merge = false;
+          FLOG_INFO("ERRSIM EN_COMPACTION_SKIP_INIT_SCHEMA_CHANGED", K(progressive_merge_round_on_schema),
+                    K(progressive_merge_round_on_sstable), K(is_progressive_merge),
+                    "tablet_id", last_major->get_key().get_tablet_id());
+        }
 #endif
       } else if (progressive_merge_step_on_sstable < progressive_merge_num_on_schema) {
         // progressive merge has not finished
