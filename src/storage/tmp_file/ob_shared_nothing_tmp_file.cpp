@@ -2830,9 +2830,8 @@ int ObSharedNothingTmpFile::insert_meta_tree_item(const ObTmpFileFlushInfo &info
     }
   }
 
-  // reinsert meta flush node during flushing to allow meta pages to be flushed if
-  // insert_meta_tree_item need tp allocate new meta pages
-  if (!is_deleting_ && OB_ISNULL(meta_flush_node_.get_next())) {
+  // reinsert meta flush node to allow meta pages to be flushed multiple times in one round of flushing
+  if (!is_deleting_ && inner_flush_ctx_.is_meta_finished() && OB_ISNULL(meta_flush_node_.get_next())) {
     if (OB_TMP_FAIL(reinsert_flush_node_(true/*is_meta*/))) {
       LOG_WARN("fail to reinsert flush node", KR(ret), K(fd_), K(info), K(block_index), KPC(this));
     }
