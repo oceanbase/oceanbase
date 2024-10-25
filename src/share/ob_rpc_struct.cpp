@@ -8994,7 +8994,7 @@ OB_DEF_DESERIALIZE(ObDDLBuildSingleReplicaRequestArg)
   }
 
   if (OB_SUCC(ret)) {
-    LST_DO_CODE(is_no_logging_)
+    LST_DO_CODE(OB_UNIS_DECODE, is_no_logging_);
   }
   return ret;
 }
