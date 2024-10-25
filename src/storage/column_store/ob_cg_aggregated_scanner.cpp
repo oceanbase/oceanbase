@@ -118,7 +118,7 @@ int ObCGAggregatedScanner::get_next_rows(uint64_t &count, const uint64_t capacit
   } else if (!need_access_data_ && !need_get_row_ids_) {
     if (OB_FAIL(agg_group_->eval_batch(iter_param_,
                                        access_ctx_,
-                                       0/*col_idx*/,
+                                       0/*col_offset*/,
                                        nullptr/*reader*/,
                                        nullptr/*row_ids*/,
                                        cur_processed_row_count_,
@@ -158,7 +158,7 @@ int ObCGAggregatedScanner::inner_fetch_rows(const int64_t row_cap, const int64_t
   if (access_ctx_->block_row_store_->is_vec2()) {
     micro_scanner_->reserve_reader_memory(false);
     ObAggGroupVec *agg_group_vec = static_cast<ObAggGroupVec *>(agg_group_);
-    projected = agg_group_vec->check_need_project(micro_scanner_->get_reader(), row_ids_, row_cap);
+    projected = agg_group_vec->check_need_project(micro_scanner_->get_reader(), 0/*col_offset*/, row_ids_, row_cap);
     if (!projected) {
       LOG_DEBUG("check whether need project in aggregate", K_(need_access_data), K_(need_get_row_ids));
     } else if (OB_FAIL(micro_scanner_->get_next_rows(*iter_param_->out_cols_project_,
@@ -175,7 +175,7 @@ int ObCGAggregatedScanner::inner_fetch_rows(const int64_t row_cap, const int64_t
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(micro_scanner_->get_aggregate_result(0/*col_idx*/, row_ids_, row_cap, projected/*reserve_memory*/, *agg_group_))) {
+  } else if (OB_FAIL(micro_scanner_->get_aggregate_result(0/*col_offset*/, row_ids_, row_cap, projected/*reserve_memory*/, *agg_group_))) {
     LOG_WARN("Fail to get aggregate result", K(ret));
   }
   return ret;
@@ -205,7 +205,6 @@ int ObCGAggregatedScanner::check_need_access_data(const ObTableIterParam &iter_p
       } else {
         need_access_data_ |= agg_group_vec->need_access_data_;
         need_get_row_ids_ |= agg_group_vec->need_get_row_ids_;
-        agg_group_vec->set_cg_offset_and_index();
         agg_group_ = agg_group_vec;
       }
     }
