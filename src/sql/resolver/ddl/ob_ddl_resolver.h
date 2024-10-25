@@ -688,7 +688,8 @@ protected:
   int resolve_auto_partition(ObPartitionedStmt *stmt, ParseNode *node,
                              ObTableSchema &table_schema);
   int resolve_presetting_partition_key(ParseNode *node, share::schema::ObTableSchema &table_schema);
-  int try_set_auto_partition_by_config(common::ObIArray<obrpc::ObCreateIndexArg> &index_arg_list,
+  int try_set_auto_partition_by_config(const ParseNode *node,
+                                       common::ObIArray<obrpc::ObCreateIndexArg> &index_arg_list,
                                        ObTableSchema &table_schema);
   int check_only_modify_auto_partition_attr(ObPartitionedStmt *stmt, ParseNode *node,
                                             ObTableSchema &table_schema, bool &is_only_modify_auto_part_attr);

@@ -7957,6 +7957,11 @@ PARTITION BY RANGE '(' expr ')' partition_options opt_range_partition_info
   dup_expr_string($$, result, @5.first_column, @5.last_column);
 }
 |
+PARTITION BY RANGE COLUMNS'(' ')' opt_partitions opt_auto_split_tablet_size_option
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RANGE_COLUMNS_PARTITION, 7, NULL, NULL, NULL, $7, NULL, NULL, $8);
+}
+|
 PARTITION BY RANGE COLUMNS '(' column_name_list ')' partition_options opt_range_partition_info
 {
   ParseNode *params = NULL;

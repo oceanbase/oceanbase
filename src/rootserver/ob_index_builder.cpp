@@ -1734,7 +1734,7 @@ int ObIndexBuilder::set_global_index_auto_partition_infos(const share::schema::O
 {
   int ret = OB_SUCCESS;
   const ObPartitionOption& index_part_option = schema.get_part_option();
-
+  ObPartitionFuncType part_type = PARTITION_FUNC_TYPE_MAX;
   if (OB_UNLIKELY(!data_schema.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(data_schema), KR(ret));
@@ -1754,9 +1754,9 @@ int ObIndexBuilder::set_global_index_auto_partition_infos(const share::schema::O
                                                 KR(ret), K(schema), K(data_schema));
       } else {
         const ObRowkeyInfo &presetting_partition_keys = schema.get_index_info();
-        ObPartitionFuncType part_type = presetting_partition_keys.get_size() > 1 ?
-                                              ObPartitionFuncType::PARTITION_FUNC_TYPE_RANGE_COLUMNS :
-                                              ObPartitionFuncType::PARTITION_FUNC_TYPE_RANGE;
+        part_type = presetting_partition_keys.get_size() > 1 ?
+                          ObPartitionFuncType::PARTITION_FUNC_TYPE_RANGE_COLUMNS :
+                          ObPartitionFuncType::PARTITION_FUNC_TYPE_RANGE;
         for (int64_t i = 0; enable_auto_split && OB_SUCC(ret) && i < presetting_partition_keys.get_size(); ++i) {
           const ObRowkeyColumn *partition_column = presetting_partition_keys.get_column(i);
           if (OB_ISNULL(partition_column)) {
@@ -1796,7 +1796,7 @@ int ObIndexBuilder::set_global_index_auto_partition_infos(const share::schema::O
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("current data version doesn't support to split partition", KR(ret), K(data_version));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "data version lower than 4.4 is");
-    } else if (OB_FAIL(schema.enable_auto_partition(auto_part_size))) {
+    } else if (OB_FAIL(schema.enable_auto_partition(auto_part_size, part_type))) {
       LOG_WARN("fail to enable auto partition", KR(ret));
     }
   }

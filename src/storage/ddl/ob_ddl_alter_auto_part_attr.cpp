@@ -270,7 +270,7 @@ int ObAlterAutoPartAttrOp::alter_table_auto_part_attr_if_need(
       }
       // enable auto split
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(table_schema.enable_auto_partition(alter_part_option.get_auto_part_size()))) {
+        if (OB_FAIL(table_schema.enable_auto_partition(alter_part_option.get_auto_part_size(), alter_part_option.get_part_func_type()))) {
           LOG_WARN("fail to enable auto partition", K(ret), K(alter_part_option));
         } else if (OB_FAIL(table_schema.check_enable_split_partition(true))) { // check origin table is satisfied auto partition conditions before enabled
           LOG_WARN("fail to check validity for auto-partition", K(ret), K(table_schema));
@@ -518,6 +518,7 @@ int ObAlterAutoPartAttrOp::extract_potential_partition_func_type(
     ObPartitionFuncType &part_func_type)
 {
   int ret = OB_SUCCESS;
+  bool is_range_col = false;
   if (part_func_expr.empty()) {
     if (table_schema.is_index_table()) {  // index table
       ObArray<ObString> rowkey_columns;
@@ -525,19 +526,23 @@ int ObAlterAutoPartAttrOp::extract_potential_partition_func_type(
         LOG_WARN("fail to extract index rowkey column cnt", K(ret));
       } else if (rowkey_columns.count() > 1) {
         part_func_type = PARTITION_FUNC_TYPE_RANGE_COLUMNS;
+      } else if (OB_FAIL(table_schema.is_range_col_part_type(is_range_col))) {
+        LOG_WARN("fail to check is first part key range col", K(ret));
+      } else if (is_range_col) {
+        part_func_type = PARTITION_FUNC_TYPE_RANGE_COLUMNS;
       } else {
         part_func_type = PARTITION_FUNC_TYPE_RANGE;
-        // TODO: if partition key column type is double or float,
-        // partition func type should change to PARTITION_FUNC_TYPE_RANGE_COLUMNS later
       }
     } else if (table_schema.is_user_table()) {    // user table
       const ObRowkeyInfo &part_keys = table_schema.get_rowkey_info();
       if (part_keys.get_size() > 1) {
         part_func_type = PARTITION_FUNC_TYPE_RANGE_COLUMNS;
+      } else if (OB_FAIL(table_schema.is_range_col_part_type(is_range_col))) {
+        LOG_WARN("fail to check is first part key range col", K(ret));
+      } else if (is_range_col) {
+        part_func_type = PARTITION_FUNC_TYPE_RANGE_COLUMNS;
       } else {
         part_func_type = PARTITION_FUNC_TYPE_RANGE;
-        // TODO: if partition key column type is double or float,
-        // partition func type should change to PARTITION_FUNC_TYPE_RANGE_COLUMNS later
       }
     }
   } else { // part_func_expr is not empty
@@ -547,10 +552,12 @@ int ObAlterAutoPartAttrOp::extract_potential_partition_func_type(
       LOG_WARN("fail to split func expr", K(ret), K(tmp_part_func_expr));
     } else if (expr_strs.count() > 1) { // multi partition column
       part_func_type = PARTITION_FUNC_TYPE_RANGE_COLUMNS;
+    } else if (OB_FAIL(table_schema.is_range_col_part_type(is_range_col))) {
+      LOG_WARN("fail to check is first part key range col", K(ret));
+    } else if (is_range_col) {
+      part_func_type = PARTITION_FUNC_TYPE_RANGE_COLUMNS;
     } else {
       part_func_type = PARTITION_FUNC_TYPE_RANGE;
-      // TODO: if partition key column type is double or float,
-      // partition func type should change to PARTITION_FUNC_TYPE_RANGE_COLUMNS later
     }
   }
   return ret;
@@ -574,11 +581,11 @@ int ObAlterAutoPartAttrOp::update_global_auto_split_attr(
   int ret = OB_SUCCESS;
   bool enable_auto_split = alter_part_option.get_auto_part();
   ObPartitionOption &new_index_option = new_index_schema.get_part_option();
+  ObPartitionFuncType part_func_type;
   if (new_index_schema.get_part_level() == PARTITION_LEVEL_ZERO) {
     if (enable_auto_split) {
       if (new_index_option.get_part_func_expr_str().empty()) {
         ObString empty_part_func_expr;
-        ObPartitionFuncType part_func_type;
         if (OB_FAIL(extract_potential_partition_func_type(new_index_schema, empty_part_func_expr, part_func_type))) {
           LOG_WARN("fail to extract partition func type", K(ret), K(new_index_schema));
         }
@@ -597,6 +604,8 @@ int ObAlterAutoPartAttrOp::update_global_auto_split_attr(
       } else if (!new_index_schema.is_range_part()) {
         // none range part table is not support, here we not set auto split attr
         enable_auto_split = false;
+      } else {
+        part_func_type = new_index_option.get_part_func_type();
       }
     }
   } else { // not support
@@ -604,7 +613,7 @@ int ObAlterAutoPartAttrOp::update_global_auto_split_attr(
   }
   if (OB_SUCC(ret)) {
     if (enable_auto_split) {
-      if (OB_FAIL(new_index_schema.enable_auto_partition(alter_part_option.get_auto_part_size()))) {
+      if (OB_FAIL(new_index_schema.enable_auto_partition(alter_part_option.get_auto_part_size(), part_func_type))) {
         LOG_WARN("fail to enable auto partition", K(ret), K(alter_part_option));
       }
     } else {

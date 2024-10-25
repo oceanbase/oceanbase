@@ -3803,10 +3803,18 @@ int ObDDLService::create_hidden_table_with_pk_changed(
       // of the data_table will always be "current" primary key.
       // thus, when modify primary key, we need to check whether the part_func_type is need to be modified
       const bool is_single_pk_column_new = new_table_schema.get_rowkey_column_num() == 1;
-      ObPartitionFuncType part_func_type = PARTITION_FUNC_TYPE_MAX;
+      ObPartitionFuncType part_func_type = PARTITION_FUNC_TYPE_RANGE;
       if (is_single_pk_column_new) {
-        if (OB_FAIL(new_table_schema.detect_part_func_type(part_func_type))) {
-          LOG_WARN("check part func type failed", K(ret), K(new_table_schema));
+        ObObjMeta type;
+        ObRowkeyColumn row_key_col;
+        const common::ObRowkeyInfo &row_key_info = new_table_schema.get_rowkey_info();
+        if (OB_FAIL(row_key_info.get_column(0/*since there is only one row key, we only need to check the first one*/, row_key_col))) {
+          LOG_WARN("get row key column failed", K(ret), K(row_key_info));
+        } else {
+          type = row_key_col.get_meta_type();
+        }
+        if (ObResolverUtils::is_partition_range_column_type(type.get_type())) {
+          part_func_type = PARTITION_FUNC_TYPE_RANGE_COLUMNS;
         }
       } else {
         part_func_type = PARTITION_FUNC_TYPE_RANGE_COLUMNS;

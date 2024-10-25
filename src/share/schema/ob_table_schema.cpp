@@ -1893,7 +1893,7 @@ int ObTableSchema::assign_partition_schema_without_auto_part_attr(const ObTableS
   return ret;
 }
 
-int ObTableSchema::enable_auto_partition(const int64_t auto_part_size)
+int ObTableSchema::enable_auto_partition(const int64_t auto_part_size, const ObPartitionFuncType &part_func_type)
 {
   int ret = OB_SUCCESS;
   if (is_partitioned_table()) {
@@ -1901,56 +1901,59 @@ int ObTableSchema::enable_auto_partition(const int64_t auto_part_size)
       LOG_WARN("fail to enable auto partition", KR(ret), K(auto_part_size));
     }
   } else {
-    ObPartitionFuncType part_func_type;
-    if (OB_FAIL(detect_part_func_type(part_func_type))) {
+    ObPartitionFuncType part_type = part_func_type;
+    if (OB_FAIL(detect_auto_part_func_type(part_type))) {
       LOG_WARN("fail to check part func type", K(ret));
-    } else if (OB_FAIL(part_option_.enable_auto_partition(auto_part_size, part_func_type))) {
+    } else if (OB_FAIL(part_option_.enable_auto_partition(auto_part_size, part_type))) {
       LOG_WARN("fail to enable auto partition", KR(ret), K(auto_part_size));
     }
   }
   return ret;
 }
 
-int ObTableSchema::detect_part_func_type(ObPartitionFuncType &part_func_type)
+int ObTableSchema::detect_auto_part_func_type(ObPartitionFuncType &part_func_type)
 {
   int ret = OB_SUCCESS;
-  part_func_type = PARTITION_FUNC_TYPE_MAX;
   const ObString &part_expr = part_option_.get_part_func_expr_str();
-  static const char DELIMITER = ',';
-  bool is_range_columns = !part_expr.empty() ?
-                          part_expr.find(DELIMITER) != nullptr :
-                          is_index_table() ? get_index_column_num() > 1 :
-                                             get_rowkey_column_num() > 1;
-  if (!is_range_columns && part_expr.empty()) {
-    /*in case of create table t1(a timestamp, b VARCHAR(150), c int, d VARCHAR(4000), primary key(a)) partition by range ()*/
-    ObObjMeta type;
-    if (!is_index_table()) {
-      ObRowkeyColumn row_key_col;
-      const common::ObRowkeyInfo &row_key_info = get_rowkey_info();
-      if (OB_FAIL(row_key_info.get_column(0/*since there is only one row key, we only need to check the first one*/, row_key_col))) {
-        LOG_WARN("get row key column failed", K(ret), K(row_key_info));
-      } else {
-        type = row_key_col.get_meta_type();
-      }
+  if (part_expr.empty()) {
+    bool is_range_column_type = false;
+    if (OB_FAIL(is_range_col_part_type(is_range_column_type))) {
+      LOG_WARN("failed to check if first part key is range column type", K(ret), K(part_expr));
+    } else if (is_range_column_type) {
+      /*in case of create table t1(a timestamp, b VARCHAR(150), c int, d VARCHAR(4000), primary key(a)) partition by range ()*/
+      part_func_type = PARTITION_FUNC_TYPE_RANGE_COLUMNS;
     } else {
-      ObIndexColumn index_key_col;
-      const common::ObIndexInfo &index_key_info = get_index_info();
-      if (OB_FAIL(index_key_info.get_column(0/*since there is only one index key, we only need to check the first one*/, index_key_col))) {
-        LOG_WARN("get index key column failed", K(ret), K(index_key_info));
-      } else {
-        type = index_key_col.get_meta_type();
-      }
-    }
-    if OB_FAIL(ret) {
-    } else {
-       is_range_columns = ObResolverUtils::is_partition_range_column_type(type.get_type());
+      part_func_type = PARTITION_FUNC_TYPE_RANGE;
     }
   }
-
-  if (OB_SUCC(ret)) {
-    part_func_type = is_range_columns ?
-                     PARTITION_FUNC_TYPE_RANGE_COLUMNS :
-                     PARTITION_FUNC_TYPE_RANGE;
+  return ret;
+}
+//this function can only be used for auto split table check
+int ObTableSchema::is_range_col_part_type(bool &is_range_column_type) const
+{
+  int ret = OB_SUCCESS;
+  is_range_column_type = false;
+  ObObjMeta type;
+  if (!is_index_table()) {
+    ObRowkeyColumn row_key_col;
+    const common::ObRowkeyInfo &row_key_info = get_rowkey_info();
+    if (row_key_info.get_size() > 1) {
+      is_range_column_type = true;
+    } else if (OB_FAIL(row_key_info.get_column(0/*since there is only one row key, we only need to check the first one*/, row_key_col))) {
+      LOG_WARN("get row key column failed", K(ret), K(row_key_info));
+    } else if (ObResolverUtils::is_partition_range_column_type(row_key_col.get_meta_type().get_type())) {
+      is_range_column_type = true;
+    }
+  } else {
+    ObIndexColumn index_key_col;
+    const common::ObIndexInfo &index_key_info = get_index_info();
+    if (index_key_info.get_size() > 1) {
+      is_range_column_type = true;
+    } else if (OB_FAIL(index_key_info.get_column(0/*since there is only one index key, we only need to check the first one*/, index_key_col))) {
+      LOG_WARN("get index key column failed", K(ret), K(index_key_info));
+    } else if (ObResolverUtils::is_partition_range_column_type(index_key_col.get_meta_type().get_type())) {
+      is_range_column_type = true;
+    }
   }
   return ret;
 }
