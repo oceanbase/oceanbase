@@ -316,9 +316,9 @@ private:
 
   int create_result_iterator(ObTableQueryAsyncSession* query_session, table::ObTableQueryResultIterator*& result_iter, uint64_t table_id);
 
-  int generate_multi_result_iterator(ObArray<table::ObTableQueryResultIterator*>& array);
+  int generate_multi_result_iterator(common::ObIArray<table::ObTableQueryResultIterator*>& array);
 
-  int generate_merge_result_iterator(const ObArray<table::ObTableQueryResultIterator*>& array);
+  int generate_merge_result_iterator();
 
   int execute_multi_cf_query();
   int execute_query();

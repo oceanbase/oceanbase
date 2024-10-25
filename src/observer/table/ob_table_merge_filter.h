@@ -26,7 +26,7 @@ template <typename Row, typename Compare>
 class ObMergeTableQueryResultIterator : public ObTableQueryResultIterator
 {
 public:
-  ObMergeTableQueryResultIterator(common::ObIAllocator* allocator, const ObTableQuery& query, table::ObTableQueryResult &one_result);
+  ObMergeTableQueryResultIterator(common::ObIAllocator& allocator, const ObTableQuery& query, table::ObTableQueryResult &one_result);
   TO_STRING_KV(KP_(one_result), K_(binary_heap));
   virtual ~ObMergeTableQueryResultIterator()
   {
@@ -35,9 +35,13 @@ public:
         binary_heap_.at(i)->~ObRowCacheIterator();
       }
     }
+
+    for (int j = 0; j < inner_result_iters_.count(); j++) {
+      ObTableQueryUtils::destroy_result_iterator(inner_result_iters_.at(j));
+    }
   }
 
-  int init(const ObArray<ObTableQueryResultIterator*>& result_iters, Compare* compare);
+  int init(Compare* compare);
 
   virtual int get_next_result(ObTableQueryResult *&one_result) override;
 
@@ -48,6 +52,7 @@ public:
   virtual void set_one_result(ObTableQueryResult *result) { one_result_ = result; }
 
   int seek(const ObString& key);
+  common::ObIArray<ObTableQueryResultIterator *>& get_inner_result_iterators() { return inner_result_iters_; }
 
 private:
 
@@ -60,7 +65,7 @@ private:
   virtual hfilter::Filter *get_filter() const override { return nullptr; }
 
 private:
-  int build_heap(const ObArray<ObTableQueryResultIterator*>& result_iters);
+  int build_heap(const common::ObIArray<ObTableQueryResultIterator*>& result_iters);
 
 private:
   struct ObRowCacheIterator
@@ -75,9 +80,6 @@ private:
     {
       if (OB_NOT_NULL(iterable_result_)) {
         iterable_result_->~ObTableQueryIterableResult();
-      }
-      if (OB_NOT_NULL(result_iter_)) {
-        result_iter_->~ObTableQueryResultIterator();
       }
     }
     int init(ObTableQueryResultIterator *result_iter);
@@ -101,18 +103,19 @@ private:
     int error_code_;
   };
 private:
-  common::ObIAllocator* allocator_;
+  common::ObIAllocator& allocator_;
   HeapCompare compare_;
 
   table::ObTableQueryResult* one_result_;
 
   common::ObBinaryHeap<ObRowCacheIterator*, HeapCompare, 64> binary_heap_;
+  common::ObSEArray<ObTableQueryResultIterator *, 8> inner_result_iters_;
 
   bool is_inited_;
 };
 
 template <typename Row, typename Compare>
-ObMergeTableQueryResultIterator<Row, Compare>::ObMergeTableQueryResultIterator(common::ObIAllocator* allocator,
+ObMergeTableQueryResultIterator<Row, Compare>::ObMergeTableQueryResultIterator(common::ObIAllocator& allocator,
                                                                               const ObTableQuery& query,
                                                                               table::ObTableQueryResult &one_result)
   : ObTableQueryResultIterator(&query),
@@ -121,6 +124,7 @@ ObMergeTableQueryResultIterator<Row, Compare>::ObMergeTableQueryResultIterator(c
     binary_heap_(compare_),
     is_inited_(false)
 {
+  inner_result_iters_.set_attr(ObMemAttr(MTL_ID(), "MergeInnerIters"));
 }
 
 
@@ -145,7 +149,7 @@ bool ObMergeTableQueryResultIterator<Row, Compare>::HeapCompare::operator()(cons
 }
 
 template <typename Row, typename Compare>
-int ObMergeTableQueryResultIterator<Row, Compare>::init(const ObArray<ObTableQueryResultIterator*>& result_iters, Compare* compare)
+int ObMergeTableQueryResultIterator<Row, Compare>::init(Compare* compare)
 {
   int ret = common::OB_SUCCESS;
   if (IS_INIT) {
@@ -154,8 +158,8 @@ int ObMergeTableQueryResultIterator<Row, Compare>::init(const ObArray<ObTableQue
     ret = common::OB_INVALID_ARGUMENT;
   } else {
     compare_.compare_ = compare;
-    if (result_iters.count() >= 1 && OB_FAIL(build_heap(result_iters))) {
-      SERVER_LOG(WARN, "fail to build heap", K(ret), K(result_iters.count()));
+    if (inner_result_iters_.count() >= 1 && OB_FAIL(build_heap(inner_result_iters_))) {
+      SERVER_LOG(WARN, "fail to build heap", K(ret), K(inner_result_iters_.count()));
     } else {
       is_inited_ = true;
     }
@@ -164,11 +168,12 @@ int ObMergeTableQueryResultIterator<Row, Compare>::init(const ObArray<ObTableQue
 }
 
 template <typename Row, typename Compare>
-int ObMergeTableQueryResultIterator<Row, Compare>::build_heap(const ObArray<ObTableQueryResultIterator*>& result_iters)
+int ObMergeTableQueryResultIterator<Row, Compare>::build_heap(const ObIArray<ObTableQueryResultIterator*>& result_iters)
 {
   int ret = common::OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < result_iters.count(); ++i) {
-    ObRowCacheIterator* cache_iterator = OB_NEWx(ObRowCacheIterator, allocator_);
+    bool in_heap = false;
+    ObRowCacheIterator* cache_iterator = OB_NEWx(ObRowCacheIterator, &allocator_);
     ObTableQueryResultIterator* iter = result_iters.at(i);
     if (OB_ISNULL(cache_iterator)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -179,12 +184,15 @@ int ObMergeTableQueryResultIterator<Row, Compare>::build_heap(const ObArray<ObTa
       } else {
         SERVER_LOG(WARN, "fail to init cache_iter", K(ret));
       }
-      cache_iterator->~ObRowCacheIterator();
-    } else if (OB_FAIL(binary_heap_.push(cache_iterator))) {
-      cache_iterator->~ObRowCacheIterator();
+    } else if (OB_FAIL(binary_heap_.push(cache_iterator, in_heap))) {
       SERVER_LOG(WARN, "fail to push heap", K(ret));
     } else if (OB_FAIL(compare_.get_error_code())) {
       SERVER_LOG(WARN, "fail to compare items", K(ret));
+    }
+
+    if (in_heap == false && OB_NOT_NULL(cache_iterator)) {
+      cache_iterator->~ObRowCacheIterator();
+      allocator_.free(cache_iterator);
     }
   }
   return ret;
