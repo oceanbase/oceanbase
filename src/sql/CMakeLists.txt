@@ -1177,7 +1177,6 @@ ob_set_subtarget(ob_sql resolver_ddl
 
 ob_set_subtarget(ob_sql resolver_dml
   resolver/dml/ob_aggr_expr_push_up_analyzer.cpp
-  resolver/dml/ob_any_value_checker.cpp
   resolver/dml/ob_column_namespace_checker.cpp
   resolver/dml/ob_default_value_utils.cpp
   resolver/dml/ob_del_upd_resolver.cpp
