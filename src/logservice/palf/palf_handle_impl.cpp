@@ -3697,7 +3697,7 @@ int PalfHandleImpl::fetch_log_from_storage_(const common::ObAddr &server,
   } else if (true == need_check_prev_log && prev_log_info.lsn_ != prev_lsn) {
     if (is_dest_in_memberlist) {
       ret = OB_ERR_UNEXPECTED;
-      PALF_LOG(ERROR, "the LSN between each replica is not same, unexpected error!!!", K(ret),
+      PALF_LOG(WARN, "the LSN between each replica is not same, unexpected error!!!", K(ret),
           K_(palf_id), K(fetch_start_lsn), K(prev_log_info));
     } else {
       PALF_LOG(INFO, "the LSN between leader and non paxos member is not same, do not fetch log",
