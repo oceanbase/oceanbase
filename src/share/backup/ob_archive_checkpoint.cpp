@@ -337,6 +337,23 @@ int ObDestRoundCheckpointer::gen_new_round_info_(
   return ret;
 }
 
+void ObDestRoundCheckpointer::fill_force_stop_msg_(ObTenantArchiveRoundAttr &new_round_info, const int ret_code) const
+{
+  int ret = OB_SUCCESS;
+  ObSqlString comment;
+  const char *err_str = NULL;
+  if (OB_SUCCESS == ret_code) {
+  } else if (!allow_force_stop_) {
+  } else if (!new_round_info.comment_.is_empty()) {
+    // have set before, do nothing
+  } else if (FALSE_IT(err_str = common::ob_strerror(ret_code))) {
+  } else if (OB_FAIL(comment.append_fmt("force stop, result: %d(%s)", ret_code, err_str))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else if (OB_FAIL(new_round_info.comment_.assign(comment.ptr()))) {
+    LOG_WARN("failed to assign comment", K(ret), K(comment));
+  }
+}
+
 
 int ObDestRoundCheckpointer::checkpoint_(const ObTenantArchiveRoundAttr &old_round_info, const ObDestRoundSummary &summary,
     ObDestRoundCheckpointer::Result &result) const
@@ -347,8 +364,9 @@ int ObDestRoundCheckpointer::checkpoint_(const ObTenantArchiveRoundAttr &old_rou
     LOG_WARN("failed to generate pieces", K(ret), K(old_round_info), K(summary));
   } else if (OB_FAIL(round_checkpoint_cb_(round_handler_->get_sql_proxy(), old_round_info, result.new_round_info_))) {
     if (result.new_round_info_.state_.is_stop() && allow_force_stop_) {
+      fill_force_stop_msg_(result.new_round_info_, ret);
+      LOG_ERROR("allow_force_stop is set, ignore round_checkpoint_cb error", K(ret), K(old_round_info), K(summary), K(result));
       ret = OB_SUCCESS;
-      LOG_INFO("allow_force_stop is set, ignore round_checkpoint_cb error", K(old_round_info), K(summary), K(result));
     } else {
       LOG_WARN("failed to call round_checkpoint_cb", K(ret), K(old_round_info), K(summary), K(result));
     }
@@ -389,8 +407,9 @@ int ObDestRoundCheckpointer::generate_pieces_(const ObTenantArchiveRoundAttr &ol
         LOG_WARN("failed to generate one piece", K(ret), K(old_round_info), K(result), K(summary), K(piece_id));
       } else if (OB_FAIL(piece_generated_cb_(round_handler_->get_sql_proxy(), old_round_info, result, piece))) {
         if (result.new_round_info_.state_.is_stop() && allow_force_stop_) {
+          fill_force_stop_msg_(result.new_round_info_, ret);
+          LOG_ERROR("allow_force_stop is set, ignore piece_generated_cb_ error", K(ret), K(old_round_info), K(piece));
           ret = OB_SUCCESS;
-          LOG_INFO("allow_force_stop is set, ignore piece_generated_cb_ error", K(old_round_info), K(piece));
         } else {
           LOG_WARN("call piece_generated_cb_ failed", K(ret), K(old_round_info), K(piece));
         }
