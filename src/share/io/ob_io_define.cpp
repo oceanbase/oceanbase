@@ -2436,7 +2436,7 @@ int ObMClockQueue::pop_phyqueue(ObIORequest *&req, int64_t &deadline_ts)
             if (OB_ISNULL(next_req)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("get null next_req", KP(next_req));
-            } else if (OB_FAIL(io_clock->calc_phyqueue_clock(tmp_phy_queue, *next_req))) {
+            } else if (OB_SUCCESS != io_clock->calc_phyqueue_clock(tmp_phy_queue, *next_req)) {
               LOG_WARN("calc phyqueue clock failed", K(ret), KPC(next_req));
             } else if (FALSE_IT(time_guard.click("R_calc_clock"))) {
             }
@@ -2545,8 +2545,8 @@ int ObMClockQueue::pop_with_ready_queue(const int64_t current_ts, ObIORequest *&
               LOG_WARN("calc phyqueue clock failed", K(ret));
             } else if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
               LOG_WARN("adjust reservation clock failed", K(tmp_ret), KPC(next_req));
-	    }
-	  }
+          }
+        }
         }
       }
       int tmp_ret = push_phyqueue(tmp_phy_queue);
