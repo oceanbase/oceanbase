@@ -25,6 +25,9 @@
 #include "sql/ob_result_set.h"
 #include "sql/ob_spi.h"
 #include "lib/xml/ob_binary_aggregate.h"
+#include "share/schema/ob_schema_getter_guard.h"
+#include "sql/engine/expr/ob_expr.h"
+#include "sql/session/ob_sql_session_info.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/sys_package/ob_sdo_geometry.h"
 #endif

@@ -16,12 +16,13 @@
 
 #include "share/ob_lob_access_utils.h"
 #include "sql/engine/expr/ob_expr_util.h"
-#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {
 namespace sql
 {
+
+class ObBasicSessionInfo;
 
 // wrapper class to handle sql expr string/text type result
 template <typename VectorType>

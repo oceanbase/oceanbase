@@ -18,9 +18,9 @@
 #include "sql/engine/expr/ob_expr_cmp_func.h"
 #include "share/datum/ob_datum_cmp_func_def.h"
 #include "share/datum/ob_datum_funcs.h"
-#include "sql/engine/expr/ob_expr_operator.h"
+// #include "sql/engine/expr/ob_expr_operator.h"
 #include "sql/engine/expr/ob_batch_eval_util.h"
-#include "share/ob_lob_access_utils.h"
+// #include "share/ob_lob_access_utils.h"
 #include "lib/udt/ob_array_type.h"
 #include "sql/engine/ob_subschema_ctx.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
@@ -231,6 +231,44 @@ struct ObRelationalStrFunc<true, CS_TYPE, WITH_END_SPACE, CMP_OP>
   // }
 };
 
+template<typename T, bool WITH_END_SPACE, ObCmpOp CMP_OP>
+struct ObNewRelationalStrFunc
+{
+  static OB_NOINLINE int eval(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+  {
+    int ret = OB_SUCCESS;
+    ObDatum *l = NULL;
+    ObDatum *r = NULL;
+    bool contain_null = false;
+    int cmp_ret = 0;
+    if (OB_FAIL(ObRelationalExprOperator::get_comparator_operands(
+                expr, ctx, l, r, expr_datum, contain_null))) {
+      LOG_WARN("failed to eval args", K(ret));
+    } else if (!contain_null) {
+      if (OB_ISNULL(l) || OB_ISNULL(r)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid operands", K(ret), K(l), K(r));
+      } else if (OB_FAIL(T::cmp(*l, *r, cmp_ret,
+                                expr.args_[0]->datum_meta_.cs_type_, WITH_END_SPACE))) {
+        LOG_WARN("datum compare failed", K(*l), K(*r));
+      } else {
+        expr_datum.set_int(get_cmp_ret<CMP_OP>(cmp_ret));
+      }
+    }
+    return ret;
+  }
+};
+
+template <ObCollationType cs, bool WITH_END_SPACE, ObCmpOp CMP_OP>
+struct ObStrRelationEvalWrap {
+  static int eval(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+  {
+    return ObNewRelationalStrFunc<datum_cmp::ObDatumStrCmpImpl,
+           WITH_END_SPACE,
+           CMP_OP>::eval(expr, ctx, expr_datum);
+  }
+};
+
 template<bool, ObScale SCALE, ObCmpOp CMP_OP>
 struct ObRelationFixedDoubleFunc{};
 
@@ -282,6 +320,16 @@ struct ObRelationalTextFunc<true, CS_TYPE, WITH_END_SPACE, CMP_OP>
   }
 };
 
+template <ObCollationType cs, bool WITH_END_SPACE, ObCmpOp CMP_OP>
+struct ObTextRelationEvalWrap {
+  static int eval(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+  {
+    return ObNewRelationalStrFunc<datum_cmp::ObDatumTextCmpImpl,
+           WITH_END_SPACE,
+           CMP_OP>::eval(expr, ctx, expr_datum);
+  }
+};
+
 template<bool, ObCollationType CS_TYPE, bool WITH_END_SPACE, ObCmpOp CMP_OP>
 struct ObRelationalTextStrFunc{};
 
@@ -305,6 +353,17 @@ struct ObRelationalTextStrFunc<true, CS_TYPE, WITH_END_SPACE, CMP_OP>
   }
 };
 
+template <ObCollationType cs, bool WITH_END_SPACE, ObCmpOp CMP_OP>
+struct ObTextStrRelationEvalWrap {
+  static int eval(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+  {
+    return ObNewRelationalStrFunc<datum_cmp::ObDatumTextStringCmpImpl,
+           WITH_END_SPACE,
+           CMP_OP>::eval(expr, ctx, expr_datum);
+  }
+};
+
+
 template<bool, ObCollationType CS_TYPE, bool WITH_END_SPACE, ObCmpOp CMP_OP>
 struct ObRelationalStrTextFunc{};
 
@@ -327,6 +386,17 @@ struct ObRelationalStrTextFunc<true, CS_TYPE, WITH_END_SPACE, CMP_OP>
     return def_relational_eval_func<DatumCmp>(expr, ctx, expr_datum);
   }
 };
+
+template <ObCollationType cs, bool WITH_END_SPACE, ObCmpOp CMP_OP>
+struct ObStrTextRelationEvalWrap {
+  static int eval(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+  {
+    return ObNewRelationalStrFunc<datum_cmp::ObDatumStringTextCmpImpl,
+           WITH_END_SPACE,
+           CMP_OP>::eval(expr, ctx, expr_datum);
+  }
+};
+
 
 template<bool, bool HAS_LOB_HEADER, ObCmpOp CMP_OP>
 struct ObRelationalJsonFunc{};
@@ -753,6 +823,7 @@ struct ObRelationalVecFunc
   }
 };
 
+
 extern ObExpr::EvalBatchFunc EVAL_BATCH_NULL_EXTEND_CMP_FUNCS[CO_MAX];
 extern ObExpr::EvalBatchFunc EVAL_BATCH_STR_CMP_FUNCS[CO_MAX];
 extern ObExpr::EvalBatchFunc EVAL_BATCH_TEXT_CMP_FUNCS[CO_MAX];
@@ -906,6 +977,9 @@ struct TCExprCmpFuncIniter
   }
 };
 
+// macro to help use the old string relation eval functions, which are always inline
+// we choose ObNewRelationalStrFunc here to compile faster.
+#define USE_OLD_STR_RELATION_EVAL_FUNC 0
 template<int X, int Y>
 struct TCExprCmpFuncIniter<X, Y, false>: public ExprDummyIniter{};
 
@@ -915,16 +989,23 @@ using TCExprCmpIniter = TCExprCmpFuncIniter<X, Y, datum_cmp::ObDatumTCCmp<static
 template<int X, int Y>
 struct StrExprFuncIniter
 {
+#if USE_OLD_STR_RELATION_EVAL_FUNC
   using Def = datum_cmp::ObDatumStrCmp<static_cast<ObCollationType>(X), false>;
   template<bool WITH_END_SPACE>
   using EvalCmp = ObRelationalStrFunc<Def::defined_,
         static_cast<ObCollationType>(X),
         WITH_END_SPACE,
         static_cast<ObCmpOp>(Y)>;
+#else
+  template<bool WITH_END_SPACE>
+  using EvalCmp = ObStrRelationEvalWrap<static_cast<ObCollationType>(X),
+        WITH_END_SPACE,
+        static_cast<ObCmpOp>(Y)>;
+#endif
   static void init_array()
   {
-    EVAL_STR_CMP_FUNCS[X][Y][0] = Def::defined_ ? EvalCmp<0>::eval : NULL;
-    EVAL_STR_CMP_FUNCS[X][Y][1] = Def::defined_ ? EvalCmp<1>::eval : NULL;
+    EVAL_STR_CMP_FUNCS[X][Y][0] = EvalCmp<0>::eval;
+    EVAL_STR_CMP_FUNCS[X][Y][1] = EvalCmp<1>::eval;
   }
 };
 
@@ -937,16 +1018,23 @@ struct StrExprFuncIniter<CS_TYPE_MAX, Y>
 template<int X, int Y>
 struct TextExprFuncIniter
 {
+#if USE_OLD_STR_RELATION_EVAL_FUNC
   using Def = datum_cmp::ObDatumTextCmp<static_cast<ObCollationType>(X), false>;
   template<bool WITH_END_SPACE>
   using EvalCmp = ObRelationalTextFunc<Def::defined_,
         static_cast<ObCollationType>(X),
         WITH_END_SPACE,
         static_cast<ObCmpOp>(Y)>;
+#else
+  template<bool WITH_END_SPACE>
+  using EvalCmp = ObTextRelationEvalWrap<static_cast<ObCollationType>(X),
+        WITH_END_SPACE,
+        static_cast<ObCmpOp>(Y)>;
+#endif
   static void init_array()
   {
-    EVAL_TEXT_CMP_FUNCS[X][Y][0] = Def::defined_ ? EvalCmp<0>::eval : NULL;
-    EVAL_TEXT_CMP_FUNCS[X][Y][1] = Def::defined_ ? EvalCmp<1>::eval : NULL;
+    EVAL_TEXT_CMP_FUNCS[X][Y][0] = EvalCmp<0>::eval;
+    EVAL_TEXT_CMP_FUNCS[X][Y][1] = EvalCmp<1>::eval;
   }
 };
 
@@ -959,18 +1047,27 @@ struct TextExprFuncIniter<CS_TYPE_MAX, Y>
 template<int X, int Y>
 struct TextStrExprFuncIniter
 {
+#if USE_OLD_STR_RELATION_EVAL_FUNC
   using Def = datum_cmp::ObDatumTextStringCmp<static_cast<ObCollationType>(X), false>;
   template<bool WITH_END_SPACE>
   using EvalCmp = ObRelationalTextStrFunc<Def::defined_,
         static_cast<ObCollationType>(X),
         WITH_END_SPACE,
         static_cast<ObCmpOp>(Y)>;
+#else
+  template<bool WITH_END_SPACE>
+  using EvalCmp = ObTextStrRelationEvalWrap<static_cast<ObCollationType>(X),
+        WITH_END_SPACE,
+        static_cast<ObCmpOp>(Y)>;
+#endif
   static void init_array()
   {
-    EVAL_TEXT_STR_CMP_FUNCS[X][Y][0] = Def::defined_ ? EvalCmp<0>::eval : NULL;
-    EVAL_TEXT_STR_CMP_FUNCS[X][Y][1] = Def::defined_ ? EvalCmp<1>::eval : NULL;
+    EVAL_TEXT_STR_CMP_FUNCS[X][Y][0] = EvalCmp<0>::eval;
+    EVAL_TEXT_STR_CMP_FUNCS[X][Y][1] = EvalCmp<1>::eval;
   }
 };
+
+#undef USE_OLD_STR_RELATION_EVAL_FUNC
 
 template<int Y>
 struct TextStrExprFuncIniter<CS_TYPE_MAX, Y>
@@ -981,16 +1078,23 @@ struct TextStrExprFuncIniter<CS_TYPE_MAX, Y>
 template<int X, int Y>
 struct StrTextExprFuncIniter
 {
+#if USE_OLD_STR_RELATION_EVAL_FUNC
   using Def = datum_cmp::ObDatumStringTextCmp<static_cast<ObCollationType>(X), false>;
   template<bool WITH_END_SPACE>
   using EvalCmp = ObRelationalStrTextFunc<Def::defined_,
         static_cast<ObCollationType>(X),
         WITH_END_SPACE,
         static_cast<ObCmpOp>(Y)>;
+#else
+  template<bool WITH_END_SPACE>
+  using EvalCmp = ObStrTextRelationEvalWrap<static_cast<ObCollationType>(X),
+        WITH_END_SPACE,
+        static_cast<ObCmpOp>(Y)>;
+#endif
   static void init_array()
   {
-    EVAL_STR_TEXT_CMP_FUNCS[X][Y][0] = Def::defined_ ? EvalCmp<0>::eval : NULL;
-    EVAL_STR_TEXT_CMP_FUNCS[X][Y][1] = Def::defined_ ? EvalCmp<1>::eval : NULL;
+    EVAL_STR_TEXT_CMP_FUNCS[X][Y][0] = EvalCmp<0>::eval;
+    EVAL_STR_TEXT_CMP_FUNCS[X][Y][1] = EvalCmp<1>::eval;
   }
 };
 

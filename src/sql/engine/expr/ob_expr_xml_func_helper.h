@@ -26,8 +26,20 @@ using namespace oceanbase::common;
 
 namespace oceanbase
 {
+namespace share
+{
+namespace schema
+{
+class ObSchemaGetterGuard;
+}
+}
+
 namespace sql
 {
+
+class ObExpr;
+class ObEvalCtx;
+class ObSQLSessionInfo;
 
 enum ObGetXmlBaseType {
   OB_IS_REPARSE,
@@ -112,7 +124,7 @@ public:
                                      sql::ObExecContext *exec_context,
                                      bool is_ps_protocol,
                                      const ColumnsFieldIArray *fields = NULL,
-                                     ObSchemaGetterGuard *schema_guard = NULL);
+                                     share::schema::ObSchemaGetterGuard *schema_guard = NULL);
   static uint64_t get_tenant_id(ObSQLSessionInfo *session);
   static int append_header_in_front(ObIAllocator &allocator, ObXmlDocument *&root, ObIMulModeBase *node);
   static int cast_to_res(ObIAllocator &allocator, ObString &xml_content, const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);

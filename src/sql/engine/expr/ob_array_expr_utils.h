@@ -18,14 +18,13 @@
 #include "lib/string/ob_string.h"
 #include "lib/udt/ob_array_type.h"
 #include "sql/engine/expr/ob_expr.h" // for ObExpr
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
 namespace sql
 {
+class ObExecContext;
 
 struct ObVectorCastInfo
 {
