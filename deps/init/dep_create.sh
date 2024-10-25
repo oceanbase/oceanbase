@@ -7,6 +7,7 @@ PWD="$(cd $(dirname $0); pwd)"
 
 OS_ARCH="$(uname -m)" || exit 1
 OS_RELEASE="0"
+AL3_RELEASE="0"
 
 if [[ ! -f /etc/os-release ]]; then
   echo "[ERROR] os release info not found" 1>&2 && exit 1
@@ -32,6 +33,12 @@ function compat_centos7() {
   OS_RELEASE=7
 }
 
+function compat_alinux3() {
+  echo_log "[NOTICE] '$PNAME' is compatible with Alinux3, use al8 dependencies list"
+  AL3_RELEASE="1"
+  OS_RELEASE=8
+}
+
 function not_supported() {
   echo_log "[ERROR] '$PNAME' is not supported yet."
 }
@@ -52,7 +59,7 @@ function get_os_release() {
   if [[ "${OS_ARCH}x" == "x86_64x" ]]; then
     case "$ID" in
       alinux)
-        version_ge "3.0" && compat_centos9 && return
+        version_ge "3.0" && compat_alinux3 && return
         version_ge "2.1903" && compat_centos7 && return
         ;;
       alios)
@@ -138,6 +145,9 @@ function get_os_release() {
         version_ge "22.04" && compat_centos9 && return
         version_ge "16.04" && compat_centos7 && return
         ;;
+      alinux)
+        version_ge "3.0" && compat_alinux3 && return
+        ;;
     esac
   elif [[ "${OS_ARCH}x" == "sw_64x" ]]; then
     case "$ID" in
@@ -151,7 +161,12 @@ function get_os_release() {
 
 get_os_release || exit 1
 
-OS_TAG="el$OS_RELEASE.$OS_ARCH"
+if [[ "${AL3_RELEASE}x" == "1x" ]]; then
+    OS_TAG="al$OS_RELEASE.$OS_ARCH"
+else
+    OS_TAG="el$OS_RELEASE.$OS_ARCH"
+fi
+
 DEP_FILE="oceanbase.${OS_TAG}.deps"
 
 MD5=`md5sum ${DEP_FILE} | cut -d" " -f1`
@@ -274,11 +289,12 @@ do
     while read -r line
     do
         [[ "$line" == "" ]] && continue
-        pkg=${line%%\ *}
-        target_name="default"
+	pkg=${line%%\ *}
+	target_name="default"
         temp=$(echo "$line" | grep -Eo "target=(\S*)")
         [[ "$temp" != "" ]] && target_name=${temp#*=}
-        if [[ -f "${TARGET_DIR_3RD}/pkg/${pkg}" ]]; then
+
+	if [[ -f "${TARGET_DIR_3RD}/pkg/${pkg}" ]]; then
             echo_log "find package <${pkg}> in cache"
         else
             echo_log "downloading package <${pkg}>"
