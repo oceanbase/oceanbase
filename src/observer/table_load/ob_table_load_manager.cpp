@@ -473,7 +473,7 @@ DEFINE_OBJ_GC_IMPL(ObTableLoadClientTask, client_task);
 int ObTableLoadManager::check_all_obj_removed(bool &all_removed)
 {
   int ret = OB_SUCCESS;
-  all_removed = false;
+  all_removed = true;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadManager not init", KR(ret), KP(this));
@@ -497,7 +497,7 @@ int ObTableLoadManager::check_all_obj_removed(bool &all_removed)
 int ObTableLoadManager::check_all_obj_released(bool &all_released)
 {
   int ret = OB_SUCCESS;
-  all_released = false;
+  all_released = true;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadManager not init", KR(ret), KP(this));
