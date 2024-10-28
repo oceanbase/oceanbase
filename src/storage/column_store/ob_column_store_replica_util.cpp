@@ -334,7 +334,9 @@ int ObCSReplicaUtil::init_cs_replica_tablet_status(
         }
       }
       ObTabletObjLoadHelper::free(arena_allocator, storage_schema);
-      LOG_INFO("[CS-Replica] Finish init cs replica tablet status", K(ret), K(ls), K(tablet), K(cs_replica_status), K(need_procss_cs_replica), KPC(sstable));
+      if (!is_normal_status(cs_replica_status)) {
+        LOG_INFO("[CS-Replica] Finish init cs replica tablet status", K(ret), K(ls), K(tablet), K(cs_replica_status), K(need_procss_cs_replica), KPC(sstable));
+      }
     }
   }
 

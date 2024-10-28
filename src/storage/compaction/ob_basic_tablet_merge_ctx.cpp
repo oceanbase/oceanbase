@@ -68,7 +68,8 @@ ObStaticMergeParam::ObStaticMergeParam(ObTabletMergeDagParam &dag_param)
     multi_version_column_descs_(),
     pre_warm_param_(),
     tablet_schema_guard_(),
-    tablet_transfer_seq_(ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ)
+    tablet_transfer_seq_(ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ),
+    co_base_snapshot_version_(0)
 {
   merge_scn_.set_max();
 }
@@ -90,6 +91,7 @@ void ObStaticMergeParam::reset()
   tablet_schema_guard_.reset();
   encoding_granularity_ = 0;
   tablet_transfer_seq_ = ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ;
+  co_base_snapshot_version_ = 0;
 }
 
 bool ObStaticMergeParam::is_valid() const
@@ -114,6 +116,9 @@ bool ObStaticMergeParam::is_valid() const
   } else if (GCTX.is_shared_storage_mode() && ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ == tablet_transfer_seq_) {
     bret = false;
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "tablet_transfer_seq in ss mode should not be invalid", K(tablet_transfer_seq_));
+  } else if (co_base_snapshot_version_ < 0) {
+    bret = false;
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "co_base_snapshot_version is invalid", K_(co_base_snapshot_version));
   } else {
     bret = true;
   }
@@ -285,6 +290,15 @@ int ObStaticMergeParam::cal_major_merge_param(
       // ATTENTION! Critical diagnostic log, DO NOT CHANGE!!!
       LOG_INFO("set merge_level to MACRO_BLOCK_MERGE_LEVEL", K_(is_schema_changed), K(force_full_merge),
         K(is_full_merge_), K(full_stored_col_cnt), K(sstable_meta_hdl.get_sstable_meta().get_column_count()));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (is_convert_co_major_merge(get_merge_type())) {
+      co_base_snapshot_version_ = version_range_.snapshot_version_;
+    } else if (is_major_merge_type(get_merge_type())) {
+      co_base_snapshot_version_ = sstable_meta_hdl.get_sstable_meta().get_basic_meta().get_co_base_snapshot_version();
+    } else {
+      co_base_snapshot_version_ = 0;
     }
   }
   return ret;

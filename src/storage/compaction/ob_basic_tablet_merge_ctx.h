@@ -65,7 +65,7 @@ public:
       K_(sstable_logic_seq), K_(tables_handle), K_(is_rebuild_column_store), K_(is_schema_changed), K_(is_tenant_major_merge),
       K_(is_cs_replica), K_(read_base_version), K_(merge_scn), K_(need_parallel_minor_merge),
       KP_(schema), "multi_version_column_descs_cnt", multi_version_column_descs_.count(),
-      K_(ls_handle), K_(snapshot_info), K_(is_backfill), K_(tablet_schema_guard), K_(tablet_transfer_seq));
+      K_(ls_handle), K_(snapshot_info), K_(is_backfill), K_(tablet_schema_guard), K_(tablet_transfer_seq), K_(co_base_snapshot_version));
 
   ObTabletMergeDagParam &dag_param_;
   bool is_full_merge_; // full merge or increment merge
@@ -100,6 +100,7 @@ public:
   share::ObPreWarmerParam pre_warm_param_;
   storage::ObCSReplicaStorageSchemaGuard tablet_schema_guard_; // original storage schema on tablet, used only in cs replcia
   int64_t tablet_transfer_seq_; // only used in shared_storage mode, used to init statis_desc;
+  int64_t co_base_snapshot_version_; // only used for column store replica, and firstly set in convert co merge
   DISALLOW_COPY_AND_ASSIGN(ObStaticMergeParam);
 };
 
