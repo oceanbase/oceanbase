@@ -15975,32 +15975,8 @@ int ObDDLService::recover_restore_table_ddl_task(
       } else {
         ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
         bool is_dest_table_column_store = false;
-
-        if (tenant_data_version >= DATA_VERSION_4_3_3_0) {
-          const share::schema::ObTenantSchema *dst_tenant_schema = nullptr;
-          if (OB_FAIL(dst_tenant_schema_guard->get_tenant_info(dst_tenant_id, dst_tenant_schema))) {
-            LOG_WARN("fail to get tenant schema", K(ret), K(dst_tenant_id));
-          } else if (OB_UNLIKELY(OB_ISNULL(dst_tenant_schema) || !dst_tenant_schema->is_valid())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("tenant schema is null or invalid", K(ret), K(dst_tenant_id), KPC(dst_tenant_schema));
-          } else {
-            common::ObArray<share::ObZoneReplicaAttrSet> zone_locality;
-            if (OB_FAIL(dst_tenant_schema->get_zone_replica_attr_array(zone_locality))) {
-              LOG_WARN("fail to get locality from schema", K(ret), KPC(dst_tenant_schema));
-            } else {
-              for (int64_t i = 0; OB_SUCC(ret) && i < zone_locality.count(); ++i) {
-                const share::ObZoneReplicaAttrSet &this_set = zone_locality.at(i);
-                if (0 != this_set.get_columnstore_replica_num()) {
-                  ret = OB_NOT_SUPPORTED;
-                  LOG_WARN("not supported to retore table with tenant with column store replica", K(ret), K(arg));
-                  LOG_USER_ERROR(OB_NOT_SUPPORTED, "Can not restore table with tenant with C-Replica");
-                }
-              }
-            }
-          }
-        }
-
-        if (FAILEDx(dst_tenant_trans.start(sql_proxy_, dst_tenant_id, refreshed_dst_tenant_version))) {
+        ObString index_name("");
+        if (OB_FAIL(dst_tenant_trans.start(sql_proxy_, dst_tenant_id, refreshed_dst_tenant_version))) {
           LOG_WARN("start transaction failed", K(ret), K(dst_tenant_id), K(refreshed_dst_tenant_version));
         } else if (OB_FAIL(dst_table_schema.assign(arg.target_schema_))) {
           LOG_WARN("assign failed", K(ret), K(session_id), K(arg));
@@ -16011,7 +15987,7 @@ int ObDDLService::recover_restore_table_ddl_task(
           LOG_WARN("not supported to retore table with column store", K(ret), K(arg));
         } else if (OB_FAIL(create_user_hidden_table(*src_table_schema, dst_table_schema, nullptr/*sequence_ddl_arg*/,
           false/*bind_tablets*/, *src_tenant_schema_guard, *dst_tenant_schema_guard, ddl_operator,
-          dst_tenant_trans, allocator, tenant_data_version))) {
+          dst_tenant_trans, allocator, tenant_data_version, index_name, true /*ignore_cs_replica*/))) {
           LOG_WARN("create user hidden table failed", K(ret), K(arg), K(tenant_data_version));
         } else {
           ObPrepareAlterTableArgParam param;
@@ -19346,7 +19322,8 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
                                            ObMySQLTransaction &trans,
                                            ObIAllocator &allocator,
                                            const uint64_t tenant_data_version,
-                                           const ObString &index_name/*default ""*/)
+                                           const ObString &index_name/*default ""*/,
+                                           const bool ignore_cs_replica/*= false*/)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = hidden_table_schema.get_tenant_id();
@@ -19490,7 +19467,8 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
               schemas,
               ls_id_array,
               tenant_data_version,
-              need_create_empty_majors/*need_create_empty_major_sstable*/))) {
+              need_create_empty_majors/*need_create_empty_major_sstable*/,
+              ignore_cs_replica))) {
         LOG_WARN("create table tablets failed", K(ret), K(hidden_table_schema));
       } else if (bind_tablets && OB_FAIL(table_creator.add_create_bind_tablets_of_hidden_table_arg(
               orig_table_schema,

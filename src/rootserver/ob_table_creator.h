@@ -52,7 +52,8 @@ public:
       const common::ObIArray<const share::schema::ObTableSchema*> &schemas,
       const common::ObIArray<share::ObLSID> &ls_id_array,
       const uint64_t tenant_data_version,
-      const common::ObIArray<bool> &need_create_empty_majors);
+      const common::ObIArray<bool> &need_create_empty_majors,
+      const bool ignore_cs_replica = false);
 
   // create tablets for local aux tables(include local_index/aux_lob_table), which are belong to a data table.
   //
@@ -86,7 +87,8 @@ private:
       const share::schema::ObTableSchema *data_table_schema,
       const common::ObIArray<share::ObLSID> &ls_id_array,
       const uint64_t tenant_data_version,
-      const common::ObIArray<bool> &need_create_empty_majors);
+      const common::ObIArray<bool> &need_create_empty_majors,
+      const bool ignore_cs_replica = false);
   int generate_create_tablet_arg_(
       const common::ObIArray<const share::schema::ObTableSchema*> &schemas,
       const ObTableSchema &data_table_schema,
