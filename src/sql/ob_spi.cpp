@@ -7923,7 +7923,21 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
       OX (value = calc_array->at(0));
       CK (!value.is_pl_extend());
       OX (value.set_param_meta());
-      OZ (spi_set_variable(ctx, static_cast<const ObSqlExpression*>(result_expr), &value, false, true));
+      if (OB_SUCC(ret)) {
+        // save session value
+        SMART_VAR(sql::ObSQLSessionInfo::StmtSavedValue, session_value) {
+          int64_t nested_count = 0;
+          OX (nested_count = ctx->exec_ctx_->get_my_session()->get_nested_count());
+          OZ (ctx->exec_ctx_->get_my_session()->save_session(session_value));
+          OZ (spi_set_variable(ctx, static_cast<const ObSqlExpression*>(result_expr), &value, false, true));
+          int tmp_ret = OB_SUCCESS;
+          if (OB_SUCCESS != (tmp_ret = ctx->exec_ctx_->get_my_session()->restore_session(session_value))) {
+            LOG_WARN("failed to restore session", K(tmp_ret));
+            ret = COVER_SUCC(tmp_ret);
+          }
+          ctx->exec_ctx_->get_my_session()->set_nested_count(nested_count);
+        }
+      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Invalid result address",
