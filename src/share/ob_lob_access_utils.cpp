@@ -1154,7 +1154,7 @@ int ObTextStringResult::fill_inrow_templob_header(const int64_t inrow_data_len, 
   if (OB_ISNULL(buf) || (buf_len == 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Lob: try to fill inrow templob header with empty buffer",
-             K(ret), K(inrow_data_len), K(buf), K(buf_len));
+             K(ret), K(inrow_data_len), KP(buf), K(buf_len));
   } else if (inrow_data_len <= OB_MAX_LONGTEXT_LENGTH - MAX_TMP_LOB_HEADER_LEN) {
     ObLobLocatorV2 locator(buf, static_cast<uint32_t>(buf_len), true);
     // temp lob in oracle mode not need extern neither, for it does not have rowkey
@@ -1171,13 +1171,13 @@ int ObTextStringResult::fill_inrow_templob_header(const int64_t inrow_data_len, 
                              0,
                              0,
                              false))) {
-      LOG_WARN("Lob: fill temp lob locator failed", K(ret), K(inrow_data_len), K(buf), K(buf_len));
+      LOG_WARN("Lob: fill temp lob locator failed", K(ret), K(inrow_data_len), KP(buf), K(buf_len));
     } else if (OB_FAIL((locator.set_payload_data(&lob_common, empty_str)))) {
-      LOG_WARN("Lob: set temp lob locator payload failed", K(ret), K(inrow_data_len), K(buf), K(buf_len));
+      LOG_WARN("Lob: set temp lob locator payload failed", K(ret), K(inrow_data_len), KP(buf), K(buf_len));
     }
   } else { // oversized
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("Lob: not support length bigger than 512M", K(ret), K(inrow_data_len), K(buf), K(buf_len));
+    LOG_WARN("Lob: not support length bigger than 512M", K(ret), K(inrow_data_len), KP(buf), K(buf_len));
   }
   return ret;
 }
