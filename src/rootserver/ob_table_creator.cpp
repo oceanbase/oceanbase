@@ -150,7 +150,8 @@ int ObTableCreator::add_create_tablets_of_tables_arg(
                     const common::ObIArray<const share::schema::ObTableSchema*> &schemas,
                     const common::ObIArray<share::ObLSID> &ls_id_array,
                     const uint64_t tenant_data_version,
-                    const common::ObIArray<bool> &need_create_empty_majors)
+                    const common::ObIArray<bool> &need_create_empty_majors,
+                    const bool ignore_cs_replica /*=false*/)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(tenant_data_version <= 0
@@ -183,7 +184,7 @@ int ObTableCreator::add_create_tablets_of_tables_arg(
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(add_create_tablets_of_tables_arg_(
-          schemas, NULL, ls_id_array, tenant_data_version, need_create_empty_majors))) {
+          schemas, NULL, ls_id_array, tenant_data_version, need_create_empty_majors, ignore_cs_replica))) {
     LOG_WARN("fail to add_create_tablets_of_tables_arg_", KR(ret), K(schemas));
   }
   return ret;
@@ -197,7 +198,8 @@ int ObTableCreator::add_create_tablets_of_tables_arg_(
                     const share::schema::ObTableSchema *data_table_schema,
                     const common::ObIArray<share::ObLSID> &ls_id_array,
                     const uint64_t tenant_data_version,
-                    const common::ObIArray<bool> &need_create_empty_majors)
+                    const common::ObIArray<bool> &need_create_empty_majors,
+                    const bool ignore_cs_replica /*=false*/)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -272,7 +274,8 @@ int ObTableCreator::add_create_tablets_of_tables_arg_(
     }
 
     // try init, but ignore ret. not blocking create tablet if query inner_table failed or other error
-    if (OB_TMP_FAIL(cs_replica_mgr.try_init(tenant_id_, ls_id_array_))) {
+    if (ignore_cs_replica) {
+    } else if (OB_TMP_FAIL(cs_replica_mgr.try_init(tenant_id_, ls_id_array_))) {
       LOG_WARN("fail to init cs_replica_mgr", KR(tmp_ret));
     }
 
@@ -377,7 +380,7 @@ int ObTableCreator::add_create_tablets_of_tables_arg_(
                  KR(ret), K_(tenant_id), K(schema_version));
       }
       int64_t end_time = ObTimeUtility::current_time();
-      LOG_INFO("finish create_tablet_to_table_history", KR(ret), K(table_schema.get_tenant_id()),
+      LOG_INFO("finish create_tablet_to_table_history", KR(ret), K(table_schema.get_tenant_id()), K(ignore_cs_replica),
                                                         K(table_schema.get_table_id()), "cost_ts", end_time - start_time);
     }
   }
