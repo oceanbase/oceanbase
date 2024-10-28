@@ -198,7 +198,8 @@ int FakeObTableScanRange::do_split_datum_range(int64_t split_start_val, int64_t 
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(split_query_.get_tablet_split_range(*tablet_handle_.get_obj(), datum_utils_, split_info_, allocator_, datum_range_))) {
+    bool is_empty_range = false;
+    if (OB_FAIL(split_query_.get_tablet_split_range(*tablet_handle_.get_obj(), datum_utils_, split_info_, allocator_, datum_range_, is_empty_range))) {
       STORAGE_LOG(WARN, "fail to do split range", K(ret));
     }
   }
