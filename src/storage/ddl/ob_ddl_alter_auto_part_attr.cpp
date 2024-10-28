@@ -287,6 +287,10 @@ int ObAlterAutoPartAttrOp::alter_table_auto_part_attr_if_need(
       if (OB_FAIL(alter_global_indexes_auto_part_attribute_online(  // update index
           alter_part_option, table_schema, schema_guard, ddl_operator, trans))) {
         LOG_WARN("fail to alter global index auto part property.", K(ret), K(table_schema));
+      // for example, enable_auto_partition may change part_func_type if data table is not partitioned,
+      // so need to sync aux tables' partition option
+      } else if (!table_schema.is_partitioned_table() && OB_FAIL(sync_aux_tables_partition_option(table_schema, schema_guard, ddl_operator, trans))) {
+        LOG_WARN("failed to sync aux tables partition schema", K(ret));
       } else if (OB_FAIL(ddl_operator.update_partition_option(trans, table_schema, alter_table_arg.ddl_stmt_str_))) {  // update main table
         LOG_WARN("fail to update partition option", K(ret), K(table_schema));
       }
@@ -436,6 +440,75 @@ int ObAlterAutoPartAttrOp::alter_global_indexes_auto_part_attribute_online(
               table_schema, index_table_id, index_type, &ddl_stmt_str, trans))) {
             LOG_WARN("fail to update index type", K(ret), K(index_type));
           }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAlterAutoPartAttrOp::sync_aux_tables_partition_option(
+    const ObTableSchema &data_table_schema,
+    ObSchemaGetterGuard &schema_guard,
+    rootserver::ObDDLOperator &ddl_operator,
+    ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  const int64_t tenant_id = data_table_schema.get_tenant_id();
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+  ObSEArray<uint64_t, 20> aux_table_ids;
+
+  // 1. gather local aux table schemas, see also ObDDLService::generate_tables_array
+  if (OB_FAIL(data_table_schema.get_simple_index_infos(simple_index_infos))) {
+    LOG_WARN("get_simple_index_infos failed", KR(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+    if (OB_FAIL(aux_table_ids.push_back(simple_index_infos.at(i).table_id_))) {
+      LOG_WARN("fail to push back index table id", KR(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    const uint64_t mtid = data_table_schema.get_aux_lob_meta_tid();
+    const uint64_t ptid = data_table_schema.get_aux_lob_piece_tid();
+    if (!((mtid != OB_INVALID_ID && ptid != OB_INVALID_ID) || (mtid == OB_INVALID_ID && ptid == OB_INVALID_ID))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Expect meta tid and piece tid both valid or both invalid", KR(ret), K(mtid), K(ptid));
+    } else if (OB_INVALID_ID != mtid &&
+        OB_FAIL(aux_table_ids.push_back(mtid))) {
+      LOG_WARN("fail to push back lob meta tid", KR(ret), K(mtid));
+    } else if (OB_INVALID_ID != ptid &&
+        OB_FAIL(aux_table_ids.push_back(ptid))) {
+      LOG_WARN("fail to push back lob piece tid", KR(ret), K(ptid));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    const uint64_t mlog_tid = data_table_schema.get_mlog_tid();
+    if ((OB_INVALID_ID != mlog_tid)
+        && OB_FAIL(aux_table_ids.push_back(mlog_tid))) {
+      LOG_WARN("failed to push back materialized view log tid", KR(ret), K(mlog_tid));
+    }
+  }
+
+  // 2. update inner table
+  for (int64_t i = 0; OB_SUCC(ret) && i < aux_table_ids.count(); ++i) {
+    const uint64_t aux_table_id = aux_table_ids.at(i);
+    const ObTableSchema *aux_table_schema = nullptr;
+    const ObString ddl_stmt_str("");
+    if (OB_FAIL(schema_guard.get_table_schema(tenant_id, aux_table_id, aux_table_schema))) {
+      LOG_WARN("fail to get to_table_schema schema", K(ret), K(aux_table_id));
+    } else if (OB_ISNULL(aux_table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema is null", K(ret), K(aux_table_id));
+    } else if (aux_table_schema->is_index_local_storage()
+        || aux_table_schema->is_aux_lob_table()
+        || aux_table_schema->is_mlog_table()) {
+      HEAP_VAR(ObTableSchema, new_aux_table_schema) {
+        if (OB_FAIL(new_aux_table_schema.assign(*aux_table_schema))) {
+          LOG_WARN("assign index_schema failed", K(ret));
+        } else if (OB_FAIL(new_aux_table_schema.assign_partition_schema(data_table_schema))) {
+          LOG_WARN("fail to assign partition schema", K(data_table_schema), KR(ret));
+        } else if (OB_FAIL(ddl_operator.update_partition_option(trans, new_aux_table_schema, ddl_stmt_str))) {
+          LOG_WARN("fail to update partition option.", K(ret), K(new_aux_table_schema));
         }
       }
     }

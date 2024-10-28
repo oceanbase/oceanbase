@@ -67,6 +67,11 @@ private:
       ObSchemaGetterGuard &schema_guard,
       rootserver::ObDDLOperator &ddl_operator,
       ObMySQLTransaction &trans);
+  int sync_aux_tables_partition_option(
+      const ObTableSchema &table_schema,
+      ObSchemaGetterGuard &schema_guard,
+      rootserver::ObDDLOperator &ddl_operator,
+      ObMySQLTransaction &trans);
   int check_auto_part_table_unique_index(
       const ObTableSchema &table_schema,
       ObString &alter_table_part_func_expr,
