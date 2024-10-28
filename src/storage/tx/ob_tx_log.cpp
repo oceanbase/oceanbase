@@ -656,7 +656,7 @@ int ObTxRedoLog::set_mutator_buf(char *buf)
   int ret = OB_SUCCESS;
   if (nullptr == buf || mutator_size_ >= 0) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(ERROR, "invalid mutator buf", K(buf), K(mutator_size_));
+    TRANS_LOG(ERROR, "invalid mutator buf", KP(buf), K(mutator_size_));
   } else {
     mutator_buf_ = buf;
   }
@@ -670,7 +670,7 @@ int ObTxRedoLog::set_mutator_size(const int64_t size, const bool after_fill)
       || (after_fill && mutator_size_ < size)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(ERROR, "invalid argument when set mutator size", K(after_fill), K(size),
-               K(mutator_size_), K(mutator_buf_));
+               K(mutator_size_), KP(mutator_buf_));
   } else if (!after_fill) {
     int len = 0;
     SERIALIZE_SIZE_HEADER(UNIS_VERSION);
@@ -1393,7 +1393,7 @@ int ObTxLogBlock::init_for_replay(const char *buf, const int64_t &size)
       || OB_ISNULL(buf)
       || size <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(ERROR, "invalid argument", K(buf), K(size), K(*this));
+    TRANS_LOG(ERROR, "invalid argument", KP(buf), K(size), K(*this));
   } else {
     replay_buf_ = buf;
     len_ = size;
@@ -1415,7 +1415,7 @@ int ObTxLogBlock::init_for_replay(const char *buf, const int64_t &size, int skip
     ret = OB_INIT_TWICE;
   } else if (OB_ISNULL(buf) || size <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(ERROR, "invalid argument", K(buf), K(size), K(*this));
+    TRANS_LOG(ERROR, "invalid argument", KP(buf), K(size), K(*this));
   } else {
     replay_buf_ = buf;
     len_ = size;
