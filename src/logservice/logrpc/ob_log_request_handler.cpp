@@ -480,18 +480,27 @@ int LogRequestHandler::handle_sync_request<LogGetCkptReq, LogGetCkptResp>(
   return ret;
 }
 
+#ifdef OB_BUILD_SHARED_STORAGE
 template <>
 int LogRequestHandler::handle_request<LogSyncBaseLSNReq>(const LogSyncBaseLSNReq &req)
 {
   int ret = common::OB_SUCCESS;
   if (OB_UNLIKELY(!req.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(ERROR, "Invalid argument!!!", K(req));
+    CLOG_LOG(ERROR, "Invalid argument!!!", K(req));
+  } else if (!GCTX.is_shared_storage_mode()) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(ERROR, "unexcepted error, mustn't use this interface in non-shared storage mode, ", K(req));
   } else {
+    LSN end_lsn;
+    LSN base_lsn;
     palf::PalfHandleGuard palf_handle_guard;
     if (OB_FAIL(get_palf_handle_guard_(req.ls_id_.id(), palf_handle_guard))) {
       CLOG_LOG(WARN, "get_palf_handle_guard_ failed", K(req));
-    } else if (OB_FAIL(palf_handle_guard.advance_base_lsn(req.base_lsn_))) {
+    } else if (OB_FAIL(palf_handle_guard.get_end_lsn(end_lsn))) {
+      CLOG_LOG(WARN, "get_end_lsnf failed", KR(ret), K(req));
+    } else if (FALSE_IT(base_lsn = MIN(end_lsn, req.base_lsn_))) {
+    } else if (OB_FAIL(palf_handle_guard.advance_base_lsn(base_lsn))) {
       PALF_LOG(WARN, "PalfHandleImpl update_base_lsn failed", K(req));
     } else {
       PALF_LOG(TRACE, "handle sync_base_lsn success", K(req));
@@ -500,7 +509,6 @@ int LogRequestHandler::handle_request<LogSyncBaseLSNReq>(const LogSyncBaseLSNReq
   return ret;
 }
 
-#ifdef OB_BUILD_SHARED_STORAGE
 template <>
 int LogRequestHandler::handle_request<LogAcquireRebuildInfoMsg>(const LogAcquireRebuildInfoMsg &req)
 {
