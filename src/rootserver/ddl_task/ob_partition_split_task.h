@@ -128,7 +128,8 @@ public:
       K(data_tablet_compaction_scn_), K(index_tablet_compaction_scns_),
       K(lob_tablet_compaction_scns_), K(freeze_progress_status_inited_),
       K(compact_progress_status_inited_), K(write_split_log_status_inited_),
-      K_(data_tablet_parallel_rowkey_list), K_(index_tablet_parallel_rowkey_list));
+      K_(data_tablet_parallel_rowkey_list), K_(index_tablet_parallel_rowkey_list),
+      K_(min_split_start_scn));
 protected:
   virtual void clear_old_status_context() override;
 private:
@@ -250,6 +251,7 @@ private:
   int64_t tablet_size_;
   common::ObSEArray<blocksstable::ObDatumRowkey, 8> data_tablet_parallel_rowkey_list_; // data table
   common::ObSEArray<common::ObSEArray<blocksstable::ObDatumRowkey, 8>, 8> index_tablet_parallel_rowkey_list_; // index table.
+  share::SCN min_split_start_scn_;
 };
 
 }  // end namespace rootserver

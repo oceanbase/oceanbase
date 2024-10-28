@@ -62,7 +62,8 @@ public:
   TO_STRING_KV(K_(is_inited), K_(tenant_id), K_(ls_id), K_(table_id), K_(schema_version),
                K_(task_id), K_(source_tablet_id), K_(dest_tablets_id), K_(compaction_scn), K_(user_parallelism),
                K_(compat_mode), K_(data_format_version), K_(consumer_group_id),
-               K_(can_reuse_macro_block), K_(split_sstable_type), K_(parallel_datum_rowkey_list));
+               K_(can_reuse_macro_block), K_(split_sstable_type), K_(parallel_datum_rowkey_list),
+               K_(min_split_start_scn));
 private:
   common::ObArenaAllocator rowkey_allocator_; // for DatumRowkey.
 public:
@@ -82,6 +83,7 @@ public:
   bool can_reuse_macro_block_;
   share::ObSplitSSTableType split_sstable_type_;
   common::ObSArray<blocksstable::ObDatumRowkey> parallel_datum_rowkey_list_;
+  share::SCN min_split_start_scn_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletSplitParam);
 };
 
@@ -416,10 +418,11 @@ public:
       const ObIArray<ObTabletID> &check_tablets_id,
       bool &is_all_major_exists);
   static int check_satisfy_split_condition(
+      const ObLSHandle &ls_handle,
+      const ObTabletHandle &source_tablet_handle,
       const ObArray<ObTabletID> &dest_tablets_id,
       const int64_t compaction_scn,
-      const ObTabletHandle &source_tablet_handle,
-      const ObLSHandle &ls_handle);
+      const share::SCN &min_split_start_scn);
   static int get_split_dest_tablets_info(
       const share::ObLSID &ls_id,
       const ObTabletID &source_tablet_id,

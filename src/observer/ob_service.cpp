@@ -1351,13 +1351,14 @@ int ObService::check_memtable_cnt(
           result.memtable_cnt_ = memtable_handles.count();
           freeze_finished = result.memtable_cnt_ == 0 ? true : false;
           if (freeze_finished) {
+            share::SCN unused_scn;
             ObTabletFreezeLog freeze_log;
             freeze_log.tablet_id_ = tablet_id;
             if (OB_FAIL(storage::ObDDLRedoLogWriter::
                   write_auto_split_log(ls_id,
                                        ObDDLClogType::DDL_TABLET_FREEZE_LOG,
                                        logservice::ObReplayBarrierType::STRICT_BARRIER,
-                                       freeze_log))) {
+                                       freeze_log, unused_scn))) {
               LOG_WARN("write tablet freeze log failed", K(ret), K(freeze_log));
             }
           }
@@ -2843,9 +2844,17 @@ int ObService::build_split_tablet_data_start_request(const obrpc::ObTabletSplitS
     LOG_WARN("invalid arg", K(ret), K(arg));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < arg.split_info_array_.count(); i++) {
+      share::SCN start_scn;
       const ObTabletSplitArg &each_arg = arg.split_info_array_.at(i);
-      if (OB_FAIL(ObTabletLobSplitUtil::process_write_split_start_log_request(each_arg))) {
+      if (OB_FAIL(ObTabletLobSplitUtil::process_write_split_start_log_request(each_arg, start_scn))) {
         LOG_WARN("process write split start log failed", K(ret), K(tmp_ret), K(arg));
+      } else if (0 == i) {
+        if (!start_scn.is_valid_and_not_min()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected start scn", K(ret), K(start_scn));
+        } else {
+          res.min_split_start_scn_ = start_scn;
+        }
       }
       if (OB_TMP_FAIL(res.ret_codes_.push_back(ret))) {
         LOG_WARN("push back result failed", K(ret), K(tmp_ret));

@@ -92,7 +92,8 @@ public:
     data_format_version_(0), parallelism_(0), compaction_scn_(),
     compat_mode_(lib::Worker::CompatMode::INVALID), task_id_(0),
     source_table_id_(OB_INVALID_ID), dest_schema_id_(OB_INVALID_ID), consumer_group_id_(0),
-    lob_col_idxs_(), split_sstable_type_(share::ObSplitSSTableType::SPLIT_BOTH)
+    lob_col_idxs_(), split_sstable_type_(share::ObSplitSSTableType::SPLIT_BOTH), parallel_datum_rowkey_list_(),
+    min_split_start_scn_()
   {}
   virtual ~ObLobSplitParam();
   int init(const ObLobSplitParam &other);
@@ -111,7 +112,8 @@ public:
     K_(new_lob_tablet_ids), K_(schema_version), K_(data_format_version),
     K_(parallelism), K_(compaction_scn), K_(compat_mode), K_(task_id),
     K_(source_table_id), K_(dest_schema_id), K_(lob_col_idxs), K_(consumer_group_id),
-    K_(lob_col_idxs), K_(split_sstable_type), K_(parallel_datum_rowkey_list));
+    K_(lob_col_idxs), K_(split_sstable_type), K_(parallel_datum_rowkey_list),
+    K_(min_split_start_scn));
 private:
   common::ObArenaAllocator rowkey_allocator_; // for DatumRowkey.
 public:
@@ -131,6 +133,7 @@ public:
   ObSArray<uint64_t> lob_col_idxs_;
   share::ObSplitSSTableType split_sstable_type_;
   common::ObSArray<blocksstable::ObDatumRowkey> parallel_datum_rowkey_list_; // calc by main table.
+  share::SCN min_split_start_scn_;
 };
 
 struct ObLobSplitContext final
@@ -359,7 +362,8 @@ public:
                                 int64_t& rk_cnt);
 
   static int process_write_split_start_log_request(
-      const ObTabletSplitArg &arg);
+      const ObTabletSplitArg &arg,
+      share::SCN &scn);
   static int process_tablet_split_request(
       const bool is_lob_tablet,
       const bool is_start_request,
@@ -369,7 +373,8 @@ public:
       const bool is_lob_tablet,
       const bool is_start_request,
       const share::ObLSID &ls_id,
-      const share::ObIDagInitParam *input_param);
+      const share::ObIDagInitParam *input_param,
+      share::SCN &scn);
 };
 
 class ObSingleRowIterWrapper: public ObIStoreRowIterator

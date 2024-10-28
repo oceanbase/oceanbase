@@ -93,8 +93,8 @@ ObPartitionSplitTask::ObPartitionSplitTask()
     wait_trans_ctx_(),
     tablet_size_(0),
     data_tablet_parallel_rowkey_list_(),
-    index_tablet_parallel_rowkey_list_()
-
+    index_tablet_parallel_rowkey_list_(),
+    min_split_start_scn_()
 {
   ObMemAttr attr(OB_SERVER_TENANT_ID, "RSSplitRange", ObCtxIds::DEFAULT_CTX_ID);
   data_tablet_parallel_rowkey_list_.set_attr(attr);
@@ -980,6 +980,7 @@ int ObPartitionSplitTask::send_split_request(
     param.execution_id_ = execution_id_;
     param.data_format_version_ = data_format_version_;
     param.consumer_group_id_ = partition_split_arg_.consumer_group_id_;
+    param.min_split_start_scn_ = min_split_start_scn_;
     if (OB_ISNULL(root_service_)) {
       ret = OB_ERR_SYS;
       LOG_WARN("error sys", K(ret));
@@ -1525,7 +1526,17 @@ int ObPartitionSplitTask::send_split_rpc(
     if (OB_UNLIKELY(resp_ret_codes.count() > target_split_info_array.count())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected err", K(ret), K(target_split_info_array), K(resp_ret_codes));
-    } else {
+    } else if (is_split_start && !min_split_start_scn_.is_valid_and_not_min()) {
+      if (OB_UNLIKELY(!start_result.min_split_start_scn_.is_valid_and_not_min())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected split start scn", K(ret), K(start_result));
+      } else if (FALSE_IT(min_split_start_scn_ = start_result.min_split_start_scn_)) {
+      } else if (OB_FAIL(update_task_message())) {
+        LOG_WARN("update split start scn failed", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
       TCWLockGuard guard(lock_);
       for (int64_t i = 0; OB_SUCC(ret) && i < resp_ret_codes.count(); i++) {
         const ObTabletID &tablet_id = target_split_info_array.at(i).source_tablet_id_;
@@ -1861,7 +1872,7 @@ int ObPartitionSplitTask::serialize_params_to_message(
   } else {
     LST_DO_CODE(OB_UNIS_ENCODE, all_src_tablet_ids_, data_tablet_compaction_scn_,
       index_tablet_compaction_scns_, lob_tablet_compaction_scns_, partition_split_arg_,
-      tablet_size_, data_tablet_parallel_rowkey_list_, index_tablet_parallel_rowkey_list_);
+      tablet_size_, data_tablet_parallel_rowkey_list_, index_tablet_parallel_rowkey_list_, min_split_start_scn_);
   }
   return ret;
 }
@@ -1901,6 +1912,9 @@ int ObPartitionSplitTask::deserialize_params_from_message(
       }
       LOG_TRACE("parallel datum rowkey info", K(ret), K(data_tablet_parallel_rowkey_list_), K(index_tablet_parallel_rowkey_list_));
     }
+    if (OB_SUCC(ret)) {
+      LST_DO_CODE(OB_UNIS_DECODE, min_split_start_scn_);
+    }
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(ObDDLUtil::replace_user_tenant_id(tenant_id, tmp_arg))) {
@@ -1921,7 +1935,7 @@ int64_t ObPartitionSplitTask::get_serialize_param_size() const
   int len = ObDDLTask::get_serialize_param_size();
   LST_DO_CODE(OB_UNIS_ADD_LEN, all_src_tablet_ids_, data_tablet_compaction_scn_,
       index_tablet_compaction_scns_, lob_tablet_compaction_scns_, partition_split_arg_,
-      tablet_size_, data_tablet_parallel_rowkey_list_, index_tablet_parallel_rowkey_list_);
+      tablet_size_, data_tablet_parallel_rowkey_list_, index_tablet_parallel_rowkey_list_, min_split_start_scn_);
   return len;
 }
 
@@ -2572,6 +2586,7 @@ int ObPartitionSplitTask::prepare_tablet_split_infos(
       split_info.consumer_group_id_   = partition_split_arg_.consumer_group_id_;
       split_info.can_reuse_macro_block_ = can_reuse_macro_blocks.at(i);
       split_info.split_sstable_type_  = share::ObSplitSSTableType::SPLIT_BOTH;
+      split_info.min_split_start_scn_ = min_split_start_scn_;
       const ObIArray<blocksstable::ObDatumRowkey> &parallel_datum_rowkey_list = i > 0 && i < lob_tablet_start_idx ?
           index_tablet_parallel_rowkey_list_.at(i - 1) : data_tablet_parallel_rowkey_list_;
       int64_t index = 0;

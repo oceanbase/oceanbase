@@ -805,13 +805,15 @@ int ObSplitStartReplayExecutor::init(
 
 int ObSplitStartReplayExecutor::prepare_param_from_log(
     const share::ObLSID &ls_id,
+    const ObTabletHandle &handle,
     const ObTabletSplitInfo &info,
+    const share::SCN &scn,
     ObTabletSplitParam &param)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!ls_id.is_valid() || !info.is_valid())) {
+  if (OB_UNLIKELY(!ls_id.is_valid() || !handle.is_valid() || !info.is_valid() || !scn.is_valid_and_not_min())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), K(ls_id), K(info));
+    LOG_WARN("invalid arg", K(ret), K(ls_id), K(handle), K(info), K(scn));
   } else {
     param.tenant_id_           = MTL_ID();
     param.ls_id_               = ls_id;
@@ -825,10 +827,10 @@ int ObSplitStartReplayExecutor::prepare_param_from_log(
     param.can_reuse_macro_block_ = info.can_reuse_macro_block_;
     param.split_sstable_type_    = info.split_sstable_type_;
     param.user_parallelism_    = info.parallel_datum_rowkey_list_.count() - 1;
+    param.compat_mode_         = handle.get_obj()->get_tablet_meta().compat_mode_;
+    param.min_split_start_scn_ = scn;
     // skip lob_col_idxs.
-    if (OB_FAIL(ObCompatModeGetter::get_table_compat_mode(param.tenant_id_, param.table_id_, param.compat_mode_))) {
-      LOG_WARN("failed to get compat mode", K(ret));
-    } else if (OB_FAIL(param.parallel_datum_rowkey_list_.assign(info.parallel_datum_rowkey_list_))) {
+    if (OB_FAIL(param.parallel_datum_rowkey_list_.assign(info.parallel_datum_rowkey_list_))) {
       LOG_WARN("assign failed", K(ret));
     } else if (OB_FAIL(param.dest_tablets_id_.assign(info.dest_tablets_id_))) {
       LOG_WARN("assign failed", K(ret), K(info));
@@ -839,13 +841,15 @@ int ObSplitStartReplayExecutor::prepare_param_from_log(
 
 int ObSplitStartReplayExecutor::prepare_param_from_log(
     const share::ObLSID &ls_id,
+    const ObTabletHandle &handle,
     const ObTabletSplitInfo &info,
+    const share::SCN &scn,
     ObLobSplitParam &param)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!ls_id.is_valid() || !info.is_valid())) {
+  if (OB_UNLIKELY(!ls_id.is_valid() || !handle.is_valid() || !info.is_valid() || !scn.is_valid_and_not_min())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), K(ls_id), K(info));
+    LOG_WARN("invalid arg", K(ret), K(ls_id), K(handle), K(info), K(scn));
   } else {
     param.tenant_id_              = MTL_ID();
     param.ls_id_                  = ls_id;
@@ -860,9 +864,9 @@ int ObSplitStartReplayExecutor::prepare_param_from_log(
     // skip can_reuse_macro_block
     param.split_sstable_type_     = info.split_sstable_type_;
     param.parallelism_            = info.parallel_datum_rowkey_list_.count() - 1;
-    if (OB_FAIL(ObCompatModeGetter::get_table_compat_mode(param.tenant_id_, param.source_table_id_, param.compat_mode_))) {
-      LOG_WARN("failed to get compat mode", K(ret));
-    } else if (OB_FAIL(param.lob_col_idxs_.assign(info.lob_col_idxs_))) {
+    param.compat_mode_            = handle.get_obj()->get_tablet_meta().compat_mode_;
+    param.min_split_start_scn_    = scn;
+    if (OB_FAIL(param.lob_col_idxs_.assign(info.lob_col_idxs_))) {
       LOG_WARN("assign failed", K(ret));
     } else if (OB_FAIL(param.parallel_datum_rowkey_list_.assign(info.parallel_datum_rowkey_list_))) {
       LOG_WARN("assign failed", K(ret));
@@ -877,7 +881,6 @@ int ObSplitStartReplayExecutor::prepare_param_from_log(
 int ObSplitStartReplayExecutor::do_replay_(ObTabletHandle &handle)
 {
   int ret = OB_SUCCESS;
-  UNUSED(handle);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLRedoLogReplayer has not been inited", K(ret));
@@ -887,7 +890,7 @@ int ObSplitStartReplayExecutor::do_replay_(ObTabletHandle &handle)
   } else if (log_->basic_info_.lob_col_idxs_.count() > 0) {
     // lob tablet.
     ObLobSplitParam param;
-    if (OB_FAIL(ObSplitStartReplayExecutor::prepare_param_from_log(ls_->get_ls_id(), log_->basic_info_, param))) {
+    if (OB_FAIL(ObSplitStartReplayExecutor::prepare_param_from_log(ls_->get_ls_id(), handle, log_->basic_info_, scn_, param))) {
       LOG_WARN("prepare lob split param failed", K(ret), KPC(log_));
     } else if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_lob_tablet_split_dag(param))) {
       LOG_WARN("schedule tablet split dag failed, but ignore to wait", K(ret), K(param));
@@ -897,7 +900,7 @@ int ObSplitStartReplayExecutor::do_replay_(ObTabletHandle &handle)
     }
   } else {
     ObTabletSplitParam param;
-    if (OB_FAIL(ObSplitStartReplayExecutor::prepare_param_from_log(ls_->get_ls_id(), log_->basic_info_, param))) {
+    if (OB_FAIL(ObSplitStartReplayExecutor::prepare_param_from_log(ls_->get_ls_id(), handle, log_->basic_info_, scn_, param))) {
       LOG_WARN("prepare tablet split param failed", K(ret), KPC(log_));
     } else if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_tablet_split_dag(param))) {
       LOG_WARN("schedule tablet split dag failed, but ignore to wait", K(ret), K(param));
@@ -943,7 +946,6 @@ int ObSplitFinishReplayExecutor::init(
 
 int ObSplitFinishReplayExecutor::do_replay_(ObTabletHandle &handle)
 {
-  UNUSED(handle);
   int ret = OB_SUCCESS;
   ObLSID ls_id;
   ObLobSplitParam lob_split_param;
@@ -964,10 +966,10 @@ int ObSplitFinishReplayExecutor::do_replay_(ObTabletHandle &handle)
   } else if (OB_FALSE_IT(is_lob_tablet = log_->basic_info_.lob_col_idxs_.count() > 0)) {
   } else if (OB_FALSE_IT(ls_id = ls_->get_ls_id())) {
   } else if (is_lob_tablet &&
-      OB_FAIL(ObSplitStartReplayExecutor::prepare_param_from_log(ls_id, log_->basic_info_, lob_split_param))) {
+      OB_FAIL(ObSplitStartReplayExecutor::prepare_param_from_log(ls_id, handle, log_->basic_info_, scn_, lob_split_param))) {
     LOG_WARN("prepare lob split param failed", K(ret), K(ls_id), KPC(log_));
   } else if (!is_lob_tablet &&
-      OB_FAIL(ObSplitStartReplayExecutor::prepare_param_from_log(ls_id, log_->basic_info_, data_split_param))) {
+      OB_FAIL(ObSplitStartReplayExecutor::prepare_param_from_log(ls_id, handle, log_->basic_info_, scn_, data_split_param))) {
     LOG_WARN("prepare tablet split param failed", K(ret), K(ls_id), KPC(log_));
   } else {
     if (is_lob_tablet && OB_FAIL(compaction::ObScheduleDagFunc::schedule_lob_tablet_split_dag(lob_split_param))) {

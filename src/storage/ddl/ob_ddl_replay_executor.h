@@ -248,11 +248,15 @@ public:
       const share::SCN &scn);
   static int prepare_param_from_log(
       const share::ObLSID &ls_id,
+      const ObTabletHandle &handle,
       const ObTabletSplitInfo &info,
+      const share::SCN &scn,
       ObTabletSplitParam &param);
   static int prepare_param_from_log(
       const share::ObLSID &ls_id,
+      const ObTabletHandle &handle,
       const ObTabletSplitInfo &info,
+      const share::SCN &scn,
       ObLobSplitParam &param);
 
 protected:

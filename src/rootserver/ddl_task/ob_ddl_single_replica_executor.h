@@ -45,7 +45,8 @@ public:
       compaction_scns_(),
       lob_col_idxs_(),
       can_reuse_macro_blocks_(),
-      parallel_datum_rowkey_list_()
+      parallel_datum_rowkey_list_(),
+      min_split_start_scn_()
   {}
   ~ObDDLReplicaBuildExecutorParam () = default;
   bool is_valid() const {
@@ -65,7 +66,8 @@ public:
                      consumer_group_id_ >= 0;
     if (is_tablet_split(ddl_type_)) {
       is_valid = is_valid && compaction_scns_.count() == source_tablet_ids_.count()
-                          && can_reuse_macro_blocks_.count() == source_tablet_ids_.count();
+                          && can_reuse_macro_blocks_.count() == source_tablet_ids_.count()
+                          && min_split_start_scn_.is_valid_and_not_min();
     } else {
       is_valid = (is_valid && compaction_scns_.count() == 0);
     }
@@ -76,7 +78,7 @@ public:
                K_(source_schema_versions), K_(dest_schema_versions), K_(snapshot_version),
                K_(task_id), K_(parallelism), K_(execution_id),
                K_(data_format_version), K_(consumer_group_id), K_(can_reuse_macro_blocks),
-               K_(parallel_datum_rowkey_list));
+               K_(parallel_datum_rowkey_list), K(min_split_start_scn_));
 public:
   uint64_t tenant_id_;
   uint64_t dest_tenant_id_;
@@ -97,6 +99,7 @@ public:
   ObSArray<uint64_t> lob_col_idxs_;
   ObSArray<bool> can_reuse_macro_blocks_;
   common::ObSEArray<common::ObSEArray<blocksstable::ObDatumRowkey, 8>, 8> parallel_datum_rowkey_list_;
+  share::SCN min_split_start_scn_;
 };
 
 enum class ObReplicaBuildStat
@@ -197,6 +200,7 @@ public:
       src_tablet_ids_(),
       dest_tablet_ids_(),
       replica_build_ctxs_(),
+      min_split_start_scn_(),
       lock_()
   {}
   ~ObDDLReplicaBuildExecutor() = default;
@@ -214,7 +218,7 @@ public:
                K(ddl_task_id_), K(snapshot_version_), K(parallelism_),
                K(execution_id_), K(data_format_version_), K(consumer_group_id_),
                K(lob_col_idxs_), K(src_tablet_ids_), K(dest_tablet_ids_),
-               K(replica_build_ctxs_));
+               K(replica_build_ctxs_), K(min_split_start_scn_));
 private:
   int schedule_task();
   int process_rpc_results(
@@ -268,6 +272,7 @@ private:
   ObArray<ObTabletID> src_tablet_ids_;
   ObSArray<ObTabletID> dest_tablet_ids_;
   ObArray<ObSingleReplicaBuildCtx> replica_build_ctxs_; // NOTE hold lock before access
+  share::SCN min_split_start_scn_;
   ObSpinLock lock_; // NOTE keep rpc send out of lock scope
 };
 
