@@ -21,7 +21,8 @@ using namespace oceanbase::common;
 using namespace oceanbase::storage;
 
 ObDirectLoadMgrAgent::ObDirectLoadMgrAgent()
-  : is_inited_(false), direct_load_type_(ObDirectLoadType::DIRECT_LOAD_INVALID), start_scn_(), execution_id_(-1), mgr_handle_()
+  : is_inited_(false), direct_load_type_(ObDirectLoadType::DIRECT_LOAD_INVALID), start_scn_(), execution_id_(-1), mgr_handle_(),
+    cgs_count_(0)
 {
 }
 
@@ -32,6 +33,7 @@ ObDirectLoadMgrAgent::~ObDirectLoadMgrAgent()
   mgr_handle_.reset();
   start_scn_.reset();
   execution_id_ = -1;
+  cgs_count_ = 0;
 }
 
 int ObDirectLoadMgrAgent::init(
@@ -76,9 +78,24 @@ int ObDirectLoadMgrAgent::init_for_sn(
     const ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  ObTabletHandle tablet_handle;
+  ObStorageSchema *storage_schema = nullptr;
+  ObArenaAllocator tmp_arena("ddl_load_schema", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(ls_id), K(tablet_id));
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
+    LOG_WARN("failed to get log stream", K(ret), K(ls_id));
+  } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
+      tablet_id, tablet_handle, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+    LOG_WARN("get tablet handle failed", K(ret), K(ls_id), K(tablet_id));
+  } else if (OB_UNLIKELY(nullptr == tablet_handle.get_obj())) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("tablet handle is null", K(ret), K(ls_id), K(tablet_id));
+  } else if (OB_FAIL(tablet_handle.get_obj()->load_storage_schema(tmp_arena, storage_schema))) {
+    LOG_WARN("load storage schema failed", K(ret));
+  } else if (OB_FALSE_IT(cgs_count_ = storage_schema->get_column_groups().count())) {
   } else if (OB_LIKELY(mgr_handle_.is_valid())) {
     if (!start_scn_.is_valid_and_not_min() || execution_id_ < 0) {
       ret = OB_ERR_SYS;
@@ -100,6 +117,7 @@ int ObDirectLoadMgrAgent::init_for_sn(
       LOG_WARN("mgr handle is invalid but the major does not exist under shared-nothing mode", K(ret), K(tablet_id));
     }
   }
+  ObTabletObjLoadHelper::free(tmp_arena, storage_schema);
   return ret;
 }
 
@@ -216,6 +234,7 @@ int ObDirectLoadMgrAgent::fill_sstable_slice_for_sn(
     const ObDatumRow *row = nullptr;
     ObIDirectLoadRowIterator *interpret_iter = static_cast<ObIDirectLoadRowIterator *>(iter);
     while (OB_SUCC(ret)) {
+      affected_rows++;
       if (OB_FAIL(THIS_WORKER.check_status())) {
         LOG_WARN("check status failed", K(ret));
       } else if (OB_FAIL(interpret_iter->get_next_row(true/*skip_lob*/, row))) {
@@ -225,7 +244,16 @@ int ObDirectLoadMgrAgent::fill_sstable_slice_for_sn(
         } else {
           LOG_WARN("iter row failed", K(ret), K(slice_info));
         }
+      } else if ((affected_rows % 100 == 0) && OB_NOT_NULL(insert_monitor)) {
+        (void) ATOMIC_AAF(&insert_monitor->scanned_row_cnt_, 100);
+        (void) ATOMIC_AAF(&insert_monitor->inserted_row_cnt_, 100);
+        (void) ATOMIC_AAF(&insert_monitor->inserted_cg_row_cnt_, cgs_count_ * 100);
       }
+    }
+    if (OB_SUCC(ret) && OB_NOT_NULL(insert_monitor)) {
+      (void) ATOMIC_AAF(&insert_monitor->scanned_row_cnt_, affected_rows % 100);
+      (void) ATOMIC_AAF(&insert_monitor->inserted_row_cnt_, affected_rows % 100);
+      (void) ATOMIC_AAF(&insert_monitor->inserted_cg_row_cnt_, cgs_count_ * (affected_rows % 100));
     }
   }
   return ret;
