@@ -841,7 +841,13 @@ public:
     ori_question_marks_count_ = count;
     question_marks_count_ = count;
   };
-
+  // check whether optimizer_features_enable_version_ in [v1, v2) or [v3, v4) or ... or [vn, +inf)
+  template<typename... Args>
+  bool check_opt_compat_version(uint64_t v1, uint64_t v2, Args... args) const;
+  bool check_opt_compat_version(uint64_t v1) const { return optimizer_features_enable_version_ >= v1; }
+  bool check_opt_compat_version(uint64_t v1, uint64_t v2) const {
+    return optimizer_features_enable_version_ >= v1 && optimizer_features_enable_version_ < v2;
+  }
 
 public:
   static const int64_t CALCULABLE_EXPR_NUM = 1;
@@ -911,6 +917,13 @@ public:
   };
   int64_t ori_question_marks_count_;
 };
+
+template<typename... Args>
+bool ObQueryCtx::check_opt_compat_version(uint64_t v1, uint64_t v2, Args... args) const
+{
+  return check_opt_compat_version(v1, v2) || check_opt_compat_version(args...);
+}
+
 } /* ns sql*/
 } /* ns oceanbase */
 #endif //OCEANBASE_SQL_CONTEXT_
