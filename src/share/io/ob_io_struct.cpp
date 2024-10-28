@@ -604,6 +604,14 @@ int ObIOGroupUsage::calc(double &avg_size, double &avg_iops, int64_t &avg_bw,
   int ret = OB_SUCCESS;
   int64_t now = ObTimeUtility::fast_current_time();
   int64_t last_ts = ATOMIC_LOAD(&last_ts_);
+  avg_size = 0;
+  avg_iops = 0;
+  avg_bw = 0;
+  avg_prepare_delay = 0;
+  avg_schedule_delay = 0;
+  avg_submit_delay = 0;
+  avg_device_delay = 0;
+  avg_total_delay = 0;
   if (0 != last_ts && now - last_ts > 0 && ATOMIC_BCAS(&last_ts_, last_ts, 0)) {
     int64_t size = 0;
     int64_t io_count = 0;
