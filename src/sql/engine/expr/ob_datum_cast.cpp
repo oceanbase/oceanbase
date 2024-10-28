@@ -2892,7 +2892,7 @@ int common_datetime_string(const ObExpr &expr, const ObObjType in_type, const Ob
       if (OB_SUCC(ret) && OB_FAIL(ObTimeConverter::datetime_to_str(in_val, tz_info,
               nls_format, in_scale, buf, buf_len, out_len))) {
         LOG_WARN("failed to convert datetime to string", K(ret), K(in_val), KP(tz_info),
-                  K(nls_format), K(in_scale), K(buf), K(out_len));
+                  K(nls_format), K(in_scale), KP(buf), K(out_len));
       }
     }
   }
@@ -6700,7 +6700,7 @@ CAST_FUNC_NAME(bit, datetime)
         char buf[BUF_LEN] = {0};
         ObLengthSemantics length = expr.args_[0]->datum_meta_.length_semantics_;
         if (OB_FAIL(bit_to_char_array(in_val, length, buf, BUF_LEN, pos))) {
-          LOG_WARN("fail to store val", K(buf), K(BUF_LEN), K(in_val), K(pos));
+          LOG_WARN("fail to store val", KP(buf), K(BUF_LEN), K(in_val), K(pos));
         } else {
           ObObjType out_type = expr.datum_meta_.type_;
           ObString str(pos, buf);
@@ -6749,7 +6749,7 @@ CAST_FUNC_NAME(bit, date)
       char buf[BUF_LEN] = {0};
       ObLengthSemantics length = expr.args_[0]->datum_meta_.length_semantics_;
       if (OB_FAIL(bit_to_char_array(in_val, length, buf, BUF_LEN, pos))) {
-        LOG_WARN("fail to store val", K(buf), K(BUF_LEN), K(in_val), K(pos));
+        LOG_WARN("fail to store val", KP(buf), K(BUF_LEN), K(in_val), K(pos));
       } else {
         ObString str(pos, buf);
         if (CAST_FAIL(ObTimeConverter::str_to_date(str, out_val, date_sql_mode))) {
@@ -6784,7 +6784,7 @@ CAST_FUNC_NAME(bit, time)
       char buf[BUF_LEN] = {0};
       ObLengthSemantics length = expr.args_[0]->datum_meta_.length_semantics_;
       if (OB_FAIL(bit_to_char_array(in_val, length, buf, BUF_LEN, pos))) {
-        LOG_WARN("fail to store val", K(buf), K(BUF_LEN), K(in_val), K(pos));
+        LOG_WARN("fail to store val", KP(buf), K(BUF_LEN), K(in_val), K(pos));
       } else {
         ObString str(pos, buf);
         ObScale res_scale;
@@ -6834,7 +6834,7 @@ CAST_FUNC_NAME(bit, string)
       char buf[BUF_LEN] = {0};
       ObLengthSemantics length = expr.args_[0]->datum_meta_.length_semantics_;
       if (OB_FAIL(bit_to_char_array(in_val, length, buf, BUF_LEN, pos))) {
-        LOG_WARN("fail to store val", K(ret), K(in_val), K(length), K(buf), K(BUF_LEN), K(pos));
+        LOG_WARN("fail to store val", K(ret), K(in_val), K(length), KP(buf), K(BUF_LEN), K(pos));
       } else {
         ObString str(pos, buf);
         bool has_set_res = false;
@@ -6866,7 +6866,7 @@ CAST_FUNC_NAME(bit, text)
       char buf[BUF_LEN] = {0};
       ObLengthSemantics length = expr.args_[0]->datum_meta_.length_semantics_;
       if (OB_FAIL(bit_to_char_array(in_val, length, buf, BUF_LEN, pos))) {
-        LOG_WARN("fail to store val", K(ret), K(in_val), K(length), K(buf), K(BUF_LEN), K(pos));
+        LOG_WARN("fail to store val", K(ret), K(in_val), K(length), KP(buf), K(BUF_LEN), K(pos));
       } else {
         ObString str(pos, buf);
         ObString res_str;
@@ -6894,7 +6894,7 @@ CAST_FUNC_NAME(bit, json)
     uint64_t in_val = child_res->get_uint();
     ObLengthSemantics length = expr.args_[0]->datum_meta_.length_semantics_;
     if (OB_FAIL(bit_to_char_array(in_val, length, buf, BUF_LEN, pos))) {
-      LOG_WARN("fail to store val", K(ret), K(in_val), K(length), K(buf), K(BUF_LEN), K(pos));
+      LOG_WARN("fail to store val", K(ret), K(in_val), K(length), KP(buf), K(BUF_LEN), K(pos));
     } else {
       ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
       common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
@@ -6904,7 +6904,7 @@ CAST_FUNC_NAME(bit, json)
       ObString raw_bin;
 
       if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
-        LOG_WARN("fail to get int json binary", K(ret), K(in_val), K(buf), K(BUF_LEN));
+        LOG_WARN("fail to get int json binary", K(ret), K(in_val), KP(buf), K(BUF_LEN));
       } else if (OB_FAIL(common_json_bin(expr, ctx, res_datum, raw_bin))) {
         LOG_WARN("fail to fill json bin lob locator", K(ret));
       }
