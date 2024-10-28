@@ -249,7 +249,7 @@ private:
   template<typename RequestType, typename OutcomeType>
   int do_s3_operation_(S3OperationFunc<RequestType, OutcomeType> s3_op_func,
                        const RequestType &request, OutcomeType &outcome,
-                       const int64_t retry_timeout_us = OB_STORAGE_MAX_IO_TIMEOUT_US);
+                       const int64_t retry_timeout_us = ObObjectStorageTenantGuard::get_timeout_us());
 
 private:
   SpinRWLock lock_;
