@@ -57,7 +57,7 @@ int ObDASIndexDMLAdaptor<DAS_OP_TABLE_INSERT, ObDASDMLIterator>::write_rows(cons
 
   if (ctdef.table_param_.get_data_table().is_mlog_table()
       && !ctdef.is_access_mlog_as_master_table_) {
-    ObDASMLogDMLIterator mlog_iter(tablet_id, dml_param_, &iter, DAS_OP_TABLE_INSERT);
+    ObDASMLogDMLIterator mlog_iter(ls_id, tablet_id, dml_param_, &iter, DAS_OP_TABLE_INSERT);
     if (OB_FAIL(as->insert_rows(ls_id,
                                 tablet_id,
                                 *tx_desc_,
@@ -296,7 +296,7 @@ int ObDASInsertOp::insert_row_with_fetch()
     } else if (OB_FAIL(dml_iter.rewind(index_ins_ctdef))) {
       LOG_WARN("rewind dml iter failed", K(ret));
     } else {
-      ObDASMLogDMLIterator mlog_iter(index_tablet_id, dml_param, &dml_iter, DAS_OP_TABLE_INSERT);
+      ObDASMLogDMLIterator mlog_iter(ls_id_, index_tablet_id, dml_param, &dml_iter, DAS_OP_TABLE_INSERT);
       ObDatumRowIterator *new_iter = nullptr;
       if (index_ins_ctdef->table_param_.get_data_table().is_mlog_table()
           && !index_ins_ctdef->is_access_mlog_as_master_table_) {

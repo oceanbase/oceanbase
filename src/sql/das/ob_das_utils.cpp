@@ -400,7 +400,8 @@ int ObDASUtils::find_child_das_def(const ObDASBaseCtDef *root_ctdef,
   return ret;
 }
 
-int ObDASUtils::generate_mlog_row(const ObTabletID &tablet_id,
+int ObDASUtils::generate_mlog_row(const ObLSID &ls_id,
+                                  const ObTabletID &tablet_id,
                                   const storage::ObDMLBaseParam &dml_param,
                                   blocksstable::ObDatumRow &row,
                                   ObDASOpType op_type,
@@ -420,8 +421,8 @@ int ObDASUtils::generate_mlog_row(const ObTabletID &tablet_id,
   } else if (row.count_ < 4) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("each mlog row should at least contain 4 columns", KR(ret), K(row.count_));
-  } else if (OB_FAIL(auto_inc.get_autoinc_seq(tenant_id, tablet_id, autoinc_seq))) {
-    LOG_WARN("get_autoinc_seq fail", K(ret), K(tenant_id), K(tablet_id));
+  } else if (OB_FAIL(auto_inc.get_autoinc_seq_for_mlog(tenant_id, ls_id, tablet_id, autoinc_seq))) {
+    LOG_WARN("get_autoinc_seq fail", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
   } else {
     // mlog_row = | base_table_rowkey_cols | partition key cols | sequence_col | ... | dmltype_col | old_new_col |
     int sequence_col = 0;

@@ -245,7 +245,7 @@ int ObDASIndexDMLAdaptor<DAS_OP_TABLE_UPDATE, ObDASUpdIterator>::write_rows(cons
     }
   } else if (ctdef.table_param_.get_data_table().is_mlog_table()
       && !ctdef.is_access_mlog_as_master_table_) {
-    ObDASMLogDMLIterator mlog_iter(tablet_id, dml_param_, &iter, DAS_OP_TABLE_UPDATE);
+    ObDASMLogDMLIterator mlog_iter(ls_id, tablet_id, dml_param_, &iter, DAS_OP_TABLE_UPDATE);
     if (OB_FAIL(as->insert_rows(ls_id,
                                 tablet_id,
                                 *tx_desc_,
