@@ -485,6 +485,8 @@ public:
   int fill_comment(char *buf, const int64_t buf_len);
 
   virtual bool is_ha_dag() const { return false; }
+  void set_dag_emergency(const bool emergency) { emergency_ = emergency; }
+  bool get_emergency() const { return emergency_; }
 
   DECLARE_VIRTUAL_TO_STRING;
   DISABLE_COPY_ASSIGN(ObIDag);
@@ -544,6 +546,7 @@ private:
   uint32_t running_times_;
   ObIDagNet *dag_net_; // should protect by lock
   ObDagListIndex list_idx_;
+  bool emergency_;
 };
 
 /*
@@ -917,7 +920,6 @@ public:
   int loop_waiting_dag_list();
   void dump_dag_status();
   int inner_add_dag(
-    const bool emergency,
     const bool check_size_overflow,
     ObIDag *&dag);
   void get_all_dag_scheduler_info(
@@ -1022,11 +1024,9 @@ private:
     const bool add_last = true);
   int add_dag_into_list_and_map_(
     const ObDagListIndex list_index,
-    ObIDag &dag,
-    const bool emergency);
+    ObIDag &dag);
   int get_stored_dag_(ObIDag &dag, ObIDag *&stored_dag);
   int inner_add_dag_(
-    const bool emergency,
     const bool check_size_overflow,
     ObIDag *&dag);
   void add_schedule_info_(const ObDagType::ObDagTypeEnum dag_type, const int64_t data_size);

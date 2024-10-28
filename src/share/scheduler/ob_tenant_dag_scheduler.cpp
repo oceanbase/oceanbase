@@ -489,7 +489,8 @@ ObIDag::ObIDag(const ObDagType::ObDagTypeEnum type)
     max_retry_times_(0),
     running_times_(0),
     dag_net_(nullptr),
-    list_idx_(DAG_LIST_MAX)
+    list_idx_(DAG_LIST_MAX),
+    emergency_(false)
 {
   STATIC_ASSERT(static_cast<int64_t>(DAG_STATUS_MAX) == ARRAYSIZEOF(ObIDagStatusStr), "dag status str len is mismatch");
   STATIC_ASSERT(MergeDagPrioCnt == ARRAYSIZEOF(MergeDagPrio), "merge dag prio len is mismatch");
@@ -556,6 +557,7 @@ void ObIDag::reset()
   is_stop_ = false;
   dag_net_ = nullptr;
   list_idx_ = DAG_LIST_MAX;
+  emergency_ = false;
 }
 
 int ObIDag::add_task(ObITask &task)
@@ -849,7 +851,8 @@ int64_t ObIDag::to_string(char *buf, const int64_t buf_len) const
   } else {
     J_OBJ_START();
     J_KV(KP(this), K_(is_inited), K_(type), "name", get_dag_type_str(type_), K_(id), KPC_(dag_net), K_(dag_ret), K_(dag_status),
-        K_(add_time), K_(start_time), K_(running_task_cnt), K_(indegree), K_(consumer_group_id), "hash", hash(), K(task_list_.get_size()));
+        K_(add_time), K_(start_time), K_(running_task_cnt), K_(indegree), K_(consumer_group_id), "hash", hash(), K(task_list_.get_size()),
+        K_(emergency));
     J_OBJ_END();
   }
   return pos;
@@ -1977,8 +1980,7 @@ int ObDagPrioScheduler::get_stored_dag_(ObIDag &dag, ObIDag *&stored_dag)
 // call this func with locked
 int ObDagPrioScheduler::add_dag_into_list_and_map_(
     const ObDagListIndex list_index,
-    ObIDag &dag,
-    const bool emergency)
+    ObIDag &dag)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -2012,6 +2014,7 @@ int ObDagPrioScheduler::add_dag_into_list_and_map_(
       COMMON_LOG(WARN, "failed to set dag_map", K(ret), K(dag));
     }
   } else {
+    const bool emergency = dag.get_emergency();
     bool add_ret = false;
     ObDagListIndex add_list_index = emergency ? READY_DAG_LIST : list_index; // skip to rank emergency dag
     if (!emergency) {
@@ -2039,7 +2042,6 @@ int ObDagPrioScheduler::add_dag_into_list_and_map_(
 
 // call this func with locked
 int ObDagPrioScheduler::inner_add_dag_(
-    const bool emergency,
     const bool check_size_overflow,
     ObIDag *&dag)
 {
@@ -2056,15 +2058,14 @@ int ObDagPrioScheduler::inner_add_dag_(
   } else if (OB_FAIL(add_dag_into_list_and_map_(
           is_waiting_dag_type(dag->get_type()) ? WAITING_DAG_LIST :
           is_rank_dag_type(dag->get_type()) ? RANK_DAG_LIST : READY_DAG_LIST, // compaction dag should add into RANK_LIST first.
-          *dag,
-          emergency))) {
+          *dag))) {
     if (OB_EAGAIN != ret) {
       COMMON_LOG(WARN, "failed to add dag into list and map", K(ret), KPC(dag));
     }
   } else {
     add_added_info_(dag->get_type());
     COMMON_LOG(INFO, "add dag success", KP(dag), "id", dag->get_dag_id(), K(dag->hash()), "dag_cnt", scheduler_->get_cur_dag_cnt(),
-        K(emergency), "dag_type", OB_DAG_TYPES[dag->get_type()].dag_type_str_,
+        "emergency", dag->get_emergency(), "dag_type", OB_DAG_TYPES[dag->get_type()].dag_type_str_,
         "dag_type_cnts", scheduler_->get_type_dag_cnt(dag->get_type()));
 
     dag = nullptr;
@@ -2480,7 +2481,6 @@ int ObDagPrioScheduler::generate_next_dag_(ObIDag &dag)
   ObIDag *next_dag = nullptr;
   ObIDag *child_dag = nullptr;
   ObIDagNet *dag_net = nullptr;
-  const bool emergency = false;
   const bool check_size_overflow = true;
 
   if (OB_UNLIKELY(dag.get_priority() != priority_ || OB_ISNULL(scheduler_))) {
@@ -2514,7 +2514,7 @@ int ObDagPrioScheduler::generate_next_dag_(ObIDag &dag)
       }
 
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(inner_add_dag_(emergency, check_size_overflow, next_dag))) {
+      } else if (OB_FAIL(inner_add_dag_(check_size_overflow, next_dag))) {
         LOG_WARN("failed to add next dag", K(ret), KPC(next_dag));
       }
     }
@@ -2834,12 +2834,11 @@ void ObDagPrioScheduler::dump_dag_status()
 }
 
 int ObDagPrioScheduler::inner_add_dag(
-    const bool emergency,
     const bool check_size_overflow,
     ObIDag *&dag)
 {
   ObMutexGuard guard(prio_lock_);
-  return inner_add_dag_(emergency, check_size_overflow, dag);
+  return inner_add_dag_(check_size_overflow, dag);
 }
 
 #define ADD_DAG_SCHEDULER_INFO(value_type, key_str, value) \
@@ -4197,7 +4196,8 @@ int ObTenantDagScheduler::add_dag(
   } else if (OB_UNLIKELY(!dag->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid argument", K(ret), KPC(dag));
-  } else if (OB_FAIL(prio_sche_[dag->get_priority()].inner_add_dag(emergency, check_size_overflow, dag))) {
+  } else if (FALSE_IT(dag->set_dag_emergency(emergency))) {
+  } else if (OB_FAIL(prio_sche_[dag->get_priority()].inner_add_dag(check_size_overflow, dag))) {
     if (OB_EAGAIN != ret) {
       LOG_WARN("failed to inner add dag", K(ret), KPC(dag));
     }
