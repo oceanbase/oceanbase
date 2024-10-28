@@ -20,6 +20,7 @@
 #include "sql/optimizer/ob_optimizer.h"
 #include "sql/optimizer/ob_opt_selectivity.h"
 #include <math.h>
+#define DEFAULT_BATCH_SIZE  256
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase;
@@ -1891,6 +1892,12 @@ int ObOptEstCostModel::cost_table_get_one_batch_inner(double row_count,
     //因为存储层有预期，所以去存储层的IO、CPU代价的最大值
     double scan_cpu_cost = row_count * cost_params_.TABLE_SCAN_CPU_TUPLE_COST + project_cost;
     cost = io_cost + scan_cpu_cost + cpu_cost + memtable_cost + memtable_merge_cost;
+    if (est_cost_info.index_id_ == est_cost_info.ref_table_id_ &&
+        table_meta_info->has_opt_stat_ &&
+        table_meta_info->micro_block_count_ > 100 &&
+        table_meta_info->table_row_count_ / table_meta_info->micro_block_count_ < DEFAULT_BATCH_SIZE) {
+      cpu_cost *= 2 * (1-0.002 * (table_meta_info->table_row_count_ / table_meta_info->micro_block_count_));
+    }
     LOG_TRACE("OPT:[COST TABLE GET INNER]", K(cost), K(io_cost), K(cpu_cost), K(fetch_row_cost),
               K(qual_cost), K(memtable_cost), K(memtable_merge_cost),
               K(row_count));
