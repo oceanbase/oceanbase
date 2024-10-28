@@ -82,37 +82,43 @@ int ObRedisImporter::exec_op(table::ObModuleDataArg::ObInfoOpType op)
 int ObRedisImporter::get_sql_uint_result(const char *sql, const char *col_name, uint64_t &sql_res)
 {
   int ret = OB_SUCCESS;
-  HEAP_VAR(ObMySQLProxy::MySQLResult, res)
-  {
-    common::sqlclient::ObMySQLResult *result = NULL;
-    if (OB_FAIL(sql_proxy_.read(res, tenant_id_, sql))) {
-      SHARE_LOG(WARN, "failed to read", K(ret), K(tenant_id_), K(sql));
-    } else if (OB_ISNULL(result = res.get_result())) {
-      ret = OB_ERR_UNEXPECTED;
-      SHARE_LOG(WARN, "failed to get sql result", K(ret));
-    } else if (OB_FAIL(result->next())) {
-      // should has one line
-      LOG_WARN("fail to get next result", K(ret));
-    } else {
-      ObObjMeta meta;
-      if (OB_FAIL(result->get_type(col_name, meta))) {
-        LOG_WARN("fail to get type", K(ret), K(col_name));
-      } else if (meta.is_number()) {
-        common::number::ObNumber num;
-        if (OB_FAIL(result->get_number(col_name, num))) {
-          LOG_WARN("fail to get column in row. ", "column_name", col_name, K(ret));
-        } else if (OB_FAIL(ObJsonBaseUtil::number_to_uint(num, sql_res))) {
-          LOG_WARN("fail to convert number to uint", K(ret), K(num));
-        }
-      } else if (meta.is_int()) {
-        int64_t int_res = 0;
-        if (OB_FAIL(result->get_int(col_name, int_res))) {
-          LOG_WARN("fail to get column in row. ", "column_name", col_name, K(ret));
-        } else if (int_res < 0) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected sql res", K(ret), K(int_res));
-        } else {
-          sql_res = static_cast<uint64_t>(int_res);
+  if (OB_ISNULL(exec_ctx_.get_sql_proxy())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy must not null", K(ret), KP(exec_ctx_.get_sql_proxy()));
+  } else {
+    ObCommonSqlProxy *sql_proxy = exec_ctx_.get_sql_proxy();
+    HEAP_VAR(ObMySQLProxy::MySQLResult, res)
+    {
+      common::sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(sql_proxy->read(res, tenant_id_, sql))) {
+        SHARE_LOG(WARN, "failed to read", K(ret), K(tenant_id_), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        SHARE_LOG(WARN, "failed to get sql result", K(ret));
+      } else if (OB_FAIL(result->next())) {
+        // should has one line
+        LOG_WARN("fail to get next result", K(ret));
+      } else {
+        ObObjMeta meta;
+        if (OB_FAIL(result->get_type(col_name, meta))) {
+          LOG_WARN("fail to get type", K(ret), K(col_name));
+        } else if (meta.is_number()) {
+          common::number::ObNumber num;
+          if (OB_FAIL(result->get_number(col_name, num))) {
+            LOG_WARN("fail to get column in row. ", "column_name", col_name, K(ret));
+          } else if (OB_FAIL(ObJsonBaseUtil::number_to_uint(num, sql_res))) {
+            LOG_WARN("fail to convert number to uint", K(ret), K(num));
+          }
+        } else if (meta.is_int()) {
+          int64_t int_res = 0;
+          if (OB_FAIL(result->get_int(col_name, int_res))) {
+            LOG_WARN("fail to get column in row. ", "column_name", col_name, K(ret));
+          } else if (int_res < 0) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected sql res", K(ret), K(int_res));
+          } else {
+            sql_res = static_cast<uint64_t>(int_res);
+          }
         }
       }
     }
@@ -182,7 +188,10 @@ int ObRedisImporter::check_basic_info(bool &need_import)
   int ret = OB_SUCCESS;
   ObKvModeType kv_mode = ObKvModeType::NONE;
   need_import = false;
-  if (!lib::is_mysql_mode() || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_5_0) {
+  if (OB_ISNULL(exec_ctx_.get_sql_proxy()) || OB_ISNULL(exec_ctx_.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy and session must not null", K(ret), KP(exec_ctx_.get_sql_proxy()));
+  } else if (!lib::is_mysql_mode() || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_5_0) {
     const char *err_msg = "Redis running in oracle mode or ob version < 4.2.5";
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg);
@@ -276,6 +285,11 @@ int ObRedisImporter::import_redis_info()
     // 1. get tenant memory to decide partition num
     uint64_t memory_size = 0;
     uint64_t partition_num = 0;
+    ObSessionParam session_param;
+    ObCommonSqlProxy *sql_proxy = exec_ctx_.get_sql_proxy();
+    ObSQLSessionInfo *session = exec_ctx_.get_my_session();
+    ObSQLMode sess_sql_mode = session->get_sql_mode();
+    session_param.sql_mode_ = reinterpret_cast<int64_t *>(&sess_sql_mode);
     LOG_DEBUG("1. get tenant memory size",
              K(ret),
              K(start_time),
@@ -298,7 +312,7 @@ int ObRedisImporter::import_redis_info()
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(sql_str.assign_fmt("create database %s", ObRedisInfoV1::DB_NAME))) {
       LOG_WARN("failed to set sql", K(ret), K(sql_str));
-    } else if (OB_FAIL(sql_proxy_.write(tenant_id_, sql_str.ptr(), affected_rows))) {
+    } else if (OB_FAIL(sql_proxy->write(tenant_id_, sql_str.ptr(), affected_rows, ObCompatibilityMode::MYSQL_MODE, &session_param))) {
       if (ret == OB_DATABASE_EXIST) {
         ret = OB_SUCCESS;
       } else {
@@ -312,7 +326,7 @@ int ObRedisImporter::import_redis_info()
       sql_str.reset();
       if (OB_FAIL(sql_str.assign_fmt("%s %lu", ObRedisInfoV1::TABLE_SQLS[i], partition_num))) {
         LOG_WARN("failed to set sql", K(ret), K(sql_str));
-      } else if (OB_FAIL(sql_proxy_.write(tenant_id_, sql_str.ptr(), affected_rows))) {
+      } else if (OB_FAIL(sql_proxy->write(tenant_id_, sql_str.ptr(), affected_rows, ObCompatibilityMode::MYSQL_MODE, &session_param))) {
         LOG_WARN("failed to execute sql write", K(ret), K(sql_str));
       }
     }
@@ -324,7 +338,7 @@ int ObRedisImporter::import_redis_info()
              ObTimeUtility::current_time() - start_time);
     ObMySQLTransaction trans;
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(trans.start(&sql_proxy_, tenant_id_))) {
+    } else if (OB_FAIL(trans.start(sql_proxy, tenant_id_))) {
       LOG_WARN("fail to start trans", K(ret));
     }
     for (int i = 0; OB_SUCC(ret) && i < ObRedisInfoV1::COMMAND_NUM; ++i) {

@@ -2902,20 +2902,16 @@ int ObModuleDataExecutor::execute(ObExecContext &ctx, ObModuleDataStmt &stmt)
   const int64_t INNER_SQL_TIMEOUT = GCONF.internal_sql_execute_timeout;
   ObTimeoutCtx timeout_ctx;
   const table::ObModuleDataArg &arg = stmt.get_arg();
-  ObMySQLProxy *sql_proxy = nullptr;
   LOG_INFO("start to handle module_data", K(arg), K(INNER_SQL_TIMEOUT), K(start_time));
   if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid ObModuleDataArg", K(ret), K(arg));
-  } else if (OB_ISNULL(sql_proxy = ctx.get_sql_proxy())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql proxy must not null", K(ret));
   } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(timeout_ctx, INNER_SQL_TIMEOUT))) {
     LOG_WARN("failed to set default timeout ctx", K(ret), K(INNER_SQL_TIMEOUT));
   } else {
     switch (arg.module_) {
       case table::ObModuleDataArg::REDIS: {
-        table::ObRedisImporter importer(arg.target_tenant_id_, *sql_proxy);
+        table::ObRedisImporter importer(arg.target_tenant_id_, ctx);
         if (OB_FAIL(importer.exec_op(arg.op_))) {
           LOG_WARN("fail to exec op", K(ret), K(arg.op_));
         }

@@ -58,8 +58,8 @@ public:
 class ObRedisImporter
 {
 public:
-  explicit ObRedisImporter(uint64_t tenant_id, common::ObCommonSqlProxy &sql_proxy)
-      : tenant_id_(tenant_id), sql_proxy_(sql_proxy), affected_rows_(0)
+  explicit ObRedisImporter(uint64_t tenant_id, sql::ObExecContext& exec_ctx)
+      : tenant_id_(tenant_id), exec_ctx_(exec_ctx), affected_rows_(0)
   {}
   virtual ~ObRedisImporter() {}
   int exec_op(table::ObModuleDataArg::ObInfoOpType op);
@@ -74,7 +74,7 @@ private:
   int check_redis_info();
 
   uint64_t tenant_id_;
-  common::ObCommonSqlProxy &sql_proxy_;
+  sql::ObExecContext& exec_ctx_;
   int64_t affected_rows_;
 };
 
