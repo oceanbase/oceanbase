@@ -4409,7 +4409,8 @@ def_table_schema(
     ('destination_name', 'varchar:128', 'true'),
     ('interval_ts', 'int', 'true'),
     ('user_id', 'int', 'true', 'OB_INVALID_ID'),
-    ('database_id', 'int', 'true', 'OB_INVALID_ID')
+    ('database_id', 'int', 'true', 'OB_INVALID_ID'),
+    ('max_failures', 'int', 'true', '0')
   ],
 )
 
