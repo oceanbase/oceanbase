@@ -476,81 +476,52 @@ int ObTableApiProcessorBase::get_table_id(
   return ret;
 }
 
-// transaction control
-int ObTableApiProcessorBase::get_tablet_by_rowkey(uint64_t table_id, const ObIArray<ObRowkey> &rowkeys,
-                                                  ObIArray<ObTabletID> &tablet_ids)
-{
+int ObTableApiProcessorBase::get_idx_by_table_tablet_id(uint64_t arg_table_id, ObTabletID arg_tablet_id,
+                                                        int64_t &part_idx, int64_t &subpart_idx) {
   int ret = OB_SUCCESS;
+  const ObTableSchema *table_schema = NULL;
+  const uint64_t tenant_id = MTL_ID();
   share::schema::ObSchemaGetterGuard schema_guard;
-  SMART_VAR(sql::ObTableLocation, location_calc) {
-    const uint64_t tenant_id = MTL_ID();
-    const ObTableSchema *table_schema;
-    if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
-      LOG_WARN("failed to get schema guard", K(ret), K(tenant_id));
-    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
-      LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(table_id));
-    } else if (OB_ISNULL(table_schema)) {
-      ret = OB_TABLE_NOT_EXIST;
-      LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(table_id));
-    } else if (!table_schema->is_partitioned_table()) {
-      tablet_ids.push_back(table_schema->get_tablet_id());
-    } else {
-      // trigger client to refresh table entry
-      // maybe drop a non-partitioned table and create a
-      // partitioned table with same name
-      ret = OB_SCHEMA_ERROR;
-      LOG_WARN("partitioned table should pass right tablet id from client", K(ret));
-    }
+  if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("failed to get schema guard", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, arg_table_id, table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(arg_table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+  } else if (!table_schema->is_partitioned_table()) {
+    // do nothing
+  } else if (OB_FAIL(table_schema->get_part_idx_by_tablet(arg_tablet_id, part_idx, subpart_idx))) {
+    LOG_WARN("fail to get part idx by tablet", K(ret));
   }
   return ret;
 }
 
-int ObTableApiProcessorBase::get_tablet_by_rowkey_partition_table(uint64_t table_id,
-                                                                  const ObIArray<ObRowkey> &rowkeys,
-                                                                  ObIArray<ObTabletID> &tablet_ids)
+int ObTableApiProcessorBase::get_tablet_by_idx(uint64_t table_id,
+                                              int64_t part_idx,
+                                              int64_t subpart_idx,
+                                              ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObObjectID, 1> part_ids;
   share::schema::ObSchemaGetterGuard schema_guard;
-  SMART_VAR(sql::ObTableLocation, location_calc) {
-    const uint64_t tenant_id = MTL_ID();
-    const ObTableSchema *table_schema;
-    if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
-      LOG_WARN("failed to get schema guard", K(ret), K(tenant_id));
-    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
-      LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(table_id));
-    } else if (OB_ISNULL(table_schema)) {
-      ret = OB_TABLE_NOT_EXIST;
-      LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(table_id));
-    } else if (!table_schema->is_partitioned_table()) {
-      ret = OB_SCHEMA_ERROR;
-      LOG_WARN("used for partoition table", K(ret));
-    } else if (OB_FAIL(location_calc.calculate_partition_ids_by_rowkey(
-                           session(), schema_guard, table_id, rowkeys, tablet_ids, part_ids))) {
-      LOG_WARN("failed to calc partition id", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObTableApiProcessorBase::get_tablet_id_by_rowkey(uint64_t table_id, const ObRowkey& rowkey, uint64_t& tablet_id)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObRowkey, 1> rowkey_array;
-  rowkey_array.push_back(rowkey);
-  ObSEArray<ObTabletID, 1> tablet_ids;
-  if (OB_FAIL(get_tablet_by_rowkey(table_id, rowkey_array, tablet_ids))) {
-    if (OB_SCHEMA_ERROR == ret) {
-      ret = OB_SUCCESS;
-      if (OB_FAIL(get_tablet_by_rowkey_partition_table(table_id, rowkey_array, tablet_ids))) {
-        LOG_WARN("fail to get tablet by rowkey in partition table", K(ret));
-      }
-    } else {
-      LOG_WARN("failed to get_tablet_by_rowkey", K(table_id), K(rowkey_array));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    tablet_id = tablet_ids.at(0).id();
+  const uint64_t tenant_id = MTL_ID();
+  const ObTableSchema *table_schema = NULL;
+  ObObjectID tmp_object_id = OB_INVALID_ID;
+  ObObjectID tmp_first_level_part_id = OB_INVALID_ID;
+  if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("failed to get schema guard", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(table_id));
+  } else if (!table_schema->is_partitioned_table()) {
+    tablet_id = table_schema->get_tablet_id();
+  } else if (OB_FAIL(table_schema->get_part_id_and_tablet_id_by_idx(part_idx,
+                                                                    subpart_idx,
+                                                                    tmp_object_id,
+                                                                    tmp_first_level_part_id,
+                                                                    tablet_id))) {
+    LOG_WARN("fail to get tablet by idx", K(ret));
   }
   return ret;
 }
