@@ -3145,11 +3145,14 @@ int ObHashGroupByOp::check_llc_ndv()
   } else if (OB_ISNULL(tenant_sql_mem_manager)) {
      uint64_t tenant_id  = MTL_ID();
      if (OB_MAX_RESERVED_TENANT_ID <  tenant_id) {
-       ret = OB_ERR_UNEXPECTED;
-       LOG_WARN("unexpect null ptr", K(ret));
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null ptr", K(ret));
      } else if (ndv_ratio_is_small_enough) {
-       bypass_ctrl_.bypass_rebackto_insert(ndv);
-       llc_est_.enabled_  = false;
+        bypass_ctrl_.bypass_rebackto_insert(ndv);
+        llc_est_.enabled_  = false;
+        if (OB_FAIL(by_pass_brs_holder_.save(MY_SPEC.max_batch_size_))) {
+          LOG_WARN("failed to save child batch", K(ret));
+        }
      }
   } else {
     global_bound_size = tenant_sql_mem_manager->get_global_bound_size();
@@ -3163,6 +3166,9 @@ int ObHashGroupByOp::check_llc_ndv()
       // go to llc_insert_state and stop bypass and stop estimating llc ndv
       bypass_ctrl_.bypass_rebackto_insert(ndv);
       llc_est_.enabled_  = false;
+      if (OB_FAIL(by_pass_brs_holder_.save(MY_SPEC.max_batch_size_))) {
+        LOG_WARN("failed to save child batch", K(ret));
+      }
       LOG_TRACE("reback into deduplication state and stop bypass and stop estimating llc ndv", K(ndv_ratio_is_small_enough), K(ndv), K(llc_est_.est_cnt_), K(has_enough_mem_for_deduplication), K(llc_est_.avg_group_mem_), K(global_bound_size), K(get_actual_mem_used_size()));
     } else {
       //do nothing, continue bypass and estimate llc ndv
