@@ -564,7 +564,9 @@ public:
 };
 
 struct ObBackupSSTableMeta {
-  OB_UNIS_VERSION(1);
+  static const int64_t OB_BACKUP_SSTABLE_META_V1 = 1;
+  static const int64_t OB_BACKUP_SSTABLE_META_V2 = 2;
+  OB_UNIS_VERSION(OB_BACKUP_SSTABLE_META_V2);
 
 public:
   ObBackupSSTableMeta();
@@ -582,6 +584,10 @@ public:
   ObBackupLinkedBlockAddr entry_block_addr_for_other_block_;
   int64_t total_other_block_count_;
   bool is_major_compaction_mview_dep_;
+
+private:
+  int deserialize_v1(const char *buf, const int64_t len, int64_t &pos);
+  int deserialize_v2(const char *buf, const int64_t len, int64_t &pos);
 };
 
 struct ObBackupMacroBlockIDPair final {
