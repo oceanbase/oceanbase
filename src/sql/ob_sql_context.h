@@ -640,6 +640,7 @@ public:
       uint32_t reserved_ : 29;
     };
   };
+  common::ObString raw_sql_;
   TO_STRING_KV(K(stmt_type_));
 private:
   share::ObFeedbackRerouteInfo *reroute_info_;
