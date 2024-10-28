@@ -36,6 +36,12 @@
 
 #define OB_LATIN1 "latin1"
 #define OB_LATIN1_SWEDISH_CI OB_LATIN1 "_swedish_ci"
+#define OB_LATIN1_GERMAN1_CI OB_LATIN1 "_german1_ci"
+#define OB_LATIN1_DANISH_CI OB_LATIN1 "_danish_ci"
+#define OB_LATIN1_GENERAL_CI OB_LATIN1 "_general_ci"
+#define OB_LATIN1_GENERAL_CS OB_LATIN1 "_general_cs"
+#define OB_LATIN1_SPANISH_CI OB_LATIN1 "_spanish_ci"
+#define OB_LATIN1_GERMAN2_CI OB_LATIN1 "_german2_ci"
 #define OB_LATIN1_BIN OB_LATIN1 "_bin"
 
 /* wm_wc and wc_mb return codes */
@@ -480,6 +486,12 @@ extern ObCharsetInfo ob_charset_utf8mb4_0900_bin;
 extern ObCharsetInfo ob_charset_utf8mb4_0900_ai_ci;
 extern ObCharsetInfo ob_charset_utf16_unicode_ci;
 extern ObCharsetInfo ob_charset_latin1;
+extern ObCharsetInfo ob_charset_latin1_german1_ci;
+extern ObCharsetInfo ob_charset_latin1_danish_ci;
+extern ObCharsetInfo ob_charset_latin1_general_ci;
+extern ObCharsetInfo ob_charset_latin1_general_cs;
+extern ObCharsetInfo ob_charset_latin1_spanish_ci;
+extern ObCharsetInfo ob_charset_latin1_german2_ci;
 extern ObCharsetInfo ob_charset_latin1_bin;
 extern ObCharsetInfo ob_charset_utf8mb4_croatian_uca_ci;
 extern ObCharsetInfo ob_charset_utf8mb4_unicode_520_ci;
