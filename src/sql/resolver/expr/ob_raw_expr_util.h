@@ -1226,6 +1226,10 @@ public:
                                          ObRawExpr *left_expr,
                                          ObRawExpr *right_expr,
                                          ObRawExpr *&expr);
+  static int wrap_cm_warn_on_fail_if_need(const ObRawExpr *src_expr,
+                                          const ObExprResType &dst_type,
+                                          const ObSQLSessionInfo *session,
+                                          ObCastMode &cm);
 private:
   static int need_extra_cast_for_enumset(const ObExprResType &src_type,
                                          const ObExprResType &dst_type,

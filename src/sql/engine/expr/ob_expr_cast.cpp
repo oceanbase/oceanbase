@@ -269,6 +269,8 @@ int ObExprCast::get_explicit_cast_cm(const ObExprResType &src_type,
     if (!is_called_in_sql() && CM_IS_WARN_ON_FAIL(cast_raw_expr.get_extra())) {
       cast_mode |= CM_WARN_ON_FAIL;
     }
+    OZ (ObRawExprUtils::wrap_cm_warn_on_fail_if_need(cast_raw_expr.get_param_expr(0), dst_type,
+                                                     &session, cast_mode));
   }
   return ret;
 }
