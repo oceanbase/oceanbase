@@ -134,7 +134,7 @@ void ObBasicMergeScheduler::try_finish_merge_progress(const int64_t merge_versio
     merged_version_ = merged_scn;
   }
 
-  if (merged_version_ > merge_version && OB_FAIL(MTL(ObTenantCompactionProgressMgr *)->finish_progress(merged_version_))) {
+  if (merged_version_ >= merge_version && OB_FAIL(MTL(ObTenantCompactionProgressMgr *)->finish_progress(merged_version_))) {
     LOG_WARN("failed to finish progress", KR(ret), K(merge_version), K(merged_version_));
   }
 }
