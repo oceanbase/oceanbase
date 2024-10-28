@@ -1369,7 +1369,7 @@ int ObTenantTabletScheduler::schedule_merge_execute_dag(
     LOG_INFO("success to scheudle tablet minor execute dag", K(ret), KP(merge_exe_dag), K(emergency));
   }
   if (OB_FAIL(ret) && nullptr != merge_exe_dag) {
-    MTL(share::ObTenantDagScheduler *)->free_dag(*merge_exe_dag);
+    MTL(share::ObTenantDagScheduler *)->free_dag(*merge_exe_dag, nullptr/*parent_dag*/);
   }
   return ret;
 }

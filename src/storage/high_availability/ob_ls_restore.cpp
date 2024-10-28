@@ -310,7 +310,7 @@ int ObLSRestoreDagNet::start_running_for_ls_restore_()
     if (OB_SUCCESS != (tmp_ret = erase_dag_from_dag_net(*initial_ls_restore_dag))) {
       LOG_WARN("failed to erase dag from dag net", K(tmp_ret), KPC(initial_ls_restore_dag));
     }
-    scheduler->free_dag(*initial_ls_restore_dag);
+    scheduler->free_dag(*initial_ls_restore_dag, nullptr/*parent_dag*/);
     initial_ls_restore_dag = nullptr;
   }
 
@@ -1907,7 +1907,7 @@ int ObTabletGroupMetaRestoreDag::generate_next_dag(share::ObIDag *&dag)
   }
 
   if (OB_NOT_NULL(tablet_group_meta_restore_dag)) {
-    scheduler->free_dag(*tablet_group_meta_restore_dag);
+    scheduler->free_dag(*tablet_group_meta_restore_dag, nullptr/*parent_dag*/);
     tablet_group_meta_restore_dag = nullptr;
   }
 

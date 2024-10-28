@@ -66,19 +66,19 @@ TEST_F(TestDagSize, test_size)
 
   ObBuildIndexDag *build_index_dag = NULL;
   ASSERT_EQ(OB_SUCCESS, scheduler->alloc_dag(build_index_dag));
-  scheduler->free_dag(*build_index_dag);
+  scheduler->free_dag(*build_index_dag, nullptr/*parent_dag*/);
   ObMigrateDag *migrate_dag = NULL;
   ASSERT_EQ(OB_SUCCESS, scheduler->alloc_dag(migrate_dag));
-  scheduler->free_dag(*migrate_dag);
+  scheduler->free_dag(*migrate_dag, nullptr/*parent_dag*/);
   ObSSTableMajorMergeDag *major_merge_dag = NULL;
   ASSERT_EQ(OB_SUCCESS, scheduler->alloc_dag(major_merge_dag));
-  scheduler->free_dag(*major_merge_dag);
+  scheduler->free_dag(*major_merge_dag, nullptr/*parent_dag*/);
   ObSSTableMinorMergeDag *minor_merge_dag = NULL;
   ASSERT_EQ(OB_SUCCESS, scheduler->alloc_dag(minor_merge_dag));
-  scheduler->free_dag(*minor_merge_dag);
+  scheduler->free_dag(*minor_merge_dag, nullptr/*parent_dag*/);
   ObUniqueCheckingDag *unique_check_dag = NULL;
   ASSERT_EQ(OB_SUCCESS, scheduler->alloc_dag(unique_check_dag));
-  scheduler->free_dag(*unique_check_dag);
+  scheduler->free_dag(*unique_check_dag, nullptr/*parent_dag*/);
 
   scheduler->destroy();
 }

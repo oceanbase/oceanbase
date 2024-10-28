@@ -301,7 +301,8 @@ int ObLSRemoveMemberHandler::generate_remove_member_dag_(
   }
 
   if (OB_FAIL(ret) && OB_NOT_NULL(ls_remove_member_dag)) {
-    scheduler->free_dag(*ls_remove_member_dag);
+    scheduler->free_dag(*ls_remove_member_dag, nullptr/*parent_dag*/);
+    ls_remove_member_dag = nullptr;
   }
   return ret;
 }
@@ -343,7 +344,7 @@ int ObLSRemoveMemberHandler::check_task_exist(
     }
 
     if (OB_NOT_NULL(exist_dag)) {
-      scheduler->free_dag(*exist_dag);
+      scheduler->free_dag(*exist_dag, nullptr/*parent_dag*/);
     }
   }
   return ret;

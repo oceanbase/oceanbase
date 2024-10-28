@@ -201,7 +201,8 @@ int ObLSBackupCleanDagNet::start_running()
 
   if (OB_FAIL(ret)) {
     if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(clean_dag)) {
-      scheduler->free_dag(*clean_dag);
+      scheduler->free_dag(*clean_dag, nullptr/*parent_dag*/);
+      clean_dag = nullptr;
     }
   }
   return ret;
