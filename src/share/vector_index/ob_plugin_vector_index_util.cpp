@@ -123,9 +123,6 @@ void ObVectorQueryVidIterator::reset()
   is_init_ = false;
   total_ = 0;
   cur_pos_ = 0;
-  if (OB_NOT_NULL(allocator_)) {
-    allocator_->reset();
-  }
 }
 
 int ObPluginVectorIndexHelper::merge_delta_and_snap_vids(const ObVsagQueryResult &first,

@@ -1651,7 +1651,8 @@ private:
       common::ObMySQLTransaction &trans,
       common::ObIAllocator &allocator,
       const uint64_t tenant_data_version,
-      const ObString &index_name = ObString(""));
+      const ObString &index_name = ObString(""),
+      const bool ignore_cs_replica = false);
   int rebuild_triggers_on_hidden_table(
       const share::schema::ObTableSchema &orig_table_schema,
       const share::schema::ObTableSchema &hidden_table_schema,

@@ -266,7 +266,8 @@ public:
   }
   void reset_slice_ctx_on_demand();
   void cleanup_slice_writer(const int64_t context_id);
-  TO_STRING_KV(K_(build_param), K_(is_task_end), K_(task_finish_count), K_(task_total_cnt), K_(sorted_slices_idx), K_(commit_scn), KPC(storage_schema_));
+  TO_STRING_KV(K_(build_param), K_(is_task_end), K_(task_finish_count), K_(task_total_cnt), K_(sorted_slices_idx), K_(commit_scn),
+      KP_(index_builder), KPC(storage_schema_));
   struct AggregatedCGInfo final {
   public:
     AggregatedCGInfo()
@@ -306,7 +307,7 @@ public:
   common::ObArray<ObDirectLoadSliceWriter *> sorted_slice_writers_;
   common::ObArray<AggregatedCGInfo> sorted_slices_idx_; //for cg_aggregation
   common::ObArray<ObSSTableIndexItem> cg_index_builders_;
-  bool is_task_end_; // to avoid write commit log/freeze in memory index sstable again.
+  bool is_task_end_; // to avoid write commit log/freeze in memory index sstable again
   int64_t task_finish_count_; // reach the parallel slice cnt, means the tablet data finished.
   int64_t task_total_cnt_; // parallelism of the PX.
   int64_t fill_column_group_finish_count_;

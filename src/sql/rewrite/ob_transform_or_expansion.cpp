@@ -1781,8 +1781,13 @@ int ObTransformOrExpansion::may_expr_extract_query_range(const ObDMLStmt *stmt,
   }
   if (OB_SUCC(ret) && !is_match) {
     const ObItemType com_type = expr->get_expr_type();
-    // EQ、NSEQ、LE、LT、GE、GT、NE、IS、IS_NOT
-    if ((T_OP_EQ <= com_type && T_OP_NE >= com_type) || T_OP_IS == com_type || T_OP_IS_NOT == com_type) {
+    if (expr->has_flag(CNT_COLUMN) &&
+        (expr->has_flag(IS_ROWID_SIMPLE_COND) || expr->has_flag(IS_ROWID_RANGE_COND))) {
+      //rowid = const or rowid belong const range can choose primary key.
+      is_match = true;
+    } else if ((T_OP_EQ <= com_type && T_OP_NE >= com_type) ||
+               T_OP_IS == com_type || T_OP_IS_NOT == com_type) {
+      // EQ、NSEQ、LE、LT、GE、GT、NE、IS、IS_NOT
       if (OB_UNLIKELY(expr->get_param_count() != 2) ||
           OB_ISNULL(l_expr = expr->get_param_expr(0)) || OB_ISNULL(r_expr = expr->get_param_expr(1))) {
         ret = OB_ERR_UNEXPECTED;
@@ -1820,10 +1825,6 @@ int ObTransformOrExpansion::may_expr_extract_query_range(const ObDMLStmt *stmt,
       } else if (r_expr->is_const_expr() && r2_expr->is_const_expr()) {
         is_right_const = true;
       }
-    } else if (expr->has_flag(CNT_COLUMN) &&
-               (expr->has_flag(IS_ROWID_SIMPLE_COND) || expr->has_flag(IS_ROWID_RANGE_COND))) {
-      //rowid = const or rowid belong const range can choose primary key.
-      is_match = true;
     }
     if (OB_SUCC(ret) && !is_match && is_right_const) {
       if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(l_expr, l_expr))) {
