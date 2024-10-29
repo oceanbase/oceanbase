@@ -502,7 +502,8 @@ public:
               K_(data_table_id), K_(rowkey_vid_table_id), K_(vid_rowkey_table_id),
               K_(inc_table_id),  K_(vbitmap_table_id), K_(snapshot_table_id),
               K_(ref_cnt), K_(idle_cnt), KP_(allocator),
-              K_(index_identity), K_(follower_sync_statistics));
+              K_(index_identity), K_(follower_sync_statistics),
+              K_(mem_check_cnt), K_(is_mem_limited));
 
 private:
   void *get_incr_index();
@@ -565,6 +566,7 @@ private:
   int64_t ref_cnt_;
   int64_t idle_cnt_; // not merged cnt
   int64_t mem_check_cnt_;
+  bool is_mem_limited_;
   uint64_t *all_vsag_use_mem_;
   ObIAllocator *allocator_; // allocator for alloc adapter self
   lib::MemoryContext &parent_mem_ctx_;
