@@ -450,7 +450,7 @@ int ObStartTransferMoveTxHelper::on_replay(const char* buf, const int64_t len, c
                                         collect_tx_info.transfer_epoch_,
                                         collect_tx_info.transfer_scn_,
                                         scn,
-                                        transaction::NotifyType::REGISTER_SUCC,
+                                        transaction::NotifyType::ON_REDO,
                                         true,
                                         transfer_move_tx_ctx.is_incomplete_replay());
     if (OB_FAIL(ls->move_tx_op(move_tx_param, collect_tx_info.args_))) {
