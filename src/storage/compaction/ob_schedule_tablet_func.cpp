@@ -17,6 +17,7 @@ namespace oceanbase
 using namespace storage;
 namespace compaction
 {
+ERRSIM_POINT_DEF(EN_COMPACTION_SKIP_CS_REPLICA_TO_REBUILD);
 /********************************************ObScheduleTabletFunc impl******************************************/
 
 ObScheduleTabletFunc::ObScheduleTabletFunc(
@@ -188,6 +189,13 @@ int ObScheduleTabletFunc::schedule_tablet_execute(
   if (OB_FAIL(ret)) {
     FLOG_INFO("ERRSIM EN_MEDIUM_CREATE_DAG", K(ret));
     return ret;
+  }
+  if (OB_SUCC(ret) && ls_status_.get_ls().is_cs_replica()) {
+    ret = EN_COMPACTION_SKIP_CS_REPLICA_TO_REBUILD;
+    if (OB_FAIL(ret)) {
+      LOG_INFO("ERRSIM EN_COMPACTION_SKIP_CS_REPLICA_TO_REBUILD", K(ret));
+      return ret;
+    }
   }
 #endif
   const ObLSID &ls_id = ls_status_.ls_id_;

@@ -340,7 +340,7 @@ public:
       "skip_index_cnt", skip_idx_attr_array_.count(), K_(skip_idx_attr_array),
       "column_group_cnt", column_group_array_.count(), K_(column_group_array), K_(has_all_column_group));
 public:
-  static void trim(const ObCollationType type, blocksstable::ObStorageDatum &storage_datum);
+  static int trim(const ObCollationType type, blocksstable::ObStorageDatum &storage_datum);
 private:
   int copy_from(const share::schema::ObMergeSchema &input_schema);
   int deep_copy_str(const ObString &src, ObString &dest);

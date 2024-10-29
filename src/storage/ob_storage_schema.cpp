@@ -108,8 +108,9 @@ int ObStorageColumnSchema::construct_column_param(share::schema::ObColumnParam &
     if (OB_FAIL(datum.from_obj(orig_default_value_))) {
       STORAGE_LOG(WARN, "fail to covent datum from obj", K(ret), K(orig_default_value_));
     } else {
-      (void) ObStorageSchema::trim(orig_default_value_.get_collation_type(), datum);
-      if (OB_FAIL(datum.to_obj_enhance(obj, orig_default_value_.get_meta()))) {
+      if (OB_FAIL(ObStorageSchema::trim(orig_default_value_.get_collation_type(), datum))) {
+        STORAGE_LOG(WARN, "failed to trim datum", K(ret), K_(orig_default_value), K(datum));
+      } else if (OB_FAIL(datum.to_obj_enhance(obj, orig_default_value_.get_meta()))) {
         STORAGE_LOG(WARN, "failed to transfer datum to obj", K(ret), K(datum));
       } else if (OB_FAIL(column_param.set_orig_default_value(obj))) {
         STORAGE_LOG(WARN, "fail to set orig default value", K(ret));
@@ -1926,19 +1927,25 @@ int ObStorageSchema::get_orig_default_row(
       } else if (OB_FAIL(default_row.storage_datums_[i].from_obj_enhance(col_schema->get_orig_default_value()))) {
         STORAGE_LOG(WARN, "Failed to transfer obj to datum", K(ret));
       } else if (need_trim && col_schema->get_orig_default_value().is_fixed_len_char_type()) {
-        trim(col_schema->get_orig_default_value().get_collation_type(), default_row.storage_datums_[i]);
+        if (OB_FAIL(trim(col_schema->get_orig_default_value().get_collation_type(), default_row.storage_datums_[i]))) {
+          STORAGE_LOG(WARN, "Failed to trim default value", K(ret), KPC(col_schema), K(default_row));
+        }
       }
     }
   }
   return ret;
 }
 
-void ObStorageSchema::trim(const ObCollationType type, blocksstable::ObStorageDatum &storage_datum)
+int ObStorageSchema::trim(const ObCollationType type, blocksstable::ObStorageDatum &storage_datum)
 {
+  int ret = OB_SUCCESS;
+  ObString space_pattern = ObCharsetUtils::get_const_str(type, ' ');
+  if (OB_UNLIKELY(!ObCharset::is_valid_collation(type) || (0 == space_pattern.length()))) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid collation type", K(ret), K(type), K(space_pattern));
+  } else {
     const char *str = storage_datum.ptr_;
     int32_t len = storage_datum.len_;
-    ObString space_pattern = ObCharsetUtils::get_const_str(type, ' ');
-
     for (; len >= space_pattern.length(); len -= space_pattern.length()) {
       if (0 != MEMCMP(str + len - space_pattern.length(),
             space_pattern.ptr(),
@@ -1947,6 +1954,8 @@ void ObStorageSchema::trim(const ObCollationType type, blocksstable::ObStorageDa
       }
     }
     storage_datum.len_ = len;
+  }
+  return ret;
 }
 
 const ObStorageColumnSchema *ObStorageSchema::get_column_schema(const int64_t column_idx) const
