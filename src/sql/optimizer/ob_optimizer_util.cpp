@@ -9017,6 +9017,8 @@ int ObOptimizerUtil::check_can_encode_sortkey(const common::ObIArray<OrderItem> 
       LOG_WARN("failed to estimate width for output join column exprs", K(ret));
     } else if (avg_len > 256) {
       can_sort_opt = false;
+    } else if (card < 1000) {
+      can_sort_opt = false;
     } else if (avg_len < 64 && card < 100000) {
       can_sort_opt = false;
     } else if (avg_len > 64 && avg_len < 128 && card < 1500000 ) {
