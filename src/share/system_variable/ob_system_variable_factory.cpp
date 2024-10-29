@@ -1173,12 +1173,14 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "performance_schema_setup_objects_size",
   "performance_schema_show_processlist",
   "performance_schema_users_size",
+  "pid_file",
   "plsql_ccflags",
   "plsql_optimize_level",
   "plsql_warnings",
   "plugin_dir",
   "plugin_load",
   "plugin_load_add",
+  "port",
   "preload_buffer_size",
   "privilege_features_enable",
   "profiling",
@@ -1281,6 +1283,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "slow_launch_time",
   "slow_query_log",
   "slow_query_log_file",
+  "socket",
   "sort_buffer_size",
   "sql_auto_is_null",
   "sql_big_selects",
@@ -1997,12 +2000,14 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_PERFORMANCE_SCHEMA_SETUP_OBJECTS_SIZE,
   SYS_VAR_PERFORMANCE_SCHEMA_SHOW_PROCESSLIST,
   SYS_VAR_PERFORMANCE_SCHEMA_USERS_SIZE,
+  SYS_VAR_PID_FILE,
   SYS_VAR_PLSQL_CCFLAGS,
   SYS_VAR_PLSQL_OPTIMIZE_LEVEL,
   SYS_VAR_PLSQL_WARNINGS,
   SYS_VAR_PLUGIN_DIR,
   SYS_VAR_PLUGIN_LOAD,
   SYS_VAR_PLUGIN_LOAD_ADD,
+  SYS_VAR_PORT,
   SYS_VAR_PRELOAD_BUFFER_SIZE,
   SYS_VAR_PRIVILEGE_FEATURES_ENABLE,
   SYS_VAR_PROFILING,
@@ -2105,6 +2110,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_SLOW_LAUNCH_TIME,
   SYS_VAR_SLOW_QUERY_LOG,
   SYS_VAR_SLOW_QUERY_LOG_FILE,
+  SYS_VAR_SOCKET,
   SYS_VAR_SORT_BUFFER_SIZE,
   SYS_VAR_SQL_AUTO_IS_NULL,
   SYS_VAR_SQL_BIG_SELECTS,
@@ -3006,7 +3012,10 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "auto_generate_certs",
   "_optimizer_cost_based_transformation",
   "range_index_dive_limit",
-  "partition_index_dive_limit"
+  "partition_index_dive_limit",
+  "pid_file",
+  "port",
+  "socket"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -4032,6 +4041,9 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarOptimizerCostBasedTransformation)
         + sizeof(ObSysVarRangeIndexDiveLimit)
         + sizeof(ObSysVarPartitionIndexDiveLimit)
+        + sizeof(ObSysVarPidFile)
+        + sizeof(ObSysVarPort)
+        + sizeof(ObSysVarSocket)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -11427,6 +11439,33 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PARTITION_INDEX_DIVE_LIMIT))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarPartitionIndexDiveLimit));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPidFile())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPidFile", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PID_FILE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPidFile));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPort())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPort", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PORT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPort));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSocket())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSocket", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SOCKET))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSocket));
       }
     }
 
@@ -20467,6 +20506,39 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPartitionIndexDiveLimit())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarPartitionIndexDiveLimit", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PID_FILE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPidFile)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPidFile)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPidFile())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPidFile", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PORT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPort)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPort)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPort())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPort", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SOCKET: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSocket)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSocket)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSocket())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSocket", K(ret));
       }
       break;
     }

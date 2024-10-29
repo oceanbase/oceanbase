@@ -5936,6 +5936,27 @@ public:
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_PARTITION_INDEX_DIVE_LIMIT; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(820); }
 };
+class ObSysVarPidFile : public ObVarcharSysVar
+{
+public:
+  ObSysVarPidFile() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_PID_FILE; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(821); }
+};
+class ObSysVarPort : public ObIntSysVar
+{
+public:
+  ObSysVarPort() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_PORT; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(822); }
+};
+class ObSysVarSocket : public ObVarcharSysVar
+{
+public:
+  ObSysVarSocket() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_SOCKET; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(823); }
+};
 
 
 class ObSysVarFactory
@@ -5959,7 +5980,7 @@ private:
 
 public:
   const static int64_t MYSQL_SYS_VARS_COUNT = 99;
-  const static int64_t OB_SYS_VARS_COUNT = 722;
+  const static int64_t OB_SYS_VARS_COUNT = 725;
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
   const static int64_t INVALID_MAX_READ_STALE_TIME = -1;
 
