@@ -953,7 +953,8 @@ protected:
   int64_t tablespace_id_;
   int64_t table_dop_; // default value is 1
   int64_t hash_subpart_num_;
-  int64_t vector_ivfflat_lists_;
+  int64_t vector_ivf_lists_;
+  int64_t vector_pq_seg_;
   int64_t vector_hnsw_m_;
   int64_t vector_hnsw_ef_construction_;
   bool is_external_table_;

@@ -134,7 +134,7 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
 
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (!schema->is_using_ivfflat_index()
+    } else if (!schema->is_using_ivf_index()
         && OB_FAIL(schema->get_index_info().get_fulltext_column(fulltext_col_id_))) {
       LOG_WARN("fail to get fulltext column id", K(ret), K(schema->get_index_info()));
     } else if (OB_FAIL(schema->get_index_name(tmp_name))) {
@@ -192,7 +192,7 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
         LOG_WARN("Fail to get column group index", K(ret));
       } else if (use_cs && OB_FAIL(tmp_cg_idxs.push_back(cg_idx))) {
         LOG_WARN("Fail to push back cg idx", K(ret));
-      } else if (schema->is_using_ivfflat_index()) {
+      } else if (schema->is_using_ivf_index()) {
         if (column_schema->is_rowkey_column() && 0 == column_schema->get_column_name_str().compare("center_idx")) {
           extra_rowkey_id_ = column_id;
         } else if (column_schema->is_index_column() && ObVectorType == column_schema->get_data_type()) {

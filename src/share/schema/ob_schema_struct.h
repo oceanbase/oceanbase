@@ -335,6 +335,7 @@ enum ObIndexUsingType
   USING_HASH,
   USING_HNSW,
   USING_IVFFLAT,
+  USING_IVFPQ,
   USING_TYPE_MAX,
 };
 

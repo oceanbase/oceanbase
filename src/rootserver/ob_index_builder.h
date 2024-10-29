@@ -17,6 +17,8 @@
 #include "share/ob_ddl_task_executor.h"
 #include "share/ob_rpc_struct.h"
 #include "share/schema/ob_schema_struct.h"
+#include "ob_ddl_service.h"
+#include "share/ob_index_builder_util.h"
 
 namespace oceanbase
 {
@@ -91,7 +93,8 @@ public:
       const obrpc::ObDropIndexArg &arg,
       common::ObIAllocator &allocator,
       ObDDLTaskRecord &task_record,
-      const ObTableSchema *container_schema = nullptr);
+      const ObTableSchema *container_schema = nullptr,
+      const ObTableSchema *second_container_schema = nullptr);
   int submit_build_index_task(common::ObMySQLTransaction &trans,
                               const obrpc::ObCreateIndexArg &arg,
                               const share::schema::ObTableSchema *data_schema,
@@ -103,9 +106,18 @@ public:
                               const uint64_t tenant_data_version,
                               common::ObIAllocator &allocator,
                               ObDDLTaskRecord &task_record,
-                              const ObTableSchema *container_schema = nullptr);
+                              const ObTableSchema *container_schema = nullptr,
+                              const ObTableSchema *second_container_schema = nullptr);
 private:
   typedef common::ObArray<std::pair<int64_t, common::ObString> > OrderFTColumns;
+  int create_container_table(obrpc::ObCreateIndexArg &arg,
+                             ObDDLSQLTransaction &trans,
+                             ObArenaAllocator &allocator,
+                             const ObTableSchema &index_schema,
+                             const ObTableSchema &new_table_schema,
+                             const uint64_t offset,
+                             const uint64_t tenant_data_version,
+                             const bool is_global_index = false);
   class FulltextColumnOrder
   {
   public:
@@ -124,7 +136,8 @@ private:
                       share::schema::ObTableSchema &schema);
   int set_index_table_columns(const obrpc::ObCreateIndexArg &arg,
                               const share::schema::ObTableSchema &data_schema,
-                              share::schema::ObTableSchema &schema);
+                              share::schema::ObTableSchema &schema,
+                              const share::ObIndexTableType index_table_type = share::ObIndexTableType::INDEX_TABLE);
   int set_index_table_options(const obrpc::ObCreateIndexArg &arg,
                               const share::schema::ObTableSchema &data_schema,
                               share::schema::ObTableSchema &schema);

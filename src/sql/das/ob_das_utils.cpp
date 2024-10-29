@@ -209,13 +209,18 @@ int ObDASUtils::project_storage_row(const ObDASDMLBaseCtDef &dml_ctdef,
                                     ObTabletID *tablet_id)
 {
   int ret = OB_SUCCESS;
+  ObTypeVector vector;
+  int64_t center_column_idx = -1;
+  int64_t vector_column_idx = -1;
   for (int64_t i = 0; OB_SUCC(ret) && i < row_projector.count(); ++i) {
     int64_t projector_idx = row_projector.at(i);
     const ObObjMeta &col_type = dml_ctdef.column_types_.at(i);
     const ObAccuracy &col_accuracy = dml_ctdef.column_accuracys_.at(i);
-    if (projector_idx < 0) {
-      if (dml_ctdef.table_param_.get_data_table().is_vector_ivfflat_index()
-          && dml_ctdef.column_ids_[i] == dml_ctdef.table_param_.get_data_table().get_extra_rowkey_id()) {
+    if (dml_ctdef.table_param_.get_data_table().is_vector_ivfpq_index() && vector_column_idx == i) {
+      //do nothing, we will fill this column later
+    } else if (projector_idx < 0) {
+      if (((dml_ctdef.table_param_.get_data_table().is_vector_ivfflat_index() || dml_ctdef.table_param_.get_data_table().is_vector_ivfpq_index()) &&
+           dml_ctdef.column_ids_[i] == dml_ctdef.table_param_.get_data_table().get_extra_rowkey_id())) {
         if (OB_ISNULL(tablet_id)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("nullptr tablet_id", K(ret), K(tablet_id));
@@ -225,15 +230,18 @@ int ObDASUtils::project_storage_row(const ObDASDMLBaseCtDef &dml_ctdef,
           if (column_id == dml_ctdef.table_param_.get_data_table().get_vector_index_id()
               && dml_ctdef.column_types_.at(j).is_vector()) {
             ObObj obj;
-            ObTypeVector vector;
             if (OB_FAIL(dml_row.cells()[row_projector.at(j)].to_obj(obj, dml_ctdef.column_types_.at(j)))) {
               LOG_WARN("stored row to new row obj failed", K(ret), K(j),
                 K(dml_row.cells()[row_projector.at(j)]), K(dml_ctdef.column_types_.at(j)));
             } else if (OB_FAIL(obj.get_vector(vector))) {
               LOG_WARN("failed to get vector", K(ret), K(obj));
-            } else if (OB_FAIL(MTL(ObTenantIvfflatCenterCache*)->get_nearest_center(
+            } else if (OB_FAIL(MTL(ObTenantIvfCenterCache*)->get_nearest_center(
                 vector, dml_ctdef.table_param_.get_data_table().get_table_id(), *tablet_id, storage_row.cells_[i]))) {
               LOG_WARN("failed to get nearest center", K(ret));
+            }
+            if (OB_SUCC(ret)) {
+              center_column_idx = i;
+              vector_column_idx = j;
             }
             break;
           }
@@ -247,6 +255,20 @@ int ObDASUtils::project_storage_row(const ObDASDMLBaseCtDef &dml_ctdef,
                K(dml_row.cells()[projector_idx]), K(col_type), K(projector_idx), K(i));
     } else if (OB_FAIL(reshape_storage_value(col_type, col_accuracy, allocator, storage_row.cells_[i]))) {
       LOG_WARN("reshape storage value failed", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && dml_ctdef.table_param_.get_data_table().is_vector_ivfpq_index() &&
+      center_column_idx >= 0 && vector_column_idx >= 0) {
+    ObTypeVector *residual;
+    if (OB_FAIL(MTL(ObTenantIvfCenterCache*)->cal_qvector_residual(allocator,
+          vector, residual,
+          storage_row.cells_[center_column_idx],
+          dml_ctdef.table_param_.get_data_table().get_table_id(),
+          *tablet_id))) {
+      LOG_WARN("failed to get residual for nearest center", K(ret));
+    } else if (OB_FAIL(MTL(ObTenantPQCenterCache*)->convert_to_pq_index_vec(allocator,
+        *residual, dml_ctdef.table_param_.get_data_table().get_table_id(), *tablet_id, storage_row.cells_[vector_column_idx]))) {
+      LOG_WARN("failed to set pq index vector", K(ret));
     }
   }
   //to project shadow rowkey with unique index

@@ -114,6 +114,65 @@ select count(1) from oceanbase.__all_table where table_name like "%ivfflat%";
 
 drop database if exists vector_test;
 
+create database vector_test;
+use vector_test;
+
+create table ivfpq_test (c1 int, c2 vector(12), c3 int, c4 int, primary key (c1,c3));
+insert into ivfpq_test values(1,'[1,2,3,1,2,3,1,2,3,1,2,3]',2,3),(2,'[2,3,4,2,3,4,2,3,4,2,3,4]',3,4),(4,'[4,5,6,4,5,6,4,5,6,4,5,6]',5,6),(10,'[10,11,12,10,11,12,10,11,12,10,11,12]',11,12),(11,'[11,12,13,11,12,13,11,12,13,11,12,13]',12,13),(25,'[25,26,27,25,26,27,25,26,27,25,26,27]',26,27),(31,'[31,32,33,31,32,33,31,32,33,31,32,33]',32,33),(50,'[50,51,52,50,51,52,50,51,52,50,51,52]',51,52),(55,'[55,56,57,55,56,57,55,56,57,55,56,57]',56,57);
+select count(1) from ivfpq_test;
+
+create vector index ivfpq_idx1 on ivfpq_test (c2 vector_l2_ops) with(type=ivfpq, lists=3, seg=4);
+create vector index ivfpq_idx2 on ivfpq_test (c2 vector_ip_ops) with(type=ivfpq, lists=3, seg=4);
+create vector index ivfpq_idx3 on ivfpq_test (c2 vector_cosine_ops) with(type=ivfpq, lists=3, seg=4);
+create index idx on ivfpq_test (c4);
+
+show index from ivfpq_test;
+show create table ivfpq_test;
+
+explain select * from ivfpq_test order by l2_distance(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]');
+explain select * from ivfpq_test order by l2_distance(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]') approx limit 7;
+explain select * from ivfpq_test order by inner_product(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]');
+explain select * from ivfpq_test order by inner_product(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]') approx limit 7;
+explain select * from ivfpq_test order by cosine_distance(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]');
+explain select * from ivfpq_test order by cosine_distance(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]') approx limit 7;
+
+select *, l2_distance(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]') as dis from ivfpq_test order by l2_distance(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]') approx limit 7;
+select /*+probes(2)*/ *, l2_distance(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]') as dis from ivfpq_test order by l2_distance(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]') approx limit 7;
+select *, inner_product(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]') as dis from ivfpq_test order by inner_product(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]') approx limit 7;
+select *, cosine_distance(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]') as dis from ivfpq_test order by cosine_distance(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]') approx limit 7;
+set @@vector_ivfpq_probes=2;
+select * from ivfpq_test order by l2_distance(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]') approx limit 7;
+
+delete from ivfpq_test where c1 = 2;
+delete from ivfpq_test where c4 = 6;
+select count(1) from ivfpq_test;
+
+insert into ivfpq_test values(0,'[0,1,2,0,1,2,0,1,2,0,1,2]',1,2),(58,'[58,59,60,58,59,60,58,59,60,58,59,60]',59,60);
+insert into ivfpq_test values(100,'[100,200,300,100,200,300,100,200,300,100,200,300]',200,300);
+select count(1) from ivfpq_test;
+
+explain select /*+probes(1)*/ *, l2_distance(c2, '[60,61,62,60,61,62,60,61,62,60,61,62]') as dis from ivfpq_test order by l2_distance(c2, '[60,61,62,60,61,62,60,61,62,60,61,62]') approx limit 5;
+select /*+probes(1)*/ *, l2_distance(c2, '[60,61,62,60,61,62,60,61,62,60,61,62]') as dis from ivfpq_test order by l2_distance(c2, '[60,61,62,60,61,62,60,61,62,60,61,62]') approx limit 5;
+select *, inner_product(c2, '[60,61,62,60,61,62,60,61,62,60,61,62]') as dis from ivfpq_test order by inner_product(c2, '[60,61,62,60,61,62,60,61,62,60,61,62]') approx limit 5;
+select *, cosine_distance(c2, '[60,61,62,60,61,62,60,61,62,60,61,62]') as dis from ivfpq_test order by cosine_distance(c2, '[60,61,62,60,61,62,60,61,62,60,61,62]') approx limit 5;
+
+drop index ivfpq_idx1 on ivfpq_test;
+show index from ivfpq_test;
+show create table ivfpq_test;
+select count(1) from oceanbase.__all_table where table_name like "%ivfpq_idx1%";
+
+alter system set vector_ivfpq_elkan = "false";
+create vector index ivfpq_idx1 on ivfpq_test (c2 vector_l2_ops) with(type=ivfpq); # without lists or seg
+explain select * from ivfpq_test order by l2_distance(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]');
+explain select * from ivfpq_test order by l2_distance(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]') approx limit 3;
+
+select /*+probes(2)*/* from ivfpq_test order by l2_distance(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]') approx limit 3;
+
+drop table ivfpq_test;
+select count(1) from oceanbase.__all_table where table_name like "%ivfpq%";
+
+drop database if exists vector_test;
+
 # 
 create database vector_test;
 use vector_test;
@@ -121,10 +180,12 @@ use vector_test;
 create table vector_test (c1 int, c2 vector(3), c3 int, c4 int, primary key (c1,c3));
 create index idx on vector_test (c4);
 create vector index ivfflat_idx on vector_test (c2 vector_l2_ops) with(type=ivfflat,lists=3);
+create vector index ivfpq_idx on vector_test (c2 vector_l2_ops) with(type=ivfpq,lists=3);
 create vector index hnsw_idx on vector_test (c2 vector_l2_ops) with(type=hnsw);
 
 drop table vector_test;
 select count(1) from oceanbase.__all_table where table_name like "%ivfflat%";
+select count(1) from oceanbase.__all_table where table_name like "%ivfpq%";
 select count(1) from oceanbase.__all_table where table_name like "%hnsw%";
 select count(1) from oceanbase.__all_table where table_name like "%vector%";
 drop database if exists vector_test;

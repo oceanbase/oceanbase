@@ -366,7 +366,8 @@ private:
       const uint64_t tenant_data_version,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record,
-      const ObTableSchema *container_schema = nullptr);
+      const ObTableSchema *container_schema = nullptr,
+      const ObTableSchema *second_container_schema = nullptr);
   int create_constraint_task(
       common::ObISQLClient &proxy,
       const share::schema::ObTableSchema *table_schema,
@@ -453,7 +454,8 @@ private:
       const obrpc::ObDropIndexArg *drop_index_arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record,
-      const ObTableSchema *container_schema = nullptr);
+      const ObTableSchema *container_schema = nullptr,
+      const ObTableSchema *second_container_schema = nullptr);
   
   int create_ddl_retry_task(
       common::ObISQLClient &proxy,

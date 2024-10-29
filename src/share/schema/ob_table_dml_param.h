@@ -71,6 +71,7 @@ public:
   OB_INLINE bool is_domain_index() const { return ObTableSchema::is_domain_index(index_type_); }
   OB_INLINE bool is_spatial_index() const { return ObTableSchema::is_spatial_index(index_type_); }
   OB_INLINE bool is_vector_ivfflat_index() const { return USING_IVFFLAT == index_using_type_; }
+  OB_INLINE bool is_vector_ivfpq_index() const { return USING_IVFPQ == index_using_type_; }
   OB_INLINE uint32_t get_extra_rowkey_id() const { return extra_rowkey_id_; }
   OB_INLINE uint32_t get_vector_index_id() const { return vector_index_id_; }
   int is_rowkey_column(const uint64_t column_id, bool &is_rowkey) const;
@@ -118,7 +119,7 @@ private:
   storage::ObTableReadInfo read_info_;
   storage::ObFixedMetaObjArray<storage::ObTableReadInfo *> cg_read_infos_;
   int64_t lob_inrow_threshold_;
-  // for ivfflat index
+  // for ivf index
   uint32_t extra_rowkey_id_; // rowkey column id of "center_idx"
   uint32_t vector_index_id_; // index column id of vector
 };

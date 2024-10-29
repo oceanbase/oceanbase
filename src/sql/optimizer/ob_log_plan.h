@@ -1322,7 +1322,7 @@ public:
                        const ObTableSchema &table_schema,
                        ObIArray<ObRawExpr*> &keys);
 
-  // for ivfflat index
+  // for ivf index
   int get_extra_access_exprs(const uint64_t table_id,
                        const uint64_t ref_table_id,
                        ObIArray<ObRawExpr*> &extra_columns);

@@ -110,7 +110,8 @@ struct ObIndexMetaInfo
       is_geo_index_(false),
       index_micro_block_count_(-1),
       is_vector_index_(false),
-      container_table_id_(OB_INVALID_ID)
+      container_table_id_(OB_INVALID_ID),
+      second_container_table_id_(OB_INVALID_ID)
   { }
   virtual ~ObIndexMetaInfo()
   { }
@@ -134,6 +135,7 @@ struct ObIndexMetaInfo
   int64_t index_micro_block_count_;  // micro block count from table static info
   bool is_vector_index_;  // For HNSW & IVVFLAT
   int64_t container_table_id_;
+  int64_t second_container_table_id_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObIndexMetaInfo);
 };

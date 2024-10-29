@@ -24,7 +24,6 @@
 #include "share/schema/ob_mlog_info.h"
 #include "lib/mysqlclient/ob_mysql_transaction.h"
 #include "share/vector_index/ob_hnsw_index_builder.h"
-#include "share/vector_index/ob_ivfflat_index_build_helper.h"
 
 using namespace oceanbase::rootserver;
 using namespace oceanbase::common;
@@ -364,7 +363,7 @@ int ObIndexSSTableBuildTask::inner_hnsw_process(
   return ret;
 }
 
-int ObIndexSSTableBuildTask::inner_ivfflat_process(
+int ObIndexSSTableBuildTask::inner_ivf_process(
     const ObTableSchema &data_schema,
     const ObTableSchema &index_schema,
     const bool is_oracle_mode)
@@ -506,13 +505,13 @@ int ObIndexSSTableBuildTask::process()
   } else if (nullptr == index_schema) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, index schema must not be nullptr", K(ret), K(tenant_id_), K(dest_table_id_));
-  } else if (ObIndexUsingType::USING_HNSW == vector_index_using_type_) {
+  } else if (is_using_hnsw_index()) {
     if (OB_FAIL(inner_hnsw_process(schema_guard, *data_schema, *index_schema))) {
       LOG_WARN("failed to process hnsw index", K(ret));
     }
-  } else if (ObIndexUsingType::USING_IVFFLAT == vector_index_using_type_) {
-    if (OB_FAIL(inner_ivfflat_process(*data_schema, *index_schema, oracle_mode))) {
-      LOG_WARN("failed to process ivfflat index", K(ret));
+  } else if (is_using_ivf_index()) {
+    if (OB_FAIL(inner_ivf_process(*data_schema, *index_schema, oracle_mode))) {
+      LOG_WARN("failed to process ivf index", K(ret));
     }
   } else if (OB_FAIL(ObDDLUtil::generate_build_replica_sql(tenant_id_, data_table_id_,
                                                           dest_table_id_,
@@ -579,9 +578,11 @@ ObAsyncTask *ObIndexSSTableBuildTask::deep_copy(char *buf, const int64_t buf_siz
         is_vector_index_);
     task->set_vector_index_using_type(vector_index_using_type_);
     task->set_vd_type(vd_type_);
+    task->set_vector_pq_seg(vector_pq_seg_);
     task->set_vector_hnsw_m(vector_hnsw_m_);
     task->set_vector_hnsw_ef_construction(vector_hnsw_ef_construction_);
     task->set_container_table_id(container_table_id_);
+    task->set_second_container_table_id(second_container_table_id_);
     if (OB_SUCCESS != (task->set_nls_format(nls_date_format_, nls_timestamp_format_, nls_timestamp_tz_format_))) {
       task->~ObIndexSSTableBuildTask();
       task = nullptr;
@@ -738,6 +739,7 @@ int ObIndexBuildTask::init(
     const int64_t parent_task_id /* = 0 */,
     const uint64_t tenant_data_version,
     const ObTableSchema *container_schema /* nullptr */,
+    const ObTableSchema *second_container_schema /* nullptr */,
     const int64_t task_status /* = TaskStatus::PREPARE */,
     const int64_t snapshot_version /* = 0 */)
 {
@@ -781,6 +783,9 @@ int ObIndexBuildTask::init(
     index_table_id_ = index_schema->get_table_id();
     if (OB_NOT_NULL(container_schema)) {
       create_index_arg_.container_table_id_ = container_schema->get_table_id();
+    }
+    if (OB_NOT_NULL(second_container_schema)) {
+      create_index_arg_.second_container_table_id_ = second_container_schema->get_table_id();
     }
     schema_version_ = schema_version;
     parallelism_ = parallelism;
@@ -1260,14 +1265,23 @@ int ObIndexBuildTask::send_build_single_replica_request()
     if (create_index_arg_.is_vector_index()) {
       task.set_vector_index_using_type(create_index_arg_.index_using_type_);
       task.set_vd_type(create_index_arg_.index_columns_.at(0).vd_type_);
+      task.set_vector_pq_seg(create_index_arg_.vector_pq_seg_);
       task.set_vector_hnsw_m(create_index_arg_.vector_hnsw_m_);
       task.set_vector_hnsw_ef_construction(create_index_arg_.vector_hnsw_ef_construction_);
-      if (USING_IVFFLAT == create_index_arg_.index_using_type_) {
+      if (create_index_arg_.is_vector_ivf_index()) {
         if (create_index_arg_.vector_help_schema_.empty()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected empty vector help schema", K(ret), K_(create_index_arg));
         } else {
           task.set_container_table_id(create_index_arg_.container_table_id_);
+        }
+        if (USING_IVFPQ == create_index_arg_.index_using_type_) {
+          if (create_index_arg_.vector_help_schema_.count() < 2) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected not enough vector help schema", K(ret), K_(create_index_arg));
+          } else {
+            task.set_second_container_table_id(create_index_arg_.second_container_table_id_);
+          }
         }
       }
     }

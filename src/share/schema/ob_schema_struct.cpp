@@ -6432,9 +6432,31 @@ int ObPartitionUtils::check_param_valid_(
             } else if (OB_ISNULL(table_schema)) {
               ret = OB_TABLE_NOT_EXIST;
               LOG_WARN("data table schema not exist", KR(ret), K(tenant_id), K(related_tid));
-            } else if (!table_schema->vec_ivfflat_container_table()) {
+            } else if (!table_schema->vec_container_table()) {
               ret = OB_TABLE_NOT_EXIST;
             }
+          } else if (related_table->related_tids_->count() == 2) {
+            const ObTableSchema *table_schema2 = nullptr;
+            const uint64_t related_tid =
+              share::is_oracle_mapping_real_virtual_table(related_table->related_tids_->at(0)) ?
+                    ObSchemaUtils::get_real_table_mappings_tid(related_table->related_tids_->at(0))
+                    : related_table->related_tids_->at(0);
+            const uint64_t related_tid2 =
+              share::is_oracle_mapping_real_virtual_table(related_table->related_tids_->at(1)) ?
+                    ObSchemaUtils::get_real_table_mappings_tid(related_table->related_tids_->at(1))
+                    : related_table->related_tids_->at(1);
+            if (FAILEDx(guard->get_table_schema(
+                tenant_id, related_tid, table_schema)) || FAILEDx(guard->get_table_schema(
+                tenant_id, related_tid2, table_schema2))) {
+              LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(related_tid));
+            } else if (OB_ISNULL(table_schema) || OB_ISNULL(table_schema2)) {
+              ret = OB_TABLE_NOT_EXIST;
+              LOG_WARN("data table schema not exist", KR(ret), K(tenant_id), K(related_tid));
+            } else if (!(table_schema->vec_ivf_container_table() && table_schema2->vec_ivfpq_second_container_table()) &&
+                       !(table_schema2->vec_ivf_container_table() && table_schema->vec_ivfpq_second_container_table())) {
+              ret = OB_TABLE_NOT_EXIST;
+            }
+            LOG_TRACE("check ivf container table", K(ret), KPC(table_schema), KPC(table_schema2));
           } else {
             ret = OB_TABLE_NOT_EXIST;
           }
@@ -6486,8 +6508,8 @@ int ObPartitionUtils::check_param_valid_(
             } else if (OB_ISNULL(table_schema)) {
               ret = OB_TABLE_NOT_EXIST;
               LOG_WARN("data table schema not exist", KR(ret), K(tenant_id), K(related_tid));
-            } else if (table_schema->vec_ivfflat_container_table()) {
-              // do nothing // ignore error if related_tid is ivfflat container table
+            } else if (table_schema->vec_container_table()) {
+              // do nothing // ignore error if related_tid is ivf container table
             } else {
               ret = OB_TABLE_NOT_EXIST;
               LOG_WARN("local index not exist", KR(ret), K(table_id), K(data_table_id), K(related_tid));
@@ -9662,7 +9684,8 @@ bool is_mlog_table(const ObTableType table_type)
 bool is_vector_using_type(const ObIndexUsingType index_using_type)
 {
   return ObIndexUsingType::USING_HNSW == index_using_type
-          || ObIndexUsingType::USING_IVFFLAT == index_using_type;
+          || ObIndexUsingType::USING_IVFFLAT == index_using_type
+          || ObIndexUsingType::USING_IVFPQ == index_using_type;
 }
 
 const char *schema_type_str(const ObSchemaType schema_type)

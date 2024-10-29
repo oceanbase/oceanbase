@@ -3765,6 +3765,24 @@ int ObLSTabletService::check_old_row_legitimacy(
       ret = OB_ERR_DEFENSIVE_CHECK;
       FLOG_WARN("storage old row is not matched with sql old row", K(ret));
     } else {
+      bool is_using_pq_index = false;
+      if (data_table.is_index_table()) {
+        const uint64_t tenant_id = MTL_ID();
+        uint64_t index_table_id = data_table.get_table_id();
+        const ObTableSchema *index_table_schema = NULL;
+        ObMultiVersionSchemaService *schema_service = MTL(ObTenantSchemaService*)->get_schema_service();
+        ObSchemaGetterGuard schema_guard;
+        if (OB_ISNULL(schema_service)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret), KP(schema_service));
+        } else if (OB_FAIL(schema_service->get_tenant_schema_guard(tenant_id, schema_guard))) {
+          LOG_WARN("failed to get schema manager", K(ret), K(tenant_id));
+        } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, index_table_id, index_table_schema))) {
+          LOG_WARN("get index table schema failed", K(ret));
+        } else if (!OB_ISNULL(index_table_schema)) {
+          is_using_pq_index = index_table_schema->is_using_ivfpq_index();
+        }
+      }
       for (int64_t i = 0; OB_SUCC(ret) && i < old_row.get_count(); ++i) {
         const ObObj &storage_val = storage_old_row->get_cell(i);
         const ObObj &sql_val = old_row.get_cell(i);
@@ -3786,7 +3804,9 @@ int ObLSTabletService::check_old_row_legitimacy(
         } else if (sql_val.is_nop_value()) {
           //this column is nop val, means that this column does not be touched by DML
           //just ignore it
-        } else if (OB_FAIL(storage_val.compare(sql_val, cmp)) || 0 != cmp) {
+        } else if (!(is_using_pq_index && storage_val.get_type() == ObVectorType && storage_val.get_type() == sql_val.get_type())
+                   && (OB_FAIL(storage_val.compare(sql_val, cmp)) || 0 != cmp)) {
+          // Ignore the error in ivf_pq since it's totally normal for them to be different
           ret = OB_ERR_DEFENSIVE_CHECK;
           err_col_id = column_ids.at(i);
           FLOG_WARN("storage_val is not equal with sql_val, maybe catch a bug", K(ret),
@@ -3899,8 +3919,9 @@ int ObLSTabletService::check_is_gencol_check_failed(const ObRelativeTable &data_
         } else if (is_shadow_column(column->get_column_id())) {
           //shadow column does not exists in basic table, do nothing
         } else if (OB_ISNULL(column = data_table_schema->get_column_schema(column->get_column_id()))) {
-          if (index_table_schema->is_using_ivfflat_index() && 0 == (*iter)->get_column_name_str().compare("center_idx")) {
-            // do nothing // ivfflat index extra column
+          if (index_table_schema->is_using_ivf_index() && (0 == (*iter)->get_column_name_str().compare("center_idx") ||
+              (0 == (*iter)->get_column_name_str().compare("seg_idx")))) {
+            // do nothing // ivf index extra column
           } else {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected null", K(ret), KP(column));

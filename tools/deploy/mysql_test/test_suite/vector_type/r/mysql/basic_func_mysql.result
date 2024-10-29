@@ -480,12 +480,286 @@ count(1)
 drop database if exists vector_test;
 create database vector_test;
 use vector_test;
+create table ivfpq_test (c1 int, c2 vector(12), c3 int, c4 int, primary key (c1,c3));
+insert into ivfpq_test values(1,'[1,2,3,1,2,3,1,2,3,1,2,3]',2,3),(2,'[2,3,4,2,3,4,2,3,4,2,3,4]',3,4),(4,'[4,5,6,4,5,6,4,5,6,4,5,6]',5,6),(10,'[10,11,12,10,11,12,10,11,12,10,11,12]',11,12),(11,'[11,12,13,11,12,13,11,12,13,11,12,13]',12,13),(25,'[25,26,27,25,26,27,25,26,27,25,26,27]',26,27),(31,'[31,32,33,31,32,33,31,32,33,31,32,33]',32,33),(50,'[50,51,52,50,51,52,50,51,52,50,51,52]',51,52),(55,'[55,56,57,55,56,57,55,56,57,55,56,57]',56,57);
+select count(1) from ivfpq_test;
+count(1)
+9
+create vector index ivfpq_idx1 on ivfpq_test (c2 vector_l2_ops) with(type=ivfpq, lists=3, seg=4);
+create vector index ivfpq_idx2 on ivfpq_test (c2 vector_ip_ops) with(type=ivfpq, lists=3, seg=4);
+create vector index ivfpq_idx3 on ivfpq_test (c2 vector_cosine_ops) with(type=ivfpq, lists=3, seg=4);
+create index idx on ivfpq_test (c4);
+show index from ivfpq_test;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+ivfpq_test	0	PRIMARY	1	c1	A	NULL	NULL	NULL		BTREE	available		YES	NULL
+ivfpq_test	0	PRIMARY	2	c3	A	NULL	NULL	NULL		BTREE	available		YES	NULL
+ivfpq_test	1	ivfpq_idx1	1	c2	A	NULL	NULL	NULL	YES	IVFPQ	available		YES	NULL
+ivfpq_test	1	ivfpq_idx2	1	c2	A	NULL	NULL	NULL	YES	IVFPQ	available		YES	NULL
+ivfpq_test	1	ivfpq_idx3	1	c2	A	NULL	NULL	NULL	YES	IVFPQ	available		YES	NULL
+ivfpq_test	1	idx	1	c4	A	NULL	NULL	NULL	YES	BTREE	available		YES	NULL
+show create table ivfpq_test;
+Table	Create Table
+ivfpq_test	CREATE TABLE `ivfpq_test` (
+  `c1` int(11) NOT NULL,
+  `c2` vector(12) DEFAULT NULL,
+  `c3` int(11) NOT NULL,
+  `c4` int(11) DEFAULT NULL,
+  PRIMARY KEY (`c1`, `c3`),
+  KEY `ivfpq_idx1` (`c2`) BLOCK_SIZE 16384 LOCAL,
+  KEY `ivfpq_idx2` (`c2`) BLOCK_SIZE 16384 LOCAL,
+  KEY `ivfpq_idx3` (`c2`) BLOCK_SIZE 16384 LOCAL,
+  KEY `idx` (`c4`) BLOCK_SIZE 16384 LOCAL
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+explain select * from ivfpq_test order by l2_distance(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]');
+Query Plan
+=======================================================
+|ID|OPERATOR         |NAME      |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |SORT             |          |9       |5           |
+|1 |└─TABLE FULL SCAN|ivfpq_test|9       |3           |
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([ivfpq_test.c1], [ivfpq_test.c2], [ivfpq_test.c3], [ivfpq_test.c4]), filter(nil), rowset=16
+      sort_keys([l2_distance(ivfpq_test.c2, cast('[3,1,2,3,1,2,3,1,2,3,1,2]', VECTOR(-1, -1))), ASC])
+  1 - output([ivfpq_test.c1], [ivfpq_test.c3], [ivfpq_test.c2], [ivfpq_test.c4], [l2_distance(ivfpq_test.c2, cast('[3,1,2,3,1,2,3,1,2,3,1,2]', VECTOR(-1,
+       -1)))]), filter(nil), rowset=16
+      access([ivfpq_test.c1], [ivfpq_test.c3], [ivfpq_test.c2], [ivfpq_test.c4]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([ivfpq_test.c1], [ivfpq_test.c3]), range(MIN,MIN ; MAX,MAX)always true
+explain select * from ivfpq_test order by l2_distance(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]') approx limit 7;
+Query Plan
+=================================================================
+|ID|OPERATOR       |NAME                  |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |TABLE FULL SCAN|ivfpq_test(ivfpq_idx1)|9       |28          |
+=================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([ivfpq_test.c1], [ivfpq_test.c2], [ivfpq_test.c3], [ivfpq_test.c4]), filter(nil), rowset=16
+      access([ivfpq_test.c1], [ivfpq_test.c3], [ivfpq_test.c2], [ivfpq_test.c4]), partitions(p0)
+      is_index_back=true, is_global_index=false, 
+      range_key([ivfpq_test.center_idx], [ivfpq_test.c1], [ivfpq_test.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+explain select * from ivfpq_test order by inner_product(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]');
+Query Plan
+=======================================================
+|ID|OPERATOR         |NAME      |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |SORT             |          |9       |5           |
+|1 |└─TABLE FULL SCAN|ivfpq_test|9       |3           |
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([ivfpq_test.c1], [ivfpq_test.c2], [ivfpq_test.c3], [ivfpq_test.c4]), filter(nil), rowset=16
+      sort_keys([inner_product(ivfpq_test.c2, cast('[3,1,2,3,1,2,3,1,2,3,1,2]', VECTOR(-1, -1))), ASC])
+  1 - output([ivfpq_test.c1], [ivfpq_test.c3], [ivfpq_test.c2], [ivfpq_test.c4], [inner_product(ivfpq_test.c2, cast('[3,1,2,3,1,2,3,1,2,3,1,2]', VECTOR(-1,
+       -1)))]), filter(nil), rowset=16
+      access([ivfpq_test.c1], [ivfpq_test.c3], [ivfpq_test.c2], [ivfpq_test.c4]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([ivfpq_test.c1], [ivfpq_test.c3]), range(MIN,MIN ; MAX,MAX)always true
+explain select * from ivfpq_test order by inner_product(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]') approx limit 7;
+Query Plan
+=================================================================
+|ID|OPERATOR       |NAME                  |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |TABLE FULL SCAN|ivfpq_test(ivfpq_idx2)|9       |28          |
+=================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([ivfpq_test.c1], [ivfpq_test.c2], [ivfpq_test.c3], [ivfpq_test.c4]), filter(nil), rowset=16
+      access([ivfpq_test.c1], [ivfpq_test.c3], [ivfpq_test.c2], [ivfpq_test.c4]), partitions(p0)
+      is_index_back=true, is_global_index=false, 
+      range_key([ivfpq_test.center_idx], [ivfpq_test.c1], [ivfpq_test.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+explain select * from ivfpq_test order by cosine_distance(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]');
+Query Plan
+=======================================================
+|ID|OPERATOR         |NAME      |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |SORT             |          |9       |5           |
+|1 |└─TABLE FULL SCAN|ivfpq_test|9       |3           |
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([ivfpq_test.c1], [ivfpq_test.c2], [ivfpq_test.c3], [ivfpq_test.c4]), filter(nil), rowset=16
+      sort_keys([cosine_distance(ivfpq_test.c2, cast('[3,1,2,3,1,2,3,1,2,3,1,2]', VECTOR(-1, -1))), ASC])
+  1 - output([ivfpq_test.c1], [ivfpq_test.c3], [ivfpq_test.c2], [ivfpq_test.c4], [cosine_distance(ivfpq_test.c2, cast('[3,1,2,3,1,2,3,1,2,3,1,2]', VECTOR(-1,
+       -1)))]), filter(nil), rowset=16
+      access([ivfpq_test.c1], [ivfpq_test.c3], [ivfpq_test.c2], [ivfpq_test.c4]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([ivfpq_test.c1], [ivfpq_test.c3]), range(MIN,MIN ; MAX,MAX)always true
+explain select * from ivfpq_test order by cosine_distance(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]') approx limit 7;
+Query Plan
+=================================================================
+|ID|OPERATOR       |NAME                  |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |TABLE FULL SCAN|ivfpq_test(ivfpq_idx3)|9       |28          |
+=================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([ivfpq_test.c1], [ivfpq_test.c2], [ivfpq_test.c3], [ivfpq_test.c4]), filter(nil), rowset=16
+      access([ivfpq_test.c1], [ivfpq_test.c3], [ivfpq_test.c2], [ivfpq_test.c4]), partitions(p0)
+      is_index_back=true, is_global_index=false, 
+      range_key([ivfpq_test.center_idx], [ivfpq_test.c1], [ivfpq_test.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+select *, l2_distance(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]') as dis from ivfpq_test order by l2_distance(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]') approx limit 7;
+c1	c2	c3	c4	dis
+1	[1.00000000,2.00000000,3.00000000,1.00000000,2.00000000,3.00000000,1.00000000,2.00000000,3.00000000,1.00000000,2.00000000,3.00000000]	2	3	4.898979485566356
+2	[2.00000000,3.00000000,4.00000000,2.00000000,3.00000000,4.00000000,2.00000000,3.00000000,4.00000000,2.00000000,3.00000000,4.00000000]	3	4	6
+4	[4.00000000,5.00000000,6.00000000,4.00000000,5.00000000,6.00000000,4.00000000,5.00000000,6.00000000,4.00000000,5.00000000,6.00000000]	5	6	11.489125293076057
+10	[10.00000000,11.00000000,12.00000000,10.00000000,11.00000000,12.00000000,10.00000000,11.00000000,12.00000000,10.00000000,11.00000000,12.00000000]	11	12	31.559467676119
+11	[11.00000000,12.00000000,13.00000000,11.00000000,12.00000000,13.00000000,11.00000000,12.00000000,13.00000000,11.00000000,12.00000000,13.00000000]	12	13	34.9857113690718
+select /*+probes(2)*/ *, l2_distance(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]') as dis from ivfpq_test order by l2_distance(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]') approx limit 7;
+c1	c2	c3	c4	dis
+1	[1.00000000,2.00000000,3.00000000,1.00000000,2.00000000,3.00000000,1.00000000,2.00000000,3.00000000,1.00000000,2.00000000,3.00000000]	2	3	4.898979485566356
+2	[2.00000000,3.00000000,4.00000000,2.00000000,3.00000000,4.00000000,2.00000000,3.00000000,4.00000000,2.00000000,3.00000000,4.00000000]	3	4	6
+4	[4.00000000,5.00000000,6.00000000,4.00000000,5.00000000,6.00000000,4.00000000,5.00000000,6.00000000,4.00000000,5.00000000,6.00000000]	5	6	11.489125293076057
+10	[10.00000000,11.00000000,12.00000000,10.00000000,11.00000000,12.00000000,10.00000000,11.00000000,12.00000000,10.00000000,11.00000000,12.00000000]	11	12	31.559467676119
+11	[11.00000000,12.00000000,13.00000000,11.00000000,12.00000000,13.00000000,11.00000000,12.00000000,13.00000000,11.00000000,12.00000000,13.00000000]	12	13	34.9857113690718
+25	[25.00000000,26.00000000,27.00000000,25.00000000,26.00000000,27.00000000,25.00000000,26.00000000,27.00000000,25.00000000,26.00000000,27.00000000]	26	27	83.28265125462805
+31	[31.00000000,32.00000000,33.00000000,31.00000000,32.00000000,33.00000000,31.00000000,32.00000000,33.00000000,31.00000000,32.00000000,33.00000000]	32	33	104.03845442911962
+select *, inner_product(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]') as dis from ivfpq_test order by inner_product(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]') approx limit 7;
+c1	c2	c3	c4	dis
+55	[55.00000000,56.00000000,57.00000000,55.00000000,56.00000000,57.00000000,55.00000000,56.00000000,57.00000000,55.00000000,56.00000000,57.00000000]	56	57	-1340
+50	[50.00000000,51.00000000,52.00000000,50.00000000,51.00000000,52.00000000,50.00000000,51.00000000,52.00000000,50.00000000,51.00000000,52.00000000]	51	52	-1220
+31	[31.00000000,32.00000000,33.00000000,31.00000000,32.00000000,33.00000000,31.00000000,32.00000000,33.00000000,31.00000000,32.00000000,33.00000000]	32	33	-764
+25	[25.00000000,26.00000000,27.00000000,25.00000000,26.00000000,27.00000000,25.00000000,26.00000000,27.00000000,25.00000000,26.00000000,27.00000000]	26	27	-620
+11	[11.00000000,12.00000000,13.00000000,11.00000000,12.00000000,13.00000000,11.00000000,12.00000000,13.00000000,11.00000000,12.00000000,13.00000000]	12	13	-284
+10	[10.00000000,11.00000000,12.00000000,10.00000000,11.00000000,12.00000000,10.00000000,11.00000000,12.00000000,10.00000000,11.00000000,12.00000000]	11	12	-260
+select *, cosine_distance(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]') as dis from ivfpq_test order by cosine_distance(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]') approx limit 7;
+c1	c2	c3	c4	dis
+55	[55.00000000,56.00000000,57.00000000,55.00000000,56.00000000,57.00000000,55.00000000,56.00000000,57.00000000,55.00000000,56.00000000,57.00000000]	56	57	0.07703341641900951
+50	[50.00000000,51.00000000,52.00000000,50.00000000,51.00000000,52.00000000,50.00000000,51.00000000,52.00000000,50.00000000,51.00000000,52.00000000]	51	52	0.07732369488767032
+31	[31.00000000,32.00000000,33.00000000,31.00000000,32.00000000,33.00000000,31.00000000,32.00000000,33.00000000,31.00000000,32.00000000,33.00000000]	32	33	0.07930153767997983
+25	[25.00000000,26.00000000,27.00000000,25.00000000,26.00000000,27.00000000,25.00000000,26.00000000,27.00000000,25.00000000,26.00000000,27.00000000]	26	27	0.08056790161930749
+set @@vector_ivfpq_probes=2;
+select * from ivfpq_test order by l2_distance(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]') approx limit 7;
+c1	c2	c3	c4
+1	[1.00000000,2.00000000,3.00000000,1.00000000,2.00000000,3.00000000,1.00000000,2.00000000,3.00000000,1.00000000,2.00000000,3.00000000]	2	3
+2	[2.00000000,3.00000000,4.00000000,2.00000000,3.00000000,4.00000000,2.00000000,3.00000000,4.00000000,2.00000000,3.00000000,4.00000000]	3	4
+4	[4.00000000,5.00000000,6.00000000,4.00000000,5.00000000,6.00000000,4.00000000,5.00000000,6.00000000,4.00000000,5.00000000,6.00000000]	5	6
+10	[10.00000000,11.00000000,12.00000000,10.00000000,11.00000000,12.00000000,10.00000000,11.00000000,12.00000000,10.00000000,11.00000000,12.00000000]	11	12
+11	[11.00000000,12.00000000,13.00000000,11.00000000,12.00000000,13.00000000,11.00000000,12.00000000,13.00000000,11.00000000,12.00000000,13.00000000]	12	13
+25	[25.00000000,26.00000000,27.00000000,25.00000000,26.00000000,27.00000000,25.00000000,26.00000000,27.00000000,25.00000000,26.00000000,27.00000000]	26	27
+31	[31.00000000,32.00000000,33.00000000,31.00000000,32.00000000,33.00000000,31.00000000,32.00000000,33.00000000,31.00000000,32.00000000,33.00000000]	32	33
+delete from ivfpq_test where c1 = 2;
+delete from ivfpq_test where c4 = 6;
+select count(1) from ivfpq_test;
+count(1)
+7
+insert into ivfpq_test values(0,'[0,1,2,0,1,2,0,1,2,0,1,2]',1,2),(58,'[58,59,60,58,59,60,58,59,60,58,59,60]',59,60);
+insert into ivfpq_test values(100,'[100,200,300,100,200,300,100,200,300,100,200,300]',200,300);
+select count(1) from ivfpq_test;
+count(1)
+10
+explain select /*+probes(1)*/ *, l2_distance(c2, '[60,61,62,60,61,62,60,61,62,60,61,62]') as dis from ivfpq_test order by l2_distance(c2, '[60,61,62,60,61,62,60,61,62,60,61,62]') approx limit 5;
+Query Plan
+=================================================================
+|ID|OPERATOR       |NAME                  |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |TABLE FULL SCAN|ivfpq_test(ivfpq_idx1)|10      |36          |
+=================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([ivfpq_test.c1], [ivfpq_test.c2], [ivfpq_test.c3], [ivfpq_test.c4], [l2_distance(ivfpq_test.c2, cast('[60,61,62,60,61,62,60,61,62,60,61,62]',
+       VECTOR(-1, -1)))]), filter(nil), rowset=16
+      access([ivfpq_test.c1], [ivfpq_test.c3], [ivfpq_test.c2], [ivfpq_test.c4]), partitions(p0)
+      is_index_back=true, is_global_index=false, 
+      range_key([ivfpq_test.center_idx], [ivfpq_test.c1], [ivfpq_test.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+select /*+probes(1)*/ *, l2_distance(c2, '[60,61,62,60,61,62,60,61,62,60,61,62]') as dis from ivfpq_test order by l2_distance(c2, '[60,61,62,60,61,62,60,61,62,60,61,62]') approx limit 5;
+c1	c2	c3	c4	dis
+58	[58.00000000,59.00000000,60.00000000,58.00000000,59.00000000,60.00000000,58.00000000,59.00000000,60.00000000,58.00000000,59.00000000,60.00000000]	59	60	6.928203230275509
+55	[55.00000000,56.00000000,57.00000000,55.00000000,56.00000000,57.00000000,55.00000000,56.00000000,57.00000000,55.00000000,56.00000000,57.00000000]	56	57	17.320508075688775
+50	[50.00000000,51.00000000,52.00000000,50.00000000,51.00000000,52.00000000,50.00000000,51.00000000,52.00000000,50.00000000,51.00000000,52.00000000]	51	52	34.64101615137755
+100	[100.00000000,200.00000000,300.00000000,100.00000000,200.00000000,300.00000000,100.00000000,200.00000000,300.00000000,100.00000000,200.00000000,300.00000000]	200	300	557.0098742392274
+select *, inner_product(c2, '[60,61,62,60,61,62,60,61,62,60,61,62]') as dis from ivfpq_test order by inner_product(c2, '[60,61,62,60,61,62,60,61,62,60,61,62]') approx limit 5;
+c1	c2	c3	c4	dis
+58	[58.00000000,59.00000000,60.00000000,58.00000000,59.00000000,60.00000000,58.00000000,59.00000000,60.00000000,58.00000000,59.00000000,60.00000000]	59	60	-43196
+55	[55.00000000,56.00000000,57.00000000,55.00000000,56.00000000,57.00000000,55.00000000,56.00000000,57.00000000,55.00000000,56.00000000,57.00000000]	56	57	-41000
+50	[50.00000000,51.00000000,52.00000000,50.00000000,51.00000000,52.00000000,50.00000000,51.00000000,52.00000000,50.00000000,51.00000000,52.00000000]	51	52	-37340
+31	[31.00000000,32.00000000,33.00000000,31.00000000,32.00000000,33.00000000,31.00000000,32.00000000,33.00000000,31.00000000,32.00000000,33.00000000]	32	33	-23432
+25	[25.00000000,26.00000000,27.00000000,25.00000000,26.00000000,27.00000000,25.00000000,26.00000000,27.00000000,25.00000000,26.00000000,27.00000000]	26	27	-19040
+select *, cosine_distance(c2, '[60,61,62,60,61,62,60,61,62,60,61,62]') as dis from ivfpq_test order by cosine_distance(c2, '[60,61,62,60,61,62,60,61,62,60,61,62]') approx limit 5;
+c1	c2	c3	c4	dis
+58	[58.00000000,59.00000000,60.00000000,58.00000000,59.00000000,60.00000000,58.00000000,59.00000000,60.00000000,58.00000000,59.00000000,60.00000000]	59	60	0.00000010289969709642577
+55	[55.00000000,56.00000000,57.00000000,55.00000000,56.00000000,57.00000000,55.00000000,56.00000000,57.00000000,55.00000000,56.00000000,57.00000000]	56	57	0.0000007138600326417333
+50	[50.00000000,51.00000000,52.00000000,50.00000000,51.00000000,52.00000000,50.00000000,51.00000000,52.00000000,50.00000000,51.00000000,52.00000000]	51	52	0.0000034426301465106945
+11	[11.00000000,12.00000000,13.00000000,11.00000000,12.00000000,13.00000000,11.00000000,12.00000000,13.00000000,11.00000000,12.00000000,13.00000000]	12	13	0.001487606638439054
+10	[10.00000000,11.00000000,12.00000000,10.00000000,11.00000000,12.00000000,10.00000000,11.00000000,12.00000000,10.00000000,11.00000000,12.00000000]	11	12	0.0018420858210514979
+drop index ivfpq_idx1 on ivfpq_test;
+show index from ivfpq_test;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+ivfpq_test	0	PRIMARY	1	c1	A	NULL	NULL	NULL		BTREE	available		YES	NULL
+ivfpq_test	0	PRIMARY	2	c3	A	NULL	NULL	NULL		BTREE	available		YES	NULL
+ivfpq_test	1	ivfpq_idx2	1	c2	A	NULL	NULL	NULL	YES	IVFPQ	available		YES	NULL
+ivfpq_test	1	ivfpq_idx3	1	c2	A	NULL	NULL	NULL	YES	IVFPQ	available		YES	NULL
+ivfpq_test	1	idx	1	c4	A	NULL	NULL	NULL	YES	BTREE	available		YES	NULL
+show create table ivfpq_test;
+Table	Create Table
+ivfpq_test	CREATE TABLE `ivfpq_test` (
+  `c1` int(11) NOT NULL,
+  `c2` vector(12) DEFAULT NULL,
+  `c3` int(11) NOT NULL,
+  `c4` int(11) DEFAULT NULL,
+  PRIMARY KEY (`c1`, `c3`),
+  KEY `ivfpq_idx2` (`c2`) BLOCK_SIZE 16384 LOCAL,
+  KEY `ivfpq_idx3` (`c2`) BLOCK_SIZE 16384 LOCAL,
+  KEY `idx` (`c4`) BLOCK_SIZE 16384 LOCAL
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+select count(1) from oceanbase.__all_table where table_name like "%ivfpq_idx1%";
+count(1)
+0
+alter system set vector_ivfpq_elkan = "false";
+create vector index ivfpq_idx1 on ivfpq_test (c2 vector_l2_ops) with(type=ivfpq);
+explain select * from ivfpq_test order by l2_distance(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]');
+Query Plan
+=======================================================
+|ID|OPERATOR         |NAME      |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |SORT             |          |10      |5           |
+|1 |└─TABLE FULL SCAN|ivfpq_test|10      |4           |
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([ivfpq_test.c1], [ivfpq_test.c2], [ivfpq_test.c3], [ivfpq_test.c4]), filter(nil), rowset=16
+      sort_keys([l2_distance(ivfpq_test.c2, cast('[3,1,2,3,1,2,3,1,2,3,1,2]', VECTOR(-1, -1))), ASC])
+  1 - output([ivfpq_test.c1], [ivfpq_test.c3], [ivfpq_test.c2], [ivfpq_test.c4], [l2_distance(ivfpq_test.c2, cast('[3,1,2,3,1,2,3,1,2,3,1,2]', VECTOR(-1,
+       -1)))]), filter(nil), rowset=16
+      access([ivfpq_test.c1], [ivfpq_test.c3], [ivfpq_test.c2], [ivfpq_test.c4]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([ivfpq_test.c1], [ivfpq_test.c3]), range(MIN,MIN ; MAX,MAX)always true
+explain select * from ivfpq_test order by l2_distance(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]') approx limit 3;
+Query Plan
+=================================================================
+|ID|OPERATOR       |NAME                  |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |TABLE FULL SCAN|ivfpq_test(ivfpq_idx1)|10      |31          |
+=================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([ivfpq_test.c1], [ivfpq_test.c2], [ivfpq_test.c3], [ivfpq_test.c4]), filter(nil), rowset=16
+      access([ivfpq_test.c1], [ivfpq_test.c3], [ivfpq_test.c2], [ivfpq_test.c4]), partitions(p0)
+      is_index_back=true, is_global_index=false, 
+      range_key([ivfpq_test.center_idx], [ivfpq_test.c1], [ivfpq_test.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+select /*+probes(2)*/* from ivfpq_test order by l2_distance(c2, '[3,1,2,3,1,2,3,1,2,3,1,2]') approx limit 3;
+c1	c2	c3	c4
+1	[1.00000000,2.00000000,3.00000000,1.00000000,2.00000000,3.00000000,1.00000000,2.00000000,3.00000000,1.00000000,2.00000000,3.00000000]	2	3
+0	[0.00000000,1.00000000,2.00000000,0.00000000,1.00000000,2.00000000,0.00000000,1.00000000,2.00000000,0.00000000,1.00000000,2.00000000]	1	2
+drop table ivfpq_test;
+select count(1) from oceanbase.__all_table where table_name like "%ivfpq%";
+count(1)
+0
+drop database if exists vector_test;
+create database vector_test;
+use vector_test;
 create table vector_test (c1 int, c2 vector(3), c3 int, c4 int, primary key (c1,c3));
 create index idx on vector_test (c4);
 create vector index ivfflat_idx on vector_test (c2 vector_l2_ops) with(type=ivfflat,lists=3);
+create vector index ivfpq_idx on vector_test (c2 vector_l2_ops) with(type=ivfpq,lists=3);
 create vector index hnsw_idx on vector_test (c2 vector_l2_ops) with(type=hnsw);
 drop table vector_test;
 select count(1) from oceanbase.__all_table where table_name like "%ivfflat%";
+count(1)
+0
+select count(1) from oceanbase.__all_table where table_name like "%ivfpq%";
 count(1)
 0
 select count(1) from oceanbase.__all_table where table_name like "%hnsw%";

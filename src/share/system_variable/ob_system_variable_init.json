@@ -3804,5 +3804,18 @@
     "info_cn": "",
     "background_cn": "",
     "ref_url": ""
+  },
+    "vector_ivfpq_probes": {
+    "id": 10182,
+    "name": "vector_ivfpq_probes",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "uint",
+    "info": "The center counts which should be checked in ivfpq index. 0 means calculate by self",
+    "flags": "GLOBAL | SESSION | MYSQL_ONLY",
+    "publish_version": "432",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
   }
 }

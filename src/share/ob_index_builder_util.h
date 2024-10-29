@@ -43,6 +43,14 @@ namespace schema
 class ObTableSchema;
 class ObColumnSchemaV2;
 };
+
+enum ObIndexTableType
+{
+    INDEX_TABLE = 0,
+    CONTAINER_TABLE = 1,
+    SECOND_CONTAINER_TABLE = 2
+};
+
 class ObIndexBuilderUtil
 {
 public:
@@ -62,18 +70,20 @@ public:
       const obrpc::ObCreateIndexArg &arg,
       const share::schema::ObTableSchema &data_schema,
       share::schema::ObTableSchema &index_schema,
-      bool check_data_schema = true);
+      bool check_data_schema = true,
+      ObIndexTableType index_table_type = ObIndexTableType::INDEX_TABLE);
   static int set_index_table_columns_for_vector_hnsw(
       const obrpc::ObCreateIndexArg &arg,
       const share::schema::ObTableSchema &data_schema,
       share::schema::ObTableSchema &index_schema,
       common::ObRowDesc &row_desc);
-  static int set_index_table_columns_for_vector_ivfflat(
+  static int set_index_table_columns_for_vector_ivf(
       const obrpc::ObCreateIndexArg &arg,
       const share::schema::ObTableSchema &data_schema,
       const ObColumnSchemaV2 &data_column,
       share::schema::ObTableSchema &index_schema,
-      common::ObRowDesc &row_desc);
+      common::ObRowDesc &row_desc,
+      ObIndexTableType index_table_type);
   static void del_column_flags_and_default_value(share::schema::ObColumnSchemaV2 &column);
   static int add_column(
       const share::schema::ObColumnSchemaV2 *data_column,

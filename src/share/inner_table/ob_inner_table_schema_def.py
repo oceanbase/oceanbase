@@ -313,8 +313,9 @@ all_table_def = dict(
       ('max_used_column_group_id', 'int', 'false', '1000'),
       ('column_store', 'int', 'false', '0'),
       ('auto_increment_cache_size', 'int', 'false', '0'),
-      ('vector_ivfflat_lists', 'int', 'false', '128'),
+      ('vector_ivf_lists', 'int', 'false', '128'),
       ('vector_distance_func', 'int', 'false', '0'),
+      ('vector_pq_seg', 'int', 'false', '1'),
     ],
 )
 

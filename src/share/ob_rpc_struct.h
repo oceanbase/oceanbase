@@ -38,6 +38,7 @@
 #include "share/schema/ob_error_info.h"
 #include "share/schema/ob_constraint.h"
 #include "share/schema/ob_schema_service.h"
+#include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_udf.h"
 #include "share/schema/ob_dependency_info.h"
 #include "share/schema/ob_trigger_info.h"
@@ -1364,6 +1365,7 @@ public:
     index_action_type_ = DROP_INDEX;
     index_table_id_ = common::OB_INVALID_ID;
     container_table_id_ = common::OB_INVALID_ID;
+    second_container_table_id_ = common::OB_INVALID_ID;
     is_add_to_scheduler_ = false;
     is_hidden_ = false;
     is_in_recyclebin_ = false;
@@ -1382,6 +1384,7 @@ public:
   bool is_valid() const { return ObIndexArg::is_valid(); }
   uint64_t index_table_id_;
   uint64_t container_table_id_;
+  uint64_t second_container_table_id_;
   bool is_add_to_scheduler_;
   bool is_hidden_;
   bool is_in_recyclebin_;
@@ -2522,6 +2525,8 @@ public:
         exist_all_column_group_(false),
         index_cgs_(),
         container_table_id_(common::OB_INVALID_ID),
+        second_container_table_id_(common::OB_INVALID_ID),
+        vector_pq_seg_(0),
         vector_hnsw_m_(0),
         vector_hnsw_ef_construction_(0),
         vector_help_schema_()
@@ -2557,6 +2562,8 @@ public:
     exist_all_column_group_ = false;
     index_cgs_.reset();
     container_table_id_ = common::OB_INVALID_ID;
+    second_container_table_id_ = common::OB_INVALID_ID;
+    vector_pq_seg_ = 0;
     vector_hnsw_m_ = 0;
     vector_hnsw_ef_construction_ = 0;
     vector_help_schema_.reset();
@@ -2600,6 +2607,8 @@ public:
       consumer_group_id_ = other.consumer_group_id_;
       exist_all_column_group_ = other.exist_all_column_group_;
       container_table_id_ = other.container_table_id_;
+      second_container_table_id_ = other.second_container_table_id_;
+      vector_pq_seg_ = other.vector_pq_seg_;
       vector_hnsw_m_ = other.vector_hnsw_m_;
       vector_hnsw_ef_construction_ = other.vector_hnsw_ef_construction_;
     }
@@ -2616,7 +2625,8 @@ public:
   inline bool is_spatial_index() const { return share::schema::INDEX_TYPE_SPATIAL_LOCAL == index_type_
                                                 || share::schema::INDEX_TYPE_SPATIAL_GLOBAL == index_type_
                                                 || share::schema::INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE == index_type_; }
-  inline bool is_vector_index() const { return USING_HNSW == index_using_type_ || USING_IVFFLAT == index_using_type_; }
+  inline bool is_vector_index() const { return USING_HNSW == index_using_type_ || is_vector_ivf_index(); }
+  inline bool is_vector_ivf_index() const { return USING_IVFFLAT == index_using_type_ || USING_IVFPQ == index_using_type_; }
 
 //todo @qilu:only for each_cg now, when support customized cg ,refine this
   typedef common::ObSEArray<uint64_t, common::DEFAULT_CUSTOMIZED_CG_NUM> ObCGColumnList;
@@ -2674,6 +2684,8 @@ public:
   bool exist_all_column_group_;
   common::ObSEArray<ObIndexColumnGroupItem, 1/*each*/> index_cgs_;
   int64_t container_table_id_;
+  int64_t second_container_table_id_;
+  int64_t vector_pq_seg_;
   int64_t vector_hnsw_m_;
   int64_t vector_hnsw_ef_construction_;
   common::ObSArray<share::schema::ObTableSchema> vector_help_schema_; // table schema for ivffalt index container

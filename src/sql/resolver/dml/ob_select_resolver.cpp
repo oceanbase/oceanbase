@@ -5000,7 +5000,7 @@ int ObSelectResolver::resolve_table_column_ref(const ObQualifiedName &q_name, Ob
   //3. object (sequence)
   int ret = OB_SUCCESS;
   if (OB_FAIL(resolve_table_column_expr(q_name, real_ref_expr))) {
-    if (q_name.col_name_ == "center_idx") {
+    if (q_name.col_name_ == "center_idx" || q_name.col_name_ == "seg_idx") {
       LOG_WARN("resolve table column expr failed", K(ret), K(q_name), K(lbt()));
     } else {
       LOG_WARN("resolve table column expr failed", K(ret), K(q_name), K(lbt()));

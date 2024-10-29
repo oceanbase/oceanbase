@@ -32,6 +32,8 @@
 #include "share/vector_index/ob_hnsw_index_reader.h"
 #include "share/vector_index/ob_ivfflat_index_search_helper.h"
 #include "share/vector_index/ob_ivfflat_index_build_helper.h"
+#include "share/vector_index/ob_ivfpq_index_search_helper.h"
+#include "share/vector_index/ob_ivfpq_index_build_helper.h"
 namespace oceanbase
 {
 namespace common
@@ -144,6 +146,8 @@ public:
       lookup_loc_meta_(nullptr),
       container_ctdef_(nullptr),
       container_loc_meta_(nullptr),
+      second_container_ctdef_(nullptr),
+      second_container_loc_meta_(nullptr),
       das_dppr_tbl_(nullptr),
       allocator_(allocator),
       calc_part_id_expr_(NULL),
@@ -172,6 +176,8 @@ public:
                KPC_(lookup_loc_meta),
                KP_(container_ctdef),
                KP_(container_loc_meta),
+               KP_(second_container_ctdef),
+               KP_(second_container_loc_meta),
                KPC_(das_dppr_tbl),
                KPC_(calc_part_id_expr),
                K_(global_index_rowkey_exprs),
@@ -197,9 +203,12 @@ public:
   //lookup_loc_meta_ used to calc the main table tablet location
   //when query access the global index and lookup the main table
   ObDASTableLocMeta *lookup_loc_meta_;
-  // 用于查ivfflat索引表前查询container表 // 和ivfflat索引表强绑定
+  // 用于查ivf索引表前查询container表 // 和ivf索引表强绑定
   ObDASScanCtDef *container_ctdef_;
   ObDASTableLocMeta *container_loc_meta_;
+  // 用于查ivfpq索引表前查询second container表 // 和ivfpq索引表强绑定
+  ObDASScanCtDef *second_container_ctdef_;
+  ObDASTableLocMeta *second_container_loc_meta_;
   //used for dynamic partition pruning
   ObTableLocation *das_dppr_tbl_;
   common::ObIAllocator &allocator_;
@@ -221,6 +230,7 @@ struct ObTableScanRtDef
       scan_rtdef_(),
       lookup_rtdef_(nullptr),
       container_rtdef_(nullptr),
+      second_container_rtdef_(nullptr),
       range_buffers_(nullptr),
       range_buffer_idx_(0),
       group_size_(0),
@@ -228,7 +238,8 @@ struct ObTableScanRtDef
       is_ann_scan_(false),
       is_build_vector_index_(false),
       build_vector_index_table_id_(common::OB_INVALID_ID),
-      build_vector_index_container_table_id_(common::OB_INVALID_ID)
+      build_vector_index_container_table_id_(common::OB_INVALID_ID),
+      build_vector_index_second_container_table_id_(common::OB_INVALID_ID)
   { }
 
   void prepare_multi_part_limit_param();
@@ -241,12 +252,14 @@ struct ObTableScanRtDef
                K_(is_ann_scan),
                K_(is_build_vector_index),
                K_(build_vector_index_table_id),
-               K_(build_vector_index_container_table_id));
+               K_(build_vector_index_container_table_id),
+               K_(build_vector_index_second_container_table_id));
 
   GroupRescanParamArray bnlj_params_;
   ObDASScanRtDef scan_rtdef_;
   ObDASScanRtDef *lookup_rtdef_;
   ObDASScanRtDef *container_rtdef_;
+  ObDASScanRtDef *second_container_rtdef_;
   // for equal_query_range opt
   void *range_buffers_;
   int64_t range_buffer_idx_;
@@ -257,6 +270,7 @@ struct ObTableScanRtDef
   bool is_build_vector_index_;
   uint64_t build_vector_index_table_id_;
   uint64_t build_vector_index_container_table_id_;
+  uint64_t build_vector_index_second_container_table_id_;
 };
 
 // table scan operator input
@@ -701,6 +715,10 @@ protected:
   // IVFFLAT INDEX SEARCH HELPER
   ObIvfflatIndexSearchHelper ivfflat_helper_;
   ObIvfflatIndexBuildHelper  ivfflat_build_helper_;
+
+  // IVFPQ INDEX SEARCH HELPER
+  ObIvfpqIndexSearchHelper ivfpq_helper_;
+  ObIvfpqIndexBuildHelper  ivfpq_build_helper_;
 private:
   ObSQLSessionInfo::StmtSavedValue *saved_session_;
   char saved_session_buf_[sizeof(ObSQLSessionInfo::StmtSavedValue)] __attribute__((aligned (16)));;

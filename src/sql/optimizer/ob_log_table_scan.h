@@ -82,6 +82,7 @@ public:
         use_column_store_(false),
         is_vector_index_(false),
         container_table_id_(common::OB_INVALID_ID),
+        second_container_table_id_(common::OB_INVALID_ID),
         vector_ann_k_expr_(NULL),
         query_vector_expr_(NULL),
         is_build_vector_index_(false),
@@ -224,6 +225,15 @@ public:
 
   inline bool need_container_table() const
   { return OB_INVALID_ID != container_table_id_; }
+
+  inline void set_second_container_table_id(const int64_t second_container_table_id)
+  { second_container_table_id_ = second_container_table_id; }
+
+  inline int64_t get_second_container_table_id() const
+  { return second_container_table_id_; }
+
+  inline bool need_second_container_table() const
+  { return OB_INVALID_ID != second_container_table_id_; }
   /**
    *  Set scan direction
    */
@@ -289,6 +299,10 @@ public:
   // get extra access expressions
   inline const common::ObIArray<ObRawExpr *> &get_extra_access_exprs() const
   { return extra_access_exprs_; }
+
+  // get second extra access expressions
+  inline const common::ObIArray<ObRawExpr *> &get_second_extra_access_exprs() const
+  { return second_extra_access_exprs_; }
 
 // removal it in cg layer, up to opt layer.
   inline const common::ObIArray<uint64_t> &get_ddl_output_column_ids() const
@@ -568,8 +582,9 @@ protected: // memeber variables
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> rowkey_exprs_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> part_exprs_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> spatial_exprs_;
-  // for ivfflat index table
+  // for ivf index table
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> extra_access_exprs_;
+  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> second_extra_access_exprs_;
   //for external table
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> ext_file_column_exprs_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> ext_column_convert_exprs_;
@@ -643,6 +658,7 @@ protected: // memeber variables
   ObPxRFStaticInfo px_rf_info_;
   bool is_vector_index_;
   int64_t container_table_id_;
+  int64_t second_container_table_id_;
   ObRawExpr *vector_ann_k_expr_;
   ObRawExpr *query_vector_expr_;
   bool is_build_vector_index_;

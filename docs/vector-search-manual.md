@@ -7,7 +7,7 @@ OceanBase 向量数据库能力支持将您的向量数据与其他数据一起�
 - 支持向量类型的存储
 - 支持精确搜索、近似最近邻搜索
 - 支持计算L2距离、内积和余弦距离
-- 支持HNSW、IVF_FLAT索引
+- 支持HNSW、IVF_FLAT、IVF_PQ索引
 - 支持最大 16,000 维的向量存储
 # 如何使用OceanBase的向量数据库功能
 下面介绍如何部署并使用OceanBase的向量数据库，包括基本SQL语法以及目前版本的一些功能约束和注意事项。
@@ -50,6 +50,12 @@ CREATE VECTOR INDEX vidx4_c1_t1 on t1 (c1 vector_l2_ops) with(type=ivfflat);
 ## vector_cosine_ops: 距离算法，余弦距离; ivfflat: 索引类型; lists: 聚簇中心数，建议值sqrt(主表数据行数）
 CREATE VECTOR INDEX vidx5_c1_t1 on t1 (c1 vector_cosine_ops) with (type=ivfflat, lists=2);
 
+## vector_l2_ops: 距离算法，欧式距离; ivfpq: 索引类型
+CREATE VECTOR INDEX vidx6_c1_t1 on t1 (c1 vector_l2_ops) with(type=ivfpq);
+
+## vector_cosine_ops: 距离算法，余弦距离; ivfpq: 索引类型; seg: 量化分段数，需能够整除数据向量维度; lists: 聚簇中心数，建议值sqrt(主表数据行数)/分段数;
+CREATE VECTOR INDEX vidx7_c1_t1 on t1 (c1 vector_cosine_ops) with (type=ivfpq, lists=2, seg=3);
+
 # 支持增量更新
 insert into t2 values ('[1.2, 5.4, 6.3]', 4, 10.3);
 
@@ -87,7 +93,7 @@ insert into table_name values (……, '[float0, float1, ……]', ……),…�
 
 - 向量常量格式为'[float0, float1, ……]'；
 - 插入会对vector维度做检查；
-- 支持对已有ivfflat索引的表进行插入
+- 支持对已有ivfflat和ivfpq索引的表进行插入
 #### 示例
 ```sql
 obclient> insert into item values ('[1.1, 2.2, 3.3]', 1, 1.1), ('[  9.1, 3.14, 2.14]', 2, 2.43), ('[7576.420000,467.230000,2913.762000]', 3, 4.33);
@@ -107,7 +113,7 @@ delete from table_name where 非向量列条件
 ```
 
 - 目前条件中不支持向量列；
-- 支持对已有ivfflat索引的表进行删除
+- 支持对已有ivfflat和ivfpq索引的表进行删除
 #### 示例
 ```sql
 obclient> delete from item where c2=1;
@@ -185,9 +191,10 @@ create VECTOR index index_table_name on table_name (vector_column_name distance_
    - vector_ip_ops：向量内积；
    - vector_cosine_ops：余弦距离；
 - vector_index_parameters为可选索引参数，使用key=value的形式指定，包括：
-   - type：索引类型，仅支持ivfflat和hnsw，如type=ivfflat。不指定情况下默认为ivfflat。
-   - lists：ivfflat索引使用，表示聚簇中心数量，如lists=3。不指定情况下默认为128.
-   - m：hnsw索引使用，表示每个向量的最大连接度，如m=16。不指定情况下默认为16.
+   - type：索引类型，仅支持ivfflat、ivfpq和hnsw，如type=ivfflat。不指定情况下默认为ivfflat。
+   - lists：ivfflat和ivfpq索引使用，表示聚簇中心数量，如lists=3。不指定情况下默认为128。
+   - seg：ivfpq索引使用，表示向量量化的分段数，如seg=2。不指定情况下默认为1（不分段）；注意：分段数需要能够整除向量维度，否则行为未定义。
+   - m：hnsw索引使用，表示每个向量的最大连接度，如m=16。不指定情况下默认为16。
    - ef_construction：hnsw索引使用，表示索引构建时每个向量备选邻居的搜索规模，如ef_construction=200。不指定情况下默认为200。
 #### HNSW索引
 ```sql
@@ -294,6 +301,101 @@ obclient> select /*+parallel(2)*/* from ivfflat_test order by l2_distance(c2, '[
 |  2 | [2.09999990,3.20000005,4.30000019] | 124 |
 +----+------------------------------------+-----+
 ```
+
+#### IVF_PQ索引
+```sql
+create index index_table_name on table_name (vector_column_name distance_function_type) with (type=ivfpq[, lists=cluster_count, seg=segment_count]);
+```
+
+##### 参数详解
+- cluster_count：指定IVF_PQ聚簇中心数量, 默认为128，建议手动指定；聚簇中心数越多，建索引时间越长。为达到最优召回率，建议值：小于等于100万行，lists=rows/1000；大于100万行，lists=sqrt(rows)。
+  - 特殊情况：当指定中心数小于数据行数时，会采用数据行数作为实际聚簇中心数。即实际取值为`MIN（row_count, cluster_count)`。
+- segment_count：指定IVF_PQ向量量化分段数量, 默认为1，需要手动指定。建议值：根据向量本身特征选择一个合适的值，不要过大也不要过小。
+  - 注意：分段数需要能够整除向量维度，否则行为未定义（余数部分维度在构建PQ索引时丢失）。
+- vector_ivfpq_iters_count: 设置kmeans最大迭代次数，默认200。
+- vector_ivfpq_elkan：设置kmeans算法为elkan kmeans。建议在测试欧式距离索引时开启，可以加快索引构建速度。默认值为'True'。
+- vector_ivfpq_sample_count：构建IVF_PQ索引时样本采样数量。默认值为10000。建索引时样本数取值为`MAX（lists * 50, 10000)`。
+
+其中后三个参数为租户级配置项，使用如下方式进行修改：
+```sql
+alter system set vector_ivfpq_iters_count = 100;
+alter system set vector_ivfpq_elkan = 'True';
+alter system set vector_ivfpq_sample_count = 50000;
+```
+##### 示例
+```sql
+obclient> CREATE VECTOR INDEX vidx2 on item (c1 vector_l2_ops) with(type=ivfpq,lists=3);
+```
+##### 注意事项
+建ivfpq分区索引时，可以通过修改`_FORCE_PARALLEL_DDL_DOP`，或者在`create index`中增加`parallel` hint来提高建索引并行度。
+### 向量索引删除
+```sql
+drop index index_table_name on table_name; 
+```
+与普通索引表删除一致，不做赘述
+### 向量查询
+#### 最邻近向量查询
+```sql
+select column_name1,column_name2…… from table_name order by vector_distance_func(vector_column_name, '[float0,float1,……]') [approximate|approx] limit K;
+```
+
+- vector_distance_func是向量距离表达式，包括：
+  - l2_distance：欧式距离
+  - inner_product：内积
+  - cosine_distance：余弦距离
+- 可选关键字approximate或approx用来在有向量索引的情况下强制走向量索引。目前即使不使用该关键字同样强制走向量索引。
+- 要求order by子句表达式必须是一个向量距离表达式，且目前只支持向量列与常量向量；
+- 要求limit子句必须是一个整数常量表达式；
+- 在未建立向量索引时，走全表扫描后top-k排序计划；
+
+##### 示例
+```sql
+obclient> select c1,c2 from item order by l2_distance(c1,'[3,1,2]') approx limit 2;
++------------------------------------+----+
+| c1                                 | c2 |
++------------------------------------+----+
+| [9.10000038,3.14000010,2.14000010] |  2 |
++------------------------------------+----+
+```
+
+- **建立向量索引后，满足以下条件，走ANN查询计划：**
+   - **只有一个基表，无join等操作；**
+   - **存在order by子句和limit子句；**
+   - **order by 必须升序；**
+   - **order by后面是一个vector distance表达式，且引用基表的向量列；**
+   - **该向量列上建有向量索引；**
+   - **特殊：**
+      - **分区表可以额外在where子句中增加，且只能增加分区键；**
+      - **分区表可开启并行查询进行加速，并行度建议为可被分区数整除的数值。**
+
+##### 示例
+```sql
+obclient> create table ivfpq_test (c1 int, c2 vector(3), c3 int, primary key(c1,c3)) partition by hash(c3) partitions 100;
+
+obclient> insert into ivfpq_test values (1, '[1.1, 2.2, 3.3]', 124), (2, '[2.1, 3.2, 4.3]', 124), (3, '[3.1, 4.2, 5.3]', 124), (2, '[  9.1, 3.14, 2.14]', 243), (3, '[7576.42, 467.23, 2913.762]', 546), (4, '[3,1,2]', 467), (5, '[42.4,53.1,5.23]', 4232);
+
+obclient> create index ivfpq_idx1 on ivfpq_test (c2 vector_l2_ops) with(type=ivfpq, lists=128, seg=1);
+
+# 带分区键条件
+obclient> select /*+probes(2)*/* from ivfpq_test where c3=124 order by l2_distance(c2,'[3,1,2]') approx limit 3;
++----+------------------------------------+-----+
+| c1 | c2                                 | c3  |
++----+------------------------------------+-----+
+|  1 | [1.10000002,2.20000005,3.29999995] | 124 |
+|  2 | [2.09999990,3.20000005,4.30000019] | 124 |
++----+------------------------------------+-----+
+
+# 带并行hint
+obclient> select /*+parallel(2)*/* from ivfpq_test order by l2_distance(c2, '[3,1,2]') approx limit 3;
++----+------------------------------------+-----+
+| c1 | c2                                 | c3  |
++----+------------------------------------+-----+
+|  4 | [3.00000000,1.00000000,2.00000000] | 467 |
+|  1 | [1.10000002,2.20000005,3.29999995] | 124 |
+|  2 | [2.09999990,3.20000005,4.30000019] | 124 |
++----+------------------------------------+-----+
+```
+
 ##### 最邻近向量查询参数
 
 1. HNSW索引
@@ -315,8 +417,21 @@ select /*+probes(xx)*/ * from t1 order by l2_distance(c1, '[3,1,2]') approx limi
 ```
 
 - vector_ivfflat_probes：设置查询时访问的聚簇中心数，该值需要小于索引创建时指定的聚簇中心数，默认值为0。建议值：数据量小于等于100万行，probes=lists/10；数据量大于100万行，probes=sqrt(lists)。理论上，该值越大，召回率越高，查询耗时越大。实际取值规则为hint probes优先，如果hint probes为0则取系统变量vector_ivfflat_probes值，如果系统变量为0则取sqrt(lists)，如果最后仍然为0则取1。
+3. IVF_PQ索引
+```sql
+// 设置session系统变量
+set @@vector_ivfpq_probes = xx;
+
+// 设置global系统变量
+set global vector_ivfpq_probes = xx;
+
+// 使用hint
+select /*+probes(xx)*/ * from t1 order by l2_distance(c1, '[3,1,2]') approx limit 2;
+```
+
+- vector_ivfpq_probes：设置查询时访问的聚簇中心数，该值需要小于索引创建时指定的聚簇中心数，默认值为0。建议值：数据量小于等于100万行，probes=lists/10；数据量大于100万行，probes=sqrt(lists)。理论上，该值越大，召回率越高，查询耗时越大。实际取值规则为hint probes优先，如果hint probes为0则取系统变量vector_ivfflat_probes值，如果系统变量为0则取sqrt(lists)，如果最后仍然为0则取1。
 ##### 注意事项
 
-1. **在同一个向量列上同时建立IVF_FLAT以及HNSW索引，在查询时采用哪一个索引目前是未定义的；**
+1. **在同一个向量列上同时建立IVF_FLAT、IVF_PQ以及HNSW索引，在查询时采用哪一个索引目前是未定义的；**
 2. **当前版本推荐使用IVF_FLAT；**
-3. **目前仅IVF_FLAT索引表支持动态更新，建立索引之后对数据表的插入和删除操作会同步到IVF_FLAT索引表，但索引表聚簇中心不会变化，长时间增量会导致聚簇中心偏移。建议导入数据后再建索引，不建议使用场景存在大量增量数据；**
+3. **目前仅IVF_FLAT和IVF_PQ索引表支持动态更新，建立索引之后对数据表的插入和删除操作会同步到IVF_FLAT或者IVF_PQ索引表，但索引表聚簇中心不会变化，长时间增量会导致聚簇中心偏移。建议导入数据后再建索引，不建议使用场景存在大量增量数据；**
