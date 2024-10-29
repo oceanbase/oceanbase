@@ -4462,7 +4462,8 @@ public:
      max_connections_(0),
      max_user_connections_(0),
      proxied_user_info_(NULL), proxied_user_info_capacity_(0), proxied_user_info_cnt_(0),
-     proxy_user_info_(NULL), proxy_user_info_capacity_(0), proxy_user_info_cnt_(0), user_flags_()
+     proxy_user_info_(NULL), proxy_user_info_capacity_(0), proxy_user_info_cnt_(0), user_flags_(),
+     trigger_list_()
   { }
   explicit ObUserInfo(common::ObIAllocator *allocator);
   virtual ~ObUserInfo();
@@ -4554,7 +4555,7 @@ public:
                K_(profile_id), K_(proxied_user_info_cnt), K_(proxy_user_info_cnt),
                "proxied info", ObArrayWrap<ObProxyInfo*>(proxied_user_info_, proxied_user_info_cnt_),
                "proxy info", ObArrayWrap<ObProxyInfo*>(proxy_user_info_, proxy_user_info_cnt_),
-               K_(user_flags)
+               K_(user_flags), K_(trigger_list)
               );
   bool role_exists(const uint64_t role_id, const uint64_t option) const;
   int get_seq_by_role_id(uint64_t role_id, uint64_t &seq) const;
@@ -4604,6 +4605,7 @@ private:
   uint64_t proxy_user_info_capacity_;
   uint64_t proxy_user_info_cnt_;
   ObUserFlags user_flags_;
+  common::ObSArray<uint64_t> trigger_list_;
   DISABLE_COPY_ASSIGN(ObUserInfo);
 };
 

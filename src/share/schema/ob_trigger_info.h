@@ -54,7 +54,17 @@ public:
   OB_INLINE static bool is_update_event(uint64_t value) { return TE_UPDATE == value; }
   OB_INLINE static bool is_delete_event(uint64_t value) { return TE_DELETE == value; }
 public:
-  uint64_t bit_value_;
+  union {
+    uint64_t bit_value_;
+    struct {
+      uint64_t insert_:1;
+      uint64_t update_:1;
+      uint64_t delete_:1;
+      uint64_t logon_ :1;
+      uint64_t logoff_:1;
+      uint64_t reserved_:59;
+    };
+  };
 #undef TE_INSERT
 #undef TE_UPDATE
 #undef TE_DELETE
@@ -105,7 +115,9 @@ public:
       uint64_t after_row_:1;
       uint64_t after_stmt_:1;
       uint64_t instead_row_:1;
-      uint64_t reserved_:58;
+      uint64_t before_event_:1;
+      uint64_t after_event_:1;
+      uint64_t reserved_:56;
     };
   };
 };
@@ -636,7 +648,8 @@ protected:
       uint64_t is_has_sequence_ : 1;
       uint64_t is_has_out_param_ : 1;
       uint64_t is_external_state_ : 1;
-      uint64_t reserved_:54;
+      uint64_t is_has_auto_trans_ : 1;
+      uint64_t reserved_:53;
     };
   };
 };
