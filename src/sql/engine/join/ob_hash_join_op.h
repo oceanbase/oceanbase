@@ -840,7 +840,7 @@ private:
   int inner_join_read_hashrow_func_end();
   int other_join_read_hashrow_func_end();
 
-  int set_hash_function(int8_t hash_join_hasher);
+  int set_hash_function();
 
   int next();
   int join_end_operate();
@@ -1288,6 +1288,7 @@ inline int ObHashJoinOp::init_mem_context(uint64_t tenant_id)
     if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
       SQL_ENG_LOG(WARN, "create entity failed", K(ret));
     } else if (OB_ISNULL(mem_context_)) {
+      ret = OB_ERR_UNEXPECTED;
       SQL_ENG_LOG(WARN, "mem entity is null", K(ret));
     } else {
       alloc_ = &mem_context_->get_malloc_allocator();

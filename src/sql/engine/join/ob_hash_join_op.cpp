@@ -316,50 +316,24 @@ ObHashJoinOp::ObHashJoinOp(ObExecContext &ctx_, const ObOpSpec &spec, ObOpInput 
   get_next_left_batch_func_ = &ObHashJoinOp::get_next_left_row_batch;
 }
 
-int ObHashJoinOp::set_hash_function(int8_t hash_join_hasher)
+int ObHashJoinOp::set_hash_function()
 {
   int ret = OB_SUCCESS;
   const common::ObIArray<common::ObHashFunc> *cur_hash_funcs = &MY_SPEC.all_hash_funcs_;
-  if (DEFAULT_MURMUR_HASH != (hash_join_hasher & HASH_FUNCTION_MASK)) {
-    ObHashFunc hash_func;
-    if (OB_FAIL(tmp_hash_funcs_.init(MY_SPEC.all_hash_funcs_.count()))) {
-      LOG_WARN("failed to init tmp hash func", K(ret));
-    } else {
-      for (int64_t i = 0; i < MY_SPEC.all_hash_funcs_.count() && OB_SUCC(ret); ++i) {
-        if (ENABLE_WY_HASH == (hash_join_hasher & HASH_FUNCTION_MASK)) {
-          hash_func.hash_func_ = MY_SPEC.all_join_keys_.at(i)->basic_funcs_->wy_hash_;
-        } else  if (ENABLE_XXHASH64 == (hash_join_hasher & HASH_FUNCTION_MASK)) {
-          hash_func.hash_func_ = MY_SPEC.all_join_keys_.at(i)->basic_funcs_->xx_hash_;
-        } else {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected status: hash join hasher is invalid", K(ret), K(hash_join_hasher));
-        }
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(tmp_hash_funcs_.push_back(hash_func))) {
-          LOG_WARN("failed to push back wy hash func", K(ret));
-        } else {
-          LOG_DEBUG("debug hash function", K(hash_func), K(i), K(*MY_SPEC.all_join_keys_.at(i)));
-        }
-      }
-      cur_hash_funcs = &tmp_hash_funcs_;
-    }
-  }
-  if (OB_SUCC(ret)) {
-    int64_t all_cnt = cur_hash_funcs->count();
-    left_hash_funcs_.init(
-      all_cnt / 2, const_cast<ObHashFunc*>(&cur_hash_funcs->at(0)), all_cnt / 2);
-    right_hash_funcs_.init(all_cnt / 2,
-      const_cast<ObHashFunc*>(&cur_hash_funcs->at(0) + left_hash_funcs_.count()),
-      cur_hash_funcs->count() - left_hash_funcs_.count());
-    if (left_hash_funcs_.count() != right_hash_funcs_.count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected status: hash func is not match", K(ret), K(cur_hash_funcs->count()),
-        K(left_hash_funcs_.count()), K(right_hash_funcs_.count()));
-    } else if (MY_SPEC.all_join_keys_.count() != cur_hash_funcs->count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected status: hash func is not match", K(ret), K(cur_hash_funcs->count()),
-        K(MY_SPEC.all_join_keys_.count()));
-    }
+  int64_t all_cnt = cur_hash_funcs->count();
+  left_hash_funcs_.init(
+    all_cnt / 2, const_cast<ObHashFunc*>(&cur_hash_funcs->at(0)), all_cnt / 2);
+  right_hash_funcs_.init(all_cnt / 2,
+    const_cast<ObHashFunc*>(&cur_hash_funcs->at(0) + left_hash_funcs_.count()),
+    cur_hash_funcs->count() - left_hash_funcs_.count());
+  if (left_hash_funcs_.count() != right_hash_funcs_.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected status: hash func is not match", K(ret), K(cur_hash_funcs->count()),
+      K(left_hash_funcs_.count()), K(right_hash_funcs_.count()));
+  } else if (MY_SPEC.all_join_keys_.count() != cur_hash_funcs->count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected status: hash func is not match", K(ret), K(cur_hash_funcs->count()),
+      K(MY_SPEC.all_join_keys_.count()));
   }
   return ret;
 }
@@ -432,7 +406,7 @@ int ObHashJoinOp::inner_open()
       if (0 == (hash_join_processor_ & HJ_PROCESSOR_MASK)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect hash join processor", K(ret), K(hash_join_processor_));
-      } else if (OB_FAIL(set_hash_function(tenant_config->_enable_hash_join_hasher))) {
+      } else if (OB_FAIL(set_hash_function())) {
         LOG_WARN("unexpect hash join function", K(ret));
       }
     } else {
