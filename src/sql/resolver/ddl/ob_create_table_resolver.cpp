@@ -2785,6 +2785,12 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
                                                                         is_multi_value_index,
                                                                         reinterpret_cast<int*>(&index_keyname_)))) {
                 LOG_WARN("failed to resolve index type", K(ret));
+#ifdef OB_BUILD_SHARED_STORAGE
+              } else if (GCTX.is_shared_storage_mode() && (MULTI_KEY == index_keyname_ || MULTI_UNIQUE_KEY == index_keyname_)) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("multivalue search index isn't supported in shared storage mode", K(ret));
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "multivalue search index in shared storage mode is");
+#endif
               } else if (NULL != index_column_node->children_[1]) {
                 sort_item.prefix_len_ = static_cast<int32_t>(index_column_node->children_[1]->value_);
                 if (0 == sort_item.prefix_len_) {
