@@ -187,6 +187,26 @@ TEST(ObObjectStorageInfo, s3)
   ASSERT_EQ(OB_INVALID_ARGUMENT, info1.set(uri, storage_info));
 }
 
+TEST(ObObjectStorageInfo, s3_compatible)
+{
+  const char *uri = "s3://backup_dir?host=xxx.com&access_id=111&access_key=222&s3_region=333";
+  ObObjectStorageInfo info1;
+
+  const char *storage_info = "";
+  storage_info = "host=xxx.com&access_id=111&access_key=222&s3_region=333&delete_mode=delete&addressing_model=";
+  info1.reset();
+  ASSERT_EQ(OB_INVALID_ARGUMENT, info1.set(uri, storage_info));
+  storage_info = "host=xxx.com&access_id=111&access_key=222&s3_region=333&delete_mode=delete&addressing_model=path_style";
+  info1.reset();
+  ASSERT_EQ(OB_SUCCESS, info1.set(uri, storage_info));
+  storage_info = "host=xxx.com&access_id=111&access_key=222&s3_region=333&addressing_model=virtual_hosted_style";
+  info1.reset();
+  ASSERT_EQ(OB_SUCCESS, info1.set(uri, storage_info));
+  storage_info = "host=xxx.com&access_id=111&access_key=222&s3_region=333&addressing_model=xxx";
+  info1.reset();
+  ASSERT_EQ(OB_INVALID_ARGUMENT, info1.set(uri, storage_info));
+}
+
 int main(int argc, char **argv)
 {
   system("rm -f test_storage_info.log*");
