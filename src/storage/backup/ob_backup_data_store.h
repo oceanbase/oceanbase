@@ -119,17 +119,19 @@ public:
   bool is_valid() const override { return true; }
 };
 
-struct ObBackupResourcePool
+struct ObBackupResourcePool final
 {
+  OB_UNIS_VERSION(1);
 public:
-    ObBackupResourcePool()
-      : resource_pool_(),
-        unit_config_() {}
-    int assign(const ObBackupResourcePool &that);
-    TO_STRING_KV(K_(resource_pool), K_(unit_config));
-public:
-    share::ObResourcePool resource_pool_;
-    share::ObUnitConfig unit_config_;
+  ObBackupResourcePool()
+    : resource_pool_(),
+      unit_config_() {}
+  int assign(const ObBackupResourcePool &that);
+  int set(const share::ObResourcePool &resource_pool, const share::ObUnitConfig &unit_config);
+  void reset();
+  TO_STRING_KV(K_(resource_pool), K_(unit_config));
+  share::ObResourcePool resource_pool_;
+  share::ObUnitConfig unit_config_;
 };
 
 struct ObExternTenantLocalityInfoDesc final : public ObExternBackupDataDesc
@@ -159,9 +161,9 @@ public:
   virtual ~ObExternTenantLocalityInfoDesc() {}
   int assign(const ObExternTenantLocalityInfoDesc &that);
   bool is_valid() const override;
-  INHERIT_TO_STRING_KV("ObExternBackupDataDesc", ObExternBackupDataDesc, K_(tenant_id), K_(backup_set_id), K_(cluster_id), 
-      K_(compat_mode), K_(tenant_name), K_(cluster_name), K_(locality), K_(primary_zone), K_(sys_time_zone),
-      K_(sys_time_zone_wrap));
+  INHERIT_TO_STRING_KV("ObExternBackupDataDesc", ObExternBackupDataDesc, K_(tenant_id),
+    K_(backup_set_id), K_(cluster_id), K_(compat_mode), K_(tenant_name), K_(cluster_name),
+    K_(locality), K_(primary_zone), K_(sys_time_zone), K_(sys_time_zone_wrap), K_(resource_pool_infos));
 public:
   uint64_t tenant_id_;
   int64_t backup_set_id_;

@@ -79,6 +79,8 @@ bool ObBackupDeletedTabletToLSDesc::is_valid() const
 /*
  *------------------------------ObBackupResourcePool----------------------------------------
  */
+OB_SERIALIZE_MEMBER(ObBackupResourcePool, resource_pool_, unit_config_);
+
 int ObBackupResourcePool::assign(const ObBackupResourcePool &that)
 {
   int ret = OB_SUCCESS;
@@ -90,11 +92,32 @@ int ObBackupResourcePool::assign(const ObBackupResourcePool &that)
   return ret;
 }
 
+int ObBackupResourcePool::set(const share::ObResourcePool &resource_pool, const share::ObUnitConfig &unit_config)
+{
+  int ret = OB_SUCCESS;
+  if (!resource_pool.is_valid() || !unit_config.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(resource_pool), K(unit_config));
+  } else if (OB_FAIL(resource_pool_.assign(resource_pool))) {
+    LOG_WARN("failed to assign resource pool", K(ret));
+  } else if (OB_FAIL(unit_config_.assign(unit_config))) {
+    LOG_WARN("failed to assign unit config", K(ret));
+  }
+  return ret;
+}
+
+void ObBackupResourcePool::reset()
+{
+  resource_pool_.reset();
+  unit_config_.reset();
+}
+
 /*
  *------------------------------ObExternTenantLocalityInfo----------------------------
  */
-OB_SERIALIZE_MEMBER(ObExternTenantLocalityInfoDesc, tenant_id_, backup_set_id_, cluster_id_, compat_mode_,
-    tenant_name_, cluster_name_, locality_, primary_zone_, sys_time_zone_, sys_time_zone_wrap_);
+OB_SERIALIZE_MEMBER(ObExternTenantLocalityInfoDesc, tenant_id_, backup_set_id_, cluster_id_,
+  compat_mode_, tenant_name_, cluster_name_, locality_, primary_zone_, sys_time_zone_,
+  sys_time_zone_wrap_, resource_pool_infos_);
 
 bool ObExternTenantLocalityInfoDesc::is_valid() const
 {
@@ -106,6 +129,8 @@ bool ObExternTenantLocalityInfoDesc::is_valid() const
       && !cluster_name_.is_empty()
       && !locality_.is_empty()
       && !primary_zone_.is_empty();
+      /** remove resource_pool_infos empty check for compat previous version
+        * do not include resource_pool_infos. */
 }
 
 int ObExternTenantLocalityInfoDesc::assign(const ObExternTenantLocalityInfoDesc &that)
@@ -114,7 +139,7 @@ int ObExternTenantLocalityInfoDesc::assign(const ObExternTenantLocalityInfoDesc 
   if (OB_FAIL(sys_time_zone_wrap_.deep_copy(that.sys_time_zone_wrap_))) {
     LOG_WARN("failed to deep copy", K(ret));
   } else if (OB_FAIL(resource_pool_infos_.assign(that.resource_pool_infos_))) {
-    LOG_WARN("failed to assign resource pool infos", K(ret));
+    LOG_WARN("failed to assign resource pool configs", K(ret));
   } else {
     tenant_id_ = that.tenant_id_;
     backup_set_id_ = that.backup_set_id_;
