@@ -419,6 +419,41 @@ int64_t ObTenantFreezeInfoMgr::get_min_reserved_snapshot_for_tx()
   return snapshot_version;
 }
 
+void ObTenantFreezeInfoMgr::check_tenant_in_restore_with_mv_(
+    bool &need_check_mview,
+    ObSchemaGetterGuard &schema_guard,
+    const ObSimpleTenantSchema *&tenant_schema)
+{
+  need_check_mview = false;
+  int ret = OB_SUCCESS;
+  if (MTL_TENANT_ROLE_CACHE_IS_RESTORE() || MTL_TENANT_ROLE_CACHE_IS_INVALID()) {
+    need_check_mview = true;
+  } else if (MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
+    need_check_mview = false;
+  } else {
+    // get tenant schema if pointer is nullptr
+    const uint64_t tenant_id = MTL_ID();
+    if (OB_ISNULL(tenant_schema)) {
+      if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+        LOG_WARN("failed to get schema guard", K(ret), K(tenant_id));
+      } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
+        LOG_WARN("failed to get tenant info", K(ret), K(tenant_id));
+      }
+    }
+    if (OB_FAIL(ret)) {
+      need_check_mview = true;
+      LOG_WARN("failed to get tenant schema, need check mview", K(ret),
+                K(tenant_id), K(need_check_mview), KP(tenant_schema));
+    } else if (OB_ISNULL(tenant_schema)) {
+      need_check_mview = true;
+      LOG_WARN("tenant schema is null, need check mview", K(ret),
+                K(tenant_id), K(need_check_mview), KP(tenant_schema));
+    } else if (tenant_schema->is_restore()) {
+      need_check_mview = true;
+    }
+  }
+}
+
 // get smallest kept snapshot
 int ObTenantFreezeInfoMgr::get_min_reserved_snapshot(
     const ObTabletID &tablet_id,
@@ -430,6 +465,8 @@ int ObTenantFreezeInfoMgr::get_min_reserved_snapshot(
   int64_t duration = 0;
   bool unused = false;
   snapshot_info.reset();
+  const ObSimpleTenantSchema *tenant_schema = nullptr;
+  ObSchemaGetterGuard schema_guard;
 
   const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + RLOCK_TIMEOUT_US;
   RLockGuardWithTimeout lock_guard(lock_, abs_timeout_us, ret);
@@ -459,8 +496,8 @@ int ObTenantFreezeInfoMgr::get_min_reserved_snapshot(
     snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_FOR_UNDO_RETENTION, snapshot_for_undo_retention);
     snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_FOR_TX, snapshot_for_tx);
     snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_FOR_MAJOR_FREEZE_TS, freeze_info.frozen_scn_.get_val_for_tx());
-    bool exist_mview_snapshot_type = false;
-    for (int64_t i = 0; i < snapshots.count() && OB_SUCC(ret) && !exist_mview_snapshot_type; ++i) {
+    bool exit_loop = false;
+    for (int64_t i = 0; i < snapshots.count() && OB_SUCC(ret) && !exit_loop; ++i) {
       bool related = false;
       const ObSnapshotInfo &snapshot = snapshots.at(i);
       if (OB_FAIL(is_snapshot_related_to_tablet(tablet_id, snapshot, related))) {
@@ -469,14 +506,16 @@ int ObTenantFreezeInfoMgr::get_min_reserved_snapshot(
         snapshot_info.update_by_smaller_snapshot(snapshot.snapshot_type_, snapshot.snapshot_scn_.get_val_for_tx());
         if (ObSnapShotType::SNAPSHOT_FOR_MAJOR_REFRESH_MV == snapshot.snapshot_type_) {
           // if exist mview snapshot type and tenant in restore
-          // if not init merge scheduler, use 0 as multi_version_start
-          bool during_restore = false;
-          int tmp_ret = ObBasicMergeScheduler::get_merge_scheduler()->during_restore(during_restore);
-          if (OB_TMP_FAIL(tmp_ret) || (OB_SUCCESS == tmp_ret && during_restore)) {
-            exist_mview_snapshot_type = true;
+          // if tenant is invalid or restore, need check mview snapshot
+          // TODO siyu:: use tenant_status_cache
+          bool need_check_mview = false;
+          IGNORE_RETURN check_tenant_in_restore_with_mv_(need_check_mview, schema_guard, tenant_schema);
+          if (need_check_mview) {
+            exit_loop = true;
             snapshot_info.update_by_smaller_snapshot(ObSnapShotType::SNAPSHOT_FOR_MAJOR_REFRESH_MV, static_cast<int64_t>(0));
-            LOG_INFO("exist new mv in restore", K(ret), K(tmp_ret), K(snapshot_info), K(tablet_id), K(merged_version));
+            LOG_INFO("exist new mv in restore", K(ret), K(snapshot_info), K(tablet_id), K(merged_version), K(need_check_mview));
           }
+          LOG_INFO("exist new mview when calc multi_version_start", K(ret), K(tablet_id), K(need_check_mview), K(snapshot_info), K(exit_loop));
         }
       }
     }

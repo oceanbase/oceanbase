@@ -328,8 +328,10 @@ int ObTableScanRange::init_ranges(
         } else if (is_tablet_spliting && OB_FAIL(split_query.get_split_datum_range(
             datum_utils,
             *allocator_,
-            datum_range))) {
+            datum_range,
+            is_false))) {
           STORAGE_LOG(WARN, "Failed to get split datum range", K(ret), K(tablet_id), K(ls_id));
+        } else if (is_false) {
         } else if (OB_FAIL(ranges_.push_back(datum_range))) {
           STORAGE_LOG(WARN, "Failed to push back datum range", K(ret));
         }

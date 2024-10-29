@@ -205,6 +205,9 @@ private:
       const obrpc::ObAdminServerArg::AdminServerOp &op);
   int check_and_update_service_epoch_(common::ObMySQLTransaction &trans);
   int fetch_new_server_id_(uint64_t &server_id);
+  bool check_server_index_(
+      const uint64_t candidate_server_id,
+      const common::ObIArray<uint64_t> &server_id_in_cluster) const;
   int check_server_have_enough_resource_for_delete_server_(
       const ObIArray<common::ObAddr> &servers,
       const common::ObZone &zone);

@@ -74,7 +74,7 @@ int ObDelUpdLogPlan::compute_dml_parallel()
     } else {
       if (del_upd_stmt->is_insert_stmt()) {
         const ObInsertStmt *insert_stmt = static_cast<const ObInsertStmt*>(del_upd_stmt);
-        if (insert_stmt->is_overwrite()) {
+        if (insert_stmt->is_normal_table_overwrite()) {
           const int64_t default_insert_overwrite_parallel = 2;
           if (dml_parallel <= ObGlobalHint::DEFAULT_PARALLEL) {
             dml_parallel = default_insert_overwrite_parallel;
@@ -2384,7 +2384,7 @@ int ObDelUpdLogPlan::allocate_link_dml_as_top(ObLogicalOperator *&old_top)
 int ObDelUpdLogPlan::check_is_direct_load(const ObInsertStmt &insert_stmt, const int64_t dml_parallel)
 {
   int ret = OB_SUCCESS;
-  if (insert_stmt.is_overwrite() || insert_stmt.value_from_select()) {
+  if (insert_stmt.value_from_select() && !insert_stmt.is_external_table_overwrite()) {
     ObOptimizerContext &optimize_ctx = get_optimizer_context();
     ObDirectLoadOptimizerCtx &direct_load_optimize_ctx = get_optimizer_context().get_direct_load_optimizer_ctx();
     ObDirectLoadOptimizer optimizer(direct_load_optimize_ctx);

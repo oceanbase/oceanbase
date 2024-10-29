@@ -40,7 +40,7 @@ public:
   virtual ~ObCGAggCells() { reset(); }
   void reset();
   bool check_finished() const;
-  int can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info, bool &can_agg) override;
+  int can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info, const int32_t col_index, bool &can_agg) override;
   int add_agg_cell(ObAggCell *cell);
   int eval_batch(
       const ObTableIterParam *iter_param,

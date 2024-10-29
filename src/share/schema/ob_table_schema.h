@@ -1388,8 +1388,10 @@ public:
   // Copy all constraint information in src_schema
   int assign_constraint(const ObTableSchema &other);
   int assign_partition_schema_without_auto_part_attr(const ObTableSchema &other);
-  int enable_auto_partition(const int64_t auto_part_size);
-  int detect_part_func_type(ObPartitionFuncType &part_func_type);
+  int enable_auto_partition(const int64_t auto_part_size, const ObPartitionFuncType &part_func_type);
+  int detect_auto_part_func_type(ObPartitionFuncType &part_func_type);
+
+  int is_range_col_part_type(bool &is_range_column_type) const;
   void forbid_auto_partition();
   void clear_constraint();
   int set_ttl_definition(const common::ObString &ttl_definition) { return deep_copy_str(ttl_definition, ttl_definition_); }

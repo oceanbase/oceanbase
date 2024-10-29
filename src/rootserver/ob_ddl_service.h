@@ -1651,7 +1651,8 @@ private:
       common::ObMySQLTransaction &trans,
       common::ObIAllocator &allocator,
       const uint64_t tenant_data_version,
-      const ObString &index_name = ObString(""));
+      const ObString &index_name = ObString(""),
+      const bool ignore_cs_replica = false);
   int rebuild_triggers_on_hidden_table(
       const share::schema::ObTableSchema &orig_table_schema,
       const share::schema::ObTableSchema &hidden_table_schema,
@@ -1687,6 +1688,15 @@ private:
       common::ObIAllocator &allocator,
       share::schema::ObTableSchema &hidden_table_schema,
       const ObString &index_name);
+  int clear_ctas_hidden_table_session_id_(
+      share::schema::ObTableSchema &hidden_table_schema);
+  int swap_ctas_hidden_table_session_id_(
+      const share::schema::ObTableSchema &orig_table_schema,
+      const share::schema::ObTableSchema &hidden_table_schema,
+      share::schema::ObTableSchema &new_orig_table_schema,
+      share::schema::ObTableSchema &new_hidden_table_schema,
+      ObDDLOperator &ddl_operator,
+      common::ObMySQLTransaction &trans);
   int rebuild_hidden_table_priv(
       const share::schema::ObTableSchema &orig_table_schema,
       const share::schema::ObTableSchema &hidden_table_schema,
@@ -2822,6 +2832,10 @@ private:
                                ObDDLOperator &ddl_operator,
                                obrpc::ObAlterTableRes &res,
                                ObIArray<ObDDLTaskRecord> &ddl_tasks);
+  template <class TTableSchema>
+  int get_tablets_with_table_id_(const ObArray<TTableSchema *> &table_schemas,
+                                 const int table_id,
+                                 ObArray<ObTabletID> &tablet_ids);
 public:
   //not check belong to the same table
   int check_same_partition(const bool is_oracle_mode, const ObPartition &l, const ObPartition &r,

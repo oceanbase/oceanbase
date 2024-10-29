@@ -351,7 +351,7 @@ LATCH_DEF(DEVICE_MANIFEST_RW_LOCK, 320, "device manifest rw lock", LATCH_READ_PR
 LATCH_DEF(MANIFEST_TASK_LOCK, 321, "manifest task lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(OB_DEVICE_CREDENTIAL_MGR_LOCK, 322, "device credential mgr rw lock", LATCH_READ_PREFER, 2000, 0, true)
 LATCH_DEF(DISK_SPACE_MANAGER_LOCK, 323, "share storage disk space manager lock", LATCH_FIFO, INT64_MAX, 0, true)
-LATCH_DEF(MC_PREWARM_LOCK, 324, "major compaction prewarm lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(MC_PREWARM_LOCK, 324, "major compaction prewarm lock", LATCH_FIFO, 2000, 0, true)     // FARM COMPAT WHITELIST, 432之后改名
 LATCH_DEF(TSLOG_PROCESSING_MUTEX, 325, "tslog processing mutex", LATCH_FIFO, INT64_MAX, 0, true)
 LATCH_DEF(TSLOG_CKPT_LOCK, 326, "tslog checkpoint lock", LATCH_FIFO, INT64_MAX, 0, true)
 LATCH_DEF(FILE_MANAGER_LOCK, 327, "file manager lock", LATCH_FIFO, INT64_MAX, 0, true)

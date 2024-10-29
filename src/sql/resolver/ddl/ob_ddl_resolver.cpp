@@ -2689,21 +2689,38 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
             LOG_WARN("unexpected child num", K(option_node->num_child_));
           } else {
             ObString url = ObString(string_node->str_len_, string_node->str_value_).trim_space_only();
-            ObSqlString tmp_location;
-            ObSqlString prefix;
+
             ObBackupStorageInfo storage_info;
             char storage_info_buf[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
-            OZ (resolve_file_prefix(url, prefix, storage_info.device_type_));
-            OZ (tmp_location.append(prefix.string()));
-            url = url.trim_space_only();
 
-            if (OB_STORAGE_FILE != storage_info.device_type_) {
-              OZ (ObSQLUtils::split_remote_object_storage_url(url, storage_info));
+            ObString path = url.split_on('?');
+
+            if (path.empty()) {
+              // url like: oss://ak:sk@host/bucket/...
+              ObSqlString tmp_location;
+              ObSqlString prefix;
+              OZ (resolve_file_prefix(url, prefix, storage_info.device_type_));
+              OZ (tmp_location.append(prefix.string()));
+              url = url.trim_space_only();
+
+              if (OB_STORAGE_FILE != storage_info.device_type_) {
+                OZ (ObSQLUtils::split_remote_object_storage_url(url, storage_info));
+              }
+              OZ (tmp_location.append(url));
+              OZ (storage_info.get_storage_info_str(storage_info_buf, sizeof(storage_info_buf)));
+              OZ (arg.schema_.set_external_file_location(tmp_location.string()));
+              OZ (arg.schema_.set_external_file_location_access_info(storage_info_buf));
+            } else {
+              // url like: oss://bucket/...?host=xxxx&access_id=xxx&access_key=xxx
+              ObString uri_cstr;
+              ObString storage_info_cstr;
+              OZ (ob_write_string(*params_.allocator_, path, uri_cstr, true));
+              OZ (ob_write_string(*params_.allocator_, url, storage_info_cstr, true));
+              OZ (storage_info.set(uri_cstr.ptr(), storage_info_cstr.ptr()));
+              OZ (storage_info.get_storage_info_str(storage_info_buf, sizeof(storage_info_buf)));
+              OZ (arg.schema_.set_external_file_location(path));
+              OZ (arg.schema_.set_external_file_location_access_info(storage_info_buf));
             }
-            OZ (tmp_location.append(url));
-            OZ (storage_info.get_storage_info_str(storage_info_buf, sizeof(storage_info_buf)));
-            OZ (arg.schema_.set_external_file_location(tmp_location.string()));
-            OZ (arg.schema_.set_external_file_location_access_info(storage_info_buf));
           }
 
           if (OB_SUCC(ret)) {
@@ -11553,7 +11570,7 @@ int ObDDLResolver::resolve_auto_partition_with_tenant_config(ObCreateTableStmt *
   } else if (nullptr != node && OB_FAIL(resolve_auto_partition(stmt, node, table_schema))) {
     LOG_WARN("fail to resolve auto partition", KR(ret), K(table_schema), KPC(stmt));
   } else if (!stmt->use_auto_partition_clause() &&
-             OB_FAIL(try_set_auto_partition_by_config(stmt->get_index_arg_list(), table_schema))) {
+             OB_FAIL(try_set_auto_partition_by_config(node, stmt->get_index_arg_list(), table_schema))) {
     LOG_WARN("fail to try to set auto_partition by config", KR(ret), K(table_schema), KPC(stmt));
   }
   return ret;
@@ -11661,7 +11678,6 @@ int ObDDLResolver::resolve_auto_partition(ObPartitionedStmt *stmt, ParseNode *no
       ret = OB_INVALID_ARGUMENT;
       SQL_RESV_LOG(WARN, "invalid argument", KR(ret), K(node->children_));
     }
-
     if (OB_FAIL(ret)) {
     } else if (FALSE_IT(stmt->set_use_auto_partition_clause(!SET_PARTITION_DEFINITION
                                                             || SET_AUTO_PARTITION_SIZE))) {
@@ -11732,9 +11748,18 @@ int ObDDLResolver::resolve_auto_partition(ObPartitionedStmt *stmt, ParseNode *no
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("current data version doesn't support to auto split partition", KR(ret), K(data_version));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "data version lower than 4.4 is");
-      } else if(OB_FAIL(table_schema.enable_auto_partition(auto_part_size))) {
-        LOG_WARN("fail to enable auto partition", KR(ret), K(table_schema));
+      } else {
+        ObPartitionFuncType part_func_type = PARTITION_FUNC_TYPE_MAX;
+        if (T_RANGE_COLUMNS_PARTITION == node->type_) {
+          part_func_type = PARTITION_FUNC_TYPE_RANGE_COLUMNS;
+        } else if (T_RANGE_PARTITION == node->type_) {
+          part_func_type = PARTITION_FUNC_TYPE_RANGE;
+        }
+        if (OB_FAIL(table_schema.enable_auto_partition(auto_part_size, part_func_type))) {
+          LOG_WARN("fail to enable auto partition", KR(ret), K(table_schema));
+        }
       }
+
     }
   }
 
@@ -11847,7 +11872,8 @@ int ObDDLResolver::resolve_presetting_partition_key(ParseNode *node, ObTableSche
 // if tenant_config->enable_auto_split == true and table_schema is valid for auto-partition,
 // enable auto-partition for the table;
 // otherwise, do nothing
-int ObDDLResolver::try_set_auto_partition_by_config(common::ObIArray<obrpc::ObCreateIndexArg> &index_arg_list,
+int ObDDLResolver::try_set_auto_partition_by_config(const ParseNode *node,
+                                                    common::ObIArray<obrpc::ObCreateIndexArg> &index_arg_list,
                                                     ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
@@ -11867,7 +11893,8 @@ int ObDDLResolver::try_set_auto_partition_by_config(common::ObIArray<obrpc::ObCr
       LOG_INFO("tenant_config has not been loaded over");
     } else if (tenant_config->enable_auto_split) {
       // check table
-      if (OB_FAIL(table_schema.enable_auto_partition(tenant_config->auto_split_tablet_size))) {
+      ObPartitionFuncType unused_part_func_type = PARTITION_FUNC_TYPE_MAX;// we can make sure that the part_expre is empty so enable_auto_partition will handle this situation
+      if (OB_FAIL(table_schema.enable_auto_partition(tenant_config->auto_split_tablet_size, unused_part_func_type))) {
         LOG_WARN("fail to enable auto partition", KR(ret), K(table_schema));
       } else if (OB_FAIL(table_schema.check_validity_for_auto_partition())) {
         if (OB_NOT_SUPPORTED == ret) {

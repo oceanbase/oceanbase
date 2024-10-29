@@ -66,7 +66,8 @@ int ObPartitionSplitQuery::get_tablet_split_range(
     const blocksstable::ObStorageDatumUtils &datum_utils,
     const storage::ObTabletSplitTscInfo &split_info,
     ObIAllocator &allocator,
-    blocksstable::ObDatumRange &src_range)
+    blocksstable::ObDatumRange &src_range,
+    bool &is_empty_range)
 {
   int ret = OB_SUCCESS;
   int compare_ret = 0;
@@ -75,12 +76,12 @@ int ObPartitionSplitQuery::get_tablet_split_range(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("fail to split range, invalid argument", K(ret), K(src_range), K(split_info));
   } else {
+    is_empty_range = false;
     if (split_info.split_type_ == ObTabletSplitType::RANGE && split_info.partkey_is_rowkey_prefix_) {
       const ObDatumRowkey &split_start_key = split_info.start_partkey_;
       const ObDatumRowkey &split_end_key = split_info.end_partkey_;
       const ObDatumRowkey &src_start_key = src_range.get_start_key();
       const ObDatumRowkey &src_end_key = src_range.get_end_key();
-      bool is_empty_range = false;
       // ObDatumRowkey
       if (OB_FAIL(split_start_key.compare(split_end_key, datum_utils, compare_ret))) {
         LOG_WARN("fail to split range, compare error.", K(ret), K(split_info));
@@ -222,6 +223,7 @@ int ObPartitionSplitQuery::get_tablet_split_ranges(
         tablet_handle_.get_obj()->get_rowkey_read_info().get_datum_utils();
       const ObColDescIArray &col_descs =
         tablet_handle_.get_obj()->get_rowkey_read_info().get_columns_desc();
+      bool is_empty_range = false;
 
       for (int64_t i = 0; OB_SUCC(ret) && i < ori_ranges.count(); i++) {
         tmp_range.reset();
@@ -229,8 +231,10 @@ int ObPartitionSplitQuery::get_tablet_split_ranges(
           LOG_WARN("Fail to deep copy src range", K(ret), K(ori_ranges.at(i)));
         } else if (OB_FAIL(datum_range.from_range(tmp_range, allocator))) {
           LOG_WARN("Failed to transfer store range", K(ret), K(tmp_range));
-        } else if (OB_FAIL(get_tablet_split_range(*tablet_handle_.get_obj(), datum_utils, split_info_, allocator, datum_range))) {
+        } else if (OB_FAIL(get_tablet_split_range(*tablet_handle_.get_obj(), datum_utils, split_info_, allocator, datum_range, is_empty_range))) {
           LOG_WARN("Fail to get tabelt split range", K(ret), K(split_info_));
+        } else if (is_empty_range) {
+          LOG_INFO("Range after split is empty", K(ori_ranges.at(i)));
         } else if (OB_FAIL(datum_range.to_store_range(col_descs, allocator, tmp_range))) {
           LOG_WARN("fail to transfer to store range", K(ret), K(datum_range));
         } else if (OB_FALSE_IT(tmp_range.set_table_id(ori_ranges.at(i).get_table_id()))) {
@@ -246,7 +250,8 @@ int ObPartitionSplitQuery::get_tablet_split_ranges(
 int ObPartitionSplitQuery::get_split_datum_range(
     const blocksstable::ObStorageDatumUtils *datum_utils,
     ObIAllocator &allocator,
-    blocksstable::ObDatumRange &datum_range)
+    blocksstable::ObDatumRange &datum_range,
+    bool &is_empty_range)
 {
   int ret = OB_SUCCESS;
   if (tablet_handle_.is_valid() && split_info_.is_valid()) {
@@ -254,7 +259,7 @@ int ObPartitionSplitQuery::get_split_datum_range(
       datum_utils = &tablet_handle_.get_obj()->get_rowkey_read_info().get_datum_utils();
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(get_tablet_split_range(*tablet_handle_.get_obj(), *datum_utils, split_info_, allocator, datum_range))) {
+    } else if (OB_FAIL(get_tablet_split_range(*tablet_handle_.get_obj(), *datum_utils, split_info_, allocator, datum_range, is_empty_range))) {
       STORAGE_LOG(WARN, "Failed to split range", K(ret), K(split_info_));
     }
   }
@@ -338,9 +343,6 @@ int ObPartitionSplitQuery::split_multi_ranges_if_need(
     } else if (OB_FAIL(get_tablet_split_ranges(src_ranges, new_ranges, allocator))) {
       LOG_INFO("get tablet split new ranges err, maybe no spilitng is happening",
         K(ret), K(src_ranges), K(new_ranges));
-    } else if (new_ranges.count() != src_ranges.count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fail to get tablet split range.", K(ret));
     } else {
       is_splited_range = true;
     }

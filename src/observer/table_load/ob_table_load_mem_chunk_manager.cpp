@@ -49,7 +49,7 @@ ObTableLoadMemChunkManager::ObTableLoadMemChunkManager()
 
 ObTableLoadMemChunkManager::~ObTableLoadMemChunkManager()
 {
-  for (int64_t i = 0; i < chunks_count_; ++i) {
+  for (int64_t i = 0; i < chunk_nodes_.count(); ++i) {
     if (OB_NOT_NULL(chunk_nodes_[i])) {
       chunk_nodes_[i]->~ObTableLoadChunkNode();
       ob_free(chunk_nodes_[i]);
@@ -115,14 +115,16 @@ int ObTableLoadMemChunkManager::alloc_chunk(ChunkType *&chunk)
         } else if (OB_FAIL(ObTableLoadService::get_sort_memory(sort_memory))) {
           LOG_WARN("fail to get sort memory", KR(ret));
         }
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(chunk->init(MTL_ID(), sort_memory))) {
-            chunk->~ChunkType();
-            ob_free(chunk);
-            chunk = nullptr;
-            LOG_WARN("fail to init chunk", KR(ret));
-          }
+        if (OB_SUCC(ret) && OB_FAIL(chunk->init(MTL_ID(), sort_memory))) {
+          LOG_WARN("fail to init chunk", KR(ret));
         }
+      }
+    }
+    if (OB_FAIL(ret)) {
+      if (OB_NOT_NULL(chunk)) {
+        chunk->~ChunkType();
+        ob_free(chunk);
+        chunk = nullptr;
       }
     }
   }
@@ -169,15 +171,7 @@ int ObTableLoadMemChunkManager::get_chunk(int64_t &chunk_node_id, ChunkType *&ch
               chunk_nodes_[chunk_node_id]->chunk_ = chunk;
             }
           }
-          if (OB_FAIL(ret)) {
-            if (OB_NOT_NULL(chunk)) {
-              chunk->~ChunkType();
-              ob_free(chunk);
-              chunk = nullptr;
-              chunk_nodes_[chunk_node_id]->chunk_ = nullptr;
-            }
-            chunk_nodes_[chunk_node_id]->is_used_ = false;
-          } else {
+          if (OB_SUCC(ret)) {
             get_chunk_success = true;
           }
         }
@@ -255,16 +249,6 @@ int ObTableLoadMemChunkManager::close_chunk(int64_t chunk_node_id)
       chunk = nullptr;
       ObMutexGuard guard(chunk_nodes_[chunk_node_id]->chunk_node_mutex_);
       chunk_nodes_[chunk_node_id]->is_used_ = false;
-    }
-    if (OB_NOT_NULL(chunk)) {
-      chunk->~ChunkType();
-      ob_free(chunk);
-      chunk = nullptr;
-    }
-    if (OB_NOT_NULL(chunk_nodes_[chunk_node_id]->chunk_)) {
-      chunk_nodes_[chunk_node_id]->chunk_->~ChunkType();
-      ob_free(chunk_nodes_[chunk_node_id]->chunk_);
-      chunk_nodes_[chunk_node_id]->chunk_ = nullptr;
     }
   }
   return ret;

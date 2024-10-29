@@ -91,6 +91,10 @@ public:
       const ObTabletID &tablet_id,
       const int64_t schema_version,
       uint64_t &table_id);
+  static int check_if_schema_changed(
+    const ObTablet &tablet,
+    const ObStorageSchema &storage_schema,
+    bool &is_schema_changed);
 #ifdef OB_BUILD_SHARED_STORAGE
   // medium compaction is not considered
   int prepare_ls_major_merge_info(
@@ -106,7 +110,6 @@ public:
     const storage::ObStorageSchema &storage_schema,
     bool &is_progressive_merge);
 #endif
-
   int64_t to_string(char* buf, const int64_t buf_len) const;
 protected:
   int decide_medium_snapshot(bool &medium_clog_submitted);

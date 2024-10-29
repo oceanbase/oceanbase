@@ -27,6 +27,7 @@ static void __attribute__ ((noinline)) pad_max_char_help(char *str, char *end, c
 
 static void pad_max_char(const ObCharsetInfo *cs, char *str, char *end)
 {
+/*
   char buf[10];
   char buf_len;
   if (!(cs->state & OB_CS_UNICODE)) {
@@ -42,7 +43,9 @@ static void pad_max_char(const ObCharsetInfo *cs, char *str, char *end)
                             (unsigned char*) buf + sizeof(buf));
   }
   ob_charset_assert(buf_len > 0);
-  pad_max_char_help(str, end ,buf, buf_len);
+  */
+  char pattern = 0xff;
+  pad_max_char_help(str, end , &pattern, 1);
 }
 
 bool ob_like_range_mb_help(const ObCharsetInfo *cs,

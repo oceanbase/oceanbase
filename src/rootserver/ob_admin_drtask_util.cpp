@@ -236,6 +236,9 @@ int ObAdminDRTaskUtil::execute_task_for_add_command_(
       || OB_UNLIKELY(!command_arg.is_add_task())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(arg), K(command_arg));
+  } else if (GCTX.is_shared_storage_mode() && REPLICA_TYPE_COLUMNSTORE == arg.dst_.get_replica_type()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("C-replica not supported in shared-storage mode", KR(ret));
   } else if (GCTX.self_addr() == arg.dst_.get_server()) {
     // do not need to send rpc, execute locally
     MTL_SWITCH(arg.tenant_id_) {

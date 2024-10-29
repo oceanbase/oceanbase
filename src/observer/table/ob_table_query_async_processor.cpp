@@ -555,7 +555,7 @@ int ObTableQueryAsyncP::init_tb_ctx(ObTableCtx& ctx, ObTableSingleQueryInfo& que
     ObObjectID tmp_object_id = OB_INVALID_ID;
     ObObjectID tmp_first_level_part_id = OB_INVALID_ID;
     ObTabletID real_tablet_id;
-    if (query_ctx.part_idx_ == OB_INVALID_ID && query_ctx.subpart_idx_ == OB_INVALID_ID) { // 非分区表
+    if (query_ctx.part_idx_ == OB_INVALID_INDEX && query_ctx.subpart_idx_ == OB_INVALID_INDEX) { // 非分区表
       real_tablet_id = query_info.simple_schema_->get_tablet_id();
     } else if (OB_FAIL(query_info.simple_schema_->get_part_id_and_tablet_id_by_idx(query_ctx.part_idx_,
                                                                                     query_ctx.subpart_idx_,
@@ -643,25 +643,33 @@ int ObTableQueryAsyncP::init_tb_ctx(ObTableCtx &ctx)
   return ret;
 }
 
-int ObTableQueryAsyncP::generate_merge_result_iterator(const ObArray<ObTableQueryResultIterator*>& array_result) {
+int ObTableQueryAsyncP::generate_merge_result_iterator()
+{
   int ret = OB_SUCCESS;
   // Merge Iterator: Holds multiple underlying iterators, stored in its own heap
   ResultMergeIterator *merge_result_iter = nullptr;
   ObTableHbaseRowKeyDefaultCompare *compare = nullptr;
   if (OB_ISNULL(merge_result_iter = OB_NEWx(ResultMergeIterator,
                                               &allocator_,
-                                              &allocator_,
+                                              allocator_,
                                               query_session_->get_query(),
                                               result_ /* Response serlize row*/))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to create merge_result_iter", K(ret));
+  } else if (OB_FAIL(generate_multi_result_iterator(merge_result_iter->get_inner_result_iterators()))) {
+    LOG_WARN("fail to generate multi result inner iterator", K(ret));
   } else if (OB_ISNULL(compare = OB_NEWx(ObTableHbaseRowKeyDefaultCompare, &allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to create compare, alloc memory fail", K(ret));
-  } else if (OB_FAIL(merge_result_iter->init(array_result, compare))) {
+  } else if (OB_FAIL(merge_result_iter->init(compare))) {
     LOG_WARN("fail to build merge_result_iter", K(ret));
   } else {
     query_session_->set_result_iterator(merge_result_iter);
+  }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(merge_result_iter)) {
+    merge_result_iter->~ResultMergeIterator();
+    allocator_.free(merge_result_iter);
   }
   return ret;
 }
@@ -749,7 +757,7 @@ int ObTableQueryAsyncP::process_table_info(ObTableSingleQueryInfo* table_info,
   return ret;
 }
 
-int ObTableQueryAsyncP::generate_multi_result_iterator(ObArray<ObTableQueryResultIterator*>& inner_result_iterator_list) {
+int ObTableQueryAsyncP::generate_multi_result_iterator(ObIArray<ObTableQueryResultIterator*>& inner_result_iterator_list) {
   int ret = OB_SUCCESS;
   ObIAllocator *allocator = query_session_->get_allocator();
   ObTableQueryAsyncCtx &query_ctx = query_session_->get_query_ctx();
@@ -816,6 +824,10 @@ int ObTableQueryAsyncP::generate_multi_result_iterator(ObArray<ObTableQueryResul
         if (OB_FAIL(inner_result_iterator_list.push_back(result_iter))) {
           LOG_WARN(" fail to push back result_iter to array_result", K(ret));
         }
+      }
+
+      if (OB_FAIL(ret) && OB_NOT_NULL(result_iter)) {
+        ObTableQueryUtils::destroy_result_iterator(result_iter);
       }
     }
   }
@@ -1211,7 +1223,6 @@ int ObTableQueryAsyncP::query_scan_multi_cf_with_init() {
         }
       }
     }
-    ObArray<ObTableQueryResultIterator*> inner_result_iterator_list;
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(query_session_->deep_copy_select_columns(query.get_select_columns(), query_infos.at(0)->tb_ctx_.get_query_col_names()))) {
       LOG_WARN("fail to deep copy select columns from table ctx", K(ret));
@@ -1222,9 +1233,7 @@ int ObTableQueryAsyncP::query_scan_multi_cf_with_init() {
                                     query_infos.at(0)->tb_ctx_.need_dist_das(),
                                     query_session_->get_trans_state()))) {
       LOG_WARN("fail to start readonly transaction", K(ret), K(query_infos.at(0)->tb_ctx_));
-    } else if (OB_FAIL(generate_multi_result_iterator(inner_result_iterator_list))) {
-      LOG_WARN("fail to generate_multi_result_iterator", K(ret));
-    } else if (OB_FAIL(generate_merge_result_iterator(inner_result_iterator_list))) {
+    } else if (OB_FAIL(generate_merge_result_iterator())) {
       LOG_WARN("fail to generate_merge_result_iterator", K(ret));
     } else if (OB_FAIL(execute_multi_cf_query())) {
       LOG_WARN("fail to execute query", K(ret));

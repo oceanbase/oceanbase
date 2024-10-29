@@ -94,6 +94,7 @@ public:
   int fetch_new_max_id(const uint64_t tenant_id, ObMaxIdType id_type,
                        uint64_t &max_id, const uint64_t initial = UINT64_MAX,
                        const int64_t size = 1);
+  int update_server_max_id(const uint64_t max_server_id, const uint64_t next_max_server_id);
   // For generate new tablet_ids
   int fetch_new_max_ids(const uint64_t tenant_id, ObMaxIdType id_type,
                         uint64_t &max_id, uint64_t size);

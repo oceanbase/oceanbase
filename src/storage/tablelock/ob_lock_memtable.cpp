@@ -206,6 +206,7 @@ ObLockMemtable::ObLockMemtable()
     max_committed_scn_(),
     is_frozen_(false),
     need_check_tablet_status_(false),
+    transfer_counter_(0),
     freezer_(nullptr),
     flush_lock_(common::ObLatchIds::CLOG_CKPT_LOCK)
 {}
@@ -259,6 +260,7 @@ void ObLockMemtable::reset()
   flushed_scn_.set_min();
   is_frozen_ = false;
   need_check_tablet_status_ = false;
+  transfer_counter_ = 0;
   freezer_ = nullptr;
   is_inited_ = false;
   reset_trace_id();
@@ -279,6 +281,8 @@ int ObLockMemtable::lock_(
   ObLockStep succ_step = STEP_BEGIN;
   bool register_to_deadlock = false;
   ObTxIDSet conflict_tx_set;
+  int64_t input_transfer_counter = -1;
+  int64_t output_transfer_counter = -1;
 
   // 1. record lock myself(check conflict).
   // 2. record lock at memtable ctx.
@@ -294,7 +298,9 @@ int ObLockMemtable::lock_(
       ObMvccWriteGuard guard;
       if (OB_FAIL(guard.write_auth(ctx))) {
         LOG_WARN("not allow lock table.", K(ret), K(ctx));
-      } else if (OB_FAIL(check_tablet_write_allow_(lock_op))) {
+      } else if (OB_FAIL(check_tablet_write_allow_(lock_op,
+                                                   input_transfer_counter,
+                                                   output_transfer_counter))) {
         LOG_WARN("check tablet write allow failed", K(ret), K(lock_op));
       } else {
         mem_ctx = static_cast<ObMemtableCtx *>(ctx.mvcc_acc_ctx_.mem_ctx_);
@@ -326,6 +332,11 @@ int ObLockMemtable::lock_(
             need_retry = true;
           }
           LOG_WARN("record lock at mem_ctx failed.", K(ret), K(lock_op));
+        } else {
+          input_transfer_counter = output_transfer_counter;
+          ret = check_tablet_write_allow_(lock_op,
+                                          input_transfer_counter,
+                                          output_transfer_counter);
         }
       }
       if (OB_FAIL(ret) && succ_step == STEP_IN_LOCK_MGR) {
@@ -427,7 +438,9 @@ int ObLockMemtable::lock_(
   return ret;
 }
 
-int ObLockMemtable::check_tablet_write_allow_(const ObTableLockOp &lock_op)
+int ObLockMemtable::check_tablet_write_allow_(const ObTableLockOp &lock_op,
+                                              const int64_t input_transfer_counter,
+                                              int64_t &output_transfer_counter)
 {
   int ret = OB_SUCCESS;
   ObTabletID tablet_id;
@@ -436,7 +449,14 @@ int ObLockMemtable::check_tablet_write_allow_(const ObTableLockOp &lock_op)
   ObTabletHandle tablet_handle;
   ObTabletCreateDeleteMdsUserData data;
   bool is_commited = false;
-  if (!need_check_tablet_status_) {
+
+  // the order must be ensured
+  bool need_check_tablet_status = ATOMIC_LOAD(&need_check_tablet_status_);
+  output_transfer_counter = ATOMIC_LOAD(&transfer_counter_);
+
+  if (!need_check_tablet_status // transfer is not on going
+      && (input_transfer_counter < 0 // no transfer is between two check_tablet_write_allow
+          || input_transfer_counter == output_transfer_counter)) {
   } else if (!lock_op.lock_id_.is_tablet_lock()) {
   } else if (OB_FAIL(lock_op.lock_id_.convert_to(tablet_id))) {
     LOG_WARN("convert lock id to tablet_id failed", K(ret), K(lock_op));
@@ -479,6 +499,8 @@ int ObLockMemtable::unlock_(
   bool need_retry = false;
   uint64_t unused_lock_mode_cnt_in_same_trans[TABLE_LOCK_MODE_COUNT] = {0, 0, 0, 0, 0};
   ObLockStep succ_step = STEP_BEGIN;
+  int64_t input_transfer_counter = -1;
+  int64_t output_transfer_counter = -1;
 
   // 1. record unlock op myself(check conflict).
   // 2. record unlock op at memtable ctx.
@@ -497,7 +519,9 @@ int ObLockMemtable::unlock_(
         LOG_WARN("unlock timeout", K(ret), K(unlock_op), K(expired_time));
       } else if (OB_FAIL(guard.write_auth(ctx))) {
         LOG_WARN("not allow unlock table.", K(ret), K(ctx));
-      } else if (OB_FAIL(check_tablet_write_allow_(unlock_op))) {
+      } else if (OB_FAIL(check_tablet_write_allow_(unlock_op,
+                                                   input_transfer_counter,
+                                                   output_transfer_counter))) {
         LOG_WARN("check tablet write allow failed", K(ret), K(unlock_op));
       } else if (FALSE_IT(mem_ctx = static_cast<ObMemtableCtx *>(ctx.mvcc_acc_ctx_.mem_ctx_))) {
         // check whether the unlock op exist already
@@ -520,6 +544,11 @@ int ObLockMemtable::unlock_(
           need_retry = true;
         }
         LOG_WARN("record lock at mem_ctx failed.", K(ret), K(unlock_op));
+      } else {
+        input_transfer_counter = output_transfer_counter;
+        ret = check_tablet_write_allow_(unlock_op,
+                                        input_transfer_counter,
+                                        output_transfer_counter);
       }
       if (OB_FAIL(ret) && succ_step == STEP_IN_LOCK_MGR) {
         obj_lock_map_.remove_lock_record(unlock_op);
@@ -1544,6 +1573,13 @@ int ObLockMemtable::check_and_set_tx_lock_timeout_(const ObMvccAccessCtx &acc_ct
     }
   }
   return ret;
+}
+
+void ObLockMemtable::enable_check_tablet_status(const bool need_check)
+{
+  // the order must be ensured
+  ATOMIC_INC(&transfer_counter_);
+  ATOMIC_STORE(&need_check_tablet_status_, need_check);
 }
 
 } // tablelock

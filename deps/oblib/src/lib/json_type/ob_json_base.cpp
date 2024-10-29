@@ -5762,6 +5762,14 @@ int ObIJsonBase::to_time(int64_t &value) const
   int64_t time;
 
   switch (json_type()) {
+    case ObJsonNodeType::J_INT:
+    case ObJsonNodeType::J_UINT: {
+      int64_t in_val = get_int();
+      if (OB_FAIL(ObTimeConverter::int_to_time(in_val, value))) {
+        LOG_WARN("int_to_date failed", K(ret), K(in_val), K(json_type()));
+      }
+      break;
+    }
     case ObJsonNodeType::J_TIME: {
       ObTime t;
       if (OB_FAIL(get_obtime(t))) {

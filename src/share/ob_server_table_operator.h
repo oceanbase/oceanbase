@@ -167,6 +167,10 @@ public:
       common::ObISQLClient &sql_proxy,
       const common::ObAddr &server,
       ObServerInfoInTable &server_info_in_table);
+  // get all server's id in the cluster
+  static int get_clusters_server_id(common::ObISQLClient &sql_proxy, ObIArray<uint64_t> &server_id_in_cluster);
+  // get the max server_id in the cluster
+  static int get_clusters_max_server_id(uint64_t &max_server_id);
   // insert the new server's info into __all_server table,
   // it is only called when we want to add a new server into clusters
   //

@@ -41,10 +41,10 @@ ObTableLoadTableCtx::ObTableLoadTableCtx()
     exec_ctx_(nullptr),
     allocator_("TLD_TableCtx"),
     ref_count_(0),
+    is_in_map_(false),
     is_assigned_resource_(false),
     is_assigned_memory_(false),
     mark_delete_(false),
-    is_dirty_(false),
     is_inited_(false)
 {
   free_session_ctx_.sessid_ = sql::ObSQLSessionInfo::INVALID_SESSID;

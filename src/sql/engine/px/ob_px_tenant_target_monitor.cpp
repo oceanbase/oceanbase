@@ -373,6 +373,7 @@ int ObPxTenantTargetMonitor::reset_follower_statistics(uint64_t version)
 int ObPxTenantTargetMonitor::reset_leader_statistics()
 {
   int ret = OB_SUCCESS;
+  const uint64_t server_index = GCTX.get_server_index();
   // write lock before reset map and refresh version.
   SpinWLockGuard wlock_guard(spin_lock_);
   global_target_usage_.clear();
@@ -381,7 +382,7 @@ int ObPxTenantTargetMonitor::reset_leader_statistics()
   } else {
     version_ = get_new_version();
   }
-  LOG_INFO("reset leader statistics", K(tenant_id_), K(ret), K(version_), K(GCTX.server_id_));
+  LOG_INFO("reset leader statistics", K(tenant_id_), K(ret), K(version_), K(server_index));
   return ret;
 }
 
@@ -545,12 +546,12 @@ int ObPxTenantTargetMonitor::get_all_target_info(common::ObIArray<ObPxTargetInfo
 uint64_t ObPxTenantTargetMonitor::get_new_version()
 {
   uint64_t current_time = common::ObTimeUtility::current_time();
-	uint64_t svr_id = GCTX.server_id_;
-	uint64_t new_version = ((current_time & 0x0000FFFFFFFFFFFF) | (svr_id << SERVER_ID_SHIFT));
+	uint64_t server_index = GCTX.get_server_index();
+	uint64_t new_version = ((current_time & 0x0000FFFFFFFFFFFF) | (server_index << SERVER_ID_SHIFT));
   return new_version;
 }
 
-uint64_t ObPxTenantTargetMonitor::get_server_id(uint64_t version) {
+uint64_t ObPxTenantTargetMonitor::get_server_index(uint64_t version) {
   return (version >> SERVER_ID_SHIFT);
 }
 

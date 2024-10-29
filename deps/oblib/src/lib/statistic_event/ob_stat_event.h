@@ -165,6 +165,10 @@ STAT_EVENT_ADD_DEF(SQL_PS_PREPARE_TIME, "ps prepare time", ObStatClassIds::SQL, 
 STAT_EVENT_ADD_DEF(SQL_PS_EXECUTE_COUNT, "ps execute count", ObStatClassIds::SQL, 40022, false, true, true)
 STAT_EVENT_ADD_DEF(SQL_PS_CLOSE_COUNT, "ps close count", ObStatClassIds::SQL, 40023, false, true, true)
 STAT_EVENT_ADD_DEF(SQL_PS_CLOSE_TIME, "ps close time", ObStatClassIds::SQL, 40024, false, true, true)
+STAT_EVENT_ADD_DEF(SQL_COMMIT_COUNT, "sql commit count", ObStatClassIds::SQL, 40025, false, true, true)
+STAT_EVENT_ADD_DEF(SQL_COMMIT_TIME, "sql commit time", ObStatClassIds::SQL, 40026, false, true, true)
+STAT_EVENT_ADD_DEF(SQL_ROLLBACK_COUNT, "sql rollback count", ObStatClassIds::SQL, 40027, false, true, true)
+STAT_EVENT_ADD_DEF(SQL_ROLLBACK_TIME, "sql rollback time", ObStatClassIds::SQL, 40028, false, true, true)
 
 STAT_EVENT_ADD_DEF(SQL_OPEN_CURSORS_CURRENT, "opened cursors current", ObStatClassIds::SQL, 40030, true, true, true)
 STAT_EVENT_ADD_DEF(SQL_OPEN_CURSORS_CUMULATIVE, "opened cursors cumulative", ObStatClassIds::SQL, 40031, true, true, true)
@@ -274,6 +278,8 @@ STAT_EVENT_ADD_DEF(MULTI_VERSION_FUSE_ROW_CACHE_HIT, "multi version fuse row cac
 STAT_EVENT_ADD_DEF(MULTI_VERSION_FUSE_ROW_CACHE_MISS, "multi version fuse row cache miss", ObStatClassIds::CACHE, 50070, true, true, true)
 STAT_EVENT_ADD_DEF(BACKUP_INDEX_CACHE_HIT, "backup index cache hit", ObStatClassIds::CACHE, 50071, true, true, true)
 STAT_EVENT_ADD_DEF(BACKUP_INDEX_CACHE_MISS, "backup index cache miss", ObStatClassIds::CACHE, 50072, true, true, true)
+STAT_EVENT_ADD_DEF(BACKUP_META_CACHE_HIT, "backup meta cache hit", ObStatClassIds::CACHE, 50073, true, true, true)
+STAT_EVENT_ADD_DEF(BACKUP_META_CACHE_MISS, "backup meta cache miss", ObStatClassIds::CACHE, 50074, true, true, true)
 
 // STORAGE
 STAT_EVENT_ADD_DEF(MEMSTORE_LOGICAL_READS, "MEMSTORE_LOGICAL_READS", STORAGE, "MEMSTORE_LOGICAL_READS", true, true, false)

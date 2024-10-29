@@ -150,6 +150,7 @@ const static char * ObTabletScheduleNewRoundStateStr[] = {
     "DURING_SPLIT",
     "NEED_CHECK_LAST_MEDIUM_CKM",
     "EXIST_UNFINISH_MEDIUM",
+    "SCHEDULE_CONFLICT",
     "NONE",
     "STATE_MAX"
 };
@@ -367,7 +368,12 @@ int ObTabletStatusCache::register_map(
   bool could_schedule_merge = false;
   if (OB_FAIL(MTL(ObTenantTabletScheduler*)->tablet_start_schedule_medium(
       tablet_id, could_schedule_merge))) {
-    LOG_WARN("failed to add tablet", K(ret), K(tablet_id));
+    if (OB_ENTRY_EXIST == ret) {
+      new_round_state_ = SCHEDULE_CONFLICT;
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to add tablet", K(ret), K(tablet_id));
+    }
   } else if (could_schedule_merge) {
     new_round_state_ = CAN_SCHEDULE_NEW_ROUND;
   } else {

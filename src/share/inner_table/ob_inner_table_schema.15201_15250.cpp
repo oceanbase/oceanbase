@@ -14460,7 +14460,7 @@ int ObInnerTableSchema::all_virtual_ash_ora_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("IO_READ_COUNT", //column_name
+    ADD_COLUMN_SCHEMA("DELTA_READ_IO_REQUESTS", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
@@ -14475,7 +14475,7 @@ int ObInnerTableSchema::all_virtual_ash_ora_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("IO_READ_SIZE", //column_name
+    ADD_COLUMN_SCHEMA("DELTA_READ_IO_BYTES", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
@@ -14490,7 +14490,7 @@ int ObInnerTableSchema::all_virtual_ash_ora_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("IO_WRITE_COUNT", //column_name
+    ADD_COLUMN_SCHEMA("DELTA_WRITE_IO_REQUESTS", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
@@ -14505,7 +14505,7 @@ int ObInnerTableSchema::all_virtual_ash_ora_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("IO_WRITE_SIZE", //column_name
+    ADD_COLUMN_SCHEMA("DELTA_WRITE_IO_BYTES", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
@@ -15562,7 +15562,7 @@ int ObInnerTableSchema::all_virtual_ash_ora_all_virtual_ash_i1_schema(ObTableSch
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("IO_READ_COUNT", //column_name
+    ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("DELTA_READ_IO_REQUESTS", //column_name
       column_id + 58, //column_id
       0, //rowkey_id
       0, //index_id
@@ -15579,7 +15579,7 @@ int ObInnerTableSchema::all_virtual_ash_ora_all_virtual_ash_i1_schema(ObTableSch
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("IO_READ_SIZE", //column_name
+    ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("DELTA_READ_IO_BYTES", //column_name
       column_id + 59, //column_id
       0, //rowkey_id
       0, //index_id
@@ -15596,7 +15596,7 @@ int ObInnerTableSchema::all_virtual_ash_ora_all_virtual_ash_i1_schema(ObTableSch
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("IO_WRITE_COUNT", //column_name
+    ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("DELTA_WRITE_IO_REQUESTS", //column_name
       column_id + 60, //column_id
       0, //rowkey_id
       0, //index_id
@@ -15613,7 +15613,7 @@ int ObInnerTableSchema::all_virtual_ash_ora_all_virtual_ash_i1_schema(ObTableSch
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("IO_WRITE_SIZE", //column_name
+    ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("DELTA_WRITE_IO_BYTES", //column_name
       column_id + 61, //column_id
       0, //rowkey_id
       0, //index_id

@@ -67,7 +67,7 @@ public:
   inline ObDirectLoadType get_direct_load_type() const { return direct_load_type_; }
   int get_lob_meta_tablet_id(ObTabletID &lob_meta_tablet_id);
   int update_max_lob_id(const int64_t lob_id);
-  TO_STRING_KV(K_(is_inited), K_(direct_load_type), K_(start_scn), K_(execution_id), KPC(mgr_handle_.get_obj()));
+  TO_STRING_KV(K_(is_inited), K_(direct_load_type), K_(start_scn), K_(execution_id), K_(cgs_count), KPC(mgr_handle_.get_obj()));
 private:
   int init_for_sn(
       const share::ObLSID &ls_id,
@@ -122,6 +122,7 @@ private:
   share::SCN start_scn_; // start scn in the context.
   int64_t execution_id_; // execution_id in the context.
   ObTabletDirectLoadMgrHandle mgr_handle_;
+  int64_t cgs_count_; // count of the column groups, used for the sn's statistics when retry after committed.
 DISALLOW_COPY_AND_ASSIGN(ObDirectLoadMgrAgent);
 };
 

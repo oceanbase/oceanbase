@@ -256,7 +256,8 @@ public:
       const ObTabletHandle &src_tablet_handle,
       const ObTabletID &dst_tablet_id,
       const ObTablesHandleArray &tables_handle,
-      const share::ObSplitSSTableType &split_sstable_type);
+      const share::ObSplitSSTableType &split_sstable_type,
+      const bool can_reuse_macro_block);
 private:
   int create_sstable(
       const share::ObSplitSSTableType &split_sstable_type);
@@ -265,6 +266,11 @@ private:
       const ObTabletID &dst_tablet_id,
       ObSSTableIndexBuilder *index_builder,
       ObTabletCreateSSTableParam &create_sstable_param);
+  static int check_and_determine_restore_status(
+      const ObLSHandle &ls_handle,
+      const ObTabletID &dst_tablet_id,
+      const ObTablesHandleArray &major_handles_array,
+      ObTabletRestoreStatus::STATUS &restore_status);
 private:
   bool is_inited_;
   ObTabletSplitParam *param_;

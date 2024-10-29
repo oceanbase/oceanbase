@@ -2473,6 +2473,11 @@ int ObSyncIOChannel::do_sync_io(ObIORequest &req)
   int flag = -1;
   ObFdSimulator::get_fd_flag(req.fd_, flag);
   ObIODevice *device_handle = req.fd_.device_handle_;
+
+  const int64_t timeout_us = MIN(req.get_remained_io_timeout_us(),
+      OB_IO_MANAGER.get_object_storage_io_timeout_ms(req.tenant_id_) * 1000LL);
+  ObObjectStorageTenantGuard guard(req.tenant_id_, timeout_us);
+
   // no need to perform io for req that has already been canceled
   if (req.is_canceled()) {
     ret = OB_CANCELED;

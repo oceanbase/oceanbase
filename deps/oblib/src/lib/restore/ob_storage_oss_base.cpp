@@ -924,7 +924,7 @@ void ObStorageOssBase::print_oss_info(
       }
     }
 
-    if (OB_OBJECT_NOT_EXIST != ob_errcode) {
+    if (OB_OBJECT_NOT_EXIST != ob_errcode || aos_ret->code / 100 != 2) {
       // force printing log
       allow_next_syslog();
     }

@@ -875,6 +875,10 @@ private:
   int wait_release_memtables_();
   int mark_mds_table_switched_to_empty_shell_();
   int handle_transfer_replace_(const ObBatchUpdateTableStoreParam &param);
+
+  // DDL.
+  int update_restore_status_for_split_(const ObBatchUpdateTableStoreParam &param);
+
   // NOTICE:
   // - Because the `calc_tablet_attr()` may has I/O operations, you can bypass it if wantn't to update it.
   int get_updating_tablet_pointer_param(
@@ -1029,15 +1033,21 @@ inline void ObTablet::update_wash_score(const int64_t score)
 inline void ObTablet::inc_ref()
 {
   const int64_t cnt = ATOMIC_AAF(&ref_cnt_, 1);
-  const common::ObTabletID &tablet_id = tablet_meta_.tablet_id_;
+#ifdef DEBUG
+  const common::ObTabletID tablet_id = tablet_meta_.tablet_id_;
   STORAGE_LOG(DEBUG, "tablet inc ref", KP(this), K(tablet_id), "ref_cnt", cnt, K(lbt()));
+#endif
 }
 
 inline int64_t ObTablet::dec_ref()
 {
+#ifdef DEBUG
+  const common::ObTabletID tablet_id = tablet_meta_.tablet_id_;
+#endif
   const int64_t cnt = ATOMIC_SAF(&ref_cnt_, 1/* just sub 1 */);
-  const common::ObTabletID &tablet_id = tablet_meta_.tablet_id_;
+#ifdef DEBUG
   STORAGE_LOG(DEBUG, "tablet dec ref", KP(this), K(tablet_id), "ref_cnt", cnt, K(lbt()));
+#endif
 
   return cnt;
 }

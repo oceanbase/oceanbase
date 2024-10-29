@@ -1243,10 +1243,12 @@ int ObPartitionMultiRangeSpliter::get_multi_range_size(
   total_size = 0;
   int64_t estimate_size = 0, range_size = 0;
 
-  if (OB_UNLIKELY(0 == table_iter.count() || range_array.empty())) {
+  if (OB_UNLIKELY(0 == table_iter.count())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to get multi range size", K(ret), K(table_iter),
                 K(range_array));
+  } else if (0 == range_array.count()) {
+    total_size = estimate_size;
   } else if (OB_FAIL(get_split_tables(table_iter, tables))) {
     STORAGE_LOG(WARN, "Failed to get all sstables", K(ret), K(table_iter));
   } else if (OB_FAIL(try_estimate_range_size(range_array, tables, estimate_size))) {
@@ -1542,10 +1544,12 @@ int ObPartitionMultiRangeSpliter::get_split_multi_ranges(
   int64_t fast_range_array_cnt = 0;
   multi_range_split_array.reset();
 
-  if (OB_UNLIKELY(0 == table_iter.count() || range_array.empty() || expected_task_count <= 0)) {
+  if (OB_UNLIKELY(0 == table_iter.count() || expected_task_count <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to get split multi ranges", K(ret), K(table_iter),
                 K(range_array), K(expected_task_count));
+  } else if (range_array.empty()) {
+    // do nothing
   } else if (OB_UNLIKELY(expected_task_count == 1)) {
     STORAGE_LOG(DEBUG, "Unexpected only one split task", K(expected_task_count), K(range_array));
     fast_range_array_cnt = 1;

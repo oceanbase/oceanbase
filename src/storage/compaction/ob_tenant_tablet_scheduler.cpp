@@ -754,7 +754,7 @@ int ObProhibitScheduleMediumMap::add_flag(const ObTabletID &tablet_id, const Pro
         LOG_INFO("flag in conflict", K(ret), K(tablet_id), K(tmp_flag), K(input_flag));
       }
     } else { // tmp_flag == input_flag
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_ENTRY_EXIST;
       LOG_WARN("flag in already exist", K(ret), K(tablet_id), K(tmp_flag), K(input_flag));
     }
   }
@@ -950,7 +950,7 @@ int ObTenantTabletScheduler::tablet_start_schedule_medium(const ObTabletID &tabl
     if (OB_EAGAIN == ret) {
       tablet_could_schedule_medium = false;
       ret = OB_SUCCESS;
-    } else {
+    } else if (OB_ENTRY_EXIST != ret) {
       LOG_WARN("failed to add flag for tablet schedule medium", K(ret), K(tablet_id));
     }
   } else {

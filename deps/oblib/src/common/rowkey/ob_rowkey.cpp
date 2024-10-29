@@ -542,10 +542,12 @@ int64_t ObRowkey::to_plain_string(char *buffer, const int64_t length) const
 {
   int64_t pos = 0;
   int ret = OB_SUCCESS;
+  ObObjPrintParams print_params;
+  print_params.refine_range_max_value_ = true;
   for (int i = 0; OB_SUCC(ret) && i < obj_cnt_; ++i) {
     if (pos < length) {
       if (!obj_ptr_[i].is_max_value() && !obj_ptr_[i].is_min_value()) {
-        if (OB_FAIL(obj_ptr_[i].print_plain_str_literal(buffer, length, pos))) {
+        if (OB_FAIL(obj_ptr_[i].print_plain_str_literal(buffer, length, pos, print_params))) {
           COMMON_LOG(WARN, "Failed to print", K(obj_ptr_[i]), K(ret));
         }
       } else if (obj_ptr_[i].is_min_value()) {

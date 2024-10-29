@@ -2509,6 +2509,14 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("fulltext search index isn't supported in shared storage mode", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "fulltext search index in shared storage mode is");
+        } else if (GCTX.is_shared_storage_mode() && VEC_KEY == index_keyname_) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("vector index search index isn't supported in shared storage mode", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector index search index in shared storage mode is");
+        } else if (GCTX.is_shared_storage_mode() && (MULTI_KEY == index_keyname_ || MULTI_UNIQUE_KEY == index_keyname_)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("multivalue search index isn't supported in shared storage mode", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "multivalue search index in shared storage mode is");
 #endif
         } else if (tenant_data_version < DATA_VERSION_4_3_1_0 && index_keyname_ == FTS_KEY) {
           ret = OB_NOT_SUPPORTED;
@@ -6136,8 +6144,6 @@ int ObAlterTableResolver::resolve_change_column(const ParseNode &node)
           LOG_WARN("can't set primary key nullable", K(ret));
         } else if (OB_FAIL(check_alter_geo_column_allowed(alter_column_schema, *origin_col_schema))) {
           LOG_WARN("modify geo column not allowed", K(ret));
-        } else if (OB_FAIL(check_alter_multivalue_depend_column_allowed(alter_column_schema, *origin_col_schema))) {
-          LOG_WARN("modify geo column not allowed", K(ret));
         }
       }
       if (OB_SUCC(ret)) {
@@ -6482,8 +6488,6 @@ int ObAlterTableResolver::resolve_modify_column(const ParseNode &node,
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify geometry srid");
             LOG_WARN("can't not modify geometry srid", K(ret),
                     K(origin_col_schema->get_srid()), K(alter_column_schema.get_srid()));
-          } else if (OB_FAIL(check_alter_multivalue_depend_column_allowed(alter_column_schema, *origin_col_schema))) {
-            LOG_WARN("modify geo column not allowed", K(ret));
           } else if (origin_col_schema->get_data_type() == ObRoaringBitmapType
                      && alter_column_schema.get_data_type() != ObRoaringBitmapType
                      && !ob_is_string_type(alter_column_schema.get_data_type())) {

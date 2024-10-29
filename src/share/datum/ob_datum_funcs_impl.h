@@ -13,6 +13,9 @@
 #ifndef OCEANBASE_SHARE_DATUM_FUNCS_UTIL_H_
 #define OCEANBASE_SHARE_DATUM_FUNCS_UTIL_H_
 
+#include "share/ob_lob_access_utils.h"
+#include "share/rc/ob_tenant_base.h"
+
 namespace oceanbase
 {
 using namespace sql;
@@ -438,6 +441,238 @@ struct DatumStrHashCalculator : public DefHashMethod<T>
   }
 };
 
+template <bool IS_LOB>
+struct DefStrHashFunc
+{
+  static int null_hash(const uint64_t seed, uint64_t &res, hash_algo hash_al)
+  {
+    const int null_type = ObNullType;
+    res = hash_al(&null_type, sizeof(null_type), seed);
+    return OB_SUCCESS;
+  }
+
+  static int hash(const ObDatum &datum, const uint64_t seed, uint64_t &res,
+                  const ObCollationType cs, const bool calc_end_space, const hash_algo hash_al)
+  {
+    int ret = OB_SUCCESS;
+    if (datum.is_null()) {
+      ret = null_hash(seed, res, hash_al);
+    } else {
+      if (IS_LOB) {
+        ret = datum_lob_locator_hash(datum, cs, seed, hash_al, res);
+      } else {
+        res = datum_varchar_hash(datum, cs, calc_end_space, seed, hash_al);
+      }
+    }
+    return ret;
+  }
+
+  static int hash_v2(const ObDatum &datum, const uint64_t seed, uint64_t &res,
+                     const ObCollationType cs, const bool calc_end_space, const hash_algo hash_al)
+  {
+    int ret = OB_SUCCESS;
+    if (IS_LOB) {
+      ret = datum_lob_locator_hash(datum, cs, seed, hash_al, res);
+    } else {
+      if (datum.is_null()) {
+        res = seed;
+      } else {
+        res = datum_varchar_hash(datum, cs, calc_end_space, seed, hash_al);
+      }
+    }
+    return ret;
+  }
+
+  template <typename DATUM_VEC, typename SEED_VEC>
+      static void do_hash_batch(uint64_t *hash_values,
+                                const DATUM_VEC &datum_vec,
+                                const ObBitVector &skip,
+                                const int64_t size,
+                                const SEED_VEC &seed_vec,
+                                const ObCollationType cs,
+                                const bool calc_end_space,
+                                const hash_algo hash_al)
+  {
+    ObBitVector::flip_foreach(skip, size,
+      [&](int64_t idx) __attribute__((always_inline)) {
+        int ret = OB_SUCCESS;
+        ret = hash(datum_vec[idx], seed_vec[idx], hash_values[idx], cs, calc_end_space, hash_al);
+        return ret;
+      }
+    );
+  }
+
+  static void hash_batch(uint64_t *hash_values,
+                         ObDatum *datums,
+                         const bool is_batch_datum,
+                         const ObBitVector &skip,
+                         const int64_t size,
+                         const uint64_t *seeds,
+                         const bool is_batch_seed,
+                         const ObCollationType cs,
+                         const bool calc_end_space,
+                         const hash_algo hash_al)
+  {
+    if (is_batch_datum && !is_batch_seed) {
+      do_hash_batch(hash_values, VectorIter<const ObDatum, true>(datums), skip, size,
+                    VectorIter<const uint64_t, false>(seeds), cs, calc_end_space, hash_al);
+    } else if (is_batch_datum && is_batch_seed) {
+      do_hash_batch(hash_values, VectorIter<const ObDatum, true>(datums), skip, size,
+                    VectorIter<const uint64_t, true>(seeds), cs, calc_end_space, hash_al);
+    } else if (!is_batch_datum && is_batch_seed) {
+      do_hash_batch(hash_values, VectorIter<const ObDatum, false>(datums), skip, size,
+                    VectorIter<const uint64_t, true>(seeds), cs, calc_end_space, hash_al);
+    } else {
+      do_hash_batch(hash_values, VectorIter<const ObDatum, false>(datums), skip, size,
+                    VectorIter<const uint64_t, false>(seeds), cs, calc_end_space, hash_al);
+    }
+  }
+
+  template <typename DATUM_VEC, typename SEED_VEC>
+      static void do_hash_v2_batch(uint64_t *hash_values,
+                                   const DATUM_VEC &datum_vec,
+                                   const ObBitVector &skip,
+                                   const int64_t size,
+                                   const SEED_VEC &seed_vec,
+                                   const ObCollationType cs,
+                                   const bool calc_end_space,
+                                   const hash_algo hash_al)
+  {
+    ObBitVector::flip_foreach(skip, size,
+      [&](int64_t idx) __attribute__((always_inline)) {
+        int ret = OB_SUCCESS;
+        ret = hash_v2(datum_vec[idx], seed_vec[idx], hash_values[idx], cs, calc_end_space, hash_al);
+        return ret;
+      }
+    );
+  }
+
+  static void hash_v2_batch(uint64_t *hash_values,
+                         ObDatum *datums,
+                         const bool is_batch_datum,
+                         const ObBitVector &skip,
+                         const int64_t size,
+                         const uint64_t *seeds,
+                         const bool is_batch_seed,
+                         const ObCollationType cs,
+                         const bool calc_end_space,
+                         const hash_algo hash_al)
+  {
+    if (is_batch_datum && !is_batch_seed) {
+      do_hash_v2_batch(hash_values, VectorIter<const ObDatum, true>(datums), skip, size,
+                    VectorIter<const uint64_t, false>(seeds), cs, calc_end_space, hash_al);
+    } else if (is_batch_datum && is_batch_seed) {
+      do_hash_v2_batch(hash_values, VectorIter<const ObDatum, true>(datums), skip, size,
+                    VectorIter<const uint64_t, true>(seeds), cs, calc_end_space, hash_al);
+    } else if (!is_batch_datum && is_batch_seed) {
+      do_hash_v2_batch(hash_values, VectorIter<const ObDatum, false>(datums), skip, size,
+                    VectorIter<const uint64_t, true>(seeds), cs, calc_end_space, hash_al);
+    } else {
+      do_hash_v2_batch(hash_values, VectorIter<const ObDatum, false>(datums), skip, size,
+                    VectorIter<const uint64_t, false>(seeds), cs, calc_end_space, hash_al);
+    }
+  }
+};
+
+struct ObStrHashBatchImpl {
+  static void OB_NOINLINE hash_batch(uint64_t *hash_values,
+                                     ObDatum *datums,
+                                     const bool is_batch_datum,
+                                     const ObBitVector &skip,
+                                     const int64_t size,
+                                     const uint64_t *seeds,
+                                     const bool is_batch_seed,
+                                     const ObCollationType cs,
+                                     const bool calc_end_space,
+                                     const hash_algo hash_al,
+                                     const bool is_lob)
+  {
+    return is_lob
+        ? DefStrHashFunc<true>::hash_batch(hash_values, datums, is_batch_datum, skip, size, seeds,
+                                         is_batch_seed, cs, calc_end_space, hash_al)
+        : DefStrHashFunc<false>::hash_batch(hash_values, datums, is_batch_datum, skip, size, seeds,
+                                          is_batch_seed, cs, calc_end_space, hash_al);
+  }
+
+  static void OB_NOINLINE hash_v2_batch(uint64_t *hash_values,
+                                        ObDatum *datums,
+                                        const bool is_batch_datum,
+                                        const ObBitVector &skip,
+                                        const int64_t size,
+                                        const uint64_t *seeds,
+                                        const bool is_batch_seed,
+                                        const ObCollationType cs,
+                                        const bool calc_end_space,
+                                        const hash_algo hash_al,
+                                        const  bool is_lob)
+  {
+    return is_lob
+        ? DefStrHashFunc<true>::hash_v2_batch(hash_values, datums, is_batch_datum, skip, size,
+                                              seeds, is_batch_seed, cs, calc_end_space, hash_al)
+        : DefStrHashFunc<false>::hash_v2_batch(hash_values, datums, is_batch_datum, skip, size,
+                                               seeds, is_batch_seed, cs, calc_end_space, hash_al);
+  }
+
+};
+
+template <ObCollationType cs, bool calc_end_space, typename T, bool is_lob>
+struct StrDatumHashBatchHelper {
+  static void hash_batch(uint64_t *hash_values,
+                         ObDatum *datums,
+                         const bool is_batch_datum,
+                         const ObBitVector &skip,
+                         const int64_t size,
+                         const uint64_t *seeds,
+                         const bool is_batch_seed)
+  {
+    return ObStrHashBatchImpl::hash_batch(hash_values, datums, is_batch_datum, skip, size,
+                                          seeds, is_batch_seed, cs, calc_end_space,
+                                          T::is_varchar_hash ? T::hash : NULL, is_lob);
+  }
+  static void hash_v2_batch(uint64_t *hash_values,
+                         ObDatum *datums,
+                         const bool is_batch_datum,
+                         const ObBitVector &skip,
+                         const int64_t size,
+                         const uint64_t *seeds,
+                         const bool is_batch_seed)
+  {
+    return ObStrHashBatchImpl::hash_v2_batch(hash_values, datums, is_batch_datum, skip, size,
+                                             seeds, is_batch_seed, cs, calc_end_space,
+                                             T::is_varchar_hash ? T::hash : NULL, is_lob);
+  }
+};
+
+//use DatumStrHashCalculator for CS_TYPE_UTF8MB4_BIN, because CS_TYPE_UTF8MB4_BIN is specializated.
+template <bool calc_end_space, typename T, bool is_lob>
+struct StrDatumHashBatchHelper<CS_TYPE_UTF8MB4_BIN, calc_end_space, T, is_lob> {
+  using HashBatch = DefHashFunc<
+      DatumStrHashCalculator<CS_TYPE_UTF8MB4_BIN, calc_end_space, T, is_lob>>;
+  static void hash_batch(uint64_t *hash_values,
+                         ObDatum *datums,
+                         const bool is_batch_datum,
+                         const ObBitVector &skip,
+                         const int64_t size,
+                         const uint64_t *seeds,
+                         const bool is_batch_seed)
+  {
+    return HashBatch::hash_batch(
+        hash_values, datums, is_batch_datum, skip, size, seeds, is_batch_seed);
+  }
+
+  static void hash_v2_batch(uint64_t *hash_values,
+                         ObDatum *datums,
+                         const bool is_batch_datum,
+                         const ObBitVector &skip,
+                         const int64_t size,
+                         const uint64_t *seeds,
+                         const bool is_batch_seed)
+  {
+    return HashBatch::hash_v2_batch(
+        hash_values, datums, is_batch_datum, skip, size, seeds, is_batch_seed);
+  }
+};
+
 template <ObCollationType cs_type, bool calc_end_space, typename T>
 struct DatumStrHashCalculator<cs_type, calc_end_space, T, true /* is_lob_locator */>
        : public DefHashMethod<T>
@@ -696,6 +931,14 @@ struct InitBasicStrFuncArray<X, Y, true>
   template <typename T, bool is_lob_locator>
   using Hash = DefHashFunc<DatumStrHashCalculator<static_cast<ObCollationType>(X),
         static_cast<bool>(Y), T, is_lob_locator>>;
+  /*
+  template <typename T, bool is_lob_locator>
+  using HashBatch = DefHashFunc<DatumStrHashCalculator<static_cast<ObCollationType>(X),
+        static_cast<bool>(Y), T, is_lob_locator>>;
+        */
+  template <typename T, bool is_lob>
+  using HashBatch = StrDatumHashBatchHelper<static_cast<ObCollationType>(X), static_cast<bool>(Y), T, is_lob>;
+
   template <bool null_first>
   using StrCmp = ObNullSafeDatumStrCmp<static_cast<ObCollationType>(X),
                                        static_cast<bool>(Y), null_first>;
@@ -713,22 +956,22 @@ struct InitBasicStrFuncArray<X, Y, true>
     if (datum_cmp::SupportedCollection<static_cast<ObCollationType>(X)>::defined_) {
       auto &basic_funcs = EXPR_BASIC_STR_FUNCS;
       basic_funcs[X][Y][0].default_hash_ = Hash<ObDefaultHash, false>::hash;
-      basic_funcs[X][Y][0].default_hash_batch_ = Hash<ObDefaultHash, false>::hash_batch;
+      basic_funcs[X][Y][0].default_hash_batch_ = HashBatch<ObDefaultHash, false>::hash_batch;
       basic_funcs[X][Y][0].murmur_hash_ = Hash<ObMurmurHash, false>::hash;
-      basic_funcs[X][Y][0].murmur_hash_batch_ = Hash<ObMurmurHash, false>::hash_batch;
+      basic_funcs[X][Y][0].murmur_hash_batch_ = HashBatch<ObMurmurHash, false>::hash_batch;
       basic_funcs[X][Y][0].xx_hash_ = Hash<ObXxHash, false>::hash;
-      basic_funcs[X][Y][0].xx_hash_batch_ = Hash<ObXxHash, false>::hash_batch;
+      basic_funcs[X][Y][0].xx_hash_batch_ = HashBatch<ObXxHash, false>::hash_batch;
       basic_funcs[X][Y][0].wy_hash_ = Hash<ObWyHash, false>::hash;
-      basic_funcs[X][Y][0].wy_hash_batch_ = Hash<ObWyHash, false>::hash_batch;
+      basic_funcs[X][Y][0].wy_hash_batch_ = HashBatch<ObWyHash, false>::hash_batch;
       basic_funcs[X][Y][0].null_first_cmp_ = Def::defined_ ? &StrCmp<1>::cmp : NULL;
       basic_funcs[X][Y][0].null_last_cmp_ = Def::defined_ ? &StrCmp<0>::cmp : NULL;
       basic_funcs[X][Y][0].murmur_hash_v2_ = Hash<ObMurmurHash, false>::hash_v2;
-      basic_funcs[X][Y][0].murmur_hash_v2_batch_ = Hash<ObMurmurHash, false>::hash_v2_batch;
+      basic_funcs[X][Y][0].murmur_hash_v2_batch_ = HashBatch<ObMurmurHash, false>::hash_v2_batch;
 
       basic_funcs[X][Y][1].default_hash_ = Hash<ObDefaultHash, true>::hash;
-      basic_funcs[X][Y][1].default_hash_batch_ = Hash<ObDefaultHash, true>::hash_batch;
+      basic_funcs[X][Y][1].default_hash_batch_ = HashBatch<ObDefaultHash, true>::hash_batch;
       basic_funcs[X][Y][1].murmur_hash_ = Hash<ObMurmurHash, true>::hash;
-      basic_funcs[X][Y][1].murmur_hash_batch_ = Hash<ObMurmurHash, true>::hash_batch;
+      basic_funcs[X][Y][1].murmur_hash_batch_ = HashBatch<ObMurmurHash, true>::hash_batch;
       // basic_funcs[X][Y][1].xx_hash_ = Hash<ObXxHash, true>::hash;
       // basic_funcs[X][Y][1].xx_hash_batch_ = Hash<ObXxHash, true>::hash_batch;
       // basic_funcs[X][Y][1].wy_hash_ = Hash<ObWyHash, true>::hash;
@@ -738,7 +981,7 @@ struct InitBasicStrFuncArray<X, Y, true>
       basic_funcs[X][Y][1].null_first_cmp_ = DefText::defined_ ? &TextCmp<1>::cmp : NULL;
       basic_funcs[X][Y][1].null_last_cmp_ = DefText::defined_ ? &TextCmp<0>::cmp : NULL;
       basic_funcs[X][Y][1].murmur_hash_v2_ = Hash<ObMurmurHash, true>::hash_v2;
-      basic_funcs[X][Y][1].murmur_hash_v2_batch_ = Hash<ObMurmurHash, true>::hash_v2_batch;
+      basic_funcs[X][Y][1].murmur_hash_v2_batch_ = HashBatch<ObMurmurHash, true>::hash_v2_batch;
     }
   }
 };

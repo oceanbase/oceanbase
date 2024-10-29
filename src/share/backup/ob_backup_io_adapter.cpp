@@ -44,10 +44,18 @@ static int release_device(ObIODevice *&dev_handle)
 // This class provides a straightforward wrapper for initializing and releasing a device.
 // It ensures that the URI is properly copied and
 // guarantees that the URI passed to the device handle is null-terminated ('\0').
-struct DeviceGuard
+struct DeviceGuard : public ObObjectStorageTenantGuard
 {
-  DeviceGuard() : allocator_(OB_STORAGE_IO_ADAPTER), device_handle_(nullptr), uri_cstr_(nullptr) {}
-  ~DeviceGuard()
+  DeviceGuard()
+      :  ObObjectStorageTenantGuard(
+             ObBackupIoAdapter::get_tenant_id(),
+             OB_IO_MANAGER.get_object_storage_io_timeout_ms(ObBackupIoAdapter::get_tenant_id()) * 1000LL),
+         allocator_(OB_STORAGE_IO_ADAPTER),
+         device_handle_(nullptr),
+         uri_cstr_(nullptr)
+  {}
+
+  virtual ~DeviceGuard()
   {
     int ret = OB_SUCCESS;
     if (OB_NOT_NULL(device_handle_) && OB_FAIL(release_device(device_handle_))) {

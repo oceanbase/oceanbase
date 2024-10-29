@@ -487,7 +487,6 @@ public:
   int64_t snapshot_version_;
   int64_t multi_version_start_;
   bool update_with_major_tables_;
-  bool need_replace_remote_sstable_; // only true for restore replace sstable.
 };
 
 struct ObBatchUpdateTableStoreParam final

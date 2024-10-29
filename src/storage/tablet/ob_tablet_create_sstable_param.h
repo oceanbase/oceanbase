@@ -139,7 +139,8 @@ public:
       KPHEX_(encrypt_key, sizeof(encrypt_key_)),
       K_(table_backup_flag),
       K_(table_shared_flag),
-      K_(uncommitted_tx_id));
+      K_(uncommitted_tx_id),
+      K_(co_base_snapshot_version));
 private:
   static const int64_t DEFAULT_MACRO_BLOCK_CNT = 64;
   int inner_init_with_merge_res(const blocksstable::ObSSTableMergeRes &res);
@@ -195,6 +196,7 @@ public:
   storage::ObTableBackupFlag table_backup_flag_; //ObTableBackupFlag will be updated by ObSSTableMergeRes
   storage::ObTableSharedFlag table_shared_flag_; //ObTableSharedFlag will be updated by ObTabletCreateSSTableParam
   int64_t uncommitted_tx_id_;
+  int64_t co_base_snapshot_version_;
 };
 
 } // namespace storage

@@ -302,7 +302,11 @@ public:
       v.no_more_test_ = true;
     } else if (is_direct_load(v) && !is_load_local(v)) {
       if (is_direct_load_retry_err(err)) {
-        try_packet_retry(v);
+        if (OB_SQL_RETRY_SPM == err) {
+          v.retry_type_ = RETRY_TYPE_LOCAL;
+        } else {
+          try_packet_retry(v);
+        }
       } else {
         v.client_ret_ = err;
         v.retry_type_ = RETRY_TYPE_NONE;

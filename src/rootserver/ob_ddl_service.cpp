@@ -3439,8 +3439,6 @@ int ObDDLService::check_locality_compatible_(
   } else if (OB_FAIL(ObShareUtil::check_compat_version_for_columnstore_replica(
                        tenant_id, is_compatible_with_columnstore_replica))) {
     LOG_WARN("fail to check compatible with columnstore replica", KR(ret), K(schema));
-  } else if (is_compatible_with_readonly_replica && is_compatible_with_columnstore_replica) {
-    // check pass
   } else if (OB_FAIL(schema.get_zone_replica_attr_array(zone_locality))) {
     LOG_WARN("fail to get locality from schema", K(ret), K(schema));
   } else {
@@ -3459,6 +3457,11 @@ int ObDDLService::check_locality_compatible_(
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("can not create tenant with column-store replica below data version 4.3.3", KR(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Create tenant with C-replica in locality below data version 4.3.3");
+      } else if (GCTX.is_shared_storage_mode()
+                  && 0 != this_set.get_columnstore_replica_num()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("can not create tenant with column-store replica in shared-storage mode", KR(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "In shared-storage mode, C-replica is");
       }
     }
   }
@@ -3800,10 +3803,18 @@ int ObDDLService::create_hidden_table_with_pk_changed(
       // of the data_table will always be "current" primary key.
       // thus, when modify primary key, we need to check whether the part_func_type is need to be modified
       const bool is_single_pk_column_new = new_table_schema.get_rowkey_column_num() == 1;
-      ObPartitionFuncType part_func_type = PARTITION_FUNC_TYPE_MAX;
+      ObPartitionFuncType part_func_type = PARTITION_FUNC_TYPE_RANGE;
       if (is_single_pk_column_new) {
-        if (OB_FAIL(new_table_schema.detect_part_func_type(part_func_type))) {
-          LOG_WARN("check part func type failed", K(ret), K(new_table_schema));
+        ObObjMeta type;
+        ObRowkeyColumn row_key_col;
+        const common::ObRowkeyInfo &row_key_info = new_table_schema.get_rowkey_info();
+        if (OB_FAIL(row_key_info.get_column(0/*since there is only one row key, we only need to check the first one*/, row_key_col))) {
+          LOG_WARN("get row key column failed", K(ret), K(row_key_info));
+        } else {
+          type = row_key_col.get_meta_type();
+        }
+        if (ObResolverUtils::is_partition_range_column_type(type.get_type())) {
+          part_func_type = PARTITION_FUNC_TYPE_RANGE_COLUMNS;
         }
       } else {
         part_func_type = PARTITION_FUNC_TYPE_RANGE_COLUMNS;
@@ -14264,33 +14275,25 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
           ObIndexBuilder index_builder(*this);
           const ObSArray<ObIndexArg *> &index_arg_list = alter_table_arg.index_arg_list_;
           int tmp_ret = OB_SUCCESS;
+          const int64_t new_table_id = new_table_schema.get_table_id();
           ObArray<ObTabletID> inc_tablet_ids;
           ObArray<ObTabletID> del_tablet_ids;
-          if (obrpc::ObAlterTableArg::TRUNCATE_PARTITION == alter_table_arg.alter_part_type_
-              || obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == alter_table_arg.alter_part_type_) {
-            for (int64_t i = 0; OB_SUCC(ret) && i < inc_table_schemas.count(); i++) {
-              ObTableSchema *inc_table_schema = inc_table_schemas[i];
-              if (inc_table_schema->get_table_id() == new_table_schema.get_table_id()) {
-                if (OB_FAIL(inc_table_schema->get_tablet_ids(inc_tablet_ids))) {
-                  LOG_WARN("failed to get del tablet ids", KR(ret));
-                }
-                break;
+          if (index_arg_list.count() > 0) {
+            if (obrpc::ObAlterTableArg::TRUNCATE_PARTITION == alter_table_arg.alter_part_type_
+                || obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == alter_table_arg.alter_part_type_) {
+              if (OB_FAIL(get_tablets_with_table_id_(inc_table_schemas, new_table_id, inc_tablet_ids))) {
+                LOG_WARN("fail to get tablets with table id", KR(ret), K(inc_table_schemas), K(new_table_id));
               }
             }
-          }
-          if (obrpc::ObAlterTableArg::DROP_PARTITION == alter_table_arg.alter_part_type_
-              || obrpc::ObAlterTableArg::DROP_SUB_PARTITION == alter_table_arg.alter_part_type_
-              || obrpc::ObAlterTableArg::TRUNCATE_PARTITION == alter_table_arg.alter_part_type_
-              || obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == alter_table_arg.alter_part_type_) {
-            for (int64_t i = 0; OB_SUCC(ret) && i < del_table_schemas.count(); i++) {
-              ObTableSchema *del_table_schema = del_table_schemas[i];
-              if (del_table_schema->get_table_id() == new_table_schema.get_table_id()) {
-                if (OB_FAIL(del_table_schema->get_tablet_ids(del_tablet_ids))) {
-                  LOG_WARN("failed to get del tablet ids", KR(ret));
-                }
-                break;
+            if (obrpc::ObAlterTableArg::DROP_PARTITION == alter_table_arg.alter_part_type_
+                || obrpc::ObAlterTableArg::DROP_SUB_PARTITION == alter_table_arg.alter_part_type_
+                || obrpc::ObAlterTableArg::TRUNCATE_PARTITION == alter_table_arg.alter_part_type_
+                || obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == alter_table_arg.alter_part_type_) {
+              if (FAILEDx(get_tablets_with_table_id_(del_table_schemas, new_table_id, del_tablet_ids))) {
+                LOG_WARN("fail to get tablets with table id", KR(ret), K(inc_table_schemas), K(new_table_id));
               }
             }
+
           }
           for (int64_t i = 0; OB_SUCC(ret) && i < index_arg_list.size(); ++i) {
             ObIndexArg *index_arg = const_cast<ObIndexArg *>(index_arg_list.at(i));
@@ -14333,6 +14336,8 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                   LOG_WARN("failed to push back ddl res array", KR(ret));
                 }
               }
+            // TODO @wenyu alter table drop index submit drop index task in alter_table_index() now.
+            //             should be unified here
             } else if (ObIndexArg::DROP_INDEX == index_arg->index_action_type_ && !alter_table_arg.is_alter_indexs_) {
               ObDropIndexArg *drop_index_arg = static_cast<ObDropIndexArg *>(index_arg);
               if (OB_ISNULL(drop_index_arg)) {
@@ -15972,6 +15977,7 @@ int ObDDLService::recover_restore_table_ddl_task(
       } else {
         ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
         bool is_dest_table_column_store = false;
+        ObString index_name("");
         if (OB_FAIL(dst_tenant_trans.start(sql_proxy_, dst_tenant_id, refreshed_dst_tenant_version))) {
           LOG_WARN("start transaction failed", K(ret), K(dst_tenant_id), K(refreshed_dst_tenant_version));
         } else if (OB_FAIL(dst_table_schema.assign(arg.target_schema_))) {
@@ -15983,7 +15989,7 @@ int ObDDLService::recover_restore_table_ddl_task(
           LOG_WARN("not supported to retore table with column store", K(ret), K(arg));
         } else if (OB_FAIL(create_user_hidden_table(*src_table_schema, dst_table_schema, nullptr/*sequence_ddl_arg*/,
           false/*bind_tablets*/, *src_tenant_schema_guard, *dst_tenant_schema_guard, ddl_operator,
-          dst_tenant_trans, allocator, tenant_data_version))) {
+          dst_tenant_trans, allocator, tenant_data_version, index_name, true /*ignore_cs_replica*/))) {
           LOG_WARN("create user hidden table failed", K(ret), K(arg), K(tenant_data_version));
         } else {
           ObPrepareAlterTableArgParam param;
@@ -19113,6 +19119,12 @@ int ObDDLService::prepare_hidden_table_schema(const ObTableSchema &orig_table_sc
       LOG_WARN("fail to generate object_id for partition schema", KR(ret), K(hidden_table_schema));
     } else if (OB_FAIL(generate_tablet_id(hidden_table_schema))) {
       LOG_WARN("fail to generate tablet id for hidden table", K(ret), K(hidden_table_schema));
+    } else if (orig_table_schema.is_ctas_tmp_table() &&
+               OB_FAIL(clear_ctas_hidden_table_session_id_(hidden_table_schema))) {
+      // for CTAS table, clear its session id, otherwise this table schema will not be visble
+      // to the index rebuiding phase.
+      LOG_WARN("fail to clear ctas hidden table session id", K(ret), K(orig_table_schema),
+               K(hidden_table_schema));
     } else {
       // offline ddl change table_id, so we need to reset truncate_version
       hidden_table_schema.set_truncate_version(OB_INVALID_VERSION);
@@ -19121,12 +19133,6 @@ int ObDDLService::prepare_hidden_table_schema(const ObTableSchema &orig_table_sc
       hidden_table_schema.set_association_table_id(orig_table_schema.get_table_id());
       // set the hidden attributes of the table
       hidden_table_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_HIDDEN_OFFLINE_DDL);
-      if (hidden_table_schema.is_ctas_tmp_table()) {
-        // for CTAS table, clear its session id, otherwise this table schema will not be visble
-        // to the index rebuiding phase.
-        hidden_table_schema.set_session_id(0);
-        LOG_INFO("clear session_id of hidden table copied from CTAS table", K(hidden_table_schema));
-      }
       if (orig_table_schema.get_tenant_id() != hidden_table_schema.get_tenant_id()) {
         // recover restore table, do not sync log to cdc.
         hidden_table_schema.set_ddl_ignore_sync_cdc_flag(ObDDLIgnoreSyncCdcFlag::DONT_SYNC_LOG_FOR_CDC);
@@ -19168,6 +19174,54 @@ int ObDDLService::prepare_hidden_table_schema(const ObTableSchema &orig_table_sc
       }
     }
   }
+  return ret;
+}
+
+int ObDDLService::clear_ctas_hidden_table_session_id_(share::schema::ObTableSchema &hidden_table_schema)
+{
+  int ret = OB_SUCCESS;
+
+  if (!hidden_table_schema.is_ctas_tmp_table()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("hidden table is not a CTAS tmp table", K(ret), K(hidden_table_schema));
+  } else {
+    hidden_table_schema.set_session_id(0);
+    hidden_table_schema.set_create_host("");
+    LOG_INFO("clear session_id of hidden table copied from CTAS table", K(hidden_table_schema));
+  }
+
+  return ret;
+}
+
+int ObDDLService::swap_ctas_hidden_table_session_id_(
+    const share::schema::ObTableSchema &orig_table_schema,
+    const share::schema::ObTableSchema &hidden_table_schema,
+    share::schema::ObTableSchema &new_orig_table_schema,
+    share::schema::ObTableSchema &new_hidden_table_schema,
+    ObDDLOperator &ddl_operator,
+    common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+
+  if (!orig_table_schema.is_ctas_tmp_table() || hidden_table_schema.is_ctas_tmp_table()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("origin table or hidden table state is not valid", K(ret), K(orig_table_schema),
+             K(hidden_table_schema));
+  } else {
+    new_orig_table_schema.set_session_id(hidden_table_schema.get_session_id());
+    new_hidden_table_schema.set_session_id(orig_table_schema.get_session_id());
+    new_orig_table_schema.set_create_host(hidden_table_schema.get_create_host());
+    new_hidden_table_schema.set_create_host(orig_table_schema.get_create_host());
+    // since the session id is cleared when we create the hidden table, the temp table info
+    // won't be added at the creation time, so we should add it here
+    new_hidden_table_schema.set_in_offline_ddl_white_list(true);
+    if (OB_FAIL(ddl_operator.insert_temp_table_info(trans, new_hidden_table_schema))) {
+      LOG_WARN("failed to insert temp table info", K(ret), K(new_hidden_table_schema));
+    }
+    LOG_INFO("restore session_id of hidden table copied from CTAS table",
+             K(new_hidden_table_schema), K(new_orig_table_schema));
+  }
+
   return ret;
 }
 
@@ -19270,7 +19324,8 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
                                            ObMySQLTransaction &trans,
                                            ObIAllocator &allocator,
                                            const uint64_t tenant_data_version,
-                                           const ObString &index_name/*default ""*/)
+                                           const ObString &index_name/*default ""*/,
+                                           const bool ignore_cs_replica/*= false*/)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = hidden_table_schema.get_tenant_id();
@@ -19414,7 +19469,8 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
               schemas,
               ls_id_array,
               tenant_data_version,
-              need_create_empty_majors/*need_create_empty_major_sstable*/))) {
+              need_create_empty_majors/*need_create_empty_major_sstable*/,
+              ignore_cs_replica))) {
         LOG_WARN("create table tablets failed", K(ret), K(hidden_table_schema));
       } else if (bind_tablets && OB_FAIL(table_creator.add_create_bind_tablets_of_hidden_table_arg(
               orig_table_schema,
@@ -21485,8 +21541,17 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
           new_hidden_table_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_OFFLINE_DDL);
           new_orig_table_schema.set_table_name(hidden_table_schema->get_table_name_str());
           new_hidden_table_schema.set_table_name(orig_table_schema->get_table_name_str());
-          if (OB_FAIL(table_schemas.push_back(new_orig_table_schema))
-              || OB_FAIL(table_schemas.push_back(new_hidden_table_schema))) {
+          // in prepare_hidden_table_schema, we clear the session id for hidden table of
+          // CTAS tmp table. now, data loading stage is finished, we are ready to swap hidden table
+          // with CTAS tmp table. we should exchange the session id(and create_host) property to
+          // ensure the new CTAS tmp table has correct state.
+          if (orig_table_schema->is_ctas_tmp_table() &&
+              OB_FAIL(swap_ctas_hidden_table_session_id_(
+                  *orig_table_schema, *hidden_table_schema, new_orig_table_schema,
+                  new_hidden_table_schema, ddl_operator, trans))) {
+            LOG_WARN("failed to swap ctas hidden table session id", K(ret));
+          } else if (OB_FAIL(table_schemas.push_back(new_orig_table_schema)) ||
+                     OB_FAIL(table_schemas.push_back(new_hidden_table_schema))) {
             LOG_WARN("failed to add table schema!", K(ret));
           }
         }
@@ -42835,22 +42900,22 @@ int ObDDLService::generate_partition_info_from_partitioned_table_(const ObTableS
         for (int64_t i = 0; OB_SUCC(ret) && i < ori_part_num + inc_part_num; ++i) {
           ObPartition* part = sort_part_array[i];
           int tmp_ret = source_tablet_id_set.exist_refactored(part->get_tablet_id().id());
-
           if (tmp_ret == OB_HASH_NOT_EXIST) { // not source splitting part
             if (part->get_part_idx() != part_idx) {
               bool is_inc_part = part->get_split_source_tablet_id().is_valid();
               if (is_inc_part) { // inc part
-                part->set_part_idx(part_idx++);
+                part->set_part_idx(part_idx);
               } else { // origin part
                 ObPartition upd_part;
                 if (OB_FAIL(upd_part.assign(*part))) {
                   LOG_WARN("fail to assign part", KR(ret), KPC(part));
-                } else if (FALSE_IT(upd_part.set_part_idx(part_idx++))) {
+                } else if (FALSE_IT(upd_part.set_part_idx(part_idx))) {
                 } else if (OB_FAIL(upd_table_schema.add_partition(upd_part))) {
                   LOG_WARN("add partition fail", KR(ret), K(upd_part));
                 }
               }
             }
+            part_idx++;
           } else if (tmp_ret != OB_HASH_EXIST) {
             ret = tmp_ret;
             LOG_WARN("fail to call exist_refactored", KR(ret));
@@ -43627,6 +43692,30 @@ int ObDDLService::drop_index_to_scheduler_(ObMySQLTransaction &trans,
         }
       }
       } // end smart var
+    }
+  }
+  return ret;
+}
+
+template <class TTableSchema>
+int ObDDLService:: get_tablets_with_table_id_(const ObArray<TTableSchema *> &table_schemas,
+                                              const int table_id,
+                                              ObArray<ObTabletID> &tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  tablet_ids.reset();
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count(); i++) {
+    ObTableSchema *table_schema = table_schemas[i];
+    if (OB_ISNULL(table_schema)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("table schema is null ptr", KR(ret));
+    } else if (table_schema->get_table_id() == table_id) {
+      // some table types don't have tablet like external table
+      if (table_schema->has_tablet()
+          && OB_FAIL(table_schema->get_tablet_ids(tablet_ids))) {
+        LOG_WARN("failed to get table tablet ids", KR(ret), KPC(table_schema));
+      }
+      break;
     }
   }
   return ret;

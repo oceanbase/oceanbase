@@ -48,6 +48,28 @@ public:
     set_stmt_type(stmt::T_INSERT);
   }
   bool is_overwrite() const { return table_info_.is_overwrite_; }
+  bool is_normal_table_overwrite() const {
+    bool result = false;
+    if (is_overwrite()) {
+      TableItem *insert_table = NULL;
+      if (OB_NOT_NULL(insert_table = get_table_item_by_id(table_info_.table_id_))
+          && (share::schema::EXTERNAL_TABLE != insert_table->table_type_)) {
+        result = true;
+      }
+    }
+    return result;
+  }
+  bool is_external_table_overwrite() const {
+    bool result = false;
+    if (is_overwrite()) {
+      TableItem *insert_table = NULL;
+      if (OB_NOT_NULL(insert_table = get_table_item_by_id(table_info_.table_id_))
+          && (share::schema::EXTERNAL_TABLE == insert_table->table_type_)) {
+        result = true;
+      }
+    }
+    return result;
+  }
   bool value_from_select() const { return !from_items_.empty(); }
   common::ObIArray<ObAssignment> &get_table_assignments() { return table_info_.assignments_; }
   const common::ObIArray<ObAssignment> &get_table_assignments() const { return table_info_.assignments_; }

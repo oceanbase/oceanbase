@@ -192,7 +192,7 @@ int ObVectorQueryAdaptorResultContext::set_vector(int64_t index, const char *ptr
   } else if (index >= get_count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid index.", K(ret), K(index), K(get_count()));
-  } else if (size == 0) {
+  } else if (size == 0 || OB_ISNULL(ptr)) {
     vec_data_.vectors_[index].reset();
   } else if (size / sizeof(float) != get_dim()) {
     ret = OB_ERR_UNEXPECTED;
@@ -279,7 +279,7 @@ ObPluginVectorIndexAdaptor::ObPluginVectorIndexAdaptor(common::ObIAllocator *all
     inc_table_id_(OB_INVALID_ID), vbitmap_table_id_(OB_INVALID_ID),
     snapshot_table_id_(OB_INVALID_ID), data_table_id_(OB_INVALID_ID),
     rowkey_vid_table_id_(OB_INVALID_ID), vid_rowkey_table_id_(OB_INVALID_ID),
-    ref_cnt_(0), idle_cnt_(0), mem_check_cnt_(0), all_vsag_use_mem_(nullptr), allocator_(allocator),
+    ref_cnt_(0), idle_cnt_(0), mem_check_cnt_(0), is_mem_limited_(false), all_vsag_use_mem_(nullptr), allocator_(allocator),
     parent_mem_ctx_(entity), index_identity_(), follower_sync_statistics_()
 {
 }
@@ -935,6 +935,8 @@ int ObPluginVectorIndexAdaptor::add_snap_index(float *vectors, int64_t *vids, in
   } else if (OB_ISNULL(vids)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid data.", K(ret));
+  } else if (OB_FAIL(check_vsag_mem_used())) {
+    LOG_WARN("check vsag mem used failed.", K(ret));
   } else {
     lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
     TCWLockGuard lock_guard(snap_data_->mem_data_rwlock_);
@@ -2167,7 +2169,7 @@ int ObPluginVectorIndexAdaptor::check_vsag_mem_used()
   // because mem_check_cnt_ is used to roughly determine
   // whether to perform memory verification and does not require accurate counting.
   mem_check_cnt_++;
-  if (mem_check_cnt_ % 10 == 0) {
+  if (is_mem_limited_ || mem_check_cnt_ % 10 == 0) {
     mem_check_cnt_ %= 10;
     ObRbMemMgr *mem_mgr = nullptr;
     int64_t bitmap_mem_used = 0;
@@ -2179,6 +2181,7 @@ int ObPluginVectorIndexAdaptor::check_vsag_mem_used()
     if (OB_FAIL(ObPluginVectorIndexHelper::get_vector_memory_limit_size(tenant_id_, mem_size))) {
       LOG_WARN("failed to get vector mem limit size.", K(ret), K(tenant_id_));
     } else if (ATOMIC_LOAD(all_vsag_use_mem_) + bitmap_mem_used > mem_size) {
+      is_mem_limited_ = true;
       ret = OB_ERR_VSAG_MEM_LIMIT_EXCEEDED;
       LOG_USER_ERROR(OB_ERR_VSAG_MEM_LIMIT_EXCEEDED, int(mem_size>>20));
       LOG_WARN("Memory usage exceeds user limit.", K(ret), K(mem_size), K(ATOMIC_LOAD(all_vsag_use_mem_)), K(bitmap_mem_used));

@@ -806,6 +806,7 @@ private:
                                            common::ObIArray<ObLoadTableColumnDesc> &insert_infos,
                                            common::ObString &data_buff,
                                            bool need_online_osg = false);
+  bool is_schema_error_need_retry_for_load_data(const int ret_code);
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObLoadDataSPImpl);
   // function members

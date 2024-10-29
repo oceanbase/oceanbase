@@ -339,7 +339,7 @@ int LogEngine::submit_flush_log_task(const FlushLogCbCtx &flush_log_cb_ctx,
   } else if (OB_FAIL(generate_flush_log_task_(flush_log_cb_ctx, write_buf, flush_log_task))) {
     PALF_LOG(ERROR, "generate_flush_log_task failed", K(ret), K(flush_log_cb_ctx));
   } else if (OB_FAIL(log_io_worker_->submit_io_task(flush_log_task))) {
-    PALF_LOG(ERROR, "submit_io_task failed", K(ret));
+    PALF_LOG(WARN, "submit_io_task failed", K(ret));
   } else {
     PALF_LOG(TRACE, "submit_flush_log_task success", K(ret), K(flush_log_cb_ctx), K(write_buf));
   }
@@ -394,7 +394,7 @@ int LogEngine::submit_flush_prepare_meta_task(const FlushMetaCbCtx &flush_meta_c
   } else if (OB_FAIL(log_meta_.update_log_prepare_meta(prepare_meta))) {
     PALF_LOG(ERROR, "LogMeta update_log_prepare_meta failed", K(ret), K_(palf_id), K_(is_inited));
   } else if (OB_FAIL(submit_flush_meta_task_(flush_meta_cb_ctx, log_meta_))) {
-    PALF_LOG(ERROR, "submit_flush_meta_task_ failed", K(ret));
+    PALF_LOG(WARN, "submit_flush_meta_task_ failed", K(ret));
   } else {
     PALF_LOG(INFO, "submit_flush_prepare_meta_task success", K(ret), K(flush_meta_cb_ctx), K(prepare_meta));
   }
@@ -415,7 +415,7 @@ int LogEngine::submit_flush_change_config_meta_task(const FlushMetaCbCtx &flush_
   } else if (OB_FAIL(log_meta_.update_log_config_meta(config_meta))) {
     PALF_LOG(ERROR, "LogMeta update_log_config_meta failed", K(ret), K_(palf_id), K_(is_inited));
   } else if (OB_FAIL(submit_flush_meta_task_(flush_meta_cb_ctx, log_meta_))) {
-    PALF_LOG(ERROR, "submit_flush_meta_task_ failed", K(ret));
+    PALF_LOG(WARN, "submit_flush_meta_task_ failed", K(ret));
   } else {
     PALF_LOG(INFO, "submit_flush_change_config_meta_task success", K(ret), K(flush_meta_cb_ctx), K(config_meta));
   }
@@ -436,7 +436,7 @@ int LogEngine::submit_flush_mode_meta_task(const FlushMetaCbCtx &flush_meta_cb_c
   } else if (OB_FAIL(log_meta_.update_log_mode_meta(mode_meta))) {
     PALF_LOG(ERROR, "LogMeta update_log_mode_meta failed", K(ret), K_(palf_id), K_(is_inited));
   } else if (OB_FAIL(submit_flush_meta_task_(flush_meta_cb_ctx, log_meta_))) {
-    PALF_LOG(ERROR, "submit_flush_meta_task_ failed", K(ret));
+    PALF_LOG(WARN, "submit_flush_meta_task_ failed", K(ret));
   } else {
     PALF_LOG(INFO, "submit_flush_mode_meta_task success", K(ret), K(flush_meta_cb_ctx), K(mode_meta));
   }
@@ -449,6 +449,7 @@ int LogEngine::submit_flush_snapshot_meta_task(const FlushMetaCbCtx &flush_meta_
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(log_meta_lock_);
   const LSN &curr_base_lsn = log_meta_.get_log_snapshot_meta().base_lsn_;
+  const LogSnapshotMeta prev_log_snapshot_meta = log_meta_.get_log_snapshot_meta();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(ERROR, "LogEngine not inited!!!", K(ret));
@@ -459,8 +460,9 @@ int LogEngine::submit_flush_snapshot_meta_task(const FlushMetaCbCtx &flush_meta_
       OB_FAIL(log_meta_.update_log_snapshot_meta(log_snapshot_meta))) {
     PALF_LOG(WARN, "update_log_snapshot_meta failed", K(log_snapshot_meta));
   } else if (OB_FAIL(submit_flush_meta_task_(flush_meta_cb_ctx, log_meta_))) {
-    PALF_LOG(
-        WARN, "submit_flush_snapshot_meta_task_ failed", K(ret), K(flush_meta_cb_ctx), K_(palf_id), K_(is_inited));
+    // revert snapshot meta, otherwise next flush request will be ignored
+    log_meta_.update_log_snapshot_meta(prev_log_snapshot_meta);
+    PALF_LOG(WARN, "submit_flush_snapshot_meta_task_ failed", K(ret), K(flush_meta_cb_ctx), K_(palf_id), K_(is_inited));
   } else {
     PALF_LOG(TRACE, "submit_flush_snapshot_meta_task success", K(ret), K(flush_meta_cb_ctx));
   }
@@ -504,7 +506,7 @@ int LogEngine::submit_truncate_log_task(const TruncateLogCbCtx &truncate_log_cb_
   } else if (OB_FAIL(generate_truncate_log_task_(truncate_log_cb_ctx, truncate_log_task))) {
     PALF_LOG(ERROR, "generate_truncate_log_task_ failed", K(ret), K(truncate_log_cb_ctx));
   } else if (OB_FAIL(log_io_worker_->submit_io_task(truncate_log_task))) {
-    PALF_LOG(ERROR, "submit_io_task failed", K(ret));
+    PALF_LOG(WARN, "submit_io_task failed", K(ret));
   } else {
     PALF_LOG(INFO, "submit_truncate_log_task success", K(ret), K(truncate_log_cb_ctx));
   }
@@ -530,7 +532,7 @@ int LogEngine::submit_truncate_prefix_blocks_task(
                                                            truncate_prefix_blocks_task))) {
     PALF_LOG(ERROR, "generate_truncate_log_task_ failed", K(ret), K(truncate_prefix_blocks_ctx));
   } else if (OB_FAIL(log_io_worker_->submit_io_task(truncate_prefix_blocks_task))) {
-    PALF_LOG(ERROR, "submit_io_task failed", K(ret));
+    PALF_LOG(WARN, "submit_io_task failed", K(ret));
   } else {
     PALF_LOG(
         INFO, "submit_truncate_prefix_blocks_task success", K(ret), K(truncate_prefix_blocks_ctx));
@@ -555,7 +557,7 @@ int LogEngine::submit_flashback_task(const FlashbackCbCtx &flashback_cb_ctx)
   } else if (OB_FAIL(generate_flashback_task_(flashback_cb_ctx, flashback_task))) {
     PALF_LOG(ERROR, "generate_flashback_task_ failed", K(ret), K(flashback_cb_ctx));
   } else if (OB_FAIL(log_io_worker_->submit_io_task(flashback_task))) {
-    PALF_LOG(ERROR, "submit_io_task failed", K(ret));
+    PALF_LOG(WARN, "submit_io_task failed", K(ret));
   } else {
     PALF_LOG(INFO, "submit_flashback_task success", K(ret), K(flashback_cb_ctx));
   }
@@ -584,7 +586,7 @@ int LogEngine::submit_purge_throttling_task(const PurgeThrottlingType purge_type
   } else if (OB_FAIL(generate_purge_throttling_task_(purge_cb_ctx, purge_task))) {
     PALF_LOG(ERROR, "generate_purge_throttling_ failed", K(purge_cb_ctx));
   } else if (OB_FAIL(log_io_worker_->submit_io_task(purge_task))) {
-    PALF_LOG(ERROR, "submit_io_task failed", K(purge_cb_ctx));
+    PALF_LOG(WARN, "submit_io_task failed", K(purge_cb_ctx));
   } else {
     last_purge_throttling_ts_ = cur_ts;
     PALF_LOG(INFO, "submit_purge_throttling success", K(last_purge_throttling_ts_), "purge_type",
@@ -1424,7 +1426,7 @@ int LogEngine::submit_flush_meta_task_(const FlushMetaCbCtx &flush_meta_cb_ctx,
   if (OB_FAIL(generate_flush_meta_task_(flush_meta_cb_ctx, log_meta, flush_meta_task))) {
     PALF_LOG(ERROR, "generate_flush_meta_task_ failed", K(ret), K(flush_meta_cb_ctx), K(log_meta_));
   } else if (OB_FAIL(log_io_worker_->submit_io_task(flush_meta_task))) {
-    PALF_LOG(ERROR, "submit_io_task failed", K(ret));
+    PALF_LOG(WARN, "submit_io_task failed", K(ret));
   } else {
     PALF_LOG(INFO, "submit_flush_meta_task_ success", K(flush_meta_cb_ctx), K(log_meta));
   }

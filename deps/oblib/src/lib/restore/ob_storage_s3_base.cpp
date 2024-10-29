@@ -813,7 +813,7 @@ static void log_s3_status(OutcomeType &outcome, const int ob_errcode)
   const int code = static_cast<int>(outcome.GetError().GetResponseCode());
   const char *exception = outcome.GetError().GetExceptionName().c_str();
   const char *err_msg = outcome.GetError().GetMessage().c_str();
-  if (OB_OBJECT_NOT_EXIST != ob_errcode) {
+  if (OB_OBJECT_NOT_EXIST != ob_errcode || code / 100 != 2) {
     // force printing log
     allow_next_syslog();
   }

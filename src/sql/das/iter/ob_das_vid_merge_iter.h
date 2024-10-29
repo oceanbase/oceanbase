@@ -145,10 +145,11 @@ protected:
       ObDASScanRtDef *rtdef,
       common::ObIArray<common::ObRowkey> &rowkeys,
       common::ObIArray<int64_t> &vid_ids);
-  int fill_vid_id_in_data_table(const int64_t &vid_id);
-  int fill_vid_ids_in_data_table(const common::ObIArray<int64_t> &vid_ids);
+  int fill_vid_id_in_data_table(const int64_t &vid_id, bool set_null = false);
+  int fill_vid_ids_in_data_table(const common::ObIArray<int64_t> &vid_ids, bool set_null = false);
 private:
   bool need_filter_rowkey_vid_;
+  bool is_block_sample_;
   storage::ObTableScanParam rowkey_vid_scan_param_;
   ObDASScanIter *rowkey_vid_iter_;
   ObDASScanIter *data_table_iter_;

@@ -1549,7 +1549,8 @@ int ObTabletLobWriteDataTask::create_sstables(
                 ctx_->lob_meta_tablet_handle_,
                 ctx_->new_lob_tablet_ids_.at(i),
                 batch_sstables_handle.at(i),
-                split_sstable_type))) {
+                split_sstable_type,
+                false/*can_reuse_macro_block*/))) {
       LOG_WARN("update table store with batch tables failed", K(ret), K(batch_sstables_handle.at(i)), K(split_sstable_type));
     }
   }
@@ -1620,6 +1621,7 @@ int ObTabletLobWriteDataTask::create_sstable(ObSSTableIndexBuilder *sstable_inde
     create_sstable_param.ddl_scn_ = basic_meta.ddl_scn_;
     create_sstable_param.progressive_merge_round_ = basic_meta.progressive_merge_round_;
     create_sstable_param.progressive_merge_step_ = basic_meta.progressive_merge_step_;
+    create_sstable_param.co_base_snapshot_version_ = basic_meta.co_base_snapshot_version_;
 
     create_sstable_param.ddl_scn_.set_min();
 

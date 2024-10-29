@@ -549,7 +549,6 @@ int ObTabletMajorMergeCtx::prepare_schema()
   return ret;
 }
 
-
 #ifdef OB_BUILD_SHARED_STORAGE
 /*
  *  ----------------------------------------------ObSSMergeCtx--------------------------------------------------
@@ -661,8 +660,8 @@ void ObTabletMajorOutputMergeCtx::after_update_tablet_for_major()
   int tmp_ret = OB_SUCCESS;
   ObBasicObjHandle<ObCompactionReportObj> report_obj_hdl;
 
-  if (OB_TMP_FAIL(MTL_SVR_OBJ_MGR.get_obj_handle(GCTX.server_id_, report_obj_hdl))) {
-    LOG_WARN_RET(tmp_ret, "failed to get report obj handle", "cur_svr_id", GCTX.server_id_);
+  if (OB_TMP_FAIL(MTL_SVR_OBJ_MGR.get_obj_handle(GCTX.get_server_id(), report_obj_hdl))) {
+    LOG_WARN_RET(tmp_ret, "failed to get report obj handle", "cur_svr_id", GCTX.get_server_id());
   } else if (OB_TMP_FAIL(report_obj_hdl.get_obj()->update_exec_tablet(1, true/*is_finish_task*/))) {
     LOG_WARN_RET(tmp_ret, "failed to inc exec tablet", K(get_ls_id()), K(get_tablet_id()));
   }

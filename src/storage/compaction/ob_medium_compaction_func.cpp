@@ -41,7 +41,7 @@ using namespace common;
 
 namespace compaction
 {
-
+ERRSIM_POINT_DEF(EN_COMPACTION_SKIP_INIT_SCHEMA_CHANGED);
 int64_t ObMediumCompactionScheduleFunc::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
@@ -697,36 +697,54 @@ int ObMediumCompactionScheduleFunc::errsim_choose_medium_snapshot(
 }
 #endif
 
+int ObMediumCompactionScheduleFunc::check_if_schema_changed(ObMediumCompactionInfo &medium_info)
+{
+  int ret = OB_SUCCESS;
+  bool is_schema_changed = false;
+  if (OB_FAIL(check_if_schema_changed(*tablet_handle_.get_obj(), medium_info.storage_schema_, is_schema_changed))) {
+    LOG_WARN("failed to get check if schema changed", K(ret), K(medium_info));
+#ifdef ERRSIM
+  } else if (OB_UNLIKELY(EN_COMPACTION_SKIP_INIT_SCHEMA_CHANGED)) {
+    bool is_progressive_merge = false;
+    medium_info.is_schema_changed_ = false;
+    medium_info.storage_schema_.progressive_merge_round_ = 1;
+    FLOG_INFO("ERRSIM EN_COMPACTION_SKIP_INIT_SCHEMA_CHANGED", KPC(this), K(is_schema_changed), K(is_progressive_merge),
+      K(medium_info));
+#endif
+  } else {
+    medium_info.is_schema_changed_ = is_schema_changed;
+  }
+  return ret;
+}
+
 int ObMediumCompactionScheduleFunc::check_if_schema_changed(
-    ObMediumCompactionInfo &medium_info)
+    const ObTablet &tablet,
+    const ObStorageSchema &schema,
+    bool &is_schema_changed)
 {
   int ret = OB_SUCCESS;
   int64_t full_stored_col_cnt = 0;
-  const ObStorageSchema &schema = medium_info.storage_schema_;
   if (OB_UNLIKELY(!schema.is_inited())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema is not inited", KR(ret), K(schema));
   } else if (OB_FAIL(schema.get_stored_column_count_in_sstable(full_stored_col_cnt))) {
     LOG_WARN("failed to get stored column count in sstable", K(ret), K(schema));
-  } else if (OB_UNLIKELY(tablet_handle_.get_obj()->get_last_major_column_count() > full_stored_col_cnt)) {
+  } else if (OB_UNLIKELY(tablet.get_last_major_column_count() > full_stored_col_cnt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("stored col cnt in curr schema is less than old major sstable", K(ret),
-      "col_cnt_in_sstable", tablet_handle_.get_obj()->get_last_major_column_count(),
-      "col_cnt_in_schema", full_stored_col_cnt, KPC(this));
-  } else if (medium_info.data_version_ >= DATA_VERSION_4_3_3_0) {
-    // do not check schema changed
-    medium_info.is_schema_changed_ = false;
-  } else if (tablet_handle_.get_obj()->get_last_major_column_count() != full_stored_col_cnt
-    || tablet_handle_.get_obj()->get_last_major_compressor_type() != schema.get_compressor_type()
-    || (ObRowStoreType::DUMMY_ROW_STORE != tablet_handle_.get_obj()->get_last_major_latest_row_store_type()
-      && tablet_handle_.get_obj()->get_last_major_latest_row_store_type() != schema.row_store_type_)) {
-    medium_info.is_schema_changed_ = true;
-    LOG_INFO("schema changed", KPC(this), K(schema), K(full_stored_col_cnt),
-      "col_cnt_in_sstable", tablet_handle_.get_obj()->get_last_major_column_count(),
-      "compressor_type_in_sstable", tablet_handle_.get_obj()->get_last_major_compressor_type(),
-      "latest_row_store_type_in_sstable", tablet_handle_.get_obj()->get_last_major_latest_row_store_type());
+      "col_cnt_in_sstable", tablet.get_last_major_column_count(),
+      "col_cnt_in_schema", full_stored_col_cnt, K(schema));
+  } else if (tablet.get_last_major_column_count() != full_stored_col_cnt
+    || tablet.get_last_major_compressor_type() != schema.get_compressor_type()
+    || (ObRowStoreType::DUMMY_ROW_STORE != tablet.get_last_major_latest_row_store_type()
+      && tablet.get_last_major_latest_row_store_type() != schema.row_store_type_)) {
+    is_schema_changed = true;
+    LOG_INFO("schema changed", K(schema), K(schema), K(full_stored_col_cnt),
+      "col_cnt_in_sstable", tablet.get_last_major_column_count(),
+      "compressor_type_in_sstable", tablet.get_last_major_compressor_type(),
+      "latest_row_store_type_in_sstable", tablet.get_last_major_latest_row_store_type());
   } else {
-    medium_info.is_schema_changed_ = false;
+    is_schema_changed = false;
   }
   return ret;
 }
@@ -1086,7 +1104,7 @@ int ObMediumCompactionScheduleFunc::get_table_schema_to_merge(
   bool is_cs_replica = false;
   int64_t storage_schema_version =  ObStorageSchema::STORAGE_SCHEMA_VERSION_LATEST;
 
-  if (data_version < DATA_VERSION_4_3_3_0) {
+  if (data_version < DATA_VERSION_4_3_4_0) {
     storage_schema_version = ObStorageSchema::STORAGE_SCHEMA_VERSION_V3;
   } else {
     storage_schema_version = ObStorageSchema::STORAGE_SCHEMA_VERSION_V4;
@@ -1341,6 +1359,7 @@ int ObMediumCompactionScheduleFunc::check_replica_checksum_items(
     error_pairs.set_attr(ObMemAttr(MTL_ID(), "MedCkmErrs"));
 
     // [start_idx, end_idx share same tablet_id
+    bool found_checksum_error = false;
     while (OB_SUCC(ret) && end_idx < count) {
       while (end_idx < count && tablet_id == checksum_items.at(end_idx).tablet_id_) {
         end_idx++;
@@ -1365,6 +1384,9 @@ int ObMediumCompactionScheduleFunc::check_replica_checksum_items(
           }
         }
 
+        if (OB_CHECKSUM_ERROR == check_ret) {
+          found_checksum_error = true;
+        }
         // refresh sliding windows
         if (OB_SUCC(ret) && end_idx < count) {
           start_idx = end_idx;
@@ -1380,6 +1402,10 @@ int ObMediumCompactionScheduleFunc::check_replica_checksum_items(
         LOG_WARN("fail to batch set info status", KR(tmp_ret));
       } else {
         LOG_INFO("succ to batch set info status", K(ret), K(affected_rows), K(error_pairs));
+      }
+
+      if (!is_medium_checker && found_checksum_error) {
+        ret = OB_CHECKSUM_ERROR;
       }
     }
 
@@ -1661,8 +1687,14 @@ int ObMediumCompactionScheduleFunc::check_progressive_merge(
         // start a new round of progressive merge
         is_progressive_merge = true;
 #ifdef ERRSIM
-      LOG_INFO("schema changed", K(progressive_merge_round_on_schema), K(progressive_merge_round_on_sstable),
+        FLOG_INFO("schema changed", K(progressive_merge_round_on_schema), K(progressive_merge_round_on_sstable),
                "tablet_id", last_major->get_key().get_tablet_id());
+        if (OB_UNLIKELY(EN_COMPACTION_SKIP_INIT_SCHEMA_CHANGED)) {
+          is_progressive_merge = false;
+          FLOG_INFO("ERRSIM EN_COMPACTION_SKIP_INIT_SCHEMA_CHANGED", K(progressive_merge_round_on_schema),
+                    K(progressive_merge_round_on_sstable), K(is_progressive_merge),
+                    "tablet_id", last_major->get_key().get_tablet_id());
+        }
 #endif
       } else if (progressive_merge_step_on_sstable < progressive_merge_num_on_schema) {
         // progressive merge has not finished

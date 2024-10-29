@@ -31,7 +31,6 @@
 #include "lib/compress/ob_compressor_pool.h"
 #include "ob_i_storage.h"
 #include "common/storage/ob_device_common.h"
-#include "cos/ob_singleton.h"
 #include "lib/container/ob_se_array.h"
 
 namespace oceanbase
@@ -69,7 +68,7 @@ int ob_oss_str_assign(aos_string_t &dst, const int64_t len, const char *src);
 class ObStorageOSSRetryStrategy : public ObStorageIORetryStrategy<aos_status_t *>
 {
 public:
-  ObStorageOSSRetryStrategy(const int64_t timeout_us = OB_STORAGE_MAX_IO_TIMEOUT_US);
+  ObStorageOSSRetryStrategy(const int64_t timeout_us = ObObjectStorageTenantGuard::get_timeout_us());
   virtual ~ObStorageOSSRetryStrategy();
 
   int set_retry_headers(apr_pool_t *p, apr_table_t *&headers);

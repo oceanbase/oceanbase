@@ -1925,11 +1925,11 @@ int ObRawExprPrinter::print_json_value(ObSysFunRawExpr *expr)
       int64_t type = static_cast<ObConstRawExpr*>(expr->get_param_expr(JsnValueClause::JSN_VAL_EMPTY))->get_value().get_int();
       switch (type) {
         case JsnValueType::JSN_VALUE_ERROR:
-          DATA_PRINTF(" error");
+          DATA_PRINTF(" error on empty");
           break;
         case JsnValueType::JSN_VALUE_NULL:
           if (lib::is_mysql_mode() || type == 1) {
-            DATA_PRINTF(" null");
+            DATA_PRINTF(" null on empty");
           }
           break;
 
@@ -1938,14 +1938,12 @@ int ObRawExprPrinter::print_json_value(ObSysFunRawExpr *expr)
         case JsnValueType::JSN_VALUE_DEFAULT:
           DATA_PRINTF(" default ");
           PRINT_EXPR(expr->get_param_expr(JSN_VAL_EMPTY_DEF));
+          DATA_PRINTF(" on empty");
           break;
         default:
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid type value.", K(type));
           break;
-      }
-      if (OB_SUCC(ret) && (lib::is_mysql_mode() || type < JsnValueType::JSN_VALUE_IMPLICIT)) {
-        DATA_PRINTF(" on empty");
       }
     }
   }

@@ -57,7 +57,15 @@ def shell_run_command(command_str, need_print_all=True, need_print_output=True, 
                           close_fds=True)
     while True:
         data = ps.stdout.readline()
-        if data == b'':
+        if sys.version_info[0] >= 3:
+            # Python 3
+            if isinstance(data, bytes):
+                data = data.decode('utf-8').strip()
+        else:
+            # Python 2
+            if isinstance(data, str):
+                data = data.strip()
+        if data == '':
             if ps.poll() is not None:
                 break
         result["return_message"].append(data)
@@ -67,14 +75,14 @@ def shell_run_command(command_str, need_print_all=True, need_print_output=True, 
 
         if need_print_output and len(data.strip()) > 1:
             if not is_frist:
-                print_log("[运行输出]: %s" % data.replace("\n", ""))
+                print_log("[运行输出]: " + data)
                 is_frist = True
             else:
-                data_str = "            %s" % data.replace("\n", "")
+                data_str = "            " + data
                 if no_time:
                     print(data_str)
                 else:
-                    print_log("            %s" % data.replace("\n", ""))
+                    print_log("            " + data)
 
     result["return_code"] = ps.returncode
     return result
@@ -129,6 +137,7 @@ def main():
     '''
     # 解析参数
     parse_arg()
+    print_log("python version: " + str(sys.version_info[0]))
 
     result = shell_run_command("uname -m", False, False)
     if len(result["return_message"]) == 0:

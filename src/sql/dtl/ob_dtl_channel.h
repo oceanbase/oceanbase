@@ -342,16 +342,16 @@ OB_INLINE uint64_t ObDtlChannel::generate_id(uint64_t ch_cnt)
   //
   int64_t start_id = (common::ObTimeUtility::current_time() / 1000000) << 20;
   static volatile uint64_t sequence = start_id;
-  const uint64_t svr_id = GCTX.server_id_;
+  const uint64_t server_index = GCTX.get_server_index();
   uint64_t ch_id = -1;
   if (1 < ch_cnt) {
     uint64_t org_ch_id = 0;
     do {
-      org_ch_id = (sequence & 0x0000FFFFFFFFFFFF) | (svr_id << 48);
-      ch_id = ((ATOMIC_AAF(&sequence, ch_cnt) & 0x0000FFFFFFFFFFFF) | (svr_id << 48));
+      org_ch_id = (sequence & 0x0000FFFFFFFFFFFF) | (server_index << 48);
+      ch_id = ((ATOMIC_AAF(&sequence, ch_cnt) & 0x0000FFFFFFFFFFFF) | (server_index << 48));
     } while (ch_id < org_ch_id);
   } else {
-    ch_id = ((ATOMIC_AAF(&sequence, 1) & 0x0000FFFFFFFFFFFF) | (svr_id << 48));
+    ch_id = ((ATOMIC_AAF(&sequence, 1) & 0x0000FFFFFFFFFFFF) | (server_index << 48));
   }
   return ch_id;
 }

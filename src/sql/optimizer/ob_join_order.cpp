@@ -618,6 +618,11 @@ int ObJoinOrder::compute_base_table_path_ordering(AccessPath *path)
       OB_ISNULL(stmt = get_plan()->get_stmt()) || OB_ISNULL(stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(path), K(ret));
+  } else if (path->est_cost_info_.index_meta_info_.is_multivalue_index_) {
+    // The Json multi-value index scan operator will perform sorting and deduplication based on the primary key or docid.
+    // As a result, the final output order of the data may not match the original index table output order.
+    // Therefore, it's necessary to add an additional sort operator at the upper level.
+    path->ordering_.reset();
   } else if (path->use_das_ &&
              !path->ordering_.empty() &&
              path->table_partition_info_->get_phy_tbl_location_info().get_partition_cnt() > 1) {
@@ -3009,7 +3014,7 @@ int ObJoinOrder::check_can_use_index_merge(const uint64_t table_id,
       }
     }
   }
-
+  use_index_merge = false;
   OPT_TRACE("index merge list", index_merge_list, "use_index_merge", use_index_merge,
     "index_merge_root", index_merge_root);
   OPT_TRACE_TITLE("END CHECK USE INDEX MERGE");

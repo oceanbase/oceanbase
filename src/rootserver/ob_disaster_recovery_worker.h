@@ -610,6 +610,8 @@ private:
     bool is_readonly_all_server() { return is_readonly_all_server_; }
     bool is_columnstore_all_server() { return is_columnstore_all_server_; }
     int64_t get_readonly_memstore_percent() { return readonly_memstore_percent_; }
+    INHERIT_TO_STRING_KV("replica_desc_array", common::ObIArray<ReplicaDesc>,
+        K_(is_readonly_all_server), K_(is_columnstore_all_server), K_(readonly_memstore_percent));
   private:
     bool is_readonly_all_server_;
     bool is_columnstore_all_server_;

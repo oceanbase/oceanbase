@@ -1713,6 +1713,11 @@ int ObStorageUtil::list_directories(const common::ObString &uri, common::ObBaseD
   } else if (OB_FAIL(util_->list_directories(uri_buf, op))) {
     STORAGE_LOG(WARN, "failed to list_directories", K(ret), K(uri), K(uri_buf));
   } 
+
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_LS_FAIL_COUNT);
+  }
+  EVENT_INC(ObStatEventIds::BACKUP_IO_LS_COUNT);
   return ret;
 }
 
@@ -1737,6 +1742,11 @@ int ObStorageUtil::is_tagging(const common::ObString &uri, bool &is_tagging)
   } else if (OB_FAIL(util_->is_tagging(uri, is_tagging))) {
     STORAGE_LOG(WARN, "failed to check is tagging", K(ret), K(uri));
   }
+
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::OBJECT_STORAGE_IO_HEAD_FAIL_COUNT);
+  }
+  EVENT_INC(ObStatEventIds::OBJECT_STORAGE_IO_HEAD_COUNT);
   return ret;
 }
 
@@ -1954,6 +1964,14 @@ int ObStorageReader::open(const common::ObString &uri,
     storage_info_ = storage_info;
   }
 
+
+  if (!head_meta) {
+  } else {
+    if (OB_FAIL(ret)) {
+      EVENT_INC(ObStatEventIds::OBJECT_STORAGE_IO_HEAD_FAIL_COUNT);
+    }
+    EVENT_INC(ObStatEventIds::OBJECT_STORAGE_IO_HEAD_COUNT);
+  }
   return ret;
 }
 
@@ -1985,6 +2003,9 @@ int ObStorageReader::pread(char *buf, const int64_t buf_size, int64_t offset, in
     EVENT_ADD(ObStatEventIds::BACKUP_IO_READ_BYTES, read_size);
   }
 
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_READ_FAIL_COUNT);
+  }
   EVENT_INC(ObStatEventIds::BACKUP_IO_READ_COUNT);
   EVENT_ADD(ObStatEventIds::BACKUP_IO_READ_DELAY, ObTimeUtility::current_time() - start_ts);
 
@@ -2129,8 +2150,10 @@ int ObStorageAdaptiveReader::open(const common::ObString &uri,
     // no need to open reader
   } else if (meta_.is_object_file_type()) {
     if (OB_FAIL(reader_->open(uri, storage_info))) {
+      EVENT_INC(ObStatEventIds::OBJECT_STORAGE_IO_HEAD_FAIL_COUNT);
       OB_LOG(WARN, "fail to open reader", K(ret), K(uri), KPC(storage_info));
     }
+    EVENT_INC(ObStatEventIds::OBJECT_STORAGE_IO_HEAD_COUNT);
   } else {
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "invalid storage object type", K(ret), K(uri), KPC(storage_info), K_(meta));
@@ -2173,6 +2196,7 @@ int ObStorageAdaptiveReader::pread(char *buf,
     if (OB_FAIL(reader_->pread(buf, buf_size, offset, read_size))) {
       OB_LOG(WARN, "fail to read object", K(ret), K_(meta));
     }
+    EVENT_INC(ObStatEventIds::BACKUP_IO_READ_COUNT);
   } else if (meta_.is_simulate_append_type()) {
     // To enable parallel pread,
     // use a temporary allocator/reader for each pread call instead of using allocator_/reader_
@@ -2230,6 +2254,7 @@ int ObStorageAdaptiveReader::pread(char *buf,
         } else {
           cur_read_size += actual_read_size;
         }
+        EVENT_INC(ObStatEventIds::BACKUP_IO_READ_COUNT);
       }
 
       if (OB_SUCC(ret)) {
@@ -2241,7 +2266,10 @@ int ObStorageAdaptiveReader::pread(char *buf,
     OB_LOG(ERROR, "unkown object type", K(ret), K_(meta));
   }
 
-  // TODO @fangdan: add event
+  EVENT_ADD(ObStatEventIds::BACKUP_IO_READ_BYTES, read_size);
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_READ_FAIL_COUNT);
+  }
   EVENT_ADD(ObStatEventIds::BACKUP_IO_READ_DELAY, ObTimeUtility::current_time() - start_ts);
   return ret;
 }
@@ -2369,6 +2397,9 @@ int ObStorageWriter::write(const char *buf,const int64_t size)
     EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_BYTES, size);
   }
 
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_FAIL_COUNT);
+  }
   EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
   EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts);
 
@@ -2572,6 +2603,14 @@ int ObStorageAppender::pwrite(const char *buf, const int64_t size, const int64_t
     }
   }
 
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_FAIL_COUNT);
+  } else {
+    EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_BYTES, size);
+  }
+  EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
+  EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts);
+
   return ret;
 }
 
@@ -2756,6 +2795,12 @@ int ObStorageMultiPartWriter::open(
     }
   }
 
+  // for init complete
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_FAIL_COUNT);
+  }
+  EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
+  EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts_);
   return ret;
 }
 
@@ -2776,6 +2821,9 @@ int ObStorageMultiPartWriter::write(const char *buf, const int64_t size)
     STORAGE_LOG(WARN, "failed to write", K(ret));
   } else {
     EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_BYTES, size);
+  }
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_FAIL_COUNT);
   }
   EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
   EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts);
@@ -2805,6 +2853,13 @@ int ObStorageMultiPartWriter::pwrite(const char *buf, const int64_t size, const 
     cur_max_offset_ = offset + size;
   }
 
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_FAIL_COUNT);
+  } else {
+    EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_BYTES, size);
+  }
+  EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
+  EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts);
   return ret;
 }
 
@@ -2839,6 +2894,12 @@ int ObStorageMultiPartWriter::complete()
     STORAGE_LOG(WARN, "failed to complete", K(ret));
   }
 
+  // for complete
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_FAIL_COUNT);
+  }
+  EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
+  EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts);
   return ret;
 }
 
@@ -2858,6 +2919,12 @@ int ObStorageMultiPartWriter::abort()
     STORAGE_LOG(WARN, "failed to abort", K(ret));
   }
 
+  // for abort
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_FAIL_COUNT);
+  }
+  EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
+  EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts);
   return ret;
 }
 
@@ -2959,6 +3026,12 @@ int ObStorageParallelMultiPartWriterBase::open(
     }
   }
 
+  // for init complete
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_FAIL_COUNT);
+  }
+  EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
+  EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts_);
   return ret;
 }
 
@@ -3027,6 +3100,13 @@ int ObStorageDirectMultiPartWriter::upload_part(
     SpinWLockGuard guard(lock_);
     uploaded_file_length_ += size;
   }
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_FAIL_COUNT);
+  } else {
+    EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_BYTES, size);
+  }
+  EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
+  EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts);
   return ret;
 }
 
@@ -3063,6 +3143,12 @@ int ObStorageDirectMultiPartWriter::abort()
     STORAGE_LOG(WARN, "fail to abort multipart upload", K(ret), K_(uri));
   }
 
+  // for abort
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_FAIL_COUNT);
+  }
+  EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
+  EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts);
   return ret;
 }
 

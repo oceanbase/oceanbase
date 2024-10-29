@@ -422,6 +422,34 @@ int ObMaxIdFetcher::fetch_new_max_id(const uint64_t tenant_id,
   return ret;
 }
 
+int ObMaxIdFetcher::update_server_max_id(const uint64_t max_server_id, const uint64_t next_max_server_id)
+{
+  int ret = OB_SUCCESS;
+  uint64_t fetched_max_server_id = OB_INVALID_ID;
+  ObMySQLTransaction trans;
+  if (OB_FAIL(trans.start(&proxy_, OB_SYS_TENANT_ID, false))) {
+    LOG_WARN("fail to to start transaction", KR(ret));
+  } else if (OB_FAIL(fetch_max_id(trans, OB_SYS_TENANT_ID, OB_MAX_USED_SERVER_ID_TYPE, fetched_max_server_id))) {
+    LOG_WARN("failed to get max id", KR(ret));
+  } else if (OB_UNLIKELY(max_server_id != fetched_max_server_id)) {
+    ret = OB_NEED_RETRY;
+    LOG_WARN("max_server_id has been increased, please retry", KR(ret), K(max_server_id), K(fetched_max_server_id));
+  } else if (OB_FAIL(update_max_id(trans, OB_SYS_TENANT_ID, OB_MAX_USED_SERVER_ID_TYPE, next_max_server_id))) {
+    LOG_WARN("failed to update max id", KR(ret), K(next_max_server_id));
+  }
+
+  if (trans.is_started()) {
+    const bool is_commit = (OB_SUCC(ret));
+    int temp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (temp_ret = trans.end(is_commit))) {
+      LOG_WARN("failed to end trans", K(is_commit), K(temp_ret));
+      ret = (OB_SUCCESS == ret) ? temp_ret : ret;
+    }
+  }
+  LOG_INFO("update server max id", KR(ret), K(fetched_max_server_id), K(max_server_id), K(next_max_server_id));
+  return ret;
+}
+
 int ObMaxIdFetcher::update_max_id(ObISQLClient &sql_client, const uint64_t tenant_id,
                                   ObMaxIdType max_id_type, const uint64_t max_id)
 {

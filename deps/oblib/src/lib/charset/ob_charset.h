@@ -81,15 +81,20 @@ enum ObCollationType
   CS_TYPE_INVALID = 0,
   CS_TYPE_BIG5_CHINESE_CI = 1,
   CS_TYPE_DEC8_SWEDISH_CI = 3,
+  CS_TYPE_LATIN1_GERMAN1_CI = 5,
   CS_TYPE_LATIN1_SWEDISH_CI = 8,
   CS_TYPE_ASCII_GENERAL_CI = 11,
   CS_TYPE_SJIS_JAPANESE_CI = 13,
+  CS_TYPE_LATIN1_DANISH_CI = 15,
 
   CS_TYPE_TIS620_THAI_CI = 18,
   CS_TYPE_GBK_CHINESE_CI = 28,
+  CS_TYPE_LATIN1_GERMAN2_CI = 31,
   CS_TYPE_UTF8MB4_GENERAL_CI = 45,
   CS_TYPE_UTF8MB4_BIN = 46,
   CS_TYPE_LATIN1_BIN = 47,
+  CS_TYPE_LATIN1_GENERAL_CI = 48,
+  CS_TYPE_LATIN1_GENERAL_CS = 49,
   CS_TYPE_UTF16_GENERAL_CI = 54,
   CS_TYPE_UTF16_BIN = 55,
   CS_TYPE_UTF16LE_GENERAL_CI = 56,
@@ -102,6 +107,7 @@ enum ObCollationType
   CS_TYPE_SJIS_BIN = 88,
 
   CS_TYPE_TIS620_BIN = 89,
+  CS_TYPE_LATIN1_SPANISH_CI = 94,
   CS_TYPE_COLLATION_FREE = 100, // mysql中间没有使用这个
   CS_TYPE_UTF16_UNICODE_CI = 101,
   CS_TYPE_UTF16_ICELANDIC_UCA_CI = 102,
@@ -378,7 +384,7 @@ public:
   //比如latin1 1byte ,utf8mb4 4byte,转换因子为4，也可以理解为最多使用4字节存储一个字符
   static const int32_t CharConvertFactorNum = 4;
   static const int64_t VALID_CHARSET_TYPES = 15;
-  static const int64_t VALID_COLLATION_TYPES = 143;
+  static const int64_t VALID_COLLATION_TYPES = 149;
   static int init_charset();
   // strntodv2 is an enhanced version of strntod,
   // which handles nan/infinity values in oracle mode.

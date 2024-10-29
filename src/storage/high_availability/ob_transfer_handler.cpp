@@ -1119,7 +1119,6 @@ int ObTransferHandler::do_trans_transfer_start_prepare_(
 {
   int ret = OB_SUCCESS;
   ObLSHandle src_ls_handle;
-  ObTransID failed_tx_id;
   ObStorageHASrcInfo addr_info;
   addr_info.cluster_id_ = GCONF.cluster_id;
   ObAddr dest_ls_leader;
@@ -1142,7 +1141,7 @@ int ObTransferHandler::do_trans_transfer_start_prepare_(
   // submit active tx redo log before block tablet write to optimise system interrupt time
   } else if (OB_FAIL(MTL(ObLSService*)->get_ls(task_info.src_ls_id_, src_ls_handle, ObLSGetMod::HA_MOD))) {
     LOG_WARN("failed to get ls", K(ret), K(task_info));
-  } else if (OB_FAIL(src_ls_handle.get_ls()->get_tx_svr()->traverse_trans_to_submit_redo_log(failed_tx_id))) {
+  } else if (OB_FAIL(ObTXTransferUtils::traverse_trans_to_submit_redo_log_with_retry(*src_ls_handle.get_ls(), 100_ms))) {
     LOG_WARN("failed to submit tx log", K(ret), K(task_info));
   // submit dest_ls active tx redo log
   } else if (OB_FAIL(storage_rpc_->submit_tx_log(task_info.tenant_id_, addr_info, task_info.dest_ls_id_, data_scn))) {
@@ -1192,8 +1191,10 @@ int ObTransferHandler::wait_tablet_write_end_(
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ls->get_lock_table()->enable_check_tablet_status(true))) {
       LOG_WARN("failed to enable check tablet status", KR(ret), K(task_info));
-    } else if (OB_FAIL(ls->wait_tx_write_end(timeout_ctx))) {
-      LOG_WARN("failed to wait tx_write end", KR(ret), K(task_info));
+    // Instead of wait table lock write end, we choose to use double check
+    // during table lock callback register
+    // } else if (OB_FAIL(ls->wait_tx_write_end(timeout_ctx))) {
+    //   LOG_WARN("failed to wait tx_write end", KR(ret), K(task_info));
     } else if (OB_FAIL(ls->get_tx_svr()->traverse_trans_to_submit_redo_log(failed_tx_id))) {
       LOG_WARN("failed to submit tx log", KR(ret), K(task_info));
     } else if (OB_FAIL(ls->tablet_freeze(checkpoint::INVALID_TRACE_ID,

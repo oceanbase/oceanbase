@@ -2256,22 +2256,14 @@ int ObLS::advance_checkpoint_by_flush(SCN recycle_scn,
                                       const ObFreezeSourceFlag source)
 {
   int ret = OB_SUCCESS;
-  int64_t read_lock = LSLOCKALL;
-  int64_t write_lock = 0;
-  ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock, abs_timeout_ts);
-  if (!lock_myself.locked()) {
-    ret = OB_TIMEOUT;
-    LOG_WARN("lock failed, please retry later", K(ret), K(ls_meta_));
-  } else {
-    if (is_tenant_freeze) {
-      ObDataCheckpoint::set_tenant_freeze();
-      LOG_INFO("set tenant_freeze", K(ls_meta_.ls_id_));
-    }
-    ObDataCheckpoint::set_freeze_source(source);
-    ret = checkpoint_executor_.advance_checkpoint_by_flush(recycle_scn);
-    ObDataCheckpoint::reset_freeze_source();
-    ObDataCheckpoint::reset_tenant_freeze();
+  if (is_tenant_freeze) {
+    ObDataCheckpoint::set_tenant_freeze();
+    LOG_INFO("set tenant_freeze", K(ls_meta_.ls_id_));
   }
+  ObDataCheckpoint::set_freeze_source(source);
+  ret = checkpoint_executor_.advance_checkpoint_by_flush(recycle_scn);
+  ObDataCheckpoint::reset_freeze_source();
+  ObDataCheckpoint::reset_tenant_freeze();
   return ret;
 }
 

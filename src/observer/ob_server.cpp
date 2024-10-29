@@ -143,6 +143,7 @@
 #ifdef OB_BUILD_AUDIT_SECURITY
 #include "sql/audit/ob_audit_log_mgr.h"
 #endif
+#include "storage/backup/ob_backup_meta_cache.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -545,6 +546,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init px target mgr failed", KR(ret));
     } else if (OB_FAIL(OB_BACKUP_INDEX_CACHE.init())) {
       LOG_ERROR("init backup index cache failed", KR(ret));
+    } else if (OB_FAIL(OB_BACKUP_META_CACHE.init())) {
+      LOG_ERROR("init backup meta cache failed", KR(ret));
     } else if (OB_FAIL(ObActiveSessHistList::get_instance().init())) {
       LOG_ERROR("init ASH failed", KR(ret));
     } else if (OB_FAIL(ObServerBlacklist::get_instance().init(self_addr_, net_frame_.get_req_transport()))) {
@@ -871,6 +874,10 @@ void ObServer::destroy()
     FLOG_INFO("begin to destroy backup index cache");
     OB_BACKUP_INDEX_CACHE.destroy();
     FLOG_INFO("backup index cache destroyed");
+
+    FLOG_INFO("begin to destroy backup meta cache");
+    OB_BACKUP_META_CACHE.destroy();
+    FLOG_INFO("backup meta cache destroyed");
 
     FLOG_INFO("begin to destroy log block mgr");
     log_block_mgr_.destroy();
@@ -2987,9 +2994,9 @@ int ObServer::init_global_context()
   gctx_.startup_accel_handler_ = &startup_accel_handler_;
 
   gctx_.flashback_scn_ = opts_.flashback_scn_;
-  gctx_.server_id_ = config_.observer_id;
-  if (is_valid_server_id(gctx_.server_id_)) {
-    LOG_INFO("this observer has had a valid server_id", K(gctx_.server_id_));
+  (void) gctx_.set_server_id(config_.observer_id);
+  if (is_valid_server_id(gctx_.get_server_id())) {
+    LOG_INFO("this observer has had a valid server_id", K(gctx_.get_server_id()));
   }
   if ((PHY_FLASHBACK_MODE == gctx_.startup_mode_ || PHY_FLASHBACK_VERIFY_MODE == gctx_.startup_mode_)
       && 0 >= gctx_.flashback_scn_) {

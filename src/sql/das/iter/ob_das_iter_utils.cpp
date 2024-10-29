@@ -1339,6 +1339,7 @@ int ObDASIterUtils::create_index_merge_sub_tree(const ObLSID &ls_id,
       merge_param.tx_desc_ = tx_desc;
       merge_param.snapshot_ = snapshot;
       merge_param.is_reverse_ = merge_ctdef->is_reverse_;
+      merge_param.is_left_child_leaf_node_ = (left_iter->get_type() != DAS_ITER_INDEX_MERGE);
       if (OB_FAIL(create_das_iter(alloc, merge_param, merge_iter))) {
         LOG_WARN("failed to create index merge iter", K(merge_param));
       } else if (OB_FAIL(merge_iter->set_ls_tablet_ids(ls_id, related_tablet_ids))) {
@@ -1348,8 +1349,7 @@ int ObDASIterUtils::create_index_merge_sub_tree(const ObLSID &ls_id,
       } else {
         merge_iter->get_children()[0] = left_iter;
         merge_iter->get_children()[1] = right_iter;
-        if (merge_ctdef->is_left_child_leaf_node_) {
-          OB_ASSERT(left_iter->get_type() == DAS_ITER_SCAN || left_iter->get_type() == DAS_ITER_SORT);
+        if (left_iter->get_type() != DAS_ITER_INDEX_MERGE) {
           ObDASScanIter *left_scan_iter = (left_iter->get_type() == DAS_ITER_SCAN) ?
               static_cast<ObDASScanIter*>(left_iter) : static_cast<ObDASScanIter*>(left_iter->get_children()[0]);
           OB_ASSERT(left_scan_iter != nullptr);

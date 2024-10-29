@@ -13,9 +13,11 @@
 #define USING_LOG_PREFIX SERVER
 #include "ob_server_struct.h"
 #include "lib/thread_local/ob_tsi_factory.h"
+#include "lib/ob_define.h"
 #include "share/schema/ob_schema_service.h"
 #include "share/ob_web_service_root_addr.h"
 #include "share/ob_lease_struct.h"
+#include "common/ob_version_def.h"
 namespace oceanbase
 {
 namespace share
@@ -43,6 +45,20 @@ share::ServerServiceStatus ObGlobalContext::get_server_service_status() const
 {
   int64_t server_status = ATOMIC_LOAD(&server_status_);
   return static_cast<share::ServerServiceStatus>(server_status);
+}
+
+uint64_t ObGlobalContext::get_server_index() const
+{
+  uint64_t server_index = 0;
+  uint64_t server_id = ATOMIC_LOAD(&server_id_);
+  if (OB_UNLIKELY(!is_valid_server_id(server_id))) {
+    // return 0;
+  } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_4_0) {
+    server_index = ObShareUtil::compute_server_index(server_id);
+  } else {
+    server_index = server_id;
+  }
+  return server_index;
 }
 
 DEF_TO_STRING(ObGlobalContext)

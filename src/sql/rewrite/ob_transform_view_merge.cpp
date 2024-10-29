@@ -192,6 +192,8 @@ int ObTransformViewMerge::transform_in_from_item(ObDMLStmt *stmt,
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(stmt), K(ret));
+  } else if (stmt->is_select_stmt() && static_cast<ObSelectStmt*>(stmt)->has_rollup()) {
+    OPT_TRACE("stmt contain rollup, can not merge from item");
   } else {
     int64_t i = 0;
     while (OB_SUCC(ret) && i < stmt->get_from_item_size()) {

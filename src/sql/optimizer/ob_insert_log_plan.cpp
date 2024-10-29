@@ -1829,7 +1829,7 @@ int ObInsertLogPlan::allocate_select_into_as_top_for_insert(ObLogicalOperator *&
     } else if (OB_FAIL(select_into->get_select_exprs().assign(table_info.column_conv_exprs_))) {
       LOG_WARN("failed to get select exprs", K(ret));
     } else {
-      select_into->set_is_overwrite(stmt->is_overwrite());
+      select_into->set_is_overwrite(stmt->is_external_table_overwrite());
       select_into->set_external_properties(external_properties);
       select_into->set_external_partition(stmt->get_table_item(0)->external_table_partition_);
       select_into->set_child(ObLogicalOperator::first_child, old_top);

@@ -155,7 +155,6 @@ int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
                                                   const ObStmtScope &scope,
                                                   const bool is_root_condition,
                                                   const bool is_need_print,
-                                                  const bool is_prepare_protocol,
                                                   const bool is_in_pl,
                                                   const ObSQLSessionInfo *session_info,
                                                   const ParamStore *param_store,
@@ -173,10 +172,10 @@ int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), KP(session_info));
   } else if (T_WHERE_SCOPE != scope || !is_root_condition || T_OP_IN != op_type ||
-             T_EXPR_LIST != in_list.type_ || is_need_print || is_prepare_protocol ||
+             T_EXPR_LIST != in_list.type_ || is_need_print || session_info->is_varparams_sql_prepare() ||
              (NULL != stmt && stmt->is_select_stmt() && static_cast<const ObSelectStmt *>(stmt)->is_hierarchical_query())) {
     LOG_TRACE("no need rewrite inlist", K(is_root_condition), K(scope), K(in_list.type_),
-              K(op_type), K(is_need_print), K(is_prepare_protocol));
+              K(op_type), K(is_need_print), K(session_info->is_varparams_sql_prepare()));
   } else {
     if (NULL == stmt) {
       if (OB_FAIL(session_info->get_optimizer_features_enable_version(optimizer_features_enable_version))) {

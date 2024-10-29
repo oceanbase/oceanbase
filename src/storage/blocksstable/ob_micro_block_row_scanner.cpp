@@ -983,7 +983,7 @@ int ObIMicroBlockRowScanner::get_next_rows(
 }
 
 int ObIMicroBlockRowScanner::get_aggregate_result(
-    const int32_t col_idx,
+    const int32_t col_offset,
     const int32_t *row_ids,
     const int64_t row_cap,
     const bool reserve_memory,
@@ -996,7 +996,7 @@ int ObIMicroBlockRowScanner::get_aggregate_result(
   } else if (OB_UNLIKELY(nullptr == row_ids || row_cap < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid arguments", K(ret), KP(row_ids), K(row_cap));
-  } else if (OB_FAIL(agg_group.eval_batch(param_, context_, col_idx, reader_, row_ids, row_cap, reserve_memory))) {
+  } else if (OB_FAIL(agg_group.eval_batch(param_, context_, col_offset, reader_, row_ids, row_cap, reserve_memory))) {
     LOG_WARN("Fail to eval batch rows", K(ret));
   }
   return ret;

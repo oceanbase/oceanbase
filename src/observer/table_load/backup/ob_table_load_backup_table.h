@@ -24,7 +24,7 @@ enum class ObTableLoadBackupVersion
 {
   INVALID = 0,
   V_1_4,
-  V_3_2,
+  V_3_X,      // FARM COMPAT WHITELIST, 重命名，加白名单
   MAX_VERSION
 };
 

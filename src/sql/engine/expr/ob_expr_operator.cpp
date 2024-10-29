@@ -36,6 +36,7 @@
 #include "share/vector/expr_cmp_func.h"
 #include "sql/engine/expr/ob_expr_func_round.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
+#include "share/schema/ob_schema_struct.h"
 
 
 namespace oceanbase

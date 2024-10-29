@@ -244,7 +244,6 @@ struct ObGlobalContext
   share::ObLocationService *location_service_;
   int64_t start_time_;
   int64_t *warm_up_start_time_;
-  uint64_t server_id_;
   ObServiceStatus status_;
   ObServerMode startup_mode_;
   share::RSServerStatus rs_server_status_;
@@ -282,6 +281,25 @@ struct ObGlobalContext
   bool is_observer() const;
   common::ObClusterRole get_cluster_role() const;
   share::ServerServiceStatus get_server_service_status() const;
+  /*
+  Returns a globally unique, monotonically increasing server ID.
+  This ID is unique across the lifetime of the cluster and will not be reused.
+  */
+  inline uint64_t get_server_id() const { return ATOMIC_LOAD(&server_id_); }
+  inline void set_server_id(const uint64_t id) { ATOMIC_SET(&server_id_, id); }
+  /*
+  Returns a currently unique server index within the cluster.
+  This index is unique among current servers in the cluster, but may be reused if a server is removed from the cluster.
+
+  When server ID has size limitation, like only 12 bits are allocated for server ID in session_id
+  to ensure its uniqueness, which implies the server ID cannot be greater than or equal to 4096,
+  we should consider using server index instead of server ID.
+  However, using server index requires a guarantee that no remnants of an old server remain after it is deleted.
+  For example, no sessions from the deleted server should exist anymore. If remnants persist after server deletion,
+  using server index is not permitted, otherwise, correctness issues may arise.
+  In such cases, you need to carefully consider how to resolve this problem by yourself.
+  */
+  uint64_t get_server_index() const;
   void set_upgrade_stage(obrpc::ObUpgradeStage upgrade_stage) { upgrade_stage_ = upgrade_stage; }
   obrpc::ObUpgradeStage get_upgrade_stage() { return upgrade_stage_; }
   DECLARE_TO_STRING;
@@ -304,6 +322,7 @@ private:
   bool has_start_service() const { return 0 < start_service_time_; }
 
   obrpc::ObUpgradeStage upgrade_stage_;
+  uint64_t server_id_;
 };
 
 } // end of namespace share

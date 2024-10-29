@@ -781,6 +781,7 @@ int ObTabletCreateDeleteHelper::build_create_sstable_param(
     param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
     param.table_backup_flag_.reset();
     param.table_shared_flag_.reset();
+    param.co_base_snapshot_version_ = 0;
     if (OB_FAIL(storage_schema.get_store_column_count(param.column_cnt_, true/*is_full*/))) {
       LOG_WARN("fail to get stored col cnt of table schema", K(ret), K(storage_schema));
     } else if (FALSE_IT(param.column_cnt_ += multi_version_col_cnt)) {

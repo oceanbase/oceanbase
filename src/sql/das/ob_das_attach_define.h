@@ -175,7 +175,6 @@ public:
   ObDASIndexMergeCtDef(common::ObIAllocator &alloc)
     : ObDASAttachCtDef(alloc, DAS_OP_INDEX_MERGE),
       merge_type_(INDEX_MERGE_INVALID),
-      is_left_child_leaf_node_(false),
       is_reverse_(false)
   {}
 
@@ -184,7 +183,6 @@ public:
   const ObDASBaseCtDef *get_right_ctdef() const;
 public:
   ObIndexMergeType merge_type_;
-  bool is_left_child_leaf_node_;
   bool is_reverse_;
 };
 

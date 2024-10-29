@@ -3657,17 +3657,17 @@ int ObSysVarEncoder::display_sess_info(ObSQLSessionInfo &sess, const char* curre
 void ObSQLSessionInfo::gen_gtt_session_scope_unique_id()
 {
   static int64_t cur_ts = 0;
-  int64_t next_ts = ObSQLUtils::combine_server_id(ObSQLUtils::get_next_ts(cur_ts), GCTX.server_id_);
+  int64_t next_ts = ObSQLUtils::combine_server_id(ObSQLUtils::get_next_ts(cur_ts), GCTX.get_server_id());
   gtt_session_scope_unique_id_ = next_ts;
-  LOG_DEBUG("check temporary table ssid session scope", K(next_ts), K(get_sessid_for_table()), K(GCTX.server_id_), K(lbt()));
+  LOG_DEBUG("check temporary table ssid session scope", K(next_ts), K(get_sessid_for_table()), K(GCTX.get_server_id()), K(lbt()));
 }
 
 void ObSQLSessionInfo::gen_gtt_trans_scope_unique_id()
 {
   static int64_t cur_ts = 0;
-  int64_t next_ts = ObSQLUtils::combine_server_id(ObSQLUtils::get_next_ts(cur_ts), GCTX.server_id_);
+  int64_t next_ts = ObSQLUtils::combine_server_id(ObSQLUtils::get_next_ts(cur_ts), GCTX.get_server_id());
   gtt_trans_scope_unique_id_ = next_ts;
-  LOG_DEBUG("check temporary table ssid trans scope", K(next_ts), K(get_sessid_for_table()), K(GCTX.server_id_), K(lbt()));
+  LOG_DEBUG("check temporary table ssid trans scope", K(next_ts), K(get_sessid_for_table()), K(GCTX.get_server_id()), K(lbt()));
 }
 
 int ObAppInfoEncoder::serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos)

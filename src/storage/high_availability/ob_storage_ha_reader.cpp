@@ -23,6 +23,7 @@
 #include "storage/backup/ob_backup_factory.h"
 #include "observer/omt/ob_tenant.h"
 #include "common/storage/ob_device_common.h"
+#include "storage/backup/ob_backup_meta_cache.h"
 
 namespace oceanbase
 {
@@ -1966,7 +1967,7 @@ int ObCopySSTableInfoRestoreReader::inner_get_backup_sstable_metas_(
   } else if (OB_FAIL(get_macro_block_backup_path_(sstable_meta_index, data_type, sstable_meta_backup_path))) {
     LOG_WARN("failed to get macro block backup path", K(ret), KPC(restore_base_info_));
   } else if (OB_FAIL(backup::ObLSBackupRestoreUtil::read_sstable_metas(sstable_meta_backup_path.get_obstr(),
-      restore_base_info_->backup_dest_.get_storage_info(), mod, sstable_meta_index, backup_sstable_meta_array))) {
+      restore_base_info_->backup_dest_.get_storage_info(), mod, sstable_meta_index, &OB_BACKUP_META_CACHE, backup_sstable_meta_array))) {
     LOG_WARN("failed to read sstable meta", K(ret), KPC(restore_base_info_));
   } else if (OB_FAIL(filter_backup_sstable_meta_on_data_type_(data_type, backup_sstable_meta_array))) {
     LOG_WARN("failed to filter backup sstable meta on data type", K(ret), K(data_type));

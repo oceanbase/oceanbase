@@ -218,7 +218,7 @@ void ObSMConnectionCallback::destroy(ObSMConnection& conn)
     } else if (is_need_clear) {
       if (OB_FAIL(GCTX.session_mgr_->mark_sessid_unused(conn.sessid_))) {
         LOG_ERROR("fail to mark sessid unused", K(ret), K(conn.sessid_),
-                  "proxy_sessid", conn.proxy_sessid_, "server_id", GCTX.server_id_);
+                  "proxy_sessid", conn.proxy_sessid_);
       } else {
         LOG_INFO("mark session id unused", K(conn.sessid_));
       }
@@ -231,7 +231,6 @@ void ObSMConnectionCallback::destroy(ObSMConnection& conn)
            "sessid", conn.sessid_,
            "proxy_sessid", conn.proxy_sessid_,
            "tenant_id", conn.tenant_id_,
-           "server_id", GCTX.server_id_,
            "from_proxy", conn.is_proxy_,
            "from_java_client", conn.is_java_client_,
            "c/s protocol", get_cs_protocol_type_name(conn.get_cs_protocol_type()),
@@ -264,8 +263,7 @@ int ObSMConnectionCallback::on_disconnect(observer::ObSMConnection& conn)
       sess_info->set_shadow(true);
     }
   }
-  LOG_INFO("kill and revert session", K(conn.sessid_),
-          "proxy_sessid", conn.proxy_sessid_, "server_id", GCTX.server_id_, K(ret));
+  LOG_INFO("kill and revert session", K(conn.sessid_), "proxy_sessid", conn.proxy_sessid_, K(ret));
   return ret;
 }
 

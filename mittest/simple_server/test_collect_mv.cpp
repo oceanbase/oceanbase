@@ -635,6 +635,82 @@ TEST_F(ObCollectMV, mv_transfer)
   }
 }
 
+//TEST_F(ObCollectMV, create_mview_and_major_merge_concurrent)
+//{
+//  common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy2();
+//  int64_t affected_rows = 0;
+//  LOGI("create tg");
+//  EQ(0, sql_proxy.write("create tablegroup tg1000 sharding='PARTITION'", affected_rows));
+//  LOGI("create table");
+//  EQ(0, sql_proxy.write("create table t1000(c1 int,c2 int, primary key(c1,c2)) tablegroup='tg1000' partition by hash(c1) partitions 2", affected_rows));
+//  EQ(0, sql_proxy.write("create table t2000(c2 int, c3 int, primary key(c2)) duplicate_scope = 'cluster' duplicate_read_consistency='weak'", affected_rows));
+//
+//  LOGI("insert data");
+//  EQ(0, sql_proxy.write("insert into t1000 values(1, 1)", affected_rows));;
+//  EQ(0, sql_proxy.write("insert into t2000 values(1, 1000)", affected_rows));;
+//  int64_t start_time = ObTimeUtil::current_time();
+//  while (ObTimeUtil::current_time() - start_time < 10 * 1000 * 1000) {
+//    ObSqlString sql;
+//    int64_t val = 0;
+//    EQ(0, SSH::select_int64(sql_proxy, "select max(c1) val from t1000", val));
+//    EQ(0, sql.assign_fmt("insert into t1000 select c1+%ld,c2+%ld from t1000", val, val));
+//    EQ(0, sql_proxy.write(sql.ptr(), affected_rows));;
+//    EQ(0, sql.assign_fmt("insert into t2000 select c2+%ld,c3 from t2000", val));
+//    EQ(0, sql_proxy.write(sql.ptr(), affected_rows));;
+//  }
+//  int64_t row_count = 0;
+//  EQ(0, SSH::select_int64(sql_proxy, "select count(*) val from t1000", row_count));
+//
+//  uint64_t new_freeze_scn = 0;
+//  std::thread th([&]() {
+//    ::sleep(1);
+//    LOGI("major freeze")
+//    sql_proxy.write("alter system major freeze", affected_rows);
+//    EQ(0, SSH::g_select_uint64(R.tenant_id_, "select max(frozen_scn) val from oceanbase.__all_freeze_info", new_freeze_scn));
+//  });
+//
+//  LOGI("create mview start");
+//  EQ(0, sql_proxy.write(
+//            "create materialized view compact_mv_1000 (primary key(t1000_c1,t1000_c2)) tablegroup='tg1000' "
+//            "partition by hash(t1000_c1) partitions 2 "
+//            "REFRESH FAST ON DEMAND  ENABLE QUERY REWRITE ENABLE ON QUERY COMPUTATION "
+//            "as select /*+read_consistency(weak) use_nl(t1000 t2000) leading(t1000 t2000) "
+//            "use_das(t2000) no_use_nl_materialization(t2000)*/ t1000.c1 t1000_c1,t1000.c2 t1000_c2,t2000.c2 t2000_c2,t2000.c3 t2000_c3 "
+//            "from t1000 join t2000 on t1000.c2=t2000.c2",
+//            affected_rows));
+//  LOGI("create mview finish");
+//  int64_t mv_row_count = 0;
+//  EQ(0, SSH::select_int64(sql_proxy, "select /*+no_mv_rewrite*/count(*) val from compact_mv_1000", mv_row_count));
+//  EQ(row_count, mv_row_count);
+//  LOGI("row_count:%ld %ld", row_count, mv_row_count);
+//  th.join();
+//  LOGI("wait major merge %ld", new_freeze_scn);
+//  EQ(0, wait_major_mv_refresh_finish(new_freeze_scn));
+//  LOGI("wait major merge finish %ld", new_freeze_scn);
+//
+//
+//  LOGI("mview fast_refresh");
+//  int64_t max_val = 0;
+//  EQ(0, SSH::select_int64(sql_proxy, "select max(c1) val from t1000", max_val));
+//  ObSqlString sql;
+//  sql.assign_fmt("insert into t1000 values(%ld, %ld)", max_val+1, max_val+1);
+//  EQ(0, sql_proxy.write(sql.ptr(), affected_rows));
+//  sql.assign_fmt("insert into t2000 values(%ld, 1000)", max_val+1);
+//  EQ(0, sql_proxy.write(sql.ptr(), affected_rows));
+//  EQ(0, sql_proxy.write("update t2000 set c3=2000 where c2<1000", affected_rows));
+//  EQ(0, sql_proxy.write("delete from t1000 where c1<1000", affected_rows));
+//
+//
+//  EQ(0, sql_proxy.write("alter system major freeze", affected_rows));
+//  EQ(0, SSH::g_select_uint64(R.tenant_id_, "select max(frozen_scn) val from oceanbase.__all_freeze_info", new_freeze_scn));
+//  EQ(0, wait_major_mv_refresh_finish(new_freeze_scn));
+//
+//  EQ(0, SSH::select_int64(sql_proxy, "select count(*) val from t1000", row_count));
+//  EQ(0, SSH::select_int64(sql_proxy, "select /*+no_mv_rewrite*/count(*) val from compact_mv_1000", mv_row_count));
+//  EQ(row_count, mv_row_count);
+//  LOGI("row_count:%ld %ld", row_count, mv_row_count);
+//}
+
 TEST_F(ObCollectMV, end)
 {
   int64_t wait_us = R.time_sec_ * 1000 * 1000;

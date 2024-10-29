@@ -24,7 +24,6 @@
 #include "sql/engine/ob_batch_rows.h"
 #include "common/ob_common_utility.h"
 #include "sql/ob_eval_bound.h"
-#include "share/schema/ob_schema_struct.h"
 
 namespace oceanbase
 {

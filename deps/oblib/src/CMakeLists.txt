@@ -19,6 +19,7 @@ target_include_directories(
   ${DEP_DIR}/include/libxml2
   ${DEVTOOLS_DIR}
   ${DEP_DIR}/include/apr-1/
+  ${DEP_DIR}/include/icu
   ${DEP_DIR}/include/icu/common
   ${DEP_DIR}/include/apache-arrow
   ${DEP_DIR}/include/apache-orc

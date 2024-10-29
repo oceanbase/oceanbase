@@ -242,6 +242,7 @@ ob_set_subtarget(ob_share common_mixed
   client_feedback/ob_feedback_int_struct.cpp
   client_feedback/ob_feedback_partition_struct.cpp
   datum/ob_datum.cpp
+  datum/ob_datum_cmp_func_def.cpp
   diagnosis/ob_sql_monitor_statname.cpp
   diagnosis/ob_sql_plan_monitor_node_list.cpp
   interrupt/ob_global_interrupt_call.cpp

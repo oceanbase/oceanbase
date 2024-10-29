@@ -648,10 +648,6 @@ int ObStorageSchema::deep_copy_column_array(
       col_schema.destroy(allocator);
     }
   }
-  // for heap table, the column array is out of order when tablet firstly created, need sort it.
-  if (FAILEDx(sort_out_of_order_column_array_for_heap_table())) {
-    STORAGE_LOG(WARN, "failed to sort out of order column array for heap table", K(ret));
-  }
   return ret;
 }
 
@@ -671,36 +667,6 @@ int ObStorageSchema::rebuild_column_array(
     column_cnt_ = column_array_.count();
     store_column_cnt_ = update_param.major_column_cnt_ - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
     STORAGE_LOG(INFO, "rebuild column array from table schema", K(ret), K(update_param), K(src_schema), K_(column_array));
-  }
-  return ret;
-}
-
-int ObStorageSchema::sort_out_of_order_column_array_for_heap_table()
-{
-  int ret = OB_SUCCESS;
-  bool is_out_of_order = false;
-  const int64_t rowkey_cnt = rowkey_array_.count();
-  const int64_t column_cnt = column_array_.count();
-  if (!is_heap_table() || is_column_info_simplified()) {
-  } else if (column_cnt < 2 || rowkey_cnt != 1) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "invalid column cnt or rowkey cnt for heap table", K(ret), K(column_cnt), K(rowkey_cnt));
-  } else if (OB_FAIL(check_is_column_array_out_of_order_for_heap_table(is_out_of_order))) {
-    STORAGE_LOG(WARN, "failed to check is column array out of order", K(ret));
-  } else if (is_out_of_order) {
-    // sort rowkey array. heap table only has one rowkey.
-    rowkey_array_[0].column_idx_ = common::OB_APP_MIN_COLUMN_ID;
-    // sort column array
-    ObStorageColumnSchema pk_increment_schema = column_array_[column_cnt - 1];
-    for (int64_t i = column_cnt - 1 ; i > 0; --i) {
-      column_array_[i] = column_array_[i - 1];
-    }
-    column_array_[0] = pk_increment_schema;
-    // sort skip idx attr array
-    for (int64_t i = 0; i < skip_idx_attr_array_.count(); ++i) {
-      skip_idx_attr_array_[i].col_idx_++;
-    }
-    STORAGE_LOG(INFO, "Finsih sort out of order column array for heap table", K(ret), KPC(this));
   }
   return ret;
 }
@@ -1101,10 +1067,6 @@ int ObStorageSchema::deserialize_column_array(
         column.destroy(allocator);
       }
     }
-    // for heap table, the column array is out of order when tablet firstly created, need sort it.
-    if (FAILEDx(sort_out_of_order_column_array_for_heap_table())) {
-      STORAGE_LOG(WARN, "failed to sort out of order column array for heap table", K(ret));
-    }
   }
   return ret;
 }
@@ -1452,22 +1414,6 @@ bool ObStorageSchema::is_cg_array_generated_in_cs_replica() const
   return bret;
 }
 
-int ObStorageSchema::check_is_column_array_out_of_order_for_heap_table(bool &is_out_of_order) const
-{
-  int ret = OB_SUCCESS;
-  is_out_of_order = false;
-  const int64_t column_cnt = column_array_.count();
-  if (!is_heap_table() || is_column_info_simplified()) {
-  } else if (column_cnt <= 1) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "invalid count of column array", KPC(this));
-  } else if (column_array_[column_cnt - 1].is_rowkey_column()) {
-    is_out_of_order = true; // the __pk_increment column should be the first column of heap table
-    STORAGE_LOG(INFO, "find a out of order heap table", K(ret), KPC(this));
-  }
-  return ret;
-}
-
 int ObStorageSchema::deserialize_column_group_array(ObIAllocator &allocator,
                                                     const char *buf,
                                                     const int64_t data_len,
@@ -1691,10 +1637,6 @@ int ObStorageSchema::generate_column_array(const ObTableSchema &input_schema)
     }
   }
 
-  // for heap table, the column array is out of order when tablet firstly created, need sort it.
-  if (FAILEDx(sort_out_of_order_column_array_for_heap_table())) {
-    STORAGE_LOG(WARN, "failed to sort out of order column array for heap table", K(ret));
-  }
   if (tmp_map.created()) {
     tmp_map.destroy();
   }

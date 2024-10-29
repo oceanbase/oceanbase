@@ -877,6 +877,13 @@ typedef enum ObItemType
   T_FUNC_SYS_ARRAY_REMOVE = 1751,
   T_FUNC_SYS_ARRAY_MAP = 1752,
   T_FUNC_SYS_LAMBDA = 1753,
+  T_FUN_SYS_ORA_LOGIN_USER = 1754,
+  T_FUNC_SYS_ARRAY_TO_STRING = 1755,
+  T_FUNC_SYS_STRING_TO_ARRAY = 1756,
+  T_FUNC_SYS_ARRAY_APPEND = 1757,
+  T_FUNC_SYS_ELEMENT_AT = 1758,
+  T_FUNC_SYS_ARRAY_CARDINALITY = 1759,
+  T_FUNC_SYS_RB_BUILD = 1760,
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table
@@ -2592,7 +2599,7 @@ typedef enum ObItemType
   T_MICRO_INDEX_CLUSTERED = 4728,
 
   // Parquet related
-  T_ROW_GROUP_SIZE = 4729,
+  T_ROW_GROUP_SIZE = 4729,    // FARM COMPAT WHITELIST, renamed
   T_COMPRESSION_ALGORITHM = 4730,
 
   // Erase micro cache
@@ -2627,6 +2634,14 @@ typedef enum ObItemType
 
   T_GRANT_PROXY = 4750,
   T_REVOKE_PROXY = 4751,
+  T_TG_DB_SCHEMA = 4752,
+  T_TG_SYS_EVENT_OPTION = 4753,
+  T_TG_SYS_EVENT = 4754,
+  T_TG_DB_EVENT_LIST = 4755,
+  T_FILE_EXTENSION = 4756,
+  T_LS_ATTR_LIST = 4757,
+  T_ALTER_LS = 4758,
+  T_UNIT_GROUP = 4759,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

@@ -2394,6 +2394,7 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
     } else {
       const ObString &sql = !ps_info->get_no_param_sql().empty() ? ps_info->get_no_param_sql() : ps_info->get_ps_sql();
       context.cur_sql_ = sql;
+      context.raw_sql_ = ps_info->get_ps_sql();
 #ifndef NDEBUG
       LOG_INFO("Begin to handle execute statement", "sess_id", session.get_sessid(),
                "proxy_sess_id", session.get_proxy_sessid(), K(sql));
@@ -2402,9 +2403,7 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
       if (!ps_info->get_fixed_raw_params().empty()) {
         pctx->set_is_ps_rewrite_sql();
       }
-      if (OB_FAIL(ObPsSqlUtils::deep_copy_str(allocator, ps_info->get_ps_sql(), context.raw_sql_))) {
-        LOG_WARN("deep copy raw sql failed", K(ps_info->get_ps_sql()), K(ret));
-      } else if (OB_FAIL(session.store_query_string(sql))) {
+      if (OB_FAIL(session.store_query_string(sql))) {
         LOG_WARN("store query string fail", K(ret));
       } else if (FALSE_IT(generate_ps_sql_id(sql, context))) {
       } else if (OB_LIKELY(ObStmt::is_dml_stmt(stmt_type))) {

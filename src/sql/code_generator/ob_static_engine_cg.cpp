@@ -2948,7 +2948,7 @@ int ObStaticEngineCG::check_is_insert_overwrite_stmt(const ObLogPlan *plan, bool
     } else if (IS_INSERT_OR_REPLACE_STMT(stmt_type)) {
       const ObInsertStmt *insert_stmt = static_cast<const ObInsertStmt *>(plan->get_stmt());
       if (OB_NOT_NULL(insert_stmt)) {
-        if (insert_stmt->is_overwrite()) {
+        if (insert_stmt->is_normal_table_overwrite()) {
           is_insert_overwrite = true;
         }
       }

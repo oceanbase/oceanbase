@@ -895,6 +895,31 @@ int ObTablet::handle_transfer_replace_(const ObBatchUpdateTableStoreParam &param
   return ret;
 }
 
+// Update restore status from Full to Remote for split.
+// Reuse backup macro block should be pulled from the remote by the remote restore status tag.
+int ObTablet::update_restore_status_for_split_(const ObBatchUpdateTableStoreParam &param)
+{
+  int ret = OB_SUCCESS;
+  ObTabletRestoreStatus::STATUS old_restore_status;
+  if (!param.tablet_split_param_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(param));
+  } else if (!param.tablet_split_param_.update_with_major_tables_ || ObTabletRestoreStatus::is_full(param.restore_status_)) {
+    // update restore status only when updating major sstables and inputing remote restore status.
+  } else if (!ObTabletRestoreStatus::is_remote(param.restore_status_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid restore status, input restore status should be full or remote", K(ret), "restore_status", param.restore_status_, K(param));
+  } else if (OB_FAIL(tablet_meta_.ha_status_.get_restore_status(old_restore_status))) {
+    LOG_WARN("get restore status failed", K(ret), K(tablet_meta_));
+  } else if (!ObTabletRestoreStatus::is_full(old_restore_status)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected restore status in split dest", K(ret), K(old_restore_status), K(param));
+  } else if (OB_FAIL(tablet_meta_.ha_status_.set_restore_status(param.restore_status_))) {
+    LOG_WARN("failed to set tablet restore status", K(ret), "restore_status", param.restore_status_);
+  }
+  return ret;
+}
+
 int ObTablet::init_for_sstable_replace(
     common::ObArenaAllocator &allocator,
     const ObBatchUpdateTableStoreParam &param,
@@ -954,6 +979,8 @@ int ObTablet::init_for_sstable_replace(
     LOG_WARN("failed to choose and save storage schema", K(ret), K(old_tablet), K(param));
   } else if (is_tablet_split && OB_FAIL(try_update_table_store_flag(param.tablet_split_param_.update_with_major_tables_))) {
     LOG_WARN("failed to update table store flag", K(ret), K(param), K(table_store_addr_));
+  } else if (is_tablet_split && OB_FAIL(update_restore_status_for_split_(param))) {
+    LOG_WARN("update restore status for tablet split failed", K(ret), K(param), KPC(this));
   } else if (OB_FAIL(try_update_start_scn())) {
     LOG_WARN("failed to update start scn", K(ret), K(param), K(table_store_addr_));
   } else if (OB_FAIL(check_tablet_schema_mismatch(old_tablet, *storage_schema, false/*is_convert_co_major_merge*/))) {

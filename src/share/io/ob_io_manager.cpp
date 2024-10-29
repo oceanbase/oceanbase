@@ -1991,7 +1991,7 @@ int ObTenantIOManager::print_io_status()
     for (int64_t i = 0; i < info.count(); ++i) {
       if (OB_TMP_FAIL(transform_usage_index_to_group_config_index(i, group_config_index))) {
         continue;
-      } else if (group_config_index >= io_config_.group_configs_.count() || io_clock_.get_group_clocks_count() || info.count() != failed_req_info.count() || info.count() != mem_stat.group_mem_infos_.count()) {
+      } else if (group_config_index >= io_config_.group_configs_.count() || group_config_index >= io_clock_.get_group_clocks_count() || info.count() != failed_req_info.count() || info.count() != mem_stat.group_mem_infos_.count()) {
         continue;
       }
       mode = static_cast<ObIOMode>(group_config_index % MODE_COUNT);
@@ -2014,8 +2014,10 @@ int ObTenantIOManager::print_io_status()
       double iops_scale = 1.0;
       double failed_iops_scale = 1.0;
       bool is_io_ability_valid = false;  // unused
-      int64_t limit = io_clock_.get_group_limit(group_config_index);
-      if (OB_TMP_FAIL(failed_req_info.at(i).calc(failed_avg_size,
+      int64_t limit = 0;
+      if (OB_TMP_FAIL(io_clock_.get_group_limit(group_config_index, limit))) {
+        LOG_WARN("get group limit failed", K(ret), K(group_config_index));
+      } else if (OB_TMP_FAIL(failed_req_info.at(i).calc(failed_avg_size,
               failed_req_iops,
               failed_req_bw,
               failed_avg_prepare_delay,

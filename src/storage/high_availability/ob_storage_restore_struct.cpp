@@ -18,6 +18,7 @@
 #include "share/backup/ob_backup_connectivity.h"
 #include "storage/backup/ob_backup_data_struct.h"
 #include "storage/backup/ob_backup_factory.h"
+#include "storage/backup/ob_backup_meta_cache.h"
 namespace oceanbase
 {
 namespace storage
@@ -735,7 +736,7 @@ int ObRestoreMacroBlockIdMgr::inner_init_v1_(
           second_meta_index.ls_id_, data_type, second_meta_index.turn_id_, second_meta_index.retry_id_, second_meta_index.file_id_, second_meta_backup_path))) {
         LOG_WARN("failed to get macro block index", K(ret), K(table_key), K(tablet_id), K(restore_base_info), K(second_meta_index));
       } else if (OB_FAIL(backup::ObLSBackupRestoreUtil::read_sstable_metas(sstable_meta_backup_path.get_obstr(),
-          restore_base_info.backup_dest_.get_storage_info(), mod, sstable_meta_index, backup_sstable_meta_array))) {
+          restore_base_info.backup_dest_.get_storage_info(), mod, sstable_meta_index, &OB_BACKUP_META_CACHE, backup_sstable_meta_array))) {
         LOG_WARN("failed to read sstable metas", K(ret), K(table_key), K(tablet_id), K(restore_base_info));
       } else if (OB_FAIL(backup::ObLSBackupRestoreUtil::read_macro_block_id_mapping_metas(second_meta_backup_path.get_obstr(),
           restore_base_info.backup_dest_.get_storage_info(), mod, second_meta_index, macro_block_id_map))) {
@@ -852,7 +853,7 @@ int ObRestoreMacroBlockIdMgr::inner_init_v2_(
       meta_index.ls_id_, data_type, meta_index.turn_id_, meta_index.retry_id_, meta_index.file_id_, backup_path))) {
     LOG_WARN("failed to get macro block backup path", K(ret), K(restore_base_info), K(meta_index), K(data_type));
   } else if (OB_FAIL(backup::ObLSBackupRestoreUtil::read_sstable_metas(backup_path.get_obstr(),
-      restore_base_info.backup_dest_.get_storage_info(), mod, meta_index, sstable_metas))) {
+      restore_base_info.backup_dest_.get_storage_info(), mod, meta_index, &OB_BACKUP_META_CACHE, sstable_metas))) {
     LOG_WARN("failed to read sstable meta", K(ret), K(backup_path), K(restore_base_info), K(meta_index));
   } else {
     int64_t index = -1;

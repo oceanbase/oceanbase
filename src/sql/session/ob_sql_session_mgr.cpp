@@ -364,10 +364,10 @@ void ObSQLSessionMgr::destroy()
   sess_hold_map_.destroy();
 }
 
-uint64_t ObSQLSessionMgr::extract_server_id(uint32_t sessid)
+uint64_t ObSQLSessionMgr::extract_server_index(uint32_t sessid)
 {
-  uint64_t server_id = sessid >> LOCAL_SEQ_LEN;
-  return server_id & MAX_SERVER_ID;
+  uint64_t server_index = sessid >> LOCAL_SEQ_LEN;
+  return server_index & MAX_SERVER_INDEX;
 }
 
 int ObSQLSessionMgr::inc_session_ref(const ObSQLSessionInfo *my_session)
@@ -393,7 +393,7 @@ int ObSQLSessionMgr::inc_session_ref(const ObSQLSessionInfo *my_session)
 //
 //MASK: 1 表示是server自己生成connection id,
 //      0 表示是proxy生成的connection id(已废弃，目前仅用于 in_mgr = false 的场景)；
-//Server Id: 集群中server的id由RS分配，集群内唯一；
+//Server index: 集群中server的id由RS分配，集群内唯一，但在server删除后可能会被复用；
 //Local Seq: 一个server可用连接数，目前单台server最多有INT16_MAX个连接;
 //
 int ObSQLSessionMgr::create_sessid(uint32_t &sessid, bool in_mgr)
@@ -401,29 +401,29 @@ int ObSQLSessionMgr::create_sessid(uint32_t &sessid, bool in_mgr)
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   sessid = 0;
-  const uint64_t server_id = GCTX.server_id_;
+  const uint64_t server_index = GCTX.get_server_index();
   uint32_t local_seq = 0;
   static uint32_t abnormal_seq = 0;//用于server_id == 0是的sessid分配
-  if (server_id > MAX_SERVER_ID) {
+  if (server_index > MAX_SERVER_INDEX) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("server id maybe invalid", K(ret), K(server_id));
+    LOG_ERROR("server index maybe invalid", K(ret), K(server_index));
   } else if (!in_mgr) {
     sessid = (GETTID() | LOCAL_SESSID_TAG);
-    sessid |= static_cast<uint32_t>(server_id << LOCAL_SEQ_LEN);  // set observer
-  } else if (0 == server_id) {
+    sessid |= static_cast<uint32_t>(server_index << LOCAL_SEQ_LEN);  // set observer
+  } else if (0 == server_index) {
     local_seq = (ATOMIC_FAA(&abnormal_seq, 1) & MAX_LOCAL_SEQ);
     uint32_t max_local_seq = MAX_LOCAL_SEQ;
-    uint32_t max_server_id = MAX_SERVER_ID;
-    LOG_WARN("server is initiating", K(server_id), K(local_seq), K(max_local_seq), K(max_server_id));
+    uint32_t max_server_index = MAX_SERVER_INDEX;
+    LOG_WARN("server is initiating", K(server_index), K(local_seq), K(max_local_seq), K(max_server_index));
   } else if (OB_UNLIKELY(OB_SUCCESS != (ret = tmp_ret = get_avaiable_local_seq(local_seq)))) {
     LOG_WARN("fail to get avaiable local_seq", K(local_seq));
   } else {/*do nothing*/}
 
   if (OB_SUCC(ret) && in_mgr) {
     sessid = local_seq | SERVER_SESSID_TAG;// set observer sessid mark
-    sessid |= static_cast<uint32_t>(server_id << LOCAL_SEQ_LEN);  // set observer
-    // high bit is reserved for server id
-    sessid |= static_cast<uint32_t>(1ULL << (LOCAL_SEQ_LEN + SERVER_ID_LEN));
+    sessid |= static_cast<uint32_t>(server_index << LOCAL_SEQ_LEN);  // set observer
+    // high bit is reserved for server index
+    sessid |= static_cast<uint32_t>(1ULL << (LOCAL_SEQ_LEN + SERVER_INDEX_LEN));
   }
   return ret;
 }
@@ -815,8 +815,8 @@ int ObSQLSessionMgr::mark_sessid_used(uint32_t sess_id)
 int ObSQLSessionMgr::mark_sessid_unused(uint32_t sess_id)
 {
   int ret = OB_SUCCESS;
-  uint64_t server_id = extract_server_id(sess_id);
-  if (server_id == 0) {
+  uint64_t server_index = extract_server_index(sess_id);
+  if (0 == server_index) {
     // 参考：create_sessid方法
     // 由于server_id == 0时, 此时的local_seq，是由ATOMIC_FAA(&abnormal_seq, 1)产生，
     // 使用ATOMIC_FAA的原因无从考证（原作者的信息描述无任何具体信息），采取保守修改策略
@@ -955,8 +955,8 @@ int ObSQLSessionMgr::is_need_clear_sessid(const ObSMConnection *conn, bool &is_n
     LOG_WARN("unexpected parameter", K(conn));
   } else if (is_server_sessid(conn->sessid_)
              && ObSMConnection::INITIAL_SESSID != conn->sessid_
-             && 0 != extract_server_id(conn->sessid_)
-             && GCTX.server_id_ == extract_server_id(conn->sessid_)
+             && 0 != extract_server_index(conn->sessid_)
+             && GCTX.get_server_index() == extract_server_index(conn->sessid_)
              && conn->is_need_clear_sessid_) {
     is_need = true;
   } else {/*do nothing*/  }

@@ -27,11 +27,13 @@
 #include "cos_crc64.h"
 
 #include "ob_cos_wrapper.h"
+#include "lib/restore/ob_object_storage_base.h"
 
 namespace oceanbase
 {
 namespace common
 {
+
 namespace qcloud_cos
 {
 using namespace oceanbase::common;
@@ -185,7 +187,7 @@ int ob_set_retry_headers(
 class ObStorageCOSRetryStrategy : public ObStorageIORetryStrategyBase<cos_status_t *>
 {
 public:
-  ObStorageCOSRetryStrategy(const int64_t timeout_us = OB_STORAGE_MAX_IO_TIMEOUT_US)
+  ObStorageCOSRetryStrategy(const int64_t timeout_us = ObObjectStorageTenantGuard::get_timeout_us())
       : ObStorageIORetryStrategyBase<cos_status_t *>(timeout_us),
         origin_headers_(nullptr),
         ref_headers_(nullptr),
