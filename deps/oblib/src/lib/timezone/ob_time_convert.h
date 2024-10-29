@@ -186,6 +186,7 @@ struct ObDateSqlMode {
   };
   ObDateSqlMode() : date_sql_mode_(0) {};
   ObDateSqlMode(const int64_t date_sql_mode) {
+    date_sql_mode_ = 0;
     allow_invalid_dates_ = date_sql_mode & (1ULL << 0);
     no_zero_date_ = date_sql_mode & (1ULL << 1);
     // no_zero_in_date_ = date_sql_mode & (1ULL << 2);
