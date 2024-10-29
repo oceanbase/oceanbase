@@ -774,7 +774,7 @@ int ObSSTableDataBlockReader::dump_sstable_macro_block(const MicroBlockType bloc
       // dump leaf index block
       if (OB_FAIL(macro_iter.open_leaf_index_micro_block())) {
         LOG_WARN("Fail to open leaf index micro block", K(ret));
-      } else if (OB_FAIL(dump_sstable_micro_block(0, block_type, macro_iter))) {
+      } else if (OB_FAIL(dump_sstable_micro_block(0, MicroBlockType::INDEX, macro_iter))) {
         LOG_WARN("Fail to dump leaf index micro block", K(ret));
       } else if (OB_FAIL(dump_macro_block_meta_block(macro_iter))) {
         LOG_WARN("Fail to dump macro meta block in macro block", K(ret));
