@@ -54,6 +54,8 @@ int ObIndexStatsEstimator::estimate(const ObOptStatGatherParam &param,
     LOG_WARN("failed init col stats", K(ret));
   } else if (OB_FAIL(add_hint(no_rewrite, ctx_.get_allocator()))) {
     LOG_WARN("failed to add no_rewrite", K(ret));
+  } else if (OB_FAIL(add_no_use_das_hint(ctx_.get_allocator(), param.data_table_name_))) {
+    LOG_WARN("failed to no use das hint", K(ret));
   } else if (OB_FAIL(add_from_table(param.db_name_, param.data_table_name_))) {
     LOG_WARN("failed to add from table", K(ret));
   } else if (OB_FAIL(fill_index_info(ctx_.get_allocator(),
@@ -499,6 +501,37 @@ int ObIndexStatsEstimator::get_index_part_id(const int64_t data_tab_partition_id
   return ret;
 }
 
+int ObIndexStatsEstimator::add_no_use_das_hint(common::ObIAllocator &alloc, const ObString &table_name)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(table_name.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(table_name));
+  } else {
+    const char *fmt_str = "NO_USE_DAS(%.*s)";
+    char *buf = NULL;
+    int64_t buf_len = table_name.length() + 16;
+    if (OB_ISNULL(buf = static_cast<char *>(alloc.alloc(buf_len)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc memory", K(ret), K(buf), K(buf_len));
+    } else {
+      int64_t real_len = snprintf(buf, buf_len, fmt_str, table_name.length(), table_name.ptr());
+      if (OB_UNLIKELY(real_len < 0 || real_len > buf_len)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", K(ret), K(real_len));
+      } else {
+        ObString hint;
+        hint.assign_ptr(buf, real_len);
+        if (OB_FAIL(add_hint(hint, alloc))) {
+          LOG_WARN("failed to add hint", K(ret));
+        } else {
+          LOG_TRACE("succeed to fill no_use_das hint", K(hint));
+        }
+      }
+    }
+  }
+  return ret;
+}
 
 } // end of common
 } // end of oceanbase
