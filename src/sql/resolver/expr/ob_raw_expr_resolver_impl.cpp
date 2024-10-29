@@ -4524,7 +4524,6 @@ int ObRawExprResolverImpl::resolve_right_branch_of_in_op(const ParseNode *node,
             ctx_.current_scope_,
             is_root_condition,
             ctx_.is_need_print_,
-            !ctx_.is_extract_param_type_,  /* equal to is_prepare_protocol*/
             NULL != ctx_.secondary_namespace_ || ctx_.is_for_dynamic_sql_ || ctx_.is_for_dbms_sql_,
             ctx_.session_info_,
             ctx_.param_list_,
