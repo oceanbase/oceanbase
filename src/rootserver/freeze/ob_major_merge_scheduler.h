@@ -117,7 +117,7 @@ private:
   int update_all_tablets_report_scn(const uint64_t global_broadcast_scn_val,
                                     const int64_t expected_epoch);
 
-  void check_merge_interval_time(const bool is_merging);
+  void check_merge_interval_time(const bool is_merging, const int64_t expected_epoch);
   // add merge time statistics into __all_rootservice_event_history
   void add_merge_time_stat(const ObUpdateMergeStatusTime &stat, const share::ObGlobalMergeInfo &global_info);
 
