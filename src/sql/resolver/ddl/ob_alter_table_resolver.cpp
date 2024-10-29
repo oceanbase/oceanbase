@@ -6140,8 +6140,6 @@ int ObAlterTableResolver::resolve_change_column(const ParseNode &node)
           LOG_WARN("can't set primary key nullable", K(ret));
         } else if (OB_FAIL(check_alter_geo_column_allowed(alter_column_schema, *origin_col_schema))) {
           LOG_WARN("modify geo column not allowed", K(ret));
-        } else if (OB_FAIL(check_alter_multivalue_depend_column_allowed(alter_column_schema, *origin_col_schema))) {
-          LOG_WARN("modify geo column not allowed", K(ret));
         }
       }
       if (OB_SUCC(ret)) {
@@ -6486,8 +6484,6 @@ int ObAlterTableResolver::resolve_modify_column(const ParseNode &node,
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify geometry srid");
             LOG_WARN("can't not modify geometry srid", K(ret),
                     K(origin_col_schema->get_srid()), K(alter_column_schema.get_srid()));
-          } else if (OB_FAIL(check_alter_multivalue_depend_column_allowed(alter_column_schema, *origin_col_schema))) {
-            LOG_WARN("modify geo column not allowed", K(ret));
           } else if (origin_col_schema->get_data_type() == ObRoaringBitmapType
                      && alter_column_schema.get_data_type() != ObRoaringBitmapType
                      && !ob_is_string_type(alter_column_schema.get_data_type())) {

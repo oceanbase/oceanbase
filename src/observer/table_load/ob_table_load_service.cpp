@@ -540,14 +540,6 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
       LOG_WARN("direct-load does not support table has full-text search index", KR(ret));
       FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has full-text search index", tmp_prefix);
     }
-    // check if exists multi-value index
-    else if (OB_FAIL(table_schema->check_has_multivalue_index(schema_guard, has_multivalue_index))) {
-      LOG_WARN("fail to check has multivalue index", K(ret));
-    } else if (has_multivalue_index) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("direct-load does not support table has multi-value index", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has multi-value index", tmp_prefix);
-    }
     // check if exists generated column
     else if (OB_UNLIKELY(table_schema->has_generated_column())) {
       ret = OB_NOT_SUPPORTED;

@@ -1135,7 +1135,8 @@ int ObDmlCgService::generate_scan_ctdef(ObLogInsert &op,
           scan_ctdef.vec_vid_idx_ = tsc_col_ids.count() - 1;
         }
       } else if (OB_FAIL(scan_ctdef.access_column_ids_.push_back(base_cid))) {
-        LOG_WARN("fail to add column id", K(ret));
+        LOG_WARN("fail to add column id", K(ret), K(need_doc_id), K(need_vec_vid), K(scan_ctdef.access_column_ids_),
+          K(item->get_column_name()), K(item->get_alias_column_name()), K(item->get_column_id()));
       }
     }
   }
