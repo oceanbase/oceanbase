@@ -10824,6 +10824,8 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg &arg)
           LOG_WARN("config invalid", "item", *item, K(ret), K(i), K(item->tenant_ids_.at(i)));
         }
       }
+    } else if (0 == STRCMP(item->name_.ptr(), _TRANSFER_TASK_TABLET_COUNT_THRESHOLD)) {
+      ret = check_transfer_task_tablet_count_threshold_(*item);
     }
   }
   return ret;
@@ -12254,6 +12256,28 @@ int ObRootService::reload_master_key(const obrpc::ObReloadMasterKeyArg &arg,
   return ret;
 }
 #endif
+
+int ObRootService::check_transfer_task_tablet_count_threshold_(obrpc::ObAdminSetConfigItem &item)
+{
+  int ret = OB_SUCCESS;
+  bool valid = true;
+  for (int i = 0; i < item.tenant_ids_.count() && valid; i++) {
+    const uint64_t tenant_id = item.tenant_ids_.at(i);
+    int64_t value = ObConfigIntParser::get(item.value_.ptr(), valid);
+    if (valid && (value > OB_MAX_TRANSFER_BINDING_TABLET_CNT)) {
+      valid = false;
+      char err_msg[DEFAULT_BUF_LENGTH];
+      (void)snprintf(err_msg, sizeof(err_msg), "_transfer_task_tablet_count_threshold of tenant %ld, "
+          "it cannot be greater than %ld", tenant_id, OB_MAX_TRANSFER_BINDING_TABLET_CNT);
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, err_msg);
+    }
+    if (!valid) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("config invalid", KR(ret), K(value), K(item), K(tenant_id));
+    }
+  }
+  return ret;
+}
 
 } // end namespace rootserver
 } // end namespace oceanbase

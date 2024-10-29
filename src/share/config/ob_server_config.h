@@ -70,6 +70,7 @@ const char* const LOG_DISK_UTILIZATION_LIMIT_THRESHOLD = "log_disk_utilization_l
 const char* const LOG_DISK_THROTTLING_PERCENTAGE = "log_disk_throttling_percentage";
 const char* const ARCHIVE_LAG_TARGET = "archive_lag_target";
 const char* const OB_VECTOR_MEMORY_LIMIT_PERCENTAGE = "ob_vector_memory_limit_percentage";
+const char* const _TRANSFER_TASK_TABLET_COUNT_THRESHOLD = "_transfer_task_tablet_count_threshold";
 
 class ObServerMemoryConfig;
 

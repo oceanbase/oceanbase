@@ -146,7 +146,6 @@ private:
       const share::ObTransferPartList &part_list,
       const transaction::tablelock::ObTableLockOwnerID &lock_owner_id);
   int get_related_table_schemas_(
-      common::ObISQLClient &sql_proxy,
       share::schema::ObSimpleTableSchemaV2 &table_schema,
       ObArenaAllocator &allocator,
       ObArray<share::schema::ObSimpleTableSchemaV2 *> &related_table_schemas);
@@ -195,7 +194,7 @@ private:
       const share::ObTransferPartInfo &part_info,
       const common::ObTabletID &tablet_id);
   int generate_related_tablet_ids_(
-      share::schema::ObSimpleTableSchemaV2 &table_schema,
+      const ObIArray<share::schema::ObSimpleTableSchemaV2 *> &related_table_schemas,
       const int64_t part_idx,
       const int64_t subpart_idx,
       common::ObIArray<common::ObTabletID> &tablet_ids);
@@ -240,6 +239,11 @@ private:
 #ifdef OB_BUILD_SHARED_STORAGE
   int lock_and_check_tenant_merge_status_(ObMySQLTransaction &trans, bool &need_wait);
 #endif
+  int check_tablet_count_by_threshold_(
+      const ObIArray<common::ObTabletID> &tablet_ids,
+      const int64_t new_tablet_cnt,
+      bool &exceed_threshold);
+
 private:
   static const int64_t IDLE_TIME_US = 10 * 1000 * 1000L; // 10s
   static const int64_t BUSY_IDLE_TIME_US = 100 * 1000L; // 100ms

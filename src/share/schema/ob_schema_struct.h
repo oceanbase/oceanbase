@@ -303,6 +303,24 @@ bool is_aux_lob_piece_table(const ObTableType table_type);
 bool is_aux_lob_table(const ObTableType table_type);
 bool is_mlog_table(const ObTableType table_type);
 
+const int64_t OB_MLOG_TABLE_CNT = 1;
+const int64_t OB_AUX_LOB_TABLE_CNT = 2; // aux lob meta + aux lob piece
+// The max count of aux tables that can be created for each index.
+// Some special indexes such as full-text index(FTS), multi-value index, vector index, etc., have multiple aux tables.
+// The current index with max aux tables: vector index
+const int64_t OB_MAX_TABLE_CNT_PER_INDEX = 5;
+// The max count of aux tables with physical tablets per user data table.
+const int64_t OB_MAX_AUX_TABLE_PER_TABLE = OB_MAX_INDEX_PER_TABLE * OB_MAX_TABLE_CNT_PER_INDEX + OB_AUX_LOB_TABLE_CNT + OB_MLOG_TABLE_CNT; // 643
+// The max tablet count of a transfer is one data table tablet with max aux tablets bound together.
+const int64_t OB_MAX_TRANSFER_BINDING_TABLET_CNT = OB_MAX_AUX_TABLE_PER_TABLE + 1; // 644
+
+// Note: When adding new index type, you should modifiy "tools/obtest/t/quick/partition_balance.test" and
+//       "tools/obtest/t/shared_storage/partition_balance.test" to verify that all aux tables of the new index
+//       can be properly distributed after table creation and partition rebalanceing.
+//
+//       If the new index has multiple aux tables, you need to make sure that OB_MAX_TABLE_CNT_PER_INDEX is correct and
+//       modify "tools/obtest/t/quick/include/transfer_and_balance_configs.inc [1.5.2]" to verify that a partition with
+//       max aux tables can be transferred.
 enum ObIndexType
 {
   INDEX_TYPE_IS_NOT = 0,//is not index table
@@ -779,6 +797,7 @@ inline bool is_index_local_storage(ObIndexType index_type)
            || is_local_multivalue_index(index_type);
 }
 
+// Note: When adding new related table, you need to modify OB_MAX_TRANSFER_BINDING_TABLET_CNT
 inline bool is_related_table(
     const ObTableType &table_type,
     const ObIndexType &index_type)
