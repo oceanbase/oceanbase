@@ -1293,72 +1293,32 @@ int ObDDLFinishReplayExecutor::replay_ddl_finish(ObTabletHandle &tablet_handle)
 
 // ObDDLIncStartReplayExecutor
 ObDDLIncStartReplayExecutor::ObDDLIncStartReplayExecutor()
-  : ObDDLReplayExecutor(), log_(nullptr)
+  : ObDDLReplayExecutor(), tablet_id_()
 {
 }
 
 int ObDDLIncStartReplayExecutor::init(
     ObLS *ls,
-    const ObDDLIncStartLog &log,
-    const share::SCN &scn)
+    const ObTabletID &tablet_id,
+    const SCN &scn)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", KR(ret), K_(is_inited));
   } else if (OB_ISNULL(ls)
-          || OB_UNLIKELY(!log.is_valid())
+          || OB_UNLIKELY(!tablet_id.is_valid())
           || OB_UNLIKELY(!scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), KP(ls), K(log), K(scn));
+    LOG_WARN("invalid arguments", K(ret), KP(ls), K(tablet_id), K(scn));
   } else {
     ls_ = ls;
-    log_ = &log;
+    tablet_id_ = tablet_id;
     scn_ = scn;
     is_inited_ = true;
   }
   return ret;
 }
-
-struct SyncTabletFreezeHelper {
-  SyncTabletFreezeHelper(ObLS *ls, const ObTabletID &tablet_id, const ObTabletID &lob_meta_tablet_id)
-      : ls_(ls), tablet_id_(tablet_id), lob_meta_tablet_id_(lob_meta_tablet_id) {}
-  int operator()(const ObFreezeSourceFlag source)
-  {
-    int ret = OB_SUCCESS;
-    if (OB_ISNULL(ls_) || !tablet_id_.is_valid()) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", KP(ls_), K(tablet_id_));
-    } else {
-      const bool is_sync = true;
-      // try freeze for ten seconds
-      int64_t abs_timeout_ts = ObClockGenerator::getClock() + 10LL * 1000LL * 1000LL;
-      int tmp_ret = ls_->tablet_freeze(tablet_id_,
-                                       is_sync,
-                                       abs_timeout_ts,
-                                       false, /*need_rewrite_meta*/
-                                       source);
-      int tmp_ret_lob = OB_SUCCESS;
-      if (lob_meta_tablet_id_.is_valid()) {
-        abs_timeout_ts = ObClockGenerator::getClock() + 10LL * 1000LL * 1000LL;
-        tmp_ret_lob = ls_->tablet_freeze(lob_meta_tablet_id_,
-                                         is_sync,
-                                         abs_timeout_ts,
-                                         false, /*need_rewrite_meta*/
-                                         source);
-      }
-      if (OB_SUCCESS != (tmp_ret | tmp_ret_lob)) {
-        ret = OB_EAGAIN;
-        LOG_WARN("sync freeze failed", K(ret), K(tmp_ret), K(tmp_ret_lob), K(tablet_id_), K(lob_meta_tablet_id_));
-      }
-    }
-    return ret;
-  }
-
-  ObLS *ls_;
-  const ObTabletID &tablet_id_;
-  const ObTabletID &lob_meta_tablet_id_;
-};
 
 int ObDDLIncStartReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
 {
@@ -1372,18 +1332,23 @@ int ObDDLIncStartReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
     LOG_WARN("invalid arguments", K(ret), K(tablet_handle));
   } else if (OB_FAIL(check_need_replay_ddl_inc_log_(ls_, tablet_handle, scn_, need_replay))) {
     if (OB_EAGAIN != ret) {
-      LOG_WARN("fail to check need replay ddl log", K(ret), K(scn_), K(log_));
+      LOG_WARN("fail to check need replay ddl log", K(ret), K(scn_), K(tablet_id_));
     }
   } else if (!need_replay) {
     // do nothing
-    FLOG_INFO("no need to replay ddl inc start log", K(ls_->get_ls_id()), K(scn_), K(log_->get_log_basic()));
+    FLOG_INFO("no need to replay ddl inc start log", K(ls_->get_ls_id()), K(scn_), K(tablet_id_));
   } else {
-    SyncTabletFreezeHelper sync_tablet_freeze(
-        ls_, log_->get_log_basic().get_tablet_id(), log_->get_log_basic().get_lob_meta_tablet_id());
-    if (OB_FAIL(sync_tablet_freeze(ObFreezeSourceFlag::DIRECT_INC_START))) {
-      LOG_WARN("fail to sync tablet freeze", K(ret), K(ls_->get_ls_id()), K(scn_), K(log_->get_log_basic()));
+    const bool is_sync = true;
+    // try freeze for ten seconds
+    int64_t abs_timeout_ts = ObClockGenerator::getClock() + 10LL * 1000LL * 1000LL;
+    if (OB_FAIL(ls_->tablet_freeze(tablet_id_,
+                                    is_sync,
+                                    abs_timeout_ts,
+                                    false, /*need_rewrite_meta*/
+                                    ObFreezeSourceFlag::DIRECT_INC_START))) {
+      LOG_WARN("fail to sync tablet freeze", K(ret), K(ls_->get_ls_id()), K(scn_), K(tablet_id_));
     } else {
-      FLOG_INFO("replay ddl inc start log success", K(ls_->get_ls_id()), K(scn_), K(log_->get_log_basic()));
+      FLOG_INFO("replay ddl inc start log success", K(ls_->get_ls_id()), K(scn_), K(tablet_id_));
     }
   }
 
@@ -1392,13 +1357,13 @@ int ObDDLIncStartReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
 
 // ObDDLIncCommitReplayExecutor
 ObDDLIncCommitReplayExecutor::ObDDLIncCommitReplayExecutor()
-  : ObDDLReplayExecutor(), log_(nullptr)
+  : ObDDLReplayExecutor(), tablet_id_()
 {
 }
 
 int ObDDLIncCommitReplayExecutor::init(
     ObLS *ls,
-    const ObDDLIncCommitLog &log,
+    const ObTabletID &tablet_id,
     const share::SCN &scn)
 {
   int ret = OB_SUCCESS;
@@ -1406,13 +1371,13 @@ int ObDDLIncCommitReplayExecutor::init(
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", KR(ret), K_(is_inited));
   } else if (OB_ISNULL(ls)
-          || OB_UNLIKELY(!log.is_valid())
+          || OB_UNLIKELY(!tablet_id.is_valid())
           || OB_UNLIKELY(!scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), KP(ls), K(log), K(scn));
+    LOG_WARN("invalid arguments", K(ret), KP(ls), K(tablet_id), K(scn));
   } else {
     ls_ = ls;
-    log_ = &log;
+    tablet_id_ = tablet_id;
     scn_ = scn;
     is_inited_ = true;
   }
@@ -1433,18 +1398,23 @@ int ObDDLIncCommitReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
     LOG_WARN("invalid arguments", K(ret), K(tablet_handle));
   } else if (OB_FAIL(check_need_replay_ddl_inc_log_(ls_, tablet_handle, scn_, need_replay))) {
     if (OB_EAGAIN != ret) {
-      LOG_WARN("fail to check need replay ddl log", K(ret), K(scn_), K(log_));
+      LOG_WARN("fail to check need replay ddl log", K(ret), K(scn_), K(tablet_id_));
     }
   } else if (!need_replay) {
     // do nothing
-    FLOG_INFO("no need to replay ddl inc commit log", K(ls_->get_ls_id()), K(scn_), K(log_->get_log_basic()));
+    FLOG_INFO("no need to replay ddl inc commit log", K(ls_->get_ls_id()), K(scn_), K(tablet_id_));
   } else {
-    SyncTabletFreezeHelper sync_tablet_freeze(
-        ls_, log_->get_log_basic().get_tablet_id(), log_->get_log_basic().get_lob_meta_tablet_id());
-    if (OB_FAIL(sync_tablet_freeze(ObFreezeSourceFlag::DIRECT_INC_END))) {
-      LOG_WARN("fail to sync tablet freeze", K(ret), K(ls_->get_ls_id()), K(scn_), K(log_->get_log_basic()));
+    const bool is_sync = true;
+    // try freeze for ten seconds
+    int64_t abs_timeout_ts = ObClockGenerator::getClock() + 10LL * 1000LL * 1000LL;
+    if (OB_FAIL(ls_->tablet_freeze(tablet_id_,
+                                    is_sync,
+                                    abs_timeout_ts,
+                                    false, /*need_rewrite_meta*/
+                                    ObFreezeSourceFlag::DIRECT_INC_END))) {
+      LOG_WARN("fail to sync tablet freeze", K(ret), K(ls_->get_ls_id()), K(scn_), K(tablet_id_));
     } else {
-      FLOG_INFO("replay ddl inc commit log success", K(ls_->get_ls_id()), K(scn_), K(log_->get_log_basic()));
+      FLOG_INFO("replay ddl inc commit log success", K(ls_->get_ls_id()), K(scn_), K(tablet_id_));
     }
   }
   return ret;

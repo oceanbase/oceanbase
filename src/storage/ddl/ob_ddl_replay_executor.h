@@ -203,7 +203,7 @@ class ObDDLIncStartReplayExecutor final : public ObDDLReplayExecutor
 public:
   ObDDLIncStartReplayExecutor();
 
-  int init(ObLS *ls, const ObDDLIncStartLog &log, const share::SCN &scn);
+  int init(ObLS *ls, const common::ObTabletID &tablet_id, const share::SCN &scn);
 
 protected:
   // replay to the tablet
@@ -214,7 +214,7 @@ protected:
   int do_replay_(ObTabletHandle &handle) override;
 
 private:
-  const ObDDLIncStartLog *log_;
+  common::ObTabletID tablet_id_;
 };
 
 class ObDDLIncCommitReplayExecutor final : public ObDDLReplayExecutor
@@ -222,7 +222,7 @@ class ObDDLIncCommitReplayExecutor final : public ObDDLReplayExecutor
 public:
   ObDDLIncCommitReplayExecutor();
 
-  int init(ObLS *ls, const ObDDLIncCommitLog &log, const share::SCN &scn);
+  int init(ObLS *ls, const common::ObTabletID &tablet_id, const share::SCN &scn);
 
 protected:
   // replay to the tablet
@@ -233,7 +233,7 @@ protected:
   int do_replay_(ObTabletHandle &handle) override;
 
 private:
-  const ObDDLIncCommitLog *log_;
+  common::ObTabletID tablet_id_;
 };
 
 class ObSplitStartReplayExecutor final : public ObDDLReplayExecutor
