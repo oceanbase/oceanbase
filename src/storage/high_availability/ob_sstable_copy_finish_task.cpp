@@ -788,8 +788,8 @@ int ObSSTableCopyFinishTask::update_major_sstable_reuse_info_()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("sstable copy finish task do not init", K(ret));
-  } else if (!ObITable::is_major_sstable(copy_ctx_.table_key_.table_type_)) {
-    // sstable is not major or is meta major, skip reuse
+  } else if (!ObITable::is_major_sstable(copy_ctx_.table_key_.table_type_) || ls_->is_cs_replica()) {
+    // sstable is not major or is meta major or ls is C replica, skip reuse
     LOG_INFO("sstable is not major, skip update major sstable reuse info", K(ret), K(copy_ctx_));
   } else if (OB_ISNULL(copy_ctx_.macro_block_reuse_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -832,7 +832,7 @@ int ObSSTableCopyFinishTask::update_copy_tablet_record_extra_info_()
     copy_ctx_.extra_info_->add_macro_count(copy_ctx_.total_macro_count_);
     copy_ctx_.extra_info_->add_reuse_macro_count(copy_ctx_.reuse_macro_count_);
 
-    if (!ObITable::is_major_sstable(copy_ctx_.table_key_.table_type_)) {
+    if (!ObITable::is_major_sstable(copy_ctx_.table_key_.table_type_) || ls_->is_cs_replica()) {
       // skip
     } else if (OB_FAIL(copy_ctx_.extra_info_->update_max_reuse_mgr_size(copy_ctx_.macro_block_reuse_mgr_))) {
       LOG_WARN("failed to update max reuse mgr size", K(ret), K(copy_ctx_));
