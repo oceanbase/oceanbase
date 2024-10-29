@@ -256,13 +256,13 @@ void ObTrafficControl::print_status()
                   entry.first.get_tenant_id(),
                   entry.first.get_storage_id(),
                   bw_in / 1024,
-                  entry.second.ibw_clock_.iops_ / 1024,
+                  entry.second.ibw_clock_.iops_ == 0 ? INT64_MAX : entry.second.ibw_clock_.iops_ / 1024,
                   bw_out / 1024,
-                  entry.second.obw_clock_.iops_ / 1024,
+                  entry.second.obw_clock_.iops_ == 0 ? INT64_MAX : entry.second.obw_clock_.iops_ / 1024,
                   req_in,
-                  entry.second.ips_clock_.iops_,
+                  entry.second.ips_clock_.iops_ == 0 ? INT64_MAX : entry.second.ips_clock_.iops_,
                   req_out,
-                  entry.second.ops_clock_.iops_,
+                  entry.second.ops_clock_.iops_ == 0 ? INT64_MAX : entry.second.ops_clock_.iops_,
                   tag,
                   entry.second.tagps_clock_.iops_ / 1024);
       }
@@ -318,6 +318,82 @@ void ObTrafficControl::inner_calc_()
     ATOMIC_STORE(&ibw_clock_.iops_, std::max(0L, device_bandwidth_ - read_bytes));
     ATOMIC_STORE(&obw_clock_.iops_, std::max(0L, device_bandwidth_ - write_bytes));
   }
+}
+
+int ObTrafficControl::gc_tenant_infos()
+{
+  int ret = OB_SUCCESS;
+  if (REACH_TIME_INTERVAL(1 * 60 * 1000L * 1000L)) {  // 60s
+    struct GCTenantSharedDeviceInfos
+    {
+      GCTenantSharedDeviceInfos(
+          const ObVector<uint64_t> &tenant_ids, ObSEArray<ObTrafficControl::ObStorageKey, 7> &gc_tenant_infos)
+          : tenant_ids_(tenant_ids), gc_tenant_infos_(gc_tenant_infos)
+      {}
+      int operator()(hash::HashMapPair<ObTrafficControl::ObStorageKey, ObTrafficControl::ObSharedDeviceControl> &pair)
+      {
+        bool is_find = false;
+        for (int i = 0; !is_find && i < tenant_ids_.size(); ++i) {
+          if (0 == pair.first.get_tenant_id() || tenant_ids_.at(i) == pair.first.get_tenant_id()) {
+            is_find = true;
+          }
+        }
+        if (false == is_find) {
+          gc_tenant_infos_.push_back(pair.first);
+        }
+        return OB_SUCCESS;
+      }
+      const ObVector<uint64_t> &tenant_ids_;
+      ObSEArray<ObTrafficControl::ObStorageKey, 7> &gc_tenant_infos_;
+    };
+    struct GCTenantRecordInfos
+    {
+      GCTenantRecordInfos(
+          const ObVector<uint64_t> &tenant_ids, ObSEArray<ObTrafficControl::ObIORecordKey, 7> &gc_tenant_infos)
+          : tenant_ids_(tenant_ids), gc_tenant_infos_(gc_tenant_infos)
+      {}
+      int operator()(hash::HashMapPair<ObTrafficControl::ObIORecordKey, ObTrafficControl::ObSharedDeviceIORecord> &pair)
+      {
+        bool is_find = false;
+        for (int i = 0; !is_find && i < tenant_ids_.size(); ++i) {
+          if (0 == pair.first.id_.get_tenant_id() || tenant_ids_.at(i) == pair.first.id_.get_tenant_id()) {
+            is_find = true;
+          }
+        }
+        if (false == is_find) {
+          gc_tenant_infos_.push_back(pair.first);
+        }
+        return OB_SUCCESS;
+      }
+      const ObVector<uint64_t> &tenant_ids_;
+      ObSEArray<ObTrafficControl::ObIORecordKey, 7> &gc_tenant_infos_;
+    };
+    ObVector<uint64_t> tenant_ids;
+    ObSEArray<ObTrafficControl::ObIORecordKey, 7> gc_tenant_record_infos;
+    ObSEArray<ObTrafficControl::ObStorageKey, 7> gc_tenant_shared_device_infos;
+    GCTenantRecordInfos fn(tenant_ids, gc_tenant_record_infos);
+    GCTenantSharedDeviceInfos fn2(tenant_ids, gc_tenant_shared_device_infos);
+    if(OB_ISNULL(GCTX.omt_)) {
+    } else if (FALSE_IT(GCTX.omt_->get_tenant_ids(tenant_ids))) {
+    } else if (OB_FAIL(io_record_map_.foreach_refactored(fn))) {
+      LOG_WARN("SSNT:failed to get gc tenant record infos", K(ret));
+    } else if (OB_FAIL(shared_device_map_.foreach_refactored(fn2))) {
+      LOG_WARN("SSNT:failed to get gc tenant shared device infos", K(ret));
+    } else {
+      for (int i = 0; i < gc_tenant_record_infos.count(); ++i) {
+        if (OB_SUCCESS != io_record_map_.erase_refactored(gc_tenant_record_infos.at(i))) {
+          LOG_WARN("SSNT:failed to erase gc tenant record infos", K(ret), K(gc_tenant_record_infos.at(i)));
+        }
+      }
+      for (int i = 0; i < gc_tenant_shared_device_infos.count(); ++i) {
+        if (OB_SUCCESS != shared_device_map_.erase_refactored(gc_tenant_shared_device_infos.at(i))) {
+          LOG_WARN(
+              "SSNT:failed to erase gc tenant shared device infos", K(ret), K(gc_tenant_shared_device_infos.at(i)));
+        }
+      }
+    }
+  }
+  return ret;
 }
 
 ObIOManager::ObIOManager()

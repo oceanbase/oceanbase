@@ -243,7 +243,11 @@ int ObVirtualSharedStorageQuota::add_row(
         break;
       }
       case ASSIGN: {
-        cells[i].set_int(limit.value_);
+        if (limit.value_ <= 0 || limit.value_ >= INT64_MAX) {
+          cells[i].set_int(INT64_MAX);
+        } else {
+          cells[i].set_int(limit.value_);
+        }
         break;
       }
       default: {

@@ -1249,6 +1249,7 @@ int ObAllVirtualFunctionIOStat::record_function_info(const uint64_t tenant_id,
     for (int i = 0; OB_SUCC(ret) && i < FUNC_NUM; ++i) {
       for (int j = 0; OB_SUCC(ret) && j < GROUP_MODE_NUM; ++j) {
         FuncInfo item;
+        item.tenant_id_ = tenant_id;
         item.function_type_ = static_cast<share::ObFunctionType>(i);
         item.group_mode_ = static_cast<ObIOGroupMode>(j);
         if (i >= func_usages.count()) {

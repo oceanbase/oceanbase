@@ -133,6 +133,10 @@ int ObSharedStorageNetThrotManager::clear_expired_infos()
   const int64_t current_time = ObTimeUtility::current_time();
   ObSpinLockGuard guard(lock_);
 
+  if (OB_SUCCESS != OB_IO_MANAGER.get_tc().gc_tenant_infos()) {
+    LOG_WARN("SSNT:failed to gc tenant infos for IO MANAGER", K(ret));
+  }
+
   // clean up expired storages
   if (storage_key_limit_map_.size() == 0) {
   } else if (REACH_TIME_INTERVAL(1 * 60 * 1000L * 1000L)){ // 1min

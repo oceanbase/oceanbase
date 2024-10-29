@@ -128,6 +128,7 @@ public:
     {
       return tenant_id_ == that.tenant_id_ && id_ == that.id_;
     }
+    TO_STRING_KV(K(tenant_id_), K(id_));
     uint64_t tenant_id_; // tenant_id of req
     ObStorageKey id_;
   };
@@ -188,6 +189,7 @@ public:
   int64_t get_net_obw() { return net_obw_.calc(); }
   int64_t get_device_bandwidth() const { return device_bandwidth_; }
   void set_device_bandwidth(int64_t bw) { device_bandwidth_ = ibw_clock_.iops_ = obw_clock_.iops_ = bw; }
+  int gc_tenant_infos();
 private:
   void inner_calc_();
 private:
