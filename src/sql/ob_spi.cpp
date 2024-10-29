@@ -3388,7 +3388,7 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
 
     ObPLSqlAuditRecord audit_record(sql::PLSql);
     ObQueryRetryCtrl retry_ctrl;
-    ObSPIExecEnvGuard env_guard(session_info, *spi_result);
+    ObSPIExecEnvGuard env_guard(session_info, *spi_result, cursor.is_ps_cursor());
 
     do {
       {
@@ -3501,7 +3501,7 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
 
       ObPLSqlAuditRecord audit_record(sql::PLSql);
       ObQueryRetryCtrl retry_ctrl;
-      ObSPIExecEnvGuard env_guard(session_info, spi_result);
+      ObSPIExecEnvGuard env_guard(session_info, spi_result, cursor.is_ps_cursor());
 
       do {
         ret = OB_SUCCESS;
@@ -9088,18 +9088,22 @@ void ObSPIRetryCtrlGuard::test()
   }
 }
 
-ObSPIExecEnvGuard::ObSPIExecEnvGuard(ObSQLSessionInfo &session_info, ObSPIResultSet &spi_result)
-  : session_info_(session_info), spi_result_(spi_result)
+ObSPIExecEnvGuard::ObSPIExecEnvGuard(
+  ObSQLSessionInfo &session_info, ObSPIResultSet &spi_result, bool is_ps_cursor)
+  : session_info_(session_info), spi_result_(spi_result), is_ps_cursor_(is_ps_cursor)
 {
-  query_start_time_bk_ = session_info.get_query_start_time();
-  session_info.set_query_start_time(ObTimeUtility::current_time());
-
+  if (!is_ps_cursor_) {
+    query_start_time_bk_ = session_info.get_query_start_time();
+    session_info.set_query_start_time(ObTimeUtility::current_time());
+  }
 }
 
 ObSPIExecEnvGuard::~ObSPIExecEnvGuard()
 {
   session_info_.get_retry_info_for_update().clear();
-  session_info_.set_query_start_time(query_start_time_bk_);
+  if (!is_ps_cursor_) {
+    session_info_.set_query_start_time(query_start_time_bk_);
+  }
 }
 
 }
