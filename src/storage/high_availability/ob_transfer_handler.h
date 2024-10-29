@@ -103,6 +103,7 @@ public:
       const uint64_t timestamp,
       const int64_t start_ts,
       const bool is_report);
+  void wakeup_thread_cond();
 private:
   int get_transfer_task_(share::ObTransferTaskInfo &task_info);
   int get_transfer_task_from_inner_table_(
@@ -242,13 +243,9 @@ private:
       const share::ObTransferTaskInfo &task_info,
       const share::SCN &start_scn,
       ObTimeoutCtx &timeout_ctx);
-  int get_transfer_tablets_meta_(
-      const share::ObTransferTaskInfo &task_info,
-      common::ObIArray<ObMigrationTabletParam> &params);
   int do_tx_start_transfer_in_(
       const share::ObTransferTaskInfo &task_info,
       const share::SCN &start_scn,
-      const common::ObIArray<ObMigrationTabletParam> &params,
       ObTimeoutCtx &timeout_ctx,
       common::ObMySQLTransaction &trans);
   int inner_tx_start_transfer_in_(
@@ -337,6 +334,23 @@ private:
                                   ObMySQLTransaction &trans,
                                   CollectTxCtxInfo &collect_batch,
                                   int64_t &batch_len);
+  int parallel_get_transfer_tablets_meta_(
+      const share::ObTransferTaskInfo &task_info,
+      ObTimeoutCtx &timeout_ctx);
+  int generate_parallel_tablet_info_dag_(
+      const share::ObTransferTaskInfo &task_info);
+  int do_build_tablet_info_(
+      const share::ObTransferTaskInfo &task_info,
+      ObTimeoutCtx &timeout_ctx);
+  int wait_parallel_tablet_info_ready_(
+      const share::ObTransferTaskInfo &task_info,
+      ObTimeoutCtx &timeout_ctx,
+      int32_t &result);
+  int wait_parallel_tablet_info_dag_finish_(
+      const share::ObTransferTaskInfo &task_info);
+  void finish_parallel_tablet_info_dag_(
+      const share::ObTransferTaskInfo &task_info);
+
 private:
   static const int64_t INTERVAL_US = 1 * 1000 * 1000; //1s
   static const int64_t KILL_TX_MAX_RETRY_TIMES = 3;
@@ -358,6 +372,9 @@ private:
   share::ObStorageHACostItemName diagnose_result_msg_;
   common::SpinRWLock transfer_handler_lock_;
   bool transfer_handler_enabled_;
+  ObTransferBuildTabletInfoCtx ctx_;
+  common::ObThreadCond cond_;
+
   DISALLOW_COPY_AND_ASSIGN(ObTransferHandler);
 };
 

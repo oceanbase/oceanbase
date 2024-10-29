@@ -1040,3 +1040,224 @@ int ObTransferRelatedInfo::get_related_info_task_id(share::ObTransferTaskID &tas
   }
   return ret;
 }
+
+/******************ObTransferTabletInfoMgr*********************/
+ObTransferBuildTabletInfoCtx::ObTransferTabletInfoMgr::ObTransferTabletInfoMgr()
+  : lock_(),
+    tablet_info_array_()
+{
+}
+
+ObTransferBuildTabletInfoCtx::ObTransferTabletInfoMgr::~ObTransferTabletInfoMgr()
+{
+  common::SpinWLockGuard guard(lock_);
+  tablet_info_array_.reset();
+}
+
+int ObTransferBuildTabletInfoCtx::ObTransferTabletInfoMgr::add_tablet_info(
+    const ObMigrationTabletParam &param)
+{
+  int ret = OB_SUCCESS;
+  if (!param.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("add tablet info get invalid argument", K(ret), K(param));
+  } else {
+    common::SpinWLockGuard guard(lock_);
+    if (OB_FAIL(tablet_info_array_.push_back(param))) {
+      LOG_WARN("failed to add tablet info", K(ret), K(param));
+    }
+  }
+  return ret;
+}
+
+int64_t ObTransferBuildTabletInfoCtx::ObTransferTabletInfoMgr::get_tablet_info_num() const
+{
+  common::SpinRLockGuard guard(lock_);
+  return tablet_info_array_.count();
+}
+
+int ObTransferBuildTabletInfoCtx::ObTransferTabletInfoMgr::get_tablet_info(
+    const int64_t index, const ObMigrationTabletParam *&param)
+{
+  int ret = OB_SUCCESS;
+  param = nullptr;
+  common::SpinRLockGuard guard(lock_);
+  if (index < 0 || index >= tablet_info_array_.count()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get tablet info get invalid argument", K(ret), K(index));
+  } else {
+    param = &tablet_info_array_.at(index);
+  }
+  return ret;
+}
+
+void ObTransferBuildTabletInfoCtx::ObTransferTabletInfoMgr::reuse()
+{
+  common::SpinWLockGuard guard(lock_);
+  tablet_info_array_.reset();
+}
+
+/******************ObTransferBuildTabletInfoCtx*********************/
+ObTransferBuildTabletInfoCtx::ObTransferBuildTabletInfoCtx()
+  : lock_(),
+    dest_ls_id_(),
+    index_(0),
+    tablet_info_array_(),
+    child_task_num_(0),
+    total_tablet_count_(0),
+    result_(OB_SUCCESS),
+    data_version_(0),
+    task_id_(),
+    mgr_()
+{
+}
+
+ObTransferBuildTabletInfoCtx::~ObTransferBuildTabletInfoCtx()
+{
+}
+
+void ObTransferBuildTabletInfoCtx::reuse()
+{
+  common::SpinWLockGuard guard(lock_);
+  total_tablet_count_ = 0;
+  dest_ls_id_.reset();
+  index_ = 0;
+  tablet_info_array_.reset();
+  child_task_num_ = 0;
+  result_ = OB_SUCCESS;
+  data_version_ = 0;
+  task_id_.reset();
+  mgr_.reuse();
+}
+
+int ObTransferBuildTabletInfoCtx::build_transfer_tablet_info(
+    const share::ObLSID &dest_ls_id,
+    const common::ObIArray<share::ObTransferTabletInfo> &tablet_info_array,
+    const common::ObCurTraceId::TraceId &task_id,
+    const uint64_t data_version)
+{
+  int ret = OB_SUCCESS;
+  common::SpinWLockGuard guard(lock_);
+  if (0 != index_ || !tablet_info_array_.empty()) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("build transfer tablet info init twice", K(ret), K(index_), K(tablet_info_array_));
+  } else if (!dest_ls_id.is_valid() || !task_id.is_valid() || 0 == data_version) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("build transfer tablet info get invalid argument", K(ret), K(task_id), K(data_version));
+  } else if (OB_FAIL(tablet_info_array_.assign(tablet_info_array))) {
+    LOG_WARN("failed to assign tablet info array", K(ret), K(tablet_info_array));
+  } else {
+    dest_ls_id_ = dest_ls_id;
+    total_tablet_count_ = tablet_info_array_.count();
+    task_id_ = task_id;
+    data_version_ = data_version;
+  }
+  return ret;
+}
+
+bool ObTransferBuildTabletInfoCtx::is_valid() const
+{
+  common::SpinRLockGuard guard(lock_);
+  return is_valid_();
+}
+
+bool ObTransferBuildTabletInfoCtx::is_valid_() const
+{
+  return index_ >= 0 && tablet_info_array_.count() >= 0 && index_ <= tablet_info_array_.count() && data_version_ > 0 && dest_ls_id_.is_valid();
+}
+
+int ObTransferBuildTabletInfoCtx::get_next_tablet_info(share::ObTransferTabletInfo &tablet_info)
+{
+  int ret = OB_SUCCESS;
+  tablet_info.reset();
+  common::SpinWLockGuard guard(lock_);
+  if (!is_valid_()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("transfer build tablet info ctx is invalid, unexpected", K(ret), KPC(this));
+  } else if (index_ == tablet_info_array_.count()) {
+    ret = OB_ITER_END;
+  } else {
+    tablet_info = tablet_info_array_.at(index_);
+    ++index_;
+  }
+  return ret;
+}
+
+void ObTransferBuildTabletInfoCtx::inc_child_task_num()
+{
+  ATOMIC_INC(&child_task_num_);
+}
+
+void ObTransferBuildTabletInfoCtx::dec_child_task_num()
+{
+  ATOMIC_DEC(&child_task_num_);
+}
+
+int64_t ObTransferBuildTabletInfoCtx::get_child_task_num()
+{
+  int64_t child_task_num = ATOMIC_LOAD(&child_task_num_);
+  return child_task_num;
+}
+
+int64_t ObTransferBuildTabletInfoCtx::get_total_tablet_count()
+{
+  common::SpinRLockGuard guard(lock_);
+  return total_tablet_count_;
+}
+
+bool ObTransferBuildTabletInfoCtx::is_build_tablet_finish() const
+{
+  return total_tablet_count_ == mgr_.get_tablet_info_num();
+}
+
+bool ObTransferBuildTabletInfoCtx::is_failed() const
+{
+  common::SpinRLockGuard guard(lock_);
+  return OB_SUCCESS != result_;
+}
+
+void ObTransferBuildTabletInfoCtx::set_result(const int32_t result)
+{
+  common::SpinWLockGuard guard(lock_);
+  if (OB_SUCCESS == result_) {
+    result_ = result;
+  }
+}
+
+int32_t ObTransferBuildTabletInfoCtx::get_result()
+{
+  common::SpinRLockGuard guard(lock_);
+  return result_;
+}
+
+int ObTransferBuildTabletInfoCtx::add_tablet_info(
+    const ObMigrationTabletParam &param)
+{
+  int ret = OB_SUCCESS;
+  if (!param.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("add tablet info get invalid argument", K(ret), K(param));
+  } else if (OB_FAIL(mgr_.add_tablet_info(param))) {
+    LOG_WARN("failed to add tablet info", K(ret), K(param));
+  }
+  return ret;
+}
+
+int ObTransferBuildTabletInfoCtx::get_tablet_info(
+    const int64_t index, const ObMigrationTabletParam *&param)
+{
+  int ret = OB_SUCCESS;
+  param = nullptr;
+  if (index < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get tablet info get invalid argument", K(ret), K(index));
+  } else if (OB_FAIL(mgr_.get_tablet_info(index, param))) {
+    LOG_WARN("failed to get tablet info", K(ret), K(index));
+  }
+  return ret;
+}
+
+int64_t ObTransferBuildTabletInfoCtx::get_tablet_info_num() const
+{
+  return mgr_.get_tablet_info_num();
+}

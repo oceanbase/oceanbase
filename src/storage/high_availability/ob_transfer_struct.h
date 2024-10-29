@@ -316,6 +316,71 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObTransferRelatedInfo);
 };
 
+struct ObTransferBuildTabletInfoCtx final
+{
+public:
+  ObTransferBuildTabletInfoCtx();
+  ~ObTransferBuildTabletInfoCtx();
+  int build_transfer_tablet_info(
+      const share::ObLSID &dest_ls_id,
+      const common::ObIArray<share::ObTransferTabletInfo> &tablet_info_array,
+      const common::ObCurTraceId::TraceId &task_id,
+      const uint64_t data_version);
+  void reuse();
+  int get_next_tablet_info(share::ObTransferTabletInfo &tablet_info);
+  bool is_valid() const;
+  void inc_child_task_num();
+  void dec_child_task_num();
+  int64_t get_child_task_num();
+  int64_t get_total_tablet_count();
+  bool is_build_tablet_finish() const;
+  common::ObCurTraceId::TraceId &get_task_id() { return task_id_; }
+  bool is_failed() const;
+  void set_result(const int32_t result);
+  share::ObLSID &get_dest_ls_id() { return dest_ls_id_; }
+  uint64_t get_data_version() { return data_version_; }
+  int32_t get_result();
+
+  int add_tablet_info(const ObMigrationTabletParam &param);
+  int get_tablet_info(const int64_t index, const ObMigrationTabletParam *&param);
+  int64_t get_tablet_info_num() const;
+
+  TO_STRING_KV(K_(index), K_(tablet_info_array), K_(child_task_num), K_(total_tablet_count),
+      K_(result), K_(data_version), K_(task_id));
+private:
+  bool is_valid_() const;
+
+private:
+  struct ObTransferTabletInfoMgr final
+  {
+  public:
+    ObTransferTabletInfoMgr();
+    ~ObTransferTabletInfoMgr();
+    int add_tablet_info(const ObMigrationTabletParam &param);
+    int64_t get_tablet_info_num() const;
+    int get_tablet_info(const int64_t index, const ObMigrationTabletParam *&param);
+    void reuse();
+
+    TO_STRING_KV(K_(tablet_info_array));
+  private:
+    common::SpinRWLock lock_;
+    common::ObArray<ObMigrationTabletParam> tablet_info_array_;
+    DISALLOW_COPY_AND_ASSIGN(ObTransferTabletInfoMgr);
+  };
+private:
+  common::SpinRWLock lock_;
+  share::ObLSID dest_ls_id_;
+  int64_t index_;
+  common::ObArray<share::ObTransferTabletInfo> tablet_info_array_;
+  int64_t child_task_num_;
+  int64_t total_tablet_count_;
+  int32_t result_;
+  uint64_t data_version_;
+  common::ObCurTraceId::TraceId task_id_;
+  ObTransferTabletInfoMgr mgr_;
+  DISALLOW_COPY_AND_ASSIGN(ObTransferBuildTabletInfoCtx);
+};
+
 }
 }
 #endif
