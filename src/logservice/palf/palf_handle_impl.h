@@ -995,7 +995,9 @@ public:
   {
     LSN committed_end_lsn;
     sw_.get_committed_end_lsn(committed_end_lsn);
-    return committed_end_lsn;
+    LSN max_flushed_end_lsn;
+    (void)sw_.get_max_flushed_end_lsn(max_flushed_end_lsn);
+    return MIN(max_flushed_end_lsn, committed_end_lsn);
   }
 
   LSN get_max_lsn() const override final
