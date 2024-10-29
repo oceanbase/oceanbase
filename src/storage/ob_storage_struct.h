@@ -481,12 +481,12 @@ public:
   ~ObSplitTableStoreParam();
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(snapshot_version), K_(multi_version_start), K_(update_with_major_tables));
+  TO_STRING_KV(K_(snapshot_version), K_(multi_version_start), K_(merge_type));
 
 public:
   int64_t snapshot_version_;
   int64_t multi_version_start_;
-  bool update_with_major_tables_;
+  compaction::ObMergeType merge_type_;
 };
 
 struct ObBatchUpdateTableStoreParam final

@@ -10385,6 +10385,7 @@ void ObBatchCreateTabletArg::reset()
   allocator_.reset();
   tablet_extra_infos_.reset();
   clog_checkpoint_scn_.reset();
+  mds_checkpoint_scn_.reset();
   create_type_ = ObTabletMdsUserDataType::CREATE_TABLET;
 }
 
@@ -10433,6 +10434,7 @@ int ObBatchCreateTabletArg::assign(const ObBatchCreateTabletArg &arg)
     need_check_tablet_cnt_ = arg.need_check_tablet_cnt_;
     is_old_mds_ = arg.is_old_mds_;
     clog_checkpoint_scn_ = arg.clog_checkpoint_scn_;
+    mds_checkpoint_scn_ = arg.mds_checkpoint_scn_;
     create_type_ = arg.create_type_;
   }
   return ret;
@@ -10640,7 +10642,7 @@ int ObBatchCreateTabletArg::is_old_mds(const char *buf,
 DEF_TO_STRING(ObBatchCreateTabletArg)
 {
   int64_t pos = 0;
-  J_KV(K_(id), K_(major_frozen_scn), K_(need_check_tablet_cnt), K_(is_old_mds), K_(tablets), K_(tablet_extra_infos), K_(clog_checkpoint_scn), K_(create_type));
+  J_KV(K_(id), K_(major_frozen_scn), K_(need_check_tablet_cnt), K_(is_old_mds), K_(tablets), K_(tablet_extra_infos), K_(clog_checkpoint_scn), K_(create_type), K_(mds_checkpoint_scn));
   return pos;
 }
 
@@ -10654,7 +10656,7 @@ OB_DEF_SERIALIZE(ObBatchCreateTabletArg)
   } else {
     OB_UNIS_ENCODE_ARRAY(tablet_extra_infos_, tablet_extra_infos_.count());
   }
-  LST_DO_CODE(OB_UNIS_ENCODE, clog_checkpoint_scn_, create_type_);
+  LST_DO_CODE(OB_UNIS_ENCODE, clog_checkpoint_scn_, create_type_, mds_checkpoint_scn_);
   return ret;
 }
 
@@ -10664,7 +10666,7 @@ OB_DEF_SERIALIZE_SIZE(ObBatchCreateTabletArg)
   LST_DO_CODE(OB_UNIS_ADD_LEN, id_, major_frozen_scn_, tablets_, table_schemas_, need_check_tablet_cnt_, is_old_mds_);
   len += get_serialize_size_for_create_tablet_schemas();
   OB_UNIS_ADD_LEN_ARRAY(tablet_extra_infos_, tablet_extra_infos_.count());
-  LST_DO_CODE(OB_UNIS_ADD_LEN, clog_checkpoint_scn_, create_type_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, clog_checkpoint_scn_, create_type_, mds_checkpoint_scn_);
   return len;
 }
 
@@ -10708,7 +10710,7 @@ OB_DEF_DESERIALIZE(ObBatchCreateTabletArg)
       }
     }
   }
-  LST_DO_CODE(OB_UNIS_DECODE, clog_checkpoint_scn_, create_type_);
+  LST_DO_CODE(OB_UNIS_DECODE, clog_checkpoint_scn_, create_type_, mds_checkpoint_scn_);
   return ret;
 }
 

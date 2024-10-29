@@ -4419,6 +4419,7 @@ public:
   common::ObSArray<ObCreateTabletExtraInfo> tablet_extra_infos_;
   share::SCN clog_checkpoint_scn_;
   storage::ObTabletMdsUserDataType create_type_;
+  share::SCN mds_checkpoint_scn_;
 };
 
 struct ObBatchRemoveTabletArg

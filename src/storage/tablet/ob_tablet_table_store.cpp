@@ -3242,6 +3242,7 @@ int ObTabletTableStore::build_split_new_table_store_(
   int64_t inc_base_snapshot_version = -1;
   ObSEArray<ObITable *, OB_DEFAULT_SE_ARRAY_COUNT> batch_tables;
   const ObTabletHAStatus &ha_status = tablet.get_tablet_meta().ha_status_;
+  ObSSTable *new_mds_sstable = nullptr;
   if (OB_FAIL(param.tables_handle_.get_tables(batch_tables))) {
     LOG_WARN("get tables failed", K(ret), K(param));
   } else if (OB_FAIL(inner_build_major_tables_(allocator, old_store, batch_tables,
@@ -3261,7 +3262,12 @@ int ObTabletTableStore::build_split_new_table_store_(
     LOG_WARN("failed to pull memtable from memtable_mgr", K(ret));
   } else if (OB_FAIL(pull_ddl_memtables(allocator, tablet))) {
     LOG_WARN("pull_ddl_memtables failed", K(ret));
-  } else if (OB_FAIL(build_minor_tables(allocator, nullptr/*new_sstable*/, old_store, false/*need_check_sstable*/, -1/*inc_base_snapshot_version*/, ha_status, unused_param, true/*is_mds*/))) {
+  } else if (is_mds_merge(param.tablet_split_param_.merge_type_) && 1 != batch_tables.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null new mds sstable", K(ret), K(param));
+  } else if (is_mds_merge(param.tablet_split_param_.merge_type_)
+      && OB_FALSE_IT(new_mds_sstable = static_cast<ObSSTable *>(batch_tables.at(0)))) {
+  } else if (OB_FAIL(build_minor_tables(allocator, new_mds_sstable, old_store, false/*need_check_sstable*/, -1/*inc_base_snapshot_version*/, ha_status, unused_param, true/*is_mds*/))) {
     LOG_WARN("failed to build mds sstables", K(ret));
   } else {
     is_inited_ = true;

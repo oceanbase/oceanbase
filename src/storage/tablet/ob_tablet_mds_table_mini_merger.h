@@ -99,6 +99,18 @@ private:
   share::SCN scan_end_scn_;
 };
 
+// to query all medium mds info, and dump them to minor sstable.
+class ObTabletDumpMediumMds2MiniOperator : public ObMdsMiniMergeOperator
+{
+public:
+  ObTabletDumpMediumMds2MiniOperator() = default;
+  virtual ~ObTabletDumpMediumMds2MiniOperator() = default;
+  virtual int operator()(const mds::MdsDumpKV &kv) override;
+protected:
+  virtual bool for_flush() override { return true; }
+};
+
+
 class ObMdsTableMiniMerger
 {
 public:

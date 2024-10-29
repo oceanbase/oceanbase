@@ -1480,6 +1480,8 @@ int ObTabletLobWriteDataTask::create_sstables(
   int64_t last_minor_idx = -1;
   ObFixedArray<ObTablesHandleArray, common::ObIAllocator> batch_sstables_handle;
   batch_sstables_handle.set_allocator(&allocator_);
+  const compaction::ObMergeType merge_type = share::ObSplitSSTableType::SPLIT_MINOR == split_sstable_type ?
+        compaction::ObMergeType::MINOR_MERGE : compaction::ObMergeType::MAJOR_MERGE;
   if (OB_FAIL(batch_sstables_handle.prepare_allocate(ctx_->new_lob_tablet_ids_.count()))) {
     LOG_WARN("init failed", K(ret), K(ctx_->new_lob_tablet_ids_));
   }
@@ -1553,9 +1555,35 @@ int ObTabletLobWriteDataTask::create_sstables(
                 ctx_->lob_meta_tablet_handle_,
                 ctx_->new_lob_tablet_ids_.at(i),
                 batch_sstables_handle.at(i),
-                split_sstable_type,
+                merge_type,
                 false/*can_reuse_macro_block*/))) {
       LOG_WARN("update table store with batch tables failed", K(ret), K(batch_sstables_handle.at(i)), K(split_sstable_type));
+    }
+    if (OB_SUCC(ret) && !is_major_merge_type(merge_type)) {
+      // build lost mds sstable into tablet.
+      ObTableHandleV2 mds_table_handle;
+      ObTablesHandleArray mds_sstables_handle;
+      common::ObArenaAllocator build_mds_arena("SplitBuildMds", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+      if (OB_FAIL(ObTabletSplitUtil::build_lost_medium_mds_sstable(
+            build_mds_arena,
+            ctx_->ls_handle_,
+            ctx_->lob_meta_tablet_handle_,
+            ctx_->new_lob_tablet_ids_.at(i),
+            mds_table_handle))) {
+        LOG_WARN("build lost medium mds sstable failed", K(ret), KPC(param_));
+      } else if (OB_UNLIKELY(!mds_table_handle.is_valid())) {
+        LOG_INFO("no need to fill medium mds sstable", K(ret), KPC(param_));
+      } else if (OB_FAIL(mds_sstables_handle.add_table(mds_table_handle))) {
+        LOG_WARN("add table failed", K(ret));
+      } else if (OB_FAIL(ObTabletSplitMergeTask::update_table_store_with_batch_tables(
+            ctx_->ls_handle_,
+            ctx_->lob_meta_tablet_handle_,
+            ctx_->new_lob_tablet_ids_.at(i),
+            mds_sstables_handle,
+            compaction::ObMergeType::MDS_MINI_MERGE,
+            false/*can_reuse_macro_block*/))) {
+        LOG_WARN("update table store with batch tables failed", K(ret), K(mds_sstables_handle));
+      }
     }
   }
   return ret;

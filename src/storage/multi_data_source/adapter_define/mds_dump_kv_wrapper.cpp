@@ -127,8 +127,8 @@ int MdsDumpKVStorageAdapter::convert_to_mds_row(
       ret = OB_ALLOCATE_MEMORY_FAILED;
       MDS_LOG(WARN, "failed to alloc buf for seriaize DumpKVStorageMetaInfo",
           K(ret), K(meta_info_size), K(allocator.total()), K(allocator.used()));
-    } else if (meta_info_.serialize(buf, meta_info_size, pos)) {
-      MDS_LOG(WARN, "failed to serialize DumpKVStorageMetaInfo", K(meta_info_), K(meta_info_size), K(pos));
+    } else if (OB_FAIL(meta_info_.serialize(buf, meta_info_size, pos))) {
+      MDS_LOG(WARN, "failed to serialize DumpKVStorageMetaInfo", K(ret), K(meta_info_), K(meta_info_size), K(pos));
     } else if (OB_UNLIKELY(pos != meta_info_size)) {
       ret = OB_ERR_UNEXPECTED;
       MDS_LOG(WARN, "unexpected pos with serialize size", K(ret), K(pos), K(meta_info_size));

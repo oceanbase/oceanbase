@@ -140,7 +140,10 @@ const static int64_t BATCH_ARG_SIZE = 1024 * 1024;  // 1M
   int execute();
   bool need_retry(int ret);
   int add_create_tablet_arg(const ObTabletCreatorArg &arg);
-  int modify_batch_args(const storage::ObTabletMdsUserDataType &create_type, const share::SCN &clog_checkpoint_scn, const bool clear_auto_part_size);
+  int modify_batch_args(const storage::ObTabletMdsUserDataType &create_type,
+                        const share::SCN &clog_checkpoint_scn,
+                        const share::SCN &mds_checkpoint_scn,
+                        const bool clear_auto_part_size);
   void reset();
 private:
   int find_leader_of_ls(const share::ObLSID &id, ObAddr &addr);
