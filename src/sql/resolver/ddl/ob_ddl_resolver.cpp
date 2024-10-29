@@ -2350,8 +2350,9 @@ int ObDDLResolver::resolve_vector_index_parameters(const ParseNode *option_node)
             index_using_type_ = USING_HNSW;
           } else if (parser_name == "ivfflat") {
             index_using_type_ = USING_IVFFLAT;
-          } else if (parser_name == "ivfpq") {
-            index_using_type_ = USING_IVFPQ;
+          // TODO: Stablize the support of IVFPQ
+          // } else if (parser_name == "ivfpq") {
+          //   index_using_type_ = USING_IVFPQ;
           } else {
             ret = OB_NOT_SUPPORTED;
             SQL_RESV_LOG(ERROR, "not support vector index type", K(ret), K(parser_name));
