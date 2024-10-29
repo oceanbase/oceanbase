@@ -318,7 +318,7 @@ void* Thread::__th_start(void *arg)
       ObPageManager::set_thread_local_instance(pm);
       MemoryContext *mem_context = GET_TSI0(MemoryContext);
       if (OB_ISNULL(mem_context)) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("null ptr", K(ret));
       } else if (OB_FAIL(ROOT_CONTEXT->CREATE_CONTEXT(*mem_context,
                          ContextParam().set_properties(RETURN_MALLOC_DEFAULT)
