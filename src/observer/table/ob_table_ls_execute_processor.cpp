@@ -390,6 +390,7 @@ int ObTableLSExecuteP::try_process()
   bool need_all_prop = arg_.ls_op_.need_all_prop_bitmap();
   table_id_ = table_id;  // init move response need
   ObTableLSOpResult *cb_result = nullptr;
+  observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
 
   if (OB_ISNULL(cb_)) {
     ret = OB_ERR_UNEXPECTED;

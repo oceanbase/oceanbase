@@ -1376,6 +1376,7 @@ int ObTableQueryAsyncP::try_process()
   int ret = OB_SUCCESS;
   table_id_ = arg_.table_id_; // init move response need
   tablet_id_ = arg_.tablet_id_;
+  observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
   if (OB_FAIL(check_query_type())) {
     LOG_WARN("query type is invalid", K(ret), K(arg_.query_type_));
   } else if (OB_FAIL(get_session_id(query_session_id_, arg_.query_session_id_))) {
