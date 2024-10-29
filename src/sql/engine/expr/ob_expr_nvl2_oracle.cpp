@@ -13,7 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/expr/ob_expr_nvl2_oracle.h"
-
+#include "pl/ob_pl_type.h"
 namespace oceanbase
 {
 namespace sql

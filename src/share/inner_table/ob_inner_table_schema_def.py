@@ -30150,6 +30150,8 @@ def_table_schema(
                           THEN CONCAT(lower('BINARY'),'(', rp.param_length, ')')
                           WHEN (rp.param_type IN (27, 28, 29, 30) AND rp.param_charset = 1)
                           THEN lower(REPLACE(v.data_type_str, 'TEXT', 'BLOB'))
+                          WHEN rp.param_type IN (32, 33)
+                          THEN get_mysql_routine_parameter_type_str(rp.routine_id, rp.param_position)
                           ELSE lower(v.data_type_str) END AS char(4194304)) AS DTD_IDENTIFIER,
                         CAST(CASE WHEN r.routine_type = 1 THEN 'PROCEDURE'
                           WHEN ROUTINE_TYPE = 2 THEN 'FUNCTION'

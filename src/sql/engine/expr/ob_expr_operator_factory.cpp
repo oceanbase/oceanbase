@@ -470,6 +470,8 @@
 #include "sql/engine/expr/ob_expr_audit_log_func.h"
 #include "sql/engine/expr/ob_expr_can_access_trigger.h"
 #include "sql/engine/expr/ob_expr_split_part.h"
+#include "sql/engine/expr/ob_expr_get_mysql_routine_parameter_type_str.h"
+
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -1166,6 +1168,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprSm4Decrypt);
     REG_OP(ObExprSplitPart);
     REG_OP(ObExprTokenize);
+    REG_OP(ObExprGetMySQLRoutineParameterTypeStr);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);

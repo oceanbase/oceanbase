@@ -405,6 +405,7 @@
 #include "ob_expr_audit_log_func.h"
 #include "ob_expr_can_access_trigger.h"
 #include "ob_expr_split_part.h"
+#include "ob_expr_get_mysql_routine_parameter_type_str.h"
 
 namespace oceanbase
 {
@@ -1274,7 +1275,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprInnerIsTrue::decimal_int_is_true_end,                /* 765 */
   NULL, // ObExprInnerIsTrue::json_is_true_start,                     /* 766 */
   NULL, // ObExprInnerIsTrue::json_is_true_end,                       /* 767 */
-  NULL, // ObExprGetMySQLRoutineParameterTypeStr::get_mysql_routine_parameter_type_str /* 768 */
+  ObExprGetMySQLRoutineParameterTypeStr::get_mysql_routine_parameter_type_str, /* 768 */
   NULL, // ObExprArrayDistinct::eval_array_distinct,                  /* 769 */
   NULL, // ObExprArrayRemove::eval_array_remove_int64_t,              /* 770 */
   NULL, // ObExprArrayRemove::eval_array_remove_float,                /* 771 */
