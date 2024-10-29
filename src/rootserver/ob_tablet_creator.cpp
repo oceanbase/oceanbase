@@ -390,6 +390,7 @@ int ObTabletCreator::add_create_tablet_arg(const ObTabletCreatorArg &arg)
 int ObTabletCreator::modify_batch_args(
     const storage::ObTabletMdsUserDataType &create_type,
     const SCN &clog_checkpoint_scn,
+    const SCN &mds_checkpoint_scn,
     const bool clear_auto_part_size)
 {
   int ret = OB_SUCCESS;
@@ -405,6 +406,7 @@ int ObTabletCreator::modify_batch_args(
       } else {
         while (OB_SUCC(ret) && OB_NOT_NULL(batch_arg)) {
           batch_arg->batch_arg_.clog_checkpoint_scn_ = clog_checkpoint_scn;
+          batch_arg->batch_arg_.mds_checkpoint_scn_ = mds_checkpoint_scn;
           batch_arg->batch_arg_.create_type_ = create_type;
           if (clear_auto_part_size) {
             batch_arg->auto_part_size_arr_.reset();

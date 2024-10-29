@@ -676,6 +676,7 @@ int ObTabletCreateMdsHelper::build_pure_data_tablet(
   const lib::Worker::CompatMode &compat_mode = info.compat_mode_;
   const int64_t snapshot_version = arg.major_frozen_scn_.get_val_for_tx();
   const share::SCN &clog_checkpoint_scn = arg.clog_checkpoint_scn_;
+  const share::SCN &mds_checkpoint_scn = arg.mds_checkpoint_scn_;
   const bool has_cs_replica = info.has_cs_replica_;
   ObTabletHandle tablet_handle;
   bool exist = false;
@@ -719,7 +720,7 @@ int ObTabletCreateMdsHelper::build_pure_data_tablet(
     LOG_WARN("check and get create tablet schema_info failed", K(ret));
   } else if (CLICK_FAIL(ls->get_tablet_svr()->create_tablet(ls_id, data_tablet_id, data_tablet_id,
       scn, snapshot_version, *create_tablet_schema, compat_mode,
-      need_create_empty_major_sstable, clog_checkpoint_scn, micro_index_clustered, has_cs_replica, tablet_handle))) {
+      need_create_empty_major_sstable, clog_checkpoint_scn, mds_checkpoint_scn, micro_index_clustered, has_cs_replica, tablet_handle))) {
     LOG_WARN("failed to do create tablet", K(ret), K(ls_id), K(data_tablet_id), "arg", PRETTY_ARG(arg));
   }
 
@@ -751,6 +752,7 @@ int ObTabletCreateMdsHelper::build_mixed_tablets(
   const ObSArray<obrpc::ObCreateTabletExtraInfo> &create_tablet_extra_infos = arg.tablet_extra_infos_;
   const int64_t snapshot_version = arg.major_frozen_scn_.get_val_for_tx();
   const share::SCN &clog_checkpoint_scn = arg.clog_checkpoint_scn_;
+  const share::SCN &mds_checkpoint_scn = arg.mds_checkpoint_scn_;
   const bool has_cs_replica = info.has_cs_replica_;
   ObTabletHandle data_tablet_handle;
   ObTabletHandle tablet_handle;
@@ -808,7 +810,7 @@ int ObTabletCreateMdsHelper::build_mixed_tablets(
       LOG_WARN("failed to push back tablet id", K(ret), K(ls_id), K(tablet_id));
     } else if (CLICK_FAIL(ls->get_tablet_svr()->create_tablet(ls_id, tablet_id, data_tablet_id,
         scn, snapshot_version, *create_tablet_schema, compat_mode,
-        need_create_empty_major_sstable, clog_checkpoint_scn, micro_index_clustered, has_cs_replica, tablet_handle))) {
+        need_create_empty_major_sstable, clog_checkpoint_scn, mds_checkpoint_scn, micro_index_clustered, has_cs_replica, tablet_handle))) {
       LOG_WARN("failed to do create tablet", K(ret), K(ls_id), K(tablet_id), K(data_tablet_id), "arg", PRETTY_ARG(arg));
     }
 
@@ -858,6 +860,7 @@ int ObTabletCreateMdsHelper::build_pure_aux_tablets(
   const ObSArray<obrpc::ObCreateTabletExtraInfo> &create_tablet_extra_infos = arg.tablet_extra_infos_;
   const int64_t snapshot_version = arg.major_frozen_scn_.get_val_for_tx();
   const share::SCN &clog_checkpoint_scn = arg.clog_checkpoint_scn_;
+  const share::SCN &mds_checkpoint_scn = arg.mds_checkpoint_scn_;
   const bool has_cs_replica = info.has_cs_replica_;
   ObTabletHandle tablet_handle;
   bool exist = false;
@@ -905,7 +908,7 @@ int ObTabletCreateMdsHelper::build_pure_aux_tablets(
       LOG_WARN("check and get create tablet schema_info failed", K(ret));
     } else if (CLICK_FAIL(ls->get_tablet_svr()->create_tablet(ls_id, tablet_id, data_tablet_id,
         scn, snapshot_version, *create_tablet_schema, compat_mode,
-        need_create_empty_major_sstable, clog_checkpoint_scn, micro_index_clustered, has_cs_replica, tablet_handle))) {
+        need_create_empty_major_sstable, clog_checkpoint_scn, mds_checkpoint_scn, micro_index_clustered, has_cs_replica, tablet_handle))) {
       LOG_WARN("failed to do create tablet", K(ret), K(ls_id), K(tablet_id), K(data_tablet_id), "arg", PRETTY_ARG(arg));
     }
 
@@ -940,6 +943,7 @@ int ObTabletCreateMdsHelper::build_bind_hidden_tablets(
   const ObSArray<obrpc::ObCreateTabletExtraInfo> &create_tablet_extra_infos = arg.tablet_extra_infos_;
   const int64_t snapshot_version = arg.major_frozen_scn_.get_val_for_tx();
   const share::SCN &clog_checkpoint_scn = arg.clog_checkpoint_scn_;
+  const share::SCN &mds_checkpoint_scn = arg.mds_checkpoint_scn_;
   const bool has_cs_replica = info.has_cs_replica_;
   ObTabletHandle tablet_handle;
   int64_t aux_info_idx = -1;
@@ -1010,7 +1014,7 @@ int ObTabletCreateMdsHelper::build_bind_hidden_tablets(
       LOG_WARN("failed to push back tablet id", K(ret), K(ls_id), K(tablet_id));
     } else if (CLICK_FAIL(ls->get_tablet_svr()->create_tablet(ls_id, tablet_id, tablet_id,
         scn, snapshot_version, *create_tablet_schema, compat_mode,
-        need_create_empty_major_sstable, clog_checkpoint_scn, micro_index_clustered, has_cs_replica, tablet_handle))) {
+        need_create_empty_major_sstable, clog_checkpoint_scn, mds_checkpoint_scn, micro_index_clustered, has_cs_replica, tablet_handle))) {
       LOG_WARN("failed to do create tablet", K(ret), K(ls_id), K(tablet_id), K(orig_tablet_id), "arg", PRETTY_ARG(arg));
     }
 

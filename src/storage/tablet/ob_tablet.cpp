@@ -343,6 +343,7 @@ int ObTablet::init_for_first_time_creation(
     const ObCreateTabletSchema &create_tablet_schema,
     const bool need_create_empty_major_sstable,
     const share::SCN &clog_checkpoint_scn,
+    const share::SCN &mds_checkpoint_scn,
     const bool micro_index_clustered,
     const bool need_generate_cs_replica_cg_array,
     const bool has_cs_replica,
@@ -379,7 +380,7 @@ int ObTablet::init_for_first_time_creation(
     LOG_WARN("failed to init shared params", K(ret), K(ls_id), K(tablet_id), K(compat_mode), KP(freezer));
   } else if (OB_FAIL(tablet_meta_.init(ls_id, tablet_id, data_tablet_id,
       create_scn, snapshot_version, compat_mode, table_store_flag, create_tablet_schema.get_schema_version()/*create_schema_version*/,
-      clog_checkpoint_scn, micro_index_clustered, has_cs_replica, need_generate_cs_replica_cg_array))) {
+      clog_checkpoint_scn, mds_checkpoint_scn, micro_index_clustered, has_cs_replica, need_generate_cs_replica_cg_array))) {
     LOG_WARN("failed to init tablet meta", K(ret), K(ls_id), K(tablet_id), K(data_tablet_id),
         K(create_scn), K(snapshot_version), K(compat_mode), K(table_store_flag));
   } else if (OB_FAIL(pull_memtables(allocator))) {
@@ -602,6 +603,7 @@ int ObTablet::init_for_shared_merge(
             old_tablet.tablet_meta_.table_store_flag_,
             old_tablet.tablet_meta_.create_schema_version_,
             SCN::invalid_scn()/*clog_checkpoint_scn*/,
+            SCN::invalid_scn()/*mds_checkpoint_scn*/,
             old_tablet.tablet_meta_.micro_index_clustered_,
             false /*has_cs_replica*/,
             false /*need_generate_cs_replica_cg_array*/))) {

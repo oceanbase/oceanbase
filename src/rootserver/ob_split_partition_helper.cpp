@@ -736,7 +736,7 @@ int ObSplitPartitionHelper::start_dst_(
 
   // create dst tablets
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(tablet_creator->modify_batch_args(storage::ObTabletMdsUserDataType::START_SPLIT_DST, data_end_scn, true/*clear_auto_part_size*/))) {
+  } else if (OB_FAIL(tablet_creator->modify_batch_args(storage::ObTabletMdsUserDataType::START_SPLIT_DST, data_end_scn, data_end_scn, true/*clear_auto_part_size*/))) {
     LOG_WARN("failed to set clog checkpoint scn of tablet creator args", KR(ret));
   } else if (OB_FAIL(tablet_creator->execute())) {
     LOG_WARN("execute create partition failed", KR(ret));

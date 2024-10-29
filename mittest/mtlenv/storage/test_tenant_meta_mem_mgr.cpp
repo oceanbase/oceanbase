@@ -728,7 +728,8 @@ TEST_F(TestTenantMetaMemMgr, test_wash_tablet)
 
   ObTabletID empty_tablet_id;
   ret = tablet->init_for_first_time_creation(allocator_, ls_id_, tablet_id, tablet_id,
-      create_scn, create_scn.get_val_for_tx(), create_tablet_schema, true/*need_create_empty_major_sstable*/, SCN::invalid_scn(), false/*micro_index_clustered*/, false/*need_generate_cs_replica_cg_array*/, false/*has_cs_replica*/, &freezer);
+      create_scn, create_scn.get_val_for_tx(), create_tablet_schema, true/*need_create_empty_major_sstable*/,
+      SCN::invalid_scn()/*clog_checkpoint_scn*/, SCN::invalid_scn()/*mds_checkpoint_scn*/, false/*micro_index_clustered*/, false/*need_generate_cs_replica_cg_array*/, false/*has_cs_replica*/, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
   const ObTabletPersisterParam persist_param(ls_id_, ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq());
@@ -829,7 +830,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_inner_tablet)
   bool make_empty_co_sstable = true;
   ret = tablet->init_for_first_time_creation(allocator_, ls_id_, tablet_id, tablet_id,
       create_scn, create_scn.get_val_for_tx(), create_tablet_schema,
-      make_empty_co_sstable/*need_create_empty_major_sstable*/, share::SCN::invalid_scn(),  false/*micro_index_clustered*/, false/*need_generate_cs_replica_cg_array*/, false/*has_cs_replica*/, &freezer);
+      make_empty_co_sstable/*need_create_empty_major_sstable*/, share::SCN::invalid_scn()/*clog_checkpoint_scn*/, SCN::invalid_scn()/*mds_checkpoint_scn*/, false/*micro_index_clustered*/, false/*need_generate_cs_replica_cg_array*/, false/*has_cs_replica*/, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
 
@@ -942,7 +943,8 @@ TEST_F(TestTenantMetaMemMgr, test_wash_no_sstable_tablet)
   bool make_empty_co_sstable = false;
   ret = tablet->init_for_first_time_creation(allocator_, ls_id_, tablet_id, tablet_id,
       create_scn, create_scn.get_val_for_tx(), create_tablet_schema,
-      make_empty_co_sstable/*need_create_empty_major_sstable*/, share::SCN::invalid_scn(), false/*micro_index_clustered*/, false/*need_generate_cs_replica_cg_array*/, false/*has_cs_replica*/, &freezer);
+      make_empty_co_sstable/*need_create_empty_major_sstable*/, share::SCN::invalid_scn()/*clog_checkpoint_scn*/,
+      share::SCN::invalid_scn()/*mds_checkpoint_scn*/, false/*micro_index_clustered*/, false/*need_generate_cs_replica_cg_array*/, false/*has_cs_replica*/, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
 
@@ -1041,7 +1043,8 @@ TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
   bool make_empty_co_sstable = true;
   ret = tablet->init_for_first_time_creation(allocator_, ls_id_, tablet_id, tablet_id,
       create_scn, create_scn.get_val_for_tx(), create_tablet_schema,
-      make_empty_co_sstable/*need_create_empty_major_sstable*/, share::SCN::invalid_scn(), false/*micro_index_clustered*/, false/*need_generate_cs_replica_cg_array*/, false/*has_cs_replica*/, &freezer);
+      make_empty_co_sstable/*need_create_empty_major_sstable*/, share::SCN::invalid_scn()/*clog_checkpoint_scn*/,
+      share::SCN::invalid_scn()/*mds_checkpoint_scn*/, false/*micro_index_clustered*/, false/*need_generate_cs_replica_cg_array*/, false/*has_cs_replica*/, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
 
@@ -1173,7 +1176,8 @@ TEST_F(TestTenantMetaMemMgr, test_wash_mem_tablet)
   bool make_empty_co_sstable = false;
   ret = tablet->init_for_first_time_creation(allocator_, ls_id_, tablet_id, tablet_id,
       create_scn, create_scn.get_val_for_tx(), create_tablet_schema,
-      make_empty_co_sstable/*need_create_empty_major_sstable*/, share::SCN::invalid_scn(), false/*micro_index_clustered*/, false/*need_generate_cs_replica_cg_array*/, false/*has_cs_replica*/, &freezer);
+      make_empty_co_sstable/*need_create_empty_major_sstable*/, share::SCN::invalid_scn()/*clog_checkpoint_scn*/,
+      share::SCN::invalid_scn()/*mds_checkpoint_scn*/, false/*micro_index_clustered*/, false/*need_generate_cs_replica_cg_array*/, false/*has_cs_replica*/, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
 

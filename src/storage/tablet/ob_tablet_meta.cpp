@@ -88,6 +88,7 @@ int ObTabletMeta::init(
     const ObTabletTableStoreFlag &table_store_flag,
     const int64_t create_schema_version,
     const share::SCN &clog_checkpoint_scn,
+    const share::SCN &mds_checkpoint_scn,
     const bool micro_index_clustered,
     const bool has_cs_replica,
     const bool need_generate_cs_replica_cg_array)
@@ -129,7 +130,7 @@ int ObTabletMeta::init(
     ddl_snapshot_version_ = 0;
     max_sync_storage_schema_version_ = create_schema_version;
     ddl_data_format_version_ = 0;
-    mds_checkpoint_scn_ = INIT_CLOG_CHECKPOINT_SCN;
+    mds_checkpoint_scn_ = mds_checkpoint_scn.is_valid() ? mds_checkpoint_scn : INIT_CLOG_CHECKPOINT_SCN;
     report_status_.merge_snapshot_version_ = snapshot_version;
     report_status_.cur_report_version_ = snapshot_version;
     report_status_.data_checksum_ = 0;
