@@ -1420,12 +1420,6 @@ int ObCopyTabletInfoRestoreReader::fetch_tablet_info(obrpc::ObCopyTabletInfo &ta
     const common::ObTabletID &tablet_id = tablet_id_array_.at(tablet_id_index_);
     tablet_info.tablet_id_ = tablet_id;
     tablet_info.version_ = 0; // for restore this is invalid
-#ifdef ERRSIM
-    if (!tablet_id.is_ls_inner_tablet() && tablet_id_array_.count() > 10 && 5 == tablet_id_index_) {
-      ret = OB_E(EventTable::EN_RESTORE_FETCH_TABLET_INFO) OB_SUCCESS;
-      LOG_WARN("errsim restore fetch tablet info", K(ret), K(tablet_id), K_(tablet_id_index), K(tablet_id_array_.count()), K(tablet_id_array_));
-    }
-#endif
     if (OB_FAIL(ret)) {
       // do nothing
     } else if (OB_FAIL(restore_base_info_->get_restore_data_dest_id(*GCTX.sql_proxy_, MTL_ID(), dest_id))) {
@@ -3858,6 +3852,13 @@ int ObCopyLSViewInfoRestoreReader::get_next_tablet_info(
       LOG_WARN("failed to get next tablet meta", K(ret));
     }
   }
+
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = OB_E(EventTable::EN_RESTORE_FETCH_TABLET_INFO) OB_SUCCESS;
+    LOG_WARN("errsim restore fetch tablet info", K(ret));
+  }
+#endif
 
   if (OB_SUCC(ret)) {
     tablet_info.data_size_ = 0;
