@@ -497,6 +497,11 @@ int ObPartitionSplitQuery::fill_range_filter_param(
             if (expr_datum.is_outrow()) {
               LOG_DEBUG("set is outrow", K(ret), K(expr_datum));
             }
+          } else if (lower_datum.is_max()) {
+            expr_datum.set_ext(); // max
+            if (expr_datum.is_ext()) {
+              LOG_DEBUG("set is ext", K(ret), K(expr_datum));
+            }
           } else if (OB_FAIL(expr_datum.from_storage_datum(
               lower_datum,
               expr->obj_datum_map_,
@@ -509,6 +514,11 @@ int ObPartitionSplitQuery::fill_range_filter_param(
             expr_datum.set_ext();  // max
             if (expr_datum.is_ext()) {
               LOG_DEBUG("set is ext", K(ret), K(expr_datum));
+            }
+          } else if (upper_datum.is_min()) {
+            expr_datum.set_outrow();  // min
+            if (expr_datum.is_outrow()) {
+              LOG_DEBUG("set is outrow", K(ret), K(expr_datum));
             }
           } else if (OB_FAIL(expr_datum.from_storage_datum(
               upper_datum,
