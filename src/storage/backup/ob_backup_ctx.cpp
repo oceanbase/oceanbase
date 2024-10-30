@@ -1265,7 +1265,7 @@ int ObLSBackupCtx::open(
   } else if (!param.is_valid() || !backup_data_type.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(param), K(backup_data_type));
-  } else if (OB_FAIL(cond_.init(ObWaitEventIds::IO_CONTROLLER_COND_WAIT))) {
+  } else if (OB_FAIL(cond_.init(ObWaitEventIds::LS_BACKUP_CTX_COND_WAIT))) {
     LOG_WARN("failed to init condition", K(ret));
   } else if (OB_FAIL(tablet_stat_.init(
                  param.tenant_id_, param.backup_set_desc_.backup_set_id_, param.ls_id_, backup_data_type))) {

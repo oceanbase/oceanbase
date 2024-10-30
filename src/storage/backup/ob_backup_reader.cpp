@@ -662,7 +662,7 @@ int ObSSTableMetaBackupReader::init(const common::ObTabletID &tablet_id,
   } else if (!tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid argument", K(ret), K(tablet_id));
-  } else if (OB_FAIL(cond_.init(ObWaitEventIds::IO_CONTROLLER_COND_WAIT))) {
+  } else if (OB_FAIL(cond_.init(ObWaitEventIds::SSTABLE_META_BACKUP_READER_COND_WAIT))) {
     LOG_WARN("failed to init condition", K(ret));
   } else {
     tablet_id_ = tablet_id;

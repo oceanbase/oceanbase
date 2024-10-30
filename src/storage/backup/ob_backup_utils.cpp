@@ -2798,7 +2798,7 @@ int ObBackupMacroBlockTaskMgr::init(const share::ObBackupDataType &backup_data_t
   } else if (batch_size < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(batch_size));
-  } else if (OB_FAIL(cond_.init(ObWaitEventIds::IO_CONTROLLER_COND_WAIT))) {
+} else if (OB_FAIL(cond_.init(ObWaitEventIds::BACKUP_MACRO_BLOCK_TASK_COND_WAIT))) {
     LOG_WARN("failed to init condition", K(ret));
   } else {
     backup_data_type_ = backup_data_type;
