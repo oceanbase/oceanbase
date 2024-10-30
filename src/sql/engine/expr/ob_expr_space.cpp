@@ -35,25 +35,38 @@ inline int ObExprSpace::calc_result_type1(
     ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
+  ObRawExpr * raw_expr = nullptr;
+  ObRawExpr * child_raw_expr = nullptr;
   // space is mysql only expr
   CK(lib::is_mysql_mode());
   ObObjType res_type = ObMaxType;
   if (type1.is_null() || (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_0_0)) {
     res_type = ObVarcharType;
   } else if (type1.is_literal()) {
-    const ObObj &obj = type1.get_param();
-    ObArenaAllocator alloc(ObModIds::OB_SQL_RES_TYPE);
-    const ObDataTypeCastParams dtc_params = type_ctx.get_dtc_params();
-    int64_t cur_time = 0;
-    ObCastMode cast_mode = CM_NONE;
-    if (FALSE_IT(ObSQLUtils::get_default_cast_mode(type_ctx.get_sql_mode(), cast_mode))) {
-    } else {
-      cast_mode |= CM_WARN_ON_FAIL;
-      ObCastCtx cast_ctx(
-          &alloc, &dtc_params, cur_time, cast_mode, CS_TYPE_INVALID);
-      int64_t count_val = 0;
-      EXPR_GET_INT64_V2(obj, count_val);
-      res_type = get_result_type_mysql(count_val);
+    if (OB_FAIL(calc_result_type(type_ctx, type1.get_param(), res_type))) {
+      LOG_WARN("calc_result_type fail", K(ret), K(type1), K(type_ctx));
+    }
+  } else if (OB_ISNULL(raw_expr = type_ctx.get_raw_expr())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("raw_expr is null", K(ret), K(type_ctx));
+  } else if (OB_ISNULL(child_raw_expr = raw_expr->get_param_expr(0))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get child expr fail", K(ret), KPC(raw_expr), K(type_ctx));
+  } else if (T_FUN_SYS_CAST == child_raw_expr->get_expr_type()
+        && child_raw_expr->has_flag(IS_OP_OPERAND_IMPLICIT_CAST)
+        && child_raw_expr->get_param_expr(0)->get_result_type().is_literal()) {
+    // some scenarios may have multiple type inferences
+    // if the input is a string literal, the first inference will add an implicit cast to convert a string to an integer
+    // this makes the input type not literal in the second type inference, resulting in an inference to longtext
+    // this in turn causes multiple implicit cast to be added to the same expr
+    // so need to make a special judgment here
+    // eg :
+    //      create table space_t1(c1 char(181) default (space( '1')));
+    //      select c1 from space_t1;
+    if (child_raw_expr->get_param_expr(0)->get_result_type().is_null()) {
+      res_type = ObVarcharType;
+    } else if (OB_FAIL(calc_result_type(type_ctx, child_raw_expr->get_param_expr(0)->get_result_type().get_param(), res_type))) {
+      LOG_WARN("calc_result_type fail", K(ret), K(type1), K(type_ctx));
     }
   } else {
     res_type = ObLongTextType;
@@ -77,6 +90,26 @@ inline int ObExprSpace::calc_result_type1(
   type1.set_calc_type(ObIntType);
   // Set cast mode for parameter casting, truncate string to integer.
   type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_STRING_INTEGER_TRUNC);
+  return ret;
+}
+
+int ObExprSpace::calc_result_type(ObExprTypeCtx &type_ctx, const ObObj &obj, ObObjType &res_type) const
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator alloc(ObModIds::OB_SQL_RES_TYPE);
+  const ObDataTypeCastParams dtc_params = type_ctx.get_dtc_params();
+  int64_t cur_time = 0;
+  ObCastMode cast_mode = CM_NONE;
+  // void return function
+  ObSQLUtils::get_default_cast_mode(type_ctx.get_sql_mode(), cast_mode);
+  cast_mode |= CM_WARN_ON_FAIL;
+  ObCastCtx cast_ctx(
+      &alloc, &dtc_params, cur_time, cast_mode, CS_TYPE_INVALID);
+  int64_t count_val = 0;
+  EXPR_GET_INT64_V2(obj, count_val);
+  if (OB_SUCC(ret)) {
+    res_type = get_result_type_mysql(count_val);
+  }
   return ret;
 }
 
