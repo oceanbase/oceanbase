@@ -1393,14 +1393,7 @@ int ObSql::do_real_prepare(const ObString &sql,
     }
   }
   //if the error code is ob_timeout, we add more error info msg for dml query.
-  if (OB_TIMEOUT == ret &&
-      session.is_user_session() &&
-      parse_result.result_tree_ != NULL &&
-      parse_result.result_tree_->children_ != NULL &&
-      parse_result.result_tree_->num_child_ >= 1 &&
-      (parse_result.result_tree_->children_[0]->type_ == T_EXPLAIN ||
-       IS_DML_STMT(parse_result.result_tree_->children_[0]->type_) ||
-       IS_SHOW_STMT(parse_result.result_tree_->children_[0]->type_))) {
+  if (OB_UNLIKELY(OB_TIMEOUT == ret && session.is_user_session())) {
     LOG_USER_ERROR(OB_TIMEOUT, THIS_WORKER.get_timeout_ts() - session.get_query_start_time());
   }
   LOG_INFO("add ps cache", K(info_ctx.normalized_sql_), K(param_cnt), K(ret));
@@ -5237,14 +5230,7 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
   }
 #endif
   //if the error code is ob_timeout, we add more error info msg for dml query.
-  if (OB_TIMEOUT == ret &&
-      result.get_session().is_user_session() &&
-      parse_result.result_tree_ != NULL &&
-      parse_result.result_tree_->children_ != NULL &&
-      parse_result.result_tree_->num_child_ >= 1 &&
-      (parse_result.result_tree_->children_[0]->type_ == T_EXPLAIN ||
-       IS_DML_STMT(parse_result.result_tree_->children_[0]->type_) ||
-       IS_SHOW_STMT(parse_result.result_tree_->children_[0]->type_))) {
+  if (OB_UNLIKELY(OB_TIMEOUT == ret && session.is_user_session())) {
     LOG_USER_ERROR(OB_TIMEOUT, THIS_WORKER.get_timeout_ts() - result.get_session().get_query_start_time());
   }
   return ret;
