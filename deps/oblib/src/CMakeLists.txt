@@ -20,6 +20,7 @@ target_include_directories(
   ${DEVTOOLS_DIR}
   ${DEVTOOLS_DIR}/include
   ${DEP_DIR}/include/apr-1/
+  ${DEP_DIR}/include/icu
   ${DEP_DIR}/include/icu/common
   ${USSL_INCLUDE_DIRS}
 )
