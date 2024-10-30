@@ -221,7 +221,7 @@ typedef enum ObItemType
   T_OP_VECTOR_COSINE_DISTANCE = 190,
 
   // vector parameter
-  T_VECTOR_IVFFLAT_PROBES = 191,
+  T_VECTOR_PROBES = 191,
   T_VECTOR_INDEX_PARAMS = 192,
 
   T_VECTOR_APPROX = 193,

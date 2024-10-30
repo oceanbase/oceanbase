@@ -110,7 +110,8 @@ ObDDLResolver::ObDDLResolver(ObResolverParams &params)
     tablespace_id_(OB_INVALID_ID),
     table_dop_(DEFAULT_TABLE_DOP),
     hash_subpart_num_(-1),
-    vector_ivfflat_lists_(OB_DEFAULT_VECTOR_IVFFLAT_LISTS),
+    vector_ivf_lists_(OB_DEFAULT_VECTOR_IVF_LISTS),
+    vector_pq_seg_(OB_DEFAULT_VECTOR_PQ_SEG),
     vector_hnsw_m_(OB_DEFAULT_VECTOR_HNSW_M),
     vector_hnsw_ef_construction_(OB_DEFAULT_VECTOR_HNSW_EF_CONSTRUCTION),
     is_external_table_(false),
@@ -2328,7 +2329,8 @@ int ObDDLResolver::resolve_vector_index_parameters(const ParseNode *option_node)
             parser_name_ != "m" &&
             parser_name_ != "ef_construction" &&
             parser_name_ != "ef_search" &&
-            parser_name_ != "lists") {
+            parser_name_ != "lists" &&
+            parser_name_ != "seg") {
           SQL_RESV_LOG(ERROR, "unexpected vector variable name", K(ret), K(parser_name_));
         } else {
           last_variable = parser_name_;
@@ -2348,6 +2350,9 @@ int ObDDLResolver::resolve_vector_index_parameters(const ParseNode *option_node)
             index_using_type_ = USING_HNSW;
           } else if (parser_name == "ivfflat") {
             index_using_type_ = USING_IVFFLAT;
+          // TODO: Stablize the support of IVFPQ
+          // } else if (parser_name == "ivfpq") {
+          //   index_using_type_ = USING_IVFPQ;
           } else {
             ret = OB_NOT_SUPPORTED;
             SQL_RESV_LOG(ERROR, "not support vector index type", K(ret), K(parser_name));
@@ -2355,11 +2360,20 @@ int ObDDLResolver::resolve_vector_index_parameters(const ParseNode *option_node)
         } else if (last_variable == "lists") {
           if (parser_value <= 0) {
             ret = OB_INVALID_ARGUMENT;
-            SQL_RESV_LOG(WARN, "invalid vector_ivfflat_lists", K(parser_value),
+            SQL_RESV_LOG(WARN, "invalid vector_ivf_lists", K(parser_value),
                 K(ret));
-            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "vector_ivfflat_lists");
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "vector_ivf_lists");
           } else {
-            vector_ivfflat_lists_ = parser_value;
+            vector_ivf_lists_ = parser_value;
+          }
+        } else if (last_variable == "seg") {
+          if (parser_value <= 0) {
+            ret = OB_INVALID_ARGUMENT;
+            SQL_RESV_LOG(WARN, "invalid vector_pq_seg", K(parser_value),
+                K(ret));
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "vector_pq_seg");
+          } else {
+            vector_pq_seg_ = parser_value;
           }
         } else if (last_variable == "m") {
           if (parser_value <= 0) {
@@ -4570,7 +4584,8 @@ void ObDDLResolver::reset() {
   tablespace_id_ = OB_INVALID_ID;
   table_dop_ = DEFAULT_TABLE_DOP;
   hash_subpart_num_ = -1;
-  vector_ivfflat_lists_ = OB_DEFAULT_VECTOR_IVFFLAT_LISTS;
+  vector_ivf_lists_ = OB_DEFAULT_VECTOR_IVF_LISTS;
+  vector_pq_seg_ = OB_DEFAULT_VECTOR_PQ_SEG;
   ttl_definition_.reset();
   kv_attributes_.reset();
   lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;

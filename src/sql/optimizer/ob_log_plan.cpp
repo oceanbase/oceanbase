@@ -4283,6 +4283,7 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
     scan->set_is_spatial_index(ap->est_cost_info_.index_meta_info_.is_geo_index_);
     scan->set_is_vector_index(ap->est_cost_info_.index_meta_info_.is_vector_index_);
     scan->set_container_table_id(ap->est_cost_info_.index_meta_info_.container_table_id_);
+    scan->set_second_container_table_id(ap->est_cost_info_.index_meta_info_.second_container_table_id_);
     scan->set_use_das(ap->use_das_);
     scan->set_table_partition_info(ap->table_partition_info_);
     scan->set_table_opt_info(ap->table_opt_info_);
@@ -12468,7 +12469,8 @@ int ObLogPlan::collect_table_location(ObLogicalOperator *op)
           *optimizer_context_.get_exec_ctx(),
           table_scan->get_real_index_table_id(),
           table_scan->is_index_scan() && !table_scan->get_is_index_global(),
-          table_scan->get_container_table_id()))) {
+          table_scan->get_container_table_id(),
+          table_scan->get_second_container_table_id()))) {
         LOG_WARN("failed to set table partition info", K(ret));
       } else if (OB_FAIL(add_global_table_partition_info(table_partition_info))) {
         LOG_WARN("failed to add table partition info", K(ret));
@@ -12560,6 +12562,9 @@ int ObLogPlan::collect_location_related_info(ObLogicalOperator &op)
       }
       if (OB_SUCC(ret) && tsc_op.need_container_table() && OB_FAIL(rel_info.related_ids_.push_back(tsc_op.get_container_table_id()))) {
         LOG_WARN("store the related container table id failed", K(ret));
+      }
+      if (OB_SUCC(ret) && tsc_op.need_second_container_table() && OB_FAIL(rel_info.related_ids_.push_back(tsc_op.get_second_container_table_id()))) {
+        LOG_WARN("store the related second container table id failed", K(ret));
       }
       if (OB_SUCC(ret) && OB_FAIL(optimizer_context_.get_loc_rel_infos().push_back(rel_info))) {
         LOG_WARN("store location related info failed", K(ret));
@@ -13118,23 +13123,23 @@ int ObLogPlan::get_extra_access_exprs(const uint64_t table_id,
       if (OB_FAIL(rowkey_info.get_column_id(i, column_id))) {
         LOG_WARN("Failed to get column_id from rowkey_info", K(ret));
       } else if (NULL != (column_item = get_column_item_by_id(table_id, column_id))) {
-        if (0 == column_item->column_name_.compare("center_idx")) { // 这列保证了column_id是最大的，不会和原来的column_id重复
+        if (0 == column_item->column_name_.compare("center_idx") ||
+            0 == column_item->column_name_.compare("seg_idx")) { // 这列保证了column_id是最大的，不会和原来的column_id重复
           if (OB_FAIL(extra_columns.push_back(column_item->expr_))) {
             LOG_WARN("failed to push column item", K(ret));
           }
-          break;
         }
       } else if (OB_ISNULL(column_schema = table_schema.get_column_schema(column_id))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get column schema", K(column_id), K(ret));
-      } else if (0 == column_schema->get_column_name_str().compare("center_idx")) {
+      } else if (0 == column_schema->get_column_name_str().compare("center_idx") ||
+                 0 == column_schema->get_column_name_str().compare("seg_idx")) {
         if (OB_FAIL(generate_column_expr(get_optimizer_context().get_expr_factory(), table_id,
                                                 *column_schema, column_item2))) {
           LOG_WARN("failed to get rowkey exprs", K(ret));
         } else if (OB_FAIL(extra_columns.push_back(column_item2.expr_))) {
           LOG_WARN("failed to push column item", K(ret));
         }
-        break;
       }
     }
     const common::ObIndexInfo &index_info = table_schema.get_index_info();

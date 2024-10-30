@@ -13010,9 +13010,9 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
       }
       break;
     }
-    case T_VECTOR_IVFFLAT_PROBES: {
+    case T_VECTOR_PROBES: {
       CHECK_HINT_PARAM(hint_node, 1) {
-        global_hint.merge_vector_ivfflat_probes_hint(child0->value_);
+        global_hint.merge_vector_probes_hint(child0->value_);
       }
       break;
     }

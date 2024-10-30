@@ -15,6 +15,7 @@
 #include "lib/vector/ob_vector_ip_distance.h"
 #include "lib/vector/ob_vector_cosine_distance.h"
 #include "common/object/ob_obj_compare.h"
+#include "lib/random/ob_mysql_random.h"
 
 namespace oceanbase
 {
@@ -119,6 +120,52 @@ int ObTypeVector::divide(const int64_t divisor)
   return ret;
 }
 
+int ObTypeVector::subtract(const ObTypeVector& other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(vals_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LIB_LOG(WARN, "vals_ is nullptr", K(ret));
+  } else if (OB_ISNULL(other.ptr()) || dims_ != other.dims()) {
+    ret = OB_INVALID_ARGUMENT;
+    LIB_LOG(WARN, "invalid argument", K(ret), K(other), K(this));
+  } else {
+    for (int64_t i = 0; i < dims_; ++i) {
+      vals_[i] -= other.at(i);
+    }
+  }
+  return ret;
+}
+
+int ObTypeVector::split(ObTypeVector* &vector, const int64_t dim, const int64_t idx) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(vals_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LIB_LOG(WARN, "vals_ is nullptr", K(ret));
+  } else if (0 == dim) {
+    LIB_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid argument for split dim", K(dim));
+  } else if (dims_/dim <= idx) {
+    LIB_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid argument for split idx", K(idx), K(dims_), K(dim));
+  } else {
+    // 通过浅拷贝的方式完成，复用float指针
+    vector = new ObTypeVector(&vals_[idx*dim], dim);
+  }
+  return ret;
+}
+
+bool ObTypeVector::is_zero() const
+{
+  bool is_zero = true;
+  for (int64_t i = 0; i < dims_; ++i) {
+    if (0 != vals_[i]) {
+      is_zero = false;
+      break;
+    }
+  }
+  return is_zero;
+}
+
 int ObTypeVector::vector_cmp(const ObTypeVector& other)
 {
   int cmp_res = ObObjCmpFuncs::CR_EQ;
@@ -182,6 +229,95 @@ bool ObTypeVector::vector_ge(const ObTypeVector& other)
 bool ObTypeVector::vector_gt(const ObTypeVector& other)
 {
   return vector_cmp(other) == ObObjCmpFuncs::CR_GT;
+}
+
+void ObTypeVector::destory_vector(ObIAllocator &allocator, ObTypeVector *&vector) {
+  if (OB_NOT_NULL(vector)) {
+    vector->destroy(allocator); // free ptr
+    allocator.free(vector);
+    vector = nullptr;
+  }
+}
+
+void ObTypeVector::reuse_array(ObIAllocator &allocator, ObIArray<ObTypeVector *> &array) {
+  for (int64_t i = 0; i < array.count(); ++i) {
+    if (OB_ISNULL(array.at(i))) {
+      LIB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpect nullptr", K(i), "count",
+                    array.count());
+    } else {
+      destory_vector(allocator, array.at(i));
+    }
+  }
+  array.reuse();
+}
+
+int ObTypeVector::alloc_random_vector(ObIAllocator &allocator, ObTypeVector *&vector, const int64_t vector_size) {
+  int ret = OB_SUCCESS;
+  vector = nullptr;
+  void *buf = nullptr;
+  float *val = nullptr;
+  if (nullptr == (buf = allocator.alloc(sizeof(ObTypeVector)))) {
+    ret = common::OB_ALLOCATE_MEMORY_FAILED;
+    LIB_LOG(WARN, "failed to alloc ObTypeVector", K(ret));
+  } else if (FALSE_IT(vector = new (buf) ObTypeVector())) {
+  } else if (nullptr == (val = static_cast<float *>(
+                            allocator.alloc(sizeof(float) * vector_size)))) {
+    ret = common::OB_ALLOCATE_MEMORY_FAILED;
+    LIB_LOG(WARN, "failed to alloc double array", K(ret));
+  } else {
+    ObMysqlRandom random;
+    const int64_t current_time = ObClockGenerator::getClock();
+    random.init(static_cast<uint64_t>(current_time),
+                static_cast<uint64_t>(current_time / 2));
+    for (int64_t i = 0; i < vector_size; ++i) {
+      val[i] = random.get_double();
+    }
+    vector->assign(val, vector_size);
+  }
+  if (OB_FAIL(ret)) {
+    destory_vector(allocator, vector);
+  }
+  return ret;
+}
+
+int ObTypeVector::alloc_and_copy_vector(ObIAllocator &allocator, const ObTypeVector &other, ObTypeVector *&vector) {
+  int ret = OB_SUCCESS;
+  vector = nullptr;
+  void *buf = nullptr;
+  if (nullptr == (buf = allocator.alloc(sizeof(ObTypeVector)))) {
+    ret = common::OB_ALLOCATE_MEMORY_FAILED;
+    LIB_LOG(WARN, "failed to alloc ObTypeVector", K(ret));
+  } else if (FALSE_IT(vector = new (buf) ObTypeVector())) {
+  } else if (OB_FAIL(vector->deep_copy(other, allocator))) {
+    LIB_LOG(WARN, "failed to deep copy vector", K(ret), K(vector));
+  }
+  if (OB_FAIL(ret)) {
+    destory_vector(allocator, vector);
+  }
+  return ret;
+}
+
+int ObTypeVector::alloc_vector(ObIAllocator &allocator, ObTypeVector *&vector, const int64_t vector_size) {
+  int ret = OB_SUCCESS;
+  vector = nullptr;
+  void *buf = nullptr;
+  float *val = nullptr;
+  if (nullptr == (buf = allocator.alloc(sizeof(ObTypeVector)))) {
+    ret = common::OB_ALLOCATE_MEMORY_FAILED;
+    LIB_LOG(WARN, "failed to alloc ObTypeVector", K(ret));
+  } else if (FALSE_IT(vector = new (buf) ObTypeVector())) {
+  } else if (nullptr == (val = static_cast<float *>(
+                            allocator.alloc(sizeof(float) * vector_size)))) {
+    ret = common::OB_ALLOCATE_MEMORY_FAILED;
+    LIB_LOG(WARN, "failed to alloc double array", K(ret));
+  } else {
+    MEMSET(val, 0, sizeof(float) * vector_size);
+    vector->assign(val, vector_size);
+  }
+  if (OB_FAIL(ret)) {
+    destory_vector(allocator, vector);
+  }
+  return ret;
 }
 
 const char* ObTypeVector::get_distance_expr_str(const ObVectorDistanceType distance_type)
@@ -275,21 +411,26 @@ int ObTypeVector::cal_distance(const common::ObVectorDistanceType vd_type, const
 {
   int ret = OB_SUCCESS;
   distance = 0;
-  switch(vd_type) {
-    case L2: {
-      ret = cal_l2_distance(other, distance);
-      break;
-    }
-    case INNER_PRODUCT: {
-      ret = cal_inner_product_distance(other, distance);
-      break;
-    }
-    case COSINE: {
-      ret = cal_cosine_distance(other, distance);
-      break;
-    }
-    default:{
-      ret = OB_ERR_UNEXPECTED;
+  if (this->is_zero() || other.is_zero()) {
+    distance = DBL_MAX;
+    LIB_LOG(WARN, "undefined behavior for vector to be zero", K(this), K(other));
+  } else {
+    switch(vd_type) {
+      case L2: {
+        ret = cal_l2_distance(other, distance);
+        break;
+      }
+      case INNER_PRODUCT: {
+        ret = cal_inner_product_distance(other, distance);
+        break;
+      }
+      case COSINE: {
+        ret = cal_cosine_distance(other, distance);
+        break;
+      }
+      default:{
+        ret = OB_ERR_UNEXPECTED;
+      }
     }
   }
   return ret;
@@ -299,18 +440,23 @@ int ObTypeVector::cal_kmeans_distance(const common::ObVectorDistanceType vd_type
 {
   int ret = OB_SUCCESS;
   distance = 0;
-  switch(vd_type) {
-    case L2: {
-      ret = cal_l2_distance(other, distance);
-      break;
-    }
-    case INNER_PRODUCT:
-    case COSINE: {
-      ret = cal_angular_distance(other, distance);
-      break;
-    }
-    default:{
-      ret = OB_ERR_UNEXPECTED;
+  if (this->is_zero() || other.is_zero()) {
+    distance = DBL_MAX;
+    LIB_LOG(WARN, "undefined behavior for vector to be zero", K(this), K(other));
+  } else {
+    switch(vd_type) {
+      case L2: {
+        ret = cal_l2_distance(other, distance);
+        break;
+      }
+      case INNER_PRODUCT:
+      case COSINE: {
+        ret = cal_angular_distance(other, distance);
+        break;
+      }
+      default:{
+        ret = OB_ERR_UNEXPECTED;
+      }
     }
   }
   return ret;

@@ -810,7 +810,7 @@ int ObInnerTableSchema::dba_ob_access_point_ora_schema(ObTableSchema &table_sche
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT a.TENANT_ID,         TENANT_NAME,         SVR_IP,         SQL_PORT   FROM SYS.ALL_VIRTUAL_LS_META_TABLE a, SYS.DBA_OB_TENANTS b    WHERE LS_ID=1 and a.TENANT_ID = b.TENANT_ID;   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT a.TENANT_ID,         TENANT_NAME,         SVR_IP,         SQL_PORT   FROM SYS.ALL_VIRTUAL_LS_META_TABLE a, SYS.DBA_OB_TENANTS b   WHERE LS_ID=1 and a.TENANT_ID = b.TENANT_ID;   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

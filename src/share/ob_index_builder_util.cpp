@@ -496,18 +496,21 @@ int ObIndexBuilderUtil::set_index_table_columns_for_vector_hnsw(
   return ret;
 }
 
-int ObIndexBuilderUtil::set_index_table_columns_for_vector_ivfflat(
+int ObIndexBuilderUtil::set_index_table_columns_for_vector_ivf(
     const obrpc::ObCreateIndexArg &arg,
     const share::schema::ObTableSchema &data_schema,
     const ObColumnSchemaV2 &data_column,
     share::schema::ObTableSchema &index_schema,
-    common::ObRowDesc &row_desc)
+    common::ObRowDesc &row_desc,
+    ObIndexTableType index_table_type)
 {
   int ret = OB_SUCCESS;
+  ObColumnSchemaV2 new_data_column;
+  new_data_column.assign(data_column);
   // always !is_unique
   const ObColumnSchemaV2 *rowkey_data_column = NULL;
   const ObRowkeyInfo &rowkey_info = data_schema.get_rowkey_info();
-  const int64_t new_column_id = data_schema.get_max_used_column_id() + 1;
+  int64_t new_column_id = data_schema.get_max_used_column_id() + 1;
 
   ObColumnSchemaV2 rowkey_col;
   rowkey_col.set_data_type(ObIntType);
@@ -518,6 +521,20 @@ int ObIndexBuilderUtil::set_index_table_columns_for_vector_ivfflat(
       nullptr/*new_col_name*/, 0/*new_col_name_len*/, new_column_id/*new_col_id*/, 0/*index_position*/))) {
       LOG_WARN("add column failed", K(data_column), "order_type", arg.index_columns_.at(0).order_type_,
           K(row_desc), K(ret));
+  }
+  if (OB_SUCC(ret) && ObIndexUsingType::USING_IVFPQ == arg.index_using_type_ &&
+      ObIndexTableType::SECOND_CONTAINER_TABLE == index_table_type) {
+    new_column_id++;
+    ObColumnSchemaV2 second_rowkey_col;
+    second_rowkey_col.set_data_type(ObIntType);
+    second_rowkey_col.set_column_name("seg_idx");
+    if (FAILEDx(add_column(&second_rowkey_col, false/*is_index_column*/, true/*is_rowkey*/,
+        arg.index_columns_.at(0).order_type_, row_desc, index_schema,
+        false /* is_hidden */, false /* is_specified_storing_col */,
+        nullptr/*new_col_name*/, 0/*new_col_name_len*/, new_column_id/*new_col_id*/, 1/*index_position*/))) {
+        LOG_WARN("add column failed", K(data_column), "order_type", arg.index_columns_.at(0).order_type_,
+            K(row_desc), K(ret));
+    }
   }
   if (OB_SUCC(ret)) { // index table
     for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_info.get_size(); ++i) {
@@ -558,13 +575,32 @@ int ObIndexBuilderUtil::set_index_table_columns_for_vector_ivfflat(
   }
   if (OB_SUCC(ret)) {
     index_schema.set_rowkey_column_num(row_desc.get_column_num());
+    if (ObIndexUsingType::USING_IVFPQ == arg.index_using_type_) {
+      common::ObAccuracy accuracy = new_data_column.get_accuracy();
+      switch (index_table_type) {
+        case ObIndexTableType::INDEX_TABLE:
+          accuracy.set_length(arg.vector_pq_seg_);
+          break;
+        case ObIndexTableType::SECOND_CONTAINER_TABLE:
+          if (accuracy.get_length() % arg.vector_pq_seg_ != 0) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("vector_pq_seg_ should be a factor of accuracy length", K(accuracy.get_length()), K(arg.vector_pq_seg_), K(ret));
+          } else if (FALSE_IT(accuracy.set_length(accuracy.get_length() / arg.vector_pq_seg_))) {
+          }
+          break;
+        default:
+          break;
+      }
+      new_data_column.set_accuracy(accuracy);
+    }
+    LOG_TRACE("new accuracy", K(new_data_column.get_accuracy()));
   }
-  if (FAILEDx(add_column(&data_column, true/*is_index_column*/, false/*is_rowkey*/,
+  if (FAILEDx(add_column(&new_data_column, true/*is_index_column*/, false/*is_rowkey*/,
       arg.index_columns_.at(0).order_type_, row_desc, index_schema,
       false /* is_hidden */, false /* is_specified_storing_col */,
       nullptr/*new_col_name*/, 0/*new_col_name_len*/, -1/*new_col_id*/, 1/*index_position*/))) {
-      LOG_WARN("add column failed", K(data_column), "order_type", arg.index_columns_.at(0).order_type_,
-          K(row_desc), K(ret));
+      LOG_WARN("add column failed", K(new_data_column), "order_type", arg.index_columns_.at(0).order_type_,
+             K(row_desc), K(ret));
   } else {
     index_schema.set_index_column_num(1);
   }
@@ -576,7 +612,8 @@ int ObIndexBuilderUtil::set_index_table_columns(
     const ObCreateIndexArg &arg,
     const ObTableSchema &data_schema,
     ObTableSchema &index_schema,
-    bool check_data_schema /*=true*/)
+    bool check_data_schema, /*=true*/
+    ObIndexTableType index_table_type)
 {
   int ret = OB_SUCCESS;
   bool use_mysql_errno = true; //use mysql errno for functional index
@@ -623,9 +660,9 @@ int ObIndexBuilderUtil::set_index_table_columns(
                       "column length", sort_item.prefix_len_, K(ret));
           } else {
             index_schema.set_vector_distance_func(sort_item.vd_type_);
-            if (ObIndexUsingType::USING_IVFFLAT == arg.index_using_type_) {
-              if (OB_FAIL(set_index_table_columns_for_vector_ivfflat(arg, data_schema, *data_column, index_schema, row_desc))) {
-                LOG_WARN("failed to set index table columns for ivfflat", K(ret), K(arg));
+            if (arg.is_vector_ivf_index()) {
+              if (OB_FAIL(set_index_table_columns_for_vector_ivf(arg, data_schema, *data_column, index_schema, row_desc, index_table_type))) {
+                LOG_WARN("failed to set index table columns for ivf", K(ret), K(arg));
               }
             } else if (ObIndexUsingType::USING_HNSW == arg.index_using_type_) {
               if (OB_FAIL(set_index_table_columns_for_vector_hnsw(arg, data_schema, index_schema, row_desc))) {

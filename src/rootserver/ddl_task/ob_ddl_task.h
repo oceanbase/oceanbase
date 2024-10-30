@@ -148,7 +148,8 @@ public:
                        const obrpc::ObDDLArg *ddl_arg = nullptr,
                        const int64_t parent_task_id = 0,
                        const int64_t task_id = 0,
-                       const ObTableSchema *container_table_schema = nullptr);
+                       const ObTableSchema *container_table_schema = nullptr,
+                       const ObTableSchema *second_container_schema = nullptr);
   ~ObCreateDDLTaskParam() = default;
   bool is_valid() const { return OB_INVALID_ID != tenant_id_ && type_ > share::DDL_INVALID
                                  && type_ < share::DDL_MAX && nullptr != allocator_; }
@@ -167,6 +168,7 @@ public:
   const ObTableSchema *src_table_schema_;
   const ObTableSchema *dest_table_schema_;
   const ObTableSchema *container_table_schema_;
+  const ObTableSchema *second_container_table_schema_;
   const obrpc::ObDDLArg *ddl_arg_;
   common::ObIAllocator *allocator_;
   uint64_t tenant_data_version_;

@@ -611,6 +611,11 @@ public:
     probes = sys_vars_cache_.get_vector_ivfflat_probes();
     return common::OB_SUCCESS;
   }
+  int get_vector_ivfpq_probes(uint64_t &probes) const
+  {
+    probes = sys_vars_cache_.get_vector_ivfpq_probes();
+    return common::OB_SUCCESS;
+  }
   int64_t get_query_timeout_ts() const; //获取当前query超时的绝对时间
   int64_t get_trx_lock_timeout() const
   {
@@ -1624,6 +1629,7 @@ public:
         ob_org_cluster_id_(0),
         ob_query_timeout_(0),
         vector_ivfflat_probes_(0),
+        vector_ivfpq_probes_(0),
         ob_trx_timeout_(0),
         collation_connection_(0),
         sql_mode_(DEFAULT_OCEANBASE_MODE),
@@ -1678,6 +1684,7 @@ public:
       ob_org_cluster_id_ = 0;
       ob_query_timeout_ = 0;
       vector_ivfflat_probes_ = 0;
+      vector_ivfpq_probes_ = 0;
       ob_trx_timeout_ = 0;
       collation_connection_ = 0;
       ob_enable_sql_audit_ = false;
@@ -1733,6 +1740,7 @@ public:
             ob_org_cluster_id_ == other.ob_org_cluster_id_ &&
             ob_query_timeout_ == other.ob_query_timeout_ &&
             vector_ivfflat_probes_ == other.vector_ivfflat_probes_ &&
+            vector_ivfpq_probes_ == other.vector_ivfpq_probes_ &&
             ob_trx_timeout_ == other.ob_trx_timeout_ &&
             collation_connection_ == other.collation_connection_ &&
             ob_enable_sql_audit_ == other.ob_enable_sql_audit_ &&
@@ -1860,7 +1868,7 @@ public:
     }
 
     TO_STRING_KV(K(autocommit_), K(ob_enable_trace_log_), K(ob_enable_sql_audit_), K(nls_length_semantics_),
-                 K(ob_org_cluster_id_), K(ob_query_timeout_), K_(vector_ivfflat_probes), K(ob_trx_timeout_), K(collation_connection_),
+                 K(ob_org_cluster_id_), K(ob_query_timeout_), K_(vector_ivfflat_probes), K_(vector_ivfpq_probes), K(ob_trx_timeout_), K(collation_connection_),
                  K(sql_mode_), K(nls_formats_[0]), K(nls_formats_[1]), K(nls_formats_[2]),
                  K(ob_trx_idle_timeout_), K(ob_trx_lock_timeout_), K(nls_collation_), K(nls_nation_collation_),
                  K_(sql_throttle_current_priority), K_(ob_last_schema_version), K_(sql_select_limit),
@@ -1911,6 +1919,7 @@ public:
     int64_t ob_org_cluster_id_;
     int64_t ob_query_timeout_;
     uint64_t vector_ivfflat_probes_;
+    uint64_t vector_ivfpq_probes_;
     int64_t ob_trx_timeout_;
     int64_t collation_connection_;
     ObSQLMode sql_mode_;
@@ -2022,6 +2031,7 @@ private:
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, ob_org_cluster_id);
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, ob_query_timeout);
     DEF_SYS_VAR_CACHE_FUNCS(uint64_t, vector_ivfflat_probes);
+    DEF_SYS_VAR_CACHE_FUNCS(uint64_t, vector_ivfpq_probes);
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, ob_trx_timeout);
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, collation_connection);
     DEF_SYS_VAR_CACHE_FUNCS(ObSQLMode, sql_mode);
@@ -2093,6 +2103,7 @@ private:
         bool inc_ob_org_cluster_id_:1;
         bool inc_ob_query_timeout_:1;
         bool inc_vector_ivfflat_probes_:1;
+        bool inc_vector_ivfpq_probes_:1;
         bool inc_ob_trx_timeout_:1;
         bool inc_collation_connection_:1;
         bool inc_sql_mode_:1;

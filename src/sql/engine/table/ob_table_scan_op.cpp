@@ -112,6 +112,7 @@ OB_DEF_SERIALIZE(ObTableScanCtDef)
   int ret = OB_SUCCESS;
   bool has_lookup = (lookup_ctdef_ != nullptr);
   bool has_container = (container_ctdef_ != nullptr);
+  bool has_second_container = (second_container_ctdef_ != nullptr);
   OB_UNIS_ENCODE(pre_query_range_);
   OB_UNIS_ENCODE(flashback_item_.need_scn_);
   OB_UNIS_ENCODE(flashback_item_.flashback_query_expr_);
@@ -128,6 +129,11 @@ OB_DEF_SERIALIZE(ObTableScanCtDef)
   if (OB_SUCC(ret) && has_container) {
     OB_UNIS_ENCODE(*container_ctdef_);
     OB_UNIS_ENCODE(*container_loc_meta_);
+  }
+  OB_UNIS_ENCODE(has_second_container);
+  if (OB_SUCC(ret) && has_second_container) {
+    OB_UNIS_ENCODE(*second_container_ctdef_);
+    OB_UNIS_ENCODE(*second_container_loc_meta_);
   }
   bool has_dppr_tbl = (das_dppr_tbl_ != nullptr);
   OB_UNIS_ENCODE(has_dppr_tbl);
@@ -157,6 +163,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableScanCtDef)
   int64_t len = 0;
   bool has_lookup = (lookup_ctdef_ != nullptr);
   bool has_container = (container_ctdef_ != nullptr);
+  bool has_second_container = (second_container_ctdef_ != nullptr);
   OB_UNIS_ADD_LEN(pre_query_range_);
   OB_UNIS_ADD_LEN(flashback_item_.need_scn_);
   OB_UNIS_ADD_LEN(flashback_item_.flashback_query_expr_);
@@ -173,6 +180,11 @@ OB_DEF_SERIALIZE_SIZE(ObTableScanCtDef)
   if (has_container) {
     OB_UNIS_ADD_LEN(*container_ctdef_);
     OB_UNIS_ADD_LEN(*container_loc_meta_);
+  }
+  OB_UNIS_ADD_LEN(has_second_container);
+  if (has_second_container) {
+    OB_UNIS_ADD_LEN(*second_container_ctdef_);
+    OB_UNIS_ADD_LEN(*second_container_loc_meta_);
   }
   bool has_dppr_tbl = (das_dppr_tbl_ != nullptr);
   OB_UNIS_ADD_LEN(has_dppr_tbl);
@@ -201,6 +213,7 @@ OB_DEF_DESERIALIZE(ObTableScanCtDef)
   int ret = OB_SUCCESS;
   bool has_lookup = false;
   bool has_container = false;
+  bool has_second_container = false;
   OB_UNIS_DECODE(pre_query_range_);
   OB_UNIS_DECODE(flashback_item_.need_scn_);
   OB_UNIS_DECODE(flashback_item_.flashback_query_expr_);
@@ -247,6 +260,27 @@ OB_DEF_DESERIALIZE(ObTableScanCtDef)
       } else {
         container_loc_meta_ = new(loc_meta_buf) ObDASTableLocMeta(allocator_);
         OB_UNIS_DECODE(*container_loc_meta_);
+      }
+    }
+  }
+  OB_UNIS_DECODE(has_second_container);
+  if (OB_SUCC(ret) && has_second_container) {
+    void *ctdef_buf = allocator_.alloc(sizeof(ObDASScanCtDef));
+    if (OB_ISNULL(ctdef_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate das scan ctdef buffer failed", K(ret), K(sizeof(ObDASScanCtDef)));
+    } else {
+      second_container_ctdef_ = new(ctdef_buf) ObDASScanCtDef(allocator_);
+      OB_UNIS_DECODE(*second_container_ctdef_);
+    }
+    if (OB_SUCC(ret)) {
+      void *second_loc_meta_buf = allocator_.alloc(sizeof(ObDASTableLocMeta));
+      if (OB_ISNULL(second_loc_meta_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate second table loc meta failed", K(ret));
+      } else {
+        second_container_loc_meta_ = new(second_loc_meta_buf) ObDASTableLocMeta(allocator_);
+        OB_UNIS_DECODE(*second_container_loc_meta_);
       }
     }
   }
@@ -702,6 +736,7 @@ ObTableScanOp::ObTableScanOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOp
     hnsw_index_scan_cell_cnt_(-1),
     hnsw_index_scan_row_cnt_(-1),
     ivfflat_helper_(),
+    ivfpq_helper_(),
     saved_session_(NULL)
 {
 }
@@ -830,29 +865,42 @@ OB_INLINE int ObTableScanOp::create_one_das_task(ObDASTabletLoc *tablet_loc, boo
                                 && can_partition_retry());
     scan_op->set_inner_rescan(in_rescan_);
     scan_op->set_hnsw_index_iter_info(ann_output_objs_, hnsw_index_scan_cell_cnt_, hnsw_index_scan_row_cnt_);
-
-    scan_op->set_ivfflat_helper(&ivfflat_helper_);
-    scan_op->set_ivfflat_build_helper(&ivfflat_build_helper_);
-    // TODO(@wangmiao): set ivfflat_build_helper_
-    if (OB_UNLIKELY(ivfflat_helper_.is_inited()) && no_dist_das
-        && OB_FAIL(ivfflat_helper_.set_partition_name(tablet_loc->tablet_id_))) {
+    if (OB_UNLIKELY(ivfflat_helper_.is_inited())) {
+      scan_op->set_ivf_helper(&ivfflat_helper_);
+    } else if (OB_UNLIKELY(ivfpq_helper_.is_inited())) {
+      scan_op->set_ivf_helper(&ivfpq_helper_);
+    }
+    if (OB_UNLIKELY(ivfflat_build_helper_.is_inited())) {
+      scan_op->set_ivf_build_helper(&ivfflat_build_helper_);
+    } else if (OB_UNLIKELY(ivfpq_build_helper_.is_inited())) {
+      scan_op->set_ivf_build_helper(&ivfpq_build_helper_);
+    }
+    // TODO(@wangmiao): set ivfflat_build_helper_ and ivfpq_build_helper_
+    if ((OB_UNLIKELY(ivfflat_helper_.is_inited()) && no_dist_das
+        && OB_FAIL(ivfflat_helper_.set_partition_name(tablet_loc->tablet_id_))) ||
+        (OB_UNLIKELY(ivfpq_helper_.is_inited()) && no_dist_das
+        && OB_FAIL(ivfpq_helper_.set_partition_name(tablet_loc->tablet_id_)))) {
       if (ret == OB_OP_NOT_ALLOW) {
         // ignore error
         ret = OB_SUCCESS;
       } else {
-        LOG_WARN("fail to set partition name for ivfflat helper", K(ret), K(tablet_loc->tablet_id_));
+        LOG_WARN("fail to set partition name for ivfflat or ivfpq helper", K(ret), K(tablet_loc->tablet_id_));
       }
     }
     ivfflat_helper_.reuse();
+    ivfpq_helper_.reuse();
     if (OB_FAIL(ret)) {
     } else if (OB_UNLIKELY(ivfflat_build_helper_.is_inited() && no_dist_das
         && OB_FAIL(ivfflat_build_helper_.set_partition_name(
+           tablet_loc->tablet_id_, MY_SPEC.ref_table_id_))) ||
+        OB_UNLIKELY(ivfpq_build_helper_.is_inited() && no_dist_das
+        && OB_FAIL(ivfpq_build_helper_.set_partition_name(
            tablet_loc->tablet_id_, MY_SPEC.ref_table_id_)))) {
       if (ret == OB_OP_NOT_ALLOW) {
         // ignore error
         ret = OB_SUCCESS;
       } else {
-        LOG_WARN("fail to set partition name for ivfflat builder helper",
+        LOG_WARN("fail to set partition name for ivfflat or ivfpq builder helper",
                 K(ret), K(tablet_loc->tablet_id_), K(scan_op->get_scan_param().index_id_));
       }
     }
@@ -890,6 +938,23 @@ OB_INLINE int ObTableScanOp::create_one_das_task(ObDASTabletLoc *tablet_loc, boo
         LOG_WARN("set container tablet id failed", K(ret), KPC(container_tablet_loc));
       } else {
         container_table_loc->is_reading_ = true;
+      }
+    }
+    if (OB_SUCC(ret) && MY_CTDEF.second_container_ctdef_ != nullptr) {
+      ObDASTableLoc *second_container_table_loc = tsc_rtdef_.second_container_rtdef_->table_loc_;
+      ObDASTabletLoc *second_container_tablet_loc = ObDASUtils::get_related_tablet_loc(
+          *tablet_loc, second_container_table_loc->loc_meta_->ref_table_id_);
+      if (OB_ISNULL(second_container_tablet_loc)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("second container tablet loc is nullptr", K(ret), KPC(tablet_loc), KPC(second_container_table_loc->loc_meta_));
+      } else if (OB_FAIL(scan_op->set_second_container_ctdef(MY_CTDEF.second_container_ctdef_))) {
+        LOG_WARN("set second container ctdef failed", K(ret));
+      } else if (OB_FAIL(scan_op->set_second_container_rtdef(tsc_rtdef_.second_container_rtdef_))) {
+        LOG_WARN("set second container rtdef failed", K(ret));
+      } else if (OB_FAIL(scan_op->set_second_container_tablet_id(second_container_tablet_loc->tablet_id_))) {
+        LOG_WARN("set second container tablet id failed", K(ret), KPC(second_container_tablet_loc));
+      } else {
+        second_container_table_loc->is_reading_ = true;
       }
     }
   }
@@ -1078,6 +1143,7 @@ int ObTableScanOp::init_table_scan_rtdef()
       tsc_rtdef_.is_build_vector_index_ = true;
       tsc_rtdef_.build_vector_index_table_id_ = MY_CTDEF.scan_ctdef_.table_param_.get_build_vector_index_table_id();
       tsc_rtdef_.build_vector_index_container_table_id_ = MY_CTDEF.scan_ctdef_.table_param_.get_build_vector_index_container_table_id();
+      tsc_rtdef_.build_vector_index_second_container_table_id_ = MY_CTDEF.scan_ctdef_.table_param_.get_build_vector_index_second_container_table_id();
     }
     if (OB_SUCC(ret) && MY_CTDEF.scan_ctdef_.table_param_.is_vector_index()) {
       tsc_rtdef_.is_ann_scan_ = true;
@@ -1096,6 +1162,7 @@ int ObTableScanOp::init_table_scan_rtdef()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ann search k can not be null", K(ret));
       }
+      LOG_TRACE("ann search k and vector", K(scan_rtdef.ann_search_k_), K(scan_rtdef.ann_search_vector_));
     }
   }
   if (OB_SUCC(ret) && MY_CTDEF.lookup_ctdef_ != nullptr) {
@@ -1120,7 +1187,20 @@ int ObTableScanOp::init_table_scan_rtdef()
       if (OB_FAIL(init_das_scan_rtdef(container_ctdef, *tsc_rtdef_.container_rtdef_, MY_CTDEF.container_loc_meta_))) {
         LOG_WARN("init das scan rtdef failed", K(ret), K(container_ctdef));
       }
-      // 不需要将qvector和k存到container_rtdef_，ivfflat_helper_里有
+      // 不需要将qvector和k存到container_rtdef_，ivfflat_helper_或者ivfpq_helper_里有
+    }
+  }
+  if (OB_SUCC(ret) && MY_CTDEF.second_container_ctdef_ != nullptr) {
+    const ObDASScanCtDef &second_container_ctdef = *MY_CTDEF.second_container_ctdef_;
+    ObDASBaseRtDef *das_rtdef = nullptr;
+    if (OB_FAIL(das_factory.create_das_rtdef(DAS_OP_TABLE_SCAN, das_rtdef))) {
+      LOG_WARN("create das rtdef failed", K(ret));
+    } else {
+      tsc_rtdef_.second_container_rtdef_ = static_cast<ObDASScanRtDef*>(das_rtdef);
+      if (OB_FAIL(init_das_scan_rtdef(second_container_ctdef, *tsc_rtdef_.second_container_rtdef_, MY_CTDEF.second_container_loc_meta_))) {
+        LOG_WARN("init das scan rtdef failed", K(ret), K(second_container_ctdef));
+      }
+      // 不需要将qvector和k存到second_container_rtdef_，ivfflat_helper_或者ivfpq_helper_里有
     }
   }
   return ret;
@@ -1753,7 +1833,7 @@ int ObTableScanOp::inner_open()
   }
 
   if (OB_SUCC(ret) && tsc_rtdef_.is_build_vector_index_) {
-    LOG_INFO("############### ivfflat_sp build_vector_index", KP(this));
+    LOG_INFO("############### ivf_sp build_vector_index", KP(this));
     ObSqlCtx *sql_ctx = NULL;
     const ObTableSchema *vector_index_table_schema = NULL;
     if (OB_ISNULL(sql_ctx = ctx_.get_sql_ctx()) || OB_ISNULL(sql_ctx->schema_guard_)) {
@@ -1766,34 +1846,56 @@ int ObTableScanOp::inner_open()
     } else if (OB_ISNULL(vector_index_table_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("NULL ptr", K(ret));
-    } else if (USING_IVFFLAT != vector_index_table_schema->get_index_using_type()) {
+    } else if (!vector_index_table_schema->is_using_ivf_index()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("table scan build vector index is not supported", K(ret));
     } else if (OB_FAIL(open_inner_conn())) {
       LOG_WARN("fail to open inner connection", K(ret));
-    } else if (ivfflat_build_helper_.init(MTL_ID(),
-               vector_index_table_schema->get_vector_ivfflat_lists(),
+    } else if (vector_index_table_schema->is_using_ivfflat_index() &&
+               ivfflat_build_helper_.init(MTL_ID(),
+               vector_index_table_schema->get_vector_ivf_lists(),
                static_cast<ObVectorDistanceType>(vector_index_table_schema->get_vector_distance_func()))) {
       LOG_WARN("failed to init ivfflat index build helper", K(ret), K(vector_index_table_schema));
-    } else {
+    } else if (vector_index_table_schema->is_using_ivfflat_index()) {
       LOG_INFO("############### ivfflat_sp build_vector_index", KP(this), K(ivfflat_build_helper_.is_inited()));
+    } else if (vector_index_table_schema->is_using_ivfpq_index() &&
+               ivfpq_build_helper_.init(MTL_ID(),
+               vector_index_table_schema->get_vector_ivf_lists(),
+               vector_index_table_schema->get_vector_pq_seg(),
+               static_cast<ObVectorDistanceType>(vector_index_table_schema->get_vector_distance_func()))) {
+      LOG_WARN("failed to init ivfpq index build helper", K(ret), K(vector_index_table_schema));
+    } else if (vector_index_table_schema->is_using_ivfpq_index()) {
+      LOG_INFO("############### ivfpq_sp build_vector_index", KP(this), K(ivfpq_build_helper_.is_inited()));
     }
   }
 
   if (OB_SUCC(ret) && tsc_rtdef_.is_ann_scan_) {
-    if (OB_FAIL(open_inner_conn())) {
+    ObSqlCtx *sql_ctx = NULL;
+    const ObTableSchema *vector_index_table_schema = NULL;
+    if (OB_ISNULL(sql_ctx = ctx_.get_sql_ctx()) || OB_ISNULL(sql_ctx->schema_guard_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected status: sql ctx or schema guard is null", K(ret));
+    } else if (OB_FAIL(sql_ctx->schema_guard_->get_table_schema(MTL_ID(),
+                       MY_CTDEF.scan_ctdef_.table_param_.get_table_id(),
+                       vector_index_table_schema))) {
+      LOG_WARN("fail to get table schema", K(ret), K(MY_CTDEF.scan_ctdef_.table_param_.get_table_id()));
+    } else if (OB_ISNULL(vector_index_table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("NULL ptr", K(ret));
+    } else if (OB_FAIL(open_inner_conn())) {
       LOG_WARN("fail to open inner connection", K(ret));
-    } else if (MY_CTDEF.scan_ctdef_.table_param_.is_vector_ivfflat_index()) {
+    } else if (MY_CTDEF.scan_ctdef_.table_param_.is_vector_ivf_index()) {
       ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
       const ObPhysicalPlan *phy_plan = nullptr;
       int64_t probes = 0;
       if (OB_NOT_NULL(plan_ctx)) {
         phy_plan = plan_ctx->get_phy_plan();
         if (OB_NOT_NULL(phy_plan)) {
-          probes = phy_plan->get_phy_plan_hint().vector_ivfflat_probes_;
+          probes = phy_plan->get_phy_plan_hint().vector_probes_;
         }
       }
-      if (OB_FAIL(ivfflat_helper_.init(tenant_id_,
+      if (MY_CTDEF.scan_ctdef_.table_param_.is_vector_ivfflat_index() &&
+          OB_FAIL(ivfflat_helper_.init(tenant_id_,
           MY_CTDEF.scan_ctdef_.table_param_.get_table_id(),
           tsc_rtdef_.scan_rtdef_.ann_search_k_,
           probes,
@@ -1802,6 +1904,17 @@ int ObTableScanOp::inner_open()
           inner_conn_,
           ctx_.get_my_session()))) {
         LOG_WARN("failed to init ivfflat helper", K(ret));
+      } else if (MY_CTDEF.scan_ctdef_.table_param_.is_vector_ivfpq_index() &&
+                 OB_FAIL(ivfpq_helper_.init(tenant_id_,
+                 MY_CTDEF.scan_ctdef_.table_param_.get_table_id(),
+                 tsc_rtdef_.scan_rtdef_.ann_search_k_,
+                 probes,
+                 vector_index_table_schema->get_vector_pq_seg(),
+                 tsc_rtdef_.scan_rtdef_.ann_search_vector_,
+                 MY_CTDEF.scan_ctdef_.table_param_.get_output_projector(),
+                 inner_conn_,
+                 ctx_.get_my_session()))) {
+        LOG_WARN("failed to init ivfpq helper", K(ret));
       }
     } else {
       if (OB_FAIL(open_hnsw_index_op())) {
@@ -1838,6 +1951,8 @@ int ObTableScanOp::inner_close()
   unsafe_out_ring_allocator2_.reset();
   ivfflat_helper_.destroy();
   ivfflat_build_helper_.destroy();
+  ivfpq_helper_.destroy();
+  ivfpq_build_helper_.destroy();
   close_inner_conn();
   if (das_ref_.has_task()) {
     int tmp_ret = fill_storage_feedback_info();
@@ -1921,6 +2036,14 @@ int ObTableScanOp::do_init_before_get_row()
         }
         if (OB_UNLIKELY(ivfflat_build_helper_.is_inited()) &&
             OB_FAIL(ivfflat_build_helper_.set_partition_name(info.tablet_loc_->tablet_id_, MY_SPEC.ref_table_id_))) {
+          LOG_WARN("fail to set partition name", K(ret), K(info.tablet_loc_->tablet_id_));
+        }
+        if (OB_UNLIKELY(ivfpq_helper_.is_inited()) &&
+            OB_FAIL(ivfpq_helper_.set_partition_name(info.tablet_loc_->tablet_id_))) {
+          LOG_WARN("fail to set partition name", K(ret), K(info.tablet_loc_->tablet_id_));
+        }
+        if (OB_UNLIKELY(ivfpq_build_helper_.is_inited()) &&
+            OB_FAIL(ivfpq_build_helper_.set_partition_name(info.tablet_loc_->tablet_id_, MY_SPEC.ref_table_id_))) {
           LOG_WARN("fail to set partition name", K(ret), K(info.tablet_loc_->tablet_id_));
         }
       }
@@ -2101,11 +2224,17 @@ int ObTableScanOp::local_iter_rescan()
   ObGranuleTaskInfo info;
   if (OB_FAIL(get_access_tablet_loc(info))) {
     LOG_WARN("fail to get access partition", K(ret));
-  } if (OB_UNLIKELY(ivfflat_helper_.is_inited()) &&
-        OB_FAIL(ivfflat_helper_.set_partition_name(info.tablet_loc_->tablet_id_))) {
+  } else if (OB_UNLIKELY(ivfflat_helper_.is_inited()) &&
+      OB_FAIL(ivfflat_helper_.set_partition_name(info.tablet_loc_->tablet_id_))) {
     LOG_WARN("fail to set partition name", K(ret), K(info.tablet_loc_->tablet_id_));
   } else if (OB_UNLIKELY(ivfflat_build_helper_.is_inited()
              && OB_FAIL(ivfflat_build_helper_.set_partition_name(info.tablet_loc_->tablet_id_, MY_SPEC.ref_table_id_)))) {
+    LOG_WARN("fail to set partition name", K(ret), K(info.tablet_loc_->tablet_id_));
+  } else if (OB_UNLIKELY(ivfpq_helper_.is_inited()) &&
+        OB_FAIL(ivfpq_helper_.set_partition_name(info.tablet_loc_->tablet_id_))) {
+    LOG_WARN("fail to set partition name", K(ret), K(info.tablet_loc_->tablet_id_));
+  } else if (OB_UNLIKELY(ivfpq_build_helper_.is_inited()
+             && OB_FAIL(ivfpq_build_helper_.set_partition_name(info.tablet_loc_->tablet_id_, MY_SPEC.ref_table_id_)))) {
     LOG_WARN("fail to set partition name", K(ret), K(info.tablet_loc_->tablet_id_));
   } else if (OB_FAIL(local_iter_reuse())) {
     LOG_WARN("failed to reset query range", K(ret));
@@ -2136,6 +2265,14 @@ int ObTableScanOp::local_iter_rescan()
               *MY_INPUT.tablet_loc_, MY_CTDEF.container_ctdef_->ref_table_id_);
           if (OB_FAIL(scan_op->set_container_tablet_id(container_tablet_loc->tablet_id_))) {
             LOG_WARN("set container tablet id failed", K(ret), KPC(container_tablet_loc));
+          }
+        }
+        if (MY_CTDEF.second_container_ctdef_ != nullptr) {
+          ObDASTableLoc *second_container_table_loc = tsc_rtdef_.second_container_rtdef_->table_loc_;
+          ObDASTabletLoc *second_container_tablet_loc = ObDASUtils::get_related_tablet_loc(
+              *MY_INPUT.tablet_loc_, MY_CTDEF.second_container_ctdef_->ref_table_id_);
+          if (OB_FAIL(scan_op->set_second_container_tablet_id(second_container_tablet_loc->tablet_id_))) {
+            LOG_WARN("set container tablet id failed", K(ret), KPC(second_container_tablet_loc));
           }
         }
       }

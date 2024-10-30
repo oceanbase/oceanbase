@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "share/schema/ob_schema_struct.h"
 #define USING_LOG_PREFIX RS
 #include "rootserver/ob_ddl_service.h"
 
@@ -21318,6 +21319,7 @@ int ObDDLService::drop_aux_table_in_drop_table(
   const uint64_t tenant_id = table_schema.get_tenant_id();
   ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
   ObSEArray<ObAuxTableMetaInfo, 16> simple_container_infos;
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_second_container_infos;
   ObSEArray<uint64_t, 16> aux_tid_array; // for aux_vp or aux_lob
   bool is_index = false;
 
@@ -21362,13 +21364,60 @@ int ObDDLService::drop_aux_table_in_drop_table(
       LOG_WARN("table schema should not be null", K(tenant_id), K(tid), KR(ret), K(table_type));
     } else if (OB_FAIL(new_table_schema.assign(*aux_table_schema))) {
       LOG_WARN("assign table schema failed", K(ret));
-    } else if (USING_IVFFLAT ==  new_table_schema.get_index_using_type()) { // get container table info
+    } else if (new_table_schema.is_using_ivf_index()) { // get container table info
       if (OB_FAIL(new_table_schema.get_simple_index_infos(simple_container_infos))) {
         LOG_WARN("get_simple_index_infos failed", K(ret));
       }
     }
   }
-  // drop container table first
+  if (OB_SUCC(ret) && (new_table_schema.is_using_vector_index())) { // any vector type
+    // get second container tables
+    ObTableSchema new_second_table_schema;
+    for (int64_t i = 0; OB_SUCC(ret) && i < simple_container_infos.count(); ++i) {
+      const ObTableSchema *aux_table_schema = NULL;
+      uint64_t tid = simple_container_infos.at(i).table_id_;
+      if (OB_FAIL(schema_guard.get_table_schema(tenant_id, tid, aux_table_schema))) {
+        LOG_WARN("get_table_schema failed", K(tenant_id), "table id", tid, K(ret));
+      } else if (OB_ISNULL(aux_table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table schema should not be null", K(tenant_id), K(tid), KR(ret), K(table_type));
+      } else if (OB_FAIL(new_second_table_schema.assign(*aux_table_schema))) {
+        LOG_WARN("assign table schema failed", K(ret));
+      } else if (OB_FAIL(new_second_table_schema.get_simple_index_infos(simple_second_container_infos))) { // get second container table info
+        LOG_WARN("get_simple_index_infos failed", K(ret));
+      }
+    }
+    // drop second container table first
+    for (int64_t i = 0; OB_SUCC(ret) && i < simple_second_container_infos.count(); ++i) {
+      const ObTableSchema *aux_table_schema = NULL;
+      uint64_t tid = simple_second_container_infos.at(i).table_id_;
+      if (OB_FAIL(schema_guard.get_table_schema(tenant_id, tid, aux_table_schema))) {
+        LOG_WARN("get_table_schema failed", K(tenant_id), "table id", tid, K(ret));
+      } else if (OB_ISNULL(aux_table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table schema should not be null", K(ret));
+      } else if (OB_FAIL(new_second_table_schema.assign(*aux_table_schema))) {
+        LOG_WARN("assign table schema failed", K(ret));
+      } else {
+        // If the data table of the delayed index table is placed in the recycle bin,
+        // the delayed index will also go in, and a row of data will be inserted into __all_recyclebin
+        new_second_table_schema.set_in_offline_ddl_white_list(table_schema.get_in_offline_ddl_white_list());
+        if (to_recyclebin && !is_inner_table(table_schema.get_table_id())) {
+          if (new_second_table_schema.is_in_recyclebin()) {
+            LOG_INFO("aux table is already in recyclebin");
+          } else if (OB_FAIL(ddl_operator.drop_table_to_recyclebin(new_second_table_schema,
+                                                                  schema_guard,
+                                                                  trans,
+                                                                  NULL /* ddl_stmt_str */))) {
+            LOG_WARN("drop aux table to recycle failed", K(ret));
+          }
+        } else if (OB_FAIL(ddl_operator.drop_table(new_second_table_schema, trans))) {
+          LOG_WARN("ddl_operator drop_table failed", K(*aux_table_schema), K(ret));
+        }
+      }
+    }
+  }
+  // drop container table
   for (int64_t i = 0; OB_SUCC(ret) && i < simple_container_infos.count(); ++i) {
     const ObTableSchema *aux_table_schema = NULL;
     uint64_t tid = simple_container_infos.at(i).table_id_;

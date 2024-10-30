@@ -386,7 +386,12 @@ public:
   bool is_using_vector_index() const
   {
     return share::schema::USING_HNSW == index_using_type_ ||
-           share::schema::USING_IVFFLAT == index_using_type_;
+           is_using_vector_ivf_index();
+  }
+  bool is_using_vector_ivf_index() const
+  {
+    return share::schema::USING_IVFFLAT == index_using_type_ ||
+           share::schema::USING_IVFPQ == index_using_type_;
   }
   int init(common::ObIAllocator &allocator,
       const share::schema::ObTableSchema &input_schema,

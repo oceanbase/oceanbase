@@ -15,10 +15,10 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "lib/container/ob_array.h"
 #include "lib/ob_define.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/utility/ob_print_utils.h"
-#include "lib/oblog/ob_log.h"
 #include "lib/ob_define.h"
 
 namespace oceanbase
@@ -44,6 +44,8 @@ public:
     int shallow_copy(ObTypeVector& other);
     int clear_vals();
     int add(const ObTypeVector& other);
+    int subtract(const ObTypeVector& other);
+    int split(ObTypeVector* &samples, const int64_t dim, const int64_t idx) const;
     int divide(const int64_t divisor);
     const float& at(int64_t idx) const {
         OB_ASSERT(idx < dims_);
@@ -66,6 +68,7 @@ public:
       vals_ = vals;
       dims_ = size;
     }
+    bool is_zero() const;
     int vector_cmp(const ObTypeVector& other);
     bool vector_lt(const ObTypeVector& other);
     bool vector_le(const ObTypeVector& other);
@@ -90,6 +93,11 @@ public:
     DECLARE_TO_STRING;
 public:
   static const int precision = 8;
+  static void destory_vector(ObIAllocator &allocator, ObTypeVector *&vector);
+  static void reuse_array(ObIAllocator &allocator, ObIArray<ObTypeVector *> &array);
+  static int alloc_random_vector(ObIAllocator &allocator, ObTypeVector *&vector, const int64_t vector_size);
+  static int alloc_and_copy_vector(ObIAllocator &allocator, const ObTypeVector &other, ObTypeVector *&vector);
+  static int alloc_vector(ObIAllocator &allocator, ObTypeVector *&vector, const int64_t vector_size);
 private:
   float* vals_;
   int64_t dims_;

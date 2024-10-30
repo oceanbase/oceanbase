@@ -43,7 +43,8 @@ public:
   void set_tenant_id(const uint64_t tenant_id);
   void set_index_dop(int64_t index_dop);
   int64_t get_index_dop();
-  void set_vector_ivfflat_lists(const int64_t vector_ivfflat_lists);
+  void set_vector_ivf_lists(const int64_t vector_ivf_lists);
+  void set_vector_pq_seg(const int64_t vector_pq_seg);
   void set_vector_hnsw_m(const int64_t vector_hnsw_m);
   void set_vector_hnsw_ef_construction(const int64_t vector_hnsw_ef_construction);
 
@@ -174,9 +175,15 @@ inline int64_t ObCreateIndexStmt::get_index_dop()
   return create_index_arg_.index_schema_.get_dop();
 }
 
-inline void ObCreateIndexStmt::set_vector_ivfflat_lists(const int64_t vector_ivfflat_lists)
+inline void ObCreateIndexStmt::set_vector_ivf_lists(const int64_t vector_ivf_lists)
 {
-  create_index_arg_.index_schema_.set_vector_ivfflat_lists(vector_ivfflat_lists);
+  create_index_arg_.index_schema_.set_vector_ivf_lists(vector_ivf_lists);
+}
+
+inline void ObCreateIndexStmt::set_vector_pq_seg(const int64_t vector_pq_seg)
+{
+  create_index_arg_.index_schema_.set_vector_pq_seg(vector_pq_seg);
+  create_index_arg_.vector_pq_seg_ = vector_pq_seg;
 }
 
 inline void ObCreateIndexStmt::set_vector_hnsw_m(const int64_t vector_hnsw_m)

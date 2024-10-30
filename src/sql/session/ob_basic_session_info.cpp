@@ -2701,6 +2701,12 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       OX (sys_vars_cache_.set_vector_ivfflat_probes(uint_val));
       break;
     }
+    case SYS_VAR_VECTOR_IVFPQ_PROBES: {
+      uint64_t uint_val = 0;
+      OZ (val.get_uint64(uint_val), val);
+      OX (sys_vars_cache_.set_vector_ivfpq_probes(uint_val));
+      break;
+    }
     default: {
       //do nothing
     }

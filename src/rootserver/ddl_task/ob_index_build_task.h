@@ -58,13 +58,19 @@ public:
   void set_vector_index_using_type(share::schema::ObIndexUsingType vector_index_using_type) { vector_index_using_type_ = vector_index_using_type; }
   void set_vd_type(common::ObVectorDistanceType vd_type) { vd_type_ = vd_type; }
   common::ObVectorDistanceType get_vd_type() const { return vd_type_; }
+  void set_vector_pq_seg(const int64_t vector_pq_seg) { vector_pq_seg_ = vector_pq_seg; }
   void set_vector_hnsw_m(const int64_t vector_hnsw_m) { vector_hnsw_m_ = vector_hnsw_m; }
   void set_vector_hnsw_ef_construction(const int64_t vector_hnsw_ef_construction) { vector_hnsw_ef_construction_ = vector_hnsw_ef_construction; }
   void set_container_table_id(const int64_t container_table_id) { container_table_id_ = container_table_id; }
+  void set_second_container_table_id(const int64_t second_container_table_id) { second_container_table_id_ = second_container_table_id; }
   TO_STRING_KV(K_(data_table_id), K_(dest_table_id), K_(schema_version), K_(snapshot_version),
                K_(execution_id), K_(consumer_group_id), K_(trace_id), K_(parallelism), K_(nls_date_format),
                K_(nls_timestamp_format), K_(nls_timestamp_tz_format), K_(is_vector_index), K_(container_table_id),
-               K_(vector_index_using_type), K_(vd_type), K_(vector_hnsw_m), K_(vector_hnsw_ef_construction));
+               K_(second_container_table_id), K_(vector_index_using_type), K_(vd_type), K_(vector_pq_seg), K_(vector_hnsw_m), K_(vector_hnsw_ef_construction));
+  inline bool is_using_ivf_index() const { return is_using_ivfpq_index() || is_using_ivfflat_index(); }
+  inline bool is_using_hnsw_index() const { return USING_HNSW == vector_index_using_type_; }
+  inline bool is_using_ivfflat_index() const { return USING_IVFFLAT == vector_index_using_type_; }
+  inline bool is_using_ivfpq_index() const { return USING_IVFPQ == vector_index_using_type_; }
 
 private:
   int inner_normal_process(
@@ -76,7 +82,7 @@ private:
       ObSchemaGetterGuard &schema_guard,
       const ObTableSchema &data_schema,
       const ObTableSchema &index_schema);
-  int inner_ivfflat_process(
+  int inner_ivf_process(
       const ObTableSchema &data_schema,
       const ObTableSchema &index_schema,
       const bool is_oracle_mode);
@@ -99,9 +105,11 @@ private:
   ObRootService *root_service_;
   common::ObAddr inner_sql_exec_addr_;
   bool is_vector_index_;
-  int64_t container_table_id_; // for ivfflat indexs
+  int64_t container_table_id_; // for ivf indexs
+  int64_t second_container_table_id_; // for ivfpq indexs
   share::schema::ObIndexUsingType vector_index_using_type_;
   common::ObVectorDistanceType vd_type_;
+  int64_t vector_pq_seg_;
   int64_t vector_hnsw_m_;
   int64_t vector_hnsw_ef_construction_;
 
@@ -127,6 +135,7 @@ public:
       const int64_t parent_task_id /* = 0 */,
       const uint64_t tenant_data_version,
       const ObTableSchema *container_schema = nullptr,
+      const ObTableSchema *second_container_schema = nullptr,
       const int64_t task_status = share::ObDDLTaskStatus::PREPARE,
       const int64_t snapshot_version = 0);
   int init(const ObDDLTaskRecord &task_record);

@@ -10137,7 +10137,7 @@ READ_CONSISTENCY '(' consistency_level ')'
 }
 | PROBES '(' INTNUM ')'
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_VECTOR_IVFFLAT_PROBES, 1, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_VECTOR_PROBES, 1, $3);
 }
 | MONITOR
 {

@@ -629,6 +629,7 @@ ObTableParam::ObTableParam(ObIAllocator &allocator)
     is_build_vector_index_(false),
     build_vector_index_table_id_(common::OB_INVALID_ID),
     build_vector_index_container_table_id_(common::OB_INVALID_ID),
+    build_vector_index_second_container_table_id_(common::OB_INVALID_ID),
     rowkey_cnt_(0)
 {
   reset();
@@ -682,6 +683,7 @@ OB_DEF_SERIALIZE(ObTableParam)
               is_build_vector_index_,
               build_vector_index_table_id_,
               build_vector_index_container_table_id_,
+              build_vector_index_second_container_table_id_,
               rowkey_cnt_);
   if (OB_SUCC(ret)) {
     if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, cg_read_infos_.count()))) {
@@ -733,6 +735,7 @@ OB_DEF_DESERIALIZE(ObTableParam)
                 is_build_vector_index_,
                 build_vector_index_table_id_,
                 build_vector_index_container_table_id_,
+                build_vector_index_second_container_table_id_,
                 rowkey_cnt_);
   }
   if (OB_SUCC(ret) && pos < data_len) {
@@ -796,6 +799,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
               is_build_vector_index_,
               build_vector_index_table_id_,
               build_vector_index_container_table_id_,
+              build_vector_index_second_container_table_id_,
               rowkey_cnt_);
   if (OB_SUCC(ret)) {
     len += serialization::encoded_length_vi64(cg_read_infos_.count());
@@ -1505,6 +1509,7 @@ int64_t ObTableParam::to_string(char *buf, const int64_t buf_len) const
        K_(is_build_vector_index),
        K_(build_vector_index_table_id),
        K_(build_vector_index_container_table_id),
+       K_(build_vector_index_second_container_table_id),
        K_(rowkey_cnt));
   J_OBJ_END();
 

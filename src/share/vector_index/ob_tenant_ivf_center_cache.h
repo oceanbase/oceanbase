@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2023 OceanBase
+ * Copyright (c) 2024 OceanBase
  * OceanBase is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -10,14 +10,13 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef SRC_SHARE_VECTOR_INDEX_OB_TENANT_IVFFLAT_CENTER_CACHE_H_
-#define SRC_SHARE_VECTOR_INDEX_OB_TENANT_IVFFLAT_CENTER_CACHE_H_
+#ifndef SRC_SHARE_VECTOR_INDEX_OB_TENANT_IVF_CENTER_CACHE_H_
+#define SRC_SHARE_VECTOR_INDEX_OB_TENANT_IVF_CENTER_CACHE_H_
 
 #include "lib/ob_define.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/allocator/ob_fifo_allocator.h"
 #include "lib/vector/ob_vector.h"
-#include "lib/container/ob_se_array.h"
 #include "lib/hash/ob_hashmap.h"
 #include "share/schema/ob_table_schema.h"
 
@@ -25,16 +24,16 @@ namespace oceanbase
 {
 namespace share
 {
-class ObTableIvfflatCenters
+class ObTableIvfCenters
 {
 public:
-  ObTableIvfflatCenters()
+  ObTableIvfCenters()
     : count_(0),
       dis_type_(INVALID_DISTANCE_TYPE),
       centers_(nullptr),
       allocator_()
   {}
-  ~ObTableIvfflatCenters() { destroy(); }
+  ~ObTableIvfCenters() { destroy(); }
 
   int init(const int64_t tenant_id, const common::ObIArray<ObTypeVector *> &array);
   int init(const int64_t tenant_id, const int64_t count);
@@ -82,16 +81,16 @@ struct ObTableCenterKey {
   int64_t partition_id_;
 };
 
-class ObTenantIvfflatCenterCache
+class ObTenantIvfCenterCache
 {
 public:
-  static int mtl_init(ObTenantIvfflatCenterCache *&ivfflat_center_cache);
-  ObTenantIvfflatCenterCache()
+  static int mtl_init(ObTenantIvfCenterCache *&ivf_center_cache);
+  ObTenantIvfCenterCache()
     : is_inited_(false),
       allocator_(),
       rwlock_()
   {}
-  ~ObTenantIvfflatCenterCache() { destroy(); }
+  ~ObTenantIvfCenterCache() { destroy(); }
 
   int init(const int64_t tenant_id);
   void destroy();
@@ -103,8 +102,15 @@ public:
       const int64_t partition_id,
       const ObVectorDistanceType dis_type,
       const common::ObIArray<ObTypeVector *> &array);
-  int get(const int64_t table_id, const int64_t partition_id, ObTableIvfflatCenters *&centers);
+  int get(const int64_t table_id, const int64_t partition_id, ObTableIvfCenters *&centers);
   int drop(const int64_t table_id, const int64_t part_count);
+  int cal_qvector_residual(
+      ObIAllocator &allocator,
+      const ObTypeVector &qvector,
+      ObTypeVector *&residual,
+      ObObj &center_idx_obj,
+      const int64_t table_id,
+      const ObTabletID &tablet_id);
   int get_nearest_center(
       const ObTypeVector &qvector,
       const int64_t table_id,
@@ -120,14 +126,15 @@ public:
       int64_t &partition_index);
   TO_STRING_KV(K_(is_inited));
 private:
-  int create_map_entry(const common::ObIArray<ObTypeVector *> &array, ObTableIvfflatCenters *&entry);
-  int create_map_entry(const int64_t count, ObTableIvfflatCenters *&entry);
+  int get_centers(ObTableIvfCenters *&centers, const int64_t table_id, const ObTabletID &tablet_id);
+  int create_map_entry(const common::ObIArray<ObTypeVector *> &array, ObTableIvfCenters *&entry);
+  int create_map_entry(const int64_t count, ObTableIvfCenters *&entry);
   int erase_map_entry(const int64_t table_id, const int64_t part_idx);
 private:
   static const int64_t BUCKET_LIMIT = 1000;
   static const int64_t PAGE_SIZE = (1 << 12); // 4KB
   static const int64_t MAX_SIZE = (1 << 31); // 2GB
-  typedef common::hash::ObHashMap<ObTableCenterKey, ObTableIvfflatCenters*> TableCenterMap;
+  typedef common::hash::ObHashMap<ObTableCenterKey, ObTableIvfCenters*> TableCenterMap;
 private:
   bool is_inited_;
   common::ObFIFOAllocator allocator_;

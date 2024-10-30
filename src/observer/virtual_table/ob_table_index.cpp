@@ -413,6 +413,10 @@ int ObTableIndex::add_rowkey_indexes(const ObTableSchema &table_schema,
                 cells[cell_idx].set_varchar(ObString("IVFFLAT"));
                 break;
               }
+              case share::schema::USING_IVFPQ: {
+                cells[cell_idx].set_varchar(ObString("IVFPQ"));
+                break;
+              }
               case share::schema::USING_BTREE: {
                 cells[cell_idx].set_varchar(ObString("BTREE"));
                 break;
@@ -807,6 +811,10 @@ int ObTableIndex::add_normal_index_column(const ObString &database_name,
                 }
                 case share::schema::USING_IVFFLAT: {
                   cells[cell_idx].set_varchar(ObString("IVFFLAT"));
+                  break;
+                }
+                case share::schema::USING_IVFPQ: {
+                  cells[cell_idx].set_varchar(ObString("IVFPQ"));
                   break;
                 }
                 case share::schema::USING_BTREE: {

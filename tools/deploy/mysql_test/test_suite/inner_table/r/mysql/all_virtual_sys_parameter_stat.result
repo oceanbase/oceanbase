@@ -249,6 +249,9 @@ vector_hnsw_ef_search
 vector_ivfflat_elkan
 vector_ivfflat_iters_count
 vector_ivfflat_sample_count
+vector_ivfpq_elkan
+vector_ivfpq_iters_count
+vector_ivfpq_sample_count
 virtual_table_location_cache_expire_time
 weak_read_version_refresh_interval
 workarea_size_policy

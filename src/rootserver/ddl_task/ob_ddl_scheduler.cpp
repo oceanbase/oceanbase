@@ -987,7 +987,8 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                             param.tenant_data_version_,
                                             *param.allocator_,
                                             task_record,
-                                            param.container_table_schema_))) {
+                                            param.container_table_schema_,
+                                            param.second_container_table_schema_))) {
           LOG_WARN("fail to create build index task", K(ret));
         }
         break;
@@ -1004,7 +1005,8 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                            drop_index_arg,
                                            *param.allocator_,
                                            task_record,
-                                           param.container_table_schema_))) {
+                                           param.container_table_schema_,
+                                           param.second_container_table_schema_))) {
           LOG_WARN("fail to create drop index task failed", K(ret));
         }
         break;
@@ -1506,7 +1508,8 @@ int ObDDLScheduler::create_build_index_task(
     const uint64_t tenant_data_version,
     ObIAllocator &allocator,
     ObDDLTaskRecord &task_record,
-    const ObTableSchema *container_schema)
+    const ObTableSchema *container_schema,
+    const ObTableSchema *second_container_schema)
 {
   int ret = OB_SUCCESS;
   int64_t task_id = 0;
@@ -1532,7 +1535,8 @@ int ObDDLScheduler::create_build_index_task(
                                       *create_index_arg,
                                       parent_task_id,
                                       tenant_data_version,
-                                      container_schema))) {
+                                      container_schema,
+                                      second_container_schema))) {
       LOG_WARN("init global index task failed", K(ret), K(data_table_schema), K(index_schema));
     } else if (OB_FAIL(index_task.set_trace_id(*ObCurTraceId::get_trace_id()))) {
       LOG_WARN("set trace id failed", K(ret));
@@ -1554,7 +1558,8 @@ int ObDDLScheduler::create_drop_index_task(
     const obrpc::ObDropIndexArg *drop_index_arg,
     ObIAllocator &allocator,
     ObDDLTaskRecord &task_record,
-    const ObTableSchema *container_schema)
+    const ObTableSchema *container_schema,
+    const ObTableSchema *second_container_schema)
 {
   int ret = OB_SUCCESS;
   ObDropIndexTask index_task;
@@ -1583,7 +1588,8 @@ int ObDDLScheduler::create_drop_index_task(
                                 consumer_group_id,
                                 sub_task_trace_id,
                                 *drop_index_arg,
-                                container_schema))) {
+                                container_schema,
+                                second_container_schema))) {
       LOG_WARN("init drop index task failed", K(ret), K(data_table_id), K(index_table_id));
     } else if (OB_FAIL(index_task.set_trace_id(*ObCurTraceId::get_trace_id()))) {
       LOG_WARN("set trace id failed", K(ret));

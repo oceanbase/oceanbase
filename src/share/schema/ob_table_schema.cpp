@@ -1529,8 +1529,9 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
       is_column_store_supported_ = src_schema.is_column_store_supported_;
       max_used_column_group_id_ = src_schema.max_used_column_group_id_;
       mlog_tid_ = src_schema.mlog_tid_;
-      vector_ivfflat_lists_ = src_schema.vector_ivfflat_lists_;
+      vector_ivf_lists_ = src_schema.vector_ivf_lists_;
       vector_distance_func_ = src_schema.vector_distance_func_;
+      vector_pq_seg_ = src_schema.vector_pq_seg_;
       if (OB_FAIL(deep_copy_str(src_schema.tablegroup_name_, tablegroup_name_))) {
         LOG_WARN("Fail to deep copy tablegroup_name", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.comment_, comment_))) {
@@ -3353,8 +3354,9 @@ void ObTableSchema::reset()
   cg_name_hash_arr_ = NULL;
   mlog_tid_ = OB_INVALID_ID;
 
-  vector_ivfflat_lists_ = OB_DEFAULT_VECTOR_IVFFLAT_LISTS;
+  vector_ivf_lists_ = OB_DEFAULT_VECTOR_IVF_LISTS;
   vector_distance_func_ = common::INVALID_DISTANCE_TYPE;
+   vector_pq_seg_ = OB_DEFAULT_VECTOR_PQ_SEG;
   ObSimpleTableSchemaV2::reset();
 }
 
@@ -6376,8 +6378,9 @@ int64_t ObTableSchema::to_string(char *buf, const int64_t buf_len) const
     "column_group_array", ObArrayWrap<ObColumnGroupSchema* >(column_group_arr_, column_group_cnt_),
     K_(mlog_tid),
     K_(auto_increment_cache_size),
-    K_(vector_ivfflat_lists),
-    K_(vector_distance_func));
+    K_(vector_ivf_lists),
+    K_(vector_distance_func),
+    K_(vector_pq_seg));
   J_OBJ_END();
 
   return pos;
@@ -6658,8 +6661,9 @@ OB_DEF_SERIALIZE(ObTableSchema)
   // serialize vector index
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_ENCODE,
-                vector_ivfflat_lists_,
-                vector_distance_func_);
+                vector_ivf_lists_,
+                vector_distance_func_,
+                vector_pq_seg_);
   }
   }();
 
@@ -7093,8 +7097,9 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   // decode vector index
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_DECODE,
-                vector_ivfflat_lists_,
-                vector_distance_func_);
+                vector_ivf_lists_,
+                vector_distance_func_,
+                vector_pq_seg_);
   }
   }();
 
@@ -7250,8 +7255,9 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(max_used_column_group_id_);
   OB_UNIS_ADD_LEN(mlog_tid_);
   OB_UNIS_ADD_LEN(auto_increment_cache_size_);
-  OB_UNIS_ADD_LEN(vector_ivfflat_lists_);
+  OB_UNIS_ADD_LEN(vector_ivf_lists_);
   OB_UNIS_ADD_LEN(vector_distance_func_);
+  OB_UNIS_ADD_LEN(vector_pq_seg_);
   return len;
 }
 
@@ -9011,8 +9017,9 @@ int64_t ObPrintableTableSchema::to_string(char *buf, const int64_t buf_len) cons
     K_(is_column_store_supported),
     K_(max_used_column_group_id),
     K_(mlog_tid),
-    K_(vector_ivfflat_lists),
-    K_(vector_distance_func)
+    K_(vector_ivf_lists),
+    K_(vector_distance_func),
+    K_(vector_pq_seg)
   );
   J_OBJ_END();
   return pos;

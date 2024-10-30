@@ -189,7 +189,12 @@ int ObLogTableScan::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
   } else if (is_vector_index_
       && OB_FAIL(get_plan()->get_extra_access_exprs(table_id_, index_table_id_, extra_access_exprs_))) {
     LOG_WARN("failed to get extra access exprs", K(ret));
+  } else if (is_vector_index_ && second_container_table_id_ != OB_INVALID_ID
+      && OB_FAIL(get_plan()->get_extra_access_exprs(table_id_, second_container_table_id_, second_extra_access_exprs_))) {
+    LOG_WARN("failed to get extra access exprs", K(ret));
   } else if (OB_FAIL(append(all_exprs, extra_access_exprs_))) {
+    LOG_WARN("failed to append exprs", K(ret));
+  } else if (OB_FAIL(append(all_exprs, second_extra_access_exprs_))) {
     LOG_WARN("failed to append exprs", K(ret));
   } else if (OB_FAIL(ObLogicalOperator::get_op_exprs(all_exprs))) {
     LOG_WARN("failed to get exprs", K(ret));
@@ -221,6 +226,15 @@ int ObLogTableScan::allocate_expr_post(ObAllocExprContext &ctx)
   for (int64_t i = 0; OB_SUCC(ret) && i < extra_access_exprs_.count(); i++) {
     ObRawExpr *expr = NULL;
     if (OB_ISNULL(expr = extra_access_exprs_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null expr", K(ret));
+    } else if (OB_FAIL(mark_expr_produced(expr, branch_id_, id_, ctx))) {
+      LOG_WARN("failed to mark expr as produced", K(*expr), K(branch_id_), K(id_), K(ret));
+    } else { /*do nothing*/ }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < second_extra_access_exprs_.count(); i++) {
+    ObRawExpr *expr = NULL;
+    if (OB_ISNULL(expr = second_extra_access_exprs_.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null expr", K(ret));
     } else if (OB_FAIL(mark_expr_produced(expr, branch_id_, id_, ctx))) {

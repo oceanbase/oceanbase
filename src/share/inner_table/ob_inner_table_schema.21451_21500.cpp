@@ -60,7 +60,7 @@ int ObInnerTableSchema::cdb_ob_recover_table_jobs_schema(ObTableSchema &table_sc
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TENANT_ID,     JOB_ID,     INITIATOR_TENANT_ID,     INITIATOR_JOB_ID,     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,     CASE        WHEN END_TS = 0         THEN NULL       ELSE         USEC_TO_TIME(END_TS)       END AS FINISH_TIMESTAMP,     STATUS,     AUX_TENANT_NAME,     TARGET_TENANT_NAME,     IMPORT_ALL,     DB_LIST,     TABLE_LIST,     RESTORE_SCN,     CASE       WHEN RESTORE_SCN = 0         THEN NULL       ELSE         SCN_TO_TIMESTAMP(RESTORE_SCN)       END AS RESTORE_SCN_DISPLAY,     RESTORE_OPTION,     BACKUP_DEST,     BACKUP_SET_LIST,     BACKUP_PIECE_LIST,     BACKUP_PASSWD,     EXTERNAL_KMS_INFO,     REMAP_DB_LIST,     REMAP_TABLE_LIST,     REMAP_TABLEGROUP_LIST,     REMAP_TABLESPACE_LIST,     RESULT,     COMMENT,     DESCRIPTION     FROM OCEANBASE.__ALL_VIRTUAL_RECOVER_TABLE_JOB; )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TENANT_ID,     JOB_ID,     INITIATOR_TENANT_ID,     INITIATOR_JOB_ID,     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,     CASE       WHEN END_TS = 0         THEN NULL       ELSE         USEC_TO_TIME(END_TS)       END AS FINISH_TIMESTAMP,     STATUS,     AUX_TENANT_NAME,     TARGET_TENANT_NAME,     IMPORT_ALL,     DB_LIST,     TABLE_LIST,     RESTORE_SCN,     CASE       WHEN RESTORE_SCN = 0         THEN NULL       ELSE         SCN_TO_TIMESTAMP(RESTORE_SCN)       END AS RESTORE_SCN_DISPLAY,     RESTORE_OPTION,     BACKUP_DEST,     BACKUP_SET_LIST,     BACKUP_PIECE_LIST,     BACKUP_PASSWD,     EXTERNAL_KMS_INFO,     REMAP_DB_LIST,     REMAP_TABLE_LIST,     REMAP_TABLEGROUP_LIST,     REMAP_TABLESPACE_LIST,     RESULT,     COMMENT,     DESCRIPTION     FROM OCEANBASE.__ALL_VIRTUAL_RECOVER_TABLE_JOB; )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -110,7 +110,7 @@ int ObInnerTableSchema::dba_ob_recover_table_jobs_schema(ObTableSchema &table_sc
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     JOB_ID,     INITIATOR_TENANT_ID,     INITIATOR_JOB_ID,     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,     CASE        WHEN END_TS = 0         THEN NULL       ELSE         USEC_TO_TIME(END_TS)       END AS FINISH_TIMESTAMP,     STATUS,     AUX_TENANT_NAME,     TARGET_TENANT_NAME,     IMPORT_ALL,     DB_LIST,     TABLE_LIST,     RESTORE_SCN,     CASE       WHEN RESTORE_SCN = 0         THEN NULL       ELSE         SCN_TO_TIMESTAMP(RESTORE_SCN)       END AS RESTORE_SCN_DISPLAY,     RESTORE_OPTION,     BACKUP_DEST,     BACKUP_SET_LIST,     BACKUP_PIECE_LIST,     BACKUP_PASSWD,     EXTERNAL_KMS_INFO,     REMAP_DB_LIST,     REMAP_TABLE_LIST,     REMAP_TABLEGROUP_LIST,     REMAP_TABLESPACE_LIST,     RESULT,     COMMENT,     DESCRIPTION     FROM OCEANBASE.__ALL_VIRTUAL_RECOVER_TABLE_JOB     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     JOB_ID,     INITIATOR_TENANT_ID,     INITIATOR_JOB_ID,     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,     CASE       WHEN END_TS = 0         THEN NULL       ELSE         USEC_TO_TIME(END_TS)       END AS FINISH_TIMESTAMP,     STATUS,     AUX_TENANT_NAME,     TARGET_TENANT_NAME,     IMPORT_ALL,     DB_LIST,     TABLE_LIST,     RESTORE_SCN,     CASE       WHEN RESTORE_SCN = 0         THEN NULL       ELSE         SCN_TO_TIMESTAMP(RESTORE_SCN)       END AS RESTORE_SCN_DISPLAY,     RESTORE_OPTION,     BACKUP_DEST,     BACKUP_SET_LIST,     BACKUP_PIECE_LIST,     BACKUP_PASSWD,     EXTERNAL_KMS_INFO,     REMAP_DB_LIST,     REMAP_TABLE_LIST,     REMAP_TABLEGROUP_LIST,     REMAP_TABLESPACE_LIST,     RESULT,     COMMENT,     DESCRIPTION     FROM OCEANBASE.__ALL_VIRTUAL_RECOVER_TABLE_JOB     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -260,7 +260,7 @@ int ObInnerTableSchema::cdb_ob_import_table_jobs_schema(ObTableSchema &table_sch
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TENANT_ID,     JOB_ID,     INITIATOR_TENANT_ID,     INITIATOR_JOB_ID,     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,     CASE        WHEN END_TS = 0         THEN NULL       ELSE         USEC_TO_TIME(END_TS)       END AS FINISH_TIMESTAMP,     SRC_TENANT_NAME,     SRC_TENANT_ID,     STATUS,     IMPORT_ALL,     DB_LIST,     TABLE_LIST,     REMAP_DB_LIST,     REMAP_TABLE_LIST,     REMAP_TABLEGROUP_LIST,     REMAP_TABLESPACE_LIST,     TOTAL_TABLE_COUNT,     FINISHED_TABLE_COUNT,     FAILED_TABLE_COUNT,     RESULT,     COMMENT,     DESCRIPTION     FROM OCEANBASE.__ALL_VIRTUAL_IMPORT_TABLE_JOB; )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TENANT_ID,     JOB_ID,     INITIATOR_TENANT_ID,     INITIATOR_JOB_ID,     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,     CASE       WHEN END_TS = 0         THEN NULL       ELSE         USEC_TO_TIME(END_TS)       END AS FINISH_TIMESTAMP,     SRC_TENANT_NAME,     SRC_TENANT_ID,     STATUS,     IMPORT_ALL,     DB_LIST,     TABLE_LIST,     REMAP_DB_LIST,     REMAP_TABLE_LIST,     REMAP_TABLEGROUP_LIST,     REMAP_TABLESPACE_LIST,     TOTAL_TABLE_COUNT,     FINISHED_TABLE_COUNT,     FAILED_TABLE_COUNT,     RESULT,     COMMENT,     DESCRIPTION     FROM OCEANBASE.__ALL_VIRTUAL_IMPORT_TABLE_JOB; )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -310,7 +310,7 @@ int ObInnerTableSchema::dba_ob_import_table_jobs_schema(ObTableSchema &table_sch
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     JOB_ID,     INITIATOR_TENANT_ID,     INITIATOR_JOB_ID,     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,     CASE        WHEN END_TS = 0         THEN NULL       ELSE         USEC_TO_TIME(END_TS)       END AS FINISH_TIMESTAMP,     SRC_TENANT_NAME,     SRC_TENANT_ID,     STATUS,     IMPORT_ALL,     DB_LIST,     TABLE_LIST,     REMAP_DB_LIST,     REMAP_TABLE_LIST,     REMAP_TABLEGROUP_LIST,     REMAP_TABLESPACE_LIST,     TOTAL_TABLE_COUNT,     FINISHED_TABLE_COUNT,     FAILED_TABLE_COUNT,     RESULT,     COMMENT,     DESCRIPTION     FROM OCEANBASE.__ALL_VIRTUAL_IMPORT_TABLE_JOB     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     JOB_ID,     INITIATOR_TENANT_ID,     INITIATOR_JOB_ID,     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,     CASE       WHEN END_TS = 0         THEN NULL       ELSE         USEC_TO_TIME(END_TS)       END AS FINISH_TIMESTAMP,     SRC_TENANT_NAME,     SRC_TENANT_ID,     STATUS,     IMPORT_ALL,     DB_LIST,     TABLE_LIST,     REMAP_DB_LIST,     REMAP_TABLE_LIST,     REMAP_TABLEGROUP_LIST,     REMAP_TABLESPACE_LIST,     TOTAL_TABLE_COUNT,     FINISHED_TABLE_COUNT,     FAILED_TABLE_COUNT,     RESULT,     COMMENT,     DESCRIPTION     FROM OCEANBASE.__ALL_VIRTUAL_IMPORT_TABLE_JOB     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -860,7 +860,7 @@ int ObInnerTableSchema::dba_ob_aux_statistics_schema(ObTableSchema &table_schema
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   	select       LAST_ANALYZED,       CPU_SPEED AS `CPU_SPEED(MHZ)`,       DISK_SEQ_READ_SPEED AS `DISK_SEQ_READ_SPEED(MB/S)`,       DISK_RND_READ_SPEED AS `DISK_RND_READ_SPEED(MB/S)`,       NETWORK_SPEED AS `NETWORK_SPEED(MB/S)`     from oceanbase.__all_aux_stat; )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( 	select       LAST_ANALYZED,       CPU_SPEED AS `CPU_SPEED(MHZ)`,       DISK_SEQ_READ_SPEED AS `DISK_SEQ_READ_SPEED(MB/S)`,       DISK_RND_READ_SPEED AS `DISK_RND_READ_SPEED(MB/S)`,       NETWORK_SPEED AS `NETWORK_SPEED(MB/S)`     from oceanbase.__all_aux_stat; )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

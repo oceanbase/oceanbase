@@ -4388,15 +4388,18 @@ int ObDDLOperator::drop_table(
     } else if (OB_FAIL(snapshot_mgr.batch_release_snapshot_in_trans(
             trans, SNAPSHOT_FOR_DDL, tenant_id, -1/*schema_version*/, invalid_scn/*snapshot_scn*/, tablet_ids))) {
       LOG_WARN("fail to release ddl snapshot acquired by this table", K(ret));
-    } else if (table_schema.is_using_ivfflat_index() && !table_schema.vec_ivfflat_container_table()) {
+    } else if ((table_schema.is_using_ivfflat_index() && !table_schema.vec_ivf_container_table()) ||
+               (table_schema.is_using_ivfpq_index() && !table_schema.vec_container_table())) {
       int tmp_ret = OB_SUCCESS;
       int64_t part_count = 0;
       if (PARTITION_LEVEL_ZERO != table_schema.get_part_level()) {
         part_count = table_schema.get_part_option().get_part_num();
       }
       MTL_SWITCH(tenant_id) {
-        if (OB_TMP_FAIL(MTL(ObTenantIvfflatCenterCache*)->drop(table_schema.get_table_id(), part_count))) {
+        if (OB_TMP_FAIL(MTL(ObTenantIvfCenterCache*)->drop(table_schema.get_table_id(), part_count))) {
           LOG_WARN("failed to drop center cache", K(tmp_ret), K(table_schema));
+        } else if (OB_TMP_FAIL(MTL(ObTenantPQCenterCache*)->drop(table_schema.get_table_id(), part_count))) {
+          LOG_WARN("failed to drop pq center cache", K(tmp_ret), K(table_schema));
         }
       }
 
@@ -9671,7 +9674,7 @@ int ObDDLOperator::drop_inner_generated_index_column(ObMySQLTransaction &trans,
   } else {
     new_data_table_schema.set_in_offline_ddl_white_list(index_schema.get_in_offline_ddl_white_list());
   }
-  if (index_schema.vec_ivfflat_container_table()) {
+  if (index_schema.vec_ivf_container_table()) {
     // do nothing
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < index_info.get_size(); ++i) {

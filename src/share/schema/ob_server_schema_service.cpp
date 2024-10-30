@@ -5134,7 +5134,7 @@ bool ObServerSchemaService::need_construct_aux_infos_(
        || table_schema.is_mlog_table()) {
     bret = false;
   }
-  if (table_schema.is_index_table() && table_schema.is_using_ivfflat_index()) {
+  if (table_schema.is_index_table() && table_schema.is_using_ivf_index()) {
     bret = true;
   }
   return bret;

@@ -829,7 +829,7 @@ int ObTableSqlService::drop_table(const ObTableSchema &table_schema,
     if (OB_FAIL(log_operation_wrapper(opt, sql_client))) {
       LOG_WARN("log operation failed", K(opt), K(ret));
     } else {
-      if ((table_schema.is_index_table() && !table_schema.vec_ivfflat_container_table())
+      if ((table_schema.is_index_table() && !table_schema.vec_container_table())
           || table_schema.is_aux_vp_table()
           || table_schema.is_aux_lob_table()
           || table_schema.is_mlog_table()) {
@@ -2997,9 +2997,11 @@ int ObTableSqlService::gen_table_dml(
         || (data_version >= DATA_VERSION_4_3_0_0
             && OB_FAIL(dml.add_column("column_store", table.is_column_store_supported())))
         || (data_version >= DATA_VERSION_4_3_0_0
-            && OB_FAIL(dml.add_column("vector_ivfflat_lists", table.get_vector_ivfflat_lists())))
+            && OB_FAIL(dml.add_column("vector_ivf_lists", table.get_vector_ivf_lists())))
         || (data_version >= DATA_VERSION_4_3_0_0
             && OB_FAIL(dml.add_column("vector_distance_func", table.get_vector_distance_func())))
+        || (data_version >= DATA_VERSION_4_3_0_0
+            && OB_FAIL(dml.add_column("vector_pq_seg", table.get_vector_pq_seg())))
         ) {
       LOG_WARN("add column failed", K(ret));
     }
@@ -3141,9 +3143,11 @@ int ObTableSqlService::gen_table_options_dml(
         || (data_version >= DATA_VERSION_4_3_0_0
             && OB_FAIL(dml.add_column("column_store", table.is_column_store_supported())))
         || (data_version >= DATA_VERSION_4_3_0_0
-            && OB_FAIL(dml.add_column("vector_ivfflat_lists", table.get_vector_ivfflat_lists())))
+            && OB_FAIL(dml.add_column("vector_ivf_lists", table.get_vector_ivf_lists())))
         || (data_version >= DATA_VERSION_4_3_0_0
             && OB_FAIL(dml.add_column("vector_distance_func", table.get_vector_distance_func())))
+        || (data_version >= DATA_VERSION_4_3_0_0
+            && OB_FAIL(dml.add_column("vector_pq_seg", table.get_vector_pq_seg())))
         ) {
       LOG_WARN("add column failed", K(ret));
     }
@@ -3216,9 +3220,11 @@ int ObTableSqlService::update_table_attribute(ObISQLClient &sql_client,
       || (data_version >= DATA_VERSION_4_3_0_0
           && OB_FAIL(dml.add_column("max_used_column_group_id", new_table_schema.get_max_used_column_group_id())))
       || (data_version >= DATA_VERSION_4_3_0_0
-            && OB_FAIL(dml.add_column("vector_ivfflat_lists", new_table_schema.get_vector_ivfflat_lists())))
+            && OB_FAIL(dml.add_column("vector_ivf_lists", new_table_schema.get_vector_ivf_lists())))
       || (data_version >= DATA_VERSION_4_3_0_0
-            && OB_FAIL(dml.add_column("vector_distance_func", new_table_schema.get_vector_distance_func())))) {
+            && OB_FAIL(dml.add_column("vector_distance_func", new_table_schema.get_vector_distance_func())))
+      || (data_version >= DATA_VERSION_4_3_0_0
+            && OB_FAIL(dml.add_column("vector_pq_seg", new_table_schema.get_vector_pq_seg())))) {
             LOG_WARN("add column failed", K(ret));
   } else {
     if (new_table_schema.is_interval_part()) {

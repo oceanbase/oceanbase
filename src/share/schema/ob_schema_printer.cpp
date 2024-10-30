@@ -2446,7 +2446,7 @@ int ObSchemaPrinter::print_index_definition_columns(
       } else if (NULL == (col = index_schema.get_column_schema(rowkey_column->column_id_))) {
         ret = OB_SCHEMA_ERROR;
         SHARE_SCHEMA_LOG(WARN, "fail to get column schema", K(ret));
-      } else if (k == 0 && index_schema.is_using_ivfflat_index()
+      } else if (k == 0 && index_schema.is_using_ivf_index()
           && NULL == (col = index_schema.get_column_schema(column_ids.at(0).col_id_))) {
         ret = OB_SCHEMA_ERROR;
         SHARE_SCHEMA_LOG(WARN, "fail to get column schema", K(ret));

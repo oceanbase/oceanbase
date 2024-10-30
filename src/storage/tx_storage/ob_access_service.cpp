@@ -293,7 +293,7 @@ int ObAccessService::table_rescan(
   } else if (OB_ISNULL(result) || OB_UNLIKELY(!vparam.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(result), K(vparam), K(lbt()));
-  } else if (OB_UNLIKELY(ObNewRowIterator::ObIvfflatBuildIndex == result->get_type())) {
+  } else if (OB_UNLIKELY(ObNewRowIterator::ObIvfflatBuildIndex == result->get_type() || ObNewRowIterator::ObIvfpqBuildIndex == result->get_type())) {
     ObBuildVectorIndexDummyResult *build_vidx_iter = static_cast<ObBuildVectorIndexDummyResult*>(result);
     build_vidx_iter->reuse();
   } else if (OB_UNLIKELY(ObNewRowIterator::ObTableScanIterator != result->get_type())) {
@@ -1197,12 +1197,15 @@ int ObAccessService::reuse_scan_iter(const bool switch_param, ObNewRowIterator *
     } else {
       scan_iter->reset_for_switch();
     }
-  } else if (iter->get_type() == ObNewRowIterator::ObIvfflatBuildIndex) {
+  } else if (iter->get_type() == ObNewRowIterator::ObIvfflatBuildIndex || iter->get_type() == ObNewRowIterator::ObIvfpqBuildIndex) {
     ObBuildVectorIndexDummyResult *build_vidx_iter = static_cast<ObBuildVectorIndexDummyResult*>(iter);
     build_vidx_iter->reuse();
   } else if (iter->get_type() == ObNewRowIterator::ObIvfflatAnnOp) {
     ObIvfflatAnnScanOp *ivfflat_ann_op = static_cast<ObIvfflatAnnScanOp*>(iter);
     ivfflat_ann_op->reuse();
+  } else if (iter->get_type() == ObNewRowIterator::ObIvfpqAnnOp) {
+    ObIvfpqAnnScanOp *ivfpq_ann_op = static_cast<ObIvfpqAnnScanOp*>(iter);
+    ivfpq_ann_op->reuse();
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("only local das scan task can be reuse", K(ret), K(iter->get_type()));
@@ -1230,6 +1233,11 @@ int ObAccessService::revert_scan_iter(ObNewRowIterator *iter)
   } else if (iter->get_type() == ObNewRowIterator::ObIvfflatAnnOp) {
     ObIvfflatAnnScanOp *ivfflat_ann_op = static_cast<ObIvfflatAnnScanOp*>(iter);
     if (OB_FAIL(ivfflat_ann_op->revert_iter())) {
+      LOG_WARN("failed to revert iter", K(ret));
+    }
+  } else if (iter->get_type() == ObNewRowIterator::ObIvfpqAnnOp) {
+    ObIvfpqAnnScanOp *ivfpq_ann_op = static_cast<ObIvfpqAnnScanOp*>(iter);
+    if (OB_FAIL(ivfpq_ann_op->revert_iter())) {
       LOG_WARN("failed to revert iter", K(ret));
     }
   } else {
