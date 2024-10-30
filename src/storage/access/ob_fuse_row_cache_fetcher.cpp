@@ -72,7 +72,7 @@ int ObFuseRowCacheFetcher::get_fuse_row_cache(const ObDatumRowkey &rowkey, ObFus
         STORAGE_LOG(WARN, "fail to get row from multi version fuse row cache", K(ret), K(cache_key));
       }
     } else {
-      // TODO(yht146439) add to sql_audit
+      EVENT_INC(ObStatEventIds::FUSE_ROW_CACHE_HIT);
       EVENT_INC(ObStatEventIds::MULTI_VERSION_FUSE_ROW_CACHE_HIT);
     }
     STORAGE_LOG(DEBUG, "get from multi version fuse row cache", K(ret), K(cache_key));

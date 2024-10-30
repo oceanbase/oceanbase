@@ -144,6 +144,7 @@ struct ObExecRecord
     UPDATE_EVENT(blockscan_block_cnt);
     UPDATE_EVENT(blockscan_row_cnt);
     UPDATE_EVENT(pushdown_storage_filter_row_cnt);
+    UPDATE_EVENT(fuse_row_cache_hit);
   }
 
   uint64_t get_cur_memstore_read_row_count(common::ObDiagnoseSessionInfo *di = NULL) {

@@ -311,6 +311,7 @@ int ObMviewCompactionHelper::create_inner_session(
     session->get_ddl_info().set_major_refreshing_mview(true);
     session->get_ddl_info().set_refreshing_mview(true);
     session->set_database_id(database_id);
+    session->set_query_start_time(ObTimeUtil::current_time());
     LOG_INFO("[MVIEW COMPACTION]: Succ to create inner session", K(ret), K(tenant_id), K(database_id), KP(session));
   }
   if (OB_FAIL(ret)) {
@@ -396,29 +397,32 @@ int ObMviewCompactionHelper::validate_row_count(const ObMergeParameter &merge_pa
       LOG_WARN("Failed to create inner session", K(ret), KPC(merge_param.mview_merge_param_));
     } else if (OB_FAIL(ObMviewCompactionHelper::create_inner_connection(session, conn))) {
       LOG_WARN("Failed to create inner connection", K(ret));
-    } else if (OB_FAIL(conn->execute_read(GCONF.cluster_id, MTL_ID(), sql.ptr(), read_result))) {
-      LOG_WARN("Failed to execute", K(ret), K(sql));
-    } else if (OB_ISNULL(sql_result = static_cast<observer::ObInnerSQLResult *>(read_result.get_result()))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unexpected null sql result", K(ret), K(sql));
-    } else if (OB_FAIL(sql_result->next())) {
-      if (OB_UNLIKELY(OB_ITER_END != ret)) {
-        LOG_WARN("Failed to get next row", K(ret));
-      } else {
-        ret = OB_SUCCESS;
-      }
     } else {
-      const ObNewRow *new_row = sql_result->get_row();
-      if (OB_UNLIKELY(nullptr == new_row || 1 != new_row->get_count())) {
+      ObSessionStatEstGuard sess_stat_guard(MTL_ID(), session->get_sessid());
+      if (OB_FAIL(conn->execute_read(GCONF.cluster_id, MTL_ID(), sql.ptr(), read_result))) {
+        LOG_WARN("Failed to execute", K(ret), K(sql));
+      } else if (OB_ISNULL(sql_result = static_cast<observer::ObInnerSQLResult *>(read_result.get_result()))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Unexpected result row", K(ret), KPC(new_row));
-      } else if (merge_param.get_schema()->is_oracle_mode()) {
-        const number::ObNumber nmb(new_row->get_cell(0).get_number());
-        if (OB_FAIL(nmb.extract_valid_int64_with_trunc(join_row_count))) {
-          STORAGE_LOG(WARN, "Failed to cast number to int64", K(ret), K(new_row->get_cell(0)));
+        LOG_WARN("Unexpected null sql result", K(ret), K(sql));
+      } else if (OB_FAIL(sql_result->next())) {
+        if (OB_UNLIKELY(OB_ITER_END != ret)) {
+          LOG_WARN("Failed to get next row", K(ret));
+        } else {
+          ret = OB_SUCCESS;
         }
       } else {
-        join_row_count = new_row->get_cell(0).get_int();
+        const ObNewRow *new_row = sql_result->get_row();
+        if (OB_UNLIKELY(nullptr == new_row || 1 != new_row->get_count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected result row", K(ret), KPC(new_row));
+        } else if (merge_param.get_schema()->is_oracle_mode()) {
+          const number::ObNumber nmb(new_row->get_cell(0).get_number());
+          if (OB_FAIL(nmb.extract_valid_int64_with_trunc(join_row_count))) {
+            STORAGE_LOG(WARN, "Failed to cast number to int64", K(ret), K(new_row->get_cell(0)));
+          }
+        } else {
+          join_row_count = new_row->get_cell(0).get_int();
+        }
       }
     }
   }

@@ -417,7 +417,7 @@ public:
            const ObITableReadInfo *read_info) override;
   virtual int next() override;
   TO_STRING_KV(K_(is_delete), K_(is_replace), K_(sql_idx), K_(sql_read_col_cnt), K_(store_col_cnt),
-               K_(free_session_ctx), KP_(session), KP_(conn), KP_(sql_result));
+               K_(free_session_ctx), KP_(session), KP_(conn), KP_(sql_result), KP_(sess_stat_guard));
 protected:
   virtual int inner_init(const ObMergeParameter &merge_param) override;
   virtual bool inner_check(const ObMergeParameter &merge_param) override;
@@ -433,6 +433,7 @@ private:
   sql::ObSQLSessionInfo *session_;
   sqlclient::ObISQLConnection *conn_;
   observer::ObInnerSQLResult *sql_result_;
+  ObSessionStatEstGuard *sess_stat_guard_;
 };
 
 static const int64_t DEFAULT_ITER_COUNT = 16;
