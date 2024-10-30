@@ -2068,7 +2068,7 @@ int ObRawExprUtils::check_deterministic_single(const ObRawExpr *expr,
         } else {
           const ObUDFRawExpr *udf_expr = dynamic_cast<const ObUDFRawExpr *>(expr);
           CK(OB_NOT_NULL(udf_expr));
-          if (!udf_expr->is_udf_deterministic()) {
+          if (!udf_expr->is_deterministic()) {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("user-defined function is not deterministic", K(ret), K(*expr));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "The user-defined function is not deterministic");
@@ -3213,7 +3213,7 @@ int ObRawExprUtils::resolve_gen_column_udf_expr(ObRawExpr *&udf_expr,
   // } else if (OB_ISNULL(expr)) {
   //   ret = OB_ERR_UNEXPECTED;
   //   LOG_WARN("Invalid expr", K(expr), K(ret));
-  // } else if (expr->is_udf_expr() && !expr->is_udf_deterministic()) {
+  // } else if (expr->is_udf_expr() && !expr->is_deterministic()) {
   //   ret = OB_ERR_USE_UDF_NOT_DETERMIN;
   //   LOG_WARN("generated column expect deterministic udf", K(q_name), K(ret));
   //   LOG_USER_ERROR(OB_ERR_USE_UDF_NOT_DETERMIN);

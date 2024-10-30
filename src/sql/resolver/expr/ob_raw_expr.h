@@ -3995,7 +3995,6 @@ public:
       params_type_(),
       database_name_(),
       package_name_(),
-      has_deterministic_attribute_(false),
       is_parallel_enable_(false),
       is_udt_udf_(false),
       is_pkg_body_udf_(false),
@@ -4023,7 +4022,6 @@ public:
       params_type_(),
       database_name_(),
       package_name_(),
-      has_deterministic_attribute_(false),
       is_parallel_enable_(false),
       is_udt_udf_(false),
       is_pkg_body_udf_(false),
@@ -4172,7 +4170,7 @@ public:
   {
     return common::OB_INVALID_ID == pkg_id_ && common::OB_INVALID_ID == type_id_;
   }
-  inline bool is_udf_deterministic() const { return has_deterministic_attribute_; }
+
   void set_udf_deterministic(bool is_deterministic);
 
   VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_,
@@ -4186,7 +4184,6 @@ public:
                                             K_(pkg_id),
                                             K_(type_id),
                                             K_(subprogram_path),
-                                            K_(has_deterministic_attribute),
                                             K_(is_deterministic),
                                             K_(is_udt_udf),
                                             K_(is_return_sys_cursor),
@@ -4213,7 +4210,6 @@ private:
   common::ObSEArray<ObExprResType, 5, common::ModulePageAllocator, true> params_type_;
   common::ObString database_name_;
   common::ObString package_name_;
-  bool has_deterministic_attribute_;  // udf deterministic attribute
   bool is_parallel_enable_;
   bool is_udt_udf_;
   bool is_pkg_body_udf_;
