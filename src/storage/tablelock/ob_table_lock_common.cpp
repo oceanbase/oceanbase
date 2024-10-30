@@ -28,6 +28,102 @@ namespace tablelock
 constexpr const char ObSimpleIteratorModIds::OB_OBJ_LOCK[];
 constexpr const char ObSimpleIteratorModIds::OB_OBJ_LOCK_MAP[];
 
+const char *get_name(const ObTableLockPriority intype)
+{
+  const char *type_name = "UNKNOWN";
+  switch (static_cast<const uint64_t>(intype)) {
+#define DEF_LOCK_PRIORITY(n, type)            \
+    case n:                                   \
+      type_name = #type;                      \
+      break;
+#include "ob_table_lock_def.h"
+#undef DEF_LOCK_PRIORITY
+  default:
+    break;
+  }
+  return type_name;
+}
+
+const char *get_name(const ObTableLockMode intype)
+{
+  const char *type_name = "U";
+  switch (intype) {
+#define DEF_LOCK_MODE(n, type, name)            \
+    case n:                                     \
+      type_name = #name;                        \
+      break;
+#include "ob_table_lock_def.h"
+#undef DEF_LOCK_MODE
+  default:
+    break;
+  }
+  return type_name;
+}
+
+const char *get_name(const ObTableLockOpType intype)
+{
+  const char *type_name = "UNKNOWN_TYPE";
+  switch (static_cast<const uint64_t>(intype)) {
+#define DEF_LOCK_OP_TYPE(n, type)             \
+    case n:                                   \
+      type_name = #type;                      \
+      break;
+#include "ob_table_lock_def.h"
+#undef DEF_LOCK_OP_TYPE
+  default:
+    break;
+  }
+  return type_name;
+}
+
+const char *get_name(const ObTableLockOpStatus intype)
+{
+  const char *type_name = "UNKNOWN";
+  switch (static_cast<const uint64_t>(intype)) {
+#define DEF_LOCK_OP_STATUS(n, type)             \
+    case n:                                     \
+      type_name = #type;                        \
+      break;
+#include "ob_table_lock_def.h"
+#undef DEF_LOCK_OP_STATUS
+  default:
+    break;
+  }
+  return type_name;
+}
+
+const char *get_name(const ObLockOBJType intype)
+{
+  const char *type_name = "UNKNOWN";
+  switch (static_cast<const uint64_t>(intype)) {
+#define DEF_OBJ_TYPE(n, type)                                   \
+    case n:                                                     \
+      type_name = #type;                                        \
+      break;
+#include "ob_table_lock_def.h"
+#undef DEF_OBJ_TYPE
+  default:
+    break;
+  }
+  return type_name;
+}
+
+const char *get_name(const ObLockOwnerType intype)
+{
+  const char *type_name = "UNKNOWN";
+  switch (static_cast<const uint64_t>(intype)) {
+#define DEF_LOCK_OWNER_TYPE(n, type)          \
+    case n:                                   \
+      type_name = #type;                      \
+      break;
+#include "ob_table_lock_def.h"
+#undef DEF_LOCK_OWNER_TYPE
+  default:
+    break;
+  }
+  return type_name;
+}
+
 bool is_deadlock_avoid_enabled(const bool is_from_sql, const int64_t timeout_us)
 {
   return (!is_from_sql && timeout_us >= MIN_DEADLOCK_AVOID_TIMEOUT_US);

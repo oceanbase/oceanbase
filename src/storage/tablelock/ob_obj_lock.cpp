@@ -1086,11 +1086,15 @@ int ObOBJLock::check_allow_lock_(
     // get all the conflict tx id that lock mode conflict with me
     // but not myself
     int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = get_tx_id_set_(lock_op.create_trans_id_,
-                                                conflict_modes,
-                                                include_finish_tx,
-                                                conflict_tx_set))) {
+    if (OB_TMP_FAIL(get_tx_id_set_(lock_op.create_trans_id_,
+                                   conflict_modes,
+                                   include_finish_tx,
+                                   conflict_tx_set))) {
       LOG_WARN("get conflict tx failed", K(tmp_ret), K(lock_op));
+    }
+    if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+      LOG_WARN("obj_lock conflict with others", K(ret), KNN(curr_lock, lock_op), KNN(conflict_tx, conflict_tx_set),
+               K(conflict_modes));
     }
   }
   // for pre check
@@ -1650,6 +1654,12 @@ int ObOBJLock::check_op_allow_lock_from_list_(
             // can not lock with the same lock mode twice.
             ret = OB_TRY_LOCK_ROW_CONFLICT;
             need_break = true;
+            if (OB_TRY_LOCK_ROW_CONFLICT == ret) {
+              if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+                LOG_WARN("obj_lock conflict with itself", K(ret), KNN(curr_lock, lock_op),
+                         KNN(older_lock, curr->lock_op_));
+              }
+            }
           } else if (curr->lock_op_.lock_op_status_ == LOCK_OP_COMPLETE) {
             // need continue to check unlock op
             ret = OB_OBJ_LOCK_EXIST;
@@ -1663,6 +1673,12 @@ int ObOBJLock::check_op_allow_lock_from_list_(
           ret = OB_TRY_LOCK_ROW_CONFLICT;
           has_unlock_op = true;
           need_break = true;
+          if (OB_TRY_LOCK_ROW_CONFLICT == ret) {
+            if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+              LOG_WARN("obj_lock conflict with itself", K(ret), KNN(curr_lock, lock_op),
+                       KNN(older_lock, curr->lock_op_));
+            }
+          }
         } else if (curr->lock_op_.op_type_ == IN_TRANS_COMMON_LOCK &&
                    curr->lock_op_.create_trans_id_ == lock_op.create_trans_id_) {
           // continue

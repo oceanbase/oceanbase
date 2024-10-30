@@ -21,6 +21,8 @@
 #include "share/ob_common_id.h"
 #include "storage/tx/ob_trans_define.h"
 
+// KNN means print the value x with a new name
+#define KNN(name, x) #name, ::oceanbase::common::check_char_array(x)
 namespace oceanbase
 {
 
@@ -43,11 +45,12 @@ struct ObObjLockPriorityTaskID
 enum class ObTableLockPriority : int8_t
 {
   INVALID = -1,
-  HIGH1 = 0,
-  HIGH2 = 10,
-  NORMAL = 20,
-  LOW = 30,
+#define DEF_LOCK_PRIORITY(n, type)              \
+  type = n,
+#include "ob_table_lock_def.h"
+#undef DEF_LOCK_PRIORITY
 };
+const char *get_name(const ObTableLockPriority intype);
 
 // Lock compatibility matrix:
 //
@@ -64,12 +67,11 @@ enum class ObTableLockPriority : int8_t
 typedef unsigned char ObTableLockMode;
 static const char TABLE_LOCK_MODE_COUNT = 5;
 
-static const unsigned char NO_LOCK             = 0x0; // binary 0000
-static const unsigned char ROW_SHARE           = 0x8; // binary 1000
-static const unsigned char ROW_EXCLUSIVE       = 0x4; // binary 0100
-static const unsigned char SHARE               = 0x2; // binary 0010
-static const unsigned char SHARE_ROW_EXCLUSIVE = 0x6; // binary 0110, SHARE | ROW_EXCLUSIVE
-static const unsigned char EXCLUSIVE           = 0x1; // binary 0001
+#define DEF_LOCK_MODE(n, type, name)            \
+static const unsigned char type = n;
+#include "ob_table_lock_def.h"
+#undef DEF_LOCK_MODE
+
 static const unsigned char MAX_LOCK_MODE       = 0xf;
 
 // Each item occupies 4 bits, stand for ROW SHARE, ROW EXCLUSIVE, SHARE, EXCLUSIVE.
@@ -78,27 +80,14 @@ static const unsigned char compatibility_matrix[] = { 0x0, /* EXCLUSIVE    : 000
                                                       0xc, /* ROW EXCLUSIVE: 1100 */
                                                       0xe  /* ROW SHARE    : 1110 */ };
 
+const char *get_name(const ObTableLockMode intype);
 static inline
 int lock_mode_to_string(const ObTableLockMode lock_mode,
                         char *str,
                         const int64_t str_len)
 {
   int ret = OB_SUCCESS;
-  if (NO_LOCK == lock_mode) {
-    strncpy(str ,"N", str_len);
-  } else if (ROW_SHARE == lock_mode) {
-    strncpy(str ,"RS", str_len);
-  } else if (ROW_EXCLUSIVE == lock_mode) {
-    strncpy(str ,"RX", str_len);
-  } else if (SHARE == lock_mode) {
-    strncpy(str ,"S", str_len);
-  } else if (SHARE_ROW_EXCLUSIVE == lock_mode) {
-    strncpy(str ,"SRX", str_len);
-  } else if (EXCLUSIVE == lock_mode) {
-    strncpy(str ,"X", str_len);
-  } else {
-    ret = OB_INVALID_ARGUMENT;
-  }
+  strncpy(str, get_name(lock_mode), str_len);
   return ret;
 }
 
@@ -185,60 +174,42 @@ bool request_lock(ObTableLockMode curr_lock,
 enum ObTableLockOpType : char
 {
   UNKNOWN_TYPE = 0,
-  IN_TRANS_DML_LOCK = 1,  // will be unlock if we do callback
-  OUT_TRANS_LOCK = 2,     // will be unlock use OUT_TRANS_UNLOCK
-  OUT_TRANS_UNLOCK = 3,
-  IN_TRANS_COMMON_LOCK = 4,
-  TABLET_SPLIT = 5,
+#define DEF_LOCK_OP_TYPE(n, type)        \
+  type = n,
+#include "ob_table_lock_def.h"
+#undef DEF_LOCK_OP_TYPE
   MAX_VALID_LOCK_OP_TYPE,
 };
 
+const char *get_name(const ObTableLockOpType intype);
 static inline
 int lock_op_type_to_string(const ObTableLockOpType op_type,
                            char *str,
                            const int64_t str_len)
 {
   int ret = OB_SUCCESS;
-  if (UNKNOWN_TYPE == op_type) {
-    strncpy(str ,"UNKNOWN_TYPE", str_len);
-  } else if (IN_TRANS_DML_LOCK == op_type) {
-    strncpy(str ,"IN_TRANS_DML_LOCK", str_len);
-  } else if (OUT_TRANS_LOCK == op_type) {
-    strncpy(str ,"OUT_TRANS_LOCK", str_len);
-  } else if (OUT_TRANS_UNLOCK == op_type) {
-    strncpy(str ,"OUT_TRANS_UNLOCK", str_len);
-  } else if (IN_TRANS_COMMON_LOCK == op_type) {
-    strncpy(str ,"IN_TRANS_COMMON_LOCK", str_len);
-  } else if (TABLET_SPLIT == op_type) {
-    strncpy(str ,"TABLET_SPLIT", str_len);
-  } else {
-    ret = OB_INVALID_ARGUMENT;
-  }
+  strncpy(str, get_name(op_type), str_len);
   return ret;
 }
 
 enum ObTableLockOpStatus : char
 {
   UNKNOWN_STATUS = 0,
-  LOCK_OP_DOING = 1,
-  LOCK_OP_COMPLETE
+
+#define DEF_LOCK_OP_STATUS(n, type)             \
+  LOCK_OP_##type = n,
+#include "ob_table_lock_def.h"
+#undef DEF_LOCK_OP_STATUS
 };
 
+const char *get_name(const ObTableLockOpStatus intype);
 static inline
 int lock_op_status_to_string(const ObTableLockOpStatus op_status,
                              char *str,
                              const int64_t str_len)
 {
   int ret = OB_SUCCESS;
-  if (UNKNOWN_STATUS == op_status) {
-    strncpy(str ,"UNKNOWN", str_len);
-  } else if (LOCK_OP_DOING == op_status) {
-    strncpy(str ,"DOING", str_len);
-  } else if (LOCK_OP_COMPLETE == op_status) {
-    strncpy(str ,"COMPLETE", str_len);
-  } else {
-    ret = OB_INVALID_ARGUMENT;
-  }
+  strncpy(str, get_name(op_status), str_len);
   return ret;
 }
 
@@ -277,90 +248,23 @@ bool is_op_status_valid(const ObTableLockOpStatus status)
 enum class ObLockOBJType : char
 {
   OBJ_TYPE_INVALID = 0,
-  OBJ_TYPE_TABLE = 1, // table
-  OBJ_TYPE_TABLET = 2, // tablet
-  OBJ_TYPE_COMMON_OBJ = 3, // common_obj
-  OBJ_TYPE_LS = 4,     // for ls
-  OBJ_TYPE_TENANT = 5, // for tenant
-  OBJ_TYPE_EXTERNAL_TABLE_REFRESH = 6, // for external table
-  OBJ_TYPE_ONLINE_DDL_TABLE = 7, // online ddl table
-  OBJ_TYPE_ONLINE_DDL_TABLET = 8, // online ddl tablets
-  OBJ_TYPE_DATABASE_NAME = 9,   // for database related ddl
-  OBJ_TYPE_OBJECT_NAME = 10,     // for obj related ddl
-  OBJ_TYPE_DBMS_LOCK = 11,  // for dbms lock
-  OBJ_TYPE_MATERIALIZED_VIEW = 12, // for materialized view operations
-  OBJ_TYPE_MYSQL_LOCK_FUNC = 13,  // for mysql lock function
-  OBJ_TYPE_REFRESH_VECTOR_INDEX = 14,
+
+#define DEF_OBJ_TYPE(n, type) \
+  OBJ_TYPE_##type = n,
+#include "ob_table_lock_def.h"
+#undef DEF_OBJ_TYPE
+
   OBJ_TYPE_MAX
 };
 
+const char *get_name(const ObLockOBJType obj_type);
 static inline
 int lock_obj_type_to_string(const ObLockOBJType obj_type,
                             char *str,
                             const int64_t str_len)
 {
   int ret = OB_SUCCESS;
-  switch (obj_type) {
-  case ObLockOBJType::OBJ_TYPE_TABLE: {
-    strncpy(str, "TABLE", str_len);
-    break;
-  }
-  case ObLockOBJType::OBJ_TYPE_TABLET: {
-    strncpy(str, "TABLET", str_len);
-    break;
-  }
-  case ObLockOBJType::OBJ_TYPE_COMMON_OBJ: {
-    strncpy(str, "COMMON_OBJ", str_len);
-    break;
-  }
-  case ObLockOBJType::OBJ_TYPE_LS: {
-    strncpy(str, "LS", str_len);
-    break;
-  }
-  case ObLockOBJType::OBJ_TYPE_TENANT: {
-    strncpy(str, "TENANT", str_len);
-    break;
-  }
-  case ObLockOBJType::OBJ_TYPE_EXTERNAL_TABLE_REFRESH: {
-    strncpy(str, "EXTERNAL_TABLE_REFRES", str_len);
-    break;
-  }
-  case ObLockOBJType::OBJ_TYPE_ONLINE_DDL_TABLE: {
-    strncpy(str, "ONLINE_DDL_TABLE", str_len);
-    break;
-  }
-  case ObLockOBJType::OBJ_TYPE_ONLINE_DDL_TABLET: {
-    strncpy(str, "ONLINE_DDL_TABLET", str_len);
-    break;
-  }
-  case ObLockOBJType::OBJ_TYPE_DATABASE_NAME: {
-    strncpy(str, "DATABASE_NAME", str_len);
-    break;
-  }
-  case ObLockOBJType::OBJ_TYPE_OBJECT_NAME: {
-    strncpy(str, "OBJECT_NAME", str_len);
-    break;
-  }
-  case ObLockOBJType::OBJ_TYPE_DBMS_LOCK: {
-    strncpy(str, "DBMS_LOCK", str_len);
-    break;
-  }
-  case ObLockOBJType::OBJ_TYPE_MATERIALIZED_VIEW: {
-    strncpy(str, "MATERIALIZED_VIEW", str_len);
-    break;
-  }
-  case ObLockOBJType::OBJ_TYPE_MYSQL_LOCK_FUNC: {
-    strncpy(str, "MYSQL_LOCK_FUNC", str_len);
-    break;
-  }
-  case ObLockOBJType::OBJ_TYPE_REFRESH_VECTOR_INDEX: {
-    strncpy(str, "REFRESH_VECTOR_INDEX", str_len);
-    break;
-  }
-  default: {
-    strncpy(str, "UNKNOWN", str_len);
-  }
-  }
+  strncpy(str, get_name(obj_type), str_len);
   return ret;
 }
 
@@ -429,7 +333,9 @@ public:
     obj_id_ = common::OB_INVALID_ID;
     hash_value_ = 0;
   }
-  TO_STRING_KV(K_(obj_type), K_(obj_id));
+  TO_STRING_KV(KNN("type", obj_type_),
+               "type_str", get_name(obj_type_),
+               KNN("id", obj_id_));
   NEED_SERIALIZE_AND_DESERIALIZE;
 public:
   ObLockOBJType obj_type_;
@@ -448,15 +354,17 @@ int get_lock_id(const ObIArray<ObTabletID> &tablets,
 // typedef share::ObCommonID ObTableLockOwnerID;
 
 enum class ObLockOwnerType : unsigned char {
-  DEFAULT_OWNER_TYPE    = 0,
-  SESS_ID_OWNER_TYPE    = 1,
-
+#define DEF_LOCK_OWNER_TYPE(n, type)                    \
+  type##_OWNER_TYPE = n,
+#include "ob_table_lock_def.h"
+#undef DEF_LOCK_OWNER_TYPE
   // make sure this is smaller than INVALID_OWNER_TYPE
   MAX_OWNER_TYPE,
 
   INVALID_OWNER_TYPE    = 255,
 };
 
+const char *get_name(const ObLockOwnerType intype);
 static inline
 bool is_lock_owner_type_valid(const ObLockOwnerType &type)
 {
@@ -537,7 +445,9 @@ public:
   uint64_t hash() const
   { return pack_; }
   NEED_SERIALIZE_AND_DESERIALIZE;
-  TO_STRING_KV(K_(pack), K_(type), K_(id), K_(reserved), K_(valid_flag));
+  TO_STRING_KV(K_(pack), K_(type),
+               "type_name", get_name(static_cast<ObLockOwnerType>(type_)),
+               K_(id), K_(reserved), K_(valid_flag));
 private:
   union {
     struct {
@@ -650,8 +560,13 @@ private:
             lock_mode_ == EXCLUSIVE);
   }
 public:
-  TO_STRING_KV(K_(lock_id), K_(lock_mode), K_(owner_id), K_(create_trans_id),
-               K_(op_type), K_(lock_op_status), K_(lock_seq_no),
+  TO_STRING_KV(K_(lock_id), K_(lock_mode),
+               "lock_mode_name", get_name(lock_mode_),
+               K_(owner_id), K_(create_trans_id), K_(op_type),
+               "op_type_name", get_name(op_type_),
+               K_(lock_op_status),
+               "lock_op_status_name", get_name(lock_op_status_),
+               K_(lock_seq_no),
                K_(commit_version), K_(commit_scn), K_(create_timestamp),
                K_(create_schema_version));
 
@@ -694,7 +609,8 @@ public:
   bool is_valid() const
   { return ObTableLockPriority::INVALID != priority_ && lock_op_.is_valid(); }
 public:
-  TO_STRING_KV(K_(lock_op), K_(priority));
+  TO_STRING_KV(K_(lock_op), K_(priority),
+               "priority_name", get_name(priority_));
 public:
   ObTableLockOp lock_op_;
   ObTableLockPriority priority_;
@@ -711,7 +627,8 @@ public:
     : priority_(priority) {}
   bool is_valid() const { return ObTableLockPriority::INVALID != priority_; }
 public:
-  TO_STRING_KV(K_(priority));
+  TO_STRING_KV(K_(priority),
+               "priority_name", get_name(priority_));
 public:
   ObTableLockPriority priority_;
 };
