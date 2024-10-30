@@ -4108,7 +4108,7 @@ int ObTablet::auto_get_read_tables(
   } else if (need_split_src_table) { // auto split query
     if (OB_FAIL(get_split_src_read_table_if_need(snapshot_version, iter, succ_get_split_src_tables))) {
       LOG_WARN("fail to get src read table.", K(ret), K(*this));
-    } else {
+    } else if (succ_get_split_src_tables) {
 #ifdef ENABLE_DEBUG_LOG
       FLOG_INFO("get read tables during tablet splitting",K(ret), K(ls_id), K(tablet_id),
           K(snapshot_version), K(iter.table_store_iter_.table_ptr_array_), K(succ_get_split_src_tables));
