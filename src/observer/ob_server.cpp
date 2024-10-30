@@ -515,7 +515,7 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init server blacklist failed", KR(ret));
     } else if (OB_FAIL(ObLongopsMgr::get_instance().init())) {
       LOG_WARN("init longops mgr fail", KR(ret));
-    } else if (ObSimpleThreadPoolDynamicMgr::get_instance().init()) {
+    } else if (OB_FAIL(ObSimpleThreadPoolDynamicMgr::get_instance().init())) {
       LOG_ERROR("init queue_thread dynamic mgr failed", KR(ret));
 #ifdef ERRSIM
     } else if (OB_FAIL(ObDDLSimPointMgr::get_instance().init())) {
