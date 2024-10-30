@@ -117,6 +117,8 @@ int ObSplitPartitionHelper::check_allow_split(
   const uint64_t tenant_id = table_schema.get_tenant_id();
   bool is_db_in_recyclebin = false;
   const ObTenantSchema *tenant_schema = nullptr;
+  common::ObArray<const ObSimpleTableSchemaV2 *> table_schemas_in_tg;
+  const uint64_t tablegroup_id = table_schema.get_tablegroup_id();
   ObArray<share::ObZoneReplicaAttrSet> zone_locality;
   if (OB_UNLIKELY(table_schema.is_in_recyclebin())) {
     ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
@@ -146,6 +148,19 @@ int ObSplitPartitionHelper::check_allow_split(
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "split with column store replica");
       }
     }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_LIKELY(OB_INVALID_ID == tablegroup_id)) {
+    //do nothing
+  } else if (OB_FAIL(schema_guard.get_table_schemas_in_tablegroup(tenant_id, tablegroup_id, table_schemas_in_tg))) {
+    LOG_WARN("failed to get table schemas in table group", K(ret), K(tablegroup_id));
+  } else if (OB_UNLIKELY(table_schemas_in_tg.count() <= 1)) {
+    //do nothing
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support spliting of a table in a group with multiple tables", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "spliting of a table in a group with multiple tables");
   }
 
   if (OB_FAIL(ret)) {
