@@ -1686,6 +1686,9 @@ public:
 
   inline ObIArray<double> &get_ambient_card() { return ambient_card_; }
 
+  int pre_check_can_px_batch_rescan(bool &find_nested_rescan,
+                                    bool &find_rescan_px,
+                                    bool nested) const;
 public:
   ObSEArray<ObLogicalOperator *, 16, common::ModulePageAllocator, true> child_;
   ObSEArray<ObPCParamEqualInfo, 4, common::ModulePageAllocator, true> equal_param_constraints_;

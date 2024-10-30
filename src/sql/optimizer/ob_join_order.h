@@ -1060,6 +1060,8 @@ struct EstimateCostInfo {
                                                          ObIArray<common::ObAddr> &server_list);
     inline bool is_nlj_with_param_down() const
     { return NULL != right_path_ && right_path_->is_inner_path() && !right_path_->nl_params_.empty(); }
+    int check_right_is_local_scan(bool &is_local_scan) const;
+    int pre_check_nlj_can_px_batch_rescan(bool &can_px_batch_rescan) const;
   private:
     int compute_hash_hash_sharding_info();
     int compute_join_path_ordering();
@@ -1070,6 +1072,9 @@ struct EstimateCostInfo {
     int re_adjust_sharding_ordering_info();
     int compute_nlj_batch_rescan();
     int check_right_has_gi_or_exchange(bool &right_has_gi_or_exchange);
+    int pre_check_can_px_batch_rescan(bool &find_nested_rescan,
+                                      bool &find_rescan_px,
+                                      bool nested) const;
   public:
     VIRTUAL_TO_STRING_KV(K_(join_algo),
                  K_(join_dist_algo),
@@ -1693,14 +1698,22 @@ struct NullAwareAntiJoinInfo {
                                OptSkipScanState use_skip_scan);
 
     int will_use_das(const uint64_t table_id,
-                     const uint64_t ref_id,
                      const uint64_t index_id,
                      const ObIndexInfoCache &index_info_cache,
                      PathHelper &helper,
                      bool &create_das_path,
                      bool &create_basic_path,
                      const LogTableHint *aj_table_hint);
-
+    int check_exec_force_use_das(const uint64_t table_id,
+                                 bool &create_das_path,
+                                 bool &create_basic_path);
+    int check_opt_rule_use_das(const uint64_t table_id,
+                               const uint64_t index_id,
+                               const ObIndexInfoCache &index_info_cache,
+                               const ObIArray<ObRawExpr*> &filters,
+                               const bool is_rescan,
+                               bool &create_das_path,
+                               bool &create_basic_path);
     int will_use_skip_scan(const uint64_t table_id,
                            const uint64_t ref_id,
                            const uint64_t index_id,

@@ -11293,28 +11293,57 @@ int ObLogPlan::compute_rescan_plan_relationship(const ObLogicalOperator &first_p
       && log_op_def::LOG_SUBPLAN_FILTER == second_plan.get_type()) {
     const ObLogSubPlanFilter *first_spf = static_cast<const ObLogSubPlanFilter*>(&first_plan);
     const ObLogSubPlanFilter *second_spf = static_cast<const ObLogSubPlanFilter*>(&second_plan);
+    bool first_right_local_rescan = false;
+    bool second_right_local_rescan = false;
+    bool first_can_px_batch_rescan = false;
+    bool second_can_px_batch_rescan = false;
+    bool first_rescan_contain_match_all = false;
+    bool second_rescan_contain_match_all = false;
     if (!first_spf->enable_das_group_rescan() && second_spf->enable_das_group_rescan()) {
       relation = DominateRelation::OBJ_RIGHT_DOMINATE;
       OPT_TRACE("right plan dominate left plan because of group rescan subplan filter");
     } else if (first_spf->enable_das_group_rescan() && !second_spf->enable_das_group_rescan()) {
       relation = DominateRelation::OBJ_LEFT_DOMINATE;
       OPT_TRACE("left plan dominate right plan because of group rescan subplan filter");
-    } else if (first_spf->enable_das_group_rescan() && second_spf->enable_das_group_rescan()
-               && first_spf->get_parallel() == second_spf->get_parallel()) {
-      bool first_group_rescan_without_shuffle = false;
-      bool second_group_rescan_without_shuffle = false;
-      if (OB_FAIL(first_spf->check_is_group_rescan_without_shuffle(first_group_rescan_without_shuffle))) {
-        LOG_WARN("failed to check is group rescan without shuffle", K(ret));
-      } else if (OB_FAIL(second_spf->check_is_group_rescan_without_shuffle(second_group_rescan_without_shuffle))) {
-        LOG_WARN("failed to check is group rescan without shuffle", K(ret));
-      } else if (!first_group_rescan_without_shuffle && second_group_rescan_without_shuffle) {
+    } else if (OB_FAIL(first_spf->check_right_is_local_scan(first_right_local_rescan))
+               || OB_FAIL(second_spf->check_right_is_local_scan(second_right_local_rescan))) {
+      LOG_WARN("failed to check right is local rescan", K(ret));
+    } else if (first_spf->enable_das_group_rescan() && second_spf->enable_das_group_rescan()) {
+      if (first_spf->get_parallel() != second_spf->get_parallel()) {
+        /* do nothing */
+      } else if (!first_right_local_rescan && second_right_local_rescan) {
         relation = DominateRelation::OBJ_RIGHT_DOMINATE;
-        OPT_TRACE("right path dominate left path because of spf group rescan without shuffle");
-      } else if (first_group_rescan_without_shuffle && !second_group_rescan_without_shuffle) {
+        OPT_TRACE("right path dominate left path because of right local group rescan");
+      } else if (first_right_local_rescan && !second_right_local_rescan) {
         relation = DominateRelation::OBJ_LEFT_DOMINATE;
-        OPT_TRACE("left path dominate right path because of spf group rescan without shuffle");
+        OPT_TRACE("left path dominate right path because of right local group rescan");
       }
+    } else if (!first_right_local_rescan && second_right_local_rescan) {
+      relation = DominateRelation::OBJ_RIGHT_DOMINATE;
+      OPT_TRACE("right plan dominate left plan because of right local rescan subplan filter");
+    } else if (first_right_local_rescan && !second_right_local_rescan) {
+      relation = DominateRelation::OBJ_LEFT_DOMINATE;
+      OPT_TRACE("left plan dominate right plan because of right local rescan subplan filter");
+    } else if (first_right_local_rescan && second_right_local_rescan) {
+      /* do nothing */
+    } else if (OB_FAIL(first_spf->pre_check_spf_can_px_batch_rescan(first_can_px_batch_rescan, first_rescan_contain_match_all))
+               || OB_FAIL(second_spf->pre_check_spf_can_px_batch_rescan(second_can_px_batch_rescan, second_rescan_contain_match_all))) {
+      LOG_WARN("failed to pre check spf can px batch rescan", K(ret));
+    } else if ((!first_can_px_batch_rescan || (first_rescan_contain_match_all && !second_rescan_contain_match_all))
+               && second_can_px_batch_rescan) {
+      relation = DominateRelation::OBJ_RIGHT_DOMINATE;
+      OPT_TRACE("right plan dominate left plan because of px batch rescan subplan filter");
+    } else if (first_can_px_batch_rescan
+               && (!second_can_px_batch_rescan || (!first_rescan_contain_match_all && second_rescan_contain_match_all))) {
+      relation = DominateRelation::OBJ_LEFT_DOMINATE;
+      OPT_TRACE("left plan dominate right plan because of px batch rescan subplan filter");
+    } else {
+      /* do nothing */
     }
+    LOG_TRACE("finish compute spf rescan plan relationship",
+                    K(first_spf->enable_das_group_rescan()), K(second_spf->enable_das_group_rescan()),
+                    K(first_right_local_rescan), K(second_right_local_rescan),
+                    K(first_can_px_batch_rescan), K(second_can_px_batch_rescan));
   }
   return ret;
 }

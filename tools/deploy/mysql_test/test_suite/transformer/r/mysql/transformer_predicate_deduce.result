@@ -1002,13 +1002,13 @@ rollback;
 == subquery:case 1
 EXPLAIN select /*+no_rewrite*/* from t1 a where exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
 Query Plan
-=============================================================
-|ID|OPERATOR                     |NAME|EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------
-|0 |SUBPLAN FILTER               |    |1       |24          |
-|1 |├─TABLE FULL SCAN            |a   |1       |4           |
-|2 |└─DISTRIBUTED TABLE FULL SCAN|b   |1       |21          |
-=============================================================
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SUBPLAN FILTER   |    |1       |24          |
+|1 |├─TABLE FULL SCAN|a   |1       |4           |
+|2 |└─TABLE FULL SCAN|b   |1       |21          |
+=================================================
 Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([(T_OP_EXISTS, subquery(1))]), rowset=16
@@ -2448,13 +2448,13 @@ rollback;
 == 不能推导 anti semi join:case 1
 EXPLAIN select /*+no_rewrite*/* from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
 Query Plan
-=============================================================
-|ID|OPERATOR                     |NAME|EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------
-|0 |SUBPLAN FILTER               |    |1       |24          |
-|1 |├─TABLE FULL SCAN            |a   |1       |4           |
-|2 |└─DISTRIBUTED TABLE FULL SCAN|b   |1       |21          |
-=============================================================
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SUBPLAN FILTER   |    |1       |24          |
+|1 |├─TABLE FULL SCAN|a   |1       |4           |
+|2 |└─TABLE FULL SCAN|b   |1       |21          |
+=================================================
 Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([(T_OP_NOT_EXISTS, subquery(1))]), rowset=16

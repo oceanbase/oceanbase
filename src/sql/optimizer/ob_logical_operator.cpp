@@ -5133,6 +5133,33 @@ int ObLogicalOperator::find_nested_dis_rescan(bool &find, bool nested)
   return ret;
 }
 
+int ObLogicalOperator::pre_check_can_px_batch_rescan(bool &find_nested_rescan,
+                                                     bool &find_rescan_px,
+                                                     bool nested) const
+{
+  int ret = OB_SUCCESS;
+  if (find_nested_rescan) {
+  } else if (LOG_EXCHANGE == get_type()) {
+    const ObLogExchange *op = static_cast<const ObLogExchange *>(this);
+    find_nested_rescan |= nested;
+    find_rescan_px |= !nested && op->is_consumer() && !op->is_task_order();
+  } else {
+    nested = LOG_SUBPLAN_FILTER == get_type() ||
+             (LOG_JOIN == get_type() &&
+              JoinAlgo::NESTED_LOOP_JOIN == static_cast<const ObLogJoin*>(this)->get_join_algo());
+    for (int64_t i = 0; !find_nested_rescan && OB_SUCC(ret) && i < get_num_of_child(); i++) {
+      const ObLogicalOperator *child = NULL;
+      if (OB_ISNULL(child = get_child(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(get_child(i)), K(ret));
+      } else if (OB_FAIL(SMART_CALL(child->pre_check_can_px_batch_rescan(find_nested_rescan, find_rescan_px, nested)))) {
+        LOG_WARN("fail to find px for batch rescan", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLogicalOperator::check_subplan_filter_child_exchange_rescanable()
 {
   int ret = OB_SUCCESS;

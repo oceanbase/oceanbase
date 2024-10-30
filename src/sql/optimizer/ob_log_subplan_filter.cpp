@@ -901,25 +901,61 @@ int ObLogSubPlanFilter::get_sub_qb_names(ObIArray<ObString> &sub_qb_names)
   return ret;
 }
 
-int ObLogSubPlanFilter::check_is_group_rescan_without_shuffle(bool &is_group_rescan_without_shuffle) const
+int ObLogSubPlanFilter::check_right_is_local_scan(bool &is_local_scan) const
 {
   int ret = OB_SUCCESS;
-  is_group_rescan_without_shuffle = false;
-  if (!enable_das_group_rescan()) {
+  is_local_scan = true;
+  const ObLogicalOperator *child = NULL;
+  for (int64_t i = 1; is_local_scan && OB_SUCC(ret) && i < get_num_of_child(); i++) {
+    if (init_plan_idxs_.has_member(i) || one_time_idxs_.has_member(i)) {
+      /* do nothing */
+    } else if (OB_ISNULL(child = get_child(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(i));
+    } else if (child->is_exchange_allocated() || child->get_contains_das_op()) {
+      is_local_scan = false;
+    }
+  }
+  return ret;
+}
+
+int ObLogSubPlanFilter::pre_check_spf_can_px_batch_rescan(bool &can_px_batch_rescan,
+                                                          bool &rescan_contain_match_all) const
+{
+  int ret = OB_SUCCESS;
+  can_px_batch_rescan = false;
+  rescan_contain_match_all = false;
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(get_plan()));
+  } else if (1 < get_available_parallel() || 1 < get_parallel()
+             || get_exec_params().empty()
+             || !get_plan()->get_optimizer_context().enable_px_batch_rescan()) {
     /* do nothing */
-  } else if (DistAlgo::DIST_PARTITION_WISE == get_distributed_algo()) {
-    is_group_rescan_without_shuffle = true;
-  } else if (DistAlgo::DIST_BASIC_METHOD == get_distributed_algo()) {
-    is_group_rescan_without_shuffle = true;
-    for (int64_t i = 1; OB_SUCC(ret) && is_group_rescan_without_shuffle && i < get_num_of_child(); i++) {
-      if (OB_ISNULL(get_child(i))) {
+  } else {
+    bool find_nested_rescan = false;
+    bool find_rescan_px = false;
+    bool tmp_find_nested_rescan = false;
+    bool tmp_find_rescan_px = false;
+    const ObLogicalOperator *child = NULL;
+    for (int i = 1; !find_nested_rescan && OB_SUCC(ret) && i < get_num_of_child(); ++i) {
+      tmp_find_nested_rescan = false;
+      tmp_find_rescan_px = false;
+      if (OB_ISNULL(child = get_child(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(i));
-      } else if (init_plan_idxs_.has_member(i) || one_time_idxs_.has_member(i)) {
+      } else if (one_time_idxs_.has_member(i)) {
         /* do nothing */
+      } else if (OB_FAIL(child->pre_check_can_px_batch_rescan(tmp_find_nested_rescan, tmp_find_rescan_px, false))) {
+        LOG_WARN("fail to pre check can px batch rescan", K(ret));
       } else {
-        is_group_rescan_without_shuffle = !get_child(i)->is_match_all();
+        find_nested_rescan |= tmp_find_nested_rescan;
+        find_rescan_px |= tmp_find_rescan_px;
+        rescan_contain_match_all |= child->is_match_all() && child->get_contains_das_op();
       }
+    }
+    if (OB_SUCC(ret)) {
+      can_px_batch_rescan = !find_nested_rescan && find_rescan_px;
     }
   }
   return ret;

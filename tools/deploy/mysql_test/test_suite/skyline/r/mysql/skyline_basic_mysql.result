@@ -1505,14 +1505,14 @@ Outputs & filters:
       range_key([t3.a], [t3.b], [t3.c], [t3.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select distinct a,b,c from t3 where d > any (select pk2 from t2);
 Query Plan
-=========================================================================
-|ID|OPERATOR                        |NAME         |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------------
-|0 |MERGE DISTINCT                  |             |1       |25          |
-|1 |└─NESTED-LOOP SEMI JOIN         |             |1       |25          |
-|2 |  ├─TABLE FULL SCAN             |t3(idx_a_b_c)|1       |4           |
-|3 |  └─DISTRIBUTED TABLE RANGE SCAN|t2           |1       |21          |
-=========================================================================
+=================================================================
+|ID|OPERATOR                |NAME         |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |MERGE DISTINCT          |             |1       |25          |
+|1 |└─NESTED-LOOP SEMI JOIN |             |1       |25          |
+|2 |  ├─TABLE FULL SCAN     |t3(idx_a_b_c)|1       |4           |
+|3 |  └─TABLE RANGE SCAN    |t2           |1       |21          |
+=================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t3.a], [t3.b], [t3.c]), filter(nil), rowset=16

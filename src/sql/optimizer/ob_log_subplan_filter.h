@@ -135,7 +135,8 @@ public:
   int compute_spf_batch_rescan();
   int compute_spf_batch_rescan(bool &can_batch);
   int compute_spf_batch_rescan_compat(bool &can_batch);
-  int check_is_group_rescan_without_shuffle(bool &is_group_rescan_without_shuffle) const;
+  int check_right_is_local_scan(bool &is_local_scan) const;
+  int pre_check_spf_can_px_batch_rescan(bool &can_px_batch_rescan, bool &rescan_contain_match_all) const;
 private:
   int extract_exist_style_subquery_exprs(ObRawExpr *expr,
                                          ObIArray<ObRawExpr*> &exist_style_exprs);

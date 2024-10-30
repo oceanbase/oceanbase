@@ -338,7 +338,7 @@ int ObJoinOrder::prune_paths_due_to_parallel(ObIArray<AccessPath *> &access_path
   } else if (OB_ISNULL(path = access_paths.at(0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(path));
-  } else if (path->is_rescan_path() && !is_virtual_table(path->ref_table_id_)) {
+  } else if (path->is_rescan_path()) {
     /* do nothing */
   } else {
     ObSEArray<AccessPath*, 16> tmp_paths;
@@ -1190,7 +1190,6 @@ int ObJoinOrder::add_table_by_heuristics(const uint64_t table_id,
         AccessPath *das_access_path = NULL;
         AccessPath *basic_access_path = NULL; // the path does not use DAS, maybe optimal sometime.
         if (OB_FAIL(will_use_das(table_id,
-                                 ref_table_id,
                                  index_to_use,
                                  index_info_cache,
                                  helper,
@@ -1557,7 +1556,6 @@ int ObJoinOrder::check_index_subset(const OrderingInfo *first_ordering_info,
 }
 
 int ObJoinOrder::will_use_das(const uint64_t table_id,
-                             const uint64_t ref_id,
                              const uint64_t index_id,
                              const ObIndexInfoCache &index_info_cache,
                              PathHelper &helper,
@@ -1568,38 +1566,62 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
   int ret = OB_SUCCESS;
   create_das_path = false;
   create_basic_path = false;
-  IndexInfoEntry *index_info_entry;
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(get_plan()));
+  } else if (OB_FAIL(check_exec_force_use_das(table_id, create_das_path, create_basic_path))) {
+    LOG_WARN("failed to check exec force use das", K(ret));
+  } else if (create_das_path || create_basic_path) {
+    LOG_TRACE("will use das by execution", K(create_das_path), K(create_basic_path));
+  } else if (NULL == aj_table_hint && OB_FAIL(get_plan()->get_log_plan_hint().check_use_das(table_id, create_das_path, create_basic_path))) {
+    LOG_WARN("failed to check hint use das", K(ret));
+  } else if (NULL != aj_table_hint && OB_FAIL(aj_table_hint->check_use_das(table_id,
+                                                  get_plan()->get_log_plan_hint().is_outline_data_,
+                                                  create_das_path, create_basic_path))) {
+    LOG_WARN("failed to check hint use das", K(ret));
+  } else if (create_das_path || create_basic_path) {
+    LOG_TRACE("will use das by hint", K(create_das_path), K(create_basic_path));
+  } else if (OB_FAIL(check_opt_rule_use_das(table_id,
+                                            index_id,
+                                            index_info_cache,
+                                            helper.filters_,
+                                            (get_plan()->get_is_rescan_subplan() || helper.is_inner_path_),
+                                            create_das_path,
+                                            create_basic_path))) {
+    LOG_WARN("failed to check opt rule use das", K(ret));
+  } else {
+    LOG_TRACE("will use das by opt rule", K(create_das_path), K(create_basic_path));
+  }
+  return ret;
+}
+
+int ObJoinOrder::check_exec_force_use_das(const uint64_t table_id,
+                                          bool &create_das_path,
+                                          bool &create_basic_path)
+{
+  int ret = OB_SUCCESS;
+  create_das_path = false;
+  create_basic_path = false;
   const TableItem *table_item = nullptr;
   ObSQLSessionInfo *session_info = NULL;
-  if (OB_UNLIKELY(OB_INVALID_ID == ref_id) || OB_UNLIKELY(OB_INVALID_ID == index_id) ||
-      OB_ISNULL(get_plan()) ||
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_stmt()) ||
       OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ref_id), K(index_id), K(get_plan()), K(session_info), K(ret));
-  } else if (OB_FAIL(index_info_cache.get_index_info_entry(table_id, index_id,
-                                                           index_info_entry))) {
-    LOG_WARN("failed to get index info entry", K(table_id), K(index_id), K(ret));
-  } else if (OB_ISNULL(index_info_entry)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("index info entry should not be null", K(ret));
+    LOG_WARN("get unexpected null", K(get_plan()), K(session_info), K(ret));
   } else if (OB_ISNULL(table_item = get_plan()->get_stmt()->get_table_item_by_id(table_id))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table_item is null", K(ret), K(table_id));
   } else {
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
-    bool is_batch_update_table = opt_ctx.is_batched_multi_stmt() && table_item->is_basic_table();
-    bool hint_force_das = false;
-    bool hint_force_no_das = false;
-    int64_t explicit_dop = ObGlobalHint::UNSET_PARALLEL;
     // TODO: access virtual table by remote das task is not supported, it will report 4016 error in execute server
     // Ensure that the following scenarios will not combined with virtual table
-    bool force_das_tsc = opt_ctx.in_nested_sql() ||
+    bool force_das_tsc = opt_ctx.in_nested_sql() || //contain nested sql(pl udf or in nested sql), trigger or foreign key in the top sql not force to use DAS TSC
                          opt_ctx.has_pl_udf() ||
                          opt_ctx.has_dblink() ||
-                         opt_ctx.has_subquery_in_function_table() ||
+                         opt_ctx.has_subquery_in_function_table() ||  //has function table
                          opt_ctx.has_cursor_expression() ||
-                         (opt_ctx.has_var_assign() && session_info->is_var_assign_use_das_enabled() && !is_virtual_table(ref_id)) ||
-                         is_batch_update_table ||
+                         (opt_ctx.has_var_assign() && session_info->is_var_assign_use_das_enabled()) ||
+                         (opt_ctx.is_batched_multi_stmt() && table_item->is_basic_table()) || //batch update table(multi queries or arraybinding)
                          (table_item->for_update_ && table_item->skip_locked_ && session_info->get_pl_context()) // select for update skip locked stmt in PL use das force
                          ;
     bool is_select_sample_scan = get_plan()->get_stmt()->is_select_stmt()
@@ -1607,49 +1629,54 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
                                     || (opt_ctx.is_online_ddl() && opt_ctx.get_root_stmt()->is_insert_stmt()) // online ddl plan use sample table scan, create index not support DAS TSC
                                    );
 
-    if (EXTERNAL_TABLE == table_item->table_type_ || is_select_sample_scan) {
+    if (EXTERNAL_TABLE == table_item->table_type_
+        || is_select_sample_scan
+        || is_virtual_table(table_item->ref_id_)) {
       create_das_path = false;
       create_basic_path = true;
-    } else
-    //this sql force to use DAS TSC:
-    //batch update table(multi queries or arraybinding)
-    //contain nested sql(pl udf or in nested sql)
-    //trigger or foreign key in the top sql not force to use DAS TSC
-    //has function table
-    if (force_das_tsc) {
+    } else if (force_das_tsc) { //this sql force to use DAS TSC
       create_das_path = true;
       create_basic_path = false;
-    } else if (NULL == aj_table_hint && OB_FAIL(get_plan()->get_log_plan_hint().check_use_das(table_id, hint_force_das,
-                                                                     hint_force_no_das))) {
-      LOG_WARN("table_item is null", K(ret), K(table_id));
-    } else if (NULL != aj_table_hint && OB_FAIL(aj_table_hint->check_use_das(table_id,
-                                                  get_plan()->get_log_plan_hint().is_outline_data_,
-                                                  hint_force_das, hint_force_no_das))) {
-      LOG_WARN("table_item is null", K(ret), K(table_id));
-    } else if (hint_force_das || hint_force_no_das) {
-      create_das_path = hint_force_das;
-      create_basic_path = hint_force_no_das;
-    } else if ((get_plan()->get_is_rescan_subplan() || helper.is_inner_path_) && !is_virtual_table(ref_id)) {
-      bool force_use_nlj = false;
-      force_use_nlj = (OB_SUCCESS != (OB_E(EventTable::EN_GENERATE_PLAN_WITH_NLJ) OB_SUCCESS));
-      create_das_path = true;
-      create_basic_path = force_use_nlj ? false : true;
-    } else if (index_info_entry->is_index_global() && OB_FAIL(get_explicit_dop_for_path(index_id, explicit_dop))) {
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::check_opt_rule_use_das(const uint64_t table_id,
+                                        const uint64_t index_id,
+                                        const ObIndexInfoCache &index_info_cache,
+                                        const ObIArray<ObRawExpr*> &filters,
+                                        const bool is_rescan,
+                                        bool &create_das_path,
+                                        bool &create_basic_path)
+{
+  int ret = OB_SUCCESS;
+  create_das_path = false;
+  create_basic_path = false;
+  IndexInfoEntry *index_info_entry = NULL;
+  if (is_rescan) {
+    create_das_path = true;
+    create_basic_path = (OB_SUCCESS != (OB_E(EventTable::EN_GENERATE_PLAN_WITH_NLJ) OB_SUCCESS)) ? false : true;
+  } else if (OB_FAIL(index_info_cache.get_index_info_entry(table_id, index_id, index_info_entry))) {
+    LOG_WARN("failed to get index info entry", K(table_id), K(index_id), K(ret));
+  } else if (OB_ISNULL(index_info_entry)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(index_info_entry));
+  } else if (index_info_entry->is_index_global() && index_info_entry->is_index_back()) {
+    int64_t explicit_dop = ObGlobalHint::UNSET_PARALLEL;
+    if (OB_FAIL(get_explicit_dop_for_path(index_id, explicit_dop))) {
       LOG_WARN("failed to get explicit dop", K(ret));
-    } else if (ObGlobalHint::DEFAULT_PARALLEL == explicit_dop) {
-      create_das_path = true;
-      create_basic_path = false;
-    } else if (index_info_entry->is_index_global() && ObGlobalHint::UNSET_PARALLEL == explicit_dop) {
+    } else if (ObGlobalHint::UNSET_PARALLEL == explicit_dop) {
       // for global index use auto dop, create das path and basic path, after get auto dop result, prune unnecessary path
       create_das_path = true;
       create_basic_path = true;
+    } else if (ObGlobalHint::DEFAULT_PARALLEL == explicit_dop) {
+      create_das_path = true;
     } else {
-      create_das_path = false;
       create_basic_path = true;
     }
-    LOG_TRACE("will use das", K(force_das_tsc), K(hint_force_das), K(hint_force_no_das),
-                              K(get_plan()->get_is_rescan_subplan()), K(helper.is_inner_path_),
-                              K(create_das_path), K(create_basic_path));
+  } else {
+    create_basic_path = true;
   }
   return ret;
 }
@@ -2516,7 +2543,6 @@ int ObJoinOrder::create_access_paths(const uint64_t table_id,
       AccessPath *basic_access_path = NULL; // the path does not use DAS, maybe optimal sometime.
       OptSkipScanState use_skip_scan = OptSkipScanState::SS_UNSET;
       if (OB_FAIL(will_use_das(table_id,
-                               ref_table_id,
                                skyline_index_ids.at(i),
                                index_info_cache,
                                helper,
@@ -4988,28 +5014,53 @@ int ObJoinOrder::compute_join_path_relationship(const JoinPath &first_path,
 
   if (OB_SUCC(ret) && DominateRelation::OBJ_EQUAL == relation
       && first_path.is_nlj_with_param_down() && second_path.is_nlj_with_param_down()) {
+    bool first_right_local_rescan = false;
+    bool second_right_local_rescan = false;
+    bool first_can_px_batch_rescan = false;
+    bool second_can_px_batch_rescan = false;
     if (!first_path.can_use_batch_nlj_ && second_path.can_use_batch_nlj_) {
       relation = DominateRelation::OBJ_RIGHT_DOMINATE;
       OPT_TRACE("right path dominate left path because of batch nl");
     } else if (first_path.can_use_batch_nlj_ && !second_path.can_use_batch_nlj_) {
       relation = DominateRelation::OBJ_LEFT_DOMINATE;
       OPT_TRACE("left path dominate right path because of batch nl");
-    } else if (first_path.can_use_batch_nlj_ && second_path.can_use_batch_nlj_
-               && first_path.parallel_ == second_path.parallel_) {
-      bool first_batch_without_shuffle = DistAlgo::DIST_PARTITION_WISE == first_path.join_dist_algo_
-                                         || (DistAlgo::DIST_BASIC_METHOD == first_path.join_dist_algo_
-                                             && !first_path.right_path_->is_match_all());
-      bool second_batch_without_shuffle = DistAlgo::DIST_PARTITION_WISE == second_path.join_dist_algo_
-                                          || (DistAlgo::DIST_BASIC_METHOD == second_path.join_dist_algo_
-                                              && !second_path.right_path_->is_match_all());
-      if (!first_batch_without_shuffle && second_batch_without_shuffle) {
+    } else if (OB_FAIL(first_path.check_right_is_local_scan(first_right_local_rescan))
+               || OB_FAIL(second_path.check_right_is_local_scan(second_right_local_rescan))) {
+      LOG_WARN("failed to check right is lcoal rescan", K(ret));
+    } else if (first_path.can_use_batch_nlj_ && second_path.can_use_batch_nlj_) {
+      if (first_path.parallel_ != second_path.parallel_) {
+        /* do nothing */
+      } else if (!first_right_local_rescan && second_right_local_rescan) {
         relation = DominateRelation::OBJ_RIGHT_DOMINATE;
-        OPT_TRACE("right path dominate left path because of batch nl without shuffle");
-      } else if (first_batch_without_shuffle && !second_batch_without_shuffle) {
+        OPT_TRACE("right path dominate left path because of batch nl local rescan");
+      } else if (first_right_local_rescan && !second_right_local_rescan) {
         relation = DominateRelation::OBJ_LEFT_DOMINATE;
-        OPT_TRACE("left path dominate right path because of batch nl without shuffle");
+        OPT_TRACE("left path dominate right path because of batch nl local rescan");
       }
+    } else if (!first_right_local_rescan && second_right_local_rescan) {
+      relation = DominateRelation::OBJ_RIGHT_DOMINATE;
+      OPT_TRACE("right path dominate left path because of nl local rescan");
+    } else if (first_right_local_rescan && !second_right_local_rescan) {
+      relation = DominateRelation::OBJ_LEFT_DOMINATE;
+      OPT_TRACE("left path dominate right path because of nl local rescan");
+    } else if (first_right_local_rescan && second_right_local_rescan) {
+      /* do nothing */
+    } else if (OB_FAIL(first_path.pre_check_nlj_can_px_batch_rescan(first_can_px_batch_rescan))
+               || OB_FAIL(second_path.pre_check_nlj_can_px_batch_rescan(second_can_px_batch_rescan))) {
+      LOG_WARN("failed to pre check spf can px batch rescan", K(ret));
+    } else if (!first_can_px_batch_rescan && second_can_px_batch_rescan) {
+      relation = DominateRelation::OBJ_RIGHT_DOMINATE;
+      OPT_TRACE("right plan dominate left plan because of nl px batch rescan");
+    } else if (first_can_px_batch_rescan && !second_can_px_batch_rescan) {
+      relation = DominateRelation::OBJ_LEFT_DOMINATE;
+      OPT_TRACE("left plan dominate right plan because of nl px batch rescan");
+    } else {
+      /* do nothing */
     }
+    LOG_TRACE("finish compute nlj rescan join path relationship",
+                    K(first_path.can_use_batch_nlj_), K(second_path.can_use_batch_nlj_),
+                    K(first_right_local_rescan), K(second_right_local_rescan),
+                    K(first_can_px_batch_rescan), K(second_can_px_batch_rescan));
   }
   return ret;
 }
@@ -6838,6 +6889,85 @@ int JoinPath::check_right_has_gi_or_exchange(bool &right_has_gi_or_exchange)
     right_has_gi_or_exchange = false;
   } else {
     right_has_gi_or_exchange = true;
+  }
+  return ret;
+}
+
+int JoinPath::check_right_is_local_scan(bool &is_local_scan) const
+{
+  int ret = OB_SUCCESS;
+  is_local_scan = true;
+  if (OB_ISNULL(right_path_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(right_path_));
+  } else if (is_right_need_exchange() || right_path_->exchange_allocated_ || right_path_->contain_das_op_) {
+    is_local_scan = false;
+  }
+  return ret;
+}
+
+int JoinPath::pre_check_nlj_can_px_batch_rescan(bool &can_px_batch_rescan) const
+{
+  int ret = OB_SUCCESS;
+  can_px_batch_rescan = false;
+  bool find_nested_rescan = false;
+  bool find_rescan_px = false;
+  const ObLogicalOperator *op = NULL;
+  if (OB_ISNULL(parent_) || OB_ISNULL(parent_->get_plan()) || OB_ISNULL(right_path_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(parent_), K(right_path_));
+  } else if (1 < available_parallel_ || 1 < parallel_
+             || !parent_->get_plan()->get_optimizer_context().enable_px_batch_rescan()
+             || NESTED_LOOP_JOIN != join_algo_ || !is_nlj_with_param_down()
+             || CONNECT_BY_JOIN == join_type_
+             || IS_SEMI_ANTI_JOIN(join_type_)
+             || GCONF._enable_px_ordered_coord) {
+    /* when _enable_px_ordered_coord is enabled, px batch rescan is disabled due to is_task_order(）exchange op */
+  } else if (is_right_need_exchange()) {
+    can_px_batch_rescan = true;
+  } else if (right_path_->is_join_path() &&
+             OB_FAIL(SMART_CALL(static_cast<const JoinPath*>(right_path_)->pre_check_can_px_batch_rescan(find_nested_rescan, find_rescan_px, false)))) {
+    LOG_WARN("fail to find px for batch rescan", K(ret));
+  } else if (right_path_->is_subquery_path() &&
+             NULL != (op = static_cast<const SubQueryPath*>(right_path_)->root_) &&
+             OB_FAIL(SMART_CALL(op->pre_check_can_px_batch_rescan(find_nested_rescan, find_rescan_px, false)))) {
+    LOG_WARN("fail to find px for batch rescan", K(ret));
+  } else if (!find_nested_rescan && find_rescan_px) {
+    can_px_batch_rescan = true;
+  }
+  return ret;
+}
+
+int JoinPath::pre_check_can_px_batch_rescan(bool &find_nested_rescan,
+                                            bool &find_rescan_px,
+                                            bool nested) const
+{
+  int ret = OB_SUCCESS;
+  const ObLogicalOperator *op = NULL;
+  if (find_nested_rescan) {
+  } else if (NULL != log_op_) {
+    ret = log_op_->pre_check_can_px_batch_rescan(find_nested_rescan, find_rescan_px, nested);
+  } else if (OB_FALSE_IT(nested |= NESTED_LOOP_JOIN == join_algo_)) {
+  } else if (is_left_need_exchange() || is_right_need_exchange()) {
+    find_nested_rescan = nested;
+    find_rescan_px |= !nested;
+  } else if (OB_ISNULL(left_path_) || OB_ISNULL(right_path_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(left_path_), K(right_path_));
+  } else if (left_path_->is_join_path() &&
+             OB_FAIL(SMART_CALL(static_cast<const JoinPath*>(left_path_)->pre_check_can_px_batch_rescan(find_nested_rescan, find_rescan_px, nested)))) {
+    LOG_WARN("fail to find px for batch rescan", K(ret));
+  } else if (left_path_->is_subquery_path() &&
+             NULL != (op = static_cast<const SubQueryPath*>(left_path_)->root_) &&
+             OB_FAIL(SMART_CALL(op->pre_check_can_px_batch_rescan(find_nested_rescan, find_rescan_px, nested)))) {
+    LOG_WARN("fail to find px for batch rescan", K(ret));
+  } else if (right_path_->is_join_path() &&
+             OB_FAIL(SMART_CALL(static_cast<const JoinPath*>(right_path_)->pre_check_can_px_batch_rescan(find_nested_rescan, find_rescan_px, nested)))) {
+    LOG_WARN("fail to find px for batch rescan", K(ret));
+  } else if (right_path_->is_subquery_path() &&
+             NULL != (op = static_cast<const SubQueryPath*>(right_path_)->root_) &&
+             OB_FAIL(SMART_CALL(op->pre_check_can_px_batch_rescan(find_nested_rescan, find_rescan_px, nested)))) {
+    LOG_WARN("fail to find px for batch rescan", K(ret));
   }
   return ret;
 }
