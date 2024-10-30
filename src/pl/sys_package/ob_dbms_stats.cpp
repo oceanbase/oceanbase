@@ -754,21 +754,21 @@ int ObDbmsStats::set_index_stats(ObExecContext &ctx, ParamStore &params, ObObj &
     LOG_WARN("failed to parse index part info", K(ret));
   } else if (!params.at(5).is_null() && OB_FAIL(params.at(5).get_number(num_numrows))) {
     LOG_WARN("failed to get ncachehit", K(ret));
+  } else if (!params.at(5).is_null() && OB_FAIL(num_numrows.extract_valid_int64_with_trunc(set_index_param.numrows_))) {
+    LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(num_numrows));
   } else if (!params.at(18).is_null() && OB_FAIL(params.at(18).get_bool(index_stat_param.force_))) {
     LOG_WARN("failed to get force", K(ret));
   } else if (!params.at(19).is_null() && OB_FAIL(params.at(19).get_number(num_avgrlen))) {
     LOG_WARN("failed to get avgrlen", K(ret));
+  } else if (!params.at(19).is_null() && OB_FAIL(num_avgrlen.extract_valid_int64_with_trunc(set_index_param.avgrlen_))) {
+    LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(num_avgrlen));
   } else if (!params.at(20).is_null() && OB_FAIL(params.at(20).get_number(num_nummacroblks))) {
     LOG_WARN("failed to get nummacroblks", K(ret));
+  } else if (!params.at(20).is_null() && OB_FAIL(num_nummacroblks.extract_valid_int64_with_trunc(set_index_param.nummacroblks_))) {
+    LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(num_nummacroblks));
   } else if (!params.at(21).is_null() && OB_FAIL(params.at(21).get_number(num_nummicroblks))) {
     LOG_WARN("failed to get nummicroblks", K(ret));
-  } else if (OB_FAIL(num_numrows.extract_valid_int64_with_trunc(set_index_param.numrows_))) {
-    LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(num_numrows));
-  } else if (OB_FAIL(num_avgrlen.extract_valid_int64_with_trunc(set_index_param.avgrlen_))) {
-    LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(num_avgrlen));
-  } else if (OB_FAIL(num_nummacroblks.extract_valid_int64_with_trunc(set_index_param.nummacroblks_))) {
-    LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(num_nummacroblks));
-  } else if (OB_FAIL(num_nummicroblks.extract_valid_int64_with_trunc(set_index_param.nummicroblks_))) {
+  } else if (!params.at(21).is_null() && OB_FAIL(num_nummicroblks.extract_valid_int64_with_trunc(set_index_param.nummicroblks_))) {
     LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(num_nummicroblks));
   } else {
     decide_modified_part(index_stat_param, false/* cascade_part */);
