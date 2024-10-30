@@ -233,6 +233,17 @@ struct ObPLExternTypeInfo
   TO_STRING_KV(K_(flag), K_(type_owner), K_(type_name), K_(type_subname), K_(obj_version));
 };
 
+OB_INLINE bool is_mocked_anonymous_array_id(uint64_t udt_id, uint8_t extend_type)
+{
+  uint64_t mask = 0xFFFFFFFFFFF00000;
+  // anonymous_array will use OB_INVALID_ID and type_start_gen_id_ to generate a mocked
+  // id like this: common::combine_pl_type_id(OB_INVALID_ID, type_start_gen_id_++)
+  // For the mocked id: first 40 bit is shift left by OB_INVALID_ID, then 4 bit is pl mask,
+  // these bits are always 1. So the first 44 bits of mocked id format in hex: 0xFFFFFFFFFFF
+  // then last 20 bits are mocked from type_start_gen_id_, so mocked_id & mask will remain mask
+  return (PL_NESTED_TABLE_TYPE == extend_type && (udt_id & mask) == mask) || OB_INVALID_ID == udt_id;
+}
+
 class ObPLDataType
 {
 public:

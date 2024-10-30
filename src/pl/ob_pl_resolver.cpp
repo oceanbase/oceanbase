@@ -6160,7 +6160,7 @@ int ObPLResolver::resolve_using(const ObStmtNodeTree *using_node,
       } else {
         bool legal_extend = false;
         if (ObExtendType == expr->get_result_type().get_type()) {
-          if (expr->get_result_type().get_udt_id() != OB_INVALID_ID) {
+          if (!is_mocked_anonymous_array_id(expr->get_result_type().get_udt_id(), expr->get_result_type().get_extend_type())) {
             const ObUserDefinedType *user_type = NULL;
             CK (OB_NOT_NULL(current_block_));
             OZ (current_block_->get_namespace().get_pl_data_type_by_id(
@@ -7360,42 +7360,8 @@ int ObPLResolver::check_in_param_type_legal(const ObIRoutineParam *param_info,
       } else if (actually_type.is_obj_type() && ObNullType == actually_type.get_obj_type()) {
         // do nothing ...
       } else if (actually_type.is_composite_type() && expected_type.is_composite_type()) {
-
         if (is_anonymous_array_type && expected_type.is_collection_type()) { // check anonymous array compatible
-
-          const ObUserDefinedType *left_type = NULL;
-          const ObUserDefinedType *right_type = NULL;
-          const ObCollectionType *left_coll_type = NULL;
-          const ObCollectionType *right_coll_type = NULL;
-
-          OZ (current_block_->get_namespace().get_pl_data_type_by_id(actually_type.get_user_type_id(), left_type));
-          OZ (current_block_->get_namespace().get_pl_data_type_by_id(expected_type.get_user_type_id(), right_type));
-          CK (OB_NOT_NULL(left_coll_type = static_cast<const ObCollectionType *>(left_type)));
-          CK (OB_NOT_NULL(right_coll_type = static_cast<const ObCollectionType *>(right_type)));
-
-          if (OB_FAIL(ret)) {
-          } else if (left_coll_type->get_element_type().is_obj_type() ^ right_coll_type->get_element_type().is_obj_type()) {
-            is_legal = false;
-            LOG_WARN("uncompatible with anonymous array type", K(ret), KPC(left_coll_type), KPC(right_coll_type));
-          } else if (left_coll_type->get_element_type().is_obj_type()) {
-            const ObDataType *left_basic_type = left_coll_type->get_element_type().get_data_type();
-            const ObDataType *right_basic_type = right_coll_type->get_element_type().get_data_type();
-            if (left_basic_type->get_obj_type() != right_basic_type->get_obj_type()
-                && !cast_supported(left_basic_type->get_obj_type(),
-                                   left_basic_type->get_collation_type(),
-                                   right_basic_type->get_obj_type(),
-                                   right_basic_type->get_collation_type())) {
-              is_legal = false;
-              LOG_WARN("uncompatible with anonymous array type", K(ret), KPC(left_coll_type), KPC(right_coll_type));
-            } else {
-              // compatible with anonymous array type
-            }
-          } else if (left_coll_type->get_element_type().get_user_type_id() != right_coll_type->get_element_type().get_user_type_id()) {
-            OZ (check_composite_compatible(current_block_->get_namespace(),
-                                           left_coll_type->get_element_type().get_user_type_id(),
-                                           right_coll_type->get_element_type().get_user_type_id(),
-                                           is_legal));
-          }
+          OZ (check_anonymous_array_compatible(actually_type.get_user_type_id(), expected_type.get_user_type_id(), is_legal));
         } else if (actually_type.get_user_type_id() != expected_type.get_user_type_id()) {
           OZ (check_composite_compatible(current_block_->get_namespace(),
                                          actually_type.get_user_type_id(),
@@ -9983,7 +9949,7 @@ int ObPLResolver::formalize_expr(ObRawExpr &expr,
   int ret = OB_SUCCESS;
   if (OB_SUCC(ret)
       && expr.get_result_type().is_ext()
-      && OB_INVALID_ID != expr.get_udt_id()) {
+      && !is_mocked_anonymous_array_id(expr.get_udt_id(), expr.get_result_type().get_extend_type())) {
     int64_t size = 0;
     const ObUserDefinedType *user_type = NULL;
     OZ (ns.get_user_type(expr.get_udt_id(), user_type, NULL));
@@ -10155,10 +10121,14 @@ int ObPLResolver::resolve_expr(const ParseNode *node,
                && expected_type->get_user_type_id() != expr->get_result_type().get_udt_id()
                && expr->get_expr_type() != T_FUN_SYS_PDB_GET_RUNTIME_INFO) {
       bool is_compatible = false;
-      OZ (check_composite_compatible(current_block_->get_namespace(),
-                                     expr->get_result_type().get_udt_id(),
-                                     expected_type->get_user_type_id(),
-                                     is_compatible));
+      if (is_mocked_anonymous_array_id(expr->get_result_type().get_udt_id(), expr->get_result_type().get_extend_type())) {
+        OZ (check_anonymous_array_compatible(expr->get_result_type().get_udt_id(), expected_type->get_user_type_id(), is_compatible));
+      } else {
+        OZ (check_composite_compatible(current_block_->get_namespace(),
+                                      expr->get_result_type().get_udt_id(),
+                                      expected_type->get_user_type_id(),
+                                      is_compatible));
+      }
       if (OB_FAIL(ret)) {
       } else if (!is_compatible) {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
@@ -10361,6 +10331,47 @@ int ObPLResolver::resolve_expr(const ParseNode *node,
   return ret;
 }
 
+int ObPLResolver::check_anonymous_array_compatible (uint64_t actual_param_type_id,
+                                                    uint64_t formal_param_type_id,
+                                                    bool &is_compatible)
+{
+  int ret = OB_SUCCESS;
+  const ObUserDefinedType *left_type = NULL;
+  const ObUserDefinedType *right_type = NULL;
+  const ObCollectionType *left_coll_type = NULL;
+  const ObCollectionType *right_coll_type = NULL;
+  OZ (current_block_->get_namespace().get_pl_data_type_by_id(actual_param_type_id, left_type));
+  OZ (current_block_->get_namespace().get_pl_data_type_by_id(formal_param_type_id, right_type));
+  CK (OB_NOT_NULL(left_coll_type = static_cast<const ObCollectionType *>(left_type)));
+  CK (OB_NOT_NULL(right_coll_type = static_cast<const ObCollectionType *>(right_type)));
+
+  if (OB_FAIL(ret)) {
+  } else if (left_coll_type->get_element_type().is_obj_type() ^ right_coll_type->get_element_type().is_obj_type()) {
+    is_compatible = false;
+    LOG_WARN("uncompatible with anonymous array type", K(ret), KPC(left_coll_type), KPC(right_coll_type));
+  } else if (left_coll_type->get_element_type().is_obj_type()) {
+    const ObDataType *left_basic_type = left_coll_type->get_element_type().get_data_type();
+    const ObDataType *right_basic_type = right_coll_type->get_element_type().get_data_type();
+    if (left_basic_type->get_obj_type() != right_basic_type->get_obj_type()
+        && !cast_supported(left_basic_type->get_obj_type(),
+                            left_basic_type->get_collation_type(),
+                            right_basic_type->get_obj_type(),
+                            right_basic_type->get_collation_type())) {
+      is_compatible = false;
+      LOG_WARN("uncompatible with anonymous array type", K(ret), KPC(left_coll_type), KPC(right_coll_type));
+    } else {
+      is_compatible = true;// compatible with anonymous array type
+    }
+  } else if (left_coll_type->get_element_type().get_user_type_id() != right_coll_type->get_element_type().get_user_type_id()) {
+    OZ (check_composite_compatible(current_block_->get_namespace(),
+                                    left_coll_type->get_element_type().get_user_type_id(),
+                                    right_coll_type->get_element_type().get_user_type_id(),
+                                    is_compatible));
+  } else {
+    is_compatible = true; // user_type_id equal
+  }
+  return ret;
+}
 
 int ObPLResolver::transform_subquery_expr(const ParseNode *node,
                                           ObRawExpr *&expr,

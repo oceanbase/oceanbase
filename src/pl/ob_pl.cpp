@@ -3561,7 +3561,8 @@ int ObPLExecState::check_routine_param_legal(ParamStore *params)
     } else if (!params->at(i).is_pl_extend()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("real parameter is ext ptr, but extend type not set property", K(ret), K(params->at(i)), K(i));
-    } else if (PL_OPAQUE_TYPE == params->at(i).get_meta().get_extend_type() || params->at(i).get_udt_id() != OB_INVALID_ID) {
+    } else if (PL_OPAQUE_TYPE == params->at(i).get_meta().get_extend_type()
+              || !is_mocked_anonymous_array_id(params->at(i).get_udt_id(), params->at(i).get_meta().get_extend_type())) {
       if (params->at(i).get_udt_id() != dest_type.get_user_type_id()) {
         bool is_compatible = false;
         OZ (ObPLResolver::check_composite_compatible(
@@ -3576,7 +3577,8 @@ int ObPLExecState::check_routine_param_legal(ParamStore *params)
       ObPLComposite *composite = reinterpret_cast<ObPLComposite *>(params->at(i).get_ext());
       CK (OB_NOT_NULL(composite));
       if (OB_FAIL(ret)) {
-      } else if (OB_INVALID_ID == composite->get_id()) { // anonymous collection, should check element composite.
+      } else if (is_mocked_anonymous_array_id(composite->get_id(), composite->get_type())) {
+        // anonymous collection, should check element composite.
         bool need_cast = false;
         if (!dest_type.is_collection_type()) {
           ret = OB_INVALID_ARGUMENT;
@@ -3849,7 +3851,8 @@ do {                                                                  \
               get_params().at(i).set_is_ref_cursor_type(true);  // last assignment statement could clear this flag
               get_params().at(i).set_extend(
                   get_params().at(i).get_ext(), PL_REF_CURSOR_TYPE, get_params().at(i).get_val_len());
-            } else if (pl_type.is_collection_type() && OB_INVALID_ID == params->at(i).get_udt_id()) {
+            } else if (pl_type.is_collection_type()
+                  && (is_mocked_anonymous_array_id(params->at(i).get_udt_id(), params->at(i).get_meta().get_extend_type()))) {
               ObPLComposite *composite = NULL;
               get_params().at(i) = params->at(i);
               get_params().at(i).set_udt_id(pl_type.get_user_type_id());
