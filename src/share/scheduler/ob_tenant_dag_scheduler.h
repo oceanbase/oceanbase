@@ -409,8 +409,8 @@ public:
     }
     return diagnose_type;
   }
-  bool has_set_stop() { return ATOMIC_LOAD(&is_stop_); }
-  void set_stop() { ATOMIC_SET(&is_stop_, true); }
+  bool has_set_stop() { return is_stop_; }
+  void set_stop();
   ObIDagNet *get_dag_net() const { return dag_net_; }
   void set_dag_net(ObIDagNet &dag_net)
   {
@@ -469,8 +469,6 @@ public:
   }
   void set_start_time() { start_time_ = ObTimeUtility::fast_current_time(); }
   int64_t get_start_time() const { return start_time_; }
-  void set_force_cancel_flag();
-  bool get_force_cancel_flag() { return force_cancel_flag_; }
   int add_child_without_inheritance(ObIDag &child);
   int add_child_without_inheritance(const common::ObIArray<ObINodeWithChild*> &child_array);
   int get_next_ready_task(ObITask *&task);
@@ -544,8 +542,7 @@ private:
   ObDagStatus dag_status_;
   int64_t running_task_cnt_;
   TaskList task_list_; // should protect by lock
-  bool is_stop_;
-  bool force_cancel_flag_; // should protect by lock
+  bool is_stop_; // should protect by lock
   uint32_t max_retry_times_;  // should protect by lock
   uint32_t running_times_;
   ObIDagNet *dag_net_; // should protect by lock
@@ -1316,15 +1313,18 @@ int ObIDag::alloc_task(T *&task)
     ntask->set_dag(*this);
     {
       lib::ObMutexGuard guard(lock_);
-      if (!task_list_.add_last(ntask)) {
+      if (is_stop_) {
+        ret = OB_CANCELED;
+      } else if (!task_list_.add_last(ntask)) {
         ret = common::OB_ERR_UNEXPECTED;
         COMMON_LOG(WARN, "Failed to add task", K(task), K_(id));
-        ntask->~T();
-        allocator_->free(ntask);
       }
     }
     if (OB_SUCC(ret)) {
       task = ntask;
+    } else {
+      ntask->~T();
+      allocator_->free(ntask);
     }
   }
   return ret;

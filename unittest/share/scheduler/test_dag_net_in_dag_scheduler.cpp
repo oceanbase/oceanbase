@@ -944,6 +944,17 @@ public:
     }
     return common::OB_SUCCESS;
   }
+  virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param,
+      ObIAllocator &allocator) const override
+  {
+    int ret = OB_SUCCESS;
+    if (!is_inited_) {
+      ret = OB_NOT_INIT;
+    } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(), id_, id_+1))) {
+      COMMON_LOG(WARN, "fail to add dag warning info param", K(ret));
+    }
+    return ret;
+  }
   int inner_reset_status_for_retry() { return OB_SUCCESS; }
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, K_(is_inited), K_(type), K_(id), K(task_list_.get_size()), K_(dag_ret));
 };
@@ -1685,7 +1696,7 @@ TEST_F(TestDagScheduler, test_cancel_waiting_dag)
 
   ObCancelDag *first_dag = dag_net->first_dag_;
   EXPECT_NE(nullptr, first_dag);
-  first_dag->set_force_cancel_flag();
+  first_dag->set_stop();
   first_dag->can_schedule_ = true;
   wait_scheduler();
 }

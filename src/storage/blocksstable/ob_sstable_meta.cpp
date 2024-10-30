@@ -876,7 +876,7 @@ int ObSSTableMeta::deserialize_(
   if (OB_FAIL(basic_meta_.deserialize(buf, data_len, pos))) {
     LOG_WARN("fail to deserialize basic meta", K(ret), KP(buf), K(data_len), K(pos));
   } else if (OB_FAIL(column_ckm_struct_.deserialize(allocator, buf, data_len, pos))) {
-    LOG_WARN("fail to deserialize column checksum", K(ret), K(column_ckm_struct_));
+    LOG_WARN("fail to deserialize column checksum", K(ret));
   } else {
     ObMicroBlockDesMeta des_meta(basic_meta_.compressor_type_,
                                  basic_meta_.root_row_store_type_,
