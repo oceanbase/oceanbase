@@ -333,7 +333,7 @@ int ObMajorMergeScheduler::do_work()
 
     LOG_TRACE("finish do merge scheduler work", KR(ret), K(curr_round_epoch), K(global_info));
     // is_merging = false, except for switchover
-    check_merge_interval_time(false);
+    check_merge_interval_time(false, curr_round_epoch);
   }
   return ret;
 }
@@ -415,7 +415,7 @@ int ObMajorMergeScheduler::do_one_round_major_merge(const int64_t expected_epoch
 
       ret = OB_SUCCESS;
       // treat as is_merging = true, even though last merge complete
-      check_merge_interval_time(true);
+      check_merge_interval_time(true, expected_epoch);
       LOG_INFO("finish one round of loop in do_one_round_major_merge", K(expected_epoch), K(global_info));
     }
   }
@@ -813,7 +813,7 @@ int ObMajorMergeScheduler::update_all_tablets_report_scn(
   return ret;
 }
 
-void ObMajorMergeScheduler::check_merge_interval_time(const bool is_merging)
+void ObMajorMergeScheduler::check_merge_interval_time(const bool is_merging, const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
   int64_t now = ObTimeUtility::current_time();
@@ -867,9 +867,15 @@ void ObMajorMergeScheduler::check_merge_interval_time(const bool is_merging)
       if (is_merging) {
         if ((now - max_merge_time) > MAX_NO_MERGE_INTERVAL) {
           if (TC_REACH_TIME_INTERVAL(30 * 60 * 1000 * 1000)) {
-            LOG_ERROR("long time major freeze not finish, please check it", KR(ret),
-              K(global_last_merged_time), K(global_merge_start_time), K(max_merge_time),
-              K(now), K_(tenant_id), K(is_merging), K(start_service_time), K(total_service_time));
+            bool is_match = true;
+            if (OB_FAIL(share::ObServiceEpochProxy::check_service_epoch(*sql_proxy_, tenant_id_,
+                        share::ObServiceEpochProxy::FREEZE_SERVICE_EPOCH, expected_epoch, is_match))) {
+              LOG_WARN("fail to check freeze service epoch", KR(ret), K_(tenant_id), K(expected_epoch));
+            } else if (is_match) {
+              LOG_ERROR("long time major freeze not finish, please check it", KR(ret), K(expected_epoch),
+                        K(global_last_merged_time), K(global_merge_start_time), K(max_merge_time),
+                        K(now), K_(tenant_id), K(is_merging), K(start_service_time), K(total_service_time));
+            }
           }
         }
       } else {
@@ -894,9 +900,15 @@ void ObMajorMergeScheduler::check_merge_interval_time(const bool is_merging)
               LOG_INFO("standby tenant do not sync from primary tenant any more, and do not"
                        " major freeze any more");
             } else {
-              LOG_ERROR("long time no major freeze, please check it", KR(ret),
-                K(global_last_merged_time), K(global_merge_start_time), K(max_merge_time),
-                K(now), K_(tenant_id), K(is_merging), K(start_service_time), K(total_service_time));
+              bool is_match = true;
+              if (OB_FAIL(share::ObServiceEpochProxy::check_service_epoch(*sql_proxy_, tenant_id_,
+                          share::ObServiceEpochProxy::FREEZE_SERVICE_EPOCH, expected_epoch, is_match))) {
+                LOG_WARN("fail to check freeze service epoch", KR(ret), K_(tenant_id), K(expected_epoch));
+              } else if (is_match) {
+                LOG_ERROR("long time no major freeze, please check it", KR(ret), K(expected_epoch),
+                  K(global_last_merged_time), K(global_merge_start_time), K(max_merge_time),
+                  K(now), K_(tenant_id), K(is_merging), K(start_service_time), K(total_service_time));
+              }
             }
           }
         }
