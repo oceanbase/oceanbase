@@ -7929,7 +7929,8 @@ int ObTablet::calc_sstable_occupy_size(
         // TODO gaishun.gs: for major_sstable, should add the meta_block occupy_size;
         ss_public_sstable_occupy_size += cur_sstable_occupy_size;
       }
-      if (!meta_handle.get_sstable_meta().get_basic_meta().table_backup_flag_.has_local()) {
+      if (!meta_handle.get_sstable_meta().get_basic_meta().table_backup_flag_.has_local()
+        && meta_handle.get_sstable_meta().get_basic_meta().table_backup_flag_.has_backup()) {
         pure_backup_sstable_occupy_size +=  cur_sstable_occupy_size;
       }
     }
