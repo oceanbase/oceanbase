@@ -29,15 +29,17 @@ struct ObPxRpcAddrTarget
 {
   OB_UNIS_VERSION(1);
 public:
-  ObPxRpcAddrTarget() : addr_(), target_() {}
-  ObPxRpcAddrTarget(ObAddr addr, int64_t target) : addr_(addr), target_(target) {}
+  ObPxRpcAddrTarget() : addr_(), target_(), cpu_percent_(0.) {}
+  ObPxRpcAddrTarget(ObAddr addr, int64_t target, double cpu_percent) : addr_(addr), target_(target), cpu_percent_(cpu_percent) {}
+  ObPxRpcAddrTarget(ObAddr addr, int64_t target) : addr_(addr), target_(target), cpu_percent_(-1.) {}
   ObAddr addr_;
   int64_t target_;
+  double cpu_percent_;
   TO_STRING_KV(K_(addr), K_(target));
 };
 
-// The follower reports the usage of the local target to the leader, 
-// and receives the current statistics of the global target usage of the leader
+// The follower reports the usage of the local target and cpu to the leader, 
+// and receives the current statistics of the global target & cpu usage of the leader
 class ObPxRpcFetchStatArgs {
   OB_UNIS_VERSION(1);
 public:
@@ -61,6 +63,15 @@ public:
     int ret = OB_SUCCESS;
     if (OB_FAIL(addr_target_array_.push_back(ObPxRpcAddrTarget(server, local_usage)))) {
       COMMON_LOG(WARN, "push_back addr failed", K(server), K(local_usage));
+    }
+    return ret;
+  }
+
+  int push_local_target_usage(const ObAddr &server, int64_t local_usage, double cpu_percent)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(addr_target_array_.push_back(ObPxRpcAddrTarget(server, local_usage, cpu_percent)))) {
+      COMMON_LOG(WARN, "push_back addr failed", K(server), K(local_usage), K(cpu_percent));
     }
     return ret;
   }
@@ -95,11 +106,11 @@ public:
   void set_version(uint64_t version) { leader_version_ = version; }
   uint64_t get_version() { return leader_version_; }
 
-  int push_peer_target_usage(const ObAddr &server, int64_t peer_usage)
+  int push_peer_target_usage(const ObAddr &server, int64_t peer_usage, double cpu_percent)
   {
     int ret = OB_SUCCESS;
-    if (OB_FAIL(addr_target_array_.push_back(ObPxRpcAddrTarget(server, peer_usage)))) {
-      COMMON_LOG(WARN, "push_back addr failed", K(server), K(peer_usage));
+    if (OB_FAIL(addr_target_array_.push_back(ObPxRpcAddrTarget(server, peer_usage, cpu_percent)))) {
+      COMMON_LOG(WARN, "push_back addr failed", K(server), K(peer_usage), K(cpu_percent));
     }
     return ret;
   }
