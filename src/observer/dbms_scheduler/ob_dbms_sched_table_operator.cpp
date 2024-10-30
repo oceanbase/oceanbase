@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX RS
+#define USING_LOG_PREFIX SERVER
 
 #include "ob_dbms_sched_table_operator.h"
 
@@ -314,7 +314,7 @@ int ObDBMSSchedTableOperator::update_for_end(ObDBMSSchedJobInfo &job_info, int e
   OZ (_check_need_record(job_info, need_record, err == 0 ? false : true));
 
   if (OB_FAIL(ret)) {
-  } else if ((now >= job_info.end_date_ || job_info.get_interval_ts() == 0) && (true == job_info.auto_drop_)) {
+  } else if ((now >= job_info.end_date_ || (job_info.get_interval_ts() == 0 && (job_info.get_repeat_interval().empty() || 0 == job_info.get_repeat_interval().case_compare("null")))) && (true == job_info.auto_drop_)) {
     OZ (_build_job_drop_dml(now, job_info, sql1));
   } else {
     OX (job_info.failures_ = (err == 0) ? 0 : (job_info.failures_ + 1));
@@ -332,7 +332,7 @@ int ObDBMSSchedTableOperator::update_for_end(ObDBMSSchedJobInfo &job_info, int e
     if (OB_SUCC(ret) && ((job_info.flag_ & 0x1) != 0)) {
       // when if failures > 16 then set broken state.
       job_info.state_ = ObString("BROKEN");
-    } else if (now >= job_info.end_date_ || job_info.get_interval_ts() == 0) {
+    } else if (now >= job_info.end_date_ || (job_info.get_interval_ts() == 0 && (job_info.get_repeat_interval().empty() || 0 == job_info.get_repeat_interval().case_compare("null")))) {
       // when end_date is reach and auto_drop is set false, disable set completed state.
       // for once job, not wait until end date, set completed state when running end
       job_info.state_ = ObString("COMPLETED");
@@ -524,7 +524,7 @@ do {                                                                  \
   //job_type not used
   //job_action not used
   //number_of_argument not used
-  //repeat_interval not used
+  EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "repeat_interval", job_info_local.repeat_interval_);
   EXTRACT_BOOL_FIELD_MYSQL_SKIP_RET(result, "enabled", job_info_local.enabled_);
   EXTRACT_BOOL_FIELD_MYSQL_SKIP_RET(result, "auto_drop", job_info_local.auto_drop_);
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "state", job_info_local.state_);
