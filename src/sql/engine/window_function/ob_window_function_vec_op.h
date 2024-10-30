@@ -244,7 +244,7 @@ public:
       store_it_age_()
   {}
 
-  virtual ~ObWindowFunctionVecOp() {}
+  virtual ~ObWindowFunctionVecOp() { destroy(); }
   virtual int inner_open() override;
   virtual int inner_close() override;
   virtual int inner_rescan() override;
