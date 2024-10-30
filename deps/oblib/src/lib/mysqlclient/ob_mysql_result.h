@@ -1132,7 +1132,7 @@
         {                                                                                 \
           def_obj.set_type(data_type);                                                    \
           if (is_mysql_mode()) {                                                          \
-            if (OB_FAIL(def_obj.build_not_strict_default_value(column.get_data_precision()))) {    \
+            if (OB_FAIL(def_obj.build_not_strict_default_value(column.get_data_precision(), ObCollationType::CS_TYPE_INVALID /*string_cs_type, no need set for json*/))) {    \
               SQL_LOG(WARN, "failed to build not strict default json value", K(ret));     \
             } else {                                                                      \
               res_obj.set_json_value(data_type,  def_obj.get_string().ptr(),              \
@@ -1275,7 +1275,7 @@
         {                                                                                        \
           def_obj.set_type(data_type);                                                           \
           if (is_mysql_mode()) {                                                                 \
-            if (OB_FAIL(def_obj.build_not_strict_default_value(column.get_data_precision()))) {  \
+            if (OB_FAIL(def_obj.build_not_strict_default_value(column.get_data_precision(), ObCollationType::CS_TYPE_INVALID /*string_cs_type, no need set for json*/))) {  \
               SQL_LOG(WARN, "failed to build not strict default json value", K(ret));            \
             } else {                                                                             \
               res_obj.set_json_value(data_type,  def_obj.get_string().ptr(),                     \
