@@ -1946,14 +1946,14 @@ int ObIndexBlockRowScanner::get_end_key(ObCommonDatumRowkey &endkey) const
 void ObIndexBlockRowScanner::switch_context(const ObSSTable &sstable,
                                             const ObTablet *tablet,
                                             const ObStorageDatumUtils &datum_utils,
-                                            ObTableAccessContext &access_ctx,
+                                            const ObQueryFlag &query_flag,
                                             const ObIArray<share::schema::ObColDesc> *rowkey_col_descs)
 {
   nested_offset_ = sstable.get_macro_offset();
   datum_utils_ = &datum_utils;
   is_normal_cg_ = sstable.is_normal_cg_sstable();
-  is_reverse_scan_ = access_ctx.query_flag_.is_reverse_scan();
-  is_normal_query_ = !access_ctx.query_flag_.is_daily_merge() && !access_ctx.query_flag_.is_multi_version_minor_merge();
+  is_reverse_scan_ = query_flag.is_reverse_scan();
+  is_normal_query_ = !query_flag.is_daily_merge() && !query_flag.is_multi_version_minor_merge();
   rowkey_col_descs_ = rowkey_col_descs;
   iter_param_.sstable_ = &sstable;
   iter_param_.tablet_ = tablet;

@@ -415,7 +415,7 @@ public:
   void switch_context(const ObSSTable &sstable,
                       const ObTablet *tablet,
                       const ObStorageDatumUtils &datum_utils,
-                      ObTableAccessContext &access_ctx,
+                      const ObQueryFlag &query_flag,
                       const ObIArray<share::schema::ObColDesc> *rowkey_col_descs = nullptr);
   TO_STRING_KV(K_(index_format), KP_(raw_iter), KP_(transformed_iter), KP_(ddl_iter), KP_(ddl_merge_iter),
                KPC_(iter), K_(range_idx), K_(is_get), K_(is_reverse_scan), K_(is_left_border), K_(is_right_border),

@@ -2398,7 +2398,7 @@ int ObTabletSplitUtil::split_task_ranges(
     ObStoreRange whole_range;
     whole_range.set_whole_range();
     if (OB_FAIL(range_spliter.get_range_split_info(tables,
-      rowkey_read_info, whole_range, range_info))) {
+       rowkey_read_info, whole_range, range_info))) {
       LOG_WARN("init range split info failed", K(ret));
     } else if (OB_FALSE_IT(range_info.parallel_target_count_
       = MAX(1, MIN(user_parallelism, (range_info.total_size_ + tablet_size - 1) / tablet_size)))) {
