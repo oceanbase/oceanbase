@@ -632,6 +632,7 @@ public:
     : ObDMLBaseCtDef(alloc, dupd_ctdef_, DAS_OP_TABLE_UPDATE),
       dupd_ctdef_(alloc),
       need_check_filter_null_(false),
+      need_check_table_cycle_(false),
       distinct_algo_(T_DISTINCT_NONE),
       assign_columns_(alloc),
       ddel_ctdef_(nullptr),
@@ -647,6 +648,7 @@ public:
   INHERIT_TO_STRING_KV("ObDMLBaseCtDef", ObDMLBaseCtDef,
                        K_(dupd_ctdef),
                        K_(need_check_filter_null),
+                       K_(need_check_table_cycle),
                        K_(distinct_algo),
                        K_(assign_columns),
                        K_(distinct_key),
@@ -660,6 +662,8 @@ public:
                        K_(related_ins_ctdefs));
   ObDASUpdCtDef dupd_ctdef_;
   bool need_check_filter_null_;
+  // need_check_table_cycle_ is true if the fk cascade update may cause a cycle reference.
+  bool need_check_table_cycle_;
   DistinctType distinct_algo_;
   ColContentFixedArray assign_columns_;
   //if update target column involve the partition key,
@@ -689,6 +693,7 @@ public:
       dlock_rtdef_(nullptr),
       primary_rtdef_(nullptr),
       is_row_changed_(false),
+      has_table_cycle_(false),
       found_rows_(0),
       related_upd_rtdefs_(),
       related_del_rtdefs_(),
@@ -721,6 +726,7 @@ public:
                        KPC_(dins_rtdef),
                        KPC_(dlock_rtdef),
                        K_(is_row_changed),
+                       K_(has_table_cycle),
                        K_(found_rows),
                        K_(related_upd_rtdefs),
                        K_(related_del_rtdefs),
@@ -732,6 +738,7 @@ public:
   ObDASLockRtDef *dlock_rtdef_;
   ObUpdRtDef *primary_rtdef_; //reference the data table's rtdef
   bool is_row_changed_;
+  bool has_table_cycle_;
   int64_t found_rows_;
   DASUpdRtDefArray related_upd_rtdefs_;
   DASDelRtDefArray related_del_rtdefs_;
