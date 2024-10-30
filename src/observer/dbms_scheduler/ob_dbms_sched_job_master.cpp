@@ -634,14 +634,14 @@ int ObDBMSSchedJobMaster::check_all_tenants()
           }
         }
       } else {
+        /*
         uint64_t data_version = 0;
         if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_ids.at(i), data_version))) {
           LOG_WARN("fail to get tenant data version", KR(ret), K(data_version));
-        } else if (MOCK_DATA_VERSION <= data_version) {
-          //add default job class
-          OZ (table_operator_.register_default_job_class(tenant_ids.at(i)));
+        } else if (DATA_VERSION_SUPPORT_JOB_CLASS(data_version)) {
           OZ (table_operator_.purge_run_detail_histroy(tenant_ids.at(i)));
         }
+        */ // not open
         OZ (check_new_jobs(tenant_ids.at(i), tenant_schema->is_oracle_tenant()));
       }
       ret = OB_SUCCESS; // one tenant failed should not affect other

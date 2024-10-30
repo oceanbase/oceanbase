@@ -89,7 +89,6 @@ public:
 
   int check_job_can_running(int64_t tenant_id, int64_t alive_job_count, bool &can_running);
 
-  int register_default_job_class(uint64_t tenant_id);
   int purge_run_detail_histroy(uint64_t tenant_id);
 
 private:
