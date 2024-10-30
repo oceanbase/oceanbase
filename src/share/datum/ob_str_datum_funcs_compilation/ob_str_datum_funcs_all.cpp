@@ -157,6 +157,12 @@ extern void __init_str_func139();
 extern void __init_str_func140();
 extern void __init_str_func141();
 extern void __init_str_func142();
+extern void __init_str_func143();
+extern void __init_str_func144();
+extern void __init_str_func145();
+extern void __init_str_func146();
+extern void __init_str_func147();
+extern void __init_str_func148();
 void __init_all_str_funcs() {
   __init_str_func0();
   __init_str_func1();
@@ -301,6 +307,12 @@ void __init_all_str_funcs() {
   __init_str_func140();
   __init_str_func141();
   __init_str_func142();
+  __init_str_func143();
+  __init_str_func144();
+  __init_str_func145();
+  __init_str_func146();
+  __init_str_func147();
+  __init_str_func148();
 }
 } // end common
 } // end oceanbase

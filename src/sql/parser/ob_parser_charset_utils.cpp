@@ -38,8 +38,14 @@ int obcharset_is_gb_charset_of_collation(ObCollationType collation_type, bool *i
 int obcharset_is_single_byte_charset_of_collation(ObCollationType collation_type, bool *is_single_byte) {
     int ret = OB_SUCCESS;
     *is_single_byte = false;
-    if (collation_type == CS_TYPE_LATIN1_SWEDISH_CI ||
+    if (collation_type == CS_TYPE_LATIN1_GERMAN1_CI ||
+        collation_type == CS_TYPE_LATIN1_SWEDISH_CI ||
+        collation_type == CS_TYPE_LATIN1_DANISH_CI ||
+        collation_type == CS_TYPE_LATIN1_GERMAN2_CI ||
         collation_type == CS_TYPE_LATIN1_BIN ||
+        collation_type == CS_TYPE_LATIN1_GENERAL_CI ||
+        collation_type == CS_TYPE_LATIN1_GENERAL_CS ||
+        collation_type == CS_TYPE_LATIN1_SPANISH_CI ||
         collation_type == CS_TYPE_ASCII_GENERAL_CI ||
         collation_type == CS_TYPE_ASCII_BIN ||
         collation_type == CS_TYPE_TIS620_BIN ||

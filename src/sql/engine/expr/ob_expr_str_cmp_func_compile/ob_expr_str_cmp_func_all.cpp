@@ -157,6 +157,12 @@ extern void __init_str_expr_cmp_func139();
 extern void __init_str_expr_cmp_func140();
 extern void __init_str_expr_cmp_func141();
 extern void __init_str_expr_cmp_func142();
+extern void __init_str_expr_cmp_func143();
+extern void __init_str_expr_cmp_func144();
+extern void __init_str_expr_cmp_func145();
+extern void __init_str_expr_cmp_func146();
+extern void __init_str_expr_cmp_func147();
+extern void __init_str_expr_cmp_func148();
 void __init_all_str_expr_cmp_func() {
   __init_str_expr_cmp_func0();
   __init_str_expr_cmp_func1();
@@ -301,6 +307,12 @@ void __init_all_str_expr_cmp_func() {
   __init_str_expr_cmp_func140();
   __init_str_expr_cmp_func141();
   __init_str_expr_cmp_func142();
+  __init_str_expr_cmp_func143();
+  __init_str_expr_cmp_func144();
+  __init_str_expr_cmp_func145();
+  __init_str_expr_cmp_func146();
+  __init_str_expr_cmp_func147();
+  __init_str_expr_cmp_func148();
 }
 } // end sql
 } // end oceanbase
