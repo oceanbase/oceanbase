@@ -401,7 +401,7 @@ int ObWrCollector::collect_ash()
                   LOG_WARN("failed to add column p1", KR(ret), K(ash));
                 } else if (ash.p1_ >= 0 && OB_FAIL(dml_splicer.add_column("p1", ash.p1_))) {
                   LOG_WARN("failed to add column p1", KR(ret), K(ash));
-                } else if (ash.p2_ < 0 && OB_FAIL(dml_splicer.add_column(true, "p2"))) {
+                } else if (ash.p3_ < 0 && OB_FAIL(dml_splicer.add_column(true, "p2"))) {
                   LOG_WARN("failed to add column p2", KR(ret), K(ash));
                 } else if (ash.p2_ >= 0 && OB_FAIL(dml_splicer.add_column("p2", ash.p2_))) {
                   LOG_WARN("failed to add column p2", KR(ret), K(ash));
@@ -548,8 +548,9 @@ int ObWrCollector::collect_ash()
         }      
       }
       // record snapshot_end_time_
-      if (OB_FAIL(update_last_snapshot_end_time())) {
-        LOG_WARN("failed to update last snapshot end time", KR(ret));
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(update_last_snapshot_end_time())) {
+        LOG_WARN("failed to update last snapshot end time", KR(tmp_ret));
       }
     }
   }
