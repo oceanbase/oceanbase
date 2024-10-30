@@ -67,6 +67,7 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     require_local_execution_(false),
     use_px_(false),
     px_dop_(0),
+    px_parallel_rule_(PXParallelRule::USE_PX_DEFAULT),
     next_phy_operator_id_(0),
     next_expr_operator_id_(0),
     regexp_op_count_(0),
@@ -905,7 +906,8 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     online_sample_percent_,
                     need_switch_to_table_lock_worker_,
                     data_complement_gen_doc_id_,
-                    direct_load_need_sort_);
+                    direct_load_need_sort_,
+                    px_parallel_rule_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)

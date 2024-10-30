@@ -611,6 +611,7 @@ private:
   bool require_local_execution_; // not need serialize
   bool use_px_;
   int64_t px_dop_;
+  PXParallelRule px_parallel_rule_;
   uint32_t next_phy_operator_id_; //share val
   uint32_t next_expr_operator_id_; //share val
   // for regexp expression's compilation
