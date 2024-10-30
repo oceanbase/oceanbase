@@ -3916,12 +3916,27 @@ int ObTablet::fetch_tablet_autoinc_seq_cache(
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "FetchAutoSeq"));
   ObTabletAutoincSeq autoinc_seq;
+  mds::MdsWriter writer;
+  mds::TwoPhaseCommitState trans_stat;
+  share::SCN unused_trans_version;
   uint64_t auto_inc_seqvalue = 0;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (OB_FAIL(get_autoinc_seq(autoinc_seq, allocator))) {
-    LOG_WARN("fail to get latest autoinc seq", K(ret));
+  } else if (OB_FAIL(ObITabletMdsInterface::get_latest(autoinc_seq, writer, trans_stat, unused_trans_version, &allocator))) {
+    if (OB_EMPTY_RESULT == ret) {
+      ret = OB_SUCCESS;
+      autoinc_seq.reset();
+      trans_stat = mds::TwoPhaseCommitState::ON_COMMIT;
+    } else {
+      LOG_WARN("fail to get latest autoinc seq", K(ret), K(tablet_meta_.tablet_id_));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(trans_stat != mds::TwoPhaseCommitState::ON_COMMIT)) {
+    ret = OB_EAGAIN;
+    LOG_WARN("tablet autoinc not committed", K(ret), K(autoinc_seq), K(trans_stat), K(writer));
   } else if (OB_FAIL(autoinc_seq.get_autoinc_seq_value(auto_inc_seqvalue))) {
     LOG_WARN("failed to get autoinc seq value", K(ret), K(autoinc_seq));
   } else {
@@ -4103,13 +4118,28 @@ int ObTablet::update_tablet_autoinc_seq(const uint64_t autoinc_seq)
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "UpdAutoincSeq"));
   ObTabletAutoincSeq curr_autoinc_seq;
+  mds::MdsWriter writer;
+  mds::TwoPhaseCommitState trans_stat;
+  share::SCN unused_trans_version;
   uint64_t curr_auto_inc_seqvalue;
   SCN scn;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (OB_FAIL(get_autoinc_seq(curr_autoinc_seq, allocator))) {
-    LOG_WARN("fail to get latest autoinc seq", K(ret));
+  } else if (OB_FAIL(ObITabletMdsInterface::get_latest(curr_autoinc_seq, writer, trans_stat, unused_trans_version, &allocator))) {
+    if (OB_EMPTY_RESULT == ret) {
+      ret = OB_SUCCESS;
+      curr_autoinc_seq.reset();
+      trans_stat = mds::TwoPhaseCommitState::ON_COMMIT;
+    } else {
+      LOG_WARN("fail to get latest autoinc seq", K(ret), K(tablet_meta_.tablet_id_));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(trans_stat != mds::TwoPhaseCommitState::ON_COMMIT)) {
+    ret = OB_EAGAIN;
+    LOG_WARN("tablet autoinc not committed", K(ret), K(curr_autoinc_seq), K(trans_stat), K(writer));
   } else if (OB_FAIL(curr_autoinc_seq.get_autoinc_seq_value(curr_auto_inc_seqvalue))) {
     LOG_WARN("failed to get autoinc seq value", K(ret));
   } else if (autoinc_seq > curr_auto_inc_seqvalue) {
