@@ -543,7 +543,7 @@ all_tenant_def = dict(
   normal_columns = [
       ('tenant_name', 'varchar:OB_MAX_TENANT_NAME_LENGTH_STORE'),
       ('zone_list', 'varchar:MAX_ZONE_LIST_LENGTH'),
-      ('primary_zone', 'varchar:MAX_ZONE_LENGTH', 'true'),
+      ('primary_zone', 'varchar:MAX_ZONE_LIST_LENGTH', 'true'),
       ('locked', 'int'),
       ('collation_type', 'int'),
       ('info', 'varchar:OB_MAX_TENANT_INFO_LENGTH'),

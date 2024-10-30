@@ -4756,7 +4756,7 @@ int ObSchemaRetrieveUtils::fill_replica_options(T &result, SCHEMA &schema)
     } else if (OB_FAIL(schema.set_primary_zone(primary_zone_str))) {
       SHARE_SCHEMA_LOG(WARN, "set_primary_zone failed", K(ret));
     } else if (!ObPrimaryZoneUtil::no_need_to_check_primary_zone(schema.get_primary_zone())) {
-      ObPrimaryZoneUtil primary_zone_util(schema.get_primary_zone());
+      SMART_VAR(ObPrimaryZoneUtil, primary_zone_util, schema.get_primary_zone()) {
       if (OB_FAIL(primary_zone_util.init())) {
         SHARE_SCHEMA_LOG(WARN, "fail to init primary zone util", K(ret));
       } else if (OB_FAIL(primary_zone_util.check_and_parse_primary_zone())) {
@@ -4764,6 +4764,7 @@ int ObSchemaRetrieveUtils::fill_replica_options(T &result, SCHEMA &schema)
       } else if (OB_FAIL(schema.set_primary_zone_array(primary_zone_util.get_zone_array()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to set primary zone array", K(ret));
       } else {} // set primary zone array success
+      } // end smart var
     } else {} // empty primary zone, no need to check and parse
   }
   return ret;

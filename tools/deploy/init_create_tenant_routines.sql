@@ -51,7 +51,7 @@ drop procedure if exists create_tenant_with_arg;/
 create procedure create_tenant_with_arg(tenant_name varchar(64), compat_mode varchar(10), unit_config varchar(64), arg_list varchar(64))
 begin
   declare num int;
-  declare zone_name varchar(20);
+  declare zone_name varchar(128);
 
   select count(*) from oceanbase.DBA_OB_SERVERS group by zone limit 1 into num;
   select zone from (select zone, count(*) as a from oceanbase.DBA_OB_ZONES group by region order by a desc limit 1) into zone_name;

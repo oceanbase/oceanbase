@@ -3571,7 +3571,7 @@ gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(
 tenant_id	bigint(20)	NO	PRI	NULL	
 tenant_name	varchar(128)	NO		NULL	
 zone_list	varchar(8192)	NO		NULL	
-primary_zone	varchar(128)	YES		NULL	
+primary_zone	varchar(8192)	YES		NULL	
 locked	bigint(20)	NO		NULL	
 collation_type	bigint(20)	NO		NULL	
 info	varchar(4096)	NO		NULL	
