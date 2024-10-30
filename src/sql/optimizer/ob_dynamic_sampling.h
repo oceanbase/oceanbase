@@ -92,7 +92,8 @@ enum ObDSResultItemType
   OB_DS_INVALID_STAT = -1,
   OB_DS_BASIC_STAT,//basic table stat, like table rowcount、column ndv、column num null
   OB_DS_OUTPUT_STAT,
-  OB_DS_FILTER_OUTPUT_STAT//match filters output
+  OB_DS_INDEX_SCAN_STAT, //index scan with prefix filters
+  OB_DS_INDEX_BACK_STAT //index scan with prefix and postfix filters
 };
 
 enum ObDSStatItemType
