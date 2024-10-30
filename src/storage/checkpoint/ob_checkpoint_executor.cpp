@@ -199,7 +199,7 @@ int ObCheckpointExecutor::update_clog_checkpoint()
           if (OB_NOT_INIT == ret) {
             STORAGE_LOG(WARN, "palf has been disabled", K(ret), K(checkpoint_scn), K(ls_->get_ls_id()));
             ret = OB_SUCCESS;
-          } else if (OB_NEED_RETRY == ret) {
+          } else if (OB_NEED_RETRY == ret || OB_ENTRY_NOT_EXIST == ret) {
             STORAGE_LOG(WARN, "locate_by_scn_coarsely need retry", K(checkpoint_scn), K(ls_->get_ls_id()));
             ret = OB_SUCCESS;
           } else {
