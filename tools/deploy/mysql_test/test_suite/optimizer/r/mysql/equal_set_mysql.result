@@ -6273,29 +6273,29 @@ Outputs & filters:
       range_key([t1.a], [t1.b], [t1.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select * from t1 where (t1.a, t1.b) in (select t2.a, t2.b from t2) and (t1.a, t1.b) in (select t3.a, t3.b from t3);
 Query Plan
-======================================================================
-|ID|OPERATOR                          |NAME    |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |PX COORDINATOR                    |        |1       |136         |
-|1 |└─EXCHANGE OUT DISTR              |:EX10000|1       |135         |
-|2 |  └─NESTED-LOOP SEMI JOIN         |        |1       |134         |
-|3 |    ├─PX PARTITION ITERATOR       |        |1       |113         |
-|4 |    │ └─NESTED-LOOP JOIN          |        |1       |113         |
-|5 |    │   ├─SUBPLAN SCAN            |VIEW3   |1       |95          |
-|6 |    │   │ └─MERGE DISTINCT        |        |1       |95          |
-|7 |    │   │   └─TABLE FULL SCAN     |t2      |1       |95          |
-|8 |    │   └─TABLE RANGE SCAN        |t1      |1       |436         |
-|9 |    └─DISTRIBUTED TABLE RANGE SCAN|t3      |1       |501         |
-======================================================================
+=================================================================
+|ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |PX COORDINATOR               |        |1       |136         |
+|1 |└─EXCHANGE OUT DISTR         |:EX10000|1       |135         |
+|2 |  └─PX PARTITION ITERATOR    |        |1       |134         |
+|3 |    └─NESTED-LOOP SEMI JOIN  |        |1       |134         |
+|4 |      ├─NESTED-LOOP JOIN     |        |1       |113         |
+|5 |      │ ├─SUBPLAN SCAN       |VIEW3   |1       |95          |
+|6 |      │ │ └─MERGE DISTINCT   |        |1       |95          |
+|7 |      │ │   └─TABLE FULL SCAN|t2      |1       |95          |
+|8 |      │ └─TABLE RANGE SCAN   |t1      |1       |436         |
+|9 |      └─TABLE RANGE SCAN     |t3      |1       |501         |
+=================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d)]), filter(nil), rowset=16
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
-      conds(nil), nl_params_([t1.a(:2)], [t1.b(:3)]), use_batch=false
-  3 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
       partition wise, force partition granule
+  3 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
+      conds(nil), nl_params_([t1.a(:2)], [t1.b(:3)]), use_batch=false
   4 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
       conds(nil), nl_params_([VIEW3.VIEW1.a(:0)], [VIEW3.VIEW1.b(:1)]), use_batch=true
   5 - output([VIEW3.VIEW1.a], [VIEW3.VIEW1.b]), filter(nil), rowset=16
