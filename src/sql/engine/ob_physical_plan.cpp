@@ -1156,7 +1156,10 @@ int ObPhysicalPlan::alloc_op_spec_for_cg(ObLogicalOperator *op, ObSqlSchemaGuard
     spec->max_batch_size_ = 0;
     spec->use_rich_format_ = false;
   }
-  LOG_TRACE("alloc op spec for cg", K(disable_vectorize), K(spec->max_batch_size_), K(spec->use_rich_format_), K(*spec));
+  if (OB_SUCC(ret)) {
+    LOG_TRACE("alloc op spec for cg", K(disable_vectorize), K(spec->max_batch_size_),
+              K(spec->use_rich_format_), K(*spec));
+  }
   return ret;
 }
 int ObPhysicalPlan::get_encrypt_meta(const uint64_t table_id,
