@@ -4101,6 +4101,9 @@ bool ObBasicSessionInfo::is_sync_sys_var(share::ObSysVarClassType sys_var_id) co
     case SYS_VAR_OB_LAST_SCHEMA_VERSION:
     case SYS_VAR__OB_PROXY_WEAKREAD_FEEDBACK:
     case SYS_VAR_SYSTEM_TIME_ZONE:
+    case SYS_VAR_PID_FILE:
+    case SYS_VAR_PORT:
+    case SYS_VAR_SOCKET:
       not_need_serialize = true;
       break;
     default:
