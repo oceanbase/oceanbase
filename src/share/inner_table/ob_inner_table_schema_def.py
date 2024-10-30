@@ -37514,7 +37514,8 @@ def_table_schema(
     INNER JOIN oceanbase.__all_tenant atnt
       ON      atnt.tenant_id = avttl.tenant_id
     INNER JOIN oceanbase.__all_virtual_table avt
-      ON      avt.table_type = 5
+      ON      avt.tenant_id = atnt.tenant_id
+        AND   avt.table_type = 5
         AND 	avt.table_id = avttl.table_id
     group by TENANT_ID, SERVER_IP, SERVER_PORT, SPACE_TYPE
     UNION
@@ -37543,8 +37544,9 @@ def_table_schema(
     INNER JOIN oceanbase.__all_tenant atnt
       ON      atnt.tenant_id = avttl.tenant_id
     INNER JOIN oceanbase.__all_virtual_table avt
-      ON      avt.table_id = avttl.table_id
-        AND  avt.table_type in (3, 12, 13)
+      ON      avt.tenant_id = atnt.tenant_id
+        AND   avt.table_id = avttl.table_id
+        AND   avt.table_type in (3, 12, 13)
     group by TENANT_ID, SERVER_IP, SERVER_PORT, SPACE_TYPE
     order by TENANT_ID, SERVER_IP, SERVER_PORT, SPACE_TYPE
 """.replace("\n", " ")
@@ -37638,15 +37640,17 @@ def_table_schema(
     INNER JOIN oceanbase.__all_tenant atnt
       ON      atnt.tenant_id = avttl.tenant_id
     INNER JOIN oceanbase.__all_virtual_table avt
-      ON      avt.table_id = avttl.table_id
+      ON      avt.tenant_id = avttl.tenant_id
+        AND   avt.table_id = avttl.table_id
     INNER JOIN oceanbase.__all_virtual_database ad
-      ON      ad.database_id = avt.database_id
+      ON      ad.tenant_id = atnt.tenant_id
+        AND   ad.database_id = avt.database_id
     INNER JOIN oceanbase.__all_virtual_ls_meta_table avlmt
       ON      avtps.tenant_id = avlmt.tenant_id
-        AND  avtps.ls_id = avlmt.ls_id
-        AND  avtps.svr_ip = avlmt.svr_ip
-        AND  avtps.svr_port = avlmt.svr_port
-        AND  avlmt.role = 1
+        AND   avtps.ls_id = avlmt.ls_id
+        AND   avtps.svr_ip = avlmt.svr_ip
+        AND   avtps.svr_port = avlmt.svr_port
+        AND   avlmt.role = 1
     group by tenant_id, table_id
     order by tenant_id, table_id
 """.replace("\n", " ")
