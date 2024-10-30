@@ -1078,7 +1078,7 @@ int ObPLPackageManager::set_package_var_val(const ObPLResolveCtx &resolve_ctx,
     ret = OB_ERR_NUMERIC_OR_VALUE_ERROR;
     LOG_WARN("not null check violated", K(var->is_not_null()), K(var_val.is_null()), K(ret));
   }
-  OZ (package_state->set_package_var_val(var_idx, new_var_val, !need_deserialize));
+  OZ (package_state->set_package_var_val(var_idx, new_var_val, resolve_ctx, !need_deserialize));
   OX (need_free_old = true);
   OX (need_free_new = false);
   OZ (update_special_package_status(resolve_ctx, package_id, *var, old_var_val, new_var_val));

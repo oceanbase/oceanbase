@@ -291,7 +291,7 @@ int ObPLPackage::instantiate_package_state(const ObPLResolveCtx &resolve_ctx,
                                     value));
             // need set var again if var is baisc type
             if (var_type.is_obj_type()) {
-              OZ (package_state.set_package_var_val(var_idx, value, !need_deserialize));
+              OZ (package_state.set_package_var_val(var_idx, value, resolve_ctx, !need_deserialize));
             }
           }
           // record sync variable, avoid to sync tiwce!
