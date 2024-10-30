@@ -6362,7 +6362,11 @@ int ObPartTransCtx::switch_to_follower_forcedly(ObTxCommitCallback *&cb_list_hea
           !is_logging_() &&
           !sub_state_.is_state_log_submitted()) {
         mt_ctx_.set_trans_version(SCN::max_scn());
-        TRANS_LOG(INFO, "clear local tx trans version when switch to follower forcely", KP(this));
+        if (OB_FAIL(ctx_tx_data_.set_commit_version(share::SCN::invalid_scn()))) {
+          TRANS_LOG(ERROR, "reset commit version failed", KR(ret), K(*this));
+        } else {
+          TRANS_LOG(INFO, "clear local tx trans version when switch to follower forcely", KP(this));
+        }
       }
 
       if (OB_SUCC(ret) && exec_info_.is_dup_tx_ && get_downstream_state() == ObTxState::REDO_COMPLETE
