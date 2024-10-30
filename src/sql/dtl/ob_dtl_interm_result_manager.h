@@ -98,7 +98,7 @@ public:
   ~ObDTLMemProfileInfo() {}
 
   // The local channel and the rpc channel may modify the interm results concurrently,
-  // and these interme results may be linked to the same profile.
+  // and these interm results may be linked to the same profile.
   // Therefore, access to the profile needs to be protected by locks
   // to prevent concurrent modification issues.
   void alloc(int64_t size)
@@ -302,6 +302,28 @@ public:
   ObDTLIntermResultInfoGuard &result_info_guard_;
   ObDTLIntermResultManager *interm_res_manager_;
   int ret_;
+};
+
+class ObAtomicGetIntermMemProfileCall
+{
+public:
+  explicit ObAtomicGetIntermMemProfileCall() :
+      ret_(OB_SUCCESS), mem_profile_info_(nullptr) {}
+  ~ObAtomicGetIntermMemProfileCall() = default;
+  void operator() (common::hash::HashMapPair<ObDTLMemProfileKey,
+      ObDTLMemProfileInfo *> &entry);
+public:
+  int ret_;
+  ObDTLMemProfileInfo *mem_profile_info_;
+};
+
+class MemProfileEraseIfRef0
+{
+public:
+  MemProfileEraseIfRef0() {};
+  ~MemProfileEraseIfRef0() {};
+  bool operator() (common::hash::HashMapPair<ObDTLMemProfileKey,
+      ObDTLMemProfileInfo *> &entry);
 };
 
 class ObAtomicAppendBlockCall
