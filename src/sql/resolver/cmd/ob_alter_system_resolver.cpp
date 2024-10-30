@@ -1518,6 +1518,8 @@ int ObAdminMergeResolver::resolve(const ParseNode &parse_tree)
           switch (node->value_) {
             case 1: {
               stmt->get_rpc_arg().type_ = ObAdminMergeArg::START_MERGE;
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("start merge zone is not supported", KR(ret));
               break;
             }
             case 2: {
