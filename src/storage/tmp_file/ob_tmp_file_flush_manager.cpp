@@ -452,6 +452,9 @@ int ObTmpFileFlushManager::inner_fill_block_buf_(
       if (OB_ITER_END != ret) {
         STORAGE_LOG(WARN, "fail to get file from iterator",
             KR(ret), K(flush_stage), K(is_meta), K(flush_tail), K(flush_ctx_));
+        // it is no need to process the error code of iterator. it will handle with problem by itself.
+        // just using OB_ITER_END to finish this flushing loop is enough
+        ret = OB_ITER_END;
       }
     } else if (OB_ISNULL(file_handle.get())) {
       ret = OB_ERR_UNEXPECTED;

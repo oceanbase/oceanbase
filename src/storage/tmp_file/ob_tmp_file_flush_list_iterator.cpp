@@ -277,12 +277,13 @@ int ObTmpFileFlushListIterator::cache_files_(const FlushCtxState iter_stage)
   }
 
   if (OB_FAIL(ret)) {
+    cached_file_num_ = 0; // to guarantee that the iterator must not reinsert cached part files into priority list
     int tmp_ret = OB_SUCCESS;
     for (int64_t i = 0; OB_LIKELY(OB_SUCCESS == tmp_ret) && i < file_handles.count(); ++i) {
       if (OB_ISNULL(file_handles[i].get())) {
         // could not happen, just skip
       } else if (OB_TMP_FAIL(file_handles[i].get()->reinsert_flush_node(cur_caching_list_is_meta_))) {
-        LOG_WARN("fail to reinsert flush node", KR(tmp_ret), K(i), K(file_handles[i]));
+        LOG_ERROR("fail to reinsert flush node", KR(tmp_ret), K(i), K(file_handles[i]));
       }
     }
   }
