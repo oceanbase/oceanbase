@@ -383,14 +383,23 @@ public:
   int init(
       const ObSplitScanParam param,
       ObSSTable &src_sstable,
-      const int64_t major_snapshot_version);
+      const int64_t major_snapshot_version,
+      const int64_t schema_column_cnt);
   virtual int get_next_row(const blocksstable::ObDatumRow *&tmp_row) override;
 private:
+  int get_next_rowkey_rows();
+  int row_queue_add(const ObDatumRow &row);
+  void row_queue_reuse();
   int check_can_skip(const blocksstable::ObDatumRow &row, bool &can_skip);
 private:
   ObRowScan row_scan_;
+  bool row_scan_end_;
+  const ObDatumRow *next_row_;
   int64_t major_snapshot_version_;
   int64_t trans_version_col_idx_;
+  blocksstable::ObRowQueue row_queue_;
+  ObArenaAllocator row_queue_allocator_;
+  bool row_queue_has_unskippable_row_;
 };
 
 struct ObTabletSplitUtil final

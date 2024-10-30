@@ -1840,7 +1840,7 @@ int ObTabletLobSplitUtil::open_uncommitted_scan_iters(ObLobSplitParam *param,
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("fail to alloc row scan", K(ret));
           } else if (FALSE_IT(new_scanner = new(buff)ObUncommittedRowScan())) {
-          } else if (OB_FAIL(new_scanner->init(scan_param, *sst, major_snapshot_version))) {
+          } else if (OB_FAIL(new_scanner->init(scan_param, *sst, major_snapshot_version, ObLobMetaUtil::LOB_META_COLUMN_CNT))) {
             LOG_WARN("fail to init row scanner", K(ret));
           } else if (OB_FAIL(iters.push_back(ObIStoreRowIteratorPtr(new_scanner)))) {
             LOG_WARN("fail to push back new row scanner", K(ret));
