@@ -1238,9 +1238,9 @@ int ObSSTenantTmpFileManager::shared_storage_wash(const int64_t expect_wash_size
            wash_size < expect_wash_size &&
            list->get_last() != list->get_header()) {
       if (OB_FAIL(get_tmp_file(list->get_last()->get_fd(), tmp_file_handle)) &&
-          ret != OB_HASH_NOT_EXIST) {
+          ret != OB_ENTRY_NOT_EXIST) {
         LOG_WARN("fail to get temporary file in wash", K(ret), K(list->get_last()->get_fd()));
-      } else if (ret == OB_HASH_NOT_EXIST) {
+      } else if (ret == OB_ENTRY_NOT_EXIST) {
         // This temporary file may be in the process of removing, but it is still waiting for
         // the LRU lock which held here to remove itself from the list.
         list->remove_last();
