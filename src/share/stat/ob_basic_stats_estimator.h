@@ -142,6 +142,9 @@ public:
 
   int fill_hints(common::ObIAllocator &alloc, const ObString &table_name, int64_t gather_vectorize);
 
+  static int set_partition_stat_no_regather(const int64_t partition_id,
+                                            ObIArray<ObPartitionStatInfo> &partition_stat_infos);
+
 private:
 
   static int generate_first_part_idx_map(const ObIArray<PartInfo> &all_part_infos,

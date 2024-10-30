@@ -5102,21 +5102,22 @@ int ObDbmsStats::parse_set_hist_stats_options(ObExecContext &ctx,
 {
   int ret = OB_SUCCESS;
   UNUSED(ctx);
+  ObString func_name("DBMS_STATS.SET_COLUMN_STATS");
   number::ObNumber num_epc;
   number::ObNumber num_eavs;
   if (!epc.is_null() && OB_FAIL(epc.get_number(num_epc))) {
     LOG_WARN("failed to get epc", K(ret));
   } else if (!minval.is_null() && FALSE_IT(hist_param.minval_ = &minval)) {
   } else if (!maxval.is_null() && FALSE_IT(hist_param.maxval_ = &maxval)) {
-  } else if (OB_FAIL(parser_pl_numarray(bkvals, hist_param.bkvals_))) {
+  } else if (OB_FAIL(parser_pl_numarray(func_name, bkvals, hist_param.bkvals_))) {
     LOG_WARN("failed to parser pl numarray", K(ret));
-  } else if (OB_FAIL(parser_pl_numarray(novals, hist_param.novals_))) {
+  } else if (OB_FAIL(parser_pl_numarray(func_name, novals, hist_param.novals_))) {
     LOG_WARN("failed to parser pl numarray", K(ret));
-  } else if (OB_FAIL(parser_pl_chararray(chvals, hist_param.chvals_))) {
+  } else if (OB_FAIL(parser_pl_chararray(func_name, chvals, hist_param.chvals_))) {
     LOG_WARN("failed to parser pl chararray", K(ret));
-  } else if (OB_FAIL(parser_pl_rawarray(eavals, hist_param.eavals_))) {
+  } else if (OB_FAIL(parser_pl_rawarray(func_name, eavals, hist_param.eavals_))) {
     LOG_WARN("failed to parser pl rawarray", K(ret));
-  } else if (OB_FAIL(parser_pl_numarray(rpcnts, hist_param.rpcnts_))) {
+  } else if (OB_FAIL(parser_pl_numarray(func_name, rpcnts, hist_param.rpcnts_))) {
     LOG_WARN("failed to parser pl numarray", K(ret));
   } else if (!eavs.is_null() && OB_FAIL(eavs.get_number(num_eavs))) {
     LOG_WARN("failed to get eavs", K(ret));
@@ -5128,7 +5129,8 @@ int ObDbmsStats::parse_set_hist_stats_options(ObExecContext &ctx,
   return ret;
 }
 
-int ObDbmsStats::parser_pl_numarray(const ObObjParam &numarray_param,
+int ObDbmsStats::parser_pl_numarray(const ObString &func_name,
+                                    const ObObjParam &numarray_param,
                                     ObIArray<int64_t> &num_array)
 {
   int ret = OB_SUCCESS;
@@ -5141,10 +5143,12 @@ int ObDbmsStats::parser_pl_numarray(const ObObjParam &numarray_param,
         LOG_WARN("get invalid argument", K(ret), K(numarray_ext));
       } else if (numarray_ext->is_collection_null()) {
         //do nothing
+      } else if (OB_UNLIKELY(pl::PL_VARRAY_TYPE != numarray_ext->get_type())) {
+        ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
+        LOG_USER_ERROR(OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE, func_name.length(), func_name.ptr());
       } else if ((numarray_ext->get_count() != 0 &&
                   OB_ISNULL(obj = reinterpret_cast<ObObj *>(numarray_ext->get_data()))) ||
-                 OB_UNLIKELY(pl::PL_VARRAY_TYPE != numarray_ext->get_type() ||
-                             !(numarray_ext->is_inited()))) {
+                 OB_UNLIKELY(!(numarray_ext->is_inited()))) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("get invalid argument", K(ret), K(numarray_ext), K(obj), K(numarray_ext->get_type()),
                                          K(numarray_ext->is_inited()), K(numarray_ext->get_count()));
@@ -5162,14 +5166,15 @@ int ObDbmsStats::parser_pl_numarray(const ObObjParam &numarray_param,
         }
       }
     } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get invalid argument", K(numarray_param));
+      ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
+      LOG_USER_ERROR(OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE, func_name.length(), func_name.ptr());
     }
   }
   return ret;
 }
 
-int ObDbmsStats::parser_pl_chararray(const ObObjParam &chararray_param,
+int ObDbmsStats::parser_pl_chararray(const ObString &func_name,
+                                     const ObObjParam &chararray_param,
                                      ObIArray<ObString> &char_array)
 {
   int ret = OB_SUCCESS;
@@ -5182,10 +5187,12 @@ int ObDbmsStats::parser_pl_chararray(const ObObjParam &chararray_param,
         LOG_WARN("get invalid argument", K(ret), K(chararray_ext));
       } else if (chararray_ext->is_collection_null()) {
         //do nothing
+      } else if (OB_UNLIKELY(pl::PL_VARRAY_TYPE != chararray_ext->get_type())) {
+        ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
+        LOG_USER_ERROR(OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE, func_name.length(), func_name.ptr());
       } else if ((chararray_ext->get_count() != 0 &&
                   OB_ISNULL(obj = reinterpret_cast<ObObj *>(chararray_ext->get_data()))) ||
-                OB_UNLIKELY(pl::PL_VARRAY_TYPE != chararray_ext->get_type() ||
-                            !(chararray_ext->is_inited()))) {
+                OB_UNLIKELY(!(chararray_ext->is_inited()))) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("get invalid argument", K(ret), K(obj), K(chararray_ext->get_type()),
                                         K(chararray_ext->get_count()), K(chararray_ext->is_inited()));
@@ -5200,14 +5207,15 @@ int ObDbmsStats::parser_pl_chararray(const ObObjParam &chararray_param,
         }
       }
     } else {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("get invalid argument", K(chararray_param));
+      ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
+      LOG_USER_ERROR(OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE, func_name.length(), func_name.ptr());
     }
   }
   return ret;
 }
 
-int ObDbmsStats::parser_pl_rawarray(const ObObjParam &rawarray_param,
+int ObDbmsStats::parser_pl_rawarray(const ObString &func_name,
+                                    const ObObjParam &rawarray_param,
                                     ObIArray<ObString> &raw_array)
 {
   int ret = OB_SUCCESS;
@@ -5220,10 +5228,12 @@ int ObDbmsStats::parser_pl_rawarray(const ObObjParam &rawarray_param,
         LOG_WARN("get invalid argument", K(ret), K(rawarray_ext));
       } else if (rawarray_ext->is_collection_null()) {
         //do nothing
+      } else if (OB_UNLIKELY(pl::PL_VARRAY_TYPE != rawarray_ext->get_type())) {
+        ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
+        LOG_USER_ERROR(OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE, func_name.length(), func_name.ptr());
       } else if ((rawarray_ext->get_count() != 0 &&
                   OB_ISNULL(obj = reinterpret_cast<ObObj *>(rawarray_ext->get_data()))) ||
-                 OB_UNLIKELY(pl::PL_VARRAY_TYPE != rawarray_ext->get_type() ||
-                            !(rawarray_ext->is_inited()))) {
+                 OB_UNLIKELY(!(rawarray_ext->is_inited()))) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("get invalid argument", K(ret), K(obj), K(rawarray_ext->get_type()),
                                         K(rawarray_ext->get_count()), K(rawarray_ext->is_inited()));
@@ -5238,8 +5248,8 @@ int ObDbmsStats::parser_pl_rawarray(const ObObjParam &rawarray_param,
         }
       }
     } else {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("get invalid argument", K(rawarray_param));
+      ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
+      LOG_USER_ERROR(OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE, func_name.length(), func_name.ptr());
     }
   }
   return ret;
