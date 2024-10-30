@@ -1107,7 +1107,8 @@ int ObInRowLobDataSpliter::get_next_row(ObLobMetaInfo &info)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("byte_pos is larger than data length", K(ret), K(byte_pos_), "data_length", inrow_data_.length());
   } else {
-    byte_len = ObCharset::max_bytes_charpos(cs_type_, inrow_data_.ptr() + byte_pos_, inrow_data_.length() - byte_pos_, chunk_size_, char_len);
+    int64_t max_bytes = OB_MIN(inrow_data_.length() - byte_pos_, chunk_size_);
+    byte_len = ObCharset::max_bytes_charpos(cs_type_, inrow_data_.ptr() + byte_pos_, inrow_data_.length() - byte_pos_, max_bytes, char_len);
     if (byte_len <= 0 || char_len <= 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("no data can be return when has remain data", K(ret), K(byte_pos_), "data_length", inrow_data_.length());
