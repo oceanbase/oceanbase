@@ -805,11 +805,12 @@ static int add_content_md5(oss_request_options_t *options, const char *buf, cons
   } else {
     unsigned char *md5 = nullptr;
     char *b64_value = nullptr;    // store the base64-encoded MD5 value
-    const int in_len = APR_MD5_DIGESTSIZE + 1;  // including trailing '\0'
+    // in_len indicates encoding only for an MD5 of 16 bytes in length, excluding the trailing '\0'.
+    const int in_len = APR_MD5_DIGESTSIZE;
     // Calculate the buffer size needed for the base64-encoded string including the null terminator.
     // Base64 encoding represents every 3 bytes of input with 4 bytes of output,
     // so allocate enough space based on this ratio and add extra byte for the null terminator.
-    const int b64_buf_len = (in_len + 1) * 4 / 3 + 1;
+    const int b64_buf_len = (in_len + 2) * 4 / 3 + 1;
 
     if (OB_ISNULL(md5 = aos_md5(options->pool, buf, (apr_size_t)size))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
