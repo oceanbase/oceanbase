@@ -397,6 +397,11 @@ ob_set_subtarget(ob_malloc_object_list common_alloc
 
 ob_add_new_object_target(ob_malloc_object ob_malloc_object_list)
 target_link_libraries(ob_malloc_object oblib_base_base_base)
+if (ENABLE_SANITY)
+  if (${ARCHITECTURE} STREQUAL "x86_64" OR ${ARCHITECTURE} STREQUAL "aarch64")
+    target_link_libraries(ob_malloc_object ${DEVTOOLS_DIR}/lib64/libsanity.a)
+  endif()
+endif()
 add_library(ob_malloc STATIC)
 target_link_libraries(ob_malloc ob_malloc_object)
 

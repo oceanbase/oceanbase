@@ -139,10 +139,13 @@ void  __attribute__((constructor(MALLOC_INIT_PRIORITY))) init_global_memory_pool
   in_hook()= true;
   global_default_allocator = ObMallocAllocator::get_instance();
   in_hook()= false;
-  #ifndef OB_USE_ASAN
+#ifndef OB_USE_ASAN
   abort_unless(OB_SUCCESS == install_ob_signal_handler());
-  #endif
+#endif
   init_proc_map_info();
+#ifdef ENABLE_SANITY
+  abort_unless(init_sanity());
+#endif
 }
 
 int64_t get_virtual_memory_used(int64_t *resident_size)

@@ -212,7 +212,6 @@ private:
   static constexpr int32_t HUGE_ACHUNK_INDEX = MAX_ACHUNK_INDEX;
 public:
   static AChunkMgr &instance();
-
 public:
   AChunkMgr();
 
@@ -246,7 +245,6 @@ public:
   inline int64_t get_total_hold() const { return ATOMIC_LOAD(&total_hold_); }
   inline int64_t get_used() const;
   inline int64_t get_freelist_hold() const;
-  inline int64_t get_shadow_hold() const { return ATOMIC_LOAD(&shadow_hold_); }
 
   int64_t sync_wash();
 
@@ -318,14 +316,12 @@ private:
   {
     return slots_[chunk_index].free_list_;
   }
-
 protected:
   int64_t limit_;
   int64_t urgent_;
   int64_t hold_; // Including the memory occupied by free_list, limited by memory_limit
   int64_t total_hold_; // Including virtual memory, just for statifics.
   int64_t cache_hold_;
-  int64_t shadow_hold_;
   int64_t max_chunk_cache_size_;
   Slot slots_[MAX_ACHUNK_INDEX + 1];
 }; // end of class AChunkMgr

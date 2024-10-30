@@ -18,6 +18,7 @@ target_include_directories(
   ${DEP_DIR}/include
   ${DEP_DIR}/include/libxml2
   ${DEVTOOLS_DIR}
+  ${DEVTOOLS_DIR}/include
   ${DEP_DIR}/include/apr-1/
   ${DEP_DIR}/include/icu
   ${DEP_DIR}/include/icu/common
@@ -127,7 +128,7 @@ if (OB_USE_CLANG)
   if (ENABLE_SANITY)
     target_compile_options(oblib_base_base
       INTERFACE
-      "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-Xclang -load -Xclang ${CMAKE_CURRENT_SOURCE_DIR}/lib/alloc/libsanity_${ARCHITECTURE}.so>"
+      "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-Xclang -load -Xclang ${DEVTOOLS_DIR}/lib64/libsanitypass.so>"
       -fno-builtin-memset
       -fno-builtin-bzero
       -fno-builtin-memcpy
