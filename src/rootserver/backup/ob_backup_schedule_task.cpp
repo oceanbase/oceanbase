@@ -416,12 +416,8 @@ int ObBackupDataBaseTask::set_optional_servers_(const ObIArray<common::ObAddr> &
   uint64_t tenant_id = get_tenant_id();
   share::ObLSTableOperator *lst_operator = GCTX.lst_operator_;
   int64_t cluster_id = GCONF.cluster_id;
-  ObLSID server_ls_id = execute_on_sys_server_() ? ObLSID(ObLSID::SYS_LS_ID) : ls_id_;
-  if (nullptr == lst_operator) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("lst_operator ptr is null", K(ret));
-  } else if (OB_FAIL(lst_operator->get(cluster_id, tenant_id, server_ls_id, share::ObLSTable::DEFAULT_MODE, ls_info))) {
-    LOG_WARN("failed to get log stream info", K(ret), K(cluster_id), K(tenant_id), K(ls_id_));
+  if (OB_FAIL(get_ls_replica_array_(ls_info))) {
+    LOG_WARN("failed to get ls replica array", K(ret));
   } else {
     const ObLSInfo::ReplicaArray &replica_array = ls_info.get_replicas();
     for (int i = 0; OB_SUCC(ret) && i < replica_array.count(); ++i) {
@@ -460,6 +456,30 @@ int ObBackupDataBaseTask::set_optional_servers_(const ObIArray<common::ObAddr> &
     LOG_WARN("failed to optional servers", K(ret));
   } else {
     FLOG_INFO("task optional servers are：", K(*this), K(servers));
+  }
+  return ret;
+}
+
+int ObBackupDataBaseTask::get_ls_replica_array_(ObLSInfo &ls_info)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = get_tenant_id();
+  const int64_t cluster_id = GCONF.cluster_id;
+  share::ObLSTableOperator *lst_operator = GCTX.lst_operator_;
+  ObLSID server_ls_id = execute_on_sys_server_() ? ObLSID(ObLSID::SYS_LS_ID) : ls_id_;
+  if (nullptr == lst_operator) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("lst_operator ptr is null", K(ret));
+  } else if (OB_FAIL(lst_operator->get(cluster_id, tenant_id, server_ls_id, share::ObLSTable::DEFAULT_MODE, ls_info))) {
+    LOG_WARN("failed to get log stream info", K(ret), K(cluster_id), K(tenant_id), K(ls_id_));
+  } else if (0 != ls_info.get_replicas().count()) {
+    // do nothing
+  } else if (!server_ls_id.is_sys_ls() && fallback_to_sys_server_when_needed_()) {
+    LOG_INFO("fall back to sys server", K_(ls_id), K(ls_info));
+    server_ls_id = ObLSID(ObLSID::SYS_LS_ID);
+    if (OB_FAIL(lst_operator->get(cluster_id, tenant_id, server_ls_id, share::ObLSTable::DEFAULT_MODE, ls_info))) {
+      LOG_WARN("failed to get log stream info", K(ret), K(cluster_id), K(tenant_id), K(ls_id_));
+    }
   }
   return ret;
 }

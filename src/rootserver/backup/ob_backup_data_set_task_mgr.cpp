@@ -184,6 +184,7 @@ int ObBackupSetTaskMgr::process()
         break;
       }
       case ObBackupStatus::Status::BACKUP_LOG: {
+        DEBUG_SYNC(BEFORE_BACKUP_COMPLEMENT_LOG);
         if (OB_FAIL(backup_completing_log_())) {
           LOG_WARN("[DATA_BACKUP]failed to backup completing log", K(ret), K(set_task_attr_));
         }

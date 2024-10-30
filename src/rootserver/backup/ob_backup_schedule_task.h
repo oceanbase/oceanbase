@@ -273,6 +273,8 @@ private:
   virtual int do_update_dst_and_doing_status_(common::ObISQLClient &sql_proxy, common::ObAddr &dst,
       share::ObTaskId &trace_id) final override;
   virtual bool execute_on_sys_server_() const { return false; }
+  virtual bool fallback_to_sys_server_when_needed_() const { return false; }
+  int get_ls_replica_array_(ObLSInfo &ls_info);
   bool check_replica_in_black_server_(const share::ObLSReplica &replica, const ObIArray<common::ObAddr> &black_servers);
 public:
   INHERIT_TO_STRING_KV("ObBackupScheduleTask", ObBackupScheduleTask, K_(incarnation_id), K_(backup_set_id),
@@ -322,7 +324,8 @@ public:
 private:
   int calc_start_replay_scn_(const share::ObBackupJobAttr &job_attr, const share::ObBackupSetTaskAttr &set_task_attr,
       const share::ObBackupLSTaskAttr &ls_attr, share::SCN &scn);
-  bool execute_on_sys_server_() const override { return true; }
+  bool execute_on_sys_server_() const override { return false; }
+  virtual bool fallback_to_sys_server_when_needed_() const { return true; }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupComplLogTask); 
 };

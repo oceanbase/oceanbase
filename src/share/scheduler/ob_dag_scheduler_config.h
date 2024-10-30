@@ -146,7 +146,9 @@ DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_PREFETCH_BACKUP_INFO, ObDagPrio::DAG_PRIO_HA
     false, 7, {"tenant_id", "backup_set_id", "backup_data_type", "ls_id", "turn_id", "retry_id", "task_id"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_BACKUP_INDEX_REBUILD, ObDagPrio::DAG_PRIO_HA_LOW, ObSysTaskType::BACKUP_TASK, "BACKUP_INDEX_REBUILD", "BACKUP",
     false, 6, {"tenant_id", "backup_set_id", "backup_data_type", "ls_id", "turn_id", "retry_id"})
-DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_BACKUP_COMPLEMENT_LOG, ObDagPrio::DAG_PRIO_HA_LOW, ObSysTaskType::BACKUP_TASK, "BACKUP_COMPLEMENT_LOG", "BACKUP",
+DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_BACKUP_LS_LOG_GROUP, ObDagPrio::DAG_PRIO_HA_LOW, ObSysTaskType::BACKUP_TASK, "BACKUP_COMPLEMENT_LOG_LS_GROUP", "BACKUP",
+    false, 3, {"tenant_id", "backup_set_id", "ls_id"})
+DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_BACKUP_LS_LOG, ObDagPrio::DAG_PRIO_HA_LOW, ObSysTaskType::BACKUP_TASK, "BACKUP_COMPLEMENT_LOG_LS", "BACKUP",
     false, 3, {"tenant_id", "backup_set_id", "ls_id"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_INITIAL_BACKUP_FUSE, ObDagPrio::DAG_PRIO_HA_LOW, ObSysTaskType::BACKUP_TASK, "INITIAL_BACKUP_FUSE", "BACKUP",
     false, 0, {})
