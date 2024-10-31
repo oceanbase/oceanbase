@@ -937,6 +937,39 @@ int ObArrayExprUtils::transform_array_to_uniform(ObEvalCtx &ctx, const ObExpr &e
   return ret;
 }
 
+int ObArrayExprUtils::assign_array_to_uniform(ObEvalCtx &ctx, const ObExpr &expr, const ObExpr &dst_expr, int64_t row_idx)
+{
+  int ret = OB_SUCCESS;
+  ObSubSchemaValue value;
+  uint16_t subschema_id = expr.obj_meta_.get_subschema_id();
+  if (OB_FAIL(ctx.exec_ctx_.get_sqludt_meta_by_subschema_id(subschema_id, value))) {
+    LOG_WARN("failed to get subschema", K(ret));
+  } else {
+    ObIArrayType *arr_obj = NULL;
+    ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+    common::ObArenaAllocator &alloc = tmp_alloc_g.get_allocator();
+    const ObSqlCollectionInfo *coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(value.value_);
+    ObCollectionArrayType *arr_type = static_cast<ObCollectionArrayType *>(coll_info->collection_meta_);
+    if (OB_ISNULL(coll_info)) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("collect info is null", K(ret), K(subschema_id));
+    } else if (OB_FAIL(ObArrayTypeObjFactory::construct(alloc, *arr_type, arr_obj, true))) {
+      LOG_WARN("construct array obj failed", K(ret), K(subschema_id), K(coll_info));
+    } else {
+      UniformFormat *root_vec = static_cast<UniformFormat *>(dst_expr.get_vector(ctx));
+      if (expr.attrs_cnt_ <= 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected attrs cnt", K(ret), K(expr.attrs_cnt_));
+      } else if (OB_FAIL(assemble_array_attrs(ctx, expr, row_idx, arr_obj))) {
+        LOG_WARN("assemble array attrs failed", K(ret));
+      } else if (OB_FAIL(set_array_res(arr_obj, dst_expr, ctx, root_vec, row_idx))) {
+        LOG_WARN("set array res failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObArrayExprUtils::calc_nested_expr_data_size(const ObExpr &expr, ObEvalCtx &ctx, const int64_t batch_idx, int64_t &size)
 {
   int ret = OB_SUCCESS;

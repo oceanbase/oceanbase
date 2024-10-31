@@ -75,6 +75,7 @@ public:
                                 const int64_t col_offset, const uint64_t row_idx, int64_t &cell_len, const int64_t *remain_size = nullptr);
   static int assemble_array_attrs(ObEvalCtx &ctx, const ObExpr &expr, int64_t row_idx, ObIArrayType *arr_obj);
   static void set_expr_attrs_null(const ObExpr &expr, ObEvalCtx &ctx, const int64_t idx);
+  static int assign_array_to_uniform(ObEvalCtx &ctx, const ObExpr &expr, const ObExpr &dst_expr, int64_t row_idx);
 
   // for vector
   static int get_type_vector(const ObExpr &expr,

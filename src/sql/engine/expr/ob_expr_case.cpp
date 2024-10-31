@@ -15,6 +15,7 @@
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 
 namespace oceanbase
 {
@@ -397,12 +398,14 @@ static int dispatch_check_when_is_match(const ObExpr &expr, ObEvalCtx &ctx,
 }
 
 template<typename ThenVec, typename ResVec>
-static int eval_match_then(const ObExpr &expr, ObEvalCtx &ctx,
+static int eval_nested_expr_match_then(const ObExpr &expr, ObEvalCtx &ctx,
                           ObBitVector &case_when_match, const EvalBound &bound,
                           const int64_t &then_expr_idx)
 {
   int ret = OB_SUCCESS;
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  VectorFormat then_format = expr.args_[then_expr_idx]->get_format(ctx);
+  VectorFormat result_format = expr.get_format(ctx);
   ThenVec *then_vec = static_cast<ThenVec *>(expr.args_[then_expr_idx]->get_vector(ctx));
   ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
   for (int64_t j = bound.start(); OB_SUCC(ret) && j < bound.end(); ++j) {
@@ -412,9 +415,57 @@ static int eval_match_then(const ObExpr &expr, ObEvalCtx &ctx,
     if (then_vec->is_null(j)) {
       res_vec->set_null(j);
     } else {
-      res_vec->set_payload_shallow(j, then_vec->get_payload(j), then_vec->get_length(j));
+      if (is_uniform_format(then_format) && is_uniform_format(result_format)) {
+        res_vec->set_payload_shallow(j, then_vec->get_payload(j), then_vec->get_length(j));
+      } else if (!is_uniform_format(then_format) && !is_uniform_format(result_format)) {
+        for (uint32_t i = 0; i < expr.attrs_cnt_; i++) {
+          ObExpr *then_attr = expr.args_[then_expr_idx]->attrs_[i];
+          ObExpr *res_attr = expr.attrs_[i];
+          ThenVec *then_attr_vec = static_cast<ThenVec *>(then_attr->get_vector(ctx));
+          ResVec *res_attr_vec = static_cast<ResVec *>(res_attr->get_vector(ctx));
+          res_attr_vec->set_payload_shallow(j, then_attr_vec->get_payload(j), then_attr_vec->get_length(j));
+        }
+      } else if (is_uniform_format(result_format)) {
+        // vector format to uniform format
+        if (OB_FAIL(ObArrayExprUtils::assign_array_to_uniform(ctx, *expr.args_[then_expr_idx], expr, j))) {
+          LOG_WARN("assgined to uniform nested failed", K(ret), K(j));
+        }
+      } else {
+        // uniform format to attr format
+        ObString raw_data(then_vec->get_length(j), then_vec->get_payload(j));
+        if (OB_FAIL(ObArrayExprUtils::dispatch_array_attrs(ctx, const_cast<ObExpr &>(expr), raw_data, j))) {
+          LOG_WARN("dispatch array attrs failed", K(ret), K(j));
+        }
+      }
     }
     eval_flags.set(j);
+  }
+  return ret;
+}
+
+template<typename ThenVec, typename ResVec>
+static int eval_match_then(const ObExpr &expr, ObEvalCtx &ctx,
+                          ObBitVector &case_when_match, const EvalBound &bound,
+                          const int64_t &then_expr_idx)
+{
+  int ret = OB_SUCCESS;
+  if (expr.is_nested_expr()) {
+    ret = eval_nested_expr_match_then<ThenVec, ResVec>(expr, ctx, case_when_match, bound, then_expr_idx);
+  } else {
+    ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+    ThenVec *then_vec = static_cast<ThenVec *>(expr.args_[then_expr_idx]->get_vector(ctx));
+    ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+    for (int64_t j = bound.start(); OB_SUCC(ret) && j < bound.end(); ++j) {
+      if (case_when_match.at(j)) {
+        continue;
+      }
+      if (then_vec->is_null(j)) {
+        res_vec->set_null(j);
+      } else {
+        res_vec->set_payload_shallow(j, then_vec->get_payload(j), then_vec->get_length(j));
+      }
+      eval_flags.set(j);
+    }
   }
   return ret;
 }
