@@ -83,7 +83,7 @@ TEST_F(TestObArbitrationService, locality_allow_degrade_test)
     LogMemberStatusList dead_servers;
     common::GlobalLearnerList degraded_servers;
     EXPECT_EQ(OB_SUCCESS, dead_servers.push_back(LogMemberStatus(LogMemberAckInfo(ObMember(addr1, 1), 1, LSN(1000)))));
-    EXPECT_TRUE(do_degrade_func.is_allow_degrade_(paxos_list, replica_num, degraded_servers, dead_servers));
+    EXPECT_TRUE(do_degrade_func.is_allow_degrade_(paxos_list, replica_num, degraded_servers, dead_servers, palf_id));
   }
   {
     // 4F, degrade 3, not allow
@@ -98,7 +98,7 @@ TEST_F(TestObArbitrationService, locality_allow_degrade_test)
     EXPECT_EQ(OB_SUCCESS, dead_servers.push_back(LogMemberStatus(LogMemberAckInfo(ObMember(addr1, 1), 1, LSN(1000)))));
     EXPECT_EQ(OB_SUCCESS, dead_servers.push_back(LogMemberStatus(LogMemberAckInfo(ObMember(addr2, 1), 1, LSN(1000)))));
     EXPECT_EQ(OB_SUCCESS, dead_servers.push_back(LogMemberStatus(LogMemberAckInfo(ObMember(addr3, 1), 1, LSN(1000)))));
-    EXPECT_FALSE(do_degrade_func.is_allow_degrade_(paxos_list, replica_num, degraded_servers, dead_servers));
+    EXPECT_FALSE(do_degrade_func.is_allow_degrade_(paxos_list, replica_num, degraded_servers, dead_servers, palf_id));
   }
   {
     // 4F, degrade 1, not allow
@@ -109,7 +109,7 @@ TEST_F(TestObArbitrationService, locality_allow_degrade_test)
     LogMemberStatusList dead_servers;
     common::GlobalLearnerList degraded_servers;
     EXPECT_EQ(OB_SUCCESS, dead_servers.push_back(LogMemberStatus(LogMemberAckInfo(ObMember(addr1, 1), 1, LSN(1000)))));
-    EXPECT_FALSE(do_degrade_func.is_allow_degrade_(paxos_list, replica_num, degraded_servers, dead_servers));
+    EXPECT_FALSE(do_degrade_func.is_allow_degrade_(paxos_list, replica_num, degraded_servers, dead_servers, palf_id));
   }
   {
     // 3F1A, degrade 1, not allow
@@ -121,7 +121,7 @@ TEST_F(TestObArbitrationService, locality_allow_degrade_test)
     LogMemberStatusList dead_servers;
     common::GlobalLearnerList degraded_servers;
     EXPECT_EQ(OB_SUCCESS, dead_servers.push_back(LogMemberStatus(LogMemberAckInfo(ObMember(addr3, 1), 1, LSN(1000)))));
-    EXPECT_FALSE(do_degrade_func.is_allow_degrade_(paxos_list, replica_num, degraded_servers, dead_servers));
+    EXPECT_FALSE(do_degrade_func.is_allow_degrade_(paxos_list, replica_num, degraded_servers, dead_servers, palf_id));
   }
   {
     // 4F1A, degrade 2(addr2, addr3), allow
@@ -134,7 +134,7 @@ TEST_F(TestObArbitrationService, locality_allow_degrade_test)
     common::GlobalLearnerList degraded_servers;
     EXPECT_EQ(OB_SUCCESS, dead_servers.push_back(LogMemberStatus(LogMemberAckInfo(ObMember(addr2, 1), 1, LSN(1000)))));
     EXPECT_EQ(OB_SUCCESS, dead_servers.push_back(LogMemberStatus(LogMemberAckInfo(ObMember(addr3, 1), 1, LSN(1000)))));
-    EXPECT_TRUE(do_degrade_func.is_allow_degrade_(paxos_list, replica_num, degraded_servers, dead_servers));
+    EXPECT_TRUE(do_degrade_func.is_allow_degrade_(paxos_list, replica_num, degraded_servers, dead_servers, palf_id));
   }
 }
 

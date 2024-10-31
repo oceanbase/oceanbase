@@ -437,6 +437,38 @@ void LogFlashbackMsg::reset()
 OB_SERIALIZE_MEMBER(LogFlashbackMsg, src_tenant_id_, src_, ls_id_,
     mode_version_, flashback_scn_, is_flashback_req_);
 // ============= LogFlashbackMsg end =============
+// ============= LogProbeRsReq start =============
+LogProbeRsReq::LogProbeRsReq() : src_() {}
+
+LogProbeRsReq::LogProbeRsReq(const common::ObAddr src) : src_(src) {}
+
+bool LogProbeRsReq::is_valid() const
+{
+  return src_.is_valid();
+}
+
+void LogProbeRsReq::reset()
+{
+  src_.reset();
+}
+
+OB_SERIALIZE_MEMBER(LogProbeRsReq, src_);
+// ============= LogProbeRsReq end =============
+// ============= LogProbeRsResp start =============
+LogProbeRsResp::LogProbeRsResp() : ret_(OB_MAX_ERROR_CODE) {}
+
+bool LogProbeRsResp::is_valid() const
+{
+  return OB_MAX_ERROR_CODE != ret_;
+}
+
+void LogProbeRsResp::reset()
+{
+  ret_ = OB_MAX_ERROR_CODE;
+}
+
+OB_SERIALIZE_MEMBER(LogProbeRsResp, ret_);
+// ============= LogProbeRsResp end =============
 
 } // end namespace logservice
 }// end namespace oceanbase

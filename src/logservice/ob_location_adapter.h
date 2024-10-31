@@ -35,6 +35,7 @@ public:
 public:
   // Gets leader address of a log stream synchronously.
   int get_leader(const int64_t id, common::ObAddr &leader);
+  int get_leader(const uint64_t tenant_id, int64_t id, common::ObAddr &leader, const bool force_renew);
   // Nonblock way to get leader address of the log stream.
   int nonblock_get_leader(int64_t id, common::ObAddr &leader);
   int nonblock_renew_leader(int64_t id);

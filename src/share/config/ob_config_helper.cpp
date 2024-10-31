@@ -1495,5 +1495,11 @@ bool ObConfigS3URLEncodeTypeChecker::check(const ObConfigItem &t) const
   return bret;
 }
 
+bool ObConfigDegradationPolicyChecker::check(const ObConfigItem &t) const
+{
+  common::ObString tmp_str(t.str());
+  return 0 == tmp_str.case_compare("LS_POLICY") || 0 == tmp_str.case_compare("CLUSTER_POLICY");
+}
+
 } // end of namepace common
 } // end of namespace oceanbase

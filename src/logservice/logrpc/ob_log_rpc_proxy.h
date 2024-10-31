@@ -39,6 +39,9 @@ public:
 #endif
   RPC_S(PR3 get_palf_stat, OB_LOG_GET_PALF_STAT,
       (logservice::LogGetPalfStatReq), logservice::LogGetPalfStatResp);
+#ifdef OB_BUILD_ARBITRATION
+  RPC_S(PR5 log_probe_rs, OB_LOG_PROBE_RS, (logservice::LogProbeRsReq), logservice::LogProbeRsResp);
+#endif
 };
 
 } // end namespace obrpc
