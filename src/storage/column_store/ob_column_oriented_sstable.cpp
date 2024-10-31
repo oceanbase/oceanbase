@@ -41,6 +41,7 @@ namespace oceanbase
 {
 namespace storage
 {
+ERRSIM_POINT_DEF(EN_CO_SSTABLE_COLUMN_CHECKSUM_ERROR);
 
 ObSSTableWrapper::ObSSTableWrapper()
   : meta_handle_(),
@@ -973,6 +974,18 @@ int ObCOSSTableV2::fill_column_ckm_array(
           }
         }
       } // for
+#ifdef ERRSIM
+      if (OB_SUCC(ret)) {
+        int tmp_ret = EN_CO_SSTABLE_COLUMN_CHECKSUM_ERROR;
+        if (OB_SUCCESS != tmp_ret) {
+          const int64_t column_cnt = column_checksums.count();
+          for (int64_t j = column_cnt - 1; j - 1 >= 0; j--) {
+            column_checksums.at(j) = column_checksums.at(j-1);
+          }
+          LOG_INFO("ERRSIM EN_CO_SSTABLE_COLUMN_CHECKSUM_ERROR, after errsim", K(tmp_ret), K(column_checksums));
+        }
+      }
+#endif
     }
   }
   return ret;
