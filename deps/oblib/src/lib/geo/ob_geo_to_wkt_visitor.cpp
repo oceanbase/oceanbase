@@ -631,10 +631,10 @@ void ObGeoToWktVisitor::get_wkt(ObString &wkt)
   wkt.assign(buffer_.ptr(), static_cast<int32_t>(buffer_.length()));
 }
 
-int ObGeoToWktVisitor::init(uint32_t srid, int64_t maxdecimaldigits)
+int ObGeoToWktVisitor::init(uint32_t srid, int64_t maxdecimaldigits, bool output_srid0)
 {
   INIT_SUCC(ret);
-  if (srid != 0) {
+  if (srid != 0 || output_srid0) {
     ObFastFormatInt ffi(srid);
     uint64_t reserve_len = strlen("srid") + 1 + ffi.length() + 1;
     // [srid][=][1][2][3][4][;]
