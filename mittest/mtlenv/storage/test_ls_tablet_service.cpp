@@ -1063,6 +1063,65 @@ TEST_F(TestLSTabletService, test_serialize_sstable_with_min_filled_tx_scn)
   ASSERT_EQ(sstable.meta_->basic_meta_.filled_tx_scn_, sstable.get_key().get_end_scn());
 }
 
+TEST_F(TestLSTabletService, test_migrate_with_tablet_meta_merge)
+{
+  // create_tablet_without_index
+  int ret = OB_SUCCESS;
+  ObTabletID tablet_id(10000011);
+  share::schema::ObTableSchema schema;
+  TestSchemaUtils::prepare_data_schema(schema);
+  common::ObArenaAllocator allocator;
+
+  ObLSHandle ls_handle;
+  ObLSService *ls_svr = MTL(ObLSService*);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ret = TestTabletHelper::create_tablet(ls_handle, tablet_id, schema, allocator, ObTabletStatus::Status::NORMAL);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObTabletHandle old_tablet_handle;
+  ret = ls_handle.get_ls()->get_tablet_svr()->get_tablet(tablet_id, old_tablet_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObMigrationTabletParam tablet_meta;
+  tablet_meta.reset();
+  ret = old_tablet_handle.get_obj()->build_migration_tablet_param(tablet_meta);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObTabletMeta old_tablet_meta;
+  ret = old_tablet_meta.assign(old_tablet_handle.get_obj()->get_tablet_meta());
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  //modified migration tablet param
+  tablet_meta.clog_checkpoint_scn_ = SCN::plus(tablet_meta.clog_checkpoint_scn_, 1);
+  tablet_meta.ddl_checkpoint_scn_ = SCN::plus(tablet_meta.ddl_checkpoint_scn_, 1);
+  tablet_meta.ddl_commit_scn_ = SCN::plus(tablet_meta.ddl_commit_scn_, 1);
+  tablet_meta.ddl_snapshot_version_ = tablet_meta.ddl_snapshot_version_  + 1;
+  tablet_meta.ddl_start_scn_ = SCN::plus(tablet_meta.ddl_start_scn_, 1);
+  tablet_meta.mds_checkpoint_scn_ = SCN::plus(tablet_meta.mds_checkpoint_scn_, 1); //42x not same with 433 or later
+  tablet_meta.multi_version_start_ = tablet_meta.multi_version_start_ + 1;
+  tablet_meta.snapshot_version_ = tablet_meta.snapshot_version_ + 1;
+
+  ObTabletMeta new_tablet_meta;
+  ret = new_tablet_meta.init(old_tablet_handle.get_obj()->get_tablet_meta(), &tablet_meta);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  //check merge result
+  ASSERT_EQ(new_tablet_meta.clog_checkpoint_scn_ , tablet_meta.clog_checkpoint_scn_);
+  ASSERT_EQ(new_tablet_meta.ddl_checkpoint_scn_, old_tablet_handle.get_obj()->get_tablet_meta().ddl_checkpoint_scn_);
+  ASSERT_EQ(new_tablet_meta.ddl_commit_scn_, old_tablet_handle.get_obj()->get_tablet_meta().ddl_commit_scn_);
+  ASSERT_EQ(new_tablet_meta.ddl_snapshot_version_, old_tablet_handle.get_obj()->get_tablet_meta().ddl_snapshot_version_);
+  ASSERT_EQ(new_tablet_meta.ddl_start_scn_, old_tablet_handle.get_obj()->get_tablet_meta().ddl_start_scn_);
+  ASSERT_EQ(new_tablet_meta.mds_checkpoint_scn_, old_tablet_handle.get_obj()->get_tablet_meta().mds_checkpoint_scn_);
+  ASSERT_EQ(new_tablet_meta.multi_version_start_, tablet_meta.multi_version_start_);
+  ASSERT_EQ(new_tablet_meta.snapshot_version_, tablet_meta.snapshot_version_);
+
+  ObTabletMapKey key(ls_id_, tablet_id);
+  ret = MTL(ObTenantMetaMemMgr*)->del_tablet(key);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+}
 
 } // end storage
 } // end oceanbase

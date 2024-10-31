@@ -2406,12 +2406,14 @@ int ObStorageHATabletBuilderUtil::build_table_with_minor_tables(
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
   ObTablet *tablet = nullptr;
-  const bool need_tablet_meta_merge = ObTabletRestoreAction::is_restore_major(restore_action) ? false : true;
+  const bool need_tablet_meta_merge = true;
   const bool update_ddl_sstable = false;
 
   if (OB_ISNULL(ls) || !tablet_id.is_valid() || OB_ISNULL(src_tablet_meta) || !ObTabletRestoreAction::is_valid(restore_action)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("build tablet with major tables get invalid argument", K(ret), KP(ls), K(tablet_id), K(restore_action));
+  }  else if (ObTabletRestoreAction::is_restore_major(restore_action)) {
+    //do nothing
   } else if (OB_FAIL(get_tablet_(tablet_id, ls, tablet_handle))) {
     LOG_WARN("failed to get tablet", K(ret), K(tablet_id), KPC(ls));
   } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
@@ -2458,16 +2460,13 @@ int ObStorageHATabletBuilderUtil::inner_update_tablet_table_store_with_minor_(
   int ret = OB_SUCCESS;
   ObBatchUpdateTableStoreParam update_table_store_param;
   const bool is_rollback = false;
-  bool need_merge = false;
 
   if (OB_ISNULL(ls) || OB_ISNULL(tablet) || (need_tablet_meta_merge && OB_ISNULL(src_tablet_meta))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("inner update tablet table store with minor get invalid argument", K(ret), KP(ls), KP(tablet));
-  } else if (need_tablet_meta_merge && OB_FAIL(check_need_merge_tablet_meta_(src_tablet_meta, tablet, need_merge))) {
-    LOG_WARN("failed to check remote logical sstable exist", K(ret), KPC(tablet));
   } else {
     const ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
-    update_table_store_param.tablet_meta_ = need_merge ? src_tablet_meta : nullptr;
+    update_table_store_param.tablet_meta_ = need_tablet_meta_merge ? src_tablet_meta : nullptr;
     update_table_store_param.rebuild_seq_ = ls->get_rebuild_seq();
     update_table_store_param.update_ddl_sstable_ = update_ddl_sstable;
 
@@ -2476,30 +2475,6 @@ int ObStorageHATabletBuilderUtil::inner_update_tablet_table_store_with_minor_(
     } else if (OB_FAIL(ls->build_ha_tablet_new_table_store(tablet_id, update_table_store_param))) {
       LOG_WARN("failed to build ha tablet new table store", K(ret), K(tablet_id), KPC(tablet), KPC(src_tablet_meta), K(update_table_store_param));
     }
-  }
-  return ret;
-}
-
-int ObStorageHATabletBuilderUtil::check_need_merge_tablet_meta_(
-    const ObMigrationTabletParam *src_tablet_meta,
-    ObTablet *tablet,
-    bool &need_merge)
-{
-  int ret = OB_SUCCESS;
-  need_merge = false;
-  bool is_exist = false;
-  if (OB_ISNULL(tablet) || OB_ISNULL(src_tablet_meta)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("check need merge tablet meta get invalid argument", K(ret), KP(tablet), KP(src_tablet_meta));
-  } else if (tablet->get_tablet_meta().has_transfer_table()) {
-    // If transfer table exist, no remote logical table will be created. And, the replaced transfer table
-    // must be included in the minor tables. The transfer table info of local tablet need to be cleared by
-    // merging tablet meta.
-    need_merge = true;
-  } else if (tablet->get_tablet_meta().clog_checkpoint_scn_ >= src_tablet_meta->clog_checkpoint_scn_) {
-    need_merge = false;
-  } else {
-    need_merge = true;
   }
   return ret;
 }
