@@ -547,6 +547,7 @@ public:
   }
 
   int add_members(const ObBitSet &other);
+  void intersect(const ObBitSet &other);
   void del_members(const ObBitSet &other); //added by ryan.ly 20150105
   int do_mask(int64_t begin_index, int64_t end_index);
   void reuse();
@@ -701,6 +702,25 @@ int ObBitSet<N, BlockAllocatorT, auto_free>::add_members(const ObBitSet &other)
     }
   }
   return ret;
+}
+
+template <int64_t N, typename BlockAllocatorT, bool auto_free>
+void ObBitSet<N, BlockAllocatorT, auto_free>::intersect(const ObBitSet &other)
+{
+  int ret = OB_SUCCESS;
+  int64_t this_count = bitset_word_array_.count();
+  int64_t other_count = other.bitset_word_array_.count();
+
+  if (OB_SUCC(ret)) {
+    int64_t i = 0;
+    for (i = 0; i < this_count && i < other_count; ++i) {
+      bitset_word_array_.at(i) &= other.get_bitset_word(i);
+    }
+    for (; i < this_count; ++i) {
+      bitset_word_array_.at(i) &= 0;
+    }
+  }
+  return;
 }
 
 template <int64_t N, typename BlockAllocatorT, bool auto_free>

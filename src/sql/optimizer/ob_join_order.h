@@ -2354,6 +2354,14 @@ struct NullAwareAntiJoinInfo {
                                     const ObBitSet<> &ex_prefix_column_bs,
                                     bool &can_extract);
 
+    int can_extract_unprecise_range_v2(const uint64_t table_id,
+                                       const ObRawExpr *filter,
+                                       const ObBitSet<> &ex_prefix_column_bs,
+                                       bool &can_extract,
+                                       bool &is_dynamic,
+                                       bool is_top_filter = true,
+                                       ObBitSet<> *equal_column_bs = NULL);
+
     int estimate_rowcount_for_access_path(ObIArray<AccessPath*> &all_paths,
                                           const bool is_inner_path,
                                           common::ObIArray<ObRawExpr*> &filter_exprs);

@@ -11528,7 +11528,9 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
     ObBitSet<> prefix_column_bs;
     ObBitSet<> ex_prefix_column_bs;
     ObSEArray<ObColDesc, 16> index_column_descs;
-    if (OB_ISNULL(get_plan()) ||
+    const ObQueryCtx *query_ctx = NULL;
+    if (OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_stmt()) ||
+        OB_ISNULL(query_ctx = get_plan()->get_stmt()->get_query_ctx()) ||
         OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(get_plan()), K(schema_guard), K(ret));
@@ -11619,6 +11621,8 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
         expr_column_bs.reset();
         ObRawExpr *filter = NULL;
         bool can_extract = false;
+        bool is_dynamic = false;
+        bool enable_unprecise_filter_opt = query_ctx->optimizer_features_enable_version_ >= COMPAT_VERSION_4_2_1_BP10;
         if (OB_ISNULL(filter = all_filters.at(i))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null expr", K(ret));
@@ -11627,6 +11631,27 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
         } else if (OB_FAIL(ObOptimizerUtil::extract_column_ids(filter, est_cost_info.table_id_,
                                                        expr_column_bs))) {
           LOG_WARN("failed to extract column ids", K(ret));
+        } else if (enable_unprecise_filter_opt && expr_column_bs.overlap(index_column_bs) &&
+                   OB_FAIL(can_extract_unprecise_range_v2(est_cost_info.table_id_, filter,
+                                                          ex_prefix_column_bs,
+                                                          can_extract,
+                                                          is_dynamic))) {
+          LOG_WARN("failed to extract column ids", K(ret));
+        } else if (can_extract) {
+          if (is_dynamic) {
+            ret = est_cost_info.pushdown_prefix_filters_.push_back(filter);
+          } else {
+            if (OB_FAIL(new_prefix_filters.push_back(filter)) ||
+                OB_FAIL(est_cost_info.prefix_filters_.push_back(filter))) {
+              LOG_WARN("failed to push back", K(ret));
+            } else if (OB_FAIL(ObOptimizerUtil::extract_column_ids(filter,
+                                                                   est_cost_info.table_id_,
+                                                                   column_bs))) {
+              LOG_WARN("failed to extract column ids", K(ret));
+            }
+          }
+          LOG_PRINT_EXPR(TRACE, "Found unprecise range filters", filter, K(is_dynamic));
+          OPT_TRACE("Found unprecise range filters :", filter);
         } else if (!expr_column_bs.is_subset(index_column_bs)) {
           ret = est_cost_info.table_filters_.push_back(filter);
         } else if (OB_FAIL(can_extract_unprecise_range(est_cost_info.table_id_, filter,
@@ -11782,6 +11807,185 @@ int ObJoinOrder::can_extract_unprecise_range(const uint64_t table_id,
       } else if ((ob_is_string_type(column_type) || ob_is_geometry(column_type))
                 && (ob_is_string_type(exec_param_type) || ob_is_geometry(exec_param_type))) {
         can_extract = true;
+      } else {
+        can_extract = false;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::can_extract_unprecise_range_v2(const uint64_t table_id,
+                                                const ObRawExpr *filter,
+                                                const ObBitSet<> &ex_prefix_column_bs,
+                                                bool &can_extract,
+                                                bool &is_dynamic,
+                                                bool is_top_filter,
+                                                ObBitSet<> *equal_column_bs)
+{
+  int ret = OB_SUCCESS;
+  const ObRawExpr *exec_param = NULL;
+  const ObColumnRefRawExpr *column = NULL;
+  can_extract = false;
+  is_dynamic = false;
+  if (OB_ISNULL(filter)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null expr", K(ret));
+  } else if (T_OP_EQ == filter->get_expr_type() || T_OP_NSEQ == filter->get_expr_type() ||
+             T_OP_IN == filter->get_expr_type()) {
+    const ObRawExpr *l_expr = filter->get_param_expr(0);
+    const ObRawExpr *r_expr = filter->get_param_expr(1);
+    if (OB_ISNULL(l_expr) || OB_ISNULL(r_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null expr", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(l_expr, l_expr))) {
+      LOG_WARN("failed to get expr without lossless cast", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(r_expr, r_expr))) {
+      LOG_WARN("failed to get expr without lossless cast", K(ret));
+    } else if (l_expr->is_const_expr() && r_expr->is_column_ref_expr()) {
+      column = static_cast<const ObColumnRefRawExpr*>(r_expr);
+      exec_param = l_expr;
+    } else if (l_expr->is_column_ref_expr() && r_expr->is_const_expr()) {
+      column = static_cast<const ObColumnRefRawExpr*>(l_expr);
+      exec_param = r_expr;
+    }
+    if (OB_SUCC(ret) && NULL != exec_param && T_OP_ROW == exec_param->get_expr_type() &&
+        exec_param->get_param_count() > 0) {
+      exec_param = exec_param->get_param_expr(0);
+    }
+    if (OB_SUCC(ret) && NULL != column && NULL != exec_param) {
+      ObObjType column_type = column->get_result_type().get_type();
+      ObObjType exec_param_type = exec_param->get_result_type().get_type();
+      if (column->get_table_id() != table_id
+          || !ex_prefix_column_bs.has_member(column->get_column_id())) {
+        /*do nothing*/
+      } else if (!is_top_filter) {
+        can_extract = true;
+      } else if (((ObCharType == column_type && ObVarcharType == exec_param_type)
+                || (ObNCharType == column_type && ObNVarchar2Type == exec_param_type))
+                && lib::is_oracle_mode()) {
+        can_extract = true;
+      } else {
+        can_extract = false;
+      }
+    }
+    if (OB_SUCC(ret) && can_extract) {
+      if (NULL != equal_column_bs) {
+        ret = equal_column_bs->add_member(column->get_column_id());
+      }
+      is_dynamic = filter->has_flag(CNT_DYNAMIC_PARAM);
+    }
+  } else if (T_OP_LIKE == filter->get_expr_type()) {
+    const ObRawExpr *first_expr = filter->get_param_expr(0);
+    const ObRawExpr *patten_expr = filter->get_param_expr(1);
+    const ObRawExpr *escape_expr = filter->get_param_expr(2);
+    if (OB_ISNULL(first_expr) || OB_ISNULL(patten_expr) || OB_ISNULL(escape_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null expr", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(first_expr, first_expr))) {
+      LOG_WARN("failed to get expr without lossless cast", K(ret));
+    } else if (first_expr->is_column_ref_expr() &&
+               patten_expr->is_const_expr() &&
+               escape_expr->is_static_const_expr()) {
+      column = static_cast<const ObColumnRefRawExpr*>(first_expr);
+      ObObjType column_type = column->get_result_type().get_type();
+      ObObjType patten_type = patten_expr->get_result_type().get_type();
+      if (column->get_table_id() != table_id
+          || !ex_prefix_column_bs.has_member(column->get_column_id())) {
+        /*do nothing*/
+      } else if (column_type == patten_type && ob_is_string_type(column_type)) {
+        bool is_start_with = false;
+        if (patten_expr->is_dynamic_const_expr()) {
+          can_extract = true;
+        } else if (OB_FAIL(ObOptEstUtils::if_expr_start_with_patten_sign(OPT_CTX.get_params(),
+                                                                         patten_expr,
+                                                                         escape_expr,
+                                                                         OPT_CTX.get_exec_ctx(),
+                                                                         OPT_CTX.get_allocator(),
+                                                                         is_start_with))) {
+          LOG_WARN("failed to check if expr start with percent sign", K(ret));
+        } else {
+          can_extract = !is_start_with;
+        }
+      } else {
+        can_extract = false;
+      }
+    }
+    if (OB_SUCC(ret) && can_extract) {
+      if (NULL != equal_column_bs) {
+        ret = equal_column_bs->add_member(column->get_column_id());
+      }
+      is_dynamic = filter->has_flag(CNT_DYNAMIC_PARAM);
+    }
+  } else if (T_OP_OR == filter->get_expr_type()) {
+    can_extract = true;
+    ObBitSet<> tmp_equal_column_bs;
+    ObBitSet<> child_equal_column_bs;
+    for (int64_t i = 0; OB_SUCC(ret) && can_extract && i < filter->get_param_count(); i ++) {
+      bool child_can_extract = false;
+      bool child_is_dynamic = false;
+      child_equal_column_bs.reuse();
+      if (OB_FAIL(SMART_CALL(can_extract_unprecise_range_v2(
+              table_id, filter->get_param_expr(i), ex_prefix_column_bs,
+              child_can_extract, child_is_dynamic, false, &child_equal_column_bs)))) {
+        LOG_WARN("failed to check child can extract", K(ret));
+      } else if (!child_can_extract) {
+        can_extract = false;
+      } else if (i == 0) {
+        ret = tmp_equal_column_bs.add_members(child_equal_column_bs);
+        is_dynamic |= child_is_dynamic;
+      } else {
+        tmp_equal_column_bs.intersect(child_equal_column_bs);
+        can_extract = !tmp_equal_column_bs.is_empty();
+        is_dynamic |= child_is_dynamic;
+      }
+    }
+    if (OB_SUCC(ret) && NULL != equal_column_bs && can_extract) {
+      ret = equal_column_bs->assign(tmp_equal_column_bs);
+    }
+  } else if (T_OP_AND == filter->get_expr_type()) {
+    can_extract = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < filter->get_param_count(); i ++) {
+      bool child_can_extract = false;
+      bool child_is_dynamic = false;
+      if (OB_FAIL(SMART_CALL(can_extract_unprecise_range_v2(
+              table_id, filter->get_param_expr(i), ex_prefix_column_bs,
+              child_can_extract, child_is_dynamic, false, equal_column_bs)))) {
+        LOG_WARN("failed to check child can extract", K(ret));
+      } else if (child_can_extract) {
+        can_extract = true;
+        is_dynamic |= child_is_dynamic;
+      }
+    }
+  } else if (is_top_filter && filter->is_spatial_expr()) {
+    const ObRawExpr *geo_expr = ObRawExprUtils::skip_inner_added_expr(filter);
+    const ObRawExpr *l_expr = NULL;
+    const ObRawExpr *r_expr = NULL;
+    if (OB_ISNULL(geo_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null expr", K(ret));
+    } else if (OB_ISNULL(l_expr = geo_expr->get_param_expr(0))
+              || OB_ISNULL(r_expr = geo_expr->get_param_expr(1))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null expr", K(ret));
+    } else if (l_expr->is_const_expr() && r_expr->is_column_ref_expr()) {
+      column = static_cast<const ObColumnRefRawExpr*>(r_expr);
+      exec_param = l_expr;
+    } else if (l_expr->is_column_ref_expr() && r_expr->is_const_expr()) {
+      column = static_cast<const ObColumnRefRawExpr*>(l_expr);
+      exec_param = r_expr;
+    }
+
+    if (OB_SUCC(ret) && NULL != column && NULL != exec_param) {
+      ObObjType column_type = column->get_result_type().get_type();
+      ObObjType exec_param_type = exec_param->get_result_type().get_type();
+      if (column->get_table_id() != table_id
+          || !ex_prefix_column_bs.has_member(column->get_column_id())) {
+        /*do nothing*/
+      } else if ((ob_is_string_type(column_type) || ob_is_geometry(column_type))
+                && (ob_is_string_type(exec_param_type) || ob_is_geometry(exec_param_type))) {
+        can_extract = true;
+        is_dynamic = filter->has_flag(CNT_DYNAMIC_PARAM);
       } else {
         can_extract = false;
       }
