@@ -506,7 +506,7 @@ int ObFtsIndexBuildTask::prepare()
   } else {
     state_finished = true;
   }
-
+  DEBUG_SYNC(BUILD_FTS_INDEX_PREPARE_STATUS);
   if (state_finished || OB_FAIL(ret)) {
     ObDDLTaskStatus next_status = static_cast<ObDDLTaskStatus>(task_status_);
     ObDDLTaskStatus old_status = static_cast<ObDDLTaskStatus>(task_status_);
@@ -604,6 +604,7 @@ int ObFtsIndexBuildTask::prepare_rowkey_doc_table()
   int ret = OB_SUCCESS;
   bool state_finished = false;
   const ObIndexType index_type = ObIndexType::INDEX_TYPE_ROWKEY_DOC_ID_LOCAL;
+  DEBUG_SYNC(CREATE_TFS_INDEX_ROWKEY_DOC_STATUS);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -663,6 +664,7 @@ int ObFtsIndexBuildTask::prepare_aux_index_tables()
       }
     }
 #endif
+    DEBUG_SYNC(BEFOR_PREPARE_CREATE_TFS_INDEX_DOC_ROWKEY);
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(prepare_aux_table(doc_rowkey_type,
                                        doc_rowkey_task_submitted_,
@@ -679,6 +681,7 @@ int ObFtsIndexBuildTask::prepare_aux_index_tables()
         }
       }
 #endif
+     DEBUG_SYNC(BEFOR_PREPARE_CREATE_TFS_INDEX_WORD_DOC);
      if (OB_FAIL(ret)) {
      } else if (OB_FAIL(prepare_aux_table(domain_index_aux_type,
                                        domain_index_aux_task_submitted_,
@@ -697,6 +700,7 @@ int ObFtsIndexBuildTask::prepare_aux_index_tables()
         }
       }
 #endif
+      DEBUG_SYNC(BEFOR_PREPARE_CREATE_TFS_INDEX_DOC_WORD);
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(prepare_aux_table(fts_doc_word_type,
                                        fts_doc_word_task_submitted_,

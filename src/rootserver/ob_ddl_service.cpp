@@ -6976,7 +6976,7 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
         if (index_arg->index_action_type_ == ObIndexArg::ADD_INDEX) {
           ObCreateIndexArg *create_index_arg = static_cast<ObCreateIndexArg *>(index_arg);
           uint64_t tenant_data_version = 0;
-          const bool is_check_fts_index_conflict = !create_index_arg->is_inner_ && share::schema::is_fts_index(create_index_arg->index_type_);
+          const bool is_check_fts_index_conflict = !create_index_arg->is_inner_ && share::schema::is_fts_or_multivalue_index(create_index_arg->index_type_);
           if (is_check_fts_index_conflict && OB_FAIL(check_fts_index_conflict(origin_table_schema.get_tenant_id(), origin_table_schema.get_table_id()))) {
             if (OB_EAGAIN != ret) {
               LOG_WARN("failed to check fts index ", K(ret));
@@ -43575,7 +43575,11 @@ int ObDDLService::check_fts_index_conflict(const uint64_t tenant_id, const uint6
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < task_records.count(); ++i) {
       const ObDDLTaskRecord &cur_record = task_records.at(i);
-      if (cur_record.ddl_type_ == ObDDLType::DDL_CREATE_FTS_INDEX || cur_record.ddl_type_ == ObDDLType::DDL_DROP_FTS_INDEX) {
+      if (cur_record.ddl_type_ == ObDDLType::DDL_CREATE_FTS_INDEX
+          || cur_record.ddl_type_ == ObDDLType::DDL_DROP_FTS_INDEX
+          || cur_record.ddl_type_ == ObDDLType::DDL_CREATE_MULTIVALUE_INDEX
+          || cur_record.ddl_type_ == ObDDLType::DDL_DROP_MULVALUE_INDEX) {
+        LOG_INFO("cur_record.ddl_type is: ", K(cur_record.ddl_type_));
         ret = OB_EAGAIN;
         LOG_WARN("fts index is building, will retry later", K(ret), K(table_id), K(cur_record));
       }
@@ -43643,7 +43647,7 @@ int ObDDLService::drop_index_to_scheduler_(ObMySQLTransaction &trans,
     } else {
       const bool is_fts_or_multivalue_or_vec_index = (index_table_schema->is_fts_or_multivalue_index() || index_table_schema->is_vec_index());
       const bool is_inner_and_domain_index = drop_index_arg->is_inner_ && is_fts_or_multivalue_or_vec_index;
-      const bool need_check_fts_index_conflict = !drop_index_arg->is_inner_ && index_table_schema->is_fts_index();
+      const bool need_check_fts_index_conflict = !drop_index_arg->is_inner_ && index_table_schema->is_fts_or_multivalue_index();
       const bool need_check_vec_index_conflict = !drop_index_arg->is_inner_ && index_table_schema->is_vec_index();
       bool has_index_task = false;
       typedef common::ObSEArray<share::schema::ObTableSchema, 4> TableSchemaArray;

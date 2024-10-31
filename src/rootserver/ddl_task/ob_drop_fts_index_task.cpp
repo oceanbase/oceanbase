@@ -290,6 +290,7 @@ int ObDropFTSIndexTask::prepare(const share::ObDDLTaskStatus &new_status)
   int ret = OB_SUCCESS;
   bool has_finished = false;
   ObSchemaGetterGuard schema_guard;
+  DEBUG_SYNC(DROP_FTS_INDEX_PREPARE_STATUS);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDropFTSIndexTask has not been inited", K(ret));

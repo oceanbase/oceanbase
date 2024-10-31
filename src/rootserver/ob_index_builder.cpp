@@ -349,7 +349,7 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &arg, obrpc::ObDropIndexRes 
       bool has_other_domain_index = false;
       const bool is_vec_or_fts_or_multivalue_index = index_table_schema->is_fts_or_multivalue_index() || index_table_schema->is_vec_index();
       const bool is_inner_and_fts_index = arg.is_inner_ && !arg.is_parent_task_dropping_fts_index_ && index_table_schema->is_fts_index();
-      const bool need_check_fts_index_conflict = !arg.is_inner_ && index_table_schema->is_fts_index();
+      const bool need_check_fts_index_conflict = !arg.is_inner_ && index_table_schema->is_fts_or_multivalue_index();
       const bool is_inner_and_multivalue_index = arg.is_inner_ && index_table_schema->is_multivalue_index();
       const bool is_inner_and_vec_index = arg.is_inner_ && !arg.is_vec_inner_drop_ && index_table_schema->is_vec_index();
       const bool need_check_vec_index_conflict = !arg.is_inner_ && index_table_schema->is_vec_index();
@@ -1226,7 +1226,7 @@ int ObIndexBuilder::do_create_index(
     LOG_WARN("table not exist", K(arg), K(ret));
   } else if (FALSE_IT(table_id = table_schema->get_table_id())) {
   } else if (!arg.is_inner_
-             && share::schema::is_fts_index(arg.index_type_)
+             && share::schema::is_fts_or_multivalue_index(arg.index_type_)
              && OB_FAIL(ddl_service_.check_fts_index_conflict(table_schema->get_tenant_id(), table_id))) {
     if (OB_EAGAIN != ret) {
       LOG_WARN("failed to check fts index ", K(ret), K(arg));
