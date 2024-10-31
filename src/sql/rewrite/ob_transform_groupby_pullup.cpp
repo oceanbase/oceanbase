@@ -791,6 +791,29 @@ int ObTransformGroupByPullup::do_groupby_pull_up(ObSelectStmt *stmt, PullupHelpe
       }
     }
   }
+  // need to formalize cte stmt expr reference after transformation
+  if (OB_SUCC(ret)) {
+    ObSEArray<TableItem *, 4> cte_table_items;
+    if (OB_FAIL(subquery->get_all_CTE_table_items_recursive(cte_table_items))) {
+      LOG_WARN("failed to get all cte table items", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < cte_table_items.count(); ++i) {
+        TableItem *cte_table = cte_table_items.at(i);
+        ObSelectStmt *cte_stmt = NULL;
+        if (OB_ISNULL(cte_table)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect null cte table", K(ret));
+        } else if (FALSE_IT(cte_stmt = cte_table->ref_query_)) {
+        } else if (OB_ISNULL(cte_stmt)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect null cte stmt", K(ret));
+        } else if (OB_FAIL(cte_stmt->formalize_stmt_expr_reference(ctx_->expr_factory_,
+                                                                   ctx_->session_info_))) {
+          LOG_WARN("failed to formalize stmt expr reference in cte stmt", K(ret));
+        }
+      }
+    }
+  }
   // classify where conditions
   ObSEArray<ObRawExpr *, 4> new_conds;
   for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_condition_size(); ++i) {
