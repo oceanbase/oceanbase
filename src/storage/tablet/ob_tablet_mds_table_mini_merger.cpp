@@ -326,6 +326,31 @@ int ObCrossLSMdsMiniMergeOperator::operator()(const mds::MdsDumpKV &kv)
   return ret;
 }
 
+int ObTabletDumpMediumMds2MiniOperator::operator()(const mds::MdsDumpKV &kv)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_UNLIKELY(!kv.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("dump kv is invalid", K(ret), K(kv));
+  } else {
+    cur_row_.reuse();
+    cur_allocator_.reuse();
+    mds::MdsDumpKVStorageAdapter adapter(kv);
+    if (OB_FAIL(adapter.convert_to_mds_row(cur_allocator_, cur_row_))) {
+      LOG_WARN("fail to convert MdsDumpKVStorageAdapter to row", K(ret), K(adapter), K(cur_row_));
+    } else if (OB_FAIL(row_store_.put_row_into_queue(cur_row_))) {
+      LOG_WARN("fail to put row into queue", K(ret));
+    } else {
+      LOG_INFO("mds op succeed to add medium mds row", K(ret), K(adapter), K(cur_row_));
+    }
+  }
+  return ret;
+}
+
+
 /*
 ------------------------------------------ObMdsTableMiniMerger-----------------------------------
 */

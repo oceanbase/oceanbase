@@ -258,7 +258,7 @@ public:
       const ObTabletHandle &src_tablet_handle,
       const ObTabletID &dst_tablet_id,
       const ObTablesHandleArray &tables_handle,
-      const share::ObSplitSSTableType &split_sstable_type,
+      const compaction::ObMergeType &merge_type,
       const bool can_reuse_macro_block);
 private:
   int create_sstable(
@@ -445,6 +445,21 @@ public:
       const ObLSHandle &ls_handle,
       const ObTabletHandle &source_tablet_handle,
       bool &is_tablet_status_need_to_split);
+  static int build_lost_medium_mds_sstable(
+      common::ObArenaAllocator &allocator,
+      const ObLSHandle &ls_handle,
+      const ObTabletHandle &source_tablet_handle,
+      const ObTabletID &dest_tablet_id,
+      ObTableHandleV2 &medium_mds_table_handle);
+private:
+  static int check_and_build_mds_sstable_merge_ctx(
+      const ObLSHandle &ls_handle,
+      const ObTabletHandle &dest_tablet_handle,
+      compaction::ObTabletMergeCtx &tablet_merge_ctx);
+  static int check_and_determine_mds_end_scn(
+      const ObTabletHandle &dest_tablet_handle,
+      share::SCN &end_scn);
+
 };
 
 }  // end namespace storage
