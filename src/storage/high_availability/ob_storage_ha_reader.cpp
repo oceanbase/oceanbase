@@ -457,9 +457,6 @@ int ObCopyMacroBlockObReader::get_read_info_(const ObCopyMacroBlockHeader &heade
     } else if (OB_ISNULL(macro_block_reuse_mgr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("macro block reuse mgr is NULL", K(ret), KP(macro_block_reuse_mgr_));
-    } else if (macro_meta.get_macro_id() != ObIndexBlockRowHeader::DEFAULT_IDX_ROW_MACRO_ID) {
-      ret = OB_INVALID_DATA;
-      LOG_WARN("local macro id of major sstable hasn't been set to default", K(ret), K(macro_meta));
     } else if (OB_FAIL(macro_block_reuse_mgr_->get_macro_block_reuse_info(table_key_, macro_meta.get_logic_id(), macro_id, data_checksum))) {
       LOG_WARN("failed to get macro block reuse info", K(ret), K(table_key_), K(macro_meta.get_logic_id()));
     } else if (macro_meta.get_meta_val().data_checksum_ != data_checksum) {
