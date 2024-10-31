@@ -1712,6 +1712,8 @@ int ObLogDelUpd::is_dml_fixed_expr(const ObRawExpr *expr,
       LOG_WARN("get unexpected null", K(ret));
     } else if (OB_FAIL(index_dml_info->is_new_row_expr(expr, is_fixed))) {
       LOG_WARN("failed to check is new row expr", K(ret));
+    } else if (!is_fixed) {
+      is_fixed = ObOptimizerUtil::find_item(index_dml_info->column_exprs_, expr);
     }
   }
   return ret;
