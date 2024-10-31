@@ -162,6 +162,7 @@ int ObDDLReplicaBuildExecutor::build(const ObDDLReplicaBuildExecutorParam &param
     execution_id_ = param.execution_id_;
     data_format_version_ = param.data_format_version_;
     consumer_group_id_ = param.consumer_group_id_;
+    min_split_start_scn_ = param.min_split_start_scn_;
     ObArray<ObSingleReplicaBuildCtx> replica_build_ctxs;
     if (OB_FAIL(construct_replica_build_ctxs(param, replica_build_ctxs))) {
       LOG_WARN("failed to construct replica build ctxs", K(ret));
@@ -467,6 +468,7 @@ int ObDDLReplicaBuildExecutor::construct_rpc_arg(
     arg.consumer_group_id_ = consumer_group_id_;
     arg.compaction_scn_ = replica_build_ctx.compaction_scn_;
     arg.can_reuse_macro_block_ = replica_build_ctx.can_reuse_macro_block_;
+    arg.min_split_start_scn_   = min_split_start_scn_;
     if (OB_FAIL(arg.lob_col_idxs_.assign(lob_col_idxs_))) {
       LOG_WARN("failed to assign to lob col idxs", K(ret));
     } else if (OB_FAIL(arg.parallel_datum_rowkey_list_.assign(replica_build_ctx.parallel_datum_rowkey_list_))) {

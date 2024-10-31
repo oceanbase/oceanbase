@@ -1000,9 +1000,11 @@ int ObDDLRedoLogWriter::write_auto_split_log(
     const share::ObLSID &ls_id,
     const ObDDLClogType &clog_type,
     const ObReplayBarrierType &replay_barrier_type,
-    const T &log)
+    const T &log,
+    SCN &scn)
 {
   int ret = OB_SUCCESS;
+  scn = SCN::min_scn();
   ObArenaAllocator tmp_arena("SplitLogBuf", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   logservice::ObLogBaseHeader base_header(logservice::ObLogBaseType::DDL_LOG_BASE_TYPE,
                                           replay_barrier_type);
@@ -1016,7 +1018,6 @@ int ObDDLRedoLogWriter::write_auto_split_log(
 
   palf::LSN lsn;
   const bool need_nonblock= false;
-  SCN scn = SCN::min_scn();
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
   logservice::ObLogHandler *log_handler = nullptr;
@@ -1105,15 +1106,18 @@ int ObDDLRedoLogWriter::write_auto_split_log(
 template int ObDDLRedoLogWriter::write_auto_split_log(const share::ObLSID &ls_id,
                                   const ObDDLClogType &clog_type,
                                   const ObReplayBarrierType &replay_barrier_type,
-                                  const ObTabletSplitStartLog &log);
+                                  const ObTabletSplitStartLog &log,
+                                  SCN &scn);
 template int ObDDLRedoLogWriter::write_auto_split_log(const share::ObLSID &ls_id,
                                   const ObDDLClogType &clog_type,
                                   const ObReplayBarrierType &replay_barrier_type,
-                                  const ObTabletSplitFinishLog &log);
+                                  const ObTabletSplitFinishLog &log,
+                                  SCN &scn);
 template int ObDDLRedoLogWriter::write_auto_split_log(const share::ObLSID &ls_id,
                                   const ObDDLClogType &clog_type,
                                   const ObReplayBarrierType &replay_barrier_type,
-                                  const ObTabletFreezeLog &log);
+                                  const ObTabletFreezeLog &log,
+                                  SCN &scn);
 
 bool ObDDLRedoLogWriter::need_retry(int ret_code)
 {

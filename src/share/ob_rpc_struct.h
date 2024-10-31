@@ -10551,7 +10551,6 @@ public:
       compaction_scn_(0), can_reuse_macro_block_(false), split_sstable_type_(share::ObSplitSSTableType::SPLIT_BOTH),
       lob_col_idxs_(), parallel_datum_rowkey_list_(), is_no_logging_(false),
       min_split_start_scn_()
-
   {}
   bool is_valid() const;
   int assign(const ObDDLBuildSingleReplicaRequestArg &other);
