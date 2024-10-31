@@ -3266,14 +3266,29 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
       }
       case T_FUN_SYS_CALC_UROWID: {
         ObColumnRefRawExpr *sub_pk_expr = NULL;
-        if (expr->get_param_count() < 2) {
+        if (OB_UNLIKELY(expr->get_param_count() < 2)
+            || OB_ISNULL(expr->get_param_expr(1))) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected param count of expr to type", K(ret), KPC(expr));
-        } else if (!expr->get_param_expr(1)->is_column_ref_expr()) {
+          LOG_WARN("unexpected param of expr to type", K(ret), KPC(expr));
+        } else if (expr->get_param_expr(1)->is_column_ref_expr()) {
+          // CALC_UROWID(..., sub_pk_expr)
+          sub_pk_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(1));
+        } else if (T_FUN_SYS_CAST == expr->get_param_expr(1)->get_expr_type()) {
+          // CALC_UROWID(..., CAST(sub_pk_expr, ...))
+          ObRawExpr *cast_expr = expr->get_param_expr(1);
+          if (OB_UNLIKELY(2 > cast_expr->get_param_count())
+              || OB_ISNULL(cast_expr->get_param_expr(0))
+              || OB_UNLIKELY(!cast_expr->get_param_expr(0)->is_column_ref_expr())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected param type of expr", K(ret), KPC(expr));
+          } else {
+            sub_pk_expr = static_cast<ObColumnRefRawExpr*>(cast_expr->get_param_expr(0));
+          }
+        } else {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected param type of expr", K(ret), KPC(expr));
-        } else {
-          sub_pk_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(1));
+        }
+        if (OB_SUCC(ret)) {
           // Mock a rowid ColumnRefExpr temporarily
           ObColumnRefRawExpr tmp_rowid_expr;
           tmp_rowid_expr.set_expr_type(sub_pk_expr->get_expr_type());
