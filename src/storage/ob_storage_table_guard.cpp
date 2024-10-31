@@ -447,6 +447,20 @@ bool ObStorageTableGuard::need_to_refresh_table(ObTableStoreIterator &iter)
       }
     }
   }
+
+  if (OB_SUCC(ret) && !need_create_memtable) {
+    // Inserts on split dst tablet may find last memtable is src tablet's,
+    // which may be active if leader switch after split start trans,
+    // so always create new memtable here to avoid writing to src tablet.
+    const ObTabletID &tablet_id = memtable->get_tablet_id();
+    if (OB_UNLIKELY(!tablet_id.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get memtable tablet_id", K(ret), KPC(table));
+    } else if (tablet_id != tablet_->get_tablet_meta().tablet_id_) {
+      need_create_memtable = true;
+    }
+  }
+
   if (OB_FAIL(ret)) {
   } else if (need_create_memtable) {
     const common::ObTabletID &tablet_id = tablet_->get_tablet_meta().tablet_id_;
