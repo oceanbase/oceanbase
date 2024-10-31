@@ -598,9 +598,9 @@ int ObTransformLateMaterialization::inner_accept_transform(ObIArray<ObParentDMLS
                          (check_ctx.base_index_ != common::OB_INVALID_ID &&
                           ObOptimizerUtil::find_item(check_ctx.late_material_indexs_, check_ctx.base_index_));
       }
-      if (OB_SUCC(ret) && !trans_happened &&
-          OB_FAIL(try_trans_helper.recover(stmt->get_query_ctx()))) {
-        LOG_WARN("failed to recover params", K(ret));
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(try_trans_helper.finish(trans_happened, stmt->get_query_ctx(), ctx_))) {
+        LOG_WARN("failed to finish try trans helper", K(ret));
       }
     }
     ctx_->in_accept_transform_ = false;

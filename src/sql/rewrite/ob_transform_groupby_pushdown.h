@@ -112,7 +112,7 @@ private:
                            ObIArray<uint64_t> &flattern_joined_tables,
                            ObSelectStmt *&trans_stmt,
                            ObCostBasedPushDownCtx &push_down_ctx,
-                           bool &trans_happend);
+                           bool &trans_happened);
 
   int distribute_group_aggr(ObSelectStmt *stmt,
                             ObIArray<PushDownParam> &params);

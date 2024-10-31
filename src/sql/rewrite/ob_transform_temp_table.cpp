@@ -1250,10 +1250,9 @@ int ObTransformTempTable::create_temp_table(ObDMLStmt &root_stmt,
                                      !compare_info.hint_force_stmt_set_.empty(),
                                      trans_happened))) {
       LOG_WARN("failed to accept transform", K(ret));
+    } else if (OB_FAIL(try_trans_helper.finish(trans_happened, root_stmt.get_query_ctx(), ctx_))) {
+      LOG_WARN("failed to finish try_trans_helper", K(ret));
     } else if (!trans_happened) {
-      if (OB_FAIL(try_trans_helper.recover(root_stmt.get_query_ctx()))) {
-        LOG_WARN("failed to recover params", K(ret));
-      }
     } else if (OB_FAIL(append(ctx_->equal_param_constraints_, common_map_info.equal_param_map_))) {
       LOG_WARN("failed to append equal param constraints", K(ret));
     } else if (OB_FAIL(add_materialize_stmts(accept_stmts))) {

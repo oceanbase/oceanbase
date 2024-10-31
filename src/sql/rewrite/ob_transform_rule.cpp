@@ -967,6 +967,24 @@ int ObTryTransHelper::recover(ObQueryCtx *query_ctx)
   return ret;
 }
 
+int ObTryTransHelper::finish(bool trans_happened,
+                             ObQueryCtx *query_ctx,
+                             ObTransformerCtx *trans_ctx) {
+  int ret = OB_SUCCESS;
+  if (NULL == query_ctx || NULL == trans_ctx) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null parameter", K(ret), K(query_ctx), K(trans_ctx));
+  } else if (trans_happened) {
+    if (NULL != unique_key_provider_
+        && OB_FAIL(unique_key_provider_->formalize_stmt_expr_reference_for_temp_table(trans_ctx))) {
+      LOG_WARN("failed to formalize stmt expr reference for temp table", K(ret));
+    }
+  } else if (OB_FAIL(recover(query_ctx))){
+    LOG_WARN("failed to recover try trans helper", K(ret));
+  }
+  return ret;
+}
+
 int ObEvalCostHelper::fill_helper(const ObPhysicalPlanCtx &phy_plan_ctx,
                                   const ObQueryCtx &query_ctx,
                                   const ObTransformerCtx &trans_ctx)

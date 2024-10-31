@@ -88,11 +88,10 @@ int ObTransformGroupByPullup::transform_one_stmt(common::ObIArray<ObParentDMLStm
                                         valid_views.at(i).need_merge_, true,
                                         trans_happened, &pullup_ctx))) {
       LOG_WARN("failed to accept transform", K(ret));
+    } else if (OB_FAIL(try_trans_helper.finish(trans_happened, stmt->get_query_ctx(), ctx_))) {
+      LOG_WARN("failed to finish try trans helper", K(ret));
     } else if (!trans_happened) {
       LOG_DEBUG("pull up not happen", K(trans_happened));
-      if (OB_FAIL(try_trans_helper.recover(stmt->get_query_ctx()))) {
-        LOG_WARN("failed to recover params", K(ret));
-      }
     } else if (OB_ISNULL(view) || !view->is_generated_table()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("view is not valid", K(ret));

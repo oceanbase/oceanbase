@@ -508,9 +508,7 @@ int ObTransformMVRewrite::try_transform_contain_mode(ObSelectStmt *origin_stmt,
         } else if (OB_FAIL(check_rewrite_expected(helper, is_valid))) {
           LOG_WARN("failed to check rewrite expected", K(ret), K(base_table_maps.at(i)));
         } else if (!is_valid) {
-          if (OB_FAIL(try_trans_helper.recover(origin_stmt->get_query_ctx()))) {
-            LOG_WARN("failed to recover params", K(ret));
-          } else if (OB_FAIL(ObTransformUtils::free_stmt(*ctx_->stmt_factory_, query_stmt))) {
+          if (OB_FAIL(ObTransformUtils::free_stmt(*ctx_->stmt_factory_, query_stmt))) {
             LOG_WARN("failed to free stmt", K(ret));
           } else {
             // query_stmt has been rewrited in generate_rewrite_stmt_contain_mode, need to re-copy stmt
@@ -522,6 +520,10 @@ int ObTransformMVRewrite::try_transform_contain_mode(ObSelectStmt *origin_stmt,
         } else {
           new_stmt = helper.query_stmt_;
           transform_happened = true;
+        }
+        if (OB_FAIL(ret)){
+        } else if (OB_FAIL(try_trans_helper.finish(transform_happened, origin_stmt->get_query_ctx(), ctx_))) {
+          LOG_WARN("failed to finish try trans helper", K(ret));
         }
       }
     }

@@ -103,10 +103,12 @@ int ObTransformGroupByPushdown::transform_one_stmt(common::ObIArray<ObParentDMLS
     LOG_WARN("failed to add stmt id", K(ret));
   }
 
-  if (OB_SUCC(ret) && !trans_happened && try_trans_helper.is_filled()
-      && OB_FAIL(try_trans_helper.recover(stmt->get_query_ctx()))) {
-    LOG_WARN("failed to recover params", K(ret));
+  if (OB_FAIL(ret)) {
+  } else if (!try_trans_helper.is_filled()) {
+  } else if (OB_FAIL(try_trans_helper.finish(trans_happened, stmt->get_query_ctx(), ctx_))) {
+    LOG_WARN("failed to finish try trans helper", K(ret));
   }
+
   return ret;
 }
 
@@ -655,11 +657,11 @@ int ObTransformGroupByPushdown::do_groupby_push_down(ObSelectStmt *stmt,
                                                       ObIArray<uint64_t> &flattern_joined_tables,
                                                       ObSelectStmt *&trans_stmt,
                                                       ObCostBasedPushDownCtx &push_down_ctx,
-                                                      bool &trans_happend)
+                                                      bool &trans_happened)
 {
   int ret = OB_SUCCESS;
   ObSqlBitSet<> outer_table_set;
-  trans_happend = false;
+  trans_happened = false;
   ObSQLSessionInfo *session_info = NULL;
   ObQueryCtx *query_ctx = NULL;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) ||
@@ -744,7 +746,7 @@ int ObTransformGroupByPushdown::do_groupby_push_down(ObSelectStmt *stmt,
                                                    params))) {
       LOG_WARN("failed to transform group by push down", K(ret));
     } else {
-      trans_happend = true;
+      trans_happened = true;
     }
   }
   LOG_DEBUG("distribute", K(params));

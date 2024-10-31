@@ -2133,6 +2133,7 @@ public:
                           ObSqlBitSet<> &ignore_tables,
                           ObIArray<ObRawExpr *> &unique_keys);
   int recover_useless_unique_for_temp_table();
+  int formalize_stmt_expr_reference_for_temp_table(ObTransformerCtx *ctx);
 private:
   int get_unique_keys_from_unique_stmt(const ObSelectStmt *select_stmt,
                                        ObRawExprFactory *expr_factory,

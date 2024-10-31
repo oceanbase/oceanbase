@@ -186,16 +186,16 @@ int ObTransformOrExpansion::transform_in_where_conditon(ObIArray<ObParentDMLStmt
         LOG_WARN("failed to accept transform", K(ret));
       } else if (trans_happened && OB_FAIL(add_transform_hint(*trans_stmt, &ctx))) {
         LOG_WARN("failed to add transform hint", K(ret));
-      } else if (!trans_happened && OB_FAIL(try_trans_helper2.recover(stmt->get_query_ctx()))) {
-        LOG_WARN("failed to recover params", K(ret));
+      } else if (OB_FAIL(try_trans_helper2.finish(trans_happened, stmt->get_query_ctx(), ctx_))) {
+        LOG_WARN("failed to finish try trans helper", K(ret));
       } else {
         ++try_times_;
         LOG_TRACE("transform or expansion in where conds", K(trans_happened));
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (!trans_happened && OB_FAIL(try_trans_helper1.recover(stmt->get_query_ctx()))) {
-      LOG_WARN("failed to recover params", K(ret));
+    } else if (OB_FAIL(try_trans_helper1.finish(trans_happened, stmt->get_query_ctx(), ctx_))) {
+      LOG_WARN("failed to finish try trans helper", K(ret));
     } else {
       ctx_->src_hash_val_.pop_back();
     }
@@ -289,8 +289,8 @@ int ObTransformOrExpansion::transform_in_semi_info(ObIArray<ObParentDMLStmt> &pa
             LOG_WARN("failed to accept transform", K(ret));
           } else if (trans_happened && OB_FAIL(add_transform_hint(*trans_stmt, &ctx))) {
             LOG_WARN("failed to add transform hint", K(ret));
-          } else if (!trans_happened && OB_FAIL(try_trans_helper2.recover(stmt->get_query_ctx()))) {
-            LOG_WARN("failed to recover params", K(ret));
+          } else if (OB_FAIL(try_trans_helper2.finish(trans_happened, stmt->get_query_ctx(), ctx_))) {
+            LOG_WARN("failed to finish try trans helper", K(ret));
           } else {
             ++try_times_;
             LOG_TRACE("transform or expansion in semi info", K(trans_happened), K(i), K(*semi_info));
@@ -299,8 +299,8 @@ int ObTransformOrExpansion::transform_in_semi_info(ObIArray<ObParentDMLStmt> &pa
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (!trans_happened && OB_FAIL(try_trans_helper1.recover(stmt->get_query_ctx()))) {
-      LOG_WARN("failed to recover params", K(ret));
+    } else if (OB_FAIL(try_trans_helper1.finish(trans_happened, stmt->get_query_ctx(), ctx_))) {
+      LOG_WARN("failed to finish try trans helper", K(ret));
     } else {
       ctx_->src_hash_val_.pop_back();
     }
@@ -461,16 +461,16 @@ int ObTransformOrExpansion::try_do_transform_inner_join(ObIArray<ObParentDMLStmt
         LOG_WARN("failed to accept transform", K(ret));
       } else if (trans_happened && OB_FAIL(add_transform_hint(*trans_stmt, &ctx))) {
         LOG_WARN("failed to add transform hint", K(ret));
-      } else if (!trans_happened && OB_FAIL(try_trans_helper2.recover(stmt->get_query_ctx()))) {
-        LOG_WARN("failed to recover params", K(ret));
+      } else if (OB_FAIL(try_trans_helper2.finish(trans_happened, stmt->get_query_ctx(), ctx_))) {
+        LOG_WARN("failed to finish try trans helper", K(ret));
       } else {
         ++try_times_;
         LOG_TRACE("transform or expansion in inner join", K(trans_happened), K(i), K(*conds.at(i)));
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (!trans_happened && OB_FAIL(try_trans_helper1.recover(stmt->get_query_ctx()))) {
-      LOG_WARN("failed to recover params", K(ret));
+    } else if (OB_FAIL(try_trans_helper1.finish(trans_happened, stmt->get_query_ctx(), ctx_))) {
+      LOG_WARN("failed to finish try trans helper", K(ret));
     } else {
       ctx_->src_hash_val_.pop_back();
     }
@@ -591,8 +591,8 @@ int ObTransformOrExpansion::try_do_transform_left_join(ObIArray<ObParentDMLStmt>
         LOG_WARN("failed to accept transform", K(ret));
       } else if (trans_happened && OB_FAIL(add_transform_hint(*trans_stmt, &ctx))) {
         LOG_WARN("failed to add transform hint", K(ret));
-      } else if (!trans_happened && OB_FAIL(try_trans_helper2.recover(stmt->get_query_ctx()))) {
-        LOG_WARN("failed to recover params", K(ret));
+      } else if (OB_FAIL(try_trans_helper2.finish(trans_happened, stmt->get_query_ctx(), ctx_))) {
+        LOG_WARN("failed to finish try trans helper", K(ret));
       } else {
         ++try_times_;
         LOG_TRACE("transform or expansion in left join", K(trans_happened), K(i), K(*joined_table));
@@ -604,8 +604,8 @@ int ObTransformOrExpansion::try_do_transform_left_join(ObIArray<ObParentDMLStmt>
                                                                   flag_view_sel_count,
                                                                   orig_flag_stmt))) {
       LOG_WARN("failed to recover flag temp table", K(ret));
-    } else if (!trans_happened && OB_FAIL(try_trans_helper1.recover(stmt->get_query_ctx()))) {
-      LOG_WARN("failed to recover params", K(ret));
+    } else if (OB_FAIL(try_trans_helper1.finish(trans_happened, stmt->get_query_ctx(), ctx_))) {
+      LOG_WARN("failed to finish try trans helper", K(ret));
     } else {
       ctx_->src_hash_val_.pop_back();
     }

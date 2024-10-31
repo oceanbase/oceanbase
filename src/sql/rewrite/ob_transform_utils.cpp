@@ -6105,6 +6105,22 @@ int StmtUniqueKeyProvider::generate_unique_key(ObTransformerCtx *ctx,
   return ret;
 }
 
+int StmtUniqueKeyProvider::formalize_stmt_expr_reference_for_temp_table(ObTransformerCtx *ctx)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < sel_stmts_.count(); ++i) {
+    ObSelectStmt *sel_stmt = sel_stmts_.at(i);
+    if (OB_ISNULL(sel_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null temp table stmt", K(ret));
+    } else if (OB_FAIL(sel_stmt->formalize_stmt_expr_reference(ctx->expr_factory_,
+                                                               ctx->session_info_))) {
+      LOG_WARN("failed to formalize stmt expr reference for temp table", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObTransformUtils::check_loseless_join(ObDMLStmt *stmt,
                                           ObTransformerCtx *ctx,
                                           TableItem *source_table,

@@ -232,11 +232,10 @@ int ObTransformWinMagic::do_transform(common::ObIArray<ObParentDMLStmt> &parent_
                                       false,
                                       accepted))) {
     LOG_WARN("accept transform failed", K(ret));
+  } else if (OB_FAIL(try_trans_helper.finish(accepted, stmt->get_query_ctx(), ctx_))) {
+    LOG_WARN("failed to finish try trans helper", K(ret));
   } else if (!accepted) {
     LOG_TRACE("win magic transform not accpeted", K(ret));
-    if (OB_FAIL(try_trans_helper.recover(stmt->get_query_ctx()))) {
-      LOG_WARN("failed to recover params", K(ret));
-    } 
   } else if (OB_FAIL(add_transform_hint(*stmt, &trans_basic_tables))) {
     LOG_WARN("failed to add transform hint", K(ret));
   } else if (OB_FAIL(append(stmt->get_query_ctx()->all_equal_param_constraints_,
@@ -246,7 +245,7 @@ int ObTransformWinMagic::do_transform(common::ObIArray<ObParentDMLStmt> &parent_
     add_trans_type(ctx_->happened_cost_based_trans_, WIN_MAGIC);
     trans_happened = true;
     LOG_TRACE("equal param constraints", K(map_info.equal_param_map_));
-  } 
+  }
   return ret;
 }
 
