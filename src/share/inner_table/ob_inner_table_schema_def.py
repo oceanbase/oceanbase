@@ -8864,7 +8864,9 @@ def_table_schema(
     ('total_memstore_read_row_count', 'int'),
     ('total_ssstore_read_row_count', 'int'),
     ('proxy_user', 'varchar:OB_MAX_USER_NAME_LENGTH_STORE', 'true'),
-    ('format_sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH')
+    ('format_sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH'),
+    ('user_client_port', 'int'),
+    ('trans_status', 'varchar:256'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',

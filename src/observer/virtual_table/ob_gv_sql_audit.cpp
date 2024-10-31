@@ -637,6 +637,9 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
           }
           break;
         }
+        case USER_CLIENT_PORT: {
+          cells[cell_idx].set_int(0);
+        } break;
         case TENANT_ID: {
           cells[cell_idx].set_int(record.data_.tenant_id_);
         } break;
@@ -703,6 +706,9 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                                 ObCharset::get_default_charset()));
           }
+        } break;
+        case TRANS_STATUS: {
+          cells[cell_idx].set_null();
         } break;
         case PLAN_ID: {
           cells[cell_idx].set_int(record.data_.plan_id_);
