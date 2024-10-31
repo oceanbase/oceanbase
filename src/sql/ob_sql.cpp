@@ -848,7 +848,12 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
                        || PL_NESTED_TABLE_TYPE == expr->get_result_type().get_extend_type()
                        || PL_ASSOCIATIVE_ARRAY_TYPE == expr->get_result_type().get_extend_type()
                        || PL_RECORD_TYPE == expr->get_result_type().get_extend_type())) {
-          if (PC_PS_MODE == mode || PC_PL_MODE == mode) {
+          if (PC_TEXT_MODE == mode
+              && NULL == context->secondary_namespace_
+              && NULL == context->session_info_->get_pl_context()) {
+            // Text protocol convert extend type field to varchar
+            field.type_.set_varchar(type_name);
+          } else {
             const ObUDTTypeInfo *udt_info = NULL;
             const ObSimpleDatabaseSchema *db_schema = NULL;
             uint64_t udt_id = expr->get_result_type().get_udt_id();
@@ -868,9 +873,6 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
             } else if (OB_FAIL(ob_write_string(alloc, db_schema->get_database_name_str(), field.type_owner_))) {
               LOG_WARN("fail to alloc string", K(db_schema->get_database_name_str()), K(ret));
             }
-          } else {
-            // Text protocol convert extend type field to varchar
-            field.type_.set_varchar(type_name);
           }
         } else if (!expr->get_result_type().is_ext()
                    && OB_FAIL(expr->get_length_for_meta_in_bytes(
