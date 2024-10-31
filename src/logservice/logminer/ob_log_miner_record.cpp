@@ -504,7 +504,6 @@ int ObLogMinerRecord::build_dml_stmt_(ICDCRecord &cdc_rec)
             if (has_unreliable_null || has_unsupport_type_compare) {
               APPEND_STMT(redo_stmt_, "/* POTENTIALLY INACCURATE */");
               has_unreliable_null = false;
-              has_unsupport_type_compare = false;
             }
           }
           if (OB_SUCC(ret)) {
