@@ -248,7 +248,7 @@ int ObCSReplicaChecksumHelper::check_column_type(
     const common::ObTabletID &tablet_id,
     const int64_t compaction_scn,
     const common::ObIArray<int64_t> &column_idxs,
-    bool &is_large_text_column)
+    bool &is_all_large_text_column)
 {
   int ret = OB_SUCCESS;
   share::ObFreezeInfo freeze_info;
@@ -258,7 +258,7 @@ int ObCSReplicaChecksumHelper::check_column_type(
   ObSEArray<ObColDesc, 16> column_descs;
   int64_t save_schema_version = 0;
   const ObTableSchema *table_schema = nullptr;
-  is_large_text_column = true;
+  is_all_large_text_column = true;
 
   if (OB_UNLIKELY(!tablet_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -293,7 +293,7 @@ int ObCSReplicaChecksumHelper::check_column_type(
   } else if (OB_FAIL(table_schema->get_multi_version_column_descs(column_descs))) {
     LOG_WARN("failed to get multi version column descs", K(ret), K(tablet_id), KPC(table_schema));
   } else {
-    for (int64_t idx = 0; is_large_text_column && OB_SUCC(ret) && idx < column_idxs.count(); ++idx) {
+    for (int64_t idx = 0; is_all_large_text_column && OB_SUCC(ret) && idx < column_idxs.count(); ++idx) {
       const int64_t cur_col_idx = column_idxs.at(idx);
       const int64_t column_id = column_descs.at(cur_col_idx).col_id_;
       const ObColumnSchemaV2 *col_schema = table_schema->get_column_schema(column_id);
@@ -301,10 +301,11 @@ int ObCSReplicaChecksumHelper::check_column_type(
       if (OB_ISNULL(col_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null col schema", K(ret));
-      } else {
-        is_large_text_column = ob_is_large_text(col_schema->get_data_type());
+      } else if (ob_is_large_text(col_schema->get_data_type())) {
         LOG_DEBUG("check column type for cs replica", K(cur_col_idx), KPC(col_schema),
                   "rowkey_cnt", table_schema->get_rowkey_column_num(), KPC(table_schema));
+      } else {
+        is_all_large_text_column = false;
       }
     }
   }

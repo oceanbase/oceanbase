@@ -193,14 +193,38 @@ int ObBatchCreateTabletHelper::add_arg_to_batch_arg(
 }
 
 int ObBatchCreateTabletHelper::add_table_schema_(
-    const share::schema::ObTableSchema &table_schema,
+    const share::schema::ObTableSchema &const_table_schema,
     const lib::Worker::CompatMode compat_mode,
     const uint64_t tenant_data_version,
     const bool need_create_empty_major,
     int64_t &index)
 {
   int ret = OB_SUCCESS;
-  if (tenant_data_version < DATA_VERSION_4_2_2_0) {
+  HEAP_VAR(ObTableSchema, table_schema) {
+  if (OB_FAIL(table_schema.assign(const_table_schema))) {
+    LOG_WARN("failed to assign table_schema", KR(ret), K(const_table_schema));
+  } else if (table_schema.is_user_table() && table_schema.is_heap_table()) {
+    /*
+     * When creating heap table (no explicit primary key), or doing offline ddl to drop primary key, the column array in table_schema here is out of order actually.
+     * The `__pk_increment` column is pushed back into column array with column_id 1, and in the LAST of column array in table schema.
+     * Column array in storage schema will be used to construct column group in C-replica, so the `__pk_increment` cg will be the LAST cg.
+     * However, the table schema read from schema_guard (__all_column table) when doing compaction will sort the column array by column id,
+     * so the `__pk_increment` cg will be the FIRST cg when compaction, which cause data inconsistency.
+     *
+     * So we need to sort column array by column id for heap table when creating tablet.
+     *
+     * testcases:
+     * - tools/deploy/mysql_test/test_suite/column_store_replica/t/drop_heap_table_primary_key.test
+     * - tools/deploy/mysql_test/test_suite/column_store_replica/t/drop_heap_table_primary_key_oracle.test
+     * - tools/obtest/t/errsim_storage_compaction/column_store_replica/test_rebuild_heap_table_migrate_major.test
+     */
+    if (OB_FAIL(table_schema.sort_column_array_by_column_id())) {
+      LOG_WARN("failed to sort column array", K(ret), K(table_schema));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (tenant_data_version < DATA_VERSION_4_2_2_0) {
     // compatibility with DATA_VERSION_4_2_1.
     index = batch_arg_.table_schemas_.count();
     if (OB_FAIL(batch_arg_.table_schemas_.push_back(table_schema))) {
@@ -227,6 +251,7 @@ int ObBatchCreateTabletHelper::add_table_schema_(
     } else if (OB_FAIL(batch_arg_.tablet_extra_infos_.push_back(create_tablet_extr_info))) {
       LOG_WARN("failed to push back tablet extra infos", K(ret), K(create_tablet_extr_info));
     }
+  }
   }
   return ret;
 }

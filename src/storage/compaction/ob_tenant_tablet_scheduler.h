@@ -133,7 +133,7 @@ public:
       const common::ObTabletID &tablet_id,
       const int64_t compaction_scn,
       const common::ObIArray<int64_t> &column_idxs,
-      bool &is_large_text_column);
+      bool &is_all_large_text_column);
 };
 
 

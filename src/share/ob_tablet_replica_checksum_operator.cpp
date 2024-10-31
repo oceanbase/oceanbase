@@ -360,7 +360,7 @@ int ObTabletReplicaChecksumItem::verify_column_checksum(const ObTabletReplicaChe
     ret = OB_CHECKSUM_ERROR;
   }
 
-  bool is_large_text_column = false;
+  bool is_all_large_text_column = false;
   if (OB_FAIL(ret) || !is_cs_replica) {
   } else {
     ObSEArray<int64_t, 8> column_idxs;
@@ -375,9 +375,9 @@ int ObTabletReplicaChecksumItem::verify_column_checksum(const ObTabletReplicaChe
     if (FAILEDx(compaction::ObCSReplicaChecksumHelper::check_column_type(tablet_id_,
                                                                          compaction_scn_.get_val_for_tx(),
                                                                          column_idxs,
-                                                                         is_large_text_column))) {
+                                                                         is_all_large_text_column))) {
       LOG_WARN("failed to check column type for cs replica", K(ret), KPC(this), K(other));
-    } else if (is_large_text_column) {
+    } else if (is_all_large_text_column) {
       // do nothing
     } else {
       ret = OB_CHECKSUM_ERROR;

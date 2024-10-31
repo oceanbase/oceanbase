@@ -42,6 +42,7 @@ using namespace common;
 namespace compaction
 {
 ERRSIM_POINT_DEF(EN_COMPACTION_SKIP_INIT_SCHEMA_CHANGED);
+ERRSIM_POINT_DEF(EN_COMPACTION_SKIP_CS_REPLICA_TO_REBUILD);
 int64_t ObMediumCompactionScheduleFunc::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
@@ -1495,6 +1496,13 @@ int ObMediumCompactionScheduleFunc::schedule_tablet_medium_merge(
   if (OB_FAIL(ret)) {
     LOG_INFO("ERRSIM EN_MEDIUM_CREATE_DAG", K(ret));
     return ret;
+  }
+  if (OB_SUCC(ret) && ls.is_cs_replica()) {
+    ret = EN_COMPACTION_SKIP_CS_REPLICA_TO_REBUILD;
+    if (OB_FAIL(ret)) {
+      LOG_INFO("ERRSIM EN_COMPACTION_SKIP_CS_REPLICA_TO_REBUILD", K(ret));
+      return ret;
+    }
   }
 #endif
   const int64_t last_major_snapshot = tablet.get_last_major_snapshot_version(); // current compaction scn

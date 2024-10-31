@@ -1223,7 +1223,9 @@ bool ObObj::is_zero() const
   return ret;
 }
 
-int ObObj::build_not_strict_default_value(int16_t precision)
+int ObObj::build_not_strict_default_value(
+    int16_t precision,
+    const ObCollationType string_cs_type)
 {
   int ret = OB_SUCCESS;
   const ObObjType &data_type = meta_.get_type();
@@ -1384,6 +1386,11 @@ int ObObj::build_not_strict_default_value(int16_t precision)
     default:
       ret = OB_INVALID_ARGUMENT;
       _OB_LOG(WARN, "unexpected data type=%u", data_type);
+  }
+  if (OB_FAIL(ret)) {
+  } else if (is_string_type()) {
+    set_collation_level(CS_LEVEL_IMPLICIT);
+    set_collation_type(string_cs_type);
   }
   return ret;
 }
