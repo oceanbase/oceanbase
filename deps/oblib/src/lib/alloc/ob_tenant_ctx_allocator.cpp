@@ -470,6 +470,7 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
                                            const ObMemAttr &attr, ObTenantCtxAllocator& ta,
                                            T &allocator)
 {
+  ObDisableDiagnoseGuard disable_diagnose_guard;
   SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
   void *nptr = NULL;
   if (!attr.label_.is_valid()) {
@@ -549,6 +550,7 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
 
 void ObTenantCtxAllocator::common_free(void *ptr)
 {
+  ObDisableDiagnoseGuard disable_diagnose_guard;
   SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
   if (NULL != ptr) {
     AObject *obj = reinterpret_cast<AObject*>((char*)ptr - AOBJECT_HEADER_SIZE);
