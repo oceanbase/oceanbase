@@ -440,7 +440,9 @@ public:
                            int64_t expr_idx,
                            ObObjParam *result);
   static int spi_convert(ObSQLSessionInfo &session, ObIAllocator &allocator,
-                         ObObj &src, const ObExprResType &result_type, ObObj &dst, bool ignore_fail = false);
+                         ObObj &src, const ObExprResType &result_type, ObObj &dst,
+                         bool ignore_fail = false,
+                         const ObIArray<ObString> *type_info = nullptr);
   static int spi_convert(ObSQLSessionInfo *session, ObIAllocator *allocator,
                          ObObjParam &src, const ObExprResType &result_type, ObObjParam &result);
   static int spi_convert_objparam(pl::ObPLExecCtx *ctx, ObObjParam *src, const int64_t result_idx, ObObjParam *result, bool need_set);

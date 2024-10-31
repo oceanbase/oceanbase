@@ -4898,7 +4898,8 @@ int ObRawExprUtils::create_type_to_str_expr(ObRawExprFactory &expr_factory,
                          && !src_expr->is_sys_func_expr()
                          && !src_expr->is_udf_expr()
                          && !src_expr->is_win_func_expr()
-                         && !(src_expr->is_op_expr() && ob_is_enum_or_set_type(src_expr->get_data_type())))) {
+                         && !(src_expr->is_op_expr() && ob_is_enum_or_set_type(src_expr->get_data_type())))
+                         && src_expr->get_expr_type() != T_FUN_SUBQUERY) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("src_expr should be terminal expr or func expr", KPC(src_expr), K(ret));
   } else if (FALSE_IT(data_type = src_expr->get_data_type())) {

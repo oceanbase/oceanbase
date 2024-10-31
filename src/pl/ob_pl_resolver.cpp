@@ -10465,6 +10465,7 @@ int ObPLResolver::transform_subquery_expr(const ParseNode *node,
         }
 
         OX (subquery_expr->set_subquery_result_type(result_type));
+        OX (subquery_expr->set_enum_set_values(expected_type->get_type_info()));
         OX (expr = subquery_expr);
       } else {
         ret = OB_ERR_UNEXPECTED;

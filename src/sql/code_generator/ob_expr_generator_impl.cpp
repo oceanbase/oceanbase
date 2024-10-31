@@ -457,6 +457,7 @@ int ObExprGeneratorImpl::visit(ObPlQueryRefRawExpr &expr)
       OX (pl_subquery->set_stmt_type(expr.get_stmt_type()));
       OZ (pl_subquery->deep_copy_route_sql(expr.get_route_sql()));
       OX (pl_subquery->set_result_type(expr.get_subquery_result_type()));
+      OZ (pl_subquery->set_type_info(expr.get_enum_set_values()));
       if (OB_SUCC(ret) && expr.is_ignore_fail()) {
         pl_subquery->set_ignore_fail();
       }
