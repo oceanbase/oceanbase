@@ -392,10 +392,9 @@ int ObMulValueIndexLookupOp::revert_iter()
 {
   int ret = OB_SUCCESS;
   if (nullptr != aux_lookup_iter_) {
-    aux_lookup_iter_->reset();
-    aux_lookup_iter_->~ObNewRowIterator();
-    if (nullptr != allocator_) {
-      allocator_->free(aux_lookup_iter_);
+    ObITabletScan &tsc_service = get_tsc_service();
+    if (OB_FAIL(tsc_service.revert_scan_iter(aux_lookup_iter_))) {
+      LOG_WARN("revert scan iterator failed", K(ret));
     }
     aux_lookup_iter_ = nullptr;
   }
@@ -406,7 +405,7 @@ int ObMulValueIndexLookupOp::revert_iter()
   aux_sorter_.clean_up();
   aux_sorter_.~ObExternalSort();
 
-  if (OB_FAIL(ObDomainIndexLookupOp::revert_iter())) {
+  if (OB_SUCC(ret) && OB_FAIL(ObDomainIndexLookupOp::revert_iter())) {
     LOG_WARN("failed to revert multivalue index lookup op iter", K(ret));
   }
   return ret;
@@ -865,9 +864,7 @@ int ObMulValueIndexLookupOp::fetch_rowkey_from_aux()
 int ObMulValueIndexLookupOp::reuse_scan_iter(bool need_switch_param)
 {
   int ret = OB_SUCCESS;
-
   ObITabletScan &tsc_service = get_tsc_service();
-  doc_id_scan_param_.need_switch_param_ = need_switch_param;
 
   // reset var for multi value
   aux_last_rowkey_.reset();
@@ -875,11 +872,17 @@ int ObMulValueIndexLookupOp::reuse_scan_iter(bool need_switch_param)
 
   if (OB_FAIL(ObDomainIndexLookupOp::reuse_scan_iter())) {
     LOG_WARN("failed to reuse scan iter", K(ret));
-  } else if (OB_FAIL(tsc_service.reuse_scan_iter(doc_id_scan_param_.need_switch_param_, rowkey_iter_))) {
+  } else if (OB_FAIL(tsc_service.reuse_scan_iter(need_switch_param, rowkey_iter_))) {
     LOG_WARN("failed to reuse scan iter", K(ret));
-  } else if (nullptr != get_aux_lookup_iter()) {
-    doc_id_scan_param_.key_ranges_.reuse();
-    doc_id_scan_param_.ss_key_ranges_.reuse();
+  } else if (OB_NOT_NULL(aux_lookup_iter_)) {
+    const ObTabletID &scan_tablet_id = doc_id_scan_param_.tablet_id_;
+    doc_id_scan_param_.need_switch_param_ = scan_tablet_id.is_valid() && scan_tablet_id != doc_id_idx_tablet_id_;
+    if (OB_FAIL(tsc_service.reuse_scan_iter(doc_id_scan_param_.need_switch_param_, aux_lookup_iter_))) {
+      LOG_WARN("failed to reuse scan iter", K(ret));
+    } else {
+      doc_id_scan_param_.key_ranges_.reuse();
+      doc_id_scan_param_.ss_key_ranges_.reuse();
+    }
   }
   return ret;
 }

@@ -768,9 +768,10 @@ int ObIndexBuilder::submit_rebuild_index_task(
   return ret;
 }
 
-int ObIndexBuilder::recognize_fts_index_schemas(
+int ObIndexBuilder::recognize_fts_or_multivalue_index_schemas(
       const common::ObIArray<share::schema::ObTableSchema> &index_schemas,
-      const bool is_parent_task_dropping_fts_index,
+      const bool is_parent_task_dropping_fts,
+      const bool is_parent_task_dropping_multivalue,
       int64_t &index_ith,
       int64_t &aux_doc_word_ith,
       int64_t &aux_rowkey_doc_ith,
@@ -786,7 +787,8 @@ int ObIndexBuilder::recognize_fts_index_schemas(
   aux_doc_rowkey_ith = -1;
   aux_multivalue_ith = -1;
 
-  if (OB_UNLIKELY(!is_parent_task_dropping_fts_index && 1 != index_schemas.count() && 4 != index_schemas.count() && 3 != index_schemas.count())) {
+  if (OB_UNLIKELY(!(is_parent_task_dropping_fts || is_parent_task_dropping_multivalue)
+    && 1 != index_schemas.count() && 4 != index_schemas.count() && 3 != index_schemas.count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(index_schemas));
   } else {
@@ -870,8 +872,9 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
                   !arg.is_vec_inner_drop_ && index_schemas.count() != VEC_INDEX_COUNT)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid index schema count", K(ret), K(index_schemas));
-  } else if (index_schemas.at(0).is_fts_index() && OB_FAIL(recognize_fts_index_schemas(index_schemas, arg.is_parent_task_dropping_fts_index_, index_ith, aux_doc_word_ith,
-          aux_rowkey_doc_ith, fts_domain_index_ith, aux_doc_rowkey_ith, aux_multivalue_ith))) {
+  } else if (index_schemas.at(0).is_fts_index()
+    && OB_FAIL(recognize_fts_or_multivalue_index_schemas(index_schemas, arg.is_parent_task_dropping_fts_index_, arg.is_parent_task_dropping_multivalue_index_,
+      index_ith, aux_doc_word_ith, aux_rowkey_doc_ith, fts_domain_index_ith, aux_doc_rowkey_ith, aux_multivalue_ith))) {
     LOG_WARN("fail to recognize index and aux table from schema array", K(ret));
   } else if (index_schemas.at(0).is_vec_index() && OB_FAIL(recognize_vec_index_schemas(index_schemas, arg.is_vec_inner_drop_, index_ith, vec_rowkey_vid_ith,
           vec_vid_rowkey_ith, vec_domain_index_ith, vec_index_id_ith, vec_snapshot_data_ith))) {

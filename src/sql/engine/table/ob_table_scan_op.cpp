@@ -3572,7 +3572,7 @@ int ObTableScanOp::inner_get_next_multivalue_index_row()
         } else if (OB_FAIL(multivalue_get_pure_data(domain_index_.alloc_, data, data_len,
                                      rowkey_start, rowkey_end, record_num, is_save_rowkey))) {
           LOG_WARN("get pure data failed", K(ret));
-        } else if (record_num == 0 && is_unique_index && rowkey_start == 1) {
+        } else if (record_num == 0 && is_unique_index) {
           need_ignore_null = true;
         } else {
           uint32_t obj_idx = 0;

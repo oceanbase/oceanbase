@@ -112,7 +112,14 @@ int ObFtsIndexBuildTask::init(
     tenant_id_ = tenant_id;
     task_id_ = task_id;
     schema_version_ = schema_version;
-    parallelism_ = std::max(parallelism, 1L);
+    // temporaty disabled parallel post-build index
+    // do sample failed when enable
+    // ref: issue workItemId=2024092400104554530
+    // todo yunyi, jinzhu
+    if (parallelism > 0) {
+      FLOG_INFO("post-create multivalue index or fts index, prune parallel", K(parallelism), K(task_type_));
+    }
+    parallelism_ = 1; // std::max(parallelism, 1L);
     consumer_group_id_ = consumer_group_id;
     parent_task_id_ = parent_task_id;
     if (snapshot_version > 0) {
@@ -1655,7 +1662,8 @@ int ObFtsIndexBuildTask::submit_drop_fts_index_task()
     drop_index_arg.session_id_        = data_table_schema->get_session_id();
     drop_index_arg.table_name_        = data_table_schema->get_table_name();
     drop_index_arg.database_name_     = database_schema->get_database_name_str();
-    drop_index_arg.is_parent_task_dropping_fts_index_ = true;  // if want to drop only one index, is_parent_task_dropping_fts_index_ should be false, else should be true.
+    drop_index_arg.is_parent_task_dropping_fts_index_ = is_fts_task();  // if want to drop only one index, is_parent_task_dropping_fts_index_ should be false, else should be true.
+    drop_index_arg.is_parent_task_dropping_multivalue_index_ = !is_fts_task();
     if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(data_table_schema->get_all_part_num() + data_table_schema->get_all_part_num(), ddl_rpc_timeout))) {
       LOG_WARN("failed to get ddl rpc timeout", KR(ret));
     } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, DROP_INDEX_RPC_FAILED))) {
@@ -1682,9 +1690,6 @@ int ObFtsIndexBuildTask::wait_drop_index_finish(bool &is_finish)
     LOG_WARN("task status not match", K(ret), K(task_status_));
   } else if (-1 == drop_index_task_id_) {
      is_finish = true;
-  } else if (!is_rowkey_doc_succ_ && !is_doc_rowkey_succ_ && !is_fts_doc_word_succ_ && !is_domain_aux_succ_) {
-    is_finish = true;
-    LOG_WARN("all aux table not create success, needn't submit task", K(ret), K(is_fts_task()), K(*this));
   } else {
     HEAP_VAR(ObDDLErrorMessageTableOperator::ObBuildDDLErrorMessage, error_message) {
       const int64_t target_object_id = -1;
@@ -1710,6 +1715,7 @@ int ObFtsIndexBuildTask::wait_drop_index_finish(bool &is_finish)
           ret = error_message.ret_code_;
           drop_index_task_submitted_ = false; // retry
         } else {
+          LOG_INFO("wait drop index task finish", K(*this), K(error_message));
           is_finish = true;
         }
       }
