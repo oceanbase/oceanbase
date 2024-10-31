@@ -124,7 +124,7 @@ int ObGeometry3D::read_nums_value(ObGeoWkbByteOrder bo, uint32_t &nums)
   return ret;
 }
 
-int ObGeometry3D::to_wkt(ObIAllocator &allocator, ObString &wkt, uint32_t srid/* = 0*/, int64_t maxdecimaldigits/* = -1*/)
+int ObGeometry3D::to_wkt(ObIAllocator &allocator, ObString &wkt, uint32_t srid/* = 0*/, int64_t maxdecimaldigits/* = -1*/, bool output_srid0/* = false*/)
 {
   int ret = OB_SUCCESS;
   ObStringBuffer *buf = NULL;
@@ -133,7 +133,7 @@ int ObGeometry3D::to_wkt(ObIAllocator &allocator, ObString &wkt, uint32_t srid/*
   if (OB_ISNULL(buf = OB_NEWx(ObStringBuffer, &allocator, (&allocator)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate buffer", K(ret));
-  } else if (srid != 0) {
+  } else if (srid != 0 || output_srid0) {
     ObFastFormatInt ffi(srid);
     uint64_t reserve_len = strlen("srid") + 1 + ffi.length() + 1;
     // [srid][=][1][2][3][4][;]
@@ -141,7 +141,9 @@ int ObGeometry3D::to_wkt(ObIAllocator &allocator, ObString &wkt, uint32_t srid/*
       LOG_WARN("fail to reserve memory for buffer_", K(ret), K(reserve_len));
     } else if (OB_FAIL(buf->append("SRID="))) {
       LOG_WARN("fail to append buffer", K(ret));
-    } else if (OB_FAIL(buf->append(ffi.ptr(), ffi.length()))) {
+    } else if (srid == UINT32_MAX && OB_FAIL(buf->append("NULL"))) {
+      LOG_WARN("fail to append buffer", K(ret));
+    } else if (srid != UINT32_MAX && OB_FAIL(buf->append(ffi.ptr(), ffi.length()))) {
       LOG_WARN("fail to append buffer", K(ret), K(ffi.length()));
     } else if (OB_FAIL(buf->append(";"))) {
       LOG_WARN("fail to append buffer", K(ret));
