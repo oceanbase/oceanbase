@@ -434,13 +434,6 @@ int ObTableApiExecuteP::try_process()
     LOG_WARN("fail to init schema guard", K(ret), K(arg_.table_name_));
   } else if (OB_FAIL(check_arg2())) {
     LOG_WARN("fail to check arg", K(ret));
-  }
-
-  if (OB_FAIL(ret)) {
-    if (OB_NOT_NULL(group_single_op_)) {
-      TABLEAPI_GROUP_COMMIT_MGR->free_op(group_single_op_);
-      group_single_op_ = nullptr;
-    }
   } else if (is_group_commit_) {
     if (OB_FAIL(process_group_commit())) {
       LOG_WARN("fail to process group commit", K(ret));
@@ -486,6 +479,10 @@ int ObTableApiExecuteP::try_process()
     // init_tb_ctx will return some replaceable error code
     result_.set_err(ret);
     table::ObTableApiUtil::replace_ret_code(ret);
+    if (OB_NOT_NULL(group_single_op_)) {
+      TABLEAPI_GROUP_COMMIT_MGR->free_op(group_single_op_);
+      group_single_op_ = nullptr;
+    }
   }
 
 #ifndef NDEBUG
