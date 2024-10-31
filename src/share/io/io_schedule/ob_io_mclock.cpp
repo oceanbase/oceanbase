@@ -532,7 +532,7 @@ int64_t ObTenantIOClock::get_max_proportion_ts()
   return max_proportion_ts;
 }
 
-int ObTenantIOClock::get_mclock(const int64_t queue_index, ObMClock *mclock)
+int ObTenantIOClock::get_mclock(const int64_t queue_index, ObMClock *&mclock)
 {
   int ret = OB_SUCCESS;
   if (queue_index >= group_clocks_.count()) {

@@ -86,7 +86,7 @@ public:
   int64_t get_unit_limit(const ObIOMode mode) const { return unit_clocks_[static_cast<int>(mode)].iops_; }
   TO_STRING_KV(K(is_inited_), K(io_config_), K(io_usage_), K(group_clocks_));
 private:
-  int get_mclock(const int64_t queue_index, ObMClock *mclock);
+  int get_mclock(const int64_t queue_index, ObMClock *&mclock);
   int64_t calc_iops(const int64_t iops, const int64_t percentage);
   int64_t calc_weight(const int64_t weight, const int64_t percentage);
 private:
