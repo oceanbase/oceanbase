@@ -421,7 +421,12 @@ int ObTableLoadMerger::build_merge_ctx()
   merge_param.dml_row_handler_ = store_table_ctx_->row_handler_;
   merge_param.file_mgr_ = store_ctx_->tmp_file_mgr_;
   merge_param.trans_param_ = store_ctx_->trans_param_;
-  merge_param.index_table_count_ = store_table_ctx_->schema_->index_table_count_;
+  merge_param.merge_with_conflict_check_ =
+    !store_table_ctx_->is_index_table_ && ObDirectLoadMethod::is_incremental(param_.method_) &&
+    (param_.insert_mode_ == ObDirectLoadInsertMode::NORMAL ||
+     (param_.insert_mode_ == ObDirectLoadInsertMode::INC_REPLACE &&
+      (store_table_ctx_->schema_->lob_column_idxs_.count() > 0 ||
+       store_table_ctx_->schema_->index_table_count_ > 0)));
   if (OB_FAIL(merge_ctx_.init(store_ctx_->ctx_, merge_param, store_table_ctx_->ls_partition_ids_))) {
     LOG_WARN("fail to init merge ctx", KR(ret));
   } else if (store_table_ctx_->is_multiple_mode_) {

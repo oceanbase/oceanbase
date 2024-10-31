@@ -63,7 +63,7 @@ ObDirectLoadMergeParam::ObDirectLoadMergeParam()
     insert_table_ctx_(nullptr),
     dml_row_handler_(nullptr),
     file_mgr_(nullptr),
-    index_table_count_(0)
+    merge_with_conflict_check_(false)
 {
 }
 
