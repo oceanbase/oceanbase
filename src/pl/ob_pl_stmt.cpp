@@ -3972,7 +3972,11 @@ int ObPLInto::generate_into_variable_info(ObPLBlockNS &ns, const ObRawExpr &expr
           ObDataType ext_type;
           ObDataType type;
           ObPLIntegerRange range;
-          ext_type.set_obj_type(ObExtendType);
+          ObObjMeta meta;
+          meta.set_type(ObExtendType);
+          meta.set_extend_type(final_type.get_type());
+          ext_type.set_meta_type(meta);
+          ext_type.set_udt_id(final_type.get_user_type_id());
           OZ (data_type_.push_back(ext_type));
           OZ (not_null_flags_.push_back(false));
           OZ (pl_integer_ranges_.push_back(range.range_));

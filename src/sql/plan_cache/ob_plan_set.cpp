@@ -251,16 +251,20 @@ int ObPlanSet::match_param_info(const ObParamInfo &param_info,
     }
 
     if (param.get_collation_type() != param_info.col_type_
-        && !(param.is_user_defined_sql_type() || param.is_collection_sql_type())) {
+        && !(param.get_param_meta().is_ext() || param.is_user_defined_sql_type() || param.is_collection_sql_type())) {
       is_same = false;
     } else if (param.get_param_meta().get_type() != param_info.type_) {
       is_same = false;
     } else if (param.is_user_defined_sql_type() || param.is_collection_sql_type()) {
-      uint64_t udt_id_param = param.get_accuracy().get_accuracy();
-      uint64_t udt_id_info = static_cast<uint64_t>(param_info.ext_real_type_) << 32
+      if (param_info.is_oracle_null_value_) {
+        is_same = false;
+      } else {
+        uint64_t udt_id_param = param.get_accuracy().get_accuracy();
+        uint64_t udt_id_info = static_cast<uint64_t>(param_info.ext_real_type_) << 32
                              | static_cast<uint32_t>(param_info.col_type_);
-      is_same = (udt_id_info == udt_id_param) ? true : false;
-    } else if (param.is_ext()) {
+        is_same = (udt_id_info == udt_id_param) ? true : false;
+      }
+    } else if (param.is_ext_sql_array()) {
       ObDataType data_type;
       if (!param_info.flag_.need_to_check_extend_type_) {
         // do nothing
@@ -274,6 +278,16 @@ int ObPlanSet::match_param_info(const ObParamInfo &param_info,
         LOG_TRACE("ext match param info", K(data_type), K(param_info), K(is_same), K(ret));
       }
       LOG_DEBUG("ext match param info", K(data_type), K(param_info), K(is_same), K(ret));
+    } else if (param.get_param_meta().is_ext()) {
+      if (!param_info.flag_.need_to_check_extend_type_) {
+        // do nothing
+      } else {
+        uint64_t udt_id_param = param.get_accuracy().get_accuracy();
+        uint64_t udt_id_info = static_cast<uint64_t>(param_info.ext_real_type_) << 32
+                             | static_cast<uint32_t>(param_info.col_type_);
+        is_same = (udt_id_info == udt_id_param) ? true : false;
+      }
+      LOG_DEBUG("ext match param info", K(param.get_accuracy()), K(param_info), K(is_same), K(ret));
     } else if (param_info.is_oracle_null_value_ && !param.is_null()) {
       is_same = false;
     } else if (ObSQLUtils::is_oracle_null_with_normal_type(param)

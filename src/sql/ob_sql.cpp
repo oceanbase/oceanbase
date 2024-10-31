@@ -853,6 +853,7 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
             const ObSimpleDatabaseSchema *db_schema = NULL;
             uint64_t udt_id = expr->get_result_type().get_udt_id();
             const uint64_t tenant_id = get_tenant_id_by_object_id(udt_id);
+            field.type_.meta_.set_extend_type(expr->get_result_type().get_extend_type());
             if (OB_FAIL(context->schema_guard_->get_udt_info(tenant_id, udt_id, udt_info))) {
               LOG_WARN("fail to get udt info. ", K(tenant_id), K(udt_id), K(ret));
             } else if (NULL == udt_info) {
