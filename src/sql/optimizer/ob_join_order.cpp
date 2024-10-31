@@ -5346,7 +5346,8 @@ int ObJoinOrder::add_path(Path* path)
     if (OB_UNLIKELY(get_plan()->get_optimizer_context().generate_random_plan())) {
       ObQueryCtx* query_ctx = get_plan()->get_optimizer_context().get_query_ctx();
       bool random_flag = !OB_ISNULL(query_ctx) && (query_ctx->rand_gen_.get(0, 1) == 1);
-      should_add = interesting_paths_.empty() || random_flag;
+      should_add = interesting_paths_.empty() || random_flag ||
+                   (!path->contain_match_all_fake_cte() && path->contain_fake_cte());
     }
 
     /**
