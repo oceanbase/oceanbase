@@ -29,7 +29,7 @@ ObPluginVectorIndexMgr::~ObPluginVectorIndexMgr()
 void ObPluginVectorIndexMgr::destroy()
 {
   if (IS_INIT) {
-    LOG_INFO("LS Vector Index Mgr destory", K(ls_id_));
+    LOG_INFO("LS Vector Index Mgr destroy", K(ls_id_));
     is_inited_ = false;
     need_check_ = false;
     ls_id_.reset();

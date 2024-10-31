@@ -505,7 +505,7 @@ int ObCachedGeoPolygon::inner_eval_contains(ObGeometry& geo, ObGeoEvalCtx& gis_c
   return ret;
 }
 
-// check if CachedPolygon catains geo
+// check if CachedPolygon contains geo
 int ObCachedGeoPolygon::contains(ObGeometry& geo, ObGeoEvalCtx& gis_context, bool &res)
 {
   int ret = OB_SUCCESS;
@@ -530,7 +530,7 @@ int ObCachedGeoPolygon::contains(ObGeometry& geo, ObGeoEvalCtx& gis_context, boo
   return ret;
 }
 
-// check if CachedPolygon catains geo
+// check if CachedPolygon contains geo
 int ObCachedGeoPolygon::cover(ObGeometry& geo, ObGeoEvalCtx& gis_context, bool &res)
 {
   int ret = OB_SUCCESS;

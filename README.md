@@ -91,7 +91,7 @@ obd demo
     docker exec -it oceanbase-ce obclient -h127.0.0.1 -P2881 -uroot # Connect to the root user of the sys tenant.
     ```
 
-See also [Docker Readme](https://github.com/oceanbase/docker-images/tree/main/oceanbase-ce) for more details.
+See also [Docker Readme](https://github.com/oceanbase/docker-images/blob/main/oceanbase-ce/README.md) for more details.
 
 ## ☸️ Start with Kubernetes
 

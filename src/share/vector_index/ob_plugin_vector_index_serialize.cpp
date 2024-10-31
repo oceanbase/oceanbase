@@ -250,7 +250,7 @@ int ObHNSWDeserializeCallback::operator()(char*& data, const int64_t data_size, 
   ObDatum data_datum;
   ObHNSWDeserializeCallback::CbParam &param = static_cast<ObHNSWDeserializeCallback::CbParam&>(cb_param);
   ObTableScanIterator *row_iter = static_cast<ObTableScanIterator *>(param.iter_);
-  ObIAllocator *alloactor = param.allocator_;
+  ObIAllocator *allocator = param.allocator_;
   ObTextStringIter *&str_iter = param.str_iter_;
   ObTextStringIterState state;
   ObString src_block_data;
@@ -272,18 +272,18 @@ int ObHNSWDeserializeCallback::operator()(char*& data, const int64_t data_size, 
           // current lob is end, need to switch to next lob
           // release current str iter
           str_iter->~ObTextStringIter();
-          alloactor->free(str_iter);
+          allocator->free(str_iter);
           str_iter = nullptr;
-          alloactor->reuse();
+          allocator->reuse();
         } else {
           ret = (str_iter->get_inner_ret() != OB_SUCCESS) ?
                 str_iter->get_inner_ret() : OB_INVALID_DATA;
           LOG_WARN("iter state invalid", K(ret), K(state), KPC(str_iter));
           // return error, release current str iter
           str_iter->~ObTextStringIter();
-          alloactor->free(str_iter);
+          allocator->free(str_iter);
           str_iter = nullptr;
-          alloactor->reuse();
+          allocator->reuse();
         }
       }
       if (OB_SUCC(ret) && OB_ISNULL(str_iter)) {
@@ -297,10 +297,10 @@ int ObHNSWDeserializeCallback::operator()(char*& data, const int64_t data_size, 
           key_datum = row->storage_datums_[0];
           data_datum = row->storage_datums_[1];
           LOG_INFO("[vec index debug] show key and data for vsag deserialize", K(key_datum), K(data_datum));
-          if (OB_ISNULL(str_iter = OB_NEWx(ObTextStringIter, alloactor, ObLongTextType, CS_TYPE_BINARY, data_datum.get_string(), true))) {
+          if (OB_ISNULL(str_iter = OB_NEWx(ObTextStringIter, allocator, ObLongTextType, CS_TYPE_BINARY, data_datum.get_string(), true))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("fail to new ObTextStringIter", KR(ret));
-          } else if (OB_FAIL(str_iter->init(0, NULL, alloactor))) {
+          } else if (OB_FAIL(str_iter->init(0, NULL, allocator))) {
             LOG_WARN("init lob str iter failed ", K(ret));
           }
         }

@@ -281,7 +281,7 @@ protected:
     CHECK_INITED();
     int ret = OB_SUCCESS;
     if (OB_FAIL(ObFutureBaseBase::wait())) {
-      OCCAM_LOG(WARN, "something wrong happend while waiting", K(ret));
+      OCCAM_LOG(WARN, "something wrong happened while waiting", K(ret));
     } else {
       ptr = &(data_shared_ptr_->data_);
     }
@@ -400,7 +400,7 @@ protected:
     CHECK_INITED();
     int ret = OB_SUCCESS;
     if (OB_FAIL(ObFutureBaseBase::wait())) {
-      OCCAM_LOG(WARN, "something wrong happend while waiting", K(ret));
+      OCCAM_LOG(WARN, "something wrong happened while waiting", K(ret));
     }
     return ret;
   }
