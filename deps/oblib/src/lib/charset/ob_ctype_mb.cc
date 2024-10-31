@@ -29,14 +29,25 @@ static void pad_max_char(const ObCharsetInfo *cs, char *str, char *end)
 {
   char buf[10];
   char buf_len;
-  if (!(cs->state & OB_CS_UNICODE)) {
+  if (!!(cs->state & OB_CS_BINSORT)) {
+    buf[0] = 0xff;
+    buf_len = 1;
+  } else if (!(cs->state & OB_CS_UNICODE)) {
     if (cs->max_sort_char <= 255) {
       memset(str, cs->max_sort_char, end - str);
       return;
+    } else if (cs->max_sort_char > 0xFFFFFF) {
+      //for gb18030
+      buf[0] = cs->max_sort_char >> 24 & 0xFF;
+      buf[1] = cs->max_sort_char >> 16 & 0xFF;
+      buf[2] = cs->max_sort_char >> 8 & 0xFF;
+      buf[3] = cs->max_sort_char & 0xFF;
+      buf_len = 4;
+    } else {
+      buf_len= 2;
+      buf[0]= cs->max_sort_char >> 8;
+      buf[1]= cs->max_sort_char & 0xFF;
     }
-    buf_len= 2;
-    buf[0]= cs->max_sort_char >> 8;
-    buf[1]= cs->max_sort_char & 0xFF;
   } else {
     buf_len= cs->cset->wc_mb(cs, cs->max_sort_char, (unsigned char*) buf,
                             (unsigned char*) buf + sizeof(buf));
