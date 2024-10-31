@@ -945,7 +945,8 @@ int ObWholeDataStoreDesc::inner_init(
 {
   int ret = OB_SUCCESS;
   const bool is_major = compaction::is_major_or_meta_merge_type(static_desc_.merge_type_);
-  if (nullptr != cg_schema && !cg_schema->is_all_column_group()) {
+  if (is_major && nullptr != cg_schema && !cg_schema->is_all_column_group()) {
+    // Only normal cg and rowkey cg (which means it must be major sstable) will get in here.
     if (OB_FAIL(col_desc_.init(is_major, merge_schema, *cg_schema, table_cg_idx, static_desc_.major_working_cluster_version_))) {
       STORAGE_LOG(WARN, "failed to init data store desc for column grouo", K(ret));
     }
