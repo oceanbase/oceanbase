@@ -783,7 +783,8 @@ private:
       bool &succ_get_split_src_tables);
   int get_split_dst_read_table(
       const int64_t snapshot_version,
-      ObTabletTableIterator &iter);
+      ObTabletTableIterator &iter,
+      bool &succ_get_split_dst_tables);
 
   int allow_to_read_();
 

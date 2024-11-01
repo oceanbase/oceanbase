@@ -4093,6 +4093,7 @@ int ObTablet::auto_get_read_tables(
   iter.table_store_iter_.reset();
   bool succ_get_src_tables = false;
   bool succ_get_split_src_tables = false;
+  bool succ_get_split_dst_tables = false;
 
   if (OB_UNLIKELY(tablet_meta_.has_transfer_table())) {
     if (OB_FAIL(get_src_tablet_read_tables_(snapshot_version, allow_no_ready_read, iter, succ_get_src_tables))) {
@@ -4108,11 +4109,6 @@ int ObTablet::auto_get_read_tables(
   } else if (need_split_src_table) { // auto split query
     if (OB_FAIL(get_split_src_read_table_if_need(snapshot_version, iter, succ_get_split_src_tables))) {
       LOG_WARN("fail to get src read table.", K(ret), K(*this));
-    } else if (succ_get_split_src_tables) {
-#ifdef ENABLE_DEBUG_LOG
-      FLOG_INFO("get read tables during tablet splitting",K(ret), K(ls_id), K(tablet_id),
-          K(snapshot_version), K(iter.table_store_iter_.table_ptr_array_), K(succ_get_split_src_tables));
-#endif
     }
   }
   if (OB_FAIL(ret)) {
@@ -4125,10 +4121,17 @@ int ObTablet::auto_get_read_tables(
     }
   }
   if (OB_SUCC(ret) && !succ_get_split_src_tables && need_split_dst_table) {
-    if (OB_FAIL(get_split_dst_read_table(snapshot_version, iter))) {
+    if (OB_FAIL(get_split_dst_read_table(snapshot_version, iter, succ_get_split_dst_tables))) {
       LOG_WARN("failed to get split dst read table", K(ret));
     }
   }
+
+#ifdef ENABLE_DEBUG_LOG
+  if (OB_SUCC(ret) && (succ_get_split_src_tables || succ_get_split_dst_tables)) {
+      FLOG_INFO("get read tables during tablet splitting", K(ret), K(ls_id), K(tablet_id), K(snapshot_version),
+          K(iter.table_store_iter_.table_ptr_array_), K(succ_get_split_src_tables), K(succ_get_split_dst_tables));
+  }
+#endif
   return ret;
 }
 
@@ -4239,10 +4242,12 @@ int ObTablet::get_split_src_read_table_if_need(
 
 int ObTablet::get_split_dst_read_table(
     const int64_t snapshot_version,
-    ObTabletTableIterator &iter)
+    ObTabletTableIterator &iter,
+    bool &succ_get_split_dst_tables)
 {
   int ret = OB_SUCCESS;
   bool maybe_split_src = true;
+  succ_get_split_dst_tables = false;
   {
     SpinRLockGuard guard(mds_cache_lock_);
     if (tablet_status_cache_.is_valid()) {
@@ -4295,6 +4300,8 @@ int ObTablet::get_split_dst_read_table(
             iter.table_store_iter_.table_store_handle_,
             ObGetReadTablesMode::SKIP_MAJOR))) {
           LOG_WARN("failed to get read tables from table store", K(ret), K(dst_tablet_ids.at(i)));
+        } else {
+          succ_get_split_dst_tables = true;
         }
       }
       LOG_INFO("is split src", K(ret), "tablet_id", tablet_meta_.tablet_id_, K(data));
