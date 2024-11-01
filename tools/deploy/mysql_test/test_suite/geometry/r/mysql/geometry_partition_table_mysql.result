@@ -385,3 +385,199 @@ select /*+index(partition_t1 idx)*/ st_astext(g) from partition_t1 where st_inte
 st_astext(g)
 POINT(1 1)
 drop table partition_t1;
+create table ptgeom1(c1 int, g geometry not null srid 0, g1 geometry not null srid 0) partition by hash(c1) partitions 3;
+insert into ptgeom1 values (0, st_geomfromtext('point(1 1)'), st_geomfromtext('point(2 2)'));
+insert into ptgeom1 values (1, st_geomfromtext('point(1 0)'), st_geomfromtext('point(2 2)'));
+select st_astext(g) from ptgeom1 where st_intersects(g, st_geomfromtext('point(1 1)'));
+st_astext(g)
+POINT(1 1)
+create index pgidx1 on ptgeom1(g) local;
+explain select /*+index(ptgeom1 pgidx1)*/ st_astext(g) from ptgeom1 where st_intersects(g, st_geomfromtext('point(1 1)'));
+Query Plan
+====================================================================
+|ID|OPERATOR                 |NAME           |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------
+|0 |PX COORDINATOR           |               |1       |420         |
+|1 |└─EXCHANGE OUT DISTR     |:EX10000       |1       |420         |
+|2 |  └─PX PARTITION ITERATOR|               |1       |419         |
+|3 |    └─TABLE FULL SCAN    |ptgeom1(pgidx1)|1       |419         |
+====================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(st_astext(ptgeom1.g))]), filter(nil)
+  1 - output([INTERNAL_FUNCTION(st_astext(ptgeom1.g))]), filter(nil)
+      dop=1
+  2 - output([ptgeom1.g]), filter(nil)
+      force partition granule
+  3 - output([ptgeom1.g]), filter([st_intersects(ptgeom1.g, st_geomfromtext('point(1 1)'))])
+      access([ptgeom1.__pk_increment], [ptgeom1.g]), partitions(p[0-2])
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([ptgeom1.__cellid_17], [ptgeom1.__mbr_17], [ptgeom1.__pk_increment]), range(1152921504606846980,MIN,MIN ; 1152921504606846980,MAX,MAX), 
+      (1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,MAX,MAX), (1152921504606847232,MIN,MIN ; 
+      1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,MIN,MIN ; 1152921504606851072,MAX,MAX), 
+      (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,MAX,MAX), (1152921504607109120,MIN,MIN ; 
+      1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,MIN,MIN ; 1152921504611041280,MAX,MAX), 
+      (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,MAX,MAX), (1152921504875282432,MIN,MIN ; 
+      1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,MIN,MIN ; 1152921508901814272,MAX,MAX), 
+      (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,MAX,MAX), (1152921779484753920,MIN,MIN ; 
+      1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,MIN,MIN ; 1152925902653358080,MAX,MAX), 
+      (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,MAX,MAX), (1153202979583557632,MIN,MIN ; 
+      1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,MIN,MIN ; 1157425104234217472,MAX,MAX), 
+      (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,MAX,MAX), (1441151880758558720,MIN,MIN ; 
+      1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX)
+select /*+index(ptgeom1 pgidx1)*/ st_astext(g) from ptgeom1 where st_intersects(g, st_geomfromtext('point(1 1)'));
+st_astext(g)
+POINT(1 1)
+drop table ptgeom1;
+DROP TABLE IF EXISTS group_change_info;
+create table group_change_info(
+`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+`geom` geometry NOT NULL /*!80003 SRID 0 */,
+`city_code` int(11) NOT NULL COMMENT '分区分表key',
+`change_status` varchar(32) NOT NULL COMMENT '变化状态: ● INIT  初始\n● PROCESSING 进入产线\n● SUCCESS 产线变更完成\n● MTL_NG  采集NG\n● DELETE  删除\n● INTERCEPT 已拦截\n● DIFF_NG 差分NG',
+`change_date` datetime NOT NULL COMMENT '变化时间，本来带的属性',
+PRIMARY KEY (`id`, `city_code`),
+SPATIAL KEY `idx_geom` (`geom`) BLOCK_SIZE 16384 LOCAL COMMENT '变化范围'
+) partition by list(city_code) (partition `p10` values in (10), partition `p20` values in (20));
+insert into group_change_info values(1, st_geomfromtext('point(1 1)', 0), 10, 'SUCCESS', '2023-06-07 00:00:00'),
+(2, st_geomfromtext('point(1 0)', 0), 10, 'SUCCESS', '2023-06-07 00:00:00'),
+(3, st_geomfromtext('point(1 1)', 0), 10, 'DELETE', '2023-06-07 00:00:00'),
+(4, st_geomfromtext('point(1 1)', 0), 20, 'SUCCESS', '2023-06-07 00:00:00'),
+(5, st_geomfromtext('point(1 1)', 0), 10, 'SUCCESS', '2023-06-06 00:00:00');
+explain select id, st_astext(geom) from group_change_info where st_intersects(geom, st_geomfromtext('point(1 1)', 0)) and city_code = 10
+and change_status in ('INIT', 'PROCESSING', 'SUCCESS', 'DIFF_NG') and change_date != '2023-06-06 00:00:00';
+Query Plan
+======================================================================
+|ID|OPERATOR       |NAME                       |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------------
+|0 |TABLE FULL SCAN|group_change_info(idx_geom)|1       |156         |
+======================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([group_change_info.id], [st_astext(group_change_info.geom)]), filter([group_change_info.city_code = 10], [group_change_info.change_date != 
+      INTERNAL_FUNCTION('2023-06-06 00:00:00', 116, 17)], [st_intersects(group_change_info.geom, st_geomfromtext('point(1 1)', 0))], [group_change_info.change_status 
+      IN ('INIT', 'PROCESSING', 'SUCCESS', 'DIFF_NG')])
+      access([group_change_info.id], [group_change_info.city_code], [group_change_info.geom], [group_change_info.change_status], [group_change_info.change_date]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true,false,false,false], 
+      range_key([group_change_info.__cellid_17], [group_change_info.__mbr_17], [group_change_info.id], [group_change_info.city_code]), range(1152921504606846980,
+      MIN,MIN,MIN ; 1152921504606846980,MAX,MAX,MAX), (1152921504606846992,MIN,MIN,MIN ; 1152921504606846992,MAX,MAX,MAX), (1152921504606847040,MIN,MIN,MIN ; 
+      1152921504606847040,MAX,MAX,MAX), (1152921504606847232,MIN,MIN,MIN ; 1152921504606847232,MAX,MAX,MAX), (1152921504606848000,MIN,MIN,MIN ; 1152921504606848000,
+      MAX,MAX,MAX), (1152921504606851072,MIN,MIN,MIN ; 1152921504606851072,MAX,MAX,MAX), (1152921504606863360,MIN,MIN,MIN ; 1152921504606863360,MAX,MAX,MAX), 
+      (1152921504606912512,MIN,MIN,MIN ; 1152921504606912512,MAX,MAX,MAX), (1152921504607109120,MIN,MIN,MIN ; 1152921504607109120,MAX,MAX,MAX), (1152921504607895552,
+      MIN,MIN,MIN ; 1152921504607895552,MAX,MAX,MAX), (1152921504611041280,MIN,MIN,MIN ; 1152921504611041280,MAX,MAX,MAX), (1152921504623624192,MIN,MIN,MIN ; 
+      1152921504623624192,MAX,MAX,MAX), (1152921504673955840,MIN,MIN,MIN ; 1152921504673955840,MAX,MAX,MAX), (1152921504875282432,MIN,MIN,MIN ; 1152921504875282432,
+      MAX,MAX,MAX), (1152921505680588800,MIN,MIN,MIN ; 1152921505680588800,MAX,MAX,MAX), (1152921508901814272,MIN,MIN,MIN ; 1152921508901814272,MAX,MAX,MAX), 
+      (1152921521786716160,MIN,MIN,MIN ; 1152921521786716160,MAX,MAX,MAX), (1152921573326323712,MIN,MIN,MIN ; 1152921573326323712,MAX,MAX,MAX), (1152921779484753920,
+      MIN,MIN,MIN ; 1152921779484753920,MAX,MAX,MAX), (1152922604118474752,MIN,MIN,MIN ; 1152922604118474752,MAX,MAX,MAX), (1152925902653358080,MIN,MIN,MIN ; 
+      1152925902653358080,MAX,MAX,MAX), (1152939096792891392,MIN,MIN,MIN ; 1152939096792891392,MAX,MAX,MAX), (1152991873351024640,MIN,MIN,MIN ; 1152991873351024640,
+      MAX,MAX,MAX), (1153202979583557632,MIN,MIN,MIN ; 1153202979583557632,MAX,MAX,MAX), (1154047404513689600,MIN,MIN,MIN ; 1154047404513689600,MAX,MAX,MAX), 
+      (1157425104234217472,MIN,MIN,MIN ; 1157425104234217472,MAX,MAX,MAX), (1170935903116328960,MIN,MIN,MIN ; 1170935903116328960,MAX,MAX,MAX), (1224979098644774912,
+      MIN,MIN,MIN ; 1224979098644774912,MAX,MAX,MAX), (1441151880758558720,MIN,MIN,MIN ; 1441151880758558720,MAX,MAX,MAX), (1152921504606846976,MIN,MIN,MIN ; 
+      1152921504606846976,MAX,MAX,MAX), (1152921504606846977,MIN,MIN,MIN ; 1152921504606846977,MAX,MAX,MAX)
+select id, st_astext(geom) from group_change_info where st_intersects(geom, st_geomfromtext('point(1 1)', 0)) and city_code = 10
+and change_status in ('INIT', 'PROCESSING', 'SUCCESS', 'DIFF_NG') and change_date != '2023-06-06 00:00:00';
+id	st_astext(geom)
+1	POINT(1 1)
+explain select id, st_astext(geom) from group_change_info where city_code = 10 and st_intersects(geom, st_geomfromtext('point(1 1)', 0))
+and change_status in ('INIT', 'PROCESSING', 'SUCCESS', 'DIFF_NG') and change_date != '2023-06-06 00:00:00';
+Query Plan
+======================================================================
+|ID|OPERATOR       |NAME                       |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------------
+|0 |TABLE FULL SCAN|group_change_info(idx_geom)|1       |137         |
+======================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([group_change_info.id], [st_astext(group_change_info.geom)]), filter([group_change_info.city_code = 10], [group_change_info.change_date != 
+      INTERNAL_FUNCTION('2023-06-06 00:00:00', 116, 17)], [st_intersects(group_change_info.geom, st_geomfromtext('point(1 1)', 0))], [group_change_info.change_status 
+      IN ('INIT', 'PROCESSING', 'SUCCESS', 'DIFF_NG')])
+      access([group_change_info.id], [group_change_info.city_code], [group_change_info.geom], [group_change_info.change_status], [group_change_info.change_date]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true,false,false,false], 
+      range_key([group_change_info.__cellid_17], [group_change_info.__mbr_17], [group_change_info.id], [group_change_info.city_code]), range(1152921504606846980,
+      MIN,MIN,MIN ; 1152921504606846980,MAX,MAX,MAX), (1152921504606846992,MIN,MIN,MIN ; 1152921504606846992,MAX,MAX,MAX), (1152921504606847040,MIN,MIN,MIN ; 
+      1152921504606847040,MAX,MAX,MAX), (1152921504606847232,MIN,MIN,MIN ; 1152921504606847232,MAX,MAX,MAX), (1152921504606848000,MIN,MIN,MIN ; 1152921504606848000,
+      MAX,MAX,MAX), (1152921504606851072,MIN,MIN,MIN ; 1152921504606851072,MAX,MAX,MAX), (1152921504606863360,MIN,MIN,MIN ; 1152921504606863360,MAX,MAX,MAX), 
+      (1152921504606912512,MIN,MIN,MIN ; 1152921504606912512,MAX,MAX,MAX), (1152921504607109120,MIN,MIN,MIN ; 1152921504607109120,MAX,MAX,MAX), (1152921504607895552,
+      MIN,MIN,MIN ; 1152921504607895552,MAX,MAX,MAX), (1152921504611041280,MIN,MIN,MIN ; 1152921504611041280,MAX,MAX,MAX), (1152921504623624192,MIN,MIN,MIN ; 
+      1152921504623624192,MAX,MAX,MAX), (1152921504673955840,MIN,MIN,MIN ; 1152921504673955840,MAX,MAX,MAX), (1152921504875282432,MIN,MIN,MIN ; 1152921504875282432,
+      MAX,MAX,MAX), (1152921505680588800,MIN,MIN,MIN ; 1152921505680588800,MAX,MAX,MAX), (1152921508901814272,MIN,MIN,MIN ; 1152921508901814272,MAX,MAX,MAX), 
+      (1152921521786716160,MIN,MIN,MIN ; 1152921521786716160,MAX,MAX,MAX), (1152921573326323712,MIN,MIN,MIN ; 1152921573326323712,MAX,MAX,MAX), (1152921779484753920,
+      MIN,MIN,MIN ; 1152921779484753920,MAX,MAX,MAX), (1152922604118474752,MIN,MIN,MIN ; 1152922604118474752,MAX,MAX,MAX), (1152925902653358080,MIN,MIN,MIN ; 
+      1152925902653358080,MAX,MAX,MAX), (1152939096792891392,MIN,MIN,MIN ; 1152939096792891392,MAX,MAX,MAX), (1152991873351024640,MIN,MIN,MIN ; 1152991873351024640,
+      MAX,MAX,MAX), (1153202979583557632,MIN,MIN,MIN ; 1153202979583557632,MAX,MAX,MAX), (1154047404513689600,MIN,MIN,MIN ; 1154047404513689600,MAX,MAX,MAX), 
+      (1157425104234217472,MIN,MIN,MIN ; 1157425104234217472,MAX,MAX,MAX), (1170935903116328960,MIN,MIN,MIN ; 1170935903116328960,MAX,MAX,MAX), (1224979098644774912,
+      MIN,MIN,MIN ; 1224979098644774912,MAX,MAX,MAX), (1441151880758558720,MIN,MIN,MIN ; 1441151880758558720,MAX,MAX,MAX), (1152921504606846976,MIN,MIN,MIN ; 
+      1152921504606846976,MAX,MAX,MAX), (1152921504606846977,MIN,MIN,MIN ; 1152921504606846977,MAX,MAX,MAX)
+select id, st_astext(geom) from group_change_info where city_code = 10 and st_intersects(geom, st_geomfromtext('point(1 1)', 0))
+and change_status in ('INIT', 'PROCESSING', 'SUCCESS', 'DIFF_NG') and change_date != '2023-06-06 00:00:00';
+id	st_astext(geom)
+1	POINT(1 1)
+explain select id, st_astext(geom) from group_change_info where city_code = 10 and change_status in ('INIT', 'PROCESSING', 'SUCCESS', 'DIFF_NG') 
+and change_date != '2023-06-06 00:00:00' and st_intersects(geom, st_geomfromtext('point(1 1)', 0));
+Query Plan
+======================================================================
+|ID|OPERATOR       |NAME                       |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------------
+|0 |TABLE FULL SCAN|group_change_info(idx_geom)|1       |136         |
+======================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([group_change_info.id], [st_astext(group_change_info.geom)]), filter([group_change_info.city_code = 10], [group_change_info.change_date != 
+      INTERNAL_FUNCTION('2023-06-06 00:00:00', 116, 17)], [st_intersects(group_change_info.geom, st_geomfromtext('point(1 1)', 0))], [group_change_info.change_status 
+      IN ('INIT', 'PROCESSING', 'SUCCESS', 'DIFF_NG')])
+      access([group_change_info.id], [group_change_info.city_code], [group_change_info.geom], [group_change_info.change_status], [group_change_info.change_date]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true,false,false,false], 
+      range_key([group_change_info.__cellid_17], [group_change_info.__mbr_17], [group_change_info.id], [group_change_info.city_code]), range(1152921504606846980,
+      MIN,MIN,MIN ; 1152921504606846980,MAX,MAX,MAX), (1152921504606846992,MIN,MIN,MIN ; 1152921504606846992,MAX,MAX,MAX), (1152921504606847040,MIN,MIN,MIN ; 
+      1152921504606847040,MAX,MAX,MAX), (1152921504606847232,MIN,MIN,MIN ; 1152921504606847232,MAX,MAX,MAX), (1152921504606848000,MIN,MIN,MIN ; 1152921504606848000,
+      MAX,MAX,MAX), (1152921504606851072,MIN,MIN,MIN ; 1152921504606851072,MAX,MAX,MAX), (1152921504606863360,MIN,MIN,MIN ; 1152921504606863360,MAX,MAX,MAX), 
+      (1152921504606912512,MIN,MIN,MIN ; 1152921504606912512,MAX,MAX,MAX), (1152921504607109120,MIN,MIN,MIN ; 1152921504607109120,MAX,MAX,MAX), (1152921504607895552,
+      MIN,MIN,MIN ; 1152921504607895552,MAX,MAX,MAX), (1152921504611041280,MIN,MIN,MIN ; 1152921504611041280,MAX,MAX,MAX), (1152921504623624192,MIN,MIN,MIN ; 
+      1152921504623624192,MAX,MAX,MAX), (1152921504673955840,MIN,MIN,MIN ; 1152921504673955840,MAX,MAX,MAX), (1152921504875282432,MIN,MIN,MIN ; 1152921504875282432,
+      MAX,MAX,MAX), (1152921505680588800,MIN,MIN,MIN ; 1152921505680588800,MAX,MAX,MAX), (1152921508901814272,MIN,MIN,MIN ; 1152921508901814272,MAX,MAX,MAX), 
+      (1152921521786716160,MIN,MIN,MIN ; 1152921521786716160,MAX,MAX,MAX), (1152921573326323712,MIN,MIN,MIN ; 1152921573326323712,MAX,MAX,MAX), (1152921779484753920,
+      MIN,MIN,MIN ; 1152921779484753920,MAX,MAX,MAX), (1152922604118474752,MIN,MIN,MIN ; 1152922604118474752,MAX,MAX,MAX), (1152925902653358080,MIN,MIN,MIN ; 
+      1152925902653358080,MAX,MAX,MAX), (1152939096792891392,MIN,MIN,MIN ; 1152939096792891392,MAX,MAX,MAX), (1152991873351024640,MIN,MIN,MIN ; 1152991873351024640,
+      MAX,MAX,MAX), (1153202979583557632,MIN,MIN,MIN ; 1153202979583557632,MAX,MAX,MAX), (1154047404513689600,MIN,MIN,MIN ; 1154047404513689600,MAX,MAX,MAX), 
+      (1157425104234217472,MIN,MIN,MIN ; 1157425104234217472,MAX,MAX,MAX), (1170935903116328960,MIN,MIN,MIN ; 1170935903116328960,MAX,MAX,MAX), (1224979098644774912,
+      MIN,MIN,MIN ; 1224979098644774912,MAX,MAX,MAX), (1441151880758558720,MIN,MIN,MIN ; 1441151880758558720,MAX,MAX,MAX), (1152921504606846976,MIN,MIN,MIN ; 
+      1152921504606846976,MAX,MAX,MAX), (1152921504606846977,MIN,MIN,MIN ; 1152921504606846977,MAX,MAX,MAX)
+select id, st_astext(geom) from group_change_info where city_code = 10 and change_status in ('INIT', 'PROCESSING', 'SUCCESS', 'DIFF_NG') 
+and change_date != '2023-06-06 00:00:00' and st_intersects(geom, st_geomfromtext('point(1 1)', 0));
+id	st_astext(geom)
+1	POINT(1 1)
+explain select id, st_astext(geom) from group_change_info where city_code = 10 and change_status in ('INIT', 'PROCESSING', 'SUCCESS', 'DIFF_NG') 
+and st_intersects(geom, st_geomfromtext('point(1 1)', 0)) and change_date != '2023-06-06 00:00:00';
+Query Plan
+======================================================================
+|ID|OPERATOR       |NAME                       |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------------
+|0 |TABLE FULL SCAN|group_change_info(idx_geom)|1       |136         |
+======================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([group_change_info.id], [st_astext(group_change_info.geom)]), filter([group_change_info.city_code = 10], [group_change_info.change_date != 
+      INTERNAL_FUNCTION('2023-06-06 00:00:00', 116, 17)], [st_intersects(group_change_info.geom, st_geomfromtext('point(1 1)', 0))], [group_change_info.change_status 
+      IN ('INIT', 'PROCESSING', 'SUCCESS', 'DIFF_NG')])
+      access([group_change_info.id], [group_change_info.city_code], [group_change_info.geom], [group_change_info.change_status], [group_change_info.change_date]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true,false,false,false], 
+      range_key([group_change_info.__cellid_17], [group_change_info.__mbr_17], [group_change_info.id], [group_change_info.city_code]), range(1152921504606846980,
+      MIN,MIN,MIN ; 1152921504606846980,MAX,MAX,MAX), (1152921504606846992,MIN,MIN,MIN ; 1152921504606846992,MAX,MAX,MAX), (1152921504606847040,MIN,MIN,MIN ; 
+      1152921504606847040,MAX,MAX,MAX), (1152921504606847232,MIN,MIN,MIN ; 1152921504606847232,MAX,MAX,MAX), (1152921504606848000,MIN,MIN,MIN ; 1152921504606848000,
+      MAX,MAX,MAX), (1152921504606851072,MIN,MIN,MIN ; 1152921504606851072,MAX,MAX,MAX), (1152921504606863360,MIN,MIN,MIN ; 1152921504606863360,MAX,MAX,MAX), 
+      (1152921504606912512,MIN,MIN,MIN ; 1152921504606912512,MAX,MAX,MAX), (1152921504607109120,MIN,MIN,MIN ; 1152921504607109120,MAX,MAX,MAX), (1152921504607895552,
+      MIN,MIN,MIN ; 1152921504607895552,MAX,MAX,MAX), (1152921504611041280,MIN,MIN,MIN ; 1152921504611041280,MAX,MAX,MAX), (1152921504623624192,MIN,MIN,MIN ; 
+      1152921504623624192,MAX,MAX,MAX), (1152921504673955840,MIN,MIN,MIN ; 1152921504673955840,MAX,MAX,MAX), (1152921504875282432,MIN,MIN,MIN ; 1152921504875282432,
+      MAX,MAX,MAX), (1152921505680588800,MIN,MIN,MIN ; 1152921505680588800,MAX,MAX,MAX), (1152921508901814272,MIN,MIN,MIN ; 1152921508901814272,MAX,MAX,MAX), 
+      (1152921521786716160,MIN,MIN,MIN ; 1152921521786716160,MAX,MAX,MAX), (1152921573326323712,MIN,MIN,MIN ; 1152921573326323712,MAX,MAX,MAX), (1152921779484753920,
+      MIN,MIN,MIN ; 1152921779484753920,MAX,MAX,MAX), (1152922604118474752,MIN,MIN,MIN ; 1152922604118474752,MAX,MAX,MAX), (1152925902653358080,MIN,MIN,MIN ; 
+      1152925902653358080,MAX,MAX,MAX), (1152939096792891392,MIN,MIN,MIN ; 1152939096792891392,MAX,MAX,MAX), (1152991873351024640,MIN,MIN,MIN ; 1152991873351024640,
+      MAX,MAX,MAX), (1153202979583557632,MIN,MIN,MIN ; 1153202979583557632,MAX,MAX,MAX), (1154047404513689600,MIN,MIN,MIN ; 1154047404513689600,MAX,MAX,MAX), 
+      (1157425104234217472,MIN,MIN,MIN ; 1157425104234217472,MAX,MAX,MAX), (1170935903116328960,MIN,MIN,MIN ; 1170935903116328960,MAX,MAX,MAX), (1224979098644774912,
+      MIN,MIN,MIN ; 1224979098644774912,MAX,MAX,MAX), (1441151880758558720,MIN,MIN,MIN ; 1441151880758558720,MAX,MAX,MAX), (1152921504606846976,MIN,MIN,MIN ; 
+      1152921504606846976,MAX,MAX,MAX), (1152921504606846977,MIN,MIN,MIN ; 1152921504606846977,MAX,MAX,MAX)
+select id, st_astext(geom) from group_change_info where city_code = 10 and change_status in ('INIT', 'PROCESSING', 'SUCCESS', 'DIFF_NG') 
+and st_intersects(geom, st_geomfromtext('point(1 1)', 0)) and change_date != '2023-06-06 00:00:00';
+id	st_astext(geom)
+1	POINT(1 1)
+drop table group_change_info;

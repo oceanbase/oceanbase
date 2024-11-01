@@ -790,7 +790,7 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
         // ignore the condition from which we can not extract query range
       } else if (cur_expr->has_flag(CNT_DYNAMIC_PARAM) &&
                   OB_FALSE_IT(has_exec_param_ = true)) {
-      } else if (is_contain_geo_filters()) {
+      } else if (is_contain_geo_filters() && is_single_domain_op(cur_expr)) {
         // or connect with spatial filters for functional correctness
         has_geo_expr = true;
         if (OB_FAIL(add_or_item(geo_ranges, temp_result))) {
