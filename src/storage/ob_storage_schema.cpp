@@ -1565,6 +1565,8 @@ int ObStorageSchema::generate_column_array(const ObTableSchema &input_schema)
       if (meta_type.is_decimal_int()) {
         meta_type.set_stored_precision(col->get_accuracy().get_precision());
         meta_type.set_scale(col->get_accuracy().get_scale());
+      } else if (ob_is_real_type(meta_type.get_type())) {
+        meta_type.set_scale(col->get_accuracy().get_scale());
       }
       col_schema.meta_type_ = meta_type;
       if (ob_is_large_text(col->get_data_type())) {
@@ -1628,6 +1630,8 @@ int ObStorageSchema::generate_column_array(const ObTableSchema &input_schema)
       ObObjMeta meta_type = rowkey_column->type_;
       if (meta_type.is_decimal_int()) {
         meta_type.set_stored_precision(rowkey_col_schema->get_accuracy().get_precision());
+        meta_type.set_scale(rowkey_col_schema->get_accuracy().get_scale());
+      } else if (ob_is_real_type(meta_type.get_type())) {
         meta_type.set_scale(rowkey_col_schema->get_accuracy().get_scale());
       }
       rowkey_schema.meta_type_ = meta_type;

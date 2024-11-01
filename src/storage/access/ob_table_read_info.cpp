@@ -523,6 +523,8 @@ int ObTableReadInfo::init_datum_utils(common::ObIAllocator &allocator, const boo
     if (cols_param_.at(i)->get_meta_type().is_decimal_int()) {
       cols_desc_.at(i).col_type_.set_stored_precision(cols_param_.at(i)->get_accuracy().get_precision());
       cols_desc_.at(i).col_type_.set_scale(cols_param_.at(i)->get_accuracy().get_scale());
+    } else if (ob_is_real_type(cols_param_.at(i)->get_meta_type().get_type())) {
+      cols_desc_.at(i).col_type_.set_scale(cols_param_.at(i)->get_accuracy().get_scale());
     }
   }
   if (OB_FAIL(datum_utils_.init(cols_desc_, schema_rowkey_cnt_, is_oracle_mode_, allocator, is_cg_sstable))) {
