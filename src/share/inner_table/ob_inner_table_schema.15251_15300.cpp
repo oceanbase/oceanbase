@@ -7459,7 +7459,7 @@ int ObInnerTableSchema::all_virtual_tenant_sys_agent_schema(ObTableSchema &table
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_UTF8MB4_BIN, //column_collation_type
-      MAX_ZONE_LENGTH, //column_length
+      MAX_ZONE_LIST_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
       true, //is_nullable

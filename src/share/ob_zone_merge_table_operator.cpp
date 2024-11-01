@@ -411,7 +411,7 @@ int ObZoneMergeTableOperator::construct_zone_merge_info_(
   bool exist = false;
   int64_t tmp_real_str_len = 0; // only used for output parameter
   int64_t tenant_id = 0;
-  char zone_buf[OB_MAX_TZ_NAME_LEN] = "";
+  char zone_buf[MAX_ZONE_LENGTH] = "";
   ObZoneMergeInfo tmp_merge_info;
   uint64_t all_merged_scn = 0;
   uint64_t broadcast_scn = 0;

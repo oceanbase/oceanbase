@@ -1396,7 +1396,7 @@ int ObInnerTableSchema::all_virtual_tenant_mysql_sys_agent_schema(ObTableSchema 
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      MAX_ZONE_LENGTH, //column_length
+      MAX_ZONE_LIST_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
       true, //is_nullable
