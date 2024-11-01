@@ -106,11 +106,12 @@ AObject *ObjectSet::realloc_object(
     abort_unless(obj->is_valid());
     uint64_t copy_size = MIN(obj->alloc_bytes_, size);
     new_obj = alloc_object(size, attr);
-    if (NULL != new_obj && copy_size != 0) {
-      memmove(new_obj->data_, obj->data_, copy_size);
+    if (NULL != new_obj) {
+      if (copy_size != 0) {
+        memmove(new_obj->data_, obj->data_, copy_size);
+      }
+      do_free_object(obj);
     }
-
-    do_free_object(obj);
   }
 
   return new_obj;
