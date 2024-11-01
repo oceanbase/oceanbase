@@ -786,10 +786,10 @@ void ObArchiveSender::handle_archive_ret_code_(const ObLSID &id,
           "archive_dest_id", key.dest_id_,
           "archive_round", key.round_);
     }
-  } else if (OB_BACKUP_PERMISSION_DENIED == ret_code) {
+  } else if (OB_OBJECT_STORAGE_PERMISSION_DENIED == ret_code) {
     // backup permission denied
     if (REACH_TIME_INTERVAL(ARCHIVE_DBA_ERROR_LOG_PRINT_INTERVAL)) {
-      LOG_DBA_ERROR(OB_BACKUP_PERMISSION_DENIED, "msg", "archive dest permission denied", "ret", ret_code,
+      LOG_DBA_ERROR(OB_OBJECT_STORAGE_PERMISSION_DENIED, "msg", "archive dest permission denied", "ret", ret_code,
           "archive_dest_id", key.dest_id_,
           "archive_round", key.round_);
     }
@@ -829,9 +829,9 @@ bool ObArchiveSender::is_retry_ret_code_(const int ret_code) const
   return is_io_error(ret_code)
     || OB_ALLOCATE_MEMORY_FAILED == ret_code
     || OB_BACKUP_DEVICE_OUT_OF_SPACE == ret_code
-    || OB_BACKUP_PWRITE_OFFSET_NOT_MATCH == ret_code
+    || OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH == ret_code
     || OB_IO_LIMIT == ret_code
-    || OB_BACKUP_PERMISSION_DENIED == ret_code
+    || OB_OBJECT_STORAGE_PERMISSION_DENIED == ret_code
     || OB_ERR_AES_ENCRYPT == ret_code
     || OB_ERR_AES_DECRYPT == ret_code
     || OB_TIMEOUT == ret_code;

@@ -168,9 +168,9 @@ TEST_F(TestStorageCos, test_append)
     // second append
     const char second_write[] = "4567";
     // repeatable_pwrite returned err code
-    ASSERT_EQ(OB_BACKUP_PWRITE_CONTENT_NOT_MATCH,
+    ASSERT_EQ(OB_OBJECT_STORAGE_PWRITE_CONTENT_NOT_MATCH,
         appender.pwrite(second_write, strlen(second_write), strlen(first_write) - 1));
-    ASSERT_EQ(OB_BACKUP_PWRITE_OFFSET_NOT_MATCH,
+    ASSERT_EQ(OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH,
         appender.pwrite(second_write, strlen(second_write) - 1, strlen(first_write) + 1));
     ASSERT_EQ(OB_SUCCESS, appender.pwrite(second_write, strlen(second_write), strlen(first_write)));
     ASSERT_EQ(strlen(first_write) + strlen(second_write), appender.get_length());
@@ -685,7 +685,7 @@ TEST_F(TestStorageCos, test_multipartupload)
     memset(content, 'a', content_size);
 
     // operate before open
-    ASSERT_EQ(OB_COS_ERROR, multi_upload.write(content, content_size));
+    ASSERT_EQ(OB_OBJECT_STORAGE_IO_ERROR, multi_upload.write(content, content_size));
 
     const int64_t ts = ObTimeUtility::current_time();
     ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",

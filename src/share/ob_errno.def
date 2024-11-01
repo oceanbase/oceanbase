@@ -2196,6 +2196,7 @@ DEFINE_ERROR_DEP(OB_TENANT_ID_NOT_MATCH, -8005, -1, "08005", "Tenant id not matc
 ////////////////////////////////////////////////////////////////
 DEFINE_ERROR_DEP(OB_URI_ERROR, -9001, -1, "HY000", "URI error");
 DEFINE_ERROR_DEP(OB_FINAL_MD5_ERROR, -9002, -1, "HY000", "OSS file MD5 error");
+// do not use OB_OSS_ERROR, use OB_OBJECT_STORAGE_IO_ERROR instead
 DEFINE_ERROR_DEP(OB_OSS_ERROR, -9003, -1, "HY000", "OSS error");
 DEFINE_ERROR_DEP(OB_INIT_MD5_ERROR, -9004, -1, "HY000", "Init MD5 fail");
 DEFINE_ERROR_DEP(OB_OUT_OF_ELEMENT, -9005, -1, "HY000", "Out of element");
@@ -2253,6 +2254,7 @@ DEFINE_ERROR(OB_BACKUP_CLEAN_INFO_NOT_EXIST, -9054, -1, "HY000", "backup clean i
 DEFINE_ERROR_EXT(OB_CANNOT_SET_BACKUP_REGION, -9057, -1, "HY000", "can not set backup region", "can not set backup region, because %s");
 DEFINE_ERROR_EXT(OB_CANNOT_SET_BACKUP_ZONE, -9058, -1, "HY000", "can not set backup zone", "can not set backup zone, because %s");
 DEFINE_ERROR(OB_BACKUP_BACKUP_REACH_MAX_BACKUP_TIMES, -9059, -1, "HY000", "backup backup has reached max backup times");
+// do not use OB_COS_ERROR, use OB_OBJECT_STORAGE_IO_ERROR instead
 DEFINE_ERROR_DEP(OB_COS_ERROR, -9060, -1, "HY000", "COS error");
 DEFINE_ERROR_DEP(OB_IO_LIMIT, -9061, -1, "HY000", "IO limit");
 DEFINE_ERROR_DEP(OB_BACKUP_BACKUP_REACH_COPY_LIMIT, -9062, -1, "HY000", "reach backup backup copy limit");
@@ -2278,6 +2280,7 @@ DEFINE_ERROR(OB_ARCHIVE_LOG_RECYCLED, -9079, -1, "HY000", "archive log had been 
 DEFINE_ERROR_EXT_DEP(OB_BACKUP_FORMAT_FILE_NOT_EXIST, -9080, -1, "HY000", "format file does not exist", "format file does not exist%s");
 DEFINE_ERROR_EXT_DEP(OB_BACKUP_FORMAT_FILE_NOT_MATCH, -9081, -1, "HY000", "format file does not match", "format file does not match%s");
 DEFINE_ERROR_DEP(OB_BACKUP_DEVICE_OUT_OF_SPACE, -9082, -1, "HY000", "backup device out of space");
+// do not use OB_BACKUP_PWRITE_OFFSET_NOT_MATCH, use OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH instead
 DEFINE_ERROR_DEP(OB_BACKUP_PWRITE_OFFSET_NOT_MATCH, -9083, -1, "HY000", "the pwrite offset of the object storage is inconsistent");
 DEFINE_ERROR_DEP(OB_BACKUP_PWRITE_CONTENT_NOT_MATCH, -9084, -1, "HY000", "the contents of pwrite are inconsistent");
 
@@ -2304,6 +2307,7 @@ DEFINE_ERROR(OB_FILE_OR_DIRECTORY_EXIST, -9101, -1, "HY000", "file or directory 
 DEFINE_ERROR(OB_FILE_OR_DIRECTORY_PERMISSION_DENIED, -9102, -1, "HY000", "file or directory permission denied");
 DEFINE_ERROR(OB_TOO_MANY_OPEN_FILES, -9103, -1, "HY000", "too many open files");
 DEFINE_ERROR(OB_DIRECT_LOAD_COMMIT_ERROR, -9104, -1, "HY000", "fail to commit direct load");
+// do not use OB_S3_ERROR, use OB_OBJECT_STORAGE_IO_ERROR instead
 DEFINE_ERROR_DEP(OB_S3_ERROR, -9105, -1, "HY000", "S3 error");
 
 // For tenant snapshot
@@ -2333,6 +2337,9 @@ DEFINE_ERROR_DEP(OB_SS_CACHE_REACH_MEM_LIMIT, -9126, -1, "HY000", "ss_micro_cach
 DEFINE_ERROR(OB_TABLET_STATUS_NO_NEED_TO_SPLIT, -9127, -1, "HY000", "no need to split due to current tablet status");
 DEFINE_ERROR(OB_FILE_DELETE_FAILED, -9128, -1, "HY000", "fail to delete file");
 
+DEFINE_ERROR_DEP(OB_OBJECT_STORAGE_IO_ERROR, -9129, -1, "HY000", "object storage io error");
+DEFINE_ERROR_DEP(OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH, -9130, -1, "HY000", "the pwrite offset of the object storage is inconsistent");
+DEFINE_ERROR_DEP(OB_OBJECT_STORAGE_PWRITE_CONTENT_NOT_MATCH, -9131, -1, "HY000", "the contents of pwrite are inconsistent");
 // 余留位置，在该行之前继续添加storage错误码
 
 ////////////////////////////////////////////////////////////////

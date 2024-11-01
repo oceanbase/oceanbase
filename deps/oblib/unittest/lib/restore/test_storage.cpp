@@ -81,7 +81,7 @@ TEST_F(TestStorageOss, test_repeatable_pwrite)
   ASSERT_EQ(4, appender.get_length());
 
   const char *buf2 = "56";
-  ASSERT_EQ(OB_BACKUP_PWRITE_CONTENT_NOT_MATCH, appender.pwrite(buf2, strlen(buf2), 5));
+  ASSERT_EQ(OB_OBJECT_STORAGE_PWRITE_CONTENT_NOT_MATCH, appender.pwrite(buf2, strlen(buf2), 5));
   ASSERT_EQ(4, appender.get_length());
 
   const char *buf3 = "45";
@@ -101,7 +101,7 @@ TEST_F(TestStorageOss, test_repeatable_pwrite)
   ASSERT_EQ(7, appender.get_length());
 
   const char *buf7 = "427";
-  ASSERT_EQ(OB_BACKUP_PWRITE_CONTENT_NOT_MATCH, appender.pwrite(buf7, strlen(buf7), 4));
+  ASSERT_EQ(OB_OBJECT_STORAGE_PWRITE_CONTENT_NOT_MATCH, appender.pwrite(buf7, strlen(buf7), 4));
   ASSERT_EQ(7, appender.get_length());
 
   ASSERT_EQ(OB_SUCCESS, appender.close());

@@ -34,7 +34,7 @@ int ObTableLoadBackupFileUtil::list_directories(const common::ObString &path,
   while (OB_SUCC(ret)) {
     if (OB_FAIL(adapter.list_directories(path, storage_info, op))) {
       LOG_WARN("fail to list directories", K(ret), K(retry_count));
-      if (ret == OB_OSS_ERROR) {
+      if (ret == OB_OBJECT_STORAGE_IO_ERROR) {
         retry_count++;
         if (retry_count <= MAX_RETRY_COUNT) {
           ret = OB_SUCCESS;
@@ -59,7 +59,7 @@ int ObTableLoadBackupFileUtil::get_file_length(const common::ObString &path,
   while (OB_SUCC(ret)) {
     if (OB_FAIL(adapter.get_file_length(path, storage_info, file_length))) {
       LOG_WARN("fail to list directories", K(ret), K(retry_count));
-      if (ret == OB_OSS_ERROR) {
+      if (ret == OB_OBJECT_STORAGE_IO_ERROR) {
         retry_count++;
         if (retry_count <= MAX_RETRY_COUNT) {
           ret = OB_SUCCESS;
@@ -87,7 +87,7 @@ int ObTableLoadBackupFileUtil::read_single_file(const common::ObString &path,
   while (OB_SUCC(ret)) {
     if (OB_FAIL(adapter.read_single_file(path, storage_info, buf, buf_size, read_size, ObStorageIdMod(table::OB_STORAGE_ID_DDL, ObStorageUsedMod::STORAGE_USED_DDL)))) {
       LOG_WARN("fail to list directories", K(ret), K(retry_count));
-      if (ret == OB_OSS_ERROR) {
+      if (ret == OB_OBJECT_STORAGE_IO_ERROR) {
         retry_count++;
         if (retry_count <= MAX_RETRY_COUNT) {
           ret = OB_SUCCESS;

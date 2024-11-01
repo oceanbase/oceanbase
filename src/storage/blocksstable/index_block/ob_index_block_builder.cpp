@@ -1972,9 +1972,7 @@ bool ObSSTableIndexBuilder::is_retriable_error(const int ret_code) const
     case OB_ALLOCATE_MEMORY_FAILED:
     case OB_EAGAIN:
     case OB_IO_ERROR:
-    case OB_OSS_ERROR:
-    case OB_COS_ERROR:
-    case OB_S3_ERROR:
+    case OB_OBJECT_STORAGE_IO_ERROR:
       b_ret = true;
       break;
     default:

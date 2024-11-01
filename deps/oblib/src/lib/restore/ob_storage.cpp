@@ -110,7 +110,7 @@ bool is_object_storage_type(const ObStorageType &type)
 }
 bool is_io_error(const int result)
 {
-  return OB_IO_ERROR == result || OB_OSS_ERROR == result || OB_COS_ERROR == result || OB_S3_ERROR == result;
+  return OB_IO_ERROR == result || OB_OBJECT_STORAGE_IO_ERROR == result;
 }
 
 int get_storage_type_from_name(const char *type_str, ObStorageType &type)
@@ -2545,7 +2545,7 @@ int ObStorageAppender::repeatable_pwrite_(const char *buf, const int64_t size, c
   } else if (reader.get_length() <= offset) {
     // This situation also has concurrency issues.
     // The length read by the reader may be old, so offset not match needs to be returned for retry.
-    ret = OB_BACKUP_PWRITE_OFFSET_NOT_MATCH;
+    ret = OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH;
     STORAGE_LOG(WARN, "offset is invalid", K(offset), "length", reader.get_length(), K(ret));
   } else if (OB_FALSE_IT(actual_write_offset = reader.get_length() - offset)) {
   } else if (OB_FALSE_IT(read_buf_size = std::min(actual_write_offset, size))) {
@@ -2555,11 +2555,11 @@ int ObStorageAppender::repeatable_pwrite_(const char *buf, const int64_t size, c
   } else if (OB_FAIL(reader.pread(read_buffer, read_buf_size, offset, read_size))) {
     STORAGE_LOG(WARN, "failed to pread", K(ret));
   } else if (0 != MEMCMP(buf, read_buffer, read_buf_size)) {
-    ret = OB_BACKUP_PWRITE_CONTENT_NOT_MATCH;
+    ret = OB_OBJECT_STORAGE_PWRITE_CONTENT_NOT_MATCH;
     STORAGE_LOG(WARN, "data inconsistent", K(ret));
   } else if (offset + size > reader.get_length()) {
     if (OB_FAIL(appender_->pwrite(buf + actual_write_offset, size - actual_write_offset, reader.get_length()))) {
-      if (OB_BACKUP_PWRITE_OFFSET_NOT_MATCH == ret) {
+      if (OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH == ret) {
         ret = OB_IO_ERROR;
         STORAGE_LOG(WARN, "There may be concurrency problems that require the caller to retry", K(ret));
       }
@@ -2594,8 +2594,8 @@ int ObStorageAppender::pwrite(const char *buf, const int64_t size, const int64_t
   }
 
   // no need to adjust the function repeatable_pwrite_
-  // because S3 will not return OB_BACKUP_PWRITE_OFFSET_NOT_MATCH
-  if (OB_BACKUP_PWRITE_OFFSET_NOT_MATCH == ret && appender_ != &s3_appender_) {
+  // because S3 will not return OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH
+  if (OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH == ret && appender_ != &s3_appender_) {
     if (OB_FAIL(repeatable_pwrite_(buf, size, offset))) {
       STORAGE_LOG(WARN, "failed to repeatable_pwrite", K(ret));
     } else {

@@ -95,9 +95,9 @@ public:
   //   OB_SUCCESS, read successfully.
   //   OB_INVALID_ARGUMENT, invalid argument.
   //   OB_ALLOCATE_MEMORY_FAILED, allocate memory failed.
-  //   OB_BACKUP_PERMISSION_DENIED, permission denied.
+  //   OB_OBJECT_STORAGE_PERMISSION_DENIED, permission denied.
   //   OB_OBJECT_NOT_EXIST, uri not exist.
-  //   OB_OSS_ERROR, oss error.
+  //   OB_OBJECT_STORAGE_IO_ERROR, oss error.
   //   OB_FILE_LENGTH_INVALID, read offset is greater than file size.
   //   OB_NOT_INIT
   //   OB_NOT_RUNNING
@@ -134,9 +134,9 @@ public:
   //   OB_SUCCESS, read successfully.
   //   OB_INVALID_ARGUMENT, invalid argument.
   //   OB_ALLOCATE_MEMORY_FAILED, allocate memory failed.
-  //   OB_BACKUP_PERMISSION_DENIED, permission denied.
+  //   OB_OBJECT_STORAGE_PERMISSION_DENIED, permission denied.
   //   OB_OBJECT_NOT_EXIST, uri not exist.
-  //   OB_OSS_ERROR, oss error.
+  //   OB_OBJECT_STORAGE_IO_ERROR, oss error.
   //   OB_NOT_INIT
   //   OB_NOT_RUNNING
 	int upload(const uint64_t tenant_id,
@@ -159,7 +159,7 @@ public:
   //   OB_INVALID_ARGUMENT, invalid argument.
   //   OB_ALLOCATE_MEMORY_FAILED, allocate memory failed.
   //   OB_FILE_LENGTH_INVALID, read offset is greater than file size.
-  //   OB_OSS_ERROR, oss error.
+  //   OB_OBJECT_STORAGE_IO_ERROR, oss error.
   //   OB_FILE_OR_DIRECTORY_NOT_EXIST, file not exist
   //   OB_NOT_INIT
   //   OB_NOT_RUNNING

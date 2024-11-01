@@ -346,10 +346,10 @@ public:
     try {
       ret = std::mem_fn(f)(obj, std::forward<Args>(args)...);
     } catch (const std::exception &e) {
-      ret = OB_S3_ERROR;
+      ret = OB_OBJECT_STORAGE_IO_ERROR;
       OB_LOG(WARN, "caught exception when doing s3 operation", K(ret), K(e.what()), KP(this));
     } catch (...) {
-      ret = OB_S3_ERROR;
+      ret = OB_OBJECT_STORAGE_IO_ERROR;
       OB_LOG(WARN, "caught unknown exception when doing s3 operation", K(ret), KP(this));
     }
     return ret;

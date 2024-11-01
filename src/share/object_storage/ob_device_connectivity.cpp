@@ -247,7 +247,7 @@ int ObDeviceCheckFile::check_appender_permission_(const ObBackupDest &storage_de
 
 bool ObDeviceCheckFile::is_permission_error_(const int result)
 {
-  return ((OB_IO_ERROR == result) || (OB_OSS_ERROR == result) || (OB_COS_ERROR == result));
+  return ((OB_IO_ERROR == result) || (OB_OBJECT_STORAGE_IO_ERROR == result));
 }
 
 int ObDeviceCheckFile::storage_time_to_strftime_(

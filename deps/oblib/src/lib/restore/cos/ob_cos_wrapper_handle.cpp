@@ -115,7 +115,7 @@ int create_cos_handle(
                                                           check_md5, &handle))) {
     OB_LOG(WARN, "failed to create tmp cos handle", K(ret));
   } else if (OB_ISNULL(handle)) {
-    ret = OB_COS_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "create tmp handle succeed, but returned handle is null", K(ret));
   }
 
@@ -152,7 +152,7 @@ int ObCosWrapperHandle::create_tmp_cos_handle(
                                                                  check_md5, &handle))) {
     OB_LOG(WARN, "failed to create tmp cos handle", K(ret));
   } else if (OB_ISNULL(handle)) {
-    ret = OB_COS_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "create tmp handle succeed, but returned handle is null", K(ret));
   }
 

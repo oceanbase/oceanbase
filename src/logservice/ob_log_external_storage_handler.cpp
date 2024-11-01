@@ -395,15 +395,15 @@ int ObLogExternalStorageHandler::convert_ret_code_(const int ret_code)
 {
   int ret = ret_code;
   switch (ret_code) {
-    case OB_BACKUP_PERMISSION_DENIED:
-    case OB_BACKUP_PWRITE_OFFSET_NOT_MATCH:
-      ret = OB_OSS_ERROR;
+    case OB_OBJECT_STORAGE_PERMISSION_DENIED:
+    case OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH:
+      ret = OB_OBJECT_STORAGE_IO_ERROR;
       break;
     case OB_OBJECT_NOT_EXIST:
       ret = OB_NO_SUCH_FILE_OR_DIRECTORY;
       break;
     default:
-      ret = OB_OSS_ERROR;
+      ret = OB_OBJECT_STORAGE_IO_ERROR;
   }
   return ret;
 }
