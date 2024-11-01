@@ -958,6 +958,7 @@ int ObVectorRefreshIndexExecutor::do_refresh_with_retry()
   refresh_ctx.index_id_tb_id_ = index_id_tb_id_;
   refresh_ctx.refresh_method_ = refresh_method_;
   refresh_ctx.refresh_threshold_ = refresh_threshold_;
+  int retry_cnt = 0;
 
   CK(OB_NOT_NULL(ctx_));
   while (OB_SUCC(ret) && OB_SUCC(ctx_->check_status())) {
@@ -979,9 +980,11 @@ int ObVectorRefreshIndexExecutor::do_refresh_with_retry()
       }
     }
     if (OB_FAIL(ret)) {
-      if (ObVectorRefreshIndexExecutor::is_refresh_retry_ret_code(ret)) {
+      if (retry_cnt < MAX_REFRESH_RETRY_THRESHOLD &&
+          ObVectorRefreshIndexExecutor::is_refresh_retry_ret_code(ret)) {
         ret = OB_SUCCESS;
         refresh_ctx.reuse();
+        ++retry_cnt;
         ob_usleep(1LL * 1000 * 1000);
       }
     } else {
@@ -1045,6 +1048,7 @@ int ObVectorRefreshIndexExecutor::do_rebuild_with_retry()
   refresh_ctx.idx_parameters_ = idx_parameters_;
   refresh_ctx.idx_parallel_creation_ = idx_parallel_creation_;
   refresh_ctx.delta_rate_threshold_ = delta_rate_threshold_;
+  int retry_cnt = 0;
 
   CK(OB_NOT_NULL(ctx_));
   while (OB_SUCC(ret) && OB_SUCC(ctx_->check_status())) {
@@ -1066,9 +1070,11 @@ int ObVectorRefreshIndexExecutor::do_rebuild_with_retry()
       }
     }
     if (OB_FAIL(ret)) {
-      if (ObVectorRefreshIndexExecutor::is_refresh_retry_ret_code(ret)) {
+      if (retry_cnt < MAX_REFRESH_RETRY_THRESHOLD &&
+          ObVectorRefreshIndexExecutor::is_refresh_retry_ret_code(ret)) {
         ret = OB_SUCCESS;
         refresh_ctx.reuse();
+        ++retry_cnt;
         ob_usleep(1LL * 1000 * 1000);
       }
     } else {

@@ -114,6 +114,8 @@ public:
 
 class ObVectorRefreshIndexExecutor {
 public:
+  static const int MAX_REFRESH_RETRY_THRESHOLD = 3;
+
   enum class VectorIndexAuxType : int8_t {
     DELTA_BUF_INDEX = 0,
     INDEX_ID_INDEX = 1,

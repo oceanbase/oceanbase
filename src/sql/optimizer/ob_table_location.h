@@ -725,7 +725,8 @@ public:
                                        ObDASTableLoc *&table_loc);
   bool is_duplicate_table() const { return loc_meta_.is_dup_table_; }
   bool is_dynamic_replica_select_table() const { return (is_duplicate_table() || get_is_broadcast_table()) &&
-                                                         !is_partitioned(); }
+                                                         !is_partitioned() &&
+                                                         loc_meta_.is_weak_read_; }
   void set_broadcast_table(const bool is_broadcast_table) {
     is_broadcast_table_ = is_broadcast_table;
   }
