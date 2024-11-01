@@ -2587,7 +2587,6 @@ int ObTransformJoinElimination::is_table_column_used_in_subquery(const ObSelectS
   return ret;
 }
 
-// source_table and target_table come from the same stmt
 int ObTransformJoinElimination::check_semi_join_condition(ObDMLStmt *stmt,
                                                           ObIArray<ObRawExpr*> &semi_conds,
                                                           const TableItem *source_table,
@@ -2603,7 +2602,7 @@ int ObTransformJoinElimination::check_semi_join_condition(ObDMLStmt *stmt,
   is_simple_join_condition = true;
   target_tables_have_filter = false;
   is_simple_filter = true;
-  if (OB_ISNULL(stmt)) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(source_table) || OB_ISNULL(target_table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("param has null", K(ret));
   } else {
@@ -2616,7 +2615,7 @@ int ObTransformJoinElimination::check_semi_join_condition(ObDMLStmt *stmt,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is null", K(ret));
       } else if (!expr->get_relation_ids().has_member(right_idx)) {
-        /* do nohing */
+        /* do nothing */
       } else if (!expr->get_relation_ids().has_member(left_idx)) {
         target_tables_have_filter = true;
         if (T_OP_OR == expr->get_expr_type()) { // complex right table filter
@@ -2651,6 +2650,42 @@ int ObTransformJoinElimination::check_semi_join_condition(ObDMLStmt *stmt,
         } else if (OB_FAIL(target_exprs.push_back(col2))) {
           LOG_WARN("push back column expr failed", K(ret));
         } else {/*do nothing*/}
+      }
+    }
+
+    /* source table is required in not null side, bad case:
+        select * from (t2 left join t1 on t2.c1 = t1.c1) semi join t1 t;
+        --> following rewriting is wrong when t1 is a empty table.
+        select * from t2 left join t1 on t2.c1 = t1.c1;
+
+        The following logic can be processed more finely：
+        if source table is on null side, but where_condition or on_condition has null reject property，can also do this optimization.
+
+        but this is a very corner case, so may modify oneday when there is a need
+    */
+    if (OB_SUCC(ret) && is_simple_join_condition && source_exprs.empty()) {
+      bool is_on_null_side = true;
+      bool has_null_reject = false;
+      ObRelIds left_ids;
+      if (OB_FAIL(ObOptimizerUtil::is_table_on_null_side(stmt,
+                                                         source_table->table_id_,
+                                                         is_on_null_side))) {
+        LOG_WARN("failed to check table is on null side", K(ret));
+      } else if (!is_on_null_side) {
+        /* do nothing */
+      } else if (OB_FAIL(left_ids.add_member(left_idx))) {
+        LOG_WARN("failed to add member");
+      } else if (OB_FAIL(ObTransformUtils::is_null_reject_conditions(semi_conds,
+                                                                      left_ids,
+                                                                      has_null_reject))) {
+        LOG_WARN("failed to get is null reject conditions", K(ret));
+      } else if (!has_null_reject &&
+                  OB_FAIL(ObTransformUtils::is_null_reject_conditions(stmt->get_condition_exprs(),
+                                                                      left_ids,
+                                                                      has_null_reject))) {
+        LOG_WARN("failed to get is null reject conditions", K(ret));
+      } else if (!has_null_reject) {
+        is_simple_join_condition = false;
       }
     }
   }
@@ -2688,7 +2723,7 @@ int ObTransformJoinElimination::check_semi_join_condition(ObDMLStmt *stmt,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is null", K(ret));
       } else if (!select_relids.at(i).has_member(right_idx)) {
-        /* do nohing */
+        /* do nothing */
       } else if (!expr->get_relation_ids().has_member(left_idx)) {
         target_tables_have_filter = true;
         if (T_OP_OR == expr->get_expr_type()) { // complex right table filter
@@ -2735,7 +2770,31 @@ int ObTransformJoinElimination::check_semi_join_condition(ObDMLStmt *stmt,
         }
       }
     }
-    
+    if (OB_SUCC(ret) && is_simple_join_condition && source_exprs.empty()) {
+      bool is_on_null_side = true;
+      bool has_null_reject = false;
+      ObRelIds left_ids;
+      if (OB_FAIL(ObOptimizerUtil::is_table_on_null_side(stmt,
+                                                         source_table->table_id_,
+                                                         is_on_null_side))) {
+        LOG_WARN("failed to check table is on null side", K(ret));
+      } else if (!is_on_null_side) {
+        /* do nothing */
+      } else if (OB_FAIL(left_ids.add_member(left_idx))) {
+        LOG_WARN("failed to add member");
+      } else if (OB_FAIL(ObTransformUtils::is_null_reject_conditions(semi_conds,
+                                                                     left_ids,
+                                                                     has_null_reject))) {
+        LOG_WARN("failed to get is null reject conditions", K(ret));
+      } else if (!has_null_reject &&
+                 OB_FAIL(ObTransformUtils::is_null_reject_conditions(stmt->get_condition_exprs(),
+                                                                     left_ids,
+                                                                     has_null_reject))) {
+        LOG_WARN("failed to get is null reject conditions", K(ret));
+      } else if (!has_null_reject) {
+        is_simple_join_condition = false;
+      }
+    }
     /* check right table filters in target stmt */
     if (OB_SUCC(ret) && is_simple_join_condition) {
       ObIArray<ObRawExpr*> &conds = target_stmt->get_condition_exprs();
