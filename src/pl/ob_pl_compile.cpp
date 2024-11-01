@@ -102,7 +102,7 @@ int ObPLCompiler::init_anonymous_ast(
   for (int64_t i = 0; OB_SUCC(ret) && OB_NOT_NULL(params) && i < params->count(); ++i) {
     ObObjParam& param = const_cast<ObObjParam&>(params->at(i));
     if (param.is_pl_extend()) {
-      if (!is_mocked_anonymous_array_id(param.get_udt_id(), param.get_meta().get_extend_type())) {
+      if (!is_mocked_anonymous_array_id(param.get_udt_id())) {
         const ObUserDefinedType *user_type = NULL;
         OZ (ObResolverUtils::get_user_type(&allocator,
                                            &session_info,
@@ -137,7 +137,7 @@ int ObPLCompiler::init_anonymous_ast(
         }
         OX (nested_type->set_element_type(element_type));
         OX (nested_type->set_user_type_id(
-          func_ast.get_user_type_table().generate_user_type_id(OB_INVALID_ID)));
+          func_ast.get_user_type_table().generate_user_type_id(OB_PL_MOCK_ANONYMOUS_ID)));
         OZ (func_ast.get_user_type_table().add_type(nested_type));
         OZ (func_ast.get_user_type_table().add_external_type(nested_type));
         OX (param.set_udt_id(nested_type->get_user_type_id()));

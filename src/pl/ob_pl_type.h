@@ -31,6 +31,7 @@
 
 #define ObCursorType ObIntType
 #define ObPtrType ObIntType
+#define OB_PL_MOCK_ANONYMOUS_ID 0xFFFFFFFFFFFFFFFE
 
 #define IS_TYPE_FROM_TYPE_OR_ROWTYPE(type_from)  \
       (PL_TYPE_ATTR_ROWTYPE == type_from) ||     \
@@ -233,15 +234,22 @@ struct ObPLExternTypeInfo
   TO_STRING_KV(K_(flag), K_(type_owner), K_(type_name), K_(type_subname), K_(obj_version));
 };
 
-OB_INLINE bool is_mocked_anonymous_array_id(uint64_t udt_id, uint8_t extend_type)
+OB_INLINE bool is_mocked_anonymous_array_id(uint64_t udt_id)
 {
-  uint64_t mask = 0xFFFFFFFFFFF00000;
-  // anonymous_array will use OB_INVALID_ID and type_start_gen_id_ to generate a mocked
-  // id like this: common::combine_pl_type_id(OB_INVALID_ID, type_start_gen_id_++)
-  // For the mocked id: first 40 bit is shift left by OB_INVALID_ID, then 4 bit is pl mask,
-  // these bits are always 1. So the first 44 bits of mocked id format in hex: 0xFFFFFFFFFFF
-  // then last 20 bits are mocked from type_start_gen_id_, so mocked_id & mask will remain mask
-  return (PL_NESTED_TABLE_TYPE == extend_type && (udt_id & mask) == mask) || OB_INVALID_ID == udt_id;
+  uint64_t mask = 0xFFFFFFFFFF000000;
+  uint64_t res =  0xFFFFFFFFFE000000;
+  // anonymous_array will use OB_PL_MOCK_ANONYMOUS_ID to generate a mocked id ,
+  // OB_PL_MOCK_ANONYMOUS_ID = (uint64)OB_INVALID_ID - 1.
+  // Why do not use OB_INVALID_ID? Anonymous block has declare local nested type (this package_id is OB_INVALID_ID)
+  // use OB_INVALID_ID - 1 to identify this scenery.
+  // So the first 40 bits of mocked id in hex is: 0xFFFFFFFFFE
+  // We can use (mocked_id & mask) to get the first 40 bits and check if it is mocked.
+  return (udt_id & mask) == res || OB_INVALID_ID == udt_id;
+}
+
+OB_INLINE bool is_invalid_or_mocked_package_id(uint64_t udt_id)
+{
+  return OB_INVALID_ID == extract_package_id(udt_id) || OB_PL_MOCK_ANONYMOUS_ID == extract_package_id(udt_id);
 }
 
 class ObPLDataType

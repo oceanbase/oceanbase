@@ -6160,7 +6160,7 @@ int ObPLResolver::resolve_using(const ObStmtNodeTree *using_node,
       } else {
         bool legal_extend = false;
         if (ObExtendType == expr->get_result_type().get_type()) {
-          if (!is_mocked_anonymous_array_id(expr->get_result_type().get_udt_id(), expr->get_result_type().get_extend_type())) {
+          if (!is_mocked_anonymous_array_id(expr->get_result_type().get_udt_id())) {
             const ObUserDefinedType *user_type = NULL;
             CK (OB_NOT_NULL(current_block_));
             OZ (current_block_->get_namespace().get_pl_data_type_by_id(
@@ -9949,7 +9949,7 @@ int ObPLResolver::formalize_expr(ObRawExpr &expr,
   int ret = OB_SUCCESS;
   if (OB_SUCC(ret)
       && expr.get_result_type().is_ext()
-      && !is_mocked_anonymous_array_id(expr.get_udt_id(), expr.get_result_type().get_extend_type())) {
+      && !is_mocked_anonymous_array_id(expr.get_udt_id())) {
     int64_t size = 0;
     const ObUserDefinedType *user_type = NULL;
     OZ (ns.get_user_type(expr.get_udt_id(), user_type, NULL));
@@ -10121,7 +10121,7 @@ int ObPLResolver::resolve_expr(const ParseNode *node,
                && expected_type->get_user_type_id() != expr->get_result_type().get_udt_id()
                && expr->get_expr_type() != T_FUN_SYS_PDB_GET_RUNTIME_INFO) {
       bool is_compatible = false;
-      if (is_mocked_anonymous_array_id(expr->get_result_type().get_udt_id(), expr->get_result_type().get_extend_type())) {
+      if (is_mocked_anonymous_array_id(expr->get_result_type().get_udt_id())) {
         OZ (check_anonymous_array_compatible(expr->get_result_type().get_udt_id(), expected_type->get_user_type_id(), is_compatible));
       } else {
         OZ (check_composite_compatible(current_block_->get_namespace(),

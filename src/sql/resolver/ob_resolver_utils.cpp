@@ -969,7 +969,7 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
       OX (match_info = (ObRoutineMatchInfo::MatchInfo(false, src_type, dst_type)));
     } else if (resolve_ctx.is_prepare_protocol_ &&
                ObExtendType == src_type &&
-               is_mocked_anonymous_array_id(src_type_id, expr->get_result_type().get_extend_type()) &&
+               is_mocked_anonymous_array_id(src_type_id) &&
                T_QUESTIONMARK == expr->get_expr_type()) { // 匿名数组
       const ObConstRawExpr *const_expr = static_cast<const ObConstRawExpr*>(expr);
       int64_t idx = const_expr->get_value().get_unknown();
