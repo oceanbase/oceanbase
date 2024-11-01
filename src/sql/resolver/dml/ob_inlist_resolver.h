@@ -46,7 +46,6 @@ public:
                                          const ObStmtScope &scope,
                                          const bool is_root_condition,
                                          const bool is_need_print,
-                                         const bool is_prepare_protocol,
                                          const bool is_in_pl,
                                          const ObSQLSessionInfo *session_info,
                                          const ParamStore *param_store,
