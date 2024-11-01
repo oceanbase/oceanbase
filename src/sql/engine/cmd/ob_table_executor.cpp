@@ -875,7 +875,12 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
                                                             alter_table_schema.get_origin_database_name(),
                                                             alter_table_schema.get_origin_table_name(),
                                                             alter_table_arg.index_arg_list_))) {
-      LOG_WARN("fail to get pre split query range", K(ret), K(alter_table_arg));
+      LOG_WARN("fail to get global index pre split schema if need", K(ret), K(alter_table_arg));
+      //overwrite ret code
+      ret = OB_SUCCESS;
+    }
+
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(common_rpc_proxy->alter_table(alter_table_arg, res))) {
       LOG_WARN("rpc proxy alter table failed", KR(ret), "dst", common_rpc_proxy->get_server(), K(alter_table_arg));
     } else {

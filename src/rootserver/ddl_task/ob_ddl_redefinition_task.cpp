@@ -2489,6 +2489,11 @@ int ObDDLRedefinitionTask::generate_rebuild_index_arg_list(
           LOG_WARN("fail to assign schema", K(ret));
         } else if (OB_FAIL(pre_split.do_table_pre_split_if_need(database_name, ObDDLType::DDL_CREATE_INDEX, false, *table_schema, *index_schema, new_index_schema))) {
           LOG_WARN("fail to pre split index partition", K(ret), K(index_id));
+          //overwrite ret code
+          ret = OB_SUCCESS;
+          if (OB_FAIL(alter_table_arg.rebuild_index_arg_list_.push_back(*index_schema))) {
+            LOG_WARN("fail to push back index schema", K(ret));
+          }
         } else if (OB_FAIL(alter_table_arg.rebuild_index_arg_list_.push_back(new_index_schema))) {
           LOG_WARN("fail to push back index schema", K(ret));
         }

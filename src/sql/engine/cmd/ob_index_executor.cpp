@@ -90,7 +90,12 @@ int ObCreateIndexExecutor::execute(ObExecContext &ctx, ObCreateIndexStmt &stmt)
     LOG_WARN("fail to push back create index arg", K(ret));
   } else if (OB_FAIL(pre_split.get_global_index_pre_split_schema_if_need(
       create_index_arg.tenant_id_, create_index_arg.session_id_, create_index_arg.database_name_, create_index_arg.table_name_, index_arg_list))) {
-    LOG_WARN("fail to get pre split query range", K(ret));
+    LOG_WARN("fail to get global index pre split schema if need", K(ret));
+    //overwrite ret code
+    ret = OB_SUCCESS;
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(common_rpc_proxy->create_index(create_index_arg, res))) {    //send the signal of creating index to rs
     LOG_WARN("rpc proxy create index failed", K(create_index_arg),
              "dst", common_rpc_proxy->get_server(), K(ret));

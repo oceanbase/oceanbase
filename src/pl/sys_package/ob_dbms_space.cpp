@@ -36,11 +36,11 @@
                             "where tablet_id in (%.*s) and (svr_ip, svr_port) in (%.*s) and tenant_id = %lu "\
                             "group by __all_virtual_tablet_sstable_macro_info.tablet_id with rollup;"
 
-#define GET_TABLET_SIZE_SQL "select case when tablet_id is null then 0 else tablet_id end as tablet_id,"\
-                                  " sum(occupy_size) as tablet_size "\
-                            "from __all_virtual_tablet_sstable_macro_info "\
+
+#define GET_TABLET_SIZE_SQL "select case when tablet_id is null then 0 else tablet_id end as tablet_id, sum(occupy_size) as tablet_size "\
+                            "from __all_virtual_tablet_pointer_status "\
                             "where tablet_id in (%.*s) and (svr_ip, svr_port) in (%.*s) and tenant_id = %lu "\
-                            "group by __all_virtual_tablet_sstable_macro_info.tablet_id;"
+                            "group by __all_virtual_tablet_pointer_status.tablet_id;"
 
 namespace oceanbase
 {
