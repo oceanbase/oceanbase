@@ -36,7 +36,7 @@ namespace pl
 struct ObPLExecCtx;
 class ObPLResolveCtx;
 class ObPLPackage;
-class ObPLPkgAllocator;
+class ObPLAllocator1;
 
 enum PackageVarType
 {
@@ -113,7 +113,8 @@ public:
   ObPLPackageState(uint64_t package_id,
                    const ObPackageStateVersion &state_version,
                    bool serially_reusable)
-      : inner_allocator_(this),
+      : parent_alloc_(SET_IGNORE_MEM_VERSION("pkgsymbol"), OB_MALLOC_NORMAL_BLOCK_SIZE),
+        inner_allocator_(PL_MOD_IDX::OB_PL_PACKAGE_SYMBOL, &parent_alloc_),
         cursor_allocator_("PlPkgCursor", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
         package_id_(package_id),
         state_version_(state_version),
@@ -130,11 +131,13 @@ public:
     inner_allocator_.reset();
     cursor_allocator_.reset();
   }
+  int init();
   void reset(sql::ObSQLSessionInfo *session_info);
   common::ObIAllocator &get_pkg_allocator() { return inner_allocator_; }
   common::ObIAllocator &get_pkg_cursor_allocator() { return cursor_allocator_; }
   int add_package_var_val(const common::ObObj &value, ObPLType type);
-  int set_package_var_val(int64_t var_idx, const common::ObObj &value, bool deep_copy_complex = true);
+  int set_package_var_val(int64_t var_idx, const common::ObObj &value,
+                          const ObPLResolveCtx &resolve_ctx, bool deep_copy_complex = true);
   int get_package_var_val(int64_t var_idx, common::ObObj &value);
   int update_changed_vars(int64_t var_idx);
   inline bool is_package_info_changed()
@@ -172,14 +175,12 @@ public:
 
   ObIArray<ObObj> &get_vars() { return vars_; }
 
-  int shrink() { return inner_allocator_.shrink(); }
-
   TO_STRING_KV(K(package_id_), K(serially_reusable_), K(state_version_));
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPLPackageState);
-
-  ObPLPkgAllocator inner_allocator_;
+  ObArenaAllocator parent_alloc_;
+  ObPLAllocator1 inner_allocator_;
   ObArenaAllocator cursor_allocator_;
   uint64_t package_id_;
   ObPackageStateVersion state_version_;

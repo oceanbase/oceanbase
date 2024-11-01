@@ -411,8 +411,15 @@ int ObExprPLAssocIndex::eval_assoc_idx(const ObExpr &expr,
       expr_datum.set_int(pl::ObPLCollection::IndexRangeType::LESS_THAN_FIRST);
     }
   } else {
-    pl::ObPLAssocArray *assoc_array = reinterpret_cast<pl::ObPLAssocArray *>(
-        array->extend_obj_->get_ext());
+    pl::ObPLAssocArray *assoc_array = nullptr;
+    if (info.for_write_) {
+      pl::ObPlCompiteWrite *composite_write = nullptr;
+      OX (composite_write = reinterpret_cast<pl::ObPlCompiteWrite *>(array->extend_obj_->get_ext()));
+      CK (OB_NOT_NULL(composite_write));
+      OX (assoc_array = reinterpret_cast<pl::ObPLAssocArray *>(composite_write->value_addr_));
+    } else {
+      assoc_array = reinterpret_cast<pl::ObPLAssocArray *>(array->extend_obj_->get_ext());
+    }
     CK(NULL != assoc_array);
     int64_t assoc_idx = 0;
     OZ(do_eval_assoc_index(assoc_idx, ctx.exec_ctx_, info, *assoc_array, key_obj));

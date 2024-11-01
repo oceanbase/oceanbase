@@ -2321,6 +2321,8 @@ int ObSQLSessionInfo::reset_all_serially_package_state()
     FOREACH(it, package_state_map_) {
       if (it->second->get_serially_reusable()) {
         it->second->reset(this);
+        it->second->~ObPLPackageState();
+        get_package_allocator().free(it->second);
         OZ (serially_packages.push_back(it->first));
       }
     }
@@ -2387,20 +2389,6 @@ int ObSQLSessionInfo::add_changed_package_info(ObExecContext &exec_ctx)
             }
           }
         }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObSQLSessionInfo::shrink_package_info()
-{
-  int ret = OB_SUCCESS;
-  if (0 != package_state_map_.size()) {
-    FOREACH(it, package_state_map_) {
-      ObPLPackageState *package_state = it->second;
-      if (OB_FAIL(package_state->shrink())) {
-        LOG_WARN("package shrink failed", K(ret));
       }
     }
   }

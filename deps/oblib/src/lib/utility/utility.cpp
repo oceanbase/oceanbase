@@ -600,7 +600,7 @@ int deep_copy_obj(ObIAllocator &allocator, const ObObj &src, ObObj &dst)
     if (size > 0) {
       if (NULL == (buf = static_cast<char *>(allocator.alloc(size)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("Fail to allocate memory, ", K(size), K(ret));
+        LOG_WARN("Fail to allocate memory, ", K(size), K(ret));
       } else if (OB_FAIL(dst.deep_copy(src, buf, size, pos))){
         LOG_WARN("Fail to deep copy obj, ", K(ret));
       } else { }//do nothing

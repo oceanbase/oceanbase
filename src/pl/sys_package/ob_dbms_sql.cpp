@@ -209,7 +209,7 @@ int ObDbmsInfo::set_bind_param(const ObString &param_name, const ObObjParam&para
               && param_value.get_ext() != 0
               && param_value.get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
         if (bind_params_.at(idx).param_value_.get_ext() != 0) {
-          OZ (ObUserDefinedType::destruct_obj(bind_params_.at(idx).param_value_));
+          OZ (ObUserDefinedType::destruct_obj(bind_params_.at(idx).param_value_, nullptr, true));
         }
         OZ (ObUserDefinedType::deep_copy_obj(alloc, param_value, bind_params_.at(idx).param_value_));
       } else {
@@ -457,13 +457,19 @@ int ObDbmsInfo::column_value(sql::ObSQLSessionInfo *session,
           int64_t index = OB_INVALID_INDEX;
           ObNewRow &row = fetch_rows_.at(i);
           ObObjParam src = row.get_cell(col_idx);
+          ObObj tmp;
           OX (key.set_int32(desc->lower_bnd_ + desc->cur_idx_));
           OZ (ObExprPLAssocIndex::do_eval_assoc_index(index, session, info, *table, key, *allocator));
           CK(table->get_count() >= index);
-          OZ (ObSPIService::spi_convert(session, table->get_allocator(), src, element_type, obj));
-          OZ (deep_copy_obj(*table->get_allocator(),
-                            obj,
-                            reinterpret_cast<ObObj*>(table->get_data())[index-1]));
+          OZ (ObSPIService::spi_convert(session, allocator, src, element_type, obj));
+          OZ (deep_copy_obj(*table->get_allocator(), obj, tmp));
+          if (OB_SUCC(ret)) {
+            void *ptr = (table->get_data())[index-1].get_deep_copy_obj_ptr();
+            if (nullptr != ptr) {
+              table->get_allocator()->free(ptr);
+            }
+            (table->get_data())[index-1] = tmp;
+          }
           LOG_DEBUG("column add key ", K(col_idx), K(index), K(desc->cur_idx_), K(desc->lower_bnd_), K(key.get_int32()), K(table->get_key(index-1)->get_int32()));
           OX (++desc->cur_idx_);
         }
@@ -1390,11 +1396,12 @@ int ObPLDbmsSql::do_describe(ObExecContext &exec_ctx, ParamStore &params, Descri
     ObPLAssocArray *table = reinterpret_cast<ObPLAssocArray*>(params.at(2).get_ext());
     CK (OB_NOT_NULL(exec_ctx.get_my_session()));
     CK (OB_NOT_NULL(table));
-    OZ (ObSPIService::spi_extend_assoc_array(exec_ctx.get_my_session()->get_effective_tenant_id(),
+    OZ (ObSPIService::spi_set_collection(exec_ctx.get_my_session()->get_effective_tenant_id(),
                                              NULL,
                                              exec_ctx.get_allocator(),
                                              *table,
-                                             cursor->get_field_columns().count()));
+                                             cursor->get_field_columns().count(),
+                                             true));
 
   /*
    * TYPE desc_rec IS RECORD ( col_type BINARY_INTEGER := 0,

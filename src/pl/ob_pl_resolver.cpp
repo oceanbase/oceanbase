@@ -4423,13 +4423,19 @@ int ObPLResolver::resolve_case(const ObStmtNodeTree *parse_tree, ObPLCaseStmt *s
                                     case_expr,
                                     combine_line_and_col(expr_node->stmt_loc_)))) {
       LOG_WARN("failed to resolve expr", K(expr_node), K(ret));
-    } else if (OB_FAIL(current_block_->get_namespace().add_symbol(
-                   ObString(""), // anonymous variable for holding case expr value
-                   case_expr->get_data_type()))) {
-      LOG_WARN("failed to add CASE expr var to symbol table");
     } else {
-      stmt->set_case_expr(func.get_expr_count() - 1);
-      stmt->set_case_var(func.get_symbol_table().get_count() - 1);
+      ObPLDataType pl_data_type(case_expr->get_data_type());
+      if (case_expr->get_result_type().is_ext()) {
+        const pl::ObUserDefinedType *user_type = NULL;
+        OZ (current_block_->get_namespace().get_pl_data_type_by_id(case_expr->get_result_type().get_udt_id(), user_type));
+        CK (OB_NOT_NULL(user_type));
+        OX (pl_data_type = *user_type);
+      }
+      OZ (current_block_->get_namespace().add_symbol(
+                                          ObString(""), // anonymous variable for holding case expr value
+                                          pl_data_type));
+      OX (stmt->set_case_expr(func.get_expr_count() - 1));
+      OX (stmt->set_case_var(func.get_symbol_table().get_count() - 1));
       OZ(expr_factory_.create_raw_expr(T_QUESTIONMARK, case_var));
       CK(OB_NOT_NULL(case_var));
       if (OB_SUCC(ret)) {
@@ -4887,7 +4893,8 @@ int ObPLResolver::resolve_cursor_for_loop(
                                                   expr_factory_,
                                                   &resolve_ctx_.session_info_,
                                                   &resolve_ctx_.schema_guard_,
-                                                  expr))) {
+                                                  expr,
+                                                  true))) {
         LOG_WARN("failed to resolve_local_var", K(ret));
       } else if (OB_FAIL(func.add_expr(expr))) {
         LOG_WARN("failed ot add expr", K(ret));
@@ -17991,13 +17998,13 @@ int ObPLResolveCtx::get_user_type(uint64_t type_id, const ObUserDefinedType *&us
 
   SET_LOG_CHECK_MODE();
 
-  UNUSED(allocator);
+  ObIAllocator *alloc = allocator != nullptr ? allocator : &allocator_;
   // 首先尝试下是不是UDT Type
   const ObUDTTypeInfo *udt_info = NULL;
   const uint64_t tenant_id = get_tenant_id_by_object_id(type_id);
   OZ (schema_guard_.get_udt_info(tenant_id, type_id, udt_info), type_id);
   if (OB_NOT_NULL(udt_info)) {
-    OZ (udt_info->transform_to_pl_type(allocator_, user_type), type_id);
+    OZ (udt_info->transform_to_pl_type(*alloc, user_type), type_id);
   } else { // 其次尝试下是不是Table Type
     ret = OB_SUCCESS;
     const ObTableSchema* table_schema = NULL;

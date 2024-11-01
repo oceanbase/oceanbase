@@ -1097,6 +1097,7 @@ int ObSqlUdtUtils::cast_sql_udt_varray_to_pl_varray(sql::ObExecContext *exec_ctx
       elem_desc.set_field_count(1); // varray with basic type elements, field count is 1.
       coll->set_element_desc(elem_desc);
       coll->set_not_null(false); // should from udt meta
+      OZ (coll->init_allocator(alloc, true));
     }
 
     ObObj *varray_objs = NULL;
@@ -1175,6 +1176,7 @@ int ObSqlUdtUtils::cast_sql_udt_attributes_to_pl_record(sql::ObExecContext *exec
       LOG_WARN("failed to alloc memory", K(ret));
     } else {
       new(record)pl::ObPLRecord(udt_meta.udt_id_, top_level_attr_count);
+      OZ (record->init_data(allocator, true));
     }
     ObObj obj;
     for (int64_t i = 0; OB_SUCC(ret) && i < top_level_attr_count; i++) {
@@ -1245,12 +1247,24 @@ int ObSqlUdtUtils::cast_sql_udt_attributes_to_pl_record(sql::ObExecContext *exec
           obj.meta_.set_ext();
           obj.meta_.set_extend_type(type == ObUserDefinedSQLType ? pl::PL_RECORD_TYPE : pl::PL_VARRAY_TYPE);
         }
-        record->get_element()[i] = obj;
+        //record->get_element()[i] = obj;
+        OZ (deep_copy_obj(*record->get_allocator(), obj, record->get_element()[i]));
       }
     }
-    if (OB_SUCC(ret)) {
-      res_obj.set_extend(reinterpret_cast<int64_t>(record),
+    res_obj.set_extend(reinterpret_cast<int64_t>(record),
                         pl::PL_RECORD_TYPE, pl::ObRecordType::get_init_size(top_level_attr_count));
+    if (OB_NOT_NULL(record->get_allocator())) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_ISNULL(exec_ctx->get_pl_ctx())) {
+        tmp_ret = exec_ctx->init_pl_ctx();
+      }
+      if (OB_SUCCESS == tmp_ret && OB_NOT_NULL(exec_ctx->get_pl_ctx())) {
+        tmp_ret = exec_ctx->get_pl_ctx()->add(res_obj);
+      }
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_ERROR("fail to collect pl collection allocator, may be exist memory issue", K(tmp_ret));
+      }
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
     }
   }
 #endif

@@ -260,7 +260,7 @@ int ObPlAggUdfFunction::process_init_pl_agg_udf(ObObjParam &pl_obj)
     pl::ObPLDataType pl_type;
     pl_type.set_user_type_id(pl::PL_RECORD_TYPE, type_id_);
     pl_type.set_type_from(pl::PL_TYPE_UDT);
-    if (OB_FAIL(ns.init_complex_obj(*allocator_, pl_type, pl_obj, false))) {
+    if (OB_FAIL(ns.init_complex_obj(*allocator_, *allocator_, pl_type, pl_obj, false))) {
       LOG_WARN("failed to init complex obj", K(ret));
     } else if (OB_FAIL(build_in_params_store(pl_obj, true, NULL, 0, params_desc,
                                              params_type, udf_params))) {

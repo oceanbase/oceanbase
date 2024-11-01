@@ -191,6 +191,7 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
   } else {
     ParamStore params( (ObWrapperAllocator(ctx.get_allocator())) );
     const share::schema::ObRoutineInfo *routine_info = NULL;
+    ObArray<bool> null_params;
 
     if (!call_proc_info->can_direct_use_param()) {
       ObObjParam param;
@@ -262,6 +263,11 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
               LOG_WARN("push back error", K(i), K(*expr), K(ret));
             } else {
               params.at(params.count() - 1).set_param_meta();
+              if (call_proc_info->get_output_count() > 0) {
+                if (OB_FAIL(null_params.push_back(param.is_null()))) {
+                  LOG_WARN("fail to push back", K(ret));
+                }
+              }
             }
           }
         }
@@ -281,8 +287,13 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < param_cnt; ++i) {
         LOG_DEBUG("params", "param", ctx.get_physical_plan_ctx()->get_param_store().at(i), K(i));
-        if (OB_FAIL(params.push_back(ctx.get_physical_plan_ctx()->get_param_store().at(i)))) {
+        ObObjParam param = ctx.get_physical_plan_ctx()->get_param_store().at(i);
+        if (OB_FAIL(params.push_back(param))) {
           LOG_WARN("push back error", K(i), K(ret));
+        } else if (call_proc_info->get_output_count() > 0) {
+          if (OB_FAIL(null_params.push_back(param.is_null()))) {
+            LOG_WARN("fail to push back", K(ret));
+          }
         }
       }
     }
@@ -385,6 +396,16 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
           } // for end
         }
       } else { /*do nothing*/ }
+      if (OB_FAIL(ret) && call_proc_info->get_output_count() > 0) {
+        for (int64_t i = 0; i < null_params.count() && i < params.count(); ++i) {
+          if (null_params.at(i) &&
+              params.at(i).is_pl_extend() &&
+              params.at(i).get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE &&
+              params.at(i).get_ext() != 0) {
+            pl::ObUserDefinedType::destruct_obj(params.at(i), ctx.get_my_session());
+          }
+        }
+      }
     }
     ctx.get_sql_ctx()->cur_stmt_ = &stmt;
   }
@@ -518,7 +539,11 @@ int ObAnonymousBlockExecutor::execute(ObExecContext &ctx, ObAnonymousBlockStmt &
 
   if (OB_FAIL(ret)) {
   } else if (stmt.is_prepare_protocol()) {
+    ObArray<bool> null_params;
     ObBitSet<OB_DEFAULT_BITSET_SIZE> out_args;
+    for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_params()->count(); ++i) {
+      OZ (null_params.push_back(stmt.get_params()->at(i).is_null()));
+    }
     OZ (ctx.get_pl_engine()->execute(
       ctx, *stmt.get_params(), stmt.get_stmt_id(), stmt.get_sql(), out_args),
       K(stmt), KPC(stmt.get_params()));
@@ -609,6 +634,16 @@ int ObAnonymousBlockExecutor::execute(ObExecContext &ctx, ObAnonymousBlockStmt &
             OX (ctx.get_field_columns()->at(out_idx) = field);
           }
           OX (out_idx ++);
+        }
+      }
+    }
+    if (OB_FAIL(ret) && !out_args.is_empty()) {
+      for (int64_t i = 0; i < null_params.count() && i < stmt.get_params()->count(); ++i) {
+        if (null_params.at(i) &&
+            stmt.get_params()->at(i).is_pl_extend() &&
+            stmt.get_params()->at(i).get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE &&
+            stmt.get_params()->at(i).get_ext() != 0) {
+          pl::ObUserDefinedType::destruct_obj(stmt.get_params()->at(i), ctx.get_my_session());
         }
       }
     }

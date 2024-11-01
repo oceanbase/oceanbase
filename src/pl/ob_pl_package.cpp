@@ -207,7 +207,7 @@ int ObPLPackage::instantiate_package_state(const ObPLResolveCtx &resolve_ctx,
     if (OB_NOT_NULL(var) && var->get_type().is_cursor_type() && !var->get_type().is_cursor_var()) {
       // package ref cursor variable, refrence outside, do not destruct it.
     } else if (OB_FAIL(ret)) {
-      ObUserDefinedType::destruct_obj(value, &(resolve_ctx.session_info_));
+      ObUserDefinedType::destruct_objparam(package_state.get_pkg_allocator(), value, &(resolve_ctx.session_info_));
     }
   }
   if (OB_SUCC(ret) && !package_state.get_serially_reusable()) {
@@ -275,7 +275,7 @@ int ObPLPackage::instantiate_package_state(const ObPLResolveCtx &resolve_ctx,
                       int64_t init_size = OB_INVALID_SIZE;
                       int64_t member_ptr = 0;
                       OZ (record_type->get_member(i)->get_size(PL_TYPE_INIT_SIZE, init_size));
-                      OZ (record_type->get_member(i)->newx(package_state.get_pkg_allocator(), &resolve_ctx, member_ptr));
+                      OZ (record_type->get_member(i)->newx(*record->get_allocator(), &resolve_ctx, member_ptr));
                       OX (member->set_extend(member_ptr, record_type->get_member(i)->get_type(), init_size));
                     }
                   }
@@ -291,7 +291,7 @@ int ObPLPackage::instantiate_package_state(const ObPLResolveCtx &resolve_ctx,
                                     value));
             // need set var again if var is baisc type
             if (var_type.is_obj_type()) {
-              OZ (package_state.set_package_var_val(var_idx, value, !need_deserialize));
+              OZ (package_state.set_package_var_val(var_idx, value, resolve_ctx, !need_deserialize));
             }
           }
           // record sync variable, avoid to sync tiwce!

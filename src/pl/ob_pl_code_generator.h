@@ -74,7 +74,7 @@ public:
     jit::ObLLVMFunction spi_cursor_fetch_;
     jit::ObLLVMFunction spi_cursor_close_;
     jit::ObLLVMFunction spi_destruct_collection_;
-    jit::ObLLVMFunction spi_reset_collection_;
+    jit::ObLLVMFunction spi_reset_composite_;
     jit::ObLLVMFunction spi_copy_datum_;
     jit::ObLLVMFunction spi_destruct_obj_;
     jit::ObLLVMFunction spi_sub_nestedtable_;
@@ -102,6 +102,9 @@ public:
     jit::ObLLVMFunction spi_opaque_assign_null_;
     jit::ObLLVMFunction spi_pl_profiler_before_record_;
     jit::ObLLVMFunction spi_pl_profiler_after_record_;
+    jit::ObLLVMFunction spi_init_composite_;
+    jit::ObLLVMFunction spi_get_parent_allocator_;
+    jit::ObLLVMFunction spi_get_current_expr_allocator_;
   };
 
   struct EHStack
@@ -325,7 +328,7 @@ public:
 
   int generate_sql(const ObPLSqlStmt &s, jit::ObLLVMValue &ret_err);
   int generate_after_sql(const ObPLSqlStmt &s, jit::ObLLVMValue &ret_err);
-  int generate_new_objparam(jit::ObLLVMValue &result, int64_t udt_id = OB_INVALID_ID);
+  int generate_new_objparam(jit::ObLLVMValue &result, int64_t udt_id = OB_INVALID_ID, int8_t actual_type = 0, int8_t extend_type = -1);
   int check_success(jit::ObLLVMValue &ret_err,
                     int64_t stmt_id = OB_INVALID_ID,
                     bool in_notfound = false,
@@ -629,12 +632,16 @@ public:
   int extract_capacity_from_varray(jit::ObLLVMValue &p_varray, jit::ObLLVMValue &result);
   int extract_type_from_record(jit::ObLLVMValue &p_record, jit::ObLLVMValue &result);
   int extract_type_ptr_from_record(jit::ObLLVMValue &p_record, jit::ObLLVMValue &result);
+  int extract_data_ptr_from_record(jit::ObLLVMValue &p_record, jit::ObLLVMValue &result);
   int extract_id_from_record(jit::ObLLVMValue &p_record, jit::ObLLVMValue &result);
   int extract_id_ptr_from_record(jit::ObLLVMValue &p_record, jit::ObLLVMValue &result);
   int extract_isnull_from_record(jit::ObLLVMValue &p_record, jit::ObLLVMValue &result);
   int extract_isnull_ptr_from_record(jit::ObLLVMValue &p_record, jit::ObLLVMValue &result);
+  int extract_allocator_ptr_from_record(jit::ObLLVMValue &p_record, jit::ObLLVMValue &result);
+  int extract_allocator_from_record(jit::ObLLVMValue &p_record, jit::ObLLVMValue &result);
   int extract_count_from_record(jit::ObLLVMValue &p_record, jit::ObLLVMValue &result);
   int extract_count_ptr_from_record(jit::ObLLVMValue &p_record, jit::ObLLVMValue &result);
+  int extract_data_from_record(jit::ObLLVMValue &p_record, jit::ObLLVMValue &result);
   int extract_notnull_from_record(jit::ObLLVMValue &p_record, int64_t idx,
                                                      jit::ObLLVMValue &result);
   int extract_notnull_ptr_from_record(jit::ObLLVMValue &p_record, int64_t idx,
@@ -643,8 +650,6 @@ public:
                                                      jit::ObLLVMValue &result);
   int extract_meta_ptr_from_record(jit::ObLLVMValue &p_record, int64_t count, int64_t idx,
                                                      jit::ObLLVMValue &result);
-  int extract_element_from_record(jit::ObLLVMValue &p_record, int64_t count, int64_t idx,
-                                  jit::ObLLVMValue &result);
   int extract_element_ptr_from_record(jit::ObLLVMValue &p_record, int64_t count, int64_t idx,
                                       jit::ObLLVMValue &result);
   int extract_type_from_elemdesc(jit::ObLLVMValue &p_elemdesc, jit::ObLLVMValue &result);
@@ -653,6 +658,11 @@ public:
   int extract_notnull_ptr_from_elemdesc(jit::ObLLVMValue &p_elemdesc, jit::ObLLVMValue &result);
   int extract_field_count_from_elemdesc(jit::ObLLVMValue &p_elemdesc, jit::ObLLVMValue &result);
   int extract_field_count_ptr_from_elemdesc(jit::ObLLVMValue &p_elemdesc, jit::ObLLVMValue &result);
+
+  int extract_allocator_from_composite_write(jit::ObLLVMValue &composite_write, jit::ObLLVMValue &result);
+  int extract_allocator_ptr_from_composite_write(jit::ObLLVMValue &composite_write, jit::ObLLVMValue &result);
+  int extract_value_from_composite_write(jit::ObLLVMValue &composite_write, jit::ObLLVMValue &result);
+  int extract_value_ptr_from_composite_write(jit::ObLLVMValue &composite_write, jit::ObLLVMValue &result);
 
 public:
   int generate_obj(const ObObj &obj, jit::ObLLVMValue &result);
@@ -698,12 +708,15 @@ private:
                         const common::ObIArray<ObObjAccessIdx> &obj_access,
                         bool for_write,
                         jit::ObLLVMValue &ir_value,
+                        jit::ObLLVMValue &allocator_ptr,
                         jit::ObLLVMValue &ret_value,
-                        jit::ObLLVMBasicBlock &exit);
+                        jit::ObLLVMBasicBlock &exit,
+                        const sql::ObExprResType &res_type);
   int generate_get_record_attr(const ObObjAccessIdx &current_access,
                                            uint64_t udt_id,
                                            bool for_write,
                                            jit::ObLLVMValue &current_value,
+                                           jit::ObLLVMValue &current_allocator,
                                            jit::ObLLVMValue &ret_value_ptr,
                                            jit::ObLLVMBasicBlock& exit);
   int generate_get_collection_attr(jit::ObLLVMValue &param_array,
@@ -712,12 +725,15 @@ private:
                                            bool for_write,
                                            bool is_assoc_array,
                                            jit::ObLLVMValue &current_value,
+                                           jit::ObLLVMValue &current_allocator,
                                            jit::ObLLVMValue &ret_value_ptr,
-                                           jit::ObLLVMBasicBlock& exit);
+                                           jit::ObLLVMBasicBlock& exit,
+                                           const sql::ObExprResType &res_type);
   int generate_get_attr_func(const common::ObIArray<ObObjAccessIdx> &idents,
                              int64_t param_count, const
                              common::ObString &func_name,
-                             bool for_write);
+                             bool for_write,
+                             const sql::ObExprResType &res_type);
 #ifdef OB_BUILD_ORACLE_PL
   int build_nested_table_type(const ObNestedTableType &table_type, ObIArray<jit::ObLLVMType> &elem_type_array);
   int build_assoc_array_type(const ObAssocArrayType &table_type, ObIArray<jit::ObLLVMType> &elem_type_array);
@@ -820,6 +836,12 @@ public:
   int generate_spi_pl_profiler_before_record(const ObPLStmt &s);
   int generate_spi_pl_profiler_after_record(const ObPLStmt &s);
 
+  int generate_get_parent_allocator(jit::ObLLVMValue &allocator,
+                                    jit::ObLLVMValue &parent_allocator,
+                                    jit::ObLLVMValue &ret_value_ptr,
+                                    jit::ObLLVMBasicBlock &exit);
+  int extract_allocator_and_restore_obobjparam(jit::ObLLVMValue &into_address, jit::ObLLVMValue &allocator);
+  int generate_get_current_expr_allocator(const ObPLStmt &s, jit::ObLLVMValue &expr_allocator);
   static int set_profiler_unit_info_recursive(const ObPLCompileUnit &unit);
 
 private:
