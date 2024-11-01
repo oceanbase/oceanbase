@@ -898,12 +898,14 @@ int ObSSTableCopyFinishTask::prepare_data_store_desc_(
   } else {
     const uint16_t cg_idx = sstable_param->table_key_.get_column_group_id();
     const ObStorageColumnGroupSchema *cg_schema = nullptr;
-    if (sstable_param->table_key_.is_cg_sstable()) {
-      if (OB_UNLIKELY(cg_idx < 0 || cg_idx >= storage_schema->get_column_group_count())) {
+    if (OB_UNLIKELY(cg_idx < 0 || cg_idx >= storage_schema->get_column_group_count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected cg idx", K(ret), K(cg_idx), KPC(storage_schema));
+    } else {
+      cg_schema = &storage_schema->get_column_groups().at(cg_idx);
+      if (OB_ISNULL(cg_schema)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected cg idx", K(ret), K(cg_idx), KPC(storage_schema));
-      } else {
-        cg_schema = &storage_schema->get_column_groups().at(cg_idx);
+        LOG_WARN("fail to get cg schema", K(ret), KPC(storage_schema), K(cg_idx));
       }
     }
     if (FAILEDx(desc.init(
