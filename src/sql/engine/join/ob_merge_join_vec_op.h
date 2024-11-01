@@ -64,7 +64,11 @@ public:
      equal_cond_infos_(alloc),
      merge_directions_(alloc),
      left_child_fetcher_all_exprs_(alloc),
-     right_child_fetcher_all_exprs_(alloc)
+     right_child_fetcher_all_exprs_(alloc),
+     left_child_fetcher_equal_keys_(alloc),
+     right_child_fetcher_equal_keys_(alloc),
+     left_child_fetcher_equal_keys_idx_(alloc),
+     right_child_fetcher_equal_keys_idx_(alloc)
   {}
 
   virtual ~ObMergeJoinVecSpec() {};
@@ -96,6 +100,10 @@ public:
   common::ObFixedArray<int64_t, common::ObIAllocator> merge_directions_;
   ExprFixedArray left_child_fetcher_all_exprs_;
   ExprFixedArray right_child_fetcher_all_exprs_;
+  ExprFixedArray left_child_fetcher_equal_keys_;
+  ExprFixedArray right_child_fetcher_equal_keys_;
+  common::ObFixedArray<int64_t, common::ObIAllocator> left_child_fetcher_equal_keys_idx_;
+  common::ObFixedArray<int64_t, common::ObIAllocator> right_child_fetcher_equal_keys_idx_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMergeJoinVecSpec);

@@ -39,7 +39,11 @@ OB_SERIALIZE_MEMBER((ObMergeJoinVecSpec, ObJoinVecSpec),
                     equal_cond_infos_,
                     merge_directions_,
                     left_child_fetcher_all_exprs_,
-                    right_child_fetcher_all_exprs_);
+                    right_child_fetcher_all_exprs_,
+                    left_child_fetcher_equal_keys_,
+                    right_child_fetcher_equal_keys_,
+                    left_child_fetcher_equal_keys_idx_,
+                    right_child_fetcher_equal_keys_idx_);
 
 OB_SERIALIZE_MEMBER(ObMergeJoinVecSpec::EqualConditionInfo, expr_, ser_eval_func_, is_opposite_);
 const int64_t ObMergeJoinVecSpec::MERGE_DIRECTION_ASC = 1;
