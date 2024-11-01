@@ -147,6 +147,7 @@ int ObCgroupCtrl::which_type_dir_(const char *curr_path, int &type)
         }
       }
     }
+    closedir(dir);
   }
   return ret;
 }
@@ -232,6 +233,7 @@ int ObCgroupCtrl::recursion_process_group_(const char *curr_path, DirProcessor *
             LOG_WARN("process path failed", K(sub_path));
           }
         }
+        closedir(dir);
       }
     }
     if (OB_SUCC(ret) && 0 != strcmp(root_cgroup_, curr_path) &&
