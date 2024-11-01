@@ -126,14 +126,15 @@ int ObOptStatManager::get_column_stat(const uint64_t tenant_id,
                                       ObIArray<ObOptColumnStatHandle> &handles)
 {
   int ret = OB_SUCCESS;
+  const static int64_t MAX_BATCH_SIZE = 1000;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("stat manager has not been initialized.", K(ret));
   } else {
     ObArenaAllocator arena("ObGetColStat", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
+    ObSEArray<ObOptColumnStatHandle, 4> tmp_handles;
+    ObSEArray<const ObOptColumnStat::Key*, 4> keys;
     for (int64_t i = 0; OB_SUCC(ret) && i < part_ids.count(); ++i) {
-      ObSEArray<ObOptColumnStatHandle, 4> tmp_handles;
-      ObSEArray<const ObOptColumnStat::Key*, 4> keys;
       for (int64_t j = 0; OB_SUCC(ret) && j < column_ids.count(); ++j) {
         void *ptr = NULL;
         if (OB_ISNULL(ptr = arena.alloc(sizeof(ObOptColumnStat::Key)))) {
@@ -146,11 +147,22 @@ int ObOptStatManager::get_column_stat(const uint64_t tenant_id,
                                                                      column_ids.at(j));
           if (OB_FAIL(keys.push_back(key))) {
             LOG_WARN("failed to push back", K(ret));
-          } else {/*do nothing*/}
+          } else if (MAX_BATCH_SIZE == keys.count()) {
+            if (OB_FAIL(stat_service_.get_column_stat(tenant_id, keys, tmp_handles))) {
+              LOG_WARN("get column stat failed.", K(ret));
+            } else if (OB_FAIL(append(handles, tmp_handles))) {
+              LOG_WARN("failed to append", K(ret));
+            } else {
+              arena.reuse();
+              keys.reuse();
+              tmp_handles.reuse();
+            }
+          }
         }
       }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(stat_service_.get_column_stat(tenant_id, keys, tmp_handles))) {
+    }
+    if (OB_SUCC(ret) && !keys.empty()) {
+      if (OB_FAIL(stat_service_.get_column_stat(tenant_id, keys, tmp_handles))) {
         LOG_WARN("get column stat failed.", K(ret));
       } else if (OB_FAIL(append(handles, tmp_handles))) {
         LOG_WARN("failed to append", K(ret));
