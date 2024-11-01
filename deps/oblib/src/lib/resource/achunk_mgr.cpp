@@ -138,7 +138,7 @@ void *AChunkMgr::low_alloc(const uint64_t size, const bool can_use_huge_page, bo
   const int fd = -1234;
   const int offset = 0;
   const int large_page_type = ObLargePageHelper::get_type();
-  set_ob_mem_mgr_path();
+  ObUnmanagedMemoryStat::DisableGuard guard;
   if (SANITY_BOOL_EXPR(alloc_shadow)) {
     ptr = SANITY_MMAP(size);
   }
@@ -161,13 +161,12 @@ void *AChunkMgr::low_alloc(const uint64_t size, const bool can_use_huge_page, bo
       }
     }
   }
-  unset_ob_mem_mgr_path();
   return ptr;
 }
 
 void AChunkMgr::low_free(const void *ptr, const uint64_t size)
 {
-  set_ob_mem_mgr_path();
+  ObUnmanagedMemoryStat::DisableGuard guard;
   if (SANITY_ADDR_IN_RANGE(ptr, size)) {
     AChunk *chunk = (AChunk*)ptr;
 #ifdef ENABLE_SANITY
@@ -178,7 +177,6 @@ void AChunkMgr::low_free(const void *ptr, const uint64_t size)
   } else {
     this->munmap((void*)ptr, size);
   }
-  unset_ob_mem_mgr_path();
 }
 
 AChunk *AChunkMgr::alloc_chunk(const uint64_t size, bool high_prio)
@@ -390,11 +388,11 @@ int64_t AChunkMgr::to_string(char *buf, const int64_t buf_len) const
   ret = databuff_printf(buf, buf_len, pos,
       "[CHUNK_MGR] limit=%'15ld hold=%'15ld total_hold=%'15ld used=%'15ld freelists_hold=%'15ld"
       " total_maps=%'15ld total_unmaps=%'15ld large_maps=%'15ld large_unmaps=%'15ld huge_maps=%'15ld huge_unmaps=%'15ld"
-      " resident_size=%'15ld divisive_memory_used=%'15ld"
+      " resident_size=%'15ld unmanaged_memory_size=%'15ld"
       " virtual_memory_used=%'15ld",
       limit_, hold_, total_hold_, get_used(), cache_hold_,
       total_maps, total_unmaps, large_maps, large_unmaps, get_maps(HUGE_ACHUNK_INDEX), get_unmaps(HUGE_ACHUNK_INDEX),
-      resident_size, get_divisive_mem_size(),
+      resident_size, get_unmanaged_memory_size(),
       get_virtual_memory_used(&resident_size));
 #ifdef ENABLE_SANITY
   if (OB_SUCC(ret)) {

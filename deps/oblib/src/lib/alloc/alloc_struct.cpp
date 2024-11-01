@@ -27,8 +27,6 @@ namespace lib
 thread_local ObMemAttr ObMallocHookAttrGuard::tl_mem_attr(OB_SERVER_TENANT_ID,
                                                           "glibc_malloc",
                                                           ObCtxIds::GLIBC);
-static int64_t g_divisive_mem_size[OB_MAX_CPU_NUM];
-static thread_local bool g_is_ob_mem_mgr_path = false;
 
 static bool g_memleak_light_backtrace_enabled = false;
 
@@ -98,41 +96,30 @@ void Label::fmt(char *buf, int64_t buf_len, int64_t &pos, const char *str)
     }
   }
 }
-
-int64_t get_divisive_mem_size()
+int64_t ObUnmanagedMemoryStat::get_total_hold()
 {
-  int64_t total_size = 0;
+  int64_t total_hold = 0;
   for (int64_t i = 0; i < OB_MAX_CPU_NUM; i++) {
-    total_size += g_divisive_mem_size[i];
+    total_hold += hold_[i];
   }
-  return total_size;
+  return total_hold;
 }
 
-void inc_divisive_mem_size(const int64_t size)
+void ObUnmanagedMemoryStat::inc(const int64_t size)
 {
   const int64_t idx = ob_gettid() % OB_MAX_CPU_NUM;
-  __sync_fetch_and_add(&(g_divisive_mem_size[idx]), size);
+  __sync_fetch_and_add(&(hold_[idx]), size);
 }
 
-void dec_divisive_mem_size(const int64_t size)
+void ObUnmanagedMemoryStat::dec(const int64_t size)
 {
   const int64_t idx = ob_gettid() % OB_MAX_CPU_NUM;
-  __sync_fetch_and_add(&(g_divisive_mem_size[idx]), 0 - size);
+  __sync_fetch_and_add(&(hold_[idx]), 0 - size);
 }
 
-void set_ob_mem_mgr_path()
+int64_t get_unmanaged_memory_size()
 {
-  g_is_ob_mem_mgr_path = true;
-}
-
-void unset_ob_mem_mgr_path()
-{
-  g_is_ob_mem_mgr_path = false;
-}
-
-bool is_ob_mem_mgr_path()
-{
-  return g_is_ob_mem_mgr_path;
+  return UNMAMAGED_MEMORY_STAT.get_total_hold();
 }
 
 void enable_memleak_light_backtrace(const bool enable)

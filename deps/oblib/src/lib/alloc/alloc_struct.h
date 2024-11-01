@@ -696,13 +696,52 @@ private:
   const bool last_;
 };
 
-extern void inc_divisive_mem_size(const int64_t size);
-extern void dec_divisive_mem_size(const int64_t size);
-extern int64_t get_divisive_mem_size();
+class ObUnmanagedMemoryStat
+{
+public:
+  class DisableGuard
+  {
+  public:
+    DisableGuard()
+      : last_(tl_disabled())
+    {
+      tl_disabled() = true;
+    }
+    ~DisableGuard()
+    {
+      tl_disabled() = last_;
+    }
+    static bool &tl_disabled()
+    {
+      static __thread bool disabled = false;
+      return disabled;
+    }
+  private:
+    bool last_;
+  };
+  static ObUnmanagedMemoryStat &get_instance()
+  {
+    static ObUnmanagedMemoryStat instance;
+    return instance;
+  }
+  static bool is_disabled()
+  {
+    return DisableGuard::tl_disabled();
+  }
+  void inc(const int64_t size);
+  void dec(const int64_t size);
+  int64_t get_total_hold();
+private:
+  ObUnmanagedMemoryStat()
+  {
+    MEMSET(hold_, 0, sizeof(hold_));
+  }
+  int64_t hold_[OB_MAX_CPU_NUM];
+};
 
-extern void set_ob_mem_mgr_path();
-extern void unset_ob_mem_mgr_path();
-extern bool is_ob_mem_mgr_path();
+#define UNMAMAGED_MEMORY_STAT ObUnmanagedMemoryStat::get_instance()
+
+extern int64_t get_unmanaged_memory_size();
 
 extern void enable_memleak_light_backtrace(const bool);
 extern bool is_memleak_light_backtrace_enabled();

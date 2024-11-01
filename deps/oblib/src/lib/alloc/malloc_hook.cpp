@@ -79,18 +79,18 @@ void *ob_malloc_retry(size_t size)
 static inline void *ob_mmap(void *addr, size_t length, int prot, int flags, int fd, loff_t offset)
 {
   void *ptr = (void*)syscall(SYS_mmap, addr, length, prot, flags, fd, offset);
-  if (OB_UNLIKELY(!is_ob_mem_mgr_path()) && OB_LIKELY(MAP_FAILED != ptr)) {
+  if (OB_UNLIKELY(!UNMAMAGED_MEMORY_STAT.is_disabled()) && OB_LIKELY(MAP_FAILED != ptr)) {
     const int64_t page_size = get_page_size();
-    inc_divisive_mem_size(upper_align(length, page_size));
+    UNMAMAGED_MEMORY_STAT.inc(upper_align(length, page_size));
   }
   return ptr;
 }
 
 static inline int ob_munmap(void *addr, size_t length)
 {
-  if (OB_UNLIKELY(!is_ob_mem_mgr_path())) {
+  if (OB_UNLIKELY(!ObUnmanagedMemoryStat::is_disabled())) {
     const int64_t page_size = get_page_size();
-    dec_divisive_mem_size(upper_align(length, page_size));
+    UNMAMAGED_MEMORY_STAT.dec(upper_align(length, page_size));
   }
   return syscall(SYS_munmap, addr, length);
 }

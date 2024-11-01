@@ -446,14 +446,14 @@ void ObServerMemoryConfig::check_limit(bool ignore_error)
               K(hold), K(reserved));
     }
   }
-  // check divisive memory size
-  const int64_t DIVISIVE_MEMORY_LIMIT = 2LL<<30;
-  int64_t divisive_memory_size = get_divisive_mem_size();
-  if (divisive_memory_size > DIVISIVE_MEMORY_LIMIT) {
+  // check unmanaged memory size
+  const int64_t UNMANAGED_MEMORY_LIMIT = 2LL<<30;
+  int64_t unmanaged_memory_size = get_unmanaged_memory_size();
+  if (unmanaged_memory_size > UNMANAGED_MEMORY_LIMIT) {
     if (ignore_error) {
-      LOG_WARN("divisive_memory_size is over the limit", K(divisive_memory_size), K(DIVISIVE_MEMORY_LIMIT));
+      LOG_WARN("unmanaged_memory_size is over the limit", K(unmanaged_memory_size), K(UNMANAGED_MEMORY_LIMIT));
     } else {
-      LOG_ERROR("divisive_memory_size is over the limit", K(divisive_memory_size), K(DIVISIVE_MEMORY_LIMIT));
+      LOG_ERROR("unmanaged_memory_size is over the limit", K(unmanaged_memory_size), K(UNMANAGED_MEMORY_LIMIT));
     }
   }
 }
