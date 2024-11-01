@@ -138,6 +138,7 @@ void TestBackupIndexIterator::SetUp()
   tenant_ctx.set(tf_mgr);
 
   ObTenantEnv::set_tenant(&tenant_ctx);
+  SERVER_STORAGE_META_SERVICE.is_started_ = true;
   inner_init_();
   ASSERT_EQ(OB_SUCCESS, bandwidth_throttle_.init(1024 * 1024 * 60));
 }

@@ -224,7 +224,7 @@ void TestCompactChunk::SetUp()
   tf_mgr->get_sn_file_manager().page_cache_controller_.write_buffer_pool_.default_wbp_memory_limit_ = 40*1024*1024;
   EXPECT_EQ(OB_SUCCESS, tf_mgr->start());
   tenant_ctx.set(tf_mgr);
-
+  SERVER_STORAGE_META_SERVICE.is_started_ = true;
   ObTenantEnv::set_tenant(&tenant_ctx);
 }
 

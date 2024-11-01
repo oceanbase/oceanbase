@@ -146,7 +146,7 @@ TEST_F(TestBlockManager, test_mark_and_sweep)
   EXPECT_EQ(OB_SUCCESS, tf_mgr->start());
   tenant_ctx.set(tf_mgr);
   ObTenantEnv::set_tenant(&tenant_ctx);
-
+  SERVER_STORAGE_META_SERVICE.is_started_ = true;
   ASSERT_EQ(0, OB_SERVER_BLOCK_MGR.block_map_.count());
 
   const int blk_cnt = 100;
