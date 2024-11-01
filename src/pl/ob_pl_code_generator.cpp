@@ -5270,7 +5270,11 @@ int ObPLCodeGenerator::generate_fetch(const ObPLStmt &s,
             OZ (store_data_type(*(pl_data_type->get_data_type()), type_value));
           } else { // 构造函数场景
             ObDataType ext_type;
-            ext_type.set_obj_type(ObExtendType);
+            ObObjMeta meta;
+            meta.set_type(ObExtendType);
+            meta.set_extend_type(pl_data_type->get_type());
+            ext_type.set_meta_type(meta);
+            ext_type.set_udt_id(pl_data_type->get_user_type_id());
             OZ (store_data_type(ext_type, type_value));
           }
         }

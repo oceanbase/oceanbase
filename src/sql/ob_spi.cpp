@@ -7403,9 +7403,12 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
                     || obj.is_null())
                && (result_type.get_type() == ObExtendType
                     || ob_is_xml_sql_type(result_type.get_type(), result_type.get_subschema_id())))
-            || (obj.get_meta().is_geometry() && lib::is_oracle_mode() && result_type.get_type() != ObExtendType)) {
+            || (obj.get_meta().is_geometry() && lib::is_oracle_mode() && result_type.get_type() != ObExtendType)
+            || (obj.is_null() && current_type.at(i).get_meta_type().is_xml_sql_type()
+                && !ob_is_xml_pl_type(result_type.get_type(), result_type.get_accuracy().get_accuracy())
+                && !ob_is_string_tc(result_type.get_type()))) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
-          LOG_WARN("xml type can not convert other type in pl", K(ret));
+          LOG_WARN("xml type can not convert other type in pl", K(ret), K(obj), K(current_type.at(i)), K(i), K(result_type));
         } else if (result_type.is_ext()
                     && (result_type.get_accuracy().get_accuracy() == 300004 ||
                         result_type.get_accuracy().get_accuracy() == 300005)
@@ -7416,8 +7419,9 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
         } else if (OB_FAIL(ObExprColumnConv::convert_with_null_check(tmp_obj, obj, result_type, is_strict, cast_ctx, type_info))) {
           LOG_WARN("fail to convert with null check", K(ret));
         } else if (tmp_obj.is_null()) {
-          if (current_type.at(i).get_meta_type().is_xml_sql_type()
-              || (current_type.at(i).get_meta_type().is_ext() && current_type.at(i).get_accuracy().get_accuracy() == T_OBJ_XML)) {
+          if (!ob_is_string_tc(result_type.get_type()) &&
+              (current_type.at(i).get_meta_type().is_xml_sql_type()
+              || (current_type.at(i).get_meta_type().is_ext() && current_type.at(i).get_accuracy().get_accuracy() == T_OBJ_XML))) {
   #ifdef OB_BUILD_ORACLE_PL
             ObPLOpaque *opaque = reinterpret_cast<ObPLOpaque*>(cast_ctx.allocator_v2_->alloc(sizeof(ObPLOpaque)));;
             if (OB_ISNULL(opaque)) {
