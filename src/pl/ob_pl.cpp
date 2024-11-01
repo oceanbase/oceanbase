@@ -3368,13 +3368,13 @@ int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, 
     const pl::ObPLComposite *actual_composite = reinterpret_cast<const ObPLComposite *>(actual_param.get_ext());
 
     // get actual param type id
-    CK (OB_NOT_NULL(actual_composite));
     OX (actual_udt_id = actual_param.get_udt_id());
     if (OB_SUCC(ret) && OB_INVALID_ID == actual_udt_id) {
       if (PL_RECORD_TYPE == actual_param.get_meta().get_extend_type()
           || PL_NESTED_TABLE_TYPE == actual_param.get_meta().get_extend_type()
           || PL_ASSOCIATIVE_ARRAY_TYPE == actual_param.get_meta().get_extend_type()
           || PL_VARRAY_TYPE == actual_param.get_meta().get_extend_type()) {
+        CK (OB_NOT_NULL(actual_composite));
         OX (actual_udt_id = actual_composite->get_id());
       } else {
         ret = OB_ERR_UNEXPECTED;
@@ -3389,10 +3389,22 @@ int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, 
     if (OB_FAIL(ret)) {
     } else if (OB_INVALID_ID != actual_udt_id && formal_udt_id == actual_udt_id) {
       // skip same valid udt id
-    } else if (OB_INVALID_ID == actual_udt_id || actual_composite->is_collection()) {
+    } else if (OB_INVALID_ID == actual_udt_id
+               || (OB_NOT_NULL(actual_composite) && actual_composite->is_collection())) {
       // check compatible for anonymous array which has invalid udt id
-      bool dummy;
-      OZ (check_anonymous_collection_compatible(*actual_composite, formal_param_type, dummy));
+      const ObUserDefinedType *formal_type = nullptr;
+      OZ (get_exec_ctx().get_user_type(formal_udt_id, formal_type));
+      OV (OB_NOT_NULL(formal_type), OB_ERR_UNEXPECTED, formal_udt_id);
+      if (formal_type->is_generic_varray_type()
+          || formal_type->is_generic_v2_table_type()
+          || formal_type->is_generic_table_type()
+          || formal_type->is_generic_collection_type()) {
+        // skip check for generic type
+      } else {
+        bool dummy;
+        CK (OB_NOT_NULL(actual_composite));
+        OZ (check_anonymous_collection_compatible(*actual_composite, formal_param_type, dummy));
+      }
     } else {
       const ObUserDefinedType *actual_type = nullptr;
       const ObUserDefinedType *formal_type = nullptr;
