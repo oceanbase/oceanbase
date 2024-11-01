@@ -4687,7 +4687,8 @@ int ObJoinOrder::add_path(ObLogPlan &plan, Path* path)
   } else if (OB_UNLIKELY(plan.get_optimizer_context().generate_random_plan())) {
     ObQueryCtx* query_ctx = plan.get_optimizer_context().get_query_ctx();
     bool random_flag = !OB_ISNULL(query_ctx) && (query_ctx->rand_gen_.get(0, 1) == 1);
-    should_add = interesting_paths_.empty() || random_flag;
+    should_add = interesting_paths_.empty() || random_flag ||
+                 (!path->contain_match_all_fake_cte() && path->contain_fake_cte());
   } else {
     DominateRelation plan_rel = DominateRelation::OBJ_UNCOMPARABLE;
     OPT_TRACE_TITLE("new candidate path:", path);
