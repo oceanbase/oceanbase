@@ -51,7 +51,7 @@ class ObLogRestoreService : public share::ObThreadPool
   const int64_t SCHEDULE_INTERVAL = 1000 * 1000L;   // 1s
   const int64_t UPDATE_RESTORE_UPPER_LIMIT_INTERVAL = 100 * 1000L;  // 100ms
   const int64_t PRIMARY_THREAD_RUN_INTERVAL = 1000 * 1000L;   // 1s
-  const int64_t STANDBY_THREAD_RUN_INTERVAL = 100 * 1000L;  // 100ms
+  const int64_t STANDBY_THREAD_RUN_INTERVAL = 10 * 1000L;  // 10ms
 public:
   ObLogRestoreService();
   ~ObLogRestoreService();

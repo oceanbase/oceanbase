@@ -75,7 +75,7 @@ int ObLogRestoreService::init(rpc::frame::ObReqTransport *transport,
     LOG_WARN("net_driver_ init failed");
   } else if (OB_FAIL(fetch_log_impl_.init(tenant_id, &archive_driver_, &net_driver_))) {
     LOG_WARN("fetch_log_impl_ init failed", K(ret));
-  } else if (OB_FAIL(fetch_log_worker_.init(tenant_id, &allocator_, this, ls_svr))) {
+  } else if (OB_FAIL(fetch_log_worker_.init(tenant_id, &allocator_, this, ls_svr, &writer_))) {
     LOG_WARN("fetch_log_worker_ init failed", K(ret));
   } else if (OB_FAIL(writer_.init(tenant_id, ls_svr, this, &fetch_log_worker_))) {
     LOG_WARN("remote_log_writer init failed");
