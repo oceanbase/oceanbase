@@ -2471,34 +2471,41 @@ int ObMySQLProcStatement::process_array_out_param(const pl::ObCollectionType *co
             ObObj *current_obj = new_data + i;
             int64_t element_cnt = record_type->get_record_member_count();
             int64_t init_size = pl::ObRecordType::get_init_size(element_cnt);
-            void *ptr = local_allocator->alloc(init_size);
-            pl::ObPLRecord *record = NULL;
-            OV (OB_NOT_NULL(ptr), OB_ALLOCATE_MEMORY_FAILED, init_size);
-            CK (OB_NOT_NULL(record = reinterpret_cast<pl::ObPLRecord*>(ptr)));
-            if (OB_SUCC(ret)) {
-              ObObj *element = NULL;
-              new(ptr)pl::ObPLRecord(record_type->get_user_type_id(), record_type->get_member_count());
-              OZ (record->init_data(*local_allocator, false));
-              CK (record->get_allocator());
-              for (int64_t j = 0; OB_SUCC(ret) && j < record_type->get_member_count(); ++j) {
-                CK (OB_NOT_NULL(record_type->get_record_member_type(j)));
-                OZ (record->get_element(j, element));
-                CK (OB_NOT_NULL(element));
-                CK (record_type->get_record_member_type(j)->is_obj_type());
-                OX (new (element) ObObj(ObNullType));
-                if (OB_SUCC(ret)) {
-                  CK (start_idx + j < com_data.get_data_array().count());
-                  CK (OB_NOT_NULL(bind_param = com_data.get_data_array().at(start_idx + j)));
-                  CK (MYSQL_TYPE_OBJECT == bind_param->buffer_type_);
-                  CK (OB_NOT_NULL(pl_array = (MYSQL_COMPLEX_BIND_ARRAY *)bind_param->buffer_));
-                  OX (element->set_meta_type(*(record_type->get_record_member_type(j)->get_meta_type())));
-                  OZ (process_array_element(i, *(record->get_allocator()), pl_array->buffer, *element, tz_info));
-                }
-              } // end for
-            }
             CK (OB_NOT_NULL(current_obj));
             OX (current_obj->reset());
-            OX (current_obj->set_extend(reinterpret_cast<int64_t>(ptr), pl::PL_RECORD_TYPE, init_size));
+            if (OB_SUCC(ret)) {
+              void *ptr = local_allocator->alloc(init_size);
+              pl::ObPLRecord *record = NULL;
+              OV (OB_NOT_NULL(ptr), OB_ALLOCATE_MEMORY_FAILED, init_size);
+              CK (OB_NOT_NULL(record = reinterpret_cast<pl::ObPLRecord*>(ptr)));
+              if (OB_SUCC(ret)) {
+                ObObj *element = NULL;
+                new(ptr)pl::ObPLRecord(record_type->get_user_type_id(), record_type->get_member_count());
+                OZ (record->init_data(*local_allocator, false));
+                CK (record->get_allocator());
+                for (int64_t j = 0; OB_SUCC(ret) && j < record_type->get_member_count(); ++j) {
+                  CK (OB_NOT_NULL(record_type->get_record_member_type(j)));
+                  OZ (record->get_element(j, element));
+                  CK (OB_NOT_NULL(element));
+                  CK (record_type->get_record_member_type(j)->is_obj_type());
+                  OX (new (element) ObObj(ObNullType));
+                  if (OB_SUCC(ret)) {
+                    CK (start_idx + j < com_data.get_data_array().count());
+                    CK (OB_NOT_NULL(bind_param = com_data.get_data_array().at(start_idx + j)));
+                    CK (MYSQL_TYPE_OBJECT == bind_param->buffer_type_);
+                    CK (OB_NOT_NULL(pl_array = (MYSQL_COMPLEX_BIND_ARRAY *)bind_param->buffer_));
+                    OX (element->set_meta_type(*(record_type->get_record_member_type(j)->get_meta_type())));
+                    OZ (process_array_element(i, *(record->get_allocator()), pl_array->buffer, *element, tz_info));
+                  }
+                } // end for
+              }
+              if (NULL != ptr) {
+                current_obj->set_extend(reinterpret_cast<int64_t>(ptr), pl::PL_RECORD_TYPE, init_size);
+                if (OB_FAIL(ret)) {
+                  pl::ObUserDefinedType::destruct_objparam(*local_allocator, *current_obj);
+                }
+              }
+            }
           } // end for array_size
           if (OB_SUCC(ret)) {
             coll->set_data(new_data);
