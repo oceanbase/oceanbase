@@ -147,6 +147,7 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   int prepare_mocked_row_store_cg_schema();
   bool should_mock_row_store_cg_schema();
   int prepare_cs_replica_param();
+  int check_convert_co_checksum(const ObSSTable *new_sstable);
   OB_INLINE bool is_build_row_store_from_rowkey_cg() const { return static_param_.is_build_row_store_from_rowkey_cg(); }
   OB_INLINE bool is_build_row_store() const { return static_param_.is_build_row_store(); }
   int get_cg_schema_for_merge(const int64_t idx, const ObStorageColumnGroupSchema *&cg_schema_ptr);
