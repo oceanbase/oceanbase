@@ -1237,7 +1237,7 @@ int ObStartMigrationTask::choose_src_()
     } else if (OB_FAIL(member_helper.init(storage_rpc_))) {
       LOG_WARN("failed to init member helper", K(ret), KP(storage_rpc_));
     } else if (OB_FAIL(member_helper.get_member_list_by_replica_type(tenant_id, ctx_->arg_.ls_id_,
-        ctx_->arg_.dst_, param.info_))) {
+        ctx_->arg_.dst_, param.info_, param.is_first_c_replica_))) {
       LOG_WARN("failed to get member list.", K(ret), K(tenant_id), "ls_id", ctx_->arg_.ls_id_, "dst", ctx_->arg_.dst_);
     } else if (OB_FAIL(ObStorageHAChooseSrcHelper::get_policy_type(ctx_->arg_, tenant_id,
         enable_choose_source_policy, str, param.info_.learner_list_, policy))) {
@@ -1842,6 +1842,20 @@ int ObStartMigrationTask::join_learner_list_()
           "src", ctx_->arg_.src_.get_server(),
           "dst", ctx_->arg_.dst_.get_server());
   DEBUG_SYNC(AFTER_JOIN_LEARNER_LIST);
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    const ObString &errsim_migration_dest_server_addr = GCONF.errsim_migration_dest_server_addr.str();
+    common::ObAddr addr;
+    const ObAddr &my_addr = GCONF.self_addr_;
+    if (!errsim_migration_dest_server_addr.empty() && OB_FAIL(addr.parse_from_string(errsim_migration_dest_server_addr))) {
+      LOG_WARN("failed to parse from string to addr", K(ret), K(errsim_migration_dest_server_addr));
+    } else {
+      if (my_addr == addr) {
+        DEBUG_SYNC(AFTER_JOIN_LEARNER_LIST_FOR_SPECIFIED_SERVER);
+      }
+    }
+  }
+#endif
   return ret;
 }
 /******************ObSysTabletsMigrationDag*********************/

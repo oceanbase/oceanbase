@@ -559,7 +559,7 @@ TEST_F(TestChooseMigrationSourcePolicy, get_available_src_with_checkpoint_policy
   ObMigrationChooseSrcHelperInitParam param;
   EXPECT_EQ(OB_SUCCESS, mock_migrate_choose_helper_param(tenant_id, ls_id, local_ls_checkpoint_scn, mock_arg, param));
   EXPECT_EQ(OB_SUCCESS, member_helper_.get_member_list_by_replica_type(tenant_id, ls_id,
-        mock_arg.dst_, param.info_));
+        mock_arg.dst_, param.info_, param.is_first_c_replica_));
   ObStorageHASrcProvider::ChooseSourcePolicy policy;
   EXPECT_EQ(OB_SUCCESS, get_checkpoint_policy(mock_arg, tenant_id, param.info_.learner_list_, policy));
   ObStorageHASrcInfo src_info;
@@ -597,7 +597,7 @@ TEST_F(TestChooseMigrationSourcePolicy, get_available_src_with_rs_recommend)
   ObMigrationChooseSrcHelperInitParam param;
   EXPECT_EQ(OB_SUCCESS, mock_migrate_choose_helper_param(tenant_id, ls_id, local_ls_checkpoint_scn, mock_arg, param));
   EXPECT_EQ(OB_SUCCESS, member_helper_.get_member_list_by_replica_type(tenant_id, ls_id,
-        mock_arg.dst_, param.info_));
+        mock_arg.dst_, param.info_, param.is_first_c_replica_));
   ObStorageHASrcProvider::ChooseSourcePolicy policy;
   EXPECT_EQ(OB_SUCCESS, get_recommand_policy(mock_arg, tenant_id, param.info_.learner_list_, policy));
   ObStorageHASrcInfo src_info;
@@ -636,7 +636,7 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_idc_leader)
   ObMigrationChooseSrcHelperInitParam param;
   EXPECT_EQ(OB_SUCCESS, mock_migrate_choose_helper_param(tenant_id, ls_id, local_ls_checkpoint_scn, mock_arg, param));
   EXPECT_EQ(OB_SUCCESS, member_helper_.get_member_list_by_replica_type(tenant_id, ls_id,
-        mock_arg.dst_, param.info_));
+        mock_arg.dst_, param.info_, param.is_first_c_replica_));
   ObStorageHASrcProvider::ChooseSourcePolicy policy;
   EXPECT_EQ(OB_SUCCESS, get_idc_policy(mock_arg, tenant_id, param.info_.learner_list_, policy));
   ObStorageHASrcInfo src_info;
@@ -678,7 +678,7 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_idc_follower)
   ObMigrationChooseSrcHelperInitParam param;
   EXPECT_EQ(OB_SUCCESS, mock_migrate_choose_helper_param(tenant_id, ls_id, local_ls_checkpoint_scn, mock_arg, param));
   EXPECT_EQ(OB_SUCCESS, member_helper_.get_member_list_by_replica_type(tenant_id, ls_id,
-        mock_arg.dst_, param.info_));
+        mock_arg.dst_, param.info_, param.is_first_c_replica_));
   ObStorageHASrcProvider::ChooseSourcePolicy policy;
   EXPECT_EQ(OB_SUCCESS, get_idc_policy(mock_arg, tenant_id, param.info_.learner_list_, policy));
   ObStorageHASrcInfo src_info;
@@ -718,7 +718,7 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_region_leader)
   ObMigrationChooseSrcHelperInitParam param;
   EXPECT_EQ(OB_SUCCESS, mock_migrate_choose_helper_param(tenant_id, ls_id, local_ls_checkpoint_scn, mock_arg, param));
   EXPECT_EQ(OB_SUCCESS, member_helper_.get_member_list_by_replica_type(tenant_id, ls_id,
-        mock_arg.dst_, param.info_));
+        mock_arg.dst_, param.info_, param.is_first_c_replica_));
   ObStorageHASrcProvider::ChooseSourcePolicy policy;
   EXPECT_EQ(OB_SUCCESS, get_idc_policy(mock_arg, tenant_id, param.info_.learner_list_, policy));
   ObStorageHASrcInfo src_info;
@@ -758,7 +758,7 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_region_follower)
   ObMigrationChooseSrcHelperInitParam param;
   EXPECT_EQ(OB_SUCCESS, mock_migrate_choose_helper_param(tenant_id, ls_id, local_ls_checkpoint_scn, mock_arg, param));
   EXPECT_EQ(OB_SUCCESS, member_helper_.get_member_list_by_replica_type(tenant_id, ls_id,
-        mock_arg.dst_, param.info_));
+        mock_arg.dst_, param.info_, param.is_first_c_replica_));
   ObStorageHASrcProvider::ChooseSourcePolicy policy;
   EXPECT_EQ(OB_SUCCESS, get_idc_policy(mock_arg, tenant_id, param.info_.learner_list_, policy));
   ObStorageHASrcInfo src_info;
@@ -796,7 +796,7 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_diff_region_leader)
   ObMigrationChooseSrcHelperInitParam param;
   EXPECT_EQ(OB_SUCCESS, mock_migrate_choose_helper_param(tenant_id, ls_id, local_ls_checkpoint_scn, mock_arg, param));
   EXPECT_EQ(OB_SUCCESS, member_helper_.get_member_list_by_replica_type(tenant_id, ls_id,
-        mock_arg.dst_, param.info_));
+        mock_arg.dst_, param.info_, param.is_first_c_replica_));
   ObStorageHASrcProvider::ChooseSourcePolicy policy;
   EXPECT_EQ(OB_SUCCESS, get_idc_policy(mock_arg, tenant_id, param.info_.learner_list_, policy));
   ObStorageHASrcInfo src_info;
@@ -835,7 +835,7 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_diff_region_follower)
   ObMigrationChooseSrcHelperInitParam param;
   EXPECT_EQ(OB_SUCCESS, mock_migrate_choose_helper_param(tenant_id, ls_id, local_ls_checkpoint_scn, mock_arg, param));
   EXPECT_EQ(OB_SUCCESS, member_helper_.get_member_list_by_replica_type(tenant_id, ls_id,
-        mock_arg.dst_, param.info_));
+        mock_arg.dst_, param.info_, param.is_first_c_replica_));
   ObStorageHASrcProvider::ChooseSourcePolicy policy;
   EXPECT_EQ(OB_SUCCESS, get_idc_policy(mock_arg, tenant_id, param.info_.learner_list_, policy));
   ObStorageHASrcInfo src_info;
@@ -875,7 +875,7 @@ TEST_F(TestChooseMigrationSourcePolicy, region_mode_region_follower)
   ObMigrationChooseSrcHelperInitParam param;
   EXPECT_EQ(OB_SUCCESS, mock_migrate_choose_helper_param(tenant_id, ls_id, local_ls_checkpoint_scn, mock_arg, param));
   EXPECT_EQ(OB_SUCCESS, member_helper_.get_member_list_by_replica_type(tenant_id, ls_id,
-        mock_arg.dst_, param.info_));
+        mock_arg.dst_, param.info_, param.is_first_c_replica_));
   ObStorageHASrcProvider::ChooseSourcePolicy policy;
   EXPECT_EQ(OB_SUCCESS, get_region_policy(mock_arg, tenant_id, param.info_.learner_list_, policy));
   ObStorageHASrcInfo src_info;
@@ -915,7 +915,7 @@ TEST_F(TestChooseMigrationSourcePolicy, region_mode_region_leader)
   ObMigrationChooseSrcHelperInitParam param;
   EXPECT_EQ(OB_SUCCESS, mock_migrate_choose_helper_param(tenant_id, ls_id, local_ls_checkpoint_scn, mock_arg, param));
   EXPECT_EQ(OB_SUCCESS, member_helper_.get_member_list_by_replica_type(tenant_id, ls_id,
-        mock_arg.dst_, param.info_));
+        mock_arg.dst_, param.info_, param.is_first_c_replica_));
   ObStorageHASrcProvider::ChooseSourcePolicy policy;
   EXPECT_EQ(OB_SUCCESS, get_region_policy(mock_arg, tenant_id, param.info_.learner_list_, policy));
   ObStorageHASrcInfo src_info;
@@ -954,7 +954,7 @@ TEST_F(TestChooseMigrationSourcePolicy, region_mode_diff_region_follower)
   ObMigrationChooseSrcHelperInitParam param;
   EXPECT_EQ(OB_SUCCESS, mock_migrate_choose_helper_param(tenant_id, ls_id, local_ls_checkpoint_scn, mock_arg, param));
   EXPECT_EQ(OB_SUCCESS, member_helper_.get_member_list_by_replica_type(tenant_id, ls_id,
-        mock_arg.dst_, param.info_));
+        mock_arg.dst_, param.info_, param.is_first_c_replica_));
   ObStorageHASrcProvider::ChooseSourcePolicy policy;
   EXPECT_EQ(OB_SUCCESS, get_region_policy(mock_arg, tenant_id, param.info_.learner_list_, policy));
   ObStorageHASrcInfo src_info;
@@ -992,7 +992,7 @@ TEST_F(TestChooseMigrationSourcePolicy, region_mode_diff_region_leader)
   ObMigrationChooseSrcHelperInitParam param;
   EXPECT_EQ(OB_SUCCESS, mock_migrate_choose_helper_param(tenant_id, ls_id, local_ls_checkpoint_scn, mock_arg, param));
   EXPECT_EQ(OB_SUCCESS, member_helper_.get_member_list_by_replica_type(tenant_id, ls_id,
-        mock_arg.dst_, param.info_));
+        mock_arg.dst_, param.info_, param.is_first_c_replica_));
   ObStorageHASrcProvider::ChooseSourcePolicy policy;
   EXPECT_EQ(OB_SUCCESS, get_region_policy(mock_arg, tenant_id, param.info_.learner_list_, policy));
   ObStorageHASrcInfo src_info;
@@ -1034,7 +1034,7 @@ TEST_F(TestChooseMigrationSourcePolicy, get_available_src_with_rebuild)
   ObMigrationChooseSrcHelperInitParam param;
   EXPECT_EQ(OB_SUCCESS, mock_migrate_choose_helper_param(tenant_id, ls_id, local_ls_checkpoint_scn, mock_arg, param));
   EXPECT_EQ(OB_SUCCESS, member_helper_.get_member_list_by_replica_type(tenant_id, ls_id,
-        mock_arg.dst_, param.info_));
+        mock_arg.dst_, param.info_, param.is_first_c_replica_));
   ObStorageHASrcProvider::ChooseSourcePolicy policy;
   EXPECT_EQ(OB_SUCCESS, get_idc_policy(mock_arg, tenant_id, param.info_.learner_list_, policy));
   ObStorageHASrcInfo src_info;
@@ -1083,7 +1083,7 @@ TEST_F(TestChooseMigrationSourcePolicy, src_provider_init_idc_fail)
   param.local_clog_checkpoint_scn_ = local_ls_checkpoint_scn;
   param.arg_ = mock_arg;
   EXPECT_EQ(OB_SUCCESS, member_helper_.get_member_list_by_replica_type(tenant_id, ls_id,
-        mock_arg.dst_, param.info_));
+        mock_arg.dst_, param.info_, param.is_first_c_replica_));
   ObStorageHASrcProvider::ChooseSourcePolicy policy;
   EXPECT_EQ(OB_INVALID_ARGUMENT, get_idc_policy(mock_arg, tenant_id, param.info_.learner_list_, policy));
   ObStorageHASrcInfo src_info;
@@ -1111,7 +1111,7 @@ TEST_F(TestChooseMigrationSourcePolicy, src_provider_init_region_fail)
   param.local_clog_checkpoint_scn_ = local_ls_checkpoint_scn;
   param.arg_ = mock_arg;
   EXPECT_EQ(OB_SUCCESS, member_helper_.get_member_list_by_replica_type(tenant_id, ls_id,
-        mock_arg.dst_, param.info_));
+        mock_arg.dst_, param.info_, param.is_first_c_replica_));
   ObStorageHASrcProvider::ChooseSourcePolicy policy;
   EXPECT_EQ(OB_INVALID_ARGUMENT, get_region_policy(mock_arg, tenant_id, param.info_.learner_list_, policy));
   ObStorageHASrcInfo src_info;
@@ -1139,7 +1139,7 @@ TEST_F(TestChooseMigrationSourcePolicy, src_provider_init_recommand_fail)
   param.local_clog_checkpoint_scn_ = local_ls_checkpoint_scn;
   param.arg_ = mock_arg;
   EXPECT_EQ(OB_SUCCESS, member_helper_.get_member_list_by_replica_type(tenant_id, ls_id,
-        mock_arg.dst_, param.info_));
+        mock_arg.dst_, param.info_, param.is_first_c_replica_));
   ObStorageHASrcProvider::ChooseSourcePolicy policy;
   EXPECT_EQ(OB_INVALID_ARGUMENT, get_recommand_policy(mock_arg, tenant_id, param.info_.learner_list_, policy));
   ObStorageHASrcInfo src_info;
@@ -1167,7 +1167,7 @@ TEST_F(TestChooseMigrationSourcePolicy, src_provider_init_checkpoint_fail)
   param.local_clog_checkpoint_scn_ = local_ls_checkpoint_scn;
   param.arg_ = mock_arg;
   EXPECT_EQ(OB_SUCCESS, member_helper_.get_member_list_by_replica_type(tenant_id, ls_id,
-        mock_arg.dst_, param.info_));
+        mock_arg.dst_, param.info_, param.is_first_c_replica_));
   ObStorageHASrcProvider::ChooseSourcePolicy policy;
   EXPECT_EQ(OB_INVALID_ARGUMENT, get_checkpoint_policy(mock_arg, tenant_id, param.info_.learner_list_, policy));
   ObStorageHASrcInfo src_info;
@@ -1213,7 +1213,7 @@ TEST_F(TestChooseMigrationSourcePolicy, get_available_src_condition_fail)
   ObMigrationChooseSrcHelperInitParam param;
   EXPECT_EQ(OB_SUCCESS, mock_migrate_choose_helper_param(tenant_id, ls_id, local_ls_checkpoint_scn, mock_arg, param));
   EXPECT_EQ(OB_SUCCESS, member_helper_.get_member_list_by_replica_type(tenant_id, ls_id,
-        mock_arg.dst_, param.info_));
+        mock_arg.dst_, param.info_, param.is_first_c_replica_));
   ObStorageHASrcProvider::ChooseSourcePolicy policy;
   EXPECT_EQ(OB_SUCCESS, get_checkpoint_policy(mock_arg, tenant_id, param.info_.learner_list_, policy));
   ObStorageHASrcInfo src_info;
@@ -1263,7 +1263,7 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_check_replica_fail)
   ObMigrationChooseSrcHelperInitParam param;
   EXPECT_EQ(OB_SUCCESS, mock_migrate_choose_helper_param(tenant_id, ls_id, local_ls_checkpoint_scn, mock_arg, param));
   EXPECT_EQ(OB_SUCCESS, member_helper_.get_member_list_by_replica_type(tenant_id, ls_id,
-        mock_arg.dst_, param.info_));
+        mock_arg.dst_, param.info_, param.is_first_c_replica_));
   ObStorageHASrcProvider::ChooseSourcePolicy policy;
   EXPECT_EQ(OB_SUCCESS, get_idc_policy(mock_arg, tenant_id, param.info_.learner_list_, policy));
   ObStorageHASrcInfo src_info;
@@ -1315,7 +1315,7 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_r_replica_init)
   ObMigrationChooseSrcHelperInitParam param;
   EXPECT_EQ(OB_SUCCESS, mock_migrate_choose_helper_param(tenant_id, ls_id, local_ls_checkpoint_scn, mock_arg, param));
   EXPECT_EQ(OB_SUCCESS, member_helper_.get_member_list_by_replica_type(tenant_id, ls_id,
-        mock_arg.dst_, param.info_));
+        mock_arg.dst_, param.info_, param.is_first_c_replica_));
   ObStorageHASrcProvider::ChooseSourcePolicy policy;
   EXPECT_EQ(OB_SUCCESS, get_idc_policy(mock_arg, tenant_id, param.info_.learner_list_, policy));
   ObStorageHASrcInfo src_info;
@@ -1368,7 +1368,7 @@ TEST_F(TestChooseMigrationSourcePolicy, c_replica_no_other)
   ObMigrationChooseSrcHelperInitParam param;
   EXPECT_EQ(OB_SUCCESS, mock_migrate_choose_helper_param(tenant_id, ls_id, local_ls_checkpoint_scn, mock_arg, param));
   EXPECT_EQ(OB_SUCCESS, member_helper_.get_member_list_by_replica_type(tenant_id, ls_id,
-        mock_arg.dst_, param.info_));
+        mock_arg.dst_, param.info_, param.is_first_c_replica_));
   ObStorageHASrcProvider::ChooseSourcePolicy policy;
   EXPECT_EQ(OB_SUCCESS, get_idc_policy(mock_arg, tenant_id, param.info_.learner_list_, policy));
   ObStorageHASrcInfo src_info;
@@ -1421,7 +1421,7 @@ TEST_F(TestChooseMigrationSourcePolicy, c_replica_have_other)
   ObMigrationChooseSrcHelperInitParam param;
   EXPECT_EQ(OB_SUCCESS, mock_migrate_choose_helper_param(tenant_id, ls_id, local_ls_checkpoint_scn, mock_arg, param));
   EXPECT_EQ(OB_SUCCESS, member_helper_.get_member_list_by_replica_type(tenant_id, ls_id,
-        mock_arg.dst_, param.info_));
+        mock_arg.dst_, param.info_, param.is_first_c_replica_));
   ObStorageHASrcProvider::ChooseSourcePolicy policy;
   EXPECT_EQ(OB_SUCCESS, get_idc_policy(mock_arg, tenant_id, param.info_.learner_list_, policy));
   ObStorageHASrcInfo src_info;

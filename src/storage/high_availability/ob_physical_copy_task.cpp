@@ -536,6 +536,9 @@ int ObPhysicalCopyTask::build_copy_macro_block_reader_init_param_(
 {
   int ret = OB_SUCCESS;
   int64_t snapshot_version = 0;
+  int64_t co_base_snapshot_version = 0;
+  int64_t src_co_base_snapshot_version = 0;
+
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("physical copy task do not init", K(ret));
@@ -564,16 +567,21 @@ int ObPhysicalCopyTask::build_copy_macro_block_reader_init_param_(
 
     if (OB_ISNULL(copy_ctx_->macro_block_reuse_mgr_)) {
       // skip reuse
-    } else if (OB_FAIL(copy_ctx_->macro_block_reuse_mgr_->get_major_snapshot_version(copy_ctx_->table_key_, snapshot_version))) {
+    } else if (OB_FAIL(copy_ctx_->macro_block_reuse_mgr_->get_major_snapshot_version(copy_ctx_->table_key_, snapshot_version, co_base_snapshot_version))) {
       if (OB_ENTRY_NOT_EXIST != ret) {
         LOG_WARN("failed to get reuse major snapshot version", K(ret), KPC(copy_ctx_));
       } else {
         ret = OB_SUCCESS;
-        LOG_INFO("major snapshot version not exist, maybe copying first major in this tablet, skip reuse, set data_version_ to 0", K(ret), KPC(copy_ctx_));
+        LOG_INFO("major snapshot version not exist, maybe copying first major in this tablet or copying F major to C replica, skip reuse, set data_version_ to 0", K(ret), KPC(copy_ctx_), K(init_param));
       }
+    } else if (FALSE_IT(src_co_base_snapshot_version = finish_task_->get_sstable_param()->basic_meta_.get_co_base_snapshot_version())) {
+    } else if (co_base_snapshot_version != src_co_base_snapshot_version) {
+      // when co_base_snapshot_version not match (dst C's major is converted from different version of src major), skip reuse
+      LOG_INFO("co_base_snapshot_version not match, skip reuse, set data_version_ to 0", K(snapshot_version), K(co_base_snapshot_version),
+          K(src_co_base_snapshot_version), KPC(copy_ctx_), K(init_param));
     } else {
       init_param.data_version_ = snapshot_version;
-      LOG_INFO("succeed get and set reuse major max snapshot version", K(snapshot_version), KPC(copy_ctx_), K(init_param));
+      LOG_INFO("succeed get and set reuse major max snapshot version", K(snapshot_version), K(co_base_snapshot_version), K(src_co_base_snapshot_version), KPC(copy_ctx_), K(init_param));
     }
 
     if (OB_SUCC(ret)) {

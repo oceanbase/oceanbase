@@ -41,7 +41,7 @@ public:
   // F replica get member list, R replica get member list and learner list.
   int get_member_list_by_replica_type(
       const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObReplicaMember &dst,
-      ObLSMemberListInfo &info);
+      ObLSMemberListInfo &info, bool &is_first_c_replica);
 
 private:
   int fetch_ls_member_list_and_learner_list_(const uint64_t tenant_id, const share::ObLSID &ls_id, const bool need_learner_list,
@@ -52,7 +52,12 @@ private:
   int filter_dest_replica_(
       const common::ObReplicaMember &dst,
       common::GlobalLearnerList &learner_list);
-
+  // check whether the dst is the first C replica in the learner list
+  int check_is_first_c_replica_(
+      const common::ObReplicaMember &dst,
+      const common::GlobalLearnerList &learner_list,
+      const bool &need_learner_list,
+      bool &is_first_c_replica);
 private:
   bool is_inited_;
   storage::ObStorageRpc *storage_rpc_;
@@ -87,6 +92,7 @@ public:
   const share::SCN &get_local_clog_checkpoint_scn() const { return local_clog_checkpoint_scn_; }
   const share::SCN &get_palf_parent_checkpoint_scn() const { return palf_parent_checkpoint_scn_; }
   ChooseSourcePolicy get_policy_type() const { return policy_type_; }
+  bool is_first_c_replica() const { return is_first_c_replica_; }
 
   const static char *ObChooseSourcePolicyStr[static_cast<int64_t>(ChooseSourcePolicy::MAX_POLICY)];
   const static char *get_policy_str(const ChooseSourcePolicy policy_type);
@@ -106,7 +112,7 @@ protected:
 protected:
   bool is_inited_;
   ObLSMemberListInfo member_list_info_;
-
+  bool is_first_c_replica_;
 private:
   int fetch_ls_meta_info_(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObAddr &member_addr,
       obrpc::ObFetchLSMetaInfoResp &ls_meta_info);

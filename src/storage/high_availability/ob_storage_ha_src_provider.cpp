@@ -22,6 +22,8 @@
 namespace oceanbase {
 using namespace share;
 namespace storage {
+ERRSIM_POINT_DEF(EN_FORCE_NOT_CHOOSE_C_REPLICA);
+
 /**
  * ------------------------------ObStorageHAGetMemberHelper---------------------
  */
@@ -244,9 +246,48 @@ int ObStorageHAGetMemberHelper::filter_dest_replica_(
   return ret;
 }
 
+int ObStorageHAGetMemberHelper::check_is_first_c_replica_(
+    const common::ObReplicaMember &dst,
+    const common::GlobalLearnerList &learner_list,
+    const bool &need_learner_list,
+    bool &is_first_c_replica)
+{
+  int ret = OB_SUCCESS;
+  is_first_c_replica = false;
+  if (!dst.is_valid() || (need_learner_list && !learner_list.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument!", K(ret), K(dst), K(need_learner_list), K(learner_list));
+  } else if (!need_learner_list || !dst.is_columnstore()) {
+    is_first_c_replica = false;
+  } else {
+    int64_t learner_count = learner_list.get_member_number();
+    int64_t idx = 0;
+    for (idx = 0; OB_SUCC(ret) && idx < learner_count; ++idx) {
+      common::ObMember member;
+      if (OB_FAIL(learner_list.get_learner(idx, member))) {
+        LOG_WARN("failed to get learner", K(ret), K(idx), K(learner_list));
+      } else if (member.is_columnstore()) {
+        // stop at first c replica
+        if (member.get_server() == dst.get_server()) {
+          is_first_c_replica = true;
+        } else {
+          is_first_c_replica = false;
+        }
+        break;
+      }
+
+      if (OB_SUCC(ret) && idx == learner_count) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("learner list does not contain dst", K(ret), K(learner_list), K(dst));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObStorageHAGetMemberHelper::get_member_list_by_replica_type(
     const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObReplicaMember &dst,
-    ObLSMemberListInfo &info)
+    ObLSMemberListInfo &info, bool &is_first_c_replica)
 {
   int ret = OB_SUCCESS;
   bool need_learner_list = false;
@@ -272,16 +313,18 @@ int ObStorageHAGetMemberHelper::get_member_list_by_replica_type(
         info.leader_addr_, info.learner_list_, info.member_list_))) {
       LOG_WARN("failed to fetch ls leader member list and learner list", K(ret), K(tenant_id), K(ls_id),
           K(need_learner_list));
+    } else if (OB_FAIL(check_is_first_c_replica_(dst, info.learner_list_, need_learner_list, is_first_c_replica))) {
+      LOG_WARN("failed to check is first c replica", K(ret), K(dst), K(need_learner_list), K(info));
     } else if (need_learner_list && OB_FAIL(filter_dest_replica_(dst, info.learner_list_))) {
-      LOG_WARN("failed to filter dest replica", K(ret), K(info), K(dst));
+      LOG_WARN("failed to filter dest replica", K(ret), K(info), K(dst), K(is_first_c_replica));
     } else if (info.learner_list_.is_valid()) {
       if (OB_FAIL(info.learner_list_.get_addr_array(learner_addr_array))) {
-        LOG_WARN("failed to get addr array from learner list", K(ret), K(info));
+        LOG_WARN("failed to get addr array from learner list", K(ret), K(info), K(is_first_c_replica));
       } else if (OB_FAIL(common::append(info.member_list_, learner_addr_array))) {
-        LOG_WARN("failed to append addr list", K(ret), K(info), K(learner_addr_array));
+        LOG_WARN("failed to append addr list", K(ret), K(info), K(learner_addr_array), K(is_first_c_replica));
       }
     }
-    LOG_INFO("get member info", K(ret), K(info));
+    LOG_INFO("get member info", K(ret), K(info), K(is_first_c_replica));
   }
   return ret;
 }
@@ -291,6 +334,7 @@ int ObStorageHAGetMemberHelper::get_member_list_by_replica_type(
 ObStorageHASrcProvider::ObStorageHASrcProvider()
   : is_inited_(false),
     member_list_info_(),
+    is_first_c_replica_(false),
     tenant_id_(OB_INVALID_ID),
     ls_id_(),
     type_(ObMigrationOpType::MAX_LS_OP),
@@ -337,6 +381,7 @@ int ObStorageHASrcProvider::init(const ObMigrationChooseSrcHelperInitParam &para
       type_ = param.arg_.type_;
       local_clog_checkpoint_scn_ = param.local_clog_checkpoint_scn_;
       policy_type_ = policy_type;
+      is_first_c_replica_ = param.is_first_c_replica_;
     }
   }
   return ret;
@@ -419,6 +464,11 @@ int ObStorageHASrcProvider::check_replica_type_for_normal_replica_(
     } else if (src.is_columnstore()) {
       // src is C, dst can only be C as well
       is_replica_type_valid = REPLICA_TYPE_COLUMNSTORE == dst.get_replica_type();
+#ifdef ERRSIM
+      if (OB_SUCCESS != EN_FORCE_NOT_CHOOSE_C_REPLICA) {
+        is_replica_type_valid = false;
+      }
+#endif
     } else {
       // src is R, dst can be non-paxos replica-type (R or C)
       if (common::ObReplicaType::REPLICA_TYPE_FULL == dst.get_replica_type()) { // dst is F
@@ -1216,17 +1266,17 @@ int ObCTypeReplicaSrcProvider::inner_choose_ob_src_(
         choosen_src_addr = valid_c_replica_list.at(rand() % num);
         LOG_INFO("found available C replica source in this area", "tenant_id", get_tenant_id(),
             "ls_id", get_ls_id(), K(arg.dst_), K(learner_list), K(choosen_src_addr), K(addr_list), K(valid_c_replica_list));
-      } else if (!all_c_replica_list.empty()) {
-        // if C replica exist, but all C replica is not available, fail this migration
+      } else if (!all_c_replica_list.empty() && !is_first_c_replica_) {
+        // C replica exist, but all C replica is not available. If dst is not first C replica, fail this migration
         ret = OB_DATA_SOURCE_NOT_EXIST;
         LOG_INFO("C replica exist, but all C replica is not available", K(ret), "tenant_id", get_tenant_id(),
-            "ls_id", get_ls_id(), K(arg.dst_), K(learner_list), K(addr_list), K(all_c_replica_list), K(valid_c_replica_list));
+            "ls_id", get_ls_id(), K(arg.dst_), K(learner_list), K(addr_list), K(all_c_replica_list), K(valid_c_replica_list), K(is_first_c_replica_));
       } else {
-        // if no C replica exist, choose other replica
+        // If no C replica exist or dst is first C replica and other C replica invalid, choose other F/R replica
         int64_t num = candidate_addr_list.count();
         choosen_src_addr = addr_list.at(candidate_addr_list.at(rand() % num));
         LOG_INFO("no available C replica, but found other available source in this area", "tenant_id", get_tenant_id(),
-            "ls_id", get_ls_id(), K(arg.dst_), K(learner_list), K(choosen_src_addr), K(addr_list));
+            "ls_id", get_ls_id(), K(arg.dst_), K(learner_list), K(choosen_src_addr), K(addr_list), K(is_first_c_replica_));
       }
     }
   }
@@ -1571,6 +1621,13 @@ int ObStorageHAChooseSrcHelper::check_c_replica_migration_policy_(const uint64_t
   } else {
     use_c_replica_policy = false;
   }
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    if(OB_SUCCESS != EN_FORCE_NOT_CHOOSE_C_REPLICA) {
+      use_c_replica_policy = false;
+    }
+  }
+#endif
   return ret;
 }
 }  // namespace storage
