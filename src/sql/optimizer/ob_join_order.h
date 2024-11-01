@@ -1381,11 +1381,20 @@ struct NullAwareAntiJoinInfo {
                                const ObIndexInfoCache &index_info_cache,
                                const common::ObIArray<uint64_t> &valid_index_ids,
                                common::ObIArray<uint64_t> &skyline_index_ids,
-                               ObIArray<ObRawExpr *> &restrict_infos);
+                               ObIArray<ObRawExpr *> &restrict_infos,
+                               bool ignore_index_back_dim = false);
 
-    int pruning_unstable_access_path(BaseTableOptInfo *table_opt_info,
+    int pruning_unstable_access_path(const uint64_t table_id,
+                                     const uint64_t ref_table_id,
+                                     PathHelper &helper,
+                                     ObIndexInfoCache &index_info_cache,
+                                     BaseTableOptInfo *table_opt_info,
                                      ObIArray<AccessPath *> &access_paths);
-    int try_pruning_base_table_access_path(ObIArray<AccessPath*> &access_paths,
+    int try_pruning_base_table_access_path(const uint64_t table_id,
+                                           const uint64_t ref_table_id,
+                                           PathHelper &helper,
+                                           ObIndexInfoCache &index_info_cache,
+                                           ObIArray<AccessPath*> &access_paths,
                                            ObIArray<uint64_t> &unstable_index_id);
 
     int cal_dimension_info(const uint64_t table_id,
@@ -1394,7 +1403,8 @@ struct NullAwareAntiJoinInfo {
                            const ObDMLStmt *stmt,
                            ObIndexSkylineDim &index_dim,
                            const ObIndexInfoCache &index_info_cache,
-                           ObIArray<ObRawExpr *> &restrict_infos);
+                           ObIArray<ObRawExpr *> &restrict_infos,
+                           bool ignore_index_back_dim = false);
 
     int fill_index_info_entry(const uint64_t table_id,
                               const uint64_t base_table_id,
