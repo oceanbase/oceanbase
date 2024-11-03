@@ -244,6 +244,7 @@ public:
   inline int64_t get_column_group_count() const { return column_group_array_.count(); }
   inline int64_t has_all_column_group() const { return has_all_column_group_; }
   inline bool is_row_store() const { return column_group_array_.count() <= 1; }
+  inline bool need_generate_cg_array() const { return column_group_array_.count() <= column_array_.count(); }
   virtual inline int64_t get_pctfree() const override { return pctfree_; }
   virtual inline int64_t get_progressive_merge_round() const override { return progressive_merge_round_; }
   virtual inline int64_t get_progressive_merge_num() const override { return progressive_merge_num_; }

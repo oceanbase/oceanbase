@@ -1388,8 +1388,9 @@ int ObBasicTabletMergeCtx::get_convert_compaction_info()
     LOG_WARN("failed to alloc storage schema", K(ret));
   } else if (schema_on_tablet->is_column_info_simplified() && OB_FAIL(param.init(*tablet))) {
     LOG_WARN("failed to init param", K(ret), KPC(tablet));
-  } else if (FALSE_IT(generate_cs_replica_cg_array = (schema_on_tablet->is_row_store() || schema_on_tablet->is_column_info_simplified()))) {
-    // storage schema is column store but simplifed, it should become not simplified before it can be used for merge
+  } else if (FALSE_IT(generate_cs_replica_cg_array = (schema_on_tablet->is_row_store() || schema_on_tablet->is_column_info_simplified() || schema_on_tablet->need_generate_cg_array()))) {
+    // 1. storage schema is column store but simplifed, it should become not simplified before it can be used for merge
+    // 2. if need generate cg array (column group cnt <= column cnt), need generate cg array from the latest column array
   } else if (OB_FAIL(schema_for_merge->init(mem_ctx_.get_allocator(), *schema_on_tablet,
                         false /*skip_column_info*/, nullptr /*column_group_schema*/, generate_cs_replica_cg_array,
                         schema_on_tablet->is_column_info_simplified() ? &param : nullptr))) {
