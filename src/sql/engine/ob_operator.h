@@ -565,11 +565,11 @@ protected:
 protected:
   // for sql plan monitor
   int try_register_rt_monitor_node(int64_t rows);
+  int check_stack_once();
 private:
   int try_deregister_rt_monitor_node();
   int submit_op_monitor_node();
   bool match_rt_monitor_condition(int64_t rows);
-  int check_stack_once();
   int output_expr_sanity_check();
   int output_expr_sanity_check_batch();
   int setup_op_feedback_info();
