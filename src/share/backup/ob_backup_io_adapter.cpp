@@ -113,6 +113,8 @@ int ObBackupIoAdapter::open_with_access_type(ObIODevice*& device_handle, ObIOFd 
       iod_opts.opt_cnt_++;
     }
 
+    ObObjectStorageTenantGuard object_storage_tenant_guard(
+        get_tenant_id(), OB_IO_MANAGER.get_object_storage_io_timeout_ms(get_tenant_id()) * 1000LL);
     ObArenaAllocator allocator(OB_STORAGE_IO_ADAPTER);
     char *uri_cstr = nullptr;
     if (OB_FAIL(ob_dup_cstring(allocator, uri, uri_cstr))) {
@@ -273,6 +275,8 @@ int ObBackupIoAdapter::batch_del_files(
     ObIArray<int64_t> &failed_files_idx)
 {
   int ret = OB_SUCCESS;
+  ObObjectStorageTenantGuard object_storage_tenant_guard(
+      get_tenant_id(), OB_IO_MANAGER.get_object_storage_io_timeout_ms(get_tenant_id()) * 1000LL);
   ObIODevice *device_handle = nullptr;
   if (OB_UNLIKELY(files_to_delete.empty())) {
     ret = OB_INVALID_ARGUMENT;
@@ -496,6 +500,8 @@ int ObBackupIoAdapter::async_upload_data(
 int ObBackupIoAdapter::complete(common::ObIODevice &device_handle, common::ObIOFd &fd)
 {
   int ret = OB_SUCCESS;
+  ObObjectStorageTenantGuard object_storage_tenant_guard(
+      get_tenant_id(), OB_IO_MANAGER.get_object_storage_io_timeout_ms(get_tenant_id()) * 1000LL);
   int flag = -1;
   ObFdSimulator::get_fd_flag(fd, flag);
   fd.device_handle_ = &device_handle;
@@ -522,6 +528,8 @@ int ObBackupIoAdapter::complete(common::ObIODevice &device_handle, common::ObIOF
 int ObBackupIoAdapter::abort(common::ObIODevice &device_handle, common::ObIOFd &fd)
 {
   int ret = OB_SUCCESS;
+  ObObjectStorageTenantGuard object_storage_tenant_guard(
+      get_tenant_id(), OB_IO_MANAGER.get_object_storage_io_timeout_ms(get_tenant_id()) * 1000LL);
   int flag = -1;
   ObFdSimulator::get_fd_flag(fd, flag);
   if ((ObStorageAccessType::OB_STORAGE_ACCESS_DIRECT_MULTIPART_WRITER != flag)
