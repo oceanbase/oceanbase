@@ -5775,7 +5775,7 @@ int ObIJsonBase::to_time(int64_t &value) const
       if (OB_FAIL(get_obtime(t))) {
         LOG_WARN("fail to get json obtime", K(ret));
       } else {
-        time = ObTimeConverter::ob_time_to_time(t);
+        value = ObTimeConverter::ob_time_to_time(t);
       }
       break;
     }
@@ -5790,6 +5790,8 @@ int ObIJsonBase::to_time(int64_t &value) const
         ObString str(static_cast<int32_t>(length), static_cast<int32_t>(length), data);
         if (OB_FAIL(ObTimeConverter::str_to_time(str, time))) {
           LOG_WARN("fail to cast string to time", K(ret), K(str));
+        } else {
+          value = time;
         }
       }
       break;
@@ -5804,10 +5806,6 @@ int ObIJsonBase::to_time(int64_t &value) const
       LOG_WARN("fail to cast json type to time", K(ret), K(json_type()));
       break;
     }
-  }
-
-  if (OB_SUCC(ret)) {
-    value = time;
   }
 
   return ret;
