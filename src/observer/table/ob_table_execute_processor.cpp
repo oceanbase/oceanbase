@@ -244,6 +244,11 @@ int ObTableApiExecuteP::before_process()
     ret = ParentType::before_process();
   }
 
+  if (OB_FAIL(ret) && OB_NOT_NULL(group_single_op_)) {
+    TABLEAPI_GROUP_COMMIT_MGR->free_op(group_single_op_);
+    group_single_op_ = nullptr;
+  }
+
   return ret;
 }
 
@@ -287,13 +292,21 @@ int ObTableApiExecuteP::process_group_commit()
   ObLSID ls_id(ObLSID::INVALID_LS_ID);
 
   if (!tablet_id_.is_valid()) {
-    tablet_id_ = simple_table_schema_->get_tablet_id();
+    if (!simple_table_schema_->is_partitioned_table()) {
+      tablet_id_ = simple_table_schema_->get_tablet_id();
+    } else {
+      // maybe drop a non-partitioned table and create a
+      // partitioned table with same name
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("partitioned table should pass right tablet id from client", K(ret));
+    }
   }
-  if (OB_NOT_NULL(group_single_op_)) {
+  if (OB_SUCC(ret) && OB_NOT_NULL(group_single_op_)) {
     group_single_op_->tablet_id_ = tablet_id_;
   }
 
-  if (OB_FAIL(GCTX.location_service_->get(tenant_id,
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(GCTX.location_service_->get(tenant_id,
                                           tablet_id_,
                                           0, /* expire_renew_time */
                                           is_cache_hit,
@@ -449,6 +462,14 @@ int ObTableApiExecuteP::try_process()
     // init_tb_ctx will return some replaceable error code
     result_.set_err(ret);
     table::ObTableApiUtil::replace_ret_code(ret);
+
+    if (OB_NOT_NULL(group_single_op_)) {
+      // In group commit scene:
+      // ret != OB_SUCCESS mean we should response packet by the responser in rpc processor
+      // and here we should free group_single_op_ in hand
+      TABLEAPI_GROUP_COMMIT_MGR->free_op(group_single_op_);
+      group_single_op_ = nullptr;
+    }
   }
 
 #ifndef NDEBUG

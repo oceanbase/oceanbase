@@ -312,6 +312,15 @@ int ObRedisService::execute_cmd_group(ObRedisSingleCtx &ctx)
   } else {
     ctx.did_async_commit_ = true;  // do not response packet anyway
   }
+
+  if (OB_FAIL(ret)) {
+    // ret != OB_SUCCESS mean we should response packet by the responser in rpc processor
+    // and here we should free redis_op in hand
+    if (OB_NOT_NULL(redis_op)) {
+      TABLEAPI_GROUP_COMMIT_MGR->free_op(redis_op);
+      redis_op = nullptr;
+    }
+  }
   // NOTE: Must be called to turn redis_err into success
   ret = COVER_REDIS_ERROR(ret);
 

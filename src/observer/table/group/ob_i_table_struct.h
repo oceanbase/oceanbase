@@ -65,6 +65,7 @@ public:
   virtual void reset()
   {
     req_ = nullptr;
+    result_.set_entity(nullptr);
     result_.reset();
     tablet_id_.reset();
     timeout_ts_ = 0;

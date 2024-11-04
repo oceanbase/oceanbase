@@ -1018,7 +1018,9 @@ void ObTableOperationResult::reset()
 {
   ObTableResult::reset();
   operation_type_ = ObTableOperationType::GET;
-  entity_->reset();
+  if (entity_ != nullptr) {
+    entity_->reset();
+  }
   affected_rows_ = 0;
   flags_ = 0;
   insertup_old_row_ = nullptr;

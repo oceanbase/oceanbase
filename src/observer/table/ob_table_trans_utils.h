@@ -29,14 +29,15 @@ struct ObTableTransParam final
 {
 public:
   ObTableTransParam()
-      : trans_state_(),
-        trans_state_ptr_(&trans_state_) // refer to inner trans_state_ default
+      : trans_state_()
   {
     reset();
   }
   virtual ~ObTableTransParam() {}
   void reset()
   {
+    trans_state_.reset();
+    trans_state_ptr_ = &trans_state_; // refer to inner trans_state_ default
     trans_desc_ = nullptr;
     had_do_response_ = false;
     req_ = nullptr;
