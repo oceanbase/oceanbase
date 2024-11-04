@@ -396,8 +396,7 @@ int64_t get_global_addr()
 
 bool init_sanity()
 {
-  set_ob_mem_mgr_path();
-  DEFER(unset_ob_mem_mgr_path(););
+  ObUnmanagedMemoryStat::DisableGuard guard;
   bool succ = false;
   int64_t maxs[] = {0x600000000000, 0x500000000000, 0x400000000000};
   int64_t mins[] = {0, 0, 0};
