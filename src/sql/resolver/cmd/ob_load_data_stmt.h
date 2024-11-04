@@ -48,6 +48,7 @@ public:
   int add_files(common::ObString *start, const int64_t count = 1);
   int get_next_file(common::ObString &file);
   int copy(const ObLoadFileIterator &other);
+  void rewind() { pos_ = 0; }
   TO_STRING_KV(K_(files), K_(pos));
 private:
   common::ObSEArray<common::ObString, 16> files_;

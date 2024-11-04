@@ -1415,7 +1415,7 @@ int ObLoadDataSPImpl::next_file_buffer(ObExecContext &ctx,
         box.data_trimer.commit_line_cnt(complete_cnt);
         has_valid_data = complete_cnt > 0;
         LOG_DEBUG("LOAD DATA",
-            "split offset", box.read_cursor.file_offset_ - box.data_trimer.get_incomplate_data_string().length(),
+            "split offset", box.read_cursor.total_read_size_ - box.data_trimer.get_incomplate_data_string().length(),
             K(complete_len), K(complete_cnt),
             "incomplate data length", box.data_trimer.get_incomplate_data_string().length(),
             "incomplate data", box.data_trimer.get_incomplate_data_string());
@@ -1957,36 +1957,47 @@ int ObLoadDataSPImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
              , "transaction_timeout", box.txn_timeout
              );
 
-    //ignore rows
-    while (OB_SUCC(ret)
-           && !box.read_cursor.is_end_file()
-           && box.data_trimer.get_lines_count() < box.ignore_rows) {
-      box.temp_handle->data_buffer->reset();
-      OZ (next_file_buffer(ctx, box, box.temp_handle,
-                           box.ignore_rows - box.data_trimer.get_lines_count()));
-      OZ (ObLoadDataUtils::check_session_status(*ctx.get_my_session()));
-      LOG_DEBUG("LOAD DATA ignore rows", K(box.ignore_rows), K(box.data_trimer.get_lines_count()));
+    ObString filename;
+    while (OB_SUCC(ret) && OB_SUCC(box.file_iter.get_next_file(filename))) {
+      LOG_TRACE("begin to load file", K(filename));
+
+      OZ (box.open_file(filename, ctx));
+
+      //ignore rows
+      while (OB_SUCC(ret)
+             && !box.read_cursor.is_end_file()
+             && box.data_trimer.get_current_file_lines_count() < box.ignore_rows) {
+        box.temp_handle->data_buffer->reset();
+        OZ (next_file_buffer(ctx, box, box.temp_handle,
+                             box.ignore_rows - box.data_trimer.get_current_file_lines_count()));
+        OZ (ObLoadDataUtils::check_session_status(*ctx.get_my_session()));
+        LOG_DEBUG("LOAD DATA ignore rows", K(box.ignore_rows), K(box.data_trimer.get_current_file_lines_count()));
+      }
+
+      //main while
+      while (OB_SUCC(ret) && !box.read_cursor.is_end_file()) {
+        /* 执行分两步并行
+         * 1. 并行计算分区 (shuffle_task_gen_and_dispatch)
+         * 2. 并行插入 (insert_task_gen_and_dispatch)
+         * 每次循环从文件读取 data_frag_mem_usage_limit * MAX_BUFFER_SIZE = 100M 在内存缓存
+         */
+        OZ (shuffle_task_gen_and_dispatch(ctx, box));
+        OW (wait_shuffle_task_return(box));
+        OZ (insert_task_gen_and_dispatch(ctx, box));
+        //OW (wait_insert_task_return(ctx, box));
+
+        /* 所有异步task都已经返回了，这些task依赖的datafrag可以被释放
+         */
+        OW (box.data_frag_mgr.free_unused_datafrag());
+
+        /* 检查session是否有效，无效时可直接退出
+         */
+        OZ (ObLoadDataUtils::check_session_status(*ctx.get_my_session()));
+      }
     }
 
-    //main while
-    while (OB_SUCC(ret) && !box.read_cursor.is_end_file()) {
-      /* 执行分两步并行
-       * 1. 并行计算分区 (shuffle_task_gen_and_dispatch)
-       * 2. 并行插入 (insert_task_gen_and_dispatch)
-       * 每次循环从文件读取 data_frag_mem_usage_limit * MAX_BUFFER_SIZE = 100M 在内存缓存
-       */
-      OZ (shuffle_task_gen_and_dispatch(ctx, box));
-      OW (wait_shuffle_task_return(box));
-      OZ (insert_task_gen_and_dispatch(ctx, box));
-      //OW (wait_insert_task_return(ctx, box));
-
-      /* 所有异步task都已经返回了，这些task依赖的datafrag可以被释放
-       */
-      OW (box.data_frag_mgr.free_unused_datafrag());
-
-      /* 检查session是否有效，无效时可直接退出
-       */
-      OZ (ObLoadDataUtils::check_session_status(*ctx.get_my_session()));
+    if (OB_ITER_END == ret) {
+      ret = OB_SUCCESS;
     }
 
     //release
@@ -2777,9 +2788,21 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
     }
   }
 
+  if (OB_UNLIKELY(ObLoadFileLocation::OSS == load_file_storage &&
+                    ObLoadDataFormat::CSV != load_args.access_info_.get_load_data_format())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("load data format not support", KR(ret), K(load_args.access_info_));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-csv format in load data is");
+  }
+
+  if (OB_SUCC(ret) && OB_FAIL(file_iter.copy(load_args.file_iter_))) {
+    LOG_WARN("failed to copy file iter", K(ret));
+  }
+
   if (OB_SUCC(ret)) {
+  // init file read param except filename
     file_read_param.file_location_      = load_file_storage;
-    file_read_param.filename_           = load_args.file_name_;
+    // file_read_param.filename_           = load_args.file_name_;
     file_read_param.compression_format_ = load_args.compression_format_;
     file_read_param.access_info_        = load_args.access_info_;
     file_read_param.packet_handle_      = nullptr;
@@ -2788,21 +2811,9 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
     }
     file_read_param.session_            = ctx.get_my_session();
     file_read_param.timeout_ts_         = THIS_WORKER.get_timeout_ts();
-
-    if (OB_UNLIKELY(ObLoadFileLocation::OSS == load_file_storage &&
-                    ObLoadDataFormat::CSV != load_args.access_info_.get_load_data_format())) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("load data format not support", KR(ret), K(load_args.access_info_));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-csv format in load data is");
-    } else if (OB_FAIL(ObFileReader::open(file_read_param, ctx.get_allocator(), file_reader))) {
-      LOG_WARN("failed to open file.", KR(ret), K(file_read_param), K(load_args.file_name_));
-
-    } else if (!file_reader->seekable()) {
-      file_size = -1;
-    } else if (OB_FAIL(file_reader->get_file_size(file_size))) {
-      LOG_WARN("fail to get io device file size", KR(ret), K(file_size));
-    }
   }
+
+  OZ (init_file_size(ctx));
 
   for (int64_t i = 0; OB_SUCC(ret) && i < insert_infos.count(); ++i) {
     const ObLoadTableColumnDesc &desc = insert_infos.at(i);
@@ -3178,6 +3189,62 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
         gid = temp_gid;
       }
     }
+  }
+
+  return ret;
+}
+
+int ObLoadDataSPImpl::ToolBox::open_file(ObString filename, ObExecContext &ctx)
+{
+  int ret = OB_SUCCESS;
+
+  // the other params inited in the ToolBox::init
+  file_read_param.filename_ = filename;
+
+  if (OB_NOT_NULL(file_reader)) {
+    ObFileReader::destroy(file_reader);
+    file_reader = nullptr;
+  }
+
+  if (OB_FAIL(ObFileReader::open(file_read_param, ctx.get_allocator(), file_reader))) {
+    LOG_WARN("failed to open file.", KR(ret), K(file_read_param));
+  } else {
+    read_cursor.read_size_ = 0;
+    read_cursor.is_end_file_ = false;
+    data_trimer.reset_current_file_line_cnt();
+  }
+  return ret;
+}
+
+int ObLoadDataSPImpl::ToolBox::init_file_size(ObExecContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  if (file_read_param.file_location_ == ObLoadFileLocation::CLIENT_DISK) {
+    file_size = -1;
+  } else {
+    ObString filename;
+    file_size = 0;
+    while (OB_SUCC(ret) && OB_SUCC(file_iter.get_next_file(filename))) {
+      int64_t this_file_size = 0;
+      if (OB_FAIL(open_file(filename, ctx))) {
+        LOG_WARN("failed to open file", K(filename));
+      } else if (OB_ISNULL(file_reader)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("open file return success but got null", KP(file_reader), K(ret));
+      } else if (!file_reader->seekable()) {
+        file_size = -1;
+        ret = OB_ITER_END;
+      } else if (OB_FAIL(file_reader->get_file_size(this_file_size))) {
+        LOG_WARN("failed to get io device file size", KR(ret), K(this_file_size));
+      } else {
+        file_size += this_file_size;
+      }
+    }
+
+    if (OB_ITER_END == ret) {
+      ret = OB_SUCCESS;
+    }
+    file_iter.rewind();
   }
 
   return ret;
