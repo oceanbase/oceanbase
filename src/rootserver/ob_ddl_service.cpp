@@ -32898,10 +32898,10 @@ int ObDDLService::check_and_set_primary_zone(
   } else if (OB_FAIL(construct_zone_region_list(zone_region_list, zone_list))) {
     LOG_WARN("fail to construct zone region list", K(ret));
   } else {
-    char primary_zone_str[MAX_ZONE_LENGTH];
+    SMART_VARS_2((char[MAX_ZONE_LIST_LENGTH], primary_zone_str),
+                 (ObPrimaryZoneUtil, primary_zone_util,
+                  schema.get_primary_zone(), &zone_region_list)) {
     int64_t pos = 0;
-    ObPrimaryZoneUtil primary_zone_util(schema.get_primary_zone(),
-                                        &zone_region_list);
     if (OB_FAIL(primary_zone_util.init(zone_list))) {
       LOG_WARN("fail to init primary zone util", K(ret));
     } else if (OB_FAIL(primary_zone_util.check_and_parse_primary_zone())) {
@@ -32909,7 +32909,7 @@ int ObDDLService::check_and_set_primary_zone(
       LOG_WARN("invalid primary zone", K(ret));
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "primary zone");
     } else if (OB_FAIL(primary_zone_util.output_normalized_primary_zone(
-                primary_zone_str, MAX_ZONE_LENGTH, pos))) {
+                primary_zone_str, MAX_ZONE_LIST_LENGTH, pos))) {
       LOG_WARN("fail to output normalized primary zone", K(ret));
     } else if (OB_FAIL(schema.set_primary_zone(primary_zone_str))) {
       LOG_WARN("fail to set primary zone", K(ret));
@@ -32919,6 +32919,7 @@ int ObDDLService::check_and_set_primary_zone(
             schema, zone_list, zone_region_list, schema_guard))) {
       LOG_WARN("fail to check primary zone region condition", K(ret));
     } else {} // no more to do
+    } // end smart var
   }
   return ret;
 }
@@ -33078,15 +33079,16 @@ int ObDDLService::trim_and_set_primary_zone(
     } else {} // no more to do
   } else {
     std::sort(new_zone_score_array.begin(), new_zone_score_array.end());
-    char primary_zone_str[MAX_ZONE_LENGTH];
+    SMART_VAR(char[MAX_ZONE_LIST_LENGTH], primary_zone_str) {
     if (OB_FAIL(format_primary_zone_from_zone_score_array(
-            new_zone_score_array, primary_zone_str, MAX_ZONE_LENGTH))) {
+            new_zone_score_array, primary_zone_str, MAX_ZONE_LIST_LENGTH))) {
       LOG_WARN("fail to construct primary zone from zone score array", K(ret));
     } else if (OB_FAIL(new_schema.set_primary_zone(ObString::make_string(primary_zone_str)))) {
       LOG_WARN("fail to set primary zone", K(ret));
     } else if (OB_FAIL(check_and_set_primary_zone(new_schema, zone_list, schema_guard))) {
       LOG_WARN("fail to check and set primary zone", K(ret));
     } else {} // no more to do
+    } // end smart var
   }
   return ret;
 }

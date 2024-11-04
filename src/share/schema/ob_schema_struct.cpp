@@ -2173,7 +2173,7 @@ OB_DEF_DESERIALIZE(ObTenantSchema)
     // parse and set primary zone array
     if (OB_FAIL(ret)) {
     } else if (primary_zone_.length() > 0 && zone_list_.count() > 0) {
-      ObPrimaryZoneUtil primary_zone_util(primary_zone_);
+      SMART_VAR(ObPrimaryZoneUtil, primary_zone_util, primary_zone_) {
       if (OB_FAIL(primary_zone_util.init())) {
         SHARE_SCHEMA_LOG(WARN, "fail to init primary zone util", K(ret));
       } else if (OB_FAIL(primary_zone_util.check_and_parse_primary_zone())) {
@@ -2181,6 +2181,7 @@ OB_DEF_DESERIALIZE(ObTenantSchema)
       } else if (OB_FAIL(set_primary_zone_array(primary_zone_util.get_zone_array()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to set primary zone array", K(ret));
       } else {} // set primary zone array success
+      } // end smart var
     } else {} // no need to parse primary zone
   }
   return ret;

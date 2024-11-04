@@ -208,7 +208,7 @@ private:
   // normalized_zone_array_ has a extra region info while full_zone_array_ has not
   common::ObArray<share::schema::ObZoneScore> full_zone_array_;
   // the strings in zone_array_ are pointing into primary_zone_str_
-  char primary_zone_str_[common::MAX_ZONE_LENGTH + 1];
+  char primary_zone_str_[common::MAX_ZONE_LIST_LENGTH + 1];
   int64_t zone_score_; // this is used to record zone priority during check and parse
   common::ObArenaAllocator allocator_;
   bool check_and_parse_finished_;
@@ -258,21 +258,21 @@ private:
       const common::ObIArray<common::ObZone> &zone_list,
       const common::ObIArray<share::ObZoneReplicaNumSet> &zone_locality,
       common::ObIArray<share::schema::ObZoneScore> &zone_score_list,
-      common::ObZone &primary_zone_str);
+      common::ObPriZone &primary_zone_str);
   static int convert_random_primary_zone_into_integrated(
       const common::ObIArray<common::ObZone> &zone_list,
       const common::ObIArray<share::ObZoneReplicaNumSet> &zone_locality,
       common::ObIArray<share::schema::ObZoneScore> &zone_score_list,
-      common::ObZone &primary_zone_str);
+      common::ObPriZone &primary_zone_str);
   static int convert_normal_primary_zone_into_integrated(
       const common::ObIArray<share::schema::ObZoneScore> &primary_zone_array,
       const common::ObIArray<common::ObZone> &zone_list,
       const common::ObIArray<share::ObZoneReplicaNumSet> &zone_locality,
       common::ObIArray<share::schema::ObZoneScore> &zone_score_list,
-      common::ObZone &primary_zone_str);
+      common::ObPriZone &primary_zone_str);
   static int do_generate_integrated_primary_zone_str(
       const common::ObIArray<share::schema::ObZoneScore> &zone_score_list,
-      common::ObZone &primary_zone_str);
+      common::ObPriZone &primary_zone_str);
 };
 
 /* ObPrimaryZoneUtil is a full utility parser of primary zone, One can refer to the comments
