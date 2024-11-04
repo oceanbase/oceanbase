@@ -818,9 +818,6 @@ int ObOptimizerTraceImpl::append(const ObSkylineDim &dim)
     case ObSkylineDim::INDEX_BACK: {
       const ObIndexBackDim &index_dim = static_cast<const ObIndexBackDim &>(dim);
       append("[index back dim] need index back:", index_dim.need_index_back_);
-      append(", has interesting order:", index_dim.has_interesting_order_);
-      append(", can extract range:", index_dim.can_extract_range_);
-      append(", filter columns:", common::ObArrayWrap<uint64_t>(index_dim.filter_column_ids_, index_dim.filter_column_cnt_));
       break;
     }
     case ObSkylineDim::INTERESTING_ORDER: {

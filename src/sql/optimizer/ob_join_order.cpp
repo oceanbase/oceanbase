@@ -2076,7 +2076,8 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
                                     const ObDMLStmt *stmt,
                                     ObIndexSkylineDim &index_dim,
                                     const ObIndexInfoCache &index_info_cache,
-                                    ObIArray<ObRawExpr *> &restrict_infos)
+                                    ObIArray<ObRawExpr *> &restrict_infos,
+                                    bool ignore_index_back_dim)
 {
   int ret = OB_SUCCESS;
   ObSqlSchemaGuard *guard = NULL;
@@ -2093,7 +2094,7 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
     LOG_WARN("index info entry should not be null", K(ret));
   } else {
     ObSEArray<uint64_t, 8> filter_column_ids;
-    bool is_index_back = index_info_entry->is_index_back();
+    bool is_index_back = ignore_index_back_dim ? false : index_info_entry->is_index_back();
     const OrderingInfo *ordering_info = &index_info_entry->get_ordering_info();
     ObSEArray<uint64_t, 8> interest_column_ids;
     ObSEArray<bool, 8> const_column_info;
@@ -2138,10 +2139,6 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
           index_dim.set_can_prunning(false);
         }
         if (OB_FAIL(index_dim.add_index_back_dim(is_index_back,
-                                                 interest_column_ids.count() > 0,
-                                                 prefix_range_ids.count() > 0,
-                                                 index_schema->get_column_count(),
-                                                 filter_column_ids,
                                                  *allocator_))) {
           LOG_WARN("add index back dim failed", K(is_index_back), K(ret));
         } else if (OB_FAIL(index_dim.add_interesting_order_dim(is_index_back,
@@ -2178,7 +2175,8 @@ int ObJoinOrder::skyline_prunning_index(const uint64_t table_id,
                                         const ObIndexInfoCache &index_info_cache,
                                         const ObIArray<uint64_t> &valid_index_ids,
                                         ObIArray<uint64_t> &skyline_index_ids,
-                                        ObIArray<ObRawExpr *> &restrict_infos)
+                                        ObIArray<ObRawExpr *> &restrict_infos,
+                                        bool ignore_index_back_dim)
 {
   int ret = OB_SUCCESS;
   if (!do_prunning) {
@@ -2208,7 +2206,8 @@ int ObJoinOrder::skyline_prunning_index(const uint64_t table_id,
                                             base_table_id,
                                             tid, stmt,
                                             *index_dim, index_info_cache,
-                                            restrict_infos))) {
+                                            restrict_infos,
+                                            ignore_index_back_dim))) {
         LOG_WARN("Failed to cal dimension info", K(ret), "index_id", valid_index_ids, K(i));
       } else if (OB_FAIL(recorder.add_index_dim(*index_dim, has_add))) {
         LOG_WARN("failed to add index dimension", K(ret));
@@ -2360,12 +2359,12 @@ int ObJoinOrder::fill_index_info_cache(const uint64_t table_id,
 int ObJoinOrder::create_access_paths(const uint64_t table_id,
                                      const uint64_t ref_table_id,
                                      PathHelper &helper,
+                                     ObIndexInfoCache &index_info_cache,
                                      ObIArray<AccessPath *> &access_paths)
 {
   int ret = OB_SUCCESS;
   ObSEArray<uint64_t, 4> valid_index_ids;
   bool heuristics_used = false;
-  ObIndexInfoCache index_info_cache;
   const ObDMLStmt *stmt = NULL;
   ObOptimizerContext *opt_ctx = NULL;
   const ParamStore *params = NULL;
@@ -7543,12 +7542,17 @@ int ObJoinOrder::generate_base_table_paths(PathHelper &helper)
   int ret = OB_SUCCESS;
   ObSEArray<AccessPath *, 8> access_paths;
   ObSEArray<ObTablePartitionInfo *, 8> tbl_part_infos;
+  ObIndexInfoCache index_info_cache;
   uint64_t table_id = table_id_;
   uint64_t ref_table_id = table_meta_info_.ref_table_id_;
   if (!helper.is_inner_path_ &&
       OB_FAIL(compute_base_table_property(table_id, ref_table_id))) {
     LOG_WARN("failed to compute base path property", K(ret));
-  } else if (OB_FAIL(create_access_paths(table_id, ref_table_id, helper, access_paths))) {
+  } else if (OB_FAIL(create_access_paths(table_id,
+                                         ref_table_id,
+                                         helper,
+                                         index_info_cache,
+                                         access_paths))) {
     LOG_WARN("failed to add table to join order(single)", K(ret));
   } else if (OB_FAIL(compute_table_location_for_paths(access_paths,
                                                       tbl_part_infos))) {
@@ -7559,7 +7563,12 @@ int ObJoinOrder::generate_base_table_paths(PathHelper &helper)
              && EXTERNAL_TABLE != table_meta_info_.table_type_
              && OB_FAIL(compute_one_row_info_for_table_scan(access_paths))) {
     LOG_WARN("failed to compute one row info", K(ret));
-  } else if (OB_FAIL(pruning_unstable_access_path(helper.table_opt_info_, access_paths))) {
+  } else if (OB_FAIL(pruning_unstable_access_path(table_id,
+                                                  ref_table_id,
+                                                  helper,
+                                                  index_info_cache,
+                                                  helper.table_opt_info_,
+                                                  access_paths))) {
     LOG_WARN("failed to pruning unstable access path", K(ret));
   } else if (OB_FAIL(get_plan()->select_location(tbl_part_infos))) {
     LOG_WARN("failed to select location", K(ret));
@@ -7617,7 +7626,11 @@ int ObJoinOrder::compute_base_table_property(uint64_t table_id,
   return ret;
 }
 
-int ObJoinOrder::pruning_unstable_access_path(BaseTableOptInfo *table_opt_info,
+int ObJoinOrder::pruning_unstable_access_path(const uint64_t table_id,
+                                              const uint64_t ref_table_id,
+                                              PathHelper &helper,
+                                              ObIndexInfoCache &index_info_cache,
+                                              BaseTableOptInfo *table_opt_info,
                                               ObIArray<AccessPath *> &access_paths)
 {
   int ret = OB_SUCCESS;
@@ -7625,7 +7638,12 @@ int ObJoinOrder::pruning_unstable_access_path(BaseTableOptInfo *table_opt_info,
   ObSEArray<uint64_t, 4> unstable_index_id;
   if (access_paths.count() <= 1) {
     /* do not pruning access path */
-  } else if (OB_FAIL(try_pruning_base_table_access_path(access_paths, unstable_index_id))) {
+  } else if (OB_FAIL(try_pruning_base_table_access_path(table_id,
+                                                        ref_table_id,
+                                                        helper,
+                                                        index_info_cache,
+                                                        access_paths,
+                                                        unstable_index_id))) {
     LOG_WARN("failed to pruning base table access path", K(ret));
   }
 
@@ -7654,32 +7672,43 @@ int ObJoinOrder::pruning_unstable_access_path(BaseTableOptInfo *table_opt_info,
   return ret;
 }
 
-int ObJoinOrder::try_pruning_base_table_access_path(ObIArray<AccessPath*> &access_paths,
+int ObJoinOrder::try_pruning_base_table_access_path(const uint64_t table_id,
+                                                    const uint64_t ref_table_id,
+                                                    PathHelper &helper,
+                                                    ObIndexInfoCache &index_info_cache,
+                                                    ObIArray<AccessPath*> &access_paths,
                                                     ObIArray<uint64_t> &unstable_index_id)
 {
   int ret = OB_SUCCESS;
   bool need_prune = false;
-  ObSEArray<int64_t, 2> base_path_positions;
+  ObSEArray<int64_t, 2> none_range_path_positions;
   AccessPath *ap = NULL;
+  const QueryRangeInfo *query_range_info = NULL;
   for (int64_t i = 0; OB_SUCC(ret) && i < access_paths.count(); ++i) {
     if (OB_ISNULL(ap = access_paths.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret));
-    } else if (ap->ref_table_id_ == ap->index_id_) {
-      if (OB_FAIL(base_path_positions.push_back(i))) {
-        LOG_WARN("failed to push back pos", K(ret));
-      }
+    } else if (OB_FAIL(index_info_cache.get_query_range(table_id, ap->index_id_,
+                                                 query_range_info))) {
+      LOG_WARN("get_range_columns failed", K(ret));
+    } else if (OB_ISNULL(query_range_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("query_range_info should not be null", K(ret));
+    } else if (ap->range_prefix_count_ <= 0 &&
+               !query_range_info->get_contain_always_false() &&
+               OB_FAIL(none_range_path_positions.push_back(i))) {
+      LOG_WARN("failed to push back pos", K(ret));
     } else {
-      need_prune |= ap->range_prefix_count_ > 0 &&
+      need_prune |= (ap->range_prefix_count_ > 0 || query_range_info->get_contain_always_false()) &&
                     ap->query_range_row_count_ < PRUNING_ROW_COUNT_THRESHOLD;
-      need_prune |= ap->range_prefix_count_ > 0 &&
+      need_prune |= (ap->range_prefix_count_ > 0 || query_range_info->get_contain_always_false()) &&
                     ap->est_cost_info_.index_meta_info_.is_geo_index_;
     }
   }
 
   if (OB_SUCC(ret) && need_prune) {
-    for (int64_t i = base_path_positions.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
-      int64_t base_path_pos = base_path_positions.at(i);
+    for (int64_t i = none_range_path_positions.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
+      int64_t base_path_pos = none_range_path_positions.at(i);
       if (OB_ISNULL(ap = access_paths.at(base_path_pos))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected pos or access path", K(ret), K(base_path_pos),
@@ -7691,11 +7720,51 @@ int ObJoinOrder::try_pruning_base_table_access_path(ObIArray<AccessPath*> &acces
       } else if (OB_FAIL(unstable_index_id.push_back(ap->index_id_))) {
         LOG_WARN("failed to push back index id", K(ret));
       } else {
-        LOG_TRACE("pruned base table access paths", K(*ap));
+        LOG_TRACE("pruned none query range access paths", K(*ap));
       }
     }
   }
 
+  ObSEArray<uint64_t, 8> valid_index_ids;
+  for (int64_t i = 0; OB_SUCC(ret) && i < access_paths.count(); ++i) {
+    if (OB_ISNULL(ap = access_paths.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (ObOptimizerUtil::find_item(valid_index_ids, ap->index_id_)) {
+    } else if (OB_FAIL(valid_index_ids.push_back(ap->index_id_))) {
+      LOG_WARN("failed to push back index id", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && need_prune) {
+    const ObDMLStmt *stmt = NULL;
+    ObSEArray<uint64_t, 8> skyline_index_ids;
+    if (OB_ISNULL(get_plan()) ||
+        OB_ISNULL(stmt = get_plan()->get_stmt())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null stmt", K(ret));
+    } else if (OB_FAIL(skyline_prunning_index(table_id,
+                                              ref_table_id,
+                                              stmt,
+                                              true,
+                                              index_info_cache,
+                                              valid_index_ids,
+                                              skyline_index_ids,
+                                              helper.filters_,
+                                              true))) {
+      LOG_WARN("failed to pruning_index", K(table_id), K(ref_table_id), K(ret));
+    }
+    for (int i = access_paths.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
+      if (OB_ISNULL(ap = access_paths.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (ObOptimizerUtil::find_item(skyline_index_ids, ap->index_id_)) {
+      } else if (OB_FAIL(unstable_index_id.push_back(ap->index_id_))) {
+        LOG_WARN("failed to push back index id", K(ret));
+      } else if (OB_FAIL(access_paths.remove(i))) {
+        LOG_WARN("failed to remove access path", K(ret), K(i));
+      }
+    }
+  }
   return ret;
 }
 

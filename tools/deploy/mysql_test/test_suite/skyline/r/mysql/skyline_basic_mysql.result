@@ -217,20 +217,21 @@ Outputs & filters:
       range_key([t1.b], [t1.c], [t1.pk1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select distinct(b),c from t1 where a > 100;
 Query Plan
-==========================================================
-|ID|OPERATOR         |NAME         |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------
-|0 |MERGE DISTINCT   |             |1       |4           |
-|1 |└─TABLE FULL SCAN|t1(idx_b_c_a)|1       |4           |
-==========================================================
+===========================================================
+|ID|OPERATOR          |NAME         |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------
+|0 |HASH DISTINCT     |             |1       |5           |
+|1 |└─TABLE RANGE SCAN|t1(idx_a_b_c)|1       |4           |
+===========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.b], [t1.c]), filter(nil), rowset=16
       distinct([t1.b], [t1.c])
-  1 - output([t1.b], [t1.c]), filter([t1.a > 100]), rowset=16
-      access([t1.a], [t1.b], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
+  1 - output([t1.b], [t1.c]), filter(nil), rowset=16
+      access([t1.b], [t1.c]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.a], [t1.b], [t1.c], [t1.pk1]), range(100,MAX,MAX,MAX ; MAX,MAX,MAX,MAX), 
+      range_cond([t1.a > 100])
 explain select distinct(c),b from t1;
 Query Plan
 ========================================================
@@ -249,23 +250,24 @@ Outputs & filters:
       range_key([t1.b], [t1.c], [t1.pk1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select distinct(c),b, d from t1 where b > 200 limit 100;
 Query Plan
-============================================================
-|ID|OPERATOR           |NAME         |EST.ROWS|EST.TIME(us)|
-------------------------------------------------------------
-|0 |LIMIT              |             |1       |5           |
-|1 |└─HASH DISTINCT    |             |1       |5           |
-|2 |  └─TABLE FULL SCAN|t1(idx_c_a_b)|1       |5           |
-============================================================
+===========================================================
+|ID|OPERATOR            |NAME       |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------
+|0 |LIMIT               |           |1       |7           |
+|1 |└─HASH DISTINCT     |           |1       |7           |
+|2 |  └─TABLE RANGE SCAN|t1(idx_b_c)|1       |7           |
+===========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c], [t1.b], [t1.d]), filter(nil), rowset=16
       limit(100), offset(nil)
   1 - output([t1.c], [t1.b], [t1.d]), filter(nil), rowset=16
       distinct([t1.c], [t1.b], [t1.d])
-  2 - output([t1.b], [t1.c], [t1.d]), filter([t1.b > 200]), rowset=16
+  2 - output([t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
       access([t1.pk1], [t1.b], [t1.c], [t1.d]), partitions(p0)
-      is_index_back=true, is_global_index=false, filter_before_indexback[true], 
-      range_key([t1.c], [t1.a], [t1.b], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
+      is_index_back=true, is_global_index=false, 
+      range_key([t1.b], [t1.c], [t1.pk1]), range(200,MAX,MAX ; MAX,MAX,MAX), 
+      range_cond([t1.b > 200])
 explain select b from t1 order by b;
 Query Plan
 ====================================================
@@ -1537,30 +1539,42 @@ Outputs & filters:
       range_cond([t1.c < 100], [t1.c > 100])
 explain select a, b, c from t1 where b = 100 or (b = 200 and c = 300) order by c desc limit 0, 100;
 Query Plan
-================================================================
-|ID|OPERATOR       |NAME                 |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------
-|0 |TABLE FULL SCAN|t1(idx_c_a_b,Reverse)|1       |4           |
-================================================================
+============================================================
+|ID|OPERATOR           |NAME         |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------
+|0 |LIMIT              |             |1       |7           |
+|1 |└─TOP-N SORT       |             |1       |7           |
+|2 |  └─TABLE FULL SCAN|t1(idx_b_c_a)|1       |7           |
+============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.a], [t1.b], [t1.c]), filter([t1.b = 100 OR t1.b = 200 AND t1.c = 300]), rowset=16
+  0 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
+      limit(100), offset(0)
+  1 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
+      sort_keys([t1.c, DESC]), topn(100 + 0)
+  2 - output([t1.b], [t1.c], [t1.a]), filter([t1.b = 100 OR t1.b = 200 AND t1.c = 300]), rowset=16
       access([t1.b], [t1.c], [t1.a]), partitions(p0)
-      limit(100), offset(0), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([t1.c], [t1.a], [t1.b], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(100,MIN,MIN,MIN ; 100,MAX,MAX,MAX), (200,300,MIN,MIN ; 200,300,MAX,MAX)
 explain select a, b, c from t1 where (b = 200 and c = 300) or (b = 100) order by c desc limit 0, 100;
 Query Plan
-================================================================
-|ID|OPERATOR       |NAME                 |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------
-|0 |TABLE FULL SCAN|t1(idx_c_a_b,Reverse)|1       |4           |
-================================================================
+============================================================
+|ID|OPERATOR           |NAME         |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------
+|0 |LIMIT              |             |1       |7           |
+|1 |└─TOP-N SORT       |             |1       |7           |
+|2 |  └─TABLE FULL SCAN|t1(idx_b_c_a)|1       |7           |
+============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.a], [t1.b], [t1.c]), filter([t1.b = 200 AND t1.c = 300 OR t1.b = 100]), rowset=16
+  0 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
+      limit(100), offset(0)
+  1 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
+      sort_keys([t1.c, DESC]), topn(100 + 0)
+  2 - output([t1.b], [t1.c], [t1.a]), filter([t1.b = 200 AND t1.c = 300 OR t1.b = 100]), rowset=16
       access([t1.b], [t1.c], [t1.a]), partitions(p0)
-      limit(100), offset(0), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([t1.c], [t1.a], [t1.b], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(200,300,MIN,MIN ; 200,300,MAX,MAX), (100,MIN,MIN,MIN ; 100,MAX,MAX,MAX)
 explain select a1, a2, b, min(c), max(c) from t4 group by a1, a2, b;
 Query Plan
 =========================================================
