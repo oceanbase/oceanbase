@@ -548,7 +548,8 @@ int ObIntegerStreamVecDecoder::decode_vector(
     case VEC_TC_BIT:
     case VEC_TC_ENUM_SET:
 
-    case VEC_TC_DOUBLE: {
+    case VEC_TC_DOUBLE:
+    case VEC_TC_FIXED_DOUBLE: {
       ret = DECODE_VECTOR_(uint64_t);
       break;
     }
