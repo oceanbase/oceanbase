@@ -137,7 +137,7 @@ void ObMySQLRequestManager::destroy()
 {
   if (!destroyed_) {
     TG_DESTROY(tg_id_);
-    clear_queue();
+    clear_queue(true);
     queue_.destroy();
     allocator_.destroy();
     inited_ = false;
@@ -313,10 +313,10 @@ int ObMySQLRequestManager::get_mem_limit(uint64_t tenant_id,
   return ret;
 }
 
-int ObMySQLRequestManager::release_record(int64_t release_cnt) {
+int ObMySQLRequestManager::release_record(int64_t release_cnt, bool is_destroyed) {
   int ret = OB_SUCCESS;
   LockGuard lock_guard(destroy_second_level_mutex_);
-  if (OB_FAIL(queue_.release_record(release_cnt, std::move(this)))) {
+  if (OB_FAIL(queue_.release_record(release_cnt, std::move(this), is_destroyed))) {
     SERVER_LOG(WARN, "fail to release record",
           K(release_cnt), K(ret));
   }

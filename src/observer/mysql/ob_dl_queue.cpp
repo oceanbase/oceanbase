@@ -285,7 +285,21 @@ int ObDlQueue::get_leaf_size_used(int64_t idx, int64_t &size) {
   return ret;
 }
 
-int ObDlQueue::release_record(int64_t release_cnt, oceanbase::obmysql::ObMySQLRequestManager*&& pointer) {
+int ObDlQueue::need_clean_leaf_queue(int64_t idx, bool &need_clean) {
+  int ret = OB_SUCCESS;
+  ObLeafQueue *leaf_rec = NULL;
+  Root_Ref tmp_ref;
+  if (OB_FAIL(get_leaf_queue(idx, leaf_rec, &tmp_ref))) {
+    LOG_WARN("fail to get second level queue pointer",K(idx));
+  } else {
+    need_clean = leaf_rec->get_pop_idx() == leaf_rec->get_push_idx();
+    revert_leaf_queue(&tmp_ref, leaf_rec);
+  }
+  return ret;
+}
+
+int ObDlQueue::release_record(int64_t release_cnt, oceanbase::obmysql::ObMySQLRequestManager*&& pointer,
+                              bool is_destroyed) {
   int ret = OB_SUCCESS;
   int64_t rq_release_idx = get_pop_idx();
   int64_t rq_push_idx = get_push_idx();
@@ -293,6 +307,7 @@ int ObDlQueue::release_record(int64_t release_cnt, oceanbase::obmysql::ObMySQLRe
     SERVER_LOG(INFO, "no need release record", K(rq_release_idx), K(rq_push_idx));
   } else {
     int64_t size = 0;
+    bool need_clean = false;
     if (OB_FAIL(clear_leaf_queue(rq_release_idx, release_cnt,
         std::bind(&oceanbase::obmysql::ObMySQLRequestManager::freeCallback,
         pointer, std::placeholders::_1)))) {
@@ -301,8 +316,11 @@ int ObDlQueue::release_record(int64_t release_cnt, oceanbase::obmysql::ObMySQLRe
     } else if (OB_FAIL(get_leaf_size_used(rq_release_idx, size))) {
       SERVER_LOG(WARN, "fail to get second level size used",
           K(rq_release_idx), K(ret));
+    } else if (is_destroyed && OB_FAIL(need_clean_leaf_queue(rq_release_idx, need_clean))) {
+      SERVER_LOG(WARN, "fail to get second level size used",
+          K(rq_release_idx), K(ret));
     } else {
-      if (size == ObDlQueue::LEAF_QUEUE_SIZE) {
+      if (size == ObDlQueue::LEAF_QUEUE_SIZE || need_clean) {
         release_wait_times_++;
         ObLeafQueue *leaf_queue = NULL;
         // delay pop for performance.
@@ -313,11 +331,11 @@ int ObDlQueue::release_record(int64_t release_cnt, oceanbase::obmysql::ObMySQLRe
             ob_free(leaf_queue);
           }
           SERVER_LOG(INFO, "release ref is 0",
-              K(rq_release_idx), K(ret));
+              K(rq_release_idx), K(need_clean),K(ret));
           release_wait_times_ = 0;
         } else {
           SERVER_LOG(INFO, "release ref is not 0 or release_wait_times < 3",
-              K(rq_release_idx), K(ret), K(release_wait_times_));
+              K(rq_release_idx), K(ret), K(release_wait_times_), K(need_clean));
         }
       }
     }
