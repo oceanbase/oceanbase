@@ -244,7 +244,7 @@ SubObjectMgr *ObjectMgr::create_sub_mgr()
   attr.label_ = common::ObModIds::OB_TENANT_CTX_ALLOCATOR;
   attr.ctx_id_ = ObCtxIds::DEFAULT_CTX_ID;
   attr.ignore_version_ = true;
-  class SubObjectMgrWrapper {
+  class SubObjectMgrWrapper : public IObjectMgr {
   public:
     SubObjectMgrWrapper(SubObjectMgr& sub_mgr)
       : sub_mgr_(sub_mgr)

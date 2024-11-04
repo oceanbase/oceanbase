@@ -35,9 +35,9 @@ void *ObTenantCtxAllocator::alloc(const int64_t size, const ObMemAttr &attr)
   abort_unless(attr.ctx_id_ == ctx_id_);
   void *ptr = NULL;
   if (OB_LIKELY(ObSubCtxIds::MAX_SUB_CTX_ID == attr.sub_ctx_id_)) {
-    ptr = common_realloc(NULL, size, attr, *this, obj_mgr_);
+    ptr = inner_common_realloc(NULL, size, attr, *this, obj_mgr_);
   } else if (OB_UNLIKELY(attr.sub_ctx_id_ < ObSubCtxIds::MAX_SUB_CTX_ID)) {
-    ptr = common_realloc(NULL, size, attr, *this, obj_mgrs_[attr.sub_ctx_id_]);
+    ptr = inner_common_realloc(NULL, size, attr, *this, obj_mgrs_[attr.sub_ctx_id_]);
   } else {
     LIB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "allocate memory with unexpected sub_ctx_id");
   }
@@ -53,7 +53,7 @@ int64_t ObTenantCtxAllocator::get_obj_hold(void *ptr)
 
 void* ObTenantCtxAllocator::realloc(const void *ptr, const int64_t size, const ObMemAttr &attr)
 {
-  void *nptr = common_realloc(ptr, size, attr, *this, obj_mgr_);
+  void *nptr = inner_common_realloc(ptr, size, attr, *this, obj_mgr_);
   return nptr;
 }
 
@@ -468,7 +468,7 @@ void ObTenantCtxAllocator::on_free(AObject &obj)
 }
 
 template <typename T>
-void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
+void* ObTenantCtxAllocator::inner_common_realloc(const void *ptr, const int64_t size,
                                            const ObMemAttr &attr, ObTenantCtxAllocator& ta,
                                            T &allocator)
 {
