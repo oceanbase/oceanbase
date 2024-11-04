@@ -251,8 +251,7 @@ int ObInnerConnectionLockUtil::process_replace_lock_(
   const int64_t data_len = arg.get_inner_sql().length();
   int64_t pos = 0;
   int64_t tmp_pos = 0;
-  // FIXME: change to 431 later
-  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0) {
+  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_4_0) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("cluster version check faild", KR(ret), K(GET_MIN_CLUSTER_VERSION()));
   } else if (OB_FAIL(replace_req.deserialize_and_check_header(buf, data_len, pos))) {
@@ -265,19 +264,19 @@ int ObInnerConnectionLockUtil::process_replace_lock_(
     LOG_WARN("deserialize unlock_req failed", K(ret), K(arg), K(tmp_pos));
   } else {
     switch (unlock_req.type_) {
-      case ObLockRequest::ObLockMsgType::LOCK_OBJ_REQ:{
+      case ObLockRequest::ObLockMsgType::UNLOCK_OBJ_REQ:{
         REPLACE_LOCK(ObUnLockObjsRequest, arg, conn, replace_req, buf, data_len, pos);
       }
-      case ObLockRequest::ObLockMsgType::LOCK_TABLE_REQ: {
+      case ObLockRequest::ObLockMsgType::UNLOCK_TABLE_REQ: {
         REPLACE_LOCK(ObUnLockTableRequest, arg, conn, replace_req, buf, data_len, pos);
       }
-      case ObLockRequest::ObLockMsgType::LOCK_PARTITION_REQ: {
+      case ObLockRequest::ObLockMsgType::UNLOCK_PARTITION_REQ: {
         REPLACE_LOCK(ObUnLockPartitionRequest, arg, conn, replace_req, buf, data_len, pos);
       }
-      case ObLockRequest::ObLockMsgType::LOCK_TABLET_REQ: {
+      case ObLockRequest::ObLockMsgType::UNLOCK_TABLET_REQ: {
         REPLACE_LOCK(ObUnLockTabletsRequest, arg, conn, replace_req, buf, data_len, pos);
       }
-      case ObLockRequest::ObLockMsgType::LOCK_ALONE_TABLET_REQ: {
+      case ObLockRequest::ObLockMsgType::UNLOCK_ALONE_TABLET_REQ: {
         REPLACE_LOCK(ObUnLockAloneTabletRequest, arg, conn, replace_req, buf, data_len, pos);
       }
       default: {
