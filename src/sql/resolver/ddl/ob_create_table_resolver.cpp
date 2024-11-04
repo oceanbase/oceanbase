@@ -1830,34 +1830,36 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
       ObIArray<SelectItem> &select_items = select_stmt->get_select_items();
       ObColumnSchemaV2 column;
       create_table_stmt->set_sub_select(select_stmt);
-      //检查查询项之间有无重名, 有则报错; 查询项和表定义中列名是可以重名的;
-      for (int64_t i = 0; OB_SUCC(ret) && i < select_items.count(); ++i) {
-        const SelectItem &cur_item = select_items.at(i);
-        const ObString *cur_name = NULL;
-        if (!cur_item.alias_name_.empty()) {
-            cur_name = &cur_item.alias_name_;
-        } else {
-            cur_name = &cur_item.expr_name_;
-        }
-        if (cur_name->length() > OB_MAX_COLUMN_NAME_LENGTH) {
-          ret = OB_ERR_TOO_LONG_IDENT;
-          LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, cur_name->length(), cur_name->ptr());
-        }
-        for (int64_t j = 0; OB_SUCC(ret) && j < i; ++j) {
-          const SelectItem &pre_item = select_items.at(j);
-          const ObString *prev_name = NULL;
-          if (!pre_item.alias_name_.empty()) {
-            prev_name = &pre_item.alias_name_;
+      const int64_t create_table_column_count = table_schema.get_column_count();
+      if (!lib::is_oracle_mode() || create_table_column_count <= 0) {
+        //检查查询项之间有无重名, 有则报错; 查询项和表定义中列名是可以重名的;
+        for (int64_t i = 0; OB_SUCC(ret) && i < select_items.count(); ++i) {
+          const SelectItem &cur_item = select_items.at(i);
+          const ObString *cur_name = NULL;
+          if (!cur_item.alias_name_.empty()) {
+              cur_name = &cur_item.alias_name_;
           } else {
-            prev_name = &pre_item.expr_name_;
+              cur_name = &cur_item.expr_name_;
           }
-          if (ObCharset::case_compat_mode_equal(*prev_name, *cur_name)) {
-            ret = OB_ERR_COLUMN_DUPLICATE;
-            LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, cur_name->length(), cur_name->ptr());
+          if (cur_name->length() > OB_MAX_COLUMN_NAME_LENGTH) {
+            ret = OB_ERR_TOO_LONG_IDENT;
+            LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, cur_name->length(), cur_name->ptr());
+          }
+          for (int64_t j = 0; OB_SUCC(ret) && j < i; ++j) {
+            const SelectItem &pre_item = select_items.at(j);
+            const ObString *prev_name = NULL;
+            if (!pre_item.alias_name_.empty()) {
+              prev_name = &pre_item.alias_name_;
+            } else {
+              prev_name = &pre_item.expr_name_;
+            }
+            if (ObCharset::case_compat_mode_equal(*prev_name, *cur_name)) {
+              ret = OB_ERR_COLUMN_DUPLICATE;
+              LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, cur_name->length(), cur_name->ptr());
+            }
           }
         }
       }
-      const int64_t create_table_column_count = table_schema.get_column_count();
       // oracle模式下,create table (column_names) as select expr, 如果没有显示定义column_names,
       // 则要求每一个expr必须显示指定别名或者本身是列
       if (lib::is_oracle_mode() && create_table_column_count <= 0) {
