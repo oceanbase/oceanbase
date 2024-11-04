@@ -475,7 +475,7 @@ int ObLSRecoveryStatOperator::get_tenant_recovery_stat(const uint64_t tenant_id,
               "where a.drop_scn = %ld and b.%s) p, "
             "(select min(greatest(c.create_scn, c.readable_scn)) as min_wrs "
               "from %s as c join %s as d on c.tenant_id = d.tenant_id and c.ls_id = d.ls_id "
-              "where c.drop_scn = %ld or c.drop_scn > c.readable_scn and d.%s) q",
+              "where (c.drop_scn = %ld or c.drop_scn > c.readable_scn) and d.%s) q",
             OB_ALL_LS_RECOVERY_STAT_TNAME, OB_ALL_LS_STATUS_TNAME,
             SCN::base_scn().get_val_for_inner_table_field(), status_sql.ptr(),
             OB_ALL_LS_RECOVERY_STAT_TNAME, OB_ALL_LS_STATUS_TNAME,
