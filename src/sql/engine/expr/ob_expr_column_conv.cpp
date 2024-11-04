@@ -484,7 +484,7 @@ int ObExprColumnConv::column_convert(const ObExpr &expr,
   } else {
     const ObEnumSetInfo *enumset_info = static_cast<ObEnumSetInfo *>(expr.extra_info_);
     const uint64_t cast_mode = enumset_info->cast_mode_;
-    bool is_strict = CM_IS_STRICT_MODE(cast_mode);
+    bool is_strict = CM_IS_STRICT_MODE(cast_mode) && !CM_IS_IGNORE_CHARSET_CONVERT_ERR(cast_mode);
     ObObjType out_type = expr.datum_meta_.type_;
     ObCollationType out_cs_type = expr.datum_meta_.cs_type_;
     ObDatum *val = NULL;

@@ -1300,6 +1300,7 @@ int ObWrCollector::collect_sql_plan()
     } else {
       const bool skip_null_error = true;
       const bool skip_column_error = false;
+      const bool need_insert_ignore = true;
       const int64_t default_value = -1;
       while (OB_SUCC(ret)) {
         if (OB_FAIL(result->next())) {
@@ -1446,13 +1447,13 @@ int ObWrCollector::collect_sql_plan()
           }
         }
         if (OB_SUCC(ret) && dml_splicer.get_row_count() >= WR_SQL_PLAN_BATCH_SIZE) {
-          if (OB_FAIL(write_to_wr(dml_splicer, OB_WR_SQL_PLAN_TNAME, tenant_id))) {
+          if (OB_FAIL(write_to_wr(dml_splicer, OB_WR_SQL_PLAN_TNAME, tenant_id, need_insert_ignore))) {
             LOG_WARN("failed to batch write to wr", KR(ret));
           }
         }
       }
       if (OB_SUCC(ret) && dml_splicer.get_row_count() > 0 &&
-          OB_FAIL(write_to_wr(dml_splicer, OB_WR_SQL_PLAN_TNAME, tenant_id))) {
+          OB_FAIL(write_to_wr(dml_splicer, OB_WR_SQL_PLAN_TNAME, tenant_id, need_insert_ignore))) {
         LOG_WARN("failed to batch write remaining part to wr", KR(ret));
       }
     }
@@ -1461,13 +1462,15 @@ int ObWrCollector::collect_sql_plan()
 }
 
 int ObWrCollector::write_to_wr(
-    ObDMLSqlSplicer &dml_splicer, const char *table_name, int64_t tenant_id)
+    ObDMLSqlSplicer &dml_splicer, const char *table_name, int64_t tenant_id, bool ignore_error)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   int64_t affected_rows = 0;
   int64_t cur_row = dml_splicer.get_row_count();
-  if (OB_FAIL(dml_splicer.splice_batch_insert_sql(table_name, sql))) {
+  if (!ignore_error && OB_FAIL(dml_splicer.splice_batch_insert_sql(table_name, sql))) {
+    LOG_WARN("failed to generate sql", KR(ret), K(tenant_id));
+  } else if (ignore_error && OB_FAIL(dml_splicer.splice_batch_insert_ignore_sql(table_name, sql))) {
     LOG_WARN("failed to generate sql", KR(ret), K(tenant_id));
   } else if (OB_FAIL(
                  GCTX.sql_proxy_->write(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {

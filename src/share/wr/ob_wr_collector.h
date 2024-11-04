@@ -417,7 +417,7 @@ private:
   int update_sqlstat();
   int collect_sqltext();
   int collect_sql_plan();
-  int write_to_wr(ObDMLSqlSplicer &dml_splicer, const char *table_name, int64_t tenant_id);
+  int write_to_wr(ObDMLSqlSplicer &dml_splicer, const char *table_name, int64_t tenant_id, bool ignore_error=false);
   int fetch_snapshot_id_sequence_curval(int64_t &snap_id);
   int get_cur_snapshot_id_for_ahead_snapshot(int64_t &snap_id);
   int get_begin_interval_time(int64_t &begin_interval_time);
