@@ -16753,7 +16753,7 @@ static uint64_t virtual_table_index_scan_white_list[2]{
 
 bool ObJoinOrder::virtual_table_index_can_range_scan(uint64_t table_id) {
   bool bret = false;
-  for (int i = 0; i < sizeof(virtual_table_index_scan_white_list); i++) {
+  for (int i = 0; i < ARRAYSIZEOF(virtual_table_index_scan_white_list); i++) {
     if (table_id == virtual_table_index_scan_white_list[i]) {
       bret = true;
       break;
