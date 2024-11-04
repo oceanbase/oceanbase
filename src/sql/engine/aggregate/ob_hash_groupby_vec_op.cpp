@@ -1311,7 +1311,7 @@ int ObHashGroupByVecOp::load_data_batch(int64_t max_row_cnt)
                                    local_group_rows_.size(),
                                    get_actual_mem_used_size());
     if (bypass_ctrl_.processing_ht()) {
-      by_pass_vec_holder_.save(last_batch_size);
+      ret = by_pass_vec_holder_.save(last_batch_size);
       break;
     }
     const ObBatchRows *child_brs = NULL;
