@@ -75,6 +75,7 @@
   #include "src/storage/multi_data_source/ob_finish_transfer_in_mds_ctx.h"
   #include "src/share/ob_standby_upgrade.h"
   #include "src/storage/mview/ob_major_mv_merge_info.h"
+  #include "src/storage/truncate_info/ob_truncate_info.h"
 #endif
 /**************************************************************************************************/
 
@@ -195,6 +196,10 @@ _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENU
                                           ::oceanbase::storage::ObUnUseCtx, \
                                           37,\
                                           MV_UPDATE_SCN)
+  // GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTruncateInfoMdsHelper,\
+  //                                         ::oceanbase::storage::mds::MdsCtx, \
+  //                                         38,\
+  //                                         SYNC_TRUNCATE_INFO)
   // # 余留位置（此行之前占位）
 #undef GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION
 #endif
@@ -262,6 +267,9 @@ _GENERATE_MDS_UNIT_(KEY_TYPE, VALUE_TYPE, NEED_MULTI_VERSION)
                     false)
   GENERATE_MDS_UNIT(::oceanbase::storage::mds::DummyKey,\
                     ::oceanbase::storage::ObTabletSplitMdsUserData,\
+                    false)
+  GENERATE_MDS_UNIT(::oceanbase::storage::ObTruncateInfoKey,\
+                    ::oceanbase::storage::ObTruncateInfo,\
                     false)
   // # 余留位置（此行之前占位）
 #endif
