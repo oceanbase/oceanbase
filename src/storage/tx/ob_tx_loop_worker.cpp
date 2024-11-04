@@ -93,6 +93,9 @@ void ObTxLoopWorker::run1()
   bool can_gc_retain_ctx = false;
 
   while (!has_set_stop()) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    const int64_t KEEPALIVE_INTERVAL = tenant_config.is_valid() ?
+        min(tenant_config->_keepalive_interval, LOOP_INTERVAL) : LOOP_INTERVAL;
     start_time_us = ObTimeUtility::current_time();
 
     // tx gc, interval = 5s
@@ -119,8 +122,8 @@ void ObTxLoopWorker::run1()
 
     time_used = ObTimeUtility::current_time() - start_time_us;
 
-    if (time_used < LOOP_INTERVAL) {
-      ob_usleep(LOOP_INTERVAL- time_used);
+    if (time_used < KEEPALIVE_INTERVAL) {
+      ob_usleep(KEEPALIVE_INTERVAL - time_used);
     }
     can_gc_tx = false;
     can_gc_retain_ctx = false;

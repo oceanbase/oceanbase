@@ -786,6 +786,11 @@ DEF_TIME(_ob_get_gts_ahead_interval, OB_CLUSTER_PARAMETER, "0s", "[0s, 1s]",
          "get gts ahead interval. Range: [0s, 1s]",
          ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_TIME(_keepalive_interval, OB_TENANT_PARAMETER, "100ms", "[10ms, 10s]",
+        "This configuration item is used to control the write interval of the keepalive log, "
+        "ensuring that the readable point of the standby database can be advanced in a timely manner.",
+        ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE))
+
 //// rpc config
 DEF_TIME(rpc_timeout, OB_CLUSTER_PARAMETER, "2s",
          "the time during which a RPC request is permitted to execute before it is terminated",
