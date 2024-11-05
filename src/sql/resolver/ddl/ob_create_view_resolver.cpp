@@ -227,6 +227,7 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
       view_table_resolver.set_materialized(parse_tree.children_[MATERIALIZED_NODE] ? true : false);
       select_stmt_node = parse_tree.children_[SELECT_STMT_NODE];
       ParseNode *view_columns_node = parse_tree.children_[VIEW_COLUMNS_NODE];
+      bool has_column = (NULL != view_columns_node) && (view_columns_node->num_child_ > 0);
       ObString sql_str(select_stmt_node->str_len_, select_stmt_node->str_value_);
       view_define = sql_str;
       view_definition_start_pos = select_stmt_node->stmt_loc_.first_column_;
@@ -260,7 +261,7 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
         } else {
           LOG_WARN("resolve select in create view failed", K(select_stmt_node), K(ret));
         }
-      } else if (OB_FAIL(view_table_resolver.check_auto_gen_column_names())) {
+      } else if (!has_column && OB_FAIL(view_table_resolver.check_auto_gen_column_names())) {
         LOG_WARN("fail to check auto gen column names", K(ret));
       } else if (OB_FAIL(params_.query_ctx_->query_hint_.init_query_hint(params_.allocator_,
                                                                           params_.session_info_,
