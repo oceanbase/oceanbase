@@ -377,6 +377,10 @@ int ObTabletSplitMdsArg::set_autoinc_seq_arg(const obrpc::ObBatchSetTabletAutoin
   if (OB_FAIL(autoinc_seq_arg_.assign(arg))) {
     LOG_WARN("failed to assign", K(ret), K(arg));
   }
+  if (OB_SUCC(ret) && OB_UNLIKELY(!autoinc_seq_arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid autoinc seq arg", K(ret), KPC(this));
+  }
   return ret;
 }
 
@@ -1044,9 +1048,10 @@ int ObTabletSplitMdsHelper::modify(
     }
   }
 
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObTabletAutoincSeqRpcHandler::get_instance().batch_set_tablet_autoinc_seq_in_trans(*ls, arg.autoinc_seq_arg_, scn, ctx))) {
-    LOG_WARN("failed to batch set tablet autoinc seq", K(ret), K(scn));
+  if (OB_SUCC(ret) && arg.autoinc_seq_arg_.is_valid()) {
+    if (OB_FAIL(ObTabletAutoincSeqRpcHandler::get_instance().batch_set_tablet_autoinc_seq_in_trans(*ls, arg.autoinc_seq_arg_, scn, ctx))) {
+      LOG_WARN("failed to batch set tablet autoinc seq", K(ret), K(scn));
+    }
   }
 
   if (OB_SUCC(ret) && need_empty_shell_trigger) {
