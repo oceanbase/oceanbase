@@ -982,6 +982,7 @@ column_name
   #endif
   } else {
     yyerror(&@1, result, "force key work can be used to be name in PL\n");
+    YYABORT_PARSE_SQL_ERROR;
   }
 }
 | CASCADE
@@ -996,6 +997,7 @@ column_name
   #endif
   } else {
     yyerror(&@1, result, "cascade key work can be used to be name in PL\n");
+    YYABORT_PARSE_SQL_ERROR;
   }
 }
 ;
