@@ -349,9 +349,7 @@ int ObTxCallbackList::remove_callbacks_for_remove_memtable(
   // hence, acquire iter_latch is not required actually.
   int ret = OB_SUCCESS;
   LockGuard guard(*this, LOCK_MODE::LOCK_ITERATE);
-  const bool skip_checksum = is_skip_checksum_();
-  const share::SCN right_bound = skip_checksum ? share::SCN::max_scn()
-    : (stop_scn.is_max() ? sync_scn_ : stop_scn);
+  const share::SCN right_bound = stop_scn;
   struct Functor final : public ObRemoveSyncCallbacksWCondFunctor {
     Functor(const bool need_remove_data = true, const bool is_reverse = false)
       : ObRemoveSyncCallbacksWCondFunctor(need_remove_data, is_reverse) {}
@@ -384,7 +382,7 @@ int ObTxCallbackList::remove_callbacks_for_remove_memtable(
   functor.right_bound_ = right_bound;
   functor.memtable_set_ = memtable_set;
 
-  if (!skip_checksum) {
+  if (!is_skip_checksum_()) {
     functor.set_checksumer(checksum_scn_, &batch_checksum_);
   }
 
