@@ -699,12 +699,16 @@ int ObLogGroupBy::compute_op_ordering()
     ObSEArray<OrderItem, 4> ordering;
     // for rollup distributor, sort key is inner
     if (ObRollupStatus::ROLLUP_DISTRIBUTOR != rollup_adaptive_info_.rollup_status_) {
-      for (int64_t i = 0; OB_SUCC(ret) && i < group_exprs_.count(); i++) {
+      bool has_ordering = true;
+      for (int64_t i = 0; OB_SUCC(ret) && has_ordering && i < group_exprs_.count(); i++) {
         if (i < child->get_op_ordering().count() &&
-            child->get_op_ordering().at(i).expr_ == group_exprs_.at(i) &&
-            OB_FAIL(ordering.push_back(child->get_op_ordering().at(i)))) {
-          LOG_WARN("failed to push back into ordering.", K(ret));
-        } else {}
+            child->get_op_ordering().at(i).expr_ == group_exprs_.at(i)) {
+            if (OB_FAIL(ordering.push_back(child->get_op_ordering().at(i)))) {
+              LOG_WARN("failed to push back into ordering.", K(ret));
+            }
+        } else {
+          has_ordering = false;
+        }
       }
     }
     if (OB_SUCC(ret) && OB_FAIL(set_op_ordering(ordering))) {
