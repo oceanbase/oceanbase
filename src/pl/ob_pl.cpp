@@ -2927,9 +2927,11 @@ int ObPLExecState::set_var(int64_t var_idx, const ObObjParam& value)
       OZ (ObUserDefinedType::destruct_objparam(*get_allocator(), params->at(var_idx), ctx_.exec_ctx_->get_my_session()));
       OX (params->at(var_idx).set_extend(0, extend_type, val_len));
     }
-    OZ (ctx_.get_user_type(udt_id, user_type), K(udt_id));
-    CK (OB_NOT_NULL(user_type));
-    OZ (init_complex_obj(*get_allocator(), *user_type, params->at(var_idx)));
+    if (!params->at(var_idx).is_ref_cursor_type()) {
+      OZ (ctx_.get_user_type(udt_id, user_type), K(udt_id));
+      CK (OB_NOT_NULL(user_type));
+      OZ (init_complex_obj(*get_allocator(), *user_type, params->at(var_idx)));
+    }
   } else if (!copy_value.is_ext()) {
     bool is_ref_cursor = params->at(var_idx).is_ref_cursor_type();
     copy_value.ObObj::set_scale(params->at(var_idx).get_meta().get_scale());
@@ -3650,6 +3652,7 @@ int ObPLExecState::init_params(const ParamStore *params, bool is_anonymous)
     } else if (func_.get_variables().at(i).is_ref_cursor_type()) {
       OX (param.set_is_ref_cursor_type(true));
       OX (param.set_extend(0, PL_REF_CURSOR_TYPE));
+      OX (param.set_udt_id(func_.get_variables().at(i).get_user_type_id()));
       // CURSOR初始化为NULL
     } else if (func_.get_variables().at(i).is_cursor_type()) {
       // leave obj as null type, spi_init wil init it.

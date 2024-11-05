@@ -8486,14 +8486,21 @@ int ObPLResolver::convert_cursor_actual_params(
     OX (idx = func.get_exprs().count() - 1);
   } else if (pl_data_type.is_cursor_type()) {
     if (convert_expr->get_result_type().get_extend_type() != PL_CURSOR_TYPE
-        && convert_expr->get_result_type().get_extend_type() != PL_REF_CURSOR_TYPE) {
+        && convert_expr->get_result_type().get_extend_type() != PL_REF_CURSOR_TYPE
+        && !convert_expr->get_result_type().is_null()) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("PLS-00382: expression is of wrong type",
                   K(ret), K(pl_data_type.is_obj_type()), KPC(convert_expr),
                   K(convert_expr->get_result_type().get_obj_meta().get_type()),
                   K(pl_data_type.get_user_type_id()),
                   K(convert_expr->get_result_type().get_udt_id()));
-    }
+      }
+  } else if (!convert_expr->get_result_type().is_ext()) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("PLS-00382: expression is of wrong type",
+                K(ret), K(pl_data_type.is_obj_type()), KPC(convert_expr),
+                K(convert_expr->get_result_type().get_obj_meta().get_type()),
+                K(pl_data_type.get_user_type_id()));
   } else if (pl_data_type.get_user_type_id() != convert_expr->get_result_type().get_udt_id()) {
     bool is_compatible = false;
     if (convert_expr->get_result_type().is_null()) {
