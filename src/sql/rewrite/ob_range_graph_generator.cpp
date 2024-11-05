@@ -30,6 +30,7 @@ int ObRangeGraphGenerator::generate_range_graph(const ObIArray<ObRawExpr*> &expr
   int ret = OB_SUCCESS;
   ObRawExpr *expr = nullptr;
   ObSEArray<ObRangeNode*, 4> range_nodes;
+  ObSEArray<ObRangeNode*, 4> geo_range_nodes;
   ObSEArray<ObPriciseExprItem, 4> pricise_exprs;
   ObSEArray<ObPriciseExprItem, 4> unprecise_exprs;
   ObSEArray<ObRawExpr*, 4> sorted_exprs;
@@ -45,7 +46,11 @@ int ObRangeGraphGenerator::generate_range_graph(const ObIArray<ObRawExpr*> &expr
       LOG_WARN("get null expr");
     } else if (OB_FAIL(generate_range_node(expr, range_node_generator, range_node, 0, is_precise, max_offset))) {
       LOG_WARN("faield to generate range node", K(ret));
-    } else if (!range_node->always_true_ &&
+    } else if (range_node->is_geo_node_ &&
+               OB_FAIL(geo_range_nodes.push_back(range_node))) {
+      LOG_WARN("failed to push back geo range node");
+    } else if (!range_node->is_geo_node_ &&
+               !range_node->always_true_ &&
                OB_FAIL(range_nodes.push_back(range_node))) {
       LOG_WARN("failed to push back range node");
     } else if (expr->is_const_expr()) {
@@ -67,11 +72,10 @@ int ObRangeGraphGenerator::generate_range_graph(const ObIArray<ObRawExpr*> &expr
     LOG_INFO("use too much memory during extract query range, fall back to whole range",
         K(ctx_.max_mem_size_));
   }
-  if (OB_SUCC(ret) && ctx_.is_geo_range_ && range_nodes.count() > 1) {
+  if (OB_SUCC(ret) && ctx_.is_geo_range_ && geo_range_nodes.count() > 0) {
     ObRangeNode *final_geo_range = nullptr;
-    if (OB_FAIL(or_range_nodes(range_node_generator, range_nodes, ctx_.column_cnt_, final_geo_range))) {
+    if (OB_FAIL(or_range_nodes(range_node_generator, geo_range_nodes, ctx_.column_cnt_, final_geo_range))) {
       LOG_WARN("failed to or range nodes");
-    } else if (OB_FALSE_IT(range_nodes.reuse())) {
     } else if (OB_FAIL(range_nodes.push_back(final_geo_range))) {
       LOG_WARN("failed to push back range nodes");
     }
