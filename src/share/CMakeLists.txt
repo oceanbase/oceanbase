@@ -1,3 +1,37 @@
+ob_set_subtarget(ob_datum ALONE
+  datum/ob_datum_funcs.cpp
+  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_0.cpp
+  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_1.cpp
+  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_2.cpp
+  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_3.cpp
+  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_4.cpp
+  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_5.cpp
+  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_6.cpp
+  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_7.cpp
+  datum/ob_datum_funcs_compilation/ob_datum_funcs_all.cpp
+  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_0.cpp
+  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_1.cpp
+  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_2.cpp
+  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_3.cpp
+  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_4.cpp
+  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_5.cpp
+  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_6.cpp
+  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_7.cpp
+  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_all.cpp
+)
+
+file(GLOB SCHEMA_CPPS "inner_table/ob_inner_table_schema.*.cpp")
+ob_set_subtarget(ob_schema SCHEMA_CPPS
+  inner_table/ob_inner_table_schema.vt.cpp
+  inner_table/ob_inner_table_schema.lob.cpp
+  inner_table/ob_inner_table_schema_misc.ipp
+  ${SCHEMA_CPPS}
+)
+
+ob_set_subtarget(ob_schema ALONE
+  schema/ob_schema_service_sql_impl.cpp
+)
+
 ob_set_subtarget(ob_share ALONE
   aggregate/approx_count_distinct.cpp
   aggregate/count.cpp
@@ -11,11 +45,9 @@ ob_set_subtarget(ob_share ALONE
   aggregate/sum.cpp
   aggregate/sys_bit.cpp
   aggregate/aggr_extra.cpp
-  datum/ob_datum_funcs.cpp
   ob_rpc_struct.cpp
   ob_tenant_mgr.cpp
   parameter/ob_parameter_attr.cpp
-  schema/ob_schema_service_sql_impl.cpp
   vector/expr_cmp_func.cpp
   vector/expr_cmp_func_parts/expr_cmp_func_part_0.cpp
   vector/expr_cmp_func_parts/expr_cmp_func_part_1.cpp
@@ -26,31 +58,6 @@ ob_set_subtarget(ob_share ALONE
   vector/expr_cmp_func_parts/expr_cmp_func_part_6.cpp
   vector/expr_cmp_func_parts/expr_cmp_func_part_7.cpp
   aggregate/approx_count_distinct_synopsis.cpp
-
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_0.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_1.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_2.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_3.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_4.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_5.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_6.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_7.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_all.cpp
-
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_0.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_1.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_2.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_3.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_4.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_5.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_6.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_7.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_all.cpp
-)
-
-file(GLOB SCHEMA_CPPS "inner_table/ob_inner_table_schema.*.cpp")
-ob_set_subtarget(ob_share SCHEMA_CPPS
-  ${SCHEMA_CPPS}
 )
 
 ob_set_subtarget(ob_share allocator
@@ -257,9 +264,6 @@ ob_set_subtarget(ob_share common_mixed
   location_cache/ob_tablet_location_broadcast.cpp
   location_cache/ob_vtable_location_service.cpp
   location_cache/ob_tablet_location_refresh_service.cpp
-  inner_table/ob_inner_table_schema.vt.cpp
-  inner_table/ob_inner_table_schema.lob.cpp
-  inner_table/ob_inner_table_schema_misc.ipp
   object/ob_obj_cast.cpp
   parameter/ob_parameter_seed.ipp
   ratelimit/ob_rl_mgr.cpp
@@ -429,7 +433,7 @@ ob_set_subtarget(ob_share resource_manager
   resource_manager/ob_resource_plan_manager.cpp
 )
 
-ob_set_subtarget(ob_share schema
+ob_set_subtarget(ob_schema schema
   schema/ob_column_schema.cpp
   schema/ob_constraint.cpp
   schema/ob_database_sql_service.cpp
@@ -655,7 +659,6 @@ ob_set_subtarget(ob_share vector_type
 )
 
 ob_add_new_object_target(ob_share ob_share)
-
 target_compile_options(ob_share PRIVATE)
 #target_compile_options(ob_share PRIVATE -Wshorten-64-to-32)
 target_link_libraries(ob_share PUBLIC ob_base)
@@ -666,3 +669,25 @@ add_library(ob_share_static
 
 target_link_libraries(ob_share_static
   PUBLIC ob_share)
+
+ob_add_new_object_target(ob_datum ob_datum)
+target_compile_options(ob_datum PRIVATE)
+target_link_libraries(ob_datum PUBLIC ob_base)
+
+add_library(ob_datum_static
+  STATIC
+  EXCLUDE_FROM_ALL)
+
+target_link_libraries(ob_datum_static
+  PUBLIC ob_datum)
+
+ob_add_new_object_target(ob_schema ob_schema)
+target_compile_options(ob_schema PRIVATE)
+target_link_libraries(ob_schema PUBLIC ob_base)
+
+add_library(ob_schema_static
+  STATIC
+  EXCLUDE_FROM_ALL)
+
+target_link_libraries(ob_schema_static
+  PUBLIC ob_schema)
