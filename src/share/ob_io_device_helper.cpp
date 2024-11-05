@@ -827,6 +827,7 @@ int ObIODeviceLocalFileOp::convert_sys_errno(const int error_no)
     case EAGAIN:
       ret = OB_EAGAIN;
       break;
+    case EDQUOT:
     case ENOSPC:
       ret = OB_SERVER_OUTOF_DISK_SPACE;
       break;
