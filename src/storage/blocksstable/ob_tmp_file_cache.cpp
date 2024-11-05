@@ -609,12 +609,17 @@ int ObTmpBlockCache::put_block(const ObTmpBlockCacheKey &key, ObTmpBlockValueHan
   if (OB_UNLIKELY(!key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid arguments", K(ret), K(key));
-  } else if (OB_FAIL(put_kvpair(handle.inst_handle_, handle.kvpair_,
-      handle.handle_, true/*overwrite*/))) {
+  } else if (OB_FAIL(put_kvpair(handle.inst_handle_, handle.kvpair_, handle.handle_, true/*overwrite*/))) {
     STORAGE_LOG(WARN, "fail to put tmp block to block cache", K(ret));
-  } else {
+    if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+      ret = OB_SUCCESS;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
     handle.reset();
   }
+
   return ret;
 }
 
