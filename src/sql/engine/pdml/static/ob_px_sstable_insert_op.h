@@ -116,7 +116,7 @@ private:
 private:
   friend class storage::ObSSTableInsertRowIterator;
   static const uint64_t MAP_HASH_BUCKET_NUM = 1543L;
-  static const uint64_t TABLET_STORE_MEM_LIMIT = 2 * 1024 * 1024; // 2M
+  static const uint64_t TABLET_STORE_MEM_LIMIT = 16 * 1024; // 16 KB
   typedef common::hash::ObHashMap<common::ObTabletID, ObChunkDatumStore*, common::hash::NoPthreadDefendMode> TabletStoreMap;
   common::ObArenaAllocator allocator_;
   common::ObArray<LSTabletIDPair> participants_;
