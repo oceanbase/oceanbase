@@ -406,15 +406,19 @@ int ObLSServiceHelper::get_primary_zone_unit_array(const share::schema::ObTenant
 
   return ret;
 }
+ERRSIM_POINT_DEF(ERRSIM_LS_NO_REPORT);
 int ObLSServiceHelper::update_ls_recover_in_trans(
      const share::ObLSRecoveryStat &ls_recovery_stat,
      const bool only_update_readable_scn,
      common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
+  int64_t errsim_ls_id = ERRSIM_LS_NO_REPORT ? -ERRSIM_LS_NO_REPORT : ObLSID::INVALID_LS_ID;
   if (OB_UNLIKELY(!ls_recovery_stat.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ls recovery stat is invalid", KR(ret), K(ls_recovery_stat));
+  } else if (ls_recovery_stat.get_ls_id().id() == errsim_ls_id) {
+    FLOG_INFO("ERRSIM_LS_NO_REPORT opened", K(ls_recovery_stat));
   } else {
     share::ObLSRecoveryStatOperator ls_recovery;
     SCN new_scn;
