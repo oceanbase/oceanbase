@@ -1178,7 +1178,13 @@ public:
                       uint64_t &parent_id,
                       int64_t &var_idx,
                       const ObString &synonym_name,
-                      const uint64_t cur_db_id) const;
+                      const uint64_t cur_db_id,
+                      const pl::ObPLDependencyTable *&dep_table) const;
+  int add_dependency_obj(const ObSchemaType schema_type,
+                        const uint64_t schema_id,
+                        const ObDependencyTableType table_type,
+                        bool is_db_expilicit,
+                        const pl::ObPLDependencyTable *&dep_table) const;
   int resolve_external_symbol(const common::ObString &name, ExternalType &type, ObPLDataType &data_type,
                               uint64_t &parent_id, int64_t &var_idx) const;
   int resolve_external_type_by_name(const ObString &db_name,

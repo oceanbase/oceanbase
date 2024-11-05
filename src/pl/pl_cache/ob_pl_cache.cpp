@@ -591,6 +591,9 @@ int ObPLObjectValue::get_synonym_schema_version(ObPLCacheCtx &pc_ctx,
       } else {
         new_version = synonym_info->get_schema_version();
       }
+    } else if (OB_ISNULL(synonym_info)) {
+      ret = OB_OLD_SCHEMA_VERSION;
+      LOG_WARN("can not get newer synonym_info", K(ret));
     }
   }
   return ret;

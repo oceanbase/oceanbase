@@ -23,7 +23,8 @@ ARCH_DEF(OB_ARM_ARCH_TYPE, "ARM")
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "ob_pl_stmt.h"
 #include "pl/ob_pl_allocator.h"
-
+#include "sql/resolver/expr/ob_raw_expr_util.h"
+#include "sql/resolver/ob_stmt_resolver.h"
 namespace oceanbase
 {
 
@@ -145,6 +146,12 @@ public:
                             schema::ObSchemaGetterGuard &schema_guard,
                             ObPLCompileUnit &unit,
                             const ObRoutinePersistentInfo::ObPLOperation op);
+
+  static int has_same_name_dependency_with_public_synonym(
+                            schema::ObSchemaGetterGuard &schema_guard,
+                            const ObPLDependencyTable &dep_schema_objs,
+                            bool& exist,
+                            ObSQLSessionInfo &session_info);
 
   static int delete_dll_from_disk(common::ObISQLClient &trans,
                                   uint64_t tenant_id,

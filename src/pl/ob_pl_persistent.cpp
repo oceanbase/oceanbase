@@ -327,6 +327,140 @@ int ObRoutinePersistentInfo::gen_routine_storage_dml(const uint64_t exec_tenant_
   return ret;
 }
 
+int ObRoutinePersistentInfo::has_same_name_dependency_with_public_synonym(
+                                                                  ObSchemaGetterGuard &schema_guard,
+                                                                  const ObPLDependencyTable &dep_schema_objs,
+                                                                  bool& exist,
+                                                                  ObSQLSessionInfo &session_info)
+{
+  int ret = OB_SUCCESS;
+  exist = false;
+  uint64_t tenant_id = MTL_ID();
+  ObSchemaChecker schema_checker;
+  ObSynonymChecker synonym_checker;
+  ObString obj_name;
+  uint64_t obj_id;
+  OZ (schema_checker.init(schema_guard, session_info.get_sessid()));
+  for (int64_t i = 0; !exist && OB_SUCC(ret) && i < dep_schema_objs.count(); ++i) {
+    obj_id = dep_schema_objs.at(i).object_id_;
+    if (dep_schema_objs.at(i).is_db_explicit() &&
+       (SYNONYM_SCHEMA != dep_schema_objs.at(i).get_schema_type())) {
+      continue;
+    }
+    if (PACKAGE_SCHEMA == dep_schema_objs.at(i).get_schema_type()
+        || UDT_SCHEMA == dep_schema_objs.at(i).get_schema_type()
+        || ROUTINE_SCHEMA == dep_schema_objs.at(i).get_schema_type()) {
+      tenant_id = pl::get_tenant_id_by_object_id(dep_schema_objs.at(i).object_id_);
+    }
+    switch (dep_schema_objs.at(i).get_schema_type()) {
+      case SEQUENCE_SCHEMA:
+        {
+          const ObSequenceSchema *sequence_schema = NULL;
+          if (OB_FAIL(schema_guard.get_sequence_schema(tenant_id,
+                                                        obj_id, sequence_schema))) {
+            LOG_WARN("failed to get sequence schema", K(ret), K(obj_id));
+          } else if (nullptr == sequence_schema) {
+            LOG_WARN("get an unexpected null sequence schema", K(obj_id));
+          } else {
+            obj_name = sequence_schema->get_sequence_name();
+          }
+          break;
+        }
+      case ROUTINE_SCHEMA:
+        {
+          const ObRoutineInfo *routine_schema = NULL;
+          if (OB_FAIL(schema_guard.get_routine_info(tenant_id,
+                                                        obj_id, routine_schema))) {
+            LOG_WARN("failed to get routine_schema", K(ret), K(obj_id));
+          } else if (nullptr == routine_schema) {
+            LOG_WARN("get an unexpected null routine_schema", K(obj_id));
+          } else {
+            obj_name = routine_schema->get_routine_name();
+          }
+          break;
+        }
+      case PACKAGE_SCHEMA:
+        {
+          const ObPackageInfo *package_info = NULL;
+          if (OB_FAIL(schema_guard.get_package_info(tenant_id,
+                                                        obj_id, package_info))) {
+            LOG_WARN("failed to get package_info", K(ret), K(obj_id));
+          } else if (nullptr == package_info) {
+            LOG_WARN("get an unexpected null package_info", K(obj_id));
+          } else {
+            obj_name = package_info->get_package_name();
+          }
+          break;
+        }
+      case UDT_SCHEMA:
+        {
+          const ObUDTTypeInfo *udt_info = NULL;
+          if (OB_FAIL(schema_guard.get_udt_info(tenant_id,
+                                                        obj_id, udt_info))) {
+            LOG_WARN("failed to get udt_info", K(ret), K(obj_id));
+          } else if (nullptr == udt_info) {
+            LOG_WARN("get an unexpected null udt_info", K(obj_id));
+          } else {
+            obj_name = udt_info->get_type_name();
+          }
+          break;
+        }
+      case TABLE_SCHEMA:
+        {
+          const ObSimpleTableSchemaV2 *table_schema = nullptr;
+          if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id,
+                                                          obj_id,
+                                                          table_schema))) {
+            LOG_WARN("failed to get table schema", K(ret), K(obj_id));
+          } else if (nullptr == table_schema) {
+            LOG_WARN("get an unexpected null table schema", K(obj_id));
+          } else {
+            obj_name = table_schema->get_table_name_str();
+          }
+          break;
+        }
+      case SYNONYM_SCHEMA:
+        {
+          const ObSimpleSynonymSchema *synonym_info = nullptr;
+          if (OB_FAIL(schema_guard.get_simple_synonym_info(tenant_id,
+                                                          obj_id,
+                                                          synonym_info))) {
+            LOG_WARN("failed to get synonym_info", K(ret), K(obj_id));
+          } else if (nullptr == synonym_info) {
+            LOG_WARN("get an unexpected null table schema", K(obj_id));
+          } else {
+            obj_name = synonym_info->get_synonym_name_str();
+            if (OB_PUBLIC_SCHEMA_ID == synonym_info->get_database_id()) {
+              continue;
+            }
+          }
+          break;
+        }
+      default:
+          break;
+    }
+    const ObSimpleSynonymSchema *synonym_info = NULL;
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to get obj name using dependency id", K(ret), K(obj_id));
+    } else if (OB_ISNULL(obj_name)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("get null obj name using dependency id", K(ret), K(obj_id));
+    } else {
+        ObString public_obj_name;
+        bool exist_with_synonym = false;
+        uint64_t object_database_id;
+        OZ (ObResolverUtils::resolve_synonym_object_recursively(schema_checker, synonym_checker, tenant_id, OB_PUBLIC_SCHEMA_ID,
+                                               obj_name, object_database_id, public_obj_name, exist_with_synonym));
+        if (exist_with_synonym && public_obj_name != obj_name) {
+          exist = true;
+        }
+    }
+    if (OB_ERR_UNEXPECTED != ret) {
+      ret = OB_SUCCESS;
+    }
+  }
+  return ret;
+}
 int ObRoutinePersistentInfo::check_dep_schema(ObSchemaGetterGuard &schema_guard,
                                           const ObPLDependencyTable &dep_schema_objs,
                                           int64_t merge_version,

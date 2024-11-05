@@ -1457,7 +1457,8 @@ int ObPLExternalNS::resolve_synonym(uint64_t object_db_id,
                                     uint64_t &parent_id,
                                     int64_t &var_idx,
                                     const ObString &synonym_name,
-                                    const uint64_t cur_db_id) const
+                                    const uint64_t cur_db_id,
+                                    const pl::ObPLDependencyTable *&dep_table) const
 {
   int ret = OB_SUCCESS;
   uint64_t object_id = OB_INVALID_ID;
@@ -1505,12 +1506,15 @@ int ObPLExternalNS::resolve_synonym(uint64_t object_db_id,
           }
         }
       } else {
+        OZ (add_dependency_obj(schema::ObSchemaType::UDT_SCHEMA, object_id, DEPENDENCY_TYPE, true, dep_table));
         type = UDT_NS;
       }
     } else {
+      OZ (add_dependency_obj(schema::ObSchemaType::PACKAGE_SCHEMA, object_id, DEPENDENCY_PACKAGE, true, dep_table));
       type = PKG_NS;
     }
   } else {
+    OZ (add_dependency_obj(schema::ObSchemaType::TABLE_SCHEMA, object_id, DEPENDENCY_TABLE, true, dep_table));
     type = TABLE_NS;
   }
   if (OB_FAIL(ret)) {
@@ -1519,6 +1523,32 @@ int ObPLExternalNS::resolve_synonym(uint64_t object_db_id,
   } else {
     var_idx = static_cast<int64_t>(object_id);
     parent_id = object_db_id;
+  }
+  return ret;
+}
+int ObPLExternalNS::add_dependency_obj(const ObSchemaType schema_type,
+                                      const uint64_t schema_id,
+                                      const ObDependencyTableType table_type,
+                                      bool is_db_expilicit,
+                                      const pl::ObPLDependencyTable *&dep_table) const
+{
+  int ret = OB_SUCCESS;
+  int64_t schema_version = OB_INVALID_VERSION;
+  if (OB_INVALID_ID == schema_id) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid schema id", K(ret), K(schema_id));
+  } else if (OB_FAIL(resolve_ctx_.schema_guard_.get_schema_version(schema_type,
+                                              resolve_ctx_.session_info_.get_effective_tenant_id(),
+                                              schema_id,
+                                              schema_version))) {
+    LOG_WARN("get schema version failed", K(resolve_ctx_.session_info_.get_effective_tenant_id()),
+                                            K(schema_id), K(ret));
+  } else if (OB_NOT_NULL(dep_table)) {
+    ObSchemaObjVersion ver(schema_id, schema_version, table_type);
+    ver.is_db_explicit_ = is_db_expilicit;
+    if (OB_FAIL(ObPLCompileUnitAST::add_dependency_object_impl(*dep_table, ver))) {
+      LOG_WARN("add dependency object failed", K(schema_id), K(ret));
+    }
   }
   return ret;
 }
@@ -1733,7 +1763,8 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
             schema_checker, synonym_checker,
             tenant_id, db_id, name, object_db_id, object_name, exist, OB_INVALID_INDEX == parent_id));
           if (exist) {
-            OZ (resolve_synonym(object_db_id, object_name, type, parent_id, var_idx, name, db_id));
+            const ObPLDependencyTable *dep_table = get_dependency_table();
+            OZ (resolve_synonym(object_db_id, object_name, type, parent_id, var_idx, name, db_id, dep_table));
             if (synonym_checker.has_synonym() && OB_NOT_NULL(get_dependency_table())) {
               OZ (ObResolverUtils::add_dependency_synonym_object(&resolve_ctx_.schema_guard_,
                                                                 &resolve_ctx_.session_info_,
