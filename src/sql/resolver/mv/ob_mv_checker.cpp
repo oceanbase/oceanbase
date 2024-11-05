@@ -225,6 +225,9 @@ int ObMVChecker::check_mv_table_type_valid(const ObSelectStmt &stmt, bool &is_va
       } else if (OB_NOT_NULL(table->flashback_query_expr_)) {
         is_valid = false;
         append_fast_refreshable_note("flashback query not support");
+      } else if (OB_UNLIKELY(!table->part_ids_.empty())) {
+        is_valid = false;
+        append_fast_refreshable_note("define mview use table with partition hint not support");
       }
     }
   }

@@ -2766,6 +2766,7 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
         include_hidden = true;
         if (T_NONE_SCOPE == params_.hidden_column_scope_) {
           params_.hidden_column_scope_ = current_scope_;
+          params_.hidden_column_name_ = OB_HIDDEN_PK_INCREMENT_COLUMN_NAME;
         }
       }
     }
@@ -13689,6 +13690,12 @@ int ObDMLResolver::resolve_old_new_pseudo_column(const ObQualifiedName &q_name,
     pseudo_column_expr->set_table_id(table_item->table_id_);
     real_ref_expr = pseudo_column_expr;
     LOG_DEBUG("old_new_expr build success", K(*pseudo_column_expr));
+  }
+
+  if (OB_SUCC(ret) && T_NONE_SCOPE == params_.hidden_column_scope_
+      && !(params_.is_for_rt_mv_ || session_info_->get_ddl_info().is_major_refreshing_mview())) {
+    params_.hidden_column_scope_ = current_scope_;
+    params_.hidden_column_name_ = OB_MLOG_OLD_NEW_COLUMN_NAME;
   }
   return ret;
 }

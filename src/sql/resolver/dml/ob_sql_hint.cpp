@@ -240,12 +240,17 @@ int ObQueryHint::check_and_set_params_from_hint(const ObResolverParams &params, 
              OB_FAIL(global_hint_.opt_params_.has_enable_opt_param(ObOptParamHint::OptParamType::HIDDEN_COLUMN_VISIBLE, has_enable_param))) {
     LOG_WARN("failed to check has enable opt param", K(ret));
   } else if (OB_UNLIKELY(T_NONE_SCOPE != params.hidden_column_scope_ && !has_enable_param)) {
-    ret = OB_ERR_BAD_FIELD_ERROR;
-    LOG_WARN("hidden columns not allowed", K(ret));
-    ObString column_name(OB_HIDDEN_PK_INCREMENT_COLUMN_NAME);
-    ObString scope_name = ObString::make_string(get_scope_name(params.hidden_column_scope_));
-    LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column_name.length(), column_name.ptr(),
-                                          scope_name.length(), scope_name.ptr());
+    if (OB_ISNULL(params.hidden_column_name_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret), K(params.hidden_column_scope_), K(params.hidden_column_name_));
+    } else {
+      ret = OB_ERR_BAD_FIELD_ERROR;
+      LOG_WARN("hidden columns not allowed", K(ret));
+      ObString column_name(params.hidden_column_name_);
+      ObString scope_name = ObString::make_string(get_scope_name(params.hidden_column_scope_));
+      LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column_name.length(), column_name.ptr(),
+                                            scope_name.length(), scope_name.ptr());
+    }
   } else if (OB_FAIL(check_ddl_schema_version_from_hint(stmt))) {
     LOG_WARN("failed to check ddl schema version", K(ret));
   } else {
