@@ -649,7 +649,7 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
           }
         }
         if (OB_SUCC(ret)) {
-          int64_t num_distinct = ObOptSelectivity::scale_distinct(total_row_cnt, sample_size, ndv_eval.get());
+          int64_t num_distinct = ndv_eval.get() == 0 ? 0 : ObOptSelectivity::scale_distinct(total_row_cnt, sample_size, ndv_eval.get());
           col_stat->set_table_id(param.column_params_.at(i).need_basic_stat() ? param.table_id_ : OB_INVALID_ID);
           col_stat->set_partition_id(partition_id);
           col_stat->set_column_id(param.column_params_.at(i).column_id_);
