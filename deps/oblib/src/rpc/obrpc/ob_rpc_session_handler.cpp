@@ -242,10 +242,19 @@ int ObRpcSessionHandler::wait_for_next_request(int64_t sessid,
             // try to send reverse keepalive request.
             if (current_time_us >= keepalive_timeout_us && reverse_keepalive_arg.is_valid()) {
               get_next_cond_(thid).unlock();
-              ret = stream_rpc_reverse_probe(reverse_keepalive_arg);
+              int tmp_ret = stream_rpc_reverse_probe(reverse_keepalive_arg);
               get_next_cond_(thid).lock();
-              if (OB_FAIL(ret)) {
+              if (OB_SUCCESS != tmp_ret) {
                 LOG_WARN("stream rpc sender has been aborted, unneed to wait", K(sessid), K(timeout), K(reverse_keepalive_arg));
+                if (OB_FAIL(next_wait_map_.get_refactored(sessid, wait_object))) {
+                  LOG_ERROR("wait object has been released", K(sessid), K(ret));
+                } else if (OB_ISNULL(wait_object.req_)) {
+                  // keepalive faild and the req is null, set the error and break
+                  ret = tmp_ret;
+                } else {
+                  req = wait_object.req_;
+                  LOG_INFO("got the next request though keepalive failed, break and return success", K(sessid), K(tmp_ret), K(ret));
+                }
                 break;
               }
             }
