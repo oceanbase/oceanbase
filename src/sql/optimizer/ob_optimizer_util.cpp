@@ -10107,9 +10107,9 @@ int ObOptimizerUtil::compute_nlj_spf_storage_compute_parallel_skew(ObOptimizerCo
   } else {
     ObParallelBlockRangeTaskParams params;
     params.parallelism_ = compute_parallel;
-    params.expected_task_load_ = table_schema->get_tablet_size() / 1024 / 1024 <= 0 ? sql::OB_EXPECTED_TASK_LOAD : table_schema->get_tablet_size() / 1024 / 1024;
-    //convert from B -> MB
-    int64_t esti_table_size = (esti_table_meta_info->micro_block_count_ * esti_table_meta_info->micro_block_size_) / 1024 / 1024;
+    params.expected_task_load_ = table_schema->get_tablet_size() / 1024 <= 0 ? sql::OB_EXPECTED_TASK_LOAD : table_schema->get_tablet_size() / 1024;
+    //convert from B -> KB
+    int64_t esti_table_size = (esti_table_meta_info->micro_block_count_ * esti_table_meta_info->micro_block_size_) / 1024;
     double query_range_filter_ratio = esti_table_meta_info->row_count_ / esti_table_meta_info->table_row_count_;
     esti_table_size *= query_range_filter_ratio;
     esti_table_size = MAX(0, esti_table_size);
