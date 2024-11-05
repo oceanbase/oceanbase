@@ -819,13 +819,14 @@ int ObTabletTableStore::calculate_read_tables(
 {
   int ret = OB_SUCCESS;
   const ObSSTable *base_table = nullptr;
+  const bool is_major_empty = is_major_sstable_empty(tablet.get_tablet_meta().ddl_commit_scn_);
 
   if (!skip_major && !meta_major_tables_.empty() && meta_major_tables_.at(0)->get_snapshot_version() < snapshot_version) {
     base_table = meta_major_tables_.at(0);
     if (OB_FAIL(iterator.add_table(meta_major_tables_.at(0)))) {
       LOG_WARN("failed to add meta major table to iterator", K(ret), K(meta_major_tables_));
     }
-  } else if (!skip_major && !is_major_sstable_empty(tablet.get_tablet_meta().ddl_commit_scn_)) {
+  } else if (!skip_major && !is_major_empty) {
     if (!major_tables_.empty()) {
       for (int64_t i = major_tables_.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
         if (major_tables_[i]->get_snapshot_version() <= snapshot_version) {
@@ -893,23 +894,25 @@ int ObTabletTableStore::calculate_read_tables(
           K(ret), K(snapshot_version), K(iterator), K(PRINT_TS(*this)));
     }
   } else { // not find base table
-    if (!allow_no_ready_read) {
-      if (is_major_sstable_empty(tablet.get_tablet_meta().ddl_commit_scn_)) {
+    if (skip_major || (allow_no_ready_read && is_major_empty)) {
+      if (!minor_tables_.empty() && OB_FAIL(iterator.add_tables(
+              minor_tables_, 0, minor_tables_.count()))) {
+        LOG_WARN("failed to add all minor tables to iterator", K(ret));
+      } else {
+        if (OB_FAIL(calculate_read_memtables(tablet, iterator))) {
+          LOG_WARN("no base table, but allow no ready read, failed to calculate read memtables",
+              K(ret), K(snapshot_version), K(memtables_), K(PRINT_TS(*this)));
+        }
+      }
+    } else {
+      if (is_major_empty) {
         ret = OB_REPLICA_NOT_READABLE;
         LOG_WARN("no base table, not allow no ready read, tablet is not readable",
-                 K(ret), K(snapshot_version), K(allow_no_ready_read), K(PRINT_TS(*this)));
+            K(ret), K(snapshot_version), K(allow_no_ready_read), K(PRINT_TS(*this)));
       } else {
         ret = OB_SNAPSHOT_DISCARDED;
         LOG_WARN("no base table found for specific version",
-                 K(ret), K(snapshot_version), K(allow_no_ready_read), K(PRINT_TS(*this)));
-      }
-    } else if (!minor_tables_.empty() && OB_FAIL(iterator.add_tables(
-        minor_tables_, 0, minor_tables_.count()))) {
-      LOG_WARN("failed to add all minor tables to iterator", K(ret));
-    } else {
-      if (OB_FAIL(calculate_read_memtables(tablet, iterator))) {
-        LOG_WARN("no base table, but allow no ready read, failed to calculate read memtables",
-                 K(ret), K(snapshot_version), K(memtables_), K(PRINT_TS(*this)));
+            K(ret), K(snapshot_version), K(allow_no_ready_read), K(PRINT_TS(*this)));
       }
     }
   }
