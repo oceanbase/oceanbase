@@ -11944,6 +11944,15 @@ int ObBatchSetTabletAutoincSeqArg::init(const uint64_t tenant_id, const share::O
   return ret;
 }
 
+void ObBatchSetTabletAutoincSeqArg::reset()
+{
+  tenant_id_ = OB_INVALID_ID;
+  ls_id_.reset();
+  autoinc_params_.reset();
+  is_tablet_creating_ = false;
+  return;
+}
+
 OB_SERIALIZE_MEMBER(ObBatchSetTabletAutoincSeqRes, autoinc_params_);
 
 int ObBatchSetTabletAutoincSeqRes::assign(const ObBatchSetTabletAutoincSeqRes &other)

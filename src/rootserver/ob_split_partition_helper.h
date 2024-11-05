@@ -110,14 +110,15 @@ private:
       ObMySQLTransaction &trans);
   static int start_dst_(
       const uint64_t tenant_id,
+      const uint64_t tenant_data_version,
       const share::ObLSID &ls_id,
       const ObAddr &leader_addr,
       const ObIArray<const share::schema::ObTableSchema *> &inc_table_schemas,
       const ObIArray<ObArray<ObTabletID>> &dst_tablet_ids,
-      const storage::ObTabletSplitMdsArg &start_dst_arg,
       const share::SCN &data_end_scn,
       const ObIArray<std::pair<uint64_t, uint64_t>> &end_autoinc_seqs,
       const int64_t task_id,
+      storage::ObTabletSplitMdsArg &start_dst_arg,
       ObTabletCreator *&tablet_creator,
       ObMySQLTransaction &trans);
 

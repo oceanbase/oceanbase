@@ -94,14 +94,15 @@ int ObSplitPartitionHelper::execute(ObDDLTaskRecord &task_record)
                                 trans_))) {
     LOG_WARN("failed to split wait src end", KR(ret));
   } else if (OB_FAIL(start_dst_(tenant_id_,
+                                tenant_data_version_,
                                 ls_id_,
                                 leader_addr_,
                                 inc_table_schemas_,
                                 dst_tablet_ids_,
-                                start_dst_arg_,
                                 data_end_scn_,
                                 end_autoinc_seqs_,
                                 task_id_,
+                                start_dst_arg_,
                                 tablet_creator_,
                                 trans_))) {
     LOG_WARN("failed to split start dst", KR(ret));
@@ -729,14 +730,15 @@ int ObSplitPartitionHelper::start_src_(
 
 int ObSplitPartitionHelper::start_dst_(
     const uint64_t tenant_id,
+    const uint64_t tenant_data_version,
     const share::ObLSID &ls_id,
     const ObAddr &leader_addr,
     const ObIArray<const ObTableSchema *> &inc_table_schemas,
     const ObIArray<ObArray<ObTabletID>> &dst_tablet_ids,
-    const ObTabletSplitMdsArg &start_dst_arg,
     const share::SCN &data_end_scn,
     const ObIArray<std::pair<uint64_t, uint64_t>> &end_autoinc_seqs,
     const int64_t task_id,
+    ObTabletSplitMdsArg &start_dst_arg,
     ObTabletCreator *&tablet_creator,
     ObMySQLTransaction &trans)
 {
@@ -804,26 +806,33 @@ int ObSplitPartitionHelper::start_dst_(
       }
     }
 
-    const int64_t timeout_us = THIS_WORKER.is_timeout_ts_valid() ? THIS_WORKER.get_timeout_remain() : GCONF.rpc_timeout;
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(proxy.call(leader_addr, timeout_us, tenant_id, arg))) {
-      LOG_WARN("send rpc failed", KR(ret), K(arg), K(leader_addr));
-    }
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = proxy.wait())) {
-      LOG_WARN("rpc proxy wait failed", K(tmp_ret));
-      ret = OB_SUCCESS == ret ? tmp_ret : ret;
-    } else if (OB_SUCC(ret)) {
-      const auto &result_array = proxy.get_results();
-      if (OB_UNLIKELY(1 != result_array.count()) || OB_ISNULL(result_array.at(0))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("result count not match", KR(ret), K(result_array.count()));
-      } else {
-        const auto *cur_result = result_array.at(0);
-        for (int64_t j = 0; OB_SUCC(ret) && j < cur_result->autoinc_params_.count(); j++) {
-          const ObMigrateTabletAutoincSeqParam &autoinc_param = cur_result->autoinc_params_.at(j);
-          if (OB_FAIL(autoinc_param.ret_code_)) {
-            LOG_WARN("failed to get autoinc", KR(ret));
+    } else if (DATA_VERSION_4_3_5_0 <= tenant_data_version) {
+      if (OB_FAIL(start_dst_arg.set_autoinc_seq_arg(arg))) {
+        LOG_WARN("failed to set autoinc arg", K(ret), K(arg));
+      }
+    } else {
+      const int64_t timeout_us = THIS_WORKER.is_timeout_ts_valid() ? THIS_WORKER.get_timeout_remain() : GCONF.rpc_timeout;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(proxy.call(leader_addr, timeout_us, tenant_id, arg))) {
+        LOG_WARN("send rpc failed", KR(ret), K(arg), K(leader_addr));
+      }
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = proxy.wait())) {
+        LOG_WARN("rpc proxy wait failed", K(tmp_ret));
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
+      } else if (OB_SUCC(ret)) {
+        const auto &result_array = proxy.get_results();
+        if (OB_UNLIKELY(1 != result_array.count()) || OB_ISNULL(result_array.at(0))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("result count not match", KR(ret), K(result_array.count()));
+        } else {
+          const auto *cur_result = result_array.at(0);
+          for (int64_t j = 0; OB_SUCC(ret) && j < cur_result->autoinc_params_.count(); j++) {
+            const ObMigrateTabletAutoincSeqParam &autoinc_param = cur_result->autoinc_params_.at(j);
+            if (OB_FAIL(autoinc_param.ret_code_)) {
+              LOG_WARN("failed to get autoinc", KR(ret));
+            }
           }
         }
       }

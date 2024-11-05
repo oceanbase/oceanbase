@@ -19,6 +19,8 @@
 #include "lib/container/ob_array_serialization.h"
 #include "lib/mysqlclient/ob_mysql_transaction.h"
 #include "share/ob_ls_id.h"
+#include "share/ob_rpc_struct.h"
+#include "src/share/ob_tablet_autoincrement_param.h"
 #include "src/storage/tablet/ob_tablet_create_delete_mds_user_data.h"
 #include "src/storage/tablet/ob_tablet_split_mds_user_data.h"
 
@@ -58,7 +60,7 @@ public:
   OB_UNIS_VERSION_V(1);
 
 public:
-  ObTabletSplitMdsArg() : tenant_id_(OB_INVALID_TENANT_ID), ls_id_(), split_data_tablet_ids_(), split_datas_(), tablet_status_tablet_ids_(), tablet_status_(ObTabletStatus::NONE), tablet_status_data_type_(ObTabletMdsUserDataType::NONE), set_freeze_flag_tablet_ids_() {}
+  ObTabletSplitMdsArg() : tenant_id_(OB_INVALID_TENANT_ID), ls_id_(), split_data_tablet_ids_(), split_datas_(), tablet_status_tablet_ids_(), tablet_status_(ObTabletStatus::NONE), tablet_status_data_type_(ObTabletMdsUserDataType::NONE), set_freeze_flag_tablet_ids_(), autoinc_seq_arg_() {}
   ~ObTabletSplitMdsArg() {}
   bool is_valid() const;
   int assign(const ObTabletSplitMdsArg &other);
@@ -90,6 +92,7 @@ public:
     const ObIArray<ObTabletID> &src_tablet_ids,
     const ObIArray<ObArray<ObTabletID>> &dst_tablet_ids,
     const ObIArray<ObRowkey> &dst_high_bound_vals);
+  int set_autoinc_seq_arg(const obrpc::ObBatchSetTabletAutoincSeqArg &arg);
   int init_split_end_src(
     const uint64_t tenant_id,
     const share::ObLSID &ls_id,
@@ -109,7 +112,7 @@ public:
     const ObIArray<ObTabletID> &tablet_ids,
     const ObIArray<ObTabletSplitMdsUserData> &split_datas);
 
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(split_data_tablet_ids), K_(split_datas), K_(tablet_status_tablet_ids), K_(tablet_status), K_(tablet_status_data_type), K_(set_freeze_flag_tablet_ids));
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(split_data_tablet_ids), K_(split_datas), K_(tablet_status_tablet_ids), K_(tablet_status), K_(tablet_status_data_type), K_(set_freeze_flag_tablet_ids), K_(autoinc_seq_arg));
 
 private:
   static bool is_split_data_table(const share::schema::ObTableSchema &table_schema);
@@ -129,6 +132,7 @@ public:
   ObTabletStatus tablet_status_;
   ObTabletMdsUserDataType tablet_status_data_type_;
   ObSArray<ObTabletID> set_freeze_flag_tablet_ids_; // set transfer freeze flag on replay
+  obrpc::ObBatchSetTabletAutoincSeqArg autoinc_seq_arg_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletSplitMdsArg);
 };

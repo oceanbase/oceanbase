@@ -12064,6 +12064,7 @@ public:
   int assign(const ObBatchSetTabletAutoincSeqArg &other);
   bool is_valid() const { return tenant_id_ != OB_INVALID_ID && ls_id_.is_valid() && autoinc_params_.count() > 0; }
   int init(const uint64_t tenant_id_, const share::ObLSID &ls_id, const ObIArray<share::ObMigrateTabletAutoincSeqParam> &params);
+  void reset();
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(autoinc_params), K_(is_tablet_creating));
 public:
   uint64_t tenant_id_;

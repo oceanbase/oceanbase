@@ -19,6 +19,7 @@
 #include "storage/tablet/ob_tablet_split_replay_executor.h"
 #include "storage/ls/ob_ls.h"
 #include "storage/multi_data_source/mds_ctx.h"
+#include "storage/ob_tablet_autoinc_seq_rpc_handler.h"
 #include "storage/tablet/ob_tablet_common.h"
 #include "storage/tablet/ob_tablet_create_delete_helper.h"
 #include "storage/tablet/ob_tablet_binding_helper.h"
@@ -66,6 +67,8 @@ int ObTabletSplitMdsArg::assign(const ObTabletSplitMdsArg &other)
     LOG_WARN("failed to assign tablet ids", K(ret));
   } else if (OB_FAIL(set_freeze_flag_tablet_ids_.assign(other.set_freeze_flag_tablet_ids_))) {
     LOG_WARN("failed to assign", K(ret));
+  } else if (OB_FAIL(autoinc_seq_arg_.assign(other.autoinc_seq_arg_))) {
+    LOG_WARN("failed to assign", K(ret));
   }
   return ret;
 }
@@ -80,6 +83,7 @@ void ObTabletSplitMdsArg::reset()
   tablet_status_ = ObTabletStatus::NONE;
   tablet_status_data_type_ = ObTabletMdsUserDataType::NONE;
   set_freeze_flag_tablet_ids_.reset();
+  autoinc_seq_arg_.reset();
 }
 
 bool ObTabletSplitMdsArg::is_split_data_table(const ObTableSchema &table_schema)
@@ -367,6 +371,15 @@ int ObTabletSplitMdsArg::init_split_start_dst(
   return ret;
 }
 
+int ObTabletSplitMdsArg::set_autoinc_seq_arg(const obrpc::ObBatchSetTabletAutoincSeqArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(autoinc_seq_arg_.assign(arg))) {
+    LOG_WARN("failed to assign", K(ret), K(arg));
+  }
+  return ret;
+}
+
 int ObTabletSplitMdsArg::init_split_end_src(
     const uint64_t tenant_id,
     const ObLSID &ls_id,
@@ -493,7 +506,7 @@ int ObTabletSplitMdsArg::init(
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObTabletSplitMdsArg, tenant_id_, ls_id_, split_data_tablet_ids_, split_datas_, tablet_status_tablet_ids_, tablet_status_, tablet_status_data_type_, set_freeze_flag_tablet_ids_);
+OB_SERIALIZE_MEMBER(ObTabletSplitMdsArg, tenant_id_, ls_id_, split_data_tablet_ids_, split_datas_, tablet_status_tablet_ids_, tablet_status_, tablet_status_data_type_, set_freeze_flag_tablet_ids_, autoinc_seq_arg_);
 
 int ObTabletSplitMdsArgPrepareSrcOp::operator()(const int64_t part_idx, ObBasePartition &part)
 {
@@ -1029,6 +1042,11 @@ int ObTabletSplitMdsHelper::modify(
     } else if (ObTabletStatus::SPLIT_SRC_DELETED == arg.tablet_status_) {
       need_empty_shell_trigger = true;
     }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObTabletAutoincSeqRpcHandler::get_instance().batch_set_tablet_autoinc_seq_in_trans(*ls, arg.autoinc_seq_arg_, scn, ctx))) {
+    LOG_WARN("failed to batch set tablet autoinc seq", K(ret), K(scn));
   }
 
   if (OB_SUCC(ret) && need_empty_shell_trigger) {
