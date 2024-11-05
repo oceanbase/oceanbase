@@ -11224,10 +11224,13 @@ int ObTransformUtils::check_select_item_need_remove(const ObSelectStmt *stmt,
       ret = SMART_CALL(check_select_item_need_remove(child_stmts.at(i), child_idx, need_remove));
     }
     for (int64_t i = 0; OB_SUCC(ret) && need_remove && i < stmt->get_order_item_size(); ++i) {
+      ObRawExpr *find_expr = NULL;
       if (OB_ISNULL(order_expr = stmt->get_order_item(i).expr_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null order expr", K(ret));
-      } else if (order_expr == expr) {
+      } else if (OB_FAIL(find_parent_expr(order_expr, expr, find_expr))) {
+        LOG_WARN("failed to find select expr in order_expr", K(ret));
+      } else if (NULL != find_expr) {
         need_remove = false;
       }
     }
