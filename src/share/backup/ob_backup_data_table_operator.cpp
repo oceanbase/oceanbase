@@ -2163,6 +2163,8 @@ int ObBackupLSTaskOperator::delete_build_index_task(
   } else if (1 != affected_rows) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[DATA_BACKUP]invalid affected_rows", K(ret), K(affected_rows), K(sql));
+  } else {
+    LOG_INFO("[DATA_BACKUP]delete build index task succ", K(build_index_attr), K(sql));
   }
   return ret;
 }
