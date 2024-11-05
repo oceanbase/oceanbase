@@ -993,11 +993,6 @@ int ObUnLockExecutor::execute_(ObExecContext &ctx,
       }
     }
   }
-  // if release_cnt is valid, means we have tried to release,
-  // and have not encountered any failures before
-  if (INVALID_RELEASE_CNT != release_cnt) {
-    ret = OB_SUCCESS;
-  }
   return ret;
 }
 
@@ -1174,32 +1169,30 @@ int ObUnLockExecutor::release_all_locks_(ObLockContext &ctx,
       LOG_WARN("lock request should not be null", K(ret));
     } else {
       switch(arg->type_) {
-      case ObLockRequest::ObLockMsgType::UNLOCK_OBJ_REQ: {
+        case ObLockRequest::ObLockMsgType::UNLOCK_OBJ_REQ: {
           const ObUnLockObjsRequest *real_arg = static_cast<const ObUnLockObjsRequest *>(arg);
-          if (OB_FAIL(ObTableLockDetector::remove_detect_info_from_inner_table(session,
-                                                                               LOCK_OBJECT,
-                                                                               *real_arg,
-                                                                               tmp_cnt))) {
-            LOG_WARN("remove_detect_info_from_inner_table failed", K(ret), K(real_arg));
-          } else if (FALSE_IT(cnt = cnt + tmp_cnt)) {
-          } else if (OB_FAIL(unlock_obj_(session->get_tx_desc(), tx_param, *real_arg))) {
-            LOG_WARN("unlock obj failed", K(ret), K(arg));
-          } else if (real_arg->objs_.count() != 1) {
+          if (real_arg->objs_.count() != 1) {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("do not support batch unlock right now", KPC(real_arg));
+          } else if (OB_FAIL(ObTableLockDetector::remove_detect_info_from_inner_table(
+                      session, LOCK_OBJECT, *real_arg, tmp_cnt))) {
+            LOG_WARN("remove_detect_info_from_inner_table failed", K(ret), K(real_arg));
+          } else if (OB_FAIL(unlock_obj_(session->get_tx_desc(), tx_param, *real_arg))) {
+            LOG_WARN("unlock obj failed", K(ret), K(arg));
+          } else if (FALSE_IT(cnt = cnt + tmp_cnt)) {
           }
           break;
         }
-      case ObLockRequest::ObLockMsgType::UNLOCK_TABLE_REQ: {
+        case ObLockRequest::ObLockMsgType::UNLOCK_TABLE_REQ: {
           const ObUnLockTableRequest *real_arg = static_cast<const ObUnLockTableRequest*>(arg);
           if (OB_FAIL(ObTableLockDetector::remove_detect_info_from_inner_table(session,
                                                                                LOCK_TABLE,
                                                                                *real_arg,
                                                                                tmp_cnt))) {
             LOG_WARN("remove_detect_info_from_inner_table failed", K(ret), K(real_arg));
-          } else if (FALSE_IT(cnt = cnt + tmp_cnt)) {
           } else if (OB_FAIL(unlock_table_(session->get_tx_desc(), tx_param, *real_arg))) {
             LOG_WARN("unlock obj failed", K(ret), K(arg));
+          } else if (FALSE_IT(cnt = cnt + tmp_cnt)) {
           }
           break;
         }
@@ -1254,7 +1247,7 @@ int ObUnLockExecutor::parse_unlock_request_(common::sqlclient::ObMySQLResult &re
           unlock_arg->table_id_ = obj_id;
           unlock_arg->lock_mode_ = lock_mode;
           unlock_arg->op_type_ = ObTableLockOpType::OUT_TRANS_UNLOCK;
-          unlock_arg->timeout_us_ = 0;
+          unlock_arg->timeout_us_ = 1000 * 1000L;  // 1s, which means is_try_lock = false
           unlock_arg->is_from_sql_ = true;
           arg = unlock_arg;
         }
@@ -1286,7 +1279,7 @@ int ObUnLockExecutor::parse_unlock_request_(common::sqlclient::ObMySQLResult &re
         } else {
           unlock_arg->lock_mode_ = is_dbms_lock ? lock_mode : EXCLUSIVE;
           unlock_arg->op_type_ = ObTableLockOpType::OUT_TRANS_UNLOCK;
-          unlock_arg->timeout_us_ = 0;
+          unlock_arg->timeout_us_ = 1000 * 1000L;  // 1s, which means is_try_lock = false
           unlock_arg->is_from_sql_ = true;
           arg = unlock_arg;
         }

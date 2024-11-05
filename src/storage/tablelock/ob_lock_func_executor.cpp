@@ -272,7 +272,7 @@ int ObReleaseLockExecutor::execute(ObExecContext &ctx,
         OZ (arg.objs_.push_back(tmp_lock_id));
         OX (arg.lock_mode_ = EXCLUSIVE);
         OX (arg.op_type_ = ObTableLockOpType::OUT_TRANS_UNLOCK);
-        OX (arg.timeout_us_ = 0);
+        OX (arg.timeout_us_ = 1000 * 1000L);  // 1s, which means is_try_lock = false
         OX (arg.is_from_sql_ = true);
         OX (arg.owner_id_ = lock_owner);
 

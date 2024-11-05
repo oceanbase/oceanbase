@@ -556,8 +556,8 @@ int ObOBJLock::fast_lock(
     if (OB_FAIL(ret)) {
       // do nothing
     } else if (OB_FAIL(try_fast_lock_(lock_op,
-                               lock_mode_cnt_in_same_trans,
-                               conflict_tx_set))) {
+                                      lock_mode_cnt_in_same_trans,
+                                      conflict_tx_set))) {
       if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_EAGAIN != ret) {
         LOG_WARN("try fast lock failed", KR(ret), K(lock_op));
       }
@@ -1506,7 +1506,8 @@ int ObOBJLock::check_op_allow_unlock_from_list_(
       if (curr->lock_op_.owner_id_ == lock_op.owner_id_) {
         lock_exist = true;
         if (curr->lock_op_.lock_op_status_ == LOCK_OP_DOING) {
-          if (curr->lock_op_.op_type_ == OUT_TRANS_LOCK) {
+          if (curr->lock_op_.op_type_ == OUT_TRANS_LOCK ||
+              curr->lock_op_.op_type_ == IN_TRANS_COMMON_LOCK) {
             ret = OB_OBJ_LOCK_NOT_COMPLETED;
           } else if (curr->lock_op_.op_type_ == OUT_TRANS_UNLOCK) {
             ret = OB_OBJ_UNLOCK_CONFLICT;
@@ -1586,9 +1587,13 @@ int ObOBJLock::check_op_allow_lock_from_list_(
           ret = OB_TRY_LOCK_ROW_CONFLICT;
           has_unlock_op = true;
           need_break = true;
-        } else if (curr->lock_op_.op_type_ == IN_TRANS_COMMON_LOCK &&
-                   curr->lock_op_.create_trans_id_ == lock_op.create_trans_id_) {
-          // continue
+        } else if (curr->lock_op_.op_type_ == IN_TRANS_COMMON_LOCK) {
+          if (curr->lock_op_.create_trans_id_ == lock_op.create_trans_id_) {
+            // continue
+          } else {
+            ret = OB_TRY_LOCK_ROW_CONFLICT;
+            need_break = true;
+          }
         } else {
           ret = OB_ERR_UNEXPECTED;
           need_break = true;
