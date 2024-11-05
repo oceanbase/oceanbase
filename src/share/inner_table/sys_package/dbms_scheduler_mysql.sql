@@ -1,8 +1,5 @@
 CREATE OR REPLACE PACKAGE dbms_scheduler
 
-  PROCEDURE create_job    ( job_name            VARCHAR(65535),
-                            enabled             BOOLEAN DEFAULT FALSE);
-
   PROCEDURE enable ( job_name  VARCHAR(65535));
 
   PROCEDURE disable ( job_name          VARCHAR(65535),

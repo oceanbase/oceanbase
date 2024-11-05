@@ -59,48 +59,6 @@ int ObDBMSSchedulerMysql::execute_sql(sql::ObExecContext &ctx, ObSqlString &sql,
   return ret;
 }
 
-int ObDBMSSchedulerMysql::create_job(
-  sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result)
-{
-  int ret = OB_SUCCESS;
-  ObMySQLTransaction trans;
-  ObDMLSqlSplicer dml;
-  ObSqlString sql;
-  int64_t affected_rows = 0;
-  const int64_t now = ObTimeUtility::current_time();
-  int64_t pos = 0;
-  uint64_t tenant_id = OB_INVALID_ID;
-
-  UNUSED(result);
-  CK (OB_LIKELY(2 == params.count()));
-  CK (OB_NOT_NULL(ctx.get_my_session()));
-  CK (OB_NOT_NULL(ctx.get_sql_proxy()));
-  OZ (dml.add_gmt_create(now));
-  OZ (dml.add_gmt_modified(now));
-  OX (tenant_id = ctx.get_my_session()->get_effective_tenant_id());
-  OZ (dml.add_pk_column("tenant_id",
-    share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
-  OZ (dml.add_pk_column("job", 0));
-  OZ (dml.add_column("lowner", ObHexEscapeSqlStr(ObString("SYS"))));
-  OZ (dml.add_column("powner", ObHexEscapeSqlStr(ObString("SYS"))));
-  OZ (dml.add_column("cowner", ObHexEscapeSqlStr(ObString("SYS"))));
-  OZ (dml.add_time_column("next_date", 0));
-  OZ (dml.add_column("total", 0));
-  OZ (dml.add_column("`interval#`", ObHexEscapeSqlStr(ObString("null"))));
-  OZ (dml.add_column("flag", 0));
-  OZ (dml.add_column("what", ObHexEscapeSqlStr(ObString(""))));
-  OZ (dml.add_column("nlsenv", ObHexEscapeSqlStr(ObString(""))));
-  OZ (dml.add_column("exec_env", ObHexEscapeSqlStr(ObString(""))));
-  OZ (dml.add_column("job_name", ObHexEscapeSqlStr(params.at(0).get_string())));
-  OZ (dml.add_column("enabled", params.at(1).get_bool()));
-  OZ (dml.add_column("job_type", ObHexEscapeSqlStr(ObString(""))));
-  OZ (dml.add_column("job_action", ObHexEscapeSqlStr(ObString("")))); 
-  OZ (dml.splice_insert_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
-  OZ (execute_sql(ctx, sql, affected_rows));
-  CK (OB_LIKELY(1 == affected_rows));
-  return ret;
-}
-
 int ObDBMSSchedulerMysql::disable(
   sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result)
 {
