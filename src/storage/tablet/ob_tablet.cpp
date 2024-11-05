@@ -5892,7 +5892,7 @@ int ObTablet::get_kept_snapshot_info(
 
   int64_t min_medium_snapshot = INT64_MAX;
   if (!is_ls_inner_tablet()) {
-    common::ObArenaAllocator allocator;
+    common::ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "GetKeptShotInfo"));
     SMART_VARS_2((ObTableScanParam, scan_param), (ObTabletMediumInfoReader, medium_info_reader)) {
       if (OB_FAIL(ObMdsScanParamHelper::build_medium_info_scan_param(allocator, ls_id, tablet_id, scan_param))) {
         LOG_WARN("fail to build scan param", K(ret), K(ls_id), K(tablet_id));
@@ -8301,7 +8301,7 @@ int ObTablet::get_sstable_column_checksum(
     }
   } else {
     ObStorageSchema *storage_schema = nullptr;
-    ObArenaAllocator allocator;
+    ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "GetColChecksum"));
     if (OB_FAIL(load_storage_schema(allocator, storage_schema))) {
       LOG_WARN("fail to load storage schema", K(ret));
     } else if (OB_FAIL(static_cast<const ObCOSSTableV2 *>(&sstable)->fill_column_ckm_array(*storage_schema, column_checksums))) {
