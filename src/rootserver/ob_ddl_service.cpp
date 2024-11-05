@@ -42872,57 +42872,18 @@ int ObDDLService::generate_partition_info_from_partitioned_table_(const ObTableS
       } // end for
     }
 
-    // set part_idx for inc_part and upd_part
-    ObArenaAllocator allocator;
-    ObPartition** sort_part_array;
-    if (OB_ISNULL(sort_part_array = static_cast<ObPartition**>(allocator.alloc(
-                                            sizeof(ObPartition*) * (ori_part_num + inc_part_num))))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc", KR(ret), K(ori_part_num), K(inc_part_num));
+    // the part_idx is deprecated, so we need to set it to a invalid value
+    if (OB_FAIL(ret)) {
     } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < ori_part_num + inc_part_num; ++i) {
-        if (i < ori_part_num) {
-          if (OB_ISNULL(ori_part_array[i])) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("ori part is null", KR(ret), K(ori_table_schema));
-          } else {
-            sort_part_array[i] = ori_part_array[i];
-          }
+      const int64_t deprecated_part_idx = 0;
+      for (int64_t i = 0; OB_SUCC(ret) && i < inc_part_num; ++i) {
+        ObPartition *part = inc_part_array[i];
+        if (OB_ISNULL(part)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("split partition is null", KR(ret));
         } else {
-          sort_part_array[i] = inc_part_array[i - ori_part_num];
+            part->set_part_idx(deprecated_part_idx);
         }
-      } // end for
-
-      if (OB_FAIL(ret)) {
-      } else {
-        ob_sort(sort_part_array, sort_part_array + ori_part_num + inc_part_num,
-                  ObBasePartition::range_like_func_less_than);
-
-        int part_idx = 0;
-        for (int64_t i = 0; OB_SUCC(ret) && i < ori_part_num + inc_part_num; ++i) {
-          ObPartition* part = sort_part_array[i];
-          int tmp_ret = source_tablet_id_set.exist_refactored(part->get_tablet_id().id());
-          if (tmp_ret == OB_HASH_NOT_EXIST) { // not source splitting part
-            if (part->get_part_idx() != part_idx) {
-              bool is_inc_part = part->get_split_source_tablet_id().is_valid();
-              if (is_inc_part) { // inc part
-                part->set_part_idx(part_idx);
-              } else { // origin part
-                ObPartition upd_part;
-                if (OB_FAIL(upd_part.assign(*part))) {
-                  LOG_WARN("fail to assign part", KR(ret), KPC(part));
-                } else if (FALSE_IT(upd_part.set_part_idx(part_idx))) {
-                } else if (OB_FAIL(upd_table_schema.add_partition(upd_part))) {
-                  LOG_WARN("add partition fail", KR(ret), K(upd_part));
-                }
-              }
-            }
-            part_idx++;
-          } else if (tmp_ret != OB_HASH_EXIST) {
-            ret = tmp_ret;
-            LOG_WARN("fail to call exist_refactored", KR(ret));
-          }
-        } // end for
       }
     }
   }
