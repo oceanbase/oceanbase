@@ -733,9 +733,7 @@ public:
   int64_t get_total_hold();
 private:
   ObUnmanagedMemoryStat()
-  {
-    MEMSET(hold_, 0, sizeof(hold_));
-  }
+  {}
   int64_t hold_[OB_MAX_CPU_NUM];
 };
 
