@@ -318,7 +318,9 @@ int ObExprSetToStr::inner_to_str(const ObCollationType cs_type,
             ++i, index = index << 1) {
         if (set_val & (index)) {
           const ObString &element_val = str_values.at(i);
-          if (OB_FAIL(text_result.append(element_val))) {
+          if (OB_UNLIKELY(element_val.empty())) {
+            // skip empty string and its separator
+          } else if (OB_FAIL(text_result.append(element_val))) {
             LOG_WARN("fail to append str to lob result", K(ret), K(element_val));
           } else if ((i + 1) < element_num && (i + 1) < EFFECTIVE_COUNT &&
               ((index << 1) <= set_val)) {
