@@ -28,7 +28,9 @@ struct ObLobDataInsertTask
     cur_data_locator_(),
     col_idx_(0),
     row_idx_(0)
-  {}
+  {
+    lob_meta_list_.set_attr(ObMemAttr(MTL_ID(), "LobDml"));
+  }
 
   ObLobLocatorV2 src_data_locator_;
   ObLobLocatorV2 cur_data_locator_;
@@ -43,7 +45,9 @@ struct ObLobTabletDmlCtx
 {
   ObLobTabletDmlCtx():
     insert_data_info_()
-  {}
+  {
+    insert_data_info_.set_attr(ObMemAttr(MTL_ID(), "LobDml"));
+  }
 
   ~ObLobTabletDmlCtx();
 
