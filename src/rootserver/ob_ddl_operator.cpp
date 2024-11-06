@@ -10994,6 +10994,7 @@ int ObDDLOperator::update_tablespace_table(
   } else {
     new_table_schema.set_schema_version(new_schema_version);
     new_table_schema.set_encryption_str(tablespace_schema.get_encryption_name());
+    new_table_schema.set_progressive_merge_round(table_schema->get_progressive_merge_round() + 1);
     if (OB_FAIL(schema_service->get_table_sql_service().update_table_options(trans,
       *table_schema, new_table_schema, OB_DDL_ALTER_TABLE, NULL))) {
       LOG_WARN("fail to update data table schema version", K(ret),

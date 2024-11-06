@@ -2643,6 +2643,8 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
         if (OB_SUCC(ret) && stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
           if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::TABLESPACE_ID))) {
             LOG_WARN("failed to add encryption member to bitset", K(ret));
+          } else if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::ENCRYPTION))) {
+            LOG_WARN("fail to set encryption name from tablespace schema in ob ddl resolver", K(ret));
           }
         }
         break;
