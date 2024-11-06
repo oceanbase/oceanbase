@@ -25,7 +25,7 @@ ObCompactionTimeGuard::~ObCompactionTimeGuard()
   }
   total_cost += common::ObTimeUtility::current_time() - last_click_ts_;
   if (OB_UNLIKELY(total_cost >= warn_threshold_)) {
-    ::oceanbase::common::OB_PRINT(log_mod_, OB_LOG_LEVEL_DIRECT_NO_ERRCODE(WARN), OB_SUCCESS, "cost too much time", LOG_KVS(K(*this)));
+    OB_MOD_LOG_RET(log_mod_, WARN, OB_SUCCESS, "cost too much time", KPC(this));
   }
 }
 
