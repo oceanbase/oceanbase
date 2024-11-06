@@ -100,6 +100,12 @@ int ObCommonSqlProxy::read(ReadResult &result, const uint64_t tenant_id, const c
         LOG_WARN("set inner connection sql mode failed", K(ret));
       }
     }
+    if (OB_SUCC(ret) && nullptr != session_param && nullptr != session_param->tz_info_wrap_) {
+      if (OB_FAIL(conn->set_tz_info_wrap(*session_param->tz_info_wrap_))) {
+        LOG_WARN("fail to set time zone info wrap", K(ret));
+      }
+    }
+
     if (session_param->ddl_info_.is_ddl()) {
       conn->set_force_remote_exec(true);
     }

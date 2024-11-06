@@ -44,6 +44,7 @@
 #include "observer/ob_server_event_history_table_operator.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "storage/ddl/ob_tablet_split_task.h"
+#include "deps/oblib/src/lib/charset/ob_charset.h"
 
 namespace oceanbase
 {
@@ -2305,7 +2306,7 @@ ObRemoteScan::ObRemoteScan()
     allocator_("DDLRemoteScan", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     org_col_ids_(),
     column_names_(),
-    org_rowkey_col_scales_(),
+    rowkey_col_accuracys_(),
     checksum_calculator_()
 {
 }
@@ -2332,7 +2333,7 @@ void ObRemoteScan::reset()
   datum_range_ = nullptr;
   org_col_ids_.reset();
   column_names_.reset();
-  org_rowkey_col_scales_.reset();
+  rowkey_col_accuracys_.reset();
   allocator_.reset();
 }
 
@@ -2361,6 +2362,7 @@ int ObRemoteScan::init(const uint64_t tenant_id,
     ObSchemaGetterGuard schema_guard;
     const ObTableSchema *hidden_table_schema = nullptr;
     bool is_oracle_mode = false;
+    ObFixedLengthString<common::OB_MAX_TIMESTAMP_TZ_LENGTH> time_zone; // unused
     if (OB_FAIL((ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
         dest_tenant_id, schema_guard, dest_schema_version)))) {
       LOG_WARN("fail to get tenant schema guard", K(ret), K(dest_tenant_id), K(dest_schema_version));
@@ -2393,7 +2395,9 @@ int ObRemoteScan::init(const uint64_t tenant_id,
       row_without_reshape_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
       row_with_reshape_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
       datum_range_ = &datum_range;
-      if (OB_FAIL(generate_build_select_sql(sql_string))) {
+      if (OB_FAIL(ObBackupUtils::get_tenant_sys_time_zone_wrap(dest_tenant_id_, time_zone, tz_info_wrap_))) {
+        LOG_WARN("failed to get tenant sys time zone wrap", K(dest_tenant_id_));
+      } else if (OB_FAIL(generate_build_select_sql(sql_string))) {
         LOG_WARN("fail to generate build replica sql", K(ret), K(sql_string));
       } else if (is_oracle_mode && OB_FAIL(prepare_iter(sql_string, GCTX.ddl_oracle_sql_proxy_))) {
         LOG_WARN("prepare iter under oracle mode failed", K(ret), K(sql_string));
@@ -2412,7 +2416,7 @@ int ObRemoteScan::generate_build_select_sql(ObSqlString &sql_string)
   int ret = OB_SUCCESS;
   sql_string.reset();
   column_names_.reset();
-  org_rowkey_col_scales_.reset();
+  rowkey_col_accuracys_.reset();
   ObSchemaGetterGuard hold_buf_src_tenant_schema_guard;
   ObSchemaGetterGuard hold_buf_dst_tenant_schema_guard;
   ObSchemaGetterGuard *src_tenant_schema_guard = nullptr;
@@ -2471,8 +2475,8 @@ int ObRemoteScan::generate_build_select_sql(ObSqlString &sql_string)
               orig_column_schema->is_enum_or_set())))) {
             LOG_WARN("fail to push back column name failed", K(ret));
           } else if (i < dest_rowkey_cols_cnt
-                     && OB_FAIL(org_rowkey_col_scales_.push_back(orig_column_schema->get_accuracy().get_scale()))) {
-            LOG_WARN("fail to push back rowkey column scale", K(ret));
+                     && OB_FAIL(rowkey_col_accuracys_.push_back(orig_column_schema->get_accuracy()))) {
+            LOG_WARN("fail to push back rowkey column accuacy", K(ret));
           }
         }
       }
@@ -2540,36 +2544,41 @@ int ObRemoteScan::generate_build_select_sql(ObSqlString &sql_string)
 
 int ObRemoteScan::convert_rowkey_to_sql_literal(
     const ObRowkey &rowkey,
-    const ObIArray<ObScale> &rowkey_col_scales,
     bool is_oracle_mode,
-    const ObObjPrintParams &obj_print_params,
     char *buf,
     int64_t &pos,
     int64_t buf_len)
 {
   int ret = OB_SUCCESS;
-  if (!rowkey.is_valid() || rowkey.get_obj_cnt() != rowkey_col_scales.count()) {
+  const ObObj *objs = nullptr;
+  if (!rowkey.is_valid() || rowkey.get_obj_cnt() != rowkey_col_accuracys_.count()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(rowkey));
+    LOG_WARN("invalid arguments", K(ret), K(rowkey), "rowkey obj cnt", rowkey.get_obj_cnt(),
+      "rowkey col accuracys cnt", rowkey_col_accuracys_.count());
+  } else if (OB_ISNULL(objs = rowkey.get_obj_ptr())){
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("objs is null", K(ret));
   } else {
-    const ObObj *objs = rowkey.get_obj_ptr();
-    if (nullptr == objs) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("objs is null", K(ret));
-    }
+    ObObjPrintParams print_params(tz_info_wrap_.get_time_zone_info());
+    print_params.print_const_expr_type_ = true;
+    print_params.need_cast_expr_ = true;
+    print_params.cs_type_ = CS_TYPE_UTF8MB4_GENERAL_CI; /*unused collation type*/
     for (int64_t i = 0; OB_SUCC(ret) && i < rowkey.get_obj_cnt(); ++i) {
       ObObj tmp_obj = objs[i]; // shallow copy obj
-      /* oracle interval type print sql literal require ObObjMeta scale info */
-      if (is_oracle_mode && (tmp_obj.is_interval_ym() || tmp_obj.is_interval_ds())) {
-        tmp_obj.set_scale(rowkey_col_scales.at(i));
-      }
+      print_params.ob_obj_type_ = tmp_obj.get_type();
+      print_params.accuracy_ = rowkey_col_accuracys_.at(i);
+      /* safe hex representation of character types */
+      print_params.character_hex_safe_represent_ =
+        ob_is_character_type(tmp_obj.get_type(), tmp_obj.get_collation_type());
+      /*  ObObj read from storage layer may loss ObObjMeta scale info and need to be obtained from schema. */
+      tmp_obj.set_scale(rowkey_col_accuracys_.at(i).get_scale());
       if (0 != i) {
         if (OB_FAIL(databuff_printf(buf, buf_len, pos, ","))) {
           LOG_WARN("failed to add comma", K(ret));
         }
       }
-      if (FAILEDx(tmp_obj.print_sql_literal(buf, buf_len, pos, obj_print_params))) {
-        LOG_WARN("failed to print obj", K(ret), K(tmp_obj), K(obj_print_params));
+      if (FAILEDx(tmp_obj.print_sql_literal(buf, buf_len, pos, print_params))) {
+        LOG_WARN("failed to print obj", K(ret), K(tmp_obj), K(print_params));
       }
     }
   }
@@ -2588,7 +2597,7 @@ int ObRemoteScan::generate_range_condition(
   int ret = OB_SUCCESS;
   ObSqlString rowkey_cols_str;
   ObArray<ObColumnNameInfo> rowkey_cols_names;
-  const int64_t rowkey_cols_cnt = org_rowkey_col_scales_.count();
+  const int64_t rowkey_cols_cnt = rowkey_col_accuracys_.count();
   const ObRowkey &start_key = datum_range.start_key_.store_rowkey_.get_rowkey();
   const ObRowkey &end_key = datum_range.end_key_.store_rowkey_.get_rowkey();
   const ObBorderFlag border_flag = datum_range.border_flag_;
@@ -2596,7 +2605,7 @@ int ObRemoteScan::generate_range_condition(
       || rowkey_cols_cnt <= 0 || rowkey_cols_cnt > column_names_.count()
       || start_key.is_max_row() || end_key.is_min_row())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(datum_range), K(org_rowkey_col_scales_), K(column_names_));
+    LOG_WARN("invalid args", K(ret), K(datum_range), K(rowkey_col_accuracys_), K(column_names_));
   } else if (datum_range.is_whole_range()) {
     // do nothing at whole range
   } else {
@@ -2617,19 +2626,11 @@ int ObRemoteScan::generate_range_condition(
     } else if (OB_FAIL(sql.append(" WHERE "))) {
       LOG_WARN("failed to append string", K(ret));
     } else {
-      ObTimeZoneInfo tz_info; /*  */
-      tz_info.set_offset(0);
-      if (OB_FAIL(OTTZ_MGR.get_tenant_tz(MTL_ID(), tz_info.get_tz_map_wrap()))) {
-        LOG_WARN("failed to get tenant timezone map", K(ret), K(MTL_ID()));
-      } else {
         ObArenaAllocator allocator("addCond");
         int64_t low_val_len = 0;
         int64_t high_val_len = 0;
         char *low_val_str = nullptr;
         char *high_val_str = nullptr;
-        ObObjPrintParams print_params(&tz_info);
-        print_params.print_const_expr_type_ = true;
-        print_params.need_cast_expr_ = true;
         if (start_key.is_min_row()) {
           // do nothing when start_key is min_row
         } else if (OB_UNLIKELY(start_key.get_obj_cnt() != rowkey_cols_cnt)) {
@@ -2639,13 +2640,11 @@ int ObRemoteScan::generate_range_condition(
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("val str is nullptr", K(ret), K(low_val_str));
         } else if (OB_FAIL(convert_rowkey_to_sql_literal(start_key,
-                                                         org_rowkey_col_scales_,
                                                          is_oracle_mode,
-                                                         print_params,
                                                          low_val_str,
                                                          low_val_len,
                                                          OB_MAX_ROW_KEY_LENGTH))) {
-          LOG_WARN("failed to convert rowkey to sql literal", K(ret), K(start_key), K(org_rowkey_col_scales_));
+          LOG_WARN("failed to convert rowkey to sql literal", K(ret), K(start_key));
         } else if (OB_UNLIKELY(0 == low_val_len)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid rowkey sql literal length", K(ret), K(start_key));
@@ -2670,13 +2669,11 @@ int ObRemoteScan::generate_range_condition(
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("val str is nullptr", K(ret), K(low_val_str));
         } else if (OB_FAIL(convert_rowkey_to_sql_literal(end_key,
-                                                         org_rowkey_col_scales_,
                                                          is_oracle_mode,
-                                                         print_params,
                                                          high_val_str,
                                                          high_val_len,
                                                          OB_MAX_ROW_KEY_LENGTH))) {
-          LOG_WARN("failed to convert rowkey to sql literal", K(ret), K(end_key), K(org_rowkey_col_scales_));
+          LOG_WARN("failed to convert rowkey to sql literal", K(ret), K(end_key));
         } else if (OB_UNLIKELY(0 == high_val_len)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid rowkey sql literal length", K(ret));
@@ -2689,7 +2686,6 @@ int ObRemoteScan::generate_range_condition(
           LOG_WARN("failed to append string", K(ret), K(rowkey_cols_str), K(high_val_str));
         }
       }
-    }
   }
   return ret;
 }
@@ -2804,7 +2800,7 @@ int ObRemoteScan::prepare_iter(const ObSqlString &sql_string, common::ObCommonSq
   ObSessionParam session_param;
   ObSQLMode sql_mode = SMO_STRICT_ALL_TABLES;
   session_param.sql_mode_ = reinterpret_cast<int64_t *>(&sql_mode);
-  session_param.tz_info_wrap_ = nullptr;
+  session_param.tz_info_wrap_ = &tz_info_wrap_;
   session_param.ddl_info_.set_is_ddl(true);
   session_param.ddl_info_.set_source_table_hidden(false);
   session_param.ddl_info_.set_dest_table_hidden(false);
