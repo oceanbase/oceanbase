@@ -1566,7 +1566,7 @@ int ObLSTabletService::update_tablet_snapshot_version(
     const int64_t snapshot_version)
 {
   int ret = OB_SUCCESS;
-  common::ObArenaAllocator allocator;
+  common::ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "UTabletSnapVer"));
   ObTabletHandle old_tablet_handle;
   ObTimeGuard time_guard("ObLSTabletService::update_tablet_snapshot_version", 1_s);
   ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
@@ -6180,7 +6180,7 @@ int ObLSTabletService::get_multi_ranges_cost(
   } else {
     ObPartitionSplitQuery split_query;
     ObSEArray<ObStoreRange, 16> new_ranges;
-    ObArenaAllocator allocator;
+    ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "GetMulRangeCost"));
     const ObTabletHandle &tablet_handle = iter.get_tablet_handle();
     bool is_splited_range = false;
     if (OB_FAIL(split_query.split_multi_ranges_if_need(ranges, new_ranges,

@@ -489,7 +489,7 @@ int ObTenantStorageMetaService::inner_get_gc_tablet_scn_arr_(
 {
   int ret = OB_SUCCESS;
   gc_tablet_scn_arr.tablet_version_arr_.reuse();
-  ObArenaAllocator allocator;
+  ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "InnerGetGCScn"));
   bool is_exist = false;
 
   if (OB_FAIL(ObStorageMetaIOUtil::check_meta_existence(opt, 0/*do not need ls_epoch*/, is_exist))) {
@@ -637,7 +637,7 @@ int ObTenantStorageMetaService::ss_write_gc_info_(
 {
   int ret = OB_SUCCESS;
   blocksstable::ObStorageObjectOpt opt;
-  common::ObArenaAllocator allocator;
+  common::ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "WriteGCSCN"));
   opt.set_ss_gc_info_object_opt(tablet_id.id());
   if (OB_FAIL(ObStorageMetaIOUtil::write_storage_meta_object(
       opt, gc_info_scn_arr, allocator, MTL_ID(), 0/*ls_epoch, unused*/))) {
@@ -650,7 +650,7 @@ int ObTenantStorageMetaService::ss_write_meta_list_(
 {
   int ret = OB_SUCCESS;
   blocksstable::ObStorageObjectOpt opt;
-  common::ObArenaAllocator allocator;
+  common::ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "WriteMetaList"));
   opt.set_ss_meta_list_object_opt(tablet_id.id());
   if (OB_FAIL(ObStorageMetaIOUtil::write_storage_meta_object(
       opt, meta_list_scn_arr, allocator, MTL_ID(), 0/*ls_epoch, unused*/))) {
