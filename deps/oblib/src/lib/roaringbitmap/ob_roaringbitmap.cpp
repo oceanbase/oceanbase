@@ -567,6 +567,9 @@ int ObRoaringBitmap::deserialize(const ObString &rb_bin, bool need_validate)
         break;
       }
     } // end switch
+    if (OB_FAIL(ret)) {
+      set_empty();
+    }
   }
   return ret;
 }

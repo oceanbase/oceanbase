@@ -28,7 +28,7 @@
 #include "lib/xml/ob_binary_aggregate.h"
 #include "lib/xml/ob_xpath.h"
 #include "sql/engine/expr/ob_expr_rb_func_helper.h"
-
+#include "lib/roaringbitmap/ob_rb_utils.h"
 
 namespace oceanbase
 {
@@ -995,7 +995,11 @@ int RbIterateTableFunc::eval_input(ObJsonTableOp &jt, JtScanCtx &ctx, ObEvalCtx 
     } else if (OB_FAIL(ObRbExprHelper::get_input_roaringbitmap(eval_ctx, ctx.row_alloc_, value_expr, rb, is_null))) {
       LOG_WARN("fail to get roaringbitmap from expr", K(ret), K(i));
     }
-    if (OB_SUCC(ret)) {
+    if (OB_FAIL(ret)) {
+      for (int64_t j = 0; j < i; ++j) {
+        ObRbUtils::rb_destroy(rbs[j]);
+      }
+    } else {
       rbs[i] = rb;
       is_all_null &= is_null;
     }
@@ -1055,7 +1059,11 @@ int RbIterateTableFunc::reset_path_iter(ObRegCol &scan_node, void* in, JtScanCtx
       is_null_value = false;
     }
   }
-  if (OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
+    for (int64_t i = 0; i < col_num; ++i) {
+      ObRbUtils::rb_destroy(rbs[i]);
+    }
+  } else {
     scan_node.iter_ = rb_iters;
   }
   return ret;
