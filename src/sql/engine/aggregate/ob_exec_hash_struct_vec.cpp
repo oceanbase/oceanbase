@@ -254,7 +254,17 @@ int ObExtendHashTableVec<GroupRowBucket>::process_popular_value_batch(ObBatchRow
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected check_valid_threshold value", K(check_valid_threshold));
   }
-
+  // extend bucket to hold whole batch
+  while (OB_SUCC(ret) && auto_extend_ && OB_UNLIKELY((size_ + result_brs->size_)
+                                                      * SIZE_BUCKET_SCALE >= get_bucket_num())) {
+    int64_t pre_bkt_num = get_bucket_num();
+    if (OB_FAIL(extend())) {
+      SQL_ENG_LOG(WARN, "extend failed", K(ret));
+    } else if (get_bucket_num() <= pre_bkt_num) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to extend table", K(ret), K(pre_bkt_num), K(get_bucket_num()));
+    }
+  }
   for (int64_t i = 0; i < exprs.count(); ++i) {
     if (nullptr == exprs.at(i)) {
       vector_ptrs_.at(i) = nullptr;
@@ -264,6 +274,9 @@ int ObExtendHashTableVec<GroupRowBucket>::process_popular_value_batch(ObBatchRow
   }
 
   for (int64_t i=0; OB_SUCC(ret) && i < result_brs->size_; i++) {
+    if (result_brs->skip_->at(i)) {
+      continue;
+    }
     by_pass_rows++;
     mask_hash = (hash_vals[i] & ObGroupRowBucketBase::HASH_VAL_MASK);
     if (popular_map->size() == 0) {
