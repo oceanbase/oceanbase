@@ -646,6 +646,9 @@ int ObServerAutoSplitScheduler::check_and_fetch_tablet_split_info(const storage:
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pointer to tablet is nullptr", K(ret), KP(tablet));
+  } else if ((GCTX.is_shared_storage_mode())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_DEBUG("split in shared storage mode not supported", K(ret));
   } else if (OB_FAIL(tablet->ObITabletMdsInterface::cross_ls_get_latest<ObTabletSplitMdsUserData>(ReadSplitDataAutoPartSizeOp(auto_split_tablet_size), is_committed))) {
     if (OB_EMPTY_RESULT == ret) {
       ret = OB_SUCCESS;
@@ -715,7 +718,9 @@ int ObServerAutoSplitScheduler::push_task(const storage::ObTabletHandle &tablet_
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tablet_handle));
   } else if (OB_FAIL(check_and_fetch_tablet_split_info(tablet_handle, ls, can_split, task))) {
-    LOG_WARN("failed to check and fetch tablet split info", K(ret), K(task));
+    if (OB_UNLIKELY(OB_NOT_SUPPORTED != ret)) {
+      LOG_WARN("failed to check and fetch tablet split info", K(ret), K(task));
+    }
   } else if (can_split && OB_FAIL(task_array.push_back(task))) {
     LOG_WARN("task_array push back failed" , K(ret), K(task_array));
   } else if (can_split && OB_FAIL(polling_manager_.push_tasks(task_array))) {
