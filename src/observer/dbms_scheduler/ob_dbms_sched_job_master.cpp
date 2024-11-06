@@ -31,7 +31,7 @@
 #include "storage/mview/ob_mview_sched_job_utils.h"
 #include "sql/session/ob_basic_session_info.h"
 #define TO_TS(second) (1000000L * second)
-#define IS_SPLIT_TENANT_DATA_VERSION ((GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_4_0))
+#define IS_SPLIT_TENANT_DATA_VERSION ((GET_MIN_CLUSTER_VERSION() > MOCK_CLUSTER_VERSION_4_2_5_0 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0) || (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_4_0))
 namespace oceanbase
 {
 using namespace common;
