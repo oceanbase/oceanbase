@@ -156,14 +156,11 @@ int ObTableLoadPreSorter::init_chunks_manager()
   return ret;
 }
 
-void ObTableLoadPreSorter::stop() {
+void ObTableLoadPreSorter::stop()
+{
   set_has_error();
   if (OB_NOT_NULL(sample_task_scheduler_)) {
     sample_task_scheduler_->stop();
-    sample_task_scheduler_->wait();
-    sample_task_scheduler_->~ObITableLoadTaskScheduler();
-    ob_free(sample_task_scheduler_);
-    sample_task_scheduler_ = nullptr;
   }
 }
 
