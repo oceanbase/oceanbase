@@ -230,6 +230,7 @@ enum ObBackupProviderItemType {
 class ObBackupProviderItem {
   friend class ObBackupTabletStat;
   friend class ObBackupTabletProvider;
+  OB_UNIS_VERSION(1);
 public:
   ObBackupProviderItem();
   virtual ~ObBackupProviderItem();
@@ -316,6 +317,31 @@ public:
 };
 
 class ObBackupTabletIndexBlockBuilderMgr;
+
+class ObBackupTmpFileQueue final {
+public:
+  ObBackupTmpFileQueue();
+  ~ObBackupTmpFileQueue();
+  int init(const uint64_t tenant_id);
+  int put_item(const ObBackupProviderItem &item);
+  int get_item(ObBackupProviderItem &item);
+  void reset();
+
+  TO_STRING_KV(K_(is_inited), K_(tenant_id), K_(read_count), K_(write_count));
+
+private:
+  int get_next_item_size_(int64_t &size);
+
+private:
+  bool is_inited_;
+  uint64_t tenant_id_;
+  ObBackupTmpFile tmp_file_;
+  int64_t read_offset_;
+  int64_t read_count_;
+  int64_t write_count_;
+  blocksstable::ObSelfBufferWriter buffer_writer_;
+  DISALLOW_COPY_AND_ASSIGN(ObBackupTmpFileQueue);
+};
 
 class ObBackupTabletProvider : public ObIBackupTabletProvider {
 public:
@@ -415,8 +441,7 @@ private:
   ObBackupMetaIndexStore meta_index_store_;
   ObBackupProviderItem prev_item_;
   bool has_prev_item_;
-  common::ObLightyQueue lighty_queue_;
-  common::ObFIFOAllocator fifo_allocator_;
+  ObBackupTmpFileQueue item_queue_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupTabletProvider);
 };
 
