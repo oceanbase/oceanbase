@@ -149,7 +149,7 @@ public:
     return common::OB_SUCCESS;
   }
 
-  int release_record(int64_t release_cnt);
+  int release_record(int64_t release_cnt, bool is_destroyed = false);
 
   int clear_leaf_queue(int64_t idx, int64_t size);
   void freeCallback(void* ptr);
@@ -162,12 +162,14 @@ public:
 
   void free(void *ptr) { allocator_.free(ptr); ptr = NULL;}
 
-  void clear_queue()
+  void clear_queue(bool is_destroyed = false)
   {
-    while (queue_.get_pop_idx() < queue_.get_cur_idx()) {
-      (void)release_record(INT64_MAX);
+    // destroy tenant scene, clean all queue, otherwise clean current queue
+    int64_t release_boundary = is_destroyed == true ? queue_.get_push_idx() : queue_.get_cur_idx();
+    while (queue_.get_pop_idx() < release_boundary) {
+      (void)release_record(INT64_MAX, is_destroyed);
     }
-    (void)release_record(INT64_MAX);
+    (void)release_record(INT64_MAX, is_destroyed);
     allocator_.purge();
   }
 
