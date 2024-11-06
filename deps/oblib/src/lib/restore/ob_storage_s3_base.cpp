@@ -726,7 +726,7 @@ static void convert_http_error(const Aws::S3::S3Error &s3_err, int &ob_errcode)
   switch (http_code) {
     case S3_BAD_REQUEST: {
       if (exception == "InvalidRequest" && err_msg.find("x-amz-checksum") != std::string::npos) {
-        ob_errcode = OB_CHECKSUM_ERROR;
+        ob_errcode = OB_OBJECT_STORAGE_CHECKSUM_ERROR;
       } else if (err_msg.find("region") != std::string::npos
                  && err_msg.find("is wrong; expecting") != std::string::npos) {
         ob_errcode = OB_S3_REGION_MISMATCH;
@@ -820,7 +820,7 @@ static void log_s3_status(OutcomeType &outcome, const int ob_errcode)
     // force printing log
     allow_next_syslog();
   }
-  if (OB_CHECKSUM_ERROR == ob_errcode) {
+  if (OB_OBJECT_STORAGE_CHECKSUM_ERROR == ob_errcode) {
     OB_LOG_RET(ERROR, ob_errcode, "S3 info", K(request_id), K(code), K(exception), K(err_msg));
   } else {
     OB_LOG_RET(WARN, ob_errcode, "S3 info", K(request_id), K(code), K(exception), K(err_msg));
@@ -923,7 +923,7 @@ static int check_crc32(const char *buf, const int64_t size, Aws::S3::Model::GetO
     Aws::String returned_data_checksum = Aws::Utils::HashingUtils::Base64Encode(checksum_buf);
 
     if (OB_UNLIKELY(returned_data_checksum != response_checksum)) {
-      ret = OB_CHECKSUM_ERROR;
+      ret = OB_OBJECT_STORAGE_CHECKSUM_ERROR;
       OB_LOG(ERROR, "crc32 mismatch",
           K(ret), K(size), K(returned_data_checksum.c_str()), K(response_checksum.c_str()));
     }
@@ -941,7 +941,7 @@ static int check_crc32c(const char *buf, const int64_t size, Aws::S3::Model::Get
     Aws::String returned_data_checksum = Aws::Utils::HashingUtils::Base64Encode(checksum_buf);
 
     if (OB_UNLIKELY(returned_data_checksum != response_checksum)) {
-      ret = OB_CHECKSUM_ERROR;
+      ret = OB_OBJECT_STORAGE_CHECKSUM_ERROR;
       OB_LOG(ERROR, "crc32c mismatch",
           K(ret), K(size), K(returned_data_checksum.c_str()), K(response_checksum.c_str()));
     }
@@ -959,7 +959,7 @@ static int check_sha1(const char *buf, const int64_t size, Aws::S3::Model::GetOb
     Aws::String returned_data_checksum = Aws::Utils::HashingUtils::Base64Encode(checksum_buf);
 
     if (OB_UNLIKELY(returned_data_checksum != response_checksum)) {
-      ret = OB_CHECKSUM_ERROR;
+      ret = OB_OBJECT_STORAGE_CHECKSUM_ERROR;
       OB_LOG(ERROR, "sha1 mismatch",
           K(ret), K(size), K(returned_data_checksum.c_str()), K(response_checksum.c_str()));
     }
@@ -977,7 +977,7 @@ static int check_sha256(const char *buf, const int64_t size, Aws::S3::Model::Get
     Aws::String returned_data_checksum = Aws::Utils::HashingUtils::Base64Encode(checksum_buf);
 
     if (OB_UNLIKELY(returned_data_checksum != response_checksum)) {
-      ret = OB_CHECKSUM_ERROR;
+      ret = OB_OBJECT_STORAGE_CHECKSUM_ERROR;
       OB_LOG(ERROR, "sha256 mismatch",
           K(ret), K(size), K(returned_data_checksum.c_str()), K(response_checksum.c_str()));
     }

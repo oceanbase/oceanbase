@@ -112,7 +112,7 @@ static void convert_io_error(cos_status_t *cos_ret, int &ob_errcode)
         if (nullptr == cos_ret->error_code) {
           ob_errcode = OB_OBJECT_STORAGE_IO_ERROR;
         } else if (0 == strcmp("InvalidDigest", cos_ret->error_code)) {
-          ob_errcode = OB_CHECKSUM_ERROR;
+          ob_errcode = OB_OBJECT_STORAGE_CHECKSUM_ERROR;
         } else if (0 == strcmp("InvalidRegionName", cos_ret->error_code)) {
           ob_errcode = OB_INVALID_OBJECT_STORAGE_ENDPOINT;
         }
@@ -584,7 +584,7 @@ struct CosContext
 static void log_status(cos_status_t *s, const int ob_errcode)
 {
   if (nullptr != s) {
-    if (OB_CHECKSUM_ERROR == ob_errcode) {
+    if (OB_OBJECT_STORAGE_CHECKSUM_ERROR == ob_errcode) {
       cos_error_log("[COS]cos_log_status ret=%d, code=%d, error_code=%s, error_msg=%s, req_id=%s",
           ob_errcode, s->code, s->error_code, s->error_msg, s->req_id);
     } else {

@@ -3926,6 +3926,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_OBJECT_STORAGE_IO_ERROR__USER_ERROR_MSG "object storage io error"
 #define OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH__USER_ERROR_MSG "the pwrite offset of the object storage is inconsistent"
 #define OB_OBJECT_STORAGE_PWRITE_CONTENT_NOT_MATCH__USER_ERROR_MSG "the contents of pwrite are inconsistent"
+#define OB_OBJECT_STORAGE_CHECKSUM_ERROR__USER_ERROR_MSG "object storage data checksum error"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__USER_ERROR_MSG "Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__USER_ERROR_MSG "Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__USER_ERROR_MSG "Auto extend param is not ready to start extending file"
@@ -8271,6 +8272,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9130, the pwrite offset of the object storage is inconsistent"
 #define OB_OBJECT_STORAGE_PWRITE_CONTENT_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9131, the contents of pwrite are inconsistent"
 #define OB_OBJECT_STORAGE_PWRITE_CONTENT_NOT_MATCH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9131, the contents of pwrite are inconsistent"
+#define OB_OBJECT_STORAGE_CHECKSUM_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9132, object storage data checksum error"
+#define OB_OBJECT_STORAGE_CHECKSUM_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9132, object storage data checksum error"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9201, Mark blocks timeout(5s) in auto extend process when alloc block fail"
@@ -9074,7 +9077,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2370];
+extern int g_all_ob_errnos[2371];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
