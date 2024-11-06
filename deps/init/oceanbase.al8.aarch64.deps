@@ -3,12 +3,6 @@ os=8
 arch=aarch64
 repo=https://mirrors.aliyun.com/oceanbase/development-kit/al/8/aarch64/
 
-#RANGE_IF_BUSINESS
-[target-test]
-os=8
-arch=aarch64
-repo=https://ob-yum.oceanbase-dev.com/8/aarch64/test
-#RANGE_END
 
 [target-community]
 os=8
@@ -46,27 +40,14 @@ obdevtools-cmake-3.22.1-122024092710.al8.aarch64.rpm
 obdevtools-flex-2.5.35-42024092621.al8.aarch64.rpm
 obdevtools-gcc9-9.3.0-152024092711.al8.aarch64.rpm
 obdevtools-llvm-11.0.1-662024092811.al8.aarch64.rpm
-#RANGE_IF_BUSINESS
-ob-sanity-1.0.0-102024102821.al8.aarch64.rpm target=test
-#RANGE_END
 
 [tools-deps]
 devdeps-oblogmsg-1.1-122024093010.al8.aarch64.rpm
 obdevtools-obstack-2.0.4-42024101017.al8.aarch64.rpm
 devdeps-rocksdb-6.22.1.1-172024092818.al8.aarch64.rpm
-#RANGE_IF_BUSINESS
-obshell-4.2.4.2-12024102115.al8.aarch64.rpm target=test
-#RANGE_ELSE
-#obshell-4.2.4.2-12024102115.al8.aarch64.rpm target=community
-#RANGE_END
+obshell-4.2.4.2-12024102115.al8.aarch64.rpm target=community
 
 [test-utils]
-#RANGE_IF_BUSINESS
-ob-deploy-2.1.x-1142024092609.al8.aarch64.rpm target=test
-obclient-2.2.3-202024102217.al8.aarch64.rpm
-libobclient-2.2.3-152024102213.al8.aarch64.rpm
-#RANGE_ELSE
-#ob-deploy-2.10.0-4.al8.aarch64.rpm target=community
-#obclient-2.2.3-202024102217.al8.aarch64.rpm target=community
-#libobclient-2.2.3-152024102213.al8.aarch64.rpm target=community
-#RANGE_END
+ob-deploy-2.10.0-4.al8.aarch64.rpm target=community
+obclient-2.2.3-202024102217.al8.aarch64.rpm target=community
+libobclient-2.2.3-152024102213.al8.aarch64.rpm target=community
