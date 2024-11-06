@@ -361,25 +361,27 @@ int ObSubSchemaCtx::assgin(const ObSubSchemaCtx &other)
   int ret = OB_SUCCESS;
   if (!other.is_inited() || other.get_subschema_count() == 0) {
     // no subschema, do nothing
-  } else if (is_inited() && get_subschema_count() > 0) {
-    reset();
-    LOG_INFO("subschema context reset due to assgin other", K(*this), K(lbt()));
-  }
-  if (!is_inited() && OB_FAIL(init())) {
-    LOG_WARN("fail to init subschema ctx", K(ret));
   } else {
-    ObSubSchemaMap::const_iterator iter = other.get_subschema_map().begin();
-    while (OB_SUCC(ret) && iter != other.get_subschema_map().end()) {
-      uint64_t subschema_id = iter->first;
-      ObSubSchemaValue value = iter->second;
-      if (OB_FAIL(value.deep_copy_value(iter->second.value_, allocator_))) {
-        LOG_WARN("deep copy value failed", K(ret), K(subschema_id), K(value));
-      } else if (OB_FAIL(set_subschema(subschema_id, value))) {
-        LOG_WARN("fail to set subschema", K(ret), K(subschema_id), K(value));
-      }
-      iter++;
+    if (is_inited() && get_subschema_count() > 0) {
+      reset();
+      LOG_INFO("subschema context reset due to assgin other", K(*this), K(lbt()));
     }
-    used_subschema_id_ = other.used_subschema_id_;
+    if (!is_inited() && OB_FAIL(init())) {
+      LOG_WARN("fail to init subschema ctx", K(ret));
+    } else {
+      ObSubSchemaMap::const_iterator iter = other.get_subschema_map().begin();
+      while (OB_SUCC(ret) && iter != other.get_subschema_map().end()) {
+        uint64_t subschema_id = iter->first;
+        ObSubSchemaValue value = iter->second;
+        if (OB_FAIL(value.deep_copy_value(iter->second.value_, allocator_))) {
+          LOG_WARN("deep copy value failed", K(ret), K(subschema_id), K(value));
+        } else if (OB_FAIL(set_subschema(subschema_id, value))) {
+          LOG_WARN("fail to set subschema", K(ret), K(subschema_id), K(value));
+        }
+        iter++;
+      }
+      used_subschema_id_ = other.used_subschema_id_;
+    }
   }
   return ret;
 }
