@@ -200,6 +200,7 @@ private:
                          ObIArray<ObSEArray<int64_t,4>> &table_maps);
   int inner_gen_base_table_map(int64_t from_rel_id,
                                const ObIArray<TableItem*> &from_tables,
+                               const ObIArray<TableItem*> &to_tables,
                                hash::ObHashMap<uint64_t, int64_t> &from_table_num,
                                const ObIArray<ObSEArray<int64_t,4>> &to_table_ids,
                                const hash::ObHashMap<uint64_t, int64_t> &to_table_map,

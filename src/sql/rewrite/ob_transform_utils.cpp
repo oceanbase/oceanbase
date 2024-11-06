@@ -6272,11 +6272,9 @@ int ObTransformUtils::check_table_item_containment(ObDMLStmt *source_stmt,
   } else if (source_table->is_basic_table() && target_table->is_basic_table()) {
     QueryRelation relation = QueryRelation::QUERY_UNCOMPARABLE;
     //zhenling.zzg 修复存在partition hint的情况下，正确性bug
-    if (OB_FAIL(ObStmtComparer::compare_basic_table_item(source_stmt,
-                                                        source_table,
-                                                        target_stmt,
-                                                        target_table,
-                                                        relation))) {
+    if (OB_FAIL(ObStmtComparer::compare_basic_table_item(source_table,
+                                                         target_table,
+                                                         relation))) {
       LOG_WARN("compare table part failed",K(ret), K(source_table), K(target_table));
     } else if (QueryRelation::QUERY_LEFT_SUBSET == relation ||
                QueryRelation::QUERY_EQUAL == relation) {
