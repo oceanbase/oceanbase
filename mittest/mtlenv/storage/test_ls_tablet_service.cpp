@@ -1217,6 +1217,69 @@ TEST_F(TestLSTabletService, test_serialize_sstable_with_min_filled_tx_scn)
 }
 
 
+TEST_F(TestLSTabletService, test_new_tablet_has_backup_table_with_ha_status)
+{
+
+  //create tablet
+  int ret = OB_SUCCESS;
+  ObTabletID tablet_id(10000014);
+  share::schema::ObTableSchema schema;
+  TestSchemaUtils::prepare_data_schema(schema);
+  ObLSHandle ls_handle;
+  ObLSService *ls_svr = MTL(ObLSService*);
+  ObLS *ls = nullptr;
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ls = ls_handle.get_ls();
+  ASSERT_EQ(true, OB_NOT_NULL(ls));
+
+  ret = TestTabletHelper::create_tablet(ls_handle, tablet_id, schema, allocator_, ObTabletStatus::Status::NORMAL);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObTabletHandle tablet_handle;
+  ObTablet *tablet = nullptr;
+  ret = ls_handle.get_ls()->get_tablet_svr()->get_tablet(tablet_id, tablet_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  tablet = tablet_handle.get_obj();
+  ASSERT_EQ(true, OB_NOT_NULL(tablet));
+
+
+  //create backup sstable
+  blocksstable::ObSSTable sstable;
+  ObTabletCreateSSTableParam param;
+  TestTabletHelper::prepare_sstable_param(tablet_id, schema, param);
+  param.table_key_.table_type_ = ObITable::MINOR_SSTABLE;
+  param.filled_tx_scn_ = param.table_key_.get_end_scn();
+  param.table_backup_flag_.set_has_backup();
+  param.table_backup_flag_.set_no_local();
+  ASSERT_EQ(OB_SUCCESS, sstable.init(param, &allocator_));
+
+  ObTableHandleV2 table_handle;
+  ret = table_handle.set_sstable(&sstable, &allocator_);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObTabletHandle new_table_handle;
+  const int64_t update_snapshot_version = sstable.get_snapshot_version();
+  const int64_t update_multi_version_start = tablet->get_multi_version_start();
+  ObStorageSchema *storage_schema = nullptr;
+  ret = tablet->load_storage_schema(allocator_, storage_schema);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObBatchUpdateTableStoreParam update_table_store_param;
+  update_table_store_param.tablet_meta_ = nullptr;
+  update_table_store_param.rebuild_seq_ = ls->get_rebuild_seq();
+  update_table_store_param.need_replace_remote_sstable_ = false;
+  ret = update_table_store_param.tables_handle_.add_table(table_handle);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ret = ls_tablet_service_->build_tablet_with_batch_tables(tablet_id, update_table_store_param);
+  ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
+
+  tablet_handle.reset();
+  new_table_handle.reset();
+  ret = ls_tablet_service_->do_remove_tablet(ls_id_, tablet_id);
+  ASSERT_EQ(OB_SUCCESS, ret);
+}
+
 } // end storage
 } // end oceanbase
 

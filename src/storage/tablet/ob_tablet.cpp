@@ -8682,7 +8682,6 @@ int ObTablet::build_transfer_backfill_tablet_param(
     param.snapshot_version_ = src_tablet_meta.snapshot_version_;
     param.multi_version_start_ = src_tablet_meta.multi_version_start_;
     param.extra_medium_info_ = src_tablet_meta.extra_medium_info_;
-
     if (OB_FAIL(param.storage_schema_.assign(param.allocator_, src_storage_schema))) {
       LOG_WARN("failed to assign src storage schema", K(ret), K(src_storage_schema));
     } else {
@@ -8735,7 +8734,41 @@ int ObTablet::check_table_store_flag_match_with_table_store_(const ObTabletTable
     LOG_ERROR("tablet table store flag is with major flag but tablet has no major sstable",
         K(ret), KPC(this), K(table_store_flag), KPC(table_store));
   } else {
+    const ObSSTableArray &major_sstables = table_store->get_major_sstables();
+    const ObSSTableArray &minor_sstables = table_store->get_minor_sstables();
+    const ObSSTableArray &ddl_sstables = table_store->get_ddl_sstables();
+    if (OB_FAIL(check_table_store_without_backup_table_(major_sstables))) {
+      LOG_WARN("failed to check major sstables", K(ret), KPC(this));
+    } else if (OB_FAIL(check_table_store_without_backup_table_(minor_sstables))) {
+      LOG_WARN("failed to check minor sstables", K(ret), KPC(this));
+    } else if (OB_FAIL(check_table_store_without_backup_table_(ddl_sstables))) {
+      LOG_WARN("failed to check ddl sstables", K(ret), KPC(this));
+    }
     // check passed, do nothing
+  }
+  return ret;
+}
+
+int ObTablet::check_table_store_without_backup_table_(const ObSSTableArray &sstable_array)
+{
+  int ret = OB_SUCCESS;
+  ObSSTableMetaHandle meta_handle;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < sstable_array.count(); ++i) {
+    const ObSSTable *sstable = sstable_array.at(i);
+    meta_handle.reset();
+    if (OB_ISNULL(sstable)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sstable should not be NULL", K(ret), K(sstable_array), K(i));
+    } else if (OB_FAIL(sstable->get_meta(meta_handle))) {
+      LOG_WARN("failed to get meta", K(ret), K(meta_handle));
+    } else if (!meta_handle.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sstable meta should not be invalid", K(ret), KPC(sstable));
+    } else if (meta_handle.get_sstable_meta().get_table_backup_flag().has_backup()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet ha status is none but still has backup table, unexpected", K(ret), KPC(sstable), KPC(this));
+    }
   }
   return ret;
 }
