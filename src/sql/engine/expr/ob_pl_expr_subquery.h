@@ -34,7 +34,8 @@ public:
       type_(stmt::T_NONE),
       route_sql_(ObString()),
       result_type_(),
-      is_ignore_fail_(false) {}
+      is_ignore_fail_(false),
+      type_info_() {}
 
   virtual int deep_copy(common::ObIAllocator &allocator,
                         const ObExprOperatorType type,
@@ -50,6 +51,7 @@ public:
   common::ObString route_sql_;
   sql::ObExprResType result_type_;
   bool is_ignore_fail_;
+  common::ObSEArray<common::ObString, 4> type_info_;
 };
 
 class ObExprOpSubQueryInPl : public ObFuncExprOperator
@@ -69,6 +71,10 @@ public:
     ObFuncExprOperator::reset();
   }
 
+  static int deep_copy_type_info(common::ObIArray<common::ObString>& dst_type_info,
+                                  common::ObIAllocator &allocator,
+                                  const common::ObIArray<common::ObString>& type_info);
+
   virtual int assign(const ObExprOperator &other);
 
   int deep_copy_route_sql(const common::ObString &v)
@@ -85,6 +91,11 @@ public:
   inline void set_route_sql(common::ObString sql) { route_sql_ = sql; }
   inline void set_result_type(ObExprResType type) { result_type_ = type; }
   inline void set_ignore_fail() { is_ignore_fail_ = true; }
+
+  int set_type_info(const common::ObIArray<common::ObString>& type_info)
+  {
+    return deep_copy_type_info(type_info_, allocator_, type_info);
+  }
 
   virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
                       const ObRawExpr &raw_expr, ObExpr &rt_expr) const override;
@@ -105,6 +116,7 @@ private:
   ObExprResType result_type_;
   bool is_ignore_fail_;
   common::ObIAllocator &allocator_;
+  common::ObSEArray<common::ObString, 4> type_info_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprOpSubQueryInPl);

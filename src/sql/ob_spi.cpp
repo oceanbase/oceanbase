@@ -761,7 +761,8 @@ int ObSPIService::spi_convert(ObSQLSessionInfo &session,
                               ObObj &src,
                               const ObExprResType &dst_type,
                               ObObj &dst,
-                              bool ignore_fail)
+                              bool ignore_fail,
+                              const ObIArray<ObString> *type_info)
 {
   int ret = OB_SUCCESS;
   ObCastMode cast_mode = CM_NONE;
@@ -781,7 +782,7 @@ int ObSPIService::spi_convert(ObSQLSessionInfo &session,
     } else if (ob_is_enum_or_set_type(src.get_type()) && ob_is_enum_or_set_type(dst_type.get_type())) {
       OX (dst = src);
     } else {
-      OZ (ObExprColumnConv::convert_with_null_check(dst, src, dst_type, is_strict, cast_ctx, NULL));
+      OZ (ObExprColumnConv::convert_with_null_check(dst, src, dst_type, is_strict, cast_ctx, type_info));
     }
   }
   return ret;

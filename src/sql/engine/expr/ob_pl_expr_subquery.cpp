@@ -31,7 +31,7 @@ namespace sql
 
 OB_SERIALIZE_MEMBER(
     (ObExprOpSubQueryInPl, ObFuncExprOperator),
-    id_, type_, route_sql_, result_type_, is_ignore_fail_, ps_sql_);
+    id_, type_, route_sql_, result_type_, is_ignore_fail_, ps_sql_, type_info_);
 
 
 ObExprOpSubQueryInPl::ObExprOpSubQueryInPl(common::ObIAllocator &alloc)
@@ -44,9 +44,38 @@ ObExprOpSubQueryInPl::ObExprOpSubQueryInPl(common::ObIAllocator &alloc)
       route_sql_(ObString()),
       result_type_(),
       is_ignore_fail_(false),
-      allocator_(alloc) {}
+      allocator_(alloc),
+      type_info_() {}
 
 ObExprOpSubQueryInPl::~ObExprOpSubQueryInPl() {}
+
+int ObExprOpSubQueryInPl::deep_copy_type_info(common::ObIArray<common::ObString>& dst_type_info,
+                                              common::ObIAllocator &allocator,
+                                              const common::ObIArray<common::ObString>& type_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_SUCC(ret)) {
+    dst_type_info.reset();
+    for (int64_t i = 0; OB_SUCC(ret) && i < type_info.count(); ++i) {
+      const ObString &info = type_info.at(i);
+      if (OB_UNLIKELY(0 == info.length())) {
+        if (OB_FAIL(dst_type_info.push_back(ObString(0, NULL)))) {
+          LOG_WARN("fail to push back info", K(i), K(info), K(ret));
+        }
+      } else {
+        char *buf = NULL;
+        if (OB_ISNULL(buf = static_cast<char*>(allocator.alloc(info.length())))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to allocate memory", K(i), K(info), K(ret));
+        } else if (FALSE_IT(MEMCPY(buf, info.ptr(), info.length()))) {
+        } else if (OB_FAIL(dst_type_info.push_back(ObString(info.length(), buf)))) {
+          LOG_WARN("fail to push back info", K(i), K(info), K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
 
 int ObExprOpSubQueryInPl::assign(const ObExprOperator &other)
 {
@@ -64,6 +93,7 @@ int ObExprOpSubQueryInPl::assign(const ObExprOperator &other)
       OX (this->result_type_ = tmp_other->result_type_);
       OZ (deep_copy_route_sql(tmp_other->route_sql_));
       OX (this->is_ignore_fail_ = tmp_other->is_ignore_fail_);
+      OZ (ObExprOpSubQueryInPl::deep_copy_type_info(type_info_, allocator_, tmp_other->type_info_));
     }
   }
   return ret;
@@ -233,7 +263,8 @@ int ObExprOpSubQueryInPl::eval_subquery(const ObExpr &expr,
                                          result,
                                          info->result_type_,
                                          conv_res,
-                                         info->is_ignore_fail_));
+                                         info->is_ignore_fail_,
+                                         &info->type_info_));
       if (OB_FAIL(ret)) {
         LOG_WARN("convert type error", K(ret));
       } else {
@@ -342,7 +373,8 @@ OB_DEF_SERIALIZE(ObExprPlSubQueryInfo)
               route_sql_,
               result_type_,
               is_ignore_fail_,
-              ps_sql_);
+              ps_sql_,
+              type_info_);
   return ret;
 }
 
@@ -355,7 +387,8 @@ OB_DEF_DESERIALIZE(ObExprPlSubQueryInfo)
               route_sql_,
               result_type_,
               is_ignore_fail_,
-              ps_sql_);
+              ps_sql_,
+              type_info_);
   return ret;
 }
 
@@ -368,9 +401,12 @@ OB_DEF_SERIALIZE_SIZE(ObExprPlSubQueryInfo)
               route_sql_,
               result_type_,
               is_ignore_fail_,
-              ps_sql_);
+              ps_sql_,
+              type_info_);
   return len;
 }
+
+
 
 int ObExprPlSubQueryInfo::deep_copy(common::ObIAllocator &allocator,
                          const ObExprOperatorType type,
@@ -385,6 +421,7 @@ int ObExprPlSubQueryInfo::deep_copy(common::ObIAllocator &allocator,
 
   OZ(ob_write_string(allocator, route_sql_, other.route_sql_, true));
   OZ(ob_write_string(allocator, ps_sql_, other.ps_sql_, true));
+  OZ(ObExprOpSubQueryInPl::deep_copy_type_info(other.type_info_, allocator, type_info_));
   return ret;
 }
 
@@ -402,6 +439,7 @@ int ObExprPlSubQueryInfo::from_raw_expr(RE &raw_expr, ObIAllocator &alloc)
 
   OZ(ob_write_string(alloc, subquery_expr.get_route_sql(), route_sql_, true));
   OZ(ob_write_string(alloc, subquery_expr.get_route_sql(), ps_sql_, true));
+  OZ(ObExprOpSubQueryInPl::deep_copy_type_info(type_info_, alloc, subquery_expr.get_enum_set_values()));
   return ret;
 }
 
