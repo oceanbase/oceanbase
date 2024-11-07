@@ -18013,10 +18013,22 @@ int ObPLResolveCtx::get_user_type(uint64_t type_id, const ObUserDefinedType *&us
   ObLogger::ObTraceLogPrintGuard trace_log_guard(ret, MOD_NAME_FOR_TRACE_LOG(PL));
 
   ObIAllocator *alloc = allocator != nullptr ? allocator : &allocator_;
-  // 首先尝试下是不是UDT Type
+
+  user_type = nullptr;
+  for (int64_t i = 0; i < type_buffer_.count(); ++i) {
+    if (OB_NOT_NULL(type_buffer_.at(i))) {
+      if (type_buffer_.at(i)->get_user_type_id() == type_id) {
+        user_type = type_buffer_.at(i);
+        break;
+      }
+    }
+  }
+
   const ObUDTTypeInfo *udt_info = NULL;
   uint64_t tenant_id = OB_INVALID_ID;
-  if (common::is_dblink_type_id(type_id)) {
+  if (OB_NOT_NULL(user_type)) {
+    // do nothing ...
+  } else if (common::is_dblink_type_id(type_id)) {
     if (OB_FAIL(package_guard_.dblink_guard_.get_dblink_type_by_id(
                     extract_package_id(type_id), type_id, user_type))) {
       LOG_WARN("get dblink type failed", K(ret), K(type_id));
@@ -18026,7 +18038,7 @@ int ObPLResolveCtx::get_user_type(uint64_t type_id, const ObUserDefinedType *&us
     LOG_WARN("get udt info failed", K(ret), K(type_id));
   } else if (OB_NOT_NULL(udt_info)) {
     OZ (udt_info->transform_to_pl_type(*alloc, user_type), type_id);
-  } else { // 其次尝试下是不是Table Type
+  } else {
     ret = OB_SUCCESS;
     const ObTableSchema* table_schema = NULL;
     const uint64_t tenant_id = session_info_.get_effective_tenant_id();
@@ -18037,7 +18049,7 @@ int ObPLResolveCtx::get_user_type(uint64_t type_id, const ObUserDefinedType *&us
       CK (OB_NOT_NULL(record_type));
       OX (user_type = record_type);
     } else if (type_id != OB_INVALID_ID
-              && extract_package_id(type_id) != OB_INVALID_ID) { // 最后尝试下是不是PackageType
+              && extract_package_id(type_id) != OB_INVALID_ID) {
       ret = OB_SUCCESS;
       const ObUserDefinedType *package_user_type = NULL;
       if (!common::is_dblink_type_id(type_id)) {
@@ -18051,6 +18063,10 @@ int ObPLResolveCtx::get_user_type(uint64_t type_id, const ObUserDefinedType *&us
         CK (OB_NOT_NULL(user_type = static_cast<const ObUserDefinedType *>(package_user_type)));
       }
     }
+  }
+
+  if (OB_SUCC(ret) && alloc == &allocator_) {
+    OZ (const_cast<ObPLResolveCtx *>(this)->type_buffer_.push_back(user_type));
   }
 
   return ret;

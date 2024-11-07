@@ -94,6 +94,7 @@ public:
   sql::ExternalParams *extern_param_info_;
   bool is_udt_udf_ctx_; // indicate this context is belong to a udt udf
   bool is_sync_package_var_;
+  ObSEArray<const ObUserDefinedType *, 32> type_buffer_;
 };
 
 class ObPLMockSelfArg
