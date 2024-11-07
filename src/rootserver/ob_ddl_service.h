@@ -2176,16 +2176,16 @@ private:
                               ObTableSchema &new_table_schema,
                               const ObColumnSchemaV2 &new_origin_col,
                               int64_t new_schema_version);
-  int check_can_drop_columns(
-      const obrpc::ObAlterTableArg &alter_table_arg,
-      const share::schema::ObTableSchema &orig_table_schema,
-      share::schema::ObTableSchema &new_table_schema);
   int check_can_drop_column(
       const common::ObString &orig_column_name,
       const share::schema::ObColumnSchemaV2 *orig_column_schema,
       const ObTableSchema &orig_table_schema,
       const share::schema::ObTableSchema &new_table_schema,
       const int64_t new_table_cols_cnt,
+      ObSchemaGetterGuard &schema_guard);
+  int check_is_drop_partition_key(
+      const share::schema::ObTableSchema &orig_table_schema,
+      const share::schema::ObColumnSchemaV2 &to_drop_column,
       ObSchemaGetterGuard &schema_guard);
   int check_drop_column_with_drop_foreign_key(
       const obrpc::ObAlterTableArg &alter_table_arg,

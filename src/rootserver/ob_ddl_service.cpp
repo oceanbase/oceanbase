@@ -5453,7 +5453,6 @@ int ObDDLService::check_can_drop_column(
 {
   int ret = OB_SUCCESS;
   int64_t column_count = new_table_cols_cnt;
-  bool is_tbl_partition_key = false;
   if (OB_ISNULL(orig_column_schema) || OB_ISNULL(new_table_schema.get_column_schema(orig_column_name))) {
     ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
     LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, orig_column_name.length(), orig_column_name.ptr());
@@ -5479,13 +5478,8 @@ int ObDDLService::check_can_drop_column(
       LOG_USER_ERROR(OB_ERR_DEPENDENT_BY_FUNCTIONAL_INDEX, orig_column_name.length(), orig_column_name.ptr());
       LOG_WARN("Dropping column has functional index column deps", K(ret), K(orig_column_name));
     }
-  } else if (OB_FAIL(new_table_schema.is_tbl_partition_key(*orig_column_schema, is_tbl_partition_key,
-                                                           false /* ignore_presetting_key */))) {
-    LOG_WARN("fail to check tbl partition key", KR(ret), KPC(orig_column_schema), K(new_table_schema));
-  } else if (is_tbl_partition_key) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop partitioning column is");
-    LOG_WARN("partitioning column is not allowed to be dropped", K(ret), K(orig_column_schema->get_column_name_str()));
+  } else if (OB_FAIL(check_is_drop_partition_key(orig_table_schema, *orig_column_schema, schema_guard))) {
+    LOG_WARN("check drop partition column failed", K(ret));
   } else if ((!new_table_schema.is_heap_table() && column_count <= ObTableSchema::MIN_COLUMN_COUNT_WITH_PK_TABLE)
       || (new_table_schema.is_heap_table() && column_count <= ObTableSchema::MIN_COLUMN_COUNT_WITH_HEAP_TABLE)) {
     ret = OB_CANT_REMOVE_ALL_FIELDS;
@@ -5495,6 +5489,48 @@ int ObDDLService::check_can_drop_column(
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop rowkey column is");
     LOG_WARN("rowkey column is not allowed to be dropped", K(ret), K(orig_column_schema->get_column_name_str()));
+  }
+  return ret;
+}
+
+int ObDDLService::check_is_drop_partition_key(
+    const share::schema::ObTableSchema &orig_table_schema,
+    const ObColumnSchemaV2 &to_drop_column,
+    ObSchemaGetterGuard &schema_guard)
+{
+  int ret = OB_SUCCESS;
+  bool is_tbl_partition_key = false;
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+  const uint64_t tenant_id = orig_table_schema.get_tenant_id();
+  const uint64_t to_drop_column_id = to_drop_column.get_column_id();
+  if (OB_FAIL(orig_table_schema.get_simple_index_infos(simple_index_infos))) {
+    LOG_WARN("get index infos failed", K(ret));
+  } else if (OB_FAIL(orig_table_schema.is_tbl_partition_key(to_drop_column_id, is_tbl_partition_key,
+                                                           false /* ignore_presetting_key */))) {
+    LOG_WARN("fail to check tbl partition key", K(ret), K(to_drop_column), K(orig_table_schema));
+  } else {
+    // to check whether the column is the partition key of the global index.
+    for (int64_t idx = 0; OB_SUCC(ret) && !is_tbl_partition_key && idx < simple_index_infos.count(); idx++) {
+      const ObTableSchema *index_schema = nullptr;
+      const uint64_t index_tid = simple_index_infos.at(idx).table_id_;
+      if (OB_FAIL(schema_guard.get_table_schema(tenant_id, index_tid, index_schema))) {
+        LOG_WARN("get index schema failed", K(ret), K(tenant_id), K(index_tid));
+      } else if (OB_ISNULL(index_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("index not exist", K(ret), K(tenant_id), K(index_tid));
+      } else if (index_schema->is_global_index_table()
+          && OB_FAIL(index_schema->is_tbl_partition_key(to_drop_column_id, is_tbl_partition_key,
+                                                        false /* ignore_presetting_key */))) {
+        LOG_WARN("check column in part key failed", K(ret), K(index_tid));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && is_tbl_partition_key) {
+    ret = OB_ERR_DEPENDENT_BY_PARTITION_FUNC;
+    LOG_USER_ERROR(OB_ERR_DEPENDENT_BY_PARTITION_FUNC,
+                  to_drop_column.get_column_name_str().length(),
+                  to_drop_column.get_column_name_str().ptr());
+    LOG_WARN("drop column has table part key deps", K(ret), "column_name", to_drop_column.get_column_name_str());
   }
   return ret;
 }
@@ -16008,7 +16044,7 @@ int ObDDLService::recover_restore_table_ddl_task(
                                       &dst_table_schema,
                                       src_table_schema->get_table_id()/*object_id*/,
                                       src_table_schema->get_schema_version(),
-                                      arg.parallelism_,
+                                      MAX(1, arg.parallelism_),
                                       arg.consumer_group_id_,
                                       &allocator,
                                       &alter_table_arg,
