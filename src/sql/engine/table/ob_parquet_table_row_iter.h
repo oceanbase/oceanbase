@@ -156,15 +156,19 @@ private:
                parquet::ColumnReader *reader,
                common::ObIArrayWrap<int16_t> &def_levels_buf,
                common::ObIArrayWrap<int16_t> &rep_levels_buf,
+               common::ObIAllocator &str_res_mem,
                const int64_t batch_size,
+               const int64_t row_offset,
                int64_t &row_count):
       eval_ctx_(eval_ctx),
       file_col_expr_(file_col_expr),
       reader_(reader),
       batch_size_(batch_size),
+      row_offset_(row_offset),
       row_count_(row_count),
       def_levels_buf_(def_levels_buf),
-      rep_levels_buf_(rep_levels_buf)
+      rep_levels_buf_(rep_levels_buf),
+      str_res_mem_(str_res_mem)
     {}
     typedef int (DataLoader::*LOAD_FUNC)();
     static LOAD_FUNC select_load_function(const ObDatumMeta &datum_type,
@@ -202,9 +206,11 @@ private:
     ObExpr *file_col_expr_;
     parquet::ColumnReader *reader_;
     const int64_t batch_size_;
+    const int64_t row_offset_;
     int64_t &row_count_;
     common::ObIArrayWrap<int16_t> &def_levels_buf_;
     common::ObIArrayWrap<int16_t> &rep_levels_buf_;
+    common::ObIAllocator &str_res_mem_;
   };
 private:
   int next_file();
@@ -215,6 +221,7 @@ private:
   StateValues state_;
   lib::ObMemAttr mem_attr_;
   ObArenaAllocator allocator_;
+  ObArenaAllocator str_res_mem_;
   ObArrowMemPool arrow_alloc_;
   parquet::ReaderProperties read_props_;
   ObExternalDataAccessDriver data_access_driver_;
