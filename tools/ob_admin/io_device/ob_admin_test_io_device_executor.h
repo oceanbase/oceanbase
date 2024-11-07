@@ -17,9 +17,16 @@
 #include "../ob_admin_executor.h"
 #include "deps/oblib/src/lib/ob_define.h"                    // OB_MAX_URI_LENGTH
 #include "share/backup/ob_backup_struct.h"                  // OB_MAX_BACKUP_STORAGE_INFO_LENGTH
+#include "../dumpsst/ob_admin_dumpsst_print_helper.h"
 
 namespace oceanbase {
 namespace tools {
+
+#define STORAGE_LOG_FILTER(level, info_string, args...) \
+  STORAGE_LOG(level, info_string, ##args); \
+  if (strcmp(#level, "ERROR") == 0) {                  \
+    std::cout << LIGHT_RED << "ERROR INFO: " << info_string << NONE_COLOR << std::endl;  \
+  }
 
 struct TestObjectStorageInterfaceContext
 {
@@ -47,6 +54,19 @@ struct TestObjectStorageInterfaceContext
   char single_file_path_[OB_MAX_URI_LENGTH];
   char appendable_file_path_[OB_MAX_URI_LENGTH];
   char upload_file_path_[OB_MAX_URI_LENGTH];
+};
+
+class TestExecGuard
+{
+public:
+  TestExecGuard(const char *title, int64_t &test_id, int &ret);
+  ~TestExecGuard();
+
+private:
+  const char *title_;
+  int64_t &test_id_;
+  int &ret_;
+  const int64_t start_time_us_;
 };
 
 class ObAdminTestIODeviceExecutor : public ObAdminExecutor
@@ -88,6 +108,7 @@ private:
   char backup_path_[common::OB_MAX_URI_LENGTH];
   char storage_info_[common::OB_MAX_BACKUP_STORAGE_INFO_LENGTH];
   bool is_quiet_;
+  int64_t test_id_;
   common::ObArenaAllocator allocator_;
 
 private:
