@@ -114,14 +114,14 @@ int get_stackattr(void *&stackaddr, size_t &stacksize)
     DEFER(in_hook() = in_hook_bak);
     pthread_attr_t attr;
     if (OB_UNLIKELY(0 != pthread_getattr_np(pthread_self(), &attr))) {
-      ret = OB_ERR_UNEXPECTED;
-      COMMON_LOG(ERROR, "cannot get thread params", K(ret));
+      ret = OB_ERROR;
+      COMMON_LOG(ERROR, "cannot get thread params", K(ret), KERRMSG);
     } else if (OB_UNLIKELY(0 != pthread_attr_getstack(&attr, &stackaddr, &stacksize))) {
-      ret = OB_ERR_UNEXPECTED;
-      COMMON_LOG(ERROR, "cannot get thread statck params", K(ret));
+      ret = OB_ERROR;
+      COMMON_LOG(ERROR, "cannot get thread statck params", K(ret), KERRMSG);
     } else if (OB_UNLIKELY(0 != pthread_attr_destroy(&attr))) {
-      ret = OB_ERR_UNEXPECTED;
-      COMMON_LOG(ERROR, "destroy thread attr failed", K(ret));
+      ret = OB_ERROR;
+      COMMON_LOG(ERROR, "destroy thread attr failed", K(ret), KERRMSG);
     }
     if (OB_SUCC(ret)) {
       g_stackaddr = (char*)stackaddr;
