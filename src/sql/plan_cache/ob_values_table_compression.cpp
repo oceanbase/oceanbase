@@ -281,7 +281,7 @@ int ObValuesTableCompression::try_batch_exec_params(ObIAllocator &allocator,
       fp_result.values_tokens_.empty() ||
       !GCONF._enable_values_table_folding) {
     /* do nothing */
-  /* TODO NOTE@yejingtao.yjt: remove following upgrade checking after next barrier version */
+  /* TODO NOTE@sean.yyj: remove following upgrade checking after next barrier version */
   } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_1_2 ||
              !is_support_compress_values_table(pc_ctx.raw_sql_)) {
     /* do nothing */

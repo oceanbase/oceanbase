@@ -30178,7 +30178,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'yejingtao.yjt',
+  owner = 'sean.yyj',
   database_id    = 'OB_INFORMATION_SCHEMA_ID',
   table_name     = 'TABLE_PRIVILEGES',
   table_id       = '21347',
@@ -30312,7 +30312,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'yejingtao.yjt',
+  owner = 'sean.yyj',
   database_id    = 'OB_INFORMATION_SCHEMA_ID',
   table_name     = 'USER_PRIVILEGES',
   table_id       = '21348',
@@ -30512,7 +30512,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'yejingtao.yjt',
+  owner = 'sean.yyj',
   database_id    = 'OB_INFORMATION_SCHEMA_ID',
   table_name     = 'SCHEMA_PRIVILEGES',
   table_id       = '21349',
