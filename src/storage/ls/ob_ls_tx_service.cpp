@@ -268,20 +268,21 @@ int ObLSTxService::revert_store_ctx(storage::ObStoreCtx &store_ctx) const
   int ret = OB_SUCCESS;
 
   // Phase1: revert the read count of the transfer src read
-  ObTxTableGuard src_tx_table_guard = store_ctx.mvcc_acc_ctx_.get_tx_table_guards().src_tx_table_guard_;
+  ObTxTableGuard &src_tx_table_guard = store_ctx.mvcc_acc_ctx_.get_tx_table_guards().src_tx_table_guard_;
   if (src_tx_table_guard.is_valid()) {
     // do not overrite ret
     int tmp_ret = OB_SUCCESS;
-    ObLSHandle ls_handle = store_ctx.mvcc_acc_ctx_.get_tx_table_guards().src_ls_handle_;
-    if (!ls_handle.is_valid()) {
+    ObLSHandle &src_ls_handle = store_ctx.mvcc_acc_ctx_.get_tx_table_guards().src_ls_handle_;
+    if (!src_ls_handle.is_valid()) {
       TRANS_LOG(ERROR, "src tx guard is valid when src ls handle not valid", K(store_ctx));
+      ObLSHandle ls_handle;
       if (OB_TMP_FAIL(MTL(ObLSService*)->get_ls(src_tx_table_guard.get_ls_id(), ls_handle, ObLSGetMod::TRANS_MOD))) {
         TRANS_LOG(ERROR, "get_ls failed", KR(tmp_ret), K(src_tx_table_guard));
       } else if (OB_TMP_FAIL(ls_handle.get_ls()->get_tx_svr()->end_request_for_transfer())) {
         TRANS_LOG(ERROR, "end request for transfer", KR(tmp_ret), K(src_tx_table_guard));
       }
     } else {
-      if (OB_TMP_FAIL(ls_handle.get_ls()->get_tx_svr()->end_request_for_transfer())) {
+      if (OB_TMP_FAIL(src_ls_handle.get_ls()->get_tx_svr()->end_request_for_transfer())) {
         TRANS_LOG(ERROR, "end request for transfer", KR(tmp_ret), K(src_tx_table_guard));
       }
     }
