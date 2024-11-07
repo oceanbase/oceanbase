@@ -9874,30 +9874,10 @@ int ObPLResolver::check_composite_compatible(const ObPLINS &ns,
   // NOTICE: do not call this function when left_type_id equal to right_type_id
   CK (actual_param_type_id != formal_param_type_id);
 
-  // The type of the actual argument may not exist in the current function's lexical scope, an error needs to be
-  // reported to the upper level to search in the caller's lexical scope. Consider case below:
-  // ```
-  // declare
-  //   cursor cur is select * from some_table;
-  // begin
-  //   for v in cur loop
-  //     some_proc(v);
-  //   end loop;
-  // end;
-  // ```
-  // The type of actual param V passed to SOME_PROC can not be found in SOME_PROC's scope, it is recorded in the caller
-  // anonymous block's scope.
   OZ (ns.get_user_type(actual_param_type_id, actual_param_type, &allocator));
-  if (OB_FAIL(ret) || OB_ISNULL(actual_param_type)) {
-    LOG_WARN("failed to get user type of actual param", K(ret), K(actual_param_type_id));
-    ret = OB_INVALID_ARGUMENT;  // indicates that the type of the actual argument was not found
-  }
-  OV (OB_NOT_NULL(actual_param_type), OB_INVALID_ARGUMENT, actual_param_type_id, formal_param_type_id);
-
-  // The type of the formal argument must exist in the current function's lexical scope.
+  CK (OB_NOT_NULL(actual_param_type));
   OZ (ns.get_user_type(formal_param_type_id, formal_param_type, &allocator));
   CK (OB_NOT_NULL(formal_param_type));
-
   OZ (check_composite_compatible(actual_param_type, formal_param_type, is_compatible));
   return ret;
 }

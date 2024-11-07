@@ -740,7 +740,7 @@ public:
   int init(const ParamStore *params = NULL, bool is_anonymous = false);
   int defend_stored_routine_change(const ObObjParam &actual_param, const ObPLDataType &formal_param_type);
   int check_routine_param_legal(ParamStore *params = NULL);
-  int check_anonymous_collection_compatible(ObPLComposite &composite, const ObPLDataType &dest_type, bool &need_cast);
+  int check_anonymous_collection_compatible(const ObPLComposite &composite, const ObPLDataType &dest_type, bool &need_cast);
   int convert_composite(ObObjParam &param, const ObPLDataType &dest_type);
   int init_params(const ParamStore *params = NULL, bool is_anonymous = false);
   int execute();
