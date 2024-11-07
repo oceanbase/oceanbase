@@ -34,7 +34,7 @@ int async_connect(addr_t dest, uint64_t dispatch_id) {
   socklen_t dispatch_id_len = sizeof(dispatch_id);
   int send_negotiation_flag = 1;
   socklen_t send_negotiation_len = sizeof(send_negotiation_flag);
-  ef((fd = socket(!dest.is_ipv6 ? AF_INET : AF_INET6, SOCK_STREAM, 0)) < 0);
+  ef((fd = socket(!dest.is_ipv6 ? AF_INET : AF_INET6, SOCK_STREAM|SOCK_CLOEXEC, 0)) < 0);
   ef(make_fd_nonblocking(fd));
   set_tcpopt(fd, TCP_SYNCNT, PNIO_TCP_SYNCNT);
   ef(ussl_setsockopt(fd, SOL_OB_SOCKET, SO_OB_SET_CLIENT_GID, &dispatch_id, dispatch_id_len));
