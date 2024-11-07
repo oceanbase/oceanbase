@@ -1807,7 +1807,9 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
       if (OB_ERR_BAD_FIELD_ERROR == ret && !q_name.access_idents_.empty()) {
         if (OB_FAIL(try_resolve_external_symbol(q_name, columns, real_exprs, real_ref_expr, is_external))) {
           LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve external symbol failed", K(ret), K(q_name), K(columns));
-          ret = OB_ERR_BAD_FIELD_ERROR;
+          if (!ObPLResolver::is_unrecoverable_error(ret)) {
+            ret = OB_ERR_BAD_FIELD_ERROR;
+          }
         }
       }
     }

@@ -14301,12 +14301,11 @@ int ObPLResolver::resolve_routine(ObObjAccessIdent &access_ident,
     }
 
     if (OB_FAIL(ret)
-        && OB_ERR_UNEXPECTED != ret
         && OB_ERR_SP_WRONG_ARG_NUM != ret
         && OB_ERR_CALL_WRONG_ARG != ret
         && OB_ERR_FUNC_DUP != ret
         && OB_ERR_POSITIONAL_FOLLOW_NAME != ret
-        && OB_ALLOCATE_MEMORY_FAILED != ret) {
+        && !is_unrecoverable_error(ret)) {
       // Not A Routine, try compostie access again.
       if (access_idxs.count() > 0
           && (access_idxs.at(access_idxs.count() - 1)).elem_type_.is_composite_type()

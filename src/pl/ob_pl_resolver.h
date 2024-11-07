@@ -597,6 +597,16 @@ public:
                          ObRawExprFactory &expr_factory,
                          ObRawExpr *&expr,
                          ObPLCompileUnitAST &unit_ast);
+
+  static OB_INLINE bool is_unrecoverable_error(int ret)
+  {
+    return OB_ALLOCATE_MEMORY_FAILED == ret
+             || OB_ERR_UNEXPECTED == ret
+             || OB_EXCEED_QUERY_MEM_LIMIT == ret
+             || OB_TIMEOUT == ret
+             || OB_SIZE_OVERFLOW == ret;
+  }
+
 private:
   int resolve_declare_var(const ObStmtNodeTree *parse_tree, ObPLDeclareVarStmt *stmt, ObPLFunctionAST &func_ast);
   int resolve_declare_var(const ObStmtNodeTree *parse_tree, ObPLPackageAST &package_ast);
