@@ -16,7 +16,6 @@
 #include "lib/ob_define.h"
 #include "lib/container/ob_iarray.h"
 #include "lib/utility/ob_macro_utils.h"
-#include "share/resource_manager/ob_resource_plan_info.h"
 
 namespace oceanbase
 {

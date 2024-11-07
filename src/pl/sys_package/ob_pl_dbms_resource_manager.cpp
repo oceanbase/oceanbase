@@ -92,7 +92,7 @@ int ObPlDBMSResourceManager::delete_plan(
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(proxy.delete_plan(tenant_id, plan))) {
-      LOG_WARN("fail create plan", K(tenant_id), K(plan), K(ret));
+      LOG_WARN("fail delete plan", K(tenant_id), K(plan), K(ret));
     }
   }
   return ret;

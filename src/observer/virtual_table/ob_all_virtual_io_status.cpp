@@ -395,8 +395,7 @@ int ObAllVirtualIOQuota::record_user_group(const uint64_t tenant_id, ObIOUsage &
     for (int64_t i = 0; i < info.count(); ++i) {
       if (OB_TMP_FAIL(oceanbase::common::transform_usage_index_to_group_config_index(i, group_config_index))) {
       } else if (group_config_index >= io_config.group_configs_.count()) {
-      } else if (io_config.group_configs_.at(group_config_index).deleted_ ||
-                 io_config.group_configs_.at(group_config_index).cleared_) {
+      } else if (io_config.group_configs_.at(group_config_index).deleted_) {
       } else if (info.at(i).avg_byte_ > std::numeric_limits<double>::epsilon()) {
         QuotaInfo item;
         ObIOMode mode = static_cast<ObIOMode>(group_config_index % MODE_COUNT);
@@ -676,7 +675,7 @@ int ObAllVirtualIOScheduler::init(const common::ObAddr &addr)
           const ObTenantIOConfig &io_config = tenant_holder.get_ptr()->get_io_config();
           int64_t group_num = io_config.group_configs_.count();
           for (int64_t index = 0; OB_SUCC(ret) && index < group_num; ++index) {
-            if (io_config.group_configs_.at(index).deleted_ || io_config.group_configs_.at(index).cleared_) {
+            if (io_config.group_configs_.at(index).deleted_) {
               continue;
             }
             ScheduleInfo item;
