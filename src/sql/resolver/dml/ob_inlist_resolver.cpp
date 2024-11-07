@@ -252,6 +252,12 @@ int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
                            param_type, is_enable))) {
           LOG_WARN("failed to got const node types", K(ret));
         } else if (is_enable) {
+          if (lib::is_oracle_mode() && ObCharType == param_type.obj_type_) {
+            // in oracle mode, inlist to values table rewrite may cast char types to varchar2
+            // but comparison behaviors for chars and varchar2s are different for trailing spaces
+            // which will lead to unexpect comparison result
+            is_enable = false;
+          } else
           if (ob_is_enum_or_set_type(param_type.obj_type_) ||
               is_lob_locator(param_type.obj_type_)) {
             is_enable = false;
