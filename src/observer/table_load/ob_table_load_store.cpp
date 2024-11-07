@@ -172,7 +172,7 @@ int ObTableLoadStore::pre_begin()
     LOG_WARN("ObTableLoadStore not init", KR(ret), KP(this));
   } else {
     LOG_INFO("store pre begin");
-    if (OB_FAIL(ObTableLoadService::assign_memory(ctx_->param_.need_sort_, ctx_->param_.avail_memory_))) {
+    if (OB_FAIL(ObTableLoadService::assign_memory(ctx_->param_.task_need_sort_, ctx_->param_.avail_memory_))) {
       LOG_WARN("fail to assign_memory", KR(ret));
     } else {
       ctx_->set_assigned_memory();
@@ -500,7 +500,7 @@ int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info,
     } else {
       int tmp_ret = OB_SUCCESS;
       if (ctx_->is_assigned_memory()) {
-        if (OB_TMP_FAIL(ObTableLoadService::recycle_memory(ctx_->param_.need_sort_, ctx_->param_.avail_memory_))) {
+        if (OB_TMP_FAIL(ObTableLoadService::recycle_memory(ctx_->param_.task_need_sort_, ctx_->param_.avail_memory_))) {
           LOG_WARN("fail to recycle memory", KR(tmp_ret));
         }
         ctx_->reset_assigned_memory();

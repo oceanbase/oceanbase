@@ -821,7 +821,7 @@ int ObTableLoadService::remove_ctx(ObTableLoadTableCtx *table_ctx)
       LOG_WARN("fail to remove_table_ctx", KR(ret), K(release_arg.task_key_));
     } else {
       if (table_ctx->is_assigned_memory()) {
-        if (OB_TMP_FAIL(service->assigned_memory_manager_.recycle_memory(table_ctx->param_.need_sort_, table_ctx->param_.avail_memory_))) {
+        if (OB_TMP_FAIL(service->assigned_memory_manager_.recycle_memory(table_ctx->param_.task_need_sort_, table_ctx->param_.avail_memory_))) {
           LOG_WARN("fail to recycle_memory", KR(tmp_ret), K(release_arg.task_key_));
         }
         table_ctx->reset_assigned_memory();

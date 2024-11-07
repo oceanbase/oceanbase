@@ -60,6 +60,7 @@ int ObDirectLoadControlPreBeginExecutor::process()
     param.max_error_row_count_ = arg_.config_.max_error_row_count_;
     param.column_count_ = arg_.column_count_;
     param.need_sort_ = arg_.config_.is_need_sort_;
+    param.task_need_sort_ = arg_.config_.is_task_need_sort_;
     param.px_mode_ = arg_.px_mode_;
     param.online_opt_stat_gather_ = arg_.online_opt_stat_gather_;
     param.dup_action_ = arg_.dup_action_;

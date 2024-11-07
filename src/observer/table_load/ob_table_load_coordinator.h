@@ -65,6 +65,7 @@ public:
   int get_status(table::ObTableLoadStatusType &status, int &error_code);
   int heart_beat();
 private:
+  int check_need_sort_for_lob_or_index(bool &need_sort) const;
   int gen_apply_arg(ObDirectLoadResourceApplyArg &apply_arg);
   int pre_begin_peers(ObDirectLoadResourceApplyArg &apply_arg);
   int confirm_begin_peers();
