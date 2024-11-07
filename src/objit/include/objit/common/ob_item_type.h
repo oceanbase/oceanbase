@@ -508,6 +508,7 @@ typedef enum ObItemType
   T_FUN_SYS_SM3 = 776,
   T_FUN_SYS_SM4_ENCRYPT = 777,
   T_FUN_SYS_SM4_DECRYPT = 778,
+  T_FUN_SYS_HELLO_REPEAT = 798,
   T_FUN_SYS_ENHANCED_AES_ENCRYPT = 779,
   T_FUN_SYS_ENHANCED_AES_DECRYPT = 780,
   ///< @note add new mysql only function type before this line

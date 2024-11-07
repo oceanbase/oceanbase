@@ -419,6 +419,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_greater_equal.cpp
   engine/expr/ob_expr_greater_than.cpp
   engine/expr/ob_expr_greatest.cpp
+  engine/expr/ob_expr_hello_repeat.cpp
   engine/expr/ob_expr_hex.cpp
   engine/expr/ob_expr_hextoraw.cpp
   engine/expr/ob_expr_host_ip.cpp

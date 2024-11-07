@@ -37,6 +37,7 @@
 #include "ob_expr_from_unix_time.h"
 #include "ob_expr_func_partition_key.h"
 #include "ob_expr_greatest.h"
+#include "ob_expr_hello_repeat.h"
 #include "ob_expr_host_ip.h"
 #include "ob_expr_trim.h"
 #include "ob_expr_tokenize.h"
@@ -1262,6 +1263,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprArrayContains::eval_array_contains_ObString,                  /* 753 */
   ObExprArrayContains::eval_array_contains_array,                     /* 754 */
   ObExprSplitPart::calc_split_part_expr,                              /* 755 */
+  ObExprHelloRepeat::eval, 
   ObExprRbSelect::eval_rb_select,                                     /* 756 */
   ObExprVectorNegativeIPDistance::calc_negative_inner_product,        /* 757 */
   ObExprTokenize::eval_tokenize,                                      /* 758 */
