@@ -133,6 +133,7 @@ public:
                          const ObString &sql_id,
                          const uint64_t plan_hash,
                          const bool with_plan_hash,
+                         const uint64_t parallel,
                          int64_t &baseline_affected);
   int load_baseline(ObSpmBaselineLoader &baseline_loader);
   int purge_baselines(const uint64_t tenant_id, int64_t baseline_affected);

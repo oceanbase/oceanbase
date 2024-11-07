@@ -2326,15 +2326,20 @@ int ObAdminLoadBaselineV2::call_server(const common::ObAddr &server,
                                      obrpc::ObLoadBaselineRes &res)
 {
   int ret = OB_SUCCESS;
+  int64_t timeout = THIS_WORKER.get_timeout_remain();
   if (!ctx_.is_inited()) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
   } else if (!server.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid server", K(server), KR(ret));
+  } else if (OB_UNLIKELY(0 >= timeout)) {
+    ret = OB_TIMEOUT;
+    LOG_WARN("query timeout is reached", K(timeout));
   } else if (OB_FAIL(ctx_.rpc_proxy_->to(server)
                                      .by(arg.tenant_id_)
                                      .as(arg.tenant_id_)
+                                     .timeout(timeout)
                                      .load_baseline_v2(arg, res))) {
     LOG_WARN("request server load baseline failed", KR(ret), K(server));
   }
