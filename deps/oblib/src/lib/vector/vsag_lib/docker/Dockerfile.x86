@@ -1,0 +1,23 @@
+
+# base image
+FROM ubuntu:22.04
+
+# update and install basic deps
+RUN apt update && apt install -y wget gpg sudo
+
+# install intel-mkl and fix soft links
+RUN wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
+| gpg --dearmor | sudo tee /usr/share/keyrings/oneapi-archive-keyring.gpg > /dev/null
+RUN echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" | sudo tee /etc/apt/sources.list.d/oneAPI.list
+RUN apt update && apt install -y intel-oneapi-mkl intel-oneapi-mkl-devel
+RUN [ ! -f /opt/intel/oneapi/mkl/latest/lib/intel64/libmkl_def.so ] && ln -s /opt/intel/oneapi/mkl/latest/lib/intel64/libmkl_def.so.2 /opt/intel/oneapi/mkl/latest/lib/intel64/libmkl_def.so
+RUN [ ! -f /opt/intel/oneapi/mkl/latest/lib/intel64/libmkl_avx2.so ] && ln -s /opt/intel/oneapi/mkl/latest/lib/intel64/libmkl_avx2.so.2 /opt/intel/oneapi/mkl/latest/lib/intel64/libmkl_avx2.so
+RUN [ ! -f /opt/intel/oneapi/mkl/latest/lib/intel64/libmkl_mc3.so ] && ln -s /opt/intel/oneapi/mkl/latest/lib/intel64/libmkl_mc3.so.2 /opt/intel/oneapi/mkl/latest/lib/intel64/libmkl_mc3.so
+
+# install build tools
+RUN apt install -y git g++ cmake ninja-build gdb ccache build-essential lcov gfortran
+RUN apt install -y clang-15 clangd-15 clang-format-15 python3-pip
+RUN ln -s /usr/bin/clang-format-15 /usr/bin/clang-format
+
+# install vsag deps
+RUN apt install -y python3-dev libomp-15-dev
