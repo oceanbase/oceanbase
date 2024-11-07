@@ -1,6 +1,6 @@
 add_subdirectory(compress)
 add_subdirectory(restore)
-
+add_subdirectory(vector)
 ob_set_subtarget(oblib_lib ALONE
   timezone/ob_timezone_util.cpp
   geo/ob_geo_func_difference.cpp
@@ -418,17 +418,19 @@ target_link_libraries(oblib_lib
 if (NOT OB_BUILD_CDC)
 # vsag vector library
 target_link_directories(
-  oblib_lib PUBLIC ${DEP_DIR}/lib ${DEP_DIR}/lib/vsag_lib
+  oblib_lib PUBLIC 
+  ${DEP_DIR}/lib ${DEP_DIR}/lib/vsag_lib
+  ${CMAKE_BINARY_DIR}/deps/oblib/src/lib/vector/vsag_lib ${CMAKE_BINARY_DIR}/deps/oblib/src/lib//vector/vsag_lib/src
 )
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp")
 
 if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
   target_link_libraries(oblib_lib
     PUBLIC
-    libob_vsag_static.a
+    libob_vsag_static_test.a
     libcpuinfo.a
     libsimd.a
-    libvsag_static.a
+    libvsag_static_test.a
     libdiskann.a
     libopenblas.a
     libgfortran_static.a
@@ -439,10 +441,10 @@ if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
 elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
   target_link_libraries(oblib_lib
     PUBLIC
-    libob_vsag_static.a
+    libob_vsag_static_test.a
     libcpuinfo.a
     libsimd.a
-    libvsag_static.a
+    libvsag_static_test.a
     libdiskann.a
     libopenblas.a
     libgfortran_static.a
