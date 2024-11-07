@@ -906,6 +906,7 @@ public:
       bool &all_dag_exit);
 private:
   static int hold_snapshot(
+      common::ObMySQLTransaction &trans,
       rootserver::ObDDLTask* task,
       const uint64_t table_id,
       const uint64_t target_table_id,

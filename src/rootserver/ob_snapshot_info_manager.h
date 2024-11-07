@@ -62,6 +62,14 @@ public:
                          share::ObSnapShotType snapshot_type,
                          int64_t &count);
   int batch_acquire_snapshot(
+      common::ObMySQLTransaction &trans,
+      share::ObSnapShotType snapshot_type,
+      const uint64_t tenant_id,
+      const int64_t schema_version,
+      const share::SCN &snapshot_scn,
+      const char *comment,
+      const common::ObIArray<ObTabletID> &tablet_ids);
+  int batch_acquire_snapshot_in_trans(
       common::ObMySQLProxy &proxy,
       share::ObSnapShotType snapshot_type,
       const uint64_t tenant_id,

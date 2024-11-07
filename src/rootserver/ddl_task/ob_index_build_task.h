@@ -137,7 +137,7 @@ private:
   int clean_on_failed();
   int succ();
   virtual int cleanup_impl() override;
-  int hold_snapshot(const int64_t snapshot);
+  int hold_snapshot(common::ObMySQLTransaction &trans, const int64_t snapshot);
   int release_snapshot(const int64_t snapshot);
   int update_index_status_in_schema(
       const share::schema::ObTableSchema &index_schema,

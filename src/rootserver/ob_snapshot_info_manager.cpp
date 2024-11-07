@@ -56,7 +56,7 @@ int ObSnapshotInfoManager::acquire_snapshot(
   return ret;
 }
 
-int ObSnapshotInfoManager::batch_acquire_snapshot(
+int ObSnapshotInfoManager::batch_acquire_snapshot_in_trans(
     common::ObMySQLProxy &proxy,
     share::ObSnapShotType snapshot_type,
     const uint64_t tenant_id,
@@ -67,6 +67,33 @@ int ObSnapshotInfoManager::batch_acquire_snapshot(
 {
   int ret = OB_SUCCESS;
   ObMySQLTransaction trans;
+  if (OB_FAIL(trans.start(&proxy, tenant_id))) {
+    LOG_WARN("fail to start trans", K(ret), K(tenant_id));
+  } else if (OB_FAIL(batch_acquire_snapshot(trans, snapshot_type,
+      tenant_id, schema_version, snapshot_scn, comment, tablet_ids))) {
+    LOG_WARN("batch add snapshot failed", K(ret));
+  }
+  if (trans.is_started()) {
+    bool need_commit = (ret == OB_SUCCESS);
+    int tmp_ret = trans.end(need_commit);
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("fail to end trans", K(tmp_ret), K(need_commit));
+    }
+    ret = OB_SUCC(ret) ? tmp_ret : ret;
+  }
+  return ret;
+}
+
+int ObSnapshotInfoManager::batch_acquire_snapshot(
+    common::ObMySQLTransaction &trans,
+    share::ObSnapShotType snapshot_type,
+    const uint64_t tenant_id,
+    const int64_t schema_version,
+    const SCN &snapshot_scn,
+    const char *comment,
+    const common::ObIArray<ObTabletID> &tablet_ids)
+{
+  int ret = OB_SUCCESS;
   ObSnapshotTableProxy snapshot_proxy;
   ObSnapshotInfo snapshot;
   ObTimeoutCtx timeout_ctx;
@@ -75,9 +102,9 @@ int ObSnapshotInfoManager::batch_acquire_snapshot(
   snapshot.snapshot_scn_ = snapshot_scn;
   snapshot.schema_version_ = schema_version;
   snapshot.comment_ = comment;
-  if (OB_UNLIKELY(!snapshot.is_valid() || tablet_ids.count() <= 0)) {
+  if (OB_UNLIKELY(!trans.is_started() || !snapshot.is_valid() || tablet_ids.count() <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tablet_ids.count()));
+    LOG_WARN("invalid argument", K(ret), "trans_started", trans.is_started(), K(snapshot), K(tablet_ids.count()));
   } else {
     int64_t rpc_timeout = 0;
     int64_t trx_timeout = 0;
@@ -89,19 +116,9 @@ int ObSnapshotInfoManager::batch_acquire_snapshot(
       LOG_WARN("set trx timeout failed", K(ret), K(trx_timeout));
     } else if (OB_FAIL(timeout_ctx.set_timeout(rpc_timeout))) {
       LOG_WARN("set timeout failed", K(ret), K(rpc_timeout));
-    } else if (OB_FAIL(trans.start(&proxy, tenant_id))) {
-      LOG_WARN("fail to start trans", K(ret), K(tenant_id));
     } else if (OB_FAIL(snapshot_proxy.batch_add_snapshot(trans, snapshot_type,
         tenant_id, schema_version, snapshot.snapshot_scn_, comment, tablet_ids))) {
       LOG_WARN("batch add snapshot failed", K(ret));
-    }
-    if (trans.is_started()) {
-      bool need_commit = (ret == OB_SUCCESS);
-      int tmp_ret = trans.end(need_commit);
-      if (OB_SUCCESS != tmp_ret) {
-        LOG_WARN("fail to end trans", K(tmp_ret), K(need_commit));
-      }
-      ret = OB_SUCC(ret) ? tmp_ret : ret;
     }
     ROOTSERVICE_EVENT_ADD("snapshot", "batch_acquire_snapshot", K(ret), K(snapshot), "rs_addr", self_addr_);
   }

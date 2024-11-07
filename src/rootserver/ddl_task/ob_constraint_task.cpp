@@ -633,7 +633,9 @@ int ObConstraintTask::init(const ObDDLTaskRecord &task_record)
   return ret;
 }
 
-int ObConstraintTask::hold_snapshot(const int64_t snapshot_version)
+int ObConstraintTask::hold_snapshot(
+    common::ObMySQLTransaction &trans,
+    const int64_t snapshot_version)
 {
   int ret = OB_SUCCESS;
   ObDDLService &ddl_service = root_service_->get_ddl_service();
@@ -668,7 +670,7 @@ int ObConstraintTask::hold_snapshot(const int64_t snapshot_version)
              OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, table_schema->get_aux_lob_piece_tid(), tablet_ids))) {
     LOG_WARN("failed to get data lob piece table snapshot", K(ret));
   } else if (OB_FAIL(ddl_service.get_snapshot_mgr().batch_acquire_snapshot(
-          ddl_service.get_sql_proxy(), SNAPSHOT_FOR_DDL, tenant_id_, schema_version_, snapshot_scn, nullptr, tablet_ids))) {
+          trans, SNAPSHOT_FOR_DDL, tenant_id_, schema_version_, snapshot_scn, nullptr, tablet_ids))) {
     LOG_WARN("acquire snapshot failed", K(ret), K(tablet_ids));
   } else {
     snapshot_version_ = snapshot_version;
@@ -742,14 +744,16 @@ int ObConstraintTask::wait_trans_end()
   DEBUG_SYNC(CONSTRAINT_WAIT_TRANS_END);
 
   if (OB_SUCC(ret) && new_status != CHECK_CONSTRAINT_VALID && snapshot_version_ > 0 && !snapshot_held_) {
-    if (OB_FAIL(ObDDLTaskRecordOperator::update_snapshot_version(root_service_->get_sql_proxy(),
+    ObMySQLTransaction trans;
+    if (OB_FAIL(trans.start(&root_service_->get_sql_proxy(), tenant_id_))) {
+      LOG_WARN("fail to start trans", K(ret), K(tenant_id_));
+    } else if (OB_FAIL(ObDDLTaskRecordOperator::update_snapshot_version(trans,
                                                                  tenant_id_,
                                                                  task_id_,
                                                                  snapshot_version_))) {
       LOG_WARN("update snapshot version failed", K(ret), K(task_id_));
-    } else if (OB_FAIL(hold_snapshot(snapshot_version_))) {
+    } else if (OB_FAIL(hold_snapshot(trans, snapshot_version_))) {
       if (OB_SNAPSHOT_DISCARDED == ret) {
-        ret = OB_SUCCESS;
         snapshot_held_ = false;
         snapshot_version_ = 0;
         wait_trans_ctx_.reset();
@@ -760,6 +764,15 @@ int ObConstraintTask::wait_trans_end()
       new_status = CHECK_CONSTRAINT_VALID;
       snapshot_held_ = true;
     }
+    if (trans.is_started()) {
+      bool need_commit = (ret == OB_SUCCESS);
+      int tmp_ret = trans.end(need_commit);
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("fail to end trans", K(ret), K(tmp_ret), K(need_commit));
+      }
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    }
+    ret = OB_SNAPSHOT_DISCARDED == ret ? OB_SUCCESS : ret;
   }
 
   if (OB_FAIL(switch_status(new_status, true, ret))) {

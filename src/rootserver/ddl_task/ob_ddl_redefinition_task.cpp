@@ -410,7 +410,7 @@ int ObDDLRedefinitionTask::hold_snapshot_for_major_refresh_mv_(const int64_t sna
     }
     if (OB_SUCC(ret)) {
       ObDDLService &ddl_service = root_service->get_ddl_service();
-      if (OB_FAIL(ddl_service.get_snapshot_mgr().batch_acquire_snapshot(
+      if (OB_FAIL(ddl_service.get_snapshot_mgr().batch_acquire_snapshot_in_trans(
               ddl_service.get_sql_proxy(), SNAPSHOT_FOR_MAJOR_REFRESH_MV, tenant_id_,
               schema_version_, snapshot_scn, nullptr, tablet_ids))) {
         LOG_WARN("batch acquire snapshot failed", K(ret), K(tablet_ids));
