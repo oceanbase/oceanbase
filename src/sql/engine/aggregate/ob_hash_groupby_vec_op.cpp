@@ -2330,7 +2330,7 @@ int ObHashGroupByVecOp::by_pass_prepare_one_batch(const int64_t batch_size)
       LOG_WARN("prepare add one row failed", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < brs_.size_; i++) {
-      if (!batch_old_rows_[i]) {
+      if (!batch_old_rows_[i] || brs_.skip_->at(i)) {
         continue;
       }
       by_pass_agg_rows_++;
@@ -2509,7 +2509,7 @@ int ObHashGroupByVecOp::by_pass_restart_round()
   if (skew_detection_enabled_ && bypass_ctrl_.by_passing()) {
     // for popular values, so do not need to be big
     OZ(local_group_rows_.resize(&mem_context_->get_malloc_allocator(),
-      INIT_BUCKET_COUNT_FOR_POPULAR));
+      INIT_BKT_SIZE_FOR_ADAPTIVE_GBY));
   } else {
     // if last round is in L2 cache, reuse the bucket
     // otherwise resize to init size to avoid L2 cache overflow
