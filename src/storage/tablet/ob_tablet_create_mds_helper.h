@@ -70,9 +70,16 @@ public:
     const int64_t len,
     const transaction::ObMulSourceDataNotifyArg &arg);
   static int register_process(
+      obrpc::ObBatchCreateTabletArg &arg,
+      mds::BufferCtx &ctx);
+  static int create_tablets_for_register(
       const obrpc::ObBatchCreateTabletArg &arg,
       mds::BufferCtx &ctx);
   static int replay_process(
+      obrpc::ObBatchCreateTabletArg &arg,
+      const share::SCN &scn,
+      mds::BufferCtx &ctx);
+  static int create_tablets_for_replay(
       const obrpc::ObBatchCreateTabletArg &arg,
       const share::SCN &scn,
       mds::BufferCtx &ctx);

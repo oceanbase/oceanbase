@@ -51,7 +51,7 @@ int ObTabletCreateMdsHelper::on_commit_for_old_mds(
   return ObTabletCreateDeleteHelper::process_for_old_mds<ObBatchCreateTabletArg, ObTabletCreateMdsHelper>(buf, len, notify_arg);
 }
 
-int ObTabletCreateMdsHelper::register_process(
+int ObTabletCreateMdsHelper::create_tablets_for_register(
     const ObBatchCreateTabletArg &arg,
     mds::BufferCtx &ctx)
 {
@@ -90,6 +90,22 @@ int ObTabletCreateMdsHelper::register_process(
   return ret;
 }
 
+int ObTabletCreateMdsHelper::register_process(
+    ObBatchCreateTabletArg &arg,
+    mds::BufferCtx &ctx)
+{
+  int ret = 0;
+  // 41x arg -> 421 will call this function, so convert_schemas is needed.
+  if (OB_FAIL(convert_schemas(arg))) {
+    LOG_WARN("failed to convert_schemas", K(ret), "arg", PRETTY_ARG(arg));
+  } else if (OB_FAIL(check_create_new_tablets(arg, false/*is_replay*/))) {
+    LOG_WARN("failed to check crate new tablets", K(ret), "arg", PRETTY_ARG(arg));
+  } else if (OB_FAIL(create_tablets_for_register(arg, ctx))) {
+    LOG_WARN("fail to create_tablets_for_register", K(ret), "arg", PRETTY_ARG(arg));
+  }
+  return ret;
+}
+
 int ObTabletCreateMdsHelper::on_register(
     const char* buf,
     const int64_t len,
@@ -111,17 +127,13 @@ int ObTabletCreateMdsHelper::on_register(
   } else if (arg.is_old_mds_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, arg is old mds", K(ret), K(arg));
-  } else if (OB_FAIL(convert_schemas(arg))) {
-    LOG_WARN("failed to convert_schemas", K(ret), "arg", PRETTY_ARG(arg));
-  } else if (CLICK_FAIL(check_create_new_tablets(arg, false/*is_replay*/))) {
-    LOG_WARN("failed to check crate new tablets", K(ret), "arg", PRETTY_ARG(arg));
   } else if (CLICK_FAIL(register_process(arg, ctx))) {
     LOG_WARN("fail to register_process", K(ret), "arg", PRETTY_ARG(arg));
   }
   return ret;
 }
 
-int ObTabletCreateMdsHelper::replay_process(
+int ObTabletCreateMdsHelper::create_tablets_for_replay(
     const ObBatchCreateTabletArg &arg,
     const share::SCN &scn,
     mds::BufferCtx &ctx)
@@ -168,6 +180,23 @@ int ObTabletCreateMdsHelper::replay_process(
   return ret;
 }
 
+int ObTabletCreateMdsHelper::replay_process(
+    ObBatchCreateTabletArg &arg,
+    const share::SCN &scn,
+    mds::BufferCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+  // 41x arg -> 421 will call this function, so convert_schemas is needed.
+  if (OB_FAIL(convert_schemas(arg))) {
+    LOG_WARN("failed to convert_schemas", K(ret), "arg", PRETTY_ARG(arg));
+  } else if (OB_FAIL(check_create_new_tablets(arg, true/*is_replay*/))) {
+    LOG_WARN("failed to check create new tablets", K(ret));
+  } else if (OB_FAIL(create_tablets_for_replay(arg, scn, ctx))) {
+    LOG_WARN("fail to create_tablets_for_replay", K(ret), "arg", PRETTY_ARG(arg));
+  }
+  return ret;
+}
+
 int ObTabletCreateMdsHelper::on_replay(
     const char* buf,
     const int64_t len,
@@ -189,10 +218,6 @@ int ObTabletCreateMdsHelper::on_replay(
     LOG_WARN("arg is invalid", K(ret), "arg", PRETTY_ARG(arg));
   } else if (arg.is_old_mds_) {
     LOG_INFO("skip replay create tablet for old mds", K(ret), K(scn), "arg", PRETTY_ARG(arg));
-  } else if (OB_FAIL(convert_schemas(arg))) {
-    LOG_WARN("failed to convert_schemas", K(ret), "arg", PRETTY_ARG(arg));
-  } else if (CLICK_FAIL(check_create_new_tablets(arg, true/*is_replay*/))) {
-    LOG_WARN("failed to check create new tablets", K(ret));
   } else if (CLICK_FAIL(replay_process(arg, scn, ctx))) {
     LOG_WARN("fail to replay_process", K(ret), "arg", PRETTY_ARG(arg));
   }
