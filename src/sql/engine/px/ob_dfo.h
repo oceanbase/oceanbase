@@ -489,6 +489,7 @@ public:
     root_op_spec_(nullptr),
     child_dfos_(),
     has_scan_(false),
+    has_das_(false),
     has_dml_op_(false),
     has_need_branch_id_op_(false),
     has_temp_scan_(false),
@@ -560,6 +561,10 @@ public:
   inline void get_root(const ObOpSpec *&root) const { root = root_op_spec_; }
   inline void set_scan(bool has_scan) { has_scan_ = has_scan; }
   inline bool has_scan_op() const { return has_scan_; }
+
+  inline void set_das(bool has_das) { has_das_ = has_das; }
+
+  inline bool has_das_op() const { return has_das_; }
   inline void set_dml_op(bool has_dml_op) { has_dml_op_ = has_dml_op; }
   inline bool has_dml_op() { return has_dml_op_; }
   inline void set_need_branch_id_op(bool has_need_branch_id_op) { has_need_branch_id_op_ = has_need_branch_id_op; }
@@ -775,6 +780,7 @@ private:
   const ObOpSpec *root_op_spec_;
   common::ObSEArray<ObDfo *, 4> child_dfos_;
   bool has_scan_; // DFO 中包含至少一个 scan 算子，或者仅仅包含一个dml
+  bool has_das_;  // DFO 中包含至少一个 das 算子
   bool has_dml_op_; // DFO中可能包含一个dml
   bool has_need_branch_id_op_; // DFO 中有算子需要分配branch_id
   bool has_temp_scan_;
