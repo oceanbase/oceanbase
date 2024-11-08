@@ -2727,6 +2727,21 @@ int LogConfigMgr::handle_register_parent_resp(const LogLearner &server,
   return ret;
 }
 
+int LogConfigMgr::retire_parent()
+{
+  int ret = OB_SUCCESS;
+  const RetireParentReason reason = RetireParentReason::IS_FULL_MEMBER;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "LogConfigMgr not init", KR(ret));
+  } else if (OB_FAIL(retire_parent_(reason))) {
+    PALF_LOG(WARN, "LogConfigMgr not init", KR(ret));
+  } else {
+    PALF_LOG(INFO, "retire_parent success", KR(ret), "reason", retire_parent_reason_2_str_(reason));
+  }
+  return ret;
+}
+
 int LogConfigMgr::retire_parent_(const RetireParentReason &reason)
 {
   int ret = OB_SUCCESS;
