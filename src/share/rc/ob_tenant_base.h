@@ -169,6 +169,7 @@ namespace rootserver
   class ObBackupCleanService;
   class ObArchiveSchedulerService;
   class ObArbitrationService;
+  class ObDBMSSchedService;
   class ObHeartbeatService;
   class ObStandbySchemaRefreshTrigger;
 }
@@ -341,6 +342,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       ObTestModule*,                                 \
       ObTenantOciEnv                                 \
       rootserver::ObHeartbeatService*,              \
+      rootserver::ObDBMSSchedService*,              \
       TenantErrsimModule                            \
       TenantErrsimEvent                             \
       oceanbase::common::ObOptStatMonitorManager*,  \

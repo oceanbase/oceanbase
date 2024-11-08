@@ -128,6 +128,9 @@ enum ObLogBaseType
 
   // for table load resource manager
   TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE = 40,
+
+  // for DBMS_SCHEDULER
+  DBMS_SCHEDULER_LOG_BASE_TYPE = 45,
   // pay attention!!!
   // add log type in log_base_type_to_string
   // max value
@@ -224,6 +227,8 @@ int log_base_type_to_string(const ObLogBaseType log_type,
     strncpy(str ,"TTL_SERVICE", str_len);
   } else if (log_type == TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE) {
     strncpy(str ,"TABLE_LOAD_RESOURCE_SERVICE", str_len);
+  } else if (log_type == DBMS_SCHEDULER_LOG_BASE_TYPE) {
+    strncpy(str ,"DBMS_SCHEDULER", str_len);
   } else {
     ret = OB_INVALID_ARGUMENT;
   }

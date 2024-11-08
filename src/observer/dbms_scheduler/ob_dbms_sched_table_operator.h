@@ -63,6 +63,7 @@ public:
   int _build_job_log_dml(int64_t now, ObDBMSSchedJobInfo &job_info, int err, const ObString &errmsg, ObSqlString &sql);
   int _check_need_record(ObDBMSSchedJobInfo &job_info, bool &need_record, bool err_state = true);
   int update_for_missed(ObDBMSSchedJobInfo &job_info);
+  int update_for_zone_not_exist(ObDBMSSchedJobInfo &job_info);
   int update_for_enddate(ObDBMSSchedJobInfo &job_info);
   int update_for_rollback(ObDBMSSchedJobInfo &job_info);
   int update_for_timeout(ObDBMSSchedJobInfo &job_info);

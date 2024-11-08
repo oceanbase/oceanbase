@@ -72,7 +72,6 @@
 #include "sql/engine/cmd/ob_user_cmd_executor.h"
 #include "sql/engine/px/ob_px_util.h"
 #include "observer/dbms_job/ob_dbms_job_master.h"
-#include "observer/dbms_scheduler/ob_dbms_sched_job_master.h"
 
 #include "rootserver/ob_bootstrap.h"
 #include "rootserver/ob_schema2ddl_sql.h"
@@ -762,12 +761,7 @@ int ObRootService::fake_init(ObServerConfig &config,
     }
   }
 
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobMaster::get_instance()
-          .init(&unit_manager_, &sql_proxy_, schema_service_))) {
-      LOG_WARN("failed to init ObDBMSSchedJobMaster", K(ret));
-    }
-  }
+
 
   if (OB_SUCC(ret)) {
     inited_ = true;
@@ -915,15 +909,13 @@ int ObRootService::init(ObServerConfig &config,
   } else if (OB_FAIL(dbms_job::ObDBMSJobMaster::get_instance().init(&sql_proxy_,
                                                                     schema_service_))) {
     FLOG_WARN("init ObDBMSJobMaster failed", KR(ret));
-  } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobMaster::get_instance().init(&unit_manager_,
-                                                                               &sql_proxy_,
-                                                                               schema_service_))) {
-    FLOG_WARN("init ObDBMSSchedJobMaster failed", KR(ret));
+  }
 #ifdef OB_BUILD_TDE_SECURITY
-  } else if (OB_FAIL(master_key_mgr_.init(&zone_manager_, schema_service_))) {
+  else if (OB_FAIL(master_key_mgr_.init(&zone_manager_, schema_service_))) {
     FLOG_WARN("init master key mgr failed", KR(ret));
+  }
 #endif
-  } else if (OB_FAIL(disaster_recovery_task_executor_.init(lst_operator,
+   else if (OB_FAIL(disaster_recovery_task_executor_.init(lst_operator,
                                                            rpc_proxy_))) {
     FLOG_WARN("init disaster recovery task executor failed", KR(ret));
   } else if (OB_FAIL(disaster_recovery_task_mgr_.init(self,
@@ -1034,8 +1026,6 @@ void ObRootService::destroy()
     FLOG_INFO("disaster recovery task mgr destroy");
   }
 
-  dbms_scheduler::ObDBMSSchedJobMaster::get_instance().destroy();
-  FLOG_INFO("ObDBMSSchedJobMaster destroy");
   TG_DESTROY(lib::TGDefIDs::GlobalCtxTimer);
   FLOG_INFO("global ctx timer destroyed");
 
@@ -1249,8 +1239,6 @@ int ObRootService::stop()
 #endif
       disaster_recovery_task_mgr_.stop();
       FLOG_INFO("disaster_recovery_task_mgr stop");
-      dbms_scheduler::ObDBMSSchedJobMaster::get_instance().stop();
-      FLOG_INFO("dbms sched job master stop");
       TG_STOP(lib::TGDefIDs::GlobalCtxTimer);
       FLOG_INFO("global ctx timer stop");
     }
@@ -5415,11 +5403,7 @@ int ObRootService::do_restart()
     FLOG_INFO("success to start dbms job master");
   }
 
-  if (FAILEDx(dbms_scheduler::ObDBMSSchedJobMaster::get_instance().start())) {
-    FLOG_WARN("failed to start dbms sched job master", KR(ret));
-  } else {
-    FLOG_INFO("success to start dbms sched job mstart");
-  }
+
 
   if (OB_SUCC(ret)) {
     upgrade_executor_.start();

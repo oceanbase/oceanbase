@@ -30,6 +30,7 @@
 #ifdef OB_BUILD_ARBITRATION
 #include "rootserver/ob_arbitration_service.h"
 #endif
+#include "observer/dbms_scheduler/ob_dbms_sched_service.h"
 #include "rootserver/backup/ob_backup_task_scheduler.h"
 #include "rootserver/backup/ob_backup_service.h"
 #include "rootserver/backup/ob_archive_scheduler_service.h"
@@ -255,6 +256,7 @@ int ObLS::init(const share::ObLSID &ls_id,
         REGISTER_TO_LOGSERVICE(logservice::BACKUP_ARCHIVE_SERVICE_LOG_BASE_TYPE, MTL(rootserver::ObArchiveSchedulerService *));
       }
       if (OB_SUCC(ret) && ls_id.is_sys_ls()) {
+        REGISTER_TO_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
         if (is_user_tenant(tenant_id)) {
           //user
           REGISTER_TO_LOGSERVICE(logservice::PRIMARY_LS_SERVICE_LOG_BASE_TYPE, MTL(rootserver::ObPrimaryLSService *));
@@ -813,6 +815,7 @@ void ObLS::destroy()
     MTL(share::ObGlobalAutoIncService *)->set_cache_ls(nullptr);
   }
   if (ls_meta_.ls_id_.is_sys_ls()) {
+    UNREGISTER_FROM_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
     if (is_user_tenant(MTL_ID())) {
       rootserver::ObPrimaryLSService* ls_service = MTL(rootserver::ObPrimaryLSService*);
       UNREGISTER_FROM_LOGSERVICE(logservice::PRIMARY_LS_SERVICE_LOG_BASE_TYPE, ls_service);

@@ -61,6 +61,7 @@ ob_set_subtarget(ob_server common_mixed
   dbms_scheduler/ob_dbms_sched_job_rpc_processor.cpp
   dbms_scheduler/ob_dbms_sched_job_rpc_proxy.cpp
   dbms_scheduler/ob_dbms_sched_table_operator.cpp
+  dbms_scheduler/ob_dbms_sched_service.cpp
  )
 
 ob_set_subtarget(ob_server mysql
