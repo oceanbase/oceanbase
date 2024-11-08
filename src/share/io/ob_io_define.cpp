@@ -1905,7 +1905,7 @@ void ObIOHandle::estimate()
     }
     static const int64_t LONG_IO_PRINT_TRIGGER_US = 1000L * 1000L * 3L; // 3s
     if (result_delay > LONG_IO_PRINT_TRIGGER_US) {
-      LOG_WARN_RET(OB_ERR_UNEXPECTED, "io result wait too long", KPC(result_), K(result_delay));
+      LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "io result wait too long", KPC(result_), K(result_delay));
     }
   }
 }
