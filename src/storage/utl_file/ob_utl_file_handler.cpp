@@ -142,7 +142,7 @@ int ObUtlFileHandler::get_line(const int64_t &fd, char *buffer, const int64_t le
         // cannot find '\n' within [0, len)
         buffer[len] = '\0';
         target_pos = current_read_pos + len;
-        line_size = pos;
+        line_size = len + 1;
       } else {
         buffer[pos] = '\0';
         target_pos = current_read_pos + pos + 1;
