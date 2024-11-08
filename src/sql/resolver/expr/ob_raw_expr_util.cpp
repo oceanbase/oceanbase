@@ -1091,6 +1091,23 @@ int ObRawExprUtils::resolve_udf_param_exprs(ObResolverParams &params,
     OZ (func_info->get_routine_param(i, iparam));
     CK (OB_NOT_NULL(iparam));
     OX (mode = static_cast<pl::ObPLRoutineParamMode>(iparam->get_mode()));
+    if (OB_SUCC(ret) && lib::is_mysql_mode()) {
+      bool need_wrap = false;
+      OZ (ObRawExprUtils::need_wrap_to_string(udf_raw_expr->get_param_expr(i)->get_result_type().get_type(),
+                                              iparam->get_pl_data_type().get_obj_type(),
+                                              true,
+                                              need_wrap));
+      if (OB_SUCC(ret) && need_wrap) {
+        ObSysFunRawExpr *out_expr = NULL;
+        OZ (ObRawExprUtils::create_type_to_str_expr(*(params.expr_factory_),
+                                                    udf_raw_expr->get_param_expr(i),
+                                                    out_expr,
+                                                    params.session_info_,
+                                                    true));
+        CK (OB_NOT_NULL(out_expr));
+        OZ (udf_raw_expr->replace_param_expr(i, out_expr));
+      }
+    }
     if (OB_SUCC(ret)) {
 #ifdef OB_BUILD_ORACLE_PL
       if (iparam->is_nocopy_param()
