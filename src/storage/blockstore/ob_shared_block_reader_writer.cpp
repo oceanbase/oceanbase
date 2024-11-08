@@ -507,16 +507,21 @@ int ObSharedBlockLinkIter::read_next_block(ObSharedBlockReadHandle &block_handle
   ObSharedBlockReadInfo read_info;
   read_info.addr_ = cur_;
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
+  const int64_t start_ts = ObTimeUtility::current_time();
   if (OB_FAIL(ObSharedBlockReaderWriter::async_read(read_info, block_handle))) {
     LOG_WARN("Fail to read block", K(ret), K(read_info));
   } else if (OB_FAIL(block_handle.wait())) {
     LOG_WARN("Fail to wait read io finish", K(ret), K(block_handle));
   } else {
+    const int64_t end_ts = ObTimeUtility::current_time();
     ObMacroBlockHandle &macro_handle = block_handle.macro_handle_;
     const ObSharedBlockHeader *header =
         reinterpret_cast<const ObSharedBlockHeader *>(macro_handle.get_buffer());
     cur_ = header->prev_addr_;
     LOG_DEBUG("get next link block macro id", K(ret), K(head_), K(cur_), KPC(header));
+    if (REACH_TIME_INTERVAL(100000)) {
+      LOG_INFO("read next block", K(ret), "io_used_ts", end_ts - start_ts);
+    }
   }
   return ret;
 }

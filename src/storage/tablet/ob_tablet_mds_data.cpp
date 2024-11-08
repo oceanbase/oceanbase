@@ -1204,7 +1204,10 @@ int ObTabletMdsData::read_medium_info(
   } else if (OB_FAIL(iter.init(addr))) {
     LOG_WARN("failed to init link iter", K(ret), K(addr));
   } else {
+    int64_t loop_cnt = 0;
+    const int64_t start_ts = ObTimeUtility::current_time();
     while (OB_SUCC(ret)) {
+      loop_cnt++;
       info = nullptr;
       buf = nullptr;
       len = 0;
@@ -1231,6 +1234,10 @@ int ObTabletMdsData::read_medium_info(
       if (OB_FAIL(ret)) {
         ObTabletObjLoadHelper::free(allocator, info);
       }
+    }
+    const int64_t end_ts = ObTimeUtility::current_time();
+    if (end_ts - start_ts > 5000000) {
+      LOG_INFO("read medium info use too much time", K(ret), K(loop_cnt), K(start_ts), "used_ts", end_ts - start_ts);
     }
   }
 
