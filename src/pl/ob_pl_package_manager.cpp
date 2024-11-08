@@ -1115,7 +1115,10 @@ int ObPLPackageManager::set_package_var_val(const ObPLResolveCtx &resolve_ctx,
   OZ (update_special_package_status(resolve_ctx, package_id, *var, old_var_val, new_var_val));
 
   if (OB_NOT_NULL(var) && var->get_type().is_cursor_type() && !var->get_type().is_cursor_var()) {
-    // package ref cursor variable, refrence outside, do not destruct it.
+    // package ref cursor variable, refrence outside, do not destruct old var val.
+    if (OB_FAIL(ret) && need_free_new) {
+      ObUserDefinedType::destruct_objparam(package_state->get_pkg_allocator(), new_var_val, &(resolve_ctx.session_info_));
+    }
   } else {
     if (OB_FAIL(ret) && need_free_new) {
       ObUserDefinedType::destruct_objparam(package_state->get_pkg_allocator(), new_var_val, &(resolve_ctx.session_info_));
