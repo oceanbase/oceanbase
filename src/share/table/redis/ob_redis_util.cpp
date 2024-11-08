@@ -41,12 +41,6 @@ int ObRedisHelper::get_decoded_msg_from_entity(ObIAllocator &allocator,
   return ret;
 }
 
-observer::ObTableProccessType ObRedisHelper::redis_cmd_to_proccess_type(const RedisCommandType &redis_cmd_type)
-{
-  return static_cast<observer::ObTableProccessType>(redis_cmd_type +
-                                                    observer::ObTableProccessType::TABLE_API_REDIS_TYPE_OFFSET);
-}
-
 int ObRedisHelper::get_lock_key(ObIAllocator &allocator, const ObRedisRequest &redis_req, ObString &lock_key)
 {
   int ret = OB_SUCCESS;

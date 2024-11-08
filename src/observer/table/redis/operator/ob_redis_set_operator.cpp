@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 #include "ob_redis_set_operator.h"
 #include "share/table/redis/ob_redis_error.h"
+#include "src/observer/table/redis/ob_redis_rkey.h"
 
 namespace oceanbase
 {
@@ -475,7 +476,11 @@ int SetCommandOperator::do_scard(int64_t db, const ObString &key)
   return ret;
 }
 
-int SetCommandOperator::do_smembers_inner(int64_t db, const common::ObString &key, ObIArray<ObString> &res_members)
+int SetCommandOperator::do_smembers_inner(
+    int64_t db,
+    const common::ObString &key,
+    bool get_insert_ts,
+    SrandResult &srand_result)
 {
   int ret = OB_SUCCESS;
   ObTableQuery query;
@@ -483,6 +488,8 @@ int SetCommandOperator::do_smembers_inner(int64_t db, const common::ObString &ke
     LOG_WARN("fail to add hash set scan range", K(ret), K(db), K(key));
   } else if (OB_FAIL(query.add_select_column(ObRedisUtil::RKEY_PROPERTY_NAME))) {
     LOG_WARN("fail to add select column", K(ret));
+  } else if (get_insert_ts && OB_FAIL(query.add_select_column(ObRedisUtil::INSERT_TS_PROPERTY_NAME))) {
+    LOG_WARN("fail to add select insert ts column", K(ret), K(query));
   } else {
     SMART_VAR(ObTableCtx, tb_ctx, op_temp_allocator_)
     {
@@ -505,8 +512,15 @@ int SetCommandOperator::do_smembers_inner(int64_t db, const common::ObString &ke
             }
           } else if (OB_FAIL(get_subkey_from_entity(op_temp_allocator_, *result_entity, member))) {
             LOG_WARN("fail to get member from entity", K(ret), KPC(result_entity));
-          } else if (OB_FAIL(res_members.push_back(member))) {
+          } else if (OB_FAIL(srand_result.res_members_.push_back(member))) {
             LOG_WARN("fail to push back", K(ret));
+          } else if (get_insert_ts) {
+            int64_t insert_ts = 0;
+            if (OB_FAIL(get_insert_ts_from_entity(*result_entity, insert_ts))) {
+              LOG_WARN("fail to get insert ts from entity", K(ret), KPC(result_entity));
+            } else if (OB_FAIL(srand_result.res_insert_ts_.push_back(insert_ts))) {
+              LOG_WARN("fail to push back insert_ts", K(ret), K(insert_ts));
+            }
           }
         }
       }
@@ -517,11 +531,70 @@ int SetCommandOperator::do_smembers_inner(int64_t db, const common::ObString &ke
   return ret;
 }
 
+int SetCommandOperator::query_member_at_indexes(
+    bool get_insert_ts,
+    const ObTableQuery &query,
+    const ObArray<int64_t> &target_idxs,
+    SrandResult& srand_result)
+{
+  int ret = OB_SUCCESS;
+
+  int64_t count = target_idxs.count();
+
+  SMART_VAR(ObTableCtx, tb_ctx, op_temp_allocator_)
+  {
+    ObRedisSetMeta *null_meta = nullptr;
+    QUERY_ITER_START(redis_ctx_, query, tb_ctx, iter, null_meta)
+    ObTableQueryResult *one_result = nullptr;
+    const ObITableEntity *result_entity = nullptr;
+
+    int64_t cur_seq = 0;
+    while (OB_SUCC(ret) && cur_seq < count) {
+      tb_ctx.set_limit(1);
+      // offset 0 is meta
+      tb_ctx.set_offset(target_idxs[cur_seq++] + 1);
+      ObNewRow *tmp_next_row = NULL;
+      if (OB_FAIL(row_iter->get_scan_executor()->rescan())) {
+        LOG_WARN("failed to rescan executor", K(ret));
+      } else if (OB_FAIL(row_iter->get_next_row(tmp_next_row))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("failed to get next row", K(ret));
+        }
+      } else {
+        ObString member;
+        ObString encoded;
+        ObString tmp_subkey;
+        const ObObj &rkey_obj = tmp_next_row->get_cell(ObRedisUtil::COL_IDX_RKEY);
+        if (OB_FAIL(rkey_obj.get_varbinary(encoded))) {
+          LOG_WARN("fail to get db num", K(ret), K(rkey_obj));
+        } else if (ObRedisRKeyUtil::decode_subkey(encoded, tmp_subkey)) {
+          LOG_WARN("fail to decode subkey", K(ret), K(encoded));
+        } else if (OB_FAIL(ob_write_string(op_temp_allocator_, tmp_subkey, member))) {
+          LOG_WARN("fail to write string", K(ret), K(tmp_subkey));
+        } else if (OB_FAIL(srand_result.res_members_.push_back(member))) {
+          LOG_WARN("fail to push back member", K(ret), K(member));
+        } else if (get_insert_ts) {
+          int64_t insert_ts = 0;
+          const ObObj &insert_ts_obj = tmp_next_row->get_cell(ObRedisUtil::COL_IDX_INSERT_TS);
+          if (OB_FAIL(insert_ts_obj.get_timestamp(insert_ts))) {
+            LOG_WARN("fail to get insert ts", K(ret), K(insert_ts_obj));
+          } else if (OB_FAIL(srand_result.res_insert_ts_.push_back(insert_ts))) {
+            LOG_WARN("fail to push back insert_ts", K(ret), K(insert_ts));
+          }
+        }
+      }
+    }
+
+    QUERY_ITER_END(iter)
+  }
+  return ret;
+}
+
 int SetCommandOperator::do_srand_mem_repeat_inner(
     int64_t db,
     const common::ObString &key,
     int64_t count,
-    ObArray<ObString> &res_members)
+    SrandResult& srand_result)
 {
   int ret = OB_SUCCESS;
   int64_t total_count = 0;
@@ -532,7 +605,7 @@ int SetCommandOperator::do_srand_mem_repeat_inner(
     LOG_WARN("fail to get set count", K(ret), K(db), K(key));
   } else if (total_count == 0 || count == 0) {
     LOG_INFO("set is empty", K(ret), K(db), K(key));
-  } else if (OB_FAIL(res_members.reserve(count))) {
+  } else if (OB_FAIL(srand_result.res_members_.reserve(count))) {
     LOG_WARN("fail to reserve", K(ret), K(count));
   } else {
     ObRandom random;
@@ -547,9 +620,6 @@ int SetCommandOperator::do_srand_mem_repeat_inner(
           LOG_WARN("fail to set refactored", K(ret), K(rand_idx));
         }
       }
-      int64_t *end = &target_idxs.at(target_idxs.count() - 1);
-      ++end;
-      lib::ob_sort(&target_idxs.at(0), end);
 
       if (OB_SUCC(ret)) {
         int64_t cur_index = 0;
@@ -559,58 +629,20 @@ int SetCommandOperator::do_srand_mem_repeat_inner(
           LOG_WARN("fail to build scan query", K(ret));
         } else if (OB_FAIL(query.add_select_column(ObRedisUtil::RKEY_PROPERTY_NAME))) {
           LOG_WARN("fail to add select member column", K(ret), K(query));
-        } else {
-          SMART_VAR(ObTableCtx, tb_ctx, op_temp_allocator_)
-          {
-            ObRedisSetMeta *null_meta = nullptr;
-            QUERY_ITER_START(redis_ctx_, query, tb_ctx, iter, null_meta)
-            ObTableQueryResult *one_result = nullptr;
-            const ObITableEntity *result_entity = nullptr;
-            while (OB_SUCC(ret)) {
-              if (OB_FAIL(iter->get_next_result(one_result))) {
-                if (OB_ITER_END != ret) {
-                  LOG_WARN("fail to get next result", K(ret));
-                }
-              }
-              one_result->rewind();
-              while (OB_SUCC(ret) && cur_index < total_count) {
-                if (OB_FAIL(one_result->get_next_entity(result_entity))) {
-                  if (OB_ITER_END != ret) {
-                    LOG_WARN("fail to get next result", K(ret));
-                  }
-                } else {
-                  ObString member;
-                  if (OB_FAIL(get_subkey_from_entity(op_temp_allocator_, *result_entity, member))) {
-                    LOG_WARN("fail to get member from entity", K(ret), KPC(result_entity));
-                  }
-                  while (OB_SUCC(ret) && idx < target_idxs.count() && cur_index == target_idxs.at(idx)) {
-                    if (OB_FAIL(res_members.push_back(member))) {
-                      LOG_WARN("fail to push back member", K(ret), K(member));
-                    }
-                    ++idx;
-                  }
-                }
-                cur_index++;
-              }
-            }
-            QUERY_ITER_END(iter)
-          }
-          if (OB_SUCC(ret)) {
-            if (res_members.count() != count) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN(
-                  "fail to get enough members",
-                  K(ret),
-                  K(count),
-                  K(total_count),
-                  K(res_members),
-                  K(cur_index),
-                  K(target_idxs));
-            } else {
-              ObString *end = &res_members.at(res_members.count() - 1);
-              ++end;
-              std::shuffle(&res_members.at(0), end, std::default_random_engine());
-            }
+        } else if (OB_FAIL(query_member_at_indexes(false /* not get_insert_ts */, query, target_idxs, srand_result))) {
+          LOG_WARN("fail to do query idxs member", K(ret), K(query), K(target_idxs));
+        }
+        if (OB_SUCC(ret)) {
+          if (srand_result.res_members_.count() != count) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN(
+                "fail to get enough members",
+                K(ret),
+                K(count),
+                K(total_count),
+                K(srand_result.res_members_),
+                K(cur_index),
+                K(target_idxs));
           }
         }
       }
@@ -623,10 +655,12 @@ int SetCommandOperator::do_srand_mem_repeat_inner(
 int SetCommandOperator::do_srand_mem_inner(
     int64_t db,
     const common::ObString &key,
+    bool get_insert_ts,
     int64_t count,
-    ObArray<ObString> &res_members)
+    SrandResult& srand_result)
 {
   int ret = OB_SUCCESS;
+  srand_result.is_get_all_ = false;
   int64_t total_count = 0;
   if (count < 0) {
     ret = OB_INVALID_ARGUMENT;
@@ -636,19 +670,25 @@ int SetCommandOperator::do_srand_mem_inner(
   } else if (total_count == 0) {
     LOG_INFO("set is empty", K(ret), K(db), K(key));
   } else if (count >= total_count) {
-    if (OB_FAIL(res_members.reserve(total_count))) {
+    srand_result.is_get_all_ = true;
+    if (OB_FAIL(srand_result.res_members_.reserve(total_count))) {
       LOG_WARN("fail to reserve", K(ret), K(total_count));
-    } else if (OB_FAIL(do_smembers_inner(db, key, res_members))) {
+    } else if (OB_FAIL(do_smembers_inner(db, key, get_insert_ts, srand_result))) {
       LOG_WARN("fail to do smembers", K(ret), K(db), K(key));
     }
-  } else if (OB_FAIL(res_members.reserve(count))) {
+  } else if (OB_FAIL(srand_result.res_members_.reserve(count))) {
+    LOG_WARN("fail to reserve", K(ret), K(count));
+  } else if (get_insert_ts && OB_FAIL(srand_result.res_insert_ts_.reserve(count))) {
     LOG_WARN("fail to reserve", K(ret), K(count));
   } else {
-    ObString null_string;
     ObRandom random;
+    ObArray<int64_t> target_idxs(
+        OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(op_temp_allocator_, "RedisSRandMem"));
     hash::ObHashMap<int64_t, int64_t> idx_seq;
     if (OB_FAIL(idx_seq.create(count, ObMemAttr(MTL_ID(), "RedisSRandMem")))) {
       LOG_WARN("fail to create hash set", K(ret));
+    } else if (OB_FAIL(target_idxs.reserve(count))) {
+      LOG_WARN("fail to reserve", K(ret), K(count));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < count;) {
         int64_t rand_idx = random.get(0, total_count - 1);
@@ -658,7 +698,7 @@ int SetCommandOperator::do_srand_mem_inner(
           } else {
             LOG_WARN("fail to set refactored", K(ret), K(rand_idx));
           }
-        } else if (OB_FAIL(res_members.push_back(null_string))) {
+        } else if (OB_FAIL(target_idxs.push_back(rand_idx))) {
           LOG_WARN("fail to push back", K(ret));
         } else {
           // if idx not exist in hash, ++i
@@ -667,53 +707,15 @@ int SetCommandOperator::do_srand_mem_inner(
       }
 
       if (OB_SUCC(ret)) {
-        int64_t cur_index = -1;
         ObTableQuery query;
         if (OB_FAIL(add_complex_type_subkey_scan_range(db, key, query))) {
           LOG_WARN("fail to build scan query", K(ret));
         } else if (OB_FAIL(query.add_select_column(ObRedisUtil::RKEY_PROPERTY_NAME))) {
           LOG_WARN("fail to add select member column", K(ret), K(query));
-        } else {
-          SMART_VAR(ObTableCtx, tb_ctx, op_temp_allocator_)
-          {
-            ObRedisSetMeta *null_meta = nullptr;
-            QUERY_ITER_START(redis_ctx_, query, tb_ctx, iter, null_meta)
-            ObTableQueryResult *one_result = nullptr;
-            const ObITableEntity *result_entity = nullptr;
-            while (OB_SUCC(ret)) {
-              if (OB_FAIL(iter->get_next_result(one_result))) {
-                if (OB_ITER_END != ret) {
-                  LOG_WARN("fail to get next result", K(ret));
-                }
-              }
-              one_result->rewind();
-              while (OB_SUCC(ret)) {
-                if (OB_FAIL(one_result->get_next_entity(result_entity))) {
-                  if (OB_ITER_END != ret) {
-                    LOG_WARN("fail to get next result", K(ret));
-                  }
-                } else {
-                  int64_t cur_seq = 0;
-                  ret = idx_seq.get_refactored(++cur_index, cur_seq);
-                  if (ret == OB_HASH_NOT_EXIST) {
-                    ret = OB_SUCCESS;
-                  } else if (ret == OB_SUCCESS) {
-                    ret = OB_SUCCESS;
-                    ObString member;
-                    if (OB_FAIL(get_subkey_from_entity(op_temp_allocator_, *result_entity, member))) {
-                      LOG_WARN("fail to get member from entity", K(ret), KPC(result_entity));
-                    } else {
-                      res_members[cur_seq] = member;
-                    }
-                  } else {
-                    LOG_WARN("fail to check exist refactored", K(ret), K(cur_index));
-                  }
-
-                }
-              }
-            }
-            QUERY_ITER_END(iter)
-          }
+        } else if (get_insert_ts && OB_FAIL(query.add_select_column(ObRedisUtil::INSERT_TS_PROPERTY_NAME))) {
+          LOG_WARN("fail to add select insert ts column", K(ret), K(query));
+        } else if (OB_FAIL(query_member_at_indexes(get_insert_ts, query, target_idxs, srand_result))) {
+          LOG_WARN("fail to do query idxs member", K(ret), K(query), K(target_idxs));
         }
       }
     }
@@ -729,11 +731,11 @@ int SetCommandOperator::do_srand_mem_inner(
 int SetCommandOperator::do_smembers(int64_t db, const ObString &key)
 {
   int ret = OB_SUCCESS;
-  ObArray<ObString> ret_arr(OB_MALLOC_NORMAL_BLOCK_SIZE,
-                            ModulePageAllocator(op_temp_allocator_, "RedisHGet"));
-  if (OB_FAIL(do_smembers_inner(db, key, ret_arr))) {
+
+  SrandResult srand_result(op_temp_allocator_);
+  if (OB_FAIL(do_smembers_inner(db, key, false /*not get_insert_ts*/, srand_result))) {
     LOG_WARN("fail to do smembers inner", K(db), K(key));
-  } else if (OB_FAIL(reinterpret_cast<ObRedisSingleCtx &>(redis_ctx_).response_.set_res_array(ret_arr))) {
+  } else if (OB_FAIL(reinterpret_cast<ObRedisSingleCtx &>(redis_ctx_).response_.set_res_array(srand_result.res_members_))) {
     LOG_WARN("fail to set result array", K(ret));
   }
 
@@ -743,13 +745,45 @@ int SetCommandOperator::do_smembers(int64_t db, const ObString &key)
 
   return ret;
 }
+
+int SetCommandOperator::del_member_after_spop(
+    int64_t db,
+    const common::ObString &key,
+    const ObArray<ObString> &members,
+    const ObArray<int64_t> &res_insert_ts)
+{
+  int ret = OB_SUCCESS;
+  ObTableBatchOperation del_ops;
+  ObITableEntity *value_entity = nullptr;
+  ObObj insert_ts_obj;
+  ObObj expire_ts_obj;
+  expire_ts_obj.set_null();
+  for (int64_t i = 0; OB_SUCC(ret) && i < members.count(); ++i) {
+    if (OB_FAIL(build_complex_type_rowkey_entity(db, key, true /*not meta*/, members.at(i), value_entity))) {
+      LOG_WARN("fail to build rowkey entity", K(ret), K(members.at(i)), K(db), K(key));
+    } else if (OB_FALSE_IT(insert_ts_obj.set_timestamp(res_insert_ts.at(i)))) {
+    } else if (OB_FAIL(value_entity->set_property(ObRedisUtil::INSERT_TS_PROPERTY_NAME, insert_ts_obj))) {
+      LOG_WARN("fail to set insert_ts", K(ret), K(res_insert_ts.at(i)));
+    } else if (OB_FAIL(value_entity->set_property(ObRedisUtil::EXPIRE_TS_PROPERTY_NAME, expire_ts_obj))) {
+      LOG_WARN("fail to set expire_ts", K(ret));
+    } else {
+      del_ops.del(*value_entity);
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ResultFixedArray results(op_temp_allocator_);
+    if (OB_FAIL(process_table_batch_op(del_ops, results, nullptr /*meta*/, RedisOpFlags::DEL_SKIP_SCAN))) {
+      LOG_WARN("fail to del data", K(ret), K(del_ops));
+    }
+  }
+  return ret;
+}
 int SetCommandOperator::do_spop(int64_t db, const common::ObString &key, const common::ObString &count_str)
 {
   int ret = OB_SUCCESS;
 
-  ObArray<ObString> res_members(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(op_temp_allocator_, "RedisSPop"));
-
   int64_t count = 1;
+  SrandResult srand_result(op_temp_allocator_);
   if (!count_str.empty()) {
     bool is_valid = false;
     count = 0;
@@ -762,25 +796,30 @@ int SetCommandOperator::do_spop(int64_t db, const common::ObString &key, const c
   }
 
   if (OB_SUCC(ret) && count != 0) {
-    int64_t del_num = 0;
-    if (OB_FAIL(do_srand_mem_inner(db, key, count, res_members))) {
+    if (OB_FAIL(do_srand_mem_inner(db, key, true /*need get insert_ts*/, count, srand_result))) {
       LOG_WARN("fail to do srandmem inner", K(ret), K(db), K(key));
-    } else if (OB_FAIL(do_srem_inner(db, key, res_members, del_num))) {
-      LOG_WARN("fail to do srem inner", K(ret), K(db), K(key));
+    } else if (srand_result.res_members_.count() != srand_result.res_insert_ts_.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("res_members count not equal to res_insert_ts", K(ret), K(srand_result));
+    } else if (OB_FAIL(del_member_after_spop(db, key, srand_result.res_members_, srand_result.res_insert_ts_))) {
+      LOG_WARN("fail to del member after spop", K(ret));
+    } else if (
+        srand_result.is_get_all_ && OB_FAIL(fake_del_empty_key_meta(is_zset_ ? ObRedisModel::ZSET : ObRedisModel::SET, db, key))) {
+      LOG_WARN("fail to delete empty key meta", K(ret), K(db), K(key));
     }
   }
 
   if (OB_SUCC(ret)) {
     if (count_str.empty()) {
-      if (res_members.empty()) {
+      if (srand_result.res_members_.empty()) {
         if (OB_FAIL(reinterpret_cast<ObRedisSingleCtx&>(redis_ctx_).response_.set_fmt_res(ObString::make_string(ObRedisFmt::NULL_BULK_STRING)))) {
           LOG_WARN("fail to set fmt res", K(ret));
         }
-      } else if (OB_FAIL(reinterpret_cast<ObRedisSingleCtx&>(redis_ctx_).response_.set_res_bulk_string(res_members.at(0)))) {
-        LOG_WARN("fail to set res string", K(ret), K(res_members));
+      } else if (OB_FAIL(reinterpret_cast<ObRedisSingleCtx&>(redis_ctx_).response_.set_res_bulk_string(srand_result.res_members_.at(0)))) {
+        LOG_WARN("fail to set res string", K(ret), K(srand_result.res_members_));
       }
-    } else if (OB_FAIL(reinterpret_cast<ObRedisSingleCtx&>(redis_ctx_).response_.set_res_array(res_members))) {
-      LOG_WARN("fail to set result int", K(ret), K(res_members));
+    } else if (OB_FAIL(reinterpret_cast<ObRedisSingleCtx&>(redis_ctx_).response_.set_res_array(srand_result.res_members_))) {
+      LOG_WARN("fail to set result int", K(ret), K(srand_result.res_members_));
     }
   } else if (ObRedisErr::is_redis_error(ret)) {
     RESPONSE_REDIS_ERROR(reinterpret_cast<ObRedisSingleCtx &>(redis_ctx_).response_, fmt_redis_msg_.ptr());
@@ -792,7 +831,7 @@ int SetCommandOperator::do_srand_member(int64_t db, const common::ObString &key,
 {
   int ret = OB_SUCCESS;
 
-  ObArray<ObString> res_members(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(op_temp_allocator_, "RedisSPop"));
+  SrandResult srand_result(op_temp_allocator_);
 
   int64_t count = 1;
   if (!count_str.empty()) {
@@ -807,25 +846,25 @@ int SetCommandOperator::do_srand_member(int64_t db, const common::ObString &key,
     } else if (count < 0) {
       if (count == INT64_MIN) {
         RECORD_REDIS_ERROR(fmt_redis_msg_, ObRedisErr::INTEGER_ERR);
-      } else if (OB_FAIL(do_srand_mem_repeat_inner(db, key, -count, res_members))) {
+      } else if (OB_FAIL(do_srand_mem_repeat_inner(db, key, -count, srand_result))) {
         LOG_WARN("fail to do srandmem inner", K(ret), K(db), K(key), K(count));
       }
-    } else if (OB_FAIL(do_srand_mem_inner(db, key, count, res_members))) {
+    } else if (OB_FAIL(do_srand_mem_inner(db, key, false /*not get insert_ts*/, count, srand_result))) {
       LOG_WARN("fail to do srandmem inner", K(ret), K(db), K(key));
     }
   }
 
   if (OB_SUCC(ret)) {
     if (count_str.empty()) {
-      if (res_members.empty()) {
+      if (srand_result.res_members_.empty()) {
         if (OB_FAIL(reinterpret_cast<ObRedisSingleCtx&>(redis_ctx_).response_.set_fmt_res(ObString::make_string(ObRedisFmt::NULL_BULK_STRING)))) {
           LOG_WARN("fail to set fmt res", K(ret));
         }
-      } else if (OB_FAIL(reinterpret_cast<ObRedisSingleCtx&>(redis_ctx_).response_.set_res_bulk_string(res_members.at(0)))) {
-        LOG_WARN("fail to set res string", K(ret), K(res_members));
+      } else if (OB_FAIL(reinterpret_cast<ObRedisSingleCtx&>(redis_ctx_).response_.set_res_bulk_string(srand_result.res_members_.at(0)))) {
+        LOG_WARN("fail to set res string", K(ret), K(srand_result.res_members_));
       }
-    } else if (OB_FAIL(reinterpret_cast<ObRedisSingleCtx&>(redis_ctx_).response_.set_res_array(res_members))) {
-      LOG_WARN("fail to set result int", K(ret), K(res_members));
+    } else if (OB_FAIL(reinterpret_cast<ObRedisSingleCtx&>(redis_ctx_).response_.set_res_array(srand_result.res_members_))) {
+      LOG_WARN("fail to set result int", K(ret), K(srand_result.res_members_));
     }
   } else if (ObRedisErr::is_redis_error(ret)) {
     RESPONSE_REDIS_ERROR(reinterpret_cast<ObRedisSingleCtx &>(redis_ctx_).response_, fmt_redis_msg_.ptr());

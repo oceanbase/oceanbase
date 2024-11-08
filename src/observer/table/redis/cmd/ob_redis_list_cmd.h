@@ -33,8 +33,10 @@ public:
 class Push : public ListCommand
 {
 public:
-  explicit Push(ObIAllocator &allocator, bool is_push_left)
-      : is_push_left_(is_push_left), values_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "RedisPUSH"))
+  explicit Push(ObIAllocator &allocator, bool is_push_left, bool need_exist)
+      : is_push_left_(is_push_left),
+        need_exist_(need_exist),
+        values_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "RedisPUSH"))
   {
     attr_.arity_ = -3;
     attr_.need_snapshot_ = false;
@@ -55,9 +57,15 @@ public:
     return is_push_left_;
   }
 
+  OB_INLINE bool need_exist() const
+  {
+    return need_exist_;
+  }
+
 protected:
   // args
   bool is_push_left_;
+  bool need_exist_;
   ObSEArray<common::ObString, 2> values_;
 private:
   DISALLOW_COPY_AND_ASSIGN(Push);
@@ -66,9 +74,8 @@ private:
 class LPush : public Push
 {
 public:
-  explicit LPush(ObIAllocator &allocator) : Push(allocator, true)
-  {
-  }
+  explicit LPush(ObIAllocator &allocator) : Push(allocator, true /*is_push_left*/, false /*need_exist*/)
+  {}
   virtual ~LPush()
   {}
 
@@ -81,9 +88,8 @@ private:
 class LPushX : public Push
 {
 public:
-  explicit LPushX(ObIAllocator &allocator) : Push(allocator, true)
-  {
-  }
+  explicit LPushX(ObIAllocator &allocator) : Push(allocator, true /*is_push_left*/, true /*need_exist*/)
+  {}
   virtual ~LPushX()
   {}
   int apply(ObRedisSingleCtx &redis_ctx) override;
@@ -95,9 +101,8 @@ private:
 class RPush : public Push
 {
 public:
-  explicit RPush(ObIAllocator &allocator) : Push(allocator, false)
-  {
-  }
+  explicit RPush(ObIAllocator &allocator) : Push(allocator, false /*is_push_left*/, false /*need_exist*/)
+  {}
   virtual ~RPush()
   {}
 
@@ -110,9 +115,8 @@ private:
 class RPushX : public Push
 {
 public:
-  explicit RPushX(ObIAllocator &allocator) : Push(allocator, false)
-  {
-  }
+  explicit RPushX(ObIAllocator &allocator) : Push(allocator, false /*is_push_left*/, true /*need_exist*/)
+  {}
   virtual ~RPushX()
   {}
   int apply(ObRedisSingleCtx &redis_ctx) override;
@@ -124,7 +128,7 @@ private:
 class Pop : public ListCommand
 {
 public:
-  explicit Pop()
+  explicit Pop(bool is_pop_left) : is_pop_left_(is_pop_left)
   {
     attr_.arity_ = 2;
     attr_.need_snapshot_ = false;
@@ -133,15 +137,19 @@ public:
   {}
   // set and check args here
   int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
-
+  OB_INLINE bool is_pop_left() const
+  {
+    return is_pop_left_;
+  }
 private:
+  bool is_pop_left_;
   DISALLOW_COPY_AND_ASSIGN(Pop);
 };
 
 class LPop : public Pop
 {
 public:
-  explicit LPop(ObIAllocator &allocator)
+  explicit LPop(ObIAllocator &allocator) : Pop(true /*is_pop_left*/)
   {
   }
   virtual ~LPop()
@@ -155,9 +163,8 @@ private:
 class RPop : public Pop
 {
 public:
-  explicit RPop(ObIAllocator &allocator)
-  {
-  }
+  explicit RPop(ObIAllocator &allocator) : Pop(false /*is_pop_left*/)
+  {}
   virtual ~RPop()
   {}
   int apply(ObRedisSingleCtx &redis_ctx) override;

@@ -40,7 +40,7 @@ int SetAgg::apply(ObRedisSingleCtx &redis_ctx)
     ret = OB_NOT_INIT;
     LOG_WARN("SetAgg not inited", K(ret));
   } else if (OB_FAIL(cmd_op.do_aggregate(redis_ctx.get_request_db(), *keys_, agg_func_))) {
-    LOG_WARN("fail to do set diff", K(ret), K_(keys));
+    LOG_WARN("fail to do SetAgg", K(ret), K_(keys));
   }
   return ret;
 }
@@ -79,7 +79,7 @@ int SAdd::apply(ObRedisSingleCtx &redis_ctx)
     ret = OB_NOT_INIT;
     LOG_WARN("SAdd not inited", K(ret));
   } else if (OB_FAIL(cmd_op.do_sadd(redis_ctx.get_request_db(), key_, members_))) {
-    LOG_WARN("fail to do set diff", K(ret), K(key_));
+    LOG_WARN("fail to do sadd", K(ret), K(key_));
   }
   return ret;
 }
@@ -117,7 +117,7 @@ int SetAggStore::apply(ObRedisSingleCtx &redis_ctx)
     LOG_WARN("SetAggStore not inited", K(ret));
   } else if (OB_FAIL(
                  cmd_op.do_aggregate_store(redis_ctx.get_request_db(), dest_, keys_, agg_func_))) {
-    LOG_WARN("fail to do set diff", K(ret), K_(keys));
+    LOG_WARN("fail to do SetAggStore", K(ret), K_(keys));
   }
   return ret;
 }
@@ -142,7 +142,7 @@ int SCard::apply(ObRedisSingleCtx &redis_ctx)
     ret = OB_NOT_INIT;
     LOG_WARN("SCard not inited", K(ret));
   } else if (OB_FAIL(cmd_op.do_scard(redis_ctx.get_request_db(), key_))) {
-    LOG_WARN("fail to do set diff", K(ret), K(key_));
+    LOG_WARN("fail to do SCard", K(ret), K(key_));
   }
   return ret;
 }
@@ -183,12 +183,25 @@ int SIsMember::init(const common::ObIArray<common::ObString> &args, ObString& fm
   if (OB_FAIL(init_common(args))) {
     RECORD_REDIS_ERROR(fmt_err_msg, ObRedisErr::SYNTAX_ERR);
     LOG_WARN("fail to init SIsMember", K(ret));
-  } else if (OB_FAIL(args.at(1, member_))) {
+  } else if (OB_FAIL(args.at(1, sub_key_))) {
     LOG_WARN("fail to get member", K(ret));
   }
 
   if (OB_SUCC(ret)) {
     is_inited_ = true;
+  }
+  return ret;
+}
+
+int SIsMember::apply(ObRedisSingleCtx &redis_ctx)
+{
+  int ret = OB_SUCCESS;
+  SetCommandOperator cmd_op(redis_ctx);
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("SIsMember not inited", K(ret));
+  } else if (OB_FAIL(cmd_op.do_sismember(redis_ctx.get_request_db(), key_, sub_key_))) {
+    LOG_WARN("fail to do SIsMember", K(ret), K(key_));
   }
   return ret;
 }
@@ -223,19 +236,6 @@ int SRandMember::apply(ObRedisSingleCtx &redis_ctx)
   return ret;
 }
 
-int SIsMember::apply(ObRedisSingleCtx &redis_ctx)
-{
-  int ret = OB_SUCCESS;
-  SetCommandOperator cmd_op(redis_ctx);
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("SIsMember not inited", K(ret));
-  } else if (OB_FAIL(cmd_op.do_sismember(redis_ctx.get_request_db(), key_, member_))) {
-    LOG_WARN("fail to do set diff", K(ret), K(key_));
-  }
-  return ret;
-}
-
 int SMembers::init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg)
 {
   int ret = OB_SUCCESS;
@@ -256,7 +256,7 @@ int SMembers::apply(ObRedisSingleCtx &redis_ctx)
     ret = OB_NOT_INIT;
     LOG_WARN("SMembers not inited", K(ret));
   } else if (OB_FAIL(cmd_op.do_smembers(redis_ctx.get_request_db(), key_))) {
-    LOG_WARN("fail to do set diff", K(ret), K(key_));
+    LOG_WARN("fail to do SMembers", K(ret), K(key_));
   }
   return ret;
 }
@@ -289,7 +289,7 @@ int SMove::apply(ObRedisSingleCtx &redis_ctx)
     ret = OB_NOT_INIT;
     LOG_WARN("SMove not inited", K(ret));
   } else if (OB_FAIL(cmd_op.do_smove(redis_ctx.get_request_db(), src_, dest_, member_))) {
-    LOG_WARN("fail to do set diff", K(ret), K(src_), K(dest_), K(member_));
+    LOG_WARN("fail to do SMove", K(ret), K(src_), K(dest_), K(member_));
   }
   return ret;
 }

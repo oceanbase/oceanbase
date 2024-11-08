@@ -51,7 +51,7 @@ int LPush::apply(ObRedisSingleCtx &redis_ctx)
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("cmd not inited", K(ret));
-  } else if (OB_FAIL(cmd_op.do_push(redis_ctx.get_request_db(), key_, values_, true /*is_push_left*/, false /*is_need_exist*/))) {
+  } else if (OB_FAIL(cmd_op.do_push(redis_ctx.get_request_db(), key_, values_, true /*is_push_left*/, false /*need_exist*/))) {
     LOG_WARN("failed to do list lpush", K(ret), K(key_), K(values_));
   }
   return ret;
@@ -64,7 +64,7 @@ int LPushX::apply(ObRedisSingleCtx &redis_ctx)
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("cmd not inited", K(ret));
-  } else if (OB_FAIL(cmd_op.do_push(redis_ctx.get_request_db(), key_, values_, true /*is_push_left*/, true /*is_need_exist*/))) {
+  } else if (OB_FAIL(cmd_op.do_push(redis_ctx.get_request_db(), key_, values_, true /*is_push_left*/, true /*need_exist*/))) {
     LOG_WARN("failed to do list lpush", K(ret), K(key_), K(values_));
   }
   return ret;
@@ -77,7 +77,7 @@ int RPush::apply(ObRedisSingleCtx &redis_ctx)
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("cmd not inited", K(ret));
-  } else if (OB_FAIL(cmd_op.do_push(redis_ctx.get_request_db(), key_, values_, false /*is_push_left*/, false /*is_need_exist*/))) {
+  } else if (OB_FAIL(cmd_op.do_push(redis_ctx.get_request_db(), key_, values_, false /*is_push_left*/, false /*need_exist*/))) {
     LOG_WARN("failed to do list lpush", K(ret), K(key_), K(values_));
   }
   return ret;
@@ -90,7 +90,7 @@ int RPushX::apply(ObRedisSingleCtx &redis_ctx)
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("cmd not inited", K(ret));
-  } else if (OB_FAIL(cmd_op.do_push(redis_ctx.get_request_db(), key_, values_, false /*is_push_left*/, true /*is_need_exist*/))) {
+  } else if (OB_FAIL(cmd_op.do_push(redis_ctx.get_request_db(), key_, values_, false /*is_push_left*/, true /*need_exist*/))) {
     LOG_WARN("failed to do list lpush", K(ret), K(key_), K(values_));
   }
   return ret;

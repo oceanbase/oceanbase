@@ -235,7 +235,7 @@ int ZScore::init(const common::ObIArray<common::ObString> &args, ObString& fmt_e
     LOG_WARN("fail to init zadd", K(ret));
   } else {
     key_ = args.at(0);
-    member_ = args.at(1);
+    sub_key_ = args.at(1);
     is_inited_ = true;
   }
   return ret;
@@ -248,8 +248,8 @@ int ZScore::apply(ObRedisSingleCtx &redis_ctx)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("zadd not inited", K(ret));
-  } else if (OB_FAIL(cmd_op.do_zscore(redis_ctx.get_request_db(), key_, member_))) {
-    LOG_WARN("fail to do zadd", K(ret), K(redis_ctx.get_request_db()), K(key_), K(member_));
+  } else if (OB_FAIL(cmd_op.do_zscore(redis_ctx.get_request_db(), key_, sub_key_))) {
+    LOG_WARN("fail to do zadd", K(ret), K(redis_ctx.get_request_db()), K(key_), K(sub_key_));
   }
   return ret;
 }

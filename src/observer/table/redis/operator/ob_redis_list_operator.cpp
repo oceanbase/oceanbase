@@ -274,6 +274,22 @@ int ListCommandOperator::pop_single_count_list(
   return ret;
 }
 
+void ListCommandOperator::update_ins_region_after_pop(bool pop_left, ObRedisListMeta &list_meta)
+{
+  bool need_reset = (pop_left && list_meta.left_idx_ > list_meta.ins_region_right_) ||
+                    (!pop_left && list_meta.right_idx_ < list_meta.ins_region_left_);
+  if (need_reset) {
+    list_meta.reset_ins_region();
+  } else {
+    if (pop_left && list_meta.left_idx_ > list_meta.ins_region_left_) {
+      list_meta.ins_region_left_ = list_meta.left_idx_;
+    } else if (!pop_left && list_meta.right_idx_ < list_meta.ins_region_right_) {
+      list_meta.ins_region_right_ = list_meta.right_idx_;
+    }
+    format_ins_region(list_meta);
+  }
+}
+
 int ListCommandOperator::update_list_after_pop(
     int64_t db,
     const ObString &key,
@@ -301,6 +317,12 @@ int ListCommandOperator::update_list_after_pop(
       } else {
         list_meta.right_idx_ = new_borded.first;
       }
+
+      // update ins region
+      if (list_meta.has_ins_region()) {
+        update_ins_region_after_pop(pop_left, list_meta);
+      }
+
       ObITableEntity *meta_entity = nullptr;
       if (OB_FAIL(gen_meta_entity(db, key, ObRedisModel::LIST, list_meta, meta_entity))) {
         LOG_WARN("fail to put meta into batch operation", K(ret), K(key), K(list_meta));
@@ -1006,6 +1028,35 @@ int ListCommandOperator::build_trim_querys(
   return ret;
 }
 
+void ListCommandOperator::format_ins_region(ObRedisListMeta &list_meta)
+{
+  list_meta.ins_region_left_ = ((list_meta.ins_region_left_ % ObRedisListMeta::INDEX_STEP) == 0)
+                                   ? list_meta.ins_region_left_
+                                   : get_region_left_bord_idx(list_meta.ins_region_left_);
+  list_meta.ins_region_right_ = ((list_meta.ins_region_right_ % ObRedisListMeta::INDEX_STEP) == 0)
+                                    ? list_meta.ins_region_right_
+                                    : get_region_right_bord_idx(list_meta.ins_region_right_);
+}
+
+void ListCommandOperator::update_ins_region_after_trim(ObRedisListMeta &list_meta)
+{
+  if (list_meta.ins_region_right_ < list_meta.left_idx_ || list_meta.ins_region_left_ > list_meta.right_idx_) {
+    list_meta.reset_ins_region();
+  } else if (list_meta.ins_region_left_ < list_meta.left_idx_ && list_meta.ins_region_right_ > list_meta.right_idx_) {
+    list_meta.ins_region_left_ = list_meta.left_idx_;
+    list_meta.ins_region_right_ = list_meta.right_idx_;
+  } else if (list_meta.ins_region_left_ > list_meta.left_idx_ && list_meta.ins_region_right_ < list_meta.right_idx_) {
+  } else {
+    if (list_meta.ins_region_left_ < list_meta.left_idx_) {
+      list_meta.ins_region_left_ = list_meta.left_idx_;
+    }
+    if (list_meta.ins_region_right_ > list_meta.right_idx_) {
+      list_meta.ins_region_right_ = list_meta.right_idx_;
+    }
+  }
+  format_ins_region(list_meta);
+}
+
 int ListCommandOperator::update_meta_after_trim(
     int64_t db,
     const ObString &key,
@@ -1027,6 +1078,11 @@ int ListCommandOperator::update_meta_after_trim(
     list_meta.left_idx_ = new_border_idxs.at(0);
   } else if (right_del_count > 0) {
     list_meta.right_idx_ = new_border_idxs.at(0);
+  }
+
+  // update ins region
+  if (list_meta.has_ins_region()) {
+    update_ins_region_after_trim(list_meta);
   }
 
   ObITableEntity *new_meta_entity = nullptr;
@@ -1523,6 +1579,28 @@ int64_t ListCommandOperator::get_region_right_bord_idx(int64_t pivot_idx)
          (pivot_idx > 0 ? ObRedisListMeta::INDEX_STEP : 0);
 }
 
+void ListCommandOperator::update_ins_region_after_rdct(
+    bool is_redict_left,
+    int64_t pivot_bord_idx,
+    ObRedisListMeta &list_meta)
+{
+  bool has_region_after_rdct = false;
+
+  if (is_redict_left) {
+    has_region_after_rdct = pivot_bord_idx < list_meta.ins_region_right_;
+    list_meta.ins_region_left_ = has_region_after_rdct ? pivot_bord_idx : list_meta.ins_region_left_;
+  } else {
+    has_region_after_rdct = pivot_bord_idx > list_meta.ins_region_left_;
+    list_meta.ins_region_right_ = has_region_after_rdct ? pivot_bord_idx : list_meta.ins_region_right_;
+  }
+
+  if (!has_region_after_rdct) {
+    list_meta.reset_ins_region();
+  } else {
+    format_ins_region(list_meta);
+  }
+}
+
 int ListCommandOperator::redict_idx(
     const int64_t db,
     const ObString &key,
@@ -1559,11 +1637,28 @@ int ListCommandOperator::redict_idx(
           list_meta,
           insert_idx))) {
     LOG_WARN("fail to do redict idx", K(ret), K(db), K(key), K(pivot_idx), K(is_before_pivot), K(list_meta));
+  } else {
+    // update ins region
+    int64_t pivot_bord_idx = is_redict_left ? right_bord_idx : left_bord_idx;
+    update_ins_region_after_rdct(is_redict_left, pivot_bord_idx, list_meta);
   }
   int64_t rdt_end_us = ObTimeUtility::fast_current_time();
   LOG_INFO(
       "redict cost", K(ret), K(rdt_end_us - rdt_beg_us), K(db), K(key), K(pivot_idx), K(is_redict_left), K(list_meta));
   return ret;
+}
+
+void ListCommandOperator::updata_ins_region_after_insert(
+    bool is_before_pivot,
+    int64_t adjacent_idx,
+    int64_t pivot_idx,
+    ObRedisListMeta &list_meta)
+{
+  list_meta.ins_region_left_ = is_before_pivot ? std::min(list_meta.ins_region_left_, adjacent_idx)
+                                               : std::min(list_meta.ins_region_left_, pivot_idx);
+  list_meta.ins_region_right_ = is_before_pivot ? std::max(list_meta.ins_region_right_, pivot_idx)
+                                                : std::max(list_meta.ins_region_right_, adjacent_idx);
+  format_ins_region(list_meta);
 }
 
 int ListCommandOperator::get_insert_index(
@@ -1576,7 +1671,7 @@ int ListCommandOperator::get_insert_index(
 {
 
   int ret = OB_SUCCESS;
-
+  int64_t adjacent_idx = 0;
   if (is_before_pivot &&
       (pivot_idx == list_meta.left_idx_ || list_meta.count_ == 1)) {
     insert_idx = list_meta.left_idx_ - ObRedisListMeta::INDEX_STEP;
@@ -1585,19 +1680,26 @@ int ListCommandOperator::get_insert_index(
       (pivot_idx == list_meta.right_idx_ || list_meta.count_ == 1)) {
     insert_idx = list_meta.right_idx_ + ObRedisListMeta::INDEX_STEP;
   } else {
-    int64_t adjacent_idx = 0;
-    if (get_adjacent_index(db, key, list_meta, pivot_idx, is_before_pivot, adjacent_idx)) {
-      LOG_WARN("fail to get adjacent index", K(ret), K(pivot_idx), K(is_before_pivot));
+    if (!list_meta.has_ins_region()) {
+      adjacent_idx =
+          is_before_pivot ? pivot_idx - ObRedisListMeta::INDEX_STEP : pivot_idx + ObRedisListMeta::INDEX_STEP;
     } else {
-      if (std::abs(adjacent_idx - pivot_idx) > 1) {
-        if (is_before_pivot) {
-          insert_idx = adjacent_idx + ((pivot_idx - adjacent_idx) >> 1);
-        } else {
-          insert_idx = pivot_idx + ((adjacent_idx - pivot_idx) >> 1);
-        }
-      } else if (OB_FAIL(redict_idx(db, key, pivot_idx, is_before_pivot, list_meta, insert_idx))) {
-        LOG_WARN("fail to redict idx", K(ret), K(pivot_idx), K(adjacent_idx));
+      if (is_before_pivot && pivot_idx <= list_meta.ins_region_left_) {
+        adjacent_idx = pivot_idx - ObRedisListMeta::INDEX_STEP;
+      } else if (!is_before_pivot && pivot_idx >= list_meta.ins_region_right_) {
+        adjacent_idx = pivot_idx + ObRedisListMeta::INDEX_STEP;
+      } else if (get_adjacent_index(db, key, list_meta, pivot_idx, is_before_pivot, adjacent_idx)) {
+        LOG_WARN("fail to get adjacent index", K(ret), K(pivot_idx), K(is_before_pivot));
       }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (std::abs(adjacent_idx - pivot_idx) > 1) {
+      insert_idx = is_before_pivot ? adjacent_idx + ((pivot_idx - adjacent_idx) >> 1)
+                                   : pivot_idx + ((adjacent_idx - pivot_idx) >> 1);
+      // update ins region
+      updata_ins_region_after_insert(is_before_pivot, adjacent_idx, pivot_idx, list_meta);
+    } else if (OB_FAIL(redict_idx(db, key, pivot_idx, is_before_pivot, list_meta, insert_idx))) {
+      LOG_WARN("fail to redict idx", K(ret), K(pivot_idx), K(adjacent_idx));
     }
   }
 
@@ -1886,15 +1988,54 @@ int ListCommandOperator::get_new_border_idxs(
   return ret;
 }
 
+void ListCommandOperator::after_ins_region_after_rem(
+    int64_t del_leftmost_idx,
+    int64_t del_rightmost_idx,
+    ObRedisListMeta &list_meta)
+{
+  if (del_leftmost_idx < list_meta.ins_region_left_) {
+    if (del_leftmost_idx < list_meta.left_idx_) {
+      list_meta.ins_region_left_ = list_meta.left_idx_;
+    } else {
+      list_meta.ins_region_left_ = ((del_leftmost_idx % ObRedisListMeta::INDEX_STEP) == 0)
+                                       ? del_leftmost_idx - ObRedisListMeta::INDEX_STEP
+                                       : get_region_left_bord_idx(del_leftmost_idx);
+    }
+    list_meta.ins_region_left_ =
+        list_meta.ins_region_left_ < list_meta.left_idx_ ? list_meta.left_idx_ : list_meta.ins_region_left_;
+  }
+  if (del_rightmost_idx > list_meta.ins_region_right_) {
+    if (del_rightmost_idx > list_meta.right_idx_) {
+      list_meta.ins_region_right_ = list_meta.right_idx_;
+    } else {
+      list_meta.ins_region_right_ = ((del_rightmost_idx % ObRedisListMeta::INDEX_STEP) == 0)
+                                        ? del_rightmost_idx + ObRedisListMeta::INDEX_STEP
+                                        : get_region_right_bord_idx(del_rightmost_idx);
+    }
+    list_meta.ins_region_right_ =
+        list_meta.ins_region_right_ > list_meta.right_idx_ ? list_meta.right_idx_ : list_meta.ins_region_right_;
+  }
+  format_ins_region(list_meta);
+}
+
 int ListCommandOperator::update_meta_after_rem(
     int64_t db,
     const ObString &key,
     ObRedisListMeta &list_meta,
     const int64_t rem_count,
-    bool need_update_left_idx,
-    bool need_update_right_idx)
+    int64_t del_leftmost_idx,
+    int64_t del_rightmost_idx)
 {
   int ret = OB_SUCCESS;
+  bool need_update_left_idx = false;
+  bool need_update_right_idx = false;
+  if (del_leftmost_idx == list_meta.left_idx_) {
+    need_update_left_idx = true;
+  }
+  if (del_rightmost_idx == list_meta.right_idx_) {
+    need_update_right_idx = true;
+  }
+
   ObTableBatchOperation batch_ops;
   ResultFixedArray results(op_temp_allocator_);
   if (rem_count == list_meta.count_) {
@@ -1923,6 +2064,11 @@ int ListCommandOperator::update_meta_after_rem(
         }
       }
     }
+    // update ins region
+    if (OB_SUCC(ret)) {
+      after_ins_region_after_rem(del_leftmost_idx, del_rightmost_idx, list_meta);
+    }
+
     if (OB_SUCC(ret)) {
       ObITableEntity *meta_entity = nullptr;
       if (OB_FAIL(gen_meta_entity(db,
@@ -2018,8 +2164,8 @@ int ListCommandOperator::do_rem(int64_t db, const ObString &key, int64_t count, 
     LOG_WARN("fail to build range query", K(ret), K(key), K(count), K(value), K(*list_meta));
   } else {
     ObTableBatchOperation del_ops;
-    bool need_update_left_idx = false;
-    bool need_update_right_idx = false;
+    int64_t first_del_index = INT_MIN;
+    int64_t last_del_index = INT_MIN;
 
     // query element
     SMART_VAR(ObTableCtx, tb_ctx, op_temp_allocator_)
@@ -2052,15 +2198,16 @@ int ListCommandOperator::do_rem(int64_t db, const ObString &key, int64_t count, 
             } else if (OB_FAIL(del_ops.del(*del_data_entity))) {
               LOG_WARN("fail to push back", K(ret));
             } else {
-              if (index == list_meta->left_idx_) {
-                need_update_left_idx = true;
-              } else if (index == list_meta->right_idx_) {
-                need_update_right_idx = true;
+              if (first_del_index == INT_MIN) {
+                first_del_index = index;
               }
               ++real_rem_count;
             }
           }
         }
+      }
+      if (OB_SUCC(ret) || ret == OB_ITER_END) {
+        last_del_index = index;
       }
       QUERY_ITER_END(iter)
     }
@@ -2071,14 +2218,14 @@ int ListCommandOperator::do_rem(int64_t db, const ObString &key, int64_t count, 
       if (OB_FAIL(process_table_batch_op(del_ops, results))) {
         LOG_WARN("fail to process table batch op", K(ret), K(del_ops));
       } else if (OB_FAIL(update_meta_after_rem(
-                     db, key, *list_meta, real_rem_count, need_update_left_idx, need_update_right_idx))) {
+                     db, key, *list_meta, real_rem_count, min(first_del_index, last_del_index), max(first_del_index, last_del_index)))) {
         LOG_WARN(
             "fail to update meta after rem",
             K(ret),
             K(*list_meta),
             K(real_rem_count),
-            K(need_update_left_idx),
-            K(need_update_right_idx));
+            K(first_del_index),
+            K(last_del_index));
       }
     }
   }
@@ -2223,28 +2370,46 @@ int ListCommandOperator::do_same_keys_push(
   int64_t cur_ts = ObTimeUtility::fast_current_time();
   // do (same_key_start_pos, same_key_end_pos)
   ObRedisListMeta *list_meta = reinterpret_cast<ObRedisListMeta *>(metas.at(same_key_start_pos));
+  bool list_is_empty = true;
+  if (list_meta->is_exists()) {
+    list_is_empty = false;
+  }
   for (int64_t i = same_key_start_pos; OB_SUCC(ret) && i <= same_key_end_pos; ++i) {
-    ObRedisOp *&redis_op = reinterpret_cast<ObRedisOp *&>(ops.at(i));
+    ObRedisOp *redis_op = reinterpret_cast<ObRedisOp *>(ops.at(i));
     Push *push = reinterpret_cast<Push *>(redis_op->cmd());
-    bool need_push_meta = (i == same_key_end_pos) ? true : false;
-    int64_t push_size = need_push_meta ? push->get_values().count() + 1 : push->get_values().count();
-    if (OB_FAIL(build_push_ops(
-            batch_op, redis_op->db(), key, *list_meta, cur_ts, push->get_values(), push->is_push_left(), need_push_meta))) {
-      LOG_WARN("fail to build push ops", K(ret), KPC(redis_op));
-      if (ObRedisErr::is_redis_error(ret)) {
-        RESPONSE_REDIS_ERROR(redis_op->response(), fmt_redis_msg_.ptr());
-        ret = COVER_REDIS_ERROR(ret);
+    if (list_is_empty && push->need_exist()) {
+      if (OB_FAIL(redis_op->response().set_fmt_res(ObRedisFmt::ZERO))) {
+        LOG_WARN("fail to set res int", K(ret), KPC(redis_op));
       }
-    } else if (OB_FAIL(redis_op->response().set_res_int(list_meta->count_))) {
-      LOG_WARN("fail to set res int", K(ret), KPC(redis_op));
     } else {
-      for (int64_t i = 0; i < push_size && OB_SUCC(ret); i++) {
-        if (OB_FAIL(tablet_ids.push_back(redis_op->tablet_id_))) {
-          LOG_WARN("fail to push back tablet_id", K(ret), K(redis_op->tablet_id_));
+      list_is_empty = false;
+      bool need_push_meta = (i == same_key_end_pos) ? true : false;
+      int64_t push_size = need_push_meta ? push->get_values().count() + 1 : push->get_values().count();
+      if (OB_FAIL(build_push_ops(
+              batch_op,
+              redis_op->db(),
+              key,
+              *list_meta,
+              cur_ts,
+              push->get_values(),
+              push->is_push_left(),
+              need_push_meta))) {
+        LOG_WARN("fail to build push ops", K(ret), KPC(redis_op));
+        if (ObRedisErr::is_redis_error(ret)) {
+          RESPONSE_REDIS_ERROR(redis_op->response(), fmt_redis_msg_.ptr());
+          ret = COVER_REDIS_ERROR(ret);
         }
-      }  // end for
+      } else if (OB_FAIL(redis_op->response().set_res_int(list_meta->count_))) {
+        LOG_WARN("fail to set res int", K(ret), KPC(redis_op));
+      } else {
+        for (int64_t i = 0; i < push_size && OB_SUCC(ret); i++) {
+          if (OB_FAIL(tablet_ids.push_back(redis_op->tablet_id_))) {
+            LOG_WARN("fail to push back tablet_id", K(ret), K(redis_op->tablet_id_));
+          }
+        }  // end for
+      }
     }
-  } // end for
+  }  // end for
 
   return ret;
 }
@@ -2252,23 +2417,28 @@ int ListCommandOperator::do_same_keys_push(
 // Define the comparison function
 bool ListCommandOperator::compare_ob_redis_ops(ObITableOp *&op_a, ObITableOp *&op_b)
 {
-  ObRedisOp *&redis_op_a = reinterpret_cast<ObRedisOp *&>(op_a);
-  ObRedisOp *&redis_op_b = reinterpret_cast<ObRedisOp *&>(op_b);
+  ObRedisOp *redis_op_a = reinterpret_cast<ObRedisOp *>(op_a);
+  ObRedisOp *redis_op_b = reinterpret_cast<ObRedisOp *>(op_b);
   ObString key_a, key_b;
   redis_op_a->get_key(key_a);
   redis_op_b->get_key(key_b);
   return key_a < key_b;
+}
+
+void ListCommandOperator::sort_group_ops() {
+  ObRedisBatchCtx &group_ctx = reinterpret_cast<ObRedisBatchCtx &>(redis_ctx_);
+  ObIArray<ObITableOp *> &ops = group_ctx.ops();
+  ObITableOp **end = &ops.at(ops.count() - 1);
+  ++end;
+  lib::ob_sort(&ops.at(0), end, ListCommandOperator::compare_ob_redis_ops);
 }
 int ListCommandOperator::do_group_push()
 {
   int ret = OB_SUCCESS;
 
   // Sort ops by key to find the same key
-  ObRedisBatchCtx &group_ctx = reinterpret_cast<ObRedisBatchCtx &>(redis_ctx_);
-  ObIArray<ObITableOp *> &ops = group_ctx.ops();
-  ObITableOp **end = &ops.at(ops.count() - 1);
-  ++end;
-  lib::ob_sort(&ops.at(0), end, ListCommandOperator::compare_ob_redis_ops);
+  sort_group_ops();
+  ObIArray<ObITableOp *> &ops = reinterpret_cast<ObRedisBatchCtx &>(redis_ctx_).ops();
   ObTabletIDArray tablet_ids;
   // Get all op's meta
   ObArray<ObRedisMeta *> metas(OB_MALLOC_NORMAL_BLOCK_SIZE,
@@ -2282,7 +2452,7 @@ int ListCommandOperator::do_group_push()
     int64_t same_key_start_pos = 0, same_key_end_pos = 0;
     int64_t pos = 0;
     for (; OB_SUCC(ret) && pos < ops.count(); ++pos) {
-      ObRedisOp *&redis_op = reinterpret_cast<ObRedisOp *&>(ops.at(pos));
+      ObRedisOp *redis_op = reinterpret_cast<ObRedisOp *>(ops.at(pos));
       ObString key;
       if (OB_FAIL(redis_op->get_key(key))) {
         LOG_WARN("fail to get key", K(ret), KPC(redis_op));
@@ -2301,8 +2471,7 @@ int ListCommandOperator::do_group_push()
     // do (same_key_start_pos, end_pos - 1)
     if (OB_SUCC(ret)) {
       same_key_end_pos = pos - 1;
-      ObString key = last_key;
-      if (OB_FAIL(do_same_keys_push(batch_op, tablet_ids, ops, metas, key, same_key_start_pos, same_key_end_pos))) {
+      if (OB_FAIL(do_same_keys_push(batch_op, tablet_ids, ops, metas, last_key, same_key_start_pos, same_key_end_pos))) {
         LOG_WARN("fail to do same keys push", K(ret), K(ops));
       }
     }
@@ -2310,6 +2479,669 @@ int ListCommandOperator::do_group_push()
     if (OB_SUCC(ret) && OB_FAIL(process_table_batch_op(
                             batch_op, results, nullptr, RedisOpFlags::NONE, nullptr, nullptr, &tablet_ids))) {
       LOG_WARN("fail to process table batch op", K(ret), K(batch_op));
+    }
+  }
+
+  return ret;
+}
+
+int ListCommandOperator::deep_copy_list_entity(
+    const ObITableEntity *result_entity,
+    ObITableEntity *&result_copy_entity,
+    ListData &list_data)
+{
+  int ret = OB_SUCCESS;
+  ObObj tmp_res_obj;
+  ObITableEntity *tmp_entity = nullptr;
+  if (OB_FAIL(result_entity->get_property(ObRedisUtil::REDIS_INDEX_NAME, tmp_res_obj))) {
+    LOG_WARN("fail to get member from result enrity", K(ret), KPC(result_entity));
+  } else if (OB_FAIL(tmp_res_obj.get_int(list_data.index_))) {
+    LOG_WARN("fail to get idx", K(ret), K(tmp_res_obj));
+  } else if (OB_FAIL(result_entity->get_property(ObRedisUtil::INSERT_TS_PROPERTY_NAME, tmp_res_obj))) {
+    LOG_WARN("fail to get member from result enrity", K(ret), KPC(result_entity));
+  } else if (OB_FAIL(tmp_res_obj.get_timestamp(list_data.insert_ts_))) {
+    LOG_WARN("fail to get idx", K(ret), K(tmp_res_obj));
+  } else if (OB_FAIL(result_entity->get_property(ObRedisUtil::VALUE_PROPERTY_NAME, tmp_res_obj))) {
+    LOG_WARN("fail to get member from result enrity", K(ret), KPC(result_entity));
+  } else if (OB_FAIL(get_varbinary_by_deep(tmp_res_obj, list_data.value_))) {
+    // note: deep copy is required, because after the iterator destruct, the memory of the query results
+    // will be released
+    LOG_WARN("fail to get res value by deep", K(ret), K(tmp_res_obj));
+  } else if (OB_FAIL(gen_entity_with_rowkey(
+                 list_data.db_, list_data.key_, list_data.index_, true, tmp_entity, &op_entity_factory_))) {
+    LOG_WARN("fail to gen entity with rowkey", K(ret), K(list_data));
+  } else if (OB_FAIL(list_entity_set_value(list_data.value_, list_data.insert_ts_, tmp_entity))) {
+    LOG_WARN("fail to set value", K(ret), KPC(tmp_entity));
+  } else {
+    result_copy_entity = tmp_entity;
+  }
+  return ret;
+}
+
+int ListCommandOperator::copy_list_entity(
+    const ObITableEntity *result_entity,
+    ObITableEntity *&result_copy_entity,
+    ListData &list_data)
+{
+  int ret = OB_SUCCESS;
+  ObObj tmp_res_obj;
+  ObITableEntity *tmp_entity = nullptr;
+  if (OB_FAIL(result_entity->get_property(ObRedisUtil::REDIS_INDEX_NAME, tmp_res_obj))) {
+    LOG_WARN("fail to get member from result enrity", K(ret), KPC(result_entity));
+  } else if (OB_FAIL(tmp_res_obj.get_int(list_data.index_))) {
+    LOG_WARN("fail to get idx", K(ret), K(tmp_res_obj));
+  } else if (OB_FAIL(result_entity->get_property(ObRedisUtil::INSERT_TS_PROPERTY_NAME, tmp_res_obj))) {
+    LOG_WARN("fail to get member from result enrity", K(ret), KPC(result_entity));
+  } else if (OB_FAIL(tmp_res_obj.get_timestamp(list_data.insert_ts_))) {
+    LOG_WARN("fail to get idx", K(ret), K(tmp_res_obj));
+  } else if (OB_FAIL(result_entity->get_property(ObRedisUtil::VALUE_PROPERTY_NAME, tmp_res_obj))) {
+    LOG_WARN("fail to get member from result enrity", K(ret), KPC(result_entity));
+  } else if (OB_FAIL(tmp_res_obj.get_varbinary(list_data.value_))) {
+    LOG_WARN("fail to get res value", K(ret), K(tmp_res_obj));
+  } else if (OB_FAIL(gen_entity_with_rowkey(
+                 list_data.db_, list_data.key_, list_data.index_, true, tmp_entity, &op_entity_factory_))) {
+    LOG_WARN("fail to gen entity with rowkey", K(ret), K(list_data));
+  } else if (OB_FAIL(list_entity_set_value(list_data.value_, list_data.insert_ts_, tmp_entity))) {
+    LOG_WARN("fail to set value", K(ret), KPC(tmp_entity));
+  } else {
+    result_copy_entity = tmp_entity;
+  }
+  return ret;
+}
+
+int ListCommandOperator::gen_group_pop_res(
+    const ObIArray<ListElemEntity> &res_idx_entitys,
+    ObRedisListMeta *list_meta,
+    int64_t same_key_start_pos,
+    int64_t same_key_end_pos,
+    ObTableBatchOperation &batch_op_insup,
+    ObTableBatchOperation &batch_op_del,
+    ObTabletIDArray &tablet_insup_ids,
+    ObTabletIDArray &tablet_del_ids)
+{
+  int ret = OB_SUCCESS;
+  ObIArray<ObITableOp *> &ops = reinterpret_cast<ObRedisBatchCtx &>(redis_ctx_).ops();
+  ObRedisOp *redis_op = reinterpret_cast<ObRedisOp *>(ops.at(same_key_start_pos));
+  Pop *pop = reinterpret_cast<Pop *>(redis_op->cmd());
+
+  if (res_idx_entitys.count() == 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("idx array count not match", K(ret), K(res_idx_entitys));
+  } else if (
+      (pop->is_pop_left() && res_idx_entitys.at(0).first != list_meta->left_idx_) ||
+      (!pop->is_pop_left() && res_idx_entitys.at(0).first != list_meta->right_idx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("idx array not match", K(ret), K(res_idx_entitys), K(list_meta), K(pop->is_pop_left()));
+  } else {
+    int64_t pos_op_right = same_key_end_pos;
+    int64_t pos_res_right = list_meta->count_ > (same_key_end_pos - same_key_start_pos + 1)
+                                ? same_key_end_pos
+                                : same_key_start_pos + res_idx_entitys.count() - 1;
+    for (int64_t pos_op = pos_op_right; OB_SUCC(ret) && pos_op > pos_res_right; --pos_op) {
+      redis_op = reinterpret_cast<ObRedisOp *>(ops.at(pos_op));
+      if (OB_FAIL(redis_op->response().set_fmt_res(ObRedisFmt::NULL_BULK_STRING))) {
+        LOG_WARN("fail to set res nil", K(ret), KPC(redis_op));
+      }
+    }
+    for (int64_t pos_op = same_key_start_pos, pos_res = 0; OB_SUCC(ret) && pos_op <= pos_res_right;
+         ++pos_op, ++pos_res) {
+      ObString res_value;
+      redis_op = reinterpret_cast<ObRedisOp *>(ops.at(pos_op));
+      ObObj value_obj;
+      if (OB_FAIL(res_idx_entitys.at(pos_res).second->get_property(ObRedisUtil::VALUE_PROPERTY_NAME, value_obj))) {
+        LOG_WARN("fail to get member from result enrity", K(ret), KPC(res_idx_entitys.at(pos_res).second));
+      } else if (OB_FAIL(value_obj.get_varbinary(res_value))) {
+        LOG_WARN("fail to get res value", K(ret), K(value_obj));
+      } else if (OB_FAIL(redis_op->response().set_res_bulk_string(res_value))) {
+        LOG_WARN("fail to set res int", K(ret), KPC(redis_op));
+      } else if (OB_FAIL(batch_op_del.del(*res_idx_entitys.at(pos_res).second))) {
+        LOG_WARN("fail to push back", K(ret));
+      } else if (OB_FAIL(tablet_del_ids.push_back(redis_op->tablet_id_))) {
+        LOG_WARN("fail to push back", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      // update meta
+      if (list_meta->count_ <= (same_key_end_pos - same_key_start_pos + 1)) {
+        ObITableEntity *meta_entity = nullptr;
+        if (OB_FAIL(gen_meta_entity(redis_op->db(), pop->key(), ObRedisModel::LIST, *list_meta, meta_entity))) {
+          LOG_WARN("fail to put meta into batch operation", K(ret), K(pop->key()), K(list_meta));
+        } else if (OB_FAIL(batch_op_del.del(*meta_entity))) {
+          LOG_WARN("fail to push back", K(ret));
+        } else if (OB_FAIL(tablet_del_ids.push_back(redis_op->tablet_id_))) {
+          LOG_WARN("fail to push back", K(ret));
+        }
+      } else {
+        list_meta->count_ -= (same_key_end_pos - same_key_start_pos + 1);
+        if (pop->is_pop_left()) {
+          list_meta->left_idx_ = res_idx_entitys.at(res_idx_entitys.count() - 1).first;
+        } else {
+          list_meta->right_idx_ = res_idx_entitys.at(res_idx_entitys.count() - 1).first;
+        }
+        // update ins region
+        if (list_meta->has_ins_region()) {
+          update_ins_region_after_pop(pop->is_pop_left(), *list_meta);
+        }
+        ObITableEntity *meta_entity = nullptr;
+        if (OB_FAIL(gen_meta_entity(redis_op->db(), pop->key(), ObRedisModel::LIST, *list_meta, meta_entity))) {
+          LOG_WARN("fail to put meta into batch operation", K(ret), K(pop->key()), K(list_meta));
+        } else if (OB_FAIL(batch_op_insup.insert_or_update(*meta_entity))) {
+          LOG_WARN("fail to push back", K(ret));
+        } else if (OB_FAIL(tablet_insup_ids.push_back(redis_op->tablet_id_))) {
+          LOG_WARN("fail to push back", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ListCommandOperator::do_same_keys_pop(
+    ObTableBatchOperation &batch_op_insup,
+    ObTableBatchOperation &batch_op_del,
+    ObTabletIDArray &tablet_insup_ids,
+    ObTabletIDArray &tablet_del_ids,
+    const ObIArray<ObRedisMeta *> &metas,
+    const ObString &key,
+    int64_t same_key_start_pos,
+    int64_t same_key_end_pos)
+{
+  int ret = OB_SUCCESS;
+  ObIArray<ObITableOp *> &ops = reinterpret_cast<ObRedisBatchCtx &>(redis_ctx_).ops();
+  ObRedisListMeta *list_meta = reinterpret_cast<ObRedisListMeta *>(metas.at(same_key_start_pos));
+  ObRedisOp *redis_op = reinterpret_cast<ObRedisOp *>(ops.at(same_key_start_pos));
+  Pop *pop = reinterpret_cast<Pop *>(redis_op->cmd());
+  if (!list_meta->is_exists()) {
+    if (OB_FAIL(ops_return_nullstr(ops, same_key_start_pos, same_key_end_pos))) {
+      LOG_WARN("fail to ops return nullstr", K(ret), K(same_key_start_pos), K(same_key_end_pos));
+    }
+  } else {
+    ObTableQuery query;
+    ObSEArray<ListElemEntity, 2> res_idx_entitys(
+        OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(op_temp_allocator_, "RedisGPop"));
+    ListQueryCond query_cond(
+        key,
+        redis_op->db(),
+        list_meta->left_idx_,
+        list_meta->right_idx_,
+        same_key_end_pos - same_key_start_pos + 2 /*limit*/,
+        0 /*offset*/,
+        pop->is_pop_left(),
+        true /*need_query_all*/);
+    if (OB_FAIL(build_list_query(query_cond, query))) {
+      LOG_WARN("fail to build list query", K(ret), K(query_cond));
+    } else {
+      SMART_VAR(ObTableCtx, tb_ctx, op_temp_allocator_)
+      {
+        QUERY_ITER_START(redis_ctx_, query, tb_ctx, iter, list_meta)
+        ObTableQueryResult *one_result = nullptr;
+        const ObITableEntity *result_entity = nullptr;
+        ListData list_data;
+        list_data.db_ = redis_op->db();
+        list_data.key_ = key;
+        while (OB_SUCC(ret)) {
+          if (OB_FAIL(iter->get_next_result(one_result))) {
+            if (OB_ITER_END != ret) {
+              LOG_WARN("fail to get next result", K(ret));
+            }
+          }
+          one_result->rewind();
+          while (OB_SUCC(ret)) {
+            if (OB_FAIL(one_result->get_next_entity(result_entity))) {
+              if (OB_ITER_END != ret) {
+                LOG_WARN("fail to get next result", K(ret));
+              }
+            } else {
+              ObITableEntity *result_copy_entity = nullptr;
+              if (OB_FAIL(deep_copy_list_entity(result_entity, result_copy_entity, list_data))) {
+                LOG_WARN("fail to deep copy list entity", K(ret), KPC(result_entity));
+              } else if (OB_FAIL(res_idx_entitys.push_back({list_data.index_, result_copy_entity}))) {
+                LOG_WARN("fail to push back entity", K(ret), KPC(result_copy_entity));
+              }
+            }
+          }
+        }
+        if (OB_SUCC(ret) || OB_ITER_END == ret) {
+          if (OB_FAIL(gen_group_pop_res(
+                  res_idx_entitys,
+                  list_meta,
+                  same_key_start_pos,
+                  same_key_end_pos,
+                  batch_op_insup,
+                  batch_op_del,
+                  tablet_insup_ids,
+                  tablet_del_ids))) {
+            LOG_WARN("fail to gen group pop res", K(ret), K(same_key_start_pos), K(same_key_end_pos));
+          }
+        }
+        QUERY_ITER_END(iter)
+      }
+    }
+  }
+  return ret;
+}
+
+// auxiliary function, check multiple acquisition conditions
+bool check_multi_get_cond(
+    int64_t same_key_start_pos,
+    int64_t same_key_end_pos,
+    ObRedisOp *&redis_op,
+    const ObRedisListMeta *meta)
+{
+  bool can_use_multi = true;
+  if (meta->has_ins_region()) {
+    Pop *pop = reinterpret_cast<Pop *>(redis_op->cmd());
+    if (pop->is_pop_left() && (meta->left_idx_ + (same_key_end_pos - same_key_start_pos) *
+                                                     ObRedisListMeta::INDEX_STEP) >= meta->ins_region_left_) {
+      can_use_multi = false;
+    } else if (
+        !pop->is_pop_left() && (meta->right_idx_ - (same_key_end_pos - same_key_start_pos) *
+                                                       ObRedisListMeta::INDEX_STEP) <= meta->ins_region_right_) {
+      can_use_multi = false;
+    }
+  }
+
+  return can_use_multi;
+}
+
+int ListCommandOperator::gen_same_key_batch_get_op(
+    const ObRedisListMeta &meta,
+    const ObRedisOp &redis_op,
+    ObString key,
+    int64_t same_key_start_pos,
+    int64_t same_key_end_pos,
+    ObTableBatchOperation &batch_op_get,
+    ObTabletIDArray &tablet_get_ids)
+{
+  int ret = OB_SUCCESS;
+
+  const Pop *pop = reinterpret_cast<const Pop *>(redis_op.cmd());
+  for (int64_t i = 0; i < same_key_end_pos - same_key_start_pos + 1; ++i) {
+    int64_t idx = pop->is_pop_left() ? meta.left_idx_ + i * ObRedisListMeta::INDEX_STEP
+                                     : meta.right_idx_ - i * ObRedisListMeta::INDEX_STEP;
+    ObITableEntity *entity = nullptr;
+    if (OB_FAIL(
+            gen_entity_with_rowkey(redis_op.db(), key, idx, true /*is_data*/, entity, &op_entity_factory_))) {
+      LOG_WARN("fail to gen entity with rowkey", K(ret));
+    } else if (OB_FAIL(batch_op_get.retrieve(*entity))) {
+      LOG_WARN("fail to retrieve entity", K(ret), KPC(entity));
+    } else if (OB_FAIL(tablet_get_ids.push_back(redis_op.tablet_id_))) {
+      LOG_WARN("fail to push back tablet id", K(ret));
+    }
+  }
+
+  return ret;
+}
+
+int ListCommandOperator::ops_return_nullstr(
+    ObIArray<ObITableOp *> &ops,
+    int64_t same_key_start_pos,
+    int64_t same_key_end_pos)
+{
+  int ret = OB_SUCCESS;
+
+  for (int64_t pos_op = same_key_end_pos; OB_SUCC(ret) && pos_op >= same_key_start_pos; --pos_op) {
+    ObRedisOp *redis_op = reinterpret_cast<ObRedisOp *>(ops.at(pos_op));
+    if (OB_FAIL(redis_op->response().set_fmt_res(ObRedisFmt::NULL_BULK_STRING))) {
+      LOG_WARN("fail to set res nil", K(ret), KPC(redis_op));
+    }
+  }
+
+  return ret;
+}
+
+int ListCommandOperator::check_can_use_multi_get(
+    const ObArray<ObRedisMeta *> &metas,
+    ObIArray<ObITableOp *> &ops,
+    ObTableBatchOperation &batch_op_get,
+    ObTabletIDArray &tablet_get_ids,
+    bool &can_use_multi_get)
+{
+  int ret = OB_SUCCESS;
+
+  ObString last_key;
+  int64_t same_key_start_pos = 0, same_key_end_pos = 0;
+  int64_t pos = 0;
+  for (; OB_SUCC(ret) && can_use_multi_get == true && pos < ops.count(); ++pos) {
+    ObRedisOp *redis_op = reinterpret_cast<ObRedisOp *>(ops.at(pos));
+    ObString key;
+    if (OB_FAIL(redis_op->get_key(key))) {
+      LOG_WARN("fail to get key", K(ret), KPC(redis_op));
+    } else if (!last_key.empty() && last_key != key) {
+      same_key_end_pos = pos - 1;
+      // do (same_key_start_pos, same_key_end_pos)
+      ObRedisListMeta *list_meta = static_cast<ObRedisListMeta *>(metas[same_key_start_pos]);
+      can_use_multi_get = check_multi_get_cond(same_key_start_pos, same_key_end_pos, redis_op, list_meta);
+      if (can_use_multi_get &&
+          OB_FAIL(gen_same_key_batch_get_op(
+              *list_meta, *redis_op, last_key, same_key_start_pos, same_key_end_pos, batch_op_get, tablet_get_ids))) {
+        LOG_WARN("fail to gen same key batch get op", K(ret), K(same_key_start_pos), K(same_key_end_pos));
+      }
+
+      same_key_start_pos = pos;
+    }
+    last_key = key;
+  }
+  // do (same_key_start_pos, end_pos - 1)
+  if (OB_SUCC(ret) && can_use_multi_get) {
+    same_key_end_pos = pos - 1;
+    ObRedisOp *redis_op = reinterpret_cast<ObRedisOp *>(ops.at(same_key_start_pos));
+    ObRedisListMeta *list_meta = static_cast<ObRedisListMeta *>(metas[same_key_start_pos]);
+    can_use_multi_get = check_multi_get_cond(same_key_start_pos, same_key_end_pos, redis_op, list_meta);
+    if (can_use_multi_get &&
+        OB_FAIL(gen_same_key_batch_get_op(
+            *list_meta, *redis_op, last_key, same_key_start_pos, same_key_end_pos, batch_op_get, tablet_get_ids))) {
+      LOG_WARN("fail to gen same key batch get op", K(ret), K(same_key_start_pos), K(same_key_end_pos));
+    }
+  }
+
+  return ret;
+}
+
+int ListCommandOperator::update_meta_after_multi_pop(
+    ObRedisListMeta *list_meta,
+    ObTableBatchOperation &batch_op_insup,
+    ObTableBatchOperation &batch_op_del,
+    ObTabletIDArray &tablet_insup_ids,
+    ObTabletIDArray &tablet_del_ids,
+    int64_t same_key_start_pos,
+    int64_t same_key_end_pos)
+{
+  int ret = OB_SUCCESS;
+
+  ObIArray<ObITableOp *> &ops = reinterpret_cast<ObRedisBatchCtx &>(redis_ctx_).ops();
+  ObRedisOp *redis_op = reinterpret_cast<ObRedisOp *>(ops.at(same_key_start_pos));
+  Pop *pop = reinterpret_cast<Pop *>(redis_op->cmd());
+
+  if (list_meta->count_ <= (same_key_end_pos - same_key_start_pos + 1)) {
+    ObITableEntity *meta_entity = nullptr;
+    if (OB_FAIL(gen_meta_entity(redis_op->db(), pop->key(), ObRedisModel::LIST, *list_meta, meta_entity))) {
+      LOG_WARN("fail to put meta into batch operation", K(ret), K(pop->key()), K(list_meta));
+    } else if (OB_FAIL(batch_op_del.del(*meta_entity))) {
+      LOG_WARN("fail to push back", K(ret));
+    } else if (OB_FAIL(tablet_del_ids.push_back(redis_op->tablet_id_))) {
+      LOG_WARN("fail to push back", K(ret));
+    }
+  } else {
+    list_meta->count_ -= (same_key_end_pos - same_key_start_pos + 1);
+    if (pop->is_pop_left()) {
+      list_meta->left_idx_ += (same_key_end_pos - same_key_start_pos + 1) * ObRedisListMeta::INDEX_STEP;
+    } else {
+      list_meta->right_idx_ -= (same_key_end_pos - same_key_start_pos + 1) * ObRedisListMeta::INDEX_STEP;
+    }
+    // update ins region
+    if (list_meta->has_ins_region()) {
+      update_ins_region_after_pop(pop->is_pop_left(), *list_meta);
+    }
+    ObITableEntity *meta_entity = nullptr;
+    if (OB_FAIL(gen_meta_entity(redis_op->db(), pop->key(), ObRedisModel::LIST, *list_meta, meta_entity))) {
+      LOG_WARN("fail to put meta into batch operation", K(ret), K(pop->key()), K(list_meta));
+    } else if (OB_FAIL(batch_op_insup.insert_or_update(*meta_entity))) {
+      LOG_WARN("fail to push back", K(ret));
+    } else if (OB_FAIL(tablet_insup_ids.push_back(redis_op->tablet_id_))) {
+      LOG_WARN("fail to push back", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ListCommandOperator::do_same_keys_multi_pop(
+    const ResultFixedArray& batch_res,
+    ObTableBatchOperation &batch_op_insup,
+    ObTableBatchOperation &batch_op_del,
+    ObTabletIDArray &tablet_insup_ids,
+    ObTabletIDArray &tablet_del_ids,
+    const ObIArray<ObRedisMeta *> &metas,
+    const ObString &key,
+    int64_t same_key_start_pos,
+    int64_t same_key_end_pos)
+{
+  int ret = OB_SUCCESS;
+
+  ObIArray<ObITableOp *> &ops = reinterpret_cast<ObRedisBatchCtx &>(redis_ctx_).ops();
+  ObRedisListMeta *list_meta = reinterpret_cast<ObRedisListMeta *>(metas.at(same_key_start_pos));
+  ObRedisOp *redis_op = reinterpret_cast<ObRedisOp *>(ops.at(same_key_start_pos));
+  Pop *pop = reinterpret_cast<Pop *>(redis_op->cmd());
+
+  for (int i = same_key_start_pos; OB_SUCC(ret) && i <= same_key_end_pos; ++i) {
+    redis_op = reinterpret_cast<ObRedisOp *>(ops.at(i));
+    if (batch_res[i].get_return_rows() > 0) {
+      ListData list_data;
+      list_data.db_ = redis_op->db();
+      list_data.key_ = pop->key();
+      ObString val;
+      const ObITableEntity *res_entity = nullptr;
+      ObITableEntity *result_copy_entity = nullptr;
+      if (OB_FAIL(batch_res[i].get_entity(res_entity))) {
+        LOG_WARN("fail to get entity", K(ret), K(batch_res[i]));
+      } else if (OB_FAIL(get_varbinary_from_entity(*res_entity, ObRedisUtil::VALUE_PROPERTY_NAME, val))) {
+        LOG_WARN("fail to get value from entity", K(ret), KPC(res_entity));
+      } else if (OB_FAIL(redis_op->response().set_res_bulk_string(val))) {
+        LOG_WARN("fail to set bulk string", K(ret), K(val));
+      } else if (OB_FAIL(copy_list_entity(res_entity, result_copy_entity, list_data))) {
+        LOG_WARN("fail to copy list entity", K(ret));
+      } else if (OB_FAIL(batch_op_del.del(*result_copy_entity))) {
+        LOG_WARN("fail to push back", K(ret));
+      } else if (OB_FAIL(tablet_del_ids.push_back(redis_op->tablet_id_))) {
+        LOG_WARN("fail to push back", K(ret));
+      }
+    } else {
+      if (OB_FAIL(redis_op->response().set_fmt_res(ObRedisFmt::NULL_BULK_STRING))) {
+        LOG_WARN("fail to set bulk string", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    // update meta
+    if (OB_FAIL(update_meta_after_multi_pop(
+            list_meta, batch_op_insup, batch_op_del, tablet_insup_ids, tablet_del_ids, same_key_start_pos, same_key_end_pos))) {
+      LOG_WARN("fail to update meta after multi pop", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ListCommandOperator::do_group_pop_use_multi_get(
+    const ObArray<ObRedisMeta *> &metas,
+    const ObTableBatchOperation &batch_op_get,
+    ObTabletIDArray &tablet_get_ids,
+    ObTableBatchOperation &batch_op_insup,
+    ObTabletIDArray &tablet_insup_ids,
+    ObTableBatchOperation &batch_op_del,
+    ObTabletIDArray &tablet_del_ids)
+{
+  int ret = OB_SUCCESS;
+  ObIArray<ObITableOp *> &ops = reinterpret_cast<ObRedisBatchCtx &>(redis_ctx_).ops();
+  ResultFixedArray batch_res(op_temp_allocator_);
+  if (OB_FAIL(process_table_batch_op(
+          batch_op_get,
+          batch_res,
+          nullptr,
+          RedisOpFlags::NONE,
+          &op_temp_allocator_,
+          &op_entity_factory_,
+          &tablet_get_ids))) {
+    LOG_WARN("fail to process table batch op", K(ret));
+  } else if (batch_res.count() != ops.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("batch res count not match", K(ret), K(batch_res.count()), K(ops.count()));
+  } else {
+    ObString last_key;
+    int64_t same_key_start_pos = 0, same_key_end_pos = 0;
+    int64_t pos = 0;
+    for (; OB_SUCC(ret) && pos < ops.count(); ++pos) {
+      ObRedisOp *redis_op = reinterpret_cast<ObRedisOp *>(ops.at(pos));
+      ObString key;
+      if (OB_FAIL(redis_op->get_key(key))) {
+        LOG_WARN("fail to get key", K(ret), KPC(redis_op));
+      } else if (!last_key.empty() && last_key != key) {
+        same_key_end_pos = pos - 1;
+        ObRedisListMeta *list_meta = reinterpret_cast<ObRedisListMeta *>(metas.at(same_key_start_pos));
+        // do (same_key_start_pos, same_key_end_pos)
+        if (!list_meta->is_exists()) {
+          if (OB_FAIL(ops_return_nullstr(ops, same_key_start_pos, same_key_end_pos))) {
+            LOG_WARN("fail to ops return nullstr", K(ret), K(same_key_start_pos), K(same_key_end_pos));
+          }
+        } else if (OB_FAIL(do_same_keys_multi_pop(
+                       batch_res,
+                       batch_op_insup,
+                       batch_op_del,
+                       tablet_insup_ids,
+                       tablet_del_ids,
+                       metas,
+                       last_key,
+                       same_key_start_pos,
+                       same_key_end_pos))) {
+          LOG_WARN("fail to do same keys multi pop", K(ret), K(same_key_start_pos), K(same_key_end_pos));
+        }
+        same_key_start_pos = pos;
+      }
+      last_key = key;
+    }
+    if (OB_SUCC(ret)) {
+      same_key_end_pos = pos - 1;
+      // do (same_key_start_pos, same_key_end_pos)
+      ObRedisListMeta *list_meta = reinterpret_cast<ObRedisListMeta *>(metas.at(same_key_start_pos));
+      if (!list_meta->is_exists()) {
+        if (OB_FAIL(ops_return_nullstr(ops, same_key_start_pos, same_key_end_pos))) {
+          LOG_WARN("fail to ops return nullstr", K(ret), K(same_key_start_pos), K(same_key_end_pos));
+        }
+      } else if (OB_FAIL(do_same_keys_multi_pop(
+                     batch_res,
+                     batch_op_insup,
+                     batch_op_del,
+                     tablet_insup_ids,
+                     tablet_del_ids,
+                     metas,
+                     last_key,
+                     same_key_start_pos,
+                     same_key_end_pos))) {
+        LOG_WARN("fail to do same keys multi pop", K(ret), K(same_key_start_pos), K(same_key_end_pos));
+      }
+      same_key_start_pos = pos;
+    }
+  }
+  return ret;
+}
+
+int ListCommandOperator::do_group_pop_use_query(
+    const ObArray<ObRedisMeta *> &metas,
+    const ObTableBatchOperation &batch_op_get,
+    ObTabletIDArray &tablet_get_ids,
+    ObTableBatchOperation &batch_op_insup,
+    ObTabletIDArray &tablet_insup_ids,
+    ObTableBatchOperation &batch_op_del,
+    ObTabletIDArray &tablet_del_ids)
+{
+  int ret = OB_SUCCESS;
+  ObIArray<ObITableOp *> &ops = reinterpret_cast<ObRedisBatchCtx &>(redis_ctx_).ops();
+  ObString last_key;
+  int64_t same_key_start_pos = 0, same_key_end_pos = 0;
+  int64_t pos = 0;
+  for (; OB_SUCC(ret) && pos < ops.count(); ++pos) {
+    ObRedisOp *redis_op = reinterpret_cast<ObRedisOp *>(ops.at(pos));
+    ObString key;
+    if (OB_FAIL(redis_op->get_key(key))) {
+      LOG_WARN("fail to get key", K(ret), KPC(redis_op));
+    } else if (!last_key.empty() && last_key != key) {
+      same_key_end_pos = pos - 1;
+      // do (same_key_start_pos, same_key_end_pos)
+      if (OB_FAIL(do_same_keys_pop(
+              batch_op_insup,
+              batch_op_del,
+              tablet_insup_ids,
+              tablet_del_ids,
+              metas,
+              last_key,
+              same_key_start_pos,
+              same_key_end_pos))) {
+        LOG_WARN(
+            "fail to do same keys pop",
+            K(ret),
+            K(batch_op_insup),
+            K(batch_op_del),
+            K(tablet_insup_ids),
+            K(tablet_del_ids));
+      } else {
+        same_key_start_pos = pos;
+      }
+    }
+    last_key = key;
+  }
+  // do (same_key_start_pos, end_pos - 1)
+  if (OB_SUCC(ret)) {
+    same_key_end_pos = pos - 1;
+    if (OB_FAIL(do_same_keys_pop(
+            batch_op_insup,
+            batch_op_del,
+            tablet_insup_ids,
+            tablet_del_ids,
+            metas,
+            last_key,
+            same_key_start_pos,
+            same_key_end_pos))) {
+      LOG_WARN(
+          "fail to do same keys pop",
+          K(ret),
+          K(batch_op_insup),
+          K(batch_op_del),
+          K(tablet_insup_ids),
+          K(tablet_del_ids));
+    }
+  }
+  return ret;
+}
+
+int ListCommandOperator::do_group_pop()
+{
+  int ret = OB_SUCCESS;
+
+  // Sort ops by key to find the same key
+  sort_group_ops();
+  ObIArray<ObITableOp *> &ops = reinterpret_cast<ObRedisBatchCtx &>(redis_ctx_).ops();
+  // Get all op's meta
+  ObArray<ObRedisMeta *> metas(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(op_temp_allocator_, "RedisGPop"));
+  if (OB_FAIL(get_group_metas(op_temp_allocator_, ObRedisModel::LIST, metas))) {
+    LOG_WARN("fail to get group metas", K(ret));
+  } else {
+    ObTableBatchOperation batch_op_get;
+    ObTabletIDArray tablet_get_ids;
+    ObTableBatchOperation batch_op_insup;
+    ObTableBatchOperation batch_op_del;
+    ObTabletIDArray tablet_insup_ids;
+    ObTabletIDArray tablet_del_ids;
+    bool can_use_multi_get = true;
+    if (OB_FAIL(check_can_use_multi_get(metas, ops, batch_op_get, tablet_get_ids, can_use_multi_get))) {
+      LOG_WARN("fail to check can use multi", K(ret));
+    } else if (can_use_multi_get) {
+      // ret = do_group_pop_get();
+      if (OB_FAIL(do_group_pop_use_multi_get(
+              metas, batch_op_get, tablet_get_ids, batch_op_insup, tablet_insup_ids, batch_op_del, tablet_del_ids))) {
+        LOG_WARN("fail to do group pop use multi get", K(ret));
+      }
+    } else {
+      // do_group_pop_query()
+      if (OB_FAIL(do_group_pop_use_query(
+              metas, batch_op_get, tablet_get_ids, batch_op_insup, tablet_insup_ids, batch_op_del, tablet_del_ids))) {
+        LOG_WARN("fail to do group pop use query", K(ret));
+      }
+    }
+
+    ResultFixedArray results_insup(op_temp_allocator_);
+    ResultFixedArray results_del(op_temp_allocator_);
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(process_table_batch_op(
+                   batch_op_del,
+                   results_del,
+                   nullptr /*meta*/,
+                   RedisOpFlags::DEL_SKIP_SCAN,
+                   nullptr /*allocator*/,
+                   nullptr /*entity_factory*/,
+                   &tablet_del_ids))) {
+      LOG_WARN("fail to process table batch op", K(ret), K(batch_op_del));
+    } else if (OB_FAIL(process_table_batch_op(
+                   batch_op_insup, results_insup, nullptr, RedisOpFlags::NONE, nullptr, nullptr, &tablet_insup_ids))) {
+      LOG_WARN("fail to process table batch op", K(ret), K(batch_op_insup));
     }
   }
 

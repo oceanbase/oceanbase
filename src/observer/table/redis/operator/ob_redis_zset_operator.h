@@ -68,6 +68,7 @@ public:
   int fill_set_batch_op(const ObRedisOp &op,
                         ObIArray<ObTabletID> &tablet_ids,
                         ObTableBatchOperation &batch_op) override;
+  int do_group_zscore();
 
 private:
   static const ObString SCORE_INDEX_NAME;

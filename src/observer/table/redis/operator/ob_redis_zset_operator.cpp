@@ -1221,5 +1221,39 @@ int ZSetCommandOperator::fill_set_batch_op(const ObRedisOp &op,
   }
   return ret;
 }
+
+int ZSetCommandOperator::do_group_zscore()
+{
+  int ret = OB_SUCCESS;
+  ResultFixedArray batch_res(op_temp_allocator_);
+  if (OB_FAIL(group_get_complex_type_data(ObRedisUtil::SCORE_PROPERTY_NAME, batch_res))) {
+    LOG_WARN("fail to group get complex type data", K(ret), K(ObRedisUtil::SCORE_PROPERTY_NAME));
+  }
+
+  // reply
+  ObRedisBatchCtx &group_ctx = reinterpret_cast<ObRedisBatchCtx &>(redis_ctx_);
+  for (int i = 0; i < group_ctx.ops().count() && OB_SUCC(ret); ++i) {
+    ObRedisOp *op = reinterpret_cast<ObRedisOp*>(group_ctx.ops().at(i));
+    if (batch_res.at(i).get_return_rows() == 0) {
+      if (OB_FAIL(op->response().set_fmt_res(ObRedisFmt::NULL_BULK_STRING))) {
+        LOG_WARN("fail to set response null bulk string", K(ret));
+      }
+    } else {
+      double score = 0.0;
+      ObITableEntity *res_entity = nullptr;
+      ObString score_str;
+      if (OB_FAIL(batch_res.at(i).get_entity(res_entity))) {
+        LOG_WARN("fail to get entity", K(ret), K(batch_res.at(i)));
+      } else if (OB_FAIL(get_score_from_entity(*res_entity, score))) {
+        LOG_WARN("fail to get score from entity", K(ret), KPC(res_entity));
+      } else if (OB_FAIL(ObRedisHelper::double_to_string(redis_ctx_.allocator_, score, score_str))) {
+        LOG_WARN("fail to convert double to string", K(ret), K(score));
+      } else if (OB_FAIL(op->response().set_res_bulk_string(score_str))) {
+        LOG_WARN("fail to set response bulk string", K(ret), K(score_str));
+      }
+    }
+  }
+  return ret;
+}
 }  // namespace table
 }  // namespace oceanbase

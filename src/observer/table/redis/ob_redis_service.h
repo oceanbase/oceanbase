@@ -26,6 +26,7 @@ namespace table
 {
 class RedisCommand;
 class ObRedisOp;
+class ObRedisAttr;
 
 class ObTableRedisEndTransCb : public ObTableAPITransCb
 {
@@ -90,6 +91,7 @@ public:
 private:
   static int cover_to_redis_err(int ob_ret);
   static int end_trans(ObRedisSingleCtx &redis_ctx, bool need_snapshot, bool is_rollback);
+  static int redis_cmd_to_proccess_type(const RedisCommandType &attr, observer::ObTableProccessType& ret_type);
   DISALLOW_COPY_AND_ASSIGN(ObRedisService);
 };
 

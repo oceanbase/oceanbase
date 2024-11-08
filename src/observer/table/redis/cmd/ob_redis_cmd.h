@@ -87,7 +87,8 @@ public:
 
   RedisCommand()
       : is_inited_(false),
-        key_()
+        key_(),
+        sub_key_()
   {
   }
   virtual ~RedisCommand()
@@ -131,6 +132,7 @@ public:
   OB_INLINE void set_cmd_name(const ObString& cmd_name) { attr_.cmd_name_ = cmd_name; }
 
   OB_INLINE const ObString &key() const { return key_; }
+  OB_INLINE const ObString &sub_key() const { return sub_key_; }
 
 protected:
   int init_common(const common::ObIArray<common::ObString> &args);
@@ -139,6 +141,7 @@ protected:
   ObRedisAttr attr_;
   bool is_inited_;
   ObString key_;
+  ObString sub_key_; // member in SET/ZSET, field in HASH
 
 private:
   DISALLOW_COPY_AND_ASSIGN(RedisCommand);

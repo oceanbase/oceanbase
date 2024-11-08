@@ -155,7 +155,6 @@ int ObRedisExecuteP::try_process()
   table_id_ = arg_.table_id_;
   tablet_id_ = arg_.tablet_id_;
   // note: use single get tmp
-  stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_GET;
   if (OB_FAIL(check_arg())) {
     LOG_WARN("check arg failed", K(ret));
   } else if (OB_FAIL(check_tenant_version())) {
@@ -194,7 +193,7 @@ int ObRedisExecuteP::try_process()
 #endif
   OB_TABLE_END_AUDIT(ret_code, ret,
                      snapshot, get_tx_snapshot(),
-                     stmt_type, ObTableAuditUtils::get_stmt_type(arg_.table_operation_.type()));
+                     stmt_type, sql::stmt::StmtType::T_REDIS);
   return ret;
 }
 

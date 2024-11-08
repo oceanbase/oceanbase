@@ -82,6 +82,8 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObRedisFmt);
 };
 
+// The sequence of RedisCommandType is associated with that of ObTableProccessType.
+// If you want to change it, you need to change ObTableProccessType simultaneously
 enum RedisCommandType {
   REDIS_COMMAND_INVALID = 0,
   // List

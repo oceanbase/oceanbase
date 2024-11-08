@@ -48,7 +48,7 @@ namespace table
   } else if (OB_FAIL(spec->create_executor(tb_ctx, executor))) {                         \
     SERVER_LOG(WARN, "fail to generate executor", K(ret), K(tb_ctx));                    \
   } else if (OB_FAIL(ObTableQueryUtils::generate_query_result_iterator(                  \
-            tb_ctx.get_allocator(), query, false, result, tb_ctx, iter))) {              \
+            tb_ctx.get_allocator(), query, false, result, tb_ctx, iter))) {                 \
     SERVER_LOG(WARN, "fail to generate query result iterator", K(ret));                  \
   } else if (OB_FAIL(ObTableQueryUtils::get_scan_row_interator(tb_ctx, row_iter))) {     \
     SERVER_LOG(WARN, "fail to get scan row iterator", K(ret));                           \
@@ -85,6 +85,8 @@ enum RedisOpFlags {
   RETURN_ROWKEY = 1 << 1,
   RETURN_REDIS_META = 1 << 2,
   DEL_SKIP_SCAN = 1 << 3,
+  BATCH_NOT_ATOMIC = 1 << 4, // for batch
+  RETURN_AFFECTED_ENTITY = 1 << 5, // for append, increment
 };
 
 typedef common::ObFixedArray<ObTableOperationResult, common::ObIAllocator> ResultFixedArray;
@@ -142,6 +144,7 @@ public:
       const ObString &member,
       common::ObRowkey &rowkey);
   int do_group_complex_type_set();
+  int do_group_complex_type_subkey_exists(ObRedisModel model);
 
 protected:
   int build_range(const common::ObRowkey &start_key,
@@ -157,7 +160,7 @@ protected:
                        const ObTableQuery &query,
                        const ObRedisMeta *meta,
                        ObTableCtx &tb_ctx);
-  int init_batch_ctx(const ObTableBatchOperation &req_ops, ObTableBatchCtx &batch_ctx);
+  int init_batch_ctx(const ObTableBatchOperation &req_ops, RedisOpFlags flags, ObTableBatchCtx &batch_ctx);
   int hashset_to_array(const common::hash::ObHashSet<ObString> &hash_set,
                        ObIArray<ObString> &ret_arr);
 
@@ -181,10 +184,12 @@ protected:
                                 ObString &value);
   bool is_incr_out_of_range(int64_t old_val, int64_t incr);
   bool is_incrby_out_of_range(double old_val, double incr);
+  bool is_incrby_out_of_range(long double old_val, long double incr);
   int get_subkey_from_entity(
       ObIAllocator &allocator,
       const ObITableEntity &entity,
       ObString &subkey);
+  int get_insert_ts_from_entity(const ObITableEntity &entity, int64_t &insert_ts);
   int del_complex_key(
       ObRedisModel model,
       int64_t db,
@@ -220,6 +225,8 @@ protected:
   virtual int fill_set_batch_op(const ObRedisOp &op,
                                 ObIArray<ObTabletID> &tablet_ids,
                                 ObTableBatchOperation &batch_op);
+  int group_get_complex_type_data(const ObString &property_name, ResultFixedArray &batch_res);
+
 protected:
   static const ObString COUNT_STAR_PROPERTY;  // count(*)
   ObRedisCtx &redis_ctx_;
@@ -255,6 +262,23 @@ private:
 
   common::ObStringBuffer buffer_;
   DISALLOW_COPY_AND_ASSIGN(FilterStrBuffer);
+};
+
+struct RedisKeyNode {
+  RedisKeyNode(int64_t db, const ObString &key, ObTabletID tablet_id) : db_(db), key_(key), tablet_id_(tablet_id) {}
+  RedisKeyNode() : db_(0), key_(), tablet_id_() {}
+  // uint64_t hash() const;
+  int hash(uint64_t &res) const;
+  bool operator==(const RedisKeyNode &other) const
+  {
+    return (other.db_ == db_) && (other.key_ == key_);
+  }
+
+  TO_STRING_KV(K(db_), K(key_), K(tablet_id_));
+
+  int64_t db_;
+  ObString key_;
+  ObTabletID tablet_id_;
 };
 
 }  // namespace table

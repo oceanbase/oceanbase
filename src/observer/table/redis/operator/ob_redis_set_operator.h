@@ -20,6 +20,18 @@ namespace oceanbase
 {
 namespace table
 {
+struct SrandResult {
+  SrandResult(ObIAllocator &allocator)
+      : is_get_all_(false),
+        res_members_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "RedisSPop")),
+        res_insert_ts_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "RedisInsTs"))
+  {}
+  TO_STRING_KV(K_(is_get_all), K_(res_members), K_(res_insert_ts));
+  bool is_get_all_;
+  ObArray<ObString> res_members_;
+  ObArray<int64_t> res_insert_ts_;
+};
+
 class SetCommandOperator : public CommandOperator
 {
 public:
@@ -84,17 +96,28 @@ protected:
       int64_t &del_num);
 
   int do_srem_inner(
-    int64_t db,
-    const common::ObString &key,
-    const common::ObIArray<ObString> &members,
-    int64_t &del_num);
-  int do_smembers_inner(int64_t db, const common::ObString &key, ObIArray<ObString> &res_members);
-  int do_srand_mem_inner(int64_t db, const common::ObString &key, int64_t count, ObArray<ObString> &res_members);
-  int do_srand_mem_repeat_inner(
       int64_t db,
       const common::ObString &key,
+      const common::ObIArray<ObString> &members,
+      int64_t &del_num);
+  int do_smembers_inner(int64_t db, const common::ObString &key, bool get_insert_ts, SrandResult &srand_result);
+  int do_srand_mem_inner(
+      int64_t db,
+      const common::ObString &key,
+      bool get_insert_ts,
       int64_t count,
-      ObArray<ObString> &res_members);
+      SrandResult &srand_result);
+  int do_srand_mem_repeat_inner(int64_t db, const common::ObString &key, int64_t count, SrandResult &srand_result);
+  int query_member_at_indexes(
+      bool get_insert_ts,
+      const ObTableQuery &query,
+      const ObArray<int64_t> &target_idxs,
+      SrandResult &srand_result);
+  int del_member_after_spop(
+      int64_t db,
+      const common::ObString &key,
+      const ObArray<ObString> &members,
+      const ObArray<int64_t> &res_insert_ts);
 
 protected:
   bool is_zset_;

@@ -20,22 +20,6 @@ namespace oceanbase
 {
 namespace table
 {
-struct StringKeyNode {
-  StringKeyNode(int64_t db, const ObString &key, ObTabletID tablet_id) : db_(db), key_(key), tablet_id_(tablet_id) {}
-  StringKeyNode() : db_(0), key_(), tablet_id_() {}
-  // uint64_t hash() const;
-  int hash(uint64_t &res) const;
-  bool operator==(const StringKeyNode &other) const
-  {
-    return (other.db_ == db_) && (other.key_ == key_);
-  }
-
-  TO_STRING_KV(K(db_), K(key_), K(tablet_id_));
-
-  int64_t db_;
-  ObString key_;
-  ObTabletID tablet_id_;
-};
 
 class StringCommandOperator : public CommandOperator
 {
@@ -78,6 +62,16 @@ public:
   int do_group_get();
   int do_group_set();
   int do_group_incr();
+  int do_group_setnx();
+  int do_group_incrbyfloat();
+  int do_group_append();
+
+  int do_group_analyze(int (StringCommandOperator::*analyze_func)(ObRedisOp *op, ObTableOperationResult &),
+                       StringCommandOperator *obj);
+  int analyze_bitcount(ObRedisOp *op, ObTableOperationResult &res);
+  int analyze_getbit(ObRedisOp *op, ObTableOperationResult &res);
+  int analyze_getrange(ObRedisOp *op, ObTableOperationResult &res);
+  int analyze_strlen(ObRedisOp *op, ObTableOperationResult &res);
 
 private:
   int build_rowkey_entity(int64_t db, const common::ObString &key, ObITableEntity *&entity);
@@ -106,7 +100,7 @@ private:
   int convert_incr_str_to_int(const common::ObString &incr, bool is_incr, int64_t &incr_num);
 
   // for group
-  int inner_do_group_get(ResultFixedArray &batch_res);
+  int inner_do_group_get(const ObString &prop_name, ResultFixedArray &batch_res);
 
 private:
   const static int64_t MAX_RANGE = (2 << 9) - 1;  // 1M -1

@@ -42,8 +42,8 @@ void ObTableGroupOpFactory::free(ObITableOp *op)
  if (NULL != op) {
     ObTableGroupType op_type = op->type();
     if (op_type > 0 && op_type < ObTableGroupType::TYPE_MAX) {
-      ObLockGuard<ObSpinLock> guard(locks_[op_type]);
       op->reset();
+      ObLockGuard<ObSpinLock> guard(locks_[op_type]);
       used_list_[op_type].remove(op);
       free_list_[op_type].add_last(op);
     } else {

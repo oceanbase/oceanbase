@@ -90,10 +90,20 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ListQueryCond);
 };
 
+struct ListData {
+  int64_t db_;
+  int64_t index_;
+  int64_t insert_ts_;
+  ObString key_;
+  ObString value_;
+  TO_STRING_KV(K_(db), K_(index), K_(insert_ts), K_(key), K_(value));
+};
+
 class ListCommandOperator : public CommandOperator
 {
 public:
   using ListElement = std::pair<int64_t, ObObj>;
+  using ListElemEntity = std::pair<int64_t, ObITableEntity*>;
 
 public:
   explicit ListCommandOperator(ObRedisCtx &redis_ctx) : CommandOperator(redis_ctx)
@@ -123,6 +133,7 @@ public:
   int do_del(int64_t db, const common::ObString &key, bool &is_exist);
   // for group
   int do_group_push();
+  int do_group_pop();
 public:
   int gen_entity_with_rowkey(
       int64_t db,
@@ -173,8 +184,28 @@ private:
       bool need_push_meta = true);
   int do_same_keys_push(
       ObTableBatchOperation &batch_op,
-      ObTabletIDArray& tablet_ids,
+      ObTabletIDArray &tablet_ids,
       ObIArray<ObITableOp *> &ops,
+      const ObIArray<ObRedisMeta *> &metas,
+      const ObString &key,
+      int64_t same_key_start_pos,
+      int64_t same_key_end_pos);
+  int do_same_keys_pop(
+      ObTableBatchOperation &batch_op_insup,
+      ObTableBatchOperation &batch_op_del,
+      ObTabletIDArray &tablet_insup_ids,
+      ObTabletIDArray &tablet_del_ids,
+      const ObIArray<ObRedisMeta *> &metas,
+      const ObString &key,
+      int64_t same_key_start_pos,
+      int64_t same_key_end_pos);
+
+  int do_same_keys_multi_pop(
+      const ResultFixedArray &batch_res,
+      ObTableBatchOperation &batch_op_insup,
+      ObTableBatchOperation &batch_op_del,
+      ObTabletIDArray &tablet_insup_ids,
+      ObTabletIDArray &tablet_del_ids,
       const ObIArray<ObRedisMeta *> &metas,
       const ObString &key,
       int64_t same_key_start_pos,
@@ -246,8 +277,8 @@ private:
       const ObString &key,
       ObRedisListMeta &list_meta,
       const int64_t rem_count,
-      bool need_update_left_idx,
-      bool need_update_right_idx);
+      int64_t del_leftmost_idx,
+      int64_t del_rightmost_idx);
 
   int get_new_border_idxs(
       int64_t db,
@@ -319,6 +350,77 @@ private:
   int del_key(const ObString &key, int64_t db, ObRedisListMeta *list_meta);
   int64_t get_region_left_bord_idx(int64_t pivot_idx);
   int64_t get_region_right_bord_idx(int64_t pivot_idx);
+  void sort_group_ops();
+  int deep_copy_list_entity(
+      const ObITableEntity *result_entity,
+      ObITableEntity *&result_copy_entity,
+      ListData &list_data);
+  int copy_list_entity(const ObITableEntity *result_entity, ObITableEntity *&result_copy_entity, ListData &list_data);
+  int gen_group_pop_res(
+      const ObIArray<ListElemEntity> &res_idx_entitys,
+      ObRedisListMeta *list_meta,
+      int64_t same_key_start_pos,
+      int64_t same_key_end_pos,
+      ObTableBatchOperation &batch_op_insup,
+      ObTableBatchOperation &batch_op_del,
+      ObTabletIDArray &tablet_insup_ids,
+      ObTabletIDArray &tablet_del_ids);
+
+  int gen_same_key_batch_get_op(
+      const ObRedisListMeta &meta,
+      const ObRedisOp &redis_op,
+      ObString key,
+      int64_t same_key_start_pos,
+      int64_t same_key_end_pos,
+      ObTableBatchOperation &batch_op_get,
+      ObTabletIDArray &tablet_get_ids);
+
+  int check_can_use_multi_get(
+      const ObArray<ObRedisMeta *> &metas,
+      ObIArray<ObITableOp *> &ops,
+      ObTableBatchOperation &batch_op_get,
+      ObTabletIDArray &tablet_get_ids,
+      bool &can_use_multi_get);
+
+  int do_group_pop_use_multi_get(
+      const ObArray<ObRedisMeta *> &metas,
+      const ObTableBatchOperation &batch_op_get,
+      ObTabletIDArray &tablet_get_ids,
+      ObTableBatchOperation &batch_op_insup,
+      ObTabletIDArray &tablet_insup_ids,
+      ObTableBatchOperation &batch_op_del,
+      ObTabletIDArray &tablet_del_ids);
+
+  int do_group_pop_use_query(
+      const ObArray<ObRedisMeta *> &metas,
+      const ObTableBatchOperation &batch_op_get,
+      ObTabletIDArray &tablet_get_ids,
+      ObTableBatchOperation &batch_op_insup,
+      ObTabletIDArray &tablet_insup_ids,
+      ObTableBatchOperation &batch_op_del,
+      ObTabletIDArray &tablet_del_ids);
+
+  int update_meta_after_multi_pop(
+      ObRedisListMeta *list_meta,
+      ObTableBatchOperation &batch_op_insup,
+      ObTableBatchOperation &batch_op_del,
+      ObTabletIDArray &tablet_insup_ids,
+      ObTabletIDArray &tablet_del_ids,
+      int64_t same_key_start_pos,
+      int64_t same_key_end_pos);
+
+  int ops_return_nullstr(ObIArray<ObITableOp *> &ops, int64_t same_key_start_pos, int64_t same_key_end_pos);
+
+  void format_ins_region(ObRedisListMeta& list_meta);
+  void update_ins_region_after_pop(bool pop_left, ObRedisListMeta &list_meta);
+  void update_ins_region_after_trim(ObRedisListMeta &list_meta);
+  void updata_ins_region_after_insert(
+      bool is_before_pivot,
+      int64_t adjacent_idx,
+      int64_t pivot_idx,
+      ObRedisListMeta &list_meta);
+  void update_ins_region_after_rdct(bool is_redict_left, int64_t pivot_bord_idx, ObRedisListMeta &list_meta);
+  void after_ins_region_after_rem(int64_t del_leftmost_idx, int64_t del_rightmost_idx, ObRedisListMeta &list_meta);
   static bool compare_ob_redis_ops(ObITableOp *&op_a, ObITableOp *&op_b);
 
 private:

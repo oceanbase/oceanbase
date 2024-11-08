@@ -540,6 +540,7 @@ public:
   OB_INLINE void set_scan(const bool &is_scan) { is_scan_ = is_scan; }
   OB_INLINE void set_scan_order(const common::ObQueryFlag::ScanOrder scan_order) {  scan_order_ = scan_order; }
   OB_INLINE void set_limit(const int64_t &limit) { limit_ = limit; }
+  OB_INLINE void set_offset(const int64_t &offset) { offset_ = offset; }
   OB_INLINE void set_read_latest(bool read_latest) { read_latest_ = read_latest; }
   // for dml
   OB_INLINE void set_entity(const ObITableEntity *entity) { entity_ = entity; }

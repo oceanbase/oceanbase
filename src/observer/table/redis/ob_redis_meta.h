@@ -151,6 +151,12 @@ public:
     ttl_ = INT_MAX64;
     insert_ts_ = ObTimeUtility::fast_current_time();
   }
+
+  void reset_ins_region()
+  {
+    ins_region_left_ = INT64_MAX;
+    ins_region_right_ = INT64_MIN;
+  }
   virtual OB_INLINE bool is_expired() const override
   {
     return ttl_ < ObTimeUtility::fast_current_time();
@@ -158,7 +164,16 @@ public:
 
   virtual int decode(const ObString &encoded_content) override;
   virtual int encode(ObIAllocator &allocator, ObString &encoded_content) const override;
-  int build_meta_rowkey(int64_t db, const ObString &key, ObRedisCtx &redis_ctx, ObITableEntity *&entity) const override;
+  int build_meta_rowkey(int64_t db, const ObString &key, ObRedisCtx &redis_ctx, ObITableEntity *&entity)
+      const override;
+  OB_INLINE bool has_ins_region()
+  {
+    return ins_region_left_ < ins_region_right_;
+  }
+  OB_INLINE bool has_ins_region() const
+  {
+    return ins_region_left_ < ins_region_right_;
+  }
 
 public:
   static const int64_t INIT_INDEX = 0;

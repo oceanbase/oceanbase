@@ -78,7 +78,7 @@ int CommandOperator::process_table_batch_op(const ObTableBatchOperation &req_ops
           LOG_WARN("fail to assign tablet ids", K(ret));
         } else if (OB_FAIL(init_table_ctx(req_ops.at(0), batch_ctx.tb_ctx_, meta, flags, true/*is_batch_ctx*/))) {
           LOG_WARN("fail to init table ctx", K(ret), K(redis_ctx_));
-        } else if (OB_FAIL(init_batch_ctx(req_ops, batch_ctx))) {
+        } else if (OB_FAIL(init_batch_ctx(req_ops, flags, batch_ctx))) {
           LOG_WARN("fail to init batch ctx", K(ret), K(redis_ctx_));
         } else if (OB_FAIL(batch_ctx.tb_ctx_.init_trans(redis_ctx_.trans_param_->trans_desc_,
                                                         redis_ctx_.trans_param_->tx_snapshot_))) {
@@ -113,7 +113,7 @@ int CommandOperator::process_table_multi_batch_op(const ObTableMultiBatchRequest
                                RedisOpFlags::NONE,
                                true/*is_batch_ctx*/))) {
       LOG_WARN("fail to init table ctx", K(ret), K(redis_ctx_));
-    } else if (OB_FAIL(init_batch_ctx(batch_ops.at(0), ctx))) {
+    } else if (OB_FAIL(init_batch_ctx(batch_ops.at(0), RedisOpFlags::NONE, ctx))) {
       LOG_WARN("fail to init batch ctx", K(ret), K(redis_ctx_));
     } else if (OB_FAIL(ctx.tb_ctx_.init_trans(redis_ctx_.trans_param_->trans_desc_,
                                               redis_ctx_.trans_param_->tx_snapshot_))) {
@@ -196,18 +196,21 @@ int CommandOperator::process_table_single_op(const table::ObTableOperation &op,
 }
 
 int CommandOperator::init_batch_ctx(const ObTableBatchOperation &req_ops,
+                                    RedisOpFlags flags,
                                     ObTableBatchCtx &batch_ctx)
 {
   int ret = OB_SUCCESS;
   ObTableCtx &tb_ctx = batch_ctx.tb_ctx_;
   batch_ctx.trans_param_ = redis_ctx_.trans_param_;
   batch_ctx.stat_event_type_ = redis_ctx_.stat_event_type_;
-  batch_ctx.is_atomic_ = true;
+  batch_ctx.is_atomic_ = !(flags & RedisOpFlags::BATCH_NOT_ATOMIC);
   batch_ctx.is_readonly_ = req_ops.is_readonly();
   batch_ctx.is_same_type_ = req_ops.is_same_type();
   batch_ctx.is_same_properties_names_ = req_ops.is_same_properties_names();
   batch_ctx.consistency_level_ = table::ObTableConsistencyLevel::STRONG;
   batch_ctx.credential_ = redis_ctx_.credential_;
+  batch_ctx.returning_affected_entity_ = flags & RedisOpFlags::RETURN_AFFECTED_ENTITY;
+  batch_ctx.returning_rowkey_ = flags & RedisOpFlags::RETURN_ROWKEY;
   if (batch_ctx.tablet_ids_.empty()) {
     if (tb_ctx.need_dist_das()) {
       for (int i = 0; OB_SUCC(ret) && i < req_ops.count(); ++i) {
@@ -406,7 +409,7 @@ int CommandOperator::init_table_ctx(const ObTableOperation &op,
         break;
       }
       case ObTableOperationType::INSERT_OR_UPDATE: {
-        if (OB_FAIL(tb_ctx.init_insert_up(false))) {
+        if (OB_FAIL(tb_ctx.init_insert_up(false/*use put*/))) {
           LOG_WARN("fail to init insert up tb_ctx", K(ret), K(tb_ctx));
         }
         break;
@@ -419,14 +422,14 @@ int CommandOperator::init_table_ctx(const ObTableOperation &op,
       }
       case ObTableOperationType::APPEND: {
         if (OB_FAIL(tb_ctx.init_append(
-                flags & RedisOpFlags::RETURN_AFFECTED_ROWS, flags & RedisOpFlags::RETURN_ROWKEY))) {
+                flags & RedisOpFlags::RETURN_AFFECTED_ENTITY, flags & RedisOpFlags::RETURN_ROWKEY))) {
           LOG_WARN("fail to init append tb_ctx", K(ret), K(tb_ctx));
         }
         break;
       }
       case ObTableOperationType::INCREMENT: {
         if (OB_FAIL(tb_ctx.init_increment(
-                flags & RedisOpFlags::RETURN_AFFECTED_ROWS, flags & RedisOpFlags::RETURN_ROWKEY))) {
+                flags & RedisOpFlags::RETURN_AFFECTED_ENTITY, flags & RedisOpFlags::RETURN_ROWKEY))) {
           LOG_WARN("fail to init increment tb_ctx", K(ret), K(tb_ctx));
         }
         break;
@@ -846,6 +849,11 @@ bool CommandOperator::is_incrby_out_of_range(double old_val, double incr)
   return (incr > 0) ? (old_val > DBL_MAX - incr) : (old_val < (-DBL_MAX) - incr);
 }
 
+bool CommandOperator::is_incrby_out_of_range(long double old_val, long double incr)
+{
+  return (incr > 0) ? (old_val > DBL_MAX - incr) : (old_val < (-DBL_MAX) - incr);
+}
+
 // with deep copy
 int CommandOperator::get_subkey_from_entity(
     ObIAllocator &allocator,
@@ -864,6 +872,18 @@ int CommandOperator::get_subkey_from_entity(
     LOG_WARN("fail to decode subkey", K(ret), K(encoded));
   } else if (OB_FAIL(ob_write_string(allocator, tmp_subkey, subkey))) {
     LOG_WARN("fail to write string", K(ret), K(tmp_subkey));
+  }
+  return ret;
+}
+
+int CommandOperator::get_insert_ts_from_entity(const ObITableEntity &entity, int64_t &insert_ts)
+{
+  int ret = OB_SUCCESS;
+  ObObj insert_ts_obj;
+  if (OB_FAIL(entity.get_property(ObRedisUtil::INSERT_TS_PROPERTY_NAME, insert_ts_obj))) {
+    LOG_WARN("fail to get member from result enrity", K(ret), K(entity));
+  } else if (OB_FAIL(insert_ts_obj.get_timestamp(insert_ts))) {
+    LOG_WARN("fail to get insert ts", K(ret), K(insert_ts_obj));
   }
   return ret;
 }
@@ -1361,12 +1381,71 @@ int CommandOperator::do_group_complex_type_set()
   return ret;
 }
 
+// do_group_complex_type_subkey_exists
+int CommandOperator::do_group_complex_type_subkey_exists(ObRedisModel model)
+{
+  int ret = OB_SUCCESS;
+  model_ = model;
+  ResultFixedArray batch_res(op_temp_allocator_);
+  if (OB_FAIL(group_get_complex_type_data(ObRedisUtil::INSERT_TS_PROPERTY_NAME, batch_res))) {
+    LOG_WARN("fail to group get complex type data", K(ret), K(ObRedisUtil::INSERT_TS_PROPERTY_NAME));
+  }
+
+  // reply
+  ObRedisBatchCtx &group_ctx = reinterpret_cast<ObRedisBatchCtx &>(redis_ctx_);
+  for (int i = 0; i < group_ctx.ops().count() && OB_SUCC(ret); ++i) {
+    int reply = batch_res.at(i).get_return_rows() > 0 ? 1 : 0;
+    ObRedisOp *op = reinterpret_cast<ObRedisOp*>(group_ctx.ops().at(i));
+    if (OB_FAIL(op->response().set_res_int(reply/* field already exists */))) {
+      LOG_WARN("fail to set response", K(ret), K(i));
+    }
+  }
+  return ret;
+}
+
 int CommandOperator::fill_set_batch_op(const ObRedisOp &op,
                       ObIArray<ObTabletID> &tablet_ids,
                       ObTableBatchOperation &batch_op)
 {
   int ret = OB_NOT_SUPPORTED;
   LOG_WARN("should call with specific CommandOperator, such as HashCommandOperator", K(ret));
+  return ret;
+}
+
+int CommandOperator::group_get_complex_type_data(const ObString &property_name, ResultFixedArray &batch_res)
+{
+  int ret = OB_SUCCESS;
+  ObRedisBatchCtx &group_ctx = reinterpret_cast<ObRedisBatchCtx &>(redis_ctx_);
+  ObTableBatchOperation batch_op;
+  group_ctx.entity_factory_ = &op_entity_factory_;
+
+  for (int i = 0; OB_SUCC(ret) && i < group_ctx.ops().count(); ++i) {
+    ObRedisOp *op = reinterpret_cast<ObRedisOp*>(group_ctx.ops().at(i));
+    if (OB_ISNULL(op) || OB_ISNULL(op->cmd())) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("invalid null hget op", K(ret), KP(op), KP(op->cmd()));
+    } else {
+      RedisCommand *cmd = reinterpret_cast<RedisCommand*>(op->cmd());
+      ObITableEntity *entity = nullptr;
+      if (OB_FAIL(build_complex_type_rowkey_entity(op->db(), cmd->key(), true /*not meta*/, cmd->sub_key(), entity))) {
+        LOG_WARN("fail to build rowkey entity", K(ret), K(cmd->sub_key()), K(op->db()), K(cmd->key()));
+      } else if(OB_FAIL(entity->add_retrieve_property(property_name))) {
+        LOG_WARN("fail to add retrive property", K(ret), KPC(entity));
+      } else if (OB_FAIL(batch_op.retrieve(*entity))) {
+        LOG_WARN("fail to add get op", K(ret), KPC(entity));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ObArray<ObTabletID> *tablet_ids = nullptr;
+    if (OB_FAIL(init_tablet_ids_by_ops(group_ctx.ops(), tablet_ids))) {
+      LOG_WARN("fail to init tablet ids by ops", K(ret));
+    } else if (OB_FAIL(process_table_batch_op(
+            batch_op, batch_res, nullptr, RedisOpFlags::NONE, &op_temp_allocator_, &op_entity_factory_, tablet_ids))) {
+      LOG_WARN("fail to process table batch op", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -1457,6 +1536,18 @@ int FilterStrBuffer::add_value_compare(hfilter::CompareOperator cmp_op, const Ob
 int FilterStrBuffer::add_conjunction(bool is_and)
 {
   return is_and ? buffer_.append(" && ") : buffer_.append(" || ");
+}
+
+/*****************/
+/* RedisKeyNode */
+/*****************/
+
+int RedisKeyNode::hash(uint64_t &res) const
+{
+  res = 0;
+  res = murmurhash(&key_, sizeof(key_), res);
+  res = murmurhash(&db_, sizeof(int64_t), res);
+  return OB_SUCCESS;
 }
 
 }  // namespace table

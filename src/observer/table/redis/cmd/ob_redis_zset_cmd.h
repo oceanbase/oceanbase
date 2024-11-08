@@ -175,7 +175,7 @@ private:
 class ZScore : public ZSetCommand
 {
 public:
-  explicit ZScore(ObIAllocator &allocator) : member_()
+  explicit ZScore(ObIAllocator &allocator)
   {
     attr_.arity_ = 3;
     attr_.need_snapshot_ = true;
@@ -185,9 +185,7 @@ public:
 
   int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
   int apply(ObRedisSingleCtx &redis_ctx) override;
-
 private:
-  ObString member_;
   DISALLOW_COPY_AND_ASSIGN(ZScore);
 };
 

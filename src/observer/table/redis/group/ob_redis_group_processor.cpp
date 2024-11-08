@@ -164,6 +164,16 @@ int ObRedisGroupOpProcessor::process()
           ret = op.do_group_complex_type_set();
           break;
         }
+        case RedisCommandType::REDIS_COMMAND_HSETNX: {
+          HashCommandOperator op(batch_ctx);
+          ret = op.do_group_hsetnx();
+          break;
+        }
+        case RedisCommandType::REDIS_COMMAND_HEXISTS: {
+          CommandOperator op(batch_ctx);
+          ret = op.do_group_complex_type_subkey_exists(ObRedisModel::HASH);
+          break;
+        }
         // string
         case RedisCommandType::REDIS_COMMAND_GET: {
           StringCommandOperator op(batch_ctx);
@@ -175,6 +185,26 @@ int ObRedisGroupOpProcessor::process()
           ret = op.do_group_set();
           break;
         }
+        case RedisCommandType::REDIS_COMMAND_BITCOUNT: {
+          StringCommandOperator op(batch_ctx);
+          ret = op.do_group_analyze(&StringCommandOperator::analyze_bitcount, &op);
+          break;
+        }
+        case RedisCommandType::REDIS_COMMAND_GETBIT: {
+          StringCommandOperator op(batch_ctx);
+          ret = op.do_group_analyze(&StringCommandOperator::analyze_getbit, &op);
+          break;
+        }
+        case RedisCommandType::REDIS_COMMAND_GETRANGE: {
+          StringCommandOperator op(batch_ctx);
+          ret = op.do_group_analyze(&StringCommandOperator::analyze_getrange, &op);
+          break;
+        }
+        case RedisCommandType::REDIS_COMMAND_STRLEN: {
+          StringCommandOperator op(batch_ctx);
+          ret = op.do_group_analyze(&StringCommandOperator::analyze_strlen, &op);
+          break;
+        }
         case RedisCommandType::REDIS_COMMAND_INCRBY:
         case RedisCommandType::REDIS_COMMAND_DECRBY:
         case RedisCommandType::REDIS_COMMAND_DECR:
@@ -183,13 +213,42 @@ int ObRedisGroupOpProcessor::process()
           ret = op.do_group_incr();
           break;
         }
+        case RedisCommandType::REDIS_COMMAND_INCRBYFLOAT: {
+          StringCommandOperator op(batch_ctx);
+          ret = op.do_group_incrbyfloat();
+          break;
+        }
+        case RedisCommandType::REDIS_COMMAND_SETNX: {
+          StringCommandOperator op(batch_ctx);
+          ret = op.do_group_setnx();
+          break;
+        }
+        case RedisCommandType::REDIS_COMMAND_APPEND: {
+          StringCommandOperator op(batch_ctx);
+          ret = op.do_group_append();
+          break;
+        }
+        // list
         case RedisCommandType::REDIS_COMMAND_LPUSH:
-        case RedisCommandType::REDIS_COMMAND_RPUSH: {
+        case RedisCommandType::REDIS_COMMAND_RPUSH:
+        case RedisCommandType::REDIS_COMMAND_LPUSHX:
+        case RedisCommandType::REDIS_COMMAND_RPUSHX: {
           ListCommandOperator op(batch_ctx);
           ret = op.do_group_push();
           break;
         }
+        case RedisCommandType::REDIS_COMMAND_LPOP:
+        case RedisCommandType::REDIS_COMMAND_RPOP: {
+          ListCommandOperator op(batch_ctx);
+          ret = op.do_group_pop();
+          break;
+        }
         // set
+        case RedisCommandType::REDIS_COMMAND_SISMEMBER: {
+          CommandOperator op(batch_ctx);
+          ret = op.do_group_complex_type_subkey_exists(ObRedisModel::SET);
+          break;
+        }
         case RedisCommandType::REDIS_COMMAND_SADD: {
           SetCommandOperator op(batch_ctx);
           ret = op.do_group_complex_type_set();
@@ -199,6 +258,11 @@ int ObRedisGroupOpProcessor::process()
         case RedisCommandType::REDIS_COMMAND_ZADD: {
           ZSetCommandOperator op(batch_ctx);
           ret = op.do_group_complex_type_set();
+          break;
+        }
+        case RedisCommandType::REDIS_COMMAND_ZSCORE: {
+          ZSetCommandOperator op(batch_ctx);
+          ret = op.do_group_zscore();
           break;
         }
         default: {

@@ -47,7 +47,6 @@ public:
   int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
   int apply(ObRedisSingleCtx &redis_ctx) override;
 
-private:
   common::ObString val_;
 
 private:
@@ -69,7 +68,6 @@ public:
   int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
   int apply(ObRedisSingleCtx &redis_ctx) override;
 
-private:
   common::ObString start_;
   common::ObString end_;
 
@@ -111,7 +109,6 @@ public:
   int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
   int apply(ObRedisSingleCtx &redis_ctx) override;
 
-private:
   ObString offset_;
 
 private:
@@ -133,7 +130,6 @@ public:
   int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
   int apply(ObRedisSingleCtx &redis_ctx) override;
 
-private:
   common::ObString start_;
   common::ObString end_;
 

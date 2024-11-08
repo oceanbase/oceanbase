@@ -23,6 +23,7 @@ namespace table
 class HashCommandOperator : public CommandOperator
 {
 public:
+  using RedisKeySet = hash::ObHashSet<RedisKeyNode>;
   explicit HashCommandOperator(ObRedisCtx &redis_ctx) : CommandOperator(redis_ctx)
   {
     model_ = ObRedisModel::HASH;
@@ -47,6 +48,7 @@ public:
                         ObIArray<ObTabletID> &tablet_ids,
                         ObTableBatchOperation &batch_op) override;
 
+  int do_group_hsetnx();
 private:
   int do_hset_inner(int64_t db, const ObString &key, const RedisCommand::FieldValMap &field_val_map, int64_t &insert_num);
   int build_value_entity(int64_t db, const ObString &key, const ObString &field,

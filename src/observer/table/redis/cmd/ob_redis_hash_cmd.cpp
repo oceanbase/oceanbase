@@ -117,7 +117,7 @@ int HExists::init(const common::ObIArray<common::ObString> &args, ObString& fmt_
   if (OB_FAIL(init_common(args))) {
     RECORD_REDIS_ERROR(fmt_err_msg, ObRedisErr::SYNTAX_ERR);
     LOG_WARN("fail to init common", K(ret));
-  } else if (OB_FAIL(args.at(1, field_))) {
+  } else if (OB_FAIL(args.at(1, sub_key_))) {
     LOG_WARN("fail to get field", K(ret));
   } else {
     is_inited_ = true;
@@ -132,8 +132,8 @@ int HExists::apply(ObRedisSingleCtx &redis_ctx)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("HExists not inited", K(ret));
-  } else if (OB_FAIL(cmd_op.do_hexists(redis_ctx.get_request_db(), key_, field_))) {
-    LOG_WARN("fail to do HExists", K(ret), K(redis_ctx.get_request_db()), K(key_), K(field_));
+  } else if (OB_FAIL(cmd_op.do_hexists(redis_ctx.get_request_db(), key_, sub_key_))) {
+    LOG_WARN("fail to do HExists", K(ret), K(redis_ctx.get_request_db()), K(key_), K(sub_key_));
   }
 
   return ret;
@@ -145,7 +145,7 @@ int HGet::init(const common::ObIArray<common::ObString> &args, ObString& fmt_err
   if (OB_FAIL(init_common(args))) {
     RECORD_REDIS_ERROR(fmt_err_msg, ObRedisErr::SYNTAX_ERR);
     LOG_WARN("fail to init common", K(ret));
-  } else if (OB_FAIL(args.at(1, field_))) {
+  } else if (OB_FAIL(args.at(1, sub_key_))) {
     LOG_WARN("fail to get field", K(ret));
   } else {
     is_inited_ = true;
@@ -160,8 +160,8 @@ int HGet::apply(ObRedisSingleCtx &redis_ctx)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("HGet not inited", K(ret));
-  } else if (OB_FAIL(cmd_op.do_hget(redis_ctx.get_request_db(), key_, field_))) {
-    LOG_WARN("fail to do HGet", K(ret), K(redis_ctx.get_request_db()), K(key_), K(field_));
+  } else if (OB_FAIL(cmd_op.do_hget(redis_ctx.get_request_db(), key_, sub_key_))) {
+    LOG_WARN("fail to do HGet", K(ret), K(redis_ctx.get_request_db()), K(key_), K(sub_key_));
   }
 
   return ret;

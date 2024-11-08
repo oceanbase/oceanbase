@@ -90,7 +90,6 @@ public:
   int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
   virtual int apply(ObRedisSingleCtx &redis_ctx) override;
 
-private:
   ObString field_;
   ObString new_value_;
 
@@ -113,9 +112,6 @@ public:
   virtual int apply(ObRedisSingleCtx &redis_ctx) override;
 
 private:
-  ObString field_;
-
-private:
   DISALLOW_COPY_AND_ASSIGN(HExists);
 };
 
@@ -132,12 +128,6 @@ public:
 
   int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
   virtual int apply(ObRedisSingleCtx &redis_ctx) override;
-  OB_INLINE const ObString &field() { return field_; }
-
-  TO_STRING_KV(K_(field));
-
-private:
-  ObString field_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(HGet);

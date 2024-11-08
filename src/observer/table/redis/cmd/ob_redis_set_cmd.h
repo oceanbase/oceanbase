@@ -227,10 +227,6 @@ public:
   // set and check args here
   int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
   int apply(ObRedisSingleCtx &redis_ctx) override;
-
-private:
-  ObString member_;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(SIsMember);
 };

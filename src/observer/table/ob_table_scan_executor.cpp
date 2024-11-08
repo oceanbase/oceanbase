@@ -443,6 +443,7 @@ int ObTableApiScanExecutor::rescan()
       LOG_WARN("fail to generate scan ranges", K(ret));
     } else {
       scan_op_->get_scan_param().limit_param_.limit_ = tb_ctx.get_limit();
+      scan_op_->get_scan_param().limit_param_.offset_ = tb_ctx.get_offset();
       if (OB_FAIL(scan_op_->rescan())) {
         LOG_WARN("rescan error", K(ret));
       }

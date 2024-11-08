@@ -354,6 +354,7 @@ OB_STMT_TYPE_DEF_UNKNOWN_AT(T_LOAD_INDEX_INTO_CACHE, no_priv_needed, 359)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_SHOW_CHECK_TABLE, err_stmt_type_priv, 360)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_REBUILD_TABLET, get_sys_tenant_alter_system_priv, 361)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_MODULE_DATA, get_sys_tenant_alter_system_priv, 366)
+OB_STMT_TYPE_DEF_UNKNOWN_AT(T_REDIS, err_stmt_type_priv, 367)
 
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_MAX, err_stmt_type_priv, 500)
 #endif

@@ -21,11 +21,13 @@
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
-using namespace oceanbase::table;
 using namespace oceanbase::share;
 using namespace oceanbase::sql;
 using namespace oceanbase::rpc;
-
+namespace oceanbase
+{
+namespace table
+{
 void ObTableRedisEndTransCb::callback(int cb_param)
 {
   int ret = OB_SUCCESS;
@@ -179,6 +181,7 @@ int ObRedisService::execute_cmd_single(ObRedisSingleCtx &ctx)
   ObString lock_key;
   REDIS_LOCK_MODE lock_mode;
   ObString fmt_err_msg;
+  observer::ObTableProccessType process_type = observer::ObTableProccessType::TABLE_API_PROCESS_TYPE_INVALID;
   // process cmd in the old way
   if (OB_FAIL(ObRedisCommandFactory::gen_command(
           ctx.allocator_, ctx.request_.get_cmd_name(), ctx.request_.get_args(), fmt_err_msg, cmd))) {
@@ -190,6 +193,11 @@ int ObRedisService::execute_cmd_single(ObRedisSingleCtx &ctx)
         K(ret),
         K(ctx.request_.get_cmd_name()),
         K(ctx.request_.get_args()));
+  } else if (OB_ISNULL(ctx.stat_event_type_)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("invalid null stat event type", K(ret));
+  } else if (OB_FAIL(redis_cmd_to_proccess_type(cmd->cmd_type(), process_type))) {
+    LOG_WARN("fail to convert redis cmd to process type", K(ret));
   } else if (cmd->cmd_group() == ObRedisCmdGroup::GENERIC_CMD) {
     ObRowkey cur_rowkey = ctx.request_.get_entity().get_rowkey();
     if (OB_FAIL(ctx.init_cmd_ctx(cur_rowkey, ctx.request_.get_args()))) {
@@ -234,6 +242,7 @@ int ObRedisService::execute_cmd_single(ObRedisSingleCtx &ctx)
   bool is_rollback = (OB_SUCCESS != ret);
   if (OB_NOT_NULL(cmd)) {
     int tmp_ret = OB_SUCCESS;
+    *ctx.stat_event_type_ = process_type; // set event_type after apply
     // cmd pointer need manual destruction
     cmd->~RedisCommand();
     // exec end_trans regardless of whether ret is OB_SUCCESS
@@ -281,6 +290,7 @@ int ObRedisService::execute_cmd_group(ObRedisSingleCtx &ctx)
   ObSEArray<ObString, 8> redis_args;
   ObString fmt_err_msg;
   ObTableID table_id = ctx.tb_ctx_.get_simple_table_schema()->get_table_id();
+  observer::ObTableProccessType process_type = observer::ObTableProccessType::TABLE_API_PROCESS_TYPE_INVALID;
   if (OB_FAIL(alloc_group_op(redis_op))) {
     LOG_WARN("fail to alloc group op", K(ret));
   } else if (OB_FAIL(deep_copy_redis_args(redis_op->allocator_, ctx.request_.get_cmd_name(), ctx.request_.get_args(),
@@ -295,6 +305,11 @@ int ObRedisService::execute_cmd_group(ObRedisSingleCtx &ctx)
         K(ret),
         K(ctx.request_.get_cmd_name()),
         K(ctx.request_.get_args()));
+  } else if (OB_ISNULL(ctx.stat_event_type_)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("invalid null stat event type", K(ret));
+  } else if (OB_FAIL(redis_cmd_to_proccess_type(cmd->cmd_type(), process_type))) {
+    LOG_WARN("fail to convert redis cmd to process type", K(ret));
   } else if (OB_FAIL(redis_op->init(ctx, cmd, ObTableGroupType::TYPE_REDIS_GROUP))) {
     LOG_WARN("fail to init redis op", K(ret));
   } else if (OB_ISNULL(key = OB_NEWx(ObRedisCmdKey,
@@ -323,6 +338,7 @@ int ObRedisService::execute_cmd_group(ObRedisSingleCtx &ctx)
   }
   // NOTE: Must be called to turn redis_err into success
   ret = COVER_REDIS_ERROR(ret);
+  *ctx.stat_event_type_ = process_type; // set event_type after process
 
   return ret;
 }
@@ -411,4 +427,21 @@ int ObRedisService::end_trans(ObRedisSingleCtx &redis_ctx, bool need_snapshot, b
   }
 
   return ret;
+}
+
+int ObRedisService::redis_cmd_to_proccess_type(const RedisCommandType &cmd_type, observer::ObTableProccessType& ret_type)
+{
+  int ret = OB_SUCCESS;
+  int iret = static_cast<int>(cmd_type + observer::ObTableProccessType::TABLE_API_REDIS_TYPE_OFFSET);
+  if (iret <= observer::ObTableProccessType::TABLE_API_REDIS_TYPE_OFFSET
+      || iret >= observer::ObTableProccessType::TABLE_API_REDIS_TYPE_MAX) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid redis type", K(ret), K(cmd_type), K(iret), "max type", TABLE_API_REDIS_TYPE_MAX);
+  } else {
+    ret_type = static_cast<observer::ObTableProccessType>(iret);
+  }
+  return ret;
+}
+
+}
 }
