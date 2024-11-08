@@ -3011,7 +3011,9 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
     }
     // 缓存data version 用于性能优化
     uint64_t data_version = 0;
-    if (OB_TMP_FAIL(GET_MIN_DATA_VERSION(effective_tenant_id, data_version))) {
+    if (!is_valid_tenant_id(effective_tenant_id)) {
+      LOG_DEBUG("invalid tenant id", K_(saved_tenant_info), K(effective_tenant_id));
+    } else if (OB_TMP_FAIL(GET_MIN_DATA_VERSION(effective_tenant_id, data_version))) {
       LOG_WARN_RET(tmp_ret, "get data version fail", "ret", tmp_ret, K(effective_tenant_id));
     } else {
       ATOMIC_STORE(&data_version_, data_version);
