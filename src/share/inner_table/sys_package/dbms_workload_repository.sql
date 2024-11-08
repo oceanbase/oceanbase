@@ -1,10 +1,6 @@
--- package_name:dbms_workload_repository
--- author:xiaochu.yh
+#package_name:dbms_workload_repository
+#author:xiaochu.yh
 
-
---
--- 完整 PL 包参考文档：https://docs.oracle.com/database/121/ARPLS/d_workload_repos.htm#ARPLS093
---
 CREATE OR REPLACE PACKAGE dbms_workload_repository AUTHID CURRENT_USER AS
 
   PROCEDURE ASH_REPORT(BTIME         IN TIMESTAMP,
