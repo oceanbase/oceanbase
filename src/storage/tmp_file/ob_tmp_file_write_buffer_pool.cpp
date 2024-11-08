@@ -1060,6 +1060,18 @@ bool ObTmpWriteBufferPool::has_free_page_(PageEntryType type)
   return b_ret;
 }
 
+void ObTmpWriteBufferPool::print_page_entry(const uint32_t page_id)
+{
+  common::TCRWLock::RLockGuard guard(lock_);
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_page_id_(page_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("wbp use unexpected page id", KR(ret), K(page_id), K(fat_.size()));
+  } else {
+    LOG_INFO("page entry info", K(page_id), K(fat_[page_id]));
+  }
+}
+
 void ObTmpWriteBufferPool::print_statistics()
 {
   int64_t dirty_page_percentage = get_dirty_page_percentage();
