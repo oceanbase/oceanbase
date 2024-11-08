@@ -873,7 +873,7 @@ int ObParquetTableRowIterator::DataLoader::load_fixed_string_col()
           } else {
             if (row_count_ == batch_size_) {
               res_ptr = (void*)(cur_v.ptr);
-            } else {
+            } else if (fixed_length > 0) {
               //when row_count_ less than batch_size_, it may reach page end and reload next page
               //string values need deep copy
               if (OB_ISNULL(res_ptr = str_res_mem_.alloc(fixed_length))) {
@@ -933,7 +933,7 @@ int ObParquetTableRowIterator::DataLoader::load_string_col()
             } else {
               if (row_count_ == batch_size_) {
                 res_ptr = (void *)(cur_v.ptr);
-              } else {
+              } else if (cur_v.len > 0) {
                 //when row_count_ less than batch_size_, it may reach page end and reload next page
                 //string values need deep copy
                 if (OB_ISNULL(res_ptr = str_res_mem_.alloc(cur_v.len))) {
