@@ -904,8 +904,6 @@ int ObOptimizerTraceImpl::append(const ObOptTabletLoc& tablet_loc)
   int ret = OB_SUCCESS;
   if (OB_FAIL(append("(partition id:", tablet_loc.get_partition_id()))) {
     LOG_WARN("failed to append", K(ret));
-  } else if (OB_FAIL(append("partition id:", tablet_loc.get_partition_id()))) {
-    LOG_WARN("failed to append", K(ret));
   } else if (tablet_loc.get_first_level_part_id() >= 0 &&
              OB_FAIL(append(", first level partition id:", tablet_loc.get_first_level_part_id()))) {
     LOG_WARN("failed to append", K(ret));
@@ -937,6 +935,10 @@ int ObOptimizerTraceImpl::append(const ObBatchEstTasks& task)
       LOG_WARN("failed to append", K(ret));
     } else if (OB_FAIL(append(", tablet", params.at(i).tablet_id_.id()))) {
       LOG_WARN("failed to append", K(ret));
+    } else if (ObSimpleBatch::T_SCAN == params.at(i).batch_.type_ &&
+               NULL != params.at(i).batch_.range_ &&
+               OB_FAIL(append(", range", *params.at(i).batch_.range_))) {
+      LOG_WARN("failed to append");
     } else if (OB_FAIL(append(") logical rows:", res.at(i).logical_row_count_))) {
       LOG_WARN("failed to append", K(ret));
     } else if (OB_FAIL(append(", physical rows:", res.at(i).physical_row_count_))) {
@@ -946,6 +948,11 @@ int ObOptimizerTraceImpl::append(const ObBatchEstTasks& task)
     }
   }
   return ret;
+}
+
+int ObOptimizerTraceImpl::append(const ObTabletID& id)
+{
+  return append(id.id());
 }
 
 template <>
