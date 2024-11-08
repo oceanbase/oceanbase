@@ -4076,7 +4076,7 @@ int ObLSBackupPrepareTask::process()
     LOG_WARN("backup already failed, do nothing", K(ret));
   } else if (OB_FAIL(may_need_advance_checkpoint_())) {
     LOG_WARN("may need advance checkpoint failed", K(ret), K_(param));
-  } else if (OB_FAIL(prepare_backup_tx_table_filled_tx_scn_())) {
+  } else if (OB_FAIL(prepare_backup_tx_data_recycle_scn_())) {
     LOG_WARN("failed to check tx data can explain user data", K(ret));
   } else if (OB_FAIL(scheduler->alloc_dag(rebuild_dag))) {
     LOG_WARN("failed to alloc child dag", K(ret));
@@ -4338,7 +4338,7 @@ int ObLSBackupPrepareTask::fetch_backup_ls_meta_(share::SCN &clog_checkpoint_scn
   return ret;
 }
 
-int ObLSBackupPrepareTask::prepare_backup_tx_table_filled_tx_scn_()
+int ObLSBackupPrepareTask::prepare_backup_tx_data_recycle_scn_()
 {
   int ret = OB_SUCCESS;
   bool created_after_backup = false;
@@ -4352,16 +4352,16 @@ int ObLSBackupPrepareTask::prepare_backup_tx_table_filled_tx_scn_()
                      "tenant_id", param_.tenant_id_,
                      "job_id", param_.job_desc_.job_id_,
                      "ls_id", param_.ls_id_);
-  } else if (OB_FAIL(get_backup_tx_data_table_filled_tx_scn_(ls_backup_ctx_->backup_tx_table_filled_tx_scn_))) {
+  } else if (OB_FAIL(get_backup_tx_data_recycle_scn_(ls_backup_ctx_->backup_tx_data_recycle_scn_))) {
     LOG_WARN("failed to get backup tx data table filled tx scn", K(ret));
   }
   return ret;
 }
 
-int ObLSBackupPrepareTask::get_backup_tx_data_table_filled_tx_scn_(SCN &filled_tx_scn)
+int ObLSBackupPrepareTask::get_backup_tx_data_recycle_scn_(SCN &tx_data_recycle_scn)
 {
   int ret = OB_SUCCESS;
-  filled_tx_scn = SCN::max_scn();
+  tx_data_recycle_scn = SCN::max_scn();
   const common::ObTabletID &tx_data_tablet_id = LS_TX_DATA_TABLET;
   const ObBackupMetaType meta_type = ObBackupMetaType::BACKUP_SSTABLE_META;
   ObBackupDataType sys_backup_data_type;
@@ -4382,10 +4382,10 @@ int ObLSBackupPrepareTask::get_backup_tx_data_table_filled_tx_scn_(SCN &filled_t
       backup_path.get_obstr(), param_.backup_dest_.get_storage_info(), meta_index, meta_array))) {
     LOG_WARN("failed to read sstable metas", K(ret), K(backup_path), K(meta_index));
   } else if (meta_array.empty()) {
-    filled_tx_scn = SCN::min_scn();
+    tx_data_recycle_scn = SCN::min_scn();
     LOG_INFO("the log stream do not have tx data sstable", K(ret));
   } else {
-    filled_tx_scn = meta_array.at(0).sstable_meta_.basic_meta_.filled_tx_scn_;
+    tx_data_recycle_scn = meta_array.at(0).sstable_meta_.basic_meta_.tx_data_recycle_scn_;
   }
   return ret;
 }
@@ -4479,85 +4479,6 @@ int ObLSBackupPrepareTask::prepare_meta_index_store_param_(
     index_param.backup_data_type_.set_sys_data_backup();
     index_param.turn_id_ = turn_id;
     index_param.retry_id_ = retry_id;
-  }
-  return ret;
-}
-
-int ObLSBackupPrepareTask::get_cur_ls_min_filled_tx_scn_(SCN &min_filled_tx_scn)
-{
-  int ret = OB_SUCCESS;
-  min_filled_tx_scn = SCN::max_scn();
-  ObLSTabletIterator iterator(ObMDSGetTabletMode::READ_WITHOUT_CHECK);
-  storage::ObLSHandle ls_handle;
-  storage::ObLS *ls = NULL;
-  ObLSTabletService *ls_tablet_svr = NULL;
-  ObTabletHandle tablet_handle;
-  const uint64_t tenant_id = param_.tenant_id_;
-  const share::ObLSID &ls_id = param_.ls_id_;
-  if (OB_FAIL(get_ls_handle(tenant_id, ls_id, ls_handle))) {
-    LOG_WARN("failed to get ls handle", K(ret), K(tenant_id), K(ls_id));
-  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("log stream not exist", K(ret), K(ls_id));
-  } else if (FALSE_IT(ls_tablet_svr = ls->get_tablet_svr())) {
-  } else if (OB_FAIL(ls_tablet_svr->build_tablet_iter(iterator))) {
-    STORAGE_LOG(WARN, "build ls table iter failed.", KR(ret));
-  } else {
-    while (OB_SUCC(iterator.get_next_tablet(tablet_handle))) {
-      SCN tmp_filled_tx_scn = SCN::max_scn();
-      bool has_minor_sstable = false;
-      if (OB_FAIL(get_tablet_min_filled_tx_scn_(tablet_handle, tmp_filled_tx_scn, has_minor_sstable))) {
-        STORAGE_LOG(WARN, "get min end_log_ts from a single tablet failed.", KR(ret));
-      } else if (!has_minor_sstable) {
-        continue;
-      } else if (tmp_filled_tx_scn < min_filled_tx_scn) {
-        min_filled_tx_scn = tmp_filled_tx_scn;
-      }
-    }
-
-    if (OB_ITER_END == ret) {
-      ret = OB_SUCCESS;
-    }
-  }
-  return ret;
-}
-
-int ObLSBackupPrepareTask::get_tablet_min_filled_tx_scn_(
-    ObTabletHandle &tablet_handle, SCN &min_filled_tx_scn, bool &has_minor_sstable)
-{
-  int ret = OB_SUCCESS;
-  has_minor_sstable = false;
-  min_filled_tx_scn = SCN::max_scn();
-  ObTablet *tablet = nullptr;
-  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
-  if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tablet is nullptr.", K(ret), K(tablet_handle));
-  } else if (tablet->get_tablet_meta().tablet_id_.is_ls_inner_tablet()) {
-    // skip inner tablet
-  } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
-    LOG_WARN("fail to fetch table store", K(ret));
-  } else {
-    const ObSSTableArray &sstable_array = table_store_wrapper.get_member()->get_minor_sstables();
-    has_minor_sstable = !sstable_array.empty();
-    for (int64_t i = 0; OB_SUCC(ret) && i < sstable_array.count(); ++i) {
-      ObITable *table_ptr = sstable_array[i];
-      ObSSTable *sstable = NULL;
-      ObSSTableMetaHandle sst_meta_hdl;
-      if (OB_ISNULL(table_ptr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table ptr should not be null", K(ret));
-      } else if (!table_ptr->is_sstable()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table ptr type not expectedd", K(ret));
-      } else if (FALSE_IT(sstable = static_cast<ObSSTable *>(table_ptr))) {
-      } else if (OB_FAIL(sstable->get_meta(sst_meta_hdl))) {
-        LOG_WARN("fail to get sstable meta", K(ret));
-      } else {
-        min_filled_tx_scn = std::min(
-          std::max(sst_meta_hdl.get_sstable_meta().get_filled_tx_scn(), sstable->get_end_scn()), min_filled_tx_scn);
-      }
-    }
   }
   return ret;
 }

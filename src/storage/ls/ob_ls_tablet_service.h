@@ -209,9 +209,8 @@ public:
   int remove_tablets(const common::ObIArray<common::ObTabletID> &tablet_id_array);
   // Exactly deletion compared with input tablets
   int remove_tablet(const ObTabletHandle& tablet_handle);
-  int get_ls_min_end_scn(
-      share::SCN &min_end_scn_from_latest_tablets,
-      share::SCN &min_end_scn_from_old_tablets);
+  int get_ls_min_filled_tx_scn(share::SCN &min_filled_tx_scn_from_latest_tablets,
+                               share::SCN &min_filled_tx_scn_from_old_tablets);
   int get_tx_data_memtable_mgr(ObMemtableMgrHandle &mgr_handle);
   int get_tx_ctx_memtable_mgr(ObMemtableMgrHandle &mgr_handle);
   int get_lock_memtable_mgr(ObMemtableMgrHandle &mgr_handle);

@@ -134,6 +134,7 @@ int TestParallelMinorDag::prepare_merge_result(
   }
   result.scn_range_.start_scn_ = fake_sstables_[0]->key_.scn_range_.start_scn_;
   result.scn_range_.end_scn_ = fake_sstables_[sstable_cnt - 1]->key_.scn_range_.end_scn_;
+  result.merge_scn_ = result.scn_range_.end_scn_;
   return ret;
 }
 

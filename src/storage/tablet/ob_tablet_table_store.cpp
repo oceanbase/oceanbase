@@ -1083,7 +1083,7 @@ int ObTabletTableStore::get_mini_minor_sstables(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("table store is not inited", K(ret));
-  } else if (OB_FAIL(get_mini_minor_sstables_(iter))) {
+  } else if (OB_FAIL(iter.add_tables(minor_tables_, 0, minor_tables_.count()))) {
     LOG_WARN("failed to get mini minor sstables", K(ret));
   }
   return ret;
@@ -1328,6 +1328,7 @@ int ObTabletTableStore::build_minor_tables(
   ObArray<ObITable *> minor_tables;
 
   if (NULL == new_table || !new_table->is_minor_sstable()) {
+    // do nothing
   } else if (!new_table->get_key().scn_range_.is_valid() ||
              new_table->get_key().scn_range_.is_empty()) {
     ret = OB_ERR_SYS;
@@ -1346,45 +1347,43 @@ int ObTabletTableStore::build_minor_tables(
     }
   }
 
-  if (OB_SUCC(ret)) {
-    ObITable *table = nullptr;
-    for (int64_t i = 0; OB_SUCC(ret) && i < old_store.minor_tables_.count(); ++i) {
-      table = old_store.minor_tables_[i];
-      bool need_add = true;
-      if (OB_UNLIKELY(NULL == table || !table->is_minor_sstable())) {
-        ret = OB_ERR_SYS;
-        LOG_ERROR("table must be minor sstable", K(ret), KPC(table));
-      } else if (OB_NOT_NULL(new_table) && new_table->is_minor_sstable()) {
-        if (new_table->get_key() == table->get_key()) {
-          ObSSTable *sstable = static_cast<ObSSTable *>(table);
-          if (sstable->get_max_merged_trans_version() <= new_sstable->get_max_merged_trans_version()) {
-            need_add = false;
-            LOG_INFO("new table's max merge trans version is not less than the old table, "
-                "add new table when table key is same", KPC(sstable), KPC(new_sstable));
-          } else {
-            ret = OB_NO_NEED_MERGE;
-            LOG_WARN("new table with old max merged trans version, no need to merge", K(ret), KPC(sstable), KPC(new_sstable));
-          }
-        } else if (ObTableStoreUtil::check_include_by_scn_range(*new_table, *table)) {
-          LOG_DEBUG("table purged", K(*new_table), K(*table));
-          continue;
-        } else if (ObTableStoreUtil::check_include_by_scn_range(*table, *new_table)) {
-          ret = OB_MINOR_SSTABLE_RANGE_CROSS;
-          LOG_WARN("new_table is contained by existing table", K(ret), KPC(new_table), KPC(table));
-        } else if (ObTableStoreUtil::check_intersect_by_scn_range(*table, *new_table)) {
-          ret = OB_MINOR_SSTABLE_RANGE_CROSS;
-          LOG_WARN("new table's range is crossed with existing table", K(ret), K(*new_table), K(*table));
-        }
+  for (int64_t i = 0; OB_SUCC(ret) && i < old_store.minor_tables_.count(); ++i) {
+    ObITable *table = old_store.minor_tables_[i];
+    bool need_add = true;
+    if (OB_UNLIKELY(NULL == table || !table->is_minor_sstable())) {
+      ret = OB_ERR_SYS;
+      LOG_ERROR("table must be minor sstable", K(ret), KPC(table));
+    } else if (OB_ISNULL(new_table) || !new_table->is_minor_sstable()) {
+      // do nothing
+    } else if (OB_FAIL(check_need_add_old_minor_sstable(static_cast<ObSSTable *>(table), new_sstable, need_add))) {
+      LOG_WARN("failed to check need add old sstable", K(ret), KPC(table), KPC(new_table));
+    } else if (!need_add) {
+      // add new sstable, do nothing
+    } else if (ObTableStoreUtil::check_include_by_scn_range(*new_table, *table)) {
+      if (static_cast<ObSSTable *>(new_table)->get_filled_tx_scn() < static_cast<ObSSTable *>(table)->get_filled_tx_scn()) {
+        ret = OB_NO_NEED_MERGE;
+      } else {
+        LOG_DEBUG("table purged", KPC(new_table), KPC(table));
+        continue;
       }
-      if (OB_FAIL(ret)) {
-      } else if (need_add && OB_FAIL(minor_tables.push_back(table))) {
-        LOG_WARN("failed to add table", K(ret));
-      }
+    } else if (ObTableStoreUtil::check_include_by_scn_range(*table, *new_table)) {
+      ret = OB_MINOR_SSTABLE_RANGE_CROSS;
+      LOG_WARN("new_table is contained by existing table", K(ret), KPC(new_table), KPC(table));
+    } else if (ObTableStoreUtil::check_intersect_by_scn_range(*table, *new_table)) {
+      ret = OB_MINOR_SSTABLE_RANGE_CROSS;
+      LOG_WARN("new table's range is crossed with existing table", K(ret), K(*new_table), K(*table));
     }
-  }
+
+    if (OB_FAIL(ret)) {
+    } else if (need_add && OB_FAIL(minor_tables.push_back(table))) {
+      LOG_WARN("failed to add table", K(ret));
+    }
+  } // end for
+
   if (OB_SUCC(ret)) {
-    if (OB_NOT_NULL(new_table) && new_table->is_minor_sstable()
-        && (OB_FAIL(minor_tables.push_back(new_table)))) {
+    if (nullptr != new_table &&
+        new_table->is_minor_sstable() &&
+        OB_FAIL(minor_tables.push_back(new_table))) {
       LOG_WARN("failed to add new minor table", K(ret), KPC(new_table));
     } else if (minor_tables.empty()) { // no minor tables
     } else if (minor_tables.count() == old_store.minor_tables_.count() && minor_tables.count() >= MAX_SSTABLE_CNT) {
@@ -1448,6 +1447,47 @@ int ObTabletTableStore::build_minor_tables(
         }
         LOG_INFO("Finish update upper_trans_version", K(ret), K(param), K_(minor_tables));
       }
+    }
+  }
+  return ret;
+}
+
+int ObTabletTableStore::check_need_add_old_minor_sstable(
+    const blocksstable::ObSSTable *old_sstable,
+    const blocksstable::ObSSTable *new_sstable,
+    bool &need_add)
+{
+  int ret = OB_SUCCESS;
+  need_add = true;
+
+  if (OB_UNLIKELY(nullptr == old_sstable || nullptr == new_sstable)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid arguments", K(ret), KPC(old_sstable), KPC(new_sstable));
+  } else if (new_sstable->get_key() != old_sstable->get_key()) {
+    // do nothing
+  } else if (old_sstable->get_max_merged_trans_version() == new_sstable->get_max_merged_trans_version()) {
+    if (old_sstable->get_filled_tx_scn() < new_sstable->get_filled_tx_scn()) {
+      need_add = false;
+    } else {
+      ret = OB_NO_NEED_MERGE;
+      LOG_WARN("new table cannot replace old table, no need to merge", K(ret), KPC(old_sstable), KPC(new_sstable));
+    }
+  } else if (old_sstable->get_max_merged_trans_version() < new_sstable->get_max_merged_trans_version()) {
+    if (old_sstable->get_filled_tx_scn() > new_sstable->get_filled_tx_scn()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected filled tx scn", K(ret), KPC(old_sstable), KPC(new_sstable));
+    } else {
+      need_add = false;
+      LOG_INFO("same key, and the max merged trans version of the new table is bigger than the old table, add new table",
+              KPC(old_sstable), KPC(new_sstable));
+    }
+  } else { // old max merged trans version > new max merged trans version
+    if (old_sstable->get_filled_tx_scn() < new_sstable->get_filled_tx_scn()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected filled tx scn", K(ret), KPC(old_sstable), KPC(new_sstable));
+    } else {
+      ret = OB_NO_NEED_MERGE;
+      LOG_WARN("new table cannot replace old table, no need to merge", K(ret), KPC(old_sstable), KPC(new_sstable));
     }
   }
   return ret;
@@ -1708,10 +1748,50 @@ int ObTabletTableStore::check_continuous() const
       prev_table = table;
     }
 
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(check_minor_tables_continue_(minor_tables_))) {
-        LOG_WARN("failed to check minor tables continue", K(ret), K(minor_tables_));
-      }
+    if (FAILEDx(check_minor_tables_continue_(minor_tables_))) {
+      LOG_WARN("failed to check minor tables continue", K(ret), K(minor_tables_));
+    } else if (OB_FAIL(check_minor_tx_scn())) {
+      LOG_WARN("failed to check tx scn", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTabletTableStore::check_minor_tx_scn() const
+{
+  int ret = OB_SUCCESS;
+  SCN prev = SCN::min_scn();
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < minor_tables_.count(); ++i) {
+    ObSSTable *sstable = static_cast<ObSSTable *>(minor_tables_[i]);
+
+    if (OB_UNLIKELY(nullptr == sstable || !sstable->is_minor_sstable())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("table must be minor table", K(ret), K(i), KPC(sstable));
+    } else if (sstable->is_remote_logical_minor_sstable()) {
+      // remote logical minor sst's tx filled scn is invalid, no need to check
+      break;
+    } else if (OB_UNLIKELY(sstable->get_filled_tx_scn().is_max() || sstable->get_filled_tx_scn().is_min())) {
+      LOG_INFO("filled tx scn is MAX, skip to check", KPC(sstable));
+      continue;
+    } else if (sstable->get_filled_tx_scn() == sstable->get_end_scn() && !sstable->contain_uncommitted_row()) {
+      /*  This is an universal defend for checking the monotonicity of filled tx scn on SSTABLE.
+       *  If SSTABLE's filled tx scn equals to its end scn, we assume it has not been backfilled.
+       *  If SSTABLE doesn't contain uncommitted data, and it hasn't been backfilled, ignore it.
+       *  If SSTABLE initially contains uncommitted data, we should check its monotoicity of filled tx scn regardless of whether it has been backfilled.
+       *  The backfill on SSTABLE has two scenes: 1. transfer 2. minor gc tx data
+       *
+       *  For example, consider the following SSTs:
+       *      SST1([1, 50], tx=50, comt), SST2([50, 100], tx=120, comt), SST3([100, 105], tx=105, comt), SST4([105, 130], tx=130, uncomt)
+       *  The SST2 has been backfilled to 120, the SST4 contains uncommitted data and it should be backfilled in the future, we should always check SST2 && SST4
+       */
+      LOG_INFO("filled tx scn equals to end scn, skip to check cur sstable", KPC(sstable)); // change to debug log later
+      continue;
+    } else if (sstable->get_filled_tx_scn() < prev) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexepcted filled tx scn", K(ret), KPC(sstable), K(prev));
+    } else {
+      prev = sstable->get_filled_tx_scn();
     }
   }
   return ret;
@@ -2402,34 +2482,6 @@ int ObTabletTableStore::build_ha_minor_tables_(
   return ret;
 }
 
-//TODO (muwei.ym) temporay fix in 430 for transfer
-int ObTabletTableStore::get_mini_minor_sstables_(ObTableStoreIterator &iter) const
-{
-  int ret = OB_SUCCESS;
-  SCN max_fill_tx_scn(SCN::min_scn());
-  SCN max_end_scn(SCN::min_scn());
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < minor_tables_.count(); ++i) {
-    ObSSTable *table = minor_tables_[i];
-    if (OB_ISNULL(table)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table should not be NULL", K(ret), K(minor_tables_), KP(table));
-    } else {
-      max_fill_tx_scn = SCN::max(max_fill_tx_scn, table->get_filled_tx_scn());
-      max_end_scn = SCN::max(max_end_scn, table->get_end_scn());
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (max_end_scn < max_fill_tx_scn) {
-      //do nothing
-      LOG_INFO("max end scn is smaller than max fill tx scn, cannot minor merge", K(max_end_scn), K(max_fill_tx_scn), K(minor_tables_));
-    } else if (OB_FAIL(iter.add_tables(minor_tables_, 0, minor_tables_.count()))) {
-      LOG_WARN("failed to get all minor tables", K(ret));
-    }
-  }
-  return ret;
-}
 
 int ObTabletTableStore::get_all_minor_sstables(
     ObTableStoreIterator &iter) const

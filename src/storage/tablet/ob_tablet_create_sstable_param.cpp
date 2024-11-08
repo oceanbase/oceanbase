@@ -22,6 +22,7 @@
 #include "storage/blocksstable/ob_index_block_builder.h"
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
 #include "storage/compaction/ob_tablet_merge_ctx.h"
+#include "storage/compaction/ob_i_compaction_filter.h"
 #include "storage/ddl/ob_ddl_merge_task.h"
 
 namespace oceanbase
@@ -29,6 +30,7 @@ namespace oceanbase
 using namespace share;
 namespace storage
 {
+using namespace compaction;
 // if you add membership for this param, plz check all paths that use it, including
 // but not limited to unittest, merge, ddl, shared_macro_block
 ObTabletCreateSSTableParam::ObTabletCreateSSTableParam()
@@ -61,6 +63,7 @@ ObTabletCreateSSTableParam::ObTabletCreateSSTableParam()
     max_merged_trans_version_(0),
     ddl_scn_(SCN::min_scn()),
     filled_tx_scn_(SCN::min_scn()),
+    tx_data_recycle_scn_(SCN::min_scn()),
     contain_uncommitted_row_(false),
     is_meta_root_(false),
     compressor_type_(ObCompressorType::INVALID_COMPRESSOR),
@@ -102,6 +105,7 @@ bool ObTabletCreateSSTableParam::is_valid() const
                && occupy_size_ >= 0
                && ddl_scn_.is_valid()
                && filled_tx_scn_.is_valid()
+               && tx_data_recycle_scn_.is_valid()
                && original_size_ >= 0
                && recycle_version_ >= 0)) {
     ret = false;
@@ -109,7 +113,7 @@ bool ObTabletCreateSSTableParam::is_valid() const
              K(root_row_store_type_), K_(latest_row_store_type), K(data_index_tree_height_), K(index_blocks_cnt_),
              K(data_blocks_cnt_), K(micro_block_cnt_), K(use_old_macro_block_count_),
              K(row_count_), K(rowkey_column_cnt_), K(column_cnt_), K(occupy_size_),
-             K(ddl_scn_), K(filled_tx_scn_), K(original_size_), K_(recycle_version));
+             K(ddl_scn_), K(filled_tx_scn_), K(tx_data_recycle_scn_), K(original_size_), K_(recycle_version));
   } else if (ObITable::is_ddl_sstable(table_key_.table_type_)) {
     // ddl sstable can have invalid meta addr, so skip following ifs
     if (!ddl_scn_.is_valid_and_not_min()) {
@@ -179,6 +183,7 @@ int ObTabletCreateSSTableParam::init_for_small_sstable(const blocksstable::ObSST
   int ret = OB_SUCCESS;
   const blocksstable::ObSSTableBasicMeta &basic_meta = sstable_meta.get_basic_meta();
   filled_tx_scn_ = basic_meta.filled_tx_scn_;
+  tx_data_recycle_scn_ = basic_meta.tx_data_recycle_scn_;
   ddl_scn_ = basic_meta.ddl_scn_;
   table_key_ = table_key;
   sstable_logic_seq_ = sstable_meta.get_sstable_seq();
@@ -255,7 +260,9 @@ int ObTabletCreateSSTableParam::init_for_merge(const compaction::ObTabletMergeCt
   nested_offset_ = res.nested_offset_;
   ddl_scn_.set_min();
 
-  if (OB_FAIL(inner_init_with_merge_res(res))) {
+  if (OB_FAIL(record_recycle_scn_for_tx_data(ctx))) {
+    LOG_WARN("fail to record tx data recycle scn", K(ret), K(ctx));
+  } else if (OB_FAIL(inner_init_with_merge_res(res))) {
     LOG_WARN("fail to init with merge res", K(ret), K(res.data_block_ids_));
   } else if (is_major_or_meta_merge_type(ctx.param_.merge_type_)) {
     if (OB_FAIL(column_checksums_.assign(res.data_column_checksums_))) {
@@ -270,6 +277,58 @@ int ObTabletCreateSSTableParam::init_for_merge(const compaction::ObTabletMergeCt
       }
     }
   }
+
+  return ret;
+}
+
+int ObTabletCreateSSTableParam::record_recycle_scn_for_tx_data(const compaction::ObTabletMergeCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+  if (!(ctx.param_.tablet_id_.is_ls_tx_data_tablet())) {
+    // not tx data sstable, skip this logic
+  } else if (is_mini_merge(ctx.param_.merge_type_)) {
+    // when this merge is MINI_MERGE, use the start_scn of the oldest tx data memtable as start_tx_scn
+    ObTxDataMemtable *tx_data_memtable = nullptr;
+    if (ctx.tables_handle_.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("tables handle is unexpected empty", KR(ret), K(ctx));
+    } else if (OB_ISNULL(tx_data_memtable = (ObTxDataMemtable*)ctx.tables_handle_.get_table(0))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("table ptr is unexpected nullptr", KR(ret), K(ctx));
+    } else {
+      tx_data_recycle_scn_ = tx_data_memtable->get_start_scn();
+    }
+  } else if (is_minor_merge(ctx.param_.merge_type_)) {
+    // when this merge is MINOR_MERGE, use max_filtered_end_scn in filter if filtered some tx data
+    ObTransStatusFilter *compaction_filter_ = (ObTransStatusFilter*)ctx.compaction_filter_;
+    ObSSTableMetaHandle sstable_meta_hdl;
+    ObSSTable *oldest_tx_data_sstable = static_cast<ObSSTable *>(ctx.tables_handle_.get_table(0));
+    if (OB_ISNULL(oldest_tx_data_sstable)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("tx data sstable is unexpected nullptr", KR(ret));
+    } else if (OB_FAIL(oldest_tx_data_sstable->get_meta(sstable_meta_hdl))) {
+      LOG_WARN("fail to get sstable meta handle", K(ret));
+    } else {
+      tx_data_recycle_scn_ = sstable_meta_hdl.get_sstable_meta().get_tx_data_recycle_scn();
+
+      if (OB_NOT_NULL(compaction_filter_)) {
+        // if compaction_filter is valid, update filled_tx_log_ts if recycled some tx data
+        SCN recycled_scn;
+        if (compaction_filter_->get_max_filtered_end_scn() > SCN::min_scn()) {
+          recycled_scn = compaction_filter_->get_max_filtered_end_scn();
+        } else {
+          recycled_scn = compaction_filter_->get_recycle_scn();
+        }
+        if (recycled_scn > filled_tx_scn_) {
+          tx_data_recycle_scn_ = recycled_scn;
+        }
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("unexpected merge type when merge tx data table", KR(ret), K(ctx));
+  }
+
   return ret;
 }
 
@@ -323,6 +382,7 @@ int ObTabletCreateSSTableParam::init_for_ddl(blocksstable::ObSSTableIndexBuilder
       nested_size_ = res.nested_size_;
       nested_offset_ = res.nested_offset_;
       filled_tx_scn_ = table_key_.get_end_scn();
+      tx_data_recycle_scn_.set_min();
 
       if (OB_FAIL(inner_init_with_merge_res(res))) {
         LOG_WARN("fail to inner init with merge res", K(ret), K(res));
@@ -363,11 +423,13 @@ int ObTabletCreateSSTableParam::init_for_ha(
   rowkey_column_cnt_ = sstable_param.basic_meta_.rowkey_column_count_;
   ddl_scn_ = sstable_param.basic_meta_.ddl_scn_;
   filled_tx_scn_ = sstable_param.basic_meta_.filled_tx_scn_;
+  tx_data_recycle_scn_ = sstable_param.basic_meta_.tx_data_recycle_scn_;
   if (OB_FAIL(inner_init_with_merge_res(res))) {
     LOG_WARN("fail to inner init with merge res", K(ret), K(res));
   } else if (OB_FAIL(column_checksums_.assign(sstable_param.column_checksums_))) {
     LOG_WARN("fail to fill column checksum", K(ret), K(sstable_param));
-  } else if (OB_FAIL(blocksstable::ObSSTableMetaCompactUtil::fix_filled_tx_scn_value_for_compact(table_key_, filled_tx_scn_))) {
+  } else if (OB_FAIL(blocksstable::ObSSTableMetaCompactUtil::fix_filled_tx_scn_value_for_compact(
+                 table_key_, filled_tx_scn_, tx_data_recycle_scn_))) {
     LOG_WARN("failed to fix filled tx scn value for compact", K(ret), K(table_key_), K(sstable_param));
   } else if (!is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -402,6 +464,7 @@ int ObTabletCreateSSTableParam::init_for_ha(const blocksstable::ObMigrationSSTab
   max_merged_trans_version_ = sstable_param.basic_meta_.max_merged_trans_version_;
   ddl_scn_ = sstable_param.basic_meta_.ddl_scn_;
   filled_tx_scn_ = sstable_param.basic_meta_.filled_tx_scn_;
+  tx_data_recycle_scn_ = sstable_param.basic_meta_.tx_data_recycle_scn_;
   contain_uncommitted_row_ = sstable_param.basic_meta_.contain_uncommitted_row_;
   compressor_type_ = sstable_param.basic_meta_.compressor_type_;
   encrypt_id_ = sstable_param.basic_meta_.encrypt_id_;
@@ -412,7 +475,8 @@ int ObTabletCreateSSTableParam::init_for_ha(const blocksstable::ObMigrationSSTab
   MEMCPY(encrypt_key_, sstable_param.basic_meta_.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
   if (OB_FAIL(column_checksums_.assign(sstable_param.column_checksums_))) {
     LOG_WARN("fail to assign column checksums", K(ret), K(sstable_param));
-  } else if (OB_FAIL(blocksstable::ObSSTableMetaCompactUtil::fix_filled_tx_scn_value_for_compact(table_key_, filled_tx_scn_))) {
+  } else if (OB_FAIL(blocksstable::ObSSTableMetaCompactUtil::fix_filled_tx_scn_value_for_compact(
+                 table_key_, filled_tx_scn_, tx_data_recycle_scn_))) {
     LOG_WARN("failed to fix filled tx scn value for compact", K(ret), K(table_key_), K(sstable_param));
   } else if (!is_valid()) {
     ret = OB_INVALID_ARGUMENT;

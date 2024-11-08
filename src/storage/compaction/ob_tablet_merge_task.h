@@ -163,6 +163,8 @@ private:
       ObTabletHandle &tablet_handle,
       bool &create_dag);
   int try_report_tablet_stat_after_mini(ObTabletMergeCtx &ctx);
+  void report_checkpoint_info(ObTabletMergeCtx &ctx);
+  void record_tx_data_info(ObTabletMergeCtx &ctx);
 private:
   bool is_inited_;
   ObBasicTabletMergeDag *merge_dag_;

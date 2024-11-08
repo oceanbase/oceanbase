@@ -855,7 +855,7 @@ ObLSBackupCtx::ObLSBackupCtx()
       sql_proxy_(NULL),
       rebuild_seq_(),
       check_tablet_info_cost_time_(),
-      backup_tx_table_filled_tx_scn_(share::SCN::min_scn()),
+      backup_tx_data_recycle_scn_(share::SCN::min_scn()),
       tablet_checker_(),
       bandwidth_throttle_(NULL)
 {}

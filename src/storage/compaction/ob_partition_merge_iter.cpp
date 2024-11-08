@@ -131,7 +131,7 @@ int ObPartitionMergeIter::init_query_base_params(const ObMergeParameter &merge_p
     } else {
       access_context_.trans_state_mgr_ = merge_param.trans_state_mgr_;
       // 1.normal minor merge merge scn equal to end scn
-      // 2.backfill may merge scn is bigger than end scn
+      // 2.backfill && update filled tx scn merge may merge scn maybe bigger than end scn
       access_context_.merge_scn_ = merge_param.merge_scn_;
     }
   }

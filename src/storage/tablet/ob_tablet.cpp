@@ -6372,5 +6372,43 @@ int ObTablet::get_all_minor_sstables(ObTableStoreIterator &table_store_iter) con
   return ret;
 }
 
+int ObTablet::get_safety_fill_tx_scn(SCN &safety_fill_tx_scn) const
+{
+  int ret = OB_SUCCESS;
+  ObIMemtableMgr *memtable_mgr = nullptr;
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (is_ls_inner_tablet()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("should not get fill tx scn from ls inner tablet", K(ret), K(tablet_meta_.tablet_id_));
+  } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
+    LOG_WARN("failed to get memtable mgr", K(ret));
+  } else if (OB_FAIL((static_cast<ObTabletMemtableMgr *>(memtable_mgr))->get_safety_fill_tx_scn(safety_fill_tx_scn))) {
+    LOG_WARN("failed to get safety fill tx scn", K(ret), K(safety_fill_tx_scn));
+  } else {
+    ObTabletCreateDeleteMdsUserData user_data;
+    mds::MdsWriter unused_writer;
+    mds::TwoPhaseCommitState unused_trans_stat;
+    share::SCN unused_trans_version;
+    if (OB_FAIL(get_latest(user_data, unused_writer, unused_trans_stat, unused_trans_version))) {
+      LOG_WARN("failed to get latest tablet status", K(ret), KPC(this), K(user_data));
+    } else if (ObTabletStatus::TRANSFER_OUT == user_data.tablet_status_) {
+      SCN transfer_scn = user_data.transfer_scn_;
+      if (transfer_scn.is_valid() && (!transfer_scn.is_min()) && (!transfer_scn.is_max())) {
+        SCN scn_from_memtable_mgr = safety_fill_tx_scn;
+        safety_fill_tx_scn = MIN(transfer_scn, scn_from_memtable_mgr);
+        FLOG_INFO("Transfer is running", K(transfer_scn), K(scn_from_memtable_mgr), K(safety_fill_tx_scn));
+      } else {
+        ret = OB_EAGAIN;
+        LOG_INFO("transfer scn has not be set, skip minor merge once", K(user_data));
+      }
+    }
+  }
+
+  return ret;
+}
+
 } // namespace storage
 } // namespace oceanbase

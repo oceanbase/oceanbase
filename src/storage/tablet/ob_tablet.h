@@ -310,6 +310,7 @@ public:
   // just for rebuild or migrate retry.
   int release_memtables();
   int wait_release_memtables();
+  int get_safety_fill_tx_scn(share::SCN &safety_fill_tx_scn) const;
 
   // multi-source data operation
   int get_storage_schema_for_transfer_in(

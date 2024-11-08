@@ -62,7 +62,11 @@ ObSSTableBasicMeta::ObSSTableBasicMeta()
     encrypt_id_(0),
     master_key_id_(0),
     sstable_logic_seq_(0),
-    latest_row_store_type_(ObRowStoreType::MAX_ROW_STORE)
+    latest_row_store_type_(ObRowStoreType::MAX_ROW_STORE),
+    table_backup_flag_(),
+    table_shared_flag_(),
+    root_macro_seq_(0),
+    tx_data_recycle_scn_(SCN::min_scn())
 {
   MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
 }
@@ -113,7 +117,11 @@ bool ObSSTableBasicMeta::check_basic_meta_equality(const ObSSTableBasicMeta &oth
       && encrypt_id_ == other.encrypt_id_
       && master_key_id_ == other.master_key_id_
       && 0 == MEMCMP(encrypt_key_, other.encrypt_key_, sizeof(encrypt_key_))
-      && latest_row_store_type_ == other.latest_row_store_type_;
+      && latest_row_store_type_ == other.latest_row_store_type_
+      && table_backup_flag_ == other.table_backup_flag_
+      && table_shared_flag_ == other.table_shared_flag_
+      && root_macro_seq_ == other.root_macro_seq_
+      && tx_data_recycle_scn_ == other.tx_data_recycle_scn_;
 }
 
 
@@ -141,7 +149,11 @@ bool ObSSTableBasicMeta::is_valid() const
            && data_index_tree_height_ >= 0
            && sstable_logic_seq_ >= 0
            && root_row_store_type_ < ObRowStoreType::MAX_ROW_STORE
-           && is_latest_row_store_type_valid());
+           && is_latest_row_store_type_valid())
+           && table_backup_flag_.is_valid()
+           && table_shared_flag_.is_valid()
+           && root_macro_seq_ >= 0
+           && tx_data_recycle_scn_.is_valid();
   return ret;
 }
 
@@ -181,6 +193,10 @@ void ObSSTableBasicMeta::reset()
   sstable_logic_seq_ = 0;
   MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
   latest_row_store_type_ = ObRowStoreType::MAX_ROW_STORE;
+  table_backup_flag_.reset();
+  table_shared_flag_.reset();
+  root_macro_seq_ = 0;
+  tx_data_recycle_scn_.set_min();
 }
 
 DEFINE_SERIALIZE(ObSSTableBasicMeta)
@@ -236,7 +252,11 @@ DEFINE_SERIALIZE(ObSSTableBasicMeta)
                   encrypt_id_,
                   master_key_id_,
                   sstable_logic_seq_,
-                  latest_row_store_type_);
+                  latest_row_store_type_,
+                  table_backup_flag_,
+                  table_shared_flag_,
+                  root_macro_seq_,
+                  tx_data_recycle_scn_);
       if (OB_FAIL(ret)) {
       } else if (OB_UNLIKELY(length_ != pos - start_pos)) {
         ret = OB_ERR_UNEXPECTED;
@@ -316,7 +336,11 @@ int ObSSTableBasicMeta::decode_for_compat(const char *buf, const int64_t data_le
               encrypt_id_,
               master_key_id_,
               sstable_logic_seq_,
-              latest_row_store_type_);
+              latest_row_store_type_,
+              table_backup_flag_,
+              table_shared_flag_,
+              root_macro_seq_,
+              tx_data_recycle_scn_);
   return ret;
 }
 
@@ -357,7 +381,11 @@ DEFINE_GET_SERIALIZE_SIZE(ObSSTableBasicMeta)
               encrypt_id_,
               master_key_id_,
               sstable_logic_seq_,
-              latest_row_store_type_);
+              latest_row_store_type_,
+              table_backup_flag_,
+              table_shared_flag_,
+              root_macro_seq_,
+              tx_data_recycle_scn_);
   return len;
 }
 
@@ -455,6 +483,11 @@ int ObSSTableMeta::init_base_meta(
     basic_meta_.master_key_id_ = param.master_key_id_;
     MEMCPY(basic_meta_.encrypt_key_, param.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
     basic_meta_.length_ = basic_meta_.get_serialize_size();
+    // These fields are only used in master branch
+    // basic_meta_.table_backup_flag_ = param.table_backup_flag_;
+    // basic_meta_.table_shared_flag_ = param.table_shared_flag_;
+    // basic_meta_.root_macro_seq_ = param.root_macro_seq_;
+    basic_meta_.tx_data_recycle_scn_ = param.tx_data_recycle_scn_;
     if (OB_FAIL(prepare_column_checksum(param.column_checksums_, allocator))) {
       LOG_WARN("fail to prepare column checksum", K(ret), K(param));
     }
@@ -1018,11 +1051,24 @@ int ObSSTableMetaChecker::check_sstable_column_checksum_(
 
 int ObSSTableMetaCompactUtil::fix_filled_tx_scn_value_for_compact(
     const ObITable::TableKey &table_key,
-    share::SCN &filled_tx_scn)
+    share::SCN &filled_tx_scn,
+    share::SCN &tx_data_recycle_scn)
 {
   int ret = OB_SUCCESS;
   if (table_key.tablet_id_.is_ls_inner_tablet()) {
-    //do nothing
+     if (table_key.tablet_id_.is_ls_tx_data_tablet()) {
+      if (table_key.get_end_scn() != filled_tx_scn) {
+        if (!tx_data_recycle_scn.is_min()) {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(ERROR, "unexpected tx_data_recycle_scn", KR(ret), K(table_key), K(filled_tx_scn), K(tx_data_recycle_scn));
+        } else {
+          // This situation measn a new version observer read an old version sstable, which does not have
+          // tx_data_recycle_scn variable
+          tx_data_recycle_scn = filled_tx_scn;
+          filled_tx_scn = table_key.get_end_scn();
+        }
+      }
+     }
   } else if (table_key.is_major_sstable()) {
     //do nothing
   } else if (filled_tx_scn.is_min()) {
@@ -1031,7 +1077,6 @@ int ObSSTableMetaCompactUtil::fix_filled_tx_scn_value_for_compact(
   }
   return ret;
 }
-
 
 } // namespace blocksstable
 } // namespace oceanbase

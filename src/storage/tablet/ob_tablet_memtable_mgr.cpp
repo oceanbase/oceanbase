@@ -993,5 +993,45 @@ int ObTabletMemtableMgr::set_frozen_for_all_memtables()
   return ret;
 }
 
+int ObTabletMemtableMgr::get_safety_fill_tx_scn(share::SCN &safety_fill_tx_scn) const
+{
+  int ret = OB_SUCCESS;
+  SCN max_decided_scn;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "not inited", K(ret), K_(is_inited));
+  } else if (OB_FAIL(ls_->get_max_decided_scn(max_decided_scn))) {
+    STORAGE_LOG(WARN, "get max decided scn failed", K(ret), K_(is_inited), K(max_decided_scn));
+  } else {
+    safety_fill_tx_scn.set_invalid();
+    MemMgrRLockGuard guard(lock_);
+    if (has_memtable_()) {
+      ObMemtable *first_memtable = static_cast<ObMemtable*>(tables_[get_memtable_idx(memtable_head_)]);
+      if (OB_ISNULL(first_memtable)) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "invalid memtable ptr", K(ret), K(tables_), KPC(first_memtable));
+      } else {
+        // The fill tx scn can not larger than or equal to rec_scn
+        SCN rec_scn = first_memtable->get_rec_scn();
+        safety_fill_tx_scn = MIN(max_decided_scn, SCN::scn_dec(rec_scn));
+        FLOG_INFO("finish get safety fill tx scn",
+                  KP(this),
+                  K(safety_fill_tx_scn),
+                  K(max_decided_scn),
+                  K(rec_scn),
+                  KP(first_memtable),
+                  K(first_memtable->get_scn_range()));
+      }
+    } else {
+      // Here we can make sure that a new created memtable do not hold the data whose redo_scn is less than
+      // max_decided_scn, so we use max_decided_scn to fill tx state
+      safety_fill_tx_scn = max_decided_scn;
+      FLOG_INFO("finish get safety fill tx scn", KP(this), K(safety_fill_tx_scn), K(max_decided_scn));
+    }
+  }
+
+  return ret;
+}
+
 }  // namespace storage
 }  // namespace oceanbase
