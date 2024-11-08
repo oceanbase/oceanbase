@@ -333,7 +333,7 @@ public:
   inline const ObRefCursorType &get_sys_refcursor_type() const { return sys_refcursor_type_; }
 #endif
   const common::ObIArray<const ObUserDefinedType *> &get_types() const { return user_types_; }
-  int add_type(ObUserDefinedType *user_defined_type);
+  int add_type(const ObUserDefinedType *user_defined_type);
   const ObUserDefinedType *get_type(const common::ObString &type_name) const;
   const ObUserDefinedType *get_type(uint64_t type_id) const;
   const ObUserDefinedType *get_type(int64_t idx) const;

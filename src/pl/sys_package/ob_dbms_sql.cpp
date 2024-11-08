@@ -710,6 +710,14 @@ int ObPLDbmsSql::parse_6p(ObExecContext &exec_ctx, ParamStore &params, ObObj &re
   UNUSED(result);
   int ret = OB_SUCCESS;
   int64_t param_count = params.count();
+  int64_t low_bound = -1, upper_bound = -1;
+  bool linefeed = false;
+  int8_t flag = 0;
+  ObPLCollection *sql_arr = NULL;
+  ObSqlString sql_txt;
+  ObPLAssocArray *assoc_arr = NULL;
+  ObCollationType coll_type = CS_TYPE_INVALID;
+
   OV (param_count == 6, OB_INVALID_ARGUMENT, params);
   OV (params.at(1).is_ext(), OB_INVALID_ARGUMENT, params);
   OV (params.at(2).is_number(), OB_INVALID_ARGUMENT, params);
@@ -717,100 +725,50 @@ int ObPLDbmsSql::parse_6p(ObExecContext &exec_ctx, ParamStore &params, ObObj &re
   OV (params.at(4).is_tinyint(), OB_INVALID_ARGUMENT, params);
   OV (params.at(5).is_number(), OB_INVALID_ARGUMENT, params);
 
-  ObPLCollection *sql_arr = NULL;
   OX (sql_arr = reinterpret_cast<ObPLCollection *>(params.at(1).get_ext()));
   CK (OB_NOT_NULL(sql_arr));
   CK (sql_arr->is_associative_array());
-  int64_t low_bound = -1, upper_bound = -1;
-  bool linefeed = false;
-  int8_t flag = 0;
   OV (params.at(2).get_number().is_valid_int64(low_bound), OB_INVALID_ARGUMENT, params.at(2));
   OV (params.at(3).get_number().is_valid_int64(upper_bound), OB_INVALID_ARGUMENT, params.at(3));
   OZ (params.at(4).get_tinyint(flag), params.at(4));
   OX (linefeed = static_cast<bool>(flag));
-  CK (sql_arr->get_count() >= upper_bound - low_bound);
-  CK (low_bound <= upper_bound);
-  ObSqlString sql_txt;
-  ObCollationType coll_type = CS_TYPE_INVALID;
-  if (OB_SUCC(ret)) {
-    ObString elem_txt;
-    ObPLAssocArray *assoc_arr = static_cast<ObPLAssocArray *>(sql_arr);
-    int64_t *sort_arr = assoc_arr->get_sort();
-    int64_t idx = assoc_arr->get_first() - 1;
-    ObObj *keys = assoc_arr->get_key();
-    CK (OB_NOT_NULL(keys));
-    int32_t key = -1;
-    int64_t low_idx = OB_INVALID_INDEX, upper_idx = OB_INVALID_INDEX;
-    #define GET_NEXT() { \
-      if (OB_SUCC(ret) && 0 <= idx && idx < assoc_arr->get_count()) { \
-        if (OB_NOT_NULL(sort_arr)) { \
-          idx = sort_arr[idx]; \
-        } else { \
-          idx++; \
-        } \
-      } else { \
-        idx = OB_INVALID_INDEX; \
-      } \
+  CK (OB_NOT_NULL(assoc_arr = static_cast<ObPLAssocArray *>(sql_arr)));
+  if (OB_SUCC(ret) && low_bound > upper_bound) {
+    ret = OB_ERR_PARSE_SQL;
+    LOG_WARN("wrong parameter with lower bound and upper bound", K(ret), K(low_bound), K(upper_bound));
+  }
+
+  for (int64_t i = low_bound; OB_SUCC(ret) && i <= upper_bound; ++i) {
+    ObObj key, exists;
+    int64_t index = OB_INVALID_INDEX;
+    int64_t search_end = OB_INVALID_INDEX;
+    key.set_int32(i);
+    OZ (assoc_arr->search_key(key, index, search_end, assoc_arr->get_count()));
+    if (OB_SUCC(ret) && OB_INVALID_INDEX == index) {
+      ret = OB_READ_NOTHING;
+      LOG_WARN("can not found key in assoc array", K(ret), K(key), KPC(assoc_arr));
     }
-    // 首先拿到low_bound和upper_bound对应的index;
-    do {
-      if (OB_SUCC(ret) && 0 <= idx && idx < assoc_arr->get_count()) {
-        OZ (keys[idx].get_int32(key), keys[idx]);
-        if (OB_SUCC(ret)) {
-          if (static_cast<int64_t>(key) == low_bound) {
-            low_idx = idx;
-          }
-          if (static_cast<int64_t>(key) == upper_bound) {
-            upper_idx = idx;
-          }
-        }
-      }
-      if (OB_INVALID_INDEX != low_idx && OB_INVALID_INDEX != upper_idx) {
-        break;
-      }
-      GET_NEXT();
-    } while (OB_SUCC(ret) && OB_INVALID_INDEX != idx);
-
-    CK (0 <= low_idx);
-    CK (sql_arr->get_count() > low_idx);
-    CK (sql_arr->get_count() > upper_idx);
-    CK (low_idx <= upper_idx);
-
+    CK (search_end != OB_INVALID_INDEX);
+    OV (index >= 0 && index < assoc_arr->get_count(), OB_ERR_UNEXPECTED, K(index));
+    OZ (assoc_arr->exist(index + 1, exists)); // Notice: first argument is start with 1, index is start with 0.
+    if (OB_SUCC(ret) && !exists.get_tinyint()) {
+      ret = OB_READ_NOTHING;
+      LOG_WARN("can not found key in assoc array", K(ret), K(key), KPC(assoc_arr));
+    }
     if (OB_SUCC(ret)) {
-      // reset idx
-      OX (idx = assoc_arr->get_first() - 1);
-      // 定位low bound
-      while(0 < low_idx) {
-        GET_NEXT();
-        low_idx--;
-        upper_idx--;
-      }
-      // 开始组装
-      while (OB_SUCC(ret) && 0 <= upper_idx) {
-        bool is_del = false;
-        OZ (assoc_arr->is_elem_deleted(idx, is_del));
-        if (OB_SUCC(ret)) {
-          if (is_del) {
-            ret = OB_READ_NOTHING;
-          } else {
-            ObObj &elem = reinterpret_cast<ObObj *>(assoc_arr->get_data())[idx];
-            if (elem.is_null()) {
-              ret = OB_READ_NOTHING;
-            } else {
-              coll_type = elem.get_collation_type();
-              OZ (elem.get_varchar(elem_txt), elem);
-              OZ (sql_txt.append(elem_txt));
-              if (linefeed) {
-                OZ (sql_txt.append("\n"));
-              }
-              GET_NEXT();
-            }
-          }
+      ObObj &elem = reinterpret_cast<ObObj *>(assoc_arr->get_data())[index];
+      OX (coll_type = elem.get_collation_type(););
+      if (!elem.is_null()) {
+        ObString elem_txt;
+        OZ (elem.get_varchar(elem_txt), K(elem));
+        OZ (sql_txt.append(elem_txt));
+        if (linefeed) {
+          OZ (sql_txt.append("\n"));
         }
-        upper_idx--;
       }
     }
   }
+
   ObDbmsCursorInfo *cursor = NULL;
   ObString sql_stmt;
   OZ (get_cursor(exec_ctx, params, cursor));// 这儿只用了params的第一个参数，cursor id
@@ -895,6 +853,7 @@ int ObPLDbmsSql::do_parse(ObExecContext &exec_ctx,
                                       hidden_rowid,
                                       into_cnt,
                                       skip_locked,
+                                      nullptr,
                                       &cursor->get_field_columns()));
     if (OB_SUCC(ret)) {
       cursor->set_ps_sql(ps_sql);

@@ -8602,7 +8602,8 @@ ObUserInfo::ObUserInfo(ObIAllocator *allocator)
     proxy_user_info_(NULL),
     proxy_user_info_capacity_(0),
     proxy_user_info_cnt_(0),
-    user_flags_()
+    user_flags_(),
+    trigger_list_()
 {
 }
 
@@ -8710,6 +8711,9 @@ int ObUserInfo::assign(const ObUserInfo &other)
       }
       if (OB_SUCC(ret)) {
         user_flags_ = other.user_flags_;
+      }
+      if (OB_SUCC(ret) && trigger_list_.assign(other.trigger_list_)) {
+        LOG_WARN("assign trigger list failed", K(ret));
       }
     }
     if (OB_FAIL(ret)) {
@@ -8844,6 +8848,7 @@ void ObUserInfo::reset()
   max_connections_ = 0;
   max_user_connections_ = 0;
   user_flags_.reset();
+  trigger_list_.reset();
   ObSchema::reset();
   ObPriv::reset();
 }
@@ -8875,6 +8880,7 @@ int64_t ObUserInfo::get_convert_size() const
       convert_size += proxy_user_info_[i]->get_convert_size();
     }
   }
+  convert_size += trigger_list_.get_data_size();
   return convert_size;
 }
 
@@ -8926,6 +8932,7 @@ OB_DEF_SERIALIZE(ObUserInfo)
 
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_ENCODE, user_flags_);
+    LST_DO_CODE(OB_UNIS_ENCODE, trigger_list_);
   }
   return ret;
 }
@@ -9027,6 +9034,7 @@ OB_DEF_DESERIALIZE(ObUserInfo)
 
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_DECODE, user_flags_);
+    LST_DO_CODE(OB_UNIS_DECODE, trigger_list_);
   }
 
   return ret;
@@ -9066,6 +9074,7 @@ OB_DEF_SERIALIZE_SIZE(ObUserInfo)
     }
   }
   LST_DO_CODE(OB_UNIS_ADD_LEN, user_flags_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, trigger_list_);
   return len;
 }
 

@@ -6302,6 +6302,8 @@ int ObRootService::create_routine_common(const ObCreateRoutineArg &arg,
     const ObUserInfo *user_info = NULL;
     if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
       LOG_WARN("get schema guard in inner table failed", K(ret));
+    } else if (OB_FAIL(check_parallel_ddl_conflict(schema_guard, arg))) {
+      LOG_WARN("check parallel ddl conflict failed", K(ret));
     } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, database_name, db_schema))) {
       LOG_WARN("get database schema failed", K(ret));
     } else if (NULL == db_schema) {
@@ -6438,6 +6440,8 @@ int ObRootService::alter_routine_common(const ObCreateRoutineArg &arg,
     if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(
                                   tenant_id, schema_guard))) {
       LOG_WARN("get schema guard in inner table failed", K(ret), K(tenant_id));
+    } else if (OB_FAIL(check_parallel_ddl_conflict(schema_guard, arg))) {
+      LOG_WARN("check parallel ddl conflict failed", K(ret));
     } else if (OB_FAIL(schema_guard.get_routine_info(
                tenant_id, arg.routine_info_.get_routine_id(), routine_info))) {
       LOG_WARN("failed to get routine info", K(ret), K(tenant_id));
@@ -6509,6 +6513,8 @@ int ObRootService::drop_routine(const ObDropRoutineArg &arg)
       LOG_WARN("no database selected", K(ret), K(db_name));
     } else if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
       LOG_WARN("get schema guard in inner table failed", K(ret));
+    } else if (OB_FAIL(check_parallel_ddl_conflict(schema_guard, arg))) {
+      LOG_WARN("check parallel ddl conflict failed", K(ret));
     } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, db_name, db_schema))) {
       LOG_WARN("get database schema failed", K(ret));
     } else if (NULL == db_schema) {
@@ -6775,6 +6781,8 @@ int ObRootService::drop_udt(const ObDropUDTArg &arg)
       LOG_WARN("no database selected", K(ret), K(db_name));
     } else if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
       LOG_WARN("get schema guard in inner table failed", K(ret));
+    } else if (OB_FAIL(check_parallel_ddl_conflict(schema_guard, arg))) {
+      LOG_WARN("check parallel ddl conflict failed", K(ret));
     } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, db_name, db_schema))) {
       LOG_WARN("get database schema failed", K(ret));
     } else if (NULL == db_schema) {
@@ -7094,6 +7102,8 @@ int ObRootService::create_package_common(const obrpc::ObCreatePackageArg &arg,
       LOG_WARN("fail to assign package info", K(ret));
     } else if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
       LOG_WARN("get schema guard in inner table failed", K(ret));
+    } else if (OB_FAIL(check_parallel_ddl_conflict(schema_guard, arg))) {
+      LOG_WARN("check parallel ddl conflict failed", K(ret));
     } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, database_name, db_schema))) {
       LOG_WARN("get database schema failed", K(ret));
     } else if (NULL == db_schema) {
@@ -7232,6 +7242,8 @@ int ObRootService::alter_package_common(const obrpc::ObAlterPackageArg &arg,
     const ObDatabaseSchema *db_schema = NULL;
     if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
       LOG_WARN("get schema guard in inner table failed", K(ret));
+    } else if (OB_FAIL(check_parallel_ddl_conflict(schema_guard, arg))) {
+      LOG_WARN("check parallel ddl conflict failed", K(ret));
     } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, db_name, db_schema))) {
       LOG_WARN("get database schema failed", K(ret));
     } else if (NULL == db_schema) {
@@ -7337,6 +7349,8 @@ int ObRootService::drop_package(const obrpc::ObDropPackageArg &arg)
     const ObDatabaseSchema *db_schema = NULL;
     if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
       LOG_WARN("get schema guard in inner table failed", K(ret));
+    } else if (OB_FAIL(check_parallel_ddl_conflict(schema_guard, arg))) {
+      LOG_WARN("check parallel ddl conflict failed", K(ret));
     } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, db_name, db_schema))) {
       LOG_WARN("get database schema failed", K(ret));
     } else if (NULL == db_schema) {

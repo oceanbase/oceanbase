@@ -33,7 +33,7 @@ public:
       expr_factory_(inner_allocator_) {}
   virtual ~ObPLRouter() {}
 
-  int analyze(ObString &route_sql, common::ObIArray<share::schema::ObDependencyInfo> &dep_infos, ObRoutineInfo &routine_info);
+  int analyze(ObString &route_sql, common::ObIArray<share::schema::ObDependencyInfo> &dep_infos, ObRoutineInfo &routine_info, obrpc::ObDDLArg *ddl_arg);
   int simple_resolve(ObPLFunctionAST &func_ast);
   static int analyze_stmt(const ObPLStmt *stmt, ObString &route_sql);
 

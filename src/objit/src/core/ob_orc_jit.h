@@ -166,6 +166,9 @@ public:
 
   int set_optimize_level(ObPLOptLevel level);
 
+  inline void update_stack_size(uint64_t stack_size) { StackSize = std::max(StackSize, stack_size); }
+  inline uint64_t get_stack_size() const { return StackSize; }
+
 private:
   int lookup(const std::string &name, ObJITSymbol &symbol);
 
@@ -186,6 +189,8 @@ private:
 
   ObLLJITBuilder ObEngineBuilder;
   std::unique_ptr<ObJitEngineT> ObJitEngine;
+
+  uint64_t StackSize = 0;
 };
 
 } // core

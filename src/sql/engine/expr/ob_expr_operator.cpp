@@ -33,6 +33,8 @@
 #include "lib/timezone/ob_oracle_format_models.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
+#include "common/object/ob_object.h"
+#include "sql/engine/expr/ob_expr_multiset.h"
 
 namespace oceanbase
 {
@@ -2497,13 +2499,11 @@ int ObRelationalExprOperator::calc_result_type2(ObExprResType &type,
     }
     if (support && type1.is_ext()) {
       support = (type1.get_obj_meta().get_extend_type() == pl::PL_NESTED_TABLE_TYPE ||
-                 ob_is_xml_pl_type(type1.get_type(), type1.get_udt_id()) ||
-                 ObObjUDTUtil::ob_is_supported_sql_udt(type1.get_udt_id()));
+                   OB_INVALID_ID != type1.get_udt_id());
     }
     if (support && type2.is_ext()) {
       support = (type2.get_obj_meta().get_extend_type() == pl::PL_NESTED_TABLE_TYPE ||
-                 ob_is_xml_pl_type(type2.get_type(), type2.get_udt_id()) ||
-                 ObObjUDTUtil::ob_is_supported_sql_udt(type2.get_udt_id()));
+                   OB_INVALID_ID != type2.get_udt_id());
     }
     if (!support) {
       ret = OB_ERR_CALL_WRONG_ARG;
@@ -2948,11 +2948,11 @@ int ObRelationalExprOperator::pl_udt_compare2(CollectionPredRes &cmp_result,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("not support udt compare with different elem type", K(ret), K(c1), K(c2));
   } else if (c1->is_of_composite()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "comparison of composite types is");
-    LOG_WARN("comparison of composite types is not supported",
-              K(c1->get_element_type()),
-              K(c2->get_element_type()));
+    if (c1->is_collection_null() || c2->is_collection_null()) {
+      cmp_result = CollectionPredRes::COLL_PRED_NULL;
+    } else if (OB_FAIL(eval_compare_composite(cmp_result, obj1, obj2, exec_ctx, cmp_op))) {
+      LOG_WARN("failed to eval_compare_composite", K(ret), K(cmp_result), K(obj1), K(obj2));
+    }
   } else if (!c1->is_inited() || !c2->is_inited()) {
     cmp_result = CollectionPredRes::COLL_PRED_NULL;
   } else if ((c1->get_actual_count() != c2->get_actual_count())) {
@@ -3086,6 +3086,170 @@ int ObRelationalExprOperator::eval_pl_udt_compare(const ObExpr &expr,
       }
     }
   }
+  return ret;
+}
+
+int ObRelationalExprOperator::eval_compare_composite(CollectionPredRes &cmp_result,
+                                                     const common::ObObj &obj1,
+                                                     const common::ObObj &obj2,
+                                                     ObExecContext &exec_ctx,
+                                                     const ObCmpOp cmp_op)
+{
+  int ret = OB_SUCCESS;
+
+#ifdef OB_BUILD_ORACLE_PL
+
+  // LHS = common_part(C) + unique_part(Ul) + null_part(Nl)
+  // RHS = common_part(C) + unique_part(Ur) + null_part(Nr)
+  // LHS == RHS if and only if |LHS| == |RHS| && |Ul| == 0 && |Nl| == 0 && |Ur| == 0 && |Nr| == 0
+  // LHS != RHS if and only if |LHS| != |RHS| || |Ul| > |Nr| || |Ur| > |Nr|
+  // otherwise (LHS == RHS) is NULL, because for all element, there are always a counterpart(equal or NULL).
+
+  // when |LHS| == |RHS|, we have |Ul| + |Nl| = |Ur| + |Nr|
+  // which leads to |Ul| == 0 && |Nl| == 0 <=> |Ur| == 0 && |Nr| == 0
+  // and |Ul| > |Nr| <=> |Ur| > |Nr|
+  // these formulas can reduce the condition.
+  static constexpr char CMP_EQ_PL[] =
+      "declare\n"
+      "cmp boolean;\n"
+      "round boolean;\n"
+      "lhs_null pls_integer := 0;\n"  // Nl
+      "rhs_null pls_integer := 0;\n"  // Nr
+      "matched pls_integer := 0;\n"  // C
+      "null_result boolean := NULL;\n"
+      "begin\n"
+      ":result := TRUE;\n"
+      "if :lhs.count != :rhs.count then\n"
+      "  :result := FALSE;\n"
+      "elsif :lhs.count = 0 then\n"
+      "  :result := TRUE;\n"
+      "else\n"
+      "  for j in :rhs.first..:rhs.last loop\n"
+      "    if :rhs.exists(j) and (:rhs(j) = :rhs(j)) is null then\n"
+      "      rhs_null := rhs_null + 1;\n"
+      "      :rhs.delete(j);"
+      "    end if;\n"
+      "  end loop;\n"
+      "  for i in :lhs.first..:lhs.last loop\n"
+      "    if not :lhs.exists(i) then continue; end if;\n"
+      "    if (:lhs(i) = :lhs(i)) is null then lhs_null := lhs_null + 1; continue; end if;\n"
+      "    round := FALSE;\n"
+      "    for j in :rhs.first..:rhs.last loop\n"
+      "      if not :rhs.exists(j) then continue; end if;\n"
+      "      cmp := (:lhs(i) = :rhs(j));\n"
+      "      if cmp then\n"
+      "        round := TRUE;\n"
+      "        :rhs.delete(j);\n"
+      "        exit;\n"
+      "      else\n"
+      "        round := cmp;\n"
+      "      end if;\n"
+      "    end loop;\n"
+      "    if round then\n"
+      "      matched := matched + 1;\n"
+      "    end if;\n"
+      "  end loop;\n"
+      "  if matched = :lhs.count then\n"
+      "    :result := TRUE;\n"
+      "  elsif :lhs.count - matched - lhs_null > rhs_null then\n"
+      "    :result := FALSE;\n"
+      "  else\n"
+      "    :result := null_result;\n"
+      "  end if;"
+      "end if;\n"
+      "end;";
+
+  pl::ObPLCollection *c1 = reinterpret_cast<pl::ObPLCollection *>(obj1.get_ext());
+  pl::ObPLCollection *c2 = reinterpret_cast<pl::ObPLCollection *>(obj2.get_ext());
+
+  pl::ObPLNestedTable rhs;
+  ObArenaAllocator tmp_alloc(GET_PL_MOD_STRING(pl::PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  pl::ObPLAllocator1 tmp_coll_alloc(pl::PL_MOD_IDX::OB_PL_COLLECTION, &tmp_alloc);
+  OZ (tmp_coll_alloc.init(nullptr));
+  ObObj c2_copy;
+  c2_copy.set_null();
+
+  ObArenaAllocator alloc;
+  ParamStore params((ObWrapperAllocator(alloc)));
+
+  ObObj result;
+  result.set_bool(false);
+
+  CK (OB_NOT_NULL(c1));
+  CK (OB_NOT_NULL(c2));
+  CK (c1->is_nested_table());
+  CK (c2->is_nested_table());
+
+  OX (rhs.set_id(c2->get_id()));
+  OX (rhs.set_allocator(&tmp_coll_alloc));
+  OZ (rhs.deep_copy(c2, nullptr));
+  OX (c2_copy.set_extend(reinterpret_cast<int64_t>(&rhs), obj2.get_meta().get_extend_type()));
+  DEFER(pl::ObUserDefinedType::destruct_obj(c2_copy));
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (c1->get_id() != c2->get_id()) {
+    ObString op;
+
+    if (CO_EQ == cmp_op) {
+      op = "=";
+    } else if (CO_NE == cmp_op) {
+      op = "!=";
+    }
+
+    ret = OB_ERR_CALL_WRONG_ARG;
+    LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, op.length(), op.ptr());
+    LOG_WARN("failed to compare udt with different id",
+             K(ret), K(obj1), K(obj2), K(cmp_op), KPC(c1), KPC(c2));
+  } else if (OB_FAIL(params.push_back(result))) {
+    LOG_WARN("failed to push back result", K(ret), K(result), K(params));
+  } else if (OB_FAIL(params.push_back(obj1))) {
+    LOG_WARN("failed to push back obj1", K(ret), K(obj1), K(params));
+  } else if (OB_FAIL(params.push_back(c2_copy))) {
+    LOG_WARN("failed to push back obj2", K(ret), K(obj2), K(params));
+  } else {
+    params.at(0).set_param_meta();
+
+    params.at(1).set_udt_id(c1->get_id());
+    params.at(1).set_param_meta();
+
+    params.at(2).set_udt_id(c2->get_id());
+    params.at(2).set_param_meta();
+  }
+
+  CK (OB_NOT_NULL(GCTX.pl_engine_));
+  CK (OB_NOT_NULL(exec_ctx.get_sql_ctx()));
+
+  if (OB_SUCC(ret)) {
+    ObBitSet<> out_args;
+
+    bool tmp_result = false;
+
+    if (OB_FAIL(ObExprMultiSet::eval_composite_relative_anonymous_block(exec_ctx,
+                                                                        CMP_EQ_PL,
+                                                                        params,
+                                                                        out_args))) {
+      LOG_WARN("failed to execute PS anonymous bolck", K(ret), K(obj1), K(obj2), K(params));
+    } else if (out_args.num_members() != 2 || !out_args.has_member(0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected out args",
+               K(ret), K(obj1), K(obj2), K(params), K(out_args));
+    } else if (params.at(0).is_null()) {
+      cmp_result = COLL_PRED_NULL;
+    } else if (OB_FAIL(params.at(0).get_bool(tmp_result))) {
+      LOG_WARN("failed to get result",
+               K(ret), K(obj1), K(obj2), K(params), K(result), K(tmp_result));
+    } else if (CO_EQ == cmp_op) {
+      cmp_result = tmp_result ? COLL_PRED_TRUE : COLL_PRED_FALSE;
+    } else if (CO_NE == cmp_op) {
+      cmp_result = tmp_result ? COLL_PRED_FALSE : COLL_PRED_TRUE;
+    } else {
+      cmp_result = COLL_PRED_INVALID;
+    }
+  }
+
+#endif // OB_BUILD_ORACLE_PL
+
   return ret;
 }
 
@@ -4242,7 +4406,7 @@ int ObVectorExprOperator::calc_result_typeN(ObExprResType &type,
     bool has_composite_elem = false;
     // in 可能是nest table, (nt1 in (nt2, nt3, nt4))
     for (int64_t k = 0; lib::is_oracle_mode() && k < param_num; ++k) {
-      if (!types[k].is_ext()) {
+      if (!types[k].is_ext() && !types[k].is_null()) {
         not_composite_elem_idx = k;
       }
       has_composite_elem |= types[k].is_ext();

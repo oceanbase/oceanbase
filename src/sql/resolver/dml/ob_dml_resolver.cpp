@@ -846,17 +846,25 @@ int ObDMLResolver::resolve_into_variables(const ParseNode *node,
             }
             OZ (pl_vars.push_back(expr));
           } else if (params_.is_prepare_protocol_) { //动态SQL中的RETURNING子句, 后面跟的是QuestionMark
-            ObSEArray<ObQualifiedName, 1> columns;
-            ObSEArray<ObVarInfo, 1> var_infos;
-            OZ (ObResolverUtils::resolve_const_expr(params_,
-                                                   *ch_node,
-                                                    expr,
-                                                    &var_infos));
-            CK (0 == var_infos.count());
-            if (OB_SUCC(ret) && expr->get_expr_type() != T_QUESTIONMARK) {
+            if (OB_SUCC(ret) && ch_node->type_ != T_QUESTIONMARK) {
               ret = OB_NOT_SUPPORTED;
               LOG_WARN("dynamic sql into variable not a question mark", K(ret), KPC(expr));
               LOG_USER_ERROR(OB_NOT_SUPPORTED, "dynamic sql into variable not a question mark");
+            } else if (params_.is_dynamic_sql_ &&
+                       !params_.is_dbms_sql_ &&
+                       OB_NOT_NULL(params_.param_list_) &&
+                       params_.param_list_->count() > 0) {
+              ObConstRawExpr *c_expr = NULL;
+              OZ (params_.expr_factory_->create_raw_expr(ch_node->type_, c_expr));
+              OX (expr = c_expr);
+            } else {
+              ObSEArray<ObQualifiedName, 1> columns;
+              ObSEArray<ObVarInfo, 1> var_infos;
+              OZ (ObResolverUtils::resolve_const_expr(params_,
+                                                    *ch_node,
+                                                      expr,
+                                                      &var_infos));
+              CK (0 == var_infos.count());
             }
             OZ (pl_vars.push_back(expr));
           } else {

@@ -497,6 +497,379 @@ int ObExprMultiSet::cg_expr(ObExprCGCtx &expr_cg_ctx,
   return ret;
 }
 
+int ObExprMultiSet::eval_multiset_composite(ObExecContext &exec_ctx,
+                                            const common::ObObj &obj1,
+                                            const common::ObObj &obj2,
+                                            common::ObObj &result,
+                                            ObMultiSetType ms_type,
+                                            ObMultiSetModifier ms_modifier) {
+  int ret = OB_SUCCESS;
+
+#ifdef OB_BUILD_ORACLE_PL
+
+  static constexpr char MULTISET_EXCEPT_PL[] =
+      "declare\n"
+      "lhs_count pls_integer := :lhs.count;\n"
+      "rhs_count pls_integer := :rhs.count;\n"
+      "buffer_count pls_integer := :buffer.count;\n"
+      "result_count pls_integer := :result.count;\n"
+      "begin\n"
+      "if lhs_count > 0 then\n"
+      "  if rhs_count > 0 then\n"
+      "    for i in :rhs.first..:rhs.last loop\n"
+      "      if not :rhs.exists(i) then continue; end if;\n"
+      "        for j in :lhs.first..:lhs.last loop\n"
+      "          if not :lhs.exists(j) then continue; end if;\n"
+      "          if (:rhs(i) is NULL) or (:lhs(j) is NULL) then\n"
+      "            if (:rhs(i) is NULL) and (:lhs(j) is NULL) then\n"
+      "              :lhs.delete(j);\n"
+      "              exit;\n"
+      "            end if;\n"
+      "          elsif :rhs(i) = :lhs(j) or (:rhs(i) = :lhs(j)) is NULL then\n"
+      "            :lhs.delete(j);\n"
+      "            exit;\n"
+      "          end if;\n"
+      "      end loop;\n"
+      "    end loop;\n"
+      "  end if;\n"
+      "  for i in :lhs.first..:lhs.last loop\n"
+      "    if not :lhs.exists(i) then continue; end if;\n"
+      "    :result.extend(1);\n"
+      "    :result(:result.count) := :lhs(i);\n"
+      "  end loop;\n"
+      "end if;\n"
+      "end;";
+
+  static constexpr char MULTISET_INTERSECT_PL[] =
+      "declare\n"
+      "lhs_count pls_integer := :lhs.count;\n"
+      "rhs_count pls_integer := :rhs.count;\n"
+      "buffer_count pls_integer := :buffer.count;\n"
+      "result_count pls_integer := :result.count;\n"
+      "lhs_cnt pls_integer := 0;\n"
+      "rhs_cnt pls_integer := 0;\n"
+      "begin\n"
+      "if lhs_count = 0 or rhs_count = 0 then return; end if;\n"
+      "for i in :buffer.first..:buffer.last loop\n"
+      "if not :buffer.exists(i) then continue; end if;\n"
+      "  lhs_cnt := 0;\n"
+      "  rhs_cnt := 0;\n"
+      "  for j in :lhs.first..:lhs.last loop\n"
+      "    if not :lhs.exists(j) then continue; end if;\n"
+      "    if (:buffer(i) is NULL) or (:lhs(j) is NULL) then\n"
+      "      if (:buffer(i) is NULL) and (:lhs(j) is NULL) then\n"
+      "        lhs_cnt := lhs_cnt+1;\n"
+      "        :lhs.delete(j);\n"
+      "      end if;\n"
+      "    elsif :buffer(i) = :lhs(j) or (:buffer(i) = :lhs(j)) is NULL then\n"
+      "      lhs_cnt := lhs_cnt+1;\n"
+      "      :lhs.delete(j);\n"
+      "    end if;\n"
+      "  end loop;\n"
+      "\n"
+      "  for j in :rhs.first..:rhs.last loop\n"
+      "    if not :rhs.exists(j) then continue; end if;\n"
+      "    if (:buffer(i) is NULL) or (:rhs(j) is NULL) then\n"
+      "      if (:buffer(i) is NULL) and (:rhs(j) is NULL) then\n"
+      "        rhs_cnt := rhs_cnt+1;\n"
+      "        :rhs.delete(j);\n"
+      "      end if;\n"
+      "    elsif :buffer(i) = :rhs(j) or (:buffer(i) = :rhs(j)) is NULL then\n"
+      "      rhs_cnt := rhs_cnt+1;\n"
+      "      :rhs.delete(j);\n"
+      "    end if;\n"
+      "  end loop;\n"
+      "\n"
+      "  for j in 1..least(lhs_cnt, rhs_cnt) loop\n"
+      "    :result.extend(1);\n"
+      "    :result(:result.count) := :buffer(i);\n"
+      "  end loop;\n"
+      "end loop;\n"
+      "end;";
+
+  static constexpr char MULTISET_UNION_PL[] =
+      "declare\n"
+      "lhs_count pls_integer := :lhs.count;\n"
+      "rhs_count pls_integer := :rhs.count;\n"
+      "buffer_count pls_integer := :buffer.count;\n"
+      "result_count pls_integer := :result.count;\n"
+      "begin\n"
+      "if :lhs.count > 0 then\n"
+      "  for idx in :lhs.first..:lhs.last loop\n"
+      "    if not :lhs.exists(idx) then continue; end if;\n"
+      "    :result.extend(1);\n"
+      "    :result(:result.count) := :lhs(idx);\n"
+      "  end loop;\n"
+      "end if;\n"
+      "\n"
+      "if :rhs.count > 0 then\n"
+      "  for idx in :rhs.first..:rhs.last loop\n"
+      "    if not :rhs.exists(idx) then continue; end if;\n"
+      "    :result.extend(1);\n"
+      "    :result(:result.count) := :rhs(idx);\n"
+      "  end loop;\n"
+      "end if;\n"
+      "end;";
+
+  static constexpr char DISTINCT_PL[] =
+      "declare\n"
+      "null_element boolean := FALSE;\n"
+      "cmp boolean;\n"
+      "begin\n"
+      "if :coll.count = 0 then return; end if;\n"
+      "for idx in :coll.first..:coll.last loop\n"
+      "  if not :coll.exists(idx) then continue; end if;\n"
+      "  if :coll(idx) is null then\n"
+      "    if not null_element then\n"
+      "      null_element := TRUE;\n"
+      "      :result.extend(1);\n"
+      "      :result(:result.count) := :coll(idx);\n"
+      "    end if;\n"
+      "  else\n"
+      "    cmp := :coll(idx) member of :result;\n"
+      "    if cmp then\n"
+      "      null;\n"
+      "    else\n"
+      "      :result.extend(1);\n"
+      "      :result(:result.count) := :coll(idx);\n"
+      "    end if;\n"
+      "  end if;\n"
+      "end loop;\n"
+      "end;";
+
+#define DECLARE_NESTED_TABLE(name, coll)                                         \
+  pl::ObPLNestedTable name;                                                      \
+  pl::ObPLAllocator1 name##_alloc(pl::PL_MOD_IDX::OB_PL_COLLECTION, &tmp_alloc); \
+  OZ (name##_alloc.init(nullptr));                                               \
+  ObObj name##_obj;                                                              \
+  if (OB_SUCC(ret)) {                                                            \
+    (name).set_id((coll)->get_id());                                             \
+    (name).set_allocator(&name##_alloc);                                         \
+    (name).set_element_desc((coll)->get_element_desc());                         \
+    (name).set_inited();                                                         \
+    (name##_obj)                                                                 \
+        .set_extend(reinterpret_cast<int64_t>(&(name)),                          \
+                    (coll)->get_type());                                         \
+  }                                                                              \
+  DEFER(pl::ObUserDefinedType::destruct_obj((name##_obj)));
+
+#define DEDUP_COLLECTION(obj, params, result)                                  \
+  do {                                                                         \
+    if (OB_FAIL(ret)) {                                                        \
+    } else if (OB_FAIL((params).push_back(obj))) {                             \
+      LOG_WARN("failed to push back coll obj", K(ret), K(obj), K(params));     \
+    } else if (OB_FAIL((params).push_back(result))) {                          \
+      LOG_WARN("failed to push back result obj", K(ret), K(result),            \
+               K(params));                                                     \
+    } else {                                                                   \
+      (params).at(0).set_udt_id(coll_udt_id);                                  \
+      (params).at(0).set_param_meta();                                         \
+      (params).at(1).set_udt_id(coll_udt_id);                                  \
+      (params).at(1).set_param_meta();                                         \
+    }                                                                          \
+    if (OB_FAIL(ret)) {                                                        \
+    } else if (OB_FAIL(eval_composite_relative_anonymous_block(exec_ctx,       \
+                                                               DISTINCT_PL,    \
+                                                               (params),       \
+                                                               out_args))) {   \
+      LOG_WARN("failed to execute PS anonymous bolck", K(params),              \
+               K(out_args));                                                   \
+    } else if (1 != out_args.num_members() || !out_args.has_member(1)) {       \
+      ret = OB_ERR_UNEXPECTED;                                                 \
+      LOG_WARN("unexpected out param for DISTINCT_PL", K(ret), K(out_args),    \
+               K(params));                                                     \
+    } else {                                                                   \
+      (result) = (params).at(1);                                               \
+    }                                                                          \
+  } while (0)
+
+  pl::ObPLCollection *c1 =
+      reinterpret_cast<pl::ObPLCollection *>(obj1.get_ext());
+  pl::ObPLCollection *c2 =
+      reinterpret_cast<pl::ObPLCollection *>(obj2.get_ext());
+
+  const char *multiset_pl = nullptr;
+
+  pl::ObPLNestedTable *res_coll = nullptr;
+  pl::ObPLAllocator1 *res_alloc = nullptr;
+
+  CK (OB_NOT_NULL(c1));
+  CK (OB_NOT_NULL(c2));
+  CK (c1->is_nested_table());
+  CK (c2->is_nested_table());
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (MULTISET_TYPE_EXCEPT == ms_type) {
+    multiset_pl = MULTISET_EXCEPT_PL;
+  } else if (MULTISET_TYPE_INTERSECT == ms_type) {
+    multiset_pl = MULTISET_INTERSECT_PL;
+  } else if (MULTISET_TYPE_UNION == ms_type) {
+    multiset_pl = MULTISET_UNION_PL;
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected MULTISET type", K(ret), K(ms_type), K(ms_modifier));
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (c1->get_id() != c2->get_id()) {
+    static const ObString EXPR_NAME = "MULTISET";
+    ret = OB_ERR_CALL_WRONG_ARG;
+
+    LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, EXPR_NAME.length(), EXPR_NAME.ptr());
+    LOG_WARN("failed to eval MULTISET", K(ret), KPC(c1), KPC(c2), K(ms_type),
+             K(ms_modifier));
+  } else if (OB_ISNULL(res_coll = static_cast<pl::ObPLNestedTable *>(
+                           exec_ctx.get_allocator().alloc(
+                               sizeof(pl::ObPLNestedTable))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory for result collection", K(ret));
+  } else if (OB_ISNULL(res_coll =
+                           new (res_coll) pl::ObPLNestedTable(c1->get_id()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to construct result collection",
+             K(ret), KPC(c1), KPC(res_coll));
+  } else if (OB_ISNULL(res_alloc = static_cast<pl::ObPLAllocator1 *>(
+                           exec_ctx.get_allocator().alloc(
+                               sizeof(pl::ObPLAllocator1))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory for result collection allocator", K(ret));
+  } else if (OB_ISNULL(res_alloc =
+                           new (res_alloc) pl::ObPLAllocator1(pl::PL_MOD_IDX::OB_PL_COLLECTION, &exec_ctx.get_allocator()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to construct result collection allocator", K(ret));
+  } else if (OB_FAIL(res_alloc->init(nullptr))) {
+    LOG_WARN("failed to init result collection allocator", K(ret));
+  } else if (FALSE_IT(res_coll->set_allocator(res_alloc))) {
+    // unreachable
+  } else {
+    const uint64_t coll_udt_id = c1->get_id();
+    ObArenaAllocator tmp_alloc(GET_PL_MOD_STRING(pl::PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    DECLARE_NESTED_TABLE(lhs, c1);
+    DECLARE_NESTED_TABLE(rhs, c2);
+    DECLARE_NESTED_TABLE(buffer, c1);
+    DECLARE_NESTED_TABLE(res, c1);
+    DECLARE_NESTED_TABLE(res_distinct, c1);
+
+    pl::ObPLNestedTable *eval_result = nullptr;
+
+    ObArenaAllocator alloc;
+    ParamStore params((ObWrapperAllocator(alloc)));
+    ParamStore lhs_distinct_params((ObWrapperAllocator(alloc)));
+    ParamStore rhs_distinct_params((ObWrapperAllocator(alloc)));
+    ParamStore result_distinct_params((ObWrapperAllocator(alloc)));
+
+    ObBitSet<> out_args;
+
+    if (MULTISET_MODIFIER_DISTINCT == ms_modifier) {
+      DEDUP_COLLECTION(obj1, lhs_distinct_params, lhs_obj);
+      DEDUP_COLLECTION(obj2, rhs_distinct_params, rhs_obj);
+    } else {
+      if (OB_FAIL(lhs.deep_copy(c1, nullptr))) {
+        LOG_WARN("failed too deep copy c1", K(ret), K(lhs), KPC(c1));
+      } else if (OB_FAIL(rhs.deep_copy(c2, nullptr))) {
+        LOG_WARN("failed too deep copy c2", K(ret), K(rhs), KPC(c2));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(buffer.deep_copy(reinterpret_cast<pl::ObPLNestedTable*>(lhs_obj.get_ext()), nullptr))) {
+      LOG_WARN("failed to deep copy lhs to buffer", K(lhs_obj), K(buffer));
+    } else if (OB_FAIL(params.push_back(lhs_obj))) {
+      LOG_WARN("failed to push back lhs_obj", K(ret), K(lhs_obj), K(params));
+    } else if (OB_FAIL(params.push_back(rhs_obj))) {
+      LOG_WARN("failed to push back rhs_obj", K(ret), K(rhs_obj), K(params));
+    } else if (OB_FAIL(params.push_back(buffer_obj))) {
+      LOG_WARN("failed to push back buffer_obj", K(ret), K(buffer_obj), K(params));
+    } else if (OB_FAIL(params.push_back(res_obj))) {
+      LOG_WARN("failed to push back res_obj", K(ret), K(res_obj), K(params));
+    } else {
+      params.at(0).set_udt_id(coll_udt_id);
+      params.at(0).set_param_meta();
+      params.at(1).set_udt_id(coll_udt_id);
+      params.at(1).set_param_meta();
+      params.at(2).set_udt_id(coll_udt_id);
+      params.at(2).set_param_meta();
+      params.at(3).set_udt_id(coll_udt_id);
+      params.at(3).set_param_meta();
+    }
+
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(eval_composite_relative_anonymous_block(exec_ctx, multiset_pl, params, out_args))) {
+      LOG_WARN("failed to execute PS anonymous bolck",
+               K(multiset_pl), K(params), K(out_args));
+    } else if (!out_args.has_member(3)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected out args", K(ret), K(params), K(out_args));
+    } else if (MULTISET_MODIFIER_DISTINCT == ms_modifier) {
+      ObObj all_result = params.at(3);
+      DEDUP_COLLECTION(all_result, result_distinct_params, res_distinct_obj);
+      OX (eval_result = reinterpret_cast<pl::ObPLNestedTable*>(res_distinct_obj.get_ext()));
+    } else {
+      eval_result = reinterpret_cast<pl::ObPLNestedTable*>(params.at(3).get_ext());
+    }
+
+    CK (OB_NOT_NULL(eval_result));
+
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(res_coll->deep_copy(eval_result, nullptr))) {
+      LOG_WARN("failed too deep copy eval_result", K(ret), KPC(eval_result), K(res_coll));
+    } else {
+      result.set_extend(reinterpret_cast<int64_t>(res_coll), res_coll->get_type());
+    }
+  }
+
+#undef DECLARE_NESTED_TABLE
+
+#endif // OB_BUILD_ORACLE_PL
+
+  return ret;
+}
+
+
+
+int ObExprMultiSet::eval_composite_relative_anonymous_block(ObExecContext &exec_ctx,
+                                                            const char *pl,
+                                                            ParamStore &params,
+                                                            ObBitSet<> &out_args) {
+  int ret = OB_SUCCESS;
+
+  CK (OB_NOT_NULL(GCTX.pl_engine_));
+  CK (OB_NOT_NULL(exec_ctx.get_sql_ctx()));
+  CK (OB_NOT_NULL(exec_ctx.get_pl_stack_ctx()));
+
+  if (OB_SUCC(ret)) {
+    bool is_ps_backup = exec_ctx.get_sql_ctx()->is_prepare_protocol_;
+    bool is_pre_exec_backup = exec_ctx.get_sql_ctx()->is_pre_execute_;
+    bool is_inner_mock_backup = exec_ctx.get_pl_stack_ctx()->get_is_inner_mock();
+
+    exec_ctx.get_sql_ctx()->is_prepare_protocol_ = true;
+    exec_ctx.get_sql_ctx()->is_pre_execute_ = true;
+    exec_ctx.get_pl_stack_ctx()->set_is_inner_mock(true);
+
+    DEFER(exec_ctx.get_sql_ctx()->is_prepare_protocol_ = is_ps_backup);
+    DEFER(exec_ctx.get_sql_ctx()->is_pre_execute_ = is_pre_exec_backup);
+    DEFER(exec_ctx.get_pl_stack_ctx()->set_is_inner_mock(is_inner_mock_backup));
+
+    out_args.reuse();
+
+    if (OB_FAIL(GCTX.pl_engine_->execute(exec_ctx,
+                                         params,
+                                         OB_INVALID_ID,
+                                         pl,
+                                         out_args))) {
+      LOG_WARN("failed to execute PS anonymous bolck",
+               K(ret), K(pl), K(params), K(out_args));
+    }
+  }
+
+  return ret;
+}
+
 int ObExprMultiSet::eval_multiset(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   int ret = OB_SUCCESS;
@@ -543,12 +916,20 @@ int ObExprMultiSet::eval_multiset(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &r
       } else if (c1->get_element_type().get_obj_type() != c2->get_element_type().get_obj_type()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("udt union failed due to uninited", K(ret), KPC(c1), KPC(c2));
-      } else if (c1->is_of_composite()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "MULTISET expr for collections of composite types is");
-        LOG_WARN("MULTISET expr for collections of composite types is not supported", K(c1->get_element_type()), K(c2->get_element_type()));
       } else if (!c1->is_inited() || !c2->is_inited()) {
         // if has uninit collection, result is uninit, so do nothing ...
+      } else if (c1->is_of_composite()) {
+        if (OB_FAIL(eval_multiset_composite(ctx.exec_ctx_,
+                                            obj1,
+                                            obj2,
+                                            result,
+                                            info->ms_type_,
+                                            info->ms_modifier_))) {
+          LOG_WARN("failed to eval_multiset_composit",
+                   K(ret), K(obj1), K(obj2), K(result));
+        } else {
+          coll = reinterpret_cast<pl::ObPLNestedTable*>(result.get_ext());
+        }
       } else {
         coll = new(coll)pl::ObPLNestedTable(c1->get_id());
         collection_allocator =
@@ -590,40 +971,41 @@ int ObExprMultiSet::eval_multiset(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &r
             }
           }
         }
-      }
-      if (OB_FAIL(ret)) {
-        LOG_WARN("failed to calc multiset operator", K(ret), K(data_arr));
-      } else if (elem_count > 0 && OB_ISNULL(data_arr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected result.", K(elem_count), K(data_arr), K(ret));
-      } else {
-        coll->set_allocator(collection_allocator);
-        coll->set_type(c1->get_type());
-        coll->set_id(c1->get_id());
-        coll->set_is_null(c1->is_null());
-        coll->set_element_desc(c1->get_element_desc());
-        coll->set_column_count(c1->get_column_count());
-        coll->set_not_null(c1->is_not_null());
-        coll->set_count(elem_count);
-        coll->set_first(elem_count > 0 ? 1 : OB_INVALID_ID);
-        coll->set_last(elem_count > 0 ? elem_count : OB_INVALID_ID);
-        coll->set_data(data_arr);
-        result.set_extend(reinterpret_cast<int64_t>(coll), coll->get_type());
-        OZ(res.from_obj(result, expr.obj_datum_map_));
-        //Collection constructed here must be recorded and destructed at last
-        if (OB_NOT_NULL(coll->get_allocator())) {
-          int tmp_ret = OB_SUCCESS;
-          if (OB_ISNULL(ctx.exec_ctx_.get_pl_ctx())) {
-            tmp_ret = ctx.exec_ctx_.init_pl_ctx();
-          }
-          if (OB_SUCCESS == tmp_ret && OB_NOT_NULL(ctx.exec_ctx_.get_pl_ctx())) {
-            tmp_ret = ctx.exec_ctx_.get_pl_ctx()->add(result);
-          }
-          if (OB_SUCCESS != tmp_ret) {
-            LOG_ERROR("fail to collect pl collection allocator, may be exist memory issue", K(tmp_ret));
-          }
-          ret = OB_SUCCESS == ret ? tmp_ret : ret;
+        if (OB_FAIL(ret)) {
+          LOG_WARN("failed to calc multiset operator", K(ret), K(data_arr));
+        } else if (elem_count > 0 && OB_ISNULL(data_arr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected result.", K(elem_count), K(data_arr), K(ret));
+        } else {
+          coll->set_allocator(collection_allocator);
+          coll->set_type(c1->get_type());
+          coll->set_id(c1->get_id());
+          coll->set_is_null(c1->is_null());
+          coll->set_element_desc(c1->get_element_desc());
+          coll->set_column_count(c1->get_column_count());
+          coll->set_not_null(c1->is_not_null());
+          coll->set_count(elem_count);
+          coll->set_first(elem_count > 0 ? 1 : OB_INVALID_ID);
+          coll->set_last(elem_count > 0 ? elem_count : OB_INVALID_ID);
+          coll->set_data(data_arr, elem_count);
+          result.set_extend(reinterpret_cast<int64_t>(coll), coll->get_type());
         }
+      }
+
+      OZ(res.from_obj(result, expr.obj_datum_map_));
+      //Collection constructed here must be recorded and destructed at last
+      if (OB_NOT_NULL(coll) && OB_NOT_NULL(coll->get_allocator())) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_ISNULL(ctx.exec_ctx_.get_pl_ctx())) {
+          tmp_ret = ctx.exec_ctx_.init_pl_ctx();
+        }
+        if (OB_SUCCESS == tmp_ret && OB_NOT_NULL(ctx.exec_ctx_.get_pl_ctx())) {
+          tmp_ret = ctx.exec_ctx_.get_pl_ctx()->add(result);
+        }
+        if (OB_SUCCESS != tmp_ret) {
+          LOG_ERROR("fail to collect pl collection allocator, may be exist memory issue", K(tmp_ret));
+        }
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
       }
     }
   }

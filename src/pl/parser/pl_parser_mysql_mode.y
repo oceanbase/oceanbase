@@ -223,7 +223,7 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
       DATA DATE DAY DEFINER DISABLE ENABLE ENDS END_KEY EVENT EVERY EXTEND FOLLOWS FOUND FUNCTION HANDLER HOUR INTERFACE INVOKER JSON LANGUAGE
       MESSAGE_TEXT MINUTE MONTH MYSQL_ERRNO NATIONAL NEXT NO OF OPEN PACKAGE PRAGMA PRECEDES PRESERVE RECORD RETURNS ROW ROWTYPE
       SCHEDULE SCHEMA_NAME SECOND SECURITY SUBCLASS_ORIGIN TABLE_NAME TYPE VALUE DATETIME TIMESTAMP TIME YEAR
-      TEXT NCHAR NVARCHAR BOOL BOOLEAN ENUM BIT FIXED SIGNED STARTS INTERVAL ROLE USER TO XA RECOVER
+      TEXT NCHAR NVARCHAR BOOL BOOLEAN ENUM BIT FIXED SIGNED STARTS INTERVAL ROLE USER TO XA RECOVER COMPILE REUSE SETTINGS
 //-----------------------------non_reserved keyword end---------------------------------------------
 %right END_KEY
 %left ELSE IF ELSEIF
@@ -241,7 +241,7 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
 %type <node> create_procedure_stmt sp_proc_stmt expr expr_list procedure_body default_expr
 %type <node> create_function_stmt function_body
 %type <node> drop_procedure_stmt drop_function_stmt
-%type <node> alter_procedure_stmt alter_function_stmt opt_sp_alter_chistics
+%type <node> alter_procedure_stmt alter_function_stmt opt_sp_alter_chistics sp_compile_clause
 %type <node> sp_unlabeled_block
 %type <node> sp_block_content opt_sp_decls sp_proc_stmts sp_decl sp_decls
 %type <node> sp_labeled_block label_ident opt_sp_label
@@ -254,7 +254,7 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
 %type <node> sp_param sp_fparam sp_alter_chistics
 %type <node> opt_sp_definer sp_create_chistics sp_create_chistic sp_chistic opt_parentheses user opt_host_name
 %type <node> param_type sp_cparams opt_sp_cparam_list cexpr sp_cparam opt_sp_cparam_with_assign
-%type <ival> opt_sp_inout opt_if_exists opt_if_not_exists
+%type <ival> opt_sp_inout opt_if_exists opt_if_not_exists opt_reuse_settings
 %type <node> call_sp_stmt do_sp_stmt
 %type <node> sp_cond sp_hcond_list sp_hcond
 %type <node> sp_unlabeled_control sp_labeled_control
@@ -839,6 +839,9 @@ unreserved_keyword:
   | MINUTE
   | SECOND
   | INTERVAL
+  | COMPILE
+  | REUSE
+  | SETTINGS
 ;
 
 /*****************************************************************************
@@ -1505,12 +1508,26 @@ alter_function_stmt:
     }
 ;
 
+sp_compile_clause:
+    COMPILE opt_reuse_settings
+    {
+      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_COMPILE_CLAUSE, 1, NULL);
+      $$->int32_values_[1] = $2;
+    }
+;
+
+opt_reuse_settings:
+      /*EMPTY*/        { $$ = 0; }
+    | REUSE SETTINGS   { $$ = 1; }
+;
+
 opt_sp_alter_chistics:
     /* empty */ { $$ = NULL; }
   | sp_alter_chistics
     {
       merge_nodes($$, parse_ctx->mem_pool_, T_SP_CLAUSE_LIST, $1);
     }
+  | sp_compile_clause { $$ = $1; }
 ;
 
 sp_alter_chistics:

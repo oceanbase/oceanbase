@@ -1028,8 +1028,13 @@ struct ObSchemaObjVersion
   inline bool operator !=(const ObSchemaObjVersion &other) const { return !operator ==(other); }
   ObSchemaType get_schema_type() const
   {
+    return get_schema_type(object_type_);
+  }
+
+  static  ObSchemaType get_schema_type(ObDependencyTableType object_type)
+  {
     ObSchemaType ret_type = OB_MAX_SCHEMA;
-    switch (object_type_) {
+    switch (object_type) {
       case DEPENDENCY_TABLE:
       case DEPENDENCY_VIEW:
         ret_type = TABLE_SCHEMA;
@@ -1066,6 +1071,7 @@ struct ObSchemaObjVersion
     }
     return ret_type;
   }
+
   static ObObjectType get_schema_object_type(ObDependencyTableType object_type)
   {
     ObObjectType ret_type = ObObjectType::MAX_TYPE;
@@ -4127,7 +4133,8 @@ public:
      max_connections_(0),
      max_user_connections_(0),
      proxied_user_info_(NULL), proxied_user_info_capacity_(0), proxied_user_info_cnt_(0),
-     proxy_user_info_(NULL), proxy_user_info_capacity_(0), proxy_user_info_cnt_(0), user_flags_()
+     proxy_user_info_(NULL), proxy_user_info_capacity_(0), proxy_user_info_cnt_(0), user_flags_(),
+     trigger_list_()
   { }
   explicit ObUserInfo(common::ObIAllocator *allocator);
   virtual ~ObUserInfo();
@@ -4219,7 +4226,7 @@ public:
                K_(profile_id), K_(proxied_user_info_cnt), K_(proxy_user_info_cnt),
                "proxied info", ObArrayWrap<ObProxyInfo*>(proxied_user_info_, proxied_user_info_cnt_),
                "proxy info", ObArrayWrap<ObProxyInfo*>(proxy_user_info_, proxy_user_info_cnt_),
-               K_(user_flags)
+               K_(user_flags), K_(trigger_list)
               );
   bool role_exists(const uint64_t role_id, const uint64_t option) const;
   int get_seq_by_role_id(uint64_t role_id, uint64_t &seq) const;
@@ -4230,7 +4237,9 @@ public:
     user_flags_.proxy_activated_flag_ = flag;
   }
   inline ObProxyActivatedFlag get_proxy_activated_flag() { return (ObProxyActivatedFlag)(user_flags_.proxy_activated_flag_); }
-
+  inline common::ObIArray<uint64_t> &get_trigger_list() { return trigger_list_; }
+  inline const common::ObIArray<uint64_t> &get_trigger_list() const { return trigger_list_; }
+  inline void reset_trigger_list() { trigger_list_.reset(); }
 private:
   int add_proxy_info_(ObProxyInfo **&arr, uint64_t &capacity, uint64_t &cnt, const ObProxyInfo &proxy_info);
   int assign_proxy_info_array_(ObProxyInfo **src_arr,
@@ -4269,6 +4278,7 @@ private:
   uint64_t proxy_user_info_capacity_;
   uint64_t proxy_user_info_cnt_;
   ObUserFlags user_flags_;
+  common::ObSArray<uint64_t> trigger_list_;
   DISABLE_COPY_ASSIGN(ObUserInfo);
 };
 

@@ -1833,8 +1833,26 @@ constexpr int OB_ERR_EVENT_RECURSION_FORBIDDEN = -9780;
 constexpr int OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR = -9781;
 constexpr int OB_ERR_INVALID_CHARACTER = -9782;
 constexpr int OB_ERR_CURSOR_ATTR_APPLY = -9784;
+constexpr int OB_UTL_TCP_BUFFER_TOO_SMALL = -9785;
+constexpr int OB_UTL_TCP_END_OF_INPUT = -9786;
+constexpr int OB_UTL_TCP_NETWORK_ERROR = -9787;
+constexpr int OB_UTL_TCP_BAD_ARGUMENT = -9788;
+constexpr int OB_UTL_TCP_PARTIAL_MULTIBYTE_CHAR = -9789;
+constexpr int OB_UTL_TCP_TRANSFER_TIMEOUT = -9790;
+constexpr int OB_UTL_TCP_NETWORK_ACCCESS_DENIED = -9791;
+constexpr int OB_ERR_UTL_TCP_TOO_MANY_CONNS = -9792;
+constexpr int OB_UTL_TCP_SECURITY_VIOLATION = -9793;
+constexpr int OB_UTL_SMTP_INVALID_OPERATION = -9794;
+constexpr int OB_UTL_SMTP_TRANSIENT_ERROR = -9795;
+constexpr int OB_UTL_SMTP_PERMANENT_ERROR = -9796;
+constexpr int OB_UTL_SMTP_UNSUPPORTED_SCHEME = -9797;
+constexpr int OB_UTL_SMTP_NO_SUPPORTED_SCHEME = -9798;
 constexpr int OB_ERR_COMPILE_RESULT_NOT_ADD_CACHE = -9800;
 constexpr int OB_ELEMENT_AT_GIVEN_INDEX_NOT_EXIST = -9801;
+constexpr int OB_ERR_CANNOT_DEFINE_TRIGGER = -9802;
+constexpr int OB_ERR_CANNOT_RENAME_TRIGGER = -9803;
+constexpr int OB_ERR_LOGON_TRIGGER = -9804;
+constexpr int OB_ERR_LOGOFF_TRIGGER = -9805;
 constexpr int OB_ERR_KV_GLOBAL_INDEX_ROUTE = -10500;
 constexpr int OB_TTL_NOT_ENABLE = -10501;
 constexpr int OB_TTL_COLUMN_NOT_EXIST = -10502;
@@ -4087,8 +4105,26 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR__USER_ERROR_MSG "Table has no partition for value"
 #define OB_ERR_INVALID_CHARACTER__USER_ERROR_MSG "invalid character"
 #define OB_ERR_CURSOR_ATTR_APPLY__USER_ERROR_MSG "cursor attribute may not be applied to non-cursor %.*s"
+#define OB_UTL_TCP_BUFFER_TOO_SMALL__USER_ERROR_MSG "buffer too small"
+#define OB_UTL_TCP_END_OF_INPUT__USER_ERROR_MSG "end-of-input reached"
+#define OB_UTL_TCP_NETWORK_ERROR__USER_ERROR_MSG "network error: %.*s"
+#define OB_UTL_TCP_BAD_ARGUMENT__USER_ERROR_MSG "bad argument"
+#define OB_UTL_TCP_PARTIAL_MULTIBYTE_CHAR__USER_ERROR_MSG "partial multibyte character"
+#define OB_UTL_TCP_TRANSFER_TIMEOUT__USER_ERROR_MSG "transfer timeout"
+#define OB_UTL_TCP_NETWORK_ACCCESS_DENIED__USER_ERROR_MSG "network access denied by access control list (ACL)"
+#define OB_ERR_UTL_TCP_TOO_MANY_CONNS__USER_ERROR_MSG "too many open connections"
+#define OB_UTL_TCP_SECURITY_VIOLATION__USER_ERROR_MSG "security violation"
+#define OB_UTL_SMTP_INVALID_OPERATION__USER_ERROR_MSG "invalid SMTP operation"
+#define OB_UTL_SMTP_TRANSIENT_ERROR__USER_ERROR_MSG "SMTP transient error: %.*s"
+#define OB_UTL_SMTP_PERMANENT_ERROR__USER_ERROR_MSG "SMTP permanent error: %.*s"
+#define OB_UTL_SMTP_UNSUPPORTED_SCHEME__USER_ERROR_MSG "Authentication scheme '%.*s' not supported"
+#define OB_UTL_SMTP_NO_SUPPORTED_SCHEME__USER_ERROR_MSG "No supported authentication scheme found"
 #define OB_ERR_COMPILE_RESULT_NOT_ADD_CACHE__USER_ERROR_MSG "To be compatible with MySQL, if an exception occurs when compiling an OB PL object (such as the object does not exist or a parameter mismatch), the relevant statement will be converted to a statement that throws an exception, and compiled object cannot be added to the cache, which may cause performance problems. User should create or redefine the pl object of the problem indicated in the warning until the warning is eliminated. Problem object name: '%.*s'"
 #define OB_ELEMENT_AT_GIVEN_INDEX_NOT_EXIST__USER_ERROR_MSG "element at index [%ld] does not exist"
+#define OB_ERR_CANNOT_DEFINE_TRIGGER__USER_ERROR_MSG "system triggers cannot be defined on the schema of SYS user"
+#define OB_ERR_CANNOT_RENAME_TRIGGER__USER_ERROR_MSG "renaming system triggers is not allowed"
+#define OB_ERR_LOGON_TRIGGER__USER_ERROR_MSG "client logon triggers cannot have BEFORE type"
+#define OB_ERR_LOGOFF_TRIGGER__USER_ERROR_MSG "client logoff triggers cannot have AFTER type"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__USER_ERROR_MSG "incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__USER_ERROR_MSG "TTL feature is not enabled"
 #define OB_TTL_COLUMN_NOT_EXIST__USER_ERROR_MSG "TTL column '%.*s' not exists"
@@ -6341,8 +6377,26 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR__ORA_USER_ERROR_MSG "ORA-14400: inserted partition key does not map to any partition"
 #define OB_ERR_INVALID_CHARACTER__ORA_USER_ERROR_MSG "ORA-00911: invalid character"
 #define OB_ERR_CURSOR_ATTR_APPLY__ORA_USER_ERROR_MSG "PLS-00324: cursor attribute may not be applied to non-cursor %.*s"
+#define OB_UTL_TCP_BUFFER_TOO_SMALL__ORA_USER_ERROR_MSG "ORA-29258: buffer too small"
+#define OB_UTL_TCP_END_OF_INPUT__ORA_USER_ERROR_MSG "ORA-29259: end-of-input reached"
+#define OB_UTL_TCP_NETWORK_ERROR__ORA_USER_ERROR_MSG "ORA-29260: network error: %.*s"
+#define OB_UTL_TCP_BAD_ARGUMENT__ORA_USER_ERROR_MSG "ORA-29261: bad argument"
+#define OB_UTL_TCP_PARTIAL_MULTIBYTE_CHAR__ORA_USER_ERROR_MSG "ORA-29275: partial multibyte character"
+#define OB_UTL_TCP_TRANSFER_TIMEOUT__ORA_USER_ERROR_MSG "ORA-29276: transfer timeout"
+#define OB_UTL_TCP_NETWORK_ACCCESS_DENIED__ORA_USER_ERROR_MSG "ORA-24247: network access denied by access control list (ACL)"
+#define OB_ERR_UTL_TCP_TOO_MANY_CONNS__ORA_USER_ERROR_MSG "ORA-30678: too many open connections"
+#define OB_UTL_TCP_SECURITY_VIOLATION__ORA_USER_ERROR_MSG "ORA-53203: security violation"
+#define OB_UTL_SMTP_INVALID_OPERATION__ORA_USER_ERROR_MSG "ORA-29277: invalid SMTP operation"
+#define OB_UTL_SMTP_TRANSIENT_ERROR__ORA_USER_ERROR_MSG "ORA-29278: SMTP transient error: %.*s"
+#define OB_UTL_SMTP_PERMANENT_ERROR__ORA_USER_ERROR_MSG "ORA-29279: SMTP permanent error: %.*s"
+#define OB_UTL_SMTP_UNSUPPORTED_SCHEME__ORA_USER_ERROR_MSG "ORA-24249: Authentication scheme '%.*s' not supported"
+#define OB_UTL_SMTP_NO_SUPPORTED_SCHEME__ORA_USER_ERROR_MSG "ORA-24250: No supported authentication scheme found"
 #define OB_ERR_COMPILE_RESULT_NOT_ADD_CACHE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9800, To be compatible with MySQL, if an exception occurs when compiling an OB PL object (such as the object does not exist or a parameter mismatch), the relevant statement will be converted to a statement that throws an exception, and compiled object cannot be added to the cache, which may cause performance problems. User should create or redefine the pl object of the problem indicated in the warning until the warning is eliminated. Problem object name: '%.*s'"
 #define OB_ELEMENT_AT_GIVEN_INDEX_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-22160: element at index [%ld] does not exist"
+#define OB_ERR_CANNOT_DEFINE_TRIGGER__ORA_USER_ERROR_MSG "ORA-30510: system triggers cannot be defined on the schema of SYS user"
+#define OB_ERR_CANNOT_RENAME_TRIGGER__ORA_USER_ERROR_MSG "ORA-25020: renaming system triggers is not allowed"
+#define OB_ERR_LOGON_TRIGGER__ORA_USER_ERROR_MSG "ORA-30508: client logon triggers cannot have BEFORE type"
+#define OB_ERR_LOGOFF_TRIGGER__ORA_USER_ERROR_MSG "ORA-30509: client logoff triggers cannot have AFTER type"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10501, TTL feature is not enabled"
 #define OB_TTL_COLUMN_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10502, TTL column '%.*s' not exists"
@@ -6390,7 +6444,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2250];
+extern int g_all_ob_errnos[2268];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

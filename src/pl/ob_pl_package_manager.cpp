@@ -460,6 +460,8 @@ static const ObSysPackageFile oracle_syspack_file_list[] = {
   {"utl_recomp", "utl_recomp.sql", "utl_recomp_body.sql"},
   {"dbms_profiler", "dbms_profiler.sql", "dbms_profiler_body.sql"},
   {"dbms_balance", "dbms_balance.sql", "dbms_balance_body.sql"},
+  {"utl_tcp", "utl_tcp.sql", "utl_tcp_body.sql"},
+  {"utl_smtp", "utl_smtp.sql", "utl_smtp_body.sql"},
 #endif
 };
 static const ObSysPackageFile mysql_syspack_file_list[] = {
@@ -1236,6 +1238,7 @@ int ObPLPackageManager::load_package_body(const ObPLResolveCtx &resolve_ctx,
       source = package_spec_info.get_source();
     }
     OZ (resolve_ctx.schema_guard_.get_database_schema(tenant_id, db_id, db_schema));
+    CK (OB_NOT_NULL(db_schema));
     OZ (package_spec_ast.init(db_schema->get_database_name_str(),
                               package_spec_info.get_package_name(),
                               PL_PACKAGE_SPEC,

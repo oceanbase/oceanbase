@@ -104,6 +104,12 @@ enum SpDataAccess
   SP_MODIFIES_SQL_DATA = 3
 };
 
+enum SystemTriggerEvent
+{
+  SYS_TRIGGER_LOGON = 0,
+  SYS_TRIGGER_LOGOFF = 1,
+};
+
 #ifdef __cplusplus
 }
 #endif

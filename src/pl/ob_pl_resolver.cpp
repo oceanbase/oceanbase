@@ -9929,20 +9929,13 @@ int ObPLResolver::check_collection_expr_illegal(const ObRawExpr *expr, bool &is_
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr left or right children is null", K(ret));
     } else {
-      if (T_OBJ_ACCESS_REF == left->get_expr_type()
-          && T_OBJ_ACCESS_REF == right->get_expr_type()) {
-        const ObObjAccessRawExpr *l = static_cast<const ObObjAccessRawExpr *>(left);
-        const ObObjAccessRawExpr *r = static_cast<const ObObjAccessRawExpr *>(right);
-        is_obj_acc = true;
-        if ((ObObjAccessIdx::get_final_type(l->get_access_idxs()).is_varray_type()
-            || ObObjAccessIdx::get_final_type(r->get_access_idxs()).is_varray_type())
-            || (ObObjAccessIdx::get_final_type(l->get_access_idxs()).is_associative_array_type()
-            || ObObjAccessIdx::get_final_type(r->get_access_idxs()).is_associative_array_type())) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("not supported varray or associative array compared.", K(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "varray or associative array compared");
-        }
-      }
+      const ObExprResType &left_type = left->get_result_type();
+      const ObExprResType &right_type = right->get_result_type();
+      is_obj_acc |= left_type.is_ext() && PL_NESTED_TABLE_TYPE == left_type.get_extend_type()
+                       && right_type.is_ext() && PL_NESTED_TABLE_TYPE == right_type.get_extend_type()
+                       && left_type.get_udt_id() == right_type.get_udt_id();
+      is_obj_acc |= left_type.is_null() && right_type.is_ext() && PL_NESTED_TABLE_TYPE == right_type.get_extend_type();
+      is_obj_acc |= left_type.is_ext() && PL_NESTED_TABLE_TYPE == left_type.get_extend_type() && right_type.is_null();
     }
   }
   return ret;
@@ -10718,6 +10711,14 @@ int ObPLResolver::resolve_raw_expr(const ParseNode &node,
       if (NULL == params.package_guard_) {
         OZ (package_guard->init());
       }
+      OZ (ObPLCompiler::init_anonymous_ast(func_ast,
+                                            *(params.allocator_),
+                                            *(params.session_info_),
+                                            *(params.sql_proxy_),
+                                            *(params.schema_checker_->get_schema_guard()),
+                                            *package_guard,
+                                            params.param_list_,
+                                            params.is_prepare_protocol_));
       OZ (resolver.init(func_ast));
       // build first namespace
       OZ (resolver.make_block(func_ast, NULL, null_block));

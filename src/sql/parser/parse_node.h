@@ -219,6 +219,7 @@ typedef struct _PLParseInfo
   bool is_forbid_pl_fp_;
   bool is_inner_parse_;
   int last_pl_symbol_pos_; //上一个pl变量的结束位置
+  bool is_parse_dynamic_sql_;
   int plsql_line_;
   /*for mysql pl*/
   void *pl_ns_; //ObPLBlockNS
@@ -321,6 +322,7 @@ typedef struct
     uint32_t is_for_udr_                       : 1;
     uint32_t is_for_remap_                     : 1;
     uint32_t is_external_table_                : 1;
+    uint32_t is_into_cluster_                  : 1;
   };
 
   ParseNode *result_tree_;

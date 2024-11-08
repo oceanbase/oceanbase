@@ -509,6 +509,8 @@ typedef enum ObItemType
   T_FUN_SYS_SM3 = 776,
   T_FUN_SYS_SM4_ENCRYPT = 777,
   T_FUN_SYS_SM4_DECRYPT = 778,
+  T_FUNC_SYS_MYSQL_PROC_INFO = 781,
+
   T_FUN_SYS_GET_MYSQL_ROUTINE_PARAMETER_TYPE_STR = 782,
   ///< @note add new mysql only function type before this line
   T_MYSQL_ONLY_SYS_MAX_OP = 800,
@@ -866,6 +868,7 @@ typedef enum ObItemType
   T_FUN_SYS_VECTOR_DIMS = 1742,
   T_FUN_SYS_VECTOR_NORM = 1743,
   T_FUN_SYS_VECTOR_DISTANCE = 1744,
+  T_FUN_SYS_ORA_LOGIN_USER = 1754,
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table
@@ -2594,6 +2597,10 @@ typedef enum ObItemType
   T_DISTRIBUTE_BASIC = 4736,
   T_MODULE_DATA = 4738,
   T_MODULE_NAME = 4739,
+  T_TG_DB_SCHEMA = 4752,
+  T_TG_SYS_EVENT_OPTION = 4753,
+  T_TG_SYS_EVENT = 4754,
+  T_TG_DB_EVENT_LIST = 4755,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

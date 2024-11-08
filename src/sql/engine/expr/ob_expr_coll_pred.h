@@ -72,11 +72,10 @@ public:
   inline void set_ms_modifier(ObMultiSetModifier ms_modifier) { ms_modifier_ = ms_modifier; }
   inline ObMultiSetModifier get_ms_modifier() const { return ms_modifier_; }
 
-  static int calc_is_submultiset(const ObObj &obj1,
-                                     const ObObj &obj2,
-                                     int64_t tz_offset,
-                                     const ObExprCalcType calc_type,
-                                     CollectionPredRes &result);
+  static int calc_is_submultiset(ObExecContext &exec_ctx,
+                                 const ObObj &obj1,
+                                 const ObObj &obj2,
+                                 CollectionPredRes &result);
   static int compare_obj(const ObObj &obj1, const ObObj &obj2, ObCompareCtx &cmp_ctx);
 
   static int calc_collection_is_contained_without_null(const pl::ObPLCollection *c1,
@@ -89,6 +88,15 @@ public:
                       ObExpr &rt_expr) const override;
   static int eval_coll_pred(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
 private:
+  static int eval_member_of_composite(ObExecContext &exec_ctx,
+                                      const ObObj &val,
+                                      const ObObj &coll,
+                                      ObObj &res);
+
+  static int eval_is_set_composit(ObExecContext &exec_ctx,
+                                  const ObObj &obj,
+                                  ObObj &res);
+
   DISALLOW_COPY_AND_ASSIGN(ObExprCollPred);
 
 private:

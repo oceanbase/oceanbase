@@ -1252,6 +1252,12 @@ public:
 
   static int eval_pl_udt_compare(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
 
+  static int eval_compare_composite(CollectionPredRes &cmp_result,
+                                    const common::ObObj &obj1,
+                                    const common::ObObj &obj2,
+                                    ObExecContext &exec_ctx,
+                                    const ObCmpOp cmp_op);
+
   OB_INLINE static common::ObCmpOp get_cmp_op(const ObExprOperatorType type) {
     /*
      * maybe we can use associative array(table lookup) to get a better

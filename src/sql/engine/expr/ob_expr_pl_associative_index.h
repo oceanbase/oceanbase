@@ -23,6 +23,7 @@ namespace sql
 class ObExprPLAssocIndex : public ObExprOperator
 {
   OB_UNIS_VERSION(1);
+
 public:
   explicit ObExprPLAssocIndex(common::ObIAllocator &alloc);
   virtual ~ObExprPLAssocIndex();
@@ -33,6 +34,7 @@ public:
                                 ObExprResType &type1,
                                 ObExprResType &type2,
                                 common::ObExprTypeCtx &type_ctx) const;
+
   inline void set_write(bool for_write) { info_.for_write_ = for_write; }
   inline void set_out_of_range_set_err(bool v) { info_.out_of_range_set_err_ = v; }
   inline void set_parent_expr_type(pl::parent_expr_type type) { info_.parent_expr_type_ = type; }
@@ -90,7 +92,6 @@ public:
                                  const common::ObObj &key,
                                  ObIAllocator &allocator);
 
-  static int reserve_assoc_key(pl::ObPLAssocArray &assoc_array);
 #endif
   DISALLOW_COPY_AND_ASSIGN(ObExprPLAssocIndex);
 

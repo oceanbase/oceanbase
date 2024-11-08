@@ -91,7 +91,7 @@ int ObPLSymbolTable::delete_symbol(int64_t symbol_idx)
   return ret;
 }
 
-int ObPLUserTypeTable::add_type(ObUserDefinedType *user_defined_type)
+int ObPLUserTypeTable::add_type(const ObUserDefinedType *user_defined_type)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(user_types_.push_back(user_defined_type))) {

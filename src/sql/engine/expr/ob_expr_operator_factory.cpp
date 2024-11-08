@@ -444,7 +444,9 @@
 #include "sql/engine/expr/ob_expr_transaction_id.h"
 #include "sql/engine/expr/ob_expr_audit_log_func.h"
 #include "sql/engine/expr/ob_expr_can_access_trigger.h"
+#include "sql/engine/expr/ob_expr_mysql_proc_info.h"
 #include "sql/engine/expr/ob_expr_get_mysql_routine_parameter_type_str.h"
+#include "sql/engine/expr/ob_expr_ora_login_user.h"
 
 #include "sql/engine/expr/ob_expr_lock_func.h"
 
@@ -978,6 +980,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprScnToTimestamp);
     REG_OP(ObExprSqlModeConvert);
     REG_OP(ObExprCanAccessTrigger);
+    REG_OP(ObExprMysqlProcInfo);
 #if  defined(ENABLE_DEBUG_LOG) || !defined(NDEBUG)
     // convert input value into an OceanBase error number and throw out as exception
     REG_OP(ObExprErrno);
@@ -1423,6 +1426,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprInnerTableSequenceGetter);
   REG_OP_ORCL(ObExprDecodeTraceId);
   REG_OP_ORCL(ObExprTransactionId);
+  REG_OP_ORCL(ObExprOraLoginUser);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)

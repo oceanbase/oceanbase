@@ -2581,8 +2581,26 @@ DEFINE_ERROR(OB_ERR_EVENT_RECURSION_FORBIDDEN, -9780, ER_EVENT_RECURSION_FORBIDD
 DEFINE_ORACLE_ERROR(OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR, -9781, ER_NO_PARTITION_FOR_GIVEN_VALUE, "HY000", "Table has no partition for value", 14400, "inserted partition key does not map to any partition");
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_CHARACTER, -9782, -1, "HY000", "invalid character", 911, "invalid character");
 DEFINE_PLS_ERROR_EXT(OB_ERR_CURSOR_ATTR_APPLY, -9784, -1, "HY000", "cursor attribute may not be applied to non-cursor", "cursor attribute may not be applied to non-cursor %.*s", 324, "cursor attribute may not be applied to non-cursor", "cursor attribute may not be applied to non-cursor %.*s");
+DEFINE_ORACLE_ERROR(OB_UTL_TCP_BUFFER_TOO_SMALL, -9785, -1, "HY000", "buffer too small", 29258, "buffer too small");
+DEFINE_ORACLE_ERROR(OB_UTL_TCP_END_OF_INPUT, -9786, -1, "HY000", "end-of-input reached", 29259, "end-of-input reached");
+DEFINE_ORACLE_ERROR_EXT(OB_UTL_TCP_NETWORK_ERROR, -9787, -1, "HY000", "network error:", "network error: %.*s", 29260, "network error:", "network error: %.*s");
+DEFINE_ORACLE_ERROR(OB_UTL_TCP_BAD_ARGUMENT, -9788, -1, "HY000", "bad argument", 29261, "bad argument");
+DEFINE_ORACLE_ERROR(OB_UTL_TCP_PARTIAL_MULTIBYTE_CHAR, -9789, -1, "HY000", "partial multibyte character", 29275, "partial multibyte character");
+DEFINE_ORACLE_ERROR(OB_UTL_TCP_TRANSFER_TIMEOUT, -9790, -1, "HY000", "transfer timeout", 29276, "transfer timeout");
+DEFINE_ORACLE_ERROR(OB_UTL_TCP_NETWORK_ACCCESS_DENIED, -9791, -1, "HY000", "network access denied by access control list (ACL)", 24247, "network access denied by access control list (ACL)");
+DEFINE_ORACLE_ERROR(OB_ERR_UTL_TCP_TOO_MANY_CONNS, -9792, -1, "HY000", "too many open connections", 30678, "too many open connections");
+DEFINE_ORACLE_ERROR(OB_UTL_TCP_SECURITY_VIOLATION, -9793, -1, "HY000", "security violation", 53203, "security violation");
+DEFINE_ORACLE_ERROR(OB_UTL_SMTP_INVALID_OPERATION, -9794, -1, "HY000", "invalid SMTP operation", 29277, "invalid SMTP operation");
+DEFINE_ORACLE_ERROR_EXT(OB_UTL_SMTP_TRANSIENT_ERROR, -9795, -1, "HY000", "SMTP transient error:", "SMTP transient error: %.*s", 29278, "SMTP transient error:", "SMTP transient error: %.*s");
+DEFINE_ORACLE_ERROR_EXT(OB_UTL_SMTP_PERMANENT_ERROR, -9796, -1, "HY000", "SMTP permanent error:", "SMTP permanent error: %.*s", 29279, "SMTP permanent error:", "SMTP permanent error: %.*s");
+DEFINE_ORACLE_ERROR_EXT(OB_UTL_SMTP_UNSUPPORTED_SCHEME, -9797, -1, "HY000", "Authentication scheme '' not supported", "Authentication scheme '%.*s' not supported", 24249, "Authentication scheme '' not supported", "Authentication scheme '%.*s' not supported");
+DEFINE_ORACLE_ERROR(OB_UTL_SMTP_NO_SUPPORTED_SCHEME, -9798, -1, "HY000", "No supported authentication scheme found", 24250, "No supported authentication scheme found");
 DEFINE_ERROR_EXT(OB_ERR_COMPILE_RESULT_NOT_ADD_CACHE, -9800, -1, "HY000", "Throw this warning means that the user has handled some MySQL exceptions which may cause performance problems.", "To be compatible with MySQL, if an exception occurs when compiling an OB PL object (such as the object does not exist or a parameter mismatch), the relevant statement will be converted to a statement that throws an exception, and compiled object cannot be added to the cache, which may cause performance problems. User should create or redefine the pl object of the problem indicated in the warning until the warning is eliminated. Problem object name: '%.*s'");
 DEFINE_ORACLE_ERROR_EXT(OB_ELEMENT_AT_GIVEN_INDEX_NOT_EXIST, -9801, -1, "HY000", "collection element at the given index does not exist.", "element at index [%ld] does not exist", 22160, "collection element at the given index does not exist.", "element at index [%ld] does not exist");
+DEFINE_ORACLE_ERROR(OB_ERR_CANNOT_DEFINE_TRIGGER, -9802, -1, "HY000", "system triggers cannot be defined on the schema of SYS user", 30510, "system triggers cannot be defined on the schema of SYS user");
+DEFINE_ORACLE_ERROR(OB_ERR_CANNOT_RENAME_TRIGGER, -9803, -1, "HY000", "renaming system triggers is not allowed", 25020, "renaming system triggers is not allowed");
+DEFINE_ORACLE_ERROR(OB_ERR_LOGON_TRIGGER, -9804, -1, "HY000", "client logon triggers cannot have BEFORE type", 30508, "client logon triggers cannot have BEFORE type");
+DEFINE_ORACLE_ERROR(OB_ERR_LOGOFF_TRIGGER, -9805, -1, "HY000", "client logoff triggers cannot have AFTER type", 30509, "client logoff triggers cannot have AFTER type");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // PL/SQL错误码值域 [-9500, -10000)
