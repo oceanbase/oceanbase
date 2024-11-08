@@ -1845,6 +1845,7 @@ int ObSharedNothingTmpFile::truncate_the_first_wbp_page_()
   int ret = OB_SUCCESS;
   bool is_flushed_page = false;
   bool is_write_back_page = false;
+  bool is_dirty_page = false;
   uint32_t next_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
 
   if (ObTmpFileGlobal::INVALID_PAGE_ID == begin_page_id_ ||
@@ -1857,6 +1858,12 @@ int ObSharedNothingTmpFile::truncate_the_first_wbp_page_()
     is_flushed_page = true;
   } else if (wbp_->is_write_back(fd_, begin_page_id_, ObTmpFilePageUniqKey(begin_page_virtual_id_))) {
     is_write_back_page = true;
+  } else if (wbp_->is_dirty(fd_, begin_page_id_, ObTmpFilePageUniqKey(begin_page_virtual_id_))) {
+    is_dirty_page = true;
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("begin page state is unexpected", KR(ret), KPC(this));
+    wbp_->print_page_entry(begin_page_id_);
   }
 
   if (FAILEDx(wbp_->free_page(fd_, begin_page_id_, ObTmpFilePageUniqKey(begin_page_virtual_id_), next_page_id))) {
@@ -1873,10 +1880,6 @@ int ObSharedNothingTmpFile::truncate_the_first_wbp_page_()
           // thus, only if the page is flushed, we can check the equality of flushed_page_id_ and begin_page_id_
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("flushed_page_id_ or flushed_data_page_num_ is unexpected", KR(ret), KPC(this));
-        } else if (flushed_page_id_ == begin_page_id_) {
-          flushed_page_id_ = ObTmpFileGlobal::INVALID_PAGE_ID;
-          flushed_page_virtual_id_ = ObTmpFileGlobal::INVALID_VIRTUAL_PAGE_ID;
-          LOG_INFO("all flushed page has been truncated", KPC(this));
         }
       }
       if (OB_SUCC(ret)) {
@@ -1884,6 +1887,19 @@ int ObSharedNothingTmpFile::truncate_the_first_wbp_page_()
       }
     } else if (is_write_back_page) {
       write_back_data_page_num_--;
+    } else if (is_dirty_page) {
+      if (flushed_page_id_ == begin_page_id_ && flushed_data_page_num_ != 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("flushed_page_id_ or flushed_data_page_num_ is unexpected", KR(ret), KPC(this));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (flushed_page_id_ == begin_page_id_) {
+        flushed_page_id_ = ObTmpFileGlobal::INVALID_PAGE_ID;
+        flushed_page_virtual_id_ = ObTmpFileGlobal::INVALID_VIRTUAL_PAGE_ID;
+        LOG_INFO("all flushed page has been truncated", KPC(this));
+      }
     }
 
     if (OB_SUCC(ret)) {
