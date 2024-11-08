@@ -292,7 +292,10 @@ const int64_t OB_MAX_AUX_TABLE_PER_TABLE = OB_MAX_INDEX_PER_TABLE * OB_MAX_TABLE
 // The max tablet count of a transfer is one data table tablet with max aux tablets bound together.
 const int64_t OB_MAX_TRANSFER_BINDING_TABLET_CNT = OB_MAX_AUX_TABLE_PER_TABLE + 1; // 131
 
-// Note: When adding new index type with multiple aux tables, make sure OB_MAX_TABLE_CNT_PER_INDEX is correct
+// Note:
+// - When adding new index type with multiple aux tables, make sure OB_MAX_TABLE_CNT_PER_INDEX is correct
+// - When adding a new index type, make sure to add it to INDEX_TYPE field of DBA_OB_TABLE_LOCATIONS and CDB_OB_TABLE_LOCATIONS
+//   to distinguish between global and local index
 enum ObIndexType
 {
   INDEX_TYPE_IS_NOT = 0,//is not index table
