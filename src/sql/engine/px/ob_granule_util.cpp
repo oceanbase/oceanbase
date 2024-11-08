@@ -45,7 +45,7 @@ void ObParallelBlockRangeTaskParams::reset()
   expected_task_load_ = sql::OB_EXPECTED_TASK_LOAD;
   min_task_count_per_thread_ = sql::OB_MIN_PARALLEL_TASK_COUNT;
   max_task_count_per_thread_ = sql::OB_MAX_PARALLEL_TASK_COUNT;
-  min_task_access_size_ = GCONF.px_task_size >> 20;
+  min_task_access_size_ = GCONF.px_task_size >> 10;
 }
 
 int ObParallelBlockRangeTaskParams::valid() const
@@ -325,8 +325,8 @@ int ObGranuleUtil::split_block_granule(ObExecContext &exec_ctx,
                                                                  partition_size))) {
         LOG_WARN("failed to get multi ranges cost", K(ret), K(tablet));
       } else {
-        // B to MB
-        partition_size = partition_size / 1024 / 1024;
+        // B to KB
+        partition_size = partition_size / 1024;
       }
 
       if (OB_SUCC(ret)) {
@@ -340,6 +340,7 @@ int ObGranuleUtil::split_block_granule(ObExecContext &exec_ctx,
         }
       }
     }
+    LOG_TRACE("get multi ranges cost", K(empty_partition_cnt), K(size_each_partitions));
   }
 
   // 3. calc the total number of tasks for all partitions
@@ -347,7 +348,7 @@ int ObGranuleUtil::split_block_granule(ObExecContext &exec_ctx,
   if (OB_SUCC(ret)) {
     ObParallelBlockRangeTaskParams params;
     params.parallelism_ = parallelism;
-    params.expected_task_load_ = tablet_size/1024/1024;
+    params.expected_task_load_ = tablet_size/1024;
     if (OB_FAIL(compute_total_task_count(params, total_size, esti_task_cnt_by_data_size))) {
       LOG_WARN("compute task count failed", K(ret));
     } else {
@@ -446,16 +447,18 @@ int ObGranuleUtil::compute_total_task_count(const ObParallelBlockRangeTaskParams
       tmp_total_task_count = min(params.min_task_count_per_thread_ * params.parallelism_,
                                  total_access_size/min_task_access_size);
       tmp_total_task_count = max(tmp_total_task_count, total_access_size / expected_task_load);
-      LOG_TRACE("the data is less than lower bound size", K(ret), K(tmp_total_task_count));
+      LOG_TRACE("the data is less than lower bound size", K(ret), K(tmp_total_task_count),
+                K(total_size), K(params));
     } else if (total_access_size > upper_bound_size) {
       // the data size is greater than upper bound size
       tmp_total_task_count = params.max_task_count_per_thread_ * params.parallelism_;
-      LOG_TRACE("the data size is greater upper bound size", K(ret), K(tmp_total_task_count));
+      LOG_TRACE("the data size is greater upper bound size", K(ret), K(tmp_total_task_count),
+                K(total_size), K(params));
     } else {
       // the data size is between lower bound size and upper bound size
       tmp_total_task_count = total_access_size / expected_task_load;
       LOG_TRACE("the data size is between lower bound size and upper bound size",
-        K(ret), K(tmp_total_task_count));
+        K(ret), K(tmp_total_task_count), K(total_size), K(params));
     }
   }
   if (OB_SUCC(ret)) {
