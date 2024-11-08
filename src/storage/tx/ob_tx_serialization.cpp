@@ -98,11 +98,12 @@ bool ObTxSerCompatByte::is_object_valid(int64_t object_index) const
   int64_t byte_index = -1;
   uint8_t bit_index = 0;
 
-  if (OB_FAIL(cal_object_location_(object_index, byte_index, bit_index))) {
-    TRANS_LOG(WARN, "cal object location failed", K(ret));
+  if (OB_FAIL(cal_object_location_(object_index, byte_index, bit_index, true/*ignore_compat_warn*/))) {
     if (OB_INVALID_ARGUMENT == ret) {
       // ret = OB_SUCCESS;
       is_valid = false;
+    } else {
+      TRANS_LOG(WARN, "cal object location failed", K(ret));
     }
   } else if (OB_FALSE_IT(is_object_valid_(byte_index, bit_index, is_valid))) {
   }
@@ -112,13 +113,16 @@ bool ObTxSerCompatByte::is_object_valid(int64_t object_index) const
 
 int ObTxSerCompatByte::cal_object_location_(int64_t object_index,
                                             int64_t &byte_index,
-                                            uint8_t &bit_index) const
+                                            uint8_t &bit_index,
+                                            const bool ignore_compat_warn) const
 {
   int ret = OB_SUCCESS;
 
   if (object_index < 1 || object_index > total_obj_cnt_) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "object index may be invalid", K(ret), K(object_index), KPC(this));
+    if (!ignore_compat_warn) {
+      TRANS_LOG(WARN, "object index may be invalid", K(ret), K(object_index), KPC(this));
+    }
   } else {
     byte_index = object_index / MAX_OBJECT_COUNT_PER_BYTE - 1;
     bit_index = object_index % MAX_OBJECT_COUNT_PER_BYTE;
