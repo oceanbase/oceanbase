@@ -535,9 +535,6 @@ int ObPhysicalCopyTask::build_copy_macro_block_reader_init_param_(
     ObCopyMacroBlockReaderInitParam &init_param)
 {
   int ret = OB_SUCCESS;
-  int64_t snapshot_version = 0;
-  int64_t co_base_snapshot_version = 0;
-  int64_t src_co_base_snapshot_version = 0;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -565,34 +562,56 @@ int ObPhysicalCopyTask::build_copy_macro_block_reader_init_param_(
     init_param.macro_block_reuse_mgr_ = copy_ctx_->macro_block_reuse_mgr_;
     init_param.data_version_ = 0;
 
-    if (OB_ISNULL(copy_ctx_->macro_block_reuse_mgr_)) {
-      // skip reuse
-    } else if (OB_FAIL(copy_ctx_->macro_block_reuse_mgr_->get_major_snapshot_version(copy_ctx_->table_key_, snapshot_version, co_base_snapshot_version))) {
-      if (OB_ENTRY_NOT_EXIST != ret) {
-        LOG_WARN("failed to get reuse major snapshot version", K(ret), KPC(copy_ctx_));
-      } else {
-        ret = OB_SUCCESS;
-        LOG_INFO("major snapshot version not exist, maybe copying first major in this tablet or copying F major to C replica, skip reuse, set data_version_ to 0", K(ret), KPC(copy_ctx_), K(init_param));
-      }
-    } else if (FALSE_IT(src_co_base_snapshot_version = finish_task_->get_sstable_param()->basic_meta_.get_co_base_snapshot_version())) {
-    } else if (co_base_snapshot_version != src_co_base_snapshot_version) {
-      // when co_base_snapshot_version not match (dst C's major is converted from different version of src major), skip reuse
-      LOG_INFO("co_base_snapshot_version not match, skip reuse, set data_version_ to 0", K(snapshot_version), K(co_base_snapshot_version),
-          K(src_co_base_snapshot_version), KPC(copy_ctx_), K(init_param));
+    if (OB_FAIL(build_data_version_for_macro_block_reuse_(init_param))) {
+      LOG_WARN("failed to check enable macro block reuse", K(ret), K(init_param));
+    } else if (!init_param.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("copy macro block reader init param is invalid", K(ret), K(init_param));
     } else {
-      init_param.data_version_ = snapshot_version;
-      LOG_INFO("succeed get and set reuse major max snapshot version", K(snapshot_version), K(co_base_snapshot_version), K(src_co_base_snapshot_version), KPC(copy_ctx_), K(init_param));
-    }
-
-    if (OB_SUCC(ret)) {
-      if (!init_param.is_valid()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("copy macro block reader init param is invalid", K(ret), K(init_param));
-      } else {
-        LOG_INFO("succeed init param", KPC(copy_macro_range_info_), K(init_param));
-      }
+      LOG_INFO("succeed init param", KPC(copy_macro_range_info_), K(init_param));
     }
   }
+  return ret;
+}
+
+int ObPhysicalCopyTask::build_data_version_for_macro_block_reuse_(ObCopyMacroBlockReaderInitParam &init_param)
+{
+  int ret = OB_SUCCESS;
+  int64_t snapshot_version = 0;
+  int64_t co_base_snapshot_version = 0;
+  int64_t src_co_base_snapshot_version = 0;
+  uint64_t compat_version = 0;
+  init_param.data_version_ = 0;
+
+  if (OB_ISNULL(copy_ctx_->macro_block_reuse_mgr_)) {
+    // skip reuse
+    init_param.data_version_ = 0;
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(copy_ctx_->tenant_id_, compat_version))) {
+    LOG_INFO("failed to get min data version", K(ret), KPC(copy_ctx_));
+  } else if (compat_version < DATA_VERSION_4_3_4_0) {
+    // when reuse macro block, dst will send data_version to src, but data_version cannot be set to larger than 0 before 4.3.4
+    // therefore, if src observer version is less than 4.3.4, skip reuse for compatibility
+    init_param.data_version_ = 0;
+    LOG_INFO("skip reuse for compatibility", K(compat_version), KPC(copy_ctx_));
+  } else if (OB_FAIL(copy_ctx_->macro_block_reuse_mgr_->get_major_snapshot_version(copy_ctx_->table_key_, snapshot_version, co_base_snapshot_version))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("failed to get reuse major snapshot version", K(ret), KPC(copy_ctx_));
+    } else {
+      ret = OB_SUCCESS;
+      init_param.data_version_ = 0;
+      LOG_INFO("major snapshot version not exist, maybe copying first major in this tablet or copying F major to C replica, skip reuse, set data_version_ to 0", K(ret), KPC(copy_ctx_), K(init_param));
+    }
+  } else if (FALSE_IT(src_co_base_snapshot_version = finish_task_->get_sstable_param()->basic_meta_.get_co_base_snapshot_version())) {
+  } else if (co_base_snapshot_version != src_co_base_snapshot_version) {
+    // when co_base_snapshot_version not match (dst C's major is converted from different version of src major), skip reuse
+    init_param.data_version_ = 0;
+    LOG_INFO("co_base_snapshot_version not match, skip reuse, set data_version_ to 0", K(snapshot_version), K(co_base_snapshot_version),
+        K(src_co_base_snapshot_version), KPC(copy_ctx_), K(init_param));
+  } else {
+    init_param.data_version_ = snapshot_version;
+    LOG_INFO("succeed get and set reuse major max snapshot version", K(snapshot_version), K(co_base_snapshot_version), K(src_co_base_snapshot_version), KPC(copy_ctx_), K(init_param));
+  }
+
   return ret;
 }
 
