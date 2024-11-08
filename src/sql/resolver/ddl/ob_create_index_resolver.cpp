@@ -235,8 +235,8 @@ int ObCreateIndexResolver::resolve_index_column_node(
       } else if (index_keyname_ == FTS_KEY) {
         if (!GCONF._enable_add_fulltext_index_to_existing_table) {
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("build fulltext index afterward is experimental feature", K(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "experimental feature: build fulltext index afterward");
+          LOG_WARN("build fulltext index afterward not supported", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "build fulltext index afterward");
         } else if (OB_FAIL(resolve_fts_index_constraint(*tbl_schema,
                                                  sort_item.column_name_,
                                                  index_keyname_value))) {
