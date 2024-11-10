@@ -185,7 +185,6 @@ struct ObLSStatusInfo
   }
 
   bool is_user_ls() const { return ls_id_.is_user_ls(); }
-
   uint64_t tenant_id_;
   ObLSID ls_id_;
   uint64_t ls_group_id_;

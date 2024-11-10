@@ -103,7 +103,8 @@ public:
   static const int64_t BALANCE_TASK_ALTER = 1;
   static const int64_t BALANCE_TASK_MERGE = 2;
   static const int64_t BALANCE_TASK_TRANSFER = 3;
-  static const int64_t BALANCE_TASK_MAX = 4;
+  static const int64_t BALANCE_TASK_CREATE = 4;
+  static const int64_t BALANCE_TASK_MAX = 5;
 
 
   ObBalanceTaskType(const int64_t value = BALANCE_TASK_INVALID) : val_(value) {}
@@ -118,6 +119,7 @@ public:
   IS_BALANCE_TASK(BALANCE_TASK_ALTER, alter_task)
   IS_BALANCE_TASK(BALANCE_TASK_MERGE, merge_task)
   IS_BALANCE_TASK(BALANCE_TASK_TRANSFER, transfer_task)
+  IS_BALANCE_TASK(BALANCE_TASK_CREATE, create_task)
   // assignment
   ObBalanceTaskType &operator=(const int64_t value) { val_ = value; return *this; }
 
@@ -423,6 +425,8 @@ public:
    * */
   static int get_job_task_cnt(const uint64_t tenant_id, const ObBalanceJobID job_id,
   int64_t &task_cnt, ObISQLClient &client);
+  static int get_ls_task_cnt(const uint64_t tenant_id, const ObLSID ls_id,
+      int64_t &task_cnt, ObISQLClient &client);
   /*
    * @description: update ls part list before set to transfer
    * @param[in] tenant_id : user_tenant_id
@@ -464,6 +468,9 @@ public:
   static int load_need_transfer_task(const uint64_t tenant_id,
                                        ObBalanceTaskIArray &task_array,
                                        ObISQLClient &client);
+private:
+  static int execute_task_cnt_sql_(const uint64_t tenant_id, const ObSqlString &sql,
+      int64_t &task_cnt, ObISQLClient &client);
 
 };
 #undef IS_BALANCE_TASK

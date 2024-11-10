@@ -116,7 +116,8 @@ void ObCommonLSService::do_work()
         } else if (OB_TMP_FAIL(try_create_ls_(user_tenant_schema))) {
           LOG_WARN("failed to create ls", KR(ret), KR(tmp_ret), K(user_tenant_schema));
         }
-        if (OB_SUCC(ret) && !user_tenant_schema.is_dropping()) {
+        if (OB_SUCC(ret) && !user_tenant_schema.is_dropping()
+            && ObShareUtil::is_tenant_enable_rebalance(user_tenant_id)) {
           if (OB_TMP_FAIL(ObBalanceLSPrimaryZone::try_adjust_user_ls_primary_zone(user_tenant_schema))) {
             LOG_WARN("failed to adjust user tenant primary zone", KR(ret), KR(tmp_ret), K(user_tenant_schema));
           }
@@ -129,9 +130,10 @@ void ObCommonLSService::do_work()
           (void)try_update_primary_ip_list();
         }
       }
-
-      if (OB_TMP_FAIL(ObBalanceLSPrimaryZone::try_update_sys_ls_primary_zone(tenant_id_))) {
-        LOG_WARN("failed to update sys ls primary zone", KR(ret), KR(tmp_ret), K(tenant_id_));
+      if (ObShareUtil::is_tenant_enable_rebalance(tenant_id_)) {
+        if (OB_TMP_FAIL(ObBalanceLSPrimaryZone::try_update_sys_ls_primary_zone(tenant_id_))) {
+          LOG_WARN("failed to update sys ls primary zone", KR(ret), KR(tmp_ret), K(tenant_id_));
+        }
       }
 
       user_tenant_schema.reset();

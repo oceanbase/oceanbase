@@ -28,6 +28,7 @@ namespace sql
 {
 class ObSystemCmdStmt;
 class ObFreezeStmt;
+class ObAlterLSStmt;
 class ObAlterSystemResolverUtil
 {
 public:
@@ -259,6 +260,20 @@ private:
   int resolve_transfer_partition_(const ParseNode &parse_tree);
   int resolve_cancel_transfer_partition_(const ParseNode &parse_tree);
   int resolve_cancel_balance_job_(const ParseNode &parse_tree);
+};
+class ObAlterLSResolver : public ObSystemCmdResolver
+{
+public:
+  ObAlterLSResolver(ObResolverParams &params) :  ObSystemCmdResolver(params) {}
+  virtual ~ObAlterLSResolver() {}
+  virtual int resolve(const ParseNode &parse_tree);
+private:
+  int resolve_create_ls_(const ParseNode &parse_tree, ObAlterLSStmt *stmt);
+  int resolve_modify_ls_(const ParseNode &parse_tree, ObAlterLSStmt *stmt);
+  int resolve_drop_ls_(const ParseNode &parse_tree, ObAlterLSStmt *stmt);
+  int resolve_ls_attr_(const ParseNode &parse_tree,
+                       uint64_t &unit_group_id, ObZone &primary_zone);
+
 };
 class ObFreezeResolver : public ObSystemCmdResolver {
 public:

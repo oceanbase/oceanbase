@@ -6673,7 +6673,7 @@ int ObTransferPartitionResolver::resolve(const ParseNode &parse_tree)
 
 int ObTransferPartitionResolver::resolve_cancel_transfer_partition_(const ParseNode &parse_tree)
 {
-int ret = OB_SUCCESS;
+  int ret = OB_SUCCESS;
   ObTransferPartitionStmt *stmt = create_stmt<ObTransferPartitionStmt>();
   uint64_t target_tenant_id = OB_INVALID_TENANT_ID;
   if (OB_UNLIKELY(T_CANCEL_TRANSFER_PARTITION != parse_tree.type_)) {
@@ -6751,6 +6751,228 @@ int ret = OB_SUCCESS;
       LOG_WARN("fail to init stmt rpc arg", KR(ret), K(target_tenant_id));
   } else {
     stmt_ = stmt;
+  }
+  return ret;
+}
+
+int ObAlterLSResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  ObAlterLSStmt *stmt = create_stmt<ObAlterLSStmt>();
+  if (OB_UNLIKELY(T_ALTER_LS !=  parse_tree.type_
+        || 1 >= parse_tree.num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parse node, type is not ALTER_LS", KR(ret),
+        "type", get_type_name(parse_tree.type_), "child num", parse_tree.num_child_);
+  } else {
+    ParseNode *op_node = parse_tree.children_[0];
+    if (OB_ISNULL(op_node) || T_INT != op_node->type_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("op node is null", KR(ret), KP(op_node));
+    } else if (1 == op_node->value_) {
+      if (OB_FAIL(resolve_create_ls_(parse_tree, stmt))) {
+        LOG_WARN("failed to resolve create ls", KR(ret));
+      }
+    } else if (2 == op_node->value_) {
+      if (OB_FAIL(resolve_modify_ls_(parse_tree, stmt))) {
+        LOG_WARN("failed to resolve modify ls", KR(ret));
+      }
+    } else if (3 == op_node->value_) {
+      if (OB_FAIL(resolve_drop_ls_(parse_tree, stmt))) {
+        LOG_WARN("failed to resolve drop ls", KR(ret));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid parse value", KR(ret), "value",  parse_tree.value_);
+    }
+  }
+  if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
+    if (OB_ISNULL(schema_checker_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret));
+    } else if (OB_FAIL(schema_checker_->check_ora_ddl_priv(
+            session_info_->get_effective_tenant_id(),
+            session_info_->get_priv_user_id(),
+            ObString(""),
+            // why use T_ALTER_SYSTEM_SET_PARAMETER?
+            // because T_ALTER_SYSTEM_SET_PARAMETER has following traits:
+            // T_ALTER_SYSTEM_SET_PARAMETER can allow dba to do an operation
+            // and prohibit other user to do this operation
+            // so we reuse this.
+            stmt::T_ALTER_SYSTEM_SET_PARAMETER,
+            session_info_->get_enable_role_array()))) {
+      LOG_WARN("failed to check privilege", K(session_info_->get_effective_tenant_id()), K(session_info_->get_user_id()));
+    }
+  }
+  return ret;
+}
+
+int ObAlterLSResolver::resolve_create_ls_(const ParseNode &parse_tree, ObAlterLSStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  uint64_t target_tenant_id = OB_INVALID_TENANT_ID;
+  uint64_t ug_id = OB_INVALID_ID;
+  ObZone primary_zone;
+  if (OB_ISNULL(stmt) || OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt or session_info_ is null", KR(ret), KP(stmt), KP(session_info_));
+  } else {
+    if (3 != parse_tree.num_child_ || OB_ISNULL(parse_tree.children_[0])
+          || OB_ISNULL(parse_tree.children_[1])) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid parse tree or session info", KR(ret),
+          "num_child", parse_tree.num_child_);
+    } else if (1 != parse_tree.children_[0]->value_) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("operation type is invalid", KR(ret),
+          "value", parse_tree.children_[1]->value_);
+    } else if (OB_FAIL(resolve_ls_attr_(*parse_tree.children_[1], ug_id, primary_zone))) {
+      LOG_WARN("failed to resolve ls attr", KR(ret));
+    } else if (OB_INVALID_ID == ug_id) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("create ls must specify unit group", KR(ret));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "unit_group");
+    } else if (OB_FAIL(get_and_verify_tenant_name(parse_tree.children_[2],
+            session_info_->get_effective_tenant_id(), target_tenant_id, "Create LS"))) {
+      LOG_WARN("fail to execute get_and_verify_tenant_name", KR(ret),
+          K(session_info_->get_effective_tenant_id()), KP(parse_tree.children_[2]));
+    } else if (OB_FAIL(stmt->get_arg().init_create_ls(target_tenant_id, ug_id, primary_zone))) {
+      LOG_WARN("failed to init create ls", KR(ret), K(target_tenant_id), K(ug_id), K(primary_zone));
+    }
+  }
+  return ret;
+
+}
+
+int ObAlterLSResolver::resolve_modify_ls_(const ParseNode &parse_tree, ObAlterLSStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  uint64_t target_tenant_id = OB_INVALID_TENANT_ID;
+  uint64_t ug_id = OB_INVALID_ID;
+  ObZone primary_zone;
+  if (OB_ISNULL(stmt) || OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt or session_info_ is null", KR(ret), KP(stmt), KP(session_info_));
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_5_1) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("CLUSTER_VERSION < 4.2.5.1", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "CLUSTER_VERSION < 4.2.5.1, MODIFY LS is");
+  } else {
+    if (4 != parse_tree.num_child_ || OB_ISNULL(parse_tree.children_[1])
+        || OB_ISNULL(parse_tree.children_[2]) || OB_ISNULL(parse_tree.children_[0])) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid parse tree or session info", KR(ret),
+          "num_child", parse_tree.num_child_);
+    } else if (2 != parse_tree.children_[0]->value_) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("operation type is invalid", KR(ret),
+          "value", parse_tree.children_[1]->value_);
+    } else if (OB_FAIL(resolve_ls_attr_(*parse_tree.children_[2], ug_id, primary_zone))) {
+      LOG_WARN("failed to resolve ls attr", KR(ret));
+    } else if (OB_FAIL(get_and_verify_tenant_name(parse_tree.children_[3],
+            session_info_->get_effective_tenant_id(), target_tenant_id, "Modify LS"))) {
+      LOG_WARN("fail to execute get_and_verify_tenant_name", KR(ret),
+          K(session_info_->get_effective_tenant_id()), KP(parse_tree.children_[3]));
+    } else if (T_LS != parse_tree.children_[1]->type_ || 1 != parse_tree.children_[1]->num_child_
+        || OB_ISNULL(parse_tree.children_[1]->children_[0])) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("ls tree is invalid", KR(ret), "num_child", parse_tree.children_[1]->num_child_,
+          "type", parse_tree.children_[1]->type_);
+    } else if (T_INT != parse_tree.children_[1]->children_[0]->type_) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("parse node type is invalid", KR(ret), "type", parse_tree.children_[1]->children_[0]->type_);
+    } else {
+      int64_t id = parse_tree.children_[1]->children_[0]->value_;
+      if (OB_FAIL(stmt->get_arg().init_modify_ls(target_tenant_id, id, ug_id, primary_zone))) {
+        LOG_WARN("failed to init modify ls", KR(ret), K(target_tenant_id), K(id), K(ug_id), K(primary_zone));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAlterLSResolver::resolve_drop_ls_(const ParseNode &parse_tree, ObAlterLSStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  uint64_t target_tenant_id = OB_INVALID_TENANT_ID;
+  if (OB_ISNULL(stmt) || OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt or session_info_ is null", KR(ret), KP(stmt), KP(session_info_));
+  } else {
+    if (3 != parse_tree.num_child_ || OB_ISNULL(parse_tree.children_[1])
+        || OB_ISNULL(parse_tree.children_[0])) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid parse tree or session info", KR(ret),
+          "num_child", parse_tree.num_child_);
+    } else if (3 != parse_tree.children_[0]->value_) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("operation type is invalid", KR(ret),
+          "value", parse_tree.children_[1]->value_);
+    } else if (OB_FAIL(get_and_verify_tenant_name(parse_tree.children_[2],
+            session_info_->get_effective_tenant_id(), target_tenant_id, "Drop LS"))) {
+      LOG_WARN("fail to execute get_and_verify_tenant_name", KR(ret),
+          K(session_info_->get_effective_tenant_id()), KP(parse_tree.children_[2]));
+    } else if (T_LS != parse_tree.children_[1]->type_ || 1 != parse_tree.children_[1]->num_child_
+        || OB_ISNULL(parse_tree.children_[1]->children_[0])) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("ls tree is invalid", KR(ret), "num_child", parse_tree.children_[1]->num_child_,
+          "type", parse_tree.children_[1]->type_);
+    } else if (T_INT != parse_tree.children_[1]->children_[0]->type_) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("parse node type is invalid", KR(ret), "type", parse_tree.children_[1]->children_[0]->type_);
+    } else {
+      int64_t id = parse_tree.children_[1]->children_[0]->value_;
+      if (OB_FAIL(stmt->get_arg().init_drop_ls(target_tenant_id, id))) {
+        LOG_WARN("failed to init drop ls", KR(ret), K(target_tenant_id), K(id));
+      }
+    }
+  }
+  return ret;
+
+}
+
+int ObAlterLSResolver::resolve_ls_attr_(const ParseNode &parse_tree,
+    uint64_t &unit_group_id, ObZone &primary_zone)
+{
+  int ret = OB_SUCCESS;
+  unit_group_id = OB_INVALID_ID;
+  primary_zone.reset();
+  if (OB_UNLIKELY(T_LS_ATTR_LIST != parse_tree.type_
+        || 1 > parse_tree.num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parse node", KR(ret), "type", get_type_name(parse_tree.type_),
+        "num", parse_tree.num_child_);
+  } else {
+    int64_t num = parse_tree.num_child_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < num; ++i) {
+      ParseNode *node = parse_tree.children_[i];
+      if (OB_ISNULL(node) || 1 != node->num_child_
+          || OB_ISNULL(node->children_[0])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("node is null", KR(ret), K(i), K(num), KP(node));
+      } else {
+        ParseNode *attr_node = node->children_[0];
+        if (T_UNIT_GROUP == node->type_) {
+          unit_group_id = attr_node->value_;
+          if (OB_USER_UNIT_GROUP_ID >= unit_group_id && 0 != unit_group_id) {
+            ret = OB_OP_NOT_ALLOW;
+            LOG_WARN("set unit group id invalid not allowed", KR(ret), K(unit_group_id));
+            LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set invalid unit group");
+          }
+        } else if (T_PRIMARY_ZONE == node->type_) {
+          common::ObString primary_zone_str;
+          primary_zone_str.assign_ptr(const_cast<char *>(attr_node->str_value_),
+                                  static_cast<int32_t>(attr_node->str_len_));
+          if (primary_zone_str.empty()) {
+            ret = OB_OP_NOT_ALLOW;
+            LOG_WARN("set primary_zone empty is not allowed now", KR(ret));
+            LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set primary_zone empty");
+          } else if (OB_FAIL(primary_zone.assign(primary_zone_str))) {
+            LOG_WARN("failed to assign primary zone", KR(ret), K(primary_zone_str));
+          }
+        }
+      }
+    }//end for
   }
   return ret;
 }

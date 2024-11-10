@@ -20,7 +20,7 @@
 #include "share/ls/ob_ls_status_operator.h"
 #include "share/ls/ob_ls_operator.h"//ObLSAttr
 #include "share/transfer/ob_transfer_info.h"//ObPartList
-#include "share/ob_balance_define.h"  // ObBalanceTaskID, ObBalanceJobID
+#include "share/ob_balance_define.h"  // ObBalanceTaskID, ObBalanceJobID, ObBalanceStrategy
 #include "rootserver/ob_balance_group_ls_stat_operator.h"//ObBalanceGroupID
 #include "rootserver/balance/ob_tenant_ls_balance_group_info.h" //ObTenantLSBalanceGroupInfo
 
@@ -41,28 +41,26 @@ struct ObUnitGroupBalanceInfo
 public:
   ObUnitGroupBalanceInfo() { reset(); }
   ObUnitGroupBalanceInfo(const share::ObSimpleUnitGroup &unit_group,
-                      const int64_t primary_zone_num) :
-                      primary_zone_count_(primary_zone_num), unit_group_(unit_group),
+                      const int64_t target_ls_count) :
+                      target_ls_count_(target_ls_count), unit_group_(unit_group),
                       redundant_ls_array_(), normal_ls_array_() {}
   ~ObUnitGroupBalanceInfo() {}
-  int init_basic_info(const share::ObSimpleUnitGroup &unit_group,
-                      const int64_t primary_zone_num)
-  {
-    unit_group_ = unit_group;
-    primary_zone_count_ = primary_zone_num;
-    return OB_SUCCESS;
-  }
+
   int64_t get_lack_ls_count() const
   {
     int64_t count = 0;
     if (unit_group_.is_active()) {
-      count = primary_zone_count_ - normal_ls_array_.count();
+      count = target_ls_count_ - normal_ls_array_.count();
     }
     return count;
   }
-  int64_t get_primary_zone_count() const
+  int64_t get_redundant_ls_count() const
   {
-    return primary_zone_count_;
+    return redundant_ls_array_.count();
+  }
+  int64_t get_normal_ls_count() const
+  {
+    return normal_ls_array_.count();
   }
   uint64_t get_unit_group_id() const
   {
@@ -80,13 +78,18 @@ public:
   {
     return unit_group_.is_active();
   }
+  int64_t get_all_ls_count() const
+  {
+    return redundant_ls_array_.count() + normal_ls_array_.count();
+  }
   int remove_redundant_ls(const int64_t &index);
   void reset();
   int add_ls_status_info(const share::ObLSStatusInfo &ls_info);
-  TO_STRING_KV(K_(primary_zone_count), K_(unit_group),
+  int get_and_remove_ls_status(share::ObLSStatusInfo &ls_info);
+  TO_STRING_KV(K_(target_ls_count), K_(unit_group),
                K_(redundant_ls_array), K_(normal_ls_array));
 private:
-  int64_t primary_zone_count_;
+  int64_t target_ls_count_;
   share::ObSimpleUnitGroup unit_group_;
   share::ObLSStatusInfoArray redundant_ls_array_;// ls need merge to other normal ls
   share::ObLSStatusInfoArray normal_ls_array_;//normal ls need keep
@@ -188,6 +191,13 @@ public:
       const share::ObLSID &dest_ls_id,
       const share::ObBalanceStrategy &balance_strategy,
       common::ObIArray<share::ObBalanceTask> &task_array);
+  static int add_create_ls_task(
+      const uint64_t tenant_id,
+      const share::ObBalanceJobID &balance_job_id,
+      const uint64_t ls_group_id,
+      const share::ObBalanceStrategy &balance_strategy,
+      common::ObMySQLProxy *sql_proxy,
+      common::ObIArray<share::ObBalanceTask> &task_array);
   static int choose_ls_group_id_for_transfer_between_dup_ls(
       const uint64_t src_ls_group_id,
       const uint64_t dest_ls_group_id,
@@ -216,10 +226,12 @@ public:
   }
 private:
   int generate_balance_job_();
+  int generate_balance_job_strategy_();
   int generate_alter_task_();
   int generate_migrate_task_();
   int generate_expand_task_();
   int generate_shrink_task_();
+  int generate_factor_task_();
   /* description: get index of the unit_group_id in unit_group_balance_array
    * param[in] unit_group_id : unit_group_id
    * param[out] index : index of unit_group in unit_group_balance_array
@@ -250,16 +262,26 @@ private:
                               const share::ObLSID &dest_ls_id,
                               const uint64_t ls_group_id);
   bool has_redundant_dup_ls_() const { return dup_ls_stat_array_.count() > 1; }
-  bool need_modify_ls_group_for_dup_ls_() const
-  {
-    return 1 == dup_ls_stat_array_.count() && 0 != dup_ls_stat_array_.at(0).get_ls_group_id();
-  }
   int generate_task_for_dup_ls_shrink_();
   int check_need_modify_ls_group_(const ObUnitGroupBalanceInfo &balance_info, bool &need_modify);
- private:
+  //generate for scale_out_factor
+  int generate_migrate_task_for_deleting_unit_(ObUnitGroupBalanceInfo &balance_info);
+  int generate_expand_task_for_factor_(const ObUnitGroupBalanceInfo &balance_info);
+  int generate_shrink_task_for_factor_(const ObUnitGroupBalanceInfo &balance_info);
+  int check_ls_count_balanced_between_normal_unitgroup_(bool &need_balance);
+  int get_min_max_ls_unitgroup_(int64_t &min_index, int64_t &max_index);
+  //尽可能补齐缺口
+  int generate_migrate_task_while_enable_transfer_();
+  //把日志流均匀打散在各个unit_group中
+  int generate_migrate_task_while_disable_transfer_();
+
+private:
   bool inited_;
   uint64_t tenant_id_;
   int64_t primary_zone_num_;
+  int64_t ls_scale_out_factor_;
+  bool enable_transfer_;
+  share::ObBalanceStrategy balance_strategy_;
   ObUnitGroupBalanceInfoArray unit_group_balance_array_;
   ObMySQLProxy *sql_proxy_;
   share::ObBalanceJob job_;

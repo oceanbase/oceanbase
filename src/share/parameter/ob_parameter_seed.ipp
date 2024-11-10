@@ -771,6 +771,12 @@ DEF_TIME(partition_balance_schedule_interval, OB_TENANT_PARAMETER, "2h", "[0s,]"
          "Default value 2h and the value 0s means disable partition balance. "
          "Range: [0s, +∞)",
          ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(ls_scale_out_factor, OB_TENANT_PARAMETER, "1", "[1, 10]",
+        "Parameters can allow tenant to have enough LS to meet the scaling requirements, "
+        "and disabling transfer when scaling can also achieve a flat effect. "
+        "Default value 1. "
+        "Range: [1, +∞)]",
+        ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(balancer_tolerance_percentage, OB_CLUSTER_PARAMETER, "10", "[1, 100)",
         "specifies the tolerance (in percentage) of the unbalance of the disk space utilization "
         "among all units. The average disk space utilization is calculated by dividing "

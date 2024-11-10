@@ -19,6 +19,7 @@
 #include "share/backup/ob_backup_clean_struct.h"
 #include "rootserver/ob_transfer_partition_command.h"
 #include "share/ob_service_name_proxy.h"
+#include "rootserver/ob_alter_ls_command.h"
 #include "share/rebuild_tablet/ob_rebuild_tablet_location.h"
 #include "share/table/ob_redis_importer.h"
 
@@ -1395,6 +1396,16 @@ public:
   share::ObServiceNameArg &get_arg() { return arg_; }
 private:
   share::ObServiceNameArg arg_;
+};
+
+class ObAlterLSStmt : public ObSystemCmdStmt
+{
+public:
+  ObAlterLSStmt() : ObSystemCmdStmt(stmt::T_ALTER_LS), arg_() {}
+  virtual ~ObAlterLSStmt() {}
+  rootserver::ObAlterLSArg &get_arg() { return arg_; }
+private:
+  rootserver::ObAlterLSArg arg_;
 };
 
 class ObRebuildTabletStmt : public ObSystemCmdStmt

@@ -104,29 +104,15 @@ void ObTenantBalanceService::do_work()
       }
       if (OB_SUCC(ret) && 0 == job_cnt
           && ObShareUtil::is_tenant_enable_rebalance(tenant_id_)) {
-        if (ObShareUtil::is_tenant_enable_transfer(tenant_id_)) {
-          if (OB_FAIL(gather_ls_status_stat(tenant_id_, ls_array_))) {
-            LOG_WARN("failed to gather ls status stat", KR(ret), K(tenant_id_));
-          } else if (OB_FAIL(ls_balance_(job_cnt))) {
-            LOG_WARN("failed to do ls balance", KR(ret));
-          }
+        if (OB_FAIL(gather_ls_status_stat(tenant_id_, ls_array_))) {
+          LOG_WARN("failed to gather ls status stat", KR(ret), K(tenant_id_));
+        } else if (OB_FAIL(ls_balance_(job_cnt))) {
+          LOG_WARN("failed to do ls balance", KR(ret));
+        }
 
-          if (OB_SUCC(ret) && 0 == job_cnt) {
-            if (OB_FAIL(try_do_partition_balance_(last_partition_balance_time))) {
-              LOG_WARN("try do partition balance failed", KR(ret), K(last_partition_balance_time));
-            }
-          }
-        } else { // disable transfer
-          ObTenantSchema tenant_schema_copy;
-          if (OB_FAIL(get_tenant_schema(tenant_id_, tenant_schema_copy))) {
-            LOG_WARN("failed to get tenant schema", KR(ret), K(tenant_id_));
-          } else {
-            bool is_balanced = false;
-            bool need_execute_balance = true;
-            ObTenantLSInfo tenant_info(GCTX.sql_proxy_, &tenant_schema_copy, tenant_id_);
-            if (OB_FAIL(ObLSServiceHelper::balance_ls_group(need_execute_balance, tenant_info, is_balanced))) {
-              LOG_WARN("failed to balance ls group", KR(ret));
-            }
+        if (OB_SUCC(ret) && 0 == job_cnt && ObShareUtil::is_tenant_enable_transfer(tenant_id_)) {
+          if (OB_FAIL(try_do_partition_balance_(last_partition_balance_time))) {
+            LOG_WARN("try do partition balance failed", KR(ret), K(last_partition_balance_time));
           }
         }
       }
@@ -146,7 +132,15 @@ void ObTenantBalanceService::do_work()
         idle_time_us = 100 * 1000;
       } else {
         omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
-        idle_time_us = tenant_config.is_valid() ? tenant_config->balancer_idle_time : 10 * 1000 * 1000;
+        int64_t tmp_time = 0;
+        if (tenant_config.is_valid()) {
+          tmp_time = tenant_config->balancer_idle_time;
+        }
+        idle_time_us = tenant_config.is_valid() ? tenant_config->balancer_idle_time : 10 * 1000 * 1000L;
+        if (idle_time_us <= 0) {
+          LOG_ERROR("balancer idle time is not valid", K(idle_time_us), K(tmp_time));
+          idle_time_us = 10 * 1000 * 1000L;
+        }
       }
       ISTAT("finish one round", KR(ret), KR(tmp_ret), K_(tenant_id), K(job_cnt),
                 K(primary_zone_num_), K(unit_group_array_),
@@ -304,7 +298,7 @@ int ObTenantBalanceService::is_ls_balance_finished(const uint64_t &tenant_id, bo
     LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
   } else if (ObAllTenantInfoProxy::is_primary_tenant(GCTX.sql_proxy_, tenant_id, is_primary)) {
     LOG_WARN("fail to execute is_primary_tenant", KR(ret), K(tenant_id));
-  } else if (is_primary && ObShareUtil::is_tenant_enable_transfer(tenant_id)) {
+  } else if (is_primary && ObShareUtil::is_tenant_enable_rebalance(tenant_id)) {
     if (OB_FAIL(is_primary_tenant_ls_balance_finished_(tenant_id, is_finished))) {
       LOG_WARN("fail to execute is_primary_tenant_ls_balance_finished_", KR(ret), K(tenant_id));
     }

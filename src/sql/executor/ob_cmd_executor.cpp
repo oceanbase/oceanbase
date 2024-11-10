@@ -1100,6 +1100,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObServiceNameStmt, ObServiceNameExecutor);
         break;
       }
+      case stmt::T_ALTER_LS: {
+        DEFINE_EXECUTE_CMD(ObAlterLSStmt, ObAlterLSExecutor);
+        break;
+      }
       case stmt::T_EVENT_JOB_CREATE: {
         DEFINE_EXECUTE_CMD(ObCreateEventStmt, ObCreateEventExecutor);
         break;

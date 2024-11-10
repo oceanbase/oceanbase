@@ -35087,11 +35087,6 @@ int ObDDLService::check_alter_schema_replica_options(
     }
   }
 
-  // retrun OB_OP_NOT_ALLOW if first_primary_zone changed when tenant rebalance is disabled.
-  if (FAILEDx(check_alter_tenant_when_rebalance_is_disabled_(orig_schema, new_schema))) {
-    LOG_WARN("failed to check alter tenant when rebalance is disabled", KR(ret), K(orig_schema), K(new_schema));
-  }
-
   if (OB_SUCC(ret)) {
     int64_t paxos_num = 0;
     if (OB_FAIL(new_schema.get_paxos_replica_num(schema_guard, paxos_num))) {
@@ -38178,61 +38173,6 @@ int ObDDLService::try_add_dep_info_for_all_synonyms_batch(const uint64_t tenant_
         LOG_WARN("publish_schema failed", K(ret));
       }
     }
-  }
-  return ret;
-}
-
-// alter tenant with primary_zone changed is not allowed when tenant rebalance is disabled.
-int ObDDLService::check_alter_tenant_when_rebalance_is_disabled_(
-    const share::schema::ObTenantSchema &orig_tenant_schema,
-    const share::schema::ObTenantSchema &new_tenant_schema)
-{
-  int ret = OB_SUCCESS;
-  const uint64_t tenant_id = orig_tenant_schema.get_tenant_id();
-  ObArray<ObZone> orig_first_primary_zone;
-  ObArray<ObZone> new_first_primary_zone;
-  bool is_allowed = true;
-  bool is_first_primary_zone_changed = false;
-  if (OB_UNLIKELY(orig_tenant_schema.get_tenant_id() != new_tenant_schema.get_tenant_id())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid input tenant schema", KR(ret), K(orig_tenant_schema), K(new_tenant_schema));
-  } else if (is_sys_tenant(tenant_id)) {
-    // primary_zone and locality changes in sys tenant do not cause rebalance,
-    // so alter sys tenant is not controlled by enable_rebalance.
-    is_allowed = true;
-  } else if (ObShareUtil::is_tenant_enable_rebalance(tenant_id)) {
-    is_allowed = true;
-  } else if (OB_FAIL(ObRootUtils::is_first_priority_primary_zone_changed(
-      orig_tenant_schema,
-      new_tenant_schema,
-      orig_first_primary_zone,
-      new_first_primary_zone,
-      is_first_primary_zone_changed))) {
-    LOG_WARN("fail to check is_first_priority_primary_zone_changed", KR(ret), K(orig_tenant_schema), K(new_tenant_schema));
-  } else if (is_first_primary_zone_changed) {
-    is_allowed = false;
-  }
-  if (OB_SUCC(ret) && !is_allowed) {
-    ObSqlString orig_str;
-    ObSqlString new_str;
-    ARRAY_FOREACH(orig_first_primary_zone, idx) {
-      if (OB_FAIL(orig_str.append_fmt(0 == idx ? "%s" : ",%s", orig_first_primary_zone.at(idx).ptr()))) {
-        LOG_WARN("append fmt failed", KR(ret), K(orig_first_primary_zone), K(idx));
-      }
-    }
-    ARRAY_FOREACH(new_first_primary_zone, idx) {
-      if (OB_FAIL(new_str.append_fmt(0 == idx ? "%s" : ",%s", new_first_primary_zone.at(idx).ptr()))) {
-        LOG_WARN("append fmt failed", KR(ret), K(new_first_primary_zone), K(idx));
-      }
-    }
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("enable_rebalance is disabled, alter tenant with primary zone changed not allowed", KR(ret),
-        K(tenant_id), K(orig_first_primary_zone), K(new_first_primary_zone));
-    char err_msg[DEFAULT_BUF_LENGTH];
-    (void)snprintf(err_msg, sizeof(err_msg),
-        "Tenant (%lu) Primary Zone with the first priority will be changed from '%s' to '%s', "
-        "but tenant 'enable_rebalance' is disabled, alter tenant", tenant_id, orig_str.ptr(), new_str.ptr());
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
   }
   return ret;
 }

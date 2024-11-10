@@ -82,6 +82,7 @@
 #include "rootserver/standby/ob_recovery_ls_service.h"
 #include "logservice/ob_server_log_block_mgr.h"
 #include "storage/high_availability/ob_rebuild_service.h"
+#include "rootserver/ob_alter_ls_command.h"
 
 namespace oceanbase
 {
@@ -2903,7 +2904,15 @@ int ObAdminUnlockMemberListP::process()
   }
   return ret;
 }
-
+int ObRpcAlterLSP::process()
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("receive admin alter ls", K(arg_));
+  if (OB_FAIL(rootserver::ObAlterLSCommand::process(arg_, result_))) {
+    LOG_WARN("fail to process", KR(ret), K(arg_));
+  }
+  return ret;
+}
 int ObRpcNotifyTenantThreadP::process()
 {
   int ret = OB_SUCCESS;

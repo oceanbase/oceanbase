@@ -2820,7 +2820,43 @@ int ObTransferPartitionExecutor::execute(ObExecContext& ctx, ObTransferPartition
   }
   return ret;
 }
-
+int ObAlterLSExecutor::execute(ObExecContext& ctx, ObAlterLSStmt& stmt)
+{
+  int ret = OB_SUCCESS;
+  const rootserver::ObAlterLSArg &arg = stmt.get_arg();
+  rootserver::ObAlterLSRes result;
+  const uint64_t tenant_id = arg.get_tenant_id();
+  ObTaskExecutorCtx* task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx);
+  obrpc::ObSrvRpcProxy *rpc_proxy =NULL;
+  if (OB_ISNULL(task_exec_ctx)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("get task executor context failed");
+  } else if (OB_ISNULL(GCTX.location_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("location service is null", KR(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invaid argument", KR(ret), K(arg));
+  } else {
+    rpc_proxy = task_exec_ctx->get_srv_rpc();
+    ObAddr leader;
+    int64_t timeout = THIS_WORKER.get_timeout_remain();
+    if (OB_ISNULL(rpc_proxy)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("rpc_proxy is null", KR(ret), K(arg));
+    } else if (OB_FAIL(GCTX.location_service_->get_leader(
+            GCONF.cluster_id, tenant_id, SYS_LS, false, leader))) {
+      LOG_WARN("failed to get leader", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(rpc_proxy->to(leader).timeout(timeout)
+          .by(tenant_id).admin_alter_ls(arg, result))) {
+      LOG_WARN("failed to alter ls", KR(ret), K(arg), K(leader), K(timeout));
+    } else {
+      LOG_INFO("alter ls success", K(result));
+      //TODO check ls create success
+    }
+  }
+  return ret;
+}
 int ObServiceNameExecutor::execute(ObExecContext& ctx, ObServiceNameStmt& stmt)
 {
   int ret = OB_SUCCESS;

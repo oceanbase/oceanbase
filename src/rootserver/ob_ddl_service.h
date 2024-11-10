@@ -2717,11 +2717,7 @@ private:
                                     const ObIArray<const ObTableSchema*> &orig_table_schemas,
                                     const ObIArray<ObTableSchema*> &new_table_schemas,
                                     ObMySQLTransaction &trans);
-  int check_alter_tenant_when_rebalance_is_disabled_(
-      const share::schema::ObTenantSchema &orig_tenant_schema,
-      const share::schema::ObTenantSchema &new_tenant_schema);
-
-  //not check belong to the same table
+    //not check belong to the same table
   int check_same_partition_(const bool is_oracle_mode, const ObPartition &l, const ObPartition &r,
                             const ObPartitionFuncType part_type, bool &is_matched) const;
   //not check belong to the same table

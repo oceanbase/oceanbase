@@ -553,8 +553,7 @@ int ObBalanceTaskExecuteService::cancel_other_init_task_(
           LOG_WARN("failed to update task comment", KR(tmp_ret), KR(ret), K(task), K(comment));
         } else if (OB_FAIL(update_task_status_(
                other_task,
-               share::ObBalanceJobStatus(
-                 share::ObBalanceJobStatus::BALANCE_JOB_STATUS_CANCELING),
+               share::ObBalanceJobStatus(share::ObBalanceJobStatus::BALANCE_JOB_STATUS_CANCELING),
                trans))) {
           LOG_WARN("failed to update task status", KR(ret), K(other_task));
         }
@@ -578,17 +577,14 @@ int ObBalanceTaskExecuteService::process_init_task_(const ObBalanceTask &task,
   } else if (OB_UNLIKELY(!task.is_valid() || !task.get_task_status().is_init())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("task is invalid", KR(ret), K(task));
-  } else if (task.get_task_type().is_split_task()) {
+  } else if (task.get_task_type().is_split_task()
+             || task.get_task_type().is_create_task()) {
     //insert a ls attr
     share::ObLSAttr ls_info;
     share::ObLSFlag flag;
     SCN create_scn;
-    share::ObLSAttr src_ls_info;
-    // when ls_group_id of split task is 0, it means creating a duplicate ls
-    // TODO: add new task type like split_dup_ls
-    if (0 == task.get_ls_group_id()) {
-      flag.set_duplicate();
-    }
+    //生成的分裂或者创建任务，内部表中的ls_group_id都是合法的，可以直接使用
+    int64_t ls_group_id = task.get_ls_group_id();
     if (OB_FAIL(wait_can_create_new_ls_(create_scn))) {
       LOG_WARN("failed to wait create new ls", KR(ret), K(tenant_id_));
       if (OB_NEED_WAIT == ret && !task_comment_.empty()) {
@@ -597,15 +593,28 @@ int ObBalanceTaskExecuteService::process_init_task_(const ObBalanceTask &task,
         ret = OB_SUCCESS;
         skip_next_status = true;
       }
-    } else if (OB_FAIL(ls_op.get_ls_attr(task.get_src_ls_id(), false, trans, src_ls_info))) {
-      LOG_WARN("failed to get ls attr", KR(ret), K(task));
-    } else if (OB_FAIL(ls_info.init(task.get_dest_ls_id(), src_ls_info.get_ls_group_id(), flag,
+    } else {
+      // when ls_group_id of split task is 0, it means creating a duplicate ls
+      // TODO: add new task type like split_dup_ls
+      // 由于需要使用ls_group_id代表创建广播日志流，所以ls_group_id是非法的，需要通过
+      // 读取内部表__all_ls_status表获取正确的ls_group_id
+      if (0 == ls_group_id) {
+        share::ObLSAttr src_ls_info;
+        if (OB_FAIL(ls_op.get_ls_attr(task.get_src_ls_id(), false, trans, src_ls_info))) {
+          LOG_WARN("failed to get ls attr", KR(ret), K(task));
+        } else {
+          ls_group_id = src_ls_info.get_ls_group_id();
+          flag.set_duplicate();
+        }
+      }
+      if (FAILEDx(ls_info.init(task.get_dest_ls_id(), ls_group_id, flag,
                              share::OB_LS_CREATING, share::OB_LS_OP_CREATE_PRE, create_scn))) {
-      LOG_WARN("failed to init new operation", KR(ret), K(create_scn), K(task),
-          K(skip_next_status), K(task_comment_));
-      //TODO msy164651
-    } else if (OB_FAIL(ls_op.insert_ls(ls_info, share::NORMAL_SWITCHOVER_STATUS, &trans, true/*skip_dup_ls_check*/))) {
-      LOG_WARN("failed to insert new operation", KR(ret), K(ls_info));
+        LOG_WARN("failed to init new operation", KR(ret), K(create_scn), K(task),
+            K(skip_next_status), K(task_comment_), K(ls_group_id), K(flag));
+        //TODO msy164651
+      } else if (OB_FAIL(ls_op.insert_ls(ls_info, share::NORMAL_SWITCHOVER_STATUS, &trans, true/*skip_dup_ls_check*/))) {
+        LOG_WARN("failed to insert new operation", KR(ret), K(ls_info));
+      }
     }
     ISTAT("create new ls", KR(ret), K(ls_info), K(task));
   } else if (task.get_task_type().is_alter_task()) {
