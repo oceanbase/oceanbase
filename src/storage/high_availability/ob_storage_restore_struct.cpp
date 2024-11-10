@@ -15,6 +15,7 @@
 #include "storage/restore/ob_ls_restore_args.h"
 #include "storage/backup/ob_backup_data_store.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
+#include "storage/backup/ob_backup_meta_cache.h"
 namespace oceanbase
 {
 namespace storage

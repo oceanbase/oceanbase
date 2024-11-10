@@ -127,6 +127,7 @@
 #include "sql/audit/ob_audit_log_mgr.h"
 #endif
 #include "lib/stat/ob_diagnostic_info_container.h"
+#include "storage/backup/ob_backup_meta_cache.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -509,6 +510,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init px target mgr failed", KR(ret));
     } else if (OB_FAIL(OB_BACKUP_INDEX_CACHE.init())) {
       LOG_ERROR("init backup index cache failed", KR(ret));
+    } else if (OB_FAIL(OB_BACKUP_META_CACHE.init())) {
+      LOG_ERROR("init backup meta cache failed", KR(ret));
     } else if (OB_FAIL(ObActiveSessHistList::get_instance().init())) {
       LOG_ERROR("init ASH failed", KR(ret));
     } else if (OB_FAIL(ObServerBlacklist::get_instance().init(self_addr_, net_frame_.get_req_transport()))) {
@@ -798,6 +801,10 @@ void ObServer::destroy()
     FLOG_INFO("begin to destroy backup index cache");
     OB_BACKUP_INDEX_CACHE.destroy();
     FLOG_INFO("backup index cache destroyed");
+
+    FLOG_INFO("begin to destroy backup meta cache");
+    OB_BACKUP_META_CACHE.destroy();
+    FLOG_INFO("backup meta cache destroyed");
 
     FLOG_INFO("begin to destroy log block mgr");
     log_block_mgr_.destroy();

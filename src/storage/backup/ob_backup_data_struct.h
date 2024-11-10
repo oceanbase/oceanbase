@@ -406,6 +406,7 @@ public:
   bool is_valid() const;
   void reset();
   int get_backup_index_file_type(ObBackupFileType &backup_file_type) const;
+  uint64_t calc_hash(uint64_t seed) const;
   TO_STRING_KV(K_(tablet_id), K_(meta_type));
 
   common::ObTabletID tablet_id_;
@@ -503,6 +504,7 @@ public:
   void reset();
   bool is_valid() const;
   bool operator==(const ObBackupMetaIndex &other) const;
+  uint64_t calc_hash(uint64_t seed) const;
   TO_STRING_KV(
       K_(meta_key), K_(backup_set_id), K_(ls_id), K_(turn_id), K_(retry_id), K_(file_id), K_(offset), K_(length));
   ObBackupMetaKey meta_key_;

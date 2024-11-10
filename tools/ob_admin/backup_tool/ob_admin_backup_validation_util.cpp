@@ -14,6 +14,7 @@
 #include "storage/backup/ob_backup_index_store.h"
 #include "storage/backup/ob_backup_iterator.h"
 #include "storage/backup/ob_backup_restore_util.h"
+#include "storage/backup/ob_backup_meta_cache.h"
 
 namespace oceanbase
 {
@@ -263,7 +264,7 @@ int ObAdminBackupValidationUtil::read_sstable_metas(
     STORAGE_LOG(WARN, "failed to limit and sleep", K(ret), K(meta_index.length_));
   } else if (OB_FAIL(backup::ObLSBackupRestoreUtil::read_sstable_metas(
                  full_path.get_obstr(), backup_set_dest.get_storage_info(), meta_index,
-                 sstable_metas))) {
+                 &OB_BACKUP_META_CACHE, sstable_metas))) {
     STORAGE_LOG(WARN, "failed to read sstable metas", K(ret), K(full_path));
   } else {
     STORAGE_LOG(DEBUG, "succeed to read sstable meta", K(ret), K(full_path),

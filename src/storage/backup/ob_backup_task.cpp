@@ -50,6 +50,7 @@
 #include "observer/omt/ob_tenant.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include <algorithm>
+#include "storage/backup/ob_backup_meta_cache.h"
 
 using namespace oceanbase::blocksstable;
 using namespace oceanbase::storage;
@@ -4379,7 +4380,7 @@ int ObLSBackupPrepareTask::get_backup_tx_data_recycle_scn_(SCN &tx_data_recycle_
       meta_index.retry_id_, meta_index.file_id_, backup_path))) {
     LOG_WARN("failed to get ls meta index backup path", K(ret), K_(param), K(sys_backup_data_type), K(meta_index));
   } else if (OB_FAIL(ObLSBackupRestoreUtil::read_sstable_metas(
-      backup_path.get_obstr(), param_.backup_dest_.get_storage_info(), meta_index, meta_array))) {
+      backup_path.get_obstr(), param_.backup_dest_.get_storage_info(), meta_index, &OB_BACKUP_META_CACHE, meta_array))) {
     LOG_WARN("failed to read sstable metas", K(ret), K(backup_path), K(meta_index));
   } else if (meta_array.empty()) {
     tx_data_recycle_scn = SCN::min_scn();
