@@ -129,8 +129,10 @@ public:
 
   // for get
   inline transaction::ObTxDesc *get_trans_desc() { return trans_param_.trans_desc_; }
-  int get_tablet_by_rowkey(uint64_t table_id, const ObIArray<ObRowkey> &rowkeys,
-                           ObIArray<ObTabletID> &tablet_ids);
+
+  int get_idx_by_table_tablet_id(uint64_t arg_table_id, ObTabletID arg_tablet_id,
+                                int64_t &part_idx, int64_t &subpart_idx);
+  int get_tablet_by_idx(uint64_t table_id, int64_t part_idx, int64_t subpart_idx, ObTabletID &tablet_ids);
   inline transaction::ObTxReadSnapshot &get_tx_snapshot() { return trans_param_.tx_snapshot_; }
   inline bool had_do_response() const { return trans_param_.had_do_response_; }
   int get_table_id(const ObString &table_name, const uint64_t arg_table_id, uint64_t &real_table_id) const;
@@ -149,8 +151,11 @@ protected:
   // init schema guard
   virtual int init_schema_info(const ObString &arg_table_name);
   virtual int init_schema_info(uint64_t table_id);
-  int check_table_has_global_index(bool &exists);
-  int get_tablet_id(const ObTabletID &arg_tablet_id, const uint64_t table_id, ObTabletID &tablet_id);
+  int check_table_has_global_index(bool &exists, table::ObKvSchemaCacheGuard& schema_cache_guard);
+  int get_tablet_id(const share::schema::ObSimpleTableSchemaV2 * simple_table_schema,
+                    const ObTabletID &arg_tablet_id,
+                    const uint64_t table_id,
+                    ObTabletID &tablet_id);
 protected:
   const ObGlobalContext &gctx_;
   ObTableService *table_service_;
@@ -219,6 +224,26 @@ int64_t ObTableRpcProcessor<T>::get_timeout() const
   }
   return timeout;
 }
+
+struct ObTableInfoBase {
+  explicit ObTableInfoBase()
+                          :table_id_(OB_INVALID_ID),
+                          simple_schema_(nullptr),
+                          schema_cache_guard_(),
+                          schema_version_(OB_INVALID_VERSION){}
+
+  virtual ~ObTableInfoBase() {}
+
+  TO_STRING_KV(K(table_id_),
+              KP(simple_schema_),
+              K(schema_cache_guard_),
+              K(schema_version_));
+  int64_t table_id_;
+  const share::schema::ObSimpleTableSchemaV2* simple_schema_;
+  table::ObKvSchemaCacheGuard schema_cache_guard_;
+  int64_t schema_version_;
+};
+
 } // end namespace observer
 } // end namespace oceanbase
 

@@ -682,6 +682,7 @@ int ObTableBatchService::htable_put(ObTableBatchCtx &ctx,
   } else if (OB_FAIL(tb_ctx.check_insert_up_can_use_put(can_use_put))) {
     LOG_WARN("fail to check htable put can use table api put", K(ret));
   } else if (can_use_put) {
+    tb_ctx.set_operation_type(ObTableOperationType::INSERT);
     tb_ctx.set_client_use_put(true);
     if (OB_FAIL(ObTableOpWrapper::get_insert_spec(tb_ctx, cache_guard, spec))) {
       LOG_WARN("fail to get insert spec", K(ret));

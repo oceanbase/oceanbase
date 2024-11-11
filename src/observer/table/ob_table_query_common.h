@@ -30,6 +30,13 @@ public:
                                             ObTableQueryResult &one_result,
                                             const ObTableCtx &tb_ctx,
                                             ObTableQueryResultIterator *&result_iter);
+
+  template<typename ResultType>
+  static int generate_htable_result_iterator(ObIAllocator &allocator,
+                                             const ObTableQuery &query,
+                                             ResultType &one_result,
+                                             const ObTableCtx &tb_ctx,
+                                             ObTableQueryResultIterator *&result_iter);
   static void destroy_result_iterator(ObTableQueryResultIterator *result_iter);
   static int get_rowkey_column_names(ObKvSchemaCacheGuard &schema_cache_guard, ObIArray<ObString> &names);
   static int get_full_column_names(ObKvSchemaCacheGuard &schema_cache_guard, ObIArray<ObString> &names);

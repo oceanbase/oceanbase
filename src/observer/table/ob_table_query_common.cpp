@@ -58,6 +58,62 @@ int ObTableQueryUtils::check_htable_query_args(const ObTableQuery &query,
   return ret;
 }
 
+template<typename ResultType>
+int ObTableQueryUtils::generate_htable_result_iterator(ObIAllocator &allocator,
+                                                       const ObTableQuery &query,
+                                                       ResultType &one_result,
+                                                       const ObTableCtx &tb_ctx,
+                                                       ObTableQueryResultIterator *&result_iter)
+{
+  int ret = OB_SUCCESS;
+  bool has_filter = (query.get_htable_filter().is_valid() || query.get_filter_string().length() > 0);
+  ObKVAttr kv_attributes;
+
+  ObHTableFilterOperator *htable_result_iter = nullptr;
+  ObKvSchemaCacheGuard *schema_cache_guard = tb_ctx.get_schema_cache_guard();
+  if (OB_ISNULL(schema_cache_guard) || !schema_cache_guard->is_inited()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_cache_cache is NULL or not inited", K(ret));
+  } else if (OB_FAIL(schema_cache_guard->get_kv_attributes(kv_attributes))) {
+    LOG_WARN("get kv attributes failed", K(ret));
+  } else if (OB_FAIL(check_htable_query_args(query, tb_ctx))) {
+    LOG_WARN("fail to check htable query args", K(ret), K(tb_ctx));
+  } else if (OB_ISNULL(htable_result_iter = OB_NEWx(ObHTableFilterOperator,
+                                                    (&allocator),
+                                                    query,
+                                                    one_result))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc htable query result iterator", K(ret));
+  } else if (OB_FAIL(htable_result_iter->init(&allocator))) {
+    LOG_WARN("fail to init row htable_result_iter", K(ret));
+  } else {
+    ObHColumnDescriptor desc;
+    desc.from_kv_attribute(kv_attributes);
+    if (desc.get_time_to_live() > 0) {
+      htable_result_iter->set_ttl(desc.get_time_to_live());
+    }
+    if (desc.get_max_version() > 0) {
+      htable_result_iter->set_max_version(desc.get_max_version());
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    result_iter = htable_result_iter;
+  } else if (OB_NOT_NULL(htable_result_iter)) {
+    htable_result_iter->~ObHTableFilterOperator();
+    allocator.free(htable_result_iter);
+  }
+
+  return ret;
+}
+
+// explicit specialization for ObTableQueryIterableResult
+template int ObTableQueryUtils::generate_htable_result_iterator(ObIAllocator &allocator,
+                                                                const ObTableQuery &query,
+                                                                ObTableQueryIterableResult &one_result,
+                                                                const ObTableCtx &tb_ctx,
+                                                                ObTableQueryResultIterator *&result_iter);
+
 int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
                                                       const ObTableQuery &query,
                                                       bool is_hkv,
@@ -68,39 +124,13 @@ int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
   int ret = OB_SUCCESS;
   ObTableQueryResultIterator *tmp_result_iter = nullptr;
   bool has_filter = (query.get_htable_filter().is_valid() || query.get_filter_string().length() > 0);
-  ObKVAttr kv_attributes;
 
-  ObKvSchemaCacheGuard *schema_cache_guard = tb_ctx.get_schema_cache_guard();
-  if (OB_ISNULL(schema_cache_guard) || !schema_cache_guard->is_inited()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema_cache_cache is NULL or not inited", K(ret));
-  } else if (OB_FAIL(schema_cache_guard->get_kv_attributes(kv_attributes))) {
-    LOG_WARN("get kv attributes failed", K(ret));
-  } else if (OB_FAIL(one_result.deep_copy_property_names(tb_ctx.get_query_col_names()))) {
+  if (OB_FAIL(one_result.deep_copy_property_names(tb_ctx.get_query_col_names()))) {
     LOG_WARN("fail to deep copy property names to one result", K(ret), K(tb_ctx));
   } else if (has_filter) {
     if (is_hkv) {
-      ObHTableFilterOperator *htable_result_iter = nullptr;
-      if (OB_FAIL(check_htable_query_args(query, tb_ctx))) {
-        LOG_WARN("fail to check htable query args", K(ret), K(tb_ctx));
-      } else if (OB_ISNULL(htable_result_iter = OB_NEWx(ObHTableFilterOperator,
-                                                        (&allocator),
-                                                        query,
-                                                        one_result))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to alloc htable query result iterator", K(ret));
-      } else if (OB_FAIL(htable_result_iter->init(&allocator))) {
-        LOG_WARN("fail to init row htable_result_iter", K(ret));
-      } else {
-        tmp_result_iter = htable_result_iter;
-        ObHColumnDescriptor desc;
-        desc.from_kv_attribute(kv_attributes);
-        if (desc.get_time_to_live() > 0) {
-          htable_result_iter->set_ttl(desc.get_time_to_live());
-        }
-        if (desc.get_max_version() > 0) {
-          htable_result_iter->set_max_version(desc.get_max_version());
-        }
+      if (OB_FAIL(generate_htable_result_iterator(allocator, query, one_result, tb_ctx, tmp_result_iter))) {
+        LOG_WARN("fail to generate htable result iterator", K(ret), K(query));
       }
     } else { // tableapi
       ObTableFilterOperator *table_result_iter = nullptr;
@@ -119,8 +149,8 @@ int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
           table_result_iter->init_aggregation();
           table_result_iter->get_agg_calculator().set_projs(tb_ctx.get_agg_projs());
         }
-        tmp_result_iter = table_result_iter;
       }
+      tmp_result_iter = table_result_iter;
     }
   } else { // no filter
     ObNormalTableQueryResultIterator *normal_result_iter = nullptr;
@@ -141,12 +171,14 @@ int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
         normal_result_iter->init_aggregation();
         normal_result_iter->get_agg_calculator().set_projs(tb_ctx.get_agg_projs());
       }
-      tmp_result_iter = normal_result_iter;
     }
+    tmp_result_iter = normal_result_iter;
   }
 
   if (OB_SUCC(ret)) {
     result_iter = tmp_result_iter;
+  } else if (OB_NOT_NULL(tmp_result_iter)) {
+    destroy_result_iterator(tmp_result_iter);
   }
 
   return ret;

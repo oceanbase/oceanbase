@@ -309,7 +309,7 @@ int ObTableCtx::init_common(ObTableApiCredential &credential,
   } else {
     if (OB_ISNULL(simple_table_schema_) || OB_ISNULL(schema_guard_)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table schema or schema guard is NULL", K(ret));
+      LOG_WARN("table schema or schema guard is NULL", K(ret), KP(simple_table_schema_), KP(schema_guard_));
     } else if (OB_FAIL(inner_init_common(arg_tablet_id, simple_table_schema_->get_table_name(), timeout_ts))) {
       LOG_WARN("fail to inner init common", KR(ret), K(credential), K(timeout_ts));
     }

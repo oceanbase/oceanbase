@@ -1,3 +1,15 @@
+/**
+ * Copyright (c) 2023 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
+
 #ifndef ob_hfilter_HEADER_H
 #define ob_hfilter_HEADER_H 1
 #define ob_hfilter_IN_HEADER 1
@@ -346,7 +358,7 @@ extern int ob_hfilter_lex \
 #undef YY_DECL
 #endif
 
-#line 112 "../../../src/observer/table/htable_filter_lex.lxx"
+#line 117 "../../../src/observer/table/htable_filter_lex.lxx"
 
 
 #line 353 "../../../src/observer/table/htable_filter_lex.hxx"
