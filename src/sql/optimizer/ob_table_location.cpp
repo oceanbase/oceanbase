@@ -1508,7 +1508,7 @@ int ObTableLocation::calculate_single_tablet_partition(ObExecContext &exec_ctx,
   ObDASTabletLoc *tablet_loc = nullptr;
   ObDASTableLocMeta *final_meta = nullptr;
   LOG_DEBUG("das table loc assign begin", K_(loc_meta));
-  if (OB_FAIL(das_ctx.build_table_loc_meta(loc_meta_, final_meta))) {
+  if (FAILEDx(das_ctx.build_table_loc_meta(loc_meta_, final_meta))) {
     LOG_WARN("build table loc meta failed", K(ret));
   } else if (OB_FAIL(das_ctx.extended_table_loc(*final_meta, table_loc))) {
     LOG_WARN("extended table loc failed", K(ret), K(loc_meta_));

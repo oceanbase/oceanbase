@@ -1712,7 +1712,7 @@ int ObTransformUtils::flatten_joined_table(ObDMLStmt *stmt)
           LOG_WARN("failed to push back joined table", K(ret));
         } else if (i < origin_joined_table_count) {
           /* do nohing */
-        } else if (stmt->add_from_item(table->table_id_, true)) {
+        } else if (OB_FAIL(stmt->add_from_item(table->table_id_, true))) {
           LOG_WARN("failed to add from item", K(ret), K(right_table));
         }
       } else if (OB_FAIL(append(stmt->get_condition_exprs(), table->get_join_conditions()))) {
@@ -1723,13 +1723,13 @@ int ObTransformUtils::flatten_joined_table(ObDMLStmt *stmt)
       } else {
         if (left_table->is_joined_table()) {
           ret = tmp_joined_tables.push_back(static_cast<JoinedTable*>(left_table));
-        } else if (stmt->add_from_item(left_table->table_id_, false)) {
+        } else if (OB_FAIL(stmt->add_from_item(left_table->table_id_, false))) {
           LOG_WARN("failed to add from item", K(ret), K(left_table));
         }
         if (OB_FAIL(ret)) {
         } else if (right_table->is_joined_table()) {
           ret = tmp_joined_tables.push_back(static_cast<JoinedTable*>(right_table));
-        } else if (stmt->add_from_item(right_table->table_id_, false)) {
+        } else if (OB_FAIL(stmt->add_from_item(right_table->table_id_, false))) {
           LOG_WARN("failed to add from item", K(ret), K(right_table));
         }
       }
@@ -6944,7 +6944,7 @@ int ObTransformUtils::create_simple_view(ObTransformerCtx *ctx,
     LOG_WARN("failed to get from tables", K(ret));
   } else if (OB_FAIL(semi_infos.assign(stmt->get_semi_infos()))) {
     LOG_WARN("failed to assign semi info", K(ret));
-  } else if (ObOptimizerUtil::remove_item(stmt->get_condition_exprs(), norm_conds)) {
+  } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_condition_exprs(), norm_conds))) {
     LOG_WARN("failed to remove item", K(ret));
   } else if (OB_FAIL(ObTransformUtils::replace_with_empty_view(ctx,
                                                                stmt,
@@ -13940,7 +13940,7 @@ int ObTransformUtils::get_column_node_from_table(ObTransformerCtx *ctx,
           } else if (col_schema->is_extend()) {
             ret = OB_ERR_JSON_FUN_UNSUPPORTED_TYPE;
             LOG_WARN("unsupported data type in json object function", K(ret));
-          } else if (ObRawExprUtils::build_column_expr(*ctx->expr_factory_, *col_schema, col_expr)) {
+          } else if (OB_FAIL(ObRawExprUtils::build_column_expr(*ctx->expr_factory_, *col_schema, col_expr))) {
             LOG_WARN("fail to create col expr by column schema", K(ret));
           } else {
             col_expr->set_table_name(tmp_table_item->table_name_);

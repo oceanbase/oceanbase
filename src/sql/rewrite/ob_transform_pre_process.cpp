@@ -7539,9 +7539,9 @@ int ObTransformPreProcess::recursive_generate_rowid_select_item(ObSelectStmt *se
           // ignore create rowid item.
         } else if (OB_FAIL(create_rowid_item_for_stmt(select_stmt, table_item, rowid_expr))) {
           LOG_WARN("create rowid item for stmt failed", K(ret));
-        } else if (ObTransformUtils::create_select_item(*(ctx_->allocator_),
-                                                        rowid_expr,
-                                                        select_stmt)) {
+        } else if (OB_FAIL(ObTransformUtils::create_select_item(*(ctx_->allocator_),
+                                                                rowid_expr,
+                                                                select_stmt))) {
           LOG_WARN("failed to create select item", K(ret));
         } else {/*do nothing*/}
       } else if (OB_FAIL(build_rowid_expr(select_stmt, table_item, rowid_func_expr))) {

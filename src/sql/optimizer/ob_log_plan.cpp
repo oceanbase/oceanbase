@@ -3942,7 +3942,7 @@ int ObLogPlan::inner_remove_redundancy_pred(ObIArray<ObRawExpr*> &join_pred,
               OB_UNLIKELY(right_table.num_members() != 1))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected params", K(ret), K(left_table), K(right_table));
-  } else if (has_checked.prepare_allocate(join_pred.count(), false)) {
+  } else if (OB_FAIL(has_checked.prepare_allocate(join_pred.count(), false))) {
     LOG_WARN("failed to allocate", K(ret));
   }
 

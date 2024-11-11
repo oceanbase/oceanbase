@@ -1180,7 +1180,7 @@ int ObTransformWinMagic::adjust_column_and_table(ObDMLStmt *main_stmt,
   }
 
   if (OB_FAIL(ret)) {
-  } else if (ObOptimizerUtil::remove_item(main_stmt->get_semi_infos(), rm_semi_infos)) {
+  } else if (OB_FAIL(ObOptimizerUtil::remove_item(main_stmt->get_semi_infos(), rm_semi_infos))) {
     LOG_WARN("failed to remove semi infos", K(ret));
   }
 

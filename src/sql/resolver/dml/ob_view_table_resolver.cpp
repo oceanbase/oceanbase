@@ -265,7 +265,7 @@ int ObViewTableResolver::resolve_subquery_info(const ObIArray<ObSubQueryInfo> &s
       subquery_resolver.set_parent_aggr_level(info.parents_expr_info_.has_member(IS_AGG) ?
           current_level_ : parent_aggr_level_);
     }
-    if (OB_FAIL(do_resolve_subquery_info(info, subquery_resolver))) {
+    if (FAILEDx(do_resolve_subquery_info(info, subquery_resolver))) {
       LOG_WARN("do resolve subquery info failed", K(ret));
     }
     set_query_ref_exec_params(NULL);

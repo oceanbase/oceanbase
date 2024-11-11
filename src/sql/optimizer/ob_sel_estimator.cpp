@@ -2811,7 +2811,8 @@ int ObInequalJoinSelEstimator::get_sel(const OptTableMetas &table_metas,
     }
     ndv1 = std::max(ndv1, 1.0);
     ndv2 = std::max(ndv2, 1.0);
-    if (OB_UNLIKELY(min1 > max1) ||
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(min1 > max1) ||
         OB_UNLIKELY(min2 > max2)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected min max", K(min1), K(max1), K(min2), K(max2), KPC(this));

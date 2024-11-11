@@ -133,7 +133,7 @@ int ObTransformJoinElimination::eliminate_join_in_from_base_table(ObDMLStmt *stm
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(stmt), K(ctx_), K(ret));
-  } else if (stmt->get_equal_set_conditions(conds, true)) {
+  } else if (OB_FAIL(stmt->get_equal_set_conditions(conds, true))) {
     LOG_WARN("failed to get equal set conditions", K(ret));
   } else if (OB_FAIL(extract_candi_table(stmt, stmt->get_from_items(), candi_tables,
                                          child_candi_tables))) {
@@ -1960,6 +1960,7 @@ int ObTransformJoinElimination::eliminate_semi_right_child_table(ObDMLStmt *stmt
         LOG_WARN("failed to add member", K(ret));
       } else if (OB_ISNULL(col = stmt->get_column_expr_by_id(semi_right_table->table_id_,
                                                              i + OB_APP_MIN_COLUMN_ID))) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get column expr by id", K(ret));
       } else if (OB_FAIL(pullup_column_exprs.push_back(col))) {
         LOG_WARN("failed to push back column expr", K(ret));
@@ -2485,6 +2486,7 @@ int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt
       if (item.is_joined_ || target_stmt->is_semi_left_table(item.table_id_)) {
         /* do nothing */
       } else if (OB_ISNULL(right_table = target_stmt->get_table_item_by_id(item.table_id_))) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexcepted null", K(ret), K(right_table));
       } else if (OB_FAIL(check_hint_valid(*stmt, *right_table, is_hint_valid))) {
         LOG_WARN("failed to check hint valid", K(ret));
@@ -2937,9 +2939,9 @@ int ObTransformJoinElimination::trans_semi_condition_exprs(ObDMLStmt *stmt,
     LOG_WARN("param has null", K(stmt), K(ctx_), K(ret));
   } else if (semi_info->is_semi_join()) {
     ret = append(stmt->get_condition_exprs(), semi_info->semi_conditions_);
-  } else if (stmt->get_table_rel_ids(semi_info->left_table_ids_, left_rel_ids)) {
+  } else if (OB_FAIL(stmt->get_table_rel_ids(semi_info->left_table_ids_, left_rel_ids))) {
     LOG_WARN("failed to get table rel ids", K(ret));
-  } else if (stmt->get_table_rel_ids(semi_info->right_table_id_, right_rel_ids)) {
+  } else if (OB_FAIL(stmt->get_table_rel_ids(semi_info->right_table_id_, right_rel_ids))) {
     LOG_WARN("failed to get table rel ids", K(ret));
   } else {
     const int64_t count = semi_info->semi_conditions_.count();

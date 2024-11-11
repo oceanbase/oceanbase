@@ -3998,7 +3998,7 @@ int ObTransformTempTable::get_all_view_stmts(ObDMLStmt *stmt,
   } else if (stmt->is_set_stmt()) {
     if (OB_FAIL(stmt->get_child_stmts(child_stmts))) {
       LOG_WARN("failed to get child stmts", K(ret));
-    } else if (append_array_no_dup(view_stmts, child_stmts)) {
+    } else if (OB_FAIL(append_array_no_dup(view_stmts, child_stmts))) {
       LOG_WARN("failed to append array", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {

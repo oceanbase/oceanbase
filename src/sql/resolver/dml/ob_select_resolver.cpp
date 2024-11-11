@@ -1012,7 +1012,7 @@ int ObSelectResolver::check_and_mark_aggr_in_having_scope(ObSelectStmt *select_s
       if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is NULL ptr", K(ret));
-      } else if (ObTransformUtils::extract_aggr_expr(expr, aggrs)) {
+      } else if (OB_FAIL(ObTransformUtils::extract_aggr_expr(expr, aggrs))) {
         LOG_WARN("failed to extrace aggr expr", K(ret));
       } else {
         // having aggr must in inner stmt
@@ -3504,6 +3504,7 @@ int ObSelectResolver::resolve_cycle_pseudo(const ParseNode *cycle_set_clause,
   ObRawExpr *expr_d_v = nullptr;
   //for pseudo column
   if (OB_ISNULL(cycle_set_clause)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cycle clause must have set pseudo column", K(ret));
   } else if (OB_FAIL(resolve_and_split_sql_expr(*cycle_set_clause,
                                                 r_union_stmt->get_cte_exprs()))) {
@@ -3960,7 +3961,7 @@ int ObSelectResolver::gen_unpivot_target_column(const int64_t table_count,
           if (OB_ISNULL(first_select_item.expr_)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("expr is null", K(ret), K(first_select_item.expr_));
-          } else if (types.push_back(first_select_item.expr_->get_result_type())) {
+          } else if (OB_FAIL(types.push_back(first_select_item.expr_->get_result_type()))) {
             LOG_WARN("fail to push left_type", K(ret));
           }
           while (OB_SUCC(ret) && item_idx < select_item_count) {
@@ -7295,6 +7296,7 @@ int ObSelectResolver::resolve_values_table_from_union(const ObIArray<int64_t> &l
     const ParseNode *node = reinterpret_cast<const ParseNode *>(leaf_nodes.at(0));
     const ParseNode *project_list = NULL;
     if (OB_ISNULL(node) || OB_ISNULL(node->children_[PARSE_SELECT_SELECT])) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null pointer", K(ret), KP(node));
     } else if (OB_FAIL(resolve_query_options(node->children_[PARSE_SELECT_DISTINCT]))) {
       LOG_WARN("failed to resolve query options", K(ret));

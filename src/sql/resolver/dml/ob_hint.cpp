@@ -664,7 +664,7 @@ int ObGlobalHint::print_monitoring_hints(PlanText &plan_text) const
           LOG_WARN("failed to print tracing hint", K(ret));
         }
       }
-      if (OB_FAIL(BUF_PRINTF(")"))) {
+      if (FAILEDx(BUF_PRINTF(")"))) {
         LOG_WARN("failed to print tracing hint", K(ret));
       }
     }
@@ -677,7 +677,7 @@ int ObGlobalHint::print_monitoring_hints(PlanText &plan_text) const
           LOG_WARN("failed to print tracing hint", K(ret));
         }
       }
-      if (OB_FAIL(BUF_PRINTF(")"))) {
+      if (FAILEDx(BUF_PRINTF(")"))) {
         LOG_WARN("failed to print tracing hint", K(ret));
       }
     }
@@ -1891,7 +1891,7 @@ int ObMaterializeHint::print_hint_desc(PlanText &plan_text) const
           }
         }
       }
-      if (OB_FAIL(BUF_PRINTF(")"))) {
+      if (FAILEDx(BUF_PRINTF(")"))) {
         LOG_WARN("fail to print materialize hint", K(ret));
       }
     }
@@ -2012,7 +2012,7 @@ int ObCoalesceSqHint::print_hint_desc(PlanText &plan_text) const
           }
         }
       }
-      if (OB_FAIL(BUF_PRINTF(")"))) {
+      if (FAILEDx(BUF_PRINTF(")"))) {
         LOG_WARN("fail to print coalesce sq hint", K(ret));
       }
     }
@@ -2953,7 +2953,7 @@ int ObWindowDistHint::add_win_dist_option(const ObIArray<int64_t> &win_func_idxs
     win_dist_option.algo_ = algo;
     win_dist_option.is_push_down_ = is_push_down;
     win_dist_option.use_hash_sort_ = use_hash_sort;
-    if (win_dist_option.win_func_idxs_.assign(win_func_idxs)) {
+    if (OB_FAIL(win_dist_option.win_func_idxs_.assign(win_func_idxs))) {
       LOG_WARN("failed to add win dist option", K(ret));
     }
   }
