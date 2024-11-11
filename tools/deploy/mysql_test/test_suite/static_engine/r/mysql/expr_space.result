@@ -92,3 +92,61 @@ select * from t1 where space(c1) = '';
 drop table if exists t1;
 drop database if exists luofan;
 
+drop table if exists space_t1;
+drop table if exists space_t2;
+create table space_t1(c1 char(181) default (space( '1')), c2 int);
+select * from space_t1;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+insert into space_t1(c2) values(1);
+select * from space_t1;
++------+------+
+| c1   | c2   |
++------+------+
+|      |    1 |
++------+------+
+
+create table space_t2 as select space('1') as c1 from space_t1;
+desc space_t2;
++-------+--------------+------+-----+---------+-------+
+| Field | Type         | Null | Key | Default | Extra |
++-------+--------------+------+-----+---------+-------+
+| c1    | varchar(512) | YES  |     | NULL    |       |
++-------+--------------+------+-----+---------+-------+
+drop table space_t2;
+
+create table space_t2 as select space('1024') as c1 from space_t1;
+desc space_t2;
++-------+------+------+-----+---------+-------+
+| Field | Type | Null | Key | Default | Extra |
++-------+------+------+-----+---------+-------+
+| c1    | text | YES  |     | NULL    |       |
++-------+------+------+-----+---------+-------+
+drop table space_t2;
+
+create table space_t2 as select space(NULL) as c1 from space_t1;
+desc space_t2;
++-------+--------------+------+-----+---------+-------+
+| Field | Type         | Null | Key | Default | Extra |
++-------+--------------+------+-----+---------+-------+
+| c1    | varchar(512) | YES  |     | NULL    |       |
++-------+--------------+------+-----+---------+-------+
+drop table space_t2;
+
+drop table space_t1;
+create table space_t1(c1 char(181) default (space(NULL)), c2 int);
+select * from space_t1;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+insert into space_t1(c2) values(1);
+select * from space_t1;
++------+------+
+| c1   | c2   |
++------+------+
+| NULL |    1 |
++------+------+
+drop table space_t1;
