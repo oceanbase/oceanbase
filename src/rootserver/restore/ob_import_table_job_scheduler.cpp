@@ -320,13 +320,26 @@ int ObImportTableJobScheduler::gen_import_table_task_(share::ObImportTableJob &j
 int ObImportTableJobScheduler::deal_with_import_table_task_(share::ObImportTableJob &job)
 {
   int ret = OB_SUCCESS;
-  ObImportTableTask task;
-  bool all_finish = false;
-  if (OB_FAIL(task_helper_.get_one_not_finish_task_by_initiator(*sql_proxy_, job, all_finish, task))) {
-    LOG_WARN("failed to get import table task", K(ret), K(job));
-  } else if (!all_finish) {
-    if (OB_FAIL(process_import_table_task_(task))) {
-      LOG_WARN("failed to process import table task", K(ret), K(task));
+  int64_t concurrency = DEFAULT_RECOVER_TABLE_CONCURRENCY;
+  ObArray<ObImportTableTask> import_tasks;
+  // import table job: job schedule run in meta tanent, import table job run in user tenant
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(job.get_tenant_id()));
+  if (tenant_config.is_valid() && tenant_config->recover_table_concurrency != 0) {
+    concurrency = tenant_config->recover_table_concurrency;
+  }
+  concurrency = min(MAX_RECOVER_TABLE_CONCURRENCY, concurrency); /* max 16 */
+  if (OB_FAIL(task_helper_.get_one_batch_unfinish_tasks(*sql_proxy_, job, concurrency, import_tasks))) {
+    LOG_WARN("failed to get k unfinished import table tasks", K(ret), K(job), K(concurrency));
+  } else if (!import_tasks.empty()) {
+    ARRAY_FOREACH_NORET(import_tasks, i) {
+      int tmp_ret = OB_SUCCESS;
+      ObImportTableTask &task = import_tasks.at(i);
+      if (OB_TMP_FAIL(process_import_table_task_(task))) {
+        LOG_WARN("failed to process import table task", K(tmp_ret), K(task));
+      }
+      if (OB_SUCC(ret) && OB_FAIL(tmp_ret)) {
+        ret = tmp_ret;
+      }
     }
   } else if (OB_FAIL(do_after_import_all_table_(job))) {
     LOG_WARN("failed to do after import all table", K(ret), K(job));
@@ -741,7 +754,15 @@ int ObImportTableTaskScheduler::construct_import_table_arg_(obrpc::ObRecoverRest
     const ObSysVarSchema *data_format_schema = nullptr;
     const ObSysVarSchema *nls_timestamp_format = nullptr;
     const ObSysVarSchema *nls_timestamp_tz_format = nullptr;
-    if (OB_FAIL(share::ObBackupUtils::get_tenant_sys_time_zone_wrap(import_task_->get_tenant_id(),
+    int64_t ddl_parallelism = DEFAULT_RECOVER_TABLE_DOP; /* dop=1 */
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(arg.exec_tenant_id_));
+    if (tenant_config.is_valid() && tenant_config->recover_table_dop != 0) {
+      ddl_parallelism = tenant_config->recover_table_dop;
+    }
+    if (OB_UNLIKELY(0 >= ddl_parallelism)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("parallelism is 0 not allowed", K(ret));
+    } else if (OB_FAIL(share::ObBackupUtils::get_tenant_sys_time_zone_wrap(import_task_->get_tenant_id(),
                                                                     time_zone,
                                                                     arg.tz_info_wrap_))) {
       LOG_WARN("failed to get tenant sys timezoen wrap", K(ret), KPC_(import_task));
@@ -768,6 +789,8 @@ int ObImportTableTaskScheduler::construct_import_table_arg_(obrpc::ObRecoverRest
       LOG_WARN("deep copy failed", K(ret), K(nls_timestamp_tz_format->get_value()));
     } else {
       arg.tz_info_ =  arg.tz_info_wrap_.get_tz_info_offset();
+      arg.parallelism_ = ddl_parallelism;
+      arg.is_parallel_ = (ddl_parallelism > 1);
     }
   }
   return ret;

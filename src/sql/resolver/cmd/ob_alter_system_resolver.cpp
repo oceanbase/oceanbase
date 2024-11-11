@@ -5726,6 +5726,44 @@ int ObBackupKeyResolver::resolve(const ParseNode &parse_tree)
   return ret;
 }
 
+int ObBackupClusterParamResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(T_BACKUP_CLUSTER_PARAMETERS != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_BACKUP_CLUSTER_PARAMETERS", "type", get_type_name(parse_tree.type_));
+  } else if (OB_UNLIKELY(NULL == parse_tree.children_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children should not be null", K(ret));
+  } else if (OB_UNLIKELY(1 != parse_tree.num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children num != 1", K(ret), "num_child", parse_tree.num_child_);
+  }  else if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info should not be null", K(ret));
+  } else {
+    ObString str_val;
+    ObBackupPathString backup_dest;
+    uint64_t tenant_id = session_info_->get_login_tenant_id();
+    if (OB_FAIL(Util::resolve_string(parse_tree.children_[0], str_val))) {
+      LOG_WARN("failed to resolve backup dest", K(ret));
+    } else if (OB_FAIL(backup_dest.assign(str_val))) {
+      LOG_WARN("failed to assign backup_dest", K(ret));
+    } else {
+      ObBackupClusterParamStmt *stmt = create_stmt<ObBackupClusterParamStmt>();
+      if (nullptr == stmt) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("create ObBackupClusterParamStmt failed");
+      } else if (OB_FAIL(stmt->set_param(backup_dest))) {
+        LOG_WARN("Failed to set param", K(ret), K(tenant_id));
+      } else {
+        stmt_ = stmt;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObBackupArchiveLogResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;

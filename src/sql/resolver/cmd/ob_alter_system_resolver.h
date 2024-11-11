@@ -306,6 +306,7 @@ DEF_SIMPLE_CMD_RESOLVER(ObBackupManageResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObBackupCleanResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObDeletePolicyResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObBackupKeyResolver);
+DEF_SIMPLE_CMD_RESOLVER(ObBackupClusterParamResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObEnableSqlThrottleResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObDisableSqlThrottleResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObSetRegionBandwidthResolver);

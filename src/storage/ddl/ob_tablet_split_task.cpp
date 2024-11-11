@@ -2428,7 +2428,6 @@ int ObTabletSplitUtil::split_task_ranges(
     LOG_WARN("get participants failed", K(ret));
   } else {
     const ObITableReadInfo &rowkey_read_info = tablet_handle.get_obj()->get_rowkey_read_info();
-    const int64_t tablet_size = std::max(schema_tablet_size, 128 * 1024 * 1024L/*128MB*/);
     ObRangeSplitInfo range_info;
     ObPartitionRangeSpliter range_spliter;
     ObStoreRange whole_range;
@@ -2437,7 +2436,7 @@ int ObTabletSplitUtil::split_task_ranges(
        rowkey_read_info, whole_range, range_info))) {
       LOG_WARN("init range split info failed", K(ret));
     } else if (OB_FALSE_IT(range_info.parallel_target_count_
-      = MAX(1, MIN(user_parallelism, (range_info.total_size_ + tablet_size - 1) / tablet_size)))) {
+      = MAX(1, MIN(user_parallelism, (range_info.total_size_ + schema_tablet_size - 1) / schema_tablet_size)))) {
     } else if (OB_FAIL(range_spliter.split_ranges(range_info,
       tmp_arena, false /*for_compaction*/, store_ranges))) {
       LOG_WARN("split ranges failed", K(ret), K(range_info));
@@ -2490,6 +2489,32 @@ int ObTabletSplitUtil::convert_rowkey_to_range(
       LOG_WARN("failed to convert multi_version range", K(ret), K(schema_rowkey_range));
     } else if (OB_FAIL(datum_ranges_array.push_back(multi_version_range))) { // buffer is kept by the to_multi_version_range.
       LOG_WARN("failed to push back merge range to array", K(ret), K(multi_version_range));
+    }
+  }
+  LOG_INFO("change to datum range array finished", K(ret), K(parallel_datum_rowkey_list), K(datum_ranges_array));
+  return ret;
+}
+
+// only used for table recovery to build parallel tasks cross tenants.
+int ObTabletSplitUtil::convert_datum_rowkey_to_range(
+    ObIAllocator &allocator,
+    const ObIArray<blocksstable::ObDatumRowkey> &parallel_datum_rowkey_list,
+    ObIArray<ObDatumRange> &datum_ranges_array)
+{
+  int ret = OB_SUCCESS;
+  datum_ranges_array.reset();
+  ObDatumRange schema_rowkey_range;
+  schema_rowkey_range.set_left_open();
+  schema_rowkey_range.set_right_closed();
+  for (int64_t i = 0; OB_SUCC(ret) && i < parallel_datum_rowkey_list.count() - 1; i++) {
+    const ObDatumRowkey &start_key = parallel_datum_rowkey_list.at(i);
+    const ObDatumRowkey &end_key = parallel_datum_rowkey_list.at(i + 1);
+    if (OB_FAIL(start_key.deep_copy(schema_rowkey_range.start_key_, allocator))) { // deep copy necessary, to hold datum buffer.
+      LOG_WARN("failed to deep copy start_key", K(ret), K(start_key));
+    } else if (OB_FAIL(end_key.deep_copy(schema_rowkey_range.end_key_, allocator))) {
+      LOG_WARN("failed to deep copy end_key", K(ret), K(end_key));
+    } else if (OB_FAIL(datum_ranges_array.push_back(schema_rowkey_range))) { // buffer is kept by the schema_rowkey_range.
+      LOG_WARN("failed to push back merge range to array", K(ret), K(schema_rowkey_range));
     }
   }
   LOG_INFO("change to datum range array finished", K(ret), K(parallel_datum_rowkey_list), K(datum_ranges_array));

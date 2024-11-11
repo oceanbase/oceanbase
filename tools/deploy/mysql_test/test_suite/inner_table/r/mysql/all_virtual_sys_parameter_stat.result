@@ -216,6 +216,8 @@ query_response_time_flush
 query_response_time_range_base
 query_response_time_stats
 range_optimizer_max_mem_size
+recover_table_concurrency
+recover_table_dop
 recyclebin_object_expire_time
 redundancy_level
 resource_hard_limit

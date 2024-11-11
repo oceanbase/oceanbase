@@ -422,6 +422,12 @@ public:
       ObIAllocator &allocator,
       const ObIArray<blocksstable::ObDatumRowkey> &parallel_datum_rowkey_list,
       ObIArray<ObDatumRange> &datum_ranges_array);
+
+  // only used for table recovery to build parallel tasks cross tenants.
+  static int convert_datum_rowkey_to_range(
+      ObIAllocator &allocator,
+      const ObIArray<blocksstable::ObDatumRowkey> & datum_rowkey_list,
+      ObIArray<ObDatumRange> &datum_ranges_array);
   static int check_major_sstables_exist(
       const share::ObLSID &ls_id,
       const ObIArray<ObTabletID> &check_tablets_id,
@@ -459,7 +465,6 @@ private:
   static int check_and_determine_mds_end_scn(
       const ObTabletHandle &dest_tablet_handle,
       share::SCN &end_scn);
-
 };
 
 }  // end namespace storage

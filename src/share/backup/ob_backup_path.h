@@ -232,6 +232,14 @@ struct ObBackupPathUtil
   static int get_locality_info_path(const share::ObBackupDest &backup_tenant_dest,
       share::ObBackupSetDesc &desc, share::ObBackupPath &backup_path);  
 
+  // file:///obbackup/backup_set_1_full/infos/tenant_parameter.obbak
+  static int get_tenant_parameters_info_path(const share::ObBackupDest &backup_set_dest,
+      share::ObBackupPath &backup_path);
+
+  // file:///obbackup/cluster_parameter_path/cluster_parameter.[timestamp_ms].obbak
+  static int get_cluster_parameters_info_path(const share::ObBackupDest &backup_tenant_dest,
+    const int64_t timestamp_sec, share::ObBackupPath &backup_path);
+
   // file:///obbackup/backup_set_1_full/log_stream_1/meta_info_turn_1_retry_0/ls_meta_info.obbak
   static int get_ls_meta_info_backup_path(const share::ObBackupDest &backup_tenant_dest,
       const share::ObBackupSetDesc &desc, const share::ObLSID &ls_id, const int64_t turn_id,

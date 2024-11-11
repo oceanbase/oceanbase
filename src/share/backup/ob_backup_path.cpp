@@ -1373,6 +1373,46 @@ int ObBackupPathUtil::get_locality_info_path(const share::ObBackupDest &backup_t
   return ret;
 }
 
+// file:///obbackup/backup_set_1_full/infos/tenant_parameter.obbak
+int ObBackupPathUtil::get_tenant_parameters_info_path(const share::ObBackupDest &backup_set_dest,
+  share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_ls_info_dir_path(backup_set_dest, backup_path))) {
+    LOG_WARN("failed to get backup set dir path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(backup_path.join(OB_STR_TENANT_PARAMETER_INFO, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join data", K(ret));
+  }
+  return ret;
+}
+
+// file:///obbackup/cluster_parameter_path/cluster_parameter.[timestamp_ms].obbak
+int ObBackupPathUtil::get_cluster_parameters_info_path(const share::ObBackupDest &backup_dest,
+    const int64_t timestamp_sec, share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  int64_t time_pos = 0;
+  int64_t str_pos = 0;
+  char time_buff[OB_BACKUP_MAX_TIME_STR_LEN] = { 0 };
+  char str_path[OB_MAX_BACKUP_PATH_LENGTH] = { 0 };
+  backup_path.reset();
+  if (timestamp_sec < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(timestamp_sec));
+  } else if (OB_FAIL(backup_path.init(backup_dest.get_root_path()))) {
+    LOG_WARN("failed to init path", K(ret));
+  } else if (OB_FAIL(share::backup_time_to_strftime(timestamp_sec, time_buff, sizeof(time_buff), time_pos, 'T'/* concat */))) {
+    LOG_WARN("failed to format time tag", K(ret), K(timestamp_sec));
+  } else if (OB_FAIL(databuff_printf(str_path, sizeof(str_path), str_pos,
+      "%.*s.%.*s", static_cast<int>(strlen(OB_STR_CLUSTER_PARAMETER_INFO)), OB_STR_CLUSTER_PARAMETER_INFO,
+      static_cast<int>(time_pos), time_buff))) {
+    LOG_WARN("failed to print str path", K(ret), K(time_buff));
+  } else if (OB_FAIL(backup_path.join(str_path, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join data", K(ret));
+  }
+  return ret;
+}
+
 // file:///obbackup/backup_set_1_full/log_stream_1/meta_info_turn_1_retry_0/ls_meta_info.obbak
 int ObBackupPathUtil::get_ls_meta_info_backup_path(const share::ObBackupDest &backup_tenant_dest,
     const ObBackupSetDesc &desc, const share::ObLSID &ls_id, const int64_t turn_id, 

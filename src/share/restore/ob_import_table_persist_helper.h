@@ -66,8 +66,8 @@ public:
 
   int get_all_import_table_tasks_by_initiator(common::ObISQLClient &proxy,
       const ObImportTableJob &job, common::ObIArray<ObImportTableTask> &tasks) const;
-  int get_one_not_finish_task_by_initiator(common::ObISQLClient &proxy,
-      const ObImportTableJob &job, bool &all_finish, ObImportTableTask &task) const;
+  int get_one_batch_unfinish_tasks(common::ObISQLClient &proxy, const ObImportTableJob &job,
+    const int64_t k, common::ObIArray<ObImportTableTask> &tasks) const;
   int get_recover_table_task(common::ObISQLClient &proxy, const uint64_t tenant_id, const int64_t task_id,
       ObImportTableTask &task) const;
 

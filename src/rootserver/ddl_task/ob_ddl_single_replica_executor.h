@@ -134,7 +134,8 @@ public:
       heart_beat_time_(0),
       row_inserted_(0),
       row_scanned_(0),
-      physical_row_count_(0)
+      physical_row_count_(0),
+      sess_not_found_times_(0)
   { }
   ~ObSingleReplicaBuildCtx() = default;
   int init(const ObAddr& addr,
@@ -158,7 +159,8 @@ public:
                K(dest_table_id_), K(tablet_task_id_), K(compaction_scn_),
                K(src_tablet_id_), K(dest_tablet_id_), K_(can_reuse_macro_block),
                K(parallel_datum_rowkey_list_), K(stat_), K(ret_code_),
-               K(heart_beat_time_), K(row_inserted_), K(row_scanned_), K(physical_row_count_));
+               K(heart_beat_time_), K(row_inserted_), K(row_scanned_), K(physical_row_count_),
+               K(sess_not_found_times_));
 
 public:
   bool is_inited_;
@@ -180,6 +182,9 @@ public:
   int64_t row_inserted_;
   int64_t row_scanned_;
   int64_t physical_row_count_;
+  /* special variable is only used to reduce table recovery retry parallelism
+   * when the session not found error code appear in table recovery data complement. */
+  int64_t sess_not_found_times_;
 };
 
 class ObDDLReplicaBuildExecutor

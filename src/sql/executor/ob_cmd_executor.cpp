@@ -986,6 +986,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObBackupKeyStmt, ObBackupKeyExecutor);
         break;
       }
+      case stmt::T_BACKUP_CLUSTER_PARAMETERS: {
+        DEFINE_EXECUTE_CMD(ObBackupClusterParamStmt, ObBackupClusterParamExecutor);
+        break;
+      }
       case stmt::T_CREATE_DBLINK: {
         DEFINE_EXECUTE_CMD(ObCreateDbLinkStmt, ObCreateDbLinkExecutor);
         break;

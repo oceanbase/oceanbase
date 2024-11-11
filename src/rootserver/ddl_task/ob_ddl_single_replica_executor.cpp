@@ -461,7 +461,6 @@ int ObDDLReplicaBuildExecutor::construct_rpc_arg(
     arg.snapshot_version_ = snapshot_version_;
     arg.ddl_type_ = ddl_type_;
     arg.task_id_ = ddl_task_id_;
-    arg.parallelism_ = parallelism_;
     arg.execution_id_ = execution_id_;
     arg.tablet_task_id_ = replica_build_ctx.tablet_task_id_;
     arg.data_format_version_ = data_format_version_;
@@ -469,6 +468,14 @@ int ObDDLReplicaBuildExecutor::construct_rpc_arg(
     arg.compaction_scn_ = replica_build_ctx.compaction_scn_;
     arg.can_reuse_macro_block_ = replica_build_ctx.can_reuse_macro_block_;
     arg.min_split_start_scn_   = min_split_start_scn_;
+    /** handle OB_SESSION_NOT_FOUND(-4067) may lead to infinite retry of table recovery task.
+      * Due to the number limit(100) of blocked thread stream rpc receiver
+      * reduce table recovery retry parallelism. */
+    if (ObDDLType::DDL_TABLE_RESTORE == ddl_type_ && replica_build_ctx.sess_not_found_times_ > 0) {
+      arg.parallelism_ = MAX(1, parallelism_ >> replica_build_ctx.sess_not_found_times_);
+    } else {
+      arg.parallelism_ = parallelism_;
+    }
     if (OB_FAIL(arg.lob_col_idxs_.assign(lob_col_idxs_))) {
       LOG_WARN("failed to assign to lob col idxs", K(ret));
     } else if (OB_FAIL(arg.parallel_datum_rowkey_list_.assign(replica_build_ctx.parallel_datum_rowkey_list_))) {
@@ -848,6 +855,9 @@ int ObDDLReplicaBuildExecutor::update_replica_build_ctx(
     build_ctx.row_scanned_ = 0;
     build_ctx.physical_row_count_ = 0;
     build_ctx.stat_ = ObReplicaBuildStat::BUILD_RETRY;
+    if (ret_code == common::OB_SESSION_NOT_FOUND) {
+      build_ctx.sess_not_found_times_++;
+    }
     LOG_INFO("task need retry", K(ret_code), K(build_ctx.addr_),
         K(build_ctx.src_tablet_id_), K(build_ctx.dest_tablet_id_),
         K(is_rpc_request), K(is_observer_report));

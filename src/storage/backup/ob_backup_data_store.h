@@ -178,6 +178,46 @@ public:
   common::ObSArray<ObBackupResourcePool> resource_pool_infos_;
 };
 
+struct ObBackupParam final
+{
+  typedef common::ObFixedLengthString<common::OB_MAX_CONFIG_NAME_LEN + 1> ConfigName;
+  typedef common::ObString ConfigValue;
+  OB_UNIS_VERSION(1);
+public:
+  void reset();
+  bool is_valid() const;
+  int assign(const ObBackupParam &other);
+  int deep_copy(common::ObIAllocator &allocator, ObBackupParam &target) const;
+  TO_STRING_KV(K_(name), K_(value));
+  ConfigName  name_;
+  ConfigValue value_;
+};
+
+struct ObExternParamInfoDesc final : public ObExternBackupDataDesc
+{
+public:
+  static const uint8_t FILE_VERSION = 1;
+  OB_UNIS_VERSION(1);
+public:
+  ObExternParamInfoDesc()
+    : ObExternBackupDataDesc(
+      share::ObBackupFileType::BACKUP_PARAMETERS_INFO, FILE_VERSION),
+      tenant_id_(OB_INVALID_TENANT_ID),
+      allocator_(),
+      param_array_() {}
+  void reset();
+  bool is_valid() const override;
+  int assign(const ObExternParamInfoDesc &other);
+  int push(const ObBackupParam &param);
+  const common::ObSArray<ObBackupParam> &param_array() const;
+  TO_STRING_KV(K_(tenant_id), K_(param_array));
+  uint64_t tenant_id_;
+private:
+  common::ObArenaAllocator allocator_;
+  common::ObSArray<ObBackupParam> param_array_;
+  DISALLOW_COPY_AND_ASSIGN(ObExternParamInfoDesc);
+};
+
 struct ObExternBackupSetInfoDesc final : public ObExternBackupDataDesc
 {
 public:
@@ -373,6 +413,10 @@ public:
   int write_tenant_locality_info(const ObExternTenantLocalityInfoDesc &locality_info);
   int read_tenant_locality_info(ObExternTenantLocalityInfoDesc &locality_info);
 
+  // write and read tenant parameters info
+  int write_tenant_param_info(const ObExternParamInfoDesc &tenant_param_info);
+  int read_tenant_param_info(ObExternParamInfoDesc &tenant_param_info);
+
   // write and read tenant dignose info
   int write_tenant_diagnose_info(const ObExternTenantDiagnoseInfoDesc &diagnose_info);
   int read_tenant_diagnose_info(ObExternTenantDiagnoseInfoDesc &diagnose_info);
@@ -400,6 +444,8 @@ public:
   int write_table_list_meta_info(const share::SCN &scn, const ObBackupTableListMetaInfoDesc &desc);
   int read_table_list_file(const char* file_name, ObBackupPartialTableListDesc &desc);
   int is_table_list_meta_exist(const share::SCN &scn, bool &is_exist);
+  // cluster parameters
+  int write_cluster_param_info(const ObExternParamInfoDesc &cluster_param_info);
   // mview dep tablet list
   int write_major_compaction_mview_dep_tablet_list(const ObBackupMajorCompactionMViewDepTabletListDesc &desc);
   int read_major_compaction_mview_dep_tablet_list(ObBackupMajorCompactionMViewDepTabletListDesc &desc);

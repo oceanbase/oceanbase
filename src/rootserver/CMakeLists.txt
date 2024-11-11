@@ -21,6 +21,7 @@ ob_set_subtarget(ob_rootserver backup
   backup/ob_backup_proxy.cpp
   backup/ob_backup_data_ls_task_mgr.cpp
   backup/ob_backup_table_list_mgr.cpp
+  backup/ob_backup_param_operator.cpp
 )
 
 ob_set_subtarget(ob_rootserver common

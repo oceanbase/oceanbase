@@ -423,18 +423,17 @@ int ObImportTableTaskPersistHelper::get_all_import_table_tasks_by_initiator(comm
   return ret;
 }
 
-int ObImportTableTaskPersistHelper::get_one_not_finish_task_by_initiator(
-    common::ObISQLClient &proxy, const ObImportTableJob &job, bool &all_finish, ObImportTableTask &task) const
+int ObImportTableTaskPersistHelper::get_one_batch_unfinish_tasks(common::ObISQLClient &proxy,
+    const ObImportTableJob &job, const int64_t k, common::ObIArray<ObImportTableTask> &tasks) const
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   const uint64_t exec_tenant_id = get_exec_tenant_id();
-  task.reset();
-  all_finish = false;
+  tasks.reset();
   const int64_t job_id = job.get_job_id();
   if (OB_FAIL(sql.assign_fmt("select * from %s", OB_ALL_IMPORT_TABLE_TASK_TNAME))) {
     LOG_WARN("fail to assign sql", K(ret));
-  } else if (OB_FAIL(sql.append_fmt(" where job_id=%ld and status != 'FINISH' order by task_id limit 1", job_id))) {
+  } else if (OB_FAIL(sql.append_fmt(" where job_id=%ld and status != 'FINISH' order by task_id limit %ld", job_id, k))) {
     LOG_WARN("failed to append sql", K(ret), K(sql), K(job_id));
   } else {
     HEAP_VAR(ObMySQLProxy::ReadResult, res) {
@@ -444,19 +443,25 @@ int ObImportTableTaskPersistHelper::get_one_not_finish_task_by_initiator(
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("result is null", K(ret), K(sql), K(exec_tenant_id));
-      } else if (OB_FAIL(result->next())) {
-        if (OB_ITER_END == ret) {
-          all_finish = true;
-          ret = OB_SUCCESS;
-        } else {
-          LOG_WARN("failed to get next", K(ret));
+      } else {
+        while (OB_SUCC(ret)) {
+          ObImportTableTask task;
+          if (OB_FAIL(result->next())) {
+            if (OB_ITER_END == ret) {
+              ret = OB_SUCCESS;
+              break;
+            } else {
+              LOG_WARN("failed to get next row", K(ret));
+            }
+          } else if (OB_FAIL(task.parse_from(*result))) {
+            LOG_WARN("failed to parse job result", K(ret));
+          } else if (OB_FAIL(tasks.push_back(task))) {
+            LOG_WARN("failed to push back job", K(ret), K(task));
+          }
         }
-      } else if (OB_FAIL(task.parse_from(*result))) {
-        LOG_WARN("failed to parse from result", K(ret));
       }
     }
   }
-  LOG_INFO("get import table tasks", K(ret), K(task));
   return ret;
 }
 
