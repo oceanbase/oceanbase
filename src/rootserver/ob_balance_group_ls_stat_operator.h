@@ -164,9 +164,11 @@ public:
   virtual ~ObNewTableTabletAllocator();
 public:
   int init();
+  // tablegroup_schema can be NULL
   int prepare(
       ObMySQLTransaction &trans,
       const share::schema::ObTableSchema &table_schema,
+      const share::schema::ObTablegroupSchema *tablegroup_schema,
       bool is_add_partition = false);
   int prepare_like(
       const share::schema::ObTableSchema &table_schema);
@@ -174,14 +176,15 @@ public:
       common::ObIArray<share::ObLSID> &ls_id_array);
   int finish(const bool commit);
 private:
-  int alloc_ls_for_meta_or_sys_tenant_tablet(
+  int alloc_ls_for_sys_tablet(
       const share::schema::ObTableSchema &table_schema);
   int alloc_ls_for_local_index_tablet(
       const share::schema::ObTableSchema &table_schema);
   int alloc_ls_for_global_index_tablet(
       const share::schema::ObTableSchema &table_schema);
   int alloc_ls_for_in_tablegroup_tablet(
-      const share::schema::ObTableSchema &table_schema);
+      const share::schema::ObTableSchema &table_schema,
+      const share::schema::ObTablegroupSchema &tablegroup_schema);
   int alloc_ls_for_normal_table_tablet(
       const share::schema::ObTableSchema &table_schema);
   int alloc_ls_for_duplicate_table_(
@@ -189,11 +192,11 @@ private:
 private:
   int alloc_tablet_for_tablegroup(
       const share::schema::ObTableSchema &table_schema,
-      const share::schema::ObSimpleTablegroupSchema &tablegroup_schema);
+      const share::schema::ObTablegroupSchema &tablegroup_schema);
   int alloc_tablet_for_tablegroup(
       const share::schema::ObTableSchema &primary_schema,
       const share::schema::ObTableSchema &table_schema,
-      const share::schema::ObSimpleTablegroupSchema &tablegroup_schema);
+      const share::schema::ObTablegroupSchema &tablegroup_schema);
   int wait_ls_elect_leader_(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id);

@@ -49,7 +49,8 @@ ObAllBalanceGroupBuilder::ObAllBalanceGroupBuilder() :
     tablet_to_ls_(),
     tablet_data_size_(),
     allocator_("AllBGBuilder"),
-    related_tablets_map_()
+    related_tablets_map_(),
+    sharding_none_tg_global_indexes_()
 {
 }
 
@@ -81,6 +82,8 @@ int ObAllBalanceGroupBuilder::init(const int64_t tenant_id,
       ObModIds::OB_HASH_NODE,
       tenant_id))) {
     LOG_WARN("create map for related tablet map failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(sharding_none_tg_global_indexes_.create(SET_BUCKET_NUM))) {
+    LOG_WARN("create set for sharding_none_tg_global_indexes_ failed", KR(ret), K(tenant_id));
   } else {
     mod_ = mod;
     tenant_id_ = tenant_id;
@@ -97,6 +100,7 @@ int ObAllBalanceGroupBuilder::init(const int64_t tenant_id,
 void ObAllBalanceGroupBuilder::destroy()
 {
   inited_ = false;
+  sharding_none_tg_global_indexes_.destroy();
   FOREACH(iter, related_tablets_map_) {
     if (OB_NOT_NULL(iter->second)) {
       iter->second->~ObIArray<ObTabletID>();
@@ -294,10 +298,18 @@ int ObAllBalanceGroupBuilder::build_balance_group_for_table_not_in_tablegroup_(
     const ObSimpleTableSchemaV2 &table_schema)
 {
   int ret = OB_SUCCESS;
-
+  int tmp_ret = OB_SUCCESS;
   if (!table_schema.is_global_index_table() && OB_INVALID_ID != table_schema.get_tablegroup_id()) {
-    // skip table not in tablegroup
+    // skip table in tablegroup
     // global index should not in tablegroup, here is defensive code
+  } else if (FALSE_IT(tmp_ret = sharding_none_tg_global_indexes_.exist_refactored(table_schema.get_table_id()))) {
+  } else if (OB_HASH_EXIST == tmp_ret) {
+    LOG_TRACE("skip global index bound to sharding none tablegroup",
+        K(tenant_id_), "table_id", table_schema.get_table_id(),
+        "data_table_id", table_schema.get_data_table_id());
+  } else if (OB_HASH_NOT_EXIST != tmp_ret) {
+    ret = tmp_ret;
+    LOG_WARN("exist_refactored failed", KR(ret), K(tmp_ret), K(table_schema));
   } else if (need_balance_table(table_schema)) {
     if (PARTITION_LEVEL_ZERO == table_schema.get_part_level())  {
       if (OB_FAIL(build_bg_for_partlevel_zero_(table_schema))) {
@@ -321,6 +333,7 @@ int ObAllBalanceGroupBuilder::build_balance_group_for_table_not_in_tablegroup_(
 }
 
 // all part in one partition group and balance group
+// global indexes of primary table in sharding none tablegroup are in the same balance group
 int ObAllBalanceGroupBuilder::build_bg_for_tablegroup_sharding_none_(
     const ObSimpleTablegroupSchema &tablegroup_schema,
     const ObArray<const ObSimpleTableSchemaV2*> &table_schemas,
@@ -329,18 +342,53 @@ int ObAllBalanceGroupBuilder::build_bg_for_tablegroup_sharding_none_(
   int ret = OB_SUCCESS;
   ObBalanceGroup bg;
   const ObString &tablegroup_name = tablegroup_schema.get_tablegroup_name();
+  ObArray<const ObSimpleTableSchemaV2 *> global_index_schemas;
+  bool in_new_pg = true; // in new partition group
+  ObLSID dest_ls_id; // binding to the first table first tablet
   if (OB_FAIL(bg.init_by_tablegroup(tablegroup_schema, max_part_level))) {
     LOG_WARN("init balance group by tablegroup fail", KR(ret), K(bg), K(max_part_level),
         K(tablegroup_schema));
+  } else if (OB_FAIL(get_global_indexes_of_tables_(table_schemas, global_index_schemas))) {
+    LOG_WARN("get global indexes of tables failed", KR(ret), K(table_schemas));
+  } else if (OB_FAIL(add_part_to_bg_for_tablegroup_sharding_none_(
+      bg,
+      table_schemas,
+      dest_ls_id,
+      in_new_pg))) {
+    LOG_WARN("add part to bg for tablegroup sharding none failed",
+        KR(ret), K(bg), K(table_schemas), K(in_new_pg));
+  } else if (OB_FAIL(add_part_to_bg_for_tablegroup_sharding_none_(
+      bg,
+      global_index_schemas,
+      dest_ls_id,
+      in_new_pg))) {
+    LOG_WARN("add global index part to bg for tablegroup sharding none failed",
+        KR(ret), K(bg), K(global_index_schemas), K(in_new_pg));
+  }
+
+  ISTAT("build balance group for table group of NONE sharding or non-partition tables",
+      KR(ret), K(max_part_level), K(tablegroup_schema), "table_count", table_schemas.count(),
+      "global_index_count", global_index_schemas.count());
+  return ret;
+}
+
+int ObAllBalanceGroupBuilder::add_part_to_bg_for_tablegroup_sharding_none_(
+    const ObBalanceGroup &bg,
+    const ObArray<const ObSimpleTableSchemaV2*> &table_schemas,
+    ObLSID &dest_ls_id,
+    bool &in_new_pg)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t part_group_uid = 0; // all partitions belong to the same partition group for each LS
+  if (OB_UNLIKELY(bg.name().is_empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid balance group", KR(ret), K(bg));
   } else {
-    ObLSID dest_ls_id; // binding to the first table first tablet
-    bool in_new_pg = true; // in new partition group
-    const uint64_t part_group_uid = 0; // all partitions belong to the same partition group for each LS
-    for (int64_t t = 0; OB_SUCC(ret) && t < table_schemas.count(); t++) {
-      const ObSimpleTableSchemaV2 *table_schema = table_schemas.at(t);
+    ARRAY_FOREACH(table_schemas, idx) {
+      const ObSimpleTableSchemaV2 *table_schema = table_schemas.at(idx);
       if (OB_ISNULL(table_schema)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table_schema is null", KR(ret), K(tenant_id_), K(tablegroup_schema), K(t));
+        LOG_WARN("table_schema is null", KR(ret), K(table_schema), K(idx));
       } else {
         const uint64_t table_id = table_schema->get_table_id();
         ObPartitionSchemaIter iter(*table_schema, CHECK_PARTITION_MODE_NORMAL);
@@ -357,16 +405,52 @@ int ObAllBalanceGroupBuilder::build_bg_for_tablegroup_sharding_none_(
 
             ADD_NEW_PART(bg, table_id, part_object_id, tablet_id, dest_ls_id, in_new_pg, part_group_uid);
           }
-        }
+        } // end while
       }
-    }
+    } // end ARRAY_FOREACH
   }
+  return ret;
+}
 
-  ISTAT("build balance group for table group of NONE sharding or non-partition tables",
-      KR(ret),
-      K(max_part_level),
-      K(tablegroup_schema),
-      "table_count", table_schemas.count());
+int ObAllBalanceGroupBuilder::get_global_indexes_of_tables_(
+    const ObArray<const ObSimpleTableSchemaV2 *> &table_schemas,
+    ObIArray<const ObSimpleTableSchemaV2 *> &global_index_schemas)
+{
+  int ret = OB_SUCCESS;
+  global_index_schemas.reset();
+  ObArray<const ObSimpleTableSchemaV2 *> single_table_indexes;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else {
+    ARRAY_FOREACH(table_schemas, i) {
+      single_table_indexes.reset();
+      const ObSimpleTableSchemaV2 *table_schema = table_schemas.at(i);
+      if (OB_ISNULL(table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table_schema is null", KR(ret), K(table_schema), K(i));
+      } else if (OB_FAIL(schema_guard_.get_index_schemas_with_data_table_id(
+          tenant_id_,
+          table_schema->get_table_id(),
+          single_table_indexes))) {
+        LOG_WARN("get index schemas with data table id failed", KR(ret), K(tenant_id_), KPC(table_schema));
+      } else {
+        ARRAY_FOREACH(single_table_indexes, j) {
+          const ObSimpleTableSchemaV2 *index_schema = single_table_indexes.at(j);
+          if (OB_ISNULL(index_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("index schema is null", KR(ret), K(table_schemas), K(i));
+          } else if (index_schema->is_global_index_table()) {
+            if (OB_FAIL(global_index_schemas.push_back(index_schema))) {
+              LOG_WARN("push back failed", KR(ret), KPC(index_schema));
+            } else if (OB_FAIL(sharding_none_tg_global_indexes_.set_refactored(index_schema->get_table_id()))) {
+              LOG_WARN("set_refactored failed", KR(ret), KPC(index_schema));
+            }
+          }
+        } // end ARRAY_FOREACH single_table_indexes
+      }
+    } // end ARRAY_FOREACH table_schemas
+  }
   return ret;
 }
 

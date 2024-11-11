@@ -2334,10 +2334,21 @@ int ObDDLService::create_tablets_in_trans_for_mv_(ObIArray<ObTableSchema> &table
     }
     if (OB_SUCC(ret)) {
       const ObTableSchema &container_table = table_schemas.at(1);
-      if (OB_FAIL(new_table_tablet_allocator.prepare(trans, container_table))) {
-        LOG_WARN("fail to prepare ls for index schema tablets");
-      } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(
-          ls_id_array))) {
+      const ObTablegroupSchema *container_tablegroup_schema = NULL; // keep NULL if no tablegroup
+      if (OB_INVALID_ID != container_table.get_tablegroup_id()) {
+        if (OB_FAIL(schema_guard.get_tablegroup_schema(
+            container_table.get_tenant_id(),
+            container_table.get_tablegroup_id(),
+            container_tablegroup_schema))) {
+          LOG_WARN("get tablegroup schema failed", KR(ret), K(container_table));
+        } else if (OB_ISNULL(container_tablegroup_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("container_tablegroup_schema is null", KR(ret), K(container_table));
+        }
+      }
+      if (FAILEDx(new_table_tablet_allocator.prepare(trans, container_table, container_tablegroup_schema))) {
+        LOG_WARN("fail to prepare ls for container table schema tablets", KR(ret));
+      } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(ls_id_array))) {
         LOG_WARN("fail to get ls id array", KR(ret));
       } else if (OB_FAIL(table_creator.add_create_tablets_of_tables_arg(
           tablet_schemas,
@@ -2382,6 +2393,9 @@ int ObDDLService::create_tablets_in_trans_(ObIArray<ObTableSchema> &table_schema
   } else if (OB_ISNULL(GCTX.root_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("root service is null", KR(ret));
+  } else if (OB_ISNULL(first_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("first_table is null", KR(ret));
   } else if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(tenant_id, frozen_scn))) {
     LOG_WARN("failed to get frozen status for create tablet", KR(ret), K(tenant_id));
   } else {
@@ -2394,10 +2408,21 @@ int ObDDLService::create_tablets_in_trans_(ObIArray<ObTableSchema> &table_schema
                               schema_guard,
                               sql_proxy_);
     common::ObArray<share::ObLSID> ls_id_array;
+    const ObTablegroupSchema *data_tablegroup_schema = NULL; // keep NULL if no tablegroup
     if (OB_FAIL(table_creator.init(true/*need_tablet_cnt_check*/))) {
       LOG_WARN("fail to init table creator", KR(ret));
     } else if (OB_FAIL(new_table_tablet_allocator.init())) {
       LOG_WARN("fail to init new table tablet allocator", KR(ret));
+    } else if (OB_INVALID_ID != first_table->get_tablegroup_id()) {
+      if (OB_FAIL(schema_guard.get_tablegroup_schema(
+          first_table->get_tenant_id(),
+          first_table->get_tablegroup_id(),
+          data_tablegroup_schema))) {
+        LOG_WARN("get tablegroup_schema failed", KR(ret), KPC(first_table));
+      } else if (OB_ISNULL(data_tablegroup_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("data_tablegroup_schema is null", KR(ret), KPC(first_table));
+      }
     }
 
     ObArray<const ObTableSchema*> schemas;
@@ -2412,8 +2437,8 @@ int ObDDLService::create_tablets_in_trans_(ObIArray<ObTableSchema> &table_schema
           LOG_WARN("failed to push_back", KR(ret), K(this_table));
         }
       } else {
-        if (OB_FAIL(new_table_tablet_allocator.prepare(trans, this_table))) {
-          LOG_WARN("fail to prepare ls for index schema tablets");
+        if (OB_FAIL(new_table_tablet_allocator.prepare(trans, this_table, data_tablegroup_schema))) {
+          LOG_WARN("fail to prepare ls for index schema tablets", KR(ret));
         } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(
             ls_id_array))) {
           LOG_WARN("fail to get ls id array", KR(ret));
@@ -2440,8 +2465,8 @@ int ObDDLService::create_tablets_in_trans_(ObIArray<ObTableSchema> &table_schema
     if (OB_FAIL(ret)) {
     } else if (schemas.count() <= 0) {
       // virtual tablet and view skip
-    } else if (OB_FAIL(new_table_tablet_allocator.prepare(trans, *first_table))) {
-      LOG_WARN("fail to prepare ls for index schema tablets");
+    } else if (OB_FAIL(new_table_tablet_allocator.prepare(trans, *first_table, data_tablegroup_schema))) {
+      LOG_WARN("fail to prepare ls for first table", KR(ret), KPC(first_table));
     } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(
             ls_id_array))) {
       LOG_WARN("fail to get ls id array", KR(ret));
@@ -6895,13 +6920,31 @@ int ObDDLService::create_index_tablet(const ObTableSchema &index_schema,
                               schema_guard,
                               sql_proxy_);
     common::ObArray<share::ObLSID> ls_id_array;
+    const uint64_t data_table_id = index_schema.get_data_table_id();
+    const ObTableSchema *data_table_schema = NULL;
+    const ObTablegroupSchema *data_tablegroup_schema = NULL; // keep NULL if no tablegroup
     if (OB_FAIL(table_creator.init(need_check_tablet_cnt))) {
       LOG_WARN("fail to init table creator", KR(ret));
     } else if (OB_FAIL(new_table_tablet_allocator.init())) {
       LOG_WARN("fail to init new table tablet allocator", KR(ret));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, data_table_id, data_table_schema))) {
+      LOG_WARN("failed to get table schema", KR(ret), K(tenant_id), K(data_table_id));
+    } else if (OB_ISNULL(data_table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("data table schema not exists", KR(ret), K(data_table_id));
+    } else if (OB_INVALID_ID != data_table_schema->get_tablegroup_id()) {
+      if (OB_FAIL(schema_guard.get_tablegroup_schema(
+          data_table_schema->get_tenant_id(),
+          data_table_schema->get_tablegroup_id(),
+          data_tablegroup_schema))) {
+        LOG_WARN("get tablegroup_schema failed", KR(ret), KPC(data_table_schema));
+      } else if (OB_ISNULL(data_tablegroup_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("data_tablegroup_schema is null", KR(ret), KPC(data_table_schema));
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (index_schema.is_index_local_storage()) {
-      const ObTableSchema *data_table_schema = NULL;
-      const uint64_t data_table_id = index_schema.get_data_table_id();
       ObSEArray<const share::schema::ObTableSchema*, 1> schemas;
       ObSEArray<bool, 1> need_create_empty_majors;
       if (OB_FAIL(schema_guard.get_table_schema(tenant_id, data_table_id, data_table_schema))) {
@@ -6912,7 +6955,7 @@ int ObDDLService::create_index_tablet(const ObTableSchema &index_schema,
       } else if (OB_FAIL(schemas.push_back(&index_schema))
         || OB_FAIL(need_create_empty_majors.push_back(false))) {
         LOG_WARN("failed to push_back", KR(ret), K(index_schema));
-      } else if (OB_FAIL(new_table_tablet_allocator.prepare(trans, index_schema))) {
+      } else if (OB_FAIL(new_table_tablet_allocator.prepare(trans, index_schema, data_tablegroup_schema))) {
         LOG_WARN("fail to prepare ls for index schema tablets", KR(ret));
       } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(
               ls_id_array))) {
@@ -6926,7 +6969,7 @@ int ObDDLService::create_index_tablet(const ObTableSchema &index_schema,
         LOG_WARN("create table tablet failed", KR(ret), K(index_schema));
       }
     } else {
-      if (OB_FAIL(new_table_tablet_allocator.prepare(trans, index_schema))) {
+      if (OB_FAIL(new_table_tablet_allocator.prepare(trans, index_schema, data_tablegroup_schema))) {
         LOG_WARN("fail to prepare ls for index schema tablets");
       } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(
               ls_id_array))) {
@@ -14245,6 +14288,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                            trans);
               common::ObArray<share::ObLSID> ls_id_array;
               const ObTableSchema *tmp_table_schema = inc_table_schema_ptrs.at(0);
+              const ObTablegroupSchema *tablegroup_schema = NULL; // keep NULL if no tablegroup
               ObNewTableTabletAllocator new_table_tablet_allocator(tenant_id, schema_guard, sql_proxy_);
               if (OB_ISNULL(tmp_table_schema)) {
                 ret = OB_ERR_UNEXPECTED;
@@ -14253,7 +14297,19 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                 LOG_WARN("fail to init table creator", KR(ret));
               } else if (OB_FAIL(new_table_tablet_allocator.init())) {
                 LOG_WARN("fail to init new table tablet allocator", KR(ret));
-              } else if (OB_FAIL(new_table_tablet_allocator.prepare(trans, *tmp_table_schema, true))) {
+              } else if (OB_INVALID_ID != tmp_table_schema->get_tablegroup_id()) {
+                if (OB_FAIL(schema_guard.get_tablegroup_schema(
+                    tmp_table_schema->get_tenant_id(),
+                    tmp_table_schema->get_tablegroup_id(),
+                    tablegroup_schema))) {
+                  LOG_WARN("get tablegroup_schema failed", KR(ret), KPC(tmp_table_schema));
+                } else if (OB_ISNULL(tablegroup_schema)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("tablegroup_schema is null", KR(ret), KPC(tmp_table_schema));
+                }
+              }
+              if (OB_FAIL(ret)) {
+              } else if (OB_FAIL(new_table_tablet_allocator.prepare(trans, *tmp_table_schema, tablegroup_schema, true))) {
                 LOG_WARN("failed to prepare tablet allocator", KR(ret), KPC(tmp_table_schema));
               } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(ls_id_array))) {
                 LOG_WARN("fail to get ls id array", KR(ret));
@@ -18718,11 +18774,23 @@ int ObDDLService::truncate_table_in_trans(const obrpc::ObTruncateTableArg &arg,
                                   schema_guard,
                                   sql_proxy_);
         common::ObArray<share::ObLSID> ls_id_array;
+        const ObTablegroupSchema *data_tablegroup_schema = NULL; // keep NULL if no tablegroup
+        const ObTableSchema &data_table_schema = table_schemas.at(0);
 
         if (OB_FAIL(table_creator.init(false/*need_check_tablet_cnt*/))) {
           LOG_WARN("fail to init table creator", KR(ret));
         } else if (OB_FAIL(new_table_tablet_allocator.init())) {
           LOG_WARN("fail to init new table tablet allocator", KR(ret));
+        } else if (OB_INVALID_ID != data_table_schema.get_tablegroup_id()) {
+          if (OB_FAIL(schema_guard.get_tablegroup_schema(
+              data_table_schema.get_tenant_id(),
+              data_table_schema.get_tablegroup_id(),
+              data_tablegroup_schema))) {
+            LOG_WARN("get tablegroup_schema failed", KR(ret), K(data_table_schema));
+          } else if (OB_ISNULL(data_tablegroup_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("data_tablegroup_schema is null", KR(ret), K(data_table_schema));
+          }
         }
 
         ObArray<const ObTableSchema*> schemas;
@@ -18738,7 +18806,7 @@ int ObDDLService::truncate_table_in_trans(const obrpc::ObTruncateTableArg &arg,
               LOG_WARN("failed to push_back", KR(ret), K(this_table));
             }
           } else {
-            if (OB_FAIL(new_table_tablet_allocator.prepare(trans, this_table))) {
+            if (OB_FAIL(new_table_tablet_allocator.prepare(trans, this_table, data_tablegroup_schema))) {
               LOG_WARN("fail to prepare ls for index schema tablets");
             } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(
                 ls_id_array))) {
@@ -18766,7 +18834,7 @@ int ObDDLService::truncate_table_in_trans(const obrpc::ObTruncateTableArg &arg,
         }
         // virtual table and view skip
         else if (schemas.count() <= 0) {
-        } else if (OB_FAIL(new_table_tablet_allocator.prepare(trans, *schemas.at(0)))) {
+        } else if (OB_FAIL(new_table_tablet_allocator.prepare(trans, *schemas.at(0), data_tablegroup_schema))) {
           LOG_WARN("new table tablet allocator prepared failed", KR(ret));
         } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(
               ls_id_array))) {
@@ -19454,11 +19522,21 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
                               dst_tenant_schema_guard,
                               sql_proxy_);
     common::ObArray<share::ObLSID> ls_id_array;
-
+    const ObTablegroupSchema *tablegroup_schema = NULL; // keep NULL if no tablegroup
     if (OB_FAIL(table_creator.init(false/*need_tablet_cnt_check*/))) {
       LOG_WARN("fail to init table creator", KR(ret));
     } else if (OB_FAIL(new_table_tablet_allocator.init())) {
       LOG_WARN("fail to init new table tablet allocator", KR(ret));
+    } else if (OB_INVALID_ID != hidden_table_schema.get_tablegroup_id()) {
+      if (OB_FAIL(dst_tenant_schema_guard.get_tablegroup_schema(
+          hidden_table_schema.get_tenant_id(),
+          hidden_table_schema.get_tablegroup_id(),
+          tablegroup_schema))) {
+        LOG_WARN("get tablegroup_schema failed", KR(ret), K(hidden_table_schema));
+      } else if (OB_ISNULL(tablegroup_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tablegroup_schema is null", KR(ret), K(hidden_table_schema));
+      }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < schemas.count(); i++) {
       share::schema::ObTableSchema *table_schema = const_cast<ObTableSchema*>(schemas.at(i));
@@ -19499,7 +19577,7 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
     if (OB_SUCC(ret) && hidden_table_schema.has_tablet()) {
       if (bind_tablets && OB_FAIL(new_table_tablet_allocator.prepare_like(orig_table_schema))) {
           LOG_WARN("fail to prepare like", KR(ret), K(orig_table_schema));
-      } else if (!bind_tablets && OB_FAIL(new_table_tablet_allocator.prepare(trans, hidden_table_schema))) {
+      } else if (!bind_tablets && OB_FAIL(new_table_tablet_allocator.prepare(trans, hidden_table_schema, tablegroup_schema))) {
         LOG_WARN("fail to prepare", KR(ret), K(hidden_table_schema));
       } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(ls_id_array))) {
         LOG_WARN("fail to get ls id array", KR(ret));
@@ -29130,6 +29208,7 @@ int ObDDLService::create_tenant_sys_tablets(
                               dummy_guard,
                               sql_proxy_);
     common::ObArray<share::ObLSID> ls_id_array;
+    const ObTablegroupSchema *dummy_tablegroup_schema = NULL;
     ObArray<const share::schema::ObTableSchema*> table_schemas;
     ObArray<uint64_t> index_tids;
     ObArray<bool> need_create_empty_majors;
@@ -29210,8 +29289,8 @@ int ObDDLService::create_tenant_sys_tablets(
         }
         if (OB_FAIL(ret)) {
           // failed, bypass
-        } else if (OB_FAIL(new_table_tablet_allocator.prepare(trans, data_table))) {
-          LOG_WARN("fail to prepare ls for index schema tablets");
+        } else if (OB_FAIL(new_table_tablet_allocator.prepare(trans, data_table, dummy_tablegroup_schema))) {
+          LOG_WARN("fail to prepare ls for sys table tablets");
         } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(
                 ls_id_array))) {
           LOG_WARN("fail to get ls id array", KR(ret));
