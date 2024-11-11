@@ -273,8 +273,7 @@ int ObAdminTestIODeviceExecutor::test_object_storage_interface_get_file_length_(
       STORAGE_LOG_FILTER(ERROR, "when the storage type is set to OB_STORAGE_S3, the get_file_length interface should fail to be invoked.",
           K(ret), K(ctx.appendable_file_path_), K(ctx.storage_info_));
     } else if (OB_UNLIKELY(ret != OB_OBJECT_NOT_EXIST)) {
-    } else if (OB_UNLIKELY(ret != OB_BACKUP_FILE_NOT_EXIST)) {
-      STORAGE_LOG_FILTER(ERROR, "the get_file_length interface should return OB_BACKUP_FILE_NOT_EXIST when storage type is set to OB_STORAGE_S3",
+      STORAGE_LOG_FILTER(ERROR, "the get_file_length interface should return OB_OBJECT_NOT_EXIST when storage type is set to OB_STORAGE_S3",
           K(ret), K(ctx.appendable_file_path_), K(ctx.storage_info_));
     } else {
       ret = OB_SUCCESS;
