@@ -420,11 +420,13 @@ if (NOT OB_BUILD_CDC)
 target_link_directories(
   oblib_lib PUBLIC 
   ${DEP_DIR}/lib ${DEP_DIR}/lib/vsag_lib
-  ${CMAKE_BINARY_DIR}/deps/oblib/src/lib/vector/vsag_lib ${CMAKE_BINARY_DIR}/deps/oblib/src/lib//vector/vsag_lib/src
+  ${CMAKE_BINARY_DIR}/deps/oblib/src/lib/vector/vsag_lib 
+  ${CMAKE_BINARY_DIR}/deps/oblib/src/lib//vector/vsag_lib/src
 )
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp")
 
 if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+if (NOT OB_BUILD_VSAG_RPM)
   target_link_libraries(oblib_lib
     PUBLIC
     libob_vsag_static_test.a
@@ -438,6 +440,21 @@ if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
     libgomp_static.a
     libroaring.a
   )
+else()
+  target_link_libraries(oblib_lib
+    PUBLIC
+    libob_vsag_static.a
+    libcpuinfo.a
+    libsimd.a
+    libvsag_static.a
+    libdiskann.a
+    libopenblas.a
+    libgfortran_static.a
+    libquadmath_static.a
+    libgomp_static.a
+    libroaring.a
+  )
+endif()
 elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
   target_link_libraries(oblib_lib
     PUBLIC
