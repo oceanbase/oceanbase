@@ -766,9 +766,11 @@ int ObParquetTableRowIterator::DataLoader::load_decimal_any_col()
   if (reader_->descr()->physical_type() == parquet::Type::type::INT32) {
     ObArrayWrap<int32_t> values;
     OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
-    row_count_ = static_cast<parquet::Int32Reader*>(reader_)->ReadBatch(
-          batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
-          values.get_data(), &values_cnt);
+    if (OB_SUCC(ret)) {
+      row_count_ = static_cast<parquet::Int32Reader*>(reader_)->ReadBatch(
+            batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
+            values.get_data(), &values_cnt);
+    }
     int j = 0;
     for (int i = 0; OB_SUCC(ret) && i < row_count_; i++) {
       if (IS_PARQUET_COL_VALUE_IS_NULL(def_levels_buf_.at(i))) {
@@ -780,9 +782,11 @@ int ObParquetTableRowIterator::DataLoader::load_decimal_any_col()
   } else if (reader_->descr()->physical_type() == parquet::Type::type::INT64) {
     ObArrayWrap<int64_t> values;
     OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
-    row_count_ = static_cast<parquet::Int64Reader*>(reader_)->ReadBatch(
-          batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
-          values.get_data(), &values_cnt);
+    if (OB_SUCC(ret)) {
+      row_count_ = static_cast<parquet::Int64Reader*>(reader_)->ReadBatch(
+            batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
+            values.get_data(), &values_cnt);
+    }
     int j = 0;
     for (int i = 0; OB_SUCC(ret) && i < row_count_; i++) {
       if (IS_PARQUET_COL_VALUE_IS_NULL(def_levels_buf_.at(i))) {
@@ -798,9 +802,11 @@ int ObParquetTableRowIterator::DataLoader::load_decimal_any_col()
     ObArrayWrap<char> buffer;
     OZ (buffer.allocate_array(tmp_alloc_g.get_allocator(), int_bytes));
     OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
-    row_count_ = static_cast<parquet::FixedLenByteArrayReader*>(reader_)->ReadBatch(
-          batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
-          values.get_data(), &values_cnt);
+    if (OB_SUCC(ret)) {
+      row_count_ = static_cast<parquet::FixedLenByteArrayReader*>(reader_)->ReadBatch(
+            batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
+            values.get_data(), &values_cnt);
+    }
     int j = 0;
     for (int i = 0; OB_SUCC(ret) && i < row_count_; i++) {
       if (IS_PARQUET_COL_VALUE_IS_NULL(def_levels_buf_.at(i))) {
@@ -817,9 +823,11 @@ int ObParquetTableRowIterator::DataLoader::load_decimal_any_col()
     ObArrayWrap<char> buffer;
     OZ (buffer.allocate_array(tmp_alloc_g.get_allocator(), int_bytes));
     OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
-    row_count_ = static_cast<parquet::ByteArrayReader*>(reader_)->ReadBatch(
-          batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
-          values.get_data(), &values_cnt);
+    if (OB_SUCC(ret)) {
+      row_count_ = static_cast<parquet::ByteArrayReader*>(reader_)->ReadBatch(
+            batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
+            values.get_data(), &values_cnt);
+    }
     int j = 0;
     for (int i = 0; OB_SUCC(ret) && i < row_count_; i++) {
       if (IS_PARQUET_COL_VALUE_IS_NULL(def_levels_buf_.at(i))) {
