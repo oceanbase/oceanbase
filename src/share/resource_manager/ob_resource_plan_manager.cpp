@@ -452,12 +452,14 @@ int ObResourcePlanManager::clear_deleted_directives(const uint64_t tenant_id,
           LOG_INFO("directive need to be cleared", K(tenant_id), K(deleted_group_id));
           if (OB_FAIL(tenant_holder.get_ptr()->reset_consumer_group_config(deleted_group_id))) {
             LOG_WARN("reset consumer group config failed", K(ret), K(deleted_group_id));
-          } else if (OB_FAIL(GCTX.cgroup_ctrl_->set_both_cpu_shares(tenant_id,
+          } else if (GCTX.cgroup_ctrl_->is_valid() &&
+                     OB_FAIL(GCTX.cgroup_ctrl_->set_both_cpu_shares(tenant_id,
                          1,
                          deleted_group_id,
                          GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
             LOG_WARN("fail to set cpu share", K(ret), K(tenant_id), K(deleted_group_id));
-          } else if (OB_FAIL(GCTX.cgroup_ctrl_->set_both_cpu_cfs_quota(tenant_id,
+          } else if (GCTX.cgroup_ctrl_->is_valid() &&
+                     OB_FAIL(GCTX.cgroup_ctrl_->set_both_cpu_cfs_quota(tenant_id,
                          -1,
                          deleted_group_id,
                          GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
