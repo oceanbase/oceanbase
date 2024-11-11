@@ -341,4 +341,6 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObClientSessionConnectTimeP, gctx_);
   // kill query client session
   RPC_PROCESSOR(ObKillQueryClientSessionP, gctx_);
+  // dump data_dict
+  RPC_PROCESSOR(ObRPcTriggerDumpDataDictP, gctx_);
 }

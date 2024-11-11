@@ -79,6 +79,7 @@
 #include "share/balance/ob_scheduled_trigger_partition_balance.h" // ObScheduledTriggerPartitionBalance
 #include "pl/ob_pl_persistent.h"
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
+#include "logservice/data_dictionary/ob_data_dict_scheduler.h"    // ObDataDictScheduler
 
 namespace oceanbase
 {
@@ -12315,6 +12316,12 @@ int ObDDLOperator::init_tenant_scheduled_job_(
       true/*is_enabled*/,
       trans))) {
     LOG_WARN("create scheduled trigger partition balance job failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(datadict::ObDataDictScheduler::create_scheduled_trigger_dump_data_dict_job(
+      sys_variable,
+      tenant_id,
+      true/*is_enabled*/,
+      trans))) {
+    LOG_WARN("create scheduled trigger dump_data_dict job failed", KR(ret), K(tenant_id));
   }
   return ret;
 }

@@ -83,6 +83,7 @@
 #include "logservice/ob_server_log_block_mgr.h"
 #include "storage/high_availability/ob_rebuild_service.h"
 #include "rootserver/ob_alter_ls_command.h"
+#include "logservice/data_dictionary/ob_data_dict_service.h" // for ObDataDictService
 
 namespace oceanbase
 {
@@ -3200,6 +3201,33 @@ int ObRebuildTabletP::process()
       SERVER_EVENT_ADD("storage_ha", "schedule_rebuild_tablet failed", "ls_id", arg_.ls_id_.id(), "result", ret);
     }
   }
+  return ret;
+}
+
+int ObRPcTriggerDumpDataDictP::process()
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("trigger dump data dict processor", K_(arg));
+  datadict::ObDataDictService *dict_service = nullptr;
+
+  if (OB_ISNULL(dict_service = MTL(datadict::ObDataDictService*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("data dict service is null", K(ret));
+  } else if (OB_UNLIKELY(! dict_service->is_leader())) {
+    ret = OB_NOT_MASTER;
+    LOG_INFO("can't process dump_dict on non-sys-ls-leader server", KR(ret), K_(arg));
+  } else {
+    // update data dict dump history retention if data_dict_dump_history_retention_sec_ >= 0
+    if (arg_.data_dict_dump_history_retention_sec_ >= 0) {
+      dict_service->update_data_dict_dump_history_retention(arg_.data_dict_dump_history_retention_sec_);
+    }
+    // update expected dump scn if base_scn is valid
+    if (arg_.base_scn_.is_valid_and_not_min()) {
+      dict_service->update_expected_dump_scn(arg_.base_scn_);
+    }
+  }
+
+  LOG_INFO("trigger dump data dict processor", KR(ret), K_(arg));
   return ret;
 }
 

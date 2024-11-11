@@ -71,6 +71,7 @@
 #include "pl/sys_package/ob_dbms_workload_repository.h"
 #include "pl/sys_package/ob_dbms_limit_calculator_mysql.h"
 #include "pl/sys_package/ob_dbms_balance.h"
+#include "pl/sys_package/ob_dbms_data_dict.h"
 
 #ifdef INTERFACE_DEF
   INTERFACE_DEF(INTERFACE_START, "TEST", (ObPLInterfaceImpl::call))
@@ -767,6 +768,16 @@
   // start of dbms_balance
   INTERFACE_DEF(INTERFACE_DBMS_BALANCE_TRIGGER_PARTITION_BALANCE, "DBMS_BALANCE_TRIGGER_PARTITION_BALANCE", (ObDBMSBalance::trigger_partition_balance))
   // end of dbms_balance
+
+  // start of dbms_data_dict
+  INTERFACE_DEF(INTERFACE_DBMS_DATA_DICT_TRIGGER_DUMP, "DBMS_DATA_DICT_TRIGGER_DUMP", (ObDBMSDataDict::trigger_dump_data_dict))
+  INTERFACE_DEF(INTERFACE_DBMS_DATA_DICT_ENABLE_DUMP, "DBMS_DATA_DICT_ENABLE", (ObDBMSDataDict::enable_dump))
+  INTERFACE_DEF(INTERFACE_DBMS_DATA_DICT_DISABLE_DUMP, "DBMS_DATA_DICT_DISABLE", (ObDBMSDataDict::disable_dump))
+  INTERFACE_DEF(INTERFACE_DBMS_DATA_DICT_MODIFY_JOB_INTERVAL, "DBMS_DATA_DICT_MODIFY_DUMP_INTERVAL", (ObDBMSDataDict::modify_interval))
+  INTERFACE_DEF(INTERFACE_DBMS_DATA_DICT_MODIFY_JOB_DURATION, "DBMS_DATA_DICT_MODIFY_RUN_DURATION", (ObDBMSDataDict::modify_duration))
+  INTERFACE_DEF(INTERFACE_DBMS_DATA_DICT_MODIFY_DICT_ITEM_RETENTION, "DBMS_DATA_DICT_MODIFY_RETENTION", (ObDBMSDataDict::modify_retention))
+
+  // end of dbms_data_dict
 
   INTERFACE_DEF(INTERFACE_END, "INVALID", (nullptr))
 #endif

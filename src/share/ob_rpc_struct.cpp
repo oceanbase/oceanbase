@@ -11261,5 +11261,22 @@ int ObRebuildTabletArg::assign(const ObRebuildTabletArg &arg)
   return ret;
 }
 
+OB_SERIALIZE_MEMBER(ObTriggerDumpDataDictArg, base_scn_, data_dict_dump_history_retention_sec_);
+
+int ObTriggerDumpDataDictArg::init(const share::SCN &base_scn, int64_t data_dict_dump_history_retention_sec)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(! base_scn.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), K(base_scn), K(data_dict_dump_history_retention_sec));
+  } else {
+    base_scn_ = base_scn;
+    data_dict_dump_history_retention_sec_ = data_dict_dump_history_retention_sec;
+  }
+
+  return OB_SUCCESS;
+}
+
 }//end namespace obrpc
 }//end namepsace oceanbase

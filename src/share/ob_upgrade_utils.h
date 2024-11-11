@@ -267,7 +267,17 @@ private:
   int post_upgrade_for_persitent_routine();
   int post_upgrade_for_optimizer_stats();
 };
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 1)
+
+class ObUpgradeFor4251Processor : public ObBaseUpgradeProcessor
+{
+public:
+  ObUpgradeFor4251Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor4251Processor() {}
+  virtual int pre_upgrade() override { return common::OB_SUCCESS; }
+  virtual int post_upgrade() override;
+private:
+  int post_upgrade_for_scheduled_trigger_dump_data_dict();
+};
 
 /* =========== special upgrade processor end   ============= */
 /* =========== upgrade processor end ============= */

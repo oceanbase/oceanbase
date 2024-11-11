@@ -462,6 +462,7 @@ static const ObSysPackageFile oracle_syspack_file_list[] = {
   {"dbms_balance", "dbms_balance.sql", "dbms_balance_body.sql"},
   {"utl_tcp", "utl_tcp.sql", "utl_tcp_body.sql"},
   {"utl_smtp", "utl_smtp.sql", "utl_smtp_body.sql"},
+  {"dbms_data_dict", "dbms_data_dict.sql", "dbms_data_dict_body.sql"},
 #endif
 };
 static const ObSysPackageFile mysql_syspack_file_list[] = {
@@ -480,6 +481,7 @@ static const ObSysPackageFile mysql_syspack_file_list[] = {
   {"dbms_ob_limit_calculator", "dbms_ob_limit_calculator_mysql.sql", "dbms_ob_limit_calculator_body_mysql.sql"},
   {"external_table_alert_log", "external_table_alert_log.sql", nullptr},
   {"dbms_balance", "dbms_balance_mysql.sql", "dbms_balance_body_mysql.sql"},
+  {"dbms_data_dict", "dbms_data_dict_mysql.sql", "dbms_data_dict_body_mysql.sql"},
 };
 
 // for now! we only have one special system package "__DBMS_UPGRADE"

@@ -89,6 +89,7 @@ ob_set_subtarget(ob_pl sys_package
   sys_package/ob_pl_dbms_resource_manager.cpp
   sys_package/ob_dbms_limit_calculator_mysql.cpp
   sys_package/ob_dbms_balance.cpp
+  sys_package/ob_dbms_data_dict.cpp
 )
 
 ob_server_add_target(ob_pl)

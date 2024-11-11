@@ -59,6 +59,9 @@ ObDataDictService::ObDataDictService()
     dump_interval_(INT64_MAX),
     timer_tg_id_(-1),
     last_dump_succ_time_(OB_INVALID_TIMESTAMP),
+    expected_dump_snapshot_scn_(),
+    last_dump_succ_snapshot_scn_(),
+    data_dict_dump_history_retention_sec_(OB_INVALID_TIMESTAMP),
     force_need_dump_(false)
 {}
 
@@ -152,6 +155,9 @@ void ObDataDictService::destroy()
   if (IS_INIT) {
     TG_DESTROY(timer_tg_id_);
     force_need_dump_ = false;
+    data_dict_dump_history_retention_sec_ = OB_INVALID_TIMESTAMP;
+    last_dump_succ_snapshot_scn_.reset();
+    expected_dump_snapshot_scn_.reset();
     last_dump_succ_time_ = OB_INVALID_TIMESTAMP;
     timer_tg_id_ = -1;
     dump_interval_ = 0;
@@ -176,10 +182,14 @@ void ObDataDictService::runTimerTask()
     refresh_config_();
     bool is_leader = ATOMIC_LOAD(&is_leader_);
     const int64_t start_time = ObClockGenerator::getClock();
-    const bool is_reach_time_interval = (start_time >= ATOMIC_LOAD(&last_dump_succ_time_) + ATOMIC_LOAD(&dump_interval_));
+    const int64_t dump_interval = ATOMIC_LOAD(&dump_interval_);
+    const bool is_reach_time_interval = (start_time >= ATOMIC_LOAD(&last_dump_succ_time_) + dump_interval)
+        && (dump_interval > 0 || last_dump_succ_time_ <=0);
+    const bool need_dump_as_expected = expected_dump_snapshot_scn_.is_valid()
+        && (! last_dump_succ_snapshot_scn_.is_valid() || last_dump_succ_snapshot_scn_ < expected_dump_snapshot_scn_);
     const bool force_need_dump = ATOMIC_LOAD(&force_need_dump_);
 
-    if (is_leader && (is_reach_time_interval || force_need_dump)) {
+    if (is_leader && (is_reach_time_interval || force_need_dump || need_dump_as_expected)) {
       int ret = OB_SUCCESS;
       uint64_t data_version = 0;
 
@@ -189,9 +199,9 @@ void ObDataDictService::runTimerTask()
         // tenant data_version less than 4100, ignore.
       } else if (OB_FAIL(do_dump_data_dict_())) {
         if (OB_STATE_NOT_MATCH == ret) {
-          LOG_WARN("dump_data_dict_, maybe not ls_leader or lsn not valid, ignore.", KR(ret), K_(tenant_id), K(force_need_dump));
+          LOG_WARN("dump_data_dict_, maybe not ls_leader or lsn not valid, ignore.", KR(ret), K_(tenant_id), K(force_need_dump), K(need_dump_as_expected));
         } else if (OB_IN_STOP_STATE != ret) {
-          LOG_WARN("dump_data_dict_ failed", KR(ret), K_(tenant_id), K(force_need_dump));
+          LOG_WARN("dump_data_dict_ failed", KR(ret), K_(tenant_id), K(force_need_dump), K(need_dump_as_expected));
         }
       } else {
         const int64_t end_time = ObClockGenerator::getClock();
@@ -202,7 +212,13 @@ void ObDataDictService::runTimerTask()
           mark_force_dump_data_dict(false);
         }
 
+        if (need_dump_as_expected && last_dump_succ_snapshot_scn_ >= expected_dump_snapshot_scn_) {
+          expected_dump_snapshot_scn_.reset();
+        }
+
         LOG_INFO("do_dump_data_dict_ success", K_(tenant_id), "cost_time", end_time - start_time);
+
+        try_recycle_dict_history_();
       }
     }
   }
@@ -236,6 +252,32 @@ int ObDataDictService::resume_leader()
   bool is_leader = true;
   switch_role_to_(is_leader);
   return ret;
+}
+
+void ObDataDictService::mark_force_dump_data_dict(const bool need_dump)
+{
+  ATOMIC_SET(&force_need_dump_, need_dump);
+  LOG_INFO("mark force_dump_data_dict", K(need_dump));
+}
+
+void ObDataDictService::update_expected_dump_scn(const share::SCN &expected_dump_scn)
+{
+  if (OB_UNLIKELY(!expected_dump_scn.is_valid())) {
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "ignore invalid expected_dump_scn", K(expected_dump_scn));
+  } else {
+    expected_dump_snapshot_scn_.atomic_set(share::SCN::max(expected_dump_scn, expected_dump_snapshot_scn_));
+    LOG_INFO("update expected dump scn", K_(expected_dump_snapshot_scn));
+  }
+}
+
+void ObDataDictService::update_data_dict_dump_history_retention(const int64_t data_dict_dump_history_retention_sec)
+{
+  if (data_dict_dump_history_retention_sec >= 0) {
+    ATOMIC_STORE(&data_dict_dump_history_retention_sec_, data_dict_dump_history_retention_sec);
+    LOG_INFO("update data_dict_dump_history_retention_sec", K(data_dict_dump_history_retention_sec));
+  } else {
+    LOG_INFO("won't update data_dict_dump_history_retention_sec cause invalid value", K(data_dict_dump_history_retention_sec));
+  }
 }
 
 void ObDataDictService::refresh_config_()
@@ -364,6 +406,10 @@ int ObDataDictService::do_dump_data_dict_()
             K(snapshot_scn), K(start_lsn), K(end_lsn));
       }
     } while (OB_FAIL(ret));
+
+    if (OB_SUCC(ret)) {
+      last_dump_succ_snapshot_scn_.atomic_set(snapshot_scn);
+    }
   }
 
   return ret;
@@ -396,14 +442,15 @@ int ObDataDictService::get_snapshot_scn_(share::SCN &snapshot_scn)
   const transaction::MonotonicTs stc = transaction::MonotonicTs::current_time();
   transaction::MonotonicTs tmp_receive_gts_ts(0);
   const int64_t expire_ts_ns = get_timestamp_ns() + gts_get_timeout_ns;
+  int64_t retry_cnt = 0;
+  const static int64_t PRINT_INTERVAL = 10;
 
   do{
     if (OB_FAIL(OB_TS_MGR.get_gts(tenant_id_, stc, NULL, gts_scn, tmp_receive_gts_ts))) {
       if (OB_EAGAIN == ret) {
-        if (expire_ts_ns < get_timestamp_ns()) {
-          ret = OB_TIMEOUT;
-        } else {
-          ob_usleep(100);
+        ob_usleep(100 * _MSEC_);
+        if (++retry_cnt % PRINT_INTERVAL == 0) {
+          LOG_WARN("retry get_gts for data_dict_service failed", KR(ret), K(retry_cnt));
         }
       } else {
         LOG_WARN("get_gts for data_dict_service failed", KR(ret));
@@ -696,6 +743,30 @@ int ObDataDictService::filter_table_(const share::schema::ObTableSchema &table_s
       || table_schema.is_external_table());
 
   return ret;
+}
+
+void ObDataDictService::try_recycle_dict_history_()
+{
+  int ret = OB_SUCCESS;
+  const int64_t data_dict_dump_history_retention_sec = ATOMIC_LOAD(&data_dict_dump_history_retention_sec_);
+
+  if (OB_UNLIKELY(data_dict_dump_history_retention_sec<=0)) {
+    LOG_INFO("won't recycle dict history because data_dict_dump_history_retention_sec is invalid", K_(data_dict_dump_history_retention_sec));
+  } else {
+    uint64_t delta = data_dict_dump_history_retention_sec * _SEC_ * NS_CONVERSION;
+    share::SCN recycle_until_scn = share::SCN::minus(last_dump_succ_snapshot_scn_, delta);
+    int64_t recycle_cnt = 0;
+
+    if (OB_UNLIKELY(!recycle_until_scn.is_valid())) {
+      LOG_WARN_RET(OB_INVALID_ARGUMENT, "recycle_until_scn is invalid",
+          K(data_dict_dump_history_retention_sec), K(delta),
+          K_(last_dump_succ_snapshot_scn), K(recycle_until_scn));
+    } else if (OB_FAIL(sql_client_.recycle_hisotry_dict_info(tenant_id_, recycle_until_scn, recycle_cnt))) {
+      LOG_WARN("execute recycle_hisotry_dict_info failed", KR(ret), K_(tenant_id), K(recycle_until_scn));
+    } else {
+      LOG_INFO("recycle_dict_history_ success", K(recycle_until_scn), K(data_dict_dump_history_retention_sec), K(recycle_cnt));
+    }
+  }
 }
 
 } // namespace datadict
