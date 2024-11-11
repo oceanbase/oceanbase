@@ -8494,10 +8494,11 @@ int ObPLResolver::convert_cursor_actual_params(
                                                convert_expr));
     OZ (func.add_expr(convert_expr));
     OX (idx = func.get_exprs().count() - 1);
+  } else if (convert_expr->get_result_type().is_null()) {
+    //actual params is null, do nothing
   } else if (pl_data_type.is_cursor_type()) {
     if (convert_expr->get_result_type().get_extend_type() != PL_CURSOR_TYPE
-        && convert_expr->get_result_type().get_extend_type() != PL_REF_CURSOR_TYPE
-        && !convert_expr->get_result_type().is_null()) {
+        && convert_expr->get_result_type().get_extend_type() != PL_REF_CURSOR_TYPE) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("PLS-00382: expression is of wrong type",
                   K(ret), K(pl_data_type.is_obj_type()), KPC(convert_expr),
@@ -8513,15 +8514,11 @@ int ObPLResolver::convert_cursor_actual_params(
                 K(pl_data_type.get_user_type_id()));
   } else if (pl_data_type.get_user_type_id() != convert_expr->get_result_type().get_udt_id()) {
     bool is_compatible = false;
-    if (convert_expr->get_result_type().is_null()) {
-      is_compatible = true;
-    } else if (convert_expr->get_result_type().is_ext()) {
-      CK (OB_NOT_NULL(current_block_));
-      OZ (check_composite_compatible(current_block_->get_namespace(),
-                                     convert_expr->get_result_type().get_udt_id(),
-                                     pl_data_type.get_user_type_id(),
-                                     is_compatible));
-    }
+    CK (OB_NOT_NULL(current_block_));
+    OZ (check_composite_compatible(current_block_->get_namespace(),
+                                    convert_expr->get_result_type().get_udt_id(),
+                                    pl_data_type.get_user_type_id(),
+                                    is_compatible));
     if (OB_SUCC(ret) && !is_compatible) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("PLS-00382: expression is of wrong type",
