@@ -54,7 +54,7 @@ ObDirectLoadPartitionMergeTask::~ObDirectLoadPartitionMergeTask()
 {
 }
 
-class ObStoreRowIteratorWrapper : public ObIStoreRowIterator
+class ObStoreRowIteratorWrapper : public ObIDirectLoadRowIterator
 {
 public:
   ObStoreRowIteratorWrapper(observer::ObTableLoadTableCtx *ctx, ObIStoreRowIterator *inner_iter) :
@@ -68,6 +68,12 @@ public:
       ATOMIC_AAF(&ctx_->job_stat_->store_.merge_stage_write_rows_, 1);
     }
     return ret;
+  }
+
+  int get_next_row(const bool skip_lob, const blocksstable::ObDatumRow *&row)
+  {
+    UNUSED(skip_lob);
+    return get_next_row(row);
   }
 
 private:
