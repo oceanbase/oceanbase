@@ -394,12 +394,6 @@ TEST_F(TestTransferTaskOperator, test_operator)
   ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get_max_task_id_from_history(sql_proxy, tenant_id_, max_task_id));
   ASSERT_TRUE(max_task_id == task_id_);
 
-  last_task.reset();
-  finish_time = OB_INVALID_TIMESTAMP;
-  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get_last_task_by_balance_task_id(sql_proxy, tenant_id_, task_.get_balance_task_id(), last_task, finish_time));
-  ASSERT_TRUE(last_task.is_valid() && last_task.get_task_id() == task_id_);
-  ASSERT_TRUE(finish_time > 0);
-
   // test convert data version
   ObString empty_string("");
   ASSERT_TRUE(empty_string.empty() && empty_string == ObString());

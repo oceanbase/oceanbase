@@ -140,7 +140,7 @@ int ObDirectLoadInsertTabletContext::init(ObDirectLoadInsertTableContext *table_
     } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, tablet_id, tablet_handle,
                                                  ObMDSGetTabletMode::READ_ALL_COMMITED))) {
       LOG_WARN("get tablet handle failed", K(ret));
-    } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_data(SCN::max_scn(), ddl_data))) {
+    } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_ddl_data(SCN::max_scn(), ddl_data))) {
       LOG_WARN("get ddl data failed", K(ret));
     } else {
       table_ctx_ = table_ctx;

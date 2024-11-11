@@ -361,6 +361,12 @@ int ObTabletAutoincrementService::get_autoinc_seq_for_mlog(
   bool is_committed = true;
   bool seq_impossible_fallback =  false;
 
+  ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "FetchAutoSeq"));
+  ObTabletAutoincSeq tmp_autoinc_seq;
+  mds::MdsWriter writer;// will be removed later
+  mds::TwoPhaseCommitState trans_stat;// will be removed later
+  share::SCN trans_version;// will be removed later
+
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet auto increment service is not inited", K(ret));
@@ -382,14 +388,14 @@ int ObTabletAutoincrementService::get_autoinc_seq_for_mlog(
       THIS_WORKER.get_timeout_ts() : ObTimeUtility::current_time() + GCONF.rpc_timeout;
     do {
       need_retry = false;
-      if (OB_FAIL(tablet_handle.get_obj()->cross_ls_get_latest<ObTabletAutoincSeq>(ReadAutoIncSeqValueOp(current_value), is_committed))) {
+      if (OB_FAIL(tablet_handle.get_obj()->get_latest_autoinc_seq(tmp_autoinc_seq, allocator, writer, trans_stat, trans_version))) {
         if (OB_EMPTY_RESULT == ret) {
           seq_impossible_fallback = true;
           ret = OB_SUCCESS;
         } else {
           LOG_WARN("failed to get auto inc seq", K(ret));
         }
-      } else if (OB_UNLIKELY(!is_committed)) {
+      } else if (OB_UNLIKELY(mds::TwoPhaseCommitState::ON_COMMIT != trans_stat)) {
         if (ObTimeUtility::current_time() > abs_timeout_us) {
           ret = OB_TIMEOUT;
           LOG_WARN("get auto inc timeout", K(ret), K(abs_timeout_us));
@@ -397,6 +403,8 @@ int ObTabletAutoincrementService::get_autoinc_seq_for_mlog(
           need_retry = true;
           usleep(100);
         }
+      } else if (OB_FAIL(tmp_autoinc_seq.get_autoinc_seq_value(current_value))) {
+        LOG_WARN("failed to get autoinc seq value", K(ret), K(tmp_autoinc_seq));
       }
     } while (need_retry);
   }

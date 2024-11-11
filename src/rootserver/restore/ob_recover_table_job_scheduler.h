@@ -75,10 +75,10 @@ private:
   void user_process_(share::ObRecoverTableJob &job);
   int user_prepare_(share::ObRecoverTableJob &job);
   int restore_aux_tenant_(share::ObRecoverTableJob &job);
+  int failover_to_primary_(share::ObRecoverTableJob &job, const uint64_t aux_tenant_id);
   int check_aux_tenant_(share::ObRecoverTableJob &job, const uint64_t aux_tenant_id);
   int active_aux_tenant_(share::ObRecoverTableJob &job);
   int ban_multi_version_recycling_(share::ObRecoverTableJob &job, const uint64_t aux_tenant_id);
-  int failover_to_primary_(share::ObRecoverTableJob &job, const uint64_t aux_tenant_id);
   int check_tenant_compatibility(
       share::schema::ObSchemaGetterGuard &aux_tenant_guard,
       share::schema::ObSchemaGetterGuard &recover_tenant_guard,

@@ -81,7 +81,12 @@ int ObITabletMdsInterface::get_tablet_status(
   #undef PRINT_WRAPPER
 }
 
-int ObITabletMdsInterface::get_latest_tablet_status(ObTabletCreateDeleteMdsUserData &data, bool &is_committed) const
+int ObITabletMdsInterface::get_latest_tablet_status(
+    ObTabletCreateDeleteMdsUserData &data,
+    mds::MdsWriter &writer,
+    mds::TwoPhaseCommitState &trans_stat,
+    share::SCN &trans_version,
+    const int64_t read_seq) const
 {
   #define PRINT_WRAPPER KR(ret), K(data)
   MDS_TG(10_ms);
@@ -89,7 +94,12 @@ int ObITabletMdsInterface::get_latest_tablet_status(ObTabletCreateDeleteMdsUserD
   if (OB_UNLIKELY(!check_is_inited_())) {
     ret = OB_NOT_INIT;
     MDS_LOG_GET(WARN, "not inited");
-  } else if (CLICK_FAIL((get_latest<ObTabletCreateDeleteMdsUserData>(ReadTabletStatusOp(data), is_committed)))) {
+  } else if (CLICK_FAIL((get_latest<ObTabletCreateDeleteMdsUserData>(
+      ReadTabletStatusOp(data),
+      writer,
+      trans_stat,
+      trans_version,
+      read_seq)))) {
     if (OB_EMPTY_RESULT != ret) {
       MDS_LOG(WARN, "fail to get latest", K(ret));
     }
@@ -98,7 +108,12 @@ int ObITabletMdsInterface::get_latest_tablet_status(ObTabletCreateDeleteMdsUserD
   #undef PRINT_WRAPPER
 }
 
-int ObITabletMdsInterface::get_latest_ddl_data(ObTabletBindingMdsUserData &data, bool &is_committed) const
+int ObITabletMdsInterface::get_latest_ddl_data(
+    ObTabletBindingMdsUserData &data,
+    mds::MdsWriter &writer,
+    mds::TwoPhaseCommitState &trans_stat,
+    share::SCN &trans_version,
+    const int64_t read_seq) const
 {
   #define PRINT_WRAPPER KR(ret), K(data)
   MDS_TG(10_ms);
@@ -120,7 +135,13 @@ int ObITabletMdsInterface::get_latest_ddl_data(ObTabletBindingMdsUserData &data,
     }
 
     if (OB_FAIL(ret)) {
-    } else if (CLICK_FAIL((cross_ls_get_latest<ObTabletBindingMdsUserData>(src, ReadBindingInfoOp(data), is_committed)))) {
+    } else if (CLICK_FAIL((cross_ls_get_latest<ObTabletBindingMdsUserData>(
+        src,
+        ReadBindingInfoOp(data),
+        writer,
+        trans_stat,
+        trans_version,
+        read_seq)))) {
       if (OB_EMPTY_RESULT != ret) {
         MDS_LOG_GET(WARN, "fail to cross ls get latest", K(lbt()));
       }

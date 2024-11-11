@@ -448,7 +448,9 @@ int ObLockMemtable::check_tablet_write_allow_(const ObTableLockOp &lock_op,
   ObLS *ls = nullptr;
   ObTabletHandle tablet_handle;
   ObTabletCreateDeleteMdsUserData data;
-  bool is_commited = false;
+  mds::MdsWriter writer;
+  mds::TwoPhaseCommitState trans_stat;
+  share::SCN trans_version;
 
   // the order must be ensured
   bool need_check_tablet_status = ATOMIC_LOAD(&need_check_tablet_status_);
@@ -471,17 +473,17 @@ int ObLockMemtable::check_tablet_write_allow_(const ObTableLockOp &lock_op,
                                     ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
     LOG_WARN("get tablet with timeout failed", K(ret), K(ls->get_ls_id()), K(tablet_id));
   } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_latest_tablet_status(
-      data, is_commited))) {
-    LOG_WARN("failed to get CreateDeleteMdsUserData", KR(ret), K(ls->get_ls_id()), K(tablet_id));
+      data, writer, trans_stat, trans_version))) {
+    LOG_WARN("failed to get CreateDeleteMdsUserData", KR(ret));
     if (OB_EMPTY_RESULT == ret) {
       ret = OB_TABLET_NOT_EXIST;
       LOG_WARN("failed to get CreateDeleteMdsUserData", KR(ret), K(ls->get_ls_id()), K(tablet_id));
     }
-  } else if (is_commited && data.tablet_status_.is_writable_for_dml()) {
+  } else if (trans_stat == mds::TwoPhaseCommitState::ON_COMMIT && data.tablet_status_.is_writable_for_dml()) {
     // allow
   } else {
     ret = OB_TABLET_NOT_EXIST;
-    LOG_INFO("tablet status not allow", KR(ret), K(tablet_id), K(is_commited), K(data));
+    LOG_INFO("tablet status not allow", KR(ret), K(tablet_id), K(trans_stat), K(data));
   }
   return ret;
 }

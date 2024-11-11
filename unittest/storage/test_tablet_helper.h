@@ -145,8 +145,8 @@ inline int TestTabletHelper::create_tablet(
       ObTabletCreateDeleteMdsUserData data;
       data.tablet_status_ = tablet_status;
       data.create_commit_scn_ = create_commit_scn;
-      data.create_commit_version_ = data.create_commit_scn_.get_val_for_tx();
-      if (tablet_status == ObTabletStatus::Status::DELETED) {
+      data.create_commit_version_ = create_commit_scn.get_val_for_tx();
+      if (tablet_status == ObTabletStatus::Status::DELETED || tablet_status == ObTabletStatus::Status::TRANSFER_OUT_DELETED) {
         data.delete_commit_scn_ = share::SCN::plus(create_commit_scn, 100);
         data.delete_commit_version_ = data.delete_commit_scn_.get_val_for_tx();
       }

@@ -17,6 +17,7 @@
 #include "lib/utility/serialization.h"
 #include "share/scn.h"
 #include "storage/multi_data_source/runtime_utility/common_define.h"
+#include "deps/oblib/src/common/meta_programming/ob_type_traits.h"
 
 namespace oceanbase {
 namespace unittest {
@@ -30,6 +31,13 @@ struct ExampleUserHelperFunction1 {
                        const int64_t len,
                        const share::SCN &scn, // 日志scn
                        storage::mds::BufferCtx &ctx); // 备机回放
+  static bool check_can_do_tx_end(const bool is_willing_to_commit,
+                                  const bool for_replay,
+                                  const share::SCN &log_scn,
+                                  const char *buf,
+                                  const int64_t buf_len,
+                                  storage::mds::BufferCtx &ctx,
+                                  const char *&can_not_do_reason);
 };
 
 struct ExampleUserHelperFunction2 {
@@ -52,6 +60,30 @@ struct ExampleUserHelperFunction3 {
                        const int64_t len,
                        const share::SCN &scn, // 日志scn
                        storage::mds::BufferCtx &ctx); // 备机回放
+  static bool check_can_do_on_prepare(bool for_replay,
+                                      const char *buf,
+                                      const int64_t buf_len,
+                                      const share::SCN &scn,
+                                      storage::mds::BufferCtx &ctx,
+                                      const char *can_not_do_reason) {
+    UNUSED(buf);
+    UNUSED(buf_len);
+    UNUSED(scn);
+    UNUSED(ctx);
+    bool ret = false;
+    if (!for_replay) {
+      ret = true;
+      MDS_LOG(INFO, "[UNITTEST] test can not do prepare return true");
+    } else {
+      static int call_times = 0;
+      if (call_times++ >= 1) {
+        ret = true;
+      } else {
+        can_not_do_reason = "TEST CAN NOT DO ON_PREPARE";
+      }
+    }
+    return ret;
+  }
 };
 
 struct ExampleUserHelperCtx : public storage::mds::BufferCtx {
@@ -90,6 +122,30 @@ inline int ExampleUserHelperFunction1::on_replay(const char* buf,
                                         storage::mds::BufferCtx &ctx)
 {
   int ret = OB_SUCCESS;
+  return ret;
+}
+
+inline bool ExampleUserHelperFunction1::check_can_do_tx_end(const bool is_willing_to_commit,
+                                                            const bool for_replay,
+                                                            const share::SCN &log_scn,
+                                                            const char *buf,
+                                                            const int64_t buf_len,
+                                                            storage::mds::BufferCtx &ctx,
+                                                            const char *&can_not_do_reason)
+{
+  static_assert(OB_TRAIT_HAS_CHECK_CAN_DO_TX_END(ExampleUserHelperFunction1), "static check failed");
+  bool ret = true;
+  UNUSED(is_willing_to_commit);
+  UNUSED(for_replay);
+  UNUSED(log_scn);
+  UNUSED(buf);
+  UNUSED(buf_len);
+  UNUSED(ctx);
+  static int call_times = 0;
+  if (call_times++ < 5) {
+    ret = false;
+    can_not_do_reason = "JUST FOR TEST";
+  }
   return ret;
 }
 

@@ -944,7 +944,9 @@ int ObTabletBackfillTXTask::add_ready_sstable_into_table_mgr_(
   int64_t transfer_seq = 0;
   SCN transfer_start_scn;
   ObTabletCreateDeleteMdsUserData user_data;
-  bool is_committed = false;
+  mds::MdsWriter writer;
+  mds::TwoPhaseCommitState trans_stat;
+  share::SCN trans_version;
   ObLSService* ls_srv = nullptr;
   ObLSHandle ls_handle;
   ObLS *ls = NULL;
@@ -965,7 +967,7 @@ int ObTabletBackfillTXTask::add_ready_sstable_into_table_mgr_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls is NULL", KR(ret), K(ls_id_));
   } else if (FALSE_IT(rebuild_seq = ls->get_ls_meta().get_rebuild_seq())) {
-  } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data, is_committed))) {
+  } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data, writer, trans_stat, trans_version))) {
     LOG_WARN("failed to get latest tablet status", K(ret), KP(tablet));
   } else if (FALSE_IT(transfer_start_scn = user_data.transfer_scn_)) {
   } else if (FALSE_IT(transfer_seq = tablet->get_tablet_meta().transfer_info_.transfer_seq_)) {
@@ -994,7 +996,7 @@ int ObTabletBackfillTXTask::add_ready_sstable_into_table_mgr_(
 
     if (OB_SUCC(ret)) {
       //double check src tablet transfer scn
-      if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data, is_committed))) {
+      if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data, writer, trans_stat, trans_version))) {
         LOG_WARN("failed to get latest tablet status", K(ret), KP(tablet));
       } else if (user_data.transfer_scn_ != backfill_tx_ctx_->backfill_scn_) {
         ret = OB_EAGAIN;
@@ -1398,7 +1400,7 @@ int ObTabletTableBackfillTXTask::check_need_merge_(bool &need_merge)
 int ObTabletTableBackfillTXTask::generate_merge_task_()
 {
   int ret = OB_SUCCESS;
-  ObTabletMergeTask *merge_task = nullptr;
+  compaction::ObTabletMergeTask *merge_task = nullptr;
   ObTabletTableFinishBackfillTXTask *finish_backfill_task = nullptr;
   const int64_t index = 0;
 
@@ -1530,7 +1532,7 @@ int ObTabletTableFinishBackfillTXTask::prepare_merge_ctx_(const int64_t dest_tra
   param_.ls_id_ = ls_id_;
   param_.tablet_id_ = tablet_info_.tablet_id_;
   param_.skip_get_tablet_ = true;
-  param_.merge_type_ = table_handle_.get_table()->is_memtable() ? ObMergeType::MINI_MERGE : ObMergeType::MINOR_MERGE;
+  param_.merge_type_ = table_handle_.get_table()->is_memtable() ? compaction::ObMergeType::MINI_MERGE : compaction::ObMergeType::MINOR_MERGE;
   bool unused_finish_flag = false;
   int64_t local_rebuild_seq = 0;
   if (OB_FAIL(tablets_table_mgr_->get_local_rebuild_seq(local_rebuild_seq))) {
@@ -1554,7 +1556,9 @@ int ObTabletTableFinishBackfillTXTask::update_merge_sstable_()
   ObTablet *tablet = nullptr;
   int64_t rebuild_seq = 0;
   ObTabletCreateDeleteMdsUserData user_data;
-  bool is_committed = false;
+  mds::MdsWriter writer;
+  mds::TwoPhaseCommitState trans_stat;
+  share::SCN trans_version;
   SCN transfer_start_scn;
 
   if (!is_inited_) {
@@ -1569,7 +1573,7 @@ int ObTabletTableFinishBackfillTXTask::update_merge_sstable_()
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(ls_id_), K(tablet_info_), K(tablet_handle));
-  } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data, is_committed))) {
+  } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data, writer, trans_stat, trans_version))) {
     LOG_WARN("failed to get latest tablet status", K(ret), KP(tablet));
   } else if (FALSE_IT(transfer_start_scn = user_data.transfer_scn_)) {
   } else if (FALSE_IT(transfer_seq = tablet->get_tablet_meta().transfer_info_.transfer_seq_)) {
@@ -2163,7 +2167,9 @@ int ObTabletMdsTableBackfillTXTask::update_merge_sstable_(
   ObTablet *tablet = nullptr;
   int64_t rebuild_seq = 0;
   ObTabletCreateDeleteMdsUserData user_data;
-  bool is_committed = false;
+  mds::MdsWriter writer;
+  mds::TwoPhaseCommitState trans_stat;
+  share::SCN trans_version;
   SCN transfer_start_scn;
 
   if (!is_inited_) {
@@ -2178,7 +2184,7 @@ int ObTabletMdsTableBackfillTXTask::update_merge_sstable_(
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(ls_id_), K(tablet_info_), K(tablet_handle));
-  } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data, is_committed))) {
+  } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data, writer, trans_stat, trans_version))) {
     LOG_WARN("failed to get latest tablet status", K(ret), KP(tablet));
   } else if (FALSE_IT(transfer_start_scn = user_data.transfer_scn_)) {
   } else if (FALSE_IT(transfer_seq = tablet->get_tablet_meta().transfer_info_.transfer_seq_)) {
@@ -2204,7 +2210,7 @@ int ObTabletMdsTableBackfillTXTask::update_merge_sstable_(
 
 /******************ObTabletBackfillMergeCtx*********************/
 ObTabletBackfillMergeCtx::ObTabletBackfillMergeCtx(
-    ObTabletMergeDagParam &param,
+    compaction::ObTabletMergeDagParam &param,
     common::ObArenaAllocator &allocator)
   : ObTabletMergeCtx(param, allocator),
     is_inited_(false),

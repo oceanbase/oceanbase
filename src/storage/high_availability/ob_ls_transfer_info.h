@@ -140,9 +140,14 @@ public:
   int get_tablet_id_array(common::ObIArray<ObTabletID> &tablet_id_array);
   bool is_in_compatible_status();
   int64_t to_string(char *buf, const int64_t buf_len) const;
+  int check_transfer_tablet_is_same(
+      const common::ObIArray<ObTabletID> &tablet_id_array,
+      bool &is_same);
 
 private:
-  int update_trans_status_(const ObTransferInTransStatus::STATUS &trans_status);
+  int update_trans_status_(
+      const ObTransferInTransStatus::STATUS &trans_status,
+      const bool skip_check_trans_status);
 
 public:
   share::ObLSID src_ls_;

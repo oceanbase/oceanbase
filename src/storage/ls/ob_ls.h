@@ -1013,6 +1013,24 @@ public:
   DELEGATE_WITH_RET(reserved_snapshot_mgr_, get_min_reserved_snapshot, int64_t);
   DELEGATE_WITH_RET(reserved_snapshot_mgr_, add_dependent_medium_tablet, int);
   DELEGATE_WITH_RET(reserved_snapshot_mgr_, del_dependent_medium_tablet, int);
+
+  int set_transfer_meta_info(
+      const share::SCN &replay_scn,
+      const share::ObLSID &src_ls,
+      const share::SCN &src_scn,
+      const ObTransferInTransStatus::STATUS &trans_status,
+      const common::ObIArray<common::ObTabletID> &tablet_id_array,
+      const uint64_t data_version)
+  {
+    return ls_meta_.set_transfer_meta_info(ls_epoch_, replay_scn, src_ls, src_scn, trans_status, tablet_id_array, data_version);
+  }
+  CONST_DELEGATE_WITH_RET(ls_meta_, get_transfer_meta_info, int);
+  int cleanup_transfer_meta_info(
+      const share::SCN &replay_scn)
+  {
+    return ls_meta_.cleanup_transfer_meta_info(ls_epoch_, replay_scn);
+  }
+
   int set_ls_migration_gc(bool &allow_gc);
   int inner_check_allow_read_(
       const ObMigrationStatus &migration_status,

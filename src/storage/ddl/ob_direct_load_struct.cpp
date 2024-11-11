@@ -2054,7 +2054,7 @@ int ObVectorIndexSliceStore::init(
     } else if (FALSE_IT(ctx_.data_tablet_id_ = five_tablet_handle.get_obj()->get_data_tablet_id())) {
     } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(ctx_.data_tablet_id_, data_tablet_handle))) {
       LOG_WARN("fail to get tablet handle", K(ret), K(ctx_.data_tablet_id_));
-    } else if (OB_FAIL(data_tablet_handle.get_obj()->get_ddl_data(share::SCN::max_scn(), ddl_data))) {
+    } else if (OB_FAIL(data_tablet_handle.get_obj()->get_ddl_data(ddl_data))) {
       LOG_WARN("failed to get ddl data from tablet", K(ret), K(data_tablet_handle));
     } else {
       ctx_.lob_meta_tablet_id_ = ddl_data.lob_meta_tablet_id_;

@@ -130,6 +130,7 @@ void ObTransferService::run1()
 #endif
 
   while (!has_set_stop()) {
+    DEBUG_SYNC(BEFORE_TRANSFER_SERVICE_RUNNING);
     ls_id_array_.reset();
     if (!SERVER_STORAGE_META_SERVICE.is_started()) {
       ret = OB_SERVER_IS_INIT;

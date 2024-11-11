@@ -293,6 +293,9 @@ int ObTransferParallelBuildTabletTask::do_build_tablet_info_(const share::ObTran
   ObTablet *tablet = nullptr;
   bool committed_flag = false;
   ObMigrationTabletParam param;
+  mds::MdsWriter writer;// will be removed later
+  mds::TwoPhaseCommitState trans_stat;// will be removed later
+  share::SCN trans_version;// will be removed later
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -305,12 +308,12 @@ int ObTransferParallelBuildTabletTask::do_build_tablet_info_(const share::ObTran
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), K(tablet_info));
-  } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data, committed_flag))) {
-    LOG_WARN("failed to get tx data", K(ret), KPC(tablet), K(tablet_info));
+  } else if (OB_FAIL(tablet->get_latest(user_data, writer, trans_stat, trans_version))) {
+    LOG_WARN("failed to get latest tablet status", K(ret), KPC(tablet), K(tablet_info));
   } else if (ObTabletStatus::TRANSFER_OUT != user_data.tablet_status_) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("tablet status is not match", K(ret), KPC(tablet), K(tablet_info), K(user_data));
-  } else if (committed_flag) {
+  } else if (mds::TwoPhaseCommitState::ON_COMMIT == trans_stat) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("transfer src tablet status is transfer out but is already committed, not match",
         K(ret), KPC(tablet), K(tablet_info), K(user_data));

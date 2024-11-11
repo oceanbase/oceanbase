@@ -257,6 +257,10 @@ TEST_F(TestTenantTransferService, test_service)
   INNER_EXE_SQL(OB_SYS_TENANT_ID, "set ob_global_debug_sync = 'AFTER_TRANSFER_PROCESS_INIT_TASK_AND_BEFORE_NOTIFY_STORAGE clear'");
   INNER_EXE_SQL(OB_SYS_TENANT_ID, "set ob_global_debug_sync = 'now signal signal'");
 
+  uint64_t data_version = 0;
+  ASSERT_EQ(OB_SUCCESS, ObShareUtil::fetch_current_data_version(inner_sql_proxy, g_tenant_id, data_version));
+  ASSERT_TRUE(data_version == history_task.get_data_version());
+
   // test retry task with interval
   sql.reset();
   ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("alter system set _transfer_task_retry_interval = '1h'"));

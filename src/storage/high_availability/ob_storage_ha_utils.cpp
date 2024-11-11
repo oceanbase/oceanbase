@@ -905,80 +905,6 @@ int ObTransferUtils::get_need_check_member(
   return ret;
 }
 
-int ObTransferUtils::check_ls_replay_scn(
-    const uint64_t tenant_id,
-    const share::ObLSID &ls_id,
-    const share::SCN &check_scn,
-    const int32_t group_id,
-    const common::ObIArray<ObAddr> &member_addr_list,
-    ObTimeoutCtx &timeout_ctx,
-    common::ObIArray<ObAddr> &finished_addr_list)
-{
-  int ret = OB_SUCCESS;
-  storage::ObFetchLSReplayScnProxy batch_proxy(
-      *(GCTX.storage_rpc_proxy_), &obrpc::ObStorageRpcProxy::fetch_ls_replay_scn);
-  ObFetchLSReplayScnArg arg;
-  const int64_t timeout = 10 * 1000 * 1000; //10s
-  const int64_t cluster_id = GCONF.cluster_id;
-
-  if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || !check_scn.is_valid() || group_id < 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("check transfer in tablet abort get invalid argument", K(ret), K(tenant_id), K(ls_id), K(check_scn), K(group_id));
-  } else {
-    arg.tenant_id_ = tenant_id;
-    arg.ls_id_ = ls_id;
-    for (int64_t i = 0; OB_SUCC(ret) && i < member_addr_list.count(); ++i) {
-      const ObAddr &addr = member_addr_list.at(i);
-      if (timeout_ctx.is_timeouted()) {
-        ret = OB_TIMEOUT;
-        LOG_WARN("check transfer in tablet abort already timeout", K(ret), K(tenant_id), K(ls_id));
-        break;
-      } else if (OB_FAIL(batch_proxy.call(
-          addr,
-          timeout,
-          cluster_id,
-          arg.tenant_id_,
-          group_id,
-          arg))) {
-        LOG_WARN("failed to send fetch ls replay scn request", K(ret), K(addr), K(tenant_id), K(ls_id));
-      } else {
-        LOG_INFO("fetch ls replay scn complete", K(arg), K(addr));
-      }
-    }
-
-    ObArray<int> return_code_array;
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(batch_proxy.wait_all(return_code_array))) {
-      LOG_WARN("fail to wait all batch result", KR(ret), KR(tmp_ret));
-      ret = OB_SUCC(ret) ? tmp_ret : ret;
-    }
-    if (OB_FAIL(ret)) {
-    } else if (return_code_array.count() != member_addr_list.count()
-        || return_code_array.count() != batch_proxy.get_results().count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("cnt not match", K(ret),
-               "return_cnt", return_code_array.count(),
-               "result_cnt", batch_proxy.get_results().count(),
-               "server_cnt", member_addr_list.count());
-    } else {
-      ARRAY_FOREACH_X(batch_proxy.get_results(), idx, cnt, OB_SUCC(ret)) {
-        const obrpc::ObFetchLSReplayScnRes *response = batch_proxy.get_results().at(idx);
-        const int res_ret = return_code_array.at(idx);
-        if (OB_SUCCESS != res_ret) {
-          ret = res_ret;
-          LOG_WARN("rpc execute failed", KR(ret), K(idx));
-        } else if (OB_ISNULL(response)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("response is null", K(ret));
-        } else if (response->replay_scn_ >= check_scn && OB_FAIL(finished_addr_list.push_back(member_addr_list.at(idx)))) {
-          LOG_WARN("failed to push member addr into list", K(ret), K(idx), K(member_addr_list));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 void ObTransferUtils::add_transfer_error_diagnose_in_backfill(
     const share::ObLSID &dest_ls_id,
     const share::SCN &log_sync_scn,
@@ -1421,6 +1347,48 @@ void ObTransferUtils::process_finish_out_perf_diag_info(
   }
 }
 
+int ObTransferUtils::check_ls_replay_scn(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const share::SCN &check_scn,
+    const int32_t group_id,
+    const common::ObIArray<ObAddr> &member_addr_list,
+    ObTimeoutCtx &timeout_ctx,
+    common::ObIArray<ObAddr> &finished_addr_list)
+{
+  int ret = OB_SUCCESS;
+  storage::ObFetchLSReplayScnProxy batch_rpc_proxy(
+      *(GCTX.storage_rpc_proxy_), &obrpc::ObStorageRpcProxy::fetch_ls_replay_scn);
+  ObFetchLSReplayScnArg arg;
+  const int64_t rpc_timeout = timeout_ctx.get_timeout();
+  ObHAAsyncRpcArg async_rpc_arg;
+  ObArray<obrpc::ObFetchLSReplayScnRes> responses;
+
+  if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || !check_scn.is_valid() || group_id < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("check transfer in tablet abort get invalid argument", K(ret), K(tenant_id), K(ls_id), K(check_scn), K(group_id));
+  } else if (rpc_timeout < 0) {
+    ret = OB_TIMEOUT;
+    LOG_WARN("check ls replay scn already timeout", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(async_rpc_arg.set_ha_async_arg(tenant_id, group_id, rpc_timeout, member_addr_list))) {
+    LOG_WARN("failed to set ha async arg", K(ret), K(tenant_id), K(group_id), K(rpc_timeout), K(member_addr_list));
+  } else {
+    arg.tenant_id_ = tenant_id;
+    arg.ls_id_ = ls_id;
+    if (OB_FAIL(ObHAAsyncRpc::send_async_rpc(async_rpc_arg, arg, batch_rpc_proxy, responses))) {
+      LOG_WARN("failed to send async rpc", K(ret), K(async_rpc_arg), K(arg));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < responses.count(); ++i) {
+        const obrpc::ObFetchLSReplayScnRes &res = responses.at(i);
+        if (res.replay_scn_ >= check_scn && OB_FAIL(finished_addr_list.push_back(member_addr_list.at(i)))) {
+          LOG_WARN("failed to push member addr into list", K(ret), K(member_addr_list));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 void ObTransferUtils::transfer_tablet_restore_stat(
     const uint64_t tenant_id,
     const share::ObLSID &src_ls_id,
@@ -1659,6 +1627,18 @@ void ObStorageHAUtils::sort_table_key_array_by_snapshot_version(common::ObArray<
 {
   TableKeySnapshotVersionComparator cmp;
   lib::ob_sort(table_key_array.begin(), table_key_array.end(), cmp);
+}
+
+bool ObTransferUtils::enable_transfer_dml_ctrl(const uint64_t data_version)
+{
+  bool b_ret = false;
+  if ((data_version >= MOCK_DATA_VERSION_4_2_3_0 && data_version < DATA_VERSION_4_3_0_0)
+      || data_version >= DATA_VERSION_4_3_5_0) {
+    b_ret = true;
+  } else {
+    b_ret = false;
+  }
+  return b_ret;
 }
 
 } // end namespace storage

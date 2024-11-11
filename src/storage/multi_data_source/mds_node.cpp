@@ -84,6 +84,13 @@ void MdsNodeStatus::advance(TwoPhaseCommitState new_stat)// ATOMIC
   } while (!ATOMIC_BCAS(&union_.value_, old_node_status.union_.value_, new_node_status.union_.value_));
 }
 
+WriterType MdsNodeStatus::get_writer_type() const
+{
+  MdsNodeStatus node_status;
+  node_status.union_.value_ = ATOMIC_LOAD(&union_.value_);
+  return (WriterType)node_status.union_.field_.writer_type_;
+}
+
 TwoPhaseCommitState MdsNodeStatus::get_state() const// ATOMIC
 {
   MdsNodeStatus node_status;

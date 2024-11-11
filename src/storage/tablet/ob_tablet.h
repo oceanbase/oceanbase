@@ -36,7 +36,7 @@
 #include "storage/tablet/ob_tablet_space_usage.h"
 #include "storage/tx/ob_trans_define.h"
 #include "share/scn.h"
-#include "ob_i_tablet_mds_interface.h"
+#include "ob_i_tablet_mds_customized_interface.h"
 #include <type_traits>
 
 namespace oceanbase
@@ -134,7 +134,7 @@ public:
   common::ObRowStoreType last_major_latest_row_store_type_;
 };
 
-class ObTablet final : public ObITabletMdsInterface
+class ObTablet final : public ObITabletMdsCustomizedInterface
 {
   friend class ObLSTabletService;
   friend class ObTabletPointer;
@@ -179,7 +179,7 @@ public:
   inline common::ObTabletID get_data_tablet_id() const { return tablet_meta_.data_tablet_id_; }
   inline int64_t get_last_compaction_scn() const { return tablet_meta_.extra_medium_info_.last_medium_scn_; }
   inline bool is_row_store() const { return table_store_cache_.is_row_store_; }
-  int get_mds_table_rec_scn(share::SCN &rec_scn);
+  int get_mds_table_rec_scn(share::SCN &rec_scn) const;
   int mds_table_flush(const share::SCN &decided_scn);
   int scan_mds_table_with_op(
       const int64_t mds_construct_sequence,
@@ -569,9 +569,9 @@ public:
   int get_mds_table_for_dump(mds::MdsTableHandle &mds_table) const;
   int64_t get_memtable_count() const { return memtable_count_; }
 
-  int check_new_mds_with_cache(const int64_t snapshot_version, const int64_t timeout);
+  int check_new_mds_with_cache(const int64_t snapshot_version);
   int check_tablet_status_for_read_all_committed();
-  int check_schema_version_with_cache(const int64_t schema_version, const int64_t timeout);
+  int check_schema_version_with_cache(const int64_t schema_version);
   int check_snapshot_readable_with_cache(
       const int64_t snapshot_version,
       const int64_t schema_version,
@@ -804,6 +804,10 @@ private:
   int read_medium_array(
       common::ObArenaAllocator &allocator,
       common::ObIArray<compaction::ObMediumCompactionInfo*> &medium_info_array) const;
+  int pre_check_empty_shell(const ObTablet &old_tablet, ObTabletCreateDeleteMdsUserData &user_data);
+  int build_user_data_for_aborted_tx_tablet(
+    const share::SCN &flush_scn,
+    ObTabletCreateDeleteMdsUserData &user_data);
   int set_initial_state(const bool initial_state);
   int set_macro_info_addr(
       const blocksstable::MacroBlockId &macro_id,

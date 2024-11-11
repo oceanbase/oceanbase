@@ -23,6 +23,7 @@
 #include "storage/tablet/ob_tablet_common.h"
 #include "storage/tablet/ob_tablet_create_delete_helper.h"
 #include "storage/tablet/ob_tablet_binding_helper.h"
+#include "storage/tx_storage/ob_ls_service.h"
 
 using namespace oceanbase::obrpc;
 using namespace oceanbase::common;
@@ -724,6 +725,7 @@ int ObTabletSplitMdsHelper::batch_get_tablet_split(
           const ObTabletID &tablet_id = arg.tablet_ids_.at(i);
           ObTabletHandle tablet_handle;
           ObTabletSplitMdsUserData data;
+
           if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle))) {
             LOG_WARN("failed to get tablet", K(ret), K(tablet_id), K(abs_timeout_us));
           } else if (OB_FAIL(tablet_handle.get_obj()->get_split_data(data, abs_timeout_us - ObTimeUtility::current_time()))) {
@@ -735,15 +737,16 @@ int ObTabletSplitMdsHelper::batch_get_tablet_split(
           // currently not support to read uncommitted mds set by this transaction, so check and avoid such usage
           if (OB_SUCC(ret) && arg.check_committed_) {
             ObTabletSplitMdsUserData tmp_data;
-            bool is_committed = true;
-            if (OB_FAIL(tablet_handle.get_obj()->cross_ls_get_latest<ObTabletSplitMdsUserData>(ReadSplitDataOp(tmp_data), is_committed))) {
+            mds::MdsWriter writer;// will be removed later
+            mds::TwoPhaseCommitState trans_stat;// will be removed later
+            share::SCN trans_version;// will be removed later
+            if (OB_FAIL(tablet_handle.get_obj()->get_latest_split_data(tmp_data, writer, trans_stat, trans_version))) {
               if (OB_EMPTY_RESULT == ret) {
-                is_committed = true;
                 ret = OB_SUCCESS;
               } else {
                 LOG_WARN("failed to get latest split data", K(ret));
               }
-            } else if (OB_UNLIKELY(!is_committed)) {
+            } else if (OB_UNLIKELY(mds::TwoPhaseCommitState::ON_COMMIT != trans_stat)) {
               ret = OB_EAGAIN;
               LOG_WARN("check committed failed", K(ret), K(tenant_id), K(arg.ls_id_), K(tablet_id), K(tmp_data));
             }
@@ -1155,7 +1158,9 @@ int ObTabletSplitMdsHelper::set_tablet_status(
   ObTabletHandle tablet_handle;
   ObTablet *tablet = nullptr;
   ObTabletCreateDeleteMdsUserData user_data;
-  bool is_committed = false;
+  mds::MdsWriter writer;// will be removed later
+  mds::TwoPhaseCommitState trans_stat;// will be removed later
+  share::SCN trans_version;// will be removed later
   if (OB_FAIL(ObTabletBindingHelper::get_tablet_for_new_mds(ls, tablet_id, replay_scn, tablet_handle))) {
     if (OB_NO_NEED_UPDATE == ret) {
       ret = OB_SUCCESS;
@@ -1163,9 +1168,9 @@ int ObTabletSplitMdsHelper::set_tablet_status(
       LOG_WARN("failed to get tablet", K(ret));
     }
   } else if (OB_FALSE_IT(tablet = tablet_handle.get_obj())) {
-  } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data, is_committed))) {
+  } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data, writer, trans_stat, trans_version))) {
     LOG_WARN("failed to get tx data", K(ret), KPC(tablet));
-  } else if (OB_UNLIKELY(!is_committed)) {
+  } else if (OB_UNLIKELY(trans_stat != mds::TwoPhaseCommitState::ON_COMMIT)) {
     ret = OB_EAGAIN;
     LOG_WARN("tablet status not committed, retry", K(ret), K(user_data), KPC(tablet));
   } else {

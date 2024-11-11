@@ -313,7 +313,7 @@ int ObDirectLoadTabletMergeCtx::init(ObDirectLoadMergeCtx *merge_ctx,
       } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, tablet_id, tablet_handle,
                                                   ObMDSGetTabletMode::READ_ALL_COMMITED))) {
         LOG_WARN("get tablet handle failed", K(ret));
-      } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_data(SCN::max_scn(), ddl_data))) {
+      } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_ddl_data(SCN::max_scn(), ddl_data))) {
         LOG_WARN("get ddl data failed", K(ret));
       } else {
         lob_meta_tablet_id = ddl_data.lob_meta_tablet_id_;

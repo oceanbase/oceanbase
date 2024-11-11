@@ -346,8 +346,8 @@ int ObTabletBindingHelper::modify_tablet_binding_new_mds(
       LOG_WARN("failed to get tablet", K(ret));
     }
   } else if (OB_FALSE_IT(tablet = tablet_handle.get_obj())) {
-  } else if (CLICK_FAIL(tablet->ObITabletMdsInterface::get_ddl_data(share::SCN::max_scn(), data))) {
-    if (OB_ERR_SHARED_LOCK_CONFLICT == ret && !replay_scn.is_valid()) {
+  } else if (CLICK_FAIL(tablet->get_ddl_data(data))) {
+    if (!replay_scn.is_valid()) {
       ret = OB_EAGAIN;
     } else {
       LOG_WARN("failed to get ddl data", K(ret));
@@ -625,7 +625,7 @@ int ObTabletBindingMdsHelper::batch_get_tablet_binding(
           ObTabletBindingMdsUserData data;
           if (OB_FAIL(ObTabletBindingHelper::get_tablet_for_new_mds(*ls, tablet_id, share::SCN::invalid_scn(), tablet_handle))) {
             LOG_WARN("failed to get tablet", K(ret), K(tablet_id), K(abs_timeout_us));
-          } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_data(share::SCN::max_scn(), data, abs_timeout_us - ObTimeUtility::current_time()))) {
+          } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_ddl_data(share::SCN::max_scn(), data, abs_timeout_us - ObTimeUtility::current_time()))) {
             LOG_WARN("failed to update tablet autoinc seq", K(ret), K(abs_timeout_us));
           } else if (OB_FAIL(res.binding_datas_.push_back(data))) {
             LOG_WARN("failed to push back", K(ret));
@@ -634,17 +634,18 @@ int ObTabletBindingMdsHelper::batch_get_tablet_binding(
           // currently not support to read uncommitted mds set by this transaction, so check and avoid such usage
           if (OB_SUCC(ret) && arg.check_committed_) {
             ObTabletBindingMdsUserData tmp_data;
-            bool is_committed = true;
-            if (OB_FAIL(tablet_handle.get_obj()->get_latest_ddl_data(tmp_data, is_committed))) {
+            mds::MdsWriter writer;
+            mds::TwoPhaseCommitState trans_stat;
+            share::SCN trans_version;
+            if (OB_FAIL(tablet_handle.get_obj()->get_latest_ddl_data(tmp_data, writer, trans_stat, trans_version))) {
               if (OB_EMPTY_RESULT == ret) {
-                is_committed = true;
                 ret = OB_SUCCESS;
               } else {
                 LOG_WARN("failed to get latest ddl data", K(ret));
               }
-            } else if (OB_UNLIKELY(!is_committed)) {
+            } else if (OB_UNLIKELY(trans_stat != mds::TwoPhaseCommitState::ON_COMMIT)) {
               ret = OB_EAGAIN;
-              LOG_WARN("check committed failed", K(ret), K(tenant_id), K(arg.ls_id_), K(tablet_id), K(tmp_data));
+              LOG_WARN("check committed failed", K(ret), K(tenant_id), K(arg.ls_id_), K(tablet_id), K(tmp_data), K(trans_stat));
             }
           }
         }

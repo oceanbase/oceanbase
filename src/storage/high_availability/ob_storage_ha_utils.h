@@ -201,6 +201,7 @@ public:
       const uint64_t tenant_id,
       const share::ObLSID &src_ls_id,
       const share::ObLSID &dest_ls_id);
+  static bool enable_transfer_dml_ctrl(const uint64_t data_version);
 private:
   static int get_ls_(
       ObLSHandle &ls_handle,

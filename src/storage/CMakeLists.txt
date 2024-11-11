@@ -320,6 +320,7 @@ ob_set_subtarget(ob_storage tablet
   tablet/ob_batch_create_tablet_pretty_arg.cpp
   tablet/ob_full_tablet_creator.cpp
   tablet/ob_i_tablet_mds_interface.cpp
+  tablet/ob_i_tablet_mds_customized_interface.cpp
   tablet/ob_mds_range_query_iterator.cpp
   tablet/ob_mds_row_iterator.cpp
   tablet/ob_mds_scan_param_helper.cpp
@@ -360,6 +361,7 @@ ob_set_subtarget(ob_storage tablet
   tablet/ob_tablet_mds_table_mini_merger.cpp
   tablet/ob_tablet_start_transfer_mds_helper.cpp
   tablet/ob_tablet_finish_transfer_mds_helper.cpp
+  tablet/ob_tablet_abort_transfer_mds_helper.cpp
   tablet/ob_tablet_persister.cpp
   tablet/ob_tablet_obj_load_helper.cpp
   tablet/ob_tablet.cpp
@@ -680,6 +682,7 @@ ob_set_subtarget(ob_storage common
   ob_tenant_tablet_stat_mgr.cpp
   ob_protected_memtable_mgr_handle.cpp
   ob_gc_upper_trans_helper.cpp
+  ob_storage_async_rpc.cpp
   ob_partition_pre_split.cpp
 )
 
@@ -807,6 +810,7 @@ ob_set_subtarget(ob_storage multi_data_source
   multi_data_source/ob_mds_compaction_filter.cpp
   multi_data_source/ob_start_transfer_in_mds_ctx.cpp
   multi_data_source/ob_finish_transfer_in_mds_ctx.cpp
+  multi_data_source/ob_abort_transfer_in_mds_ctx.cpp
   multi_data_source/ob_tablet_create_mds_ctx.cpp
   multi_data_source/ob_tablet_mds_merge_ctx.cpp
   multi_data_source/test/example_user_helper_define.cpp

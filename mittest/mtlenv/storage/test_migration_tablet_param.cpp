@@ -153,7 +153,7 @@ bool TestMigrationTabletParam::is_user_data_equal(const ObTabletCreateDeleteMdsU
       && left.create_commit_scn_ == right.create_commit_scn_
       && left.create_commit_version_ == right.create_commit_version_
       && left.delete_commit_version_ == right.delete_commit_version_
-      && left.transfer_out_commit_version_ == right.transfer_out_commit_version_;
+      && left.start_transfer_commit_version_ == right.start_transfer_commit_version_;
   return res;
 }
 

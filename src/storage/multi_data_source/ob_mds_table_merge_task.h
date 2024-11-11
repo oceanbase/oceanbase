@@ -45,7 +45,7 @@ public:
   int init();
 private:
   void try_schedule_compaction_after_mds_mini(compaction::ObTabletMergeCtx &ctx, ObTabletHandle &tablet_handle);
-  void set_merge_finish_time(compaction::ObTabletMergeCtx &ctx);
+  int check_tablet_status_for_empty_mds_table_(const ObTablet& tablet) const;
   static int build_mds_sstable(
       compaction::ObTabletMergeCtx &ctx,
       const int64_t mds_construct_sequence,

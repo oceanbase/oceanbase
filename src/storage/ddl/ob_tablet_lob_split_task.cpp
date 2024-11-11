@@ -262,7 +262,7 @@ int ObLobSplitContext::get_dst_lob_tablet_ids(const ObLobSplitParam& param)
     LOG_WARN("tablet handle is null", K(ret), K(param));
   } else if (OB_FAIL(main_tablet_handle_.get_obj()->get_all_tables(main_table_store_iterator_))) {
     LOG_WARN("failed to get all sstables", K(ret), K(param));
-  } else if (OB_FAIL(main_tablet_handle_.get_obj()->get_ddl_data(share::SCN::max_scn(), ddl_data))) {
+  } else if (OB_FAIL(main_tablet_handle_.get_obj()->ObITabletMdsInterface::get_ddl_data(share::SCN::max_scn(), ddl_data))) {
     LOG_WARN("fail to get ddl data", K(ret), K(main_tablet_handle_));
   } else if (FALSE_IT(is_lob_piece_ = (param.ori_lob_meta_tablet_id_ == ddl_data.lob_piece_tablet_id_))) {
   } else if (OB_FAIL(lob_meta_tablet_handle_.get_obj()->get_split_data(lob_meta_split_data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_10_S))) {

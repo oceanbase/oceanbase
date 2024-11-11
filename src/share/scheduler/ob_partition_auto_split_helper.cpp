@@ -632,7 +632,6 @@ int ObServerAutoSplitScheduler::check_and_fetch_tablet_split_info(const storage:
   int64_t used_disk_space = OB_INVALID_SIZE;
   int64_t auto_split_tablet_size = OB_INVALID_SIZE;
   int64_t real_auto_split_size = OB_INVALID_SIZE;
-  bool is_committed = false;
   ObTablet *tablet = nullptr;
   ObTabletPointer *tablet_ptr = nullptr;
   ObRole role = INVALID_ROLE;
@@ -640,6 +639,11 @@ int ObServerAutoSplitScheduler::check_and_fetch_tablet_split_info(const storage:
   bool num_sstables_exceed_limit = false;
   can_split = false;
   task.reset();
+  ObTabletSplitMdsUserData split_data;
+  mds::MdsWriter writer;// will be removed later
+  mds::TwoPhaseCommitState trans_stat;// will be removed later
+  share::SCN trans_version;// will be removed later
+
   if (OB_UNLIKELY(!tablet_handle.is_valid() || !ls_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tablet_handle), K(ls_id));
@@ -649,17 +653,24 @@ int ObServerAutoSplitScheduler::check_and_fetch_tablet_split_info(const storage:
   } else if ((GCTX.is_shared_storage_mode())) {
     ret = OB_NOT_SUPPORTED;
     LOG_DEBUG("split in shared storage mode not supported", K(ret));
-  } else if (OB_FAIL(tablet->ObITabletMdsInterface::cross_ls_get_latest<ObTabletSplitMdsUserData>(ReadSplitDataAutoPartSizeOp(auto_split_tablet_size), is_committed))) {
+  } else if (OB_FAIL(tablet->ObITabletMdsCustomizedInterface::get_latest_split_data(
+      split_data, writer, trans_stat, trans_version))) {
     if (OB_EMPTY_RESULT == ret) {
       ret = OB_SUCCESS;
       auto_split_tablet_size = OB_INVALID_SIZE;
     } else {
-      LOG_WARN("fail to get_auto_split_size", K(ret), KP(tablet));
+      LOG_WARN("fail to get split data", K(ret), KP(tablet));
     }
+  } else if (OB_FAIL(split_data.get_auto_part_size(auto_split_tablet_size))) {
+    LOG_WARN("fail to get auto part size", K(ret), K(split_data));
+  }
+
+
+  if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(tablet_ptr = static_cast<ObTabletPointer *>(tablet->get_pointer_handle().get_resource_ptr()))) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("unexpected null tablet pointer", K(ret), KP(tablet));
-  } else if (is_committed) {
+  } else if (mds::TwoPhaseCommitState::ON_COMMIT == trans_stat) {
     tablet_ptr->set_auto_part_size(auto_split_tablet_size);
   } else {
     auto_split_tablet_size = tablet_ptr->get_auto_part_size();

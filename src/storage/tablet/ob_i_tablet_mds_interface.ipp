@@ -19,7 +19,7 @@ inline common::ObTabletID ObITabletMdsInterface::get_tablet_id_() const
   return get_tablet_meta_().tablet_id_;
 }
 
-inline int ObITabletMdsInterface::check_tablet_status_written(bool &written)
+inline int ObITabletMdsInterface::check_tablet_status_written(bool &written) const
 {
   int ret = OB_SUCCESS;
   written = false;
@@ -407,8 +407,12 @@ int ObITabletMdsInterface::is_locked_by_others(bool &is_locked, const mds::MdsWr
   #undef PRINT_WRAPPER
 }
 
-template <typename T, typename OP>
-int ObITabletMdsInterface::get_latest(OP &&read_op, bool &is_committed) const
+template <typename T, typename OP, typename std::enable_if<OB_TRAIT_IS_FUNCTION_LIKE(OP, int(const T&)), bool>::type>
+int ObITabletMdsInterface::get_latest(OP &&read_op,
+                                      mds::MdsWriter &writer,// FIXME(xuwang.txw): should not exposed, will be removed later
+                                      mds::TwoPhaseCommitState &trans_stat,// FIXME(xuwang.txw): should not exposed, will be removed later
+                                      share::SCN &trans_version,// FIXME(xuwang.txw): should not exposed, will be removed later
+                                      const int64_t read_seq) const
 {
   #define PRINT_WRAPPER KR(ret), K(*this), K(typeid(OP).name())
   MDS_TG(10_ms);
@@ -434,7 +438,7 @@ int ObITabletMdsInterface::get_latest(OP &&read_op, bool &is_committed) const
         MDS_LOG_GET(WARN, "mds cannot be NULL");
       } else if (MDS_FAIL(ls_switch_checker.check_ls_switch_state(get_tablet_pointer_()->get_ls(), is_online))) {
         MDS_LOG_GET(WARN, "check ls online state failed", K(ret), KPC(this));
-      } else if (CLICK_FAIL(handle.get_latest<T>(read_op, is_committed))) {
+      } else if (CLICK_FAIL(handle.get_latest<T>(read_op, writer, trans_stat, trans_version, read_seq))) {
         if (OB_SNAPSHOT_DISCARDED != ret) {
           MDS_LOG_GET(WARN, "failed to get mds data");
         } else {
@@ -443,8 +447,10 @@ int ObITabletMdsInterface::get_latest(OP &&read_op, bool &is_committed) const
       }
       if (CLICK_FAIL(ret)) {
         if (OB_ENTRY_NOT_EXIST == ret || OB_SNAPSHOT_DISCARDED == ret) {
-          auto func = [&read_op, &is_committed](const T& data) -> int {
-            is_committed = true;// FIXME: here need more judge after support dump uncommitted node
+          auto func = [&read_op, &writer, &trans_stat, &trans_version](const T& data) -> int {
+            writer.reset();
+            trans_stat = mds::TwoPhaseCommitState::ON_COMMIT;// FIXME: here need more judge after support dump uncommitted node
+            trans_version.reset();
             return read_op(data);
           };
           if (CLICK_FAIL((get_mds_data_from_tablet<mds::DummyKey, T>(
@@ -477,7 +483,76 @@ int ObITabletMdsInterface::get_latest(OP &&read_op, bool &is_committed) const
   #undef PRINT_WRAPPER
 }
 
-template <typename T, typename OP>// general get for dummy key unit
+template <typename T, typename OP, typename std::enable_if<OB_TRAIT_IS_FUNCTION_LIKE(OP, int(const T&)), bool>::type>
+int ObITabletMdsInterface::get_latest_committed(OP &&read_op) const
+{
+  #define PRINT_WRAPPER KR(ret), K(*this), K(typeid(OP).name())
+  MDS_TG(10_ms);
+  int ret = OB_SUCCESS;
+  mds::MdsTableHandle handle;
+  ObLSSwitchChecker ls_switch_checker;
+  bool is_online = false;
+  TabletMdsLockGuard<LockMode::SHARE> guard;
+  if (OB_ISNULL(get_tablet_pointer_())) {
+    ret = OB_BAD_NULL_ERROR;
+    MDS_LOG(ERROR, "pointer on tablet should not be null");
+  } else {
+    get_tablet_pointer_()->get_mds_truncate_lock_guard(guard);
+    do {
+      if (CLICK_FAIL(get_mds_table_handle_(handle, false))) {
+        if (OB_ENTRY_NOT_EXIST != ret) {
+          MDS_LOG_GET(WARN, "failed to get_mds_table");
+        } else {
+          MDS_LOG_GET(TRACE, "failed to get_mds_table");
+        }
+      } else if (!handle.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        MDS_LOG_GET(WARN, "mds cannot be NULL");
+      } else if (OB_ISNULL(get_tablet_pointer_())) {
+        ret = OB_ERR_UNEXPECTED;
+        MDS_LOG_GET(WARN, "tablet pointer is null", K(ret), KPC(this));
+      } else if (MDS_FAIL(ls_switch_checker.check_ls_switch_state(get_tablet_pointer_()->get_ls(), is_online))) {
+        MDS_LOG_GET(WARN, "check ls online state failed", K(ret), KPC(this));
+      } else if (CLICK_FAIL(handle.get_latest_committed<T>(read_op))) {
+        if (OB_SNAPSHOT_DISCARDED != ret) {
+          MDS_LOG_GET(WARN, "failed to get mds data");
+        } else {
+          MDS_LOG_GET(TRACE, "failed to get mds data");
+        }
+      }
+      if (CLICK_FAIL(ret)) {
+        if (OB_ENTRY_NOT_EXIST == ret || OB_SNAPSHOT_DISCARDED == ret) {
+          auto func = [&read_op](const T& data) -> int {
+            return read_op(data);
+          };
+          if (CLICK_FAIL((get_mds_data_from_tablet<mds::DummyKey, T>(
+              mds::DummyKey(),
+              share::SCN::max_scn()/*snapshot*/,
+              ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US/*timeout_us*/,
+              func)))) {
+            if (OB_SNAPSHOT_DISCARDED == ret) {
+              ret = OB_EMPTY_RESULT;
+              MDS_LOG_GET(DEBUG, "read nothing from mds sstable");
+            } else {
+              MDS_LOG_GET(WARN, "failed to get latest committed data from tablet");
+            }
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (is_online && MDS_FAIL(ls_switch_checker.double_check_epoch(is_online))) {
+          MDS_LOG_GET(WARN, "failed to double check ls online");
+        } else {
+          MDS_LOG_GET(TRACE, "success to get_latest_committed");
+        }
+      }
+    } while (ret == OB_VERSION_NOT_MATCH && is_online);
+  }
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
+template <typename T, typename OP, typename std::enable_if<OB_TRAIT_IS_FUNCTION_LIKE(OP, int(const T&)), bool>::type>
 int ObITabletMdsInterface::get_snapshot(OP &&read_op,
                                         const share::SCN snapshot,
                                         const int64_t timeout_us) const
@@ -485,13 +560,13 @@ int ObITabletMdsInterface::get_snapshot(OP &&read_op,
   return get_snapshot<mds::DummyKey, T>(mds::DummyKey(), read_op, snapshot, timeout_us);
 }
 
-template <typename Key, typename Value, typename OP>// general get for multi key unit
+template <typename Key, typename Value, typename OP>
 int ObITabletMdsInterface::get_snapshot(const Key &key,
                                         OP &&read_op,
                                         const share::SCN snapshot,
                                         const int64_t timeout_us) const
 {
-  #define PRINT_WRAPPER KR(ret), K(*this), K(key), K(snapshot), K(typeid(OP).name())
+  #define PRINT_WRAPPER KR(ret), K(*this), K(snapshot), K(typeid(OP).name())
   MDS_TG(10_ms);
   int ret = OB_SUCCESS;
   bool is_online = false;
@@ -680,20 +755,92 @@ inline int ObITabletMdsInterface::fill_virtual_info(ObIArray<mds::MdsNodeInfoFor
   #undef PRINT_WRAPPER
 }
 
+template <typename T>
+int ObITabletMdsInterface::get_latest_committed_data(T &value, ObIAllocator *alloc)
+{
+  #define PRINT_WRAPPER KR(ret), K(value)
+  MDS_TG(10_ms);
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!check_is_inited_())) {
+    ret = OB_NOT_INIT;
+    MDS_LOG_GET(WARN, "not inited");
+  } else {
+    const ObTabletMeta &tablet_meta = get_tablet_meta_();
+    const bool has_transfer_table = tablet_meta.has_transfer_table();
+    ObITabletMdsInterface *src = nullptr;
+    ObTabletHandle src_tablet_handle;
+    if (has_transfer_table) {
+      const share::ObLSID &src_ls_id = tablet_meta.transfer_info_.ls_id_;
+      const common::ObTabletID &tablet_id = tablet_meta.tablet_id_;
+      if (CLICK_FAIL(get_tablet_handle_and_base_ptr(src_ls_id, tablet_id, src_tablet_handle, src))) {
+        MDS_LOG(WARN, "fail to get src tablet handle", K(ret), K(src_ls_id), K(tablet_id));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (CLICK_FAIL((cross_ls_get_latest_committed(
+        src,
+        value,
+        alloc)))) {
+      if (OB_EMPTY_RESULT != ret) {
+        MDS_LOG_GET(WARN, "fail to cross ls get latest", K(lbt()));
+      }
+    } else if (!value.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      MDS_LOG_GET(WARN, "invalid user data", K(lbt()));
+    }
+  }
+
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
+
 template <typename T, typename OP>
-int ObITabletMdsInterface::cross_ls_get_latest(const ObITabletMdsInterface *another, OP &&read_op, bool &is_committed) const
+int ObITabletMdsInterface::cross_ls_get_latest(
+    const ObITabletMdsInterface *another,
+    OP &&read_op,
+    mds::MdsWriter &writer,
+    mds::TwoPhaseCommitState &trans_stat,
+    share::SCN &trans_version,
+    const int64_t read_seq) const
 {
   int ret = OB_SUCCESS;
 
-  if (OB_FAIL((get_latest<T, OP>(std::forward<OP>(read_op), is_committed)))) {
+  if (OB_FAIL((get_latest<T, OP>(std::forward<OP>(read_op), writer, trans_stat, trans_version, read_seq)))) {
     if (OB_EMPTY_RESULT != ret) {
       MDS_LOG(WARN, "fail to get latest", K(ret));
     }
   }
 
   if (OB_EMPTY_RESULT == ret && nullptr != another) {
-    if (OB_FAIL((another->get_latest<T, OP>(std::forward<OP>(read_op), is_committed)))) {
-      if (OB_EMPTY_RESULT == ret) {
+    if (OB_FAIL((another->get_latest<T, OP>(std::forward<OP>(read_op), writer, trans_stat, trans_version, read_seq)))) {
+      if (OB_EMPTY_RESULT != ret) {
+        MDS_LOG(WARN, "fail to get latest", K(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
+template <typename T>
+int ObITabletMdsInterface::cross_ls_get_latest_committed(
+    const ObITabletMdsInterface *another,
+    T &value,
+    ObIAllocator *alloc) const
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL((get_latest_committed(value, alloc)))) {
+    if (OB_EMPTY_RESULT != ret) {
+      MDS_LOG(WARN, "fail to get latest", K(ret));
+    }
+  }
+
+  if (OB_EMPTY_RESULT == ret && nullptr != another) {
+    if (OB_FAIL((another->get_latest_committed(value, alloc)))) {
+      if (OB_EMPTY_RESULT != ret) {
         MDS_LOG(WARN, "fail to get latest", K(ret));
       }
     }
@@ -703,11 +850,12 @@ int ObITabletMdsInterface::cross_ls_get_latest(const ObITabletMdsInterface *anot
 }
 
 template <typename Key, typename Value, typename OP>
-int ObITabletMdsInterface::cross_ls_get_snapshot(const ObITabletMdsInterface *another,
-                                                 const Key &key,
-                                                 OP &&read_op,
-                                                 const share::SCN snapshot,
-                                                 const int64_t timeout_us) const
+int ObITabletMdsInterface::cross_ls_get_snapshot(
+    const ObITabletMdsInterface *another,
+    const Key &key,
+    OP &&read_op,
+    const share::SCN snapshot,
+    const int64_t timeout_us) const
 {
   int ret = OB_SUCCESS;
 
@@ -804,39 +952,5 @@ inline int ObITabletMdsInterface::check_transfer_in_redo_written(bool &written)
   return ret;
   #undef PRINT_WRAPPER
 }
-
-template<typename T, typename OP>
-int ObITabletMdsInterface::cross_ls_get_latest(OP &&op, bool &is_committed) const
-{
-  #define PRINT_WRAPPER KR(ret)
-  MDS_TG(10_ms);
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!check_is_inited_())) {
-    ret = OB_NOT_INIT;
-    MDS_LOG_GET(WARN, "not inited");
-  } else {
-    const ObTabletMeta &tablet_meta = get_tablet_meta_();
-    const bool has_transfer_table = tablet_meta.has_transfer_table();
-    ObITabletMdsInterface *src = nullptr;
-    ObTabletHandle src_tablet_handle;
-    if (has_transfer_table) {
-      const share::ObLSID &src_ls_id = tablet_meta.transfer_info_.ls_id_;
-      const common::ObTabletID &tablet_id = tablet_meta.tablet_id_;
-      if (CLICK_FAIL(get_tablet_handle_and_base_ptr(src_ls_id, tablet_id, src_tablet_handle, src))) {
-        MDS_LOG(WARN, "fail to get src tablet handle", K(ret), K(src_ls_id), K(tablet_id));
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (CLICK_FAIL((cross_ls_get_latest<T>(src, op, is_committed)))) {
-      if (OB_EMPTY_RESULT != ret) {
-        MDS_LOG_GET(WARN, "fail to cross ls get latest", K(lbt()));
-      }
-    }
-  }
-  return ret;
-  #undef PRINT_WRAPPER
-}
-
 }
 }

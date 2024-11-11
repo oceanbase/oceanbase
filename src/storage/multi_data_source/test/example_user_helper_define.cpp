@@ -13,6 +13,8 @@
 #ifdef TEST_MDS_TRANSACTION
 #include "example_user_helper_define.h"
 #include "storage/multi_data_source/mds_table_handle.h"
+#include "deps/oblib/src/common/meta_programming/ob_type_traits.h"
+
 namespace oceanbase {
 namespace unittest {
 
@@ -48,6 +50,30 @@ int ExampleUserHelperFunction1::on_replay(const char* buf,
 {
   UNUSED(scn);
   return on_register(buf, len, ctx);
+}
+
+bool ExampleUserHelperFunction1::check_can_do_tx_end(const bool is_willing_to_commit,
+                                                     const bool for_replay,
+                                                     const share::SCN &log_scn,
+                                                     const char *buf,
+                                                     const int64_t buf_len,
+                                                     storage::mds::BufferCtx &ctx,
+                                                     const char *&can_not_do_reason)
+{
+  static_assert(OB_TRAIT_HAS_CHECK_CAN_DO_TX_END(ExampleUserHelperFunction1), "static check failed");
+  bool ret = true;
+  UNUSED(is_willing_to_commit);
+  UNUSED(for_replay);
+  UNUSED(log_scn);
+  UNUSED(buf);
+  UNUSED(buf_len);
+  UNUSED(ctx);
+  static int call_times = 0;
+  if (call_times++ < 5) {
+    ret = false;
+    can_not_do_reason = "JUST FOR TEST";
+  }
+  return ret;
 }
 
 int ExampleUserHelperFunction2::on_register(const char* buf,
@@ -116,7 +142,7 @@ void ExampleUserHelperCtx::before_prepare()
 
 void ExampleUserHelperCtx::on_prepare(const share::SCN &prepare_version)
 {
-  MDS_LOG(INFO, "[UNITTEST] call on_prepare with ctx", K(++call_times_));
+  MDS_LOG(INFO, "[UNITTEST] call on_prepare with ctx", K(++call_times_), K(prepare_version));
 }
 
 void ExampleUserHelperCtx::on_commit(const share::SCN &commit_version, const share::SCN &)

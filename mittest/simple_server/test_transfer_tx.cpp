@@ -153,6 +153,9 @@ int ObTransferTx::do_transfer_start_abort(uint64_t tenant_id, ObLSID dest_ls_id,
     ObTransferTaskInfo task_info;
     ObMySQLTransaction trans;
     ObTimeoutCtx timeout_ctx;
+    const int64_t stmt_timeout = 10_s;
+    const int32_t group_id = 0;
+    const share::SCN dest_max_desided_scn(share::SCN::min_scn());
     if (OB_FAIL(MTL(ObLSService*)->get_ls(src_ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
     } else if (FALSE_IT(transfer_handler = ls_handle.get_ls()->get_transfer_handler())) {
     } else if (FALSE_IT(task_info.tenant_id_ = tenant_id)) {
@@ -163,11 +166,11 @@ int ObTransferTx::do_transfer_start_abort(uint64_t tenant_id, ObLSID dest_ls_id,
     } else if (FALSE_IT(task_info.status_ = ObTransferStatus::START)) {
     } else if (FALSE_IT(task_info.table_lock_owner_id_.id_ = 10000)) {
     } else if (OB_FAIL(task_info.tablet_list_.push_back(tablet_info))) {
-    } else if (OB_FAIL(transfer_handler->start_trans_(timeout_ctx, trans))) {
+    } else if (OB_FAIL(transfer_handler->start_trans_(stmt_timeout, group_id, timeout_ctx, trans))) {
       LOG_WARN("failed to start trans", K(ret), K(task_info));
     } else if (OB_FAIL(transfer_handler->precheck_ls_replay_scn_(task_info))) {
       LOG_WARN("failed to precheck ls replay scn", K(ret), K(task_info));
-    } else if (OB_FAIL(transfer_handler->check_start_status_transfer_tablets_(task_info))) {
+    } else if (OB_FAIL(transfer_handler->check_start_status_transfer_tablets_(task_info, timeout_ctx))) {
       LOG_WARN("failed to check start status transfer tablets", K(ret), K(task_info));
     } else if (OB_FAIL(transfer_handler->update_all_tablet_to_ls_(task_info, trans))) {
       LOG_WARN("failed to update all tablet to ls", K(ret), K(task_info));
@@ -175,7 +178,7 @@ int ObTransferTx::do_transfer_start_abort(uint64_t tenant_id, ObLSID dest_ls_id,
       LOG_WARN("failed to lock tablet on dest ls for table lock", KR(ret), K(task_info));
     } else if (OB_FAIL(transfer_handler->do_trans_transfer_start_prepare_(task_info, timeout_ctx, trans))) {
       LOG_WARN("failed to do trans transfer start prepare", K(ret), K(task_info));
-    } else if (OB_FAIL(transfer_handler->do_trans_transfer_start_v2_(task_info, timeout_ctx, trans))) {
+    } else if (OB_FAIL(transfer_handler->do_trans_transfer_start_v2_(task_info, dest_max_desided_scn, timeout_ctx, trans))) {
       LOG_WARN("failed to do trans transfer start", K(ret), K(task_info));
     }
 

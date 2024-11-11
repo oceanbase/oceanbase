@@ -50,7 +50,16 @@ ObStartTransferInMdsCtx::~ObStartTransferInMdsCtx()
 
 void ObStartTransferInMdsCtx::on_prepare(const share::SCN &prepare_version)
 {
-  // TODO(@muwei.ym): add ERRSIM code later
+#ifdef ERRSIM
+  int ret = OB_SUCCESS;
+  if (OB_SUCC(ret)) {
+    ret = EN_START_TRANSFER_IN_ON_PREPARE ? : OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      STORAGE_LOG(ERROR, "fake EN_START_TRANSFER_IN_ON_PREPARE", K(ret));
+      DEBUG_SYNC(BEFORE_START_TRANSFER_IN_ON_PREPARE);
+    }
+  }
+#endif
   MdsCtx::on_prepare(prepare_version);
 }
 
@@ -58,8 +67,25 @@ void ObStartTransferInMdsCtx::on_abort(const share::SCN &abort_scn)
 {
   mds::MdsCtx::on_abort(abort_scn);
 
-  // TODO(@gaishun.gs): feature branch transfer_dml_ctrl_42x patch to master,
-  // then add more logic, currently this code is just for compat
+  int ret = OB_SUCCESS;
+  ObLSService *ls_service = MTL(ObLSService*);
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+
+  if (OB_UNLIKELY(!ls_id_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ls id is invalid", K(ret), K_(ls_id));
+  } else if (OB_FAIL(ls_service->get_ls(ls_id_, ls_handle, ObLSGetMod::MDS_TABLE_MOD))) {
+    LOG_WARN("fail to get ls", K(ret), K_(ls_id));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls is null", K(ret), K_(ls_id), KP(ls));
+  } else {
+    checkpoint::ObTabletEmptyShellHandler *handler = ls->get_tablet_empty_shell_handler();
+    handler->set_empty_shell_trigger(true/*is_trigger*/);
+
+    LOG_INFO("start transfer in tx aborted", K(ret), K_(ls_id), K(abort_scn));
+  }
 }
 
 int ObStartTransferInMdsCtx::serialize(char *buf, const int64_t len, int64_t &pos) const

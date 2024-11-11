@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_transfer_struct.h"
+#include "common/ob_version_def.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "src/storage/tablet/ob_tablet_meta.h"
@@ -83,8 +84,31 @@ int ObTXStartTransferOutInfo::assign(const ObTXStartTransferOutInfo &start_trans
   return ret;
 }
 
+int64_t ObTXStartTransferOutInfo::to_string(char *buf, const int64_t buf_len) const
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  int64_t save_pos = 0;
+  if (OB_ISNULL(buf) || buf_len <= 0) {
+      // do nothing
+  } else {
+    ObClusterVersion data_version;
+    if (OB_FAIL(data_version.init(data_version_))) {
+      LOG_WARN("failed to init data version", K(ret), K(data_version_));
+    } else {
+      J_OBJ_START();
+      J_KV(K_(src_ls_id), K_(dest_ls_id), K_(tablet_list), K_(task_id),
+           K_(data_end_scn), K_(transfer_epoch), K(data_version),
+           K_(filter_tx_need_transfer), K_(move_tx_ids));
+      J_OBJ_END();
+    }
+  }
+  return pos;
+}
+
 OB_SERIALIZE_MEMBER(ObTXStartTransferOutInfo, src_ls_id_, dest_ls_id_, tablet_list_, task_id_,
     data_end_scn_, transfer_epoch_, data_version_, filter_tx_need_transfer_, move_tx_ids_);
+
 
 ObTXStartTransferInInfo::ObTXStartTransferInInfo()
   : src_ls_id_(),
@@ -131,6 +155,39 @@ int ObTXStartTransferInInfo::assign(const ObTXStartTransferInInfo &start_transfe
     data_version_ = start_transfer_in_info.data_version_;
   }
   return ret;
+}
+
+int ObTXStartTransferInInfo::get_tablet_id_list(common::ObIArray<common::ObTabletID> &tablet_id_list) const
+{
+  int ret = OB_SUCCESS;
+  tablet_id_list.reset();
+  for (int64_t i = 0; OB_SUCC(ret) && i < tablet_meta_list_.count(); ++i) {
+    const ObMigrationTabletParam &tablet_meta = tablet_meta_list_.at(i);
+    if (OB_FAIL(tablet_id_list.push_back(tablet_meta.tablet_id_))) {
+      LOG_WARN("failed to push tablet id into array", K(ret), K(tablet_meta));
+    }
+  }
+  return ret;
+}
+
+int64_t ObTXStartTransferInInfo::to_string(char *buf, const int64_t buf_len) const
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  int64_t save_pos = 0;
+  if (OB_ISNULL(buf) || buf_len <= 0) {
+      // do nothing
+  } else {
+    ObClusterVersion data_version;
+    if (OB_FAIL(data_version.init(data_version_))) {
+      LOG_WARN("failed to init data version", K(ret), K(data_version_));
+    } else {
+      J_OBJ_START();
+      J_KV(K_(src_ls_id), K_(dest_ls_id), K_(start_scn), K_(tablet_meta_list), K_(task_id), K(data_version));
+      J_OBJ_END();
+    }
+  }
+  return pos;
 }
 
 OB_SERIALIZE_MEMBER(ObTXStartTransferInInfo, src_ls_id_, dest_ls_id_, start_scn_, tablet_meta_list_, task_id_, data_version_);
@@ -185,6 +242,26 @@ int ObTXFinishTransferInInfo::assign(const ObTXFinishTransferInInfo &finish_tran
   return ret;
 }
 
+int64_t ObTXFinishTransferInInfo::to_string(char *buf, const int64_t buf_len) const
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  int64_t save_pos = 0;
+  if (OB_ISNULL(buf) || buf_len <= 0) {
+      // do nothing
+  } else {
+    ObClusterVersion data_version;
+    if (OB_FAIL(data_version.init(data_version_))) {
+      LOG_WARN("failed to init data version", K(ret), K(data_version_));
+    } else {
+      J_OBJ_START();
+      J_KV(K_(src_ls_id), K_(dest_ls_id), K_(start_scn), K_(tablet_list), K_(task_id), K(data_version));
+      J_OBJ_END();
+    }
+  }
+  return pos;
+}
+
 /* ObTXFinishTransferOutInfo */
 OB_SERIALIZE_MEMBER(ObTXFinishTransferOutInfo, src_ls_id_, dest_ls_id_, finish_scn_, tablet_list_, task_id_, data_version_);
 ObTXFinishTransferOutInfo::ObTXFinishTransferOutInfo()
@@ -196,6 +273,7 @@ ObTXFinishTransferOutInfo::ObTXFinishTransferOutInfo()
     data_version_(DEFAULT_MIN_DATA_VERSION)
 {
 }
+
 void ObTXFinishTransferOutInfo::reset()
 {
   src_ls_id_.reset();
@@ -205,6 +283,7 @@ void ObTXFinishTransferOutInfo::reset()
   task_id_.reset();
   data_version_ = 0;
 }
+
 bool ObTXFinishTransferOutInfo::is_valid() const
 {
   return src_ls_id_.is_valid()
@@ -231,6 +310,85 @@ int ObTXFinishTransferOutInfo::assign(const ObTXFinishTransferOutInfo &finish_tr
   }
   return ret;
 }
+
+int64_t ObTXFinishTransferOutInfo::to_string(char *buf, const int64_t buf_len) const
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  int64_t save_pos = 0;
+  if (OB_ISNULL(buf) || buf_len <= 0) {
+      // do nothing
+  } else {
+    ObClusterVersion data_version;
+    if (OB_FAIL(data_version.init(data_version_))) {
+      LOG_WARN("failed to init data version", K(ret), K(data_version_));
+    } else {
+      J_OBJ_START();
+      J_KV(K_(src_ls_id), K_(dest_ls_id), K_(finish_scn), K_(tablet_list), K_(task_id), K(data_version));
+      J_OBJ_END();
+    }
+  }
+  return pos;
+}
+
+ObTXTransferInAbortedInfo::ObTXTransferInAbortedInfo()
+  : dest_ls_id_(),
+    tablet_list_(),
+    data_version_(MOCK_CLUSTER_VERSION_4_2_3_0)
+{
+}
+
+void ObTXTransferInAbortedInfo::reset()
+{
+  dest_ls_id_.reset();
+  tablet_list_.reset();
+  data_version_ = 0;
+}
+
+bool ObTXTransferInAbortedInfo::is_valid() const
+{
+  return dest_ls_id_.is_valid()
+      && !tablet_list_.empty()
+      && data_version_ > 0;
+}
+
+int ObTXTransferInAbortedInfo::assign(const ObTXTransferInAbortedInfo &transfer_in_aborted_info)
+{
+  int ret = OB_SUCCESS;
+  if (!transfer_in_aborted_info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("assign transfer in aborted info get invalid argument", K(ret), K(transfer_in_aborted_info));
+  } else if (OB_FAIL(tablet_list_.assign(transfer_in_aborted_info.tablet_list_))) {
+    LOG_WARN("failed to assign transfer in aborted info", K(ret), K(transfer_in_aborted_info));
+  } else {
+    dest_ls_id_ = transfer_in_aborted_info.dest_ls_id_;
+    data_version_ = transfer_in_aborted_info.data_version_;
+  }
+  return ret;
+}
+
+int64_t ObTXTransferInAbortedInfo::to_string(char *buf, const int64_t buf_len) const
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  int64_t save_pos = 0;
+  if (OB_ISNULL(buf) || buf_len <= 0) {
+      // do nothing
+  } else {
+    ObClusterVersion data_version;
+    if (OB_FAIL(data_version.init(data_version_))) {
+      LOG_WARN("failed to init data version", K(ret), K(data_version_));
+    } else {
+      J_OBJ_START();
+      J_KV(K_(dest_ls_id), K_(tablet_list), K(data_version));
+      J_OBJ_END();
+    }
+  }
+  return pos;
+}
+
+OB_SERIALIZE_MEMBER(ObTXTransferInAbortedInfo, dest_ls_id_, tablet_list_, data_version_);
+
 
 void ObTransferEventRecorder::record_transfer_task_event(
     const share::ObTransferTaskID &task_id,
@@ -355,13 +513,16 @@ int ObTXTransferUtils::get_tablet_status_(
    ObTabletCreateDeleteMdsUserData &user_data)
 {
   int ret = OB_SUCCESS;
-  bool unused_committed_flag = false;
   if (get_commit) {
-    if (OB_FAIL(tablet->ObITabletMdsInterface::get_tablet_status(share::SCN::max_scn(), user_data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US))) {
+    if (OB_FAIL(tablet->get_latest_committed(user_data))) {
       LOG_WARN("failed to get committed tablet status", K(ret), KPC(tablet), K(user_data));
     }
   } else {
-    if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data, unused_committed_flag))) {
+    mds::MdsWriter unused_writer;// will be removed later
+    mds::TwoPhaseCommitState unused_trans_stat;// will be removed later
+    share::SCN unused_trans_version;// will be removed later
+    if (OB_FAIL(tablet->get_latest(user_data,
+        unused_writer, unused_trans_stat, unused_trans_version))) {
       LOG_WARN("failed to get latest tablet status", K(ret), KPC(tablet), K(user_data));
     }
   }
@@ -537,6 +698,10 @@ const char *ObTransferLockStatus::str() const
     str = "DOING";
     break;
   }
+  case ABORTED: {
+    str = "ABORTED";
+    break;
+  }
   default: {
     str = "INVALID_STATUS";
   }
@@ -551,6 +716,8 @@ int ObTransferLockStatus::parse_from_str(const ObString &str)
     status_ = START;
   } else if (0 == str.case_compare("DOING")) {
     status_ = DOING;
+  } else if (0 == str.case_compare("ABORTED")) {
+    status_ = ABORTED;
   } else {
     status_ = MAX_STATUS;
     ret = OB_INVALID_ARGUMENT;

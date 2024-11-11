@@ -73,7 +73,7 @@ int ObSyncTabletSeqReplayExecutor::do_replay_(ObTabletHandle &handle)
     bool need_replay = true;
     if (CLUSTER_CURRENT_VERSION >= CLUSTER_VERSION_4_3_2_0) {
       // just replay for multi-vesion mds
-    } else if (OB_FAIL(tablet->get_autoinc_seq(allocator, share::SCN::max_scn(), curr_autoinc_seq))) {
+    } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_autoinc_seq(allocator, share::SCN::max_scn(), curr_autoinc_seq))) {
       LOG_WARN("fail to get latest autoinc seq", K(ret), KPC(tablet));
     } else if (OB_FAIL(curr_autoinc_seq.get_autoinc_seq_value(curr_autoinc_seq_value))) {
       LOG_WARN("failed to get autoinc seq value", K(ret), KPC(tablet), K(curr_autoinc_seq));
@@ -234,7 +234,7 @@ int ObTabletAutoincSeqRpcHandler::batch_get_tablet_autoinc_seq(
             LOG_WARN("failed to get tablet", K(tmp_ret), K(src_tablet_id));
           } else {
             ObTabletAutoincSeq autoinc_seq;
-            if (OB_TMP_FAIL(tablet_handle.get_obj()->get_autoinc_seq(allocator, share::SCN::max_scn(), autoinc_seq, THIS_WORKER.is_timeout_ts_valid() ? THIS_WORKER.get_timeout_remain() : obrpc::ObRpcProxy::MAX_RPC_TIMEOUT))) {
+            if (OB_TMP_FAIL(tablet_handle.get_obj()->get_autoinc_seq(autoinc_seq, allocator))) {
               LOG_WARN("fail to get latest autoinc seq", K(ret));
             } else if (OB_TMP_FAIL(autoinc_seq.get_autoinc_seq_value(autoinc_param.autoinc_seq_))) {
               LOG_WARN("failed to get autoinc seq value", K(tmp_ret));

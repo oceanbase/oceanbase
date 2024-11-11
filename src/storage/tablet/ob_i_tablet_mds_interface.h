@@ -15,6 +15,7 @@
 
 #include "lib/ob_errno.h"
 #include "common/meta_programming/ob_meta_serialization.h"
+#include "common/meta_programming/ob_meta_copy.h"
 #include "storage/multi_data_source/mds_table_handle.h"
 #include "storage/meta_mem/ob_tablet_pointer.h"
 #include "storage/tablet/ob_mds_range_query_iterator.h"
@@ -29,6 +30,22 @@ namespace storage
 {
 class ObTabletCreateDeleteHelper;
 class ObMdsRowIterator;
+
+template <typename T>
+struct MdsDefaultDeepCopyOperation {
+  MdsDefaultDeepCopyOperation(T &value, ObIAllocator *alloc) : value_(value), alloc_(alloc) {}
+  int operator()(const T &value) {
+    int ret = OB_SUCCESS;
+    if (nullptr == alloc_) {
+      ret = meta::copy_or_assign(value, value_);
+    } else {
+      ret = meta::copy_or_assign(value, value_, *alloc_);
+    }
+    return ret;
+  }
+  T &value_;
+  ObIAllocator *alloc_;
+};
 
 class ObITabletMdsInterface
 {
@@ -49,22 +66,76 @@ public:
   template <typename T>
   int is_locked_by_others(bool &is_locked, const mds::MdsWriter &self = mds::MdsWriter()) const;
 
-  int check_tablet_status_written(bool &written);
+  int check_tablet_status_written(bool &written) const;
+  // belows are wrapper interfaces for default getter for simple data structure
   // specialization get for each module
-  int get_latest_tablet_status(ObTabletCreateDeleteMdsUserData &data, bool &is_committed) const;
+  int get_latest_tablet_status(ObTabletCreateDeleteMdsUserData &data,
+                               mds::MdsWriter &writer,
+                               mds::TwoPhaseCommitState &trans_stat,
+                               share::SCN &trans_version,
+                               const int64_t read_seq = 0) const;
   int get_tablet_status(const share::SCN &snapshot,
                         ObTabletCreateDeleteMdsUserData &data,
                         const int64_t timeout = ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US) const;
-  int get_latest_ddl_data(ObTabletBindingMdsUserData &data, bool &is_committed) const;
+  int get_latest_ddl_data(ObTabletBindingMdsUserData &data,
+                          mds::MdsWriter &writer,
+                          mds::TwoPhaseCommitState &trans_stat,
+                          share::SCN &trans_version,
+                          const int64_t read_seq = 0) const;
   int get_ddl_data(const share::SCN &snapshot,
                    ObTabletBindingMdsUserData &data,
                    const int64_t timeout = ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US) const;
-  template<typename T, typename OP>
-  int cross_ls_get_latest(OP &&op, bool &is_committed) const;
   int get_autoinc_seq(ObIAllocator &allocator,
                       const share::SCN &snapshot,
                       share::ObTabletAutoincSeq &data,
                       const int64_t timeout = ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US) const;
+
+  // if trans_stat < BEFORE_PREPARE, trans_version is explained as prepare_version(which is MAX).
+  // else if trans_stat < ON_PREAPRE, trans_version is explained as prepare_version(which is MIN).
+  // else if trans_stat < ON_COMMIT, trans_version is explained as prepare_version(which is a valid data).
+  // else if trans_stat == ON_COMMIT, trans_version is explained as commit_version(which is a valid data).
+  template <typename T, typename T2 = T, ENABLE_IF_NOT_LIKE_FUNCTION(T2, int(const T &))>
+  int get_latest(T &value,
+                 mds::MdsWriter &writer,// FIXME(xuwang.txw): should not exposed, will be removed later
+                 mds::TwoPhaseCommitState &trans_stat,// FIXME(xuwang.txw): should not exposed, will be removed later
+                 share::SCN &trans_version,// FIXME(xuwang.txw): should not exposed, will be removed later
+                 ObIAllocator *alloc = nullptr,
+                 const int64_t read_seq = 0) const {
+    MdsDefaultDeepCopyOperation<T> default_get_op(value, alloc);
+    return get_latest<T, MdsDefaultDeepCopyOperation<T> &>(default_get_op, writer, trans_stat, trans_version, read_seq);
+  }
+  template <typename T, typename T2 = T, ENABLE_IF_NOT_LIKE_FUNCTION(T2, int(const T &))>
+  int get_latest_committed(T &value, ObIAllocator *alloc = nullptr) const {
+    MdsDefaultDeepCopyOperation<T> default_get_op(value, alloc);
+    return get_latest_committed<T, MdsDefaultDeepCopyOperation<T> &>(default_get_op);
+  }
+  template <typename T, typename T2 = T, ENABLE_IF_NOT_LIKE_FUNCTION(T2, int(const T &))>
+  int get_snapshot(T &value,
+                   const share::SCN snapshot,
+                   const int64_t timeout_us,
+                   ObIAllocator *alloc = nullptr,
+                   const int64_t read_seq = 0) const {
+    MdsDefaultDeepCopyOperation<T> default_get_op(value, alloc);
+    return get_snapshot<T, MdsDefaultDeepCopyOperation<T> &>(default_get_op, snapshot, timeout_us, read_seq);
+  }
+  // belows are general get interfaces, which could be customized for complicated data structure
+  template <typename T, typename OP, ENABLE_IF_LIKE_FUNCTION(OP, int(const T &))>
+  int get_latest(OP &&read_op,
+                 mds::MdsWriter &writer,// FIXME(xuwang.txw): should not exposed, will be removed later
+                 mds::TwoPhaseCommitState &trans_stat,// FIXME(xuwang.txw): should not exposed, will be removed later
+                 share::SCN &trans_version,// FIXME(xuwang.txw): should not exposed, will be removed later
+                 const int64_t read_seq = 0) const;
+  template <typename T, typename OP, ENABLE_IF_LIKE_FUNCTION(OP, int(const T &))>
+  int get_latest_committed(OP &&read_op) const;
+  template <typename T, typename OP, ENABLE_IF_LIKE_FUNCTION(OP, int(const T &))>
+  int get_snapshot(OP &&read_op,
+                   const share::SCN snapshot,
+                   const int64_t timeout_us) const;
+  template <typename Key, typename Value, typename OP>
+  int get_snapshot(const Key &key,
+                   OP &&read_op,
+                   const share::SCN snapshot,
+                   const int64_t timeout_us) const;
   int get_split_data(ObTabletSplitMdsUserData &data,
                      const int64_t timeout) const;
   int split_partkey_compare(const blocksstable::ObDatumRowkey &rowkey,
@@ -85,6 +156,8 @@ public:
   //         other error...
   // CAUTIONS: this interface is only for transfer! anyone else shouldn't call this!
   int check_transfer_in_redo_written(bool &written);
+  template <typename T>
+  int get_latest_committed_data(T &value, ObIAllocator *alloc = nullptr);
 protected:// implemented by ObTablet
   // TODO(@gaishun.gs): remove these virtual functions later
   virtual bool check_is_inited_() const = 0;
@@ -135,6 +208,17 @@ protected:// implemented by ObTablet
   int replay(T &&mds,
              mds::MdsCtx &ctx,
              const share::SCN &scn);
+  static int get_tablet_handle_and_base_ptr(const share::ObLSID &ls_id,
+                                          const common::ObTabletID &tablet_id,
+                                          ObTabletHandle &tablet_handle,
+                                          ObITabletMdsInterface *&base_ptr);
+  template <typename T, typename OP>
+  int cross_ls_get_latest(const ObITabletMdsInterface *another,
+                          OP &&read_op,
+                          mds::MdsWriter &writer,// FIXME(xuwang.txw): should not exposed, will be removed later
+                          mds::TwoPhaseCommitState &trans_stat,// FIXME(xuwang.txw): should not exposed, will be removed later
+                          share::SCN &trans_version,// FIXME(xuwang.txw): should not exposed, will be removed later
+                          const int64_t read_seq = 0) const;
 private:
   template <typename Key, typename Value>
   int replay(const Key &key,
@@ -145,29 +229,16 @@ private:
   int replay_remove(const Key &key,
                     mds::MdsCtx &ctx,
                     const share::SCN &scn);// called only by ObTabletReplayExecutor
-  template <typename T, typename OP>
-  int get_latest(OP &&read_op, bool &is_committed) const;
-  template <typename T, typename OP>
-  int get_snapshot(OP &&read_op,
-                   const share::SCN snapshot,
-                   const int64_t timeout_us) const;// general get for dummy key unit
-  template <typename Key, typename Value, typename OP>
-  int get_snapshot(const Key &key,
-                   OP &&read_op,
-                   const share::SCN snapshot,
-                   const int64_t timeout_us) const;// general get for multi key unit
-  template <typename T, typename OP>
-  int cross_ls_get_latest(const ObITabletMdsInterface *another, OP &&read_op, bool &is_committed) const;
   template <typename Key, typename Value, typename OP>
   int cross_ls_get_snapshot(const ObITabletMdsInterface *another,
                             const Key &key,
                             OP &&read_op,
                             const share::SCN snapshot,
                             const int64_t timeout_us) const;
-  static int get_tablet_handle_and_base_ptr(const share::ObLSID &ls_id,
-                                            const common::ObTabletID &tablet_id,
-                                            ObTabletHandle &tablet_handle,
-                                            ObITabletMdsInterface *&base_ptr);
+  template <typename T>
+  int cross_ls_get_latest_committed(const ObITabletMdsInterface *another,
+                                    T &value,
+                                    ObIAllocator *alloc = nullptr) const;
   common::ObTabletID get_tablet_id_() const;
   template <typename T>
   int obj_to_string_holder_(const T &obj, ObStringHolder &holder) const;

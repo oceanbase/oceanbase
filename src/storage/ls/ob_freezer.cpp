@@ -1091,11 +1091,16 @@ int ObFreezer::decide_real_snapshot_version_(const ObTabletID &tablet_id,
   ObTabletCreateDeleteMdsUserData user_data;
   bool is_committed = false;
   share::SCN transfer_scn = share::SCN::max_scn();
+  mds::MdsWriter writer;
+  mds::TwoPhaseCommitState trans_stat;
+  share::SCN trans_version;
 
   if (tablet_id.is_ls_inner_tablet()) {
     //do nothing
   } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data,
-                                                                             is_committed))) {
+                                                                             writer,
+                                                                             trans_stat,
+                                                                             trans_version))) {
     LOG_WARN("fail to get latest tablet status", K(ret), KPC(tablet));
   } else if (ObTabletStatus::TRANSFER_OUT != user_data.tablet_status_
              && ObTabletStatus::TRANSFER_OUT_DELETED != user_data.tablet_status_) {

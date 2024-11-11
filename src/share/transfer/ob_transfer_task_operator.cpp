@@ -18,11 +18,14 @@
 #include "lib/mysqlclient/ob_mysql_transaction.h" // ObMySQLTransaction
 #include "share/inner_table/ob_inner_table_schema.h" // OB_ALL_TRANSFER_TASK_TNAME
 #include "share/location_cache/ob_location_struct.h" // ObTabletLSCache
+#include "share/schema/ob_schema_utils.h" // ObSchemaUtils
+#include "observer/ob_server_struct.h" // GCTX
 
 namespace oceanbase
 {
 using namespace common;
 using namespace palf;
+using namespace share::schema;
 using namespace transaction::tablelock;
 
 namespace share

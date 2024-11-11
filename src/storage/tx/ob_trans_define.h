@@ -1830,12 +1830,12 @@ struct ObMulSourceDataNotifyArg
   bool for_replay_;
   bool redo_submitted_;
   bool redo_synced_;
+  bool willing_to_commit_;
   // force kill trans without abort scn
   bool is_force_kill_;
   bool is_incomplete_replay_;
 
   ObMulSourceDataNotifyArg() { reset(); }
-
   void reset();
 
   TO_STRING_KV(K_(tx_id),
@@ -1845,8 +1845,9 @@ struct ObMulSourceDataNotifyArg
                K_(notify_type),
                K_(redo_submitted),
                K_(redo_synced),
-               K_(is_force_kill),
-               K_(is_incomplete_replay));
+               K_(is_incomplete_replay),
+               K_(willing_to_commit),
+               K_(is_force_kill));
 
   // The redo log of current buf_node has been submitted;
   bool is_redo_submitted() const;

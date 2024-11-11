@@ -189,6 +189,8 @@ public:
                     const int64_t timeout_us) const;
   template <typename OP>
   int get_latest(const K &key, OP &&op) const;
+  template <typename OP>
+  int get_latest_committed(const K &key, OP &&op) const;
   template <typename DUMP_OP>
   int scan_KV_row(DUMP_OP &&op,
                   const share::SCN flush_scn,
@@ -328,6 +330,8 @@ public:
                     const int64_t timeout_us) const;
   template <typename OP>
   int get_latest(OP &&op) const;
+  template <typename OP>
+  int get_latest_committed(OP &&op) const;
   template <typename DUMP_OP>
   int scan_KV_row(DUMP_OP &&op,
                   const share::SCN flush_scn,

@@ -23,9 +23,6 @@
 
 namespace oceanbase
 {
-namespace common
-{
-}
 namespace storage
 {
 class ObAllMicroBlockRangeIterator;

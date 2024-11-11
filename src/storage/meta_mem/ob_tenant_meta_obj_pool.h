@@ -234,7 +234,7 @@ int ObTenantMetaObjPool<T>::acquire(T *&t)
         if (OB_ITER_END != ret) {
           STORAGE_LOG(WARN, "wash function fail", K(ret));
         }
-      } else {
+      } else if (OB_NOT_NULL(free_obj)) {
         t = static_cast<T *>(free_obj);
       }
     }
