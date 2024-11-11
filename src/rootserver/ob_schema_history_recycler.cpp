@@ -153,7 +153,7 @@ void ObSchemaHistoryRecycler::stop()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
-    ObReentrantThread::stop();
+    ObRsReentrantThread::stop();
     idling_.wakeup();
   }
 }
