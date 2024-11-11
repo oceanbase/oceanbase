@@ -26,6 +26,7 @@
 #include "share/scheduler/ob_dag_scheduler_config.h"
 #include "share/rebuild_tablet/ob_rebuild_tablet_location.h"
 #include "common/ob_learner_list.h"
+#include "storage/high_availability/ob_tablet_ha_status.h"
 
 namespace oceanbase
 {
@@ -487,7 +488,10 @@ public:
   ObBackfillTabletsTableMgr();
   ~ObBackfillTabletsTableMgr();
   int init(const int64_t rebuild_seq, const share::SCN &transfer_start_scn);
-  int init_tablet_table_mgr(const common::ObTabletID &tablet_id, const int64_t transfer_seq);
+  int init_tablet_table_mgr(
+      const common::ObTabletID &tablet_id,
+      const int64_t transfer_seq,
+      const ObTabletRestoreStatus::STATUS &restore_status);
   int add_sstable(
       const common::ObTabletID &tablet_id,
       const int64_t rebuild_seq,
@@ -505,6 +509,10 @@ public:
       const common::ObTabletID &tablet_id,
       share::SCN &max_major_end_scn);
   int get_local_rebuild_seq(int64_t &local_rebuild_seq);
+  int get_restore_status(
+      const common::ObTabletID &tablet_id,
+      ObTabletRestoreStatus::STATUS &restore_status);
+  int get_transfer_scn(share::SCN &transfer_scn);
 private:
   class ObTabletTableMgr final
   {
@@ -513,7 +521,8 @@ private:
     ~ObTabletTableMgr();
     int init(
         const common::ObTabletID &tablet_id,
-        const int64_t transfer_seq);
+        const int64_t transfer_seq,
+        const ObTabletRestoreStatus::STATUS &restore_status);
     int add_sstable(
         const int64_t transfer_seq,
         const share::SCN &transfer_start_scn,
@@ -521,6 +530,7 @@ private:
     int get_all_sstables(ObTablesHandleArray &table_handle_array);
     int set_max_major_end_scn(const share::SCN &max_major_end_scn);
     int get_max_major_end_scn(share::SCN &max_major_end_scn);
+    int get_restore_status(ObTabletRestoreStatus::STATUS &restore_status);
   private:
     bool is_inited_;
     common::ObTabletID tablet_id_;
@@ -528,6 +538,7 @@ private:
     share::SCN max_major_end_scn_;
     common::ObArenaAllocator allocator_;
     ObTablesHandleArray table_handle_array_;
+    ObTabletRestoreStatus::STATUS restore_status_;
     DISALLOW_COPY_AND_ASSIGN(ObTabletTableMgr);
   };
 private:

@@ -500,6 +500,7 @@ private:
       const ObDirectLoadType direct_load_type,
       ObITable::TableKey &table_key,
       bool &replay_normal_in_cs_replica);
+  int check_table_store_without_backup_table_(const ObSSTableArray &sstable_array);
 public:
   // other
   const ObMetaDiskAddr &get_tablet_addr() const { return tablet_addr_; }

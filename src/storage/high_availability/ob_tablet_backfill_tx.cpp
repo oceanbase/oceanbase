@@ -860,6 +860,7 @@ int ObTabletBackfillTXTask::init_tablet_table_mgr_()
   ObTabletHandle tablet_handle;
   ObTablet *tablet = nullptr;
   int64_t transfer_seq = 0;
+  ObTabletRestoreStatus::STATUS restore_status = ObTabletRestoreStatus::RESTORE_STATUS_MAX;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -871,7 +872,9 @@ int ObTabletBackfillTXTask::init_tablet_table_mgr_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(tablet_info_));
   } else if (FALSE_IT(transfer_seq = tablet->get_tablet_meta().transfer_info_.transfer_seq_)) {
-  } else if (OB_FAIL(tablets_table_mgr_->init_tablet_table_mgr(tablet_info_.tablet_id_, transfer_seq))) {
+  } else if (OB_FAIL(tablet->get_restore_status(restore_status))) {
+    LOG_WARN("failed to get restore status", K(ret), KPC(tablet));
+  } else if (OB_FAIL(tablets_table_mgr_->init_tablet_table_mgr(tablet_info_.tablet_id_, transfer_seq, restore_status))) {
     LOG_WARN("failed to init tablet table mgr", K(ret), K(tablet_info_));
   }
   return ret;

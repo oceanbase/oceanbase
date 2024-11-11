@@ -1485,7 +1485,8 @@ int ObTransferReplaceTableTask::get_source_tablet_tables_(
   } else if (OB_ISNULL(dest_tablet) || !tablet_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablet info is invalid", K(ret), K(tablet_info));
-  } else if (FALSE_IT(transfer_scn = dest_tablet->get_tablet_meta().transfer_info_.transfer_start_scn_)) {
+  } else if (OB_FAIL(ctx_->tablets_table_mgr_.get_transfer_scn(transfer_scn))) {
+    LOG_WARN("failed to get transfer scn", K(ret), K(tablet_info));
   } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
@@ -1525,10 +1526,27 @@ int ObTransferReplaceTableTask::get_source_tablet_tables_(
       ret = OB_EAGAIN;
       LOG_WARN("the transfer start transaction was rolledback and the task needs to be retried", K(ret), K(tablet_info), K(src_user_data));
     }
-  } else if (OB_FAIL(tablet->get_tablet_meta().ha_status_.get_restore_status(restore_status))) {
-    LOG_WARN("failed to get tablet restore status", K(ret));
+  } else if (src_user_data.transfer_scn_ != dest_tablet->get_tablet_meta().transfer_info_.transfer_start_scn_
+      || src_user_data.transfer_scn_ != transfer_scn) {
+    if (tablet_info.is_committed_) {
+      ret = OB_TRANSFER_SYS_ERROR;
+      LOG_ERROR("transfer trans has committed but src and dest transfer scn is not same", K(ret),
+          KPC(ctx_), KPC(tablet), K(src_user_data), KPC(dest_tablet), K(transfer_scn));
+    } else {
+      ret = OB_EAGAIN;
+      LOG_WARN("transfer scn is not equal to user data transfer scn, may transfer", K(ret), K(src_user_data), KPC(ctx_));
+      //backfill tx ctx is batch context, log sync scn is for batch tablets which have same log sync scn
+      //single tablet log sync scn which is changed can not retry batch tablets task.
+      int tmp_ret = OB_SUCCESS;
+      const bool need_retry = false;
+      if (OB_SUCCESS != (tmp_ret = ctx_->set_result(ret, need_retry))) {
+        LOG_WARN("failed to set result", K(tmp_ret), K(ret), KPC(ctx_));
+      }
+    }
   } else if (OB_FAIL(tablet->fetch_table_store(wrapper))) {
     LOG_WARN("fetch table store fail", K(ret), KP(tablet));
+  } else if (OB_FAIL(ctx_->tablets_table_mgr_.get_restore_status(tablet->get_tablet_id(), restore_status))) {
+    LOG_WARN("failed to get restore status", K(ret), KPC(tablet));
   } else if (OB_FAIL(ctx_->tablets_table_mgr_.get_tablet_all_sstables(tablet_info.tablet_id_, filled_table_handle_array))) {
     LOG_WARN("failed to get tablet all sstables", K(ret), K(tablet_info));
   } else if (OB_FAIL(add_src_major_sstable_(tablet_info.tablet_id_, wrapper, filled_table_handle_array))) {
