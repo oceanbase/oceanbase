@@ -1156,7 +1156,7 @@ int CommandOperator::init_tablet_ids_by_ops(
     ObRedisOp *op = reinterpret_cast<ObRedisOp*>(ops.at(i));
     if (OB_ISNULL(op)) {
       ret = OB_ERR_NULL_VALUE;
-      LOG_WARN("invalid null hget op", K(ret), KP(op));
+      LOG_WARN("invalid null op", K(ret), KP(op));
     } else if (OB_FAIL(tablet_ids->push_back(op->tablet_id_))) {
       LOG_WARN("fail to push back tablet id", K(ret));
     }
@@ -1215,7 +1215,7 @@ int CommandOperator::get_group_metas(ObIAllocator &allocator,
     ObRedisMeta *meta_info = nullptr;
     if (OB_ISNULL(op)) {
       ret = OB_ERR_NULL_VALUE;
-      LOG_WARN("invalid null hget op", K(ret));
+      LOG_WARN("invalid null op", K(ret));
     } else {
       ObITableEntity *entity = nullptr;
       ObString key;

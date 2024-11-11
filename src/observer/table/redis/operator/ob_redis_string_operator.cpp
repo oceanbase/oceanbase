@@ -981,7 +981,7 @@ int StringCommandOperator::inner_do_group_get(const ObString &prop_name, ResultF
     ObRedisOp *op = reinterpret_cast<ObRedisOp*>(group_ctx.ops().at(i));
     if (OB_ISNULL(op) || OB_ISNULL(op->cmd())) {
       ret = OB_ERR_NULL_VALUE;
-      LOG_WARN("invalid null hget op", K(ret), KP(op), KP(op->cmd()));
+      LOG_WARN("invalid null op", K(ret), KP(op), KP(op->cmd()));
     } else {
       RedisCommand *cmd = reinterpret_cast<RedisCommand*>(op->cmd());
       ObITableEntity *entity = nullptr;
@@ -1032,7 +1032,7 @@ int StringCommandOperator::do_group_set()
     ObRedisOp *op = reinterpret_cast<ObRedisOp*>(group_ctx.ops().at(i));
     if (OB_ISNULL(op) || OB_ISNULL(op->cmd())) {
       ret = OB_ERR_NULL_VALUE;
-      LOG_WARN("invalid null hget op", K(ret), KP(op), KP(op->cmd()));
+      LOG_WARN("invalid null op", K(ret), KP(op), KP(op->cmd()));
     } else {
       Set *set = reinterpret_cast<Set*>(op->cmd());
       ObITableEntity *entity = nullptr;
@@ -1089,7 +1089,7 @@ int StringCommandOperator::do_group_incr()
     ObRedisOp *op = reinterpret_cast<ObRedisOp*>(group_ctx.ops().at(i));
     if (OB_ISNULL(op) || OB_ISNULL(op->cmd())) {
       ret = OB_ERR_NULL_VALUE;
-      LOG_WARN("invalid null hget op", K(ret), KP(op), KP(op->cmd()));
+      LOG_WARN("invalid null op", K(ret), KP(op), KP(op->cmd()));
     } else {
       IncrBy *cmd = reinterpret_cast<IncrBy*>(op->cmd());
       RedisKeyNode node(op->db(), cmd->key(), op->tablet_id_);
@@ -1160,7 +1160,7 @@ int StringCommandOperator::do_group_incr()
     RedisKeyNode node = i->first;
     ObITableEntity *entity = nullptr;
     char *addr = ptr + idx * ObFastFormatInt::MAX_DIGITS10_STR_SIZE;
-    int64_t len = ObFastFormatInt::format_unsigned(i->second, addr);
+    int64_t len = ObFastFormatInt::format_signed(i->second, addr);
     ObString val_str(len, addr);
     if (OB_FAIL(build_key_value_entity(node.db_, node.key_, val_str, entity))) {
       LOG_WARN("fail to build rowkey entity", K(ret), K(node), K(val_str));
