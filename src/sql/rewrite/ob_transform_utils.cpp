@@ -11027,7 +11027,8 @@ int ObTransformUtils::check_correlated_condition_isomorphic(ObSelectStmt *left_q
   if (OB_SUCC(ret) && is_valid) {
     if (OB_FAIL(pullup_correlated_exprs(left_query_ref,
                                         left_select_exprs,
-                                        left_new_select_exprs))) {
+                                        left_new_select_exprs,
+                                        false))) {
       LOG_WARN("failed to pullup correlated exprs", K(ret));
     } else if (OB_FAIL(pullup_correlated_exprs(left_query_ref,
                                                left_where_exprs,
@@ -11039,7 +11040,8 @@ int ObTransformUtils::check_correlated_condition_isomorphic(ObSelectStmt *left_q
       LOG_WARN("failed to pullup correlated exprs", K(ret));
     } else if (OB_FAIL(pullup_correlated_exprs(right_query_ref,
                                                right_select_exprs,
-                                               right_new_select_exprs))) {
+                                               right_new_select_exprs,
+                                               false))) {
       LOG_WARN("failed to pullup correlated exprs", K(ret));
     } else if (OB_FAIL(pullup_correlated_exprs(right_query_ref,
                                                right_where_exprs,
@@ -11511,7 +11513,8 @@ int ObTransformUtils::check_result_type_same(ObRawExpr* left_expr,
   */
 int ObTransformUtils::create_spj_and_pullup_correlated_exprs(const ObQueryRefRawExpr &query_ref,
                                                              ObSelectStmt *&subquery,
-                                                             ObTransformerCtx *ctx)
+                                                             ObTransformerCtx *ctx,
+                                                             const bool skip_const_select_item)
 {
   int ret = OB_SUCCESS;
   ObStmtFactory *stmt_factory = NULL;
@@ -11550,7 +11553,8 @@ int ObTransformUtils::create_spj_and_pullup_correlated_exprs(const ObQueryRefRaw
   } else if (OB_FAIL(pullup_correlated_select_expr(query_ref,
                                                    *subquery,
                                                    *view_stmt,
-                                                   new_select_list))) {
+                                                   new_select_list,
+                                                   skip_const_select_item))) {
     LOG_WARN("failed to pullup correlated select expr", K(ret));
   } else if (OB_FAIL(pullup_correlated_conditions(query_ref,
                                                   view_stmt->get_having_exprs(),
@@ -11580,7 +11584,8 @@ int ObTransformUtils::create_spj_and_pullup_correlated_exprs(const ObQueryRefRaw
       if (OB_FAIL(replace_none_correlated_expr(item.expr_,
                                                query_ref,
                                                pos, 
-                                               new_column_list))) {
+                                               new_column_list,
+                                               skip_const_select_item))) {
         LOG_WARN("failed to replace expr", K(ret));
       }
     }
@@ -11650,7 +11655,7 @@ int ObTransformUtils::create_spj_and_pullup_correlated_exprs_for_set(const ObQue
           LOG_WARN("unexpect null stmt", K(ret));
         // somehow, the following implemenation is quite tircky,
         // the function actually modify the origin set stmt
-        } else if (OB_FAIL(create_spj_and_pullup_correlated_exprs(query_ref, query, ctx))) {
+        } else if (OB_FAIL(create_spj_and_pullup_correlated_exprs(query_ref, query, ctx, false))) {
           LOG_WARN("failed to create spj", K(ret));
         } else if (0 < i &&
                   OB_FAIL(adjust_select_item_pos(right_new_select_exprs.at(i),
@@ -11789,14 +11794,16 @@ int ObTransformUtils::adjust_select_item_pos(ObIArray<ObRawExpr*> &right_select_
 int ObTransformUtils::replace_none_correlated_exprs(ObIArray<ObRawExpr*> &exprs,
                                                     const ObQueryRefRawExpr &query_ref,
                                                     int &pos,
-                                                    ObIArray<ObRawExpr*> &new_column_list)
+                                                    ObIArray<ObRawExpr*> &new_column_list,
+                                                    const bool skip_const)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
     if (OB_FAIL(replace_none_correlated_expr(exprs.at(i),
                                              query_ref,
                                              pos,
-                                             new_column_list))) {
+                                             new_column_list,
+                                             skip_const))) {
       LOG_WARN("failed to pullup correlated expr", K(ret));
     }
   }
@@ -11806,7 +11813,8 @@ int ObTransformUtils::replace_none_correlated_exprs(ObIArray<ObRawExpr*> &exprs,
 int ObTransformUtils::replace_none_correlated_expr(ObRawExpr *&expr,
                                                   const ObQueryRefRawExpr &query_ref,
                                                   int &pos,
-                                                  ObIArray<ObRawExpr*> &new_column_list)
+                                                  ObIArray<ObRawExpr*> &new_column_list,
+                                                  const bool skip_const)
 {
   int ret = OB_SUCCESS;
   bool is_correlated = false;
@@ -11814,7 +11822,7 @@ int ObTransformUtils::replace_none_correlated_expr(ObRawExpr *&expr,
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null expr", K(ret));
-  } else if (expr->is_static_const_expr()) {
+  } else if (skip_const && expr->is_static_const_expr()) {
     //do nothing
   } else if (OB_FAIL(is_scalar_expr(expr, is_scalar))) {
     LOG_WARN("failed to check is scalar expr", K(ret));
@@ -11838,7 +11846,8 @@ int ObTransformUtils::replace_none_correlated_expr(ObRawExpr *&expr,
       if (OB_FAIL(SMART_CALL(replace_none_correlated_expr(expr->get_param_expr(i),
                                                           query_ref,
                                                           pos,
-                                                          new_column_list)))) {
+                                                          new_column_list,
+                                                          skip_const)))) {
         LOG_WARN("failed to pullup correlated expr", K(ret));
       }
     }
@@ -11848,13 +11857,14 @@ int ObTransformUtils::replace_none_correlated_expr(ObRawExpr *&expr,
 
 int ObTransformUtils::pullup_correlated_exprs(const ObQueryRefRawExpr &query_ref,
                                               ObIArray<ObRawExpr*> &exprs,
-                                              ObIArray<ObRawExpr*> &new_select_list)
+                                              ObIArray<ObRawExpr*> &new_select_list,
+                                              const bool skip_const)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
     ObRawExpr *expr = exprs.at(i);
     bool is_correlated = false;
-    if (OB_FAIL(pullup_correlated_expr(query_ref, expr, new_select_list, is_correlated))) {
+    if (OB_FAIL(pullup_correlated_expr(query_ref, expr, new_select_list, is_correlated, skip_const))) {
       LOG_WARN("failed to pullup correlated expr", K(ret));
     }
   }
@@ -11864,7 +11874,8 @@ int ObTransformUtils::pullup_correlated_exprs(const ObQueryRefRawExpr &query_ref
 int ObTransformUtils::pullup_correlated_expr(const ObQueryRefRawExpr &query_ref,
                                              ObRawExpr *expr,
                                              ObIArray<ObRawExpr*> &new_select_list,
-                                             bool &is_correlated)
+                                             bool &is_correlated,
+                                             const bool skip_const)
 {
   int ret = OB_SUCCESS;
   is_correlated = false;
@@ -11872,7 +11883,7 @@ int ObTransformUtils::pullup_correlated_expr(const ObQueryRefRawExpr &query_ref,
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null expr", K(ret));
-  } else if (expr->is_static_const_expr()) {
+  } else if (skip_const && expr->is_static_const_expr()) {
     //do nothing
   } else if (OB_FAIL(is_scalar_expr(expr, is_scalar))) {
     LOG_WARN("failed to check is scalar expr", K(ret));
@@ -11893,7 +11904,8 @@ int ObTransformUtils::pullup_correlated_expr(const ObQueryRefRawExpr &query_ref,
       if (OB_FAIL(SMART_CALL(pullup_correlated_expr(query_ref,
                                                     expr->get_param_expr(i),
                                                     new_select_list,
-                                                    param_correlated)))) {
+                                                    param_correlated,
+                                                    skip_const)))) {
         LOG_WARN("failed to pullup correlated expr", K(ret));
       }
     }
@@ -11904,7 +11916,8 @@ int ObTransformUtils::pullup_correlated_expr(const ObQueryRefRawExpr &query_ref,
 int ObTransformUtils::pullup_correlated_select_expr(const ObQueryRefRawExpr &query_ref,
                                                     ObSelectStmt &stmt,
                                                     ObSelectStmt &view,
-                                                    ObIArray<ObRawExpr*> &new_select_list)
+                                                    ObIArray<ObRawExpr*> &new_select_list,
+                                                    const bool skip_const)
 {
   int ret = OB_SUCCESS;
   ObIArray<SelectItem> &select_items = view.get_select_items();
@@ -11917,7 +11930,8 @@ int ObTransformUtils::pullup_correlated_select_expr(const ObQueryRefRawExpr &que
     } else if (OB_FAIL(pullup_correlated_expr(query_ref,
                                               expr,
                                               new_select_list,
-                                              is_correlated))) {
+                                              is_correlated,
+                                              skip_const))) {
       LOG_WARN("failed to pullup correlated expr", K(ret));
     }
   }

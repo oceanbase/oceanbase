@@ -1619,7 +1619,8 @@ public:
 
   static int create_spj_and_pullup_correlated_exprs(const ObQueryRefRawExpr &query_ref,
                                                     ObSelectStmt *&subquery,
-                                                    ObTransformerCtx *ctx);
+                                                    ObTransformerCtx *ctx,
+                                                    const bool skip_const_select_item = true);
 
   static int create_spj_and_pullup_correlated_exprs_for_set(const ObQueryRefRawExpr &query_ref,
                                                             ObSelectStmt *&stmt,
@@ -1631,26 +1632,31 @@ public:
   static int replace_none_correlated_exprs(ObIArray<ObRawExpr*> &exprs,
                                           const ObQueryRefRawExpr &query_ref,
                                           int &pos,
-                                          ObIArray<ObRawExpr*> &new_column_list);
+                                          ObIArray<ObRawExpr*> &new_column_list,
+                                          const bool skip_const = true);
 
   static int replace_none_correlated_expr(ObRawExpr *&expr,
                                           const ObQueryRefRawExpr &query_ref,
                                           int &pos,
-                                          ObIArray<ObRawExpr*> &new_column_list);
+                                          ObIArray<ObRawExpr*> &new_column_list,
+                                          const bool skip_const = true);
 
   static int pullup_correlated_exprs(const ObQueryRefRawExpr &query_ref,
                                      ObIArray<ObRawExpr*> &exprs,
-                                     ObIArray<ObRawExpr*> &new_select_list);
+                                     ObIArray<ObRawExpr*> &new_select_list,
+                                     const bool skip_const = true);
 
   static int pullup_correlated_expr(const ObQueryRefRawExpr &query_ref,
                                     ObRawExpr *expr,
                                     ObIArray<ObRawExpr*> &new_select_list,
-                                    bool &is_correlated);
+                                    bool &is_correlated,
+                                    const bool skip_const = true);
 
   static int pullup_correlated_select_expr(const ObQueryRefRawExpr &query_ref,
                                            ObSelectStmt &stmt,
                                            ObSelectStmt &view,
-                                           ObIArray<ObRawExpr*> &new_select_list);
+                                           ObIArray<ObRawExpr*> &new_select_list,
+                                           const bool skip_const = true);
 
   static int pullup_correlated_conditions(const ObQueryRefRawExpr &query_ref,
                                           ObIArray<ObRawExpr *> &exprs,
