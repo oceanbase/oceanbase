@@ -683,7 +683,7 @@ int ObPluginVectorIndexLoadScheduler::try_schedule_remaining_tasks(ObPluginVecto
 bool ObPluginVectorIndexLoadScheduler::can_schedule_tenant(const ObPluginVectorIndexMgr *mgr)
 {
   bool bret = true;
-  if (OB_ISNULL(mgr)) {
+  if (OB_ISNULL(mgr) || is_stopped()) {
     bret = false;
   }
   return bret;
