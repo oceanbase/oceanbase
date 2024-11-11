@@ -41,7 +41,7 @@ static void *roaring_malloc(size_t size) {
                last_mem_attr.label_[0] == 'V' &&
                last_mem_attr.label_[1] == 'I' &&
                last_mem_attr.label_[2] == 'B') {
-      alloc_ptr = ob_malloc(alloc_size, SET_IGNORE_MEM_VERSION(lib::ObMemAttr(tenant_id, "VIBitmapADP")));
+      alloc_ptr = ob_malloc(alloc_size, SET_IGNORE_MEM_VERSION(lib::ObMemAttr(tenant_id, last_mem_attr.label_)));
       mem_mgr->incr_vec_idx_used(alloc_size);
     } else {
       alloc_ptr = mem_mgr->alloc(alloc_size);
