@@ -12,6 +12,7 @@
 
 #pragma once
 #include "common/row/ob_row_iterator.h"
+#include "share/schema/ob_table_schema.h"
 #include "share/backup/ob_backup_struct.h"
 #include "lib/string/ob_string.h"
 
@@ -36,12 +37,15 @@ public:
                        ObIAllocator &allocator);
   ObTableLoadBackupTable() {}
   virtual ~ObTableLoadBackupTable() {}
-  virtual int init(const share::ObBackupStorageInfo *storage_info, const ObString &path) = 0;
+  virtual int init(
+      const share::ObBackupStorageInfo *storage_info,
+      const ObString &path,
+      const share::schema::ObTableSchema *table_schema) = 0;
   virtual int scan(int64_t part_idx, common::ObNewRowIterator *&iter, common::ObIAllocator &allocator,
                    int64_t subpart_count = 1, int64_t subpart_idx = 0) = 0;
-  virtual bool is_valid() const = 0;
-  virtual int64_t get_column_count() const = 0;
   virtual int64_t get_partition_count() const = 0;
+  virtual int64_t get_hidden_pk_count() const = 0;
+  DECLARE_PURE_VIRTUAL_TO_STRING;
 };
 
 } // namespace observer

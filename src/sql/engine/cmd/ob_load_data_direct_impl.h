@@ -87,6 +87,7 @@ private:
                  K_(data_mem_usage_limit),
                  K_(need_sort),
                  K_(online_opt_stat_gather),
+                 K_(is_backup),
                  K_(max_error_rows),
                  K_(ignore_row_num),
                  K_(dup_action),
@@ -106,6 +107,7 @@ private:
     int64_t data_mem_usage_limit_; // limit = data_mem_usage_limit * MAX_BUFFER_SIZE
     bool need_sort_;
     bool online_opt_stat_gather_;
+    bool is_backup_;
     int64_t max_error_rows_; // max allowed error rows
     int64_t ignore_row_num_; // number of rows to ignore per file
     sql::ObLoadDupActionType dup_action_;
@@ -459,8 +461,6 @@ private:
     void task_finished(observer::ObTableLoadTask *task, int ret_code);
     int64_t get_total_line_count() const { return total_line_count_; }
     int check_status();
-  private:
-    int check_support_direct_load();
   private:
     ObArenaAllocator allocator_;
     const LoadExecuteParam *execute_param_;

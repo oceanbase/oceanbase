@@ -66,16 +66,17 @@ void ObTableLoadStore::abort_ctx(ObTableLoadTableCtx *ctx, bool &is_stopped)
     // store ctx not init, do nothing
     is_stopped = true;
   } else {
+    int tmp_ret = OB_SUCCESS;
     LOG_INFO("store abort");
     // 1. mark status abort, speed up background task exit
-    if (OB_FAIL(ctx->store_ctx_->set_status_abort())) {
-      LOG_WARN("fail to set store status abort", KR(ret));
+    if (OB_TMP_FAIL(ctx->store_ctx_->set_status_abort())) {
+      LOG_WARN("fail to set store status abort", KR(tmp_ret));
     }
     // 2. disable heart beat check
     ctx->store_ctx_->set_enable_heart_beat_check(false);
     // 3. mark all active trans abort
-    if (OB_FAIL(abort_active_trans(ctx))) {
-      LOG_WARN("fail to abort active trans", KR(ret));
+    if (OB_TMP_FAIL(abort_active_trans(ctx))) {
+      LOG_WARN("fail to abort active trans", KR(tmp_ret));
     }
     // 4. stop merger
     ctx->store_ctx_->merger_->stop();
@@ -500,11 +501,9 @@ public:
   {
     ctx_->inc_ref_count();
     trans_->inc_ref_count();
-    store_writer_->inc_ref_count();
   }
   virtual ~CleanUpTaskProcessor()
   {
-    trans_->put_store_writer(store_writer_);
     ctx_->store_ctx_->put_trans(trans_);
     ObTableLoadService::put_ctx(ctx_);
   }
@@ -576,10 +575,6 @@ int ObTableLoadStore::clean_up_trans(ObTableLoadStoreTrans *trans)
       }
     }
   }
-  if (OB_NOT_NULL(store_writer)) {
-    trans->put_store_writer(store_writer);
-    store_writer = nullptr;
-  }
   return ret;
 }
 
@@ -624,11 +619,9 @@ public:
   {
     ctx_->inc_ref_count();
     trans_->inc_ref_count();
-    store_writer_->inc_ref_count();
   }
   virtual ~WriteTaskProcessor()
   {
-    trans_->put_store_writer(store_writer_);
     ctx_->store_ctx_->put_trans(trans_);
     ObTableLoadService::put_ctx(ctx_);
   }
@@ -669,11 +662,9 @@ public:
   {
     ctx_->inc_ref_count();
     trans_->inc_ref_count();
-    store_writer_->inc_ref_count();
   }
   virtual ~WriteTaskCallback()
   {
-    trans_->put_store_writer(store_writer_);
     ctx_->store_ctx_->put_trans(trans_);
     ObTableLoadService::put_ctx(ctx_);
   }
@@ -751,10 +742,6 @@ int ObTableLoadStore::write(const ObTableLoadTransId &trans_id, int32_t session_
       }
     }
     if (OB_NOT_NULL(trans)) {
-      if (OB_NOT_NULL(store_writer)) {
-        trans->put_store_writer(store_writer);
-        store_writer = nullptr;
-      }
       store_ctx_->put_trans(trans);
       trans = nullptr;
     }
@@ -779,11 +766,9 @@ public:
   {
     ctx_->inc_ref_count();
     trans_->inc_ref_count();
-    store_writer_->inc_ref_count();
   }
   virtual ~FlushTaskProcessor()
   {
-    trans_->put_store_writer(store_writer_);
     ctx_->store_ctx_->put_trans(trans_);
     ObTableLoadService::put_ctx(ctx_);
   }
@@ -794,6 +779,10 @@ public:
     if (OB_SUCC(trans_->check_trans_status(ObTableLoadTransStatusType::FROZEN))) {
       if (OB_FAIL(store_writer_->flush(session_id_))) {
         LOG_WARN("fail to flush store", KR(ret));
+      } else if (0 == trans_->dec_flush_task_count()) {
+        if (OB_FAIL(trans_->set_trans_status_commit())) {
+          LOG_WARN("fail to set trans status commit", KR(ret), K(trans_->get_trans_id()));
+        }
       }
     }
     return ret;
@@ -808,17 +797,14 @@ private:
 class ObTableLoadStore::FlushTaskCallback : public ObITableLoadTaskCallback
 {
 public:
-  FlushTaskCallback(ObTableLoadTableCtx *ctx, ObTableLoadStoreTrans *trans,
-                    ObTableLoadTransStoreWriter *store_writer)
-    : ctx_(ctx), trans_(trans), store_writer_(store_writer)
+  FlushTaskCallback(ObTableLoadTableCtx *ctx, ObTableLoadStoreTrans *trans)
+    : ctx_(ctx), trans_(trans)
   {
     ctx_->inc_ref_count();
     trans_->inc_ref_count();
-    store_writer_->inc_ref_count();
   }
   virtual ~FlushTaskCallback()
   {
-    trans_->put_store_writer(store_writer_);
     ctx_->store_ctx_->put_trans(trans_);
     ObTableLoadService::put_ctx(ctx_);
   }
@@ -834,7 +820,6 @@ public:
 private:
   ObTableLoadTableCtx * const ctx_;
   ObTableLoadStoreTrans * const trans_;
-  ObTableLoadTransStoreWriter * const store_writer_; // 为了保证接收完本次写入结果之后再让store的引用归零
 };
 
 int ObTableLoadStore::flush(ObTableLoadStoreTrans *trans)
@@ -852,8 +837,9 @@ int ObTableLoadStore::flush(ObTableLoadStoreTrans *trans)
     }
     // after get store writer, avoid early commit
     else if (OB_FAIL(trans->set_trans_status_frozen())) {
-      LOG_WARN("fail to freeze trans", KR(ret));
+      LOG_WARN("fail to freeze trans", KR(ret), K(trans->get_trans_id()));
     } else {
+      trans->init_flush_task_count(param_.write_session_count_);
       for (int32_t session_id = 1; OB_SUCC(ret) && session_id <= param_.write_session_count_; ++session_id) {
         ObTableLoadTask *task = nullptr;
         // 1. 分配task
@@ -866,7 +852,7 @@ int ObTableLoadStore::flush(ObTableLoadStoreTrans *trans)
           LOG_WARN("fail to set flush task processor", KR(ret));
         }
         // 3. 设置callback
-        else if (OB_FAIL(task->set_callback<FlushTaskCallback>(ctx_, trans, store_writer))) {
+        else if (OB_FAIL(task->set_callback<FlushTaskCallback>(ctx_, trans))) {
           LOG_WARN("fail to set flush task callback", KR(ret));
         }
         // 4. 把task放入调度器
@@ -879,10 +865,6 @@ int ObTableLoadStore::flush(ObTableLoadStoreTrans *trans)
           }
         }
       }
-    }
-    if (OB_NOT_NULL(store_writer)) {
-      trans->put_store_writer(store_writer);
-      store_writer = nullptr;
     }
   }
   return ret;
@@ -928,6 +910,8 @@ int ObTableLoadStore::px_finish_trans(const ObTableLoadTransId &trans_id)
       LOG_WARN("unexpected trans id", KR(ret), K(trans_id), KPC(trans));
     } else if (OB_FAIL(px_flush(trans))) {
       LOG_WARN("fail to do px flush", KR(ret));
+    } else if (OB_FAIL(trans->set_trans_status_commit())) {
+      LOG_WARN("fail to set trans status commit", KR(ret));
     } else if (OB_FAIL(store_ctx_->commit_trans(trans))) {
       LOG_WARN("fail to commit trans", KR(ret));
     } else {
@@ -966,10 +950,6 @@ int ObTableLoadStore::px_get_trans_writer(const ObTableLoadTransId &trans_id,
       LOG_WARN("fail to init writer", KR(ret));
     }
     if (OB_NOT_NULL(trans)) {
-      if (OB_NOT_NULL(store_writer)) {
-        trans->put_store_writer(store_writer);
-        store_writer = nullptr;
-      }
       store_ctx_->put_trans(trans);
       trans = nullptr;
     }
@@ -996,10 +976,6 @@ int ObTableLoadStore::px_flush(ObTableLoadStoreTrans *trans)
       LOG_WARN("fail to flush store", KR(ret));
     } else {
       LOG_DEBUG("succeed to flush store");
-    }
-    if (OB_NOT_NULL(store_writer)) {
-      trans->put_store_writer(store_writer);
-      store_writer = nullptr;
     }
   }
   return ret;
@@ -1054,10 +1030,6 @@ int ObTableLoadStore::px_clean_up_trans(ObTableLoadStoreTrans *trans)
       LOG_WARN("fail to get store writer", KR(ret));
     } else if (OB_FAIL(store_writer->clean_up(session_id))) {
       LOG_WARN("fail to clean up store writer", KR(ret));
-    }
-    if (OB_NOT_NULL(store_writer)) {
-      trans->put_store_writer(store_writer);
-      store_writer = nullptr;
     }
   }
   return ret;

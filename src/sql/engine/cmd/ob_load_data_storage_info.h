@@ -30,9 +30,11 @@ public:
   DEF(INVALID_FORMAT, = 0)        \
   DEF(CSV, )                      \
   DEF(OB_BACKUP_1_4, )            \
+  DEF(OB_BACKUP_3_X, )            \
   DEF(MAX_FORMAT, )
 
   DECLARE_ENUM(Type, type, LOAD_DATA_FORMAT_DEF, static);
+  static bool is_backup(Type type) { return type == OB_BACKUP_1_4 || type == OB_BACKUP_3_X; }
 };
 
 class ObLoadDataStorageInfo : public share::ObBackupStorageInfo

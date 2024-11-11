@@ -13,29 +13,43 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/table_load/backup/v_1_4/ob_table_load_backup_table_v_1_4.h"
-#include "observer/table_load/backup/v_1_4/ob_table_load_backup_partition_scanner_v_1_4.h"
-#include "observer/table_load/backup/v_1_4/ob_table_load_backup_util_v_1_4.h"
+#include "observer/table_load/backup/v_1_4/ob_table_load_backup_partition_scanner.h"
+#include "observer/table_load/backup/v_1_4/ob_table_load_backup_util.h"
 #include "observer/table_load/backup/ob_table_load_backup_file_util.h"
+#include "observer/table_load/ob_table_load_schema.h"
 #include <cstring>
 
 namespace oceanbase
 {
 namespace observer
 {
+namespace table_load_backup_v_1_4
+{
 using namespace common;
 using namespace share;
+using namespace share::schema;
 
-int ObTableLoadBackupTable_V_1_4::init(const ObBackupStorageInfo *storage_info, const ObString &path)
+int ObTableLoadBackupTable_V_1_4::init(
+    const ObBackupStorageInfo *storage_info,
+    const ObString &path,
+    const ObTableSchema *table_schema)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("already init", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(storage_info == nullptr || path.empty())) {
+  } else if (OB_UNLIKELY(storage_info == nullptr || path.empty() || table_schema == nullptr || !table_schema->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), KP(storage_info), K(path));
+    LOG_WARN("invalid args", KR(ret), KP(storage_info), K(path), KP(table_schema));
+  } else if (lib::is_oracle_mode()) {   // 1.4x只支持mysql租户
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("direct load from backup data of mysql tenant to oracle tenant is not supported", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "direct load from backup data of mysql tenant to oracle tenant is");
   } else if (OB_FAIL(storage_info_.assign(*storage_info))) {
     LOG_WARN("fail to assign", KR(ret));
+  } else if (FALSE_IT(is_heap_table_ = table_schema->is_heap_table())) {
+  } else if (OB_FAIL(table_schema->get_column_ids(schema_info_.column_desc_))) {
+    LOG_WARN("fail to get columns ids", KR(ret));
   } else if (OB_FAIL(parse_path(path))) {
     LOG_WARN("fail to parse path", KR(ret), K(path));
   } else if (OB_FAIL(get_column_ids())) {
@@ -75,11 +89,11 @@ int ObTableLoadBackupTable_V_1_4::scan(int64_t part_idx, ObNewRowIterator *&iter
                                      table_id_.length(), table_id_.ptr()))) {
     LOG_WARN("fail to fill meta_buf", KR(ret), K(meta_pos), K(part_list_[part_idx]), K(table_id_));
   } else {
-    ObTableLoadBackupPartScanner_V_1_4 *scanner = nullptr;
-    if (OB_ISNULL(scanner = OB_NEWx(ObTableLoadBackupPartScanner_V_1_4, &allocator))) {
+    ObTableLoadBackupPartScanner *scanner = nullptr;
+    if (OB_ISNULL(scanner = OB_NEWx(ObTableLoadBackupPartScanner, &allocator))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc memory", KR(ret));
-    } else if (OB_FAIL(scanner->init(storage_info_, column_ids_,
+    } else if (OB_FAIL(scanner->init(storage_info_, schema_info_, column_ids_,
                                      ObString(data_pos, data_buf), ObString(meta_pos, meta_buf),
                                      subpart_count, subpart_idx))) {
       LOG_WARN("fail to init iter", KR(ret), K(table_id_), K(subpart_count), K(subpart_idx));
@@ -87,7 +101,7 @@ int ObTableLoadBackupTable_V_1_4::scan(int64_t part_idx, ObNewRowIterator *&iter
       iter = scanner;
     }
     if (OB_FAIL(ret) && scanner != nullptr) {
-      scanner->~ObTableLoadBackupPartScanner_V_1_4();
+      scanner->~ObTableLoadBackupPartScanner();
       allocator.free(scanner);
       scanner = nullptr;
     }
@@ -96,15 +110,10 @@ int ObTableLoadBackupTable_V_1_4::scan(int64_t part_idx, ObNewRowIterator *&iter
   return ret;
 }
 
-bool ObTableLoadBackupTable_V_1_4::is_valid() const
-{
-  return is_inited_;
-}
-
 int ObTableLoadBackupTable_V_1_4::parse_path(const ObString &path)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(storage_info_.get_type() != OB_STORAGE_OSS)) {
+  if (OB_UNLIKELY(storage_info_.get_type() != OB_STORAGE_OSS && storage_info_.get_type() != OB_STORAGE_FILE)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("unsupport storage type", KR(ret), K(storage_info_));
   } else {
@@ -117,40 +126,38 @@ int ObTableLoadBackupTable_V_1_4::parse_path(const ObString &path)
       if (buf[pos - 1] != '/') {
         buf[pos++] = '/';
       }
-      if (OB_FAIL(ob_write_string(allocator_, ObString(pos, buf), data_path_))) {
+      if (OB_FAIL(ob_write_string(allocator_, ObString(pos, buf), data_path_, true))) {
         LOG_WARN("fail to ob_write_string", KR(ret));
       } else {
+        const int64_t backup_table_id_idx = 0;
+        const int64_t need_split_count = backup_table_id_idx + 1;
+        ObArray<ObString> split_result;
         ObString str(pos, buf);
-        while (OB_SUCC(ret)) {
-          ObString tmp_str = str.split_on(str.reverse_find('/'));
-          if (!str.empty()) {
-            if (OB_FAIL(ob_write_string(allocator_, str, table_id_))) {
-              LOG_WARN("fail to ob_write_string", KR(ret));
-            } else {
-              break;
-            }
-          } else {
-            str = tmp_str;
-          }
-        }
-      }
-      if (OB_SUCC(ret)) {
-        ObString pattern("base_data_");
-        char *match_ptr = nullptr;
-        if (OB_ISNULL(match_ptr = strstr(buf, pattern.ptr()))) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("not match pattern", KR(ret), K(pattern));
+        if (OB_FAIL(ObTableLoadBackupFileUtil::split_reverse(str, '/', split_result, need_split_count, true/*ignore_empty*/))) {
+          LOG_WARN("fail to split reverse", KR(ret), K(split_result));
+        } else if (OB_UNLIKELY(split_result.count() != need_split_count)) {
+          ret = OB_INVALID_BACKUP_DEST;
+          LOG_WARN("invalid backup destination", KR(ret), K(split_result.count()), K(need_split_count));
+        } else if (OB_FAIL(ob_write_string(allocator_, split_result[backup_table_id_idx], table_id_))) {
+          LOG_WARN("fail to ob_write_string", KR(ret), K(split_result[backup_table_id_idx]));
         } else {
-          pos -= pattern.length();
-          MEMMOVE(match_ptr, match_ptr + pattern.length(), pos - (match_ptr - buf));
-          if (OB_FAIL(ob_write_string(allocator_, ObString(pos, buf), meta_path_, true))) {
-            LOG_WARN("fail to ob_write_string", KR(ret));
+          ObString pattern("base_data_");
+          char *match_ptr = nullptr;
+          if (OB_ISNULL(match_ptr = strstr(buf, pattern.ptr()))) {
+            ret = OB_INVALID_BACKUP_DEST;
+            LOG_WARN("invalid backup destination", KR(ret), K(str), K(pattern));
+          } else {
+            pos -= pattern.length();
+            MEMMOVE(match_ptr, match_ptr + pattern.length(), pos - (match_ptr - buf));
+            if (OB_FAIL(ob_write_string(allocator_, ObString(pos, buf), meta_path_, true))) {
+              LOG_WARN("fail to ob_write_string", KR(ret));
+            }
           }
         }
       }
     }
   }
-
+  LOG_INFO("parse path", KR(ret), K(path), K(table_id_), K(data_path_), K(meta_path_));
   return ret;
 }
 
@@ -179,8 +186,25 @@ int ObTableLoadBackupTable_V_1_4::get_column_ids()
                                                                  file_length,
                                                                  read_size))) {
     LOG_WARN("fail to read_single_file", KR(ret), K(ObString(pos, buf)));
-  } else if (OB_FAIL(ObTableLoadBackupUtil_V_1_4::get_column_ids_from_create_table_sql(ObString(read_size, file_buf), column_ids_))) {
-    LOG_WARN("fail to get_column_ids_from_create_table_sql", K(ret));
+  } else {
+    if (is_heap_table_) {
+      if (OB_FAIL(column_ids_.push_back(ObTableLoadBackupHiddenPK::OB_HIDDEN_PK_INCREMENT_COLUMN_ID))) {
+        LOG_WARN("fail to push back", K(ret));
+      } else if (OB_FAIL(column_ids_.push_back(ObTableLoadBackupHiddenPK::OB_HIDDEN_PK_CLUSTER_COLUMN_ID))) {
+        LOG_WARN("fail to push back", K(ret));
+      } else if (OB_FAIL(column_ids_.push_back(ObTableLoadBackupHiddenPK::OB_HIDDEN_PK_PARTITION_COLUMN_ID))) {
+        LOG_WARN("fail to push back", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ObTableLoadBackupUtil::get_column_ids_from_create_table_sql(ObString(read_size, file_buf), column_ids_))) {
+        LOG_WARN("fail to get_column_ids_from_create_table_sql", K(ret));
+      }
+    } else if (OB_UNLIKELY(schema_info_.column_desc_.count() != (column_ids_.count() - (is_heap_table_ ? ObTableLoadBackupHiddenPK::get_hidden_pk_count() - 1 : 0)))) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("direct load from 1.4x backup data, column count not match is not supported", KR(ret), K(is_heap_table_), K(schema_info_.column_desc_.count()), K(column_ids_.count()));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "direct load from backup data, column count not match is");
+    }
   }
   if (file_buf != nullptr) {
     allocator_.free(file_buf);
@@ -195,10 +219,13 @@ int ObTableLoadBackupTable_V_1_4::get_partitions()
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObTableLoadBackupFileUtil::list_directories(meta_path_, &storage_info_, part_list_, allocator_))) {
     LOG_WARN("fail to list_directories", KR(ret), K(meta_path_));
+  } else {
+    LOG_INFO("success to get partitions", K(part_list_));
   }
 
   return ret;
 }
 
+} // table_load_backup_v_1_4
 } // namespace observer
 } // namespace oceanbase

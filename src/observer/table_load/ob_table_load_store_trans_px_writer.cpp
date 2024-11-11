@@ -50,12 +50,9 @@ void ObTableLoadStoreTransPXWriter::reset()
   is_heap_table_ = false;
   column_count_ = 0;
   row_count_ = 0;
+  writer_ = nullptr;
   if (nullptr != store_ctx_) {
     if (nullptr != trans_) {
-      if (nullptr != writer_) {
-        trans_->put_store_writer(writer_);
-        writer_ = nullptr;
-      }
       store_ctx_->put_trans(trans_);
       trans_ = nullptr;
     }

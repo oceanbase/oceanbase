@@ -14,6 +14,7 @@
 
 #include "observer/table_load/backup/ob_table_load_backup_table.h"
 #include "observer/table_load/backup/v_1_4/ob_table_load_backup_table_v_1_4.h"
+#include "observer/table_load/backup/v_3_x/ob_table_load_backup_table_v_3_x.h"
 
 namespace oceanbase
 {
@@ -33,7 +34,14 @@ int ObTableLoadBackupTable::get_table(ObTableLoadBackupVersion version,
   } else {
     switch (version) {
       case ObTableLoadBackupVersion::V_1_4: {
-        if (OB_ISNULL(table = OB_NEWx(ObTableLoadBackupTable_V_1_4, &allocator))) {
+        if (OB_ISNULL(table = OB_NEWx(table_load_backup_v_1_4::ObTableLoadBackupTable_V_1_4, &allocator))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to alloc memory", KR(ret));
+        }
+        break;
+      }
+      case ObTableLoadBackupVersion::V_3_X: {
+        if (OB_ISNULL(table = OB_NEWx(table_load_backup_v_3_x::ObTableLoadBackupTable_V_3_X, &allocator))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to alloc memory", KR(ret));
         }

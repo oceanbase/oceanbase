@@ -38,6 +38,17 @@ public:
                               char *buf,
                               const int64_t buf_size,
                               int64_t &read_size);
+  static int read_part_file(const common::ObString &path,
+                            const share::ObBackupStorageInfo *storage_info,
+                            char *buf,
+                            const int64_t buf_size,
+                            const int64_t offset,
+                            int64_t &read_size);
+  static int split_reverse(ObString &str,
+                           const char separator,
+                           ObIArray<ObString> &result,
+                           int64_t limit = -1,
+                           bool ignore_empty = false);
 };
 
 } // namespace observer

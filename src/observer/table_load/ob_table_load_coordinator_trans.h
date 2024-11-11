@@ -37,6 +37,8 @@ struct ObTableLoadCoordinatorTrans
   int64_t get_ref_count() const { return ATOMIC_LOAD(&ref_count_); }
   int64_t inc_ref_count() { return ATOMIC_AAF(&ref_count_, 1); }
   int64_t dec_ref_count() { return ATOMIC_AAF(&ref_count_, -1); }
+  int64_t init_flush_task_count(int64_t flush_task) { return ATOMIC_AAF(&flush_task_count_, flush_task); }
+  int64_t dec_flush_task_count() { return ATOMIC_AAF(&flush_task_count_, -1); }
   bool is_dirty() const { return is_dirty_; }
   void set_dirty() { is_dirty_ = true; }
   TO_STRING_KV(KP_(trans_ctx), KP_(trans_bucket_writer), K_(is_dirty));
@@ -66,16 +68,13 @@ public:
 private:
   int advance_trans_status(table::ObTableLoadTransStatusType trans_status);
 public:
-  int get_bucket_writer_for_write(ObTableLoadTransBucketWriter *&bucket_writer) const;
-  int get_bucket_writer_for_flush(ObTableLoadTransBucketWriter *&bucket_writer) const;
-  void put_bucket_writer(ObTableLoadTransBucketWriter *bucket_writer);
-private:
-  int handle_write_done();
+  int get_bucket_writer(ObTableLoadTransBucketWriter *&bucket_writer) const;
 private:
   ObTableLoadTransCtx * const trans_ctx_;
   const int32_t default_session_id_;
   ObTableLoadTransBucketWriter *trans_bucket_writer_;
   int64_t ref_count_ CACHE_ALIGNED;
+  int64_t flush_task_count_ CACHE_ALIGNED;
   volatile bool is_dirty_;
   bool is_inited_;
 };

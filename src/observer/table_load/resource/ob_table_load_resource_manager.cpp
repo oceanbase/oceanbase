@@ -283,7 +283,8 @@ int ObTableLoadResourceManager::release_resource(ObDirectLoadResourceReleaseArg 
           }
         }
       }
-      if (OB_FAIL(assigned_tasks_.erase_refactored(arg.task_key_))) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(assigned_tasks_.erase_refactored(arg.task_key_))) {
         LOG_WARN("fail to erase refactored", K(arg.task_key_));
       } else {
         LOG_INFO("ObTableLoadResourceManager::release_resource", K(arg));

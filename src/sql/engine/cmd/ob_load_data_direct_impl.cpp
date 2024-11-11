@@ -32,8 +32,26 @@ namespace sql
 using namespace common;
 using namespace observer;
 using namespace share;
+using namespace share::schema;
 using namespace table;
 using namespace omt;
+
+static int get_backup_version(const ObLoadDataFormat::Type &type, ObTableLoadBackupVersion &backup_version)
+{
+  int ret = OB_SUCCESS;
+  switch (type) {
+  case ObLoadDataFormat::OB_BACKUP_1_4:
+    backup_version = ObTableLoadBackupVersion::V_1_4;
+    break;
+  case ObLoadDataFormat::OB_BACKUP_3_X:
+    backup_version = ObTableLoadBackupVersion::V_3_X;
+    break;
+  default:
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected type", KR(ret), K(type));
+  }
+  return ret;
+}
 
 /**
  * DataAccessParam
@@ -63,6 +81,7 @@ ObLoadDataDirectImpl::LoadExecuteParam::LoadExecuteParam()
     data_mem_usage_limit_(0),
     need_sort_(false),
     online_opt_stat_gather_(false),
+    is_backup_(false),
     max_error_rows_(-1),
     ignore_row_num_(-1),
     dup_action_(ObLoadDupActionType::LOAD_INVALID_MODE),
@@ -1834,12 +1853,16 @@ int ObLoadDataDirectImpl::BackupLoadExecutor::init(const LoadExecuteParam &execu
     execute_param_ = &execute_param;
     execute_ctx_ = &execute_ctx;
     const DataAccessParam &data_access_param = execute_param.data_access_param_;
-    if (OB_FAIL(check_support_direct_load())) {
-      LOG_WARN("fail to check support direct load", KR(ret));
-    } else if (OB_FAIL(ObTableLoadBackupTable::get_table(ObTableLoadBackupVersion::V_1_4,
-                                                         backup_table_, allocator_))) {
+    ObSchemaGetterGuard *schema_guard = execute_ctx.exec_ctx_.get_schema_guard();
+    const ObTableSchema *table_schema = nullptr;
+    ObTableLoadBackupVersion backup_version;
+    if (OB_FAIL(ObTableLoadSchema::get_table_schema(*schema_guard, MTL_ID(), execute_param_->table_id_, table_schema))) {
+      LOG_WARN("fail to get table schema", KR(ret), K(execute_param_->table_id_));
+    } else if (OB_FAIL(get_backup_version(data_access_param.access_info_.get_load_data_format(), backup_version))) {
+      LOG_WARN("fail to get backup version", KR(ret));
+    } else if (OB_FAIL(ObTableLoadBackupTable::get_table(backup_version, backup_table_, allocator_))) {
       LOG_WARN("fail to get backup table", KR(ret));
-    } else if (OB_FAIL(backup_table_->init(&data_access_param.access_info_, path))) {
+    } else if (OB_FAIL(backup_table_->init(&data_access_param.access_info_, path, table_schema))) {
       LOG_WARN("fail to init backup table", KR(ret));
     } else {
       const int64_t max_partition_count = ObTableLoadSequenceNo::MAX_BACKUP_PARTITION_IDX + 1;
@@ -1850,10 +1873,10 @@ int ObLoadDataDirectImpl::BackupLoadExecutor::init(const LoadExecuteParam &execu
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected worker count", KR(ret), K(worker_count_));
       } else if (OB_UNLIKELY(partition_count_ <= 0)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected partition count", KR(ret), K(partition_count_));
+        ret = OB_INVALID_BACKUP_DEST;
+        LOG_WARN("invalid backup destination, no partitions", KR(ret), K(partition_count_));
       } else if (OB_UNLIKELY(partition_count_ > max_partition_count)) {
-        ret = OB_NOT_SUPPORTED;
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table partition too much", KR(ret), K(partition_count_), K(max_partition_count));
       } else {
         // 计算subpart_count_
@@ -1884,28 +1907,6 @@ int ObLoadDataDirectImpl::BackupLoadExecutor::init(const LoadExecuteParam &execu
     if (OB_SUCC(ret)) {
       is_inited_ = true;
     }
-  }
-  return ret;
-}
-
-int ObLoadDataDirectImpl::BackupLoadExecutor::check_support_direct_load()
-{
-  int ret = OB_SUCCESS;
-  const uint64_t tenant_id = MTL_ID();
-  const uint64_t table_id = execute_param_->table_id_;
-  ObSchemaGetterGuard schema_guard;
-  const ObTableSchema *table_schema = nullptr;
-  bool has_lob_column = false;
-  if (OB_FAIL(
-        ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
-    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
-  }
-  // check has lob column
-  else if (OB_FAIL(ObTableLoadSchema::check_has_lob_column(table_schema, has_lob_column))) {
-    LOG_WARN("fail to check has lob column", KR(ret));
-  } else if (has_lob_column) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("direct-load backup does not support table has lob column", KR(ret));
   }
   return ret;
 }
@@ -2047,8 +2048,8 @@ int ObLoadDataDirectImpl::BackupLoadExecutor::process_partition(int32_t session_
           //因此得把它们深拷贝一遍
           ObTableLoadObjRow tmp_obj_row;
           tmp_obj_row.seq_no_= sequence_no++;
-          tmp_obj_row.cells_ = (!is_heap_table ? new_row->cells_ : new_row->cells_ + 1);
-          tmp_obj_row.count_ = (!is_heap_table ? new_row->count_ : new_row->count_ - 1);
+          tmp_obj_row.cells_ = (!is_heap_table ? new_row->cells_ : new_row->cells_ + backup_table_->get_hidden_pk_count());
+          tmp_obj_row.count_ = (!is_heap_table ? new_row->count_ : new_row->count_ - backup_table_->get_hidden_pk_count());
           ObTableLoadObjRow obj_row;
           if (OB_FAIL(obj_row.deep_copy(tmp_obj_row, allocator_handle))) {
             LOG_WARN("failed to deep copy add assign to tmp_obj_row", KR(ret));
@@ -2142,7 +2143,6 @@ int ObLoadDataDirectImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
   ObSQLSessionInfo *session = nullptr;
   ObSchemaGetterGuard *schema_guard = nullptr;
   int64_t total_line_count = 0;
-  const bool is_backup = ObLoadDataFormat::OB_BACKUP_1_4 == load_args.access_info_.get_load_data_format();
 
   if (OB_UNLIKELY(load_args.file_iter_.count() > ObTableLoadSequenceNo::MAX_DATA_ID)) {
     ret = OB_NOT_SUPPORTED;
@@ -2202,7 +2202,7 @@ int ObLoadDataDirectImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
     }
   }
 
-  if (OB_SUCC(ret) && !is_backup) {
+  if (OB_SUCC(ret) && !execute_param_.is_backup_) {
     FileLoadExecutor *file_load_executor = nullptr;
     DataDescIterator data_desc_iter;
     if (1 == load_args.file_iter_.count() && 0 == execute_param_.ignore_row_num_ &&
@@ -2250,7 +2250,7 @@ int ObLoadDataDirectImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
       file_load_executor = nullptr;
     }
   }
-  if (OB_SUCC(ret) && is_backup) {
+  if (OB_SUCC(ret) && execute_param_.is_backup_) {
     BackupLoadExecutor *backup_load_executor = nullptr;
     if (OB_ISNULL(backup_load_executor = OB_NEWx(BackupLoadExecutor, execute_ctx_.allocator_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -2299,7 +2299,6 @@ int ObLoadDataDirectImpl::init_execute_param()
     load_stmt_->get_field_or_var_list();
   ObSchemaGetterGuard *schema_guard = ctx_->get_sql_ctx()->schema_guard_;
   const ObTableSchema *table_schema = nullptr;
-  const bool is_backup = ObLoadDataFormat::OB_BACKUP_1_4 == load_args.access_info_.get_load_data_format();
   execute_param_.tenant_id_ = load_args.tenant_id_;
   execute_param_.database_id_ = load_args.database_id_;
   execute_param_.table_id_ = load_args.table_id_;
@@ -2308,6 +2307,7 @@ int ObLoadDataDirectImpl::init_execute_param()
   execute_param_.combined_name_ = load_args.combined_name_;
   execute_param_.ignore_row_num_ = load_args.ignore_rows_;
   execute_param_.dup_action_ = load_args.dupl_action_;
+  execute_param_.is_backup_ = ObLoadDataFormat::is_backup(load_args.access_info_.get_load_data_format());
   if (OB_FAIL(ObTableLoadSchema::get_table_schema(*schema_guard,
                                                   execute_param_.tenant_id_,
                                                   execute_param_.table_id_,
@@ -2392,7 +2392,7 @@ int ObLoadDataDirectImpl::init_execute_param()
   // column_ids_
   if (OB_SUCC(ret)) {
     execute_param_.column_ids_.reset();
-    if (is_backup) { // 备份数据导入
+    if (execute_param_.is_backup_) { // 备份数据导入
       if (OB_FAIL(ObTableLoadSchema::get_column_ids(table_schema, execute_param_.column_ids_))) {
         LOG_WARN("fail to get column ids for backup", KR(ret));
       }
@@ -2447,7 +2447,6 @@ int ObLoadDataDirectImpl::init_execute_context()
 {
   int ret = OB_SUCCESS;
   const ObLoadArgument &load_args = load_stmt_->get_load_arguments();
-  const bool is_backup = ObLoadDataFormat::OB_BACKUP_1_4 == load_args.access_info_.get_load_data_format();
   execute_ctx_.exec_ctx_.exec_ctx_ = ctx_;
   execute_ctx_.allocator_ = &ctx_->get_allocator();
   ObTableLoadParam load_param;
@@ -2458,7 +2457,7 @@ int ObLoadDataDirectImpl::init_execute_context()
   load_param.batch_size_ = execute_param_.batch_row_count_;
   load_param.max_error_row_count_ = execute_param_.max_error_rows_;
   load_param.column_count_ = execute_param_.column_ids_.count();
-  load_param.need_sort_ = is_backup ? false : execute_param_.need_sort_;
+  load_param.need_sort_ = execute_param_.is_backup_ ? false : execute_param_.need_sort_;
   load_param.px_mode_ = false;
   load_param.online_opt_stat_gather_ = execute_param_.online_opt_stat_gather_;
   load_param.dup_action_ = execute_param_.dup_action_;
