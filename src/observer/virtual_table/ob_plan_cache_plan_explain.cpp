@@ -250,8 +250,15 @@ int ObExpVisitor::get_property<ObOpSpec>(const ObOpSpec &cur_op,
     case PHY_TABLE_SCAN: {
       if (OB_FAIL(static_cast<const ObTableScanSpec &>(cur_op).explain_index_selection_info(
                   buf, OB_MAX_OPERATOR_PROPERTY_LENGTH, pos))) {
-        ret = OB_ERR_UNEXPECTED;
-        SERVER_LOG(WARN, "fail to gen property", K(ret));
+        if (ret == OB_SIZE_OVERFLOW) {
+          ret = OB_SUCCESS;
+          SERVER_LOG(INFO,
+                     "The properties of ObTableScanSpec exceed "
+                     "OB_MAX_OPERATOR_PROPERTY_LENGTH and have been truncated.",
+                     K(ret), K(OB_MAX_OPERATOR_PROPERTY_LENGTH));
+        } else {
+          SERVER_LOG(WARN, "fail to gen property", K(ret));
+        }
       } else {
         property.assign_ptr(buf, pos);
       }
