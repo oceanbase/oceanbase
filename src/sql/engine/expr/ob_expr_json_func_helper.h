@@ -52,7 +52,7 @@ public:
     error_type_(0),
     is_empty_default_const_(false),
     is_error_default_const_(false),
-    is_alias_(false),
+    is_asis_(false),
     is_multivalue_(false),
     empty_val_(),
     error_val_(),
@@ -76,7 +76,7 @@ public:
   int8_t error_type_;
   bool is_empty_default_const_;
   bool is_error_default_const_;
-  bool is_alias_;
+  bool is_asis_;
   bool is_multivalue_;
   ObDatum *empty_val_;
   ObDatum *error_val_;

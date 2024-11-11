@@ -280,7 +280,30 @@ int ObDropFTSIndexTask::check_switch_succ()
           && OB_FAIL(schema_guard.check_table_exist(tenant_id_, rowkey_doc_.table_id_, is_rowkey_doc_exist))) {
     LOG_WARN("fail to check table exist", K(ret), K(tenant_id_), K(rowkey_doc_));
   } else if (!is_domain_index_exist && !is_doc_word_exist && !is_rowkey_doc_exist && !is_doc_rowkey_exist) {
-    task_status_ = ObDDLTaskStatus::SUCCESS;
+    uint64_t doc_id_col_id = OB_INVALID_ID;
+    uint64_t ft_col_id = OB_INVALID_ID;
+    const ObTableSchema *data_table_schema = nullptr;
+    bool has_fts_index = false;
+    bool has_multivalue_index = false;
+
+    int tmp_ret = schema_guard.get_table_schema(tenant_id_, object_id_, data_table_schema);
+    if (tmp_ret != OB_SUCCESS) {
+    } else if (OB_ISNULL(data_table_schema)) {
+    } else if ((tmp_ret = data_table_schema->check_has_fts_index(schema_guard, has_fts_index))!= OB_SUCCESS) {
+    } else if ((tmp_ret = data_table_schema->check_has_multivalue_index(schema_guard, has_multivalue_index))!= OB_SUCCESS) {
+    } else if (!has_fts_index && !has_multivalue_index
+      && (tmp_ret = data_table_schema->get_fulltext_column_ids(doc_id_col_id, ft_col_id)) != OB_SUCCESS) {
+    }
+
+    // 主表存在，并且fts,multivalue索引不存在了，doc-id列从主表中移除
+    // 否则可能出现小概率的dml的时候，schema没有刷新，导致cg阶段多了doc-id列
+    if (tmp_ret == OB_SUCCESS
+        && OB_ISNULL(data_table_schema)
+        && doc_id_col_id != OB_INVALID_ID) {
+      // do nothing
+    } else {
+      task_status_ = ObDDLTaskStatus::SUCCESS;
+    }
   }
   return ret;
 }
@@ -529,7 +552,11 @@ int ObDropFTSIndexTask::create_drop_doc_rowkey_task()
 
 int ObDropFTSIndexTask::succ()
 {
-  return cleanup();
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(cleanup())) {
+    LOG_WARN("cleanup task failed", K(ret));
+  }
+  return ret;
 }
 
 int ObDropFTSIndexTask::fail()

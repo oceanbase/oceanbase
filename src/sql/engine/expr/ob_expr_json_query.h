@@ -66,7 +66,8 @@ private:
                           ObEvalCtx& ctx,
                           ObObjType &dest_type,
                           bool &is_cover_by_error);
-  static int set_multivalue_result(ObEvalCtx& ctx,
+  static int set_multivalue_result(bool is_array,
+                                   ObEvalCtx& ctx,
                                    ObIAllocator& allocator,
                                    ObIJsonBase* json_base,
                                    const ObExpr &expr,
