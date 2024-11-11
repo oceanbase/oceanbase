@@ -52,21 +52,34 @@ public:
       write_buffer_(write_buffer),
       old_row_(nullptr),
       new_row_(nullptr),
+      old_rows_(nullptr),
+      new_rows_(nullptr),
+      got_row_count_(0),
       got_old_row_(false),
       spat_rows_(nullptr),
       spatial_row_idx_(0),
       allocator_(alloc)
   {
+    batch_size_ = MIN(write_buffer_.get_row_cnt(), DEFAULT_BATCH_SIZE);
   }
   virtual ~ObDASUpdIterator();
   virtual int get_next_row(ObNewRow *&row) override;
   virtual int get_next_row() override { return OB_NOT_IMPLEMENT; }
+  virtual int get_next_rows(ObNewRow *&rows, int64_t &row_count) override;
   ObDASWriteBuffer &get_write_buffer() { return write_buffer_; }
   virtual void reset() override { }
   int rewind(const ObDASDMLBaseCtDef *das_ctdef)
   {
     old_row_ = nullptr;
     new_row_ = nullptr;
+#define FREE_ROW_PTR(row_ptr)     \
+  if (nullptr != row_ptr) {       \
+    allocator_.free(row_ptr);     \
+    row_ptr = nullptr;            \
+  }
+    FREE_ROW_PTR(old_rows_);
+    FREE_ROW_PTR(new_rows_);
+#undef FREE_ROW_PTR
     got_old_row_ = false;
     spatial_row_idx_ = 0;
     das_ctdef_ = static_cast<const ObDASUpdCtDef*>(das_ctdef);
@@ -77,15 +90,20 @@ private:
   int create_spatial_index_store();
   int get_next_spatial_index_row(ObNewRow *&row);
 private:
+  static const int64_t DEFAULT_BATCH_SIZE = 256;
   const ObDASUpdCtDef *das_ctdef_;
   ObDASWriteBuffer &write_buffer_;
   ObNewRow *old_row_;
   ObNewRow *new_row_;
+  ObNewRow *old_rows_;
+  ObNewRow *new_rows_;
+  int64_t got_row_count_;
   ObDASWriteBuffer::Iterator result_iter_;
   bool got_old_row_;
   ObSpatIndexRow *spat_rows_;
   uint32_t spatial_row_idx_;
   common::ObIAllocator &allocator_;
+  int64_t batch_size_;
 };
 
 int ObDASUpdIterator::get_next_row(ObNewRow *&row)
@@ -152,6 +170,83 @@ int ObDASUpdIterator::get_next_row(ObNewRow *&row)
       LOG_DEBUG("DAS update get new row",
                 "table_id", das_ctdef_->table_id_,
                 "index_tid", das_ctdef_->index_tid_, KPC_(new_row));
+    }
+  }
+  return ret;
+}
+
+int ObDASUpdIterator::get_next_rows(ObNewRow *&rows, int64_t &row_count)
+{
+  int ret = OB_SUCCESS;
+  const ObChunkDatumStore::StoredRow *sr = NULL;
+  const bool is_spatial_index = das_ctdef_->table_param_.get_data_table().is_spatial_index();
+  row_count = 0;
+
+  if (is_spatial_index || 1 == batch_size_) {
+    if (OB_FAIL(get_next_row(rows))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("Failed to get next row", K(ret), K_(batch_size), K(is_spatial_index));
+      }
+    } else {
+      row_count = 1;
+    }
+  } else if (!got_old_row_) {
+    got_old_row_ = true;
+    if (OB_ISNULL(old_rows_)) {
+      if (OB_FAIL(ob_create_rows(allocator_, batch_size_, das_ctdef_->old_row_projector_.count(), old_rows_))) {
+        LOG_WARN("create old rows buffer failed", K(ret), K(das_ctdef_->old_row_projector_.count()));
+      } else if (OB_FAIL(write_buffer_.begin(result_iter_))) {
+        LOG_WARN("begin datum result iterator failed", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret) && OB_ISNULL(new_rows_)) {
+      if (OB_FAIL(ob_create_rows(allocator_, batch_size_, das_ctdef_->new_row_projector_.count(), new_rows_))) {
+        LOG_WARN("create new rows buffer failed", K(ret), K(das_ctdef_->new_row_projector_.count()));
+      }
+    }
+    while (OB_SUCC(ret) && row_count < batch_size_) {
+      if (OB_FAIL(result_iter_.get_next_row(sr))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("get next row from result iterator failed", K(ret));
+        }
+      } else if (OB_FAIL(ObDASUtils::project_storage_row(*das_ctdef_,
+                                                         *sr,
+                                                         das_ctdef_->old_row_projector_,
+                                                         allocator_,
+                                                         old_rows_[row_count]))) {
+        LOG_WARN("project old storage row failed", K(ret));
+      } else if (OB_FAIL(ObDASUtils::project_storage_row(*das_ctdef_,
+                                                         *sr,
+                                                         das_ctdef_->new_row_projector_,
+                                                         allocator_,
+                                                         new_rows_[row_count]))) {
+        LOG_WARN("project new storage row failed", K(ret));
+      } else {
+        LOG_DEBUG("DAS update get row", K_(das_ctdef_->old_row_projector), K_(das_ctdef_->new_row_projector),
+                  "table_id", das_ctdef_->table_id_, "index_tid", das_ctdef_->index_tid_,
+                  K(old_rows_[row_count]), K(new_rows_[row_count]));
+        ++row_count;
+        got_row_count_ = row_count;
+      }
+    }
+    if (OB_SUCC(ret) || OB_LIKELY(OB_ITER_END == ret)) {
+      if (0 == row_count) {
+        ret = OB_ITER_END;
+      } else {
+        rows = old_rows_;
+        ret = OB_SUCCESS;
+      }
+    }
+  } else {
+    got_old_row_ = false;
+    if (OB_ISNULL(new_rows_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("new rows is null", K(ret));
+    } else {
+      rows = new_rows_;
+      row_count = got_row_count_;
+      got_row_count_ = 0;
     }
   }
   return ret;

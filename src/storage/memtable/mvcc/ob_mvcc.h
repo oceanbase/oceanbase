@@ -63,7 +63,7 @@ public:
   void set_epoch(int64_t epoch) { epoch_ = epoch; }
   int64_t get_epoch() const { return epoch_; }
   int before_append_cb(const bool is_replay);
-  void after_append_cb(const bool is_replay);
+  void after_append_fail_cb(const bool is_replay);
   // interface for redo log generator
   bool need_fill_redo() const { return need_fill_redo_; }
   bool need_submit_log() const { return need_submit_log_; }
@@ -74,7 +74,7 @@ public:
   int log_sync_fail_cb();
   // interface should be implement by subclasses
   virtual int before_append(const bool is_replay) { return common::OB_SUCCESS; }
-  virtual void after_append(const bool is_replay) {}
+  virtual void after_append_fail(const bool is_replay) {}
   virtual int log_submitted() { return common::OB_SUCCESS; }
   virtual int log_sync(const share::SCN scn, ObIMemtable *&last_mt)
   { UNUSED(scn), UNUSED(last_mt); return common::OB_SUCCESS; }
@@ -94,6 +94,7 @@ public:
   void set_next(ObITransCallback *node) { ATOMIC_STORE(&next_, node); }
   void set_prev(ObITransCallback *node) { ATOMIC_STORE(&prev_, node); }
   void append(ObITransCallback *node);
+  void append(ObITransCallback *head, ObITransCallback *tail);
 
 public:
   // trans_commit is called when txn commit. And you need to let the data know

@@ -287,16 +287,25 @@ int ObIndexTreePrefetcher::check_bloom_filter(
   } else if (!access_ctx_->query_flag_.is_index_back() && access_ctx_->enable_bf_cache()) {
     bool is_contain = true;
     if (is_multi_check) {
+    // If a rowkey happens to be the endkey of the microblock, the rowkey idx must also be included in the rowkey idx range of next index row,
+    // because there may be multiple versions of one row across the microblock. Otherwise, some multi-version rows may be missed when do check_rows_lock.
+    // We must recognize this situation where rowkey_begin_idx_ is overlapped with last index row,
+    // and treat it specifically when checking macro block bloom filters in prefetching phase,
+    // Otherwise, this border row may be filtered out incorrectly.
+    // At present, when we check bf, we just mindlessly skip the first row in the rowkeys idx range.
+      const int64_t tmp_rowkey_begin_idx = index_info.rowkey_begin_idx_ + 1;
       if (OB_FAIL(OB_STORE_CACHE.get_bf_cache().may_contain(MTL_ID(),
                                                             index_info.get_macro_id(),
                                                             index_info.rows_info_,
-                                                            index_info.rowkey_begin_idx_,
+                                                            tmp_rowkey_begin_idx,
                                                             index_info.rowkey_end_idx_,
                                                             *datum_utils_,
                                                             is_contain))) {
         if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
           LOG_WARN("Fail to check bloomfilter", K(ret));
         }
+      } else {
+        is_contain = true;
       }
     } else if (OB_FAIL(OB_STORE_CACHE.get_bf_cache().may_contain(MTL_ID(),
                                                                  index_info.get_macro_id(),

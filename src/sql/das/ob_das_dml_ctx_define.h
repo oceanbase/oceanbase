@@ -491,7 +491,10 @@ public:
   int rewind(const ObDASDMLBaseCtDef *das_ctdef)
   {
     cur_row_ = nullptr;
-    cur_rows_ = nullptr;
+    if (nullptr != cur_rows_) {
+      allocator_.free(cur_rows_);
+      cur_rows_ = nullptr;
+    }
     spatial_row_idx_ = 0;
     set_ctdef(das_ctdef);
     return common::OB_SUCCESS;

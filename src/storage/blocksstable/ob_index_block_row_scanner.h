@@ -122,7 +122,7 @@ public:
   TO_STRING_KV(K_(current), K_(start), K_(end), K_(step),
                K_(range_idx), K_(is_get), K_(is_reverse_scan),
                K_(is_left_border), K_(is_right_border),
-               K_(rowkey_begin_idx), K_(rowkey_end_idx),
+               K_(curr_rowkey_begin_idx), K_(rowkey_end_idx), K_(rowkey_end_idx_for_last_index_row),
                K_(is_inited), K_(index_format), K_(macro_id), KPC_(idx_data_header), KPC_(datum_utils));
 private:
   int init_by_micro_data(const ObMicroBlockData &idx_block_data);
@@ -131,7 +131,6 @@ private:
   int init_datum_row();
   int read_curr_idx_row(const ObIndexBlockRowHeader *&idx_row_header, const ObDatumRowkey *&endkey);
   int get_next_idx_row(ObMicroIndexInfo &idx_block_row);
-  void skip_index_rows();
   int find_rowkeys_belong_to_same_idx_row(int64_t &rowkey_idx);
   int skip_to_next_valid_position(ObMicroIndexInfo &idx_block_row);
 private:
@@ -165,8 +164,9 @@ private:
   int64_t step_;
   int64_t range_idx_;
   int64_t nested_offset_;
-  int64_t rowkey_begin_idx_;
+  int64_t curr_rowkey_begin_idx_;
   int64_t rowkey_end_idx_;
+  int64_t rowkey_end_idx_for_last_index_row_;
   IndexFormat index_format_;
   bool is_get_;
   bool is_reverse_scan_;

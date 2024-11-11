@@ -36,7 +36,6 @@ namespace memtable
 struct ObRowData;
 class ObMemtableCtx;
 class ObMvccAccessCtx;
-class RowHeaderGetter;
 class ObMemtableData;
 class ObMemtableDataHeader;
 class ObMemtable;
@@ -59,14 +58,17 @@ public:
 public:
   // Mvcc engine write interface
 
-  // Return the ObMvccRow according to the memtable key or create
-  // the new one if the memtable key is not exist.
+  // Return the ObMvccRow according to the memtable key or create the new one if
+  // the memtable key is not exist.
   int create_kv(const ObMemtableKey *key,
                 const bool is_insert,
                 ObMemtableKey *stored_key,
-                ObMvccRow *&value,
-                RowHeaderGetter &getter,
-                bool &is_new_add);
+                ObMvccRow *&value);
+  // Return the ObStoreRowkey and ObMvccRow pair according to the memtable key
+  // or create all unexisted ones if some of the memtable key are not exist.
+  int create_kvs(const ObMemtableKeyGenerator &keys,
+                 const bool is_normal_insert,
+                 ObStoredKVs &kvs);
 
   // mvcc_write builds the ObMvccTransNode according to the arg and write
   // into the head of the value. It will return OB_SUCCESS if successfully written,
@@ -74,9 +76,16 @@ public:
   // OB_TRANSACTION_SET_VIOLATION if encountering lost update. The interesting
   // implementation about mvcc_write is located in ob_mvcc_row.cpp/.h
   int mvcc_write(storage::ObStoreCtx &ctx,
-                 const transaction::ObTxSnapshot &snapshot,
                  ObMvccRow &value,
                  const ObTxNodeArg &arg,
+                 const bool check_exist,
+                 ObMvccWriteResult &res);
+  int mvcc_write(storage::ObStoreCtx &ctx,
+                 ObMvccRow &value,
+                 const ObTxNodeArg &arg,
+                 const bool check_exist,
+                 // preallocated memory for optimization
+                 void *buf,
                  ObMvccWriteResult &res);
 
   // mvcc_undo removes the newly written tx node. It never returns error
@@ -94,7 +103,7 @@ public:
 
   // finish_kv is used to make tx_node visible to outer read
   void finish_kv(ObMvccWriteResult& res);
-  void finish_kvs(ObMvccRowAndWriteResults& results);
+  void finish_kvs(ObMvccWriteResults& results);
 
   // Mvcc engine read interface
   int get(ObMvccAccessCtx &ctx,
@@ -118,8 +127,7 @@ public:
   // also returns tx_id for same txn write and max_trans_version for TSC check
   int check_row_locked(ObMvccAccessCtx &ctx,
                        const ObMemtableKey *key,
-                       storage::ObStoreRowLockState &lock_state,
-                       storage::ObRowState &row_state);
+                       storage::ObStoreRowLockState &lock_state);
   // estimate_scan_row_count estimate the row count for the range
   int estimate_scan_row_count(const transaction::ObTransID &tx_id,
                               const ObMvccScanRange &range,
@@ -130,6 +138,15 @@ private:
 
   int build_tx_node_(const ObTxNodeArg &arg,
                      ObMvccTransNode *&node);
+
+  int init_tx_node_(const ObTxNodeArg &arg,
+                    ObMvccTransNode *node);
+
+  int batch_alloc_kv_and_set_(const int64_t count,
+                              const int64_t key_data_size,
+                              const ObMemtableKeyGenerator &keys,
+                              ObStoredKVs &kvs,
+                              int64_t &finished_cnt);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMvccEngine);
   bool is_inited_;

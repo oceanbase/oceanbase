@@ -256,6 +256,7 @@ public:
 
   // ===================== ObMvccTransNode Setter/Getter =====================
   blocksstable::ObDmlFlag get_dml_flag() const;
+  int64_t get_data_size() const;
   int fill_trans_version(const share::SCN version);
   int fill_scn(const share::SCN scn);
   void get_trans_id_and_seq_no(transaction::ObTransID &trans_id, transaction::ObTxSEQ &seq_no);
@@ -319,7 +320,10 @@ struct ObMvccRow
   static const uint8_t F_INIT = 0x0;
   static const uint8_t F_HASH_INDEX = 0x1;
   static const uint8_t F_BTREE_INDEX = 0x2;
-  static const uint8_t F_LOWER_LOCK_SCANED = 0x8;
+  static const uint8_t F_LOWER_ROW_EXIST_AND_SCANNED = 0x4;
+  static const uint8_t F_LOWER_ROW_DELETED_AND_SCANNED = 0x8;
+  static const uint8_t F_LOWER_ROW_SCANNED =
+    F_LOWER_ROW_EXIST_AND_SCANNED | F_LOWER_ROW_DELETED_AND_SCANNED;
 
   static const int64_t NODE_SIZE_UNIT = 1024;
   static const int64_t WARN_WAIT_LOCK_TIME = 1 *1000 * 1000;
@@ -365,8 +369,8 @@ struct ObMvccRow
   // is_new_locked returns whether node represents the first lock for the operation
   // conflict_tx_id if write failed this field indicate the txn-id which hold the lock of current row
   int mvcc_write(storage::ObStoreCtx &ctx,
-                 const transaction::ObTxSnapshot &snapshot,
                  ObMvccTransNode &node,
+                 const bool check_exist,
                  ObMvccWriteResult &res);
 
   // mvcc_replay replay the tx node into the row
@@ -383,8 +387,7 @@ struct ObMvccRow
   // ctx is the write txn's context, currently the tx_table is the only required field
   // lock_state is the check's result
   int check_row_locked(ObMvccAccessCtx &ctx,
-                       storage::ObStoreRowLockState &lock_state,
-                       storage::ObRowState &row_state);
+                       storage::ObStoreRowLockState &lock_state);
 
   // insert_trans_node insert the tx node for replay
   // ctx is the write txn's context
@@ -471,13 +474,25 @@ struct ObMvccRow
   {
     ATOMIC_ADD_TAG(F_HASH_INDEX);
   }
-  OB_INLINE bool is_lower_lock_scaned() const
+  OB_INLINE bool is_lower_row_scanned() const
   {
-    return ATOMIC_LOAD(&flag_) & F_LOWER_LOCK_SCANED;
+    return ATOMIC_LOAD(&flag_) & F_LOWER_ROW_SCANNED;
   }
-  OB_INLINE void set_lower_lock_scaned()
+  OB_INLINE bool is_lower_row_exist_and_scanned() const
   {
-    ATOMIC_ADD_TAG(F_LOWER_LOCK_SCANED);
+    return ATOMIC_LOAD(&flag_) & F_LOWER_ROW_EXIST_AND_SCANNED;
+  }
+  OB_INLINE bool is_lower_row_deleted_and_scanned() const
+  {
+    return ATOMIC_LOAD(&flag_) & F_LOWER_ROW_DELETED_AND_SCANNED;
+  }
+  OB_INLINE void set_lower_row_exist_and_scanned()
+  {
+    ATOMIC_ADD_TAG(F_LOWER_ROW_EXIST_AND_SCANNED);
+  }
+  OB_INLINE void set_lower_row_deleted_and_scanned()
+  {
+    ATOMIC_ADD_TAG(F_LOWER_ROW_DELETED_AND_SCANNED);
   }
   // ===================== ObMvccRow Helper Function =====================
   int64_t to_string(char *buf, const int64_t buf_len) const;
@@ -487,7 +502,6 @@ struct ObMvccRow
   // ===================== ObMvccRow Private Function =====================
   int mvcc_write_(storage::ObStoreCtx &ctx,
                   ObMvccTransNode &node,
-                  const transaction::ObTxSnapshot &snapshot,
                   ObMvccWriteResult &res);
 
   // ===================== ObMvccRow Protection Code =====================

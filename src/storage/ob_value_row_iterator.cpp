@@ -251,8 +251,9 @@ int ObSingleRowGetter::open(const ObDatumRowkey &rowkey, bool use_fuse_row_cache
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
-
-  if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObSingleMerge)))) {
+  if (nullptr != single_merge_) { // allow repeatly call the open
+    single_merge_->reuse();
+  } else if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObSingleMerge)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Fail to allocate memory for multi get merge ", K(ret));
   } else {
@@ -263,11 +264,13 @@ int ObSingleRowGetter::open(const ObDatumRowkey &rowkey, bool use_fuse_row_cache
       }
     }
     single_merge_ = new(buf) ObSingleMerge();
-  }
-  if (OB_SUCC(ret)) {
     if (OB_FAIL(single_merge_->init(access_param_, access_ctx_, get_table_param_))) {
       STORAGE_LOG(WARN, "Fail to init ObSingleMerge, ", K(ret));
-    } else if (OB_FAIL(single_merge_->open(rowkey))) {
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(single_merge_->open(rowkey))) {
       STORAGE_LOG(WARN, "Fail to open iter, ", K(ret));
     }
     if (use_fuse_row_cache) {
