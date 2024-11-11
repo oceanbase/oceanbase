@@ -401,11 +401,11 @@ int ObWrCollector::collect_ash()
                   LOG_WARN("failed to add column p1", KR(ret), K(ash));
                 } else if (ash.p1_ >= 0 && OB_FAIL(dml_splicer.add_column("p1", ash.p1_))) {
                   LOG_WARN("failed to add column p1", KR(ret), K(ash));
-                } else if (ash.p3_ < 0 && OB_FAIL(dml_splicer.add_column(true, "p2"))) {
+                } else if (ash.p2_ < 0 && OB_FAIL(dml_splicer.add_column(true, "p2"))) {
                   LOG_WARN("failed to add column p2", KR(ret), K(ash));
                 } else if (ash.p2_ >= 0 && OB_FAIL(dml_splicer.add_column("p2", ash.p2_))) {
                   LOG_WARN("failed to add column p2", KR(ret), K(ash));
-                } else if (ash.p2_ < 0 && OB_FAIL(dml_splicer.add_column(true, "p3"))) {
+                } else if (ash.p3_ < 0 && OB_FAIL(dml_splicer.add_column(true, "p3"))) {
                   LOG_WARN("failed to add column p3", KR(ret), K(ash));
                 } else if (ash.p3_ >= 0 && OB_FAIL(dml_splicer.add_column("p3", ash.p3_))) {
                   LOG_WARN("failed to add column p3", KR(ret), K(ash));
