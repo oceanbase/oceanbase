@@ -649,14 +649,21 @@ TEST_F(TestSSMicroCacheCommonMeta, mem_block_base_info)
   ASSERT_EQ(index_buf, mem_block.index_buf_);
   ASSERT_EQ(index_buf_size, mem_block.index_buf_size_);
 
-  mem_block.update_valid_val(0);
-  mem_block.update_valid_val(100);
+  mem_block.add_valid_micro_block(50);
+  mem_block.inc_handled_count();
+  mem_block.add_valid_micro_block(100);
+  mem_block.inc_handled_count();
   mem_block.micro_count_ = 3;
-  ASSERT_EQ(100, mem_block.get_valid_length());
+  ASSERT_EQ(150, mem_block.valid_val_);
+  ASSERT_EQ(2, mem_block.valid_count_);
+  ASSERT_EQ(2, mem_block.handled_count_);
   ASSERT_EQ(false, mem_block.is_completed());
-  mem_block.update_valid_val(50);
+  mem_block.add_valid_micro_block(50);
+  mem_block.inc_handled_count();
+  ASSERT_EQ(3, mem_block.valid_count_);
+  ASSERT_EQ(3, mem_block.handled_count_);
   ASSERT_EQ(true, mem_block.is_completed());
-  ASSERT_EQ(150, mem_block.get_valid_length());
+  ASSERT_EQ(200, mem_block.valid_val_);
 
   int64_t cur_reuse_version = mem_block.reuse_version_;
   ASSERT_EQ(false, mem_block.is_reuse_version_match(cur_reuse_version + 1));
