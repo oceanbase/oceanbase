@@ -4147,6 +4147,7 @@ int PalfHandleImpl::receive_config_log(const common::ObAddr &server,
                                        const LogConfigMeta &meta)
 {
   int ret = OB_SUCCESS;
+  bool receive_newer_config_log = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "PalfHandleImpl not init", KR(ret));
@@ -4163,7 +4164,6 @@ int PalfHandleImpl::receive_config_log(const common::ObAddr &server,
     PALF_LOG(WARN, "try_update_proposal_id_ failed", KR(ret), KPC(this), K(server), K(msg_proposal_id));
   } else {
     TruncateLogInfo truncate_log_info;
-    bool need_print_register_log = false;
     // need wlock in case of truncating log and writing log_ms_meta in LogConfigMgr
     WLockGuard guard(lock_);
     // max_scn of multiple replicas may be different in FLASHBACK mode,
@@ -4175,6 +4175,7 @@ int PalfHandleImpl::receive_config_log(const common::ObAddr &server,
       if (REACH_TIME_INTERVAL(100 * 1000)) {
         PALF_LOG(WARN, "can not receive log", KR(ret), KPC(this), K(msg_proposal_id), "role", state_mgr_.get_role());
       }
+    } else if (FALSE_IT(receive_newer_config_log = true)) {
     } else if (mode_mgr_.get_accepted_mode_meta().proposal_id_ < prev_mode_pid) {
       // need fetch mode_meta
       if (OB_FAIL(sw_.try_fetch_log(FetchTriggerType::MODE_META_BARRIER))) {
@@ -4195,18 +4196,22 @@ int PalfHandleImpl::receive_config_log(const common::ObAddr &server,
     } else if (OB_FAIL(config_mgr_.receive_config_log(server, meta))) {
       PALF_LOG(WARN, "receive_config_log failed", KR(ret), KPC(this), K(server), K(msg_proposal_id),
           K(prev_log_proposal_id), K(prev_lsn));
-    } else if (!meta.curr_.config_.log_sync_memberlist_.contains(self_) &&
-               meta.curr_.config_.arbitration_member_.get_server() != self_ &&
-               !FALSE_IT(config_mgr_.register_parent()) &&
-               FALSE_IT(need_print_register_log = true)) {
-    // it's a optimization. If self isn't in memberlist, then register parent right now,
-    // otherwise this new added learner will register parent in 4s at most and its log will be far behind.
     } else {
       PALF_LOG(INFO, "receive_config_log success", KR(ret), KPC(this), K(server), K(msg_proposal_id),
           K(prev_lsn), K(prev_log_proposal_id), K(meta));
     }
-    if (need_print_register_log) {
-      PALF_LOG(INFO, "re_register_parent reason: self may in learnerlist", KPC(this), K(server), K(meta));
+  }
+  if (receive_newer_config_log) {
+    RLockGuard guard(lock_);
+    const bool in_paxos_member_list = meta.curr_.config_.log_sync_memberlist_.contains(self_) ||
+      meta.curr_.config_.degraded_learnerlist_.contains(self_);
+    // 1. self is not in paxos memberlist, try register parent
+    if (!in_paxos_member_list && OB_FAIL(config_mgr_.register_parent())) {
+      PALF_LOG(WARN, "register_parent failed", KPC(this), K(server), K(meta));
+    }
+    // 2. self is in paxos memberlist, try retire parent
+    if (in_paxos_member_list && OB_FAIL(config_mgr_.retire_parent())) {
+      PALF_LOG(WARN, "register_parent failed", KPC(this), K(server), K(meta));
     }
   }
   return ret;
