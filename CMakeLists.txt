@@ -110,6 +110,13 @@ if (OB_BUILD_PACKAGE)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DOB_BUILD_PACKAGE")
 endif()
 
+if (OB_ENABLE_MCMODEL)
+  if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mcmodel=large")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mcmodel=large")
+  endif()
+endif()
+
 message(STATUS "This is BINARY dir " ${PROJECT_BINARY_DIR})
 message(STATUS "This is SOURCE dir " ${PROJECT_SOURCE_DIR})
 

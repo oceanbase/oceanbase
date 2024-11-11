@@ -44,6 +44,7 @@ ob_define(OB_DISABLE_LSE OFF)
 
 ob_define(OB_DISABLE_PIE OFF)
 
+ob_define(OB_ENABLE_MCMODEL OFF)
 
 if(WITH_COVERAGE)
   # -ftest-coverage to generate .gcno file
