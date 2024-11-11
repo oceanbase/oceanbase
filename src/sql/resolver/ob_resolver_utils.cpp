@@ -808,7 +808,10 @@ if ((OB_FAIL(ret) || 0 == routines.count())   \
     } else if (OB_FAIL(schema_checker.get_package_id( // try user package now!
           tenant_id, object_db_id, object_name, compatible_mode, package_id))
         || OB_INVALID_ID == package_id) {
-      if (OB_FAIL(schema_checker.get_udt_id( // try user type now!
+      if (ObPLResolver::is_unrecoverable_error(ret)) {
+        LOG_WARN("failed to get_package_id",
+                 K(ret), K(tenant_id), K(object_db_id), K(object_name), K(compatible_mode), K(package_id));
+      } else if (OB_FAIL(schema_checker.get_udt_id( // try user type now!
           tenant_id, object_db_id, OB_INVALID_ID, object_name, package_id))
         || OB_INVALID_ID == package_id) {
         bool need_try_synonym = false;
@@ -817,10 +820,16 @@ if ((OB_FAIL(ret) || 0 == routines.count())   \
           if (OB_FAIL(schema_checker.get_package_id( // try synonym user package now!
               tenant_id, object_db_id, object_name, compatible_mode, package_id))
               || OB_INVALID_ID == package_id) {
-            if ((is_sys_database_id(object_db_id)
+            if (ObPLResolver::is_unrecoverable_error(ret)) {
+              LOG_WARN("failed to get_package_id",
+                       K(ret), K(tenant_id), K(object_db_id), K(object_name), K(compatible_mode), K(package_id));
+            } else if ((is_sys_database_id(object_db_id)
                   && OB_FAIL(schema_checker.get_package_id(OB_SYS_TENANT_ID, object_db_id, object_name, compatible_mode, package_id)))
                 || OB_INVALID_ID == package_id) {
-              if (OB_FAIL(schema_checker.get_udt_id( // try synonym user type now!
+              if (ObPLResolver::is_unrecoverable_error(ret)) {
+                LOG_WARN("failed to get_package_id",
+                         K(ret), K(OB_SYS_TENANT_ID), K(object_db_id), K(object_name), K(compatible_mode), K(package_id));
+              } else if (OB_FAIL(schema_checker.get_udt_id( // try synonym user type now!
                     tenant_id, object_db_id, OB_INVALID_ID, object_name, package_id))
                   || OB_INVALID_ID == package_id) {
                 LOG_WARN("failed to get package id", K(ret));
@@ -847,13 +856,18 @@ if ((OB_FAIL(ret) || 0 == routines.count())   \
     }
     // try system package or udt
     if (OB_FAIL(ret) || OB_INVALID_ID == package_id) {
-      if (lib::is_oracle_mode() && (db_name.empty()
+      if (ObPLResolver::is_unrecoverable_error(ret)) {
+        // do nothing
+      } else if (lib::is_oracle_mode() && (db_name.empty()
           || 0 == db_name.case_compare(OB_SYS_DATABASE_NAME)
           || 0 ==  db_name.case_compare(OB_ORA_SYS_SCHEMA_NAME))) {
         if (OB_FAIL(schema_checker.get_package_id( // try system pacakge
             OB_SYS_TENANT_ID, OB_SYS_DATABASE_NAME, object_name, compatible_mode, package_id))
             || OB_INVALID_ID == package_id) {
-          if (OB_FAIL(schema_checker.get_udt_id( // try system udt
+          if (ObPLResolver::is_unrecoverable_error(ret)) {
+            LOG_WARN("failed to get_package_id",
+                         K(ret), K(OB_SYS_TENANT_ID), K(OB_SYS_DATABASE_NAME), K(object_name), K(compatible_mode), K(package_id));
+          } else if (OB_FAIL(schema_checker.get_udt_id( // try system udt
               OB_SYS_TENANT_ID, OB_SYS_DATABASE_NAME, object_name, package_id))
               || OB_INVALID_ID == package_id) {
             LOG_WARN("failed to get package id", K(ret));

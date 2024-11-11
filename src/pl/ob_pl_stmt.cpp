@@ -1729,11 +1729,13 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
         }
         const ObRoutineInfo *routine_info = NULL;
         OZ (schema_guard.get_standalone_procedure_info(tenant_id, db_id, name, routine_info));
-        if (NULL == routine_info) {
+        if (NULL == routine_info && !ObPLResolver::is_unrecoverable_error(ret)) {
           ret = OB_SUCCESS;
           OZ (schema_guard.get_standalone_function_info(tenant_id, db_id, name, routine_info));
         }
-        if (NULL == routine_info) {
+        if (ObPLResolver::is_unrecoverable_error(ret)) {
+          // do nothing
+        } else if (NULL == routine_info) {
           ret = OB_SUCCESS;
           type = ObPLExternalNS::INVALID_VAR;
         } else {
