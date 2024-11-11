@@ -6385,6 +6385,27 @@ int ObSPIService::prepare_static_sql_params(ObPLExecCtx *ctx,
   return ret;
 }
 
+int ObSPIService::convert_ext_null_params(ParamStore &params, ObSQLSessionInfo *session)
+{
+  int  ret = OB_SUCCESS;
+  bool is_ext_null = false;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); i++) {
+    if (params.at(i).is_pl_extend()) {
+      if (OB_FAIL(ObPLDataType::obj_is_null(params.at(i), is_ext_null))) {
+        LOG_WARN("check obj_is_null failed", K(ret));
+      } else if (is_ext_null) {
+        ObObjMeta param_meta = params.at(i).get_meta();
+        CK (OB_NOT_NULL(session));
+        OZ (ObUserDefinedType::destruct_obj(params.at(i), session));
+        OX (params.at(i).set_null());
+        OX (params.at(i).set_param_meta(param_meta));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSPIService::inner_open(ObPLExecCtx *ctx,
                              ObIAllocator &param_allocator,
                              const ObString &sql,
@@ -6428,6 +6449,7 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
   }
 
   CK (OB_NOT_NULL(curr_params));
+  OZ (convert_ext_null_params(*curr_params, ctx->exec_ctx_->get_my_session()));
   OZ (inner_open(ctx, sql, ps_sql, type, *curr_params, spi_result, out_params, is_dynamic_sql));
 
   // if failed, we need release complex parameter memory in here
@@ -7692,9 +7714,15 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
   bool is_schema_object = (!is_type_record &&
                            1 == type_count &&
                            1 == obj_array.count() &&
-                           obj_array.at(0).is_pl_extend() &&
+                           ((obj_array.at(0).is_pl_extend() &&
                            obj_array.at(0).get_meta().get_extend_type() != PL_CURSOR_TYPE &&
-                           obj_array.at(0).get_meta().get_extend_type() != PL_OPAQUE_TYPE); // xmltypes may need to do cast
+                           obj_array.at(0).get_meta().get_extend_type() != PL_OPAQUE_TYPE) || // xmltypes may need to do cast
+                           (obj_array.at(0).is_null() &&
+                           row_desc.at(0).get_meta_type().is_ext() &&
+                           row_desc.at(0).get_meta_type().get_extend_type() > 0 &&
+                           row_desc.at(0).get_meta_type().get_extend_type() < T_EXT_SQL_ARRAY &&
+                           row_desc.at(0).get_meta_type().get_extend_type() != PL_CURSOR_TYPE &&
+                           row_desc.at(0).get_meta_type().get_extend_type() != PL_OPAQUE_TYPE))); // xmltypes may need to do cast
   if (!is_schema_object) {
     if (OB_SUCC(ret) && type_count != obj_array.count()) {
       ret = OB_ERR_SP_INVALID_FETCH_ARG;
@@ -7752,6 +7780,24 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
     for (int64_t i = 0; OB_SUCC(ret) && i < calc_array->count(); ++i) {
       OZ (sql::ObExprPLIntegerChecker::check_range(
         calc_array->at(i), calc_array->at(i).get_type(), pl_integer_ranges[i]));
+    }
+  } else if (obj_array.at(0).is_null()) { //null into extend variable，generate extend null obj
+    if (row_desc.at(0).get_meta_type().is_ext() &&
+      (PL_RECORD_TYPE == row_desc.at(0).get_meta_type().get_extend_type() ||
+       PL_NESTED_TABLE_TYPE == row_desc.at(0).get_meta_type().get_extend_type() ||
+       PL_VARRAY_TYPE == row_desc.at(0).get_meta_type().get_extend_type())) {
+      int64_t udt_id = row_desc.at(0).get_udt_id();
+      const ObUserDefinedType *type = nullptr;
+      int64_t ptr = 0;
+      int64_t init_size = OB_INVALID_SIZE;
+      ObObj   tmp_obj;
+      OX (tmp_obj.reset());
+      OZ (ctx->get_user_type(udt_id, type));
+      OZ (type->newx(*cast_ctx.allocator_v2_, ctx, ptr));
+      OZ (type->get_size(PL_TYPE_INIT_SIZE, init_size));
+      OX (tmp_obj.set_extend(ptr, type->get_type(), init_size));
+      OZ (tmp_obj_array.push_back(tmp_obj));
+      OX (calc_array = &tmp_obj_array);
     }
   }
   // 向变量赋值
@@ -8154,7 +8200,7 @@ int ObSPIService::store_datums(ObObj &dest_addr, ObIArray<ObObj> &obj_array,
           拷贝时，要求src id和dest id必须一致. */
     CK (1 == obj_array.count());
     OX (src = obj_array.at(0));
-    CK (src.is_pl_extend());
+    OV (src.is_pl_extend(), OB_ERR_EXPRESSION_WRONG_TYPE);
     OZ (check_and_deep_copy_result(*alloc, src, dest_addr));
   } else {
     int64_t current_datum = 0;

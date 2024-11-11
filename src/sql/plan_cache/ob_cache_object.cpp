@@ -88,7 +88,7 @@ int ObPlanCacheObject::set_params_info(const ParamStore &params)
                 K(params.at(i).get_type()),
                 K(common::lbt()));
     }
-    if (params.at(i).is_ext()) {
+    if (params.at(i).is_ext_sql_array()) {
       ObDataType data_type;
       if (OB_FAIL(ObSQLUtils::get_ext_obj_data_type(params.at(i), data_type))) {
         LOG_WARN("fail to get ext obj data type", K(ret));
@@ -97,7 +97,7 @@ int ObPlanCacheObject::set_params_info(const ParamStore &params)
         param_info.scale_ = data_type.get_scale();
       }
       LOG_DEBUG("ext params info", K(data_type), K(param_info), K(params.at(i)));
-    } else if (params.at(i).is_user_defined_sql_type() || params.at(i).is_collection_sql_type()) {
+    } else if (params.at(i).get_param_meta().is_ext() || params.at(i).is_user_defined_sql_type() || params.at(i).is_collection_sql_type()) {
       param_info.scale_ = 0;
       uint64_t udt_id = params.at(i).get_accuracy().get_accuracy();
       *(reinterpret_cast<uint32 *>(&param_info.ext_real_type_)) = (udt_id >> 32) & UINT_MAX32;

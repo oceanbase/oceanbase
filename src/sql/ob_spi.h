@@ -562,6 +562,8 @@ public:
                                         ObObjParam **params,
                                         ParamStore *&exec_params);
 
+  static int convert_ext_null_params(ParamStore &params, ObSQLSessionInfo *session);
+
   static int inner_open(pl::ObPLExecCtx *ctx,
                         ObIAllocator &param_allocator, //用于拷贝执行期参数
                         const ObString &sql,

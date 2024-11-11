@@ -307,6 +307,7 @@ int ObExprOracleNvl::calc_nvl_oralce_result_type(ObExprResType &type,
       ObExprResType &res_type = !type1.is_null() ? type1 : type2;
       CK ((type1.get_udt_id() == type2.get_udt_id()) || type1.is_null() || type2.is_null());
       OX (type.set_udt_id(res_type.get_udt_id()));
+      OX (type.set_extend_type(res_type.get_extend_type()));
       if (null_type.is_null()) {
         OX (null_type.set_calc_accuracy(res_type.get_accuracy()));
       }
