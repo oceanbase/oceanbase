@@ -3041,12 +3041,10 @@ int ObTabletTableStore::replace_ha_remote_sstables_(
   ObITable *new_table = nullptr;
   ObITable *last_table = nullptr;
   ObSSTable *new_sstable = nullptr;
-  ObSSTableMetaHandle old_meta_handle;
-  ObSSTableMetaHandle new_meta_handle;
   ObTableHandleV2 new_table_handle;
+  bool has_backup_macro = false;
 
   for (int64_t i = 0; OB_SUCC(ret) && i < new_tables_handle.get_count(); ++i) {
-    new_meta_handle.reset();
     new_table = new_tables_handle.get_table(i);
     if (OB_ISNULL(new_table)) {
       ret = OB_ERR_UNEXPECTED;
@@ -3054,19 +3052,16 @@ int ObTabletTableStore::replace_ha_remote_sstables_(
     } else if (!new_table->is_sstable()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("new table is not sstable", K(ret), KPC(new_table));
-    } else if (OB_FAIL(static_cast<ObSSTable *>(new_table)->get_meta(new_meta_handle))) {
-      LOG_WARN("get table meta handle fail", K(ret), KPC(new_table));
-    } else if (new_meta_handle.get_sstable_meta().get_basic_meta().table_backup_flag_.has_backup()) {
+    } else if (OB_FAIL(ObTableStoreUtil::check_has_backup_macro_block(new_table, has_backup_macro))) {
+      LOG_WARN("failed to check new table has backup macro block", K(ret), KPC(new_table));
+    } else if (has_backup_macro) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("new table still has backup macro block", K(ret), KPC(new_table), K(new_meta_handle));
-    } else {
-      // do nothing
+      LOG_WARN("new table still has backup macro block", K(ret), KPC(new_table));
     }
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < old_store_sstables.count(); ++i) {
-    old_meta_handle.reset();
-    new_meta_handle.reset();
+    has_backup_macro = false;
     new_table_handle.reset();
     old_table = old_store_sstables.at(i);
     if (OB_ISNULL(old_table)) {
@@ -3075,9 +3070,9 @@ int ObTabletTableStore::replace_ha_remote_sstables_(
     } else if (!old_table->is_sstable()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("old table is not sstable", K(ret), KPC(old_table));
-    } else if (OB_FAIL(static_cast<ObSSTable *>(old_table)->get_meta(old_meta_handle))) {
-      LOG_WARN("get table meta handle fail", K(ret), KPC(old_table));
-    } else if (old_meta_handle.get_sstable_meta().get_basic_meta().table_backup_flag_.has_no_backup()) {
+    } else if (OB_FAIL(ObTableStoreUtil::check_has_backup_macro_block(old_table, has_backup_macro))) {
+      LOG_WARN("failed to check old table has backup macro block", K(ret), KPC(old_table));
+    } else if (!has_backup_macro) {
       // this table does not has backup macro block, no need to be replaced.
       if (check_continue && OB_NOT_NULL(last_table) && old_table->get_start_scn() != last_table->get_end_scn()) {
         ret = OB_ERR_UNEXPECTED;

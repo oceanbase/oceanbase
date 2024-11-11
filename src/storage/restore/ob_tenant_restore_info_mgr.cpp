@@ -19,6 +19,7 @@
 #include "share/backup/ob_backup_connectivity.h"
 #include "observer/ob_server_struct.h"
 #include "observer/omt/ob_multi_tenant.h"
+#include "rootserver/ob_tenant_info_loader.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -198,8 +199,18 @@ int ObTenantRestoreInfoMgr::get_backup_dest(const int64_t backup_set_id, share::
 
   lib::ObMutexGuard guard(mutex_);
   int64_t idx = -1;
+  rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader *);
+  share::ObRestoreDataMode restore_data_mode;
   if (OB_FAIL(ret)) {
-  } else if (!is_refreshed_) {
+  } else if (OB_ISNULL(tenant_info_loader)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant info loader is null", K(ret), K_(tenant_id));
+  } else if (OB_FAIL(tenant_info_loader->get_restore_data_mode(restore_data_mode))) {
+    LOG_WARN("fail to get restore data mode", K(ret), K_(tenant_id));
+  } else if (!restore_data_mode.is_remote_mode()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("restore data mode is not REMOTE, tenant should not have any backup data", K(ret), K_(tenant_id));
+  } else  if (!is_refreshed_) {
     ret = OB_EAGAIN;
     LOG_WARN("restore info has not been refreshed", K(ret), K(backup_set_id));
   } else if (OB_FAIL(get_restore_backup_set_brief_info_(backup_set_id, idx))) {
