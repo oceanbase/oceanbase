@@ -98,10 +98,12 @@ int ObTransformSubqueryCoalesce::transform_one_stmt(common::ObIArray<ObParentDML
         LOG_WARN("failed to append equal infos", K(ret));
       }
       if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(try_trans_helper.finish(rule_based_trans_happened || is_happened,
+                                                 stmt->get_query_ctx(),
+                                                 ctx_))) {
+        LOG_WARN("failed to finish try trans helper", K(ret));
       } else if (rule_based_trans_happened || is_happened) {
         trans_happened = true;
-      } else if (OB_FAIL(try_trans_helper.recover(stmt->get_query_ctx()))) {
-        LOG_WARN("failed to recover params", K(ret));
       }
     } while(OB_SUCC(ret) && is_happened);
   }

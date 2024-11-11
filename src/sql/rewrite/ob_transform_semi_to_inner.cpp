@@ -98,10 +98,10 @@ int ObTransformSemiToInner::transform_one_stmt(
                                           false,
                                           accepted, &ctx))) {
         LOG_WARN("failed to accept transform", K(ret));
+      } else if (OB_FAIL(try_trans_helper.finish(accepted, stmt->get_query_ctx(), ctx_))) {
+        LOG_WARN("failed to finish try trans helper", K(ret));
       } else if (!accepted) {
-        if (OB_FAIL(try_trans_helper.recover(stmt->get_query_ctx()))) {
-          LOG_WARN("failed to recover params", K(ret));
-        } else if (OB_FAIL(add_ignore_semi_info(semi_info->semi_id_))) {
+        if (OB_FAIL(add_ignore_semi_info(semi_info->semi_id_))) {
           LOG_WARN("failed to add ignore semi info", K(ret));
         } else {
           LOG_TRACE("semi join can not transform to inner join due to cost", K(*semi_info));

@@ -236,6 +236,10 @@ struct ObTryTransHelper
   int fill_helper(const ObQueryCtx *query_ctx);
   int recover(ObQueryCtx *query_ctx);
   int is_filled() const { return !qb_name_counts_.empty(); }
+  /** @brief update or recover query_ctx and temp table stmt after transformation
+   * call this function after transformation has been accepted or rejected (by higher cost)
+   */
+  int finish(bool trans_happened, ObQueryCtx *query_ctx, ObTransformerCtx *trans_ctx);
 
   uint64_t available_tb_id_;
   int64_t subquery_count_;
