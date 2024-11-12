@@ -386,7 +386,7 @@ int ObPartitionPreSplit::do_table_pre_split_if_need(
     // 2. rebuild global index partition/ none partition table, ddl_type will be DDL_CREATE_INDEX
     bool need_pre_split = false;
     bool is_global_index = new_table_schema.is_global_local_index_table() || new_table_schema.is_global_index_table();
-    if (is_global_index && ddl_type == DDL_CREATE_INDEX) {
+    if (is_global_index && ddl_type == DDL_CREATE_INDEX && new_table_schema.get_auto_part_size() > 0) {
       need_pre_split = true;
     } else if (OB_FALSE_IT(need_pre_split = is_supported_pre_split_ddl_type(ddl_type))) {
       LOG_WARN("[PRE_SPLIT] fail to check need pre split partition", K(ret), K(ddl_type), K(new_table_schema));
