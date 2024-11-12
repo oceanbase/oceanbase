@@ -101,7 +101,6 @@ void *ObMallocAllocator::alloc(const int64_t size, const oceanbase::lib::ObMemAt
   return ::malloc(size);
 #else
   SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
-  ObDisableDiagnoseGuard disable_diagnose_guard;
   int ret = OB_SUCCESS;
   void *ptr = NULL;
   ObTenantCtxAllocatorGuard allocator = NULL;
@@ -179,7 +178,6 @@ void *ObMallocAllocator::realloc(
   return ::realloc(const_cast<void *>(ptr), size);
 #else
   SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
-  ObDisableDiagnoseGuard disable_diagnose_guard;
   // Won't create tenant allocator!!
   void *nptr = NULL;
   ObTenantCtxAllocatorGuard allocator = NULL;
