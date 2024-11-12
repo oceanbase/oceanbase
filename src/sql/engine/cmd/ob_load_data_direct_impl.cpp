@@ -1441,6 +1441,7 @@ int ObLoadDataDirectImpl::LargeFileLoadExecutor::get_next_task_handle(TaskHandle
   int64_t current_line_count = 0;
   const int64_t chunk_id = next_chunk_id_ ++;
   expr_buffer_.reuse();
+  CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_IMPORT);
   if (OB_UNLIKELY(chunk_id > ObTableLoadSequenceNo::MAX_CHUNK_ID)) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("size is overflow", KR(ret), K(chunk_id));
