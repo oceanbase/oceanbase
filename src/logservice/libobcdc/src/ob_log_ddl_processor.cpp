@@ -359,7 +359,7 @@ int ObLogDDLProcessor::handle_tenant_ddl_task_(
         mark_stmt_binlog_record_invalid_(*ddl_stmt);
       } else {
         // statements are not filtered, processing DDL statements
-        if (enable_white_black_list_ && need_update_tic && OB_FAIL(handle_ddl_stmt_update_tic_(tenant, task,
+        if ((enable_white_black_list_ || TCONF.enable_hbase_mode) && need_update_tic && OB_FAIL(handle_ddl_stmt_update_tic_(tenant, task,
             *ddl_stmt, old_schema_version, new_schema_version, stop_flag))) {
           if (OB_IN_STOP_STATE != ret) {
             LOG_ERROR("handle_ddl_stmt_update_tic_ fail", KR(ret), K(tenant), K(task), K(ddl_stmt),
