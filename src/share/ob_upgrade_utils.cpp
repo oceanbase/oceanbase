@@ -259,12 +259,10 @@ int ObUpgradeChecker::add_upgrade_versions_(const uint64_t current_version,
   return ret;
 }
 
-// TODO: should correspond to upgrade YML file.
-//       For now, just consider the valid upgrade path for 42x.
+// the version allow to backup to current version should be the same as the version can upgrade to current version
 bool ObUpgradeChecker::check_data_version_valid_for_backup(const uint64_t data_version)
 {
-  return (DATA_VERSION_4_2_1_0 <= data_version && data_version <= DATA_VERSION_4_2_1_2)
-         || (DATA_VERSION_4_2_2_0 <= data_version && data_version < DATA_VERSION_4_3_0_0);
+  return check_data_version_exist(data_version);
 }
 
 //FIXME:(yanmu.ztl) cluster version should be discrete.
