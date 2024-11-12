@@ -67,6 +67,7 @@ private:
                           ObSelectStmt* child_stmt,
                           ViewMergeHelper &helper,
                           bool need_check_subquery,
+                          bool in_joined_table,
                           bool &can_be);
 
   int check_left_join_right_view_need_merge(ObDMLStmt *parent_stmt,
@@ -81,6 +82,7 @@ private:
 
   int check_basic_validity(ObDMLStmt *parent_stmt,
                            ObSelectStmt *child_stmt,
+                           bool in_joined_table,
                            bool &can_be);
 
   int check_contain_inner_table(const ObSelectStmt &stmt,

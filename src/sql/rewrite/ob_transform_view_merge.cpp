@@ -410,6 +410,7 @@ int ObTransformViewMerge::transform_generated_table(ObDMLStmt *parent_stmt,
                                          child_stmt,
                                          helper,
                                          parent_stmt->is_hierarchical_query(),
+                                         false,
                                          can_be))) {
     LOG_WARN("failed to check can be unnested", K(ret));
   } else if (!can_be) {
@@ -463,6 +464,7 @@ int ObTransformViewMerge::transform_generated_table(ObDMLStmt *parent_stmt,
                                          child_stmt,
                                          helper,
                                          !can_push_where,
+                                         true,
                                          can_be))) {
     LOG_WARN("failed to check can be unnested", K(ret));
   } else if (!can_be) {
@@ -482,6 +484,7 @@ int ObTransformViewMerge::transform_generated_table(ObDMLStmt *parent_stmt,
 
 int ObTransformViewMerge::check_basic_validity(ObDMLStmt *parent_stmt,
                                                ObSelectStmt *child_stmt,
+                                               bool in_joined_table,
                                                bool &can_be) {
   int ret = OB_SUCCESS;
   can_be = false;
@@ -540,8 +543,9 @@ int ObTransformViewMerge::check_basic_validity(ObDMLStmt *parent_stmt,
   } else if (!is_select_expr_valid) {
     can_be = false;
   } else if (0 == child_stmt->get_from_item_size()) {
-    //当 view 为 select ... from dual, 若上层非层次查询, 允许视图合并
-    can_be = parent_stmt->is_single_table_stmt()
+    // 当 view 为 select ... from dual, 若上层非层次查询
+    // 且上层是单表查询, 或者上层不是 JOIN, 则可以合并
+    can_be = (parent_stmt->is_single_table_stmt() || !in_joined_table)
              && !parent_stmt->is_hierarchical_query();
   } else if (OB_FAIL(child_stmt->has_ref_assign_user_var(has_ref_assign_user_var))) {
     LOG_WARN("failed to check stmt has assignment ref user var", K(ret));
@@ -595,6 +599,7 @@ int ObTransformViewMerge::check_can_be_merged(ObDMLStmt *parent_stmt,
                                               ObSelectStmt *child_stmt,
                                               ViewMergeHelper &helper,
                                               bool need_check_subquery,
+                                              bool in_joined_table,
                                               bool &can_be)
 {
   int ret = OB_SUCCESS;
@@ -603,7 +608,7 @@ int ObTransformViewMerge::check_can_be_merged(ObDMLStmt *parent_stmt,
   if (OB_ISNULL(parent_stmt) || OB_ISNULL(child_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(check_basic_validity(parent_stmt, child_stmt, can_be))) {
+  } else if (OB_FAIL(check_basic_validity(parent_stmt, child_stmt, in_joined_table, can_be))) {
     LOG_WARN("failed to check", K(ret));
   } else if (can_be) {
     has_rollup = parent_stmt->is_select_stmt() &&
