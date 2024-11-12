@@ -2258,6 +2258,8 @@ int ObDMLResolver::resolve_basic_table_without_cte(const ParseNode &parse_tree, 
         LOG_WARN("resolve base or alias table item for dblink failed", K(ret));
       } else if (OB_FAIL(resolve_transpose_table(transpose_node, table_item))) {
         LOG_WARN("resolve_transpose_table failed", K(ret));
+      } else if (NULL != time_node && OB_FAIL(resolve_flashback_query_node(time_node, table_item))) {
+        LOG_WARN("failed to resolve flashback query node", K(ret));
       }
     }
   }
