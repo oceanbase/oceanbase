@@ -31,8 +31,6 @@ static constexpr int64_t OTHER_GROUPS_IOPS_WEIGHT = 100L;
 class ObResourcePlanManager
 {
 public:
-  typedef common::ObSEArray<ObPlanDirective, 8> ObPlanDirectiveSet;
-public:
   ObResourcePlanManager() : tenant_plan_map_(), background_quota_(INT32_MAX)
   {}
   virtual ~ObResourcePlanManager() = default;
@@ -48,10 +46,13 @@ private:
   int flush_directive_to_iops_control(const uint64_t tenant_id,
                                       ObPlanDirectiveSet &directives,
                                       ObPlanDirective &other_group_directive);
+  int clear_deleted_directives(const uint64_t tenant_id, ObPlanDirectiveSet &directives);
   int normalize_iops_directives(const uint64_t tenant_id,
                                 ObPlanDirectiveSet &directives,
                                 ObPlanDirective &other_group_directive);
-  int refresh_tenant_group_io_config(const uint64_t tenant_id);
+  int normalize_net_bandwidth_directives(const uint64_t tenant_id,
+                                         ObPlanDirectiveSet &directives,
+                                         ObPlanDirective &other_group_directive);
   common::hash::ObHashMap<uint64_t, ObResMgrVarcharValue> tenant_plan_map_;
   int32_t background_quota_;
   /* variables */

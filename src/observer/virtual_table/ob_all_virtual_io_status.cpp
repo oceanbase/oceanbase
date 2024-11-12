@@ -360,7 +360,7 @@ int ObAllVirtualIOQuota::record_user_group(const uint64_t tenant_id, ObIOUsage &
       LOG_ERROR("fail to get io usage", K(ret));
     } else {
       for (int64_t i = 0; i < io_config.group_num_ && i < avg_size.count() && i < avg_iops.count() && i < avg_rt.count(); ++i) {
-        if (io_config.group_configs_.at(i).deleted_ || io_config.group_configs_.at(i).cleared_) {
+        if (io_config.group_configs_.at(i).deleted_) {
           continue;
         }
         for (int64_t j = 0; OB_SUCC(ret) && j < static_cast<int>(ObIOMode::MAX_MODE); ++j) {
@@ -620,7 +620,7 @@ int ObAllVirtualIOScheduler::init(const common::ObAddr &addr)
           const ObTenantIOConfig &io_config = tenant_holder.get_ptr()->get_io_config();
           int64_t group_num = tenant_holder.get_ptr()->get_group_num();
           for (int64_t index = 0; OB_SUCC(ret) && index < group_num; ++index) {
-            if (io_config.group_configs_.at(index).deleted_ || io_config.group_configs_.at(i).cleared_) {
+            if (io_config.group_configs_.at(index).deleted_) {
               continue;
             }
             ScheduleInfo item;
