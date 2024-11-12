@@ -966,6 +966,9 @@ int ObPxSubCoord::start_ddl()
       FLOG_INFO("start ddl", K(ret), "context_id", ddl_ctrl_.context_id_, K(direct_load_param), K(ls_tablet_ids));
     }
   }
+  if (OB_EAGAIN == ret) {
+    ret = OB_STATE_NOT_MATCH; // avoid px hang
+  }
   return ret;
 }
 

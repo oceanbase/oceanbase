@@ -1493,24 +1493,8 @@ int ObDDLRedoLogWriter::write_commit_log(
     commit_scn = direct_load_mgr_handle.get_obj()->get_commit_scn(tablet_handle.get_obj()->get_tablet_meta());
     LOG_WARN("already committed", K(ret), K(start_scn), K(commit_scn), K(direct_load_mgr_handle.get_obj()->get_start_scn()), K(log));
   } else if (!remote_write_) {
-    ObTabletBindingMdsUserData ddl_data;
-    ObTabletDirectLoadMgrHandle lob_direct_load_mgr_handle;
-    if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_ddl_data(share::SCN::max_scn(), ddl_data))) {
-      LOG_WARN("failed to get ddl data from tablet", K(ret), K(tablet_handle));
-    } else if (ddl_data.lob_meta_tablet_id_.is_valid()) {
-      bool is_lob_major_sstable_exist = false;
-      if (OB_FAIL(MTL(ObTenantDirectLoadMgr *)->get_tablet_mgr_and_check_major(ls_id_, ddl_data.lob_meta_tablet_id_,
-              true/* is_full_direct_load */, lob_direct_load_mgr_handle, is_lob_major_sstable_exist))) {
-        if (OB_ENTRY_NOT_EXIST == ret && is_lob_major_sstable_exist) {
-          ret = OB_SUCCESS;
-          LOG_INFO("lob meta tablet exist major sstable, skip", K(ret), K(ddl_data.lob_meta_tablet_id_));
-        } else {
-          LOG_WARN("get tablet mgr failed", K(ret), K(ddl_data.lob_meta_tablet_id_));
-        }
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(local_write_ddl_commit_log(
+    ObTabletDirectLoadMgrHandle &lob_direct_load_mgr_handle = direct_load_mgr_handle.get_obj()->get_lob_mgr_handle();
+    if (OB_FAIL(local_write_ddl_commit_log(
       log, ObDDLClogType::DDL_COMMIT_LOG, ls_id_, ls->get_log_handler(), direct_load_mgr_handle, lob_direct_load_mgr_handle, handle, lock_tid))) {
       if (ObDDLUtil::need_remote_write(ret) && allow_remote_write) {
         if (OB_FAIL(switch_to_remote_write())) {

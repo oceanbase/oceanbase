@@ -266,6 +266,7 @@ public:
   }
   void reset_slice_ctx_on_demand();
   void cleanup_slice_writer(const int64_t context_id);
+  share::SCN get_commit_scn() { return commit_scn_.atomic_load(); }
   TO_STRING_KV(K_(build_param), K_(is_task_end), K_(task_finish_count), K_(task_total_cnt), K_(sorted_slices_idx), K_(commit_scn),
       KP_(index_builder), KPC(storage_schema_));
   struct AggregatedCGInfo final {
@@ -441,7 +442,7 @@ protected:
   // int collect_obj(const blocksstable::ObDatumRow &datum_row);
   /* +++++ -------------------------- +++++ */
 public:
-  static const int64_t TRY_LOCK_TIMEOUT = 1 * 1000000; // 1s
+  static const int64_t TRY_LOCK_TIMEOUT = 10 * 1000000; // 10s
   static const int64_t EACH_MACRO_MIN_ROW_CNT = 1000000; // 100w
 protected:
   bool is_inited_;
@@ -564,7 +565,7 @@ public:
   int open(const int64_t current_execution_id, share::SCN &start_scn) override final;
   int close(const int64_t current_execution_id, const share::SCN &start_scn) override final;
 
-  share::SCN get_start_scn() override { return start_scn_; }
+  share::SCN get_start_scn() override { return start_scn_.atomic_load(); }
   // unused, for full direct load only
   share::SCN get_commit_scn(const ObTabletMeta &tablet_meta) override
   {
