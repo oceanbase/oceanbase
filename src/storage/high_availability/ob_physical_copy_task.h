@@ -70,7 +70,6 @@ private:
   int get_ddl_macro_block_restore_reader_(
       const ObCopyMacroBlockReaderInitParam &init_param,
       ObICopyMacroBlockReader *&reader);
-
   int get_remote_macro_block_restore_reader_(
       const ObCopyMacroBlockReaderInitParam &init_param,
       ObICopyMacroBlockReader *&reader);
@@ -82,6 +81,7 @@ private:
   void free_macro_block_writer_(ObStorageHAMacroBlockWriter *&writer);
   int build_copy_macro_block_reader_init_param_(
       ObCopyMacroBlockReaderInitParam &init_param);
+  int build_data_version_for_macro_block_reuse_(ObCopyMacroBlockReaderInitParam &init_param);
   int record_server_event_();
 private:
   // For rebuilder can not retry, define MAX_RETRY_TIMES as 1.
