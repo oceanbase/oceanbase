@@ -82,6 +82,9 @@ const char *ObPrivMgr::priv_names_[] = {
     "DROP ROLE",
     "TRIGGER",
     "LOCK TABLES", // index 45
+    "ENCRYPT",     // index 46
+    "DECRYPT",     // index 47
+    "PROXY",       // index 48
 };
 
 ObPrivMgr::ObPrivMgr()

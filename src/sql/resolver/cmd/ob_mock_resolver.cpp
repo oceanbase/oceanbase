@@ -39,6 +39,8 @@ int ObMockResolver::resolve(const ParseNode& parse_tree)
     case T_CHECKSUM_TABLE:
     case T_CACHE_INDEX:
     case T_LOAD_INDEX_INTO_CACHE:
+    case T_GRANT_PROXY:
+    case T_REVOKE_PROXY:
     {
       ObMockStmt *mock_stmt = NULL;
       if (OB_UNLIKELY(NULL == (mock_stmt = create_stmt<ObMockStmt>()))) {

@@ -422,7 +422,7 @@ bool ObEncryptionUtil::is_ecb_mode(const ObCipherOpMode opmode)
          (opmode == ObCipherOpMode::ob_sm4_ecb);
 }
 
-int ObEncryptionUtil::get_cipher_op_mode(ObCipherOpMode &op_mode, ObSQLSessionInfo *session)
+int ObEncryptionUtil::get_cipher_op_mode(ObCipherOpMode &op_mode, const ObSQLSessionInfo *session)
 {
   int ret = OB_SUCCESS;
   int64_t encryption = -1;

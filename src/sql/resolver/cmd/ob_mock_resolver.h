@@ -84,6 +84,12 @@ private:
       case T_LOAD_INDEX_INTO_CACHE:
         ret = stmt::T_LOAD_INDEX_INTO_CACHE;
         break;
+      case T_GRANT_PROXY:
+        ret = stmt::T_GRANT_PROXY;
+        break;
+      case T_REVOKE_PROXY:
+        ret = stmt::T_REVOKE_PROXY;
+        break;
       default:
         ret = stmt::T_NONE;
     }

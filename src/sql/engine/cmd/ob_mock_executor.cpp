@@ -33,7 +33,9 @@ int ObMockExecutor::execute(ObExecContext &exec_ctx, ObMockStmt &stmt)
       || stmt::T_ALTER_LOGFILE_GROUP == stmt.get_stmt_type()
       || stmt::T_CACHE_INDEX == stmt.get_stmt_type()
       || stmt::T_LOAD_INDEX_INTO_CACHE == stmt.get_stmt_type()
-      || stmt::T_DROP_LOGFILE_GROUP == stmt.get_stmt_type()) {
+      || stmt::T_DROP_LOGFILE_GROUP == stmt.get_stmt_type()
+      || stmt::T_GRANT_PROXY == stmt.get_stmt_type()
+      || stmt::T_REVOKE_PROXY == stmt.get_stmt_type()) {
     LOG_USER_WARN(OB_NOT_SUPPORTED, "This statement ");
   } else if (stmt::T_REPAIR_TABLE == stmt.get_stmt_type()) {
     LOG_USER_WARN(OB_NOT_SUPPORTED, "Repair table Statement just mocks the syntax of MySQL without supporting specific realization");

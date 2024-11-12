@@ -605,7 +605,9 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       case stmt::T_ALTER_LOGFILE_GROUP:
       case stmt::T_DROP_LOGFILE_GROUP:
       case stmt::T_CACHE_INDEX:
-      case stmt::T_LOAD_INDEX_INTO_CACHE: {
+      case stmt::T_LOAD_INDEX_INTO_CACHE:
+      case stmt::T_GRANT_PROXY:
+      case stmt::T_REVOKE_PROXY: {
         DEFINE_EXECUTE_CMD(ObMockStmt, ObMockExecutor);
         break;
       }

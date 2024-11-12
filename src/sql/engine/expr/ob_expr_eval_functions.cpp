@@ -376,6 +376,7 @@
 #include "ob_expr_inner_decimal_to_year.h"
 #include "ob_expr_audit_log_func.h"
 #include "ob_expr_can_access_trigger.h"
+#include "ob_expr_enhanced_aes_encrypt.h"
 #include "ob_expr_mysql_proc_info.h"
 #include "ob_expr_get_mysql_routine_parameter_type_str.h"
 #include "ob_expr_ora_login_user.h"
@@ -1207,6 +1208,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprSm3::eval_sm3,                                                /* 730 */
   ObExprSm4Encrypt::eval_sm4_encrypt,                                 /* 731 */
   ObExprSm4Decrypt::eval_sm4_decrypt,                                 /* 732 */
+  ObExprEnhancedAesEncrypt::eval_aes_encrypt,                         /* 759 */
+  ObExprEnhancedAesDecrypt::eval_aes_decrypt,                         /* 760 */
   ObExprMysqlProcInfo::eval_mysql_proc_info,                          /* 761 */
   ObExprGetMySQLRoutineParameterTypeStr::get_mysql_routine_parameter_type_str,       /* 768 */
   ObExprOraLoginUser::eval_ora_login_user,                            /* 776 */

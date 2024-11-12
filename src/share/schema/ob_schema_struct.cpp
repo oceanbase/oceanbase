@@ -8313,6 +8313,12 @@ DEF_TO_STRING(ObPrintPrivSet)
   if ((priv_set_ & OB_PRIV_LOCK_TABLE) && OB_SUCCESS == ret) {
     ret = BUF_PRINTF(" LOCK TABLES,");
   }
+  if ((priv_set_ & OB_PRIV_ENCRYPT) && OB_SUCCESS == ret) {
+    ret = BUF_PRINTF(" ENCRYPT,");
+  }
+  if ((priv_set_ & OB_PRIV_DECRYPT) && OB_SUCCESS == ret) {
+    ret = BUF_PRINTF(" DECRYPT,");
+  }
   if (OB_SUCCESS == ret && pos > 1) {
     pos--; //Delete last ','
   }

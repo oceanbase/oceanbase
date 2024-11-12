@@ -444,6 +444,7 @@
 #include "sql/engine/expr/ob_expr_transaction_id.h"
 #include "sql/engine/expr/ob_expr_audit_log_func.h"
 #include "sql/engine/expr/ob_expr_can_access_trigger.h"
+#include "sql/engine/expr/ob_expr_enhanced_aes_encrypt.h"
 #include "sql/engine/expr/ob_expr_mysql_proc_info.h"
 #include "sql/engine/expr/ob_expr_get_mysql_routine_parameter_type_str.h"
 #include "sql/engine/expr/ob_expr_ora_login_user.h"
@@ -1099,6 +1100,8 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprSm3);
     REG_OP(ObExprSm4Encrypt);
     REG_OP(ObExprSm4Decrypt);
+    REG_OP(ObExprEnhancedAesEncrypt);
+    REG_OP(ObExprEnhancedAesDecrypt);
     REG_OP(ObExprGetMySQLRoutineParameterTypeStr);
   }();
 // 注册oracle系统函数
