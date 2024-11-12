@@ -427,7 +427,7 @@ target_link_directories(
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp")
 set(FMT_STATIC "")
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-  set(FMT_STATIC=libfmtd.a)
+  set(FMT_STATIC libfmtd.a)
 elseif (CMAKE_BUILD_TYPE STREQUAL "Release")
   set(FMT_STATIC libfmt.a)
 endif ()
