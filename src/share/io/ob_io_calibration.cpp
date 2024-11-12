@@ -485,6 +485,7 @@ ObIOBenchController::~ObIOBenchController()
   if (tg_id_ >= 0) {
     TG_STOP(tg_id_);
     TG_WAIT(tg_id_);
+    TG_DESTROY(tg_id_);
     tg_id_ = -1;
   }
 }
