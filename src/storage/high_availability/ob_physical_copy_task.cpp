@@ -593,6 +593,10 @@ int ObPhysicalCopyTask::build_data_version_for_macro_block_reuse_(ObCopyMacroBlo
     // therefore, if src observer version is less than 4.3.4, skip reuse for compatibility
     init_param.data_version_ = 0;
     LOG_INFO("skip reuse for compatibility", K(compat_version), KPC(copy_ctx_));
+  } else if (finish_task_->get_sstable_param()->is_small_sstable_) {
+    // skip reuse for small sstable
+    init_param.data_version_ = 0;
+    LOG_INFO("skip reuse for small sstable", KPC(copy_ctx_));
   } else if (OB_FAIL(copy_ctx_->macro_block_reuse_mgr_->get_major_snapshot_version(copy_ctx_->table_key_, snapshot_version, co_base_snapshot_version))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("failed to get reuse major snapshot version", K(ret), KPC(copy_ctx_));
