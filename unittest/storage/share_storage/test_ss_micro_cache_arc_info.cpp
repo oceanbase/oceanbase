@@ -147,7 +147,7 @@ TEST_F(TestSSMicroCacheArcInfo, arc_iter_info)
     ASSERT_EQ(500, arc_iter_info.iter_seg_arr_[ARC_B2].op_info_.op_cnt_);
     arc_iter_info.reuse(ARC_B2);
 
-    arc_iter_info.iter_seg_arr_[ARC_B2].init_iter_seg_info(3000, true, 510);
+    arc_iter_info.iter_seg_arr_[ARC_B2].init_iter_seg_info(5000, true, 510);
     ASSERT_EQ(true, arc_iter_info.is_delete_op_type(ARC_B2));
     ASSERT_EQ(true, arc_iter_info.need_handle_arc_seg(ARC_B2));
     arc_iter_info.adjust_arc_iter_seg_info(ARC_B2);
