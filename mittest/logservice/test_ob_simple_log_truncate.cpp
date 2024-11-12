@@ -84,6 +84,7 @@ int64_t ObSimpleLogClusterTestBase::member_cnt_ = 5;
 int64_t ObSimpleLogClusterTestBase::node_cnt_ = 5;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
 bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
+bool ObSimpleLogClusterTestBase::need_remote_log_store_ = false;
 
 TEST_F(TestObSimpleLogClusterTruncate, truncate_log)
 {

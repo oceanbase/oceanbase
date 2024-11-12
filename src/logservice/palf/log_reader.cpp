@@ -19,6 +19,7 @@
 #include "log_define.h"                   // LOG_DIO_ALIGN_SIZE...
 #include "log_reader_utils.h"             // ReadBuf
 #include "log_io_adapter.h"               // LogIOAdapter
+#include "log_io_utils.h"
 
 namespace oceanbase
 {
@@ -71,7 +72,6 @@ int LogReader::pread(const block_id_t block_id,
                      LogIOContext &io_ctx) const
 {
   int ret = OB_SUCCESS;
-  ObIOFd io_fd;
   out_read_size = 0;
   char block_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
   if (IS_NOT_INIT) {
@@ -82,39 +82,10 @@ int LogReader::pread(const block_id_t block_id,
     PALF_LOG(WARN, "invalid argument", K(block_id), K(offset), K(in_read_size), K(read_buf));
   } else if (OB_FAIL(convert_to_normal_block(log_dir_, block_id, block_path, OB_MAX_FILE_NAME_LENGTH))) {
     PALF_LOG(ERROR, "convert_to_normal_block failed", K(ret));
-  } else if (OB_FAIL(io_adapter_->open(block_path, LOG_READ_FLAG, FILE_OPEN_MODE, io_fd))) {
-    PALF_LOG(WARN, "LogReader open block failed", K(ret), K(block_path), K(io_fd));
-  } else {
-    int64_t remained_read_size = in_read_size;
-    int64_t remained_read_buf_len = read_buf.buf_len_;
-    int64_t step = MAX_LOG_BUFFER_SIZE;
-    while (remained_read_size > 0 && OB_SUCC(ret)) {
-      const int64_t curr_in_read_size = MIN(step, remained_read_size);
-      char *curr_read_buf = read_buf.buf_ + in_read_size - remained_read_size;
-      const offset_t curr_read_offset = offset + in_read_size - remained_read_size;
-      const int64_t curr_read_buf_len = remained_read_buf_len - out_read_size;
-      int64_t curr_out_read_size = 0;
-      if (OB_FAIL(inner_pread_(io_fd, curr_read_offset, curr_in_read_size, curr_read_buf, curr_read_buf_len, curr_out_read_size, io_ctx))) {
-        PALF_LOG(WARN, "LogReader inner_pread_ failed", K(ret), K(io_fd), K(block_id), K(offset),
-            K(in_read_size), K(read_buf), K(curr_in_read_size), K(curr_read_offset), K(curr_out_read_size),
-            K(remained_read_size), K(block_path));
-      } else {
-        out_read_size += curr_out_read_size;
-        remained_read_size -= curr_out_read_size;
-        PALF_LOG(TRACE, "inner_pread_ success", K(ret), K(io_fd), K(block_id), K(offset), K(in_read_size),
-            K(out_read_size), K(read_buf), K(curr_in_read_size), K(curr_read_offset), K(curr_out_read_size),
-            K(remained_read_size), K(block_path));
-      }
-    }
-  }
+  } else if (OB_FAIL(pread_impl_(block_path, offset, in_read_size, read_buf, out_read_size, io_ctx))) {
+    PALF_LOG(WARN, "pread_impl_ failed", K(ret), K(block_path), K(offset), K(in_read_size), K(read_buf), K(io_ctx));
+  } else {}
 
-  if (io_fd.is_valid()) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(io_adapter_->close(io_fd))) {
-      PALF_LOG(WARN, "close io_fd failed", K(tmp_ret), K(io_fd));
-    }
-    ret = OB_SUCCESS == ret ? tmp_ret : ret;
-  }
   return ret;
 }
 
@@ -140,7 +111,10 @@ int LogReader::inner_pread_(const ObIOFd &read_io_fd,
         K(limited_and_aligned_in_read_size));
   } else if (limited_and_aligned_in_read_size > read_buf_len) {
     ret = OB_BUF_NOT_ENOUGH;
-    PALF_LOG(WARN, "buffer not enough to hold read result");
+    PALF_LOG(WARN, "buffer not enough to hold read result", K(start_offset), K(limited_and_aligned_in_read_size), K(read_buf_len), K(out_read_size));
+  } else if (OB_FAIL(io_adapter_->pread(read_io_fd, limited_and_aligned_in_read_size, aligned_start_offset, read_buf, out_read_size, io_ctx))) {
+    PALF_LOG(WARN, "pread failed, maybe concurrently with truncate", K(ret), K(read_io_fd), K(aligned_start_offset),
+        K(limited_and_aligned_in_read_size), K(backoff), K(errno), K(out_read_size));
   } else {
     int64_t retry_interval = 10 * 1000L;
     do {
@@ -161,6 +135,55 @@ int LogReader::inner_pread_(const ObIOFd &read_io_fd,
           K(in_read_size), K(out_read_size));
     }
   }
+  return ret;
+}
+
+int LogReader::pread_impl_(const char *block_path,
+                           const offset_t offset,
+                           int64_t in_read_size,
+                           ReadBuf &read_buf,
+                           int64_t &out_read_size,
+                           LogIOContext &io_ctx) const
+{
+
+  int ret = OB_SUCCESS;
+  do {
+    ObIOFd io_fd;
+    out_read_size = 0;
+    if (OB_FAIL(io_adapter_->open(block_path, LOG_READ_FLAG, FILE_OPEN_MODE, io_fd))) {
+      PALF_LOG(WARN, "LogReader open block failed", K(ret), K(block_path), K(io_fd));
+    } else {
+      int64_t remained_read_size = in_read_size;
+      int64_t remained_read_buf_len = read_buf.buf_len_;
+      int64_t step = MAX_LOG_BUFFER_SIZE;
+      while (remained_read_size > 0 && OB_SUCC(ret)) {
+        const int64_t curr_in_read_size = MIN(step, remained_read_size);
+        char *curr_read_buf = read_buf.buf_ + in_read_size - remained_read_size;
+        const offset_t curr_read_offset = offset + in_read_size - remained_read_size;
+        const int64_t curr_read_buf_len = remained_read_buf_len - out_read_size;
+        int64_t curr_out_read_size = 0;
+        if (OB_FAIL(inner_pread_(io_fd, curr_read_offset, curr_in_read_size, curr_read_buf, curr_read_buf_len, curr_out_read_size, io_ctx))) {
+          PALF_LOG(WARN, "LogReader inner_pread_ failed", K(ret), K(io_fd), K(block_path), K(offset),
+              K(in_read_size), K(read_buf), K(curr_in_read_size), K(curr_read_offset), K(curr_out_read_size),
+              K(remained_read_size), K(block_path));
+        } else {
+          out_read_size += curr_out_read_size;
+          remained_read_size -= curr_out_read_size;
+          PALF_LOG(TRACE, "inner_pread_ success", K(ret), K(io_fd), K(block_path), K(offset), K(in_read_size),
+              K(out_read_size), K(read_buf), K(curr_in_read_size), K(curr_read_offset), K(curr_out_read_size),
+              K(remained_read_size), K(block_path));
+        }
+        if (OB_LOG_STORE_EPOCH_CHANGED == ret) {
+          PALF_LOG(WARN, "inner_pread_ failed because of LogStore", K(ret), K(curr_read_offset), K(curr_in_read_size), K(curr_read_buf_len), K(curr_out_read_size), K(remained_read_size));
+        }
+      }
+    }
+    int tmp_ret = OB_SUCCESS;
+    if (io_fd.is_valid() && OB_TMP_FAIL(io_adapter_->close(io_fd))) {
+      PALF_LOG(ERROR, "close io_fd failed", K(ret), K(io_fd));
+    }
+  } while (OB_LOG_STORE_EPOCH_CHANGED == ret);
+
   return ret;
 }
 

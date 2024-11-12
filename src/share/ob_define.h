@@ -582,6 +582,7 @@ const char *const DISABLED_WITH_READONLY_CLUSTER_MODE_STR = "disabled_with_reado
 
 static const int64_t MODIFY_GC_SNAPSHOT_INTERVAL = 2 * 1000 * 1000; //2s
 
+static const int64_t DEFAULT_GRPC_TIMEOUT_US = 2 * 1000 * 1000; // 2s
 //reserved table id for information schema
 const uint64_t OB_ALL_VIRTUAL_PARAMETERS_OLD_TID = 12037; // "PARAMETERS_OLD"
 const uint64_t OB_ALL_VIRTUAL_TABLE_CONSTRAINTS_OLD_TID = 12005; // "TABLE_CONSTRAINTS_OLD"

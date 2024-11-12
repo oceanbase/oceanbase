@@ -3,6 +3,10 @@ target_include_directories(
   ob_base INTERFACE
   ${CMAKE_CURRENT_SOURCE_DIR})
 
+target_include_directories(
+  ob_base INTERFACE
+  ${CMAKE_BINARY_DIR}/deps/oblib/src/grpc)
+
 target_compile_features(ob_base INTERFACE cxx_std_11)
 target_link_libraries(ob_base INTERFACE oblib_base objit_base
   ${OB_RELRO_FLAG} -Wl,-T,${CMAKE_SOURCE_DIR}/rpm/ld.lds)

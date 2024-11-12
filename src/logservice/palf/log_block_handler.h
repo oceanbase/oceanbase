@@ -15,14 +15,19 @@
 
 #include "lib/ob_define.h"
 #include "lib/utility/ob_macro_utils.h"
-#include "log_define.h"                                // block_id_t ...
 #include "share/io/ob_io_struct.h"                     // ObIOInfo
+#include "log_define.h"                                // block_id_t ...
+#include "log_io_utils.h"                              // LogSyncMode
 
 // This block contains the key class for writing a log into stable storage
 // device.
 
 namespace oceanbase
 {
+namespace common
+{
+class ObIODevice;
+}
 namespace palf
 {
 class LogWriteBuf;
@@ -31,6 +36,7 @@ class LogIOAdapter;
 //
 class LogDIOAlignedBuf {
 public:
+  friend class SwitchLogIOModeFunctor;
   LogDIOAlignedBuf();
   ~LogDIOAlignedBuf();
 
@@ -59,7 +65,7 @@ public:
   void reset_buf();
 
   TO_STRING_KV(K_(buf_write_offset), K_(buf_padding_size), K_(align_size), K_(aligned_buf_size),
-      K_(aligned_used_ts), K_(truncate_used_ts));
+      K_(aligned_used_ts), K_(truncate_used_ts), KP(aligned_data_buf_));
 private:
   DISALLOW_COPY_AND_ASSIGN(LogDIOAlignedBuf);
   inline bool need_align_() const
@@ -83,13 +89,34 @@ private:
   bool is_inited_;
 };
 
+class LogBlockHandler;
+
+enum class SwitchLogIOModeState {
+  INVALID = 0,
+  NORMAL = 1,
+  CLOSING = 2,
+  FSYNCING = 3,
+  OPENING = 4
+};
+
+struct SwitchLogIOModeFunctor {
+  SwitchLogIOModeFunctor(LogBlockHandler *block_handler);
+  ~SwitchLogIOModeFunctor();
+  int operator()(ObIODevice *prev_io_device, ObIODevice *io_device, const int64_t align_size);
+  int switch_state();
+  LogBlockHandler *block_handler_;
+  SwitchLogIOModeState state_;
+};
+
 // This class just used for writing log, truncating log
 class LogBlockHandler {
 public:
+  friend class SwitchLogIOModeFunctor;
   LogBlockHandler();
   ~LogBlockHandler();
 
-  int init(const int64_t log_block_size,
+  int init(const char *log_dir,
+           const int64_t log_block_size,
            const int64_t align_size,
            const int64_t align_buf_size,
            LogIOAdapter *io_adapter);
@@ -104,7 +131,7 @@ public:
   // int open(const char *block_name);
   // @brief this function used close current opened block
   // NB: retry until success!!
-  int close();
+  int close_with_fsync();
 
   // @brief this function used to truncate block via specified offset
   // NB: retry until success!!
@@ -136,8 +163,11 @@ public:
                             int64_t &accum_write_size,
                             int64_t &accum_write_count,
                             int64_t &accum_write_rt) const;
-
-  TO_STRING_KV(K_(dio_aligned_buf), K_(log_block_size), K_(io_fd));
+  int rename_tmp_block_handler_to_normal(const char *block_path);
+  int fsync();
+  int set_log_store_sync_mode(const LogSyncMode &mode);
+  int64_t get_curr_write_offset() const;
+  TO_STRING_KV(K_(dio_aligned_buf), K_(log_block_size), K_(io_fd), K_(curr_block_path), K_(sync_io), K_(curr_write_offset));
 private:
   // if timeout, retry until open block return an explicit error code
   // @brief block_path, the block path to be opened
@@ -151,6 +181,8 @@ private:
 
   // NB: retry until suuccess
   int inner_truncate_(const offset_t offset);
+  int inner_load_data_once_(const offset_t offset,
+                            const ObIOFd &io_fd);
   int inner_load_data_(const offset_t offset);
 
   int inner_write_once_(const offset_t offset,
@@ -158,7 +190,13 @@ private:
       const int64_t buf_len);
   int inner_writev_once_(const offset_t offset,
       const LogWriteBuf &write_buf);
-  int inner_write_impl_(const ObIOFd &io_fd, const char *buf, const int64_t count, const int64_t offset);
+  int inner_write_impl_(const char *buf, const int64_t count, const int64_t offset);
+
+  int inner_reopen_(const char *block_path, const int64_t offset);
+  int inner_fsync_(const bool with_reopen = true);
+  void get_io_fd_(ObIOFd &io_fd);
+  int register_to_io_adapter_(const char *log_dir, LogIOAdapter *adapter);
+  int unregister_to_io_adapter_(const char *log_dir, LogIOAdapter *adapter);
 private:
   static constexpr int64_t RETRY_INTERVAL = 10 * 1000;
   LogDIOAlignedBuf dio_aligned_buf_;
@@ -168,14 +206,21 @@ private:
   int64_t ob_pwrite_used_ts_;
   int64_t count_;
   int64_t trace_time_;
+  offset_t curr_write_offset_;
+  // The layout of second_id_ in io_fd_
+  // | sign bit | sync io bit | 30 unused bit | 32 fd bit |
+  ObSpinLock fd_lock_;
   ObIOFd io_fd_;
   LogIOAdapter *io_adapter_;
+  char curr_block_path_[OB_MAX_FILE_NAME_LENGTH];
   // === IO Failure Detection ===
   int64_t last_pwrite_start_time_us_;
   int64_t last_pwrite_size_;
   int64_t accum_write_size_;
   int64_t accum_write_rt_;
   int64_t accum_write_count_;
+  bool sync_io_;
+  char log_dir_[OB_MAX_FILE_NAME_LENGTH];
   // === IO Failure Detection ===
   bool is_inited_;
 };

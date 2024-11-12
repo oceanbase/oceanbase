@@ -119,17 +119,17 @@ int64_t ObFailureDetector::PalfDiskHangDetector::min_recovery_interval_() const
 
 namespace palf
 {
-int LogBlockHandler::inner_write_impl_(const ObIOFd &io_fd, const char *buf, const int64_t count, const int64_t offset)
+int LogBlockHandler::inner_write_impl_(const char *buf, const int64_t count, const int64_t offset)
 {
   int ret = OB_SUCCESS;
   int64_t start_ts = ObTimeUtility::fast_current_time();
   int64_t write_size = 0;
   int64_t time_interval = OB_INVALID_TIMESTAMP;
   do {
-    if (count != (write_size = ob_pwrite(io_fd.second_id_, buf, count, offset))) {
+    if (count != (write_size = ob_pwrite(io_fd_.second_id_, buf, count, offset))) {
       if (palf_reach_time_interval(1000 * 1000, time_interval)) {
         ret = convert_sys_errno();
-        PALF_LOG(ERROR, "ob_pwrite failed", K(ret), K(io_fd), K(offset), K(count), K(errno));
+        PALF_LOG(ERROR, "ob_pwrite failed", K(ret), K(io_fd_), K(offset), K(count), K(errno));
       }
       ::ob_usleep(RETRY_INTERVAL);
     } else {
@@ -317,6 +317,7 @@ int64_t ObSimpleLogClusterTestBase::member_cnt_ = 3;
 int64_t ObSimpleLogClusterTestBase::node_cnt_ = 3;
 bool ObSimpleLogClusterTestBase::need_add_arb_server_ = true;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
+bool ObSimpleLogClusterTestBase::need_remote_log_store_ = false;
 
 // test
 // 1. disk long-time hang

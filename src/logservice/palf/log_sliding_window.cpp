@@ -3257,7 +3257,6 @@ int LogSlidingWindow::receive_log(const common::ObAddr &src_server,
           // local log_task is invalid, and it does not need update, this means that it's maybe in PRE_FILL state.
         } else if (false == is_log_pid_match) {
           // local log_task's proposal_id does not match with new log.
-          //
           // (log_id <= last_submit_log_id) must be true.
           //
           // Because if log_id > last_submit_log_id, there are only too cases:

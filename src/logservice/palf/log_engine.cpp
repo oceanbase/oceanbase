@@ -179,24 +179,22 @@ int LogEngine::init(const int64_t palf_id,
 
 void LogEngine::destroy()
 {
-  if (IS_INIT) {
-    PALF_LOG(INFO, "LogEngine destroy", K_(palf_id), K_(is_inited));
-    is_inited_ = false;
-    palf_id_ = INVALID_PALF_ID;
-    log_io_worker_ = NULL;
-    log_shared_queue_th_ = NULL;
-    alloc_mgr_ = NULL;
-    log_net_service_.destroy();
-    log_meta_storage_.destroy();
-    log_meta_.reset();
-    log_storage_.destroy();
-    base_lsn_for_block_gc_.reset();
-    min_block_id_ = LOG_INVALID_BLOCK_ID;
-    min_block_max_scn_.reset();
-    min_block_min_scn_.reset();
-    min_block_info_cache_version_ = 0;
-    last_purge_throttling_ts_ = OB_INVALID_TIMESTAMP;
-  }
+  PALF_LOG(INFO, "LogEngine destroy", K_(palf_id), K_(is_inited));
+  is_inited_ = false;
+  palf_id_ = INVALID_PALF_ID;
+  log_io_worker_ = NULL;
+  log_shared_queue_th_ = NULL;
+  alloc_mgr_ = NULL;
+  log_net_service_.destroy();
+  log_meta_storage_.destroy();
+  log_meta_.reset();
+  log_storage_.destroy();
+  base_lsn_for_block_gc_.reset();
+  min_block_id_ = LOG_INVALID_BLOCK_ID;
+  min_block_max_scn_.reset();
+  min_block_min_scn_.reset();
+  min_block_info_cache_version_ = 0;
+  last_purge_throttling_ts_ = OB_INVALID_TIMESTAMP;
 }
 
 int LogEngine::load(const int64_t palf_id,
@@ -420,6 +418,8 @@ int LogEngine::submit_flush_change_config_meta_task(const FlushMetaCbCtx &flush_
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(flush_meta_cb_ctx), K(config_meta));
   } else if (OB_FAIL(log_meta_.update_log_config_meta(config_meta))) {
     PALF_LOG(ERROR, "LogMeta update_log_config_meta failed", K(ret), K_(palf_id), K_(is_inited));
+  } else if (OB_FAIL(set_log_store_sync_mode_())) {
+    PALF_LOG(ERROR, "set_log_store_sync_mode_ failed", K(ret), K_(palf_id), K_(is_inited));
   } else if (OB_FAIL(submit_flush_meta_task_(flush_meta_cb_ctx, log_meta_))) {
     PALF_LOG(ERROR, "submit_flush_meta_task_ failed", K(ret));
   } else {
@@ -1821,6 +1821,19 @@ int LogEngine::get_io_statistic_info(int64_t &last_working_time,
   } else {
     ret = log_storage_.get_io_statistic_info(last_working_time,
         last_write_size, accum_write_size, accum_write_count, accum_write_rt);
+  }
+  return ret;
+}
+
+int LogEngine::set_log_store_sync_mode_()
+{
+  int ret = OB_SUCCESS;
+  LogSyncMode mode = (log_meta_.degrade_list_is_empty() ? LogSyncMode::ASYNC : LogSyncMode::SYNC);
+  if (OB_FAIL(log_storage_.set_log_store_sync_mode(mode)) && OB_NOT_INIT != ret) {
+    PALF_LOG(WARN, "set_log_store_sync_mode failed", KR(ret), KPC(this));
+  } else {
+    ret = OB_SUCCESS;
+    PALF_LOG(INFO, "set_log_store_sync_mode failed", KR(ret), KPC(this));
   }
   return ret;
 }

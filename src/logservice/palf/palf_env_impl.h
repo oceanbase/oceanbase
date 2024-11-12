@@ -238,7 +238,6 @@ public:
            common::ObILogAllocator *alloc_mgr,
            ILogBlockPool *log_block_pool,
            PalfMonitorCb *monitor,
-           share::ObLocalDevice *log_local_device,
            share::ObResourceManager *resource_manager,
            common::ObIOManager *io_manager);
 
@@ -394,6 +393,7 @@ private:
 
   int check_can_update_log_disk_options_(const PalfDiskOptions &disk_options);
   int remove_directory_while_exist_(const char *log_dir);
+  int remove_stale_incomplete_palf_(const char *pathname);
 private:
   typedef common::RWLock RWLock;
   typedef RWLock::RLockGuard RLockGuard;

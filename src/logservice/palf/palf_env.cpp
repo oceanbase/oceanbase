@@ -51,7 +51,6 @@ int PalfEnv::create_palf_env(
     common::ObILogAllocator *log_alloc_mgr,
     ILogBlockPool *log_block_pool,
     PalfMonitorCb *monitor,
-    share::ObLocalDevice *log_local_device,
     share::ObResourceManager *resource_manager,
     common::ObIOManager *io_manager,
     PalfEnv *&palf_env)
@@ -65,7 +64,7 @@ int PalfEnv::create_palf_env(
   } else if (OB_FAIL(palf_env->palf_env_impl_.init(options, base_dir, self, obrpc::ObRpcNetHandler::CLUSTER_ID,
                                                    MTL_ID(), transport, batch_rpc,
                                                    log_alloc_mgr, log_block_pool, monitor,
-                                                   log_local_device, resource_manager, io_manager))) {
+                                                   resource_manager, io_manager))) {
     PALF_LOG(WARN, "PalfEnvImpl init failed", K(ret), K(base_dir));
   } else {
     PALF_LOG(INFO, "create_palf_handle_impl success", K(base_dir));

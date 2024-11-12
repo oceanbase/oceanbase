@@ -92,6 +92,7 @@
 #include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "observer/table/ob_table_client_info_mgr.h"
 #include "observer/table/ob_table_query_async_processor.h"
+#include "logservice/ob_log_io_adapter.h"
 
 namespace oceanbase
 {
@@ -477,13 +478,13 @@ int MockTenantModuleEnv::init_dir()
   sstable_dir_ = env_dir_ + "/sstable";
   clog_dir_ = env_dir_ + "/clog";
   slog_dir_ = env_dir_ + "/slog";
-  if (OB_FAIL(mkdir(run_dir_.c_str(), 0777))) {
+  if (OB_FAIL(::mkdir(run_dir_.c_str(), 0777))) {
   } else if (OB_FAIL(chdir(run_dir_.c_str()))) {
-  } else if (OB_FAIL(mkdir("./run", 0777))) {
-  } else if (OB_FAIL(mkdir(env_dir_.c_str(), 0777))) {
-  } else if (OB_FAIL(mkdir(clog_dir_.c_str(), 0777))) {
-  } else if (OB_FAIL(mkdir(sstable_dir_.c_str(), 0777))) {
-  } else if (OB_FAIL(mkdir(slog_dir_.c_str(), 0777))) {
+  } else if (OB_FAIL(::mkdir("./run", 0777))) {
+  } else if (OB_FAIL(::mkdir(env_dir_.c_str(), 0777))) {
+  } else if (OB_FAIL(::mkdir(clog_dir_.c_str(), 0777))) {
+  } else if (OB_FAIL(::mkdir(sstable_dir_.c_str(), 0777))) {
+  } else if (OB_FAIL(::mkdir(slog_dir_.c_str(), 0777))) {
   }
 
   // 因为改变了工作目录，设置为绝对路径
@@ -541,6 +542,7 @@ int MockTenantModuleEnv::prepare_io()
   const int64_t bucket_num = 1024L;
   const int64_t max_cache_size = 1024L * 1024L * 512;
   const int64_t block_size = common::OB_MALLOC_BIG_BLOCK_SIZE;
+  ObLogIOInfo log_io_info;
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (OB_FAIL(THE_IO_DEVICE->init(iod_opts))) {
@@ -552,6 +554,10 @@ int MockTenantModuleEnv::prepare_io()
         sync_io_thread_count,
         max_io_depth))) {
     STORAGE_LOG(WARN, "add device channel failed", K(ret));
+  } else if (OB_FAIL(log_io_info.init(logservice::ObLogIOMode::LOCAL, nullptr, 1))) {
+    STORAGE_LOG(ERROR, "init LogIOInfo fail", KR(ret));
+  } else if (OB_FAIL(LOG_IO_ADAPTER.init(clog_dir_.c_str(), 8, 128, log_io_info, &OB_IO_MANAGER, &ObDeviceManager::get_instance()))) {
+    STORAGE_LOG(ERROR, "init log_io_device_wrapper fail", KR(ret));
   } else if (OB_FAIL(log_block_mgr_.init(storage_env_.clog_dir_))) {
     SERVER_LOG(ERROR, "init log pool fail", K(ret));
   } else if (OB_FAIL(ObIOManager::get_instance().start())) {
@@ -667,8 +673,6 @@ int MockTenantModuleEnv::init_before_start_mtl()
     STORAGE_LOG(ERROR, "failed to init bandwidth_throttle_", K(ret));
   } else if (OB_FAIL(TG_START(lib::TGDefIDs::ServerGTimer))) {
     STORAGE_LOG(ERROR, "init timer fail", KR(ret));
-  } else if (OB_FAIL(LOG_IO_DEVICE_WRAPPER.init(clog_dir_.c_str(), 8, 128, &OB_IO_MANAGER, &ObDeviceManager::get_instance()))) {
-    STORAGE_LOG(ERROR, "init log_io_device_wrapper fail", KR(ret));
   } else {
     obrpc::ObRpcNetHandler::CLUSTER_ID = 1;
     oceanbase::palf::election::INIT_TS = 1;

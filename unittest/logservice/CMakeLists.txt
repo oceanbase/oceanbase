@@ -3,9 +3,12 @@ function(log_unittest case)
   target_link_libraries(${case} PRIVATE mockcontainer)
 endfunction()
 
+include_directories(${CMAKE_BINARY_DIR}/deps/oblib/src/grpc)
+
 log_unittest(test_log_checksum)
 log_unittest(test_log_entry_and_group_entry)
 log_unittest(test_lsn)
+#log_unittest(test_logstore)
 log_unittest(test_log_meta_entry_header)
 log_unittest(test_log_meta_info)
 log_unittest(test_log_meta_entry)

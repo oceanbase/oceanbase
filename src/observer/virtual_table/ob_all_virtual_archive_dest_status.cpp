@@ -25,6 +25,7 @@
 #include "share/backup/ob_archive_struct.h"
 
 using namespace oceanbase::share;
+using namespace oceanbase::common::sqlclient;
 
 namespace oceanbase
 {

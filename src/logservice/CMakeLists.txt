@@ -60,6 +60,13 @@ ob_set_subtarget(ob_logservice common
   ob_reconfig_checker_adapter.cpp
 )
 
+ob_set_subtarget(ob_logservice grpc
+  ob_log_io_adapter.cpp
+  ob_log_device.cpp
+  ob_log_grpc_adapter.cpp
+  ob_logstore_mgr.cpp
+)
+
 ob_set_subtarget(ob_logservice common_mixed
   applyservice/ob_log_apply_service.cpp
   logrpc/ob_log_request_handler.cpp

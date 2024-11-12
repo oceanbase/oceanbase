@@ -20,7 +20,7 @@
 #include "log_block_handler.h"            // LogBlockHandler
 #include "lsn.h"                          // LSN
 #include "log_block_pool_interface.h"     // ILogBlocKMgr
-
+#include "log_io_utils.h"                 // LogSyncMode
 namespace oceanbase
 {
 namespace palf
@@ -35,7 +35,9 @@ public:
   ~LogBlockMgr();
 
   // @brief this function used to initialize.
-  int init(const char *log_dir, const block_id_t block_id,
+  int init(const char *log_dir,
+           const int64_t palf_id,
+           const block_id_t block_id,
            const int64_t align_size,
            const int64_t align_buf_size,
            int64_t log_block_size,
@@ -85,7 +87,8 @@ public:
                             int64_t &accum_write_size,
                             int64_t &accum_write_count,
                             int64_t &accum_write_rt) const;
-  TO_STRING_KV(K_(log_dir), K_(dir_fd), K_(min_block_id), K_(max_block_id), K_(curr_writable_block_id));
+  int set_log_store_sync_mode(const LogSyncMode &mode);
+  TO_STRING_KV(K_(log_dir), K_(min_block_id), K_(max_block_id), K_(curr_writable_block_id), K_(palf_id));
 private:
   // @brief this function used to rebuild 'blocks_'
   // Firstly, scan the directory, get the name of all blocks;
@@ -130,10 +133,10 @@ private:
   mutable block_id_t min_block_id_;
   mutable block_id_t max_block_id_;
   ILogBlockPool *log_block_pool_;
-  int dir_fd_;
   int64_t align_size_;
   int64_t align_buf_size_;
   LogIOAdapter *io_adapter_;
+  int64_t palf_id_;
   bool is_inited_;
 };
 } // end of logservice

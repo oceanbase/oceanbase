@@ -20,6 +20,7 @@
 #include "log_net_service.h"                           // LogNetService
 #include "log_meta.h"                                  // LogMeta
 #include "log_define.h"
+#include "log_io_utils.h"                              // LogSyncMode
 
 namespace oceanbase
 {
@@ -500,6 +501,7 @@ private:
   int integrity_verify_(const LSN &last_meta_entry_start_lsn,
                         const LSN &last_group_entry_header_lsn,
                         bool &is_integrity);
+  int set_log_store_sync_mode_();
 private:
   DISALLOW_COPY_AND_ASSIGN(LogEngine);
 

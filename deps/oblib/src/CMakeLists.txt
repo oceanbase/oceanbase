@@ -267,6 +267,7 @@ set(oblib_extra_objects "" CACHE INTERNAL oblib_extra_objects)
 add_subdirectory(lib)
 add_subdirectory(common)
 add_subdirectory(rpc)
+add_subdirectory(grpc)
 
 # Define static library which contains previous object libraries.
 message(STATUS "oblib_extra_objects ${oblib_extra_objects}")

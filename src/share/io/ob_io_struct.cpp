@@ -2609,7 +2609,7 @@ int ObDeviceChannel::init(ObIODevice *device_handle,
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret), K(is_inited_));
   } else if (OB_UNLIKELY(nullptr == device_handle
-        || async_channel_count <= 0
+        || async_channel_count < 0
         || sync_channel_count <= 0
         || max_io_depth <= 0)) {
     ret = OB_INVALID_ARGUMENT;

@@ -15,6 +15,7 @@
 #include "lib/restore/ob_object_device.h"
 #include "ob_device_manager.h"
 #include "share/ob_local_device.h"
+#include "logservice/ob_log_device.h"
 
 namespace oceanbase
 {
@@ -127,6 +128,8 @@ int ObDeviceManager::init_devices_env()
       OB_LOG(WARN, "fail to init cos storage", K(ret));
     } else if (OB_FAIL(init_s3_env())) {
       OB_LOG(WARN, "fail to init s3 storage", K(ret));
+    } else if (OB_FAIL(logservice::init_log_store_env())) {
+      OB_LOG(WARN, "fail to init s3 storage", K(ret));
     } else if (OB_FAIL(ObObjectStorageInfo::register_cluster_version_mgr(
         &ObClusterVersionMgr::get_instance()))) {
       OB_LOG(WARN, "fail to register cluster version mgr", K(ret));
@@ -181,6 +184,7 @@ void ObDeviceManager::destroy()
     fin_oss_env();
     fin_cos_env();
     fin_s3_env();
+    logservice::fin_log_store_env();
     ObDeviceCredentialMgr::get_instance().destroy();
     is_init_ = false;
     device_count_ = 0;
@@ -222,6 +226,10 @@ int parse_storage_info(common::ObString storage_type_prefix, ObIODevice*& device
     device_type = OB_STORAGE_S3;
     mem = allocator.alloc(sizeof(ObObjectDevice));
     if (NULL != mem) {new(mem)ObObjectDevice;}
+  } else if (storage_type_prefix.prefix_match(OB_LOG_STORE_PREFIX)) {
+    device_type = OB_STORAGE_LOG_STORE;
+    mem = allocator.alloc(sizeof(logservice::ObLogDevice));
+    if (NULL != mem) {new(mem)logservice::ObLogDevice;}
   } else {
     ret = OB_INVALID_BACKUP_DEST;
     OB_LOG(WARN, "invaild device name info!", K(storage_type_prefix));
@@ -365,6 +373,8 @@ int ObDeviceManager::get_device(const common::ObString& storage_info,
 
   if (storage_type_prefix.prefix_match(OB_FILE_PREFIX)) {
     storage_info_tmp.assign_ptr(OB_FILE_PREFIX, strlen(OB_FILE_PREFIX));
+  } else if (storage_type_prefix.prefix_match(OB_LOG_STORE_PREFIX)) {
+    storage_info_tmp.assign_ptr(OB_LOG_STORE_PREFIX, strlen(OB_LOG_STORE_PREFIX));
   } else if (storage_type_prefix.prefix_match(OB_LOCAL_PREFIX)) {
     storage_info_tmp.assign_ptr(storage_info.ptr(), storage_info.length());
   } else if (storage_type_prefix.prefix_match(OB_OSS_PREFIX)

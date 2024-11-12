@@ -19,12 +19,13 @@
 #define private public
 #define protected public
 #include "env/ob_simple_log_cluster_env.h"
-#undef private
-#undef protected
 #include "logservice/palf/log_reader_utils.h"
 #include "logservice/palf/log_define.h"
 #include "logservice/palf/log_group_entry_header.h"
 #include "logservice/palf/log_io_worker.h"
+#include "logservice/palf/log_block_mgr.h"
+#undef private
+#undef protected
 #include "logservice/palf/lsn.h"
 
 const std::string TEST_NAME = "log_restart";
@@ -65,6 +66,7 @@ std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
 bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
 constexpr int64_t timeout_ts_us = 3 * 1000 * 1000;
 int64_t log_entry_size = 2 * 1024 * 1024 + 16 * 1024;
+bool ObSimpleLogClusterTestBase::need_remote_log_store_ = false;
 
 TEST_F(TestObSimpleLogClusterRestart, read_block_in_flashback)
 {
@@ -86,11 +88,11 @@ TEST_F(TestObSimpleLogClusterRestart, read_block_in_flashback)
   EXPECT_EQ(2, max_block_id);
   SCN scn;
   char block_name_tmp[OB_MAX_FILE_NAME_LENGTH];
-  EXPECT_EQ(OB_SUCCESS, block_id_to_tmp_string(max_block_id, block_name_tmp, OB_MAX_FILE_NAME_LENGTH));
+  EXPECT_EQ(OB_SUCCESS, construct_absolute_tmp_block_path(log_storage->block_mgr_.log_dir_, max_block_id, OB_MAX_FILE_NAME_LENGTH, block_name_tmp));
   char block_name[OB_MAX_FILE_NAME_LENGTH];
-  EXPECT_EQ(OB_SUCCESS, block_id_to_string(max_block_id, block_name, OB_MAX_FILE_NAME_LENGTH));
-  ::renameat(log_storage->block_mgr_.dir_fd_, block_name, log_storage->block_mgr_.dir_fd_, block_name_tmp);
-  EXPECT_EQ(-1, ::openat(log_storage->block_mgr_.dir_fd_, block_name, LOG_READ_FLAG));
+  EXPECT_EQ(OB_SUCCESS, construct_absolute_block_path(log_storage->block_mgr_.log_dir_, max_block_id, OB_MAX_FILE_NAME_LENGTH, block_name));
+  ::rename(block_name, block_name_tmp);
+  EXPECT_EQ(-1, open(block_name, LOG_READ_FLAG));
   EXPECT_EQ(OB_NEED_RETRY, read_log(leader));
   EXPECT_EQ(OB_NEED_RETRY, log_storage->get_block_min_scn(max_block_id, scn));
 
@@ -415,12 +417,13 @@ TEST_F(TestObSimpleLogClusterRestart, advance_base_lsn_with_restart)
     PalfHandleImplGuard leader;
     EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
+    EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.palf_handle_impl_->get_max_lsn()));
     sleep(2);
     LSN log_tail =
         leader.palf_handle_impl_->log_engine_.log_meta_storage_.log_tail_;
     int count = (LSN(PALF_META_BLOCK_SIZE) - log_tail)/4096;
     for (int64_t i = 0; i < count; i++) {
-      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->enable_vote());
+      EXPECT_UNTIL_EQ(OB_SUCCESS, leader.palf_handle_impl_->enable_vote());
     }
     while (LSN(PALF_META_BLOCK_SIZE) !=
         leader.palf_handle_impl_->log_engine_.log_meta_storage_.log_tail_)

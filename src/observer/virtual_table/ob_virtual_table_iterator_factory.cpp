@@ -98,6 +98,8 @@
 #include "observer/virtual_table/ob_virtual_ash.h"
 #include "observer/virtual_table/ob_all_virtual_arbitration_member_info.h"
 #include "observer/virtual_table/ob_all_virtual_arbitration_service_status.h"
+#include "observer/virtual_table/ob_all_virtual_logstore_service_info.h"
+#include "observer/virtual_table/ob_all_virtual_logstore_service_status.h"
 #include "observer/virtual_table/ob_virtual_sql_monitor_statname.h"
 #include "observer/virtual_table/ob_virtual_sql_plan_statistics.h"
 #include "observer/virtual_table/ob_virtual_sql_monitor.h"
@@ -1742,6 +1744,28 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               SERVER_LOG(ERROR, "ObAllVirtualArbServiceStatus construct fail", K(ret));
             } else {
               vt_iter = static_cast<ObVirtualTableIterator *>(virtual_arb_status);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_LOGSTORE_SERVICE_STATUS_TID: {
+            ObAllVirtualLogstoreServiceStatus *virtual_logstore_status = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualLogstoreServiceStatus, virtual_logstore_status))) {
+              SERVER_LOG(ERROR, "ObAllVirtualLogstoreServiceStatus construct fail", K(ret));
+            } else if (OB_FAIL(virtual_logstore_status->init(GCTX.self_addr()))) {
+              SERVER_LOG(WARN, "fail to init ObAllVirtualLogstoreServiceInfo", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(virtual_logstore_status);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_LOGSTORE_SERVICE_INFO_TID: {
+            ObAllVirtualLogstoreServiceInfo *virtual_logstore_info = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualLogstoreServiceInfo, virtual_logstore_info))) {
+              SERVER_LOG(ERROR, "ObAllVirtualLogstoreServiceInfo construct fail", K(ret));
+            } else if (OB_FAIL(virtual_logstore_info->init(GCTX.self_addr()))) {
+              SERVER_LOG(WARN, "fail to init ObAllVirtualLogstoreServiceInfo", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(virtual_logstore_info);
             }
             break;
           }

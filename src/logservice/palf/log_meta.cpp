@@ -157,6 +157,11 @@ int LogMeta::update_log_replica_property_meta(const LogReplicaPropertyMeta &log_
   return ret;
 }
 
+bool LogMeta::degrade_list_is_empty() const
+{
+  return !log_config_meta_.curr_.config_.degraded_learnerlist_.is_valid();
+}
+
 void LogMeta::operator=(const LogMeta &log_meta)
 {
   version_ = log_meta.version_;

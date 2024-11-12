@@ -1,0 +1,229 @@
+syntax = "proto3";
+package newlogstorepb;
+
+service NewLogStore {
+  // load logstore
+  rpc LoadLogStore(LoadLogStoreReq) returns (LoadLogStoreResp);
+  // open a file
+  rpc Open(OpenReq) returns(OpenResp);
+  // close a file
+  rpc Close(CloseReq) returns(CloseResp);
+  // pwrite to a file
+  rpc Pwrite(PwriteReq) returns(PwriteResp);
+  // pread from a file
+  rpc Pread(PreadReq) returns(PreadResp);
+  // fallocate a file to designated size
+  rpc Fallocate(FallocateReq) returns(FallocateResp);
+  // ftruncate a file
+  rpc Ftruncate(FtruncateReq) returns(FtruncateResp);
+  // scan a dir
+  rpc Scandir(ScanDirReq) returns(ScanDirResp);
+  // unlink
+  rpc Unlink(UnlinkReq) returns(UnlinkResp);
+  // mkdir
+  rpc Mkdir(MkdirReq) returns(MkdirResp);
+  // rmdir
+  rpc Rmdir(RmdirReq) returns(RmdirResp);
+  // stat interface
+  rpc Stat(StatReq) returns(StatResp);
+  // rename interface
+  rpc Rename(RenameReq) returns(RenameResp);
+  // fsync interface
+  rpc Fsync(FsyncReq) returns(FsyncResp);
+  // get logstore info interface
+  rpc GetLogStoreInfo(GetLogStoreInfoReq) returns(GetLogStoreInfoResp);
+  // batch fallocate interface
+  rpc BatchFallocate(BatchFallocateReq) returns(BatchFallocateResp);
+}
+
+message LoadLogStoreReq {
+  int64 version = 1;
+}
+
+message LoadLogStoreResp {
+  int64 ret_code = 1;
+  int64 version = 2;
+  int64 epoch = 3;
+}
+
+message OpenReq {
+  int64 epoch = 1;
+  string pathname = 2;
+  int32 flags = 3;
+  uint32 mode = 4;
+}
+
+message OpenResp {
+  int64 ret_code = 1;
+  int32 err_no = 2;
+  int32 fd = 3;
+}
+
+message CloseReq {
+  int64 epoch = 1;
+  int32 fd = 2;
+}
+
+message CloseResp {
+  int64 ret_code = 1;
+  int32 err_no = 2;
+}
+
+message PwriteReq {
+  int64 epoch = 1;
+  int64 seq = 2;  // seq number for pwrite request
+  int32 fd = 3;
+  bytes buf = 4;
+  uint64 size = 5;
+  uint64 offset = 6;
+  int32 write_mode = 7;  // write mode: {1: write to disk, 2: write to memory}
+}
+
+message PwriteResp {
+  int64 ret_code = 1;
+  int32 err_no = 2;
+  int64 size = 3;
+}
+
+message PreadReq {
+  int64 epoch = 1;
+  int32 fd = 2;
+  uint64 size = 3;
+  uint64 offset = 4;
+}
+
+message PreadResp {
+  int64 ret_code = 1;
+  int32 err_no = 2;
+  bytes buf = 3;
+  int64 size = 4;
+}
+
+message FallocateReq {
+  int64 epoch = 1;
+  int32 fd = 2;
+  int32 mode = 3;
+  int64 offset = 4;
+  int64 len = 5;
+}
+
+message FallocateResp {
+  int64 ret_code = 1;
+  int32 err_no = 2;
+}
+
+message FtruncateReq {
+  int64 epoch = 1;
+  int32 fd = 2;
+  int64 len = 3;
+}
+
+message FtruncateResp {
+  int64 ret_code = 1;
+  int32 err_no = 2;
+}
+
+message ScanDirReq {
+  int64 epoch = 1;
+  string dirname = 2;
+  int32 req_type = 3;
+}
+
+message ScanDirResp1 {
+  int64 ret_code = 1;
+  int32 err_no = 2;
+}
+
+message ScanDirResp {
+  int32 req_type = 1;
+  // fileds are opetional by default
+  ScanDirResp1 resp1 = 2;
+}
+
+message UnlinkReq {
+  int64 epoch = 1;
+  string pathname = 2;
+}
+
+message UnlinkResp {
+  int64 ret_code = 1;
+  int32 err_no = 2;
+}
+
+message MkdirReq {
+  int64 epoch = 1;
+  string pathname = 2;
+  uint32 mode = 3;
+}
+
+message MkdirResp {
+  int64 ret_code = 1;
+  int32 err_no = 2;
+}
+
+message RmdirReq {
+  int64 epoch = 1;
+  string pathname = 2;
+}
+
+message RmdirResp {
+  int64 ret_code = 1;
+  int32 err_no = 2;
+}
+
+message StatReq {
+  int64 epoch = 1;
+  string pathname = 2;
+}
+
+message StatResp {
+  int64 ret_code = 1;
+  int32 err_no = 2;
+  bool is_dir = 3;
+  uint64 st_size = 4;
+}
+
+message RenameReq {
+  int64 epoch = 1;
+  string oldpath = 2;
+  string newpath = 3;
+}
+
+message RenameResp {
+  int64 ret_code = 1;
+  int32 err_no = 2;
+}
+
+message FsyncReq {
+  int64 epoch = 1;
+  int32 fd = 2;
+}
+
+message FsyncResp {
+  int64 ret_code = 1;
+  int32 err_no = 2;
+}
+
+message GetLogStoreInfoReq {
+  int64 epoch = 1;
+}
+
+message GetLogStoreInfoResp {
+  int64 ret_code = 1;
+  int64 memory_limit = 2;
+  int64 memory_used = 3;
+  int64 shm_limit = 4;
+  int64 shm_used = 5;
+}
+
+message BatchFallocateReq {
+  int64 epoch = 1;
+  string dirname = 2;
+  int64 count = 3;
+  int64 size = 4;
+}
+
+message BatchFallocateResp {
+  int64 ret_code = 1;
+  int32 err_no = 2;
+};

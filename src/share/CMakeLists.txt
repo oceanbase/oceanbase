@@ -1,6 +1,7 @@
 ob_set_subtarget(ob_share ALONE
   ob_rpc_struct.cpp
   ob_tenant_mgr.cpp
+  ob_device_manager.cpp
   datum/ob_datum_funcs.cpp
   schema/ob_schema_service_sql_impl.cpp
   parameter/ob_parameter_attr.cpp
@@ -101,7 +102,6 @@ ob_set_subtarget(ob_share common
   ob_ddl_task_executor.cpp
   ob_debug_sync.cpp
   ob_debug_sync_point.cpp
-  ob_device_manager.cpp
   ob_disk_usage_table_operator.cpp
   ob_dml_sql_splicer.cpp
   ob_encryption_struct.cpp

@@ -112,6 +112,8 @@
 #include "observer/table/ttl/ob_table_ttl_task.h"
 #include "storage/high_availability/ob_storage_ha_diagnose_service.h"
 #include "share/ob_device_credential_task.h"
+#include "logservice/ob_log_io_adapter.h"
+#include "logservice/ob_logstore_mgr.h"
 #ifdef OB_BUILD_ARBITRATION
 #include "logservice/arbserver/palf_env_lite_mgr.h"
 #include "logservice/arbserver/ob_arb_srv_network_frame.h"
@@ -810,6 +812,10 @@ void ObServer::destroy()
     log_block_mgr_.destroy();
     FLOG_INFO("log block mgr destroy");
 
+    FLOG_INFO("begin to destroy logstore_mgr");
+    LOGSTORE_MGR.destroy();
+    FLOG_INFO("logstore_mgr destroy");
+
     FLOG_INFO("begin to destroy server blacklist");
     ObServerBlacklist::get_instance().destroy();
     FLOG_INFO("server blacklist destroy");
@@ -851,7 +857,7 @@ void ObServer::destroy()
     FLOG_INFO("WR service destroyed");
 
     FLOG_INFO("begin to destroy log io device wrapper");
-    LOG_IO_DEVICE_WRAPPER.destroy();
+    LOG_IO_ADAPTER.destroy();
     FLOG_INFO("log io device wrapper destroyed");
     common::ObDiagnosticInfoContainer::clear_global_di_container();
 
@@ -2309,9 +2315,22 @@ int ObServer::init_io()
         int64_t log_disk_size = 0;
         int64_t data_disk_percentage = 0;
         int64_t log_disk_percentage = 0;
-
-        if (OB_SUCC(ret) && OB_FAIL(log_block_mgr_.init(storage_env_.clog_dir_))) {
+        ObLogIOInfo log_io_info;
+        ObLogIOMode log_io_mode = (0 == GCONF._ob_flush_log_at_trx_commit ? logservice::ObLogIOMode::REMOTE : logservice::ObLogIOMode::LOCAL);
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(log_io_info.init(log_io_mode, GCONF._ob_logstore_service_addr, GCONF.cluster_id))) {
+          LOG_ERROR("init LogIOInfo failed", KR(ret));
+        } else if (OB_FAIL(LOG_IO_ADAPTER.init(storage_env_.clog_dir_,
+                                               io_config.disk_io_thread_count_,
+                                               max_io_depth,
+                                               log_io_info,
+                                               &OB_IO_MANAGER,
+                                               &ObDeviceManager::get_instance()))) {
+          LOG_ERROR("log_io_device_wrapper init failed", KR(ret));
+        } else if (OB_FAIL(log_block_mgr_.init(storage_env_.clog_dir_))) {
           LOG_ERROR("log block mgr init failed", KR(ret));
+        } else if (OB_SUCC(ret) && OB_FAIL(LOGSTORE_MGR.init())) {
+          LOG_ERROR("LOGSTORE_MGR init failed", KR(ret));
         } else if (OB_FAIL(ObServerUtils::cal_all_part_disk_size(config_.datafile_size,
                                                   config_.log_disk_size,
                                                   config_.datafile_disk_percentage,
@@ -2321,12 +2340,6 @@ int ObServer::init_io()
                                                   data_disk_percentage,
                                                   log_disk_percentage))) {
           LOG_ERROR("cal_all_part_disk_size failed", KR(ret));
-        } else if (OB_FAIL(LOG_IO_DEVICE_WRAPPER.init(storage_env_.clog_dir_,
-                                                      io_config.disk_io_thread_count_,
-                                                      max_io_depth,
-                                                      &OB_IO_MANAGER,
-                                                      &ObDeviceManager::get_instance()))) {
-          LOG_ERROR("log_io_device_wrapper init failed", KR(ret));
         } else {
           if (log_block_mgr_.is_reserved()) {
             int64_t clog_pool_in_use = 0;
@@ -3796,6 +3809,7 @@ int ObServer::init_server_in_arb_mode()
   ObIOConfig io_config;
   io_config.disk_io_thread_count_ = GCONF.disk_io_thread_count;
   const double io_memory_ratio = 0.2;
+  ObLogIOInfo log_io_info;
   if (OB_FAIL(net_work_farme.init(arb_opts, &palf_env_mgr))) {
     LOG_ERROR("init ObArbSrvNetworkFrame failed", K(ret), K(arb_opts));
   } else if (OB_FAIL(ObIOManager::get_instance().init(GMEMCONF.get_server_memory_limit() * io_memory_ratio))) {
@@ -3804,9 +3818,11 @@ int ObServer::init_server_in_arb_mode()
     LOG_ERROR("config io manager fail, ", K(ret));
   } else if (OB_FAIL(ObIOManager::get_instance().start())) {
     LOG_ERROR("start ObIOManager failed", K(ret));
-  } else if (OB_FAIL(LOG_IO_DEVICE_WRAPPER.init(GCONF.data_dir, io_config.disk_io_thread_count_, max_io_depth, &OB_IO_MANAGER, &ObDeviceManager::get_instance()))) {
+  } else if (OB_FAIL(log_io_info.init(logservice::ObLogIOMode::LOCAL, nullptr, GCONF.cluster_id.get_value()))) {
+    LOG_ERROR("LogIOInfo init failed", K(ret));
+  } else if (OB_FAIL(LOG_IO_ADAPTER.init(GCONF.data_dir, io_config.disk_io_thread_count_, max_io_depth, log_io_info, &OB_IO_MANAGER, &ObDeviceManager::get_instance()))) {
     LOG_ERROR("log_io_adapter init failed", K(ret));
-  } else if (OB_FAIL(palf_env_mgr.init(GCONF.data_dir, self_addr_, net_work_farme.get_req_transport(), LOG_IO_DEVICE_WRAPPER.get_local_device(), &G_RES_MGR, &OB_IO_MANAGER))) {
+  } else if (OB_FAIL(palf_env_mgr.init(GCONF.data_dir, self_addr_, net_work_farme.get_req_transport(), &G_RES_MGR, &OB_IO_MANAGER))) {
     LOG_ERROR("init PalfEnvLiteMgr failed", K(ret), K(arb_opts));
   } else if (OB_FAIL(arb_timer_.init(lib::TGDefIDs::ArbServerTimer, &palf_env_mgr))) {
     LOG_ERROR("init ArbServerTimer failed", K(ret));
@@ -3954,7 +3970,7 @@ int ObServer::destroy_server_in_arb_mode()
   ObMemoryDump::get_instance().destroy();
   ASCONF.destroy();
   palf::election::GLOBAL_REPORT_TIMER.destroy();
-  LOG_IO_DEVICE_WRAPPER.destroy();
+  LOG_IO_ADAPTER.destroy();
   ObIOManager::get_instance().destroy();
   LOG_WARN("destroy_server_in_arb_mode success", K(ret));
   return ret;

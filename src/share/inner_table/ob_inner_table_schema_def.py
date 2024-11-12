@@ -14654,6 +14654,50 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_name = '__all_virtual_ncomp_dll_v2',
   keywords = all_def_keywords['__all_ncomp_dll_v2']))
 
+def_table_schema(
+  owner = 'debin.jdb',
+  table_name = '__all_virtual_logstore_service_status',
+  table_id = '12507',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  in_tenant_space = True,
+  rowkey_columns = [
+  ],
+  normal_columns = [
+  ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+  ('svr_port', 'int'),
+  ('logstore_service_address', 'varchar:512'),
+  ('status', 'varchar:64'),
+  ('last_active_time', 'timestamp'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
+def_table_schema(
+  owner = 'debin.jdb',
+  table_name = '__all_virtual_logstore_service_info',
+  table_id = '12508',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  in_tenant_space = True,
+  rowkey_columns = [
+  ],
+
+  normal_columns = [
+  ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+  ('svr_port', 'int'),
+  ('logstore_service_address', 'varchar:512'),
+  ('memory_limit', 'int'),
+  ('memory_used', 'int'),
+  ('shm_limit', 'int'),
+  ('shm_used', 'int'),
+  ],
+
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
 # End of Mysql Virtual Table (10000, 15000]
@@ -15127,6 +15171,8 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15473', all_def_ke
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15481', all_def_keywords['__all_virtual_wr_sql_plan'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15482', all_def_keywords['__all_virtual_res_mgr_sysstat'])))
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15486', all_def_keywords['__all_ncomp_dll_v2']))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15487', all_def_keywords['__all_virtual_logstore_service_status'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15488', all_def_keywords['__all_virtual_logstore_service_info'])))
 #
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -36598,6 +36644,90 @@ FROM
 )
 
 def_table_schema(
+  owner = 'debin.jdb',
+  table_name     = 'GV$OB_LOGSTORE_SERVICE_STATUS',
+  table_id       = '21624',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    LOGSTORE_SERVICE_ADDRESS,
+    STATUS,
+    LAST_ACTIVE_TIME
+  FROM oceanbase.__all_virtual_logstore_service_status
+""".replace("\n", " "),
+)
+
+def_table_schema(
+    owner = 'debin.jdb',
+    table_name     = 'V$OB_LOGSTORE_SERVICE_STATUS',
+    table_id       = '21625',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    rowkey_columns = [],
+    normal_columns  = [],
+    in_tenant_space = True,
+    view_definition = """
+  SELECT SVR_IP,
+    SVR_PORT,
+    LOGSTORE_SERVICE_ADDRESS,
+    STATUS,
+    LAST_ACTIVE_TIME
+  FROM oceanbase.GV$OB_LOGSTORE_SERVICE_STATUS
+  WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'debin.jdb',
+  table_name     = 'GV$OB_LOGSTORE_SERVICE_INFO',
+  table_id       = '21626',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    LOGSTORE_SERVICE_ADDRESS,
+    MEMORY_LIMIT,
+    MEMORY_USED,
+    SHM_LIMIT,
+    SHM_USED
+  FROM oceanbase.__all_virtual_logstore_service_info
+""".replace("\n", " "),
+)
+
+def_table_schema(
+    owner = 'debin.jdb',
+    table_name     = 'V$OB_LOGSTORE_SERVICE_INFO',
+    table_id       = '21627',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    rowkey_columns = [],
+    normal_columns  = [],
+    in_tenant_space = True,
+    view_definition = """
+  SELECT SVR_IP,
+    SVR_PORT,
+    LOGSTORE_SERVICE_ADDRESS,
+    MEMORY_LIMIT,
+    MEMORY_USED,
+    SHM_LIMIT,
+    SHM_USED
+  FROM oceanbase.GV$OB_LOGSTORE_SERVICE_INFO
+  WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
+""".replace("\n", " "),
+)
+
+def_table_schema(
     owner           = 'xinning.lf',
     tablegroup_id   = 'OB_INVALID_ID',
     table_name      = 'proc',
@@ -36644,7 +36774,6 @@ def_table_schema(
         R.ROUTINE_TYPE IN (1, 2)
   """.replace("\n", " ")
 )
-
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -66867,6 +66996,98 @@ def_table_schema(
     AND D.TENANT_ID = EFFECTIVE_TENANT_ID()
     AND R.DATABASE_ID = D.DATABASE_ID
 """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'debin.jdb',
+  table_name     = 'GV$OB_LOGSTORE_SERVICE_STATUS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id       = '28265',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    LOGSTORE_SERVICE_ADDRESS,
+    STATUS,
+    LAST_ACTIVE_TIME
+  FROM SYS.ALL_VIRTUAL_LOGSTORE_SERVICE_STATUS
+""".replace("\n", " "),
+)
+
+def_table_schema(
+    owner = 'debin.jdb',
+    table_name     = 'V$OB_LOGSTORE_SERVICE_STATUS',
+    name_postfix    = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '28266',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    rowkey_columns = [],
+    normal_columns  = [],
+    in_tenant_space = True,
+    view_definition = """
+  SELECT SVR_IP,
+    SVR_PORT,
+    LOGSTORE_SERVICE_ADDRESS,
+    STATUS,
+    LAST_ACTIVE_TIME
+  FROM SYS.GV$OB_LOGSTORE_SERVICE_STATUS
+  WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'debin.jdb',
+  table_name     = 'GV$OB_LOGSTORE_SERVICE_INFO',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id       = '28267',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    LOGSTORE_SERVICE_ADDRESS,
+    MEMORY_LIMIT,
+    MEMORY_USED,
+    SHM_LIMIT,
+    SHM_USED
+  FROM SYS.ALL_VIRTUAL_LOGSTORE_SERVICE_INFO
+""".replace("\n", " "),
+)
+
+def_table_schema(
+    owner = 'debin.jdb',
+    table_name     = 'V$OB_LOGSTORE_SERVICE_INFO',
+    name_postfix    = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '28268',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    rowkey_columns = [],
+    normal_columns  = [],
+    in_tenant_space = True,
+    view_definition = """
+  SELECT SVR_IP,
+    SVR_PORT,
+    LOGSTORE_SERVICE_ADDRESS,
+    MEMORY_LIMIT,
+    MEMORY_USED,
+    SHM_LIMIT,
+    SHM_USED
+  FROM SYS.GV$OB_LOGSTORE_SERVICE_INFO
+  WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
+""".replace("\n", " "),
 )
 
 # 余留位置（此行之前占位）

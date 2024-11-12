@@ -57,7 +57,12 @@ private:
                    const int64_t read_buf_len,
                    int64_t &out_read_size,
                    LogIOContext &io_ctx) const;
-
+  int pread_impl_(const char *block_path,
+                  const offset_t offset,
+                  int64_t in_read_size,
+                  ReadBuf &read_buf,
+                  int64_t &out_read_size,
+                  LogIOContext &io_ctx) const;
 private:
   offset_t block_size_;
   char log_dir_[OB_MAX_FILE_NAME_LENGTH];

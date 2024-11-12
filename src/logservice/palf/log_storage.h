@@ -22,7 +22,7 @@
 #include "log_writer_utils.h"      // LogWriteBuf
 #include "lsn.h"                   // LSN
 #include "palf_iterator.h"         // PalfIteraor
-#include "palf_callback_wrapper.h"
+#include "log_io_utils.h"          // LogSyncMode
 
 namespace oceanbase
 {
@@ -36,6 +36,7 @@ class SCN;
 }
 namespace palf
 {
+class LogPlugins;
 class ReadBuf;
 class LogHotCache;
 class LogStorage : public ILogStorage
@@ -126,6 +127,7 @@ public:
                             int64_t &accum_write_size,
                             int64_t &accum_write_count,
                             int64_t &accum_write_rt) const;
+  int set_log_store_sync_mode(const LogSyncMode &mode);
   TO_STRING_KV(K_(log_tail),
                K_(readable_log_tail),
                K_(log_block_header),

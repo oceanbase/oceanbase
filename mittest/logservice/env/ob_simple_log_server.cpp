@@ -31,7 +31,6 @@
 #include "share/ob_thread_mgr.h"
 #include "logservice/palf/palf_options.h"
 #include "share/rpc/ob_batch_processor.h"
-#include "mittest/logservice/env/ob_simple_log_cluster_testbase.h"
 #include "share/ob_device_manager.h"                                // ObDeviceManager
 #undef protected
 #undef private
@@ -329,15 +328,20 @@ int ObSimpleLogServer::init_io_(const std::string &cluster_name)
 {
   int ret = OB_SUCCESS;
   ObTimeGuard guard("init_io_", 0);
-  const std::string logserver_dir = cluster_name + "/port_" + std::to_string(addr_.get_port());
+  char curr_dir_cstr[OB_MAX_FILE_NAME_LENGTH] = {0};
+  getcwd(curr_dir_cstr, OB_MAX_FILE_NAME_LENGTH);
+  const std::string curr_dir(curr_dir_cstr);
+  const std::string logserver_dir = curr_dir + "/" + cluster_name + "/port_" + std::to_string(addr_.get_port());
   std::string data_dir = logserver_dir;
-  std::string clog_dir = logserver_dir + "/clog";
+  std::string clog_dir = logserver_dir + "/store/clog";
   std::string slog_dir = logserver_dir + "/slog";
   std::string sstable_dir = logserver_dir + "/sstable";
   std::vector<std::string> dirs{data_dir, slog_dir, clog_dir, sstable_dir};
+  std::string mkdir_str = "mkdir -p " + clog_dir;
+  system(mkdir_str.c_str());
 
   for (auto &dir : dirs) {
-    if (-1 == mkdir(dir.c_str(), 0777)) {
+    if (-1 == ::mkdir(dir.c_str(), 0777)) {
       if (errno == EEXIST) {
         ret = OB_SUCCESS;
         SERVER_LOG(INFO, "for restart");
@@ -373,7 +377,8 @@ int ObSimpleLogServer::init_io_(const std::string &cluster_name)
     iod_opt_array_[4].set("datafile_size", storage_env.data_disk_size_);
     iod_opts_.opt_cnt_ = MAX_IOD_OPT_CNT;
 
-    if (OB_FAIL(io_device_->init(iod_opts_))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(io_device_->init(iod_opts_))) {
       SERVER_LOG(ERROR, "init io device fail", K(ret));
     } else if (OB_FAIL(log_block_pool_.init(storage_env.clog_dir_))) {
       SERVER_LOG(ERROR, "init log pool fail", K(ret));
@@ -410,7 +415,7 @@ int ObSimpleLogServer::init_log_service_()
     opts.disk_options_.log_disk_utilization_limit_threshold_ = 95;
     opts.disk_options_.log_disk_throttling_percentage_ = 100;
     opts.disk_options_.log_disk_throttling_maximum_duration_ = 2 * 3600 * 1000 * 1000L;
-    opts.disk_options_.log_writer_parallelism_ = 2;
+    opts.disk_options_.log_writer_parallelism_ = 8;
     disk_opts_ = opts.disk_options_;
     inner_table_disk_opts_ = disk_opts_;
   }

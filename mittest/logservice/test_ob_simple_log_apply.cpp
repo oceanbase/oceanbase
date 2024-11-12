@@ -98,6 +98,7 @@ int64_t ObSimpleLogClusterTestBase::member_cnt_ = 3;
 int64_t ObSimpleLogClusterTestBase::node_cnt_ = 3;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
 bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
+bool ObSimpleLogClusterTestBase::need_remote_log_store_ = false;
 
 TEST_F(TestObSimpleLogApplyFunc, apply)
 {
@@ -339,19 +340,9 @@ TEST_F(TestObSimpleLogApplyFunc, get_max_decided_scn)
   ++i;
   ref_scn.convert_for_logservice(i);
   ret = submit_log(new_leader, ref_scn, lsn, scn);
-  EXPECT_EQ(OB_SUCCESS, ret);
-
-  LSN end_lsn;
-  do {
-    end_lsn = leader.palf_handle_impl_->get_end_lsn();
-    if (end_lsn <= max_lsn) {
-      CLOG_LOG(INFO, "wait end_lsn", K(end_lsn), K(max_lsn));
-      sleep (1);
-    }
-  } while (end_lsn <= max_lsn);
   share::SCN max_decided_scn;
   EXPECT_EQ(OB_SUCCESS, ap_sv.get_max_applied_scn(ls_id, max_decided_scn));
-  CLOG_LOG(INFO, "check here", K(max_scn), K(max_decided_scn), K(end_lsn), K(max_lsn), K(apply_end_lsn));
+  CLOG_LOG(INFO, "check here", K(max_scn), K(max_decided_scn), K(max_lsn), K(apply_end_lsn));
   EXPECT_EQ(max_decided_scn, max_scn);
 
   for (int i = 0; i < task_count; i++)

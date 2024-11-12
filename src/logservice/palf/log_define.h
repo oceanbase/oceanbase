@@ -145,13 +145,6 @@ const uint64_t LOG_MAX_LSN_VAL = LOG_INVALID_LSN_VAL - 1;
 const uint64_t PALF_INITIAL_LSN_VAL = 0;
 // =========== LSN end ==============
 
-// =========== Disk io start ==================
-constexpr int LOG_READ_FLAG = O_RDONLY | O_DIRECT | O_SYNC;
-constexpr int LOG_WRITE_FLAG = O_RDWR | O_DIRECT | O_SYNC;
-constexpr mode_t FILE_OPEN_MODE = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
-// =========== Disk io end ====================
-
-
 // =========== BatchRPC start ==================
 // NOTE: ORDER AND VALUE ARE VITAL, DO NOT CHANGE
 constexpr int64_t LOG_BATCH_PUSH_LOG_REQ = 1;
@@ -240,53 +233,6 @@ inline bool is_valid_block_id(block_id_t  block_id)
   return block_id >= 0 && block_id < LOG_MAX_BLOCK_ID;
 }
 
-inline bool is_tmp_block(const char *block_name)
-{
-  bool bool_ret = false;
-  if (NULL != block_name && NULL != strstr(block_name, TMP_SUFFIX)) {
-    bool_ret = true;
-  }
-  return bool_ret;
-}
-
-inline bool is_flashback_block(const char *block_name)
-{
-  bool bool_ret = false;
-  if (NULL != block_name && NULL != strstr(block_name, FLASHBACK_SUFFIX)) {
-    bool_ret = true;
-  }
-  return bool_ret;
-}
-
-inline int convert_to_flashback_block(const char *log_dir,
-                                      const block_id_t  block_id,
-                                      char *buf,
-                                      const int64_t buf_len)
-{
-  int64_t pos = 0;
-  return databuff_printf(buf, buf_len, pos, "%s/%lu%s", log_dir,
-          block_id, FLASHBACK_SUFFIX);
-}
-
-inline int convert_to_tmp_block(const char *log_dir,
-                               const block_id_t  block_id,
-                               char *buf,
-                               const int64_t buf_len)
-{
-  int64_t pos = 0;
-  return databuff_printf(buf, buf_len, pos, "%s/%lu%s", log_dir,
-          block_id, TMP_SUFFIX);
-}
-
-inline int convert_to_normal_block(const char *log_dir,
-                                   const block_id_t  block_id,
-                                   char *buf,
-                                   const int64_t buf_len)
-{
-  int64_t pos = 0;
-  return databuff_printf(buf, buf_len, pos, "%s/%lu", log_dir, block_id);
-}
-
 struct TimeoutChecker
 {
   explicit TimeoutChecker(const int64_t timeout_us)
@@ -331,21 +277,7 @@ inline bool is_valid_file_desc(const FileDesc &fd)
   return 0 <= fd;
 }
 
-
-int block_id_to_string(const block_id_t block_id,
-                       char *str,
-                       const int64_t str_len);
-int block_id_to_tmp_string(const block_id_t block_id,
-                           char *str,
-                           const int64_t str_len);
-
-int block_id_to_flashback_string(const block_id_t block_id,
-																 char *str,
-																 const int64_t str_len);
-int construct_absolute_block_path(const char *dir_path, const block_id_t block_id, const int64_t buf_len, char *absolute_block_path);
-int construct_absolute_tmp_block_path(const char *dir_path, const block_id_t block_id, const int64_t buf_len, char *absolute_tmp_block_path);
 int convert_sys_errno();
-
 bool is_number(const char *);
 
 enum PurgeThrottlingType

@@ -736,6 +736,17 @@ DEF_INT(log_storage_warning_trigger_percentage, OB_CLUSTER_PARAMETER, "0", "[0,5
         "If the parameter needs to be set, it is recommended to set a value less than 10 to avoid misjudgment.",
         ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_STR(_ob_logstore_service_addr, OB_CLUSTER_PARAMETER, "",
+        "the logstore server addr, which is expected to be valid when _ob_flush_log_at_trx_commit is 0",
+        ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(_ob_flush_log_at_trx_commit, OB_CLUSTER_PARAMETER, "1", "[0, 1]",
+        "specifies whether to use logstore. The default value is 1."
+        "0 : flush logs asynchronously by logstore"
+        "1 : flush logs to disk directly and synchronously"
+        "this value can be set 0 only when _ob_logstore_service_addr is valid",
+        ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_STR_WITH_CHECKER(arbitration_degradation_policy, OB_CLUSTER_PARAMETER, "LS_POLICY",
         common::ObConfigDegradationPolicyChecker,
         "specifies the degradation policy, whether to check network connectivity with RS before arbitration degrades. "

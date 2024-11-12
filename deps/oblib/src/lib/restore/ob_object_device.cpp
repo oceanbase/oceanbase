@@ -829,6 +829,14 @@ int ObObjectDevice::truncate(const char *pathname, const int64_t len)
   return OB_NOT_SUPPORTED;
 }
 
+int ObObjectDevice::ftruncate(const ObIOFd &fd, const int64_t len)
+{
+  UNUSED(fd);
+  UNUSED(len);
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "ftruncate is not support in object device !", K(device_type_));
+  return OB_NOT_SUPPORTED;
+}
+
   //block interfaces
 int ObObjectDevice::mark_blocks(ObIBlockIterator &block_iter)
 {

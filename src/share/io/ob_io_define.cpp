@@ -718,16 +718,16 @@ int ObIORequest::prepare()
   if (OB_ISNULL(io_info_.fd_.device_handle_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("device handle is null", K(ret), K(*this));
-  } else if (OB_ISNULL(control_block_) && OB_ISNULL(control_block_ = io_info_.fd_.device_handle_->alloc_iocb())) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("alloc io control block failed", K(ret), K(*this));
   } else if (FALSE_IT(tg.click("alloc_iocb"))) {
   } else if (OB_ISNULL(io_buf_) && OB_FAIL(alloc_io_buf())) {
     // delayed alloc buffer for read request here to reduce memory usage when io request enqueue
     LOG_WARN("alloc io buffer for read failed", K(ret), K(*this));
   } else if (FALSE_IT(tg.click("alloc_buf"))) {
-  } else {
-    if (io_info_.flag_.is_read()) {
+  } else if (!io_info_.flag_.is_sync()){
+      if (OB_ISNULL(control_block_) && OB_ISNULL(control_block_ = io_info_.fd_.device_handle_->alloc_iocb())) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc io control block failed", K(ret), K(*this));
+    } else if (io_info_.flag_.is_read()) {
       if (OB_FAIL(io_info_.fd_.device_handle_->io_prepare_pread(
               io_info_.fd_,
               io_buf_,

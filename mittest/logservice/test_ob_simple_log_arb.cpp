@@ -71,6 +71,7 @@ int64_t ObSimpleLogClusterTestBase::member_cnt_ = 3;
 int64_t ObSimpleLogClusterTestBase::node_cnt_ = 5;
 bool ObSimpleLogClusterTestBase::need_add_arb_server_ = true;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
+bool ObSimpleLogClusterTestBase::need_remote_log_store_ = false;
 
 TEST_F(TestObSimpleLogClusterArbService, test_2f1a_degrade_upgrade)
 {
@@ -99,12 +100,14 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_degrade_upgrade)
 
   PALF_LOG(INFO, "CASE[1] degrade caused by block_net ");
   EXPECT_TRUE(is_degraded(leader, another_f_idx));
+  EXPECT_EQ(true, leader.get_palf_handle_impl()->log_engine_.log_storage_.block_mgr_.curr_writable_handler_.sync_io_);
 
   loc_cb.leader_ = leader.palf_handle_impl_->self_;
   unblock_net(leader_idx, another_f_idx);
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, id));
 
   EXPECT_TRUE(is_upgraded(leader, id));
+  EXPECT_EQ(false, leader.get_palf_handle_impl()->log_engine_.log_storage_.block_mgr_.curr_writable_handler_.sync_io_);
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, id));
 
   // set clog disk error

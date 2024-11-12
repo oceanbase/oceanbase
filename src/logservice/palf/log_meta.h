@@ -53,6 +53,8 @@ public:
   int update_log_replica_property_meta(const LogReplicaPropertyMeta &log_replica_property_meta);
   int update_log_mode_meta(const LogModeMeta &log_mode_meta);
 
+  bool degrade_list_is_empty() const;
+
   TO_STRING_KV(K_(version), K_(log_prepare_meta), K_(log_config_meta), K_(log_snapshot_meta),
       K_(log_replica_property_meta), K_(log_mode_meta));
   NEED_SERIALIZE_AND_DESERIALIZE;

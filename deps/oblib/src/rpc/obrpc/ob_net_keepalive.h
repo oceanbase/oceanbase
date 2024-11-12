@@ -19,6 +19,9 @@
 
 namespace oceanbase
 {
+namespace obgrpc {
+class ObGrpcKeepAliveClient;
+}
 namespace obrpc
 {
 struct ObNetKeepAliveData
@@ -78,6 +81,7 @@ private:
   struct DestKeepAliveState *regist_dests_map_[MAX_RS_COUNT];
   struct DestKeepAliveState *regist_dests_[MAX_RS_COUNT];
   int64_t regist_dest_count_;
+  obgrpc::ObGrpcKeepAliveClient &grpc_keepalive_instance_;
 };
 
 extern void keepalive_init_data(ObNetKeepAliveData &ka_data);

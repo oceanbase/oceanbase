@@ -3,6 +3,7 @@ set(OBLOGSVR_TEST_SRCS
   env/ob_simple_arb_server.cpp
   env/ob_simple_log_cluster_testbase.cpp
   env/ob_simple_log_cluster_env.cpp
+  env/ob_mock_log_device.cpp
   env/mock_election.cpp)
 
 add_library(oblogsvr_test ${OBLOGSVR_TEST_SRCS})

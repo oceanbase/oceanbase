@@ -10,6 +10,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#define private public
+#define protected public
+#include "logservice/ob_log_io_adapter.h"
+#undef protected
+#undef private
 #include "ob_simple_log_cluster_testbase.h"
 #include "common/ob_member_list.h"
 #include "share/allocator/ob_tenant_mutil_allocator_mgr.h"
@@ -25,6 +30,7 @@
 
 namespace oceanbase
 {
+using namespace logservice;
 namespace unittest
 {
 // int64_t ObSimpleLogClusterTestBase::member_cnt_ = 3;
@@ -41,6 +47,7 @@ observer::ObSignalHandle *ObSimpleLogClusterTestBase::signal_handle_ = new (sig_
 bool ObSimpleLogClusterTestBase::disable_hot_cache_ = false;
 int64_t ObSimpleLogClusterTestBase::tenant_id_ = ObISimpleLogServer::DEFAULT_TENANT_ID;
 ObTenantIOManager *ObSimpleLogClusterTestBase::tio_manager_ = nullptr;
+ObAddr ObSimpleLogClusterTestBase::remote_log_store_addr_ = ObAddr(ObAddr::VER::IPV4, "127.0.0.1", 50051);
 
 void ObSimpleLogClusterTestBase::SetUpTestCase()
 {
@@ -68,6 +75,19 @@ void ObSimpleLogClusterTestBase::TearDownTestCase()
   }
 }
 
+int ObSimpleLogClusterTestBase::init_log_store(const ObAddr &addr)
+{
+  int ret = OB_SUCCESS;
+  remote_log_store_addr_ = addr;
+  if (ObSimpleLogClusterTestBase::node_cnt_ != 1 && ObSimpleLogClusterTestBase::member_cnt_ != 1) {
+    ret = OB_NOT_SUPPORTED;
+    CLOG_LOG(ERROR, "not supported ObLogStore in multi replica");
+  }
+  CLOG_LOG(INFO, "init_log_store", K(addr));
+  ObLogIOInfo io_info; io_info.io_mode_ = ObLogIOMode::REMOTE; io_info.log_store_addr_ = addr; io_info.cluster_id_ = 1;
+  return LOG_IO_ADAPTER.switch_log_io_mode(io_info);
+}
+
 int ObSimpleLogClusterTestBase::start()
 {
   int ret = OB_SUCCESS;
@@ -84,8 +104,12 @@ int ObSimpleLogClusterTestBase::start()
   ObTenantBase *tmp_base = OB_NEW(ObTenantBase, "mittest", tenant_id_);
   share::ObTenantEnv::set_tenant(tmp_base);
   const std::string clog_dir = test_name_;
-  const int64_t disk_io_thread_count = 8;
-  const int64_t max_io_depth = 256;
+  const int64_t disk_io_thread_count = 256;
+  const int64_t max_io_depth = 8;
+  ObLogIOInfo log_io_info;
+  ObLogIOMode mode = (ObSimpleLogClusterTestBase::need_remote_log_store_ ? ObLogIOMode::REMOTE : ObLogIOMode::LOCAL);
+  oceanbase::lib::reload_diagnose_info_config(true);
+  log_io_info.io_mode_ = mode; log_io_info.cluster_id_ = 1; log_io_info.log_store_addr_ = remote_log_store_addr_;
   if (sig_worker_ != nullptr && OB_FAIL(sig_worker_->start())) {
     SERVER_LOG(ERROR, "Start signal worker error", K(ret));
   } else if (signal_handle_ != nullptr && OB_FAIL(signal_handle_->start())) {
@@ -107,8 +131,8 @@ int ObSimpleLogClusterTestBase::start()
     SERVER_LOG(ERROR, "init tenant io manager failed", K(ret));
   } else if (OB_FAIL(tio_manager_->start())) {
     SERVER_LOG(ERROR, "start tenant io manager failed", K(ret));
-  } else if (OB_FAIL(LOG_IO_DEVICE_WRAPPER.init(clog_dir.c_str(), disk_io_thread_count, max_io_depth, &OB_IO_MANAGER, &ObDeviceManager::get_instance()))) {
-    SERVER_LOG(ERROR, "LOG_IO_DEVICE_WRAPPER init failed", K(ret));
+  } else if (OB_FAIL(LOG_IO_ADAPTER.init(clog_dir.c_str(), disk_io_thread_count, max_io_depth, log_io_info, &OB_IO_MANAGER, &ObDeviceManager::get_instance()))) {
+    SERVER_LOG(ERROR, "LOG_IO_ADAPTER init failed", K(ret), K(log_io_info));
   } else {
     ObTenantIOConfig io_config;
     io_config.unit_config_.max_iops_ = 10000000;
@@ -165,7 +189,7 @@ int ObSimpleLogClusterTestBase::close()
     }
   }
 
-  LOG_IO_DEVICE_WRAPPER.destroy();
+  LOG_IO_ADAPTER.destroy();
   ObIOManager::get_instance().stop();
   ObIOManager::get_instance().destroy();
   ObDeviceManager::get_instance().destroy();

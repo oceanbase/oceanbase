@@ -35,6 +35,7 @@
 #include "rpc/frame/ob_req_transport.h"
 #include "io/easy_negotiation.h"
 #include "lib/ash/ob_active_session_guard.h"
+#include "grpc/ob_grpc_keepalive.h"
 
 extern "C" {
 extern int ob_epoll_wait(int __epfd, struct epoll_event *__events,
@@ -178,7 +179,7 @@ void update_write_ts(DestKeepAliveState *rs)
 }
 
 ObNetKeepAlive::ObNetKeepAlive()
-  : pipefd_(-1), regist_dest_count_(0)
+  : pipefd_(-1), regist_dest_count_(0), grpc_keepalive_instance_(obgrpc::get_grpc_ka_instance())
 {
   bzero(&regist_dests_map_, sizeof regist_dests_map_);
   bzero(&regist_dests_, sizeof regist_dests_);
@@ -722,6 +723,11 @@ int ret = OB_SUCCESS;
           rs->in_black_ = 1;
         }
       }
+    }
+    // check grpc servcie
+    grpc_keepalive_instance_.try_check_status();
+    if (dump_status) {
+      grpc_keepalive_instance_.dump_status();
     }
   }
 }

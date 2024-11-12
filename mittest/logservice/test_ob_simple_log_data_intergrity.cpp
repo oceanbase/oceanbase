@@ -38,23 +38,23 @@ int64_t ObSimpleLogClusterTestBase::member_cnt_ = 1;
 int64_t ObSimpleLogClusterTestBase::node_cnt_ = 1;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
 bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
+bool ObSimpleLogClusterTestBase::need_remote_log_store_ = false;
 
 int pwrite_one_log_by_log_storage(PalfHandleImplGuard &leader, const LogGroupEntry &entry, const LSN &lsn)
 {
   int ret = OB_SUCCESS;
   LogStorage *log_storage = &leader.palf_handle_impl_->log_engine_.log_storage_;
-  int dir_fd = log_storage->block_mgr_.dir_fd_;
   block_id_t writable_block_id = log_storage->block_mgr_.curr_writable_block_id_;
   LSN log_tail = log_storage->log_tail_;
   offset_t write_offset = log_storage->get_phy_offset_(lsn);
   char block_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
-  block_id_to_string(writable_block_id, block_path, OB_MAX_FILE_NAME_LENGTH);
+  construct_absolute_block_path(log_storage->block_mgr_.log_dir_, writable_block_id, OB_MAX_FILE_NAME_LENGTH, block_path);
   int block_fd = -1;
   int64_t pos = 0;
   char *serialize_buf = reinterpret_cast<char *>(ob_malloc(entry.get_serialize_size(), "MitTest"));
   if (NULL == serialize_buf) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-  } else if (-1 == (block_fd = ::openat(dir_fd, block_path, O_WRONLY))) {
+  } else if (-1 == (block_fd = ::open(block_path, O_WRONLY))) {
     ret = convert_sys_errno();
     PALF_LOG(ERROR, "openat failed", K(ret), K(block_path), KPC(log_storage));
   } else if (OB_FAIL(entry.serialize(serialize_buf, entry.get_serialize_size(), pos))) {

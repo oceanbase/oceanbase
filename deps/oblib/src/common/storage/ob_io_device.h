@@ -350,6 +350,7 @@ public:
   virtual int fallocate(const ObIOFd &fd, mode_t mode, const int64_t offset, const int64_t len) = 0;
   virtual int lseek(const ObIOFd &fd, const int64_t offset, const int whence, int64_t &result_offset) = 0;
   virtual int truncate(const char *pathname, const int64_t len) = 0;
+  virtual int ftruncate(const ObIOFd &fd, const int64_t len) = 0;
   virtual int exist(const char *pathname, bool &is_exist) = 0;
   virtual int stat(const char *pathname, ObIODFileStat &statbuf) = 0;
   virtual int fstat(const ObIOFd &fd, ObIODFileStat &statbuf) = 0;

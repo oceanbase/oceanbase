@@ -36,6 +36,7 @@
 #include "palf/palf_options.h"
 #include "logservice/ob_net_keepalive_adapter.h"  // ObNetKeepAliveAdapter
 #include "share/resource_manager/ob_resource_manager.h"       // ObResourceManager
+#include "palf/log_io_utils.h"
 
 namespace oceanbase
 {
@@ -113,7 +114,7 @@ int ObLogService::mtl_init(ObLogService* &logservice)
                                       net_keepalive_adapter,
                                       locality_manager))) {
     CLOG_LOG(ERROR, "init ObLogService failed", K(ret), K(tenant_clog_dir));
-  } else if (OB_FAIL(FileDirectoryUtils::fsync_dir(clog_dir))) {
+  } else if (OB_FAIL(fsync_with_retry(clog_dir))) {
     CLOG_LOG(ERROR, "fsync_dir failed", K(ret), K(clog_dir));
   } else {
     CLOG_LOG(INFO, "ObLogService mtl_init success");
@@ -222,14 +223,14 @@ int check_and_prepare_dir(const char *dir)
 {
   bool is_exist = false;
   int ret = OB_SUCCESS;
-  if (OB_FAIL(common::FileDirectoryUtils::is_exists(dir, is_exist))) {
+  if (OB_FAIL(palf::is_exists(dir, is_exist))) {
     CLOG_LOG(WARN, "chcck dir exist failed", K(ret), K(dir));
     // means it's restart
   } else if (is_exist == true) {
     CLOG_LOG(INFO, "director exist", K(ret), K(dir));
     // means it's create tenant
-  } else if (OB_FAIL(common::FileDirectoryUtils::create_directory(dir))) {
-    CLOG_LOG(WARN, "create_directory failed", K(ret), K(dir));
+  } else if (OB_FAIL(palf::mkdir(dir))) {
+    CLOG_LOG(WARN, "mkdir failed", K(ret), K(dir));
   } else {
     CLOG_LOG(INFO, "check_and_prepare_dir success", K(ret), K(dir));
   }
@@ -267,7 +268,7 @@ int ObLogService::init(const PalfOptions &options,
              KP(alloc_mgr), KP(transport), KP(batch_rpc), KP(ls_service), KP(location_service), KP(reporter),
              KP(log_block_pool), KP(sql_proxy), KP(net_keepalive_adapter));
   } else if (OB_FAIL(PalfEnv::create_palf_env(options, base_dir, self, transport, batch_rpc,
-                                              alloc_mgr, log_block_pool, &monitor_, LOG_IO_DEVICE_WRAPPER.get_local_device(),
+                                              alloc_mgr, log_block_pool, &monitor_,
                                               &G_RES_MGR, &OB_IO_MANAGER, palf_env_))) {
     CLOG_LOG(WARN, "failed to create_palf_env", K(base_dir), K(ret));
   } else if (OB_ISNULL(palf_env_)) {

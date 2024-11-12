@@ -638,6 +638,7 @@ int LogStorage::do_init_(const char *base_dir,
     PALF_LOG(ERROR, "LogStorage snprintf failed", K(ret), K(tmp_ret));
   } else if (FALSE_IT(memset(block_header_serialize_buf_, '\0', MAX_INFO_BLOCK_SIZE))) {
   } else if (OB_FAIL(block_mgr_.init(log_dir,
+                                     palf_id,
                                      lsn_2_block(base_lsn, logical_block_size),
                                      align_size,
                                      align_buf_size,
@@ -1035,6 +1036,17 @@ int LogStorage::get_io_statistic_info(int64_t &last_working_time,
   } else {
     ret = block_mgr_.get_io_statistic_info(last_working_time,
         last_write_size, accum_write_size, accum_write_count, accum_write_rt);
+  }
+  return ret;
+}
+
+int LogStorage::set_log_store_sync_mode(const LogSyncMode &mode)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    ret = block_mgr_.set_log_store_sync_mode(mode);
   }
   return ret;
 }

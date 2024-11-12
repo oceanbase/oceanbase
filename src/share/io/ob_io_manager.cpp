@@ -411,7 +411,7 @@ int ObIOManager::add_device_channel(ObIODevice *device_handle,
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
-  } else if (OB_ISNULL(device_handle) || async_channel_count <= 0 || sync_channel_count <= 0 || max_io_depth <= 0) {
+  } else if (OB_ISNULL(device_handle) || async_channel_count < 0 || sync_channel_count <= 0 || max_io_depth <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(device_handle), K(async_channel_count), K(sync_channel_count), K(max_io_depth));
   } else if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObDeviceChannel)))) {

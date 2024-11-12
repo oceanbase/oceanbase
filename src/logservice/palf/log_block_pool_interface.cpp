@@ -19,46 +19,37 @@
 #include "lib/utility/ob_utility.h"
 #include "log_define.h"
 #include "log_block_header.h"
+#include "logservice/ob_log_io_adapter.h"
 
 namespace oceanbase
 {
 namespace palf
 {
 
-int is_block_used_for_palf(const int fd, const char *path, bool &result)
+int is_block_used_for_palf(const char *path, bool &result)
 {
   int ret = OB_SUCCESS;
   result = false;
-  struct stat st;
-  if (-1 == ::fstatat(fd, path, &st, 0)) {
-    ret = convert_sys_errno();
-    PALF_LOG(ERROR, "::fstat failed", K(ret), K(path), K(errno));
-  } else if (st.st_size == PALF_PHY_BLOCK_SIZE) {
+  common::ObIODFileStat st;
+  if (OB_FAIL(LOG_IO_ADAPTER.stat(path, st))) {
+    PALF_LOG(ERROR, "fstat failed", K(ret), K(path), K(errno));
+  } else if (st.size_ == PALF_PHY_BLOCK_SIZE) {
     result = true;
   } else {
     result = false;
   }
   return ret;
 }
-
 int remove_file_at(const char *dir, const char *path, ILogBlockPool *log_block_pool)
 {
   int ret = OB_SUCCESS;
-  int fd = ::open(dir, O_DIRECTORY | O_RDONLY);
-  bool result = false;
-  if (-1 == fd) {
-    ret = convert_sys_errno();
-    PALF_LOG(ERROR, "::open directory failed", K(ret), K(dir));
-  } else if (OB_FAIL(log_block_pool->remove_block_at(fd, path))) {
+  char pathname[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+  if (OB_FAIL(databuff_printf(pathname, OB_MAX_FILE_NAME_LENGTH, "%s/%s", dir, path))) {
+    PALF_LOG(ERROR, ":databuff_printf failed", K(ret), K(dir));
+  } else if (OB_FAIL(log_block_pool->remove_block(pathname))) {
     PALF_LOG(ERROR, "remove_block_at failed", K(ret));
-    // otherwise, unlink it.
   } else {
     PALF_LOG(INFO, "remove_file_at success", K(dir), K(path));
-  }
-
-  if (-1 != fd) {
-    ::fsync(fd);
-    ::close(fd);
   }
   return ret;
 }
@@ -94,7 +85,7 @@ int remove_directory_rec(const char *path, ILogBlockPool *log_block_pool)
       }
     }
   }
-  if (OB_SUCC(ret) && OB_FAIL(FileDirectoryUtils::delete_directory(path))) {
+  if (OB_SUCC(ret) && OB_FAIL(LOG_IO_ADAPTER.rmdir(path))) {
     PALF_LOG(WARN, "delete_directory failed", K(ret), K(path));
   }
   if (NULL != dir) {

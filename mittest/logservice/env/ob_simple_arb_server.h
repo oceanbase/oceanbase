@@ -37,37 +37,6 @@ struct PalfEnvLiteGuard
   palflite::PalfEnvLiteMgr *palf_env_mgr_;
 };
 
-class DummyBlockPool : public palf::ILogBlockPool {
-public:
-  virtual int create_block_at(const palf::FileDesc &dir_fd,
-                              const char *block_path,
-                              const int64_t block_size)
-  {
-    int fd = -1;
-    if (-1 == (fd = ::openat(dir_fd, block_path, palf::LOG_WRITE_FLAG | O_CREAT, 0664))) {
-      CLOG_LOG_RET(WARN, common::OB_ERR_SYS, "openat failed", K(block_path), K(errno));
-      return OB_IO_ERROR;
-    } else if (-1 == ::fallocate(fd, 0, 0, block_size)) {
-      CLOG_LOG_RET(WARN, common::OB_ERR_SYS, "fallocate failed", K(block_path), K(errno));
-      return OB_IO_ERROR;
-    } else {
-      CLOG_LOG(INFO, "create_block_at success", K(block_path));
-    }
-    if (-1 != fd)  {
-      ::close(fd);
-    }
-    return OB_SUCCESS;
-  }
-  virtual int remove_block_at(const palf::FileDesc &dir_fd,
-                              const char *block_path)
-  {
-    if (-1 == ::unlinkat(dir_fd, block_path, 0)) {
-      return OB_IO_ERROR;
-    }
-    return OB_SUCCESS;
-  }
-};
-
 class ObSimpleArbServer : public ObISimpleLogServer
 {
 public:
@@ -195,7 +164,7 @@ private:
   palflite::PalfEnvLiteMgr palf_env_mgr_;
   arbserver::ObArbSrvNetworkFrame srv_network_frame_;
   arbserver::ObArbServerTimer timer_;
-  DummyBlockPool dummy_block_pool_;
+  palflite::DummyBlockPool dummy_block_pool_;
   ObTenantMutilAllocator allocator_;
   std::string base_dir_;
   common::ObAddr self_;

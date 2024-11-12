@@ -576,6 +576,22 @@ int ObLocalDevice::truncate(const char *pathname, const int64_t len)
   return ret;
 }
 
+int ObLocalDevice::ftruncate(const ObIOFd &fd, const int64_t len)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!fd.is_normal_file())) {
+    ret = OB_INVALID_ARGUMENT;
+    SHARE_LOG(WARN, "invalid argument", K(ret), K(fd));
+  } else {
+    int sys_ret = 0;
+    if (0 != (sys_ret = ::ftruncate(static_cast<int32_t>(fd.second_id_), len))) {
+      ret = convert_sys_errno();
+      SHARE_LOG(WARN, "fail to ftruncate", K(ret), K(sys_ret), K(fd), K(len), KERRMSG);
+    }
+  }
+  return ret;
+}
+
 int ObLocalDevice::exist(const char *pathname, bool &is_exist)
 {
   int ret = OB_SUCCESS;

@@ -15,6 +15,7 @@
 #include "sql/resolver/cmd/ob_alter_system_resolver.h"
 #include "common/ob_region.h"
 #include "lib/string/ob_sql_string.h"
+#include "logservice/ob_logstore_mgr.h"
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/ob_locality_parser.h"
 #include "share/ob_time_utility2.h"
@@ -2257,6 +2258,29 @@ int ObSetConfigResolver::check_param_valid(int64_t tenant_id ,
     } else if (0 == name.case_compare("_load_tde_encrypt_engine")) {
       if (OB_FAIL(share::ObTdeEncryptEngineLoader::get_instance().load(value))) {
         LOG_WARN("load antsm-engine failed", K(ret));
+      }
+    } else if (0 == name.case_compare("_ob_flush_log_at_trx_commit") && 0 == value.case_compare("0")) {
+      // check conditions when setting _ob_flush_log_at_trx_commit to 0
+      const char *logstore_service_addr = GCONF._ob_logstore_service_addr;
+      ObAddr logstore_address;
+      bool is_active = false;
+      int64_t last_active_ts = 0;
+      if (OB_ISNULL(logstore_service_addr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("_ob_logstore_service_addr is null", K(ret), KP(logstore_service_addr));
+      } else if (0 == strlen(logstore_service_addr)) {
+        ret = OB_INVALID_CONFIG;
+        LOG_WARN("_ob_logstore_service_addr is empty", K(ret));
+        LOG_USER_ERROR(OB_INVALID_CONFIG, "_ob_logstore_service_addr must be set before _ob_flush_log_at_trx_commit,");
+      } else if (OB_FAIL(LOGSTORE_MGR.get_logstore_service_status(logstore_address, is_active, last_active_ts))
+        || !is_active) {
+        // local logstore service is not active
+        ret = OB_OP_NOT_ALLOW;
+        LOG_WARN("logstore service status is not active, cannot switch _ob_flush_log_at_trx_commit to 0", K(ret),
+            K(logstore_address), K(is_active), K(last_active_ts));
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "logstore service's status is not active when setting _ob_flush_log_at_trx_commit to 0,");
+      } else {
+        // do nothing
       }
     }
   }

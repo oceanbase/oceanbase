@@ -697,6 +697,7 @@ const int64_t OB_INNER_TABLE_BACKUP_DEFAULT_FIELD_LENGTH = 256;
 const int64_t OB_MAX_BACKUP_PTAH_LIST_LENGTH = 8 * 1024;
 const int64_t OB_MAX_EXECUTOR_TENANT_LENGTH = 64 * 1024;
 
+const char *const OB_LOG_STORE_PREFIX = "log://";
 const char *const OB_LOCAL_PREFIX = "local://";
 const char *const OB_OSS_PREFIX = "oss://";
 const char *const OB_FILE_PREFIX = "file://";

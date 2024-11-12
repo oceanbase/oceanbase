@@ -19,6 +19,7 @@
 #include "lib/hash/ob_array_hash_map.h"         // ObArrayHashMap
 #include "ob_simple_log_server.h"
 #include "ob_simple_arb_server.h"
+//#include "ob_mock_log_device.h"
 
 namespace oceanbase
 {
@@ -82,6 +83,7 @@ protected:
   static void SetUpTestCase();
   static void TearDownTestCase();
 
+  static int init_log_store(const ObAddr &addr);
 public:
   static std::vector<ObISimpleLogServer*> cluster_;
   static ObMemberList member_list_;
@@ -98,6 +100,8 @@ public:
   static observer::ObSignalHandle *signal_handle_;
   static bool need_add_arb_server_;
   static bool disable_hot_cache_;
+  static bool need_remote_log_store_;
+  static ObAddr remote_log_store_addr_;
   static int64_t tenant_id_;
   static ObTenantIOManager *tio_manager_;
 };

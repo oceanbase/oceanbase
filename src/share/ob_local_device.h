@@ -86,6 +86,7 @@ public:
   virtual int fallocate(const common::ObIOFd &fd, mode_t mode, const int64_t offset, const int64_t len) override;
   virtual int lseek(const common::ObIOFd &fd, const int64_t offset, const int whence, int64_t &result_offset) override;
   virtual int truncate(const char *pathname, const int64_t len) override;
+  virtual int ftruncate(const common::ObIOFd &fd, const int64_t len) override;
   virtual int exist(const char *pathname, bool &is_exist) override;
   virtual int stat(const char *pathname, common::ObIODFileStat &statbuf) override;
   virtual int fstat(const common::ObIOFd &fd, common::ObIODFileStat &statbuf) override;

@@ -161,18 +161,14 @@ public:
 
   // @brief allocate a new block, and move it to the specified directory with the specified
   // name.
-  // @param[in] the file description of directory.
   // @param[in] the name of this block.
   // @param[in] specified block size.
-  int create_block_at(const palf::FileDesc &dest_dir_fd,
-                      const char *dest_block_path,
-                      const int64_t block_size) override final;
+  int create_block(const char *dest_block_path,
+                   const int64_t block_size) override final;
 
   // @brief recycle a block, and move it to myself directory.
-  // @param[in] the directory description of source directory.
   // @param[in] the name of this block.
-  int remove_block_at(const palf::FileDesc &src_dir_fd,
-                      const char *src_block_path) override final;
+  int remove_block(const char *src_block_path) override final;
 
   // @brief before 'create_tenant' in ObMultiTenant, need allocate log disk size firstly.
   // @param[in] the log disk size need by tenant.
@@ -205,7 +201,7 @@ public:
   int force_update_tenant_log_disk(const uint64_t tenant_id,
                                    const int64_t new_log_disk_size);
   TO_STRING_KV("dir:",
-               log_pool_path_, K_(dir_fd), K_(meta_fd), K_(log_pool_meta),
+               log_pool_path_, K_(log_pool_meta),
                K_(min_block_id), K_(max_block_id), K(min_log_disk_size_for_all_tenants_),
                K_(is_inited));
 
@@ -223,11 +219,11 @@ private:
   //   OB_ALLOCATE_DISK_SPACE_FAILED, no space left on device
   int resize_(const int64_t new_size_byte);
 
-  int do_init_(const char *log_pool_base_path);
+  int do_init_(const char *log_disk_base_path);
   int prepare_dir_and_create_meta_(const char *log_pool_path,
                                    const char *log_pool_tmp_path);
-  int do_load_(const char *log_disk_path);
-  int scan_log_disk_dir_(const char *log_disk_path, int64_t &has_allocated_block_cnt);
+  int do_load_(const char *log_disk_base_path);
+  int scan_log_disk_dir_(const char *log_disk_base_path, int64_t &has_allocated_block_cnt);
   int scan_log_pool_dir_and_do_trim_();
   int trim_log_pool_dir_and_init_block_id_range_(const BlockIdArray &block_id_array,
                                                  const int64_t first_need_trim_idx);
@@ -238,7 +234,8 @@ private:
   bool check_space_is_enough_(const int64_t log_disk_size) const;
   int get_all_tenants_log_disk_size_(int64_t &log_disk_size) const;
 private:
-  int update_log_pool_meta_guarded_by_lock_(const LogPoolMeta &meta);
+  int update_log_pool_meta_guarded_by_lock_(const char *pathname,
+                                            const LogPoolMeta &meta);
   const LogPoolMeta &get_log_pool_meta_guarded_by_lock_() const;
   int64_t get_total_size_guarded_by_lock_();
   int64_t get_free_size_guarded_by_lock_();
@@ -247,13 +244,10 @@ private:
                                                 const bool remove_block=false);
   int get_and_inc_min_block_id_guarded_by_lock_(palf::block_id_t &out_block_id,
                                                 const bool create_block=false);
-  int move_block_not_guarded_by_lock_(const palf::FileDesc &dest_dir_fd,
-                                      const char *dest_block_path,
-                                      const palf::FileDesc &src_dir_fd,
+  int move_block_not_guarded_by_lock_(const char *dest_block_path,
                                       const char *src_block_path);
-  int fsync_after_rename_(const palf::FileDesc &dest_dir_fd);
-  int make_resizing_tmp_dir_(const char *dir_path, palf::FileDesc &out_dir_fd);
-  int remove_resizing_tmp_dir_(const char *dir_path, const palf::FileDesc &in_dir_fd);
+  int make_resizing_tmp_dir_(const char *dir_path);
+  int remove_resizing_tmp_dir_(const char *dir_path);
   int do_resize_(const LogPoolMeta &old_log_pool_meta, const int64_t resize_block_cnt,
                  LogPoolMeta &new_log_pool_meta);
 
@@ -265,36 +259,27 @@ private:
   // 原子性的保证:
   // 1. 删除操作失败会重试
   int do_shrink_(const LogPoolMeta &new_log_meta, const int64_t resize_block_cnt);
-  int allocate_blocks_at_tmp_dir_(const palf::FileDesc &dir_fd,
+  int allocate_blocks_at_tmp_dir_(const char *tmp_dir,
                                   const palf::block_id_t start_block_id,
                                   const int64_t block_cnt);
-  int allocate_block_at_tmp_dir_(const palf::FileDesc &dir_fd, const palf::block_id_t block_id);
+  int allocate_block_at_tmp_dir_(const char *tmp_dir, const palf::block_id_t block_id);
   int free_blocks_at_log_pool_(const int64_t block_cnt);
-  int free_block_at_(const palf::FileDesc &dir_fd, const palf::block_id_t block_id);
-  int move_blocks_from_tmp_dir_to_log_pool_(const palf::FileDesc &dir_fd,
+  int free_block_at_(const char *path, const palf::block_id_t block_id);
+  int move_blocks_from_tmp_dir_to_log_pool_(const char *tmp_dir,
                                             const palf::block_id_t start_block_id,
                                             const int64_t block_cnt);
   int64_t calc_block_cnt_by_size_(const int64_t curr_total_size);
   int get_has_allocated_blocks_cnt_in_(const char *log_disk_path,
                                        int64_t &has_allocated_block_cnt);
+  int get_has_allocated_blocks_cnt_in_spec_dir_(const char *log_dir,
+                                                int64_t &has_allocated_block_cnt);
+  int get_has_allocated_blocks_cnt_in_tenant_(const char *tenant_log_disk_path,
+                                              int64_t &has_allocated_block_cnt);
+  int get_has_allocated_blocks_cnt_in_log_stream_(const char *log_stream_log_disk_path,
+                                                  int64_t &has_allocated_block_cnt);
   int64_t lower_align_(const int64_t new_size_byte);
   int remove_tmp_file_or_directory_for_tenant_(const char *log_disk_path);
   int get_free_disk_space(int64_t &free_disk_space);
-private:
-  int open_until_success_(const char *src_block_path, const int flag,
-                          palf::FileDesc &out_fd);
-  int fallocate_until_success_(const palf::FileDesc &src_fd, const int64_t block_size);
-  int unlinkat_until_success_(const palf::FileDesc &src_dir_fd, const char *block_path,
-                              const int flag);
-  int fsync_until_success_(const palf::FileDesc &src_fd);
-  int renameat_until_success_(const palf::FileDesc &dest_dir_fd,
-                              const char *dest_block_path,
-                              const palf::FileDesc &src_dir_fd,
-                              const char *src_block_path);
-  int write_unitl_success_(const palf::FileDesc &dest_fd, const char *src_buf,
-                           const int64_t src_buf_len, const int64_t offset);
-  int read_unitl_success_(const palf::FileDesc &src_fd, char *dest_buf,
-                          const int64_t dest_buf_len, const int64_t offset);
 private:
   typedef common::ObFunction<int(int64_t&)> GetTenantsLogDiskSize;
   mutable ObSpinLock log_pool_meta_lock_;
@@ -302,8 +287,6 @@ private:
   mutable RWLock block_id_range_lock_;
   char log_pool_path_[OB_MAX_FILE_NAME_LENGTH];
   char *log_pool_meta_serialize_buf_;
-  palf::FileDesc dir_fd_;
-  palf::FileDesc meta_fd_;
   LogPoolMeta log_pool_meta_;
   // [min_block_id_, max_block_id_)
   palf::block_id_t min_block_id_;

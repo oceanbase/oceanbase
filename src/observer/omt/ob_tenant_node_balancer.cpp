@@ -130,6 +130,10 @@ void ObTenantNodeBalancer::run1()
       LOG_WARN("ObServerLogBlockMgr try_resize failed", K(tmp_ret));
     }
 
+    if (OB_SUCCESS != (tmp_ret = LOG_IO_ADAPTER.try_switch_log_io_mode())) {
+      LOG_WARN("switch_log_io_mode failed", K(tmp_ret));
+    }
+
     FLOG_INFO("refresh tenant config", K(tenants), K(ret));
 
     {

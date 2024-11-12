@@ -13,6 +13,9 @@
 #include <gtest/gtest.h>
 #define private public
 #include "logservice/arbserver/palf_env_lite_mgr.h"
+#include "logservice/ob_log_io_adapter.h"
+#include "share/io/ob_io_manager.h"
+#include "share/ob_device_manager.h"
 #undef private
 
 namespace oceanbase
@@ -92,21 +95,28 @@ TEST(TestPalfEnvLiteMgr, test_create_block)
   dir_fd = ::open(test_dir.c_str(), O_DIRECTORY | O_RDONLY);
   EXPECT_NE(-1, dir_fd);
   std::string block_path = "1";
-  EXPECT_EQ(OB_SUCCESS, dbp.create_block_at(dir_fd, block_path.c_str(), block_size));
-  EXPECT_EQ(OB_SUCCESS, dbp.create_block_at(dir_fd, block_path.c_str(), block_size));
-  EXPECT_EQ(OB_SUCCESS, dbp.remove_block_at(dir_fd, block_path.c_str()));
+  EXPECT_EQ(OB_SUCCESS, dbp.create_block(block_path.c_str(), block_size));
+  EXPECT_EQ(OB_SUCCESS, dbp.create_block(block_path.c_str(), block_size));
+  EXPECT_EQ(OB_SUCCESS, dbp.remove_block(block_path.c_str()));
   // file has not exist, return OB_SUCCESS
-  EXPECT_EQ(OB_SUCCESS, dbp.remove_block_at(dir_fd, block_path.c_str()));
+  EXPECT_EQ(OB_SUCCESS, dbp.remove_block(block_path.c_str()));
 }
 
 } // end of unittest
 } // end of oceanbase
-
+using namespace oceanbase::share;
+using namespace oceanbase::logservice;
 int main(int argc, char **argv)
 {
   system("rm -rf test_palf_env_lite_mgr.log*");
   OB_LOGGER.set_file_name("test_palf_env_lite_mgr.log", true);
   OB_LOGGER.set_log_level("INFO");
+  ObLogIOInfo log_io_info;
+  std::string clog_dir = "test_palf_env_lite_mgr";
+  EXPECT_EQ(OB_SUCCESS, ObIOManager::get_instance().init());
+  EXPECT_EQ(OB_SUCCESS, log_io_info.init(ObLogIOMode::LOCAL, nullptr, 1));
+  ObDeviceManager::get_instance().init_devices_env();
+  EXPECT_EQ(OB_SUCCESS, LOG_IO_ADAPTER.init(clog_dir.c_str(), 8, 128, log_io_info, &OB_IO_MANAGER, &ObDeviceManager::get_instance()));
   PALF_LOG(INFO, "begin unittest::test_palf_env_lite_mgr");
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

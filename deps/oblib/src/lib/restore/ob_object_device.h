@@ -131,6 +131,7 @@ private:
   virtual int fallocate(const ObIOFd &fd, mode_t mode, const int64_t offset, const int64_t len) override;
   virtual int lseek(const ObIOFd &fd, const int64_t offset, const int whence, int64_t &result_offset) override;
   virtual int truncate(const char *pathname, const int64_t len) override; 
+  virtual int ftruncate(const ObIOFd &fd, const int64_t len) override;
   virtual int fstat(const ObIOFd &fd, ObIODFileStat &statbuf) override;
   //block interfaces
   virtual int mark_blocks(ObIBlockIterator &block_iter) override;

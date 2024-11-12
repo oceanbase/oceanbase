@@ -111,6 +111,7 @@ int64_t ObSimpleLogClusterTestBase::node_cnt_ = 1;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
 bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
 int64_t log_entry_size = 2 * 1024 * 1024 + 16 * 1024;
+bool ObSimpleLogClusterTestBase::need_remote_log_store_ = false;
 
 TEST_F(TestObSimpleLogReplayFunc, basic_replay)
 {

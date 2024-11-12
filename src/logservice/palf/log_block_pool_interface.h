@@ -24,14 +24,12 @@ namespace palf
 class ILogBlockPool
 {
 public:
-  virtual int create_block_at(const palf::FileDesc &dir_fd,
-                              const char *block_path,
-                              const int64_t block_size) = 0;
-  virtual int remove_block_at(const palf::FileDesc &dir_fd,
-                              const char *block_path) = 0;
+  virtual int create_block(const char *block_path,
+                           const int64_t block_size) = 0;
+  virtual int remove_block(const char *block_path) = 0;
 };
 
-int is_block_used_for_palf(const int fd, const char *path, bool &result);
+int is_block_used_for_palf(const char *path, bool &result);
 int remove_file_at(const char *dir, const char *path, ILogBlockPool *log_block_pool);
 int remove_directory_rec(const char *path, ILogBlockPool *log_block_pool);
 int remove_tmp_file_or_directory_at(const char *path, ILogBlockPool *log_block_pool);
