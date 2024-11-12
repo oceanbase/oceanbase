@@ -25,6 +25,7 @@
 #include "storage/compaction/ob_tenant_compaction_progress.h"
 #include "storage/compaction/ob_tablet_merge_task.h"
 #include "storage/compaction/ob_batch_freeze_tablets_dag.h"
+#include "lib/random/ob_random.h"
 
 int64_t dag_cnt = 1;
 int64_t stress_time= 1; // 100ms
@@ -97,7 +98,6 @@ public:
           COMMON_LOG(WARN, "failed to init addtask", K(ret));
         }
         if (OB_FAIL(ret)) {
-          dag->free_task(*ntask);
         } else {
           next_task = ntask;
         }
@@ -479,6 +479,14 @@ void wait_scheduler() {
   while (!scheduler->is_empty()) {
     ::usleep(100000);
   }
+  ObIAllocator &basic_allocator = scheduler->get_allocator(false /*is_ha*/);
+  ObIAllocator &basic_root_allocator = static_cast<ObParallelAllocator *>(&basic_allocator)->root_allocator_;
+  while ((basic_allocator.used() - basic_root_allocator.used()) != 0) {
+    ::usleep(100000);
+  }
+  while ((basic_allocator.total() - basic_root_allocator.total()) != 0) {
+    ::usleep(100000);
+  }
 }
 
 class TestDag : public ObIDag
@@ -791,13 +799,159 @@ public:
     } else if (OB_FAIL(dag->add_task(*mul_task1))) {
       COMMON_LOG(WARN, "failed to add_task", K(ret));
     } else if (OB_FAIL(dag->add_task(*mul_task))) {
-      dag->free_task(*mul_task);
       COMMON_LOG(WARN, "failed to add_task", K(ret));
     }
     return ret;
   }
 private:
   AtomicOperator *op_;
+};
+
+class ObGenerateNextFailTask : public ObITask
+{
+public:
+  ObGenerateNextFailTask() : ObITask(ObITask::TASK_TYPE_UT), cnt_(0) {}
+  virtual ~ObGenerateNextFailTask() {}
+  virtual int generate_next_task(ObITask *&next_task)
+  {
+    int ret = OB_ERR_UNEXPECTED;
+    cnt_++;
+    COMMON_LOG(WARN, "failed to generate next task", K(ret), K_(cnt));
+    return ret;
+  }
+  virtual int process()
+  {
+    int ret = OB_SUCCESS;
+    return ret;
+  }
+public:
+  int64_t cnt_;
+};
+
+class ObGenerateNextFailDag: public TestDag
+{
+public:
+  ObGenerateNextFailDag() {}
+  virtual ~ObGenerateNextFailDag() {}
+  int init()
+  {
+    int ret = OB_SUCCESS;
+    COMMON_LOG(INFO, "Start testing ObGenerateNextFailDag", K(ret));
+    ObGenerateNextFailTask *task = nullptr;
+    EXPECT_EQ(OB_SUCCESS, alloc_task(task));
+    EXPECT_EQ(OB_SUCCESS, add_task(*task));
+    return ret;
+  }
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObGenerateNextFailDag);
+};
+
+class ObMaybeCycleTask: public ObITask
+{
+public:
+  ObMaybeCycleTask()
+    : ObITask(ObITask::TASK_TYPE_UT), task_cnt_(-1), cur_idx_(-1) {}
+  virtual ~ObMaybeCycleTask() {}
+  int init(int64_t task_cnt, int64_t cur_idx)
+  {
+    int ret = OB_SUCCESS;
+    task_cnt_ = task_cnt;
+    cur_idx_ = cur_idx;
+    return ret;
+  }
+  virtual int process()
+  {
+    int ret = OB_SUCCESS;
+    const int64_t random_number = ObRandom::rand(0, 6);
+    COMMON_LOG(INFO, "Start process task", K(ret), K(random_number), KPC(this));
+    if (OB_ISNULL(dag_) ) {
+      COMMON_LOG(WARN, "task is invalid", K(ret), KP_(dag));
+    } else if (random_number == 3) {
+      ObITask *task1 = nullptr;
+      ObITask *task2 = nullptr;
+      ObITask *task3 = nullptr;
+      if (OB_FAIL(generate_next_task(task1))) {
+        COMMON_LOG(WARN, "failed to generate next task", K(ret), KPC(task1));
+      } else if (OB_FAIL(generate_next_task(task2))) {
+        COMMON_LOG(WARN, "failed to generate next task", K(ret), KPC(task1));
+      } else if (OB_FAIL(generate_next_task(task3))) {
+        COMMON_LOG(WARN, "failed to generate next task", K(ret), KPC(task1));
+      } else if (OB_ISNULL(task1) || OB_ISNULL(task2) || OB_ISNULL(task3)) {
+        ret = OB_ERR_UNEXPECTED;
+        COMMON_LOG(WARN, "task is null", K(ret), KP(task1), KP(task2), KP(task3));
+      } else if (OB_FAIL(task1->add_child(*task2))) {
+        COMMON_LOG(WARN, "failed to add child", K(ret), KPC(task1), KPC(task2));
+      } else if (OB_FAIL(task2->add_child(*task3))) {
+        COMMON_LOG(WARN, "failed to add child", K(ret), KPC(task2), KPC(task3));
+      } else if (OB_FAIL(task3->add_child(*task1))) {
+        COMMON_LOG(WARN, "failed to add child", K(ret), KPC(task3), KPC(task1));
+      } else if (OB_FAIL(dag_->add_task(*task1))) {
+        COMMON_LOG(WARN, "failed to add task", K(ret), KPC(task1));
+      } else if (OB_FAIL(dag_->add_task(*task2))) {
+        COMMON_LOG(WARN, "failed to add task", K(ret), KPC(task2));
+      } else if (OB_FAIL(dag_->add_task(*task3))) {
+        COMMON_LOG(WARN, "failed to add task", K(ret), KPC(task3));
+      }
+    } else {
+      usleep(random_number);
+    }
+    COMMON_LOG(INFO, "Finish process task", K(ret), K(random_number), KPC(this));
+    return ret;
+  }
+  virtual int generate_next_task(ObITask *&next_task)
+  {
+    int ret = OB_SUCCESS;
+    if (cur_idx_ >= task_cnt_ - 1) {
+      ret = OB_ITER_END;
+      COMMON_LOG(WARN, "failed to generate next task", K(ret), K(cur_idx_));
+    } else {
+      ObMaybeCycleTask *task = nullptr;
+      COMMON_LOG(INFO, "Start generate next task", K(ret), KPC(this));
+      if (OB_ISNULL(dag_)) {
+        ret = OB_ERR_UNEXPECTED;
+      } else if (OB_FAIL(dag_->alloc_task(task))) {
+        COMMON_LOG(WARN, "failed to alloc task", K(ret));
+      } else if (OB_ISNULL(task)) {
+        ret = OB_ERR_UNEXPECTED;
+        COMMON_LOG(WARN, "task is null", K(ret));
+      } else if (OB_FAIL(task->init(task_cnt_, cur_idx_ + 1))) {
+        COMMON_LOG(WARN, "failed to init task", K(ret));
+      } else {
+        next_task = task;
+      }
+      COMMON_LOG(INFO, "Finish generate next task", K(ret), KPC(this));
+    }
+    return ret;
+  }
+  INHERIT_TO_STRING_KV("ObITask", ObITask, K_(task_cnt), K_(cur_idx));
+public:
+  int64_t task_cnt_;
+  int64_t cur_idx_;
+};
+
+class ObMayCycleDag: public TestDag
+{
+public:
+  ObMayCycleDag() {}
+  virtual ~ObMayCycleDag() {}
+  int init(const int64_t dag_idx, const int64_t sub_task_cnt)
+  {
+    int ret = OB_SUCCESS;
+    dag_idx_ = dag_idx;
+    sub_task_cnt_ = sub_task_cnt;
+    COMMON_LOG(INFO, "Start testing ObMayCycleDag", K(ret), K(dag_idx));
+    ObMaybeCycleTask *task = nullptr;
+    EXPECT_EQ(OB_SUCCESS, alloc_task(task));
+    EXPECT_EQ(OB_SUCCESS, task->init(sub_task_cnt_, 0));
+    EXPECT_EQ(OB_SUCCESS, add_task(*task));
+    return ret;
+  }
+  INHERIT_TO_STRING_KV("TestDag", TestDag, K_(dag_idx));
+public:
+  int64_t dag_idx_;
+  int64_t sub_task_cnt_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObMayCycleDag);
 };
 
 class DagSchedulerStressTester : public lib::ThreadPool
@@ -1036,7 +1190,6 @@ TEST_F(TestDagScheduler, basic_test)
         COMMON_LOG(WARN, "failed to add task", K(ret));
       }
       if (OB_FAIL(ret)) {
-        dag->free_task(*mul_task);
       } else {
         if (OB_FAIL(dag->alloc_task(add_task))) {
           COMMON_LOG(WARN, "failed to alloc task", K(ret));
@@ -1050,9 +1203,6 @@ TEST_F(TestDagScheduler, basic_test)
             COMMON_LOG(WARN, "failed to add child", K(ret));
           } else if (OB_FAIL(dag->add_task(*add_task))) {
             COMMON_LOG(WARN, "failed to add task");
-          }
-          if (OB_FAIL(ret)) {
-            dag->free_task(*add_task);
           }
         }
       }
@@ -1078,9 +1228,6 @@ TEST_F(TestDagScheduler, basic_test)
         COMMON_LOG(WARN, "failed to init add task", K(ret));
       } else if (OB_FAIL(dup_dag->add_task(*mul_task))) {
         COMMON_LOG(WARN, "failed to add task", K(ret));
-      }
-      if (OB_FAIL(ret)) {
-        dup_dag->free_task(*mul_task);
       }
     }
   }
@@ -1204,7 +1351,6 @@ TEST_F(TestDagScheduler, test_cycle)
         }
         EXPECT_EQ(OB_SUCCESS, dag->add_task(*mul_task));
         EXPECT_EQ(OB_INVALID_ARGUMENT, dag->add_task(*add_task));
-        dag->free_task(*add_task);
         scheduler->free_dag(*dag);
       }
     }
@@ -1830,6 +1976,46 @@ TEST_F(TestDagScheduler, test_cancel_running_dag)
   EXPECT_EQ(OB_SUCCESS, cancel_dag_key->init(1));
   EXPECT_EQ(OB_SUCCESS, scheduler->cancel_dag(cancel_dag_key, true));
   scheduler->free_dag(*cancel_dag_key);
+}
+
+TEST_F(TestDagScheduler, test_generate_next_task_failed)
+{
+  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
+  ASSERT_TRUE(nullptr != scheduler);
+  ASSERT_EQ(OB_SUCCESS, scheduler->init(MTL_ID(), time_slice));
+
+  ObGenerateNextFailDag *dag = nullptr;
+  EXPECT_EQ(OB_SUCCESS, scheduler->alloc_dag(dag));
+  EXPECT_EQ(OB_SUCCESS, dag->init());
+  EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag));
+  wait_scheduler();
+}
+
+TEST_F(TestDagScheduler, test_maybe_cycle_tasks)
+{
+  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
+  ASSERT_TRUE(nullptr != scheduler);
+  ASSERT_EQ(OB_SUCCESS, scheduler->init(MTL_ID(), time_slice));
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; i < 500; i++) {
+    ObMayCycleDag *dag = nullptr;
+    EXPECT_EQ(OB_SUCCESS, scheduler->alloc_dag(dag));
+    EXPECT_EQ(OB_SUCCESS, dag->init(i, 20));
+    if (OB_FAIL(scheduler->add_dag(dag))) {
+      if (OB_EAGAIN == ret) {
+        ret = OB_SUCCESS;
+        i--;
+        usleep(10 * 1000 /*10 ms*/);
+        if (OB_NOT_NULL(dag)) {
+          (void) scheduler->free_dag(*dag);
+          dag = nullptr;
+        }
+      } else {
+        EXPECT_EQ(OB_SUCCESS, ret);
+      }
+    }
+  }
+  wait_scheduler();
 }
 
 /*

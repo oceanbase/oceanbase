@@ -376,7 +376,10 @@ int ObITask::generate_next_task()
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "task is invalid", K(ret), K_(type), KP_(dag));
   } else {
-    if (OB_TMP_FAIL(generate_next_task(next_task))) {
+    if (dag_->has_set_stop()) {
+      ret = OB_CANCELED;
+      LOG_WARN("dag is stopped", K(ret));
+    } else if (OB_TMP_FAIL(generate_next_task(next_task))) {
       if (OB_ITER_END != tmp_ret) {
         ret = tmp_ret;
         COMMON_LOG(WARN, "failed to generate_next_task");
@@ -390,7 +393,7 @@ int ObITask::generate_next_task()
       COMMON_LOG(WARN, "failed to add next task", K(ret), K(*next_task));
     }
     if (OB_FAIL(ret)) {
-      dag_->set_dag_status(ObIDag::DAG_STATUS_NODE_FAILED);
+      dag_->set_dag_status(ObIDag::DAG_STATUS_NODE_FAILED); // need set dag failed to finish dag
       dag_->set_dag_ret(ret);
     }
   }
@@ -569,11 +572,12 @@ int ObIDag::add_task(ObITask &task)
   } else {
     ObMutexGuard guard(lock_);
     task.set_status(ObITask::TASK_STATUS_WAITING);
-    if (OB_FAIL(check_cycle())) {
-      COMMON_LOG(WARN, "check_cycle failed", K(ret), K_(id));
-      if (OB_ISNULL(task_list_.remove(&task))) {
-        COMMON_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "failed to remove task from task_list", K_(id));
-      }
+    if (is_stop_) {
+      ret = OB_CANCELED;
+      LOG_WARN("dag is stopped", K(ret));
+    } else if (OB_FAIL(check_cycle())) {
+      (void) set_stop_without_lock(); // set dag stop and now allow new task to add
+      COMMON_LOG(WARN, "check_cycle failed, set dag stop", K(ret), K_(id), K_(is_stop));
     }
   }
   return ret;
@@ -916,6 +920,11 @@ int ObIDag::finish(const ObDagStatus status, bool &dag_net_finished)
 void ObIDag::set_stop()
 {
   ObMutexGuard guard(lock_);
+  set_stop_without_lock();
+}
+
+void ObIDag::set_stop_without_lock()
+{
   is_stop_ = true;
   // dag_net and dags in the same dag net should be canceled too.
   if (OB_NOT_NULL(dag_net_)) {
@@ -3447,8 +3456,8 @@ void ObDagNetScheduler::destroy()
     if (OB_NOT_NULL(cur_dag_net)) {
       allocator = cur_dag_net->is_ha_dag_net() ? ha_allocator_ : allocator_;
       cur_dag_net->~ObIDagNet();
-      if (OB_NOT_NULL(allocator_)) {
-        allocator_->free((void*)cur_dag_net);
+      if (OB_NOT_NULL(allocator)) {
+        allocator->free((void*)cur_dag_net);
       }
     }
   }

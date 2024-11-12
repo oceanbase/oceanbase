@@ -415,6 +415,7 @@ public:
   }
   bool has_set_stop() { return is_stop_; }
   void set_stop();
+  void set_stop_without_lock();
   ObIDagNet *get_dag_net() const { return dag_net_; }
   void set_dag_net(ObIDagNet &dag_net)
   {
@@ -476,7 +477,6 @@ public:
   int add_child_without_inheritance(ObIDag &child);
   int add_child_without_inheritance(const common::ObIArray<ObINodeWithChild*> &child_array);
   int get_next_ready_task(ObITask *&task);
-  void free_task(ObITask &task);
   int finish_task(ObITask &task);
   bool has_finished();
   virtual int report_result()
@@ -533,6 +533,8 @@ private:
   void reset();
   void clear_task_list();
   void clear_running_info();
+  // See ObIDag::finish_task, free_task must be called together with task_list_.remove, otherwise task will be double freed when ~ObIDag
+  void free_task(ObITask &task);
   int check_cycle();
   void inc_running_task_cnt() { ++running_task_cnt_; }
   void dec_running_task_cnt() { --running_task_cnt_; }
