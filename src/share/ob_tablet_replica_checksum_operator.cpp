@@ -361,15 +361,7 @@ int ObTabletReplicaChecksumItem::verify_column_checksum(const ObTabletReplicaChe
   }
 
   bool is_all_large_text_column = false;
-  uint64_t compat_version = 0;
   if (OB_FAIL(ret) || !is_cs_replica) {
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, compat_version))) {
-    LOG_WARN("failed to get min data version", K(ret), K(tenant_id_));
-  } else if (compat_version >= DATA_VERSION_4_3_4_0) {
-    // should not skip the validation of lob column between cs replica and row replica
-    if (compaction_scn_ == other.compaction_scn_ && !column_meta_equal) {
-      ret = OB_CHECKSUM_ERROR;
-    }
   } else {
     ObSEArray<int64_t, 8> column_idxs;
     for (int64_t idx = 0; OB_SUCC(ret) && idx < column_meta_.column_checksums_.count(); ++idx) {
