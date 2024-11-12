@@ -40,13 +40,13 @@ constexpr int OB_INIT_TWICE                          = -4005;
 constexpr int OB_ALLOCATE_MEMORY_FAILED              = -4013;
 constexpr int OB_ERR_UNEXPECTED                      = -4016;
 constexpr int OB_SIZE_OVERFLOW                       = -4019;
-constexpr int OB_CHECKSUM_ERROR                      = -4103;
 constexpr int OB_BACKUP_FILE_NOT_EXIST               = -9011;
 constexpr int OB_COS_ERROR                           = -9060;
 constexpr int OB_IO_LIMIT                            = -9061;
 constexpr int OB_BACKUP_PERMISSION_DENIED            = -9071;
 constexpr int OB_BACKUP_PWRITE_OFFSET_NOT_MATCH      = -9083;
 constexpr int OB_INVALID_OBJECT_STORAGE_ENDPOINT     = -9118;
+constexpr int OB_OBJECT_STORAGE_CHECKSUM_ERROR       = -9132;
 
 const int COS_BAD_REQUEST = 400;
 const int COS_OBJECT_NOT_EXIST  = 404;
@@ -107,7 +107,7 @@ static void convert_io_error(cos_status_t *cos_ret, int &ob_errcode)
         if (nullptr == cos_ret->error_code) {
           ob_errcode = OB_COS_ERROR;
         } else if (0 == strcmp("InvalidDigest", cos_ret->error_code)) {
-          ob_errcode = OB_CHECKSUM_ERROR;
+          ob_errcode = OB_OBJECT_STORAGE_CHECKSUM_ERROR;
         } else if (0 == strcmp("InvalidRegionName", cos_ret->error_code)) {
           ob_errcode = OB_INVALID_OBJECT_STORAGE_ENDPOINT;
         } else {
@@ -311,7 +311,7 @@ struct CosContext
 static void log_status(cos_status_t *s, const int ob_errcode)
 {
   if (NULL != s) {
-    if (OB_CHECKSUM_ERROR == ob_errcode) {
+    if (OB_OBJECT_STORAGE_CHECKSUM_ERROR == ob_errcode) {
       cos_error_log("[COS]status->code: %d, ret=%d", s->code, ob_errcode);
       if (s->error_code) {
         cos_error_log("[COS]status->error_code: %s, ret=%d", s->error_code, ob_errcode);

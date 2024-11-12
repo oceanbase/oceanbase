@@ -241,7 +241,7 @@ static void convert_io_error(aos_status_t *aos_ret, int &ob_errcode)
         if (OB_ISNULL(aos_ret->error_code)) {
           ob_errcode = OB_OSS_ERROR;
         } else if (0 == STRCMP("InvalidDigest", aos_ret->error_code)) {
-          ob_errcode = OB_CHECKSUM_ERROR;
+          ob_errcode = OB_OBJECT_STORAGE_CHECKSUM_ERROR;
         } else if (0 == STRCMP("InvalidBucketName", aos_ret->error_code)) {
           ob_errcode = OB_INVALID_OBJECT_STORAGE_ENDPOINT;
         } else {
@@ -747,8 +747,8 @@ void ObStorageOssBase::print_oss_info(
         }
       }
     }
-    if (OB_CHECKSUM_ERROR == ob_errcode) {
-      OB_LOG_RET(ERROR, OB_CHECKSUM_ERROR, "oss info ", K(aos_ret->code), KCSTRING(aos_ret->error_code),
+    if (OB_OBJECT_STORAGE_CHECKSUM_ERROR == ob_errcode) {
+      OB_LOG_RET(ERROR, OB_OBJECT_STORAGE_CHECKSUM_ERROR, "oss info ", K(aos_ret->code), KCSTRING(aos_ret->error_code),
         KCSTRING(aos_ret->error_msg), KCSTRING(aos_ret->req_id),  KCSTRING(delay_time),
         KCSTRING(oss_account_.oss_domain_), KCSTRING(oss_endpoint_), KCSTRING(oss_account_.oss_id_));
     } else {
