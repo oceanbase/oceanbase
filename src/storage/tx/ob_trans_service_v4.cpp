@@ -1141,6 +1141,15 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
   } else if (tx.access_mode_ == ObTxAccessMode::STANDBY_RD_ONLY) {
     ret = OB_STANDBY_READ_ONLY;
     TRANS_LOG(WARN, "tx is standby readonly", K(ret), K(ls_id), K(tx), KPC(this));
+  } else if (snapshot.is_weak_read()) {
+    ret = OB_ERR_READ_ONLY_TRANSACTION;
+    TRANS_LOG(WARN,
+              "Prohibited from performing write operations by weak read snapshot version",
+              K(ret),
+              K(ls_id),
+              K(snapshot),
+              K(tx),
+              KPC(this));
   } else if (branch != 0) {
     ret = OB_NOT_SUPPORTED;
     TRANS_LOG(ERROR, "do not support branch write", KR(ret), K(store_ctx), K(tx));

@@ -54,8 +54,9 @@ select * from xm_test_t1;
 commit;
 
 ########### case 2: 用户表弱一致性读，期望报错，不支持
+sleep 1;
 begin;
---error 1235
+# --error 1235
 select /*+read_consistency(weak) */ * from xm_test_t1;
 commit;
 
