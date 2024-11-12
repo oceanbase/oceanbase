@@ -2927,6 +2927,27 @@ int ObDMLStmt::get_column_items(uint64_t table_id, ObIArray<ColumnItem> &column_
   return ret;
 }
 
+int ObDMLStmt::append_column_items_nodup(uint64_t table_id, uint64_t column_id, ObIArray<ColumnItem> &column_items) const
+{
+  int ret = OB_SUCCESS;
+  bool find = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !find && i < column_items.count(); ++i) {
+    if (column_items.at(i).column_id_ == column_id) {
+      find = true;
+    }
+  }
+  if (OB_SUCC(ret) && !find) {
+    ColumnItem *column_item = NULL;
+    if (OB_ISNULL(column_item = get_column_item_by_id(table_id, column_id))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null column item", K(ret), K(table_id), K(column_id));
+    } else if (OB_FAIL(column_items.push_back(*column_item))) {
+      LOG_WARN("Failed to add column item to partition columns", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObDMLStmt::get_column_exprs(ObIArray<ObColumnRefRawExpr *> &column_exprs) const
 {
   int ret = OB_SUCCESS;
@@ -5458,6 +5479,81 @@ int ObDMLStmt::get_match_expr_on_table(uint64_t table_id, ObMatchFunRawExpr *&ma
     } else if (cur_tid == table_id) {
       match_expr = get_match_exprs().at(i);
     } else { /*do nothing*/ }
+  }
+  return ret;
+}
+
+/**
+ * 获取指定index的分区列/分区生成列
+ * e.g. create table (c1 int, c2 int generated always as (c1 + 1)) partition by hash (c2)
+ *      partition_columns = [c2]
+ *      generate_columns  = [c1]
+ */
+int ObDMLStmt::get_partition_columns(const int64_t table_id,
+                                     const int64_t index_id,
+                                     const share::schema::ObPartitionLevel part_level,
+                                     ObIArray<ColumnItem> &partition_columns,
+                                     ObIArray<ColumnItem> &generate_columns) const
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *partition_expr = NULL;
+  if (share::schema::PARTITION_LEVEL_ONE == part_level) {
+    partition_expr = get_part_expr(table_id, index_id);
+  } else if (share::schema::PARTITION_LEVEL_TWO == part_level) {
+    partition_expr = get_subpart_expr(table_id, index_id);
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("part level should be one or two", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(partition_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null partition expr", K(ret), K(part_level), K(table_id), K(index_id));
+    } else if (OB_FAIL(extract_partition_columns(table_id, partition_expr,
+                                                 partition_columns, generate_columns))) {
+      LOG_WARN("failed to extract partitoin column", K(ret));
+    } else if (generate_columns.count() > 0 && partition_columns.count() > 1) {
+      generate_columns.reset();
+    }
+  }
+  return ret;
+}
+
+int ObDMLStmt::extract_partition_columns(const int64_t table_id,
+                                         const ObRawExpr *part_expr,
+                                         ObIArray<ColumnItem> &partition_columns,
+                                         ObIArray<ColumnItem> &generate_columns,
+                                         const bool is_generate_column /* = false */) const
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 2> column_exprs;
+  ObRawExpr *cur_expr = NULL;
+  ObColumnRefRawExpr *col_expr = NULL;
+  uint64_t column_id = OB_INVALID_ID;
+  if (OB_FAIL(ObRawExprUtils::extract_column_exprs(part_expr, column_exprs))) {
+    LOG_WARN("failed to extract column exprs", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs.count(); ++i) {
+    if (OB_ISNULL(cur_expr = column_exprs.at(i)) ||
+        OB_UNLIKELY(!cur_expr->is_column_ref_expr())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected column expr", K(ret), K(cur_expr));
+    } else if (FALSE_IT(col_expr = static_cast<ObColumnRefRawExpr *>(cur_expr))) {
+    } else if (OB_UNLIKELY(OB_INVALID_ID == (column_id = col_expr->get_column_id()))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get invalid column id", K(ret));
+    } else if (is_generate_column) {//only deal dependented columns for generated partition column
+      if (OB_FAIL(append_column_items_nodup(table_id, column_id, generate_columns))) {
+        LOG_WARN("Failed to add partiton column", K(ret));
+      }
+    } else if (col_expr->is_generated_column() &&
+               column_exprs.count() <= 1 &&
+               OB_FAIL(extract_partition_columns(table_id, col_expr->get_dependant_expr(),
+                                                 partition_columns, generate_columns, true))) {
+      LOG_WARN("failed to extract partition columns for generated column", K(ret));
+    } else if (OB_FAIL(append_column_items_nodup(table_id, column_id, partition_columns))) {
+      LOG_WARN("Failed to add partiton column", K(ret));
+    }
   }
   return ret;
 }
