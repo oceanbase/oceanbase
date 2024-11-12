@@ -8697,13 +8697,13 @@ int ObRawExprUtils::new_parse_node(ParseNode *& node, ObRawExprFactory &expr_fac
   return ret;
 }
 
-int ObRawExprUtils::build_rowid_expr(const ObDMLStmt *dml_stmt,
-                                     ObRawExprFactory &expr_factory,
+int ObRawExprUtils::build_rowid_expr(ObRawExprFactory &expr_factory,
                                      ObIAllocator &alloc,
                                      const ObSQLSessionInfo &session_info,
                                      const ObTableSchema &table_schema,
-                                     const uint64_t logical_table_id,
                                      const ObIArray<ObRawExpr *> &rowkey_exprs,
+                                     ObRawExpr *part_expr,
+                                     ObRawExpr *subpart_expr,
                                      ObSysFunRawExpr *&rowid_expr)
 {
   int ret = OB_SUCCESS;
@@ -8734,17 +8734,32 @@ int ObRawExprUtils::build_rowid_expr(const ObDMLStmt *dml_stmt,
     OX(calc_urowid_expr->set_func_name(ObString::make_string(N_CALC_UROWID)));
     OZ(calc_urowid_expr->add_param_expr(version_expr));
     if (OB_SUCC(ret) && table_schema.is_external_table()) {
-      OZ(add_calc_partition_id_on_calc_rowid_expr(dml_stmt, expr_factory, session_info,
-                                                  table_schema, logical_table_id,
-                                                  calc_urowid_expr));
+      ObRawExpr *calc_part_id_expr = nullptr;
+      OZ(build_calc_part_id_expr(expr_factory,
+                                 session_info,
+                                 table_schema.get_table_id(),
+                                 table_schema.get_part_level(),
+                                 part_expr,
+                                 subpart_expr,
+                                 calc_part_id_expr));
+      CK(OB_NOT_NULL(calc_part_id_expr));
+      OZ(calc_urowid_expr->add_param_expr(calc_part_id_expr));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_exprs.count(); ++i) {
       OZ(calc_urowid_expr->add_param_expr(rowkey_exprs.at(i)));
     }
-    if (OB_SUCC(ret) && !table_schema.is_external_table()) {
+    if (OB_SUCC(ret) && !table_schema.is_external_table() && table_schema.is_heap_table()) {
       //set calc tablet id for heap table calc_urowid expr
-      OZ(add_calc_tablet_id_on_calc_rowid_expr(dml_stmt, expr_factory, session_info,
-                                               table_schema, logical_table_id, calc_urowid_expr));
+      ObRawExpr *calc_tablet_id_expr = nullptr;
+      OZ(build_calc_tablet_id_expr(expr_factory,
+                                   session_info,
+                                   table_schema.get_table_id(),
+                                   table_schema.get_part_level(),
+                                   part_expr,
+                                   subpart_expr,
+                                   calc_tablet_id_expr));
+      CK(OB_NOT_NULL(calc_tablet_id_expr));
+      OZ(calc_urowid_expr->add_param_expr(calc_tablet_id_expr));
     }
     OZ(calc_urowid_expr->formalize(&session_info));
     OX(rowid_expr = calc_urowid_expr);
@@ -9063,104 +9078,6 @@ int ObRawExprUtils::is_contain_params(const common::ObIArray<ObRawExpr*> &exprs,
   for (int64_t i = 0; OB_SUCC(ret) && !is_contain && i < exprs.count(); ++i) {
     if (OB_FAIL(is_contain_params(exprs.at(i), is_contain))) {
      }
-  }
-  return ret;
-}
-
-int ObRawExprUtils::add_calc_tablet_id_on_calc_rowid_expr(const ObDMLStmt *dml_stmt,
-                                                          ObRawExprFactory &expr_factory,
-                                                          const ObSQLSessionInfo &session_info,
-                                                          const ObTableSchema &table_schema,
-                                                          const uint64_t logical_table_id,
-                                                          ObSysFunRawExpr *&calc_rowid_expr)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(dml_stmt) || OB_ISNULL(calc_rowid_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(dml_stmt),K(calc_rowid_expr));
-  } else if (table_schema.is_heap_table()) {
-    // add calc_tablet_id param such that calc_urowid(version, xxx) becomes
-    // calc_urowid(version, xxx, calc_tablet_id) since we need part id to generate
-    // physical rowid for heap organized table.
-    ObRawExprCopier copier(expr_factory);
-    ObSEArray<ObRawExpr *, 4> column_exprs;
-    const ObRawExpr *part_expr = dml_stmt->get_part_expr(logical_table_id, table_schema.get_table_id());
-    const ObRawExpr *subpart_expr = dml_stmt->get_subpart_expr(logical_table_id, table_schema.get_table_id());
-    ObRawExpr *calc_part_id_expr = nullptr;
-    schema::ObPartitionLevel part_level = table_schema.get_part_level();
-    ObRawExpr *new_part_expr = NULL;
-    ObRawExpr *new_subpart_expr = NULL;
-    //why we deep copy part/subpart expr ?
-    //because rowid in trgger will modify relation param expr, if we don't deep copy, this will
-    //influence origin part/subpart expr and introduce other problems.
-    if (OB_FAIL(dml_stmt->get_column_exprs(logical_table_id, column_exprs))) {
-      LOG_WARN("failed to get column exprs", K(ret));
-    } else if (OB_FAIL(copier.add_skipped_expr(column_exprs))) {
-      LOG_WARN("failed to add skipped expr", K(ret));
-    } else if (OB_FAIL(copier.copy(part_expr, new_part_expr))) {
-      LOG_WARN("fail to copy part expr", K(ret));
-    } else if (OB_FAIL(copier.copy(subpart_expr, new_subpart_expr))) {
-      LOG_WARN("fail to copy subpart expr", K(ret));
-    } else if (OB_FAIL(build_calc_tablet_id_expr(expr_factory,
-                                                 session_info,
-                                                 table_schema.get_table_id(),
-                                                 part_level,
-                                                 new_part_expr,
-                                                 new_subpart_expr,
-                                                 calc_part_id_expr))) {
-      LOG_WARN("fail to build table location expr", K(ret));
-    } else if (OB_ISNULL(calc_part_id_expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null expr", K(ret));
-    } else if (OB_FAIL(calc_rowid_expr->add_param_expr(calc_part_id_expr))) {
-      LOG_WARN("failed to add param expr", K(ret));
-    } else {/*do nothing*/}
-  }
-  return ret;
-}
-
-int ObRawExprUtils::add_calc_partition_id_on_calc_rowid_expr(const ObDMLStmt *dml_stmt,
-                                                             ObRawExprFactory &expr_factory,
-                                                             const ObSQLSessionInfo &session_info,
-                                                             const ObTableSchema &table_schema,
-                                                             const uint64_t logical_table_id,
-                                                             ObSysFunRawExpr *&calc_rowid_expr)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(dml_stmt) || OB_ISNULL(calc_rowid_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(dml_stmt),K(calc_rowid_expr));
-  } else if (table_schema.is_external_table()) {
-    ObRawExprCopier copier(expr_factory);
-    ObSEArray<ObRawExpr *, 4> column_exprs;
-    const ObRawExpr *part_expr = dml_stmt->get_part_expr(logical_table_id, table_schema.get_table_id());
-    const ObRawExpr *subpart_expr = dml_stmt->get_subpart_expr(logical_table_id, table_schema.get_table_id());
-    ObRawExpr *calc_part_id_expr = nullptr;
-    schema::ObPartitionLevel part_level = table_schema.get_part_level();
-    ObRawExpr *new_part_expr = NULL;
-    ObRawExpr *new_subpart_expr = NULL;
-    if (OB_FAIL(dml_stmt->get_column_exprs(logical_table_id, column_exprs))) {
-      LOG_WARN("failed to get column exprs", K(ret));
-    } else if (OB_FAIL(copier.add_skipped_expr(column_exprs))) {
-      LOG_WARN("failed to add skipped expr", K(ret));
-    } else if (OB_FAIL(copier.copy(part_expr, new_part_expr))) {
-      LOG_WARN("fail to copy part expr", K(ret));
-    } else if (OB_FAIL(copier.copy(subpart_expr, new_subpart_expr))) {
-      LOG_WARN("fail to copy subpart expr", K(ret));
-    } else if (OB_FAIL(build_calc_part_id_expr(expr_factory,
-                                               session_info,
-                                               table_schema.get_table_id(),
-                                               part_level,
-                                               new_part_expr,
-                                               new_subpart_expr,
-                                               calc_part_id_expr))) {
-      LOG_WARN("fail to build table location expr", K(ret));
-    } else if (OB_ISNULL(calc_part_id_expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null expr", K(ret));
-    } else if (OB_FAIL(calc_rowid_expr->add_param_expr(calc_part_id_expr))) {
-      LOG_WARN("failed to add param expr", K(ret));
-    }
   }
   return ret;
 }

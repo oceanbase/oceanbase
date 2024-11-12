@@ -10493,6 +10493,8 @@ int ObDMLResolver::resolve_rowid_expr(ObDMLStmt *stmt, const TableItem &table_it
     } else {
       ObSEArray<uint64_t, 4> col_ids;
       int64_t rowkey_cnt = -1;
+      ObRawExpr *part_expr = stmt->get_part_expr(table_item.table_id_, table_item.ref_id_);
+      ObRawExpr *subpart_expr = stmt->get_subpart_expr(table_item.table_id_, table_item.ref_id_);
       if (OB_FAIL(table_schema->get_column_ids_serialize_to_rowid(col_ids, rowkey_cnt))) {
         LOG_WARN("get col ids failed", K(ret));
       } else if (OB_UNLIKELY(col_ids.count() < rowkey_cnt)) {
@@ -10516,13 +10518,13 @@ int ObDMLResolver::resolve_rowid_expr(ObDMLStmt *stmt, const TableItem &table_it
           }
         }
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(ObRawExprUtils::build_rowid_expr(stmt,
-                                                       *params_.expr_factory_,
+          if (OB_FAIL(ObRawExprUtils::build_rowid_expr(*params_.expr_factory_,
                                                        *allocator_,
                                                        *params_.session_info_,
                                                        *table_schema,
-                                                       table_item.table_id_,
                                                        index_keys,
+                                                       part_expr,
+                                                       subpart_expr,
                                                        rowid_expr))) {
             LOG_WARN("build rowid expr failed", K(ret));
           } else {

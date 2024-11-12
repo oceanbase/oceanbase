@@ -1712,6 +1712,8 @@ int ObDelUpdResolver::gen_rowid_expr_for_returning(ObSysFunRawExpr *&rowid_expr)
   ObDelUpdStmt *del_upd_stmt = get_del_upd_stmt();
   ObSEArray<ObRawExpr*, 4> rowkey_exprs;
   ObSEArray<ObDmlTableInfo*, 1> tables_info;
+  ObRawExpr *part_expr = NULL;
+  ObRawExpr *subpart_expr = NULL;
   if (OB_ISNULL(allocator_) || OB_ISNULL(session_info_) ||
       OB_ISNULL(schema_checker_) || OB_ISNULL(del_upd_stmt)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1730,18 +1732,22 @@ int ObDelUpdResolver::gen_rowid_expr_for_returning(ObSysFunRawExpr *&rowid_expr)
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FALSE_IT(part_expr = del_upd_stmt->get_part_expr(tables_info.at(0)->loc_table_id_,
+                                                                 tables_info.at(0)->ref_table_id_))) {
+  } else if (OB_FALSE_IT(subpart_expr = del_upd_stmt->get_subpart_expr(tables_info.at(0)->loc_table_id_,
+                                                                       tables_info.at(0)->ref_table_id_))) {
   } else if (OB_FAIL(get_exprs_serialize_to_rowid(del_upd_stmt,
                                                   table_schema,
                                                   tables_info.at(0)->column_exprs_,
                                                   rowkey_exprs))) {
     LOG_WARN("generated rowkey exprs failed", K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::build_rowid_expr(del_upd_stmt,
-                                                      *params_.expr_factory_,
+  } else if (OB_FAIL(ObRawExprUtils::build_rowid_expr(*params_.expr_factory_,
                                                       *allocator_,
                                                       *(session_info_),
                                                       *table_schema,
-                                                      tables_info.at(0)->table_id_,
                                                       rowkey_exprs,
+                                                      part_expr,
+                                                      subpart_expr,
                                                       rowid_expr))) {
     LOG_WARN("build rowid_expr failed", K(ret));
   } else { /*do nothing*/ }
