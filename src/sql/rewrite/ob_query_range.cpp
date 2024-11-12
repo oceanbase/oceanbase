@@ -2093,6 +2093,7 @@ int ObQueryRange::get_row_key_part(const ObRawExpr *l_expr,
             LOG_WARN("and basic query key part failed", K(ret));
           } else {
             b_flag = true;
+            row_is_precise = (row_is_precise && query_range_ctx_->cur_expr_is_precise_);
           }
         }
       } else if (tmp_key_part->is_always_true()) {
@@ -5758,6 +5759,7 @@ int ObQueryRange::and_single_gt_head_graphs(
               //经过向量的合并后，为了正确性考虑，都保守不再去filter
               //清空精确条件的记录
               query_range_ctx_->precise_range_exprs_.reset();
+              query_range_ctx_->cur_expr_is_precise_ = false;
             }
           } else { // normal case
             // 1. do and of the first general item
