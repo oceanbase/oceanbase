@@ -310,8 +310,8 @@ template <typename T, typename N>
 class DiagnosticInfoValueAlloc
 {
 public:
-  explicit DiagnosticInfoValueAlloc(ObFixedClassAllocator<T> *alloc)
-      : alloc_count_(0), allocator_(alloc)
+  explicit DiagnosticInfoValueAlloc(ObFixedClassAllocator<T> *alloc, int64_t alloc_limit = MAX_DI_PER_TENANT)
+      : alloc_count_(0), alloc_limit_(alloc_limit), allocator_(alloc)
   {}
   ~DiagnosticInfoValueAlloc()
   {}
@@ -319,8 +319,8 @@ public:
   {
     int ret = OB_SUCCESS;
     T *di = NULL;
-    if (ATOMIC_LOAD(&alloc_count_) > MAX_DI_PER_TENANT) {
-      COMMON_LOG(INFO, "diagnostic info exceed upper limit");
+    if (ATOMIC_LOAD(&alloc_count_) > alloc_limit_) {
+      COMMON_LOG(INFO, "diagnostic info exceed upper limit", K_(alloc_count), K_(alloc_limit));
     } else {
       di = op_instance_alloc_args(allocator_, T);
       if (di != nullptr) {
@@ -353,6 +353,7 @@ public:
 
 private:
   volatile int64_t alloc_count_;
+  int64_t alloc_limit_;
   ObFixedClassAllocator<T> *allocator_;
 };
 
