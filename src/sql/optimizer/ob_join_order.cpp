@@ -2116,6 +2116,9 @@ int ObJoinOrder::check_and_extract_query_range(const uint64_t table_id,
       contain_always_false = query_range_info->get_contain_always_false();
       uint64_t range_prefix_count = query_range_info->get_range_prefix_count();
       const ObIArray<ColumnItem> &range_columns = query_range_info->get_range_columns();
+      if (index_info_entry.is_index_geo()) {
+        range_prefix_count = 1;
+      }
       ObSEArray<uint64_t, 4> range_col_ids;
       if (OB_UNLIKELY(range_prefix_count > range_columns.count())) {
         ret = OB_INVALID_ARGUMENT;
