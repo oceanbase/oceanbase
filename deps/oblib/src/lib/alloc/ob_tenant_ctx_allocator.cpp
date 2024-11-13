@@ -481,7 +481,8 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
     LIB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "OB_MOD_DO_NOT_USE_ME REALLOC", K(size));
   }
 
-  AObject *obj = NULL;
+  AObject *obj = NULL; // original object
+  AObject *nobj = NULL; // newly allocated object
   bool sample_allowed = false;
   bool is_errsim = false;
   if (NULL != ptr) {
@@ -492,7 +493,7 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
   const ObErrsimModuleType type = THIS_WORKER.get_module_type();
   if (is_errsim_module(ta.get_tenant_id(), type.type_)) {
     //errsim alloc memory failed.
-    obj = nullptr;
+    nobj = nullptr;
     is_errsim = true;
   }
 #endif
@@ -504,17 +505,13 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
   if (OB_UNLIKELY(OB_FAIL(ret) || is_errsim)) {
     AllocFailedCtx &afc = g_alloc_failed_ctx();
     afc.reason_ = AllocFailedReason::ERRSIM_INJECTION;
-    if (OB_NOT_NULL(obj)) {
-      allocator.free_object(obj);
-      obj = NULL;
-    }
   } else {
     BASIC_TIME_GUARD(time_guard, "ObMalloc");
     DEFER(ObMallocTimeMonitor::get_instance().record_malloc_time(time_guard, size, inner_attr));
     sample_allowed = ObMallocSampleLimiter::malloc_sample_allowed(size, inner_attr);
     inner_attr.alloc_extra_info_ = sample_allowed;
-    obj = allocator.realloc_object(obj, size, inner_attr);
-    if(OB_ISNULL(obj)) {
+    nobj = allocator.realloc_object(obj, size, inner_attr);
+    if(OB_ISNULL(nobj)) {
       int64_t total_size = 0;
       if (g_alloc_failed_ctx().need_wash_block()) {
         total_size += ta.sync_wash();
@@ -524,14 +521,18 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
         BASIC_TIME_GUARD_CLICK("WASH_CHUNK_END");
       }
       if (total_size > 0) {
-        obj = allocator.realloc_object(obj, size, inner_attr);
+        nobj = allocator.realloc_object(obj, size, inner_attr);
       }
     }
   }
 
-  if (obj != NULL) {
-    on_alloc(*obj, inner_attr);
-    nptr = obj->data_;
+  if (OB_UNLIKELY(NULL == nobj && NULL != obj)) {
+    SANITY_UNPOISON(obj->data_, obj->alloc_bytes_);
+  }
+
+  if (OB_NOT_NULL(nobj)) {
+    on_alloc(*nobj, inner_attr);
+    nptr = nobj->data_;
   } else if (TC_REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
 #ifdef FATAL_ERROR_HANG
     if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {

@@ -1456,10 +1456,14 @@ static int ob_coll_rule_expand(ob_wc_t *wc, size_t limit, ob_wc_t code) {
 }
 static void ob_coll_rule_reset(ObCollRule *r) { memset(r, 0, sizeof(*r)); }
 static int ob_coll_rules_realloc(ObCollRules *rules, size_t n) {
-  if (rules->nrules < rules->mrules ||
-      (rules->rule = static_cast<ObCollRule *>(rules->loader->mem_realloc(
-           rules->rule, sizeof(ObCollRule) * (rules->mrules = n + 128)))))
+  ObCollRule *new_rule = nullptr;
+  if (rules->nrules < rules->mrules)
     return 0;
+  if ((new_rule = static_cast<ObCollRule *>(rules->loader->mem_realloc(
+          rules->rule, sizeof(ObCollRule) * (rules->mrules = n + 128))))) {
+    rules->rule = new_rule;
+    return 0;
+  }
   return -1;
 }
 static int ob_coll_rules_add(ObCollRules *rules, ObCollRule *rule) {
