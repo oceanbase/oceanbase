@@ -254,6 +254,15 @@ int ObSchemaUtils::convert_sys_param_to_sysvar_schema(const ObSysParam &sysparam
   return ret;
 }
 
+bool ObSchemaUtils::is_support_parallel_drop(const ObTableType table_type)
+{
+  // TODO(ziqian.zzq): support more table type for parallel drop
+  return USER_TABLE == table_type
+         || TMP_TABLE_ORA_SESS == table_type
+         || TMP_TABLE_ORA_TRX == table_type
+         || EXTERNAL_TABLE == table_type;
+}
+
 int ObSchemaUtils::get_tenant_int_variable(uint64_t tenant_id,
                                            ObSysVarClassType var_id,
                                            int64_t &v)
@@ -844,7 +853,8 @@ const char* DDLType[]
   "TRUNCATE_TABLE",
   "SET_COMMENT",
   "CREATE_INDEX",
-  "CREATE_VIEW"
+  "CREATE_VIEW",
+  "DROP_TABLE"
 };
 
 int ObParallelDDLControlMode::string_to_ddl_type(const ObString &ddl_string, ObParallelDDLType &ddl_type)

@@ -1037,6 +1037,11 @@ public:
                         const ObIArray<uint64_t> &role_ids,
                         ObIArray<ObUserInfo> &users_to_update,
                         ObMySQLTransaction &trans);
+  int cleanup_autoinc_cache(const share::schema::ObTableSchema &table_schema);
+  int sync_version_for_cascade_table(
+      const uint64_t tenant_id,
+      const common::ObIArray<uint64_t> &table_ids,
+      common::ObMySQLTransaction &trans);
 private:
   virtual int set_need_flush_ora(
       share::schema::ObSchemaGetterGuard &schema_guard,
@@ -1083,14 +1088,6 @@ private:
   int check_tenant_exist(share::schema::ObSchemaGetterGuard &schema_guard,
                          const common::ObString &tenant_name,
                          bool &is_exist);
-
-  int sync_version_for_cascade_table(
-      const uint64_t tenant_id,
-      const common::ObIArray<uint64_t> &table_ids,
-      common::ObMySQLTransaction &trans);
-
-  int cleanup_autoinc_cache(const share::schema::ObTableSchema &table_schema);
-
   int fill_trigger_id(share::schema::ObSchemaService &schema_service,
                       share::schema::ObTriggerInfo &new_trigger_info);
   bool is_aux_object(const share::schema::ObDatabaseSchema &schema);

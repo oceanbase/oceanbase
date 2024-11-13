@@ -506,6 +506,25 @@ int ObLatestSchemaGuard::get_default_audit_schemas(
   return ret;
 }
 
+int ObLatestSchemaGuard::get_audit_schemas_in_owner(
+    const oceanbase::share::schema::ObSAuditType audit_type,
+    const uint64_t object_id,
+    common::ObIArray<ObSAuditSchema> &audit_schemas)
+{
+  int ret = OB_SUCCESS;
+  audit_schemas.reset();
+  ObSchemaService *schema_service_impl = NULL;
+  ObMySQLProxy *sql_proxy = NULL;
+  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_proxy))) {
+    LOG_WARN("fail to check and get service", KR(ret));
+  } else if (OB_FAIL(schema_service_impl->get_audits_in_owner(
+             *sql_proxy, tenant_id_, audit_type, object_id,
+             audit_schemas))) {
+    LOG_WARN("fail to get audits in owner", KR(ret), K_(tenant_id), K(audit_type), K(object_id));
+  }
+  return ret;
+}
+
 int ObLatestSchemaGuard::check_oracle_object_exist(
     const uint64_t database_id,
     const uint64_t session_id,
@@ -924,6 +943,24 @@ int ObLatestSchemaGuard::get_obj_privs(const uint64_t obj_id,
   GET_RLS_SCHEMA(rls_context, ObRlsContextSchema);
 #undef GET_RLS_SCHEMA
 #endif
+
+int ObLatestSchemaGuard::get_sequence_schema(const uint64_t sequence_id,
+                                             const ObSequenceSchema *&sequence_schema)
+{
+  int ret = OB_SUCCESS;
+  sequence_schema = NULL;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_ID == sequence_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("sequence_id is invalid", KR(ret), K_(tenant_id), K(sequence_id));
+  } else if (OB_FAIL(get_schema_(SEQUENCE_SCHEMA, tenant_id_, sequence_id, sequence_schema))) {
+    LOG_WARN("fail to get sequence", KR(ret), K_(tenant_id), K(sequence_id));
+  } else if (OB_ISNULL(sequence_schema)) {
+    LOG_INFO("sequence not exist", KR(ret), K_(tenant_id));
+  }
+  return ret;
+}
 
 int ObLatestSchemaGuard::get_trigger_info(const uint64_t trigger_id,
                                           const ObTriggerInfo *&trigger_info)

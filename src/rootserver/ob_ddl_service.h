@@ -2115,7 +2115,11 @@ public:
   int construct_zone_region_list(
       common::ObIArray<share::schema::ObZoneRegion> &zone_region_list,
       const common::ObIArray<common::ObZone> &zone_list);
-
+  int construct_drop_sql(const obrpc::ObTableItem &table_item,
+                         const share::schema::ObTableType table_type,
+                         const bool is_oracle_mode,
+                         const bool is_cascade_constraints,
+                         common::ObSqlString &sql);
   int handle_security_audit(const obrpc::ObSecurityAuditArg &arg);
 
   static int check_and_get_object_name(share::schema::ObSchemaGetterGuard &schema_guard,
@@ -2490,11 +2494,6 @@ private:
                                        const uint64_t define_user_id);
   int check_enable_sys_table_ddl(const share::schema::ObTableSchema &table_schema,
                                  const share::schema::ObSchemaOperationType operation_type);
-  int construct_drop_sql(const obrpc::ObTableItem &table_item,
-                         const share::schema::ObTableType table_type,
-                         common::ObSqlString &sql,
-                         bool is_oracle_mode,
-                         bool is_cascade_constrains);
   int log_drop_warn_or_err_msg(const obrpc::ObTableItem table_item,
                                bool if_exists,
                                common::ObSqlString &err_table_list);

@@ -239,6 +239,18 @@ public:
       common::ObIArray<ObSAuditSchema> &audit_schemas);
 
   // 1. won't cache
+  // 2. return audits which is [audit_type] and owner is [object_id].
+  // @param[in]:
+  // - audit_type
+  // - object_id: owner id
+  // @param[out]:
+  // - audit_schemas
+  int get_audit_schemas_in_owner(
+      const oceanbase::share::schema::ObSAuditType audit_type,
+      const uint64_t object_id,
+      common::ObIArray<ObSAuditSchema> &audit_schemas);
+
+  // 1. won't cache
   //
   // https://docs.oracle.com/cd/E18283_01/server.112/e17118/sql_elements008.htm
   // Within a namespace, no two objects can have the same name.
@@ -400,6 +412,13 @@ public:
   // - trigger_schema: return NULL if trigger not exist
   int get_trigger_info(const uint64_t trigger_id,
                        const ObTriggerInfo *&trigger_info);
+  // 1. will cache sequence schema in guard
+  // @param[in]:
+  // - sequence_id
+  // @param[out]:
+  // - sequence_schema: return NULL if sequence not exist
+  int get_sequence_schema(const uint64_t sequence_id,
+                          const ObSequenceSchema *&sequence_schema);
 
   /* -------------- interfaces with cache end ---------------*/
 private:

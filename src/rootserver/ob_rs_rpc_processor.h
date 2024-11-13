@@ -33,7 +33,8 @@ bool is_parallel_ddl(const obrpc::ObRpcPacketCode pcode)
          || obrpc::OB_PARALLEL_CREATE_TABLE == pcode
          || obrpc::OB_PARALLEL_SET_COMMENT == pcode
          || obrpc::OB_PARALLEL_CREATE_INDEX == pcode
-         || obrpc::OB_PARALLEL_UPDATE_INDEX_STATUS == pcode;
+         || obrpc::OB_PARALLEL_UPDATE_INDEX_STATUS == pcode
+         || obrpc::OB_PARALLEL_DROP_TABLE == pcode;
 }
 
 // precondition: enable_ddl = false
@@ -202,6 +203,7 @@ protected:
           int64_t start_ts = ObTimeUtility::current_time();
           bool with_ddl_lock = false;
           if (is_ddl_like_) {
+            RS_LOG(INFO, "[DDL] try to get ddl lock");
             if (is_parallel_ddl(pcode)) {
               if (OB_FAIL(root_service_.get_ddl_service().ddl_rlock())) {
                 RS_LOG(WARN, "root service ddl lock fail", K(ret), K(ddl_arg_));
@@ -213,6 +215,7 @@ protected:
             }
             if (OB_SUCC(ret)) {
               with_ddl_lock = true;
+              RS_LOG(INFO, "[DDL] get ddl lock", "cost", ObTimeUtility::current_time() - start_ts);
             }
           }
           if (OB_FAIL(ret)) {
@@ -353,6 +356,7 @@ DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_PARALLEL_CREATE_TABLE, ObRpcParallelCreate
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_PARALLEL_SET_COMMENT, ObRpcSetCommentP, set_comment(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_ALTER_TABLE, ObRpcAlterTableP, alter_table(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_TABLE, ObRpcDropTableP, drop_table(arg_, result_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_PARALLEL_DROP_TABLE, ObRpcParallelDropTableP, parallel_drop_table(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_RENAME_TABLE, ObRpcRenameTableP, rename_table(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_TRUNCATE_TABLE, ObRpcTruncateTableP, truncate_table(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_TRUNCATE_TABLE_V2, ObRpcTruncateTableV2P, truncate_table_v2(arg_, result_));

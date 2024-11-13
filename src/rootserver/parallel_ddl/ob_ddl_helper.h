@@ -100,7 +100,7 @@ protected:
   virtual int operation_before_commit_() = 0;
   int end_ddl_trans_(const int return_ret);
   virtual int clean_on_fail_commit_() = 0;
-  virtual int construct_and_adjust_result_(int &returen_ret) = 0;
+  virtual int construct_and_adjust_result_(int &return_ret) = 0;
   /*--------------*/
 protected:
   // lock database name
