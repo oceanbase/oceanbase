@@ -1023,6 +1023,9 @@ int ObMockIteratorBuilder::static_init()
                  ObMockIteratorBuilder::parse_bigint)
              || OB_SUCCESS != str_to_obj_parse_func_.set_refactored(
                  ObString::make_string("row_cnt"),
+                 ObMockIteratorBuilder::parse_bigint)
+             || OB_SUCCESS != str_to_obj_parse_func_.set_refactored(
+                 ObString::make_string("filled_tx_scn"),
                  ObMockIteratorBuilder::parse_bigint)) {
     ret = OB_INIT_FAIL;
     STORAGE_LOG(WARN, "obj parse func hashtable insert failed");
@@ -1041,7 +1044,9 @@ int ObMockIteratorBuilder::static_init()
               || OB_SUCCESS != str_to_obj_type_.set_refactored(
                   ObString::make_string("upper_ver"), &BIGINT_TYPE)
               || OB_SUCCESS != str_to_obj_type_.set_refactored(
-                  ObString::make_string("row_cnt"), &BIGINT_TYPE)) {
+                  ObString::make_string("row_cnt"), &BIGINT_TYPE)
+              || OB_SUCCESS != str_to_obj_type_.set_refactored(
+                  ObString::make_string("filled_tx_scn"), &BIGINT_TYPE)) {
     ret = OB_INIT_FAIL;
     STORAGE_LOG(WARN, "obj type hashtable insert failed");
   } else {

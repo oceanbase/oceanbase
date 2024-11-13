@@ -1227,7 +1227,7 @@ int ObTabletMergeCtx::inner_init_for_backfill(
   ObGetMergeTablesResult get_merge_table_result;
   get_merge_table_param.merge_type_ = param_.merge_type_;
   get_merge_table_param.merge_version_ = param_.merge_version_;
-  is_backfill_ = true;
+  is_backfill_ = is_mini_merge(param_.merge_type_) ? false : true;
   SCN max_end_scn;
 
   if (!backfill_scn.is_valid() || !ls_id.is_valid() || !tablet_handle.is_valid() || !backfill_table.is_valid()) {
@@ -1300,12 +1300,13 @@ int ObTabletMergeCtx::inner_prepare_backfill_merge_result_(
     // all tx of the previous version has been committed.
     get_merge_table_result.scn_range_ = backfill_table_handle.get_table()->get_key().scn_range_;
     get_merge_table_result.merge_version_ = ObVersionRange::MIN_VERSION;
-    get_merge_table_result.is_backfill_ = true;
+    get_merge_table_result.is_backfill_ = is_backfill_;
     get_merge_table_result.backfill_scn_ = backfill_scn;
     get_merge_table_result.schedule_major_ = false;
     get_merge_table_result.update_tablet_directly_ = false; //only for mini, local sstable version range already contains mini will update tablet directly
     get_merge_table_result.create_snapshot_version_ = 0; //only for medium or meta merge, mini or minor set the value of 0
     get_merge_table_result.read_base_version_ = 0; //only for medium merge, mini or minor set the value of 0
+    get_merge_table_result.merge_scn_ = backfill_table_handle.get_table()->get_key().get_end_scn();
   }
   return ret;
 }
