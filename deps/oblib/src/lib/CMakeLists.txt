@@ -422,8 +422,15 @@ target_link_directories(
   ${DEP_DIR}/lib ${DEP_DIR}/lib/vsag_lib
   ${CMAKE_BINARY_DIR}/deps/oblib/src/lib/vector/vsag_lib 
   ${CMAKE_BINARY_DIR}/deps/oblib/src/lib//vector/vsag_lib/src
+  ${CMAKE_BINARY_DIR}/_deps/fmt-build
 )
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp")
+set(FMT_STATIC "")
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+  set(FMT_STATIC "libfmtd.a")
+else (CMAKE_BUILD_TYPE STREQUAL "Release")
+  set(FMT_STATIC "libfmt.a")
+endif ()
 
 if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
 if (NOT OB_BUILD_VSAG_RPM)
@@ -439,6 +446,7 @@ if (NOT OB_BUILD_VSAG_RPM)
     libquadmath_static.a
     libgomp_static.a
     libroaring.a
+    ${FMT_STATIC}
   )
 else()
   target_link_libraries(oblib_lib
@@ -453,6 +461,7 @@ else()
     libquadmath_static.a
     libgomp_static.a
     libroaring.a
+    ${FMT_STATIC}
   )
 endif()
 elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
