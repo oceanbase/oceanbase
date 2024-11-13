@@ -5304,91 +5304,6 @@ int ObSPIService::spi_sub_nestedtable(ObPLExecCtx *ctx, int64_t src_idx, int64_t
   return ret;
 }
 
-int ObSPIService::spi_init_collection(ObPLExecCtx *ctx, ObPLCollection *src, ObPLCollection *dest, int64_t row_size, uint64_t package_id)
-{
-  int ret = OB_SUCCESS;
-#ifndef OB_BUILD_ORACLE_PL
-  UNUSEDx(ctx, src, dest, row_size, package_id);
-#else
-  if (OB_ISNULL(ctx)
-      || OB_ISNULL(ctx->exec_ctx_)
-      || OB_ISNULL(ctx->exec_ctx_->get_my_session())
-      || OB_ISNULL(src)
-      || OB_ISNULL(dest)
-      || row_size <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Argument passed in is NULL", K(ctx), K(src), K(dest), K(row_size), K(ret));
-  } else if (!src->is_inited()) { // 如果源collection未初始化, 将目标也设置为未初始化
-    dest->set_count(OB_INVALID_COUNT);
-    dest->set_first(OB_INVALID_INDEX);
-    dest->set_last(OB_INVALID_INDEX);
-    dest->set_data(NULL, 0);
-  } else {
-    ObIAllocator *allocator = NULL;
-    if (package_id != OB_INVALID_ID) {
-      OZ (spi_get_package_allocator(ctx, package_id, allocator));
-    } else {
-      allocator = ctx->allocator_;
-    }
-    CK (OB_NOT_NULL(allocator));
-    OZ (spi_set_collection(ctx->exec_ctx_->get_my_session()->get_effective_tenant_id(),
-                             ctx, *allocator, *dest, src->get_count()), src->get_count());
-    CK (OB_NOT_NULL(dest->get_allocator()));
-    if (OB_SUCC(ret)) {
-      switch (src->get_type()) {
-      case PL_NESTED_TABLE_TYPE: {
-        // do nothing
-      }
-      break;
-      case PL_ASSOCIATIVE_ARRAY_TYPE: {
-        ObObj *key = NULL;
-        int64_t *sort = NULL;
-        ObPLAssocArray *src_aa = static_cast<ObPLAssocArray*>(src);
-        ObPLAssocArray *dest_aa = static_cast<ObPLAssocArray*>(dest);
-        CK (OB_NOT_NULL(src_aa));
-        CK (OB_NOT_NULL(dest_aa));
-        if (OB_SUCC(ret) && src->get_count() > 0) {
-          if (NULL != src_aa->get_sort() && NULL != src_aa->get_key()) {
-            key = static_cast<ObObj*>(dest->get_allocator()->alloc(src->get_count() * sizeof(ObObj)));
-            sort = static_cast<int64_t*>(dest->get_allocator()->alloc(src->get_count() * sizeof(int64_t)));
-            CK (OB_NOT_NULL(key));
-            CK (OB_NOT_NULL(sort));
-            for (int64_t i = 0; OB_SUCC(ret) && i < src->get_count(); ++i) {
-              OZ (deep_copy_obj(*dest->get_allocator(), *src_aa->get_key(i), key[i]));
-              OX (sort[i] = src_aa->get_sort(i));
-            }
-          } else if (NULL == src_aa->get_sort() && NULL == src_aa->get_key()) {
-            //Associative array的优化
-          } else {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("Unexpected associative array", K(*src), K(*dest), K(row_size), K(package_id), K(ret));
-          }
-        }
-        OX (dest_aa->set_key(key));
-        OX (dest_aa->set_sort(sort));
-      }
-      break;
-      case PL_VARRAY_TYPE: {
-        ObPLVArray *src_va = static_cast<ObPLVArray*>(src);
-        ObPLVArray *dest_va = static_cast<ObPLVArray*>(dest);
-        CK (OB_NOT_NULL(src_va));
-        CK (OB_NOT_NULL(dest_va));
-        OX (dest_va->set_capacity(src_va->get_capacity()));
-      }
-      break;
-      default: {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("src is not a collection", K(ctx), K(*src), K(*dest), K(row_size), K(package_id), K(ret));
-      }
-      break;
-      }
-    }
-  }
-  SET_SPI_STATUS;
-#endif
-  return ret;
-}
-
 int ObSPIService::spi_new_coll_element(uint64_t collection_id,
                                        ObIAllocator *allocator,
                                        const pl::ObPLINS *ns,
@@ -5545,12 +5460,14 @@ int ObSPIService::spi_set_collection(int64_t tenant_id,
             OZ (spi_new_coll_element(coll.get_id(), coll.get_allocator(), ns, row));
           }
         }
-        if (OB_FAIL(ret) && OB_NOT_NULL(data) && data != coll.get_data()) {
+        if (OB_FAIL(ret) && OB_NOT_NULL(data)) {
           for (int j = 0; j < i; ++j) {
             ObObj* row = &(reinterpret_cast<ObObj*>(data)[(coll.get_count() + j)]);
             ObUserDefinedType::destruct_objparam(*coll.get_allocator(), *row, nullptr);
           }
-          coll.get_allocator()->free(data);
+          if (data != coll.get_data()) {
+            coll.get_allocator()->free(data);
+          }
         }
         if (OB_SUCC(ret) && data != coll.get_data()) {
           OX (OB_NOT_NULL(coll.get_data()) ? MEMCPY(data, coll.get_data(), sizeof(ObObj) * coll.get_count()) : (void*)(NULL));
@@ -5758,6 +5675,7 @@ int ObSPIService::spi_extend_assoc_array(int64_t tenant_id,
         }
       }
       assoc_array.set_count(assoc_array.get_count() - n);
+      assoc_array.set_data(assoc_array.get_data(), old_capacity);
     }
 
     // NOTE: init extend key avoid to deep copy core!!!

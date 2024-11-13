@@ -18022,49 +18022,51 @@ int ObPLResolveCtx::get_user_type(uint64_t type_id, const ObUserDefinedType *&us
     }
   }
 
-  const ObUDTTypeInfo *udt_info = NULL;
-  uint64_t tenant_id = OB_INVALID_ID;
   if (OB_NOT_NULL(user_type)) {
     // do nothing ...
-  } else if (common::is_dblink_type_id(type_id)) {
-    if (OB_FAIL(package_guard_.dblink_guard_.get_dblink_type_by_id(
-                    extract_package_id(type_id), type_id, user_type))) {
-      LOG_WARN("get dblink type failed", K(ret), K(type_id));
-    }
-  } else if (FALSE_IT(tenant_id = get_tenant_id_by_object_id(type_id))) {
-  } else if (OB_FAIL(schema_guard_.get_udt_info(tenant_id, type_id, udt_info))) {
-    LOG_WARN("get udt info failed", K(ret), K(type_id));
-  } else if (OB_NOT_NULL(udt_info)) {
-    OZ (udt_info->transform_to_pl_type(*alloc, user_type), type_id);
   } else {
-    ret = OB_SUCCESS;
-    const ObTableSchema* table_schema = NULL;
-    const uint64_t tenant_id = session_info_.get_effective_tenant_id();
-    OZ (schema_guard_.get_table_schema(tenant_id, type_id, table_schema), type_id);
-    if (OB_NOT_NULL(table_schema)) {
-      ObRecordType* record_type = NULL;
-      OZ (ObPLResolver::build_record_type_by_schema(*this, table_schema, record_type), type_id);
-      CK (OB_NOT_NULL(record_type));
-      OX (user_type = record_type);
-    } else if (type_id != OB_INVALID_ID
-              && extract_package_id(type_id) != OB_INVALID_ID) {
+    const ObUDTTypeInfo *udt_info = NULL;
+    uint64_t tenant_id = OB_INVALID_ID;
+    if (common::is_dblink_type_id(type_id)) {
+      if (OB_FAIL(package_guard_.dblink_guard_.get_dblink_type_by_id(
+                      extract_package_id(type_id), type_id, user_type))) {
+        LOG_WARN("get dblink type failed", K(ret), K(type_id));
+      }
+    } else if (FALSE_IT(tenant_id = get_tenant_id_by_object_id(type_id))) {
+    } else if (OB_FAIL(schema_guard_.get_udt_info(tenant_id, type_id, udt_info))) {
+      LOG_WARN("get udt info failed", K(ret), K(type_id));
+    } else if (OB_NOT_NULL(udt_info)) {
+      OZ (udt_info->transform_to_pl_type(*alloc, user_type), type_id);
+    } else {
       ret = OB_SUCCESS;
-      const ObUserDefinedType *package_user_type = NULL;
-      if (!common::is_dblink_type_id(type_id)) {
-        ObPLPackageManager &package_manager = session_info_.get_pl_engine()->get_package_manager();
-        ObPLDataType *copy_pl_type = NULL;
-        OZ (package_manager.get_package_type(*this, extract_package_id(type_id), type_id, package_user_type), K(type_id));
-        CK (OB_NOT_NULL(user_type = static_cast<const ObUserDefinedType *>(package_user_type)));
-      } else {
-        OZ (package_guard_.dblink_guard_.get_dblink_type_by_id(extract_package_id(type_id), type_id,
-            package_user_type), type_id);
-        CK (OB_NOT_NULL(user_type = static_cast<const ObUserDefinedType *>(package_user_type)));
+      const ObTableSchema* table_schema = NULL;
+      const uint64_t tenant_id = session_info_.get_effective_tenant_id();
+      OZ (schema_guard_.get_table_schema(tenant_id, type_id, table_schema), type_id);
+      if (OB_NOT_NULL(table_schema)) {
+        ObRecordType* record_type = NULL;
+        OZ (ObPLResolver::build_record_type_by_schema(*this, table_schema, record_type), type_id);
+        CK (OB_NOT_NULL(record_type));
+        OX (user_type = record_type);
+      } else if (type_id != OB_INVALID_ID
+                && extract_package_id(type_id) != OB_INVALID_ID) {
+        ret = OB_SUCCESS;
+        const ObUserDefinedType *package_user_type = NULL;
+        if (!common::is_dblink_type_id(type_id)) {
+          ObPLPackageManager &package_manager = session_info_.get_pl_engine()->get_package_manager();
+          ObPLDataType *copy_pl_type = NULL;
+          OZ (package_manager.get_package_type(*this, extract_package_id(type_id), type_id, package_user_type), K(type_id));
+          CK (OB_NOT_NULL(user_type = static_cast<const ObUserDefinedType *>(package_user_type)));
+        } else {
+          OZ (package_guard_.dblink_guard_.get_dblink_type_by_id(extract_package_id(type_id), type_id,
+              package_user_type), type_id);
+          CK (OB_NOT_NULL(user_type = static_cast<const ObUserDefinedType *>(package_user_type)));
+        }
       }
     }
-  }
 
-  if (OB_SUCC(ret) && alloc == &allocator_) {
-    OZ (const_cast<ObPLResolveCtx *>(this)->type_buffer_.push_back(user_type));
+    if (OB_SUCC(ret) && alloc == &allocator_) {
+      OZ (const_cast<ObPLResolveCtx *>(this)->type_buffer_.push_back(user_type));
+    }
   }
 
   return ret;
