@@ -368,19 +368,19 @@ void RowHolderMapper::periodic_tasks() {
   databuff_printf(buffer, BUFFER_SIZE, pos, "dump RowHolderMapper nodes info\n");
   print_cache_statics_to_buffer(HashHolderFactory::CacheTypeRouter<RowHolderNode>::get_cache(factory_), buffer, pos, BUFFER_SIZE);
   buffer[BUFFER_SIZE - 1] = '\0';
-  OB_PRINT("[DETECT.CACHE.NODE]", OB_LOG_LEVEL_DIRECT_NO_ERRCODE(INFO), OB_SUCCESS, buffer, "");
+  OB_MOD_LOG_RET("[DETECT.CACHE.NODE]", INFO, OB_SUCCESS, buffer);
 
   pos = 0;
   databuff_printf(buffer, BUFFER_SIZE, pos, "dump RowHolderMapper lists info\n");
   print_cache_statics_to_buffer(HashHolderFactory::CacheTypeRouter<RowHolderList>::get_cache(factory_), buffer, pos, BUFFER_SIZE);
   buffer[BUFFER_SIZE - 1] = '\0';
-  OB_PRINT("[DETECT.CACHE.LIST]", OB_LOG_LEVEL_DIRECT_NO_ERRCODE(INFO), OB_SUCCESS, buffer, "");
+  OB_MOD_LOG_RET("[DETECT.CACHE.LIST]", INFO, OB_SUCCESS, buffer);
 
   pos = 0;
   databuff_printf(buffer, BUFFER_SIZE, pos, "dump RowHolderMapper nodes info:");
   print_summary_info_to_buffer_(buffer, pos, BUFFER_SIZE);
   buffer[BUFFER_SIZE - 1] = '\0';
-  OB_PRINT("[DETECT.CACHE.SUMMARY]", OB_LOG_LEVEL_DIRECT_NO_ERRCODE(INFO), OB_SUCCESS, buffer, "");
+  OB_MOD_LOG_RET("[DETECT.CACHE.SUMMARY]", INFO, OB_SUCCESS, buffer);
 #endif
 }
 
