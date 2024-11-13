@@ -168,6 +168,9 @@ private:
       const schema::ObColumnSchemaV2 &column,
       const schema::ColumnReferenceSet &index_column_ids,
       bool &is_match);
+  static int check_fulltext_index_allowed(
+      const ObTableSchema &data_schema,
+      const obrpc::ObCreateIndexArg *index_arg);
 };
 
 class ObMulValueIndexBuilderUtil

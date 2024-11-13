@@ -316,6 +316,8 @@ int ObFtsIndexBuilderUtil::adjust_fts_args(
   } else if (FALSE_IT(is_doc_word = share::schema::is_fts_doc_word_aux(index_type))) {
   } else if ((is_fts_index || is_doc_word) && OB_FAIL(check_ft_cols(&index_arg, data_schema))) {
     LOG_WARN("ft cols check failed", K(ret));
+  } else if (OB_FAIL(check_fulltext_index_allowed(data_schema, &index_arg))) {
+    LOG_WARN("fail to check fulltext index allowed", K(ret));
   } else if (OB_FAIL(get_doc_id_col(data_schema, existing_doc_id_col))) {
     LOG_WARN("failed to get doc id col", K(ret));
   } else if ((is_fts_index || is_doc_word)
@@ -1797,6 +1799,34 @@ int ObFtsIndexBuilderUtil::check_index_match(
       }
     }
     is_match = !mismatch;
+  }
+  return ret;
+}
+
+int ObFtsIndexBuilderUtil::check_fulltext_index_allowed(
+    const ObTableSchema &data_schema,
+    const obrpc::ObCreateIndexArg *index_arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(index_arg) || !share::schema::is_fts_index(index_arg->index_type_) || !data_schema.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KPC(index_arg), K(data_schema));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_arg->index_columns_.count(); ++i) {
+      const ObString &column_name = index_arg->index_columns_.at(i).column_name_;
+      const ObColumnSchemaV2 *col_schema = nullptr;
+      if (column_name.empty()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column name is empty", K(ret), K(column_name));
+      } else if (OB_ISNULL(col_schema = data_schema.get_column_schema(column_name))) {
+        ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
+        LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(),
+            column_name.ptr());
+      } else if (OB_UNLIKELY(col_schema->is_virtual_generated_column())) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Fulltext index on virtual generated column is");
+      }
+    }
   }
   return ret;
 }
