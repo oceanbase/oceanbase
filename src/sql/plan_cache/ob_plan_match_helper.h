@@ -23,7 +23,6 @@ class ObPhysicalPlan;
 class ObPlanCacheCtx;
 class ObTableLocation;
 class ObPhyTableLocation;
-class ObPhyTableLocationInfo;
 class ObSqlPlanSet;
 
 class ObPlanMatchHelper
@@ -60,21 +59,6 @@ private:
       const TableLocationKey key,
       const ObIArray<ObTableLocation> &table_locations,
       const ObTableLocation *&ret_loc_ptr) const;
-  /**
-   * @brief In the case of replicated tables, this is the only replica position adjustment
-   * that occurs before matching begins. Otherwise, there is the possibility of repeated
-   * adjustment of cmp_table_types and check_inner_constraints later. This can cause a piece
-   * of information to become mismatched.
-   *
-   * All partitions prefer native. subsequent queries will benefit from
-   * this even if the plan misses as a result
-   *
-   */
-  int reselect_duplicate_table_best_replica(
-      const ObIArray<LocationConstraint> &loc_cons,
-      const common::ObAddr &server,
-      const common::ObIArray<ObCandiTableLoc> &phy_tbl_infos,
-      const ObIArray<ObDupTabConstraint> &dup_table_replica_cons) const;
   /**
    * @brief Compare table location types
    *

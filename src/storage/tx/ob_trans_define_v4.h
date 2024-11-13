@@ -209,6 +209,33 @@ struct ObTxParam
   OB_UNIS_VERSION(1);
 };
 
+union ObTxPartFlag
+{
+  int64_t flag_val_;
+  struct FlagBit
+  {
+    unsigned int is_dup_ls_ : 1;
+
+    FlagBit() { reset(); }
+
+    void reset() { is_dup_ls_ = 0; }
+
+    TO_STRING_KV(K(is_dup_ls_));
+
+  } flag_bit_;
+
+  ObTxPartFlag() { reset(); }
+
+  void reset()
+  {
+    flag_val_ = 0;
+    flag_bit_.reset();
+  }
+
+  bool is_dup_ls() const { return flag_bit_.is_dup_ls_ == 1; }
+  void set_dup_ls() { flag_bit_.is_dup_ls_ = 1; }
+};
+
 struct ObTxPart
 {
   static const int64_t EPOCH_UNKNOWN = -1;
@@ -221,12 +248,14 @@ struct ObTxPart
   ObTxSEQ first_scn_;      // used to judge a ctx is clean in scheduler view
   ObTxSEQ last_scn_;       // used to get rollback savepoint set
   int64_t last_touch_ts_; // used to judge a ctx retouched after a time point
+  ObTxPartFlag flag_;     // used to describe some special attributes of a participant
   bool operator==(const ObTxPart &rhs) const { return id_ == rhs.id_ && addr_ == rhs.addr_; }
   bool operator!=(const ObTxPart &rhs) const { return !operator==(rhs); }
   bool is_clean() const { return !first_scn_.is_valid() || (first_scn_ > last_scn_); }
   bool is_without_ctx() const { return is_without_ctx(epoch_); }
+  bool is_dup_ls() const { return flag_.is_dup_ls(); }
   static bool is_without_ctx(int64_t epoch) { return EPOCH_DEAD == epoch; }
-  TO_STRING_KV(K_(id), K_(addr), K_(epoch), K_(first_scn), K_(last_scn), K_(last_touch_ts));
+  TO_STRING_KV(K_(id), K_(addr), K_(epoch), K_(first_scn), K_(last_scn), K_(last_touch_ts), K(flag_.flag_bit_));
   OB_UNIS_VERSION(1);
 };
 
@@ -847,6 +876,7 @@ public:
   int64_t get_expire_ts() const;
   int64_t get_tx_lock_timeout() const { return lock_timeout_us_; }
   bool is_in_tx() const { return state_ > State::IDLE; }
+  bool is_dup_ls_modified() const;
   bool is_tx_active() const { return state_ >= State::ACTIVE && state_ < State::IN_TERMINATE; }
   void print_trace();
   void dump_and_print_trace();
