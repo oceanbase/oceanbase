@@ -82,7 +82,7 @@ protected:
   static int parse_text_strategy(common::ObString &str, common::ObGeoBufferStrategy &strategy);
   static int init_buffer_strategy(const ObExpr &expr,
                                   ObEvalCtx &ctx,
-                                  ObIAllocator &allocator,
+                                  MultimodeAlloctor &allocator,
                                   common::ObGeoBufferStrategy &buf_strat,
                                   double distance);
   static int init_buffer_strategy(const common::ObObj *params,
@@ -90,7 +90,7 @@ protected:
                                   common::ObExprCtx &expr_ctx,
                                   common::ObGeoBufferStrategy &buf_strat,
                                   double distance);
-  static int fill_proj4_params(common::ObIAllocator &allocator,
+  static int fill_proj4_params(lib::MemoryContext &mem_ctx,
                                omt::ObSrsCacheGuard &srs_guard,
                                uint32 srid,
                                common::ObGeometry *geo,

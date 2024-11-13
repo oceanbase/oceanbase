@@ -15,6 +15,7 @@
 #define OCEANBASE_SQL_OB_EXPR_ST_DWITHIN
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "lib/geo/ob_geo_utils.h"
+#include "sql/engine/expr/ob_geo_expr_utils.h"
 
 
 namespace oceanbase
@@ -34,7 +35,7 @@ public:
                                 common::ObExprTypeCtx &type_ctx)const;
   template<typename ResType>
   static int eval_st_dwithin_common(ObEvalCtx &ctx,
-                                    ObArenaAllocator &temp_allocator,
+                                    MultimodeAlloctor &temp_allocator,
                                     ObString wkb1,
                                     ObString wkb2,
                                     double distance_tolerance,

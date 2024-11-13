@@ -245,7 +245,7 @@ static int push_back_innerpoint(const ObWkbGeomInnerPoint &innerpoint, const ObG
   ObCartesianGeometrycollection &res)
 {
   INIT_SUCC(ret);
-  ObCartesianPoint *point = OB_NEWx(ObCartesianPoint, context.get_allocator());
+  ObCartesianPoint *point = OB_NEWx(ObCartesianPoint, context.get_allocator(), res.get_srid());
   if (OB_ISNULL(point)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to create cartesian point", K(ret));
@@ -263,7 +263,7 @@ static int push_back_innerpoint(const ObWkbGeogInnerPoint &innerpoint, const ObG
   ObGeographGeometrycollection &res)
 {
   INIT_SUCC(ret);
-  ObGeographPoint *point = OB_NEWx(ObGeographPoint, context.get_allocator());
+  ObGeographPoint *point = OB_NEWx(ObGeographPoint, context.get_allocator(), res.get_srid());
   if (OB_ISNULL(point)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to create geograph point", K(ret));
@@ -494,7 +494,7 @@ public:
           LOG_WARN("fail to push back geometry", K(ret));
         } else if (OB_FAIL(ObGeoFuncUtils::ob_geo_gc_split(*allocator, *geo_coll, mpt, mls, mpy))) {
           LOG_WARN("failed to do gc split", K(ret));
-        } else if (OB_FAIL(ObGeoFuncUtils::ob_geo_gc_union(*allocator, *context.get_srs(), mpt, mls, mpy))) {
+        } else if (OB_FAIL(ObGeoFuncUtils::ob_geo_gc_union(context.get_mem_ctx(), *context.get_srs(), mpt, mls, mpy))) {
           LOG_WARN("failed to do gc union", K(ret));
         } else {
           for (int i = 0; OB_SUCC(ret) && i < mpy->size(); ++i) {
@@ -515,8 +515,7 @@ public:
                 allocator,
                 pt.template get<0>(),
                 pt.template get<1>(),
-                srid,
-                allocator);
+                srid);
             if (OB_ISNULL(pt_tree)) {
               ret = OB_ALLOCATE_MEMORY_FAILED;
               LOG_WARN("fail to allocate memory", K(ret));

@@ -47,6 +47,8 @@ static const uint32_t WKB_POINT_DATA_SIZE = WKB_GEO_DOUBLE_STORED_SIZE + WKB_GEO
 static const uint32_t WKB_DATA_OFFSET = WKB_OFFSET + WKB_GEO_BO_SIZE;
 // skip [srid][bo][type] only used for inner points
 static const uint32_t WKB_INNER_POINT = WKB_DATA_OFFSET + WKB_GEO_TYPE_SIZE;
+
+static constexpr double OB_GEO_TOLERANCE = 5e-14;
 // Cartesian
 // [bo][type][X][Y]
 #pragma pack(1)
@@ -95,6 +97,8 @@ public:
   ObWkbGeomInnerPoint& operator=(const ObWkbGeomInnerPoint& p);
   ObWkbGeomInnerPoint& operator=(const ObWkbGeomInnerPoint& p) const;
   bool equals(const ObWkbGeomInnerPoint& p) const;
+  bool operator==(const ObWkbGeomInnerPoint& p) const;
+  bool operator!=(const ObWkbGeomInnerPoint& p) const;
   // TODO
   int64_t to_string(char *buffer, const int64_t length) const{
     UNUSED(buffer);
@@ -133,7 +137,7 @@ public:
   index_type iter_idx_max() const { return size(); }
   index_type iter_idx_min() const { return 0; }
   void get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
-    ObWkbIterOffsetArray* offsets, pointer& data);
+    ObWkbIterOffsetArray*& offsets, pointer& data);
   iterator begin() { return iterator(iter_idx_min(), this); }
   const_iterator begin() const { return const_iterator(iter_idx_min(), this); }
   iterator end() { return iterator(iter_idx_max(), this); }
@@ -168,7 +172,7 @@ public:
   index_type iter_idx_max(ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian) const { return size(bo); }
   index_type iter_idx_min() const { return 0; }
   void get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
-    ObWkbIterOffsetArray* offsets, pointer& data);
+    ObWkbIterOffsetArray*& offsets, pointer& data);
   // iter adapt
   iterator begin() { return iterator(iter_idx_min(), this); }
   const_iterator begin() const { return const_iterator(iter_idx_min(), this); }
@@ -220,7 +224,7 @@ public:
   uint32_t data_offset() const { return WKB_COMMON_WKB_HEADER_LEN; }
   index_type et(index_type curidx) const { return curidx; }
   void get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
-    ObWkbIterOffsetArray* offsets, pointer& data);
+    ObWkbIterOffsetArray*& offsets, pointer& data);
   size_type get_sub_size(const_pointer data) const { return data->length(static_cast<ObGeoWkbByteOrder>(bo_)); };
   iterator begin() { return iterator(iter_idx_min(), this); } // for move over exterior
   const_iterator begin() const { return const_iterator(iter_idx_min(), this); } // for move over exterior
@@ -277,7 +281,7 @@ public:
   index_type iter_idx_max() const { return size(); }
   index_type iter_idx_min() const { return 0; }
   void get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
-    ObWkbIterOffsetArray* offsets, pointer& data);
+    ObWkbIterOffsetArray*& offsets, pointer& data);
   iterator begin() { return iterator(iter_idx_min(), this); }
   const_iterator begin() const { return const_iterator(iter_idx_min(), this); }
   iterator end() { return iterator(iter_idx_max(), this); }
@@ -317,7 +321,7 @@ public:
   uint32_t data_offset() const { return WKB_COMMON_WKB_HEADER_LEN; }
   index_type et(index_type curidx) const { return curidx; }
   void get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
-    ObWkbIterOffsetArray* offsets, pointer& data);
+    ObWkbIterOffsetArray*& offsets, pointer& data);
   size_type get_sub_size(const_pointer data) const { return data->length(); };
   iterator begin() { return iterator(iter_idx_min(), this); }
   const_iterator begin() const { return const_iterator(iter_idx_min(), this); }
@@ -358,7 +362,7 @@ public:
   uint32_t data_offset() const { return WKB_COMMON_WKB_HEADER_LEN; }
   index_type et(index_type curidx) const { return curidx; }
   void get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
-    ObWkbIterOffsetArray* offsets, pointer& data);
+    ObWkbIterOffsetArray*& offsets, pointer& data);
   size_type get_sub_size(const_pointer data) const { return data->length(); };
   iterator begin() { return iterator(iter_idx_min(), this); }
   const_iterator begin() const { return const_iterator(iter_idx_min(), this); }
@@ -402,7 +406,7 @@ public:
   uint32_t data_offset() const { return WKB_COMMON_WKB_HEADER_LEN; }
   index_type et(index_type curidx) const { return curidx; }
   void get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
-      ObWkbIterOffsetArray* offsets, pointer& data);
+      ObWkbIterOffsetArray*& offsets, pointer& data);
   // sub obj interface
   size_type get_sub_size(const_pointer data) const;
   ObGeoType get_sub_type(const_pointer data) const;
@@ -464,6 +468,8 @@ public:
   template<std::size_t K>
   void set(double d, ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian);
   ObWkbGeogInnerPoint& operator=(const ObWkbGeogInnerPoint& p);
+  bool operator==(const ObWkbGeogInnerPoint& p) const;
+  bool operator!=(const ObWkbGeogInnerPoint& p) const;
   // TODO
   int64_t to_string(char *buffer, const int64_t length) const{
     UNUSED(buffer);
@@ -502,7 +508,7 @@ public:
   index_type iter_idx_max() const { return size(); }
   index_type iter_idx_min() const { return 0; }
   void get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
-      ObWkbIterOffsetArray* offsets, pointer& data);
+      ObWkbIterOffsetArray*& offsets, pointer& data);
   iterator begin() { return iterator(iter_idx_min(), this); }
   const_iterator begin() const { return const_iterator(iter_idx_min(), this); }
   iterator end() { return iterator(iter_idx_max(), this); }
@@ -537,7 +543,7 @@ public:
   index_type iter_idx_max(ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian) const { return size(bo); }
   index_type iter_idx_min() const { return 0; }
   void get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
-      ObWkbIterOffsetArray* offsets, pointer& data);
+      ObWkbIterOffsetArray*& offsets, pointer& data);
   // iter adapt
   iterator begin() { return iterator(iter_idx_min(), this); }
   const_iterator begin() const { return const_iterator(iter_idx_min(), this); }
@@ -586,7 +592,7 @@ public:
   uint32_t data_offset() const { return WKB_COMMON_WKB_HEADER_LEN; }
   index_type et(index_type curidx) const { return curidx; }
   void get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
-      ObWkbIterOffsetArray* offsets, pointer& data);
+      ObWkbIterOffsetArray*& offsets, pointer& data);
   size_type get_sub_size(const_pointer data) const { return data->length(static_cast<ObGeoWkbByteOrder>(bo_)); };
   // iter interface
   iterator begin() { return iterator(iter_idx_min(), this); }
@@ -645,7 +651,7 @@ public:
   index_type iter_idx_max() const { return size(); }
   index_type iter_idx_min() const { return 0; }
   void get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
-      ObWkbIterOffsetArray* offsets, pointer& data);
+      ObWkbIterOffsetArray*& offsets, pointer& data);
   iterator begin() { return iterator(iter_idx_min(), this); }
   const_iterator begin() const { return const_iterator(iter_idx_min(), this); }
   iterator end() { return iterator(iter_idx_max(), this); }
@@ -685,7 +691,7 @@ public:
   uint32_t data_offset() const { return WKB_COMMON_WKB_HEADER_LEN; }
   index_type et(index_type curidx) const { return curidx; }
   void get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
-      ObWkbIterOffsetArray* offsets, pointer& data);
+      ObWkbIterOffsetArray*& offsets, pointer& data);
   size_type get_sub_size(const_pointer data) const { return data->length(); };
   iterator begin() { return iterator(iter_idx_min(), this); }
   const_iterator begin() const { return const_iterator(iter_idx_min(), this); }
@@ -726,7 +732,7 @@ public:
   uint32_t data_offset() const { return WKB_COMMON_WKB_HEADER_LEN; }
   index_type et(index_type curidx) const { return curidx; }
   void get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
-      ObWkbIterOffsetArray* offsets, pointer& data);
+      ObWkbIterOffsetArray*& offsets, pointer& data);
   size_type get_sub_size(const_pointer data) const { return data->length(); };
   iterator begin() { return iterator(iter_idx_min(), this); }
   const_iterator begin() const { return const_iterator(iter_idx_min(), this); }
@@ -770,7 +776,7 @@ public:
   uint32_t data_offset() const { return WKB_COMMON_WKB_HEADER_LEN; }
   index_type et(index_type curidx) const { return curidx; }
   void get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
-      ObWkbIterOffsetArray* offsets, pointer& data);
+      ObWkbIterOffsetArray*& offsets, pointer& data);
   size_type get_sub_size(const_pointer data) const;
   ObGeoType get_sub_type(const_pointer data) const;
   // iter interface

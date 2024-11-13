@@ -19,14 +19,31 @@ namespace common {
 template<typename T_Point>
 int ObGeoZoomInVisitor::zoom_in_point(T_Point *geo)
 {
-  uint32_t count = 0;
-  while (count++ < zoom_in_value_) {
-    double longti = geo->x();
-    double lati = geo->y();
-    longti *= 10;
-    lati *= 10;
-    geo->x(longti);
-    geo->y(lati);
+  if (!is_calc_zoom_) {
+    uint32_t count = 0;
+    while (count++ < zoom_in_value_) {
+      double longti = geo->x();
+      double lati = geo->y();
+      longti *= 10;
+      lati *= 10;
+      geo->x(longti);
+      geo->y(lati);
+    }
+  } else {
+    uint32_t count = 0;
+    double nx_tmp = geo->x();
+    double ny_tmp = geo->y();
+    while (nx_tmp != 0.0 && std::fabs(nx_tmp) < ZOOM_IN_THRESHOLD) {
+      nx_tmp *= 10;
+      count++;
+    }
+    zoom_in_value_ = count > zoom_in_value_ ? count : zoom_in_value_;
+    count = 0;
+    while (ny_tmp != 0.0 && std::fabs(ny_tmp) < ZOOM_IN_THRESHOLD) {
+      ny_tmp *= 10;
+      count++;
+    }
+    zoom_in_value_ = count > zoom_in_value_ ? count : zoom_in_value_;
   }
   return OB_SUCCESS;
 }

@@ -21,7 +21,7 @@
 namespace oceanbase {
 namespace common {
 
-typedef common::ObSEArray<uint64_t, 64> ObWkbIterOffsetArray;
+typedef common::ObArray<uint64_t> ObWkbIterOffsetArray;
 
 template<typename T, typename O>
 class ObWkbConstIterator
@@ -45,7 +45,7 @@ public:
   ObWkbConstIterator(index_type idx, const owner_t* owner);
   ObWkbConstIterator(self& iter, bool do_array_assign = true);
   ObWkbConstIterator(const self& iter, bool do_array_assign = true);
-  ~ObWkbConstIterator() {}
+  ~ObWkbConstIterator();
   // compare iter interface
   bool operator==(const self& iter) const { return (idx_ == iter.idx_); }
   bool operator!=(const self& iter) const { return (idx_ != iter.idx_); }
@@ -85,12 +85,9 @@ protected:
   };
 protected:
   index_type idx_;
-  index_type idx_min_;
-  index_type idx_max_;
   owner_t* owner_;
+  // should not use pointer to save diff_info_ since iterator can not return error code
   DiffInfo diff_info_;
-  DiffInfo* diff_info_ptr_;
-  ObWkbIterOffsetArray offsets_;
   ObWkbIterOffsetArray* offsets_ptr_;
 };
 
@@ -167,7 +164,7 @@ public:
                                     typename T::const_pointer last_addr,
                                     typename T::index_type last_idx,
                                     typename T::index_type cur_idx,
-                                    ObWkbIterOffsetArray* offsets,
+                                    ObWkbIterOffsetArray*& offsets,
                                     typename T::pointer& data);
 };
 

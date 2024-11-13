@@ -135,6 +135,7 @@ enum ObNodeDataType: int8_t {
 };
 
 class ObIMulModeBase;
+class ObXmlNode;
 struct ObNodeMetaData {
   ObNodeMetaData(ObNodeMemType m_type, ObNodeDataType data_type)
     : m_type_(m_type),
@@ -371,6 +372,7 @@ public:
    * node type, json xml together enum
   */
   virtual ObMulModeNodeType type() const = 0;
+  virtual int clone(ObMulModeMemCtx *ctx, ObXmlNode *&node) { return OB_NOT_SUPPORTED; }
 
   bool is_binary() const { return meta_.m_type_ == BINARY_TYPE; }
 
@@ -601,6 +603,8 @@ public:
   *  virtual int to_time(int64_t &value) const = 0;
   *  virtual int to_bit(uint64_t &value) const = 0;
   **/
+private:
+  int get_bin_size(uint64_t &size);
 
 protected:
   ObNodeMetaData meta_;

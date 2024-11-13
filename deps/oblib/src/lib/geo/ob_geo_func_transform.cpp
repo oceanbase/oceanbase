@@ -51,7 +51,7 @@ private:
     lib::ObMallocHookAttrGuard malloc_guard(last_mem_attr);
     const PtInType *src_geo = reinterpret_cast<const PtInType *>(g->val());
     PtResType *dest_geo = NULL;
-    if (OB_ISNULL(dest_geo = OB_NEWx(PtResType, (context.get_allocator())))) {
+    if (OB_ISNULL(dest_geo = OB_NEWx(PtResType, (context.get_allocator()), g->get_srid(), context.get_allocator()))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memory", K(ret));
     } else {
@@ -77,7 +77,7 @@ private:
     if (OB_ISNULL(alloc)) {
       ret = OB_ERR_NULL_VALUE;
       LOG_WARN("unexpected null allocator for transform functor", K(ret));
-    } else if (OB_ISNULL(dest_geo = OB_NEWx(GeometryResType, alloc))) {
+    } else if (OB_ISNULL(dest_geo = OB_NEWx(GeometryResType, alloc, g->get_srid(), *alloc))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to create geo by type", K(ret));
     } else {

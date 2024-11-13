@@ -17,6 +17,7 @@
 #include "lib/geo/ob_geo_utils.h"
 #include "lib/json_type/ob_json_base.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/engine/expr/ob_geo_expr_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -64,12 +65,13 @@ int ObExprPrivSTGeometryType::eval_priv_st_geometrytype(const ObExpr &expr, ObEv
   ObExpr *arg1 = expr.args_[0];
   ObObjType type1 = arg1->datum_meta_.type_;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret, N_PRIV_ST_GEOMETRYTYPE);
   ObString res_type;
 
   if (ob_is_null(type1)) {
     is_null_res = true;
-  } else if (OB_FAIL(arg1->eval(ctx, datum1))) {
+  } else if (OB_FAIL(temp_allocator.eval_arg(arg1, ctx, datum1))) {
     LOG_WARN("fail to eval args", K(ret));
   } else if (datum1->is_null()) {
     is_null_res = true;
@@ -80,6 +82,7 @@ int ObExprPrivSTGeometryType::eval_priv_st_geometrytype(const ObExpr &expr, ObEv
     if (OB_FAIL(ObTextStringHelper::read_real_string_data(
             temp_allocator, *datum1, arg1->datum_meta_, arg1->obj_meta_.has_lob_header(), wkb))) {
       LOG_WARN("fail to read real string data", K(ret), K(arg1->obj_meta_.has_lob_header()));
+    } else if (FALSE_IT(temp_allocator.set_baseline_size(wkb.length()))) {
     } else if (OB_FAIL(ObGeoTypeUtil::get_type_from_wkb(wkb, gtype))) {
       LOG_WARN("fail to get geo type from wkb", K(ret), K(gtype));
     } else if (OB_FAIL(ObGeoTypeUtil::get_st_geo_name_by_type(gtype, res_type))) {

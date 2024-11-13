@@ -194,7 +194,7 @@ private:
   {
     int ret = OB_SUCCESS;
     ObGeometry *last_res = res;
-    ObGeoEvalCtx diff_ctx(context.get_allocator(), context.get_srs());
+    ObGeoEvalCtx diff_ctx(context.get_mem_ctx(), context.get_srs());
     if (OB_FAIL(diff_ctx.append_geo_arg(g1)) || OB_FAIL(diff_ctx.append_geo_arg(g2))) {
       LOG_WARN("failed to append geo to ctx", K(ret));
     } else if (OB_FAIL(ObGeoFunc<ObGeoFuncType::Difference>::geo_func::eval(diff_ctx, res))) {
@@ -357,7 +357,7 @@ private:
         LOG_WARN("unexpected null geometry collection split", K(ret));
       } else if (!mpy1->empty()) {
         result.is_null = true;
-      } else if (OB_FAIL(ObGeoFuncUtils::ob_geo_gc_union(*allocator, *srs, mpt1, mls1, mpy1))) {
+      } else if (OB_FAIL(ObGeoFuncUtils::ob_geo_gc_union(context.get_mem_ctx(), *srs, mpt1, mls1, mpy1))) {
         LOG_WARN("failed to do gc union", K(ret));
       } else if (OB_ISNULL(mpt1) || OB_ISNULL(mls1) || OB_ISNULL(mpy1)) {
         ret = OB_ERR_UNEXPECTED;
@@ -381,7 +381,7 @@ private:
         } else if (OB_ISNULL(mpt2) || OB_ISNULL(mls2) || OB_ISNULL(mpy2)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null geometry collection split", K(ret));
-        } else if (OB_FAIL(ObGeoFuncUtils::ob_geo_gc_union(*allocator, *srs, mpt2, mls2, mpy2))) {
+        } else if (OB_FAIL(ObGeoFuncUtils::ob_geo_gc_union(context.get_mem_ctx(), *srs, mpt2, mls2, mpy2))) {
           LOG_WARN("failed to do gc union", K(ret));
         } else if (OB_ISNULL(mpt2) || OB_ISNULL(mls2) || OB_ISNULL(mpy2)) {
           ret = OB_ERR_UNEXPECTED;
@@ -407,7 +407,7 @@ private:
   static int make_collection(const ObGeometry *g, ObIAllocator *allocator, const ObGeometry *&geo)
   {
     int ret = OB_SUCCESS;
-    GcBinType *gc_bin = OB_NEWx(GcBinType, allocator);
+    GcBinType *gc_bin = OB_NEWx(GcBinType, allocator, g->get_srid());
     ObWkbBuffer buffer(*allocator);
     if (OB_ISNULL(gc_bin)) {
       ret = OB_ERR_UNEXPECTED;

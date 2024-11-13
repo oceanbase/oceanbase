@@ -72,7 +72,9 @@ int ObExprJsonMergePreserve::eval_json_merge_preserve(const ObExpr &expr, ObEval
   INIT_SUCC(ret);
   ObDatum *json_datum = NULL;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "JSONModule"));
   ObIJsonBase *j_base = NULL;
   ObIJsonBase *j_patch_node = NULL;
   bool has_null = false;
@@ -82,7 +84,10 @@ int ObExprJsonMergePreserve::eval_json_merge_preserve(const ObExpr &expr, ObEval
   }
 
   for (int32 i = 0; OB_SUCC(ret) && i < expr.arg_cnt_ && !has_null; i++) {
-    if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, temp_allocator, i, j_patch_node, has_null))) {
+    ObIJsonBase *j_res = NULL;
+    if (OB_FAIL(temp_allocator.add_baseline_size(expr.args_[i], ctx))) {
+      LOG_WARN("failed to add baseline size.", K(ret));
+    } else if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, temp_allocator, i, j_patch_node, has_null))) {
       LOG_WARN("get_json_doc failed", K(ret));
     } else if (has_null) {
       // do nothing

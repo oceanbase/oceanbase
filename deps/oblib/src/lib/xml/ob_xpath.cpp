@@ -2157,6 +2157,41 @@ ObIMulModeBase* ObPathExprIter::get_cur_res_parent()
   return path_ctx_.ancestor_record_.size() > 0 ? path_ctx_.ancestor_record_.top() : nullptr;
 }
 
+int ObPathExprIter::get_node_exists(bool &is_exists)
+{
+  INIT_SUCC(ret);
+  is_exists = false;
+  if (!is_inited_ || OB_ISNULL(path_node_)) {
+    ret = OB_INIT_FAIL;
+    LOG_WARN("should be inited", K(ret));
+  } else {
+    ObSeekResult path_res;
+    while (OB_SUCC(ret) && !is_exists) {
+      if (OB_FAIL(path_node_->eval_node(path_ctx_, path_res))) {
+        if (ret != OB_ITER_END) {
+          LOG_WARN("fail to seek", K(ret));
+        }
+      } else if (path_res.is_scalar_) {
+        if (OB_ISNULL(path_res.result_.scalar_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("xpath result scalar is null", K(ret));
+        } else if (path_res.result_.scalar_->node_type_.get_arg_type() == ObArgType::PN_BOOLEAN
+                    && !path_res.result_.scalar_->arg_.boolean_) {
+          // do nothing, keep seeking
+        } else {
+          is_exists = true;
+        }
+      } else {
+        is_exists = true;
+      }
+    }  // end while
+    if (ret == OB_ITER_END) {
+      ret = OB_SUCCESS;
+    }
+  }
+  return ret;
+}
+
 int ObPathExprIter::get_next_node(ObIMulModeBase*& res)
 {
   INIT_SUCC(ret);

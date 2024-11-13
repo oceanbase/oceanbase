@@ -61,7 +61,9 @@ int ObGeoToTreeVisitor::create_geo_tree_collection(T_IBIN *i_geo)
     LOG_WARN("failed to alloc tree geog geo string", K(ret));
   } else {
     geo = new(geo)T(i_geo->get_srid(), *allocator_);
-    if (OB_FAIL(update_root_and_parent(geo))) {
+    if (OB_FAIL(geo->reserve(i_geo->size()))) {
+      LOG_WARN("fail to reserve size", K(ret), K(i_geo->size()));
+    } else if (OB_FAIL(update_root_and_parent(geo))) {
       LOG_WARN("failed to update parent", K(ret));
     } else if (OB_FAIL(parent_.push_back(geo))) {
       LOG_WARN("failed to set self to parent", K(ret));
@@ -80,6 +82,9 @@ int ObGeoToTreeVisitor::create_geo_multi_point(T_TREE *&geo, T_IBIN *geo_ibin)
     LOG_WARN("geo value is null", K(ret));
   } else {
     geo = new(geo)T_TREE(geo_ibin->get_srid(), *allocator_);
+    if (OB_FAIL(geo->reserve(geo_bin->size()))) {
+      LOG_WARN("fail to reserve size", K(ret), K(geo_bin->size()));
+    }
     typename T_BIN::iterator iter = geo_bin->begin();
     for ( ; iter != geo_bin->end() && OB_SUCC(ret); iter++) {
       T_POINT p(iter->template get<0>(), iter->template get<1>());
@@ -190,6 +195,11 @@ int ObGeoToTreeVisitor::polygon_visit(p_ibin_type *geo)
       // construct and add tree exterior ring
       L_TYPE& tree_ext_ring = polygon->exterior_ring();
       const L_BIN_TYPE &ext_ring = polygon_bin->exterior_ring();
+      if (OB_FAIL(polygon->reserve(polygon_bin->size()))) {
+        LOG_WARN("fail to reserve size", K(ret), K(polygon_bin->size()));
+      } else if (OB_FAIL(tree_ext_ring.reserve(ext_ring.size()))) {
+        LOG_WARN("fail to reserve size", K(ret), K(ext_ring.size()));
+      }
       typename L_BIN_TYPE::iterator iter = ext_ring.begin();
       for ( ; iter != ext_ring.end() && OB_SUCC(ret); iter++) {
         POINT_TYPE p(iter->template get<0>(), iter->template get<1>());
@@ -202,19 +212,18 @@ int ObGeoToTreeVisitor::polygon_visit(p_ibin_type *geo)
         const RINGS_TYPE& inner_rings = polygon_bin->inner_rings();
         typename RINGS_TYPE::iterator iter = inner_rings.begin();
         for (; iter != inner_rings.end() && OB_SUCC(ret); iter++) {
-          L_TYPE *tree_linearring = NULL;
-          if (OB_FAIL(alloc_geo_tree_obj(tree_linearring))) {
-            LOG_WARN("failed to alloc tree linearring", K(ret));
+          L_TYPE tree_linearring(geo->get_srid(), *allocator_);
+          if (OB_FAIL(tree_linearring.reserve(iter->size()))) {
+            LOG_WARN("fail to reserve size", K(ret), K(iter->size()));
           } else {
-            tree_linearring = new(tree_linearring)L_TYPE(geo->get_srid(), *allocator_);
             typename L_BIN_TYPE::iterator point_iter = iter->begin();
             for ( ; point_iter != iter->end() && OB_SUCC(ret); point_iter++) {
               POINT_TYPE p(point_iter->template get<0>(), point_iter->template get<1>());
-              if (OB_FAIL(tree_linearring->push_back(p))) {
+              if (OB_FAIL(tree_linearring.push_back(p))) {
                 LOG_WARN("failed to push point to ring", K(ret));
               }
             }
-            if (OB_SUCC(ret) && OB_FAIL(polygon->push_back(*tree_linearring))) {
+            if (OB_SUCC(ret) && OB_FAIL(polygon->push_back(tree_linearring))) {
               LOG_WARN("failed to push ring to polygon", K(ret));
             }
           }

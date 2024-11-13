@@ -70,8 +70,9 @@ int ObExprSTWithin::eval_st_within(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
   ObExpr *gis_arg1 = expr.args_[0];
   ObExpr *gis_arg2 = expr.args_[1];
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
-  if (OB_FAIL(gis_arg1->eval(ctx, gis_datum1)) || OB_FAIL(gis_arg2->eval(ctx, gis_datum2))) {
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret, N_ST_WITHIN);
+  if (OB_FAIL(temp_allocator.eval_arg(gis_arg1, ctx, gis_datum1)) || OB_FAIL(temp_allocator.eval_arg(gis_arg2, ctx, gis_datum2))) {
     LOG_WARN("eval geo args failed", K(ret));
   } else if (gis_datum1->is_null() || gis_datum2->is_null()) {
     res.set_null();
@@ -92,6 +93,8 @@ int ObExprSTWithin::eval_st_within(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
     bool is_geo1_cached = false;
     bool is_geo2_cached = false;
     ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+    ObGeoBoostAllocGuard guard(tenant_id);
+    lib::MemoryContext *mem_ctx = nullptr;
 
     if (gis_arg1->is_static_const_) {
       ObGeoExprUtils::expr_get_const_param_cache(const_param_cache, geo1, srid1, is_geo1_cached, 0);
@@ -119,13 +122,19 @@ int ObExprSTWithin::eval_st_within(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
       LOG_WARN("get first geo by wkb failed", K(ret));
     } else if (!is_geo2_cached && OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb2, geo2, nullptr, N_ST_WITHIN, ObGeoBuildFlag::GEO_ALLOW_3D_CARTESIAN))) {
       LOG_WARN("get second geo by wkb failed", K(ret));
+    } else if (FALSE_IT(temp_allocator.set_baseline_size(geo1->length() + geo2->length()))) {
     } else if ((!is_geo1_cached && OB_FAIL(ObGeoExprUtils::check_empty(geo1, is_geo1_empty)))
         || (!is_geo2_cached && OB_FAIL(ObGeoExprUtils::check_empty(geo2, is_geo2_empty)))) {
       LOG_WARN("check geo empty failed", K(ret));
     } else if (is_geo1_empty || is_geo2_empty) {
       res.set_null();
-    } else if (OB_FAIL(ObGeoExprUtils::zoom_in_geos_for_relation(*geo1, *geo2, is_geo1_cached, is_geo2_cached))) {
+    } else if (OB_FAIL(ObGeoExprUtils::zoom_in_geos_for_relation(srs, *geo1, *geo2, is_geo1_cached, is_geo2_cached))) {
       LOG_WARN("zoom in geos failed", K(ret));
+    } else if (OB_FAIL(guard.init())) {
+      LOG_WARN("fail to init geo allocator guard", K(ret));
+    } else if (OB_ISNULL(mem_ctx = guard.get_memory_ctx())) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("fail to get mem ctx", K(ret));
     } else {
       if (OB_NOT_NULL(const_param_cache)) {
         if (gis_arg1->is_static_const_ && !is_geo1_cached &&
@@ -137,54 +146,55 @@ int ObExprSTWithin::eval_st_within(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
         }
       }
 
+      ObGeoEvalCtx gis_context(*mem_ctx);
+      bool result = false;
       if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(gis_context.append_geo_arg(geo1)) || OB_FAIL(gis_context.append_geo_arg(geo2))) {
+        LOG_WARN("build gis context failed", K(ret), K(gis_context.get_geo_count()));
       } else {
-        ObGeoEvalCtx gis_context(&temp_allocator);
-        bool result = false;
-        if (OB_FAIL(gis_context.append_geo_arg(geo1)) || OB_FAIL(gis_context.append_geo_arg(geo2))) {
-          LOG_WARN("build gis context failed", K(ret), K(gis_context.get_geo_count()));
-        } else {
-          ObCachedGeom *cache_geo = NULL;
-          ObGeometry *geo;
-          if (OB_NOT_NULL(const_param_cache)) {
-            if (gis_arg2->is_static_const_) {
-              cache_geo = const_param_cache->get_cached_geo(1);
-              if (cache_geo == NULL
-                && OB_FAIL(ObGeoTypeUtil::create_cached_geometry(*const_param_cache->get_allocator(),
-                                                                  temp_allocator,
-                                                                  const_param_cache->get_const_param_cache(1),
-                                                                  srs,
-                                                                  cache_geo))) {
-                LOG_WARN("add geo2 to const cache failed", K(ret));
-              } else {
-                geo = geo1;
-                const_param_cache->add_cached_geo(1, cache_geo);
-              }
+        ObCachedGeom *cache_geo = NULL;
+        ObGeometry *geo;
+        if (OB_NOT_NULL(const_param_cache)) {
+          if (gis_arg2->is_static_const_) {
+            cache_geo = const_param_cache->get_cached_geo(1);
+            if (cache_geo == NULL
+              && OB_FAIL(ObGeoTypeUtil::create_cached_geometry(*const_param_cache->get_allocator(),
+                                                                temp_allocator,
+                                                                const_param_cache->get_const_param_cache(1),
+                                                                srs,
+                                                                cache_geo))) {
+              LOG_WARN("add geo2 to const cache failed", K(ret));
+            } else {
+              geo = geo1;
+              const_param_cache->add_cached_geo(1, cache_geo);
             }
           }
+        }
 
-          if (OB_FAIL(ret)) {
-          } else if (OB_NOT_NULL(cache_geo)) {
-            if (OB_FAIL(cache_geo->contains(*geo, gis_context, result))) {
-              LOG_WARN("get contains result failed", K(ret));
-            } else {
-              res.set_bool(result);
-            }
-          } else if (ObGeoTypeUtil::use_point_polygon_short_circuit(*geo1, *geo2, T_FUN_SYS_ST_WITHIN)) {
-            bool result = false;
-            if (OB_FAIL(ObGeoTypeUtil::get_point_polygon_res(geo1, geo2, T_FUN_SYS_ST_WITHIN, result))) {
-              LOG_WARN("fail to get res.", K(ret));
-            } else {
-              res.set_bool(result);
-            }
-          } else if (OB_FAIL(ObGeoFunc<ObGeoFuncType::Within>::gis_func::eval(gis_context, result))) {
-            LOG_WARN("eval st intersection failed", K(ret));
-            ObGeoExprUtils::geo_func_error_handle(ret, N_ST_WITHIN);
+        if (OB_FAIL(ret)) {
+        } else if (OB_NOT_NULL(cache_geo)) {
+          if (OB_FAIL(cache_geo->contains(*geo, gis_context, result))) {
+            LOG_WARN("get contains result failed", K(ret));
           } else {
             res.set_bool(result);
           }
+        } else if (ObGeoTypeUtil::use_point_polygon_short_circuit(*geo1, *geo2, T_FUN_SYS_ST_WITHIN)) {
+          bool result = false;
+          if (OB_FAIL(ObGeoTypeUtil::get_point_polygon_res(geo1, geo2, T_FUN_SYS_ST_WITHIN, result))) {
+            LOG_WARN("fail to get res.", K(ret));
+          } else {
+            res.set_bool(result);
+          }
+        } else if (OB_FAIL(ObGeoFunc<ObGeoFuncType::Within>::gis_func::eval(gis_context, result))) {
+          LOG_WARN("eval st intersection failed", K(ret));
+          ObGeoExprUtils::geo_func_error_handle(ret, N_ST_WITHIN);
+        } else {
+          res.set_bool(result);
         }
       }
+    }
+    if (mem_ctx != nullptr) {
+      temp_allocator.add_ext_used((*mem_ctx)->arena_used());
     }
   }
   return ret;

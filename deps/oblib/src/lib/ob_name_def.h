@@ -1098,8 +1098,11 @@
 #define N_XML_ATTRIBUTES                    "xmlattributes"
 #define N_EXTRACTVALUE                      "extractvalue"
 #define N_EXTRACT_XML                       "extract_xml"
+#define N_EXISTSNODE_XML                    "existsnode_xml"
 #define N_XMLSERIALIZE                      "xmlserialize"
 #define N_XMLCAST                           "xmlcast"
+#define N_XML_CONCAT                        "xmlconcat"
+#define N_XML_FOREST                        "xmlforest"
 #define N_UPDATEXML                         "updatexml"
 #define N_INSERTCHILDXML                    "insertchildxml"
 #define N_XMLSEQUENCE                       "xmlsequence"
@@ -1189,4 +1192,6 @@
 #define N_RB_SELECT                         "rb_select"
 #define N_GET_MYSQL_ROUTINE_PARAMETER_TYPE_STR   "get_mysql_routine_parameter_type_str"
 #define N_ORA_LOGIN_USER                    "ora_login_user"
+#define N_PRIV_ST_GEOHASH                   "_st_geohash"
+#define N_PRIV_ST_MAKEPOINT                 "_st_makepoint"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

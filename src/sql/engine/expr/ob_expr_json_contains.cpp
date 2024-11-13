@@ -74,7 +74,8 @@ int ObExprJsonContains::eval_json_contains(const ObExpr &expr, ObEvalCtx &ctx, O
   ObIJsonBase *json_candidate = NULL;
   bool is_null_result = false;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
   if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, temp_allocator, 0,
                                              json_target, is_null_result))) {
     LOG_WARN("get_json_doc failed", K(ret));
@@ -95,7 +96,7 @@ int ObExprJsonContains::eval_json_contains(const ObExpr &expr, ObEvalCtx &ctx, O
       path_cache = ((path_cache != NULL) ? path_cache : &ctx_cache);
 
       ObDatum *path_data = NULL;
-      if (OB_FAIL(expr.args_[2]->eval(ctx, path_data))) {
+      if (OB_FAIL(temp_allocator.eval_arg(expr.args_[2], ctx, path_data))) {
         LOG_WARN("eval json path datum failed", K(ret));
       } else if (expr.args_[2]->datum_meta_.type_ == ObNullType || path_data->is_null()) {
         is_null_result = true;

@@ -43,21 +43,6 @@ int ObGeoNormalizeVisitor::normalize(ObIWkbPoint *geo)
       LOG_WARN("normalize y failed", K(ret));
     } else if (OB_FAIL(srs_->longtitude_convert_to_radians(geo->x(), nx))) {
       LOG_WARN("normalize x failed", K(ret));
-    } else {
-      uint32_t count = 0;
-      double nx_tmp = nx;
-      double ny_tmp = ny;
-      while (nx_tmp != 0.0 && std::fabs(nx_tmp) < ZOOM_IN_THRESHOLD) {
-        nx_tmp *= 10;
-        count++;
-      }
-      zoom_in_value_ = count > zoom_in_value_ ? count : zoom_in_value_;
-      count = 0;
-      while (ny_tmp != 0.0 && std::fabs(ny_tmp) < ZOOM_IN_THRESHOLD) {
-        ny_tmp *= 10;
-        count++;
-      }
-      zoom_in_value_ = count > zoom_in_value_ ? count : zoom_in_value_;
     }
   }
 

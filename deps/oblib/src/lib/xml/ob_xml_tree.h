@@ -177,6 +177,7 @@ public:
   virtual int get_value(ObIArray<ObXmlNode*> &value, const ObString& key_name) { return 0; }
   // compare
   virtual int compare(const ObIMulModeBase &other, int &res) { return 0; }
+  virtual int clone(ObMulModeMemCtx *ctx, ObXmlNode *&node) override { return OB_NOT_SUPPORTED; }
 
   virtual int set_flag_by_descandant();
 
@@ -336,6 +337,7 @@ public:
   virtual int get_attribute(ObIArray<ObIMulModeBase*>& res, ObMulModeNodeType filter_type, int32_t flags = 0);
   virtual int get_attribute(ObIMulModeBase*& res, ObMulModeNodeType filter_type, const ObString& key1, const ObString &key2 = ObString());
   virtual bool check_if_defined_ns();
+  int clone(ObMulModeMemCtx *ctx, ObXmlNode *&node) override;
 private:
   // namespace prefix
   ObString prefix_;
@@ -390,6 +392,7 @@ public:
   ObXmlNode* get_extSubset() { return extSubset_; }
 
   int64_t get_serialize_size();
+  int clone(ObMulModeMemCtx *ctx, ObXmlNode *&node);
 
 protected:
   // xml prolog
@@ -465,6 +468,7 @@ class ObXmlAttribute : public ObXmlNode
   // ObXmlNode *clone(ObIAllocator* allocator) const;
   virtual int compare(const ObString& key, int& res);
   int64_t get_serialize_size();
+  int clone(ObMulModeMemCtx *ctx, ObXmlNode *&node) override;
 protected:
   // namespace prefix
   ObString prefix_;
@@ -517,6 +521,7 @@ public:
   bool is_space() { return is_space_; }
   void set_is_space(bool is_space) { is_space_ = is_space; }
   int64_t get_serialize_size();
+  int clone(ObMulModeMemCtx *ctx, ObXmlNode *&node) override;
 protected:
   ObString text_;
   int64_t length_;

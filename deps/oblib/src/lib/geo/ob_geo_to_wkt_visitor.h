@@ -24,6 +24,7 @@ class ObGeoToWktVisitor : public ObEmptyGeoVisitor
 {
 public:
   static const int MAX_DIGITS_IN_DOUBLE = 25;
+  static const int PREPARE_DIGITS_IN_DOUBLE = 15;
   explicit ObGeoToWktVisitor(ObIAllocator *allocator)
   : buffer_(allocator),
     has_scale_(false),
@@ -96,6 +97,10 @@ private:
   int appendCommaWithMode();
   template<typename T_IBIN>
   int appendTypeNameWithMode(T_IBIN *geo);
+
+  template<typename T_IBIN, typename T_BIN,
+         typename T_BIN_RING, typename T_BIN_INNER_RING>
+  int estimate_polygon_len(T_IBIN *geo);
 
 public:
   static int convert_double_to_str(char* buff, uint64_t buff_size, double val, bool has_scale,

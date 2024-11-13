@@ -553,6 +553,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_insert_child_xml.cpp
   engine/expr/ob_expr_xml_delete_xml.cpp
   engine/expr/ob_expr_xml_sequence.cpp
+  engine/expr/ob_expr_existsnode_xml.cpp
   engine/expr/ob_expr_sql_udt_utils.cpp
   engine/expr/ob_expr_temp_table_ssid.cpp
   engine/expr/ob_expr_collection_construct.cpp
@@ -574,8 +575,11 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_prefix_pattern.cpp
   engine/expr/ob_expr_sys_makexml.cpp
   engine/expr/ob_expr_xml_func_helper.cpp
+  engine/expr/ob_expr_multi_mode_func_helper.cpp
   engine/expr/ob_expr_xmlparse.cpp
   engine/expr/ob_expr_xml_element.cpp
+  engine/expr/ob_expr_xml_concat.cpp
+  engine/expr/ob_expr_xml_forest.cpp
   engine/expr/ob_expr_xml_attributes.cpp
   engine/expr/ob_expr_xml_serialize.cpp
   engine/expr/ob_expr_priv_xml_binary.cpp
@@ -591,6 +595,8 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_st_geomfromewkt.cpp
   engine/expr/ob_expr_priv_st_geogfromtext.cpp
   engine/expr/ob_expr_priv_st_geographyfromtext.cpp
+  engine/expr/ob_expr_priv_st_geohash.cpp
+  engine/expr/ob_expr_priv_st_makepoint.cpp
   engine/expr/ob_expr_st_asewkt.cpp
   engine/expr/ob_expr_st_srid.cpp
   engine/expr/ob_expr_st_distance.cpp

@@ -39,7 +39,6 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
 private:
-  static int string_to_double(const common::ObString &in_str, ObCollationType cs_type, double &res);
   DISALLOW_COPY_AND_ASSIGN(ObExprPrivSTPoint);
 };
 

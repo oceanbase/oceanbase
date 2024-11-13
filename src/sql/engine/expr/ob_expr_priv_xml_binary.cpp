@@ -98,7 +98,8 @@ int ObExprPrivXmlBinary::eval_priv_xml_binary(const ObExpr &expr, ObEvalCtx &ctx
     res.set_null();
   } else {
     ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-    common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+    uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+    MultimodeAlloctor tmp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
     ObString xml_plain_text = xml_datum->get_string();
     ObIMulModeBase *xml_root = NULL;
     ObStringBuffer jbuf(&tmp_allocator);
@@ -118,6 +119,7 @@ int ObExprPrivXmlBinary::eval_priv_xml_binary(const ObExpr &expr, ObEvalCtx &ctx
                                                                   true,
                                                                   xml_plain_text))) {
       LOG_WARN("get xml plain text failed", K(ret), K(xml_datum));
+    } else if (OB_FALSE_IT(tmp_allocator.add_baseline_size(xml_plain_text.length()))) {
     } else if (xml_plain_text.empty()) {
       res.set_null();
     } else if (expr.args_[1]->obj_meta_.is_character_type()) {

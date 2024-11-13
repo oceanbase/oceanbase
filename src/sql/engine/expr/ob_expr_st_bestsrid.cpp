@@ -19,7 +19,6 @@
 #include "sql/engine/ob_exec_context.h"
 #include "observer/omt/ob_tenant_srs.h"
 #include "ob_expr_st_bestsrid.h"
-#include "lib/geo/ob_geo_utils.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
 
 using namespace oceanbase::common;
@@ -67,8 +66,8 @@ int ObExprPrivSTBestsrid::calc_result_typeN(ObExprResType& type,
   return ret;
 }
 
-int ObExprPrivSTBestsrid::get_geog_box(ObEvalCtx &ctx, ObArenaAllocator &temp_allocator, ObString wkb,
-                                       ObObjType input_type, bool &is_geo_empty, ObGeogBox *&geo_box)
+int ObExprPrivSTBestsrid::get_geog_box(ObEvalCtx &ctx, lib::MemoryContext &mem_ctx, ObString wkb,
+                                      ObObjType input_type, bool &is_geo_empty, ObGeogBox *&geo_box)
 {
   int ret = OB_SUCCESS;
   ObGeometry *geo = NULL;
@@ -76,8 +75,8 @@ int ObExprPrivSTBestsrid::get_geog_box(ObEvalCtx &ctx, ObArenaAllocator &temp_al
   const ObSrsItem *srs = NULL;
   if (OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, wkb, srs))) {
     LOG_WARN("get srs failed", K(ret), K(wkb));
-  } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb, geo, srs, N_PRIV_ST_BESTSRID,
-                                                    ObGeoBuildFlag::GEO_ALLOW_3D))) {
+  } else if (OB_FAIL(ObGeoExprUtils::build_geometry(mem_ctx->get_arena_allocator(), wkb, geo, srs, N_PRIV_ST_BESTSRID,
+                                                    GEO_ALLOW_3D | GEO_NOT_COPY_WKB))) {
     LOG_WARN("get geo failed", K(ret));
     if (ret != OB_ERR_SRS_NOT_FOUND && ret != OB_ERR_INVALID_GEOMETRY_TYPE) {
       ret = OB_ERR_GIS_INVALID_DATA;
@@ -95,7 +94,7 @@ int ObExprPrivSTBestsrid::get_geog_box(ObEvalCtx &ctx, ObArenaAllocator &temp_al
     LOG_USER_ERROR(OB_ERR_NOT_IMPLEMENTED_FOR_PROJECTED_SRS, N_PRIV_ST_BESTSRID,
                   ObGeoTypeUtil::get_geo_name_by_type(geo->type()));
   } else {
-    ObGeoEvalCtx gis_context(&temp_allocator, srs);
+    ObGeoEvalCtx gis_context(mem_ctx, srs);
     ObGeogBox *result = NULL;
     if (OB_FAIL(gis_context.append_geo_arg(geo))) {
       LOG_WARN("build gis context failed", K(ret), K(gis_context.get_geo_count()));
@@ -115,26 +114,40 @@ int ObExprPrivSTBestsrid::eval_st_bestsrid(const ObExpr &expr, ObEvalCtx &ctx, O
   ObGeogBox *geo_box2 = NULL;
   uint32_t param_num = expr.arg_cnt_;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret, N_PRIV_ST_BESTSRID);
   omt::ObSrsCacheGuard srs_guard;
   bool is_null_res = false;
   bool is_geo_empty = false;
+  ObDatum *geo_datum[2] = { nullptr };
 
   for (uint8_t i = 0; i < param_num && OB_SUCC(ret); i++) {
-    ObDatum *geo_datum = NULL;
+    ObExpr *geo_arg = expr.args_[i];
+    if (OB_FAIL(temp_allocator.eval_arg(geo_arg, ctx, geo_datum[i]))) {
+      LOG_WARN("eval geo args failed", K(ret));
+    }
+  }
+
+  ObGeoBoostAllocGuard guard(tenant_id);
+  lib::MemoryContext *mem_ctx = nullptr;
+  for (uint8_t i = 0; i < param_num && OB_SUCC(ret) && !is_null_res; i++) {
     ObString geo_str;
     ObExpr *geo_arg = expr.args_[i];
     ObObjType input_type = geo_arg->datum_meta_.type_;
-    if (OB_FAIL(geo_arg->eval(ctx, geo_datum))) {
-      LOG_WARN("eval geo args failed", K(ret));
-    } else if (geo_datum->is_null()) {
+    if (geo_datum[i]->is_null()) {
       res.set_null();
       is_null_res = true;
-    } else if (FALSE_IT(geo_str = geo_datum->get_string())) {
-    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *geo_datum,
+    } else if (FALSE_IT(geo_str = geo_datum[i]->get_string())) {
+    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(temp_allocator, *(geo_datum[i]),
               geo_arg->datum_meta_, geo_arg->obj_meta_.has_lob_header(), geo_str))) {
       LOG_WARN("fail to get real string data", K(ret), K(geo_str));
-    } else if (OB_FAIL(ObExprPrivSTBestsrid::get_geog_box(ctx, temp_allocator,
+    } else if (FALSE_IT(temp_allocator.add_baseline_size(geo_str.length()))) {
+    } else if (OB_FAIL(guard.init())) {
+      LOG_WARN("fail to init geo allocator guard", K(ret));
+    } else if (OB_ISNULL(mem_ctx = guard.get_memory_ctx())) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("fail to get mem ctx", K(ret));
+    } else if (OB_FAIL(ObExprPrivSTBestsrid::get_geog_box(ctx, *mem_ctx,
                                                           geo_str,
                                                           input_type,
                                                           is_geo_empty,
@@ -150,6 +163,9 @@ int ObExprPrivSTBestsrid::eval_st_bestsrid(const ObExpr &expr, ObEvalCtx &ctx, O
     } else {
       res.set_int(bestsrid);
     }
+  }
+  if (mem_ctx != nullptr) {
+    temp_allocator.add_ext_used((*mem_ctx)->arena_used());
   }
   return ret;
 }

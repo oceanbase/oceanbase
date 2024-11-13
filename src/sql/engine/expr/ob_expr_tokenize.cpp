@@ -202,6 +202,9 @@ int ObExprTokenize::parse_param(const ObExpr &expr,
   ObDatum *fulltext_datum;
   ObDatum *parser_datum;
   ObDatum *parser_params_datum;
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
 
   if (OB_UNLIKELY(expr.arg_cnt_ < 1 || expr.arg_cnt_ > 3)) {
     ret = OB_INVALID_ARGUMENT;
@@ -235,7 +238,7 @@ int ObExprTokenize::parse_param(const ObExpr &expr,
       if (OB_SUCC(ret) && expr.arg_cnt_ >= 3) {
         ObIJsonBase *base = nullptr;
         bool is_null = false;
-        if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, allocator, 2, base, is_null))) {
+        if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, temp_allocator, 2, base, is_null))) {
           LOG_WARN("Fail to get json doc", K(ret));
         } else {
           if (ObJsonNodeType::J_ARRAY != base->json_type()) {

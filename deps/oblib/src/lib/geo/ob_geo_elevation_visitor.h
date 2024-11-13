@@ -66,7 +66,7 @@ private:
 class ObGeoElevationVisitor : public ObEmptyGeoVisitor
 {
 public:
-  explicit ObGeoElevationVisitor(ObIAllocator &allocator, const common::ObSrsItem *srs);
+  explicit ObGeoElevationVisitor(lib::MemoryContext &mem_ctx, const common::ObSrsItem *srs);
   virtual ~ObGeoElevationVisitor()
   { if (OB_NOT_NULL(extent_))
     { extent_->~ObGeoElevationExtent(); }
@@ -154,7 +154,7 @@ private:
   ObGeoType type_3D_;
   ObGeoCRS crs_;
   uint32_t srid_;
-
+  lib::MemoryContext *mem_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObGeoElevationVisitor);
 };
 

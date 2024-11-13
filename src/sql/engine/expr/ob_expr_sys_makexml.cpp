@@ -93,7 +93,8 @@ int ObExprSysMakeXML::eval_sys_makexml(const ObExpr &expr, ObEvalCtx &ctx, ObDat
 
   bool is_null_result = false;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+   MultimodeAlloctor allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
   ObString full_xml_data;
   ObMulModeMemCtx* mem_ctx = nullptr;
   lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "XMLModule"));
@@ -106,7 +107,7 @@ int ObExprSysMakeXML::eval_sys_makexml(const ObExpr &expr, ObEvalCtx &ctx, ObDat
                  && xml_arg->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN)) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("input type error", K(xml_arg->datum_meta_));
-  } else if (OB_FAIL(xml_arg->eval(ctx, xml_datum))) {
+  } else if (OB_FAIL(allocator.eval_arg(xml_arg, ctx, xml_datum))) {
     LOG_WARN("eval xml arg failed", K(ret));
   } else if (xml_datum->is_null()) {
     res.set_null();
@@ -119,6 +120,7 @@ int ObExprSysMakeXML::eval_sys_makexml(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       LOG_WARN("get xml plain text failed", K(ret), K(xml_datum));
     } else if (xml_plain_text.empty()) {
       res.set_null();
+    } else if (OB_FALSE_IT(allocator.add_baseline_size(xml_plain_text.length()))) {
     } else if (OB_FAIL(ObXmlParserUtils::parse_document_text(mem_ctx, xml_plain_text, xml_doc))) {
       LOG_WARN("parse xml plain text as document failed.", K(ret), K(xml_plain_text));
       ret = OB_ERR_XML_PARSE;
