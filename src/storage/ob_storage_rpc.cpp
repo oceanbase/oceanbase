@@ -248,7 +248,8 @@ bool ObCopyTabletInfoArg::is_valid() const
 }
 
 OB_SERIALIZE_MEMBER(ObCopyTabletInfoArg,
-    tenant_id_, ls_id_, tablet_id_list_, need_check_seq_, ls_rebuild_seq_, is_only_copy_major_, version_);
+    tenant_id_, ls_id_, tablet_id_list_, need_check_seq_, ls_rebuild_seq_,
+    is_only_copy_major_, version_);
 
 ObCopyTabletInfo::ObCopyTabletInfo()
   : tablet_id_(),
@@ -364,7 +365,8 @@ bool ObCopyTabletsSSTableInfoArg::is_valid() const
 }
 
 OB_SERIALIZE_MEMBER(ObCopyTabletsSSTableInfoArg,
-    tenant_id_, ls_id_, need_check_seq_, ls_rebuild_seq_, is_only_copy_major_, tablet_sstable_info_arg_list_, version_);
+    tenant_id_, ls_id_, need_check_seq_, ls_rebuild_seq_, is_only_copy_major_,
+    tablet_sstable_info_arg_list_, version_);
 
 
 ObCopyTabletSSTableInfo::ObCopyTabletSSTableInfo()
@@ -1095,8 +1097,7 @@ bool ObCopyLSViewArg::is_valid() const
       && ls_id_.is_valid();
 }
 
-OB_SERIALIZE_MEMBER(ObCopyLSViewArg,
-    tenant_id_, ls_id_);
+OB_SERIALIZE_MEMBER(ObCopyLSViewArg, tenant_id_, ls_id_);
 
 
 ObStorageWakeupTransferServiceArg::ObStorageWakeupTransferServiceArg()
@@ -1558,9 +1559,10 @@ int ObFetchTabletInfoP::process()
     int64_t tablet_count = 0;
     const int64_t start_ts = ObTimeUtil::current_time();
     const int64_t first_receive_ts = this->get_receive_timestamp();
-
+    int64_t rpc_buffer_size = OB_MALLOC_BIG_BLOCK_SIZE;
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
     if (tenant_config.is_valid()) {
+      rpc_buffer_size = tenant_config->_storage_stream_rpc_buffer_size;
       const int64_t tmp_max_tablet_num = tenant_config->_ha_tablet_info_batch_count;
       if (0 != tmp_max_tablet_num) {
         max_tablet_num = tmp_max_tablet_num;
@@ -1573,10 +1575,10 @@ int ObFetchTabletInfoP::process()
     const int64_t cost_time = 10 * 1000 * 1000;
     common::ObTimeGuard timeguard("ObFetchTabletInfoP", cost_time);
     timeguard.click();
-    if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(OB_MALLOC_BIG_BLOCK_SIZE)))) {
+    if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(rpc_buffer_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed to alloc migrate data buffer.", K(ret));
-    } else if (!result_.set_data(buf, OB_MALLOC_BIG_BLOCK_SIZE)) {
+    } else if (!result_.set_data(buf, rpc_buffer_size)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed set data to result", K(ret));
     } else if (OB_ISNULL(bandwidth_throttle_)) {
@@ -1665,14 +1667,19 @@ int ObFetchSSTableInfoP::process()
     ObLS *ls = nullptr;
     const int64_t start_ts = ObTimeUtil::current_time();
     const int64_t first_receive_ts = this->get_receive_timestamp();
+    int64_t rpc_buffer_size = OB_MALLOC_BIG_BLOCK_SIZE;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      rpc_buffer_size = tenant_config->_storage_stream_rpc_buffer_size;
+    }
     LOG_INFO("start to fetch tablet sstable info", K(arg_));
 
     last_send_time_ = this->get_receive_timestamp();
 
-    if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(OB_MALLOC_BIG_BLOCK_SIZE)))) {
+    if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(rpc_buffer_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed to alloc migrate data buffer.", K(ret));
-    } else if (!result_.set_data(buf, OB_MALLOC_BIG_BLOCK_SIZE)) {
+    } else if (!result_.set_data(buf, rpc_buffer_size)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed set data to result", K(ret));
     } else if (OB_ISNULL(bandwidth_throttle_)) {
@@ -2069,35 +2076,43 @@ int ObFetchSSTableMacroInfoP::process()
 
   if (OB_FAIL(guard.switch_to(arg_.tenant_id_))) {
     LOG_ERROR("switch tenant fail", K(ret), K(arg_));
-  } else if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(OB_MALLOC_BIG_BLOCK_SIZE)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    STORAGE_LOG(WARN, "failed to alloc migrate data buffer.", K(ret));
-  } else if (!result_.set_data(buf, OB_MALLOC_BIG_BLOCK_SIZE)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    STORAGE_LOG(WARN, "failed set data to result", K(ret));
-  } else if (OB_ISNULL(bandwidth_throttle_)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(ERROR, "bandwidth_throttle_ must not null", K(ret),
-                KP_(bandwidth_throttle));
-  } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
-    LOG_WARN("fail to get log stream", KR(ret), K(arg_));
-  } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("log stream should not be NULL", KR(ret), K(arg_), KP(ls));
-  } else if (OB_FAIL(ls->get_migration_status(migration_status))) {
-    LOG_WARN("failed to get migration status", K(ret), K(arg_));
-  } else if (!ObMigrationStatusHelper::check_can_migrate_out(migration_status)) {
-    ret = OB_SRC_DO_NOT_ALLOWED_MIGRATE;
-    STORAGE_LOG(WARN, "src migrate status do not allow migrate out", K(ret), K(migration_status));
-  } else if (OB_FAIL(fetch_sstable_macro_info_header_())) {
-    LOG_WARN("failed to fetch sstable macro info header", K(ret), K(arg_));
   } else {
-    if (arg_.need_check_seq_) {
-      if (OB_FAIL(compare_ls_rebuild_seq(arg_.tenant_id_, arg_.ls_id_, arg_.ls_rebuild_seq_))) {
-        LOG_WARN("failed to compare ls rebuild seq", K(ret), K_(arg));
+    int64_t rpc_buffer_size = OB_MALLOC_BIG_BLOCK_SIZE;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      rpc_buffer_size = tenant_config->_storage_stream_rpc_buffer_size;
+    }
+
+    if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(rpc_buffer_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "failed to alloc migrate data buffer.", K(ret));
+    } else if (!result_.set_data(buf, rpc_buffer_size)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "failed set data to result", K(ret));
+    } else if (OB_ISNULL(bandwidth_throttle_)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "bandwidth_throttle_ must not null", K(ret),
+                  KP_(bandwidth_throttle));
+    } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
+    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      LOG_WARN("fail to get log stream", KR(ret), K(arg_));
+    } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("log stream should not be NULL", KR(ret), K(arg_), KP(ls));
+    } else if (OB_FAIL(ls->get_migration_status(migration_status))) {
+      LOG_WARN("failed to get migration status", K(ret), K(arg_));
+    } else if (!ObMigrationStatusHelper::check_can_migrate_out(migration_status)) {
+      ret = OB_SRC_DO_NOT_ALLOWED_MIGRATE;
+      STORAGE_LOG(WARN, "src migrate status do not allow migrate out", K(ret), K(migration_status));
+    } else if (OB_FAIL(fetch_sstable_macro_info_header_())) {
+      LOG_WARN("failed to fetch sstable macro info header", K(ret), K(arg_));
+    } else {
+      if (arg_.need_check_seq_) {
+        if (OB_FAIL(compare_ls_rebuild_seq(arg_.tenant_id_, arg_.ls_id_, arg_.ls_rebuild_seq_))) {
+          LOG_WARN("failed to compare ls rebuild seq", K(ret), K_(arg));
+        }
       }
     }
   }
@@ -3091,10 +3106,11 @@ int ObStorageFetchLSViewP::process()
     max_tablet_num_ = 32;
     const int64_t start_ts = ObTimeUtil::current_time();
     const int64_t first_receive_ts = this->get_receive_timestamp();
-
+    int64_t rpc_buffer_size = OB_MALLOC_BIG_BLOCK_SIZE;
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
     if (tenant_config.is_valid()) {
       const int64_t tmp_max_tablet_num = tenant_config->_ha_tablet_info_batch_count;
+      rpc_buffer_size = tenant_config->_storage_stream_rpc_buffer_size;
       if (0 != tmp_max_tablet_num) {
         max_tablet_num_ = tmp_max_tablet_num;
       }
@@ -3139,10 +3155,10 @@ int ObStorageFetchLSViewP::process()
     const int64_t cost_time = 10 * 1000 * 1000;
     common::ObTimeGuard timeguard("ObStorageFetchLSViewP", cost_time);
     timeguard.click();
-    if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(OB_MALLOC_BIG_BLOCK_SIZE)))) {
+    if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(rpc_buffer_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc migrate data buffer.", K(ret));
-    } else if (!result_.set_data(buf, OB_MALLOC_BIG_BLOCK_SIZE)) {
+    } else if (!result_.set_data(buf, rpc_buffer_size)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed set data to result", K(ret));
     } else if (OB_ISNULL(bandwidth_throttle_)) {
@@ -3571,14 +3587,19 @@ int ObRebuildTabletSSTableInfoP::process()
     ObLS *ls = nullptr;
     const int64_t start_ts = ObTimeUtil::current_time();
     const int64_t first_receive_ts = this->get_receive_timestamp();
+    int64_t rpc_buffer_size = OB_MALLOC_BIG_BLOCK_SIZE;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      rpc_buffer_size = tenant_config->_storage_stream_rpc_buffer_size;
+    }
     LOG_INFO("start to fetch tablet sstable info", K(arg_));
 
     last_send_time_ = this->get_receive_timestamp();
 
-    if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(OB_MALLOC_BIG_BLOCK_SIZE)))) {
+    if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(rpc_buffer_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed to alloc rebuild tablet data buffer.", K(ret));
-    } else if (!result_.set_data(buf, OB_MALLOC_BIG_BLOCK_SIZE)) {
+    } else if (!result_.set_data(buf, rpc_buffer_size)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed set data to result", K(ret));
     } else if (OB_ISNULL(bandwidth_throttle_)) {

@@ -32,23 +32,30 @@ ObStorageStreamRpcReader<RPC_CODE>::ObStorageStreamRpcReader() : is_inited_(fals
 }
 
 template <ObRpcPacketCode RPC_CODE>
-int ObStorageStreamRpcReader<RPC_CODE>::init(ObInOutBandwidthThrottle &bandwidth_throttle)
+int ObStorageStreamRpcReader<RPC_CODE>::init(
+  ObInOutBandwidthThrottle &bandwidth_throttle)
 {
   int ret = OB_SUCCESS;
   char *buf = NULL;
+  int64_t buf_size = 0;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "can not init twice", K(ret));
   } else {
     bandwidth_throttle_ = &bandwidth_throttle;
+    buf_size = OB_MALLOC_BIG_BLOCK_SIZE;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      buf_size = tenant_config->_storage_stream_rpc_buffer_size;
+    }
   }
 
   if (OB_SUCC(ret)) {
-    if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(OB_MALLOC_BIG_BLOCK_SIZE)))) {
+    if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(buf_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed to alloc buf", K(ret));
-    } else if (!rpc_buffer_.set_data(buf, OB_MALLOC_BIG_BLOCK_SIZE)) {
+    } else if (!rpc_buffer_.set_data(buf, buf_size)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed to set rpc buffer", K(ret));
     } else {

@@ -1490,7 +1490,8 @@ class ObStorageStreamRpcReader
 public:
   ObStorageStreamRpcReader();
   virtual ~ObStorageStreamRpcReader() {}
-  int init(common::ObInOutBandwidthThrottle &bandwidth_throttle);
+  int init(
+      common::ObInOutBandwidthThrottle &bandwidth_throttle);
   int fetch_next_buffer_if_need();
   int check_need_fetch_next_buffer(bool &need_fectch);
   int fetch_next_buffer();
