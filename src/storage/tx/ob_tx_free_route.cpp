@@ -12,6 +12,7 @@
 #define USING_LOG_PREFIX TRANS
 
 #include "ob_trans_service.h"
+#include "ob_xa_ctx.h"
 #include "lib/utility/serialization.h"
 
 /*

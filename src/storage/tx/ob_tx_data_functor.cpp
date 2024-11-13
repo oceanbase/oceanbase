@@ -15,6 +15,7 @@
 #include "storage/memtable/mvcc/ob_mvcc_row.h"
 #include "storage/tx/ob_committer_define.h"
 #include "storage/ob_i_store.h"
+#include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tx/ob_trans_part_ctx.h"

@@ -27,6 +27,7 @@
 #include "ob_dup_table_base.h"
 #include <cstdint>
 #include "storage/multi_data_source/buffer_ctx.h"
+#include "storage/tx/ob_tx_log_cb_define.h"
 
 
 namespace oceanbase
@@ -164,6 +165,9 @@ public:
         is_inited_(false), mt_ctx_(), reserve_allocator_("PartCtx", MTL_ID()),
         exec_info_(reserve_allocator_),
         mds_cache_(reserve_allocator_),
+        has_extra_log_cb_group_(false),
+        reserve_log_cb_group_(true/*is_reserve*/),
+        extra_cb_group_list_(),
         role_state_(TxCtxRoleState::FOLLOWER),
         coord_prepare_info_arr_(OB_MALLOC_NORMAL_BLOCK_SIZE,
                                 ModulePageAllocator(reserve_allocator_, "PREPARE_INFO")),
@@ -298,8 +302,8 @@ private:
                 K_(sub_state),
                 K(is_leaf()),
                 K(is_root()),
+                K(extra_cb_group_list_.get_size()),
                 K(busy_cbs_.get_size()),
-                K(final_log_cb_),
                 K(ctx_tx_data_),
                 K(role_state_),
                 K(create_ctx_scn_),
@@ -712,6 +716,7 @@ private:
 
   int init_log_cbs_(const share::ObLSID&ls_id, const ObTransID &tx_id);
   int extend_log_cbs_(ObTxLogCb *&log_cb);
+  int extend_log_cb_group_();
   void reset_log_cb_list_(common::ObDList<ObTxLogCb> &cb_list);
   void reset_log_cbs_();
   int prepare_log_cb_(const bool need_final_cb, ObTxLogCb *&log_cb);
@@ -1053,10 +1058,13 @@ private:
   ObIRetainCtxCheckFunctor *retain_ctx_func_ptr_;
   // sub_state_ is volatile
   ObTxSubState sub_state_;
-  ObTxLogCb log_cbs_[PREALLOC_LOG_CALLBACK_COUNT];
+
+  bool has_extra_log_cb_group_;
+  ObTxLogCbGroup reserve_log_cb_group_;
+  TxLogCbGroupList extra_cb_group_list_;
   common::ObDList<ObTxLogCb> free_cbs_;
   common::ObDList<ObTxLogCb> busy_cbs_;
-  ObTxLogCb final_log_cb_;
+
   ObSpinLock log_cb_lock_;
   ObTxLogBigSegmentInfo big_segment_info_;
   // The semantic of the rec_log_ts means the log ts of the first state change

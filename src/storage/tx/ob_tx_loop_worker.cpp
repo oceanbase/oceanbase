@@ -82,6 +82,7 @@ void ObTxLoopWorker::reset()
 {
   last_tx_gc_ts_ = false;
   last_retain_ctx_gc_ts_ = 0;
+  last_log_cb_pool_adjust_ts_ = 0;
 }
 
 void ObTxLoopWorker::run1()
@@ -92,6 +93,7 @@ void ObTxLoopWorker::run1()
   lib::set_thread_name("TxLoopWorker");
   bool can_gc_tx = false;
   bool can_gc_retain_ctx = false;
+  bool can_adjust_log_cb_pool =  false;
 
   while (!has_set_stop()) {
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
@@ -116,7 +118,14 @@ void ObTxLoopWorker::run1()
       can_gc_retain_ctx = true;
     }
 
-    (void)scan_all_ls_(can_gc_tx, can_gc_retain_ctx);
+    if (common::ObClockGenerator::getClock() - last_log_cb_pool_adjust_ts_
+        > TX_LOG_CB_POOL_ADJUST_INTERVAL) {
+      TRANS_LOG(INFO, "try to adjust log cb pool");
+      last_log_cb_pool_adjust_ts_ = common::ObClockGenerator::getClock();
+      can_adjust_log_cb_pool = true;
+    }
+
+    (void)scan_all_ls_(can_gc_tx, can_gc_retain_ctx, can_adjust_log_cb_pool);
 
     // TODO shanyan.g
     // 1) We use max(max_commit_ts, gts_cache) as read snapshot,
@@ -131,10 +140,13 @@ void ObTxLoopWorker::run1()
     }
     can_gc_tx = false;
     can_gc_retain_ctx = false;
+    can_adjust_log_cb_pool = false;
   }
 }
 
-int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc, bool can_gc_retain_ctx)
+int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc,
+                                 bool can_gc_retain_ctx,
+                                 bool can_adjust_log_cb_pool)
 {
   int ret = OB_SUCCESS;
   int iter_ret = OB_SUCCESS;
@@ -162,7 +174,7 @@ int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc, bool can_gc_retain_ctx)
       SCN min_start_scn = SCN::invalid_scn();
       SCN max_decided_scn = SCN::invalid_scn();
       MinStartScnStatus status = MinStartScnStatus::UNKOWN;
-      common::ObRole role;
+      common::ObRole role = common::ObRole::INVALID_ROLE;
       int64_t base_proposal_id, proposal_id;
 
       if (OB_TMP_FAIL(cur_ls_ptr->get_log_handler()->get_role(role, base_proposal_id))) {
@@ -229,6 +241,10 @@ int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc, bool can_gc_retain_ctx)
       }
       // ignore ret
       (void)cur_ls_ptr->get_tx_svr()->check_all_readonly_tx_clean_up();
+
+      if (can_adjust_log_cb_pool) {
+        do_log_cb_pool_adjust_(cur_ls_ptr, role);
+      }
     }
   }
 
@@ -313,6 +329,24 @@ void ObTxLoopWorker::do_retain_ctx_gc_(ObLS *ls_ptr)
   retain_ctx_mgr->try_advance_retain_ctx_gc(ls_ptr->get_ls_id());
 
   UNUSED(ret);
+}
+
+void ObTxLoopWorker::do_log_cb_pool_adjust_(ObLS *ls_ptr, const common::ObRole role)
+{
+  int ret = OB_SUCCESS;
+  int64_t active_tx_cnt = 0;
+  (void)ls_ptr->get_tx_svr()->get_active_tx_count(active_tx_cnt);
+  if (common::is_strong_leader(role)) {
+    if (OB_FAIL(ls_ptr->get_tx_svr()->get_log_cb_pool_mgr()->adjust_log_cb_pool(active_tx_cnt))) {
+      TRANS_LOG(WARN, "adjust log cb pool failed", K(ret), K(role), KPC(ls_ptr));
+    }
+  } else {
+    // log handler follower, not tx follower
+    if (OB_FAIL(
+            ls_ptr->get_tx_svr()->get_log_cb_pool_mgr()->clear_log_cb_pool(false /*for replay*/))) {
+      TRANS_LOG(WARN, "clear log cb pools on a follower  failed", K(ret), K(role), KPC(ls_ptr));
+    }
+  }
 }
 
 }

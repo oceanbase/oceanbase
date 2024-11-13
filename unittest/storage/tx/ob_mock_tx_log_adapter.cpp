@@ -13,6 +13,7 @@
 #include "ob_mock_tx_log_adapter.h"
 #include "logservice/ob_log_handler.h"
 #include "storage/tx/ob_trans_submit_log_cb.h"
+#include "storage/tx/ob_tx_log_cb_define.h"
 #include "logservice/ob_log_base_type.h"
 
 namespace oceanbase

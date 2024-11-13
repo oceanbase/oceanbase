@@ -25,6 +25,8 @@
 #include "storage/tx/ob_trans_ctx_mgr_v4.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
+#define USING_LOG_PREFIX TRANS
+
 namespace oceanbase
 {
 
@@ -178,6 +180,8 @@ int ObLSTxCtxMgr::init(const int64_t tenant_id,
     TRANS_LOG(WARN, "tx log adapter init error", KR(ret));
   } else if (OB_NOT_NULL(log_adapter) && OB_FALSE_IT(tx_log_adapter_ = log_adapter)) {
     ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(log_cb_pool_mgr_.init(tenant_id, ls_id))) {
+    TRANS_LOG(WARN, "init log_cb_pool_mgr failed", K(ret), K(ls_id_), K(log_cb_pool_mgr_));
   } else if (OB_FAIL(ls_log_writer_.init(tenant_id, ls_id, tx_log_adapter_, this))) {
     TRANS_LOG(WARN, "ls_log_writer init fail", KR(ret));
   } else {
@@ -205,6 +209,7 @@ void ObLSTxCtxMgr::destroy()
 {
   WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
   if (IS_INIT) {
+    log_cb_pool_mgr_.destroy();
     ls_log_writer_.destroy();
     is_inited_ = false;
     TRANS_LOG(INFO, "ObLSTxCtxMgr destroyed", KP(this), K_(ls_id));
@@ -678,6 +683,7 @@ int ObLSTxCtxMgr::remove_callback_for_uncommited_tx(const memtable::ObMemtableSe
 int ObLSTxCtxMgr::replay_start_working_log(const ObTxStartWorkingLog &log, SCN start_working_ts)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   UNUSED(log);
   WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
   ReplayTxStartWorkingLogFunctor fn(start_working_ts);
@@ -685,6 +691,10 @@ int ObLSTxCtxMgr::replay_start_working_log(const ObTxStartWorkingLog &log, SCN s
     TRANS_LOG(WARN, "[LsTxCtxMgr Role Change] replay start working log failed", KR(ret), K(ls_id_));
   } else {
     TRANS_LOG(INFO, "[LsTxCtxMgr Role Change] replay start working log success", K(tenant_id_), K(ls_id_));
+  }
+
+  if (OB_TMP_FAIL(log_cb_pool_mgr_.clear_log_cb_pool(false /*for_replay*/))) {
+    TRANS_LOG(WARN, "clear log cb pool failed", K(ret), K(ls_id_), K(log_cb_pool_mgr_));
   }
   return ret;
 }
@@ -764,6 +774,7 @@ int ObLSTxCtxMgr::submit_start_working_log_()
 int ObLSTxCtxMgr::switch_to_follower_forcedly()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObTimeGuard timeguard("ObLSTxCtxMgr::switch_to_follower_forcedly");
   ObTxCommitCallback *cb_list = NULL;
   {
@@ -788,6 +799,9 @@ int ObLSTxCtxMgr::switch_to_follower_forcedly()
         state_helper.restore_state();
       }
     }
+  }
+  if (OB_TMP_FAIL(log_cb_pool_mgr_.clear_log_cb_pool(false /*for_replay*/))) {
+    TRANS_LOG(WARN, "clear log cb pool failed", K(ret), K(ls_id_), K(log_cb_pool_mgr_));
   }
   timeguard.click();
   // run callback out of lock, ignore ret
@@ -837,6 +851,7 @@ int ObLSTxCtxMgr::try_wait_gts_and_inc_max_commit_ts_()
 int ObLSTxCtxMgr::switch_to_leader()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
   StateHelper state_helper(ls_id_, state_);
   if (IS_NOT_INIT) {
@@ -852,13 +867,19 @@ int ObLSTxCtxMgr::switch_to_leader()
       state_helper.restore_state();
     }
   }
-  TRANS_LOG(INFO, "[LsTxCtxMgr] switch_to_leader", K(ret), KPC(this));
+
+  if (OB_TMP_FAIL(log_cb_pool_mgr_.switch_to_leader(get_active_tx_count()))) {
+    TRANS_LOG(WARN, "switch to leader failed in log_cb_pool_mgr", K(ret), K(tmp_ret), K(ls_id_));
+  }
+
+  FLOG_INFO("[LsTxCtxMgr Role Change] switch_to_leader", K(ret), KPC(this));
   return ret;
 }
 
 int ObLSTxCtxMgr::switch_to_follower_gracefully()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObTimeGuard timeguard("switch_to_follower_gracefully");
   StateHelper state_helper(ls_id_, state_);
   int64_t start_time = ObTimeUtility::current_time();
@@ -914,6 +935,11 @@ int ObLSTxCtxMgr::switch_to_follower_gracefully()
       timeguard.click();
     }
   }
+
+  if (OB_TMP_FAIL(log_cb_pool_mgr_.clear_log_cb_pool(false /*for_replay*/))) {
+    TRANS_LOG(WARN, "clear log cb pool failed", K(ret), K(ls_id_), K(log_cb_pool_mgr_));
+  }
+
   (void)process_callback_(cb_list);
   timeguard.click();
   TRANS_LOG(INFO, "[LsTxCtxMgr] switch_to_follower_gracefully", K(ret), KPC(this), K(process_count));
