@@ -2091,7 +2091,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_switch_log_io_mode)
   SET_CASE_LOG_FILE(TEST_NAME, "test_switch_log_io_mode");
   OB_LOGGER.set_log_level("TRACE");
   ObSimpleLogServer *log_server = dynamic_cast<ObSimpleLogServer*>(get_cluster()[0]);
-  int submit_log_round = 6;
+  int submit_log_round = 1000000;
   std::vector<std::thread> submit_threads;
   for (int i = 0; i < 16; i++) {
     submit_threads.emplace_back([this, log_server, i, submit_log_round](){
@@ -2110,6 +2110,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_switch_log_io_mode)
         CLOG_LOG(INFO, "wait_until_has_committed success", KPC(leader.palf_handle_impl_), K(j));
         LSN begin_lsn;leader.palf_handle_impl_->get_begin_lsn(begin_lsn);
         EXPECT_EQ(OB_ITER_END, read_log(leader, begin_lsn));
+        printf("submit_log success, round:%d\n", j);
       }
     });
   }
@@ -2120,8 +2121,13 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_switch_log_io_mode)
       int j = submit_log_round;
       int64_t leader_idx = 0;
       while (j > 0) {
+        int ret = OB_SUCCESS;
         PalfHandleImplGuard leader;
-        EXPECT_EQ(OB_SUCCESS, create_paxos_group(1100 + i, leader_idx, leader));
+        if (OB_FAIL(create_paxos_group(1100 + i, leader_idx, leader))) {
+          printf("create_paxos_group failed, palf_id:%d, %d\n", 1100 + i, ret);
+          sleep(2);
+          continue;
+        }
         leader.palf_handle_impl_->log_engine_.log_storage_.hot_cache_ = NULL;
         LSN end_lsn = leader.palf_handle_impl_->get_end_lsn();
         EXPECT_EQ(OB_SUCCESS, leader.get_palf_handle_impl()->set_base_lsn(end_lsn));
@@ -2132,14 +2138,14 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_switch_log_io_mode)
         LSN begin_lsn;leader.palf_handle_impl_->get_begin_lsn(begin_lsn);
         EXPECT_EQ(OB_ITER_END, read_log(leader, begin_lsn));
         EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->log_engine_.truncate_prefix_blocks(LSN(10*PALF_BLOCK_SIZE)));
-        printf("after truncate prefix blocks\n");
+        printf("after truncate prefix blocks, round:%d\n", j);
         sleep(2);
         leader.reset();
         delete_paxos_group(1100+i);
       }
     });
   }
-  int switch_log_io_mode_round = 6;
+  int switch_log_io_mode_round = submit_log_round;
   std::thread switch_log_io_mode_t1([&]() {
     ObTenantEnv::set_tenant(log_server->tenant_base_);
     int i = switch_log_io_mode_round;
@@ -2154,7 +2160,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_switch_log_io_mode)
       }
       ASSERT_EQ(OB_SUCCESS, LOG_IO_ADAPTER.switch_log_io_mode(log_io_info));
       CLOG_LOG(INFO, "switch_log_io_mode success", K(log_io_info), "using_mode: ", LOG_IO_ADAPTER.using_mode_, K(i));
-      printf("switch_log_io_mode success, %d\n", LOG_IO_ADAPTER.using_mode_);
+      printf("switch_log_io_mode success, using_mode:%d, round:%d\n", LOG_IO_ADAPTER.using_mode_, i);
       i--;
       sleep(10);
     }

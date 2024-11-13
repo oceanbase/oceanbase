@@ -28,6 +28,10 @@ namespace common
 {
 class ObIODevice;
 }
+namespace logservice
+{
+enum class SwitchLogIOModeState;
+}
 namespace palf
 {
 class LogWriteBuf;
@@ -91,21 +95,11 @@ private:
 
 class LogBlockHandler;
 
-enum class SwitchLogIOModeState {
-  INVALID = 0,
-  NORMAL = 1,
-  CLOSING = 2,
-  FSYNCING = 3,
-  OPENING = 4
-};
-
 struct SwitchLogIOModeFunctor {
   SwitchLogIOModeFunctor(LogBlockHandler *block_handler);
   ~SwitchLogIOModeFunctor();
-  int operator()(ObIODevice *prev_io_device, ObIODevice *io_device, const int64_t align_size);
-  int switch_state();
+  int operator()(ObIODevice *prev_io_device, ObIODevice *io_device, const int64_t align_size, const logservice::SwitchLogIOModeState &state);
   LogBlockHandler *block_handler_;
-  SwitchLogIOModeState state_;
 };
 
 // This class just used for writing log, truncating log
@@ -167,7 +161,7 @@ public:
   int fsync();
   int set_log_store_sync_mode(const LogSyncMode &mode);
   int64_t get_curr_write_offset() const;
-  TO_STRING_KV(K_(dio_aligned_buf), K_(log_block_size), K_(io_fd), K_(curr_block_path), K_(sync_io), K_(curr_write_offset));
+  TO_STRING_KV(K_(dio_aligned_buf), K_(log_block_size), K_(io_fd), K_(curr_block_path), K_(sync_io), K_(curr_write_offset), KP(io_adapter_));
 private:
   // if timeout, retry until open block return an explicit error code
   // @brief block_path, the block path to be opened

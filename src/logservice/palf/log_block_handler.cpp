@@ -142,16 +142,15 @@ void LogDIOAlignedBuf::align_buf_()
 }
 
 SwitchLogIOModeFunctor::SwitchLogIOModeFunctor(LogBlockHandler *block_handler)
-  : block_handler_(block_handler), state_(SwitchLogIOModeState::NORMAL)
+  : block_handler_(block_handler)
 {}
 
 SwitchLogIOModeFunctor::~SwitchLogIOModeFunctor()
 {
   block_handler_ = NULL;
-  state_ = SwitchLogIOModeState::INVALID;
 }
 
-int SwitchLogIOModeFunctor::operator()(ObIODevice *prev_io_device, ObIODevice *io_device, const int64_t align_size)
+int SwitchLogIOModeFunctor::operator()(ObIODevice *prev_io_device, ObIODevice *io_device, const int64_t align_size, const logservice::SwitchLogIOModeState &state)
 {
   int ret = OB_SUCCESS;
   const bool with_reopen = false;
@@ -161,8 +160,7 @@ int SwitchLogIOModeFunctor::operator()(ObIODevice *prev_io_device, ObIODevice *i
   if (NULL == block_handler_ || NULL == prev_io_device || NULL == io_device) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "unexpected error, block_handler_ or io_device is nullptr", KP(block_handler_), KP(prev_io_device), KP(io_device));
-  } else if (OB_EAGAIN == switch_state()) {
-    if (SwitchLogIOModeState::CLOSING == state_) {
+  } else if (logservice::SwitchLogIOModeState::CLOSING == state) {
       if (!io_fd.is_valid()) {
         PALF_LOG(INFO, "io_fd is invalid, do nothing", KPC(block_handler_));
       } else {
@@ -172,68 +170,38 @@ int SwitchLogIOModeFunctor::operator()(ObIODevice *prev_io_device, ObIODevice *i
           PALF_LOG(INFO, "close successfully", KPC(block_handler_));
         }
       }
-    } else if (SwitchLogIOModeState::FSYNCING == state_) {
-      char *ptr = block_handler_->curr_block_path_;
-      if (0 == strlen(ptr)) {
-        PALF_LOG(INFO, "curr_block_path_ is nullptr do nothing", KPC(block_handler_));
-      } else if (OB_FAIL(fsync_with_retry(ptr, prev_io_device))) {
-        PALF_LOG(WARN, "fsync_with_retry failed", KPC(block_handler_));
+  } else if (logservice::SwitchLogIOModeState::FSYNCING == state) {
+    char *ptr = block_handler_->curr_block_path_;
+    if (0 == strlen(ptr)) {
+      PALF_LOG(INFO, "curr_block_path_ is nullptr do nothing", KPC(block_handler_));
+    } else if (OB_FAIL(fsync_with_retry(ptr, prev_io_device))) {
+      PALF_LOG(WARN, "fsync_with_retry failed", KPC(block_handler_));
+    } else {
+      PALF_LOG(INFO, "fsync_with_retry successfully", KPC(block_handler_));
+    }
+  } else if (logservice::SwitchLogIOModeState::OPENING == state) {
+    ObIOFd tmp_io_fd;
+    char *ptr = block_handler_->curr_block_path_;
+    block_handler_->dio_aligned_buf_.align_size_ = align_size;
+    if (0 == strlen(ptr)) {
+      PALF_LOG(INFO, "curr_block_path_ is nullptr do nothing", KPC(block_handler_));
+    } else {
+      if (OB_FAIL(io_device->open(ptr, LOG_WRITE_FLAG, FILE_OPEN_MODE, tmp_io_fd))) {
+        PALF_LOG(WARN, "open failed", KR(ret), KP(io_device));
+      } else if (FALSE_IT(tmp_io_fd.device_handle_ = io_device)) {
+      } else if (block_handler_->io_fd_.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        PALF_LOG(ERROR, "io_fd of LogBlockHandler is valid", KPC(block_handler_), K(tmp_io_fd));
+      } else if (OB_FAIL(block_handler_->inner_load_data_once_(block_handler_->curr_write_offset_, tmp_io_fd))) {
+        PALF_LOG(WARN, "inner_load_data_once_ failed", KR(ret), KP(io_device));
+      } else if (FALSE_IT(block_handler_->io_fd_ = tmp_io_fd)) {
       } else {
-        PALF_LOG(INFO, "fsync_with_retry successfully", KPC(block_handler_));
       }
-    } else if (SwitchLogIOModeState::OPENING == state_) {
-      ObIOFd tmp_io_fd;
-      char *ptr = block_handler_->curr_block_path_;
-      block_handler_->dio_aligned_buf_.align_size_ = align_size;
-      if (OB_FAIL(switch_state())) {
-        PALF_LOG(ERROR, "unexpected error, state is not normal", K(state_));
-      } else if (0 == strlen(ptr)) {
-        PALF_LOG(INFO, "curr_block_path_ is nullptr do nothing", KPC(block_handler_));
-      } else {
-        do {
-          if (OB_FAIL(open_with_retry(ptr, LOG_WRITE_FLAG, FILE_OPEN_MODE, tmp_io_fd, io_device))) {
-            PALF_LOG(WARN, "open failed", KR(ret), KP(io_device));
-          } else if (block_handler_->io_fd_.is_valid()) {
-            ret = OB_ERR_UNEXPECTED;
-            PALF_LOG(ERROR, "io_fd of LogBlockHandler is valid", KPC(block_handler_), K(tmp_io_fd));
-          } else if (OB_FAIL(block_handler_->inner_load_data_once_(block_handler_->curr_write_offset_, tmp_io_fd))) {
-            PALF_LOG(WARN, "inner_load_data_once_ failed", KR(ret), KP(io_device));
-            block_handler_->inner_close_();
-          } else if (FALSE_IT(block_handler_->io_fd_ = tmp_io_fd)) {
-          } else {
-          }
-          if (OB_FAIL(ret)) {
-            USLEEP(LogBlockHandler::RETRY_INTERVAL);
-          }
-        } while (OB_FAIL(ret));
+      if (OB_FAIL(ret)) {
+        USLEEP(LogBlockHandler::RETRY_INTERVAL);
+        io_device->close(tmp_io_fd);
       }
     }
-  }
-  return ret;
-}
-
-int SwitchLogIOModeFunctor::switch_state()
-{
-  int ret = OB_SUCCESS;
-  if (SwitchLogIOModeState::NORMAL == state_) {
-    state_ = SwitchLogIOModeState::CLOSING;
-    ret = OB_EAGAIN;
-    PALF_LOG(INFO, "switch_state to CLOSING");
-  } else if (SwitchLogIOModeState::CLOSING == state_) {
-    state_ = SwitchLogIOModeState::FSYNCING;
-    ret = OB_EAGAIN;
-    PALF_LOG(INFO, "switch_state to FSYNCING");
-  } else if (SwitchLogIOModeState::FSYNCING == state_) {
-    state_ = SwitchLogIOModeState::OPENING;
-    ret = OB_EAGAIN;
-    PALF_LOG(INFO, "switch_state to OPENGINE");
-  } else if (SwitchLogIOModeState::OPENING == state_) {
-    state_ = SwitchLogIOModeState::NORMAL;
-    PALF_LOG(INFO, "switch_state to NORMAL");
-    ret = OB_SUCCESS;
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    PALF_LOG(ERROR, "unexpected state", K_(state));
   }
   return ret;
 }
@@ -296,21 +264,23 @@ void LogBlockHandler::destroy()
 {
   is_inited_ = false;
   curr_write_offset_ = 0;
-  if (io_fd_.is_valid()) {
-    inner_fsync_();
-    inner_close_();
-    io_fd_.reset();
-    memset(curr_block_path_, 0, OB_MAX_FILE_NAME_LENGTH);
-  }
+  PALF_LOG(INFO, "LogBlockHandler destroy", KPC(this));
   if (io_adapter_ != NULL) {
     (void)unregister_to_io_adapter_(log_dir_, io_adapter_);
-    io_adapter_ = NULL;
+  }
+  {
+    ObSpinLockGuard lock(fd_lock_);
+    if (io_fd_.is_valid() && io_adapter_ != NULL) {
+      inner_fsync_();
+      inner_close_();
+      io_fd_.reset();
+      memset(curr_block_path_, 0, OB_MAX_FILE_NAME_LENGTH);
+    }
   }
   log_block_size_ = 0;
   dio_aligned_buf_.destroy();
   memset(log_dir_, 0, OB_MAX_FILE_NAME_LENGTH);
   io_adapter_ = NULL;
-  PALF_LOG(INFO, "LogFileHandler destroy success");
 }
 
 int LogBlockHandler::switch_next_block(const char *block_path)
@@ -356,6 +326,7 @@ int LogBlockHandler::close_with_fsync()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (!io_fd_.is_valid()) {
+    memset(curr_block_path_, 0, OB_MAX_FILE_NAME_LENGTH);
     PALF_LOG(WARN, "io_fd_ is invalid, do nothing", K(ret), KPC(this));
   } else if (OB_FAIL(inner_fsync_())) {
     PALF_LOG(WARN, "inner_fsync_ failed", K(ret), KPC(this));
@@ -831,7 +802,7 @@ int LogBlockHandler::register_to_io_adapter_(const char *log_dir,
 {
   int ret = OB_SUCCESS;
   SwitchLogIOModeFunctor functor(this);
-  ObFunction<int(ObIODevice *,ObIODevice *, const int64_t)> cb(functor);
+  ObFunction<int(ObIODevice *,ObIODevice *, const int64_t, const logservice::SwitchLogIOModeState&)> cb(functor);
   if (!cb.is_valid()) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     PALF_LOG(WARN, "ObFunction alloc memory failed", KR(ret), K(log_dir));

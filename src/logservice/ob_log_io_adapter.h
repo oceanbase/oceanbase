@@ -42,6 +42,14 @@ enum class ObLogIOMode {
   REMOTE = 2
 };
 
+enum class SwitchLogIOModeState {
+  INVALID = 0,
+  NORMAL = 1,
+  CLOSING = 2,
+  FSYNCING = 3,
+  OPENING = 4
+};
+
 bool is_valid_log_io_mode(const ObLogIOMode mode);
 
 inline const char *log_io_mode_user_str(const ObLogIOMode mode)
@@ -89,7 +97,7 @@ struct SwitchLogIOModeCbKey {
 
 bool operator==(const SwitchLogIOModeCbKey &lhs, const SwitchLogIOModeCbKey &rhs);
 
-typedef ObFunction<int(ObIODevice *prev_io_device, ObIODevice *io_device, const int64_t align_size)> SwitchLogIOModeCb;
+typedef ObFunction<int(ObIODevice *prev_io_device, ObIODevice *io_device, const int64_t align_size, const SwitchLogIOModeState &state)> SwitchLogIOModeCb;
 
 class ObLogIOAdapter
 {
@@ -109,6 +117,7 @@ public:
                      disk_io_thread_count_(-1),
                      max_io_depth_(-1),
                      flying_fd_count_(0),
+                     execute_io_mode_cb_done_(true),
                      is_inited_(false) {}
   int init(const char *clog_dir,
            const int64_t disk_io_thread_count,
@@ -196,7 +205,6 @@ private:
   int switch_log_io_mode_to_remote_(const ObLogIOInfo &io_info);
   int execute_switch_log_io_mode_cb_(ObIODevice *io_device,
                                      const ObLogIOMode &io_mode);
-  void wait_flying_fd_count_to_zero_();
   int deal_with_state_not_match_();
 
   const ObLogIOMode &get_using_mode_();
@@ -217,12 +225,14 @@ private:
   struct ExecuteCbFunctor {
     ExecuteCbFunctor(ObIODevice *prev_io_device,
                      ObIODevice *io_device,
-                     int64_t align_size);
+                     int64_t align_size,
+                     SwitchLogIOModeState &state);
     ~ExecuteCbFunctor();
     int operator()(common::hash::HashMapPair<SwitchLogIOModeCbKey, SwitchLogIOModeCb> &pair);
     ObIODevice *prev_io_device_;
     ObIODevice *io_device_;
     int64_t align_size_;
+    SwitchLogIOModeState &state_;
   };
 private:
   ObLogIOMode using_mode_;
@@ -239,6 +249,7 @@ private:
   common::hash::ObHashMap<SwitchLogIOModeCbKey, SwitchLogIOModeCb> cb_map_;
 
   ObSpinLock cb_map_lock_;
+  bool execute_io_mode_cb_done_;
   bool is_inited_;
 };
 

@@ -230,6 +230,7 @@ int ObLogIOAdapter::switch_log_io_mode(const ObLogIOInfo &io_info)
   int ret = OB_SUCCESS;
   const ObLogIOMode &mode = io_info.get_log_io_mode();
   WLockGuard guard(using_device_lock_);
+  execute_io_mode_cb_done_ = false;
   if (mode == using_mode_) {
     CLOG_LOG(INFO, "no need switch_log_io_mode", K(io_info), K(using_mode_));
   } else if (ObLogIOMode::LOCAL == mode) {
@@ -252,6 +253,9 @@ int64_t ObLogIOAdapter::choose_align_size() const
   return choose_align_size_(using_mode_);
 }
 
+#define BREAK_IF_NOT_STATE_NOT_MATCH                         \
+  if (OB_STATE_NOT_MATCH != ret) { break; }                  \
+  else { execute_io_mode_cb_done_ = false;}
 // ============================= file interface ===========================
 int ObLogIOAdapter::open(const char *block_path,
                          const int flags,
@@ -276,7 +280,8 @@ int ObLogIOAdapter::open(const char *block_path,
         set_fd_holder(io_fd.second_id_, true);
         CLOG_LOG(INFO, "open file sucessfully", K(block_path), K(flags), K(mode), K(io_fd), KPC(this));
       }
-    } while (OB_STATE_NOT_MATCH == ret && OB_SUCC(deal_with_state_not_match_()));
+      BREAK_IF_NOT_STATE_NOT_MATCH;
+    } while (OB_SUCC(deal_with_state_not_match_()));
   }
   return ret;
 }
@@ -487,7 +492,8 @@ int ObLogIOAdapter::stat(const char *pathname,
       } else {
         CLOG_LOG(TRACE, "stat success", K(ret), K(statbuf), K(pathname), KPC(this));
       }
-    } while (OB_STATE_NOT_MATCH == ret && OB_SUCC(deal_with_state_not_match_()));
+      BREAK_IF_NOT_STATE_NOT_MATCH;
+    } while (OB_SUCC(deal_with_state_not_match_()));
   }
   return ret;
 }
@@ -528,7 +534,8 @@ int ObLogIOAdapter::rename(const char *oldpath,
       } else {
         CLOG_LOG(TRACE, "rename success", K(oldpath), K(newpath), KPC(this));
       }
-    } while (OB_STATE_NOT_MATCH == ret && OB_SUCC(deal_with_state_not_match_()));
+      BREAK_IF_NOT_STATE_NOT_MATCH;
+    } while (OB_SUCC(deal_with_state_not_match_()));
   }
   return ret;
 }
@@ -549,7 +556,8 @@ int ObLogIOAdapter::unlink(const char *pathname)
       } else {
         CLOG_LOG(TRACE, "unlink success", K(pathname), KPC(this));
       }
-    } while (OB_STATE_NOT_MATCH == ret && OB_SUCC(deal_with_state_not_match_()));
+      BREAK_IF_NOT_STATE_NOT_MATCH;
+    } while (OB_SUCC(deal_with_state_not_match_()));
   }
   return ret;
 }
@@ -573,7 +581,8 @@ int ObLogIOAdapter::scan_dir(const char *dir_name,
       } else {
         CLOG_LOG(INFO, "scan_dir success", K(dir_name));
       }
-    } while (OB_STATE_NOT_MATCH == ret && OB_SUCC(deal_with_state_not_match_()));
+      BREAK_IF_NOT_STATE_NOT_MATCH;
+    } while (OB_SUCC(deal_with_state_not_match_()));
   }
   return ret;
 }
@@ -595,7 +604,8 @@ int ObLogIOAdapter::mkdir(const char *pathname,
       } else {
         CLOG_LOG(INFO, "mkdir success", K(pathname), K(mode));
       }
-    } while (OB_STATE_NOT_MATCH == ret && OB_SUCC(deal_with_state_not_match_()));
+      BREAK_IF_NOT_STATE_NOT_MATCH;
+    } while (OB_SUCC(deal_with_state_not_match_()));
   }
   return ret;
 }
@@ -616,7 +626,8 @@ int ObLogIOAdapter::rmdir(const char *pathname)
       } else {
         CLOG_LOG(INFO, "rmdir success", K(pathname));
       }
-    } while (OB_STATE_NOT_MATCH == ret && OB_SUCC(deal_with_state_not_match_()));
+      BREAK_IF_NOT_STATE_NOT_MATCH;
+    } while ((deal_with_state_not_match_()));
   }
   return ret;
 }
@@ -810,66 +821,78 @@ int ObLogIOAdapter::switch_log_io_mode_to_local_()
   return ret;
 }
 
-ObLogIOAdapter::ExecuteCbFunctor::ExecuteCbFunctor(ObIODevice *prev_io_device, ObIODevice *io_device, int64_t align_size)
-  : prev_io_device_(prev_io_device), io_device_(io_device), align_size_(align_size) {}
+ObLogIOAdapter::ExecuteCbFunctor::ExecuteCbFunctor(ObIODevice *prev_io_device, ObIODevice *io_device, int64_t align_size, SwitchLogIOModeState &state)
+  : prev_io_device_(prev_io_device), io_device_(io_device), align_size_(align_size), state_(state) {}
 
 ObLogIOAdapter::ExecuteCbFunctor::~ExecuteCbFunctor()
 {
   prev_io_device_ = NULL;
   io_device_ = NULL;
   align_size_ =  0;
+  state_ = SwitchLogIOModeState::INVALID;
 }
 
 int ObLogIOAdapter::ExecuteCbFunctor::operator()(common::hash::HashMapPair<SwitchLogIOModeCbKey, SwitchLogIOModeCb> &pair)
 {
-  return pair.second(prev_io_device_, io_device_, align_size_);
+  return pair.second(prev_io_device_, io_device_, align_size_, state_);
 }
 
 int ObLogIOAdapter::execute_switch_log_io_mode_cb_(ObIODevice *io_device,
                                                    const ObLogIOMode &io_mode)
 {
   int ret = OB_SUCCESS;
-  const int64_t print_threshold = 100 * 1000;
-  ObTimeGuard time_guard("execute_switch_log_io_mode_cb_", print_threshold);
-  ExecuteCbFunctor functor(using_device_, io_device, choose_align_size_(io_mode));
-  ObSpinLockGuard guad(cb_map_lock_);
-  CLOG_LOG(INFO, "execute cb first phase, make flying_fd_count to zero", K(flying_fd_count_));
-  if (OB_FAIL(cb_map_.foreach_refactored(functor))) {
-    CLOG_LOG(WARN, "foreach_refactored failed", KR(ret), KP(io_device));
-  }
-  time_guard.click("execute_cb_first_phase");
-  wait_flying_fd_count_to_zero_();
-  time_guard.click("wait_flying_fd_count_to_zero_");
-  CLOG_LOG(INFO, "execute cb second phase, fsync each writeable file", K(flying_fd_count_));
-  if (OB_FAIL(cb_map_.foreach_refactored(functor))) {
-    CLOG_LOG(WARN, "foreach_refactored failed", KR(ret), KP(io_device));
-  }
-  time_guard.click("execute_cb_second_phase");
-  CLOG_LOG(INFO, "execute cb third phase, reopen each writeable file", K(flying_fd_count_));
-  if (OB_FAIL(cb_map_.foreach_refactored(functor))) {
-    CLOG_LOG(WARN, "foreach_refactored failed", KR(ret), KP(io_device));
-  }
-  time_guard.click("execute_cb_third_phase");
+  if (!execute_io_mode_cb_done_) {
+    SwitchLogIOModeState state;
+    const int64_t print_threshold = 100 * 1000;
+    ObTimeGuard time_guard("execute_switch_log_io_mode_cb_", print_threshold);
+    ExecuteCbFunctor functor(using_device_, io_device, choose_align_size_(io_mode), state);
+    ObSpinLockGuard guad(cb_map_lock_);
+    do {
+      CLOG_LOG(INFO, "execute cb first phase, make flying_fd_count to zero", K(flying_fd_count_));
+      state = SwitchLogIOModeState::CLOSING;
+      do {
+        if (OB_FAIL(cb_map_.foreach_refactored(functor))) {
+          CLOG_LOG(WARN, "foreach_refactored failed", KR(ret), KP(io_device));
+        }
+        int64_t flying_fd_count = ATOMIC_LOAD(&flying_fd_count_);
+        if (flying_fd_count != 0) {
+          usleep(10*1000);
+          CLOG_LOG(INFO, "flying_fd_count_ not zero, need wait", KPC(this));
+        } else {
+          break;
+        }
+      } while (true);
+      time_guard.click("execute_cb_first_phase");
 
-  CLOG_LOG(INFO, "execute_switch_log_io_mode_cb_ finish", K(time_guard));
+      CLOG_LOG(INFO, "execute cb second phase, fsync each writeable file", KR(ret), K(flying_fd_count_));
+      state = SwitchLogIOModeState::FSYNCING;
+      if (OB_FAIL(cb_map_.foreach_refactored(functor))) {
+        CLOG_LOG(WARN, "foreach_refactored failed", KR(ret), KP(io_device));
+      }
+      time_guard.click("execute_cb_second_phase");
+
+      CLOG_LOG(INFO, "execute cb third phase, reopen each writeable file", K(flying_fd_count_));
+      state = SwitchLogIOModeState::OPENING;
+      if (OB_FAIL(cb_map_.foreach_refactored(functor))) {
+        CLOG_LOG(WARN, "foreach_refactored failed", KR(ret), KP(io_device));
+      }
+      time_guard.click("execute_cb_third_phase");
+
+    } while (OB_FAIL(ret));
+    execute_io_mode_cb_done_ = true;
+    CLOG_LOG(INFO, "execute_switch_log_io_mode_cb_ finish", KR(ret), K(time_guard));
+  } else {
+    CLOG_LOG(INFO, "finish execute_io_mode_cb_done_, has been done by others!", KPC(this));
+  }
   return ret;
-}
-
-void ObLogIOAdapter::wait_flying_fd_count_to_zero_()
-{
-  int ret = OB_NEED_WAIT;
-  int64_t flying_fd_count = 0;
-  while (0 != (flying_fd_count = ATOMIC_LOAD(&flying_fd_count_))) {
-    CLOG_LOG(WARN, "fd count is not zero, need wait", K(flying_fd_count));
-    ob_usleep(10*1000);
-  }
 }
 
 int ObLogIOAdapter::deal_with_state_not_match_()
 {
   WLockGuard guard(using_device_lock_);
-  CLOG_LOG(INFO, "deal_with_state_not_match_", K(flying_fd_count_));
+  CLOG_LOG(INFO, "begin deal_with_state_not_match_", KPC(this));
   execute_switch_log_io_mode_cb_(using_device_, using_mode_);
+  CLOG_LOG(INFO, "finish deal_with_state_not_match_", KPC(this));
   return OB_SUCCESS;
 }
 
