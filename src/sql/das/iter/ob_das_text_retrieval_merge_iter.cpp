@@ -1086,10 +1086,16 @@ int ObDASTRTaatIter::fill_chunk_store_by_tr_iter()
         }
       }
       if (OB_SUCC(ret) && ir_ctdef_->inv_scan_doc_id_col_->is_batch_result()) {
-        for (int64_t i = 0; i < hash_map_size_; ++i) {
-          sql::ObBitVector *skip = to_bit_vector(mem_context_->get_arena_allocator().alloc(ObBitVector::memory_size(capacity)));
-          skip->init(capacity);
-          skips[i] = skip;
+        for (int64_t i = 0; OB_SUCC(ret) && i < hash_map_size_; ++i) {
+          sql::ObBitVector *skip = nullptr;
+          if (OB_ISNULL(skip = to_bit_vector(mem_context_->get_arena_allocator().alloc(ObBitVector::memory_size(capacity))))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to allocate enough memory", K(capacity), K(ret));
+          } else {
+            skip->init(capacity);
+            skips[i] = skip;
+          }
+
         }
       }
     }

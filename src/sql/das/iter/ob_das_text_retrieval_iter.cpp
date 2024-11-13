@@ -110,12 +110,14 @@ int ObDASTextRetrievalIter::inner_init(ObDASIterParam &param)
       }
     }
 
+    const int64_t default_size = OB_MAX(max_batch_size_, 1);
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(init_calc_exprs())) {
       LOG_WARN("failed to init row-wise calc exprs", K(ret));
+    } else if (OB_ISNULL(skip_ = to_bit_vector(allocator_.alloc(ObBitVector::memory_size(default_size))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate skip bit vector", K(ret));
     } else {
-      int64_t default_size = OB_MAX(max_batch_size_, 1);
-      skip_ = to_bit_vector(allocator_.alloc(ObBitVector::memory_size(default_size)));
       skip_->init(default_size);
       is_inited_ = true;
     }
@@ -126,7 +128,9 @@ int ObDASTextRetrievalIter::inner_init(ObDASIterParam &param)
 int ObDASTextRetrievalIter::inner_reuse()
 {
   int ret = OB_SUCCESS;
-  skip_->reset(OB_MAX(max_batch_size_, 1));
+  if (OB_NOT_NULL(skip_)) {
+    skip_->reset(OB_MAX(max_batch_size_, 1));
+  }
   if (nullptr != mem_context_) {
     mem_context_->reset_remain_one_page();
   }
@@ -135,18 +139,23 @@ int ObDASTextRetrievalIter::inner_reuse()
   int64_t old_default_size = OB_MAX(max_batch_size_, 1);
   max_batch_size_ = ir_rtdef_->eval_ctx_->max_batch_size_;
   if (old_default_size < OB_MAX(max_batch_size_, 1)) {
-    int64_t default_size = OB_MAX(max_batch_size_, 1);
+    const int64_t default_size = OB_MAX(max_batch_size_, 1);
     allocator_.reuse();
-    skip_ = to_bit_vector(allocator_.alloc(ObBitVector::memory_size(default_size)));
-    skip_->init(default_size);
+    if (OB_ISNULL(skip_ = to_bit_vector(allocator_.alloc(ObBitVector::memory_size(default_size))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate skip bit vector", K(ret));
+    } else {
+      skip_->init(default_size);
+    }
   }
-
-  const ObTabletID &old_inv_scan_id = inv_idx_scan_param_.tablet_id_;
-  inverted_idx_scan_iter_->set_scan_param(inv_idx_scan_param_);
-  inv_idx_scan_param_.need_switch_param_ = inv_idx_scan_param_.need_switch_param_ ||
-    ((old_inv_scan_id.is_valid() && old_inv_scan_id != inv_idx_tablet_id_) ? true : false);
-  if (!inv_idx_scan_param_.key_ranges_.empty()) {
-    inv_idx_scan_param_.key_ranges_.reuse();
+  if (OB_SUCC(ret)) {
+    const ObTabletID &old_inv_scan_id = inv_idx_scan_param_.tablet_id_;
+    inverted_idx_scan_iter_->set_scan_param(inv_idx_scan_param_);
+    inv_idx_scan_param_.need_switch_param_ = inv_idx_scan_param_.need_switch_param_ ||
+      ((old_inv_scan_id.is_valid() && old_inv_scan_id != inv_idx_tablet_id_) ? true : false);
+    if (!inv_idx_scan_param_.key_ranges_.empty()) {
+      inv_idx_scan_param_.key_ranges_.reuse();
+    }
   }
   if (FAILEDx(inverted_idx_scan_iter_->reuse())) {
     LOG_WARN("failed to reuse inverted index iter", K(ret));
@@ -859,7 +868,7 @@ int ObDASTRCacheIter::inner_init(ObDASIterParam &param)
     LOG_WARN("failed to init base class", K(ret));
   } else {
     is_inited_ = false;
-    int64_t default_size = OB_MAX(max_batch_size_, 1);
+    const int64_t default_size = OB_MAX(max_batch_size_, 1);
     relevance_.set_allocator(&allocator_);
     if (OB_FAIL(relevance_.init(default_size))) {
       LOG_WARN("failed to init next batch iter idxes array", K(ret));
@@ -880,13 +889,15 @@ int ObDASTRCacheIter::inner_init(ObDASIterParam &param)
 int ObDASTRCacheIter::inner_reuse()
 {
   int ret = OB_SUCCESS;
-  skip_->reset(OB_MAX(max_batch_size_, 1));
+  if (OB_NOT_NULL(skip_)) {
+    skip_->reset(OB_MAX(max_batch_size_, 1));
+  }
   int64_t old_default_size = OB_MAX(max_batch_size_, 1);
   max_batch_size_ = ir_rtdef_->eval_ctx_->max_batch_size_;
   if (old_default_size < OB_MAX(max_batch_size_, 1)) {
     relevance_.reuse();
     doc_id_.reuse();
-    int64_t default_size = OB_MAX(max_batch_size_, 1);
+    const int64_t default_size = OB_MAX(max_batch_size_, 1);
     allocator_.reuse();
     if (OB_FAIL(relevance_.init(default_size))) {
       LOG_WARN("failed to init relevance_ array", K(ret));
@@ -896,8 +907,10 @@ int ObDASTRCacheIter::inner_reuse()
       LOG_WARN("failed to init doc_id_ array", K(ret));
     } else if (OB_FAIL(doc_id_.prepare_allocate(default_size))) {
       LOG_WARN("failed to prepare allocate doc_id_ array", K(ret));
+    } else if (OB_ISNULL(skip_ = to_bit_vector(allocator_.alloc(ObBitVector::memory_size(default_size))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate skip bit vector", K(ret));
     } else {
-      skip_ = to_bit_vector(allocator_.alloc(ObBitVector::memory_size(default_size)));
       skip_->init(default_size);
     }
   }
