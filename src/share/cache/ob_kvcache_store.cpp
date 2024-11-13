@@ -733,11 +733,11 @@ int ObKVCacheStore::print_tenant_memblock_info(ObDLink* head)
       static const int64_t BUFLEN = 1 << 18;
       char *buf = (char *)ctxalp(BUFLEN);
       HazardList retire_list;
+      int64_t ctx_pos = 0;
       if (nullptr == buf) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         COMMON_LOG(WARN, "Fail to allocate memory for print tenant memblock info", K(ret), KP(buf));
       } else {
-        int64_t ctx_pos = 0;
         QClockGuard guard(get_qclock());
         ObKVMemBlockHandle *handle = static_cast<ObKVMemBlockHandle *>(link_next(head));
         while (OB_SUCC(ret) && head != handle) {
@@ -760,9 +760,9 @@ int ObKVCacheStore::print_tenant_memblock_info(ObDLink* head)
           }
           handle = static_cast<ObKVMemBlockHandle *>(link_next(handle));
         }
-        if (OB_SUCC(ret)) {
-          _OB_LOG(WARN, "[CACHE-SYNC-WASH] len: %8ld tenant sync wash failed, cache memblock info: \n%s", ctx_pos, buf);
-        }
+      } // qclock guard
+      if (OB_SUCC(ret)) {
+        _OB_LOG(WARN, "[CACHE-SYNC-WASH] len: %8ld tenant sync wash failed, cache memblock info: \n%s", ctx_pos, buf);
       }
       retire_mb_handles(retire_list, false /* do retire */);
     }
