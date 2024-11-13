@@ -1979,6 +1979,9 @@ public:
   static int is_cost_based_trans_enable(ObTransformerCtx *ctx,
                                         const ObGlobalHint &global_hint,
                                         bool &is_enabled);
+  static int check_const_select(ObTransformerCtx *ctx,
+                                const ObSelectStmt *stmt,
+                                bool &is_const_select);
 
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,
