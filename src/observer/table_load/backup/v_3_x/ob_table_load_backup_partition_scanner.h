@@ -203,6 +203,7 @@ private:
   };
 private:
   ObArenaAllocator allocator_;
+  ObArenaAllocator lob_header_allocator_;
   ObSchemaInfo schema_info_;
   share::ObBackupStorageInfo storage_info_;
   ObString data_path_;

@@ -14,6 +14,7 @@
 #include "observer/table_load/backup/v_3_x/ob_table_load_backup_partition_scanner.h"
 #include "observer/table_load/backup/v_3_x/ob_table_load_backup_block_sstable_struct.h"
 #include "observer/table_load/backup/ob_table_load_backup_file_util.h"
+#include "storage/lob/ob_lob_manager.h"
 #include "share/backup/ob_backup_struct.h"
 #include <string.h>
 
@@ -235,6 +236,7 @@ bool ObTableLoadBackupPartScanner::ObTableMacroIndex::is_valid() const
  */
 ObTableLoadBackupPartScanner::ObTableLoadBackupPartScanner()
   : allocator_("TLD_BPS"),
+    lob_header_allocator_("TLD_BPS_LOB"),
     macro_block_min_skip_idx_(INT64_MAX),
     buf_(nullptr),
     cur_idx_(-1),
@@ -331,6 +333,7 @@ void ObTableLoadBackupPartScanner::reset()
   }
   cur_idx_ = -1;
   allocator_.reset();
+  lob_header_allocator_.reset();
   is_inited_ = false;
 }
 
@@ -584,9 +587,10 @@ int ObTableLoadBackupPartScanner::switch_next_macro_block()
 int ObTableLoadBackupPartScanner::read_lob_data(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
+  lob_header_allocator_.reuse();
   for (int64_t i = 0; OB_SUCC(ret) && i < row->count_; i++) {
     ObObj &col = row->get_cell(i);
-    if (col.is_lob()) {
+    if (col.is_lob() || col.is_json() || col.is_geometry()) {
       if (col.is_outrow()) {
         const ObBackupLobData *lob_data = reinterpret_cast<const ObBackupLobData *>(col.get_string_ptr());
         const int64_t direct_block_cnt = MIN(lob_data->get_direct_cnt(), static_cast<int64_t>(lob_data->idx_cnt_));
@@ -595,7 +599,7 @@ int ObTableLoadBackupPartScanner::read_lob_data(ObNewRow *&row)
           if (lob_col_buf_[i] != nullptr) {
             ob_free(lob_col_buf_[i]);
           }
-          if (OB_ISNULL(lob_col_buf_[i] = static_cast<char *>(ob_malloc(lob_data->byte_size_, ObMemAttr(MTL_ID(), "TLD_BLob32x"))))) {
+          if (OB_ISNULL(lob_col_buf_[i] = static_cast<char *>(ob_malloc(lob_data->byte_size_, ObMemAttr(MTL_ID(), "TLD_BLob3x"))))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("fail to alloc memory", KR(ret));
           } else {
@@ -614,7 +618,7 @@ int ObTableLoadBackupPartScanner::read_lob_data(ObNewRow *&row)
         for (int64_t j = direct_block_cnt; OB_SUCC(ret) && j < lob_data->idx_cnt_; j++) {
           const ObBackupLobIndex &lob_index = lob_data->lob_idx_[j];
           int64_t indirect_index_pos = 0;
-          if (OB_ISNULL(indirect_index_buf) && OB_ISNULL(indirect_index_buf = static_cast<char *>(ob_malloc(SSTABLE_BLOCK_BUF_SIZE, ObMemAttr(MTL_ID(), "TLD_BLob32x"))))) {
+          if (OB_ISNULL(indirect_index_buf) && OB_ISNULL(indirect_index_buf = static_cast<char *>(ob_malloc(SSTABLE_BLOCK_BUF_SIZE, ObMemAttr(MTL_ID(), "TLD_BLob3x"))))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("fail to alloc memory", KR(ret));
           } else if (OB_FAIL(fill_lob_buf(lob_index, indirect_index_buf, SSTABLE_BLOCK_BUF_SIZE, indirect_index_pos))) {
@@ -637,20 +641,35 @@ int ObTableLoadBackupPartScanner::read_lob_data(ObNewRow *&row)
             }
           }
         }
-        if (indirect_index_buf != nullptr) {
-          ob_free(indirect_index_buf);
-          indirect_index_buf = nullptr;
-        }
         if (OB_SUCC(ret)) {
           if (OB_UNLIKELY(pos != lob_data->byte_size_)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected error", KR(ret), K(lob_data->byte_size_), K(pos));
           } else {
-            col.set_varchar(lob_col_buf_[i], pos);
+            col.v_.string_ = lob_col_buf_[i];
+            col.val_len_ = pos;
           }
         }
-      } else {
-        col.set_varchar(col.v_.string_, col.val_len_);
+        if (indirect_index_buf != nullptr) {
+          ob_free(indirect_index_buf);
+          indirect_index_buf = nullptr;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        // 对于非text类型，比如json类型，补充lob_header并设置成json类型，跳过obj_cast里的json解析过程
+        // 对于text类型，设置成varchar类型，如果字符集不同，obj_cast的varchar_to_text过程需要做内存拷贝，这里再补充lob_header，就变成了二次拷贝
+        if (col.is_lob()) {
+          col.meta_.set_varchar();
+        } else {
+          ObString src_obj(col.val_len_, col.v_.string_);
+          ObString dest_obj;
+          if (OB_FAIL(ObLobManager::fill_lob_header(lob_header_allocator_, src_obj, dest_obj))) {
+            LOG_WARN("fail to fill lob header", KR(ret));
+          } else {
+            col.set_lob_value(col.get_type(), dest_obj.ptr(), dest_obj.length());
+            col.set_has_lob_header();
+          }
+        }
       }
     }
   }
