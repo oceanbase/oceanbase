@@ -192,7 +192,6 @@ TEST_F(ObTestRegisterMDS, basic)
 
 TEST_F(ObTestRegisterMDS, basic_big_mds)
 {
-#ifdef OB_TX_MDS_LOG_USE_BIT_SEGMENT_BUF
   START_TWO_TX_NODE_WITH_LSID(n1, n2, 2003);
   PREPARE_TX(n1, tx);
   PREPARE_TX_PARAM(tx_param);
@@ -207,7 +206,6 @@ TEST_F(ObTestRegisterMDS, basic_big_mds)
                                                       mds_str, char_count, 0));
   n1->wait_all_redolog_applied();
 
-  // TRANS_LOG(INFO, "try commit tx with expired_time", K(n1->ts_after_ms(0)),K(n1->ts_after_ms()))
   ASSERT_EQ(OB_SUCCESS, n1->commit_tx(tx, n1->ts_after_ms(100 * 1000)));
 
   n2->set_as_follower_replica(*n1);
@@ -219,7 +217,68 @@ TEST_F(ObTestRegisterMDS, basic_big_mds)
 
   GC_MDS_RETAIN_CTX(n2)
   ASSERT_EQ(OB_SUCCESS, n2->wait_all_tx_ctx_is_destoryed());
-#endif
+}
+
+TEST_F(ObTestRegisterMDS, merge_mds_log)
+{
+  START_TWO_TX_NODE_WITH_LSID(n1, n2, 2010);
+  PREPARE_TX(n1, tx);
+  PREPARE_TX_PARAM(tx_param);
+  tx_param.timeout_us_ = 1000 * 1000 * 1000;
+  const int64_t NORMAL_CHAR_CNT = 1 * 1024 * 1024;
+  const int64_t LARGE_CHAR_CNT = 5 * 1024 * 1024;
+
+  n1->txs_.dup_table_scan_timer_.unregister_timeout_task(n1->txs_.dup_tablet_scan_task_);
+  n2->txs_.dup_table_scan_timer_.unregister_timeout_task(n2->txs_.dup_tablet_scan_task_);
+
+  char normal_mds_str[NORMAL_CHAR_CNT];
+  char large_mds_str[LARGE_CHAR_CNT];
+  memset(normal_mds_str, 'M', sizeof(char) * NORMAL_CHAR_CNT);
+  memset(large_mds_str, 'M', sizeof(char) * LARGE_CHAR_CNT);
+
+  ASSERT_EQ(OB_SUCCESS, n1->start_tx(tx, tx_param));
+  ASSERT_EQ(OB_SUCCESS, n1->txs_.register_mds_into_tx(tx, n1->ls_id_, ObTxDataSourceType::DDL_TRANS,
+                                                      normal_mds_str, NORMAL_CHAR_CNT, 0));
+  ASSERT_EQ(OB_SUCCESS, n1->txs_.register_mds_into_tx(tx, n1->ls_id_, ObTxDataSourceType::DDL_TRANS,
+                                                      normal_mds_str, NORMAL_CHAR_CNT, 0));
+  ASSERT_EQ(OB_SUCCESS, n1->txs_.register_mds_into_tx(tx, n1->ls_id_, ObTxDataSourceType::DDL_TRANS,
+                                                      normal_mds_str, NORMAL_CHAR_CNT, 0));
+  n1->wait_all_redolog_applied();
+
+  ObPartTransCtx *ctx = nullptr;
+  ASSERT_EQ(OB_SUCCESS, n1->get_tx_ctx(n1->ls_id_, tx.tx_id_, ctx));
+  ASSERT_EQ(OB_SUCCESS, ctx->exec_info_.redo_lsns_.count() == 2);
+
+  ASSERT_EQ(OB_SUCCESS, n1->txs_.register_mds_into_tx(tx, n1->ls_id_, ObTxDataSourceType::DDL_TRANS,
+                                                      normal_mds_str, NORMAL_CHAR_CNT, 0));
+  ASSERT_EQ(OB_SUCCESS, n1->txs_.register_mds_into_tx(tx, n1->ls_id_, ObTxDataSourceType::DDL_TRANS,
+                                                      large_mds_str, LARGE_CHAR_CNT, 0));
+  n1->wait_all_redolog_applied();
+  ASSERT_EQ(OB_SUCCESS, ctx->exec_info_.redo_lsns_.count()
+                            == (2 + 1 + LARGE_CHAR_CNT / common::OB_MAX_LOG_ALLOWED_SIZE));
+
+  ASSERT_EQ(OB_SUCCESS, n1->txs_.register_mds_into_tx(tx, n1->ls_id_, ObTxDataSourceType::DDL_TRANS,
+                                                      normal_mds_str, NORMAL_CHAR_CNT, 0));
+  ASSERT_EQ(OB_SUCCESS, n1->txs_.register_mds_into_tx(tx, n1->ls_id_, ObTxDataSourceType::DDL_TRANS,
+                                                      normal_mds_str, NORMAL_CHAR_CNT, 0));
+  n1->wait_all_redolog_applied();
+  ASSERT_EQ(OB_SUCCESS, ctx->exec_info_.redo_lsns_.count()
+                            == (2 + 1 + LARGE_CHAR_CNT / common::OB_MAX_LOG_ALLOWED_SIZE + 1));
+
+  ASSERT_EQ(OB_SUCCESS, n1->revert_tx_ctx(ctx));
+
+  ASSERT_EQ(OB_SUCCESS, n1->commit_tx(tx, n1->ts_after_ms(100 * 1000)));
+
+  n2->set_as_follower_replica(*n1);
+  ReplayLogEntryFunctor functor(n2);
+  ASSERT_EQ(OB_SUCCESS, n2->fake_tx_log_adapter_->replay_all(functor));
+
+  GC_MDS_RETAIN_CTX(n1)
+  ASSERT_EQ(OB_SUCCESS, n1->wait_all_tx_ctx_is_destoryed());
+
+  GC_MDS_RETAIN_CTX(n2)
+  ASSERT_EQ(OB_SUCCESS, n2->wait_all_tx_ctx_is_destoryed());
+
 }
 
 TEST_F(ObTestRegisterMDS, notify_mds_error)

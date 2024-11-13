@@ -928,18 +928,27 @@ void ObTxMultiDataSourceLog::reset()
 int ObTxMultiDataSourceLog::fill_MDS_data(const ObTxBufferNode &node)
 {
   int ret = OB_SUCCESS;
-#ifndef OB_TX_MDS_LOG_USE_BIT_SEGMENT_BUF
-  if (node.get_serialize_size() + data_.get_serialize_size() >= MAX_MDS_LOG_SIZE) {
+  // #ifndef OB_TX_MDS_LOG_USE_BIT_SEGMENT_BUF
+  if (data_.empty() && node.allow_to_use_mds_big_segment()
+      && node.get_serialize_size() > ObTxMultiDataSourceLog::MAX_MDS_LOG_SIZE) {
+    TRANS_LOG(INFO, "meet a big segment node with the empty log, try to fill it", K(ret), K(node),
+              K(data_.count()), K(node.get_serialize_size()), K(this->get_serialize_size()),
+              KPC(this));
+
+  } else if (node.get_serialize_size() + data_.get_serialize_size() >= MAX_MDS_LOG_SIZE) {
     ret = OB_SIZE_OVERFLOW;
     TRANS_LOG(WARN, "MDS log is overflow", K(*this), K(node));
-  } else {
-#endif
-
-    data_.push_back(node);
-
-#ifndef OB_TX_MDS_LOG_USE_BIT_SEGMENT_BUF
   }
-#endif
+  //   } else {
+  // #endif
+
+  if (OB_SUCC(ret)) {
+    data_.push_back(node);
+  }
+
+  // #ifndef OB_TX_MDS_LOG_USE_BIT_SEGMENT_BUF
+  //   }
+  // #endif
   return ret;
 }
 

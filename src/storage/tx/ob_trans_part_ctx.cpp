@@ -605,7 +605,7 @@ int ObPartTransCtx::handle_timeout(const int64_t delay)
       }
 
       if (mds_cache_.need_retry_submit_mds()) {
-        if (OB_TMP_FAIL(submit_multi_data_source_())) {
+        if (OB_TMP_FAIL(submit_log_impl_(ObTxLogType::TX_MULTI_DATA_SOURCE_LOG))) {
           TRANS_LOG(WARN, "retry submit mds log failed", K(tmp_ret), K(*this));
         } else {
           mds_cache_.set_need_retry_submit_mds(false);
@@ -4277,7 +4277,12 @@ int ObPartTransCtx::submit_big_segment_log_()
       log_cb = NULL;
     } else if (OB_FAIL(acquire_ctx_ref_())) {
       TRANS_LOG(ERROR, "acquire ctx ref failed", KR(ret), K(*this));
-    } else if (OB_FAIL(submit_log_block_out_(log_block, big_segment_info_.submit_base_scn_, log_cb))) {
+    } else if (OB_FAIL(submit_log_block_out_(log_block,
+                                             big_segment_info_.submit_base_scn_,
+                                             log_cb,
+                                             0,
+                                             ObReplayBarrierType::NO_NEED_BARRIER,
+                                             INT64_MAX))) {
       TRANS_LOG(WARN, "submit log to clog adapter failed", KR(ret), K(*this));
       return_log_cb_(log_cb);
       log_cb = NULL;
@@ -4411,6 +4416,11 @@ int ObPartTransCtx::submit_log_block_out_(ObTxLogBlock &log_block,
   } else if (is_contain_stat_log(log_block.get_cb_arg_array()) && FALSE_IT(is_2pc_state_log = true)) {
   } else if (is_2pc_state_log && OB_FAIL(merge_intermediate_participants())) {
     TRANS_LOG(WARN, "fail to merge intermediate participants", K(ret), KPC(this));
+  } else if (big_segment_info_.segment_buf_.is_active()
+             && !is_contain(log_block.get_cb_arg_array(), ObTxLogType::TX_BIG_SEGMENT_LOG)) {
+    ret = OB_LOG_TOO_LARGE;
+    TRANS_LOG(INFO, "can not submit any log before all big log submittted", K(ret), KPC(log_cb),
+              K(replay_hint), K(barrier), K(base_scn), K(big_segment_info_));
   } else {
     const int64_t replay_hint_v = replay_hint ?: trans_id_.get_id();
     log_block.get_header().set_log_entry_no(exec_info_.next_log_entry_no_);
@@ -6740,17 +6750,11 @@ int ObPartTransCtx::switch_to_follower_gracefully(ObTxCommitCallback *&cb_list_h
     }
     timeguard.click();
     if (OB_SUCC(ret) && need_submit_log && !need_force_abort_()) {
-      if (ObTxLogType::TX_COMMIT_INFO_LOG == log_type) {
-        if (OB_FAIL(submit_redo_commit_info_log_())) {
+      if (ObTxLogType::TX_COMMIT_INFO_LOG == log_type || ObTxLogType::TX_ACTIVE_INFO_LOG == log_type) {
+        if (OB_FAIL(submit_log_impl_(log_type))) {
           // currently, if there is no log callback, switch leader would fail,
           // and resume leader would be called.
-          TRANS_LOG(WARN, "submit commit info log failed", KR(ret), K(*this));
-        }
-      } else if (ObTxLogType::TX_ACTIVE_INFO_LOG == log_type) {
-        if (OB_FAIL(submit_redo_active_info_log_())) {
-          // currently, if there is no log callback, switch leader would fail,
-          // and resume leader would be called.
-          TRANS_LOG(WARN, "submit active info log failed", KR(ret), K(*this));
+          TRANS_LOG(WARN, "submit active/commit info log failed", KR(ret), K(*this));
         }
       } else {
         ret = OB_ERR_UNEXPECTED;

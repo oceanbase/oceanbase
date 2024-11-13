@@ -143,16 +143,23 @@ int ObLSTxLogAdapter::submit_log(const char *buf,
     static const int64_t MAX_SLEEP_US = 100;
     int64_t retry_cnt = 0;
     int64_t sleep_us = 0;
-    const int64_t expire_us = cur_ts + retry_timeout_us;
+    int64_t expire_us = INT64_MAX;
+    bool block_flag = need_nonblock;
+    if (retry_timeout_us < INT64_MAX - cur_ts) {
+      expire_us = cur_ts + retry_timeout_us;
+    }
+    if (expire_us == INT64_MAX) {
+      block_flag = false;
+    }
     do {
-      if (is_big_log && OB_FAIL(log_handler_->append_big_log(buf, size, base_scn, need_nonblock,
+      if (is_big_log && OB_FAIL(log_handler_->append_big_log(buf, size, base_scn, block_flag,
                                                               allow_compression, cb, lsn, scn))) {
         TRANS_LOG(WARN, "append big log to palf failed", K(ret), KP(log_handler_), KP(buf), K(size), K(base_scn),
-              K(need_nonblock), K(is_big_log));
-      } else if (!is_big_log && OB_FAIL(log_handler_->append(buf, size, base_scn, need_nonblock,
+              K(need_nonblock), K(block_flag), K(expire_us), K(is_big_log));
+      } else if (!is_big_log && OB_FAIL(log_handler_->append(buf, size, base_scn, block_flag,
                                                          allow_compression, cb, lsn, scn))) {
         TRANS_LOG(WARN, "append log to palf failed", K(ret), KP(log_handler_), KP(buf), K(size), K(base_scn),
-              K(need_nonblock));
+              K(need_nonblock), K(block_flag), K(expire_us));
       } else {
         cb->set_base_ts(base_scn);
         cb->set_lsn(lsn);
