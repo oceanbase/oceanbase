@@ -2776,3 +2776,89 @@ int ObObjUDTUtil::ob_udt_obj_value_get_serialize_size(const ObObj &obj, int64_t 
   }
   return ret;
 }
+
+int ObObjCharacterUtil::print_safe_hex_represent_oracle(const ObObj &obj, char *buffer, int64_t length, int64_t &pos,
+    const ObAccuracy &accuracy)
+{
+  int ret = OB_SUCCESS;
+  const char *CAST_PREFIX = "CAST(UTL_RAW.CAST_TO_%s(HEXTORAW('";
+  const char *CAST_CHAR_SUFFIX = "')) AS %s(%d %s))";
+  const char *CAST_NCHAR_SUFFIX = "')) AS %s(%d))";
+  bool is_nstring_type = ob_is_nstring_type(obj.get_type());
+  const char *CAST_VARCHAR_TYPE_STR = !is_nstring_type ?  "VARCHAR2" : "NVARCHAR2";
+  const char *LENGTH_SEMANTICS_STR = !is_nstring_type ? get_length_semantics_str(accuracy.get_length_semantics()) : "";
+  const char *type_str = "";
+  switch (obj.get_type()) {
+    case ObCharType:
+      type_str = "CHAR";
+      break;
+    case ObVarcharType:
+      type_str = "VARCHAR2";
+      break;
+    case ObNCharType:
+      type_str = "NCHAR";
+      break;
+    case ObNVarchar2Type:
+      type_str = "NVARCHAR2";
+      break;
+    default:
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexcepted obj type", K(ret), K(obj.get_type()));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(databuff_printf(buffer, length, pos, CAST_PREFIX, CAST_VARCHAR_TYPE_STR))) {
+    LOG_WARN("fail to print string", K(ret), KP(CAST_PREFIX), K(CAST_VARCHAR_TYPE_STR));
+  } else if (OB_FAIL(hex_print(obj.get_string_ptr(), obj.get_string_len(), buffer, length, pos))) {
+    LOG_WARN("fail to print hex", K(ret));
+  } else if (!is_nstring_type && OB_FAIL(databuff_printf(buffer, length, pos, CAST_CHAR_SUFFIX, type_str,
+    accuracy.get_length(), LENGTH_SEMANTICS_STR))) {
+      LOG_WARN("fail to print string", K(ret), K(CAST_CHAR_SUFFIX), K(type_str),
+        K(accuracy.get_length()), K(LENGTH_SEMANTICS_STR));
+  } else if (is_nstring_type && OB_FAIL(databuff_printf(buffer, length, pos, CAST_NCHAR_SUFFIX, type_str,
+    accuracy.get_length()))) {
+      LOG_WARN("fail to print string", K(ret), K(CAST_NCHAR_SUFFIX), K(type_str), K(accuracy.get_length()));
+  }
+  return ret;
+}
+
+int ObObjCharacterUtil::print_safe_hex_represent_mysql(const ObObj &obj, char *buffer, int64_t length, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  const char *CAST_PREFIX = "CONVERT(x'";
+  const char *CAST_SUFFIX = "' USING %s) COLLATE %s";
+  ObCollationType collation_type = obj.get_collation_type();
+  ObCharsetType charset_type = ObCharset::charset_type_by_coll(collation_type);
+  const char *charset_name = nullptr;
+  const char *collation_name = nullptr;
+  if (!ObCharset::is_valid_collation(charset_type, collation_type)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid collation info", K(ret), K(obj.get_type()));
+  } else if (FALSE_IT(charset_name = ObCharset::charset_name(charset_type))) {
+  } else if (FALSE_IT(collation_name = ObCharset::collation_name(collation_type))) {
+  } else if (OB_UNLIKELY(!charset_name || !collation_name)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected collation name", K(ret), K(charset_type), K(collation_type));
+  } else if (OB_FAIL(databuff_printf(buffer, length, pos, "%s", CAST_PREFIX))) {
+    LOG_WARN("fail to print string", K(ret), K(CAST_PREFIX));
+  } else if (OB_FAIL(hex_print(obj.get_string_ptr(), obj.get_string_len(), buffer, length, pos))) {
+    LOG_WARN("fail to print hex", K(ret));
+  } else if (OB_FAIL(databuff_printf(buffer, length, pos, CAST_SUFFIX, charset_name, collation_name))) {
+    LOG_WARN("fail to print string", K(ret), K(CAST_SUFFIX), K(charset_name), K(collation_name));
+  }
+  return ret;
+}
+
+int ObObjCharacterUtil::print_safe_hex_represent(const ObObj &obj, char* buf, const int64_t buf_len, int64_t& pos,
+  const ObAccuracy &accuracy)
+{
+  int ret = OB_SUCCESS;
+  if (!ob_is_character_type(obj.get_type(), obj.get_collation_type())){
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected obj type", K(ret), K(obj.get_type()), K(obj.get_collation_type()));
+  } else {
+    ret = lib::is_oracle_mode() ? print_safe_hex_represent_oracle(obj, buf, buf_len, pos, accuracy)
+            : print_safe_hex_represent_mysql(obj, buf, buf_len, pos);
+  }
+  return ret;
+}
+

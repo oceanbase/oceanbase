@@ -427,12 +427,11 @@ private:
                                ObSqlString &sql_string);
   int convert_rowkey_to_sql_literal(
       const ObRowkey &rowkey,
-      const ObIArray<ObScale> &rowkey_col_scales,
       bool is_oracle_mode,
-      const ObObjPrintParams &obj_print_params,
       char *buf,
       int64_t &pos,
       int64_t buf_len);
+
 private:
   bool is_inited_;
   uint64_t tenant_id_;
@@ -450,7 +449,8 @@ private:
   common::ObArenaAllocator allocator_;
   ObArray<ObColDesc> org_col_ids_;
   common::ObArray<ObColumnNameInfo> column_names_;
-  common::ObArray<ObScale> org_rowkey_col_scales_; // for convert rowkey to sql literal
+  common::ObArray<ObAccuracy> rowkey_col_accuracys_;
+  ObTimeZoneInfoWrap tz_info_wrap_; // for table recovery
   compaction::ObColumnChecksumCalculator checksum_calculator_;
 };
 

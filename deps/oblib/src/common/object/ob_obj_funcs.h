@@ -1189,6 +1189,9 @@ inline int obj_print_plain_str<ObHexStringType>(const ObObj &obj, char *buffer,
     ObCharsetType dst_type = ObCharset::charset_type_by_coll(params.cs_type_);              \
     if (CHARSET_BINARY == src_type && lib::is_mysql_mode()) {               \
       ret = obj_print_sql<ObHexStringType>(obj, buffer, length, pos, params);      \
+    } else if (params.character_hex_safe_represent_                                       \
+      && ob_is_character_type(obj.get_type(), obj.get_collation_type())) {                 \
+         ret = ObObjCharacterUtil::print_safe_hex_represent(obj, buffer, length, pos, params.accuracy_); \
     } else if (OB_FAIL(databuff_printf(buffer, length, pos, "'"))) {                        \
     } else if (src_type == dst_type || src_type == CHARSET_INVALID) { \
       ObHexEscapeSqlStr sql_str(obj.get_string(), params.skip_escape_);                     \
@@ -2724,7 +2727,10 @@ template <>
     ObCharsetType src_type = ObCharset::charset_type_by_coll(obj.get_collation_type());     \
     ObCharsetType dst_type = ObCharset::charset_type_by_coll(params.cs_type_);              \
     int ret = OB_SUCCESS;                                                            \
-    if (OB_FAIL(databuff_printf(buffer, length, pos, "n'"))) {                              \
+    if (params.character_hex_safe_represent_                                                \
+      && ob_is_character_type(obj.get_type(), obj.get_collation_type())) {                  \
+         ret = ObObjCharacterUtil::print_safe_hex_represent(obj, buffer, length, pos, params.accuracy_); \
+    } else if (OB_FAIL(databuff_printf(buffer, length, pos, "n'"))) {                              \
     } else if (src_type == dst_type) {                                                      \
       ObHexEscapeSqlStr sql_str(obj.get_string(), params.skip_escape_);                     \
       pos += sql_str.to_string(buffer + pos, length - pos);                                 \

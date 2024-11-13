@@ -1255,6 +1255,7 @@ struct ObObjPrintParams
   ObObjPrintParams (const ObTimeZoneInfo *tz_info, ObCollationType cs_type):
     tz_info_(tz_info),
     cs_type_(cs_type),
+    accuracy_(),
     print_flags_(0),
     exec_ctx_(NULL),
     ob_obj_type_(ObNullType)
@@ -1262,6 +1263,7 @@ struct ObObjPrintParams
   ObObjPrintParams (const ObTimeZoneInfo *tz_info):
     tz_info_(tz_info),
     cs_type_(CS_TYPE_UTF8MB4_GENERAL_CI),
+    accuracy_(),
     print_flags_(0),
     exec_ctx_(NULL),
     ob_obj_type_(ObNullType)
@@ -1269,6 +1271,7 @@ struct ObObjPrintParams
   ObObjPrintParams ():
     tz_info_(NULL),
     cs_type_(CS_TYPE_UTF8MB4_GENERAL_CI),
+    accuracy_(),
     print_flags_(0),
     exec_ctx_(NULL),
     ob_obj_type_(ObNullType)
@@ -1276,6 +1279,7 @@ struct ObObjPrintParams
   TO_STRING_KV(K_(tz_info), K_(cs_type),K_(print_flags), K_(ob_obj_type));
   const ObTimeZoneInfo *tz_info_;
   ObCollationType cs_type_;
+  ObAccuracy accuracy_;
   union {
     uint32_t print_flags_;
     struct {
@@ -1290,7 +1294,8 @@ struct ObObjPrintParams
       uint32_t print_const_expr_type_:1;
       uint32_t print_null_string_value_:1;
       uint32_t refine_range_max_value_:1;
-      uint32_t reserved_:21;
+      uint32_t character_hex_safe_represent_:1;
+      uint32_t reserved_:20;
     };
   };
 
@@ -4430,6 +4435,16 @@ public:
           || udt_id == T_OBJ_SDO_ELEMINFO_ARRAY
           || udt_id == T_OBJ_SDO_ORDINATE_ARRAY;
   }
+};
+
+class ObObjCharacterUtil
+{
+  // Utils for safe hex representation of character types.
+  // Only use for the character types that supported as primary key columns.
+public:
+  static int print_safe_hex_represent_oracle(const ObObj &obj, char* buf, const int64_t buf_len, int64_t& pos, const ObAccuracy &accuracy);
+  static int print_safe_hex_represent_mysql(const ObObj &obj, char *buffer, int64_t length, int64_t &pos);
+  static int print_safe_hex_represent(const ObObj &obj, char *buffer, int64_t length, int64_t &pos, const ObAccuracy &accuracy);
 };
 
 }
