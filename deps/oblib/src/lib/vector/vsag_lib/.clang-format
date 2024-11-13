@@ -1,0 +1,21 @@
+---
+Language: Cpp
+BasedOnStyle: Google
+AccessModifierOffset: -4
+AlwaysBreakAfterReturnType: All
+AllowShortBlocksOnASingleLine: false
+AllowShortFunctionsOnASingleLine: false
+AllowShortIfStatementsOnASingleLine: false
+AlignTrailingComments: true
+
+ColumnLimit: 100
+DerivePointerAlignment: false
+IndentWidth: 4
+
+# Appended Options
+SortIncludes: true
+Standard: Latest
+BinPackParameters: false
+BinPackArguments: false
+ReflowComments: false
+---

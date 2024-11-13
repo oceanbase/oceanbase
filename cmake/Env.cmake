@@ -5,7 +5,7 @@ ob_define(ASAN_IGNORE_LIST "${CMAKE_SOURCE_DIR}/asan_ignore_list.txt")
 ob_define(DEP_3RD_DIR "${CMAKE_SOURCE_DIR}/deps/3rd")
 ob_define(DEVTOOLS_DIR "${CMAKE_SOURCE_DIR}/deps/3rd/usr/local/oceanbase/devtools")
 ob_define(DEP_DIR "${CMAKE_SOURCE_DIR}/deps/3rd/usr/local/oceanbase/deps/devel")
-
+ob_define(OB_BUILD_VSAG_RPM OFF)
 ob_define(OB_BUILD_CDC OFF)
 ob_define(OB_USE_CLANG ON)
 ob_define(OB_ERRSIM OFF)

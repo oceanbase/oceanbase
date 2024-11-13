@@ -1,0 +1,16 @@
+index_test:
+  - dataset_name: random-100k-128-euclidean.hdf5
+    index:
+      - index_name: hnsw
+        params:
+          dtype: float32
+          metric_type: l2
+          build:
+            max_degree: 32
+            ef_construction: 500
+          search:
+            ef_search: 300
+    query:
+      query_size: 1000
+      knn:
+        k: 1
