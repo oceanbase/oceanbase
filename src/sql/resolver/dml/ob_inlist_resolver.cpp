@@ -205,7 +205,9 @@ int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
         LOG_TRACE("current optimizer version is less then COMPAT_VERSION_4_3_2");
       } else if (in_list.num_child_ < threshold) {
         LOG_TRACE("check rewrite inlist threshold", K(threshold), K(in_list.num_child_));
-      } else {
+      } else if ((GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0 &&
+                  GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0) ||
+                  GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_2_0) {
         is_enable = true;
       }
     }
