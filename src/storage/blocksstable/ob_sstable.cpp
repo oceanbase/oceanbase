@@ -1968,12 +1968,21 @@ int ObSSTable::persist_linked_block_if_need(
   int ret = OB_SUCCESS;
   ObSSTableMetaHandle meta_handle;
   ObSSTableLinkBlockWriteInfo link_write_info(macro_start_seq);
+#ifdef ERRSIM
+  const int64_t block_cnt_config_value = GCONF.errsim_storage_meta_macro_ids_threshold;
+  const int64_t block_cnt_threshold = 0 == block_cnt_config_value ? ObSSTableMacroInfo::BLOCK_CNT_THRESHOLD
+                                             : min(ObSSTableMacroInfo::BLOCK_CNT_THRESHOLD, block_cnt_config_value);
+#else
+  const int64_t block_cnt_threshold = ObSSTableMacroInfo::BLOCK_CNT_THRESHOLD;
+#endif
   if (OB_FAIL(get_meta(meta_handle))) {
     LOG_WARN("fail to get sstable meta", K(ret));
   } else if (ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK != meta_->macro_info_.entry_id_) {
     // linked block had been persisted
+  } else if (is_small_sstable()) {
+    // The small sstable needn't persist macro ids by linked block.
   } else if (meta_->macro_info_.get_data_block_count() + meta_->macro_info_.get_other_block_count()
-              < ObSSTableMacroInfo::BLOCK_CNT_THRESHOLD) {
+              < block_cnt_threshold) {
     // need not persist linked_block
   } else if (OB_FAIL(link_write_info.init(ddl_redo_cb))) {
     LOG_WARN("fail to init link_write_info", K(ret), KP(ddl_redo_cb));

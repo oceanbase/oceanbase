@@ -1167,9 +1167,9 @@ int ObSSTableMacroInfo::write_block_ids(
         K(other_block_count_));
   } else if (OB_FAIL(writer.init_for_object(tablet_id.id(), tablet_transfer_seq, snapshot_version, link_write_info->start_macro_seq_, link_write_info->get_ddl_redo_callback()))) {
     LOG_WARN("fail to initialize item writer", K(ret), KPC(link_write_info));
-  } else if (OB_NOT_NULL(data_block_ids_) && OB_FAIL(flush_ids(data_block_ids_, data_block_count_, writer))) {
+  } else if (OB_FAIL(flush_ids(data_block_ids_, data_block_count_, writer))) {
     LOG_WARN("fail to flush data block ids", K(ret), K(data_block_count_));
-  } else if (OB_NOT_NULL(other_block_ids_) && OB_FAIL(flush_ids(other_block_ids_, other_block_count_, writer))) {
+  } else if (OB_FAIL(flush_ids(other_block_ids_, other_block_count_, writer))) {
     LOG_WARN("fail to flush other block ids", KP(ret), K(other_block_count_));
   } else if (OB_FAIL(writer.close())) {
     LOG_WARN("fail to close block id writer", K(ret));
@@ -1189,9 +1189,9 @@ int ObSSTableMacroInfo::flush_ids(
     storage::ObLinkedMacroBlockItemWriter &writer)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(blk_ids)) {
+  if (OB_UNLIKELY(nullptr == blk_ids && 0 != blk_cnt) || OB_UNLIKELY(nullptr != blk_ids && blk_cnt < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("blk_ids should not be nullptr", KR(ret));
+    LOG_WARN("blk_ids should not be nullptr", KR(ret), KP(blk_ids), K(blk_cnt));
   } else {
     int64_t len = 0;
     OB_UNIS_ADD_LEN_ARRAY(blk_ids, blk_cnt);

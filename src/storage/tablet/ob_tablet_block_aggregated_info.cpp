@@ -258,6 +258,13 @@ int ObTabletMacroInfo::init(
                             + data_block_info_set.size()
                             + shared_meta_block_info_set.size()
                             + shared_data_block_info_map.size();
+#ifdef ERRSIM
+  const int64_t block_cnt_config_value = GCONF.errsim_storage_meta_macro_ids_threshold;
+  const int64_t block_cnt_threshold = 0 == block_cnt_config_value ? ID_COUNT_THRESHOLD
+                                             : min(ID_COUNT_THRESHOLD, block_cnt_config_value);
+#else
+  const int64_t block_cnt_threshold = ID_COUNT_THRESHOLD;
+#endif
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -280,7 +287,7 @@ int ObTabletMacroInfo::init(
     LOG_WARN("fail to construct shared data block info arr", K(ret));
   } else if (OB_NOT_NULL(linked_writer) &&
     // tmp_tablet do not need write linked_block, becase it will be release soon later
-             ID_COUNT_THRESHOLD < total_macro_cnt &&
+             block_cnt_threshold < total_macro_cnt &&
              OB_FAIL(persist_macro_ids(allocator, *linked_writer))) {
     LOG_WARN("fail to persist macro ids", K(ret));
   }
