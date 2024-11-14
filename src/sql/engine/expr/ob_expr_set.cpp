@@ -263,6 +263,11 @@ int ObExprSet::eval_coll_composite(ObExecContext &exec_ctx, const common::ObObj 
     } else {
       result = res;
     }
+    int temp_ret = pl::ObUserDefinedType::destruct_obj(params.at(1));
+    if (OB_SUCCESS != temp_ret) {
+      LOG_WARN("failed to destruct obj", K(temp_ret));
+    }
+    ret = OB_SUCCESS == ret ? temp_ret : ret;
   }
 
   return ret;
