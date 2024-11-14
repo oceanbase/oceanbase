@@ -1299,6 +1299,12 @@ int ObTabletPersister::fetch_and_persist_large_co_sstable(
 {
   int ret = OB_SUCCESS;
   ObCOSSTableV2 *co_sstable = nullptr;
+#ifdef ERRSIM
+  const int64_t large_co_sstable_threshold_config = GCONF.errsim_large_co_sstable_threshold;
+  const int64_t large_co_sstable_threshold = 0 == large_co_sstable_threshold_config ? SSTABLE_MAX_SERIALIZE_SIZE : large_co_sstable_threshold_config;
+#else
+  const int64_t large_co_sstable_threshold = SSTABLE_MAX_SERIALIZE_SIZE;
+#endif
   if (OB_ISNULL(table) || !table->is_co_sstable() || !sstable_persist_ctx.is_inited()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), KP(table), KPC(table));
@@ -1306,7 +1312,7 @@ int ObTabletPersister::fetch_and_persist_large_co_sstable(
   } else if (OB_ISNULL(co_sstable)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to cast table to co_sstalbe", KR(ret));
-  } else if (co_sstable->get_serialize_size() <= SSTABLE_MAX_SERIALIZE_SIZE) {
+  } else if (co_sstable->get_serialize_size() <= large_co_sstable_threshold) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("normal co_sstable should not been there", KR(ret), KPC(co_sstable), K(co_sstable->get_serialize_size()));
   } else {
@@ -1561,6 +1567,12 @@ int ObTabletPersister::fetch_and_persist_sstable(
   const int64_t ctx_id = share::is_reserve_mode()
                        ? ObCtxIds::MERGE_RESERVE_CTX_ID
                        : ObCtxIds::DEFAULT_CTX_ID;
+#ifdef ERRSIM
+  const int64_t large_co_sstable_threshold_config = GCONF.errsim_large_co_sstable_threshold;
+  const int64_t large_co_sstable_threshold = 0 == large_co_sstable_threshold_config ? SSTABLE_MAX_SERIALIZE_SIZE : large_co_sstable_threshold_config;
+#else
+  const int64_t large_co_sstable_threshold = SSTABLE_MAX_SERIALIZE_SIZE;
+#endif
   common::ObSEArray<ObSharedObjectsWriteCtx, 8> write_ctxs;
   common::ObSEArray<ObMetaDiskAddr, 8> addrs;
   addrs.set_attr(lib::ObMemAttr(MTL_ID(), "PerstAddrs", ctx_id));
@@ -1586,7 +1598,7 @@ int ObTabletPersister::fetch_and_persist_sstable(
                                                               cur_macro_seq_,
                                                               sstable_meta_write_ctxs))) {
           LOG_WARN("fail to persist sstable linked_block if need", K(ret), K(param_), KPC(table), K(cur_macro_seq_));
-      } else if (table->is_co_sstable() && table->get_serialize_size() > SSTABLE_MAX_SERIALIZE_SIZE) {
+      } else if (table->is_co_sstable() && table->get_serialize_size() > large_co_sstable_threshold) {
         // large co sstable
         if(OB_FAIL(fetch_and_persist_large_co_sstable(tmp_allocator, table, sstable_persist_ctx))) {
           LOG_WARN("fail to fetch and persist large co sstable", K(ret), KPC(table), K(sstable_persist_ctx));

@@ -1185,6 +1185,10 @@ ERRSIM_DEF_INT(errsim_tablet_batch_count, OB_CLUSTER_PARAMETER, "0", "[0,)",
         "batch tablet count when in errsim mode"
         "Range: [0,) in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+ERRSIM_DEF_INT(errsim_large_co_sstable_threshold, OB_CLUSTER_PARAMETER, "0", "[0, 1966080]",
+        "large_co_sstable size threshold (byte) when in errsim mode"
+        "Range: [0, 1966080] in integer",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 ERRSIM_DEF_INT(errsim_backup_ls_id, OB_CLUSTER_PARAMETER, "0", "[0,)",
         "the ls id that backup want to insert error"
         "Range: [0,) in integer",
