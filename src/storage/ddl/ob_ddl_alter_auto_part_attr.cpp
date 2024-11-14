@@ -284,12 +284,13 @@ int ObAlterAutoPartAttrOp::alter_table_auto_part_attr_if_need(
       /* update global index property
        * if main table is enable auto split partition table, global index table should
        * change auto split property too */
+      ObArray<uint64_t> modified_index_type_ids;
       if (OB_FAIL(alter_global_indexes_auto_part_attribute_online(  // update index
-          alter_part_option, table_schema, schema_guard, ddl_operator, trans))) {
+          alter_part_option, table_schema, schema_guard, ddl_operator, trans, modified_index_type_ids))) {
         LOG_WARN("fail to alter global index auto part property.", K(ret), K(table_schema));
       // for example, enable_auto_partition may change part_func_type if data table is not partitioned,
       // so need to sync aux tables' partition option
-      } else if (!table_schema.is_partitioned_table() && OB_FAIL(sync_aux_tables_partition_option(table_schema, schema_guard, ddl_operator, trans))) {
+      } else if (!table_schema.is_partitioned_table() && OB_FAIL(sync_aux_tables_partition_option(table_schema, schema_guard, ddl_operator, trans, modified_index_type_ids))) {
         LOG_WARN("failed to sync aux tables partition schema", K(ret));
       } else if (OB_FAIL(ddl_operator.update_partition_option(trans, table_schema, alter_table_arg.ddl_stmt_str_))) {  // update main table
         LOG_WARN("fail to update partition option", K(ret), K(table_schema));
@@ -385,13 +386,14 @@ int ObAlterAutoPartAttrOp::alter_global_indexes_auto_part_attribute_online(
     const ObTableSchema &table_schema,
     ObSchemaGetterGuard &schema_guard,
     rootserver::ObDDLOperator &ddl_operator,
-    ObMySQLTransaction &trans)
+    ObMySQLTransaction &trans,
+    ObArray<uint64_t> &modified_index_type_ids)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
   const ObTableSchema *index_schema = nullptr;
   const int64_t tenant_id = table_schema.get_tenant_id();
-  int64_t index_table_id = OB_INVALID_ID;
+  uint64_t index_table_id = OB_INVALID_ID;
 
   if (OB_FAIL(table_schema.get_simple_index_infos(simple_index_infos))) {
     LOG_WARN("get simple_index_infos failed", KR(ret), K(tenant_id));
@@ -439,6 +441,8 @@ int ObAlterAutoPartAttrOp::alter_global_indexes_auto_part_attribute_online(
           } else if (OB_FAIL(ddl_operator.update_index_type(
               table_schema, index_table_id, index_type, &ddl_stmt_str, trans))) {
             LOG_WARN("fail to update index type", K(ret), K(index_type));
+          } else if (OB_FAIL(modified_index_type_ids.push_back(index_table_id))) {
+            LOG_WARN("fail to push back index table id", K(ret), K(index_table_id));
           }
         }
       }
@@ -451,7 +455,8 @@ int ObAlterAutoPartAttrOp::sync_aux_tables_partition_option(
     const ObTableSchema &data_table_schema,
     ObSchemaGetterGuard &schema_guard,
     rootserver::ObDDLOperator &ddl_operator,
-    ObMySQLTransaction &trans)
+    ObMySQLTransaction &trans,
+    ObArray<uint64_t> &modified_index_type_ids)
 {
   int ret = OB_SUCCESS;
   const int64_t tenant_id = data_table_schema.get_tenant_id();
@@ -499,7 +504,7 @@ int ObAlterAutoPartAttrOp::sync_aux_tables_partition_option(
     } else if (OB_ISNULL(aux_table_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table schema is null", K(ret), K(aux_table_id));
-    } else if (aux_table_schema->is_index_local_storage()
+    } else if ((aux_table_schema->is_index_local_storage() && !(common::is_contain(modified_index_type_ids, aux_table_id)))
         || aux_table_schema->is_aux_lob_table()
         || aux_table_schema->is_mlog_table()) {
       HEAP_VAR(ObTableSchema, new_aux_table_schema) {
@@ -512,6 +517,7 @@ int ObAlterAutoPartAttrOp::sync_aux_tables_partition_option(
         }
       }
     }
+
   }
   return ret;
 }

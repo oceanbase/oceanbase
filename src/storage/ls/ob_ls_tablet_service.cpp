@@ -1164,7 +1164,7 @@ int ObLSTabletService::update_tablet_table_store(
     int tmp_ret = OB_SUCCESS;
     ObServerAutoSplitScheduler &auto_split_scheduler= ObServerAutoSplitScheduler::get_instance();
     if (OB_TMP_FAIL(auto_split_scheduler.push_task(new_tablet_hdl, *ls_))) {
-      LOG_WARN("fail to push auto split task", K(ret));
+      LOG_WARN("fail to push auto split task", K(tmp_ret));
     }
 
   }
@@ -2225,7 +2225,7 @@ int ObLSTabletService::replay_create_tablet(
     int tmp_ret = OB_SUCCESS;
     ObServerAutoSplitScheduler &auto_split_scheduler= ObServerAutoSplitScheduler::get_instance();
     if (OB_TMP_FAIL(auto_split_scheduler.push_task(tablet_hdl, *ls_))) {
-      LOG_WARN("fail to push auto split task", K(ret));
+      LOG_WARN("fail to push auto split task", K(tmp_ret));
     }
   }
   return ret;
