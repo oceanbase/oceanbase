@@ -269,7 +269,7 @@ struct ObMdsEventBuffer {
         share::ObTaskController::get().allow_next_syslog();
         if (OB_UNLIKELY(OB_LOGGER.need_to_print(::oceanbase::common::OB_LOG_ROOT::M_MDS, OB_LOG_LEVEL_INFO))) {
           ::oceanbase::common::OB_PRINT("[MDS.EVENT]", OB_LOG_LEVEL_INFO, file, line, func, OB_LOG_LOCATION_HASH_VAL, OB_SUCCESS,
-                                        event.event_, LOG_KVS(K(key), K(event)));
+                                        event.event_, LOG_KVS(K(key), K(event), KPC(mds_table)));
         }
       }
       if (is_inited_) {
