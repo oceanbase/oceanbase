@@ -1118,7 +1118,7 @@ static constexpr ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* UDT */
     ObMaxType,        /* ObDecimalIntType */
     ObMaxType,        /* COLLECTION */
-    ObTimestampType,  /* MySQLDateType */
+    ObMySQLDateTimeType,  /* MySQLDateType */
     ObMySQLDateTimeType,  /* MySQLDateTimeType */
   },
 
@@ -3033,7 +3033,7 @@ static constexpr ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObMySQLDateType,      /* NumberType  */
     ObMySQLDateType,      /* UNumberType  */
     ObMySQLDateTimeType,  /* DateTimeType  */
-    ObTimestampType,      /* TimestampType  */
+    ObMySQLDateTimeType,      /* TimestampType  */
     ObMySQLDateType,      /* DateType  */
     ObMySQLDateTimeType,  /* TimeType  */
     ObVarcharType,        /* YearType  */

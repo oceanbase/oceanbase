@@ -1502,20 +1502,15 @@ int ObKeyPart::try_cast_value(const ObDataTypeCastParams &dtc_params, const int6
                                                                      value.get_type(),
                                                                      dest_val->get_type()))) {
       LOG_WARN("get compare type failed", K(ret));
+    } else if (OB_FAIL(ObRelationalExprOperator::compare_nullsafe(cmp,
+                                                                  value,
+                                                                  *dest_val,
+                                                                  cast_ctx,
+                                                                  cmp_type,
+                                                                  collation_type))) {
+      SQL_REWRITE_LOG(WARN, "compare obj value failed", K(ret));
     } else {
-      if (cmp_type == ObTimestampType && value.get_type() == ObMySQLDateType) {
-        cmp_type = ObMySQLDateType;
-      }
-      if (OB_FAIL(ObRelationalExprOperator::compare_nullsafe(cmp,
-                                                                    value,
-                                                                    *dest_val,
-                                                                    cast_ctx,
-                                                                    cmp_type,
-                                                                    collation_type))) {
-        SQL_REWRITE_LOG(WARN, "compare obj value failed", K(ret));
-      } else {
-        value = *dest_val;
-      }
+      value = *dest_val;
     }
   }
   return ret;

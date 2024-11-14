@@ -1208,16 +1208,12 @@ int ObRangeGenerator::try_cast_value(const ObRangeColumnMeta &meta,
                                                                 dest_val->get_type()))) {
         LOG_WARN("failed to get relational cmp type",
             K(cmp_type), K(value.get_type()), K(dest_val->get_type()));
+      } else if (OB_FAIL(ObRelationalExprOperator::compare_nullsafe(cmp, value, *dest_val,
+                                                                    cast_ctx, cmp_type,
+                                                                    collation_type))) {
+        LOG_WARN("failed to compare obj null safe", K(value), KPC(dest_val));
       } else {
-        if (expect_type.get_type() == ObTimestampType && value.get_type() == ObMySQLDateType) {
-          cmp_type = ObMySQLDateType;
-        }
-        if (OB_FAIL(ObRelationalExprOperator::compare_nullsafe(cmp, value, *dest_val, cast_ctx,
-                                                               cmp_type, collation_type))) {
-          LOG_WARN("failed to compare obj null safe", K(value), KPC(dest_val));
-        } else {
-          value = *dest_val;
-        }
+        value = *dest_val;
       }
     }
   }
