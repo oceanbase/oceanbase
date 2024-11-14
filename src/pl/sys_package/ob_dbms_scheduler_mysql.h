@@ -29,8 +29,6 @@ public:
 public:
 #define DECLARE_FUNC(func) \
   static int func(sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result);
-
-  DECLARE_FUNC(create_job);
   DECLARE_FUNC(disable);
   DECLARE_FUNC(enable);
   DECLARE_FUNC(set_attribute);

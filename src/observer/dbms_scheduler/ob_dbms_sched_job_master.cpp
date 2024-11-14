@@ -251,9 +251,10 @@ int ObDBMSSchedJobMaster::scheduler_job(ObDBMSSchedJobKey *job_key)
 
     const int64_t now = ObTimeUtility::current_time();
     int64_t next_check_date = now + MIN_SCHEDULER_INTERVAL;
-    if (OB_FAIL(ret) || !job_info.valid() || job_info.is_broken()) {
+    if (OB_FAIL(ret) || !job_info.valid()) {
       free_job_key(job_key);
       job_key = NULL;
+      LOG_INFO("free invalid job", K(job_info));
     } else if (job_info.is_running()) {
       LOG_INFO("job is running now, retry later", K(job_info));
       if (now > job_info.get_this_date() + TO_TS(job_info.get_max_run_duration())) {
@@ -272,9 +273,10 @@ int ObDBMSSchedJobMaster::scheduler_job(ObDBMSSchedJobKey *job_key)
       } else {
         LOG_WARN("update for stop job", K(job_info));
       }
-    } else if (job_info.is_disabled()) {
+    } else if (job_info.is_disabled() || job_info.is_broken()) {
       free_job_key(job_key);
       job_key = NULL;
+      LOG_INFO("free disable/broken job", K(job_info));
     } else if (now > job_info.get_end_date()) {
       int tmp = OB_SUCCESS;
       if (OB_SUCCESS != (tmp = table_operator_.update_for_enddate(job_info))) {
@@ -284,6 +286,7 @@ int ObDBMSSchedJobMaster::scheduler_job(ObDBMSSchedJobKey *job_key)
       }
       free_job_key(job_key);
       job_key = NULL;
+      LOG_INFO("free enddate job", K(job_info));
     } else if (now < job_info.get_next_date()) {
         next_check_date = min(job_info.get_next_date(), now + CHECK_NEW_INTERVAL);
     } else {

@@ -58,40 +58,6 @@ int ObDBMSSchedulerMysql::execute_sql(sql::ObExecContext &ctx, ObSqlString &sql,
   return ret;
 }
 
-int ObDBMSSchedulerMysql::create_job(
-  sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result)
-{
-  int ret = OB_SUCCESS;
-  ObMySQLTransaction trans;
-  int64_t affected_rows = 0;
-  int64_t job_id = OB_INVALID_ID;
-  int64_t tenant_id = ctx.get_my_session()->get_effective_tenant_id();
-
-  UNUSED(result);
-  if (0 == (params.at(10).get_string()).case_compare("__dummy_guard")) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("forbidden to create a job named '__dummy_guard'", K(ret), K(params.at(10).get_string()));
-  } else {
-    ObSqlString sql;
-    ObSqlString sql0;
-    CK (OB_LIKELY(28 == params.count()));
-    CK (OB_NOT_NULL(ctx.get_my_session()));
-    CK (OB_NOT_NULL(ctx.get_sql_proxy()));
-    OZ (_generate_job_id(tenant_id, job_id));
-    OZ (_splice_insert_sql(ctx, params, tenant_id, job_id, sql));
-    OZ (_splice_insert_sql(ctx, params, tenant_id, 0, sql0));
-    OZ (trans.start(ctx.get_sql_proxy(), tenant_id, true));
-    OZ (trans.write(tenant_id, sql.ptr(), affected_rows));
-    OZ (trans.write(tenant_id, sql0.ptr(), affected_rows));
-    CK (OB_LIKELY(1 == affected_rows));
-    if (trans.is_started()) {
-      trans.end(OB_SUCCESS == ret);
-    }
-    LOG_INFO("create job", K(ret), K(tenant_id), K(job_id), K(ObHexEscapeSqlStr(params.at(10).get_string())), K(tenant_id));
-  }
-  return ret;
-}
-
 int ObDBMSSchedulerMysql::disable(
   sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result)
 {

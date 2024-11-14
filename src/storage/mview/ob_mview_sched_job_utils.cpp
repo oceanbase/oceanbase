@@ -161,6 +161,7 @@ int ObMViewSchedJobUtils::add_scheduler_job(
       job_info.interval_ts_ = 0;
       job_info.scheduler_flags_ = ObDBMSSchedJobInfo::JOB_SCHEDULER_FLAG_DATE_EXPRESSION_JOB_CLASS;
       job_info.exec_env_ = exec_env;
+      job_info.max_failures_ = 16;
 
       if (OB_FAIL(ObDBMSSchedJobUtils::create_dbms_sched_job(
           sql_client, tenant_id, job_id, job_info))) {

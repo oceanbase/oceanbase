@@ -104,7 +104,8 @@ public:
     credential_name_(),
     destination_name_(),
     interval_ts_(),
-    is_oracle_tenant_(true) {}
+    is_oracle_tenant_(true),
+    max_failures_(0) {}
 
   TO_STRING_KV(K(tenant_id_),
                K(user_id_),
@@ -133,7 +134,9 @@ public:
                K(enabled_),
                K(auto_drop_),
                K(max_run_duration_),
-               K(interval_ts_));
+               K(interval_ts_),
+               K(max_failures_),
+               K(state_));
 
   bool valid()
   {
@@ -157,7 +160,8 @@ public:
   int64_t  get_end_date() { return end_date_; }
   int64_t  get_auto_drop() { return auto_drop_; }
 
-  bool is_broken() { return 0x1 == (flag_ & 0x1); }
+  bool is_completed() { return 0 == state_.case_compare("COMPLETED"); }
+  bool is_broken() { return 0 == state_.case_compare("BROKEN"); }
   bool is_running(){ return this_date_ != 0; }
   bool is_disabled() { return 0x0 == (enabled_ & 0x1); }
   bool is_killed() { return 0 == state_.case_compare("KILLED"); }
@@ -226,6 +230,7 @@ public:
   common::ObString destination_name_;
   int64_t interval_ts_;
   bool is_oracle_tenant_;
+  int64_t max_failures_;
 
 public:
   static const int64_t JOB_SCHEDULER_FLAG_DATE_EXPRESSION_JOB_CLASS = 1;
