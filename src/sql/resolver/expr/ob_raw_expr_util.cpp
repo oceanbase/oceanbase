@@ -1020,7 +1020,9 @@ int ObRawExprUtils::resolve_udf_param_exprs(ObResolverParams &params,
     OX (mode = static_cast<pl::ObPLRoutineParamMode>(iparam->get_mode()));
     if (OB_SUCC(ret) && lib::is_mysql_mode()) {
       bool need_wrap = false;
-      udf_raw_expr->get_param_expr(i)->mark_enum_set_skip_build_subschema();
+      if (udf_raw_expr->get_param_expr(i)->get_result_type().get_obj_meta().is_enum_or_set()) {
+        udf_raw_expr->get_param_expr(i)->mark_enum_set_skip_build_subschema();
+      }
       OZ (ObRawExprUtils::need_wrap_to_string(udf_raw_expr->get_param_expr(i)->get_result_type(),
                                               iparam->get_pl_data_type().get_obj_type(),
                                               true,
