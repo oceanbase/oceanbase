@@ -1282,6 +1282,7 @@ int ObFreezer::wait_data_memtable_freeze_finish_(ObMemtable *memtable)
     int64_t write_lock = 0;
     ObLSLockGuard lock_ls(ls_, ls_->lock_, read_lock, write_lock);
     if (OB_FAIL(check_ls_state())) {
+      TRANS_LOG(WARN, "ls state invalid", KR(ret));
     } else if (OB_FAIL(memtable->finish_freeze())) {
       TRANS_LOG(ERROR, "[Freezer] memtable cannot be flushed", K(ret), K(ls_id), KPC(memtable));
       stat_.add_diagnose_info("memtable cannot be flushed");
@@ -1314,7 +1315,9 @@ int ObFreezer::wait_memtable_ready_for_flush_(ObMemtable *memtable)
 
     int64_t time_counter = 0;
     do {
-      if (OB_ISNULL(memtable)) {
+      if (OB_FAIL(check_ls_state())) {
+        TRANS_LOG(WARN, "ls state invalid", KR(ret));
+      } else if (OB_ISNULL(memtable)) {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "[Freezer] memtable cannot be null", K(ret));
       } else if (FALSE_IT(ready_for_flush = memtable->ready_for_flush())) {
