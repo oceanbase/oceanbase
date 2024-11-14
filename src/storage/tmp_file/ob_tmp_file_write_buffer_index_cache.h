@@ -85,6 +85,7 @@ public:
   }
   INHERIT_TO_STRING_KV("ObTmpFileCircleArray", ObTmpFileCircleArray,
                        K(fd_), KP(wbp_), KP(page_buckets_),
+                       K(sparsify_count_), K(ignored_push_count_),
                        KP(bucket_array_allocator_), KP(bucket_allocator_));
 
 private:
@@ -137,6 +138,9 @@ private:
   common::ObArray<ObTmpFilePageIndexBucket*> *page_buckets_;
   int64_t fd_;
   ObTmpWriteBufferPool* wbp_;
+  int64_t sparsify_count_;              // to keep each page indexes in cache have same sparse interval,
+                                        // we need to ignore 2^(sparsify_count_) - 1 push() calling
+  int64_t ignored_push_count_;
   int64_t max_bucket_array_capacity_;   // only allowed to modify this var in unit test!!!
 };
 

@@ -26,6 +26,8 @@ ObTmpFileWBPIndexCache::ObTmpFileWBPIndexCache() :
   ObTmpFileCircleArray(), bucket_array_allocator_(nullptr), bucket_allocator_(nullptr),
   page_buckets_(nullptr) ,
   fd_(ObTmpFileGlobal::INVALID_TMP_FILE_FD), wbp_(nullptr),
+  sparsify_count_(0),
+  ignored_push_count_(0),
   max_bucket_array_capacity_(MAX_BUCKET_ARRAY_CAPACITY) {}
 
 ObTmpFileWBPIndexCache::~ObTmpFileWBPIndexCache()
@@ -85,6 +87,8 @@ void ObTmpFileWBPIndexCache::reset()
     right_ = -1;
     size_ = 0;
     capacity_ = 0;
+    sparsify_count_ = 0;
+    ignored_push_count_ = 0;
     if (OB_ISNULL(page_buckets_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("page buckets is null", KR(ret), K(fd_));
@@ -146,7 +150,10 @@ int ObTmpFileWBPIndexCache::push(const uint32_t page_index)
   }
 
   if (OB_SUCC(ret)) {
-    if (is_empty() || (OB_NOT_NULL(page_buckets_->at(right_)) && page_buckets_->at(right_)->is_full())) {
+    if (ignored_push_count_ < ((1 << sparsify_count_) - 1)) {
+      ignored_push_count_ += 1;
+    } else if (FALSE_IT(ignored_push_count_ = 0)) {
+    } else if (is_empty() || (OB_NOT_NULL(page_buckets_->at(right_)) && page_buckets_->at(right_)->is_full())) {
       // alloc a new bucket
       inc_pos_(right_);
       uint64_t tenant_id = MTL_ID();
@@ -471,6 +478,8 @@ int ObTmpFileWBPIndexCache::sparsify_()
     if (OB_SUCC(ret)) {
       right_ = (cur_bucket_pos - 1) % capacity_;
       size_ /= 2;
+      sparsify_count_ += 1;
+      ignored_push_count_ = 0;
     }
   }
   LOG_INFO("sparsify tmp file wbp index cache over", KR(ret), KPC(this));
