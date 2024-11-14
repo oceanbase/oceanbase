@@ -46,7 +46,7 @@ protected:
   int resolve_column_group_helper(const ParseNode *cg_node, ObTableSchema &table_schema);
   // check this type of table_schema should build column_group or not
   uint64_t gen_column_group_id();
-  int resolve_column_group(const ParseNode *cg_node);
+  virtual int resolve_column_group(const ParseNode *cg_node) final;
 protected:
   uint64_t cur_column_group_id_;
 };
