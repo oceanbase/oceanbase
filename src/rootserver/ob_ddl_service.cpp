@@ -21855,6 +21855,7 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
               LOG_WARN("mview version is old", KR(ret), K(alter_table_arg.mview_refresh_info_),
                        K(mview_info));
             } else {
+              DEBUG_SYNC(BEFORE_MV_FINISH_COMPLETE_REFRESH);
               mview_info.set_last_refresh_scn(refresh_scn_val);
               mview_info.set_last_refresh_type(share::schema::ObMVRefreshType::COMPLETE);
               mview_info.set_last_refresh_date(start_time);
