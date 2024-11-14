@@ -2542,7 +2542,8 @@ int ObPL::get_pl_function(ObExecContext &ctx,
   if (OB_FAIL(ret) || OB_NOT_NULL(routine) || !subprogram_path.empty()) {
     // do nothing ...
   } else if (OB_INVALID_ID != package_id) { // package or object routine
-    ObPLResolveCtx pl_ctx(ctx.get_allocator(),
+    ObArenaAllocator compile_alloc(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    ObPLResolveCtx pl_ctx(compile_alloc,
                           *ctx.get_my_session(),
                           *ctx.get_sql_ctx()->schema_guard_,
                           package_guard,
