@@ -5080,7 +5080,9 @@ int ObPartTransCtx::push_replaying_log_ts(const SCN log_ts_ns, const int64_t log
     }
     if (OB_UNLIKELY(replay_completeness_.is_unknown())) {
       const bool replay_continous = exec_info_.next_log_entry_no_ == log_entry_no;
-      set_replay_completeness_(replay_continous, log_ts_ns);
+      if (OB_FAIL(set_replay_completeness_(replay_continous, log_ts_ns))) {
+        TRANS_LOG(WARN, "set replay completeness failed", KR(ret), K(ls_id_), K(trans_id_), KP(this));
+      }
     }
   }
   return ret;
@@ -5561,8 +5563,9 @@ int ObPartTransCtx::replay_rollback_to(const ObTxRollbackToLog &log,
           // all previous log replayed
           // the txn must not replay from its first log, aka. incomplete-replay
           TRANS_LOG(INFO, "detect txn replayed from middle", K(ret), K(timestamp), K_(trans_id), K_(ls_id), K_(exec_info));
-          set_replay_completeness_(false, timestamp);
-          ret = OB_SUCCESS;
+          if (OB_FAIL(set_replay_completeness_(false, timestamp))) {
+            TRANS_LOG(WARN, "set replay completeness failed", KR(ret), K(ls_id_), K(trans_id_), KP(this));
+          }
         } else if (min_unreplayed_scn > timestamp) {
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(ERROR, "incorrect min unreplayed scn", K(ret), K(timestamp), K(min_unreplayed_scn), K_(trans_id));
@@ -11152,8 +11155,12 @@ inline bool ObPartTransCtx::has_replay_serial_final_() const
 }
 
 int ObPartTransCtx::set_replay_incomplete(const share::SCN log_ts) {
+  int ret = OB_SUCCESS;
   CtxLockGuard guard(lock_);
-  return set_replay_completeness_(false, log_ts);
+  if (OB_FAIL(set_replay_completeness_(false, log_ts))) {
+    TRANS_LOG(WARN, "set replay completeness failed", KR(ret), K(ls_id_), K(trans_id_), KP(this));
+  }
+  return ret;
 }
 
 int ObPartTransCtx::set_replay_completeness_(const bool complete, const SCN replay_scn)
