@@ -489,8 +489,8 @@ int ObSkipIndexFilterExecutor::in_operator(const sql::ObWhiteFilterExecutor &fil
     ObDatumCmpFuncType cmp_func = filter.cmp_func_;
     int cmp_res = 0;
     bool equal = false;
-    ObDatumComparator cmp(cmp_func, ret, equal);
-    int64_t pos = std::lower_bound(datums.get_data(), datums.get_data() + datums.count(), min_datum, cmp) - datums.get_data();
+    ObDatumComparator cmp_rev(cmp_func, ret, equal, true);
+    int64_t pos = std::lower_bound(datums.get_data(), datums.get_data() + datums.count(), min_datum, cmp_rev) - datums.get_data();
     if (OB_FAIL(ret)) {
     } else if (pos < 0 || pos > datums.count()) {
       ret = OB_ERR_UNEXPECTED;
