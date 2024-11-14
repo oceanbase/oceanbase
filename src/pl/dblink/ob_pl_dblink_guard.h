@@ -112,6 +112,8 @@ public:
                                const common::ObString &db_name,
                                const common::ObString &table_name,
                                const ObTableSchema *&table_schema);
+  int get_dblink_table_by_type_id(const uint64_t type_id,
+                                  const ObTableSchema *&table_schema);
 #ifdef OB_BUILD_ORACLE_PL
   int get_dblink_info(const uint64_t dblink_id,
                       const ObPLDbLinkInfo *&dblink_info);
