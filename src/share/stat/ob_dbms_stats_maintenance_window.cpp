@@ -231,7 +231,7 @@ int ObDbmsStatsMaintenanceWindow::get_stat_window_job_sql(const bool is_oracle_m
   OZ (dml.add_time_column("start_date", start_usec));
   OZ (dml.add_column("repeat_interval", ObHexEscapeSqlStr(ObString("FREQ=WEEKLY; INTERVAL=1"))));
   OZ (dml.add_raw_time_column("end_date", end_date));
-  OZ (dml.add_column("job_class", ObHexEscapeSqlStr(ObString("DEFAULT_JOB_CLASS"))));
+  OZ (dml.add_column("job_class", ObHexEscapeSqlStr(ObString(dbms_scheduler::DEFAULT_JOB_CLASS))));
   OZ (dml.add_column("enabled", true));
   OZ (dml.add_column("auto_drop", false));
   OZ (dml.add_column("comments", ObHexEscapeSqlStr(ObString("used to auto gather table stats"))));
@@ -276,7 +276,7 @@ int ObDbmsStatsMaintenanceWindow::get_stats_history_manager_job_sql(const bool i
   OZ (dml.add_raw_time_column("start_date", current));
   OZ (dml.add_column("repeat_interval", ObHexEscapeSqlStr(ObString("FREQ=DAYLY; INTERVAL=1"))));
   OZ (dml.add_raw_time_column("end_date", end_date));
-  OZ (dml.add_column("job_class", ObHexEscapeSqlStr(ObString("DEFAULT_JOB_CLASS"))));
+  OZ (dml.add_column("job_class", ObHexEscapeSqlStr(ObString(dbms_scheduler::DEFAULT_JOB_CLASS))));
   OZ (dml.add_column("enabled", true));
   OZ (dml.add_column("auto_drop", false));
   OZ (dml.add_column("comments", ObHexEscapeSqlStr(ObString("used to stats history manager"))));
@@ -321,7 +321,7 @@ int ObDbmsStatsMaintenanceWindow::get_async_gather_stats_job_sql(const bool is_o
   OZ (dml.add_raw_time_column("start_date", current));
   OZ (dml.add_column("repeat_interval", ObHexEscapeSqlStr(ObString("FREQ=MINUTELY; INTERVAL=15"))));
   OZ (dml.add_raw_time_column("end_date", end_date));
-  OZ (dml.add_column("job_class", ObHexEscapeSqlStr(ObString("DEFAULT_JOB_CLASS"))));
+  OZ (dml.add_column("job_class", ObHexEscapeSqlStr(ObString(dbms_scheduler::DEFAULT_JOB_CLASS))));
   OZ (dml.add_column("enabled", true));
   OZ (dml.add_column("auto_drop", false));
   OZ (dml.add_column("comments", ObHexEscapeSqlStr(ObString("used to async gather stats"))));

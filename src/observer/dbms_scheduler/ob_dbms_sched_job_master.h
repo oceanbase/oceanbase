@@ -138,6 +138,7 @@ public:
   int scheduler_job(ObDBMSSchedJobKey *job_key);
   int64_t calc_next_date(ObDBMSSchedJobInfo &job_info);
   int64_t run_job(ObDBMSSchedJobInfo &job_info, ObDBMSSchedJobKey *job_key, int64_t next_date);
+  int purge_run_detail();
 
 private:
   const static int MAX_READY_JOBS_CAPACITY = 1024 * 1024;
@@ -147,6 +148,7 @@ private:
   const static int DEFAULT_ZONE_SIZE = 4;
   const static int FILTER_ZONE_SIZE = 1;
   const static int DEFALUT_SERVER_SIZE = 16;
+  const static uint64_t PURGE_RUN_DETAIL_INTERVAL = 60 * 60 * 1000 * 1000L;//1h
 
   bool inited_;
   bool stoped_;

@@ -81,6 +81,10 @@ public:
     uint64_t tenant_id, bool is_oracle_tenant, const common::ObString job_class_name,
     common::ObIAllocator &allocator, ObDBMSSchedJobClassInfo &job_class_info);
 
+  int get_dbms_sched_job_class_infos_in_tenant(
+    uint64_t tenant_id, bool is_oracle_tenant,
+    common::ObIAllocator &allocator, common::ObIArray<ObDBMSSchedJobClassInfo> &job_class_infos);
+
   int extract_info(
     common::sqlclient::ObMySQLResult &result, int64_t tenant_id, bool is_oracle_tenant,
     common::ObIAllocator &allocator, ObDBMSSchedJobInfo &job_info);
@@ -90,13 +94,15 @@ public:
 
   int check_job_can_running(int64_t tenant_id, int64_t alive_job_count, bool &can_running);
 
-  int purge_run_detail_histroy(uint64_t tenant_id);
+  int purge_run_detail(uint64_t tenant_id);
+  int _purge(uint64_t tenant_id, ObString &job_class_name, int64_t log_history);
+  int _purge_fallback(uint64_t tenant_id, int64_t log_history);
 
-  int purge_olap_async_job_run_detail(uint64_t tenant_id);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDBMSSchedTableOperator);
 
 private:
+  static const int64_t PURGE_LOG_BATCH_COUNT = 1024;
   common::ObISQLClient *sql_proxy_;
 };
 

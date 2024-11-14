@@ -48,6 +48,7 @@ using namespace sql;
 
 namespace dbms_scheduler
 {
+ObInnerJobClassSet ObInnerJobClassSet::instance_;
 
 int ObDBMSSchedJobInfo::deep_copy(ObIAllocator &allocator, const ObDBMSSchedJobInfo &other)
 {

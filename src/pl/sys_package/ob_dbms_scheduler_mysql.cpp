@@ -242,7 +242,7 @@ int ObDBMSSchedulerMysql::_splice_insert_sql(
   OZ (dml.add_column("job_style", ObHexEscapeSqlStr(params.at(25).get_string())));
   OZ (dml.add_column("interval_ts", params.at(26).get_int() * 1000000));
   OZ (dml.add_column("max_run_duration", params.at(27).get_int()));
-  if (0 == params.at(17).get_string().compare("DATE_EXPRESSION_JOB_CLASS")) {
+  if (0 == params.at(17).get_string().compare(DATE_EXPRESSION_JOB_CLASS)) {
     int64_t scheduler_flags = ObDBMSSchedJobInfo::JOB_SCHEDULER_FLAG_DATE_EXPRESSION_JOB_CLASS;
     dml.add_column("scheduler_flags", scheduler_flags);
   }

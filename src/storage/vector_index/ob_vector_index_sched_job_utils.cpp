@@ -55,7 +55,7 @@ int ObVectorIndexSchedJobUtils::add_scheduler_job(
           lib::is_oracle_mode() ? ObString("SYS") : ObString("root@%");
       job_info.job_style_ = ObString("regular");
       job_info.job_type_ = ObString("PLSQL_BLOCK");
-      job_info.job_class_ = ObString("DATE_EXPRESSION_JOB_CLASS");
+      job_info.job_class_ = ObString(DATE_EXPRESSION_JOB_CLASS);
       job_info.what_ = job_action;
       job_info.start_date_ = start_date_us;
       job_info.end_date_ = end_date_us;

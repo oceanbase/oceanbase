@@ -79,6 +79,50 @@ private:
   const observer::ObGlobalContext &gctx_;
 };
 
+class ObRpcDBMSSchedPurgeCB
+  : public obrpc::ObDBMSSchedJobRpcProxy::AsyncCB<obrpc::OB_DBMS_SCHED_PURGE>
+{
+public:
+  ObRpcDBMSSchedPurgeCB() {}
+  virtual ~ObRpcDBMSSchedPurgeCB() {}
+
+public:
+  virtual int process();
+  virtual void on_invalid() {}
+  virtual void on_timeout()
+  {
+    SQL_EXE_LOG_RET(WARN, OB_TIMEOUT, "run dbms sched job timeout!");
+  }
+
+  rpc::frame::ObReqTransport::AsyncCB *clone(const rpc::frame::SPAlloc &alloc) const
+  {
+    void *buf = alloc(sizeof(*this));
+    rpc::frame::ObReqTransport::AsyncCB *newcb = NULL;
+    if (NULL != buf) {
+      newcb = new (buf) ObRpcDBMSSchedPurgeCB();
+    }
+    return newcb;
+  }
+
+  virtual void set_args(const Request &arg) { UNUSED(arg); }
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObRpcDBMSSchedPurgeCB);
+};
+
+class ObRpcDBMSSchedPurgeP
+  : public obrpc::ObRpcProcessor<obrpc::ObDBMSSchedJobRpcProxy::ObRpc<obrpc::OB_DBMS_SCHED_PURGE> >
+{
+public:
+  ObRpcDBMSSchedPurgeP(const observer::ObGlobalContext &gctx) : gctx_(gctx) {}
+
+protected:
+  int process();
+
+private:
+  const observer::ObGlobalContext &gctx_;
+};
+
 
 }
 }

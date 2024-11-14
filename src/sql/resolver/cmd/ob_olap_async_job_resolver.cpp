@@ -20,6 +20,7 @@ namespace oceanbase
 {
 using namespace common;
 using namespace share;
+using namespace dbms_scheduler;
 namespace sql
 {
 ObOLAPAsyncJobResolver::ObOLAPAsyncJobResolver(ObResolverParams &params)
@@ -194,7 +195,7 @@ int ObOLAPAsyncJobResolver::execute_submit_job(ObOLAPAsyncSubmitJobStmt &stmt)
       job_info.cowner_ = stmt.get_job_database();
       job_info.job_style_ = ObString("regular");
       job_info.job_type_ = ObString("PLSQL_BLOCK");
-      job_info.job_class_ = ObString("OLAP_ASYNC_JOB_CLASS");
+      job_info.job_class_ = ObString(OLAP_ASYNC_JOB_CLASS);
       job_info.what_ = stmt.get_job_action();
       job_info.start_date_ = start_date_us;
       job_info.end_date_ = end_date_us;

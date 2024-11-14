@@ -52,6 +52,7 @@ using namespace sql;
 using namespace transaction::tablelock;
 using namespace pl;
 using namespace common::sqlclient;
+using namespace dbms_scheduler;
 namespace share
 {
 
@@ -1528,7 +1529,7 @@ int ObExternalTableFileManager::create_repeat_job_sql_(const bool is_oracle_mode
   OZ (dml.add_time_column("start_date", start_usec));
   OZ (dml.add_column("repeat_interval", ObHexEscapeSqlStr(interval.string()))); //ObString("FREQ=SECONDLY; INTERVAL=1")
   OZ (dml.add_raw_time_column("end_date", end_date));
-  OZ (dml.add_column("job_class", "DEFAULT_JOB_CLASS"));
+  OZ (dml.add_column("job_class", DEFAULT_JOB_CLASS));
   OZ (dml.add_column("enabled", true));
   OZ (dml.add_column("auto_drop", false));
   OZ (dml.add_column("comments", "used to auto refresh external tables"));
