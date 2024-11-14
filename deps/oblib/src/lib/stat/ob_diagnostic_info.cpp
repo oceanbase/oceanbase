@@ -182,7 +182,7 @@ void ObWaitEventContainer::reset()
 
 ObDiagnosticInfo::~ObDiagnosticInfo()
 {
-  if (need_aggregate_) {
+  if (need_aggregate_ && is_inited_) {
     ObLocalDiagnosticInfo::aggregate_diagnostic_info_summary(this);
   }
 }
@@ -191,19 +191,27 @@ int ObDiagnosticInfo::init(
     int64_t tenant_id, int64_t group_id, int64_t session_id, ObWaitEventPool &pool)
 {
   int ret = OB_SUCCESS;
-  tenant_id_ = tenant_id;
-  group_id_ = group_id;
-  session_id_ = session_id;
-  ash_stat_.tenant_id_ = tenant_id;
-  ash_stat_.group_id_ = group_id_;
-  ash_stat_.session_id_ = session_id;
-  //By default, the proxy_sid is consistent with the server session id.
-  //If this is a genuine proxy connection, the proxy_sid will be corrected by the deliver_mysql_request interface
-  ash_stat_.proxy_sid_ = session_id;
-  ash_stat_.last_touch_ts_ = rdtsc();
-  ash_stat_.last_inactive_ts_ = ash_stat_.last_touch_ts_;
-  pool_ = &pool;
-  events_.init(pool_);
+  if (is_inited_) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("di info init twice", K(ret), K(tenant_id), K(group_id), K(session_id), KPC(this),
+        K(lbt()));
+  } else {
+    tenant_id_ = tenant_id;
+    group_id_ = group_id;
+    session_id_ = session_id;
+    ash_stat_.tenant_id_ = tenant_id;
+    ash_stat_.group_id_ = group_id_;
+    ash_stat_.session_id_ = session_id;
+    // By default, the proxy_sid is consistent with the server session id.
+    // If this is a genuine proxy connection, the proxy_sid will be corrected by the
+    // deliver_mysql_request interface
+    ash_stat_.proxy_sid_ = session_id;
+    ash_stat_.last_touch_ts_ = rdtsc();
+    ash_stat_.last_inactive_ts_ = ash_stat_.last_touch_ts_;
+    pool_ = &pool;
+    events_.init(pool_);
+    is_inited_ = true;
+  }
   return ret;
 }
 

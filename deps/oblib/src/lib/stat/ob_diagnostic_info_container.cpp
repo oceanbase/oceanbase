@@ -433,6 +433,9 @@ int ObDiagnosticInfoContainer::inc_ref(ObDiagnosticInfo *di)
 
 void ObDiagnosticInfoContainer::dec_ref(ObDiagnosticInfo *di)
 {
+  if (stop_) {
+    LOG_WARN_RET(OB_SUCCESS, "dec ref after tenant is stopped", K(di), KPC(this), KPC(di), K(lbt()));
+  }
   runnings_.dec_ref(di);
 }
 
