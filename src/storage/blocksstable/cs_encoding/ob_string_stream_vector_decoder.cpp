@@ -633,7 +633,8 @@ int ObStringStreamVecDecoder::decode_vector(
     case VEC_TC_UINTEGER:
     case VEC_TC_BIT:
     case VEC_TC_ENUM_SET:
-    case VEC_TC_DOUBLE: {
+    case VEC_TC_DOUBLE:
+    case VEC_TC_FIXED_DOUBLE: {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("unexpected vec value type for string stream", K(ret), K(vec_tc), K(base_col_ctx), K(vec_decode_ctx));
       break;
