@@ -54,6 +54,8 @@ enum class ObDirectLoadControlCommandType
 
   HEART_BEAT = 14,
 
+  INIT_EMPTY_TABLETS = 15,
+
   MAX_TYPE
 };
 
