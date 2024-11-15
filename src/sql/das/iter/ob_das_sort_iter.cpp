@@ -202,7 +202,7 @@ int ObDASSortIter::inner_get_next_rows(int64_t &count, int64_t capacity)
       int64_t need_offset_count = limit_param_.offset_;
       while (OB_SUCC(ret) && need_offset_count > 0) {
         int64_t got_count = 0;
-        if (OB_FAIL(sort_impl_.get_next_batch(sort_row_, need_offset_count, got_count))) {
+        if (OB_FAIL(sort_impl_.get_next_batch(sort_row_, OB_MIN(need_offset_count, capacity), got_count))) {
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
             LOG_WARN("failed to get next row from token merge", K(ret));
           }
