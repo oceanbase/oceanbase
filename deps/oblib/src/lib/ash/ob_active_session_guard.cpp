@@ -67,8 +67,8 @@ ObExecPhase &ObActiveSessionStat::exec_phase()
 void ObActiveSessionStat::set_sess_active()
 {
   if (!is_active_session_) {
-    is_active_session_ = true;
     accumulate_tm_idle_time();
+    is_active_session_ = true;
     if (trace_id_.is_invalid()) {
       trace_id_ = *common::ObCurTraceId::get_trace_id();
     }
@@ -77,8 +77,10 @@ void ObActiveSessionStat::set_sess_active()
 
 void ObActiveSessionStat::set_sess_inactive()
 {
-  last_inactive_ts_ = rdtsc();
-  is_active_session_ = false;
+  if (is_active_session_) {
+    is_active_session_ = false;
+    last_inactive_ts_ = rdtsc();
+  }
 }
 
 void ObActiveSessionStat::accumulate_tm_idle_time()
@@ -87,7 +89,7 @@ void ObActiveSessionStat::accumulate_tm_idle_time()
     // When set_sess_inactive() is called, there is some time left after last_ts_. So we mark it as
     // extra time to calculat in next round of calc_db_time when session is active again.
     const int64_t cur = rdtsc();
-    tm_idle_time_ += (cur - last_inactive_ts_) * 1000 / lib_get_cpu_khz();
+    tm_idle_cpu_cycles_ += cur - last_inactive_ts_;
   }
 }
 
@@ -96,7 +98,8 @@ void ObActiveSessionStat::calc_db_time(
 {
   if (oceanbase::lib::is_diagnose_info_enabled()) {
     ObActiveSessionStat &stat = di->get_ash_stat();
-    const int64_t delta_time = (tsc_sample_time - stat.last_touch_ts_) * 1000 / lib_get_cpu_khz();
+    const int64_t delta_time =
+        (tsc_sample_time - stat.last_touch_ts_) * 1000 / static_cast<int64_t>(lib_get_cpu_khz());
     if (OB_UNLIKELY(delta_time <= 0)) {
       // ash sample happened before set_session_active
       if (delta_time < -ash_iteration_time) {
@@ -112,7 +115,7 @@ void ObActiveSessionStat::calc_db_time(
         // has unfinished wait event
         stat.wait_event_begin_ts_ = tsc_sample_time;
         const uint64_t cur_wait_time =
-            (tsc_sample_time - cur_wait_begin_ts) * 1000 / lib_get_cpu_khz();
+            (tsc_sample_time - cur_wait_begin_ts) * 1000 / static_cast<int64_t>(lib_get_cpu_khz());
         if (OB_WAIT_EVENTS[cur_event_no].wait_class_ != ObWaitClassIds::IDLE) {
           stat.total_non_idle_wait_time_ += cur_wait_time;
         } else {
@@ -135,7 +138,10 @@ void ObActiveSessionStat::calc_db_time(
         stat.prev_non_idle_wait_time_ = stat.total_non_idle_wait_time_;
         stat.prev_idle_wait_time_ = stat.total_idle_wait_time_;
         stat.delta_time_ = delta_time;
-        stat.delta_db_time_ = delta_time - stat.tm_idle_time_ - delta_idle_wait_time;
+        stat.delta_db_time_ =
+            delta_time -
+            (stat.tm_idle_cpu_cycles_ * 1000 / static_cast<int64_t>(lib_get_cpu_khz())) -
+            delta_idle_wait_time;
         stat.delta_cpu_time_ = stat.delta_db_time_ - delta_non_idle_wait_time;
         if (stat.delta_db_time_ < 0 || stat.delta_cpu_time_ < 0) {
           //When delta_db_time < 0 or delta_cpu_time < 0,
@@ -161,7 +167,7 @@ void ObActiveSessionStat::calc_db_time(
         }
       }
     }
-    stat.tm_idle_time_ = 0;
+    stat.tm_idle_cpu_cycles_ = 0;
     stat.last_touch_ts_ = tsc_sample_time;
   }
 }

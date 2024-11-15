@@ -31,6 +31,10 @@ ObBKGDSessInActiveGuard::ObBKGDSessInActiveGuard()
 ObBKGDSessInActiveGuard::~ObBKGDSessInActiveGuard()
 {
   if (need_record_) {
-    ObActiveSessionGuard::get_stat().is_active_session_ = prev_stat_;
+    if (prev_stat_) {
+      GET_DIAGNOSTIC_INFO->get_ash_stat().set_sess_active();
+    } else {
+      GET_DIAGNOSTIC_INFO->get_ash_stat().set_sess_inactive();
+    }
   }
 }

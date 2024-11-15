@@ -180,7 +180,7 @@ public:
         is_active_session_(false),
         inner_sql_wait_type_id_(ObInnerSqlWaitTypeId::NULL_INNER_SQL),
         pcode_(0),
-        tm_idle_time_(0),
+        tm_idle_cpu_cycles_(0),
         prev_inner_sql_wait_type_id_(ObInnerSqlWaitTypeId::NULL_INNER_SQL),
         retry_wait_event_no_(0),
         retry_wait_event_p1_(0),
@@ -291,7 +291,7 @@ public:
   bool is_active_session_ CACHE_ALIGNED;
   ObInnerSqlWaitTypeId inner_sql_wait_type_id_;
   int pcode_ CACHE_ALIGNED;
-  int64_t tm_idle_time_; // the idle time between two sampling intervals.
+  int64_t tm_idle_cpu_cycles_; // the idle time between two sampling intervals.
   ObInnerSqlWaitTypeId prev_inner_sql_wait_type_id_;
   int64_t retry_wait_event_no_;
   int64_t retry_wait_event_p1_;
@@ -305,11 +305,11 @@ public:
   int64_t curr_das_task_start_time_;
 
   INHERIT_TO_STRING_KV("ObActiveSessionStatItem", ObActiveSessionStatItem, K_(last_touch_ts),
-      K_(wait_event_begin_ts), K_(total_idle_wait_time), K_(total_non_idle_wait_time),
-      K_(prev_idle_wait_time), K_(prev_non_idle_wait_time), K_(total_cpu_time),
-      K_(is_active_session), K_(inner_sql_wait_type_id), K_(pcode),
-      K_(tm_idle_time), K_(prev_inner_sql_wait_type_id), K_(fixup_index),
-      K_(fixup_ash_buffer), K_(retry_wait_event_no), K_(retry_plan_line_id));
+      K_(last_inactive_ts), K_(wait_event_begin_ts), K_(total_idle_wait_time),
+      K_(total_non_idle_wait_time), K_(prev_idle_wait_time), K_(prev_non_idle_wait_time),
+      K_(total_cpu_time), K_(is_active_session), K_(inner_sql_wait_type_id), K_(pcode),
+      K_(tm_idle_cpu_cycles), K_(fixup_index), K_(fixup_ash_buffer), K_(retry_wait_event_no),
+      K_(retry_plan_line_id));
 
 private:
 

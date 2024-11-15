@@ -251,10 +251,10 @@ void ObDiagnosticInfo::end_wait_event(const int64_t event_no, const bool is_idle
   if (cur_event_no == event_no) {
     curr_wait_.wait_end_time_ = rdtsc();
     curr_wait_.wait_time_ = (curr_wait_.wait_end_time_ - curr_wait_.wait_begin_time_) * 1000 /
-                            lib_get_cpu_khz();
+                            static_cast<int64_t>(lib_get_cpu_khz());
     // TODO(roland.qk): unify wait event record source.
     const int64_t cur_wait_time = (curr_wait_.wait_end_time_ - ash_stat_.wait_event_begin_ts_) * 1000 /
-                            lib_get_cpu_khz();
+                            static_cast<int64_t>(lib_get_cpu_khz());
     if (!is_idle) {
       ash_stat_.total_non_idle_wait_time_ += cur_wait_time;
     } else {
