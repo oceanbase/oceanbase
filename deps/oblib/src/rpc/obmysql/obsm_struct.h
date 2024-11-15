@@ -81,6 +81,7 @@ public:
     client_addr_port_ = 0;
     client_create_time_ = 0;
     has_service_name_ = false;
+    logined_ = false;
   }
 
   obmysql::ObCompressType get_compress_type() {
@@ -144,7 +145,8 @@ public:
   common::ObCSProtocolType get_cs_protocol_type() const
   {
     common::ObCSProtocolType type = common::OB_INVALID_CS_TYPE;
-    if (is_in_auth_switch_phase()) {
+    if (is_in_auth_switch_phase() && !is_logined()) {
+      // if is change user, must is logined
       type = common::OB_MYSQL_CS_TYPE;
     } else if (proxy_cap_flags_.is_ob_protocol_v2_support()) {
       type = common::OB_2_0_CS_TYPE;
@@ -168,6 +170,8 @@ public:
   inline void set_ssl_connect_phase() { connection_phase_ = rpc::ConnectionPhaseEnum::CPE_SSL_CONNECT; }
   inline void set_auth_phase() { connection_phase_ = rpc::ConnectionPhaseEnum::CPE_AUTHED; }
   inline void set_connect_phase() { connection_phase_ = rpc::ConnectionPhaseEnum::CPE_CONNECTED; }
+  inline bool is_logined() const { return logined_; }
+  inline void set_logined(bool logined) { logined_ = true; }
 public:
   obmysql::ObMySQLCapabilityFlags cap_flags_;
   bool is_proxy_;
@@ -220,6 +224,7 @@ public:
   int32_t client_addr_port_;
   int64_t client_create_time_;
   bool has_service_name_;
+  bool logined_;
 };
 } // end of namespace observer
 } // end of namespace oceanbase

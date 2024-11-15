@@ -402,6 +402,7 @@ int ObMPConnect::process()
                "group_id", conn->group_id_,
                "sql_req_level", conn->sql_req_level_);
       conn->set_auth_phase();
+      conn->set_logined(true);
       session->get_autocommit(autocommit);
     }
 
