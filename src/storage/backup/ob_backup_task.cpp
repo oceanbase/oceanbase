@@ -2047,7 +2047,7 @@ int ObPrefetchBackupInfoTask::check_backup_item_need_copy_(
   const ObBackupDataType &backup_data_type = item.get_backup_data_type();
   if (item.get_item_type() != PROVIDER_ITEM_MACRO_ID) {
     need_copy = true;
-  } else if (!backup_data_type.is_user_backup()) {
+  } else if (!backup_data_type.is_major_backup()) {
     need_copy = true;
   } else {
     switch (param_.backup_set_desc_.backup_type_.type_) {
@@ -2106,7 +2106,7 @@ int ObPrefetchBackupInfoTask::inner_check_backup_item_need_copy_when_change_retr
   macro_index.reset();
   ObCompareBackupMacroBlockIdPair compare;
   const ObBackupDataType &backup_data_type = item.get_backup_data_type();
-  if (!backup_data_type.is_user_backup()) {
+  if (!backup_data_type.is_major_backup()) {
     need_copy = true;
   } else if (OB_ISNULL(ls_backup_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
