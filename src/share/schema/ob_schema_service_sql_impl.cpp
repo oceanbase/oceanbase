@@ -2680,26 +2680,50 @@ int ObSchemaServiceSQLImpl::fetch_all_table_info(const ObRefreshSchemaStatus &sc
           LOG_WARN("append sql failed", KR(ret));
         }
       } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < table_ids_size; i++) {
-          if (OB_FAIL(sql.append_fmt("(SELECT * FROM %s WHERE tenant_id = %lu AND table_id = %lu AND schema_version <= %ld ORDER BY schema_version DESC LIMIT 1)",
-                                    table_name,
-                                    fill_extract_tenant_id(schema_status, tenant_id),
-                                    fill_extract_schema_id(schema_status, table_ids[i]),
-                                    schema_version))) {
+        // for obcdc compatibility, values table stmt is not supported when cluster version < 4.2.1
+        if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_1_0) {
+          if (OB_FAIL(sql.append("SELECT /*+ no_rewrite */ r.* FROM ("))) {
             LOG_WARN("append sql failed", KR(ret));
-          } else if (i != table_ids_size - 1) {
-            if (OB_FAIL(sql.append(" UNION ALL "))) {
+          } else if (OB_FAIL(sql.append("SELECT column_0 tid FROM ("))) {
+            LOG_WARN("append sql failed", KR(ret));
+          } else if (OB_FAIL(sql.append("SELECT * FROM (VALUES "))) {
+            LOG_WARN("append sql failed", KR(ret));
+          }
+          for (int64_t i = 0; OB_SUCC(ret) && i < table_ids_size; i++) {
+            if (OB_FAIL(sql.append_fmt("%srow(%lu)", 0 == i ? "" : ", ", fill_extract_schema_id(schema_status, table_ids[i])))) {
               LOG_WARN("append sql failed", KR(ret));
             }
           }
-        }
-        if (FAILEDx(sql.append_fmt(" ORDER BY TENANT_ID DESC, TABLE_ID DESC, SCHEMA_VERSION DESC"))) {
+          if (FAILEDx(sql.append_fmt("))) l JOIN %s r ON r.tenant_id = %lu AND r.table_id = l.tid AND r.schema_version = (",
+                                    table_name,
+                                    fill_extract_tenant_id(schema_status, tenant_id)))) {
             LOG_WARN("append sql failed", KR(ret));
+          } else if (OB_FAIL(sql.append_fmt("SELECT schema_version FROM %s WHERE tenant_id = %lu AND table_id = l.tid AND schema_version <= %ld ORDER BY schema_version DESC LIMIT 1)",
+                                            table_name,
+                                            fill_extract_tenant_id(schema_status, tenant_id),
+                                            schema_version))) {
+            LOG_WARN("append sql failed", KR(ret));
+          } else if (OB_FAIL(sql.append(" ORDER BY tenant_id DESC, table_id DESC, schema_version DESC"))) {
+            LOG_WARN("append sql failed", KR(ret));
+          }
+        } else {
+          if (OB_FAIL(sql.append_fmt(FETCH_ALL_TABLE_HISTORY_SQL3,
+                                    table_name,
+                                    fill_extract_tenant_id(schema_status, tenant_id)))) {
+            LOG_WARN("append sql failed", KR(ret));
+          } else if (OB_FAIL(sql.append_fmt(" AND SCHEMA_VERSION <= %ld", schema_version))) {
+            LOG_WARN("append sql failed", KR(ret));
+          } else if (OB_FAIL(sql.append_fmt(" AND table_id in"))) {
+            LOG_WARN("append failed", KR(ret));
+          } else if (OB_FAIL(sql_append_pure_ids(schema_status, table_ids, table_ids_size, sql))) {
+            LOG_WARN("sql append table id failed", KR(ret));
+          } else if (OB_FAIL(sql.append_fmt(" ORDER BY tenant_id DESC, table_id DESC, schema_version DESC"))) {
+            LOG_WARN("append sql failed", KR(ret));
+          }
         }
       }
     }
   }
-
   if (OB_SUCC(ret)) {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       ObMySQLResult *result = NULL;
@@ -4962,8 +4986,8 @@ int ObSchemaServiceSQLImpl::fetch_tables(
   } else {
     ObTimeoutCtx ctx;
     if (OB_FAIL(ObSchemaUtils::get_all_table_history_name(exec_tenant_id,
-                                                                 table_name,
-                                                                 schema_service_))) {
+                                                          table_name,
+                                                          schema_service_))) {
       LOG_WARN("fail to get all table name", K(ret), K(exec_tenant_id));
     } else if (!is_increase_schema) {
       const char *tname = OB_ALL_TABLE_HISTORY_TNAME;
@@ -4977,17 +5001,41 @@ int ObSchemaServiceSQLImpl::fetch_tables(
         LOG_WARN("append sql failed", K(ret));
       }
     } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < schema_key_size; i++) {
-        if (OB_FAIL(sql.append_fmt("(SELECT * FROM %s WHERE tenant_id = %lu AND table_id = %lu AND schema_version <= %ld ORDER BY schema_version DESC LIMIT 1)",
-                                   table_name,
-                                   fill_extract_tenant_id(schema_status, tenant_id),
-                                   fill_extract_schema_id(schema_status, schema_keys[i].table_id_),
-                                   schema_version))) {
+      // for obcdc compatibility, values table stmt is not supported when cluster version < 4.2.1
+      if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_1_0) {
+        if (OB_FAIL(sql.append("SELECT /*+ no_rewrite */ r.* FROM ("))) {
           LOG_WARN("append sql failed", KR(ret));
-        } else if (i != schema_key_size - 1) {
-          if (OB_FAIL(sql.append(" UNION ALL "))) {
+        } else if (OB_FAIL(sql.append("SELECT column_0 tid FROM ("))) {
+          LOG_WARN("append sql failed", KR(ret));
+        } else if (OB_FAIL(sql.append("SELECT * FROM (VALUES "))) {
+          LOG_WARN("append sql failed", KR(ret));
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < schema_key_size; i++) {
+          if (OB_FAIL(sql.append_fmt("%srow(%lu)", 0 == i ? "" : ", ", fill_extract_schema_id(schema_status, schema_keys[i].table_id_)))) {
             LOG_WARN("append sql failed", KR(ret));
           }
+        }
+        if (FAILEDx(sql.append_fmt("))) l JOIN %s r ON r.tenant_id = %lu AND r.table_id = l.tid AND r.schema_version = (",
+                                    table_name,
+                                    fill_extract_tenant_id(schema_status, tenant_id)))) {
+          LOG_WARN("append sql failed", KR(ret));
+        } else if (OB_FAIL(sql.append_fmt("SELECT schema_version FROM %s WHERE tenant_id = %lu AND table_id = l.tid AND schema_version <= %ld ORDER BY schema_version DESC LIMIT 1)",
+                                          table_name,
+                                          fill_extract_tenant_id(schema_status, tenant_id),
+                                          schema_version))) {
+          LOG_WARN("append sql failed", KR(ret));
+        }
+      } else {
+        if (OB_FAIL(sql.append_fmt(FETCH_ALL_TABLE_HISTORY_SQL3,
+                                  table_name,
+                                  fill_extract_tenant_id(schema_status, tenant_id)))) {
+          LOG_WARN("append sql failed", KR(ret));
+        } else if (OB_FAIL(sql.append_fmt(" AND SCHEMA_VERSION <= %ld", schema_version))) {
+          LOG_WARN("append sql failed", KR(ret));
+        } else if (OB_FAIL(sql.append_fmt(" AND table_id in"))) {
+          LOG_WARN("append failed", KR(ret));
+        } else if (OB_FAIL(SQL_APPEND_SCHEMA_ID(table, schema_keys, schema_key_size, sql))) {
+          LOG_WARN("sql append table id failed", KR(ret));
         }
       }
     }
