@@ -400,7 +400,9 @@ public:
       exception_stack_.exceptions_[exception_stack_.cur_].raising_block_.reset();
       ++exception_stack_.cur_;
     } else {
-      ret = common::OB_ERR_UNEXPECTED;
+      ret = OB_NOT_SUPPORTED;
+      PL_LOG(WARN, "max exception block nested level exceeded", K(exception_stack_.cur_));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "exception blocks nested level exceed 64");
     }
     return ret;
   }
@@ -445,7 +447,9 @@ public:
       label_stack_.labels_[label_stack_.cur_].exit_ = exit;
       ++label_stack_.cur_;
     } else {
-      ret = common::OB_ERR_UNEXPECTED;
+      ret = OB_NOT_SUPPORTED;
+      PL_LOG(WARN, "max label nested level exceeded", K(label_stack_.cur_));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "labels nested level exceeds 64");
     }
     return ret;
   }

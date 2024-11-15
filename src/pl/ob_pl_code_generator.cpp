@@ -10118,7 +10118,11 @@ int ObPLCodeGenerator::set_loop(int64_t level,
 {
   int ret = OB_SUCCESS;
 
-  CK (loop_stack_.cur_ < LOOP_STACK_DEPTH - 1);
+  if (loop_stack_.cur_ >= LOOP_STACK_DEPTH - 1) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("max loop nested level exceeded", K(loop_stack_.cur_));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "loops nested level exceed 64");
+  }
 
   if (OB_SUCC(ret)) {
     LoopStack::LoopInfo &curr = loop_stack_.loops_[loop_stack_.cur_];
