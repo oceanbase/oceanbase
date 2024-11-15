@@ -1250,6 +1250,7 @@ int ObResourceManagerProxy::replace_user_mapping_rule(ObMySQLTransaction &trans,
                                     user_exist))) {
       LOG_WARN("fail check if user exist", K(tenant_id), K(value), K(ret));
     } else if (!user_exist) {
+      ret = OB_ERR_USER_NOT_EXIST;
       LOG_USER_ERROR(OB_ERR_USER_NOT_EXIST);
     }
   }
@@ -1318,7 +1319,8 @@ int ObResourceManagerProxy::replace_function_mapping_rule(ObMySQLTransaction &tr
     if (OB_FAIL(check_if_function_exist(value, function_exist))) {
       LOG_WARN("fail check if function exist", K(tenant_id), K(value), K(ret));
     } else if (OB_UNLIKELY(!function_exist)) {
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "invalid function name, please check");
+      ret = OB_INVALID_CONFIG;
+      LOG_USER_ERROR(OB_INVALID_CONFIG, "invalid function name, please check");
     }
   }
   if (OB_SUCC(ret) && function_exist) {
