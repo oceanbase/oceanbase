@@ -21,6 +21,7 @@
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 #include "ob_storage_ha_utils.h"
+#include "storage/high_availability/ob_storage_ha_src_provider.h"
 
 using namespace oceanbase;
 using namespace share;
@@ -586,7 +587,7 @@ int ObRebuildService::check_rebuild_ctx_map_()
   ObArray<ObLSID> ls_id_array;
   ObArray<ObLSRebuildCtx> rebuild_ctx_array;
   ObMigrationStatus status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
-
+  bool is_in_member_or_learner_list = false;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("rebuild service do not init", K(ret));
@@ -620,7 +621,27 @@ int ObRebuildService::check_rebuild_ctx_map_()
       } else if (OB_FAIL(ObMigrationStatusHelper::check_migration_in_final_state(status, in_final_state))) {
         LOG_WARN("failed to check migration status in final state", K(ret), K(status), KPC(ls));
       } else if (rebuild_info.is_in_rebuild() || !in_final_state) {
-        //do nohting
+        if (OB_FAIL(check_if_in_member_list_or_learner_list_(rebuild_ctx, is_in_member_or_learner_list))) {
+          LOG_WARN("failed to check if in member list", K(ret), K(rebuild_ctx));
+        } else if (!is_in_member_or_learner_list
+            && OB_FAIL(ObStorageHACancelDagNetUtils::cancel_task(rebuild_ctx.ls_id_, rebuild_ctx.task_id_))) {
+          if (OB_ENTRY_NOT_EXIST == ret) {
+            ret = OB_SUCCESS;
+            LOG_INFO("task already not exist", K(rebuild_ctx));
+          } else {
+            LOG_WARN("failed to cancel rebuild task", K(ret), K(rebuild_ctx));
+          }
+        }
+#ifdef ERRSIM
+        SERVER_EVENT_ADD("storage_ha", "check_if_in_member_list",
+                  "tenant_id", MTL_ID(),
+                  "ls_id",  rebuild_ctx.ls_id_.id(),
+                  "task_id", rebuild_ctx.task_id_,
+                  "destination", MYADDR,
+                  "is_in_member_list", is_in_member_or_learner_list,
+                  "result", ret,
+                  "REBUILD_LS_OP");
+#endif
       } else if (OB_FAIL(ls_id_array.push_back(ls_id))) {
         LOG_WARN("failed to push ls id into array", K(ret), K(ls_id));
       }
@@ -773,6 +794,38 @@ int ObRebuildService::check_can_rebuild_(
   return ret;
 }
 
+int ObRebuildService::check_if_in_member_list_or_learner_list_(const ObLSRebuildCtx &rebuild_ctx, bool &is_in_member_or_learner_list) const
+{
+  int ret = OB_SUCCESS;
+  is_in_member_or_learner_list = false;
+  common::ObArray<common::ObAddr> member_list;
+  common::GlobalLearnerList learner_list;
+  common::ObAddr leader_addr;
+  ObStorageHAGetMemberHelper get_member_helper;
+  const uint64_t tenant_id = MTL_ID();
+  int64_t quorum = 0;
+  ObLSService *ls_service = nullptr;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls rebuild service do not init", K(ret));
+  } else if (!rebuild_ctx.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(rebuild_ctx));
+  } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls_service should not be nullptr", K(ret));
+  } else if (OB_FAIL(get_member_helper.init(ls_service->get_storage_rpc()))) {
+    STORAGE_LOG(WARN, "failed to init palf helper", K(ret), K(rebuild_ctx));
+  } else if (OB_FAIL(get_member_helper.get_ls_member_list_and_learner_list(tenant_id, rebuild_ctx.ls_id_, true /*need_learner_list*/, leader_addr, learner_list, member_list))) {
+    STORAGE_LOG(WARN, "failed to get ls member list", K(ret), K(tenant_id), K(rebuild_ctx));
+  } else if (is_contain(member_list, GCONF.self_addr_) || learner_list.contains(GCONF.self_addr_)) {
+    is_in_member_or_learner_list = true;
+  } else {
+    is_in_member_or_learner_list = false;
+  }
+  LOG_INFO("check ls in member list or learner_list", K(is_in_member_or_learner_list), "ls_id", rebuild_ctx.ls_id_.id(), "task_id", rebuild_ctx.task_id_, K(member_list), K(learner_list));
+  return ret;
+}
 
 ObLSRebuildMgr::ObLSRebuildMgr()
   : is_inited_(false),
