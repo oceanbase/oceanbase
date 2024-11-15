@@ -262,6 +262,7 @@ public:
   static bool use_point_polygon_short_circuit(const ObGeometry& geo1, const ObGeometry& geo2, ObItemType func_type);
   static int get_point_polygon_res(ObGeometry *geo1, ObGeometry *geo2, ObItemType func_type, bool& result);
   static bool need_get_srs(const uint32_t srid);
+  static int print_double(double val, ObStringBuffer &buf);
 private:
   template<typename PT, typename LN, typename PY, typename MPT, typename MLN, typename MPY, typename GC>
   static int create_geo_bin_by_type(ObIAllocator &allocator,

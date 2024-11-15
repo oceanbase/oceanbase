@@ -96,7 +96,6 @@ public:
   TO_STRING_KV(K_(gtype), K_(srid), K_(point), K_(elem_info), K_(ordinates));
 
 private:
-  bool need_sci_format(double num) { return num <= -1e9 || num >= 1e10; }
 
   ObGeoType gtype_;
   ObSdoPoint point_;
