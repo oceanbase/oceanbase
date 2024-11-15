@@ -1612,7 +1612,14 @@ int ObHTableFilterOperator::get_next_result_internal(ResultType *&next_result)
 
     // if only check exist, just return row_count_ as 1
     if (check_existence_only_) {
-      one_result_->save_row_count_only(1);
+      if (std::is_same<ObTableQueryResult, ResultType>::value) {
+        one_result_->save_row_count_only(1);
+      } else if (std::is_same<ObTableQueryIterableResult, ResultType>::value) {
+        iterable_result_->save_row_count_only(1);
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unknown result type", K(ret));
+      }
       ret = OB_ITER_END;
       break;
     }
