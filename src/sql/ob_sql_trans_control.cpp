@@ -1406,7 +1406,9 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback, co
 
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(ObTransDeadlockDetectorAdapter::maintain_deadlock_info_when_end_stmt(exec_ctx, rollback))) {
-      TRANS_LOG(WARN, "maintain deadlock info at end stmt fail", K(tmp_ret));
+      if (OB_NOT_RUNNING != tmp_ret) {
+        TRANS_LOG(WARN, "maintain deadlock info at end stmt fail", K(tmp_ret));
+      }
     }
     // this may happend cause tx may implicit aborted
     // (for example: first write sql of implicit started trans meet lock conflict)
