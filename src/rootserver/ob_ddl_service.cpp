@@ -23857,6 +23857,7 @@ int ObDDLService::batch_alter_system_table_column_(
             LOG_WARN("failed to get table new schema", KR(ret), K(*orig_table_schema), K(hard_code_schema));
           } else if (0 == add_column_ids.count() && 0 == alter_column_ids.count()) {
             LOG_INFO("system table's column schemas not changed, just skip", KR(ret), K(tenant_id), K(table_id));
+          } else if (FALSE_IT(new_table_schema.set_progressive_merge_round(orig_table_schema->get_progressive_merge_round() + 1))) {
           } else if (OB_FAIL(ddl_operator.batch_update_system_table_columns(trans, *orig_table_schema,
                   new_table_schema, add_column_ids, alter_column_ids))) {
             LOG_WARN("fail to batch update columns", KR(ret), K(new_table_schema));
