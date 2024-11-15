@@ -95,6 +95,7 @@ int ObPlanCacheObject::set_params_info(const ParamStore &params)
       } else {
         param_info.ext_real_type_ = data_type.get_obj_type();
         param_info.scale_ = data_type.get_scale();
+        param_info.precision_ = data_type.get_precision();
       }
       LOG_DEBUG("ext params info", K(data_type), K(param_info), K(params.at(i)));
     } else if (params.at(i).get_param_meta().is_ext() || params.at(i).is_user_defined_sql_type() || params.at(i).is_collection_sql_type()) {

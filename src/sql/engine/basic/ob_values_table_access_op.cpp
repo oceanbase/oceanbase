@@ -245,10 +245,22 @@ int ObValuesTableAccessOp::calc_datum_from_param(const ObObj &src_obj, ObExpr *d
   ObDatum &dst_datum = dst_expr->locate_datum_for_write(eval_ctx_);
   const ObObjType &src_type = src_obj.get_type();
   const ObObjType &dst_type =  dst_expr->obj_meta_.get_type();
-  if (ob_is_decimal_int_tc(src_type) && ob_is_number_tc(dst_type)) {
+  const ObObjParam src_obj_param = static_cast<const ObObjParam>(src_obj);
+  bool need_adjust_decimal_int = ob_is_decimal_int_tc(src_type)
+                                 && ob_is_decimal_int_tc(dst_expr->datum_meta_.type_)
+                                 && ObDatumCast::need_scale_decimalint(src_obj_param.get_scale(),
+                                                                       src_obj_param.get_precision(),
+                                                                       dst_expr->datum_meta_.scale_,
+                                                                       dst_expr->datum_meta_.precision_);
+  if (ob_is_decimal_int_tc(src_type) && (ob_is_number_tc(dst_type) || need_adjust_decimal_int)) {
     ObObj dst_obj;
     const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(GET_MY_SESSION(ctx_));
-    ObCastCtx cast_ctx(&eval_ctx_.exec_ctx_.get_allocator(), &dtc_params, cm_, dst_expr->obj_meta_.get_collation_type());
+    ObAccuracy dst_accuracy = ObAccuracy::DDL_DEFAULT_ACCURACY2[is_oracle_mode()][dst_type];
+    if (ob_is_decimal_int_tc(dst_type)) {
+      dst_accuracy.set_scale(dst_expr->datum_meta_.scale_);
+      dst_accuracy.set_precision(dst_expr->datum_meta_.precision_);
+    }
+    ObCastCtx cast_ctx(&eval_ctx_.exec_ctx_.get_allocator(), &dtc_params, cm_, dst_expr->obj_meta_.get_collation_type(), &dst_accuracy);
     cast_ctx.exec_ctx_ = &eval_ctx_.exec_ctx_;
     if (OB_FAIL(ObObjCaster::to_type(dst_type, dst_expr->obj_meta_.get_collation_type(), cast_ctx,
                                      src_obj, dst_obj))) {

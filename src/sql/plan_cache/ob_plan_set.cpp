@@ -272,6 +272,10 @@ int ObPlanSet::match_param_info(const ObParamInfo &param_info,
         // do nothing
       } else if (OB_FAIL(ObSQLUtils::get_ext_obj_data_type(param, data_type))) {
         LOG_WARN("fail to get obj data_type", K(ret), K(param));
+      } else if (data_type.get_obj_type() == ObDecimalIntType) {
+        is_same = param_info.ext_real_type_ == ObDecimalIntType
+                  && data_type.get_scale() == param_info.scale_
+                  && match_decint_precision(param_info, data_type.get_precision());
       } else if (data_type.get_scale() == param_info.scale_ &&
                  data_type.get_obj_type() == param_info.ext_real_type_) {
         is_same = true;
@@ -2469,6 +2473,9 @@ bool ObPlanSet::match_decint_precision(const ObParamInfo &param_info, ObPrecisio
   bool ret = false;
   if (ob_is_decimal_int(param_info.type_)) {
     ret = (param_info.precision_ == other_prec);
+  } else if (ob_is_extend(param_info.type_) && ob_is_decimal_int(param_info.ext_real_type_)) {
+    ret = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(param_info.precision_)
+          == wide::ObDecimalIntConstValue::get_int_bytes_by_precision(other_prec);
   } else {
     // not decimal_int, return true
     ret = true;
