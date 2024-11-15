@@ -288,6 +288,7 @@ int ObRandomOSSReader::read(char *buf, int64_t count, int64_t &read_size)
   int ret = OB_SUCCESS;
   ObBackupIoAdapter io_adapter;
   ObIOHandle io_handle;
+  CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_IMPORT);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObRandomOSSReader not init", KR(ret), KP(this));
