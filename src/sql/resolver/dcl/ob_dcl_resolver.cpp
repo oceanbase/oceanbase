@@ -83,6 +83,8 @@ int ObDCLResolver::check_password_strength(common::ObString &password)
                                                                            *session_info_,
                                                                            passed))) {
     LOG_WARN("password len dont satisfied current pw policy", K(ret));
+  } else if (OB_UNLIKELY(!passed)) {
+    // do nothing
   } else if (ObPasswordPolicy::LOW == pw_policy) {
     // do nothing
   } else if (ObPasswordPolicy::MEDIUM == pw_policy) {
