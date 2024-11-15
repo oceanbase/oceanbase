@@ -861,6 +861,7 @@ void ObTxDesc::implicit_start_tx_()
     expire_ts_ = active_ts_ + timeout_us_;
     active_scn_ = get_tx_seq();
     state_change_flags_.mark_all();
+    TX_STAT_START_INC;
   }
 }
 
