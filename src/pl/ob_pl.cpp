@@ -953,10 +953,14 @@ void ObPLContext::destory(
               ret = OB_SUCCESS == ret ? rl_ret : ret;
             }
           } else if (OB_TRANS_XA_BRANCH_FAIL != ret) {
-            tmp_ret = ObDbmsXA::xa_rollback_savepoint(ctx);
-            if (OB_SUCCESS != tmp_ret) {
-              LOG_WARN("xa trans roll back to save point failed",
-                      K(tmp_ret), KPC(session_info.get_tx_desc()));
+            if (in_nested_sql_ctrl()) {
+              // rollback or commit by the top sql.
+            } else {
+              tmp_ret = ObDbmsXA::xa_rollback_savepoint(ctx);
+              if (OB_SUCCESS != tmp_ret) {
+                LOG_WARN("xa trans roll back to save point failed",
+                        K(tmp_ret), KPC(session_info.get_tx_desc()));
+              }
             }
           }
 #endif
