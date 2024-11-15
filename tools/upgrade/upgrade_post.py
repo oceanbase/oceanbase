@@ -1630,8 +1630,6 @@
 #      ori_enable_ddl = actions.get_ori_enable_ddl(cur, timeout)
 #      if ori_enable_ddl == 0:
 #        actions.set_parameter(cur, 'enable_ddl', 'True', timeout)
-#      # enable_sys_table_ddl
-#      actions.set_parameter(cur, 'enable_sys_table_ddl', 'True', timeout)
 #      # get max_used_job_id
 #      max_used_job_id = get_max_used_job_id(cur)
 #      # run upgrade job
@@ -1640,8 +1638,6 @@
 #      cur.execute(sql)
 #      # check upgrade job result
 #      check_upgrade_job_result(cur, job_name, timeout, max_used_job_id)
-#      # reset enable_sys_table_ddl
-#      actions.set_parameter(cur, 'enable_sys_table_ddl', 'False', timeout)
 #      # reset enable_ddl
 #      if ori_enable_ddl == 0:
 #        actions.set_parameter(cur, 'enable_ddl', 'False', timeout)
@@ -3303,6 +3299,10 @@
 #def enable_direct_load(cur, timeout):
 #  actions.set_parameter(cur, '_ob_enable_direct_load', 'True', timeout)
 #
+## 9 关闭enable_sys_table_ddl
+#def disable_sys_table_ddl(cur, timeout):
+#  actions.set_parameter(cur, 'enable_sys_table_ddl', 'False', timeout)
+#
 ## 开始升级后的检查
 #def do_check(conn, cur, query_cur, timeout):
 #  try:
@@ -3314,6 +3314,7 @@
 #    enable_rereplication(cur, timeout)
 #    enable_major_freeze(cur, timeout)
 #    enable_direct_load(cur, timeout)
+#    disable_sys_table_ddl(cur, timeout)
 #  except Exception as e:
 #    logging.exception('run error')
 #    raise

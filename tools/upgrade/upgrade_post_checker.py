@@ -126,6 +126,10 @@ def enable_major_freeze(cur, timeout):
 def enable_direct_load(cur, timeout):
   actions.set_parameter(cur, '_ob_enable_direct_load', 'True', timeout)
 
+# 9 关闭enable_sys_table_ddl
+def disable_sys_table_ddl(cur, timeout):
+  actions.set_parameter(cur, 'enable_sys_table_ddl', 'False', timeout)
+
 # 开始升级后的检查
 def do_check(conn, cur, query_cur, timeout):
   try:
@@ -137,6 +141,7 @@ def do_check(conn, cur, query_cur, timeout):
     enable_rereplication(cur, timeout)
     enable_major_freeze(cur, timeout)
     enable_direct_load(cur, timeout)
+    disable_sys_table_ddl(cur, timeout)
   except Exception as e:
     logging.exception('run error')
     raise
