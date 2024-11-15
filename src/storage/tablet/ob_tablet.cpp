@@ -725,7 +725,12 @@ int ObTablet::init_with_migrate_param(
         LOG_WARN("fail to pull memtable", K(ret));
       } else if (is_transfer || !need_compat) {
         const ObMajorChecksumInfo *ckm_info = &param.major_ckm_info_;
-        ALLOC_AND_INIT(allocator, table_store_addr_, (*this), nullptr/*ObSSTable*/, ckm_info->is_empty() ? nullptr : ckm_info);
+        ALLOC_AND_INIT(allocator, table_store_addr_, (*this),
+                       nullptr /*ObSSTable*/,
+                       (ckm_info->is_empty() ||
+                        is_output_exec_mode(ckm_info->get_exec_mode()))
+                           ? nullptr
+                           : ckm_info);
       } else if (OB_ISNULL(sstable)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("sstable is null", K(ret), "ls_id", tablet_meta_.ls_id_, "tablet_id", tablet_meta_.tablet_id_, K(param));
@@ -5608,7 +5613,9 @@ int ObTablet::build_migration_tablet_param_major_ckm_info(
     if (OB_UNLIKELY(!major_ckm_info.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("major ckm info on table store is invalid", K(ret), K(tablet_id), K(major_ckm_info));
-    } else if (!major_ckm_info.is_empty() && OB_FAIL(mig_tablet_param.major_ckm_info_.assign(major_ckm_info, &mig_tablet_param.allocator_))) {
+    } else if (major_ckm_info.is_empty() || is_output_exec_mode(major_ckm_info.get_exec_mode())) {
+      // do not copy OUTPUT major ckm info to migrate or backup
+    } else if (OB_FAIL(mig_tablet_param.major_ckm_info_.assign(major_ckm_info, &mig_tablet_param.allocator_))) {
       LOG_WARN("failed to assign major ckm info from table store", K(ret), K(tablet_id), K(table_store));
     }
   }
