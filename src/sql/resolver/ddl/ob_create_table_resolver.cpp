@@ -1969,8 +1969,19 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
               column_meta.set_type(ObLongTextType);
             }
             column.set_meta_type(column_meta);
-            column.set_charset_type(table_schema.get_charset_type());
-            column.set_collation_type(expr->get_collation_type());
+            ObCharsetType char_type = table_schema.get_charset_type();
+            ObCollationType collation_type = expr->get_collation_type();
+            if (is_oracle_mode() && ob_is_string_or_lob_type(column.get_data_type())
+                && CS_TYPE_BINARY != collation_type) {
+              if (ob_is_nstring_type(column.get_data_type())) {
+                collation_type = session_info_->get_nls_collation_nation();
+              } else {
+                collation_type = session_info_->get_nls_collation();
+              }
+              char_type = ObCharset::charset_type_by_coll(collation_type);
+            }
+            column.set_charset_type(char_type);
+            column.set_collation_type(collation_type);
             column.set_accuracy(expr->get_accuracy());
             column.set_zero_fill(expr->get_result_flag() & ZEROFILL_FLAG);
             if (column.is_enum_or_set()) {
