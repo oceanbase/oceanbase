@@ -347,6 +347,9 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(
       CK (OB_NOT_NULL(pool = static_cast<ObInnerSQLConnectionPool *>(sql_proxy_->get_pool())));
       OX (session_info->set_job_info(&job_info));
       OZ (pool->acquire_spi_conn(session_info, conn));
+      if (OB_NOT_NULL(conn) && OB_NOT_NULL(session_info) && !is_ora_sys_user(session_info->get_user_id()) && !is_root_user(session_info->get_user_id())) {
+        conn->set_check_priv(true);
+      }
       if (OB_SUCC(ret) && job_info.is_mysql_event_job_class()) {
         ObArenaAllocator allocator("MYSQL_EVENT_TMP");
         ObParser parser(allocator, session_info->get_sql_mode(), session_info->get_charsets4parser());
@@ -364,6 +367,9 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(
         }
       } else {
         OZ (conn->execute_write(tenant_id, what.string().ptr(), affected_rows));
+      }
+      if (OB_NOT_NULL(conn) && OB_NOT_NULL(session_info) && !is_ora_sys_user(session_info->get_user_id()) && !is_root_user(session_info->get_user_id())) {
+        conn->set_check_priv(false);
       }
       if (OB_NOT_NULL(conn)) {
         sql_proxy_->close(conn, ret);

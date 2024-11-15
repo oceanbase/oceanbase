@@ -399,18 +399,31 @@ int ObDBMSDataDict::modify_schedule_job_(
 {
   int ret = OB_SUCCESS;
   common::ObISQLClient *sql_client = nullptr;
+  const bool is_oracle_mode = lib::is_oracle_mode();
+  ObVSliceAlloc allocator(ObMemAttr(tenant_id, "dbms_data_dict"));
+  dbms_scheduler::ObDBMSSchedJobInfo job_info;
 
   if (OB_ISNULL(sql_client = GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql_proxy is null", KR(ret));
-  } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::update_dbms_sched_job_info(
+  } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::get_dbms_sched_job_info(
       *sql_client,
       tenant_id,
-      ObString(DATA_DICT_SCHEDULED_JOB_NAME),
+      is_oracle_mode,
+      DATA_DICT_SCHEDULED_JOB_NAME,
+      allocator,
+      job_info))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        LOG_WARN("get_dbms_sched_job_info not exist", KR(ret), K(tenant_id));
+      } else {
+        LOG_WARN("get_dbms_sched_job_info failed", KR(ret), K(tenant_id));
+      }
+  } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::update_dbms_sched_job_info(
+      *sql_client,
+      job_info,
       job_attribute_name,
       job_attribute_value))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
       LOG_INFO("schedule job didn't change, just skip", K(tenant_id), K(job_attribute_name), K(job_attribute_value));
     } else {
       LOG_WARN("update_dbms_sched_job_info failed", KR(ret),
@@ -419,6 +432,10 @@ int ObDBMSDataDict::modify_schedule_job_(
   } else {
     LOG_INFO("modify schedule job succ", K(tenant_id),
         KCSTRING(DATA_DICT_SCHEDULED_JOB_NAME), K(job_attribute_name), K(job_attribute_value));
+  }
+
+  if (OB_ENTRY_NOT_EXIST == ret) {
+    ret = OB_SUCCESS;
   }
 
   return ret;

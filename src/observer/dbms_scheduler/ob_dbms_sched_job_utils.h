@@ -396,8 +396,7 @@ public:
                                  const bool is_delete_after_stop);
   /**
    * @brief  更新 JOB 信息
-   * @param [in] tenant_id
-   * @param [in] job_name
+   * @param [in] job_info
    * @param [in] job_attribute_name - 要更新的 job 列
    * @param [in] job_attribute_value - 要更新的列 value
    * @retval OB_SUCCESS execute success
@@ -406,8 +405,7 @@ public:
    * @retval OB_ENTRY_NOT_EXIST JOB 不存在/没做更改
    */
   static int update_dbms_sched_job_info(common::ObISQLClient &sql_client,
-                                        const uint64_t tenant_id,
-                                        const ObString &job_name,
+                                        const ObDBMSSchedJobInfo &job_info,
                                         const ObString &job_attribute_name,
                                         const ObObj &job_attribute_value);
   /**

@@ -124,7 +124,7 @@ int ObDBMSSchedJobUtils::check_is_valid_end_date(const int64_t start_date, const
 
 int ObDBMSSchedJobUtils::check_is_valid_repeat_interval(const ObString &str) {
   int ret = OB_SUCCESS;
-  if (!str.empty()) {
+  if (!str.empty() && 0 != str.case_compare("null")) {
     ObString repeat_expr(str);
     ObString freq_str = repeat_expr.split_on('=').trim_space_only();
     ObString repeat_type_str = repeat_expr.split_on(';').trim_space_only();
@@ -197,7 +197,11 @@ int ObDBMSSchedJobInfo::deep_copy(ObIAllocator &allocator, const ObDBMSSchedJobI
   OZ (ob_write_string(allocator, other.state_, state_));
   OZ (ob_write_string(allocator, other.job_action_, job_action_));
   OZ (ob_write_string(allocator, other.job_type_, job_type_));
-  OZ (ob_write_string(allocator, other.job_style_, job_style_));
+
+  //处理存在兼容性问题的列
+  //job style
+  OZ (ob_write_string(allocator, "REGULAR", job_style_));
+
   return ret;
 }
 
@@ -253,7 +257,7 @@ int ObDBMSSchedJobUtils::stop_dbms_sched_job(
     if (is_delete_after_stop) {
       ObObj state_obj;
       state_obj.set_char("KILLED");
-      if(OB_FAIL(update_dbms_sched_job_info(sql_client, job_info.tenant_id_, job_info.job_name_, ObString("state"), state_obj))) {
+      if(OB_FAIL(update_dbms_sched_job_info(sql_client, job_info, ObString("state"), state_obj))) {
         LOG_WARN("update job info failed", K(ret));
       }
     }
@@ -467,8 +471,7 @@ int ObDBMSSchedJobUtils::create_dbms_sched_job(
 }
 
 int ObDBMSSchedJobUtils::update_dbms_sched_job_info(common::ObISQLClient &sql_client,
-                                                    const uint64_t tenant_id,
-                                                    const ObString &job_name,
+                                                    const ObDBMSSchedJobInfo &job_info,
                                                     const ObString &job_attribute_name,
                                                     const ObObj &job_attribute_value)
 {
@@ -477,16 +480,17 @@ int ObDBMSSchedJobUtils::update_dbms_sched_job_info(common::ObISQLClient &sql_cl
   const int64_t now = ObTimeUtility::current_time();
   ObDMLSqlSplicer dml;
   int64_t exec_tenant_id = 0;
+  int64_t tenant_id = job_info.tenant_id_;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
   //chcek job name
-  } else if (job_name.empty() || OB_FAIL(check_is_valid_name(job_name))) {
+  } else if (job_info.job_name_.empty() || OB_FAIL(check_is_valid_name(job_info.job_name_))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid job name", KR(ret), K(job_name));
+    LOG_WARN("invalid job name", KR(ret), K(job_info.job_name_));
   } else if (OB_FAIL(dml.add_pk_column(
         "tenant_id", ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id)))
-        || OB_FAIL(dml.add_pk_column("job_name", job_name)) || OB_FAIL(dml.add_gmt_modified(now))) {
+        || OB_FAIL(dml.add_pk_column("job_name", job_info.job_name_)) || OB_FAIL(dml.add_gmt_modified(now))) {
       LOG_WARN("add column failed", KR(ret));
   } else if (0 == job_attribute_name.case_compare("state")) {
     if (OB_FAIL(check_is_valid_state(job_attribute_value.get_string()))) {
@@ -499,10 +503,17 @@ int ObDBMSSchedJobUtils::update_dbms_sched_job_info(common::ObISQLClient &sql_cl
       LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_bool()));
     }
   } else if (0 == job_attribute_name.case_compare("repeat_interval")) {
+    int64_t next_date = 0;
     if (OB_FAIL(check_is_valid_repeat_interval(job_attribute_value.get_string()))) {
       LOG_WARN("invalid repeat_interval", KR(ret), K(job_attribute_value.get_string()));
+    } else if (OB_FAIL(calc_dbms_sched_repeat_expr(job_info, next_date))) {
+      LOG_WARN("invalid next_date", KR(ret), K(job_attribute_value.get_string()));
     } else if (OB_FAIL(dml.add_column("repeat_interval", job_attribute_value.get_string()))) {
       LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_string()));
+    } else if (OB_FAIL(dml.add_column("`interval#`", job_attribute_value.get_string()))) {
+      LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_string()));
+    } else if (OB_FAIL(dml.add_raw_time_column("next_date", next_date))) {
+      LOG_WARN("add next_date column failed", KR(ret), K(next_date));
     }
   } else if (0 == job_attribute_name.case_compare("job_action")) {
     if (OB_FAIL(dml.add_column("job_action", job_attribute_value.get_string()))) {
@@ -510,6 +521,9 @@ int ObDBMSSchedJobUtils::update_dbms_sched_job_info(common::ObISQLClient &sql_cl
     } else if (OB_FAIL(dml.add_column("what", job_attribute_value.get_string()))) {
       LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_string()));
     }
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("not support argument", KR(ret), K(tenant_id));
   }
 
   if (OB_SUCC(ret)) {
@@ -662,6 +676,8 @@ int ObDBMSSchedJobUtils::calc_dbms_sched_repeat_expr(const ObDBMSSchedJobInfo &j
         int64_t repeat_interval_ts = freq_num * repeat_num * 1000000LL;
         int64_t N = (now - job_info.start_date_) / repeat_interval_ts;
         next_run_time = job_info.start_date_ + (N + 1) * repeat_interval_ts;
+        //未开始执行时，重新计算下次执行时间应该还是 start_date
+        next_run_time = max(next_run_time, job_info.start_date_);
       }
     }
   }
