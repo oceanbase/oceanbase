@@ -130,10 +130,10 @@ void ObCommonLSService::do_work()
           (void)try_update_primary_ip_list();
         }
       }
-      if (ObShareUtil::is_tenant_enable_rebalance(tenant_id_)) {
-        if (OB_TMP_FAIL(ObBalanceLSPrimaryZone::try_update_sys_ls_primary_zone(tenant_id_))) {
-          LOG_WARN("failed to update sys ls primary zone", KR(ret), KR(tmp_ret), K(tenant_id_));
-        }
+      //系统日志流primary_zone的调整不受配置项的控制
+      //系统日志流的个数不会发生变化，加上限制会导致升级case需要大量的修改
+      if (OB_TMP_FAIL(ObBalanceLSPrimaryZone::try_update_sys_ls_primary_zone(tenant_id_))) {
+        LOG_WARN("failed to update sys ls primary zone", KR(ret), KR(tmp_ret), K(tenant_id_));
       }
 
       user_tenant_schema.reset();
