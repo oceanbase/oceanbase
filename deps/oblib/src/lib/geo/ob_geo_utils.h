@@ -273,6 +273,7 @@ public:
   static int remove_duplicate_geo(ObGeometry *&geo, lib::MemoryContext &mem_ctx, const ObSrsItem *srs, bool need_simplify = true);
   template<typename GcTreeType>
   static int check_if_geo_duplicate(ObGeometry *geo, lib::MemoryContext &mem_ctx, const ObSrsItem *srs, bool &is_duplicate);
+  static int print_double(double val, ObStringBuffer &buf);
 private:
   template<typename PT, typename LN, typename PY, typename MPT, typename MLN, typename MPY, typename GC>
   static int create_geo_bin_by_type(ObIAllocator &allocator,

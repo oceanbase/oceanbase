@@ -50,6 +50,7 @@
 #include "lib/geo/ob_geo_zoom_in_visitor.h"
 #include "lib/geo/ob_geo_close_ring_visitor.h"
 #include "share/rc/ob_tenant_base.h"
+#include "rpc/obmysql/ob_mysql_global.h" // DOUBLE_TO_STRING_CONVERSION_BUFFER_SIZE
 
 namespace oceanbase
 {
@@ -3293,6 +3294,24 @@ bool ObGeoTypeUtil::need_get_srs(const uint32_t srid)
     ret_bool = false;
   }
   return ret_bool;
+}
+
+int ObGeoTypeUtil::print_double(double val, ObStringBuffer &buf)
+{
+  INIT_SUCC(ret);
+
+  if (OB_FAIL(buf.reserve(DOUBLE_TO_STRING_CONVERSION_BUFFER_SIZE + 1))) {
+    LOG_WARN("fail to reserve memory for j_buf", K(ret));
+  } else {
+    char *start = buf.ptr() + buf.length();
+    uint64_t len = ob_gcvt(val, ob_gcvt_arg_type::OB_GCVT_ARG_DOUBLE,
+        DOUBLE_TO_STRING_CONVERSION_BUFFER_SIZE, start, NULL);
+    if (OB_FAIL(buf.set_length(buf.length() + len))) {
+      LOG_WARN("fail to set j_buf len", K(ret), K(buf.length()), K(len));
+    }
+  }
+
+  return ret;
 }
 
 int ObGeoMVTUtil::snap_to_grid(ObGeometry *geo, const ObGeoGrid &grid, bool use_floor)

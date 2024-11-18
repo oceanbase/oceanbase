@@ -106,7 +106,6 @@ public:
 
 private:
   static const int64_t DEFAULT_PAGE_SIZE_ORDINATES = 1024; // 1KB
-  bool need_sci_format(double num) { return num <= -1e9 || num >= 1e10; }
 
   ObGeoType gtype_;
   ObSdoPoint point_;
