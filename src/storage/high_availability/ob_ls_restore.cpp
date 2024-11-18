@@ -368,11 +368,11 @@ int ObLSRestoreDagNet::fill_comment(char *buf, const int64_t buf_len) const
     LOG_WARN("ls restore dag net do not init ", K(ret));
   } else if (OB_UNLIKELY(0 > ctx_->task_id_.to_string(task_id_str, MAX_TRACE_ID_LENGTH))) {
     ret = OB_BUF_NOT_ENOUGH;
-    LOG_WARN("failed to get trace id string", K(ret), K(*ctx_));
+    LOG_WARN("failed to get trace id string", K(ret), "arg", ctx_->arg_);
   } else if (OB_FAIL(databuff_printf(buf, buf_len,
           "ObLSRestoreDagNet: ls_id=%s, trace_id=%s",
           to_cstring(ctx_->arg_.ls_id_), task_id_str))) {
-    LOG_WARN("failed to fill comment", K(ret), K(*ctx_));
+    LOG_WARN("failed to fill comment", K(ret), "arg", ctx_->arg_);
   }
   return ret;
 }
