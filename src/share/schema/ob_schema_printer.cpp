@@ -2042,13 +2042,8 @@ static int print_partition_func(const ObTableSchema &table_schema,
   bool is_oracle_mode = false;
   if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("fail to check oracle mode", KR(ret), K(table_schema));
-  } else if (table_schema.is_external_table()) {
-    if (OB_FAIL(disp_part_str.append_fmt("partition by (%.*s)",
-                                              func_expr.length(),
-                                              func_expr.ptr()))) {
-      SHARE_SCHEMA_LOG(WARN, "fail to append diaplay partition expr", K(ret), K(type_str), K(func_expr));
-    }
-  } else if (OB_FAIL(get_part_type_str(is_oracle_mode, type, type_str))) {
+  } else if (!table_schema.is_external_table()
+             && OB_FAIL(get_part_type_str(is_oracle_mode, type, type_str))) {
     SHARE_SCHEMA_LOG(WARN, "failed to get part type string", K(ret));
   }
 
