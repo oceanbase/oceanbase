@@ -1569,12 +1569,18 @@ int ObStorageSchema::generate_column_array(const ObTableSchema &input_schema)
         meta_type.set_scale(col->get_accuracy().get_scale());
       }
       col_schema.meta_type_ = meta_type;
-      if (ob_is_large_text(col->get_data_type())) {
-        col_schema.default_checksum_ = 0;
-      } else if (OB_FAIL(datum.from_obj_enhance(col->get_orig_default_value()))) {
+      if (OB_FAIL(datum.from_obj_enhance(col->get_orig_default_value()))) {
         STORAGE_LOG(WARN, "Failed to transfer obj to datum", K(ret));
       } else {
         col_schema.default_checksum_ = datum.checksum(0);
+#ifdef ERRSIM
+        int64_t error_code = OB_E(EventTable::EN_COMPACTION_WITH_ZERO_DEFAULT_COLUMN_CHECKSUM) OB_SUCCESS;
+        int64_t errsim_data_version = static_cast<int>(DATA_VERSION_4_3_4_0);
+        if (-errsim_data_version == error_code && ob_is_large_text(col->get_data_type())) {
+          col_schema.default_checksum_ = 0;
+          STORAGE_LOG(INFO, "ERRSIM EN_COMPACTION_WITH_ZERO_DEFAULT_COLUMN_CHECKSUM set zero default checksum", K(error_code), K(col_schema));
+        }
+#endif
       }
       if (FAILEDx(col_schema.deep_copy_default_val(*allocator_, col->get_orig_default_value()))) {
         STORAGE_LOG(WARN, "failed to deep copy", K(ret), K(col->get_orig_default_value()));
@@ -1838,7 +1844,6 @@ int ObStorageSchema::init_column_meta_array(
 {
   int ret = OB_SUCCESS;
   ObArray<ObColDesc> columns;
-  uint64_t compat_version = 0;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1848,8 +1853,6 @@ int ObStorageSchema::init_column_meta_array(
     STORAGE_LOG(WARN, "not support get multi version column desc array when column simplified", K(ret), KPC(this));
   } else if (OB_FAIL(get_multi_version_column_descs(columns))) {
     STORAGE_LOG(WARN, "fail to get store column ids", K(ret));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), compat_version))) {
-    STORAGE_LOG(WARN, "failed to get min data version", K(ret));
   } else {
     // build column schema map
     common::hash::ObHashMap<uint64_t, uint64_t> tmp_map; // column_id -> index
@@ -1884,13 +1887,6 @@ int ObStorageSchema::init_column_meta_array(
         if (!col_schema.is_column_stored_in_sstable_ && !is_storage_index_table()) {
           ret = OB_ERR_UNEXPECTED;
           STORAGE_LOG(WARN, "virtual generated column should be filtered already", K(ret), K(col_schema));
-        } else if (ob_is_large_text(col_schema.get_data_type()) && compat_version < DATA_VERSION_4_3_4_0) {
-          blocksstable::ObStorageDatum datum;
-          if (OB_FAIL(datum.from_obj_enhance(col_schema.get_orig_default_value()))) {
-            STORAGE_LOG(WARN, "Failed to transfer obj to datum", K(ret));
-          } else {
-            col_meta.column_default_checksum_ = datum.checksum(0);
-          }
         } else {
           col_meta.column_default_checksum_ = col_schema.default_checksum_;
         }

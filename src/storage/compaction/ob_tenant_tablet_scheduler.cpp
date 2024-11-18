@@ -245,17 +245,16 @@ void ObFastFreezeChecker::try_update_tablet_threshold(
 /*******************************************ObCSReplicaChecksumHelper impl*****************************************/
 int ObCSReplicaChecksumHelper::check_column_type(
     const common::ObTabletID &tablet_id,
-    const int64_t compaction_scn,
+    const share::ObFreezeInfo &freeze_info,
     const common::ObIArray<int64_t> &column_idxs,
     bool &is_all_large_text_column)
 {
   int ret = OB_SUCCESS;
-  share::ObFreezeInfo freeze_info;
   uint64_t table_id = 0;
   schema::ObMultiVersionSchemaService *schema_service = nullptr;
   schema::ObSchemaGetterGuard schema_guard;
   ObSEArray<ObColDesc, 16> column_descs;
-  int64_t save_schema_version = 0;
+  int64_t save_schema_version = freeze_info.schema_version_;
   const ObTableSchema *table_schema = nullptr;
   is_all_large_text_column = true;
 
@@ -264,9 +263,6 @@ int ObCSReplicaChecksumHelper::check_column_type(
     LOG_WARN("get invalid arguments", K(ret), K(tablet_id), K(column_idxs));
   } else if (OB_UNLIKELY(column_idxs.empty())) {
     // do nothing
-  } else if (OB_FAIL(MTL(ObTenantFreezeInfoMgr *)->get_freeze_info_by_snapshot_version(compaction_scn, freeze_info))) {
-    LOG_WARN("failed to get major freeze info", K(ret), K(compaction_scn));
-  } else if (FALSE_IT(save_schema_version = freeze_info.schema_version_)) {
   } else if (OB_ISNULL(schema_service = MTL(ObTenantSchemaService *)->get_schema_service())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null schema service", K(ret));

@@ -151,7 +151,14 @@ int ObMajorMergeInfoManager::set_freeze_info(const ObMajorFreezeReason freeze_re
         freeze_info.frozen_scn_ = new_frozen_scn;
         freeze_info.schema_version_ = schema_version_in_frozen_ts;
         freeze_info.data_version_ = data_version;
-
+#ifdef ERRSIM
+        int64_t error_code = OB_E(EventTable::EN_COMPACTION_WITH_ZERO_DEFAULT_COLUMN_CHECKSUM) OB_SUCCESS;
+        int64_t errsim_data_version = static_cast<int>(DATA_VERSION_4_3_4_0);
+        if (-errsim_data_version == error_code) {
+          freeze_info.data_version_ = DATA_VERSION_4_3_4_0;
+          LOG_INFO("ERRSIM EN_COMPACTION_WITH_ZERO_DEFAULT_COLUMN_CHECKSUM set freeze info", K(error_code), K(freeze_info));
+        }
+#endif
         // 4. insert freeze info
         if (OB_FAIL(freeze_info_proxy.set_freeze_info(trans, freeze_info))) {
           LOG_WARN("fail to set freeze info", KR(ret), K(freeze_info), K_(tenant_id));

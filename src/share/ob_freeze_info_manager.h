@@ -80,6 +80,12 @@ public:
 class ObFreezeInfoManager
 {
 public:
+  enum class CmpType
+  {
+    LOWER_BOUND,
+    GREATER_THAN
+  };
+public:
   static int fetch_new_freeze_info(
       const int64_t tenant_id,
       const share::SCN &min_frozen_scn,
@@ -117,8 +123,9 @@ public:
       ObIArray<share::ObFreezeInfo> &info_list,
       const bool need_all_behind_info);
 
-  int get_freeze_info_behind_major_snapshot(
+  int get_freeze_info_compare_with_major_snapshot(
       const int64_t snapshot_version,
+      const CmpType cmp_type,
       share::ObFreezeInfo &frozen_status);
 
   int get_neighbour_frozen_status(

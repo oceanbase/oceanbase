@@ -345,8 +345,9 @@ int ObFreezeInfoManager::get_freeze_info_by_major_snapshot(
   return ret;
 }
 
-int ObFreezeInfoManager::get_freeze_info_behind_major_snapshot(
+int ObFreezeInfoManager::get_freeze_info_compare_with_major_snapshot(
     const int64_t snapshot_version,
+    const CmpType cmp_type,
     share::ObFreezeInfo &frozen_status)
 {
   int ret = OB_SUCCESS;
@@ -359,11 +360,21 @@ int ObFreezeInfoManager::get_freeze_info_behind_major_snapshot(
     LOG_WARN("get invalid arguments", K(ret), K(snapshot_version));
   } else {
     bool found = false;
-    for (int64_t i = 0; OB_SUCC(ret) && i < freeze_info_.frozen_statuses_.count(); ++i) {
-      if (snapshot_version < freeze_info_.frozen_statuses_.at(i).frozen_scn_.get_val_for_tx()) {
-        frozen_status = freeze_info_.frozen_statuses_.at(i);
-        found = true;
-        break;
+    if (CmpType::GREATER_THAN == cmp_type) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < freeze_info_.frozen_statuses_.count(); ++i) {
+        if (snapshot_version < freeze_info_.frozen_statuses_.at(i).frozen_scn_.get_val_for_tx()) {
+          frozen_status = freeze_info_.frozen_statuses_.at(i);
+          found = true;
+          break;
+        }
+      }
+    } else if (CmpType::LOWER_BOUND == cmp_type) {
+      for (int64_t i = freeze_info_.frozen_statuses_.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
+        if (freeze_info_.frozen_statuses_.at(i).frozen_scn_.get_val_for_tx() <= snapshot_version) {
+          frozen_status = freeze_info_.frozen_statuses_.at(i);
+          found = true;
+          break;
+        }
       }
     }
 

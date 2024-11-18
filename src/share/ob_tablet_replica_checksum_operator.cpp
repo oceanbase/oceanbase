@@ -340,37 +340,56 @@ int ObTabletReplicaChecksumItem::verify_column_checksum(const ObTabletReplicaChe
 {
   int ret = OB_SUCCESS;
   bool column_meta_equal = false;
-  bool is_cs_replica = false;
-
+  bool is_cs_replica_flag1 = false;
+  bool is_cs_replica_flag2 = false;
   if (OB_UNLIKELY(compaction_scn_ != other.compaction_scn_)) {
     // do nothing
   } else if (OB_FAIL(column_meta_.check_equal(other.column_meta_, column_meta_equal))) {
     LOG_WARN("fail to check column meta equal", KR(ret), K(other), K(*this));
   } else if (column_meta_equal) {
     // do nothing
-  } else if (OB_FAIL(check_data_checksum_type(is_cs_replica))) {
+  } else if (OB_FAIL(check_data_checksum_type(is_cs_replica_flag1))) {
     LOG_WARN("fail to check data checksum type", KR(ret), KPC(this));
-  } else if (is_cs_replica) {
-    // do nothing
-  } else if (OB_FAIL(other.check_data_checksum_type(is_cs_replica))) {
+  } else if (OB_FAIL(other.check_data_checksum_type(is_cs_replica_flag2))) {
     LOG_WARN("fail to check data checksum type", KR(ret), K(other));
-  } else if (is_cs_replica) {
-    // do nothing
-  } else {
-    ret = OB_CHECKSUM_ERROR;
+  } else if (is_cs_replica_flag1 == is_cs_replica_flag2) {
+    ret = OB_CHECKSUM_ERROR; // compaction between the same replica type can be compared
+  } else if (OB_FAIL(verify_column_checksum_between_diffrent_replica(other))) {
+    LOG_WARN("fail to verify column checksum between diffrent replica", KR(ret), K(other), K(*this));
+  }
+  return ret;
+}
+
+int ObTabletReplicaChecksumItem::verify_column_checksum_between_diffrent_replica(const ObTabletReplicaChecksumItem &other) const
+{
+  int ret = OB_SUCCESS;
+  ObFreezeInfo boundary_freeze_info;
+  ObFreezeInfo to_check_freeze_info;
+  if (OB_FAIL(MTL(ObTenantFreezeInfoMgr *)->get_lower_bound_freeze_info_before_snapshot_version(compaction_scn_.get_val_for_tx(), boundary_freeze_info))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get boundary freeze info", K(ret), K_(compaction_scn));
+    }
+  } else if (boundary_freeze_info.is_valid() && boundary_freeze_info.data_version_ >= DATA_VERSION_4_3_5_0) {
+    ret = OB_CHECKSUM_ERROR; // it is compacted in lob column checksum fixed version
+    LOG_WARN("failed to check column checksum", K(ret), K(boundary_freeze_info));
   }
 
-  bool is_all_large_text_column = false;
-  uint64_t compat_version = 0;
-  if (OB_FAIL(ret) || !is_cs_replica) {
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, compat_version))) {
-    LOG_WARN("failed to get min data version", K(ret), K(tenant_id_));
-  } else if (compat_version >= DATA_VERSION_4_3_4_0) {
-    // should not skip the validation of lob column between cs replica and row replica
-    if (compaction_scn_ == other.compaction_scn_ && !column_meta_equal) {
-      ret = OB_CHECKSUM_ERROR;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(MTL(ObTenantFreezeInfoMgr *)->get_freeze_info_by_snapshot_version(compaction_scn_.get_val_for_tx(), to_check_freeze_info))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get freeze info", K(ret), K_(compaction_scn));
     }
+  } else if (!to_check_freeze_info.is_valid()) {
+  } else if (to_check_freeze_info.data_version_ >= DATA_VERSION_4_3_5_0) {
+    ret = OB_CHECKSUM_ERROR; // it is compacted in lob column checksum fixed version
+    LOG_WARN("failed to check column checksum", K(ret), K(to_check_freeze_info));
   } else {
+    // only freeze_info of this round compaction reserved can we get the correct table schema to check lob column
+    bool is_all_large_text_column = false;
     ObSEArray<int64_t, 8> column_idxs;
     for (int64_t idx = 0; OB_SUCC(ret) && idx < column_meta_.column_checksums_.count(); ++idx) {
       if (column_meta_.column_checksums_.at(idx) == other.column_meta_.column_checksums_.at(idx)) {
@@ -381,7 +400,7 @@ int ObTabletReplicaChecksumItem::verify_column_checksum(const ObTabletReplicaChe
     }
 
     if (FAILEDx(compaction::ObCSReplicaChecksumHelper::check_column_type(tablet_id_,
-                                                                         compaction_scn_.get_val_for_tx(),
+                                                                         to_check_freeze_info,
                                                                          column_idxs,
                                                                          is_all_large_text_column))) {
       LOG_WARN("failed to check column type for cs replica", K(ret), KPC(this), K(other));
@@ -389,6 +408,7 @@ int ObTabletReplicaChecksumItem::verify_column_checksum(const ObTabletReplicaChe
       // do nothing
     } else {
       ret = OB_CHECKSUM_ERROR;
+      LOG_WARN("failed to check column checksum", K(ret), K(to_check_freeze_info));
     }
   }
   return ret;

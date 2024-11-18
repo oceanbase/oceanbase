@@ -1566,6 +1566,43 @@ TEST_F(TestCompactionPolicy, test_build_tablet_for_hybrid_store)
   LOG_INFO("[CS-Replica] show hybrid table store", K(ret), K(table_store), K(ObPrintTableStore(table_store)));
 }
 
+TEST_F(TestCompactionPolicy, test_freeze_info_boundary_func)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFreezeInfoMgr *mgr = MTL(ObTenantFreezeInfoMgr *);
+  ASSERT_TRUE(nullptr != mgr);
+  common::ObArray<share::ObFreezeInfo> freeze_infos;
+  share::SCN frozen_val;
+
+  frozen_val.val_ = 100;
+  ASSERT_EQ(OB_SUCCESS, freeze_infos.push_back(share::ObFreezeInfo(frozen_val, 1, DATA_VERSION_4_3_3_0)));
+  frozen_val.val_ = 200;
+  ASSERT_EQ(OB_SUCCESS, freeze_infos.push_back(share::ObFreezeInfo(frozen_val, 1, DATA_VERSION_4_3_3_0)));
+  frozen_val.val_ = 300;
+  ASSERT_EQ(OB_SUCCESS, freeze_infos.push_back(share::ObFreezeInfo(frozen_val, 2, DATA_VERSION_4_3_4_0)));
+  frozen_val.val_ = 400;
+  ASSERT_EQ(OB_SUCCESS, freeze_infos.push_back(share::ObFreezeInfo(frozen_val, 2, DATA_VERSION_4_3_4_0)));
+  frozen_val.val_ = 500;
+  ASSERT_EQ(OB_SUCCESS, freeze_infos.push_back(share::ObFreezeInfo(frozen_val, 2, DATA_VERSION_4_3_5_0)));
+
+  ret = TestCompactionPolicy::prepare_freeze_info(600, freeze_infos);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObFreezeInfo freeze_info;
+  ASSERT_EQ(OB_ENTRY_NOT_EXIST,  MTL(ObTenantFreezeInfoMgr *)->get_lower_bound_freeze_info_before_snapshot_version(50, freeze_info));
+  ASSERT_EQ(OB_SUCCESS,  MTL(ObTenantFreezeInfoMgr *)->get_lower_bound_freeze_info_before_snapshot_version(100, freeze_info));
+  ASSERT_EQ(100, freeze_info.frozen_scn_.get_val_for_tx());
+  ASSERT_EQ(OB_SUCCESS,  MTL(ObTenantFreezeInfoMgr *)->get_lower_bound_freeze_info_before_snapshot_version(150, freeze_info));
+  ASSERT_EQ(100, freeze_info.frozen_scn_.get_val_for_tx());
+  ASSERT_EQ(OB_SUCCESS,  MTL(ObTenantFreezeInfoMgr *)->get_lower_bound_freeze_info_before_snapshot_version(450, freeze_info));
+  ASSERT_EQ(400, freeze_info.frozen_scn_.get_val_for_tx());
+  ASSERT_EQ(OB_SUCCESS,  MTL(ObTenantFreezeInfoMgr *)->get_lower_bound_freeze_info_before_snapshot_version(500, freeze_info));
+  ASSERT_EQ(500, freeze_info.frozen_scn_.get_val_for_tx());
+  ASSERT_EQ(OB_SUCCESS,  MTL(ObTenantFreezeInfoMgr *)->get_lower_bound_freeze_info_before_snapshot_version(600, freeze_info));
+  ASSERT_EQ(500, freeze_info.frozen_scn_.get_val_for_tx());
+
+}
+
 } //unittest
 } //oceanbase
 

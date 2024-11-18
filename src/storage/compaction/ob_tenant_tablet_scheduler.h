@@ -133,7 +133,7 @@ struct ObCSReplicaChecksumHelper
 public:
   static int check_column_type(
       const common::ObTabletID &tablet_id,
-      const int64_t compaction_scn,
+      const share::ObFreezeInfo &freeze_info,
       const common::ObIArray<int64_t> &column_idxs,
       bool &is_all_large_text_column);
 };

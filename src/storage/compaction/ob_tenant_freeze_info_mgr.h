@@ -109,6 +109,7 @@ public:
   int get_freeze_info_by_snapshot_version(const int64_t snapshot_version, share::ObFreezeInfo &freeze_info);
   // get first freeze info larger than snapshot
   int get_freeze_info_behind_snapshot_version(const int64_t snapshot_version, share::ObFreezeInfo &freeze_info);
+  int get_lower_bound_freeze_info_before_snapshot_version(const int64_t snapshot_version, share::ObFreezeInfo &freeze_info);
 
   int get_neighbour_major_freeze(const int64_t snapshot_version, NeighbourFreezeInfo &info);
 
@@ -145,8 +146,9 @@ private:
   void switch_info() { cur_idx_ = get_next_idx(); }
   virtual int get_multi_version_duration(int64_t &duration) const;
   int update_next_snapshots(const common::ObIArray<share::ObSnapshotInfo> &snapshots);
-  int get_freeze_info_behind_snapshot_version_(
+  int get_freeze_info_compare_with_snapshot_version_(
       const int64_t snapshot_version,
+      const share::ObFreezeInfoManager::CmpType cmp_type,
       share::ObFreezeInfo &freeze_info);
   int try_update_reserved_snapshot();
   int try_update_info();
