@@ -24,10 +24,12 @@ namespace backup {
 /* ObBackupMetaCacheKey */
 
 ObBackupMetaCacheKey::ObBackupMetaCacheKey()
-    : tenant_id_(), meta_index_() {}
+    : tenant_id_(), backup_data_type_(), meta_index_() {}
 
-ObBackupMetaCacheKey::ObBackupMetaCacheKey(const uint64_t tenant_id, const ObBackupMetaIndex &meta_index)
-    : tenant_id_(tenant_id), meta_index_(meta_index) {}
+ObBackupMetaCacheKey::ObBackupMetaCacheKey(const uint64_t tenant_id,
+                                           const share::ObBackupDataType &backup_data_type,
+                                           const ObBackupMetaIndex &meta_index)
+    : tenant_id_(tenant_id), backup_data_type_(backup_data_type), meta_index_(meta_index) {}
 
 ObBackupMetaCacheKey::~ObBackupMetaCacheKey()
 {}
@@ -35,7 +37,9 @@ ObBackupMetaCacheKey::~ObBackupMetaCacheKey()
 bool ObBackupMetaCacheKey::operator==(const ObIKVCacheKey &other) const
 {
   const ObBackupMetaCacheKey &other_key = reinterpret_cast<const ObBackupMetaCacheKey &>(other);
-  return tenant_id_ == other_key.tenant_id_ && meta_index_ == other_key.meta_index_;
+  return tenant_id_ == other_key.tenant_id_
+      && backup_data_type_ == other_key.backup_data_type_
+      && meta_index_ == other_key.meta_index_;
 }
 
 uint64_t ObBackupMetaCacheKey::get_tenant_id() const
@@ -47,6 +51,7 @@ uint64_t ObBackupMetaCacheKey::hash() const
 {
   uint64_t hash_code = 0;
   hash_code = murmurhash(&tenant_id_, sizeof(tenant_id_), hash_code);
+  hash_code = murmurhash(&backup_data_type_, sizeof(backup_data_type_), hash_code);
   hash_code = meta_index_.calc_hash(hash_code);
   return hash_code;
 }
@@ -63,7 +68,7 @@ int ObBackupMetaCacheKey::deep_copy(char *buf, const int64_t buf_len, ObIKVCache
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(buf), K(buf_len));
   } else {
-    key = new (buf) ObBackupMetaCacheKey(tenant_id_, meta_index_);
+    key = new (buf) ObBackupMetaCacheKey(tenant_id_, backup_data_type_, meta_index_);
   }
   return ret;
 }
@@ -147,18 +152,19 @@ ObBackupMetaCacheReader::ObBackupMetaCacheReader() : is_inited_(false), tenant_i
 ObBackupMetaCacheReader::~ObBackupMetaCacheReader() {}
 
 int ObBackupMetaCacheReader::init(const uint64_t tenant_id, const common::ObString &path,
-    const share::ObBackupStorageInfo *storage_info, ObBackupMetaKVCache &cache)
+    const share::ObBackupStorageInfo *storage_info, const share::ObBackupDataType &backup_data_type, ObBackupMetaKVCache &cache)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("meta cache reader init twice", K(ret));
-  } else if (OB_INVALID_ID == tenant_id || path.empty()) {
+  } else if (OB_INVALID_ID == tenant_id || path.empty() || !backup_data_type.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid arg", K(ret), K(tenant_id), K(path));
+    LOG_WARN("get invalid arg", K(ret), K(tenant_id), K(path), K(backup_data_type));
   } else {
     tenant_id_ = tenant_id;
     path_ = path;
+    backup_data_type_ = backup_data_type;
     storage_info_ = storage_info;
     meta_kv_cache_ = &cache;
     is_inited_ = true;
@@ -211,7 +217,7 @@ int ObBackupMetaCacheReader::get_backup_meta_cache_key_(const ObBackupMetaIndex 
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid arg", K(ret), K(meta_index));
   } else {
-    cache_key = ObBackupMetaCacheKey(tenant_id_, meta_index);
+    cache_key = ObBackupMetaCacheKey(tenant_id_, backup_data_type_, meta_index);
   }
   return ret;
 }

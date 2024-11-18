@@ -263,7 +263,7 @@ int ObAdminBackupValidationUtil::read_sstable_metas(
   } else if (ctx != nullptr && OB_FAIL(ctx->limit_and_sleep(meta_index.length_))) {
     STORAGE_LOG(WARN, "failed to limit and sleep", K(ret), K(meta_index.length_));
   } else if (OB_FAIL(backup::ObLSBackupRestoreUtil::read_sstable_metas(
-                 full_path.get_obstr(), backup_set_dest.get_storage_info(), meta_index,
+                 full_path.get_obstr(), backup_set_dest.get_storage_info(), backup_data_type, meta_index,
                  &OB_BACKUP_META_CACHE, sstable_metas))) {
     STORAGE_LOG(WARN, "failed to read sstable metas", K(ret), K(full_path));
   } else {

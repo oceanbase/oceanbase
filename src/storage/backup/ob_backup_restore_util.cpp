@@ -66,7 +66,8 @@ int ObLSBackupRestoreUtil::read_tablet_meta(const common::ObString &path, const 
 }
 
 int ObLSBackupRestoreUtil::read_sstable_metas(const common::ObString &path, const share::ObBackupStorageInfo *storage_info,
-    const ObBackupMetaIndex &meta_index, ObBackupMetaKVCache *kv_cache, common::ObIArray<ObBackupSSTableMeta> &sstable_metas)
+    const share::ObBackupDataType &backup_data_type, const ObBackupMetaIndex &meta_index,
+    ObBackupMetaKVCache *kv_cache, common::ObIArray<ObBackupSSTableMeta> &sstable_metas)
 {
   int ret = OB_SUCCESS;
   common::ObArenaAllocator allocator(ObModIds::RESTORE);
@@ -79,7 +80,7 @@ int ObLSBackupRestoreUtil::read_sstable_metas(const common::ObString &path, cons
   } else if (BACKUP_SSTABLE_META != meta_index.meta_key_.meta_type_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("meta type do not match", K(meta_index));
-  } else if (OB_FAIL(cache_reader.init(MTL_ID(), path, storage_info, *kv_cache))) {
+  } else if (OB_FAIL(cache_reader.init(MTL_ID(), path, storage_info, backup_data_type, *kv_cache))) {
     LOG_WARN("failed to init cache reader", K(ret), "tenant_id", MTL_ID(), K(path));
   } else if (OB_FAIL(cache_reader.fetch_block(meta_index, allocator, cache_handle, buffer_reader))) {
     LOG_WARN("failedto fetch block", K(ret), K(meta_index));

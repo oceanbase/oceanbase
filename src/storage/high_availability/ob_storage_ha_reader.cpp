@@ -1356,7 +1356,7 @@ int ObCopySSTableInfoRestoreReader::inner_get_backup_sstable_metas_(
       sstable_meta_index.file_id_, sstable_meta_backup_path))) {
     LOG_WARN("failed to get macro block backup path", K(ret), KPC(restore_base_info_));
   } else if (OB_FAIL(backup::ObLSBackupRestoreUtil::read_sstable_metas(sstable_meta_backup_path.get_obstr(),
-      restore_base_info_->backup_dest_.get_storage_info(), sstable_meta_index, &OB_BACKUP_META_CACHE, backup_sstable_meta_array))) {
+      restore_base_info_->backup_dest_.get_storage_info(), data_type, sstable_meta_index, &OB_BACKUP_META_CACHE, backup_sstable_meta_array))) {
     LOG_WARN("failed to read sstable meta", K(ret), KPC(restore_base_info_));
   } else if (data_type.is_major_backup() && backup_sstable_meta_array.count() > 1) {
     ret = OB_ERR_UNEXPECTED;

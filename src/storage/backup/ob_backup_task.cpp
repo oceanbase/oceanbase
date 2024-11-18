@@ -4380,7 +4380,7 @@ int ObLSBackupPrepareTask::get_backup_tx_data_recycle_scn_(SCN &tx_data_recycle_
       meta_index.retry_id_, meta_index.file_id_, backup_path))) {
     LOG_WARN("failed to get ls meta index backup path", K(ret), K_(param), K(sys_backup_data_type), K(meta_index));
   } else if (OB_FAIL(ObLSBackupRestoreUtil::read_sstable_metas(
-      backup_path.get_obstr(), param_.backup_dest_.get_storage_info(), meta_index, &OB_BACKUP_META_CACHE, meta_array))) {
+      backup_path.get_obstr(), param_.backup_dest_.get_storage_info(), sys_backup_data_type, meta_index, &OB_BACKUP_META_CACHE, meta_array))) {
     LOG_WARN("failed to read sstable metas", K(ret), K(backup_path), K(meta_index));
   } else if (meta_array.empty()) {
     tx_data_recycle_scn = SCN::min_scn();

@@ -25,7 +25,7 @@ namespace backup {
 class ObBackupMetaCacheKey : public common::ObIKVCacheKey {
 public:
   ObBackupMetaCacheKey();
-  ObBackupMetaCacheKey(const uint64_t tenant_id, const ObBackupMetaIndex &meta_index);
+  ObBackupMetaCacheKey(const uint64_t tenant_id, const share::ObBackupDataType &backup_data_type, const ObBackupMetaIndex &meta_index);
   virtual ~ObBackupMetaCacheKey();
   virtual bool operator==(const ObIKVCacheKey &other) const override;
   virtual uint64_t get_tenant_id() const override;
@@ -37,6 +37,7 @@ public:
 
 private:
   uint64_t tenant_id_;
+  share::ObBackupDataType backup_data_type_;
   ObBackupMetaIndex meta_index_;
 };
 
@@ -84,7 +85,8 @@ class ObBackupMetaCacheReader final {
 public:
   ObBackupMetaCacheReader();
   ~ObBackupMetaCacheReader();
-  int init(const uint64_t tenant_id, const common::ObString &path, const share::ObBackupStorageInfo *storage_info, ObBackupMetaKVCache &cache);
+  int init(const uint64_t tenant_id, const common::ObString &path, const share::ObBackupStorageInfo *storage_info,
+      const share::ObBackupDataType &backup_data_type, ObBackupMetaKVCache &cache);
   int fetch_block(const ObBackupMetaIndex &meta_index, common::ObIAllocator &allocator,
       ObKVCacheHandle &handle, blocksstable::ObBufferReader &buffer_reader);
 
@@ -99,6 +101,7 @@ private:
   bool is_inited_;
   uint64_t tenant_id_;
   common::ObString path_;
+  share::ObBackupDataType backup_data_type_;
   const share::ObBackupStorageInfo *storage_info_;
   ObBackupMetaKVCache *meta_kv_cache_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupMetaCacheReader);

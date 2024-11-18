@@ -31,7 +31,8 @@ public:
   static int read_tablet_meta(const common::ObString &path, const share::ObBackupStorageInfo *storage_info,
       const share::ObBackupDataType &backup_data_type, const ObBackupMetaIndex &meta_index, ObBackupTabletMeta &tablet_meta);
   static int read_sstable_metas(const common::ObString &path, const share::ObBackupStorageInfo *storage_info,
-      const ObBackupMetaIndex &meta_index, ObBackupMetaKVCache *kv_cache, common::ObIArray<ObBackupSSTableMeta> &sstable_metas);
+      const share::ObBackupDataType &backup_data_type, const ObBackupMetaIndex &meta_index,
+      ObBackupMetaKVCache *kv_cache, common::ObIArray<ObBackupSSTableMeta> &sstable_metas);
   static int read_macro_block_id_mapping_metas(const common::ObString &path, const share::ObBackupStorageInfo *storage_info,
       const ObBackupMetaIndex &meta_index, ObBackupMacroBlockIDMappingsMeta &id_mappings_meta);
   static int read_macro_block_data(const common::ObString &path, const share::ObBackupStorageInfo *storage_info,
