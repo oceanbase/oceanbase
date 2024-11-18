@@ -39,6 +39,7 @@ int rename_with_retry(const char *src_name, const char *dest_name);
 int fsync_with_retry(const char *src_name);
 
 int fsync_with_retry(const char *src_name, ObIODevice *io_device);
+int fsync(const char *src_name, ObIODevice *io_device);
 
 int reuse_block(const char *block_path);
 

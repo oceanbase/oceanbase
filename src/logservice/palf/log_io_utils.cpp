@@ -154,6 +154,24 @@ int fsync_with_retry(const char *path, ObIODevice *io_device)
 
 }
 
+int fsync(const char *path, ObIODevice *io_device)
+{
+  int ret = OB_SUCCESS;
+  ObIOFd io_fd;
+  if (OB_FAIL(io_device->open(path, LOG_WRITE_FLAG, FILE_OPEN_MODE, io_fd))) {
+    CLOG_LOG(WARN, "open failed", K(ret), K(path));
+  } else if (OB_FAIL(io_device->fsync(io_fd))) {
+    CLOG_LOG(WARN, "fsync failed", K(ret), K(io_fd));
+  } else {
+    CLOG_LOG(INFO, "fsync success", K(ret), K(io_fd));
+  }
+  if (io_fd.is_valid()) {
+    io_device->close(io_fd);
+  }
+  return ret;
+
+}
+
 int write_until_success(const char *pathname,
                         const char *src_buf,
                         const int64_t src_buf_len,

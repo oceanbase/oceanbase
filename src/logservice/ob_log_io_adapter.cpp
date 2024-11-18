@@ -850,30 +850,27 @@ int ObLogIOAdapter::execute_switch_log_io_mode_cb_(ObIODevice *io_device,
     do {
       CLOG_LOG(INFO, "execute cb first phase, make flying_fd_count to zero", K(flying_fd_count_));
       state = SwitchLogIOModeState::CLOSING;
-      do {
-        if (OB_FAIL(cb_map_.foreach_refactored(functor))) {
-          CLOG_LOG(WARN, "foreach_refactored failed", KR(ret), KP(io_device));
-        }
+      if (OB_FAIL(cb_map_.foreach_refactored(functor))) {
+        CLOG_LOG(WARN, "foreach_refactored failed", KR(ret), KP(io_device));
+      } else {
         int64_t flying_fd_count = ATOMIC_LOAD(&flying_fd_count_);
         if (flying_fd_count != 0) {
-          usleep(10*1000);
           CLOG_LOG(INFO, "flying_fd_count_ not zero, need wait", KPC(this));
-        } else {
-          break;
+          ret = OB_EAGAIN;
         }
-      } while (true);
+      }
       time_guard.click("execute_cb_first_phase");
 
       CLOG_LOG(INFO, "execute cb second phase, fsync each writeable file", KR(ret), K(flying_fd_count_));
       state = SwitchLogIOModeState::FSYNCING;
-      if (OB_FAIL(cb_map_.foreach_refactored(functor))) {
+      if (FAILEDx(cb_map_.foreach_refactored(functor))) {
         CLOG_LOG(WARN, "foreach_refactored failed", KR(ret), KP(io_device));
       }
       time_guard.click("execute_cb_second_phase");
 
       CLOG_LOG(INFO, "execute cb third phase, reopen each writeable file", K(flying_fd_count_));
       state = SwitchLogIOModeState::OPENING;
-      if (OB_FAIL(cb_map_.foreach_refactored(functor))) {
+      if (FAILEDx(cb_map_.foreach_refactored(functor))) {
         CLOG_LOG(WARN, "foreach_refactored failed", KR(ret), KP(io_device));
       }
       time_guard.click("execute_cb_third_phase");

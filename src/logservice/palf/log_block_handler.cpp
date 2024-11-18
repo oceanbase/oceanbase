@@ -174,7 +174,7 @@ int SwitchLogIOModeFunctor::operator()(ObIODevice *prev_io_device, ObIODevice *i
     char *ptr = block_handler_->curr_block_path_;
     if (0 == strlen(ptr)) {
       PALF_LOG(INFO, "curr_block_path_ is nullptr do nothing", KPC(block_handler_));
-    } else if (OB_FAIL(fsync_with_retry(ptr, prev_io_device))) {
+    } else if (OB_FAIL(fsync(ptr, prev_io_device))) {
       PALF_LOG(WARN, "fsync_with_retry failed", KPC(block_handler_));
     } else {
       PALF_LOG(INFO, "fsync_with_retry successfully", KPC(block_handler_));
