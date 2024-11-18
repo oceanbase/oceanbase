@@ -1454,8 +1454,10 @@ int ObTenantTabletTTLMgr::alloc_and_init_tablet_scheduler(storage::ObLS *ls)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", K(ret));
   } else if (OB_FAIL(tablet_scheduler->init(ls))) {
+    tablet_scheduler->~T();
     LOG_WARN("fail to init ttl tablet scheduler", K(ret), KPC(ls));
   } else if (OB_FAIL(tablet_ttl_schedulers_.push_back(tablet_scheduler))) {
+    tablet_scheduler->~T();
     LOG_WARN("fail to add ttl tablet scheduler", K(ret));
   }
   return ret;
