@@ -9143,9 +9143,11 @@ int ObAggregateProcessor::get_rb_calc_agg_result(const ObAggrInfo &aggr_info,
   int ret = OB_SUCCESS;
   common::ObArenaAllocator tmp_alloc(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObRbExprHelper::get_tenant_id(eval_ctx_.exec_ctx_.get_my_session()), "ROARINGBITMAP"));
-  if (OB_ISNULL(extra) || OB_UNLIKELY(extra->empty())) {
+  if (OB_ISNULL(extra)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unpexcted null", K(ret), K(extra));
+  } else if (OB_UNLIKELY(extra->empty())) {
+    LOG_TRACE("is empty", K(ret), KPC(extra), K(lbt()));
   } else if (extra->is_iterated() && OB_FAIL(extra->rewind())) {
     // Group concat row may be iterated in rollup_process(), rewind here.
     LOG_WARN("rewind failed", KPC(extra), K(ret));

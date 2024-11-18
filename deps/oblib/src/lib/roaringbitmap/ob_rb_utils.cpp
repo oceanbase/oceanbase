@@ -929,5 +929,208 @@ int ObRbUtils::str_read_value_(const char *str, size_t len,  char *&value_end, u
   return ret;
 }
 
+ObRbAggCell::ObRbAggCell(ObRoaringBitmap *rb, const uint64_t tenant_id):
+    allocator_("RbAggCell", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id),
+    rb_(rb),
+    max_cache_count_(0),
+    cached_value_(),
+    rb_bin_(),
+    is_serialized_(false)
+{
+  max_cache_count_ = MAX_CACHED_COUNT;
+  cached_value_.set_attr(lib::ObMemAttr(tenant_id, "RbAggArray"));
+}
+
+int ObRbAggCell::destroy()
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(rb_)) {
+    ObRbUtils::rb_destroy(rb_);
+    rb_ = nullptr;
+  }
+  cached_value_.reset();
+  rb_bin_.reset();
+  allocator_.reset();
+  is_serialized_ = false;
+  return ret;
+}
+
+int ObRbAggCell::add_values(const ObArray<uint64_t> &values)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i< values.count(); ++i) {
+    if (OB_FAIL(rb_->value_add(values.at(i)))) {
+      LOG_WARN("add value fail", K(ret), K(i));
+    }
+  }
+  return ret;
+}
+
+int ObRbAggCell::value_add(const uint64_t val)
+{
+  int ret = OB_SUCCESS;
+  if (is_serialized_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("is serialized, can not add value", K(ret), KPC(this));
+  } else if (cached_value_.count() < max_cache_count_) {
+    if (OB_FAIL(cached_value_.push_back(val))) {
+      LOG_WARN("push back fail");
+    }
+  } else if (OB_ISNULL(rb_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rb is null", K(ret));
+  } else if (OB_FAIL(rb_->value_add(val))) {
+    LOG_WARN("add value fail", K(ret), K(val));
+  } else if (OB_FAIL(add_values(cached_value_))) {
+    LOG_WARN("add value fail", K(ret), K(val));
+  } else {
+    cached_value_.reuse();
+  }
+  return ret;
+}
+
+int ObRbAggCell::value_or(const ObRbAggCell *other)
+{
+  int ret = OB_SUCCESS;
+  if (is_serialized_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("is serialized, can not add value", K(ret), KPC(this));
+  } else if (OB_ISNULL(rb_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rb is null", K(ret));
+  } else if (OB_ISNULL(other)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("other rb is null", K(ret));
+  } else if (OB_FAIL(add_values(cached_value_))) {
+    LOG_WARN("add value fail", K(ret));
+  } else if (OB_FAIL(add_values(other->cached_value_))) {
+    LOG_WARN("add value fail", K(ret));
+  } else if (OB_NOT_NULL(other->rb_) && OB_FAIL(rb_->value_or(other->rb_))) {
+    LOG_WARN("or value fail", K(ret));
+  } else {
+    // reset for save memory
+    cached_value_.reset();
+  }
+  return ret;
+}
+
+int ObRbAggCell::serialize(ObString &rb_bin)
+{
+  int ret = OB_SUCCESS;
+  if (! is_serialized_ && OB_FAIL(serialize())) {
+    LOG_WARN("serialize fail", K(ret));
+  } else if (rb_bin_.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("may be serialize fail", K(ret));
+  } else {
+    rb_bin = rb_bin_;
+  }
+  return ret;
+}
+
+int ObRbAggCell::serialize()
+{
+  int ret = OB_SUCCESS;
+  if (is_serialized_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("serialized again", K(ret), KPC(this));
+  } else if (OB_ISNULL(rb_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("serialize rb is null", K(ret));
+  } else if (OB_FAIL(add_values(cached_value_))) {
+    LOG_WARN("add values fail", K(ret));
+  } else if (OB_FAIL(ObRbUtils::rb_serialize(allocator_, rb_bin_, rb_))) {
+    LOG_WARN("rb_serialize fail", K(ret));
+  } else {
+    cached_value_.reset();
+    ObRbUtils::rb_destroy(rb_);
+    rb_ = nullptr;
+    is_serialized_ = true;
+  }
+  return ret;
+}
+
+int ObRbAggAllocator::init()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(alloced_rb_.create(10, lib::ObMemAttr(tenant_id_, "RbAggAlloc")))) {
+    LOG_WARN("failed to create set", K(ret));
+  } else {
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+void ObRbAggAllocator::destroy_all_rb()
+{
+  if (alloced_rb_.size() > 0) {
+    LOG_INFO("will destory by rb allocator", KP(this), K(alloced_rb_.size()));
+    hash::ObHashSet<uint64_t, hash::NoPthreadDefendMode>::const_iterator iter;
+    for (iter = alloced_rb_.begin(); iter != alloced_rb_.end(); iter++) {
+      ObRbAggCell *rb = reinterpret_cast<ObRbAggCell*>(iter->first);
+      if (OB_NOT_NULL(rb)) {
+        rb->destroy();
+      }
+    }
+  }
+}
+
+void ObRbAggAllocator::free(ObRbAggCell *rb)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(rb)) {
+  } else if (OB_FAIL(alloced_rb_.erase_refactored(reinterpret_cast<uint64_t>(rb)))) {
+    LOG_WARN("failed to erase from the set", K(ret), KPC(rb));
+  } else {
+    rb->destroy();
+  }
+}
+
+ObRbAggCell *ObRbAggAllocator::alloc()
+{
+  int ret = OB_SUCCESS;
+  ObRbAggCell *res_ptr = nullptr;
+  ObRoaringBitmap *rb = nullptr;
+  ObRbAggCell *rb_cell = nullptr;
+  if (IS_NOT_INIT && OB_FAIL(init())) {
+    LOG_ERROR("init fail", KR(ret));
+  } else if (OB_ISNULL(rb = OB_NEWx(ObRoaringBitmap, &rb_allocator_, &rb_allocator_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate rb memory failed", K(ret), "size", sizeof(ObRoaringBitmap));
+  } else if (OB_ISNULL(rb_cell = OB_NEWx(ObRbAggCell, &rb_allocator_, rb, tenant_id_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate cell memory failed", K(ret), "size", sizeof(ObRbAggCell));
+  } else if (OB_FAIL(alloced_rb_.set_refactored(reinterpret_cast<uint64_t>(rb_cell)))) {
+    LOG_WARN("push back failed", K(ret));
+  } else {
+    res_ptr = rb_cell;
+  }
+  return res_ptr;
+}
+
+int ObRbAggAllocator::rb_serialize(ObString &rb_bin, ObRbAggCell *rb)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(rb)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rb is null", K(ret));
+  } else if (OB_FAIL(rb->serialize(rb_bin))) {
+    LOG_WARN("serialize failed", K(ret));
+  }
+  return ret;
+}
+
+int ObRbAggAllocator::rb_serialize(ObRbAggCell *rb)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(rb)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rb is null", K(ret));
+  } else if (OB_FAIL(rb->serialize())) {
+    LOG_WARN("serialize failed", K(ret));
+  }
+  return ret;
+}
+
 }  // namespace common
 }  // namespace oceanbase

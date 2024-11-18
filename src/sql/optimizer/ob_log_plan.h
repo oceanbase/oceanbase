@@ -1787,6 +1787,7 @@ public:
   int do_alloc_values_table_path(ValuesTablePath *values_table_path,
                                  ObLogValuesTableAccess *&out_access_path_op);
   inline ObRawExprReplacer &gen_col_replacer() { return gen_col_replacer_; }
+  int get_enable_rich_vector_format(bool &enable);
 private:
   static const int64_t IDP_PATHNUM_THRESHOLD = 5000;
 protected: // member variable

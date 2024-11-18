@@ -610,6 +610,9 @@ inline bool supported_aggregate_function(const ObItemType agg_op)
   case T_FUN_SYS_BIT_XOR: {
     return true;
   }
+  case T_FUN_SYS_RB_BUILD_AGG: {
+    return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0;
+  }
   default:
     return false;
   }

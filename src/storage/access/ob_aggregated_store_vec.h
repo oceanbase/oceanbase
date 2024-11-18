@@ -36,9 +36,11 @@ public:
   OB_INLINE void set_count_flag(const bool t_count) { t_count_ = t_count; }
   OB_INLINE void set_minmax_flag(const bool t_minmax) { t_minmax_ = t_minmax; }
   OB_INLINE void set_sum_flag(const bool t_sum) { t_sum_ = t_sum; }
+  OB_INLINE void set_has_rb_build_agg(const bool t_rb_build_agg) { t_rb_build_agg_ = t_rb_build_agg; }
   OB_INLINE bool has_count() const { return t_count_; }
   OB_INLINE bool has_minmax() const { return t_minmax_; }
   OB_INLINE bool has_sum() const { return t_sum_; }
+  OB_INLINE bool has_rb_build_agg() const { return t_rb_build_agg_; }
   OB_INLINE bool only_count() const { return t_flag_ == 1; }
   TO_STRING_KV(K_(t_flag));
 
@@ -82,7 +84,7 @@ public:
       const int64_t row_count)
   {
     bool bret = false;
-    if (agg_type_flag_.has_sum()) {
+    if (agg_type_flag_.has_sum() || agg_type_flag_.has_rb_build_agg()) {
       bret = true;
     } else if (agg_type_flag_.has_minmax()) {
       for (int64_t i = 0; !bret && i < agg_cells_.count(); ++i) {

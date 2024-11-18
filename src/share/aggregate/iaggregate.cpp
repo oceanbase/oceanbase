@@ -44,6 +44,9 @@ extern int init_approx_count_distinct_synopsis_aggregate(RuntimeContext &agg_ctx
                                                          ObIAllocator &allocator, IAggregate *&agg);
 extern int init_sysbit_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                                  ObIAllocator &allocator, IAggregate *&agg);
+extern int init_rb_build_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                  ObIAllocator &allocator, IAggregate *&agg);
+
 #define INIT_AGGREGATE_CASE(OP_TYPE, func_name, col_id)                                            \
   case (OP_TYPE): {                                                                                \
     ret = init_##func_name##_aggregate(agg_ctx, col_id, allocator, aggregate);                     \
@@ -82,6 +85,7 @@ int init_aggregates(RuntimeContext &agg_ctx, ObIAllocator &allocator,
         INIT_AGGREGATE_CASE(T_FUN_SYS_BIT_OR, sysbit, i);
         INIT_AGGREGATE_CASE(T_FUN_SYS_BIT_AND, sysbit, i);
         INIT_AGGREGATE_CASE(T_FUN_SYS_BIT_XOR, sysbit, i);
+        INIT_AGGREGATE_CASE(T_FUN_SYS_RB_BUILD_AGG, rb_build, i);
       default: {
         ret = OB_NOT_SUPPORTED;
         SQL_LOG(WARN, "not supported aggregate function", K(ret), K(aggr_info.expr_->type_));

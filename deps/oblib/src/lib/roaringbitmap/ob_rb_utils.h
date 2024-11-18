@@ -72,6 +72,78 @@ private:
 
 };
 
+struct ObRbAggCell
+{
+  // max memory cost 64KB = 8 * 8K
+  static const uint64_t MAX_CACHED_COUNT = 8000;
+
+  ObRbAggCell(ObRoaringBitmap *rb, const uint64_t tenant_id);
+
+  int destroy();
+  int reuse() { return destroy(); }
+  int value_add(const uint64_t val);
+  int add_values(const ObArray<uint64_t> &values);
+  int value_or(const ObRbAggCell *other);
+  int serialize(ObString &rb_bin);
+  int serialize();
+
+  common::ObArenaAllocator allocator_;
+  ObRoaringBitmap *rb_;
+  uint64_t max_cache_count_;
+  common::ObArray<uint64_t> cached_value_;
+  ObString rb_bin_;
+  bool is_serialized_;
+
+  TO_STRING_KV(KPC_(rb), K_(cached_value), K_(is_serialized), K_(rb_bin));
+};
+
+class ObRbAggAllocator
+{
+public:
+  ObRbAggAllocator(const uint64_t tenant_id) :
+    is_inited_(false),
+    tenant_id_(tenant_id),
+    rb_allocator_("RbAggAlloc", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id)
+  {}
+
+  ~ObRbAggAllocator()
+  {
+    reset();
+  }
+
+  int init();
+
+  void reuse()
+  {
+    destroy_all_rb();
+    alloced_rb_.reuse();
+    rb_allocator_.reset_remain_one_page();
+  }
+
+  void reset()
+  {
+    destroy_all_rb();
+    alloced_rb_.destroy();
+    rb_allocator_.reset();
+    is_inited_ = false;
+  }
+
+  ObRbAggCell *alloc();
+  void free(ObRbAggCell *rb);
+  int rb_serialize(ObString &rb_bin, ObRbAggCell *rb);
+  int rb_serialize(ObRbAggCell *rb);
+
+private:
+  void destroy_all_rb();
+
+private:
+  bool is_inited_;
+  uint64_t tenant_id_;
+  hash::ObHashSet<uint64_t, hash::NoPthreadDefendMode> alloced_rb_;
+  common::ObArenaAllocator rb_allocator_;
+
+};
+
 } // namespace common
 } // namespace oceanbase
 

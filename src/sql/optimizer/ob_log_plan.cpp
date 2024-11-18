@@ -5693,7 +5693,12 @@ int ObLogPlan::check_three_stage_groupby_pushdown(const ObIArray<ObRawExpr *> &r
                aggr_expr->get_expr_type() != T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE &&
                aggr_expr->get_expr_type() != T_FUN_SYS_BIT_AND &&
                aggr_expr->get_expr_type() != T_FUN_SYS_BIT_OR &&
-               aggr_expr->get_expr_type() != T_FUN_SYS_BIT_XOR) {
+               aggr_expr->get_expr_type() != T_FUN_SYS_BIT_XOR &&
+               aggr_expr->get_expr_type() != T_FUN_SYS_RB_BUILD_AGG) {
+      can_push = false;
+    } else if (aggr_expr->get_expr_type() == T_FUN_SYS_RB_BUILD_AGG &&
+              (! session->use_rich_format() || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_0)) {
+      // if vector 2.0 is not enable  can not pushdown for rb_build_agg
       can_push = false;
     } else if (is_rollup && aggr_expr->get_expr_type() == T_FUN_GROUPING) {
       can_push = false;
@@ -5754,6 +5759,10 @@ int ObLogPlan::check_basic_groupby_pushdown(const ObIArray<ObAggFunRawExpr*> &ag
 {
   int ret = OB_SUCCESS;
   can_push = true;
+  bool enable_rich_vector_format = false;
+  if (OB_FAIL(get_enable_rich_vector_format(enable_rich_vector_format))) {
+    LOG_WARN("get enable_rich_vector_format fail", K(ret));
+  }
   // check whether contain agg expr can not be pushed down
   for (int64_t i = 0; OB_SUCC(ret) && can_push && i < aggr_items.count(); ++i) {
     ObAggFunRawExpr *aggr_expr = aggr_items.at(i);
@@ -5773,7 +5782,12 @@ int ObLogPlan::check_basic_groupby_pushdown(const ObIArray<ObAggFunRawExpr*> &ag
                T_FUN_SYS_BIT_AND != aggr_expr->get_expr_type() &&
                T_FUN_SYS_BIT_OR != aggr_expr->get_expr_type() &&
                T_FUN_SYS_BIT_XOR != aggr_expr->get_expr_type() &&
-               T_FUN_SUM_OPNSIZE != aggr_expr->get_expr_type()) {
+               T_FUN_SUM_OPNSIZE != aggr_expr->get_expr_type() &&
+               T_FUN_SYS_RB_BUILD_AGG != aggr_expr->get_expr_type()) {
+      can_push = false;
+    } else if (T_FUN_SYS_RB_BUILD_AGG == aggr_expr->get_expr_type() &&
+              (! enable_rich_vector_format || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_0)) {
+      // if vector 2.0 is not enable  can not pushdown for rb_build_agg
       can_push = false;
     } else if (aggr_expr->is_param_distinct()) {
       can_push = false;
@@ -14038,6 +14052,10 @@ int ObLogPlan::check_scalar_aggr_can_storage_pushdown(const uint64_t table_id,
   ObAggFunRawExpr *cur_aggr = NULL;
   ObRawExpr *first_param = NULL;
   can_push = true;
+  bool enable_rich_vector_format = false;
+  if (OB_FAIL(get_enable_rich_vector_format(enable_rich_vector_format))) {
+    LOG_WARN("get enable_rich_vector_format fail", K(ret), K(table_id));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && can_push && i < aggrs.count(); ++i) {
     if (OB_ISNULL(cur_aggr = aggrs.at(i))) {
       ret = OB_ERR_UNEXPECTED;
@@ -14047,7 +14065,12 @@ int ObLogPlan::check_scalar_aggr_can_storage_pushdown(const uint64_t table_id,
                 && T_FUN_MAX != cur_aggr->get_expr_type()
                 && T_FUN_SUM != cur_aggr->get_expr_type()
                 && T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS != cur_aggr->get_expr_type()
-                && T_FUN_SUM_OPNSIZE != cur_aggr->get_expr_type()) {
+                && T_FUN_SUM_OPNSIZE != cur_aggr->get_expr_type()
+                && T_FUN_SYS_RB_BUILD_AGG != cur_aggr->get_expr_type()) {
+      can_push = false;
+    } else if (T_FUN_SYS_RB_BUILD_AGG == cur_aggr->get_expr_type() &&
+              (! enable_rich_vector_format || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_0)) {
+      // if vector 2.0 is not enable  can not storage pushdown for rb_build_agg
       can_push = false;
     } else if (1 < cur_aggr->get_real_param_count()) {
       can_push = false;
@@ -14678,6 +14701,19 @@ int ObLogPlan::remove_duplicate_constraints()
         LOG_WARN("failed to remove a element from array", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObLogPlan::get_enable_rich_vector_format(bool &enable)
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session_info = nullptr;
+  if (OB_ISNULL(session_info = get_optimizer_context().get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else {
+    enable = session_info->use_rich_format();
   }
   return ret;
 }

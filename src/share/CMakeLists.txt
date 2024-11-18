@@ -11,6 +11,7 @@ ob_set_subtarget(ob_share ALONE
   aggregate/sum.cpp
   aggregate/sys_bit.cpp
   aggregate/aggr_extra.cpp
+  aggregate/rb_build_agg.cpp
   datum/ob_datum_funcs.cpp
   ob_rpc_struct.cpp
   ob_tenant_mgr.cpp

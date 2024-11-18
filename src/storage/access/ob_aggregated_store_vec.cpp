@@ -144,6 +144,10 @@ OB_INLINE int ObAggGroupVec::set_agg_type_flag(const ObPDAggType agg_type)
       agg_type_flag_.set_sum_flag(true);
       break;
     }
+    case PD_RB_BUILD: {
+      agg_type_flag_.set_has_rb_build_agg(true);
+      break;
+    }
     default : {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected aggregate type", K(ret), K(agg_type));

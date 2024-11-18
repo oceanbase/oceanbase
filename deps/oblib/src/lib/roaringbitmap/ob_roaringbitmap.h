@@ -141,6 +141,8 @@ public:
 
   int convert_to_bitmap();
 
+  TO_STRING_KV(KP_(allocator), K_(version), K_(type), K_(single_value), KP_(bitmap), K_(set));
+
 private:
   ObIAllocator* allocator_;
   uint8_t version_;

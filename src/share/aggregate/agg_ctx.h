@@ -15,6 +15,7 @@
 
 #include "share/aggregate/aggr_extra.h"
 #include "share/aggregate/util.h"
+#include "lib/roaringbitmap/ob_rb_utils.h"
 
 namespace oceanbase
 {
@@ -227,7 +228,7 @@ struct RuntimeContext
     agg_rows_(ModulePageAllocator(label, tenant_id, ObCtxIds::WORK_AREA)),
     agg_extras_(ModulePageAllocator(label, tenant_id, ObCtxIds::WORK_AREA)), removal_info_(),
     win_func_agg_(false), hp_infras_mgr_(nullptr), rollup_context_(nullptr), distinct_count_(0),
-    flag_(0)
+    flag_(0), rb_allocator_(nullptr)
   {}
 
   inline const AggrRowMeta &row_meta() const
@@ -334,6 +335,9 @@ struct RuntimeContext
         } // end for
       }
     } // end for
+    // rb_allocator is alloced by allocator_
+    // can not reuse, so just free here
+    free_rb_allocator();
     distinct_count_ = 0;
     agg_extras_.reuse();
     allocator_.reset_remain_one_page();
@@ -350,6 +354,7 @@ struct RuntimeContext
         } // end for
       }
     } // end for
+    free_rb_allocator();
     agg_rows_.reset();
     agg_extras_.reset();
     allocator_.reset();
@@ -358,6 +363,23 @@ struct RuntimeContext
     agg_row_meta_.reset();
     removal_info_.reset();
     win_func_agg_ = false;
+  }
+
+  void free_rb_allocator()
+  {
+    if (OB_NOT_NULL(rb_allocator_)) {
+      rb_allocator_->reset();
+      allocator_.free(rb_allocator_);
+      rb_allocator_ = nullptr;
+    }
+  }
+
+  ObRbAggAllocator* get_rb_allocator()
+  {
+    if (OB_ISNULL(rb_allocator_)) {
+      rb_allocator_ = OB_NEWx(ObRbAggAllocator, &allocator_, MTL_ID());
+    }
+    return rb_allocator_;
   }
 
   inline void enable_removal_opt()
@@ -405,6 +427,7 @@ struct RuntimeContext
       uint16_t reserved_ : 12;
     };
   };
+  ObRbAggAllocator *rb_allocator_;
 };
 
 /*
