@@ -34,22 +34,13 @@ int ObTableLoadBackupMacroBlockScanner::init(
     LOG_WARN("invalid args", KR(ret), KP(buf), K(buf_size), KP(schema_info), KP(column_ids));
   } else if (OB_FAIL(macro_reader_.init(buf, buf_size))) {
     LOG_WARN("fail to init macro_reader_", KR(ret));
-  } else if (OB_FAIL(init_column_map(schema_info, column_ids))) {
-    LOG_WARN("fail to init_column_map", KR(ret));
-  } else if (!row_alloced_) {
-    if (OB_FAIL(ob_create_row(allocator_, column_ids->count(), row_))) {
-      LOG_WARN("fail to init row_", KR(ret), K(column_ids->count()));
-    } else {
-      row_alloced_ = true;
-    }
-  }
-  if (OB_SUCC(ret)) {
-    for (int32_t i = 0; i < column_ids->count(); i++) {
-      row_.cells_[i].set_nop_value();
-    }
+  } else if (OB_FAIL(init_column_map_ids(schema_info, column_ids))) {
+    LOG_WARN("fail to init column map ids", KR(ret));
+  } else if (OB_FAIL(init_row())) {
+    LOG_WARN("fail to init row", KR(ret));
+  } else {
     is_inited_ = true;
   }
-
   return ret;
 }
 
@@ -78,14 +69,14 @@ int ObTableLoadBackupMacroBlockScanner::get_next_row(common::ObNewRow *&row)
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(micro_scanner_.get_next_row(row_))) {
+    if (OB_FAIL(micro_scanner_.get_next_row(row))) {
       if (ret == OB_ITER_END) {
         block_idx_++;
         if (block_idx_ < macro_reader_.get_macro_block_meta()->micro_block_count_) {
           if (OB_FAIL(init_micro_block_scanner())) {
             LOG_WARN("fail to init_micro_block_scanner", KR(ret), K(block_idx_));
           } else {
-            ret = micro_scanner_.get_next_row(row_);
+            ret = micro_scanner_.get_next_row(row);
           }
         }
       } else {
@@ -94,53 +85,68 @@ int ObTableLoadBackupMacroBlockScanner::get_next_row(common::ObNewRow *&row)
     }
   }
   if (OB_SUCC(ret)) {
-    row = &row_;
+    if (OB_FAIL(adjust_column_idx(row))) {
+      LOG_WARN("fail to adjust column idx", KR(ret));
+    } else {
+      row = &row_;
+    }
   }
-
   return ret;
 }
 
-int ObTableLoadBackupMacroBlockScanner::init_column_map(
+int ObTableLoadBackupMacroBlockScanner::init_column_map_ids(
     const ObSchemaInfo *schema_info,
     const ObIArray<int64_t> *column_ids)
 {
   int ret = OB_SUCCESS;
   const ObTableLoadBackupMacroBlockMeta *meta = macro_reader_.get_macro_block_meta();
-  bool is_heap_table = column_ids->at(0) < common::OB_APP_MIN_COLUMN_ID;
-  int64_t relative_offset = is_heap_table ? ObTableLoadBackupHiddenPK::get_hidden_pk_count() - 1 : 0;
-  for (int16_t i = 0; OB_SUCC(ret) && i < meta->column_number_; i++) {
-    if (OB_FAIL(column_map_ids_.push_back(-1))) {
-      LOG_WARN("fail to push back", KR(ret), K(i));
-    } else {
-      for (int32_t j = 0; OB_SUCC(ret) && j < column_ids->count(); j++) {
-        if (meta->column_id_array_[i] == column_ids->at(j)) {
-          if (meta->column_id_array_[i] < common::OB_APP_MIN_COLUMN_ID) {
-            column_map_ids_[i] = j;
+  int64_t offset = schema_info->is_heap_table_ ? 1 : 0;
+  // 对于堆表，schema_info由一个自增列+创建表的所有列组成，column_ids由14x逻辑备份里创建表的所有列组成，meta->column_id_array_表示备份宏块的列id顺序，由自增列+分区列(固定是2列)+创建表的剩余列组成
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_ids->count(); i++) {
+    bool has_match = false;
+    int64_t match_idx = -1;
+    for (int64_t j = 0; OB_SUCC(ret) && !has_match && j < meta->column_number_; j++) {
+      if (column_ids->at(i) == meta->column_id_array_[j]) {
+        has_match = true;
+        match_idx = j;
+        if (schema_info->column_desc_[i + offset].col_type_ != meta->column_type_array_[j]) {
+          if ((schema_info->column_desc_[i + offset].col_type_.is_mysql_date() && meta->column_type_array_[j].is_date()) ||
+              (schema_info->column_desc_[i + offset].col_type_.is_mysql_datetime() && meta->column_type_array_[j].is_datetime())) {
+            // do nothing
           } else {
-            int64_t relative_idx = j - relative_offset;
-            if (OB_UNLIKELY(relative_idx < 0)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected relative offset", K(j), K(relative_offset));
-            } else if (schema_info->column_desc_[relative_idx].col_type_ == meta->column_type_array_[i]) {
-              column_map_ids_[i] = j;
-            } else {
-              if ((schema_info->column_desc_[relative_idx].col_type_.is_mysql_date() && meta->column_type_array_[i].is_date()) ||
-                  (schema_info->column_desc_[relative_idx].col_type_.is_mysql_datetime() && meta->column_type_array_[i].is_datetime())) {
-                column_map_ids_[i] = j;
-              } else {
-                ret = OB_NOT_SUPPORTED;
-                LOG_WARN("direct load from 1.4x backup data, column type not match is not supported", KR(ret),
-                    K(i), K(schema_info->column_desc_[relative_idx].col_type_), K(meta->column_type_array_[i]));
-                LOG_USER_ERROR(OB_NOT_SUPPORTED, "direct load from backup data, column type not match is");
-              }
-            }
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("direct load from 1.4x backup data, column type not match is not supported", KR(ret),
+                K(i), K(j), K(schema_info->column_desc_[i + offset].col_type_), K(meta->column_type_array_[j]),
+                K(schema_info->column_desc_), K(ObArrayWrap<ObObjMeta>(meta->column_type_array_, meta->column_number_)));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "direct load from backup data, column type not match is");
           }
-          break;
         }
       }
     }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(column_map_ids_.push_back(match_idx))) {
+        LOG_WARN("fail to push back", KR(ret));
+      }
+    }
   }
+  return ret;
+}
 
+int ObTableLoadBackupMacroBlockScanner::init_row()
+{
+  int ret = OB_SUCCESS;
+  int64_t column_count = column_map_ids_.count();
+  if (row_.count_ <= 0) {
+    if (OB_FAIL(ob_create_row(allocator_, column_count, row_))) {
+      LOG_WARN("fail to init out_row_", KR(ret));
+    }
+  } else if (OB_UNLIKELY(row_.count_ != column_count)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected count", KR(ret), K(row_.count_), K(column_count));
+  }
+  for (int32_t i = 0; OB_SUCC(ret) && i < column_count; i++) {
+    row_.cells_[i].set_nop_value();
+  }
   return ret;
 }
 
@@ -151,13 +157,29 @@ int ObTableLoadBackupMacroBlockScanner::init_micro_block_scanner()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), KP(this));
   } else {
-    micro_scanner_.reset();
+    micro_scanner_.reuse();
     if (OB_FAIL(macro_reader_.decompress_data(block_idx_))) {
       LOG_WARN("fail to decompress data", KR(ret), K(block_idx_));
     } else if (OB_FAIL(micro_scanner_.init(macro_reader_.get_uncomp_buf(),
-                                           &column_map_ids_,
                                            macro_reader_.get_column_map()))) {
       LOG_WARN("fail to init micro_scanner_", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadBackupMacroBlockScanner::adjust_column_idx(ObNewRow *&row)
+{
+  int ret = OB_SUCCESS;
+  for (int32_t i = 0; OB_SUCC(ret) && i < column_map_ids_.count(); i++) {
+    int64_t idx = column_map_ids_[i];
+    if (idx != -1) {
+      if (OB_UNLIKELY(idx >= row->count_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected idx", KR(ret), K(idx), K(row->count_));
+      } else {
+        row_.cells_[i] = row->cells_[idx];
+      }
     }
   }
   return ret;

@@ -61,11 +61,13 @@ int read_compact_rowkey(ObBufferReader &buffer_reader,
 ObSchemaInfo::ObSchemaInfo()
 {
   column_desc_.set_tenant_id(MTL_ID());
+  is_heap_table_ = false;
 }
 
 void ObSchemaInfo::reset()
 {
   column_desc_.reset();
+  is_heap_table_ = false;
 }
 
 int ObSchemaInfo::assign(const ObSchemaInfo &other)
@@ -73,6 +75,8 @@ int ObSchemaInfo::assign(const ObSchemaInfo &other)
   int ret = OB_SUCCESS;
   if (OB_FAIL(column_desc_.assign(other.column_desc_))) {
     LOG_WARN("fail to assign", KR(ret), K(other));
+  } else {
+    is_heap_table_ = other.is_heap_table_;
   }
   return ret;
 }

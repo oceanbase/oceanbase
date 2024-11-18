@@ -26,9 +26,8 @@ class ObTableLoadBackupMacroBlockScanner : public ObNewRowIterator
 {
 public:
   ObTableLoadBackupMacroBlockScanner()
-    : allocator_("TLD_BMBS_V_1_4"),
+    : allocator_("TLD_BMaBSR_V14"),
       block_idx_(0),
-      row_alloced_(false),
       is_inited_(false)
   {
     allocator_.set_tenant_id(MTL_ID());
@@ -43,8 +42,10 @@ public:
   void reset() override;
   int get_next_row(common::ObNewRow *&row) override;
 private:
-  int init_column_map(const ObSchemaInfo *schema_info, const ObIArray<int64_t> *column_ids);
+  int init_column_map_ids(const ObSchemaInfo *schema_info, const ObIArray<int64_t> *column_ids);
+  int init_row();
   int init_micro_block_scanner();
+  int adjust_column_idx(common::ObNewRow *&row);
 private:
   ObArenaAllocator allocator_;
   ObTableLoadBackupMacroBlockReader macro_reader_;
@@ -52,7 +53,6 @@ private:
   ObTableLoadBackupMicroBlockScanner micro_scanner_;
   common::ObNewRow row_;
   int32_t block_idx_;
-  bool row_alloced_;
   bool is_inited_;
 };
 

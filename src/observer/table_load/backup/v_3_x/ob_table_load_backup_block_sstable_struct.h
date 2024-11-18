@@ -82,6 +82,20 @@ const int64_t EXPIRE_VERSION_DELAY_TIME = 15L * 60L * 1000L * 1000L; //15 minute
 const int64_t PG_SUPER_BLOCK_HEADER_VERSION = 1;
 const int64_t SERVER_SUPER_BLOCK_HEADER_VERSION = 1;
 
+class ObSchemaColumnInfo
+{
+public:
+  ObSchemaColumnInfo();
+  ObSchemaColumnInfo(int64_t partkey_idx, bool is_partkey);
+  ~ObSchemaColumnInfo() = default;
+  void reset();
+  int assign(const ObSchemaColumnInfo &other);
+  TO_STRING_KV(K_(partkey_idx), K_(is_partkey));
+public:
+  int64_t partkey_idx_;
+  bool is_partkey_;
+};
+
 class ObSchemaInfo
 {
 public:
@@ -89,9 +103,12 @@ public:
   ~ObSchemaInfo() = default;
   void reset();
   int assign(const ObSchemaInfo &other);
-  TO_STRING_KV(K_(column_desc));
+  TO_STRING_KV(K_(column_desc), K_(column_info), K_(partkey_count), K_(is_heap_table));
 public:
   common::ObArray<ObColDesc> column_desc_;
+  common::ObArray<ObSchemaColumnInfo> column_info_;// 只记录堆表的列信息，有主键表该数组为空
+  int64_t partkey_count_;
+  bool is_heap_table_;
 };
 
 class ObMacroBlockCommonHeader

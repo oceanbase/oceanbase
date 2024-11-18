@@ -397,7 +397,7 @@ int ObTableLoadBackupPartScanner::init_macro_block_index(
     } else if (OB_FAIL(common_header->check_valid())) {
       LOG_WARN("common_header is not vaild", KR(ret), K(*common_header));
     } else if (common_header->data_type_ == BACKUP_FILE_END_MARK) {
-      // do nothing
+      break;
     } else if (OB_UNLIKELY(common_header->data_length_ > buffer_reader.remain())) {
       ret = OB_BUF_NOT_ENOUGH;
       LOG_WARN("buffer_reader not enough", KR(ret), K(*common_header), K(buffer_reader));
@@ -691,7 +691,7 @@ int ObTableLoadBackupPartScanner::fill_lob_buf(
     LOG_WARN("fail to get refactored", KR(ret), K(macro_block_id));
   } else if (OB_FAIL(read_macro_block_data(macro_block_idx, lob_buf_, read_size))) {
     LOG_WARN("fail to read macro block data", KR(ret), K(macro_block_idx));
-  } else if (OB_FAIL(lob_reader.init(lob_buf_, read_size, schema_info_))) {
+  } else if (OB_FAIL(lob_reader.init(lob_buf_, read_size))) {
     LOG_WARN("fail to init sstable block reader", KR(ret), K(macro_block_index_[macro_block_idx]));
   } else {
     macro_block_min_skip_idx_ = MIN(macro_block_min_skip_idx_, macro_block_idx);

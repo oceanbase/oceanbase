@@ -24,7 +24,6 @@ namespace table_load_backup_v_3_x
 class ObTableLoadBackupTable_V_3_X : public ObTableLoadBackupTable
 {
 public:
-  static const int64_t HIDDEN_PK_COUNT = 1;
   ObTableLoadBackupTable_V_3_X();
   virtual ~ObTableLoadBackupTable_V_3_X() {}
   int init(
@@ -38,7 +37,6 @@ public:
       int64_t subpart_count = 1,
       int64_t subpart_idx = 0) override;
   int64_t get_partition_count() const override { return part_list_.count(); }
-  int64_t get_hidden_pk_count() const override { return HIDDEN_PK_COUNT; }
   TO_STRING_KV(
       K_(storage_info),
       K_(schema_info),
@@ -51,6 +49,7 @@ private:
   int parse_path(const ObString &path);
   int check_support_for_tenant();
   int get_partitions();
+  int init_schema_info(const share::schema::ObTableSchema *table_schema);
 private:
   ObArenaAllocator allocator_;
   share::ObBackupStorageInfo storage_info_;

@@ -27,12 +27,16 @@ public:
   ObTableLoadBackupMicroBlockScanner();
   ~ObTableLoadBackupMicroBlockScanner();
   int init(const ObMicroBlockData *micro_block_data, const ObColumnMap *column_map);
+  void reset();
   void reuse();
   bool is_valid() const;
   int get_next_row(common::ObNewRow *&row);
 private:
+  int init_row();
+private:
   common::ObArenaAllocator allocator_;
   ObIMicroBlockReader *reader_;
+  const ObColumnMap *column_map_;
   common::ObNewRow row_;
   int64_t row_idx_;
   bool is_inited_;

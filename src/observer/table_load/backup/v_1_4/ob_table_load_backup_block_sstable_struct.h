@@ -58,9 +58,10 @@ public:
   ~ObSchemaInfo() = default;
   void reset();
   int assign(const ObSchemaInfo &other);
-  TO_STRING_KV(K_(column_desc));
+  TO_STRING_KV(K_(column_desc), K_(is_heap_table));
 public:
   common::ObArray<share::schema::ObColDesc> column_desc_;
+  bool is_heap_table_;
 };
 
 class ObTableLoadBackupMacroBlockMeta

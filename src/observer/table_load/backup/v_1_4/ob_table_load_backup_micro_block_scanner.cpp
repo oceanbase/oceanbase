@@ -107,27 +107,28 @@ int ObTableLoadBackupMicroBlockRecordHeader::check_record(const char *ptr, const
  */
 int ObTableLoadBackupMicroBlockScanner::init(
     const char *buf,
-    const ObIArray<int64_t> *column_ids,
     const ObTableLoadBackupColumnMap *column_map)
 {
   int ret = OB_SUCCESS;
   // meta只在内部的scan中可能会用到，所以为nullptr是可能存在的
   if (OB_UNLIKELY(buf == nullptr ||
-                  column_ids == nullptr ||
                   column_map == nullptr ||
                   !column_map->is_inited())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), KP(buf), KP(column_ids), KP(column_map));
+    LOG_WARN("invalid args", KR(ret), KP(buf), KP(column_map));
   } else {
     header_ = reinterpret_cast<const ObTableLoadBackupMicroBlockHeader_V_1_4*>(buf);
     if (OB_UNLIKELY(!header_->is_valid())) {
       LOG_WARN("header_ is invalid", KR(ret), K(*header_));
     } else {
-      column_ids_ = column_ids;
       column_map_ = column_map;
       data_begin_ = buf + header_->header_size_;
       index_begin_ = reinterpret_cast<const int32_t*>(buf + header_->row_index_offset_);
-      is_inited_ = true;
+      if (OB_FAIL(init_row())) {
+        LOG_WARN("fail to init row", KR(ret));
+      } else {
+        is_inited_ = true;
+      }
     }
   }
 
@@ -141,29 +142,61 @@ void ObTableLoadBackupMicroBlockScanner::reset()
   column_map_ = nullptr;
   data_begin_ = nullptr;
   index_begin_ = nullptr;
+  row_.reset();
+  cur_idx_ = 0;
+  allocator_.reset();
+  is_inited_ = false;
+}
+
+void ObTableLoadBackupMicroBlockScanner::reuse()
+{
+  reader_.reset();
+  header_ = nullptr;
+  column_map_ = nullptr;
+  data_begin_ = nullptr;
+  index_begin_ = nullptr;
   cur_idx_ = 0;
   is_inited_ = false;
 }
 
-int ObTableLoadBackupMicroBlockScanner::get_next_row(common::ObNewRow &row)
+int ObTableLoadBackupMicroBlockScanner::get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
+  row = nullptr;
   if(!is_inited_){
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
   } else if(cur_idx_ >= header_->row_count_) {
     ret = OB_ITER_END;
-  } else if (OB_FAIL(reader_.read_meta_row(*column_ids_,
-                                           column_map_,
+  } else if (OB_FAIL(reader_.read_meta_row(column_map_,
                                            data_begin_,
                                            *(index_begin_ + cur_idx_ + 1),
                                            *(index_begin_ + cur_idx_),
-                                           row))) {
+                                           row_))) {
     LOG_WARN("row reader fail to read row", KR(ret));
   } else {
     cur_idx_++;
+    row = &row_;
   }
 
+  return ret;
+}
+
+int ObTableLoadBackupMicroBlockScanner::init_row()
+{
+  int ret = OB_SUCCESS;
+  int64_t column_count = column_map_->get_store_count();
+  if (row_.count_ <= 0) {
+    if (OB_FAIL(ob_create_row(allocator_, column_count, row_))) {
+      LOG_WARN("fail to init row_", KR(ret));
+    }
+  } else if (OB_UNLIKELY(row_.count_ != column_count)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected count", KR(ret), K(row_.count_), K(column_count));
+  }
+  for (int32_t i = 0; OB_SUCC(ret) && i < column_count; i++) {
+    row_.cells_[i].set_nop_value();
+  }
   return ret;
 }
 

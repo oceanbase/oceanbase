@@ -24,10 +24,8 @@ namespace table_load_backup_v_1_4
 class ObTableLoadBackupTable_V_1_4 : public ObTableLoadBackupTable
 {
 public:
-  static const int64_t HIDDEN_PK_COUNT = 3;
   ObTableLoadBackupTable_V_1_4()
     : allocator_("TLD_BT_V_1_4"),
-      is_heap_table_(false),
       is_inited_(false)
   {
     allocator_.set_tenant_id(MTL_ID());
@@ -42,8 +40,7 @@ public:
   int scan(int64_t part_idx, ObNewRowIterator *&iter, ObIAllocator &allocator,
            int64_t subpart_count = 1, int64_t subpart_idx = 0) override;
   int64_t get_partition_count() const override { return part_list_.count(); }
-  int64_t get_hidden_pk_count() const override { return HIDDEN_PK_COUNT; }
-  TO_STRING_KV(K(table_id_), K(data_path_), K(meta_path_), K(column_ids_), K(part_list_), K(is_heap_table_));
+  TO_STRING_KV(K(table_id_), K(data_path_), K(meta_path_), K(column_ids_), K(part_list_));
 private:
   int parse_path(const ObString &path);
   int get_column_ids();
@@ -57,7 +54,6 @@ private:
   ObString meta_path_;
   ObArray<int64_t> column_ids_;
   ObArray<ObString> part_list_;
-  bool is_heap_table_;
   bool is_inited_;
 };
 

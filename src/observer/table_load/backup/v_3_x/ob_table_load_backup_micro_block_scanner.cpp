@@ -22,6 +22,7 @@ namespace table_load_backup_v_3_x
 ObTableLoadBackupMicroBlockScanner::ObTableLoadBackupMicroBlockScanner()
   : allocator_("TLD_MBR_V_3_X"),
     reader_(nullptr),
+    column_map_(nullptr),
     row_idx_(0),
     is_inited_(false)
 {
@@ -30,12 +31,30 @@ ObTableLoadBackupMicroBlockScanner::ObTableLoadBackupMicroBlockScanner()
 
 ObTableLoadBackupMicroBlockScanner::~ObTableLoadBackupMicroBlockScanner()
 {
+  reset();
+}
+
+void ObTableLoadBackupMicroBlockScanner::reset()
+{
   if (reader_ != nullptr) {
     reader_->~ObIMicroBlockReader();
     allocator_.free(reader_);
     reader_ = nullptr;
   }
+  row_.reset();
   allocator_.reset();
+  row_idx_ = 0;
+  is_inited_ = false;
+}
+
+void ObTableLoadBackupMicroBlockScanner::reuse()
+{
+  if (reader_ != nullptr) {
+    reader_->reset();
+  }
+  column_map_ = nullptr;
+  row_idx_ = 0;
+  is_inited_ = false;
 }
 
 int ObTableLoadBackupMicroBlockScanner::init(
@@ -69,34 +88,17 @@ int ObTableLoadBackupMicroBlockScanner::init(
       }
     }
     if (OB_SUCC(ret)) {
-      if (row_.count_ <= 0) {
-        if (OB_FAIL(ob_create_row(allocator_, column_map->get_request_count(), row_))) {
-          LOG_WARN("fail to init row_", KR(ret));
-        }
-      } else {
-        for (int32_t i = 0; i < row_.count_; i++) {
-          row_.cells_[i].set_nop_value();
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
+      column_map_ = column_map;
       if (OB_FAIL(reader_->init(micro_block_data, column_map))) {
         LOG_WARN("fail to init reader_", KR(ret));
+      } else if (OB_FAIL(init_row())) {
+        LOG_WARN("fail to init row", KR(ret));
       } else {
         is_inited_ = true;
       }
     }
   }
   return ret;
-}
-
-void ObTableLoadBackupMicroBlockScanner::reuse()
-{
-  if (reader_ != nullptr) {
-    reader_->reset();
-  }
-  row_idx_ = 0;
-  is_inited_ = false;
 }
 
 bool ObTableLoadBackupMicroBlockScanner::is_valid() const
@@ -118,6 +120,24 @@ int ObTableLoadBackupMicroBlockScanner::get_next_row(ObNewRow *&row)
   } else {
     row_idx_++;
     row = &row_;
+  }
+  return ret;
+}
+
+int ObTableLoadBackupMicroBlockScanner::init_row()
+{
+  int ret = OB_SUCCESS;
+  int64_t column_count = column_map_->get_store_count();
+  if (row_.count_ <= 0) {
+    if (OB_FAIL(ob_create_row(allocator_, column_count, row_))) {
+      LOG_WARN("fail to init row_", KR(ret));
+    }
+  } else if (OB_UNLIKELY(row_.count_ != column_count)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected count", KR(ret), K(row_.count_), K(column_count));
+  }
+  for (int32_t i = 0; OB_SUCC(ret) && i < column_count; i++) {
+    row_.cells_[i].set_nop_value();
   }
   return ret;
 }

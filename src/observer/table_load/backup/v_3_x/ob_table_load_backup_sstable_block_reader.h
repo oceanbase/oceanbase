@@ -57,12 +57,16 @@ class ObTableLoadBackupSSTableBlockReader
 public:
   ObTableLoadBackupSSTableBlockReader();
   ~ObTableLoadBackupSSTableBlockReader();
-  int init(const char *buf, int64_t buf_size, const ObSchemaInfo &schema_info);
+  int init(const char *buf, int64_t buf_size);
   void reset();
   int get_next_micro_block(const ObMicroBlockData *&micro_block_data);
   const ObMacroBlockCommonHeader& get_macro_block_common_header()
   {
     return macro_block_common_header_;
+  }
+  const common::ObArray<share::schema::ObColDesc>& get_columns()
+  {
+    return columns_;
   }
   const ObColumnMap* get_column_map()
   {
@@ -91,10 +95,10 @@ public:
       KP_(compressor));
 private:
   static const uint64_t OB_TENANT_ID_SHIFT = 40;
-  int inner_init(const ObSchemaInfo &schema_info);
+  int inner_init();
   int init_backup_common_header();
   int init_full_macro_block_meta_entry();
-  int inner_init_data_block(const ObSchemaInfo &schema_info);
+  int inner_init_data_block();
   int inner_init_lob_block();
   int decrypt_data_buf(
       const char *buf,

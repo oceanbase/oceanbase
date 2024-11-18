@@ -47,7 +47,7 @@ int ObTableLoadBackupTable_V_1_4::init(
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "direct load from backup data of mysql tenant to oracle tenant is");
   } else if (OB_FAIL(storage_info_.assign(*storage_info))) {
     LOG_WARN("fail to assign", KR(ret));
-  } else if (FALSE_IT(is_heap_table_ = table_schema->is_heap_table())) {
+  } else if (FALSE_IT(schema_info_.is_heap_table_ = table_schema->is_heap_table())) {
   } else if (OB_FAIL(table_schema->get_column_ids(schema_info_.column_desc_))) {
     LOG_WARN("fail to get columns ids", KR(ret));
   } else if (OB_FAIL(parse_path(path))) {
@@ -186,25 +186,14 @@ int ObTableLoadBackupTable_V_1_4::get_column_ids()
                                                                  file_length,
                                                                  read_size))) {
     LOG_WARN("fail to read_single_file", KR(ret), K(ObString(pos, buf)));
+  } else if (OB_FAIL(ObTableLoadBackupUtil::get_column_ids_from_create_table_sql(ObString(read_size, file_buf), column_ids_))) {
+    LOG_WARN("fail to get_column_ids_from_create_table_sql", K(ret));
+  } else if (OB_UNLIKELY(schema_info_.column_desc_.count() != (column_ids_.count() + (schema_info_.is_heap_table_ ? 1 : 0)))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("direct load from 1.4x backup data, column count not match is not supported", KR(ret), K(schema_info_.is_heap_table_), K(schema_info_.column_desc_.count()), K(column_ids_.count()));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "direct load from backup data, column count not match is");
   } else {
-    if (is_heap_table_) {
-      if (OB_FAIL(column_ids_.push_back(ObTableLoadBackupHiddenPK::OB_HIDDEN_PK_INCREMENT_COLUMN_ID))) {
-        LOG_WARN("fail to push back", K(ret));
-      } else if (OB_FAIL(column_ids_.push_back(ObTableLoadBackupHiddenPK::OB_HIDDEN_PK_CLUSTER_COLUMN_ID))) {
-        LOG_WARN("fail to push back", K(ret));
-      } else if (OB_FAIL(column_ids_.push_back(ObTableLoadBackupHiddenPK::OB_HIDDEN_PK_PARTITION_COLUMN_ID))) {
-        LOG_WARN("fail to push back", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObTableLoadBackupUtil::get_column_ids_from_create_table_sql(ObString(read_size, file_buf), column_ids_))) {
-        LOG_WARN("fail to get_column_ids_from_create_table_sql", K(ret));
-      }
-    } else if (OB_UNLIKELY(schema_info_.column_desc_.count() != (column_ids_.count() - (is_heap_table_ ? ObTableLoadBackupHiddenPK::get_hidden_pk_count() - 1 : 0)))) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("direct load from 1.4x backup data, column count not match is not supported", KR(ret), K(is_heap_table_), K(schema_info_.column_desc_.count()), K(column_ids_.count()));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "direct load from backup data, column count not match is");
-    }
+    LOG_INFO("get column ids", K(schema_info_), K(column_ids_));
   }
   if (file_buf != nullptr) {
     allocator_.free(file_buf);

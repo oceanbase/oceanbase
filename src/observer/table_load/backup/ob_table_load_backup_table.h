@@ -44,7 +44,6 @@ public:
   virtual int scan(int64_t part_idx, common::ObNewRowIterator *&iter, common::ObIAllocator &allocator,
                    int64_t subpart_count = 1, int64_t subpart_idx = 0) = 0;
   virtual int64_t get_partition_count() const = 0;
-  virtual int64_t get_hidden_pk_count() const = 0;
   DECLARE_PURE_VIRTUAL_TO_STRING;
 };
 

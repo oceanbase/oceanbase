@@ -249,18 +249,15 @@ int ObTableLoadBackupRowReader::read_column_no_meta(const ObObjMeta &src_meta, O
 
 template<class T>
 int ObTableLoadBackupRowReader::read_sequence_columns(
-    const ObIArray<int64_t> &column_ids,
     const T *items,
     const int64_t column_count,
     common::ObNewRow &row)
 {
   int ret = common::OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < column_count; ++i) {
-    int64_t column_id = column_ids.at(i);
-    if (column_id == -1) continue;
-    row.cells_[column_id].set_meta_type(items[i].get_obj_meta());
-    if (OB_FAIL(read_column_no_meta(items[i].get_obj_meta(), row.cells_[column_id]))) {
-      LOG_WARN("fail to read column", KR(ret), K(i), K(items[i].get_obj_meta()), K(row.cells_[column_id]));
+    row.cells_[i].set_meta_type(items[i].get_obj_meta());
+    if (OB_FAIL(read_column_no_meta(items[i].get_obj_meta(), row.cells_[i]))) {
+      LOG_WARN("fail to read column", KR(ret), K(i), K(items[i].get_obj_meta()), K(row.cells_[i]));
     }
   }
   if (OB_SUCC(ret)) {
@@ -440,7 +437,6 @@ int ObTableLoadBackupRowReader::read_column(const ObObjMeta &src_meta, ObObj &ob
 }
 
 int ObTableLoadBackupRowReader::read_columns(
-    const ObIArray<int64_t> &column_ids,
     const int64_t start_column_index,
     const bool check_null_value,
     const bool read_no_meta,
@@ -456,8 +452,6 @@ int ObTableLoadBackupRowReader::read_columns(
   const ObTableLoadBackupColumnIndexItem *column_indexs = column_map->get_column_indexs();
   const int8_t store_column_index_bytes = row_header_->get_column_index_bytes();
   for (int64_t i = start_column_index; OB_SUCC(ret) && i < request_count; ++i) {
-    int64_t column_id = column_ids.at(i);
-    if (column_id == -1) continue;
     store_index = column_indexs[i].store_index_;
     request_type = column_indexs[i].request_column_type_;
     if (OB_INVALID_INDEX != store_index) {
@@ -473,23 +467,23 @@ int ObTableLoadBackupRowReader::read_columns(
       if (read_no_meta && column_indexs[i].is_column_type_matched_) {
         // Essentiall there is no need to set the meta in the ObObj each time if it's not
         // going to change anyway.
-        if (OB_FAIL(read_column_no_meta(request_type, row.cells_[column_id]))) {
+        if (OB_FAIL(read_column_no_meta(request_type, row.cells_[i]))) {
           LOG_WARN("fail to read column", KR(ret), K(request_type), K(i),K(column_indexs[i]),
-                    K(row.cells_[column_id]), K(*column_map));
+                    K(row.cells_[i]), K(*column_map));
         }
-      } else if (OB_FAIL(read_column(request_type, row.cells_[column_id]))) {
+      } else if (OB_FAIL(read_column(request_type, row.cells_[i]))) {
         // We need to set the mata on fetching the first row and if the column meta stored
         // on macro does not match the one from schema, we need to perform the cast so we
         // have to resolve to the original 'type-aware' call.
         LOG_WARN("fail to read column", KR(ret), K(request_type), K(i), K(column_indexs[i]),
-                  K(row.cells_[column_id]), K(*column_map));
+                  K(row.cells_[i]), K(*column_map));
       }
     } else {
-      row.cells_[column_id].set_nop_value();
+      row.cells_[i].set_nop_value();
     }
 
     if (OB_SUCC(ret) && check_null_value) {
-      if (row.cells_[column_id].is_null() || row.cells_[column_id].is_nop_value()) {
+      if (row.cells_[i].is_null() || row.cells_[i].is_nop_value()) {
         has_null_value = true;
       }
     }
@@ -499,22 +493,20 @@ int ObTableLoadBackupRowReader::read_columns(
 }
 
 int ObTableLoadBackupRowReader::read_columns(
-    const ObIArray<int64_t> &column_ids,
     const ObTableLoadBackupColumnMap *column_map,
     ObNewRow &row)
 {
   int ret = OB_SUCCESS;
   bool has_null_value = false;
   int64_t seq_read_column_count = column_map->get_seq_read_column_count();
-  if (OB_UNLIKELY(column_ids.count() < column_map->get_request_count())) {
+  if (OB_UNLIKELY(row.count_ < column_map->get_request_count())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(column_ids.count()), K(column_map->get_request_count()));
+    LOG_WARN("invalid args", KR(ret), K(row.count_), K(column_map->get_request_count()));
   } else if (seq_read_column_count > 0 &&
-      OB_FAIL(read_sequence_columns(column_ids, column_map->get_column_indexs(), seq_read_column_count, row))) {
+      OB_FAIL(read_sequence_columns(column_map->get_column_indexs(), seq_read_column_count, row))) {
     LOG_WARN("sequence read columns in row failed", KR(ret), K_(is_first_row), K(*column_map));
   } else if (seq_read_column_count < column_map->get_request_count()) {
-    if (OB_FAIL(read_columns(column_ids,
-                             seq_read_column_count,
+    if (OB_FAIL(read_columns(seq_read_column_count,
                              true, /* need check null value for next read row */
                              !is_first_row_ /* if not first row, next time we do not need read meta*/,
                              column_map,
@@ -565,7 +557,6 @@ int ObTableLoadBackupRowReader::read_compact_rowkey(
 }
 
 int ObTableLoadBackupRowReader::read_meta_row(
-    const ObIArray<int64_t> &column_ids,
     const ObTableLoadBackupColumnMap *column_map,
     const char *buf,
     const int64_t row_end_pos,
@@ -578,7 +569,7 @@ int ObTableLoadBackupRowReader::read_meta_row(
     LOG_WARN("column_map is nullptr", KR(ret));
   } else if (OB_FAIL(setup_row(buf, row_end_pos, pos, column_map->get_store_count()))) {
     LOG_WARN("fail to setup", KR(ret), K(OB_P(buf)), K(row_end_pos), K(pos));
-  } else if (OB_FAIL(read_columns(column_ids, column_map, row))) {
+  } else if (OB_FAIL(read_columns(column_map, row))) {
     LOG_WARN("fail to read columns.", KR(ret), K(*column_map));
   }
 

@@ -146,8 +146,7 @@ public:
                           const int64_t row_end_pos,
                           int64_t &pos,
                           common::ObNewRow &row);
-  int read_meta_row(const ObIArray<int64_t> &column_ids,
-                    const ObTableLoadBackupColumnMap *column_map,
+  int read_meta_row(const ObTableLoadBackupColumnMap *column_map,
                     const char *buf,
                     const int64_t row_end_pos,
                     int64_t pos,
@@ -161,16 +160,13 @@ private:
   int read_text_store(const ObStoreMeta &store_meta, common::ObObj &obj);
   int read_column_no_meta(const common::ObObjMeta &src_meta, common::ObObj &obj);
   template<class T>
-  int read_sequence_columns(const ObIArray<int64_t> &column_ids,
-                            const T *items,
+  int read_sequence_columns(const T *items,
                             const int64_t column_count,
                             common::ObNewRow &row);
   int read_column(const ObObjMeta &src_meta, ObObj &obj);
-  int read_columns(const ObIArray<int64_t> &column_ids,
-                   const ObTableLoadBackupColumnMap *column_map,
+  int read_columns(const ObTableLoadBackupColumnMap *column_map,
                    common::ObNewRow &row);
-  int read_columns(const ObIArray<int64_t> &column_ids,
-                   const int64_t start_column_index,
+  int read_columns(const int64_t start_column_index,
                    const bool check_null_value,
                    const bool read_no_meta,
                    const ObTableLoadBackupColumnMap *column_map,

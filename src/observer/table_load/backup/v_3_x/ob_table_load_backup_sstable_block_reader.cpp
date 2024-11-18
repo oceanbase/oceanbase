@@ -59,20 +59,19 @@ ObTableLoadBackupSSTableBlockReader::~ObTableLoadBackupSSTableBlockReader()
 
 int ObTableLoadBackupSSTableBlockReader::init(
     const char *buf,
-    int64_t buf_size,
-    const ObSchemaInfo &schema_info)
+    int64_t buf_size)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("already init", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(buf == nullptr || buf_size <= 0 || schema_info.column_desc_.empty())) {
+  } else if (OB_UNLIKELY(buf == nullptr || buf_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), KP(buf), K(buf_size), K(schema_info));
+    LOG_WARN("invalid args", KR(ret), KP(buf), K(buf_size));
   } else {
     buf_ = buf;
     buf_size_ = buf_size;
-    if (OB_FAIL(inner_init(schema_info))) {
+    if (OB_FAIL(inner_init())) {
       LOG_WARN("fail to inner_init", KR(ret));
     } else {
       is_inited_ = true;
@@ -81,7 +80,7 @@ int ObTableLoadBackupSSTableBlockReader::init(
   return ret;
 }
 
-int ObTableLoadBackupSSTableBlockReader::inner_init(const ObSchemaInfo &schema_info)
+int ObTableLoadBackupSSTableBlockReader::inner_init()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(init_backup_common_header())) {
@@ -100,7 +99,7 @@ int ObTableLoadBackupSSTableBlockReader::inner_init(const ObSchemaInfo &schema_i
     } else if (OB_FAIL(macro_block_common_header_.check_integrity())) {
       LOG_WARN("fail to check integrity", KR(ret), K(macro_block_common_header_));
     } else if (macro_block_common_header_.is_sstable_data_block()) {
-      if (OB_FAIL(inner_init_data_block(schema_info))) {
+      if (OB_FAIL(inner_init_data_block())) {
         LOG_WARN("fail to inner init data block", KR(ret));
       }
     } else if (macro_block_common_header_.is_lob_data_block()) {
@@ -156,7 +155,7 @@ int ObTableLoadBackupSSTableBlockReader::init_full_macro_block_meta_entry()
   return ret;
 }
 
-int ObTableLoadBackupSSTableBlockReader::inner_init_data_block(const ObSchemaInfo &schema_info)
+int ObTableLoadBackupSSTableBlockReader::inner_init_data_block()
 {
   int ret = OB_SUCCESS;
   sstable_macro_block_header_ = reinterpret_cast<const ObSSTableMacroBlockHeader*>(macro_block_buf_ + macro_block_buf_pos_);
@@ -181,33 +180,12 @@ int ObTableLoadBackupSSTableBlockReader::inner_init_data_block(const ObSchemaInf
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("incorrect data offset", KR(ret), K(macro_block_buf_pos_), K(*sstable_macro_block_header_));
     }
-    if (OB_SUCC(ret)) {
-      if (OB_UNLIKELY(schema_info.column_desc_.count() != column_cnt)) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("direct load from 3.x backup data, column count not match is not supported", KR(ret), K(schema_info.column_desc_.count()), K(column_cnt));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "direct load from backup data, column count not match is");
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; ++i) {
-          share::schema::ObColDesc col_desc;
-          col_desc.col_id_ = column_ids_[i];
-          col_desc.col_type_ = column_types_[i];
-          // 这里只做列类型检查，由外部保证备份数据表和导入表的列顺序保持一致
-          if (OB_UNLIKELY(schema_info.column_desc_[i].col_type_ != column_types_[i])) {
-            if ((schema_info.column_desc_[i].col_type_.is_mysql_date() && column_types_[i].is_date()) ||
-                (schema_info.column_desc_[i].col_type_.is_mysql_datetime() && column_types_[i].is_datetime())) {
-              // do nothing
-            } else {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("direct load from 3.x backup data, column type not match is not supported", KR(ret), K(i), K(schema_info.column_desc_[i].col_type_), K(column_types_[i]));
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "direct load from backup data, column type not match is");
-            }
-          }
-          if (OB_SUCC(ret)) {
-            if (OB_FAIL(columns_.push_back(col_desc))) {
-              LOG_WARN("fail to push col desc to columns", KR(ret), K(i));
-            }
-          }
-        }
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; ++i) {
+      ObColDesc col_desc;
+      col_desc.col_id_ = column_ids_[i];
+      col_desc.col_type_ = column_types_[i];
+      if (OB_FAIL(columns_.push_back(col_desc))) {
+        LOG_WARN("fail to push col desc to columns", KR(ret), K(i));
       }
     }
     if (OB_SUCC(ret)) {

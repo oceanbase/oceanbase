@@ -78,28 +78,33 @@ class ObTableLoadBackupMicroBlockScanner
 {
 public:
   ObTableLoadBackupMicroBlockScanner()
-    : header_(nullptr),
-      column_ids_(nullptr),
+    : allocator_("TLD_BMiBS_V14"),
+      header_(nullptr),
       column_map_(nullptr),
       data_begin_(nullptr),
       index_begin_(nullptr),
       cur_idx_(0),
-      is_inited_(false) {}
+      is_inited_(false)
+  {
+    allocator_.set_tenant_id(MTL_ID());
+  }
   ~ObTableLoadBackupMicroBlockScanner() {}
   int init(const char *buf,
-           const ObIArray<int64_t> *column_ids,
            const ObTableLoadBackupColumnMap *column_map);
   void reset();
-  int get_next_row(ObNewRow &row);
+  void reuse();
+  int get_next_row(ObNewRow *&row);
 private:
+  int init_row();
+private:
+  ObArenaAllocator allocator_;
   ObTableLoadBackupRowReader reader_;
   const ObTableLoadBackupMicroBlockHeader_V_1_4 *header_; //微块头首地址
-  const ObIArray<int64_t> *column_ids_;
   const ObTableLoadBackupColumnMap *column_map_;
   const char *data_begin_;
   const int32_t *index_begin_;
+  common::ObNewRow row_;
   int32_t cur_idx_;
-  // 避免调用ObObj的构造函数
   bool is_inited_;
 };
 

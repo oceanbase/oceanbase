@@ -23,16 +23,51 @@ namespace table_load_backup_v_3_x
 using namespace blocksstable;
 
 /**
+ * ObSchemaColumnInfo
+ */
+ObSchemaColumnInfo::ObSchemaColumnInfo()
+  : partkey_idx_(-1),
+    is_partkey_(false)
+{
+}
+
+ObSchemaColumnInfo::ObSchemaColumnInfo(int64_t partkey_idx, bool is_partkey)
+  : partkey_idx_(partkey_idx),
+    is_partkey_(is_partkey)
+{
+}
+
+void ObSchemaColumnInfo::reset()
+{
+  partkey_idx_ = -1;
+  is_partkey_ = false;
+}
+
+int ObSchemaColumnInfo::assign(const ObSchemaColumnInfo &other)
+{
+  int ret = OB_SUCCESS;
+  partkey_idx_ = other.partkey_idx_;
+  is_partkey_ = other.is_partkey_;
+  return ret;
+}
+
+/**
  * ObSchemaInfo
  */
 ObSchemaInfo::ObSchemaInfo()
 {
   column_desc_.set_tenant_id(MTL_ID());
+  column_info_.set_tenant_id(MTL_ID());
+  partkey_count_ = 0;
+  is_heap_table_ = false;
 }
 
 void ObSchemaInfo::reset()
 {
   column_desc_.reset();
+  column_info_.reset();
+  partkey_count_ = 0;
+  is_heap_table_ = false;
 }
 
 int ObSchemaInfo::assign(const ObSchemaInfo &other)
@@ -40,6 +75,11 @@ int ObSchemaInfo::assign(const ObSchemaInfo &other)
   int ret = OB_SUCCESS;
   if (OB_FAIL(column_desc_.assign(other.column_desc_))) {
     LOG_WARN("fail to assign", KR(ret), K(other));
+  } else if (OB_FAIL(column_info_.assign(other.column_info_))) {
+    LOG_WARN("fail to assign", KR(ret), K(other));
+  } else {
+    partkey_count_ = other.partkey_count_;
+    is_heap_table_ = other.is_heap_table_;
   }
   return ret;
 }

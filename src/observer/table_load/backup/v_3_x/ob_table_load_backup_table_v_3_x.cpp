@@ -48,15 +48,14 @@ int ObTableLoadBackupTable_V_3_X::init(
     LOG_WARN("invalid args", KR(ret), KP(storage_info), K(path), KP(table_schema));
   } else if (OB_FAIL(storage_info_.assign(*storage_info))) {
     LOG_WARN("fail to assign", KR(ret));
-  } else if (OB_FAIL(table_schema->get_column_ids(schema_info_.column_desc_))) {
-    // 运维保证源表和目标表的column schema一致，column id不一定一致, 这一期不从备份获取源表的column schema，直接用目标表的column schema
-    LOG_WARN("fail to get columns ids", KR(ret));
   } else if (OB_FAIL(parse_path(path))) {
     LOG_WARN("fail to parse path", KR(ret), K(path));
   } else if (OB_FAIL(check_support_for_tenant())) {
     LOG_WARN("fail to check support for tenant", KR(ret));
   } else if (OB_FAIL(get_partitions())) {
     LOG_WARN("fail to get_partitions", KR(ret));
+  } else if (OB_FAIL(init_schema_info(table_schema))) {
+    LOG_WARN("fail to init schema info", KR(ret));
   } else {
     is_inited_ = true;
   }
@@ -244,6 +243,47 @@ int ObTableLoadBackupTable_V_3_X::get_partitions()
   } else {
      LOG_INFO("success to get partitions", K(part_list_));
   }
+  return ret;
+}
+
+int ObTableLoadBackupTable_V_3_X::init_schema_info(const ObTableSchema *table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(table_schema->get_column_ids(schema_info_.column_desc_))) {
+    // 运维保证源表和目标表的column schema一致，column id不一定一致, 这一期不从备份获取源表的column schema，直接用目标表的column schema
+    LOG_WARN("fail to get columns ids", KR(ret));
+  } else if (table_schema->is_heap_table()) {
+    schema_info_.is_heap_table_ = true;
+    const ObPartitionKeyInfo &part_key_info = table_schema->get_partition_key_info();
+    const ObPartitionKeyInfo &subpart_key_info = table_schema->get_subpartition_key_info();
+    ObArray<uint64_t> column_ids;
+    if (part_key_info.get_size() > 0) {
+      if (OB_FAIL(part_key_info.get_column_ids(column_ids))) {
+        LOG_WARN("fail to get partition columns ids", KR(ret));
+      } else if (subpart_key_info.get_size() > 0) {
+        if (OB_FAIL(subpart_key_info.get_column_ids(column_ids))) {
+          LOG_WARN("fail to get subpartition columns ids", KR(ret));
+        }
+      }
+    }
+    schema_info_.partkey_count_ = column_ids.count();
+    for (int64_t i = 0; OB_SUCC(ret) && i < schema_info_.column_desc_.count(); i++) {
+      ObSchemaColumnInfo column_info;
+      if (OB_FAIL(schema_info_.column_info_.push_back(column_info))) {
+        LOG_WARN("fail to push back", KR(ret));
+      } else {
+        bool has_match = false;
+        for (int64_t j = 0; !has_match && j < column_ids.count(); j++) {
+          if (schema_info_.column_desc_[i].col_id_ == column_ids[j]) {
+            has_match = true;
+            schema_info_.column_info_[i].partkey_idx_ = j;
+            schema_info_.column_info_[i].is_partkey_ = true;
+          }
+        }
+      }
+    }
+  }
+  LOG_INFO("init schema info", KR(ret), K(schema_info_));
   return ret;
 }
 

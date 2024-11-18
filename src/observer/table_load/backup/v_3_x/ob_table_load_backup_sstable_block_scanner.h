@@ -32,11 +32,16 @@ public:
   int get_next_row(common::ObNewRow *&row) override;
   bool is_lob_block() { return sstable_block_reader_.get_macro_block_common_header().is_lob_data_block(); }
 private:
+  int init_column_map_ids(const ObSchemaInfo &schema_info);
+  int init_row();
+  int adjust_column_idx(common::ObNewRow *&row);
   int switch_next_micro_block();
 private:
   ObArenaAllocator allocator_;
   ObTableLoadBackupSSTableBlockReader sstable_block_reader_;
   ObTableLoadBackupMicroBlockScanner micro_block_scanner_;
+  ObArray<int64_t> column_map_ids_;
+  common::ObNewRow row_;
   bool is_inited_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableLoadBackupSSTableBlockScanner);

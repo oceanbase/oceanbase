@@ -2008,7 +2008,6 @@ int ObLoadDataDirectImpl::BackupLoadExecutor::process_partition(int32_t session_
     ObNewRow *new_row = nullptr;
     bool is_iter_end = false;
     int64_t processed_line_count = 0;
-    const bool is_heap_table = direct_loader->get_table_ctx()->schema_.is_heap_table_;
     ObTableLoadSequenceNo sequence_no(
       (partition_idx << ObTableLoadSequenceNo::BACKUP_PARTITION_IDX_SHIFT) +
       (subpart_idx << ObTableLoadSequenceNo::BACKUP_SUBPART_IDX_SHIFT));
@@ -2048,8 +2047,8 @@ int ObLoadDataDirectImpl::BackupLoadExecutor::process_partition(int32_t session_
           //因此得把它们深拷贝一遍
           ObTableLoadObjRow tmp_obj_row;
           tmp_obj_row.seq_no_= sequence_no++;
-          tmp_obj_row.cells_ = (!is_heap_table ? new_row->cells_ : new_row->cells_ + backup_table_->get_hidden_pk_count());
-          tmp_obj_row.count_ = (!is_heap_table ? new_row->count_ : new_row->count_ - backup_table_->get_hidden_pk_count());
+          tmp_obj_row.cells_ = new_row->cells_;
+          tmp_obj_row.count_ = new_row->count_;
           ObTableLoadObjRow obj_row;
           if (OB_FAIL(obj_row.deep_copy(tmp_obj_row, allocator_handle))) {
             LOG_WARN("failed to deep copy add assign to tmp_obj_row", KR(ret));
