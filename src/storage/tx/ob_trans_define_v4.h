@@ -937,7 +937,9 @@ public:
 #endif
   };
   static void force_release(ObTxDesc &tx) {
-    ObTxDescAlloc::force_free(&tx);
+    if (tx.dec_ref(1) == 0) {
+      ObTxDescAlloc::force_free(&tx);
+    }
   }
   share::ObLightHashMap<ObTransID, ObTxDesc, ObTxDescAlloc, common::SpinRWLock, 1 << 16 /*bucket_num*/> map_;
   std::function<int(ObTransID&)> tx_id_allocator_;
