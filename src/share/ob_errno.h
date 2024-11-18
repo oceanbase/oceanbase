@@ -479,6 +479,7 @@ constexpr int OB_NOT_PRIMARY_TENANT = -4782;
 constexpr int OB_SERVICE_STOPPED = -4783;
 constexpr int OB_SERVER_CONNECTION_ERROR = -4784;
 constexpr int OB_ERR_ATLER_TABLE_ILLEGAL_FK_DROP_INDEX = -4785;
+constexpr int OB_ERR_FLASHBACK_QUERY_EXP_NULL = -4786;
 constexpr int OB_ERR_PARSER_INIT = -5000;
 constexpr int OB_ERR_PARSE_SQL = -5001;
 constexpr int OB_ERR_RESOLVE_SQL = -5002;
@@ -2543,6 +2544,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SERVICE_STOPPED__USER_ERROR_MSG "The service has stopped"
 #define OB_SERVER_CONNECTION_ERROR__USER_ERROR_MSG "Server '%s' connection error"
 #define OB_ERR_ATLER_TABLE_ILLEGAL_FK_DROP_INDEX__USER_ERROR_MSG "Cannot drop index '%.*s': needed in a foreign key constraint"
+#define OB_ERR_FLASHBACK_QUERY_EXP_NULL__USER_ERROR_MSG "NULL snapshot expression not allowed here"
 #define OB_ERR_PARSER_INIT__USER_ERROR_MSG "Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__USER_ERROR_MSG "%s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__USER_ERROR_MSG "Resolve error"
@@ -5509,6 +5511,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SERVER_CONNECTION_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4784, Server '%s' connection error"
 #define OB_ERR_ATLER_TABLE_ILLEGAL_FK_DROP_INDEX__ORA_USER_ERROR_MSG "ORA-02266: Cannot drop index '%.*s': needed in a foreign key constraint"
 #define OB_ERR_ATLER_TABLE_ILLEGAL_FK_DROP_INDEX__OBE_USER_ERROR_MSG "OBE-02266: Cannot drop index '%.*s': needed in a foreign key constraint"
+#define OB_ERR_FLASHBACK_QUERY_EXP_NULL__ORA_USER_ERROR_MSG "ORA-30055: NULL snapshot expression not allowed here"
+#define OB_ERR_FLASHBACK_QUERY_EXP_NULL__OBE_USER_ERROR_MSG "OBE-30055: NULL snapshot expression not allowed here"
 #define OB_ERR_PARSER_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5000, Failed to init SQL parser"
 #define OB_ERR_PARSER_INIT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -5000, Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__ORA_USER_ERROR_MSG "ORA-00900: %s near \'%.*s\' at line %d"
@@ -9114,7 +9118,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2381];
+extern int g_all_ob_errnos[2382];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
