@@ -884,6 +884,10 @@ typedef enum ObItemType
   T_FUNC_SYS_ELEMENT_AT = 1758,
   T_FUNC_SYS_ARRAY_CARDINALITY = 1759,
   T_FUNC_SYS_RB_BUILD = 1760,
+  T_FUNC_SYS_ARRAY_PREPEND = 1761,
+  T_FUNC_SYS_ARRAY_CONCAT = 1762,
+  T_FUNC_SYS_ARRAY_DIFFERENCE = 1763,
+  T_FUNC_SYS_ARRAY_FIRST = 1764,
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table
