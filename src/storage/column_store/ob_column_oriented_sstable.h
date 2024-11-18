@@ -108,6 +108,7 @@ enum ObCOMajorSSTableStatus: uint8_t {
   PURE_COL_ONLY_ALL = 4, // all cg only (schema do not have all cg)
   COL_REPLICA_MAJOR = 5, // temp status, row store major from F/R replica for column store replica
   DELAYED_TRANSFORM_MAJOR = 6, // row store sstable under column store schema
+  PURE_COL_WITH_ALL = 7, // rowkey cg + normal cg (schema have all cg)
   MAX_CO_MAJOR_SSTABLE_STATUS
 };
 /*

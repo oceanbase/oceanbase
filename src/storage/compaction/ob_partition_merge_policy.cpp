@@ -1836,6 +1836,7 @@ const char * ObCOMajorMergeTypeStr[] = {
   "BUILD_COLUMN_STORE_MERGE",
   "BUILD_ROW_STORE_MERGE",
   "USE_RS_BUILD_SCHEMA_MATCH_MERGE",
+  "BUILD_REDUNDANT_ROW_STORE_MERGE",
 };
 
 const char* ObCOMajorMergePolicy::co_major_merge_type_to_str(const ObCOMajorMergeType co_merge_type)
