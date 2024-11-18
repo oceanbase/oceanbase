@@ -172,8 +172,14 @@ int ObExprUDF::check_types(const ObExpr &expr, const ObExprUDFInfo &info)
     if (!expr.args_[i]->obj_meta_.is_null()
         && (!info.params_desc_.at(i).is_out())) {
       if (expr.args_[i]->obj_meta_.get_type() != info.params_type_.at(i).get_type()) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("check param type failed", K(ret), K(i));
+        if (info.params_type_.at(i).is_enum_or_set() &&
+            ObVarcharType == expr.args_[i]->obj_meta_.get_type() &&
+            lib::is_mysql_mode()) {
+          // do nothing ...
+        } else {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("check param type failed", K(ret), K(i));
+        }
       }
     }
   }
