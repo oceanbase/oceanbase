@@ -62,6 +62,7 @@ WAIT_EVENT_DEF(MT_READ_LOCK_WAIT,14001,"memstore read lock wait","lock","waiter"
 WAIT_EVENT_DEF(MT_WRITE_LOCK_WAIT,14002,"memstore write lock wait","lock","waiter","owner",APPLICATION,false, false)
 WAIT_EVENT_DEF(ROW_LOCK_WAIT,14003,"row lock wait","lock holder's tx id","data seq number","hold time",APPLICATION,false, false)
 WAIT_EVENT_DEF(ROW_LOCK_RETRY, 14004, "retry wait because of row lock wait", "lock holder's tx id","data seq number","hold time", APPLICATION, false , false)
+WAIT_EVENT_DEF(EXPR_FUNC_SLEEP, 14005, "sleep: wait for user calls", "sleep_interval", "", "", APPLICATION, true, true)
 
 // CONCURRENCY
 // condition wait has one parameter e.g. address of the condition variable
@@ -125,6 +126,7 @@ WAIT_EVENT_DEF(BACKUP_TMP_FILE_WAIT, 18001, "backup tmp file wait", "", "", "", 
 WAIT_EVENT_DEF(BACKUP_TMP_FILE_QUEUE_WAIT, 18002, "backup tmp file queue wait", "", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(SYNC_GET_GTS_WAIT, 18101, "sync get gts timestamp wait", "address", "", "", NETWORK, true, true)
 
+//sleep
 WAIT_EVENT_DEF(BANDWIDTH_THROTTLE_SLEEP, 20000, "sleep: bandwidth throttle sleep wait", "sleep_interval", "", "", NETWORK, true, true)
 WAIT_EVENT_DEF(DTL_PROCESS_CHANNEL_SLEEP, 20001, "sleep: dtl process channel sleep wait", "sleep_interval", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(DTL_DESTROY_CHANNEL_SLEEP, 20002, "sleep: dtl destroy channel sleep wait", "sleep_interval", "", "", CONCURRENCY, true, true)
@@ -132,11 +134,18 @@ WAIT_EVENT_DEF(STORAGE_WRITING_THROTTLE_SLEEP, 20003, "sleep: storage writing th
 WAIT_EVENT_DEF(STORAGE_AUTOINC_FETCH_RETRY_SLEEP, 20004, "sleep: tablet autoinc fetch new range retry wait", "sleep_interval", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(STORAGE_AUTOINC_FETCH_CONFLICT_SLEEP, 20005, "sleep: tablet autoinc fetch new range conflict wait", "sleep_interval", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(STORAGE_HA_FINISH_TRANSFER, 20006, "sleep: finish transfer sleep wait", "sleep_interval", "", "", CONCURRENCY, true, true)
+
+// logsergice
 WAIT_EVENT_DEF(LOG_EXTERNAL_STORAGE_IO_TASK_WAIT, 20007, "latch: log external storage io task wait", "", "", "", SYSTEM_IO, true, true)
 WAIT_EVENT_DEF(LOG_EXTERNAL_STORAGE_HANDLER_RW_WAIT, 20008, "latch: log external storage handler rw wait", "", "", "", CONCURRENCY, true, false)
 WAIT_EVENT_DEF(LOG_EXTERNAL_STORAGE_HANDLER_WAIT, 20009, "latch: log external storage handler spin wait", "", "", "", CONCURRENCY, true, false)
 WAIT_EVENT_DEF(DH_LOCAL_SYNC_COND_WAIT, 20010, "datahub local sync conditional wait", "address", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(TRANSFER_HANDLER_COND_WAIT, 20011, "transfer handler condition wait", "address", "", "", CONCURRENCY, true, true)
+
+//sleep part-2
+//For rate limiting periodic tasks.
+//It involves intentionally adding a sleep interval during task retries or periodic execution to prevent the task from running too frequently.
+WAIT_EVENT_DEF(TASK_THROTTLE_SLEEP, 20200, "sleep: periodic task throttle wait", "sleep_interval", "task errcode", "", CONCURRENCY, true, true)
 
 // share storage 21001-21999
 WAIT_EVENT_DEF(ZONE_STORAGE_MANAGER_LOCK_WAIT, 21001, "latch: zone storage manager maintaince lock wait", "address", "number", "tries", CONCURRENCY, true, false)
