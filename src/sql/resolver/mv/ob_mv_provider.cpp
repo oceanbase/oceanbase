@@ -107,7 +107,7 @@ int ObMVProvider::init_mv_provider(const share::SCN &last_refresh_scn,
         LOG_WARN("failed to collect dep infos", K(ret));
       } else if (OB_FAIL(dependency_infos_.assign(dependency_infos))) {
         LOG_WARN("failed to assign fixed array", K(ret));
-      } else if (OB_FAIL(check_mv_column_type(mv_schema, view_stmt))) {
+      } else if (OB_FAIL(check_mv_column_type(mv_schema, view_stmt, *session_info))) {
         if (OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH == ret) {
           inited_ = true;
           refreshable_type_ = OB_MV_REFRESH_INVALID;
@@ -215,7 +215,8 @@ int ObMVProvider::get_mv_dependency_infos(ObIArray<ObDependencyInfo> &dep_infos)
 // if the result type from mv_schema and view_stmt is different, no refresh method is allowed
 // get new column info same as ObCreateViewResolver::add_column_infos
 int ObMVProvider::check_mv_column_type(const ObTableSchema *mv_schema,
-                                       const ObSelectStmt *view_stmt)
+                                       const ObSelectStmt *view_stmt,
+                                       ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(mv_schema) || OB_ISNULL(view_stmt)) {
@@ -236,6 +237,7 @@ int ObMVProvider::check_mv_column_type(const ObTableSchema *mv_schema,
       } else if (OB_FAIL(ObCreateViewResolver::fill_column_meta_infos(*select_items.at(i).expr_,
                                                                       mv_schema->get_charset_type(),
                                                                       mv_schema->get_table_id(),
+                                                                      session,
                                                                       cur_column))) {
         LOG_WARN("failed to fill column meta infos", K(ret), K(cur_column));
       } else if (OB_FAIL(check_mv_column_type(*org_column, cur_column))) {

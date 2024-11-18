@@ -260,7 +260,7 @@ int ObDefaultValueUtils::resolve_default_expr(const ColumnItem &column_item, ObR
       LOG_WARN("params_.session_info_ is null", K(ret));
     } else {
       default_func_expr->set_func_name(ObString::make_string(N_DEFAULT));
-      default_func_expr->set_data_type(column_item.get_column_type()->get_type());
+      default_func_expr->set_result_type(*column_item.get_column_type());
       if (OB_FAIL(build_type_expr(&column_item, c_expr))) {
         LOG_WARN("fail to build type expr", K(ret));
       } else if (OB_FAIL(default_func_expr->add_param_expr(c_expr))) {

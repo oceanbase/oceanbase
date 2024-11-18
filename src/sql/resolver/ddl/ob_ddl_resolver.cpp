@@ -7470,6 +7470,30 @@ int ObDDLResolver::adjust_number_decimal_column_accuracy_within_max(share::schem
   return ret;
 }
 
+int ObDDLResolver::adjust_enum_set_column_meta_info(const ObRawExpr &expr,
+                                                    sql::ObSQLSessionInfo &session_info,
+                                                    share::schema::ObColumnSchemaV2 &column)
+{
+  int ret = OB_SUCCESS;
+  if (column.is_enum_or_set()) {
+    const ObEnumSetMeta *enum_set_meta = nullptr;
+    if (expr.is_enum_set_with_subschema()) {
+      if (OB_FAIL(ObRawExprUtils::extract_enum_set_meta(expr.get_result_type(),
+                                                        &session_info,
+                                                        enum_set_meta))) {
+        LOG_WARN("fail to extract enum set meta", K(ret), K(expr));
+      } else {
+        column.set_meta_type(enum_set_meta->get_obj_meta());
+        column.set_data_scale(-1);
+        OZ(column.set_extended_type_info(*enum_set_meta->get_str_values()), expr);
+      }
+    } else {
+      OZ(column.set_extended_type_info(expr.get_enum_set_values()), expr);
+    }
+  }
+  return ret;
+}
+
 int ObDDLResolver::resolve_range_partition_elements(ParseNode *node,
                                                     const bool is_subpartition,
                                                     const ObPartitionFuncType part_type,

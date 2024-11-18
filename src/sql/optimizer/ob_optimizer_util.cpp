@@ -1889,7 +1889,8 @@ int ObOptimizerUtil::generate_rowkey_exprs(const ObDMLStmt *stmt,
                                            table_id,
                                            *table_schema,
                                            keys,
-                                           ordering))) {
+                                           ordering,
+                                           opt_ctx.get_session_info()))) {
     LOG_WARN("failed to get rowkeys raw expr", K(table_id), K(ref_table_id), K(ret));
   } else { /*do nothing*/ }
 
@@ -1901,7 +1902,8 @@ int ObOptimizerUtil::generate_rowkey_exprs(const ObDMLStmt* cstmt,
                                            uint64_t table_id,
                                            const ObTableSchema &index_table_schema,
                                            ObIArray<ObRawExpr*> &index_keys,
-                                           ObIArray<ObRawExpr*> &index_ordering)
+                                           ObIArray<ObRawExpr*> &index_ordering,
+                                           ObSQLSessionInfo *session)
 {
   int ret = OB_SUCCESS;
   ObDMLStmt *stmt = const_cast<ObDMLStmt *>(cstmt);
@@ -1927,7 +1929,8 @@ int ObOptimizerUtil::generate_rowkey_exprs(const ObDMLStmt* cstmt,
         //or other opt need to use different indexes in one logical plan, remember this problem.
         if (NULL != (raw_expr = stmt->get_column_expr_by_id(table_id, column_id))) {
           expr = static_cast<ObColumnRefRawExpr*>(raw_expr);
-        } else if (OB_FAIL(generate_rowkey_expr(stmt, expr_factory, table_id, *column_schema, expr))) {
+        } else if (OB_FAIL(generate_rowkey_expr(stmt, expr_factory, table_id, *column_schema, expr,
+                                                session))) {
           LOG_WARN("failed to get row key expr", K(ret));
         } else { /*do nothing*/ }
 
@@ -7004,7 +7007,8 @@ int ObOptimizerUtil::add_cast_to_set_list(ObSQLSessionInfo *session_info,
         || OB_ISNULL(src_expr = stmt->get_select_item(idx).expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected stmt", K(ret), K(stmts.at(i)));
-    } else if (ob_is_enumset_tc(src_expr->get_result_type().get_type())) {
+    } else if (ob_is_enumset_tc(src_expr->get_result_type().get_type())
+        && !src_expr->is_enum_set_with_subschema()) {
       ObSysFunRawExpr *to_str_expr = NULL;
       if (src_expr->get_result_type() == res_type) {
         /*do nothing*/
@@ -8623,6 +8627,7 @@ int ObOptimizerUtil::generate_rowkey_expr(ObDMLStmt *stmt,
                                           const uint64_t &table_id,
                                           const ObColumnSchemaV2 &column_schema,
                                           ObColumnRefRawExpr *&rowkey,
+                                          ObSQLSessionInfo *session,
                                           ObIArray<ColumnItem> *column_items)
 {
   int ret = OB_SUCCESS;
@@ -8655,7 +8660,7 @@ int ObOptimizerUtil::generate_rowkey_expr(ObDMLStmt *stmt,
       LOG_WARN("add column item to stmt failed", K(ret));
     } else if (FALSE_IT(rowkey->clear_explicited_referece())) {
       /*do nothing*/
-    } else if (OB_FAIL(rowkey->formalize(NULL))) {
+    } else if (OB_FAIL(rowkey->formalize(session))) {
       LOG_WARN("formalize rowkey failed", K(ret));
     } else if (OB_FAIL(rowkey->pull_relation_id())) {
       LOG_WARN("failed to pullup relation ids", K(ret));

@@ -11425,6 +11425,9 @@ int ObJoinOrder::create_and_add_hash_path(const Path *left_path,
       LOG_WARN("failed to create subplan filter for join path", K(ret));
     } else if (OB_FAIL(add_path(join_path))) {
       LOG_WARN("failed to add path", K(ret));
+    } else if (CONNECT_BY_JOIN == join_type &&
+               OB_FAIL(push_down_order_siblings(join_path, right_path))) {
+      LOG_WARN("push down order siblings by condition failed", K(ret));
     } else {
       LOG_TRACE("succeed to create a hash join path", K(join_type),
           K(join_dist_algo), K(equal_join_conditions), K(other_join_conditions));
@@ -12768,7 +12771,7 @@ int ObJoinOrder::get_valid_path_info(const ObJoinOrder &left_tree,
     const bool both_access = ACCESS == left_tree.get_type() && ACCESS == right_tree.get_type();
     const bool contain_fake_cte = left_paths.at(0)->contain_fake_cte() || right_paths.at(0)->contain_fake_cte();
     if (CONNECT_BY_JOIN == path_info.join_type_) {
-      path_info.local_methods_ = NESTED_LOOP_JOIN;
+      path_info.local_methods_ = NESTED_LOOP_JOIN | HASH_JOIN;
       path_info.distributed_methods_ = DIST_PULL_TO_LOCAL | DIST_BASIC_METHOD;
       OPT_TRACE("connect by will use nl join");
       OPT_TRACE("connect by will use pull to local / basic method");

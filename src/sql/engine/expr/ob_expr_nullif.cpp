@@ -89,12 +89,12 @@ int ObExprNullif::se_deduce_type(ObExprResType &type,
   OZ(calc_cmp_type2(cmp_type, type1, type2, type_ctx));
   if (OB_SUCC(ret)) {
     if (ob_is_enumset_tc(type1.get_type()) || ob_is_enumset_tc(type2.get_type())) {
-      ObObjType calc_type = enumset_calc_types_[OBJ_TYPE_TO_CLASS[cmp_type.get_calc_type()]];
+      ObObjType calc_type = get_enumset_calc_type(cmp_type.get_calc_type(), -1);
       CK(ObMaxType != calc_type);
       if (OB_SUCC(ret)) {
         cmp_type.set_calc_type(calc_type);
         cmp_type.set_calc_collation_type(ObCharset::get_system_collation());
-        if (ObVarcharType == calc_type) {
+        if (ob_is_string_type(calc_type)) {
           if (ob_is_enumset_tc(type1.get_type())) {
             // only set calc type when calc_type is varchar.
             // EnumWrapper will add EnumToStr when calc_type is varchar, and otherwise add EnumToInner.
@@ -108,7 +108,7 @@ int ObExprNullif::se_deduce_type(ObExprResType &type,
         if (type1.is_decimal_int()) {
           type1.set_calc_type(calc_type);
         }
-        // set calc type for type2 no matter whether calc_type is varchar or not, and no matther which param is enum.
+        // set calc type for type2 no matter whether calc_type is varchar or not, and no matter which param is enum.
         type2.set_calc_type(calc_type);
         type2.set_calc_collation_type(cmp_type.get_calc_collation_type());
         type2.set_calc_collation_level(cmp_type.get_calc_collation_level());

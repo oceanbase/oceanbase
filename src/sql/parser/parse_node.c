@@ -19,6 +19,7 @@
 #include "sql/parser/parse_node_hash.h"
 #include "sql/parser/parse_define.h"
 #include "sql/parser/sql_parser_base.h"
+#include "sql/executor/ob_memory_tracker_wrapper.h"
 extern const char *get_type_name(int type);
 
 #ifdef SQL_PARSER_COMPILATION
@@ -173,30 +174,40 @@ int deep_copy_parse_node(void *malloc_pool, const ParseNode *src_node, ParseNode
   return ret;
 }
 
+int __attribute__((weak)) check_mem_status() { return OB_PARSER_SUCCESS; }
+int __attribute__((weak)) try_check_mem_status(int64_t check_try_times) { return OB_PARSER_SUCCESS; }
+
 ParseNode *new_node(void *malloc_pool, ObItemType type, int num)
 {
+  int ret = OB_PARSER_SUCCESS;
+  const int64_t check_try_times = 1024;
+  ParseNode *node = NULL;
   // the mem alloced by parse_malloc has been memset;
-  ParseNode *node = (ParseNode *)parse_malloc(sizeof(ParseNode), malloc_pool);
-  if (OB_UNLIKELY(NULL == node)) {
-    (void)printf("malloc memory failed\n");
+  if (OB_UNLIKELY((OB_PARSER_SUCCESS != (ret = try_check_mem_status(check_try_times))))) {
+    (void)printf("Exceeded memory usage limit\n");
   } else {
-    node->type_ = type;
-    node->num_child_ = num;
-    node->value_ = INT64_MAX;
-    node->pl_str_off_ = -1;
-#ifdef SQL_PARSER_COMPILATION
-    node->token_off_ = -1;
-    node->token_len_ = -1;
-#endif
-    if (num > 0) {
-      int64_t alloc_size = sizeof(ParseNode *) * num ;
-      node->children_ = (ParseNode **)parse_malloc(alloc_size, malloc_pool);
-      if (OB_UNLIKELY(NULL == node->children_)) {
-        parse_free(node);
-        node = NULL;
-      }
+    node = (ParseNode *)parse_malloc(sizeof(ParseNode), malloc_pool);
+    if (OB_UNLIKELY(NULL == node)) {
+      (void)printf("malloc memory failed\n");
     } else {
-      node->children_ = NULL;
+      node->type_ = type;
+      node->num_child_ = num;
+      node->value_ = INT64_MAX;
+      node->pl_str_off_ = -1;
+  #ifdef SQL_PARSER_COMPILATION
+      node->token_off_ = -1;
+      node->token_len_ = -1;
+  #endif
+      if (num > 0) {
+        int64_t alloc_size = sizeof(ParseNode *) * num ;
+        node->children_ = (ParseNode **)parse_malloc(alloc_size, malloc_pool);
+        if (OB_UNLIKELY(NULL == node->children_)) {
+          parse_free(node);
+          node = NULL;
+        }
+      } else {
+        node->children_ = NULL;
+      }
     }
   }
   return node;

@@ -245,6 +245,7 @@ protected:
 	// this will not affect any correctness issues, and will make the code look better
 	static const int64_t PARSER_NODE_SIZE = sizeof(ParseNode);
 	static const int64_t FIEXED_PARAM_NODE_SIZE = PARSER_NODE_SIZE + sizeof(ParamList);
+	static const int64_t CHECK_STATUS_TRY_TIMES = 512;
 
 protected:
 	/**
@@ -644,6 +645,7 @@ protected:
   bool is_invalid_character(ObRawSql &raw_sql, int64_t pos, int64_t& skip_len);
   int extend_alloc_sql_buffer();
 	int process_format_token();
+	int try_check_status();
 protected:
   enum FoundInsertTokenStatus
   {
@@ -665,6 +667,7 @@ protected:
 	char *tmp_buf_;
 	int64_t tmp_buf_len_;
 	int64_t last_escape_check_pos_;
+	uint64_t try_check_tick_;
 public:
   ParamList *param_node_list_;
 	ParamList *tail_param_node_;

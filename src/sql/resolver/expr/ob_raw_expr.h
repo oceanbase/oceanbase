@@ -44,6 +44,7 @@
 #include "sql/engine/expr/ob_expr_join_filter.h"
 #include "sql/engine/expr/ob_expr_calc_partition_id.h"
 #include "sql/resolver/dml/ob_raw_expr_sets.h"
+#include "sql/executor/ob_memory_tracker.h"
 namespace oceanbase
 {
 namespace share
@@ -4961,11 +4962,13 @@ private:
 class ObRawExprFactory
 {
 public:
+  const static uint64_t CHECK_STATUS_TRY_TIMES = 1024;
   explicit ObRawExprFactory(common::ObIAllocator &alloc)
     : allocator_(alloc),
       expr_store_(alloc),
       is_called_sql_(true),
-      proxy_(nullptr)
+      proxy_(nullptr),
+      try_check_tick_(0)
   {
   }
   ObRawExprFactory(ObRawExprFactory &expr_factory) : allocator_(expr_factory.allocator_),
@@ -5030,10 +5033,23 @@ public:
     return ret;
   }
 
+  inline int try_check_status()
+  {
+    return ((++try_check_tick_) % CHECK_STATUS_TRY_TIMES == 0)
+        ? CHECK_MEM_STATUS()
+        : common::OB_SUCCESS;
+  }
+
   template <typename ExprType>
   int create_raw_expr(ObItemType expr_type, ExprType *&raw_expr)
   {
-    return create_raw_expr_inner(expr_type, raw_expr);
+    int ret = common::OB_SUCCESS;
+    if (OB_FAIL(try_check_status())) {
+      SQL_RESV_LOG(WARN, "Exceeded memory usage limit", K(ret));
+    } else if (OB_FAIL(create_raw_expr_inner(expr_type, raw_expr))) {
+      SQL_RESV_LOG(WARN, "failed to create raw expr", K(ret));
+    }
+    return ret;
   }
 
 
@@ -5062,6 +5078,7 @@ private:
   bool is_called_sql_;
   //if not null, raw_expr is create by pl resolver
   ObRawExprFactory *proxy_;
+  int64_t try_check_tick_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRawExprFactory);
 };

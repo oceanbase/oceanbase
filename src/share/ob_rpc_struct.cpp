@@ -12530,6 +12530,28 @@ int ObTTLResponseArg::assign(const ObTTLResponseArg &other)
   return ret;
 }
 
+OB_SERIALIZE_MEMBER(ObSeqCleanCacheRes, inited_, with_prefetch_node_, cache_node_, prefetch_node_);
+
+ObSeqCleanCacheRes::ObSeqCleanCacheRes()
+    : inited_(false), with_prefetch_node_(false), cache_node_(), prefetch_node_()
+{
+}
+
+int ObSeqCleanCacheRes::assign(const ObSeqCleanCacheRes &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else if (OB_FAIL(cache_node_.assign(other.cache_node_))) {
+    LOG_WARN("fail to assign cache node", K(ret));
+  } else if (OB_FAIL(prefetch_node_.assign(other.prefetch_node_))) {
+    LOG_WARN("fail to assign prefetch node", K(ret));
+  } else {
+    inited_ = other.inited_;
+    with_prefetch_node_ = other.with_prefetch_node_;
+  }
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER(ObTTLRequestArg, cmd_code_, trigger_type_, task_id_, tenant_id_);
 
 int ObTTLRequestArg::assign(const ObTTLRequestArg &other)

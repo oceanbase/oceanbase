@@ -188,6 +188,7 @@ struct ObOptParamHint
     DEF(PARTITION_INDEX_DIVE_LIMIT,)                \
     DEF(OB_TABLE_ACCESS_POLICY,)                    \
     DEF(PARTITION_WISE_PLAN_ENABLED,)               \
+    DEF(ENABLE_ENUM_SET_SUBSCHEMA,)       \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 

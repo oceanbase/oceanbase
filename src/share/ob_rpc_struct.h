@@ -92,6 +92,7 @@
 #endif
 #include "storage/tablelock/ob_table_lock_common.h"       //ObTableLockPriority
 #include "storage/mview/ob_major_mv_merge_info.h"       //ObMajorMVMergeInfo
+#include "share/sequence/ob_sequence_cache.h" // ObSeqCleanCacheRes
 
 namespace oceanbase
 {
@@ -12773,6 +12774,22 @@ public:
   uint8_t task_status_;
   int err_code_;
 };
+
+struct ObSeqCleanCacheRes final {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObSeqCleanCacheRes();
+  int assign(const ObSeqCleanCacheRes &other);
+  TO_STRING_KV(K_(inited), K_(with_prefetch_node), K_(cache_node), K_(prefetch_node));
+
+public:
+  bool inited_;
+  bool with_prefetch_node_;
+  share::SequenceCacheNode cache_node_;
+  share::SequenceCacheNode prefetch_node_;
+};
+
 struct ObAdminUnlockMemberListOpArg final
 {
   OB_UNIS_VERSION(1);

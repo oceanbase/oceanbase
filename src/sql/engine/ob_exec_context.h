@@ -514,6 +514,11 @@ public:
                                                const ObDataType &elem_type,
                                                uint16_t &subschema_id);
   int get_subschema_id_by_type_string(const ObString &type_string, uint16_t &subschema_id);
+  int get_enumset_meta_by_subschema_id(uint16_t subschema_id, const ObEnumSetMeta *&meta) const;
+  bool support_enum_set_type_subschema(ObSQLSessionInfo &session);
+  int get_subschema_id_by_type_info(const ObObjMeta &obj_meta,
+                                    const ObIArray<common::ObString> &type_info,
+                                    uint16_t &subschema_id);
   ObExecFeedbackInfo &get_feedback_info() { return fb_info_; };
   inline void set_cur_rownum(int64_t cur_rownum) { user_logging_ctx_.row_num_ = cur_rownum; }
   inline int64_t get_cur_rownum() const { return user_logging_ctx_.row_num_; }

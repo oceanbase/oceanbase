@@ -411,7 +411,8 @@ public:
                                    uint64_t table_id,
                                    const share::schema::ObTableSchema &index_table_schema,
                                    common::ObIArray<ObRawExpr*> &index_keys,
-                                   common::ObIArray<ObRawExpr*> &index_ordering);
+                                   common::ObIArray<ObRawExpr*> &index_ordering,
+                                   ObSQLSessionInfo *session);
 
   static int build_range_columns(const ObDMLStmt *stmt,
                                  common::ObIArray<ObRawExpr*> &rowkeys,
@@ -1425,6 +1426,7 @@ public:
                                   const uint64_t &table_id,
                                   const share::schema::ObColumnSchemaV2 &column_schema,
                                   ObColumnRefRawExpr *&rowkey,
+                                  ObSQLSessionInfo *session,
                                   common::ObIArray<ColumnItem> *column_items = NULL);
 
   static int check_contain_ora_rowscn_expr(const ObRawExpr *expr, bool &contains);

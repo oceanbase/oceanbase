@@ -65,7 +65,8 @@ public:
                                           const bool gen_error,
                                           bool &is_vars_matched);
 private:
-  int check_mv_column_type(const ObTableSchema *mv_schema, const ObSelectStmt *view_stmt);
+  int check_mv_column_type(const ObTableSchema *mv_schema, const ObSelectStmt *view_stmt,
+                           ObSQLSessionInfo &session);
   int check_mv_column_type(const ObColumnSchemaV2 &org_column, const ObColumnSchemaV2 &cur_column);
   int check_column_type_and_accuracy(const ObColumnSchemaV2 &org_column,
                                      const ObColumnSchemaV2 &cur_column,

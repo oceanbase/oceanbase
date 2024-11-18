@@ -62,18 +62,22 @@ int ObExprCoalesce::calc_result_typeN(ObExprResType &type,
       LOG_WARN("cast basic session to sql session info failed", K(ret));
     } else {
       ObExprOperator::calc_result_flagN(type, types, param_num);
-      ObObjType calc_type = enumset_calc_types_[OBJ_TYPE_TO_CLASS[type.get_type()]];
       bool is_expr_integer_type = (ob_is_int_tc(type.get_type()) ||
                              ob_is_uint_tc(type.get_type()));
       bool all_null_type = true;
       for (int64_t i = 0; OB_SUCC(ret) && i < param_num; ++i) {
         all_null_type = (types[i].get_type() != ObNullType) ? false : all_null_type;
         if (ob_is_enumset_tc(types[i].get_type())) {
+          ObObjType calc_type = get_enumset_calc_type(type.get_type(), i);
           if (OB_UNLIKELY(ObMaxType == calc_type)) {
             ret = OB_ERR_UNEXPECTED;
             SQL_ENG_LOG(WARN, "invalid type of parameter ", K(i), K(ret));
           } else {
             types[i].set_calc_type(calc_type);
+            if (ob_is_string_type(calc_type)) {
+              types[i].set_calc_collation_type(type.get_collation_type());
+              types[i].set_calc_collation_level(CS_LEVEL_IMPLICIT);
+            }
           }
         } else {
           bool is_arg_integer_type = (ob_is_int_tc(types[i].get_type()) ||

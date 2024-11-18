@@ -28,6 +28,7 @@
 #include "lib/json/ob_json_print_utils.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/printer/ob_select_stmt_printer.h"
+#include "sql/executor/ob_memory_tracker.h"
 namespace oceanbase
 {
 namespace sql
@@ -306,11 +307,14 @@ int ObTransformRule::accept_transform(common::ObIArray<ObParentDMLStmt> &parent_
   ObDMLStmt *top_stmt = parent_stmts.empty() ? stmt : parent_stmts.at(0).stmt_;
   bool is_expected = false;
   bool is_original_expected = false;
+  const int64_t check_try_times = 32;
   ObDMLStmt *tmp1 = NULL;
   ObDMLStmt *tmp2 = NULL;
   cost_based_trans_tried_ = true;
   BEGIN_OPT_TRACE_EVA_COST;
-  if (OB_ISNULL(ctx_) || OB_ISNULL(stmt) || OB_ISNULL(trans_stmt) || OB_ISNULL(top_stmt)) {
+  if (OB_UNLIKELY((OB_SUCCESS != (ret = TRY_CHECK_MEM_STATUS(check_try_times))))) {
+    LOG_WARN("Exceeded memory usage limit", K(ret));
+  } else if (OB_ISNULL(ctx_) || OB_ISNULL(stmt) || OB_ISNULL(trans_stmt) || OB_ISNULL(top_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("context is null", K(ret), K(ctx_), K(stmt), K(trans_stmt), K(top_stmt));
   } else if (force_accept) {

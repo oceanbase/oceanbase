@@ -17,11 +17,58 @@
 #include "share/schema/ob_schema_struct.h"
 #include "lib/worker.h"
 #include "share/ob_errno.h"
+#include "share/ob_rpc_struct.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::number;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
+
+OB_DEF_SERIALIZE(SequenceCacheNode)
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_ENCODE(start_);
+  OB_UNIS_ENCODE(end_);
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(SequenceCacheNode)
+{
+  int ret = OB_SUCCESS;
+  share::ObSequenceValue start;
+  share::ObSequenceValue end;
+  OB_UNIS_DECODE(start);
+  OB_UNIS_DECODE(end);
+  // deep copy is needed to ensure that the memory of start and end will not be reclaimed
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(start_.assign(start))) {
+    LOG_WARN("fail to assign start", K(ret));
+  } else if (OB_FAIL(end_.assign(end))) {
+    LOG_WARN("fail to assign end", K(ret));
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(SequenceCacheNode)
+{
+  int64_t len = 0;
+  OB_UNIS_ADD_LEN(start_);
+  OB_UNIS_ADD_LEN(end_);
+  return len;
+}
+
+int SequenceCacheNode::assign(const SequenceCacheNode &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else if (OB_FAIL(start_.assign(other.start_))) {
+    LOG_WARN("fail to assign start", K(ret));
+  } else if (OB_FAIL(end_.assign(other.end_))) {
+    LOG_WARN("fail to assign end", K(ret));
+  }
+  return ret;
+}
+
 
 ObSequenceCache::ObSequenceCache()
   : inited_(false),
@@ -260,8 +307,10 @@ int ObSequenceCache::refill_sequence_cache(const ObSequenceSchema &schema,
     need_refetch = false;
     if (OB_FAIL(dml_proxy_.next_batch(schema.get_tenant_id(),
                                       schema.get_sequence_id(),
+                                      schema.get_schema_version(),
                                       schema.get_sequence_option(),
-                                      next_range))) {
+                                      next_range,
+                                      cache))) {
       LOG_WARN("fail get next sequence batch", K(schema), K(ret));
     } else {
       // 判断是否需要重取，确保取得的值够一次 increment
@@ -324,13 +373,16 @@ int ObSequenceCache::refill_sequence_cache(const ObSequenceSchema &schema,
 
 
 int ObSequenceCache::prefetch_sequence_cache(const ObSequenceSchema &schema,
-                                             ObSequenceCacheItem &cache)
+                                             ObSequenceCacheItem &cache,
+                                             ObSequenceCacheItem &old_cache)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(dml_proxy_.prefetch_next_batch(schema.get_tenant_id(),
                                              schema.get_sequence_id(),
+                                             schema.get_schema_version(),
                                              schema.get_sequence_option(),
-                                             cache.prefetch_node_))) {
+                                             cache.prefetch_node_,
+                                             old_cache))) {
     LOG_WARN("fail get next sequence batch", K(schema), K(ret));
   } else {
     cache.last_refresh_ts_ = ObTimeUtility::current_time();
@@ -362,25 +414,43 @@ int ObSequenceCache::get_item(CacheItemKey &key, ObSequenceCacheItem *&item)
   return ret;
 }
 
-int ObSequenceCache::del_item(CacheItemKey &key)
+int ObSequenceCache::del_item(uint64_t tenant_id, CacheItemKey &key, obrpc::ObSeqCleanCacheRes &cache_res)
 {
   int ret = OB_SUCCESS;
 
-  // LOG_INFO("XXXX: del item", K(key));
-  // auto func = [&] (CacheItemKey &mykey, ObSequenceCacheItem *value) {
-  //   LOG_INFO("XXXX: list items in cache", K(mykey), K(*value));
-  //   return true;
-  // };
-  // sequence_cache_.map(func);
-
   if (OB_ENTRY_EXIST == (ret = sequence_cache_.contains_key(key))) {
     lib::ObMutexGuard guard(cache_mutex_); // 加锁再次确认，避免并发加入新节点
-    if (OB_ENTRY_EXIST == (ret = sequence_cache_.contains_key(key))) {
-      if (OB_FAIL(sequence_cache_.del(key))) {
-        LOG_WARN("del sequence cache failed", K(ret));
+    ObSequenceCacheItem *item = nullptr;
+    uint64_t compat_version = 0;
+    if (OB_FAIL(sequence_cache_.get(key, item))) {
+      // no cache, do nothing
+    } else if (OB_FAIL(sequence_cache_.del(key))) {
+      LOG_WARN("del sequence cache failed", K(ret));
+    } else if (FAILEDx(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+      LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+    } else if ((compat_version >= MOCK_DATA_VERSION_4_2_5_0
+                && compat_version < DATA_VERSION_4_3_0_0)
+               || compat_version >= DATA_VERSION_4_3_5_0) {
+      lib::ObMutexGuard guard(item->alloc_mutex_);
+      if (OB_FAIL(ret) || item->last_refresh_ts_ <= SequenceCacheStatus::INITED) {
+        // do nothing
+      } else if (OB_FAIL(cache_res.cache_node_.set_start(item->last_number()))) {
+        LOG_WARN("fail to set cache value", K(ret));
+      } else if (OB_FAIL(cache_res.cache_node_.set_end(item->curr_node_.end()))) {
+        LOG_WARN("fail to set cache end", K(ret));
+      } else if (item->with_prefetch_node_
+                  && OB_FAIL(cache_res.prefetch_node_.assign(item->prefetch_node_))) {
+        LOG_WARN("fail to assign prefetch node", K(ret));
+      } else {
+        item->last_refresh_ts_ = SequenceCacheStatus::DELETED;
+        cache_res.inited_ = true;
+        cache_res.with_prefetch_node_ = item->with_prefetch_node_;
       }
     } else {
       LOG_INFO("fail check if key in cache", K(ret), K(key));
+    }
+    if (nullptr != item) {
+      sequence_cache_.revert(item);
     }
   }
   return (ret == OB_ENTRY_NOT_EXIST) ? OB_SUCCESS : ret;
@@ -409,98 +479,104 @@ int ObSequenceCache::nextval(const ObSequenceSchema &schema,
   } else if (OB_ISNULL(item)) {
     ret = OB_ERR_UNEXPECTED;
   } else {
-    lib::ObMutexGuard guard(item->alloc_mutex_);
-    /* refill_sequence_cache 期间禁止调度器挂起 query */
-    lib::DisableSchedInterGuard sched_guard;
-    {
-      LOG_DEBUG("nextval", K(schema));
+    lib::ObMutexGuard guard(item->fetch_);
+    item->alloc_mutex_.lock();
+    if (item->last_refresh_ts_ == SequenceCacheStatus::DELETED) {
+      ret = OB_AUTOINC_CACHE_NOT_EQUAL;
+      LOG_WARN("cache has been cleared", K(ret), K(*item));
+    } else {
+      /* refill_sequence_cache 期间禁止调度器挂起 query */
+      lib::DisableSchedInterGuard sched_guard;
+      {
+        LOG_DEBUG("nextval", K(schema));
 
-      // step 1. 从 cache 中获取下一个值
-      ret = move_next(schema, *item, allocator, nextval);
+        // step 1. 从 cache 中获取下一个值
+        ret = move_next(schema, *item, allocator, nextval);
 
-      // setp 2. cache 中的值已经使用完，需要重填 cache
-      // 注意：预取功能正常的情况下，不会走到这个分支
-      if (OB_SIZE_OVERFLOW == ret) {
-        LOG_INFO("no more avaliable value in current cache, try refill cache", K(*item), K(ret));
-        if (OB_FAIL(refill_sequence_cache(schema, allocator, *item))) {
-          LOG_WARN("fail refill sequence cache", K(*item), K(ret));
-        } else if (OB_FAIL(move_next(schema, *item, allocator, nextval))) {
-          LOG_WARN("fail move next", K(*item), K(ret));
-        }
+        // setp 2. cache 中的值已经使用完，需要重填 cache
+        // 注意：预取功能正常的情况下，不会走到这个分支
         if (OB_SIZE_OVERFLOW == ret) {
-          ret = OB_ERR_SEQ_VALUE_EXCEED_LIMIT;
-          if (schema.get_increment_by() < static_cast<int64_t>(0)) {
-            LOG_USER_ERROR(OB_ERR_SEQ_VALUE_EXCEED_LIMIT, "MINVALUE");
-          } else if (schema.get_increment_by() > static_cast<int64_t>(0)) {
-            LOG_USER_ERROR(OB_ERR_SEQ_VALUE_EXCEED_LIMIT, "MAXVALUE");
+          LOG_INFO("no more avaliable value in current cache, try refill cache", K(*item), K(ret));
+          if (OB_FAIL(refill_sequence_cache(schema, allocator, *item))) {
+            LOG_WARN("fail refill sequence cache", K(*item), K(ret));
+          } else if (OB_FAIL(move_next(schema, *item, allocator, nextval))) {
+            LOG_WARN("fail move next", K(*item), K(ret));
+          }
+          if (OB_SIZE_OVERFLOW == ret) {
+            ret = OB_ERR_SEQ_VALUE_EXCEED_LIMIT;
+            if (schema.get_increment_by() < static_cast<int64_t>(0)) {
+              LOG_USER_ERROR(OB_ERR_SEQ_VALUE_EXCEED_LIMIT, "MINVALUE");
+            } else if (schema.get_increment_by() > static_cast<int64_t>(0)) {
+              LOG_USER_ERROR(OB_ERR_SEQ_VALUE_EXCEED_LIMIT, "MAXVALUE");
+            }
+          }
+        }
+
+        // step 3. 尝试预取
+        if (OB_SUCC(ret) &&
+            !item->prefetching_ &&
+            schema.get_cache_size() > static_cast<int64_t>(1)  && /* cache size = 1 时禁止 prefetch */
+            schema.get_order_flag() == false /* 有 order 时禁止 prefetch */) {
+          if (OB_UNLIKELY(!item->with_prefetch_node_)) {
+            //const int64_t rest = std::abs(item->curr_node_.end() - item->curr_node_.start());
+            //const int64_t full = std::abs(schema.get_increment_by() * schema.get_cache_size());
+            ObNumber rest;
+            ObNumber full;
+            ObNumberCalc calc(item->curr_node_.end(), allocator);
+            // 拍脑袋的值，表示使用了 1/2 的值后就开始预取
+            static const int64_t PREFETCH_OP_THRESHOLD = 2;
+            //
+            // const int64_t rest = std::abs(item->curr_node_.end_ - item->curr_node_.start_) * PREFETCH_OP_THRESHOLD;
+            // const int64_t full = std::abs(schema.get_increment_by() * schema.get_cache_size());
+            // if (rest < full) {
+            //    enable prefetch
+            // }
+            //
+            if (OB_FAIL(calc.sub(item->curr_node_.start()).mul(PREFETCH_OP_THRESHOLD).get_result(rest))) {
+              LOG_WARN("fail do number sub", K(ret));
+            } else if (OB_FAIL(schema.get_increment_by().mul(schema.get_cache_size(), full, allocator))) {
+              LOG_WARN("fail do number multiply", K(ret));
+            } else if (rest.abs() <= full.abs()) {
+              item->prefetching_ = true;
+              need_prefetch = true;
+            }
           }
         }
       }
 
-      // step 3. 尝试预取
-      if (OB_SUCC(ret) &&
-          !item->prefetching_ &&
-          schema.get_cache_size() > static_cast<int64_t>(1)  && /* cache size = 1 时禁止 prefetch */
-          schema.get_order_flag() == false /* 有 order 时禁止 prefetch */) {
-        if (OB_UNLIKELY(!item->with_prefetch_node_)) {
-          //const int64_t rest = std::abs(item->curr_node_.end() - item->curr_node_.start());
-          //const int64_t full = std::abs(schema.get_increment_by() * schema.get_cache_size());
-          ObNumber rest;
-          ObNumber full;
-          ObNumberCalc calc(item->curr_node_.end(), allocator);
-          // 拍脑袋的值，表示使用了 1/2 的值后就开始预取
-          static const int64_t PREFETCH_OP_THRESHOLD = 2;
-          //
-          // const int64_t rest = std::abs(item->curr_node_.end_ - item->curr_node_.start_) * PREFETCH_OP_THRESHOLD;
-          // const int64_t full = std::abs(schema.get_increment_by() * schema.get_cache_size());
-          // if (rest < full) {
-          //    enable prefetch
-          // }
-          //
-          if (OB_FAIL(calc.sub(item->curr_node_.start()).mul(PREFETCH_OP_THRESHOLD).get_result(rest))) {
-            LOG_WARN("fail do number sub", K(ret));
-          } else if (OB_FAIL(schema.get_increment_by().mul(schema.get_cache_size(), full, allocator))) {
-            LOG_WARN("fail do number multiply", K(ret));
-          } else if (rest.abs() <= full.abs()) {
-            item->prefetching_ = true;
-            need_prefetch = true;
-          }
-        }
-      }
-    }
-
-    if (OB_SUCC(ret) && need_prefetch) {
-      ObSequenceCacheItem mock_item;
-      if (OB_FAIL(prefetch_sequence_cache(schema, mock_item))) {
-        int prefetch_err = ret;
-        ret = OB_SUCCESS;
-        LOG_WARN("fail refill sequence cache. ignore prefrech error", K(prefetch_err), K(ret));
-      } else {
-        LOG_INFO("dump item", K(mock_item), K(*item));
-        if (item->with_prefetch_node_) {
-          LOG_INFO("new item has been fetched by other, ignore");
+      if (OB_SUCC(ret) && need_prefetch) {
+        ObSequenceCacheItem mock_item;
+        if (OB_FAIL(prefetch_sequence_cache(schema, mock_item, *item))) {
+          int prefetch_err = ret;
+          ret = OB_SUCCESS;
+          LOG_WARN("fail refill sequence cache. ignore prefrech error", K(prefetch_err), K(ret));
         } else {
-          item->last_refresh_ts_ = mock_item.last_refresh_ts_;
-          item->with_prefetch_node_ = true;
-          if (OB_FAIL(item->prefetch_node_.set_start(mock_item.prefetch_node_.start()))) {
-            LOG_WARN("fail set start for pretch node", K(ret));
-          } else if (OB_FAIL(item->prefetch_node_.set_end(mock_item.prefetch_node_.end()))) {
-            LOG_WARN("fail set end for pretch node", K(ret));
+          LOG_INFO("dump item", K(mock_item), K(*item));
+          if (item->with_prefetch_node_) {
+            LOG_INFO("new item has been fetched by other, ignore");
+          } else {
+            item->last_refresh_ts_ = mock_item.last_refresh_ts_;
+            item->with_prefetch_node_ = true;
+            if (OB_FAIL(item->prefetch_node_.set_start(mock_item.prefetch_node_.start()))) {
+              LOG_WARN("fail set start for pretch node", K(ret));
+            } else if (OB_FAIL(item->prefetch_node_.set_end(mock_item.prefetch_node_.end()))) {
+              LOG_WARN("fail set end for pretch node", K(ret));
+            }
           }
         }
+        item->prefetching_ = false;
       }
-      item->prefetching_ = false;
     }
   }
-
   if (nullptr != item) {
+    item->alloc_mutex_.unlock();
     sequence_cache_.revert(item);
   }
   return ret;
 }
 
-int ObSequenceCache::remove(uint64_t tenant_id, uint64_t sequence_id)
+int ObSequenceCache::remove(uint64_t tenant_id, uint64_t sequence_id, obrpc::ObSeqCleanCacheRes &cache_res)
 {
   CacheItemKey key(tenant_id, sequence_id);
-  return del_item(key);
+  return del_item(tenant_id, key, cache_res);
 }

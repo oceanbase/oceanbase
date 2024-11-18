@@ -77,6 +77,7 @@ public:
   static int fill_column_meta_infos(const ObRawExpr &expr,
                                     const ObCharsetType charset_type,
                                     const uint64_t table_id,
+                                    sql::ObSQLSessionInfo &session_info,
                                     ObColumnSchemaV2 &column,
                                     bool is_from_create_mview = false);
   static int resolve_column_default_value(const sql::ObSelectStmt *select_stmt,

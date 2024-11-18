@@ -438,7 +438,7 @@ REGISTER_OPERATOR(ObLogJoin, PHY_NESTED_LOOP_CONNECT_BY_WITH_INDEX,
 class ObLogJoin;
 class ObNLConnectBySpec;
 class ObNLConnectByOp;
-REGISTER_OPERATOR(ObLogJoin, PHY_NESTED_LOOP_CONNECT_BY, ObNLConnectBySpec,
+REGISTER_OPERATOR(ObLogJoin, PHY_CONNECT_BY, ObNLConnectBySpec,
                   ObNLConnectByOp, NOINPUT);
 
 class ObLogJoin;

@@ -155,6 +155,7 @@ private:
   int try_replace_casts_with_questionmarks_ora(ObRawExpr *row_expr);
 
   int try_replace_cast_with_questionmark_ora(ObRawExpr &parent, ObRawExpr *cast_expr, int param_idx);
+  int build_subschema_for_enum_set_type(ObRawExpr &expr);
 private:
   const sql::ObSQLSessionInfo *my_session_;
   common::ObArenaAllocator alloc_;

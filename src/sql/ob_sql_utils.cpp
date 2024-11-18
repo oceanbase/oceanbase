@@ -6149,7 +6149,8 @@ bool ObSQLUtils::check_need_disconnect_parser_err(const int ret_code)
                 || OB_ERR_VIEW_SELECT_CONTAIN_QUESTIONMARK == ret_code
                 || OB_ERR_NON_INT_LITERAL == ret_code
                 || OB_ERR_PARSER_INIT == ret_code
-                || OB_NOT_SUPPORTED == ret_code)) {
+                || OB_NOT_SUPPORTED == ret_code
+                || OB_ALLOCATE_MEMORY_FAILED == ret_code)) {
     bret = false;
   }
   return bret;

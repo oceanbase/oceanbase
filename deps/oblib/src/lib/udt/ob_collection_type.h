@@ -75,6 +75,8 @@ public:
   ObSqlCollectionInfo(ObIAllocator &allocator)
     : allocator_(allocator), name_len_(0),
       name_def_(nullptr), collection_meta_(nullptr) {}
+  ObSqlCollectionInfo(common::ObIAllocator *allocator)
+    : ObSqlCollectionInfo(*allocator) {}
    virtual ~ObSqlCollectionInfo() {}
   void set_name(ObString &name)
   {
@@ -89,6 +91,7 @@ public:
   }
 
   ObString get_def_string() const {return ObString(name_len_, name_def_);}
+  int64_t get_signature() const { return get_def_string().hash(); }
   int get_child_def_string(ObString &child_def) const;
   int deep_copy(ObIAllocator &allocator, ObSqlCollectionInfo *&dst) const;
   int create_meta_info_by_name(const std::string &name, ObCollectionTypeBase *&meta_info, uint8_t &arr_depth);

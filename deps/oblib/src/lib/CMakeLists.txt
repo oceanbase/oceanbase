@@ -249,6 +249,7 @@ ob_set_subtarget(oblib_lib common_mixed
   xml/ob_binary_aggregate.cpp
   locale/ob_locale_type.cc
   locale/ob_locale.cpp
+  enumset/ob_enum_set_meta.cpp
 )
 
 ob_set_subtarget(oblib_lib lock

@@ -506,6 +506,8 @@ public:
     J_OBJ_END();
     return pos;
   }
+  bool is_enum_set_with_subschema_arg(const int64_t arg_idx) const;
+  ObObjType get_enumset_calc_type(const ObObjType expected_type, const int64_t arg_idx) const;
 public:
   /*
     Aggregate arguments for comparison, e.g: a=b, a LIKE b, a RLIKE b
@@ -705,10 +707,10 @@ protected:
                                        const ObExprResType *types,
                                        int64_t param_num);
   static common::ObObjType get_calc_cast_type(common::ObObjType param_type, common::ObObjType calc_type);
-  static common::ObObjType enumset_calc_types_[common::ObMaxTC];
 
   void disable_operand_auto_cast() { operand_auto_cast_ = false; }
 private:
+  static common::ObObjType enumset_calc_types_[2 /*use_subschema*/][common::ObMaxTC];
   /*
    * 计算框架本身提供了一个通用的数据类型转换方法，将参数转为input_types_中的类型。
    * 这可能并不是表达式期望的行为，如需要禁止此行为，需要在构造函数中显示调 disable_operand_auto_cast().
@@ -739,14 +741,14 @@ protected:
     const common::ObObjMeta *types,
     int64_t param_num,
     uint32_t flags,
-    const common::ObCollationType conn_coll_type);
+    common::ObExprTypeCtx &type_ctx);
 
   static int aggregate_charsets(
     common::ObObjMeta &type,
     const ObExprResType *types,
     int64_t param_num,
     uint32_t flags,
-    const common::ObCollationType conn_coll_type);
+    common::ObExprTypeCtx &type_ctx);
 
 
   // data members
@@ -1934,6 +1936,11 @@ public:
                                       common::ObObj &result,
                                       common::ObIAllocator *allocator);
   void calc_temporal_format_result_length(ObExprResType &type, const ObExprResType &format) const;
+protected:
+  static int extract_enum_set_collation_for_args(const ObExprResType &text,
+                                                 const ObExprResType &pattern,
+                                                 ObExprTypeCtx &type_ctx,
+                                                 ObObjMeta *real_types);
 protected:
   common::ObObjType get_result_type_mysql(int64_t char_length) const;
   static const int64_t MAX_CHAR_LENGTH_FOR_VARCAHR_RESULT = 512;

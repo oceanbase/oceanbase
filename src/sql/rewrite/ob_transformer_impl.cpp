@@ -1015,7 +1015,10 @@ int ObTransformerImpl::add_all_rowkey_columns_to_stmt(const ObTableSchema &table
       } else if (OB_FAIL(column_items.push_back(column_item))) {
         LOG_WARN("failed to push back column item", K(ret));
       } else if (FALSE_IT(rowkey->clear_explicited_referece())) {
-      } else if (OB_FAIL(rowkey->formalize(NULL))) {
+      } else if (OB_ISNULL(ctx_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("trans ctx is null", K(ret));
+      } else if (OB_FAIL(rowkey->formalize(ctx_->session_info_))) {
         LOG_WARN("formalize rowkey failed", K(ret));
       } else if (OB_FAIL(rowkey->pull_relation_id())) {
         LOG_WARN("failed to pullup relation ids", K(ret));

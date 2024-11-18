@@ -2592,6 +2592,8 @@ int ObPLResolver::build_record_type_by_table_schema(ObSchemaGetterGuard &schema_
           if (column_schema.is_enum_or_set()) {
             OZ (pl_type.set_type_info(column_schema.get_extended_type_info()));
           }
+          data_type.set_collation_level(
+            ObRawExprUtils::get_column_collation_level(column_schema.get_data_type()));
           OX (pl_type.set_data_type(data_type));
         }
         if (OB_SUCC(ret)) {
@@ -10269,7 +10271,7 @@ int ObPLResolver::resolve_expr(const ParseNode *node,
     }
   } else if (need_cast) {
     bool need_wrap = false;
-    OZ (ObRawExprUtils::need_wrap_to_string(expr->get_result_type().get_type(),
+    OZ (ObRawExprUtils::need_wrap_to_string(expr->get_result_type(),
                                             data_type->get_obj_type(),
                                             true,
                                             need_wrap));
@@ -13886,6 +13888,7 @@ int ObPLResolver::make_var_from_access(const ObIArray<ObObjAccessIdx> &access_id
     OZ (c_expr->add_flag(IS_DYNAMIC_PARAM));
     if (OB_SUCC(ret) && ob_is_enum_or_set_type(res_type.get_type())) {
       c_expr->add_flag(IS_ENUM_OR_SET);
+      c_expr->mark_enum_set_skip_build_subschema();
     }
     OZ (c_expr->extract_info());
     OX (expr = c_expr);
@@ -14080,6 +14083,10 @@ int ObPLResolver::convert_pltype_to_restype(ObIAllocator &alloc,
         result_type->set_collation_type(data_type->get_collation_type());
         result_type->set_collation_level(data_type->get_collation_level());
         result_type->set_scale(data_type->get_scale());
+      } else if (ob_is_enumset_tc(result_type->get_type())) {
+        result_type->set_collation_type(data_type->get_collation_type());
+        result_type->set_collation_level(data_type->get_collation_level());
+        result_type->set_accuracy(data_type->get_accuracy());
       }
     }
   }

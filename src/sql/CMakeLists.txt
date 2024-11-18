@@ -1000,6 +1000,8 @@ ob_set_subtarget(ob_sql executor
   executor/ob_task_runner_notifier_service.cpp
   executor/ob_task_spliter.cpp
   executor/ob_task_spliter_factory.cpp
+  executor/ob_memory_tracker.cpp
+  executor/ob_memory_tracker_wrapper.cpp
 )
 
 ob_set_subtarget(ob_sql monitor

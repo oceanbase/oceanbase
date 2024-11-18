@@ -5952,6 +5952,9 @@ int ObAlterTableResolver::alter_column_expr_in_part_expr(
       column_ref->set_data_type(dst_col_schema.get_data_type());
       column_ref->set_accuracy(dst_col_schema.get_accuracy());
     }
+    if (ob_is_enum_or_set_type(column_ref->get_result_type().get_type())) {
+      OZ (column_ref->set_enum_set_values(dst_col_schema.get_extended_type_info()));
+    }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < part_expr->get_param_count(); ++i) {
       ObRawExpr *sub_expr = part_expr->get_param_expr(i);

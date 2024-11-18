@@ -129,4 +129,3 @@ int ObSequenceOption::assign(const share::ObSequenceOption &from)
   flag_ = from.flag_;
   return ret;
 }
-

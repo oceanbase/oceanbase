@@ -346,7 +346,7 @@ int ObExprSubAddtime::calc_result_type2(ObExprResType &type,
       date_arg.set_calc_type(ObVarcharType);
     }
     if (ob_is_enumset_tc(time_arg.get_type())) {
-      time_arg.set_calc_type(ObVarcharType);
+      time_arg.set_calc_type(get_enumset_calc_type(ObTimeType, 1));
     } else {
       type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_NULL_ON_WARN);
       time_arg.set_calc_type(ObTimeType);

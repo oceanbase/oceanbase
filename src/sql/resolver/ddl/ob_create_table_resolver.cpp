@@ -2169,8 +2169,7 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
               column_meta.set_type(ObLongTextType);
             }
             column.set_meta_type(column_meta);
-            if (column.is_enum_or_set()
-                || column.is_collection()) { // array column
+            if (column.is_collection()) { // array column
               if (OB_FAIL(column.set_extended_type_info(expr->get_enum_set_values()))) {
                 LOG_WARN("set enum or set info failed", K(ret), K(*expr));
               }
@@ -2191,6 +2190,25 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
             column.set_accuracy(expr->get_accuracy());
             column.set_zero_fill(expr->get_result_flag() & ZEROFILL_FLAG);
             OZ (adjust_number_decimal_column_accuracy_within_max(column, lib::is_oracle_mode()));
+            if (OB_SUCC(ret) && column.is_enum_or_set()) {
+              if (expr->is_enum_set_with_subschema()) {
+                const ObEnumSetMeta *enum_set_meta = NULL;
+                if (OB_FAIL(ObRawExprUtils::extract_enum_set_meta(expr->get_result_type(),
+                                                                  session_info_,
+                                                                  enum_set_meta))) {
+                  LOG_WARN("fail to extrac enum set mete", K(ret));
+                } else if (OB_FAIL(column.set_extended_type_info(*enum_set_meta->get_str_values()))) {
+                  LOG_WARN("set enum or set info failed", K(ret), K(*expr));
+                } else {
+                  column.set_collation_type(enum_set_meta->get_collation_type());
+                  column.set_data_scale(SCALE_UNKNOWN_YET);
+                }
+              } else {
+                if (OB_FAIL(column.set_extended_type_info(expr->get_enum_set_values()))) {
+                  LOG_WARN("set enum or set info failed", K(ret), K(*expr));
+                }
+              }
+            }
             if (OB_SUCC(ret) && lib::is_oracle_mode() && expr->get_result_type().is_user_defined_sql_type()) {
               // udt column is varbinary used for null bitmap
               column.set_collation_type(CS_TYPE_BINARY);

@@ -261,7 +261,7 @@ public:
   // Notice:
   // 1. all lobs created by this class should be temp lobs
   // 2. if has_lob_header_ is false, the text result should be 4.0 compatible
-  int init(const int64_t res_len, ObIAllocator *allocator = NULL);
+  virtual int init(const int64_t res_len, ObIAllocator *allocator = NULL);
   int init(const int64_t res_len, ObString &res_buffer);
 
   // copy existent loc to result

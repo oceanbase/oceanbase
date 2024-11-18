@@ -150,6 +150,11 @@ public:
   { return ob_is_enum_or_set_type(result_type_.get_type()); }
 
 private:
+  int calc_enum_set_result_type(ObExprResType &type,
+                                ObExprResType *types,
+                                ObCollationType coll_type,
+                                common::ObExprTypeCtx &type_ctx,
+                                bool &wrap_to_str) const;
   static int eval_enumset(const ObExpr &expr, ObEvalCtx &ctx, common::ObDatum *&datum);
 
 private:

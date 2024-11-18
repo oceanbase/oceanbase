@@ -151,6 +151,7 @@ public:
   void set_collation_level(common::ObCollationLevel cs_level);
   void set_collation_type(common::ObCollationType cs_type);
   void set_accuracy(const common::ObAccuracy &accuracy);
+  void set_collation(const common::ObObjMeta &meta_type);
   void set_result_flag(const uint32_t flag);
   void set_scale(const int16_t scale);
   void set_precision(const int16_t precision);
@@ -163,6 +164,12 @@ public:
 
   virtual int64_t get_children_count() const;
   virtual int get_children(ExprArray &jit_exprs) const;
+  // used for record meta state for enum/set types
+  void mark_enum_set_with_subschema();
+  void mark_enum_set_skip_build_subschema();
+  void reset_enum_set_meta_state();
+  bool is_enum_set_with_subschema() const;
+  bool skip_build_subschema_for_enumset() const;
 
   TO_STRING_KV(K_(type), K_(expr_class));
 
@@ -275,6 +282,10 @@ inline void ObIRawExpr::set_accuracy(const common::ObAccuracy &accuracy)
 {
   result_type_.set_accuracy(accuracy);
 }
+inline void ObIRawExpr::set_collation(const common::ObObjMeta &meta_type)
+{
+  result_type_.set_collation(meta_type);
+}
 inline void ObIRawExpr::set_result_flag(const uint32_t flag)
 {
   result_type_.set_result_flag(flag);
@@ -325,6 +336,29 @@ inline int ObIRawExpr::get_children(ExprArray &jit_exprs) const
 inline int ObIRawExpr::accept(Visitor __attribute__ ((unused)) &v) const
 {
   return common::OB_NOT_SUPPORTED;
+}
+
+inline void ObIRawExpr::mark_enum_set_with_subschema()
+{
+  result_type_.mark_enum_set_with_subschema();
+}
+
+inline void ObIRawExpr::mark_enum_set_skip_build_subschema()
+{
+  result_type_.set_scale(ObEnumSetMeta::MetaState::SKIP);
+}
+
+inline void ObIRawExpr::reset_enum_set_meta_state() { result_type_.reset_enum_set_meta_state(); }
+
+inline bool ObIRawExpr::is_enum_set_with_subschema() const
+{
+  return result_type_.is_enum_set_with_subschema();
+}
+
+inline bool ObIRawExpr::skip_build_subschema_for_enumset() const
+{
+  return result_type_.get_scale() == ObEnumSetMeta::MetaState::SKIP ||
+    result_type_.get_scale() == ObEnumSetMeta::MetaState::READY;
 }
 
 }  // expr

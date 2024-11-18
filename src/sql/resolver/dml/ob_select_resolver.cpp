@@ -36,6 +36,7 @@
 #include "common/ob_smart_call.h"
 #include "sql/engine/expr/ob_expr_regexp_context.h"
 #include "sql/engine/expr/ob_json_param_type.h"
+#include "sql/executor/ob_memory_tracker.h"
 namespace oceanbase
 {
 using namespace common;
@@ -1511,7 +1512,10 @@ int ObSelectResolver::resolve(const ParseNode &parse_tree)
   int ret = OB_SUCCESS;
   ObSelectStmt *select_stmt = NULL;
   bool is_stack_overflow = false;
-  if (NULL == (select_stmt = create_stmt<ObSelectStmt>())) {
+  const int64_t check_try_times = 32;
+  if (OB_UNLIKELY((OB_SUCCESS != (ret = TRY_CHECK_MEM_STATUS(check_try_times))))) {
+    LOG_WARN("Exceeded memory usage limit", K(ret));
+  } else if (NULL == (select_stmt = create_stmt<ObSelectStmt>())) {
     ret = OB_SQL_RESOLVER_NO_MEMORY;
     LOG_WARN("failed to create select stmt");
   } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
@@ -5468,6 +5472,8 @@ int ObSelectResolver::resolve_column_ref_in_all_namespace(
                                                            real_ref_expr,
                                                            exec_param))) {
       LOG_WARN("failed to get exec param expr", K(ret));
+    } else if (OB_FAIL(exec_param->formalize(session_info_))) {
+      LOG_WARN("fail to formalize exec param", K(ret));
     } else {
       /// succeed to resolve the correlated column, do the replace here
       real_ref_expr = exec_param;

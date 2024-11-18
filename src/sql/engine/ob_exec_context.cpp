@@ -26,6 +26,7 @@
 #include "ob_operator.h"
 #include "observer/ob_server.h"
 #include "storage/lob/ob_lob_persistent_reader.h"
+#include "sql/executor/ob_memory_tracker.h"
 #ifdef OB_BUILD_SPM
 #include "sql/spm/ob_spm_controller.h"
 #endif
@@ -509,6 +510,8 @@ int ObExecContext::check_status()
     LOG_WARN("px execution was interrupted", K(ic), K(ret));
   } else if (lib::Worker::WS_OUT_OF_THROTTLE == THIS_WORKER.check_wait()) {
     ret = OB_KILLED_BY_THROTTLING;
+  } else if (OB_UNLIKELY((OB_SUCCESS != (ret = CHECK_MEM_STATUS())))) {
+    LOG_WARN("Exceeded memory usage limit", K(ret));
   }
   int tmp_ret = OB_SUCCESS;
   if (OB_SUCCESS != (tmp_ret = check_extra_status())) {
@@ -1211,6 +1214,22 @@ int ObExecContext::get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSubS
   return ret;
 }
 
+int ObExecContext::get_enumset_meta_by_subschema_id(uint16_t subschema_id,
+                                                    const ObEnumSetMeta *&meta) const
+{
+  int ret = OB_SUCCESS;
+  if (ob_is_reserved_subschema_id(subschema_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_ENG_LOG(WARN, "reserved subschema id not used in enumset meta", K(ret), K(lbt()));
+  } else if (OB_ISNULL(phy_plan_ctx_)) {
+    ret = OB_NOT_INIT;
+    SQL_ENG_LOG(WARN, "not phyical plan ctx for subschema mapping", K(ret), K(lbt()));
+  } else {
+    ret = phy_plan_ctx_->get_enumset_meta_by_subschema_id(subschema_id, meta);
+  }
+  return ret;
+}
+
 int ObExecContext::get_subschema_id_by_udt_id(uint64_t udt_type_id,
                                               uint16_t &subschema_id,
                                               share::schema::ObSchemaGetterGuard *schema_guard)
@@ -1238,6 +1257,44 @@ int ObExecContext::get_subschema_id_by_collection_elem_type(ObNestedType coll_ty
     SQL_ENG_LOG(WARN, "not phyical plan ctx for reverse mapping", K(ret), K(lbt()));
   } else {
     ret = phy_plan_ctx_->get_subschema_id_by_collection_elem_type(coll_type, elem_type, subschema_id);
+  }
+  return ret;
+}
+
+bool ObExecContext::support_enum_set_type_subschema(ObSQLSessionInfo &session)
+{
+  // Considering compatibility, enumset subschema is only supported in versions [4_2_5, 4_3_0) and
+  // versions 4_3_5 at least.
+  bool bret = true;
+  const uint64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
+  if ((min_cluster_version < MOCK_CLUSTER_VERSION_4_2_5_0) ||
+        (min_cluster_version >= CLUSTER_VERSION_4_3_0_0
+          && min_cluster_version < CLUSTER_VERSION_4_3_5_0)) {
+    bret = false;
+  } else {
+    // tenant configuration Control
+    if (!session.is_enable_enum_set_with_subschema()) {
+      bret = false;
+    }
+    // hint control
+    if (OB_NOT_NULL(stmt_factory_) && OB_NOT_NULL(stmt_factory_->get_query_ctx())) {
+      stmt_factory_->get_query_ctx()->get_global_hint().opt_params_.get_bool_opt_param(
+          ObOptParamHint::ENABLE_ENUM_SET_SUBSCHEMA, bret);
+    }
+  }
+  return bret;
+}
+
+int ObExecContext::get_subschema_id_by_type_info(const ObObjMeta &obj_meta,
+                                                 const ObIArray<common::ObString> &type_info,
+                                                 uint16_t &subschema_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(phy_plan_ctx_)) {
+    ret = OB_NOT_INIT;
+    SQL_ENG_LOG(WARN, "not phyical plan ctx for reverse mapping", K(ret), K(lbt()));
+  } else {
+    ret = phy_plan_ctx_->get_subschema_id_by_type_info(obj_meta, type_info, subschema_id);
   }
   return ret;
 }

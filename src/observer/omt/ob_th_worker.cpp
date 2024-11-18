@@ -30,6 +30,7 @@
 #include "observer/ob_server.h"
 #include "storage/memtable/ob_lock_wait_mgr.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "sql/executor/ob_memory_tracker.h"
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -350,6 +351,7 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
         .set_properties(lib::USE_TL_PAGE_OPTIONAL)
         .set_ablock_size(lib::INTACT_MIDDLE_AOBJECT_SIZE);
       CREATE_WITH_TEMP_CONTEXT(param) {
+        MEM_TRACKER_GUARD(CURRENT_CONTEXT);
         const uint64_t owner_id =
           (!is_virtual_tenant_id(tenant_->id()) || is_virtual_tenant_for_memory(tenant_->id())) ?
           tenant_->id() : OB_SERVER_TENANT_ID;
@@ -473,7 +475,8 @@ int ObThWorker::check_status()
   }
 
   if (OB_SUCC(ret)) {
-    if (is_timeout()) {
+    if (OB_UNLIKELY((OB_SUCCESS != (ret = CHECK_MEM_STATUS())))) {
+    } else if (is_timeout()) {
       ret = OB_TIMEOUT;
     } else {
       if (WS_OUT_OF_THROTTLE == check_wait()) {

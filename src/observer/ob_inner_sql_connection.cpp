@@ -682,6 +682,8 @@ int ObInnerSQLConnection::do_query(sqlclient::ObIExecutor &executor, ObInnerSQLR
 {
   int ret = OB_SUCCESS;
   WITH_CONTEXT(res.mem_context_) {
+    // are there no restrictions on internal SQL such as refresh schema?
+    // MEM_TRACKER_GUARD(CURRENT_CONTEXT);
     // restore有自己的inner_sql_connection，sql_modifier不为null
     bool is_restore = NULL != sql_modifier_;
     res.sql_ctx().is_restore_ = is_restore;

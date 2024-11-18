@@ -4732,6 +4732,7 @@ int ValueItemExpr::deserialize(common::ObIAllocator &allocator, const char *buf,
       enum_set_values_ =
         static_cast<ObString *>(allocator.alloc(sizeof(ObString) * enum_set_values_cnt_));
       CK(OB_NOT_NULL(enum_set_values_));
+      MEMSET(enum_set_values_, 0, sizeof(ObString) * enum_set_values_cnt_);
       OB_UNIS_DECODE_ARRAY(enum_set_values_, enum_set_values_cnt_)
     }
   }

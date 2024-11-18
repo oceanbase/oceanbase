@@ -98,18 +98,13 @@ int ObFastParser::parse(const common::ObString &stmt,
   return ret;
 }
 
-ObFastParserBase::ObFastParserBase(
-  ObIAllocator &allocator,
-  const FPContext fp_ctx) :
-  no_param_sql_(nullptr), no_param_sql_len_(0),
-  param_num_(0), is_oracle_mode_(false),
+ObFastParserBase::ObFastParserBase(ObIAllocator &allocator, const FPContext fp_ctx) :
+  no_param_sql_(nullptr), no_param_sql_len_(0), param_num_(0), is_oracle_mode_(false),
   is_batched_multi_stmt_split_on_(fp_ctx.enable_batched_multi_stmt_),
-  is_udr_mode_(fp_ctx.is_udr_mode_),
-  def_name_ctx_(fp_ctx.def_name_ctx_),
-  cur_token_begin_pos_(0), copy_begin_pos_(0), copy_end_pos_(0),
-  tmp_buf_(nullptr), tmp_buf_len_(0), last_escape_check_pos_(0),
-  param_node_list_(nullptr), tail_param_node_(nullptr),
-  cur_token_type_(INVALID_TOKEN), allocator_(allocator),
+  is_udr_mode_(fp_ctx.is_udr_mode_), def_name_ctx_(fp_ctx.def_name_ctx_), cur_token_begin_pos_(0),
+  copy_begin_pos_(0), copy_end_pos_(0), tmp_buf_(nullptr), tmp_buf_len_(0),
+  last_escape_check_pos_(0), try_check_tick_(0), param_node_list_(nullptr),
+  tail_param_node_(nullptr), cur_token_type_(INVALID_TOKEN), allocator_(allocator),
   found_insert_status_(NOT_FOUND_INSERT_TOKEN), values_token_pos_(0),
   parse_next_token_func_(nullptr), process_idf_func_(nullptr)
 {
@@ -2234,6 +2229,12 @@ inline int ObFastParserBase::process_format_token() {
   return ret;
 }
 
+inline int ObFastParserBase::try_check_status()
+{
+  return ((++try_check_tick_) % CHECK_STATUS_TRY_TIMES == 0) ? THIS_WORKER.check_status() :
+                                                               common::OB_SUCCESS;
+}
+
 inline void ObFastParserBase::process_token()
 {
   if (NORMAL_TOKEN == cur_token_type_) {
@@ -3025,15 +3026,12 @@ int ObFastParserMysql::parse_next_token()
         break;
       }
     } // end switch
-
-    if (OB_FAIL(ret)) {
-    } else if (is_format_) {
-      if(OB_FAIL(process_format_token())) {
-        LOG_WARN("failed  to process foramt token", K(ret));
-      }
+    if (is_format_) {
+      OZ (process_format_token());
     } else {
       OX (process_token());
     }
+    OZ (try_check_status());
   } // end while
   if (OB_SUCC(ret)) {
     // After processing the string, there are still parts that have not been saved, save directly
@@ -3440,14 +3438,12 @@ int ObFastParserOracle::parse_next_token()
       }
     } // end switch
     last_ch = ch;
-    if (OB_FAIL(ret)) {
-    } else if (is_format_) {
-      if (OB_FAIL(process_format_token())) {
-        LOG_WARN("failed  to process foramt token", K(ret));
-      }
+    if (is_format_) {
+      OZ (process_format_token());
     } else {
       OX (process_token());
     }
+    OZ (try_check_status());
   } // end while
   if (OB_SUCC(ret)) {
     // After processing the string, there are still parts that have not been saved, save directly

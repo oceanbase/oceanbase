@@ -2708,8 +2708,8 @@ int ObCleanSequenceCacheP::process()
   if (OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema service is null", K(ret));
-  } else if (OB_FAIL(sequence_cache.remove(MTL_ID(), sequence_id))) {
-    LOG_WARN("remove sequence item from sequence cache failed", K(ret), K(sequence_id));
+  } else if (OB_FAIL(sequence_cache.remove(MTL_ID(), sequence_id, result_))) {
+    LOG_WARN("remove sequence item from sequence cache failed", K(ret), K(sequence_id), K(result_));
   }
   return ret;
 }

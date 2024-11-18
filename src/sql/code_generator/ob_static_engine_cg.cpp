@@ -980,7 +980,7 @@ int ObStaticEngineCG::generate_spec_final(ObLogicalOperator &op, ObOpSpec &spec)
     }
   }
 
-  if (PHY_NESTED_LOOP_CONNECT_BY == spec.type_
+  if (PHY_CONNECT_BY == spec.type_
       || PHY_NESTED_LOOP_CONNECT_BY_WITH_INDEX == spec.type_) {
     FOREACH_CNT_X(e, spec.calc_exprs_, OB_SUCC(ret)) {
       if (T_OP_PRIOR == (*e)->type_) {
@@ -5824,15 +5824,15 @@ int ObStaticEngineCG::construct_hash_elements_for_connect_by(ObLogJoin &op, ObNL
   } else if (OB_ISNULL(left_op = op.get_child(0)) || OB_ISNULL(right_op = op.get_child(1))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("child op is null", K(ret));
-  } else if (OB_FAIL(spec.hash_key_exprs_.init(op.get_other_join_conditions().count()))) {
+  } else if (OB_FAIL(spec.hash_key_exprs_.init(op.get_equal_join_conditions().count()))) {
     LOG_WARN("failed to init hash key exprs", K(ret));
-  } else if (OB_FAIL(spec.hash_probe_exprs_.init(op.get_other_join_conditions().count()))) {
+  } else if (OB_FAIL(spec.hash_probe_exprs_.init(op.get_equal_join_conditions().count()))) {
     LOG_WARN("failed to init hash probe exprs", K(ret));
   } else {
     const ObRelIds &left_table_set = left_op->get_table_set();
     const ObRelIds &right_table_set = right_op->get_table_set();
-    for (int64_t i = 0; OB_SUCC(ret) && i < op.get_other_join_conditions().count(); i++) {
-      ObRawExpr *other_cond = op.get_other_join_conditions().at(i);
+    for (int64_t i = 0; OB_SUCC(ret) && i < op.get_equal_join_conditions().count(); i++) {
+      ObRawExpr *other_cond = op.get_equal_join_conditions().at(i);
       if (OB_ISNULL(other_cond)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("other condition is null", K(ret));
@@ -5882,7 +5882,11 @@ int ObStaticEngineCG::generate_spec(ObLogJoin &op, ObNLConnectBySpec &spec, cons
   int ret = OB_SUCCESS;
   UNUSED(in_root_job);
   const ObIArray<ObRawExpr*> &other_join_conds = op.get_other_join_conditions();
-  if (OB_FAIL(generate_param_spec(op.get_nl_params(), spec.rescan_params_))) {
+  if (HASH_JOIN == op.get_join_algo()
+      && OB_FAIL(append(const_cast<ObIArray<ObRawExpr *> &>(other_join_conds),
+                        op.get_equal_join_conditions()))) {
+    LOG_WARN("fail to push back hash join conditions", K(ret));
+  } else if (OB_FAIL(generate_param_spec(op.get_nl_params(), spec.rescan_params_))) {
     LOG_WARN("failed to generate parameter", K(ret));
   } else if (OB_FAIL(generate_pump_exprs(op, spec))) {
     LOG_WARN("failed to generate pump exprs", K(ret));
@@ -5890,7 +5894,8 @@ int ObStaticEngineCG::generate_spec(ObLogJoin &op, ObNLConnectBySpec &spec, cons
     LOG_WARN("failed to init join conditions", K(ret));
   } else if (OB_FAIL(generate_rt_exprs(other_join_conds, spec.cond_exprs_))) {
     LOG_WARN("failed to generate condition rt exprs", K(ret));
-  } else if (OB_FAIL(construct_hash_elements_for_connect_by(op, spec))) {
+  } else if (HASH_JOIN == op.get_join_algo()
+             && OB_FAIL(construct_hash_elements_for_connect_by(op, spec))) {
     LOG_WARN("construct_hash_elements_for_connect_by failed", K(ret));
   }
   return ret;
@@ -9131,7 +9136,7 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
              ? PHY_NESTED_LOOP_JOIN
              : (op.get_nl_params().count() > 0
                   ? PHY_NESTED_LOOP_CONNECT_BY_WITH_INDEX
-                  : PHY_NESTED_LOOP_CONNECT_BY);
+                  : PHY_CONNECT_BY);
           break;
         }
         case MERGE_JOIN: {
@@ -9152,11 +9157,15 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
         }
         case HASH_JOIN: {
           int tmp_ret = OB_SUCCESS;
-          tmp_ret = OB_E(EventTable::EN_DISABLE_VEC_HASH_JOIN) OB_SUCCESS;
-          if (OB_SUCCESS == tmp_ret && use_rich_format) {
-            type = PHY_VEC_HASH_JOIN;
+          if (CONNECT_BY_JOIN == op.get_join_type()) {
+            type = PHY_CONNECT_BY;
           } else {
-            type = PHY_HASH_JOIN;
+            tmp_ret = OB_E(EventTable::EN_DISABLE_VEC_HASH_JOIN) OB_SUCCESS;
+            if (OB_SUCCESS == tmp_ret && use_rich_format) {
+              type = PHY_VEC_HASH_JOIN;
+            } else {
+              type = PHY_HASH_JOIN;
+            }
           }
           break;
         }

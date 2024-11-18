@@ -97,8 +97,10 @@ int ObSequenceDMLProxy::set_pre_op_timeout(common::ObTimeoutCtx &ctx)
 int ObSequenceDMLProxy::next_batch(
     const uint64_t tenant_id,
     const uint64_t sequence_id,
+    const int64_t schema_version,
     const share::ObSequenceOption &option,
-    SequenceCacheNode &cache_range)
+    SequenceCacheNode &cache_range,
+    ObSequenceCacheItem &old_cache)
 {
   int ret = OB_SUCCESS;
   const char *tname = OB_ALL_SEQUENCE_VALUE_TNAME;
@@ -127,6 +129,7 @@ int ObSequenceDMLProxy::next_batch(
     cache_size.shadow_copy(option.get_cache_size());
   }
 
+  old_cache.alloc_mutex_.unlock();
   if (OB_FAIL(ret)) {
     // pass
   } else if (!inited_) {
@@ -183,6 +186,31 @@ int ObSequenceDMLProxy::next_batch(
         } else {
           ret = OB_SUCCESS;
         }
+      }
+    }
+  }
+
+  old_cache.alloc_mutex_.lock();
+  if (OB_SUCC(ret)) {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res)
+    {
+      ObSqlString sql;
+      ObMySQLResult *result = NULL;
+      int64_t curr_version = OB_INVALID_VERSION;
+      if (OB_FAIL(sql.assign_fmt("SELECT schema_version "
+                                 "FROM %s WHERE sequence_id=%lu",
+                                 OB_ALL_SEQUENCE_OBJECT_TNAME, sequence_id))) {
+        LOG_WARN("fail to assign sql", KR(ret), K(tenant_id), K(sequence_id));
+      } else if (OB_FAIL(sql_client->read(res, tenant_id, sql.ptr()))) {
+        LOG_WARN("fail to read", KR(ret), K(tenant_id), K(sql));
+      } else if (NULL == (result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get sql result", K(ret));
+      } else if (OB_FAIL((*result).get_int("schema_version", curr_version))) {
+        LOG_WARN("fail to get schema_version", K(ret), K(tenant_id), K(sql));
+      } else if (schema_version != curr_version) {
+        ret = OB_AUTOINC_CACHE_NOT_EQUAL;
+        LOG_WARN("schema is not up to date, need retry", K(ret));
       }
     }
   }
@@ -306,16 +334,21 @@ int ObSequenceDMLProxy::next_batch(
   }
 
   if (OB_SUCC(ret)) {
-    OZ(cache_range.set_start(cache_inclusive_start));
-    OZ(cache_range.set_end(cache_exclusive_end));
-    LOG_INFO("get next sequence batch success",
-             K(tenant_id),
-             K(sequence_id),
-             "cache_inclusive_start", cache_inclusive_start.format(),
-             "cache_exclusive_end", cache_exclusive_end.format(),
-             "increment_by", increment_by.format(),
-             "cache_size", cache_size.format(),
-             K(ret));
+    if (OB_UNLIKELY(increment_by > static_cast<int64_t>(0) && cache_inclusive_start > max_value)
+        || OB_UNLIKELY(increment_by < static_cast<int64_t>(0) && cache_inclusive_start < min_value)) {
+      ret = OB_AUTOINC_CACHE_NOT_EQUAL;
+    } else {
+      OZ(cache_range.set_start(cache_inclusive_start));
+      OZ(cache_range.set_end(cache_exclusive_end));
+      LOG_INFO("get next sequence batch success",
+              K(tenant_id),
+              K(sequence_id),
+              "cache_inclusive_start", cache_inclusive_start.format(),
+              "cache_exclusive_end", cache_exclusive_end.format(),
+              "increment_by", increment_by.format(),
+              "cache_size", cache_size.format(),
+              K(ret));
+    }
   }
 
   return ret;
@@ -324,8 +357,10 @@ int ObSequenceDMLProxy::next_batch(
 int ObSequenceDMLProxy::prefetch_next_batch(
     const uint64_t tenant_id,
     const uint64_t sequence_id,
+    const int64_t schema_version,
     const share::ObSequenceOption &option,
-    SequenceCacheNode &cache_range)
+    SequenceCacheNode &cache_range,
+    ObSequenceCacheItem &old_cache)
 {
   int ret = OB_SUCCESS;
   // set timeout for prefetch
@@ -334,8 +369,10 @@ int ObSequenceDMLProxy::prefetch_next_batch(
     LOG_WARN("failed to set timeout", K(ret));
   } else if (OB_FAIL(next_batch(tenant_id,
                                 sequence_id,
+                                schema_version,
                                 option,
-                                cache_range))) {
+                                cache_range,
+                                old_cache))) {
     LOG_WARN("fail prefetch sequence batch",
              K(tenant_id), K(sequence_id), K(option), K(ret));
   }

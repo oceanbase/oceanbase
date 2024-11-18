@@ -1746,6 +1746,7 @@ int ObCreateViewResolver::add_column_infos(const uint64_t tenant_id,
       } else if (OB_FAIL(fill_column_meta_infos(*expr,
                                                 table_schema.get_charset_type(),
                                                 table_schema.get_table_id(),
+                                                session_info,
                                                 column,
                                                 is_from_create_mview))) {
         LOG_WARN("failed to fill column meta infos", K(ret), K(column));
@@ -1766,6 +1767,7 @@ int ObCreateViewResolver::add_column_infos(const uint64_t tenant_id,
 int ObCreateViewResolver::fill_column_meta_infos(const ObRawExpr &expr,
                                                  const ObCharsetType charset_type,
                                                  const uint64_t table_id,
+                                                 sql::ObSQLSessionInfo &session_info,
                                                  ObColumnSchemaV2 &column,
                                                  bool is_from_create_mview /* =false */)
 {
@@ -1790,9 +1792,11 @@ int ObCreateViewResolver::fill_column_meta_infos(const ObRawExpr &expr,
     column.set_nullable(expr.get_result_type().is_not_null_for_read() ? false : true);
   }
   if (OB_FAIL(ret)) {
-  } else if ((column.is_enum_or_set() || column.is_collection())
+  } else if (column.is_collection()
              && OB_FAIL(column.set_extended_type_info(expr.get_enum_set_values()))) {
     LOG_WARN("set enum or set info failed", K(ret), K(expr));
+  } else if (OB_FAIL(adjust_enum_set_column_meta_info(expr, session_info, column))) {
+    LOG_WARN("fail to adjust enum set colum meta info", K(ret), K(expr));
   } else if (OB_FAIL(adjust_string_column_length_within_max(column, lib::is_oracle_mode()))) {
     LOG_WARN("failed to adjust string column length within max", K(ret), K(expr));
   } else if (OB_FAIL(adjust_number_decimal_column_accuracy_within_max(column, lib::is_oracle_mode()))) {
