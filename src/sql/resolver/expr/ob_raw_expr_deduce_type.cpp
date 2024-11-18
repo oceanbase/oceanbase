@@ -1203,7 +1203,7 @@ int ObRawExprDeduceType::check_expr_param(ObOpRawExpr &expr)
       }
     }
   } else if (lib::is_oracle_mode()
-             && (T_OP_EQ == expr.get_expr_type() || T_OP_NE == expr.get_expr_type())
+             && (MAYBE_ROW_OP(expr.get_expr_type()))
              && (T_OP_ROW == expr.get_param_expr(0)->get_expr_type() ||
                  T_OP_ROW == expr.get_param_expr(1)->get_expr_type())) {
     if (expr.get_param_expr(0)->get_expr_type() != T_OP_ROW
@@ -3896,8 +3896,10 @@ int ObRawExprDeduceType::add_implicit_cast(ObOpRawExpr &parent,
               ele_cnt = ele_cnt * child_ptr->get_param_expr(0)->get_param_count();
             }
           }
-          CK(idx + ele_cnt <= input_types.count());
           if (OB_FAIL(ret)) {
+          } else if (OB_UNLIKELY(idx + ele_cnt > input_types.count())) {
+            ret = OB_INVALID_ARGUMENT_NUM;
+            LOG_WARN("invalid argument num", K(idx), K(ele_cnt), K(input_types.count()));
           } else if (OB_FAIL(add_implicit_cast_for_op_row(
                       child_ptr,
                       ObExprTypeArrayHelper(

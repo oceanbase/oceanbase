@@ -71,18 +71,30 @@ int ObExprLeastGreatest::calc_result_typeN_oracle(ObExprResType &type,
     ObExprResType &first_type = types[0];
     type = first_type;
     ObObjTypeClass first_type_class = first_type.get_type_class();
-    /**
-     * number类型和其它类型行为不一致，单独处理
-     */
-    if (ObIntTC == first_type_class
-        || ObUIntTC == first_type_class
-        || ObNumberTC == first_type_class
-        || ObDecimalIntTC == first_type_class) {
-      type.set_type(ObNumberType);
-      type.set_calc_type(ObNumberType);
-      // scale和precision信息设置为unknown，兼容oracle的number行为
-      type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
-      type.set_precision(PRECISION_UNKNOWN_YET);
+    if (ob_is_numeric_tc(first_type_class)) {
+      ObObjType highest_numeric_type = ObNumberType;
+      for (int64_t i = 0; i < param_num; ++i) {
+        if (ob_is_float_tc(types[i].get_type())) {
+          highest_numeric_type = ObFloatType;
+        } else if (ob_is_double_tc(types[i].get_type())) {
+          // binary double in oracle is the highest numeric type
+          highest_numeric_type = ObDoubleType;
+          break;
+        }
+      }
+      /**
+      * number类型和其它类型行为不一致，单独处理
+      */
+      if (ObNumberType == highest_numeric_type) {
+        type.set_type(ObNumberType);
+        type.set_calc_type(ObNumberType);
+        // scale和precision信息设置为unknown，兼容oracle的number行为
+        type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
+        type.set_precision(PRECISION_UNKNOWN_YET);
+      } else {
+        type.set_type(highest_numeric_type);
+        type.set_calc_type(highest_numeric_type);
+      }
     } else if (ObLongTextType == type.get_type()) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("lob type parameter not expected", K(ret));
