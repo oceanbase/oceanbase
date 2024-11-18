@@ -916,6 +916,7 @@ public:
   int get_column_ids(uint64_t table_id, ObSqlBitSet<> &column_ids)const;
   int get_column_items(uint64_t table_id, ObIArray<ColumnItem> &column_items) const;
   int get_column_items(ObIArray<uint64_t> &table_ids, ObIArray<ColumnItem> &column_items) const;
+  int append_column_items_nodup(uint64_t table_id, uint64_t column_id, ObIArray<ColumnItem> &column_items) const;
   int get_column_exprs(ObIArray<ObColumnRefRawExpr*> &column_exprs) const;
   int get_column_exprs(ObIArray<ObRawExpr *> &column_exprs) const;
   int get_column_exprs(ObIArray<TableItem *> &table_items,
@@ -1231,6 +1232,18 @@ public:
   int do_formalize_lateral_derived_table_pre();
 
   int do_formalize_lateral_derived_table_post();
+
+  int get_partition_columns(const int64_t table_id,
+                            const int64_t ref_table_id,
+                            const share::schema::ObPartitionLevel part_level,
+                            ObIArray<ColumnItem> &partition_columns,
+                            ObIArray<ColumnItem> &generate_columns) const;
+
+  int extract_partition_columns(const int64_t table_id,
+                                const ObRawExpr *part_expr,
+                                ObIArray<ColumnItem> &partition_columns,
+                                ObIArray<ColumnItem> &generate_columns,
+                                const bool is_generate_column = false) const;
 
 protected:
   int create_table_item(TableItem *&table_item);

@@ -27,6 +27,7 @@ namespace oceanbase
 namespace common {
 class ObObj;
 class ObDSResultItem;
+class ObTabletID;
 }
 using namespace common;
 namespace sql
@@ -342,6 +343,7 @@ public:
   int append(const ObOptTabletLoc& tablet_loc);
   int append(const ObCandiTabletLoc& candi_tablet_loc);
   int append(const ObBatchEstTasks& task);
+  int append(const ObTabletID& id);
 /***********************************************/
 ////print template type
 /***********************************************/
