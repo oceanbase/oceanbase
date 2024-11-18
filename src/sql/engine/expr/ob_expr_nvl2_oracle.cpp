@@ -67,7 +67,7 @@ int ObExprNvl2Oracle::calc_nvl2_oracle_expr_batch(const ObExpr &expr,
       ObDatum *arg1 = args1.at(i);
       ObDatum *arg2 = args2.at(i);
       if (OB_FAIL(pl::ObPLDataType::datum_is_null(arg0, is_udt_type, v))) {
-        LOG_WARN("check complex value is null not support");
+        LOG_WARN("failed to check datum null", K(ret), K(arg0), K(is_udt_type));
       } else if (!v) {
         results[i].set_datum(*arg1);
       } else {
