@@ -842,6 +842,15 @@ DEF_BOOL(enable_sys_unit_standalone, OB_CLUSTER_PARAMETER, "False",
          "Value:  True:turned on  False: turned off",
          ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_STR_WITH_CHECKER(replica_parallel_migration_mode, OB_TENANT_PARAMETER, "auto",
+        common::ObConfigReplicaParallelMigrationChecker,
+        "specify the strategy for parallel migration of LS replicas. "
+        "'auto' means to allow parallel migration of LS replica of standby tenant "
+        "and prohibit the parallel migration of LS replica of primary tenant. "
+        "'on' means to allow parallel migration of LS replica of primary tenant and standby tenant. "
+        "'off' means to prohibit parallel migration of LS replica of primary tenant and standby tenant",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 //// daily merge  config
 // set to disable if don't want major freeze launch auto
 DEF_MOMENT(major_freeze_duty_time, OB_TENANT_PARAMETER, "02:00",
@@ -2287,6 +2296,11 @@ ERRSIM_DEF_INT(errsim_rebuild_ls_id, OB_CLUSTER_PARAMETER, "0", "[0,)",
 ERRSIM_DEF_STR(errsim_rebuild_addr, OB_CLUSTER_PARAMETER, "",
         "rebuild addr (ip:port)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+ERRSIM_DEF_BOOL(enable_parallel_migration, OB_CLUSTER_PARAMETER, "False",
+         "turn on parallel migration, observer preferentially choose same zone as src",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_BOOL(_enable_adaptive_auto_dop, OB_CLUSTER_PARAMETER, "False",
          "Enable or disable adaptive auto dop feature.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

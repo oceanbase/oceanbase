@@ -187,6 +187,7 @@ struct ObMigrationOpArg
   common::ObReplicaMember dst_;
   common::ObReplicaMember data_src_;
   int64_t paxos_replica_number_;
+  bool prioritize_same_zone_src_;
 };
 
 struct ObTabletsTransferArg
@@ -721,26 +722,6 @@ public:
   common::ObArray<common::ObAddr> member_list_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLSMemberListInfo);
-};
-
-struct ObMigrationChooseSrcHelperInitParam final
-{
-public:
-  ObMigrationChooseSrcHelperInitParam();
-  ~ObMigrationChooseSrcHelperInitParam() = default;
-  void reset();
-  bool is_valid() const;
-  int assign(const ObMigrationChooseSrcHelperInitParam &param);
-
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(local_clog_checkpoint_scn), K_(arg), K_(info), K_(is_first_c_replica));
-  uint64_t tenant_id_;
-  share::ObLSID ls_id_;
-  share::SCN local_clog_checkpoint_scn_;
-  ObMigrationOpArg arg_;
-  ObLSMemberListInfo info_;
-  bool is_first_c_replica_; // whether the dst is the first C replica in the learner list
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObMigrationChooseSrcHelperInitParam);
 };
 
 }

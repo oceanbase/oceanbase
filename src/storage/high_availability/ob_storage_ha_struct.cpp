@@ -1101,7 +1101,8 @@ ObMigrationOpArg::ObMigrationOpArg()
     src_(),
     dst_(),
     data_src_(),
-    paxos_replica_number_(0)
+    paxos_replica_number_(0),
+    prioritize_same_zone_src_(false)
 {
 }
 
@@ -1127,6 +1128,7 @@ void ObMigrationOpArg::reset()
   dst_.reset();
   data_src_.reset();
   paxos_replica_number_ = 0;
+  prioritize_same_zone_src_ = false;
 }
 
 /******************ObTabletsTransferArg*********************/
@@ -2495,53 +2497,6 @@ int ObLSMemberListInfo::assign(const ObLSMemberListInfo &info)
   } else {
     learner_list_ = info.learner_list_;
     leader_addr_ = info.leader_addr_;
-  }
-  return ret;
-}
-
-ObMigrationChooseSrcHelperInitParam::ObMigrationChooseSrcHelperInitParam()
-  : tenant_id_(OB_INVALID_ID),
-    ls_id_(),
-    local_clog_checkpoint_scn_(),
-    arg_(),
-    info_(),
-    is_first_c_replica_(false)
-{
-}
-
-void ObMigrationChooseSrcHelperInitParam::reset()
-{
-  tenant_id_ = OB_INVALID_ID;
-  ls_id_.reset();
-  local_clog_checkpoint_scn_.reset();
-  arg_.reset();
-  info_.reset();
-  is_first_c_replica_ = false;
-}
-
-bool ObMigrationChooseSrcHelperInitParam::is_valid() const
-{
-  return OB_INVALID_ID != tenant_id_
-      && ls_id_.is_valid()
-      && local_clog_checkpoint_scn_.is_valid()
-      && arg_.is_valid()
-      && info_.is_valid();
-}
-
-int ObMigrationChooseSrcHelperInitParam::assign(const ObMigrationChooseSrcHelperInitParam &param)
-{
-  int ret = OB_SUCCESS;
-  if (!param.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument!", K(ret), K(param));
-  } else if (OB_FAIL(info_.assign(param.info_))) {
-    LOG_WARN("failed to assign param", K(ret), K(param));
-  } else {
-    tenant_id_ = param.tenant_id_;
-    ls_id_ = param.ls_id_;
-    local_clog_checkpoint_scn_ = param.local_clog_checkpoint_scn_;
-    arg_ = param.arg_;
-    is_first_c_replica_ = param.is_first_c_replica_;
   }
   return ret;
 }

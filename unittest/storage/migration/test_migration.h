@@ -511,58 +511,70 @@ static share::SCN mock_ckpt_inc(share::SCN &local_ls_checkpoint_scn)
   return result;
 }
 
-static int get_checkpoint_policy(const ObMigrationOpArg &arg, const uint64_t tenant_id,
+static int get_checkpoint_policy(
+    const ObMigrationOpArg &arg,
+    const uint64_t tenant_id,
     const common::GlobalLearnerList &learner_list,
-    ObStorageHASrcProvider::ChooseSourcePolicy &policy)
+    ObStorageHASrcProvider::ChooseSourcePolicy &policy,
+    bool &use_c_replica_policy)
 {
   int ret = OB_SUCCESS;
   bool enable_choose_source_policy = false;
   const char *str = "idc";
   if (OB_FAIL(ObStorageHAChooseSrcHelper::get_policy_type(arg, tenant_id,
-      enable_choose_source_policy, str, learner_list, policy))) {
+      enable_choose_source_policy, str, learner_list, policy, use_c_replica_policy))) {
     LOG_WARN("failed to get policy type", K(ret), K(arg), K(tenant_id), K(learner_list));
   }
   return ret;
 }
 
 
-static int get_recommand_policy(const ObMigrationOpArg &arg, const uint64_t tenant_id,
+static int get_recommand_policy(
+    const ObMigrationOpArg &arg,
+    const uint64_t tenant_id,
     const common::GlobalLearnerList &learner_list,
-    ObStorageHASrcProvider::ChooseSourcePolicy &policy)
+    ObStorageHASrcProvider::ChooseSourcePolicy &policy,
+    bool &use_c_replica_policy)
 {
   int ret = OB_SUCCESS;
   bool enable_choose_source_policy = true;
   const char *str = "idc";
   if (OB_FAIL(ObStorageHAChooseSrcHelper::get_policy_type(arg, tenant_id,
-      enable_choose_source_policy, str, learner_list, policy))) {
+      enable_choose_source_policy, str, learner_list, policy, use_c_replica_policy))) {
     LOG_WARN("failed to get policy type", K(ret), K(arg), K(tenant_id), K(learner_list));
   }
   return ret;
 }
 
-static int get_idc_policy(const ObMigrationOpArg &arg, const uint64_t tenant_id,
+static int get_idc_policy(
+    const ObMigrationOpArg &arg,
+    const uint64_t tenant_id,
     const common::GlobalLearnerList &learner_list,
-    ObStorageHASrcProvider::ChooseSourcePolicy &policy)
+    ObStorageHASrcProvider::ChooseSourcePolicy &policy,
+    bool &use_c_replica_policy)
 {
   int ret = OB_SUCCESS;
   bool enable_choose_source_policy = true;
   const char *str = "idc";
   if (OB_FAIL(ObStorageHAChooseSrcHelper::get_policy_type(arg, tenant_id,
-      enable_choose_source_policy, str, learner_list, policy))) {
+      enable_choose_source_policy, str, learner_list, policy, use_c_replica_policy))) {
     LOG_WARN("failed to get policy type", K(ret), K(arg), K(tenant_id), K(learner_list));
   }
   return ret;
 }
 
-static int get_region_policy(const ObMigrationOpArg &arg, const uint64_t tenant_id,
+static int get_region_policy(
+    const ObMigrationOpArg &arg,
+    const uint64_t tenant_id,
     const common::GlobalLearnerList &learner_list,
-    ObStorageHASrcProvider::ChooseSourcePolicy &policy)
+    ObStorageHASrcProvider::ChooseSourcePolicy &policy,
+    bool &use_c_replica_policy)
 {
   int ret = OB_SUCCESS;
   bool enable_choose_source_policy = true;
   const char *str = "region";
   if (OB_FAIL(ObStorageHAChooseSrcHelper::get_policy_type(arg, tenant_id,
-      enable_choose_source_policy, str, learner_list, policy))) {
+      enable_choose_source_policy, str, learner_list, policy, use_c_replica_policy))) {
     LOG_WARN("failed to get policy type", K(ret), K(arg), K(tenant_id), K(learner_list));
   }
   return ret;

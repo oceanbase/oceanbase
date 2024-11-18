@@ -127,9 +127,9 @@ enum ObDRTaskRetComment
 
 class ObDRTaskQueue;
 const char *ob_disaster_recovery_task_type_strs(const rootserver::ObDRTaskType type);
+int parse_disaster_recovery_task_type_from_string(const ObString &task_type_str, rootserver::ObDRTaskType& task_type);
 const char *ob_disaster_recovery_task_priority_strs(const rootserver::ObDRTaskPriority task_priority);
 const char* ob_disaster_recovery_task_ret_comment_strs(const rootserver::ObDRTaskRetComment ret_comment);
-const char *ob_replica_type_strs(const ObReplicaType type);
 bool is_manual_dr_task_data_version_match(uint64_t tenant_data_version);
 int build_execute_result(
     const int ret_code,
@@ -179,50 +179,6 @@ private:
 };
 
 class ObDRTaskMgr;
-enum class ObDRTaskKeyType : int64_t
-{
-  INVALID = -1,
-  FORMAL_DR_KEY = 0,
-};
-
-class ObDRTaskKey
-{
-public:
-  ObDRTaskKey() : key_1_(-1),
-                  key_2_(-1),
-                  key_3_(-1),
-                  key_4_(-1),
-                  key_type_(ObDRTaskKeyType::INVALID),
-                  hash_value_(0) {}
-  virtual ~ObDRTaskKey() {}
-public:
-  bool is_valid() const;
-  bool operator==(const ObDRTaskKey &that) const;
-  ObDRTaskKey &operator=(const ObDRTaskKey &that);
-  uint64_t hash() const;
-  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
-  int init(const uint64_t key_1,
-           const uint64_t key_2,
-           const uint64_t key_3,
-           const uint64_t key_4,
-           const ObDRTaskKeyType key_type);
-  int init(const ObDRTaskKey &that);
-  ObDRTaskKeyType get_key_type() const { return key_type_; }
-  TO_STRING_KV(K_(key_1),
-               K_(key_2),
-               K_(key_3),
-               K_(key_4),
-               K_(key_type));
-private:
-  uint64_t inner_hash() const;
-private:
-  uint64_t key_1_;
-  uint64_t key_2_;
-  uint64_t key_3_;
-  uint64_t key_4_;
-  ObDRTaskKeyType key_type_;
-  uint64_t hash_value_;
-};
 
 enum class ObDRTaskType : int64_t
 {
@@ -234,6 +190,40 @@ enum class ObDRTaskType : int64_t
   LS_REMOVE_NON_PAXOS_REPLICA,
   LS_MODIFY_PAXOS_REPLICA_NUMBER,
   MAX_TYPE,
+};
+
+class ObDRTaskKey
+{
+public:
+  ObDRTaskKey() : tenant_id_(OB_INVALID_TENANT_ID),
+                  ls_id_(),
+                  task_execute_zone_(),
+                  task_type_(ObDRTaskType::MAX_TYPE) {}
+  virtual ~ObDRTaskKey() {}
+public:
+  void reset();
+  bool is_valid() const;
+  bool operator==(const ObDRTaskKey &that) const;
+  int init(const uint64_t tenant_id,
+           const share::ObLSID &ls_id,
+           const common::ObZone &task_execute_zone,
+           const ObDRTaskType &task_type);
+  int assign(const ObDRTaskKey &that);
+  ObDRTaskKey& operator=(const ObDRTaskKey&) = delete;
+  TO_STRING_KV(K_(tenant_id),
+               K_(ls_id),
+               K_(task_execute_zone),
+               K_(task_type));
+
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  const share::ObLSID &get_ls_id() const { return ls_id_; }
+  const common::ObZone &get_zone() const { return task_execute_zone_; }
+  const ObDRTaskType &get_task_type() const { return task_type_; }
+private:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  common::ObZone task_execute_zone_;
+  ObDRTaskType task_type_;
 };
 
 enum class ObDRTaskPriority : int64_t 
@@ -255,7 +245,6 @@ public:
                ls_id_(),
                cluster_id_(-1),
                transmit_data_size_(0),
-               sibling_in_schedule_(false),
                invoked_source_(obrpc::ObAdminClearDRTaskArg::TaskType::AUTO),
                generate_time_(common::ObTimeUtility::current_time()),
                priority_(ObDRTaskPriority::MAX_PRI),
@@ -332,7 +321,6 @@ public:
                        K_(ls_id),
                        K_(cluster_id),
                        K_(transmit_data_size),
-                       K_(sibling_in_schedule),
                        K_(invoked_source),
                        K_(generate_time),
                        K_(priority),
@@ -346,12 +334,6 @@ public:
   const ObDRTaskKey &get_task_key() const { return task_key_; }
   int set_task_key(
       const ObDRTaskKey &task_key);
-  int set_task_key(
-      const uint64_t key_1,
-      const uint64_t key_2,
-      const uint64_t key_3,
-      const uint64_t key_4,
-      const ObDRTaskKeyType key_type);
   // operations of tenant_id
   uint64_t get_tenant_id() const { return tenant_id_; }
   void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
@@ -364,9 +346,6 @@ public:
   // operations of transmit_data_size
   int64_t get_transmit_data_size() const { return transmit_data_size_; }
   void set_transmit_data_size(const int64_t size) { transmit_data_size_ = size; }
-  // operations of sibling_in_schedule
-  bool is_sibling_in_schedule() const { return sibling_in_schedule_; }
-  void set_sibling_in_schedule(bool is_schedule) { sibling_in_schedule_ = is_schedule; }
   // operations of invoked_source_
   obrpc::ObAdminClearDRTaskArg::TaskType get_invoked_source() const { return invoked_source_; }
   void set_invoked_source(obrpc::ObAdminClearDRTaskArg::TaskType t) { invoked_source_ = t; }
@@ -412,7 +391,6 @@ protected:
    * transmitted, so the tranmit_data_size_ is set to zero.
    */
   int64_t transmit_data_size_;
-  bool sibling_in_schedule_;
   obrpc::ObAdminClearDRTaskArg::TaskType invoked_source_;
   int64_t generate_time_;
   ObDRTaskPriority priority_;
@@ -430,7 +408,8 @@ public:
                              src_member_(),
                              data_src_member_(),
                              force_data_src_member_(),
-                             paxos_replica_number_(0) {}
+                             paxos_replica_number_(0),
+                             prioritize_same_zone_src_(false) {}
   virtual ~ObMigrateLSReplicaTask() {}
 public:
   int build(
@@ -449,8 +428,7 @@ public:
       const common::ObReplicaMember &src_member,
       const common::ObReplicaMember &data_src_member,
       const common::ObReplicaMember &force_data_src_member,
-      const int64_t paxos_replica_number
-      );
+      const int64_t paxos_replica_number);
 
   // only use some necessary information build a ObMigrateLSReplicaTask
   // Specifically, this method is only used when manually executing operation and maintenance commands
@@ -480,7 +458,8 @@ public:
                                K(src_member_),
                                K(data_src_member_),
                                K(force_data_src_member_),
-                               K(paxos_replica_number_));
+                               K(paxos_replica_number_),
+                               K(prioritize_same_zone_src_));
 
   virtual int get_execute_transmit_size(
       int64_t &execute_transmit_size) const override;
@@ -514,6 +493,8 @@ public:
       void *input_ptr,
       ObDRTask *&output_task) const override;
 public:
+  bool get_prioritize_same_zone_src() const { return prioritize_same_zone_src_; };
+  void set_prioritize_same_zone_src(bool p) { prioritize_same_zone_src_ = p; };
   // operations of dst_replica_
   int set_dst_replica(
       const ObDstReplica &that);
@@ -548,6 +529,7 @@ private:
   common::ObReplicaMember data_src_member_;
   common::ObReplicaMember force_data_src_member_;
   int64_t paxos_replica_number_;
+  bool prioritize_same_zone_src_;
 };
 
 class ObAddLSReplicaTask : public ObDRTask

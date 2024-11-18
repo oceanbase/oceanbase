@@ -221,6 +221,7 @@ recover_table_concurrency
 recover_table_dop
 recyclebin_object_expire_time
 redundancy_level
+replica_parallel_migration_mode
 resource_hard_limit
 rootservice_async_task_queue_size
 rootservice_async_task_thread_count

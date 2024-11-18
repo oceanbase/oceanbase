@@ -46,12 +46,13 @@ int ObDRTaskTableUpdateTask::init(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("task init failed", KR(ret), K(tenant_id), K(ls_id),
              K(task_type), K(task_id), K(add_timestamp));
+  } else if (OB_FAIL(task_key_.assign(task_key))) {
+    LOG_WARN("failed to assign task_key", KR(ret), K(task_key));
   } else {
     tenant_id_ = tenant_id;
     ls_id_ = ls_id;
     task_type_ = task_type;
     task_id_ = task_id;
-    task_key_ = task_key;
     ret_code_ = ret_code;
     need_clear_server_data_in_limit_ = need_clear_server_data_in_limit;
     need_record_event_ = need_record_event;
@@ -65,16 +66,19 @@ int ObDRTaskTableUpdateTask::assign(const ObDRTaskTableUpdateTask &other)
 {
   int ret = OB_SUCCESS;
   if (this != &other) {
-    tenant_id_ = other.tenant_id_;
-    ls_id_ = other.ls_id_;
-    task_type_ = other.task_type_;
-    task_id_ = other.task_id_;
-    task_key_ = other.task_key_;
-    ret_code_ = other.ret_code_;
-    need_clear_server_data_in_limit_ = other.need_clear_server_data_in_limit_;
-    need_record_event_ = other.need_record_event_;
-    ret_comment_ = other.ret_comment_;
-    add_timestamp_ = other.add_timestamp_;
+    if (OB_FAIL(task_key_.assign(other.task_key_))) {
+      LOG_WARN("failed to assign task_key", KR(ret), K(other));
+    } else {
+      tenant_id_ = other.tenant_id_;
+      ls_id_ = other.ls_id_;
+      task_type_ = other.task_type_;
+      task_id_ = other.task_id_;
+      ret_code_ = other.ret_code_;
+      need_clear_server_data_in_limit_ = other.need_clear_server_data_in_limit_;
+      need_record_event_ = other.need_record_event_;
+      ret_comment_ = other.ret_comment_;
+      add_timestamp_ = other.add_timestamp_;
+    }
   }
   return ret;
 }
@@ -314,7 +318,6 @@ int ObDRTaskTableUpdater::process_task_(
     // must be committed successfully, if memory cleaning fails, rely on detection to clean up the memory.
     if (FAILEDx(task_mgr_->do_cleaning(
                      task.get_task_id(),
-                     task.get_task_key(),
                      task.get_ret_code(),
                      task.get_need_clear_server_data_in_limit(),
                      task.get_need_record_event(),

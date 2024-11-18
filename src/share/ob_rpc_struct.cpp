@@ -4465,7 +4465,8 @@ int ObLSMigrateReplicaArg::init(
     const common::ObReplicaMember &discarded_data_source,
     const int64_t paxos_replica_number,
     const bool skip_change_member_list,
-    const common::ObReplicaMember &force_data_source)
+    const common::ObReplicaMember &force_data_source,
+    const bool prioritize_same_zone_src)
 {
   int ret = OB_SUCCESS;
   task_id_ = task_id;
@@ -4477,6 +4478,7 @@ int ObLSMigrateReplicaArg::init(
   paxos_replica_number_ = paxos_replica_number;
   skip_change_member_list_ = skip_change_member_list;
   force_data_source_ = force_data_source;
+  prioritize_same_zone_src_ = prioritize_same_zone_src;
   return ret;
 }
 

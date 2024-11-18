@@ -4873,7 +4873,8 @@ public:
       const common::ObReplicaMember &discarded_data_source,
       const int64_t paxos_replica_number,
       const bool skip_change_member_list,
-      const common::ObReplicaMember &force_data_source);
+      const common::ObReplicaMember &force_data_source,
+      const bool prioritize_same_zone_src);
 
   TO_STRING_KV(K_(task_id),
                K_(tenant_id),

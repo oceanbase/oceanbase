@@ -1476,6 +1476,14 @@ bool ObConfigRegexpEngineChecker::check(const ObConfigItem &t) const
   return valid;
 }
 
+bool ObConfigReplicaParallelMigrationChecker::check(const ObConfigItem &t) const
+{
+  ObString v_str(t.str());
+  return 0 == v_str.case_compare("auto")
+      || 0 == v_str.case_compare("on")
+      || 0 == v_str.case_compare("off");
+}
+
 bool ObConfigS3URLEncodeTypeChecker::check(const ObConfigItem &t) const
 {
   // When compliantRfc3986Encoding is set to true:

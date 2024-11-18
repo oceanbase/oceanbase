@@ -963,6 +963,16 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigS3URLEncodeTypeChecker);
 };
 
+class ObConfigReplicaParallelMigrationChecker : public ObConfigChecker
+{
+public:
+  ObConfigReplicaParallelMigrationChecker() {}
+  virtual ~ObConfigReplicaParallelMigrationChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigReplicaParallelMigrationChecker);
+};
+
 class ObConfigDegradationPolicyChecker : public ObConfigChecker
 {
 public:
