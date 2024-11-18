@@ -68,6 +68,7 @@ public:
       is_proto20_used_(false), is_checksum_off_(false),
       has_extra_info_(false), is_new_extra_info_(false),
       curr_proto20_packet_start_pos_(0), txn_free_route_(false),
+      is_dup_ls_modified_(false),
       is_filename_packet_(false) {}
   ~ObProto20Context() {}
 
@@ -85,6 +86,7 @@ public:
                 K_(has_extra_info),
                 K_(is_new_extra_info),
                 K_(txn_free_route),
+                K_(is_dup_ls_modified),
                 K_(curr_proto20_packet_start_pos),
                 K_(is_filename_packet));
 
@@ -101,6 +103,7 @@ public:
   bool is_new_extra_info_;
   int64_t curr_proto20_packet_start_pos_;
   bool txn_free_route_;
+  bool is_dup_ls_modified_;
   // used in local local.
   // We should set `is_filename_packet_` when sending PKT_FILENAME packet.
   bool is_filename_packet_;
