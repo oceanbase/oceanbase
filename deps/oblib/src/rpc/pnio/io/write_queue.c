@@ -87,8 +87,8 @@ inline void wq_push(write_queue_t* wq, dlink_t* l) {
 
 inline int wq_delete(write_queue_t* wq, dlink_t* l) {
   int err = PNIO_OK;
-  if (dqueue_top(&wq->queue) == l) {
-    // not to delete the first req of write_queue
+  if (dqueue_top(&wq->queue) == l && wq->pos > 0) {
+    // req has been sending, it cannot be deleted
     err = PNIO_ERROR;
   } else if (l == l->prev) {
     // req hasn't been inserted into flush_list
