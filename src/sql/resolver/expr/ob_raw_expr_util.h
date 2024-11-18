@@ -1282,6 +1282,11 @@ public:
                                          ObRawExpr *right_expr,
                                          ObRawExpr *&expr);
 
+  static int wrap_cm_warn_on_fail_if_need(const ObRawExpr *src_expr,
+                                          const ObExprResType &dst_type,
+                                          const ObSQLSessionInfo *session,
+                                          ObCastMode &cm);
+
   static int copy_and_formalize(ObRawExpr *&expr,
                                 ObRawExprCopier *copier,
                                 ObSQLSessionInfo *session_info);

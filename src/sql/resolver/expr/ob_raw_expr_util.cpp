@@ -4361,10 +4361,14 @@ int ObRawExprUtils::create_cast_expr(ObRawExprFactory &expr_factory,
   int ret = OB_SUCCESS;
   CK(OB_NOT_NULL(src_expr));
   CK(OB_NOT_NULL(session));
-  if (OB_SUCC(ret) && use_def_cm) {
-    OZ(ObSQLUtils::get_default_cast_mode(false,/* explicit_cast */
-                                         0,    /* result_flag */
-                                         session, cm));
+  if (OB_SUCC(ret)) {
+    if (use_def_cm && OB_FAIL(ObSQLUtils::get_default_cast_mode(false,/* explicit_cast */
+                                            0,    /* result_flag */
+                                            session, cm))) {
+      LOG_WARN("fail to get default cast mode", K(ret));
+    } else if (OB_FAIL(wrap_cm_warn_on_fail_if_need(src_expr, dst_type, session, cm))) {
+      LOG_WARN("fail to wrap cast mode", K(ret));
+    }
   }
   if (OB_SUCC(ret)) {
     const ObExprResType &src_type = src_expr->get_result_type();
@@ -4423,6 +4427,48 @@ int ObRawExprUtils::create_cast_expr(ObRawExprFactory &expr_factory,
       OZ(func_expr->formalize_with_local_vars(session, local_vars, local_var_id));
     } else {
       OZ(func_expr->formalize(session));
+    }
+  }
+  return ret;
+}
+
+int ObRawExprUtils::wrap_cm_warn_on_fail_if_need(const ObRawExpr *src_expr,
+                                                 const ObExprResType &dst_type,
+                                                 const ObSQLSessionInfo *session,
+                                                 ObCastMode &cm)
+{
+  int ret = OB_SUCCESS;
+  bool skip_wrap_cast_mode = false;
+  if (OB_ISNULL(src_expr) || OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null expr or session", K(ret), KP(src_expr), KP(session));
+  } else if (lib::is_mysql_mode()
+                && is_strict_mode(session->get_sql_mode())
+                && !session->is_ignore_stmt()
+                && !CM_IS_COLUMN_CONVERT(cm)
+                && session->get_stmt_type() != stmt::T_SELECT
+                && session->get_stmt_type() != stmt::T_EXPLAIN) {
+    // check whether it is a conversion from constant to temporal type. If so, the warn_on_fail
+    // cast mode cannot be added.
+    if (src_expr->is_static_const_expr() && ob_is_temporal_type(dst_type.get_type())) {
+      skip_wrap_cast_mode = true;
+    }
+    // checks if the source of the cast is a column or constant.
+    if (OB_SUCC(ret) && !skip_wrap_cast_mode) {
+      const ObRawExpr *real_expr_without_cast = src_expr;
+      while (OB_NOT_NULL(real_expr_without_cast)
+          && T_FUN_SYS_CAST == real_expr_without_cast->get_expr_type()) {
+        real_expr_without_cast = real_expr_without_cast->get_param_expr(0);
+      }
+      if (OB_ISNULL(real_expr_without_cast)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null expr", K(ret));
+      } else if (!IS_DATATYPE_OR_QUESTIONMARK_OP(real_expr_without_cast->get_expr_type())
+                  && !real_expr_without_cast->is_column_ref_expr()) {
+        // For MySQL's strict mode, sql mode only affects columns and constants, and casts of
+        // other expr should not follow the strict mode error reporting.
+        cm |= CM_WARN_ON_FAIL;
+      }
     }
   }
   return ret;
