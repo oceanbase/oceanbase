@@ -6417,6 +6417,8 @@ int JoinPath::compute_join_path_property()
     LOG_WARN("failed to compute pipelined path", K(ret));
   } else if (OB_FAIL(check_is_contain_normal_nl())) {
     LOG_WARN("failed to check is contain normal nl", K(ret));
+  } else if (OB_FAIL(compute_adaptive_join_threshold())) {
+    LOG_WARN("failed to compute adaptive join threshold", K(ret));
   } else {
     LOG_TRACE("succeed to compute join path property");
   }
@@ -6823,6 +6825,30 @@ int JoinPath::compute_join_path_parallel_and_server_info(ObOptimizerContext *opt
   return ret;
 }
 
+int JoinPath::compute_adaptive_join_threshold()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(left_path_) || OB_ISNULL(right_path_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null path", K(ret));
+  } else if (!left_path_->is_join_path()) {
+    //do nothing
+  } else if (is_adaptive_join() && HASH_JOIN == get_join_algo()) {
+    Path* left_path = const_cast<Path*>(left_path_);
+    JoinPath *nlj_path = static_cast<JoinPath*>(left_path);
+    const Path* nlj_right_path = nlj_path->right_path_;
+    if (OB_NOT_NULL(nlj_right_path)) {
+      double nlj_rescan_cost = nlj_right_path->get_cost();
+      nlj_rescan_cost = nlj_rescan_cost < 1 ? 1 : nlj_rescan_cost;
+      double hj_right_cost = right_path_->get_cost();
+      double hj_cost = op_cost_;
+      nlj_path->adaptive_threshold_ = (hj_cost + hj_right_cost) / nlj_rescan_cost;
+      LOG_TRACE("succeed to compute adaptive join threshold", K(hj_cost), K(hj_right_cost), K(nlj_rescan_cost));
+    }
+  }
+  return ret;
+}
+
 int JoinPath::compute_nlj_batch_rescan()
 {
   int ret = OB_SUCCESS;
@@ -7158,6 +7184,9 @@ int JoinPath::get_re_estimate_param(EstimateCostInfo &param,
     if (right_path_->is_inner_path() && (right_param.need_row_count_ > 1 || right_param.need_row_count_ < 0)
         && (LEFT_SEMI_JOIN == join_type_ || LEFT_ANTI_JOIN == join_type_)) {
       right_param.need_row_count_ = 1;
+    }
+    if (is_adaptive_join() && right_path_->is_inner_path()) {
+        right_param.override_ = true;
     }
 
     if (re_est_for_op) {
@@ -11149,10 +11178,6 @@ int ObJoinOrder::create_and_add_aj_path(const Path *left_path,
                                            hj_path))) {
     LOG_WARN("failed to create hash join path", K(ret));
   } else {
-    double nlj_rescan_cost = nlj_right_path->get_cost();
-    nlj_rescan_cost = nlj_rescan_cost < 1 ? 1 : nlj_rescan_cost;
-    double hj_right_cost = hj_right_path->get_cost();
-    static_cast<JoinPath*>(nlj_path)->adaptive_threshold_ = (hj_path->op_cost_ + hj_right_cost) / nlj_rescan_cost;
     static_cast<JoinPath*>(nlj_path)->adaptive_dist_algo_ = join_dist_algo;
     static_cast<JoinPath*>(hj_path)->adaptive_dist_algo_ = join_dist_algo;
     OPT_TRACE("create new ADAPTIVE Join path:", static_cast<JoinPath*>(hj_path));

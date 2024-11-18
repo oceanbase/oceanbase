@@ -1069,6 +1069,7 @@ struct EstimateCostInfo {
     int compute_join_path_sharding();
     int compute_join_path_plan_type();
     int compute_join_path_parallel_and_server_info();
+    int compute_adaptive_join_threshold();
     int re_adjust_sharding_ordering_info();
     int compute_nlj_batch_rescan();
     int check_right_has_gi_or_exchange(bool &right_has_gi_or_exchange);
