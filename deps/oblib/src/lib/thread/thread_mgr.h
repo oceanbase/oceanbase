@@ -1185,7 +1185,7 @@ public:
       ret = tmp_tg->logical_start();                                                                    \
     } else {                                                                                            \
       ret = common::OB_ERR_UNEXPECTED;                                                                  \
-      OB_LOG(WARN, "logical start only can be used with REENTRANT_THREAD_POOL");                        \
+      OB_LOG(ERROR, "logical start only can be used with REENTRANT_THREAD_POOL");                       \
     }                                                                                                   \
     ret;                                                                                                \
   })
@@ -1203,7 +1203,7 @@ public:
       tmp_tg->logical_stop();                                                                           \
     } else {                                                                                            \
       ret = common::OB_ERR_UNEXPECTED;                                                                  \
-      OB_LOG(WARN, "logical stop only can be used with REENTRANT_THREAD_POOL");                         \
+      OB_LOG(ERROR, "logical stop only can be used with REENTRANT_THREAD_POOL");                        \
     }                                                                                                   \
   })
 
@@ -1220,7 +1220,7 @@ public:
       tmp_tg->logical_wait();                                                                           \
     } else {                                                                                            \
       ret = common::OB_ERR_UNEXPECTED;                                                                  \
-      OB_LOG(WARN, "logical stop only can be used with REENTRANT_THREAD_POOL");                         \
+      OB_LOG(ERROR, "logical stop only can be used with REENTRANT_THREAD_POOL");                        \
     }                                                                                                   \
   })
 } // end of namespace lib
