@@ -2553,7 +2553,14 @@ int ObBackupMacroBlockTaskMgr::wait_task_(const int64_t task_id)
   int ret = OB_SUCCESS;
   while (OB_SUCC(ret) && task_id != ATOMIC_LOAD(&cur_task_id_)) {
     ObThreadCondGuard guard(cond_);
-    if (OB_FAIL(cond_.wait(DEFAULT_WAIT_TIME_MS))) {
+    if (OB_ISNULL(ls_backup_ctx_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls backup ctx should not be null", K(ret));
+    } else if (OB_SUCCESS != ls_backup_ctx_->get_result_code()) {
+      ret = ls_backup_ctx_->get_result_code();
+      LOG_INFO("ls backup ctx already failed", K(ret));
+      break;
+    } else if (OB_FAIL(cond_.wait(DEFAULT_WAIT_TIME_MS))) {
       if (OB_TIMEOUT == ret) {
         ret = OB_SUCCESS;
         LOG_WARN("waiting for task too slow", K(ret), K(task_id), K(cur_task_id_));
