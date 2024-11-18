@@ -394,6 +394,7 @@ int ObMPConnect::process()
       session->set_client_sessid_support(conn->proxy_cap_flags_.is_client_sessid_support()
         || (conn->proxy_sessid_ == 0));
       session->set_feedback_proxy_info_support(conn->proxy_cap_flags_.is_feedback_proxy_info_support());
+      session->set_session_sync_support(conn->proxy_cap_flags_.is_session_sync_support());
       session->get_control_info().support_show_trace_ = conn->proxy_cap_flags_.is_flt_show_trace_support();
       LOG_TRACE("setup user resource group OK",
                "user_id", session->get_user_id(),
