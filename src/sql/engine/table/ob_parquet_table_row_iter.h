@@ -179,6 +179,7 @@ private:
     int load_int64_to_int64_vec();
     int load_int32_to_int64_vec();
     int load_int32_to_int32_vec();
+    int load_bool_to_int64_vec();
     int load_string_col();
     int load_fixed_string_col();
     int load_decimal_any_col();
