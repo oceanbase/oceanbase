@@ -701,24 +701,36 @@ int ObArchiveHandler::checkpoint_(ObTenantArchiveRoundAttr &round_info)
       if (OB_FAIL(start_archive_(round_info))) {
         LOG_WARN("failed to prepare archive", K(ret), K(round_info));
       }
-    }
       break;
+    }
     case ObArchiveRoundState::Status::BEGINNING: {
       DEBUG_SYNC(BEFROE_LOG_ARCHIVE_SCHEDULE_BEGINNING);
+      if (OB_FAIL(do_checkpoint_(round_info))) {
+        LOG_WARN("failed to checkpoint", K(ret), K(round_info));
+      }
+      break;
     }
     case ObArchiveRoundState::Status::DOING: {
       DEBUG_SYNC(BEFROE_LOG_ARCHIVE_SCHEDULE_DOING);
+      if (OB_FAIL(do_checkpoint_(round_info))) {
+        LOG_WARN("failed to checkpoint", K(ret), K(round_info));
+      }
+      break;
     }
     case ObArchiveRoundState::Status::SUSPENDING: {
       DEBUG_SYNC(BEFROE_LOG_ARCHIVE_SCHEDULE_SUSPENDING);
+      if (OB_FAIL(do_checkpoint_(round_info))) {
+        LOG_WARN("failed to checkpoint", K(ret), K(round_info));
+      }
+      break;
     }
     case ObArchiveRoundState::Status::STOPPING: {
       DEBUG_SYNC(BEFROE_LOG_ARCHIVE_SCHEDULE_STOPPING);
       if (OB_FAIL(do_checkpoint_(round_info))) {
         LOG_WARN("failed to checkpoint", K(ret), K(round_info));
       }
-    }
       break;
+    }
     default: {
       ret = OB_ERR_SYS;
       LOG_ERROR("unknown archive status", K(ret), K(round_info));
@@ -779,6 +791,7 @@ int ObArchiveHandler::do_checkpoint_(share::ObTenantArchiveRoundAttr &round_info
   } else if (!can) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("tenant can not do archive", K(ret), K_(tenant_id));
+  } else if (OB_FALSE_IT(DEBUG_SYNC(BEFROE_LOG_ARCHIVE_DO_CHECKPOINT))) {
   } else if (OB_FAIL(checkpointer.init(&round_handler_, piece_generated_cb, round_checkpoint_cb, max_checkpoint_scn))) {
     LOG_WARN("failed to init checkpointer", K(ret), K(round_info));
   } else if (round_info.state_.is_stopping() && OB_FAIL(check_allow_force_stop_(round_info, allow_force_stop))) {
