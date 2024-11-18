@@ -1213,10 +1213,16 @@ int ObService::check_schema_version_elapsed(
         const ObTabletID &tablet_id = arg.tablets_.at(i).tablet_id_;
         ObCheckTransElapsedResult single_result;
         int tmp_ret = OB_SUCCESS;
+        bool is_leader_serving = false;
         if (OB_TMP_FAIL(DDL_SIM(arg.tenant_id_, arg.ddl_task_id_, CHECK_SCHEMA_TRANS_END_SLOW))) {
           LOG_WARN("ddl sim failure: check schema version elapsed slow", K(tmp_ret), K(arg));
         } else if (OB_TMP_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
           LOG_WARN("get ls failed", K(tmp_ret), K(i), K(ls_id));
+        } else if (OB_TMP_FAIL(ls_handle.get_ls()->get_tx_svr()->check_in_leader_serving_state(is_leader_serving))) {
+          LOG_WARN("fail to check ls in leader serving state", K(tmp_ret), K(ls_id));
+        } else if (!is_leader_serving) {
+          tmp_ret = OB_NOT_MASTER;   // check is leader ready
+          LOG_WARN("ls leader is not ready, should not provide service", K(ret));
         } else if (OB_TMP_FAIL(ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle))) {
           LOG_WARN("fail to get tablet", K(tmp_ret), K(i), K(ls_id), K(tablet_id));
         } else if (OB_TMP_FAIL(tablet_handle.get_obj()->check_schema_version_elapsed(arg.schema_version_,
