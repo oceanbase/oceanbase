@@ -212,7 +212,12 @@ int ObDDLStartReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
     const bool replay_allow_tablet_not_exist = true;
     if (OB_FAIL(ls_->replay_get_tablet_no_check(lob_meta_tablet_id, scn_,
         replay_allow_tablet_not_exist, lob_meta_tablet_handle))) {
-      LOG_WARN("get tablet handle failed", K(ret), K(lob_meta_tablet_id), K(scn_));
+      if (OB_OBSOLETE_CLOG_NEED_SKIP == ret) {
+        LOG_INFO("clog is already obsolete, should skip replay", K(ret), K(lob_meta_tablet_id), K(scn_));
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("get tablet handle failed", K(ret), K(lob_meta_tablet_id), K(scn_));
+      }
     } else if (OB_FAIL(replay_ddl_start(lob_meta_tablet_handle, true/*is_lob_meta_tablet*/))) {
       LOG_WARN("replay ddl start for lob meta tablet failed", K(ret), K(lob_meta_tablet_id), K(scn_));
     }
@@ -703,7 +708,12 @@ int ObDDLCommitReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
     const bool replay_allow_tablet_not_exist = true;
     if (OB_FAIL(ls_->replay_get_tablet_no_check(lob_meta_tablet_id, scn_,
         replay_allow_tablet_not_exist, lob_meta_tablet_handle))) {
-      LOG_WARN("get tablet handle failed", K(ret), K(lob_meta_tablet_id), K(scn_));
+      if (OB_OBSOLETE_CLOG_NEED_SKIP == ret) {
+        LOG_INFO("clog is already obsolete, should skip replay", K(ret), K(lob_meta_tablet_id), K(scn_));
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("get tablet handle failed", K(ret), K(lob_meta_tablet_id), K(scn_));
+      }
     } else if (OB_FAIL(replay_ddl_commit(lob_meta_tablet_handle))) {
       LOG_WARN("replay ddl start for lob meta tablet failed", K(ret), K(lob_meta_tablet_id), K(scn_));
     }
