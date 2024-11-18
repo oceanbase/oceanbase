@@ -332,8 +332,8 @@ ObIEncodeBlockReader::ObIEncodeBlockReader()
     need_release_decoders_(nullptr), need_release_decoder_cnt_(0),
     default_decoders_(), default_release_decoders_(),
     local_decoder_pool_(nullptr), ctx_array_(), ctxs_(NULL),
-    decoder_allocator_(common::ObModIds::OB_DECODER_CTX, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-    buf_allocator_("OB_IENB_READER", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    decoder_allocator_(SET_IGNORE_MEM_VERSION(ObMemAttr(MTL_ID(), common::ObModIds::OB_DECODER_CTX)), OB_MALLOC_NORMAL_BLOCK_SIZE),
+    buf_allocator_(SET_IGNORE_MEM_VERSION(ObMemAttr(MTL_ID(), "OB_IENB_READER")), OB_MALLOC_NORMAL_BLOCK_SIZE),
     store_id_array_(NULL), column_type_array_(NULL),
     default_store_ids_(), default_column_types_(),
     need_cast_(false)
@@ -929,7 +929,7 @@ ObMicroBlockDecoder::ObMicroBlockDecoder()
     ctx_array_(),
     ctxs_(nullptr),
     decoder_allocator_(ObModIds::OB_DECODER_CTX),
-    buf_allocator_("OB_MICB_DECODER", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
+    buf_allocator_(SET_IGNORE_MEM_VERSION(ObMemAttr(MTL_ID(), "OB_MICB_DECODER")), OB_MALLOC_NORMAL_BLOCK_SIZE)
 {
   reader_type_ = Decoder;
   need_release_decoders_.set_allocator(&buf_allocator_);

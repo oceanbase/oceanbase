@@ -285,8 +285,8 @@ ObICSEncodeBlockReader::ObICSEncodeBlockReader()
   : request_cnt_(0), cached_decocer_(NULL), decoders_(nullptr), need_release_decoders_(nullptr),
     need_release_decoder_cnt_(0), transform_helper_(), column_count_(0), default_decoders_(),
     default_release_decoders_(), local_decoder_pool_(nullptr), ctx_array_(), ctxs_(NULL),
-    decoder_allocator_(common::ObModIds::OB_DECODER_CTX, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-    buf_allocator_("IENB_CSREADER", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    decoder_allocator_(SET_IGNORE_MEM_VERSION(ObMemAttr(MTL_ID(), common::ObModIds::OB_DECODER_CTX)), OB_MALLOC_NORMAL_BLOCK_SIZE),
+    buf_allocator_(SET_IGNORE_MEM_VERSION(ObMemAttr(MTL_ID(), "IENB_CSREADER")), OB_MALLOC_NORMAL_BLOCK_SIZE),
     store_id_array_(NULL), default_store_ids_(),
     default_column_types_(), need_cast_(false)
 {
@@ -736,8 +736,8 @@ ObMicroBlockCSDecoder::ObMicroBlockCSDecoder()
     need_release_decoders_(), need_release_decoder_cnt_(0), transform_helper_(),
     column_count_(0), local_decoder_pool_(nullptr), ctx_array_(), ctxs_(nullptr),
     decoder_allocator_(ObModIds::OB_DECODER_CTX),
-    buf_allocator_("MICB_CSDECODER", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-    transform_allocator_("MICB_TRANSFORM", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
+    buf_allocator_(SET_IGNORE_MEM_VERSION(ObMemAttr(MTL_ID(), "MICB_CSDECODER")), OB_MALLOC_NORMAL_BLOCK_SIZE),
+    transform_allocator_(SET_IGNORE_MEM_VERSION(ObMemAttr(MTL_ID(), "MICB_TRANSFORM")), OB_MALLOC_NORMAL_BLOCK_SIZE)
 {
   reader_type_ = CSDecoder;
   need_release_decoders_.set_allocator(&buf_allocator_);
