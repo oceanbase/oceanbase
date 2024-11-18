@@ -1901,6 +1901,9 @@ public:
                                            const ObIArray<ObRawExpr*> &raw_having_exprs,
                                            const ObIArray<ObRawExpr*> &group_clause_exprs,
                                            ObIArray<ObRawExpr*> &having_exprs_for_deduce);
+  static int check_const_select(ObTransformerCtx *ctx,
+                                const ObSelectStmt *stmt,
+                                bool &is_const_select);
 
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,

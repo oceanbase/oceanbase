@@ -252,7 +252,7 @@ int ObWhereSubQueryPullup::check_limit(const ObItemType op_type,
       OB_ISNULL(plan_ctx = ctx_->exec_ctx_->get_physical_plan_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(subquery), K(ctx_), K(ctx_->exec_ctx_), K(plan_ctx));
-  } else if (OB_FAIL(check_const_select(*subquery, is_const_select))) {
+  } else if (OB_FAIL(ObTransformUtils::check_const_select(ctx_, subquery, is_const_select))) {
     LOG_WARN("failed to check const select", K(ret));
   } else if (op_type != T_OP_EXISTS && op_type != T_OP_NOT_EXISTS && !is_const_select) {
     has_limit = subquery->has_limit();
@@ -1587,22 +1587,6 @@ int ObWhereSubQueryPullup::trans_from_list(ObDMLStmt *stmt,
       LOG_WARN("failed to append from items", K(ret));
     } else if (OB_FAIL(append(stmt->get_condition_exprs(), subquery->get_condition_exprs()))) {
       LOG_WARN("failed to append condition exprs", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObWhereSubQueryPullup::check_const_select(const ObSelectStmt &stmt,
-                                              bool &is_const_select) const
-{
-  int ret = OB_SUCCESS;
-  is_const_select = true;
-  for (int64_t i = 0; OB_SUCC(ret) && is_const_select && i < stmt.get_select_item_size(); ++i) {
-    if (OB_ISNULL(stmt.get_select_item(i).expr_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("expr is null", K(ret));
-    } else {
-      is_const_select = stmt.get_select_item(i).expr_->is_const_expr();
     }
   }
   return ret;
