@@ -1636,6 +1636,9 @@ int ObTabletLobWriteDataTask::create_sstable(ObSSTableIndexBuilder *sstable_inde
     const int64_t uncommitted_tx_id = is_minor_merge(merge_type) ? write_sstable_ctx.dst_uncommitted_tx_id_arr_.at(tablet_idx) : 0;
     create_sstable_param.table_key_ = table_key;
     create_sstable_param.table_key_.tablet_id_ = new_tablet_id;
+    if (is_major_merge(merge_type)) {
+      create_sstable_param.table_key_.version_range_.snapshot_version_ = dst_major_snapshot_version;
+    }
     create_sstable_param.uncommitted_tx_id_ = uncommitted_tx_id;
     create_sstable_param.schema_version_ = param_->schema_version_;
 
