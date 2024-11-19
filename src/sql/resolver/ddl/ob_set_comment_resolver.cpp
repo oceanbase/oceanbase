@@ -133,6 +133,7 @@ int ObSetCommentResolver::resolve(const ParseNode &parse_tree)
           LOG_WARN("version before 4.3.1 or 4.2.2 not support comment on view", K(ret));
         } else {
           alter_table_stmt->set_table_id(table_schema->get_table_id());
+          alter_table_stmt->set_stmt_type(stmt::T_SET_TABLE_COMMENT);
         }
       } else if (T_SET_COLUMN_COMMENT == parse_tree.type_) {
         // COMMENT ON COLUMN
@@ -202,6 +203,7 @@ int ObSetCommentResolver::resolve(const ParseNode &parse_tree)
             SQL_RESV_LOG(WARN, "column doesn't exist", K(ret), K(col_name));
           } else {
             alter_table_stmt->set_table_id(table_schema->get_table_id());
+            alter_table_stmt->set_stmt_type(stmt::T_SET_COLUMN_COMMENT);
           }
         }
       } else {

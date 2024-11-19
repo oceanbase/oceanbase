@@ -124,7 +124,7 @@ public:
   virtual int64_t get_serialize_param_size() const override;
   virtual bool support_longops_monitoring() const override { return true; }
   static int deep_copy_index_arg(common::ObIAllocator &allocator, const obrpc::ObCreateIndexArg &source_arg, obrpc::ObCreateIndexArg &dest_arg);
-  INHERIT_TO_STRING_KV("ObDDLTask", ObDDLTask, K(index_table_id_), K(doc_id_col_id_), K(snapshot_held_), K(is_sstable_complete_task_submitted_), K(sstable_complete_request_time_),
+  INHERIT_TO_STRING_KV("ObDDLTask", ObDDLTask, K(index_table_id_), K(snapshot_held_), K(is_sstable_complete_task_submitted_), K(sstable_complete_request_time_),
       K(sstable_complete_ts_), K(check_unique_snapshot_), K(complete_sstable_job_ret_code_), K_(redefinition_execution_id), K(create_index_arg_), K(target_cg_cnt_));
 private:
   int prepare();
@@ -141,7 +141,8 @@ private:
   int release_snapshot(const int64_t snapshot);
   int update_index_status_in_schema(
       const share::schema::ObTableSchema &index_schema,
-      const share::schema::ObIndexStatus new_status);
+      const share::schema::ObIndexStatus new_status,
+      ObSchemaGetterGuard &schema_guard);
   int check_health();
   int reap_old_replica_build_task(bool &need_exec_new_inner_sql);
   int send_build_single_replica_request(const bool &is_partitioned_local_index_task,
@@ -170,9 +171,6 @@ private:
   using ObDDLTask::schema_version_;
   using ObDDLTask::snapshot_version_;
   uint64_t &index_table_id_;
-  uint64_t doc_id_col_id_;
-  bool is_unique_index_;
-  bool is_global_index_;
   ObRootService *root_service_;
   bool snapshot_held_;
   bool is_sstable_complete_task_submitted_;

@@ -79,7 +79,7 @@ public:
   void reset();
   TO_STRING_KV(K_(task_id), K_(parent_task_id), K_(ddl_type), K_(trace_id), K_(task_status), K_(tenant_id), K_(object_id),
       K_(schema_version), K_(target_object_id), K_(snapshot_version), K_(message), K_(task_version), K_(ret_code), K_(execution_id),
-      K_(ddl_need_retry_at_executor));
+      K_(ddl_need_retry_at_executor), K_(consensus_schema_version));
 public:
   static const int64_t MAX_MESSAGE_LENGTH = 4096;
   typedef common::ObFixedLengthString<MAX_MESSAGE_LENGTH> TaskMessage;
@@ -101,7 +101,9 @@ public:
   int64_t execution_id_;
   ObString ddl_stmt_str_;
   bool ddl_need_retry_at_executor_;
+  int64_t consensus_schema_version_;
 };
+
 
 struct ObDDLTaskInfo final
 {
@@ -279,6 +281,8 @@ public:
 
 class ObDDLTaskRecordOperator final
 {
+#define GET_DDL_TASK_SQL " SELECT *, time_to_usec(gmt_create) AS create_time, " \
+                         " UNHEX(ddl_stmt_str) as ddl_stmt_str_unhex, UNHEX(message) as message_unhex FROM %s "
 public:
   static int update_task_status(
       common::ObISQLClient &proxy,
@@ -324,6 +328,11 @@ public:
       const int ret_code,
       ObString &message);
 
+  static int update_consensus_schema_version(
+             common::ObISQLClient &proxy,
+             const uint64_t tenant_id,
+             const int64_t task_id,
+             const int64_t consensus_schema_version);
   static int update_parent_task_message(
       const int64_t tenant_id,
       const int64_t parent_task_id,
@@ -678,7 +687,8 @@ public:
       parent_task_id_(0), parent_task_key_(), task_version_(0), parallelism_(0),
       allocator_(lib::ObLabel("DdlTask")), compat_mode_(lib::Worker::CompatMode::INVALID), err_code_occurence_cnt_(0),
       longops_stat_(nullptr), gmt_create_(0), stat_info_(), delay_schedule_time_(0), next_schedule_ts_(0),
-      execution_id_(-1), start_time_(0), data_format_version_(0), is_pre_split_(false), wait_trans_ctx_()
+      execution_id_(-1), start_time_(0), data_format_version_(0), is_pre_split_(false), wait_trans_ctx_(), is_unique_index_(false),
+      is_global_index_(false), consensus_schema_version_(OB_INVALID_VERSION)
   {}
   ObDDLTask():
     ObDDLTask(share::DDL_INVALID)
@@ -774,6 +784,9 @@ public:
   virtual bool support_longops_monitoring() const { return false; }
   int cleanup();
   int update_task_record_status_and_msg(common::ObISQLClient &proxy, const share::ObDDLTaskStatus real_new_status);
+  bool is_unique_index() { return is_unique_index_; }
+  bool is_global_index() { return is_global_index_; }
+  int64_t get_consensus_schema_version() { return consensus_schema_version_; }
 
   #ifdef ERRSIM
   int check_errsim_error();
@@ -786,7 +799,7 @@ public:
       K_(task_version), K_(parallelism), K_(ddl_stmt_str), K_(compat_mode),
       K_(sys_task_id), K_(err_code_occurence_cnt), K_(stat_info),
       K_(next_schedule_ts), K_(delay_schedule_time), K(execution_id_), K(sql_exec_addrs_), K_(data_format_version), K(consumer_group_id_),
-      K_(dst_tenant_id), K_(dst_schema_version), K_(is_pre_split));
+      K_(dst_tenant_id), K_(dst_schema_version), K_(is_pre_split), K_(is_unique_index), K_(is_global_index), K_(consensus_schema_version));
   static const int64_t MAX_ERR_TOLERANCE_CNT = 3L; // Max torlerance count for error code.
   static const int64_t DEFAULT_TASK_IDLE_TIME_US = 10L * 1000L; // 10ms
 protected:
@@ -868,6 +881,9 @@ protected:
   int64_t consumer_group_id_;
   bool is_pre_split_;
   ObDDLWaitTransEndCtx wait_trans_ctx_;
+  bool is_unique_index_;
+  bool is_global_index_;
+  int64_t consensus_schema_version_;
 };
 
 enum ColChecksumStat

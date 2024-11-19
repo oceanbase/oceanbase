@@ -2217,6 +2217,55 @@ OB_SERIALIZE_MEMBER((ObCreateTableLikeArg, ObDDLArg),
                     session_id_,
                     define_user_id_);
 
+int ObSetCommentArg::assign(const ObSetCommentArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ObDDLArg", KR(ret));
+  } else if (OB_FAIL(column_name_list_.assign(other.column_name_list_))) {
+    LOG_WARN("fail to assign column name list", KR(ret), K(other));
+  } else if (OB_FAIL(column_comment_list_.assign(other.column_comment_list_))) {
+    LOG_WARN("fail to assign column comment list", KR(ret), K(other));
+  } else {
+    session_id_ = other.session_id_;
+    database_name_ = other.database_name_;
+    table_name_ = other.table_name_;
+    table_comment_ = other.table_comment_;
+    op_type_ = other.op_type_;
+  }
+  return ret;
+}
+
+void ObSetCommentArg::reset()
+{
+  session_id_ = OB_INVALID_ID;
+  database_name_.reset();
+  table_name_.reset();
+  table_comment_.reset();
+  column_name_list_.reset();
+  column_comment_list_.reset();
+  op_type_ = MIN_OP_TYPE;
+  ObDDLArg::reset();
+}
+
+bool ObSetCommentArg::is_valid() const
+{
+  return OB_INVALID_ID != exec_tenant_id_
+         && !database_name_.empty()
+         && !table_name_.empty()
+         && op_type_ > MIN_OP_TYPE
+         && op_type_ < MAX_OP_TYPE;
+}
+
+OB_SERIALIZE_MEMBER((ObSetCommentArg, ObDDLArg),
+                     session_id_,
+                     database_name_,
+                     table_name_,
+                     column_name_list_,
+                     column_comment_list_,
+                     table_comment_,
+                     op_type_);
+
 bool ObAlterTableArg::is_valid() const
 {
   // TODO(shaohang.lsh): add more check if needed
@@ -7898,6 +7947,12 @@ int ObDDLRes::assign(const ObDDLRes &other)
 
 OB_SERIALIZE_MEMBER(ObDDLRes, tenant_id_, schema_id_, task_id_);
 
+void ObParallelDDLRes::reset()
+{
+  schema_version_ = OB_INVALID_VERSION;
+}
+
+OB_SERIALIZE_MEMBER(ObParallelDDLRes, schema_version_);
 void ObAlterTableRes::reset()
 {
   index_table_id_ = OB_INVALID_ID;

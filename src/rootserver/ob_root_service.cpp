@@ -121,6 +121,9 @@
 
 #include "parallel_ddl/ob_create_table_helper.h" // ObCreateTableHelper
 #include "parallel_ddl/ob_create_view_helper.h"  // ObCreateViewHelper
+#include "parallel_ddl/ob_set_comment_helper.h" //ObCommentHelper
+#include "parallel_ddl/ob_create_index_helper.h" // ObCreateIndexHelper
+#include "parallel_ddl/ob_update_index_status_helper.h" // ObUpdateIndexStatusHelper
 
 namespace oceanbase
 {
@@ -4539,6 +4542,33 @@ int ObRootService::recover_restore_table_ddl(const obrpc::ObRecoverRestoreTableD
   return ret;
 }
 
+int ObRootService::set_comment(const obrpc::ObSetCommentArg &arg, obrpc::ObParallelDDLRes &res)
+{
+  LOG_TRACE("receive set comment arg", K(arg));
+  int64_t begin_time = ObTimeUtility::current_time();
+  const uint64_t tenant_id = arg.exec_tenant_id_;
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (OB_FAIL(parallel_ddl_pre_check_(tenant_id))) {
+    LOG_WARN("fail to pre check parallel ddl", KR(ret), K(tenant_id));
+  } else {
+    ObSetCommentHelper comment_helper(schema_service_, tenant_id, arg, res);
+    if (OB_FAIL(comment_helper.init(ddl_service_))) {
+      LOG_WARN("fail to init comment helper", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(comment_helper.execute())) {
+      LOG_WARN("fail to execute comment", KR(ret), K(tenant_id));
+    }
+  }
+  int64_t cost = ObTimeUtility::current_time() - begin_time;
+  LOG_TRACE("finish set comment", KR(ret), K(arg), K(cost));
+  return ret;
+}
+
 int ObRootService::alter_table(const obrpc::ObAlterTableArg &arg, obrpc::ObAlterTableRes &res)
 {
   LOG_DEBUG("receive alter table arg", K(arg));
@@ -4781,6 +4811,52 @@ int ObRootService::create_mlog(const obrpc::ObCreateMLogArg &arg, obrpc::ObCreat
       LOG_WARN("failed to create mlog", KR(ret), K(arg));
     }
   }
+  return ret;
+}
+
+int ObRootService::parallel_create_index(const ObCreateIndexArg &arg, obrpc::ObAlterTableRes &res)
+{
+  LOG_TRACE("receive parallel create index arg", K(arg));
+  int ret = OB_SUCCESS;
+  int64_t begin_time = ObTimeUtility::current_time();
+  const uint64_t tenant_id = arg.exec_tenant_id_;
+  uint64_t data_version = 0;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (OB_FAIL(parallel_ddl_pre_check_(tenant_id))) {
+    LOG_WARN("pre check failed before parallel ddl execute", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+  } else if (data_version < DATA_VERSION_4_2_2_0
+            || (data_version >= DATA_VERSION_4_3_0_0 && data_version < DATA_VERSION_4_3_5_0)
+            || share::schema::is_fts_or_multivalue_index(arg.index_type_)
+            || share::schema::is_vec_index(arg.index_type_)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported", KR(ret), K(data_version), K(arg.index_type_));
+  } else {
+    ObCreateIndexHelper create_index_helper(schema_service_, tenant_id, ddl_service_, arg, res);
+    if (OB_FAIL(create_index_helper.init(ddl_service_))) {
+      LOG_WARN("fail to init create index helper", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(create_index_helper.execute())) {
+      LOG_WARN("fail to execute create index table", KR(ret), K(tenant_id));
+    }
+  }
+  int64_t cost = ObTimeUtility::current_time() - begin_time;
+  char table_id_buffer[256];
+  snprintf(table_id_buffer, sizeof(table_id_buffer), "data_table_id:%ld, index_table_id:%ld",
+            arg.data_table_id_, arg.index_table_id_);
+  ROOTSERVICE_EVENT_ADD("ddl scheduler", "parallel create index",
+                        "tenant_id", arg.tenant_id_,
+                        "ret", ret,
+                        "trace_id", *ObCurTraceId::get_trace_id(),
+                        "task_id", res.task_id_,
+                        "table_id", table_id_buffer,
+                        "schema_version", res.schema_version_);
+  LOG_TRACE("finish parallel create index", KR(ret), K(arg), K(cost), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -5734,6 +5810,33 @@ int ObRootService::clone_tenant(const obrpc::ObCloneTenantArg &arg,
                           "prev_clone_status", "NULL",
                           "cur_clone_status", status_str);
   }
+  return ret;
+}
+
+int ObRootService::parallel_update_index_status(const obrpc::ObUpdateIndexStatusArg &arg, obrpc::ObParallelDDLRes &res)
+{
+  LOG_TRACE("receive update index status arg", K(arg));
+  int64_t begin_time = ObTimeUtility::current_time();
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = arg.exec_tenant_id_;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid() || OB_INVALID_ID == arg.data_table_id_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (OB_FAIL(parallel_ddl_pre_check_(tenant_id))) {
+    LOG_WARN("pre check failed before parallel ddl execute", KR(ret), K(tenant_id));
+  } else {
+    ObUpdateIndexStatusHelper update_index_status_helper(schema_service_, tenant_id, arg, res);
+    if (OB_FAIL(update_index_status_helper.init(ddl_service_))) {
+      LOG_WARN("fail to init create table helper", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(update_index_status_helper.execute())) {
+      LOG_WARN("fail to execute update index status helper", KR(ret));
+    }
+  }
+  int64_t cost = ObTimeUtility::current_time() - begin_time;
+  LOG_TRACE("finish update index status", KR(ret), K(arg), K(cost));
   return ret;
 }
 

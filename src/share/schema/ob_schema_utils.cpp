@@ -1336,8 +1336,6 @@ const char* DDLType[]
 
 const char* NOT_SUPPORT_DDLType[]
 {
-  "SET_COMMENT",
-  "CREATE_INDEX",
   "CREATE_VIEW",
   "DROP_TABLE"
 };

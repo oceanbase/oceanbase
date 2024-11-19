@@ -149,6 +149,7 @@ int ObDropIndexTask::update_index_status(const ObIndexStatus new_status)
     arg.status_ = new_status;
     arg.exec_tenant_id_ = tenant_id_;
     arg.in_offline_ddl_white_list_ = index_schema->get_table_state_flag() != TABLE_STATE_NORMAL;
+    arg.data_table_id_ = index_schema->get_data_table_id();
     int64_t ddl_rpc_timeout = 0;
     int64_t table_id = index_schema->get_table_id();
     DEBUG_SYNC(BEFORE_UPDATE_GLOBAL_INDEX_STATUS);

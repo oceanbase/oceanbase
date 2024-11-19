@@ -494,6 +494,28 @@ public:
 
 };
 
+class ObIndexSchemaInfo
+{
+public:
+  ObIndexSchemaInfo()
+    : index_name_(), index_id_(common::OB_INVALID_ID), schema_version_(common::OB_INVALID_VERSION), index_type_(INDEX_TYPE_IS_NOT) {}
+  ~ObIndexSchemaInfo() {}
+  int init(const ObString &index_name, const uint64_t index_id, const int64_t schema_version, const ObIndexType index_type);
+  void reset();
+  bool is_valid() const;
+  int assign(const ObIndexSchemaInfo &other);
+  const ObString &get_index_name() const { return index_name_; }
+  uint64_t get_index_id() const { return index_id_; }
+  int64_t get_schema_version() const {return schema_version_; }
+  ObIndexType get_index_type() const {return index_type_;}
+  TO_STRING_KV(K_(index_name), K_(index_id), K_(schema_version), K_(index_type));
+private:
+  ObString index_name_;
+  uint64_t index_id_;
+  int64_t schema_version_;
+  ObIndexType index_type_;
+};
+
 class ObSchemaIdVersion
 {
 public:
@@ -775,6 +797,8 @@ inline bool is_vec_index(const ObIndexType index_type)
   return is_vec_delta_buffer_type(index_type) || is_built_in_vec_index(index_type);
 }
 
+
+// new built in index type should add case in built_in_index_not_visible.test
 inline bool is_built_in_index(const ObIndexType index_type)
 {
   return is_built_in_vec_index(index_type) ||

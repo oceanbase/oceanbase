@@ -804,3 +804,46 @@ int ObLatestSchemaGuard::get_udt_info(
   }
   return ret;
 }
+
+int ObLatestSchemaGuard::get_coded_index_name_info_mysql(
+    common::ObIAllocator &allocator,
+    const uint64_t database_id,
+    const uint64_t data_table_id,
+    const ObString &index_name,
+    const bool is_built_in,
+    ObIndexSchemaInfo &index_info)
+{
+  int ret = OB_SUCCESS;
+  ObMySQLProxy *sql_proxy = nullptr;
+  ObSchemaService *schema_service_impl = nullptr;
+  bool is_oracle_mode = false;
+  ObArray<ObIndexSchemaInfo> index_infos;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_ID == database_id
+                  || OB_INVALID_ID == data_table_id
+                  || index_name.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("should use in mysql mode", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_proxy))) {
+    LOG_WARN("fail to check and get service", KR(ret));
+  } else if (OB_FAIL(schema_service_impl->get_table_index_infos(allocator, *sql_proxy, tenant_id_, database_id,
+                                                               data_table_id, index_infos))) {
+    LOG_WARN("fail to get table index name in mysql", KR(ret), K_(tenant_id), K(data_table_id), K(data_table_id));
+  }
+  for (uint64_t i = 0; OB_SUCC(ret) && i < index_infos.count(); ++i)
+  {
+    if (schema_service_impl->schema_name_is_equal(index_name,
+                                                  index_infos.at(i).get_index_name(),
+                                                  true/*case_compare*/,
+                                                  true/*collation*/)) {
+      if (is_built_in == schema::is_built_in_index(index_infos.at(i).get_index_type())) {
+        if (OB_FAIL(index_info.assign(index_infos.at(i)))) {
+          LOG_WARN("fail to assign index info", KR(ret));
+        }
+        break;
+      }
+    }
+  }
+  return ret;
+}

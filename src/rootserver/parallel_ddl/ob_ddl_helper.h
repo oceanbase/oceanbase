@@ -68,11 +68,28 @@ public:
   int init(rootserver::ObDDLService &ddl_service);
 
   virtual int execute();
+  static int obj_lock_database_name(
+             ObDDLSQLTransaction &trans,
+             const uint64_t tenant_id,
+             const ObString &name,
+             const transaction::tablelock::ObTableLockMode lock_mode);
+  static int obj_lock_obj_name(
+             ObDDLSQLTransaction &trans,
+             const uint64_t tenant_id,
+             const ObString &database_name,
+             const ObString &obj_name,
+             const transaction::tablelock::ObTableLockMode lock_mode);
+  static int obj_lock_obj_id(
+             ObDDLSQLTransaction &trans,
+             const uint64_t tenant_id,
+             const uint64_t obj_id,
+             const transaction::tablelock::ObTableLockMode lock_mode);
 protected:
   virtual int check_inner_stat_();
 
   /* main actions */
   int start_ddl_trans_();
+  virtual int calc_schema_version_cnt_() = 0;
   int gen_task_id_and_schema_versions_();
   int serialize_inc_schema_dict_();
   int wait_ddl_trans_();
@@ -109,6 +126,11 @@ protected:
       const common::ObString &constraint_name,
       const bool is_foreign_key,
       bool &exist);
+  int check_database_legitimacy_(const ObString &database_name, uint64_t &database_id);
+
+  int check_parallel_ddl_conflict_(const common::ObIArray<share::schema::ObBasedSchemaObjectInfo> &based_schema_object_infos);
+  int add_lock_table_udt_id_(const ObTableSchema &table_schema);
+  int check_table_udt_exist_(const ObTableSchema &table_schema);
 private:
   int add_lock_object_to_map_(
       const uint64_t lock_obj_id,
@@ -117,6 +139,14 @@ private:
   int lock_objects_in_map_(
       const transaction::tablelock::ObLockOBJType obj_type,
       ObjectLockMap &lock_map);
+  static uint64_t cast_database_name_to_id_(const ObString &database_name);
+  static uint64_t cast_obj_name_to_id_(const ObString &database_name, const ObString &obj_name);
+  static int obj_lock_with_lock_id_(
+             ObDDLSQLTransaction &trans,
+             const uint64_t tenant_id,
+             const uint64_t obj_id,
+             const transaction::tablelock::ObTableLockMode lock_mode,
+             const ObLockOBJType obj_type);
 protected:
   bool inited_;
   share::schema::ObMultiVersionSchemaService *schema_service_;

@@ -83,6 +83,16 @@ int ObCreateViewHelper::generate_schemas_()
   return ret;
 }
 
+//TODO:(wenyu.ffz) to implement
+int ObCreateViewHelper::calc_schema_version_cnt_()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  }
+  return ret;
+}
+
 //TODO:(yanmu.ztl) to implement
 int ObCreateViewHelper::create_schemas_()
 {
