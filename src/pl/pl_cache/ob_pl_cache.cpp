@@ -110,6 +110,7 @@ int PCVPlSchemaObj::deep_copy_column_infos(const ObTableSchema *schema)
               column_info->meta_type_ = column_schema.get_meta_type();
               column_info->charset_type_ = column_schema.get_charset_type();
               column_info->accuracy_ = column_schema.get_accuracy();
+              column_info->is_invisible_col_ = column_schema.is_invisible_column();
               OZ (column_info->deep_copy_type_info(column_schema.get_extended_type_info()));
 
               if (OB_SUCC(ret)) {
@@ -418,6 +419,7 @@ int ObPLObjectValue::obtain_new_column_infos(share::schema::ObSchemaGetterGuard 
         column_info.meta_type_ = column_schema.get_meta_type();
         column_info.charset_type_ = column_schema.get_charset_type();
         column_info.accuracy_ = column_schema.get_accuracy();
+        column_info.is_invisible_col_ = column_schema.is_invisible_column();
         OZ (column_info.type_info_.assign(column_schema.get_extended_type_info()));
         OX (column_info.column_name_ = column_schema.get_column_name_str());
         OZ (column_infos.push_back(column_info));
