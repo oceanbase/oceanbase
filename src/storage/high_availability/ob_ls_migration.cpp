@@ -408,7 +408,8 @@ int ObMigrationDagNet::fill_comment(char *buf, const int64_t buf_len) const
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("log stream migration dag net do not init ", K(ret));
-  } else if (OB_FAIL(ctx_->task_id_.to_string(task_id_str, MAX_TRACE_ID_LENGTH))) {
+  } else if (OB_UNLIKELY(0 >= ctx_->task_id_.to_string(task_id_str, MAX_TRACE_ID_LENGTH))) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to trace task id to string", K(ret), K(*ctx_));
   } else {
     int64_t pos = 0;
