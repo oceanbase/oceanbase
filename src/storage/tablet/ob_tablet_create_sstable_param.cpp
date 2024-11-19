@@ -309,7 +309,9 @@ int ObTabletCreateSSTableParam::record_recycle_scn_for_tx_data(const compaction:
     } else if (OB_FAIL(oldest_tx_data_sstable->get_meta(sstable_meta_hdl))) {
       LOG_WARN("fail to get sstable meta handle", K(ret));
     } else {
-      tx_data_recycle_scn_ = sstable_meta_hdl.get_sstable_meta().get_tx_data_recycle_scn();
+      SCN earliest_sst_recycle_scn = sstable_meta_hdl.get_sstable_meta().get_tx_data_recycle_scn();
+      // Use earilest sstable recycle_scn as default recycle_scn
+      tx_data_recycle_scn_ = earliest_sst_recycle_scn;
 
       if (OB_NOT_NULL(compaction_filter_)) {
         // if compaction_filter is valid, update filled_tx_log_ts if recycled some tx data
@@ -319,9 +321,15 @@ int ObTabletCreateSSTableParam::record_recycle_scn_for_tx_data(const compaction:
         } else {
           recycled_scn = compaction_filter_->get_recycle_scn();
         }
-        if (recycled_scn > filled_tx_scn_) {
+        if (recycled_scn > tx_data_recycle_scn_) {
           tx_data_recycle_scn_ = recycled_scn;
         }
+        FLOG_INFO("finish record recycle_scn for tx data",
+                  K(ret),
+                  K(tx_data_recycle_scn_),
+                  "Earliest SSTable Recycle_SCN", earliest_sst_recycle_scn,
+                  "Max Filtered SCN", compaction_filter_->get_max_filtered_end_scn(),
+                  "Filter Recycle_SCN", compaction_filter_->get_recycle_scn());
       }
     }
   } else {
