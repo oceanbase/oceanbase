@@ -266,7 +266,8 @@ enum class ObIOCallbackType : uint8_t
   TMP_MULTI_PAGE_CALLBACK = 9,
   TMP_DIRECT_READ_PAGE_CALLBACK = 10,
   TEST_CALLBACK = 11, // just for unittest
-  MAX_CALLBACK_TYPE = 12
+  SS_TMP_FILE_CALLBACK = 12,
+  MAX_CALLBACK_TYPE = 13
 };
 
 bool is_atomic_write_callback(const ObIOCallbackType type);
@@ -348,8 +349,9 @@ public:
 public:
   storage::ObSSPhysicalBlockHandle phy_block_handle_; // hold ref_cnt
   storage::ObSSFdCacheHandle fd_cache_handle_;
+  int64_t tmp_file_valid_length_;
 
-  INHERIT_TO_STRING_KV("SNIOInfo", ObSNIOInfo, K_(phy_block_handle), K_(fd_cache_handle));
+  INHERIT_TO_STRING_KV("SNIOInfo", ObSNIOInfo, K_(phy_block_handle), K_(fd_cache_handle),  K_(tmp_file_valid_length));
 };
 #endif
 

@@ -495,7 +495,7 @@ ObSNIOInfo &ObSNIOInfo::operator=(const ObSNIOInfo &other)
 
 /******************             S2IOInfo              **********************/
 #ifdef OB_BUILD_SHARED_STORAGE
-ObSSIOInfo::ObSSIOInfo() : ObSNIOInfo(), phy_block_handle_(), fd_cache_handle_()
+ObSSIOInfo::ObSSIOInfo() : ObSNIOInfo(), phy_block_handle_(), fd_cache_handle_(), tmp_file_valid_length_(0)
 {
 }
 
@@ -513,6 +513,7 @@ void ObSSIOInfo::reset()
   ObSNIOInfo::reset();
   phy_block_handle_.reset();
   fd_cache_handle_.reset();
+  tmp_file_valid_length_ = 0;
 }
 
 ObSSIOInfo &ObSSIOInfo::operator=(const ObSSIOInfo &other)
@@ -530,6 +531,7 @@ ObSSIOInfo &ObSSIOInfo::operator=(const ObSSIOInfo &other)
     buf_ = other.buf_;
     user_data_buf_ = other.user_data_buf_;
     part_id_ = other.part_id_;
+    tmp_file_valid_length_ = other.tmp_file_valid_length_;
     // ignore ret, cuz assign fails only when other.phy_block_handle_/fd_cache_handle_ is invalid.
     // in case when other.phy_block_handle_/fd_cache_handle_ is invalid, ret is unnecessary.
     int tmp_ret = OB_SUCCESS;

@@ -302,6 +302,16 @@ extern "C" void ob_zfree(void *ptr);
     }                                           \
   } while(0)
 
+#define OB_DELETEx(T, pool, ptr)                \
+  do {                                          \
+    if (NULL != ptr)                            \
+    {                                           \
+      ptr->~T();                                \
+      abort_unless(!OB_ISNULL(pool));           \
+      (pool)->free(ptr);                        \
+      ptr = NULL;                               \
+    }                                           \
+  } while(0)                                    \
 
 
 #endif /* OCEANBASE_SRC_COMMON_OB_MALLOC_H_ */

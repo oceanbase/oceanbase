@@ -69,11 +69,19 @@ int ObTmpFileAsyncFlushWaitTask::init(const int64_t fd, const int64_t length, co
 }
 
 #ifdef OB_BUILD_SHARED_STORAGE
-int ObTmpFileAsyncFlushWaitTask::push_back_io_task(const ObSSTmpFileFlushContext &ctx)
+int ObTmpFileAsyncFlushWaitTask::push_back_io_task(const ObSSTmpFileFlushContext &ctx, const int64_t flushed_page_num)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(io_tasks_.push_back(std::make_pair(ctx.object_handle_, ctx.flush_buff_)))) {
+  if (OB_UNLIKELY(io_tasks_.count() != io_page_num_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("io tasks and io page num count not equal", K(ret), K(io_tasks_.count()), K(io_page_num_.count()));
+  } else if (OB_UNLIKELY(flushed_page_num <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("flushed page num is invalid", K(ret), K(flushed_page_num));
+  } else if (OB_FAIL(io_tasks_.push_back(std::make_pair(ctx.object_handle_, ctx.flush_buff_)))) {
     LOG_WARN("fail to push back flush handle and flush buffer", K(ret), K(fd_), K(ctx));
+  } else if (OB_FAIL(io_page_num_.push_back(flushed_page_num))) {
+    LOG_WARN("fail to push back flushing page num", K(ret), K(fd_), K(ctx), K(flushed_page_num));
   } else {
     // TODO(baichangmin): add defensive check here, cur_flush_page_count and
     // this_batch_flush_data_size should equal.
@@ -106,6 +114,9 @@ int ObTmpFileAsyncFlushWaitTask::exec_wait()
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("fail to exec wait, tmp file async wait task not inited", K(ret), K(*this));
+  } else if (OB_UNLIKELY(io_tasks_.count() != io_page_num_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("io tasks and io page num count is not equal", KR(ret), K(*this));
   } else {
     // Execute `wait` for each async flush handle.
     for (int64_t i = 0; OB_SUCC(ret) && i < io_tasks_.count(); ++i) {
@@ -113,11 +124,12 @@ int ObTmpFileAsyncFlushWaitTask::exec_wait()
       if (OB_FAIL(p.first->wait())) {
         LOG_WARN("fail to wait ObStorageObjectHandle", K(ret), K(i),
                  K(io_tasks_.count()), K(*this));
-      } else {
 #ifdef OB_BUILD_SHARED_STORAGE
-        succeed_wait_page_nums_ +=
-            p.first->get_io_handle().get_data_size() /
-            ObSharedStorageTmpFile::SS_TMP_FILE_PAGE_SIZE;
+      } else if (OB_UNLIKELY(io_page_num_.at(i) <= 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("unexpected flushed page num", K(ret), K(i), K(*this));
+      } else {
+        succeed_wait_page_nums_ += io_page_num_.at(i);
 #endif
       }
     }

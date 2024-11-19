@@ -11447,6 +11447,7 @@ OB_SERIALIZE_MEMBER(ObDelSSLocalTmpFileArg, tenant_id_, macro_id_);
 OB_SERIALIZE_MEMBER(ObDelSSLocalMajorArg, tenant_id_);
 OB_SERIALIZE_MEMBER(ObCalibrateSSDiskSpaceArg, tenant_id_);
 OB_SERIALIZE_MEMBER(ObDelSSTabletMicroArg, tenant_id_, tablet_id_);
+OB_SERIALIZE_MEMBER(ObSetSSCkptCompressorArg, tenant_id_, block_type_, compressor_type_);
 #endif
 
 ObRpcRemoteWriteDDLIncCommitLogArg::ObRpcRemoteWriteDDLIncCommitLogArg()

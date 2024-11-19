@@ -42,7 +42,7 @@ public:
   ~ObTmpFileAsyncFlushWaitTask();
   int init(const int64_t fd, const int64_t length, const uint32_t begin_page_id, const ObMemAttr attr);
 #ifdef OB_BUILD_SHARED_STORAGE
-  int push_back_io_task(const ObSSTmpFileFlushContext &ctx);
+  int push_back_io_task(const ObSSTmpFileFlushContext &ctx, const int64_t flushed_page_num);
 #endif
   int exec_wait();
   OB_INLINE int64_t get_current_begin_page_id() const { return current_begin_page_id_; }
@@ -51,9 +51,9 @@ public:
   int cond_broadcast();
   int cond_wait();
   TO_STRING_KV(K_(fd), K_(current_length), K_(current_begin_page_id),
-               K_(flushed_offset), K_(io_tasks), K_(flushed_page_nums),
+               K_(flushed_offset), K_(flushed_page_nums),
                K_(succeed_wait_page_nums), K_(ref_cnt), K_(wait_has_finished),
-               K_(is_inited));
+               K_(is_inited), K_(io_page_num), K_(io_tasks));
 
 private:
   int release_io_tasks();
@@ -79,6 +79,7 @@ public:
   uint32_t current_begin_page_id_;
   int64_t flushed_offset_;
   ObArray<std::pair<ObStorageObjectHandle *, char *>> io_tasks_;
+  ObArray<int64_t> io_page_num_;
   int64_t flushed_page_nums_;
   int64_t succeed_wait_page_nums_;
 

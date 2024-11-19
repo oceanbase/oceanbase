@@ -1651,4 +1651,52 @@ DEF_COMMAND(SERVER, get_ss_micro_cache_info, 1, "tenant_id")
   COMMON_LOG(INFO, "get ss_micro_cache_info", K(arg));
   return ret;
 }
+
+DEF_COMMAND(SERVER, set_ss_ckpt_compressor, 1, "tenant_id:ckpt_type:compressor_name")
+{
+  int ret = OB_SUCCESS;
+  string arg_str;
+  ObSetSSCkptCompressorArg arg;
+  if (cmd_ == action_name_) {
+    ret = OB_INVALID_ARGUMENT;
+    ADMIN_WARN("should provide tenant_id");
+  } else {
+    arg_str = cmd_.substr(action_name_.length() + 1);
+  }
+
+  char ckpt_type_name[64] = {0};
+  char compressor_name[64] = {0};
+  if (OB_FAIL(ret)) {
+  } else if (3 != sscanf(arg_str.c_str(), "%ld:%[^:]:%s", &arg.tenant_id_, ckpt_type_name, compressor_name)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid arg", K(ret), K(arg_str.c_str()));
+  } else {
+    if (0 == strncmp(ckpt_type_name, "micro", 5)) {
+      arg.block_type_ = ObSSPhyBlockType::SS_MICRO_META_CKPT_BLK;
+    } else if (0 == strncmp(ckpt_type_name, "blk", 3)) {
+      arg.block_type_ = ObSSPhyBlockType::SS_PHY_BLOCK_CKPT_BLK;
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      COMMON_LOG(WARN, "ckpt_type is invalid", K(ret), K(ckpt_type_name));
+    }
+
+    if (FAILEDx(ObCompressorPool::get_instance().get_compressor_type(compressor_name, arg.compressor_type_))) {
+      COMMON_LOG(WARN, "fail to get compressor_type", K(ret), K(compressor_name));
+    } else if (!arg.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      COMMON_LOG(WARN, "argument is invalid", K(ret), K(arg));
+    } else if (OB_FAIL(client_->set_ss_ckpt_compressor(arg))) {
+      COMMON_LOG(ERROR, "send req fail", K(ret));
+    } else {
+      fprintf(stdout, "Successfully set_ss_ckpt_compressor [tenant_id:%ld, ckpt_type:%s, compressor_type:%s]",
+          arg.tenant_id_, ckpt_type_name, compressor_name);
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    fprintf(stderr, "fail to set_ss_ckpt_compressor, ret=%s\n", ob_error_name(ret));
+  }
+  COMMON_LOG(INFO, "set_ss_ckpt_compressor", K(arg));
+  return ret;
+}
 #endif

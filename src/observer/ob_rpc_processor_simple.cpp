@@ -4002,6 +4002,36 @@ int ObRpcClearSSMicroCacheP::process()
   }
   return ret;
 }
+
+int ObSetSSCkptCompressorP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K_(arg));
+  } else {
+    MTL_SWITCH(arg_.tenant_id_)
+    {
+      ObSSMicroCache *micro_cache = nullptr;
+      if (OB_ISNULL(micro_cache = MTL(ObSSMicroCache *))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("micro_cache is nullptr", KR(ret));
+      } else if (arg_.block_type_ == ObSSPhyBlockType::SS_MICRO_META_CKPT_BLK) {
+        micro_cache->set_micro_ckpt_compressor_type(arg_.compressor_type_);
+      } else if (arg_.block_type_ == ObSSPhyBlockType::SS_PHY_BLOCK_CKPT_BLK) {
+        micro_cache->set_blk_ckpt_compressor_type(arg_.compressor_type_);
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("block_type is unexpected", K(ret), K_(arg_.block_type));
+      }
+
+      if (OB_SUCC(ret)) {
+        LOG_INFO("succeed to set_ss_ckpt_compressor", K_(arg));
+      }
+    }
+  }
+  return ret;
+}
 #endif
 
 int ObNotifySharedStorageInfoP::process()

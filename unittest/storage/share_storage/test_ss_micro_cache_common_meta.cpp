@@ -136,7 +136,7 @@ TEST_F(TestSSMicroCacheCommonMeta, physical_block)
   ASSERT_EQ(true, reuse_info.reach_gc_reuse_version());
 
   phy_block.reuse_version_ = 5;
-  phy_block.update_gc_reuse_version();
+  phy_block.update_gc_reuse_version(phy_block.reuse_version_);
   ASSERT_EQ(5, phy_block.gc_reuse_version_);
   phy_block.update_valid_len(100);
   ASSERT_EQ(100, phy_block.get_valid_len());

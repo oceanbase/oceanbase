@@ -11588,6 +11588,29 @@ public:
   ObTabletID tablet_id_;
 };
 
+struct ObSetSSCkptCompressorArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObSetSSCkptCompressorArg()
+      : tenant_id_(OB_INVALID_TENANT_ID),
+        block_type_(ObSSPhyBlockType::SS_INVALID_BLK_TYPE),
+        compressor_type_(common::ObCompressorType::INVALID_COMPRESSOR)
+  {}
+  ~ObSetSSCkptCompressorArg()
+  {}
+  bool is_valid() const
+  {
+    return OB_INVALID_TENANT_ID != tenant_id_ && compressor_type_ != common::ObCompressorType::INVALID_COMPRESSOR &&
+           is_ckpt_block_type(block_type_);
+  }
+  TO_STRING_KV(K_(tenant_id), K_(block_type), K_(compressor_type));
+public:
+  int64_t tenant_id_;
+  ObSSPhyBlockType block_type_;
+  common::ObCompressorType compressor_type_;
+};
+
 struct ObCalibrateSSDiskSpaceArg final
 {
   OB_UNIS_VERSION(1);

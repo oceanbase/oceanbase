@@ -30,14 +30,15 @@ public:
   ObStorageObjectWriteInfo()
     : buffer_(NULL), offset_(0), size_(0), io_timeout_ms_(DEFAULT_IO_WAIT_TIME_MS), io_desc_(),
       io_callback_(NULL), device_handle_(NULL), has_backup_device_handle_(false),
-      ls_epoch_id_(0), mtl_tenant_id_(OB_INVALID_TENANT_ID)
+      ls_epoch_id_(0), mtl_tenant_id_(OB_INVALID_TENANT_ID), tmp_file_valid_length_(0)
   {}
   ~ObStorageObjectWriteInfo() = default;
   OB_INLINE bool is_valid() const
   {
     bool bret = false;
     bret = io_desc_.is_valid() && NULL != buffer_ && offset_ >= 0 && size_ > 0
-           && io_timeout_ms_ > 0 && ls_epoch_id_ >= 0 && is_valid_tenant_id(mtl_tenant_id_);
+           && io_timeout_ms_ > 0 && ls_epoch_id_ >= 0 && is_valid_tenant_id(mtl_tenant_id_)
+           && tmp_file_valid_length_ >= 0;
     if (has_backup_device_handle_) {
       bret = bret && OB_NOT_NULL(device_handle_);
     } else {
@@ -47,7 +48,8 @@ public:
   }
   int fill_io_info_for_backup(const blocksstable::MacroBlockId &macro_id, ObIOInfo &io_info) const;
   TO_STRING_KV(KP_(buffer), K_(offset), K_(size), K_(io_timeout_ms), K_(io_desc), KP_(io_callback),
-               KP_(device_handle), K_(has_backup_device_handle), K_(ls_epoch_id), K_(mtl_tenant_id));
+               KP_(device_handle), K_(has_backup_device_handle), K_(ls_epoch_id), K_(mtl_tenant_id),
+               K_(tmp_file_valid_length));
 public:
   const char *buffer_;
   int64_t offset_;
@@ -59,6 +61,7 @@ public:
   bool has_backup_device_handle_;
   int64_t ls_epoch_id_; // for share storage file path
   uint64_t mtl_tenant_id_;
+  int64_t tmp_file_valid_length_; // for shared storage tmp file path
 };
 
 
