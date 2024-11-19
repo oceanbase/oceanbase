@@ -1,97 +1,97 @@
 create resource unit if not exists tx_free_route_unit max_cpu=1, memory_size='2G';
 create tenant tx_free_route_tenant replica_num=2, resource_pool_list=('tx_free_route_pool'),primary_zone=RANDOM set ob_tcp_invited_nodes='%',ob_compatibility_mode='mysql';
 drop table if exists t;
-create table t(id int primary key) partition by range(id)
+create table t(id int primary key, v int default 0) partition by range(id)
 (partition p0 values less than (10000), partition p1 values less than (3000000000));
 "-------------- 1 - basic in txn free route -----------------"
 set autocommit=1;
 "CASE 1.1"
 begin;
-insert into t values(10);
-insert into t values(10001);
+insert into t(id) values(10);
+insert into t(id) values(10001);
 rollback;
 select "txn rollback atomic", count(1) from t where id in (10,10001);
 txn rollback atomic	count(1)
 txn rollback atomic	0
 begin;
-insert into t values(10002);
-insert into t values(11);
+insert into t(id) values(10002);
+insert into t(id) values(11);
 commit;
 select "txn commit atomic", count(2) from t where id in (11,10002);
 txn commit atomic	count(2)
 txn commit atomic	2
 "CASE 1.2"
 begin;
-insert into t values(20);
-insert into t values(10003);
+insert into t(id) values(20);
+insert into t(id) values(10003);
 "implicit commit prev txn and start new one"
 begin;
-insert into t values(10004);
+insert into t(id) values(10004);
 begin;
 commit;
 "------------- 2 - implicit start txn ----------------------"
 "CASE 2.1"
 set autocommit=0;
-insert into t values(12);
-insert into t values(1000000003);
+insert into t(id) values(12);
+insert into t(id) values(1000000003);
 rollback;
 select "implicit txn rollback atomic", count(1) from t where id in (12,1000000003);
 implicit txn rollback atomic	count(1)
 implicit txn rollback atomic	0
-insert into t values(1000000004);
-insert into t values(13);
+insert into t(id) values(1000000004);
+insert into t(id) values(13);
 commit;
 select "implicit txn commit atomic", count(1) from t where id in (13,1000000004);
 implicit txn commit atomic	count(1)
 implicit txn commit atomic	2
 "CASE 2.2"
 set autocommit=0;
-insert into t values(14);
+insert into t(id) values(14);
 select * from t where id = 1000000003;
-id
+id	v
 select * from t where id = 14;
-id
-14
+id	v
+14	0
 select * from t where id = 1000000004;
-id
-1000000004
+id	v
+1000000004	0
 rollback;
 "------------- 3 - serializable read only txn ----------------------"
 set autocommit=0;
 "CASE 3.1"
 set session transaction isolation level serializable;
 select * from t where id = 14;
-id
+id	v
 select * from t where id = 1000000005;
-id
+id	v
 commit;
 "commit a txn to promise max commit ts was advanced"
 set autocommit=0;
-insert into t values(100),(20000);
+insert into t(id) values(100),(20000);
 delete from t where id in (100,20000);
 commit;
 "continue second read only txn"
 select * from t where id = 1000000006;
-id
+id	v
 select * from t where id = 15;
-id
+id	v
 commit;
 "CASE 3.2"
 select * from t where id = 16;
-id
-insert into t values(10000016);
+id	v
+insert into t(id) values(10000016);
 commit;
 "CASE 3.3"
 select * from t where id = 17;
-id
+id	v
 select * from t where id = 10000017;
-id
-insert into t values(18);
+id	v
+insert into t(id) values(18);
 commit;
 "CASE 3.4"
-insert into t values(19);
+insert into t(id) values(19);
 select * from t where id = 10000018;
-id
+id	v
 commit;
 "recovery isolation level to RC"
 set session transaction isolation level read committed;
@@ -100,111 +100,111 @@ set autocommit=0;
 "CASE 4.1"
 savepoint sp0;
 select * from t where id = 105;
-id
+id	v
 select * from t where id = 1000005;
-id
+id	v
 savepoint sp1;
 "CASE 4.2"
 set session transaction isolation level SERIALIZABLE;
 select * from t where id = 1000006;
-id
+id	v
 "CASE 4.3"
 select * from t where id = 101;
-id
-insert into t values(1000006);
+id	v
+insert into t(id) values(1000006);
 savepoint sp2;
-insert into t values(1000007);
-insert into t values(1007);
+insert into t(id) values(1000007);
+insert into t(id) values(1007);
 select * from t where id in (1007, 1000007, 1000006) order by id asc;
-id
-1007
-1000006
-1000007
+id	v
+1007	0
+1000006	0
+1000007	0
 "CASE 4.4"
 rollback to sp2;
 select * from t where id in (1007, 1000007, 1000006) order by id asc;
-id
-1000006
+id	v
+1000006	0
 commit;
 "CASE 4.5"
 savepoint sp3;
 select * from t where id = 106;
-id
+id	v
 select * from t where id = 1000007;
-id
+id	v
 commit;
 "CASE 4.6"
 begin;
-insert into t values(108);
-insert into t values(1000008);
+insert into t(id) values(108);
+insert into t(id) values(1000008);
 commit;
 "CASE 4.7"
 savepoint sp4;
 select * from t where id = 109;
-id
+id	v
 select * from t where id = 1000009;
-id
+id	v
 commit;
 "CASE 4.8"
 savepoint sp5;
 select * from t where id = 110;
-id
+id	v
 select * from t where id = 1000010;
-id
+id	v
 commit;
 "CASE 4.9"
 savepoint sp6;
 select * from t where id = 110;
-id
+id	v
 select * from t where id = 1000010;
-id
+id	v
 commit;
 "------------- 5 - change session auto_commit ----------------------"
 "CASE 5.1"
 delete from t;
 commit;
 set autocommit=0;
-insert into t values(100);
-insert into t values(1000001);
+insert into t(id) values(100);
+insert into t(id) values(1000001);
 set autocommit=1;
-insert into t values(1000002);
+insert into t(id) values(1000002);
 set autocommit=0;
-insert into t values(200);
-insert into t values(1000003);
+insert into t(id) values(200);
+insert into t(id) values(1000003);
 select * from t order by id asc;
-id
-100
-200
-1000001
-1000002
-1000003
+id	v
+100	0
+200	0
+1000001	0
+1000002	0
+1000003	0
 rollback;
 select * from t order by id asc;
-id
-100
-1000001
-1000002
+id	v
+100	0
+1000001	0
+1000002	0
 "CASE 5.2"
 begin;
-insert into t values(300);
-insert into t values(1000004);
+insert into t(id) values(300);
+insert into t(id) values(1000004);
 commit;
 set autocommit=1;
 select * from t where id = 1000004;
-id
-1000004
+id	v
+1000004	0
 "CASE 5.3"
 select * from t where id = 1;
-id
+id	v
 set autocommit=0;
 savepoint s52;
-insert into t values(1000005);
+insert into t(id) values(1000005);
 set autocommit=1;
 rollback to s52;
 ERROR 42000: savepoint does not exist
 select * from t where id = 1000005;
-id
-1000005
+id	v
+1000005	0
 "------------- 6 - switch on/off ----------------------"
 "CASE 6.1"
 connection conn1
@@ -215,54 +215,54 @@ commit;
 delete from t;
 commit;
 set autocommit=0;
-insert into t values(1);
-insert into t values(10001);
+insert into t(id) values(1);
+insert into t(id) values(10001);
 select * from t where id = 1;
-id
-1
+id	v
+1	0
 select * from t where id = 10001;
-id
-10001
+id	v
+10001	0
 commit;
 "CASE 6.2"
-insert into t values(2);
+insert into t(id) values(2);
 alter system set _enable_transaction_internal_routing = true;
-insert into t values(10002);
+insert into t(id) values(10002);
 select * from t where id = 2;
-id
-2
+id	v
+2	0
 select * from t where id = 10002;
-id
-10002
+id	v
+10002	0
 commit;
-insert into t values(3);
-insert into t values(10003);
+insert into t(id) values(3);
+insert into t(id) values(10003);
 select * from t where id = 3;
-id
-3
+id	v
+3	0
 select * from t where id = 10003;
-id
-10003
+id	v
+10003	0
 commit;
 "CASE 6.3"
-insert into t values(4);
+insert into t(id) values(4);
 alter system set _enable_transaction_internal_routing = false;
-insert into t values(10004);
+insert into t(id) values(10004);
 select * from t where id = 4;
-id
-4
+id	v
+4	0
 select * from t where id = 10004;
-id
-10004
+id	v
+10004	0
 commit;
-insert into t values(5);
-insert into t values(10005);
+insert into t(id) values(5);
+insert into t(id) values(10005);
 select * from t where id = 5;
-id
-5
+id	v
+5	0
 select * from t where id = 10005;
-id
-10005
+id	v
+10005	0
 commit;
 "reset _enable_transaction_internal_routing=true"
 alter system set _enable_transaction_internal_routing = true;
@@ -270,75 +270,75 @@ alter system set _enable_transaction_internal_routing = true;
 delete from t;
 commit;
 begin;
-insert into t values(1);
-insert into t values(10001);
+insert into t(id) values(1);
+insert into t(id) values(10001);
 create table tx(id int);
 select * from t where id in (1, 10001) order by id asc;
-id
-1
-10001
+id	v
+1	0
+10001	0
 drop table tx;
 "------------- 7 - multi-stmt route ----------------------"
 delete from t;
 commit;
 begin /
-insert into t values(1) /
-insert into t values(10001);insert into t values(10002);/
-insert into t values(10003) /
+insert into t(id) values(1) /
+insert into t(id) values(10001);insert into t(id) values(10002);/
+insert into t(id) values(10003) /
 select * from t order by id asc /
-id
-1
-10001
-10002
-10003
+id	v
+1	0
+10001	0
+10002	0
+10003	0
 "------------- 8 - sync session var set autocommit=1 ----------------------"
 delete from t;
 commit;
 set global autocommit=0;
 "CASE 8.1"
 select * from t where id = 1;
-id
+id	v
 set autocommit=1;
 begin;
-insert into t values(1);
-insert into t values(10001);
+insert into t(id) values(1);
+insert into t(id) values(10001);
 rollback;
 select * from t order by id asc;
-id
+id	v
 "CASE 8.2"
 begin;
-insert into t values(2);
-insert into t values(10002);
+insert into t(id) values(2);
+insert into t(id) values(10002);
 set autocommit=1;
 rollback;
 select * from t order by id asc;
-id
-2
-10002
+id	v
+2	0
+10002	0
 set global autocommit=1;
 "------------- 9 - error-packet caused proxy duplicate sync etc ----------------------"
 delete from t;
 commit;
 begin;
-insert into t values(1);
-insert into t values(10001,1);
+insert into t(id) values(1);
+insert into t(id) values(10001,1);
 ERROR 21S01: Column count doesn't match value count at row 1
-insert into t values(10001);
-insert into t values(2, 1);
+insert into t(id) values(10001);
+insert into t(id) values(2, 1);
 ERROR 21S01: Column count doesn't match value count at row 1
 update t set id = id + 1 where id = 10002;
-insert into t values(2);
+insert into t(id) values(2);
 select * from t order by id asc;
-id
-1
-2
-10001
+id	v
+1	0
+2	0
+10001	0
 commit;
 select * from t order by id asc;
-id
-1
-2
-10001
+id	v
+1	0
+2	0
+10001	0
 "------------- 10 - readonly tx with serializable snapshot swtich txn----------------------"
 delete from t;
 commit;
@@ -347,14 +347,41 @@ create outline tx_route_test_ot_4 on select * from (select * FROM t) a left join
 set session transaction ISOLATION LEVEL SERIALIZABLE;
 set autocommit = 0;
 select * from t where id = 1;
-id
+id	v
 select * from t where id = 10001;
-id
+id	v
 create outline tx_route_test_ot_4 on select * from (select * FROM t) a left join t b on a.id = b.id;
 ERROR HY000: Outline 'tx_route_test_ot_4' already exists
 select * from t where id = 10001;
-id
+id	v
 drop outline tx_route_test_ot_4;
+"---- 11 deadlock ---"
+delete from t;
+commit;
+insert into t(id) values(1),(10001);
+commit;
+start transaction;
+update t set v = 100 where id = 1;
+start transaction;
+update t set v = 111 where id = 10001;
+update t set v = 112 where id = 1;
+update t set v = 101 where id = 10001;
+select * from t where id = 1;
+id	v
+1	100
+insert into t(id) values(2),(10002);
+commit;
+ERROR HY000: Deadlock
+select * from t where id = 10001;
+ERROR HY000: Deadlock
+insert into t(id) values(10003);
+ERROR HY000: Deadlock
+select * from t where id = 1;
+ERROR HY000: Deadlock
+insert into t(id) values(3);
+ERROR HY000: Deadlock
+commit;
+ERROR 40000: Transaction rollbacked
 "------------- X - special query types ----------------------"
 "CLEANUP"
 drop table t;

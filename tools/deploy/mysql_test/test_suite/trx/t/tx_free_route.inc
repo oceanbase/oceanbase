@@ -87,13 +87,13 @@ if ($compat_mode == 'oracle') {
   --enable_result_log
 }
 
-create table t(id int primary key) partition by range(id)
+create table t(id int primary key, v int default 0) partition by range(id)
  (partition p0 values less than (10000), partition p1 values less than (3000000000));
 
 # insert rows to ensure tablet created
 --disable_result_log
 --disable_query_log
-insert into t values(9999),(99999);
+insert into t(id) values(9999),(99999);
 commit;
 --enable_result_log
 --enable_query_log

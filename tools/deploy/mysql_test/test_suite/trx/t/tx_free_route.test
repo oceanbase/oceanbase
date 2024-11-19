@@ -48,18 +48,18 @@ connection conn0;
 set autocommit=1;
 --echo "CASE 1.1"
 begin;
-insert into t values(10);
+insert into t(id) values(10);
 let $session_1=`select connection_id()`;
-insert into t values(10001);
+insert into t(id) values(10001);
 let $session_2=`select connection_id()`;
 rollback;
 if ($session_1 == $session_2) {  --echo "explicit txn not free routed !! $session_1 = $session_2"
 }
 select "txn rollback atomic", count(1) from t where id in (10,10001);
 begin;
-insert into t values(10002);
+insert into t(id) values(10002);
 let $session_1=`select connection_id()`;
-insert into t values(11);
+insert into t(id) values(11);
 let $session_2=`select connection_id()`;
 commit;
 if ($session_1 == $session_2) { --echo "explicit txn not free routed !! $session_1 = $session_2"
@@ -67,19 +67,19 @@ if ($session_1 == $session_2) { --echo "explicit txn not free routed !! $session
 select "txn commit atomic", count(2) from t where id in (11,10002);
 --echo "CASE 1.2"
 begin;
-insert into t values(20);
+insert into t(id) values(20);
 let $session_1=`select connection_id()`;
-insert into t values(10003);
+insert into t(id) values(10003);
 let $session_2=`select connection_id()`;
 --echo "implicit commit prev txn and start new one"
 begin;
-insert into t values(10004);
+insert into t(id) values(10004);
 let $session_3=`select connection_id()`;
 begin;
 commit;
-let $tx_id_1=query_get_value(select transaction_id from oceanbase.__all_virtual_sql_audit where session_id = $session_1 and query_sql = 'insert into t values(20)' order by request_time desc, transaction_id, 1);
-let $tx_id_2=query_get_value(select transaction_id from oceanbase.__all_virtual_sql_audit where session_id = $session_2 and query_sql = 'insert into t values(10003)' order by request_time desc, transaction_id, 1);
-let $tx_id_3=query_get_value(select transaction_id from oceanbase.__all_virtual_sql_audit where session_id = $session_3 and query_sql = 'insert into t values(10004)' order by request_time desc, transaction_id, 1);
+let $tx_id_1=query_get_value(select transaction_id from oceanbase.__all_virtual_sql_audit where session_id = $session_1 and query_sql = 'insert into t(id) values(20)' order by request_time desc, transaction_id, 1);
+let $tx_id_2=query_get_value(select transaction_id from oceanbase.__all_virtual_sql_audit where session_id = $session_2 and query_sql = 'insert into t(id) values(10003)' order by request_time desc, transaction_id, 1);
+let $tx_id_3=query_get_value(select transaction_id from oceanbase.__all_virtual_sql_audit where session_id = $session_3 and query_sql = 'insert into t(id) values(10004)' order by request_time desc, transaction_id, 1);
 if ($session_1 == $session_2) { --echo "txn not free routed !! $session_1 = $session_2"
 }
 if ($session_2 != $session_3) { --echo "txn not free routed !! $session_1 = $session_2"
@@ -114,17 +114,17 @@ if ($tx_id_1 != "No such row") { --echo "oops ! txn implicit commit not works !!
 #--------------------------------------------------------------------------
 --echo "CASE 2.1"
 set autocommit=0;
-insert into t values(12);
+insert into t(id) values(12);
 let $session_1=`select connection_id()`;
-insert into t values(1000000003);
+insert into t(id) values(1000000003);
 let $session_2=`select connection_id()`;
 rollback;
 if ($session_1 == $session_2) { --echo "implicit txn not free routed !! $session_1 = $session_2"
 }
 select "implicit txn rollback atomic", count(1) from t where id in (12,1000000003);
-insert into t values(1000000004);
+insert into t(id) values(1000000004);
 let $session_1=`select connection_id()`;
-insert into t values(13);
+insert into t(id) values(13);
 let $session_2=`select connection_id()`;
 commit;
 if ($session_1 == $session_2) { --echo "implicit txn not free routed !! $session_1 = $session_2"
@@ -132,7 +132,7 @@ if ($session_1 == $session_2) { --echo "implicit txn not free routed !! $session
 select "implicit txn commit atomic", count(1) from t where id in (13,1000000004);
 --echo "CASE 2.2"
 set autocommit=0;
-insert into t values(14);
+insert into t(id) values(14);
 let $s1=`select connection_id()`;
 select * from t where id = 1000000003;
 let $s2=`select connection_id()`;
@@ -197,7 +197,7 @@ if ($snapshot_1 != "No such row") { --echo "serializable read only txn snapshot 
 --echo "commit a txn to promise max commit ts was advanced"
 connection conn1;
 set autocommit=0;
-insert into t values(100),(20000);
+insert into t(id) values(100),(20000);
 delete from t where id in (100,20000);
 commit;
 --echo "continue second read only txn"
@@ -227,7 +227,7 @@ if ($snapshot_2_1 != "No such row") { --echo "serializable read only txn snapsho
 --echo "CASE 3.2"
 select * from t where id = 16;
 let $session_1=`select connection_id()`;
-insert into t values(10000016);
+insert into t(id) values(10000016);
 let $session_2=`select connection_id()`;
 commit;
 if ($session_2 == $session_1) { --echo "txn is not freely routed !! $session_1 = $session_2";
@@ -237,7 +237,7 @@ select * from t where id = 17;
 let $session_1=`select connection_id()`;
 select * from t where id = 10000017;
 let $session_2=`select connection_id()`;
-insert into t values(18);
+insert into t(id) values(18);
 let $session_3=`select connection_id()`;
 commit;
 if ($session_2 == $session_1) { --echo "txn is not freely routed !! session: 1=$session_1, 2=$session_2";
@@ -255,7 +255,7 @@ if ($snapshot_1 != "No such row") { --echo "serializable read only txn snapshot 
 }
 }
 --echo "CASE 3.4"
-insert into t values(19);
+insert into t(id) values(19);
 let $session_1=`select connection_id()`;
 select * from t where id = 10000018;
 let $session_2=`select connection_id()`;
@@ -336,7 +336,7 @@ select * from t where id = 101;
 let $session_5=`select connection_id()`;
 if ($session_4 == $session_5) { --echo "txn is not freely routed !! session: 1=$session_4, 2=$session_5";
 }
-insert into t values(1000006);
+insert into t(id) values(1000006);
 let $session_6=`select connection_id()`;
 if ($session_5 == $session_6) { --echo "txn is not freely routed !! session: 1=$session_5, 2=$session_6";
 }
@@ -344,9 +344,9 @@ savepoint sp2;
 let $session_7=`select connection_id()`;
 if ($session_0 != $session_7) { --echo "savepoint should always on same session !! session: 1=$session_0, 2=$session_7";
 }
-insert into t values(1000007);
+insert into t(id) values(1000007);
 let $session_8=`select connection_id()`;
-insert into t values(1007);
+insert into t(id) values(1007);
 let $session_9=`select connection_id()`;
 if ($session_8 == $session_9) { --echo "txn is not freely routed !! session: 1=$session_8, 2=$session_9";
 }
@@ -366,9 +366,9 @@ if ($session_10 == $session_11) { --echo "txn is not freely routed !! session: 1
 }
 --echo "CASE 4.6"
 begin;
-insert into t values(108);
+insert into t(id) values(108);
 let $session_1=`select connection_id()`;
-insert into t values(1000008);
+insert into t(id) values(1000008);
 let $session_2=`select connection_id()`;
 commit;
 if ($session_1 == $session_2) { --echo "txn is not freely routed !! session: 1=$session_1, 2=$session_2";
@@ -406,11 +406,11 @@ if ($session_0 != $session_2) {
 --disable_query_log
 --disable_result_log
 if ($session_0 == $session_1) {
-  insert into t values(1000011);
+  insert into t(id) values(1000011);
   let $session_3=`select connection_id()`;
 }
 if ($session_0 == $session_2) {
-  insert into t values(888);
+  insert into t(id) values(888);
   let $session_3=`select connection_id()`;
 }
 sleep 10;
@@ -470,26 +470,26 @@ if ($sp_sess == $session_3) { --echo "txn is not freely routed !! session: 1=$se
 delete from t;
 commit;
 set autocommit=0;
-insert into t values(100);
+insert into t(id) values(100);
 let $session_1=`select connection_id()`;
-insert into t values(1000001);
+insert into t(id) values(1000001);
 let $session_2=`select connection_id()`;
 set autocommit=1;
-insert into t values(1000002);
+insert into t(id) values(1000002);
 let $session_3=`select connection_id()`;
 set autocommit=0;
-insert into t values(200);
+insert into t(id) values(200);
 let $session_4=`select connection_id()`;
-insert into t values(1000003);
+insert into t(id) values(1000003);
 let $session_5=`select connection_id()`;
 select * from t order by id asc;
 rollback;
 select * from t order by id asc;
 --echo "CASE 5.2"
 begin;
-insert into t values(300);
+insert into t(id) values(300);
 let $session_6=`select connection_id()`;
-insert into t values(1000004);
+insert into t(id) values(1000004);
 let $session_7=`select connection_id()`;
 commit;
 set autocommit=1;
@@ -500,7 +500,7 @@ select * from t where id = 1;
 set autocommit=0;
 savepoint s52;
 let $session_9=`select connection_id()`;
-insert into t values(1000005);
+insert into t(id) values(1000005);
 let $session_10=`select connection_id()`;
 set autocommit=1;
 let $session_11=`select connection_id()`;
@@ -570,9 +570,9 @@ if ($i != 110)
 select * from oceanbase.gv$ob_parameters where name = '_enable_transaction_internal_routing';
 }
 set autocommit=0;
-insert into t values(1);
+insert into t(id) values(1);
 let $s1=`select connection_id()`;
-insert into t values(10001);
+insert into t(id) values(10001);
 let $s2=`select connection_id()`;
 select * from t where id = 1;
 let $s3=`select connection_id()`;
@@ -587,7 +587,7 @@ if ($s2 != $s3) { --echo "free routed 3: $s1, $s3"
 }
 
 --echo "CASE 6.2"
-insert into t values(2);
+insert into t(id) values(2);
 let $s1=`select connection_id()`;
 connection conn1;
 alter system set _enable_transaction_internal_routing = true;
@@ -611,7 +611,7 @@ if ($i != 110)
 --echo "wait _enable_transaction_internal_routing to True failed: $i"
 select * from oceanbase.gv$ob_parameters where name = '_enable_transaction_internal_routing';
 }
-insert into t values(10002);
+insert into t(id) values(10002);
 let $s2=`select connection_id()`;
 select * from t where id = 2;
 let $s3=`select connection_id()`;
@@ -625,9 +625,9 @@ if ($s3 != $s4) { --echo "free routed 2: $s3, $s4"
 if ($s2 != $s3) { --echo "free routed 3: $s1, $s3"
 }
 ## next transaction: it should route freely
-insert into t values(3);
+insert into t(id) values(3);
 let $s1=`select connection_id()`;
-insert into t values(10003);
+insert into t(id) values(10003);
 let $s2=`select connection_id()`;
 select * from t where id = 3;
 let $s3=`select connection_id()`;
@@ -644,7 +644,7 @@ if ($s2 != $s4) { --echo "not free routed 3: $s2, $s4"
 }
 
 --echo "CASE 6.3"
-insert into t values(4);
+insert into t(id) values(4);
 let $s1=`select connection_id()`;
 connection conn1;
 alter system set _enable_transaction_internal_routing = false;
@@ -668,7 +668,7 @@ if ($i != 110)
 --echo "wait _enable_transaction_internal_routing to false failed"
 select * from oceanbase.gv$ob_parameters where name = '_enable_transaction_internal_routing';
 }
-insert into t values(10004);
+insert into t(id) values(10004);
 let $s2=`select connection_id()`;
 select * from t where id = 4;
 let $s3=`select connection_id()`;
@@ -684,9 +684,9 @@ if ($s1 != $s3) { --echo "not free routed 3: $s1, $s3"
 if ($s2 != $s4) { --echo "not free routed 3: $s2, $s4"
 }
 ## next transaction: it should not freely routed
-insert into t values(5);
+insert into t(id) values(5);
 let $s1=`select connection_id()`;
-insert into t values(10005);
+insert into t(id) values(10005);
 let $s2=`select connection_id()`;
 select * from t where id = 5;
 let $s3=`select connection_id()`;
@@ -728,9 +728,9 @@ connection conn0;
 delete from t;
 commit;
 begin;
-insert into t values(1);
+insert into t(id) values(1);
 let $s1=`select connection_id()`;
-insert into t values(10001);
+insert into t(id) values(10001);
 let $s2=`select connection_id()`;
 create table tx(id int);
 let $s3=`select connection_id()`;
@@ -747,11 +747,11 @@ delete from t;
 commit;
 --delimiter /
 begin /
-insert into t values(1) /
+insert into t(id) values(1) /
 let $s1=`select connection_id()` /
-insert into t values(10001);insert into t values(10002);/
+insert into t(id) values(10001);insert into t(id) values(10002);/
 let $s2=`select connection_id()` /
-insert into t values(10003) /
+insert into t(id) values(10003) /
 let $s3=`select connection_id()` /
 if ($s1 != $s2) { --echo "multi stmt not routed to tx start node: $s2, $s1"
 }
@@ -787,9 +787,9 @@ connection conn8;
 select * from t where id = 1;
 set autocommit=1;
 begin;
-insert into t values(1);
+insert into t(id) values(1);
 let $s1=`select connection_id()`;
-insert into t values(10001);
+insert into t(id) values(10001);
 let $s2=`select connection_id()`;
 rollback;
 select * from t order by id asc;
@@ -799,9 +799,9 @@ if ($s1 == $2) { --echo "not free routed: $s1, $s2"
 --echo "CASE 8.2"
 connect (conn82,$OBMYSQL_MS0,root@tx_free_route_tenant,,test,$OBMYSQL_PORT);
 begin;
-insert into t values(2);
+insert into t(id) values(2);
 let $s3=`select connection_id()`;
-insert into t values(10002);
+insert into t(id) values(10002);
 let $s4=`select connection_id()`;
 set autocommit=1;
 rollback;
@@ -817,19 +817,19 @@ connect (conn90,$OBMYSQL_MS0,root@tx_free_route_tenant,,test,$OBMYSQL_PORT);
 delete from t;
 commit;
 begin;
-insert into t values(1);
+insert into t(id) values(1);
 let $s1=`select connection_id()`;
 --error 1136
-insert into t values(10001,1);
+insert into t(id) values(10001,1);
 let $s2=`select connection_id()`;
-insert into t values(10001); ## duplicate sync: 5678, return 67
+insert into t(id) values(10001); ## duplicate sync: 5678, return 67
 let $s3=`select connection_id()`;
 --error 1136
-insert into t values(2, 1); ## sync 67
+insert into t(id) values(2, 1); ## sync 67
 let $s4=`select connection_id()`;
 update t set id = id + 1 where id = 10002; ## empty update, return 6
 let $s5=`select connection_id()`;
-insert into t values(2); ## duplicate sync 67, 6's version is larger than 7
+insert into t(id) values(2); ## duplicate sync 67, 6's version is larger than 7
 let $s6=`select connection_id()`;
 select * from t order by id asc;
 commit;
@@ -878,6 +878,41 @@ drop outline tx_route_test_ot_4;
 --enable_abort_on_error
 --enable_result_log
 disconnect conn100;
+
+--echo "---- 11 deadlock ---"
+connect (conn11,$OBMYSQL_MS0,root@tx_free_route_tenant,,test,$OBMYSQL_PORT);
+connect (conn12,$OBMYSQL_MS0,root@tx_free_route_tenant,,test,$OBMYSQL_PORT);
+connection conn11;
+delete from t;
+commit;
+insert into t(id) values(1),(10001);
+commit;
+start transaction;
+update t set v = 100 where id = 1;
+connection conn12;
+start transaction;
+update t set v = 111 where id = 10001;
+send update t set v = 112 where id = 1;
+connection conn11;
+update t set v = 101 where id = 10001;
+select * from t where id = 1;
+insert into t(id) values(2),(10002);
+commit;
+connection conn12;
+--error 1213
+reap;
+--error 1213
+select * from t where id = 10001;
+--error 1213
+insert into t(id) values(10003);
+--error 1213
+select * from t where id = 1;
+--error 1213
+insert into t(id) values(3);
+--error 6002
+commit;
+disconnect conn11;
+disconnect conn12;
 
 --echo "------------- X - special query types ----------------------"
 #--------------------------------------------------------------------------
