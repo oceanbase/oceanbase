@@ -88,6 +88,12 @@ public:
   int try_delete_tablet_data_dir()
   { return OB_SUCCESS; }
 
+  int get_blocks_for_error_block_check(
+      const ObIArray<int64_t> &tablet_versions,
+      const int64_t min_retain_tablet_meta_version,
+      BlockCollectOP &collect_check_block_op)
+  { return OB_SUCCESS; }
+
 
   blocksstable::MacroBlockId (*macro_block_ids_)[3];
   ObArray<blocksstable::MacroBlockId> gc_blocks_;
