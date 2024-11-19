@@ -1808,9 +1808,11 @@ int ObFtsIndexBuilderUtil::check_fulltext_index_allowed(
     const obrpc::ObCreateIndexArg *index_arg)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(index_arg) || !share::schema::is_fts_index(index_arg->index_type_) || !data_schema.is_valid()) {
+  if (OB_ISNULL(index_arg) || !data_schema.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KPC(index_arg), K(data_schema));
+  } else if (!share::schema::is_fts_index_aux(index_arg->index_type_)
+    && !share::schema::is_fts_doc_word_aux(index_arg->index_type_)) {
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < index_arg->index_columns_.count(); ++i) {
       const ObString &column_name = index_arg->index_columns_.at(i).column_name_;

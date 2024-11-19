@@ -615,6 +615,8 @@ int ObExprJsonQuery::set_multivalue_result(bool is_result_array,
       LOG_WARN("failed get object", K(ret));
     } else if (OB_FAIL(res.from_obj(*object_ptr, type))) {
       LOG_WARN("failed from object", K(ret), K(*object_ptr));
+    } else if (OB_FAIL(ObJsonUtil::set_lob_datum(&allocator, expr, ctx, dest_type, cast_param.ascii_type_, res))) {
+      LOG_WARN("failed set lob result", K(ret), K(*object_ptr));
     }
   } else {
     apaque.set_value(str_buff.string());
