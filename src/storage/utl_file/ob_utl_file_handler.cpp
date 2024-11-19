@@ -493,13 +493,6 @@ int ObUtlFileHandler::frename(const char *src_dir, const char *src_filename,
   return ret;
 }
 
-int ObUtlFileHandler::fis_open(const int64_t &fd, bool &b_open)
-{
-  int ret = OB_SUCCESS;
-  b_open = (fd > 0);
-  return ret;
-}
-
 bool ObUtlFileHandler::is_valid_path(const char *path, size_t &path_len)
 {
   return OB_NOT_NULL(path) && ((path_len = STRLEN(path)) > 0)
