@@ -55,18 +55,16 @@ int ObVectorIndexSchedJobUtils::add_scheduler_job(
           lib::is_oracle_mode() ? ObString("SYS") : ObString("root@%");
       job_info.job_style_ = ObString("regular");
       job_info.job_type_ = ObString("PLSQL_BLOCK");
-      job_info.job_class_ = ObString(DATE_EXPRESSION_JOB_CLASS);
+      job_info.job_class_ = ObString("DEFAULT_JOB_CLASS");
       job_info.what_ = job_action;
       job_info.start_date_ = start_date_us;
       job_info.end_date_ = end_date_us;
-      job_info.interval_ = job_info.repeat_interval_;
+      job_info.interval_ = ObString();
       job_info.repeat_interval_ = ObString();
       job_info.enabled_ = 1;
       job_info.auto_drop_ = 0;
       job_info.max_run_duration_ = 24 * 60 * 60; // set to 1 day
       job_info.interval_ts_ = repeat_interval_ts;
-      job_info.scheduler_flags_ =
-          ObDBMSSchedJobInfo::JOB_SCHEDULER_FLAG_DATE_EXPRESSION_JOB_CLASS;
       job_info.exec_env_ = exec_env;
 
       if (OB_FAIL(ObDBMSSchedJobUtils::create_dbms_sched_job(
