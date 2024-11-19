@@ -348,15 +348,17 @@ int ObSortVecOp::scan_all_then_sort_batch()
       if (OB_FAIL(finish_add_prescan_store())) {
         LOG_WARN("failed to finish add prescan store", K(ret));
       } else {
-        const ObCompactRow *sk_rows[MY_SPEC.max_batch_size_];
-        const ObCompactRow *addon_rows[MY_SPEC.max_batch_size_];
+        constexpr int64_t MAX_BATCH_SIZE = 256;
+        const ObCompactRow *sk_rows[MAX_BATCH_SIZE];
+        const ObCompactRow *addon_rows[MAX_BATCH_SIZE];
+        int64_t max_batch_size = min(256, MY_SPEC.max_batch_size_);
         int64_t read_rows = -1;
         if (MY_SPEC.has_addon_) {
           addon_row_iter_.set_blk_holder(&blk_holder_);
         }
         while (OB_SUCC(ret)) {
           if (OB_FAIL(
-                get_next_batch_prescan_store(MY_SPEC.max_batch_size_, read_rows, &sk_rows[0],
+                get_next_batch_prescan_store(max_batch_size, read_rows, &sk_rows[0],
                                              MY_SPEC.has_addon_ ? &addon_rows[0] : nullptr))) {
             if (OB_ITER_END != ret) {
               LOG_WARN("failed to get next batch", K(ret));
