@@ -165,6 +165,7 @@ int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
   int ret = OB_SUCCESS;
   is_enable = false;
   int64_t threshold = INT64_MAX;
+  uint64_t optimizer_features_enable_version = 0;
   // 1. check basic requests
   if (OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
@@ -174,20 +175,38 @@ int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
              (NULL != stmt && stmt->is_select_stmt() && static_cast<const ObSelectStmt *>(stmt)->is_hierarchical_query())) {
     LOG_TRACE("no need rewrite inlist", K(is_root_condition), K(scope), K(in_list.type_),
               K(op_type), K(is_need_print));
-  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_2_0) {
-    LOG_TRACE("current version less than 4_2_2_0");
   } else {
-    threshold = session_info->get_inlist_rewrite_threshold();
-    if (stmt != NULL && stmt->get_query_ctx() != NULL) {
-      const ObGlobalHint &global_hint = stmt->get_query_ctx()->get_global_hint();
-      if (OB_FAIL(global_hint.opt_params_.get_integer_opt_param(
-                                            ObOptParamHint::INLIST_REWRITE_THRESHOLD, threshold))) {
-        LOG_WARN("failed to get integer opt param", K(ret));
+    if (NULL == stmt) {
+      if (OB_FAIL(session_info->get_optimizer_features_enable_version(optimizer_features_enable_version))) {
+        LOG_WARN("failed to check ddl schema version", K(ret));
+      } else {
+        threshold = session_info->get_inlist_rewrite_threshold();
+      }
+    } else {
+      if (OB_ISNULL(stmt->get_query_ctx())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else {
+        threshold = session_info->get_inlist_rewrite_threshold();
+        const ObGlobalHint &global_hint = stmt->get_query_ctx()->get_global_hint();
+        if (OB_FAIL(global_hint.opt_params_.get_integer_opt_param(
+                                              ObOptParamHint::INLIST_REWRITE_THRESHOLD, threshold))) {
+          LOG_WARN("failed to get integer opt param", K(ret));
+        } else if (global_hint.has_valid_opt_features_version()) {
+          optimizer_features_enable_version = global_hint.opt_features_version_;
+        } else if (OB_FAIL(session_info->get_optimizer_features_enable_version(optimizer_features_enable_version))) {
+          LOG_WARN("failed to check ddl schema version", K(ret));
+        }
       }
     }
     if (OB_SUCC(ret)) {
-      is_enable = in_list.num_child_ >= threshold;
-      LOG_TRACE("check rewrite inlist threshold", K(threshold), K(in_list.num_child_));
+      if (optimizer_features_enable_version < COMPAT_VERSION_4_2_5) {
+        LOG_TRACE("current optimizer version is less then COMPAT_VERSION_4_2_5");
+      } else if (in_list.num_child_ < threshold) {
+        LOG_TRACE("check rewrite inlist threshold", K(threshold), K(in_list.num_child_));
+      } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0) {
+        is_enable = true;
+      }
     }
   }
   // 2. check same node type requests
