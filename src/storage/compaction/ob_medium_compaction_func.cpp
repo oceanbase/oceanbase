@@ -784,7 +784,11 @@ int ObMediumCompactionScheduleFunc::init_parallel_range_and_schema_changed_and_c
         STORAGE_LOG(WARN, "failed to get concurrent cnt", K(ret), K(tablet_size), K(expected_task_count),
           KPC(first_sstable));
       }
+    } else if (inc_row_cnt == 0) {
+      // there is no reason to do parallel merge for tablet without inc data
+      expected_task_count = 1;
     }
+
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
     ret = OB_E(EventTable::EN_COMPACTION_MEDIUM_INIT_PARALLEL_RANGE) ret;
@@ -816,7 +820,7 @@ int ObMediumCompactionScheduleFunc::init_parallel_range_and_schema_changed_and_c
     }
 
     if (OB_FAIL(ret)) {
-    } else if (expected_task_count <= 1) {
+    } else if (expected_task_count < 1) {
       medium_info.clear_parallel_range();
     } else {
       ObTableStoreIterator table_iter;
