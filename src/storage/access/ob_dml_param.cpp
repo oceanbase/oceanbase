@@ -302,7 +302,8 @@ DEF_TO_STRING(ObTableScanParam)
        K_(fb_read_tx_uncommitted),
        K_(external_file_format),
        K_(external_file_location),
-       K_(tx_seq_base));
+       K_(tx_seq_base),
+       K_(need_update_tablet_param));
   J_OBJ_END();
   return pos;
 }

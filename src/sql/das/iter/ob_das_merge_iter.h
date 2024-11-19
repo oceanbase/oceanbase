@@ -127,6 +127,7 @@ public:
       das_tasks_arr_(),
       get_next_row_(nullptr),
       get_next_rows_(nullptr),
+      first_get_row_(true),
       seq_task_idx_(OB_INVALID_INDEX),
       group_id_idx_(OB_INVALID_INDEX),
       need_prepare_sort_merge_info_(false),
@@ -209,6 +210,7 @@ private:
   DasTaskArray das_tasks_arr_;
   int (ObDASMergeIter::*get_next_row_)();
   int (ObDASMergeIter::*get_next_rows_)(int64_t&, int64_t);
+  bool first_get_row_;
 
   /********* SEQUENTIAL MERGE BEGIN *********/
   int64_t seq_task_idx_;

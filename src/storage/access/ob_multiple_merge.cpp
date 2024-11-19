@@ -411,6 +411,8 @@ int ObMultipleMerge::get_next_row(ObDatumRow *&row)
   } else if (FALSE_IT(not_using_static_engine = (nullptr == access_param_->output_exprs_))) {
   } else if (access_param_->iter_param_.enable_pd_aggregate()) {
     ret = get_next_aggregate_row(row);
+  } else if (OB_FAIL(refresh_filter_params_on_demand(false/*is_open*/))) {
+    LOG_WARN("failed to refresh split params on demand", K(ret));
   } else {
     row = nullptr;
     if (need_padding_) {
@@ -544,6 +546,8 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(refresh_table_on_demand())) {
     LOG_WARN("fail to refresh table on demand", K(ret));
+  } else if (OB_FAIL(refresh_filter_params_on_demand(false/*is_open*/))) {
+    LOG_WARN("failed to refresh split params on demand", K(ret));
   } else {
     ObVectorStore *vector_store = reinterpret_cast<ObVectorStore *>(block_row_store_);
     int64_t batch_size = min(capacity, access_param_->get_op()->get_batch_size());
@@ -649,6 +653,8 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect aggregate pushdown status", K(ret),
              K(access_ctx_->range_array_pos_->count()));
+  } else if (OB_FAIL(refresh_filter_params_on_demand(false/*is_open*/))) {
+    LOG_WARN("failed to refersh split params on demand", K(ret));
   } else {
     ObBlockBatchedRowStore *batch_row_store = static_cast<ObBlockBatchedRowStore *>(block_row_store_);
     if (OB_NOT_NULL(access_param_->get_op())) {
@@ -1032,15 +1038,8 @@ int ObMultipleMerge::open()
     }
   }
   if (OB_SUCC(ret)) {
-    // fill auto split params if need
-    const ObTableIterParam &iter_param = access_param_->iter_param_;
-    const int64_t table_id = access_param_->iter_param_.table_id_;
-    if (OB_NOT_NULL(iter_param.auto_split_filter_) && iter_param.auto_split_filter_type_ < static_cast<uint64_t>(ObTabletSplitType::MAX_TYPE)) {
-      ObPartitionSplitQuery split_query;
-      if (OB_FAIL(split_query.fill_auto_split_params(iter_param.tablet_id_, iter_param.ls_id_,
-          iter_param.op_, iter_param.auto_split_filter_type_, iter_param.auto_split_params_, *access_ctx_->stmt_allocator_))) {
-        LOG_WARN("fail to fill split params.", K(ret));
-      }
+    if (OB_FAIL(refresh_filter_params_on_demand(true/*is_open*/))) {
+      LOG_WARN("fail to fill split params", K(ret));
     }
   }
   if (OB_SUCC(ret)) {
@@ -1284,6 +1283,28 @@ int ObMultipleMerge::check_filtered(const ObDatumRow &row, bool &filtered)
     // %row is already projected to output expressions for main table scan.
     if (OB_FAIL(access_param_->get_op()->filter_row_outside(*access_param_->op_filters_, *skip_bit_, filtered))) {
       LOG_WARN("filter row failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObMultipleMerge::refresh_filter_params_on_demand(const bool is_open)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObMultipleMerge has not been inited", K(ret));
+  } else {
+    const ObTableIterParam &iter_param = access_param_->iter_param_;
+    const int64_t table_id = access_param_->iter_param_.table_id_;
+    const bool has_split_filter = OB_NOT_NULL(iter_param.auto_split_filter_)
+        && iter_param.auto_split_filter_type_ < static_cast<uint64_t>(ObTabletSplitType::MAX_TYPE);
+    if (has_split_filter && (is_open || (OB_NOT_NULL(iter_param.need_update_tablet_param_) && *iter_param.need_update_tablet_param_))) {
+      ObPartitionSplitQuery split_query;
+      if (OB_FAIL(split_query.fill_auto_split_params(iter_param.tablet_id_, iter_param.ls_id_,
+          iter_param.op_, iter_param.auto_split_filter_type_, iter_param.auto_split_params_, *access_ctx_->stmt_allocator_))) {
+        LOG_WARN("fail to fill split params.", K(ret));
+      }
     }
   }
   return ret;

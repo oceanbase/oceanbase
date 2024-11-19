@@ -145,6 +145,7 @@ int ObDASMergeIter::set_merge_status(MergeType merge_type)
 {
   int ret = OB_SUCCESS;
   merge_type_ = used_for_keep_order_ ? MergeType::SORT_MERGE : merge_type;
+  first_get_row_ = true;
   if (merge_type == MergeType::SEQUENTIAL_MERGE) {
     get_next_row_ = &ObDASMergeIter::get_next_seq_row;
     get_next_rows_ = &ObDASMergeIter::get_next_seq_rows;
@@ -370,6 +371,9 @@ int ObDASMergeIter::inner_get_next_row()
       LOG_WARN("das iter failed to get next row", K(ret));
     }
   }
+  if (OB_UNLIKELY(first_get_row_)) {
+    first_get_row_ = false;
+  }
   return ret;
 }
 
@@ -381,6 +385,9 @@ int ObDASMergeIter::inner_get_next_rows(int64_t &count, int64_t capacity)
     if (OB_UNLIKELY(ret != OB_ITER_END)) {
       LOG_WARN("das merge iter failed to get next rows", K(ret));
     }
+  }
+  if (OB_UNLIKELY(first_get_row_)) {
+    first_get_row_ = false;
   }
   LOG_DEBUG("[DAS ITER] merge iter get next rows end", K(count), K(merge_type_), K(merge_state_arr_), K(ret));
   const ObBitVector *skip = nullptr;
@@ -503,7 +510,12 @@ int ObDASMergeIter::get_next_seq_row()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected das task op type", K(ret));
       } else {
-        if (OB_SUCC(scan_op->get_output_result_iter()->get_next_row())) {
+        if (first_get_row_) {
+          scan_op->get_scan_param().need_update_tablet_param_ = true;
+        }
+        ret = scan_op->get_output_result_iter()->get_next_row();
+        scan_op->get_scan_param().need_update_tablet_param_ = false;
+        if (OB_SUCC(ret)) {
           got_row = true;
         } else if (OB_ITER_END == ret) {
           ++seq_task_idx_;
@@ -512,6 +524,7 @@ int ObDASMergeIter::get_next_seq_row()
           } else {
             ret = OB_SUCCESS;
             scan_op = DAS_SCAN_OP(das_tasks_arr_.at(seq_task_idx_));
+            scan_op->get_scan_param().need_update_tablet_param_ = true;
             if (need_update_partition_id_) {
               if (OB_FAIL(update_output_tablet_id(scan_op))) {
                 LOG_WARN("failed to update output tablet id", K(ret), K(scan_op->get_tablet_loc()->tablet_id_));
@@ -548,7 +561,11 @@ int ObDASMergeIter::get_next_seq_rows(int64_t &count, int64_t capacity)
           reset_datum_ptr(scan_op, capacity);
         }
         count = 0;
+        if (first_get_row_) {
+          scan_op->get_scan_param().need_update_tablet_param_ = true;
+        }
         ret = scan_op->get_output_result_iter()->get_next_rows(count, capacity);
+        scan_op->get_scan_param().need_update_tablet_param_ = false;
         if (OB_ITER_END == ret && count > 0) {
           ret = OB_SUCCESS;
         }
@@ -564,6 +581,7 @@ int ObDASMergeIter::get_next_seq_rows(int64_t &count, int64_t capacity)
           } else {
             ret = OB_SUCCESS;
             scan_op = DAS_SCAN_OP(das_tasks_arr_.at(seq_task_idx_));
+            scan_op->get_scan_param().need_update_tablet_param_ = true;
             if (need_update_partition_id_) {
               if (OB_FAIL(update_output_tablet_id(scan_op))) {
                 LOG_WARN("update output tablet id failed", K(ret), K(scan_op->get_tablet_loc()->tablet_id_));
@@ -594,6 +612,7 @@ int ObDASMergeIter::get_next_sorted_row()
         if (OB_ISNULL(scan_op)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected das task op type", K(ret), KPC(das_tasks_arr_[i]));
+        } else if (FALSE_IT(scan_op->get_scan_param().need_update_tablet_param_ = true)) {
         } else if (OB_SUCC(scan_op->get_output_result_iter()->get_next_row())) {
           if (OB_FAIL(merge_store_rows_arr_[i].save(false, 1))) {
             LOG_WARN("failed to save store row", K(ret));
@@ -679,6 +698,7 @@ int ObDASMergeIter::get_next_sorted_rows(int64_t &count, int64_t capacity)
               reset_datum_ptr(scan_op, capacity);
             }
             count = 0;
+            scan_op->get_scan_param().need_update_tablet_param_ = true;
             ret = scan_op->get_output_result_iter()->get_next_rows(count, capacity);
             if (OB_ITER_END == ret && count > 0) {
               ret = OB_SUCCESS;

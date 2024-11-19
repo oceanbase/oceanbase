@@ -61,7 +61,8 @@ ObTableIterParam::ObTableIterParam()
       auto_split_filter_(nullptr),
       auto_split_params_(nullptr),
       is_tablet_spliting_(false),
-      is_column_replica_table_(false)
+      is_column_replica_table_(false),
+      need_update_tablet_param_(nullptr)
 {}
 
 ObTableIterParam::~ObTableIterParam()
@@ -115,6 +116,7 @@ void ObTableIterParam::reset()
   is_tablet_spliting_ = false;
   is_column_replica_table_ = false;
   ObSSTableIndexFilterFactory::destroy_sstable_index_filter(sstable_index_filter_);
+  need_update_tablet_param_ = nullptr;
 }
 
 bool ObTableIterParam::is_valid() const
@@ -220,7 +222,11 @@ DEF_TO_STRING(ObTableIterParam)
        K_(is_non_unique_local_index),
        K_(ss_rowkey_prefix_cnt),
        K_(table_scan_opt),
-       K_(is_tablet_spliting));
+       K_(auto_split_filter_type),
+       KP_(auto_split_filter),
+       KPC_(auto_split_params),
+       K_(is_tablet_spliting),
+       KP_(need_update_tablet_param));
   J_OBJ_END();
   return pos;
 }
@@ -361,6 +367,7 @@ int ObTableAccessParam::init(
         OB_FAIL(get_prefix_cnt_for_skip_scan(scan_param, iter_param_))) {
       STORAGE_LOG(WARN, "Failed to get prefix for skip scan", K(ret));
     } else {
+      iter_param_.need_update_tablet_param_ = &scan_param.need_update_tablet_param_;
       is_inited_ = true;
     }
   }

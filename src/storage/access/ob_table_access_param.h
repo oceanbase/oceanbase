@@ -228,6 +228,7 @@ public:
   sql::ExprFixedArray *auto_split_params_;
   bool is_tablet_spliting_;
   bool is_column_replica_table_;
+  const bool *need_update_tablet_param_;
 };
 
 struct ObTableAccessParam
