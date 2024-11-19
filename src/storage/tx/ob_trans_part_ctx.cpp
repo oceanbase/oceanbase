@@ -3239,6 +3239,8 @@ int ObPartTransCtx::submit_redo_active_info_log_()
     TRANS_LOG(WARN, "submit pending log failed", KR(ret), K(*this));
   } else if (exec_info_.redo_lsns_.count() > 0 && OB_FAIL(submit_record_log_())) {
     TRANS_LOG(WARN, "submit record log failed", KR(ret), K(*this));
+  } else if (OB_FAIL(reuse_log_block_(log_block))) {
+    TRANS_LOG(WARN, "reuse log block failed", KR(ret), K(*this));
   } else {
     // get table lock priority info of this trans
     (void)mt_ctx_.get_prio_op_array(prio_op_array);
