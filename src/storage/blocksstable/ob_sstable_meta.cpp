@@ -1071,7 +1071,7 @@ int ObSSTableMetaCompactUtil::fix_filled_tx_scn_value_for_compact(
      }
   } else if (table_key.is_major_sstable()) {
     //do nothing
-  } else if (filled_tx_scn.is_min()) {
+  } else if (filled_tx_scn.is_min() || filled_tx_scn.is_max()) {
     filled_tx_scn = table_key.get_end_scn();
     LOG_WARN("fix filled tx scn value for compact", K(table_key), K(filled_tx_scn));
   }

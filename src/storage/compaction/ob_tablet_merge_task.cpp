@@ -800,19 +800,29 @@ int ObTabletMergeExecutePrepareTask::get_result_by_table_key()
     ObITable *table = nullptr;
     ObSSTable *sstable = nullptr;
     SCN max_filled_tx_scn(SCN::min_scn());
+    const ObSSTableArray &minor_sstables = table_store_wrapper.get_member()->get_minor_sstables();
+    int64_t sstable_idx = 0;
+    bool found = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < table_key_array_.count(); ++i) {
+      found = false;
       const ObITable::TableKey &table_key = table_key_array_.at(i);
-      if (OB_FAIL(table_store_wrapper.get_member()->get_table(table_key, table))) {
-        if (OB_ENTRY_NOT_EXIST == ret) {
-          ret = OB_NO_NEED_MERGE;
-        } else {
-          LOG_WARN("failed to get table from new table_store", K(ret));
+      while (OB_SUCC(ret) && sstable_idx < minor_sstables.count() && !found) {
+        table = minor_sstables.at(sstable_idx);
+        if (OB_UNLIKELY(nullptr == table || nullptr == (sstable = static_cast<ObSSTable *>(table)))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("null table ptr", KR(ret), KP(table), K(sstable_idx), K(minor_sstables));
+        } else if (sstable->get_key() == table_key) {
+          found = true;
+          if (OB_FAIL(result_.handle_.add_sstable(sstable, table_store_wrapper.get_meta_handle()))) {
+          LOG_WARN("failed to add sstable into result", K(ret), KPC(sstable));
+          } else {
+            max_filled_tx_scn = SCN::max(max_filled_tx_scn, sstable->get_filled_tx_scn());
+          }
         }
-      } else if (OB_FAIL(result_.handle_.add_sstable(table, table_store_wrapper.get_meta_handle()))) {
-        LOG_WARN("failed to add sstable into result", K(ret), KPC(table));
-      } else {
-        sstable = static_cast<ObSSTable *>(table);
-        max_filled_tx_scn = SCN::max(max_filled_tx_scn, sstable->get_filled_tx_scn());
+        ++sstable_idx;
+      } // while
+      if (OB_SUCC(ret) && !found) {
+        ret = OB_NO_NEED_MERGE;
       }
     } // end of for
 
@@ -820,9 +830,21 @@ int ObTabletMergeExecutePrepareTask::get_result_by_table_key()
       if (result_.handle_.get_count() != table_key_array_.count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected tables from current tablet", K(ret), K(table_key_array_), K(ctx_->tables_handle_));
+      } else if (ctx_->param_.tablet_id_.is_ls_inner_tablet()) {
+        // do nothing for ls inner tablet
       } else if (max_filled_tx_scn > result_.merge_scn_) {
         ret = OB_NO_NEED_MERGE;
         LOG_WARN("max filled tx scn is bigger than merge scn, no need merge", K(ret) ,K(max_filled_tx_scn), K(result_));
+      } else if (sstable_idx < minor_sstables.count()) { // compare result filled_tx_scn & filled_tx_scn of next minor
+        const ObSSTable *next_minor = static_cast<const ObSSTable *>(minor_sstables.at(sstable_idx));
+        if (OB_ISNULL(next_minor)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("last minor is unexpected null", KR(ret), KP(next_minor));
+        } else if (next_minor->get_filled_tx_scn() < result_.merge_scn_) {
+          // not including last sstable, but have larger filled tx scn
+          ret = OB_NO_NEED_MERGE;
+          LOG_WARN("max filled tx scn is bigger than merge scn, no need merge", K(ret), K(max_filled_tx_scn), K(result_));
+        }
       }
     }
   }
