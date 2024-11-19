@@ -167,3 +167,7 @@ target_link_libraries(ob_admin
   -Wl,--end-group
   -static-libgcc
   -static-libstdc++)
+
+if(ENABLE_THIN_LTO AND USE_LTO_CACHE)
+  add_dependencies(ob_admin observer)
+endif()

@@ -10,6 +10,10 @@ ob_add_new_object_target(obcdc_tailf_objects obcdc_tailf_object_list)
 target_link_libraries(obcdc_tailf_objects PRIVATE obcdc)
 target_link_libraries(obcdc_tailf PRIVATE obcdc_tailf_objects)
 
+if(ENABLE_THIN_LTO AND USE_LTO_CACHE)
+  add_dependencies(obcdc_tailf observer)
+endif()
+
 # obcdc_tailf_static
 add_executable(obcdc_tailf_static EXCLUDE_FROM_ALL)
 ob_add_new_object_target(obcdc_tailf_objects_static obcdc_tailf_object_list)

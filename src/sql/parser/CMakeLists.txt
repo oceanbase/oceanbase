@@ -146,6 +146,10 @@ target_link_libraries(ob_sql_proxy_parser_static
   PUBLIC
   ob_sql_proxy_parser_objects)
 
+if(ENABLE_THIN_LTO AND USE_LTO_CACHE)
+  add_dependencies(ob_sql_proxy_parser_static observer)
+endif()
+
 target_link_libraries(ob_sql_server_parser_static
   PUBLIC
   ob_sql_server_parser_objects)

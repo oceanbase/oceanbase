@@ -25,8 +25,16 @@ target_link_libraries(obtable
   -Wl,--allow-multiple-definition)
 set_target_properties(obtable PROPERTIES SOVERSION 1 VERSION 1.0.0)
 
+if(ENABLE_THIN_LTO AND USE_LTO_CACHE)
+  add_dependencies(obtable observer)
+endif()
+
 add_library(obtable_static
   STATIC
   EXCLUDE_FROM_ALL
   ${CMAKE_BINARY_DIR}/src/observer/ob_version.cpp)
 target_link_libraries(obtable_static PUBLIC ${obtable_base} ${ob_objects} ${oblib_object_libraries})
+
+if(ENABLE_THIN_LTO AND USE_LTO_CACHE)
+  add_dependencies(obtable_static observer)
+endif()
