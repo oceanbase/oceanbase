@@ -1157,9 +1157,13 @@ void ObTableQuery::reset()
 
 bool ObTableQuery::is_valid() const
 {
-  return (limit_ == -1 || limit_ > 0)
-      && (offset_ >= 0)
-      && key_ranges_.count() > 0;
+  bool valid = false;
+  if (OB_NOT_NULL(ob_params_.ob_params_) && ob_params_.ob_params_->get_param_type() == ParamType::HBase) {
+    valid = key_ranges_.count() > 0;
+  } else {
+    valid = (limit_ == -1 || limit_ > 0) && (offset_ >= 0) && key_ranges_.count() > 0;
+  }
+  return valid;
 }
 
 int ObTableQuery::add_scan_range(common::ObNewRange &scan_range)

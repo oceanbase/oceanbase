@@ -870,6 +870,7 @@ public:
   ObKVParamsBase(): param_type_(ParamType::HBase) {}
   virtual ~ObKVParamsBase() = default;
   OB_INLINE ParamType get_param_type() { return param_type_; }
+  virtual int32_t get_caching() const = 0;
   virtual int serialize(char *buf, const int64_t buf_len, int64_t &pos) const = 0;
   virtual int deserialize(const char *buf, const int64_t data_len, int64_t &pos) = 0;
   virtual int64_t get_serialize_size() const = 0;
@@ -894,7 +895,8 @@ public:
   ~ObHBaseParams() {};
 
   OB_INLINE ParamType get_param_type() { return param_type_; }
-  OB_INLINE void set_caching(const int32_t caching ) { caching_ = caching; }
+  OB_INLINE int32_t get_caching() const { return caching_; }
+  OB_INLINE void set_caching(const int32_t caching) { caching_ = caching; }
   OB_INLINE void set_call_timeout_(const int32_t call_timeout) { call_timeout_ = call_timeout; }
   OB_INLINE void set_allow_partial_results(const bool allow_partial_results) { allow_partial_results_ = allow_partial_results; }
   OB_INLINE void set_is_cache_block(const bool is_cache_block) { is_cache_block_ = is_cache_block; }

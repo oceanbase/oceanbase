@@ -1151,29 +1151,6 @@ ObHTableReversedRowIterator::~ObHTableReversedRowIterator()
   }
 }
 
-int ObHTableReversedRowIterator::seek_to_max_row()
-{
-  int ret = OB_SUCCESS;
-  ObTableCtx &reversed_tb_ctx = child_op_->get_scan_executor()->get_table_ctx();
-  ObNewRange &reversed_range = reversed_tb_ctx.get_key_ranges().at(0);
-  reversed_range.reset();
-  reversed_range.start_key_.set_min_row();
-  reversed_range.end_key_.set_max_row();
-  reversed_tb_ctx.set_limit(1);
-  ObNewRow *last_cell = NULL;
-  if (OB_FAIL(rescan_and_get_next_row(child_op_, last_cell))) {
-    if (OB_ITER_END == ret) {
-      LOG_INFO("no data in table", K(ret));
-    } else {
-      LOG_WARN("failed to rescan and get next row", K(ret));
-    }
-  } else {
-    stop_row_key_.reset();
-    stop_row_key_.assign(last_cell->cells_, last_cell->count_);
-  }
-  return ret;
-}
-
 int ObHTableReversedRowIterator::init()
 {
   int ret = OB_SUCCESS;
@@ -1203,41 +1180,22 @@ int ObHTableReversedRowIterator::init()
   } else {
     // curr_cell_ needs to be initialized, and the pointer should be directed
     // to either the last `startKey` or the first cell of the preceding row.
-    if (stop_row_key_.is_max_row() && OB_FAIL(seek_to_max_row())) {
-      if (OB_ITER_END != ret) {
-        LOG_WARN("seek to max row failed", K(ret));
-      }
-    } else {
-      ObHTableFirstOnRowCell tmp_cell(stop_row_key_.get_obj_ptr()[ObHTableConstants::COL_IDX_K].get_varchar());
-      ObHTableCell *new_cell = NULL;
-      ObHTableUtils::create_first_cell_on_row(allocator_, tmp_cell, new_cell);
-      if (OB_FAIL(seek_first_cell_on_hint(static_cast<ObHTableCellEntity *>(new_cell)->get_ob_row()))) {
-        if (OB_ITER_END == ret) {
-          has_more_cells_ = true;
-          ret = OB_SUCCESS;
-          ObHTableFirstOnRowCell cell(stop_row_key_.get_obj_ptr()[ObHTableConstants::COL_IDX_K].get_varchar());
-          if (OB_FAIL(seek_or_skip_to_next_row(cell))) {
-            LOG_WARN("failed to seek to next row in init", K(ret));
-          }
-        } else {
-          LOG_WARN("failed to rescan and get next row", K(ret));
-        }
-      } else if (0 < ObHTableUtils::compare_rowkey(curr_cell_.get_rowkey(),
-                         stop_row_key_.get_obj_ptr()[ObHTableConstants::COL_IDX_K].get_varchar())) {
-        ObHTableFirstOnRowCell cell(stop_row_key_.get_obj_ptr()[ObHTableConstants::COL_IDX_K].get_varchar());
-        if (OB_FAIL(seek_or_skip_to_next_row(cell))) {
-          LOG_WARN("failed to seek to next row in init", K(ret));
-        }
-      } else if (0 >= ObHTableUtils::compare_rowkey(curr_cell_.get_rowkey(),
-                          start_row_key_.get_obj_ptr()[ObHTableConstants::COL_IDX_K].get_varchar())) {
+    ObNewRow *tmp_next_row = nullptr;
+    ObHTableCell *new_cell = nullptr;
+    if (OB_FAIL(child_op_->get_next_row(tmp_next_row))) {
+      if (OB_ITER_END == ret) {
         has_more_cells_ = false;
-        curr_cell_.reset(allocator_);
-        ret = OB_ITER_END;
+        LOG_DEBUG("no data in table", K(ret));
+      } else {
+        LOG_WARN("failed to rescan and get next row", K(ret));
       }
-      new_cell->~ObHTableCell();
+    } else if (OB_FAIL(ObHTableUtils::create_first_cell_on_row(
+                   allocator_, tmp_next_row->get_cell(ObHTableConstants::COL_IDX_K).get_string(), new_cell))) {
+      LOG_WARN("failed to create first cell on row", K(ret));
+    } else if (OB_FAIL(seek_first_cell_on_hint(static_cast<ObHTableCellEntity *>(new_cell)->get_ob_row()))) {
+      LOG_WARN("failed to get first cell on row in init", K(ret));
     }
   }
-
   if (OB_SUCC(ret)) {
     is_inited_ = true;
   }
@@ -1290,7 +1248,6 @@ int ObHTableReversedRowIterator::seek_or_skip_to_next_row(const ObHTableCell &ce
 {
   int ret = OB_SUCCESS;
   ObTableCtx &reversed_tb_ctx = child_op_->get_scan_executor()->get_table_ctx();
-  reversed_tb_ctx.set_limit(1);
   ObNewRange &reverse_range = reversed_tb_ctx.get_key_ranges().at(0);
   reverse_range.start_key_ = start_row_key_;
   ObObj *end_key = nullptr;
@@ -1482,7 +1439,8 @@ ObHTableFilterOperator::ObHTableFilterOperator(const ObTableQuery &query, table:
       is_first_result_(true),
       check_existence_only_(false),
       scanner_context_(),
-      is_inited_(false)
+      is_inited_(false),
+      row_count_(0)
 {
 }
 
@@ -1500,7 +1458,8 @@ ObHTableFilterOperator::ObHTableFilterOperator(const ObTableQuery &query,
       is_first_result_(true),
       check_existence_only_(false),
       scanner_context_(),
-      is_inited_(false)
+      is_inited_(false),
+      row_count_(0)
 {}
 
 ObHTableFilterOperator::~ObHTableFilterOperator()
@@ -1508,6 +1467,11 @@ ObHTableFilterOperator::~ObHTableFilterOperator()
   if (OB_NOT_NULL(row_iterator_)) {
     row_iterator_->~ObHTableRowIterator();
   }
+}
+
+bool ObHTableFilterOperator::reach_limit()
+{
+  return query_->get_limit() > 0 && row_count_ >= query_->get_limit();
 }
 
 bool ObHTableFilterOperator::reach_caching_limit(int num_of_row)
@@ -1629,6 +1593,11 @@ int ObHTableFilterOperator::get_next_result_internal(ResultType *&next_result)
       if (next_result->reach_batch_size_or_result_size(batch_size_, max_result_size_)) {
         break;
       }
+    }
+    num_of_row++;
+    row_count_++;
+    if (reach_limit()) {
+      row_iterator_->no_more_result();
     }
   }  // end while
 

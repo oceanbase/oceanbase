@@ -346,14 +346,22 @@ int ObHTableUtils::create_first_cell_on_row_col_ts(common::ObIAllocator &allocat
   return ret;
 }
 
-int ObHTableUtils::create_first_cell_on_row(
-    common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell)
+int ObHTableUtils::create_first_cell_on_row(common::ObIAllocator &allocator,
+                                            const ObHTableCell &cell,
+                                            ObHTableCell *&new_cell)
+{
+  return create_first_cell_on_row(allocator, cell.get_rowkey(), new_cell);
+}
+
+int ObHTableUtils::create_first_cell_on_row(common::ObIAllocator &allocator,
+                                            const ObString &row_key,
+                                            ObHTableCell *&new_cell)
 {
   int ret = OB_SUCCESS;
   ObString rowkey_clone;
   ObObj *first_cell = nullptr;
   ObNewRow *ob_row = nullptr;
-  if (OB_FAIL(ob_write_string(allocator, cell.get_rowkey(), rowkey_clone))) {
+  if (OB_FAIL(ob_write_string(allocator, row_key, rowkey_clone))) {
     LOG_WARN("failed to clone rowkey", K(ret));
   } else if (OB_ISNULL(first_cell = static_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * 3)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;

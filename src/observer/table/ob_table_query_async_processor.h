@@ -156,7 +156,8 @@ public:
       select_columns_(),
       result_iterator_(nullptr),
       query_ctx_(allocator_),
-      lease_timeout_period_(60 * 1000 * 1000)
+      lease_timeout_period_(60 * 1000 * 1000),
+      row_count_(0)
   {}
   ~ObTableQueryAsyncSession() {}
 
@@ -183,6 +184,7 @@ public:
 public:
   sql::TransState* get_trans_state() {return &trans_state_;}
   transaction::ObTxDesc* get_trans_desc() {return trans_desc_;}
+  int64_t &get_row_count() { return row_count_; }
   void set_trans_desc(transaction::ObTxDesc *trans_desc) { trans_desc_ = trans_desc; }
 private:
   bool in_use_;
@@ -202,6 +204,7 @@ private:
   sql::TransState trans_state_;
   uint64_t lease_timeout_period_;
   transaction::ObTxDesc *trans_desc_;
+  int64_t row_count_;
 };
 
 /**

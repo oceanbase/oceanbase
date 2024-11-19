@@ -301,6 +301,7 @@ public:
     child_op_ = scan_result;
   }
   bool has_more_result() const { return has_more_cells_; }
+  void no_more_result() { has_more_cells_ = false; }
   void set_hfilter(table::hfilter::Filter *hfilter);
   void set_ttl(int32_t ttl_value);
   virtual int init()
@@ -397,7 +398,6 @@ private:
   int init_async_forward_tb_ctx();
   virtual table::ObTableApiScanRowIterator* get_forward_child_op() { return forward_child_op_; }
   int create_forward_child_op();
-  int seek_to_max_row();
 
 private:
   table::ObTableApiScanRowIterator *forward_child_op_;
@@ -415,6 +415,7 @@ public:
   ObHTableFilterOperator(const ObTableQuery &query, table::ObTableQueryIterableResult &one_result);
   virtual ~ObHTableFilterOperator();
   /// Fetch next batch result
+  bool reach_limit();
   bool reach_caching_limit(int num_of_row);
   virtual int get_next_result(ObTableQueryResult *&one_result) override;
   virtual int get_next_result(ObTableQueryIterableResult *&one_result) override;
@@ -462,6 +463,7 @@ private:
   bool check_existence_only_;
   ScannerContext scanner_context_;
   bool is_inited_;
+  int32_t row_count_;
 };
 
 } // end namespace table

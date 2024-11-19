@@ -329,6 +329,7 @@ public:
   static int create_last_cell_on_row(common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell);
   /// Create a Cell that is smaller than all other possible Cells for the given Cell's row.
   static int create_first_cell_on_row(common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell);
+  static int create_first_cell_on_row(common::ObIAllocator &allocator, const ObString &row_key, ObHTableCell *&new_cell);
 
   static int compare_qualifier(const common::ObString &cq1, const common::ObString &cq2);
   static int compare_rowkey(const common::ObString &rk1, const common::ObString &rk2);
