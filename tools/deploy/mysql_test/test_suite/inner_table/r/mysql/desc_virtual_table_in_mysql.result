@@ -5258,6 +5258,26 @@ IF(count(*) >= 0, 1, 0)
 "oceanbase.__all_virtual_kv_group_commit_status runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_spm_evo_result;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+record_time	timestamp(6)	NO	PRI	NULL	
+svr_ip	varchar(46)	NO	PRI	NULL	
+svr_port	bigint(20)	NO	PRI	NULL	
+database_id	bigint(20)	NO		NULL	
+sql_id	varchar(32)	NO		NULL	
+type	bigint(20)	NO		NULL	
+start_time	timestamp(6)	YES		NULL	
+end_time	timestamp(6)	YES		NULL	
+status	varchar(7)	YES		NULL	
+new_plan_better	tinyint(4)	YES		NULL	
+evo_plan_exec_count	bigint(20)	YES		NULL	
+evo_plan_cpu_time	bigint(20)	YES		NULL	
+baseline_exec_count	bigint(20)	YES		NULL	
+baseline_cpu_time	bigint(20)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_spm_evo_result;
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_vector_index_info;
 Field	Type	Null	Key	Default	Extra
 svr_ip	varchar(46)	NO		NULL	

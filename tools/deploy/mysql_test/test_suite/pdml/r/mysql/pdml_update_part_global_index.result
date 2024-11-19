@@ -39,10 +39,10 @@ Outputs & filters:
       dop=3
   2 - output(nil), filter(nil)
       columns([{t1: ({t1_idx1: (t1.c2, t1.c1)})}]), partitions(p[0-3]), 
-      column_values([column_conv(INT,PS:(11,0),NULL,cast(3, INT(-1, 0)))], [t1.c1])
+      column_values([column_conv(INT,PS:(11,0),NULL,3)], [t1.c1])
   3 - output([PARTITION_ID], [t1.c1]), filter(nil), rowset=16
   4 - output([PARTITION_ID], [t1.c1]), filter(nil), rowset=16
-      (#keys=1, [column_conv(INT,PS:(11,0),NULL,cast(3, INT(-1, 0)))]), dop=3
+      (#keys=1, [column_conv(INT,PS:(11,0),NULL,3)]), dop=3
   5 - output([t1.c1]), filter(nil), rowset=16
   6 - output([t1.c1]), filter(nil)
       table_columns([{t1: ({t1_idx1: (t1.c2, t1.c1)})}]), with_barrier
@@ -52,7 +52,7 @@ Outputs & filters:
   9 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
  10 - output([t1.c1], [t1.c2]), filter(nil)
       table_columns([{t1: ({t1: (t1.c1, t1.c2, t1.c3)})}]),
-      update([t1.c2=column_conv(INT,PS:(11,0),NULL,cast(3, INT(-1, 0)))])
+      update([t1.c2=column_conv(INT,PS:(11,0),NULL,3)])
  11 - output([t1.c1], [t1.c2], [PARTITION_ID], [t1.c3]), filter(nil), rowset=16
  12 - output([t1.c1], [t1.c2], [PARTITION_ID], [t1.c3]), filter(nil), rowset=16
       (#keys=1, [t1.c1]), dop=3
@@ -126,7 +126,7 @@ Outputs & filters:
   9 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1], [pindex.c2]), filter(nil), rowset=16
  10 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1], [pindex.c2]), filter(nil)
       table_columns([{pindex: ({pindex: (pindex.c1, pindex.c2, pindex.c3)})}]),
-      update([pindex.c2=column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c3=column_conv(INT,PS:(11,0),NULL,cast(5, INT(-1, 0)))])
+      update([pindex.c2=column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c3=column_conv(INT,PS:(11,0),NULL,5)])
  11 - output([pindex.c1], [pindex.c2], [PARTITION_ID], [pindex.c3]), filter(nil), rowset=16
  12 - output([pindex.c1], [pindex.c2], [PARTITION_ID], [pindex.c3]), filter(nil), rowset=16
       (#keys=1, [pindex.c1]), dop=3
@@ -203,7 +203,7 @@ Outputs & filters:
   9 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1], [pindex.c2]), filter(nil), rowset=16
  10 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1], [pindex.c2]), filter(nil)
       table_columns([{pindex: ({pindex: (pindex.c1, pindex.c2, pindex.c3)})}]),
-      update([pindex.c2=column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c3=column_conv(INT,PS:(11,0),NULL,cast(5, INT(-1, 0)))])
+      update([pindex.c2=column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c3=column_conv(INT,PS:(11,0),NULL,5)])
  11 - output([pindex.c1], [pindex.c2], [PARTITION_ID], [pindex.c3]), filter(nil), rowset=16
  12 - output([pindex.c1], [pindex.c2], [PARTITION_ID], [pindex.c3]), filter(nil), rowset=16
       (#keys=1, [pindex.c1]), dop=3
@@ -278,7 +278,7 @@ Outputs & filters:
   9 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1], [pindex.c2]), filter(nil), rowset=16
  10 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1], [pindex.c2]), filter(nil)
       table_columns([{pindex: ({pindex: (pindex.c1, pindex.c2, pindex.c3)})}]),
-      update([pindex.c2=column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c3=column_conv(INT,PS:(11,0),NULL,cast(5, INT(-1, 0)))])
+      update([pindex.c2=column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c3=column_conv(INT,PS:(11,0),NULL,5)])
  11 - output([pindex.c1], [pindex.c2], [PARTITION_ID], [pindex.c3]), filter(nil), rowset=16
  12 - output([pindex.c1], [pindex.c2], [PARTITION_ID], [pindex.c3]), filter(nil), rowset=16
       (#keys=1, [pindex.c1]), dop=3
@@ -342,7 +342,7 @@ Outputs & filters:
   9 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1], [pindex.c2]), filter(nil), rowset=16
  10 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1], [pindex.c2]), filter(nil)
       table_columns([{pindex: ({pindex: (pindex.__pk_increment, pindex.c1, pindex.c2, pindex.c3)})}]),
-      update([pindex.c2=column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c3=column_conv(INT,PS:(11,0),NULL,cast(5, INT(-1, 0)))])
+      update([pindex.c2=column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c3=column_conv(INT,PS:(11,0),NULL,5)])
  11 - output([pindex.__pk_increment], [pindex.c1], [pindex.c2], [PARTITION_ID], [pindex.c3]), filter(nil), rowset=16
  12 - output([pindex.__pk_increment], [pindex.c1], [pindex.c2], [PARTITION_ID], [pindex.c3]), filter(nil), rowset=16
       (#keys=1, [pindex.c1]), dop=3
@@ -419,7 +419,7 @@ Outputs & filters:
   9 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1], [pindex.c2]), filter(nil), rowset=16
  10 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1], [pindex.c2]), filter(nil)
       table_columns([{pindex: ({pindex: (pindex.__pk_increment, pindex.c1, pindex.c2, pindex.c3)})}]),
-      update([pindex.c2=column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c3=column_conv(INT,PS:(11,0),NULL,cast(5, INT(-1, 0)))])
+      update([pindex.c2=column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c3=column_conv(INT,PS:(11,0),NULL,5)])
  11 - output([pindex.__pk_increment], [pindex.c1], [pindex.c2], [PARTITION_ID], [pindex.c3]), filter(nil), rowset=16
  12 - output([pindex.__pk_increment], [pindex.c1], [pindex.c2], [PARTITION_ID], [pindex.c3]), filter(nil), rowset=16
       (#keys=1, [pindex.c1]), dop=3
@@ -494,7 +494,7 @@ Outputs & filters:
   9 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1], [pindex.c2]), filter(nil), rowset=16
  10 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1], [pindex.c2]), filter(nil)
       table_columns([{pindex: ({pindex: (pindex.__pk_increment, pindex.c1, pindex.c2, pindex.c3)})}]),
-      update([pindex.c2=column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c3=column_conv(INT,PS:(11,0),NULL,cast(5, INT(-1, 0)))])
+      update([pindex.c2=column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c3=column_conv(INT,PS:(11,0),NULL,5)])
  11 - output([pindex.__pk_increment], [pindex.c1], [pindex.c2], [PARTITION_ID], [pindex.c3]), filter(nil), rowset=16
  12 - output([pindex.__pk_increment], [pindex.c1], [pindex.c2], [PARTITION_ID], [pindex.c3]), filter(nil), rowset=16
       (#keys=1, [pindex.c1]), dop=3
@@ -535,10 +535,10 @@ Outputs & filters:
       dop=2
   2 - output(nil), filter(nil)
       columns([{pindex: ({idx_b: (pindex.b, pindex.a)})}]), partitions(p0), 
-      column_values([column_conv(INT,PS:(11,0),NULL,cast(2, INT(-1, 0)))], [pindex.a])
+      column_values([column_conv(INT,PS:(11,0),NULL,2)], [pindex.a])
   3 - output([pindex.a]), filter(nil), rowset=16
   4 - output([pindex.a]), filter(nil), rowset=16
-      (#keys=1, [column_conv(INT,PS:(11,0),NULL,cast(2, INT(-1, 0)))]), dop=2
+      (#keys=1, [column_conv(INT,PS:(11,0),NULL,2)]), dop=2
   5 - output([pindex.a]), filter(nil), rowset=16
   6 - output([pindex.a]), filter(nil)
       table_columns([{pindex: ({idx_b: (pindex.b, pindex.a)})}]), with_barrier
@@ -548,7 +548,7 @@ Outputs & filters:
   9 - output([pindex.a], [pindex.b]), filter(nil), rowset=16
  10 - output([pindex.a], [pindex.b]), filter(nil)
       table_columns([{pindex: ({pindex: (pindex.a, pindex.b)})}]),
-      update([pindex.b=column_conv(INT,PS:(11,0),NULL,cast(2, INT(-1, 0)))])
+      update([pindex.b=column_conv(INT,PS:(11,0),NULL,2)])
  11 - output([pindex.a], [pindex.b], [PARTITION_ID]), filter(nil), rowset=16
  12 - output([pindex.a], [pindex.b], [PARTITION_ID]), filter(nil), rowset=16
       (#keys=1, [pindex.a]), dop=2

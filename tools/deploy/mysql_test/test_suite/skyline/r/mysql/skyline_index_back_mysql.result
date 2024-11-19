@@ -532,7 +532,7 @@ Outputs & filters:
        quality_item_info.block_id, quality_item_info.band_id, quality_item_info.brand_id, quality_item_info.pass_status, quality_item_info.pass_operator, quality_item_info.gmt_pass,
        quality_item_info.cat_id)})}]),
       update([quality_item_info.gmt_modified=column_conv(DATETIME,PS:(19,0),NOT NULL,current_timestamp())], [quality_item_info.pass_status=column_conv(INT,
-      PS:(11,0),NULL,cast(100, INT(-1, 0)))], [quality_item_info.gmt_pass=column_conv(DATETIME,PS:(19,0),NULL,current_timestamp())], [quality_item_info.pass_operator=column_conv(VARCHAR,
+      PS:(11,0),NULL,100)], [quality_item_info.gmt_pass=column_conv(DATETIME,PS:(19,0),NULL,current_timestamp())], [quality_item_info.pass_operator=column_conv(VARCHAR,
       utf8mb4_general_ci,length:64,NULL,'1')])
   1 - output([quality_item_info.id], [quality_item_info.gmt_modified], [quality_item_info.pass_status], [quality_item_info.gmt_pass], [quality_item_info.pass_operator],
        [quality_item_info.gmt_create], [quality_item_info.item_id], [quality_item_info.seller_id], [quality_item_info.seller_nick], [quality_item_info.status],
@@ -561,7 +561,7 @@ Outputs & filters:
        quality_item_info.block_id, quality_item_info.band_id, quality_item_info.brand_id, quality_item_info.pass_status, quality_item_info.pass_operator, quality_item_info.gmt_pass,
        quality_item_info.cat_id)})}]),
       update([quality_item_info.gmt_modified=column_conv(DATETIME,PS:(19,0),NOT NULL,current_timestamp())], [quality_item_info.pass_status=column_conv(INT,
-      PS:(11,0),NULL,cast(100, INT(-1, 0)))], [quality_item_info.gmt_pass=column_conv(DATETIME,PS:(19,0),NULL,current_timestamp())], [quality_item_info.pass_operator=column_conv(VARCHAR,
+      PS:(11,0),NULL,100)], [quality_item_info.gmt_pass=column_conv(DATETIME,PS:(19,0),NULL,current_timestamp())], [quality_item_info.pass_operator=column_conv(VARCHAR,
       utf8mb4_general_ci,length:64,NULL,'1')])
   1 - output([quality_item_info.id], [quality_item_info.gmt_modified], [quality_item_info.pass_status], [quality_item_info.gmt_pass], [quality_item_info.pass_operator],
        [quality_item_info.gmt_create], [quality_item_info.item_id], [quality_item_info.seller_id], [quality_item_info.seller_nick], [quality_item_info.status],
@@ -589,7 +589,7 @@ Outputs & filters:
        quality_item_info.block_id, quality_item_info.band_id, quality_item_info.brand_id, quality_item_info.pass_status, quality_item_info.pass_operator, quality_item_info.gmt_pass,
        quality_item_info.cat_id)})}]),
       update([quality_item_info.gmt_modified=column_conv(DATETIME,PS:(19,0),NOT NULL,current_timestamp())], [quality_item_info.pass_status=column_conv(INT,
-      PS:(11,0),NULL,cast(100, INT(-1, 0)))], [quality_item_info.gmt_pass=column_conv(DATETIME,PS:(19,0),NULL,current_timestamp())], [quality_item_info.pass_operator=column_conv(VARCHAR,
+      PS:(11,0),NULL,100)], [quality_item_info.gmt_pass=column_conv(DATETIME,PS:(19,0),NULL,current_timestamp())], [quality_item_info.pass_operator=column_conv(VARCHAR,
       utf8mb4_general_ci,length:64,NULL,'1')])
   1 - output([quality_item_info.id], [quality_item_info.gmt_modified], [quality_item_info.pass_status], [quality_item_info.gmt_pass], [quality_item_info.pass_operator],
        [quality_item_info.gmt_create], [quality_item_info.item_id], [quality_item_info.seller_id], [quality_item_info.seller_nick], [quality_item_info.status],

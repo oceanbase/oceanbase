@@ -211,7 +211,7 @@ int ObLoadDataBase::make_parameterize_stmt(ObExecContext &ctx,
           LOG_WARN("invalid argument", K(ret), KP(ctx.get_stmt_factory()->get_query_ctx()));
         } else {
           resolver_ctx.query_ctx_ = ctx.get_stmt_factory()->get_query_ctx();
-          resolver_ctx.query_ctx_->question_marks_count_ = param_store.count();
+          resolver_ctx.query_ctx_->set_questionmark_count(param_store.count());
           resolver_ctx.query_ctx_->sql_schema_guard_.set_schema_guard(ctx.get_sql_ctx()->schema_guard_);
           ObResolver resolver(resolver_ctx);
           ObStmt *astmt = NULL;

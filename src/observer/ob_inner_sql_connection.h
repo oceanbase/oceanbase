@@ -178,6 +178,7 @@ public:
   // session environment
   virtual int get_session_variable(const ObString &name, int64_t &val) override;
   virtual int set_session_variable(const ObString &name, int64_t val) override;
+  virtual int set_session_variable(const ObString &name, const ObString &val) override;
   inline void set_spi_connection(bool is_spi_conn) { is_spi_conn_ = is_spi_conn; }
   int set_primary_schema_version(const common::ObIArray<int64_t> &primary_schema_versions);
 

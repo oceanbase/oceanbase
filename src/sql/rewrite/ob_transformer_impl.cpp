@@ -52,6 +52,7 @@
 #include "sql/rewrite/ob_transform_decorrelate.h"
 #include "sql/rewrite/ob_transform_mv_rewrite_prepare.h"
 #include "sql/rewrite/ob_transform_late_materialization.h"
+#include "sql/rewrite/ob_transform_distinct_aggregate.h"
 #include "common/ob_smart_call.h"
 #include "sql/engine/ob_exec_context.h"
 
@@ -77,6 +78,8 @@ int ObTransformerImpl::transform(ObDMLStmt *&stmt)
     //dml write query will be executed in remote, do not need transform
   } else if (OB_FAIL(SMART_CALL(get_stmt_trans_info(stmt, true)))) {
     LOG_WARN("get_stmt_trans_info failed", K(ret));
+  } else if (OB_FAIL(stmt->formalize_implicit_distinct())) {
+    LOG_WARN("failed to frommalize implicit distinct", K(ret));
   } else if (OB_FAIL(do_transform_pre_precessing(stmt))) {
     LOG_WARN("failed to do transform pre_precessing", K(ret));
   } else if (OB_FAIL(stmt->formalize_query_ref_exprs())) {
@@ -128,6 +131,27 @@ int ObTransformerImpl::set_transformation_parameters(ObQueryCtx *query_ctx)
     LOG_WARN("failed to check temp table force inline", K(ret));
   } else if (OB_FAIL(session_info->is_force_temp_table_materialize(ctx_->is_force_materialize_))) {
     LOG_WARN("failed to check temp table force materialize", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (!query_ctx->check_opt_compat_version(COMPAT_VERSION_4_2_5, COMPAT_VERSION_4_3_0,
+                                                  COMPAT_VERSION_4_3_5) ||
+             query_ctx->get_query_hint().has_outline_data()) {
+    ctx_->cbqt_policy_ = TransPolicy::ENABLE_TRANS;
+  } else if (OB_FAIL(session_info->get_optimizer_cost_based_transformation(opt_param_val))) {
+    LOG_WARN("failed to get optimizer cost based transformation", K(ret));
+  } else if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_integer_opt_param(
+                            ObOptParamHint::OPTIMIZER_COST_BASED_TRANSFORMATION, opt_param_val))) {
+    LOG_WARN("failed to get integer opt param", K(ret));
+  } else {
+    ctx_->cbqt_policy_ = static_cast<TransPolicy>(opt_param_val);
+  }
+  if (OB_SUCC(ret)) {
+    uint64_t tenant_id = session_info->get_effective_tenant_id();
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      ctx_->complex_cbqt_table_num_ = tenant_config->_complex_cbqt_table_num;
+    }
   }
   return ret;
 }
@@ -462,8 +486,13 @@ int ObTransformerImpl::transform_rule_set(ObDMLStmt *&stmt,
       LOG_TRACE("succeed to transform one iteration", K(i), K(need_next_iteration), K(ret));
       OPT_TRACE("-- end ", i, " iteration");
     }
-    if (OB_SUCC(ret) && i == max_iteration_count_) {
-      LOG_INFO("transformer ends without convergence", K(max_iteration_count_));
+    if (OB_SUCC(ret) && need_next_iteration && i == max_iteration_count_) {
+      ret = OB_E(EventTable::EN_CHECK_REWRITE_ITER_CONVERGE) OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        LOG_WARN("transformer ends without convergence", K(ret), K(max_iteration_count_));
+      } else {
+        LOG_INFO("transformer ends without convergence", K(max_iteration_count_));
+      }
     }
   }
   return ret;
@@ -493,6 +522,7 @@ int ObTransformerImpl::transform_rule_set_in_one_iteration(ObDMLStmt *&stmt,
     APPLY_RULE_IF_NEEDED(TEMP_TABLE_OPTIMIZATION, ObTransformTempTable);
     APPLY_RULE_IF_NEEDED(PROJECTION_PRUNING, ObTransformProjectPruning);
     APPLY_RULE_IF_NEEDED(CONST_PROPAGATE, ObTransformConstPropagate);
+    APPLY_RULE_IF_NEEDED(DISTINCT_AGGREGATE, ObTransformDistinctAggregate);
     APPLY_RULE_IF_NEEDED(SUBQUERY_COALESCE, ObTransformSubqueryCoalesce);
     APPLY_RULE_IF_NEEDED(SIMPLIFY_SET, ObTransformSimplifySet);
     APPLY_RULE_IF_NEEDED(VIEW_MERGE, ObTransformViewMerge);
@@ -806,6 +836,10 @@ int ObTransformerImpl::finalize_exec_params(ObDMLStmt *stmt)
 int ObTransformerImpl::finalize_exec_params(ObDMLStmt *stmt, ObIArray<ObExecParamRawExpr*> & exec_params)
 {
   int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt) || OB_ISNULL(stmt->query_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt or query ctx is null", K(ret));
+  }
   for (int64_t j = 0; OB_SUCC(ret) && j < exec_params.count(); ++j) {
     ObExecParamRawExpr *exec_param = NULL;
     if (OB_ISNULL(exec_param = exec_params.at(j))) {
@@ -814,8 +848,8 @@ int ObTransformerImpl::finalize_exec_params(ObDMLStmt *stmt, ObIArray<ObExecPara
     } else if (exec_param->get_param_index() >= 0) {
       // do nothing
     } else {
-      exec_param->set_param_index(stmt->get_question_marks_count());
-      stmt->increase_question_marks_count();
+      exec_param->set_param_index(*stmt->query_ctx_);
+      exec_param->set_result_type(exec_param->get_ref_expr()->get_result_type());
     }
   }
   return ret;

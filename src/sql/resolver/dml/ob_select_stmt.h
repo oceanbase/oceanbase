@@ -627,14 +627,15 @@ public:
    */
   bool equals(const ObSelectStmt &stmt);
   int check_and_get_same_aggr_item(ObRawExpr *expr, ObAggFunRawExpr *&same_aggr);
-  ObWinFunRawExpr *get_same_win_func_item(const ObRawExpr *expr);
+  int get_same_win_func_item(const ObRawExpr *expr, ObWinFunRawExpr *&win_expr);
   void set_match_topk(bool is_match) { is_match_topk_ = is_match; }
   bool is_match_topk() const { return is_match_topk_; }
   bool is_set_stmt() const { return NONE != set_op_; }
   int get_child_stmt_size(int64_t &child_size) const;
   int get_child_stmts(common::ObIArray<ObSelectStmt*> &child_stmts) const;
   int set_child_stmt(const int64_t child_num, ObSelectStmt* child_stmt);
-  int get_from_subquery_stmts(common::ObIArray<ObSelectStmt*> &child_stmts) const;
+  virtual int get_from_subquery_stmts(common::ObIArray<ObSelectStmt*> &child_stmts,
+                                      bool contain_lateral_table = true) const override;
   const common::ObIArray<ObWinFunRawExpr *> &get_window_func_exprs() const { return win_func_exprs_; };
   common::ObIArray<ObWinFunRawExpr *> &get_window_func_exprs() { return win_func_exprs_; };
   bool has_window_function() const { return win_func_exprs_.count() != 0; }
@@ -698,6 +699,13 @@ public:
   void set_select_straight_join(bool flag) { is_select_straight_join_ = flag; }
   bool is_select_straight_join() const { return is_select_straight_join_; }
   virtual int check_is_simple_lock_stmt(bool &is_valid) const override;
+  inline bool is_implicit_distinct() const { return is_implicit_distinct_; }
+  virtual int formalize_implicit_distinct() override;
+  virtual int check_from_dup_insensitive(bool &is_from_dup_insens) const override;
+  int is_duplicate_insensitive_aggregation(bool &is_dup_insens_aggr) const;
+  bool is_implicit_distinct_allowed() const;
+  inline void set_implicit_distinct(bool v) { is_implicit_distinct_ = v; }
+  inline void reset_implicit_distinct() { is_implicit_distinct_ = false; }
   int is_query_deterministic(bool &is_deterministic) const;
 
 private:
@@ -763,6 +771,9 @@ private:
   bool is_expanded_mview_;
   //denote if the query option 'STRAIGHT_JOIN' has been specified
   bool is_select_straight_join_;
+  // denote if the duplicate value of this stmt will not change the query result
+  // optimizer can assign or remove DISTINCT for this stmt
+  bool is_implicit_distinct_;
 };
 }
 }

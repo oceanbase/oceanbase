@@ -2091,26 +2091,18 @@ int ObSelectLogPlan::generate_union_all_plans(const ObIArray<ObSelectLogPlan*> &
 {
   int ret = OB_SUCCESS;
   if (child_plans.count() > 2) {
-    ObSEArray<ObLogicalOperator*, 2> child_ops;
+    ObSEArray<ObSEArray<ObLogicalOperator*, 4>, 3> child_ops;
     // get best children plan
-    for (int64_t i = 0; OB_SUCC(ret) && i < child_plans.count(); i++) {
-      ObLogicalOperator *best_plan = NULL;
-      if (OB_ISNULL(child_plans.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(child_plans.at(i)->get_candidate_plans().get_best_plan(best_plan))) {
-        LOG_WARN("failed to get best plan", K(ret));
-      } else if (OB_ISNULL(best_plan)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(child_ops.push_back(best_plan))) {
-        LOG_WARN("failed to push back child ops", K(ret));
-      } else { /*do nothing*/ }
+    if (OB_FAIL(child_ops.prepare_allocate(3))) {
+      LOG_WARN("fail to prepare allocate", K(ret));
+    } else if (OB_FAIL(get_best_child_candidate_plans(child_plans, child_ops.at(0), child_ops.at(1), child_ops.at(2)))) {
+      LOG_WARN("failed to get best child candi plans", K(ret));
     }
     // generate union all plan
-    if (OB_SUCC(ret)) {
+    for (int i = 0; OB_SUCC(ret) && i < 3; ++i) {
       CandidatePlan candidate_plan;
-      if (OB_FAIL(create_union_all_plan(child_ops, ignore_hint, candidate_plan.plan_tree_))) {
+      if (!child_ops.at(i).empty() &&
+          OB_FAIL(create_union_all_plan(child_ops.at(i), ignore_hint, candidate_plan.plan_tree_))) {
         LOG_WARN("failed to create union all plan", K(ret));
       } else if (NULL == candidate_plan.plan_tree_) {
         /*do nothing*/
@@ -2187,6 +2179,66 @@ int ObSelectLogPlan::generate_union_all_plans(const ObIArray<ObSelectLogPlan*> &
   return ret;
 }
 
+int ObSelectLogPlan::get_best_child_candidate_plans(const ObIArray<ObSelectLogPlan*> &child_plans,
+                                                    ObIArray<ObLogicalOperator*> &best_child_ops,
+                                                    ObIArray<ObLogicalOperator*> &best_das_child_ops,
+                                                    ObIArray<ObLogicalOperator*> &best_px_child_ops)
+{
+  int ret = OB_SUCCESS;
+  best_child_ops.reuse();
+  best_das_child_ops.reuse();
+  best_px_child_ops.reuse();
+  ObLogicalOperator *best_plan = NULL;
+  for (int64_t i = 0; OB_SUCC(ret) && i < child_plans.count(); i++) {
+    if (OB_ISNULL(child_plans.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(i));
+    } else if (OB_FAIL(child_plans.at(i)->get_candidate_plans().get_best_plan(best_plan))) {
+      LOG_WARN("failed to get best plan", K(ret));
+    } else if (OB_ISNULL(best_plan)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(best_child_ops.push_back(best_plan))) {
+      LOG_WARN("failed to push back child ops", K(ret));
+    } else {
+      ObIArray<CandidatePlan> &candidate_plans = child_plans.at(i)->get_candidate_plans().candidate_plans_;
+      ObLogicalOperator *child_op = NULL;
+      ObLogicalOperator *best_das_plan = NULL;
+      ObLogicalOperator *best_px_plan = NULL;
+      for (int64_t j = 0; OB_SUCC(ret) && j < candidate_plans.count(); ++j) {
+        if (OB_ISNULL(child_op = candidate_plans.at(j).plan_tree_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret), K(j));
+        } else if (!child_op->is_match_all() && child_op->get_contains_das_op()) {
+          /* ignore this plan */
+        } else if (child_op->is_match_all()) {
+          best_das_plan = (NULL == best_das_plan || best_das_plan->get_cost() > child_op->get_cost())
+                          ? child_op : best_das_plan;
+        } else {
+          best_px_plan = (NULL == best_px_plan || best_px_plan->get_cost() > child_op->get_cost())
+                          ? child_op : best_px_plan;
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (NULL != best_das_plan && OB_FAIL(best_das_child_ops.push_back(best_das_plan))) {
+        LOG_WARN("failed to push back child op", K(ret));
+      } else if (NULL != best_px_plan && OB_FAIL(best_px_child_ops.push_back(best_px_plan))) {
+        LOG_WARN("failed to push back child op", K(ret));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (best_das_child_ops.count() != child_plans.count()) {
+      best_das_child_ops.reuse();
+    }
+    if (best_px_child_ops.count() != child_plans.count()) {
+      best_px_child_ops.reuse();
+    }
+  }
+  return ret;
+}
+
 int ObSelectLogPlan::create_union_all_plan(const ObIArray<ObLogicalOperator*> &child_ops,
                                            const bool ignore_hint,
                                            ObLogicalOperator *&top)
@@ -2205,10 +2257,13 @@ int ObSelectLogPlan::create_union_all_plan(const ObIArray<ObLogicalOperator*> &c
   bool is_partition_wise = false;
   bool is_ext_partition_wise = false;
   bool is_set_partition_wise = false;
+  bool basic_push_distinct = false;
   DistAlgo hint_dist_methods = get_log_plan_hint().get_valid_set_dist_algo(&random_none_idx);
   if (OB_ISNULL(select_stmt = get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(select_stmt), K(ret));
+  } else if (select_stmt->is_set_distinct() && OB_FAIL(check_basic_distinct_pushdown(basic_push_distinct))) {
+    LOG_WARN("failed to check basic distinct pushdown", K(ret));
   } else if (!get_optimizer_context().is_var_assign_only_in_root_stmt() &&
       get_optimizer_context().has_var_assign()) {
     set_dist_methods &= DistAlgo::DIST_PULL_TO_LOCAL | DistAlgo::DIST_BASIC_METHOD;
@@ -2315,11 +2370,33 @@ int ObSelectLogPlan::create_union_all_plan(const ObIArray<ObLogicalOperator*> &c
       set_dist_methods = DistAlgo::DIST_SET_RANDOM;
       for (int64_t i = 0; OB_SUCC(ret) && i < child_ops.count(); i++) {
         ObLogicalOperator *child_op = NULL;
+        const ObDMLStmt *child_stmt = NULL;
+        ObSEArray<ObRawExpr*, 4> child_select_exprs;
+        bool child_push_distinct = false;
+        bool need_exchange = false;
         if (OB_ISNULL(child_op = child_ops.at(i)) ||
-            OB_ISNULL(child_op->get_plan())) {
+            OB_ISNULL(child_op->get_plan()) ||
+            OB_ISNULL(child_stmt = child_op->get_plan()->get_stmt())) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(ret));
-        } else if (child_op != largest_op &&
+          LOG_WARN("get unexpected null", K(ret), K(child_op), K(child_stmt));
+        } else if (OB_FALSE_IT(need_exchange = child_op != largest_op)) {
+        } else if (OB_UNLIKELY(!child_stmt->is_select_stmt())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("child stmt is not select stmt", K(ret), KPC(child_stmt));
+        } else if (OB_FAIL(static_cast<const ObSelectStmt *>(child_stmt)->get_select_exprs(child_select_exprs))) {
+          LOG_WARN("failed to get select exprs", K(ret));
+        } else if (basic_push_distinct && need_exchange &&
+                   OB_FAIL(check_need_pushdown_set_distinct(child_op,
+                                                            child_select_exprs,
+                                                            child_push_distinct))) {
+          LOG_WARN("failed to check need pushdown set distinct", K(ret));
+        } else if (child_push_distinct &&
+                   OB_FAIL(allocate_pushdown_set_distinct_as_top(child_op,
+                                                                 child_select_exprs,
+                                                                 HASH_AGGREGATE,
+                                                                 get_update_table_metas().get_table_meta_by_table_id(i)))) {
+          LOG_WARN("failed to allocate push down distinct as top", K(ret));
+        } else if (need_exchange &&
                    OB_FAIL(child_op->get_plan()->allocate_exchange_as_top(child_op, exch_info))) {
           LOG_WARN("failed to allocate exchange as top", K(ret));
         } else if (OB_FAIL(set_child_ops.push_back(child_op))) {
@@ -2335,11 +2412,33 @@ int ObSelectLogPlan::create_union_all_plan(const ObIArray<ObLogicalOperator*> &c
     set_dist_methods = DistAlgo::DIST_PULL_TO_LOCAL;
     for (int64_t i = 0; OB_SUCC(ret) && i < child_ops.count(); i++) {
       ObLogicalOperator *child_op = NULL;
+      const ObDMLStmt *child_stmt = NULL;
+      ObSEArray<ObRawExpr*, 4> child_select_exprs;
+      bool child_push_distinct = false;
+      bool need_exchange = false;
       if (OB_ISNULL(child_op = child_ops.at(i)) ||
-          OB_ISNULL(child_op->get_plan())) {
+          OB_ISNULL(child_op->get_plan()) ||
+          OB_ISNULL(child_stmt = child_op->get_plan()->get_stmt())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (child_op->is_sharding() &&
+        LOG_WARN("get unexpected null", K(ret), K(child_op), K(child_stmt));
+      } else if (OB_FALSE_IT(need_exchange = child_op->is_sharding())) {
+      } else if (OB_UNLIKELY(!child_stmt->is_select_stmt())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("child stmt is not select stmt", K(ret), KPC(child_stmt));
+      } else if (OB_FAIL(static_cast<const ObSelectStmt *>(child_stmt)->get_select_exprs(child_select_exprs))) {
+        LOG_WARN("failed to get select exprs", K(ret));
+      } else if (basic_push_distinct && need_exchange &&
+                 OB_FAIL(check_need_pushdown_set_distinct(child_op,
+                                                          child_select_exprs,
+                                                          child_push_distinct))) {
+        LOG_WARN("failed to check need pushdown set distinct", K(ret));
+      } else if (child_push_distinct &&
+                 OB_FAIL(allocate_pushdown_set_distinct_as_top(child_op,
+                                                               child_select_exprs,
+                                                               HASH_AGGREGATE,
+                                                               get_update_table_metas().get_table_meta_by_table_id(i)))) {
+        LOG_WARN("failed to allocate push down distinct as top", K(ret));
+      } else if (need_exchange &&
                 OB_FAIL(child_op->get_plan()->allocate_exchange_as_top(child_op, exch_info))) {
         LOG_WARN("failed to allocate exchange as top", K(ret));
       } else if (OB_ISNULL(child_op)) {
@@ -3811,11 +3910,11 @@ int ObSelectLogPlan::create_merge_set_plan(const EqualSets &equal_sets,
                                            const ObIArray<ObOrderDirection> &order_directions,
                                            const ObIArray<int64_t> &map_array,
                                            const ObIArray<OrderItem> &left_sort_keys,
-                                           const bool left_need_sort,
-                                           const int64_t left_prefix_pos,
+                                           bool left_need_sort,
+                                           int64_t left_prefix_pos,
                                            const ObIArray<OrderItem> &right_sort_keys,
-                                           const bool right_need_sort,
-                                           const int64_t right_prefix_pos,
+                                           bool right_need_sort,
+                                           int64_t right_prefix_pos,
                                            CandidatePlan &merge_plan)
 {
   int ret = OB_SUCCESS;
@@ -3823,16 +3922,31 @@ int ObSelectLogPlan::create_merge_set_plan(const EqualSets &equal_sets,
   ObLogPlan *right_plan = NULL;
   ObExchangeInfo left_exch_info;
   ObExchangeInfo right_exch_info;
+  bool basic_push_distinct = false;
+  bool left_push_distinct = false;
+  bool right_push_distinct = false;
   if (OB_ISNULL(left_child) || OB_ISNULL(right_child) ||
       OB_ISNULL(left_plan = left_child->get_plan()) ||
       OB_ISNULL(right_plan = right_child->get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(left_child), K(right_child), K(left_plan), K(right_plan));
+  } else if (OB_FAIL(check_basic_distinct_pushdown(basic_push_distinct))) {
+    LOG_WARN("failed to check basic distinct pushdown", K(ret));
+  } else if (basic_push_distinct
+             && OB_FAIL(check_need_pushdown_set_distinct(left_child,
+                                                         left_set_keys,
+                                                         left_push_distinct))) {
+    LOG_WARN("failed to check need pushdown set distinct", K(ret));
+  } else if (basic_push_distinct
+             && OB_FAIL(check_need_pushdown_set_distinct(right_child,
+                                                         right_set_keys,
+                                                         right_push_distinct))) {
+    LOG_WARN("failed to check need pushdown set distinct", K(ret));
   } else {
     bool is_fully_partition_wise = DistAlgo::DIST_PARTITION_WISE == dist_set_method &&
                                    !left_child->is_exchange_allocated() && !right_child->is_exchange_allocated();
-    bool is_left_local_order = left_child->get_is_local_order() && !is_fully_partition_wise;
-    bool is_right_local_order = right_child->get_is_local_order() && !is_fully_partition_wise;
+    bool is_left_local_order = false;
+    bool is_right_local_order = false;
     if (OB_FAIL(compute_set_exchange_info(equal_sets,
                                           *left_child,
                                           *right_child,
@@ -3843,6 +3957,26 @@ int ObSelectLogPlan::create_merge_set_plan(const EqualSets &equal_sets,
                                           left_exch_info,
                                           right_exch_info))) {
       LOG_WARN("failed to compute set exchange info", K(ret));
+    } else if (OB_FAIL(init_width_estimation_info(get_stmt()))) {
+      LOG_WARN("failed to init width estimation info", K(ret));
+    } else if (left_push_distinct && left_exch_info.need_exchange()
+              && OB_FAIL(allocate_pushdown_merge_set_distinct_as_top(left_child,
+                                                                     left_set_keys,
+                                                                     left_sort_keys,
+                                                                     get_update_table_metas().get_table_meta_by_table_id(0),
+                                                                     left_need_sort,
+                                                                     left_prefix_pos))) {
+      LOG_WARN("failed to allocate push down distinct as top", K(ret));
+    } else if (right_push_distinct && right_exch_info.need_exchange()
+              && OB_FAIL(allocate_pushdown_merge_set_distinct_as_top(right_child,
+                                                                     right_set_keys,
+                                                                     right_sort_keys,
+                                                                     get_update_table_metas().get_table_meta_by_table_id(1),
+                                                                     right_need_sort,
+                                                                     right_prefix_pos))) {
+      LOG_WARN("failed to allocate push down distinct as top", K(ret));
+    } else if (OB_FALSE_IT(is_left_local_order = left_child->get_is_local_order() && !is_fully_partition_wise)) {
+    } else if (OB_FALSE_IT(is_right_local_order = right_child->get_is_local_order() && !is_fully_partition_wise)) {
     } else if (OB_FAIL(left_plan->allocate_sort_and_exchange_as_top(left_child,
                                                                     left_exch_info,
                                                                     left_sort_keys,
@@ -4011,12 +4145,27 @@ int ObSelectLogPlan::create_hash_set_plan(const EqualSets &equal_sets,
   ObLogPlan *left_log_plan = NULL;
   ObLogPlan *right_log_plan = NULL;
   const ObSelectStmt *select_stmt = get_stmt();
+  bool basic_push_distinct = false;
+  bool left_push_distinct = false;
+  bool right_push_distinct = false;
   if (OB_ISNULL(left_child) || OB_ISNULL(right_child) ||
       OB_ISNULL(left_log_plan = left_child->get_plan()) ||
       OB_ISNULL(right_log_plan = right_child->get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(left_child), K(right_child),
         K(left_log_plan), K(right_log_plan), K(ret));
+  } else if (OB_FAIL(check_basic_distinct_pushdown(basic_push_distinct))) {
+    LOG_WARN("failed to check basic distinct pushdown", K(ret));
+  } else if (basic_push_distinct
+             && OB_FAIL(check_need_pushdown_set_distinct(left_child,
+                                                         left_set_keys,
+                                                         left_push_distinct))) {
+    LOG_WARN("failed to check need pushdown set distinct", K(ret));
+  } else if (basic_push_distinct
+             && OB_FAIL(check_need_pushdown_set_distinct(right_child,
+                                                         right_set_keys,
+                                                         right_push_distinct))) {
+    LOG_WARN("failed to check need pushdown set distinct", K(ret));
   } else if (OB_FAIL(compute_set_exchange_info(equal_sets,
                                                *left_child,
                                                *right_child,
@@ -4027,6 +4176,20 @@ int ObSelectLogPlan::create_hash_set_plan(const EqualSets &equal_sets,
                                                left_exch_info,
                                                right_exch_info))) {
     LOG_WARN("failed to compute set exchange info", K(ret));
+  } else if (OB_FAIL(init_width_estimation_info(get_stmt()))) {
+      LOG_WARN("failed to init width estimation info", K(ret));
+  } else if (left_push_distinct && left_exch_info.need_exchange()
+             && OB_FAIL(allocate_pushdown_set_distinct_as_top(left_child,
+                                                              left_set_keys,
+                                                              HASH_AGGREGATE,
+                                                              get_update_table_metas().get_table_meta_by_table_id(0)))) {
+    LOG_WARN("failed to allocate push down distinct as top", K(ret));
+  } else if (right_push_distinct && right_exch_info.need_exchange()
+             && OB_FAIL(allocate_pushdown_set_distinct_as_top(right_child,
+                                                              right_set_keys,
+                                                              HASH_AGGREGATE,
+                                                              get_update_table_metas().get_table_meta_by_table_id(1)))) {
+    LOG_WARN("failed to allocate push down distinct as top", K(ret));
   } else if (left_exch_info.need_exchange() &&
              OB_FAIL(left_log_plan->allocate_exchange_as_top(left_child, left_exch_info))) {
     LOG_WARN("failed to allocate exchange as top", K(ret));
@@ -4041,6 +4204,117 @@ int ObSelectLogPlan::create_hash_set_plan(const EqualSets &equal_sets,
     LOG_WARN("failed to allocate distinct set as top", K(ret));
   } else {
     LOG_TRACE("succeed to create hash set plan");
+  }
+  return ret;
+}
+
+int ObSelectLogPlan::check_need_pushdown_set_distinct(ObLogicalOperator *&child,
+                                                      const ObIArray<ObRawExpr*> &set_keys,
+                                                      bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  bool is_const = true;
+  bool is_unique = true;
+  is_valid = false;
+  if (OB_ISNULL(child) || OB_ISNULL(optimizer_context_.get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(child), K(optimizer_context_.get_query_ctx()));
+  } else if (!optimizer_context_.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_3_5)) {
+    // do nothing
+  } else if (LOG_SET == child->get_type()
+             && static_cast<ObLogSet*>(child)->is_set_distinct()) {
+    // do nothing
+  } else if (OB_FAIL(ObOptimizerUtil::is_exprs_unique(set_keys,
+                                                      child->get_table_set(),
+                                                      child->get_fd_item_set(),
+                                                      child->get_output_equal_sets(),
+                                                      child->get_output_const_exprs(),
+                                                      is_unique))) {
+    LOG_WARN("failed to check whether distinct exprs is unique", K(ret));
+  } else if (is_unique) {
+    // do nothing
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && is_const && i < set_keys.count(); ++i) {
+      if (OB_FAIL(ObOptimizerUtil::is_const_expr(set_keys.at(i),
+                                                 child->get_output_equal_sets(),
+                                                 child->get_output_const_exprs(),
+                                                 get_onetime_query_refs(),
+                                                 is_const))) {
+        LOG_WARN("check is const expr failed", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      is_valid = !is_const;
+    }
+  }
+  return ret;
+}
+
+int ObSelectLogPlan::allocate_pushdown_set_distinct_as_top(ObLogicalOperator *&child,
+                                                           const ObIArray<ObRawExpr*> &set_keys,
+                                                           AggregateAlgo algo,
+                                                           const OptTableMeta *table_meta,
+                                                           bool is_partition_wise,
+                                                           bool is_partition_gi)
+{
+  int ret = OB_SUCCESS;
+  ObSelectLogPlan *child_plan = NULL;
+  if (OB_ISNULL(child)
+      || OB_ISNULL(child_plan = static_cast<ObSelectLogPlan *>(child->get_plan()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(child));
+  } else {
+    double child_ndv = 1.0;
+    if (OB_NOT_NULL(table_meta)) {
+      child_ndv = table_meta->get_distinct_rows();
+    }
+    if (OB_FAIL(child_plan->allocate_distinct_as_top(child,
+                                                     algo,
+                                                     set_keys,
+                                                     child_ndv,
+                                                     is_partition_wise,
+                                                     true, /* is_push_down */
+                                                     is_partition_gi))) {
+      LOG_WARN("failed to allocate push down distinct as top", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSelectLogPlan::allocate_pushdown_merge_set_distinct_as_top(ObLogicalOperator *&child,
+                                                                 const ObIArray<ObRawExpr*> &set_keys,
+                                                                 const ObIArray<OrderItem> &sort_keys,
+                                                                 const OptTableMeta *table_meta,
+                                                                 bool &need_sort,
+                                                                 int64_t &prefix_pos)
+{
+  int ret = OB_SUCCESS;
+  bool should_pullup_gi = false;
+  bool child_is_local_order = false;
+  bool is_partition_gi = false;
+  if (OB_ISNULL(child)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(child));
+  } else if (OB_FAIL(check_can_pullup_gi(*child, false, need_sort, should_pullup_gi))) {
+    LOG_WARN("failed to check can pullup gi", K(ret));
+  } else if (OB_FALSE_IT(is_partition_gi = child->is_partition_wise())) {
+  } else if (OB_FALSE_IT(child_is_local_order = child->get_is_local_order() && !should_pullup_gi)) {
+  } else if ((need_sort || child_is_local_order) &&
+              OB_FAIL(allocate_sort_as_top(child,
+                                           sort_keys,
+                                           need_sort && child_is_local_order ? 0 : prefix_pos,
+                                           !need_sort && child_is_local_order))) {
+    LOG_WARN("failed to allocate sort as top", K(ret));
+  } else if (OB_FAIL(allocate_pushdown_set_distinct_as_top(child,
+                                                           set_keys,
+                                                           MERGE_AGGREGATE,
+                                                           table_meta,
+                                                           should_pullup_gi,
+                                                           is_partition_gi))) {
+    LOG_WARN("failed to allocate distinct as top", K(ret));
+  } else {
+    prefix_pos = 0;
+    need_sort = false;
   }
   return ret;
 }
@@ -4758,6 +5032,8 @@ int ObSelectLogPlan::generate_child_plan_for_set(const ObDMLStmt *sub_stmt,
   } else if (FALSE_IT(sub_plan->set_is_parent_set_distinct(is_set_distinct)) ||
              FALSE_IT(sub_plan->set_nonrecursive_plan_for_fake_cte(nonrecursive_plan))) {
     // do nothing
+  } else if (OB_FAIL(sub_plan->init_rescan_info_for_subquery_paths(*this, false, false))) {
+    LOG_WARN("failed to init rescan info", K(ret));
   } else if (OB_FAIL(sub_plan->add_pushdown_filters(pushdown_filters))) {
     LOG_WARN("failed to add pushdown filters", K(ret));
   } else if (OB_FAIL(sub_plan->generate_raw_plan())) {

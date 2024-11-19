@@ -725,36 +725,6 @@ public:
                                   const share::schema::ObForeignKeyInfo *foreign_key_info,
                                   bool &is_rely);
 
-
-  static int check_stmt_limit_validity(ObTransformerCtx *ctx,
-                                       const ObSelectStmt *select_stmt,
-                                       bool &is_valid,
-                                       bool &need_add_const_constraint);
-
-  static int check_stmt_is_non_sens_dul_vals(ObTransformerCtx *ctx,
-                                             const ObDMLStmt *upper_stmt,
-                                             const ObDMLStmt *stmt,
-                                             bool &is_match,
-                                             bool &need_add_limit_constraint);
-
-  
-  /**
-   * @brief 
-   * to check if semi join can be transformed
-   *    select * from t1 where c1 = 3 or exists (select 1 from t1 left join t2 on t1.c1 = t2.c1);
-   * ==>
-   *    select * from t1 where c1 = 3 or exists (select 1 from t1);
-   * @param ctx 
-   * @param stmt 
-   * @param is_match 
-   * @param need_add_limit_constraint 
-   * @return int 
-   */
-  static int check_stmt_is_non_sens_dul_vals_rec(ObTransformerCtx *ctx,
-                                              const ObDMLStmt *stmt,
-                                              const ObRawExpr *expr,
-                                              bool &is_match,
-                                              bool &need_add_limit_constraint);
   /**
    * @brief check_exprs_unique
    * 检查 exprs 在 table 上是否有唯一性
@@ -1495,9 +1465,10 @@ public:
                                                   bool &is_existed);
 
   static bool check_objparam_abs_equal(const ObObjParam &obj1, const ObObjParam &obj2);
-  static int add_neg_or_pos_constraint(ObTransformerCtx *trans_ctx,
-                                       ObRawExpr *expr,
-                                       bool is_negative = false);
+  static int add_compare_int_constraint(ObTransformerCtx *trans_ctx,
+                                        ObRawExpr *expr,
+                                        const ObItemType op_type,
+                                        int64_t val);
   static int add_equal_expr_value_constraint(ObTransformerCtx *trans_ctx,
                                              ObRawExpr *left,
                                              ObRawExpr *right);
@@ -1696,6 +1667,10 @@ public:
                                           const common::ObIArray<ObRawExpr*> &exprs,
                                           common::ObIArray<int64_t> &true_exprs,
                                           common::ObIArray<int64_t> &false_exprs);
+  static int extract_const_bool_expr_result(ObTransformerCtx *ctx,
+                                            ObRawExpr *expr,
+                                            bool &is_true,
+                                            bool &is_false);
   /* extract exprs in all_exprs whoes indexs are in target_idx to target_exprs */
   static int extract_target_exprs_by_idx(const ObIArray<ObRawExpr*> &all_exprs,
                                          const ObIArray<int64_t> &target_idx,
@@ -1860,7 +1835,10 @@ public:
   static int check_group_by_subset(ObRawExpr *expr,
                                    const ObIArray<ObRawExpr *> &group_exprs,
                                    bool &bret);
-  static int expand_temp_table(ObTransformerCtx *ctx, ObDMLStmt::TempTableInfo& table_info);
+
+  static int check_inline_temp_table_valid(ObSelectStmt *stmt, bool &is_valid);
+
+  static int inline_temp_table(ObTransformerCtx *ctx, ObDMLStmt::TempTableInfo& table_info);
 
   static int get_stmt_map_after_copy(ObDMLStmt *origin_stmt,
                                      ObDMLStmt *new_stmt,
@@ -1971,7 +1949,7 @@ public:
                                            const TableItem *table_item,
                                            bool &is_ref);
 
-  static int check_contain_correlated_lateral_table(ObDMLStmt *stmt, bool &is_contain);
+  static int check_contain_correlated_lateral_table(const ObDMLStmt *stmt, bool &is_contain);
 
   static int cartesian_tables_pre_split(ObSelectStmt *subquery,
                                         ObIArray<ObRawExpr*> &outer_conditions,
@@ -2031,6 +2009,13 @@ public:
                                                     ObSQLSessionInfo *session,
                                                     ObQueryCtx *query_ctx,
                                                     bool &enable_parallel);
+  static int calc_column_repeat_rate(ObTransformerCtx *ctx,
+                                     const TableItem *table,
+                                     const ObIArray<uint64_t> &column_ids,
+                                     double &repeat_rate);
+  static int is_cost_based_trans_enable(ObTransformerCtx *ctx,
+                                        const ObGlobalHint &global_hint,
+                                        bool &is_enabled);
   static int check_const_select(ObTransformerCtx *ctx,
                                 const ObSelectStmt *stmt,
                                 bool &is_const_select);

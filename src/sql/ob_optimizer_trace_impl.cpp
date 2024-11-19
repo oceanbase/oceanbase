@@ -682,8 +682,8 @@ int ObOptimizerTraceImpl::append(const JoinPath* join_path)
       new_line();
       append("tables:", join_path->right_path_->parent_);
       new_line();
-      new_line();
       append_ptr(join_path->right_path_);
+      new_line();
       append("cost:", join_path->right_path_->cost_, ",card:", join_path->right_path_->parent_->get_output_rows(),
             ",width:", join_path->right_path_->parent_->get_output_row_size());
       new_line();
@@ -1082,6 +1082,8 @@ int ObOptimizerTraceImpl::trace_static(const ObDMLStmt *stmt, OptTableMetas &tab
         LOG_WARN("failed to append msg", K(ret));
       } else if (OB_FAIL(append("rows:",
                                 table_meta->get_rows(),
+                                "base rows:",
+                                table_meta->get_base_rows(),
                                 "statis type:",
                                 table_meta->use_default_stat() ? "DEFAULT" : "OPTIMIZER",
                                 "version:",
@@ -1107,6 +1109,10 @@ int ObOptimizerTraceImpl::trace_static(const ObDMLStmt *stmt, OptTableMetas &tab
         } else if (OB_FAIL(new_line())) {
           LOG_WARN("failed to append msg", K(ret));
         } else if (OB_FAIL(append("NDV:", col_meta->get_ndv()))) {
+          LOG_WARN("failed to append msg", K(ret));
+        } else if (OB_FAIL(new_line())) {
+          LOG_WARN("failed to append msg", K(ret));
+        } else if (OB_FAIL(append("BASE NDV:", col_meta->get_base_ndv()))) {
           LOG_WARN("failed to append msg", K(ret));
         } else if (OB_FAIL(new_line())) {
           LOG_WARN("failed to append msg", K(ret));

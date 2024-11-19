@@ -247,11 +247,13 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[idx, tt2]
       pruned_index_name:[idx]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 'LINESTRING(0 0, 10 10, 20 25, 50 60)'
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select /*+index(tt2 idx)*/ st_astext(g) from tt2 where ST_Intersects(g,ST_GeomFromText('LINESTRING(0 0, 10 10, 20 25, 50 60)'));
@@ -296,11 +298,13 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[idx, tt2]
       pruned_index_name:[idx]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 'LINESTRING(0 0, 10 10, 20 25, 50 60)'
   Note:
       Degree of Parallelisim is 1 because of table property
 drop table tt2;
@@ -438,11 +442,14 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[idx, tt2]
       unstable_index_name:[tt2]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 'LINESTRING(0 0, 10 10, 20 25, 50 60)'
+      :1 => 4326
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select /*+index(tt2 idx)*/ st_astext(g) from tt2 where ST_Intersects(g,ST_GeomFromText('LINESTRING(0 0, 10 10, 20 25, 50 60)', 4326));
@@ -577,11 +584,14 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[idx, tt2]
       pruned_index_name:[tt2]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 'LINESTRING(0 0, 10 10, 20 25, 50 60)'
+      :1 => 4326
   Note:
       Degree of Parallelisim is 1 because of table property
 insert into tt2 values (1, ST_GeomFromText('LINESTRING(0 0, 10 10, 20 25, 50 60)', 4326));
@@ -716,11 +726,14 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[idx, tt2]
       unstable_index_name:[tt2]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 'LINESTRING(0 0, 10 10, 20 25, 50 60)'
+      :1 => 4326
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select /*+index(tt2 idx)*/ st_astext(g) from tt2 where ST_Intersects(g,ST_GeomFromText('LINESTRING(0 0, 10 10, 20 25, 50 60)', 4326));
@@ -855,11 +868,14 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[idx, tt2]
       pruned_index_name:[tt2]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 'LINESTRING(0 0, 10 10, 20 25, 50 60)'
+      :1 => 4326
   Note:
       Degree of Parallelisim is 1 because of table property
 drop table tt2;

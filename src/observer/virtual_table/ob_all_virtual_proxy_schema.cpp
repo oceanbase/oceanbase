@@ -693,7 +693,7 @@ int ObAllVirtualProxySchema::get_view_decoded_schema_(
           LOG_WARN("create query context failed", KR(ret));
         } else {
           // set # of question marks
-          resolver_ctx.query_ctx_->question_marks_count_ = static_cast<int64_t> (parse_result.question_mark_ctx_.count_);
+          resolver_ctx.query_ctx_->set_questionmark_count(static_cast<int64_t> (parse_result.question_mark_ctx_.count_));
         }
         if (OB_SUCC(ret)
             && OB_NOT_NULL(parse_result.result_tree_)

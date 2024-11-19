@@ -3023,10 +3023,10 @@ int ObSql::generate_stmt(ParseResult &parse_result,
   if (OB_SUCC(ret)) {
       // set # of question marks
       if (context.is_prepare_protocol_ && !context.is_prepare_stage_) {
-        resolver_ctx.query_ctx_->question_marks_count_ = plan_ctx->get_param_store().count();
+        resolver_ctx.query_ctx_->set_questionmark_count(plan_ctx->get_param_store().count());
         LOG_DEBUG("question mark size is ", K(plan_ctx->get_param_store()));
       } else {
-        resolver_ctx.query_ctx_->question_marks_count_ = static_cast<int64_t> (parse_result.question_mark_ctx_.count_);
+        resolver_ctx.query_ctx_->set_questionmark_count(static_cast<int64_t>(parse_result.question_mark_ctx_.count_));
         LOG_DEBUG("question mark size is ", K(parse_result.question_mark_ctx_.count_));
       }
 
@@ -4420,6 +4420,8 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
   ObPhysicalPlanCtx *pctx = exec_ctx.get_physical_plan_ctx();
   bool is_stack_overflow = false;
   bool is_show_variables = false;
+  bool is_explain_parameterize = false;
+  stmt::StmtType stmt_type = stmt::T_NONE;
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
@@ -4530,6 +4532,17 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
               }
             }
           }
+          if (OB_SUCC(ret) && stmt::T_EXPLAIN == stmt_type) {
+#ifndef OB_BUILD_SPM
+            if (OB_SQL_PC_NOT_EXIST == get_plan_err) {
+#else
+            if (OB_SQL_PC_NOT_EXIST == get_plan_err || pc_ctx.sql_ctx_.spm_ctx_.is_retry_for_spm_) {
+#endif
+              is_explain_parameterize = true;
+            } else {
+              is_explain_parameterize = false;
+            }
+          }
         }
       }
     }
@@ -4567,10 +4580,11 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
     //对于create outline限流语句，可能会带有问题。我们需要对?做特殊处理,
     //所以也需要经过transform_systax_tree
     bool flag = false;
-    if ((add_plan_to_pc && !is_show_variables)
-        || ((T_CREATE_OUTLINE == parse_result.result_tree_->children_[0]->type_
-             || T_ALTER_OUTLINE == parse_result.result_tree_->children_[0]->type_)
-            && (INT64_MAX != parse_result.result_tree_->children_[0]->value_))) {
+    if ((add_plan_to_pc && !is_show_variables) ||
+        is_explain_parameterize ||
+        ((T_CREATE_OUTLINE == parse_result.result_tree_->children_[0]->type_ ||
+          T_ALTER_OUTLINE == parse_result.result_tree_->children_[0]->type_) &&
+         (INT64_MAX != parse_result.result_tree_->children_[0]->value_))) {
       flag = true;
       if (T_CREATE_OUTLINE == parse_result.result_tree_->children_[0]->type_) {
         if (1 != parse_result.result_tree_->children_[0]->children_[2]->value_) {
@@ -5232,9 +5246,10 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
           (void) ObSpmController::deny_new_plan_as_baseline(spm_ctx);
         }
       } else if (plan_added && ObSpmCacheCtx::SpmStat::STAT_ADD_BASELINE_PLAN == spm_ctx.spm_stat_) {
-        if (nullptr != spm_ctx.baseline_guard_.get_cache_obj() &&
-            static_cast<ObPlanBaselineItem*>(spm_ctx.baseline_guard_.get_cache_obj())->get_fixed()) {
-          // fixed baseline plan, use is directly
+        if ((nullptr != spm_ctx.baseline_guard_.get_cache_obj() &&
+             static_cast<ObPlanBaselineItem*>(spm_ctx.baseline_guard_.get_cache_obj())->get_fixed()) ||
+            SPM_MODE_BASELINE_FIRST == spm_ctx.spm_mode_) {
+          // fixed baseline plan or baseline first mode, use is directly
         } else {
           spm_ctx.spm_force_disable_ = true;
           spm_ctx.spm_stat_ = ObSpmCacheCtx::STAT_FIRST_EXECUTE_PLAN;

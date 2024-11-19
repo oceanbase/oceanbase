@@ -3349,7 +3349,7 @@
   "optimizer_features_enable": {
     "id": 10150,
     "name": "optimizer_features_enable",
-    "default_value": "4.3.4.0",
+    "default_value": "4.3.5.0",
     "base_value": "",
     "data_type": "varchar",
     "info": "enabling a series of optimizer features based on an OceanBase release number",
@@ -11825,8 +11825,7 @@
     "publish_version": "425",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "",
-    "placeholder": true
+    "ref_url": ""
   },
   "range_index_dive_limit": {
     "id": 10740,

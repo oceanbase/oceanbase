@@ -222,6 +222,9 @@ int ObCommonSqlProxy::write(const uint64_t tenant_id, const ObString sql,
       conn->set_force_remote_exec(true);
       conn->set_nls_formats(param->nls_formats_);
     }
+    if (!param->secure_file_priv_.empty()) {
+      conn->set_session_variable("secure_file_priv", param->secure_file_priv_);
+    }
   }
   if (OB_SUCC(ret) && nullptr != param && nullptr != param->sql_mode_) {
     // TODO(cangdi): fix get_session_variable not working

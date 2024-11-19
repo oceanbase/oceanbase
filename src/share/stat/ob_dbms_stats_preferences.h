@@ -319,6 +319,19 @@ class ObHistBlockSamplePrefs : public ObStatPrefs
     virtual const char* get_stat_pref_default_value() const { return "FALSE"; }
 };
 
+class ObAutoSampleRowCountPrefs : public ObStatPrefs
+{
+  public:
+    ObAutoSampleRowCountPrefs() : ObStatPrefs() {}
+    ObAutoSampleRowCountPrefs(ObIAllocator *alloc,
+                              ObSQLSessionInfo *session_info,
+                              const ObString &pvalue):
+      ObStatPrefs(alloc, session_info, pvalue) {}
+    virtual int check_pref_value_validity(ObTableStatParam *param = NULL) override;
+    virtual const char* get_stat_pref_name() const { return "AUTO_SAMPLE_ROW_COUNT"; }
+    virtual const char* get_stat_pref_default_value() const { return "5000000"; }
+};
+
 template <class T>
 static int new_stat_prefs(ObIAllocator &allocator, ObSQLSessionInfo *session_info,
                           const ObString &opt_value, T *&src)
@@ -368,6 +381,8 @@ public:
   static int get_online_estimate_percent_for_upgrade(ObSqlString &sql);
 
   static int get_extra_stats_perfs_for_upgrade(ObSqlString &sql);
+
+  static int get_extra_stats_perfs_for_upgrade_425(ObSqlString &sql);
 
 private:
   static int do_get_prefs(ObMySQLProxy *mysql_proxy,

@@ -365,6 +365,7 @@
 # 517: __all_storage_io_usage
 # 518: __all_mview_dep
 # 519: __all_scheduler_job_run_detail_v2
+# 520: __all_spm_evo_result
 # 528: __all_ncomp_dll_v2
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
@@ -1160,6 +1161,8 @@
 # 12491: __all_virtual_log_transport_dest_stat
 # 12492: __all_virtual_ss_local_cache_info
 # 12493: __all_virtual_kv_group_commit_status
+# 12495: __all_virtual_spm_evo_result
+# 12495: __all_spm_evo_result  # BASE_TABLE_NAME
 # 12496: __all_virtual_vector_index_info
 # 12500: __all_virtual_kv_client_info
 # 12504: __all_virtual_function_io_stat
@@ -1790,6 +1793,9 @@
 # 15461: __all_virtual_log_transport_dest_stat  # BASE_TABLE_NAME
 # 15462: ALL_VIRTUAL_SS_LOCAL_CACHE_INFO
 # 15462: __all_virtual_ss_local_cache_info  # BASE_TABLE_NAME
+# 15466: ALL_VIRTUAL_SPM_EVO_RESULT
+# 15466: __all_spm_evo_result  # BASE_TABLE_NAME
+# 15466: __all_virtual_spm_evo_result  # BASE_TABLE_NAME1
 # 15467: ALL_VIRTUAL_VECTOR_INDEX_INFO
 # 15467: __all_virtual_vector_index_info  # BASE_TABLE_NAME
 # 15484: ALL_VIRTUAL_FUNCTION_IO_STAT
@@ -2288,6 +2294,8 @@
 # 21605: INNODB_SYS_FOREIGN_COLS
 # 21607: GV$OB_KV_CLIENT_INFO
 # 21608: V$OB_KV_CLIENT_INFO
+# 21616: DBA_OB_SPM_EVO_RESULT
+# 21617: CDB_OB_SPM_EVO_RESULT
 # 21620: GV$OB_FUNCTION_IO_STAT
 # 21621: V$OB_FUNCTION_IO_STAT
 # 21622: DBA_OB_TEMP_FILES
@@ -2772,6 +2780,7 @@
 # 28239: V$OB_LOG_TRANSPORT_DEST_STAT
 # 28240: GV$OB_SS_LOCAL_CACHE
 # 28241: V$OB_SS_LOCAL_CACHE
+# 28261: DBA_OB_SPM_EVO_RESULT
 # 28262: GV$OB_FUNCTION_IO_STAT
 # 28263: V$OB_FUNCTION_IO_STAT
 # 28264: DBA_OB_TEMP_FILES

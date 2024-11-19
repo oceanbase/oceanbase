@@ -98,7 +98,7 @@ public:
   // session environment
   virtual int get_session_variable(const ObString &name, int64_t &val) override;
   virtual int set_session_variable(const ObString &name, int64_t val) override;
-  int set_session_variable(const ObString &name, const ObString &val);
+  virtual int set_session_variable(const ObString &name, const ObString &val) override;
 
   virtual int ping() override;
   int set_trace_id();

@@ -271,6 +271,11 @@ typedef struct _ParenthesesOffset
   struct _ParenthesesOffset *next_;
 } ParenthesesOffset;
 
+typedef struct _ParseNodeOptParens {
+  struct _ParseNode *select_node_;
+  bool is_parenthesized_;
+} ParseNodeOptParens;
+
 //dml base runtime context definition
 typedef struct _InsMultiValuesResult
 {
@@ -421,6 +426,7 @@ extern ParseNode *push_back_child(void *malloc_pool, int *error_code, ParseNode 
 extern ParseNode *push_front_child(void *malloc_pool, int *error_code, ParseNode *right_node, ParseNode *node);
 extern ParseNode *append_child(void *malloc_pool, int *error_code, ParseNode *left_node, ParseNode *right_node);
 extern ParseNode *adjust_inner_join_inner(int *error_code, ParseNode *inner_join, ParseNode *table_node);
+extern ParseNodeOptParens *new_parse_node_opt_parens(void *malloc_pool);
 
 // compare ParseNode str_value_ to pattern
 // @param [in] node        ParseNode

@@ -90,7 +90,6 @@ class ObDMLResolver : public ObStmtResolver
   public:
     ObCteResolverCtx():
       left_select_stmt_(NULL),
-      left_select_stmt_parse_node_(NULL),
       opt_col_alias_parse_node_(NULL),
       is_with_clause_resolver_(false),
       current_cte_table_name_(""),
@@ -119,17 +118,15 @@ class ObDMLResolver : public ObStmtResolver
     inline void reset_subquery_level() { cte_resolve_level_ = 0; }
     inline bool is_recursive() const { return is_recursive_cte_; }
     inline void set_left_select_stmt(ObSelectStmt* left_stmt) { left_select_stmt_ = left_stmt; }
-    inline void set_left_parse_node(const ParseNode* node) { left_select_stmt_parse_node_ = node; }
     inline void set_set_all(bool all) { is_set_all_ = all; }
     inline bool invalid_recursive_union() { return  (nullptr != left_select_stmt_ && !is_set_all_); }
     inline bool more_than_two_branch() { return cte_branch_count_ >= 2; }
     inline void reset_branch_count() { cte_branch_count_ = 0; }
     inline void set_recursive_left_branch() { is_set_left_resolver_ = true; cte_branch_count_ ++; }
-    inline void set_recursive_right_branch(ObSelectStmt* left_stmt, const ParseNode* node, bool all) {
+    inline void set_recursive_right_branch(ObSelectStmt* left_stmt, bool all) {
       is_set_left_resolver_ = false;
       cte_branch_count_ ++;
       left_select_stmt_ = left_stmt;
-      left_select_stmt_parse_node_ = node;
       is_set_all_ = all;
     }
     inline void set_has_param_list(bool has) { has_cte_param_list_ = has; }
@@ -138,7 +135,6 @@ class ObDMLResolver : public ObStmtResolver
     inline bool check_has_recursive_word() const { return has_recursive_word_; }
     int assign(ObCteResolverCtx &cte_ctx) {
       left_select_stmt_ = cte_ctx.left_select_stmt_;
-      left_select_stmt_parse_node_ = cte_ctx.left_select_stmt_parse_node_;
       opt_col_alias_parse_node_ = cte_ctx.opt_col_alias_parse_node_;
       is_with_clause_resolver_ = cte_ctx.is_with_clause_resolver_;
       current_cte_table_name_ = cte_ctx.current_cte_table_name_;
@@ -162,7 +158,6 @@ class ObDMLResolver : public ObStmtResolver
                  K_(has_recursive_word));
   private:
     ObSelectStmt* left_select_stmt_;
-    const ParseNode* left_select_stmt_parse_node_;
     const ParseNode* opt_col_alias_parse_node_;
     bool is_with_clause_resolver_;
     ObString current_cte_table_name_;

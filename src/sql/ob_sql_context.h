@@ -778,7 +778,8 @@ public:
       optimizer_features_enable_version_(0),
       udf_flag_(0),
       has_dblink_(false),
-      injected_random_status_(false)
+      injected_random_status_(false),
+      ori_question_marks_count_(0)
   {
   }
   TO_STRING_KV(N_PARAM_NUM, question_marks_count_,
@@ -822,6 +823,7 @@ public:
     root_stmt_ = NULL;
     udf_flag_ = 0;
     optimizer_features_enable_version_ = 0;
+    ori_question_marks_count_ = 0;
   }
 
   int64_t get_new_stmt_id() { return stmt_count_++; }
@@ -862,7 +864,10 @@ public:
   bool check_opt_compat_version(uint64_t v1, uint64_t v2) const {
     return optimizer_features_enable_version_ >= v1 && optimizer_features_enable_version_ < v2;
   }
-
+  void set_questionmark_count(int64_t count) {
+    ori_question_marks_count_ = count;
+    question_marks_count_ = count;
+  };
 
 
 public:
@@ -930,6 +935,7 @@ public:
   bool has_dblink_;
   bool injected_random_status_;
   ObRandom rand_gen_;
+  int64_t ori_question_marks_count_;
 };
 
 template<typename... Args>

@@ -545,6 +545,13 @@ public:
   static void update_optimizer_gather_stat_info(const ObOptStatTaskInfo *task_info,
                                                 const ObOptStatGatherStat *gather_stat);
 
+  static int convert_vaild_ident_name(common::ObIAllocator &allocator,
+                                      const common::ObDataTypeCastParams &dtc_params,
+                                      ObString &ident_name,
+                                      bool need_extra_conv = false);
+  static int parse_refine_min_max_options(ObExecContext &ctx,
+                                          ObTableStatParam &param);
+
 private:
   static int check_statistic_table_writeable(sql::ObExecContext &ctx);
 
@@ -567,12 +574,6 @@ private:
                                ObString &opt_value,
                                bool is_global_prefs,
                                ObStatPrefs *&stat_pref);
-
-  static int convert_vaild_ident_name(common::ObIAllocator &allocator,
-                                      const common::ObDataTypeCastParams &dtc_params,
-                                      ObString &ident_name,
-                                      bool need_extra_conv = false);
-
 
   static int get_common_table_stale_percent(sql::ObExecContext &ctx,
                                             const uint64_t tenant_id,
@@ -666,6 +667,9 @@ private:
   static int adjust_text_column_basic_stats(ObExecContext &ctx,
                                             const share::schema::ObTableSchema &schema,
                                             ObTableStatParam &param);
+
+  static int determine_auto_sample_table(ObExecContext &ctx,
+                                         ObTableStatParam &param);
 
 };
 

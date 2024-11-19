@@ -1258,10 +1258,9 @@ public:
                            bool is_null_safe,
                            common::ObCmpOp cmp_op) const;
 
-  static int is_equivalent(const common::ObObjMeta &meta1,
-                           const common::ObObjMeta &meta2,
-                           const common::ObObjMeta &meta3,
-                           bool &result);
+  static int is_equal_transitive(const common::ObObjMeta &meta1,
+                                 const common::ObObjMeta &meta2,
+                                 bool &result);
   int assign(const ObExprOperator &other);
   int set_cmp_func(const common::ObObjType type1,
                    const common::ObObjType type2);

@@ -308,6 +308,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 517	__all_storage_io_usage	0	201001	1
 518	__all_mview_dep	0	201001	1
 519	__all_scheduler_job_run_detail_v2	0	201001	1
+520	__all_spm_evo_result	0	201001	1
 528	__all_ncomp_dll_v2	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
@@ -780,6 +781,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12491	__all_virtual_log_transport_dest_stat	2	201001	1
 12492	__all_virtual_ss_local_cache_info	2	201001	1
 12493	__all_virtual_kv_group_commit_status	2	201001	1
+12495	__all_virtual_spm_evo_result	2	201001	1
 12496	__all_virtual_vector_index_info	2	201001	1
 12500	__all_virtual_kv_client_info	2	201001	1
 12504	__all_virtual_function_io_stat	2	201001	1
@@ -1273,6 +1275,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21605	INNODB_SYS_FOREIGN_COLS	1	201002	1
 21607	GV$OB_KV_CLIENT_INFO	1	201001	1
 21608	V$OB_KV_CLIENT_INFO	1	201001	1
+21616	DBA_OB_SPM_EVO_RESULT	1	201001	1
+21617	CDB_OB_SPM_EVO_RESULT	1	201001	1
 21620	GV$OB_FUNCTION_IO_STAT	1	201001	1
 21621	V$OB_FUNCTION_IO_STAT	1	201001	1
 21622	DBA_OB_TEMP_FILES	1	201001	1

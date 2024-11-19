@@ -503,7 +503,7 @@ int ObPlanCacheValue::choose_plan(ObPlanCacheCtx &pc_ctx,
   } else if (FALSE_IT(session->set_stmt_type(stmt_type_))) {
   } else if (OB_FAIL(session->get_spm_mode(spm_mode))) {
     LOG_WARN("fail to get spm mode", K(ret));
-  } else if (spm_mode > 0) {
+  } else if (spm_mode > SPM_MODE_DISABLE) {
     if (OB_FAIL(ob_write_string(pc_ctx.allocator_,
                                 constructed_sql_,
                                 pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_))) {

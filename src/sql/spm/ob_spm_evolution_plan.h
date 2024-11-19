@@ -72,7 +72,8 @@ public:
       is_inited_(false),
       current_stage_cnt_(0),
       lazy_finished_(false),
-      lazy_better_(false)
+      lazy_better_(false),
+      spm_mode_(SPM_MODE_DISABLE)
   {
   }
   void reset();
@@ -119,8 +120,8 @@ private:
   static const int64_t DEFAULT_EVOLUTION_TIMEOUT_THRESHOLD = 3 * 60 * 60 * 1000L * 1000L; //3 hours
   static const int64_t DEFAULT_ERROR_COUNT_THRESHOLD = 3;
 
-  int get_plan_with_guard(ObPlanCacheCtx &ctx,
-                          ObPhysicalPlan *&plan);
+  int online_evolve_get_plan_with_guard(ObPlanCacheCtx &ctx,
+                                        ObPhysicalPlan *&plan);
   int add_baseline_plan(ObPlanCacheCtx &ctx,
                         ObPhysicalPlan &plan);
   int add_evolving_plan(ObPlanCacheCtx &ctx,
@@ -151,7 +152,7 @@ private:
                                             ObPhysicalPlan *&plan);
   int64_t get_baseline_plan_error_cnt();
   int64_t get_plan_finish_cnt();
-
+  int confirm_baseline_plan();
 protected:
   ObSqlPlanSet *plan_set_;
   common::SpinRWLock ref_lock_;
@@ -172,6 +173,7 @@ protected:
   int64_t current_stage_cnt_;
   bool lazy_finished_;
   bool lazy_better_;
+  int64_t spm_mode_;
 };
 
 } //namespace sql end

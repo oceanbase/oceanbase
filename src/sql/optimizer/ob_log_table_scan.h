@@ -516,6 +516,7 @@ public:
   virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
   inline common::ObIArray<bool> &get_filter_before_index_flags() { return filter_before_index_back_; }
   inline const common::ObIArray<bool> &get_filter_before_index_flags() const { return filter_before_index_back_; }
+  inline const ObRawExpr *get_limit_expr() const { return limit_count_expr_; }
   inline ObRawExpr *get_limit_expr() { return limit_count_expr_; }
   inline ObRawExpr *get_offset_expr() { return limit_offset_expr_; }
   int set_limit_offset(ObRawExpr *limit, ObRawExpr *offset);
@@ -621,6 +622,7 @@ public:
   share::schema::ObTableType get_table_type() const { return table_type_; }
   virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
+  int print_stats_version(OptTableMeta &table_meta, char *buf, int64_t &buf_len, int64_t &pos);
   int print_est_method(ObBaseTableEstMethod method, char *buf, int64_t &buf_len, int64_t &pos);
   int get_plan_object_info(PlanText &plan_text,
                            ObSqlPlanItem &plan_item);
@@ -681,6 +683,7 @@ public:
   inline bool is_vec_idx_scan() const { return is_index_scan() && vector_index_info_.delta_buffer_tid_ != OB_INVALID_ID; }
   inline ObVectorIndexInfo &get_vector_index_info() { return vector_index_info_; }
   inline const ObVectorIndexInfo &get_vector_index_info() const { return vector_index_info_; }
+  inline bool can_batch_rescan() const { return NULL != access_path_ && access_path_->can_batch_rescan_; }
 
   inline bool das_need_keep_ordering() const { return das_keep_ordering_; }
 

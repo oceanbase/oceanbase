@@ -77,6 +77,7 @@ class ObTablePartitionInfo;
 struct SubPlanInfo;
 class OptSelectivityCtx;
 class Path;
+class AccessPath;
 class ObSharedExprResolver;
 class ObTableMetaInfo;
 class ObOptimizerUtil
@@ -1150,7 +1151,23 @@ public:
                                  ObSQLSessionInfo *session_info,
                                  ObRawExprFactory *expr_factory,
                                  ObSelectStmt *select_stmt);
-
+  static int try_add_cast_to_select_list(ObIAllocator *allocator,
+                                         ObSQLSessionInfo *session_info,
+                                         ObRawExprFactory *expr_factory,
+                                         const int64_t column_cnt,
+                                         const bool is_set_distinct,
+                                         ObIArray<ObRawExpr*> &select_exprs,
+                                         ObIArray<ObExprResType> *res_types);
+  static int add_cast_to_set_select_expr(ObSQLSessionInfo *session_info,
+                                         ObRawExprFactory &expr_factory,
+                                         const ObExprResType &res_type,
+                                         ObRawExpr *&src_expr);
+  static int check_set_child_res_types(const ObExprResType &left_type,
+                                       const ObExprResType &right_type,
+                                       const bool is_ps_prepare_stage,
+                                       const bool is_distinct,
+                                       const bool is_mysql_recursive_union,
+                                       bool &skip_add_cast);
   static int get_set_res_types(ObIAllocator *allocator,
                                ObSQLSessionInfo *session_info,
                                ObIArray<ObSelectStmt*> &child_querys,
@@ -1165,13 +1182,26 @@ public:
                                             ObIArray<ObExprResType> *res_types,
                                             const bool is_mysql_recursive_union = false,
                                             ObIArray<ObString> *rcte_col_name = NULL);
-
+  static int try_add_cast_to_set_child_list(ObIAllocator *allocator,
+                                            ObSQLSessionInfo *session_info,
+                                            ObRawExprFactory *expr_factory,
+                                            const bool is_distinct,
+                                            ObIArray<ObSelectStmt*> &left_stmts,
+                                            ObSelectStmt *right_stmt,
+                                            ObIArray<ObExprResType> *res_types,
+                                            const bool is_mysql_recursive_union = false,
+                                            ObIArray<ObString> *rcte_col_name = NULL);
   static int add_cast_to_set_list(ObSQLSessionInfo *session_info,
                                   ObRawExprFactory *expr_factory,
                                   ObIArray<ObSelectStmt*> &stmts,
                                   const ObExprResType &res_type,
                                   const int64_t idx);
-
+  static int add_cast_to_set_list(ObSQLSessionInfo *session_info,
+                                  ObRawExprFactory *expr_factory,
+                                  ObIArray<ObRawExpr*> &exprs,
+                                  const ObExprResType &res_type,
+                                  const int64_t column_idx,
+                                  const int64_t row_cnt);
   static int add_column_conv_to_set_list(ObSQLSessionInfo *session_info,
                                          ObRawExprFactory *expr_factory,
                                          ObIArray<ObSelectStmt*> &stmts,
@@ -1412,8 +1442,9 @@ public:
   // aggregate partial results
   static int generate_pullup_aggr_expr(ObRawExprFactory &expr_factory,
                                        ObSQLSessionInfo *session_info,
-                                       ObAggFunRawExpr *origin_aggr,
-                                       ObAggFunRawExpr *&replaced_aggr);
+                                       ObItemType aggr_type,
+                                       ObRawExpr *origin_expr,
+                                       ObAggFunRawExpr *&pullup_aggr);
 
   static int check_filter_before_indexback(const ObIArray<ObRawExpr*> &filter_exprs,
                                            const ObIArray<uint64_t> &index_columns,
@@ -1435,13 +1466,9 @@ public:
 
   static int allocate_identify_seq_expr(ObOptimizerContext &opt_ctx, ObRawExpr *&identify_seq_expr);
 
-  static int check_contribute_query_range(ObLogicalOperator *tsc,
-                                          const ObIArray<ObExecParamRawExpr *> &params,
-                                          bool &is_valid);
-
-  static int check_pushdown_range_cond(ObLogicalOperator *root,
-                                       bool &cnt_pd_range_cond);
- 
+  static int check_exec_param_filter_exprs(const ObIArray<ObRawExpr*> &filters,
+                                           const ObIArray<ObExecParamRawExpr *> &exec_params,
+                                           bool &used_in_filter);
   static int check_exec_param_filter_exprs(const ObIArray<ObRawExpr *> &input_filters,
                                            bool &has_exec_param_filters);
 
@@ -1610,6 +1637,25 @@ public:
                                     const ObIArray<TableItem*> &table_items,
                                     const ObRawExpr *expr,
                                     bool &is_filter);
+  static int get_has_global_index_filters(const ObSqlSchemaGuard *schema_guard,
+                                          const uint64_t index_id,
+                                          const ObIArray<ObRawExpr*> &filter_exprs,
+                                          bool &has_index_scan_filter,
+                                          bool &has_index_lookup_filter);
+  static int get_has_global_index_filters(const ObIArray<ObRawExpr*> &filter_exprs,
+                                          const ObIArray<uint64_t> &index_columns,
+                                          bool &has_index_scan_filter,
+                                          bool &has_index_lookup_filter);
+  static int check_can_batch_rescan(const ObLogicalOperator *op,
+                                    const bool allow_normal_scan,
+                                    bool &can_batch_rescan);
+  static int check_can_batch_rescan_compat(const AccessPath &access_path, bool &can_batch_rescan);
+  static int check_can_batch_rescan_compat(ObLogicalOperator *op,
+                                           const ObIArray<ObExecParamRawExpr*> &rescan_params,
+                                           bool for_nlj,
+                                           bool &can_batch_rescan);
+  static int check_aggr_can_pre_aggregate(const ObAggFunRawExpr *aggr,
+                                          bool &can_pre_aggr);
 
   static int compute_nlj_spf_storage_compute_parallel_skew(ObOptimizerContext *opt_ctx,
                                                            uint64_t ref_table_id,

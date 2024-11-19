@@ -1907,6 +1907,9 @@ DEF_BOOL(_xsolapi_generate_with_clause, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_optimizer_group_by_placement, OB_TENANT_PARAMETER, "True",
         "enable group by placement transform rule",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_complex_cbqt_table_num, OB_TENANT_PARAMETER, "10", "[0,)",
+        "cost-based transform will be disabled when table count in a single stmt exceeds threshold",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(_wait_interval_after_parallel_ddl, OB_TENANT_PARAMETER, "30s", "[0s,)",
         "time interval for waiting other servers to refresh schema after parallel ddl is done",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -2001,7 +2004,7 @@ DEF_CAP(auto_split_tablet_size, OB_TENANT_PARAMETER, "128M", "[128M,)",
         "Note that the modification of this config will not affect the created auto-partitioned table."
         "Range: [128M, +∞)",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(_inlist_rewrite_threshold, OB_TENANT_PARAMETER, "2147483647", "[1, 2147483647]"
+DEF_INT(_inlist_rewrite_threshold, OB_TENANT_PARAMETER, "1000", "[1, 2147483647]"
         "specifies transform how much const params in IN list to values table",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 

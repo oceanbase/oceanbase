@@ -23,6 +23,7 @@
 #include "share/stat/ob_index_stats_estimator.h"
 #include "pl/sys_package/ob_dbms_stats.h"
 #include "share/stat/ob_opt_stat_gather_stat.h"
+#include "share/stat/ob_min_max_estimator.h"
 namespace oceanbase {
 using namespace pl;
 namespace common {
@@ -76,6 +77,30 @@ int ObDbmsStatsGather::gather_stats(ObExecContext &ctx,
         }
       }
     } else {/*do nothing*/}
+
+    if (OB_SUCC(ret) &&
+        param.sample_info_.is_specify_sample() && param.need_refine_min_max_) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < opt_stats.count(); ++i) {
+        ObOptStatGatherParam new_param;
+        ObMinMaxEstimator min_max_est(ctx, *param.allocator_);
+        if (OB_ISNULL(opt_stats.at(i).table_stat_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected error", K(ret), K(opt_stats.at(i).table_stat_));
+        } else if (OB_FAIL(THIS_WORKER.check_status())) {
+          LOG_WARN("check status failed", KR(ret));
+        } else if (opt_stats.at(i).table_stat_->get_row_count() <= 0) {
+          //empty table or empty partition, no need gather histogram, just skip.
+        } else if (OB_FAIL(new_param.assign(param))) {
+          LOG_WARN("failed to assign", K(ret));
+        } else if (new_param.stat_level_ != TABLE_LEVEL &&
+                   OB_FAIL(ObDbmsStatsUtils::remove_stat_gather_param_partition_info(opt_stats.at(i).table_stat_->get_partition_id(),
+                                                                                     new_param))) {
+          LOG_WARN("failed to remove stat gather param partition info", K(ret));
+        } else if (OB_FAIL(min_max_est.estimate(new_param, opt_stats.at(i)))) {
+          LOG_WARN("failed to estimate hybrid histogram", K(ret));
+        }
+      }
+    }
   }
   return ret;
 }
@@ -268,16 +293,22 @@ int ObDbmsStatsGather::refine_sample_block_for_async_gather(const ObIArray<ObOpt
                     sstable_row_cnt + memtable_row_cnt > DEFAULT_ASYNC_MAX_SCAN_ROWCOUNT)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected error", K(sstable_row_cnt), K(memtable_row_cnt), K(opt_stats), K(param));
-    } else if (opt_stats.count() == 1) {
-      if (param.async_full_table_size_ < sstable_row_cnt + memtable_row_cnt) {
-        double sample_ratio = 100.0;
-        sample_ratio = 1.0 * param.async_gather_sample_size_ / (sstable_row_cnt + memtable_row_cnt) * 100.0;
-        if (sample_ratio > 0.0 && sample_ratio < 100.0) {
-          param.sample_info_.set_percent(sample_ratio);
-          param.sample_info_.set_is_block_sample(true);
-        }
-        LOG_INFO("decide async gather stats need sample", K(param), K(opt_stats));
+    }
+  }
+
+  if (OB_SUCC(ret) &&
+      (param.is_async_gather_ || param.is_auto_sample_size_) &&
+      !param.sample_info_.is_specify_sample() && opt_stats.count() == 1) {
+    int64_t sstable_row_cnt = opt_stats.at(0).table_stat_->get_sstable_row_count();
+    int64_t memtable_row_cnt = opt_stats.at(0).table_stat_->get_memtable_row_count();
+    if (param.auto_sample_row_cnt_ < sstable_row_cnt + memtable_row_cnt) {
+      double sample_ratio = 100.0;
+      sample_ratio = 1.0 * param.auto_sample_row_cnt_ / (sstable_row_cnt + memtable_row_cnt) * 100.0;
+      if (sample_ratio > 0.0 && sample_ratio < 100.0) {
+        param.sample_info_.set_percent(sample_ratio);
+        param.sample_info_.set_is_block_sample(true);
       }
+      LOG_INFO("decide auto gather stats need sample", K(param), K(opt_stats));
     }
   }
   return ret;

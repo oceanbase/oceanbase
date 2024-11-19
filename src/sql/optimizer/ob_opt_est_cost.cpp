@@ -51,16 +51,12 @@ const int64_t ObOptEstCost::MAX_STORAGE_RANGE_ESTIMATION_NUM = 10;
 
 int ObOptEstCost::cost_nestloop(const ObCostNLJoinInfo &est_cost_info,
                                 double &cost,
-                                double &filter_selectivity,
-                                ObIArray<ObExprSelPair> &all_predicate_sel,
                                 const ObOptimizerContext &opt_ctx)
 {
   int ret = OB_SUCCESS;
   GET_COST_MODEL();
   if (OB_FAIL(model->cost_nestloop(est_cost_info,
-                                  cost,
-                                  filter_selectivity,
-                                  all_predicate_sel))) {
+                                   cost))) {
     LOG_WARN("failed to est cost for nestloop join", K(ret));
   }
   return ret;

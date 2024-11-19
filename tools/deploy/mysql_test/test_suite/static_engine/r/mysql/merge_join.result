@@ -541,7 +541,7 @@ Query Plan
 ===================================================
 |ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------
-|0 |MERGE JOIN         |    |4       |8           |
+|0 |MERGE JOIN         |    |9       |8           |
 |1 |├─SORT             |    |9       |4           |
 |2 |│ └─TABLE FULL SCAN|t2  |9       |3           |
 |3 |└─SORT             |    |10      |4           |
@@ -799,7 +799,7 @@ Query Plan
 ===================================================
 |ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------
-|0 |MERGE JOIN         |    |4       |9           |
+|0 |MERGE JOIN         |    |9       |9           |
 |1 |├─SORT             |    |10      |4           |
 |2 |│ └─TABLE FULL SCAN|t1  |10      |3           |
 |3 |└─SORT             |    |9       |4           |
@@ -1057,7 +1057,7 @@ Query Plan
 ===================================================
 |ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------
-|0 |MERGE JOIN         |    |2       |7           |
+|0 |MERGE JOIN         |    |4       |7           |
 |1 |├─TABLE FULL SCAN  |pk_t|4       |3           |
 |2 |└─SORT             |    |9       |4           |
 |3 |  └─TABLE FULL SCAN|t2  |9       |3           |

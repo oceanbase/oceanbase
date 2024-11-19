@@ -3087,19 +3087,19 @@ int ObLogicalOperator::check_exchange_rescan(bool &need_rescan)
   return ret;
 }
 
-int ObLogicalOperator::check_has_exchange_below(bool &has_exchange) const
+int ObLogicalOperator::check_has_op_below(const log_op_def::ObLogOpType target_type, bool &has) const
 {
   int ret = OB_SUCCESS;
-  has_exchange = false;
-  if (LOG_EXCHANGE == get_type()) {
-    has_exchange = true;
+  has = false;
+  if (target_type == get_type()) {
+    has = true;
   } else {
     ObLogicalOperator *child_op = NULL;
-    for (int64_t i = 0; OB_SUCC(ret) && !has_exchange && i < get_num_of_child(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && !has && i < get_num_of_child(); ++i) {
       if (OB_ISNULL(child_op = get_child(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get_child(i) returns null", K(i), K(ret));
-      } else if (OB_FAIL(SMART_CALL(child_op->check_has_exchange_below(has_exchange)))) {
+      } else if (OB_FAIL(SMART_CALL(child_op->check_has_op_below(target_type, has)))) {
         LOG_WARN("failed to check if child operator has exchange below", KPC(child_op), K(ret));
       } else { /* Do nothing */ }
     }
@@ -5491,6 +5491,10 @@ int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterI
   ObLogOperatorFactory &factory = get_plan()->get_log_op_factory();
   CK(LOG_JOIN == get_type());
   DistAlgo join_dist_algo = static_cast<ObLogJoin*>(this)->get_join_distributed_method();
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null plan", K(ret));
+  }
   for (int i = 0; i < infos.count() && OB_SUCC(ret); ++i) {
     filter_create = NULL;
     bool right_has_exchange = false;
@@ -5543,7 +5547,28 @@ int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterI
       } else {
           join_filter_create->set_is_shared_partition_join_filter();
       }
-      join_filter_create->set_tablet_id_expr(info.calc_part_id_expr_);
+      if (get_plan()->get_optimizer_context().get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_3_5) &&
+         DistAlgo::DIST_PARTITION_NONE == join_dist_algo) {
+        ObLogicalOperator* child = get_child(first_child);
+        if (OB_ISNULL(child)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect null child", K(ret));
+        } else if (OB_ISNULL(child=child->get_child(first_child))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect null child", K(ret));
+        } else if (OB_ISNULL(child=child->get_child(first_child))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect null child", K(ret));
+        } else if (LOG_EXCHANGE != child->get_type()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect child type", K(ret));
+        } else {
+          ObLogExchange *exch_op = static_cast<ObLogExchange*>(child);
+          join_filter_create->set_tablet_id_expr(exch_op->get_calc_part_id_expr());
+        }
+      } else {
+        join_filter_create->set_tablet_id_expr(info.calc_part_id_expr_);
+      }
       OZ(join_filter_create->compute_property());
       OZ(bf_info.init(get_plan()->get_optimizer_context().get_session_info()->get_effective_tenant_id(),
           filter_id, GCTX.get_server_id(),
@@ -5862,6 +5887,33 @@ int ObLogicalOperator::find_nested_dis_rescan(bool &find, bool nested)
   return ret;
 }
 
+int ObLogicalOperator::pre_check_can_px_batch_rescan(bool &find_nested_rescan,
+                                                     bool &find_rescan_px,
+                                                     bool nested) const
+{
+  int ret = OB_SUCCESS;
+  if (find_nested_rescan) {
+  } else if (LOG_EXCHANGE == get_type()) {
+    const ObLogExchange *op = static_cast<const ObLogExchange *>(this);
+    find_nested_rescan |= nested;
+    find_rescan_px |= !nested && op->is_consumer() && !op->is_task_order();
+  } else {
+    nested = LOG_SUBPLAN_FILTER == get_type() ||
+             (LOG_JOIN == get_type() &&
+              JoinAlgo::NESTED_LOOP_JOIN == static_cast<const ObLogJoin*>(this)->get_join_algo());
+    for (int64_t i = 0; !find_nested_rescan && OB_SUCC(ret) && i < get_num_of_child(); i++) {
+      const ObLogicalOperator *child = NULL;
+      if (OB_ISNULL(child = get_child(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(get_child(i)), K(ret));
+      } else if (OB_FAIL(SMART_CALL(child->pre_check_can_px_batch_rescan(find_nested_rescan, find_rescan_px, nested)))) {
+        LOG_WARN("fail to find px for batch rescan", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLogicalOperator::check_subplan_filter_child_exchange_rescanable()
 {
   int ret = OB_SUCCESS;
@@ -5977,22 +6029,6 @@ int ObLogicalOperator::find_shuffle_join_filter(bool &find) const
       } else if (OB_FAIL(SMART_CALL(child->find_shuffle_join_filter(find)))) {
         LOG_WARN("failed to find shuffle join filter", K(ret));
       }
-    }
-  }
-  return ret;
-}
-
-int ObLogicalOperator::has_window_function_below(bool &has_win_func) const
-{
-  int ret = OB_SUCCESS;
-  has_win_func = LOG_WINDOW_FUNCTION == get_type();
-  const ObLogicalOperator *child = NULL;
-  for (int64_t i = 0; !has_win_func && OB_SUCC(ret) && i < get_num_of_child(); i++) {
-    if (OB_ISNULL(child = get_child(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret), K(child));
-    } else if (OB_FAIL(SMART_CALL(child->has_window_function_below(has_win_func)))) {
-      LOG_WARN("failed to check has window function below", K(ret));
     }
   }
   return ret;
@@ -6171,12 +6207,9 @@ int ObLogicalOperator::pick_out_startup_filters()
 {
   int ret = OB_SUCCESS;
   ObLogPlan *plan = get_plan();
-  const ParamStore *params = NULL;
   ObOptimizerContext *opt_ctx = NULL;
   ObArray<ObRawExpr *> filter_exprs;
-  if (OB_ISNULL(plan)
-      || OB_ISNULL(opt_ctx = &plan->get_optimizer_context())
-      || OB_ISNULL(params = opt_ctx->get_params())) {
+  if (OB_ISNULL(plan) || OB_ISNULL(opt_ctx = &plan->get_optimizer_context())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("NULL pointer error", K(plan), K(opt_ctx), K(ret));
   } else if (OB_FAIL(filter_exprs.assign(filter_exprs_))) {

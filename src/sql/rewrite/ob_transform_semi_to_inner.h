@@ -25,11 +25,13 @@ struct ObCostBasedRewriteCtx {
   uint64_t table_id_;
   bool is_multi_join_cond_;
   bool hint_force_;
+  bool is_non_sens_dul_vals_;
   ObSEArray<uint64_t,4> view_table_id_;
   ObCostBasedRewriteCtx()
   :table_id_(OB_INVALID_ID),
   is_multi_join_cond_(false),
-  hint_force_(false)
+  hint_force_(false),
+  is_non_sens_dul_vals_(false)
   {}
 };
 
@@ -50,9 +52,9 @@ protected:
 private:
   enum TransformFlag {TO_INNER = 1, TO_AGGR_INNER = 2, TO_INNER_GBY = 4};
   struct TransformParam {
-    TransformParam() : transform_flag_(0), need_add_distinct_(false), need_add_limit_constraint_(false),
-          right_table_need_add_limit_(false), need_add_gby_(false), cmp_join_cond_(NULL),
-          cmp_right_expr_(NULL), need_spj_view_(false) {}
+    TransformParam() : transform_flag_(0), need_add_distinct_(false),
+          right_table_need_add_limit_(false), need_add_gby_(false),
+          cmp_join_cond_(NULL), cmp_right_expr_(NULL), need_spj_view_(false) {}
 
     void set_transform_flag(TransformFlag flag) { transform_flag_ |= flag; }
 
@@ -62,7 +64,7 @@ private:
 
     bool use_inner_gby() { return (transform_flag_ & TO_INNER_GBY) != 0; }
 
-    TO_STRING_KV(K_(transform_flag), K_(need_add_distinct), K_(need_add_limit_constraint), K_(right_table_need_add_limit), K_(need_add_gby), K_(need_spj_view), K_(cmp_join_cond), K_(cmp_right_expr));
+    TO_STRING_KV(K_(transform_flag), K_(need_add_distinct), K_(right_table_need_add_limit), K_(need_add_gby), K_(need_spj_view), K_(cmp_join_cond), K_(cmp_right_expr));
 
     // record rewrite form, note that rewrite choices are mutually exclusive (select at most one)
     int64_t transform_flag_;
@@ -75,10 +77,6 @@ private:
 
     // for INNER form, mark if a distinct view is needed to eliminate possible duplicates
     bool need_add_distinct_;
-
-    // for INNER form, whether const param constraint need to be added to context
-    // (plan cache only hits for certain const value in LIMIT clause)
-    bool need_add_limit_constraint_;
 
     bool right_table_need_add_limit_;
 
@@ -135,6 +133,9 @@ private:
                                TableItem* right_table,
                                ObIArray<ObRawExpr*>& right_exprs,
                                bool& is_unique);
+
+  int push_right_table_ids(TableItem* right_table,
+                           ObIArray<uint64_t>& view_table_ids);
 
   int check_semi_join_condition(ObDMLStmt& stmt,
                                 SemiInfo& semi_info,
@@ -220,10 +221,13 @@ private:
   int check_is_semi_condition(ObIArray<ObExecParamRawExpr *> &nl_params,
                               ObIArray<uint64_t> & table_ids,
                               bool &is_valid);
-    int check_hint_valid(const ObDMLStmt &stmt, 
-                        const TableItem& table,
-                        bool &force_trans,
-                        bool &force_no_trans) const;
+  int check_hint_valid(const ObDMLStmt &stmt,
+                       const TableItem& table,
+                       bool &force_trans,
+                       bool &force_no_trans) const;
+  int non_sens_dul_vals_need_check_cost(ObDMLStmt &stmt,
+                                        SemiInfo &semi_info,
+                                        bool &need_check_cost);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransformSemiToInner);
 };

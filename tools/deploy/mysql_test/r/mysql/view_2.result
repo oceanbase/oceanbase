@@ -482,7 +482,7 @@ Optimization Info:
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:1
       estimation method:[DYNAMIC SAMPLING FULL]
   t21:
@@ -494,11 +494,13 @@ Optimization Info:
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t21]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:1
       estimation method:[DYNAMIC SAMPLING FULL]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 10
   Note:
       Degree of Parallelisim is 1 because of table property
   Expr Constraints:

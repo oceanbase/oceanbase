@@ -25,6 +25,7 @@ namespace oceanbase
 {
 namespace sql
 {
+class ObSqlPlanSet;
 
 enum PlanBaselineFlag
 {
@@ -273,7 +274,8 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
       evolution_plan_type_(OB_PHY_PLAN_UNINITIALIZED),
       select_plan_type_(INVALID_TYPE),
       baseline_exec_time_(0),
-      flags_(0)
+      flags_(0),
+      spm_mode_(SPM_MODE_DISABLE)
   {
     cache_node_empty_ = true;
   }
@@ -351,6 +353,8 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
       uint64_t reserved_:                      55;
     };
   };
+  int64_t spm_mode_;
+  ObSqlPlanSet *evo_plan_set_;
 };
 
 struct EvolutionTaskResult
@@ -360,10 +364,16 @@ public:
   : key_(),
     accept_new_plan_(false),
     new_plan_hash_(0),
-    new_stat_()
+    new_stat_(),
+    status_(0),
+    start_time_(0),
+    end_time_(0),
+    spm_mode_(SPM_MODE_DISABLE)
   {}
   ~EvolutionTaskResult() {}
-int deep_copy(common::ObIAllocator& allocator, const EvolutionTaskResult& other);
+  int deep_copy(common::ObIAllocator& allocator, const EvolutionTaskResult& other);
+  TO_STRING_KV(K_(key), K_(old_plan_hash_array), K_(old_stat_array), K_(new_plan_hash),
+               K_(new_stat), K_(start_time), K_(end_time), K_(status), K_(spm_mode));
 public:
   ObBaselineKey key_;
   bool accept_new_plan_;
@@ -373,23 +383,10 @@ public:
   // new plan statistics
   uint64_t new_plan_hash_;
   ObEvolutionStat new_stat_;
-};
-
-struct EvoResultUpdateTask
-{
-public:
-  EvoResultUpdateTask()
-  : key_(),
-    plan_hash_(),
-    plan_stat_()
-  {}
-  ~EvoResultUpdateTask() {}
-  int init_task(common::ObIAllocator& allocator, const EvolutionTaskResult& evo_task_result);
-  TO_STRING_KV(K_(key), K_(plan_hash), K_(plan_stat));
-public:
-  ObBaselineKey key_;
-  common::ObSEArray<uint64_t, 4> plan_hash_;
-  common::ObSEArray<ObEvolutionStat, 4> plan_stat_;
+  int64_t status_;
+  int64_t start_time_;
+  int64_t end_time_;
+  int64_t spm_mode_;
 };
 
 } // namespace sql end

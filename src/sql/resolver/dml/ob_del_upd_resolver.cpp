@@ -356,7 +356,9 @@ int ObDelUpdResolver::resolve_column_and_values(const ParseNode &assign_list,
                 LOG_WARN("failed to assign '' to date time", K(ret));
               }
               OZ (c_expr->add_flag(IS_TABLE_ASSIGN));
+              ObObj val = c_expr->get_result_type().get_param();
               OX (c_expr->set_result_type(col_expr->get_result_type()));
+              OX (c_expr->set_param(val));
               if (col_expr->get_result_type().get_obj_meta().is_collection_sql_type()
                   && col_expr->get_enum_set_values().count() > 0) {
                 // array type

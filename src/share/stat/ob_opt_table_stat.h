@@ -241,12 +241,10 @@ public:
 
   bool is_stat_expired() const { return stale_stats_; }
   void set_stale_stats(int64_t stale_stats) { stale_stats_ = stale_stats > 0; }
-
+  void add_sample_size(int64_t rc) { sample_size_ += rc; }
   bool is_locked() const { return stattype_locked_ > 0; }
 
   void add_row_count(int64_t rc) { row_count_ += rc; }
-
-  void add_sample_size(int64_t rc) { sample_size_ += rc; }
 
   // for multi rows
   void add_avg_row_size(double avg_row_size, int64_t rc) {

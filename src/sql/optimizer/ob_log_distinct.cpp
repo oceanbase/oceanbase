@@ -118,7 +118,8 @@ int ObLogDistinct::get_distinct_output_exprs(ObIArray<ObRawExpr *> &output_exprs
   } else if (OB_FAIL(append_array_no_dup(candi_exprs, plan->get_orderby_exprs_for_width_est()))) {
     LOG_WARN("failed to add into output exprs", K(ret));  
   } else if (OB_FAIL(ObRawExprUtils::extract_col_aggr_winfunc_exprs(candi_exprs,
-                                                                    extracted_col_aggr_winfunc_exprs))) {
+                                                                    extracted_col_aggr_winfunc_exprs,
+                                                                    true))) {
   } else if (OB_FAIL(append_array_no_dup(output_exprs, extracted_col_aggr_winfunc_exprs))) {
     LOG_WARN("failed to add into output exprs", K(ret));
   } else {/*do nothing*/}

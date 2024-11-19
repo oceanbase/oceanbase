@@ -364,8 +364,8 @@ int ObMVProvider::generate_mv_stmt(ObIAllocator &alloc,
              OB_UNLIKELY(T_SELECT != node->type_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid mv select node", K(ret), K(node), K(node->type_));
-  } else if (OB_FALSE_IT(resolver_ctx.query_ctx_->question_marks_count_ =
-                             static_cast<int64_t>(parse_result.question_mark_ctx_.count_))) {
+  } else if (OB_FALSE_IT(resolver_ctx.query_ctx_->set_questionmark_count(
+                                   static_cast<int64_t>(parse_result.question_mark_ctx_.count_)))) {
   } else if (OB_FAIL(select_resolver.resolve(*node))) {
     LOG_WARN("resolve view definition failed", K(ret));
   } else if (OB_ISNULL(sel_stmt = static_cast<ObSelectStmt *>(select_resolver.get_basic_stmt()))) {

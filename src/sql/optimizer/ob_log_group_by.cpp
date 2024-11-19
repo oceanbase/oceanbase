@@ -245,12 +245,10 @@ int ObLogGroupBy::est_cost()
   } else if (OB_FAIL(inner_est_cost(get_parallel(),
                                     child_card,
                                     child_ndv,
-                                    distinct_per_dop_,
                                     group_cost))) {
     LOG_WARN("failed to est group by cost", K(ret));
   } else {
-    distinct_card_ = child_ndv;
-    set_card(distinct_card_ * selectivity);
+    set_card(child_ndv * selectivity);
     set_cost(child->get_cost() + group_cost);
     set_op_cost(group_cost);
   }
@@ -310,7 +308,6 @@ int ObLogGroupBy::do_re_est_cost(EstimateCostInfo &param, double &card, double &
     } else if (OB_FAIL(inner_est_cost(parallel,
                                       child_card,
                                       need_ndv,
-                                      distinct_per_dop_,
                                       op_cost))) {
       LOG_WARN("failed to est distinct cost", K(ret));
     } else {
@@ -324,11 +321,11 @@ int ObLogGroupBy::do_re_est_cost(EstimateCostInfo &param, double &card, double &
   return ret;
 }
 
-int ObLogGroupBy::inner_est_cost(const int64_t parallel, double child_card, double &child_ndv, double &per_dop_ndv, double &op_cost)
+int ObLogGroupBy::inner_est_cost(const int64_t parallel, double child_card, double &child_ndv, double &op_cost)
 {
   int ret = OB_SUCCESS;
   double per_dop_card = 0.0;
-  per_dop_ndv = 0.0;
+  double per_dop_ndv = 0.0;
   common::ObSEArray<ObRawExpr *, 8> group_rollup_exprs;
   ObLogicalOperator *child = get_child(ObLogicalOperator::first_child);
   if (OB_ISNULL(get_plan()) ||
@@ -919,7 +916,7 @@ int ObLogGroupBy::compute_sharding_info()
 int ObLogGroupBy::get_card_without_filter(double &card)
 {
   int ret = OB_SUCCESS;
-  card = get_distinct_card();
+  card = get_total_ndv();
   return ret;
 }
 

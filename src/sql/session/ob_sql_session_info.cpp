@@ -638,11 +638,11 @@ int ObSQLSessionInfo::get_spm_mode(int64_t &spm_mode)
 {
   int ret = OB_SUCCESS;
   spm_mode = get_sql_plan_management_mode();
-  if (0 == spm_mode) {
+  if (SPM_MODE_DISABLE == spm_mode) {
     bool sysvar_use_baseline = false;
     get_use_plan_baseline(sysvar_use_baseline);
     if (sysvar_use_baseline) {
-      spm_mode = 1;
+      spm_mode = SPM_MODE_ONLINE_EVOLVE;
     }
   }
   return ret;

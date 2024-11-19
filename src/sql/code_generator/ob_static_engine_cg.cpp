@@ -4797,7 +4797,7 @@ int ObStaticEngineCG::generate_spec(ObLogGroupBy &op, ObMergeGroupBySpec &spec,
     }
     if ((!op.get_group_by_exprs().empty() || !op.get_rollup_exprs().empty())
       && SCALAR_AGGREGATE != op.get_algo()) {
-      double distinct_card = MAX(1.0, op.get_distinct_card());
+      double distinct_card = MAX(1.0, op.get_total_ndv());
       spec.est_rows_per_group_ = ceil(op.get_origin_child_card() / distinct_card);
     }
     spec.set_rollup(op.has_rollup());
@@ -5066,7 +5066,7 @@ int ObStaticEngineCG::generate_spec(ObLogGroupBy &op, ObHashGroupBySpec &spec,
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("wrong number of children", K(ret), K(op.get_num_of_child()));
   } else {
-    spec.set_est_group_cnt(op.get_distinct_card());
+    spec.set_est_group_cnt(op.get_total_ndv());
     OZ(set_3stage_info(op, spec));
     spec.by_pass_enabled_ = op.is_adaptive_aggregate();
     int64_t tenant_id = op.get_plan()->get_optimizer_context().get_session_info()->get_effective_tenant_id();

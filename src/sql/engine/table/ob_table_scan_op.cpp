@@ -1333,11 +1333,6 @@ int ObTableScanOp::build_bnlj_params()
         OZ(tsc_rtdef_.bnlj_params_.push_back(GroupRescanParamInfo(param_idx, group_param.gr_param_)));
       }
     }
-    if (OB_SUCC(ret) && tsc_rtdef_.bnlj_params_.empty()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("batch param is empty in batch rescan", K(ret),
-               K(MY_CTDEF.bnlj_param_idxs_), KPC(group_params_above));
-    }
     if (OB_SUCC(ret) && (OB_ISNULL(fold_iter_))) {
       if (OB_FAIL(ObDASIterUtils::create_group_fold_iter(MY_CTDEF,
                                                           tsc_rtdef_,

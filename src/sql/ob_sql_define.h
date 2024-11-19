@@ -762,6 +762,10 @@ static int16_t get_type_fixed_length(ObObjType type) {
   return len;
 }
 
+#define SPM_MODE_DISABLE 0
+#define SPM_MODE_ONLINE_EVOLVE 1
+#define SPM_MODE_BASELINE_FIRST 2
+
 }  // namespace sql
 }  // namespace oceanbase
 #endif /* OCEANBASE_SQL_OB_SQL_DEFINE_H_ */

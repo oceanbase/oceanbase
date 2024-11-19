@@ -456,9 +456,11 @@ public:
   static int extract_col_aggr_exprs(ObRawExpr* expr,
                                     ObIArray<ObRawExpr*> &column_or_aggr_exprs);
   static int extract_col_aggr_winfunc_exprs(ObIArray<ObRawExpr*> &exprs,
-                                            ObIArray<ObRawExpr*> &column_aggr_winfunc_exprs);
+                                            ObIArray<ObRawExpr*> &column_aggr_winfunc_exprs,
+                                            const bool extract_set_op = false);
   static int extract_col_aggr_winfunc_exprs(ObRawExpr* expr,
-                                            ObIArray<ObRawExpr*> &column_aggr_winfunc_exprs);
+                                            ObIArray<ObRawExpr*> &column_aggr_winfunc_exprs,
+                                            const bool extract_set_op = false);
 
   static int extract_metadata_filename_expr(ObRawExpr *expr, ObRawExpr *&file_name_expr);
   static int find_alias_expr(ObRawExpr *expr, ObAliasRefRawExpr *&alias_expr);
@@ -1205,7 +1207,7 @@ public:
                                         ObDMLStmt *stmt
                                         );
 
-  static int extract_params(common::ObIArray<ObRawExpr*> &exprs,
+  static int extract_params(const common::ObIArray<ObRawExpr*> &exprs,
                             common::ObIArray<ObRawExpr*> &params);
   static int is_contain_params(const common::ObIArray<ObRawExpr*> &exprs, bool &is_contain);
   static int is_contain_params(const ObRawExpr *expr, bool &is_contain);

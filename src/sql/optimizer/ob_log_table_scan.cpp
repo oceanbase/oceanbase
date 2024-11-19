@@ -136,6 +136,7 @@ int ObLogTableScan::do_re_est_cost(EstimateCostInfo &param, double &card, double
                                             limit_percent, limit_count, offset_count))) {
     LOG_WARN("failed to get limit offset value", K(ret));
   } else {
+    est_cost_info_->rescan_left_server_list_ = param.rescan_left_server_list_;
     card = get_output_row_count();
     int64_t part_count = est_cost_info_->index_meta_info_.index_part_count_;
     double limit_count_double = static_cast<double>(limit_count);
@@ -169,10 +170,12 @@ int ObLogTableScan::do_re_est_cost(EstimateCostInfo &param, double &card, double
                                             *est_cost_info_,
                                             sample_info_,
                                             get_plan()->get_optimizer_context(),
+                                            access_path_->can_batch_rescan_,
                                             card,
                                             op_cost))) {
       LOG_WARN("failed to re estimate cost", K(ret));
     } else {
+      est_cost_info_->rescan_left_server_list_ = NULL;
       cost = op_cost;
       if (0 <= limit_count && param.need_row_count_ == -1) {
         // full scan with table filters
@@ -1595,21 +1598,11 @@ int ObLogTableScan::get_plan_item_info(PlanText &plan_text,
       LOG_WARN("unexpected null param", K(ret));
     } else if (OB_FAIL(explain_index_selection_info(buf, buf_len, pos))) {
       LOG_WARN("failed to explain index selection info", K(ret));
-    } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
-      LOG_WARN("BUF_PRINTF fails", K(ret));
-    } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
-      LOG_WARN("BUF_PRINTF fails", K(ret));
     } else if (OB_ISNULL(table_meta =
       plan->get_basic_table_metas().get_table_meta_by_table_id(table_id_))) {
       //do nothing
-    } else if (OB_FAIL(BUF_PRINTF("stats info:[version=%ld", table_meta->get_version()))) {
-      LOG_WARN("BUF_PRINTF fails", K(ret));
-    } else if (OB_FAIL(BUF_PRINTF(", is_locked=%d", table_meta->is_stat_locked()))) {
-      LOG_WARN("BUF_PRINTF fails", K(ret));
-    } else if (OB_FAIL(BUF_PRINTF(", is_expired=%d", table_meta->is_opt_stat_expired()))) {
-      LOG_WARN("BUF_PRINTF fails", K(ret));
-    } else if (OB_FAIL(BUF_PRINTF("]"))) {
-      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (OB_FAIL(print_stats_version(*table_meta, buf, buf_len, pos))) {
+      LOG_WARN("failed to print stats version", K(ret));
     } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
     } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
@@ -1729,6 +1722,43 @@ int ObLogTableScan::get_plan_item_info(PlanText &plan_text,
                   plan_item.special_predicates_len_);
   }
 
+  return ret;
+}
+
+int ObLogTableScan::print_stats_version(OptTableMeta &table_meta, char *buf, int64_t &buf_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  ObLogPlan *plan = NULL;
+  ObSQLSessionInfo *session_info = NULL;
+  const ObTimeZoneInfo *cur_tz_info = NULL;
+  if (OB_ISNULL(plan = get_plan()) ||
+      OB_ISNULL(session_info = plan->get_optimizer_context().get_session_info()) ||
+      OB_ISNULL(cur_tz_info = session_info->get_tz_info_wrap().get_time_zone_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null param", K(ret));
+  } else {
+    char date[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
+    int64_t date_len = 0;
+    const ObDataTypeCastParams dtc_params(cur_tz_info);
+    ObOTimestampData in_val;
+    in_val.time_us_ = table_meta.get_version();
+    if (OB_FAIL(ObTimeConverter::otimestamp_to_str(in_val, dtc_params, 6, ObTimestampLTZType, date,
+                                                   sizeof(date), date_len))) {
+      LOG_WARN("failed to convert otimestamp to string", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF("stats info:[version=%.*s", int32_t(date_len), date))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF(", is_locked=%d", table_meta.is_stat_locked()))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF(", is_expired=%d", table_meta.is_opt_stat_expired()))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF("]"))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    }
+  }
   return ret;
 }
 

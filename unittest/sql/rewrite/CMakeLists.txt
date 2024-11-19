@@ -4,5 +4,6 @@ function(rewrite_unittest case)
 endfunction()
 
 rewrite_unittest(test_query_range)
+rewrite_unittest(test_raw_expr_equal)
 # Fix me: disable for now
 #rewrite_unittest(test_transformer)

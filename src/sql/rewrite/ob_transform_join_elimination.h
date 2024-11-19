@@ -262,15 +262,11 @@ private:
   int eliminate_outer_join_in_joined_table(ObDMLStmt *stmt,
                                            TableItem *&table_item,
                                            const bool is_non_sens_dul_vals,
+                                           const bool is_root_table,
                                            ObIArray<uint64_t> &removed_ids,
                                            ObIArray<ObRawExprPointer> &relation_exprs,
                                            bool &trans_happen,
                                            ObIArray<ObSEArray<TableItem *, 4>> &trans_tables);
-
-  int check_vaild_non_sens_dul_vals(ObIArray<ObParentDMLStmt> &parent_stmts,
-                                    ObDMLStmt *stmt,
-                                    bool &is_valid,
-                                    bool &need_add_limit_constraint);
 
   int get_eliminable_tables(const ObDMLStmt *stmt,
                             const ObIArray<ObRawExpr *> &conds,

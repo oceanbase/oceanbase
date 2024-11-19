@@ -216,8 +216,9 @@ struct ObCostTableScanInfo
      index_meta_info_(ref_table_id, index_id),
      is_virtual_table_(is_virtual_table(ref_table_id)),
      is_unique_(false),
-     is_inner_path_(false),
-     can_use_batch_nlj_(false),
+     is_das_scan_(false),
+     is_rescan_(false),
+     is_batch_rescan_(false),
      ranges_(),
      ss_ranges_(),
      range_columns_(),
@@ -244,6 +245,8 @@ struct ObCostTableScanInfo
      use_column_store_(false),
      at_most_one_range_(false),
      index_back_with_column_store_(false),
+     rescan_left_server_list_(NULL),
+     rescan_server_list_(NULL),
      limit_rows_(-1.0)
   { }
   virtual ~ObCostTableScanInfo()
@@ -257,7 +260,7 @@ struct ObCostTableScanInfo
                K_(table_meta_info), K_(index_meta_info),
                K_(access_column_items),
                K_(is_virtual_table), K_(is_unique),
-               K_(is_inner_path), K_(can_use_batch_nlj), K_(est_method),
+               K_(is_das_scan), K_(is_rescan), K_(is_batch_rescan), K_(est_method),
                K_(prefix_filter_sel), K_(pushdown_prefix_filter_sel),
                K_(postfix_filter_sel), K_(table_filter_sel),
                K_(ss_prefix_ndv), K_(ss_postfix_range_filters_sel),
@@ -274,8 +277,9 @@ struct ObCostTableScanInfo
   ObIndexMetaInfo index_meta_info_; // index related meta info
   bool is_virtual_table_; // is virtual table
   bool is_unique_;  // whether query range is unique
-  bool is_inner_path_;
-  bool can_use_batch_nlj_;
+  bool is_das_scan_;
+  bool is_rescan_;
+  bool is_batch_rescan_;
   ObRangesArray ranges_;  // all the ranges
   ObRangesArray ss_ranges_;  // skip scan ranges
   common::ObSEArray<ColumnItem, 4, common::ModulePageAllocator, true> range_columns_; // all the range columns
@@ -313,6 +317,8 @@ struct ObCostTableScanInfo
   bool index_back_with_column_store_;
   common::ObSEArray<ObCostColumnGroupInfo, 4, common::ModulePageAllocator, true> index_scan_column_group_infos_;
   common::ObSEArray<ObCostColumnGroupInfo, 4, common::ModulePageAllocator, true> index_back_column_group_infos_;
+  const common::ObIArray<common::ObAddr> *rescan_left_server_list_;
+  const common::ObIArray<common::ObAddr> *rescan_server_list_;
 
   double limit_rows_;
 private:
@@ -360,7 +366,7 @@ struct ObCostNLJoinInfo : public ObCostBaseJoinInfo
   ObCostNLJoinInfo(double left_rows, double left_cost, double left_width,
                    double right_rows, double right_cost, double right_width,
                    ObRelIds left_ids, ObRelIds right_ids, ObJoinType join_type,
-                   double anti_or_semi_match_sel,
+                   double other_cond_sel,
                    bool with_nl_param,
                    bool need_mat,
                    bool right_has_px_rescan,
@@ -379,7 +385,7 @@ struct ObCostNLJoinInfo : public ObCostBaseJoinInfo
                         sel_ctx),
       left_cost_(left_cost),
       right_cost_(right_cost),
-      anti_or_semi_match_sel_(anti_or_semi_match_sel),
+      other_cond_sel_(other_cond_sel),
       parallel_(parallel),
       with_nl_param_(with_nl_param),
       need_mat_(need_mat),
@@ -393,7 +399,7 @@ struct ObCostNLJoinInfo : public ObCostBaseJoinInfo
                K_(equal_join_conditions), K_(other_join_conditions), K_(filters));
   double left_cost_;
   double right_cost_;
-  double anti_or_semi_match_sel_;
+  double other_cond_sel_;
   int64_t parallel_;
   bool with_nl_param_;
   bool need_mat_;
@@ -669,9 +675,7 @@ public:
   virtual ~ObOptEstCostModel()=default;
 
   int cost_nestloop(const ObCostNLJoinInfo &est_cost_info,
-										double &cost,
-                    double &filter_selectivity,
-										common::ObIArray<ObExprSelPair> &all_predicate_sel);
+										double &cost);
 
   int cost_mergejoin(const ObCostMergeJoinInfo &est_cost_info,
                     double &cost);
@@ -879,7 +883,6 @@ protected:
                       double limit_count,
                       double &prefix_filter_sel,
                       double &cost);
-
   int cost_column_store_index_scan(const ObCostTableScanInfo &est_cost_info,
                                     double row_count,
                                     double &prefix_filter_sel,
@@ -898,6 +901,12 @@ protected:
                                 double row_count,
                                 double limit_count,
                                 double &cost);
+  int calc_das_rpc_cost(const ObCostTableScanInfo &est_cost_info,
+                        double &das_rpc_cost);
+  int get_rescan_rpc_cnt(const ObIArray<common::ObAddr> *left_server_list,
+                         const ObIArray<common::ObAddr> *right_server_list,
+                         double &remote_rpc_cnt,
+                         double &local_rpc_cnt);
   // estimate the network transform and rpc cost for global index
   int cost_global_index_back_with_rp(double row_count,
                                     const ObCostTableScanInfo &est_cost_info,

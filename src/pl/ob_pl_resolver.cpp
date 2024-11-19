@@ -2430,8 +2430,7 @@ int ObPLResolver::get_view_select_stmt(
   OX (resolver_ctx.expr_factory_ = &expr_factory);
   OX (resolver_ctx.stmt_factory_ = &stmt_factory);
   CK (OB_NOT_NULL(resolver_ctx.query_ctx_ = stmt_factory.get_query_ctx()));
-  OX (resolver_ctx.query_ctx_->question_marks_count_
-        = static_cast<int64_t>(parse_result.question_mark_ctx_.count_));
+  OX (resolver_ctx.query_ctx_->set_questionmark_count(static_cast<int64_t>(parse_result.question_mark_ctx_.count_)));
 
   CK (OB_NOT_NULL(select_stmt_node = parse_result.result_tree_->children_[0]));
   CK (T_SELECT == select_stmt_node->type_);
@@ -2521,8 +2520,7 @@ int ObPLResolver::fill_record_type(
     OX (resolver_ctx.sql_proxy_ = &(ctx.sql_proxy_));        \
     CK (OB_NOT_NULL(resolver_ctx.query_ctx_ = stmt_factory.get_query_ctx()));    \
     OX (resolver_ctx.query_ctx_->sql_schema_guard_.set_schema_guard(&ctx.schema_guard_)); \
-    OX (resolver_ctx.query_ctx_->question_marks_count_                           \
-          = static_cast<int64_t>(parse_result.question_mark_ctx_.count_));       \
+    OX (resolver_ctx.query_ctx_->set_questionmark_count(static_cast<int64_t>(parse_result.question_mark_ctx_.count_))); \
     OZ (resolver_ctx.schema_checker_->init(resolver_ctx.query_ctx_->sql_schema_guard_,    \
                                            ctx.session_info_.get_sessid()));              \
     CK (OB_NOT_NULL(select_stmt_node = parse_result.result_tree_->children_[0]));\

@@ -181,6 +181,7 @@ struct ObOptParamHint
     DEF(NLJ_BATCHING_ENABLED,)                      \
     DEF(RUNTIME_FILTER_TYPE,)                       \
     DEF(BLOOM_FILTER_RATIO,)                        \
+    DEF(OPTIMIZER_COST_BASED_TRANSFORMATION,)       \
     DEF(CORRELATION_FOR_CARDINALITY_ESTIMATION,)    \
     DEF(CARDINALITY_ESTIMATION_MODEL,)              \
     DEF(_PUSH_JOIN_PREDICATE,)                      \
@@ -278,7 +279,8 @@ struct ObGlobalHint {
 #define COMPAT_VERSION_4_3_2      (oceanbase::common::cal_version(4, 3, 2, 0))
 #define COMPAT_VERSION_4_3_3      (oceanbase::common::cal_version(4, 3, 3, 0))
 #define COMPAT_VERSION_4_3_4      (oceanbase::common::cal_version(4, 3, 4, 0))
-#define LASTED_COMPAT_VERSION     COMPAT_VERSION_4_3_4
+#define COMPAT_VERSION_4_3_5      (oceanbase::common::cal_version(4, 3, 5, 0))
+#define LASTED_COMPAT_VERSION     COMPAT_VERSION_4_3_5
   static bool is_valid_opt_features_version(uint64_t version)
   { return COMPAT_VERSION_4_0 <= version && LASTED_COMPAT_VERSION >= version; }
 

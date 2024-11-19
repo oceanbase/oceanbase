@@ -208,8 +208,8 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
 
   int ret = OB_SUCCESS;
   const ParseNode *real_parse_tree = NULL;
+  int64_t questionmark_count = 0;
   UNUSED(if_prepared);
-
   if (OB_ISNULL(params_.allocator_)
       || OB_ISNULL(params_.schema_checker_)
       || OB_ISNULL(params_.session_info_)
@@ -229,7 +229,8 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
                               *(params_.expr_factory_),
                               NULL,
                               params_.is_prepare_protocol_);
-    OZ (resolver.resolve_condition_compile(&parse_tree, real_parse_tree, params_.query_ctx_->question_marks_count_));
+    OZ (resolver.resolve_condition_compile(&parse_tree, real_parse_tree, questionmark_count));
+    OX (params_.query_ctx_->set_questionmark_count(questionmark_count));
   } else {
     real_parse_tree = &parse_tree;
   }

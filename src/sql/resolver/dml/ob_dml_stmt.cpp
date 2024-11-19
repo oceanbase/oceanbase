@@ -1974,6 +1974,140 @@ int ObDMLStmt::formalize_child_stmt_expr_reference(ObRawExprFactory *expr_factor
   return ret;
 }
 
+
+/**
+ * @brief ObDMLStmt::formalize_implicit_distinct
+ *
+ * 1. Check current stmt is legal for implicit distinct (only for ObSelectStmt)
+ * 2. Set implicit distinct for subquery
+ */
+int ObDMLStmt::formalize_implicit_distinct()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(formalize_implicit_distinct_for_subquery())) {
+    LOG_WARN("failed to set implicit distinct for subquery", K(ret));
+  }
+  return ret;
+}
+
+/**
+ * @brief ObDMLStmt::formalize_implicit_distinct_for_subquery
+ *
+ * Set implicit distinct for subquery
+ * 1. If stmt is FROM dup insensitive, set implicit distinct for FROM subquery
+ * 2. Set implicit distinct for semi right subquery
+ * 3. Set implicit distinct for exists, any, all subquery
+ * 4. Recursive set implicit distinct for subquery
+ */
+int ObDMLStmt::formalize_implicit_distinct_for_subquery() {
+  int ret = OB_SUCCESS;
+  bool is_from_dul_insene = false;
+  ObSEArray<ObSelectStmt*, 4> all_child_stmts;
+  ObSEArray<ObSelectStmt*, 4> from_table_stmts;
+  ObSEArray<ObSelectStmt*, 4> semi_right_stmts;
+  ObSEArray<ObSelectStmt*, 4> exists_anyall_stmts;
+  if (OB_FAIL(get_child_stmts(all_child_stmts))) {
+    LOG_WARN("failed to get child stmts", K(ret));
+  } else if (OB_FAIL(get_from_subquery_stmts(from_table_stmts, false))) {
+    LOG_WARN("get from subquery stmts failed", K(ret));
+  } else if (OB_FAIL(get_semi_right_subquery_stmts(semi_right_stmts, false))) {
+    LOG_WARN("failed to get semi right subquery stmts", K(ret));
+  } else if (OB_FAIL(get_exists_any_all_subquery(exists_anyall_stmts))) {
+    LOG_WARN("failed to get exists any all subquery stmts", K(ret));
+  } else if (is_set_stmt()) {
+    const ObSelectStmt* select_stmt = static_cast<const ObSelectStmt*>(this);
+    is_from_dul_insene = select_stmt->is_set_distinct()
+                         || select_stmt->is_implicit_distinct();
+  } else if (OB_FAIL(check_from_dup_insensitive(is_from_dul_insene))) {
+    LOG_WARN("failed to check from dup insens", K(ret));
+  }
+
+  // reset implicit distinct for subquery
+  for (int64_t i = 0; OB_SUCC(ret) && i < all_child_stmts.count(); ++i) {
+    ObSelectStmt *child_stmt = all_child_stmts.at(i);
+    if (OB_ISNULL(child_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("child_stmt is null", K(ret));
+    } else {
+      child_stmt->reset_implicit_distinct();
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (is_from_dul_insene
+             && OB_FAIL(add_implicit_distinct_for_child_stmts(from_table_stmts))) {
+    LOG_WARN("failed to add implicit distinct for FROM child stmts", K(ret));
+  } else if (OB_FAIL(add_implicit_distinct_for_child_stmts(semi_right_stmts))) {
+    LOG_WARN("failed to add implicit distinct for semi right child stmts", K(ret));
+  } else if (OB_FAIL(add_implicit_distinct_for_child_stmts(exists_anyall_stmts))) {
+    LOG_WARN("failed to add implicit distinct for EXISTS, ANY/ALL child stmts", K(ret));
+  }
+
+  // recursive set implicit distinct for subquery
+  for (int64_t i = 0; OB_SUCC(ret) && i < all_child_stmts.count(); ++i) {
+    ObSelectStmt *child_stmt = all_child_stmts.at(i);
+    if (OB_ISNULL(child_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("child_stmt is null", K(ret));
+    } else if (OB_FAIL(SMART_CALL(child_stmt->formalize_implicit_distinct_for_subquery()))) {
+      LOG_WARN("failed to set implicit distinct for subquery", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDMLStmt::add_implicit_distinct_for_child_stmts(ObIArray<ObSelectStmt*> &child_stmts)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
+    ObSelectStmt *child_stmt = child_stmts.at(i);
+    if (OB_ISNULL(child_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("child_stmt is null", K(ret));
+    } else if (child_stmt->is_implicit_distinct_allowed()) {
+      child_stmt->set_implicit_distinct(true);
+    }
+  }
+  return ret;
+}
+
+/**
+ * @brief ObDMLStmt::get_exists_any_all_subquery
+ *
+ * Get all subquery stmt which is in exists or any/all ObQueryRefRawExpr
+ */
+int ObDMLStmt::get_exists_any_all_subquery(ObIArray<ObSelectStmt*> &subquerys)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < get_subquery_exprs().count(); ++i) {
+    ObQueryRefRawExpr *expr = get_subquery_exprs().at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("subquery expr is null", K(ret));
+    } else if (!expr->is_set()) {
+      // do nothing, it is not a exists, any/all query
+    } else if (OB_FAIL(subquerys.push_back(expr->get_ref_stmt()))) {
+      LOG_WARN("failed push back subquery", K(ret));
+    }
+  }
+  return ret;
+}
+
+/**
+ * @brief ObDMLStmt::check_from_dup_insensitive
+ *
+ * Stmt contains duplicate-insensitive aggregation or DISTINCT, making it
+ * insensitive to duplicate values ​​in From Scope.
+ */
+int ObDMLStmt::check_from_dup_insensitive(bool &is_from_dup_insens) const
+{
+  int ret = OB_SUCCESS;
+  // only check FROM scope duplicate-insensitive for ObSelectStmt
+  is_from_dup_insens = false;
+  return ret;
+}
+
 int ObDMLStmt::get_table_pseudo_column_like_exprs(uint64_t table_id,
                                                   ObIArray<ObRawExpr *> &pseudo_columns)
 {
@@ -2303,7 +2437,8 @@ int ObDMLStmt::clear_sharable_expr_reference()
   return ret;
 }
 
-int ObDMLStmt::get_from_subquery_stmts(ObIArray<ObSelectStmt*> &child_stmts) const
+int ObDMLStmt::get_from_subquery_stmts(ObIArray<ObSelectStmt*> &child_stmts,
+                                       bool contain_lateral_table/* =true */) const
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < get_table_size(); ++i) {
@@ -2312,9 +2447,32 @@ int ObDMLStmt::get_from_subquery_stmts(ObIArray<ObSelectStmt*> &child_stmts) con
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table_item is null", K(i));
     } else if (table_item->is_generated_table() ||
-               table_item->is_lateral_table()) {// to remove temp table
+               (contain_lateral_table && table_item->is_lateral_table())) {// to remove temp table
       if (OB_FAIL(child_stmts.push_back(table_item->ref_query_))) {
-        LOG_WARN("adjust parent namespace stmt failed", K(ret));
+        LOG_WARN("failed to push back child stmt", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDMLStmt::get_semi_right_subquery_stmts(ObIArray<ObSelectStmt*> &child_stmts,
+                                             bool contain_lateral_table/* =true */) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < get_semi_info_size(); ++i) {
+    const SemiInfo *semi_info = get_semi_infos().at(i);
+    const TableItem *table_item = NULL;
+    if (OB_ISNULL(semi_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("semi info is null", K(ret), K(i));
+    } else if (OB_ISNULL(table_item = get_table_item_by_id(semi_info->right_table_id_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table item is null", K(ret), KPC(semi_info));
+    } else if (table_item->is_generated_table() ||
+               (contain_lateral_table && table_item->is_lateral_table())) {
+      if (OB_FAIL(child_stmts.push_back(table_item->ref_query_))) {
+        LOG_WARN("failed to push back child stmt", K(ret));
       }
     }
   }
@@ -3736,6 +3894,32 @@ int ObDMLStmt::get_relation_exprs_for_enum_set_wrapper(ObIArray<ObRawExpr*> &rel
     LOG_WARN("init expr checker failed", K(ret));
   } else if (OB_FAIL(iterate_stmt_expr(visitor))) {
     LOG_WARN("get relation exprs failed", K(ret));
+  }
+  return ret;
+}
+
+int ObDMLStmt::check_relation_exprs_deterministic(bool &is_deterministic) const
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> rel_exprs;
+  is_deterministic = true;
+  if (is_contains_assignment()
+      || has_sequence()) {
+    is_deterministic = false;
+  } else if (OB_FAIL(get_relation_exprs(rel_exprs))) {
+    LOG_WARN("failed to get relation exprs", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && is_deterministic && i < rel_exprs.count(); ++i) {
+    const ObRawExpr *expr = rel_exprs.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("rel expr is null", K(ret));
+    } else if (!expr->is_deterministic()
+               || expr->has_flag(CNT_RAND_FUNC)
+               || expr->has_flag(CNT_STATE_FUNC)) {
+      is_deterministic = false;
+      break;
+    }
   }
   return ret;
 }
@@ -5167,6 +5351,16 @@ bool ObDMLStmt::is_values_table_query() const
          table_items_.at(0)->is_values_table();
 }
 
+bool ObDMLStmt::is_const_values_table_query() const
+{
+  return is_select_stmt() &&
+         table_items_.count() == 1 &&
+         table_items_.at(0) != NULL &&
+         table_items_.at(0)->is_values_table() &&
+         table_items_.at(0)->values_table_def_ != NULL &&
+         table_items_.at(0)->values_table_def_->is_const_;
+}
+
 int ObDMLStmt::do_formalize_lateral_derived_table_pre()
 {
   int ret = OB_SUCCESS;
@@ -5452,6 +5646,7 @@ int ObValuesTableDef::deep_copy(const ObValuesTableDef &other,
     end_param_idx_ = other.end_param_idx_;
     column_cnt_ = other.column_cnt_;
     row_cnt_ = other.row_cnt_;
+    is_const_ = other.is_const_;
     for (int64_t i = 0; OB_SUCC(ret) && i < other.access_objs_.count(); ++i) {
       const ObObjParam &obj = other.access_objs_.at(i);
       ObObjParam tmp_obj = obj;

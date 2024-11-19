@@ -365,6 +365,11 @@ public:
 //    }
     return seed;
   }
+  int hash(uint64_t &hash_val, uint64_t seed) const
+  {
+    hash_val = hash(seed);
+    return OB_SUCCESS;
+  }
   // others.
   INHERIT_TO_STRING_KV(N_META,
                        ObObjMeta,

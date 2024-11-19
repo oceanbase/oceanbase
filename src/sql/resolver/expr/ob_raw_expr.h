@@ -71,6 +71,7 @@ class ObRTDatumArith;
 class ObLogicalOperator;
 class ObInListInfo;
 extern ObRawExpr *USELESS_POINTER;
+struct ObExprEqualCheckContext;
 
 // If is_stack_overflow is true, the printing will not continue
 #ifndef DEFINE_VIRTUAL_TO_STRING_CHECK_STACK_OVERFLOW
@@ -1498,9 +1499,6 @@ struct ObExprEqualCheckContext
   virtual bool compare_query(const ObQueryRefRawExpr &left,
                              const ObQueryRefRawExpr &right);
 
-  virtual bool compare_query(const ObPlQueryRefRawExpr &left,
-                             const ObPlQueryRefRawExpr &right);
-
   virtual bool compare_set_op_expr(const ObSetOpRawExpr& left,
                                    const ObSetOpRawExpr& right);
 
@@ -1763,7 +1761,8 @@ public:
        partition_id_calc_type_(CALC_INVALID),
        local_session_var_(),
        local_session_var_id_(OB_INVALID_INDEX_INT64),
-       attr_exprs_()
+       attr_exprs_(),
+       expr_hash_(0)
   {
   }
 
@@ -1788,7 +1787,8 @@ public:
        with_null_equal_cond_(false),
        local_session_var_(&alloc),
        local_session_var_id_(OB_INVALID_INDEX_INT64),
-       attr_exprs_()
+       attr_exprs_(),
+       expr_hash_(0)
   {
   }
   virtual ~ObRawExpr();
@@ -1810,7 +1810,10 @@ public:
                ObExprEqualCheckContext *check_context = NULL) const;
 
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const = 0;
+                             ObExprEqualCheckContext *check_context) const = 0;
+  int calc_hash();
+  int is_hash_different(const ObRawExpr &expr, ObExprEqualCheckContext *check_context) const;
+  virtual void inner_calc_hash() = 0;
 
   inline bool is_generalized_column() const
   {
@@ -1973,9 +1976,11 @@ public:
   void set_rt_expr(sql::ObExpr *expr) { rt_expr_ = expr; }
   void reset_rt_expr() { rt_expr_ = NULL; }
   void set_extra(uint64_t extra) { extra_ = extra; }
+  void set_expr_hash(uint64_t expr_hash) { expr_hash_ = expr_hash; }
   void set_is_called_in_sql(bool is_called_in_sql) { is_called_in_sql_ = is_called_in_sql; }
   void set_is_calculated(bool is_calculated) { is_calculated_ = is_calculated; }
   uint64_t get_extra() const { return extra_; }
+  uint64_t get_expr_hash() const { return expr_hash_; }
   bool is_called_in_sql() const { return is_called_in_sql_; }
   bool is_calculated() const { return is_calculated_; }
   bool is_deterministic() const { return is_deterministic_; }
@@ -2035,7 +2040,8 @@ public:
                        K_(is_calculated),
                        K_(is_deterministic),
                        K_(partition_id_calc_type),
-                       K_(may_add_interval_part));
+                       K_(may_add_interval_part),
+                       K_(expr_hash));
   virtual int set_local_session_vars(const ObLocalSessionVar *local_sys_vars,
                                      const ObBasicSessionInfo *session,
                                      int64_t ctx_array_idx)
@@ -2104,6 +2110,7 @@ protected:
   ObLocalSessionVar local_session_var_;
   int64_t local_session_var_id_;
   common::ObSEArray<ObRawExpr *, COMMON_MULTI_NUM, common::ModulePageAllocator, true> attr_exprs_;
+  uint64_t expr_hash_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRawExpr);
 };
@@ -2309,7 +2316,8 @@ public:
   bool is_date_unit() {return true == is_date_unit_; }
   virtual void reset();
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const override;
+                             ObExprEqualCheckContext *check_context) const override;
+  virtual void inner_calc_hash() override;
 
   virtual int do_visit(ObRawExprVisitor &visitor) override;
 
@@ -2378,7 +2386,8 @@ public:
   virtual int replace_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
                            const common::ObIArray<ObRawExpr *> &new_exprs) override;
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const override;
+                             ObExprEqualCheckContext *check_context) const override;
+  virtual void inner_calc_hash() override;
 
   virtual int do_visit(ObRawExprVisitor &visitor) override;
 
@@ -2406,7 +2415,8 @@ public:
                            const common::ObIArray<ObRawExpr *> &new_exprs) override;
   virtual void reset();
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const override;
+                             ObExprEqualCheckContext *check_context) const override;
+  virtual void inner_calc_hash() override;
 
   virtual int do_visit(ObRawExprVisitor &visitor) override;
 
@@ -2433,7 +2443,10 @@ class ObExecParamRawExpr : public ObConstRawExpr
 public:
   ObExecParamRawExpr() :
     ObConstRawExpr(),
+    outer_expr_(NULL),
+    is_onetime_(false),
     ref_same_dblink_(false),
+    exec_param_idx_(-1),
     eval_by_storage_(false)
   {
     set_expr_class(ObIRawExpr::EXPR_EXEC_PARAM);
@@ -2441,14 +2454,17 @@ public:
 
   ObExecParamRawExpr(common::ObIAllocator &alloc)
     : ObConstRawExpr(alloc),
+      outer_expr_(NULL),
+      is_onetime_(false),
       ref_same_dblink_(false),
+      exec_param_idx_(-1),
       eval_by_storage_(false)
   {
     set_expr_class(ObIRawExpr::EXPR_EXEC_PARAM);
   }
 
   virtual ~ObExecParamRawExpr() {}
-
+  void set_param_index(ObQueryCtx &query_ctx);
   void set_param_index(int64_t index);
   int64_t get_param_index() const;
 
@@ -2471,20 +2487,21 @@ public:
                            const common::ObIArray<ObRawExpr *> &new_exprs) override;
   virtual bool inner_same_as(const ObRawExpr &expr,
                              ObExprEqualCheckContext *check_context) const override;
-
+  virtual void inner_calc_hash() override;
   virtual int do_visit(ObRawExprVisitor &visitor) override;
 
   virtual uint64_t hash_internal(uint64_t seed) const;
   virtual int get_name_internal(char *buf,
                                 const int64_t buf_len,
                                 int64_t &pos,
-                                ExplainType type) const;
+                                ExplainType type) const override;
   DECLARE_VIRTUAL_TO_STRING;
 private:
   // the refered expr in the outer stmt
   ObRawExpr *outer_expr_;
   bool is_onetime_;
   bool ref_same_dblink_;
+  int64_t exec_param_idx_; // used to print exec_param self index in explain
   bool eval_by_storage_;
 };
 
@@ -2573,7 +2590,8 @@ public:
   bool is_scalar() const { return !is_set_ && !is_multiset_ && get_output_column() == 1; }
   virtual void reset();
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const override;
+                             ObExprEqualCheckContext *check_context) const override;
+  virtual void inner_calc_hash() override;
 
   virtual int do_visit(ObRawExprVisitor &visitor) override;
 
@@ -2592,7 +2610,8 @@ public:
                                             K_(is_multiset),
                                             K_(column_types),
                                             K_(enum_set_values),
-                                            N_CHILDREN, exec_params_);
+                                            N_CHILDREN, exec_params_,
+                                            K_(expr_hash));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObQueryRefRawExpr);
   //ObUnaryRefExpr是表示对一个stmt或者logical plan的引用，
@@ -2754,7 +2773,8 @@ public:
   inline int64_t get_cte_generate_column_projector_offset() const { return get_column_id() - common::OB_APP_MIN_COLUMN_ID; }
   virtual void reset();
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const override;
+                             ObExprEqualCheckContext *check_context) const override;
+  virtual void inner_calc_hash() override;
 
   virtual int do_visit(ObRawExprVisitor &visitor) override;
 
@@ -2849,7 +2869,8 @@ public:
                        K_(is_mul_key_column),
                        K_(is_strict_json_column),
                        K_(srs_id),
-                       K_(udt_set_id));
+                       K_(udt_set_id),
+                       K_(expr_hash));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObColumnRefRawExpr);
   uint64_t table_id_;
@@ -2930,7 +2951,8 @@ public:
                            const common::ObIArray<ObRawExpr *> &new_exprs) override;
   int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const;
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const override;
+                             ObExprEqualCheckContext *check_context) const override;
+  virtual void inner_calc_hash() override;
 
   int assign(const ObRawExpr &other) override;
 
@@ -2940,7 +2962,8 @@ public:
                        N_RESULT_TYPE, result_type_,
                        N_EXPR_INFO, info_,
                        N_REL_ID, rel_ids_,
-                       K_(idx));
+                       K_(idx),
+                       K_(expr_hash));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSetOpRawExpr);
   int64_t idx_; // set op expr 对应 child stmt select expr 的 index
@@ -2986,14 +3009,15 @@ public:
   virtual uint64_t hash_internal(uint64_t seed) const;
   int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const;
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const override;
-
+                             ObExprEqualCheckContext *check_context) const override;
+  virtual void inner_calc_hash() override;
   VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_,
                                             N_RESULT_TYPE, result_type_,
                                             N_EXPR_INFO, info_,
                                             N_REL_ID, rel_ids_,
                                             N_VALUE, ref_expr_,
-                                            K_(enum_set_values));
+                                            K_(enum_set_values),
+                                            K_(expr_hash));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAliasRefRawExpr);
   ObRawExpr *ref_expr_;
@@ -3095,7 +3119,8 @@ public:
   virtual void clear_child() override;
   virtual void reset();
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const override;
+                             ObExprEqualCheckContext *check_context) const override;
+  virtual void inner_calc_hash() override;
 
 
   //used for jit expr
@@ -3126,7 +3151,8 @@ public:
                                             N_RESULT_TYPE, result_type_,
                                             N_EXPR_INFO, info_,
                                             N_REL_ID, rel_ids_,
-                                            N_CHILDREN, exprs_);
+                                            N_CHILDREN, exprs_,
+                                            K_(expr_hash));
 protected:
   common::ObSEArray<ObRawExpr *, COMMON_MULTI_NUM, common::ModulePageAllocator, true> exprs_;
   ObSubQueryKey subquery_key_;
@@ -3260,7 +3286,8 @@ public:
   virtual void clear_child() override;
   virtual void reset();
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const override;
+                             ObExprEqualCheckContext *check_context) const override;
+  virtual void inner_calc_hash() override;
 
   virtual int do_visit(ObRawExprVisitor &visitor) override;
 
@@ -3287,7 +3314,8 @@ public:
                                             N_DEFAULT, default_expr_,
                                             N_WHEN, when_exprs_,
                                             N_THEN, then_exprs_,
-                                            N_DECODE, is_decode_func_);
+                                            N_DECODE, is_decode_func_,
+                                            K_(expr_hash));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCaseOpRawExpr);
   ObRawExpr *arg_expr_;
@@ -3496,7 +3524,8 @@ public:
   virtual void clear_child() override;
   virtual void reset();
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const override;
+                             ObExprEqualCheckContext *check_context) const override;
+  virtual void inner_calc_hash() override;
 
   virtual int64_t get_param_count() const;
   virtual const ObRawExpr *get_param_expr(int64_t index) const;
@@ -3550,8 +3579,8 @@ public:
                                             N_SEPARATOR_PARAM_EXPR, separator_param_expr_,
                                             K_(udf_meta),
                                             K_(expr_in_inner_stmt),
-                                            K_(pl_agg_udf_expr));
-
+                                            K_(pl_agg_udf_expr),
+                                            K_(expr_hash));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAggFunRawExpr);
   // real_param_exprs_.count() == 0 means '*'
@@ -3667,9 +3696,10 @@ public:
   virtual ObExprOperator *get_op();
   virtual void reset();
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const override;
+                             ObExprEqualCheckContext *check_context) const override;
   virtual bool inner_json_expr_same_as(const ObRawExpr &expr,
                              ObExprEqualCheckContext *check_context = NULL) const;
+  virtual void inner_calc_hash() override;
   virtual int do_visit(ObRawExprVisitor &visitor) override;
 
   virtual uint64_t hash_internal(uint64_t seed) const
@@ -3703,7 +3733,8 @@ public:
                                             K_(dblink_id),
                                             K_(local_session_var),
                                             K_(local_session_var_id),
-                                            K_(mview_id));
+                                            K_(mview_id),
+                                            K_(expr_hash));
 private:
   int check_param_num_internal(int32_t param_num, int32_t param_count, ObExprOperatorType type);
   DISALLOW_COPY_AND_ASSIGN(ObSysFunRawExpr);
@@ -3744,8 +3775,8 @@ public:
   const common::ObString &get_action() const { return action_; }
   uint64_t get_sequence_id() const { return sequence_id_; }
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const override;
-
+                             ObExprEqualCheckContext *check_context) const override;
+  virtual void inner_calc_hash() override;
   virtual int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const override;
 private:
   common::ObString database_name_; // sequence database name
@@ -3767,8 +3798,8 @@ public:
   int add_udf_attribute(const ObRawExpr *expr, const ParseNode *node);
   const share::schema::ObUDFMeta &get_udf_meta() const { return udf_meta_; }
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const override;
-
+                             ObExprEqualCheckContext *check_context) const override;
+  virtual void inner_calc_hash() override;
 private:
   //for udf function info
   share::schema::ObUDFMeta udf_meta_;
@@ -3840,7 +3871,8 @@ public:
                                             N_REL_ID, rel_ids_,
                                             N_FUNC, get_func_name(),
                                             N_CHILDREN, exprs_,
-                                            K_(coll_schema_version));
+                                            K_(coll_schema_version),
+                                            K_(expr_hash));
 private:
   pl::ObPLType type_; // PL_NESTED_TABLE_TYPE|PL_ASSOCIATIVE_ARRAY_TYPE|PL_VARRAY_TYPE
   pl::ObPLDataType elem_type_; // 记录复杂数据类型的元素类型
@@ -3930,7 +3962,8 @@ public:
                                             N_FUNC, get_func_name(),
                                             N_CHILDREN, exprs_,
                                             K_(database_id),
-                                            K_(object_schema_version));
+                                            K_(object_schema_version),
+                                            K_(expr_hash));
 private:
   int64_t rowsize_;
   uint64_t udt_id_;
@@ -4118,8 +4151,8 @@ public:
   int assign(const ObRawExpr &other) override;
   int inner_deep_copy(ObIRawExprCopier &copier) override;
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const override;
-
+                             ObExprEqualCheckContext *check_context) const override;
+  virtual void inner_calc_hash() override;
   virtual ObExprOperator *get_op() override;
 
   int check_param() { return common::OB_SUCCESS; }
@@ -4201,7 +4234,8 @@ public:
                                             K_(loc),
                                             K_(is_udt_cons),
                                             K_(params_desc_v2),
-                                            N_CHILDREN, exprs_);
+                                            N_CHILDREN, exprs_,
+                                            K_(expr_hash));
 private:
   uint64_t udf_id_;
   uint64_t pkg_id_;
@@ -4256,7 +4290,8 @@ public:
                                             N_REL_ID, rel_ids_,
                                             K_(pl_integer_type),
                                             K_(pl_integer_range_.range),
-                                            N_CHILDREN, exprs_);
+                                            N_CHILDREN, exprs_,
+                                            K_(expr_hash));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPLIntegerCheckerRawExpr);
 private:
@@ -4281,7 +4316,8 @@ public:
                                             N_EXPR_INFO, info_,
                                             N_REL_ID, rel_ids_,
                                             K_(cursor_info),
-                                            N_CHILDREN, exprs_);
+                                            N_CHILDREN, exprs_,
+                                            K_(expr_hash));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPLGetCursorAttrRawExpr);
 private:
@@ -4305,7 +4341,8 @@ public:
                                             N_EXPR_INFO, info_,
                                             N_REL_ID, rel_ids_,
                                             K_(is_sqlcode),
-                                            N_CHILDREN, exprs_);
+                                            N_CHILDREN, exprs_,
+                                            K_(expr_hash));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPLSQLCodeSQLErrmRawExpr);
 private:
@@ -4392,7 +4429,8 @@ public:
                                             K_(for_write),
                                             N_CHILDREN, exprs_,
                                             K_(out_of_range_set_err),
-                                            K_(parent_type));
+                                            K_(parent_type),
+                                            K_(expr_hash));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPLAssocIndexRawExpr);
 private:
@@ -4434,7 +4472,8 @@ public:
   int assign(const ObRawExpr &other) override;
   int inner_deep_copy(ObIRawExprCopier &copier) override;
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const override;
+                             ObExprEqualCheckContext *check_context) const override;
+  virtual void inner_calc_hash() override;
 
   int add_access_indexs(const common::ObIArray<pl::ObObjAccessIdx> &access_idxs);
   common::ObIArray<pl::ObObjAccessIdx> &get_access_idxs() { return access_indexs_; }
@@ -4498,7 +4537,8 @@ public:
 
   int assign(const ObRawExpr &other) override;
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const override;
+                             ObExprEqualCheckContext *check_context) const override;
+  virtual void inner_calc_hash() override;
 
   inline ObMultiSetModifier get_multiset_modifier() const { return ms_modifier_; }
   inline ObMultiSetType get_multiset_type() const { return ms_type_; }
@@ -4518,7 +4558,8 @@ public:
   virtual ~ObCollPredRawExpr() {}
 
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const override;
+                             ObExprEqualCheckContext *check_context) const override;
+  virtual void inner_calc_hash() override;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCollPredRawExpr);
@@ -4704,7 +4745,8 @@ public:
 
   virtual void clear_child() override;
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const override;
+                             ObExprEqualCheckContext *check_context) const override;
+  virtual void inner_calc_hash() override;
 
   virtual int64_t get_param_count() const
   {
@@ -4746,7 +4788,8 @@ public:
                                             K_(upper),
                                             K_(lower),
                                             KPC_(agg_expr),
-                                            KPC_(pl_agg_udf_expr));
+                                            KPC_(pl_agg_udf_expr),
+                                            K_(expr_hash));
 public:
   common::ObString sort_str_;
 private:
@@ -4780,7 +4823,8 @@ public:
   virtual int replace_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
                            const common::ObIArray<ObRawExpr *> &new_exprs);
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const override;
+                             ObExprEqualCheckContext *check_context) const override;
+  virtual void inner_calc_hash() override;
 
   virtual int do_visit(ObRawExprVisitor &visitor) override;
   virtual uint64_t hash_internal(uint64_t seed) const;
@@ -4802,7 +4846,8 @@ public:
                        N_REL_ID, rel_ids_,
                        N_TABLE_ID, table_id_,
                        N_TABLE_NAME, table_name_,
-                       K_(data_access_path));
+                       K_(data_access_path),
+                       K_(expr_hash));
 private:
   ObRawExpr *cte_cycle_value_;
   ObRawExpr *cte_cycle_default_value_;
@@ -4834,8 +4879,8 @@ public:
   virtual int replace_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
                            const common::ObIArray<ObRawExpr *> &new_exprs) override;
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const override;
-
+                             ObExprEqualCheckContext *check_context) const override;
+  virtual void inner_calc_hash() override;
   virtual int do_visit(ObRawExprVisitor &visitor) override;
   virtual int get_name_internal(char *buf,
                                 const int64_t buf_len,
@@ -4877,7 +4922,8 @@ public:
   virtual int do_visit(ObRawExprVisitor &visitor) override;
   virtual uint64_t hash_internal(uint64_t seed) const;
   int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const override;
-  virtual bool inner_same_as(const ObRawExpr &expr, ObExprEqualCheckContext *check_context = NULL) const override;
+  virtual bool inner_same_as(const ObRawExpr &expr, ObExprEqualCheckContext *check_context) const override;
+  virtual void inner_calc_hash() override;
   virtual void clear_child() override;
   virtual void reset();
   virtual int64_t get_param_count() const;
@@ -5165,7 +5211,8 @@ public:
   virtual void clear_child() override;
 
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const override;
+                             ObExprEqualCheckContext *check_context) const override;
+  virtual void inner_calc_hash() override;
 
   virtual int do_visit(ObRawExprVisitor &visitor) override;
 
@@ -5290,7 +5337,8 @@ public:
                                             N_FUNC, get_func_name(),
                                             N_CHILDREN, exprs_,
                                             K_(database_id),
-                                            K_(object_schema_version));
+                                            K_(object_schema_version),
+                                            K_(expr_hash));
 private:
   uint64_t udt_id_;
   // 记录Object每个元素的类型

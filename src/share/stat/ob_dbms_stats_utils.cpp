@@ -1106,12 +1106,14 @@ int ObDbmsStatsUtils::prepare_gather_stat_param(const ObTableStatParam &param,
   gather_param.gather_vectorize_ = gather_vectorize;
   gather_param.use_column_store_ = use_column_store;
   gather_param.is_async_gather_ = param.is_async_gather_;
-  gather_param.async_gather_sample_size_ = param.async_gather_sample_size_;
   gather_param.async_full_table_size_ = param.async_full_table_size_;
   gather_param.hist_sample_info_.is_sample_ = param.hist_sample_info_.is_sample_;
   gather_param.hist_sample_info_.is_block_sample_ = param.hist_sample_info_.is_block_sample_;
   gather_param.hist_sample_info_.sample_type_ = param.hist_sample_info_.sample_type_;
   gather_param.hist_sample_info_.sample_value_ = param.hist_sample_info_.sample_value_;
+  gather_param.is_auto_sample_size_ = param.is_auto_sample_size_;
+  gather_param.auto_sample_row_cnt_ = param.auto_sample_row_cnt_;
+  gather_param.need_refine_min_max_ = param.need_refine_min_max_;
   gather_param.is_global_index_ = param.is_global_index_;
   gather_param.data_table_id_ = param.data_table_id_;
   gather_param.part_level_ = param.part_level_;

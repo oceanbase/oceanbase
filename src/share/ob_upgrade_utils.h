@@ -286,6 +286,7 @@ private:
   int post_upgrade_for_external_table_flag();
   int post_upgrade_for_service_name();
   int post_upgrade_for_optimizer_stats();
+  int add_spm_stats_scheduler_job();
 };
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 3, 1)
 
@@ -300,7 +301,17 @@ private:
   int post_upgrade_for_persitent_routine();
 };
 
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 5, 0)
+class ObUpgradeFor4350Processor : public ObBaseUpgradeProcessor
+{
+public:
+  ObUpgradeFor4350Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor4350Processor() {}
+  virtual int pre_upgrade() override { return common::OB_SUCCESS; }
+  virtual int post_upgrade() override;
+private:
+  int add_spm_stats_scheduler_job();
+  int post_upgrade_for_optimizer_stats();
+};
 
 /* =========== special upgrade processor end   ============= */
 

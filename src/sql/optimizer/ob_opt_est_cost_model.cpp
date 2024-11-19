@@ -86,8 +86,9 @@ int ObCostTableScanInfo::assign(const ObCostTableScanInfo &est_cost_info)
     index_meta_info_.assign(est_cost_info.index_meta_info_);
     is_virtual_table_ = est_cost_info.is_virtual_table_;
     is_unique_ = est_cost_info.is_unique_;
-    is_inner_path_ = est_cost_info.is_inner_path_;
-    can_use_batch_nlj_ = est_cost_info.can_use_batch_nlj_;
+    is_das_scan_ = est_cost_info.is_das_scan_;
+    is_rescan_ = est_cost_info.is_rescan_;
+    is_batch_rescan_ = est_cost_info.is_batch_rescan_;
     table_metas_ = est_cost_info.table_metas_;
     sel_ctx_ = est_cost_info.sel_ctx_;
     est_method_ = est_cost_info.est_method_;
@@ -107,6 +108,8 @@ int ObCostTableScanInfo::assign(const ObCostTableScanInfo &est_cost_info)
     use_column_store_ = est_cost_info.use_column_store_;
     at_most_one_range_ = est_cost_info.at_most_one_range_;
     index_back_with_column_store_ = est_cost_info.index_back_with_column_store_;
+    rescan_left_server_list_ = est_cost_info.rescan_left_server_list_;
+    rescan_server_list_ = est_cost_info.rescan_server_list_;
     limit_rows_ = est_cost_info.limit_rows_;
     // no need to copy table scan param
   }
@@ -208,9 +211,7 @@ double ObIndexMetaInfo::get_micro_block_numbers() const
  *                         + qual_cost
  */
 int ObOptEstCostModel::cost_nestloop(const ObCostNLJoinInfo &est_cost_info,
-                                    double &cost,
-                                    double &filter_selectivity,
-                                    ObIArray<ObExprSelPair> &all_predicate_sel)
+                                     double &cost)
 {
   int ret = OB_SUCCESS;
   cost = 0.0;
@@ -222,60 +223,47 @@ int ObOptEstCostModel::cost_nestloop(const ObCostNLJoinInfo &est_cost_info,
     double right_rows = est_cost_info.right_rows_;
     double cart_tuples = left_rows * right_rows; // tuples of Cartesian product
     double out_tuples = 0.0;
-    filter_selectivity = 0.0;
     double material_cost = 0.0;
-    //selectivity for equal conds
-    if (OB_FAIL(ObOptSelectivity::calculate_selectivity(*est_cost_info.table_metas_,
-                                                        *est_cost_info.sel_ctx_,
-                                                        est_cost_info.other_join_conditions_,
-                                                        filter_selectivity,
-                                                        all_predicate_sel))) {
-      LOG_WARN("Failed to calculate filter selectivity", K(ret));
+    double join_sel = est_cost_info.other_cond_sel_;
+    if (IS_SEMI_ANTI_JOIN(est_cost_info.join_type_)) {
+      // nested loop join must be left semi/anti join
+      out_tuples = left_rows * join_sel;
     } else {
-      out_tuples = cart_tuples * filter_selectivity;
-
-      // 再次扫描右表全表的代价。如果不使用物化，就是读取一次右表和本层get_next_row的代价；
-      // 如果物化，则为读取物化后的行的代价。
-      double once_rescan_cost = 0.0;
-      if (est_cost_info.need_mat_) {
-        once_rescan_cost = cost_read_materialized(right_rows);
-      } else {
-        double rescan_cost = 0.0;
-        if (est_cost_info.right_has_px_rescan_) {
-          if (est_cost_info.parallel_ > 1) {
-            rescan_cost = cost_params_.get_px_rescan_per_row_cost(sys_stat_);
-          } else {
-            rescan_cost = cost_params_.get_px_batch_rescan_per_row_cost(sys_stat_);
-          }
-        } else {
-          rescan_cost = cost_params_.get_rescan_cost(sys_stat_);
-        }
-        once_rescan_cost = est_cost_info.right_cost_ + rescan_cost
-                           + right_rows * cost_params_.get_cpu_tuple_cost(sys_stat_);
-      }
-      // total rescan cost
-      if (LEFT_SEMI_JOIN == est_cost_info.join_type_
-          || LEFT_ANTI_JOIN == est_cost_info.join_type_) {
-        double match_sel = (est_cost_info.anti_or_semi_match_sel_ < OB_DOUBLE_EPSINON) ?
-                            OB_DOUBLE_EPSINON : est_cost_info.anti_or_semi_match_sel_;
-        out_tuples = left_rows * match_sel;
-      }
-      cost += left_rows * once_rescan_cost;
-      //qual cost
-      double qual_cost = cost_quals(left_rows * right_rows, est_cost_info.equal_join_conditions_) +
-                         cost_quals(left_rows * right_rows, est_cost_info.other_join_conditions_);
-
-      cost += qual_cost;
-
-      double join_cost = cost_params_.get_join_per_row_cost(sys_stat_) * out_tuples;
-      cost += join_cost;
-
-      LOG_TRACE("OPT: [COST NESTLOOP JOIN]",
-                K(cost), K(qual_cost), K(join_cost),K(once_rescan_cost),
-                K(est_cost_info.left_cost_), K(est_cost_info.right_cost_),
-                K(left_rows), K(right_rows), K(est_cost_info.right_width_),
-                K(filter_selectivity), K(cart_tuples), K(material_cost));
+      out_tuples = left_rows * right_rows * join_sel;
     }
+
+
+    // 再次扫描右表全表的代价。如果不使用物化，就是读取一次右表和本层get_next_row的代价；
+    // 如果物化，则为读取物化后的行的代价。
+    double once_rescan_cost = 0.0;
+    if (est_cost_info.need_mat_) {
+      once_rescan_cost = cost_read_materialized(right_rows);
+    } else {
+      double rescan_cost = 0.0;
+      if (est_cost_info.right_has_px_rescan_) {
+        if (est_cost_info.parallel_ > 1) {
+          rescan_cost = cost_params_.get_px_rescan_per_row_cost(sys_stat_);
+        } else {
+          rescan_cost = cost_params_.get_px_batch_rescan_per_row_cost(sys_stat_);
+        }
+      } else {
+        rescan_cost = cost_params_.get_rescan_cost(sys_stat_);
+      }
+      once_rescan_cost = est_cost_info.right_cost_ + rescan_cost
+                         + right_rows * cost_params_.get_cpu_tuple_cost(sys_stat_);
+    }
+    cost += left_rows * once_rescan_cost;
+    //qual cost
+    double qual_cost = cost_quals(left_rows * right_rows, est_cost_info.equal_join_conditions_) +
+                       cost_quals(left_rows * right_rows, est_cost_info.other_join_conditions_);
+    cost += qual_cost;
+    double join_cost = cost_params_.get_join_per_row_cost(sys_stat_) * out_tuples;
+    cost += join_cost;
+    LOG_TRACE("OPT: [COST NESTLOOP JOIN]", K(out_tuples),
+              K(cost), K(qual_cost), K(join_cost),K(once_rescan_cost),
+              K(est_cost_info.left_cost_), K(est_cost_info.right_cost_),
+              K(left_rows), K(right_rows), K(est_cost_info.right_width_),
+              K(join_sel), K(cart_tuples), K(material_cost));
   }
   return ret;
 }
@@ -1392,6 +1380,7 @@ int ObOptEstCostModel::cost_basic_table(const ObCostTableScanInfo &est_cost_info
   double index_scan_cost = 0;
   double index_back_cost = 0;
   double prefix_filter_sel = 1.0;
+  double das_rpc_cost = 0.0;
   // calc scan one partition cost
   if (OB_FAIL(cost_index_scan(est_cost_info,
                               row_count_per_part,
@@ -1405,6 +1394,8 @@ int ObOptEstCostModel::cost_basic_table(const ObCostTableScanInfo &est_cost_info
                                     prefix_filter_sel,
                                     index_back_cost))) {
     LOG_WARN("failed to calc index back cost", K(ret));
+  } else if (OB_FAIL(calc_das_rpc_cost(est_cost_info, das_rpc_cost))) {
+    LOG_WARN("failed to calc das rpc cost", K(ret));
   } else {
     cost += index_scan_cost;
     OPT_TRACE_COST_MODEL(KV(cost), "+=", KV(index_scan_cost));
@@ -1413,7 +1404,10 @@ int ObOptEstCostModel::cost_basic_table(const ObCostTableScanInfo &est_cost_info
     // calc one parallel scan cost
     cost *= part_cnt_per_dop;
     OPT_TRACE_COST_MODEL(KV(cost), "*=", KV(part_cnt_per_dop));
-    LOG_TRACE("OPT:[ESTIMATE FINISH]", K(cost), K(part_cnt_per_dop), K(est_cost_info));
+    // calc das rescan scan rpc cost
+    cost += das_rpc_cost;
+    OPT_TRACE_COST_MODEL(KV(cost), "+=", KV(das_rpc_cost));
+    LOG_TRACE("OPT:[ESTIMATE FINISH]", K(cost), K(part_cnt_per_dop), K(das_rpc_cost), K(est_cost_info));
   }
   return ret;
 }
@@ -1691,6 +1685,67 @@ int ObOptEstCostModel::cost_row_store_index_back(const ObCostTableScanInfo &est_
   return ret;
 }
 
+
+int ObOptEstCostModel::calc_das_rpc_cost(const ObCostTableScanInfo &est_cost_info,
+                                         double &das_rpc_cost)
+{
+  int ret = OB_SUCCESS;
+  das_rpc_cost = 0.0;
+  double remote_rpc_cnt = 0;
+  double local_rpc_cnt = 0;
+  if (OB_ISNULL(est_cost_info.sel_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(est_cost_info.sel_ctx_));
+  } else if (!est_cost_info.sel_ctx_->get_opt_ctx().enable_425_batch_rescan()) {
+    /* do nothing */
+  } else if (!est_cost_info.is_das_scan_ || !est_cost_info.is_rescan_) {
+    /* do nothing */
+  } else if (OB_FAIL(get_rescan_rpc_cnt(est_cost_info.rescan_left_server_list_,
+                                        est_cost_info.rescan_server_list_,
+                                        remote_rpc_cnt,
+                                        local_rpc_cnt))) {
+    LOG_WARN("failed to get rescan rpc cnt", K(ret));
+  } else if (est_cost_info.is_batch_rescan_) {
+    //  ignore local rpc now
+    das_rpc_cost = remote_rpc_cnt * cost_params_.get_das_batch_rescan_per_row_rpc_cost(sys_stat_);
+  } else {
+    das_rpc_cost = remote_rpc_cnt * cost_params_.get_das_rescan_per_row_rpc_cost(sys_stat_);
+  }
+  return ret;
+}
+
+int ObOptEstCostModel::get_rescan_rpc_cnt(const ObIArray<common::ObAddr> *left_server_list,
+                                          const ObIArray<common::ObAddr> *right_server_list,
+                                          double &remote_rpc_cnt,
+                                          double &local_rpc_cnt)
+{
+  int ret = OB_SUCCESS;
+  remote_rpc_cnt = 0;
+  local_rpc_cnt = 0;
+  if (OB_ISNULL(right_server_list) || OB_UNLIKELY(right_server_list->empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected right server list", K(ret), KPC(right_server_list));
+  } else if (NULL == left_server_list || left_server_list->empty()
+             || ObShardingInfo::is_shuffled_server_list(*left_server_list)) {
+    remote_rpc_cnt = right_server_list->count();
+  } else if (1 == left_server_list->count() && 1 == right_server_list->count()) {
+    if (left_server_list->at(0) == right_server_list->at(0)) {
+      local_rpc_cnt = 1;
+    } else {
+      remote_rpc_cnt = 1;
+    }
+  } else if (ObOptimizerUtil::is_subset(*left_server_list, *right_server_list)) {
+    remote_rpc_cnt = right_server_list->count() - 1;
+    local_rpc_cnt = 1;
+  } else {
+    remote_rpc_cnt = right_server_list->count();
+    local_rpc_cnt = 0;
+  }
+  LOG_TRACE("OPT:[GET RESCAN RPC CNT]", KPC(left_server_list), KPC(right_server_list),
+                                          K(remote_rpc_cnt), K(local_rpc_cnt));
+  return ret;
+}
+
 /*
  * estimate the network transform and rpc cost for global index,
  * so far, this cost model should be revised by banliu
@@ -1828,8 +1883,8 @@ int ObOptEstCostModel::range_get_io_cost(const ObCostTableScanInfo &est_cost_inf
     }
     // IO代价，包括读取整个微块及反序列化的代价和每行定位微块的代价
     double first_block_cost = cost_params_.get_micro_block_rnd_cost(sys_stat_);
-    if (est_cost_info.is_inner_path_) {
-      if (est_cost_info.can_use_batch_nlj_) {
+    if (est_cost_info.is_rescan_) {
+      if (est_cost_info.is_batch_rescan_) {
         first_block_cost = cost_params_.get_batch_nl_get_cost(sys_stat_);
       } else {
         first_block_cost = cost_params_.get_nl_get_cost(sys_stat_);
@@ -1881,8 +1936,8 @@ int ObOptEstCostModel::range_scan_io_cost(const ObCostTableScanInfo &est_cost_in
 
     // IO代价，主要包括读取微块、反序列化的代价的代价
     double first_block_cost = cost_params_.get_micro_block_rnd_cost(sys_stat_);
-    if (!est_cost_info.pushdown_prefix_filters_.empty()) {
-      if (est_cost_info.can_use_batch_nlj_) {
+    if (est_cost_info.is_rescan_) {
+      if (est_cost_info.is_batch_rescan_) {
         first_block_cost = cost_params_.get_batch_nl_scan_cost(sys_stat_);
       } else {
         first_block_cost = cost_params_.get_nl_scan_cost(sys_stat_);

@@ -539,6 +539,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_ob_proxy_weakread_feedback",
   "_ob_px_bcast_optimization",
   "_ob_px_slave_mapping_threshold",
+  "_optimizer_cost_based_transformation",
   "_optimizer_gather_stats_on_load",
   "_optimizer_null_aware_antijoin",
   "_oracle_sql_select_limit",
@@ -1151,6 +1152,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR__OB_PROXY_WEAKREAD_FEEDBACK,
   SYS_VAR__OB_PX_BCAST_OPTIMIZATION,
   SYS_VAR__OB_PX_SLAVE_MAPPING_THRESHOLD,
+  SYS_VAR__OPTIMIZER_COST_BASED_TRANSFORMATION,
   SYS_VAR__OPTIMIZER_GATHER_STATS_ON_LOAD,
   SYS_VAR__OPTIMIZER_NULL_AWARE_ANTIJOIN,
   SYS_VAR__ORACLE_SQL_SELECT_LIMIT,
@@ -2346,6 +2348,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "delayed_insert_limit",
   "ndb_version",
   "auto_generate_certs",
+  "_optimizer_cost_based_transformation",
   "range_index_dive_limit",
   "partition_index_dive_limit",
   "ob_table_access_policy"
@@ -3159,6 +3162,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarDelayedInsertLimit)
         + sizeof(ObSysVarNdbVersion)
         + sizeof(ObSysVarAutoGenerateCerts)
+        + sizeof(ObSysVarOptimizerCostBasedTransformation)
         + sizeof(ObSysVarRangeIndexDiveLimit)
         + sizeof(ObSysVarPartitionIndexDiveLimit)
         + sizeof(ObSysVarObTableAccessPolicy)
@@ -8622,6 +8626,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_AUTO_GENERATE_CERTS))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarAutoGenerateCerts));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOptimizerCostBasedTransformation())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOptimizerCostBasedTransformation", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__OPTIMIZER_COST_BASED_TRANSFORMATION))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarOptimizerCostBasedTransformation));
       }
     }
     if (OB_SUCC(ret)) {
@@ -15324,6 +15337,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarAutoGenerateCerts())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarAutoGenerateCerts", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR__OPTIMIZER_COST_BASED_TRANSFORMATION: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarOptimizerCostBasedTransformation)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarOptimizerCostBasedTransformation)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOptimizerCostBasedTransformation())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOptimizerCostBasedTransformation", K(ret));
       }
       break;
     }

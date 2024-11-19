@@ -15,13 +15,13 @@ set _nlj_batching_enabled = false;
 
 EXPLAIN select /*+use_nl(t1 t2) leading(t1 t2)*/ * from t1, t2 where t1.c1 = t2.c1;
 Query Plan
-=======================================================
-|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
--------------------------------------------------------
-|0 |NESTED-LOOP JOIN       |    |4       |96          |
-|1 |├─TABLE FULL SCAN      |t1  |5       |3           |
-|2 |└─DISTRIBUTED TABLE GET|t2  |1       |18          |
-=======================================================
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |NESTED-LOOP JOIN |    |4       |96          |
+|1 |├─TABLE FULL SCAN|t1  |5       |3           |
+|2 |└─TABLE GET      |t2  |1       |18          |
+=================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t2.c1], [t2.c2]), filter(nil), rowset=16
@@ -84,7 +84,7 @@ Query Plan
 -------------------------------------------------------
 |0 |NESTED-LOOP OUTER JOIN |    |5       |96          |
 |1 |├─TABLE FULL SCAN      |t1  |5       |3           |
-|2 |└─DISTRIBUTED TABLE GET|t2  |1       |18          |
+|2 |└─TABLE GET            |t2  |1       |18          |
 =======================================================
 Outputs & filters:
 -------------------------------------
@@ -321,13 +321,13 @@ select /*+use_nl(t1, t2)*/ * from t1 where exists (select 1 from t2 where t1.c1 
 
 EXPLAIN select /*+use_nl(t1, t2)*/ * from t1 where exists (select 1 from t2 where t1.c1 =  t2.c1);
 Query Plan
-=======================================================
-|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
--------------------------------------------------------
-|0 |NESTED-LOOP JOIN       |    |4       |96          |
-|1 |├─TABLE FULL SCAN      |t1  |5       |3           |
-|2 |└─DISTRIBUTED TABLE GET|t2  |1       |18          |
-=======================================================
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |NESTED-LOOP JOIN |    |4       |96          |
+|1 |├─TABLE FULL SCAN|t1  |5       |3           |
+|2 |└─TABLE GET      |t2  |1       |18          |
+=================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
@@ -384,13 +384,13 @@ select /*+use_nl(t1, t2)*/ * from t1 where not exists (select 1 from t2 where t1
 
 EXPLAIN select /*+use_nl(t1, t2)*/ * from t1 where not exists (select 1 from t2 where t1.c1 =  t2.c1);
 Query Plan
-=======================================================
-|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
--------------------------------------------------------
-|0 |NESTED-LOOP ANTI JOIN  |    |1       |96          |
-|1 |├─TABLE FULL SCAN      |t1  |5       |3           |
-|2 |└─DISTRIBUTED TABLE GET|t2  |1       |18          |
-=======================================================
+======================================================
+|ID|OPERATOR              |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |NESTED-LOOP ANTI JOIN |    |1       |96          |
+|1 |├─TABLE FULL SCAN     |t1  |5       |3           |
+|2 |└─TABLE GET           |t2  |1       |18          |
+======================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
@@ -416,13 +416,13 @@ select /*+use_nl(t1, t2)*/ * from t1 where not exists (select 1 from t2 where t1
 set _nlj_batching_enabled = true;
 EXPLAIN select /*+use_nl(t1 t2) leading(t1 t2)*/ * from t1, t2 where t1.c1 = t2.c1;
 Query Plan
-=======================================================
-|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
--------------------------------------------------------
-|0 |NESTED-LOOP JOIN       |    |4       |83          |
-|1 |├─TABLE FULL SCAN      |t1  |5       |3           |
-|2 |└─DISTRIBUTED TABLE GET|t2  |1       |16          |
-=======================================================
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |NESTED-LOOP JOIN |    |4       |83          |
+|1 |├─TABLE FULL SCAN|t1  |5       |3           |
+|2 |└─TABLE GET      |t2  |1       |16          |
+=================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t2.c1], [t2.c2]), filter(nil), rowset=16
@@ -483,7 +483,7 @@ Query Plan
 -------------------------------------------------------
 |0 |NESTED-LOOP OUTER JOIN |    |5       |83          |
 |1 |├─TABLE FULL SCAN      |t1  |5       |3           |
-|2 |└─DISTRIBUTED TABLE GET|t2  |1       |16          |
+|2 |└─TABLE GET            |t2  |1       |16          |
 =======================================================
 Outputs & filters:
 -------------------------------------
@@ -719,13 +719,13 @@ select /*+use_nl(t1, t2)*/ * from t1 where exists (select 1 from t2 where t1.c1 
 
 EXPLAIN select /*+use_nl(t1, t2)*/ * from t1 where exists (select 1 from t2 where t1.c1 =  t2.c1);
 Query Plan
-=======================================================
-|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
--------------------------------------------------------
-|0 |NESTED-LOOP JOIN       |    |4       |83          |
-|1 |├─TABLE FULL SCAN      |t1  |5       |3           |
-|2 |└─DISTRIBUTED TABLE GET|t2  |1       |16          |
-=======================================================
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |NESTED-LOOP JOIN |    |4       |83          |
+|1 |├─TABLE FULL SCAN|t1  |5       |3           |
+|2 |└─TABLE GET      |t2  |1       |16          |
+=================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
@@ -782,13 +782,13 @@ select /*+use_nl(t1, t2)*/ * from t1 where not exists (select 1 from t2 where t1
 
 EXPLAIN select /*+use_nl(t1, t2)*/ * from t1 where not exists (select 1 from t2 where t1.c1 =  t2.c1);
 Query Plan
-=======================================================
-|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
--------------------------------------------------------
-|0 |NESTED-LOOP ANTI JOIN  |    |1       |96          |
-|1 |├─TABLE FULL SCAN      |t1  |5       |3           |
-|2 |└─DISTRIBUTED TABLE GET|t2  |1       |18          |
-=======================================================
+======================================================
+|ID|OPERATOR              |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |NESTED-LOOP ANTI JOIN |    |1       |96          |
+|1 |├─TABLE FULL SCAN     |t1  |5       |3           |
+|2 |└─TABLE GET           |t2  |1       |18          |
+======================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2]), filter(nil), rowset=16

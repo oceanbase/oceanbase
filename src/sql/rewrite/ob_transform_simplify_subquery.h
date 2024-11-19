@@ -163,7 +163,7 @@ private:
    * 4. 无聚集函数（select item中）
    * 5. 非常量select item列，全部包含在group exprs中
    */
-  int groupby_can_be_eliminated_in_any_all(const ObSelectStmt *stmt, bool &can_be_eliminated) const;
+  int eliminate_groupby_in_any_all(ObSelectStmt *stmt, bool &trans_happened);
 
   int eliminate_subquery_in_exists(ObDMLStmt *stmt,
                                    ObRawExpr *&expr,
@@ -179,15 +179,13 @@ private:
                                   ObSelectStmt *&subquery,
                                   bool &trans_happened);
   int eliminate_groupby_distinct_in_any_all(ObRawExpr *expr, bool &trans_happened);
-  int eliminate_groupby_in_any_all(ObSelectStmt *&stmt, bool &trans_happened);
   int eliminate_distinct_in_any_all(ObSelectStmt *subquery,bool &trans_happened);
   int check_need_add_limit(ObSelectStmt *subquery, bool &need_add_limit);
   int check_limit(const ObItemType op_type,
                   const ObSelectStmt *subquery,
                   bool &has_limit) const;
-  int need_add_limit_constraint(const ObItemType op_type,
-                const ObSelectStmt *subquery,
-                bool &add_limit_constraint) const;
+  int check_has_limit_1(const ObSelectStmt *stmt,
+                        bool &has_limit_1) const;
   int check_const_select(const ObSelectStmt &stmt, bool &is_const_select) const;
   int get_push_down_conditions(ObDMLStmt *stmt,
                                JoinedTable *join_table,

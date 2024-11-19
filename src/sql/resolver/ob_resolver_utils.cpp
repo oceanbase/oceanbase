@@ -8694,23 +8694,23 @@ int ObResolverUtils::get_select_into_node(const ParseNode &node, ParseNode* &int
   int ret = OB_SUCCESS;
   ParseNode *child_into_node = NULL;
   if (OB_LIKELY(node.type_ == T_SELECT)) {
-    if (NULL != node.children_[PARSE_SELECT_SET] &&
-        NULL != node.children_[PARSE_SELECT_FORMER] &&
-        NULL != node.children_[PARSE_SELECT_LATER]) {
-        if (OB_FAIL(SMART_CALL(get_select_into_node(*node.children_[PARSE_SELECT_FORMER], child_into_node, false))) ||
-            NULL != child_into_node) {
-          ret = OB_SUCCESS == ret ? OB_ERR_SET_USAGE : ret;
-          LOG_WARN("invalid into clause", K(ret));
-        } else {
-          child_into_node = get_select_into_node(*node.children_[PARSE_SELECT_LATER]);
-          if (!top_level && NULL != child_into_node) {
+    if (NULL == node.children_[PARSE_SELECT_SET]) {
+      into_node = get_select_into_node(node);
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < node.children_[PARSE_SELECT_SET]->num_child_; i++) {
+        ParseNode *child_node = node.children_[PARSE_SELECT_SET]->children_[i];
+        if (OB_FAIL(SMART_CALL(get_select_into_node(*child_node, child_into_node, false)))) {
+          LOG_WARN("failed to get select into node", K(ret));
+        } else if (NULL != child_into_node) {
+          if (top_level && i == node.children_[PARSE_SELECT_SET]->num_child_ - 1) {
+            // select into is only allow to in last branch of set
+            into_node = child_into_node;
+          } else {
             ret = OB_ERR_SET_USAGE;
             LOG_WARN("invalid into clause", K(ret));
           }
-          into_node = child_into_node;
-        }
-    } else {
-      into_node = get_select_into_node(node);
+        } else {/* it doesn't have into node */}
+      }
     }
   }
   return ret;

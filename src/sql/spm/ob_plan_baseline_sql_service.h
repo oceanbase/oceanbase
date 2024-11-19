@@ -29,6 +29,7 @@ class ObMySQLProxy;
 
 namespace sql
 {
+struct ObImportBaseline;
 class ObSpmBaselineLoader;
 
 class ObPlanBaselineSqlService
@@ -61,7 +62,8 @@ public:
                            const uint64_t tenant_id,
                            const ObBaselineKey& key,
                            ObPlanBaselineItem* baseline,
-                           bool update_info);
+                           bool update_info,
+                           int64_t record_type = 0);
 
   int delete_baseline_item(ObMySQLTransaction& trans,
                            const uint64_t tenant_id,
@@ -117,7 +119,7 @@ public:
                                 ObString &output_str);
 
   int update_plan_baselines_result(const uint64_t tenant_id,
-                                   EvoResultUpdateTask& evo_res);
+                                   EvolutionTaskResult& evo_res);
 
   int update_baseline_item_evolving_result(ObMySQLTransaction& trans,
                                            const uint64_t tenant_id,
@@ -136,10 +138,41 @@ public:
                                const uint64_t tenant_id,
                                const ObBaselineKey& key,
                                const ObPlanBaselineItem& baseline_item);
+
+  int import_plan_baseline(ObIAllocator& allocator,
+                           const uint64_t tenant_id,
+                           const uint64_t baseline_db_id,
+                           ObIArray<ObImportBaseline*> &baselines);
+  int insert_baseline_item(ObMySQLTransaction& trans,
+                           ObIAllocator& allocator,
+                           const uint64_t tenant_id,
+                           const uint64_t baseline_db_id,
+                           const ObImportBaseline* baseline);
+  int update_baseline_info(ObMySQLTransaction& trans,
+                           ObIAllocator& allocator,
+                           const uint64_t tenant_id,
+                           const uint64_t baseline_db_id,
+                           const ObImportBaseline* baseline);
+
+  int batch_record_evolution_result(const uint64_t tenant_id,
+                                    ObIArray<EvolutionTaskResult*> &evo_res_array);
+  int insert_spm_record(ObMySQLProxy *proxy,
+                        const uint64_t tenant_id,
+                        const ObBaselineKey& key,
+                        int64_t record_type);
+  int delete_timeout_record(const uint64_t tenant_id, const uint64_t current_time);
+
+  int update_baseline_item_verify_result(ObMySQLTransaction& trans,
+                                         const uint64_t tenant_id,
+                                         const ObBaselineKey& key,
+                                         const uint64_t& plan_hash,
+                                         const ObEvolutionStat &evo_stat,
+                                         int64_t& affected_rows);
 private:
   static const int64_t max_sql_text_size = 10 * 1024 * 1024; // 10M
   const static char *EMPTY_STR;
   bool inited_;
+  char ip_buff_[common::MAX_IP_ADDR_LENGTH] = {'\0'};
   ObMySQLProxy* mysql_proxy_;
 };
 

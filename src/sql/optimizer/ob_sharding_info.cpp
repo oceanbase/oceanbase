@@ -93,14 +93,14 @@ int ObShardingInfo::init_partition_info(ObOptimizerContext &ctx,
         LOG_WARN("There is no part expr in stmt", K(table_id), K(ret));
       } else if (OB_FAIL(part_func_exprs_.push_back(part_expr))) {
       	LOG_WARN("Failed to push back to part expr");
-    	} else if (OB_FAIL(set_partition_key(part_expr, part_func_type_, partition_keys_))) {
+	} else if (OB_FAIL(get_partition_key(part_expr, part_func_type_, partition_keys_))) {
         LOG_WARN("Failed to set partition key", K(ret), K(table_id), K(ref_table_id));
       } else if (PARTITION_LEVEL_TWO == part_level_) {
         subpart_func_type_ = table_schema->get_sub_part_option().get_part_func_type();
         if (OB_ISNULL(subpart_expr = stmt.get_subpart_expr(table_id, ref_table_id))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("There is no subpart expr in stmt", K(ret));
-        } else if (OB_FAIL(set_partition_key(subpart_expr, subpart_func_type_, sub_partition_keys_))) {
+        } else if (OB_FAIL(get_partition_key(subpart_expr, subpart_func_type_, sub_partition_keys_))) {
           LOG_WARN("Failed to set sub partition key", K(ret), K(table_id), K(ref_table_id));
         } else if (OB_FAIL(part_func_exprs_.push_back(subpart_expr))) {
         	LOG_WARN("Failed to set key partition func", K(ret), K(table_id), K(ref_table_id));
@@ -130,7 +130,50 @@ int ObShardingInfo::init_partition_info(ObOptimizerContext &ctx,
   return ret;
 }
 
-int ObShardingInfo::set_partition_key(
+int ObShardingInfo::get_all_partition_key(ObOptimizerContext &ctx,
+                                          const ObDMLStmt &stmt,
+                                          const uint64_t table_id,
+                                          const uint64_t ref_table_id,
+                                          ObIArray<ObRawExpr*> &all_partition_keys)
+{
+  int ret = OB_SUCCESS;
+  all_partition_keys.reuse();
+  ObSqlSchemaGuard *schema_guard = NULL;
+  const ObTableSchema *table_schema = NULL;
+  ObRawExpr *part_expr = NULL;
+  if (OB_ISNULL(schema_guard = ctx.get_sql_schema_guard())) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("failed to get table schema", K(ref_table_id));
+  } else if (OB_FAIL(schema_guard->get_table_schema(table_id, ref_table_id, &stmt, table_schema))) {
+	ret = OB_SCHEMA_ERROR;
+	LOG_WARN("failed to get table schema", K(ref_table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("failed to get table schema", K(ref_table_id));
+  } else if (PARTITION_LEVEL_ONE != table_schema->get_part_level()
+             && PARTITION_LEVEL_TWO != table_schema->get_part_level()) {
+    /* do nohitng */
+  } else if (OB_ISNULL(part_expr = stmt.get_part_expr(table_id, ref_table_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("There is no part expr in stmt", K(table_id), K(ret));
+  } else if (OB_FAIL(get_partition_key(part_expr,
+                                       table_schema->get_part_option().get_part_func_type(),
+                                       all_partition_keys))) {
+        LOG_WARN("Failed to get partition key", K(ret), K(table_id), K(ref_table_id));
+  } else if (PARTITION_LEVEL_TWO != table_schema->get_part_level()) {
+    /* do nohitng */
+  } else if (OB_ISNULL(part_expr = stmt.get_subpart_expr(table_id, ref_table_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("There is no subpart expr in stmt", K(ret));
+  } else if (OB_FAIL(get_partition_key(part_expr,
+                                       table_schema->get_sub_part_option().get_part_func_type(),
+                                       all_partition_keys))) {
+    LOG_WARN("Failed to get sub partition key", K(ret), K(table_id), K(ref_table_id));
+  }
+  return ret;
+}
+
+int ObShardingInfo::get_partition_key(
     ObRawExpr *part_expr,
     const ObPartitionFuncType part_func_type,
     ObIArray<ObRawExpr*> &partition_keys)

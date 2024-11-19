@@ -84,7 +84,7 @@ public:
   ObPlanBaselineMgr* baseline_mgr_;
 };
 
-typedef ObList<EvoResultUpdateTask*, ObIAllocator> task_result_list;
+typedef ObList<EvolutionTaskResult*, ObIAllocator> task_result_list;
 
 class ObPlanBaselineMgr
 {
@@ -116,6 +116,8 @@ public:
                    ObPlanCacheCtx& pc_ctx,
                    ObPhysicalPlan* plan);
   int update_plan_baseline_statistic(EvolutionTaskResult& result);
+  int update_statistic_for_evolve(EvolutionTaskResult& result);
+  int update_statistic_for_confirm(EvolutionTaskResult& result);
   int accept_new_plan_baseline(ObSpmCacheCtx& spm_ctx, const ObAuditRecordData &audit_record);
   int force_accept_new_plan_baseline(ObSpmCacheCtx& spm_ctx, uint64_t plan_hash, const bool with_plan_hash);
   int sync_baseline_from_inner_table();
@@ -136,6 +138,7 @@ public:
   int purge_baselines(const uint64_t tenant_id, int64_t baseline_affected);
   int evict_plan_baseline(ObSpmCacheCtx& spm_ctx);
   int check_evolution_task();
+  int handle_spm_evo_record(const uint64_t tenant_id);
 private:
   int init(uint64_t tenant_id);
   int init_mem_context(uint64_t tenant_id);

@@ -564,6 +564,7 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
   bool storage_estimation_enabled = false;
   bool has_cursor_expr = false;
   int64_t link_stmt_count = 0;
+  ObQueryCtx* query_ctx = ctx_.get_query_ctx();
   bool push_join_pred_into_view_enabled = true;
   bool partition_wise_plan_enabled = true;
   bool exists_partition_wise_plan_enabled_hint = false;
@@ -581,7 +582,10 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
   bool better_inlist_costing = false;
   bool enable_spf_batch_rescan = session.is_spf_mlj_group_rescan_enabled();
   const ObOptParamHint &opt_params = ctx_.get_global_hint().opt_params_;
-  if (OB_FAIL(check_whether_contain_nested_sql(stmt))) {
+  if (OB_ISNULL(query_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null query ctx");
+  } else if (OB_FAIL(check_whether_contain_nested_sql(stmt))) {
     LOG_WARN("check whether contain nested sql failed", K(ret));
   } else if (OB_FAIL(stmt.check_has_subquery_in_function_table(has_subquery_in_function_table))) {
     LOG_WARN("failed to check stmt has function table", K(ret));
@@ -634,6 +638,8 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
                                                    exists_partition_wise_plan_enabled_hint))) {
     LOG_WARN("failed to check partition wise plan enabled", K(ret));
   } else {
+    ctx_.init_batch_rescan_flags(enable_use_batch_nlj, enable_spf_batch_rescan,
+                                 query_ctx->optimizer_features_enable_version_);
     ctx_.set_storage_estimation_enabled(storage_estimation_enabled);
     ctx_.set_serial_set_order(force_serial_set_order);
     ctx_.set_has_multiple_link_stmt(link_stmt_count > 1);
@@ -647,8 +653,6 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     ctx_.set_optimizer_index_cost_adj(optimizer_index_cost_adj);
     ctx_.set_is_skip_scan_enabled(is_skip_scan_enable);
     ctx_.set_enable_better_inlist_costing(better_inlist_costing);
-    ctx_.set_nlj_batching_enabled(enable_use_batch_nlj);
-    ctx_.set_enable_spf_batch_rescan(enable_spf_batch_rescan);
     ctx_.set_push_join_pred_into_view_enabled(push_join_pred_into_view_enabled);
     if (!hash_join_enabled
         && !optimizer_sortmerge_join_enabled

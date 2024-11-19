@@ -4331,6 +4331,7 @@ int ObRawExprDeduceType::try_replace_cast_with_questionmark_ora(ObRawExpr &paren
         ObConstRawExpr *c_expr = static_cast<ObConstRawExpr *>(param_expr);
         ObExprResType res_type = cast_expr->get_result_type();
         res_type.add_cast_mode(cast_expr->get_extra());
+        res_type.set_param(c_expr->get_result_type().get_param());
         int64_t param_idx = 0;
         if (OB_ISNULL(expr_factory_)) {
           ret = OB_ERR_UNEXPECTED;
@@ -4340,7 +4341,7 @@ int ObRawExprDeduceType::try_replace_cast_with_questionmark_ora(ObRawExpr &paren
         } else if (OB_FAIL(ObRawExprUtils::create_param_expr(*expr_factory_, param_idx, param_expr))) {
           // create new param store to avoid unexpected problem
           LOG_WARN("create param expr failed", K(ret));
-        } else if (OB_FAIL(static_cast<ObConstRawExpr *>(param_expr)->set_dynamic_eval_questionmark(res_type))){
+        } else if (OB_FAIL(static_cast<ObConstRawExpr *>(param_expr)->set_dynamic_eval_questionmark(res_type))) {
           LOG_WARN("set dynamic eval question mark failed", K(ret));
         } else {
           parent.get_param_expr(child_idx) = param_expr;

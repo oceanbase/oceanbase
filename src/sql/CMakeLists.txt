@@ -1380,7 +1380,6 @@ ob_set_subtarget(ob_sql resolver_prepare
 
 ob_set_subtarget(ob_sql rewrite
   rewrite/ob_equal_analysis.cpp
-  rewrite/ob_equal_set.ipp
   rewrite/ob_expand_aggregate_utils.cpp
   rewrite/ob_key_part.cpp
   rewrite/ob_predicate_deduce.cpp
@@ -1427,6 +1426,7 @@ ob_set_subtarget(ob_sql rewrite
   rewrite/ob_transform_decorrelate.cpp
   rewrite/ob_transform_late_materialization.cpp
   rewrite/ob_transform_mv_rewrite_prepare.cpp
+  rewrite/ob_transform_distinct_aggregate.cpp
 )
 
 ob_set_subtarget(ob_sql session

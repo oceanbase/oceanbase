@@ -213,7 +213,8 @@ typedef struct ObJsonTableDef {
 } ObJsonTableDef;
 
 struct ObValuesTableDef {
-  ObValuesTableDef() : start_param_idx_(-1), end_param_idx_(-1), column_cnt_(0), row_cnt_(0) , access_type_(ACCESS_EXPR) {}
+  ObValuesTableDef() : start_param_idx_(-1), end_param_idx_(-1), column_cnt_(0), row_cnt_(0),
+                       access_type_(ACCESS_EXPR), is_const_(false) {}
   enum TableAccessType {
     ACCESS_EXPR = 0,  // expr, one by one
     FOLD_ACCESS_EXPR, // expr, one expr->ObSqlArray
@@ -232,10 +233,11 @@ struct ObValuesTableDef {
   int64_t column_cnt_;
   int64_t row_cnt_;
   TableAccessType access_type_;
+  bool is_const_; // values table’s outputs are all params.
   common::ObArray<ObExprResType, common::ModulePageAllocator, true> column_types_;
   virtual TO_STRING_KV(K(column_cnt_), K(row_cnt_), K(access_exprs_), K(start_param_idx_),
                        K(end_param_idx_), K(access_objs_), K(column_ndvs_), K(column_nnvs_),
-                       K(access_type_), K(column_types_));
+                       K(access_type_), K(is_const_), K(column_types_));
 };
 
 struct TableItem
@@ -882,7 +884,11 @@ public:
                                            ObSQLSessionInfo *session_info,
                                            bool explicit_for_col);
   virtual int clear_sharable_expr_reference();
-  virtual int get_from_subquery_stmts(common::ObIArray<ObSelectStmt*> &child_stmts) const;
+  virtual int get_from_subquery_stmts(common::ObIArray<ObSelectStmt*> &child_stmts,
+                                      bool contain_lateral_table = true) const;
+  int get_semi_right_subquery_stmts(ObIArray<ObSelectStmt*> &child_stmts,
+                                    bool contain_lateral_table = true) const;
+  int get_exists_any_all_subquery(ObIArray<ObSelectStmt*> &subquerys);
   virtual int get_subquery_stmts(common::ObIArray<ObSelectStmt*> &child_stmts) const;
   int generated_column_depend_column_is_referred(ObRawExpr *expr, bool &has_no_dep);
   int is_referred_by_partitioning_expr(const ObRawExpr *expr,
@@ -1112,6 +1118,7 @@ public:
   int get_relation_exprs(common::ObIArray<ObRawExprPointer> &relation_expr_ptrs);
   //this func is used for enum_set_wrapper to get exprs which need to be handled
   int get_relation_exprs_for_enum_set_wrapper(common::ObIArray<ObRawExpr*> &rel_array);
+  int check_relation_exprs_deterministic(bool &is_deterministic) const;
   ColumnItem *get_column_item_by_id(uint64_t table_id, uint64_t column_id) const;
   const ColumnItem *get_column_item_by_base_id(uint64_t table_id, uint64_t base_column_id) const;
   ObColumnRefRawExpr *get_column_expr_by_id(uint64_t table_id, uint64_t column_id) const;
@@ -1244,6 +1251,7 @@ public:
 
   int check_has_cursor_expression(bool &has_cursor_expr) const;
   bool is_values_table_query() const;
+  bool is_const_values_table_query() const;
 
   int do_formalize_query_ref_exprs_pre();
 
@@ -1256,6 +1264,12 @@ public:
                             const ObDMLStmt &other);
 
   int do_formalize_lateral_derived_table_post();
+
+  virtual int formalize_implicit_distinct();
+
+  int formalize_implicit_distinct_for_subquery();
+
+  virtual int check_from_dup_insensitive(bool &is_from_dup_insens) const;
 
   int get_partition_columns(const int64_t table_id,
                             const int64_t ref_table_id,
@@ -1286,6 +1300,7 @@ protected:
                            TableItem &new_item,
                            ObIAllocator *allocator);
   int adjust_duplicated_table_name(ObIAllocator &allocator, TableItem &table_item, bool &adjusted);
+  static int add_implicit_distinct_for_child_stmts(ObIArray<ObSelectStmt*> &child_stmts);
 
 protected:
   /**

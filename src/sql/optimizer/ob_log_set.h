@@ -122,6 +122,7 @@ public:
   virtual int print_used_hint(PlanText &plan_text) override;
   int get_used_pq_set_hint(const ObPQSetHint *&used_hint);
   int construct_pq_set_hint(ObPQSetHint &hint);
+  int check_has_push_down(bool &has_push_down);
   int set_child_ndv(ObIArray<double> &ndv) { return child_ndv_.assign(ndv); }
   int add_child_ndv(double ndv) { return child_ndv_.push_back(ndv); }
   virtual int get_card_without_filter(double &card) override;

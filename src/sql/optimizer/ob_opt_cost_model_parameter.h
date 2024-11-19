@@ -53,6 +53,8 @@ public:
     const double DEFAULT_NETWORK_TRANS_PER_BYTE_COST,
     const double DEFAULT_PX_RESCAN_PER_ROW_COST,
     const double DEFAULT_PX_BATCH_RESCAN_PER_ROW_COST,
+    const double DEFAULT_DAS_RESCAN_PER_ROW_RPC_COST,
+    const double DEFAULT_DAS_BATCH_RESCAN_PER_ROW_RPC_COST,
     const double DEFAULT_NL_SCAN_COST,
     const double DEFAULT_BATCH_NL_SCAN_COST,
     const double DEFAULT_NL_GET_COST,
@@ -96,6 +98,8 @@ public:
       NETWORK_TRANS_PER_BYTE_COST(DEFAULT_NETWORK_TRANS_PER_BYTE_COST),
       PX_RESCAN_PER_ROW_COST(DEFAULT_PX_RESCAN_PER_ROW_COST),
       PX_BATCH_RESCAN_PER_ROW_COST(DEFAULT_PX_BATCH_RESCAN_PER_ROW_COST),
+      DAS_RESCAN_PER_ROW_RPC_COST(DEFAULT_DAS_RESCAN_PER_ROW_RPC_COST),
+      DAS_BATCH_RESCAN_PER_ROW_RPC_COST(DEFAULT_DAS_BATCH_RESCAN_PER_ROW_RPC_COST),
       NL_SCAN_COST(DEFAULT_NL_SCAN_COST),
       BATCH_NL_SCAN_COST(DEFAULT_BATCH_NL_SCAN_COST),
       NL_GET_COST(DEFAULT_NL_GET_COST),
@@ -145,6 +149,8 @@ public:
   double get_network_trans_per_byte_cost(const OptSystemStat& stat) const;
   double get_px_rescan_per_row_cost(const OptSystemStat& stat) const;
   double get_px_batch_rescan_per_row_cost(const OptSystemStat& stat) const;
+  double get_das_rescan_per_row_rpc_cost(const OptSystemStat& stat) const;
+  double get_das_batch_rescan_per_row_rpc_cost(const OptSystemStat& stat) const;
   double get_nl_scan_cost(const OptSystemStat& stat) const;
   double get_batch_nl_scan_cost(const OptSystemStat& stat) const;
   double get_nl_get_cost(const OptSystemStat& stat) const;
@@ -206,6 +212,9 @@ protected:
   /*additional px-rescan cost*/
   double PX_RESCAN_PER_ROW_COST;
   double PX_BATCH_RESCAN_PER_ROW_COST;
+  /*additional das-rescan cost*/
+  double DAS_RESCAN_PER_ROW_RPC_COST;
+  double DAS_BATCH_RESCAN_PER_ROW_RPC_COST;
   //条件下压nestloop join右表扫一次的代价
   double NL_SCAN_COST;
   //条件下压batch nestloop join右表扫一次的代价

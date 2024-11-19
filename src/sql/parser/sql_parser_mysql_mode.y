@@ -26,6 +26,7 @@
   const struct _NonReservedKeyword *non_reserved_keyword;
   const struct _NonReservedKeyword *reserved_keyword;
   int32_t ival[2]; //ival[0]表示value, ival[1]表示fast parse在对应的该node及其子node可识别的常量个数
+  struct _ParseNodeOptParens *node_opt_parens;
 }
 
 %{
@@ -179,7 +180,7 @@ COALESCE_SQ NO_COALESCE_SQ COUNT_TO_EXISTS NO_COUNT_TO_EXISTS LEFT_TO_ANTI NO_LE
 ELIMINATE_JOIN NO_ELIMINATE_JOIN PUSH_LIMIT NO_PUSH_LIMIT PULLUP_EXPR NO_PULLUP_EXPR
 WIN_MAGIC NO_WIN_MAGIC AGGR_FIRST_UNNEST NO_AGGR_FIRST_UNNEST JOIN_FIRST_UNNEST NO_JOIN_FIRST_UNNEST
 COALESCE_AGGR NO_COALESCE_AGGR WITH_PULLUP WO_PULLUP
-MV_REWRITE NO_MV_REWRITE
+MV_REWRITE NO_MV_REWRITE TRANSFORM_DISTINCT_AGG NO_TRANSFORM_DISTINCT_AGG
 DECORRELATE NO_DECORRELATE
 // optimize hint
 INDEX_HINT FULL_HINT NO_INDEX_HINT USE_DAS_HINT NO_USE_DAS_HINT UNION_MERGE_HINT
@@ -419,7 +420,7 @@ END_P SET_VAR DELIMITER
 %type <node> data_type special_table_type opt_if_not_exists opt_if_exists opt_charset collation opt_collation cast_data_type
 %type <node> replace_with_opt_hint insert_with_opt_hint column_list opt_on_duplicate_key_clause opt_into opt_replace opt_temporary opt_algorithm opt_sql_security opt_definer view_algorithm no_param_column_ref
 %type <node> insert_vals_list insert_vals value_or_values opt_insert_row_alias
-%type <node> select_with_parens select_no_parens select_clause select_into no_table_select_with_order_and_limit simple_select_with_order_and_limit select_with_parens_with_order_and_limit select_clause_set select_clause_set_left select_clause_set_right  select_clause_set_with_order_and_limit
+%type <node> select_with_parens select_no_parens select_clause select_into no_table_select_with_order_and_limit simple_select_with_order_and_limit select_with_parens_with_order_and_limit select_clause_set_with_order_and_limit
 %type <node> simple_select no_table_select limit_clause select_expr_list opt_approx
 %type <node> with_select with_clause with_list common_table_expr opt_column_alias_name_list alias_name_list column_alias_name
 %type <node> opt_where opt_hint_value opt_groupby opt_rollup opt_order_by order_by opt_having groupby_clause
@@ -479,9 +480,9 @@ END_P SET_VAR DELIMITER
 %type <node> drop_mlog_stmt
 %type <non_reserved_keyword> unreserved_keyword unreserved_keyword_normal unreserved_keyword_special unreserved_keyword_extra unreserved_keyword_ambiguous_roles unreserved_keyword_for_role_name
 %type <reserved_keyword> mysql_reserved_keyword
-%type <ival> set_type_other set_type_union audit_by_session_access_option audit_whenever_option audit_or_noaudit
+%type <ival> audit_by_session_access_option audit_whenever_option audit_or_noaudit
 %type <ival> consistency_level use_plan_cache_type
-%type <node> set_type set_expression_option
+%type <node> set_type
 %type <node> drop_index_stmt hint_options opt_expr_as_list expr_as_list expr_with_opt_alias substr_params opt_comma substr_or_substring
 %type <node> /*frozen_type*/ opt_binary
 %type <node> ip_port
@@ -566,6 +567,8 @@ END_P SET_VAR DELIMITER
 %type <node> any_expr
 %type <node> opt_empty_table_list opt_repair_mode opt_repair_option_list repair_option repair_option_list opt_checksum_option
 %type <node> cache_index_stmt load_index_into_cache_stmt tbl_index_list tbl_index tbl_partition_list opt_tbl_partition_list tbl_index_or_partition_list tbl_index_or_partition opt_ignore_leaves key_cache_name
+%type <node_opt_parens> select_clause_set select_clause_set_body
+
 %start sql_stmt
 %%
 ////////////////////////////////////////////////////////////////
@@ -10434,7 +10437,7 @@ select_clause opt_lock_type
 }
 | select_clause_set opt_lock_type
 {
-  $$ = $1;
+  $$ = $1->select_node_;
   $$->children_[PARSE_SELECT_FOR_UPD] = $2;
 }
 | select_clause_set_with_order_and_limit opt_lock_type
@@ -10532,60 +10535,93 @@ no_table_select
 select_clause_set_with_order_and_limit:
 select_clause_set order_by
 {
-  $$ = $1;
+  $$ = $1->select_node_;
   $$->children_[PARSE_SELECT_ORDER] = $2;
 }
 | select_clause_set opt_order_by limit_clause
 {
-  $$ = $1;
+  $$ = $1->select_node_;
   $$->children_[PARSE_SELECT_ORDER] = $2;
   $$->children_[PARSE_SELECT_LIMIT] = $3;
 }
 ;
 
 select_clause_set:
-select_clause_set set_type select_clause_set_right
+select_clause_set set_type select_clause_set_body
 {
   ParseNode *select_node = NULL;
-  malloc_select_node(select_node, result->malloc_pool_);
-  select_node->children_[PARSE_SELECT_SET] = $2;
-  select_node->children_[PARSE_SELECT_FORMER] = $1;
-  select_node->children_[PARSE_SELECT_LATER] = $3;
-  $$ = select_node;
+  flatten_set_op(result, select_node, $1, $3, $2);
+  if (OB_ISNULL(select_node)) {
+    yyerror(NULL, result, "No more space for flatten set op");
+    YYABORT_NO_MEMORY;
+  } else {
+    $$ = $1;
+    $$->select_node_ = select_node;
+    $$->is_parenthesized_ = false;
+  }
 }
-| select_clause_set_left set_type select_clause_set_right {
+| select_clause_set_body set_type select_clause_set_body
+{
   ParseNode *select_node = NULL;
-  malloc_select_node(select_node, result->malloc_pool_);
-  select_node->children_[PARSE_SELECT_SET] = $2;
-  select_node->children_[PARSE_SELECT_FORMER] = $1;
-  select_node->children_[PARSE_SELECT_LATER] = $3;
-  $$ = select_node;
+  flatten_set_op(result, select_node, $1, $3, $2);
+  if (OB_ISNULL(select_node)) {
+    yyerror(NULL, result, "No more space for flatten set op");
+    YYABORT_NO_MEMORY;
+  } else {
+    $$ = $1;
+    $$->select_node_ = select_node;
+    $$->is_parenthesized_ = false;
+  }
 }
 ;
 
-select_clause_set_right:
+select_clause_set_body:
 no_table_select
 {
-  $$ = $1;
+  malloc_select_set_body($$, result, $1, false);
 }
 | simple_select
 {
-  $$ = $1;
+  malloc_select_set_body($$, result, $1, false);
 }
 | select_with_parens %prec LOWER_PARENS
 {
-  $$ = $1;
+  malloc_select_set_body($$, result, $1, true);
 }
 | table_values_clause
 {
-  $$ = $1;
+  malloc_select_set_body($$, result, $1, false);
 }
 ;
 
-select_clause_set_left:
-select_clause_set_right
+set_type:
+UNION /* EMPTY */
 {
-  $$ = $1;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_UNION, 2, NULL, NULL);
+}
+| UNION ALL
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_UNION_ALL, 2, NULL, NULL);
+}
+| UNION DISTINCT
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_UNION, 2, NULL, NULL);
+}
+| UNION UNIQUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_UNION, 2, NULL, NULL);
+}
+| INTERSECT
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_INTERSECT, 2, NULL, NULL);
+}
+| EXCEPT
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_EXCEPT, 2, NULL, NULL);
+}
+| MINUS
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_EXCEPT, 2, NULL, NULL);
 }
 ;
 
@@ -10763,43 +10799,6 @@ opt_where opt_groupby opt_having opt_named_windows
 
   setup_token_pos_info(from_list, @5.first_column - 1, 4);
   setup_token_pos_info(select_node, @1.first_column - 1, 6);
-}
-;
-
-set_type_union:
-UNION     { $$[0] = T_SET_UNION; }
-;
-
-set_type_other:
-INTERSECT { $$[0] = T_SET_INTERSECT; }
-| EXCEPT    { $$[0] = T_SET_EXCEPT; }
-| MINUS    { $$[0] = T_SET_EXCEPT; }
-;
-
-set_type:
-set_type_union set_expression_option
-{
-  malloc_non_terminal_node($$, result->malloc_pool_, $1[0], 1, $2);
-}
-| set_type_other
-{
-  malloc_non_terminal_node($$, result->malloc_pool_, $1[0], 1, NULL);
-}
-
-set_expression_option:
-/* EMPTY */
-{ $$ = NULL; }
-| ALL
-{
-  malloc_terminal_node($$, result->malloc_pool_, T_ALL);
-}
-| DISTINCT
-{
-  malloc_terminal_node($$, result->malloc_pool_, T_DISTINCT);
-}
-| UNIQUE
-{
-  malloc_terminal_node($$, result->malloc_pool_, T_DISTINCT);
 }
 ;
 
@@ -11657,6 +11656,14 @@ NO_REWRITE opt_qb_name
 | NO_USE_LATE_MATERIALIZATION opt_qb_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_NO_USE_LATE_MATERIALIZATION, 1, $2);
+}
+| TRANSFORM_DISTINCT_AGG opt_qb_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TRANSFORM_DISTINCT_AGG, 1, $2);
+}
+| NO_TRANSFORM_DISTINCT_AGG opt_qb_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_NO_TRANSFORM_DISTINCT_AGG, 1, $2);
 }
 ;
 
@@ -13976,6 +13983,7 @@ WITH RECURSIVE with_list
 {
   ParseNode *with_list = NULL;
   merge_nodes(with_list, result, T_WITH_CLAUSE_LIST, $3);
+  refine_recursive_cte_list(with_list, result);
   $$ = with_list;
   $$->value_ = 1;
 }

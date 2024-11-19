@@ -87,13 +87,13 @@ select group_concat(c1) from (select 'abcdefg' c1 union select '0123456789101234
 +----------------------+
 | group_concat(c1)     |
 +----------------------+
-| 01234567891012345678 |
+| abcdefg,012345678910 |
 +----------------------+
 select group_concat(c1) from (select 'abcdefg' c1 union select '012345678910123456' c1)a;
 +----------------------+
 | group_concat(c1)     |
 +----------------------+
-| 012345678910123456,a |
+| abcdefg,012345678910 |
 +----------------------+
 
 drop table if exists t111_var;

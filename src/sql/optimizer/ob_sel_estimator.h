@@ -97,7 +97,8 @@ public:
                       double &selectivity,
                       ObIArray<ObExprSelPair> &all_predicate_sel) = 0;
   // Check whether we tend to use dynamic sampling for this estimator
-  virtual bool tend_to_use_ds() = 0;
+  virtual bool is_complex_filter_qual() = 0;
+  virtual bool is_complex_join_qual() = 0;
   inline ObSelEstType get_type() const { return type_; }
 
   const ObRawExpr *get_eigen_expr() const { return eigen_expr_; }
@@ -243,7 +244,8 @@ public:
   {
     return create_simple_estimator<ObDefaultSelEstimator>(factory, ctx, expr, estimator);
   }
-  virtual bool tend_to_use_ds() override { return true; }
+  virtual bool is_complex_filter_qual() override { return true; }
+  virtual bool is_complex_join_qual() override { return true; }
   virtual int get_sel(const OptTableMetas &table_metas,
                       const OptSelectivityCtx &ctx,
                       double &selectivity,
@@ -270,7 +272,8 @@ public:
   {
     return create_simple_estimator<ObAggSelEstimator>(factory, ctx, expr, estimator);
   }
-  virtual bool tend_to_use_ds() override { return false; }
+  virtual bool is_complex_filter_qual() override { return false; }
+  virtual bool is_complex_join_qual() override { return false; }
   virtual int get_sel(const OptTableMetas &table_metas,
                       const OptSelectivityCtx &ctx,
                       double &selectivity,
@@ -343,7 +346,8 @@ public:
   {
     return create_simple_estimator<ObConstSelEstimator>(factory, ctx, expr, estimator);
   }
-  virtual bool tend_to_use_ds() override { return false; }
+  virtual bool is_complex_filter_qual() override { return false; }
+  virtual bool is_complex_join_qual() override { return true; }
   virtual int get_sel(const OptTableMetas &table_metas,
                       const OptSelectivityCtx &ctx,
                       double &selectivity,
@@ -385,7 +389,8 @@ public:
   {
     return create_simple_estimator<ObColumnSelEstimator>(factory, ctx, expr, estimator);
   }
-  virtual bool tend_to_use_ds() override { return false; }
+  virtual bool is_complex_filter_qual() override { return false; }
+  virtual bool is_complex_join_qual() override { return true; }
   virtual int get_sel(const OptTableMetas &table_metas,
                       const OptSelectivityCtx &ctx,
                       double &selectivity,
@@ -432,7 +437,8 @@ public:
   {
     return create_simple_estimator<ObInSelEstimator>(factory, ctx, expr, estimator);
   }
-  virtual bool tend_to_use_ds() override { return false; }
+  virtual bool is_complex_filter_qual() override { return false; }
+  virtual bool is_complex_join_qual() override { return true; }
   virtual int get_sel(const OptTableMetas &table_metas,
                       const OptSelectivityCtx &ctx,
                       double &selectivity,
@@ -487,7 +493,8 @@ public:
                               const ObRawExpr &expr,
                               ObSelEstimator *&estimator);
 
-  virtual bool tend_to_use_ds() override { return !can_calc_sel_; }
+  virtual bool is_complex_filter_qual() override { return !can_calc_sel_; }
+  virtual bool is_complex_join_qual() override { return true; }
   virtual int get_sel(const OptTableMetas &table_metas,
                       const OptSelectivityCtx &ctx,
                       double &selectivity,
@@ -518,7 +525,8 @@ public:
                               const OptSelectivityCtx &ctx,
                               const ObRawExpr &expr,
                               ObSelEstimator *&estimator);
-  virtual bool tend_to_use_ds() override { return !can_calc_sel_; }
+  virtual bool is_complex_filter_qual() override { return !can_calc_sel_; }
+  virtual bool is_complex_join_qual() override { return true; }
   virtual int get_sel(const OptTableMetas &table_metas,
                       const OptSelectivityCtx &ctx,
                       double &selectivity,
@@ -549,7 +557,8 @@ public:
                               const OptSelectivityCtx &ctx,
                               const ObRawExpr &expr,
                               ObSelEstimator *&estimator);
-  virtual bool tend_to_use_ds() override { return !can_calc_sel_; }
+  virtual bool is_complex_filter_qual() override { return !can_calc_sel_; }
+  virtual bool is_complex_join_qual() override { return true; }
   virtual int get_sel(const OptTableMetas &table_metas,
                       const OptSelectivityCtx &ctx,
                       double &selectivity,
@@ -578,7 +587,10 @@ public:
                               const OptSelectivityCtx &ctx,
                               const ObRawExpr &expr,
                               ObSelEstimator *&estimator);
-  virtual bool tend_to_use_ds() override { return !can_calc_sel_; }
+  virtual bool is_complex_filter_qual() override { return !can_calc_sel_; }
+  virtual bool is_complex_join_qual() override {
+    return OB_NOT_NULL(expr_) && expr_->get_relation_ids().num_members() > 2;
+  }
   virtual int get_sel(const OptTableMetas &table_metas,
                       const OptSelectivityCtx &ctx,
                       double &selectivity,
@@ -645,6 +657,14 @@ private:
                                       ObItemType op_type,
                                       double &selectivity);
 
+  static int try_calc_equal_sel_with_hist(const OptTableMetas &table_metas,
+                                          const OptSelectivityCtx &ctx,
+                                          const ObRawExpr *left_expr,
+                                          const ObRawExpr *right_expr,
+                                          ObItemType op_type,
+                                          double &selectivity,
+                                          bool &calc_with_hist);
+
   static int check_can_calc_sel(const ObRawExpr &l_expr,
                                 const ObRawExpr &r_expr,
                                 bool &can_calc_sel);
@@ -675,7 +695,8 @@ public:
                               const OptSelectivityCtx &ctx,
                               const ObRawExpr &expr,
                               ObSelEstimator *&estimator);
-  virtual bool tend_to_use_ds() override { return !can_calc_sel_by_prefix_; }
+  virtual bool is_complex_filter_qual() override { return !can_calc_sel_by_prefix_; }
+  virtual bool is_complex_join_qual() override { return true; }
   virtual int get_sel(const OptTableMetas &table_metas,
                       const OptSelectivityCtx &ctx,
                       double &selectivity,
@@ -709,7 +730,8 @@ public:
                               const OptSelectivityCtx &ctx,
                               const ObRawExpr &expr,
                               ObSelEstimator *&estimator);
-  virtual bool tend_to_use_ds() override;
+  virtual bool is_complex_filter_qual() override;
+  virtual bool is_complex_join_qual() override;
   virtual int get_sel(const OptTableMetas &table_metas,
                       const OptSelectivityCtx &ctx,
                       double &selectivity,
@@ -745,7 +767,8 @@ public:
                       double &selectivity,
                       ObIArray<ObExprSelPair> &all_predicate_sel) override;
 
-  virtual bool tend_to_use_ds() override { return false; }
+  virtual bool is_complex_filter_qual() override { return false; }
+  virtual bool is_complex_join_qual() override { return true; }
 
   VIRTUAL_TO_STRING_KV(K_(type), KPC_(column_expr), K_(range_exprs));
 
@@ -788,7 +811,8 @@ public:
                       double &selectivity,
                       ObIArray<ObExprSelPair> &all_predicate_sel) override;
 
-  virtual bool tend_to_use_ds() override { return false; }
+  virtual bool is_complex_filter_qual() override { return false; }
+  virtual bool is_complex_join_qual() override { return false; }
 
   VIRTUAL_TO_STRING_KV(K_(type), KPC_(left_rel_ids), KPC_(right_rel_ids), K_(join_conditions));
 private:
@@ -849,7 +873,8 @@ public:
 
 public:
   ObInequalJoinSelEstimator() :
-    ObSelEstimator(ObSelEstType::INEQUAL_JOIN) {}
+    ObSelEstimator(ObSelEstType::INEQUAL_JOIN),
+    use_default_(false) {}
   virtual ~ObInequalJoinSelEstimator() = default;
 
   static int create_estimator(ObSelEstimatorFactory &factory,
@@ -864,7 +889,8 @@ public:
                       double &selectivity,
                       ObIArray<ObExprSelPair> &all_predicate_sel) override;
 
-  virtual bool tend_to_use_ds() override { return false; }
+  virtual bool is_complex_filter_qual() override { return false; }
+  virtual bool is_complex_join_qual() override { return use_default_; }
 
   VIRTUAL_TO_STRING_KV(K_(type), K_(term), K_(range));
 
@@ -918,6 +944,7 @@ private:
 
   Term term_;
   SimpleRange range_;
+  bool use_default_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObInequalJoinSelEstimator);
@@ -976,7 +1003,8 @@ public:
                                const double end_scalar,
                                double &selectivity);
 
-  virtual bool tend_to_use_ds() override { return true; }
+  virtual bool is_complex_filter_qual() override { return true; }
+  virtual bool is_complex_join_qual() override { return true; }
 };
 
 }

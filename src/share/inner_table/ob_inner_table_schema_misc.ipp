@@ -525,6 +525,7 @@ case OB_ALL_VIRTUAL_RESTORE_JOB_TID:
 case OB_ALL_VIRTUAL_RESTORE_JOB_HISTORY_TID:
 case OB_ALL_VIRTUAL_RESTORE_PROGRESS_TID:
 case OB_ALL_VIRTUAL_SERVICE_TID:
+case OB_ALL_VIRTUAL_SPM_EVO_RESULT_TID:
 case OB_ALL_VIRTUAL_STORAGE_IO_USAGE_TID:
 case OB_ALL_VIRTUAL_TABLE_OPT_STAT_GATHER_HISTORY_TID:
 case OB_ALL_VIRTUAL_TABLET_CHECKSUM_ERROR_INFO_TID:
@@ -1519,6 +1520,22 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
   END_CREATE_VT_ITER_SWITCH_LAMBDA
 
   BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
+    case OB_ALL_VIRTUAL_SPM_EVO_RESULT_TID: {
+      ObIteratePrivateVirtualTable *iter = NULL;
+      const bool meta_record_in_sys = false;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIteratePrivateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create iterate private virtual table iterator failed", KR(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_SPM_EVO_RESULT_TID, meta_record_in_sys, index_schema, params))) {
+        SERVER_LOG(WARN, "iterate private virtual table iter init failed", KR(ret));
+        iter->~ObIteratePrivateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
     case OB_ALL_VIRTUAL_STORAGE_IO_USAGE_TID: {
       ObIteratePrivateVirtualTable *iter = NULL;
       const bool meta_record_in_sys = false;
@@ -1822,7 +1839,9 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_WR_SYSSTAT_TID: {
       ObIteratePrivateVirtualTable *iter = NULL;
       const bool meta_record_in_sys = false;
@@ -1838,9 +1857,7 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID: {
       ObIteratePrivateVirtualTable *iter = NULL;
       const bool meta_record_in_sys = false;
@@ -5028,6 +5045,9 @@ case OB_ALL_SERVICE_AUX_LOB_PIECE_TID:
 case OB_ALL_SERVICE_EPOCH_TID:
 case OB_ALL_SERVICE_EPOCH_AUX_LOB_META_TID:
 case OB_ALL_SERVICE_EPOCH_AUX_LOB_PIECE_TID:
+case OB_ALL_SPM_EVO_RESULT_TID:
+case OB_ALL_SPM_EVO_RESULT_AUX_LOB_META_TID:
+case OB_ALL_SPM_EVO_RESULT_AUX_LOB_PIECE_TID:
 case OB_ALL_STORAGE_IO_USAGE_TID:
 case OB_ALL_STORAGE_IO_USAGE_AUX_LOB_META_TID:
 case OB_ALL_STORAGE_IO_USAGE_AUX_LOB_PIECE_TID:

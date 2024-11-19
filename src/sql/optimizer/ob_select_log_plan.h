@@ -221,7 +221,10 @@ private:
   int generate_union_all_plans(const ObIArray<ObSelectLogPlan*> &child_plans,
                                const bool ignore_hint,
                                ObIArray<CandidatePlan> &all_plans);
-
+  int get_best_child_candidate_plans(const ObIArray<ObSelectLogPlan*> &child_plans,
+                                     ObIArray<ObLogicalOperator*> &best_child_ops,
+                                     ObIArray<ObLogicalOperator*> &best_das_child_ops,
+                                     ObIArray<ObLogicalOperator*> &best_px_child_ops);
   int create_union_all_plan(const ObIArray<ObLogicalOperator*> &child_plans,
                             const bool ignore_hint,
                             ObLogicalOperator *&top);
@@ -383,12 +386,30 @@ private:
                             const ObIArray<ObOrderDirection> &order_directions,
                             const ObIArray<int64_t> &map_array,
                             const ObIArray<OrderItem> &left_sort_keys,
-                            const bool left_need_sort,
-                            const int64_t left_prefix_pos,
+                            bool left_need_sort,
+                            int64_t left_prefix_pos,
                             const ObIArray<OrderItem> &right_sort_keys,
-                            const bool right_need_sort,
-                            const int64_t right_prefix_pos,
+                            bool right_need_sort,
+                            int64_t right_prefix_pos,
                             CandidatePlan &merge_plan);
+
+  int check_need_pushdown_set_distinct(ObLogicalOperator *&child,
+                                       const ObIArray<ObRawExpr*> &set_keys,
+                                       bool &is_valid);
+
+  int allocate_pushdown_set_distinct_as_top(ObLogicalOperator *&child,
+                                            const ObIArray<ObRawExpr*> &set_keys,
+                                            AggregateAlgo algo,
+                                            const OptTableMeta *table_meta,
+                                            bool is_partition_wise = false,
+                                            bool is_partition_gi = false);
+
+  int allocate_pushdown_merge_set_distinct_as_top(ObLogicalOperator *&child,
+                                                  const ObIArray<ObRawExpr*> &set_keys,
+                                                  const ObIArray<OrderItem> &sort_keys,
+                                                  const OptTableMeta *table_meta,
+                                                  bool &need_sort,
+                                                  int64_t &prefix_pos);
 
   int allocate_distinct_set_as_top(ObLogicalOperator *left_child,
                                    ObLogicalOperator *right_child,

@@ -884,14 +884,18 @@ int64_t get_need_reserve_capacity(int64_t n)
 ParseNode *push_back_child(void *malloc_pool, int *error_code, ParseNode *left_node, ParseNode *node)
 {
   ParseNode *ret_node = NULL;
-  if (OB_ISNULL(malloc_pool) || OB_ISNULL(error_code)) {
+  if (OB_ISNULL(error_code)) {
     (void)fprintf(stderr, "ERROR parser result is NULL\n");
-  } else if (NULL == left_node || NULL == node) {
-    /* do nothing */
-  } else if ((left_node->type_ != T_OP_OR &&
-              left_node->type_ != T_OP_AND &&
-              left_node->type_ != T_EXPR_LIST) ||
-             left_node->value_ == INT64_MAX) {
+  } else if (OB_ISNULL(malloc_pool) ||
+             OB_ISNULL(left_node) ||
+             OB_ISNULL(node) ||
+             OB_UNLIKELY(INT64_MAX == left_node->value_)) {
+    *error_code = OB_PARSER_ERR_UNEXPECTED;
+  } else if (OB_UNLIKELY(!(T_OP_OR == left_node->type_ ||
+                           T_OP_AND == left_node->type_ ||
+                           T_EXPR_LIST == left_node->type_ ||
+                           T_SET_UNION == left_node->type_ ||
+                           T_SET_UNION_ALL == left_node->type_))) {
     *error_code = OB_PARSER_ERR_UNEXPECTED;
   } else {
     int64_t capacity = get_need_reserve_capacity(left_node->num_child_ + 1);
@@ -919,14 +923,18 @@ ParseNode *push_back_child(void *malloc_pool, int *error_code, ParseNode *left_n
 ParseNode *push_front_child(void *malloc_pool, int *error_code, ParseNode *right_node, ParseNode *node)
 {
   ParseNode *ret_node = NULL;
-  if (OB_ISNULL(malloc_pool) || OB_ISNULL(error_code)) {
+  if (OB_ISNULL(error_code)) {
     (void)fprintf(stderr, "ERROR parser result is NULL\n");
-  } else if (NULL == right_node || NULL == node) {
-    /* do nothing */
-  } else if ((right_node->type_ != T_OP_OR &&
-              right_node->type_ != T_OP_AND &&
-              right_node->type_ != T_EXPR_LIST) ||
-             right_node->value_ == INT64_MAX) {
+  } else if (OB_ISNULL(malloc_pool) ||
+             OB_ISNULL(right_node) ||
+             OB_ISNULL(node) ||
+             OB_UNLIKELY(INT64_MAX == right_node->value_)) {
+    *error_code = OB_PARSER_ERR_UNEXPECTED;
+  } else if (OB_UNLIKELY(!(T_OP_OR == right_node->type_ ||
+                           T_OP_AND == right_node->type_ ||
+                           T_EXPR_LIST == right_node->type_ ||
+                           T_SET_UNION == right_node->type_ ||
+                           T_SET_UNION_ALL == right_node->type_))) {
     *error_code = OB_PARSER_ERR_UNEXPECTED;
   } else {
     int64_t capacity = get_need_reserve_capacity(right_node->num_child_ + 1);
@@ -948,17 +956,21 @@ ParseNode *push_front_child(void *malloc_pool, int *error_code, ParseNode *right
 ParseNode *append_child(void *malloc_pool, int *error_code, ParseNode *left_node, ParseNode *right_node)
 {
   ParseNode *ret_node = NULL;
-  if (OB_ISNULL(malloc_pool) || OB_ISNULL(error_code)) {
+  if (OB_ISNULL(error_code)) {
     (void)fprintf(stderr, "ERROR parser result is NULL\n");
-  } else if (NULL == left_node || NULL == right_node) {
-    /* do nothing */
-  } else if (left_node->type_ != right_node->type_ ||
-             (left_node->type_ != T_OP_OR &&
-              left_node->type_ != T_OP_AND &&
-              left_node->type_ != T_EXPR_LIST) ||
-             left_node->value_ == INT64_MAX ||
-             right_node->value_ == INT64_MAX) {
+  } else if (OB_ISNULL(malloc_pool) ||
+             OB_ISNULL(left_node) ||
+             OB_ISNULL(right_node) ||
+             OB_UNLIKELY(INT64_MAX == left_node->value_ || INT64_MAX == right_node->value_) ||
+             OB_UNLIKELY(left_node->type_ != right_node->type_)) {
     *error_code = OB_PARSER_ERR_UNEXPECTED;
+  } else if (OB_UNLIKELY(!(T_OP_OR == left_node->type_ ||
+                           T_OP_AND == left_node->type_ ||
+                           T_EXPR_LIST == left_node->type_ ||
+                           T_SET_UNION == left_node->type_ ||
+                           T_SET_UNION_ALL == left_node->type_))) {
+    *error_code = OB_PARSER_ERR_UNEXPECTED;
+
   } else {
     int64_t num_child = left_node->num_child_ + right_node->num_child_;
     int64_t capacity = get_need_reserve_capacity(num_child);
@@ -1004,4 +1016,25 @@ ParseNode *adjust_inner_join_inner(int *error_code, ParseNode *inner_join, Parse
     ret_node = inner_join;
   }
   return ret_node;
+}
+
+ParseNodeOptParens *new_parse_node_opt_parens(void *malloc)
+{
+  ParseNodeOptParens *new_node = (ParseNodeOptParens *)parse_malloc(sizeof(ParseNodeOptParens), malloc);
+  if (NULL == new_node) {
+    (void)printf("ERROR malloc memory failed\n");
+  } else {
+    new_node->select_node_ = NULL;
+    new_node->is_parenthesized_ = false;
+  }
+  return new_node;
+}
+
+extern int ob_backtrace_c(void **buffer, int size);
+extern char *parray_c(char *buf, int64_t len, int64_t *array, int size);
+char *parser_lbt(void **addr_buff, const size_t addr_size,
+                 char *str_buff, const size_t str_size)
+{
+  int size = ob_backtrace_c(addr_buff, addr_size);
+  return parray_c(str_buff, str_size, (int64_t *)addr_buff, size);
 }

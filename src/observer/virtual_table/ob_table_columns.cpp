@@ -1223,7 +1223,7 @@ int ObTableColumns::resolve_view_definition(
           LOG_WARN("create query context failed", K(ret));
         } else {
           // set # of question marks
-          resolver_ctx.query_ctx_->question_marks_count_ = static_cast<int64_t> (parse_result.question_mark_ctx_.count_);
+          resolver_ctx.query_ctx_->set_questionmark_count(static_cast<int64_t> (parse_result.question_mark_ctx_.count_));
           resolver_ctx.query_ctx_->sql_schema_guard_.set_schema_guard(schema_guard);
           uint64_t session_id = 0;
           if (session->get_session_type() != ObSQLSessionInfo::INNER_SESSION) {

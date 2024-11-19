@@ -1151,6 +1151,14 @@ int64_t ObSqlPlanManagementModeChecker::get_spm_mode_by_string(const common::ObS
     spm_mode = 0;
   } else if (0 == string.case_compare("OnlineEvolve")) {
     spm_mode = 1;
+  } else if (0 == string.case_compare("BaselineFirst")) {
+    uint64_t cluster_version = GET_MIN_CLUSTER_VERSION();
+    if (cluster_version >= CLUSTER_VERSION_4_3_5_0 ||
+        (cluster_version >= MOCK_CLUSTER_VERSION_4_2_5_0 && cluster_version < CLUSTER_VERSION_4_3_0_0)) {
+      spm_mode = 2;
+    } else {
+      spm_mode = -1;
+    }
   }
   return spm_mode;
 }

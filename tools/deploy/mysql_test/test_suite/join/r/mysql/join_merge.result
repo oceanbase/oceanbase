@@ -288,7 +288,7 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |MERGE JOIN           |    |2       |12          |
+|0 |MERGE JOIN           |    |4       |12          |
 |1 |├─MERGE JOIN         |    |6       |8           |
 |2 |│ ├─SORT             |    |6       |4           |
 |3 |│ │ └─TABLE FULL SCAN|aa  |6       |3           |
@@ -332,7 +332,7 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |MERGE JOIN           |    |2       |12          |
+|0 |MERGE JOIN           |    |4       |12          |
 |1 |├─MERGE JOIN         |    |6       |8           |
 |2 |│ ├─SORT             |    |6       |4           |
 |3 |│ │ └─TABLE FULL SCAN|aa  |6       |3           |
@@ -889,7 +889,7 @@ Query Plan
 ===================================================================
 |ID|OPERATOR                       |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------
-|0 |MERGE JOIN                     |        |2       |50          |
+|0 |MERGE JOIN                     |        |4       |51          |
 |1 |├─MERGE JOIN                   |        |5       |35          |
 |2 |│ ├─PX COORDINATOR MERGE SORT  |        |6       |18          |
 |3 |│ │ └─EXCHANGE OUT DISTR       |:EX10000|6       |16          |
@@ -960,7 +960,7 @@ Query Plan
 ===================================================================
 |ID|OPERATOR                       |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------
-|0 |MERGE JOIN                     |        |2       |50          |
+|0 |MERGE JOIN                     |        |4       |51          |
 |1 |├─MERGE JOIN                   |        |5       |35          |
 |2 |│ ├─PX COORDINATOR MERGE SORT  |        |6       |18          |
 |3 |│ │ └─EXCHANGE OUT DISTR       |:EX10000|6       |16          |
@@ -1659,7 +1659,7 @@ Query Plan
 |ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
 |0 |SORT                     |    |13      |9           |
-|1 |└─NESTED-LOOP OUTER JOIN |    |13      |4           |
+|1 |└─NESTED-LOOP OUTER JOIN |    |13      |5           |
 |2 |  ├─TABLE FULL SCAN      |t2  |13      |3           |
 |3 |  └─MATERIAL             |    |5       |4           |
 |4 |    └─TABLE FULL SCAN    |t7  |5       |3           |

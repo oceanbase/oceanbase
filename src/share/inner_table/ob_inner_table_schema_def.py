@@ -7513,7 +7513,36 @@ def_table_schema(
   ],
 )
 
-# 520 : __all_spm_evo_result
+def_table_schema(
+  owner = 'yibo.tyf',
+  table_id = '520',
+  table_name = '__all_spm_evo_result',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = [],
+  rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('record_time', 'timestamp'),
+      ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+      ('svr_port', 'int'),
+  ],
+  in_tenant_space=True,
+  is_cluster_private=True,
+  meta_record_in_sys = False,
+  normal_columns = [
+      ('database_id', 'int'),
+      ('sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH'),
+      ('type', 'int'),
+      ('start_time', 'timestamp', 'true'),
+      ('end_time', 'timestamp', 'true'),
+      ('status', 'varchar:7', 'true'),
+      ('new_plan_better', 'bool', 'true'),
+      ('evo_plan_exec_count', 'int', 'true'),
+      ('evo_plan_cpu_time', 'int', 'true'),
+      ('baseline_exec_count', 'int', 'true'),
+      ('baseline_cpu_time', 'int', 'true'),
+  ],
+)
+
 # 521 : __all_detect_lock_info_v2
 # 522 : __all_pkg_type
 # 523 : __all_pkg_type_attr
@@ -15091,7 +15120,12 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 # 12494: __all_virtual_session_sys_variable
-# 12495: __all_virtual_spm_evo_result
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12495',
+  table_name = '__all_virtual_spm_evo_result',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__all_spm_evo_result']))
+
 def_table_schema(
   owner = 'huhaosheng.hhs',
   table_name     = '__all_virtual_vector_index_info',
@@ -15733,7 +15767,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15462'
 # 15464: __all_virtual_kv_group_commit_status
 
 # 15465: __all_virtual_session_sys_variable
-# 15466: __all_spm_evo_result
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15466', all_def_keywords['__all_virtual_spm_evo_result']))
 # 15467: __all_virtual_vector_index_info
 
 # 15468: __all_pkg_type
@@ -25811,7 +25845,7 @@ def_table_schema(
     CAST(NULL AS    NUMBER) AS IM_BLOCK_COUNT,
     CAST(NULL AS    DATETIME) AS IM_STAT_UPDATE_TIME,
     CAST(NULL AS    NUMBER) AS SCAN_RATE,
-    CAST(STAT.SPARE1 AS    NUMBER) AS SAMPLE_SIZE,
+    CAST(STAT.SPARE1 AS    DECIMAL(20, 0)) AS SAMPLE_SIZE,
     CAST(STAT.LAST_ANALYZED AS DATETIME(6)) AS LAST_ANALYZED,
     CAST((CASE STAT.GLOBAL_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS GLOBAL_STATS,
     CAST((CASE STAT.USER_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS USER_STATS,
@@ -38156,8 +38190,78 @@ def_table_schema(
 # 21613: CDB_WR_SQL_PLAN
 # 21614: DBA_WR_RES_MGR_SYSSTAT
 # 21615: CDB_WR_RES_MGR_SYSSTAT
-# 21616: DBA_OB_SPM_EVO_RESULT
-# 21617: CDB_OB_SPM_EVO_RESULT
+
+def_table_schema(
+  owner = 'yibo.tyf',
+  table_name      = 'DBA_OB_SPM_EVO_RESULT',
+  table_id        = '21616',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT D.DATABASE_NAME AS OWNER,
+         RECORD_TIME,
+         SVR_IP,
+         SVR_PORT,
+         SQL_ID,
+         CAST(CASE WHEN TYPE = 0 THEN 'OnlineEvolve'
+                   WHEN TYPE = 1 THEN 'FirstBaseline'
+                   WHEN TYPE = 2 THEN 'UnReproducible'
+                   WHEN TYPE = 3 THEN 'BaselineFirst'
+                   ELSE NULL END AS CHAR(32)) AS TYPE,
+         START_TIME,
+         END_TIME,
+         STATUS,
+         NEW_PLAN_BETTER,
+         EVO_PLAN_EXEC_COUNT,
+         EVO_PLAN_CPU_TIME,
+         BASELINE_EXEC_COUNT,
+         BASELINE_CPU_TIME
+  FROM OCEANBASE.__ALL_VIRTUAL_SPM_EVO_RESULT R,
+       OCEANBASE.__ALL_DATABASE D
+  WHERE R.TENANT_ID = EFFECTIVE_TENANT_ID()
+    AND D.TENANT_ID = 0
+    AND R.DATABASE_ID = D.DATABASE_ID
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'yibo.tyf',
+  table_name      = 'CDB_OB_SPM_EVO_RESULT',
+  table_id        = '21617',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+  SELECT R.TENANT_ID,
+         D.DATABASE_NAME AS OWNER,
+         RECORD_TIME,
+         SVR_IP,
+         SVR_PORT,
+         SQL_ID,
+         CAST(CASE WHEN TYPE = 0 THEN 'OnlineEvolve'
+                   WHEN TYPE = 1 THEN 'FirstBaseline'
+                   WHEN TYPE = 2 THEN 'UnReproducible'
+                   WHEN TYPE = 3 THEN 'BaselineFirst'
+                   ELSE NULL END AS CHAR(32)) AS TYPE,
+         START_TIME,
+         END_TIME,
+         STATUS,
+         NEW_PLAN_BETTER,
+         EVO_PLAN_EXEC_COUNT,
+         EVO_PLAN_CPU_TIME,
+         BASELINE_EXEC_COUNT,
+         BASELINE_CPU_TIME
+  FROM OCEANBASE.__ALL_VIRTUAL_SPM_EVO_RESULT R,
+       OCEANBASE.__ALL_VIRTUAL_DATABASE D
+  WHERE R.TENANT_ID = D.TENANT_ID
+    AND R.DATABASE_ID = D.DATABASE_ID
+""".replace("\n", " ")
+)
+
 # 21618: DBA_OB_KV_REDIS_TABLE
 # 21619: CDB_OB_KV_REDIS_TABLE
 
@@ -67081,7 +67185,44 @@ def_table_schema(
 # 28258: V$OB_RES_MGR_SYSSTAT
 # 28259: DBA_WR_SQL_PLAN
 # 28260: DBA_WR_RES_MGR_SYSSTAT
-# 28261: DBA_OB_SPM_EVO_RESULT
+
+def_table_schema(
+  owner = 'yibo.tyf',
+  table_name      = 'DBA_OB_SPM_EVO_RESULT',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28261',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT D.DATABASE_NAME AS OWNER,
+         RECORD_TIME,
+         SVR_IP,
+         SVR_PORT,
+         SQL_ID,
+         CAST(CASE WHEN TYPE = 0 THEN 'OnlineEvolve'
+                   WHEN TYPE = 1 THEN 'FirstBaseline'
+                   WHEN TYPE = 2 THEN 'UnReproducible'
+                   WHEN TYPE = 3 THEN 'BaselineFirst'
+                   ELSE NULL END AS VARCHAR(32)) AS TYPE,
+         START_TIME,
+         END_TIME,
+         STATUS,
+         NEW_PLAN_BETTER,
+         EVO_PLAN_EXEC_COUNT,
+         EVO_PLAN_CPU_TIME,
+         BASELINE_EXEC_COUNT,
+         BASELINE_CPU_TIME
+  FROM SYS.ALL_VIRTUAL_SPM_EVO_RESULT R,
+       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT D
+  WHERE R.TENANT_ID = EFFECTIVE_TENANT_ID()
+    AND D.TENANT_ID = EFFECTIVE_TENANT_ID()
+    AND R.DATABASE_ID = D.DATABASE_ID
+""".replace("\n", " ")
+)
 
 def_table_schema(
   owner           = 'zz412656',

@@ -2081,6 +2081,18 @@ int ObInnerSQLConnection::set_session_variable(const ObString &name, int64_t val
   return ret;
 }
 
+int ObInnerSQLConnection::set_session_variable(const ObString &name, const ObString &val)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(get_session().update_sys_variable(name, val))) {
+    LOG_WARN("failed to update sys variable", K(ret), K(name), K(val));
+  }
+  return ret;
+}
+
 lib::Worker::CompatMode ObInnerSQLConnection::get_compat_mode() const
 {
   lib::Worker::CompatMode mode;

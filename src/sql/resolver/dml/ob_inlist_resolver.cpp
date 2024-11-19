@@ -83,6 +83,7 @@ int ObInListResolver::resolve_values_table_from_inlist(const ParseNode *in_list,
     table_def->column_cnt_ = column_cnt;
     table_def->row_cnt_ = row_cnt;
     table_def->access_type_ = access_type;
+    table_def->is_const_ = true;
   }
   if (OB_FAIL(ret)) {
   } else if (ObValuesTableDef::ACCESS_PARAM == access_type &&

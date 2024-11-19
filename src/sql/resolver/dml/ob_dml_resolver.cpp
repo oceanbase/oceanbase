@@ -1833,6 +1833,8 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
         LOG_WARN("Failed to check and remove outer join symbol", K(ret));
       } else if (OB_FAIL(resolve_special_expr(expr, current_scope_))) {
         LOG_WARN("resolve special expression failed", K(ret));
+      } else if (OB_FAIL(expr->calc_hash())) {
+        LOG_WARN("failed to calc expr hash", K(ret), KPC(expr));
       }
     }
     if (OB_SUCC(ret) &&
@@ -14873,7 +14875,9 @@ int ObDMLResolver::resolve_transform_hint(const ParseNode &hint_node,
     case T_DECORRELATE:
     case T_NO_DECORRELATE:
     case T_USE_LATE_MATERIALIZATION:
-    case T_NO_USE_LATE_MATERIALIZATION: {
+    case T_NO_USE_LATE_MATERIALIZATION:
+    case T_TRANSFORM_DISTINCT_AGG:
+    case T_NO_TRANSFORM_DISTINCT_AGG: {
       if (OB_FAIL(resolve_normal_transform_hint(hint_node, trans_hint))) {
         LOG_WARN("failed to resolve hint with qb name param.", K(ret));
       }
@@ -17949,6 +17953,7 @@ int ObDMLResolver::compute_values_table_row_count(ObValuesTableDef &table_def)
         table_def.start_param_idx_ = param_idx;
         param_expr = static_cast<ObConstRawExpr *>(expr2);
         table_def.end_param_idx_ = param_expr->get_value().get_unknown();
+        table_def.is_const_ = true;
       }
     }
   }

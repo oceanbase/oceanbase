@@ -891,8 +891,8 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
       is_valid = val.is_int() && (0 <= val.get_int() && val.get_int() < 100);
       break;
     }
-    case PUSHDOWN_STORAGE_LEVEL: {
-      is_valid = val.is_int() && (0 <= val.get_int() && val.get_int() <= 4);
+    case OPTIMIZER_COST_BASED_TRANSFORMATION: {
+      is_valid = val.is_int() && (0 <= val.get_int() && val.get_int() <= 2);
       break;
     }
     case CORRELATION_FOR_CARDINALITY_ESTIMATION:
@@ -1203,6 +1203,7 @@ ObItemType ObHint::get_hint_type(ObItemType type)
     case T_NO_COALESCE_AGGR:      return T_COALESCE_AGGR;
     case T_MV_NO_REWRITE:       return T_MV_REWRITE;
     case T_NO_USE_LATE_MATERIALIZATION: return T_USE_LATE_MATERIALIZATION;
+    case T_NO_TRANSFORM_DISTINCT_AGG:     return T_TRANSFORM_DISTINCT_AGG;
 
     // optimize hint
     case T_NO_USE_DAS_HINT:     return T_USE_DAS_HINT;
@@ -1263,6 +1264,8 @@ const char* ObHint::get_hint_name(ObItemType type, bool is_enable_hint /* defaul
     case T_MV_REWRITE:          return is_enable_hint ? "MV_REWRITE" : "NO_MV_REWRITE";
     case T_USE_LATE_MATERIALIZATION:
       return is_enable_hint ? "USE_LATE_MATERIALIZATION" : "NO_USE_LATE_MATERIALIZATION";
+    case T_TRANSFORM_DISTINCT_AGG:
+      return is_enable_hint ? "TRANSFORM_DISTINCT_AGG" : "NO_TRANSFORM_DISTINCT_AGG";
     // optimize hint
     case T_INDEX_HINT:          return "INDEX";
     case T_FULL_HINT:           return "FULL";

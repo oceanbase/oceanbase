@@ -86,8 +86,6 @@ public:
         rollup_exprs_(),
         aggr_exprs_(),
         algo_(AGGREGATE_UNINITIALIZED),
-        distinct_card_(0.0),
-        distinct_per_dop_(0.0),
         from_pivot_(false),
         is_push_down_(false),
         is_partition_gi_(false),
@@ -155,7 +153,6 @@ public:
   int inner_est_cost(const int64_t parallel,
                      double child_card,
                      double &child_ndv,
-                     double &per_dop_ndv,
                      double &op_cost);
   int get_child_est_info(const int64_t parallel, double &child_card, double &child_ndv, double &selectivity);
   int get_gby_output_exprs(ObIArray<ObRawExpr *> &output_exprs);
@@ -167,8 +164,6 @@ public:
   virtual int compute_equal_set() override;
   virtual int compute_fd_item_set() override;
   virtual int compute_op_ordering() override;
-  double get_distinct_card() const { return distinct_card_; }
-  void set_distinct_card(const double distinct_card) { distinct_card_ = distinct_card; }
   bool from_pivot() const { return from_pivot_; }
   void set_from_pivot(const bool value) { from_pivot_ = value; }
   int get_group_rollup_exprs(common::ObIArray<ObRawExpr *> &group_rollup_exprs) const;
@@ -241,7 +236,7 @@ public:
   void set_pushdown_scalar_aggr() { is_pushdown_scalar_aggr_ = true; }
   bool is_pushdown_scalar_aggr() { return is_pushdown_scalar_aggr_; }
 
-  VIRTUAL_TO_STRING_KV(K_(group_exprs), K_(rollup_exprs), K_(aggr_exprs), K_(algo), K_(distinct_card),
+  VIRTUAL_TO_STRING_KV(K_(group_exprs), K_(rollup_exprs), K_(aggr_exprs), K_(algo),
       K_(is_push_down));
   virtual int get_card_without_filter(double &card) override;
 private:
@@ -258,9 +253,6 @@ private:
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> rollup_exprs_;
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> aggr_exprs_;
   AggregateAlgo algo_;
-  // used for the execution engine to set hash bucket size
-  double distinct_card_;
-  double distinct_per_dop_;
   bool from_pivot_;
   bool is_push_down_;
   bool is_partition_gi_;

@@ -178,6 +178,7 @@ public:
   // session environment
   virtual int get_session_variable(const ObString &name, int64_t &val) = 0;
   virtual int set_session_variable(const ObString &name, int64_t val) = 0;
+  virtual int set_session_variable(const ObString &name, const ObString &val) = 0;
 
   virtual int execute(const uint64_t tenant_id, ObIExecutor &executor)
   {

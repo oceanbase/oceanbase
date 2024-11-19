@@ -1074,6 +1074,7 @@ public:
   int get_name_case_mode(common::ObNameCaseMode &case_mode) const;
   int get_init_connect(common::ObString &str) const;
   int get_locale_name(common::ObString &str) const;
+  int get_optimizer_cost_based_transformation(int64_t &cbqt_policy) const;
   /// @}
 
   ///@{ user variables related:

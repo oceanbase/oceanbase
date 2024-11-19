@@ -272,6 +272,7 @@ int ObTransformUdtUtils::replace_udt_assignment_exprs(ObTransformerCtx *ctx, ObD
             ObExprResType res_type;
             res_type.set_varchar();
             res_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+            res_type.set_param(value_expr->get_result_type().get_param());
             value_expr->set_result_type(res_type);
           }
         }

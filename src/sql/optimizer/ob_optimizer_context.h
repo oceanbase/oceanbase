@@ -219,6 +219,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     batch_size_(0),
     root_stmt_(root_stmt),
     enable_px_batch_rescan_(-1),
+    batch_rescan_flags_(0),
     column_usage_infos_(),
     temp_table_infos_(),
     exchange_allocated_(false),
@@ -255,8 +256,6 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     optimizer_index_cost_adj_(0),
     is_skip_scan_enabled_(false),
     enable_better_inlist_costing_(false),
-    nlj_batching_enabled_(false),
-    enable_spf_batch_rescan_(false),
     correlation_type_(ObEstCorrelationType::MAX),
     use_column_store_replica_(false),
     push_join_pred_into_view_enabled_(true),
@@ -424,6 +423,21 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     }
     return enable_px_batch_rescan_;
   }
+
+  void init_batch_rescan_flags(const bool enable_batch_nlj,
+                               const bool enable_batch_spf,
+                               const uint64_t opt_version)
+  {
+    enable_nlj_batch_rescan_ = enable_batch_nlj;
+    enable_spf_batch_rescan_ = enable_batch_nlj && enable_batch_spf;
+    // adaptive group-rescan is supported in 4.2.3.0
+    enable_425_batch_rescan_ = GET_MIN_CLUSTER_VERSION() >= COMPAT_VERSION_4_2_3
+                               && (opt_version >= COMPAT_VERSION_4_2_5 || opt_version >= COMPAT_VERSION_4_3_5);
+  }
+  inline bool enable_nlj_batch_rescan() const { return enable_nlj_batch_rescan_; }
+  inline bool enable_spf_batch_rescan() const { return enable_spf_batch_rescan_; }
+  inline bool enable_425_batch_rescan() const { return enable_425_batch_rescan_; }
+  inline bool enable_experimental_batch_rescan() const { return false; }
 
   int get_px_object_sample_rate()
   {
@@ -658,10 +672,6 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_is_skip_scan_enabled(bool v) { is_skip_scan_enabled_ = v; }
   inline bool get_enable_better_inlist_costing() const { return enable_better_inlist_costing_; }
   inline void set_enable_better_inlist_costing(bool v) { enable_better_inlist_costing_ = v; }
-  inline bool get_nlj_batching_enabled() const { return nlj_batching_enabled_; }
-  inline void set_nlj_batching_enabled(bool v) { nlj_batching_enabled_ = v; }
-  inline bool get_enable_spf_batch_rescan() const { return enable_spf_batch_rescan_; }
-  inline void set_enable_spf_batch_rescan(bool v) { enable_spf_batch_rescan_ = v; }
   inline bool use_column_store_replica() const { return use_column_store_replica_; }
   inline void set_use_column_store_replica(bool use) { use_column_store_replica_ = use; }
 
@@ -707,6 +717,14 @@ private:
   int64_t batch_size_;
   ObDMLStmt *root_stmt_;
   int enable_px_batch_rescan_;
+  union {
+    int64_t batch_rescan_flags_;
+    struct {
+      int64_t enable_nlj_batch_rescan_  : 1;  // enable nestloop inner path batch rescan
+      int64_t enable_spf_batch_rescan_  : 1;  // enable subplan filter batch rescan
+      int64_t enable_425_batch_rescan_  : 1;  // enbale batch rescan behaviors supported in 4.2.5
+    };
+  };
   common::ObSEArray<ColumnUsageArg, 16, common::ModulePageAllocator, true> column_usage_infos_;
   common::ObSEArray<ObSqlTempTableInfo*, 1, common::ModulePageAllocator, true> temp_table_infos_;
   bool exchange_allocated_;
@@ -761,8 +779,6 @@ private:
   int64_t optimizer_index_cost_adj_;
   bool is_skip_scan_enabled_;
   bool enable_better_inlist_costing_;
-  bool nlj_batching_enabled_;
-  bool enable_spf_batch_rescan_;
   ObEstCorrelationType correlation_type_;
   bool use_column_store_replica_;
   bool push_join_pred_into_view_enabled_;

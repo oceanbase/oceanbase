@@ -34,6 +34,14 @@ extern "C"
       sleep(120);
     }
   }
+  extern int ob_backtrace_c(void **buffer, int size)
+  {
+    return 0;
+  }
+  extern char *parray_c(char *buf, int64_t len, int64_t *array, int size)
+  {
+    return NULL;
+  }
 }
 
 using namespace oceanbase::common;

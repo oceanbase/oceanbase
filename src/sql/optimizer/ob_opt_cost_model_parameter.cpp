@@ -210,6 +210,24 @@ double ObOptCostModelParameter::get_px_batch_rescan_per_row_cost(const OptSystem
     }
 }
 
+double ObOptCostModelParameter::get_das_rescan_per_row_rpc_cost(const OptSystemStat& stat) const
+{
+    if (stat.get_network_speed() <= 0) {
+        return DAS_RESCAN_PER_ROW_RPC_COST;
+    } else {
+        return DAS_RESCAN_PER_ROW_RPC_COST / stat.get_network_speed();
+    }
+}
+
+double ObOptCostModelParameter::get_das_batch_rescan_per_row_rpc_cost(const OptSystemStat& stat) const
+{
+    if (stat.get_network_speed() <= 0) {
+        return DAS_BATCH_RESCAN_PER_ROW_RPC_COST;
+    } else {
+        return DAS_BATCH_RESCAN_PER_ROW_RPC_COST / stat.get_network_speed();
+    }
+}
+
 double ObOptCostModelParameter::get_nl_scan_cost(const OptSystemStat& stat) const
 {
     if (stat.get_cpu_speed() <= 0) {
