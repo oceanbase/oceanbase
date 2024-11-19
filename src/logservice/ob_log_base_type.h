@@ -160,6 +160,10 @@ enum ObLogBaseType
 
   // for DBMS_SCHEDULER GC
   DBMS_SCHEDULER_GC_LOG_BASE_TYPE = 50,
+#ifdef  OB_BUILD_SHARED_STORAGE
+  // for sswriter of shared storage
+  SHARED_STORAGE_SSWRITER_LOG_BASE_TYPE = 51,
+#endif
 
   // pay attention!!!
   // add log type in log_base_type_to_string
@@ -283,6 +287,10 @@ int log_base_type_to_string(const ObLogBaseType log_type,
     strncpy(str ,"DBMS_SCHEDULER", str_len);
   } else if (log_type == DBMS_SCHEDULER_GC_LOG_BASE_TYPE) {
     strncpy(str ,"DBMS_SCHEDULER_GC", str_len);
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (log_type == SHARED_STORAGE_SSWRITER_LOG_BASE_TYPE) {
+    strncpy(str ,"SHARED_STORAGE_SSWRITER", str_len);
+#endif
   } else {
     ret = OB_INVALID_ARGUMENT;
   }

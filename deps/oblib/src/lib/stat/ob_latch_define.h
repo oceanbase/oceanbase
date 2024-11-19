@@ -379,8 +379,9 @@ LATCH_DEF(DAG_PRIO_SCHEDULER, 344, "dag prio scheduler lock", LATCH_FIFO, 2000, 
 LATCH_DEF(LS_RESERVED_SNAPSHOT_LOCK, 345, "ls reserved snapshot lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(STORAGE_CLOG_RECORDER_LOCK, 346, "storage clog recorder lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(SPM_SET_LOCK, 347, "spm set latch", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(SSWRITER_CTX_LOCK, 348, "sswriter ctx lock", LATCH_FIFO, 2000, 0, true)
 
-LATCH_DEF(LATCH_END, 348, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(LATCH_END, 349, "latch end", LATCH_FIFO, 2000, 0, true)
 
 
 #endif
