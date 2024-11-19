@@ -1299,6 +1299,10 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprArrayConcat::eval_array_concat,                      /* 784 */
   NULL, // ObExprArrayDifference::eval_array_difference,              /* 785 */
   NULL, // ObExprArrayMap::eval_array_first,                          /* 786 */
+  NULL, // ObExprCalcPartitionName::get_partition_name,               /* 787 */
+  NULL, // ObExprCalcSubPartitionName::get_sub_partition_name,        /* 788 */
+  NULL, // ObExprCalcPartitionIdx::get_partition_idx,                 /* 789 */
+  NULL, // ObExprCalcSubPartitionIdx::get_sub_partition_idx,          /* 790 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
