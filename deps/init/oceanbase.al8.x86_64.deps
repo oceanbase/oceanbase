@@ -24,7 +24,7 @@ devdeps-apr-1.6.5-342024100911.al8.x86_64.rpm
 devdeps-xz-5.2.2-112024092715.al8.x86_64.rpm
 devdeps-lua-5.4.3-162024092718.al8.x86_64.rpm
 devdeps-oss-c-sdk-3.11.2-42024100915.al8.x86_64.rpm
-devdeps-zlib-static-1.2.13-52024092714.al8.x86_64.rpm
+devdeps-zlib-static-1.2.13-82024102414.al8.x86_64.rpm
 devdeps-ncurses-static-6.2-112024092810.al8.x86_64.rpm
 devdeps-boost-1.74.0-72024092811.al8.x86_64.rpm
 devdeps-s2geometry-0.9.0-112024100811.al8.x86_64.rpm
