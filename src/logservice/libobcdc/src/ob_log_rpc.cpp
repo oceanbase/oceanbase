@@ -116,6 +116,7 @@ int ObLogRpc::async_stream_fetch_log(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   req.set_client_id(client_id_);
+  req.set_client_type(obrpc::ObCdcClientType::CLIENT_TYPE_CDC);
   if (1 == TCONF.test_mode_force_fetch_archive) {
     req.set_flag(ObCdcRpcTestFlag::OBCDC_RPC_FETCH_ARCHIVE);
   }

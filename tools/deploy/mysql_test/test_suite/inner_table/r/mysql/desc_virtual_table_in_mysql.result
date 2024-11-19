@@ -5189,6 +5189,34 @@ IF(count(*) >= 0, 1, 0)
 "oceanbase.__all_virtual_nic_info runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_log_transport_dest_stat;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO		NULL	
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+ls_id	bigint(20)	NO		NULL	
+client_ip	varchar(46)	NO		NULL	
+client_pid	bigint(20)	NO		NULL	
+client_tenant_id	bigint(20)	NO		NULL	
+client_type	bigint(20)	NO		NULL	
+start_serve_time	timestamp(6)	NO		NULL	
+last_serve_time	timestamp(6)	NO		NULL	
+last_read_source	bigint(20)	NO		NULL	
+last_request_type	bigint(20)	NO		NULL	
+last_request_log_lsn	bigint(20) unsigned	NO		NULL	
+last_request_log_scn	bigint(20) unsigned	NO		NULL	
+last_failed_request	longtext	NO		NULL	
+avg_request_process_time	bigint(20)	NO		NULL	
+avg_request_queue_time	bigint(20)	NO		NULL	
+avg_request_read_log_time	bigint(20)	NO		NULL	
+avg_request_read_log_size	bigint(20)	NO		NULL	
+avg_log_transport_bandwidth	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_log_transport_dest_stat;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_log_transport_dest_stat runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_ss_local_cache_info;
 Field	Type	Null	Key	Default	Extra
 svr_ip	varchar(46)	NO		NULL	

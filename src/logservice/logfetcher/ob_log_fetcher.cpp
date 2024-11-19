@@ -111,12 +111,14 @@ int ObLogFetcher::init(
     log_fetcher_user_ = log_fetcher_user;
     fetching_mode_ = fetching_mode;
     self_tenant_id_ = self_tenant_id;
+
     // Before the LogFetcher module is initialized, the following configuration items need to be loaded
     configure(cfg);
     const int64_t max_log_file_buffer_cnt = max(
       (get_tenant_memory_limit(self_tenant_id_) >> 5) / palf::PALF_PHY_BLOCK_SIZE, 1);
     const int64_t MIN_FETCH_LOG_ARPC_RES_CNT = 4;
     const common::ObRegion region(cfg.region.str());
+    const obrpc::ObCdcClientType client_type = get_client_type_from_user_type(log_fetcher_user_);
 
     if (is_integrated_fetching_mode(fetching_mode_) && OB_FAIL(log_route_service_.init(
         proxy,
@@ -155,7 +157,7 @@ int ObLogFetcher::init(
       LOG_ERROR("init part fetch mgr fail", KR(ret));
     } else if (OB_FAIL(init_self_addr_())) {
       LOG_ERROR("init_self_addr_ fail", KR(ret));
-    } else if (OB_FAIL(rpc_.init(cluster_id, self_tenant_id, cfg.io_thread_num, cfg))) {
+    } else if (OB_FAIL(rpc_.init(cluster_id, self_tenant_id, client_type, cfg.io_thread_num, cfg))) {
       LOG_ERROR("init rpc handler fail", KR(ret));
     } else if (is_cdc(log_fetcher_user_) && OB_FAIL(start_lsn_locator_.init(
             cfg.start_lsn_locator_thread_num,

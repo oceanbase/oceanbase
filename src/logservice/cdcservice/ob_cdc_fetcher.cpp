@@ -88,7 +88,9 @@ void ObCdcFetcher::destroy()
 }
 
 int ObCdcFetcher::fetch_log(const ObCdcLSFetchLogReq &req,
-    ObCdcLSFetchLogResp &resp)
+    ObCdcLSFetchLogResp &resp,
+    ClientLSCtx &ctx,
+    ObCdcFetchLogTimeStats &fetch_log_time_stat)
 {
   int ret = OB_SUCCESS;
   FetchRunTime frt;
@@ -96,7 +98,6 @@ int ObCdcFetcher::fetch_log(const ObCdcLSFetchLogReq &req,
 
   // Generate this RPC ID using the current timestamp directly.
   ObLogRpcIDType rpc_id = cur_tstamp;
-  ObCdcFetchLogTimeStats fetch_log_time_stat;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (OB_UNLIKELY(! req.is_valid())) {
@@ -110,30 +111,10 @@ int ObCdcFetcher::fetch_log(const ObCdcLSFetchLogReq &req,
     PalfHandleGuard palf_handle_guard;
     const ObCdcRpcId &rpc_id = req.get_client_id();
 
-    ClientLSCtx *ls_ctx = NULL;
     int8_t fetch_log_flag = req.get_flag();
 
-    if (OB_FAIL(host_->get_or_create_client_ls_ctx(req.get_client_id(),
-        req.get_tenant_id(), ls_id, fetch_log_flag,
-        req.get_progress(), ObCdcFetchLogProtocolType::LogGroupEntryProto, ls_ctx))) {
-      LOG_WARN("failed to get or create client ls ctx", K(req), KP(ls_ctx));
-    } else if (OB_ISNULL(ls_ctx)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get null ctx afeter get_or_create_client_ls_ctx, unexpected", KP(ls_ctx), K(req));
-    } else {
-      ls_ctx->update_touch_ts();
-      if (OB_FAIL(do_fetch_log_(req, frt, resp, *ls_ctx, fetch_log_time_stat))) {
-        LOG_WARN("do fetch log error", KR(ret), K(req));
-      }
-
-      if (OB_NOT_NULL(ls_ctx)) {
-        int tmp_ret = OB_SUCCESS;
-        if (OB_TMP_FAIL(host_->revert_client_ls_ctx(ls_ctx))) {
-          LOG_WARN_RET(tmp_ret, "failed to revert client ls ctx", K(req));
-        } else {
-          ls_ctx = nullptr;
-        }
-      }
+    if (OB_FAIL(do_fetch_log_(req, frt, resp, ctx, fetch_log_time_stat))) {
+      LOG_WARN("do fetch log error", KR(ret), K(req));
     }
   }
 
@@ -157,35 +138,16 @@ int ObCdcFetcher::fetch_log(const ObCdcLSFetchLogReq &req,
 }
 
 int ObCdcFetcher::fetch_raw_log(const ObCdcFetchRawLogReq &req,
-    ObCdcFetchRawLogResp &resp)
+    ObCdcFetchRawLogResp &resp,
+    ClientLSCtx &ctx)
 {
   int ret = OB_SUCCESS;
   const int64_t cur_tstamp = ObTimeUtility::current_time();
   ObCdcFetchRawStatus &stat = resp.get_fetch_status();
-  ClientLSCtx *ctx = nullptr;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (OB_FAIL(host_->get_or_create_client_ls_ctx(req.get_client_id(),
-      req.get_tenant_id(), req.get_ls_id(), req.get_flag(),
-      req.get_progress(), ObCdcFetchLogProtocolType::RawLogDataProto, ctx))) {
-    LOG_WARN("failed to get or create client ls ctx when fetching raw log", K(req), KP(ctx));
-  } else if (OB_ISNULL(ctx)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get null ctx afeter get_or_create_client_ls_ctx, unexpected", KP(ctx), K(req));
-  } else {
-    ctx->update_touch_ts();
-    if (OB_FAIL(do_fetch_raw_log_(req, resp, *ctx))) {
-      LOG_WARN("failed to fetch raw log", K(req), K(resp), KPC(ctx));
-    }
-
-    if (OB_NOT_NULL(ctx)) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(host_->revert_client_ls_ctx(ctx))) {
-        LOG_WARN_RET(tmp_ret, "failed to revert client ls ctx", K(req));
-      } else {
-        ctx = nullptr;
-      }
-    }
+  } else if (OB_FAIL(do_fetch_raw_log_(req, resp, ctx))) {
+      LOG_WARN("failed to fetch raw log", K(req), K(resp), K(ctx));
   }
 
   resp.set_err(ret);
@@ -222,7 +184,8 @@ int ObCdcFetcher::fetch_missing_log(const obrpc::ObCdcLSFetchMissLogReq &req,
 
     if (OB_FAIL(host_->get_or_create_client_ls_ctx(req.get_client_id(),
         req.get_tenant_id(), ls_id, req.get_flag(),
-        req.get_progress(), ObCdcFetchLogProtocolType::Unknown, ls_ctx))) {
+        req.get_progress(), ObCdcFetchLogProtocolType::UnknownProto,
+        obrpc::ObCdcClientType::CLIENT_TYPE_CDC, ls_ctx))) {
       LOG_ERROR("get_or_create_client_ls_ctx failed", KR(ret), K(req));
     } else if (OB_ISNULL(ls_ctx)) {
       ret = OB_ERR_UNEXPECTED;

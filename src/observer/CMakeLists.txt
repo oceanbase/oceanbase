@@ -494,6 +494,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_vector_index_info.cpp
   virtual_table/ob_all_virtual_session_ps_info.cpp
   virtual_table/ob_all_virtual_tmp_file.cpp
+  virtual_table/ob_all_virtual_log_transport_dest_stat.cpp
   virtual_table/ob_all_virtual_kv_client_info.cpp
   virtual_table/ob_all_virtual_kv_group_commit_info.cpp
 )

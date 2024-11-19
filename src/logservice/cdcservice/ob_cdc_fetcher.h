@@ -63,7 +63,9 @@ public:
 public:
   // Fetch LogGroupEntry
   int fetch_log(const obrpc::ObCdcLSFetchLogReq &req,
-      obrpc::ObCdcLSFetchLogResp &resp);
+      obrpc::ObCdcLSFetchLogResp &resp,
+      ClientLSCtx &ctx,
+      ObCdcFetchLogTimeStats &fetch_log_time_stat);
 
   // Fetch Missing LogEntry
   // TODO optimize fetch LogEntry(Random read)
@@ -71,7 +73,8 @@ public:
       obrpc::ObCdcLSFetchLogResp &resp);
 
   int fetch_raw_log(const obrpc::ObCdcFetchRawLogReq &req,
-      obrpc::ObCdcFetchRawLogResp &resp);
+      obrpc::ObCdcFetchRawLogResp &resp,
+      ClientLSCtx &ctx);
 
 private:
   // @retval OB_SUCCESS         Success

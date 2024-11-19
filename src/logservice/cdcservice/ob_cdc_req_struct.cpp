@@ -35,7 +35,7 @@ int ObCdcRpcId::init(const uint64_t pid, const ObAddr &addr) {
 
 ObCdcFetchLogProtocolType get_fetch_log_protocol_type(const ObString &proto_type_str)
 {
-  ObCdcFetchLogProtocolType type = ObCdcFetchLogProtocolType::Unknown;
+  ObCdcFetchLogProtocolType type = ObCdcFetchLogProtocolType::UnknownProto;
   if (0 == proto_type_str.case_compare("v1")) {
     type = ObCdcFetchLogProtocolType::LogGroupEntryProto;
   } else if (0 == proto_type_str.case_compare("v2")) {
@@ -59,6 +59,66 @@ const char *fetch_log_protocol_type_str(const ObCdcFetchLogProtocolType type)
       break;
   }
   return type_str;
+}
+
+const char *cdc_client_type_str(const ObCdcClientType type)
+{
+  const char *type_str = "UNKNOWN";
+  switch (type) {
+    case ObCdcClientType::CLIENT_TYPE_CDC:
+      type_str = "CDC";
+      break;
+    case ObCdcClientType::CLIENT_TYPE_STANDBY:
+      type_str = "STANDBY";
+      break;
+    default:
+      type_str = "UNKNOWN";
+      break;
+  }
+  return type_str;
+}
+
+const char *feedback_type_str(const FeedbackType feedback)
+{
+  const char *type_str = "UNKNOWN";
+  switch (feedback) {
+    case FeedbackType::INVALID_FEEDBACK:
+      type_str = "INVALID_FEEDBACK";
+      break;
+    case FeedbackType::LAGGED_FOLLOWER:
+      type_str = "LAGGED_FOLLOWER";
+      break;
+    case FeedbackType::LOG_NOT_IN_THIS_SERVER:
+      type_str = "LOG_NOT_IN_THIS_SERVER";
+      break;
+    case FeedbackType::LS_OFFLINED:
+      type_str = "LS_OFFLINED";
+      break;
+    case FeedbackType::ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF:
+      type_str = "ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF";
+      break;
+    default:
+      type_str = "UNKNOWN";
+      break;
+  }
+  return type_str;
+}
+
+ObCdcClientType get_client_type_from_user_type(const logfetcher::LogFetcherUser user_type)
+{
+  ObCdcClientType client_type = ObCdcClientType::CLIENT_TYPE_UNKNOWN;
+  switch(user_type) {
+    case logfetcher::UNKNOWN:
+      client_type = ObCdcClientType::CLIENT_TYPE_UNKNOWN;
+      break;
+    case logfetcher::STANDBY:
+      client_type = ObCdcClientType::CLIENT_TYPE_STANDBY;
+      break;
+    case logfetcher::CDC:
+      client_type = ObCdcClientType::CLIENT_TYPE_CDC;
+      break;
+  }
+  return client_type;
 }
 
 }

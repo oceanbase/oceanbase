@@ -95,6 +95,15 @@ private:
   int64_t dest_ver_;
 };
 
+class CtxSnapshotFunctor {
+public:
+  CtxSnapshotFunctor(ClientLSCtxMap &map):
+      map_(map) {}
+  bool operator()(const ClientLSKey &key, ClientLSCtx *value);
+private:
+  ClientLSCtxMap &map_;
+};
+
 class ObCdcService: public lib::TGRunnable
 {
 public:
@@ -150,6 +159,7 @@ public:
       const int8_t flag,
       const int64_t client_progress,
       const obrpc::ObCdcFetchLogProtocolType proto_type,
+      const obrpc::ObCdcClientType client_type,
       ClientLSCtx *&ctx);
 
   int revert_client_ls_ctx(ClientLSCtx *ctx);
@@ -173,6 +183,18 @@ private:
   int recycle_expired_ctx_(const int64_t cur_ts);
 
   int resize_log_ext_handler_();
+
+  int snapshot_traffic_info_();
+
+  template <class RpcRequest>
+  obrpc::ObCdcClientType get_client_type_from_req_(const RpcRequest &req) {
+    obrpc::ObCdcClientType client_type = req.get_client_type();
+    if (obrpc::ObCdcClientType::CLIENT_TYPE_UNKNOWN == client_type) {
+      client_type = OB_INVALID_TENANT_ID == req.get_tenant_id() ?
+          obrpc::ObCdcClientType::CLIENT_TYPE_CDC : obrpc::ObCdcClientType::CLIENT_TYPE_STANDBY;
+    }
+    return client_type;
+  }
 
   void do_monitor_stat_(const int64_t start_ts,
       const int64_t end_ts,

@@ -193,6 +193,9 @@ public:
   void set_compressor_type(const common::ObCompressorType &compressor_type) { compressor_type_ = compressor_type; }
   common::ObCompressorType get_compressor_type() const { return compressor_type_; }
 
+  void set_client_type(const obrpc::ObCdcClientType client_type) { client_type_ = client_type; }
+  obrpc::ObCdcClientType get_client_type() const { return client_type_; }
+
   TO_STRING_KV(K_(rpc_ver),
       K_(ls_id),
       K_(start_lsn),

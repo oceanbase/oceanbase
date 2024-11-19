@@ -1249,6 +1249,108 @@ int ObInnerTableSchema::dba_ob_table_space_usage_ora_schema(ObTableSchema &table
   return ret;
 }
 
+int ObInnerTableSchema::gv_ob_log_transport_dest_stat_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_GV_OB_LOG_TRANSPORT_DEST_STAT_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_GV_OB_LOG_TRANSPORT_DEST_STAT_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT           TENANT_ID,           SVR_IP,           SVR_PORT,           LS_ID,           CLIENT_IP,           CLIENT_PID,           CLIENT_TENANT_ID,           CASE CLIENT_TYPE             WHEN 1 THEN 'CDC'             WHEN 2 THEN 'STANDBY'             ELSE 'UNKNOWN'           END AS CLIENT_TYPE,           START_SERVE_TIME,           LAST_SERVE_TIME,           CASE LAST_READ_SOURCE             WHEN 1 THEN 'ONLINE'             WHEN 2 THEN 'ARCHIVE'             ELSE 'UNKNOWN'           END AS LAST_READ_SOURCE,           CASE LAST_REQUEST_TYPE             WHEN 0 THEN 'SEQUENTIAL_READ_SERIAL'             WHEN 1 THEN 'SEQUENTIAL_READ_PARALLEL'             WHEN 2 THEN 'SCATTERED_READ'             ELSE 'UNKNOWN'           END AS LAST_REQUEST_TYPE,           LAST_REQUEST_LOG_LSN,           LAST_REQUEST_LOG_SCN,           LAST_FAILED_REQUEST,           AVG_REQUEST_PROCESS_TIME,           AVG_REQUEST_QUEUE_TIME,           AVG_REQUEST_READ_LOG_TIME,           AVG_REQUEST_READ_LOG_SIZE,           CASE             WHEN AVG_LOG_TRANSPORT_BANDWIDTH >= 1024 * 1024 * 1024 THEN               CONCAT(ROUND(AVG_LOG_TRANSPORT_BANDWIDTH/1024/1024/1024, 2), 'GB/S')             WHEN AVG_LOG_TRANSPORT_BANDWIDTH >= 1024 * 1024  THEN               CONCAT(ROUND(AVG_LOG_TRANSPORT_BANDWIDTH/1024/1024, 2), 'MB/S')             WHEN AVG_LOG_TRANSPORT_BANDWIDTH >= 1024 THEN               CONCAT(ROUND(AVG_LOG_TRANSPORT_BANDWIDTH/1024, 2), 'KB/S')             ELSE               CONCAT(AVG_LOG_TRANSPORT_BANDWIDTH, 'B/s')           END AS AVG_LOG_TRANSPORT_BANDWIDTH     FROM SYS.ALL_VIRTUAL_LOG_TRANSPORT_DEST_STAT )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::v_ob_log_transport_dest_stat_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_V_OB_LOG_TRANSPORT_DEST_STAT_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_V_OB_LOG_TRANSPORT_DEST_STAT_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT           TENANT_ID,           SVR_IP,           SVR_PORT,           LS_ID,           CLIENT_IP,           CLIENT_PID,           CLIENT_TENANT_ID,           CLIENT_TYPE,           START_SERVE_TIME,           LAST_SERVE_TIME,           LAST_READ_SOURCE,           LAST_REQUEST_TYPE,           LAST_REQUEST_LOG_LSN,           LAST_REQUEST_LOG_SCN,           LAST_FAILED_REQUEST,           AVG_REQUEST_PROCESS_TIME,           AVG_REQUEST_QUEUE_TIME,           AVG_REQUEST_READ_LOG_TIME,           AVG_REQUEST_READ_LOG_SIZE,           AVG_LOG_TRANSPORT_BANDWIDTH     FROM SYS.GV$OB_LOG_TRANSPORT_DEST_STAT     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
 int ObInnerTableSchema::gv_ob_ss_local_cache_ora_schema(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;

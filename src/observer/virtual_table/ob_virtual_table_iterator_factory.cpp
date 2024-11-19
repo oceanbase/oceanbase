@@ -239,6 +239,7 @@
 #include "observer/virtual_table/ob_all_virtual_ss_local_cache_info.h"
 #include "observer/virtual_table/ob_all_virtual_vector_index_info.h"
 #include "observer/virtual_table/ob_all_virtual_tmp_file.h"
+#include "observer/virtual_table/ob_all_virtual_log_transport_dest_stat.h"
 #include "observer/virtual_table/ob_all_virtual_kv_client_info.h"
 #include "observer/virtual_table/ob_all_virtual_kv_group_commit_info.h"
 
@@ -2855,6 +2856,19 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               SERVER_LOG(WARN, "fail to init all_tmp_file_info", K(ret));
             } else {
               vt_iter = static_cast<ObVirtualTableIterator *>(all_tmp_file_info);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_LOG_TRANSPORT_DEST_STAT_TID:
+          {
+            ObAllVirtualLogTransportDestStat *all_virtual_log_transport_dest_stat = NULL;
+            omt::ObMultiTenant *omt = GCTX.omt_;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualLogTransportDestStat,
+                                          all_virtual_log_transport_dest_stat, omt))) {
+              SERVER_LOG(ERROR, "ObAllVirtualLogTransportDestStat construct fail", K(ret));
+            } else {
+              all_virtual_log_transport_dest_stat->set_allocator(&allocator);
+              vt_iter = all_virtual_log_transport_dest_stat;
             }
             break;
           }
