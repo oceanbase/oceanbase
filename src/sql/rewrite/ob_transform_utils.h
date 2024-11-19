@@ -2031,6 +2031,10 @@ public:
                                                     ObSQLSessionInfo *session,
                                                     ObQueryCtx *query_ctx,
                                                     bool &enable_parallel);
+  static int check_const_select(ObTransformerCtx *ctx,
+                                const ObSelectStmt *stmt,
+                                bool &is_const_select);
+
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,
                                       TableItem *table,

@@ -16776,5 +16776,37 @@ int ObTransformUtils::check_enable_global_parallel_execution(ObDMLStmt *stmt,
   return ret;
 }
 
+int ObTransformUtils::check_const_select(ObTransformerCtx *ctx,
+                                         const ObSelectStmt *stmt,
+                                         bool &is_const_select)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator alloc;
+  ObSEArray<ObRawExpr*, 4> const_exprs;
+  is_const_select = true;
+  if (OB_ISNULL(ctx) || OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(ctx), K(stmt));
+  } else if (OB_FALSE_IT(ctx->equal_sets_.reuse())) {
+  } else if (OB_FAIL(stmt->get_stmt_equal_sets(ctx->equal_sets_, alloc, true, true))) {
+    LOG_WARN("failed to get stmt equal sets", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(stmt->get_condition_exprs(),
+                                                          const_exprs))) {
+    LOG_WARN("failed to compute const equivalent exprs", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && is_const_select && i < stmt->get_select_item_size(); ++i) {
+    if (OB_FAIL(ObOptimizerUtil::is_const_expr(stmt->get_select_item(i).expr_,
+                                               ctx->equal_sets_,
+                                               const_exprs,
+                                               is_const_select))) {
+      LOG_WARN("failed to check is const expr", K(ret), K(i), KPC(stmt->get_select_item(i).expr_));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ctx->equal_sets_.reuse();
+  }
+  return ret;
+}
+
 } // namespace sql
 } // namespace oceanbase

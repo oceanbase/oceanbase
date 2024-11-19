@@ -110,26 +110,9 @@ int ObTransformSimplifyDistinct::distinct_can_be_eliminated(ObSelectStmt *stmt, 
       LOG_WARN("failed to get limit int value", K(ret));
     } else if (!stmt->has_limit() || (limit_offset_expr == NULL && limit_count > 0)) {
       bool contain_only = true;
-      EqualSets &equal_sets = ctx_->equal_sets_;
-      ObArenaAllocator alloc;
-      ObSEArray<ObRawExpr *, 4> const_exprs;
-      const ObIArray<ObRawExpr *> &conditions = stmt->get_condition_exprs();
-      if (OB_FAIL(stmt->get_stmt_equal_sets(equal_sets, alloc, true, true))) {
-        LOG_WARN("failed to get stmt equal sets", K(ret));
-      } else if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(conditions, const_exprs))) {
-        LOG_WARN("failed to compute const equivalent exprs", K(ret));
-      }
-      for (int64_t i = 0; OB_SUCC(ret) && contain_only && i < stmt->get_select_item_size(); ++i) {
-        ObRawExpr *expr = stmt->get_select_item(i).expr_;
-        bool is_const = false;
-        if (OB_FAIL(ObOptimizerUtil::is_const_expr(expr, equal_sets, const_exprs, is_const))) {
-          LOG_WARN("check expr whether const expr failed", K(ret));
-        } else {
-          contain_only = is_const;
-        }
-      }
-      equal_sets.reuse();
-      if (OB_SUCC(ret) && contain_only) {
+      if (OB_FAIL(ObTransformUtils::check_const_select(ctx_, stmt, contain_only))) {
+        LOG_WARN("failed to check const select", K(ret));
+      } else if (contain_only) {
         can_be = true;
       } else { /* Do nothing */ }
     } else { /* Do nothing */ }
