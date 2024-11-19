@@ -1306,45 +1306,14 @@ int ObPLDataType::get_external_user_type(const ObPLResolveCtx &resolve_ctx,
                                          const ObUserDefinedType *&user_type) const
 {
   int ret = OB_SUCCESS;
-  uint64_t user_type_id = get_user_type_id();
-  if (common::is_dblink_type_id(user_type_id)) {
-    if (OB_FAIL(resolve_ctx.package_guard_.dblink_guard_.get_dblink_type_by_id(
-                extract_package_id(user_type_id), user_type_id, user_type))) {
-      LOG_WARN("failed to get dblink package id", K(ret), K(user_type_id));
-    } else if (OB_ISNULL(user_type)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get dblink type is null", K(ret), K(user_type_id));
-    }
-  } else if (is_package_type()) { // other package type
-    ObPLPackageManager &pl_manager = resolve_ctx.session_info_.get_pl_engine()->get_package_manager();
-    uint64_t package_id = extract_package_id(user_type_id);
-    uint64_t type_id = extract_type_id(user_type_id);
-    if (OB_FAIL(pl_manager.get_package_type(resolve_ctx, package_id, user_type_id, user_type))) {
-      LOG_WARN("failed to get package type", K(*this), K(ret));
-    } else if (OB_ISNULL(user_type)) {
-      ret = OB_ERR_SP_UNDECLARED_TYPE;
-      LOG_WARN("user type not found", K(package_id), K(type_id), K(user_type_id), KPC(this));
-    }
-  } else if (is_udt_type()) { // udt type
-    const uint64_t tenant_id = get_tenant_id_by_object_id(user_type_id);
-    const ObUDTTypeInfo *udt_info = NULL;
-    if (OB_FAIL(resolve_ctx.schema_guard_.get_udt_info(tenant_id, user_type_id, udt_info))) {
-      LOG_WARN("failed to get udt type info", K(ret), K(tenant_id), K(user_type_id));
-    } else if (OB_ISNULL(udt_info)) {
-      ret = OB_ERR_SP_UNDECLARED_TYPE;
-      LOG_WARN("user type info not found", K(ret), K(udt_info));
-    } else if (OB_FAIL(udt_info->transform_to_pl_type(resolve_ctx.allocator_, user_type))) {
-      LOG_WARN("failed to transform to pl type from udt info", K(ret), K(user_type_id), KPC(this));
-    } else if (OB_ISNULL(user_type)) {
-      ret = OB_ERR_SP_UNDECLARED_TYPE;
-      LOG_WARN("type is NULL", K(ret), K(user_type_id), KPC(this));
-    }
-  } else if (is_rowtype_type() || is_type_type()) {
-    OZ (resolve_ctx.get_user_type(user_type_id, user_type, &resolve_ctx.allocator_));
-  } else { // local type
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("usre local type not found", K(ret), K(user_type_id), K(type_from_));
-  }
+  OZ (resolve_ctx.get_user_type(get_user_type_id(), user_type, &resolve_ctx.allocator_));
+  CK (OB_NOT_NULL(user_type));
+  OV (common::is_dblink_type_id(get_user_type_id())
+      || is_package_type() == user_type->is_package_type()
+      || is_udt_type() == user_type->is_udt_type()
+      || is_rowtype_type() == user_type->is_rowtype_type()
+      || is_type_type() == user_type->is_type_type(),
+    OB_ERR_UNEXPECTED, KPC(this), KPC(user_type));
   return ret;
 }
 
