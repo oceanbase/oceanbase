@@ -874,22 +874,16 @@ int ObHTableReversedRowIterator::seek_to_max_row()
   reversed_range.reset();
   reversed_range.start_key_.set_min_row();
   reversed_range.end_key_.set_max_row();
-  reversed_tb_ctx.set_limit(1);
-  reversed_tb_ctx.get_key_ranges().reset();
-  if (OB_FAIL(reversed_tb_ctx.get_key_ranges().push_back(reversed_range))) {
-    LOG_WARN("failed to push back forward_range in init ", K(ret), K(reversed_range));
-  } else {
-    ObNewRow *last_cell = NULL;
-    if (OB_FAIL(rescan_and_get_next_row(child_op_, last_cell))) {
-      if (OB_ITER_END == ret) {
-        LOG_WARN("no data in table", K(ret));
-      } else {
-        LOG_WARN("failed to rescan and get next row", K(ret));
-      }
+  ObNewRow *last_cell = NULL;
+  if (OB_FAIL(rescan_and_get_next_row(child_op_, last_cell))) {
+    if (OB_ITER_END == ret) {
+      LOG_WARN("no data in table", K(ret));
     } else {
-      stop_row_key_.reset();
-      stop_row_key_.assign(last_cell->cells_, last_cell->count_);
+      LOG_WARN("failed to rescan and get next row", K(ret));
     }
+  } else {
+    stop_row_key_.reset();
+    stop_row_key_.assign(last_cell->cells_, last_cell->count_);
   }
   return ret;
 }
