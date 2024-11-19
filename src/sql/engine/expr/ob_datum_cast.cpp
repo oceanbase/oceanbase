@@ -8585,7 +8585,11 @@ CAST_FUNC_NAME(json, float)
         ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
         LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
       } else {
-        SET_RES_FLOAT(out_val);
+        if (OB_FAIL(common_double_float(expr, tmp_val, out_val))) {
+          LOG_WARN("common_double_float failed", K(ret), K(tmp_val), K(warning));
+        } else {
+          SET_RES_FLOAT(out_val);
+        }
       }
     }
   }
