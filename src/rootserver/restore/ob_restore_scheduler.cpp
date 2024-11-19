@@ -427,9 +427,7 @@ int ObRestoreScheduler::restore_pre(const ObPhysicalRestoreJob &job_info)
     }
   } else if (!is_sys_ready) { // sys job not in WAIT_RETSTORE_TENANT_FINISH  state
     ret = OB_EAGAIN;
-  } else if (share::ObBackupSetFileDesc::is_allow_quick_restore(
-              static_cast<share::ObBackupSetFileDesc::Compatible>(job_info.get_backup_compatible()))
-             && OB_FAIL(update_tenant_restore_data_mode_to_remote_(tenant_id_))) {
+  } else if (OB_FAIL(update_tenant_restore_data_mode_to_remote_(tenant_id_))) {
     LOG_WARN("fail to update tenant restore data mode to REMOTE", K(ret), K_(tenant_id));
   } else if (OB_FAIL(restore_root_key(job_info))) {
     LOG_WARN("fail to restore root key", K(ret));
@@ -668,8 +666,6 @@ int ObRestoreScheduler::post_check(const ObPhysicalRestoreJob &job_info)
   } else if (OB_FAIL(restore_service_->check_stop())) {
     LOG_WARN("restore scheduler stopped", K(ret));
   } else if (job_info.get_restore_type().is_full_restore()
-             && share::ObBackupSetFileDesc::is_allow_quick_restore(
-                static_cast<share::ObBackupSetFileDesc::Compatible>(job_info.get_backup_compatible()))
              && OB_FAIL(update_tenant_restore_data_mode_to_normal_(tenant_id_))) {
     LOG_WARN("fail to update tenant restore data mode to NORMAL", K(ret), K_(tenant_id));
   } else if (OB_FAIL(ObRestoreCommonUtil::try_update_tenant_role(sql_proxy_, tenant_id_,

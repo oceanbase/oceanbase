@@ -208,8 +208,8 @@ int ObTenantRestoreInfoMgr::get_backup_dest(const int64_t backup_set_id, share::
   } else if (OB_FAIL(tenant_info_loader->get_restore_data_mode(restore_data_mode))) {
     LOG_WARN("fail to get restore data mode", K(ret), K_(tenant_id));
   } else if (!restore_data_mode.is_remote_mode()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("restore data mode is not REMOTE, tenant should not have any backup data", K(ret), K_(tenant_id));
+    ret = OB_BACKUP_IO_PROHIBITED;
+    LOG_WARN("restore data mode is not REMOTE, tenant should not have any backup IO", K(ret), K_(tenant_id));
   } else  if (!is_refreshed_) {
     ret = OB_EAGAIN;
     LOG_WARN("restore info has not been refreshed", K(ret), K(backup_set_id));
