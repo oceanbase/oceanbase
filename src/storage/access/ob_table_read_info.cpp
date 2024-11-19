@@ -340,6 +340,11 @@ int ObTableReadInfo::init_datum_utils(common::ObIAllocator &allocator)
       max_col_index_ = INT64_MAX;
     }
   }
+  for (int64_t i = 0; i < cols_param_.count(); i++) {
+    if (ob_is_real_type(cols_param_.at(i)->get_meta_type().get_type())) {
+      cols_desc_.at(i).col_type_.set_scale(cols_param_.at(i)->get_accuracy().get_scale());
+    }
+  }
   if (OB_FAIL(datum_utils_.init(cols_desc_, schema_rowkey_cnt_, is_oracle_mode_, allocator))) {
     STORAGE_LOG(WARN, "Failed to init datum utils", K(ret), K_(schema_rowkey_cnt), K_(is_oracle_mode));
   }

@@ -632,7 +632,11 @@ int ObStorageSchema::generate_column_array(const ObTableSchema &input_schema)
       col_schema.is_rowkey_column_ = col->is_rowkey_column();
       col_schema.is_column_stored_in_sstable_ = col->is_column_stored_in_sstable();
       col_schema.is_generated_column_ = col->is_generated_column();
-      col_schema.meta_type_ = col->get_meta_type();
+      ObObjMeta meta_type = col->get_meta_type();
+      if (ob_is_real_type(meta_type.get_type())) {
+        meta_type.set_scale(col->get_accuracy().get_scale());
+      }
+      col_schema.meta_type_ = meta_type;
       if (ob_is_large_text(col->get_data_type())) {
         col_schema.default_checksum_ = 0;
       } else if (OB_FAIL(datum.from_obj_enhance(col->get_orig_default_value()))) {
@@ -658,6 +662,7 @@ int ObStorageSchema::generate_column_array(const ObTableSchema &input_schema)
   }
   // add rowkey columns
   ObStorageRowkeyColumnSchema rowkey_schema;
+  const ObColumnSchemaV2 *rowkey_col_schema = nullptr;
   const common::ObRowkeyInfo &rowkey_info = input_schema.get_rowkey_info();
   const ObRowkeyColumn *rowkey_column = NULL;
   if (OB_FAIL(ret)) {
@@ -671,10 +676,18 @@ int ObStorageSchema::generate_column_array(const ObTableSchema &input_schema)
       STORAGE_LOG(WARN, "The rowkey column is NULL", K(i));
     } else if (OB_FAIL(tmp_map.get_refactored(rowkey_column->column_id_, find_idx))) {
       STORAGE_LOG(WARN, "failed to get column idx from tmp_map", K(ret), "column_id", rowkey_column->column_id_);
+    } else if (OB_ISNULL(rowkey_col_schema =
+                           input_schema.get_column_schema(rowkey_column->column_id_))) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "failed to get rowkey column schema", K(ret));
     } else {
       rowkey_schema.reset();
       rowkey_schema.column_idx_ = common::OB_APP_MIN_COLUMN_ID + find_idx;
-      rowkey_schema.meta_type_ = rowkey_column->type_;
+      ObObjMeta meta_type = rowkey_column->type_;
+      if (ob_is_real_type(meta_type.get_type())) {
+        meta_type.set_scale(rowkey_col_schema->get_accuracy().get_scale());
+      }
+      rowkey_schema.meta_type_ = meta_type;
       rowkey_schema.order_ = rowkey_column->order_;
       if (OB_FAIL(rowkey_array_.push_back(rowkey_schema))) {
         STORAGE_LOG(WARN, "Fail to add rowkey column id to rowkey array", K(ret));
