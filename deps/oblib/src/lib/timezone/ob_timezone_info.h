@@ -205,7 +205,7 @@ struct ObOTimestampTinyData {
     time_us_ = v.time_us_;
     return *this;
   }
-  ObOTimestampData to_timestamp_data() {
+  ObOTimestampData to_timestamp_data() const {
     ObOTimestampData res;
     res.time_ctx_.time_desc_ = desc_;
     res.time_ctx_.tz_desc_ = 0;

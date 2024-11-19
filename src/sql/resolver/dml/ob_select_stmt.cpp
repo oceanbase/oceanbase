@@ -52,7 +52,8 @@ int SelectItem::deep_copy(ObIRawExprCopier &expr_copier,
   return ret;
 }
 
-int ObSelectIntoItem::deep_copy(ObIRawExprCopier &copier,
+int ObSelectIntoItem::deep_copy(ObIAllocator &allocator,
+                                ObIRawExprCopier &copier,
                                 const ObSelectIntoItem &other)
 {
   int ret = OB_SUCCESS;
@@ -71,6 +72,8 @@ int ObSelectIntoItem::deep_copy(ObIRawExprCopier &copier,
   user_vars_.assign(other.user_vars_);
   if (OB_FAIL(copier.copy(other.file_partition_expr_, file_partition_expr_))) {
     LOG_WARN("deep copy file partition expr failed", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, other.external_properties_, external_properties_))) {
+    LOG_WARN("failed to deep copy string", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < other.pl_vars_.count(); ++i) {
     ObRawExpr* pl_var;
@@ -367,7 +370,7 @@ int ObSelectStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
         LOG_WARN("failed to allocate select into item", K(ret));
       } else {
         temp_into_item = new(ptr) ObSelectIntoItem();
-        if (OB_FAIL(temp_into_item->deep_copy(expr_copier, *other.into_item_))) {
+        if (OB_FAIL(temp_into_item->deep_copy(allocator, expr_copier, *other.into_item_))) {
           LOG_WARN("deep copy into item failed", K(ret));
         } else {
           into_item_ = temp_into_item;

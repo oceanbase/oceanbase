@@ -281,9 +281,12 @@ int ObOrcTableRowIterator::next_file()
         for (int i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
           ObDataAccessPathExtraInfo *data_access_info =
               static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(i)->extra_info_);
-          CK (data_access_info != nullptr);
-          CK (data_access_info->data_access_path_.ptr() != nullptr);
-          CK (data_access_info->data_access_path_.length() != 0);
+          if (OB_SUCC(ret) && (data_access_info == nullptr ||
+                              data_access_info->data_access_path_.ptr() == nullptr ||
+                              data_access_info->data_access_path_.length() == 0))
+          {
+            ret = OB_EXTERNAL_ACCESS_PATH_ERROR;
+          }
           if (OB_SUCC(ret)) {
             include_names_list.push_front(std::string(data_access_info->data_access_path_.ptr(),
                                                       data_access_info->data_access_path_.length())); //x.y.z -> column_id
@@ -291,7 +294,21 @@ int ObOrcTableRowIterator::next_file()
         }
         orc::RowReaderOptions rowReaderOptions;
         rowReaderOptions.include(include_names_list);
-        row_reader_ = reader->createRowReader(rowReaderOptions);
+        try {
+          row_reader_ = reader->createRowReader(rowReaderOptions);
+        } catch(const std::exception& e) {
+          if (OB_SUCC(ret)) {
+            ret = OB_ORC_READ_ERROR;
+            LOG_USER_ERROR(OB_ORC_READ_ERROR, e.what());
+            LOG_WARN("unexpected error", K(ret), "Info", e.what());
+          }
+        } catch(...) {
+          if (OB_SUCC(ret)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected error", K(ret));
+          }
+        }
+
         if (OB_FAIL(ret)) {
         } else if (!row_reader_) {
           ret = OB_ERR_UNEXPECTED;
@@ -315,6 +332,10 @@ int ObOrcTableRowIterator::next_file()
             const orc::Type *type = nullptr;
             OZ (id_to_type_.get_refactored(col_id, type));
             CK (type != nullptr);
+            if (OB_SUCC(ret) && ob_is_text_tc(file_column_exprs_.at(i)->datum_meta_.type_)) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "text type for orc");
+            }
             if (OB_SUCC(ret)) {
               load_funcs_.at(i) = DataLoader::select_load_function(file_column_exprs_.at(i)->datum_meta_,
                                                                     *type);
@@ -414,34 +435,52 @@ ObOrcTableRowIterator::DataLoader::LOAD_FUNC ObOrcTableRowIterator::DataLoader::
   const orc::Type* col_desc = &type;
   orc::TypeKind type_kind = col_desc->getKind();
   if (ob_is_integer_type(datum_type.type_)) {
+    func = &DataLoader::load_int64_vec;
+    int orc_data_len = 0;
     switch (type_kind) {
         case orc::TypeKind::BOOLEAN:
         case orc::TypeKind::BYTE:
-        case orc::TypeKind::SHORT:
-        case orc::TypeKind::INT:
-        case orc::TypeKind::LONG:
-          func = &DataLoader::load_int64_vec;
+          orc_data_len = 1;
           break;
-        case orc::TypeKind::DATE:
-          func = &DataLoader::load_int32_vec;
+        case orc::TypeKind::SHORT:
+          orc_data_len = 2;
+          break;
+        case orc::TypeKind::INT:
+          orc_data_len = 4;
+          break;
+        case orc::TypeKind::LONG:
+          orc_data_len = 8;
           break;
         default:
           func = NULL;
     }
-  } else if (ob_is_string_type(datum_type.type_) || ob_is_enum_or_set_type(datum_type.type_)) {
-    //convert parquet enum/string to enum/string vector
+    //sign and width
+    ObObj temp_obj;
+    temp_obj.set_int(datum_type.type_, 0);
+    if (ob_is_unsigned_type(datum_type.type_)) {
+      func = NULL;
+    }
+    if (temp_obj.get_tight_data_len() < orc_data_len) {
+      func = NULL;
+    }
+  } else if (ob_is_string_tc(datum_type.type_) || ob_is_enum_or_set_type(datum_type.type_)) {
+    //convert orc enum/string to enum/string vector
     switch (type_kind) {
       case orc::TypeKind::STRING:
       case orc::TypeKind::VARCHAR:
       case orc::TypeKind::BINARY:
-      case orc::TypeKind::CHAR:
         func = &DataLoader::load_string_col;
         break;
+      case orc::TypeKind::CHAR:
+        if (ob_is_char(datum_type.type_, datum_type.cs_type_)) {
+          func = &DataLoader::load_string_col;
+          break;
+        }
       default:
         func = NULL;
     }
   } else if (ob_is_number_or_decimal_int_tc(datum_type.type_)) {
-    //convert parquet int storing as int32/int64 to number/decimal vector
+    //convert orc int storing as int32/int64 to number/decimal vector
     if (type_kind == orc::TypeKind::DECIMAL) {
       if (col_desc->getPrecision() != datum_type.precision_ || col_desc->getScale() != datum_type.scale_) {
         func = NULL;
@@ -482,8 +521,7 @@ ObOrcTableRowIterator::DataLoader::LOAD_FUNC ObOrcTableRowIterator::DataLoader::
       case orc::TypeKind::DATE:
         if (ob_is_date_tc(datum_type.type_)) {
           func = &DataLoader::load_int32_vec;
-        } else if (ob_is_datetime(datum_type.type_) ||
-                   ob_is_time_tc(datum_type.type_) ||
+        } else if (ob_is_time_tc(datum_type.type_) ||
                    ObTimestampType == datum_type.type_ ||
                    ObTimestampLTZType == datum_type.type_) {
           func = &DataLoader::load_date_to_time_or_stamp;
@@ -549,11 +587,11 @@ int ObOrcTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("row reader is null", K(ret));
   } else {
-    std::unique_ptr<orc::ColumnVectorBatch> batch = row_reader_->createRowBatch(capacity);
-    if (!batch) {
+    orc_batch_ = row_reader_->createRowBatch(capacity);
+    if (!orc_batch_) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("create orc row batch failed", K(ret));
-    } else if (row_reader_->next(*batch)) {
+    } else if (row_reader_->next(*orc_batch_)) {
       //ok
     } else {
       ret = OB_ERR_UNEXPECTED;
@@ -575,7 +613,7 @@ int ObOrcTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
         OZ (name_to_id_.get_refactored(ObString(data_access_info->data_access_path_.length(), data_access_info->data_access_path_.ptr()), col_id));
         ObArray<int> idxs;
         OZ (get_data_column_batch_idxs(&row_reader_->getSelectedType(), col_id, idxs));
-        DataLoader loader(eval_ctx, file_column_exprs_.at(i), batch, capacity, idxs, read_count);
+        DataLoader loader(eval_ctx, file_column_exprs_.at(i), orc_batch_, capacity, idxs, read_count);
         OZ (file_column_exprs_.at(i)->init_vector_for_write(
               eval_ctx, file_column_exprs_.at(i)->get_default_res_format(), eval_ctx.max_batch_size_));
         OZ (loader.load_data_for_col(load_funcs_.at(i)));
@@ -820,10 +858,8 @@ int ObOrcTableRowIterator::DataLoader::load_string_col()
   CK (OB_NOT_NULL(file_col_expr_));
   if (OB_SUCC(ret)) {
     StrDiscVec *text_vec = static_cast<StrDiscVec *>(file_col_expr_->get_vector(eval_ctx_));
-    ObArrayWrap<std::string> values;
     CK (OB_NOT_NULL(text_vec));
     CK (VEC_DISCRETE == text_vec->get_format());
-    OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
     if (OB_SUCC(ret)) {
       if (batch_) {
         row_count_ = batch_->numElements;
@@ -873,8 +909,7 @@ int ObOrcTableRowIterator::DataLoader::load_string_col()
                         ret = OB_ERR_DATA_TOO_LONG;
                         LOG_WARN("data too long", K(ret));
                       } else {
-                        values.at(i) = std::string(string_batch->data[i], string_batch->data[i] + string_batch->length[i]);
-                        text_vec->set_string(i, values.at(i).data(), values.at(i).length());
+                        text_vec->set_string(i, string_batch->data[i], string_batch->length[i]);
                       }
                     }
                   } else {
@@ -896,8 +931,7 @@ int ObOrcTableRowIterator::DataLoader::load_string_col()
                     ret = OB_ERR_DATA_TOO_LONG;
                     LOG_WARN("data too long", K(ret));
                   } else {
-                    values.at(i) = std::string(string_batch->data[i], string_batch->data[i] + string_batch->length[i]);
-                    text_vec->set_string(i, values.at(i).data(), values.at(i).length());
+                    text_vec->set_string(i, string_batch->data[i], string_batch->length[i]);
                   }
                 }
               }
@@ -1199,7 +1233,7 @@ int ObOrcTableRowIterator::DataLoader::load_dec128_vec()
               int32_t int_bytes = sizeof(int128_t);
               int128_t val = dec128_batch->values[i].getHighBits();
               val = val << 64;
-              val = val | dec128_batch->values[i].getLowBits();
+              val.items_[0] = dec128_batch->values[i].getLowBits();
               void *data = nullptr;
 
               if (OB_ISNULL(data = tmp_alloc_g.get_allocator().alloc(int_bytes))) {

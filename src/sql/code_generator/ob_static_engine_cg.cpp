@@ -8244,6 +8244,8 @@ int ObStaticEngineCG::generate_spec(ObLogSelectInto &op, ObSelectIntoSpec &spec,
     LOG_WARN("init fixed array failed", K(ret), K(op.get_user_vars().count()));
   } else if (OB_FAIL(spec.select_exprs_.init(op.get_select_exprs().count()))) {
     LOG_WARN("init fixed array failed", K(ret), K(op.get_select_exprs().count()));
+  } else if (OB_FAIL(spec.alias_names_.store_strs(op.get_alias_names()))) {
+    LOG_WARN("failed to deep copy strs", K(ret));
   } else {
     ObString var;
     for (int64_t i = 0; OB_SUCC(ret) && i < op.get_user_vars().count(); ++i) {

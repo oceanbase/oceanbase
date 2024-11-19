@@ -16,7 +16,6 @@
 #include "sql/optimizer/ob_logical_operator.h"
 #include "sql/optimizer/ob_log_operator_factory.h"
 #include "objit/common/ob_item_type.h"
-#include "sql/engine/cmd/ob_load_data_parser.h"
 
 namespace oceanbase
 {
@@ -39,12 +38,13 @@ public:
         max_file_size_(DEFAULT_MAX_FILE_SIZE),
         buffer_size_(DEFAULT_BUFFER_SIZE),
         escaped_cht_(),
+        cs_type_(CS_TYPE_INVALID),
         file_partition_expr_(NULL),
         is_overwrite_(false),
         external_properties_(),
-        external_partition_()
+        external_partition_(),
+        alias_names_()
   {
-    cs_type_ = ObCharset::get_system_collation();
   }
   virtual ~ObLogSelectInto() {}
   inline void set_into_type(ObItemType &into_type)
@@ -116,6 +116,15 @@ public:
   {
     external_partition_.assign_ptr(external_partition.ptr(), external_partition.length());
   }
+  inline void set_alias_names(common::ObIArray<common::ObString> &alias_names)
+  {
+    int ret = common::OB_SUCCESS;
+    for (int i = 0 ; OB_SUCC(ret) && i < alias_names.count() ; ++i) {
+      if (OB_FAIL(alias_names_.push_back(alias_names.at(i)))) {
+        SQL_OPT_LOG(WARN, "push back failed", K(ret));
+      }
+    }
+  }
   inline ObItemType get_into_type() const
   {
     return into_type_;
@@ -180,6 +189,14 @@ public:
   {
     return external_partition_;
   }
+  inline const common::ObIArray<common::ObString> &get_alias_names() const
+  {
+    return alias_names_;
+  }
+  inline common::ObIArray<common::ObString> &get_alias_names()
+  {
+    return alias_names_;
+  }
   const common::ObIArray<ObRawExpr*> &get_select_exprs() const { return select_exprs_; }
   common::ObIArray<ObRawExpr*> &get_select_exprs() { return select_exprs_; }
   virtual int est_cost() override;
@@ -206,6 +223,7 @@ private:
   bool is_overwrite_;
   common::ObString external_properties_;
   common::ObString external_partition_;
+  common::ObSEArray<common::ObString, 8, common::ModulePageAllocator, true> alias_names_;
 };
 }
 }

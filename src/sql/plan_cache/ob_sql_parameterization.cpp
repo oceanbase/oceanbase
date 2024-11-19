@@ -364,6 +364,8 @@ bool ObSqlParameterization::is_tree_not_param(const ParseNode *tree)
     ret_bool = true;
   } else if (T_EXTERNAL_TABLE_PARTITION == tree->type_) {
     ret_bool = true;
+  } else if (T_EXTERNAL_FILE_FORMAT == tree->type_) {
+    ret_bool = true;
   } else if (T_PIVOT_IN_LIST == tree->type_) {
     ret_bool = true;
   } else if (T_CHAR_CHARSET == tree->type_) {

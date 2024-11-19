@@ -5193,7 +5193,7 @@ int ObSelectResolver::resolve_into_file_node(const ParseNode *list_node, ObSelec
           into_item.is_single_ = node->children_[0]->value_;
         }
       } else if (T_MAX_FILE_SIZE == node->type_) {
-        if (OB_FAIL(resolve_size_node(node, into_item))) {
+        if (OB_FAIL(ObResolverUtils::resolve_file_size_node(node, into_item.max_file_size_))) {
           LOG_WARN("failed to resolve max file size", K(ret));
         }
       } else if (T_BUFFER_SIZE == node->type_) {
@@ -5201,7 +5201,7 @@ int ObSelectResolver::resolve_into_file_node(const ParseNode *list_node, ObSelec
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("not support to set buffer size during updating", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "set buffer size during updating");
-        } else if (OB_FAIL(resolve_size_node(node, into_item))) {
+        } else if (OB_FAIL(ObResolverUtils::resolve_file_size_node(node, into_item.buffer_size_))) {
           LOG_WARN("failed to resolve buffer size", K(ret));
         }
       } else {
@@ -5247,57 +5247,167 @@ int ObSelectResolver::resolve_file_partition_node(const ParseNode *node, ObSelec
   return ret;
 }
 
-int ObSelectResolver::resolve_size_node(const ParseNode *file_size_node, ObSelectIntoItem &into_item)
+int ObSelectResolver::resolve_into_outfile_with_format(const ParseNode *node, ObSelectIntoItem &into_item)
 {
   int ret = OB_SUCCESS;
-  ParseNode *child = NULL;
-  int64_t parse_int_value = 0;
-  if (OB_ISNULL(file_size_node) || file_size_node->num_child_ != 1
-      || OB_ISNULL(child = file_size_node->children_[0])
-      || (T_MAX_FILE_SIZE != file_size_node->type_ && T_BUFFER_SIZE != file_size_node->type_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected file size node", K(ret));
-  } else if (T_INT == child->type_) {
-    parse_int_value = static_cast<int64_t>(child->value_);
-  } else if (T_VARCHAR == child->type_) {
-    if (OB_FAIL(resolve_varchar_file_size(child, parse_int_value))) {
-      LOG_WARN("failed to resolve varchar value", K(ret));
-    }
-  } else {
-    ret = OB_ERR_PARSE_SQL;
-    LOG_WARN("child of max file size node has wrong type", K(ret));
+  char *buf = NULL;
+  int64_t buf_len = DEFAULT_BUF_LENGTH / 2;
+  int64_t pos = 0;
+  bool has_format_type = false;
+  bool has_cs_type = false;
+  ObExternalFileFormat external_format;
+  ParseNode* format_node = NULL;
+  ParseNode* option_node = NULL;
+  if (node->num_child_ > 0
+      && OB_FAIL(resolve_into_const_node(node->children_[0], into_item.outfile_name_))) { // name
+    LOG_WARN("resolve into outfile name failed", K(ret));
   }
-  if (OB_FAIL(ret)) {
-  } else if (OB_UNLIKELY(parse_int_value < 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("size should not be smaller than 0", K(ret), K(parse_int_value));
-  } else if (T_MAX_FILE_SIZE == file_size_node->type_) {
-    into_item.max_file_size_ = parse_int_value;
-  } else if (T_BUFFER_SIZE == file_size_node->type_) {
-    into_item.buffer_size_ = parse_int_value;
+  if (OB_SUCC(ret) && node->num_child_ > 1 && NULL != node->children_[1]) { // partition by
+    if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_2_1) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not support to use file partition option during updating", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "use file partition option during updating");
+    } else if (OB_FAIL(resolve_file_partition_node(node->children_[1], into_item))) {
+      LOG_WARN("resolve file partition node failed", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && node->num_child_ > 2 && NULL != (format_node = node->children_[2])) { // format
+    // TODO(bitao): handle other parquet property
+    for (int i = 0; OB_SUCC(ret) && i < format_node->num_child_; ++i) {
+      if (OB_ISNULL(option_node = format_node->children_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(format_node->num_child_));
+      } else if (T_EXTERNAL_FILE_FORMAT_TYPE == option_node->type_
+                 || T_CHARSET == option_node->type_) {
+        if (OB_FAIL(ObResolverUtils::resolve_file_format(option_node, external_format, params_))) {
+          LOG_WARN("failed to resolve file format", K(ret), K(option_node->type_));
+        }
+        has_format_type |= (T_EXTERNAL_FILE_FORMAT_TYPE == option_node->type_);
+        has_cs_type |= (T_CHARSET == option_node->type_);
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (!has_format_type) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("should set file format type", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "format without type");
+    } else if (ObExternalFileFormat::PARQUET_FORMAT != external_format.format_type_
+               && ObExternalFileFormat::CSV_FORMAT != external_format.format_type_
+               && ObExternalFileFormat::ORC_FORMAT != external_format.format_type_) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("select into only support parquet/orc/csv format type now", K(ret),
+               K(external_format.format_type_));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "this format type");
+    } else if (ObExternalFileFormat::CSV_FORMAT == external_format.format_type_) {
+      ObCollationType file_cs_type = has_cs_type
+                                     ? ObCharset::get_default_collation(external_format.csv_format_.cs_type_)
+                                     : ObCharset::get_system_collation();
+      if (OB_FAIL(external_format.csv_format_.init_format(ObDataInFileStruct(), 0, file_cs_type))) {
+        LOG_WARN("failed to init csv format", K(ret));
+      }
+    }
+    for (int i = 0; OB_SUCC(ret) && i < format_node->num_child_; ++i) {
+      if (OB_ISNULL(option_node = format_node->children_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(format_node->num_child_));
+      } else if (T_EXTERNAL_FILE_FORMAT_TYPE == option_node->type_
+                 || T_CHARSET == option_node->type_) {
+      } else if (OB_FAIL(ObResolverUtils::resolve_file_format(option_node, external_format, params_))) {
+        LOG_WARN("failed to resolve file format", K(ret), K(option_node->type_));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      do {
+        buf_len *= 2;
+        if (OB_ISNULL(buf = static_cast<char*>(allocator_->alloc(buf_len)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc buf", K(ret), K(buf_len));
+        } else {
+          pos = external_format.to_string(buf, buf_len, true);
+        }
+      } while (OB_SUCC(ret) && pos >= buf_len);
+      if (OB_SUCC(ret)) {
+        into_item.external_properties_.assign_ptr(buf, pos);
+      }
+    }
+  }
+  // file: single, max_file_size, buffer_size
+  if (OB_SUCC(ret) && node->num_child_ > 3 && NULL != node->children_[3]) {
+    if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_1_0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not support to use file option during updating", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "use file option during updating");
+    } else if (OB_FAIL(resolve_into_file_node(node->children_[3], into_item))) {
+      LOG_WARN("reosolve into file node failed", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && into_item.is_single_ && NULL != into_item.file_partition_expr_) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support to use file partition option when single is true", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "use file partition option when single is true");
   }
   return ret;
 }
 
-int ObSelectResolver::resolve_varchar_file_size(const ParseNode *child, int64_t &parse_int_value) const
+int ObSelectResolver::resolve_into_outfile_without_format(const ParseNode *node,
+                                                          ObSelectIntoItem &into_item)
 {
   int ret = OB_SUCCESS;
-  bool valid = false;
-  common::ObSqlString buf;
-  if (OB_ISNULL(child)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("varchar node get unexpected null", K(ret));
-  } else if (OB_FAIL(buf.append(child->str_value_, child->str_len_))) {
-    LOG_WARN("failed to assign child str", K(ret), K(child->str_value_), K(child->str_len_));
-  } else {
-    parse_int_value = common::ObConfigCapacityParser::get(buf.ptr(), valid, false, true);
-    if (!valid) {
-      ret = OB_ERR_PARSE_SQL;
-      LOG_WARN("failed to parse file size varchar value to int", K(ret), K(buf));
+  if (node->num_child_ > 0
+      && OB_FAIL(resolve_into_const_node(node->children_[0], into_item.outfile_name_))) { // name
+    LOG_WARN("resolve into outfile name failed", K(ret));
+  }
+  if (OB_SUCC(ret) && node->num_child_ > 1 && NULL != node->children_[1]) { // partition by
+    if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_2_1) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not support to use file partition option during updating", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "use file partition option during updating");
+    } else if (OB_FAIL(resolve_file_partition_node(node->children_[1], into_item))) {
+      LOG_WARN("resolve file partition node failed", K(ret));
     }
+  }
+  if (OB_SUCC(ret) && node->num_child_ > 2 && NULL != node->children_[2]) { // charset
+    ObCharsetType charset_type = CHARSET_INVALID;
+    ObString charset(node->children_[2]->str_len_, node->children_[2]->str_value_);
+    if (CHARSET_INVALID == (charset_type = ObCharset::charset_type(charset.trim()))) {
+      ret = OB_ERR_UNKNOWN_CHARSET;
+      LOG_USER_ERROR(OB_ERR_UNKNOWN_CHARSET, charset.length(), charset.ptr());
+    } else if (CHARSET_UTF16 == charset_type) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("select into outfile character set utf16", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "upload data using utf16");
+    } else {
+      into_item.cs_type_ = ObCharset::get_default_collation(charset_type);
+    }
+  }
+  if (OB_SUCC(ret) && node->num_child_ > 3 && NULL != node->children_[3]) { // field
+    if (OB_FAIL(resolve_into_field_node(node->children_[3], into_item))) {
+      LOG_WARN("reosolve into field node failed", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && node->num_child_ > 4 && NULL != node->children_[4]) { // line
+    if (OB_FAIL(resolve_into_line_node(node->children_[4], into_item))) {
+      LOG_WARN("reosolve into line node failed", K(ret));
+    }
+  }
+  // file: single, max_file_size, buffer_size
+  if (OB_SUCC(ret) && node->num_child_ > 5 && NULL != node->children_[5]) {
+    if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_1_0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not support to use file option during updating", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "use file option during updating");
+    } else if (OB_FAIL(resolve_into_file_node(node->children_[5], into_item))) {
+      LOG_WARN("reosolve into file node failed", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && into_item.is_single_ && NULL != into_item.file_partition_expr_) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support to use file partition option when single is true", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "use file partition option when single is true");
   }
   return ret;
 }
+
 int ObSelectResolver::resolve_into_clause(const ParseNode *node)
 {
   int ret = OB_SUCCESS;
@@ -5328,51 +5438,18 @@ int ObSelectResolver::resolve_into_clause(const ParseNode *node)
       new(into_item) ObSelectIntoItem();
       into_item->into_type_ = node->type_;
       if (T_INTO_OUTFILE == node->type_) { // into outfile
-        if (node->num_child_ > 0
-            && OB_FAIL(resolve_into_const_node(node->children_[0], into_item->outfile_name_))) { //name
-          LOG_WARN("resolve into outfile name failed", K(ret));
-        }
-        if (OB_SUCC(ret) && node->num_child_ > 1 && NULL != node->children_[1]) { // partition by
-          if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_2_1) {
+        if (node->num_child_ > 2 && NULL != node->children_[2]
+            && T_EXTERNAL_FILE_FORMAT == node->children_[2]->type_) { // Handle with `FORMAT`
+          if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_0) {
             ret = OB_NOT_SUPPORTED;
-            LOG_WARN("not support to use file partition option during updating", K(ret));
-	          LOG_USER_ERROR(OB_NOT_SUPPORTED, "use file partition option during updating");
-          } else if (OB_FAIL(resolve_file_partition_node(node->children_[1], *into_item))) {
-            LOG_WARN("resolve file partition node failed", K(ret));
+            LOG_WARN("not support select into outfile with `FORMAT` property", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "select into outfile with `FORMAT` property");
+          } else if (OB_FAIL(resolve_into_outfile_with_format(node, *into_item))) {
+            LOG_WARN("resolve into outfile failed", K(ret));
           }
-        }
-        if (OB_SUCC(ret) && node->num_child_ > 2 && NULL != node->children_[2]) { // charset
-          ObCharsetType charset_type = CHARSET_INVALID;
-          ObString charset(node->children_[2]->str_len_, node->children_[2]->str_value_);
-          if (CHARSET_INVALID == (charset_type = ObCharset::charset_type(charset.trim()))) {
-            ret = OB_ERR_UNKNOWN_CHARSET;
-            LOG_USER_ERROR(OB_ERR_UNKNOWN_CHARSET, charset.length(), charset.ptr());
-          } else if (CHARSET_UTF16 == charset_type) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("select into outfile character set utf16", K(ret));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "upload data using utf16");
-          } else {
-            into_item->cs_type_ = ObCharset::get_default_collation(charset_type);
-          }
-        }
-        if (OB_SUCC(ret) && node->num_child_ > 3 && NULL != node->children_[3]) { //field
-          if (OB_FAIL(resolve_into_field_node(node->children_[3], *into_item))) {
-            LOG_WARN("reosolve into field node failed", K(ret));
-          }
-        }
-        if (OB_SUCC(ret) && node->num_child_ > 4 && NULL != node->children_[4]) { // line
-          if (OB_FAIL(resolve_into_line_node(node->children_[4], *into_item))) {
-            LOG_WARN("reosolve into line node failed", K(ret));
-          }
-        }
-        // file: single, max_file_size, buffer_size
-        if (OB_SUCC(ret) && node->num_child_ > 5 && NULL != node->children_[5]) {
-          if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_1_0) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("not support to use file option during updating", K(ret));
-	          LOG_USER_ERROR(OB_NOT_SUPPORTED, "use file option during updating");
-          } else if (OB_FAIL(resolve_into_file_node(node->children_[5], *into_item))) {
-            LOG_WARN("reosolve into line node failed", K(ret));
+        } else { // Be compatible with grammar before
+          if (OB_FAIL(resolve_into_outfile_without_format(node, *into_item))) {
+            LOG_WARN("resolve into outfile failed", K(ret));
           }
         }
         if (OB_SUCC(ret) && into_item->is_single_ && NULL != into_item->file_partition_expr_) {

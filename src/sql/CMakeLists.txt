@@ -182,6 +182,7 @@ ob_set_subtarget(ob_sql engine_aggregate
 )
 
 ob_set_subtarget(ob_sql engine_basic
+  engine/basic/ob_arrow_basic.cpp
   engine/basic/ob_batch_result_holder.cpp
   engine/basic/ob_compact_row.cpp
   engine/basic/ob_temp_block_store.cpp
@@ -206,6 +207,8 @@ ob_set_subtarget(ob_sql engine_basic
   engine/basic/ob_ra_row_store.cpp
   engine/basic/ob_temp_block_store.cpp
   engine/basic/ob_select_into_op.cpp
+  engine/basic/ob_select_into_basic.cpp
+  engine/basic/ob_external_file_writer.cpp
   engine/basic/ob_temp_table_access_op.cpp
   engine/basic/ob_temp_table_insert_op.cpp
   engine/basic/ob_temp_table_transformation_op.cpp

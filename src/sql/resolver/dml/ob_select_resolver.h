@@ -203,8 +203,8 @@ protected:
   int resolve_into_variable_node(const ParseNode *node, ObSelectIntoItem &into_item);
   int resolve_into_file_node(const ParseNode *node, ObSelectIntoItem &into_item);
   int resolve_file_partition_node(const ParseNode *node, ObSelectIntoItem &into_item);
-  int resolve_size_node(const ParseNode *file_size_node, ObSelectIntoItem &into_item);
-  int resolve_varchar_file_size(const ParseNode *child, int64_t &parse_int_value) const;
+  int resolve_into_outfile_without_format(const ParseNode *node, ObSelectIntoItem &into_item);
+  int resolve_into_outfile_with_format(const ParseNode *node, ObSelectIntoItem &into_item);
   // resolve_star related functions
   int resolve_star_for_table_groups(ObStarExpansionInfo &star_expansion_info);
   int find_joined_table_group_for_table(const uint64_t table_id, int64_t &jt_idx);

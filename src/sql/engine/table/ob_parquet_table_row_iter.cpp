@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_parquet_table_row_iter.h"
+#include "sql/engine/basic/ob_arrow_basic.h"
 #include "sql/engine/expr/ob_expr_get_path.h"
 #include "share/external_table/ob_external_table_utils.h"
 #include "sql/engine/expr/ob_datum_cast.h"
@@ -24,161 +25,6 @@ using namespace share::schema;
 using namespace common;
 using namespace share;
 namespace sql {
-
-void ObArrowMemPool::init(uint64_t tenant_id)
-{
-  mem_attr_ = ObMemAttr(tenant_id, "ArrowMemPool");
-}
-
-arrow::Status ObArrowMemPool::Allocate(int64_t size, uint8_t** out)
-{
-  int ret = OB_SUCCESS;
-  arrow::Status status_ret = arrow::Status::OK();
-  if (0 == size) {
-    *out = NULL;
-  } else {
-    void *buf = ob_malloc_align(64, size, mem_attr_);
-    if (OB_ISNULL(buf)) {
-      status_ret = arrow::Status::Invalid("allocate memory failed");
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to allocate memory", K(size), K(lbt()));
-    } else {
-      *out = static_cast<uint8_t*>(buf);
-      total_alloc_size_ += size;
-    }
-  }
-  LOG_DEBUG("ObArrowMemPool::Allocate", K(size), "stack", lbt());
-  return status_ret;
-}
-
-arrow::Status ObArrowMemPool::Reallocate(int64_t old_size, int64_t new_size, uint8_t** ptr)
-{
-  int ret = OB_SUCCESS;
-  uint8_t* old = *ptr;
-  arrow::Status status_ret = Allocate(new_size, ptr);
-  if (arrow::Status::OK() == status_ret) {
-    MEMCPY(*ptr, old, std::min(old_size, new_size));
-    Free(old, old_size);
-  }
-  LOG_DEBUG("ObArrowMemPool::Reallocate", K(old_size), K(new_size), "stack", lbt());
-  return status_ret;
-}
-
-void ObArrowMemPool::Free(uint8_t* buffer, int64_t size) {
-  int ret = OB_SUCCESS;
-  ob_free_align(buffer);
-  total_alloc_size_ -= size;
-  LOG_DEBUG("ObArrowMemPool::Free", K(size), "stack", lbt());
-}
-
-void ObArrowMemPool::ReleaseUnused() {
-  LOG_DEBUG("ObArrowMemPool::ReleaseUnused", "stack", lbt());
-}
-
-int64_t ObArrowMemPool::bytes_allocated() const {
-  LOG_DEBUG("ObArrowMemPool::bytes_allocated", "stack", lbt());
-  return total_alloc_size_;
-}
-
-
-int ObArrowFile::open()
-{
-  return file_reader_.open(file_name_);
-}
-
-arrow::Status ObArrowFile::Seek(int64_t position) {
-  position_ = position;
-  return arrow::Status::OK();
-}
-
-arrow::Result<int64_t> ObArrowFile::Read(int64_t nbytes, void *out)
-{
-  int ret = OB_SUCCESS;
-  arrow::Result<int64_t> ret_code;
-  int64_t read_size = -1;
-  if (OB_FAIL(file_reader_.pread(out, nbytes, position_, read_size))) {
-    LOG_WARN("fail to read file", K(ret), K(nbytes));
-    ret_code = arrow::Result<int64_t>(arrow::Status(arrow::StatusCode::IOError, "read file failed"));
-  } else {
-    position_ += read_size;
-    ret_code = read_size;
-  }
-  LOG_DEBUG("Read(int64_t nbytes, void *out)", K(nbytes));
-  return ret_code;
-}
-
-arrow::Result<std::shared_ptr<arrow::Buffer>> ObArrowFile::Read(int64_t nbytes)
-{
-  ARROW_ASSIGN_OR_RAISE(auto buffer, arrow::AllocateResizableBuffer(nbytes, pool_));
-  ARROW_ASSIGN_OR_RAISE(int64_t bytes_read, Read(nbytes, buffer->mutable_data()));
-  if (bytes_read < nbytes) {
-    RETURN_NOT_OK(buffer->Resize(bytes_read));
-  }
-  LOG_DEBUG("ObArrowFile::Read(int64_t nbytes)", K(nbytes));
-  return std::move(buffer);
-}
-
-
-arrow::Result<int64_t> ObArrowFile::ReadAt(int64_t position, int64_t nbytes, void* out)
-{
-  int ret = OB_SUCCESS;
-  arrow::Result<int64_t> ret_code;
-  int64_t read_size = -1;
-
-  if (OB_FAIL(file_reader_.pread(out, nbytes, position, read_size))) {
-    LOG_WARN("fail to read file", K(ret), K(position), K(nbytes));
-    ret_code = arrow::Result<int64_t>(arrow::Status(arrow::StatusCode::IOError, "read at file failed"));
-  } else {
-    position_ = position + read_size;
-    ret_code = read_size;
-  }
-  LOG_DEBUG("ObArrowFile::Read(int64_t nbytes)", K(nbytes));
-  return ret_code;
-}
-
-arrow::Result<std::shared_ptr<arrow::Buffer>> ObArrowFile::ReadAt(int64_t position, int64_t nbytes)
-{
-  ARROW_ASSIGN_OR_RAISE(auto buffer, AllocateResizableBuffer(nbytes, pool_));
-  ARROW_ASSIGN_OR_RAISE(int64_t bytes_read,
-                        ReadAt(position, nbytes, buffer->mutable_data()));
-  if (bytes_read < nbytes) {
-    RETURN_NOT_OK(buffer->Resize(bytes_read));
-    buffer->ZeroPadding();
-  }
-  LOG_DEBUG("ObArrowFile::ReadAt(int64_t position, int64_t nbytes)", K(nbytes));
-  return std::move(buffer);
-}
-
-
-arrow::Result<int64_t> ObArrowFile::Tell() const
-{
-  return position_;
-}
-
-arrow::Result<int64_t> ObArrowFile::GetSize()
-{
-  int ret = OB_SUCCESS;
-  arrow::Result<int64_t> ret_code;
-  int64_t file_size = 0;
-  if (OB_FAIL(file_reader_.get_file_size(file_name_, file_size))) {
-    LOG_WARN("fail to get file size", K(ret), K(file_name_));
-    ret_code = arrow::Result<int64_t>(arrow::Status(arrow::StatusCode::IOError, "get file size"));
-  } else {
-    ret_code = file_size;
-  }
-  return ret_code;
-}
-
-arrow::Status ObArrowFile::Close()
-{
-  file_reader_.close();
-  return arrow::Status::OK();
-}
-
-bool ObArrowFile::closed() const
-{
-  return !file_reader_.is_opened();
-}
 
 bool mem_zero_detect(void *buf, size_t n)
 {
@@ -461,7 +307,11 @@ ObParquetTableRowIterator::DataLoader::LOAD_FUNC ObParquetTableRowIterator::Data
     if (parquet::Type::INT64 == phy_type) {
       func = &DataLoader::load_int64_to_int64_vec;
     } else if (parquet::Type::INT32 == phy_type) {
-      func = &DataLoader::load_int32_to_int64_vec;
+      if (log_type->is_int() && !static_cast<const parquet::IntLogicalType*>(log_type)->is_signed()) {
+        func = &DataLoader::load_uint32_to_int64_vec;
+      } else {
+        func = &DataLoader::load_int32_to_int64_vec;
+      }
     }
     //sign and width
     ObObj temp_obj;
@@ -474,8 +324,8 @@ ObParquetTableRowIterator::DataLoader::LOAD_FUNC ObParquetTableRowIterator::Data
       func = NULL;
     }
   } else if ((no_log_type || log_type->is_string() || log_type->is_enum())
-             && (ob_is_string_type(datum_type.type_) || ob_is_enum_or_set_type(datum_type.type_))) {
-    //convert parquet enum/string to enum/string vector
+             && ob_is_string_type(datum_type.type_)) {
+    //convert parquet enum/string to string vector
     if (parquet::Type::BYTE_ARRAY == phy_type) {
       func = &DataLoader::load_string_col;
     } else if (parquet::Type::FIXED_LEN_BYTE_ARRAY == phy_type) {
@@ -484,7 +334,7 @@ ObParquetTableRowIterator::DataLoader::LOAD_FUNC ObParquetTableRowIterator::Data
   } else if ((no_log_type || log_type->is_decimal() || log_type->is_int())
              && ob_is_number_or_decimal_int_tc(datum_type.type_)) {
     //convert parquet int storing as int32/int64 to number/decimal vector
-    if (log_type->is_decimal() && (col_desc->type_precision() != datum_type.precision_
+    if (log_type->is_decimal() && (col_desc->type_precision() != ((datum_type.precision_ == -1) ? 38 : datum_type.precision_)
                                    || col_desc->type_scale() != datum_type.scale_)) {
       func = NULL;
     } else {
@@ -510,6 +360,9 @@ ObParquetTableRowIterator::DataLoader::LOAD_FUNC ObParquetTableRowIterator::Data
     } else if (parquet::Type::INT32 == phy_type && ob_is_datetime(datum_type.type_)) {
       func = &DataLoader::load_date_col_to_datetime;
     }
+  } else if ((no_log_type || log_type->is_int()) && parquet::Type::INT32 == phy_type
+             && ob_is_year_tc(datum_type.type_)) {
+    func = &DataLoader::load_year_col;
   } else if (log_type->is_time() && ob_is_time_tc(datum_type.type_)) {
     switch (static_cast<const parquet::TimeLogicalType*>(log_type)->time_unit()) {
       case parquet::LogicalType::TimeUnit::unit::MILLIS: {
@@ -535,10 +388,10 @@ ObParquetTableRowIterator::DataLoader::LOAD_FUNC ObParquetTableRowIterator::Data
       }
     }
   } else if (log_type->is_timestamp() && parquet::Type::INT64 == phy_type
-             && (ob_is_otimestamp_type(datum_type.type_) || ObTimestampType == datum_type.type_)) {
+             && (ob_is_otimestamp_type(datum_type.type_) || ob_is_datetime_tc(datum_type.type_))) {
     switch (static_cast<const parquet::TimestampLogicalType*>(log_type)->time_unit()) {
       case parquet::LogicalType::TimeUnit::unit::MILLIS: {
-        if (ObTimestampType == datum_type.type_
+        if (ob_is_datetime_tc(datum_type.type_)
             || ObTimestampLTZType == datum_type.type_
             || ObTimestampNanoType == datum_type.type_) {
           func = &DataLoader::load_timestamp_millis_col;
@@ -546,10 +399,11 @@ ObParquetTableRowIterator::DataLoader::LOAD_FUNC ObParquetTableRowIterator::Data
         break;
       }
       case parquet::LogicalType::TimeUnit::unit::MICROS: {
-        if (ObTimestampType == datum_type.type_ && is_parquet_store_utc(log_type)) {
+        if ((ObTimestampType == datum_type.type_ && is_parquet_store_utc(log_type))
+            || (ObDateTimeType == datum_type.type_ && !is_parquet_store_utc(log_type))) {
           //mysql timestamp storing utc timestamp as int64 values
           func = &DataLoader::load_int64_to_int64_vec;
-        } else if (ObTimestampType == datum_type.type_
+        } else if (ob_is_datetime_tc(datum_type.type_)
                    || ObTimestampLTZType == datum_type.type_
                    || ObTimestampNanoType == datum_type.type_) {
           func = &DataLoader::load_timestamp_micros_col;
@@ -557,7 +411,7 @@ ObParquetTableRowIterator::DataLoader::LOAD_FUNC ObParquetTableRowIterator::Data
         break;
       }
       case parquet::LogicalType::TimeUnit::unit::NANOS: {
-        if (ObTimestampType == datum_type.type_
+        if (ob_is_datetime_tc(datum_type.type_)
             || ObTimestampLTZType == datum_type.type_
             || ObTimestampNanoType == datum_type.type_) {
           func = &DataLoader::load_timestamp_nanos_col;
@@ -822,7 +676,9 @@ int ObParquetTableRowIterator::DataLoader::load_decimal_any_col()
   } else if (reader_->descr()->physical_type() == parquet::Type::Type::FIXED_LEN_BYTE_ARRAY) {
     ObArrayWrap<parquet::FixedLenByteArray> values;
     int32_t fixed_length = reader_->descr()->type_length();
-    int32_t int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(file_col_expr_->datum_meta_.precision_);
+    int32_t int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(
+                                                    (file_col_expr_->datum_meta_.precision_ == -1)
+                                                    ? 38 : file_col_expr_->datum_meta_.precision_);
     ObArrayWrap<char> buffer;
     OZ (buffer.allocate_array(tmp_alloc_g.get_allocator(), int_bytes));
     OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
@@ -1049,6 +905,40 @@ int ObParquetTableRowIterator::DataLoader::load_bool_to_int64_vec()
   return ret;
 }
 
+int ObParquetTableRowIterator::DataLoader::load_uint32_to_int64_vec()
+{
+  int ret = OB_SUCCESS;
+  int64_t values_cnt = 0;
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
+  int16_t max_def_level = reader_->descr()->max_definition_level();
+  ObFixedLengthBase *int32_vec = static_cast<ObFixedLengthBase *>(file_col_expr_->get_vector(eval_ctx_));
+  ObArrayWrap<int32_t> values;
+
+  CK (VEC_FIXED == int32_vec->get_format());
+  OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
+  if (OB_SUCC(ret)) {
+    row_count_ = static_cast<parquet::Int32Reader*>(reader_)->ReadBatch(
+          batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
+          values.get_data(), &values_cnt);
+    if (OB_UNLIKELY(values_cnt > row_count_)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("repeated data not support");
+    } else {
+      int j = 0;
+      for (int i = 0; i < row_count_; i++) {
+        if (IS_PARQUET_COL_VALUE_IS_NULL(def_levels_buf_.at(i))) {
+          int32_vec->set_null(i);
+        } else {
+          uint32_t uint_value = static_cast<uint32_t>(values.at(j));
+          int32_vec->set_int(i, static_cast<int64_t>(uint_value));
+          j++;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObParquetTableRowIterator::DataLoader::load_int64_to_int64_vec()
 {
   int ret = OB_SUCCESS;
@@ -1103,6 +993,31 @@ int ObParquetTableRowIterator::DataLoader::load_date_col_to_datetime()
         dec_vec->set_null(i + row_offset_);
       } else {
         dec_vec->set_datetime(i + row_offset_, values.at(j++) * USECS_PER_DAY);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObParquetTableRowIterator::DataLoader::load_year_col()
+{
+  int ret = OB_SUCCESS;
+  int64_t values_cnt = 0;
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
+  ObFixedLengthBase *dec_vec = static_cast<ObFixedLengthBase *>(file_col_expr_->get_vector(eval_ctx_));
+  int16_t max_def_level = reader_->descr()->max_definition_level();
+  ObArrayWrap<int32_t> values;
+  OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
+  if (OB_SUCC(ret)) {
+    row_count_ = static_cast<parquet::Int32Reader*>(reader_)->ReadBatch(
+          batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
+          values.get_data(), &values_cnt);
+    int j = 0;
+    for (int i = 0; OB_SUCC(ret) && i < row_count_; i++) {
+      if (IS_PARQUET_COL_VALUE_IS_NULL(def_levels_buf_.at(i))) {
+        file_col_expr_->get_vector(eval_ctx_)->set_null(i);
+      } else {
+        dec_vec->set_year(i, values.at(j++));
       }
     }
   }
@@ -1207,7 +1122,7 @@ int ObParquetTableRowIterator::DataLoader::load_timestamp_millis_col()
         dec_vec->set_null(i + row_offset_);
       } else {
         int64_t adjusted_value = values.at(j++) * USECS_PER_MSEC + adjust_us;
-        if (ObTimestampType == file_col_expr_->datum_meta_.type_) {
+        if (ob_is_datetime_tc(file_col_expr_->datum_meta_.type_)) {
           dec_vec->set_timestamp(i + row_offset_, adjusted_value);
         } else {
           ObOTimestampData data;
@@ -1240,7 +1155,7 @@ int ObParquetTableRowIterator::DataLoader::load_timestamp_micros_col()
         dec_vec->set_null(i + row_offset_);
       } else {
         int64_t adjusted_value = (values.at(j++) + adjust_us);
-        if (ObTimestampType == file_col_expr_->datum_meta_.type_) {
+        if (ob_is_datetime_tc(file_col_expr_->datum_meta_.type_)) {
           dec_vec->set_timestamp(i + row_offset_, adjusted_value);
         } else {
           ObOTimestampData data;
@@ -1272,7 +1187,7 @@ int ObParquetTableRowIterator::DataLoader::load_timestamp_nanos_col()
       if (IS_PARQUET_COL_VALUE_IS_NULL(def_levels_buf_.at(i))) {
         dec_vec->set_null(i + row_offset_);
       } else {
-        if (ObTimestampType == file_col_expr_->datum_meta_.type_) {
+        if (ob_is_datetime_tc(file_col_expr_->datum_meta_.type_)) {
           dec_vec->set_timestamp(i + row_offset_, values.at(j++) / NSECS_PER_USEC + adjust_us);
         } else {
           ObOTimestampData data;
@@ -1310,7 +1225,7 @@ int ObParquetTableRowIterator::DataLoader::load_timestamp_hive()
         uint64_t nsec_time_value = ((uint64_t)value.value[1] << 32) + (uint64_t)value.value[0];
         uint32_t julian_date_value = value.value[2];
         int64_t utc_timestamp =((int64_t)julian_date_value - 2440588LL) * 86400000000LL + (int64_t)(nsec_time_value / NSECS_PER_USEC);
-        if (ObTimestampType == file_col_expr_->datum_meta_.type_) {
+        if (ob_is_datetime_tc(file_col_expr_->datum_meta_.type_)) {
           dec_vec->set_timestamp(i + row_offset_, utc_timestamp + adjust_us);
         } else {
           ObOTimestampData data;

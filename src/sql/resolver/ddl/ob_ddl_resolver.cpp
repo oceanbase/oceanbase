@@ -2776,7 +2776,7 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
                 LOG_WARN("failed. get unexpected NULL ptr", K(ret), K(option_node->num_child_));
               } else if (T_EXTERNAL_FILE_FORMAT_TYPE == option_node->children_[i]->type_
                          || T_CHARSET == option_node->children_[i]->type_) {
-                if (OB_FAIL(resolve_file_format(option_node->children_[i], format))) {
+                if (OB_FAIL(ObResolverUtils::resolve_file_format(option_node->children_[i], format, params_))) {
                   LOG_WARN("fail to resolve file format", K(ret));
                 }
                 has_file_format |= (T_EXTERNAL_FILE_FORMAT_TYPE == option_node->children_[i]->type_);
@@ -2795,7 +2795,7 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
                 LOG_WARN("failed. get unexpected NULL ptr", K(ret), K(option_node->num_child_));
               } else if (T_EXTERNAL_FILE_FORMAT_TYPE == option_node->children_[i]->type_ ||
                          T_CHARSET == option_node->children_[i]->type_) {
-              } else if (OB_FAIL(resolve_file_format(option_node->children_[i], format))) {
+              } else if (OB_FAIL(ObResolverUtils::resolve_file_format(option_node->children_[i], format, params_))) {
                 LOG_WARN("fail to resolve file format", K(ret));
               } else if (OB_FAIL(mask_properties_sensitive_info(option_node->children_[i], masked_sql, temp_masked_sql))) {
                 LOG_WARN("failed to mask properties sensitive info", K(ret), K(i), K(option_node->num_child_));
@@ -3069,202 +3069,6 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
     }
   }
 
-  return ret;
-}
-
-int ObDDLResolver::resolve_file_format(const ParseNode *node, ObExternalFileFormat &format)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(node) || node->num_child_ != 1 || OB_ISNULL(node->children_[0]) ||
-      OB_ISNULL(params_.session_info_) || OB_ISNULL(params_.expr_factory_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid parse node", K(ret));
-  } else {
-    switch (node->type_) {
-      case ObItemType::T_ACCESSTYPE: {
-        format.odps_format_.access_type_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
-        break;
-      }
-      case ObItemType::T_ACCESSID: {
-        format.odps_format_.access_id_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
-        break;
-      }
-      case ObItemType::T_ACCESSKEY: {
-        format.odps_format_.access_key_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
-        break;
-      }
-      case ObItemType::T_STSTOKEN: {
-        format.odps_format_.sts_token_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
-        break;
-      }
-      case ObItemType::T_ENDPOINT: {
-        format.odps_format_.endpoint_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
-        break;
-      }
-      case ObItemType::T_PROJECT: {
-        format.odps_format_.project_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
-        break;
-      }
-      case ObItemType::T_SCHEMA: {
-        format.odps_format_.schema_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
-        break;
-      }
-      case ObItemType::T_TABLE: {
-        format.odps_format_.table_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
-        break;
-      }
-      case ObItemType::T_QUOTA: {
-        format.odps_format_.quota_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
-        break;
-      }
-      case ObItemType::T_COMPRESSION_CODE: {
-        format.odps_format_.compression_code_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
-        break;
-      }
-      case T_EXTERNAL_FILE_FORMAT_TYPE: {
-        ObString string_v = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
-        for (int i = 0; i < ObExternalFileFormat::MAX_FORMAT; i++) {
-          if (0 == string_v.case_compare(ObExternalFileFormat::FORMAT_TYPE_STR[i])) {
-            format.format_type_ = static_cast<ObExternalFileFormat::FormatType>(i);
-            break;
-          }
-        }
-        if (ObExternalFileFormat::INVALID_FORMAT == format.format_type_) {
-          ObSqlString err_msg;
-          err_msg.append_fmt("format '%.*s'", string_v.length(), string_v.ptr());
-          ret = OB_NOT_SUPPORTED;
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg.ptr());
-          LOG_WARN("failed. external file format type is not supported yet", K(ret),
-                   KPHEX(string_v.ptr(), string_v.length()));
-        }
-        break;
-      }
-      case T_FIELD_TERMINATED_STR: {
-        if (OB_FAIL(ObResolverUtils::resolve_file_format_string_value(node->children_[0],
-                                                            format.csv_format_.cs_type_,
-                                                            params_,
-                                                            format.csv_format_.field_term_str_))) {
-          LOG_WARN("failed to resolve file format field terminated str", K(ret));
-        } else {
-          format.origin_file_format_str_.origin_field_term_str_.assign_ptr(node->str_value_, node->str_len_);
-        }
-        break;
-      }
-      case T_LINE_TERMINATED_STR: {
-        if (OB_FAIL(ObResolverUtils::resolve_file_format_string_value(node->children_[0],
-                                                              format.csv_format_.cs_type_,
-                                                              params_,
-                                                              format.csv_format_.line_term_str_))) {
-          LOG_WARN("failed to resolve file format line terminated str", K(ret));
-        } else {
-          format.origin_file_format_str_.origin_line_term_str_.assign_ptr(node->str_value_, node->str_len_);
-        }
-        break;
-      }
-      case T_ESCAPED_STR: {
-        ObString string_v;
-        if (OB_FAIL(ObResolverUtils::resolve_file_format_string_value(node->children_[0],
-                                                                      format.csv_format_.cs_type_,
-                                                                      params_,
-                                                                      string_v))) {
-          LOG_WARN("failed to resolve file format escape str", K(ret));
-        } else if (string_v.length() > 1) {
-          ret = OB_ERR_INVALID_ESCAPE_CHAR_LENGTH;
-          LOG_USER_ERROR(OB_ERR_INVALID_ESCAPE_CHAR_LENGTH);
-          LOG_WARN("failed. ESCAPE CHAR length is wrong", K(ret), KPHEX(string_v.ptr(),
-                                                                        string_v.length()));
-        } else if (string_v.length() == 1) {
-          format.csv_format_.field_escaped_char_ = string_v.ptr()[0];
-        } else {
-          format.csv_format_.field_escaped_char_ = INT64_MAX; // default value
-        }
-        if (OB_SUCC(ret)) {
-          format.origin_file_format_str_.origin_field_escaped_str_.assign_ptr(node->str_value_, node->str_len_);
-        }
-        break;
-      }
-      case T_CLOSED_STR: {
-        ObString string_v;
-        if (OB_FAIL(ObResolverUtils::resolve_file_format_string_value(node->children_[0],
-                                                                      format.csv_format_.cs_type_,
-                                                                      params_,
-                                                                      string_v))) {
-          LOG_WARN("failed to resolve file format close str", K(ret));
-        } else if (string_v.length() > 1) {
-          ret = OB_WRONG_FIELD_TERMINATORS;
-          LOG_USER_ERROR(OB_WRONG_FIELD_TERMINATORS);
-          LOG_WARN("failed. ENCLOSED CHAR length is wrong", K(ret), KPHEX(string_v.ptr(),
-                                                                          string_v.length()));
-        } else if (string_v.length() == 1) {
-          format.csv_format_.field_enclosed_char_ = string_v.ptr()[0];
-        } else {
-          format.csv_format_.field_enclosed_char_ = INT64_MAX; // default value
-        }
-        if (OB_SUCC(ret)) {
-          format.origin_file_format_str_.origin_field_enclosed_str_.assign_ptr(node->str_value_,
-                                                                   node->str_len_);
-        }
-        break;
-      }
-      case T_CHARSET: {
-        ObString string_v = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
-        ObCharsetType cs_type = CHARSET_INVALID;
-        if (CHARSET_INVALID == (cs_type = ObCharset::charset_type(string_v))) {
-          ret = OB_ERR_UNSUPPORTED_CHARACTER_SET;
-          LOG_USER_ERROR(OB_ERR_UNSUPPORTED_CHARACTER_SET);
-          LOG_WARN("failed. Encoding type is unsupported", K(ret), KPHEX(string_v.ptr(),
-                                                                         string_v.length()));
-        } else {
-          format.csv_format_.cs_type_ = cs_type;
-        }
-        break;
-      }
-      case T_SKIP_HEADER: {
-        format.csv_format_.skip_header_lines_ = node->children_[0]->value_;
-        break;
-      }
-      case T_SKIP_BLANK_LINE: {
-        format.csv_format_.skip_blank_lines_ = node->children_[0]->value_;
-        break;
-      }
-      case T_TRIM_SPACE: {
-        format.csv_format_.trim_space_ = node->children_[0]->value_;
-        break;
-      }
-      case T_NULL_IF_EXETERNAL: {
-        if (OB_FAIL(format.csv_format_.null_if_.allocate_array(*allocator_,
-                                                               node->children_[0]->num_child_))) {
-          LOG_WARN("allocate array failed", K(ret));
-        }
-        for (int64_t i = 0; OB_SUCC(ret) && i < node->children_[0]->num_child_; i++) {
-          if (OB_FAIL(ObResolverUtils::resolve_file_format_string_value(
-                                                              node->children_[0]->children_[i],
-                                                              format.csv_format_.cs_type_,
-                                                              params_,
-                                                              format.csv_format_.null_if_.at(i)))) {
-            LOG_WARN("failed to resolve file format line terminated str", K(ret));
-          }
-        }
-        if (OB_SUCC(ret)) {
-          format.origin_file_format_str_.origin_null_if_str_.assign_ptr(node->str_value_, node->str_len_);
-        }
-        break;
-      }
-      case T_EMPTY_FIELD_AS_NULL: {
-        format.csv_format_.empty_field_as_null_ = node->children_[0]->value_;
-        break;
-      }
-      case T_COMPRESSION: {
-        ObString string_v = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim();
-        ret = compression_algorithm_from_string(string_v, format.csv_format_.compression_algorithm_);
-        break;
-      }
-      default: {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid file format option", K(ret), K(node->type_));
-      }
-    }
-  }
   return ret;
 }
 

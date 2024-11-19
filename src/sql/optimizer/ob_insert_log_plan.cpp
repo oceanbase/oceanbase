@@ -1793,6 +1793,7 @@ int ObInsertLogPlan::allocate_select_into_as_top_for_insert(ObLogicalOperator *&
   const ObTableSchema *table_schema = NULL;
   ObSQLSessionInfo *session_info = NULL;
   const ObInsertStmt *stmt = get_stmt();
+  ObColumnRefRawExpr *col_expr = NULL;
   if (OB_ISNULL(old_top) || OB_ISNULL(stmt)
       || OB_ISNULL(schema_guard = get_optimizer_context().get_schema_guard())
       || OB_ISNULL(session_info = get_optimizer_context().get_session_info())
@@ -1828,7 +1829,16 @@ int ObInsertLogPlan::allocate_select_into_as_top_for_insert(ObLogicalOperator *&
       LOG_WARN("failed to append string", K(ret));
     } else if (OB_FAIL(select_into->get_select_exprs().assign(table_info.column_conv_exprs_))) {
       LOG_WARN("failed to get select exprs", K(ret));
-    } else {
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_info.values_desc_.count(); i++) {
+      if (OB_ISNULL(col_expr = table_info.values_desc_.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(select_into->get_alias_names().push_back(col_expr->get_column_name()))) {
+        LOG_WARN("failed to push back column name", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
       select_into->set_is_overwrite(stmt->is_external_table_overwrite());
       select_into->set_external_properties(external_properties);
       select_into->set_external_partition(stmt->get_table_item(0)->external_table_partition_);

@@ -217,6 +217,12 @@ struct ObWideInteger
   }
 
   template<typename T>
+  ObWideInteger<Bits, Signed>& operator|(const T &rhs) = delete;
+
+  template<typename T>
+  ObWideInteger<Bits, Signed>& operator|=(const T &rhs) = delete;
+
+  template<typename T>
   ObWideInteger<Bits, Signed>& operator+=(const T &rhs)
   {
     if (ObWideInteger<Bits, Signed>::_impl::is_negative(rhs)) {

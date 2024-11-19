@@ -7724,6 +7724,7 @@ int ObLogPlan::allocate_select_into_as_top(ObLogicalOperator *&old_top)
   } else {
     ObSelectIntoItem *into_item = stmt->get_select_into();
     ObSEArray<ObRawExpr*, 4> select_exprs;
+    ObExternalFileFormat external_properties;
     if (OB_ISNULL(into_item)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("into item is null", K(ret));
@@ -7731,7 +7732,24 @@ int ObLogPlan::allocate_select_into_as_top(ObLogicalOperator *&old_top)
       LOG_WARN("failed to get select exprs", K(ret));
     } else if (OB_FAIL(select_into->get_select_exprs().assign(select_exprs))) {
       LOG_WARN("failed to get select exprs", K(ret));
-    } else {
+    } else if (!into_item->external_properties_.empty()
+               && OB_FAIL(external_properties.load_from_string(into_item->external_properties_,
+                                                               get_allocator()))) {
+      LOG_WARN("failed to load external properties", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_select_item_size(); i++) {
+      if (!into_item->external_properties_.empty()
+          && (external_properties.format_type_ == ObExternalFileFormat::FormatType::PARQUET_FORMAT
+              || external_properties.format_type_ == ObExternalFileFormat::FormatType::ORC_FORMAT)
+          && is_contain(select_into->get_alias_names(), stmt->get_select_item(i).alias_name_)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("alias names should be different", K(ret));
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "alias names, alias names should be different");
+      } else if (OB_FAIL(select_into->get_alias_names().push_back(stmt->get_select_item(i).alias_name_))) {
+        LOG_WARN("failed to push back alias name", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
       select_into->set_into_type(into_item->into_type_);
       select_into->set_outfile_name(into_item->outfile_name_);
       select_into->set_field_str(into_item->field_str_);
@@ -7744,6 +7762,7 @@ int ObLogPlan::allocate_select_into_as_top(ObLogicalOperator *&old_top)
       select_into->set_buffer_size(into_item->buffer_size_);
       select_into->set_escaped_cht(into_item->escaped_cht_);
       select_into->set_cs_type(into_item->cs_type_);
+      select_into->set_external_properties(into_item->external_properties_);
       select_into->set_child(ObLogicalOperator::first_child, old_top);
       select_into->set_file_partition_expr(into_item->file_partition_expr_);
       // compute property

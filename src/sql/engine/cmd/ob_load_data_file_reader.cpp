@@ -21,6 +21,7 @@
 #include "share/io/ob_io_manager.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "lib/compress/zstd_1_3_8/ob_zstd_wrapper.h"
+#include "lib/compress/ob_compress_util.h"
 #include "share/table/ob_table_load_define.h"
 
 namespace oceanbase
@@ -709,26 +710,6 @@ int ObDecompressFileReader::read_compressed_data()
 /**
  * ObZlibDecompressor
  */
-voidpf zlib_alloc(voidpf opaque, uInt items, uInt size)
-{
-  voidpf ret = NULL;
-  ObIAllocator *allocator = static_cast<ObIAllocator *>(opaque);
-  if (OB_ISNULL(allocator)) {
-  } else {
-    ret = allocator->alloc(items * size);
-  }
-  return ret;
-}
-
-void zlib_free(voidpf opaque, voidpf address)
-{
-  ObIAllocator *allocator = static_cast<ObIAllocator *>(opaque);
-  if (OB_ISNULL(allocator)) {
-    free(address);
-  } else {
-    allocator->free(address);
-  }
-}
 
 ObZlibDecompressor::ObZlibDecompressor(ObIAllocator &allocator,
                                        ObCSVGeneralFormat::ObCSVCompression compression_format)
@@ -759,8 +740,8 @@ int ObZlibDecompressor::init()
     LOG_WARN("allocate memory failed: zlib stream object.", K(sizeof(z_stream)));
   } else {
     z_streamp zstream_ptr = static_cast<z_streamp>(zlib_stream_ptr_);
-    zstream_ptr->zalloc   = zlib_alloc;
-    zstream_ptr->zfree    = zlib_free;
+    zstream_ptr->zalloc   = ob_zlib_alloc;
+    zstream_ptr->zfree    = ob_zlib_free;
     zstream_ptr->opaque   = static_cast<voidpf>(&allocator_);
     zstream_ptr->avail_in = 0;
     zstream_ptr->next_in  = Z_NULL;
@@ -833,25 +814,6 @@ int ObZlibDecompressor::decompress(const char *src, int64_t src_size, int64_t &c
 /**
  * ObZstdDecompressor
  */
-void *zstd_alloc(void* opaque, size_t size)
-{
-  void *ret = nullptr;
-  if (OB_ISNULL(opaque)) {
-  } else {
-    ObIAllocator *allocator = static_cast<ObIAllocator *>(opaque);
-    ret = allocator->alloc(size);
-  }
-  return ret;
-}
-
-void zstd_free(void *opaque, void *address)
-{
-  if (OB_ISNULL(opaque)) {
-  } else {
-    ObIAllocator *allocator = static_cast<ObIAllocator *>(opaque);
-    allocator->free(address);
-  }
-}
 
 ObZstdDecompressor::ObZstdDecompressor(ObIAllocator &allocator)
     : ObDecompressor(allocator)
@@ -883,8 +845,8 @@ int ObZstdDecompressor::init()
     ret = OB_INIT_TWICE;
   } else {
     OB_ZSTD_customMem allocator;
-    allocator.customAlloc = zstd_alloc;
-    allocator.customFree  = zstd_free;
+    allocator.customAlloc = ob_zstd_malloc;
+    allocator.customFree  = ob_zstd_free;
     allocator.opaque      = &allocator_;
 
     ret = ObZstdWrapper::create_stream_dctx(allocator, zstd_stream_context_);

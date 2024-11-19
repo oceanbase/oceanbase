@@ -2594,7 +2594,7 @@ typedef enum ObItemType
   T_ACCESSID = 4717,
   T_ACCESSKEY = 4718,
   T_STSTOKEN = 4719,
-  T_COMPRESSION_CODE = 4720,
+  T_COMPRESSION_CODE = 4720,//Deprecated, use T_COMPRESSION
   T_ENDPOINT = 4721,
   T_PROJECT = 4722,
   T_SCHEMA = 4723,
@@ -2609,7 +2609,7 @@ typedef enum ObItemType
 
   // Parquet related
   T_ROW_GROUP_SIZE = 4729,    // FARM COMPAT WHITELIST, renamed
-  T_COMPRESSION_ALGORITHM = 4730,
+  T_COMPRESSION_ALGORITHM = 4730,//Deprecated, use T_COMPRESSION
 
   // Erase micro cache
   T_FLUSH_SS_MICRO_CACHE = 4731,

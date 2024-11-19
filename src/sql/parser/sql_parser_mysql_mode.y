@@ -276,9 +276,9 @@ END_P SET_VAR DELIMITER
         BADFILE BUFFER_SIZE
 
         CACHE CALIBRATION CALIBRATION_INFO CANCEL CASCADED CAST CATALOG_NAME CHAIN CHANGED CHARSET CHECKSUM CHECKPOINT CHUNK CIPHER
-        CLASS_ORIGIN CLEAN CLEAR CLIENT CLONE CLOG CLOSE CLUSTER CLUSTER_ID CLUSTER_NAME COALESCE COLUMN_STAT
+        CLASS_ORIGIN CLEAN CLEAR CLIENT CLONE CLOG CLOSE CLUSTER CLUSTER_ID CLUSTER_NAME COALESCE COLUMN_BLOOM_FILTER COLUMN_STAT
         CODE COLLATION COLUMN_FORMAT COLUMN_NAME COLUMNS COMMENT COMMIT COMMITTED COMPACT COMPLETION COMPLETE
-        COMPRESSED COMPRESSION COMPRESSION_CODE COMPUTATION COMPUTE CONCURRENT CONDENSED CONDITIONAL CONNECTION CONSISTENT CONSISTENT_MODE CONSTRAINT_CATALOG
+        COMPRESSED COMPRESSION COMPRESSION_BLOCK_SIZE COMPRESSION_CODE COMPUTATION COMPUTE CONCURRENT CONDENSED CONDITIONAL CONNECTION CONSISTENT CONSISTENT_MODE CONSTRAINT_CATALOG
         CONSTRAINT_NAME CONSTRAINT_SCHEMA CONTAINS CONTEXT CONTRIBUTORS COPY COSINE COUNT CPU CREATE_TIMESTAMP
         CTXCAT CTX_ID CUBE CURDATE CURRENT STACKED CURTIME CURSOR_NAME CUME_DIST CYCLE CALC_PARTITION_ID CONNECT
 
@@ -293,7 +293,7 @@ END_P SET_VAR DELIMITER
 
         FAILOVER FAST FAULTS FILE_BLOCK_SIZE FIELDS FILEX FINAL_COUNT FIRST FIRST_VALUE FIXED FLUSH FOLLOWER FORMAT
         FOUND FREEZE FREQUENCY FUNCTION FOLLOWING FLASHBACK FULL FRAGMENTATION FROZEN FILE_ID
-        FIELD_OPTIONALLY_ENCLOSED_BY FIELD_DELIMITER
+        FIELD_OPTIONALLY_ENCLOSED_BY FIELD_DELIMITER FIELD_ENCLOSED_BY FILE_EXTENSION
 
         GENERAL GEOMETRY GEOMCOLLECTION GEOMETRYCOLLECTION GET_FORMAT GLOBAL GRANTS GROUP_CONCAT GROUPING GTS
         GLOBAL_NAME GLOBAL_ALIAS
@@ -344,7 +344,7 @@ END_P SET_VAR DELIMITER
         RELAY_LOG_FILE RELAY_LOG_POS RELAY_THREAD RELOAD REMAP REMOVE REORGANIZE REPAIR REPEATABLE REPLICA
         REPLICA_NUM REPLICA_TYPE REPLICATION REPORT RESET RESOURCE RESOURCE_POOL RESOURCE_POOL_LIST RESPECT RESTART
         RESTORE RESUME RETURNED_SQLSTATE RETURNS RETURNING REVERSE REWRITE ROLLBACK ROLLUP ROOT
-        ROARINGBITMAP ROOTTABLE ROOTSERVICE ROOTSERVICE_LIST ROUTINE ROW ROLLING ROWID ROW_COUNT ROW_FORMAT ROWS RTREE RUN
+        ROARINGBITMAP ROOTTABLE ROOTSERVICE ROOTSERVICE_LIST ROUTINE ROW ROLLING ROWID ROW_COUNT ROW_FORMAT ROW_GROUP_SIZE ROW_INDEX_STRIDE ROWS RTREE RUN
         RECYCLEBIN ROTATE ROW_NUMBER RUDUNDANT RECURSIVE RANDOM REDO_TRANSPORT_OPTIONS REMOTE_OSS RT
         RANK READ_ONLY RECOVERY REJECT ROLE
 
@@ -355,7 +355,7 @@ END_P SET_VAR DELIMITER
         SQL_CACHE SQL_NO_CACHE SQL_ID SCHEMA_ID SQL_THREAD SQL_TSI_DAY SQL_TSI_HOUR SQL_TSI_MINUTE SQL_TSI_MONTH
         SQL_TSI_QUARTER SQL_TSI_SECOND SQL_TSI_WEEK SQL_TSI_YEAR SRID STANDBY _ST_ASMVT STAT START STARTS STATS_AUTO_RECALC
         STATS_PERSISTENT STATS_SAMPLE_PAGES STATUS STATEMENTS STATISTICS STD STDDEV STDDEV_POP STDDEV_SAMP STRONG STSTOKEN
-        SYNCHRONIZATION SYNCHRONOUS STOP STORAGE STORAGE_FORMAT_VERSION STORE STORING STRING
+        SYNCHRONIZATION SYNCHRONOUS STOP STORAGE STORAGE_FORMAT_VERSION STORE STORING STRING STRIPE_SIZE
         SUBCLASS_ORIGIN SUBDATE SUBJECT SUBPARTITION SUBPARTITIONS SUBSTR SUBSTRING SUCCESSFUL SUM
         SUPER SUSPEND SWAPS SWITCH SWITCHES SWITCHOVER SYSTEM SYSTEM_USER SYSDATE SESSION_ALIAS
         SIZE SKEWONLY SEQUENCE SLOG STATEMENT_ID SKIP_HEADER SKIP_BLANK_LINES STATEMENT SUM_OPNSIZE SS_MICRO_CACHE
@@ -498,7 +498,7 @@ END_P SET_VAR DELIMITER
 %type <node> server_action server_list opt_server_list
 %type <node> zone_action upgrade_action
 %type <node> opt_index_name opt_key_or_index opt_index_options opt_primary  opt_all
-%type <node> charset_key database_key charset_name charset_name_or_default collation_name databases_or_schemas trans_param_name trans_param_value
+%type <node> charset_key database_key charset_name charset_name_or_default collation_name compression_key databases_or_schemas trans_param_name trans_param_value
 %type <node> charset_introducer complex_string_literal literal number_literal now_or_signed_literal signed_literal
 %type <node> create_tablegroup_stmt drop_tablegroup_stmt alter_tablegroup_stmt default_tablegroup
 %type <node> set_transaction_stmt transaction_characteristics transaction_access_mode isolation_level
@@ -4915,6 +4915,7 @@ opt_compression:
 
 compression_name:
 NAME_OB { $$ = $1; }
+| STRING_VALUE { $$ = $1; }
 | unreserved_keyword
 {
   get_non_reserved_node($$, result->malloc_pool_, @1.first_column, @1.last_column);
@@ -8660,14 +8661,25 @@ TYPE COMP_EQ STRING_VALUE
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_QUOTA, 1, $3);
 }
-| COMPRESSION_CODE COMP_EQ STRING_VALUE
+| compression_key COMP_EQ compression_name
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_COMPRESSION_CODE, 1, $3);
+  (void)($1);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COMPRESSION, 1, $3);
 }
 | TABLE_NAME COMP_EQ STRING_VALUE
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE, 1, $3);
 };
+
+compression_key:
+COMPRESSION_CODE
+{
+  $$ = NULL;
+}
+| COMPRESSION
+{
+  $$ = NULL;
+}
 
 external_file_format_list:
 external_file_format
@@ -8703,6 +8715,11 @@ TYPE COMP_EQ STRING_VALUE
 }
 | FIELD_OPTIONALLY_ENCLOSED_BY COMP_EQ expr
 {
+  malloc_non_terminal_node($$, result->malloc_pool_, T_OPTIONALLY_CLOSED_STR, 1, $3);
+  dup_expr_string($$, result, @3.first_column, @3.last_column);
+}
+| FIELD_ENCLOSED_BY COMP_EQ expr
+{
   malloc_non_terminal_node($$, result->malloc_pool_, T_CLOSED_STR, 1, $3);
   dup_expr_string($$, result, @3.first_column, @3.last_column);
 }
@@ -8732,9 +8749,34 @@ TYPE COMP_EQ STRING_VALUE
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_EMPTY_FIELD_AS_NULL, 1, $3);
 }
+| ROW_GROUP_SIZE COMP_EQ file_size_const
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ROW_GROUP_SIZE, 1, $3);
+}
 | COMPRESSION COMP_EQ compression_name
 {
+  (void)($1);
   malloc_non_terminal_node($$, result->malloc_pool_, T_COMPRESSION, 1, $3);
+}
+| STRIPE_SIZE COMP_EQ file_size_const
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_STRIPE_SIZE, 1, $3);
+}
+| COMPRESSION_BLOCK_SIZE COMP_EQ file_size_const
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COMPRESSION_BLOCK_SIZE, 1, $3);
+}
+| ROW_INDEX_STRIDE COMP_EQ INTNUM
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ROW_INDEX_STRIDE, 1, $3);
+}
+| COLUMN_BLOOM_FILTER COMP_EQ '(' intnum_list ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_BLOOM_FILTER, 1, $4)
+}
+| FILE_EXTENSION COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FILE_EXTENSION, 1, $3);
 }
 ;
 
@@ -10806,6 +10848,13 @@ into_clause:
 INTO OUTFILE STRING_VALUE file_partition_opt opt_charset field_opt line_opt file_opt
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_INTO_OUTFILE, 6, $3, $4, $5, $6, $7, $8);
+}
+| INTO OUTFILE STRING_VALUE file_partition_opt FORMAT opt_equal_mark '(' external_file_format_list ')' file_opt
+{
+  (void)($6);
+  ParseNode *format_list = NULL;
+  merge_nodes(format_list, result, T_EXTERNAL_FILE_FORMAT, $8);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INTO_OUTFILE, 4, $3, $4, format_list, $10);
 }
 | INTO DUMPFILE STRING_VALUE
 {
@@ -23697,6 +23746,7 @@ ACCESS_INFO
 |       COALESCE
 |       CODE
 |       COLLATION
+|       COLUMN_BLOOM_FILTER
 |       COLUMN_FORMAT
 |       COLUMN_NAME
 |       COLUMN_STAT
@@ -23709,6 +23759,7 @@ ACCESS_INFO
 |       COMPLETION
 |       COMPRESSED
 |       COMPRESSION
+|       COMPRESSION_BLOCK_SIZE
 |       COMPRESSION_CODE
 |       COMPUTATION
 |       COMPUTE
@@ -23826,7 +23877,9 @@ ACCESS_INFO
 |       FILE_BLOCK_SIZE
 |       FIELDS
 |       FIELD_DELIMITER
+|       FIELD_ENCLOSED_BY
 |       FIELD_OPTIONALLY_ENCLOSED_BY
+|       FILE_EXTENSION
 |       FILE_ID
 |       FINAL_COUNT
 |       FIRST
@@ -24117,6 +24170,8 @@ ACCESS_INFO
 |       RECYCLEBIN
 |       ROTATE
 |       ROW_NUMBER
+|       ROW_GROUP_SIZE
+|       ROW_INDEX_STRIDE
 |       REDO_BUFFER_SIZE
 |       REDOFILE
 |       REDUNDANCY
@@ -24255,6 +24310,7 @@ ACCESS_INFO
 |       STORING
 |       STRONG
 |       STRING
+|       STRIPE_SIZE
 |       STSTOKEN
 |       SUBCLASS_ORIGIN
 |       SUBDATE

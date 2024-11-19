@@ -2350,7 +2350,6 @@ int ObOdpsPartitionDownloaderMgr::commit_upload()
   uint32_t block_id = 0;
   uint32_t task_count = static_cast<uint32_t>(odps_mgr_map_.size());
   OdpsUploader *uploader = NULL;
-  LOG_TRACE("debug select into commit upload begin");
   try {
     for (common::hash::ObHashMap<int64_t, int64_t>::iterator iter = odps_mgr_map_.begin();
          OB_SUCC(ret) && iter != odps_mgr_map_.end(); iter++) {
@@ -2387,7 +2386,6 @@ int ObOdpsPartitionDownloaderMgr::commit_upload()
       LOG_WARN("caught exception when commit", K(ret));
     }
   }
-  LOG_TRACE("debug select into commit upload end");
   return ret;
 }
 

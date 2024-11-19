@@ -29,33 +29,6 @@
 
 namespace oceanbase {
 namespace sql {
-  class ObOrcMemPool : public orc::MemoryPool {
-    public:
-      void init(uint64_t tenant_id) {
-        mem_attr_ = ObMemAttr(tenant_id, "OrcMemPool");
-      }
-
-      virtual char* malloc(uint64_t size) override {
-        int ret = OB_SUCCESS;
-        void *buf = ob_malloc_align(64, size, mem_attr_);
-        if (OB_ISNULL(buf)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("fail to allocate memory", K(size), K(lbt()));
-          throw std::bad_alloc();
-        }
-        return (char*)buf;
-      }
-
-      virtual void free(char* p) override {
-        if (OB_ISNULL(p)) {
-          throw std::bad_exception();
-        }
-        ob_free_align(p);
-      }
-
-    private:
-      common::ObMemAttr mem_attr_;
-  };
 
   class ObOrcFileAccess : public orc::InputStream {
     public:
@@ -157,7 +130,6 @@ namespace sql {
 
   int get_next_row() override;
   int get_next_rows(int64_t &count, int64_t capacity) override;
-
   virtual void reset() override;
 private:
   // load vec data from orc file to expr mem
@@ -214,6 +186,7 @@ private:
     ObOrcMemPool orc_alloc_;
     std::unique_ptr<orc::Reader> reader_;
     std::unique_ptr<orc::RowReader> row_reader_;
+    std::unique_ptr<orc::ColumnVectorBatch> orc_batch_;
     common::ObArrayWrap<StripeInformation> stripes_;
     ObExternalDataAccessDriver data_access_driver_;
     common::ObArrayWrap<int> column_indexs_; //for getting statistics, may useless now.

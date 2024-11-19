@@ -25,67 +25,11 @@
 #include "storage/access/ob_dml_param.h"
 #include "common/storage/ob_io_device.h"
 #include "share/backup/ob_backup_struct.h"
+#include "sql/engine/basic/ob_arrow_basic.h"
 #include "sql/engine/table/ob_external_table_access_service.h"
 
 namespace oceanbase {
 namespace sql {
-
-class ObArrowMemPool : public ::arrow::MemoryPool
-{
-public:
-  ObArrowMemPool() : total_alloc_size_(0) {}
-  void init(uint64_t tenant_id);
-  virtual arrow::Status Allocate(int64_t size, uint8_t** out) override;
-
-  virtual arrow::Status Reallocate(int64_t old_size, int64_t new_size, uint8_t** ptr) override;
-
-  virtual void Free(uint8_t* buffer, int64_t size) override;
-
-  virtual void ReleaseUnused() override;
-
-  virtual int64_t bytes_allocated() const override;
-
-  virtual int64_t max_memory() const override { return -1; }
-
-  virtual std::string backend_name() const override { return "Arrow"; }
-private:
-  common::ObArenaAllocator alloc_;
-  common::ObMemAttr mem_attr_;
-  arrow::internal::MemoryPoolStats stats_;
-  int64_t total_alloc_size_;
-};
-
-
-class ObArrowFile : public arrow::io::RandomAccessFile {
-public:
-  ObArrowFile(ObExternalDataAccessDriver &file_reader, const char*file_name, arrow::MemoryPool *pool)
-    : file_reader_(file_reader), file_name_(file_name), pool_(pool)
-  {}
-  ~ObArrowFile() override {
-    file_reader_.close();
-  }
-
-  int open();
-
-  virtual arrow::Status Close() override;
-
-  virtual bool closed() const override;
-
-  virtual arrow::Result<int64_t> Read(int64_t nbytes, void* out) override;
-  virtual arrow::Result<std::shared_ptr<arrow::Buffer>> Read(int64_t nbytes) override;
-  virtual arrow::Result<int64_t> ReadAt(int64_t position, int64_t nbytes, void* out) override;
-  virtual arrow::Result<std::shared_ptr<arrow::Buffer>> ReadAt(int64_t position, int64_t nbytes) override;
-
-
-  virtual arrow::Status Seek(int64_t position) override;
-  virtual arrow::Result<int64_t> Tell() const override;
-  virtual arrow::Result<int64_t> GetSize() override;
-private:
-  ObExternalDataAccessDriver &file_reader_;
-  const char* file_name_;
-  arrow::MemoryPool *pool_;
-  int64_t position_;
-};
 
 class ObParquetTableRowIterator : public ObExternalTableRowIterator {
 public:
@@ -178,6 +122,7 @@ private:
 
     int load_int64_to_int64_vec();
     int load_int32_to_int64_vec();
+    int load_uint32_to_int64_vec();
     int load_int32_to_int32_vec();
     int load_bool_to_int64_vec();
     int load_string_col();
@@ -185,6 +130,7 @@ private:
     int load_decimal_any_col();
     //[TODO EXTERNAL TABLE] float16
     int load_date_col_to_datetime();
+    int load_year_col();
     int load_time_millis_col();
     int load_time_nanos_col();
     int load_timestamp_millis_col();

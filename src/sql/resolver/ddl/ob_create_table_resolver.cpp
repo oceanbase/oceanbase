@@ -3343,7 +3343,7 @@ int ObCreateTableResolver::resolve_external_table_format_early(const ParseNode *
           for (int32_t j = 0; OB_SUCC(ret) && j < option_node->num_child_; ++j) {
             if (OB_NOT_NULL(option_node->children_[j])
                 && T_EXTERNAL_FILE_FORMAT_TYPE == option_node->children_[j]->type_) {
-              if (OB_FAIL(resolve_file_format(option_node->children_[j], format))) {
+              if (OB_FAIL(ObResolverUtils::resolve_file_format(option_node->children_[j], format, params_))) {
                 LOG_WARN("fail to resolve file format", K(ret));
               } else {
                 external_table_format_type_ = format.format_type_;

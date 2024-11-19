@@ -844,7 +844,14 @@ public:
   static bool is_external_file_column_name(const common::ObString &name);
   static bool is_external_pseudo_column_name(const common::ObString &name);
   static ObExternalFileFormat::FormatType resolve_external_file_column_type(const common::ObString &name);
-
+  static int resolve_file_size_node(const ParseNode *file_size_node, int64_t &parse_int_value);
+  static int resolve_varchar_file_size(const ParseNode *child, int64_t &parse_int_value);
+  static int resolve_file_format(const ParseNode *node,
+                                 ObExternalFileFormat &format,
+                                 ObResolverParams &params);
+  static int resolve_file_compression_format(const ParseNode *node,
+                                             ObExternalFileFormat &format,
+                                             ObResolverParams &params);
   static int resolve_file_format_string_value(const ParseNode *node,
                                               const ObCharsetType &format_charset,
                                               ObResolverParams &params,

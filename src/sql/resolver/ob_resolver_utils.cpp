@@ -11,6 +11,10 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
+
+#include <parquet/arrow/schema.h>
+#include <orc/Writer.hh>
+
 #include "sql/resolver/ob_resolver_utils.h"
 #include "lib/charset/ob_charset.h"
 #include "lib/timezone/ob_time_convert.h"
@@ -5078,7 +5082,7 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
                                                      cast_expr->get_extra(), dst_type))) {
           LOG_WARN("get cast dest type failed", K(ret));
         } else {
-          if (dst_type.is_string_or_lob_locator_type()) {
+          if (dst_type.is_string_or_lob_locator_type() || dst_type.is_enum_or_set()) {
             // string data stored in parquet file as UTF8 format
             dst_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
           }
@@ -5093,10 +5097,20 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
           file_column_expr->set_data_type(column_expr->get_data_type());
           file_column_expr->set_collation_type(column_expr->get_collation_type());
           file_column_expr->set_collation_level(column_expr->get_collation_level());
-          if (column_expr->get_result_type().is_string_or_lob_locator_type()
+          if ((column_expr->get_result_type().is_string_or_lob_locator_type()
+               || column_expr->get_result_type().is_enum_or_set())
               && ObCharset::charset_type_by_coll(column_expr->get_collation_type()) != CHARSET_UTF8MB4) {
             // string data stored in parquet file as UTF8 format
             file_column_expr->set_collation_type(CS_TYPE_UTF8MB4_BIN);
+          }
+          if (ob_is_enum_or_set_type(column_expr->get_data_type())
+              || ob_is_text_tc(column_expr->get_data_type())) {
+            file_column_expr->set_data_type(ObVarcharType);
+            if (is_mysql_mode()) {
+              file_column_expr->set_length(OB_MAX_MYSQL_VARCHAR_LENGTH);
+            } else {
+              file_column_expr->set_length(OB_MAX_ORACLE_VARCHAR_LENGTH);
+            }
           }
         }
       } else {
@@ -9272,6 +9286,344 @@ bool ObResolverUtils::in_updatable_view_path(const TableItem &table_item,
   return in_path;
 }
 
+int ObResolverUtils::resolve_file_size_node(const ParseNode *file_size_node, int64_t &parse_int_value)
+{
+  int ret = OB_SUCCESS;
+  ParseNode *child = NULL;
+  parse_int_value = 0;
+  if (OB_ISNULL(file_size_node) || file_size_node->num_child_ != 1
+      || OB_ISNULL(child = file_size_node->children_[0])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected file size node", K(ret));
+  } else if (T_INT == child->type_) {
+    parse_int_value = static_cast<int64_t>(child->value_);
+  } else if (T_VARCHAR == child->type_) {
+    if (OB_FAIL(resolve_varchar_file_size(child, parse_int_value))) {
+      LOG_WARN("failed to resolve varchar value", K(ret));
+    }
+  } else {
+    ret = OB_ERR_PARSE_SQL;
+    LOG_WARN("child of max file size node has wrong type", K(ret));
+  }
+  if (OB_SUCC(ret) && OB_UNLIKELY(parse_int_value < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "size, size value should not be negative");
+    LOG_WARN("file size value should not be negative", K(ret), K(parse_int_value));
+  }
+  return ret;
+}
+
+int ObResolverUtils::resolve_varchar_file_size(const ParseNode *child, int64_t &parse_int_value)
+{
+  int ret = OB_SUCCESS;
+  bool valid = false;
+  common::ObSqlString buf;
+  if (OB_ISNULL(child)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("varchar node get unexpected null", K(ret));
+  } else if (OB_FAIL(buf.append(child->str_value_, child->str_len_))) {
+    LOG_WARN("failed to assign child str", K(ret), K(child->str_value_), K(child->str_len_));
+  } else {
+    parse_int_value = common::ObConfigCapacityParser::get(buf.ptr(), valid, false, true);
+    if (!valid) {
+      ret = OB_ERR_PARSE_SQL;
+      LOG_WARN("failed to parse file size varchar value to int", K(ret), K(buf));
+    }
+  }
+  return ret;
+}
+
+int ObResolverUtils::resolve_file_compression_format(const ParseNode *node, ObExternalFileFormat &format, ObResolverParams &params)
+{
+  int ret = OB_SUCCESS;
+  bool find = false;
+  ObString string_v = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim();
+  ObSqlString err_msg;
+  if (OB_ISNULL(node) || node->num_child_ != 1 || OB_ISNULL(node->children_[0])
+      || OB_ISNULL(params.session_info_) || OB_ISNULL(params.expr_factory_)
+      || T_COMPRESSION != node->type_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parse node", K(ret));
+  } else {
+    switch (format.format_type_) {
+      case ObExternalFileFormat::PARQUET_FORMAT: {
+        for (int32_t compress_idx = 0; !find && compress_idx <= parquet::Compression::LZ4_HADOOP; compress_idx++) {
+          if (0 == string_v.case_compare(ObParquetGeneralFormat::COMPRESSION_ALGORITHMS[compress_idx])) {
+            format.parquet_format_.compress_type_index_ = compress_idx;
+            find = true;
+          }
+        }
+        if (!find || format.parquet_format_.compress_type_index_ == parquet::Compression::LZ4_FRAME
+            || format.parquet_format_.compress_type_index_ == parquet::Compression::LZO
+            || format.parquet_format_.compress_type_index_ == parquet::Compression::BZ2) {
+          err_msg.append_fmt("compression algorithm '%.*s'", string_v.length(), string_v.ptr());
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg.ptr());
+          LOG_WARN("failed. compress type for parquet file is not supported yet", K(ret), K(string_v));
+        }
+        break;
+      }
+      case ObExternalFileFormat::ORC_FORMAT: {
+        for (int32_t compress_idx = 0; !find && compress_idx <= orc::CompressionKind::CompressionKind_ZSTD; compress_idx++) {
+          if (0 == string_v.case_compare(ObOrcGeneralFormat::COMPRESSION_ALGORITHMS[compress_idx])) {
+            format.orc_format_.compress_type_index_ = compress_idx;
+            find = true;
+          }
+        }
+        if (!find || format.orc_format_.compress_type_index_ == orc::CompressionKind::CompressionKind_LZO) {
+          err_msg.append_fmt("compression algorithm '%.*s'", string_v.length(), string_v.ptr());
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg.ptr());
+          LOG_WARN("failed. compress type for orc file is not supported yet", K(ret), K(string_v));
+        }
+        break;
+      }
+      case ObExternalFileFormat::ODPS_FORMAT: {
+        format.odps_format_.compression_code_ = string_v;
+        break;
+      }
+      case ObExternalFileFormat::CSV_FORMAT: {
+        if (OB_FAIL(compression_algorithm_from_string(string_v, format.csv_format_.compression_algorithm_))) {
+          LOG_WARN("failed to resolve format from string", K(ret));
+        }
+        break;
+      }
+      default: {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "this format type");
+        LOG_WARN("not support this format type", K(format.format_type_));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFormat &format, ObResolverParams &params)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node) || node->num_child_ != 1 || OB_ISNULL(node->children_[0]) ||
+      OB_ISNULL(params.session_info_) || OB_ISNULL(params.expr_factory_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parse node", K(ret));
+  } else {
+    switch (node->type_) {
+      case T_EXTERNAL_FILE_FORMAT_TYPE: {
+        ObString string_v = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        for (int i = 0; i < ObExternalFileFormat::MAX_FORMAT; i++) {
+          if (0 == string_v.case_compare(ObExternalFileFormat::FORMAT_TYPE_STR[i])) {
+            format.format_type_ = static_cast<ObExternalFileFormat::FormatType>(i);
+            break;
+          }
+        }
+        if (ObExternalFileFormat::INVALID_FORMAT == format.format_type_) {
+          ObSqlString err_msg;
+          err_msg.append_fmt("format '%.*s'", string_v.length(), string_v.ptr());
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg.ptr());
+          LOG_WARN("failed. external file format type is not supported yet", K(ret),
+                   KPHEX(string_v.ptr(), string_v.length()));
+        }
+        break;
+      }
+      case T_FIELD_TERMINATED_STR: {
+        if (OB_FAIL(resolve_file_format_string_value(
+                node->children_[0], format.csv_format_.cs_type_, params,
+                format.csv_format_.field_term_str_))) {
+          LOG_WARN("failed to resolve file format field terminated str", K(ret));
+        } else {
+          format.origin_file_format_str_.origin_field_term_str_.assign_ptr(node->str_value_, node->str_len_);
+        }
+        break;
+      }
+      case T_LINE_TERMINATED_STR: {
+        if (OB_FAIL(resolve_file_format_string_value(
+                node->children_[0], format.csv_format_.cs_type_, params,
+                format.csv_format_.line_term_str_))) {
+          LOG_WARN("failed to resolve file format line terminated str", K(ret));
+        } else {
+          format.origin_file_format_str_.origin_line_term_str_.assign_ptr(node->str_value_, node->str_len_);
+        }
+        break;
+      }
+      case T_ESCAPED_STR: {
+        ObString string_v;
+        if (OB_FAIL(resolve_file_format_string_value(
+                node->children_[0], format.csv_format_.cs_type_, params,
+                string_v))) {
+          LOG_WARN("failed to resolve file format escape str", K(ret));
+        } else if (string_v.length() > 1) {
+          ret = OB_ERR_INVALID_ESCAPE_CHAR_LENGTH;
+          LOG_USER_ERROR(OB_ERR_INVALID_ESCAPE_CHAR_LENGTH);
+          LOG_WARN("failed. ESCAPE CHAR length is wrong", K(ret), KPHEX(string_v.ptr(),
+                                                                        string_v.length()));
+        } else if (string_v.length() == 1) {
+          format.csv_format_.field_escaped_char_ = string_v.ptr()[0];
+        } else {
+          format.csv_format_.field_escaped_char_ = INT64_MAX; // escaped by ''
+        }
+        if (OB_SUCC(ret)) {
+          format.origin_file_format_str_.origin_field_escaped_str_.assign_ptr(node->str_value_, node->str_len_);
+        }
+        break;
+      }
+      case T_OPTIONALLY_CLOSED_STR:
+      case T_CLOSED_STR: {
+        ObString string_v;
+        if (OB_FAIL(resolve_file_format_string_value(
+                node->children_[0], format.csv_format_.cs_type_, params,
+                string_v))) {
+          LOG_WARN("failed to resolve file format close str", K(ret));
+        } else if (string_v.length() > 1) {
+          ret = OB_WRONG_FIELD_TERMINATORS;
+          LOG_USER_ERROR(OB_WRONG_FIELD_TERMINATORS);
+          LOG_WARN("failed. ENCLOSED CHAR length is wrong", K(ret), KPHEX(string_v.ptr(),
+                                                                          string_v.length()));
+        } else if (string_v.length() == 1) {
+          format.csv_format_.field_enclosed_char_ = string_v.ptr()[0];
+        } else {
+          format.csv_format_.field_enclosed_char_ = INT64_MAX; // enclosed by ''
+        }
+        if (OB_SUCC(ret)) {
+          format.csv_format_.is_optional_ = (T_OPTIONALLY_CLOSED_STR == node->type_);
+          format.origin_file_format_str_.origin_field_enclosed_str_.assign_ptr(node->str_value_,
+                                                                   node->str_len_);
+        }
+        break;
+      }
+      case T_CHARSET: {
+        ObString string_v = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        ObCharsetType cs_type = CHARSET_INVALID;
+        if (CHARSET_INVALID == (cs_type = ObCharset::charset_type(string_v))) {
+          ret = OB_ERR_UNSUPPORTED_CHARACTER_SET;
+          LOG_USER_ERROR(OB_ERR_UNSUPPORTED_CHARACTER_SET);
+          LOG_WARN("failed. Encoding type is unsupported", K(ret), KPHEX(string_v.ptr(),
+                                                                         string_v.length()));
+        } else {
+          format.csv_format_.cs_type_ = cs_type;
+        }
+        break;
+      }
+      case T_SKIP_HEADER: {
+        format.csv_format_.skip_header_lines_ = node->children_[0]->value_;
+        break;
+      }
+      case T_SKIP_BLANK_LINE: {
+        format.csv_format_.skip_blank_lines_ = node->children_[0]->value_;
+        break;
+      }
+      case T_TRIM_SPACE: {
+        format.csv_format_.trim_space_ = node->children_[0]->value_;
+        break;
+      }
+      case T_NULL_IF_EXETERNAL: {
+        if (OB_FAIL(format.csv_format_.null_if_.allocate_array(*params.allocator_,
+                                                               node->children_[0]->num_child_))) {
+          LOG_WARN("allocate array failed", K(ret));
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < node->children_[0]->num_child_; i++) {
+          if (OB_FAIL(resolve_file_format_string_value(
+                  node->children_[0]->children_[i], format.csv_format_.cs_type_,
+                  params, format.csv_format_.null_if_.at(i)))) {
+            LOG_WARN("failed to resolve file format line terminated str", K(ret));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          format.origin_file_format_str_.origin_null_if_str_.assign_ptr(node->str_value_, node->str_len_);
+        }
+        break;
+      }
+      case T_EMPTY_FIELD_AS_NULL: {
+        format.csv_format_.empty_field_as_null_ = node->children_[0]->value_;
+        break;
+      }
+      case T_ACCESSTYPE: {
+        format.odps_format_.access_type_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        break;
+      }
+      case T_ACCESSID: {
+        format.odps_format_.access_id_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        break;
+      }
+      case T_ACCESSKEY: {
+        format.odps_format_.access_key_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        break;
+      }
+      case T_STSTOKEN: {
+        format.odps_format_.sts_token_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        break;
+      }
+      case T_ENDPOINT: {
+        format.odps_format_.endpoint_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        break;
+      }
+      case T_PROJECT: {
+        format.odps_format_.project_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        break;
+      }
+      case ObItemType::T_SCHEMA: {
+        format.odps_format_.schema_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        break;
+      }
+      case T_TABLE: {
+        format.odps_format_.table_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        break;
+      }
+      case T_QUOTA: {
+        format.odps_format_.quota_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        break;
+      }
+      case T_STRIPE_SIZE: {
+        if (OB_FAIL(resolve_file_size_node(node, format.orc_format_.stripe_size_))) {
+          LOG_WARN("failed to resolve file size node", K(ret));
+        }
+        break;
+      }
+      case T_ROW_INDEX_STRIDE: {
+        format.orc_format_.row_index_stride_ = node->children_[0]->value_;
+        break;
+      }
+      case T_COMPRESSION_BLOCK_SIZE: {
+        if (OB_FAIL(resolve_file_size_node(node, format.orc_format_.compression_block_size_))) {
+          LOG_WARN("failed to resolve file size node", K(ret));
+        }
+        break;
+      }
+      case T_COLUMN_BLOOM_FILTER: {
+        if (OB_FAIL(format.orc_format_.column_use_bloom_filter_.allocate_array(*params.allocator_,
+                                                               node->children_[0]->num_child_))) {
+         LOG_WARN("failed to allocate array", K(ret));
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < node->children_[0]->num_child_; i++) {
+            format.orc_format_.column_use_bloom_filter_.at(i) = node->children_[0]->children_[i]->value_;
+          }
+        }
+        break;
+      }
+      case T_COMPRESSION: {
+        if (OB_FAIL(ObResolverUtils::resolve_file_compression_format(node, format, params))) {
+          LOG_WARN("failed to resolve file compression", K(ret));
+        }
+        break;
+      }
+      case T_ROW_GROUP_SIZE: {
+        if (OB_FAIL(resolve_file_size_node(node, format.parquet_format_.row_group_size_))) {
+          LOG_WARN("failed to resolve file size node", K(ret));
+        }
+        break;
+      }
+      case T_FILE_EXTENSION: {
+        format.csv_format_.file_extension_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        break;
+      }
+      default: {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid file format option", K(ret), K(node->type_));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObResolverUtils::resolve_file_format_string_value(const ParseNode *node,
                                                       const ObCharsetType &format_charset,
                                                       ObResolverParams &params,
@@ -9282,7 +9634,22 @@ int ObResolverUtils::resolve_file_format_string_value(const ParseNode *node,
   ObRawExpr *expr = NULL;
   ObRawExprFactory *expr_factory = params.expr_factory_;
   ObSQLSessionInfo *session_info = params.session_info_;
-  if (OB_ISNULL(node) || OB_ISNULL(expr_factory) || OB_ISNULL(session_info)) {
+  ObRawExpr *new_expr = NULL;
+  const int64_t max_len = 64;
+  ObCastMode cast_mode = CM_NONE;
+  ObExprResType expr_output_type;
+  ObCollationType result_collation_type = ObCharset::get_bin_collation(format_charset);
+  ObExprResType cast_dst_type;
+  uint32_t res_len = 0;
+  char *buf = nullptr;
+  int64_t buf_size = 0;
+  RowDesc row_desc;
+  ObNewRow tmp_row;
+  ObObj value_obj;
+  ObTempExpr *temp_expr = NULL;
+  ObExecContext *exec_ctx = NULL;
+  if (OB_ISNULL(node) || OB_ISNULL(expr_factory) || OB_ISNULL(session_info)
+      || OB_ISNULL(exec_ctx = session_info->get_cur_exec_ctx()) || OB_ISNULL(exec_ctx->get_sql_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed. get unexpect NULL ptr", K(ret), K(node), K(expr_factory), K(session_info));
   } else if (OB_FAIL(resolve_const_expr(params, *node, expr, NULL))) {
@@ -9302,12 +9669,7 @@ int ObResolverUtils::resolve_file_format_string_value(const ParseNode *node,
 
   // 2. try case convert
   if (OB_SUCC(ret)) {
-    ObRawExpr *new_expr = NULL;
-    const int64_t max_len = 64;
-    ObCastMode cast_mode = CM_NONE;
-    ObExprResType expr_output_type = expr->get_result_type();
-    ObCollationType result_collation_type = ObCharset::get_bin_collation(format_charset);
-    ObExprResType cast_dst_type;
+    expr_output_type = expr->get_result_type();
     cast_dst_type.set_type(ObVarcharType);
     cast_dst_type.set_length(max_len);
     cast_dst_type.set_calc_meta(ObObjMeta());
@@ -9316,7 +9678,9 @@ int ObResolverUtils::resolve_file_format_string_value(const ParseNode *node,
     if (!(expr_output_type.is_varchar() ||
           expr_output_type.is_nvarchar2() ||
           expr_output_type.is_char() ||
-          expr_output_type.is_nchar())) {
+          expr_output_type.is_nchar() ||
+          expr_output_type.is_varbinary() ||
+          expr_output_type.is_binary())) {
       if (result_collation_type == CS_TYPE_INVALID) {
         ret = OB_ERR_PARAM_INVALID;
         LOG_WARN("failed. get invalid collaction", K(ret), K(format_charset));
@@ -9342,15 +9706,7 @@ int ObResolverUtils::resolve_file_format_string_value(const ParseNode *node,
 
   // 3. compute expr result
   if (OB_SUCC(ret)) {
-    RowDesc row_desc;
-    ObNewRow tmp_row;
-    ObObj value_obj;
-    ObTempExpr *temp_expr = NULL;
-    ObExecContext *exec_ctx = session_info->get_cur_exec_ctx();
-    if (OB_ISNULL(exec_ctx) || OB_ISNULL(exec_ctx->get_sql_ctx())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed. get unexpected NULL", K(ret));
-    } else if (OB_FAIL(ObStaticEngineExprCG::gen_expr_with_row_desc(expr,
+    if (OB_FAIL(ObStaticEngineExprCG::gen_expr_with_row_desc(expr,
                                                             row_desc,
                                                             exec_ctx->get_allocator(),
                                                             exec_ctx->get_my_session(),
@@ -9366,6 +9722,22 @@ int ObResolverUtils::resolve_file_format_string_value(const ParseNode *node,
       result_value = ObString();
     } else {
       result_value = value_obj.get_string();
+    }
+    if (result_value.length() > 0
+        && format_charset != expr->get_result_type().get_charset_type()
+        && CHARSET_BINARY != expr->get_result_type().get_charset_type()) {
+      buf_size = result_value.length() * ObCharset::MAX_MB_LEN;
+      if (OB_ISNULL(buf = static_cast<char *>(exec_ctx->get_allocator().alloc(buf_size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc memory", K(ret));
+      } else if (OB_FAIL(ObCharset::charset_convert(expr->get_result_type().get_collation_type(),
+                                                    result_value.ptr(), result_value.length(),
+                                                    result_collation_type, buf, buf_size, res_len,
+                                                    false, false))) {
+        LOG_WARN("failed to convert charset", K(ret));
+      } else {
+        result_value = ObString(res_len, buf);
+      }
     }
   }
   return ret;
