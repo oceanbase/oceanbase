@@ -38,7 +38,7 @@ namespace observer
 {
 class ObInfoSchemaColumnsTable : public common::ObVirtualTableScannerIterator
 {
-  static const int32_t COLUMNS_COLUMN_COUNT = 21;
+  static const int32_t COLUMNS_COLUMN_COUNT = 22;
   enum COLUMN_NAME {
     TABLE_SCHEMA = common::OB_APP_MIN_COLUMN_ID,
     TABLE_NAME,
@@ -60,7 +60,8 @@ class ObInfoSchemaColumnsTable : public common::ObVirtualTableScannerIterator
     EXTRA,
     PRIVILEGES,
     COLUMN_COMMENT,
-    GENERATION_EXPRESSION
+    GENERATION_EXPRESSION,
+    SRS_ID
   };
 public:
   ObInfoSchemaColumnsTable();

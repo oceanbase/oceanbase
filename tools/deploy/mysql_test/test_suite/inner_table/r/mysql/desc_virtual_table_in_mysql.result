@@ -1917,6 +1917,7 @@ EXTRA	varchar(4096)	NO
 PRIVILEGES	varchar(200)	NO			
 COLUMN_COMMENT	longtext	NO			
 GENERATION_EXPRESSION	longtext	NO			
+SRS_ID	int(10) unsigned	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__ALL_VIRTUAL_INFORMATION_COLUMNS;
 IF(count(*) >= 0, 1, 0)
 1

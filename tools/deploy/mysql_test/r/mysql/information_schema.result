@@ -26,6 +26,7 @@ desc information_schema.columns;
 | PRIVILEGES               | varchar(200)        | NO   |     |         |       |
 | COLUMN_COMMENT           | longtext            | NO   |     |         |       |
 | GENERATION_EXPRESSION    | longtext            | NO   |     |         |       |
+| SRS_ID                   | int(10) unsigned    | YES  |     | NULL    |       |
 +--------------------------+---------------------+------+-----+---------+-------+
 desc information_schema.tables;
 +------------------------+---------------------+------+-----+---------+-------+
