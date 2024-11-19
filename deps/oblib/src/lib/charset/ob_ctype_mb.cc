@@ -67,7 +67,7 @@ bool ob_like_range_mb_help(const ObCharsetInfo *cs,
   char *min_end = *min_end_;
   char *max_end = *max_end_;
   char *min_org = *min_org_;
-  *min_length = ((cs->state & OB_CS_BINSORT) ? (size_t) (min_str - min_org) : res_length);
+  *min_length = ((!!(cs->state & OB_CS_BINSORT) || cs->pad_attribute == NO_PAD) ? (size_t) (min_str - min_org) : res_length);
   *max_length = res_length;
   do {
     *min_str++ = (char) cs->min_sort_char;
