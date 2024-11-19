@@ -2399,12 +2399,7 @@ int ObTenantIOManager::get_throttled_time(uint64_t group_id, int64_t &throttled_
 {
   int ret = OB_SUCCESS;
   int64_t current_throttled_time_us = -1;
-  if (OB_ISNULL(GCTX.cgroup_ctrl_) || !GCTX.cgroup_ctrl_->is_valid()) {
-    // do nothing
-  } else if (OB_FAIL(GCTX.cgroup_ctrl_->get_throttled_time(tenant_id_,
-                 current_throttled_time_us,
-                 group_id,
-                 GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
+  if (OB_FAIL(GCTX.cgroup_ctrl_->get_throttled_time(tenant_id_, current_throttled_time_us, group_id))) {
     LOG_WARN("get throttled time failed", K(ret), K(tenant_id_), K(group_id));
   } else if (current_throttled_time_us > 0) {
     uint64_t idx = 0;

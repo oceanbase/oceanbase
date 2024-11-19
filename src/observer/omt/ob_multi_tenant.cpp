@@ -2559,7 +2559,9 @@ void ObMultiTenant::run1()
         if (!OB_ISNULL(*it)) {
           ObTaskController::get().allow_next_syslog();
           LOG_INFO("dump tenant info", "tenant", **it);
-          (*it)->print_throttled_time();
+          if (OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid()) {
+            (*it)->print_throttled_time();
+          }
         }
       }
     }

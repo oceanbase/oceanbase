@@ -158,27 +158,16 @@ public:
   static int compare_cpu(const double cpu1, const double cpu2, int &compare_ret);
 
   // 删除租户cgroup规则
-  int remove_cgroup(const uint64_t tenant_id, const uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
-  int remove_both_cgroup(const uint64_t tenant_id, const uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
-  static int remove_dir_(const char *curr_dir, bool is_delete_group = false);
-
-  static int get_cgroup_config_(const char *group_path, const char *config_name, char *config_value);
-  static int set_cgroup_config_(const char *group_path, const char *config_name, char *config_value);
+  int remove_cgroup(const uint64_t tenant_id, const uint64_t group_id = OB_INVALID_GROUP_ID, const bool is_background = false);
   // 设定指定租户cgroup组的cpu.shares
-  int set_cpu_shares(const uint64_t tenant_id, const double cpu, const uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
-  int set_both_cpu_shares(const uint64_t tenant_id, const double cpu, const uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
-  int get_cpu_shares(const uint64_t tenant_id, double &cpu, const uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
+  int set_cpu_shares(const uint64_t tenant_id, const double cpu, const uint64_t group_id = OB_INVALID_GROUP_ID, const bool is_background = false);
+  int get_cpu_shares(const uint64_t tenant_id, double &cpu, const uint64_t group_id = OB_INVALID_GROUP_ID, const bool is_background = false);
   // 设定指定租户cgroup组的cpu.cfs_quota_us
-  int set_cpu_cfs_quota(const uint64_t tenant_id, const double cpu, const uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
-  static int set_cpu_cfs_quota_by_path_(const char *group_path, const double cpu);
-  static int get_cpu_cfs_quota_by_path_(const char *group_path, double &cpu);
-  static int dec_cpu_cfs_quota_(const char *curr_path, const double cpu);
-  int recursion_dec_cpu_cfs_quota_(const char *curr_path, const double cpu);
-  int set_both_cpu_cfs_quota(const uint64_t tenant_id, const double cpu, const uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
-  int get_cpu_cfs_quota(const uint64_t tenant_id, double &cpu, const uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
+  int set_cpu_cfs_quota(const uint64_t tenant_id, const double cpu, const uint64_t group_id = OB_INVALID_GROUP_ID, const bool is_background = false);
+  int get_cpu_cfs_quota(const uint64_t tenant_id, double &cpu, const uint64_t group_id = OB_INVALID_GROUP_ID, const bool is_background = false);
   // 获取某个cgroup组的cpuacct.usage, 即cpu time
-  int get_cpu_time(const uint64_t tenant_id, int64_t &cpu_time, const uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
-  int get_throttled_time(const uint64_t tenant_id, int64_t &throttled_time, const uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
+  int get_cpu_time(const uint64_t tenant_id, int64_t &cpu_time, const uint64_t group_id = OB_INVALID_GROUP_ID);
+  int get_throttled_time(const uint64_t tenant_id, int64_t &throttled_time, const uint64_t group_id = OB_INVALID_GROUP_ID);
   int get_group_info_by_group_id(const uint64_t tenant_id,
                                  uint64_t group_id,
                                  share::ObGroupName &group_name);
@@ -188,7 +177,7 @@ public:
   public:
     DirProcessor() = default;
     ~DirProcessor() = default;
-    virtual int handle_dir(const char *group_path, bool is_top_dir=false) = 0;
+    virtual int handle_dir(const char *group_path, const bool is_top_dir=false) = 0;
   };
 
 private:
@@ -220,11 +209,23 @@ private:
       int path_bufsize,
       const uint64_t tenant_id,
       uint64_t group_id = OB_INVALID_GROUP_ID,
-      const char *base_path = "");
+      const bool is_background = false);
   enum { NOT_DIR = 0, LEAF_DIR, REGULAR_DIR };
   int which_type_dir_(const char *curr_path, int &result);
   int recursion_remove_group_(const char *curr_path);
   int recursion_process_group_(const char *curr_path, DirProcessor *processor_ptr, bool is_top_dir = false);
+  int remove_cgroup_(const uint64_t tenant_id, const uint64_t group_id = OB_INVALID_GROUP_ID, const bool is_background = false);
+  static int remove_dir_(const char *curr_dir, bool is_delete_group = false);
+  static int get_cgroup_config_(const char *group_path, const char *config_name, char *config_value);
+  static int set_cgroup_config_(const char *group_path, const char *config_name, char *config_value);
+  int set_cpu_shares_(const uint64_t tenant_id, const double cpu, const uint64_t group_id = OB_INVALID_GROUP_ID, const bool is_background = false);
+  int set_cpu_cfs_quota_(const uint64_t tenant_id, const double cpu, const uint64_t group_id = OB_INVALID_GROUP_ID, const bool is_background = false);
+  static int set_cpu_cfs_quota_by_path_(const char *group_path, const double cpu);
+  static int get_cpu_cfs_quota_by_path_(const char *group_path, double &cpu);
+  static int dec_cpu_cfs_quota_(const char *curr_path, const double cpu);
+  int recursion_dec_cpu_cfs_quota_(const char *curr_path, const double cpu);
+  int get_cpu_time_(const uint64_t tenant_id, int64_t &cpu_time, const uint64_t group_id = OB_INVALID_GROUP_ID, const bool is_background = false);
+  int get_throttled_time_(const uint64_t tenant_id, int64_t &throttled_time, const uint64_t group_id = OB_INVALID_GROUP_ID, const bool is_background = false);
 };
 
 }  // share
