@@ -162,7 +162,7 @@ VERSION	bigint(0) unsigned	NO
 ROW_FORMAT	varchar(10)	NO			
 TABLE_ROWS	bigint(20) unsigned	NO			
 AVG_ROW_LENGTH	bigint(21) unsigned	NO			
-DATA_LENGTH	bigint(20) unsigned	NO			
+DATA_LENGTH	bigint(21) unsigned	NO			
 MAX_DATA_LENGTH	bigint(0) unsigned	NO			
 INDEX_LENGTH	bigint(21) unsigned	NO			
 DATA_FREE	bigint(0) unsigned	NO			
@@ -7002,6 +7002,16 @@ JOB_CLASS	varchar(30)	YES		NULL
 GMT_CREATE	timestamp(6)	YES			
 GMT_MODIFIED	timestamp(6)	YES			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_SCHEDULER_JOB_RUN_DETAILS limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_TABLE_SPACE_USAGE;
+Field	Type	Null	Key	Default	Extra
+TABLE_ID	bigint(20)	NO			
+DATABASE_NAME	varchar(128)	NO			
+TABLE_NAME	varchar(256)	NO			
+OCCUPY_SIZE	decimal(42,0)	NO			
+REQUIRED_SIZE	decimal(42,0)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_TABLE_SPACE_USAGE limit 1);
 cnt
 1
 desc oceanbase.GV$OB_SS_LOCAL_CACHE;
