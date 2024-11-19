@@ -2293,7 +2293,8 @@ int ObPL::get_pl_function(ObExecContext &ctx,
   if (OB_FAIL(ret) || OB_NOT_NULL(routine) || !subprogram_path.empty()) {
     // do nothing ...
   } else if (OB_INVALID_ID != package_id) { // package or object routine
-    ObPLResolveCtx pl_ctx(ctx.get_allocator(),
+    ObArenaAllocator compile_alloc(ObModIds::OB_PL_TEMP, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    ObPLResolveCtx pl_ctx(compile_alloc,
                           *ctx.get_my_session(),
                           *ctx.get_sql_ctx()->schema_guard_,
                           package_guard,
@@ -2447,6 +2448,7 @@ int ObPL::generate_pl_function(ObExecContext &ctx,
   ParseNode *block_node = NULL;
   ObPLFunction *routine = NULL;
   ObPLPackageGuard package_guard(ctx.get_my_session()->get_effective_tenant_id());
+  ObArenaAllocator compile_alloc(ObModIds::OB_PL_TEMP, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
 
   int64_t compile_start = ObTimeUtility::current_time();
 
@@ -2461,7 +2463,7 @@ int ObPL::generate_pl_function(ObExecContext &ctx,
 
   // do parser
   if (OB_SUCC(ret)) {
-    ObParser parser(ctx.get_allocator(),
+    ObParser parser(compile_alloc,
                     ctx.get_my_session()->get_sql_mode(),
                     ctx.get_my_session()->get_charsets4parser());
     ParseResult parse_result;
@@ -2480,7 +2482,7 @@ int ObPL::generate_pl_function(ObExecContext &ctx,
                KP(parse_result.result_tree_->children_[0]));
     } else if (T_SP_PRE_STMTS == parse_tree->type_) {
       OZ (ObPLResolver::resolve_condition_compile(
-          ctx.get_allocator(),
+          compile_alloc,
           ctx.get_my_session(),
           ctx.get_sql_ctx()->schema_guard_,
           &(package_guard),
@@ -2509,7 +2511,7 @@ int ObPL::generate_pl_function(ObExecContext &ctx,
 
   // do compile
   if (OB_SUCC(ret)) {
-    ObPLCompiler compiler(ctx.get_allocator(),
+    ObPLCompiler compiler(compile_alloc,
                           *(ctx.get_my_session()),
                           *(ctx.get_sql_ctx()->schema_guard_),
                           *(ctx.get_package_guard()),
@@ -2531,6 +2533,7 @@ int ObPL::generate_pl_function(
 {
   int ret = OB_SUCCESS;
   ObPLFunction *routine = NULL;
+  ObArenaAllocator compile_alloc(ObModIds::OB_PL_TEMP, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
 
   int64_t compile_start = ObTimeUtility::current_time();
   OZ (ObPLContext::valid_execute_context(ctx));
@@ -2540,7 +2543,7 @@ int ObPL::generate_pl_function(
   OX (routine = static_cast<ObPLFunction *>(cacheobj_guard.get_cache_obj()));
   CK (OB_NOT_NULL(routine));
   if (OB_SUCC(ret)) {
-    ObPLCompiler compiler(ctx.get_allocator(),
+    ObPLCompiler compiler(compile_alloc,
                           *(ctx.get_my_session()),
                           *(ctx.get_sql_ctx()->schema_guard_),
                           *(ctx.get_package_guard()),
