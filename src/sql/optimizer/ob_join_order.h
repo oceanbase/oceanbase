@@ -1621,10 +1621,26 @@ struct NullAwareAntiJoinInfo {
                                           const uint64_t ref_table_id,
                                           const share::schema::ObTableSchema &table_schema);
 
+    int get_used_stat_partitions(const uint64_t ref_table_id,
+                                 const share::schema::ObTableSchema &table_schema,
+                                 const ObIArray<int64_t> &all_used_part_ids,
+                                 ObIArray<int64_t> &table_stat_part_ids,
+                                 double &table_stat_scale_ratio,
+                                 ObIArray<int64_t> *hist_stat_part_ids = NULL);
+
+    int get_partition_infos(const uint64_t ref_table_id,
+                            const share::schema::ObTableSchema &table_schema,
+                            const ObIArray<int64_t> &all_used_parts,
+                            ObIArray<int64_t> &table_id,
+                            ObIArray<int64_t> &part_ids,
+                            ObIArray<int64_t> &subpart_ids,
+                            int64_t &subpart_cnt_in_parts);
+
     int init_est_info_for_index(const uint64_t table_id,
                                 const uint64_t index_id,
                                 ObIndexMetaInfo &meta_info,
                                 ObTablePartitionInfo *table_partition_info,
+                                const share::schema::ObTableSchema &table_schema,
                                 const share::schema::ObTableSchema &index_schema,
                                 bool &has_opt_stat);
 

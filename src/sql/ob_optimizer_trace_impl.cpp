@@ -1093,6 +1093,10 @@ int ObOptimizerTraceImpl::trace_static(const ObDMLStmt *stmt, OptTableMetas &tab
         LOG_WARN("failed to append msg", K(ret));
       } else if (OB_FAIL(append("used partitions:", table_meta->get_all_used_parts()))) {
         LOG_WARN("failed to append msg", K(ret));
+      } else if (OB_FAIL(append("normal stat partitions:", table_meta->get_stat_parts()))) {
+        LOG_WARN("failed to append msg", K(ret));
+      } else if (OB_FAIL(append("histogram stat partitions:", table_meta->get_hist_parts()))) {
+        LOG_WARN("failed to append msg", K(ret));
       } else if (OB_FAIL(new_line())) {
         LOG_WARN("failed to append msg", K(ret));
       }
