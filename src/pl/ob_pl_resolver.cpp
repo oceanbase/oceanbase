@@ -4975,69 +4975,67 @@ int ObPLResolver::check_raw_expr_in_forall(ObRawExpr* expr, int64_t idx, bool &n
     if (expr->is_obj_access_expr()) {
       ObObjAccessRawExpr *obj_access_expr = static_cast<ObObjAccessRawExpr*>(expr);
       int64_t collection_index = OB_INVALID_INDEX;
-      for (int64_t i = 0; i < obj_access_expr->get_access_idxs().count(); ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && !need_modify && i < obj_access_expr->get_access_idxs().count(); ++i) {
         if (obj_access_expr->get_access_idxs().at(i).elem_type_.is_collection_type()) {
           collection_index = i;
-          break;
-        }
-      }
-      if (OB_INVALID_INDEX == collection_index) {
-        can_array_binding = false;
-      } else {
-        if (obj_access_expr->get_access_idxs().at(collection_index + 1).is_local()) {
-          int64_t var_idx = obj_access_expr->get_access_idxs().at(collection_index + 1).var_index_;
-          if (var_idx < 0 || var_idx >= obj_access_expr->get_var_indexs().count()) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("var index is invalid", K(var_idx), K(obj_access_expr->get_var_indexs()), K(ret));
-          } else if (obj_access_expr->get_var_indexs().at(var_idx) == idx) {
-            need_modify = true;
-            if (obj_access_expr->get_var_indexs().count() != 2
-                || !obj_access_expr->get_access_idxs().at(collection_index + 1).elem_type_.is_obj_type()) {
-              can_array_binding = false;
-            } else if (2 == obj_access_expr->get_access_idxs().count() - collection_index) {
-              can_array_binding = (0 == collection_index);
-            } else if (obj_access_expr->get_access_idxs().at(collection_index + 2).is_const()) {
-              can_array_binding = false;
-            } else {
-              ret = OB_ERR_BULK_IN_BIND;
-              LOG_WARN("PLS-00674: references to fields of BULK In-BIND table of records or objects must have the form A(I).F",
-                       K(ret), K(obj_access_expr));
-            }
-          }
-        } else if (obj_access_expr->get_access_idxs().at(collection_index + 1).is_expr()) {
-          CK (OB_NOT_NULL(obj_access_expr->get_access_idxs().at(collection_index + 1).get_sysfunc_));
-          if (OB_FAIL(ret)) {
-          } else if (T_FUN_PL_ASSOCIATIVE_INDEX == obj_access_expr->get_access_idxs().at(collection_index + 1).get_sysfunc_->get_expr_type()) {
-            ObPLAssocIndexRawExpr *result_expr = static_cast<ObPLAssocIndexRawExpr *>(
-              obj_access_expr->get_access_idxs().at(collection_index + 1).get_sysfunc_);
-            ObConstRawExpr *const_expr = NULL;
-            CK (OB_NOT_NULL(result_expr));
-            CK (OB_NOT_NULL(result_expr->get_param_expr(1)));
-            if (OB_FAIL(ret)) {
-            } else if (result_expr->get_param_expr(1)->is_const_raw_expr()) {
-              CK (OB_NOT_NULL(const_expr = static_cast<ObConstRawExpr*>(result_expr->get_param_expr(1))));
-            } else if (OB_FAIL(check_use_idx_illegal(result_expr->get_param_expr(1), idx))) {
-              ret = OB_ERR_BULK_SQL_RESTRICTION;
-              LOG_WARN("Implementation restriction: bulk SQL with associative arrays with VARCHAR2 key is not supported.");
-            }
-            if (OB_SUCC(ret) && OB_NOT_NULL(const_expr)) {
-              const ObObj &const_obj = const_expr->get_value();
-              if (const_obj.is_unknown() && (idx == const_obj.get_unknown())) {
-                need_modify = true;
+          if (obj_access_expr->get_access_idxs().at(collection_index + 1).is_local()) {
+            int64_t var_idx = obj_access_expr->get_access_idxs().at(collection_index + 1).var_index_;
+            if (var_idx < 0 || var_idx >= obj_access_expr->get_var_indexs().count()) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("var index is invalid", K(var_idx), K(obj_access_expr->get_var_indexs()), K(ret));
+            } else if (obj_access_expr->get_var_indexs().at(var_idx) == idx) {
+              need_modify = true;
+              if (obj_access_expr->get_var_indexs().count() != 2
+                  || !obj_access_expr->get_access_idxs().at(collection_index + 1).elem_type_.is_obj_type()) {
                 can_array_binding = false;
+              } else if (2 == obj_access_expr->get_access_idxs().count() - collection_index) {
+                can_array_binding = (0 == collection_index);
+              } else if (obj_access_expr->get_access_idxs().at(collection_index + 2).is_const()) {
+                can_array_binding = false;
+              } else {
+                ret = OB_ERR_BULK_IN_BIND;
+                LOG_WARN("PLS-00674: references to fields of BULK In-BIND table of records or objects must have the form A(I).F",
+                        K(ret), K(obj_access_expr));
               }
             }
+          } else if (obj_access_expr->get_access_idxs().at(collection_index + 1).is_expr()) {
+            CK (OB_NOT_NULL(obj_access_expr->get_access_idxs().at(collection_index + 1).get_sysfunc_));
+            if (OB_FAIL(ret)) {
+            } else if (T_FUN_PL_ASSOCIATIVE_INDEX == obj_access_expr->get_access_idxs().at(collection_index + 1).get_sysfunc_->get_expr_type()) {
+              ObPLAssocIndexRawExpr *result_expr = static_cast<ObPLAssocIndexRawExpr *>(
+                obj_access_expr->get_access_idxs().at(collection_index + 1).get_sysfunc_);
+              ObConstRawExpr *const_expr = NULL;
+              CK (OB_NOT_NULL(result_expr));
+              CK (OB_NOT_NULL(result_expr->get_param_expr(1)));
+              if (OB_FAIL(ret)) {
+              } else if (result_expr->get_param_expr(1)->is_const_raw_expr()) {
+                CK (OB_NOT_NULL(const_expr = static_cast<ObConstRawExpr*>(result_expr->get_param_expr(1))));
+              } else if (OB_FAIL(check_use_idx_illegal(result_expr->get_param_expr(1), idx))) {
+                ret = OB_ERR_BULK_SQL_RESTRICTION;
+                LOG_WARN("Implementation restriction: bulk SQL with associative arrays with VARCHAR2 key is not supported.");
+              }
+              if (OB_SUCC(ret) && OB_NOT_NULL(const_expr)) {
+                const ObObj &const_obj = const_expr->get_value();
+                if (const_obj.is_unknown() && (idx == const_obj.get_unknown())) {
+                  need_modify = true;
+                  can_array_binding = false;
+                }
+              }
+            } else {
+              OZ (check_use_idx_illegal(obj_access_expr->get_access_idxs().at(collection_index + 1).get_sysfunc_, idx));
+            }
+          } else if (obj_access_expr->get_access_idxs().at(collection_index + 1).is_const() ||
+                    obj_access_expr->get_access_idxs().at(collection_index + 1).is_pkg()) {
+            // do nothing ...
           } else {
-            OZ (check_use_idx_illegal(obj_access_expr->get_access_idxs().at(collection_index + 1).get_sysfunc_, idx));
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not supported yet", K(ret), KPC(obj_access_expr));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-urowid type");
           }
-        } else if (obj_access_expr->get_access_idxs().at(collection_index + 1).is_const() ||
-                   obj_access_expr->get_access_idxs().at(collection_index + 1).is_pkg()) {
-          // do nothing ...
-        } else {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("not supported yet", K(ret), KPC(obj_access_expr));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-urowid type");
         }
+      }
+      if (OB_SUCC(ret) && OB_INVALID_INDEX == collection_index) {
+        can_array_binding = false;
       }
     } else if (T_QUESTIONMARK == expr->get_expr_type()) {
       ObConstRawExpr *const_expr = static_cast<ObConstRawExpr*>(expr);
