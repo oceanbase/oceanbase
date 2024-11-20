@@ -1958,14 +1958,15 @@ int ObTransformJoinElimination::eliminate_semi_right_child_table(ObDMLStmt *stmt
         /* do nothing */
       } else if (OB_FAIL(removed_idxs.add_member(i))) {
         LOG_WARN("failed to add member", K(ret));
-      } else if (OB_ISNULL(col = stmt->get_column_expr_by_id(semi_right_table->table_id_,
-                                                             i + OB_APP_MIN_COLUMN_ID))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to get column expr by id", K(ret));
-      } else if (OB_FAIL(pullup_column_exprs.push_back(col))) {
-        LOG_WARN("failed to push back column expr", K(ret));
-      } else if (OB_FAIL(pullup_select_exprs.push_back(expr))) {
-        LOG_WARN("failed to push back", K(ret));
+      } else {
+        col = stmt->get_column_expr_by_id(semi_right_table->table_id_,
+                                          i + OB_APP_MIN_COLUMN_ID);
+        if (NULL == col) {
+        } else if (OB_FAIL(pullup_column_exprs.push_back(col))) {
+          LOG_WARN("failed to push back column expr", K(ret));
+        } else if (OB_FAIL(pullup_select_exprs.push_back(expr))) {
+          LOG_WARN("failed to push back", K(ret));
+        }
       }
     }
     if (OB_FAIL(ret)) {
