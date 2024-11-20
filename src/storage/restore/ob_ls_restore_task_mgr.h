@@ -190,6 +190,7 @@ private:
       bool &discard) const;
   bool is_follower_() const;
   ObTabletRestoreAction::ACTION get_common_restore_action_(
+      const ObLSID &ls_id,
       const share::ObLSRestoreStatus &ls_restore_status) const;
 
   int reload_tablets_();
