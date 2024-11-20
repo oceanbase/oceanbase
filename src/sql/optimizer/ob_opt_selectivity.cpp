@@ -1168,6 +1168,7 @@ int ObOptSelectivity::add_ds_result_into_selectivity(const ObIArray<ObDSResultIt
     //do nothing
   } else {
     int64_t rowcount = basic_item->stat_handle_.stat_->get_rowcount();
+    rowcount = rowcount < 1 ? 1 : rowcount;
     for (int64_t i = 0; OB_SUCC(ret) && i < ds_result_items.count(); ++i) {
       if (ds_result_items.at(i).type_ == ObDSResultItemType::OB_DS_OUTPUT_STAT) {
         if (OB_ISNULL(ds_result_items.at(i).stat_handle_.stat_) ||
