@@ -588,7 +588,7 @@ int ObDASVIdMergeIter::sorted_merge_join_rows(int64_t &count, int64_t capacity)
              OB_SUCC(ret) && i < data_table_cnt && j < rowkeys_in_rowkey_vid.count();
              ++j) {
           bool is_equal = false;
-          LOG_INFO("compare one row in rowkey vid", K(ret), K(i), K(j), K(rowkeys_in_data_table.at(i)),
+          LOG_DEBUG("compare one row in rowkey vid", K(ret), K(i), K(j), K(rowkeys_in_data_table.at(i)),
               K(rowkeys_in_rowkey_vid.at(j)));
           if (rowkeys_in_rowkey_vid.at(j).equal(rowkeys_in_data_table.at(i), is_equal)) {
             LOG_WARN("fail to equal rowkey between data table and rowkey", K(ret));
@@ -598,7 +598,7 @@ int ObDASVIdMergeIter::sorted_merge_join_rows(int64_t &count, int64_t capacity)
             } else {
               --remain_cnt;
               ++i;
-              LOG_INFO("find vid id in rowkey vid", K(vid_ids_in_rowkey_vid.at(j)), K(remain_cnt), K(i), K(data_table_cnt));
+              LOG_DEBUG("find vid id in rowkey vid", K(vid_ids_in_rowkey_vid.at(j)), K(remain_cnt), K(i), K(data_table_cnt));
             }
           }
         }
@@ -805,7 +805,7 @@ int ObDASVIdMergeIter::fill_vid_id_in_data_table(const int64_t &vid_id, bool set
           datum.set_int(vid_id);
         }
         vid_id_expr->set_evaluated_projected(*data_table_rtdef_->eval_ctx_);
-        LOG_INFO("Doc id merge fill a vidument id", K(vid_id));
+        LOG_DEBUG("Doc id merge fill a vidument id", K(vid_id));
       }
       if (OB_SUCC(ret)) {
       }
