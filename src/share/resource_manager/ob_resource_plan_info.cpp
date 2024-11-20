@@ -16,64 +16,32 @@
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 
+int oceanbase::share::check_if_function_exist(const ObString &function_name, bool &exist)
+{
+  int ret = OB_SUCCESS;
+  if (
+#define OB_RESOURCE_FUNCTION_TYPE_DEF(function_type_string) 0 == function_name.compare(#function_type_string) ||
+#include "ob_resource_plan_info.h"
+#undef OB_RESOURCE_FUNCTION_TYPE_DEF
+      0) {
+    exist = true;
+  } else {
+    exist = false;
+    LOG_WARN("invalid function name", K(function_name));
+  }
+  return ret;
+}
+
 ObString oceanbase::share::get_io_function_name(ObFunctionType function_type)
 {
   ObString ret_name;
   switch (function_type) {
-    case share::ObFunctionType::DEFAULT_FUNCTION:
-      ret_name = "DEFAULT_FUNCTION";
-      break;
-    case ObFunctionType::PRIO_COMPACTION_HIGH:
-      ret_name = ObString("COMPACTION_HIGH");
-      break;
-    case ObFunctionType::PRIO_HA_HIGH:
-      ret_name = ObString("HA_HIGH");
-      break;
-    case ObFunctionType::PRIO_COMPACTION_MID:
-      ret_name = ObString("COMPACTION_MID");
-      break;
-    case ObFunctionType::PRIO_HA_MID:
-      ret_name = ObString("HA_MID");
-      break;
-    case ObFunctionType::PRIO_COMPACTION_LOW:
-      ret_name = ObString("COMPACTION_LOW");
-      break;
-    case ObFunctionType::PRIO_HA_LOW:
-      ret_name = ObString("HA_LOW");
-      break;
-    case ObFunctionType::PRIO_DDL:
-      ret_name = ObString("DDL");
-      break;
-    case ObFunctionType::PRIO_DDL_HIGH:
-      ret_name = ObString("DDL_HIGH");
-      break;
-    case ObFunctionType::PRIO_GC_MACRO_BLOCK:
-      ret_name = ObString("GC_MACRO_BLOCK");
-      break;
-    case ObFunctionType::PRIO_CLOG_LOW:
-      ret_name = ObString("CLOG_LOW");
-      break;
-    case ObFunctionType::PRIO_CLOG_MID:
-      ret_name = ObString("CLOG_MID");
-      break;
-    case ObFunctionType::PRIO_CLOG_HIGH:
-      ret_name = ObString("CLOG_HIGH");
-      break;
-    case ObFunctionType::PRIO_OPT_STATS:
-      ret_name = ObString("OPT_STATS");
-      break;
-    case ObFunctionType::PRIO_IMPORT:
-      ret_name = ObString("IMPORT");
-      break;
-    case ObFunctionType::PRIO_EXPORT:
-      ret_name = ObString("EXPORT");
-      break;
-    case ObFunctionType::PRIO_SQL_AUDIT:
-      ret_name = ObString("SQL_AUDIT");
-      break;
-    case ObFunctionType::PRIO_MICRO_MINI_MERGE:
-      ret_name = ObString("MICRO_MINI_MERGE");
-      break;
+#define OB_RESOURCE_FUNCTION_TYPE_DEF(function_type_string) \
+  case ObFunctionType::PRIO_##function_type_string:         \
+    ret_name = ObString(#function_type_string);             \
+    break;
+#include "ob_resource_plan_info.h"
+#undef OB_RESOURCE_FUNCTION_TYPE_DEF
     default:
       ret_name = ObString("OTHER_GROUPS");
       break;

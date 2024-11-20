@@ -10,6 +10,38 @@
  * See the Mulan PubL v2 for more details.
  */
 
+// Define a function type of resource manager
+// Examples:
+//   Defination:
+//     DAG_SCHEDULER_DAG_PRIO_DEF(TEST_FUNCTION)
+//   Use this function type:
+//     ObFunctionType func_type = ObFunctionType::PRIO_TEST_FUNCTION
+//   Get function name:
+//     ObString functiono_name = get_io_function_name(ObFunctionType::PRIO_TEST_FUNCTION)
+//   Check if function name exist:
+//     bool is_exist = false;
+//     check_if_function_exist("TEST_FUNCTION", is_exist)
+#ifdef OB_RESOURCE_FUNCTION_TYPE_DEF
+// DAG_SCHEDULER_DAG_PRIO_DEF(function_type_string)
+OB_RESOURCE_FUNCTION_TYPE_DEF(COMPACTION_HIGH)
+OB_RESOURCE_FUNCTION_TYPE_DEF(HA_HIGH)
+OB_RESOURCE_FUNCTION_TYPE_DEF(COMPACTION_MID)
+OB_RESOURCE_FUNCTION_TYPE_DEF(HA_MID)
+OB_RESOURCE_FUNCTION_TYPE_DEF(COMPACTION_LOW)
+OB_RESOURCE_FUNCTION_TYPE_DEF(HA_LOW)
+OB_RESOURCE_FUNCTION_TYPE_DEF(DDL)
+OB_RESOURCE_FUNCTION_TYPE_DEF(DDL_HIGH)
+OB_RESOURCE_FUNCTION_TYPE_DEF(GC_MACRO_BLOCK)  // block manager scans for bad blocks in the background
+OB_RESOURCE_FUNCTION_TYPE_DEF(CLOG_LOW)
+OB_RESOURCE_FUNCTION_TYPE_DEF(CLOG_MID)
+OB_RESOURCE_FUNCTION_TYPE_DEF(CLOG_HIGH)
+OB_RESOURCE_FUNCTION_TYPE_DEF(OPT_STATS)
+OB_RESOURCE_FUNCTION_TYPE_DEF(IMPORT)
+OB_RESOURCE_FUNCTION_TYPE_DEF(EXPORT)
+OB_RESOURCE_FUNCTION_TYPE_DEF(SQL_AUDIT)
+OB_RESOURCE_FUNCTION_TYPE_DEF(MICRO_MINI_MERGE)
+#endif
+
 #ifndef OB_SHARE_RESOURCE_MANAGER_OB_PLAN_INFO_H_
 #define OB_SHARE_RESOURCE_MANAGER_OB_PLAN_INFO_H_
 
@@ -29,30 +61,13 @@ namespace share
 enum ObFunctionType : uint8_t
 {
   DEFAULT_FUNCTION = 0,
-  PRIO_COMPACTION_HIGH = 1,
-  PRIO_HA_HIGH = 2,
-  PRIO_COMPACTION_MID = 3,
-  PRIO_HA_MID = 4,
-  PRIO_COMPACTION_LOW = 5,
-  PRIO_HA_LOW = 6,
-  PRIO_DDL = 7,
-  PRIO_DDL_HIGH = 8,
-  PRIO_GC_MACRO_BLOCK = 9, // block manager scans for bad blocks in the background
-  PRIO_CLOG_LOW = 10,
-  PRIO_CLOG_MID = 11,
-  PRIO_CLOG_HIGH = 12,
-  PRIO_OPT_STATS = 13,
-  PRIO_IMPORT = 14,
-  PRIO_EXPORT = 15,
-  /* add new function type here, or you will have compatibility issues. */
-  PRIO_SQL_AUDIT = 16,
-
-  PRIO_MICRO_MINI_MERGE = 17,
-
-  /* add new function, can learn by "grep -rnI 'CLOG_HIGH' src/" */
+#define OB_RESOURCE_FUNCTION_TYPE_DEF(function_type_string) PRIO_##function_type_string,
+#include "ob_resource_plan_info.h"
+#undef OB_RESOURCE_FUNCTION_TYPE_DEF
   MAX_FUNCTION_NUM
 };
 ObString get_io_function_name(ObFunctionType function_type);
+int check_if_function_exist(const ObString &function_name, bool &exist);
 
 // 为了便于作为 hash value，所以把 ObString 包一下
 class ObResMgrVarcharValue
