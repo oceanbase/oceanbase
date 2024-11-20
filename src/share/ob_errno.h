@@ -465,6 +465,7 @@ constexpr int OB_SERVICE_NAME_NOT_FOUND = -4780;
 constexpr int OB_SERVICE_NOT_FULLY_STARTED = -4781;
 constexpr int OB_NOT_PRIMARY_TENANT = -4782;
 constexpr int OB_SERVICE_STOPPED = -4783;
+constexpr int OB_ERR_FLASHBACK_QUERY_EXP_NULL = -4786;
 constexpr int OB_ERR_PARSER_INIT = -5000;
 constexpr int OB_ERR_PARSE_SQL = -5001;
 constexpr int OB_ERR_RESOLVE_SQL = -5002;
@@ -2470,6 +2471,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SERVICE_NOT_FULLY_STARTED__USER_ERROR_MSG "The service has not started on all servers"
 #define OB_NOT_PRIMARY_TENANT__USER_ERROR_MSG "The tenant is not PRIMARY"
 #define OB_SERVICE_STOPPED__USER_ERROR_MSG "The service has stopped"
+#define OB_ERR_FLASHBACK_QUERY_EXP_NULL__USER_ERROR_MSG "NULL snapshot expression not allowed here"
 #define OB_ERR_PARSER_INIT__USER_ERROR_MSG "Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__USER_ERROR_MSG "%s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__USER_ERROR_MSG "Resolve error"
@@ -4743,6 +4745,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SERVICE_NOT_FULLY_STARTED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4781, The service has not started on all servers"
 #define OB_NOT_PRIMARY_TENANT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4782, The tenant is not PRIMARY"
 #define OB_SERVICE_STOPPED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4783, The service has stopped"
+#define OB_ERR_FLASHBACK_QUERY_EXP_NULL__ORA_USER_ERROR_MSG "ORA-30055: NULL snapshot expression not allowed here"
 #define OB_ERR_PARSER_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5000, Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__ORA_USER_ERROR_MSG "ORA-00900: %s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5002, Resolve error"
@@ -6446,7 +6449,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2269];
+extern int g_all_ob_errnos[2270];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

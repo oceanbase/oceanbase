@@ -58,7 +58,7 @@ int FlashBackItem::set_flashback_query_info(ObEvalCtx &eval_ctx, ObDASScanRtDef 
   } else if (OB_FAIL(expr->eval(eval_ctx, datum))) {
     LOG_WARN("expr evaluate failed", K(ret));
   } else if (datum->is_null()) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_ERR_FLASHBACK_QUERY_EXP_NULL;
     LOG_WARN("NULL value", K(ret));
   } else {
     scan_rtdef.fb_read_tx_uncommitted_ = fq_read_tx_uncommitted_;
