@@ -19,6 +19,22 @@ using namespace storage;
 namespace compaction
 {
 /*
+ *  ----------------------------------------ObBatchFreezeTabletsDag--------------------------------------------
+ */
+int ObBatchFreezeTabletsDag::inner_init()
+{
+  int ret = OB_SUCCESS;
+  const ObBatchFreezeTabletsParam &param = get_param();
+  if (!param.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid param", K(ret), K(param));
+  } else {
+    (void) set_max_concurrent_task_cnt(MAX_CONCURRENT_FREEZE_TASK_CNT);
+  }
+  return ret;
+}
+
+/*
  *  ----------------------------------------ObBatchFreezeTabletsTask--------------------------------------------
  */
 ObBatchFreezeTabletsTask::ObBatchFreezeTabletsTask()

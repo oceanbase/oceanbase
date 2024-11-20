@@ -488,6 +488,7 @@ ObIDag::ObIDag(const ObDagType::ObDagTypeEnum type)
     priority_(OB_DAG_TYPES[type].init_dag_prio_),
     dag_status_(ObIDag::DAG_STATUS_INITING),
     running_task_cnt_(0),
+    max_concurrent_task_cnt_(INT64_MAX),
     is_stop_(false),
     max_retry_times_(0),
     running_times_(0),
@@ -541,6 +542,7 @@ void ObIDag::clear_running_info()
   start_time_ = 0;
   consumer_group_id_ = USER_RESOURCE_OTHER_GROUP_ID;
   running_task_cnt_ = 0;
+  max_concurrent_task_cnt_ = INT64_MAX;
   dag_status_ = ObDagStatus::DAG_STATUS_INITING;
   dag_ret_ = OB_SUCCESS;
   error_location_.reset();
@@ -718,7 +720,12 @@ int ObIDag::get_next_ready_task(ObITask *&task)
   bool found = false;
 
   ObMutexGuard guard(lock_);
-  if (!is_stop_ && ObIDag::DAG_STATUS_NODE_RUNNING == dag_status_) {
+  if (is_stop_ || ObIDag::DAG_STATUS_NODE_RUNNING != dag_status_) {
+  } else if (OB_UNLIKELY(max_concurrent_task_cnt_ >= 1 && running_task_cnt_ >= max_concurrent_task_cnt_)) {
+    if (REACH_TENANT_TIME_INTERVAL(DUMP_STATUS_INTERVAL)) {
+      COMMON_LOG(INFO, "delay scheduling since concurrent running task cnts reach limit", KPC(this));
+    }
+  } else {
     ObITask *cur_task = task_list_.get_first();
     const ObITask *head = task_list_.get_header();
     while (!found && head != cur_task && nullptr != cur_task) {
@@ -855,7 +862,7 @@ int64_t ObIDag::to_string(char *buf, const int64_t buf_len) const
   } else {
     J_OBJ_START();
     J_KV(KP(this), K_(is_inited), K_(type), "name", get_dag_type_str(type_), K_(id), KPC_(dag_net), K_(dag_ret), K_(dag_status),
-        K_(add_time), K_(start_time), K_(running_task_cnt), K_(indegree), K_(consumer_group_id), "hash", hash(), K(task_list_.get_size()),
+        K_(add_time), K_(start_time), K_(running_task_cnt), K_(max_concurrent_task_cnt), K_(indegree), K_(consumer_group_id), "hash", hash(), K(task_list_.get_size()),
         K_(emergency));
     J_OBJ_END();
   }

@@ -1815,9 +1815,9 @@ TEST_F(TestDagScheduler, test_check_ls_compaction_dag_exist_with_cancel)
   ASSERT_TRUE(nullptr != scheduler);
   ASSERT_EQ(OB_SUCCESS, scheduler->init(MTL_ID(), time_slice, 64));
   EXPECT_EQ(OB_SUCCESS, scheduler->set_thread_score(ObDagPrio::DAG_PRIO_COMPACTION_MID, 1));
-  EXPECT_EQ(OB_SUCCESS, scheduler->set_thread_score(ObDagPrio::DAG_PRIO_COMPACTION_HIGH, 1));
+  EXPECT_EQ(OB_SUCCESS, scheduler->set_thread_score(ObDagPrio::DAG_PRIO_COMPACTION_LOW, 1));
   EXPECT_EQ(1, scheduler->prio_sche_[ObDagPrio::DAG_PRIO_COMPACTION_MID].limits_);
-  EXPECT_EQ(1, scheduler->prio_sche_[ObDagPrio::DAG_PRIO_COMPACTION_HIGH].limits_);
+  EXPECT_EQ(1, scheduler->prio_sche_[ObDagPrio::DAG_PRIO_COMPACTION_LOW].limits_);
 
   LoopWaitTask *wait_task = nullptr;
   LoopWaitTask *wait_task2 = nullptr;
@@ -1837,7 +1837,7 @@ TEST_F(TestDagScheduler, test_check_ls_compaction_dag_exist_with_cancel)
     EXPECT_EQ(OB_SUCCESS, dag->add_task(*wait_task));
     EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag));
   }
-  // add 2 dag at prio = DAG_PRIO_COMPACTION_HIGH
+  // add 2 dag at prio = DAG_PRIO_COMPACTION_LOW
   for (int64_t i = 0; i < ls_cnt; ++i) {
     ObBatchFreezeTabletsDag *batch_freeze_dag = NULL;
     EXPECT_EQ(OB_SUCCESS, scheduler->alloc_dag(batch_freeze_dag));
@@ -1849,7 +1849,7 @@ TEST_F(TestDagScheduler, test_check_ls_compaction_dag_exist_with_cancel)
   }
   EXPECT_EQ(dag_cnt, scheduler->dag_cnts_[ObDagType::DAG_TYPE_MERGE_EXECUTE]);
   CHECK_EQ_UTIL_TIMEOUT(1, scheduler->get_running_task_cnt(ObDagPrio::DAG_PRIO_COMPACTION_MID));
-  CHECK_EQ_UTIL_TIMEOUT(1, scheduler->get_running_task_cnt(ObDagPrio::DAG_PRIO_COMPACTION_HIGH));
+  CHECK_EQ_UTIL_TIMEOUT(1, scheduler->get_running_task_cnt(ObDagPrio::DAG_PRIO_COMPACTION_LOW));
 
   // cancel waiting dag of ls_ids[0], all dag of ls_ids[1] will be destroyed when check_cancel
   bool exist = false;
@@ -2016,6 +2016,71 @@ TEST_F(TestDagScheduler, test_maybe_cycle_tasks)
     }
   }
   wait_scheduler();
+}
+
+TEST_F(TestDagScheduler, test_max_concurrent_task)
+{
+  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
+  ASSERT_TRUE(nullptr != scheduler);
+  ASSERT_EQ(OB_SUCCESS, scheduler->init(MTL_ID(), time_slice, 64));
+  EXPECT_EQ(OB_SUCCESS, scheduler->set_thread_score(ObDagPrio::DAG_PRIO_COMPACTION_MID, 7));
+  EXPECT_EQ(7, scheduler->prio_sche_[ObDagPrio::DAG_PRIO_COMPACTION_MID].limits_);
+
+  const int64_t dag_cnt = 3;
+  ObLSID ls_id(1001);
+  bool finish_flag[dag_cnt] = {false, false, false};
+  for (int64_t idx = 0; idx < dag_cnt; ++idx) {
+    TestCompMidCancelDag *dag = nullptr;
+    LoopWaitTask *wait_task = nullptr;
+    ObTabletID tablet_id(200001 + idx);
+    EXPECT_EQ(OB_SUCCESS, scheduler->alloc_dag(dag));
+    dag->max_concurrent_task_cnt_ = 2;
+    dag->ls_id_ = ls_id;
+    dag->tablet_id_ = tablet_id;
+    EXPECT_EQ(OB_SUCCESS, alloc_task(*dag, wait_task));
+    EXPECT_EQ(OB_SUCCESS, wait_task->init(1, 10 /*cnt*/, finish_flag[idx]));
+    EXPECT_EQ(OB_SUCCESS, dag->add_task(*wait_task));
+    EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag));
+  }
+  CHECK_EQ_UTIL_TIMEOUT(6, scheduler->get_running_task_cnt(ObDagPrio::DAG_PRIO_COMPACTION_MID));
+
+  AtomicOperator op(0);
+  TestDag *dag1 = nullptr;
+  AtomicIncTask *inc_task = nullptr;
+  AtomicIncTask *inc_task1 = nullptr;
+  AtomicMulTask *mul_task = nullptr;
+  EXPECT_EQ(OB_SUCCESS, scheduler->alloc_dag(dag1));
+  EXPECT_EQ(OB_SUCCESS, dag1->init(1));
+  EXPECT_EQ(OB_SUCCESS, alloc_task(*dag1, inc_task));
+  EXPECT_EQ(OB_SUCCESS, inc_task->init(1, 10, op));
+  EXPECT_EQ(OB_SUCCESS, dag1->add_task(*inc_task));
+  EXPECT_EQ(OB_SUCCESS, alloc_task(*dag1, mul_task));
+  EXPECT_EQ(OB_SUCCESS, mul_task->init(1, 4, op));
+  EXPECT_EQ(OB_SUCCESS, mul_task->add_child(*inc_task));
+  EXPECT_EQ(OB_SUCCESS, dag1->add_task(*mul_task));
+  EXPECT_EQ(OB_SUCCESS, alloc_task(*dag1, inc_task1));
+  EXPECT_EQ(OB_SUCCESS, inc_task1->init(1, 10, op));
+  EXPECT_EQ(OB_SUCCESS, inc_task1->add_child(*mul_task));
+  EXPECT_EQ(OB_SUCCESS, dag1->add_task(*inc_task1));
+  EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag1));
+  CHECK_EQ_UTIL_TIMEOUT(170, op.value());
+
+  int64_t start_time = oceanbase::common::ObTimeUtility::current_time();
+  while (oceanbase::common::ObTimeUtility::current_time() - start_time < CHECK_TIMEOUT) {
+    const int64_t cnt = scheduler->get_running_task_cnt(ObDagPrio::DAG_PRIO_COMPACTION_MID);
+    EXPECT_LE(cnt, 7);
+    if (cnt == 6) {
+      break;
+    } else {
+      usleep(10 * 1000 /*10 ms*/);
+    }
+  }
+  EXPECT_EQ(6, scheduler->get_running_task_cnt(ObDagPrio::DAG_PRIO_COMPACTION_MID));
+  finish_flag[0] = true;
+  finish_flag[1] = true;
+  finish_flag[2] = true;
+  wait_scheduler();
+  EXPECT_EQ(0, scheduler->get_running_task_cnt(ObDagPrio::DAG_PRIO_COMPACTION_MID));
 }
 
 /*

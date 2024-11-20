@@ -436,6 +436,8 @@ public:
     lib::ObMutexGuard guard(lock_);
     return task_list_.get_size();
   }
+  void set_max_concurrent_task_cnt(int64_t max_concurrent_task_cnt) { max_concurrent_task_cnt_ = max_concurrent_task_cnt; }
+  int64_t get_max_concurrent_task_cnt() const { return max_concurrent_task_cnt_;}
   virtual int gene_warning_info(ObDagWarningInfo &info, ObIAllocator &allocator);
   virtual bool ignore_warning() { return false; }
   virtual bool check_can_retry();
@@ -529,6 +531,7 @@ protected:
 private:
   typedef common::ObDList<ObITask> TaskList;
   static const int64_t DEFAULT_TASK_NUM = 32;
+  static const int64_t DUMP_STATUS_INTERVAL = 30 * 60 * 1000L * 1000L /*30min*/;
 private:
   void reset();
   void clear_task_list();
@@ -547,6 +550,7 @@ private:
   ObDagId id_;
   ObDagStatus dag_status_;
   int64_t running_task_cnt_;
+  int64_t max_concurrent_task_cnt_;
   TaskList task_list_; // should protect by lock
   bool is_stop_; // should protect by lock
   uint32_t max_retry_times_;  // should protect by lock

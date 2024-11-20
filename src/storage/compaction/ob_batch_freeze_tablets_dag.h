@@ -57,6 +57,9 @@ public:
     : ObBatchExecDag(share::ObDagType::DAG_TYPE_BATCH_FREEZE_TABLETS)
   {}
   virtual ~ObBatchFreezeTabletsDag() = default;
+  virtual int inner_init();
+public:
+  static constexpr int64_t MAX_CONCURRENT_FREEZE_TASK_CNT = 2;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBatchFreezeTabletsDag);
 };
