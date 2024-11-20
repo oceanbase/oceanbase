@@ -1211,7 +1211,7 @@ int ObBasicTabletMergeCtx::get_medium_compaction_info()
     } else if (OB_FAIL(storage_schema->init(mem_ctx_.get_allocator(), medium_info->storage_schema_,
                                             false /*skip_column_info*/, nullptr /*column_group_schema*/,
                                             medium_info->storage_schema_.is_row_store() && medium_info->storage_schema_.is_user_data_table() && static_param_.is_cs_replica_))) {
-      LOG_WARN("failed to init storage schema from current medium info", K(ret), K(medium_info));
+      LOG_WARN("failed to init storage schema from current medium info", K(ret), KPC(medium_info));
       ObStorageSchemaUtil::free_storage_schema(mem_ctx_.get_allocator(), storage_schema);
     } else {
       static_param_.schema_ = storage_schema;

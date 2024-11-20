@@ -10246,7 +10246,8 @@ def_table_schema(
       ('io_cost_time_percentage', 'int'),
       ('merge_reason', 'varchar:OB_MERGE_REASON_STR_LENGTH'),
       ('base_major_status', 'varchar:OB_MERGE_TYPE_STR_LENGTH'),
-      ('co_merge_type', 'varchar:OB_MERGE_TYPE_STR_LENGTH')
+      ('co_merge_type', 'varchar:OB_MERGE_TYPE_STR_LENGTH'),
+      ('mds_filter_info', 'varchar:OB_COMPACTION_COMMENT_STR_LENGTH')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -25407,7 +25408,8 @@ def_table_schema(
       IO_COST_TIME_PERCENTAGE,
       MERGE_REASON,
       BASE_MAJOR_STATUS,
-      CO_MERGE_TYPE
+      CO_MERGE_TYPE,
+      MDS_FILTER_INFO
     FROM oceanbase.__all_virtual_tablet_compaction_history
 """.replace("\n", " ")
 )
@@ -25457,7 +25459,8 @@ def_table_schema(
       IO_COST_TIME_PERCENTAGE,
       MERGE_REASON,
       BASE_MAJOR_STATUS,
-      CO_MERGE_TYPE
+      CO_MERGE_TYPE,
+      MDS_FILTER_INFO
     FROM oceanbase.GV$OB_TABLET_COMPACTION_HISTORY
     WHERE
         SVR_IP=HOST_IP()
@@ -64214,7 +64217,8 @@ def_table_schema(
       IO_COST_TIME_PERCENTAGE,
       MERGE_REASON,
       BASE_MAJOR_STATUS,
-      CO_MERGE_TYPE
+      CO_MERGE_TYPE,
+      MDS_FILTER_INFO
     FROM SYS.ALL_VIRTUAL_TABLET_COMPACTION_HISTORY
 """.replace("\n", " ")
 )
@@ -64266,7 +64270,8 @@ def_table_schema(
       IO_COST_TIME_PERCENTAGE,
       MERGE_REASON,
       BASE_MAJOR_STATUS,
-      CO_MERGE_TYPE
+      CO_MERGE_TYPE,
+      MDS_FILTER_INFO
     FROM SYS.GV$OB_TABLET_COMPACTION_HISTORY
     WHERE
         SVR_IP=HOST_IP()

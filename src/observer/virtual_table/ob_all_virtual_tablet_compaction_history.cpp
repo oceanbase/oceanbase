@@ -275,6 +275,10 @@ int ObAllVirtualTabletCompactionHistory::process_curr_tenant(ObNewRow *&row)
       }
       cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
       break;
+    case MDS_FILTER_INFO:
+      cells[i].set_varchar("");
+      cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+      break;
     default:
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "invalid column id", K(ret), K(col_id));

@@ -64,7 +64,8 @@ public:
     IO_COST_TIME_PERCENTAGE,
     MERGE_REASON,
     BASE_MAJOR_STATUS,
-    CO_MERGE_TYPE
+    CO_MERGE_TYPE,
+    MDS_FILTER_INFO
   };
   ObAllVirtualTabletCompactionHistory();
   virtual ~ObAllVirtualTabletCompactionHistory();
