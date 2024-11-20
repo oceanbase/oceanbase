@@ -478,6 +478,10 @@ int fill_exprs_lob_locator(
         }
       }
     }
+    if (OB_SUCC(ret) && col_param.get_meta_type().is_collection_sql_type() &&
+        OB_FAIL(storage::distribute_attrs_on_rich_format_columns(row_cap, vector_offset, expr, eval_ctx))) {
+      STORAGE_LOG(WARN, "failed to dispatch collection cells", K(ret), K(row_cap), K(vector_offset));
+    }
   }
   return ret;
 }

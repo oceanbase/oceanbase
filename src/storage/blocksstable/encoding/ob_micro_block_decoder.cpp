@@ -2350,7 +2350,7 @@ int ObMicroBlockDecoder::get_rows(
             expr,
             eval_ctx))) {
           LOG_WARN("Failed pad on rich format columns", K(ret), K(expr));
-        } else if (need_dispatch_collection
+        } else if (need_dispatch_collection && !has_lob_out_row()
                    && OB_FAIL(storage::distribute_attrs_on_rich_format_columns(row_cap, vec_offset, expr, eval_ctx))) {
           LOG_WARN("failed to dispatch collection cells", K(ret), K(i), K(row_cap), K(vec_offset));
         }
