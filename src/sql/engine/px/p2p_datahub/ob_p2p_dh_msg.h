@@ -127,7 +127,9 @@ public:
       uint64_t *batch_hash_values)
   { return OB_SUCCESS; }
   virtual void after_process() {}
-  virtual int try_extract_query_range(bool &has_extract, ObIArray<ObNewRange> &ranges)
+  virtual int try_extract_query_range(bool &has_extract, ObIArray<ObNewRange> &ranges,
+                                      bool need_deep_copy = false,
+                                      common::ObIAllocator *allocator = nullptr)
   {
     return OB_SUCCESS;
   }

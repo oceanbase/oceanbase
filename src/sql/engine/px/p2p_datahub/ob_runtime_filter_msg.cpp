@@ -1402,7 +1402,8 @@ void ObRFRangeFilterMsg::after_process()
   (void)prepare_query_range();
 }
 
-int ObRFRangeFilterMsg::try_extract_query_range(bool &has_extract, ObIArray<ObNewRange> &ranges)
+int ObRFRangeFilterMsg::try_extract_query_range(bool &has_extract, ObIArray<ObNewRange> &ranges,
+                                                bool need_deep_copy, common::ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
   if (!is_query_range_ready_) {
@@ -1410,9 +1411,18 @@ int ObRFRangeFilterMsg::try_extract_query_range(bool &has_extract, ObIArray<ObNe
   } else {
     // overwrite ranges
     ranges.reset();
-    if (OB_FAIL(ranges.push_back(query_range_))) {
-      LOG_WARN("failed to push_back range");
+    if (need_deep_copy) {
+      if (OB_FAIL(ranges.prepare_allocate(1))) {
+        LOG_WARN("failed to prepare_allocate");
+      } else if (OB_FAIL(deep_copy_range(*allocator, query_range_, ranges.at(0)))) {
+        LOG_WARN("failed to deep_copy_range");
+      }
     } else {
+      if (OB_FAIL(ranges.push_back(query_range_))) {
+        LOG_WARN("failed to push_back range");
+      }
+    }
+    if (OB_SUCC(ret)) {
       has_extract = true;
     }
   }
@@ -2403,7 +2413,8 @@ void ObRFInFilterMsg::after_process()
   (void)prepare_query_ranges();
 }
 
-int ObRFInFilterMsg::try_extract_query_range(bool &has_extract, ObIArray<ObNewRange> &ranges)
+int ObRFInFilterMsg::try_extract_query_range(bool &has_extract, ObIArray<ObNewRange> &ranges,
+                                             bool need_deep_copy, common::ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
   if (!is_query_range_ready_) {
@@ -2411,9 +2422,22 @@ int ObRFInFilterMsg::try_extract_query_range(bool &has_extract, ObIArray<ObNewRa
   } else {
     // overwrite ranges
     ranges.reset();
-    if (OB_FAIL(ranges.assign(query_range_))) {
-      LOG_WARN("failed to assign range");
+    if (need_deep_copy) {
+      if (OB_FAIL(ranges.prepare_allocate(query_range_.count()))) {
+        LOG_WARN("failed to prepare_allocate");
+      } else if (need_deep_copy) {
+        for (int64_t i = 0; i < ranges.count() && OB_SUCC(ret); ++i) {
+          if (OB_FAIL(deep_copy_range(*allocator, query_range_.at(i), ranges.at(i)))) {
+            LOG_WARN("failed to deep_copy_range");
+          }
+        }
+      }
     } else {
+      if (OB_FAIL(ranges.assign(query_range_))) {
+        LOG_WARN("failed to assign");
+      }
+    }
+    if (OB_SUCC(ret)) {
       has_extract = true;
     }
   }
