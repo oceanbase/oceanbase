@@ -12812,6 +12812,8 @@ def_table_schema(
   ('obj_type', 'varchar:MAX_LOCK_OBJ_TYPE_BUF_LENGTH'),
   ('obj_id', 'int'),
   ('owner_type', 'int'),
+  ('priority', 'varchar:MAX_LOCK_OP_PRIORITY_BUF_LENGTH'),
+  ('wait_seq', 'int')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',

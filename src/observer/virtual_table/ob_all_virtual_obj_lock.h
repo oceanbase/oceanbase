@@ -71,6 +71,8 @@ private:
     OBJ_TYPE,
     OBJ_ID,
     OWNER_TYPE,
+    PRIORITY,
+    WAIT_SEQ
   };
 private:
   common::ObAddr addr_;
