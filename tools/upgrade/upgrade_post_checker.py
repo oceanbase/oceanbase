@@ -122,6 +122,10 @@ def enable_major_freeze(cur, timeout):
   actions.set_tenant_parameter(cur, '_enable_adaptive_compaction', 'True', timeout)
   actions.do_resume_merge(cur, timeout)
 
+# 8 关闭enable_sys_table_ddl
+def disable_sys_table_ddl(cur, timeout):
+  actions.set_parameter(cur, 'enable_sys_table_ddl', 'False', timeout)
+
 # 开始升级后的检查
 def do_check(conn, cur, query_cur, timeout):
   try:
@@ -131,6 +135,7 @@ def do_check(conn, cur, query_cur, timeout):
     enable_ddl(cur, timeout)
     enable_rebalance(cur, timeout)
     enable_rereplication(cur, timeout)
+    disable_sys_table_ddl(cur, timeout)
   except Exception as e:
     logging.exception('run error')
     raise
