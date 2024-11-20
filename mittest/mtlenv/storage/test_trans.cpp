@@ -506,7 +506,7 @@ TEST_F(TestTrans, tablet_to_ls_cache)
     ASSERT_EQ(true, is_local);
     // tablet not exist
     const ObTabletID &tablet_id_2 = tablet_ids_2.at(i);
-    ASSERT_EQ(OB_ENTRY_NOT_EXIST, tx_service->check_and_get_ls_info(tablet_id_2, ls_id, is_local));
+    ASSERT_EQ(OB_SUCCESS, tx_service->check_and_get_ls_info(tablet_id_2, ls_id, is_local));
   }
   ASSERT_EQ(TABLET_NUM + base_size, tx_service->tablet_to_ls_cache_.size());
 
@@ -521,7 +521,7 @@ TEST_F(TestTrans, tablet_to_ls_cache)
     ASSERT_EQ(ls_id_1, ls_id);
     ASSERT_EQ(true, is_local);
     tx_service->remove_tablet(tablet_id, ls_id);
-    ASSERT_EQ(OB_ENTRY_NOT_EXIST, tx_service->check_and_get_ls_info(tablet_id, ls_id, is_local));
+    ASSERT_EQ(OB_SUCCESS, tx_service->check_and_get_ls_info(tablet_id, ls_id, is_local));
   }
   ASSERT_EQ(0, tx_service->tablet_to_ls_cache_.size());
   ASSERT_EQ(base_ref, ls_tx_ctx_mgr->get_ref());

@@ -4070,6 +4070,7 @@ OB_INLINE int ObSql::init_exec_context(const ObSqlCtx &context, ObExecContext &e
         context.session_info_->get_query_start_time() + query_timeout);
       exec_ctx.get_physical_plan_ctx()->set_rich_format(
          context.session_info_->use_rich_format());
+      exec_ctx.set_retry_info(&context.session_info_->get_retry_info());
     }
   }
   return ret;

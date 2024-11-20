@@ -999,25 +999,26 @@ int ObDASLocationRouter::nonblock_get_leader(const uint64_t tenant_id,
   bool is_local_leader = false;
   if (OB_FAIL(all_tablet_list_.push_back(tablet_id))) {
     LOG_WARN("store access tablet id failed", K(ret), K(tablet_id));
-  } else if (get_total_retry_cnt() > 0 || OB_FAIL(trans_service->check_and_get_ls_info(tablet_id, tablet_loc.ls_id_, is_local_leader))) {
-    ret = OB_SUCCESS;
-    if (OB_FAIL(GCTX.location_service_->nonblock_get(tenant_id,
-                                                     tablet_id,
-                                                     tablet_loc.ls_id_))) {
-      LOG_WARN("nonblock get ls id failed", K(ret), K(tablet_id));
-    } else if (OB_FAIL(GCTX.location_service_->nonblock_get_leader(GCONF.cluster_id,
-                                                                   tenant_id,
-                                                                   tablet_loc.ls_id_,
-                                                                   tablet_loc.server_))) {
-      LOG_WARN("nonblock get ls location failed", K(ret), K(tablet_loc));
-    }
-  } else if (is_local_leader) {
+  } else if (get_total_retry_cnt() == 0
+             && OB_SUCC(trans_service->check_and_get_ls_info(tablet_id, tablet_loc.ls_id_, is_local_leader))
+             && is_local_leader) {
+    // when not in retry, try local leader optimization
     tablet_loc.server_ = GCTX.self_addr();
+  } else if (OB_FAIL(GCTX.location_service_->nonblock_get(tenant_id,
+                                                          tablet_id,
+                                                          tablet_loc.ls_id_))) {
+    LOG_WARN("nonblock get ls id failed", K(ret), K(tablet_id));
   } else if (OB_FAIL(GCTX.location_service_->nonblock_get_leader(GCONF.cluster_id,
                                                                  tenant_id,
                                                                  tablet_loc.ls_id_,
                                                                  tablet_loc.server_))) {
     LOG_WARN("nonblock get ls location failed", K(ret), K(tablet_loc));
+  }
+  if (OB_SUCC(ret) && get_total_retry_cnt() > 0 && last_errno_ == OB_NOT_MASTER) {
+    // flush ls cache when OB_NOT_MASTER
+    if (OB_FAIL(trans_service->remove_tablet(tablet_id, tablet_loc.ls_id_))) {
+      LOG_WARN("failed to remove tablet cache", K(ret), K(tablet_id));
+    }
   }
   if (is_partition_change_error(ret)) {
     /*During the execution phase, if nonblock location interface is used to obtain the location
