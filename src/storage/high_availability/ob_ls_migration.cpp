@@ -410,7 +410,7 @@ int ObMigrationDagNet::fill_comment(char *buf, const int64_t buf_len) const
     LOG_WARN("log stream migration dag net do not init ", K(ret));
   } else if (OB_UNLIKELY(0 >= ctx_->task_id_.to_string(task_id_str, MAX_TRACE_ID_LENGTH))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to trace task id to string", K(ret), K(*ctx_));
+    LOG_WARN("failed to trace task id to string", K(ret), "arg", ctx_->arg_);
   } else {
     int64_t pos = 0;
     ret = databuff_printf(buf, buf_len, pos, "ObLSMigrationDagNet: tenant_id=%lu, ls_id=", ctx_->tenant_id_);
@@ -418,7 +418,7 @@ int ObMigrationDagNet::fill_comment(char *buf, const int64_t buf_len) const
     OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos,
         ", migration_type=%d, trace_id=%s", ctx_->arg_.type_, task_id_str);
     if (OB_FAIL(ret)) {
-      LOG_WARN("failed to fill comment", K(ret), K(*ctx_));
+      LOG_WARN("failed to fill comment", K(ret), "arg", ctx_->arg_);
     }
   }
   return ret;

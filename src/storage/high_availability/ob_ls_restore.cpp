@@ -365,14 +365,14 @@ int ObLSRestoreDagNet::fill_comment(char *buf, const int64_t buf_len) const
     LOG_WARN("ls restore dag net do not init ", K(ret));
   } else if (OB_UNLIKELY(0 >= ctx_->task_id_.to_string(task_id_str, MAX_TRACE_ID_LENGTH))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to trace task id to string", K(ret), K(*ctx_));
+    LOG_WARN("failed to trace task id to string", K(ret), "arg", ctx_->arg_);
   } else {
     int64_t pos = 0;
     ret = databuff_printf(buf, buf_len, pos, "ObLSRestoreDagNet: ls_id=");
     OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx_->arg_.ls_id_);
     OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", trace_id=%s", task_id_str);
     if (OB_FAIL(ret)) {
-      LOG_WARN("failed to fill comment", K(ret), K(*ctx_));
+      LOG_WARN("failed to fill comment", K(ret), "arg", ctx_->arg_);
     }
   }
   return ret;
