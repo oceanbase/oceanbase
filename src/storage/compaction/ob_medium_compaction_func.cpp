@@ -1300,6 +1300,9 @@ int ObMediumCompactionScheduleFunc::check_tablet_checksum(
     for (int64_t idx = start_idx; OB_SUCC(ret) && idx < end_idx; ++idx) {
       const ObTabletReplicaChecksumItem &curr_item = checksum_items.at(idx);
       if (OB_ISNULL(prev_item)) {
+        if (OB_FAIL(data_checksum_checker.set_data_checksum(curr_item))) {
+          LOG_WARN("fail to set data checksum", KR(ret), K(data_checksum_checker), K(curr_item));
+        }
       } else if (!curr_item.is_same_tablet(*prev_item)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("not continuous same tablet id", K(ret), K(curr_item), KPC(prev_item));

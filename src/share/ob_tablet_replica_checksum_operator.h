@@ -351,11 +351,11 @@ public:
   ObTabletDataChecksumChecker();
   ~ObTabletDataChecksumChecker();
   void reset();
+  int set_data_checksum(const ObTabletReplicaChecksumItem& curr_item);
   int check_data_checksum(const ObTabletReplicaChecksumItem& curr_item);
-  TO_STRING_KV(KPC_(normal_ckm_item), KPC_(cs_replica_ckm_item));
+  TO_STRING_KV(KPC_(normal_ckm_item));
 private:
   const ObTabletReplicaChecksumItem *normal_ckm_item_;
-  const ObTabletReplicaChecksumItem *cs_replica_ckm_item_;
 };
 
 } // share
