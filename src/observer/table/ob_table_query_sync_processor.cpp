@@ -423,6 +423,7 @@ void ObTableQuerySyncP::reset_ctx()
 {
   result_row_count_ = 0;
   query_session_ = nullptr;
+  trans_state_ptr_ = &trans_state_; // refer trans_state_ptr_ to default trans_state_
   ObTableApiProcessorBase::reset_ctx();
 }
 
