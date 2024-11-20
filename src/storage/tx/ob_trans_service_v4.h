@@ -22,6 +22,11 @@ int remove_ls(const share::ObLSID &ls_id,
 int acquire_tx(const char* buf, const int64_t len, int64_t &pos, ObTxDesc *&tx);
 int release_tx_ref(ObTxDesc &tx);
 /*
+ * used when session destroyed
+ * and TxDesc which referenced by session and the tenant unit has removed
+ */
+static void force_release_tx_when_session_destroy(ObTxDesc &tx);
+/*
  * interrupt any work in progress thread
  */
 int interrupt(ObTxDesc &tx, int cause);

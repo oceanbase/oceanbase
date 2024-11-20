@@ -981,6 +981,13 @@ public:
                    , list_()
   #endif
    {}
+  #ifndef NDEBUG
+    ~ObTxDescAlloc()
+    {
+      ObSpinLockGuard guard(lk_);
+      list_.remove();
+    }
+  #endif
    ObTxDesc* alloc_value()
    {
      ATOMIC_INC(&alloc_cnt_);
@@ -1001,6 +1008,10 @@ public:
   #endif
         op_free(v);
       }
+    }
+    static void force_free(ObTxDesc *v)
+    {
+      op_free(v);
     }
     int64_t get_alloc_cnt() const { return ATOMIC_LOAD(&alloc_cnt_); }
   #ifndef NDEBUG
@@ -1025,6 +1036,11 @@ public:
       ObTxDesc::DLink list_;
   #endif
   };
+  static void force_release(ObTxDesc &tx) {
+    if (tx.dec_ref(1) == 0) {
+      ObTxDescAlloc::force_free(&tx);
+    }
+  }
   share::ObLightHashMap<ObTransID, ObTxDesc, ObTxDescAlloc, common::SpinRWLock, 1 << 16 /*bucket_num*/> map_;
   std::function<int(ObTransID&)> tx_id_allocator_;
   ObTransService &txs_;
