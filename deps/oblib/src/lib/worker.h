@@ -255,9 +255,9 @@ public:
   }
   ~ConsumerGroupFuncGuard()
   {
+    THIS_WORKER.set_func_type_(thread_func_type_);
     if (group_changed_) {
       SET_GROUP_ID(thread_group_id_);
-      THIS_WORKER.set_func_type_(thread_func_type_);
     }
   }
   int get_ret()
