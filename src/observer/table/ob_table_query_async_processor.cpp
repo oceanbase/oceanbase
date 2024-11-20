@@ -683,33 +683,33 @@ int ObTableQueryAsyncP::process_columns(const ObIArray<ObString>& columns,
     ObString real_column = column.after('.');
     ObString family = column.split_on('.');
 
-    if (!real_column.empty()) {
-      if (OB_FAIL(real_columns.push_back(real_column))) {
-        LOG_WARN("fail to push column name", K(ret));
-      } else if (OB_FAIL(family_addfamily_flag_pairs.push_back(std::make_pair(family, false)))) {
-        LOG_WARN("fail to push family name and addfamily flag", K(ret));
-      }
-    } else {
-      if (OB_FAIL(family_addfamily_flag_pairs.push_back(std::make_pair(family, true)))) {
-        LOG_WARN("fail to push family name and addfamily flag", K(ret));
-      }
+    if (OB_FAIL(real_columns.push_back(real_column))) {
+      LOG_WARN("fail to push column name", K(ret));
+    } else if (OB_FAIL(family_addfamily_flag_pairs.push_back(std::make_pair(family, real_column.empty())))) {
+      LOG_WARN("fail to push family name and addfamily flag", K(ret));
     }
   }
   return ret;
 }
 
 int ObTableQueryAsyncP::update_table_info_columns(ObTableSingleQueryInfo* table_info,
-                                                  const ObArray<ObString>& real_columns) {
+                                            const ObArray<std::pair<ObString, bool>>& family_addfamily_flag_pairs,
+                                            const ObArray<ObString>& real_columns,
+                                            const std::pair<ObString, bool>& family_addfamily_flag) {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(table_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table info is NULL", K(ret));
   } else {
+    ObString family_name = family_addfamily_flag.first;
     table_info->query_.htable_filter().clear_columns();
-    for (int i = 0; OB_SUCC(ret) && i < real_columns.count(); ++i) {
-      ObString real_column = real_columns.at(i);
-      if (OB_FAIL(table_info->query_.htable_filter().add_column(real_column))) {
-        LOG_WARN("fail to add column to htable_filter", K(ret));
+    for (int i = 0; OB_SUCC(ret) && i < family_addfamily_flag_pairs.count(); ++i) {
+      ObString curr_family = family_addfamily_flag_pairs.at(i).first;
+      if (curr_family == family_name) {
+        ObString real_column = real_columns.at(i);
+        if (OB_FAIL(table_info->query_.htable_filter().add_column(real_column))) {
+          LOG_WARN("fail to add column to htable_filter", K(ret));
+        }
       }
     }
   }
@@ -750,7 +750,7 @@ int ObTableQueryAsyncP::process_table_info(ObTableSingleQueryInfo* table_info,
   } else {
     if (family_addfamily_flag.second) {
       table_info->query_.htable_filter().clear_columns();
-    } else if (OB_FAIL(update_table_info_columns(table_info, real_columns))) {
+    } else if (OB_FAIL(update_table_info_columns(table_info, family_addfamily_flag_pairs, real_columns, family_addfamily_flag))) {
       LOG_WARN("fail to update table info columns", K(ret));
     }
   }
