@@ -938,7 +938,7 @@ int ObGroupByCellVec::init(const ObTableAccessParam &param, const ObTableAccessC
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(pd_agg_ctx_.init(param, batch_size_))) {
+    } else if (OB_FAIL(pd_agg_ctx_.init(param, MIN(batch_size_, USE_GROUP_BY_MAX_DISTINCT_CNT)))) {
       LOG_WARN("Failed to init agg context", K(ret), K(param));
     } else if (OB_FAIL(init_agg_cells(param, context, eval_ctx, false))) {
       LOG_WARN("Failed to init agg cells", K(ret));
