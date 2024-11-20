@@ -131,6 +131,7 @@ proxy_user	varchar(128)	YES		NULL
 service_name	varchar(64)	YES		NULL	
 total_cpu_time	double	NO		NULL	
 top_info	varchar(262143)	YES		NULL	
+memory_usage	bigint(20)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_processlist;
 IF(count(*) >= 0, 1, 0)
 1

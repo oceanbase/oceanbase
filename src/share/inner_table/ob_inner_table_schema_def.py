@@ -7932,6 +7932,7 @@ def_table_schema(
   ('service_name', 'varchar:64', 'true'),
   ('total_cpu_time', 'double', 'false'),
   ('top_info', 'varchar:MAX_COLUMN_VARCHAR_LENGTH', 'true'),
+  ('memory_usage', 'bigint', 'true'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -25021,7 +25022,8 @@ SELECT
   PROXY_USER,
   SERVICE_NAME,
   cast(total_cpu_time as SIGNED) as TOTAL_CPU_TIME,
-  TOP_INFO
+  TOP_INFO,
+  MEMORY_USAGE
 FROM oceanbase.__all_virtual_processlist
 """.replace("\n", " ")
 )
@@ -25074,7 +25076,8 @@ def_table_schema(
     PROXY_USER,
     SERVICE_NAME,
     cast(total_cpu_time as SIGNED) as TOTAL_CPU_TIME,
-    TOP_INFO
+    TOP_INFO,
+    MEMORY_USAGE
     FROM oceanbase.GV$OB_PROCESSLIST
     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
 """.replace("\n", " ")
@@ -63812,7 +63815,8 @@ SELECT
   PROXY_USER,
   SERVICE_NAME,
   CAST(total_cpu_time AS INT) as TOTAL_CPU_TIME,
-  TOP_INFO
+  TOP_INFO,
+  MEMORY_USAGE
 FROM SYS.ALL_VIRTUAL_PROCESSLIST
 """.replace("\n", " ")
 )
@@ -63867,7 +63871,8 @@ def_table_schema(
   PROXY_USER,
   SERVICE_NAME,
   CAST(total_cpu_time AS INT) as TOTAL_CPU_TIME,
-  TOP_INFO
+  TOP_INFO,
+  MEMORY_USAGE
     FROM SYS.GV$OB_PROCESSLIST
     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
 """.replace("\n", " ")

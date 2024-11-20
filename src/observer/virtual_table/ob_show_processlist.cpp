@@ -520,6 +520,10 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
             }
             break;
           }
+          case MEMORY_USAGE: {
+            cur_row_->cells_[cell_idx].set_null();
+            break;
+          }
           default: {
             ret = OB_ERR_UNEXPECTED;
             SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx),
