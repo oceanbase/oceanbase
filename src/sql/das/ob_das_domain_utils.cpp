@@ -533,6 +533,8 @@ int ObDomainDMLIterator::get_next_domain_row(blocksstable::ObDatumRow *&row)
       } else if (OB_FAIL(generate_domain_rows(sr))) {
         if (ret != OB_ITER_END) {
           LOG_WARN("fail to generate domain index row", K(ret), KPC(sr));
+        } else {
+          ret = OB_SUCCESS;
         }
       }
     }
@@ -576,6 +578,8 @@ int ObDomainDMLIterator::get_next_domain_rows(blocksstable::ObDatumRow *&row, in
         } else if (OB_FAIL(generate_domain_rows(sr))) {
           if (ret != OB_ITER_END) {
             LOG_WARN("fail to generate domain index row", K(ret), KPC(sr));
+          } else {
+            ret = OB_SUCCESS;
           }
         }
       }
