@@ -1333,6 +1333,9 @@ int ObMediumCompactionScheduleFunc::check_tablet_checksum(
     for (int64_t idx = start_idx; OB_SUCC(ret) && idx < end_idx; ++idx) {
       const ObTabletReplicaChecksumItem &curr_item = checksum_items.at(idx);
       if (OB_ISNULL(prev_item)) {
+        if (OB_FAIL(data_checksum_checker.set_data_checksum(curr_item))) {
+          LOG_WARN("fail to set data checksum", KR(ret), K(data_checksum_checker), K(curr_item));
+        }
       } else if (!curr_item.is_same_tablet(*prev_item)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("not continuous same tablet id", K(ret), K(curr_item), KPC(prev_item));
@@ -1396,6 +1399,7 @@ int ObMediumCompactionScheduleFunc::check_replica_checksum_items(
     error_pairs.set_attr(ObMemAttr(MTL_ID(), "MedCkmErrs"));
 
     // [start_idx, end_idx share same tablet_id
+    bool found_checksum_error = false;
     while (OB_SUCC(ret) && end_idx < count) {
       while (end_idx < count && tablet_id == checksum_items.at(end_idx).tablet_id_) {
         end_idx++;
@@ -1420,6 +1424,9 @@ int ObMediumCompactionScheduleFunc::check_replica_checksum_items(
           }
         }
 
+        if (OB_CHECKSUM_ERROR == check_ret) {
+          found_checksum_error = true;
+        }
         // refresh sliding windows
         if (OB_SUCC(ret) && end_idx < count) {
           start_idx = end_idx;
@@ -1435,6 +1442,10 @@ int ObMediumCompactionScheduleFunc::check_replica_checksum_items(
         LOG_WARN("fail to batch set info status", KR(tmp_ret));
       } else {
         LOG_INFO("succ to batch set info status", K(ret), K(affected_rows), K(error_pairs));
+      }
+
+      if (!is_medium_checker && found_checksum_error) {
+        ret = OB_CHECKSUM_ERROR;
       }
     }
 

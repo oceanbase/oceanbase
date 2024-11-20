@@ -107,6 +107,7 @@ using namespace palf;
 
 namespace storage
 {
+ERRSIM_POINT_DEF(EN_COMPACTION_DATA_CHECKSUM_ERROR);
 #define ALLOC_AND_INIT(allocator, addr, args...)                                  \
   do {                                                                            \
     if (OB_SUCC(ret)) {                                                           \
@@ -6328,6 +6329,13 @@ int ObTablet::get_tablet_report_info_by_sstable(
     tablet_checksum.row_count_ = get_tablet_meta().report_status_.row_count_;
     tablet_checksum.data_checksum_ = get_tablet_meta().report_status_.data_checksum_;
     tablet_checksum.data_checksum_type_ = is_cs_replica_compat() ? ObDataChecksumType::DATA_CHECKSUM_COLUMN_STORE : ObDataChecksumType::DATA_CHECKSUM_NORMAL;
+#ifdef ERRSIM
+    const ObTabletID errsim_tablet_id(-EN_COMPACTION_DATA_CHECKSUM_ERROR);
+    if (get_tablet_id() == errsim_tablet_id) {
+      tablet_checksum.data_checksum_ = get_tablet_meta().report_status_.data_checksum_ + GCTX.server_id_;
+      LOG_INFO("ERRSIM EN_COMPACTION_DATA_CHECKSUM_ERROR", K(errsim_tablet_id));
+    }
+#endif
     LOG_INFO("success to get tablet report info", KR(ret), "tablet_id", get_tablet_id(), "report_status",
       tablet_meta_.report_status_, K(tablet_checksum));
   }
