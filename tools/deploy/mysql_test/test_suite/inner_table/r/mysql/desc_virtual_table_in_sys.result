@@ -10054,6 +10054,82 @@ IF(count(*) >= 0, 1, 0)
 "oceanbase.__all_virtual_vector_index_info runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_pkg_type;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+package_id	bigint(20)	NO	PRI	NULL	
+type_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+database_id	bigint(20)	NO		NULL	
+schema_version	bigint(20)	NO		NULL	
+typecode	bigint(20)	NO		NULL	
+properties	bigint(20)	NO		NULL	
+attributes	bigint(20)	NO		NULL	
+methods	bigint(20)	NO		NULL	
+hiddenmethods	bigint(20)	NO		NULL	
+supertypes	bigint(20)	NO		NULL	
+subtypes	bigint(20)	NO		NULL	
+externtype	bigint(20)	NO		NULL	
+externname	varchar(64)	YES			
+helperclassname	varchar(64)	YES			
+local_attrs	bigint(20)	NO		NULL	
+local_methods	bigint(20)	NO		NULL	
+supertypeid	bigint(20)	NO		NULL	
+type_name	varchar(64)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_pkg_type;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_pkg_type_attr;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+type_id	bigint(20)	NO	PRI	NULL	
+attribute	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+schema_version	bigint(20)	NO		NULL	
+attr_package_id	bigint(20)	NO		NULL	
+type_attr_id	bigint(20)	NO		NULL	
+name	varchar(64)	NO		NULL	
+properties	bigint(20)	NO		NULL	
+charset_id	bigint(20)	NO		NULL	
+charset_form	bigint(20)	NO		NULL	
+length	bigint(20)	NO		NULL	
+number_precision	bigint(20)	NO		NULL	
+scale	bigint(20)	NO		NULL	
+zero_fill	bigint(20)	NO		NULL	
+coll_type	bigint(20)	NO		NULL	
+externname	varchar(64)	YES			
+xflags	bigint(20)	NO		NULL	
+setter	bigint(20)	NO		NULL	
+getter	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_pkg_type_attr;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_pkg_coll_type;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+coll_type_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+schema_version	bigint(20)	NO		NULL	
+elem_package_id	bigint(20)	NO		NULL	
+elem_type_id	bigint(20)	NO		NULL	
+elem_schema_version	bigint(20)	NO		NULL	
+properties	bigint(20)	NO		NULL	
+charset_id	bigint(20)	NO		NULL	
+charset_form	bigint(20)	NO		NULL	
+length	bigint(20)	NO		NULL	
+number_precision	bigint(20)	NO		NULL	
+scale	bigint(20)	NO		NULL	
+zero_fill	bigint(20)	NO		NULL	
+coll_type	bigint(20)	NO		NULL	
+upper_bound	bigint(20)	NO		NULL	
+package_id	bigint(20)	NO		NULL	
+coll_name	varchar(64)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_pkg_coll_type;
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_kv_client_info;
 Field	Type	Null	Key	Default	Extra
 client_id	bigint(20) unsigned	NO		NULL	

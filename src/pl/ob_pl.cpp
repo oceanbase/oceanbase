@@ -2363,6 +2363,10 @@ int ObPL::execute(ObExecContext &ctx,
       if (OB_FAIL(ret)) {
 #ifdef OB_BUILD_ORACLE_PL
       } else if (is_valid_id(dblink_id)) {
+        if (OB_ISNULL(ctx.get_pl_ctx())) {
+          OZ (ctx.init_pl_ctx());
+          CK (OB_NOT_NULL(ctx.get_pl_ctx()));
+        }
         OZ (ObSPIService::spi_execute_dblink(ctx, allocator, dblink_id, package_id,
                                              routine_id, params, &result,
                                              dblink_routine_info));

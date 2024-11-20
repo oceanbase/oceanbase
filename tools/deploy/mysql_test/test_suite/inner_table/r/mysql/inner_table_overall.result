@@ -309,6 +309,9 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 518	__all_mview_dep	0	201001	1
 519	__all_scheduler_job_run_detail_v2	0	201001	1
 520	__all_spm_evo_result	0	201001	1
+522	__all_pkg_type	0	201001	1
+523	__all_pkg_type_attr	0	201001	1
+524	__all_pkg_coll_type	0	201001	1
 528	__all_ncomp_dll_v2	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
@@ -783,6 +786,9 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12493	__all_virtual_kv_group_commit_status	2	201001	1
 12495	__all_virtual_spm_evo_result	2	201001	1
 12496	__all_virtual_vector_index_info	2	201001	1
+12497	__all_virtual_pkg_type	2	201001	1
+12498	__all_virtual_pkg_type_attr	2	201001	1
+12499	__all_virtual_pkg_coll_type	2	201001	1
 12500	__all_virtual_kv_client_info	2	201001	1
 12504	__all_virtual_function_io_stat	2	201001	1
 12505	__all_virtual_temp_file	2	201001	1

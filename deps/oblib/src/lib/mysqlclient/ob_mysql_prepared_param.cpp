@@ -67,8 +67,12 @@ int ObMySQLPreparedParam::bind_param()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt handler is null", K(ret));
   } else if (OB_UNLIKELY(0 != mysql_stmt_bind_param(stmt, bind_))) {
-    ret = OB_ERR_SQL_CLIENT;
-    LOG_WARN("fail to bind param", K(ret));
+    ret = -mysql_stmt_errno(stmt);
+    char errmsg[256] = {0};
+    const char *srcmsg = mysql_stmt_error(stmt);
+    MEMCPY(errmsg, srcmsg, MIN(255, STRLEN(srcmsg)));
+    TRANSLATE_CLIENT_ERR(ret, errmsg);
+    LOG_WARN("fail to bind param", K(ret), "errmsg", errmsg);
   }
   return ret;
 }

@@ -3359,7 +3359,8 @@ int ObPLResolver::resolve_dblink_row_type_with_synonym(ObPLResolveCtx &resolve_c
   }
   OZ (ObPLDblinkUtil::separate_name_from_synonym(checker, resolve_ctx.allocator_,
                                                  resolve_ctx.session_info_.get_effective_tenant_id(),
-                                                 resolve_ctx.session_info_.get_database_name(),
+                                                 (syn_idx > 0 ? access_idxs.at(syn_idx - 1).var_name_
+                                                              : resolve_ctx.session_info_.get_database_name()),
                                                  syn_id, dblink_name, db_name, table_name));
   OZ (resolve_dblink_row_type(db_name, table_name,
                               is_row_type ? empty_str : access_idxs.at(cnt-1).var_name_, /*col name*/
@@ -11540,7 +11541,8 @@ int ObPLResolver::resolve_dblink_routine_with_synonym(ObPLResolveCtx &resolve_ct
   return ret;
 }
 
-int ObPLResolver::resolve_dblink_type_with_synonym(const uint64_t pkg_syn_id,
+int ObPLResolver::resolve_dblink_type_with_synonym(const ObString &cur_db_name,
+                                                   const uint64_t pkg_syn_id,
                                                    const ObString &type_name,
                                                    ObPLCompileUnitAST &func,
                                                    ObPLDataType &pl_type)
@@ -11554,7 +11556,8 @@ int ObPLResolver::resolve_dblink_type_with_synonym(const uint64_t pkg_syn_id,
   OZ (checker.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_sessid()));
   OZ (ObPLDblinkUtil::separate_name_from_synonym(checker, resolve_ctx_.allocator_,
                                                  resolve_ctx_.session_info_.get_effective_tenant_id(),
-                                                 resolve_ctx_.session_info_.get_database_name(),
+                                                 cur_db_name.empty() ? resolve_ctx_.session_info_.get_database_name()
+                                                                     : cur_db_name,
                                                  pkg_syn_id, dblink_name, db_name, pkg_name));
   OZ (resolve_dblink_type(dblink_name, db_name, pkg_name, type_name, func, pl_type));
 #endif
@@ -11586,8 +11589,8 @@ int ObPLResolver::resolve_dblink_type(const ObString &dblink_name,
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(udt)) {
     pl_type.set_user_type_id(udt->get_type(), udt->get_user_type_id());
-    pl_type.set_type_from(PL_TYPE_PACKAGE);
-    pl_type.set_type_from_orgin(PL_TYPE_PACKAGE);
+    pl_type.set_type_from(udt->get_type_from());
+    pl_type.set_type_from_orgin(udt->get_type_from_origin());
   }
   return ret;
 }
@@ -14891,10 +14894,11 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
           ? reinterpret_cast<uint64_t>(access_idxs.at(cnt - 1).label_ns_)
             : access_idxs.at(cnt - 1).label_ns_->get_package_id());
     } else if (0 != cnt
-               && ObObjAccessIdx::IS_DBLINK_PKG_NS == access_idxs.at(cnt-1).access_type_
+               && ObObjAccessIdx::IS_DBLINK_PKG_NS == access_idxs.at(cnt - 1).access_type_
                && (!is_routine || is_resolve_rowtype)) {
       if (!is_routine && !is_resolve_rowtype) {
-        OZ (resolve_dblink_type_with_synonym(parent_id, access_ident.access_name_, func, pl_data_type));
+        OZ (resolve_dblink_type_with_synonym((cnt - 1 > 0 ? access_idxs.at(cnt - 2).var_name_ : ObString()),
+                                             parent_id, access_ident.access_name_, func, pl_data_type));
         OX (type = ObPLExternalNS::PKG_TYPE);
         OX (var_index = pl_data_type.get_user_type_id());
       } else {
@@ -17996,9 +18000,16 @@ int ObPLResolveCtx::get_user_type(uint64_t type_id, const ObUserDefinedType *&us
     // do nothing ...
   } else {
     const ObUDTTypeInfo *udt_info = NULL;
-    const uint64_t tenant_id = get_tenant_id_by_object_id(type_id);
-    OZ (schema_guard_.get_udt_info(tenant_id, type_id, udt_info), type_id);
-    if (OB_NOT_NULL(udt_info)) {
+    uint64_t tenant_id = OB_INVALID_ID;
+    if (common::is_dblink_type_id(type_id)) {
+      if (OB_FAIL(package_guard_.dblink_guard_.get_dblink_type_by_id(
+                      extract_package_id(type_id), type_id, user_type))) {
+        LOG_WARN("get dblink type failed", K(ret), K(type_id));
+      }
+    } else if (FALSE_IT(tenant_id = get_tenant_id_by_object_id(type_id))) {
+    } else if (OB_FAIL(schema_guard_.get_udt_info(tenant_id, type_id, udt_info))) {
+      LOG_WARN("get udt info failed", K(ret), K(type_id));
+    } else if (OB_NOT_NULL(udt_info)) {
       OZ (udt_info->transform_to_pl_type(*alloc, user_type), type_id);
     } else {
       ret = OB_SUCCESS;

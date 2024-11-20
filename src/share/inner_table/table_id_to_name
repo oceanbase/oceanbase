@@ -366,6 +366,9 @@
 # 518: __all_mview_dep
 # 519: __all_scheduler_job_run_detail_v2
 # 520: __all_spm_evo_result
+# 522: __all_pkg_type
+# 523: __all_pkg_type_attr
+# 524: __all_pkg_coll_type
 # 528: __all_ncomp_dll_v2
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
@@ -1164,6 +1167,12 @@
 # 12495: __all_virtual_spm_evo_result
 # 12495: __all_spm_evo_result  # BASE_TABLE_NAME
 # 12496: __all_virtual_vector_index_info
+# 12497: __all_virtual_pkg_type
+# 12497: __all_pkg_type  # BASE_TABLE_NAME
+# 12498: __all_virtual_pkg_type_attr
+# 12498: __all_pkg_type_attr  # BASE_TABLE_NAME
+# 12499: __all_virtual_pkg_coll_type
+# 12499: __all_pkg_coll_type  # BASE_TABLE_NAME
 # 12500: __all_virtual_kv_client_info
 # 12504: __all_virtual_function_io_stat
 # 12505: __all_virtual_temp_file
@@ -1798,6 +1807,18 @@
 # 15466: __all_virtual_spm_evo_result  # BASE_TABLE_NAME1
 # 15467: ALL_VIRTUAL_VECTOR_INDEX_INFO
 # 15467: __all_virtual_vector_index_info  # BASE_TABLE_NAME
+# 15468: ALL_VIRTUAL_PKG_TYPE_SYS_AGENT
+# 15468: __all_pkg_type  # BASE_TABLE_NAME
+# 15469: ALL_VIRTUAL_PKG_TYPE_ATTR_SYS_AGENT
+# 15469: __all_pkg_type_attr  # BASE_TABLE_NAME
+# 15470: ALL_VIRTUAL_PKG_COLL_TYPE_SYS_AGENT
+# 15470: __all_pkg_coll_type  # BASE_TABLE_NAME
+# 15471: ALL_VIRTUAL_PKG_TYPE_REAL_AGENT
+# 15471: __all_pkg_type  # BASE_TABLE_NAME
+# 15472: ALL_VIRTUAL_PKG_TYPE_ATTR_REAL_AGENT
+# 15472: __all_pkg_type_attr  # BASE_TABLE_NAME
+# 15473: ALL_VIRTUAL_PKG_COLL_TYPE_REAL_AGENT
+# 15473: __all_pkg_coll_type  # BASE_TABLE_NAME
 # 15484: ALL_VIRTUAL_FUNCTION_IO_STAT
 # 15484: __all_virtual_function_io_stat  # BASE_TABLE_NAME
 # 15485: ALL_VIRTUAL_TEMP_FILE
@@ -2780,6 +2801,15 @@
 # 28239: V$OB_LOG_TRANSPORT_DEST_STAT
 # 28240: GV$OB_SS_LOCAL_CACHE
 # 28241: V$OB_SS_LOCAL_CACHE
+# 28244: ALL_PLSQL_TYPES
+# 28245: DBA_PLSQL_TYPES
+# 28246: USER_PLSQL_TYPES
+# 28247: ALL_PLSQL_COLL_TYPES
+# 28248: DBA_PLSQL_COLL_TYPES
+# 28249: USER_PLSQL_COLL_TYPES
+# 28250: ALL_PLSQL_TYPE_ATTRS
+# 28251: DBA_PLSQL_TYPE_ATTRS
+# 28252: USER_PLSQL_TYPE_ATTRS
 # 28261: DBA_OB_SPM_EVO_RESULT
 # 28262: GV$OB_FUNCTION_IO_STAT
 # 28263: V$OB_FUNCTION_IO_STAT
@@ -3195,6 +3225,24 @@
 # 101106: __idx_519_idx_scheduler_job_run_detail_v2_job_class_time
 # 101106: idx_scheduler_job_run_detail_v2_job_class_time  # INDEX_NAME
 # 101106: __all_scheduler_job_run_detail_v2  # DATA_BASE_TABLE_NAME
+# 101107: __idx_522_idx_pkg_db_type_name
+# 101107: idx_pkg_db_type_name  # INDEX_NAME
+# 101107: __all_pkg_type  # DATA_BASE_TABLE_NAME
+# 101108: __idx_522_idx_pkg_type_name
+# 101108: idx_pkg_type_name  # INDEX_NAME
+# 101108: __all_pkg_type  # DATA_BASE_TABLE_NAME
+# 101109: __idx_523_idx_pkg_type_attr_name
+# 101109: idx_pkg_type_attr_name  # INDEX_NAME
+# 101109: __all_pkg_type_attr  # DATA_BASE_TABLE_NAME
+# 101110: __idx_523_idx_pkg_type_attr_id
+# 101110: idx_pkg_type_attr_id  # INDEX_NAME
+# 101110: __all_pkg_type_attr  # DATA_BASE_TABLE_NAME
+# 101111: __idx_524_idx_pkg_coll_name_type
+# 101111: idx_pkg_coll_name_type  # INDEX_NAME
+# 101111: __all_pkg_coll_type  # DATA_BASE_TABLE_NAME
+# 101112: __idx_524_idx_pkg_coll_name_id
+# 101112: idx_pkg_coll_name_id  # INDEX_NAME
+# 101112: __all_pkg_coll_type  # DATA_BASE_TABLE_NAME
 # 101104: __idx_482_idx_tablet_his_table_id_dest
 # 101104: idx_tablet_his_table_id_dest  # INDEX_NAME
 # 101104: __all_tablet_reorganize_history  # DATA_BASE_TABLE_NAME
@@ -3498,3 +3546,27 @@
 # 15463: idx_scheduler_job_run_detail_v2_job_class_time_real_agent  # INDEX_NAME
 # 15463: __all_scheduler_job_run_detail_v2  # DATA_BASE_TABLE_NAME
 # 15463: ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2_REAL_AGENT  # DATA_BASE_TABLE_NAME1
+# 15474: __idx_15471_idx_pkg_db_type_name_real_agent
+# 15474: idx_pkg_db_type_name_real_agent  # INDEX_NAME
+# 15474: __all_pkg_type  # DATA_BASE_TABLE_NAME
+# 15474: ALL_VIRTUAL_PKG_TYPE_REAL_AGENT  # DATA_BASE_TABLE_NAME1
+# 15475: __idx_15471_idx_pkg_type_name_real_agent
+# 15475: idx_pkg_type_name_real_agent  # INDEX_NAME
+# 15475: __all_pkg_type  # DATA_BASE_TABLE_NAME
+# 15475: ALL_VIRTUAL_PKG_TYPE_REAL_AGENT  # DATA_BASE_TABLE_NAME1
+# 15476: __idx_15472_idx_pkg_type_attr_name_real_agent
+# 15476: idx_pkg_type_attr_name_real_agent  # INDEX_NAME
+# 15476: __all_pkg_type_attr  # DATA_BASE_TABLE_NAME
+# 15476: ALL_VIRTUAL_PKG_TYPE_ATTR_REAL_AGENT  # DATA_BASE_TABLE_NAME1
+# 15477: __idx_15472_idx_pkg_type_attr_id_real_agent
+# 15477: idx_pkg_type_attr_id_real_agent  # INDEX_NAME
+# 15477: __all_pkg_type_attr  # DATA_BASE_TABLE_NAME
+# 15477: ALL_VIRTUAL_PKG_TYPE_ATTR_REAL_AGENT  # DATA_BASE_TABLE_NAME1
+# 15478: __idx_15473_idx_pkg_coll_name_type_real_agent
+# 15478: idx_pkg_coll_name_type_real_agent  # INDEX_NAME
+# 15478: __all_pkg_coll_type  # DATA_BASE_TABLE_NAME
+# 15478: ALL_VIRTUAL_PKG_COLL_TYPE_REAL_AGENT  # DATA_BASE_TABLE_NAME1
+# 15479: __idx_15473_idx_pkg_coll_name_id_real_agent
+# 15479: idx_pkg_coll_name_id_real_agent  # INDEX_NAME
+# 15479: __all_pkg_coll_type  # DATA_BASE_TABLE_NAME
+# 15479: ALL_VIRTUAL_PKG_COLL_TYPE_REAL_AGENT  # DATA_BASE_TABLE_NAME1

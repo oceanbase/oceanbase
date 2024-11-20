@@ -460,7 +460,7 @@ public:
   inline bool is_generic_table_type() const { return PL_TABLE_1 == generic_type_; }
   inline bool is_generic_collection_type() const { return PL_COLLECTION_1 == generic_type_; }
   inline bool is_generic_ref_cursor_type() const { return PL_REF_CURSOR_1 == generic_type_; }
-
+  inline bool is_dblink_type() { return common::is_dblink_type_id(user_type_id_); }
   /*!
    * ------ new session serialize/deserialize interface -------
    */
@@ -616,7 +616,7 @@ public:
 protected:
   ObPLType type_;
   ObPLTypeFrom type_from_;
-  ObPLTypeFrom type_from_origin_; /* valid if type_from is PL_TYPE_ATTR_ROWTYPE or PL_TYPE_ATTR_TYPE */
+  ObPLTypeFrom type_from_origin_; /* valid if type_from is PL_TYPE_ATTR_ROWTYPE or PL_TYPE_ATTR_TYPE or PL_TYPE_DBLINK*/
   common::ObDataType obj_type_;
   union {
     uint64_t user_type_id_;

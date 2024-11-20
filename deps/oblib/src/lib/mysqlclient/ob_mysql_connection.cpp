@@ -520,23 +520,27 @@ int ObMySQLConnection::execute_proc(const uint64_t tenant_id,
                                     bool is_sql)
 {
   int ret = OB_SUCCESS;
+  int64_t real_param_cnt = 0;
+  int64_t out_param_start_pos = 0;
+  int64_t basic_param_start_pos = 0;
+  int64_t basic_return_value_pos = 0;
   if (OB_UNLIKELY(closed_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("connection not established. call connect first", K(ret));
-  } else {
-    int64_t real_param_cnt = routine_info.is_function() ? 1 : 0;
-    for (int64_t i = 0; i < params.count(); i++) {
-      if (!params.at(i).is_pl_mock_default_param()) {
-        real_param_cnt++;
-      }
-    }
-    if (OB_FAIL(prepare_proc_stmt(sql.ptr(), real_param_cnt, &allocator))) {
-      LOG_WARN("create statement failed", K(sql), K(ret));
-    } else if (OB_FAIL(proc_stmt_.execute_proc(allocator, params, routine_info, tz_info, result, is_sql))) {
-      LOG_WARN("statement execute update failed", K(sql), K(ret));
-    } else if (OB_FAIL(proc_stmt_.close())) {
-      LOG_WARN("fail to close stmt", K(ret));
-    }
+  } else if (OB_FAIL(ObMySQLProcStatement::get_anonymous_param_count(params, routine_info, udts,
+                                                                     is_sql,
+                                                                     real_param_cnt,
+                                                                     out_param_start_pos,
+                                                                     basic_param_start_pos,
+                                                                     basic_return_value_pos))) {
+    LOG_WARN("get real param count failed", K(ret));
+  } else if (OB_FAIL(prepare_proc_stmt(sql.ptr(), real_param_cnt, &allocator))) {
+    LOG_WARN("create statement failed", K(sql), K(ret));
+  } else if (OB_FAIL(proc_stmt_.execute_proc(allocator, params, routine_info, udts, tz_info, result, is_sql,
+                                             out_param_start_pos, basic_param_start_pos, basic_return_value_pos))) {
+    LOG_WARN("statement execute update failed", K(sql), K(ret));
+  } else if (OB_FAIL(proc_stmt_.close())) {
+    LOG_WARN("fail to close stmt", K(ret));
   }
   return ret;
 }
