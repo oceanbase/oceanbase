@@ -218,16 +218,16 @@ OB_DECLARE_AVX512_SPECIFIC_CODE(
 OB_INLINE uint32_t get_supported_archs()
 {
   uint32_t result = 0;
-  if (ObCpuFlagsCache::support_sse42()) {
+  if (CpuFlagSet::get_instance().have_flag(CpuFlag::SSE4_2)) {
     result |= static_cast<uint32_t>(ObTargetArch::SSE42);
   }
-  if (ObCpuFlagsCache::support_avx()) {
+  if (CpuFlagSet::get_instance().have_flag(CpuFlag::AVX)) {
     result |= static_cast<uint32_t>(ObTargetArch::AVX);
   }
-  if (ObCpuFlagsCache::support_avx2()) {
+  if (CpuFlagSet::get_instance().have_flag(CpuFlag::AVX2)) {
     result |= static_cast<uint32_t>(ObTargetArch::AVX2);
   }
-  if (ObCpuFlagsCache::support_avx512()) {
+  if (CpuFlagSet::get_instance().have_flag(CpuFlag::AVX512BW)) {
     result |= static_cast<uint32_t>(ObTargetArch::AVX512);
   }
   return result;
