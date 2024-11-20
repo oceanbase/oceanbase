@@ -896,6 +896,13 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigTableStoreFormatChecker);
 };
 
+class ObConfigDDLNoLoggingChecker: public ObConfigChecker {
+  public:
+    static bool check(const uint64_t tenant_id, const obrpc::ObAdminSetConfigItem &t);
+  private:
+    DISALLOW_COPY_AND_ASSIGN(ObConfigDDLNoLoggingChecker);
+};
+
 class ObConfigArchiveLagTargetChecker {
 public:
   ObConfigArchiveLagTargetChecker(){}

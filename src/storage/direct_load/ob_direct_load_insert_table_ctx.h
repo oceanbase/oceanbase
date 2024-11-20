@@ -59,7 +59,8 @@ public:
                KP_(datum_utils),
                KP_(col_descs),
                KP_(cmp_funcs),
-               K_(online_sample_percent));
+               K_(online_sample_percent),
+               K_(is_no_logging));
 
 public:
   uint64_t table_id_; // dest_table_id
@@ -82,6 +83,7 @@ public:
   const common::ObIArray<share::schema::ObColDesc> *col_descs_;
   const blocksstable::ObStoreCmpFuncs *cmp_funcs_;
   double online_sample_percent_;
+  bool is_no_logging_;
 };
 
 struct ObDirectLoadInsertTabletWriteCtx

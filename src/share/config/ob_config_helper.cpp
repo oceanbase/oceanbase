@@ -37,7 +37,7 @@
 #include "lib/utility/utility.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "share/vector_index/ob_vector_index_util.h"
-
+#include "share/backup/ob_tenant_archive_mgr.h"
 namespace oceanbase
 {
 using namespace share;
@@ -1344,6 +1344,56 @@ bool ObConfigTableStoreFormatChecker::check(const ObConfigItem &t) const {
     bret = (0 == tmp_str.case_compare("ROW"));
   }
   return bret;
+}
+
+bool ObConfigDDLNoLoggingChecker::check(const uint64_t tenant_id, const obrpc::ObAdminSetConfigItem &t) {
+  int ret = OB_SUCCESS;
+  bool is_valid = true;
+  uint64_t data_version = 0;
+  const bool value = ObConfigBoolParser::get(t.value_.ptr(), is_valid);
+
+  if (!is_valid) {
+  } else if (!GCTX.is_shared_storage_mode()) {
+    is_valid = false;
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "it's not allowded to set no logging in shared nothing mode");
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    is_valid = false;
+    OB_LOG(WARN, "failed to get mini data version", K(ret));
+  } else if (data_version < DATA_VERSION_4_3_5_0) {
+    is_valid = false;
+    ret = OB_NOT_SUPPORTED;
+    OB_LOG(WARN, "it's not allowded to set no logging during cluster updating process", K(ret));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "it's not allowded to set no logging during cluster updating process");
+  }
+  if (!is_valid) {
+  } else {
+    if (OB_SYS_TENANT_ID == tenant_id) {
+      /* sys tenant not no allow archive */
+    } else {
+      ObArchivePersistHelper archive_op;
+      ObArchiveMode archive_mode;
+      common::ObMySQLProxy *sql_proxy = nullptr;
+      if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_))  {
+        is_valid = false;
+        ret = OB_ERR_UNEXPECTED;
+        OB_LOG(WARN, "invalid sql proxy", K(ret), KP(sql_proxy));
+      } else if (OB_FAIL(archive_op.init(tenant_id))) {
+        is_valid = false;
+        OB_LOG(WARN, "failed to init archive op", K(ret), K(tenant_id));
+      } else if (OB_FAIL(archive_op.get_archive_mode(*sql_proxy, archive_mode))) {
+        is_valid = false;
+        OB_LOG(WARN, "failed to get archive mode", K(ret));
+      } else if (value && archive_mode.is_archivelog()) {
+        is_valid = false;
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "it's no allowded to set no logging during archive");
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    is_valid = false;
+  }
+  return is_valid;
 }
 
 bool ObConfigMigrationChooseSourceChecker::check(const ObConfigItem &t) const

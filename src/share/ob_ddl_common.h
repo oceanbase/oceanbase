@@ -746,7 +746,8 @@ public:
      int64_t &snapshot_version,
      share::ObDDLTaskStatus &task_status,
      uint64_t &target_object_id,
-     int64_t &schema_version);
+     int64_t &schema_version,
+     bool &is_no_logging);
 
   static int replace_user_tenant_id(
     const ObDDLType &ddl_type,
@@ -904,6 +905,8 @@ public:
       int64_t &check_dag_exit_retry_cnt,
       bool is_complement_data_dag,
       bool &all_dag_exit);
+  static int get_no_logging_param(const int64_t tenant_id, bool &is_no_logging);
+
 private:
   static int hold_snapshot(
       common::ObMySQLTransaction &trans,

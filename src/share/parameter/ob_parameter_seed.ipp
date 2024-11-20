@@ -165,6 +165,9 @@ DEF_STR_WITH_CHECKER(default_table_store_format, OB_TENANT_PARAMETER, "row",
                      "Specify the default storage format of creating table: row, column, compound format of row and column"
                      "values: row, column, compound",
                      ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_no_logging, OB_TENANT_PARAMETER, "False",
+         "set true to skip writing ddl clog when all server using the same oss in shared storage mode",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(storage_rowsets_size, OB_TENANT_PARAMETER, "8192", "(0,1048576]",
         "the row number processed by vectorized storage engine within one batch in column storage. Range: (0,1048576]",

@@ -493,13 +493,18 @@ int ObDDLRedoReplayExecutor::do_full_replay_(
     #ifdef OB_BUILD_SHARED_STORAGE
     if (GCTX.is_shared_storage_mode()){
       /* write gc occupy file*/
-      if (OB_FAIL(ObDDLRedoLogWriter::write_gc_flag(tablet_handle,
+      if (ObDDLMacroBlockType::DDL_MB_SS_EMPTY_DATA_TYPE == macro_block.block_type_) {
+        /* skip write gc flag and upload block*/
+      } else if (OB_FAIL(ObDDLRedoLogWriter::write_gc_flag(tablet_handle,
                                                     redo_info.table_key_,
                                                     redo_info.parallel_cnt_,
                                                     redo_info.cg_cnt_))) {
         LOG_WARN("failed to write tablet gc flag file", K(ret));
       } else if (OB_FAIL(write_ss_block(write_info, macro_handle))) {
         LOG_WARN("failed to write shared storage block", K(ret));
+      }
+
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(macro_block.block_handle_.set_block_id(log_->get_redo_info().macro_block_id_))) {
         LOG_WARN("set macro block id failed", K(ret), K(log_->get_redo_info().macro_block_id_));
       }
@@ -514,6 +519,7 @@ int ObDDLRedoReplayExecutor::do_full_replay_(
         LOG_WARN("set macro block id failed", K(ret), K(macro_handle.get_macro_id()));
       }
     }
+
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(macro_block.set_data_macro_meta(macro_block.block_handle_.get_block_id(),
                                                        redo_info.data_buffer_.ptr(),
@@ -559,6 +565,7 @@ int ObDDLRedoReplayExecutor::do_full_replay_(
       } else if (data_format_version <= 0) {
         data_format_version = direct_load_mgr_handle.get_obj()->get_data_format_version();
       }
+
       if (OB_SUCC(ret) && need_replay) {
         if (OB_FAIL(ObDDLKVPendingGuard::set_macro_block(tablet_handle.get_obj(), macro_block,
             snapshot_version, data_format_version, direct_load_mgr_handle))) {

@@ -689,6 +689,7 @@ int ObDDLRedefinitionTask::send_build_single_replica_request()
       param.execution_id_ = execution_id_;
       param.data_format_version_ = data_format_version_;
       param.consumer_group_id_ = alter_table_arg_.consumer_group_id_;
+      param.is_no_logging_ = is_no_logging_;
       if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, object_id_, param.source_tablet_ids_))) {
         LOG_WARN("fail to get tablets", K(ret), K(tenant_id_), K(object_id_));
       } else if (OB_FAIL(ObDDLUtil::get_tablets(dst_tenant_id_, target_object_id_, param.dest_tablet_ids_))) {

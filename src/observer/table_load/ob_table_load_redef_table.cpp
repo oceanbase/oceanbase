@@ -52,7 +52,8 @@ int ObTableLoadRedefTable::start(const ObTableLoadRedefTableStartArg &arg,
           res.snapshot_version_,
           status,
           res.dest_table_id_,
-          res.schema_version_))) {
+          res.schema_version_,
+          res.is_no_logging_))) {
         LOG_WARN("fail to get ddl task info", KR(ret), K(arg));
       }
     }
@@ -85,6 +86,7 @@ int ObTableLoadRedefTable::start(const ObTableLoadRedefTableStartArg &arg,
       res.dest_table_id_ = create_table_res.dest_table_id_;
       res.task_id_ = create_table_res.task_id_;
       res.schema_version_ = create_table_res.schema_version_;
+      res.is_no_logging_ = create_table_res.is_no_logging_;
       LOG_INFO("succeed to create hidden table", K(arg), K(res));
     }
     THIS_WORKER.set_timeout_ts(origin_timeout_ts);

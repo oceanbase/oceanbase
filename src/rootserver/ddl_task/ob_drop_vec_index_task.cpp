@@ -936,6 +936,7 @@ int ObDropVecIndexTask::send_build_single_replica_request()
     param.execution_id_ = execution_id_; // should >= 0
     param.data_format_version_ = data_format_version_; // should > 0
     param.consumer_group_id_ = consumer_group_id_;
+    param.is_no_logging_ = is_no_logging_;
 
     if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, vec_index_snapshot_data_.table_id_, param.source_tablet_ids_))) {
       LOG_WARN("fail to get tablets", K(ret), K(tenant_id_), K(object_id_));

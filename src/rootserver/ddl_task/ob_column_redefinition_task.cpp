@@ -78,6 +78,8 @@ int ObColumnRedefinitionTask::init(const uint64_t tenant_id, const int64_t task_
     start_time_ = ObTimeUtility::current_time();
     if (OB_FAIL(init_ddl_task_monitor_info(target_object_id_))) {
       LOG_WARN("init ddl task monitor info failed", K(ret));
+    } else if (OB_FAIL(ObDDLUtil::get_no_logging_param(tenant_id_, is_no_logging_))) {
+      LOG_WARN("fail to get no logging param", K(ret), K(tenant_id_));
     } else {
       dst_tenant_id_ = tenant_id_;
       dst_schema_version_ = schema_version_;

@@ -2526,7 +2526,7 @@ int ObDDLUtil::get_data_information(
 {
   uint64_t target_object_id = 0;
   int64_t schema_version = 0;
-
+  bool is_no_logging = false;
   return get_data_information(
       tenant_id,
       task_id,
@@ -2534,7 +2534,8 @@ int ObDDLUtil::get_data_information(
       snapshot_version,
       task_status,
       target_object_id,
-      schema_version);
+      schema_version,
+      is_no_logging);
 }
 
 int ObDDLUtil::get_data_information(
@@ -2544,7 +2545,8 @@ int ObDDLUtil::get_data_information(
     int64_t &snapshot_version,
     share::ObDDLTaskStatus &task_status,
     uint64_t &target_object_id,
-    int64_t &schema_version)
+    int64_t &schema_version,
+    bool &is_no_logging)
 {
   int ret = OB_SUCCESS;
   data_format_version = 0;
@@ -2591,6 +2593,7 @@ int ObDDLUtil::get_data_information(
               LOG_WARN("deserialize from msg failed", K(ret));
             } else {
               data_format_version = task.get_data_format_version();
+              is_no_logging = task.get_is_no_logging();
             }
           }
         }
@@ -3286,6 +3289,20 @@ int64_t ObDDLUtil::get_real_parallelism(const int64_t parallelism, const bool is
     real_parallelism = std::min(oceanbase::ObMacroDataSeq::MAX_PARALLEL_IDX + 1, std::max(1L, parallelism));
   }
   return real_parallelism;
+}
+
+int ObDDLUtil::get_no_logging_param(const int64_t tenant_id, bool &is_no_logging)
+{
+  int ret = OB_SUCCESS;
+  is_no_logging = false;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (!tenant_config.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant config is invalid", K(ret), K(tenant_id));
+  } else {
+    is_no_logging = tenant_config->_no_logging;
+  }
+  return ret;
 }
 
 /******************           ObCheckTabletDataComplementOp         *************/

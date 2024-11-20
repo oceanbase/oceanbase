@@ -905,11 +905,11 @@ int ObPxSubCoord::start_ddl()
     const int64_t ddl_table_id = phy_plan->get_ddl_table_id();
     const int64_t ddl_task_id = phy_plan->get_ddl_task_id();
     const int64_t ddl_execution_id = phy_plan->get_ddl_execution_id();
-
     uint64_t unused_taget_object_id = OB_INVALID_ID;
     int64_t schema_version = OB_INVALID_VERSION;
+    bool is_no_logging = false;
 
-    if (OB_FAIL(ObDDLUtil::get_data_information(tenant_id, ddl_task_id, data_format_version, snapshot_version, unused_task_status, unused_taget_object_id, schema_version))) {
+    if (OB_FAIL(ObDDLUtil::get_data_information(tenant_id, ddl_task_id, data_format_version, snapshot_version, unused_task_status, unused_taget_object_id, schema_version, is_no_logging))) {
       LOG_WARN("get ddl cluster version failed", K(ret));
     } else if (OB_UNLIKELY(snapshot_version <= 0)) {
       ret = OB_NEED_RETRY;
@@ -920,12 +920,12 @@ int ObPxSubCoord::start_ddl()
     } else {
       ddl_ctrl_.direct_load_type_ = ObDDLUtil::use_idempotent_mode(data_format_version) ?
           ObDirectLoadType::DIRECT_LOAD_DDL_V2 : ObDirectLoadType::DIRECT_LOAD_DDL;
-
       ObTabletDirectLoadInsertParam direct_load_param;
       direct_load_param.is_replay_ = false;
       direct_load_param.common_param_.direct_load_type_ = ddl_ctrl_.direct_load_type_;
       direct_load_param.common_param_.data_format_version_ = data_format_version;
       direct_load_param.common_param_.read_snapshot_ = snapshot_version;
+      direct_load_param.common_param_.is_no_logging_ = is_no_logging;
       direct_load_param.runtime_only_param_.exec_ctx_ = exec_ctx;
       direct_load_param.runtime_only_param_.task_id_ = ddl_task_id;
       direct_load_param.runtime_only_param_.table_id_ = ddl_table_id;

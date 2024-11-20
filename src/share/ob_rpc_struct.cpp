@@ -9113,6 +9113,7 @@ int ObDDLBuildSingleReplicaRequestArg::assign(const ObDDLBuildSingleReplicaReque
     can_reuse_macro_block_ = other.can_reuse_macro_block_;
     split_sstable_type_ = other.split_sstable_type_;
     min_split_start_scn_ = other.min_split_start_scn_;
+    is_no_logging_ = other.is_no_logging_;
   }
   return ret;
 }

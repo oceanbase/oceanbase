@@ -760,7 +760,9 @@ int ObMacroBlockSliceStore::init(
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc memory", K(ret));
       } else if (OB_FAIL(static_cast<ObDDLRedoLogWriterCallback *>(ddl_redo_callback_)->init(
-          ls_id, table_key.tablet_id_, DDL_MB_DATA_TYPE, table_key, ddl_task_id, start_scn,
+          ls_id, table_key.tablet_id_,
+          tablet_direct_load_mgr->get_is_no_logging() ? DDL_MB_SS_EMPTY_DATA_TYPE : DDL_MB_DATA_TYPE,
+          table_key, ddl_task_id, start_scn,
           data_format_version,
           tablet_direct_load_mgr->get_task_cnt(),
           tablet_direct_load_mgr->get_cg_cnt(),
@@ -1861,7 +1863,9 @@ int ObCOSliceWriter::init(const ObStorageSchema *storage_schema, const int64_t c
         LOG_WARN("invalid cg idx", K(ret), K(cg_idx), K(tablet_direct_load_mgr->get_sqc_build_ctx().cg_index_builders_.count()));
       } else {
         ObSSTableIndexItem &cur_item = tablet_direct_load_mgr->get_sqc_build_ctx().cg_index_builders_.at(cg_idx);
-        if (OB_FAIL(flush_callback_.init(ls_id, table_key.tablet_id_, DDL_MB_DATA_TYPE, table_key, ddl_task_id,
+        if (OB_FAIL(flush_callback_.init(ls_id, table_key.tablet_id_,
+                tablet_direct_load_mgr->get_is_no_logging() ? DDL_MB_SS_EMPTY_DATA_TYPE : DDL_MB_DATA_TYPE,
+                table_key, ddl_task_id,
                 start_scn, data_format_version, tablet_direct_load_mgr->get_task_cnt(),
                 tablet_direct_load_mgr->get_cg_cnt(), tablet_direct_load_mgr->get_direct_load_type(), row_id_offset))) {
           LOG_WARN("fail to init redo log writer callback", KR(ret));

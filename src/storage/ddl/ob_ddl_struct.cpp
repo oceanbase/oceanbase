@@ -136,9 +136,14 @@ int ObDDLMacroBlock::set_data_macro_meta(const MacroBlockId &macro_id, const cha
                                          const bool force_set_macro_meta)
 {
   int ret = OB_SUCCESS;
-  if (!macro_id.is_valid() || nullptr == macro_block_buf || 0 >= size) {
+  if (!macro_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(macro_id), KP(macro_block_buf), K(size));
+    LOG_WARN("invalid arguments", K(ret), K(macro_id));
+  } else if (ObDDLMacroBlockType::DDL_MB_SS_EMPTY_DATA_TYPE == block_type) {
+    /* skip no logging type, not need to set meta*/
+  } else if (nullptr == macro_block_buf || 0 >= size) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(macro_block_buf), K(size));
   } else {
     /* shared nothing need macro_meta*/
     if (GCTX.is_shared_storage_mode() && !force_set_macro_meta) {
@@ -417,18 +422,24 @@ void ObDDLMacroBlockRedoInfo::reset()
 
 bool ObDDLMacroBlockRedoInfo::is_valid() const
 {
-  bool ret = table_key_.is_valid() && data_buffer_.ptr() != nullptr && block_type_ != ObDDLMacroBlockType::DDL_MB_INVALID_TYPE
+  bool ret = table_key_.is_valid() && block_type_ != ObDDLMacroBlockType::DDL_MB_INVALID_TYPE
               && start_scn_.is_valid_and_not_min() && data_format_version_ >= 0 && macro_block_id_.is_valid()
               // the type is default invalid, allow default value for compatibility
               && type_ >= ObDirectLoadType::DIRECT_LOAD_INVALID && type_ < ObDirectLoadType::DIRECT_LOAD_MAX;
   if (ret && is_incremental_direct_load(type_)) {
     ret = logic_id_.is_valid() && trans_id_.is_valid();
   }
+
+  if (ret && ObDDLMacroBlockType::DDL_MB_SS_EMPTY_DATA_TYPE != block_type_){
+    /* when in ss empty type, nullptr is allowded*/
+    ret = ret && !((data_buffer_.ptr() == nullptr || data_buffer_.length() == 0));
+  }
+
   if (ret && !GCTX.is_shared_storage_mode()) {  /* for shared nothing */
     ret = logic_id_.is_valid();
   #ifdef OB_BUILD_SHARED_STORAGE
   } else if (ret && GCTX.is_shared_storage_mode()) { /* for shared storage*/
-    ret = ret && (parallel_cnt_ > 0 &&  cg_cnt_ >0);
+    ret = ret && (parallel_cnt_ > 0 && cg_cnt_ >0);
   #endif
   }
   return ret;

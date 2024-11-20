@@ -46,7 +46,8 @@ public:
       lob_col_idxs_(),
       can_reuse_macro_blocks_(),
       parallel_datum_rowkey_list_(),
-      min_split_start_scn_()
+      min_split_start_scn_(),
+      is_no_logging_(false)
   {}
   ~ObDDLReplicaBuildExecutorParam () = default;
   bool is_valid() const {
@@ -73,12 +74,13 @@ public:
     }
     return is_valid;
   }
+
   TO_STRING_KV(K_(tenant_id), K_(dest_tenant_id), K_(ddl_type), K_(source_tablet_ids),
                K_(dest_tablet_ids), K_(source_table_ids), K_(dest_table_ids),
                K_(source_schema_versions), K_(dest_schema_versions), K_(snapshot_version),
                K_(task_id), K_(parallelism), K_(execution_id),
                K_(data_format_version), K_(consumer_group_id), K_(can_reuse_macro_blocks),
-               K_(parallel_datum_rowkey_list), K(min_split_start_scn_));
+               K_(parallel_datum_rowkey_list), K(min_split_start_scn_), K_(is_no_logging));
 public:
   uint64_t tenant_id_;
   uint64_t dest_tenant_id_;
@@ -100,6 +102,7 @@ public:
   ObSArray<bool> can_reuse_macro_blocks_;
   common::ObSEArray<common::ObSEArray<blocksstable::ObDatumRowkey, 8>, 8> parallel_datum_rowkey_list_;
   share::SCN min_split_start_scn_;
+  int64_t is_no_logging_;
 };
 
 enum class ObReplicaBuildStat
@@ -279,6 +282,7 @@ private:
   ObArray<ObSingleReplicaBuildCtx> replica_build_ctxs_; // NOTE hold lock before access
   share::SCN min_split_start_scn_;
   ObSpinLock lock_; // NOTE keep rpc send out of lock scope
+  bool is_no_logging_;
 };
 
 }  // end namespace rootserver

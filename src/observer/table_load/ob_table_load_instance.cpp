@@ -452,6 +452,7 @@ int ObTableLoadInstance::start_redef_table(
     ddl_param.snapshot_version_ = start_res.snapshot_version_;
     ddl_param.data_version_ = start_res.data_format_version_;
     ddl_param.cluster_version_ = GET_MIN_CLUSTER_VERSION();
+    ddl_param.is_no_logging_ = start_res.is_no_logging_;
     LOG_INFO("start redef table succeed", K(ddl_param));
   }
   return ret;

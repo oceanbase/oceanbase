@@ -201,7 +201,7 @@ int ObDDLMacroBlockClogCb::init(const share::ObLSID &ls_id,
                                                             redo_info.data_buffer_.ptr(),
                                                             redo_info.data_buffer_.length(),
                                                             redo_info.block_type_))) {
-      LOG_WARN("failed to set data macro meta", K(ret), KP(redo_info.data_buffer_.ptr()), K(redo_info.data_buffer_.length()));
+      LOG_WARN("failed to set data macro meta", K(ret), K(redo_info));
     } else {
       ddl_macro_block_.block_type_ = redo_info.block_type_;
       ddl_macro_block_.logic_id_ = redo_info.logic_id_;

@@ -118,6 +118,8 @@ int ObTableRedefinitionTask::init(const ObTableSchema* src_table_schema,
       LOG_WARN("init ddl task monitor info failed", K(ret));
     } else if (OB_FAIL(check_ddl_can_retry(ddl_need_retry_at_executor, dst_table_schema))) {
       LOG_WARN("check use heap table ddl plan failed", K(ret));
+    } else if (OB_FAIL(ObDDLUtil::get_no_logging_param(tenant_id_, is_no_logging_))) {
+      LOG_WARN("fail to get no logging param", K(ret), K(tenant_id_));
     } else {
       is_inited_ = true;
       ddl_tracing_.open();

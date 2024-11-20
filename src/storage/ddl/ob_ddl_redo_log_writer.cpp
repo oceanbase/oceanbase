@@ -782,7 +782,7 @@ int ObDDLRedoLogWriter::local_write_ddl_macro_redo(
     LOG_WARN("fail to deserialize ddl redo log", K(ret));
   /* use the ObString data_buffer_ in tmp_log.redo_info_, do not rely on the macro_block_buf in original log*/
   } else if (OB_FAIL(cb->init(ls_id, tmp_log.get_redo_info(), macro_block_id, tablet_handle))) {
-    LOG_WARN("init ddl clog callback failed", K(ret), K(tmp_log.get_redo_info()), K(macro_block_id));
+    LOG_WARN("init ddl clog callback failed", K(ret), K(redo_info), K(tmp_log.get_redo_info()), K(macro_block_id));
   } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, DDL_REDO_WRITER_WRITE_MACRO_LOG_FAILED))) {
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(task_id));
   } else if (OB_FAIL(log_handler->append(buffer,
@@ -1690,7 +1690,9 @@ int ObDDLRedoLogWriter::write_block_to_disk(const ObDDLMacroBlockRedoInfo &redo_
     bool is_object_exist = false;
     bool is_major_exist = false;
     macro_id = redo_info.macro_block_id_;
-    if (OB_FAIL(ObDDLUtil::is_major_exist(ls_id, redo_info.table_key_.tablet_id_, is_major_exist))) {
+    if (ObDDLMacroBlockType::DDL_MB_SS_EMPTY_DATA_TYPE == redo_info.block_type_) {
+      /* if empty block type, skip write to disk*/
+    } else if (OB_FAIL(ObDDLUtil::is_major_exist(ls_id, redo_info.table_key_.tablet_id_, is_major_exist))) {
       LOG_WARN("failed to check is major exist", K(ret));
     } else if (is_major_exist) {
       /* if major exit, skip*/
@@ -1859,7 +1861,6 @@ int ObDDLRedoLogWriterCallback::write(const ObStorageObjectHandle &macro_handle,
   if (OB_SUCC(ret)) {
     MacroBlockId macro_block_id = macro_handle.get_macro_id();
     redo_info.table_key_ = table_key_;
-    redo_info.data_buffer_.assign(buf, buf_len);
     redo_info.block_type_ = block_type_;
     redo_info.logic_id_ = logic_id;
     redo_info.start_scn_ = start_scn_;
@@ -1870,6 +1871,11 @@ int ObDDLRedoLogWriterCallback::write(const ObStorageObjectHandle &macro_handle,
     redo_info.parallel_cnt_ = 0; // TODO @zhuoran.zzr, place holder for shared storage
     redo_info.cg_cnt_ = 0;
     redo_info.with_cs_replica_ = with_cs_replica_;
+    if (ObDDLMacroBlockType::DDL_MB_SS_EMPTY_DATA_TYPE == block_type_) {
+      redo_info.data_buffer_.assign(nullptr, 0);
+    } else {
+      redo_info.data_buffer_.assign(buf, buf_len);
+    }
     if (GCTX.is_shared_storage_mode()) { /* shared storage */
       redo_info.macro_block_id_ = macro_handle.get_macro_id();
       redo_info.parallel_cnt_ = parallel_cnt_;
@@ -1882,11 +1888,18 @@ int ObDDLRedoLogWriterCallback::write(const ObStorageObjectHandle &macro_handle,
 
     if (need_delay_) {
       char *tmp_buf = nullptr;
-      if (OB_ISNULL(tmp_buf = (char*)(allocator_.alloc(buf_len)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc buf", K(ret));
-      } else if (FALSE_IT(MEMCPY(tmp_buf, buf, buf_len))) {
-      } else if (FALSE_IT(redo_info.data_buffer_.assign(tmp_buf, buf_len))) {
+      if (ObDDLMacroBlockType::DDL_MB_SS_EMPTY_DATA_TYPE == block_type_) {
+        redo_info.data_buffer_.assign(nullptr, 0);
+      } else {
+        if (OB_ISNULL(tmp_buf = (char*)(allocator_.alloc(buf_len)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc buf", K(ret));
+        } else if (FALSE_IT(MEMCPY(tmp_buf, buf, buf_len))) {
+        } else if (FALSE_IT(redo_info.data_buffer_.assign(tmp_buf, buf_len))) {
+        }
+      }
+
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(redo_info_array_.push_back(redo_info))) {
         LOG_WARN("failed to push back val", K(ret));
       } else if (redo_info_array_.count() > 10) {

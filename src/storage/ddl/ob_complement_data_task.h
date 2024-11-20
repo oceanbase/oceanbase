@@ -61,7 +61,7 @@ public:
     row_store_type_(common::ENCODING_ROW_STORE), orig_schema_version_(0), dest_schema_version_(0),
     snapshot_version_(0), task_id_(0), execution_id_(-1), tablet_task_id_(0), compat_mode_(lib::Worker::CompatMode::INVALID), data_format_version_(0),
     orig_schema_tablet_size_(0), user_parallelism_(0),
-    concurrent_cnt_(0), ranges_(),
+    concurrent_cnt_(0), ranges_(),is_no_logging_(false),
     allocator_("CompleteDataPar", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
   {}
   ~ObComplementDataParam() { destroy(); }
@@ -118,13 +118,14 @@ public:
     data_format_version_ = 0;
     user_parallelism_ = 0;
     concurrent_cnt_ = 0;
+    is_no_logging_ = false;
     ranges_.reset();
   }
   TO_STRING_KV(K_(is_inited), K_(orig_tenant_id), K_(dest_tenant_id), K_(orig_ls_id), K_(dest_ls_id),
       K_(orig_table_id), K_(dest_table_id), K_(orig_tablet_id), K_(dest_tablet_id), K_(orig_schema_version),
       K_(tablet_task_id), K_(dest_schema_version), K_(snapshot_version), K_(task_id),
       K_(execution_id), K_(compat_mode), K_(data_format_version), K_(orig_schema_tablet_size), K_(user_parallelism),
-      K_(concurrent_cnt), K_(ranges));
+      K_(concurrent_cnt), K_(ranges), K_(is_no_logging));
 public:
   bool is_inited_;
   uint64_t orig_tenant_id_;
@@ -149,6 +150,7 @@ public:
   /* complememt prepare task will initialize parallel task ranges */
   int64_t concurrent_cnt_; /* real complement tasks num */
   ObArray<blocksstable::ObDatumRange> ranges_;
+  bool is_no_logging_;
 private:
   common::ObArenaAllocator allocator_;
   static constexpr int64_t MAX_RPC_STREAM_WAIT_THREAD_COUNT = 100;

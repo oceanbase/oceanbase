@@ -152,6 +152,7 @@ int ObComplementDataParam::init(const ObDDLBuildSingleReplicaRequestArg &arg)
     tablet_task_id_ = arg.tablet_task_id_;
     data_format_version_ = arg.data_format_version_;
     user_parallelism_ = arg.parallelism_;
+    is_no_logging_ = arg.is_no_logging_;
     FLOG_INFO("succeed to init ObComplementDataParam", K(ret), KPC(this));
   }
   return ret;
@@ -450,6 +451,7 @@ int ObComplementDataContext::init(
     direct_load_param.common_param_.read_snapshot_ = param.snapshot_version_;
     direct_load_param.common_param_.ls_id_ = param.dest_ls_id_;
     direct_load_param.common_param_.tablet_id_ = param.dest_tablet_id_;
+    direct_load_param.common_param_.is_no_logging_ = param.is_no_logging_;
     direct_load_param.runtime_only_param_.exec_ctx_ = nullptr;
     direct_load_param.runtime_only_param_.task_id_ = param.task_id_;
     direct_load_param.runtime_only_param_.table_id_ = param.dest_table_id_;

@@ -1201,6 +1201,8 @@ int ObDDLKV::set_macro_block(
         }
       }
       if (OB_FAIL(ret)) {
+      } else if (DDL_MB_SS_EMPTY_DATA_TYPE == macro_block.block_type_) {
+        /* skip, emtpy type do not have data macro*/
       } else if (OB_FAIL(ddl_memtable->insert_block_meta_tree(macro_block.block_handle_, data_macro_meta, macro_block.end_row_id_))) {
         LOG_WARN("insert block meta tree faield", K(ret));
       } else {

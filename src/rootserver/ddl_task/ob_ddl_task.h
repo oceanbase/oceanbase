@@ -208,9 +208,10 @@ public:
                           const int64_t consumer_group_id,
                           const bool is_abort,
                           const int32_t sub_task_trace_id,
-                          const bool is_unique_index = false,
-                          const bool is_global_index = false,
-                          const bool is_pre_split = false);
+                          const bool is_unique_index,
+                          const bool is_global_index,
+                          const bool is_pre_split,
+                          const bool is_no_logging_);
   ~ObDDLTaskSerializeField() = default;
   void reset();
 public:
@@ -688,7 +689,7 @@ public:
       allocator_(lib::ObLabel("DdlTask")), compat_mode_(lib::Worker::CompatMode::INVALID), err_code_occurence_cnt_(0),
       longops_stat_(nullptr), gmt_create_(0), stat_info_(), delay_schedule_time_(0), next_schedule_ts_(0),
       execution_id_(-1), start_time_(0), data_format_version_(0), is_pre_split_(false), wait_trans_ctx_(), is_unique_index_(false),
-      is_global_index_(false), consensus_schema_version_(OB_INVALID_VERSION)
+      is_global_index_(false), consensus_schema_version_(OB_INVALID_VERSION), is_no_logging_(false)
   {}
   ObDDLTask():
     ObDDLTask(share::DDL_INVALID)
@@ -787,7 +788,7 @@ public:
   bool is_unique_index() { return is_unique_index_; }
   bool is_global_index() { return is_global_index_; }
   int64_t get_consensus_schema_version() { return consensus_schema_version_; }
-
+  bool get_is_no_logging() const { return is_no_logging_; }
   #ifdef ERRSIM
   int check_errsim_error();
   #endif
@@ -799,8 +800,7 @@ public:
       K_(task_version), K_(parallelism), K_(ddl_stmt_str), K_(compat_mode),
       K_(sys_task_id), K_(err_code_occurence_cnt), K_(stat_info),
       K_(next_schedule_ts), K_(delay_schedule_time), K(execution_id_), K(sql_exec_addrs_), K_(data_format_version), K(consumer_group_id_),
-      K_(dst_tenant_id), K_(dst_schema_version), K_(is_pre_split), K_(is_unique_index), K_(is_global_index), K_(consensus_schema_version));
-  static const int64_t MAX_ERR_TOLERANCE_CNT = 3L; // Max torlerance count for error code.
+      K_(dst_tenant_id), K_(dst_schema_version), K_(is_pre_split), K_(is_unique_index), K_(is_global_index), K_(consensus_schema_version), K(is_no_logging_));  static const int64_t MAX_ERR_TOLERANCE_CNT = 3L; // Max torlerance count for error code.
   static const int64_t DEFAULT_TASK_IDLE_TIME_US = 10L * 1000L; // 10ms
 protected:
   int gather_redefinition_stats(const uint64_t tenant_id,
@@ -884,6 +884,7 @@ protected:
   bool is_unique_index_;
   bool is_global_index_;
   int64_t consensus_schema_version_;
+  bool is_no_logging_;
 };
 
 enum ColChecksumStat

@@ -427,6 +427,8 @@ int ObIndexBuildTask::init(
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(init_ddl_task_monitor_info(index_schema->get_table_id()))) {
       LOG_WARN("init ddl task monitor info failed", K(ret));
+    } else if (OB_FAIL(ObDDLUtil::get_no_logging_param(tenant_id_, is_no_logging_))) {
+      LOG_WARN("fail to get no logging param", K(ret), K(tenant_id_));
     } else {
       dst_tenant_id_ = tenant_id_;
       dst_schema_version_ = schema_version_;
@@ -439,7 +441,6 @@ int ObIndexBuildTask::init(
     }
     ddl_tracing_.open();
   }
-
   return ret;
 }
 

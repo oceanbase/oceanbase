@@ -994,6 +994,7 @@ private:
   int check_freeze_trigger_percentage_(obrpc::ObAdminSetConfigItem &item);
   int check_write_throttle_trigger_percentage(obrpc::ObAdminSetConfigItem &item);
   int add_rs_event_for_alter_ls_replica_(const obrpc::ObAdminAlterLSReplicaArg &arg, const int ret_val);
+  int check_no_logging(obrpc::ObAdminSetConfigItem &item);
   int check_data_disk_write_limit_(obrpc::ObAdminSetConfigItem &item);
   int check_data_disk_usage_limit_(obrpc::ObAdminSetConfigItem &item);
   int check_vector_memory_limit_(obrpc::ObAdminSetConfigItem &item);

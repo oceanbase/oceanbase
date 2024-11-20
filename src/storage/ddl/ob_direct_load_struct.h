@@ -238,13 +238,14 @@ struct ObDirectInsertCommonParam final
 {
 public:
   ObDirectInsertCommonParam()
-    : ls_id_(), tablet_id_(), direct_load_type_(DIRECT_LOAD_INVALID), data_format_version_(0), read_snapshot_(0)
+    : ls_id_(), tablet_id_(), direct_load_type_(DIRECT_LOAD_INVALID), data_format_version_(0), read_snapshot_(0), replay_normal_in_cs_replica_(false), is_no_logging_(false)
+
   {}
   ~ObDirectInsertCommonParam() = default;
   bool is_valid() const { return ls_id_.is_valid() && tablet_id_.is_valid()
       && data_format_version_ >= 0 && read_snapshot_ >= 0 && DIRECT_LOAD_INVALID <= direct_load_type_ && direct_load_type_ <= DIRECT_LOAD_MAX;
   }
-  TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(direct_load_type), K_(data_format_version), K_(read_snapshot));
+  TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(direct_load_type), K_(data_format_version), K_(read_snapshot), K_(replay_normal_in_cs_replica), K_(is_no_logging));
 public:
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
@@ -253,6 +254,8 @@ public:
   // read_snapshot_ is used to scan the source data.
   // For full direct load task, it is also the commit version of the target macro block.
   int64_t read_snapshot_;
+  bool replay_normal_in_cs_replica_; // when ddl and add cs replica are concurrent, leader may write normal clog
+  bool is_no_logging_;
 };
 
 // only used in runtime execution

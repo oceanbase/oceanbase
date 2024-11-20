@@ -415,9 +415,10 @@ public:
    */
   bool is_originally_column_store_data_direct_load() const { return is_data_direct_load(direct_load_type_) && !need_process_cs_replica_; }
 
+  bool get_is_no_logging() {return is_no_logging_;}
   VIRTUAL_TO_STRING_KV(K_(is_inited), K_(is_schema_item_ready), K_(ls_id), K_(tablet_id), K_(table_key), K_(data_format_version), K_(ref_cnt),
                K_(direct_load_type), K_(need_process_cs_replica), K_(need_fill_column_group),K_(sqc_build_ctx), KPC(lob_mgr_handle_.get_obj()), K_(schema_item), K_(column_items), K_(lob_column_idxs),
-               K_(task_cnt), K_(cg_cnt), K_(micro_index_clustered), K_(tablet_transfer_seq));
+               K_(task_cnt), K_(cg_cnt), K_(micro_index_clustered), K_(tablet_transfer_seq), K_(is_no_logging));
 
 protected:
   int prepare_schema_item_on_demand(const uint64_t table_id,
@@ -474,6 +475,7 @@ protected:
   int64_t cg_cnt_;
   bool micro_index_clustered_;
   int64_t tablet_transfer_seq_;
+  bool is_no_logging_;
 };
 
 class ObTabletFullDirectLoadMgr final : public ObTabletDirectLoadMgr

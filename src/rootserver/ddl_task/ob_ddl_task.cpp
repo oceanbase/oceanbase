@@ -176,7 +176,8 @@ ObDDLTaskSerializeField::ObDDLTaskSerializeField(const int64_t task_version,
                                                  const int32_t sub_task_trace_id,
                                                  const bool is_unique_index,
                                                  const bool is_global_index,
-                                                 const bool is_pre_split)
+                                                 const bool is_pre_split,
+                                                 const bool is_no_logging)
 {
   task_version_ = task_version;
   parallelism_ = parallelism;
@@ -184,10 +185,10 @@ ObDDLTaskSerializeField::ObDDLTaskSerializeField(const int64_t task_version,
   consumer_group_id_ = consumer_group_id;
   is_abort_ = is_abort;
   sub_task_trace_id_ = sub_task_trace_id;
+  is_no_logging_ = is_no_logging;
   is_unique_index_ = is_unique_index;
   is_global_index_ = is_global_index;
   is_pre_split_ = is_pre_split;
-  is_no_logging_ = false;
 }
 
 void ObDDLTaskSerializeField::reset()
@@ -1047,7 +1048,8 @@ int ObDDLTask::serialize_params_to_message(char *buf, const int64_t buf_size, in
 {
   int ret = OB_SUCCESS;
   ObDDLTaskSerializeField serialize_field(task_version_, parallelism_, data_format_version_, consumer_group_id_, is_abort_,
-                                          sub_task_trace_id_, is_unique_index_, is_global_index_, is_pre_split_);
+                                          sub_task_trace_id_, is_unique_index_, is_global_index_, is_pre_split_, is_no_logging_);
+
   if (OB_UNLIKELY(nullptr == buf || buf_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(buf), K(buf_size));
@@ -1078,6 +1080,7 @@ int ObDDLTask::deserialize_params_from_message(const uint64_t tenant_id, const c
     is_unique_index_ = serialize_field.is_unique_index_;
     is_global_index_ = serialize_field.is_global_index_;
     is_pre_split_ = serialize_field.is_pre_split_;
+    is_no_logging_ = serialize_field.is_no_logging_;
   }
   return ret;
 }
@@ -1085,7 +1088,7 @@ int ObDDLTask::deserialize_params_from_message(const uint64_t tenant_id, const c
 int64_t ObDDLTask::get_serialize_param_size() const
 {
   ObDDLTaskSerializeField serialize_field(task_version_, parallelism_, data_format_version_, consumer_group_id_, is_abort_,
-                                          sub_task_trace_id_, is_unique_index_, is_global_index_, is_pre_split_);
+                                          sub_task_trace_id_, is_unique_index_, is_global_index_, is_pre_split_, is_no_logging_);
   return serialize_field.get_serialize_size();
 }
 
