@@ -152,6 +152,9 @@ int check_sequence_set_violation(const concurrent_control::ObWriteFlag write_fla
         TRANS_LOG(ERROR, "multiple modification on one row found", K(reader_seq_no),
                   K(writer_tx_id), K(writer_dml_flag), K(writer_seq_no),
                   K(locker_tx_id), K(locker_dml_flag), K(locker_seq_no));
+#ifdef ENABLE_DEBUG_LOG
+        ob_abort();
+#endif
       }
     }
 
