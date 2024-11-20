@@ -7490,12 +7490,21 @@ int JoinPath::compute_join_path_parallel_and_server_info(ObOptimizerContext *opt
       if (OB_FAIL(server_list.push_back(local_server_addr))) {
         LOG_WARN("failed to assign server list", K(ret));
       }
-    } else if (DistAlgo::DIST_NONE_ALL == join_dist_algo ||
-               DistAlgo::DIST_RANDOM_ALL == join_dist_algo) {
+    } else if (DistAlgo::DIST_NONE_ALL == join_dist_algo) {
       parallel = left_path->parallel_;
       server_cnt = left_path->server_cnt_;
       if (OB_FAIL(server_list.assign(left_path->server_list_))) {
         LOG_WARN("failed to assign server list", K(ret));
+      }
+    } else if (DistAlgo::DIST_RANDOM_ALL == join_dist_algo) {
+      common::ObAddr all_server_list;
+      // like hash_hash, a special ALL server list indicating we would use all servers of this sql relate
+      all_server_list.set_max();
+      if (OB_FAIL(server_list.push_back(all_server_list))) {
+        LOG_WARN("failed to assign all server list", K(ret));
+      } else {
+        parallel = left_path->parallel_;
+        server_cnt = left_path->server_cnt_;
       }
     } else if (DistAlgo::DIST_ALL_NONE == join_dist_algo) {
       parallel = right_path->parallel_;
