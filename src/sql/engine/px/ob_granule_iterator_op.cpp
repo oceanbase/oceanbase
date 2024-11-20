@@ -24,6 +24,7 @@
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_part_mgr_util.h"
+#include "sql/engine/px/ob_px_sqc_handler.h"
 
 
 namespace oceanbase
@@ -1488,7 +1489,9 @@ int ObGranuleIteratorOp::do_parallel_runtime_filter_extract_query_range(
           LOG_WARN("failed to wait wait_runtime_filter_ready");
         }
         if (OB_SUCC(ret) && OB_NOT_NULL(rf_msg) && rf_msg->check_ready()) {
-          if (OB_FAIL(rf_msg->try_extract_query_range(has_extrct, ranges))) {
+          if (OB_FAIL(rf_msg->try_extract_query_range(
+                  has_extrct, ranges, true /*need_deep_copy*/,
+                  &ctx_.get_sqc_handler()->get_exec_ctx().get_allocator()))) {
             LOG_WARN("failed to try_extract_query_range", K(ranges));
           }
         }
