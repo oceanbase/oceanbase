@@ -35,7 +35,7 @@ private:
 class HSet : public HashCommand
 {
 public:
-  explicit HSet(ObIAllocator &allocator)
+  explicit HSet(ObIAllocator &allocator) : allocator_(allocator)
   {
     attr_.arity_ = -4;
     attr_.need_snapshot_ = false;
@@ -51,6 +51,7 @@ public:
 
 protected:
   FieldValMap field_val_map_;
+  ObIAllocator &allocator_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(HSet);

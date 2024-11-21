@@ -779,14 +779,15 @@ int ObTableLSExecuteP::init_batch_ctx(table::ObTableBatchCtx &batch_ctx,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObTableBatchService::prepare_results(ops, cb_->get_entity_factory(), tablet_result))) {
     LOG_WARN("fail to prepare results", K(ret), K(ops));
-  } else if (OB_FAIL(batch_ctx.tablet_ids_.push_back(tablet_op.get_tablet_id()))) {
-    LOG_WARN("fail to push back tablet id", K(ret));
   } else if (OB_FAIL(init_tb_ctx(batch_ctx.tb_ctx_,
                                  tablet_op,
                                  ops.at(0),
                                  shcema_cache_guard,
                                  simple_table_schema))) {
     LOG_WARN("fail to init table context", K(ret));
+  } else if (OB_FAIL(batch_ctx.tablet_ids_.push_back(batch_ctx.tb_ctx_.get_tablet_id()))) {
+    // cause tb_ctx_.tablet_id_ is the corrected version of tablet_op.tablet_id_
+    LOG_WARN("fail to push back tablet id", K(ret));
   } else {
     ObTableLSOp &ls_op = arg_.ls_op_;
     batch_ctx.stat_event_type_ = &stat_event_type_;

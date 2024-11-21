@@ -406,7 +406,9 @@ int ObTableBatchService::multi_execute_internal(ObTableBatchCtx &ctx,
 {
   int ret = OB_SUCCESS;
   ObTableCtx &tb_ctx = ctx.tb_ctx_;
-
+  if (ctx.tablet_ids_.count() == 1) {
+    tb_ctx.set_tablet_id(ctx.tablet_ids_.at(0));
+  }
   bool use_multi_tablets = ctx.tablet_ids_.count() > 1;
   if (use_multi_tablets && OB_UNLIKELY(ctx.tablet_ids_.count() != ops.count())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1152,7 +1154,7 @@ int ObTableBatchService::batch_execute(ObTableBatchCtx &ctx,
                                        ObIArray<ObTableOperationResult> &results)
 {
   int ret = OB_SUCCESS;
-  ObTabletID tablet_id = ctx.tablet_ids_.at(0);
+  ObTabletID tablet_id = ctx.tablet_ids_.empty() ? ctx.tb_ctx_.get_tablet_id() : ctx.tablet_ids_.at(0);
   bool is_multi_tablets_batch = ctx.tablet_ids_.count() > 1;
   if (is_multi_tablets_batch) {
     if (OB_UNLIKELY(ctx.tablet_ids_.count() != ops.count())) {
