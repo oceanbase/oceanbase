@@ -2241,6 +2241,14 @@ ObTableQueryIterableResult::ObTableQueryIterableResult()
   }
 
 
+void ObTableQueryIterableResult::reset_except_property()
+{
+  row_count_ = 0;
+  allocator_.reset();
+  current_ = 0;
+  rows_.reset();
+}
+
 int ObTableQueryIterableResult::add_all_row(ObTableQueryIterableResult &other) {
   int ret = OB_SUCCESS;
   ObNewRow row;

@@ -1256,7 +1256,9 @@ public:
   int64_t get_row_count() const { return row_count_; }
   int add_row(const common::ObIArray<ObObj> &row);
   bool reach_batch_size_or_result_size(const int32_t batch_count, const int64_t max_result_size);
+  void save_row_count_only(const int row_count) { reset_except_property(); row_count_ += row_count; }
   int get_row(ObNewRow &row);
+  void reset_except_property();
 
 private:
   int append_family(const ObNewRow &row, ObString family_name);
