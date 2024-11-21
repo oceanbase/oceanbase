@@ -75,7 +75,7 @@ public:
   {
     reset_parameter();
     payload_buf_ = NULL;
-    tenant_id_ = OB_INVALID_TENANT_ID;
+    tenant_id_ = OB_SERVER_TENANT_ID;
   }
 
   ~ObMysqlPktContext()
