@@ -26,6 +26,8 @@ namespace sql
 
 class ObDASDocIdMergeCtDef;
 class ObDASDocIdMergeRtDef;
+class ObDASScanCtDef;
+class ObDASScanRtDef;
 
 class ObDASDocIdMergeIterParam final : public ObDASIterParam
 {

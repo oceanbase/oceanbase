@@ -77,6 +77,8 @@ private:
   int generate_geo_access_ctdef(const ObLogTableScan &op, const ObTableSchema &index_schema, ObArray<ObRawExpr*> &access_exprs);
   int generate_text_ir_ctdef(const ObLogTableScan &op, ObTableScanCtDef &tsc_ctdef, ObDASBaseCtDef *&root_ctdef);
   int generate_vec_ir_ctdef(const ObLogTableScan &op, ObTableScanCtDef &tsc_ctdef, ObDASBaseCtDef *&root_ctdef);
+  int generate_multivalue_ir_ctdef(const ObLogTableScan &op, ObTableScanCtDef &tsc_ctdef, ObDASBaseCtDef *&root_ctdef);
+  int generate_gis_ir_ctdef(const ObLogTableScan &op, ObTableScanCtDef &tsc_ctdef, ObDASBaseCtDef *&root_ctdef);
   int extract_text_ir_access_columns(const ObLogTableScan &op,
                                      const ObDASScanCtDef &scan_ctdef,
                                      ObIArray<ObRawExpr*> &access_exprs);
@@ -151,6 +153,9 @@ private:
                               const bool fetch_with_ties,
                               ObRawExpr *topk_limit_expr,
                               ObRawExpr *topk_offset_expr,
+                              ObDASBaseCtDef *child_ctdef,
+                              ObDASSortCtDef *&sort_ctdef);
+  int generate_das_sort_ctdef(const ObIArray<ObExpr *> &sort_keys,
                               ObDASBaseCtDef *child_ctdef,
                               ObDASSortCtDef *&sort_ctdef);
   int mapping_oracle_real_agent_virtual_exprs(const ObLogTableScan &op,

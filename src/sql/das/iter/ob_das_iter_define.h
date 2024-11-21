@@ -71,6 +71,16 @@ enum ObDASIterTreeType : uint32_t
   ITER_TREE_MAX
 };
 
+#define SUPPORTED_DAS_ITER_TREE(_type)                    \
+({                                                       \
+    ITER_TREE_PARTITION_SCAN == (_type) ||               \
+    ITER_TREE_LOCAL_LOOKUP == (_type)   ||               \
+    ITER_TREE_TEXT_RETRIEVAL == (_type) ||               \
+    ITER_TREE_INDEX_MERGE == (_type)    ||               \
+    ITER_TREE_MVI_LOOKUP == (_type)     ||               \
+    ITER_TREE_GIS_LOOKUP == (_type);                     \
+})
+
 struct ObDASRelatedTabletID
 {
 public:

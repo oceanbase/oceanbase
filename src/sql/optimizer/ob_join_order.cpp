@@ -3310,20 +3310,7 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
     // for use index hint, get index ids from hint.
     if (OB_FAIL(valid_index_ids.assign(log_table_hint->index_list_))) {
       LOG_WARN("failed to assign index ids", K(ret));
-    // TODO, yunyi,zixia need multivalue das iter refactor
-    } else if (OB_FAIL(temp_prune_candidate_multivalue_index(schema_guard,
-                                                             ref_table_id,
-                                                             nullptr,
-                                                             index_count,
-                                                             valid_index_ids))) {
-      LOG_WARN("failed to prune multivalue index", K(ref_table_id), K(ret));
-    } else if (valid_index_ids.count() < log_table_hint->index_list_.count() && valid_index_ids.empty()) {
-      LOG_WARN("hint index may containt multivalue index, which is pruned, using other access path",
-        K(ref_table_id));
     }
-  }
-
-  if (OB_FAIL(ret) || (valid_index_ids.count() > 0)) {
   } else if (OB_FAIL(schema_guard->get_can_read_index_array(ref_table_id,
                                                             tids,
                                                             index_count,
@@ -3342,12 +3329,6 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
                                                             log_table_hint->index_list_,
                                                             valid_index_ids))) {
     LOG_WARN("failed to get hint index ids", K(ret));
-  } else if (OB_FAIL(temp_prune_candidate_multivalue_index(schema_guard,
-                                                           ref_table_id,
-                                                           tids,
-                                                           index_count,
-                                                           valid_index_ids))) {
-    LOG_WARN("failed to prune multivalue index", K(ref_table_id), K(ret));
   } else {
     if (0 == valid_index_ids.count()) {
       for (int64_t i = -1; OB_SUCC(ret) && i < index_count; ++i) {
@@ -16734,15 +16715,6 @@ int ObJoinOrder::try_get_json_generated_col_index_expr(ObRawExpr *depend_expr,
       }
     }
   }
-
-  const ObDMLStmt *stmt = get_plan()->get_stmt();
-  if (OB_NOT_NULL(stmt) && stmt->get_stmt_type() != stmt::StmtType::T_SELECT) {
-    // TODO weiyouchao.wyc
-    // as domain query not support das iter refractor, in certain case there's happened coredump bug
-    // temperal ban multivalue access-path when not select
-    new_qual = nullptr;
-    LOG_INFO("not surppot delete update replace with domain predict", K(stmt->get_stmt_type()));
-  }
   return ret;
 }
 
@@ -17535,56 +17507,5 @@ int ObJoinOrder::get_matched_inv_index_tid(ObMatchFunRawExpr *match_expr,
       }
     }
   }
-  return ret;
-}
-
-int ObJoinOrder::temp_prune_candidate_multivalue_index(ObSqlSchemaGuard *schema_guard,
-                                                       const uint64_t table_id,
-                                                       uint64_t *index_tid_array,
-                                                       int64_t &size,
-                                                       ObIArray<uint64_t> &valid_index_ids)
-{
-  // TODO: yunyi, zixia wait multivalue das iter refractor
-  int ret = OB_SUCCESS;
-  const uint64_t tenant_id = MTL_ID();
-  const ObTableSchema *schema = NULL;
-  const ObDMLStmt *stmt = get_plan()->get_stmt();
-  bool is_link = ObSqlSchemaGuard::is_link_table(stmt, table_id);
-  ObArray<uint64_t> index_tids;
-  ObArray<uint64_t> tmp_valid_index_ids;
-
-  if (!get_plan()->get_stmt()->is_select_stmt()
-      && (OB_NOT_NULL(index_tid_array) > 0 || valid_index_ids.count() > 0)) {
-
-    for (int64_t i = 0; OB_SUCC(ret) && OB_NOT_NULL(index_tid_array) && i < size; ++i) {
-      schema_guard->get_table_schema(index_tid_array[i], schema, is_link);
-      if (OB_ISNULL(schema)) {
-      } else if (schema->is_multivalue_index_aux()) {
-      } else if (OB_FAIL(index_tids.push_back(index_tid_array[i]))) {
-        LOG_WARN("fail to push back index tid array", K(ret), K(index_tids.count()));
-      }
-    }
-
-    for (int64_t i = 0; OB_SUCC(ret) && i < valid_index_ids.count(); ++i) {
-      schema_guard->get_table_schema(valid_index_ids.at(i), schema, is_link);
-      if (OB_ISNULL(schema)) {
-      } else if (schema->is_multivalue_index_aux()) {
-      } else if (OB_FAIL(tmp_valid_index_ids.push_back(valid_index_ids.at(i)))) {
-        LOG_WARN("fail to push back index tid array", K(ret), K(index_tids.count()));
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(valid_index_ids.assign(tmp_valid_index_ids))) {
-      LOG_WARN("fail to assign index tids", K(ret));
-    } else if (OB_NOT_NULL(index_tid_array)) {
-      int64_t i = 0;
-      for (; OB_FAIL(ret) && i < index_tids.count(); ++i) {
-        index_tid_array[i] = index_tids.at(i);
-      }
-      size = index_tids.count();
-    }
-  }
-
   return ret;
 }

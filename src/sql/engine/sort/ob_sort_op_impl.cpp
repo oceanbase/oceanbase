@@ -3354,6 +3354,11 @@ int ObPrefixSortImpl::get_next_batch(const common::ObIArray<ObExpr*> &exprs,
   return ret;
 }
 
+void ObPrefixSortImpl::reuse()
+{
+  ObSortOpImpl::reuse();
+}
+
 /*********************************** end ObPrefixSortImpl *****************************/
 
 /*********************************** start ObUniqueSortImpl *****************************/

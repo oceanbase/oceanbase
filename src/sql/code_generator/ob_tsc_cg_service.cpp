@@ -178,16 +178,17 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
   }
 
   if (OB_SUCC(ret) && op.is_multivalue_index_scan()) {
-    ObDASIRAuxLookupCtDef *aux_lookup_ctdef = nullptr;
-    ObExpr *doc_id_col_expr = nullptr;
-    if (scan_ctdef.result_output_.count() == 0) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to generate multivalue lookup ctdef, scan_ctdef.result_output_.count() is 0", K(ret));
-    } else if (FALSE_IT(doc_id_col_expr = scan_ctdef.result_output_.at(scan_ctdef.result_output_.count() - 1))) {
-    } else if (OB_FAIL(generate_doc_id_lookup_ctdef(op, tsc_ctdef, root_ctdef, doc_id_col_expr, aux_lookup_ctdef))) {
-      LOG_WARN("failed to generate doc id lookup ctdef", K(ret));
+    if (OB_FAIL(generate_multivalue_ir_ctdef(op, tsc_ctdef, root_ctdef))) {
+      LOG_WARN("failed to generate multivalue ir ctdef", K(ret));
     } else {
-      root_ctdef = aux_lookup_ctdef;
+      need_attach = true;
+    }
+  }
+
+  if (OB_SUCC(ret) && op.is_spatial_index_scan()) {
+    if (OB_FAIL(generate_gis_ir_ctdef(op, tsc_ctdef, root_ctdef))) {
+      LOG_WARN("failed to generate spatial ir ctdef", K(ret));
+    } else {
       need_attach = true;
     }
   }
@@ -1307,6 +1308,12 @@ int ObTscCgService::extract_das_output_column_ids(const ObLogTableScan &op,
         LOG_WARN("fail to get doc id column.", K(ret));
       } else if (OB_FAIL(output_cids.push_back(doc_id_col_id))) {
         LOG_WARN("store colum id failed", K(ret));
+      } else if (!op.get_index_back()){
+        if (OB_FAIL(extract_tsc_access_columns(op, das_output_cols))) {
+          LOG_WARN("extract tsc access columns failed", K(ret));
+        } else if (OB_FAIL(extract_das_column_ids(das_output_cols, output_cids))) {
+          LOG_WARN("extract column ids failed", K(ret));
+        }
       }
     }
 
@@ -1629,6 +1636,90 @@ int ObTscCgService::generate_vec_ir_ctdef(const ObLogTableScan &op,
       root_ctdef = aux_lookup_ctdef;
     }
   }
+  return ret;
+}
+
+int ObTscCgService::generate_multivalue_ir_ctdef(const ObLogTableScan &op,
+                                                 ObTableScanCtDef &tsc_ctdef,
+                                                 ObDASBaseCtDef *&root_ctdef)
+{
+  int ret = OB_SUCCESS;
+
+  int64_t rowkey_cnt = 0;
+  const ObTableSchema *table_schema = nullptr;
+  if (OB_FAIL(cg_.opt_ctx_->get_schema_guard()->get_table_schema(MTL_ID(), op.get_real_ref_table_id(), table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(op.get_ref_table_id()));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr to table schema", K(ret));
+  } else {
+    rowkey_cnt = table_schema->get_rowkey_column_num();
+  }
+
+  if (OB_SUCC(ret)) {
+    ObDASScanCtDef *scan_ctdef = &tsc_ctdef.scan_ctdef_;
+    ObDASIRAuxLookupCtDef *aux_lookup_ctdef = nullptr;
+    ObDASSortCtDef *sort_ctdef = nullptr;
+    ObExpr *doc_id_col_expr = nullptr;
+
+    if (scan_ctdef->result_output_.count() < rowkey_cnt + 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to generate multivalue lookup ctdef, scan_ctdef.result_output_.count() is unexpected", K(ret));
+    } else if (FALSE_IT(doc_id_col_expr = scan_ctdef->result_output_.at(rowkey_cnt))) {
+    } else if (OB_FAIL(generate_doc_id_lookup_ctdef(op, tsc_ctdef, root_ctdef, doc_id_col_expr, aux_lookup_ctdef))) {
+      LOG_WARN("failed to generate doc id lookup ctdef", K(ret));
+    } else if (OB_FAIL(scan_ctdef->rowkey_exprs_.init(rowkey_cnt))) {
+      LOG_WARN("failed to init rowkey exprs", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_cnt; ++i) {
+        ObExpr *expr = scan_ctdef->result_output_.at(i);
+        if (OB_FAIL(scan_ctdef->rowkey_exprs_.push_back(expr))) {
+          LOG_WARN("append rowkey exprs failed", K(ret));
+        }
+      }
+
+      if (OB_SUCC(ret) && OB_FAIL(generate_das_sort_ctdef(scan_ctdef->rowkey_exprs_, aux_lookup_ctdef, sort_ctdef))) {
+        LOG_WARN("generate sort ctdef failed", K(ret));
+      } else {
+        root_ctdef = sort_ctdef;
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObTscCgService::generate_gis_ir_ctdef(const ObLogTableScan &op,
+                                          ObTableScanCtDef &tsc_ctdef,
+                                          ObDASBaseCtDef *&root_ctdef)
+{
+  int ret = OB_SUCCESS;
+
+  ObDASScanCtDef *scan_ctdef = &tsc_ctdef.scan_ctdef_;
+  ObSEArray<ObExpr *, 2> rowkey_exprs;
+  if (scan_ctdef->result_output_.count() == 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to generate gis ir ctdef, scan_ctdef.result_output_.count() is 0", K(ret));
+  } else {
+    int64_t rowkey_cnt = scan_ctdef->result_output_.count() - 1;
+    if (scan_ctdef->trans_info_expr_ != nullptr) {
+      rowkey_cnt = rowkey_cnt - 1;
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_cnt; ++i) {
+      ObExpr *expr = scan_ctdef->result_output_.at(i);
+      if (OB_FAIL(rowkey_exprs.push_back(expr))) {
+        LOG_WARN("append rowkey exprs failed", K(ret));
+      }
+    }
+  }
+
+  ObDASSortCtDef *sort_ctdef = nullptr;
+  if (OB_SUCC(ret) && OB_FAIL(generate_das_sort_ctdef(rowkey_exprs, scan_ctdef, sort_ctdef))) {
+    LOG_WARN("generate sort ctdef failed", K(ret));
+  } else {
+    root_ctdef = sort_ctdef;
+  }
+
   return ret;
 }
 
@@ -2418,7 +2509,14 @@ int ObTscCgService::generate_doc_id_lookup_ctdef(const ObLogTableScan &op,
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(aux_lookup_ctdef->result_output_.assign(result_outputs))) {
+      if (op.is_multivalue_index_scan()) {
+        ObDASScanCtDef *index_ctdef = static_cast<ObDASScanCtDef *>(ir_scan_ctdef);
+        if (OB_FAIL(append_array_no_dup(result_outputs, index_ctdef->result_output_))) {
+          LOG_WARN("append result output failed", K(ret));
+        }
+      }
+
+      if (OB_SUCC(ret) && OB_FAIL(aux_lookup_ctdef->result_output_.assign(result_outputs))) {
         LOG_WARN("assign result output failed", K(ret));
       }
     }
@@ -3059,8 +3157,82 @@ int ObTscCgService::generate_das_sort_ctdef(
     LOG_WARN("failed to append child result output", K(ret));
   } else if (OB_FAIL(sort_ctdef->result_output_.assign(result_output))) {
     LOG_WARN("failed to assign result output", K(ret));
+  } else {
+    LOG_TRACE("generate sort ctdef finished", K(sort_keys), K(sort_ctdef->sort_exprs_), K(result_output), K(ret));
   }
-  LOG_TRACE("generate sort ctdef finished", K(sort_keys), K(sort_ctdef->sort_exprs_), K(result_output), K(ret));
+  return ret;
+}
+
+int ObTscCgService::generate_das_sort_ctdef(
+    const ObIArray<ObExpr *> &sort_keys,
+    ObDASBaseCtDef *child_ctdef,
+    ObDASSortCtDef *&sort_ctdef)
+{
+  int ret = OB_SUCCESS;
+  const int64_t sort_cnt = sort_keys.count();
+  ObIAllocator &ctdef_alloc = cg_.phy_plan_->get_allocator();
+  if (OB_UNLIKELY(0 == sort_cnt) || OB_ISNULL(child_ctdef)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid sort arg", K(ret), K(sort_cnt), KPC(child_ctdef));
+  } else if (OB_FAIL(ObDASTaskFactory::alloc_das_ctdef(DAS_OP_SORT, ctdef_alloc, sort_ctdef))) {
+    LOG_WARN("alloc sort ctdef failed ", K(ret));
+  } else if (OB_FAIL(sort_ctdef->sort_collations_.init(sort_cnt))) {
+    LOG_WARN("failed to init sort collations", K(ret));
+  } else if (OB_FAIL(sort_ctdef->sort_cmp_funcs_.init(sort_cnt))) {
+    LOG_WARN("failed to init sort cmp funcs", K(ret));
+  } else if (OB_FAIL(sort_ctdef->sort_exprs_.init(sort_cnt))) {
+    LOG_WARN("failed to init sort exprs", K(ret));
+  } else if (OB_ISNULL(sort_ctdef->children_ = OB_NEW_ARRAY(ObDASBaseCtDef*, &ctdef_alloc, 1))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate ir scan ctdef children failed", K(ret));
+  } else {
+    sort_ctdef->children_cnt_ = 1;
+    sort_ctdef->children_[0] = child_ctdef;
+    sort_ctdef->fetch_with_ties_ = false;
+  }
+
+  ObSEArray<ObExpr *, 4> result_output;
+  int64_t field_idx = 0;
+  for (int64_t i = 0; i < sort_keys.count() && OB_SUCC(ret); ++i) {
+    ObExpr *expr = sort_keys.at(i);
+    ObSortFieldCollation field_collation(field_idx, expr->datum_meta_.cs_type_, true, NULL_FIRST);
+    ObSortCmpFunc cmp_func;
+    cmp_func.cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(
+        expr->datum_meta_.type_,
+        expr->datum_meta_.type_,
+        field_collation.null_pos_,
+        field_collation.cs_type_,
+        expr->datum_meta_.scale_,
+        lib::is_oracle_mode(),
+        expr->obj_meta_.has_lob_header(),
+        expr->datum_meta_.precision_,
+        expr->datum_meta_.precision_);
+    if (OB_ISNULL(cmp_func.cmp_func_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cmp_func is null, check datatype is valid", K(ret));
+    } else if (OB_FAIL(sort_ctdef->sort_cmp_funcs_.push_back(cmp_func))) {
+      LOG_WARN("failed to append sort function", K(ret));
+    } else if (OB_FAIL(sort_ctdef->sort_collations_.push_back(field_collation))) {
+      LOG_WARN("failed to push back field collation", K(ret));
+    } else if (OB_FAIL(sort_ctdef->sort_exprs_.push_back(expr))) {
+      LOG_WARN("failed to push back expr", K(ret));
+    } else {
+      field_idx++;
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(append_array_no_dup(result_output, sort_ctdef->sort_exprs_))) {
+    LOG_WARN("failed to append sort exprs to result output", K(ret));
+  } else if (ObDASTaskFactory::is_attached(child_ctdef->op_type_)
+      && OB_FAIL(append_array_no_dup(result_output, static_cast<ObDASAttachCtDef *>(child_ctdef)->result_output_))) {
+    LOG_WARN("failed to append child result output", K(ret));
+  } else if (child_ctdef->op_type_ == DAS_OP_TABLE_SCAN
+      && OB_FAIL(append_array_no_dup(result_output, static_cast<ObDASScanCtDef *>(child_ctdef)->result_output_))) {
+    LOG_WARN("failed to append child result output", K(ret));
+  } else if (OB_FAIL(sort_ctdef->result_output_.assign(result_output))) {
+    LOG_WARN("failed to assign result output", K(ret));
+  }
   return ret;
 }
 

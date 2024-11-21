@@ -43,8 +43,8 @@ class ObDASScanRtDef;
 class ObDASLocalLookupIter : public ObDASLookupIter
 {
 public:
-  ObDASLocalLookupIter()
-    : ObDASLookupIter(ObDASIterType::DAS_ITER_LOCAL_LOOKUP),
+  ObDASLocalLookupIter(const ObDASIterType type = ObDASIterType::DAS_ITER_LOCAL_LOOKUP)
+    : ObDASLookupIter(type),
       trans_info_array_(),
       lookup_param_(),
       lookup_tablet_id_(),

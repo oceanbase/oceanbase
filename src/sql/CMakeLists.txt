@@ -61,7 +61,6 @@ ob_set_subtarget(ob_sql das
   das/ob_das_ir_define.cpp
   das/ob_das_vec_define.cpp
   das/ob_das_task_result.cpp
-  das/ob_das_spatial_index_lookup_op.cpp
   das/ob_das_retry_ctrl.cpp
   das/ob_das_simple_op.cpp
   das/ob_das_domain_utils.cpp
@@ -82,6 +81,8 @@ ob_set_subtarget(ob_sql das
   das/iter/ob_das_doc_id_merge_iter.cpp
   das/iter/ob_das_vid_merge_iter.cpp
   das/iter/ob_das_index_merge_iter.cpp
+  das/iter/ob_das_mvi_lookup_iter.cpp
+  das/iter/ob_das_spatial_scan_iter.cpp
 )
 
 ob_set_subtarget(ob_sql dtl

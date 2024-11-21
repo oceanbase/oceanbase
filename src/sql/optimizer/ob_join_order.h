@@ -1486,11 +1486,7 @@ struct NullAwareAntiJoinInfo {
     int get_matched_inv_index_tid(ObMatchFunRawExpr *match_expr,
                                   uint64_t ref_table_id,
                                   uint64_t &inv_idx_tid);
-    int temp_prune_candidate_multivalue_index(ObSqlSchemaGuard *schema_guard,
-                                              const uint64_t table_id,
-                                              uint64_t *index_tid_array,
-                                              int64_t &size,
-                                              ObIArray<uint64_t> &valid_index_ids);
+
     int get_vector_inv_index_tid(ObSqlSchemaGuard *schema_guard,
                                  ObRawExpr *vector_expr,
                                  const uint64_t table_id,
