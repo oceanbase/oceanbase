@@ -2482,6 +2482,7 @@ int ObPartitionSplitTask::prepare_tablet_split_ranges(
       arg.tablet_id_          = src_tablet_id;
       arg.user_parallelism_   = parallelism_; // parallelism_;
       arg.schema_tablet_size_ = std::max(tablet_size_, 128 * 1024 * 1024L/*128MB*/);
+      arg.ddl_type_ = task_type_;
       if (OB_FAIL(root_service_->get_rpc_proxy().to(leader_addr)
         .by(tenant_id_).timeout(rpc_timeout).prepare_tablet_split_task_ranges(arg, result))) {
         LOG_WARN("prepare tablet split task ranges failed", K(ret), K(arg));

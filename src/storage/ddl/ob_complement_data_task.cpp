@@ -373,6 +373,7 @@ int ObComplementDataParam::split_task_ranges_remote(
     arg.user_parallelism_ = MIN(MIN(MAX(hint_parallelism, 1), MAX_RPC_STREAM_WAIT_THREAD_COUNT),
       ObMacroDataSeq::MAX_PARALLEL_IDX + 1);
     arg.schema_tablet_size_ = RECOVER_TABLE_PARALLEL_MIN_TASK_SIZE; /*2M*/
+    arg.ddl_type_ = ObDDLType::DDL_TABLE_RESTORE;
     const int64_t rpc_timeout = ObDDLUtil::get_default_ddl_rpc_timeout();
     const int64_t retry_interval_us = 200 * 1000; // 200ms
     /* recover table partition data complete: dest leader server send rpc to src leader server */

@@ -410,9 +410,11 @@ public:
   static int get_participants(
       const share::ObSplitSSTableType &split_sstable_type,
       const ObTableStoreIterator &table_store_iterator,
+      const bool is_table_restore,
       ObIArray<ObITable *> &participants);
   static int split_task_ranges(
       ObIAllocator &allocator,
+      const share::ObDDLType ddl_type,
       const share::ObLSID &ls_id,
       const ObTabletID &tablet_id,
       const int64_t user_parallelism,
