@@ -3285,9 +3285,10 @@ DEF_TO_STRING(ObTableBitMap)
 OB_SERIALIZE_MEMBER_SIMPLE(ObHBaseParams,
                            caching_,
                            call_timeout_,
-                           flag_);
+                           flag_,
+                           hbase_version_);
 
-int ObHBaseParams::deep_copy(ObKVParamsBase *hbase_params) const
+int ObHBaseParams::deep_copy(ObIAllocator &allocator, ObKVParamsBase *hbase_params) const
 {
   int ret = OB_SUCCESS;
   if (hbase_params == nullptr || hbase_params->get_param_type() != ParamType::HBase) {
@@ -3300,6 +3301,9 @@ int ObHBaseParams::deep_copy(ObKVParamsBase *hbase_params) const
     param->is_cache_block_ = is_cache_block_;
     param->allow_partial_results_ = allow_partial_results_;
     param->check_existence_only_ = check_existence_only_;
+    if (OB_FAIL(ob_write_string(allocator, hbase_version_, param->hbase_version_))) {
+      LOG_WARN("failed to write string", K(ret), K_(hbase_version));
+    }
   }
   return ret;
 }
@@ -3358,7 +3362,7 @@ int ObKVParams::deep_copy(ObIAllocator &allocator, ObKVParams &ob_params) const
     ob_params.set_allocator(&allocator);
     if (OB_FAIL(ob_params.alloc_ob_params(ob_params_->get_param_type(), ob_params.ob_params_))) {
       LOG_WARN("alloc ob params error", K(ob_params_->get_param_type()), K(ret));
-    } else if (OB_FAIL(ob_params_->deep_copy(ob_params.ob_params_))) {
+    } else if (OB_FAIL(ob_params_->deep_copy(allocator, ob_params.ob_params_))) {
       LOG_WARN("ob_params_ deep_copy error", K(ret));
     }
   }

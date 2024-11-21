@@ -1703,6 +1703,9 @@ int ObHTableFilterOperator::init(common::ObIAllocator *allocator)
           check_existence_only_ = hbase_params->check_existence_only_;
           row_iterator_->set_allow_partial_results(hbase_params->allow_partial_results_);
           row_iterator_->set_is_cache_block(hbase_params->is_cache_block_);
+          if (NULL != filter_ && !hbase_params->hbase_version_.empty()) {
+            filter_->set_hbase_version(hbase_params->hbase_version_);
+          }
         }
       }
     }

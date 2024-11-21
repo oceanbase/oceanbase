@@ -16,7 +16,8 @@ using namespace oceanbase::common;
 using namespace oceanbase::table;
 using namespace oceanbase::table::hfilter;
 Filter::Filter()
-  :is_reversed_(false)
+    : is_reversed_(false),
+      hbase_major_version_(1)
 {
 }
 
@@ -432,6 +433,18 @@ void FilterListBase::reset()
   } // end for
 }
 
+void FilterListBase::set_hbase_version(const ObString &version)
+{
+  const int64_t N = filters_.count();
+  for (int64_t i = 0; i < N; ++i) {
+    Filter* filter = nullptr;
+    if (nullptr != (filter = filters_.at(i))) {
+      filter->set_hbase_version(version);
+    }
+  } // end for
+  Filter::set_hbase_version(version);
+}
+
 // statement is "$list_filter_name $operator $filter0, $filter1, ..., $filtern"
 // eg: "FilterListAND AND ValueFilter EQUAL, ValueFilter GREATER"
 int64_t FilterListBase::get_format_filter_string_length() const
@@ -589,7 +602,11 @@ int FilterListAND::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
         LOG_WARN("failed to filter cell", K(ret));
         loop = false;
       } else {
-        ret_code = merge_return_code(ret_code, local_rc);
+        if (get_hbase_major_version() < 2) {
+          ret_code = local_rc;
+        } else {
+          ret_code = merge_return_code(ret_code, local_rc);
+        }
         switch (ret_code) {
           case ReturnCode::INCLUDE_AND_NEXT_COL:
           case ReturnCode::INCLUDE:
