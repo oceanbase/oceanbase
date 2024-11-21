@@ -303,9 +303,14 @@ int ObMVCheckReplicaHelper::check_can_add_member(
 
   ObMajorMVMergeInfo leader_merge_info;
   ObMajorMVMergeInfo member_merge_info;
+  uint64_t data_version = 0;
   if (!server.is_valid() || tenant_id == OB_INVALID_TENANT_ID || !ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(ls_id), K(tenant_id), K(server));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("get min data version failed", K(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(data_version < DATA_VERSION_4_3_4_0)) {
+    // skip ls reconfig check
   } else if (ls_id.is_sys_ls()) {
     // do nothing
   } else if (OB_FAIL(rootserver::ObCollectMvMergeInfoTask::sync_get_ls_member_merge_info(server,
