@@ -1121,12 +1121,43 @@ int ObTransformWinMagic::adjust_column_and_table(ObDMLStmt *main_stmt,
   ObSEArray<ObRawExpr *, 4> pushed_pseudo_column_exprs;
 
   ObArray<SemiInfo *> rm_semi_infos;
+  ObSEArray<TableItem *, 4> rm_semi_right_tables;
+  ObSEArray<uint64_t, 4> rm_semi_right_table_ids;
   
   if (OB_ISNULL(main_stmt) || OB_ISNULL(view) || 
       OB_ISNULL(view_stmt = view->ref_query_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pointer is null", K(ret), K(main_stmt), K(view), K(view_stmt));
   }
+
+  //remove mapped semi info from main stmt
+  for (int64_t i = 0; OB_SUCC(ret) && i < map_info.semi_info_map_.count(); ++i) {
+    int64_t idx = map_info.semi_info_map_.at(i);
+    SemiInfo *semi = NULL;
+    TableItem * right_table = NULL;
+    if (idx == OB_INVALID_ID) {
+      // do nothing
+    } else if (OB_UNLIKELY(idx < 0 || idx >= main_stmt->get_semi_info_size()) ||
+               OB_ISNULL(semi = main_stmt->get_semi_infos().at(idx))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("semi info is null", K(ret), K(idx), K(semi));
+    } else if (OB_FAIL(rm_semi_infos.push_back(semi))) {
+      LOG_WARN("failed to push back semi info", K(ret));
+    } else if (OB_ISNULL(right_table = main_stmt->get_table_item_by_id(semi->right_table_id_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("right table is null", K(ret), K(semi->right_table_id_));
+    } else if (OB_FAIL(rm_semi_right_tables.push_back(right_table))) {
+      LOG_WARN("failed to push back right table", K(ret));
+    } else if (OB_FAIL(rm_semi_right_table_ids.push_back(semi->right_table_id_))) {
+      LOG_WARN("failed to push back right table id", K(ret));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (ObOptimizerUtil::remove_item(main_stmt->get_semi_infos(), rm_semi_infos)) {
+    LOG_WARN("failed to remove semi infos", K(ret));
+  }
+
   //init viriables and push down table
   for (int64_t i = 0; OB_SUCC(ret) && i < map_info.table_map_.count(); ++i) {
     int64_t idx = map_info.table_map_.at(i);
@@ -1137,6 +1168,10 @@ int ObTransformWinMagic::adjust_column_and_table(ObDMLStmt *main_stmt,
                OB_ISNULL(table = main_stmt->get_table_item(idx))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("index is invalid", K(ret), K(idx), K(table));
+    } else if (ObOptimizerUtil::find_item(rm_semi_right_tables, table)) {
+      // After removing the semi join information from the main statement,
+      // the corresponding right table of the semi join will no longer be accessible
+      // in the main statement and should be removed from the table mapping.
     } else if (OB_FAIL(main_tables.push_back(table))) {
       LOG_WARN("failed to push back table item", K(ret));
     } else if (OB_FAIL(view_tables.push_back(view_stmt->get_table_item(i)))) {
@@ -1166,25 +1201,6 @@ int ObTransformWinMagic::adjust_column_and_table(ObDMLStmt *main_stmt,
     LOG_WARN("get table pseudo column like exprs failed", K(ret));
   } else if (OB_FAIL(append(view_stmt->get_pseudo_column_like_exprs(), pseudo_columns))) {
     LOG_WARN("append failed", K(ret));
-  }
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < map_info.semi_info_map_.count(); ++i) {
-    int64_t idx = map_info.semi_info_map_.at(i);
-    SemiInfo *semi = NULL;
-    if (idx == OB_INVALID_ID) {
-      // do nothing
-    } else if (OB_UNLIKELY(idx < 0 || idx >= main_stmt->get_semi_info_size()) ||
-               OB_ISNULL(semi = main_stmt->get_semi_infos().at(idx))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("semi info is null", K(ret), K(idx), K(semi));
-    } else if (OB_FAIL(rm_semi_infos.push_back(semi))) {
-      LOG_WARN("failed to push back semi info", K(ret));
-    }
-  }
-  
-  if (OB_SUCC(ret) && ObOptimizerUtil::remove_item(main_stmt->get_semi_infos(),
-                                                   rm_semi_infos)) {
-    LOG_WARN("failed to remove semi infos", K(ret));
   }
   
   //merge table
@@ -1279,9 +1295,13 @@ int ObTransformWinMagic::adjust_column_and_table(ObDMLStmt *main_stmt,
     LOG_WARN("create columns for view failed", K(ret));
   } else if (OB_FAIL(main_stmt->remove_table_item(main_tables))) {
     LOG_WARN("failed to remove table item", K(ret));
+  } else if (OB_FAIL(main_stmt->remove_table_item(rm_semi_right_tables))) {
+    LOG_WARN("failed to remove table item", K(ret));
   } else if (OB_FAIL(view_stmt->remove_table_item(main_tables))) {
     LOG_WARN("failed to remove table item", K(ret));
   } else if (OB_FAIL(main_stmt->remove_column_item(main_table_ids))) {
+    LOG_WARN("remove column item failed", K(ret));
+  } else if (OB_FAIL(main_stmt->remove_column_item(rm_semi_right_table_ids))) {
     LOG_WARN("remove column item failed", K(ret));
   } else if (OB_FAIL(main_stmt->replace_relation_exprs(pushed_column_exprs, new_col_in_main))) {
     LOG_WARN("replace inner stmt expr failed", K(ret));
