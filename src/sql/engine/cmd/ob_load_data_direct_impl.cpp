@@ -2545,7 +2545,7 @@ int ObLoadDataDirectImpl::init_logger()
                        session->get_tenant_name().length(), session->get_tenant_name().ptr(),
                        load_args.file_name_.length(), load_args.file_name_.ptr(),
                        load_args.combined_name_.length(), load_args.combined_name_.ptr(),
-                       execute_param_.thread_count_, execute_param_.batch_row_count_,
+                       execute_param_.parallel_, execute_param_.batch_row_count_,
                        ObCurTraceId::get_trace_id_str()));
     OZ(databuff_printf(buf, buf_len, pos, "Start time:\t"));
     OZ(ObTimeConverter::datetime_to_str(current_time, TZ_INFO(session), ObString(),
