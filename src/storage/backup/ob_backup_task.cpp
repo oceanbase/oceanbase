@@ -2391,7 +2391,7 @@ int ObPrefetchBackupInfoTask::inner_check_backup_item_need_copy_when_change_retr
   macro_index.reset();
   ObCompareBackupMacroBlockIdPair compare;
   const ObBackupDataType &backup_data_type = item.get_backup_data_type();
-  if (!backup_data_type.is_user_backup()) {
+  if (!backup_data_type.is_user_backup() && !backup_data_type.is_major_backup() && !backup_data_type.is_minor_backup()) {
     need_copy = true;
   } else if (OB_ISNULL(ls_backup_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
