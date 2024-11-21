@@ -500,7 +500,7 @@ int ObTableLoadInstance::start_direct_load(const ObTableLoadParam &param,
     LOG_WARN("unexpected table ctx is not null", KR(ret));
   } else if (OB_FAIL(ObTableLoadService::alloc_ctx(table_ctx))) {
     LOG_WARN("fail to alloc table ctx", KR(ret), K(param));
-  } else if (OB_FAIL(table_ctx->init(param, stmt_ctx_.ddl_param_, session_info, ObString::make_string("")))) {
+  } else if (OB_FAIL(table_ctx->init(param, stmt_ctx_.ddl_param_, session_info, ObString::make_string(""), execute_ctx_->exec_ctx_))) {
     LOG_WARN("fail to init table ctx", KR(ret));
   } else if (OB_FAIL(ObTableLoadCoordinator::init_ctx(table_ctx, column_ids, execute_ctx_))) {
     LOG_WARN("fail to coordinator init ctx", KR(ret));

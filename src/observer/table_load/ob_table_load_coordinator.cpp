@@ -537,10 +537,10 @@ int ObTableLoadCoordinator::pre_begin_peers(ObDirectLoadResourceApplyArg &apply_
     arg.load_mode_ = param_.load_mode_;
     arg.compressor_type_ = param_.compressor_type_;
     arg.online_sample_percent_ = param_.online_sample_percent_;
-    const ObExecContext *exec_ctx = arg.session_info_->get_cur_exec_ctx();
-    if (exec_ctx == nullptr) {
-      //do nothing
-    } else if (OB_FAIL(arg.set_exec_ctx_serialized_str(*exec_ctx))) {
+    if (ctx_->exec_ctx_ == nullptr) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("exec ctx must not be nullptr", KR(ret));
+    } else if (OB_FAIL(arg.set_exec_ctx_serialized_str(*(ctx_->exec_ctx_)))) {
       LOG_WARN("fail to set exec ctx", KR(ret));
     }
 
