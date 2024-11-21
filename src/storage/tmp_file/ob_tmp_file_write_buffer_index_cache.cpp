@@ -201,10 +201,7 @@ int ObTmpFileWBPIndexCache::truncate(const int64_t truncate_page_virtual_id)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_UNLIKELY(is_empty())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("array is empty", KR(ret), K(fd_), K(size_));
-  } else {
+  } else if (!is_empty()) {
     const int64_t logic_begin_pos = left_;
     const int64_t logic_end_pos = get_logic_tail_();
     bool truncate_over = false;
@@ -274,14 +271,15 @@ int ObTmpFileWBPIndexCache::truncate(const int64_t truncate_page_virtual_id)
         }
       }
     } // end for
+
+    if (OB_FAIL(ret)) {
+    } else if (is_empty()) {
+      reset();
+    } else {
+      shrink_();
+    }
   }
 
-  if (OB_FAIL(ret)) {
-  } else if (is_empty()) {
-    reset();
-  } else {
-    shrink_();
-  }
   return ret;
 }
 
