@@ -489,32 +489,28 @@ void ObResourceGroup::check_worker_count()
       }
     }
 
-    int64_t target_min = 0;
     int64_t token = 0;
-    bool is_group_critical = share::ObCgSet::instance().is_group_critical(group_id_);
+    bool is_group_critical = share::ObCgSet::instance().is_group_critical(group_id_) || is_user_group(group_id_);
     if (is_group_critical) {
-      target_min = min_worker_cnt();
       token = 1 + blocking_cnt;
       token = std::min(token, max_worker_cnt());
-      token = std::max(token, target_min);
+      token = std::max(token, min_worker_cnt());
     } else {
-      if (req_queue_.size() > 0) {
-        target_min = std::min(req_queue_.size() + workers_.get_size(), min_worker_cnt());
-      }
-      if (blocking_cnt == 0 && req_queue_.size() == 0) {
+      int64_t queue_size = req_queue_.size() + multi_level_queue_.get_total_size();
+      if (queue_size == 0) {
         token = 0;
       } else {
-        token = 1 + blocking_cnt;
+        token = max(1 + blocking_cnt, min(workers_.get_size() + queue_size, min_worker_cnt()));
         token = std::min(token, max_worker_cnt());
       }
     }
 
     int64_t succ_num = 0L;
-    int64_t shrink_ts =
-        (!is_group_critical && workers_.get_size() == 1 && token == 0) ? SLEEP_INTERVAL : SHRINK_INTERVAL;
-    int64_t diff = target_min - workers_.get_size();
+    int64_t shrink_ts = (token == 0 && workers_.get_size() == 1) ? SLEEP_INTERVAL : SHRINK_INTERVAL;
+    int64_t diff = token < min_worker_cnt() ? token - workers_.get_size() : min_worker_cnt() - workers_.get_size();
 #ifdef ERRSIM
     const int64_t interval = (-EN_ACQUIRE_MORE_WORKER_INTERVAL) * 1000;
+    int64_t target_min = min(token, min_worker_cnt());
     if (diff <= 0 && -diff <= target_min && interval > 0 && REACH_TIME_INTERVAL(interval)) {
       LOG_INFO("ERRSIM: acquire more worker", K(interval));
       diff = 1;
