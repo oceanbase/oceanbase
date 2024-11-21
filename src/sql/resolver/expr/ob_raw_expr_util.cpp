@@ -4480,17 +4480,49 @@ int ObRawExprUtils::wrap_cm_warn_on_fail_if_need(const ObRawExpr *src_expr,
                 && !CM_IS_COLUMN_CONVERT(cm)
                 && session->get_stmt_type() != stmt::T_SELECT
                 && session->get_stmt_type() != stmt::T_EXPLAIN) {
-    // check whether it is a conversion from constant to temporal type. If so, the warn_on_fail
-    // cast mode cannot be added.
+    // Case 1: check whether it is a conversion from constant to temporal type. If so,
+    // the warn_on_fail cast mode cannot be added.
+    // > delete from tbl where c_date = concat('', '');   -- where column is date(temporal) type
+    // ERROR: Incorrect date value: '' for column 'c_date' at row 1
+    // > delete from tbl where c_int = concat('', '');   -- where column is integer
+    // Query OK
     if (src_expr->is_static_const_expr() && ob_is_temporal_type(dst_type.get_type())) {
       skip_wrap_cast_mode = true;
     }
-    // checks if the source of the cast is a column or constant.
+    // Case 2: checks if the source of the cast is a column or constant. if source expr is,
+    // the warn_on_fail can not be added.
+    // Prepare table and records:
+    // > create table t1 (c1 int ,c2 varchar(20), c3 date);
+    // > insert into t1 values(1, 'test01' , '20220811');
+    // Start verifying behavior:
+    // > delete from t1 where c2 > 1;
+    // ERROR: Truncated incorrect DOUBLE value: 'test01'
+    // > delete from t1 where substr(c2, 1, 100) > 1;
+    // Query OK
+    // > delete from t1 where c1 > 'code';
+    // ERROR: Truncated incorrect DOUBLE value: 'code'
+    // > delete from t1 where c1 > substr('code', 1,100);
+    // Query OK
     if (OB_SUCC(ret) && !skip_wrap_cast_mode) {
       const ObRawExpr *real_expr_without_cast = src_expr;
-      while (OB_NOT_NULL(real_expr_without_cast)
-          && T_FUN_SYS_CAST == real_expr_without_cast->get_expr_type()) {
-        real_expr_without_cast = real_expr_without_cast->get_param_expr(0);
+      bool found_real_expr = false;
+      while (OB_NOT_NULL(real_expr_without_cast) && !found_real_expr) {
+        const ObItemType expr_type = real_expr_without_cast->get_expr_type();
+        // Some expressions do not affect the source expression and need to be skipped
+        if (T_FUN_SYS_CAST == expr_type ||
+            T_FUN_MIN == expr_type ||
+            T_FUN_MAX == expr_type) {
+          // cast and min/max expr in mysql will not change the field attribute.
+          real_expr_without_cast = real_expr_without_cast->get_param_expr(0);
+        } else if (T_FUN_COLUMN_CONV == expr_type) {
+          // ColumnConv is the same as Cast expr, a conversion function for save date in fields.
+          real_expr_without_cast = real_expr_without_cast->get_param_expr(4);
+        } else if (T_FUN_INNER_TRIM == expr_type) {
+          // Inner expr added in oceanbase, ignore it.
+          real_expr_without_cast = real_expr_without_cast->get_param_expr(2);
+        } else {
+          found_real_expr = true;
+        }
       }
       if (OB_ISNULL(real_expr_without_cast)) {
         ret = OB_ERR_UNEXPECTED;
