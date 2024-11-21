@@ -151,10 +151,6 @@ int ObTransDeadlockDetectorAdapter::kill_tx(const SessionIDPair sess_id_pair)
   } else if (OB_FAIL(GCTX.session_mgr_->kill_deadlock_tx(session_info))) {
     DETECT_LOG(WARN, "fail to kill transaction", K(ret), K(sess_id_pair), K(*session_info));
   } else {
-    if (session_info->associated_xa()) {
-      session_info->get_trans_result().reset();
-      session_info->disassociate_xa();
-    }
     session_info->reset_tx_variable();
     mgr->notify_deadlocked_session(sess_id_pair.get_valid_sess_id());
     DETECT_LOG(INFO, "set query dealocked success in mysql mode", K(ret), K(sess_id_pair), K(*session_info));

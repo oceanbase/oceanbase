@@ -382,13 +382,35 @@ int ObSqlTransControl::kill_tx(ObSQLSessionInfo *session, int cause)
           // propagated to the trans start node
           need_abort_tx = true;
         }
-        // if XA-txn is on this server, we have acquired its ref, release ref
-        // and disassocate with session
-        if (tx_desc->is_xa_trans() && tx_desc->get_addr() == GCONF.self_addr_) {
-          auto txs = MTL(transaction::ObTransService*);
-          CK (OB_NOT_NULL(txs), session_id, tx_id);
-          OZ (txs->release_tx_ref(*tx_desc), session_id, tx_id);
-          session->get_tx_desc() = NULL;
+        if (tx_desc->is_xa_trans()) {
+          if (lib::is_mysql_mode()) {
+            // for mysql mode
+            if (OB_DEAD_LOCK == cause) {
+              need_abort_tx = true;
+            } else {
+              // do nothing
+            }
+          } else {
+            // for oracle mode
+            // in this case, OB_DEAD_LOCK is unexpected
+            if (OB_DEAD_LOCK == cause) {
+              // for deadlock
+              ret = OB_ERR_UNEXPECTED;
+              LOG_ERROR("unexpected cause", KR(ret), K(cause));
+            } else if (tx_desc->get_addr() == GCONF.self_addr_) {
+              // for xa loosely coupled mode and xa start resume in a new server
+              // (not the server xa start first)
+              // therefore, the temp session for free route can be in the server xa start first
+              // if XA-txn is on this server, we have acquired its ref, release ref
+              // and disassocate with session
+              ObTransService *txs = MTL(ObTransService*);
+              CK (OB_NOT_NULL(txs), session_id, tx_id);
+              OZ (txs->release_tx_ref(*tx_desc), session_id, tx_id);
+              session->get_tx_desc() = NULL;
+            } else {
+              // do nothing
+            }
+          }
         }
       } else  if (tx_desc->is_xa_trans()) {
         const transaction::ObXATransID xid = session->get_xid();
@@ -397,21 +419,38 @@ int ObSqlTransControl::kill_tx(ObSQLSessionInfo *session, int cause)
         CK (OB_NOT_NULL(xas));
         if (transaction::ObGlobalTxType::XA_TRANS == global_tx_type) {
           if (lib::is_mysql_mode()) {
-            OZ (xas->handle_terminate_for_mysql(session->get_xid(), tx_desc),
-                xid, global_tx_type, session_id, tx_id);
+            // for mysql mode
+            if (OB_DEAD_LOCK == cause) {
+              // for dead lock
+              need_abort_tx = true;
+            } else {
+              // for session termiante
+              OZ (xas->handle_terminate_for_mysql(session->get_xid(), tx_desc),
+                  xid, global_tx_type, session_id, tx_id);
+              // currently, tx_desc is NULL
+              session->get_tx_desc() = NULL;
+            }
           } else {
-            OZ (xas->handle_terminate_for_xa_branch(session->get_xid(), tx_desc, session->get_xa_end_timeout_seconds()),
-                xid, global_tx_type, session_id, tx_id);
+            // for oracle mode
+            if (OB_DEAD_LOCK == cause) {
+              // for deadlock
+              ret = OB_ERR_UNEXPECTED;
+              LOG_ERROR("unexpected cause", KR(ret), K(cause));
+            } else {
+              OZ (xas->handle_terminate_for_xa_branch(session->get_xid(), tx_desc, session->get_xa_end_timeout_seconds()),
+                  xid, global_tx_type, session_id, tx_id);
+              // currently, tx_desc is NULL
+              session->get_tx_desc() = NULL;
+            }
           }
-          // currently, tx_desc is NULL
         } else if (transaction::ObGlobalTxType::DBLINK_TRANS == global_tx_type) {
           OZ (xas->rollback_for_dblink_trans(tx_desc), ret, xid, global_tx_type, tx_id);
           // currently, tx_desc is NULL
+          session->get_tx_desc() = NULL;
         } else {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected global trans type", K(ret), K(xid), K(global_tx_type), K(tx_id));
         }
-        session->get_tx_desc() = NULL;
       } else {
         need_abort_tx = true;
       }
