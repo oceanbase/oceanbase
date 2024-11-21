@@ -333,7 +333,10 @@ private:
                       ObArray<std::pair<ObString, bool>>& familys,
                       ObArray<ObString>& real_columns);
 
-  int update_table_info_columns(ObTableSingleQueryInfo* table_info, const ObArray<ObString>& real_columns);
+  int update_table_info_columns(ObTableSingleQueryInfo* table_info,
+                            const ObArray<std::pair<ObString, bool>>& family_addfamily_flag_pairs,
+                            const ObArray<ObString>& real_columns,
+                            const std::pair<ObString, bool>& family_addfamily_flag);
 
   bool found_family(const ObString& table_name, const ObArray<std::pair<ObString, bool>>& family_clear_flags, std::pair<ObString, bool>& flag);
 
