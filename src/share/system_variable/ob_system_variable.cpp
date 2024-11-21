@@ -876,7 +876,7 @@ int ObTypeLibSysVar::do_check_and_convert(ObExecContext &ctx,
         ret = OB_ERR_WRONG_VALUE_FOR_VAR;
         int log_ret = OB_SUCCESS;
         if (OB_SUCCESS != (log_ret = log_err_wrong_value_for_var(ret, in_val))) {
-          LOG_ERROR("fail to log error", K(ret), K(log_ret), K(in_val));
+          LOG_WARN("fail to log error", K(ret), K(log_ret), K(in_val));
         }
       } else {
         LOG_WARN("fail to find type", K(ret), K(str_val), K(in_val));
