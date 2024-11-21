@@ -788,6 +788,35 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
     }
     case T_OP_MULTISET: {
       SET_SYMBOL_IF_EMPTY("MULTISET");
+      if (OB_UNLIKELY(2 != expr->get_param_count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param count should be equal 2", K(ret), K(expr->get_param_count()));
+      } else {
+        ObMultiSetType type = static_cast<ObMultiSetRawExpr*>(expr)->get_multiset_type();
+        ObMultiSetModifier modifier = static_cast<ObMultiSetRawExpr*>(expr)->get_multiset_modifier();
+        if (type < MULTISET_TYPE_UNION || type > MULTISET_TYPE_EXCEPT || modifier < MULTISET_MODIFIER_ALL || modifier > MULTISET_MODIFIER_DISTINCT)  {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid multi set type or modifier", K(ret), K(type), K(modifier));
+        } else {
+          DATA_PRINTF("(");
+          PRINT_EXPR(expr->get_param_expr(0));
+          DATA_PRINTF("MULTISET ");
+          if (type == MULTISET_TYPE_UNION) {
+            DATA_PRINTF("UNION ");
+          } else if (type == MULTISET_TYPE_INTERSECT) {
+            DATA_PRINTF("INTERSECT ");
+          } else {
+            DATA_PRINTF("EXCEPT ");
+          }
+          if (modifier == MULTISET_MODIFIER_ALL) {
+            DATA_PRINTF("ALL ");
+          } else {
+            DATA_PRINTF("DISTINCT ");
+          }
+          PRINT_EXPR(expr->get_param_expr(1));
+          DATA_PRINTF(")");
+        }
+      }
       break;
     }
     case T_OP_BOOL:{
@@ -831,6 +860,42 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
     }
     case T_OP_COLL_PRED: {
       SET_SYMBOL_IF_EMPTY("collection predicate");
+      if (OB_UNLIKELY(2 != expr->get_param_count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param count should be equal 2", K(ret), K(expr->get_param_count()));
+      } else {
+        ObMultiSetType type = static_cast<ObCollPredRawExpr*>(expr)->get_multiset_type();
+        ObMultiSetModifier modifier = static_cast<ObCollPredRawExpr*>(expr)->get_multiset_modifier();
+        if (type < MULTISET_TYPE_SUBMULTISET || type > MULTISET_TYPE_EMPTY || (modifier != MULTISET_MODIFIER_INVALID && modifier != MULTISET_MODIFIER_NOT))  {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid coll pred type or modifier", K(ret), K(type), K(modifier));
+        } else {
+          DATA_PRINTF("(");
+          PRINT_EXPR(expr->get_param_expr(0));
+          if (type == MULTISET_TYPE_SUBMULTISET || type == MULTISET_TYPE_MEMBER_OF) {
+            if (modifier == MULTISET_MODIFIER_NOT) {
+              DATA_PRINTF("NOT ");
+            }
+            if (type == MULTISET_TYPE_SUBMULTISET) {
+              DATA_PRINTF("SUBMULTISET ");
+            } else {
+              DATA_PRINTF("MEMBER ");
+            }
+            PRINT_EXPR(expr->get_param_expr(1));
+          } else {
+             DATA_PRINTF("IS ");
+             if (modifier == MULTISET_MODIFIER_NOT) {
+               DATA_PRINTF("NOT ");
+             }
+             if (type == MULTISET_TYPE_IS_SET) {
+               DATA_PRINTF("A SET");
+             } else {
+               DATA_PRINTF("EMPTY");
+             }
+          }
+          DATA_PRINTF(")");
+        }
+      }
       break;
     }
     case T_FUN_PL_GET_CURSOR_ATTR: {
@@ -844,38 +909,6 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
                  K(cursor_attr_expr->get_pl_get_cursor_attr_info()));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "only rowid for cursor is supported");
       }
-      break;
-    }
-    case T_FUN_SYS_POINT: {
-      SET_SYMBOL_IF_EMPTY("point");
-      break;
-    }
-    case T_FUN_SYS_LINESTRING: {
-      SET_SYMBOL_IF_EMPTY("linestring");
-      break;
-    }
-    case T_FUN_SYS_MULTIPOINT: {
-      SET_SYMBOL_IF_EMPTY("multipoint");
-      break;
-    }
-    case T_FUN_SYS_MULTILINESTRING: {
-      SET_SYMBOL_IF_EMPTY("multilinestring");
-      break;
-    }
-    case T_FUN_SYS_POLYGON: {
-      SET_SYMBOL_IF_EMPTY("polygon");
-      break;
-    }
-    case T_FUN_SYS_MULTIPOLYGON: {
-      SET_SYMBOL_IF_EMPTY("multipolygon");
-      break;
-    }
-    case T_FUN_SYS_GEOMCOLLECTION: {
-      SET_SYMBOL_IF_EMPTY("geomcollection");
-      break;
-    }
-    case T_FUN_SYS_ARRAY: {
-      SET_SYMBOL_IF_EMPTY("array");
       break;
     }
     default: {
