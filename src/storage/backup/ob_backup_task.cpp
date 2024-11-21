@@ -2069,6 +2069,12 @@ int ObPrefetchBackupInfoTask::check_backup_item_need_copy_(
         } else {
           LOG_DEBUG("macro block was reused", K(macro_index), K_(param));
           need_copy = false;
+#ifdef ERRSIM
+          SERVER_EVENT_SYNC_ADD("backup_data", "reuse_macro_block",
+                                "tenant_id", param_.tenant_id_,
+                                "backup_set_id", param_.backup_set_desc_.backup_set_id_,
+                                "reused_macro_block_index", macro_index);
+#endif
         }
         break;
       }
