@@ -4293,6 +4293,7 @@ public:
   inline ObCharsetType get_charset_type() const { return charset_; }
   inline ObCollationType get_collation_type() const { return meta_.get_collation_type(); }
   inline ObCollationLevel get_collation_level() const { return meta_.get_collation_level(); }
+  inline uint16_t get_subschema_id() { return meta_.get_subschema_id(); }
   inline bool is_binary_collation() const { return is_binary_collation_; }
   inline bool is_zero_fill() const { return is_zero_fill_; }
   inline void set_obj_type(const ObObjType &type) { return meta_.set_type(type); }

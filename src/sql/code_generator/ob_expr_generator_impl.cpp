@@ -1781,6 +1781,7 @@ int ObExprGeneratorImpl::visit(ObAggFunRawExpr &expr)
         || T_FUN_PL_AGG_UDF == expr.get_expr_type()
         || T_FUN_HYBRID_HIST == expr.get_expr_type()
         || T_FUN_ORA_XMLAGG == expr.get_expr_type()
+        || T_FUNC_SYS_ARRAY_AGG == expr.get_expr_type()
         || (T_FUN_JSON_OBJECTAGG == expr.get_expr_type() && expr.get_real_param_count() > 1)
         || (T_FUN_ORA_JSON_OBJECTAGG == expr.get_expr_type() && expr.get_real_param_count() > 1)) {
       ObExprOperator *op = NULL;
@@ -1817,7 +1818,8 @@ int ObExprGeneratorImpl::visit(ObAggFunRawExpr &expr)
                T_FUN_KEEP_COUNT == expr.get_expr_type() ||
                T_FUN_KEEP_WM_CONCAT == expr.get_expr_type() ||
                T_FUN_HYBRID_HIST == expr.get_expr_type() ||
-               T_FUN_ORA_XMLAGG == expr.get_expr_type())) {
+               T_FUN_ORA_XMLAGG == expr.get_expr_type() ||
+               T_FUNC_SYS_ARRAY_AGG == expr.get_expr_type())) {
             ObConstRawExpr *sep_expr = static_cast<ObConstRawExpr *>(expr.get_separator_param_expr());
             // set separator
             if (NULL != sep_expr) {

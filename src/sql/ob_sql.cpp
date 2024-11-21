@@ -836,7 +836,7 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
               && !ObObjUDTUtil::ob_is_supported_sql_udt(udt_id)) {
             // array type
             field.type_.set_subschema_id(subschema_id);
-            field.charsetnr_ = CS_TYPE_BINARY;
+            field.charsetnr_ = CS_TYPE_UTF8MB4_BIN;
             field.length_ = OB_MAX_LONGTEXT_LENGTH;
           } else if (OB_FAIL(result_set.get_exec_context().get_subschema_id_by_udt_id(udt_id, tmp_subschema_id))) {
             LOG_WARN("unsupported udt id", K(ret), K(subschema_id));

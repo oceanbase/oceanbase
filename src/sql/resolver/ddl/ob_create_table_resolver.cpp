@@ -2170,8 +2170,20 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
             }
             column.set_meta_type(column_meta);
             if (column.is_collection()) { // array column
-              if (OB_FAIL(column.set_extended_type_info(expr->get_enum_set_values()))) {
-                LOG_WARN("set enum or set info failed", K(ret), K(*expr));
+              if (T_REF_COLUMN == expr->get_expr_type()) {
+                if(OB_FAIL(column.set_extended_type_info(expr->get_enum_set_values()))) {
+                  LOG_WARN("set enum or set info failed", K(ret), K(*expr));
+                }
+              } else {
+                const ObSqlCollectionInfo *coll_info = NULL;
+                uint16_t subschema_id = expr->get_result_type().get_subschema_id();
+                ObSubSchemaValue value;
+                if (OB_FAIL(session_info_->get_cur_exec_ctx()->get_sqludt_meta_by_subschema_id(subschema_id, value))) {
+                  LOG_WARN("failed to get subschema ctx", K(ret));
+                } else if (FALSE_IT(coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(value.value_))) {
+                } else if (OB_FAIL(column.add_type_info(coll_info->get_def_string()))) {
+                  LOG_WARN("set type info failed", K(ret));
+                }
               }
             }
             ObCharsetType char_type = table_schema.get_charset_type();

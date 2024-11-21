@@ -235,6 +235,7 @@ ob_set_subtarget(oblib_lib common_mixed
   udt/ob_udt_type.cpp
   udt/ob_collection_type.cpp
   udt/ob_array_type.cpp
+  udt/ob_array_utils.cpp
   xml/ob_mul_mode_reader.cpp
   xml/ob_xml.cpp
   xml/ob_xml_parser.cpp

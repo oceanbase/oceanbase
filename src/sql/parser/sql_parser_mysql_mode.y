@@ -169,7 +169,7 @@ TRACE_LOG LOAD_BATCH_SIZE TRANS_PARAM OPT_PARAM OB_DDL_SCHEMA_VERSION FORCE_REFR
 DISABLE_PARALLEL_DML ENABLE_PARALLEL_DML MONITOR NO_PARALLEL CURSOR_SHARING_EXACT
 MAX_CONCURRENT DOP TRACING NO_QUERY_TRANSFORMATION NO_COST_BASED_QUERY_TRANSFORMATION BLOCKING RESOURCE_GROUP
 // transform hint
-NO_REWRITE MERGE_HINT NO_MERGE_HINT NO_EXPAND USE_CONCAT UNNEST NO_UNNEST
+NO_REWRITE MERGE_HINT NO_MERGE_HINT NO_EXPAND USE_CONCAT NO_UNNEST
 PLACE_GROUP_BY NO_PLACE_GROUP_BY INLINE MATERIALIZE SEMI_TO_INNER NO_SEMI_TO_INNER
 PRED_DEDUCE NO_PRED_DEDUCE PUSH_PRED_CTE NO_PUSH_PRED_CTE
 REPLACE_CONST NO_REPLACE_CONST SIMPLIFY_ORDER_BY NO_SIMPLIFY_ORDER_BY
@@ -270,7 +270,7 @@ END_P SET_VAR DELIMITER
         ACCESS ACCESS_INFO ACCESSID ACCESSKEY ACCESSTYPE ACCOUNT ACTION ACTIVE ADDDATE AFTER AGAINST AGGREGATE ALGORITHM ALL_META ALL_USER ALWAYS ALLOW ANALYSE ANY
         APPROX_COUNT_DISTINCT APPROX_COUNT_DISTINCT_SYNOPSIS APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE
         ARBITRATION ARRAY ASCII ASIS AT ATTRIBUTE AUTHORS AUTO AUTOEXTEND_SIZE AUTO_INCREMENT AUTO_INCREMENT_MODE AUTO_INCREMENT_CACHE_SIZE
-        AVG AVG_ROW_LENGTH ACTIVATE AVAILABILITY ARCHIVELOG ASYNCHRONOUS AUDIT ADMIN AUTO_REFRESH APPROX APPROXIMATE
+        AVG AVG_ROW_LENGTH ACTIVATE AVAILABILITY ARCHIVELOG ASYNCHRONOUS AUDIT ADMIN AUTO_REFRESH APPROX APPROXIMATE ARRAY_AGG ARRAY_MAP
 
         BACKUP BACKUP_COPIES BALANCE BANDWIDTH BASE BASELINE BASELINE_ID BASIC BEGI BINDING SHARDING BINLOG BIT BIT_AND
         BIT_OR BIT_XOR BLOCK BLOCK_INDEX BLOCK_SIZE BLOOM_FILTER BOOL BOOLEAN BOOTSTRAP BTREE BYTE
@@ -368,7 +368,7 @@ END_P SET_VAR DELIMITER
         TABLEGROUP_ID TENANT_ID THROTTLE TIME_ZONE_INFO TOP_K_FRE_HIST TIMES TRIM_SPACE TTL
         TRANSFER TENANT_STS_CREDENTIAL
 
-        UNCOMMITTED UNCONDITIONAL UNDEFINED UNDO_BUFFER_SIZE UNDOFILE UNICODE UNINSTALL UNIT UNIT_GROUP UNIT_NUM UNLOCKED UNTIL
+        UNCOMMITTED UNCONDITIONAL UNDEFINED UNDO_BUFFER_SIZE UNDOFILE UNNEST UNICODE UNINSTALL UNIT UNIT_GROUP UNIT_NUM UNLOCKED UNTIL
         UNUSUAL UPGRADE USE_BLOOM_FILTER UNKNOWN USE_FRM USER USER_RESOURCES UNBOUNDED UP UNLIMITED USER_SPECIFIED
 
         VALID VALUE VARIANCE VARIABLES VERBOSE VERIFY VIEW VISIBLE VIRTUAL_COLUMN_ID VALIDATE VAR_POP
@@ -407,7 +407,7 @@ END_P SET_VAR DELIMITER
 %type <node> date_unit date_params timestamp_params
 %type <node> drop_table_stmt table_list drop_view_stmt table_or_tables
 %type <node> explain_stmt explainable_stmt format_name kill_stmt help_stmt create_outline_stmt alter_outline_stmt drop_outline_stmt opt_outline_target
-%type <node> expr_list expr expr_const conf_const simple_expr expr_or_default bit_expr bool_pri predicate explain_or_desc pl_expr_stmt
+%type <node> expr_list expr expr_const conf_const simple_expr simple_expr_list expr_or_default bit_expr bool_pri predicate explain_or_desc pl_expr_stmt
 %type <node> column_ref multi_delete_table
 %type <node> case_expr func_expr in_expr sub_query_flag search_expr
 %type <node> case_arg when_clause_list when_clause case_default
@@ -472,7 +472,7 @@ END_P SET_VAR DELIMITER
 %type <node> alter_column_behavior opt_set opt_position_column
 %type <node> alter_system_stmt alter_system_set_parameter_actions alter_system_settp_actions settp_option alter_system_set_parameter_action server_info_list server_info opt_shared_storage_info shared_storage_info alter_system_reset_parameter_actions alter_system_reset_parameter_action
 %type <node> opt_comment opt_as
-%type <node> column_name relation_name opt_relation_name function_name column_label var_name relation_name_or_string row_format_option compression_name
+%type <node> column_name relation_name relation_name_list opt_relation_name function_name column_label var_name relation_name_or_string row_format_option compression_name
 %type <node> audit_stmt audit_clause op_audit_tail_clause audit_operation_clause audit_all_shortcut_list audit_all_shortcut auditing_on_clause auditing_by_user_clause audit_user_list audit_user audit_user_with_host_name
 %type <node> opt_hint_list hint_option select_with_opt_hint update_with_opt_hint delete_with_opt_hint hint_list_with_end global_hint transform_hint optimize_hint
 %type <node> create_index_stmt index_name sort_column_list sort_column_key opt_index_option_list index_option opt_sort_column_key_length opt_index_using_algorithm index_using_algorithm visibility_option opt_constraint_name constraint_name create_with_opt_hint index_expr alter_with_opt_hint
@@ -551,7 +551,7 @@ END_P SET_VAR DELIMITER
 %type <node> skip_index_type opt_skip_index_type_list
 %type <node> opt_rebuild_column_store
 %type <node> vec_index_params vec_index_param vec_index_param_value
-%type <node> json_table_expr rb_iterate_expr mock_jt_on_error_on_empty jt_column_list json_table_column_def
+%type <node> json_table_expr rb_iterate_expr unnest_expr mock_jt_on_error_on_empty jt_column_list json_table_column_def
 %type <node> json_table_ordinality_column_def json_table_exists_column_def json_table_value_column_def json_table_nested_column_def
 %type <node> opt_value_on_empty_or_error_or_mismatch opt_on_mismatch
 %type <node> table_values_clause table_values_clause_with_order_by_and_limit values_row_list row_value
@@ -566,7 +566,7 @@ END_P SET_VAR DELIMITER
 %type <node> ttl_definition ttl_expr ttl_unit
 %type <node> id_dot_id id_dot_id_dot_id
 %type <node> vector_distance_expr vector_distance_metric
-%type <node> any_expr
+%type <node> any_expr opt_nulls_first_or_last lambda_expr lambda_expr_params
 %type <node> opt_empty_table_list opt_repair_mode opt_repair_option_list repair_option repair_option_list opt_checksum_option
 %type <node> cache_index_stmt load_index_into_cache_stmt tbl_index_list tbl_index tbl_partition_list opt_tbl_partition_list tbl_index_or_partition_list tbl_index_or_partition opt_ignore_leaves key_cache_name
 %type <node_opt_parens> select_clause_set select_clause_set_body
@@ -1865,6 +1865,17 @@ simple_expr collation %prec NEG
 }
 ;
 
+simple_expr_list:
+simple_expr
+{
+  malloc_list_node($$, result->malloc_pool_, T_EXPR_LIST, 2, 1, $1);
+}
+| simple_expr_list ',' simple_expr
+{
+  push_back_list(result->malloc_pool_, result, $$, $1, $3);
+}
+;
+
 search_expr:
 expr_const
 {
@@ -2529,6 +2540,15 @@ ALL {
 geometry_collection:
 GEOMETRYCOLLECTION { $$ = NULL; }
 | GEOMCOLLECTION { $$ = NULL; }
+;
+
+opt_nulls_first_or_last:
+NULLS first_or_last
+{
+  $$ = $2;
+}
+| /*empty*/
+{ $$ = NULL;}
 ;
 
 func_expr:
@@ -3373,6 +3393,36 @@ MOD '(' expr ',' expr ')'
 | RB_ITERATE '(' simple_expr ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_RB_ITERATE_EXPRESSION, 2, $3, NULL);
+}
+| ARRAY_AGG '(' opt_distinct expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUNC_SYS_ARRAY_AGG, 2, $3, $4);
+}
+| ARRAY_AGG '(' opt_distinct expr order_by opt_nulls_first_or_last ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUNC_SYS_ARRAY_AGG, 4, $3, $4, $5, $6);
+}
+| ARRAY_MAP '(' lambda_expr ',' expr_list ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUNC_SYS_ARRAY_MAP, 2, $3, $5);
+}
+;
+
+lambda_expr_params:
+NAME_OB { $$ = $1;}
+| unreserved_keyword { get_non_reserved_node($$, result->malloc_pool_, @1.first_column, @1.last_column); }
+| '(' name_list ')'
+{
+  $$ = $2;
+}
+;
+
+lambda_expr:
+lambda_expr_params JSON_EXTRACT '(' expr ')'
+{
+  ParseNode *params = NULL;
+  merge_nodes(params, result, T_EXPR_LIST, $1);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUNC_SYS_LAMBDA, 2, params, $4);
 }
 ;
 
@@ -12823,6 +12873,10 @@ tbl_name
   $$->value_ = 1; // value_ = 1 means with parentheses
 }
 | rb_iterate_expr
+{
+  $$ = $1;
+}
+| unnest_expr
 {
   $$ = $1;
 }
@@ -22675,6 +22729,17 @@ NAME_OB { $$ = $1; }
 }
 ;
 
+relation_name_list:
+relation_name
+{
+  malloc_list_node($$, result->malloc_pool_, T_EXPR_LIST, 2, 1, $1);
+}
+| relation_name_list ',' relation_name
+{
+  push_back_list(result->malloc_pool_, result, $$, $1, $3);
+}
+;
+
 opt_relation_name:
 /* empty */
 {
@@ -23803,17 +23868,48 @@ JSON '(' column_name ')' STORE AS '(' lob_storage_parameters ')'
 ;
 
 rb_iterate_expr:
-RB_ITERATE '(' simple_expr ')' relation_name
+RB_ITERATE '(' simple_expr ')'
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_RB_ITERATE_EXPRESSION, 2, $3, $5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RB_ITERATE_EXPRESSION, 3, $3, NULL, NULL);
+}
+| RB_ITERATE '(' simple_expr ')' relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RB_ITERATE_EXPRESSION, 3, $3, $5, NULL);
 }
 | RB_ITERATE '(' simple_expr ')' AS relation_name
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_RB_ITERATE_EXPRESSION, 2, $3, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RB_ITERATE_EXPRESSION, 3, $3, $6, NULL);
 }
-| RB_ITERATE '(' simple_expr ')'
+| RB_ITERATE '(' simple_expr ')' relation_name  '(' relation_name ')'
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_RB_ITERATE_EXPRESSION, 2, $3, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RB_ITERATE_EXPRESSION, 3, $3, $5, $7);
+}
+| RB_ITERATE '(' simple_expr ')' AS relation_name '(' relation_name ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RB_ITERATE_EXPRESSION, 3, $3, $6, $8);
+}
+;
+
+unnest_expr:
+UNNEST '(' simple_expr_list ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_UNNEST_EXPRESSION, 3, $3, NULL, NULL);
+}
+| UNNEST '(' simple_expr_list ')' relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_UNNEST_EXPRESSION, 3, $3, $5, NULL);
+}
+| UNNEST '(' simple_expr_list ')' AS relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_UNNEST_EXPRESSION, 3, $3, $6, NULL);
+}
+| UNNEST '(' simple_expr_list ')' relation_name '(' relation_name_list ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_UNNEST_EXPRESSION, 3, $3, $5, $7);
+}
+| UNNEST '(' simple_expr_list ')' AS relation_name '(' relation_name_list ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_UNNEST_EXPRESSION, 3, $3, $6, $8);
 }
 ;
 
@@ -23871,6 +23967,8 @@ ACCESS_INFO
 |       AUTO_REFRESH
 |       AVG
 |       AVG_ROW_LENGTH
+|       ARRAY_AGG
+|       ARRAY_MAP
 |       BACKUP
 |       BACKUPSET
 |       BACKUP_COPIES
@@ -24561,6 +24659,7 @@ ACCESS_INFO
 |       UNDEFINED
 |       UNDO_BUFFER_SIZE
 |       UNDOFILE
+|       UNNEST
 |       UNICODE
 |       UNKNOWN
 |       UNINSTALL

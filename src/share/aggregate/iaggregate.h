@@ -70,6 +70,7 @@ inline bool has_extra_info(ObAggrInfo &info)
   case T_FUN_JSON_OBJECTAGG:
   case T_FUN_ORA_JSON_OBJECTAGG:
   case T_FUN_ORA_XMLAGG:
+  case T_FUNC_SYS_ARRAY_AGG:
   case T_FUN_HYBRID_HIST:
   case T_FUN_TOP_FRE_HIST:
   case T_FUN_AGG_UDF: {

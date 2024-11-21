@@ -23,7 +23,7 @@
 #include "lib/geo/ob_geo_utils.h"
 #include "lib/roaringbitmap/ob_rb_utils.h"
 #include "lib/xml/ob_xml_util.h"
-#include "lib/udt/ob_array_type.h"
+#include "lib/udt/ob_array_utils.h"
 #include "sql/engine/expr/ob_expr_uuid.h"
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "sql/engine/expr/ob_expr_res_type_map.h"

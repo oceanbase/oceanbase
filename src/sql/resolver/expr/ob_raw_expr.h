@@ -2371,13 +2371,17 @@ public:
     : ObIRawExpr(alloc),
       ObTerminalRawExpr(alloc),
       ObVarExpr(),
-      result_type_assigned_(false)
+      result_type_assigned_(false),
+      ref_expr_(nullptr),
+      ref_index_(common::OB_INVALID_ID)
   { ObIRawExpr::set_expr_class(ObIRawExpr::EXPR_VAR); }
   ObVarRawExpr(ObItemType expr_type = T_INVALID)
     : ObIRawExpr(expr_type),
       ObTerminalRawExpr(expr_type),
       ObVarExpr(),
-      result_type_assigned_(false)
+      result_type_assigned_(false),
+      ref_expr_(nullptr),
+      ref_index_(common::OB_INVALID_ID)
   { set_expr_class(ObIRawExpr::EXPR_VAR); }
   virtual ~ObVarRawExpr() {}
 
@@ -2394,9 +2398,15 @@ public:
   int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const;
   void set_result_type_assigned(bool v) { result_type_assigned_ = v; }
   bool get_result_type_assigned() { return result_type_assigned_; }
+  ObRawExpr *get_ref_expr() const { return ref_expr_; }
+  int64_t get_ref_index() const { return ref_index_; }
+  void set_ref_index(int64_t ref_index) { ref_index_ = ref_index; }
+  void set_ref_expr(ObRawExpr *ref_expr) { ref_expr_ = ref_expr; }
 
 private:
   bool result_type_assigned_;
+  ObRawExpr *ref_expr_;
+  int64_t ref_index_;
   DISALLOW_COPY_AND_ASSIGN(ObVarRawExpr);
 };
 

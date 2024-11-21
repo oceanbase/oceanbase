@@ -2805,6 +2805,7 @@ extern const char *get_type_name(int type);
                          (op) == T_FUN_SYS_RB_BUILD_AGG ||\
                          (op) == T_FUN_SYS_RB_OR_AGG ||\
                          (op) == T_FUN_SYS_RB_AND_AGG ||\
+                         (op) == T_FUNC_SYS_ARRAY_AGG ||\
                          ((op) >= T_FUN_SYS_BIT_AND && (op) <= T_FUN_SYS_BIT_XOR))
 #define MAYBE_ROW_OP(op) ((op) >= T_OP_EQ && (op) <= T_OP_NE)
 #define IS_PSEUDO_COLUMN_TYPE(op) \

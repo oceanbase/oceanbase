@@ -778,7 +778,8 @@ int ObWindowFunctionVecOp::init()
         case T_FUN_JSON_OBJECTAGG:
         case T_FUN_ORA_JSON_ARRAYAGG:
         case T_FUN_ORA_JSON_OBJECTAGG:
-        case T_FUN_ORA_XMLAGG: {
+        case T_FUN_ORA_XMLAGG:
+        case T_FUNC_SYS_ARRAY_AGG: {
           aggregate::IAggregate *agg_func = nullptr;
           winfunc::AggrExpr *aggr_expr = nullptr;
           if (OB_FAIL(alloc_expr<winfunc::AggrExpr>(*local_allocator_, aggr_expr))) {

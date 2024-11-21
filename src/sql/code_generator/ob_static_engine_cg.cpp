@@ -428,7 +428,8 @@ int ObStaticEngineCG::check_expr_columnlized(const ObRawExpr *expr)
              || expr->is_query_ref_expr()
              || expr->is_udf_expr()
              || (expr->is_column_ref_expr() && static_cast<const ObColumnRefRawExpr*>(expr)->is_virtual_generated_column())
-             || (expr->is_column_ref_expr() && is_shadow_column(static_cast<const ObColumnRefRawExpr*>(expr)->get_column_id()))) {
+             || (expr->is_column_ref_expr() && is_shadow_column(static_cast<const ObColumnRefRawExpr*>(expr)->get_column_id()))
+             || expr->is_var_expr()) {
     // skip
   } else if ((expr->is_aggr_expr() || (expr->is_win_func_expr()) || expr->is_match_against_expr())
              && !expr->has_flag(IS_COLUMNLIZED)) {
@@ -7572,7 +7573,8 @@ int ObStaticEngineCG::fill_aggr_info(ObAggFunRawExpr &raw_expr,
                          T_FUN_KEEP_WM_CONCAT == raw_expr.get_expr_type() ||
                          T_FUN_HYBRID_HIST == raw_expr.get_expr_type() ||
                          T_FUN_ORA_JSON_ARRAYAGG == raw_expr.get_expr_type() ||
-                         T_FUN_ORA_XMLAGG == raw_expr.get_expr_type())) {
+                         T_FUN_ORA_XMLAGG == raw_expr.get_expr_type() ||
+                         T_FUNC_SYS_ARRAY_AGG == raw_expr.get_expr_type())) {
       const ObRawExpr *param_raw_expr = (is_oracle_mode()
           && T_FUN_GROUP_CONCAT == raw_expr.get_expr_type()
           && raw_expr.get_real_param_count() > 1)

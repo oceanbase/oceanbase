@@ -890,7 +890,7 @@ int ObExprResultTypeUtil::get_array_calc_type(ObExecContext *exec_ctx,
       } else {
         calc_type.set_collection(type2.get_subschema_id());
       }
-    } else if (OB_FAIL(get_array_calc_type(exec_ctx, coll_elem1_type.get_obj_type(), coll_elem2_type.get_obj_type(),
+    } else if (OB_FAIL(get_array_calc_type(exec_ctx, coll_elem1_type, coll_elem2_type,
                                            depth, calc_type, element_type))) {
       LOG_WARN("failed to get array calc type", K(ret));
     }
@@ -899,13 +899,16 @@ int ObExprResultTypeUtil::get_array_calc_type(ObExecContext *exec_ctx,
 }
 
 int ObExprResultTypeUtil::get_array_calc_type(ObExecContext *exec_ctx,
-                                              const ObObjType &type1,
-                                              const ObObjType &type2,
+                                              const ObDataType &coll_elem1_type,
+                                              const ObDataType &coll_elem2_type,
                                               uint32_t depth,
                                               ObExprResType &calc_type,
                                               ObObjType &element_type)
 {
   int ret = OB_SUCCESS;
+  const ObObjType type1 = coll_elem1_type.get_obj_type();
+  const ObObjType type2 = coll_elem2_type.get_obj_type();
+  ObDataType elem_data;
   ObObjType coll_calc_type = ARITH_RESULT_TYPE[type1][type2];
   if (ob_is_int_uint(ob_obj_type_class(type1), ob_obj_type_class(type2))) {
     coll_calc_type = ObIntType;
@@ -916,9 +919,27 @@ int ObExprResultTypeUtil::get_array_calc_type(ObExecContext *exec_ctx,
   } else if (ob_is_null(type2)) {
     coll_calc_type = type1;
   }
-  ObDataType elem_data;
+  elem_data.meta_.set_type(coll_calc_type);
+  elem_data.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY[coll_calc_type]);
+  if (type1 == ObVarcharType || type2 == ObVarcharType
+      || type1 == ObCharType || type2 == ObCharType) {
+    coll_calc_type = ObVarcharType;
+    ObLength len1 = 0;
+    ObLength len2 = 0;
+    if (ob_is_string_tc(type1)) {
+      len1 = coll_elem1_type.get_length();
+    } else {
+      len1 = ObAccuracy::MAX_ACCURACY[type1].get_precision();
+    }
+    if (ob_is_string_tc(type2)) {
+      len2 = coll_elem2_type.get_length();
+    } else {
+      len2 = ObAccuracy::MAX_ACCURACY[type2].get_precision();
+    }
+    elem_data.meta_.set_type(coll_calc_type);
+    elem_data.set_length(MAX(len1, len2));
+  }
   uint16_t subschema_id;
-  elem_data.set_obj_type(coll_calc_type);
   const int MAX_LEN = 256;
   char type_name[MAX_LEN] = {0};
   ObString type_info;
@@ -934,6 +955,41 @@ int ObExprResultTypeUtil::get_array_calc_type(ObExecContext *exec_ctx,
     calc_type.set_collection(subschema_id);
     element_type = coll_calc_type;
   }
+  return ret;
+}
+
+int ObExprResultTypeUtil::get_deduce_element_type(ObExprResType &input_type, ObDataType &elem_type)
+{
+  int ret = OB_SUCCESS;
+  ObObjType type1 = input_type.get_type();
+  ObObjType type2 = elem_type.get_obj_type();
+  ObObjType res_type = MERGE_RESULT_TYPE[type1][type2];
+  ObObjMeta meta;
+  if (res_type == ObDecimalIntType || res_type == ObNumberType || res_type == ObUNumberType) {
+    // decimal type isn't supported in array, use double/bigint instead
+    if (input_type.get_scale() != 0 || ob_is_float_tc(type2) || ob_is_double_tc(type2)) {
+      meta.set_double();
+    } else {
+      meta.set_int();
+    }
+  } else {
+    meta.set_type(res_type);
+  }
+  ObAccuracy acc = ObAccuracy::DDL_DEFAULT_ACCURACY[meta.get_type()];
+  if (ob_is_collection_sql_type(elem_type.get_obj_type())) {
+    ret = OB_ERR_ILLEGAL_ARGUMENT_FOR_FUNCTION;
+    LOG_USER_ERROR(OB_ERR_ILLEGAL_ARGUMENT_FOR_FUNCTION);
+  } else {
+    elem_type.set_meta_type(meta);
+    if (ob_is_string_tc(input_type.get_type())) {
+      ObLength len = elem_type.get_length();
+      elem_type.set_accuracy(acc);
+      elem_type.set_length(MAX(len, input_type.get_length()));
+    } else {
+      elem_type.set_accuracy(acc);
+    }
+  }
+
   return ret;
 }
 

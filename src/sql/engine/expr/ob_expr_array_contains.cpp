@@ -14,7 +14,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_array_contains.h"
 #include "lib/udt/ob_collection_type.h"
-#include "lib/udt/ob_array_type.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 #include "sql/engine/ob_exec_context.h"
@@ -78,80 +77,8 @@ int ObExprArrayContains::calc_result_type2(ObExprResType &type,
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, ob_obj_type_str(type1_ptr->get_type()), ob_obj_type_str(type2_ptr->get_type()));
   } else if (type2_ptr->is_null()) {
     // do nothing
-  } else if (OB_FAIL(exec_ctx->get_sqludt_meta_by_subschema_id(type1_ptr->get_subschema_id(), arr_meta))) {
-    LOG_WARN("failed to get elem meta.", K(ret), K(type1_ptr->get_subschema_id()));
-  } else if (arr_meta.type_ != ObSubSchemaType::OB_SUBSCHEMA_COLLECTION_TYPE) {
-    ret = OB_ERR_INVALID_TYPE_FOR_OP;
-    LOG_WARN("invalid subschema type", K(ret), K(arr_meta.type_));
-  } else if (OB_ISNULL(coll_info = static_cast<const ObSqlCollectionInfo *>(arr_meta.value_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("coll info is null", K(ret));
-  } else if (!ob_is_collection_sql_type(type2_ptr->get_type())) {
-    ObCollectionArrayType *arr_type = static_cast<ObCollectionArrayType *>(coll_info->collection_meta_);
-    ObCollectionTypeBase *elem_type = arr_type->element_type_;
-    if (elem_type->type_id_ == ObNestedType::OB_BASIC_TYPE) {
-      if (ob_obj_type_class(type2_ptr->get_type()) != static_cast<ObCollectionBasicType *>(elem_type)->basic_meta_.get_type_class()) {
-        ObObjType calc_type = type2_ptr->get_type();
-        if (type2_ptr->get_type() == ObDecimalIntType || type2_ptr->get_type() == ObNumberType || type2_ptr->get_type() == ObUNumberType) {
-          calc_type = ObDoubleType;
-          if (get_decimalint_type(type2_ptr->get_precision()) == DECIMAL_INT_32) {
-            calc_type = ObFloatType;
-          }
-        }
-        if (calc_type == static_cast<ObCollectionBasicType *>(elem_type)->basic_meta_.get_obj_type()) {
-          type2_ptr->set_calc_type(calc_type);
-        } else {
-          uint32_t depth = 0;
-          ObDataType coll_elem1_type;
-          ObExprResType deduce_type;
-          bool is_vec = false;
-          if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(ObArrayExprUtils::get_array_element_type(exec_ctx, type1_ptr->get_subschema_id(), coll_elem1_type, depth, is_vec))) {
-            LOG_WARN("failed to get array element type", K(ret));
-          } else if (OB_FAIL(ObExprResultTypeUtil::get_array_calc_type(exec_ctx, coll_elem1_type.get_obj_type(), calc_type,
-                                                                       depth, deduce_type, calc_type))) {
-            LOG_WARN("failed to get array calc type", K(ret));
-          } else {
-            type1_ptr->set_calc_meta(deduce_type);
-            type2_ptr->set_calc_type(calc_type);
-          }
-        }
-      }
-    } else {
-      ret = OB_ERR_INVALID_TYPE_FOR_OP;
-      LOG_WARN("invalid obj type", K(ret), K(*coll_info), K(type2_ptr->get_type()));
-    }
-  } else {
-    // type2_ptr->is array
-    ObString child_def;
-    uint16_t child_subschema_id;
-    ObExprResType child_type;
-    ObExprResType coll_calc_type;
-    if (OB_FAIL(coll_info->get_child_def_string(child_def))) {
-      LOG_WARN("failed to get type1 child define", K(ret), K(*coll_info));
-    } else if (OB_FAIL(exec_ctx->get_subschema_id_by_type_string(child_def, child_subschema_id))) {
-      LOG_WARN("failed to get type1 child subschema id", K(ret), K(*coll_info), K(child_def));
-    } else if (child_subschema_id == type2_ptr->get_subschema_id()) {
-      // do nothing
-    } else if (FALSE_IT(child_type.set_collection(child_subschema_id))) {
-    } else if (OB_FAIL(ObExprResultTypeUtil::get_array_calc_type(exec_ctx, child_type, *type2_ptr, coll_calc_type))) {
-      LOG_WARN("failed to check array compatibilty", K(ret));
-    } else {
-      if (type2_ptr->get_subschema_id() != coll_calc_type.get_subschema_id()) {
-        type2_ptr->set_calc_meta(coll_calc_type);
-      }
-      if (child_type.get_subschema_id() != coll_calc_type.get_subschema_id()) {
-        ObDataType child_calc_type;
-        uint16_t type1_calc_id;
-        child_calc_type.meta_.set_collection(coll_calc_type.get_subschema_id());
-        if (OB_FAIL(ObArrayExprUtils::deduce_nested_array_subschema_id(exec_ctx, child_calc_type, type1_calc_id))) {
-          LOG_WARN("failed to deduce nested array subschema id", K(ret));
-        } else {
-          coll_calc_type.set_collection(type1_calc_id);
-          type1_ptr->set_calc_meta(coll_calc_type);
-        }
-      }
-    }
+  } else if (OB_FAIL(ObArrayExprUtils::deduce_array_type(exec_ctx, *type1_ptr, *type2_ptr, subschema_id))) {
+    LOG_WARN("failed to get result array type subschema id", K(ret));
   }
   if (OB_SUCC(ret)) {
     type.set_int32();
@@ -434,8 +361,7 @@ int ObExprArrayContains::eval_array_contains_array_vector(const ObExpr &expr, Ob
       }
       if (OB_FAIL(ret)) {
       } else if (is_null_res) {
-        res_vec->set_null(idx);
-        eval_flags.set(idx);
+        // do noting
       } else if (right_vec->is_null(idx)) {
         bool contains_null = arr_obj->contain_null();
         res_vec->set_bool(idx, contains_null);
@@ -451,6 +377,9 @@ int ObExprArrayContains::eval_array_contains_array_vector(const ObExpr &expr, Ob
       }
       bool bret = false;
       if (OB_FAIL(ret)) {
+      } else if (is_null_res) {
+        res_vec->set_null(idx);
+        eval_flags.set(idx);
       } else if (OB_FAIL(ObArrayUtil::contains(*arr_obj, *arr_val, bret))) {
         LOG_WARN("array contains failed", K(ret));
       } else {
@@ -499,6 +428,7 @@ int ObExprArrayContains::cg_expr(ObExprCGCtx &expr_cg_ctx,
     }
     if OB_SUCC(ret) {
       switch (right_tc) {
+        case ObUIntTC:
         case ObIntTC:
           rt_expr.eval_func_ = eval_array_contains_int64_t;
           rt_expr.eval_batch_func_ = eval_array_contains_batch_int64_t;
@@ -527,12 +457,12 @@ int ObExprArrayContains::cg_expr(ObExprCGCtx &expr_cg_ctx,
           break;
         default :
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
-          LOG_WARN("invalid type", K(ret), K(right_type));
+          LOG_WARN("invalid type", K(ret), K(right_type), K(right_tc));
       }
     }
   }
 
-  return OB_SUCCESS;
+  return ret;
 }
 
 } // namespace sql

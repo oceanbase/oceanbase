@@ -220,6 +220,12 @@ private:
                               ObQualifiedName &column_ref,
                               ObRawExpr *&expr);
   int process_array_contains_node(const ParseNode *node, ObRawExpr *&expr);
+  int process_lambda_func_node(const ParseNode *node, ObRawExpr *&expr);
+  int process_array_map_func_node(const ParseNode *node, ObRawExpr *&expr);
+  int check_replace_lambda_params_node(const ParseNode *params_node, ParseNode *func_node);
+  int process_lambda_var_node(const ParseNode *node, ObRawExpr *&expr);
+  int extract_var_exprs(ObRawExpr *expr, ObIArray<ObVarRawExpr *> &var_exprs);
+  int check_lambda_params_duplicated(const ParseNode *params_node);
 private:
   int process_sys_func_params(ObSysFunRawExpr &func_expr, int current_columns_count);
   int transform_ratio_afun_to_arg_div_sum(const ParseNode *ratio_to_report, ParseNode *&div);
@@ -227,6 +233,7 @@ private:
   int get_opposite_string(const common::ObString &orig_string, common::ObString &new_string, common::ObIAllocator &allocator);
   int reset_keep_aggr_sort_direction(ObIArray<OrderItem> &aggr_sort_item);
   int reset_aggr_sort_nulls_first(ObIArray<OrderItem> &aggr_sort_item);
+  int set_array_aggr_null_direction(ObIArray<OrderItem> &aggr_sort_item, bool is_null_first);
   inline void set_udf_param_syntax_err(const bool val) { is_udf_param_syntax_err_ = val; }
   inline bool get_udf_param_syntax_err() { return is_udf_param_syntax_err_; }
 

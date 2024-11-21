@@ -3454,6 +3454,16 @@ int ObRawExprUtils::replace_ref_column(ObRawExpr *&raw_expr, ObRawExpr *from,
     } else if (OB_FAIL(SMART_CALL(replace_ref_column(relation_exprs, from, to, except_exprs)))) {
       LOG_WARN("replace reference column failed", K(ret));
     }
+  } else if (raw_expr->is_var_expr()) {
+    ObVarRawExpr *var_expr = static_cast<ObVarRawExpr *>(raw_expr);
+    ObRawExpr *ref_expr = var_expr->get_ref_expr();
+    if (ref_expr != NULL) {
+      if (OB_FAIL(SMART_CALL(replace_ref_column(ref_expr, from, to, except_exprs)))) {
+        LOG_WARN("replace reference column failed", K(ret));
+      } else {
+        var_expr->set_ref_expr(ref_expr);
+      }
+    }
   } else {
     int64_t N = raw_expr->get_param_count();
     for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
@@ -3497,6 +3507,16 @@ int ObRawExprUtils::replace_ref_column(ObRawExpr *&raw_expr,
       LOG_WARN("failed to get relation exprs", K(ret));
     } else if (OB_FAIL(SMART_CALL(replace_ref_column(relation_exprs, from, to, except_exprs)))) {
       LOG_WARN("replace reference column failed", K(ret));
+    }
+  } else if (raw_expr->is_var_expr()) {
+    ObVarRawExpr *var_expr = static_cast<ObVarRawExpr *>(raw_expr);
+    ObRawExpr *ref_expr = var_expr->get_ref_expr();
+    if (ref_expr != NULL) {
+      if (OB_FAIL(SMART_CALL(replace_ref_column(ref_expr, from, to, except_exprs)))) {
+        LOG_WARN("replace reference column failed", K(ret));
+      } else {
+        var_expr->set_ref_expr(ref_expr);
+      }
     }
   } else {
     int64_t N = raw_expr->get_param_count();

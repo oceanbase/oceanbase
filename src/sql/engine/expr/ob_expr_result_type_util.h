@@ -227,11 +227,12 @@ public:
                                  const ObExprResType &type2,
                                  ObExprResType &calc_type);
   static int get_array_calc_type(ObExecContext *exec_ctx,
-                                 const ObObjType &type1,
-                                 const ObObjType &type2,
+                                 const ObDataType &coll_elem1_type,
+                                 const ObDataType &coll_elem2_type,
                                  uint32_t depth,
                                  ObExprResType &calc_type,
                                  ObObjType &element_type);
+  static int get_deduce_element_type(ObExprResType &input_type, ObDataType &elem_type);
 };
 
 

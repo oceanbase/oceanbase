@@ -1093,6 +1093,9 @@ private:
                              GroupConcatExtraResult *&extra,
                              ObDatum &concat_result,
                              ObRbOperation calc_op);
+  int get_array_agg_result(const ObAggrInfo &aggr_info,
+                           GroupConcatExtraResult *&extra,
+                           ObDatum &concat_result);
   int check_key_valid(common::hash::ObHashSet<ObString> &view_key_names, const ObString& key);
 
   int shadow_truncate_string_for_hist(const ObObjMeta obj_meta,
@@ -1218,6 +1221,7 @@ public:
       case T_FUN_SYS_RB_BUILD_AGG:
       case T_FUN_SYS_RB_OR_AGG:
       case T_FUN_SYS_RB_AND_AGG:
+      case T_FUNC_SYS_ARRAY_AGG:
       {
         need_id = true;
         break;
@@ -1374,6 +1378,7 @@ OB_INLINE bool ObAggregateProcessor::need_extra_info(const ObExprOperatorType ex
     case T_FUN_SYS_RB_BUILD_AGG:
     case T_FUN_SYS_RB_OR_AGG:
     case T_FUN_SYS_RB_AND_AGG:
+    case T_FUNC_SYS_ARRAY_AGG:
     {
       need_extra = true;
       break;

@@ -162,6 +162,9 @@ private:
   int print_sql_udt_attr_access(ObSysFunRawExpr *expr);
   int print_sql_udt_construct(ObSysFunRawExpr *expr);
   int print_st_asmvt(ObAggFunRawExpr *expr);
+  int print_array_agg_expr(ObAggFunRawExpr *expr);
+  int print_array_map(ObSysFunRawExpr *expr);
+  int get_max_lambda_param_idx(ObRawExpr *expr, uint32_t &max_idx);
 
   int print_type(const ObExprResType &dst_type);
 

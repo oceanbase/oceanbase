@@ -572,7 +572,8 @@ int Processor::init_aggr_row_extra_info(RuntimeContext &agg_ctx, char *extra_arr
       case T_FUN_ORA_XMLAGG:
       case T_FUN_HYBRID_HIST:
       case T_FUN_TOP_FRE_HIST:
-      case T_FUN_AGG_UDF: {
+      case T_FUN_AGG_UDF:
+      case T_FUNC_SYS_ARRAY_AGG: {
         agg_ctx.need_advance_collect_ = true;
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("unsupported aggregate type", K(ret), K(aggr_info.get_expr_type()));

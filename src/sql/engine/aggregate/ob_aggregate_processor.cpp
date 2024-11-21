@@ -30,6 +30,7 @@
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/aggregate/ob_aggregate_util.h"
 #include "sql/engine/basic/ob_material_op_impl.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 #include "share/stat/ob_hybrid_hist_estimator.h"
 #include "share/stat/ob_dbms_stats_utils.h"
 #include "sql/engine/expr/ob_expr_sys_op_opnsize.h"
@@ -2481,6 +2482,7 @@ int ObAggregateProcessor::generate_group_row(GroupRow *&new_group_row,
         case T_FUN_SYS_RB_BUILD_AGG:
         case T_FUN_SYS_RB_OR_AGG:
         case T_FUN_SYS_RB_AND_AGG:
+        case T_FUNC_SYS_ARRAY_AGG:
         {
           void *tmp_buf = NULL;
           set_need_advance_collect();
@@ -2695,6 +2697,7 @@ int ObAggregateProcessor::fill_group_row(GroupRow *new_group_row,
         case T_FUN_SYS_RB_BUILD_AGG:
         case T_FUN_SYS_RB_OR_AGG:
         case T_FUN_SYS_RB_AND_AGG:
+        case T_FUNC_SYS_ARRAY_AGG:
         {
           void *tmp_buf = NULL;
           set_need_advance_collect();
@@ -3146,6 +3149,7 @@ int ObAggregateProcessor::rollup_aggregation(AggrCell &aggr_cell, AggrCell &roll
     case T_FUN_SYS_RB_BUILD_AGG:
     case T_FUN_SYS_RB_OR_AGG:
     case T_FUN_SYS_RB_AND_AGG:
+    case T_FUNC_SYS_ARRAY_AGG:
     {
       GroupConcatExtraResult *aggr_extra = NULL;
       GroupConcatExtraResult *rollup_extra = NULL;
@@ -3467,6 +3471,7 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
     case T_FUN_SYS_RB_BUILD_AGG:
     case T_FUN_SYS_RB_OR_AGG:
     case T_FUN_SYS_RB_AND_AGG:
+    case T_FUNC_SYS_ARRAY_AGG:
     {
       GroupConcatExtraResult *extra = NULL;
       if (OB_ISNULL(extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra()))) {
@@ -3784,6 +3789,7 @@ int ObAggregateProcessor::process_aggr_batch_result(
     case T_FUN_SYS_RB_BUILD_AGG:
     case T_FUN_SYS_RB_OR_AGG:
     case T_FUN_SYS_RB_AND_AGG:
+    case T_FUNC_SYS_ARRAY_AGG:
     {
       GroupConcatExtraResult *extra_info = NULL;
       if (OB_ISNULL(extra_info = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra()))) {
@@ -4050,6 +4056,7 @@ int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow
     case T_FUN_SYS_RB_BUILD_AGG:
     case T_FUN_SYS_RB_OR_AGG:
     case T_FUN_SYS_RB_AND_AGG:
+    case T_FUNC_SYS_ARRAY_AGG:
     {
       GroupConcatExtraResult *extra = NULL;
       if (OB_ISNULL(extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra()))) {
@@ -4469,6 +4476,14 @@ int ObAggregateProcessor::collect_aggr_result(
       GroupConcatExtraResult *extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra());
       if (OB_FAIL(get_rb_calc_agg_result(aggr_info, extra, result, ObRbOperation::AND))) {
         LOG_WARN("failed to get roaringbitmap calculate and result", K(ret));
+      } else {
+      }
+      break;
+    }
+    case T_FUNC_SYS_ARRAY_AGG: {
+      GroupConcatExtraResult *extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra());
+      if (OB_FAIL(get_array_agg_result(aggr_info, extra, result))) {
+        LOG_WARN("failed to get asmvt result", K(ret));
       } else {
       }
       break;
@@ -9240,6 +9255,69 @@ int ObAggregateProcessor::get_rb_calc_agg_result(const ObAggrInfo &aggr_info,
       }
     }
     ObRbUtils::rb_destroy(rb);
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::get_array_agg_result(const ObAggrInfo &aggr_info,
+                                               GroupConcatExtraResult *&extra,
+                                               ObDatum &concat_result)
+{
+  int ret = OB_SUCCESS;
+  ObIArrayType *arr_obj = NULL;
+  const uint16_t meta_id = aggr_info.expr_->obj_meta_.get_subschema_id();
+  common::ObArenaAllocator tmp_alloc(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObRbExprHelper::get_tenant_id(eval_ctx_.exec_ctx_.get_my_session()), "ARRAY_AGG"));
+  if (OB_ISNULL(extra) || OB_UNLIKELY(extra->empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unpexcted null", K(ret), K(extra));
+  } else if (extra->is_iterated() && OB_FAIL(extra->rewind())) {
+    // Group concat row may be iterated in rollup_process(), rewind here.
+    LOG_WARN("rewind failed", KPC(extra), K(ret));
+  } else if (!extra->is_iterated() && OB_FAIL(extra->finish_add_row())) {
+    LOG_WARN("finish_add_row failed", KPC(extra), K(ret));
+  } else if (OB_FAIL(ObArrayExprUtils::construct_array_obj(tmp_alloc, eval_ctx_, meta_id, arr_obj, false))) {
+    LOG_WARN("construct array obj failed", K(ret));
+  } else {
+    const ObChunkDatumStore::StoredRow *storted_row = NULL;
+    ObObjMeta elem_meta = aggr_info.param_exprs_.at(0)->obj_meta_;
+    ObObjType elem_type = elem_meta.get_type();
+    bool inited_tmp_obj = false;
+    ObObj *tmp_obj = NULL;
+    while (OB_SUCC(ret) && OB_SUCC(extra->get_next_row(storted_row))) {
+      if (OB_ISNULL(storted_row)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(storted_row));
+      } else {
+        const ObDatum& datum_val = storted_row->cells()[0];
+        if (datum_val.is_null()) {
+          if (OB_FAIL(arr_obj->push_null())) {
+            LOG_WARN("failed to push back null value", K(ret));
+          }
+        } else if (ob_is_collection_sql_type(elem_type)) {
+          common::ObArenaAllocator single_row_alloc(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+          ObArrayNested *nest_array = static_cast<ObArrayNested *>(arr_obj);
+          if (OB_FAIL(ObArrayExprUtils::add_elem_to_nested_array(single_row_alloc, eval_ctx_, elem_meta.get_subschema_id(),
+                                                                 datum_val, nest_array))) {
+            LOG_WARN("failed to push back value", K(ret));
+          }
+        } else if (OB_FAIL(ObArrayUtil::append(*arr_obj, elem_type, &datum_val))) {
+          LOG_WARN("failed to append array value", K(ret));
+        }
+      }
+    }//end of while
+
+    if (ret != OB_ITER_END && ret != OB_SUCCESS) {
+      LOG_WARN("fail to get next row", K(ret));
+    } else {
+      ret = OB_SUCCESS;
+      ObString res_str;
+      if (OB_FAIL(ObArrayExprUtils::set_array_res(arr_obj, arr_obj->get_raw_binary_len(), *aggr_info.expr_, eval_ctx_, res_str))) {
+        LOG_WARN("get array binary string failed", K(ret));
+      } else {
+        concat_result.set_string(res_str);
+      }
+    }
   }
   return ret;
 }

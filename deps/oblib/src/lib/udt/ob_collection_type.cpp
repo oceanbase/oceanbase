@@ -65,12 +65,6 @@ bool ObCollectionBasicType::has_same_super_type(const ObCollectionBasicType &oth
 {
   bool bret = false;
   if (get_compatiable_type_id() != other.get_compatiable_type_id()) {
-  } else if (basic_meta_.meta_ !=  other.basic_meta_.meta_) {
-    if (ob_is_null(basic_meta_.meta_.get_type()) || ob_is_null(other.basic_meta_.meta_.get_type())) {
-      bret = true;
-    } else if (ob_is_numeric_type(basic_meta_.meta_.get_type()) && ob_is_numeric_type(other.basic_meta_.meta_.get_type())) {
-      bret = true;
-    }
   } else {
     bret = true;
   }
@@ -352,58 +346,71 @@ int ObSqlCollectionInfo::create_meta_info_by_name(const std::string &name, ObCol
     }
   }
 
+  ObDataType &basic_meta = static_cast<ObCollectionBasicType *>(meta_info)->basic_meta_;
   if (OB_FAIL(ret)) {
   } else if (0 == name.compare("NULL")) {
-    static_cast<ObCollectionBasicType *>(meta_info)->basic_meta_.meta_.set_null();
+    basic_meta.meta_.set_null();
   } else if (0 == name.compare("TINYINT")) {
-    static_cast<ObCollectionBasicType *>(meta_info)->basic_meta_.meta_.set_tinyint();
+    basic_meta.meta_.set_tinyint();
+    basic_meta.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObTinyIntType].scale_);
+    basic_meta.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObTinyIntType].precision_);
   } else if (0 == name.compare("SMALLINT")) {
-    static_cast<ObCollectionBasicType *>(meta_info)->basic_meta_.meta_.set_smallint();
+    basic_meta.meta_.set_smallint();
+    basic_meta.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObSmallIntType].scale_);
+    basic_meta.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObSmallIntType].precision_);
   } else if (0 == name.compare("MEDIUMINT")) {
-    static_cast<ObCollectionBasicType *>(meta_info)->basic_meta_.meta_.set_mediumint();
+    basic_meta.meta_.set_mediumint();
+    basic_meta.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObMediumIntType].scale_);
+    basic_meta.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObMediumIntType].precision_);
   } else if (0 == name.compare("INT")) {
-    static_cast<ObCollectionBasicType *>(meta_info)->basic_meta_.meta_.set_int32();
+    basic_meta.meta_.set_int32();
+    basic_meta.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObInt32Type].scale_);
+    basic_meta.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObInt32Type].precision_);
   } else if (0 == name.compare("BIGINT")) {
-    static_cast<ObCollectionBasicType *>(meta_info)->basic_meta_.meta_.set_int();
+    basic_meta.meta_.set_int();
+    basic_meta.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].scale_);
+    basic_meta.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].precision_);
   } else if (0 == name.compare("FLOAT")) {
-    static_cast<ObCollectionBasicType *>(meta_info)->basic_meta_.meta_.set_float();
+    basic_meta.meta_.set_float();
   } else if (0 == name.compare("DOUBLE")) {
-    static_cast<ObCollectionBasicType *>(meta_info)->basic_meta_.meta_.set_double();
+    basic_meta.meta_.set_double();
   } else if (0 == name.compare("DECIMAL")) {
-    static_cast<ObCollectionBasicType *>(meta_info)->basic_meta_.meta_.set_number();
+    basic_meta.meta_.set_number();
+    basic_meta.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObNumberType].scale_);
+    basic_meta.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObNumberType].precision_);
   } else if (0 == name.compare("DATETIME")) {
-    static_cast<ObCollectionBasicType *>(meta_info)->basic_meta_.meta_.set_datetime();
+    basic_meta.meta_.set_datetime();
   } else if (0 == name.compare("TIMESTAMP")) {
-    static_cast<ObCollectionBasicType *>(meta_info)->basic_meta_.meta_.set_timestamp();
+    basic_meta.meta_.set_timestamp();
   } else if (0 == name.compare("DATE")) {
-    static_cast<ObCollectionBasicType *>(meta_info)->basic_meta_.meta_.set_date();
+    basic_meta.meta_.set_date();
   } else if (0 == name.compare("TIME")) {
-    static_cast<ObCollectionBasicType *>(meta_info)->basic_meta_.meta_.set_time();
+    basic_meta.meta_.set_time();
   } else if (0 == name.compare("YEAR")) {
-    static_cast<ObCollectionBasicType *>(meta_info)->basic_meta_.meta_.set_year();
+    basic_meta.meta_.set_year();
   } else if (0 == name.compare("VARCHAR")) {
-    static_cast<ObCollectionBasicType *>(meta_info)->basic_meta_.meta_.set_varchar();
+    basic_meta.meta_.set_varchar();
     // use default CS
-    static_cast<ObCollectionBasicType *>(meta_info)->basic_meta_.set_collation_type(CS_TYPE_UTF8MB4_BIN);
-    static_cast<ObCollectionBasicType *>(meta_info)->basic_meta_.set_collation_level(CS_LEVEL_COERCIBLE);
+    basic_meta.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+    basic_meta.set_collation_level(CS_LEVEL_COERCIBLE);
   } else if (0 == name.compare("VARBINARY")) {
-    static_cast<ObCollectionBasicType *>(meta_info)->basic_meta_.meta_.set_varbinary();
+    basic_meta.meta_.set_varbinary();
   } else if (0 == name.compare("CHAR")) {
-    static_cast<ObCollectionBasicType *>(meta_info)->basic_meta_.meta_.set_char();
+    basic_meta.meta_.set_char();
   } else if (0 == name.compare("BINARY")) {
-    static_cast<ObCollectionBasicType *>(meta_info)->basic_meta_.meta_.set_binary();
+    basic_meta.meta_.set_binary();
   } else if (0 == name.compare("BIT")) {
-    static_cast<ObCollectionBasicType *>(meta_info)->basic_meta_.meta_.set_bit();
+    basic_meta.meta_.set_bit();
   } else if (0 == name.compare("JSON")) {
-    static_cast<ObCollectionBasicType *>(meta_info)->basic_meta_.meta_.set_json();
+    basic_meta.meta_.set_json();
   } else if (0 == name.compare("GEOMETRY")) {
-    static_cast<ObCollectionBasicType *>(meta_info)->basic_meta_.meta_.set_geometry();
+    basic_meta.meta_.set_geometry();
   } else if (0 == name.compare("DECIMAL_INT")) {
-    static_cast<ObCollectionBasicType *>(meta_info)->basic_meta_.meta_.set_decimal_int();
+    basic_meta.meta_.set_decimal_int();
   } else if (0 == name.compare("ARRAY") || 0 == name.compare("VECTOR")) {
   } else {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get type by name failed", K(ret));
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("unsupported element type", K(ret), K(ObString(name.length(), name.c_str())));
   }
 
   return ret;

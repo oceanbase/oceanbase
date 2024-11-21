@@ -517,9 +517,20 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_rb_to_string.cpp
   engine/expr/ob_expr_rb_from_string.cpp
   engine/expr/ob_expr_rb_select.cpp
+  engine/expr/ob_expr_rb_build.cpp
   engine/expr/ob_expr_array_contains.cpp
+  engine/expr/ob_expr_array_to_string.cpp
+  engine/expr/ob_expr_string_to_array.cpp
+  engine/expr/ob_expr_array_append.cpp
+  engine/expr/ob_expr_element_at.cpp
+  engine/expr/ob_expr_array_cardinality.cpp
   engine/expr/ob_expr_decode_trace_id.cpp
   engine/expr/ob_expr_split_part.cpp
+  engine/expr/ob_expr_array_overlaps.cpp
+  engine/expr/ob_expr_array_contains_all.cpp
+  engine/expr/ob_expr_array_distinct.cpp
+  engine/expr/ob_expr_array_map.cpp
+  engine/expr/ob_expr_array_remove.cpp
   engine/expr/ob_expr_extract_cert_expired_time.cpp
   engine/expr/ob_expr_transaction_id.cpp
   engine/expr/ob_expr_inner_row_cmp_val.cpp

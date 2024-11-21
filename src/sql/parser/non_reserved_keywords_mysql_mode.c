@@ -56,6 +56,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"arbitration", ARBITRATION},
   {"archivelog", ARCHIVELOG},
   {"array", ARRAY},
+  {"array_map", ARRAY_MAP},
   {"as", AS},
   {"asc", ASC},
   {"asensitive", ASENSITIVE},
@@ -75,6 +76,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"avg", AVG},
   {"avg_row_length", AVG_ROW_LENGTH},
   {"array", ARRAY},
+  {"array_agg", ARRAY_AGG},
   {"backup", BACKUP},
   {"backupset", BACKUPSET},
   {"balance", BALANCE},
@@ -1096,6 +1098,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"rb_iterate", RB_ITERATE},
   {"optimizer_costs", OPTIMIZER_COSTS},
   {"micro_index_clustered", MICRO_INDEX_CLUSTERED},
+  {"unnest", UNNEST},
   {"tenant_sts_credential", TENANT_STS_CREDENTIAL}
 };
 

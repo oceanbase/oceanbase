@@ -38,6 +38,7 @@
 #include "sql/engine/expr/ob_expr_json_schema_validation_report.h"
 #include "sql/engine/expr/ob_expr_json_utils.h"
 #include "sql/engine/expr/ob_expr_get_path.h"
+#include "sql/engine/expr/ob_expr_array_map.h"
 
 namespace oceanbase
 {
@@ -116,6 +117,7 @@ void ObExprExtraInfoFactory::register_expr_extra_infos()
   REG_EXTRA_INFO(T_FUN_SYS_JSON_VALUE, ObExprJsonQueryParamInfo);
   REG_EXTRA_INFO(T_FUN_SYS_JSON_QUERY, ObExprJsonQueryParamInfo);
   REG_EXTRA_INFO(T_PSEUDO_EXTERNAL_FILE_COL, ObDataAccessPathExtraInfo);
+  REG_EXTRA_INFO(T_FUNC_SYS_ARRAY_MAP, ObExprArrayMapInfo);
 }
 
 } // end namespace sql

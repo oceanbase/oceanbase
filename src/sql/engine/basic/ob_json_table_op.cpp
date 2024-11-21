@@ -29,6 +29,7 @@
 #include "lib/xml/ob_binary_aggregate.h"
 #include "lib/xml/ob_xpath.h"
 #include "sql/engine/expr/ob_expr_rb_func_helper.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 #include "lib/roaringbitmap/ob_rb_utils.h"
 
 namespace oceanbase
@@ -342,7 +343,8 @@ OB_DEF_SERIALIZE(ObJsonTableSpec)
   } else if (table_type_ == MulModeTableType::OB_ORA_XML_TABLE_TYPE) {
     OB_UNIS_ENCODE(table_type_);
     OB_UNIS_ENCODE(namespace_def_);
-  } else if (table_type_ == MulModeTableType::OB_RB_ITERATE_TABLE_TYPE) {
+  } else if (table_type_ == MulModeTableType::OB_RB_ITERATE_TABLE_TYPE
+             || table_type_ == MulModeTableType::OB_UNNEST_TABLE_TYPE) {
     OB_UNIS_ENCODE(table_type_);
     int32_t value_exprs_count = value_exprs_.count() - 1;
     OB_UNIS_ENCODE(value_exprs_count);
@@ -373,7 +375,8 @@ OB_DEF_SERIALIZE_SIZE(ObJsonTableSpec)
   if (table_type_ == MulModeTableType::OB_ORA_XML_TABLE_TYPE) {
     OB_UNIS_ADD_LEN(table_type_);
     OB_UNIS_ADD_LEN(namespace_def_);
-  } else if (table_type_ == MulModeTableType::OB_RB_ITERATE_TABLE_TYPE) {
+  } else if (table_type_ == MulModeTableType::OB_RB_ITERATE_TABLE_TYPE
+             || table_type_ == MulModeTableType::OB_UNNEST_TABLE_TYPE) {
     OB_UNIS_ADD_LEN(table_type_);
     int32_t value_exprs_count = value_exprs_.count() - 1;
     OB_UNIS_ADD_LEN(value_exprs_count);
@@ -427,6 +430,8 @@ OB_DEF_DESERIALIZE(ObJsonTableSpec)
         table_type_flag = OB_XML_TABLE;
       } else if (col_info->col_type_ == COL_TYPE_RB_ITERATE) {
         table_type_flag = OB_RB_ITERATE_TABLE;
+      } else if (col_info->col_type_ == COL_TYPE_UNNEST) {
+        table_type_flag = OB_UNNEST_TABLE;
       }
     }
   }
@@ -748,6 +753,15 @@ int ObJsonTableOp::init()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to new rb iterate node", K(ret));
       }
+    } else if (jt_ctx_.is_unnest_table_func()) {
+      table_func_buf = jt_ctx_.op_exec_alloc_->alloc(sizeof(UnnestTableFunc));
+      if (OB_ISNULL(table_func_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate table func buf", K(ret));
+      } else if (OB_ISNULL(jt_ctx_.table_func_ = new (table_func_buf) UnnestTableFunc())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to new unnest node", K(ret));
+      }
     } else if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(jt_ctx_.op_exec_alloc_, jt_ctx_.xpath_ctx_))) {
       LOG_WARN("fail to create xpath memory context", K(ret));
     } else if (jt_ctx_.is_xml_table_func()) {
@@ -981,6 +995,134 @@ int RegularCol::eval_xml_type_col(ObRegCol &col_node, JtScanCtx* ctx, ObExpr* co
   return ret;
 }
 
+int RegularCol::eval_unnest_col(ObRegCol &col_node, void* in, JtScanCtx* ctx, ObExpr* col_expr)
+{
+  INIT_SUCC(ret);
+  col_node.cur_pos_++;
+  ObIArrayType **arr_stucts = reinterpret_cast<ObIArrayType**>(in);
+  ObDataType data_type = col_node.col_info_.data_type_;
+  ObIArrayType *arr_obj = arr_stucts[col_node.col_info_.output_column_idx_];
+  ObObjType obj_type = data_type.get_obj_type();
+  int32_t idx = col_node.cur_pos_;
+  ObExpr* expr = ctx->spec_ptr_->column_exprs_.at(col_node.col_info_.output_column_idx_);
+  ObDatum& res_datum = expr->locate_datum_for_write(*ctx->eval_ctx_);
+
+  if (OB_ISNULL(arr_obj) || (arr_obj->get_format() !=  ArrayFormat::Vector && arr_obj->is_null(idx))) {
+    col_expr->locate_datum_for_write(*ctx->eval_ctx_).set_null();
+  } else {
+    switch (obj_type) {
+      case ObTinyIntType: {
+        ObArrayFixedSize<int8_t> *arr = static_cast<ObArrayFixedSize<int8_t> *>(arr_obj);
+        res_datum.set_int(static_cast<int64_t>((*arr)[idx]));
+        break;
+      }
+      case ObSmallIntType: {
+        ObArrayFixedSize<int16_t> *arr = static_cast<ObArrayFixedSize<int16_t> *>(arr_obj);
+        res_datum.set_int(static_cast<int64_t>((*arr)[idx]));
+        break;
+      }
+      case ObIntType: {
+        ObArrayFixedSize<int64_t> *arr = static_cast<ObArrayFixedSize<int64_t> *>(arr_obj);
+        res_datum.set_int((*arr)[idx]);
+        break;
+      }
+      case ObInt32Type: {
+        ObArrayFixedSize<int32_t> *arr = static_cast<ObArrayFixedSize<int32_t> *>(arr_obj);
+        res_datum.set_int32((*arr)[idx]);
+        break;
+      }
+      case ObUTinyIntType: {
+        ObArrayFixedSize<uint8_t> *arr = static_cast<ObArrayFixedSize<uint8_t> *>(arr_obj);
+        res_datum.set_uint(static_cast<uint64_t>((*arr)[idx]));
+        break;
+      }
+      case ObUSmallIntType: {
+        ObArrayFixedSize<uint16_t> *arr = static_cast<ObArrayFixedSize<uint16_t> *>(arr_obj);
+        res_datum.set_uint(static_cast<uint64_t>((*arr)[idx]));
+        break;
+      }
+      case ObUInt64Type: {
+        ObArrayFixedSize<uint64_t> *arr = static_cast<ObArrayFixedSize<uint64_t> *>(arr_obj);
+        res_datum.set_uint((*arr)[idx]);
+        break;
+      }
+      case ObUInt32Type: {
+        ObArrayFixedSize<int32_t> *arr = static_cast<ObArrayFixedSize<int32_t> *>(arr_obj);
+        res_datum.set_uint32((*arr)[idx]);
+        break;
+      }
+      case ObDecimalIntType: {
+        ObPrecision prec = data_type.get_precision();
+        if (get_decimalint_type(prec) == DECIMAL_INT_32) {
+          ObArrayFixedSize<int32_t> *arr = static_cast<ObArrayFixedSize<int32_t> *>(arr_obj);
+          res_datum.set_decimal_int(arr->get_decimal_int(idx), sizeof(int32_t));
+        } else if (get_decimalint_type(prec) == DECIMAL_INT_64) {
+          ObArrayFixedSize<int64_t> *arr = static_cast<ObArrayFixedSize<int64_t> *>(arr_obj);
+          res_datum.set_decimal_int(arr->get_decimal_int(idx), sizeof(int64_t));
+        } else if (get_decimalint_type(prec) == DECIMAL_INT_128) {
+          ObArrayFixedSize<int128_t> *arr = static_cast<ObArrayFixedSize<int128_t> *>(arr_obj);
+          res_datum.set_decimal_int(arr->get_decimal_int(idx), sizeof(int128_t));
+        } else if (get_decimalint_type(prec) == DECIMAL_INT_256) {
+          ObArrayFixedSize<int256_t> *arr = static_cast<ObArrayFixedSize<int256_t> *>(arr_obj);
+          res_datum.set_decimal_int(arr->get_decimal_int(idx), sizeof(int256_t));
+        } else if (get_decimalint_type(prec) == DECIMAL_INT_512) {
+          ObArrayFixedSize<int512_t> *arr = static_cast<ObArrayFixedSize<int512_t> *>(arr_obj);
+          res_datum.set_decimal_int(arr->get_decimal_int(idx), sizeof(int512_t));
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          OB_LOG(WARN, "unexpected precision", K(ret), K(prec));
+        }
+        break;
+      }
+      case ObVarcharType : {
+        ObArrayBinary *arr = static_cast<ObArrayBinary *>(arr_obj);
+        res_datum.set_string((*arr)[idx]);
+        break;
+      }
+      case ObDoubleType: {
+        ObArrayFixedSize<double> *arr = static_cast<ObArrayFixedSize<double> *>(arr_obj);
+        res_datum.set_double((*arr)[idx]);
+        break;
+      }
+      case ObFloatType: {
+        ObArrayFixedSize<float> *arr = static_cast<ObArrayFixedSize<float> *>(arr_obj);
+        res_datum.set_float((*arr)[idx]);
+        break;
+      }
+      case ObCollectionSQLType: {
+        ObArrayNested *arr = static_cast<ObArrayNested*>(arr_obj);
+        uint16_t subschema_id = data_type.get_subschema_id();
+        ObSubSchemaValue value;
+        ObSqlCollectionInfo *coll_info  = NULL;
+        ObIArrayType* child_arr = NULL;
+        ObString res_str;
+        if (OB_FAIL(ctx->exec_ctx_->get_sqludt_meta_by_subschema_id(subschema_id, value))) {
+          LOG_WARN("failed to get subschema ctx", K(ret));
+        } else if (value.type_ >= OB_SUBSCHEMA_MAX_TYPE) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid subschema type", K(ret), K(value));
+        } else if (OB_FALSE_IT(coll_info = reinterpret_cast<ObSqlCollectionInfo *>(value.value_))) {
+        } else if (OB_FAIL(ObArrayTypeObjFactory::construct(*ctx->op_exec_alloc_, *coll_info->collection_meta_, child_arr))) {
+          LOG_WARN("failed to add null to array", K(ret));
+        } else if (OB_FAIL(arr->at(idx, *child_arr))) {
+          LOG_WARN("failed to get elem", K(ret), K(idx));
+        } else if (OB_FAIL(ObArrayExprUtils::set_array_res(child_arr, child_arr->get_raw_binary_len(), *expr, *ctx->eval_ctx_, res_str))) {
+          LOG_WARN("get array binary string failed", K(ret));
+        } else {
+          res_datum.set_string(res_str);
+        }
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        OB_LOG(WARN, "unexpected element type", K(ret), K(data_type.get_obj_type()));
+      }
+    }
+  }
+
+  return ret;
+}
+
 int RbIterateTableFunc::eval_input(ObJsonTableOp &jt, JtScanCtx &ctx, ObEvalCtx &eval_ctx)
 {
   INIT_SUCC(ret);
@@ -1089,7 +1231,7 @@ int RbIterateTableFunc::get_iter_value(ObRegCol &col_node, JtScanCtx* ctx, bool 
   INIT_SUCC(ret);
   bool all_iter_end = true;
   ObRoaringBitmapIter **rb_iters = reinterpret_cast<ObRoaringBitmapIter **>(col_node.iter_);
-  int col_num = ctx->spec_ptr_->value_exprs_.count();
+  int64_t col_num = ctx->spec_ptr_->value_exprs_.count();
   for (int64_t i = 0; OB_SUCC(ret) && i < col_num; ++i) {
     ObRoaringBitmapIter* rb_iter = rb_iters[i];
     if (OB_ISNULL(rb_iter)) {
@@ -1111,6 +1253,102 @@ int RbIterateTableFunc::get_iter_value(ObRegCol &col_node, JtScanCtx* ctx, bool 
     ret = OB_ITER_END;
   } else {
     col_node.cur_pos_ ++;
+  }
+  return ret;
+}
+
+int UnnestTableFunc::eval_input(ObJsonTableOp &jt, JtScanCtx &ctx, ObEvalCtx &eval_ctx)
+{
+  INIT_SUCC(ret);
+  ObIArrayType **arr_objs = NULL;
+  int64_t col_num = ctx.spec_ptr_->value_exprs_.count();
+  bool is_all_null = true;
+  if (!ctx.is_unnest_table_func()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid table func", K(ret));
+  } else if (OB_ISNULL(arr_objs = static_cast<ObIArrayType**>(ctx.row_alloc_.alloc(col_num * sizeof(ObIArrayType*))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc memory for array objects", K(ret));
+  } else {
+    jt.reset_columns();
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < col_num; ++i) {
+    ObExpr *value_expr = ctx.spec_ptr_->value_exprs_.at(i);
+    ObDataType data_type = ctx.spec_ptr_->cols_def_.at(i)->data_type_;
+    ObObjType obj_type = value_expr->datum_meta_.type_;
+    ObDatum *datum = NULL;
+    const uint16_t meta_id = value_expr->obj_meta_.get_subschema_id();
+    ObIArrayType *arr_obj = NULL;
+    bool is_null = false;
+    if (obj_type == ObNullType) {
+      is_null = true;
+    } else if (!ob_is_collection_sql_type(obj_type)) {
+      ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
+      LOG_WARN("invalid array data type provided.", K(ret), K(i), K(obj_type));
+    } else if (OB_FAIL(value_expr->eval(eval_ctx, datum))) {
+      LOG_WARN("failed to eval args", K(ret));
+    } else if (datum->is_null()) {
+      is_null = true;
+    } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(ctx.row_alloc_, eval_ctx, meta_id, datum->get_string(), arr_obj))) {
+      LOG_WARN("construct array obj failed", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      arr_objs[i] = arr_obj;
+      is_all_null &= is_null;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (is_all_null) {
+    ret = OB_ITER_END;
+  } else {
+    jt.input_ = arr_objs;
+  }
+  return ret;
+}
+
+int UnnestTableFunc::reset_ctx(ObRegCol &scan_node, JtScanCtx*& ctx)
+{
+  INIT_SUCC(ret);
+  return ret;
+}
+
+int UnnestTableFunc::init_ctx(ObRegCol &scan_node, JtScanCtx*& ctx)
+{
+  INIT_SUCC(ret);
+  scan_node.tab_type_ = MulModeTableType::OB_UNNEST_TABLE_TYPE;
+  return ret;
+}
+
+int UnnestTableFunc::reset_path_iter(ObRegCol &scan_node, void* in, JtScanCtx*& ctx, ScanType init_flag, bool &is_null_value)
+{
+  INIT_SUCC(ret);
+  scan_node.iter_ = in;
+  if (OB_FAIL(get_iter_value(scan_node, ctx, is_null_value))) {
+    LOG_WARN("failed to get iter value", K(ret));
+  }
+  return ret;
+}
+
+int UnnestTableFunc::get_iter_value(ObRegCol &col_node, JtScanCtx* ctx, bool &is_null_value)
+{
+  UNUSED(is_null_value);
+  INIT_SUCC(ret);
+  bool all_iter_end = true;
+  col_node.cur_pos_++;
+  ObIArrayType **arr_objs = reinterpret_cast<ObIArrayType **>(col_node.iter_);
+  int64_t col_num = ctx->spec_ptr_->value_exprs_.count();
+  for (int64_t i = 0; OB_SUCC(ret) && i < col_num; ++i) {
+    ObIArrayType *arr_obj = arr_objs[i];
+    if (OB_ISNULL(arr_obj)) {
+      // do nothing
+    } else if (col_node.cur_pos_ < arr_obj->size()) {
+      all_iter_end = false;
+    } else {
+      arr_objs[i] = NULL;
+    }
+  }
+  if (OB_SUCC(ret) && all_iter_end) {
+    ret = OB_ITER_END;
   }
   return ret;
 }
@@ -1889,18 +2127,18 @@ int ObRegCol::eval_regular_col(void *in, JtScanCtx* ctx, bool& is_null_value)
     need_cast_res = false;
     curr_ = nullptr;
     col_expr->locate_datum_for_write(*ctx->eval_ctx_).set_null();
-  } else if (this->tab_type_ == OB_RB_ITERATE_TABLE_TYPE) {
+  } else if (col_type == COL_TYPE_RB_ITERATE) {
     this->cur_pos_++;
-    if (OB_ISNULL(in)) {
+    ObRoaringBitmapIter **rb_iters = reinterpret_cast<ObRoaringBitmapIter **>(in);
+    ObRoaringBitmapIter *rb_iter = rb_iters[this->col_info_.output_column_idx_];
+    if (OB_ISNULL(rb_iter) || rb_iter->get_val_idx() != this->cur_pos_) {
       col_expr->locate_datum_for_write(*ctx->eval_ctx_).set_null();
     } else {
-      ObRoaringBitmapIter **rb_iters = reinterpret_cast<ObRoaringBitmapIter **>(in);
-      ObRoaringBitmapIter *rb_iter = rb_iters[this->col_info_.output_column_idx_];
-      if (OB_ISNULL(rb_iter) || rb_iter->get_val_idx() != this->cur_pos_) {
-        col_expr->locate_datum_for_write(*ctx->eval_ctx_).set_null();
-      } else {
-        col_expr->locate_datum_for_write(*ctx->eval_ctx_).set_uint(rb_iter->get_curr_value());
-      }
+      col_expr->locate_datum_for_write(*ctx->eval_ctx_).set_uint(rb_iter->get_curr_value());
+    }
+  } else if (col_type == COL_TYPE_UNNEST) {
+    if (OB_FAIL(RegularCol::eval_unnest_col(*this, in, ctx, col_expr))) {
+      LOG_WARN("fail to eval unnest col", K(ret), K(col_type), K(cur_pos_), K(col_info_.output_column_idx_));
     }
   } else if (col_type == COL_TYPE_ORDINALITY
             || col_type == COL_TYPE_ORDINALITY_XML) {
@@ -2243,7 +2481,8 @@ int ObJsonTableOp::inner_get_next_row()
   bool is_root_null = false;
   if (!(jt_ctx_.is_xml_table_func()
         || jt_ctx_.is_json_table_func()
-        || jt_ctx_.is_rb_iterate_table_func())) {
+        || jt_ctx_.is_rb_iterate_table_func()
+        || jt_ctx_.is_unnest_table_func())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unsupport table function", K(ret));
   } else if (is_evaled_) {

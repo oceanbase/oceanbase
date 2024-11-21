@@ -404,10 +404,21 @@
 #include "ob_expr_rb_to_string.h"
 #include "ob_expr_rb_from_string.h"
 #include "ob_expr_rb_select.h"
+#include "ob_expr_rb_build.h"
 #include "ob_expr_array_contains.h"
+#include "ob_expr_array_to_string.h"
+#include "ob_expr_string_to_array.h"
+#include "ob_expr_array_append.h"
+#include "ob_expr_element_at.h"
+#include "ob_expr_array_cardinality.h"
 #include "ob_expr_audit_log_func.h"
 #include "ob_expr_can_access_trigger.h"
 #include "ob_expr_split_part.h"
+#include "ob_expr_array_overlaps.h"
+#include "ob_expr_array_contains_all.h"
+#include "ob_expr_array_distinct.h"
+#include "ob_expr_array_remove.h"
+#include "ob_expr_array_map.h"
 #include "ob_expr_get_mysql_routine_parameter_type_str.h"
 #include "ob_expr_priv_st_geohash.h"
 #include "ob_expr_priv_st_makepoint.h"
@@ -1274,27 +1285,27 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprEnhancedAesEncrypt::eval_aes_encrypt                 /* 759 */
   NULL, // ObExprEnhancedAesDecrypt::eval_aes_decrypt                 /* 760 */
   NULL, // ObExprMysqlProcInfo::eval_mysql_proc_info                       /* 761 */
-  NULL, // ObExprArrayOverlaps::eval_array_overlaps,                  /* 762 */
-  NULL, // ObExprArrayContainsAll::eval_array_contains_all,           /* 763 */
+  ObExprArrayOverlaps::eval_array_overlaps,                           /* 762 */
+  ObExprArrayContainsAll::eval_array_contains_all,                    /* 763 */
   NULL, // ObExprInnerIsTrue::decimal_int_is_true_start,              /* 764 */
   NULL, // ObExprInnerIsTrue::decimal_int_is_true_end,                /* 765 */
   NULL, // ObExprInnerIsTrue::json_is_true_start,                     /* 766 */
   NULL, // ObExprInnerIsTrue::json_is_true_end,                       /* 767 */
   ObExprGetMySQLRoutineParameterTypeStr::get_mysql_routine_parameter_type_str, /* 768 */
-  NULL, // ObExprArrayDistinct::eval_array_distinct,                  /* 769 */
-  NULL, // ObExprArrayRemove::eval_array_remove_int64_t,              /* 770 */
-  NULL, // ObExprArrayRemove::eval_array_remove_float,                /* 771 */
-  NULL, // ObExprArrayRemove::eval_array_remove_double,               /* 772 */
-  NULL, // ObExprArrayRemove::eval_array_remove_ObString,             /* 773 */
-  NULL, // ObExprArrayRemove::eval_array_remove_array,                /* 774 */
-  NULL, // ObExprArrayMap::eval_array_map,                            /* 775 */
+  ObExprArrayDistinct::eval_array_distinct,                           /* 769 */
+  ObExprArrayRemove::eval_array_remove_int64_t,                       /* 770 */
+  ObExprArrayRemove::eval_array_remove_float,                         /* 771 */
+  ObExprArrayRemove::eval_array_remove_double,                        /* 772 */
+  ObExprArrayRemove::eval_array_remove_ObString,                      /* 773 */
+  ObExprArrayRemove::eval_array_remove_array,                         /* 774 */
+  ObExprArrayMap::eval_array_map,                                     /* 775 */
   NULL, // ObExprOraLoginUser::eval_ora_login_user,                   /* 776 */
-  NULL, // ObExprArrayToString::eval_array_to_string,                 /* 777 */
-  NULL, // ObExprStringToArray::eval_string_to_array,                 /* 778 */
-  NULL, // ObExprArrayAppend::eval_array_append,                      /* 779 */
-  NULL, // ObExprElementAt::eval_element_at,                          /* 780 */
-  NULL, // ObExprArrayCardinality::eval_array_cardinality,            /* 781 */
-  NULL, // ObExprRbBuild::eval_rb_build,                              /* 782 */
+  ObExprArrayToString::eval_array_to_string,                          /* 777 */
+  ObExprStringToArray::eval_string_to_array,                          /* 778 */
+  ObExprArrayAppend::eval_array_append,                               /* 779 */
+  ObExprElementAt::eval_element_at,                                   /* 780 */
+  ObExprArrayCardinality::eval_array_cardinality,                     /* 781 */
+  ObExprRbBuild::eval_rb_build,                                       /* 782 */
   NULL, // ObExprArrayPrepend::eval_array_prepend,                    /* 783 */
   NULL, // ObExprArrayConcat::eval_array_concat,                      /* 784 */
   NULL, // ObExprArrayDifference::eval_array_difference,              /* 785 */
@@ -1450,19 +1461,19 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   ObExprArrayContains::eval_array_contains_batch_double,              /* 141 */
   ObExprArrayContains::eval_array_contains_batch_ObString,            /* 142 */
   ObExprArrayContains::eval_array_contains_array_batch,               /* 143 */
-  NULL,// ObExprArrayOverlaps::eval_array_overlaps_batch,             /* 144 */
-  NULL,// ObExprArrayContainsAll::eval_array_contains_all_batch,      /* 145 */
-  NULL,// ObExprArrayDistinct::eval_array_distinct_batch,             /* 146 */
-  NULL,// ObExprArrayRemove::eval_array_remove_batch_int64_t,         /* 147 */
-  NULL,// ObExprArrayRemove::eval_array_remove_batch_float,           /* 148 */
-  NULL,// ObExprArrayRemove::eval_array_remove_batch_double,          /* 149 */
-  NULL,// ObExprArrayRemove::eval_array_remove_batch_ObString,        /* 150 */
-  NULL,// ObExprArrayRemove::eval_array_remove_array_batch,           /* 151 */
-  NULL,// ObExprArrayToString::eval_array_to_string_batch,            /* 152 */
-  NULL,// ObExprStringToArray::eval_string_to_array_batch,            /* 153 */
-  NULL,// ObExprArrayAppend::eval_array_append_batch,                 /* 154 */
-  NULL,// ObExprElementAt::eval_element_at_batch,                     /* 155 */
-  NULL,// ObExprArrayCardinality::eval_array_cardinality_batch,       /* 156 */
+  ObExprArrayOverlaps::eval_array_overlaps_batch,                     /* 144 */
+  ObExprArrayContainsAll::eval_array_contains_all_batch,              /* 145 */
+  ObExprArrayDistinct::eval_array_distinct_batch,                     /* 146 */
+  ObExprArrayRemove::eval_array_remove_batch_int64_t,                 /* 147 */
+  ObExprArrayRemove::eval_array_remove_batch_float,                   /* 148 */
+  ObExprArrayRemove::eval_array_remove_batch_double,                  /* 149 */
+  ObExprArrayRemove::eval_array_remove_batch_ObString,                /* 150 */
+  ObExprArrayRemove::eval_array_remove_array_batch,                   /* 151 */
+  ObExprArrayToString::eval_array_to_string_batch,                    /* 152 */
+  ObExprStringToArray::eval_string_to_array_batch,                    /* 153 */
+  ObExprArrayAppend::eval_array_append_batch,                         /* 154 */
+  ObExprElementAt::eval_element_at_batch,                             /* 155 */
+  ObExprArrayCardinality::eval_array_cardinality_batch,               /* 156 */
   NULL,// ObExprArrayPrepend::eval_array_prepend_batch,               /* 157 */
   NULL,// ObExprArrayConcat::eval_array_concat_batch,                 /* 158 */
   NULL,// ObExprArrayDifference::eval_array_difference_batch,         /* 159 */
@@ -1594,8 +1605,8 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   ObExprCalcPartitionBase::fast_calc_partition_level_one_vector,/* 122 */
   NULL, // ObExprTrim::eval_trim_vector                         /* 123 */
   NULL, // ObExprEncodeSortkey::eval_encode_sortkey_vector      /* 124 */
-  NULL, // ObExprArrayOverlaps::eval_array_overlaps_vector,     /* 125 */
-  NULL, // ObExprArrayContainsAll::eval_array_contains_all_vector, /* 126 */
+  ObExprArrayOverlaps::eval_array_overlaps_vector,              /* 125 */
+  ObExprArrayContainsAll::eval_array_contains_all_vector,       /* 126 */
   NULL, // ObBitwiseExprOperator::calc_bitwise_result2_mysql_vector,     /* 127 */
   NULL, // ObBitwiseExprOperator::calc_bitwise_result2_oracle_vector,    /* 128 */
   NULL, // ObExprDiv::decint_div_mysql_vec_fn<int32_t, int32_t>,         /* 129 */
@@ -1613,12 +1624,12 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprDiv::decint_div_mysql_vec_fn<int512_t, int128_t>,       /* 141 */
   NULL, // ObExprDiv::decint_div_mysql_vec_fn<int512_t, int256_t>,       /* 142 */
   NULL, // ObExprDiv::decint_div_mysql_vec_fn<int512_t, int512_t>,       /* 143 */
-  NULL, // ObExprArrayRemove::eval_array_remove_vector_int64_t,          /* 144 */
-  NULL, // ObExprArrayRemove::eval_array_remove_vector_float,            /* 145 */
-  NULL, // ObExprArrayRemove::eval_array_remove_vector_double,           /* 146 */
-  NULL, // ObExprArrayRemove::eval_array_remove_vector_ObString,         /* 147 */
-  NULL, // ObExprArrayRemove::eval_array_remove_array_vector,            /* 148 */
-  NULL, // ObExprArrayDistinct::eval_array_distinct_vector,              /* 149 */
+ ObExprArrayRemove::eval_array_remove_vector_int64_t,          /* 144 */
+ ObExprArrayRemove::eval_array_remove_vector_float,            /* 145 */
+ ObExprArrayRemove::eval_array_remove_vector_double,           /* 146 */
+ ObExprArrayRemove::eval_array_remove_vector_ObString,         /* 147 */
+ ObExprArrayRemove::eval_array_remove_array_vector,            /* 148 */
+ ObExprArrayDistinct::eval_array_distinct_vector,              /* 149 */
   NULL, // ObExprDateFormat::calc_date_format_vector,                    /* 150 */
   NULL, // ObExprYear::calc_year_vector,                                 /* 151 */
   NULL, // ObExprMonth::calc_month_vector,                               /* 152 */
@@ -1638,11 +1649,11 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprFromDays::calc_fromdays_vector,                         /* 166 */
   NULL, // ObExprTimeStampDiff::eval_timestamp_diff_vector,              /* 167 */
   NULL, // ObExprTimeStampAdd::calc_timestamp_add_vector,                /* 168 */
-  NULL, // ObExprArrayToString::eval_array_to_string_vector,             /* 169 */
-  NULL, // ObExprStringToArray::eval_string_to_array_vector,             /* 170 */
-  NULL, // ObExprArrayAppend::eval_array_append_vector,                  /* 171 */
-  NULL, // ObExprElementAt::eval_element_at_vector,                      /* 172 */
-  NULL, // ObExprArrayCardinality::eval_array_cardinality_vector,        /* 173 */
+  ObExprArrayToString::eval_array_to_string_vector,             /* 169 */
+  ObExprStringToArray::eval_string_to_array_vector,             /* 170 */
+  ObExprArrayAppend::eval_array_append_vector,                  /* 171 */
+  ObExprElementAt::eval_element_at_vector,                      /* 172 */
+  ObExprArrayCardinality::eval_array_cardinality_vector,        /* 173 */
   NULL, // ObExprArrayPrepend::eval_array_prepend_vector,                /* 174 */
   NULL, // ObExprArrayConcat::eval_array_concat_vector,                  /* 175 */
   NULL, // ObExprArrayDifference::eval_array_difference_vector,          /* 176 */
