@@ -58,11 +58,11 @@ int ObVirtualObRpcSendStat::inner_get_next_row(ObNewRow *&row)
     // user tenant show self tenant infos
       tenant_ids_.clear();
       tenant_ids_.push_back(effective_tenant_id_);
-      tenant_cnt_ = 1;
+      tenant_cnt_ = tenant_ids_.size();
     }
     has_start_ = true;
   }
-  if (pcode_idx_ < ObRpcPacketSet::THE_PCODE_COUNT) {
+  if (pcode_idx_ < ObRpcPacketSet::THE_PCODE_COUNT && tenant_idx_ < tenant_cnt_) {
     if (OB_LIKELY(NULL != cells)) {
       ObRpcPacketSet &set = ObRpcPacketSet::instance();
       RpcStatItem item;
