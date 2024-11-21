@@ -685,6 +685,11 @@ int ObIOResult::init(const ObIOInfo &info)
     flag_.set_func_type(GET_FUNC_TYPE());
     flag_.set_resource_group_id(GET_GROUP_ID());
     timeout_us_ = info.timeout_us_;
+    if (timeout_us_ <= 0) {
+      if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {  // 10s
+        LOG_WARN("io result timeout_us is unexpected", K(lbt()), K(*this));
+      }
+    }
     buf_ = info.buf_;
     user_data_buf_ = info.user_data_buf_;
     time_log_.begin_ts_ = ObTimeUtility::fast_current_time();
@@ -1862,6 +1867,10 @@ int ObIOHandle::wait(const int64_t wait_timeout_ms)
       // do nothing
     } else {
       ret = OB_TIMEOUT;
+      if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {  // 10s
+        LOG_WARN(
+            "real_wait_timeout is unexpected < 0", K(ret), K(real_wait_timeout), K(timeout_ms), K(result_), K(lbt()));
+      }
     }
   } else {
     int64_t wait_ms = wait_timeout_ms;
