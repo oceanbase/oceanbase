@@ -411,7 +411,8 @@ target_link_libraries(ob_malloc ob_malloc_object)
 
 add_library(malloc_hook STATIC
   alloc/malloc_hook.cpp
-  alloc/malloc_hook.h)
+  alloc/malloc_hook.h
+  alloc/malloc_hook_extended.cpp)
 target_link_libraries(malloc_hook oblib_base)
 
 if(OB_BUILD_CLOSE_MODULES)

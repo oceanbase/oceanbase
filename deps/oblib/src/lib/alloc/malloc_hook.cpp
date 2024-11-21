@@ -11,11 +11,15 @@
  */
 
 #include "malloc_hook.h"
-#include <dlfcn.h>
-#include "lib/utility/utility.h"
 #include "lib/utility/ob_defer.h"
 #include "lib/allocator/ob_mem_leak_checker.h"
 #include "lib/allocator/ob_malloc.h"
+
+#define OBMALLOC_ATTR(s) __attribute__((s))
+#define OBMALLOC_EXPORT __attribute__((visibility("default")))
+#define OBMALLOC_ALLOC_SIZE(s) __attribute__((alloc_size(s)))
+#define OBMALLOC_NOTHROW __attribute__((nothrow))
+#define LIBC_ALIAS(fn)	__attribute__((alias (#fn), used))
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -37,7 +41,7 @@ struct Header
 {
   static const uint32_t MAGIC_CODE = 0XA1B2C3D1;
   static const uint32_t SIZE;
-  Header(int32_t size, bool from_mmap)
+  Header(uint32_t size, bool from_mmap)
     : magic_code_(MAGIC_CODE),
       data_size_(size),
       offset_(0),
@@ -47,7 +51,7 @@ struct Header
   void mark_unused() { magic_code_ &= ~0x1; }
   static Header *ptr2header(void *ptr) { return reinterpret_cast<Header*>((char*)ptr - SIZE); }
   uint32_t magic_code_;
-  int32_t data_size_;
+  uint32_t data_size_;
   uint32_t offset_;
   uint8_t from_mmap_;
   char padding_[3];
@@ -55,7 +59,6 @@ struct Header
 } __attribute__((aligned (16)));
 
 const uint32_t Header::SIZE = offsetof(Header, data_);
-const size_t max_retry_size = 2 << 30; // 2G
 
 void *ob_malloc_retry(size_t size)
 {
@@ -72,7 +75,7 @@ void *ob_malloc_retry(size_t size)
     if (OB_ISNULL(ptr)) {
       ::usleep(10000);  // 10ms
     }
-  } while (OB_ISNULL(ptr) && !(size > max_retry_size || 0 == size));
+  } while (OB_ISNULL(ptr) && 0 != size);
   return ptr;
 }
 
@@ -95,9 +98,15 @@ static inline int ob_munmap(void *addr, size_t length)
   return syscall(SYS_munmap, addr, length);
 }
 
-void *ob_malloc_hook(size_t size, const void *)
+EXTERN_C_BEGIN
+
+OBMALLOC_EXPORT
+void OBMALLOC_NOTHROW *
+OBMALLOC_ATTR(malloc) OBMALLOC_ALLOC_SIZE(1)
+malloc(size_t size)
 {
   void *ptr = nullptr;
+  abort_unless(size <= UINT32_MAX - Header::SIZE);
   size_t real_size = size + Header::SIZE;
   void *tmp_ptr = nullptr;
   bool from_mmap = false;
@@ -113,17 +122,17 @@ void *ob_malloc_hook(size_t size, const void *)
     tmp_ptr = ob_malloc_retry(real_size);
   }
   if (OB_LIKELY(tmp_ptr != nullptr)) {
-    abort_unless(size <= INT32_MAX);
-    auto *header = new (tmp_ptr) Header((int32_t)size, from_mmap);
+    Header *header = new (tmp_ptr) Header((uint32_t)size, from_mmap);
     ptr = header->data_;
   }
   return ptr;
 }
 
-void ob_free_hook(void *ptr, const void *)
+OBMALLOC_EXPORT void OBMALLOC_NOTHROW
+free(void *ptr)
 {
   if (OB_LIKELY(ptr != nullptr)) {
-    auto *header = Header::ptr2header(ptr);
+    Header *header = Header::ptr2header(ptr);
     abort_unless(header->check_magic_code());
     header->mark_unused();
     void *orig_ptr = (char*)header - header->offset_;
@@ -138,9 +147,17 @@ void ob_free_hook(void *ptr, const void *)
   }
 }
 
-void *ob_realloc_hook(void *ptr, size_t size, const void *caller)
+OBMALLOC_EXPORT
+void OBMALLOC_NOTHROW *
+OBMALLOC_ALLOC_SIZE(2)
+realloc(void *ptr, size_t size)
 {
+  if (0 == size && nullptr != ptr) {
+    free(ptr);
+    return nullptr;
+  }
   void *nptr = nullptr;
+  abort_unless(size <= UINT32_MAX - Header::SIZE);
   size_t real_size = size + Header::SIZE;
   void *tmp_ptr = nullptr;
   bool from_mmap = false;
@@ -156,59 +173,59 @@ void *ob_realloc_hook(void *ptr, size_t size, const void *caller)
     tmp_ptr = ob_malloc_retry(real_size);
   }
   if (OB_LIKELY(tmp_ptr != nullptr)) {
-    abort_unless(size <= INT32_MAX);
-    auto *header = new (tmp_ptr) Header((int32_t)size, from_mmap);
+    Header *header = new (tmp_ptr) Header((uint32_t)size, from_mmap);
     nptr = header->data_;
     if (ptr != nullptr) {
-      auto *old_header = Header::ptr2header(ptr);
+      Header *old_header = Header::ptr2header(ptr);
       abort_unless(old_header->check_magic_code());
       memmove(nptr, ptr, MIN(old_header->data_size_, size));
-      ob_free_hook(old_header->data_, caller);
+      free(old_header->data_);
     }
   }
   return nptr;
 }
 
-void *ob_memalign_hook(size_t alignment, size_t size, const void *)
+OBMALLOC_EXPORT
+void OBMALLOC_NOTHROW *
+OBMALLOC_ATTR(malloc)
+memalign(size_t alignment, size_t size)
 {
   void *ptr = nullptr;
-  if (OB_LIKELY(size > 0)) {
-    // Make sure alignment is power of 2
-    {
-      size_t a = 8;
-      while (a < alignment)
-        a <<= 1;
-      alignment = a;
+  // avoid alignment overflow
+  abort_unless(alignment <= UINT32_MAX / 2);
+  // Make sure alignment is power of 2
+  {
+    size_t a = 8;
+    while (a < alignment)
+      a <<= 1;
+    alignment = a;
+  }
+  abort_unless(size <= UINT32_MAX - 2 * MAX(alignment, Header::SIZE));
+  size_t real_size = 2 * MAX(alignment, Header::SIZE) + size;
+  void *tmp_ptr = nullptr;
+  bool from_mmap = false;
+  if (OB_UNLIKELY(!g_malloc_hook_inited || in_hook())) {
+    if (MAP_FAILED == (tmp_ptr = ob_mmap(nullptr, real_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0))) {
+      tmp_ptr = nullptr;
     }
-    size_t real_size = 2 * MAX(alignment, Header::SIZE) + size;
-    void *tmp_ptr = nullptr;
-    bool from_mmap = false;
-    if (OB_UNLIKELY(!g_malloc_hook_inited || in_hook())) {
-      if (MAP_FAILED == (tmp_ptr = ob_mmap(nullptr, real_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0))) {
-        tmp_ptr = nullptr;
-      }
-      from_mmap = true;
-    } else {
-      bool in_hook_bak = in_hook();
-      in_hook()= true;
-      DEFER(in_hook()= in_hook_bak);
-      tmp_ptr = ob_malloc_retry(real_size);
-    }
-    if (OB_LIKELY(tmp_ptr != nullptr)) {
-      char *start = (char *)tmp_ptr + Header::SIZE;
-      char *align_ptr = (char *)up_align(reinterpret_cast<int64_t>(start), alignment);
-      char *pheader = align_ptr - Header::SIZE;
-      size_t offset = pheader - (char*)tmp_ptr;
-      abort_unless(size <= INT32_MAX);
-      auto *header = new (pheader) Header((int32_t)size, from_mmap);
-      header->offset_ = (uint32_t)offset;
-      ptr = header->data_;
-    }
+    from_mmap = true;
+  } else {
+    bool in_hook_bak = in_hook();
+    in_hook()= true;
+    DEFER(in_hook()= in_hook_bak);
+    tmp_ptr = ob_malloc_retry(real_size);
+  }
+  if (OB_LIKELY(tmp_ptr != nullptr)) {
+    char *start = (char *)tmp_ptr + Header::SIZE;
+    char *align_ptr = (char *)up_align(reinterpret_cast<int64_t>(start), alignment);
+    char *pheader = align_ptr - Header::SIZE;
+    size_t offset = pheader - (char*)tmp_ptr;
+    Header *header = new (pheader) Header((uint32_t)size, from_mmap);
+    header->offset_ = (uint32_t)offset;
+    ptr = header->data_;
   }
   return ptr;
 }
-
-EXTERN_C_BEGIN
 
 void *ob_mmap_hook(void *addr, size_t length, int prot, int flags, int fd, loff_t offset)
 {
@@ -220,39 +237,25 @@ int ob_munmap_hook(void *addr, size_t length)
   return ob_munmap(addr, length);
 }
 
-EXTERN_C_END
-
-#if !defined(__MALLOC_HOOK_VOLATILE)
-#define MALLOC_HOOK_MAYBE_VOLATILE /**/
-#else
-#define MALLOC_HOOK_MAYBE_VOLATILE __MALLOC_HOOK_VOLATILE
-#endif
-
-EXTERN_C_BEGIN
-
-__attribute__((visibility("default"))) void *(*MALLOC_HOOK_MAYBE_VOLATILE __malloc_hook)(size_t, const void *) = ob_malloc_hook;
-__attribute__((visibility("default"))) void (*MALLOC_HOOK_MAYBE_VOLATILE __free_hook)(void *, const void *) = ob_free_hook;
-__attribute__((visibility("default"))) void *(*MALLOC_HOOK_MAYBE_VOLATILE __realloc_hook)(void *, size_t, const void *) = ob_realloc_hook;
-__attribute__((visibility("default"))) void *(*MALLOC_HOOK_MAYBE_VOLATILE __memalign_hook)(size_t, size_t, const void *) = ob_memalign_hook;
-
 __attribute__((visibility("default"))) void *mmap(void *addr, size_t, int, int, int, loff_t) __attribute__((weak,alias("ob_mmap_hook")));
 __attribute__((visibility("default"))) void *mmap64(void *addr, size_t, int, int, int, loff_t) __attribute__((weak,alias("ob_mmap_hook")));
 __attribute__((visibility("default"))) int munmap(void *addr, size_t length) __attribute__((weak,alias("ob_munmap_hook")));
 
-size_t malloc_usable_size(void *ptr)
+OBMALLOC_EXPORT size_t OBMALLOC_NOTHROW
+malloc_usable_size(void *ptr)
 {
   size_t ret = 0;
-  static const bool malloc_hook_disabled = glibc_prereq(2, 34);
-  if (malloc_hook_disabled) {
-    static int (*real_malloc_usable_size)(void *ptr) =
-        (typeof(real_malloc_usable_size))dlsym(RTLD_NEXT, "malloc_usable_size");
-    ret = real_malloc_usable_size(ptr);
-  } else if (OB_LIKELY(ptr != nullptr)) {
-    auto *header = Header::ptr2header(ptr);
+  if (OB_LIKELY(nullptr != ptr)) {
+    Header *header = Header::ptr2header(ptr);
     abort_unless(header->check_magic_code());
     ret = header->data_size_;
   }
   return ret;
 }
+
+void *__libc_malloc(size_t size) LIBC_ALIAS(malloc);
+void *__libc_realloc(void* ptr, size_t size) LIBC_ALIAS(realloc);
+void __libc_free(void* ptr) LIBC_ALIAS(free);
+void *__libc_memalign(size_t align, size_t s) LIBC_ALIAS(memalign);
 
 EXTERN_C_END
