@@ -962,29 +962,33 @@ int TriggerHandle::calc_system_trigger_logoff(ObSQLSessionInfo &session)
       && is_user_tenant(tenant_id)
       && !session.is_inner()
       && session.is_user_session()) {
-    ObSchemaGetterGuard schema_guard;
-    bool do_trigger = false;
-    int64_t query_timeout = 0;
-    int64_t old_timeout_ts = THIS_WORKER.get_timeout_ts();
-    const observer::ObGlobalContext &gctx = GCTX;
-    OZ (session.get_query_timeout(query_timeout));
-    CK (OB_NOT_NULL(gctx.schema_service_));
-    OZ (gctx.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard));
-    OX (THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + query_timeout));
-    OZ (check_trigger_execution(session, schema_guard, SYS_TRIGGER_LOGOFF, do_trigger));
-    if (OB_SUCC(ret) && do_trigger) {
-      int64_t pl_block_timeout = 0;
-      OZ (session.get_pl_block_timeout(pl_block_timeout));
-      OX (pl_block_timeout = std::min(pl_block_timeout, OB_MAX_USER_SPECIFIED_TIMEOUT));
-      OX (THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + pl_block_timeout));
-      OV (OB_NOT_NULL(gctx.schema_service_), OB_INVALID_ARGUMENT, gctx.schema_service_);
-      if (FAILEDx(calc_system_trigger(session, schema_guard, SYS_TRIGGER_LOGOFF))) {
-        LOG_WARN("calc system trigger failed", K(ret));
-        // ignore ret after execute logoff trigger
-        ret = OB_SUCCESS;
+    bool is_enable = false;
+    OZ (is_enabled_system_trigger(is_enable));
+    if (OB_SUCC(ret) && is_enable) {
+      ObSchemaGetterGuard schema_guard;
+      bool do_trigger = false;
+      int64_t query_timeout = 0;
+      int64_t old_timeout_ts = THIS_WORKER.get_timeout_ts();
+      const observer::ObGlobalContext &gctx = GCTX;
+      OZ (session.get_query_timeout(query_timeout));
+      CK (OB_NOT_NULL(gctx.schema_service_));
+      OZ (gctx.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard));
+      OX (THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + query_timeout));
+      OZ (check_trigger_execution(session, schema_guard, SYS_TRIGGER_LOGOFF, do_trigger));
+      if (OB_SUCC(ret) && do_trigger) {
+        int64_t pl_block_timeout = 0;
+        OZ (session.get_pl_block_timeout(pl_block_timeout));
+        OX (pl_block_timeout = std::min(pl_block_timeout, OB_MAX_USER_SPECIFIED_TIMEOUT));
+        OX (THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + pl_block_timeout));
+        OV (OB_NOT_NULL(gctx.schema_service_), OB_INVALID_ARGUMENT, gctx.schema_service_);
+        if (FAILEDx(calc_system_trigger(session, schema_guard, SYS_TRIGGER_LOGOFF))) {
+          LOG_WARN("calc system trigger failed", K(ret));
+          // ignore ret after execute logoff trigger
+          ret = OB_SUCCESS;
+        }
       }
+      THIS_WORKER.set_timeout_ts(old_timeout_ts);
     }
-    THIS_WORKER.set_timeout_ts(old_timeout_ts);
   }
   return ret;
 }
@@ -994,14 +998,18 @@ int TriggerHandle::calc_system_trigger_logon(ObSQLSessionInfo &session)
   int ret = OB_SUCCESS;
   uint64_t tenant_id = session.get_effective_tenant_id();
   if (session.is_oracle_compatible() && is_user_tenant(tenant_id)) {
-    ObSchemaGetterGuard schema_guard;
-    const observer::ObGlobalContext &gctx = GCTX;
-    bool do_trigger = false;
-    CK (OB_NOT_NULL(gctx.schema_service_));
-    OZ (gctx.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard));
-    OZ (check_trigger_execution(session, schema_guard, SYS_TRIGGER_LOGON, do_trigger));
-    if (OB_SUCC(ret) && do_trigger) {
-      OZ (calc_system_trigger(session, schema_guard, SYS_TRIGGER_LOGON));
+    bool is_enable = false;
+    OZ (is_enabled_system_trigger(is_enable));
+    if (OB_SUCC(ret) && is_enable) {
+      ObSchemaGetterGuard schema_guard;
+      const observer::ObGlobalContext &gctx = GCTX;
+      bool do_trigger = false;
+      CK (OB_NOT_NULL(gctx.schema_service_));
+      OZ (gctx.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard));
+      OZ (check_trigger_execution(session, schema_guard, SYS_TRIGGER_LOGON, do_trigger));
+      if (OB_SUCC(ret) && do_trigger) {
+        OZ (calc_system_trigger(session, schema_guard, SYS_TRIGGER_LOGON));
+      }
     }
   }
   return ret;
@@ -1117,10 +1125,14 @@ int TriggerHandle::set_logoff_mark(ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
   if (session.is_oracle_compatible()) {
-    ObSessionVariable log_mark;
-    log_mark.value_.set_uint32(session.get_sessid());
-    log_mark.meta_.set_meta(log_mark.value_.meta_);
-    OZ (session.replace_user_variable(OB_LOGOFF_TRIGGER_MARK, log_mark));
+    bool is_enable = false;
+    OZ (is_enabled_system_trigger(is_enable));
+    if (OB_SUCC(ret) && is_enable) {
+      ObSessionVariable log_mark;
+      log_mark.value_.set_uint32(session.get_sessid());
+      log_mark.meta_.set_meta(log_mark.value_.meta_);
+      OZ (session.replace_user_variable(OB_LOGOFF_TRIGGER_MARK, log_mark));
+    }
   }
   return ret;
 }
@@ -1181,6 +1193,20 @@ int TriggerHandle::check_trigger_execution(ObSQLSessionInfo &session,
     }
   }
 #undef CHECK_HAS_ENABLED_TRIGGER
+  return ret;
+}
+
+int TriggerHandle::is_enabled_system_trigger(bool &is_enable)
+{
+  int ret = OB_SUCCESS;
+  is_enable = false;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (OB_UNLIKELY(!tenant_config.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get tenant config", K(ret));
+  } else {
+    is_enable = tenant_config->_system_trig_enabled;
+  }
   return ret;
 }
 

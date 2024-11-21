@@ -143,6 +143,7 @@ private:
                                      ObSchemaGetterGuard &schema_guard,
                                      SystemTriggerEvent trigger_event,
                                      bool &do_trigger);
+  static int is_enabled_system_trigger(bool &is_enable);
 private:
   static const uint64_t ROUTINE_IDX_CALC_WHEN = 1;
   static const uint64_t ROUTINE_IDX_BEFORE_STMT = 2;
