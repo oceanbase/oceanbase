@@ -170,6 +170,16 @@ public:
   void test_multi_task_sort(const int64_t buf_mem_limit, const int64_t file_buf_size, const int64_t items_cnt, const int64_t task_cnt);
   virtual void SetUp();
   virtual void TearDown();
+  static void SetUpTestCase()
+  {
+    ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
+  }
+  static void TearDownTestCase()
+  {
+    ObTimerService::get_instance().stop();
+    ObTimerService::get_instance().wait();
+    ObTimerService::get_instance().destroy();
+  }
 public:
   static const int64_t MACRO_BLOCK_SIZE = 2 * 1024 * 1024;
   static const int64_t MACRO_BLOCK_COUNT = 15* 1024;
@@ -198,6 +208,12 @@ void TestParallelExternalSort::SetUp()
   EXPECT_EQ(OB_SUCCESS, io_service->start());
   tenant_ctx.set(io_service);
 
+  ObTimerService *timer_service = nullptr;
+  EXPECT_EQ(OB_SUCCESS, ObTimerService::mtl_new(timer_service));
+  EXPECT_EQ(OB_SUCCESS, ObTimerService::mtl_start(timer_service));
+  tenant_ctx.set(timer_service);
+  tenant_ctx.set(timer_service);
+
   tmp_file::ObTenantTmpFileManager *tf_mgr = nullptr;
   EXPECT_EQ(OB_SUCCESS, mtl_new_default(tf_mgr));
   EXPECT_EQ(OB_SUCCESS, tmp_file::ObTenantTmpFileManager::mtl_init(tf_mgr));
@@ -225,6 +241,11 @@ void TestParallelExternalSort::TearDown()
   TestDataFilePrepare::TearDown();
   common::ObClockGenerator::destroy();
   destroy_tenant_mgr();
+  ObTimerService *timer_service = MTL(ObTimerService *);
+  ASSERT_NE(nullptr, timer_service);
+  timer_service->stop();
+  timer_service->wait();
+  timer_service->destroy();
 }
 
 int TestParallelExternalSort::init_tenant_mgr()

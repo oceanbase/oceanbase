@@ -29,6 +29,15 @@ bool mtl_is_mini_mode()
 }
 }
 
+
+namespace common
+{
+uint64_t mtl_get_id()
+{
+  return MTL_ID();
+}
+}
+
 namespace share
 {
 using namespace oceanbase::common;

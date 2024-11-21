@@ -37,6 +37,16 @@ public:
   virtual ~TestKVCache();
   virtual void SetUp();
   virtual void TearDown();
+  static void SetUpTestCase()
+  {
+    ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
+  }
+  static void TearDownTestCase()
+  {
+    ObTimerService::get_instance().stop();
+    ObTimerService::get_instance().wait();
+    ObTimerService::get_instance().destroy();
+  }
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestKVCache);

@@ -45,6 +45,8 @@ public:
 
   virtual void SetUp() override;
   virtual void TearDown();
+  static void SetUpTestCase();
+  static void TearDownTestCase();
   void build_storage(int64_t cnt);
 
 public:
@@ -68,9 +70,9 @@ void TestStorageLogReplay::SetUp()
   log_file_spec_.log_create_policy_ = "normal";
   log_file_spec_.log_write_policy_ = "truncate";
 
+  TestDataFilePrepare::SetUp();
   static ObTenantBase tenant_base(TEST_TENANT_ID);
   ObTenantEnv::set_tenant(&tenant_base);
-  TestDataFilePrepare::SetUp();
   ObTenantIOManager *io_service = nullptr;
   EXPECT_EQ(OB_SUCCESS, ObTenantIOManager::mtl_new(io_service));
   EXPECT_EQ(OB_SUCCESS, ObTenantIOManager::mtl_init(io_service));
@@ -82,6 +84,18 @@ void TestStorageLogReplay::SetUp()
 void TestStorageLogReplay::TearDown()
 {
   TestDataFilePrepare::TearDown();
+}
+
+void TestStorageLogReplay::SetUpTestCase()
+{
+  ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
+}
+
+void TestStorageLogReplay::TearDownTestCase()
+{
+  ObTimerService::get_instance().stop();
+  ObTimerService::get_instance().wait();
+  ObTimerService::get_instance().destroy();
 }
 
 void TestStorageLogReplay::build_storage(int64_t cnt)

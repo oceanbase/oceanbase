@@ -12237,8 +12237,12 @@ int main(int argc, char **argv)
     table_name = argv[7];
     rpc_port = atoi(argv[8]);
   }
+  ObTimerService::get_instance().start();
   ObTableServiceLibrary::init();
   int ret = RUN_ALL_TESTS();
   ObTableServiceLibrary::destroy();
+  ObTimerService::get_instance().stop();
+  ObTimerService::get_instance().wait();
+  ObTimerService::get_instance().destroy();
   return ret;
 }

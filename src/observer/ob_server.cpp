@@ -36,6 +36,7 @@
 #include "lib/task/ob_timer_monitor.h"
 #include "lib/thread/thread_mgr.h"
 #include "lib/thread/ob_dynamic_thread_pool.h"
+#include "lib/task/ob_timer_service.h" // ObTimerService
 #include "lib/compress/ob_compressor_pool.h"
 #include "lib/compress/zlib_lite/ob_zlib_lite_compressor.h"
 #include "observer/ob_server_utils.h"
@@ -289,8 +290,15 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
   opts_ = opts;
   scramble_rand_.init(static_cast<uint64_t>(start_time_), static_cast<uint64_t>(start_time_ / 2));
 
+  // start ObTimerService first, because some timers depend on it
+  if (OB_FAIL(ObSimpleThreadPoolDynamicMgr::get_instance().init())) {
+    LOG_ERROR("init queue_thread dynamic mgr failed", KR(ret));
+  } else if (OB_FAIL(ObTimerService::get_instance().start())) {
+    LOG_ERROR("start timer service failed", KR(ret));
+  }
+
   // server parameters be inited here.
-  if (OB_FAIL(init_config())) {
+  if (OB_SUCC(ret) && OB_FAIL(init_config())) {
     LOG_ERROR("init config failed", KR(ret));
   }
   // set alert log level earlier
@@ -556,8 +564,6 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_WARN("init longops mgr fail", KR(ret));
     } else if (OB_FAIL(ObDDLRedoLock::get_instance().init())) {
       LOG_WARN("init ddl redo lock failed", K(ret));
-    } else if (OB_FAIL(ObSimpleThreadPoolDynamicMgr::get_instance().init())) {
-      LOG_ERROR("init queue_thread dynamic mgr failed", KR(ret));
 #ifdef ERRSIM
     } else if (OB_FAIL(ObDDLSimPointMgr::get_instance().init())) {
       LOG_WARN("init ddl sim point mgr fail", KR(ret));
@@ -917,6 +923,13 @@ void ObServer::destroy()
     FLOG_INFO("begin to destroy kv global cache");
     ObKVGlobalCache::get_instance().destroy();
     FLOG_INFO("kv global cache destroyed");
+
+    // for unittest, make sure threads can exit
+    ObTimerService::get_instance().stop();
+    ObTimerService::get_instance().wait();
+    FLOG_INFO("begin to destroy timer service");
+    ObTimerService::get_instance().destroy();
+    FLOG_INFO("timer service destroyed");
 
     FLOG_INFO("begin to destroy clock generator");
     ObClockGenerator::destroy();
@@ -1448,10 +1461,6 @@ int ObServer::stop()
     signal_handle_->stop();
     FLOG_INFO("stop signal handle success");
 
-    FLOG_INFO("begin to stop thread dynamic mgr");
-    ObSimpleThreadPoolDynamicMgr::get_instance().stop();
-    FLOG_INFO("thread dynamic mgr stopped");
-
     FLOG_INFO("begin to stop server blacklist");
     TG_STOP(lib::TGDefIDs::Blacklist);
     FLOG_INFO("server blacklist stopped");
@@ -1731,6 +1740,14 @@ int ObServer::stop()
     ObKVGlobalCache::get_instance().stop();
     FLOG_INFO("kv global cache stopped");
 
+    FLOG_INFO("begin to stop timer service");
+    ObTimerService::get_instance().stop();
+    FLOG_INFO("timer service stopped");
+
+    FLOG_INFO("begin to stop thread dynamic mgr");
+    ObSimpleThreadPoolDynamicMgr::get_instance().stop();
+    FLOG_INFO("thread dynamic mgr stopped");
+
     FLOG_INFO("begin to stop clock generator");
     ObClockGenerator::get_instance().stop();
     FLOG_INFO("clock generator stopped");
@@ -1801,10 +1818,6 @@ int ObServer::wait()
     FLOG_INFO("begin wait signal handle");
     signal_handle_->wait();
     FLOG_INFO("wait signal handle success");
-
-    FLOG_INFO("begin to wait thread dynamic mgr");
-    ObSimpleThreadPoolDynamicMgr::get_instance().stop();
-    FLOG_INFO("wait thread dynamic mgr success");
 
     FLOG_INFO("begin to wait active session hist task");
     ObActiveSessHistTask::get_instance().wait();
@@ -2029,6 +2042,14 @@ int ObServer::wait()
     FLOG_INFO("begin to wait storage ha diagnose");
     ObStorageHADiagService::instance().wait();
     FLOG_INFO("wait storage ha diagnose success");
+
+    FLOG_INFO("begin to wait timer service");
+    ObTimerService::get_instance().wait();
+    FLOG_INFO("wait timer service success");
+
+    FLOG_INFO("begin to wait thread dynamic mgr");
+    ObSimpleThreadPoolDynamicMgr::get_instance().wait();
+    FLOG_INFO("wait thread dynamic mgr success");
 
     gctx_.status_ = SS_STOPPED;
     FLOG_INFO("[OBSERVER_NOTICE] wait observer end", KR(ret));

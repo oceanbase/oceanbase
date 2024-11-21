@@ -70,6 +70,17 @@ public:
   virtual ~TestNewRowReader() {}
   virtual void SetUp();
   virtual void TearDown();
+  static void SetUpTestCase()
+  {
+    int ret = ObTimerService::get_instance().start();
+    ASSERT_TRUE(OB_SUCCESS == ret || OB_INIT_TWICE == ret);
+  }
+  static void TearDownTestCase()
+  {
+    ObTimerService::get_instance().stop();
+    ObTimerService::get_instance().wait();
+    ObTimerService::get_instance().destroy();
+  }
   char *get_serialize_buf() { return serialize_buf_; }
   int64_t get_serialize_size() { return 2 * 1024 * 1024; }
   void append_col(ObDatumRow &row, int64_t col_cnt = INT64_MAX);

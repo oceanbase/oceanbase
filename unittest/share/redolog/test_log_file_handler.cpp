@@ -46,6 +46,7 @@ public:
   virtual void SetUp();
   virtual void TearDown();
   static void SetUpTestCase();
+  static void TearDownTestCase();
 
 public:
   static const int64_t LOG_FILE_SIZE;
@@ -90,7 +91,15 @@ void TestLogFileHandler::TearDown()
 
 void TestLogFileHandler::SetUpTestCase()
 {
+  ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
   ASSERT_EQ(OB_SUCCESS, ObDeviceManager::get_instance().init_devices_env());
+}
+
+void TestLogFileHandler::TearDownTestCase()
+{
+  ObTimerService::get_instance().stop();
+  ObTimerService::get_instance().wait();
+  ObTimerService::get_instance().destroy();
 }
 
 TEST_F(TestLogFileHandler, simple)

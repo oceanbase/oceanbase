@@ -278,6 +278,8 @@ public:
   virtual ~TestMigrationSSTableParam() = default;
   virtual void SetUp() override;
   virtual void TearDown() override;
+  static void SetUpTestCase();
+  static void TearDownTestCase();
 private:
   storage::ObStorageSchema storage_schema_;
   ObSSTableMeta sstable_meta_;
@@ -316,6 +318,18 @@ void TestMigrationSSTableParam::TearDown()
   sstable_meta_.reset();
   storage_schema_.reset();
   TestSSTableMeta::TearDown();
+}
+
+void TestMigrationSSTableParam::SetUpTestCase()
+{
+  ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
+}
+
+void TestMigrationSSTableParam::TearDownTestCase()
+{
+  ObTimerService::get_instance().stop();
+  ObTimerService::get_instance().wait();
+  ObTimerService::get_instance().destroy();
 }
 
 TEST_F(TestMigrationSSTableParam, test_check_sstable_meta)

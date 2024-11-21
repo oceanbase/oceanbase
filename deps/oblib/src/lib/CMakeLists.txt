@@ -215,6 +215,7 @@ ob_set_subtarget(oblib_lib common_mixed
   string/ob_string_buffer.cpp
   task/ob_timer.cpp
   task/ob_timer_monitor.cpp
+  task/ob_timer_service.cpp
   thread_local/ob_tsi_utils.cpp
   thread_local/thread_buffer.cpp
   time/Time.cpp

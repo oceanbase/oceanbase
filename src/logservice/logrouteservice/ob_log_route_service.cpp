@@ -88,7 +88,6 @@ int ObLogRouteService::init(ObISQLClient *proxy,
   const int64_t size = sizeof(ObLSRouterValue);
   lib::ObMemAttr log_router_mem_attr(self_tenant_id, "LogRouter");
   lib::ObMemAttr asyn_task_mem_attr(self_tenant_id, "RouterAsynTask");
-  timer_.set_run_wrapper(MTL_CTX());
 
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
@@ -119,6 +118,8 @@ int ObLogRouteService::init(ObISQLClient *proxy,
   } else if (OB_FAIL(LOG_ROUTE_TIMER_INIT_FAIL)) {
     LOG_ERROR("ERRSIM: LOG_ROUTE_TIMER_INIT_FAIL");
 #endif
+  } else if (OB_FAIL(timer_.set_run_wrapper(MTL_CTX()))) {
+    LOG_WARN("timer set run wrapper failed", K(ret));
   } else if (OB_FAIL(timer_.init("LogRouter"))) {
     LOG_ERROR("fail to init itable gc timer", K(ret));
 #ifdef ERRSIM

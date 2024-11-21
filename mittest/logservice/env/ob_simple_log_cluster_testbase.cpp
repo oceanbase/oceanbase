@@ -55,6 +55,7 @@ ObTenantIOManager *ObSimpleLogClusterTestBase::tio_manager_ = nullptr;
 void ObSimpleLogClusterTestBase::SetUpTestCase()
 {
   SERVER_LOG(INFO, "SetUpTestCase", K(member_cnt_), K(node_cnt_));
+  ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
   int ret = OB_SUCCESS;
   if (!is_started_) {
     ret = start();
@@ -76,6 +77,9 @@ void ObSimpleLogClusterTestBase::TearDownTestCase()
       ob_delete(svr);
     }
   }
+  ObTimerService::get_instance().stop();
+  ObTimerService::get_instance().wait();
+  ObTimerService::get_instance().destroy();
 }
 
 int ObSimpleLogClusterTestBase::init_log_shared_storage_()

@@ -40,21 +40,23 @@ struct MySimpleAllocer
 public:
   explicit MySimpleAllocer()
   {
-    used_cnt_ = 0;
+    alloc_cnt_ = 0;
+    free_cnt_ = 0;
   }
   void *alloc(const int64_t sz)
   {
-    used_cnt_++;
+    alloc_cnt_++;
     return ob_malloc(sz, attr_);
   }
   void free(void *p)
   {
+    free_cnt_++;
     ob_free(p);
-    used_cnt_--;
   }
   void set_attr(const ObMemAttr &attr) { attr_ = attr; }
   void set_label(const lib::ObLabel &label) { attr_.label_ = label; }
-  int64_t used_cnt_;
+  int64_t alloc_cnt_;
+  int64_t free_cnt_;
   ObMemAttr attr_;
 };
 
@@ -75,7 +77,30 @@ TEST_F(TestHashUtils, Basic)
   ASSERT_EQ(obj4, obj3);
   alloc.free(obj);
   alloc.free(obj4);
-  ASSERT_EQ(0, alloc.allocer_.used_cnt_);
+  ASSERT_EQ(0, alloc.allocer_.alloc_cnt_ - alloc.allocer_.free_cnt_);
+}
+
+TEST_F(TestHashUtils, test_SimpleAllocer_reserve)
+{
+  static constexpr int NODE_NUM = 2;
+  using TestAlloc = hash::SimpleAllocer<int, NODE_NUM, SpinMutexDefendMode, MySimpleAllocer>;
+  TestAlloc alloc;
+  ASSERT_EQ(alloc.get_nblocks(), 0);
+  ASSERT_EQ(alloc.reserve(0), OB_SUCCESS);
+  ASSERT_EQ(alloc.get_nblocks(), 0);
+  ASSERT_EQ(0, alloc.allocer_.alloc_cnt_);
+  ASSERT_EQ(alloc.reserve(2), OB_SUCCESS);
+  ASSERT_EQ(alloc.get_nblocks(), 1);
+  ASSERT_EQ(1, alloc.allocer_.alloc_cnt_);
+  ASSERT_EQ(alloc.reserve(4), OB_SUCCESS);
+  ASSERT_EQ(alloc.get_nblocks(), 2);
+  ASSERT_EQ(2, alloc.allocer_.alloc_cnt_);
+  ASSERT_EQ(alloc.reserve(2), OB_SUCCESS);
+  ASSERT_EQ(alloc.get_nblocks(), 1);
+  ASSERT_EQ(1, alloc.allocer_.free_cnt_);
+  ASSERT_GT(alloc.allocer_.alloc_cnt_, alloc.allocer_.free_cnt_);
+  alloc.~TestAlloc();
+  ASSERT_EQ(alloc.allocer_.alloc_cnt_, alloc.allocer_.free_cnt_);
 }
 
 int main(int argc, char **argv)

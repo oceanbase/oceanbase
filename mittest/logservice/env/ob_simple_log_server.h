@@ -358,6 +358,9 @@ public:
     if (OB_NOT_NULL(io_device_)) {
       ob_delete(io_device_);
     }
+    if (OB_NOT_NULL(timer_service_)) {
+      ob_delete(timer_service_);
+    }
   }
   int simple_init(const std::string &cluster_name,
                   const common::ObAddr &addr,
@@ -531,6 +534,7 @@ private:
   obrpc::ObBatchRpc batch_rpc_;
   int batch_rpc_tg_id_;
   omt::ObSharedTimer shared_timer_;
+  ObTimerService *timer_service_ = nullptr; // for timer
 };
 
 } // end unittest

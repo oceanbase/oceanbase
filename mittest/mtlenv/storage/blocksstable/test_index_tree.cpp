@@ -146,6 +146,7 @@ protected:
   ObDatumRow multi_row_;
   ObArenaAllocator allocator_;
   ObSharedMacroBlockMgr *shared_blk_mgr_;
+  ObTimerService *timer_service_;
 };
 
 TestIndexTree::TestIndexTree()
@@ -154,7 +155,8 @@ TestIndexTree::TestIndexTree()
     decode_res_pool_(nullptr),
     mem_pool_(nullptr),
     tenant_base_(500),
-    shared_blk_mgr_(nullptr)
+    shared_blk_mgr_(nullptr),
+    timer_service_(nullptr)
 {
   ObAddr self;
   rpc::frame::ObReqTransport req_transport(NULL, NULL);
@@ -187,21 +189,25 @@ void TestIndexTree::SetUp()
 {
   ASSERT_TRUE(MockTenantModuleEnv::get_instance().is_inited());
   int ret = OB_SUCCESS;
+  timer_service_ = OB_NEW(ObTimerService, ObModIds::TEST, 500);
   mgr_ = OB_NEW(ObTenantFreezeInfoMgr, ObModIds::TEST);
   decode_res_pool_ = OB_NEW(ObDecodeResourcePool, ObModIds::TEST);
   shared_blk_mgr_ = OB_NEW(ObSharedMacroBlockMgr, ObModIds::TEST);
   mem_pool_ = OB_NEW(ObTenantCompactionMemPool, ObModIds::TEST);
+  tenant_base_.set(timer_service_);
   tenant_base_.set(shared_blk_mgr_);
   tenant_base_.set(mgr_);
   tenant_base_.set(decode_res_pool_);
   tenant_base_.set(mem_pool_);
   share::ObTenantEnv::set_tenant(&tenant_base_);
+  ASSERT_EQ(OB_SUCCESS, timer_service_->start());
   ASSERT_EQ(OB_SUCCESS, tenant_base_.init());
   ASSERT_EQ(OB_SUCCESS, mgr_->init(500, *GCTX.sql_proxy_));
   ASSERT_EQ(OB_SUCCESS, decode_res_pool_->init());
   ASSERT_EQ(OB_SUCCESS, mem_pool_->init());
   ASSERT_EQ(OB_SUCCESS, shared_blk_mgr_->init());
   fake_freeze_info();
+  ASSERT_EQ(timer_service_, MTL(ObTimerService *));
   ASSERT_EQ(shared_blk_mgr_, MTL(ObSharedMacroBlockMgr *));
   ASSERT_EQ(mgr_, MTL(ObTenantFreezeInfoMgr *));
   ASSERT_EQ(decode_res_pool_, MTL(ObDecodeResourcePool *));
@@ -226,6 +232,12 @@ void TestIndexTree::TearDown()
   row_generate_.reset();
   index_row_generate_.reset();
   table_schema_.reset();
+  if (nullptr != timer_service_) {
+    timer_service_->stop();
+    timer_service_->wait();
+    timer_service_->destroy();
+    timer_service_ = nullptr;
+  }
   tenant_base_.destroy_mtl_module(); // stop threads
   tenant_base_.destroy();
   share::ObTenantEnv::set_tenant(nullptr);

@@ -21,6 +21,7 @@
 #include "lib/thread/threads.h"
 #include "lib/thread/thread_mgr.h"
 #include "lib/allocator/ob_malloc.h"
+#include "lib/task/ob_timer_service.h" // ObTimerService
 #include "share/ob_tenant_role.h"//ObTenantRole
 #ifdef OB_BUILD_DBLINK
 #include "lib/oracleclient/ob_oci_environment.h"
@@ -295,6 +296,7 @@ using ObPartTransCtxObjPool = common::ObServerObjectPool<transaction::ObPartTran
 using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage::ObTableScanIterator>;
 #define MTL_MEMBERS                                  \
   MTL_LIST(                                          \
+      ObTimerService*,                               \
       blocksstable::ObDecodeResourcePool*,           \
       omt::ObSharedTimer*,                           \
       oceanbase::sql::ObTenantSQLSessionMgr*,        \
@@ -673,6 +675,11 @@ public:
 
   template<class T>
   void set(T v) { return inner_set(v); }
+
+  ObTimerService *get_timer_service() override
+  {
+    return get<ObTimerService *>();
+  }
 
 
 private:
