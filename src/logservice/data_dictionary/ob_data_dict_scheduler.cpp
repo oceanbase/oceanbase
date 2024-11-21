@@ -58,7 +58,7 @@ int ObDataDictScheduler::create_scheduled_trigger_dump_data_dict_job(const schem
     ObString job_name(SCHEDULED_TRIGGER_DUMP_DATA_DICT_JOB_NAME);
     ObString job_action("DBMS_DATA_DICT.TRIGGER_DUMP()");
     ObString repeat_interval("FREQ=MINUTELY; INTERVAL=120");
-    const int64_t default_duration_sec = 2 * _HOUR_;
+    const int64_t default_duration_sec = 7200; // 2 hours
     const int64_t end_date = 64060560000000000; // 4000-01-01 00:00:00.000000 (same as maintenance_window)
 
     HEAP_VAR(ObDBMSSchedJobInfo, job_info) {

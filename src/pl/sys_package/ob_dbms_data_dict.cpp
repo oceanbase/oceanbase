@@ -230,8 +230,8 @@ int ObDBMSDataDict::modify_retention(
       || !params.at(0).is_integer_type()
       || params.at(0).get_int() < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid params count for modify_duration", KR(ret), K(params));
-    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "DBMS_DATA_DICT.MODIFY_RUN_DURATION parameter");
+    LOG_WARN("invalid params count for modify_retention", KR(ret), K(params));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "DBMS_DATA_DICT.MODIFY_DICT_ITEM_RETENTION parameter");
   } else if (OB_FAIL(params.at(0).get_int32(data_dict_dump_history_retention_day)) || data_dict_dump_history_retention_day < 0) {
     LOG_WARN("invalid data_dict_dump_history_retention_day", K(data_dict_dump_history_retention_day));
   } else if (OB_FAIL(check_scheduled_job_enabled_(tenant_id, is_scheduled_job_enabled))) {
@@ -240,7 +240,7 @@ int ObDBMSDataDict::modify_retention(
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("scheduled job is not enabled, can not modify retention, please call DBMS_DATA_DICT.ENABLE_DUMP() then retry",
         KR(ret), K(tenant_id));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "DBMS_SCHEDULER JOB NOT ENABLE, please call DBMS_DATA_DICT.ENABLE() otherwise MODIFY_RETENTION is");
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "DBMS_SCHEDULER JOB NOT ENABLE, please call DBMS_DATA_DICT.ENABLE() otherwise MODIFY_DICT_ITEM_RETENTION is");
   } else if (OB_FAIL(job_action_str.assign_fmt("DBMS_DATA_DICT.TRIGGER_DUMP(%d)", data_dict_dump_history_retention_day))) {
     LOG_WARN("build job_action failed", KR(ret), K(tenant_id), K(job_action_str));
   } else if (FALSE_IT(job_action.set_varchar(job_action_str.string()))) {
