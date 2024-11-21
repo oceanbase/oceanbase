@@ -1047,6 +1047,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"wrapper", WRAPPER},
   {"x509", X509},
   {"xa", XA},
+  {"xid", XID},
   {"xml", XML},
   {"xor", XOR},
   {"year", YEAR},

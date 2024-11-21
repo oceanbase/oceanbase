@@ -7888,15 +7888,133 @@ int ObResolverUtils::resolve_string(const ParseNode *node, ObString &string)
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(NULL == node)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("node should not be null");
+    LOG_WARN("node should not be null", K(ret));
   } else if (OB_UNLIKELY(T_VARCHAR != node->type_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("node type is not T_VARCHAR", "type", get_type_name(node->type_));
+    LOG_WARN("node type is not T_VARCHAR", "type", get_type_name(node->type_), K(ret));
   } else if (OB_UNLIKELY(node->str_len_ < 0)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("empty string");
+    LOG_WARN("empty string", K(ret));
   } else {
     string = ObString(node->str_len_, node->str_value_);
+  }
+  return ret;
+}
+
+int ObResolverUtils::resolve_xid(const ParseNode *node, common::ObString &gtrid_string, common::ObString &bqual_string, int64_t & format_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(NULL == node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node should not be null", K(ret));
+  } else if (OB_UNLIKELY(T_LINK_NODE != node->type_ || 1 > node->num_child_ || 3 < node->num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected type or unexpected child num when reslve xid", K(node->type_), K(node->num_child_), K(ret));
+  } else if(1 <= node->num_child_ && OB_FAIL(ObResolverUtils::resolve_text(node->children_[0], gtrid_string))) {
+    LOG_WARN("resolve gtrid string fail", K(node->children_[0]), K(gtrid_string), K(ret));
+  } else if(2 <= node->num_child_ && OB_FAIL(ObResolverUtils::resolve_text(node->children_[1], bqual_string))) {
+    LOG_WARN("resolve bqual string fail", K(node->children_[1]), K(bqual_string), K(ret));
+  } else if(3 == node->num_child_ && OB_FAIL(ObResolverUtils::resolve_ulong(node->children_[2], format_id))) {
+    LOG_WARN("resolve format id fail", K(node->children_[2]), K(format_id), K(ret));
+  } else {
+    // for mysql mode
+    // if format id is not specified, set format id to 1 by default
+    if (lib::is_mysql_mode() && 3 > node->num_child_) {
+      format_id = 1;
+    }
+  }
+  return ret;
+}
+
+int ObResolverUtils::resolve_text(const ParseNode *node, ObString &string)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(NULL == node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node should not be null", K(ret));
+  } else if (OB_UNLIKELY(T_VARCHAR != node->type_ && T_HEX_STRING != node->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node type is not T_VARCHAR/T_HEX_STRING", "type", get_type_name(node->type_), K(ret));
+  } else if (OB_UNLIKELY(node->str_len_ < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("empty string", K(ret));
+  } else {
+    string = ObString(node->str_len_, node->str_value_);
+  }
+  return ret;
+}
+
+int ObResolverUtils::resolve_ulong(const ParseNode *node, int64_t & format_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(NULL == node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node should not be null", K(ret));
+  } else if (OB_UNLIKELY(T_INT != node->type_ && T_HEX_STRING != node->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node type is not T_INT/T_HEX_STRING", "type", get_type_name(node->type_), K(ret));
+  } else {
+    format_id = node->value_;
+  }
+  return ret;
+}
+
+int ObResolverUtils::resolve_opt_join_or_resume(const ParseNode *node, int64_t & flag)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(NULL == node)) {
+    // do nothing
+  } else if (OB_UNLIKELY(T_INT != node->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected node type", K(node->type_), K(ret));
+  } else {
+    if(node->value_ != 0  && node->value_ != 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected val", K(node->value_), K(ret));
+    } else {
+      ret = OB_TRANS_XA_INVAL;
+      LOG_WARN("not support start arguments", K(node->value_), K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObResolverUtils::resolve_opt_suspend(const ParseNode *node, int64_t & flag)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(NULL == node)) {
+    // do nothing
+  } else if (OB_UNLIKELY(T_INT != node->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected node type", K(node->type_), K(ret));
+  } else {
+    if(node->value_ != 0  && node->value_ != 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected val", K(node->value_), K(ret));
+    } else {
+      // 目前这里进行里检查，可以不管直接赋值然后给执行时报错
+      ret = OB_TRANS_XA_INVAL;
+      LOG_WARN("not support start arguments", K(node->value_), K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObResolverUtils::resolve_opt_one_phase(const ParseNode *node, int64_t & flag)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(NULL == node)) {
+    // do nothing
+  } else if (OB_UNLIKELY(T_INT != node->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected node type", K(node->type_), K(ret));
+  } else {
+    if(node->value_ != 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected val", K(node->value_), K(ret));
+    } else {
+      flag = transaction::ObXAFlag::OBTMONEPHASE;
+    }
   }
   return ret;
 }

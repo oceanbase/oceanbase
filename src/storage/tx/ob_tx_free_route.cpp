@@ -13,6 +13,7 @@
 
 #include "ob_trans_service.h"
 #include "lib/utility/serialization.h"
+#include "storage/tx/ob_xa_ctx.h"
 
 /*
  * The exception handle of txn state update with synchronization via proxy
@@ -1130,6 +1131,15 @@ bool ObTransService::need_fallback_(ObTxDesc &tx, int64_t &total_size)
     fallback = true;
   } else if (tx.is_xa_trans() && tx.is_xa_tightly_couple()) {
     TRANS_LOG(TRACE, "need fallback for tightly coupled xa trans");
+    fallback = true;
+  } else if (tx.is_xa_trans()
+             && NULL != tx.get_xa_ctx()
+             && tx.get_xa_ctx()->is_mysql_mode()
+             && ObXATransState::ACTIVE != tx.get_xa_ctx()->get_state()) {
+    // To be compatible with mysql, trans can not be disassociated with session after xa end.
+    // However, any dml can not be executed after xa end. Therefore, we need stop tx free route.
+    // NOTE that the xa trans state is switched to IDLE from ACTIVE in xa end.
+    TRANS_LOG(TRACE, "need fallback for mysql xa trans");
     fallback = true;
   } else {
     total_size = OB_E(EventTable::EN_TX_FREE_ROUTE_STATE_SIZE, tx.tx_id_) tx.estimate_state_size();

@@ -2050,6 +2050,7 @@ int ObTransService::release_tx_ref(ObTxDesc &tx)
 
 int ObTransService::tx_sanity_check(ObTxDesc &tx)
 {
+  ObSpinLockGuard guard(tx.lock_);
   return tx_sanity_check_(tx);
 }
 
@@ -2144,6 +2145,7 @@ int ObTransService::sql_stmt_start_hook(const ObXATransID &xid,
       ObGlobalTxType global_tx_type = tx.get_global_tx_type(xid);
       if (ObGlobalTxType::DBLINK_TRANS == global_tx_type && OB_TRANS_XA_BRANCH_FAIL == ret) {
         // if dblink trans, change errno (branch fail) to the errno of plain trans
+        ObSpinLockGuard guard(tx.lock_);
         if (OB_FAIL(tx_sanity_check_(tx))) {
           TRANS_LOG(WARN, "tx state insanity", K(ret), K(global_tx_type), K(xid));
         } else {
@@ -2175,6 +2177,7 @@ int ObTransService::sql_stmt_end_hook(const ObXATransID &xid, ObTxDesc &tx)
       ObGlobalTxType global_tx_type = tx.get_global_tx_type(xid);
       if (ObGlobalTxType::DBLINK_TRANS == global_tx_type && OB_TRANS_XA_BRANCH_FAIL == ret) {
         // if dblink trans, change errno (branch fail) to the errno of plain trans
+        ObSpinLockGuard guard(tx.lock_);
         if (OB_FAIL(tx_sanity_check_(tx))) {
           TRANS_LOG(WARN, "tx state insanity", K(ret), K(global_tx_type), K(xid));
         } else {

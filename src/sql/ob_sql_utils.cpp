@@ -1754,6 +1754,12 @@ bool ObSQLUtils::is_readonly_stmt(ParseResult &result)
                || T_SHOW_SEQUENCES == type
                || T_SHOW_ENGINE == type
                || T_SHOW_OPEN_TABLES == type
+               || T_XA_START == type
+               || T_XA_END == type
+               || T_XA_PREPARE == type
+               || T_XA_COMMIT == type
+               || T_XA_ROLLBACK == type
+               || T_XA_RECOVER == type
                || (T_SET_ROLE == type && lib::is_mysql_mode())
                || T_SHOW_CREATE_USER == type) {
       ret = true;

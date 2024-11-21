@@ -293,6 +293,11 @@ void ObXATransStatistics::inc_compensate_record_count()
   ATOMIC_INC(&xa_compensate_record_count_);
 }
 
+void ObXATransStatistics::inc_session_terminate_count()
+{
+  ATOMIC_INC(&xa_terminate_count_);
+}
+
 void ObXATransStatistics::try_print_xa_statistics()
 {
   static const int64_t STAT_INTERVAL = 9000000; // 9 seconds
@@ -351,9 +356,11 @@ void ObXATransStatistics::try_print_xa_statistics()
       }
       // for inner logic
       int64_t xa_compensate_record_count = ATOMIC_LOAD(&xa_compensate_record_count_);
-      if (0 != xa_compensate_record_count) {
+      int64_t xa_terminate_count = ATOMIC_LOAD(&xa_terminate_count_);
+      if (0 != xa_compensate_record_count || 0 != xa_terminate_count) {
         FLOG_INFO("xa statistics of inner logic",
-            "xa_compensate_record_count", xa_compensate_record_count);
+            "xa_compensate_record_count", xa_compensate_record_count,
+            "xa_terminate_count", xa_terminate_count);
       }
       // reset
       // NOTE that the active info should not be reset
@@ -389,6 +396,7 @@ void ObXATransStatistics::try_print_xa_statistics()
       ATOMIC_STORE(&xa_inner_rpc_ten_ms_count_, 0);
       ATOMIC_STORE(&xa_inner_rpc_twenty_ms_count_, 0);
       ATOMIC_STORE(&xa_compensate_record_count_, 0);
+      ATOMIC_STORE(&xa_terminate_count_, 0);
     }
     // for active info
     int64_t active_xa_stmt_count = ATOMIC_LOAD(&active_xa_stmt_count_);

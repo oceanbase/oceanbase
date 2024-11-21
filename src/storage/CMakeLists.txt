@@ -485,6 +485,8 @@ ob_set_subtarget(ob_storage tx
   tx/ob_tx_free_route_state.cpp
   tx/ob_tx_free_route_rpc.cpp
   tx/ob_tx_free_route_msg.cpp
+  tx/ob_mysql_xa_service.cpp
+  tx/ob_xa_inner_sql_client.cpp
 )
 
 ob_set_subtarget(ob_storage tx_storage

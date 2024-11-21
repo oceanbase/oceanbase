@@ -28,17 +28,379 @@ using namespace common;
 using namespace transaction;
 namespace sql
 {
-
-int ObXaStartExecutor::execute(ObExecContext &ctx, ObXaStartStmt &stmt)
+int ObXaExecutorUtil::build_tx_param(ObSQLSessionInfo *session, transaction::ObTxParam &param)
 {
-  int ret = OB_NOT_SUPPORTED;
-  LOG_USER_ERROR(OB_NOT_SUPPORTED, "XA protocol start interface");
-  UNUSED(ctx);
-  UNUSED(stmt);
-  // 暂时禁掉mysql模式下的xa调用
+  int ret = OB_SUCCESS;
+  int64_t org_cluster_id = OB_INVALID_ORG_CLUSTER_ID;
+  if (OB_FAIL(get_org_cluster_id(session, org_cluster_id))) {
+    LOG_WARN("get original cluster id failed", K(ret));
+  } else {
+    int64_t tx_timeout_us = 0;
+    bool is_read_only = session->get_tx_read_only();
+    session->get_tx_timeout(tx_timeout_us);
+    param.timeout_us_ = tx_timeout_us;
+    param.lock_timeout_us_ = session->get_trx_lock_timeout();
+    param.access_mode_ = is_read_only ? ObTxAccessMode::RD_ONLY : ObTxAccessMode::RW;
+    param.isolation_ = session->get_tx_isolation();
+    param.cluster_id_ = org_cluster_id;
+  }
   return ret;
 }
 
+int64_t ObXaExecutorUtil::get_query_timeout(ObSQLSessionInfo *session)
+{
+  int ret = OB_SUCCESS;
+  int64_t query_timeout = 10L * 1000 * 1000; // 10 seconds by default
+  if (NULL != session) {
+    if (OB_FAIL(session->get_query_timeout(query_timeout))) {
+      LOG_WARN("get query timeout failed", K(ret), K(query_timeout));
+      query_timeout = 10L * 1000 * 1000;
+    }
+  }
+  return query_timeout;
+}
+
+// for mysql xa start
+int ObXaStartExecutor::execute(ObExecContext &ctx, ObXaStartStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  FLTSpanGuard(xa_start);
+  ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx);
+  ObSQLSessionInfo *my_session = GET_MY_SESSION(ctx);
+  ObXATransID xid;
+  ObTransID tx_id;
+  const int64_t start_ts = ObTimeUtility::current_time();
+  ObXAStmtGuard xa_stmt_guard(start_ts);
+  if (OB_ISNULL(plan_ctx) || OB_ISNULL(my_session)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid param", K(ret), K(plan_ctx), K(my_session));
+  } else if (lib::is_oracle_mode()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("unexpected in oracle mode", K(ret));
+  } else if (!my_session->is_inner() && my_session->is_txn_free_route_temp()) {
+    ret = OB_TRANS_FREE_ROUTE_NOT_SUPPORTED;
+    LOG_WARN("not support tx free route for dblink trans");
+  } else if (OB_FAIL(xid.set(stmt.get_gtrid_string(),
+                             stmt.get_bqual_string(),
+                             stmt.get_format_id()))) {
+    LOG_WARN("set xid failed", K(ret), K(stmt));
+  } else if (my_session->get_in_transaction()) {
+    ObTxDesc *&tx_desc = my_session->get_tx_desc();
+    ret = OB_TRANS_XA_OUTSIDE;
+    LOG_WARN("already start trans", K(ret), K(xid), K(tx_desc->tid()),
+        K(tx_desc->get_xid()));
+  } else {
+    ObSQLSessionInfo::LockGuard session_query_guard(my_session->get_query_lock());
+    ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
+    const int64_t flags = stmt.get_flags();
+    transaction::ObTxParam &tx_param = plan_ctx->get_trans_param();
+    ObTxDesc *&tx_desc = my_session->get_tx_desc();
+    if (OB_FAIL(ObXaExecutorUtil::build_tx_param(my_session, tx_param))) {
+      LOG_WARN("build tx param failed", K(ret));
+    } else if (OB_FAIL(MTL(transaction::ObXAService*)->xa_start_for_mysql(xid,
+            flags, my_session->get_sessid(), tx_param, tx_desc))) {
+      LOG_WARN("mysql xa start failed", K(ret), K(tx_param));
+      my_session->get_trans_result().reset();
+      my_session->reset_tx_variable();
+      ctx.set_need_disconnect(false);
+    } else {
+      // associate xa with session
+      my_session->associate_xa(xid);
+      my_session->get_raw_audit_record().trans_id_ = my_session->get_tx_id();
+      FLT_SET_TAG(trans_id, my_session->get_tx_id().get_id());
+    }
+  }
+  // for statistics
+  const int64_t used_time_us = ObTimeUtility::current_time() - start_ts;
+  XA_STAT_ADD_XA_START_TOTAL_COUNT();
+  XA_STAT_ADD_XA_START_TOTAL_USED_TIME(used_time_us);
+  if (OB_FAIL(ret)) {
+    XA_STAT_ADD_XA_START_FAIL_COUNT();
+  }
+  LOG_INFO("mysql xa start", K(ret), K(xid), K(tx_id));
+  return ret;
+}
+
+// for mysql xa end
+int ObXaEndExecutor::execute(ObExecContext &ctx, ObXaEndStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  FLTSpanGuard(xa_end);
+  ObSQLSessionInfo *my_session = GET_MY_SESSION(ctx);
+  ObXATransID xid;
+  ObTransID tx_id;
+  const int64_t start_ts = ObTimeUtility::current_time();
+  ObXAStmtGuard xa_stmt_guard(start_ts);
+  if (OB_ISNULL(my_session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid param", K(ret), K(my_session));
+  } else if (lib::is_oracle_mode()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("unexpected in oracle mode", K(ret));
+  } else if (!my_session->is_inner() && my_session->is_txn_free_route_temp()) {
+    ret = OB_TRANS_FREE_ROUTE_NOT_SUPPORTED;
+    LOG_WARN("not support tx free route for dblink trans");
+  } else if (!my_session->get_in_transaction()) {
+    ret = OB_TRANS_XA_RMFAIL;
+    LOG_WARN("not in transaction", K(ret));
+  } else if (OB_FAIL(xid.set(stmt.get_gtrid_string(),
+                             stmt.get_bqual_string(),
+                             stmt.get_format_id()))) {
+    LOG_WARN("set xid failed", K(ret), K(stmt));
+  } else if (!xid.all_equal_to(my_session->get_xid())) {
+    ret = OB_TRANS_XA_NOTA;
+    LOG_WARN("unknown xid", K(ret), K(xid), K(my_session->get_xid()));
+  } else {
+    ObSQLSessionInfo::LockGuard session_query_guard(my_session->get_query_lock());
+    ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
+    ObTxDesc *&tx_desc = my_session->get_tx_desc();
+    FLT_SET_TAG(trans_id, my_session->get_tx_id().get_id());
+    if (OB_FAIL(MTL(transaction::ObXAService*)->xa_end_for_mysql(xid, tx_desc))) {
+      LOG_WARN("mysql xa end failed", K(ret), K(xid));
+    }
+  }
+  // for statistics
+  const int64_t used_time_us = ObTimeUtility::current_time() - start_ts;
+  XA_STAT_ADD_XA_END_TOTAL_COUNT();
+  XA_STAT_ADD_XA_END_TOTAL_USED_TIME(used_time_us);
+  if (OB_FAIL(ret)) {
+    XA_STAT_ADD_XA_END_FAIL_COUNT();
+  }
+  LOG_INFO("mysql xa end", K(ret), K(xid));
+  return ret;
+}
+
+// for mysql xa prepare
+int ObXaPrepareExecutor::execute(ObExecContext &ctx, ObXaPrepareStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  FLTSpanGuard(xa_prepare);
+  ObSQLSessionInfo *my_session = GET_MY_SESSION(ctx);
+  ObXATransID xid;
+  ObTransID tx_id;
+  const int64_t start_ts = ObTimeUtility::current_time();
+  ObXAStmtGuard xa_stmt_guard(start_ts);
+  if (OB_ISNULL(my_session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid param", K(ret), K(my_session));
+  } else if (lib::is_oracle_mode()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("unexpected in oracle mode", K(ret));
+  } else if (!my_session->is_inner() && my_session->is_txn_free_route_temp()) {
+    ret = OB_TRANS_FREE_ROUTE_NOT_SUPPORTED;
+    LOG_WARN("not support tx free route for dblink trans");
+  } else if (!my_session->get_in_transaction()) {
+    ret = OB_TRANS_XA_RMFAIL;
+    LOG_WARN("not in transaction", K(ret));
+  } else if (OB_FAIL(xid.set(stmt.get_gtrid_string(),
+                             stmt.get_bqual_string(),
+                             stmt.get_format_id()))) {
+    LOG_WARN("set xid failed", K(ret), K(stmt));
+  } else if (!xid.all_equal_to(my_session->get_xid())) {
+    ret = OB_TRANS_XA_NOTA;
+    LOG_WARN("unknown xid", K(ret), K(xid), K(my_session->get_xid()));
+  } else {
+    // in two cases, xa trans need exit
+    // case one, xa prepare succeeds
+    // case two, xa trans need rollback
+    const int64_t timeout_us = ObXaExecutorUtil::get_query_timeout(my_session);
+    bool need_exit = false;
+    ObSQLSessionInfo::LockGuard session_query_guard(my_session->get_query_lock());
+    ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
+    ObTxDesc *&tx_desc = my_session->get_tx_desc();
+    my_session->get_raw_audit_record().trans_id_ = my_session->get_tx_id();
+    FLT_SET_TAG(trans_id, my_session->get_tx_id().get_id());
+    if (0 >= timeout_us) {
+      ret = OB_TRANS_STMT_TIMEOUT;
+      LOG_WARN("xa stmt timeout", K(ret), K(xid), K(timeout_us));
+    } else if (OB_FAIL(MTL(transaction::ObXAService*)->xa_prepare_for_mysql(xid, timeout_us,
+            tx_desc, need_exit))) {
+      LOG_WARN("mysql xa prepare failed", K(ret), K(xid));
+    }
+    if (need_exit) {
+      my_session->get_trans_result().reset();
+      my_session->reset_tx_variable();
+      my_session->disassociate_xa();
+      ctx.set_need_disconnect(false);
+    }
+  }
+  // for statistics
+  const int64_t used_time_us = ObTimeUtility::current_time() - start_ts;
+  XA_STAT_ADD_XA_PREPARE_TOTAL_COUNT();
+  XA_STAT_ADD_XA_PREPARE_TOTAL_USED_TIME(used_time_us);
+  if (OB_SUCCESS != ret && OB_TRANS_XA_RDONLY != ret) {
+    XA_STAT_ADD_XA_PREPARE_FAIL_COUNT();
+  }
+  LOG_INFO("mysql xa prepare", K(ret), K(xid));
+  return ret;
+}
+
+// for mysql xa commit
+int ObXaCommitExecutor::execute(ObExecContext &ctx, ObXaCommitStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  FLTSpanGuard(xa_commit);
+  ObSQLSessionInfo *my_session = GET_MY_SESSION(ctx);
+  ObXATransID xid;
+  ObTransID tx_id;
+  const int64_t start_ts = ObTimeUtility::current_time();
+  ObXAStmtGuard xa_stmt_guard(start_ts);
+  if (OB_ISNULL(my_session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid param", K(ret), K(my_session));
+  } else if (lib::is_oracle_mode()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("unexpected in oracle mode", K(ret));
+  } else if (!my_session->is_inner() && my_session->is_txn_free_route_temp()) {
+    ret = OB_TRANS_FREE_ROUTE_NOT_SUPPORTED;
+    LOG_WARN("not support tx free route for dblink trans");
+  } else if (OB_FAIL(xid.set(stmt.get_gtrid_string(),
+                             stmt.get_bqual_string(),
+                             stmt.get_format_id()))) {
+    LOG_WARN("set xid failed", K(ret), K(stmt));
+  } else {
+    const int64_t timeout_us = ObXaExecutorUtil::get_query_timeout(my_session);
+    ObSQLSessionInfo::LockGuard session_query_guard(my_session->get_query_lock());
+    ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
+    const int64_t flags = stmt.get_flags();
+    if (0 >= timeout_us) {
+      ret = OB_TRANS_STMT_TIMEOUT;
+      LOG_WARN("xa stmt timeout", K(ret), K(xid), K(timeout_us));
+    } else if (ObXAFlag::is_tmonephase(flags)) {
+      bool need_exit = false;
+      // one phase xa commit
+      if (!my_session->get_in_transaction()) {
+        ret = OB_TRANS_XA_RMFAIL;
+        LOG_WARN("no xa trans for one phase xa commit", K(ret), K(xid));
+      } else if (my_session->get_xid().empty()) {
+        ret = OB_TRANS_XA_NOTA;
+        LOG_WARN("unknown xid", K(ret), K(xid));
+      } else if (!xid.all_equal_to(my_session->get_xid())) {
+        ret = OB_TRANS_XA_RMFAIL;
+        LOG_WARN("unexpected xid", K(ret), K(xid), K(my_session->get_xid()));
+      } else {
+        ObTxDesc *&tx_desc = my_session->get_tx_desc();
+        my_session->get_raw_audit_record().trans_id_ = my_session->get_tx_id();
+        FLT_SET_TAG(trans_id, my_session->get_tx_id().get_id());
+        if (OB_FAIL(MTL(transaction::ObXAService*)->xa_commit_onephase_for_mysql(xid,
+                timeout_us, tx_desc, need_exit))) {
+          LOG_WARN("mysql xa commit failed", K(ret), K(xid));
+        }
+        if (need_exit) {
+          my_session->get_trans_result().reset();
+          my_session->reset_tx_variable();
+          my_session->disassociate_xa();
+          ctx.set_need_disconnect(false);
+        }
+      }
+    } else if (ObXAFlag::is_tmnoflags_for_mysql(flags)) {
+      // two phase xa commit
+      const bool is_rollback = false;
+      if (my_session->get_in_transaction()) {
+        if (my_session->get_xid().empty()) {
+          ret = OB_TRANS_XA_NOTA;
+          LOG_WARN("unknown xid", K(ret), K(xid));
+        } else {
+          ret = OB_TRANS_XA_RMFAIL;
+          LOG_WARN("can not be executed in this state", K(ret), K(xid), K(my_session->get_xid()));
+        }
+      } else if (OB_FAIL(MTL(transaction::ObXAService*)->xa_second_phase_twophase_for_mysql(xid,
+              timeout_us, is_rollback, tx_id))) {
+        LOG_WARN("mysql xa commit failed", K(ret), K(xid));
+      }
+      my_session->get_raw_audit_record().trans_id_ = tx_id;
+      FLT_SET_TAG(trans_id, tx_id.get_id());
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected flags for mysql xa commit", K(ret), K(xid));
+    }
+  }
+  // for statistics
+  const int64_t used_time_us = ObTimeUtility::current_time() - start_ts;
+  XA_STAT_ADD_XA_COMMIT_TOTAL_COUNT();
+  XA_STAT_ADD_XA_COMMIT_TOTAL_USED_TIME(used_time_us);
+  if (OB_FAIL(ret)) {
+    XA_STAT_ADD_XA_COMMIT_FAIL_COUNT();
+  }
+  LOG_INFO("mysql xa commit", K(ret), K(xid));
+  return ret;
+}
+
+// for mysql xa rollback
+int ObXaRollbackExecutor::execute(ObExecContext &ctx, ObXaRollBackStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  FLTSpanGuard(xa_rollback);
+  ObSQLSessionInfo *my_session = GET_MY_SESSION(ctx);
+  ObXATransID xid;
+  ObTransID tx_id;
+  const int64_t start_ts = ObTimeUtility::current_time();
+  ObXAStmtGuard xa_stmt_guard(start_ts);
+  if (OB_ISNULL(my_session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid param", K(ret), K(my_session));
+  } else if (lib::is_oracle_mode()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("unexpected in oracle mode", K(ret));
+  } else if (!my_session->is_inner() && my_session->is_txn_free_route_temp()) {
+    ret = OB_TRANS_FREE_ROUTE_NOT_SUPPORTED;
+    LOG_WARN("not support tx free route for dblink trans");
+  } else if (OB_FAIL(xid.set(stmt.get_gtrid_string(),
+                             stmt.get_bqual_string(),
+                             stmt.get_format_id()))) {
+    LOG_WARN("set xid failed", K(ret), K(stmt));
+  } else {
+    bool need_exit = false;
+    const int64_t timeout_us = ObXaExecutorUtil::get_query_timeout(my_session);
+    ObSQLSessionInfo::LockGuard session_query_guard(my_session->get_query_lock());
+    ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
+    if (0 >= timeout_us) {
+      ret = OB_TRANS_STMT_TIMEOUT;
+      LOG_WARN("xa stmt timeout", K(ret), K(xid), K(timeout_us));
+    } else if (!my_session->get_in_transaction()) {
+      // try two phase xa rollback
+      const bool is_rollback = true;
+      if (OB_FAIL(MTL(transaction::ObXAService*)->xa_second_phase_twophase_for_mysql(xid,
+              timeout_us, is_rollback, tx_id))) {
+        LOG_WARN("mysql xa rollback failed", K(ret), K(xid));
+      }
+      my_session->get_raw_audit_record().trans_id_ = tx_id;
+      FLT_SET_TAG(trans_id, tx_id.get_id());
+    } else {
+      // try one phase xa rollback
+      ObTxDesc *&tx_desc = my_session->get_tx_desc();
+      my_session->get_raw_audit_record().trans_id_ = my_session->get_tx_id();
+      FLT_SET_TAG(trans_id, my_session->get_tx_id().get_id());
+      if (my_session->get_xid().empty()) {
+        ret = OB_TRANS_XA_NOTA;
+        LOG_WARN("unknown xid", K(ret), K(xid));
+      } else if (!xid.all_equal_to(my_session->get_xid())) {
+        ret = OB_TRANS_XA_RMFAIL;
+        LOG_WARN("unexpected xid", K(ret), K(xid), K(my_session->get_xid()));
+      } else if (OB_FAIL(MTL(transaction::ObXAService*)->xa_rollback_onephase_for_mysql(xid,
+              timeout_us, tx_desc, need_exit))) {
+        LOG_WARN("mysql xa rollback failed", K(ret), K(xid));
+      }
+      if (need_exit) {
+        my_session->get_trans_result().reset();
+        my_session->reset_tx_variable();
+        my_session->disassociate_xa();
+        ctx.set_need_disconnect(false);
+      }
+    }
+  }
+  // for statistics
+  const int64_t used_time_us = ObTimeUtility::current_time() - start_ts;
+  XA_STAT_ADD_XA_ROLLBACK_TOTAL_COUNT();
+  XA_STAT_ADD_XA_ROLLBACK_TOTAL_USED_TIME(used_time_us);
+  if (OB_FAIL(ret)) {
+    XA_STAT_ADD_XA_ROLLBACK_FAIL_COUNT();
+  }
+  LOG_INFO("mysql xa rollback", K(ret), K(xid));
+  return ret;
+}
+
+// for oracle xa start
 int ObPlXaStartExecutor::execute(ObExecContext &ctx, ObXaStartStmt &stmt)
 {
   int ret = OB_SUCCESS;
@@ -71,7 +433,7 @@ int ObPlXaStartExecutor::execute(ObExecContext &ctx, ObXaStartStmt &stmt)
   } else if (true == my_session->is_for_trigger_package()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support xa start in trigger", K(ret), K(xid));
-  } else if (OB_FAIL(get_org_cluster_id_(my_session, org_cluster_id))) {
+  } else if (OB_FAIL(ObXaExecutorUtil::get_org_cluster_id(my_session, org_cluster_id))) {
   } else if (OB_FAIL(my_session->get_tx_timeout(tx_timeout))) {
     LOG_ERROR("fail to get trans timeout ts", K(ret));
   } else if (FALSE_IT(tenant_id = my_session->get_effective_tenant_id())) {
@@ -131,7 +493,7 @@ int ObPlXaStartExecutor::execute(ObExecContext &ctx, ObXaStartStmt &stmt)
   return ret;
 }
 
-int ObPlXaStartExecutor::get_org_cluster_id_(ObSQLSessionInfo *session, int64_t &org_cluster_id) {
+int ObXaExecutorUtil::get_org_cluster_id(ObSQLSessionInfo *session, int64_t &org_cluster_id) {
   int ret = OB_SUCCESS;
   if (OB_FAIL(session->get_ob_org_cluster_id(org_cluster_id))) {
     LOG_WARN("fail to get ob_org_cluster_id", K(ret));
@@ -150,45 +512,6 @@ int ObPlXaStartExecutor::get_org_cluster_id_(ObSQLSessionInfo *session, int64_t 
     }
   }
   return ret;
-}
-
-int ObXaEndExecutor::execute(ObExecContext &ctx, ObXaEndStmt &stmt)
-{
-  int ret = OB_NOT_SUPPORTED;
-  LOG_USER_ERROR(OB_NOT_SUPPORTED, "XA protocol end interface");
-  UNUSED(ctx);
-  UNUSED(stmt);
-  // 暂时禁掉mysql模式下的xa调用
-  return ret;
-  /*
-  int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  ObSQLSessionInfo *my_session = GET_MY_SESSION(ctx);
-  ObTaskExecutorCtx &task_exec_ctx = ctx.get_task_exec_ctx();
-  //storage::ObPartitionService *ps = nullptr;
-
-  // if (OB_ISNULL(my_session) || OB_ISNULL(ps = task_exec_ctx.get_partition_service())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("invalid param", K(ret), K(my_session));
-  // mysql调用flags置为TMSUCCESS
-  } else if (OB_FAIL(ps->xa_end(stmt.get_xa_string(),
-                                transaction::ObXAEndFlag::TMSUCCESS,
-                                my_session->get_trans_desc()))) {
-    LOG_WARN("xa end failed", K(ret), K(stmt.get_xa_string()));
-    // 如果是OB_TRANS_XA_RMFAIL错误那么由用户决定是否回滚
-    if (OB_TRANS_XA_RMFAIL != ret
-        && OB_SUCCESS != (tmp_ret = ObSqlTransControl::explicit_end_trans(ctx, true))) {
-      ret = tmp_ret;
-      LOG_WARN("explicit end trans failed", K(ret));
-    }
-  } else {
-    my_session->reset_tx_variable();
-    ctx.set_need_disconnect(false);
-    my_session->get_trans_desc().get_standalone_stmt_desc().reset();
-  }
-  LOG_DEBUG("xa end execute", K(stmt.get_xa_string()));
-  return ret;
-  */
 }
 
 int ObPlXaEndExecutor::execute(ObExecContext &ctx, ObXaEndStmt &stmt)
@@ -263,49 +586,6 @@ int ObPlXaEndExecutor::execute(ObExecContext &ctx, ObXaEndStmt &stmt)
   return ret;
 }
 
-int ObXaPrepareExecutor::execute(ObExecContext &ctx, ObXaPrepareStmt &stmt)
-{
-  int ret = OB_NOT_SUPPORTED;
-  LOG_USER_ERROR(OB_NOT_SUPPORTED, "XA protocol prepare interface");
-  UNUSED(ctx);
-  UNUSED(stmt);
-  // 暂时禁掉mysql模式下的xa调用
-  return ret;
-  /*
-  int ret = OB_SUCCESS;
-  //int tmp_ret = OB_SUCCESS;
-  ObSQLSessionInfo *my_session = GET_MY_SESSION(ctx);
-  ObTaskExecutorCtx &task_exec_ctx = ctx.get_task_exec_ctx();
-  ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx);
-  //storage::ObPartitionService *ps = nullptr;
-  if (OB_ISNULL(my_session) || OB_ISNULL(plan_ctx)
-      // || OB_ISNULL(ps = task_exec_ctx.get_partition_service())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("invalid param", K(ret), K(my_session), K(plan_ctx), K(ps));
-  } else if (my_session->get_in_transaction()) {
-    ret = OB_TRANS_XA_OUTSIDE;
-    LOG_WARN("already start trans", K(ret));
-  } else {
-    const uint64_t tenant_id = my_session->get_effective_tenant_id();
-    int64_t timeout = plan_ctx->get_trans_timeout_timestamp();
-    transaction::ObStartTransParam &start_trans_param = plan_ctx->get_start_trans_param();
-    init_start_trans_param(my_session, task_exec_ctx, start_trans_param);
-    if (OB_FAIL(ps->xa_prepare(stmt.get_xa_string(), tenant_id, timeout))) {
-      LOG_WARN("xa prepare failed", K(ret), K(stmt.get_xa_string()));
-      // 如果是OB_TRANS_XA_RMFAIL错误那么由用户决定是否回滚
-      // if (OB_TRANS_XA_RMFAIL != ret
-      //    && OB_SUCCESS != (tmp_ret = ObSqlTransControl::explicit_end_trans(ctx, true))) {
-      //  ret = tmp_ret;
-      //  LOG_WARN("explicit end trans failed", K(ret));
-      // }
-    }
-  }
-
-  LOG_DEBUG("xa prepare execute", K(stmt.get_xa_string()));
-  return ret;
-  */
-}
-
 int ObPlXaPrepareExecutor::execute(ObExecContext &ctx, ObXaPrepareStmt &stmt)
 {
   int ret = OB_SUCCESS;
@@ -347,18 +627,6 @@ int ObPlXaPrepareExecutor::execute(ObExecContext &ctx, ObXaPrepareStmt &stmt)
     XA_STAT_ADD_XA_PREPARE_FAIL_COUNT();
   }
   LOG_INFO("xa prepare", K(ret), K(xid), K(tx_id), K(used_time_us));
-  return ret;
-}
-
-int ObXaEndTransExecutor::execute_(const ObString &xid,
-    const bool is_rollback, ObExecContext &ctx)
-{
-  int ret = OB_NOT_SUPPORTED;
-  LOG_USER_ERROR(OB_NOT_SUPPORTED, "XA protocol end trans interface");
-  UNUSED(xid);
-  UNUSED(is_rollback);
-  UNUSED(ctx);
-  // 暂时禁掉mysql模式下的xa调用
   return ret;
 }
 

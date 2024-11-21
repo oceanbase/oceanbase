@@ -571,7 +571,6 @@ void ObTxDesc::reset()
     FORCE_PRINT_TRACE(&tlog_, "[tx desc trace]");
   }
 #endif
-  TRANS_LOG(DEBUG, "reset txdesc", KPC(this), K(lbt()));
   tenant_id_ = 0;
   cluster_id_ = -1;
   trace_info_.reset();
