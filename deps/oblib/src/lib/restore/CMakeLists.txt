@@ -17,6 +17,7 @@ oblib_add_library(restore OBJECT
   cos/ob_cos_wrapper_handle.h
   cos/ob_singleton.h
   ob_object_device.cpp
+  hmac_signature.cpp
   ob_object_device.h
   ob_object_storage_base.cpp)
 

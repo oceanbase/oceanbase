@@ -193,7 +193,7 @@ TEST_F(TestDeviceManager, test_device_manager)
   device_num = manager.get_device_cnt();
   ASSERT_EQ(1, device_num); //since we do not release automatic
 
-  //MAX_DEVICE_INSTANCE different deivce
+ //MAX_DEVICE_INSTANCE different deivce
   for (int i = 0; i < max_dev_num; i++ ) {
     ObObjectStorageInfo tmp_storage_info;
     tmp_storage_info.device_type_ = ObStorageType::OB_STORAGE_OSS;

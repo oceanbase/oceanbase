@@ -258,6 +258,7 @@ standby_fetch_log_bandwidth_limit
 storage_meta_cache_priority
 storage_rowsets_size
 strict_check_os_params
+sts_credential
 sync_io_thread_count
 syslog_compress_func
 syslog_disk_size

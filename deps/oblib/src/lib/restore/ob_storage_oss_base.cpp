@@ -555,8 +555,8 @@ void ObOssAccount::reset_account()
   memset(oss_domain_, 0, MAX_OSS_ENDPOINT_LENGTH);
   memset(oss_id_, 0, MAX_OSS_ID_LENGTH);
   memset(oss_key_, 0, MAX_OSS_KEY_LENGTH);
-  oss_sts_token_ = nullptr;
   delete_mode_ = ObStorageDeleteMode::STORAGE_DELETE_MODE;
+  sts_token_.reset();
   is_inited_ = false;
 }
 
@@ -610,10 +610,10 @@ int ObStorageOssBase::init_with_storage_info(common::ObObjectStorageInfo *storag
   } else if (OB_ISNULL(storage_info) || OB_UNLIKELY(!storage_info->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "oss account is invalid, fail to init oss base!", K(ret), KPC(storage_info));
-  } else if (OB_FAIL(storage_info->get_storage_info_str(info_str, sizeof(info_str)))) {
-    OB_LOG(WARN, "fail to get storage info str", K(ret), KPC(storage_info));
+  } else if (OB_FAIL(storage_info->get_authorization_str(info_str, sizeof(info_str), oss_account_.sts_token_))) {
+    OB_LOG(WARN, "fail to get authorization str", K(ret), KPC(storage_info));
   } else if (OB_FAIL(oss_account_.parse_oss_arg(info_str))) {
-    OB_LOG(WARN, "fail to build oss account", K(ret));
+    OB_LOG(WARN, "fail to build oss account", K(ret), KP(info_str), KPC(storage_info));
   } else if (OB_FAIL(init_oss_options(aos_pool_, oss_option_))) {
     OB_LOG(WARN, "fail to init oss options", K(aos_pool_), K(oss_option_), K(ret));
   } else if (OB_ISNULL(aos_pool_) || OB_ISNULL(oss_option_)) {
@@ -682,15 +682,15 @@ int ObOssAccount::parse_oss_arg(const common::ObString &storage_info)
       if (NULL == token) {
         break;
       } else if (0 == strncmp(HOST, token, strlen(HOST))) {
-        if (OB_FAIL(set_oss_field(token + strlen(HOST), oss_domain_, sizeof(oss_domain_)))) {
+        if (OB_FAIL(ob_set_field(token + strlen(HOST), oss_domain_, sizeof(oss_domain_)))) {
           OB_LOG(WARN, "failed to set oss_domain", K(ret), KCSTRING(token));
         }
       } else if (0 == strncmp(ACCESS_ID, token, strlen(ACCESS_ID))) {
-        if (OB_FAIL(set_oss_field(token + strlen(ACCESS_ID), oss_id_, sizeof(oss_id_)))) {
+        if (OB_FAIL(ob_set_field(token + strlen(ACCESS_ID), oss_id_, sizeof(oss_id_)))) {
           OB_LOG(WARN, "failed to set oss_id_", K(ret), KCSTRING(token));
         }
       } else if (0 == strncmp(ACCESS_KEY, token, strlen(ACCESS_KEY))) {
-        if (OB_FAIL(set_oss_field(token + strlen(ACCESS_KEY), oss_key_, sizeof(oss_key_)))) {
+        if (OB_FAIL(ob_set_field(token + strlen(ACCESS_KEY), oss_key_, sizeof(oss_key_)))) {
           OB_LOG(WARN, "failed to set oss_key_", K(ret));
         }
       } else if (0 == strncmp(STS_TOKEN_KEY, token, strlen(STS_TOKEN_KEY))) {
@@ -700,7 +700,7 @@ int ObOssAccount::parse_oss_arg(const common::ObString &storage_info)
         if (OB_ISNULL(oss_sts_token_ = reinterpret_cast<char*>(allocator_.alloc(sts_token_len + 1)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           OB_LOG(WARN, "fail to alloc memory", K(ret), K(sts_token_len));
-        } else if (OB_FAIL(set_oss_field(token + strlen(STS_TOKEN_KEY), oss_sts_token_, sts_token_len + 1))) {
+        } else if (OB_FAIL(ob_set_field(token + strlen(STS_TOKEN_KEY), oss_sts_token_, sts_token_len + 1))) {
           OB_LOG(WARN, "failed to set oss_sts_token_", K(ret), KCSTRING(token));
         }
       } else if (0 == strncmp(DELETE_MODE, token, strlen(DELETE_MODE))) {
@@ -724,25 +724,6 @@ int ObOssAccount::parse_oss_arg(const common::ObString &storage_info)
   return ret;
 }
 
-int ObOssAccount::set_oss_field(const char *info, char *field, const int64_t length)
-{
-  int ret = OB_SUCCESS;
-
-  if (NULL == info || NULL == field) {
-    ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "invalid args", K(ret), KP(info), KP(field));
-  } else {
-    const int64_t info_len = strlen(info);
-    if (info_len >= length) {
-      ret = OB_INVALID_ARGUMENT;
-      OB_LOG(WARN, "info is too long ", K(ret), K(info_len), K(length));
-    } else {
-      MEMCPY(field, info, info_len);
-      field[info_len] = '\0';
-    }
-  }
-  return ret;
-}
 /* only used by pread and init. Initialize one aos_pol and oss_option. Other methods shouldn't call this method.
  * pread need alloc memory on aos_pol and release after read finish */
 int ObStorageOssBase::init_oss_options(aos_pool_t *&aos_pool, oss_request_options_t *&oss_option)
@@ -770,12 +751,14 @@ int ObStorageOssBase::init_oss_options(aos_pool_t *&aos_pool, oss_request_option
     ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "fail to create aos http request options", K(ret));
   } else {
+    const char *sts_data = oss_account_.sts_token_.get_data();
     aos_str_set(&oss_option->config->endpoint, oss_endpoint_);
     aos_str_set(&oss_option->config->access_key_id, oss_account_.oss_id_);
     aos_str_set(&oss_option->config->access_key_secret, oss_account_.oss_key_);
-    if (OB_NOT_NULL(oss_account_.oss_sts_token_)) {
-      aos_str_set(&oss_option->config->sts_token, oss_account_.oss_sts_token_);
+    if (OB_NOT_NULL(sts_data)) {
+      aos_str_set(&oss_option->config->sts_token, sts_data);
     }
+
     oss_option->config->is_cname = 0;
 
     // Set connection timeout, the default value is 10s

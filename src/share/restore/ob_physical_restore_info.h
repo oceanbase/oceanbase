@@ -191,6 +191,8 @@ public:
   Property_declare_int(bool, using_complement_log)
   Property_declare_int(int64_t, backup_compatible)
 
+  //for sts
+  Property_declare_ObString(sts_credential)
 private:
   //job_id and tenant_id in __all_restore_job primary_key
   ObRestoreJobPersistKey restore_key_;

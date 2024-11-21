@@ -44,6 +44,7 @@ ObAdminExecutor::ObAdminExecutor()
   // 设置MTL上下文
   mock_server_tenant_.set(&blocksstable::ObDecodeResourcePool::get_instance());
   share::ObTenantEnv::set_tenant(&mock_server_tenant_);
+  omt::ObTenantConfigMgr::get_instance().add_tenant_config(OB_SYS_TENANT_ID);
 
   storage_env_.data_dir_ = data_dir_;
   storage_env_.sstable_dir_ = sstable_dir_;
@@ -212,6 +213,28 @@ int ObAdminExecutor::set_s3_url_encode_type(const char *type_str) const
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "type str is invalid, expect 'dafault'/'compliantRfc3986Encoding'",
         KR(ret), K(type_str));
+  }
+  return ret;
+}
+int ObAdminExecutor::set_sts_credential_key(const char *sts_credential)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(sts_credential)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "sts credential is null", KR(ret), KP(sts_credential));
+  } else {
+    if (OB_FAIL(ObDeviceManager::get_instance().init_devices_env())) {
+      STORAGE_LOG(WARN, "fail to init device env", KR(ret));
+    } else {
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(OB_SYS_TENANT_ID));
+      if (OB_UNLIKELY(!tenant_config.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(
+            WARN, "tenant config is invalid", KR(ret), K(OB_SYS_TENANT_ID));
+      } else {
+        tenant_config->sts_credential = sts_credential;
+      }
+    }
   }
   return ret;
 }

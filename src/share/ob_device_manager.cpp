@@ -26,6 +26,84 @@ namespace oceanbase
 {
 namespace common
 {
+int ObTenantStsCredentialMgr::get_sts_credential(
+    char *sts_credential, const int64_t sts_credential_buf_len)
+{
+  int ret = OB_SUCCESS;
+  int64_t tenant_id = ObObjectStorageTenantGuard::get_tenant_id();
+  if (OB_ISNULL(sts_credential) || OB_UNLIKELY(sts_credential_buf_len <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid args", K(ret),
+        K(tenant_id), KP(sts_credential), K(sts_credential_buf_len));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || is_virtual_tenant_id(tenant_id))) {
+    // If the tenant is invalid or illegal, the sts_credential of the system tenant will be used as
+    // a backup. Please refer to the following document for specific reasons.
+    //
+    tenant_id = OB_SYS_TENANT_ID;
+    OB_LOG(WARN, "invalid tenant ctx, use sys tenant", K(ret), K(tenant_id));
+  }
+  if (OB_SUCC(ret)) {
+    if (is_meta_tenant(tenant_id)) {
+      tenant_id = gen_user_tenant_id(tenant_id);
+    }
+    const char *tmp_credential = nullptr;
+
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    int tmp_ret = OB_SUCCESS;
+    // If the tenant does not have sts_credential, return OB_EAGAIN to wait for the next try.
+    if (OB_TMP_FAIL(check_sts_credential(tenant_config))) {
+      ret = OB_EAGAIN;
+      OB_LOG(WARN, "fail to check sts credential, should try again", K(ret), K(tmp_ret), K(tenant_id));
+    } else {
+      tmp_credential = tenant_config->sts_credential;
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(databuff_printf(sts_credential, sts_credential_buf_len,
+                                       "%s", tmp_credential))) {
+        OB_LOG(WARN, "fail to deep copy sts_credential", K(ret), K(tenant_id), KP(tmp_credential));
+      } else if (OB_UNLIKELY(sts_credential[0] == '\0')) {
+        ret = OB_ERR_UNEXPECTED;
+        OB_LOG(WARN, "sts_credential is null", K(ret), K(tenant_id), KP(tmp_credential));
+      }
+      OB_LOG(INFO, "get sts credential successfully", K(tenant_id));
+    }
+    if (OB_FAIL(ret) && REACH_TIME_INTERVAL(LOG_INTERVAL_US)) {
+      OB_LOG(WARN, "try to get sts credential", K(ret), K(tenant_id), KP(tmp_credential));
+    }
+  }
+  return ret;
+}
+
+int ObTenantStsCredentialMgr::check_sts_credential(omt::ObTenantConfigGuard &tenant_config) const
+{
+  int ret = OB_SUCCESS;
+  const char *sts_credential = nullptr;
+  if (OB_UNLIKELY(!tenant_config.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "tenant config is invalid", K(ret));
+  } else if (OB_ISNULL(sts_credential = tenant_config->sts_credential)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "tenant config is invalid", K(ret), KP(sts_credential));
+  } else if (OB_UNLIKELY(sts_credential[0] == '\0')) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "sts_credential is null", K(ret), KP(sts_credential));
+  }
+  return ret;
+}
+
+int ObClusterVersionMgr::is_supported_assume_version() const
+{
+  int ret = OB_SUCCESS;
+  uint64 min_cluster_version = GET_MIN_CLUSTER_VERSION();
+  if (min_cluster_version < MOCK_CLUSTER_VERSION_4_2_5_0
+      || (min_cluster_version >= CLUSTER_VERSION_4_3_0_0
+      && min_cluster_version < CLUSTER_VERSION_4_3_5_0)) {
+    ret = OB_NOT_SUPPORTED;
+    OB_LOG(WARN, "cluster version is too low for assume role", K(ret), K(GET_MIN_CLUSTER_VERSION()));
+  }
+  return ret;
+}
 
 const int ObDeviceManager::MAX_DEVICE_INSTANCE;
 ObDeviceManager::ObDeviceManager() : allocator_(), device_count_(0), is_init_(false)
@@ -59,6 +137,11 @@ int ObDeviceManager::init_devices_env()
       OB_LOG(WARN, "fail to init cos storage", K(ret));
     } else if (OB_FAIL(init_s3_env())) {
       OB_LOG(WARN, "fail to init s3 storage", K(ret));
+    } else if (OB_FAIL(ObStsCredential::register_sts_credential_mgr(
+        &ObTenantStsCredentialMgr::get_instance()))) {
+      OB_LOG(WARN, "fail to register sts crendential", K(ret));
+    } else if (OB_FAIL(ObDeviceCredentialMgr::get_instance().init())) {
+      OB_LOG(WARN, "fail to init device credential mgr", K(ret));
     } else {
       // When compliantRfc3986Encoding is set to true:
       // - Adhere to RFC 3986 by supporting the encoding of reserved characters
@@ -117,6 +200,7 @@ void ObDeviceManager::destroy()
     fin_cos_env();
     fin_s3_env();
     lock_.destroy();
+    ObDeviceCredentialMgr::get_instance().destroy();
     is_init_ = false;
     device_count_ = 0;
     OB_LOG_RET(WARN, ret_dev, "release the init resource", K(ret_dev), K(ret_handle));

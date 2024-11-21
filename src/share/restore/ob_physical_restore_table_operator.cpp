@@ -268,6 +268,7 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, recover_table);
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, using_complement_log);
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, backup_compatible);
+     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, sts_credential);
 
      // source_cluster_version
      if (OB_SUCC(ret)) {
@@ -525,6 +526,7 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
     RETRIEVE_STR_VALUE(kms_encrypt_key, job);
     RETRIEVE_INT_VALUE(concurrency, job);
     RETRIEVE_INT_VALUE(backup_compatible, job);
+    RETRIEVE_STR_VALUE(sts_credential, job);
 
     if (OB_SUCC(ret)) {
       if (name == "backup_dest") {

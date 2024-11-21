@@ -890,6 +890,23 @@ bool ObConfigPlanCacheGCChecker::check(const ObConfigItem &t) const
   return is_valid;
 }
 
+bool ObConfigSTScredentialChecker::check(const ObConfigItem &t) const
+{
+  int ret = OB_SUCCESS;
+  bool flag = true;
+  const char *tmp_credential = t.str();
+  ObStsCredential key;
+  if (OB_ISNULL(tmp_credential) || OB_UNLIKELY(strlen(tmp_credential) <= 0
+      || strlen(tmp_credential) > OB_MAX_STS_CREDENTIAL_LENGTH)) {
+    flag = false;
+    OB_LOG(WARN, "invalid sts credential", KP(tmp_credential));
+  } else if (OB_FAIL(check_sts_credential_format(tmp_credential, key))) {
+    flag = false;
+    OB_LOG(WARN, "fail to check sts credential format", K(ret), K(key), KP(tmp_credential));
+  }
+  return flag;
+}
+
 bool ObConfigUseLargePagesChecker::check(const ObConfigItem &t) const
 {
   bool is_valid = false;

@@ -339,6 +339,25 @@ int record_failed_files_idx(const hash::ObHashMap<ObString, int64_t> &files_to_d
   return ret;
 }
 
+int ob_set_field(const char *value, char *field, const uint32_t field_length)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(value) || OB_ISNULL(field)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid arguments", K(ret), KP(value), KP(field));
+  } else {
+    const int64_t value_len = strlen(value);
+    if (value_len >= field_length) {
+      ret = OB_SIZE_OVERFLOW;
+      OB_LOG(WARN, "value is too long", K(ret), KP(value), K(value_len), K(field_length));
+    } else {
+      MEMCPY(field, value, value_len);
+      field[value_len] = '\0';
+    }
+  }
+  return ret;
+}
+
 int ob_apr_abort_fn(int retcode)
 {
   int ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -846,6 +865,27 @@ ObObjectStorageGuard::ObObjectStorageGuard(
   }
 }
 
+
+// when accessing the object storage, if the error code returned is OB_BACKUP_PERMISSION_DENIED,
+// it may be due to expired temporary ak/sk
+// attempt to refresh the temporary ak/sk, and if the refresh fails,
+// only log the error message to avoid overriding the original error code.
+static void try_refresh_device_credential(
+    const int ob_errcode, const ObObjectStorageInfo *storage_info)
+{
+  int ret = OB_SUCCESS;
+  if (ob_errcode != OB_OBJECT_STORAGE_PERMISSION_DENIED) {
+    // do nothing
+  } else if (OB_ISNULL(storage_info) || OB_UNLIKELY(!storage_info->is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid argument", K(ret), K(ob_errcode), KPC(storage_info));
+  } else if (storage_info->is_assume_role_mode()
+      && OB_FAIL(ObDeviceCredentialMgr::get_instance().curl_credential(
+          *storage_info, true /*update_access_time*/))) {
+    OB_LOG(WARN, "failed to refresh credential", K(ret), K(ob_errcode), KPC(storage_info));
+  }
+}
+
 void ObObjectStorageGuard::print_access_storage_log_() const
 {
   const int64_t cost_time_us = ObTimeUtility::current_time() - start_time_us_;
@@ -880,6 +920,7 @@ bool ObObjectStorageGuard::is_slow_io_(const int64_t cost_time_us) const
 ObObjectStorageGuard::~ObObjectStorageGuard()
 {
   print_access_storage_log_();
+  try_refresh_device_credential(ob_errcode_, storage_info_);
   lib::ObMallocHookAttrGuard::~ObMallocHookAttrGuard();
 }
 

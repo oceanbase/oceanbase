@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_connection_mgr.h"
 #include "rpc/ob_rpc_request_operator.h"
+#include "lib/allocator/ob_sql_mem_leak_checker.h"
 
 using namespace oceanbase::table;
 using namespace oceanbase::common;
@@ -55,6 +56,7 @@ ObTableConnectionMgr::ObTableConnectionMgr()
 ObTableConnectionMgr &ObTableConnectionMgr::get_instance()
 {
   ObTableConnectionMgr *instance = NULL;
+  DISABLE_SQL_MEMLEAK_GUARD;
   while (OB_UNLIKELY(once_ < 2)) {
     if (ATOMIC_BCAS(&once_, 0, 1)) {
       instance = OB_NEW(ObTableConnectionMgr, ObModIds::TABLE_PROC);

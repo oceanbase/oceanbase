@@ -505,7 +505,6 @@ int ObLoadDataDirectImpl::DataReader::init(const DataAccessParam &data_access_pa
       file_read_param.file_location_      = data_access_param.file_location_;
       file_read_param.filename_           = data_desc.filename_;
       file_read_param.compression_format_ = data_access_param.compression_format_;
-      file_read_param.access_info_        = data_access_param.access_info_;
       file_read_param.packet_handle_      = nullptr;
       if (OB_NOT_NULL(execute_ctx.exec_ctx_.get_session_info())
           && OB_NOT_NULL(execute_ctx.exec_ctx_.get_session_info()->get_pl_query_sender())) {
@@ -514,7 +513,9 @@ int ObLoadDataDirectImpl::DataReader::init(const DataAccessParam &data_access_pa
       file_read_param.session_            = execute_ctx.exec_ctx_.get_session_info();
       file_read_param.timeout_ts_         = THIS_WORKER.get_timeout_ts();
 
-      if (OB_FAIL(ObFileReader::open(file_read_param, allocator_, file_reader_))) {
+      if (OB_FAIL(file_read_param.access_info_.assign(data_access_param.access_info_))) {
+        LOG_WARN("fail to assign access info", KR(ret), K_(data_access_param.access_info));
+      } else if (OB_FAIL(ObFileReader::open(file_read_param, allocator_, file_reader_))) {
         LOG_WARN("failed to open file", KR(ret), K(data_desc));
       } else if (file_reader_->seekable()) {
 
@@ -833,14 +834,16 @@ int ObLoadDataDirectImpl::SimpleDataSplitUtils::split(const DataAccessParam &dat
     ObFileReadParam file_read_param;
     file_read_param.file_location_      = data_access_param.file_location_;
     file_read_param.filename_           = data_desc.filename_;
-    file_read_param.access_info_        = data_access_param.access_info_;
     file_read_param.compression_format_ = data_access_param.compression_format_;
     file_read_param.packet_handle_      = NULL;
     file_read_param.session_            = NULL;
     file_read_param.timeout_ts_         = THIS_WORKER.get_timeout_ts();
 
     ObFileReader *file_reader = NULL;
-    if (OB_FAIL(ObFileReader::open(file_read_param, allocator, file_reader))) {
+
+    if (OB_FAIL(file_read_param.access_info_.assign(data_access_param.access_info_))) {
+      LOG_WARN("fail to assign access info", KR(ret), K_(data_access_param.access_info));
+    } else if (OB_FAIL(ObFileReader::open(file_read_param, allocator, file_reader))) {
       LOG_WARN("failed to open file.", KR(ret), K(data_desc));
     } else if (!file_reader->seekable()) {
       if (OB_FAIL(data_desc_iter.add_data_desc(data_desc))) {
@@ -2397,7 +2400,9 @@ int ObLoadDataDirectImpl::init_execute_param()
     data_access_param.file_column_num_ = field_or_var_list.count();
     data_access_param.file_format_ = load_stmt_->get_data_struct_in_file();
     data_access_param.file_cs_type_ = load_args.file_cs_type_;
-    data_access_param.access_info_ = load_args.access_info_;
+    if (OB_FAIL(data_access_param.access_info_.assign(load_args.access_info_))) {
+      LOG_WARN("fail to set access info", KR(ret));
+    }
     data_access_param.compression_format_ = load_args.compression_format_;
   }
   // column_ids_

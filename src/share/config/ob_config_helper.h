@@ -301,6 +301,18 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigSyslogFileUncompressedCountChecker);
 };
 
+// Used to check the format of STS credential
+class ObConfigSTScredentialChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigSTScredentialChecker() {}
+  virtual ~ObConfigSTScredentialChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigSTScredentialChecker);
+};
+
 class ObConfigUseLargePagesChecker
   : public ObConfigChecker
 {

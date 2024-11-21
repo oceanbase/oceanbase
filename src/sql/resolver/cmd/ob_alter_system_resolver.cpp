@@ -3913,22 +3913,9 @@ int ObPhysicalRestoreTenantResolver::resolve(const ParseNode &parse_tree)
           && OB_FAIL(Util::resolve_string(parse_tree.children_[4],
                                           stmt->get_rpc_arg().encrypt_key_))) {
         LOG_WARN("failed to resolve encrypt key", K(ret));
-      } else if (OB_NOT_NULL(parse_tree.children_[5])) {
-        ParseNode *kms_node = parse_tree.children_[5];
-        if (2 != kms_node->num_child_) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("num of children not match", K(ret), "child_num", kms_node->num_child_);
-        } else if (OB_ISNULL(kms_node->children_[0])) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("kms uri should not be NULL", K(ret));
-        } else if (OB_FAIL(Util::resolve_string(kms_node->children_[0],
-                                                stmt->get_rpc_arg().kms_uri_))) {
-          LOG_WARN("failed to resolve kms uri", K(ret));
-        } else if (OB_NOT_NULL(kms_node->children_[1])
-            && OB_FAIL(Util::resolve_string(kms_node->children_[1],
-                                            stmt->get_rpc_arg().kms_encrypt_key_))) {
-          LOG_WARN("failed to resolve kms encrypt key", K(ret));
-        }
+      } else if (OB_NOT_NULL(parse_tree.children_[5])
+          && OB_FAIL(resolve_restore_with_config_item(parse_tree.children_[5], stmt->get_rpc_arg()))) {
+        LOG_WARN("fail to resolve config item", K(ret));
       }
 
       ParseNode *description_node = parse_tree.children_[6];
@@ -3969,6 +3956,50 @@ int ObPhysicalRestoreTenantResolver::resolve(const ParseNode &parse_tree)
         }
       }
     }
+  return ret;
+}
+
+int ObPhysicalRestoreTenantResolver::resolve_restore_with_config_item(const ParseNode *node, obrpc::ObPhysicalRestoreTenantArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node must not be null", K(ret));
+  } else if (T_RESTORE_WITH_CONFIG_LIST != node->type_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid nde type", K(ret), "node_type", node->type_);
+  } else if (node->num_child_ > 2) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children num not match", K(ret), "num_child", node->num_child_);
+  } else {
+    for (int64_t i = 0; i < node->num_child_ && OB_SUCC(ret); i++) {
+      const ParseNode *child_node = node->children_[i];
+      if (OB_ISNULL(child_node)) {
+      } else if (T_BACKUP_KEY == child_node->type_) {
+        if (2 != child_node->num_child_) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("num of children not match", K(ret), "child_num", child_node->num_child_);
+        } else if (OB_ISNULL(child_node->children_[0])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("kms uri should not be NULL", K(ret));
+        } else if (OB_FAIL(Util::resolve_string(child_node->children_[0],
+                                                arg.kms_uri_))) {
+          LOG_WARN("failed to resolve kms uri", K(ret));
+        } else if (OB_NOT_NULL(child_node->children_[1])
+            && OB_FAIL(Util::resolve_string(child_node->children_[1],
+                                            arg.kms_encrypt_key_))) {
+          LOG_WARN("failed to resolve kms encrypt key", K(ret));
+        }
+      } else if (T_STS_CREDENTIAL == child_node->type_) {
+        if (1 != child_node->num_child_) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("num of children not match", K(ret), "child_num", child_node->num_child_);
+        } else if (OB_FAIL(Util::resolve_string(child_node->children_[0], arg.sts_credential_))) {
+          LOG_WARN("fail to resolve string", K(ret));
+        }
+      }
+    }
+  }
   return ret;
 }
 
@@ -6052,22 +6083,9 @@ int ObRecoverTableResolver::resolve(const ParseNode &parse_tree)
     } else if (OB_NOT_NULL(parse_tree.children_[5])
         && OB_FAIL(Util::resolve_string(parse_tree.children_[5], stmt->get_rpc_arg().restore_tenant_arg_.encrypt_key_))) {
       LOG_WARN("failed to resolve encrypt key", K(ret));
-    } else if (OB_NOT_NULL(parse_tree.children_[6])) {
-      ParseNode *kms_node = parse_tree.children_[6];
-      if (2 != kms_node->num_child_) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("num of children not match", K(ret), "child_num", kms_node->num_child_);
-      } else if (OB_ISNULL(kms_node->children_[0])) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("kms uri should not be NULL", K(ret));
-      } else if (OB_FAIL(Util::resolve_string(kms_node->children_[0],
-                                              stmt->get_rpc_arg().restore_tenant_arg_.kms_uri_))) {
-        LOG_WARN("failed to resolve kms uri", K(ret));
-      } else if (OB_NOT_NULL(kms_node->children_[1])
-          && OB_FAIL(Util::resolve_string(kms_node->children_[1],
-                                          stmt->get_rpc_arg().restore_tenant_arg_.kms_encrypt_key_))) {
-        LOG_WARN("failed to resolve kms encrypt key", K(ret));
-      }
+    } else if (OB_NOT_NULL(parse_tree.children_[6])
+       && OB_FAIL(resolve_restore_with_config_item_(parse_tree.children_[6], stmt->get_rpc_arg()))){
+      LOG_WARN("fail to resolve restore_with config item", K(ret));
     }
 
     if (OB_FAIL(ret)) {
@@ -6618,6 +6636,50 @@ int ObRecoverTableResolver::resolve_tenant_(
       LOG_WARN("failed to get compat mode", K(ret), K(tenant_id));
     } else if (OB_FAIL(ObImportTableUtil::get_tenant_name_case_mode(tenant_id, case_mode))) {
       LOG_WARN("failed to get name case mode", K(ret), K(tenant_id));
+    }
+  }
+  return ret;
+}
+
+int ObRecoverTableResolver::resolve_restore_with_config_item_(const ParseNode *node, obrpc::ObRecoverTableArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node must not be null", K(ret));
+  } else if (T_RESTORE_WITH_CONFIG_LIST != node->type_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid nde type", K(ret), "node_type", node->type_);
+  } else if (node->num_child_ > 2) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children num not match", K(ret), "num_child", node->num_child_);
+  } else {
+    for (int64_t i = 0; i < node->num_child_ && OB_SUCC(ret); i++) {
+      const ParseNode *child_node = node->children_[i];
+      if (OB_ISNULL(child_node)) {
+      } else if (T_BACKUP_KEY == child_node->type_) {
+        if (2 != child_node->num_child_) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("num of children not match", K(ret), "child_num", child_node->num_child_);
+        } else if (OB_ISNULL(child_node->children_[0])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("kms uri should not be NULL", K(ret));
+        } else if (OB_FAIL(Util::resolve_string(child_node->children_[0],
+                                                arg.restore_tenant_arg_.kms_uri_))) {
+          LOG_WARN("failed to resolve kms uri", K(ret));
+        } else if (OB_NOT_NULL(child_node->children_[1])
+            && OB_FAIL(Util::resolve_string(child_node->children_[1],
+                                            arg.restore_tenant_arg_.kms_encrypt_key_))) {
+          LOG_WARN("failed to resolve kms encrypt key", K(ret));
+        }
+      } else if (T_STS_CREDENTIAL == child_node->type_) {
+        if (1 != child_node->num_child_) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("num of children not match", K(ret), "child_num", child_node->num_child_);
+        } else if (OB_FAIL(Util::resolve_string(child_node->children_[0], arg.restore_tenant_arg_.sts_credential_))) {
+          LOG_WARN("fail to resolve string", K(ret));
+        }
+      }
     }
   }
   return ret;
