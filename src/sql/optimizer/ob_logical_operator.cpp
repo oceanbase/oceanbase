@@ -2201,9 +2201,13 @@ int ObLogicalOperator::find_consumer_id_for_shared_expr(const ObIArray<ExprProdu
     LOG_WARN("get unexpected null", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < ctx->count(); i++) {
+      bool need_check_status = (i + 1) % 1000 == 0;
       if (OB_ISNULL(ctx->at(i).expr_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
+      } else if (need_check_status &&
+                 OB_FAIL(THIS_WORKER.check_status())) {
+        LOG_WARN("check status fail", K(ret));
       } else if (ObOptimizerUtil::is_point_based_sub_expr(expr, ctx->at(i).expr_)) {
         if (OB_INVALID_ID == consumer_id) {
           consumer_id = ctx->at(i).consumer_id_;
