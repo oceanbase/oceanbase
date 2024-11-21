@@ -108,6 +108,10 @@ int ObDirectLoadOptimizer::optimize(ObExecContext *exec_ctx, ObLoadDataStmt &stm
           } else if (allow_fallback) {
             LOG_INFO("direct load has been allowed fallback");
             ret = OB_SUCCESS;
+            ObWarningBuffer *buf = common::ob_get_tsi_warning_buffer();
+            if (NULL != buf) {
+              buf->reset_err();
+            }
           }
         }
       }
@@ -200,6 +204,10 @@ int ObDirectLoadOptimizer::optimize(
               } else if (allow_fallback) {
                 LOG_INFO("direct load has been allowed fallback");
                 ret = OB_SUCCESS;
+                ObWarningBuffer *buf = common::ob_get_tsi_warning_buffer();
+                if (NULL != buf) {
+                  buf->reset_err();
+                }
               }
             }
           } else {
