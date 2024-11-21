@@ -2474,9 +2474,13 @@ int ObMClockQueue::remove_from_heap(ObPhyQueue *phy_queue)
   } else if (-1 == phy_queue->reservation_pos_
              || (-1 == phy_queue->limitation_pos_ && -1 == phy_queue->proportion_pos_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid status", K(phy_queue->reservation_pos_),
-                               K(phy_queue->limitation_pos_),
-                               K(phy_queue->proportion_pos_));
+    LOG_WARN("phy_queue is not in heaps of reservation, proportion and limitation",
+        K(phy_queue),
+        K(*this),
+        K(ret),
+        K(phy_queue->reservation_pos_),
+        K(phy_queue->limitation_pos_),
+        K(phy_queue->proportion_pos_));
   } else if (OB_FAIL(r_heap_.remove(phy_queue))) {
     LOG_WARN("remove phy queue from r heap failed", K(ret));
   } else if (FALSE_IT(phy_queue->reservation_pos_ = -1)) {
