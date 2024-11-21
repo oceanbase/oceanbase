@@ -2380,6 +2380,8 @@ int ObMySQLProcStatement::process_array_out_param(const pl::ObCollectionType *co
         elem_desc.set_obj_type(common::ObExtendType);
       }
       if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(coll->init_allocator(allocator, true))) {
+        LOG_WARN("collection init allocator failed", K(ret));
       } else if (coll_type->get_element_type().is_record_type()) {
         const pl::ObUserDefinedType *udt = NULL;
         const pl::ObRecordType *record_type = NULL;
