@@ -462,12 +462,26 @@ class ObNestedLoopJoinOp;
 REGISTER_OPERATOR(ObLogJoin, PHY_NESTED_LOOP_JOIN, ObNestedLoopJoinSpec,
                   ObNestedLoopJoinOp, NOINPUT, VECTORIZED_OP);
 
+class ObNestedLoopJoinVecSpec;
+class ObNestedLoopJoinVecOp;
+REGISTER_OPERATOR(ObLogJoin, PHY_VEC_NESTED_LOOP_JOIN, ObNestedLoopJoinVecSpec,
+                  ObNestedLoopJoinVecOp, NOINPUT, VECTORIZED_OP, 0 /*+version*/,
+                  SUPPORT_RICH_FORMAT);
+
+
 class ObLogSubPlanFilter;
 class ObSubPlanFilterSpec;
 class ObSubPlanFilterOp;
 REGISTER_OPERATOR(ObLogSubPlanFilter, PHY_SUBPLAN_FILTER,
                   ObSubPlanFilterSpec, ObSubPlanFilterOp,
                   NOINPUT, VECTORIZED_OP);
+
+class ObLogSubPlanFilter;
+class ObSubPlanFilterVecSpec;
+class ObSubPlanFilterVecOp;
+REGISTER_OPERATOR(ObLogSubPlanFilter, PHY_VEC_SUBPLAN_FILTER,
+                  ObSubPlanFilterVecSpec, ObSubPlanFilterVecOp,
+                  NOINPUT, VECTORIZED_OP, 0 /*+version*/, SUPPORT_RICH_FORMAT);
 
 class ObLogSubPlanScan;
 class ObSubPlanScanSpec;

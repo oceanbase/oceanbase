@@ -608,6 +608,17 @@ bool ObSQLSessionInfo::is_var_assign_use_das_enabled() const
   return bret;
 }
 
+bool ObSQLSessionInfo::is_nlj_spf_use_rich_format_enabled() const
+{
+  bool bret = false;
+  int64_t tenant_id = get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    bret = tenant_config->_enable_nlj_spf_use_rich_format;
+  }
+  return bret;
+}
+
 int ObSQLSessionInfo::is_adj_index_cost_enabled(bool &enabled, int64_t &stats_cost_percent) const
 {
   int ret = OB_SUCCESS;

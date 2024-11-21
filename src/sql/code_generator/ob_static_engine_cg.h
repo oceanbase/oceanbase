@@ -93,6 +93,7 @@ class ObPxMSCoordSpec;
 class ObPxMSCoordVecSpec;
 class ObLogSubPlanFilter;
 class ObSubPlanFilterSpec;
+class ObSubPlanFilterVecSpec;
 class ObLogSubPlanScan;
 class ObSubPlanScanSpec;
 class ObGroupBySpec;
@@ -140,6 +141,7 @@ class ObLogValuesTableAccess;
 class ObValuesTableAccessSpec;
 
 class ObMergeGroupByVecSpec;
+class ObNestedLoopJoinVecSpec;
 typedef common::ObList<uint64_t, common::ObIAllocator> DASTableIdList;
 typedef common::ObSEArray<common::ObSEArray<int64_t, 8, common::ModulePageAllocator, true>,
                           1, common::ModulePageAllocator, true> RowParamMap;
@@ -315,6 +317,7 @@ private:
   int generate_spec(ObLogValues &op, ObValuesSpec &spec, const bool in_root_job);
 
   int generate_spec(ObLogSubPlanFilter &op, ObSubPlanFilterSpec &spec, const bool in_root_job);
+  int generate_spec(ObLogSubPlanFilter &op, ObSubPlanFilterVecSpec &spec, const bool in_root_job);
 
   int generate_spec(ObLogSubPlanScan &op, ObSubPlanScanSpec &spec, const bool in_root_job);
 
@@ -365,6 +368,8 @@ private:
 
   // generate nested loop join
   int generate_spec(ObLogJoin &op, ObNestedLoopJoinSpec &spec, const bool in_root_job);
+  // generate NLJ for vec_2_0
+  int generate_spec(ObLogJoin &op, ObNestedLoopJoinVecSpec &spec, const bool in_root_job);
   // generate merge join
   int generate_spec(ObLogJoin &op, ObMergeJoinSpec &spec, const bool in_root_job);
   int generate_spec(ObLogJoin &op, ObMergeJoinVecSpec &spec, const bool in_root_job);
@@ -525,6 +530,10 @@ private:
   int do_gi_partition_pruning(
       ObLogJoin &op,
       ObBasicNestedLoopJoinSpec &spec);
+
+  int do_gi_partition_pruning(
+      ObLogJoin &op,
+      ObNestedLoopJoinVecSpec &spec);
 
   int generate_hash_func_exprs(
       const common::ObIArray<ObExchangeInfo::HashExpr> &hash_dist_exprs,

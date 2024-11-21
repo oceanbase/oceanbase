@@ -164,6 +164,8 @@
 #include "sql/engine/join/ob_join_filter_material_control_info.h"
 #include "sql/engine/join/ob_merge_join_vec_op.h"
 #include "sql/resolver/mv/ob_mv_provider.h"
+#include "sql/engine/join/ob_nested_loop_join_vec_op.h"
+#include "sql/engine/subquery/ob_subplan_filter_vec_op.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
@@ -973,7 +975,7 @@ int ObStaticEngineCG::generate_spec_final(ObLogicalOperator &op, ObOpSpec &spec)
   int ret = OB_SUCCESS;
 
   UNUSED(op);
-  if (PHY_SUBPLAN_FILTER == spec.type_) {
+  if (PHY_SUBPLAN_FILTER == spec.type_ || PHY_VEC_SUBPLAN_FILTER == spec.type_) {
     FOREACH_CNT_X(e, spec.calc_exprs_, OB_SUCC(ret)) {
       if (T_REF_QUERY == (*e)->type_) {
         ObExprSubQueryRef::Extra::get_info(**e).op_id_ = spec.id_;
@@ -6094,6 +6096,129 @@ int ObStaticEngineCG::generate_spec(ObLogJoin &op,
   UNUSED(in_root_job);
   return generate_join_spec(op, spec);
 }
+
+int ObStaticEngineCG::generate_spec(ObLogJoin &op,
+                                    ObNestedLoopJoinVecSpec &spec,
+                                    const bool in_root_job)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(in_root_job);
+  bool is_late_mat = (phy_plan_->get_is_late_materialized() || op.is_late_mat());
+  phy_plan_->set_is_late_materialized(is_late_mat);
+  if (op.is_partition_wise()) {
+    phy_plan_->set_is_wise_join(op.is_partition_wise()); // set is_wise_join
+  }
+  // 1. add other join conditions
+  const ObIArray<ObRawExpr*> &other_join_conds = op.get_other_join_conditions();
+  if (OB_FAIL(spec.other_join_conds_.init(other_join_conds.count()))) {
+    LOG_WARN("failed to init other join conditions", K(ret));
+  } else {
+    ARRAY_FOREACH(other_join_conds, i) {
+      ObRawExpr *raw_expr = other_join_conds.at(i);
+      ObExpr *expr = NULL;
+      if (OB_ISNULL(raw_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("null pointer", K(ret));
+      } else if (OB_FAIL(generate_rt_expr(*raw_expr, expr))) {
+        LOG_WARN("fail to generate rt expr", K(ret), K(*raw_expr));
+      } else if (OB_FAIL(spec.other_join_conds_.push_back(expr))) {
+        LOG_WARN("failed to add sql expr", K(ret), K(*expr));
+      } else {
+        LOG_DEBUG("equijoin condition", K(*raw_expr), K(*expr));
+      }
+    } // end for
+  }
+
+  spec.join_type_ = op.get_join_type();
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (NESTED_LOOP_JOIN ==  op.get_join_algo()) {
+    if (0 != op.get_equal_join_conditions().count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("equal join conditions' count should equal 0", K(ret));
+    } else {
+      spec.enable_gi_partition_pruning_ = op.is_enable_gi_partition_pruning();
+      if (spec.enable_gi_partition_pruning_ && OB_FAIL(do_gi_partition_pruning(op, spec))) {
+        LOG_WARN("fail do gi partition pruning", K(ret));
+      } else if (OB_FAIL(generate_param_spec(op.get_nl_params(), spec.rescan_params_))) {
+        LOG_WARN("fail to generate param spec", K(ret));
+      } else {
+        spec.enable_px_batch_rescan_ = false;
+        if (OB_SUCC(ret) && PHY_VEC_NESTED_LOOP_JOIN == spec.type_) {
+          bool use_batch_nlj = op.can_use_batch_nlj();
+          if (use_batch_nlj) {
+            spec.group_rescan_ = use_batch_nlj;
+          }
+
+          if (spec.is_vectorized()) {
+            // populate other cond join info
+            const ObIArray<ObExpr *> &conds = spec.other_join_conds_;
+            if (OB_FAIL(spec.left_expr_ids_in_other_cond_.prepare_allocate(conds.count()))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("Failed to prepare_allocate left_expr_ids_in_other_cond_", K(ret));
+            } else {
+              ARRAY_FOREACH(conds, i) {
+                ObExpr *cond = conds.at(i);
+                ObSEArray<int, 1> left_expr_ids;
+                for (int64_t l_output_idx = 0;
+                     OB_SUCC(ret) && l_output_idx < spec.get_left()->output_.count();
+                     l_output_idx++) {
+                  // check if left child expr appears in other_condition
+                  bool appears_in_cond = false;
+                  if (OB_FAIL(cond->contain_expr(
+                          spec.get_left()->output_.at(l_output_idx), appears_in_cond))) {
+                    LOG_WARN("other expr contain calculate failed", K(ret), KPC(cond),
+                             K(l_output_idx),
+                             KPC(spec.get_left()->output_.at(l_output_idx)));
+                  } else {
+                    if (appears_in_cond) {
+                      if (OB_FAIL(left_expr_ids.push_back(l_output_idx))) {
+                        LOG_WARN("other expr contain", K(ret));
+                      }
+                    }
+                  }
+                }
+                // Note: no need to call init explicitly as init() is invoked inside assign()
+                OZ(spec.left_expr_ids_in_other_cond_.at(i).assign(left_expr_ids));
+              }
+            }
+          }
+
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(spec.left_rescan_params_.init(op.get_above_pushdown_left_params().count()))) {
+              LOG_WARN("fail to init fixed array", K(ret));
+            } else if (OB_FAIL(spec.right_rescan_params_.init(op.get_above_pushdown_right_params().count()))) {
+              LOG_WARN("fail to init fixed array", K(ret));
+            } else if (OB_FAIL(set_batch_exec_param(op.get_nl_params(), spec.rescan_params_))) {
+              LOG_WARN("fail to set batch exec param", K(ret));
+            }
+            ARRAY_FOREACH(op.get_above_pushdown_left_params(), i) {
+              ObExecParamRawExpr* param_expr = op.get_above_pushdown_left_params().at(i);
+              if (OB_FAIL(batch_exec_param_caches_.push_back(BatchExecParamCache(param_expr,
+                                                                                 &spec,
+                                                                                 true)))) {
+                LOG_WARN("fail to push back param expr", K(ret));
+              }
+            }
+            ARRAY_FOREACH(op.get_above_pushdown_right_params(), i) {
+              ObExecParamRawExpr* param_expr = op.get_above_pushdown_right_params().at(i);
+              if (OB_FAIL(batch_exec_param_caches_.push_back(BatchExecParamCache(param_expr,
+                                                                                 &spec,
+                                                                                 false)))) {
+                LOG_WARN("fail to push back param expr", K(ret));
+              }
+            }
+          }
+        }
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid join algorithm to generate NLJ spec", K(ret), K(op.get_join_algo()));
+  }
+  return ret;
+}
+
 int ObStaticEngineCG::generate_spec(ObLogJoin &op,
                                     ObMergeJoinSpec &spec,
                                     const bool in_root_job)
@@ -6454,6 +6579,15 @@ int ObStaticEngineCG::generate_join_spec(ObLogJoin &op, ObJoinSpec &spec)
 int ObStaticEngineCG::do_gi_partition_pruning(
     ObLogJoin &op,
     ObBasicNestedLoopJoinSpec &spec)
+{
+  int ret = OB_SUCCESS;
+  OZ(generate_rt_expr(*op.get_partition_id_expr(), spec.gi_partition_id_expr_));
+  return ret;
+}
+
+int ObStaticEngineCG::do_gi_partition_pruning(
+    ObLogJoin &op,
+    ObNestedLoopJoinVecSpec &spec)
 {
   int ret = OB_SUCCESS;
   OZ(generate_rt_expr(*op.get_partition_id_expr(), spec.gi_partition_id_expr_));
@@ -6830,6 +6964,18 @@ int ObStaticEngineCG::generate_spec(
   }
   if (OB_SUCC(ret)) {
     spec.enable_das_group_rescan_ = op.enable_das_group_rescan();
+  }
+  return ret;
+}
+
+int ObStaticEngineCG::generate_spec(
+    ObLogSubPlanFilter &op, ObSubPlanFilterVecSpec &spec, const bool in_root_job)
+{
+  int ret = OB_SUCCESS;
+  spec.use_rich_format_ = true;
+  ObSubPlanFilterSpec &base_spec = spec;
+  if (OB_FAIL(generate_spec(op, base_spec, in_root_job))) {
+    LOG_WARN("failed to generate spec for subplan filter operator", K(ret));
   }
   return ret;
 }
@@ -9140,6 +9286,11 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
              : (op.get_nl_params().count() > 0
                   ? PHY_NESTED_LOOP_CONNECT_BY_WITH_INDEX
                   : PHY_CONNECT_BY);
+          if (type == PHY_NESTED_LOOP_JOIN && use_rich_format &&
+              op.get_plan()->get_optimizer_context().get_session_info()->is_nlj_spf_use_rich_format_enabled() &&
+              !op.enable_px_batch_rescan() && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0) {
+            type = PHY_VEC_NESTED_LOOP_JOIN;
+          }
           break;
         }
         case MERGE_JOIN: {
@@ -9370,7 +9521,15 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
       break;
     }
     case log_op_def::LOG_SUBPLAN_FILTER: {
+      auto &op = static_cast<ObLogSubPlanFilter &>(log_op);
       type = PHY_SUBPLAN_FILTER;
+      if (!op.is_update_set() && use_rich_format &&
+          op.get_plan()->get_optimizer_context().get_session_info()->is_nlj_spf_use_rich_format_enabled() &&
+          !op.is_px_batch_rescan_enabled() && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0) {
+        type = PHY_VEC_SUBPLAN_FILTER;
+      } else {
+        type = PHY_SUBPLAN_FILTER;
+      }
       break;
     }
     case log_op_def::LOG_SUBPLAN_SCAN: {
@@ -9845,6 +10004,28 @@ int ObStaticEngineCG::set_batch_exec_param(const ObIArray<ObExecParamRawExpr *> 
         }
       } else if (cache.spec_->get_type() == PHY_NESTED_LOOP_JOIN) {
         ObNestedLoopJoinSpec *nlj = static_cast<ObNestedLoopJoinSpec*>(cache.spec_);
+        if (cache.is_left_param_ &&
+                    OB_FAIL(nlj->left_rescan_params_.push_back(setter))) {
+          LOG_WARN("fail to push back left rescan params", K(ret));
+        } else if (!cache.is_left_param_ &&
+                    OB_FAIL(nlj->right_rescan_params_.push_back(setter))) {
+          LOG_WARN("fail to push back right rescan params", K(ret));
+        } else if (OB_FAIL(batch_exec_param_caches_.remove(j))) {
+          LOG_WARN("fail to remove batch nl param caches", K(ret));
+        }
+      } else if (cache.spec_->get_type() == PHY_VEC_SUBPLAN_FILTER) {
+        ObSubPlanFilterVecSpec *spf = static_cast<ObSubPlanFilterVecSpec*>(cache.spec_);
+        if (cache.is_left_param_ &&
+                    OB_FAIL(spf->left_rescan_params_.push_back(setter))) {
+          LOG_WARN("fail to push back left rescan params", K(ret));
+        } else if (!cache.is_left_param_ &&
+                    OB_FAIL(spf->right_rescan_params_.push_back(setter))) {
+          LOG_WARN("fail to push back right rescan params", K(ret));
+        } else if (OB_FAIL(batch_exec_param_caches_.remove(j))) {
+          LOG_WARN("fail to remove batch nl param caches", K(ret));
+        }
+      } else if (cache.spec_->get_type() == PHY_VEC_NESTED_LOOP_JOIN) {
+        ObNestedLoopJoinVecSpec *nlj = static_cast<ObNestedLoopJoinVecSpec*>(cache.spec_);
         if (cache.is_left_param_ &&
                     OB_FAIL(nlj->left_rescan_params_.push_back(setter))) {
           LOG_WARN("fail to push back left rescan params", K(ret));

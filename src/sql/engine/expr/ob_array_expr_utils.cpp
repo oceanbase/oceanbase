@@ -384,6 +384,12 @@ int ObArrayExprUtils::set_array_res(ObIArrayType *arr_obj, const ObExpr &expr, O
 template int ObArrayExprUtils::set_array_res<ObUniformFormat<true>>(
     ObIArrayType* arr_obj, const ObExpr& expr, ObEvalCtx& ctx,
     ObUniformFormat<true>* res_vec, int64_t batch_idx);
+template int ObArrayExprUtils::set_array_res<ObDiscreteFormat>(
+    ObIArrayType* arr_obj, const ObExpr& expr, ObEvalCtx& ctx,
+    ObDiscreteFormat* res_vec, int64_t batch_idx);
+template int ObArrayExprUtils::set_array_res<ObVectorBase>(
+    ObIArrayType* arr_obj, const ObExpr& expr, ObEvalCtx& ctx,
+    ObVectorBase* res_vec, int64_t batch_idx);
 
 int ObArrayExprUtils::set_array_obj_res(ObIArrayType *arr_obj, ObObjCastParams *params, ObObj *obj)
 {

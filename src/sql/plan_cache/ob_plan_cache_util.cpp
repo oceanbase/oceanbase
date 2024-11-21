@@ -545,6 +545,7 @@ int ObConfigInfoInPC::load_influence_plan_config()
         (0 == ObString::make_string("Hyperscan").case_compare(tenant_config->_regex_engine.str()));
     direct_load_allow_fallback_ = tenant_config->direct_load_allow_fallback;
     default_load_mode_ = ObDefaultLoadMode::get_type_value(tenant_config->default_load_mode.get_value_string());
+    enable_nlj_spf_use_rich_format_ = tenant_config->_enable_nlj_spf_use_rich_format;
   }
 
   return ret;
@@ -615,6 +616,9 @@ int ObConfigInfoInPC::serialize_configs(char *buf, int buf_len, int64_t &pos)
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                                "%d", default_load_mode_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(default_load_mode_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                               "%d,", enable_nlj_spf_use_rich_format_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_nlj_spf_use_rich_format_));
   } else {
     // do nothing
   }

@@ -52,7 +52,6 @@ public:
   int64_t param_idx_;
   ObSqlArrayObj *gr_param_; //group rescan param
 };
-
 typedef common::ObArrayWrap<GroupRescanParam> GroupParamArray;
 class ObDASCtx
 {

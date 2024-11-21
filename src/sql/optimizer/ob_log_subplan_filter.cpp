@@ -1015,3 +1015,14 @@ int ObLogSubPlanFilter::close_px_resource_analyze(CLOSE_PX_RESOURCE_ANALYZE_DECL
   }
   return ret;
 }
+
+bool ObLogSubPlanFilter::is_px_batch_rescan_enabled()
+{
+  bool enable_px_batch_rescan = false;
+  if (!enable_px_batch_rescans_.empty()) {
+    for (int i = 0; i < enable_px_batch_rescans_.count() && !enable_px_batch_rescan; i++) {
+      enable_px_batch_rescan = enable_px_batch_rescans_.at(i);
+    }
+  }
+  return enable_px_batch_rescan;
+}

@@ -184,6 +184,8 @@
 #include "sql/engine/aggregate/ob_merge_groupby_vec_op.h"
 #include "sql/engine/join/ob_merge_join_vec_op.h"
 
+#include "sql/engine/join/ob_nested_loop_join_vec_op.h"
+#include "sql/engine/subquery/ob_subplan_filter_vec_op.h"
 namespace oceanbase
 {
 using namespace common;

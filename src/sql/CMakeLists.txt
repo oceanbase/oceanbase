@@ -159,6 +159,7 @@ ob_set_subtarget(ob_sql engine
   engine/window_function/row_store.cpp
   engine/window_function/win_expr.cpp
   engine/window_function/row_store.cpp
+  engine/subquery/ob_subplan_filter_vec_op.cpp
 )
 
 ob_set_subtarget(ob_sql engine_aggregate
@@ -228,6 +229,7 @@ ob_set_subtarget(ob_sql engine_basic
   engine/basic/chunk_store/ob_compact_block_reader.cpp
   engine/basic/chunk_store/ob_compact_block_writer.cpp
   engine/basic/chunk_store/ob_chunk_block_compressor.cpp
+  engine/basic/ob_group_join_buffer_v2.cpp
   #engine/basic/chunk_store/ob_encoded_block_writer.cpp
   #engine/basic/chunk_store/ob_encoded_block_reader.cpp
   engine/basic/ob_values_table_access_op.cpp
@@ -856,6 +858,7 @@ ob_set_subtarget(ob_sql engine_join
   engine/join/ob_join_filter_partition_splitter.cpp
   engine/join/ob_join_filter_material_control_info.cpp
   engine/join/ob_merge_join_vec_op.cpp
+  engine/join/ob_nested_loop_join_vec_op.cpp
 )
 
 ob_set_subtarget(ob_sql engine_pdml
