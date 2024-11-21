@@ -268,7 +268,7 @@ int LSFetchCtx::init_remote_iter()
   } else if (OB_FAIL(get_log_ext_handler(log_ext_handler))) {
     LOG_ERROR("get log external handler failed", KR(ret));
   } else if (OB_FAIL(remote_iter_.init(tenant_id, ls_id, start_scn, start_lsn,
-      LSN(LOG_MAX_LSN_VAL), large_buffer_pool, log_ext_handler))) {
+      LSN(LOG_MAX_LSN_VAL), large_buffer_pool, log_ext_handler, archive::ARCHIVE_FILE_DATA_BUF_SIZE))) {
     LOG_ERROR("remote iter init failed", KR(ret), K(tenant_id), K(ls_id), K(start_scn), K(start_lsn));
   }
   return ret;
