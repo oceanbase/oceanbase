@@ -425,10 +425,8 @@ int ObDirectLoadMemDump::compact_tablet_tables(const ObTabletID &tablet_id)
     ObIDirectLoadPartitionTable *table = nullptr;
     if (OB_FAIL(compactor->compact())) {
       LOG_WARN("fail to compact tables", KR(ret));
-    } else if (OB_FAIL(compactor->get_table(table, mem_ctx_->allocator_))) {
-      LOG_WARN("fail to get table", KR(ret));
-    } else if (OB_FAIL(mem_ctx_->tables_.push_back(table))) {
-      LOG_WARN("fail to add table", KR(ret));
+    } else if (OB_FAIL(mem_ctx_->add_tables_from_table_compactor(*compactor))) {
+      LOG_WARN("fail to add tables from table compactor", KR(ret));
     }
   }
 
