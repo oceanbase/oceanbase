@@ -58,6 +58,7 @@ public:
   static int64_t g_rpc_timeout;
   static int64_t g_dml_progress_limit;
   static int64_t g_ddl_progress_limit;
+  static int64_t g_dict_progress_limit;
   // Survival time of server added to blacklist
   static int64_t g_blacklist_survival_time;
   static int64_t g_check_switch_server_interval;
