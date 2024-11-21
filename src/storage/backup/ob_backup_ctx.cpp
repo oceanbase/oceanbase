@@ -1236,7 +1236,8 @@ ObLSBackupCtx::ObLSBackupCtx()
       index_builder_mgr_(),
       bandwidth_throttle_(NULL),
       mview_dep_tablet_set_(),
-      wait_reuse_across_sstable_time_(0)
+      wait_reuse_across_sstable_time_(0),
+      mv_mutex_()
 {}
 
 ObLSBackupCtx::~ObLSBackupCtx()
