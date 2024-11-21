@@ -267,7 +267,8 @@ enum class ObIOCallbackType : uint8_t
   TMP_DIRECT_READ_PAGE_CALLBACK = 10,
   TEST_CALLBACK = 11, // just for unittest
   SS_TMP_FILE_CALLBACK = 12,
-  MAX_CALLBACK_TYPE = 13
+  TMP_CACHED_READ_CALLBACK = 13,
+  MAX_CALLBACK_TYPE = 14
 };
 
 bool is_atomic_write_callback(const ObIOCallbackType type);

@@ -9,18 +9,25 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+#include "mittest/mtlenv/storage/tmp_file/ob_tmp_file_test_helper.h"
+#include "mittest/mtlenv/storage/tmp_file/mock_ob_tmp_file.h"
 #define USING_LOG_PREFIX STORAGE
 #include <gtest/gtest.h>
 #include "mittest/mtlenv/mock_tenant_module_env.h"
 #include "storage/tmp_file/ob_tmp_file_write_buffer_pool.h"
 #include "lib/random/ob_random.h"
 
+
 namespace oceanbase
 {
 using namespace common;
 using namespace tmp_file;
 using namespace storage;
+
+static const int64_t WBP_BLOCK_SIZE = ObTmpWriteBufferPool::WBP_BLOCK_SIZE; // each wbp block has 253 pages (253 * 8KB == 2024KB)
+static const int64_t TENANT_MEMORY = 8L * 1024L * 1024L * 1024L /* 8 GB */;
+static const int64_t SMALL_WBP_MEM_LIMIT = 3 * WBP_BLOCK_SIZE; // the wbp mem size is 5.93MB
+static const int64_t BIG_WBP_MEM_LIMIT = 40 * WBP_BLOCK_SIZE; // the wbp mem size is 79.06MB
 
 struct WBPTestHelper
 {
@@ -29,23 +36,26 @@ public:
     : fd_(fd),
       data_size_(0),
       data_page_num_(0),
-      meta_page_num_(0),
+      // meta_page_num_(0),
       data_page_ids_(),
-      begin_page_id_(ObTmpFileGlobal::INVALID_PAGE_ID),
-      begin_virtual_page_id_(-1),
-      end_page_id_(ObTmpFileGlobal::INVALID_PAGE_ID),
       wbp_(wbp) {}
   int alloc_data_pages(const int64_t num);
   // int alloc_meta_pages(const int64_t num);
-  int free_all_pages();
+  int free_all_pages(std::vector<uint32_t> *reserve_page=nullptr);
+public:
+  struct PageInfo
+  {
+    uint32_t page_id_;
+    int64_t virtual_id_;
+    PageInfo(uint32_t page_id, int64_t vid) : page_id_(page_id), virtual_id_(vid) {}
+    TO_STRING_KV(K(page_id_), K(virtual_id_));
+  };
 public:
   int64_t fd_;
   int64_t data_size_;
   int64_t data_page_num_;
-  int64_t meta_page_num_;
-  ObArray<uint32_t> data_page_ids_;
-  uint32_t begin_page_id_;
-  int64_t begin_virtual_page_id_;
+  // int64_t meta_page_num_;
+  std::vector<PageInfo> data_page_ids_;
   uint32_t end_page_id_;
   ObTmpWriteBufferPool &wbp_;
 };
@@ -54,24 +64,18 @@ int WBPTestHelper::alloc_data_pages(const int64_t num)
 {
   int ret = OB_SUCCESS;
   uint32_t previous_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
-  int64_t previous_virtual_page_id_ = ObTmpFileGlobal::INVALID_VIRTUAL_PAGE_ID;
   for (int64_t i = 0; OB_SUCC(ret) && i < num; ++i) {
     uint32_t new_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
     char *buf = nullptr;
-    int64_t new_virtual_page_id_ = data_size_ / ObTmpFileGlobal::PAGE_SIZE;
-    if (OB_FAIL(wbp_.alloc_page(fd_, ObTmpFilePageUniqKey(new_virtual_page_id_), new_page_id, buf))) {
+    int64_t virtual_page_id = data_size_ / ObTmpFileGlobal::PAGE_SIZE;
+    if (OB_FAIL(wbp_.alloc_page(fd_, ObTmpFilePageUniqKey(virtual_page_id), new_page_id, buf))) {
       LOG_WARN("fail to alloc page", K(fd_), K(previous_page_id));
-    } else if (OB_FAIL(data_page_ids_.push_back(new_page_id))) {
+    } else if (FALSE_IT(data_page_ids_.push_back(PageInfo(new_page_id, virtual_page_id)))) {
       LOG_WARN("fail to push back", K(ret));
     } else if (ObTmpFileGlobal::INVALID_PAGE_ID != previous_page_id &&
-               OB_FAIL(wbp_.link_page(fd_, new_page_id, previous_page_id, ObTmpFilePageUniqKey(previous_virtual_page_id_)))) {
-      LOG_WARN("fail to link page", K(fd_), K(new_page_id), K(previous_page_id), K(previous_virtual_page_id_));
+               OB_FAIL(wbp_.link_page(fd_, new_page_id, previous_page_id, ObTmpFilePageUniqKey(virtual_page_id - 1)))) {
+      LOG_WARN("fail to link page", K(fd_), K(new_page_id), K(previous_page_id), K(virtual_page_id - 1));
     } else {
-      previous_virtual_page_id_ = new_virtual_page_id_;
-      if (ObTmpFileGlobal::INVALID_PAGE_ID == begin_page_id_) {
-        begin_page_id_ = new_page_id;
-        begin_virtual_page_id_ = data_size_ / ObTmpFileGlobal::PAGE_SIZE;
-      }
       data_size_ += ObTmpFileGlobal::PAGE_SIZE;
       previous_page_id = new_page_id;
     }
@@ -79,19 +83,32 @@ int WBPTestHelper::alloc_data_pages(const int64_t num)
   return ret;
 }
 
-int WBPTestHelper::free_all_pages()
+// page in reserve_page is not released
+int WBPTestHelper::free_all_pages(std::vector<uint32_t> *reserve_page)
 {
   int ret = OB_SUCCESS;
-  uint32_t free_page_id = begin_page_id_;
-  for (int64_t free_cnt = 0; OB_SUCC(ret) && free_cnt < data_page_num_
-                                          && ObTmpFileGlobal::INVALID_PAGE_ID != free_page_id; ++free_cnt) {
-    uint32_t next_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
-    ret = wbp_.free_page(fd_, free_page_id, ObTmpFilePageUniqKey(begin_virtual_page_id_), next_page_id);
-    free_page_id = next_page_id;
+  std::set<uint32_t> page_set;
+  std::vector<PageInfo> tmp_vec;
+  if (nullptr != reserve_page) {
+    page_set.insert(reserve_page->begin(), reserve_page->end());
   }
+  for (int32_t i = 0; OB_SUCC(ret) && i < data_page_ids_.size(); ++i) {
+    uint32_t next_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
+    PageInfo &page_info = data_page_ids_.at(i);
+    if (page_set.count(page_info.page_id_) != 0) {
+      tmp_vec.push_back(page_info);
+      LOG_DEBUG("skip free page", K(page_info.page_id_));
+      continue;
+    }
+    if (OB_FAIL(wbp_.free_page(fd_, page_info.page_id_, ObTmpFilePageUniqKey(page_info.virtual_id_), next_page_id))) {
+      LOG_WARN("fail to free page", K(fd_), K(data_page_ids_.at(i)));
+    }
+  }
+  data_page_ids_.swap(tmp_vec);
   return ret;
 }
 
+// TODO: 整理一下这个单测
 struct WBPTestFunctor
 {
 public:
@@ -259,50 +276,87 @@ void WBPTestFunctor::print_deque(std::deque<uint32_t> * dq)
   LOG_INFO("print_deque", K(fd_), K(data));
 }
 
-class TestBufferPool : public ::testing::Test
+static const int64_t MACRO_BLOCK_SIZE = 2 * 1024 * 1024;
+static const int64_t MACRO_BLOCK_COUNT = 15 * 1024;
+static ObSimpleMemLimitGetter getter;
+
+class TestBufferPool : public blocksstable::TestDataFilePrepare
 {
 public:
+  TestBufferPool()
+      : TestDataFilePrepare(&getter, "TestBufferPool", MACRO_BLOCK_SIZE, MACRO_BLOCK_COUNT) {}
+  virtual ~TestBufferPool() = default;
   virtual void SetUp();
   virtual void TearDown();
-  static void SetUpTestCase();
-  static void TearDownTestCase();
 };
 
 void TestBufferPool::SetUp()
 {
-  ObTmpFilePageCacheController &pc_ctrl = MTL(ObTenantTmpFileManager *)->get_sn_file_manager().get_page_cache_controller();
-  ObTmpWriteBufferPool &wbp = pc_ctrl.get_write_buffer_pool();
-  wbp.destroy();
-  ASSERT_EQ(OB_SUCCESS, wbp.init());
+  int ret = OB_SUCCESS;
+  TestDataFilePrepare::SetUp();
+
+  lib::set_memory_limit(128LL << 32);
+  lib::set_tenant_memory_limit(OB_SYS_TENANT_ID, 128LL << 32);
+
+  CHUNK_MGR.set_limit(128LL << 32);
+  ObMallocAllocator::get_instance()->set_tenant_limit(MTL_ID(), 128LL << 32);
+
+  ASSERT_EQ(OB_SUCCESS, common::ObClockGenerator::init());
+  ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpBlockCache::get_instance().init("tmp_block_cache", 1));
+  ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpPageCache::get_instance().init("tmp_page_cache", 1));
+  static ObTenantBase tenant_ctx(OB_SYS_TENANT_ID);
+  ObTenantEnv::set_tenant(&tenant_ctx);
+  ObTenantIOManager *io_service = nullptr;
+  ASSERT_EQ(OB_SUCCESS, ObTenantIOManager::mtl_new(io_service));
+  ASSERT_EQ(OB_SUCCESS, ObTenantIOManager::mtl_init(io_service));
+  ASSERT_EQ(OB_SUCCESS, io_service->start());
+  tenant_ctx.set(io_service);
+
+  MockTenantTmpFileManager *tf_mgr = nullptr;
+  ASSERT_EQ(OB_SUCCESS, mtl_new_default(tf_mgr));
+  ASSERT_EQ(OB_SUCCESS, tf_mgr->init());
+  tenant_ctx.set(tf_mgr);
+
+  SERVER_STORAGE_META_SERVICE.is_started_ = true;
+  ObTenantEnv::set_tenant(&tenant_ctx);
+
+  ASSERT_NE(nullptr, MTL(ObTenantTmpFileManager *));
+  MockTmpFilePageCacheController &pc_ctrl =
+      static_cast<MockTenantTmpFileManager *>(MTL(ObTenantTmpFileManager *))->mock_sn_tmp_file_mgr_.mock_page_cache_controller_;
+  pc_ctrl.write_buffer_pool_.default_wbp_memory_limit_ = SMALL_WBP_MEM_LIMIT;
+
+  MockIO.reset();
 }
 
 void TestBufferPool::TearDown()
 {
-  MTL(ObTenantTmpFileManager *)->get_sn_file_manager().get_page_cache_controller().get_write_buffer_pool().destroy();
-}
-
-void TestBufferPool::SetUpTestCase()
-{
-  ASSERT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
-}
-
-void TestBufferPool::TearDownTestCase()
-{
-  MockTenantModuleEnv::get_instance().destroy();
+  MockIO.reset();
+  tmp_file::ObTenantTmpFileManager *tmp_file_mgr = MTL(tmp_file::ObTenantTmpFileManager *);
+  if (OB_NOT_NULL(tmp_file_mgr)) {
+    tmp_file_mgr->destroy();
+  }
+  tmp_file::ObTmpBlockCache::get_instance().destroy();
+  tmp_file::ObTmpPageCache::get_instance().destroy();
+  TestDataFilePrepare::TearDown();
+  common::ObClockGenerator::destroy();
 }
 
 TEST_F(TestBufferPool, test_buffer_pool_basic)
 {
-  ObTmpFilePageCacheController &pc_ctrl = MTL(ObTenantTmpFileManager *)->get_sn_file_manager().get_page_cache_controller();
+  MockTmpFilePageCacheController &pc_ctrl =
+      static_cast<MockTenantTmpFileManager *>(MTL(ObTenantTmpFileManager *))->mock_sn_tmp_file_mgr_.mock_page_cache_controller_;
   ObTmpWriteBufferPool &wbp = pc_ctrl.get_write_buffer_pool();
+  wbp.default_wbp_memory_limit_ = BIG_WBP_MEM_LIMIT;
   WBPTestFunctor wbp_test_functor(0, ObTmpWriteBufferPool::BLOCK_PAGE_NUMS, 100, &wbp);
   wbp_test_functor();
 }
 
 TEST_F(TestBufferPool, test_buffer_pool_concurrent)
 {
-  ObTmpFilePageCacheController &pc_ctrl = MTL(ObTenantTmpFileManager *)->get_sn_file_manager().get_page_cache_controller();
+  MockTmpFilePageCacheController &pc_ctrl =
+      static_cast<MockTenantTmpFileManager *>(MTL(ObTenantTmpFileManager *))->mock_sn_tmp_file_mgr_.mock_page_cache_controller_;
   ObTmpWriteBufferPool &wbp = pc_ctrl.get_write_buffer_pool();
+  wbp.default_wbp_memory_limit_ = BIG_WBP_MEM_LIMIT;
   const int64_t MAX_THREAD_NUM = 5;
   const int64_t MAX_LOOP_NUM = 100;
   std::vector<std::thread> t_vec;
@@ -317,7 +371,9 @@ TEST_F(TestBufferPool, test_buffer_pool_concurrent)
 
 TEST_F(TestBufferPool, test_entry_state_switch_write_back)
 {
-  ObTmpWriteBufferPool &wbp = MTL(ObTenantTmpFileManager *)->get_sn_file_manager().page_cache_controller_.get_write_buffer_pool();
+  MockTmpFilePageCacheController &pc_ctrl =
+      static_cast<MockTenantTmpFileManager *>(MTL(ObTenantTmpFileManager *))->mock_sn_tmp_file_mgr_.mock_page_cache_controller_;
+  ObTmpWriteBufferPool &wbp = pc_ctrl.get_write_buffer_pool();
   int ret = OB_SUCCESS;
   int64_t fd = 0;
   const int64_t ALLOC_PAGE_NUM = 200;
@@ -326,7 +382,7 @@ TEST_F(TestBufferPool, test_entry_state_switch_write_back)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   // dirty
-  uint32_t cur_page_id = wbp_test.begin_page_id_;
+  uint32_t cur_page_id = wbp_test.data_page_ids_.at(0).page_id_;
   int64_t cur_page_virtual_id = 0;
   for (int64_t i = 0; i < ALLOC_PAGE_NUM; ++i) {
     uint32_t next_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
@@ -340,7 +396,7 @@ TEST_F(TestBufferPool, test_entry_state_switch_write_back)
   ASSERT_EQ(ALLOC_PAGE_NUM, wbp.dirty_page_num_);
 
   // write back
-  cur_page_id = wbp_test.begin_page_id_;
+  cur_page_id = wbp_test.data_page_ids_.at(0).page_id_;
   cur_page_virtual_id = 0;
   for (int64_t i = 0; i < ALLOC_PAGE_NUM; ++i) {
     uint32_t next_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
@@ -354,7 +410,7 @@ TEST_F(TestBufferPool, test_entry_state_switch_write_back)
   ASSERT_EQ(0, wbp.dirty_page_num_);
 
   // write back fail, page entry return to dirty
-  cur_page_id = wbp_test.begin_page_id_;
+  cur_page_id = wbp_test.data_page_ids_.at(0).page_id_;
   cur_page_virtual_id = 0;
   for (int64_t i = 0; i < ALLOC_PAGE_NUM; ++i) {
     uint32_t next_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
@@ -365,11 +421,10 @@ TEST_F(TestBufferPool, test_entry_state_switch_write_back)
     cur_page_id = next_page_id;
     cur_page_virtual_id += 1;
   }
-  printf("after write back fail\n");
   ASSERT_EQ(ALLOC_PAGE_NUM, wbp.dirty_page_num_);
 
   // write back again
-  cur_page_id = wbp_test.begin_page_id_;
+  cur_page_id = wbp_test.data_page_ids_.at(0).page_id_;
   cur_page_virtual_id = 0;
   for (int64_t i = 0; i < ALLOC_PAGE_NUM; ++i) {
     uint32_t next_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
@@ -382,7 +437,7 @@ TEST_F(TestBufferPool, test_entry_state_switch_write_back)
   }
 
   // write back succ
-  cur_page_id = wbp_test.begin_page_id_;
+  cur_page_id = wbp_test.data_page_ids_.at(0).page_id_;
   cur_page_virtual_id = 0;
   for (int64_t i = 0; i < ALLOC_PAGE_NUM; ++i) {
     uint32_t next_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
@@ -396,7 +451,7 @@ TEST_F(TestBufferPool, test_entry_state_switch_write_back)
   ASSERT_EQ(0, wbp.dirty_page_num_);
 
   // write back succ re-entrant
-  cur_page_id = wbp_test.begin_page_id_;
+  cur_page_id = wbp_test.data_page_ids_.at(0).page_id_;
   cur_page_virtual_id = 0;
   for (int64_t i = 0; i < ALLOC_PAGE_NUM; ++i) {
     uint32_t next_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
@@ -415,7 +470,9 @@ TEST_F(TestBufferPool, test_entry_state_switch_write_back)
 
 TEST_F(TestBufferPool, test_entry_state_switch_loading)
 {
-  ObTmpWriteBufferPool &wbp = MTL(ObTenantTmpFileManager *)->get_sn_file_manager().page_cache_controller_.get_write_buffer_pool();
+  MockTmpFilePageCacheController &pc_ctrl =
+      static_cast<MockTenantTmpFileManager *>(MTL(ObTenantTmpFileManager *))->mock_sn_tmp_file_mgr_.mock_page_cache_controller_;
+  ObTmpWriteBufferPool &wbp = pc_ctrl.get_write_buffer_pool();
   int ret = OB_SUCCESS;
   int64_t fd = 0;
   const int64_t ALLOC_PAGE_NUM = 200;
@@ -424,7 +481,7 @@ TEST_F(TestBufferPool, test_entry_state_switch_loading)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   // load
-  uint32_t cur_page_id = wbp_test.begin_page_id_;
+  uint32_t cur_page_id = wbp_test.data_page_ids_.at(0).page_id_;
   int64_t cur_page_virtual_id = 0;
   for (int64_t i = 0; i < ALLOC_PAGE_NUM; ++i) {
     uint32_t next_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
@@ -438,7 +495,7 @@ TEST_F(TestBufferPool, test_entry_state_switch_loading)
   }
 
   // load fail
-  cur_page_id = wbp_test.begin_page_id_;
+  cur_page_id = wbp_test.data_page_ids_.at(0).page_id_;
   cur_page_virtual_id = 0;
   for (int64_t i = 0; i < ALLOC_PAGE_NUM; ++i) {
     uint32_t next_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
@@ -452,7 +509,7 @@ TEST_F(TestBufferPool, test_entry_state_switch_loading)
   }
 
   // load again
-  cur_page_id = wbp_test.begin_page_id_;
+  cur_page_id = wbp_test.data_page_ids_.at(0).page_id_;
   cur_page_virtual_id = 0;
   for (int64_t i = 0; i < ALLOC_PAGE_NUM; ++i) {
     uint32_t next_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
@@ -466,7 +523,7 @@ TEST_F(TestBufferPool, test_entry_state_switch_loading)
   }
 
   // load succ
-  cur_page_id = wbp_test.begin_page_id_;
+  cur_page_id = wbp_test.data_page_ids_.at(0).page_id_;
   cur_page_virtual_id = 0;
   for (int64_t i = 0; i < ALLOC_PAGE_NUM; ++i) {
     uint32_t next_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
@@ -485,8 +542,10 @@ TEST_F(TestBufferPool, test_entry_state_switch_loading)
 
 TEST_F(TestBufferPool, test_alloc_page_limit)
 {
+  MockTmpFilePageCacheController &pc_ctrl =
+      static_cast<MockTenantTmpFileManager *>(MTL(ObTenantTmpFileManager *))->mock_sn_tmp_file_mgr_.mock_page_cache_controller_;
+  ObTmpWriteBufferPool &wbp = pc_ctrl.get_write_buffer_pool();
   int ret = OB_SUCCESS;
-  ObTmpWriteBufferPool &wbp = MTL(ObTenantTmpFileManager *)->get_sn_file_manager().page_cache_controller_.get_write_buffer_pool();
   int64_t max_page_num = wbp.get_max_page_num();
   std::cout << "write buffer pool max page num " << max_page_num << std::endl;
   LOG_INFO("write buffer pool max page num", K(max_page_num));
@@ -569,6 +628,7 @@ TEST_F(TestBufferPool, test_alloc_page_limit)
   }
   ASSERT_EQ(ret, OB_ALLOCATE_TMP_FILE_PAGE_FAILED);
   ASSERT_EQ(wbp.data_page_cnt_ + wbp.meta_page_cnt_, wbp.used_page_num_);
+  ASSERT_EQ(wbp.used_page_num_, wbp.get_memory_limit() / ObTmpFileGlobal::PAGE_SIZE);
 
   // data page释放后，可以继续分配meta page
   int64_t cur_meta_page_num = wbp.meta_page_cnt_;
@@ -606,7 +666,9 @@ TEST_F(TestBufferPool, test_alloc_page_limit)
 
 TEST_F(TestBufferPool, test_get_page_id_by_offset)
 {
-  ObTmpWriteBufferPool &wbp = MTL(ObTenantTmpFileManager *)->get_sn_file_manager().page_cache_controller_.get_write_buffer_pool();
+  MockTmpFilePageCacheController &pc_ctrl =
+      static_cast<MockTenantTmpFileManager *>(MTL(ObTenantTmpFileManager *))->mock_sn_tmp_file_mgr_.mock_page_cache_controller_;
+  ObTmpWriteBufferPool &wbp = pc_ctrl.get_write_buffer_pool();
   int ret = OB_SUCCESS;
   int64_t fd = 0;
   const int64_t ALLOC_PAGE_NUM = 400;
@@ -615,26 +677,26 @@ TEST_F(TestBufferPool, test_get_page_id_by_offset)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   uint32_t page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
-  ret = wbp.get_page_id_by_virtual_id(fd, 0, wbp_test.begin_page_id_, page_id);
+  ret = wbp.get_page_id_by_virtual_id(fd, 0, wbp_test.data_page_ids_.at(0).page_id_, page_id);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_NE(page_id, ObTmpFileGlobal::INVALID_PAGE_ID);
-  ASSERT_EQ(page_id, wbp_test.data_page_ids_.at(0));
+  ASSERT_EQ(page_id, wbp_test.data_page_ids_.at(0).page_id_);
 
   page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
-  ret = wbp.get_page_id_by_virtual_id(fd, 1, wbp_test.begin_page_id_, page_id);
+  ret = wbp.get_page_id_by_virtual_id(fd, 1, wbp_test.data_page_ids_.at(0).page_id_, page_id);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_NE(page_id, ObTmpFileGlobal::INVALID_PAGE_ID);
-  ASSERT_EQ(page_id, wbp_test.data_page_ids_.at(1));
+  ASSERT_EQ(page_id, wbp_test.data_page_ids_.at(1).page_id_);
 
   page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
-  ret = wbp.get_page_id_by_virtual_id(fd, ALLOC_PAGE_NUM - 1, wbp_test.begin_page_id_, page_id);
+  ret = wbp.get_page_id_by_virtual_id(fd, ALLOC_PAGE_NUM - 1, wbp_test.data_page_ids_.at(0).page_id_, page_id);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_NE(page_id, ObTmpFileGlobal::INVALID_PAGE_ID);
-  ASSERT_EQ(page_id, wbp_test.data_page_ids_.at(ALLOC_PAGE_NUM - 1));
+  ASSERT_EQ(page_id, wbp_test.data_page_ids_.at(ALLOC_PAGE_NUM - 1).page_id_);
 
   // offset out of bound, return INVALID_PAGE_ID
   page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
-  ret = wbp.get_page_id_by_virtual_id(fd, ALLOC_PAGE_NUM, wbp_test.begin_page_id_, page_id);
+  ret = wbp.get_page_id_by_virtual_id(fd, ALLOC_PAGE_NUM, wbp_test.data_page_ids_.at(0).page_id_, page_id);
   ASSERT_EQ(page_id, ObTmpFileGlobal::INVALID_PAGE_ID);
 
   ret = wbp_test.free_all_pages();
@@ -643,7 +705,9 @@ TEST_F(TestBufferPool, test_get_page_id_by_offset)
 
 TEST_F(TestBufferPool, test_truncate_page)
 {
-  ObTmpWriteBufferPool &wbp = MTL(ObTenantTmpFileManager *)->get_sn_file_manager().page_cache_controller_.get_write_buffer_pool();
+  MockTmpFilePageCacheController &pc_ctrl =
+      static_cast<MockTenantTmpFileManager *>(MTL(ObTenantTmpFileManager *))->mock_sn_tmp_file_mgr_.mock_page_cache_controller_;
+  ObTmpWriteBufferPool &wbp = pc_ctrl.get_write_buffer_pool();
   int ret = OB_SUCCESS;
   int64_t fd = 0;
   const int64_t ALLOC_PAGE_NUM = 200;
@@ -651,30 +715,206 @@ TEST_F(TestBufferPool, test_truncate_page)
   ret = wbp_test.alloc_data_pages(ALLOC_PAGE_NUM);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ret = wbp.truncate_page(fd, wbp_test.begin_page_id_, ObTmpFilePageUniqKey(0), -1);
+  ret = wbp.truncate_page(fd, wbp_test.data_page_ids_.at(0).page_id_, ObTmpFilePageUniqKey(0), -1);
   ASSERT_EQ(ret, OB_INVALID_ARGUMENT);
 
-  ret = wbp.truncate_page(fd, wbp_test.begin_page_id_, ObTmpFilePageUniqKey(0), 0);
+  ret = wbp.truncate_page(fd, wbp_test.data_page_ids_.at(0).page_id_, ObTmpFilePageUniqKey(0), 0);
   ASSERT_EQ(ret, OB_INVALID_ARGUMENT);
 
-  ret = wbp.truncate_page(2, wbp_test.begin_page_id_, ObTmpFilePageUniqKey(0), 4096);
+  ret = wbp.truncate_page(2, wbp_test.data_page_ids_.at(0).page_id_, ObTmpFilePageUniqKey(0), 4096);
   ASSERT_EQ(ret, OB_STATE_NOT_MATCH);
 
   const int64_t truncate_size = 4096;
-  ret = wbp.truncate_page(fd, wbp_test.begin_page_id_, ObTmpFilePageUniqKey(0), truncate_size);
+  ret = wbp.truncate_page(fd, wbp_test.data_page_ids_.at(0).page_id_, ObTmpFilePageUniqKey(0), truncate_size);
   ASSERT_EQ(ret, OB_SUCCESS);
 
   char null_buf[truncate_size];
   memset(null_buf, 0, sizeof(null_buf));
   char *page_buf = nullptr;
   uint32_t unused_next_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
-  ret = wbp.read_page(fd, wbp_test.data_page_ids_.at(0), ObTmpFilePageUniqKey(0), page_buf, unused_next_page_id);
+  ret = wbp.read_page(fd, wbp_test.data_page_ids_.at(0).page_id_, ObTmpFilePageUniqKey(0), page_buf, unused_next_page_id);
   ASSERT_EQ(ret, OB_SUCCESS);
   int cmp = memcmp(null_buf, page_buf, truncate_size);
   ASSERT_EQ(cmp, 0);
 
   ret = wbp_test.free_all_pages();
   ASSERT_EQ(OB_SUCCESS, ret);
+}
+
+TEST_F(TestBufferPool, test_empty_buffer_pool_shrink)
+{
+  MockTmpFilePageCacheController &pc_ctrl =
+      static_cast<MockTenantTmpFileManager *>(MTL(ObTenantTmpFileManager *))->mock_sn_tmp_file_mgr_.mock_page_cache_controller_;
+  ObTmpWriteBufferPool &wbp = pc_ctrl.get_write_buffer_pool();
+  int ret = OB_SUCCESS;
+  wbp.default_wbp_memory_limit_ = BIG_WBP_MEM_LIMIT;
+
+  // alloc pages to expand to mem limit
+  int64_t fd = 0;
+  WBPTestHelper wbp_test(fd, wbp);
+  const int64_t ALLOC_PAGE_NUM = BIG_WBP_MEM_LIMIT * 0.9 / ObTmpFileGlobal::PAGE_SIZE;
+  ret = wbp_test.alloc_data_pages(ALLOC_PAGE_NUM);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(ALLOC_PAGE_NUM, wbp.used_page_num_);
+  ASSERT_EQ(BIG_WBP_MEM_LIMIT, wbp.capacity_);
+
+  // shrink to SMALL_WBP_MEM_LIMIT
+  ret = wbp_test.free_all_pages();
+  ASSERT_EQ(OB_SUCCESS, ret);
+  wbp.default_wbp_memory_limit_ = SMALL_WBP_MEM_LIMIT;
+  MockTmpFileSwapTg &mock_swap_tg = pc_ctrl.mock_swap_tg_;
+  for (int32_t i = 0; i < 10; i++) {
+    mock_swap_tg.shrink_wbp_if_needed_();
+  }
+  ASSERT_EQ(false, wbp.shrink_ctx_.is_valid());
+  ASSERT_EQ(SMALL_WBP_MEM_LIMIT, wbp.capacity_);
+
+  // shrink to WBP_BLOCK_SIZE
+  wbp.default_wbp_memory_limit_ = WBP_BLOCK_SIZE;
+  for (int32_t i = 0; i < 10; i++) {
+    mock_swap_tg.shrink_wbp_if_needed_();
+  }
+  ASSERT_EQ(false, wbp.shrink_ctx_.is_valid());
+  ASSERT_EQ(WBP_BLOCK_SIZE, wbp.capacity_);
+}
+
+TEST_F(TestBufferPool, test_buffer_pool_shrink)
+{
+  MockTmpFilePageCacheController &pc_ctrl =
+      static_cast<MockTenantTmpFileManager *>(MTL(ObTenantTmpFileManager *))->mock_sn_tmp_file_mgr_.mock_page_cache_controller_;
+  ObTmpWriteBufferPool &wbp = pc_ctrl.get_write_buffer_pool();
+  int ret = OB_SUCCESS;
+  wbp.default_wbp_memory_limit_ = BIG_WBP_MEM_LIMIT;
+
+  // alloc pages to expand to mem limit
+  int64_t fd = 0;
+  WBPTestHelper wbp_test(fd, wbp);
+  const int64_t ALLOC_PAGE_NUM = BIG_WBP_MEM_LIMIT * 0.9 / ObTmpFileGlobal::PAGE_SIZE;
+  ret = wbp_test.alloc_data_pages(ALLOC_PAGE_NUM);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(ALLOC_PAGE_NUM, wbp.used_page_num_);
+  ASSERT_EQ(BIG_WBP_MEM_LIMIT, wbp.capacity_);
+
+  // shrinking could not progress when wbp fill with pages
+  wbp.default_wbp_memory_limit_ = SMALL_WBP_MEM_LIMIT;
+  MockTmpFileSwapTg &mock_swap_tg = pc_ctrl.mock_swap_tg_;
+  for (int32_t i = 0; i < 10; i++) {
+    mock_swap_tg.shrink_wbp_if_needed_();
+  }
+
+  // shrinking complete
+  ret = wbp_test.free_all_pages();
+  ASSERT_EQ(OB_SUCCESS, ret);
+  for (int32_t i = 0; i < 10; i++) {
+    mock_swap_tg.shrink_wbp_if_needed_();
+  }
+  ASSERT_EQ(false, wbp.shrink_ctx_.is_valid());
+  ASSERT_EQ(SMALL_WBP_MEM_LIMIT, wbp.capacity_);
+}
+
+TEST_F(TestBufferPool, test_buffer_pool_shrink_abort)
+{
+  MockTmpFilePageCacheController &pc_ctrl =
+      static_cast<MockTenantTmpFileManager *>(MTL(ObTenantTmpFileManager *))->mock_sn_tmp_file_mgr_.mock_page_cache_controller_;
+  ObTmpWriteBufferPool &wbp = pc_ctrl.get_write_buffer_pool();
+  MockTmpFileSwapTg &mock_swap_tg = pc_ctrl.mock_swap_tg_;
+  int ret = OB_SUCCESS;
+  wbp.default_wbp_memory_limit_ = BIG_WBP_MEM_LIMIT;
+
+  // alloc pages to expand to mem limit
+  int64_t fd = 0;
+  WBPTestHelper wbp_test(fd, wbp);
+  const int64_t ALLOC_PAGE_NUM = BIG_WBP_MEM_LIMIT * 0.9 / ObTmpFileGlobal::PAGE_SIZE;
+  ret = wbp_test.alloc_data_pages(ALLOC_PAGE_NUM);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(ALLOC_PAGE_NUM, wbp.used_page_num_);
+  ASSERT_EQ(BIG_WBP_MEM_LIMIT, wbp.capacity_);
+
+  ret = wbp_test.free_all_pages();
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // 1. abort in SHRINKING_SWAP
+  LOG_INFO("test abort in SHRINKING_SWAP", K(wbp.shrink_ctx_));
+  ASSERT_EQ(false, wbp.shrink_ctx_.is_valid());
+  wbp.default_wbp_memory_limit_ = SMALL_WBP_MEM_LIMIT;
+  mock_swap_tg.shrink_wbp_if_needed_();
+  EXPECT_EQ(WBPShrinkContext::SHRINKING_SWAP, wbp.shrink_ctx_.wbp_shrink_state_);
+  wbp.default_wbp_memory_limit_ = BIG_WBP_MEM_LIMIT;
+  mock_swap_tg.shrink_wbp_if_needed_();
+  ASSERT_EQ(false, wbp.shrink_ctx_.is_valid());
+
+  // 2. abort in SHRINKING_RELEASE_BLOCKS
+  LOG_INFO("test abort in SHRINKING_RELEASE_BLOCKS", K(wbp.shrink_ctx_));
+  wbp.default_wbp_memory_limit_ = SMALL_WBP_MEM_LIMIT;
+  for (int32_t i = 0; i < 2; i++) {
+    mock_swap_tg.shrink_wbp_if_needed_();
+  }
+  EXPECT_EQ(WBPShrinkContext::SHRINKING_RELEASE_BLOCKS, wbp.shrink_ctx_.wbp_shrink_state_);
+  wbp.default_wbp_memory_limit_ = BIG_WBP_MEM_LIMIT;
+  mock_swap_tg.shrink_wbp_if_needed_();
+  ASSERT_EQ(false, wbp.shrink_ctx_.is_valid());
+
+  // 3. abort in flush error code OB_SERVER_OUTOF_DISK_SPACE
+  LOG_INFO("test abort in error OB_SERVER_OUTOF_DISK_SPACE", K(wbp.shrink_ctx_));
+  wbp.default_wbp_memory_limit_ = SMALL_WBP_MEM_LIMIT;
+  for (int32_t i = 0; i < 5; i++) {
+    if (i >= 1) {
+      mock_swap_tg.flush_tg_ref_.flush_io_finished_ret_ = OB_SERVER_OUTOF_DISK_SPACE;
+    }
+    mock_swap_tg.shrink_wbp_if_needed_();
+  }
+  ASSERT_EQ(false, wbp.shrink_ctx_.is_valid());
+  wbp.default_wbp_memory_limit_ = BIG_WBP_MEM_LIMIT;
+
+  // 4. works in old size, allocates all pages normally
+  MockIO.check_wbp_free_list(wbp);
+}
+
+TEST_F(TestBufferPool, test_buffer_pool_shrink_range_boundary)
+{
+  MockTmpFilePageCacheController &pc_ctrl =
+      static_cast<MockTenantTmpFileManager *>(MTL(ObTenantTmpFileManager *))->mock_sn_tmp_file_mgr_.mock_page_cache_controller_;
+  ObTmpWriteBufferPool &wbp = pc_ctrl.get_write_buffer_pool();
+  MockTmpFileSwapTg &mock_swap_tg = pc_ctrl.mock_swap_tg_;
+  int ret = OB_SUCCESS;
+  wbp.default_wbp_memory_limit_ = BIG_WBP_MEM_LIMIT;
+
+  int64_t fd = 0;
+  WBPTestHelper wbp_test(fd, wbp);
+  const int64_t ALLOC_PAGE_NUM = BIG_WBP_MEM_LIMIT * 0.9 / ObTmpFileGlobal::PAGE_SIZE;
+  ret = wbp_test.alloc_data_pages(ALLOC_PAGE_NUM);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(ALLOC_PAGE_NUM, wbp.used_page_num_);
+  ASSERT_EQ(BIG_WBP_MEM_LIMIT, wbp.capacity_);
+
+  wbp.default_wbp_memory_limit_ = SMALL_WBP_MEM_LIMIT;
+  for (int32_t i = 0; i < 2; i++) {
+    mock_swap_tg.shrink_wbp_if_needed_();
+  }
+  EXPECT_EQ(WBPShrinkContext::SHRINKING_SWAP, wbp.shrink_ctx_.wbp_shrink_state_);
+  uint32_t shrink_lower_bound = wbp.shrink_ctx_.lower_page_id_;
+
+  // keep 2 pages in wbp
+  std::vector<uint32_t> shrink_range = {shrink_lower_bound - 1, shrink_lower_bound};
+  wbp_test.free_all_pages(&shrink_range);
+
+  ASSERT_EQ(2, wbp.used_page_num_);
+  for (int32_t i = 0; i < 5; i++) {
+    mock_swap_tg.shrink_wbp_if_needed_();
+  }
+  // pages in shrinking range are not freed, shrinking could no progress
+  EXPECT_EQ(WBPShrinkContext::SHRINKING_SWAP, wbp.shrink_ctx_.wbp_shrink_state_);
+  EXPECT_TRUE(shrink_lower_bound > wbp.shrink_ctx_.max_allow_alloc_page_id_);
+
+  // all pages in shrinking range are freed, shrinking finish
+  shrink_range.pop_back();
+  wbp_test.free_all_pages(&shrink_range);
+  for (int32_t i = 0; i < 5; i++) {
+    mock_swap_tg.shrink_wbp_if_needed_();
+  }
+
+  ASSERT_EQ(false, wbp.shrink_ctx_.is_valid());
+  MockIO.check_wbp_free_list(wbp);
 }
 
 } // namespace oceanbase

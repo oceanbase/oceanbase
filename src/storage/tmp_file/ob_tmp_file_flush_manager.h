@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_TASK_MANAGER_H_
-#define OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_TASK_MANAGER_H_
+#ifndef OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_TASK_MANAGER_H_
+#define OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_TASK_MANAGER_H_
 
 #include "storage/tmp_file/ob_tmp_file_eviction_manager.h"
 #include "storage/tmp_file/ob_tmp_file_global.h"
@@ -72,7 +72,7 @@ public:
 
 public:
   int free_tmp_file_block(ObTmpFileFlushTask &flush_task);
-  int alloc_flush_task(ObTmpFileFlushTask *&flush_task);
+  virtual int alloc_flush_task(ObTmpFileFlushTask *&flush_task);
   int free_flush_task(ObTmpFileFlushTask *flush_task);
   int notify_write_back_failed(ObTmpFileFlushTask *flush_task);
   int flush(ObSpLinkQueue &flushing_queue,
@@ -109,6 +109,7 @@ private:
   int handle_wait_(ObTmpFileFlushTask &flush_task, FlushState &next_state);
   int handle_finish_(ObTmpFileFlushTask &flush_task);
 private:
+  int flush_by_watermark_(ObSpLinkQueue &flushing_queue, const bool is_flush_meta_tree);
   int update_meta_data_after_flush_for_files_(ObTmpFileFlushTask &flush_task);
   int reset_flush_ctx_for_file_(const ObSharedNothingTmpFile *file, const bool is_meta);
   int get_or_create_file_in_ctx_(const int64_t fd, ObTmpFileSingleFlushContext &file_flush_ctx);
@@ -132,4 +133,4 @@ private:
 
 }  // end namespace tmp_file
 }  // end namespace oceanbase
-#endif // OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_TASK_MANAGER_H_
+#endif // OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_TASK_MANAGER_H_

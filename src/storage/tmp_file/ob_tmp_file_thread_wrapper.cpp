@@ -301,7 +301,7 @@ int ObTmpFileFlushTG::do_work_()
 
   flush_mgr_.try_remove_unused_file_flush_ctx();
 
-  if (TC_REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+  if (TC_REACH_TIME_INTERVAL(ObTmpFileGlobal::TMP_FILE_STAT_FREQUENCY)) {
     tmp_file_block_mgr_.print_block_usage();
     flush_monitor_.print_statistics();
     wbp_.print_statistics();
@@ -318,7 +318,7 @@ int ObTmpFileFlushTG::do_work_()
 void ObTmpFileFlushTG::flush_fast_()
 {
   int ret = OB_SUCCESS;
-  int64_t BLOCK_SIZE = OB_STORAGE_OBJECT_MGR.get_macro_object_size();
+  int64_t BLOCK_SIZE = ObTmpFileGlobal::SN_BLOCK_SIZE;
 
   if (OB_FAIL(check_flush_task_io_finished_())) {
     STORAGE_LOG(WARN, "fail to check flush task io finished", KR(ret));
@@ -346,8 +346,9 @@ void ObTmpFileFlushTG::flush_fast_()
 void ObTmpFileFlushTG::flush_normal_()
 {
   int ret = OB_SUCCESS;
-  int64_t BLOCK_SIZE = OB_STORAGE_OBJECT_MGR.get_macro_object_size();
-  int64_t normal_flush_size = max(0, (MAX_FLUSHING_BLOCK_NUM - ATOMIC_LOAD(&flushing_block_num_)) * BLOCK_SIZE);
+  int64_t BLOCK_SIZE = ObTmpFileGlobal::SN_BLOCK_SIZE;
+  int64_t normal_flush_size = max(0, (ObTmpFileGlobal::MAX_FLUSHING_BLOCK_NUM -
+                                      ATOMIC_LOAD(&flushing_block_num_)) * BLOCK_SIZE);
   if (OB_FAIL(check_flush_task_io_finished_())) {
     STORAGE_LOG(WARN, "fail to check flush task io finished", KR(ret));
   }
@@ -727,18 +728,20 @@ int ObTmpFileFlushTG::pop_finished_list_(ObTmpFileFlushTask *&flush_task)
 int ObTmpFileFlushTG::get_fast_flush_size_()
 {
   // TODO: move to page cache controller
-  const int64_t BLOCK_SIZE = OB_STORAGE_OBJECT_MGR.get_macro_object_size();
+  const int64_t BLOCK_SIZE = ObTmpFileGlobal::SN_BLOCK_SIZE;
   int64_t wbp_mem_limit = wbp_.get_memory_limit();
-  int64_t flush_size = max(BLOCK_SIZE, min(MAX_FLUSHING_BLOCK_NUM * BLOCK_SIZE, upper_align(0.1 * wbp_mem_limit, BLOCK_SIZE)));
+  int64_t flush_size = max(BLOCK_SIZE, min(ObTmpFileGlobal::MAX_FLUSHING_BLOCK_NUM * BLOCK_SIZE,
+                           upper_align(0.1 * wbp_mem_limit, BLOCK_SIZE)));
   return flush_size;
 }
 
 int64_t ObTmpFileFlushTG::get_flushing_block_num_threshold_()
 {
-  const int64_t BLOCK_SIZE = OB_STORAGE_OBJECT_MGR.get_macro_object_size();
+  const int64_t BLOCK_SIZE = ObTmpFileGlobal::SN_BLOCK_SIZE;
   int64_t wbp_mem_limit = wbp_.get_memory_limit();
   int64_t flush_threshold =
-    max(1, min(MAX_FLUSHING_BLOCK_NUM, static_cast<int64_t>(0.2 * wbp_mem_limit / BLOCK_SIZE)));
+    max(1, min(ObTmpFileGlobal::MAX_FLUSHING_BLOCK_NUM,
+               static_cast<int64_t>(0.2 * wbp_mem_limit / BLOCK_SIZE)));
   return flush_threshold;
 }
 
@@ -746,7 +749,8 @@ int64_t ObTmpFileFlushTG::get_flushing_block_num_threshold_()
 
 ObTmpFileSwapTG::ObTmpFileSwapTG(ObTmpWriteBufferPool &wbp,
                                  ObTmpFileEvictionManager &elimination_mgr,
-                                 ObTmpFileFlushTG &flush_tg)
+                                 ObTmpFileFlushTG &flush_tg,
+                                 ObTmpFilePageCacheController &pc_ctrl)
   : is_inited_(false),
     tg_id_(-1),
     idle_cond_(),
@@ -760,11 +764,11 @@ ObTmpFileSwapTG::ObTmpFileSwapTG(ObTmpWriteBufferPool &wbp,
     flush_io_finished_round_(0),
     wbp_(wbp),
     evict_mgr_(elimination_mgr),
-    file_mgr_(nullptr)
+    pc_ctrl_(pc_ctrl)
 {
 }
 
-int ObTmpFileSwapTG::init(ObSNTenantTmpFileManager &file_mgr)
+int ObTmpFileSwapTG::init()
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -782,7 +786,6 @@ int ObTmpFileSwapTG::init(ObSNTenantTmpFileManager &file_mgr)
     swap_job_num_ = 0;
     working_list_size_ = 0;
     flush_io_finished_round_ = 0;
-    file_mgr_ = &file_mgr;
   }
   return ret;
 }
@@ -837,7 +840,6 @@ void ObTmpFileSwapTG::destroy()
   working_list_size_ = 0;
   flush_io_finished_round_ = 0;
   idle_cond_.destroy();
-  file_mgr_ = nullptr;
   is_inited_ = false;
 }
 
@@ -913,10 +915,6 @@ void ObTmpFileSwapTG::run1()
     if (!has_set_stop() && idle_time != 0) {
       idle_cond_.wait(idle_time);
     }
-
-    if (OB_NOT_NULL(file_mgr_)) {
-      file_mgr_->refresh_meta_memory_limit();
-    }
   }
 }
 
@@ -968,6 +966,10 @@ int ObTmpFileSwapTG::do_work_()
   }
 
   if (OB_SUCC(ret)) {
+    if (OB_FAIL(shrink_wbp_if_needed_())) {
+      STORAGE_LOG(WARN, "fail to flush for shrinking wbp", KR(ret), KPC(this));
+    }
+
     if (ATOMIC_LOAD(&swap_job_num_) == 0 && ATOMIC_LOAD(&working_list_size_) == 0) {
       if (OB_FAIL(swap_normal_())){
         STORAGE_LOG(WARN, "fail to do normal swap", KR(ret));
@@ -1189,6 +1191,59 @@ int ObTmpFileSwapTG::push_working_job_front_(ObTmpFileSwapJob *swap_job)
   } else {
     ATOMIC_INC(&working_list_size_);
   }
+  return ret;
+}
+
+int ObTmpFileSwapTG::shrink_wbp_if_needed_()
+{
+  int ret = OB_SUCCESS;
+  int64_t actual_evict_num = 0;
+  if (wbp_.need_to_shrink()) {
+    LOG_INFO("current wbp shrinking state", K(wbp_.get_shrink_ctx()));
+    switch (wbp_.get_wbp_state()) {
+      case WBPShrinkContext::INVALID:
+        if (OB_FAIL(wbp_.begin_shrinking())) {
+          STORAGE_LOG(WARN, "fail to init shrink context", KR(ret), K(wbp_.get_shrink_ctx()));
+        } else {
+          pc_ctrl_.set_flush_all_data(true);
+          flush_tg_ref_.notify_doing_flush();
+          wbp_.advance_shrink_state();
+        }
+        break;
+      case WBPShrinkContext::SHRINKING_SWAP:
+        if (!wbp_.get_shrink_ctx().is_valid()) {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(WARN, "shrink context is invalid", KR(ret));
+        } else if (OB_FAIL(evict_mgr_.evict(INT64_MAX, actual_evict_num))) { // evict all pages
+          STORAGE_LOG(WARN, "fail to evict all pages", KR(ret));
+        } else {
+          wbp_.advance_shrink_state();
+        }
+        break;
+      case WBPShrinkContext::SHRINKING_RELEASE_BLOCKS:
+        if (OB_FAIL(wbp_.release_blocks_in_shrink_range())) {
+          STORAGE_LOG(WARN, "fail to shrink wbp", KR(ret), K(wbp_.get_shrink_ctx()));
+        } else {
+          pc_ctrl_.set_flush_all_data(false);
+          wbp_.advance_shrink_state();
+        }
+        break;
+      case WBPShrinkContext::SHRINKING_FINISH:
+        if (OB_FAIL(wbp_.finish_shrinking())) {
+          STORAGE_LOG(ERROR, "fail to finish shrinking", KR(ret));
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  // abort shrinking if wbp memory limit enlarge or flush fail with OB_SERVER_OUTOF_DISK_SPACE
+  int io_finished_ret = flush_tg_ref_.get_flush_io_finished_ret();
+  if (wbp_.get_shrink_ctx().is_valid() && (!wbp_.need_to_shrink() || OB_SERVER_OUTOF_DISK_SPACE == io_finished_ret)) {
+    wbp_.finish_shrinking();
+  }
+
   return ret;
 }
 

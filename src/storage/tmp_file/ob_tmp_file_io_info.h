@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_IO_INFO_H_
-#define OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_IO_INFO_H_
+#ifndef OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_IO_INFO_H_
+#define OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_IO_INFO_H_
 
 #include "storage/tmp_file/ob_tmp_file_global.h"
 #include "share/io/ob_io_define.h"
@@ -41,4 +41,4 @@ struct ObTmpFileIOInfo final
 
 }  // end namespace tmp_file
 }  // end namespace oceanbase
-#endif // OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_IO_INFO_H_
+#endif // OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_IO_INFO_H_

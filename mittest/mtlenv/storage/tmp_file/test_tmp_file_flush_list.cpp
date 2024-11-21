@@ -53,12 +53,12 @@ public:
   void create_files(const FlushCtxState state,
                     const int64_t file_num,
                     ObTmpFileFlushPriorityManager &flush_prio_mgr,
-                    vector<tmp_file::ObTmpFileHandle> &file_handles);
+                    vector<tmp_file::ObSNTmpFileHandle> &file_handles);
   void create_files_with_dir(const FlushCtxState state,
                              const int64_t dir,
                              const int64_t file_num,
                              ObTmpFileFlushPriorityManager &flush_prio_mgr,
-                             vector<tmp_file::ObTmpFileHandle> &file_handles);
+                             vector<tmp_file::ObSNTmpFileHandle> &file_handles);
   void clear_all_files();
 protected:
   virtual void TearDown()
@@ -118,7 +118,7 @@ void TestFlushListIterator::clear_all_files()
 //      MTL(ObTenantTmpFileManager *)->get_page_cache_controller().get_flush_priority_mgr();
 //  for (auto p : mock_dirty_record_) {
 //    int64_t fd = p.first;
-//    tmp_file::ObTmpFileHandle file_handle;
+//    tmp_file::ObSNTmpFileHandle file_handle;
 //    ret = MTL(ObTenantTmpFileManager *)->get_tmp_file(fd, file_handle);
 //    ASSERT_EQ(OB_SUCCESS, ret);
 //    ASSERT_NE(nullptr, file_handle.get());
@@ -134,7 +134,7 @@ void TestFlushListIterator::insert_file_sequence()
 
 void TestFlushListIterator::create_files(const FlushCtxState state, const int64_t file_num,
     ObTmpFileFlushPriorityManager &flush_prio_mgr,
-    vector<tmp_file::ObTmpFileHandle> &file_handles)
+    vector<tmp_file::ObSNTmpFileHandle> &file_handles)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0 ; i < file_num; ++i) {
@@ -174,7 +174,7 @@ void TestFlushListIterator::create_files(const FlushCtxState state, const int64_
     dirty_record.rightmost_meta_page_num_ = 0;
     mock_dirty_record_[fd] = dirty_record;
 
-    tmp_file::ObTmpFileHandle file_handle;
+    tmp_file::ObSNTmpFileHandle file_handle;
     file_handle.init(tmp_file);
     ObSharedNothingTmpFile &file = *file_handle.get();
     file.file_size_ = mock_dirty_data_size;
@@ -190,7 +190,7 @@ void TestFlushListIterator::create_files_with_dir(
     const int64_t dir,
     const int64_t file_num,
     ObTmpFileFlushPriorityManager &flush_prio_mgr,
-    vector<tmp_file::ObTmpFileHandle> &file_handles)
+    vector<tmp_file::ObSNTmpFileHandle> &file_handles)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0 ; i < file_num; ++i) {
@@ -223,7 +223,7 @@ void TestFlushListIterator::create_files_with_dir(
     dirty_record.rightmost_meta_page_num_ = 0;
     mock_dirty_record_[fd] = dirty_record;
 
-    tmp_file::ObTmpFileHandle file_handle;
+    tmp_file::ObSNTmpFileHandle file_handle;
     file_handle.init(tmp_file);
     ObSharedNothingTmpFile &file = *file_handle.get();
     file.file_size_ = mock_dirty_data_size;
@@ -267,7 +267,7 @@ TEST_F(TestFlushListIterator, test_iter_order)
 
     mock_dirty_record_[fd] = mock_record;
 
-    tmp_file::ObTmpFileHandle file_handle;
+    tmp_file::ObSNTmpFileHandle file_handle;
     ret = MTL(ObTenantTmpFileManager *)->get_sn_file_manager().get_tmp_file(fd, file_handle);
     ASSERT_EQ(OB_SUCCESS, ret);
     ASSERT_NE(file_handle.get(), nullptr);
@@ -283,10 +283,9 @@ TEST_F(TestFlushListIterator, test_iter_order)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   printf("iterating file...\n");
-  bool unused = false;
   for (int64_t i = 0; i < 4; i++) {
-    tmp_file::ObTmpFileHandle file_handle;
-    ret = iter.next(FlushCtxState::FSM_F1, unused, file_handle);
+    tmp_file::ObSNTmpFileHandle file_handle;
+    ret = iter.next(FlushCtxState::FSM_F1, file_handle);
     ASSERT_EQ(OB_SUCCESS, ret);
     ASSERT_NE(file_handle.get(), nullptr);
     ObSharedNothingTmpFile &file = *file_handle.get();
@@ -296,8 +295,8 @@ TEST_F(TestFlushListIterator, test_iter_order)
   }
 
   for (int64_t i = 0; i < 4; i++) {
-    tmp_file::ObTmpFileHandle file_handle;
-    ret = iter.next(FlushCtxState::FSM_F2, unused, file_handle);
+    tmp_file::ObSNTmpFileHandle file_handle;
+    ret = iter.next(FlushCtxState::FSM_F2, file_handle);
     ASSERT_EQ(OB_SUCCESS, ret);
     ASSERT_NE(file_handle.get(), nullptr);
     ObSharedNothingTmpFile &file = *file_handle.get();
@@ -308,8 +307,8 @@ TEST_F(TestFlushListIterator, test_iter_order)
   }
 
   for (int64_t i = 0; i < 4; i++) {
-    tmp_file::ObTmpFileHandle file_handle;
-    ret = iter.next(FlushCtxState::FSM_F2, unused, file_handle);
+    tmp_file::ObSNTmpFileHandle file_handle;
+    ret = iter.next(FlushCtxState::FSM_F2, file_handle);
     ASSERT_EQ(OB_SUCCESS, ret);
     ASSERT_NE(file_handle.get(), nullptr);
     ObSharedNothingTmpFile &file = *file_handle.get();
@@ -319,8 +318,8 @@ TEST_F(TestFlushListIterator, test_iter_order)
     printf("fd: %ld, file_size: %ld\n", file.fd_, file.file_size_);
   }
 
-  tmp_file::ObTmpFileHandle file_handle;
-  ret = iter.next(FlushCtxState::FSM_F3, unused, file_handle);
+  tmp_file::ObSNTmpFileHandle file_handle;
+  ret = iter.next(FlushCtxState::FSM_F3, file_handle);
   ASSERT_EQ(OB_ITER_END, ret);
 }
 
@@ -331,7 +330,7 @@ TEST_F(TestFlushListIterator, test_iter_data_basic)
   ObTmpFileFlushPriorityManager flush_prio_mgr;
   ret = flush_prio_mgr.init();
   ASSERT_EQ(OB_SUCCESS, ret);
-  vector<tmp_file::ObTmpFileHandle> file_handles;
+  vector<tmp_file::ObSNTmpFileHandle> file_handles;
   int total_file_num = 0;
   const int64_t FILE_NUM = 10;
 
@@ -341,7 +340,7 @@ TEST_F(TestFlushListIterator, test_iter_data_basic)
     file_handles.clear();
     create_files(FlushCtxState(t), FILE_NUM, flush_prio_mgr, file_handles);
     for (int64_t i = 0; i < file_handles.size(); ++i) {
-      tmp_file::ObTmpFileHandle file_handle = file_handles.at(i);
+      tmp_file::ObSNTmpFileHandle file_handle = file_handles.at(i);
       ASSERT_NE(file_handle.get(), nullptr);
       ObSharedNothingTmpFile &tmp_file = *file_handle.get();
       TestDirtyPageRecord &dirty_record = mock_dirty_record_.at(tmp_file.get_fd());
@@ -359,9 +358,8 @@ TEST_F(TestFlushListIterator, test_iter_data_basic)
   int64_t iter_file_cnt = 0;
   for (int64_t t = FlushCtxState::FSM_F1; t < FlushCtxState::FSM_FINISHED; ++t) {
     for (int64_t i = 0; OB_SUCC(ret) && i < FILE_NUM * 5; ++i) {
-      bool is_meta; // unused
-      tmp_file::ObTmpFileHandle file_handle;
-      ret = iter.next(FlushCtxState(t), is_meta, file_handle);
+      tmp_file::ObSNTmpFileHandle file_handle;
+      ret = iter.next(FlushCtxState(t), file_handle);
       if (OB_SUCC(ret)) {
         ASSERT_NE(file_handle.get(), nullptr);
         iter_file_cnt += 1;
@@ -380,7 +378,7 @@ TEST_F(TestFlushListIterator, test_iter_prev_stage)
   ObTmpFileFlushPriorityManager flush_prio_mgr;
   ret = flush_prio_mgr.init();
   ASSERT_EQ(OB_SUCCESS, ret);
-  vector<tmp_file::ObTmpFileHandle> file_handles;
+  vector<tmp_file::ObSNTmpFileHandle> file_handles;
   int total_file_num = 0;
   const int64_t FILE_NUM = 10;
 
@@ -390,7 +388,7 @@ TEST_F(TestFlushListIterator, test_iter_prev_stage)
     file_handles.clear();
     create_files(FlushCtxState(t), FILE_NUM, flush_prio_mgr, file_handles);
     for (int64_t i = 0; i < file_handles.size(); ++i) {
-      tmp_file::ObTmpFileHandle file_handle = file_handles.at(i);
+      tmp_file::ObSNTmpFileHandle file_handle = file_handles.at(i);
       ASSERT_NE(file_handle.get(), nullptr);
       ObSharedNothingTmpFile &tmp_file = *file_handle.get();
       TestDirtyPageRecord &dirty_record = mock_dirty_record_.at(tmp_file.get_fd());
@@ -406,10 +404,9 @@ TEST_F(TestFlushListIterator, test_iter_prev_stage)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   // 直接开始遍历F3直至OB_ITER_END
-  bool is_meta; // unused
   for (int64_t i = 0; OB_SUCC(ret) && i < FILE_NUM * 10; ++i) {
-    tmp_file::ObTmpFileHandle file_handle;
-    ret = iter.next(FlushCtxState::FSM_F3, is_meta, file_handle);
+    tmp_file::ObSNTmpFileHandle file_handle;
+    ret = iter.next(FlushCtxState::FSM_F3, file_handle);
     if (OB_SUCC(ret)) {
       ASSERT_NE(file_handle.get(), nullptr);
       ObSharedNothingTmpFile &tmp_file = *file_handle.get();
@@ -418,8 +415,8 @@ TEST_F(TestFlushListIterator, test_iter_prev_stage)
   ASSERT_EQ(OB_ITER_END, ret);
 
   // 切换到下一层级后，无法再遍历之前的层级
-  tmp_file::ObTmpFileHandle file_handle;
-  ret = iter.next(FlushCtxState::FSM_F1, is_meta, file_handle);
+  tmp_file::ObSNTmpFileHandle file_handle;
+  ret = iter.next(FlushCtxState::FSM_F1, file_handle);
   ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
 }
 
@@ -430,7 +427,7 @@ TEST_F(TestFlushListIterator, test_iter_reinsert_file)
   ObTmpFileFlushPriorityManager flush_prio_mgr;
   ret = flush_prio_mgr.init();
   ASSERT_EQ(OB_SUCCESS, ret);
-  vector<tmp_file::ObTmpFileHandle> file_handles;
+  vector<tmp_file::ObSNTmpFileHandle> file_handles;
   int total_file_num = 0;
   const int64_t FILE_NUM = 10;
 
@@ -438,7 +435,7 @@ TEST_F(TestFlushListIterator, test_iter_reinsert_file)
   int64_t total_file_cnt = 0;
   create_files(FlushCtxState::FSM_F1, FILE_NUM, flush_prio_mgr, file_handles);
   for (int64_t i = 0; i < file_handles.size(); ++i) {
-    tmp_file::ObTmpFileHandle file_handle = file_handles.at(i);
+    tmp_file::ObSNTmpFileHandle file_handle = file_handles.at(i);
     ASSERT_NE(file_handle.get(), nullptr);
     ObSharedNothingTmpFile &tmp_file = *file_handle.get();
     TestDirtyPageRecord &dirty_record = mock_dirty_record_.at(tmp_file.get_fd());
@@ -452,12 +449,11 @@ TEST_F(TestFlushListIterator, test_iter_reinsert_file)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   // 通过iterator取出所有文件
-  bool is_meta; // unused
   int64_t iter_file_cnt = 0;
   for (int64_t t = FlushCtxState::FSM_F1; t < FlushCtxState::FSM_FINISHED; ++t) {
     for (int64_t i = 0; OB_SUCC(ret) && i < FILE_NUM * 5; ++i) {
-      tmp_file::ObTmpFileHandle file_handle;
-      ret = iter.next(FlushCtxState(t), is_meta, file_handle);
+      tmp_file::ObSNTmpFileHandle file_handle;
+      ret = iter.next(FlushCtxState(t), file_handle);
       if (OB_SUCC(ret)) {
         ASSERT_NE(file_handle.get(), nullptr);
         iter_file_cnt += 1;
@@ -468,16 +464,16 @@ TEST_F(TestFlushListIterator, test_iter_reinsert_file)
   ASSERT_EQ(iter_file_cnt, total_file_cnt);
   ret = OB_SUCCESS;
 
-  tmp_file::ObTmpFileHandle file_handle = file_handles[0];
+  tmp_file::ObSNTmpFileHandle file_handle = file_handles[0];
   ASSERT_NE(file_handle.get(), nullptr);
   ret = flush_prio_mgr.insert_data_flush_list(*file_handle.get(), 2 * 1024 * 1024);
   ASSERT_EQ(ret, OB_SUCCESS);
 
   file_handle.reset();
-  ret = iter.next(FlushCtxState::FSM_F1, is_meta, file_handle);
+  ret = iter.next(FlushCtxState::FSM_F1, file_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ret = iter.next(FlushCtxState::FSM_F1, is_meta, file_handle);
+  ret = iter.next(FlushCtxState::FSM_F1, file_handle);
   ASSERT_EQ(OB_ITER_END, ret);
 }
 
@@ -487,16 +483,16 @@ TEST_F(TestFlushListIterator, test_flush_list_remove)
   ObTmpFileFlushPriorityManager flush_prio_mgr;
   ret = flush_prio_mgr.init();
   ASSERT_EQ(OB_SUCCESS, ret);
-  vector<tmp_file::ObTmpFileHandle> file_handles;
+  vector<tmp_file::ObSNTmpFileHandle> file_handles;
   const int64_t FILE_NUM = 10;
 
   // 创建文件，根据层级生成模拟的脏页数量
   int64_t total_file_cnt = 0;
   for (int64_t t = FlushCtxState::FSM_F1; t < FlushCtxState::FSM_FINISHED; ++t) {
-    vector<tmp_file::ObTmpFileHandle> tmp_file_handles;
+    vector<tmp_file::ObSNTmpFileHandle> tmp_file_handles;
     create_files(FlushCtxState(t), FILE_NUM, flush_prio_mgr, tmp_file_handles);
     for (int64_t i = 0; i < tmp_file_handles.size(); ++i) {
-      tmp_file::ObTmpFileHandle file_handle = tmp_file_handles.at(i);
+      tmp_file::ObSNTmpFileHandle file_handle = tmp_file_handles.at(i);
       ASSERT_NE(file_handle.get(), nullptr);
       ObSharedNothingTmpFile &tmp_file = *file_handle.get();
       TestDirtyPageRecord &dirty_record = mock_dirty_record_.at(tmp_file.get_fd());
@@ -510,7 +506,7 @@ TEST_F(TestFlushListIterator, test_flush_list_remove)
   // 从文件链表中删除文件
   const int64_t rand_remove_cnt = ObRandom::rand(1, file_handles.size());
   for (int64_t i = 0; i < rand_remove_cnt; ++i) {
-    tmp_file::ObTmpFileHandle file_handle = file_handles.at(i);
+    tmp_file::ObSNTmpFileHandle file_handle = file_handles.at(i);
     ASSERT_NE(nullptr, file_handle.get());
     ASSERT_EQ(OB_SUCCESS, ret);
     ObSharedNothingTmpFile &file = *file_handle.get();
@@ -525,9 +521,8 @@ TEST_F(TestFlushListIterator, test_flush_list_remove)
   int64_t remain_file_cnt = 0;
   for (int64_t t = FlushCtxState::FSM_F1; t < FlushCtxState::FSM_FINISHED; ++t) {
     for (int64_t i = 0; OB_SUCC(ret) && i < FILE_NUM * 10; ++i) {
-      bool is_meta; // unused
-      tmp_file::ObTmpFileHandle file_handle;
-      ret = iter.next(FlushCtxState(t), is_meta, file_handle);
+      tmp_file::ObSNTmpFileHandle file_handle;
+      ret = iter.next(FlushCtxState(t), file_handle);
       if (OB_SUCC(ret)) {
         ASSERT_NE(file_handle.get(), nullptr);
         ObSharedNothingTmpFile &tmp_file = *file_handle.get();
@@ -548,7 +543,7 @@ TEST_F(TestFlushListIterator, test_flush_list_update)
   ObTmpFileFlushPriorityManager flush_prio_mgr;
   ret = flush_prio_mgr.init();
   ASSERT_EQ(OB_SUCCESS, ret);
-  vector<tmp_file::ObTmpFileHandle> file_handles;
+  vector<tmp_file::ObSNTmpFileHandle> file_handles;
   int total_file_num = 0;
   const int64_t FILE_NUM = 10;
 
@@ -558,7 +553,7 @@ TEST_F(TestFlushListIterator, test_flush_list_update)
 
   // 0.插入文件0～4
   for (int64_t i = 0; i < file_handles.size() / 2; ++i) {
-    tmp_file::ObTmpFileHandle file_handle = file_handles.at(i);
+    tmp_file::ObSNTmpFileHandle file_handle = file_handles.at(i);
     ASSERT_NE(file_handle.get(), nullptr);
     ObSharedNothingTmpFile &tmp_file = *file_handle.get();
     TestDirtyPageRecord &dirty_record = mock_dirty_record_.at(tmp_file.get_fd());
@@ -569,7 +564,7 @@ TEST_F(TestFlushListIterator, test_flush_list_update)
 
   // 1. 更新不在链表中的文件
   for (int64_t i = file_handles.size() / 2; i < file_handles.size(); ++i) {
-    tmp_file::ObTmpFileHandle file_handle = file_handles.at(i);
+    tmp_file::ObSNTmpFileHandle file_handle = file_handles.at(i);
     ObSharedNothingTmpFile &tmp_file = *file_handle.get();
     TestDirtyPageRecord &dirty_record = mock_dirty_record_.at(tmp_file.get_fd());
     ret = flush_prio_mgr.update_data_flush_list(tmp_file, dirty_record.dirty_data_size_);
@@ -578,7 +573,7 @@ TEST_F(TestFlushListIterator, test_flush_list_update)
 
   // 2. 对层级没有变动的文件进行更新
   for (int64_t i = 0; i < file_handles.size() / 2; ++i) {
-    tmp_file::ObTmpFileHandle file_handle = file_handles.at(i);
+    tmp_file::ObSNTmpFileHandle file_handle = file_handles.at(i);
     ObSharedNothingTmpFile &tmp_file = *file_handle.get();
     TestDirtyPageRecord &dirty_record = mock_dirty_record_.at(tmp_file.get_fd());
     ret = flush_prio_mgr.update_data_flush_list(tmp_file, dirty_record.dirty_data_size_);
@@ -587,7 +582,7 @@ TEST_F(TestFlushListIterator, test_flush_list_update)
 
   // 3. 更新到新的层级
   for (int64_t i = 0; i < file_handles.size() / 2; ++i) {
-    tmp_file::ObTmpFileHandle file_handle = file_handles.at(i);
+    tmp_file::ObSNTmpFileHandle file_handle = file_handles.at(i);
     ObSharedNothingTmpFile &tmp_file = *file_handle.get();
     TestDirtyPageRecord &dirty_record = mock_dirty_record_.at(tmp_file.get_fd());
     dirty_record.dirty_data_size_ = 4096;
@@ -597,7 +592,7 @@ TEST_F(TestFlushListIterator, test_flush_list_update)
 
   // 4. 插入文件5～10
   for (int64_t i = file_handles.size() / 2; i < file_handles.size(); ++i) {
-    tmp_file::ObTmpFileHandle file_handle = file_handles.at(i);
+    tmp_file::ObSNTmpFileHandle file_handle = file_handles.at(i);
     ASSERT_NE(file_handle.get(), nullptr);
     ObSharedNothingTmpFile &tmp_file = *file_handle.get();
     TestDirtyPageRecord &dirty_record = mock_dirty_record_.at(tmp_file.get_fd());
@@ -611,18 +606,17 @@ TEST_F(TestFlushListIterator, test_flush_list_update)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   // 5. F1中可以取出5个文件
-  bool is_meta; // unused
   for (int64_t i = 0; i < file_handles.size() / 2; ++i) {
-    tmp_file::ObTmpFileHandle file_handle;
-    ret = iter.next(FlushCtxState::FSM_F1, is_meta, file_handle);
+    tmp_file::ObSNTmpFileHandle file_handle;
+    ret = iter.next(FlushCtxState::FSM_F1, file_handle);
     ASSERT_EQ(OB_SUCCESS, ret);
     ASSERT_NE(file_handle.get(), nullptr);
   }
 
   // 6. F5中可以取出5个更新后的文件
   for (int64_t i = 0; i < file_handles.size() / 2; ++i) {
-    tmp_file::ObTmpFileHandle file_handle;
-    ret = iter.next(FlushCtxState::FSM_F3, is_meta, file_handle);
+    tmp_file::ObSNTmpFileHandle file_handle;
+    ret = iter.next(FlushCtxState::FSM_F3, file_handle);
     ASSERT_EQ(OB_SUCCESS, ret);
     ASSERT_NE(file_handle.get(), nullptr);
   }
@@ -639,7 +633,7 @@ TEST_F(TestFlushListIterator, test_flush_list_reinsert_after_use)
   ret = flush_prio_mgr.init();
   ASSERT_EQ(OB_SUCCESS, ret);
   ObTmpFilePageCacheController &pc_ctrl = MTL(ObTenantTmpFileManager *)->get_sn_file_manager().get_page_cache_controller();
-  vector<tmp_file::ObTmpFileHandle> file_handles;
+  vector<tmp_file::ObSNTmpFileHandle> file_handles;
   const int64_t FILE_NUM = 10;
   FlushCtxState state = FlushCtxState::FSM_F2;
   create_files_with_dir(state, dir, FILE_NUM, flush_prio_mgr, file_handles);
@@ -650,7 +644,7 @@ TEST_F(TestFlushListIterator, test_flush_list_reinsert_after_use)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   for (int64_t i = 0; i < file_handles.size(); ++i) {
-    tmp_file::ObTmpFileHandle file_handle = file_handles.at(i);
+    tmp_file::ObSNTmpFileHandle file_handle = file_handles.at(i);
     ASSERT_NE(file_handle.get(), nullptr);
     ObSharedNothingTmpFile &tmp_file = *file_handle.get();
     TestDirtyPageRecord &dirty_record = mock_dirty_record_.at(tmp_file.get_fd());
@@ -660,10 +654,9 @@ TEST_F(TestFlushListIterator, test_flush_list_reinsert_after_use)
 
   // 取出迭代器dir中一半的文件
   const int64_t USED_FILE_CNT = file_handles.size() / 2;
-  bool is_meta = false; // unused
   for (int64_t i = 0; i < USED_FILE_CNT; ++i) {
-    tmp_file::ObTmpFileHandle file_handle;
-    ret = iter.next(state, is_meta, file_handle);
+    tmp_file::ObSNTmpFileHandle file_handle;
+    ret = iter.next(state, file_handle);
     ASSERT_EQ(OB_SUCCESS, ret);
     ASSERT_NE(file_handle.get(), nullptr);
     printf("use file %ld\n", file_handle.get()->get_fd());
@@ -677,8 +670,8 @@ TEST_F(TestFlushListIterator, test_flush_list_reinsert_after_use)
   // 重新初始化迭代器，通过迭代器取出剩余文件
   int64_t remain_file_cnt = 0;
   while (OB_SUCC(ret)) {
-    tmp_file::ObTmpFileHandle file_handle;
-    if (OB_SUCC(iter.next(state, is_meta, file_handle))) {
+    tmp_file::ObSNTmpFileHandle file_handle;
+    if (OB_SUCC(iter.next(state, file_handle))) {
       remain_file_cnt += 1;
     }
   }

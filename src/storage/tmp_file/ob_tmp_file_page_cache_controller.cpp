@@ -13,13 +13,14 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/tmp_file/ob_tmp_file_page_cache_controller.h"
+#include "storage/tmp_file/ob_tmp_file_manager.h"
 
 namespace oceanbase
 {
 namespace tmp_file
 {
 
-int ObTmpFilePageCacheController::init(ObSNTenantTmpFileManager &file_mgr)
+int ObTmpFilePageCacheController::init()
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -37,7 +38,7 @@ int ObTmpFilePageCacheController::init(ObSNTenantTmpFileManager &file_mgr)
     STORAGE_LOG(WARN, "fail to init write buffer pool", KR(ret));
   } else if (OB_FAIL(flush_tg_.init())) {
     STORAGE_LOG(WARN, "fail to init flush thread", KR(ret));
-  } else if (OB_FAIL(swap_tg_.init(file_mgr))) {
+  } else if (OB_FAIL(swap_tg_.init())) {
     STORAGE_LOG(WARN, "fail to init swap thread", KR(ret));
   } else {
     flush_all_data_ = false;
@@ -148,13 +149,14 @@ int ObTmpFilePageCacheController::invoke_swap_and_wait(int64_t expect_swap_size,
   } else {
     swap_tg_.notify_doing_swap();
     if (OB_FAIL(swap_job->wait_swap_complete())) {
-      STORAGE_LOG(WARN, "fail to wait for swap job complete timeout", KR(ret));
+      STORAGE_LOG(WARN, "fail to wait for swap job complete", KR(ret));
     }
   }
 
   if (OB_NOT_NULL(swap_job)) {
     if (OB_SUCCESS != swap_job->get_ret_code()) {
       ret = swap_job->get_ret_code();
+      STORAGE_LOG(WARN, "swap job complete with error code", KR(ret));
     }
     // reset swap job to set is_finished to false in case of failure to push into queue:
     // otherwise job is not finished, but it will not be executed, so it will never become finished.

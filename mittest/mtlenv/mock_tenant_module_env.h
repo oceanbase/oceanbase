@@ -796,12 +796,8 @@ int MockTenantModuleEnv::init_before_start_mtl()
     STORAGE_LOG(WARN, "fail to init env", K(ret));
   } else if (!GCTX.is_shared_storage_mode() && OB_FAIL(tmp_file::ObTmpBlockCache::get_instance().init("tmp_block_cache", 1))) {
     STORAGE_LOG(WARN, "init tmp block cache failed", KR(ret));
-  } else if (!GCTX.is_shared_storage_mode() && OB_FAIL(tmp_file::ObTmpPageCache::get_instance().init("sn_tmp_page_cache", 1))) {
+  } else if (OB_FAIL(tmp_file::ObTmpPageCache::get_instance().init("tmp_page_cache", 1))) {
     STORAGE_LOG(WARN, "init sn tmp page cache failed", KR(ret));
-#ifdef OB_BUILD_SHARED_STORAGE
-  } else if (GCTX.is_shared_storage_mode() && OB_FAIL(blocksstable::ObTmpPageCache::get_instance().init("ss_tmp_page_cache", 1))) {
-    STORAGE_LOG(WARN, "init ss tmp page cache failed", KR(ret));
-#endif
   } else if (OB_SUCCESS != (ret = bandwidth_throttle_.init(1024 * 1024 * 60))) {
     STORAGE_LOG(ERROR, "failed to init bandwidth_throttle_", K(ret));
   } else if (OB_FAIL(TG_START(lib::TGDefIDs::ServerGTimer))) {
@@ -1034,13 +1030,8 @@ void MockTenantModuleEnv::destroy()
   net_frame_.destroy();
   if (!GCTX.is_shared_storage_mode()) {
     tmp_file::ObTmpBlockCache::get_instance().destroy();
-    tmp_file::ObTmpPageCache::get_instance().destroy();
   }
-#ifdef OB_BUILD_SHARED_STORAGE
-  else {
-    blocksstable::ObTmpPageCache::get_instance().destroy();
-  }
-#endif
+  tmp_file::ObTmpPageCache::get_instance().destroy();
   TG_STOP(lib::TGDefIDs::ServerGTimer);
   TG_WAIT(lib::TGDefIDs::ServerGTimer);
   TG_DESTROY(lib::TGDefIDs::ServerGTimer);

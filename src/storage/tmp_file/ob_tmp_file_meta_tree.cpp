@@ -1181,7 +1181,7 @@ int ObSharedNothingTmpFileMetaTree::flush_meta_pages_for_block(
       }
       while (OB_SUCC(ret)
             && level < level_cnt
-            && write_offset < OB_DEFAULT_MACRO_BLOCK_SIZE)
+            && write_offset < ObTmpFileGlobal::SN_BLOCK_SIZE)
       {
         uint32_t flush_start_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
         int32_t level_page_index = -1;
@@ -1285,7 +1285,7 @@ int ObSharedNothingTmpFileMetaTree::flush_leaf_pages_(
     int32_t page_index_in_level = start_page_index_in_level;
     while (OB_SUCC(ret)
           && ObTmpFileGlobal::INVALID_PAGE_ID != cur_page_id
-          && write_offset + ObTmpFileGlobal::PAGE_SIZE <= OB_DEFAULT_MACRO_BLOCK_SIZE
+          && write_offset + ObTmpFileGlobal::PAGE_SIZE <= ObTmpFileGlobal::SN_BLOCK_SIZE
           && (ObTmpFileTreeEvictType::FULL == flush_type || end_page_id != cur_page_id)) {
       char *page_buff = NULL;
       uint32_t next_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
@@ -1369,7 +1369,7 @@ int ObSharedNothingTmpFileMetaTree::flush_internal_pages_(
     int32_t page_index_in_level = start_page_index_in_level;
     while (OB_SUCC(ret)
           && ObTmpFileGlobal::INVALID_PAGE_ID != cur_page_id
-          && write_offset + ObTmpFileGlobal::PAGE_SIZE <= OB_DEFAULT_MACRO_BLOCK_SIZE
+          && write_offset + ObTmpFileGlobal::PAGE_SIZE <= ObTmpFileGlobal::SN_BLOCK_SIZE
           && (ObTmpFileTreeEvictType::FULL == flush_type || end_page_id != cur_page_id)) {
       char * page_buff = NULL;
       uint32_t next_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;

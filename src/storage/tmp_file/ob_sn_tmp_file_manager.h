@@ -10,16 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_SN_TMP_FILE_MANAGER_H_
-#define OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_SN_TMP_FILE_MANAGER_H_
+#ifndef OCEANBASE_STORAGE_TMP_FILE_OB_SN_TMP_FILE_MANAGER_H_
+#define OCEANBASE_STORAGE_TMP_FILE_OB_SN_TMP_FILE_MANAGER_H_
 
-#include "lib/hash/ob_linear_hash_map.h"
-#include "lib/container/ob_array.h"
-#include "lib/lock/ob_spin_rwlock.h"
 #include "storage/blocksstable/ob_macro_block_id.h"
 #include "storage/tmp_file/ob_shared_nothing_tmp_file.h"
-#include "storage/tmp_file/ob_tmp_file_io_info.h"
-#include "storage/tmp_file/ob_tmp_file_io_handle.h"
+#include "storage/tmp_file/ob_i_tmp_file_manager.h"
 #include "storage/tmp_file/ob_tmp_file_block_manager.h"
 #include "storage/tmp_file/ob_tmp_file_eviction_manager.h"
 #include "storage/tmp_file/ob_tmp_file_page_cache_controller.h"
@@ -28,91 +24,29 @@ namespace oceanbase
 {
 namespace tmp_file
 {
-struct ObTmpFileKey final
+class ObSNTenantTmpFileManager : public ObITenantTmpFileManager
 {
-  explicit ObTmpFileKey(const int64_t fd) : fd_(fd) {}
-  OB_INLINE int hash(uint64_t &hash_val) const
-  {
-    hash_val = murmurhash(&fd_, sizeof(int64_t), 0);
-    return OB_SUCCESS;
-  }
-  OB_INLINE bool operator==(const ObTmpFileKey &other) const { return fd_ == other.fd_; }
-  TO_STRING_KV(K(fd_));
-  int64_t fd_;
-};
-
-class ObSNTenantTmpFileManager final
-{
-public:
-  typedef common::ObLinearHashMap<ObTmpFileKey, ObTmpFileHandle> TmpFileMap;
 public:
   ObSNTenantTmpFileManager();
   ~ObSNTenantTmpFileManager();
-  static int mtl_init(ObSNTenantTmpFileManager *&manager);
-  int init();
-  int start();
-  void stop();
-  void wait();
-  void destroy();
-
-  int alloc_dir(int64_t &dir_id);
-  int open(int64_t &fd, const int64_t &dir_id, const char* const label);
-  int remove(const int64_t fd);
-
-  void refresh_meta_memory_limit();
 
 public:
-  int aio_read(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, ObSNTmpFileIOHandle &io_handle);
-  int aio_pread(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, const int64_t offset, ObSNTmpFileIOHandle &io_handle);
-  int read(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, ObSNTmpFileIOHandle &io_handle);
-  int pread(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, const int64_t offset, ObSNTmpFileIOHandle &io_handle);
-  // NOTE:
-  //   only support append write.
-  int aio_write(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, ObSNTmpFileIOHandle &io_handle);
-  // NOTE:
-  //   only support append write.
-  int write(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info);
-  int truncate(const int64_t fd, const int64_t offset);
-
-public:
-  int get_tmp_file(const int64_t fd, ObTmpFileHandle &file_handle);
-  int get_tmp_file_size(const int64_t fd, int64_t &size);
+  virtual int alloc_dir(int64_t &dir_id) override;
+  virtual int open(int64_t &fd, const int64_t &dir_id, const char* const label) override;
+  int get_tmp_file(const int64_t fd, ObSNTmpFileHandle &file_handle) const;
   int get_macro_block_list(common::ObIArray<blocksstable::MacroBlockId> &macro_id_list);
-  int get_macro_block_count(int64_t &macro_block_count);
-  OB_INLINE ObIAllocator * get_callback_allocator() { return &callback_allocator_; }
+  virtual int get_tmp_file_disk_usage(int64_t &disk_data_size, int64_t &occupied_disk_size) override;
   OB_INLINE ObTmpFileBlockManager &get_tmp_file_block_manager() { return tmp_file_block_manager_; }
   OB_INLINE ObTmpFilePageCacheController &get_page_cache_controller() { return page_cache_controller_; }
 
-public:
-  //for virtual table to show
-  int get_tmp_file_fds(ObIArray<int64_t> &fd_arr);
-  int get_tmp_file_info(const int64_t fd, ObSNTmpFileInfo &tmp_file_info);
 private:
-  class CollectTmpFileKeyFunctor final
-  {
-  public:
-    CollectTmpFileKeyFunctor(ObIArray<int64_t> &fds)
-        : fds_(fds) {}
-    bool operator()(const ObTmpFileKey &key, const ObTmpFileHandle &tmp_file_handle);
-
-  private:
-    ObIArray<int64_t> &fds_;
-  };
+  virtual int init_sub_module_();
+  virtual int start_sub_module_();
+  virtual int stop_sub_module_();
+  virtual int wait_sub_module_();
+  virtual int destroy_sub_module_();
 
 private:
-  static const int64_t REFRESH_CONFIG_INTERVAL = 5 * 60 * 1000 * 1000L; // 5min
-  static const int64_t META_DEFAULT_LIMIT = 15 * 1024L * 1024L * 1024L;
-
-private:
-  bool is_inited_;
-  uint64_t tenant_id_;
-  int64_t last_access_tenant_config_ts_;
-  int64_t last_meta_mem_limit_;
-  common::ObConcurrentFIFOAllocator tmp_file_allocator_;
-  common::ObFIFOAllocator callback_allocator_;
-  common::ObFIFOAllocator wbp_index_cache_allocator_;
-  common::ObFIFOAllocator wbp_index_cache_bucket_allocator_;
-  TmpFileMap files_;
   ObTmpFileBlockManager tmp_file_block_manager_;
   ObTmpFilePageCacheController page_cache_controller_;
 
@@ -123,4 +57,4 @@ private:
 }  // end namespace tmp_file
 }  // end namespace oceanbase
 
-#endif // OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_SN_TMP_FILE_MANAGER_H_
+#endif // OCEANBASE_STORAGE_TMP_FILE_OB_SN_TMP_FILE_MANAGER_H_

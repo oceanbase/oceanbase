@@ -48,12 +48,6 @@ ob_set_subtarget(ob_storage blocksstable
   blocksstable/ob_sstable_printer.cpp
   blocksstable/ob_storage_cache_suite.cpp
   blocksstable/ob_super_block_buffer_holder.cpp
-  blocksstable/ob_i_tmp_file.cpp
-  blocksstable/ob_tmp_file.cpp
-  blocksstable/ob_tmp_file_cache.cpp
-  blocksstable/ob_tmp_file_store.cpp
-  blocksstable/ob_ss_tmp_file_manager.cpp
-  blocksstable/ob_ss_tmp_file_write_buffer_pool.cpp
   blocksstable/ob_storage_datum.cpp
   blocksstable/ob_datum_row.cpp
   blocksstable/ob_datum_rowkey.cpp
@@ -168,8 +162,9 @@ ob_set_subtarget(ob_storage meta_store
 )
 
 ob_set_subtarget(ob_storage tmp_file
+  tmp_file/ob_i_tmp_file.cpp
+  tmp_file/ob_i_tmp_file_manager.cpp
   tmp_file/ob_shared_nothing_tmp_file.cpp
-  tmp_file/ob_sn_tmp_file_io_handle.cpp
   tmp_file/ob_sn_tmp_file_manager.cpp
   tmp_file/ob_tmp_file_block_manager.cpp
   tmp_file/ob_tmp_file_cache.cpp

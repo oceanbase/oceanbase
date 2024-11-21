@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_WRITE_BUFFER_INDEX_CACHE_H_
-#define OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_WRITE_BUFFER_INDEX_CACHE_H_
+#ifndef OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_WRITE_BUFFER_INDEX_CACHE_H_
+#define OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_WRITE_BUFFER_INDEX_CACHE_H_
 
 #include "lib/container/ob_array.h"
 #include "lib/allocator/ob_fifo_allocator.h"
@@ -86,7 +86,8 @@ public:
   INHERIT_TO_STRING_KV("ObTmpFileCircleArray", ObTmpFileCircleArray,
                        K(fd_), KP(wbp_), KP(page_buckets_),
                        K(sparsify_count_), K(ignored_push_count_),
-                       KP(bucket_array_allocator_), KP(bucket_allocator_));
+                       KP(bucket_array_allocator_), KP(bucket_allocator_),
+                       K(max_bucket_array_capacity_));
 
 private:
   class ObTmpFilePageIndexBucket : public ObTmpFileCircleArray
@@ -146,4 +147,4 @@ private:
 
 }  // end namespace tmp_file
 }  // end namespace oceanbase
-#endif // OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_WRITE_BUFFER_INDEX_CACHE_H_
+#endif // OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_WRITE_BUFFER_INDEX_CACHE_H_

@@ -206,6 +206,8 @@ int ObTempBlockStore::finish_add_row(bool need_dump /*true*/)
         LOG_WARN("get timeout failed", K(ret));
       } else if (write_io_handle_.is_valid() && OB_FAIL(write_io_handle_.wait())) {
         LOG_WARN("fail to wait write", K(ret), K(write_io_handle_));
+      } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.seal(tenant_id_, io_.fd_))) {
+        LOG_WARN("fail to seal file", K(ret), K_(io));
       }
       if (OB_LIKELY(nullptr != io_observer_)) {
         io_observer_->on_write_io(rdtsc() - begin_io_dump_time);

@@ -73,6 +73,18 @@ int ObBackupTmpFile::write(const char *buf, const int64_t size)
   return ret;
 }
 
+int ObBackupTmpFile::seal()
+{
+  int ret = OB_SUCCESS;
+  if (!is_opened_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup tmp file init twice", K(ret));
+  } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.seal(MTL_ID(), file_fd_))) {
+    LOG_WARN("failed to seal tmp file", KR(ret));
+  }
+  return ret;
+}
+
 int ObBackupTmpFile::close()
 {
   int ret = OB_SUCCESS;
@@ -143,6 +155,15 @@ int ObBackupIndexBufferNode::init(
     read_count_ = 0;
     write_count_ = 0;
     is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObBackupIndexBufferNode::seal_node()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(tmp_file_.seal())) {
+    LOG_WARN("failed to seal tmp file", K(ret));
   }
   return ret;
 }

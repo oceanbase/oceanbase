@@ -27,6 +27,7 @@ public:
   virtual ~ObBackupTmpFile();
   int open(const uint64_t tenant_id);
   int write(const char *buf, const int64_t size);
+  int seal();
   int close();
   bool is_opened() const { return is_opened_; }
 
@@ -69,6 +70,7 @@ public:
   int put_backup_index(const T &backup_index);
   template <typename T>
   int get_backup_index(T &backup_index);
+  int seal_node();
   void reset();
 
 public:

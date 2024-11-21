@@ -439,6 +439,18 @@ int ObDirectLoadTmpFileIOHandle::wait()
   return ret;
 }
 
+int ObDirectLoadTmpFileIOHandle::seal()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_FILE_NOT_EXIST;
+    LOG_WARN("tmp file not set", KR(ret));
+  } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.seal(MTL_ID(), io_info_.fd_))) {
+    LOG_WARN("failed to seal tmp file", KR(ret), K_(io_info));
+  }
+  return ret;
+}
+
 /**
  * ObDirectLoadTmpFileManager
  */

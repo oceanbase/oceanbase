@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_IO_CTX_H_
-#define OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_IO_CTX_H_
+#ifndef OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_IO_CTX_H_
+#define OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_IO_CTX_H_
 
 #include "storage/blocksstable/ob_macro_block_handle.h"
 #include "storage/tmp_file/ob_tmp_file_cache.h"
@@ -95,6 +95,8 @@ public:
   {
     ObIOReadHandle();
     ObIOReadHandle(char *dest_user_read_buf,
+                   const int64_t offset_in_src_data_buf, const int64_t read_size);
+    ObIOReadHandle(char *dest_user_read_buf,
                    const int64_t offset_in_src_data_buf, const int64_t read_size,
                    ObTmpFileBlockHandle block_handle);
     ~ObIOReadHandle();
@@ -102,7 +104,7 @@ public:
     ObIOReadHandle &operator=(const ObIOReadHandle &other);
     virtual bool is_valid() override;
     INHERIT_TO_STRING_KV("ObIReadHandle", ObIReadHandle, K(handle_), K(block_handle_));
-    blocksstable::ObMacroBlockHandle handle_;
+    blocksstable::ObStorageObjectHandle handle_;
     ObTmpFileBlockHandle block_handle_;
   };
 
@@ -148,7 +150,7 @@ public:
   }
 
 private:
-  int wait_read_finish_(const int64_t timeout_ms);
+  int wait_read_finish_();
   int do_read_wait_();
 
 private:
@@ -160,10 +162,12 @@ private:
   int64_t buf_size_;
   int64_t done_size_;
   int64_t todo_size_;
-  int64_t read_offset_in_file_;
+  int64_t read_offset_in_file_;   // this var means the start offset for read.
+                                  // if this var is negative, it will be set by
+                                  // read_offset of file in file's read function
   bool disable_page_cache_;
-  bool disable_block_cache_; // only used in ut, to control whether read data from block cache
-  bool is_unaligned_read_; //for statistics
+  bool disable_block_cache_;      // only used in ut, to control whether read data from block cache
+  bool is_unaligned_read_;        // for statistics
   common::ObIOFlag io_flag_;
   int64_t io_timeout_ms_;
   common::ObSEArray<ObIOReadHandle, 1> io_handles_;
@@ -174,4 +178,4 @@ private:
 
 }  // end namespace tmp_file
 }  // end namespace oceanbase
-#endif // OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_IO_CTX_H_
+#endif // OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_IO_CTX_H_

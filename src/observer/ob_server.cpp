@@ -81,7 +81,6 @@
 #include "storage/tablelock/ob_table_lock_service.h"
 #include "storage/tx/ob_ts_mgr.h"
 #include "storage/tmp_file/ob_tmp_file_cache.h"
-#include "storage/blocksstable/ob_tmp_file_cache.h"
 #include "storage/tx_table/ob_tx_data_cache.h"
 #include "storage/ob_file_system_router.h"
 #include "storage/ob_tablet_autoinc_seq_rpc_handler.h"
@@ -467,14 +466,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     } else if (!GCTX.is_shared_storage_mode() &&
                OB_FAIL(tmp_file::ObTmpBlockCache::get_instance().init("tmp_block_cache", 1))) {
       LOG_ERROR("init tmp block cache failed", KR(ret));
-    } else if (!GCTX.is_shared_storage_mode() &&
-               OB_FAIL(tmp_file::ObTmpPageCache::get_instance().init("sn_tmp_page_cache", 1))) {
+    } else if (OB_FAIL(tmp_file::ObTmpPageCache::get_instance().init("tmp_page_cache", 1))) {
       LOG_ERROR("init tmp page cache failed", KR(ret));
-#ifdef OB_BUILD_SHARED_STORAGE
-    } else if (GCTX.is_shared_storage_mode() &&
-               OB_FAIL(blocksstable::ObTmpPageCache::get_instance().init("ss_tmp_page_cache", 1))) {
-      LOG_ERROR("Fail to init tmp page cache, ", KR(ret));
-#endif
     } else if (OB_FAIL(init_log_kv_cache())) {
       LOG_ERROR("init log kv cache failed", KR(ret));
     } else if (OB_FAIL(locality_manager_.init(self_addr_,
@@ -792,17 +785,10 @@ void ObServer::destroy()
       FLOG_INFO("begin to destroy tmp block cache");
       tmp_file::ObTmpBlockCache::get_instance().destroy();
       FLOG_INFO("tmp block cache destroyed");
-
-      FLOG_INFO("begin to destroy tmp page cache");
-      tmp_file::ObTmpPageCache::get_instance().destroy();
-      FLOG_INFO("tmp page cache destroyed");
-#ifdef OB_BUILD_SHARED_STORAGE
-    } else {
-      FLOG_INFO("begin to destroy tmp page cache");
-      blocksstable::ObTmpPageCache::get_instance().destroy();
-      FLOG_INFO("tmp page cache destroyed");
-#endif
     }
+    FLOG_INFO("begin to destroy tmp page cache");
+    tmp_file::ObTmpPageCache::get_instance().destroy();
+    FLOG_INFO("tmp page cache destroyed");
 
     FLOG_INFO("begin to destroy log kv cache");
     OB_LOG_KV_CACHE.destroy();

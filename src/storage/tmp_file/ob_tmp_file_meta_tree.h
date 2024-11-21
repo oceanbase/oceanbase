@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_STORAGE_BLOCKSSTABLE_OB_TMP_FILE_META_TREE_H_
-#define OCEANBASE_STORAGE_BLOCKSSTABLE_OB_TMP_FILE_META_TREE_H_
+#ifndef OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_META_TREE_H_
+#define OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_META_TREE_H_
 
 #include "deps/oblib/src/lib/container/ob_se_array.h"
 #include "storage/tmp_file/ob_tmp_file_write_buffer_pool.h"
@@ -549,4 +549,4 @@ public:
 
 }  // end namespace tmp_file
 }  // end namespace oceanbase
-#endif // OCEANBASE_STORAGE_BLOCKSSTABLE_OB_TMP_FILE_META_TREE_H_
+#endif // OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_META_TREE_H_

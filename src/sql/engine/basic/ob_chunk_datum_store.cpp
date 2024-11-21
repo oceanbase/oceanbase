@@ -1625,6 +1625,8 @@ int ObChunkDatumStore::finish_add_row(bool need_dump)
         LOG_WARN("get timeout failed", K(ret));
       } else if (OB_FAIL(aio_write_handle_.wait())) { // last buffer
         LOG_WARN("failed to wait write", K(ret));
+      } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.seal(tenant_id_, io_.fd_))) {
+        LOG_WARN("fail to seal temp file", K(ret), K(tenant_id_), K(io_.fd_));
       }
       if (OB_LIKELY(nullptr != get_io_event_observer())) {
         get_io_event_observer()->on_write_io(rdtsc() - begin_io_dump_time);
