@@ -7424,6 +7424,12 @@ int ObDMLResolver::resolve_current_of(const ParseNode &node,
       ColumnItem *col_item = NULL;
       ObRawExpr *rowid_expr = NULL;
       TableItem *item = stmt.get_table_item(0);
+      CK (OB_NOT_NULL(item));
+      if (OB_SUCC(ret) && item->is_link_table()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("current of dblink table not support", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "current of for dblink table");
+      }
       OZ (resolve_rowid_expr(&stmt, *item, rowid_expr));
       OZ (resolve_sql_expr(node, cursor_expr));
       OZ (ObRawExprUtils::create_equal_expr(*params_.expr_factory_,
