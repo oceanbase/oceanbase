@@ -131,7 +131,7 @@ int ObDirectLoadOptimizer::optimize(
   if (OB_ISNULL(exec_ctx = optimizer_ctx.get_exec_ctx())) {
     ret = ret = OB_ERR_UNEXPECTED;
     LOG_WARN("exec_ctx cannot be null", K(ret));
-  } else if (GCONF._ob_enable_direct_load) {
+  } else {
     direct_load_optimizer_ctx_.reset();
     uint64_t table_id = stmt.get_table_item(0) != nullptr ? stmt.get_table_item(0)->ref_id_ : 0;
     const ObGlobalHint &global_hint = optimizer_ctx.get_global_hint();
@@ -141,7 +141,9 @@ int ObDirectLoadOptimizer::optimize(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected session info is null", K(ret));
     } else if (0 != table_id && (stmt.value_from_select() && !stmt.is_external_table_overwrite())) {
-      if (stmt.is_normal_table_overwrite()) {
+      if (!GCONF._ob_enable_direct_load) {
+        // do nothing
+      } else if (stmt.is_normal_table_overwrite()) {
         if (OB_FAIL(check_support_insert_overwrite(global_hint))) {
           LOG_WARN("fail to check support insert overwrite", K(ret), K(global_hint));
         } else {
@@ -212,6 +214,19 @@ int ObDirectLoadOptimizer::optimize(
             }
           } else {
             direct_load_optimizer_ctx_.set_can_use_direct_load();
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (!direct_load_optimizer_ctx_.can_use_direct_load()) {
+          if (session_info->get_ddl_info().is_mview_complete_refresh()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "mview complete refresh using non-direct insert is");
+            LOG_WARN("mview complete refresh using non-direct insert is not support", KR(ret));
+          } else if (stmt.is_normal_table_overwrite()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "normal table overwrite using non-direct insert is");
+            LOG_WARN("normal table overwrite using non-direct insert is not support", KR(ret));
           }
         }
       }

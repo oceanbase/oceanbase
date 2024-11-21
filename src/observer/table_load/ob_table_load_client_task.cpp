@@ -240,7 +240,12 @@ public:
     ObCompressorType compressor_type = INVALID_COMPRESSOR;
     bool online_opt_stat_gather = false;
     double online_sample_percent = 100.;
-    if (OB_ISNULL(schema_guard = client_exec_ctx.get_schema_guard())) {
+    if (OB_UNLIKELY(!GCONF._ob_enable_direct_load)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "when disable direct load, table load client task is");
+      LOG_WARN("when disable direct load, table load client task is not support", KR(ret));
+    }
+    else if (OB_ISNULL(schema_guard = client_exec_ctx.get_schema_guard())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected schema guard is null", KR(ret));
     }
