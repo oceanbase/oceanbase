@@ -38,7 +38,7 @@ int ObIntDictColumnEncoder::init(
     LOG_WARN("init base column encoder failed", K(ret), K(ctx), K(column_index), K(row_count));
   } else {
     column_header_.type_ = type_;
-    dict_encoding_meta_.distinct_val_cnt_ = ctx.ht_->size();
+    dict_encoding_meta_.distinct_val_cnt_ = ctx.ht_->distinct_val_cnt();
     dict_encoding_meta_.ref_row_cnt_ = row_count_;
     if (ctx_->null_cnt_ > 0) {
       dict_encoding_meta_.set_has_null();
@@ -146,15 +146,15 @@ int ObIntDictColumnEncoder::sort_dict_()
     uint64_t min = 0;
     uint64_t max = 0;
     if (ObIntTC == tc || ObUIntTC == tc) {
-      min = ctx_->ht_->begin()->header_->datum_->get_uint64();
-      max = (ctx_->ht_->end() - 1)->header_->datum_->get_uint64();
+      min = ctx_->ht_->begin()->datum_.get_uint64();
+      max = (ctx_->ht_->end() - 1)->datum_.get_uint64();
     } else if (ObDecimalIntSC == store_class_) {
       if (precision_width_size_ == sizeof(uint32_t)) {
-        min = ctx_->ht_->begin()->header_->datum_->get_decimal_int32();
-        max = (ctx_->ht_->end() - 1)->header_->datum_->get_decimal_int32();
+        min = ctx_->ht_->begin()->datum_.get_decimal_int32();
+        max = (ctx_->ht_->end() - 1)->datum_.get_decimal_int32();
       } else {
-        min = ctx_->ht_->begin()->header_->datum_->get_decimal_int64();
-        max = (ctx_->ht_->end() - 1)->header_->datum_->get_decimal_int64();
+        min = ctx_->ht_->begin()->datum_.get_decimal_int64();
+        max = (ctx_->ht_->end() - 1)->datum_.get_decimal_int64();
       }
     }
     if (ObIntTC == tc || ObUIntTC == tc || ObDecimalIntSC == store_class_) {

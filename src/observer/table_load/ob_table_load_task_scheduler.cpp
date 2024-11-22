@@ -20,7 +20,6 @@
 #include "observer/table_load/ob_table_load_task.h"
 #include "share/ob_share_util.h"
 #include "share/rc/ob_tenant_base.h"
-#include "storage/direct_load/ob_direct_load_table_builder_allocator.h"
 #include "share/resource_manager/ob_resource_manager.h"
 
 namespace oceanbase
@@ -270,9 +269,6 @@ void ObTableLoadTaskThreadPoolScheduler::run(uint64_t thread_idx)
   if (STATE_RUNNING == state_) {
     state_ = STATE_STOPPING;
   }
-
-  // clear thread local variables
-  get_table_builder_allocator()->reset();
 
   LOG_INFO("table load task thread stopped", KP(this), "pid", get_tid_cache(), K(thread_idx));
 }

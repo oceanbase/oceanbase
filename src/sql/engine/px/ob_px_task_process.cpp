@@ -41,6 +41,7 @@
 #include "observer/mysql/obmp_base.h"
 #include "lib/alloc/ob_malloc_callback.h"
 #include "sql/engine/window_function/ob_window_function_vec_op.h"
+#include "sql/engine/direct_load/ob_table_direct_insert_op.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -891,6 +892,22 @@ int ObPxTaskProcess::OpPostparation::apply(ObExecContext &ctx, ObOpSpec &op)
       LOG_WARN("operator is NULL", K(ret), KP(kit));
     } else {
       ObPxMultiPartInsertOpInput *input = static_cast<ObPxMultiPartInsertOpInput *>(kit->input_);
+      if (OB_ISNULL(input)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("input not found for op", "op_id", op.id_, K(ret));
+      } else if (OB_SUCCESS != ret_) {
+        input->set_error_code(ret_);
+        LOG_TRACE("debug post apply info", K(ret_));
+      } else {
+        LOG_TRACE("debug post apply info", K(ret_));
+      }
+    }
+  } else if (PHY_TABLE_DIRECT_INSERT == op.get_type()) {
+    if (OB_ISNULL(kit->input_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("operator is NULL", K(ret), KP(kit));
+    } else {
+      ObTableDirectInsertOpInput *input = static_cast<ObTableDirectInsertOpInput *>(kit->input_);
       if (OB_ISNULL(input)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("input not found for op", "op_id", op.id_, K(ret));

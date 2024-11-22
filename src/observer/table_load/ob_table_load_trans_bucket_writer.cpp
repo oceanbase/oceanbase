@@ -361,6 +361,7 @@ int ObTableLoadTransBucketWriter::write_for_non_partitioned(SessionContext &sess
     } else if (OB_FAIL(load_bucket->add_row(session_ctx.partition_id_.tablet_id_,
                                             row,
                                             param_.batch_size_,
+                                            WRITE_ROW_SIZE,
                                             need_write))) {
       LOG_WARN("fail to add row", KR(ret));
     } else if (need_write && OB_FAIL(write_load_bucket(session_ctx, load_bucket))) {
@@ -433,6 +434,7 @@ int ObTableLoadTransBucketWriter::write_for_partitioned(SessionContext &session_
     } else if (OB_FAIL(load_bucket->add_row(partition_id.tablet_id_,
                                             row,
                                             param_.batch_size_,
+                                            WRITE_ROW_SIZE,
                                             need_write))) {
       LOG_WARN("fail to add row", KR(ret));
     } else if (need_write && OB_FAIL(write_load_bucket(session_ctx, load_bucket))) {

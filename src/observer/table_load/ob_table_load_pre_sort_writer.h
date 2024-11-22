@@ -10,9 +10,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
- #ifndef _OB_TABLE_PRE_SORT_WRITER_
- #define _OB_TABLE_PRE_SORT_WRITER_
+#ifndef _OB_TABLE_PRE_SORT_WRITER_
+#define _OB_TABLE_PRE_SORT_WRITER_
 
+#include "share/table/ob_table_load_row_array.h"
+#include "storage/blocksstable/ob_datum_row.h"
 #include "storage/direct_load/ob_direct_load_mem_define.h"
 #include "storage/direct_load/ob_direct_load_external_multi_partition_row.h"
 
@@ -39,7 +41,10 @@ public:
            ObTableLoadErrorRowHandler *error_row_handler,
            ObDirectLoadTableDataDesc *table_data_desc);
   int write(int32_t session_id, const table::ObTableLoadTabletObjRowArray &row_array);
-  int px_write(const ObTabletID &tablet_id, const blocksstable::ObDatumRow &row);
+  int px_write(common::ObIVector *tablet_id_vector,
+               const ObIArray<common::ObIVector *> &vectors,
+               const sql::ObBatchRows &batch_rows,
+               int64_t &affected_rows);
   int close();
 private:
   int append_row(const ObTabletID &tablet_id,
@@ -53,6 +58,7 @@ private:
   ObTableLoadMemChunkManager *chunks_manager_;
   int64_t chunk_node_id_;
   ChunkType *chunk_;
+  blocksstable::ObDatumRow datum_row_;
   ObDirectLoadExternalMultiPartitionRow external_row_;
   bool is_inited_;
 };

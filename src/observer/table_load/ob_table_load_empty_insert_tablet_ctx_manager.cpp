@@ -148,7 +148,7 @@ int ObTableLoadEmptyInsertTabletCtxManager::execute(
   insert_table_param.reserved_parallel_ = 0;
   insert_table_param.rowkey_column_count_ = table_load_schema.rowkey_column_count_;
   insert_table_param.column_count_ = table_load_schema.store_column_count_;
-  insert_table_param.lob_column_count_ = table_load_schema.lob_column_idxs_.count();
+  insert_table_param.lob_inrow_threshold_ = table_load_schema.lob_inrow_threshold_;
   insert_table_param.is_partitioned_table_ = table_load_schema.is_partitioned_table_;
   insert_table_param.is_heap_table_ = table_load_schema.is_heap_table_;
   insert_table_param.is_column_store_ = table_load_schema.is_column_store_;
@@ -157,7 +157,10 @@ int ObTableLoadEmptyInsertTabletCtxManager::execute(
   insert_table_param.datum_utils_ = &(table_load_schema.datum_utils_);
   insert_table_param.col_descs_ = &(table_load_schema.column_descs_);
   insert_table_param.cmp_funcs_ = &(table_load_schema.cmp_funcs_);
+  insert_table_param.lob_column_idxs_ = &(table_load_schema.lob_column_idxs_);
   insert_table_param.online_sample_percent_ = 1.0;
+  insert_table_param.is_no_logging_ = ddl_param.is_no_logging_;
+  insert_table_param.max_batch_size_ = 256;
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (OB_FAIL(tmp_insert_table_ctx.init(insert_table_param,

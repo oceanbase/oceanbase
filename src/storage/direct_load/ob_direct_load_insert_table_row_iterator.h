@@ -12,10 +12,16 @@
 
 #pragma once
 
-#include "storage/access/ob_store_row_iterator.h"
+#include "storage/blocksstable/ob_datum_row.h"
+#include "storage/ddl/ob_ddl_struct.h"
+#include "storage/direct_load/ob_direct_load_insert_table_row_handler.h"
 
 namespace oceanbase
 {
+namespace sql
+{
+class ObLoadDataStat;
+} // namespace sql
 namespace table
 {
 class ObTableLoadSqlStatistics;
@@ -23,27 +29,36 @@ class ObTableLoadSqlStatistics;
 namespace storage
 {
 class ObDirectLoadInsertTabletContext;
-class ObDirectLoadLobBuilder;
+class ObDirectLoadIStoreRowIterator;
+class ObDirectLoadDMLRowHandler;
 
-class ObDirectLoadInsertTableRowIterator : public ObIDirectLoadRowIterator
+class ObDirectLoadInsertTableRowIterator final : public ObIDirectLoadRowIterator
 {
 public:
   ObDirectLoadInsertTableRowIterator();
   virtual ~ObDirectLoadInsertTableRowIterator();
+  int init(ObDirectLoadInsertTabletContext *insert_tablet_ctx,
+           const ObIArray<ObDirectLoadIStoreRowIterator *> &row_iters,
+           ObDirectLoadDMLRowHandler *dml_row_handler,
+           sql::ObLoadDataStat *job_stat);
   int get_next_row(const blocksstable::ObDatumRow *&datum_row) override;
   int get_next_row(const bool skip_lob, const blocksstable::ObDatumRow *&row) override;
-protected:
-  int inner_init(ObDirectLoadInsertTabletContext *insert_tablet_ctx,
-                 table::ObTableLoadSqlStatistics *sql_statistics,
-                 ObDirectLoadLobBuilder &lob_builder);
-  virtual int inner_get_next_row(blocksstable::ObDatumRow *&datum_row) = 0;
+  int close();
 private:
-  int handle_lob(blocksstable::ObDatumRow &datum_row);
+  int inner_get_next_row(blocksstable::ObDatumRow *&datum_row);
+
 protected:
   ObDirectLoadInsertTabletContext *insert_tablet_ctx_;
-  table::ObTableLoadSqlStatistics *sql_statistics_;
-  ObDirectLoadLobBuilder *lob_builder_;
-  common::ObArenaAllocator lob_allocator_;
+  const ObIArray<ObDirectLoadIStoreRowIterator *> *row_iters_;
+  ObDirectLoadDMLRowHandler *dml_row_handler_;
+  sql::ObLoadDataStat *job_stat_;
+  ObDirectLoadInsertTableRowHandler row_handler_;
+  blocksstable::ObDatumRow insert_datum_row_;
+  blocksstable::ObDatumRow delete_datum_row_;
+  int64_t rowkey_column_count_;
+  int64_t column_count_;
+  int64_t pos_;
+  int64_t row_count_;
   bool is_inited_;
 };
 

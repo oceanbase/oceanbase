@@ -17,6 +17,7 @@
 #include "storage/direct_load/ob_direct_load_dml_row_handler.h"
 #include "storage/direct_load/ob_direct_load_multiple_datum_range.h"
 #include "storage/direct_load/ob_direct_load_multiple_sstable_scan_merge.h"
+#include "storage/direct_load/ob_direct_load_row_iterator.h"
 #include "storage/direct_load/ob_direct_load_sstable_scan_merge.h"
 #include "storage/direct_load/ob_direct_load_struct.h"
 
@@ -58,7 +59,7 @@ private:
   bool is_inited_;
 };
 
-class ObDirectLoadSSTableDataInsert : public ObIStoreRowIterator
+class ObDirectLoadSSTableDataInsert : public ObDirectLoadIStoreRowIterator
 {
 public:
   ObDirectLoadSSTableDataInsert();
@@ -74,7 +75,7 @@ private:
   bool is_inited_;
 };
 
-class ObDirectLoadMultipleSSTableDataInsert : public ObIStoreRowIterator
+class ObDirectLoadMultipleSSTableDataInsert : public ObDirectLoadIStoreRowIterator
 {
 public:
   ObDirectLoadMultipleSSTableDataInsert();

@@ -36,17 +36,18 @@ int64_t ObCSEncodingUtil::get_bit_size(const uint64_t v)
   }
   return bit_size;
 }
-int ObCSEncodingUtil::build_cs_column_encoding_ctx(ObEncodingHashTable *ht,
-  const ObObjTypeStoreClass store_class, const int64_t precision_bytes,
-  ObColumnCSEncodingCtx &col_ctx)
+int ObCSEncodingUtil::build_cs_column_encoding_ctx(
+    ObDictEncodingHashTable *ht,
+    const ObObjTypeStoreClass store_class,
+    const int64_t precision_bytes,
+    ObColumnCSEncodingCtx &col_ctx)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ht)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ht is null", K(ret));
   } else {
-    col_ctx.null_cnt_ = ht->get_null_list().size_;
-    col_ctx.nope_cnt_ = ht->get_nope_list().size_;
+    col_ctx.null_cnt_ = ht->get_null_cnt();
     col_ctx.ht_ = ht;
 
     switch (store_class) {
@@ -55,17 +56,13 @@ int ObCSEncodingUtil::build_cs_column_encoding_ctx(ObEncodingHashTable *ht,
       int64_t int_min = INT64_MAX;
       int64_t int_max = INT64_MIN;
       int64_t value = 0;
-      const int64_t row_count = ht->get_node_cnt();
-      for (int64_t i = 0; i < row_count; ++i) {
-        const ObDatum &datum = *ht->get_node_list()[i].datum_;
-        if (!datum.is_null()) {
-          value = datum.get_int();
-          if (value < int_min) {
-            int_min = value;
-          }
-          if (value > int_max) {
-            int_max = value;
-          }
+      FOREACH(node, *ht) {
+        value = node->datum_.get_int();
+        if (value < int_min) {
+          int_min = value;
+        }
+        if (value > int_max) {
+          int_max = value;
         }
       }
       col_ctx.integer_min_ = static_cast<uint64_t>(int_min);
@@ -78,17 +75,13 @@ int ObCSEncodingUtil::build_cs_column_encoding_ctx(ObEncodingHashTable *ht,
       int64_t uint_min = UINT64_MAX;
       int64_t uint_max = 0;
       uint64_t value = 0;
-      const int64_t row_count = ht->get_node_cnt();
-      for (int64_t i = 0; i < row_count; ++i) {
-        const ObDatum &datum = *ht->get_node_list()[i].datum_;
-        if (!datum.is_null()) {
-          value = datum.get_uint64();
-          if (value < uint_min) {
-            uint_min = value;
-          }
-          if (value > uint_max) {
-            uint_max = value;
-          }
+      FOREACH(node, *ht) {
+        value = node->datum_.get_uint64();
+        if (value < uint_min) {
+          uint_min = value;
+        }
+        if (value > uint_max) {
+          uint_max = value;
         }
       }
       col_ctx.integer_min_ = uint_min;
@@ -106,30 +99,26 @@ int ObCSEncodingUtil::build_cs_column_encoding_ctx(ObEncodingHashTable *ht,
       col_ctx.fix_data_size_ = -1;
       col_ctx.is_wide_int_ = false;
       decint_cmp_fp cmp = wide::ObDecimalIntCmpSet::get_decint_decint_cmp_func(precision_bytes, sizeof(int64_t));
-      const int64_t row_count = ht->get_node_cnt();
-      for (int64_t i = 0; OB_SUCC(ret) && i < row_count; ++i) {
-        const ObDatum &datum = *ht->get_node_list()[i].datum_;
-        if (!datum.is_null()) {
-          if (OB_UNLIKELY(datum.len_ != precision_bytes)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_ERROR("datum len is not match with precision bytes",
-                K(ret), K(datum), K(precision_bytes), K(i), K(row_count));
-          } else if (cmp(datum.get_decimal_int(), (ObDecimalInt*)&int64_min) < 0 || cmp(datum.get_decimal_int(), (ObDecimalInt*)&int64_max) > 0) {
-            col_ctx.is_wide_int_ = true;
-            break;
-          } else { // value range is not over int64_t, store as integer
-            int64_t value = 0;
-            if (sizeof(int32_t) == precision_bytes) {
-              value = datum.get_decimal_int32();
-            } else {
-              value = datum.get_decimal_int64();
-            }
-            if (value < int_min) {
-              int_min = value;
-            }
-            if (value > int_max) {
-              int_max = value;
-            }
+      FOREACH(node, *ht) {
+        const ObDatum &datum = node->datum_;
+        if (OB_UNLIKELY(datum.len_ != precision_bytes)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("datum len is not match with precision bytes", K(ret), K(datum), K(precision_bytes));
+        } else if (cmp(datum.get_decimal_int(), (ObDecimalInt*)&int64_min) < 0 || cmp(datum.get_decimal_int(), (ObDecimalInt*)&int64_max) > 0) {
+          col_ctx.is_wide_int_ = true;
+          break;
+        } else { // value range is not over int64_t, store as integer
+          int64_t value = 0;
+          if (sizeof(int32_t) == precision_bytes) {
+            value = datum.get_decimal_int32();
+          } else {
+            value = datum.get_decimal_int64();
+          }
+          if (value < int_min) {
+            int_min = value;
+          }
+          if (value > int_max) {
+            int_max = value;
           }
         }
       }
@@ -140,10 +129,9 @@ int ObCSEncodingUtil::build_cs_column_encoding_ctx(ObEncodingHashTable *ht,
 
         if (col_ctx.is_wide_int_) { // store as fixed len string
           col_ctx.fix_data_size_ = precision_bytes;
-          FOREACH(l, *ht)
-          {
-            const int64_t len = l->header_->datum_->len_;
-            col_ctx.var_data_size_ += len * l->size_;
+          FOREACH(node, *ht) {
+            const int64_t len = node->datum_.len_;
+            col_ctx.var_data_size_ += len * node->duplicate_cnt_;
             col_ctx.dict_var_data_size_ += len;
           }
         }
@@ -154,12 +142,11 @@ int ObCSEncodingUtil::build_cs_column_encoding_ctx(ObEncodingHashTable *ht,
     case ObNumberSC: {
       col_ctx.fix_data_size_ = -1;
       bool var_store = false;
-      FOREACH(l, *ht)
-      {
-        const ObDatum &datum = *l->header_->datum_;
+      FOREACH(node, *ht) {
+        const ObDatum &datum = node->datum_;
         const int64_t len =
           sizeof(ObNumberDesc) + datum.num_->desc_.len_ * sizeof(datum.num_->digits_[0]);
-        col_ctx.var_data_size_ += len * l->size_;
+        col_ctx.var_data_size_ += len * node->duplicate_cnt_;
         col_ctx.dict_var_data_size_ += len;
         if (!var_store) {
           if (col_ctx.fix_data_size_ < 0) {
@@ -180,11 +167,11 @@ int ObCSEncodingUtil::build_cs_column_encoding_ctx(ObEncodingHashTable *ht,
       col_ctx.fix_data_size_ = -1;
       col_ctx.max_string_size_ = -1;
       bool var_store = false;
-      FOREACH(l, *ht)
+      FOREACH(node, *ht)
       {
-        const int64_t len = l->header_->datum_->len_;
+        const int64_t len = node->datum_.len_;
         col_ctx.max_string_size_ = len > col_ctx.max_string_size_ ? len : col_ctx.max_string_size_;
-        col_ctx.var_data_size_ += len * l->size_;
+        col_ctx.var_data_size_ += len * node->duplicate_cnt_;
         col_ctx.dict_var_data_size_ += len;
         if (!col_ctx.has_zero_length_datum_ && 0 == len) {
           col_ctx.has_zero_length_datum_ = true;
@@ -204,10 +191,9 @@ int ObCSEncodingUtil::build_cs_column_encoding_ctx(ObEncodingHashTable *ht,
     case ObOTimestampSC: {
       col_ctx.fix_data_size_ = -1;
       bool var_store = false;
-      FOREACH(l, *ht)
-      {
-        const int64_t len = l->header_->datum_->len_;
-        col_ctx.var_data_size_ += len * l->size_;
+      FOREACH(node, *ht) {
+        const int64_t len = node->datum_.len_;
+        col_ctx.var_data_size_ += len * node->duplicate_cnt_;
         col_ctx.dict_var_data_size_ += len;
         if (!var_store) {
           if (col_ctx.fix_data_size_ < 0) {
@@ -224,10 +210,9 @@ int ObCSEncodingUtil::build_cs_column_encoding_ctx(ObEncodingHashTable *ht,
     case ObIntervalSC: {
       col_ctx.fix_data_size_ = -1;
       bool var_store = false;
-      FOREACH(l, *ht)
-      {
-        const int64_t len = l->header_->datum_->len_;
-        col_ctx.var_data_size_ += len * l->size_;
+      FOREACH(node, *ht) {
+        const int64_t len = node->datum_.len_;
+        col_ctx.var_data_size_ += len * node->duplicate_cnt_;
         col_ctx.dict_var_data_size_ += len;
         if (!var_store) {
           if (col_ctx.fix_data_size_ < 0) {

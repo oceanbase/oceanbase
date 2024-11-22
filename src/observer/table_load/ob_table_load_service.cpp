@@ -475,6 +475,7 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
     bool has_invisible_column = false;
     bool has_unused_column = false;
     bool has_roaringbitmap_column = false;
+    bool has_null_column = false;
     bool has_non_normal_local_index = false;
     // check if it is a user table
     const char *tmp_prefix = ObDirectLoadMode::is_insert_overwrite(load_mode) ? InsertOverwritePrefix : EmptyPrefix;
@@ -550,6 +551,14 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support table has roaringbitmap column", KR(ret));
       FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has roaringbitmap column", tmp_prefix);
+    }
+    // check has null column
+    else if (OB_FAIL(ObTableLoadSchema::check_has_null_column(table_schema, has_null_column))) {
+      LOG_WARN("fail to check has null column", KR(ret));
+    } else if (has_null_column) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("direct-load does not support table has null column", KR(ret));
+      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has null column", tmp_prefix);
     }
     // check if table has mlog
     else if (table_schema->required_by_mview_refresh() && !table_schema->mv_container_table()) {

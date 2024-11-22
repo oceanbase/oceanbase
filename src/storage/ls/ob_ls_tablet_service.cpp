@@ -3137,21 +3137,6 @@ int ObLSTabletService::insert_rows(
       || OB_ISNULL(row_iter)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(ctx), K(dml_param), K(column_ids), KP(row_iter));
-  } else if (dml_param.is_direct_insert()) { // direct-insert mode
-    if (OB_FAIL(direct_insert_rows(dml_param.table_param_->get_data_table().get_table_id(),
-                                   dml_param.direct_insert_task_id_,
-                                   dml_param.ddl_task_id_,
-                                   ctx.tablet_id_,
-                                   column_ids,
-                                   row_iter,
-                                   afct_num))) {
-      LOG_WARN("failed to insert rows direct", KR(ret),
-          K(dml_param.table_param_->get_data_table().get_table_id()),
-          K(dml_param.direct_insert_task_id_),
-          K(dml_param.ddl_task_id_),
-          K(ctx.tablet_id_),
-          K(column_ids));
-    }
   } else {
     ObDMLRunningCtx run_ctx(ctx,
                             dml_param,
@@ -3215,66 +3200,6 @@ int ObLSTabletService::insert_rows(
   }
   NG_TRACE(S_insert_rows_end);
 
-  return ret;
-}
-
-int ObLSTabletService::direct_insert_rows(
-    const uint64_t table_id,
-    const int64_t px_task_id,
-    const int64_t ddl_task_id,
-    const ObTabletID &tablet_id,
-    const ObIArray<uint64_t> &column_ids,
-    blocksstable::ObDatumRowIterator *row_iter,
-    int64_t &affected_rows)
-{
-  int ret = OB_SUCCESS;
-  ObTableLoadTableCtx *table_ctx = nullptr;
-  ObTableLoadUniqueKey key(table_id, ddl_task_id);
-  if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {
-    LOG_WARN("fail to get table ctx", KR(ret), K(key));
-  } else {
-    int64_t row_count = 0;
-    ObDatumRow *rows = nullptr;
-    table::ObTableLoadTransId trans_id;
-    trans_id.segment_id_ = px_task_id;
-    trans_id.trans_gid_ = 1;
-    ObTableLoadStore store(table_ctx);
-    ObTableLoadStoreTransPXWriter writer;
-    if (OB_FAIL(store.init())) {
-      LOG_WARN("fail to init store", KR(ret));
-    } else if (OB_FAIL(store.px_get_trans_writer(trans_id, writer))) {
-      LOG_WARN("fail to get trans writer", KR(ret), K(trans_id));
-    } else if (OB_FAIL(writer.prepare_write(tablet_id, column_ids))) {
-      LOG_WARN("fail to prepare write", KR(ret), K(tablet_id), K(column_ids));
-    }
-
-    while (OB_SUCC(ret) && OB_SUCC(get_next_rows(row_iter, rows, row_count))) {
-      if (OB_UNLIKELY(row_count <= 0)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("row_count should be greater than 0", K(ret));
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && (i < row_count); ++i) {
-          const ObDatumRow &row = rows[i];
-          if (OB_FAIL(writer.write(row))) {
-            LOG_WARN("fail to write", KR(ret), K(i), K(row));
-          } else {
-            ++affected_rows;
-          }
-        }
-      }
-    }
-
-    if (OB_ITER_END == ret) {
-      ret = OB_SUCCESS;
-    }
-    if (OB_SUCC(ret) && OB_FAIL(writer.finish_write())) {
-      LOG_WARN("px wirter fail to finish write", KR(ret));
-    }
-  }
-  if (OB_NOT_NULL(table_ctx)) {
-    ObTableLoadService::put_ctx(table_ctx);
-    table_ctx = nullptr;
-  }
   return ret;
 }
 

@@ -178,6 +178,7 @@
 #include "sql/optimizer/ob_log_values_table_access.h"
 #include "sql/engine/basic/ob_values_table_access_op.h"
 #include "sql/engine/cmd/ob_table_direct_insert_service.h"
+#include "sql/engine/direct_load/ob_table_direct_insert_op.h"
 
 namespace oceanbase
 {
@@ -7280,31 +7281,6 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op,
     spec.is_pdml_index_maintain_ = op.is_index_maintenance();
     spec.table_location_uncertain_ = op.is_table_location_uncertain(); // row-movement target table
     spec.is_pdml_update_split_ = op.is_pdml_update_split();
-    ObDirectLoadOptimizerCtx &direct_load_optimizer_ctx = op.get_plan()->get_optimizer_context().get_direct_load_optimizer_ctx();
-    spec.plan_->set_append_table_id(op.get_append_table_id());
-    spec.plan_->set_enable_append(direct_load_optimizer_ctx.use_direct_load());
-    spec.plan_->set_enable_inc_direct_load(ObDirectLoadMethod::is_incremental(direct_load_optimizer_ctx.load_method_));
-    spec.plan_->set_enable_replace(direct_load_optimizer_ctx.insert_mode_ == ObDirectLoadInsertMode::INC_REPLACE);
-    spec.plan_->set_online_sample_percent(op.get_plan()->get_optimizer_context()
-                                                         .get_exec_ctx()->get_table_direct_insert_ctx()
-                                                         .get_online_sample_percent());
-    spec.plan_->set_direct_load_need_sort(direct_load_optimizer_ctx.need_sort_);
-    // check is insert overwrite
-    bool is_insert_overwrite = false;
-    ObExecContext *exec_ctx = NULL;
-    ObPhysicalPlanCtx *plan_ctx = NULL;
-    if (OB_FAIL(check_is_insert_overwrite_stmt(log_plan, is_insert_overwrite))) {
-      LOG_WARN("check is insert overwrite failed", K(ret));
-    } else if (OB_FALSE_IT(spec.plan_->set_is_insert_overwrite(is_insert_overwrite))) {
-    } else if (OB_ISNULL(exec_ctx = log_plan->get_optimizer_context().get_exec_ctx())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexcepted null exec ctx", KR(ret), KP(exec_ctx));
-    } else if (OB_ISNULL(plan_ctx = exec_ctx->get_physical_plan_ctx())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null plan ctx", KR(ret), KP(plan_ctx));
-    } else {
-      plan_ctx->set_is_direct_insert_plan(direct_load_optimizer_ctx.use_direct_load());
-    }
     int64_t partition_expr_idx = OB_INVALID_INDEX;
     if (OB_FAIL(ret)) {
       // do nothing
@@ -9672,7 +9648,10 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
       } else if (op.get_insert_up()) {
         type = PHY_INSERT_ON_DUP;
       } else if (op.is_pdml()) {
-        if (op.get_plan()->get_optimizer_context().get_session_info()->get_ddl_info().is_ddl()) {
+        ObDirectLoadOptimizerCtx &direct_load_optimizer_ctx = op.get_plan()->get_optimizer_context().get_direct_load_optimizer_ctx();
+        if (direct_load_optimizer_ctx.use_direct_load()) {
+          type = PHY_TABLE_DIRECT_INSERT;
+        } else if (op.get_plan()->get_optimizer_context().get_session_info()->get_ddl_info().is_ddl()) {
           type = PHY_PX_MULTI_PART_SSTABLE_INSERT;
         } else {
           type = PHY_PX_MULTI_PART_INSERT;
@@ -10491,6 +10470,69 @@ int ObStaticEngineCG::generate_spec(ObLogExpand &op, ObExpandVecSpec &spec, cons
     } else if (OB_FAIL(spec.dup_expr_pairs_.assign(dup_expr_pairs))) {
       LOG_WARN("assign elements failed", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObStaticEngineCG::generate_spec(ObLogInsert &op,
+                                    ObTableDirectInsertSpec &spec,
+                                    const bool in_root_job)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(in_root_job);
+  const ObLogPlan *log_plan = op.get_plan();
+  if (OB_UNLIKELY(op.get_index_dml_infos().count() != 1) ||
+      OB_ISNULL(op.get_index_dml_infos().at(0)) ||
+      OB_ISNULL(log_plan)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("index dml info is invalid", K(ret), K(op.get_index_dml_infos().count()),
+        KP(op.get_index_dml_infos().at(0)), KP(log_plan));
+  } else {
+    const IndexDMLInfo &index_dml_info = *op.get_index_dml_infos().at(0);
+    phy_plan_->set_use_pdml(true);
+    spec.is_returning_ = op.pdml_is_returning();
+    spec.is_pdml_index_maintain_ = op.is_index_maintenance();
+    spec.table_location_uncertain_ = op.is_table_location_uncertain(); // row-movement target table
+    spec.is_pdml_update_split_ = op.is_pdml_update_split();
+    ObDirectLoadOptimizerCtx &direct_load_optimizer_ctx = op.get_plan()->get_optimizer_context().get_direct_load_optimizer_ctx();
+    spec.plan_->set_append_table_id(op.get_append_table_id());
+    spec.plan_->set_enable_append(direct_load_optimizer_ctx.use_direct_load());
+    spec.plan_->set_enable_inc_direct_load(ObDirectLoadMethod::is_incremental(direct_load_optimizer_ctx.load_method_));
+    spec.plan_->set_enable_replace(direct_load_optimizer_ctx.insert_mode_ == ObDirectLoadInsertMode::INC_REPLACE);
+    spec.plan_->set_online_sample_percent(op.get_plan()->get_optimizer_context()
+                                                         .get_exec_ctx()->get_table_direct_insert_ctx()
+                                                         .get_online_sample_percent());
+    spec.plan_->set_direct_load_need_sort(direct_load_optimizer_ctx.need_sort_);
+    // check is insert overwrite
+    bool is_insert_overwrite = false;
+    ObExecContext *exec_ctx = NULL;
+    ObPhysicalPlanCtx *plan_ctx = NULL;
+    if (OB_FAIL(check_is_insert_overwrite_stmt(log_plan, is_insert_overwrite))) {
+      LOG_WARN("check is insert overwrite failed", K(ret));
+    } else if (OB_FALSE_IT(spec.plan_->set_is_insert_overwrite(is_insert_overwrite))) {
+    } else if (OB_ISNULL(exec_ctx = log_plan->get_optimizer_context().get_exec_ctx())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexcepted null exec ctx", KR(ret), KP(exec_ctx));
+    } else if (OB_ISNULL(plan_ctx = exec_ctx->get_physical_plan_ctx())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null plan ctx", KR(ret), KP(plan_ctx));
+    } else {
+      plan_ctx->set_is_direct_insert_plan(direct_load_optimizer_ctx.use_direct_load());
+    }
+    int64_t partition_expr_idx = OB_INVALID_INDEX;
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(get_pdml_partition_id_column_idx(spec.get_child(0)->output_, partition_expr_idx))) {
+      LOG_WARN("failed to get partition id column idx", K(ret));
+    } else {
+      spec.row_desc_.set_part_id_index(partition_expr_idx);
+    }
+    LOG_TRACE("pdml static cg information", K(ret), K(partition_expr_idx), K(index_dml_info));
+    // 处理pdml-insert中的insert_row_exprs
+    OZ(dml_cg_service_.generate_insert_ctdef(op, index_dml_info, spec.ins_ctdef_));
+    // table columns exprs in dml need to set IS_COLUMNLIZED flag
+    OZ(mark_expr_self_produced(index_dml_info.column_exprs_));
+    OZ(mark_expr_self_produced(index_dml_info.column_convert_exprs_));
   }
   return ret;
 }

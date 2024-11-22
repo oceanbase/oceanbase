@@ -291,7 +291,7 @@ public:
       load_param.table_id_ = table_schema->get_table_id();
       load_param.parallel_ = task_param.get_parallel();
       load_param.session_count_ = task_param.get_parallel();
-      load_param.batch_size_ = 100;
+      load_param.batch_size_ = ObTableLoadParam::DEFAULT_BATCH_SIZE;
       load_param.max_error_row_count_ = task_param.get_max_error_row_count();
       load_param.column_count_ = column_ids.count();
       load_param.need_sort_ = true;

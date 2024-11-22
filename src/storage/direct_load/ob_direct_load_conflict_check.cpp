@@ -74,7 +74,7 @@ ObDirectLoadConflictCheck::ObDirectLoadConflictCheck()
 ObDirectLoadConflictCheck::~ObDirectLoadConflictCheck()
 {
   if (origin_iter_ != nullptr) {
-    origin_iter_->~ObIStoreRowIterator();
+    origin_iter_->~ObDirectLoadIStoreRowIterator();
     allocator_.free(origin_iter_);
     origin_iter_ = nullptr;
   }
@@ -323,6 +323,10 @@ int ObDirectLoadSSTableConflictCheck::init(
     } else if (OB_FAIL(conflict_check_.init(param, &scan_merge_))) {
       LOG_WARN("fail to init conflict_check_", KR(ret));
     } else {
+      row_flag_.uncontain_hidden_pk_ = false;
+      row_flag_.has_multi_version_cols_ = false;
+      // row_flag_.has_delete_row_ = ?;
+      column_count_ = param.table_data_desc_.column_count_;
       is_inited_ = true;
     }
   }
@@ -378,6 +382,10 @@ int ObDirectLoadMultipleSSTableConflictCheck::init(
     } else if (OB_FAIL(conflict_check_.init(param, &scan_merge_))) {
       LOG_WARN("fail to init conflict_check_", KR(ret));
     } else {
+      row_flag_.uncontain_hidden_pk_ = false;
+      row_flag_.has_multi_version_cols_ = false;
+      // row_flag_.has_delete_row_ = ?;
+      column_count_ = param.table_data_desc_.column_count_;
       is_inited_ = true;
     }
   }

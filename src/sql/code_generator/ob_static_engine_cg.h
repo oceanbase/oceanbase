@@ -150,6 +150,8 @@ class HashRollupRTInfo;
 
 class ObMergeGroupByVecSpec;
 class ObNestedLoopJoinVecSpec;
+class ObTableDirectInsertSpec;
+
 typedef common::ObList<uint64_t, common::ObIAllocator> DASTableIdList;
 typedef common::ObSEArray<common::ObSEArray<int64_t, 8, common::ModulePageAllocator, true>,
                           1, common::ModulePageAllocator, true> RowParamMap;
@@ -474,6 +476,9 @@ private:
   int generate_spec(ObLogExpand &op, ObExpandVecSpec &spec, const bool in_root_job);
   template<typename MergeDistinctSpecType>
   int generate_merge_distinct_spec(ObLogDistinct &op, MergeDistinctSpecType &spec, const bool in_root_job);
+
+  // direct load
+  int generate_spec(ObLogInsert &op, ObTableDirectInsertSpec &spec, const bool in_root_job);
 private:
   int disable_use_rich_format(const ObLogicalOperator &op, ObOpSpec &spec);
   int add_update_set(ObSubPlanFilterSpec &spec);

@@ -19,6 +19,7 @@
 #include "storage/direct_load/ob_direct_load_origin_table.h"
 #include "storage/direct_load/ob_direct_load_sstable_scan_merge.h"
 #include "storage/direct_load/ob_direct_load_external_multi_partition_table.h"
+#include "storage/direct_load/ob_direct_load_row_iterator.h"
 
 namespace oceanbase
 {
@@ -86,7 +87,7 @@ private:
   common::ObArenaAllocator range_allocator_;
   ObDirectLoadConflictCheckParam param_;
   ObIStoreRowIterator *load_iter_;
-  ObIStoreRowIterator *origin_iter_;
+  ObDirectLoadIStoreRowIterator *origin_iter_;
   const blocksstable::ObDatumRow *origin_row_;
   blocksstable::ObDatumRow append_row_;
   ObDatumRange new_range_;
@@ -95,7 +96,7 @@ private:
   bool is_inited_;
 };
 
-class ObDirectLoadSSTableConflictCheck : public ObIStoreRowIterator
+class ObDirectLoadSSTableConflictCheck : public ObDirectLoadIStoreRowIterator
 {
 public:
   ObDirectLoadSSTableConflictCheck();
@@ -110,7 +111,7 @@ private:
   bool is_inited_;
 };
 
-class ObDirectLoadMultipleSSTableConflictCheck : public ObIStoreRowIterator
+class ObDirectLoadMultipleSSTableConflictCheck : public ObDirectLoadIStoreRowIterator
 {
 public:
   ObDirectLoadMultipleSSTableConflictCheck();

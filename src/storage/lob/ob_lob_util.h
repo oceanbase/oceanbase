@@ -174,8 +174,13 @@ public:
                                const ObLobStorageParam &lob_storage_param,
                                ObObj &obj,
                                const int64_t timeout_ts);
+
+  // lob_allocator is mainly used for outrow lob read and write memory allocation,
+  // that can be released after lob inset to avoid hold too many memory
+  // and res_allocator is mainly used to alloc lob result datum memory in main table
   // should call iter.close outter
-  static int insert_lob_column(ObIAllocator &allocator,
+  static int insert_lob_column(ObIAllocator &res_allocator,
+                               ObIAllocator &lob_allocator,
                                transaction::ObTxDesc *tx_desc,
                                share::ObTabletCacheInterval &lob_id_geneator,
                                const share::ObLSID ls_id,

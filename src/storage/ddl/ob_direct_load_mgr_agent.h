@@ -45,11 +45,20 @@ public:
       ObIStoreRowIterator *iter,
       int64_t &affected_rows,
       ObInsertMonitor *insert_monitor = nullptr);
+  int fill_sstable_slice(
+      const ObDirectLoadSliceInfo &slice_info,
+      const blocksstable::ObBatchDatumRows &datum_rows,
+      ObInsertMonitor *insert_monitor = nullptr);
   int fill_lob_sstable_slice(
       ObIAllocator &allocator,
       const ObDirectLoadSliceInfo &slice_info /*contains data_tablet_id, lob_slice_id, start_seq*/,
       share::ObTabletCacheInterval &pk_interval,
       blocksstable::ObDatumRow &datum_row);
+  int fill_lob_sstable_slice(
+      ObIAllocator &allocator,
+      const ObDirectLoadSliceInfo &slice_info /*contains data_tablet_id, lob_slice_id, start_seq*/,
+      share::ObTabletCacheInterval &pk_interval,
+      blocksstable::ObBatchDatumRows &datum_rows);
   int fill_lob_meta_sstable_slice(
       const ObDirectLoadSliceInfo &slice_info /*contains data_tablet_id, lob_slice_id, start_seq*/,
       ObIStoreRowIterator *iter,
@@ -81,11 +90,20 @@ private:
       ObIStoreRowIterator *iter,
       int64_t &affected_rows,
       ObInsertMonitor *insert_monitor = nullptr);
+  int fill_sstable_slice_for_ss(
+      const ObDirectLoadSliceInfo &slice_info,
+      const blocksstable::ObBatchDatumRows &datum_rows,
+      ObInsertMonitor *insert_monitor = nullptr);
   int fill_lob_sstable_slice_for_ss(
       ObIAllocator &allocator,
       const ObDirectLoadSliceInfo &slice_info /*contains data_tablet_id, lob_slice_id, start_seq*/,
       share::ObTabletCacheInterval &pk_interval,
       blocksstable::ObDatumRow &datum_row);
+  int fill_lob_sstable_slice_for_ss(
+      ObIAllocator &allocator,
+      const ObDirectLoadSliceInfo &slice_info /*contains data_tablet_id, lob_slice_id, start_seq*/,
+      share::ObTabletCacheInterval &pk_interval,
+      blocksstable::ObBatchDatumRows &datum_rows);
   int fill_lob_meta_sstable_slice_for_ss(
       const ObDirectLoadSliceInfo &slice_info /*contains data_tablet_id, lob_slice_id, start_seq*/,
       ObIStoreRowIterator *iter,
@@ -103,11 +121,20 @@ private:
       ObIStoreRowIterator *iter,
       int64_t &affected_rows,
       ObInsertMonitor *insert_monitor = nullptr);
+  int fill_sstable_slice_for_sn(
+      const ObDirectLoadSliceInfo &slice_info,
+      const blocksstable::ObBatchDatumRows &datum_rows,
+      ObInsertMonitor *insert_monitor = nullptr);
   int fill_lob_sstable_slice_for_sn(
       ObIAllocator &allocator,
       const ObDirectLoadSliceInfo &slice_info /*contains data_tablet_id, lob_slice_id, start_seq*/,
       share::ObTabletCacheInterval &pk_interval,
       blocksstable::ObDatumRow &datum_row);
+  int fill_lob_sstable_slice_for_sn(
+      ObIAllocator &allocator,
+      const ObDirectLoadSliceInfo &slice_info /*contains data_tablet_id, lob_slice_id, start_seq*/,
+      share::ObTabletCacheInterval &pk_interval,
+      blocksstable::ObBatchDatumRows &datum_rows);
   int fill_lob_meta_sstable_slice_for_sn(
       const ObDirectLoadSliceInfo &slice_info /*contains data_tablet_id, lob_slice_id, start_seq*/,
       ObIStoreRowIterator *iter,

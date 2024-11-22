@@ -298,7 +298,7 @@ ObDirectLoadSSTableDataFuse::ObDirectLoadSSTableDataFuse()
 ObDirectLoadSSTableDataFuse::~ObDirectLoadSSTableDataFuse()
 {
   if (nullptr != origin_iter_) {
-    origin_iter_->~ObIStoreRowIterator();
+    origin_iter_->~ObDirectLoadIStoreRowIterator();
     allocator_.free(origin_iter_);
     origin_iter_ = nullptr;
   }
@@ -334,6 +334,10 @@ int ObDirectLoadSSTableDataFuse::init(const ObDirectLoadDataFuseParam &param,
       if (OB_FAIL(data_fuse_.init(param, origin_iter_, &scan_merge_))) {
         LOG_WARN("fail to init data fuse", KR(ret));
       } else {
+        row_flag_.uncontain_hidden_pk_ = false;
+        row_flag_.has_multi_version_cols_ = false;
+        // row_flag_.has_delete_row_ = ?;
+        column_count_ = param.table_data_desc_.column_count_;
         is_inited_ = true;
       }
     }
@@ -366,7 +370,7 @@ ObDirectLoadMultipleSSTableDataFuse::ObDirectLoadMultipleSSTableDataFuse()
 ObDirectLoadMultipleSSTableDataFuse::~ObDirectLoadMultipleSSTableDataFuse()
 {
   if (nullptr != origin_iter_) {
-    origin_iter_->~ObIStoreRowIterator();
+    origin_iter_->~ObDirectLoadIStoreRowIterator();
     allocator_.free(origin_iter_);
     origin_iter_ = nullptr;
   }
@@ -405,6 +409,10 @@ int ObDirectLoadMultipleSSTableDataFuse::init(
       if (OB_FAIL(data_fuse_.init(param, origin_iter_, &scan_merge_))) {
         LOG_WARN("fail to init data fuse", KR(ret));
       } else {
+        row_flag_.uncontain_hidden_pk_ = false;
+        row_flag_.has_multi_version_cols_ = false;
+        // row_flag_.has_delete_row_ = ?;
+        column_count_ = param.table_data_desc_.column_count_;
         is_inited_ = true;
       }
     }

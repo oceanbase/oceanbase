@@ -21,6 +21,10 @@
 
 namespace oceanbase
 {
+namespace storage
+{
+class ObColumnSchemaItem;
+} // namespace storage
 namespace sql
 {
 
@@ -55,9 +59,30 @@ public:
    */
   struct ColumnBlock : public Block
   {
+    static int calc_vector_size(const ObIVector *vector,
+                                const uint16_t *selector,
+                                const ObLength length,
+                                const int64_t size,
+                                int64_t &batch_mem_size);
+    static int vector_to_buf(const ObIVector *vector,
+                             const uint16_t *selector,
+                             const ObLength length,
+                             const int64_t size,
+                             char *head,
+                             int64_t &pos);
+    static int vector_from_buf(char *buf,
+                               int64_t &pos,
+                               const int64_t size,
+                               ObIVector *vector);
+
     static int calc_rows_size(ObEvalCtx &ctx,
                               const ObExprPtrIArray &exprs,
                               const IVectorPtrs &vectors,
+                              const uint16_t *selector,
+                              const ObArray<ObLength> &lengths,
+                              const int64_t size,
+                              int64_t &batch_mem_size);
+    static int calc_rows_size(const IVectorPtrs &vectors,
                               const uint16_t *selector,
                               const ObArray<ObLength> &lengths,
                               const int64_t size,
@@ -77,6 +102,12 @@ public:
                   const ObArray<ObLength> &lengths,
                   const int64_t size,
                   const int64_t batch_mem_size);
+    int add_batch(ShrinkBuffer &buf,
+                  const IVectorPtrs &vectors,
+                  const uint16_t *selector,
+                  const ObArray<ObLength> &lengths,
+                  const int64_t size,
+                  const int64_t batch_mem_size);
 
     int get_next_batch(const ObExprPtrIArray &exprs,
                        ObEvalCtx &ctx,
@@ -85,6 +116,12 @@ public:
                        const int32_t start_read_pos,
                        int32_t &batch_rows,
                        int32_t &batch_pos) const;
+    int get_next_batch(const IVectorPtrs &vectors,
+                       const ObArray<ObLength> &lengths,
+                       const int32_t start_read_pos,
+                       int32_t &batch_rows,
+                       int32_t &batch_pos) const;
+
     int get_nested_batch(ObExpr &expr, ObEvalCtx &ctx, char *buf, int64_t &pos, const int64_t size) const;
   private:
     inline static int64_t get_header_size(const int64_t vec_cnt)
@@ -111,6 +148,8 @@ public:
     int get_next_batch(const ObExprPtrIArray &exprs,
                        ObEvalCtx &ctx,
                        const int64_t max_rows,
+                       int64_t &read_rows);
+    int get_next_batch(const IVectorPtrs &vectors,
                        int64_t &read_rows);
 
     inline bool has_rest_row_in_batch() const { return rest_row_cnt_ > 0; }
@@ -169,8 +208,19 @@ public:
            const bool enable_dump,
            const bool reuse_vector_array,
            const common::ObCompressorType compressor_type);
+  // for vector interface
+  int init(const IVectorPtrs &vectors,
+           const int64_t max_batch_size,
+           const lib::ObMemAttr &mem_attr,
+           const int64_t mem_limit,
+           const bool enable_dump,
+           const common::ObCompressorType compressor_type);
+  static int init_vectors(const common::ObIArray<storage::ObColumnSchemaItem> &col_array,
+                          common::ObIAllocator &allocator,
+                          IVectorPtrs &vectors);
 
   int init_batch_ctx(const ObExprPtrIArray &exprs);
+  int init_batch_ctx(const IVectorPtrs &vectors);
 
   int begin(Iterator &it)
   {
@@ -178,6 +228,9 @@ public:
   }
   int add_batch(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &ctx,
                 const ObBatchRows &brs, int64_t &stored_rows_count);
+  int add_batch(const IVectorPtrs &vectors,
+                const ObBatchRows &brs,
+                int64_t &stored_rows_count);
   inline int64_t get_col_cnt() const { return col_cnt_; }
 
 private:

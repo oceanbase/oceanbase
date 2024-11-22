@@ -208,6 +208,7 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
 }
 
 int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
+                                               ObIAllocator &lob_allocator,
                                                transaction::ObTxDesc *tx_desc,
                                                share::ObTabletCacheInterval &lob_id_geneator,
                                                const share::ObLSID ls_id,
@@ -239,7 +240,18 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
       LOG_WARN("fail to get lob data byte len", K(ret), K(src));
     } else if (src.has_inrow_data() && lob_mngr->can_write_inrow(byte_len, lob_storage_param.inrow_threshold_)) {
       // do fast inrow
-      if (OB_FAIL(src.get_inrow_data(data))) {
+      if (src.is_inrow_disk_lob_locator()) {
+        // if is disk inrow lob, no need alloc new memory, just reset lob common header
+        char *buf = src.ptr_;
+        ObLobCommon *lob_comm = new (buf) ObLobCommon();
+        if (lob_comm->buffer_ != buf + sizeof(ObLobCommon)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("lob common buffer ptr is invalid", K(ret), KPC(lob_comm));
+        } else {
+          datum.set_lob_data(*lob_comm, src.size_);
+          iter.set_end();
+        }
+      } else if (OB_FAIL(src.get_inrow_data(data))) {
         LOG_WARN("fail to get inrow data", K(ret), K(src));
       } else {
         void *buf = allocator.alloc(data.length() + sizeof(ObLobCommon));
@@ -271,6 +283,7 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
       lob_param.lob_id_geneator_ = &lob_id_geneator;
       lob_param.inrow_threshold_ = lob_storage_param.inrow_threshold_;
       lob_param.src_tenant_id_ = src_tenant_id;
+      lob_param.set_tmp_allocator(&lob_allocator);
       if (!src.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid src lob locator.", K(ret));

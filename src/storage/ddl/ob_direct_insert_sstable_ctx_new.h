@@ -340,12 +340,23 @@ public:
       ObIStoreRowIterator *iter,
       int64_t &affected_rows,
       ObInsertMonitor *insert_monitor = NULL);
+  virtual int fill_sstable_slice(
+      const ObDirectLoadSliceInfo &slice_info,
+      const share::SCN &start_scn,
+      const blocksstable::ObBatchDatumRows &datum_rows,
+      ObInsertMonitor *insert_monitor = NULL);
   virtual int fill_lob_sstable_slice(
       ObIAllocator &allocator,
       const ObDirectLoadSliceInfo &slice_info /*contains data_tablet_id, lob_slice_id, start_seq*/,
       const share::SCN &start_scn,
       share::ObTabletCacheInterval &pk_interval,
       blocksstable::ObDatumRow &datum_row);
+  virtual int fill_lob_sstable_slice(
+      ObIAllocator &allocator,
+      const ObDirectLoadSliceInfo &slice_info /*contains data_tablet_id, lob_slice_id, start_seq*/,
+      const share::SCN &start_scn,
+      share::ObTabletCacheInterval &pk_interval,
+      blocksstable::ObBatchDatumRows &datum_rows);
   // for delete lob in incremental direct load only
   virtual int fill_lob_meta_sstable_slice(
       const ObDirectLoadSliceInfo &slice_info /*contains data_tablet_id, lob_slice_id, start_seq*/,

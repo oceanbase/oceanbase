@@ -402,7 +402,6 @@ int ObTableLoadPreSorter::build_merge_param(ObDirectLoadMergeParam& merge_param)
   merge_param.lob_column_idxs_ = &(ctx_->schema_.lob_column_idxs_);
   merge_param.table_data_desc_ = store_ctx_->data_store_table_ctx_->table_data_desc_;
   merge_param.datum_utils_ = &(ctx_->schema_.datum_utils_);
-  merge_param.lob_column_idxs_ = &(ctx_->schema_.lob_column_idxs_);
   merge_param.col_descs_ = &(ctx_->schema_.column_descs_);
   merge_param.lob_id_table_data_desc_ = store_ctx_->data_store_table_ctx_->lob_id_table_data_desc_;
   merge_param.lob_meta_datum_utils_ = &(ctx_->schema_.lob_meta_datum_utils_);

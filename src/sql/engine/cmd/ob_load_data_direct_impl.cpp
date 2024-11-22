@@ -2373,9 +2373,10 @@ int ObLoadDataDirectImpl::init_execute_param()
     int64_t hint_batch_size = 0;
     if (OB_FAIL(hint.get_value(ObLoadDataHint::BATCH_SIZE, hint_batch_size))) {
       LOG_WARN("fail to get value of BATCH_SIZE", KR(ret), K(hint));
+    } else if (hint_batch_size > 0) {
+      execute_param_.batch_row_count_ = MIN(hint_batch_size, ObTableLoadParam::MAX_BATCH_SIZE);
     } else {
-      execute_param_.batch_row_count_ =
-        hint_batch_size > 0 ? hint_batch_size : DEFAULT_BUFFERRED_ROW_COUNT;
+      execute_param_.batch_row_count_ = ObTableLoadParam::DEFAULT_BATCH_SIZE;
     }
   }
   // online_opt_stat_gather_

@@ -748,8 +748,7 @@ int ObAccessService::check_write_allowed_(
     enable_table_lock = false;
     ret = OB_SUCCESS;
   }
-  if (!dml_param.is_direct_insert()
-      && OB_FAIL(check_tenant_out_of_memstore_limit_(is_out_of_mem))) {
+  if (OB_FAIL(check_tenant_out_of_memstore_limit_(is_out_of_mem))) {
     LOG_WARN("fail to check tenant out of mem limit", K(ret));
   } else if (is_out_of_mem && !tablet_id.is_inner_tablet()) {
     ret = OB_TENANT_OUT_OF_MEM;
@@ -776,7 +775,7 @@ int ObAccessService::check_write_allowed_(
 
     if (!enable_table_lock) {
       // do nothing
-    } else if (dml_param.is_direct_insert() || is_local_index_table) {
+    } else if (is_local_index_table) {
       // skip table lock
     } else if (OB_FAIL(get_lock_id(tablet_id, lock_id))) {
       LOG_WARN("get lock id failed", K(ret), K(tablet_id));

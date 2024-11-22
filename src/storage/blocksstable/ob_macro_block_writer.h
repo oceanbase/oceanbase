@@ -37,6 +37,7 @@
 #include "storage/blocksstable/ob_macro_seq_generator.h"
 #include "storage/compaction/ob_compaction_util.h"
 #include "storage/compaction/ob_sstable_merge_history.h"
+#include "storage/blocksstable/ob_batch_datum_rows.h"
 
 namespace oceanbase
 {
@@ -160,6 +161,9 @@ public:
                                  const ObMicroBlockData *micro_block_data);
   virtual int append_micro_block(const ObMicroBlock &micro_block, const ObMacroBlockDesc *curr_macro_desc = nullptr);
   virtual int append_row(const ObDatumRow &row, const ObMacroBlockDesc *curr_macro_desc = nullptr);
+  int data_aggregator_eval(const ObBatchDatumRows &datum_rows, const int64_t start, const int64_t write_row_count);
+  virtual int append_batch(const ObBatchDatumRows &datum_rows,
+                           const ObMacroBlockDesc *curr_macro_desc = nullptr);
   // TODO(baichangmin): SSTableRebuilder disabled in SS mode. Finish SN route later.
   int append_macro_block(const ObDataMacroBlockMeta &macro_meta)
   {
@@ -197,12 +201,17 @@ protected:
 
 private:
   int append_row(const ObDatumRow &row, const int64_t split_size);
+  int append_batch(const ObBatchDatumRows &datum_rows,
+                   const int64_t split_size);
   int append(const ObDatumRow &row);
+  int append(const ObBatchDatumRows &datum_rows);
+  int append(const ObBatchDatumRows &datum_rows, const int64_t start, const int64_t write_row_count);
   int append(const ObDataMacroBlockMeta &macro_meta, const ObMicroBlockData *micro_block_data);
   int check_order(const ObDatumRow &row);
   int init_macro_seq_generator(const blocksstable::ObMacroSeqParam &macro_seq_param);
   int init_hash_index_builder();
   int append_row_and_hash_index(const ObDatumRow &row);
+  int append_batch_to_micro_block(const ObBatchDatumRows &datum_rows, const int64_t start, const int64_t write_row_count);
   int init_pre_agg_util(const ObDataStoreDesc &data_store_desc);
   void release_pre_agg_util();
   int agg_micro_block(const ObMicroIndexInfo &micro_index_info);
@@ -233,6 +242,7 @@ private:
       int64_t *column_checksum);
   int flush_reuse_macro_block(const ObDataMacroBlockMeta &macro_meta);
   int update_micro_commit_info(const ObDatumRow &row);
+  int update_micro_commit_info(const ObBatchDatumRows &datum_rows, const int64_t start, const int64_t write_row_count);
   void dump_micro_block(ObIMicroBlockWriter &micro_writer);
   void dump_macro_block(ObMacroBlock &macro_block);
   int exec_callback(const ObStorageObjectHandle &macro_handle, ObMacroBlock *macro_block);
@@ -281,6 +291,7 @@ private:
   ObSSTablePrivateObjectCleaner *object_cleaner_;
   char *io_buf_;
   ObIMacroBlockValidator *validator_;
+  bool is_cs_encoding_writer_;
 };
 
 struct ObIMacroBlockValidator

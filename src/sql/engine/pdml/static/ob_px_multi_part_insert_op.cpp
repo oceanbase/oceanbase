@@ -15,7 +15,6 @@
 #include "storage/access/ob_dml_param.h"
 #include "storage/tx_storage/ob_access_service.h"
 #include "sql/engine/dml/ob_dml_service.h"
-#include "sql/engine/cmd/ob_table_direct_insert_service.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -48,21 +47,10 @@ int ObPxMultiPartInsertOp::inner_open()
   } else if (OB_FAIL(data_driver_.init(get_spec(), ctx_.get_allocator(), ins_rtdef_, this, this,
                                        MY_SPEC.ins_ctdef_.is_heap_table_))) {
     LOG_WARN("failed to init data driver", K(ret));
-  }
-  if (OB_SUCC(ret)) {
-    const ObPhysicalPlan *plan = GET_PHY_PLAN_CTX(ctx_)->get_phy_plan();
-    if (GET_PHY_PLAN_CTX(ctx_)->get_is_direct_insert_plan()) {
-      int64_t px_task_id = ctx_.get_px_task_id() + 1;
-      int64_t ddl_task_id = plan->get_ddl_task_id();
-      if (OB_FAIL(ObTableDirectInsertService::open_task(
-          plan->get_append_table_id(), px_task_id, ddl_task_id, table_ctx_))) {
-        LOG_WARN("failed to open table direct insert task", KR(ret),
-            K(plan->get_append_table_id()), K(px_task_id), K(ddl_task_id));
-      } else {
-        ins_rtdef_.das_rtdef_.direct_insert_task_id_ = px_task_id;
-        ins_rtdef_.das_rtdef_.ddl_task_id_ = ddl_task_id;
-      }
-    }
+  } else if (OB_UNLIKELY(GET_PHY_PLAN_CTX(ctx_)->get_is_direct_insert_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("direct-insert plan should not use pdml op",
+        KR(ret), K(GET_PHY_PLAN_CTX(ctx_)->get_is_direct_insert_plan()));
   }
   LOG_TRACE("pdml static insert op", K(ret), K_(MY_SPEC.row_desc), K_(MY_SPEC.ins_ctdef));
   return ret;
@@ -108,20 +96,6 @@ int ObPxMultiPartInsertOp::inner_close()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  const ObPhysicalPlan *plan = GET_PHY_PLAN_CTX(ctx_)->get_phy_plan();
-  if (GET_PHY_PLAN_CTX(ctx_)->get_is_direct_insert_plan()) {
-    int64_t px_task_id = ctx_.get_px_task_id() + 1;
-    int64_t ddl_task_id = plan->get_ddl_task_id();
-    int error_code = (static_cast<const ObPxMultiPartInsertOpInput *>(input_))->get_error_code();
-    if (OB_TMP_FAIL(ObTableDirectInsertService::close_task(plan->get_append_table_id(),
-                                                           px_task_id,
-                                                           ddl_task_id,
-                                                           table_ctx_,
-                                                           error_code))) {
-      LOG_WARN("failed to close table direct insert task", KR(tmp_ret),
-          K(plan->get_append_table_id()), K(px_task_id), K(ddl_task_id), K(error_code));
-    }
-  }
   if (OB_FAIL(ObTableModifyOp::inner_close())) {
     LOG_WARN("failed to inner close table modify", K(ret));
   } else {

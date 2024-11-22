@@ -75,6 +75,7 @@ public:
   static int check_has_unused_column(const share::schema::ObTableSchema *table_schema, bool &bret);
   static int check_has_roaringbitmap_column(const share::schema::ObTableSchema *table_schema, bool &bret);
   static int check_has_lob_column(const share::schema::ObTableSchema *table_schema, bool &bret);
+  static int check_has_null_column(const share::schema::ObTableSchema *table_schema, bool &bret);
   static int check_has_non_local_index(share::schema::ObSchemaGetterGuard &schema_guard,
                                        const share::schema::ObTableSchema *table_schema,
                                        bool &bret);
@@ -121,6 +122,7 @@ public:
   share::schema::ObPartitionLevel part_level_;
   int64_t schema_version_;
   uint64_t lob_meta_table_id_;
+  int64_t lob_inrow_threshold_;
   int64_t index_table_count_;
   common::ObArray<int64_t> lob_column_idxs_;
   // if it is a heap table, it contains hidden primary key column
@@ -131,6 +133,7 @@ public:
   common::ObArray<share::schema::ObColDesc> lob_meta_column_descs_;
   blocksstable::ObStorageDatumUtils lob_meta_datum_utils_;
   blocksstable::ObStoreCmpFuncs cmp_funcs_; // for sql statistics
+  common::ObIVector *non_partitioned_tablet_id_vector_;
   bool is_inited_;
 };
 

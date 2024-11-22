@@ -13,7 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_string_column_encoder.h"
-#include "storage/blocksstable/encoding/ob_encoding_hash_util.h"
+#include "ob_dict_encoding_hash_table.h"
 #include "ob_column_datum_iter.h"
 #include "ob_cs_encoding_util.h"
 #include "lib/codec/ob_codecs.h"

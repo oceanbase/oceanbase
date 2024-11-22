@@ -107,7 +107,7 @@ public:
 protected:
   ObPDMLOpDataDriver data_driver_;
   ObInsRtDef ins_rtdef_;
-  observer::ObTableLoadTableCtx *table_ctx_;
+  observer::ObTableLoadTableCtx *table_ctx_; // deprecated
   DISALLOW_COPY_AND_ASSIGN(ObPxMultiPartInsertOp);
 };
 

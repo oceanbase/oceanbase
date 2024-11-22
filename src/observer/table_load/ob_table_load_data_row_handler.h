@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include "storage/blocksstable/ob_batch_datum_rows.h"
 #include "storage/blocksstable/ob_datum_row.h"
 #include "sql/engine/cmd/ob_load_data_utils.h"
 #include "storage/direct_load/ob_direct_load_dml_row_handler.h"
@@ -49,11 +50,13 @@ public:
            ObTableLoadErrorRowHandler *error_row_handler,
            hash::ObHashMap<ObTableID, ObTableLoadStoreTableCtx *> *index_store_table_ctx_map);
   int handle_insert_row(const ObTabletID tablet_id, const blocksstable::ObDatumRow &row) override;
+  int handle_insert_batch(const ObTabletID &tablet_id, const blocksstable::ObBatchDatumRows &datum_rows) override;
   int handle_delete_row(const ObTabletID tablet_id, const blocksstable::ObDatumRow &row)
   {
     return OB_ERR_UNEXPECTED;
   }
   int handle_insert_row_with_multi_version(const ObTabletID tablet_id, const blocksstable::ObDatumRow &row) override;
+  int handle_insert_batch_with_multi_version(const ObTabletID &tablet_id, const blocksstable::ObBatchDatumRows &datum_rows) override;
   int handle_update_row(const blocksstable::ObDatumRow &row);
   int handle_update_row(common::ObArray<const ObDirectLoadExternalRow *> &rows,
                         const ObDirectLoadExternalRow *&row);

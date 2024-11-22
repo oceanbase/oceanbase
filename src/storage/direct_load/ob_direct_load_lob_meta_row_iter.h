@@ -32,11 +32,19 @@ public:
   {
     return OB_ERR_UNEXPECTED;
   }
+  int handle_insert_batch(const ObTabletID &tablet_id, const blocksstable::ObBatchDatumRows &datum_rows) override
+  {
+    return OB_ERR_UNEXPECTED;
+  }
   int handle_delete_row(const ObTabletID tablet_id, const blocksstable::ObDatumRow &row)
   {
     return OB_ERR_UNEXPECTED;
   }
   int handle_insert_row_with_multi_version(const ObTabletID tablet_id, const blocksstable::ObDatumRow &row)
+  {
+    return OB_ERR_UNEXPECTED;
+  }
+  int handle_insert_batch_with_multi_version(const ObTabletID &tablet_id, const blocksstable::ObBatchDatumRows &datum_rows)
   {
     return OB_ERR_UNEXPECTED;
   }
@@ -94,7 +102,7 @@ private:
   ObDirectLoadMultipleDatumRange scan_range_;
   ObDirectLoadMultipleSSTableScanMerge scan_merge_;
   ObDirectLoadOriginTable *origin_table_;
-  ObIStoreRowIterator *origin_iter_;
+  ObDirectLoadIStoreRowIterator *origin_iter_;
   common::ObArenaAllocator range_allocator_;
   blocksstable::ObDatumRange range_;
   ObDirectLoadLobIdConflictHandler conflict_handler_;

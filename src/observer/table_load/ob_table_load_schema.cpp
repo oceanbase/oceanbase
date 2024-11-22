@@ -16,6 +16,7 @@
 #include "observer/table_load/ob_table_load_utils.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/schema/ob_multi_version_schema_service.h"
+#include "storage/direct_load/ob_direct_load_vector_utils.h"
 #include "storage/lob/ob_lob_meta.h"
 
 namespace oceanbase
@@ -380,6 +381,24 @@ int ObTableLoadSchema::check_has_lob_column(const ObTableSchema *table_schema, b
   return ret;
 }
 
+int ObTableLoadSchema::check_has_null_column(const ObTableSchema *table_schema, bool &bret)
+{
+  int ret = OB_SUCCESS;
+  bret = false;
+  for (ObTableSchema::const_column_iterator iter = table_schema->column_begin();
+       OB_SUCC(ret) && iter != table_schema->column_end(); ++iter) {
+    ObColumnSchemaV2 *column_schema = *iter;
+    if (OB_ISNULL(column_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("invalid column schema", K(column_schema));
+    } else if (column_schema->get_meta_type().is_null()) {
+      bret = true;
+      break;
+    }
+  }
+  return ret;
+}
+
 int ObTableLoadSchema::check_has_non_local_index(share::schema::ObSchemaGetterGuard &schema_guard,
                                        const share::schema::ObTableSchema *table_schema,
                                        bool &bret)
@@ -584,7 +603,9 @@ ObTableLoadSchema::ObTableLoadSchema()
     part_level_(PARTITION_LEVEL_ZERO),
     schema_version_(0),
     lob_meta_table_id_(OB_INVALID_ID),
+    lob_inrow_threshold_(-1),
     index_table_count_(0),
+    non_partitioned_tablet_id_vector_(nullptr),
     is_inited_(false)
 {
   allocator_.set_tenant_id(MTL_ID());
@@ -613,6 +634,7 @@ void ObTableLoadSchema::reset()
   part_level_ = PARTITION_LEVEL_ZERO;
   schema_version_ = 0;
   lob_meta_table_id_ = OB_INVALID_ID;
+  lob_inrow_threshold_ = -1;
   index_table_count_ = 0;
   lob_column_idxs_.reset();
   column_descs_.reset();
@@ -621,6 +643,7 @@ void ObTableLoadSchema::reset()
   lob_meta_column_descs_.reset();
   lob_meta_datum_utils_.reset();
   cmp_funcs_.reset();
+  non_partitioned_tablet_id_vector_ = nullptr;
   allocator_.reset();
   is_inited_ = false;
 }
@@ -663,6 +686,7 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
     if (table_schema->has_lob_aux_table()) {
       lob_meta_table_id_ = table_schema->get_aux_lob_meta_tid();
     }
+    lob_inrow_threshold_ = table_schema->get_lob_inrow_threshold();
     index_table_count_ = table_schema->get_simple_index_infos().count();
     if (OB_FAIL(ObTableLoadUtils::deep_copy(table_schema->get_table_name_str(), table_name_,
                                             allocator_))) {
@@ -675,6 +699,8 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
       LOG_WARN("fail to prepare column descs", KR(ret));
     } else if (OB_FAIL(table_schema->get_multi_version_column_descs(multi_version_column_descs_))) {
       LOG_WARN("fail to get multi version column descs", KR(ret));
+    } else if (OB_FAIL(update_decimal_int_precision(table_schema, column_descs_))){
+      LOG_WARN("update decimal int precision failed", K(ret));
     } else if (OB_FAIL(update_decimal_int_precision(table_schema, multi_version_column_descs_))){
       LOG_WARN("update decimal int precision failed", K(ret));
     } else if (OB_FAIL(datum_utils_.init(multi_version_column_descs_, rowkey_column_count_,
@@ -688,13 +714,6 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
       LOG_WARN("fail to init cmp funcs", KR(ret));
     }
     if (OB_SUCC(ret)) {
-      ObArray<ObTabletID> tablet_ids;
-      ObArray<uint64_t> part_ids;
-      tablet_ids.set_tenant_id(MTL_ID());
-      part_ids.set_tenant_id(MTL_ID());
-      if (OB_FAIL(table_schema->get_all_tablet_and_object_ids(tablet_ids, part_ids))) {
-        LOG_WARN("fail to get all tablet ids", KR(ret));
-      }
       for (ObTableSchema::const_column_iterator iter = table_schema->column_begin();
           OB_SUCC(ret) && iter != table_schema->column_end(); ++iter) {
         ObColumnSchemaV2 *column_schema = *iter;
@@ -709,6 +728,13 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
           }
         }
       }//end for
+    }
+    if (OB_SUCC(ret) && !is_partitioned_table_) {
+      const ObTabletID &tablet_id = table_schema->get_tablet_id();
+      if (OB_FAIL(ObDirectLoadVectorUtils::make_const_tablet_id_vector(
+            tablet_id, allocator_, non_partitioned_tablet_id_vector_))) {
+        LOG_WARN("fail to make const tablet id vector", KR(ret), K(tablet_id));
+      }
     }
   }
   return ret;

@@ -884,6 +884,10 @@ ob_set_subtarget(ob_sql engine_pdml
   engine/pdml/static/ob_px_sstable_insert_op.cpp
 )
 
+ob_set_subtarget(ob_sql engine_direct_load
+  engine/direct_load/ob_table_direct_insert_op.cpp
+)
+
 ob_set_subtarget(ob_sql engine_px
   engine/px/ob_dfo.cpp
   engine/px/ob_dfo_mgr.cpp

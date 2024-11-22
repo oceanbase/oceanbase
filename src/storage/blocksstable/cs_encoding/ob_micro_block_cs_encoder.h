@@ -17,11 +17,12 @@
 #include "ob_cs_encoding_allocator.h"
 #include "ob_column_encoding_struct.h"
 #include "ob_icolumn_cs_encoder.h"
-#include "storage/blocksstable/encoding/ob_encoding_hash_util.h"
+#include "ob_dict_encoding_hash_table.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/blocksstable/ob_data_buffer.h"
 #include "storage/blocksstable/ob_imicro_block_writer.h"
 #include "storage/compaction/ob_compaction_memory_context.h"
+#include "storage/blocksstable/ob_batch_datum_rows.h"
 
 namespace oceanbase
 {
@@ -31,11 +32,42 @@ namespace blocksstable
 class ObIColumnCSEncoder;
 class ObEncodingHashTable;
 
+class ObVecBatchInfo
+{
+public:
+  ObVecBatchInfo()
+    : row_count_(0),
+      fixed_len_(-1),
+      offsets_(nullptr) ,
+      nulls_(nullptr),
+      start_offset_(0),
+      is_integer_(false)
+  {
+  }
+  int init(const int32_t row_count,
+           const int32_t fixed_len,
+           const uint32_t *offsets,
+           sql::ObBitVector *nulls_,
+           const uint32_t start_offset,
+           bool is_integer);
+
+  TO_STRING_KV(K_(row_count), K_(fixed_len), KP_(offsets), KP_(nulls), K_(start_offset), K_(is_integer));
+
+  int32_t row_count_;
+  int32_t fixed_len_; // fixed len for fixed format < 0 represent continuous format
+  const uint32_t *offsets_; // offset arr for continuous format, ==nullptr represent fixed format
+  sql::ObBitVector *nulls_; // null bitmap, ==nullptr represent no null
+  uint32_t start_offset_; // start offset in row_buf_holder_ of this vec batch
+  bool is_integer_; // the integer is format to 8Bytes in row_buf_holder_ which may be larger then fixed_len_
+};
+typedef ObPodFix2dArray<ObVecBatchInfo, 1 << 20, common::OB_MALLOC_NORMAL_BLOCK_SIZE> ObVecBatchInfoArr;
+
 class ObMicroBlockCSEncoder : public ObIMicroBlockWriter
 {
 public:
   static const int64_t DEFAULT_ESTIMATE_REAL_SIZE_PCT = 150;
   static const int64_t RESERVE_SIZE_FOR_ESTIMATE_LIMIT = 200 << 10; // 200K
+
   ObMicroBlockCSEncoder();
   virtual ~ObMicroBlockCSEncoder();
 
@@ -43,6 +75,9 @@ public:
   int init(const ObMicroBlockEncodingCtx &ctx);
   // return OB_BUF_NOT_ENOUGH if exceed micro block size
   virtual int append_row(const ObDatumRow &row);
+  virtual int append_batch(const ObBatchDatumRows &vec_batch,
+                           const int64_t start,
+                           const int64_t row_count) override;
   virtual int build_block(char *&buf, int64_t &size);
   // clear status and release memory, reset along with macro block writer
   virtual void reset();
@@ -51,7 +86,7 @@ public:
   virtual void reuse();
   virtual int64_t get_row_count() const override
   {
-    return datum_row_offset_arr_.count();
+    return appended_row_count_;
   }
   virtual int64_t get_block_size() const override
   {
@@ -65,22 +100,67 @@ public:
   virtual void dump_diagnose_info() const override;
 
 private:
+  enum ObDataFormatType : uint8_t
+  {
+    INT_64BIT_FIXED,
+    INT_NOT_64BIT_FIXED,
+    INT_CONTINUOUS,
+    INT_DISCRETE,
+    INT_UNIFORM,
+    INT_UNIFORM_CONST,
+    STR_FIXED,
+    STR_CONTINUOUS,
+    STR_DISCRETE,
+    STR_UNIFORM,
+    STR_UNIFORM_CONST,
+    MAX
+  };
+
   int inner_init_();
   int reserve_header_(const ObMicroBlockEncodingCtx &ctx);
   int try_to_append_row_(const int64_t &store_size);
   int init_column_ctxs_();
   // only deep copy the cell part
-  int process_out_row_columns_(const ObDatumRow &row);
+  int process_out_row_columns_();
   int copy_and_append_row_(const ObDatumRow &src, int64_t &store_size);
+  int copy_and_append_batch_(const ObBatchDatumRows &vec_batch,
+                             const int64_t start,
+                             const int64_t row_count,
+                             int64_t &store_size);
   int copy_cell_(const ObColDesc &col_desc, const ObStorageDatum &src,
     ObDatum &dest, int64_t &store_size, bool &is_row_holder_not_enough);
+  int copy_vector_(const ObIVector *vector,
+                   const int64_t start,
+                   const int64_t row_count,
+                   const int64_t col_idx,
+                   int64_t &store_size,
+                   bool &is_row_holder_not_enough);
+  int do_copy_vector_(const ObIVector *vector,
+                      const int64_t start,
+                      const int64_t row_count,
+                      const int64_t col_idx,
+                      const int64_t vec_data_size,
+                      const ObDataFormatType type,
+                      const bool is_signed);
+  int build_all_col_datums_();
+  int prepare_for_build_block_();
   int process_large_row_(const ObDatumRow &src, int64_t &store_size);
   int set_datum_rows_ptr_();
   int remove_invalid_datums_(const int32_t column_cnt);
+  int remove_invalid_vec_batch_info_(const int32_t column_cnt);
   int encoder_detection_();
   // detect encoder with pre-scan result
   int fast_encoder_detect_(const int64_t column_idx);
   int64_t calc_datum_row_size_(const ObDatumRow &src) const;
+  int calc_batch_data_size_(const ObIArray<ObIVector *> &vectors,
+                                const int64_t start,
+                                const int64_t row_count,
+                                int64_t &size) const;
+  int calc_col_batch_data_size_(const ObIVector *vector,
+                                const int64_t start,
+                                const int64_t row_count,
+                                const int64_t col_idx,
+                                int64_t &size) const;
   int prescan_(const int64_t column_index);
   int choose_encoder_(const int64_t column_idx);
   int choose_encoder_for_integer_(const int64_t column_idx, ObIColumnCSEncoder *&e);
@@ -101,6 +181,7 @@ private:
   int alloc_and_init_encoder_(const int64_t column_index, ObIColumnCSEncoder *&e);
   void update_estimate_size_limit_(const ObMicroBlockEncodingCtx &ctx);
   int init_all_col_values_(const ObMicroBlockEncodingCtx &ctx);
+  int init_vec_batch_info_arrs_(const ObMicroBlockEncodingCtx &ctx);
   void print_micro_block_encoder_status_();
   int store_columns_(int64_t &column_data_offset);
   int store_all_string_data_(uint32_t &data_size, bool &use_compress);
@@ -126,7 +207,10 @@ private:
 
   common::ObArray<ObColDatums *> all_col_datums_;
   ObArenaAllocator pivot_allocator_;
-  common::ObSEArray<uint32_t, 512> datum_row_offset_arr_;
+  common::ObSEArray<uint32_t, 128> datum_row_offset_arr_;
+  common::ObArray<ObVecBatchInfoArr *> vec_batch_info_arrs_;
+  int64_t appended_batch_count_;
+  int64_t appended_row_count_;
   int64_t estimate_size_;
   int64_t estimate_size_limit_;
   int64_t all_headers_size_;
@@ -134,8 +218,8 @@ private:
   common::ObArray<ObIColumnCSEncoder *> encoders_;
   common::ObArray<uint32_t> stream_offsets_;
   ObCSEncoderAllocator encoder_allocator_;
-  common::ObArray<ObEncodingHashTable *> hashtables_;
-  ObEncodingHashTableFactory hashtable_factory_;
+  common::ObArray<ObDictEncodingHashTable *> hashtables_;
+  ObDictEncodingHashTableFactory hashtable_factory_;
   common::ObArray<ObColumnCSEncodingCtx> col_ctxs_;
   int64_t length_;
   bool is_inited_;
