@@ -351,37 +351,42 @@ int ObDropTableHelper::generate_schemas_()
 
           // oracle cascade constraints use if_exist_ flag
           bool is_cascade_constraints = arg_.if_exist_;
-          const ObForeignKeyInfo &violated_fk_info = fk_infos.at(violated_fk_index);
 
           if (OB_ERR_TABLE_IS_REFERENCED == ret) {
-            if (lib::Worker::CompatMode::MYSQL == compat_mode && !arg_.foreign_key_checks_) {
-              // gen mock fk parent table, overwrite ret
-              if (OB_FAIL(gen_mock_fk_parent_table_for_drop_table_(fk_infos,
-                                                                  violated_fk_info,
-                                                                  *table_schema,
-                                                                  mock_fk_parent_table_schemas))) {
-                LOG_WARN("fail to gen mock fk parent table schema", KR(ret));
-              }
-            } else if (lib::Worker::CompatMode::ORACLE == compat_mode && is_cascade_constraints) {
-              // delete fk later, overwrite ret
-              ret = OB_SUCCESS;
+            if (OB_UNLIKELY(violated_fk_index < 0 || violated_fk_index >= fk_infos.count())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("idx is invalid", KR(ret), K(violated_fk_index), K(fk_infos.count()));
             } else {
-              // return OB_ERR_TABLE_IS_REFERENCED
-              const ObTableSchema *child_table_schema = NULL;
-              const uint64_t child_table_id = violated_fk_info.child_table_id_;
-              if (OB_FAIL(latest_schema_guard_.get_table_schema(child_table_id, child_table_schema))) {
-                LOG_WARN("fail to get child table schema", KR(ret), K(child_table_id));
-              } else if (OB_ISNULL(child_table_schema)) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("child table schema is null", KR(ret));
+              const ObForeignKeyInfo &violated_fk_info = fk_infos.at(violated_fk_index);
+              if (lib::Worker::CompatMode::MYSQL == compat_mode && !arg_.foreign_key_checks_) {
+                // gen mock fk parent table, overwrite ret
+                if (OB_FAIL(gen_mock_fk_parent_table_for_drop_table_(fk_infos,
+                                                                    violated_fk_info,
+                                                                    *table_schema,
+                                                                    mock_fk_parent_table_schemas))) {
+                  LOG_WARN("fail to gen mock fk parent table schema", KR(ret));
+                }
+              } else if (lib::Worker::CompatMode::ORACLE == compat_mode && is_cascade_constraints) {
+                // delete fk later, overwrite ret
+                ret = OB_SUCCESS;
               } else {
-                ret = OB_ERR_TABLE_IS_REFERENCED;
-                // in oracle mode we do not log user error
-                if (lib::Worker::CompatMode::MYSQL == compat_mode) {
-                  LOG_USER_ERROR(OB_ERR_TABLE_IS_REFERENCED,
-                                  table_schema->get_table_name_str().length(), table_schema->get_table_name_str().ptr(),
-                                  violated_fk_info.foreign_key_name_.length(), violated_fk_info.foreign_key_name_.ptr(),
-                                  child_table_schema->get_table_name_str().length(), child_table_schema->get_table_name_str().ptr());
+                // return OB_ERR_TABLE_IS_REFERENCED
+                const ObTableSchema *child_table_schema = NULL;
+                const uint64_t child_table_id = violated_fk_info.child_table_id_;
+                if (OB_FAIL(latest_schema_guard_.get_table_schema(child_table_id, child_table_schema))) {
+                  LOG_WARN("fail to get child table schema", KR(ret), K(child_table_id));
+                } else if (OB_ISNULL(child_table_schema)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("child table schema is null", KR(ret));
+                } else {
+                  ret = OB_ERR_TABLE_IS_REFERENCED;
+                  // in oracle mode we do not log user error
+                  if (lib::Worker::CompatMode::MYSQL == compat_mode) {
+                    LOG_USER_ERROR(OB_ERR_TABLE_IS_REFERENCED,
+                                    table_schema->get_table_name_str().length(), table_schema->get_table_name_str().ptr(),
+                                    violated_fk_info.foreign_key_name_.length(), violated_fk_info.foreign_key_name_.ptr(),
+                                    child_table_schema->get_table_name_str().length(), child_table_schema->get_table_name_str().ptr());
+                  }
                 }
               }
             }
