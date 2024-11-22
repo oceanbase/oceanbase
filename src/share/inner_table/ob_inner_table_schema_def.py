@@ -15388,6 +15388,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12509: __all_virtual_object_balance_weight
 # 12510: __all_virtual_standby_log_transport_stat
 # 12511: __all_virtual_wr_sql_plan_aux_key2snapshot
+# 12512: __all_virtual_tablet_mds_info
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
