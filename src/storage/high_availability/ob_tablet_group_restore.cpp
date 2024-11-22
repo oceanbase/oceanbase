@@ -1089,7 +1089,8 @@ int ObInitialTabletGroupRestoreTask::record_server_event_()
       "tenant_id", ctx_->arg_.tenant_id_,
       "ls_id", ctx_->arg_.ls_id_.id(),
       "is_leader", ctx_->arg_.is_leader_,
-      "first_tablet_id", ctx_->arg_.tablet_id_array_.at(0));
+      "first_tablet_id", ctx_->arg_.tablet_id_array_.at(0),
+      "task_id", ctx_->task_id_);
   }
   return ret;
 }
@@ -1418,7 +1419,8 @@ int ObStartTabletGroupRestoreTask::record_server_event_()
       "tenant_id", ctx_->arg_.tenant_id_,
       "ls_id", ctx_->arg_.ls_id_.id(),
       "is_leader", ctx_->arg_.is_leader_,
-      "first_tablet_id", ctx_->arg_.tablet_id_array_.at(0));
+      "first_tablet_id", ctx_->arg_.tablet_id_array_.at(0),
+      "task_id", ctx_->task_id_);
   }
   return ret;
 }
@@ -1647,7 +1649,8 @@ int ObFinishTabletGroupRestoreTask::record_server_event_()
       "tenant_id", ctx_->arg_.tenant_id_,
       "ls_id", ctx_->arg_.ls_id_.id(),
       "is_leader", ctx_->arg_.is_leader_,
-      "first_tablet_id", ctx_->arg_.tablet_id_array_.at(0));
+      "first_tablet_id", ctx_->arg_.tablet_id_array_.at(0),
+      "task_id", ctx_->task_id_);
   }
   return ret;
 }
@@ -2655,16 +2658,22 @@ int ObTabletRestoreTask::check_src_sstable_exist_()
 int ObTabletRestoreTask::record_server_event_()
 {
   int ret = OB_SUCCESS;
+  ObTabletGroupRestoreCtx *tablet_group_ctx = nullptr;
   if (OB_ISNULL(tablet_restore_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ctx should not be null", K(ret));
+  } else if (OB_ISNULL(ha_dag_net_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag net ctx should not be null", K(ret));
+  } else if (FALSE_IT(tablet_group_ctx = static_cast<ObTabletGroupRestoreCtx *>(ha_dag_net_ctx_))) {
   } else {
     SERVER_EVENT_ADD("storage_ha", "tablet_restore_task",
       "tenant_id", tablet_restore_ctx_->tenant_id_,
       "ls_id", tablet_restore_ctx_->ls_id_.id(),
       "tablet_id", tablet_restore_ctx_->tablet_id_.id(),
       "action", ObTabletRestoreAction::get_action_str(tablet_restore_ctx_->action_),
-      "is_leader", tablet_restore_ctx_->is_leader_);
+      "is_leader", tablet_restore_ctx_->is_leader_,
+      "task_id", tablet_group_ctx->task_id_);
   }
   return ret;
 }
@@ -2801,16 +2810,22 @@ int ObTabletFinishRestoreTask::update_restore_status_()
 int ObTabletFinishRestoreTask::record_server_event_()
 {
   int ret = OB_SUCCESS;
+  ObTabletGroupRestoreCtx *tablet_group_ctx = nullptr;
   if (OB_ISNULL(tablet_restore_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ctx should not be null", K(ret));
+  } else if (OB_ISNULL(ha_dag_net_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag net ctx should not be null", K(ret));
+  } else if (FALSE_IT(tablet_group_ctx = static_cast<ObTabletGroupRestoreCtx *>(ha_dag_net_ctx_))) {
   } else {
     SERVER_EVENT_ADD("storage_ha", "tablet_finish_restore_task",
       "tenant_id", tablet_restore_ctx_->tenant_id_,
       "ls_id", tablet_restore_ctx_->ls_id_.id(),
       "tablet_id", tablet_restore_ctx_->tablet_id_.id(),
       "action", ObTabletRestoreAction::get_action_str(tablet_restore_ctx_->action_),
-      "is_leader", tablet_restore_ctx_->is_leader_);
+      "is_leader", tablet_restore_ctx_->is_leader_,
+      "task_id", tablet_group_ctx->task_id_);
   }
   return ret;
 }
