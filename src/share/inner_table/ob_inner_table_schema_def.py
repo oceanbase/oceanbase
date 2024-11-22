@@ -10413,6 +10413,8 @@ def_table_schema(
 
 #11120: __all_virtual_res_mgr_sysstat
 
+#11121: __all_virtual_ddl_diagnose_info
+
 ################################################################
 # INFORMATION SCHEMA
 ################################################################
