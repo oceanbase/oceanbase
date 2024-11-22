@@ -9698,6 +9698,14 @@ int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFo
         format.odps_format_.endpoint_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
         break;
       }
+      case ObItemType::T_TUNNEL_ENDPOINT: {
+        format.odps_format_.tunnel_endpoint_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        break;
+      }
+      case ObItemType::T_COLLECT_STATISTICS_ON_CREATE: {
+        format.odps_format_.collect_statistics_on_create_ = node->children_[0]->value_;
+        break;
+      }
       case T_PROJECT: {
         format.odps_format_.project_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
         break;

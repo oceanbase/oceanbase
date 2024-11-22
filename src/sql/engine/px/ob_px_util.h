@@ -280,9 +280,10 @@ private:
                                         common::ObIArray<common::ObAddr> &dst_addrs);
   static int sort_and_collect_local_file_distribution(common::ObIArray<share::ObExternalFileInfo> &files,
                                                       common::ObIArray<common::ObAddr> &dst_addrs);
-  static int assign_external_files_to_sqc(const common::ObIArray<share::ObExternalFileInfo> &files,
+  static int assign_external_files_to_sqc(ObDfo &dfo,
                                           bool is_file_on_disk,
-                                          common::ObIArray<ObPxSqcMeta *> &sqcs);
+                                          common::ObIArray<ObPxSqcMeta *> &sqcs,
+                                          int64_t parallel);
 private:
   static int generate_dh_map_info(ObDfo &dfo);
   DISALLOW_COPY_AND_ASSIGN(ObPXServerAddrUtil);

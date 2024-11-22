@@ -876,6 +876,8 @@ int ObExternalTableRowIterator::calc_file_partition_list_value(const int64_t par
   share::schema::ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = NULL;
   const ObPartition *partition = NULL;
+  ObExternalFileFormat::FormatType external_table_type;
+  bool is_odps_external_table = false;
   if (OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error");
@@ -888,7 +890,9 @@ int ObExternalTableRowIterator::calc_file_partition_list_value(const int64_t par
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table not exist", K(scan_param_->index_id_), K(scan_param_->tenant_id_));
-  } else if (table_schema->is_partitioned_table() && (table_schema->is_user_specified_partition_for_external_table() || table_schema->is_odps_external_table())) {
+  } else if (OB_FAIL(ObSQLUtils::is_odps_external_table(table_schema, is_odps_external_table))) {
+    LOG_WARN("failed to check is odps external table or not", K(ret));
+  } else if (table_schema->is_partitioned_table() && (table_schema->is_user_specified_partition_for_external_table() || is_odps_external_table)) {
     if (OB_FAIL(table_schema->get_partition_by_part_id(part_id, CHECK_PARTITION_MODE_NORMAL, partition))) {
       LOG_WARN("get partition failed", K(ret), K(part_id));
     } else if (OB_ISNULL(partition) || OB_UNLIKELY(partition->get_list_row_values().count() != 1)

@@ -1814,18 +1814,18 @@ int ObInsertLogPlan::allocate_select_into_as_top_for_insert(ObLogicalOperator *&
     LOG_WARN("allocate memory for ObLogSelectInto failed", K(ret));
   } else {
     ObString external_properties;
-    const ObString &format_or_properties = table_schema->get_external_file_format().empty()
+    const ObString &table_format_or_properties = table_schema->get_external_file_format().empty()
                                             ? table_schema->get_external_properties()
                                             : table_schema->get_external_file_format();
     const ObInsertTableInfo& table_info = stmt->get_insert_table_info();
-    if (format_or_properties.empty()) {
+    if (table_format_or_properties.empty()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("external properties is empty", K(ret));
     } else if (table_schema->get_external_properties().empty()) { //目前只支持写odps外表 其他类型暂不支持
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not support to insert into external table which is not in odps", K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert into external table which is not in odps");
-    } else if (OB_FAIL(ob_write_string(get_allocator(), format_or_properties, external_properties))) {
+    } else if (OB_FAIL(ob_write_string(get_allocator(), table_format_or_properties, external_properties))) {
       LOG_WARN("failed to append string", K(ret));
     } else if (OB_FAIL(select_into->get_select_exprs().assign(table_info.column_conv_exprs_))) {
       LOG_WARN("failed to get select exprs", K(ret));

@@ -615,6 +615,8 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"accesskey", ACCESSKEY},
   {"accesstype", ACCESSTYPE},
   {"endpoint", ENDPOINT},
+  {"tunnel_endpoint", TUNNEL_ENDPOINT},
+  {"collect_statistics_on_create", COLLECT_STATISTICS_ON_CREATE},
   {"project_name", PROJECT_NAME},
   {"quota_name", QUOTA_NAME},
   {"compression_code", COMPRESSION_CODE},

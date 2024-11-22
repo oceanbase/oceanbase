@@ -1068,7 +1068,12 @@ int ObCreateTableResolver::check_external_table_generated_partition_column_sanit
 {
   int ret = OB_SUCCESS;
   ObArray<ObRawExpr *> col_exprs;
-  if (OB_ISNULL(dependant_expr)) {
+  bool is_odps_external_table = false;
+  if (OB_FAIL(ObSQLUtils::is_odps_external_table(&table_schema, is_odps_external_table))) {
+    LOG_WARN("failed to check is odps external table or not", K(ret));
+  } else if (is_odps_external_table) {
+    // do nothing
+  } else if (OB_ISNULL(dependant_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dependant expr is null", K(ret));
   } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(dependant_expr, col_exprs, true/*extract pseudo column*/))) {
@@ -1105,8 +1110,6 @@ int ObCreateTableResolver::check_external_table_generated_partition_column_sanit
         LOG_WARN("user specified partition col expr contains no external partition pseudo column is not supported", K(ret));
       }
     }
-  } else if (table_schema.is_odps_external_table()) {
-    // lcqlog to do check
   } else {
     bool found = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < col_exprs.count(); i++) {

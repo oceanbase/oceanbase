@@ -964,6 +964,7 @@ typedef enum ObItemType
   T_FUN_SYS_CALC_SUB_PARTITION_NAME = 2053,
   T_FUN_SYS_CALC_PARTITION_IDX = 2054,
   T_FUN_SYS_CALC_SUB_PARTITION_IDX = 2055,
+  T_FUN_SYS_CALC_ODPS_SIZE = 2056,
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id
@@ -2628,7 +2629,6 @@ typedef enum ObItemType
 
   T_UNION_MERGE_HINT = 4740,
   T_UNION_MERGE_LIST = 4741,
-
   T_PSEUDO_OLD_NEW_COL = 4742,
 
   T_TRANSFORM_DISTINCT_AGG = 4743,
@@ -2653,6 +2653,10 @@ typedef enum ObItemType
   T_UNIT_GROUP = 4759,
   T_TRANSPOSE_TABLE = 4760,
   T_FUN_UNPIVOT = 4761,
+
+  //odps external table
+  T_TUNNEL_ENDPOINT = 4762,
+  T_COLLECT_STATISTICS_ON_CREATE = 4763,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

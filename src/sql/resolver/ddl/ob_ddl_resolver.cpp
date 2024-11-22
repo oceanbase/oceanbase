@@ -3089,6 +3089,7 @@ int ObDDLResolver::mask_properties_sensitive_info(const ParseNode *node, ObStrin
   } else {
     switch (node->type_) {
       case ObItemType::T_ENDPOINT:
+      case ObItemType::T_TUNNEL_ENDPOINT:
       case ObItemType::T_STSTOKEN:
       case ObItemType::T_ACCESSKEY:
       case ObItemType::T_ACCESSID: {

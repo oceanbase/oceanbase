@@ -194,12 +194,8 @@ int ObPxSqcMeta::assign(const ObPxSqcMeta &other)
   for (int i = 0; OB_SUCC(ret) && i < other.access_external_table_files_.count(); i++) {
     const ObExternalFileInfo &other_file = other.access_external_table_files_.at(i);
     ObExternalFileInfo temp_file;
-    temp_file.file_id_ = other_file.file_id_;
-    temp_file.part_id_ = other_file.part_id_;
-    temp_file.file_addr_ = other_file.file_addr_;
-    temp_file.file_size_ = other_file.file_size_;
-    if (OB_FAIL(ob_write_string(allocator_, other_file.file_url_, temp_file.file_url_))) {
-      LOG_WARN("fail to write string", K(ret));
+    if (OB_FAIL(temp_file.deep_copy(allocator_, other_file))) {
+      LOG_WARN("fail to deep copy ObExternalFileInfo", K(ret));
     } else if (OB_FAIL(access_external_table_files_.push_back(temp_file))) {
       LOG_WARN("fail to push back", K(ret));
     }

@@ -1464,17 +1464,97 @@ int ObSQLUtils::extract_odps_part_spec(const ObString &all_part_spec, ObIArray<O
   return ret;
 }
 
-int ObSQLUtils::is_external_odps_table(const ObString &properties, ObIAllocator &allocator, bool &is_odps)
+int ObSQLUtils::get_external_table_type(const uint64_t tenant_id,
+                                        const uint64_t table_id,
+                                        ObExternalFileFormat::FormatType &type)
 {
   int ret = OB_SUCCESS;
-  is_odps = false;
-  ObExternalFileFormat format;
-  if (properties.empty()) {
-    // do nothing
-  } else if (OB_FAIL(format.load_from_string(properties, allocator))) {
-    LOG_WARN("fail to load from properties string", K(ret), K(properties));
+  const ObTableSchema *table_schema = NULL;
+  share::schema::ObSchemaGetterGuard schema_guard;
+  OZ (GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard));
+  OZ (schema_guard.get_table_schema(tenant_id, table_id, table_schema));
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(get_external_table_type(table_schema, type))) {
+    LOG_WARN("failed to get external table type", K(tenant_id), K(table_id), KP(table_schema), K(ret));
+  }
+  return ret;
+}
+
+int ObSQLUtils::get_external_table_type(const ObTableSchema *table_schema, ObExternalFileFormat::FormatType &type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
   } else {
-    is_odps = ObExternalFileFormat::FormatType::ODPS_FORMAT == format.format_type_;
+    ObExternalFileFormat format;
+    ObArenaAllocator allocator;
+    ObString table_format_or_properties = table_schema->get_external_file_format().empty() ?
+                                  table_schema->get_external_properties(): table_schema->get_external_file_format();
+    if (OB_FAIL(get_external_table_type(table_format_or_properties, type))) {
+      LOG_WARN("failed to get external table type", K(ret), K(table_format_or_properties));
+    }
+  }
+  return ret;
+}
+
+int ObSQLUtils::get_external_table_type(const ObString &table_format_or_properties,
+                                        ObExternalFileFormat::FormatType &type) {
+  int ret = OB_SUCCESS;
+  ObExternalFileFormat format;
+  ObArenaAllocator allocator;
+  if (table_format_or_properties.empty()) {
+  } else if (OB_FAIL(format.load_from_string(table_format_or_properties, allocator))) {
+    LOG_WARN("fail to load from properties string", K(ret), K(table_format_or_properties));
+  } else {
+    type = format.format_type_;
+  }
+  return ret;
+}
+
+
+int ObSQLUtils::is_odps_external_table(const uint64_t tenant_id,
+                                       const uint64_t table_id,
+                                       bool &is_odps_external_table)
+{
+  int ret = OB_SUCCESS;
+  is_odps_external_table = false;
+  ObExternalFileFormat::FormatType external_table_type;
+  if (OB_FAIL(ObSQLUtils::get_external_table_type(tenant_id, table_id, external_table_type))) {
+    LOG_WARN("failed to get external table type", K(ret));
+  } else {
+    is_odps_external_table = (ObExternalFileFormat::FormatType:: ODPS_FORMAT == external_table_type);
+  }
+  return ret;
+}
+
+int ObSQLUtils::is_odps_external_table(const ObTableSchema *table_schema,
+                                       bool &is_odps_external_table)
+{
+  int ret = OB_SUCCESS;
+  is_odps_external_table = false;
+  ObExternalFileFormat::FormatType external_table_type;
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::get_external_table_type(table_schema, external_table_type))) {
+    LOG_WARN("failed to get external table type", K(ret));
+  } else {
+    is_odps_external_table = (ObExternalFileFormat::FormatType:: ODPS_FORMAT == external_table_type);
+  }
+  return ret;
+}
+
+int ObSQLUtils::is_odps_external_table(const ObString &table_format_or_properties,
+                                       bool &is_odps_external_table)
+{
+  int ret = OB_SUCCESS;
+  is_odps_external_table = false;
+  ObExternalFileFormat::FormatType external_table_type;
+  if (OB_FAIL(ObSQLUtils::get_external_table_type(table_format_or_properties, external_table_type))) {
+    LOG_WARN("failed to get external table type", K(ret));
+  } else {
+    is_odps_external_table = (ObExternalFileFormat::FormatType:: ODPS_FORMAT == external_table_type);
   }
   return ret;
 }

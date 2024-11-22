@@ -815,6 +815,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_func_ceil.cpp
   engine/expr/ob_expr_eval_functions.cpp
   engine/expr/ob_expr_in.cpp
+  engine/expr/ob_expr_calc_odps_size.cpp
 )
 
 ob_set_subtarget(ob_sql ALONE

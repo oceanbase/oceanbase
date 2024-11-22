@@ -8684,10 +8684,10 @@ int ObDMLResolver::resolve_external_table_generated_column(
     }
   } else {
     ObExternalFileFormat format;
-    const ObString &format_or_properties = table_schema->get_external_file_format().empty() ?
+    const ObString &table_format_or_properties = table_schema->get_external_file_format().empty() ?
                                             table_schema->get_external_properties() :
                                             table_schema->get_external_file_format();
-    if (OB_FAIL(format.load_from_string(format_or_properties, *params_.allocator_))) {
+    if (OB_FAIL(format.load_from_string(table_format_or_properties, *params_.allocator_))) {
       LOG_WARN("load from string failed", K(ret));
     } else if (format.format_type_ == ObExternalFileFormat::ORC_FORMAT && lib::is_oracle_mode()) {
       ret = OB_NOT_SUPPORTED;

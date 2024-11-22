@@ -420,6 +420,7 @@
 #include "ob_expr_array_distinct.h"
 #include "ob_expr_array_remove.h"
 #include "ob_expr_array_map.h"
+#include "ob_expr_calc_odps_size.h"
 #include "ob_expr_get_mysql_routine_parameter_type_str.h"
 #include "ob_expr_priv_st_geohash.h"
 #include "ob_expr_priv_st_makepoint.h"
@@ -1315,6 +1316,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprCalcSubPartitionName::get_sub_partition_name,        /* 788 */
   NULL, // ObExprCalcPartitionIdx::get_partition_idx,                 /* 789 */
   NULL, // ObExprCalcSubPartitionIdx::get_sub_partition_idx,          /* 790 */
+  ObExprCalcOdpsSize::calc_odps_size,                                 /* 791 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

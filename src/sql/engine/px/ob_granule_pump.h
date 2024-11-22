@@ -568,6 +568,9 @@ public:
     ret = odps_partition_downloader_mgr_.get_odps_downloader(part_id, downloader);
     return ret;
   }
+  inline ObOdpsPartitionDownloaderMgr::OdpsMgrMap& get_odps_map() {
+    return odps_partition_downloader_mgr_.get_odps_map();
+  }
   inline bool is_odps_downloader_inited() {  return odps_partition_downloader_mgr_.is_download_mgr_inited(); }
   ObOdpsPartitionDownloaderMgr &get_odps_mgr() { return odps_partition_downloader_mgr_; }
 #endif

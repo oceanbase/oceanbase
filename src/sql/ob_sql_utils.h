@@ -32,6 +32,8 @@
 #include "sql/engine/expr/ob_expr_frame_info.h"
 #include "sql/monitor/flt/ob_flt_span_mgr.h"
 #include "share/ob_compatibility_control.h"
+#include "sql/engine/cmd/ob_load_data_parser.h"
+
 namespace oceanbase
 {
 namespace share {
@@ -751,8 +753,21 @@ public:
   static int64_t combine_server_id(int64_t ts, uint64_t server_id) {
     return (ts & ((1LL << 43) - 1LL)) | ((server_id & 0xFFFF) << 48);
   }
+  static int get_external_table_type(const uint64_t tenant_id,
+                                     const uint64_t table_id,
+                                     ObExternalFileFormat::FormatType &type);
+  static int get_external_table_type(const ObTableSchema *table_schema,
+                                     ObExternalFileFormat::FormatType &type);
+  static int get_external_table_type(const ObString &table_format_or_properties,
+                                     ObExternalFileFormat::FormatType &type);
+  static int is_odps_external_table(const uint64_t tenant_id,
+                                    const uint64_t table_id,
+                                    bool &is_odps_external_table);
+  static int is_odps_external_table(const ObTableSchema *table_schema,
+                                    bool &is_odps_external_table);
+  static int is_odps_external_table(const ObString &table_format_or_properties,
+                                    bool &is_odps_external_table);
   static int extract_odps_part_spec(const ObString &all_part_spec, ObIArray<ObString> &part_spec_list);
-  static int is_external_odps_table(const ObString &properties, ObIAllocator &allocator, bool &is_odps);
   static int check_ident_name(const common::ObCollationType cs_type, common::ObString &name,
                               const bool check_for_path_char, const int64_t max_ident_len);
 
