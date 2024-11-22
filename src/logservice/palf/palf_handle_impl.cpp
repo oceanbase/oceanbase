@@ -4182,10 +4182,12 @@ int PalfHandleImpl::receive_config_log(const common::ObAddr &server,
       meta.curr_.config_.degraded_learnerlist_.contains(self_);
     // 1. self is not in paxos memberlist, try register parent
     if (!in_paxos_member_list && OB_FAIL(config_mgr_.register_parent())) {
+      // overwrite ret
       PALF_LOG(WARN, "register_parent failed", KPC(this), K(server), K(meta));
     }
     // 2. self is in paxos memberlist, try retire parent
     if (in_paxos_member_list && OB_FAIL(config_mgr_.retire_parent())) {
+      // overwrite ret
       PALF_LOG(WARN, "register_parent failed", KPC(this), K(server), K(meta));
     }
   }
