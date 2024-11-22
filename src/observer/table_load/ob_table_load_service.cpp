@@ -556,7 +556,24 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support table required by materialized view refresh", KR(ret));
       FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table required by materialized view refresh", tmp_prefix);
-    } else if (ObDirectLoadMethod::is_incremental(method)) { // incremental direct-load
+    }
+    // check for partition level
+    else if (ObDirectLoadLevel::PARTITION == load_level
+             && OB_FAIL(check_support_direct_load_for_partition_level(schema_guard,
+                                                                      table_schema,
+                                                                      method,
+                                                                      compat_version))) {
+      LOG_WARN("fail to check support direct load for partition level", KR(ret));
+    }
+    // check insert overwrite
+    else if (ObDirectLoadMode::is_insert_overwrite(load_mode)
+             && compat_version < DATA_VERSION_4_3_2_0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("version lower than 4.3.2.0 does not support insert overwrite", KR(ret));
+      FORWARD_USER_ERROR_MSG(ret, "version lower than 4.3.2.0 does not support insert overwrite");
+    }
+    // incremental direct-load
+    else if (ObDirectLoadMethod::is_incremental(method)) {
       if (GCTX.is_shared_storage_mode()) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("in share storage mode, using incremental direct-load is not supported", KR(ret));
@@ -596,15 +613,17 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
         LOG_WARN("incremental direct-load does not support table with check constraints", KR(ret));
         FORWARD_USER_ERROR_MSG(ret, "incremental direct-load does not support table with check constraints");
       }
-    } else if (ObDirectLoadMethod::is_full(method)) { // full direct-load
+    }
+    // full direct-load
+    else if (ObDirectLoadMethod::is_full(method)) {
       if (OB_UNLIKELY(!ObDirectLoadInsertMode::is_valid_for_full_method(insert_mode))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected insert mode for full direct-load", KR(ret), K(method), K(insert_mode));
-      } else if (ObDirectLoadMode::is_insert_overwrite(load_mode)) {
-        if (OB_FAIL(check_support_direct_load_for_insert_overwrite(
-            schema_guard, *table_schema, load_level, compat_version))) {
-          LOG_WARN("failed to check support direct load for insert overwrite", KR(ret));
-        }
+      } else if (ObDirectLoadInsertMode::OVERWRITE == insert_mode
+                 && compat_version < DATA_VERSION_4_3_1_0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("version lower than 4.3.1.0 does not support insert overwrite mode", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "version lower than 4.3.1.0 does not support insert overwrite mode");
       }
     }
     // check default column
@@ -661,102 +680,61 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
   return ret;
 }
 
-int ObTableLoadService::check_support_direct_load_for_insert_overwrite(
+int ObTableLoadService::check_support_direct_load_for_partition_level(
     ObSchemaGetterGuard &schema_guard,
-    const ObTableSchema &table_schema,
-    const ObDirectLoadLevel::Type load_level,
+    const ObTableSchema *table_schema,
+    const ObDirectLoadMethod::Type method,
     const uint64_t compat_version)
 {
   int ret = OB_SUCCESS;
-  if (compat_version < DATA_VERSION_4_3_2_0) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("version lower than 4.3.2.0 does not support insert overwrite", KR(ret));
-    FORWARD_USER_ERROR_MSG(ret, "version lower than 4.3.2.0 does not support insert overwrite");
-  } else if (table_schema.get_foreign_key_infos().count() > 0) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("insert overwrite with incremental direct-load does not support table with foreign keys", KR(ret));
-    FORWARD_USER_ERROR_MSG(ret, "insert overwrite with direct-load does not support table with foreign keys");
-  } else if (ObDirectLoadLevel::PARTITION == load_level) {
-    if (compat_version < DATA_VERSION_4_3_3_0) {
+  if (ObDirectLoadMethod::is_incremental(method)) {
+    // do nothing
+  } else if (ObDirectLoadMethod::is_full(method)) {
+    bool has_global_index = false;
+    bool has_identity_column = false;
+    bool is_support_partition_exchange = true;
+    if (compat_version < DATA_VERSION_4_3_5_0) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("version lower than 4.3.3.0 does not support insert overwrite partition", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "version lower than 4.3.3.0 does not support insert overwrite partition");
-    } else if (table_schema.is_duplicate_table()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("insert overwrite partition does not support duplicate table", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "insert overwrite partition does not support duplicate table");
-    } else if (table_schema.get_index_tid_count() > 0) {
-      bool has_global_indexes = false;
-      ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
-      if (OB_FAIL(table_schema.get_simple_index_infos(simple_index_infos))) {
-        LOG_WARN("failed to get simple_index_infos", KR(ret));
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && !has_global_indexes && (i < simple_index_infos.count()); ++i) {
-          const ObTableSchema *index_schema = NULL;
-          if (OB_FAIL(schema_guard.get_table_schema(
-              table_schema.get_tenant_id(), simple_index_infos.at(i).table_id_, index_schema))) {
-            LOG_WARN("failed to get table schema", KR(ret));
-          } else if (OB_ISNULL(index_schema)) {
-            ret = OB_TABLE_NOT_EXIST;
-            LOG_WARN("index schema from schema guard is NULL", KR(ret), KP(index_schema));
-          } else if (index_schema->is_global_index_table()) {
-            has_global_indexes = true;
-          }
-        }
-      }
-      if (OB_SUCC(ret) && (has_global_indexes)) {
+      LOG_WARN("version lower than 4.3.5.0 does not support direct load partition", KR(ret));
+      FORWARD_USER_ERROR_MSG(ret, "version lower than 4.3.5.0 does not support direct load partition");
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema is nullptr", KR(ret));
+    } else {
+      if (table_schema->is_duplicate_table()) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("insert overwrite partition does not support table with global indexes", KR(ret));
-        FORWARD_USER_ERROR_MSG(ret, "insert overwrite partition does not support table with global indexes");
-      }
-    } else if (0 != table_schema.get_autoinc_column_id()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("insert overwrite partition does not support table with auto_increment columns", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "insert overwrite partition does not support table with auto_increment columns");
-    } else if (lib::is_oracle_mode()) {
-      ObArray<ObObjectID> column_ids;
-      if (OB_FAIL(table_schema.get_column_ids(column_ids))) {
-        LOG_WARN("failed to get column ids", KR(ret));
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && (i < column_ids.count()); ++i) {
-          const ObColumnSchemaV2 *col_schema = table_schema.get_column_schema(column_ids.at(i));
-          if (OB_ISNULL(col_schema)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected null column schema", KR(ret));
-          } else if (col_schema->is_identity_column()) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("insert overwrite partition does not support table with identity columns", KR(ret));
-            FORWARD_USER_ERROR_MSG(ret, "insert overwrite partition does not support table with identity columns");
-          }
-        }
+        LOG_WARN("partition level direct load not support duplicate table", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "partition level direct-load not support duplicate table");
+      } else if (0 != table_schema->get_autoinc_column_id()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("partition level direct load not support table with auto_increment columns", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "partition level direct-load not support table with auto_increment columns");
+      } else if (table_schema->get_index_tid_count() > 0
+                && OB_FAIL(ObTableLoadSchema::check_has_global_index(schema_guard,
+                                                                     table_schema,
+                                                                     has_global_index))) {
+        LOG_WARN("fail to check has global index", KR(ret));
+      } else if (has_global_index) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("partition level direct load not support table with global indexes", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "partition level direct-load not support table with global indexes");
+      } else if (lib::is_oracle_mode() && OB_FAIL(ObTableLoadSchema::check_has_identity_column(
+                                                  table_schema, has_identity_column))) {
+        LOG_WARN("fail to check has identity column", KR(ret));
+      } else if (has_identity_column) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("partition level direct load not support table with identity columns", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "partition level direct-load not support table with identity columns");
+      } else if (OB_FAIL(ObTableLoadSchema::check_support_partition_exchange(table_schema,
+                                                                             is_support_partition_exchange))) {
+        LOG_WARN("fail to check support partition exchange", KR(ret));
+      } else if (!is_support_partition_exchange) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("partition level direct load not support hash/key partitions", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "partition level direct-load not support hash/key partitions");
       }
     }
-
-    if (OB_SUCC(ret)) { // check partition type
-      ObPartitionFuncType part_type = PARTITION_FUNC_TYPE_MAX;
-      switch (table_schema.get_part_level()) {
-        case ObPartitionLevel::PARTITION_LEVEL_ONE:
-          part_type = table_schema.get_part_option().get_part_func_type();
-          break;
-        case ObPartitionLevel::PARTITION_LEVEL_TWO:
-          part_type = table_schema.get_sub_part_option().get_part_func_type();
-          break;
-        default:
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected partition level", KR(ret), K(table_schema.get_part_level()));
-      }
-
-      if (OB_FAIL(ret)) {
-      } else if (OB_UNLIKELY(!((PARTITION_FUNC_TYPE_RANGE == part_type)
-                            || (PARTITION_FUNC_TYPE_RANGE_COLUMNS == part_type)
-                            || (PARTITION_FUNC_TYPE_LIST == part_type)
-                            || (PARTITION_FUNC_TYPE_LIST_COLUMNS == part_type)))) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("insert overwrite partition does not support hash/key partitions", KR(ret), K(part_type));
-        FORWARD_USER_ERROR_MSG(ret, "insert overwrite partition does not support hash/key partition type");
-      }
-    }
-  } // end if
+  }
   return ret;
 }
 
@@ -775,7 +753,6 @@ int ObTableLoadService::alloc_ctx(ObTableLoadTableCtx *&table_ctx)
   }
   return ret;
 }
-
 void ObTableLoadService::free_ctx(ObTableLoadTableCtx *table_ctx)
 {
   int ret = OB_SUCCESS;

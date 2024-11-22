@@ -60,6 +60,7 @@ public:
 
   int resolve_filename(ObLoadDataStmt *load_stmt, ParseNode *node);
   int local_infile_enabled(bool &enabled) const;
+  int resolve_partitions(const ParseNode &node, ObLoadDataStmt &load_stmt);
 
   int check_trigger_constraint(const ObTableSchema *table_schema);
   int check_collection_sql_type(const ObTableSchema *table_schema);
@@ -81,6 +82,7 @@ private:
     ENUM_OPT_HINT,
     ENUM_OPT_EXTENDED_OPTIONS,
     ENUM_OPT_COMPRESSION,
+    ENUM_OPT_USE_PARTITION,
     ENUM_TOTAL_COUNT
   };
   ObStmtScope current_scope_;

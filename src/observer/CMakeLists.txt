@@ -282,6 +282,7 @@ ob_set_subtarget(ob_server table_load
   table_load/ob_table_load_pre_sorter.cpp
   table_load/ob_table_load_mem_chunk_manager.cpp
   table_load/ob_table_load_pre_sort_writer.cpp
+  table_load/ob_table_load_empty_insert_tablet_ctx_manager.cpp
 )
 
 ob_set_subtarget(ob_server virtual_table

@@ -59,11 +59,10 @@ public:
                                        const storage::ObDirectLoadMode::Type load_mode,
                                        const storage::ObDirectLoadLevel::Type load_level,
                                        const common::ObIArray<uint64_t> &column_ids);
-  static int check_support_direct_load_for_insert_overwrite(
-      share::schema::ObSchemaGetterGuard &schema_guard,
-      const share::schema::ObTableSchema &table_schema,
-      const storage::ObDirectLoadLevel::Type load_level,
-      const uint64_t compat_version);
+  static int check_support_direct_load_for_partition_level(ObSchemaGetterGuard &schema_guard,
+                                                           const ObTableSchema *table_schema,
+                                                           const ObDirectLoadMethod::Type method,
+                                                           const uint64_t compat_version);
 
   static int alloc_ctx(ObTableLoadTableCtx *&table_ctx);
   static void free_ctx(ObTableLoadTableCtx *table_ctx);

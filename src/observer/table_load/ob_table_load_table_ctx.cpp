@@ -200,6 +200,7 @@ void ObTableLoadTableCtx::unregister_job_stat()
 }
 
 int ObTableLoadTableCtx::init_coordinator_ctx(const ObIArray<uint64_t> &column_ids,
+                                              const ObIArray<ObTabletID> &tablet_ids,
                                               ObTableLoadExecCtx *exec_ctx)
 {
   int ret = OB_SUCCESS;
@@ -214,7 +215,7 @@ int ObTableLoadTableCtx::init_coordinator_ctx(const ObIArray<uint64_t> &column_i
     if (OB_ISNULL(coordinator_ctx = OB_NEWx(ObTableLoadCoordinatorCtx, (&allocator_), this))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObTableLoadCoordinatorCtx", KR(ret));
-    } else if (OB_FAIL(coordinator_ctx->init(column_ids, exec_ctx))) {
+    } else if (OB_FAIL(coordinator_ctx->init(column_ids, tablet_ids, exec_ctx))) {
       LOG_WARN("fail to init coordinator ctx", KR(ret));
     } else if (OB_FAIL(coordinator_ctx->set_status_inited())) {
       LOG_WARN("fail to set coordinator status inited", KR(ret));

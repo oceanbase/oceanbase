@@ -36,6 +36,7 @@ class ObDirectLoadControlConfirmFinishTransExecutor;
 class ObDirectLoadControlAbandonTransExecutor;
 class ObDirectLoadControlGetTransStatusExecutor;
 class ObDirectLoadControlInsertTransExecutor;
+class ObDirectLoadControlInitEmptyTabletsExecutor;
 
 class ObTableLoadControlRpcProxy
 {
@@ -215,6 +216,12 @@ public:
                                    ObDirectLoadControlCommandType::INSERT_TRANS,
                                    ObDirectLoadControlInsertTransExecutor,
                                    ObDirectLoadControlInsertTransArg);
+
+  // init empty tablet
+  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(NORMAL_PRIO, init_empty_tablets,
+                                   ObDirectLoadControlCommandType::INIT_EMPTY_TABLETS,
+                                   ObDirectLoadControlInitEmptyTabletsExecutor,
+                                   ObDirectLoadControlInitEmptyTabletsArg);
 
 private:
   obrpc::ObSrvRpcProxy &rpc_proxy_;

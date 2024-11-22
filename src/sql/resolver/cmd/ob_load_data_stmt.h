@@ -268,6 +268,8 @@ public:
   ObLoadDataHint &get_hints() { return hints_; }
   void set_default_table_columns() { is_default_table_columns_ = true; }
   bool get_default_table_columns() { return is_default_table_columns_; }
+  int set_part_ids(common::ObIArray<ObObjectID> &part_ids);
+  const common::ObIArray<ObObjectID> &get_part_ids() const { return part_ids_; }
   void set_optimizer_ctx(ObDirectLoadOptimizerCtx *optimizer_ctx) { optimizer_ctx_ = optimizer_ctx; }
   ObDirectLoadOptimizerCtx *get_optimizer_ctx() { return optimizer_ctx_; }
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_),
@@ -277,7 +279,8 @@ public:
                K_(field_or_var_list),
                K_(assignments),
                K_(hints),
-               K_(is_default_table_columns));
+               K_(is_default_table_columns),
+               K_(part_ids));
 
 private:
   ObDirectLoadOptimizerCtx *optimizer_ctx_;
@@ -288,6 +291,7 @@ private:
   ObAssignments assignments_;
   ObLoadDataHint hints_;
   bool is_default_table_columns_;
+  common::ObArray<ObObjectID> part_ids_;
 
   DISALLOW_COPY_AND_ASSIGN(ObLoadDataStmt);
 };

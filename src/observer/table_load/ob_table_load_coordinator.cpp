@@ -34,6 +34,7 @@
 #include "observer/table_load/ob_table_load_index_long_wait.h"
 #include "observer/omt/ob_tenant.h"
 #include "storage/direct_load/ob_direct_load_mem_define.h"
+#include "observer/table_load/ob_table_load_empty_insert_tablet_ctx_manager.h"
 
 namespace oceanbase
 {
@@ -82,13 +83,14 @@ bool ObTableLoadCoordinator::is_ctx_inited(ObTableLoadTableCtx *ctx)
 
 int ObTableLoadCoordinator::init_ctx(ObTableLoadTableCtx *ctx,
                                      const ObIArray<uint64_t> &column_ids,
+                                     const ObIArray<ObTabletID> &tablet_ids,
                                      ObTableLoadExecCtx *exec_ctx)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ctx)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid agrs", KR(ret));
-  } else if (OB_FAIL(ctx->init_coordinator_ctx(column_ids, exec_ctx))) {
+  } else if (OB_FAIL(ctx->init_coordinator_ctx(column_ids, tablet_ids, exec_ctx))) {
     LOG_WARN("fail to init coordinator ctx", KR(ret));
   }
   return ret;
@@ -288,8 +290,11 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
   } else if (cluster_version < CLUSTER_VERSION_4_2_2_0 ||
              (cluster_version >= CLUSTER_VERSION_4_3_0_0 && cluster_version < CLUSTER_VERSION_4_3_1_0)) {
     // not support resource manage
-    if (OB_FAIL(coordinator_ctx_->init_partition_location())) {
-      LOG_WARN("fail to init partition location", KR(ret));
+    if (OB_FAIL(ObTableLoadPartitionLocation::init_partition_location(coordinator_ctx_->partition_ids_,
+                                                                      coordinator_ctx_->target_partition_ids_,
+                                                                      coordinator_ctx_->partition_location_,
+                                                                      coordinator_ctx_->target_partition_location_))) {
+      LOG_WARN("fail to inner init partition location", KR(ret));
     } else {
       ctx_->param_.session_count_ = MAX(MIN(ctx_->param_.parallel_, (int64_t)tenant->unit_max_cpu() * 2), MIN_THREAD_COUNT);
       ctx_->param_.write_session_count_ = ctx_->param_.session_count_;
@@ -310,8 +315,11 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
         LOG_WARN("fail to check status", KR(ret));
       } else if (OB_FAIL(coordinator_ctx_->exec_ctx_->check_status())) {
         LOG_WARN("fail to check status", KR(ret));
-      } else if (OB_FAIL(coordinator_ctx_->init_partition_location())) {
-        LOG_WARN("fail to init partition location", KR(ret));
+      } else if (OB_FAIL(ObTableLoadPartitionLocation::init_partition_location(coordinator_ctx_->partition_ids_,
+                                                                               coordinator_ctx_->target_partition_ids_,
+                                                                               coordinator_ctx_->partition_location_,
+                                                                               coordinator_ctx_->target_partition_location_))) {
+        LOG_WARN("fail to inner init partition location", KR(ret));
       } else if (OB_FAIL(coordinator_ctx_->partition_location_.get_all_leader_info(all_leader_info_array))) {
         LOG_WARN("fail to get all leader info", KR(ret));
       } else if (OB_FAIL(ObTableLoadService::get_memory_limit(memory_limit))) {
@@ -582,6 +590,118 @@ int ObTableLoadCoordinator::pre_begin_peers(ObDirectLoadResourceApplyArg &apply_
   return ret;
 }
 
+int ObTableLoadCoordinator::init_empty_tablets()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(coordinator_ctx_->empty_insert_tablet_ctx_manager_
+                              ->set_thread_count(param_.write_session_count_))) {
+    LOG_WARN("fail to set thread count", KR(ret), K(param_.write_session_count_));
+  }
+  for(int64_t i = 0; OB_SUCC(ret) && i < param_.write_session_count_; ++i) {
+    ObTableLoadTask *task = nullptr;
+    if (OB_FAIL(ctx_->alloc_task(task))) {
+      LOG_WARN("fail to alloc task", KR(ret));
+    } else if (OB_FAIL(task->set_processor<InitEmptyTabletTaskProcessor>(ctx_))) {
+      LOG_WARN("fail to set check begin result task processor", KR(ret));
+    } else if (OB_FAIL(task->set_callback<InitEmptyTabletTaskCallback>(ctx_))) {
+      LOG_WARN("fail to set check begin result task callback", KR(ret));
+    } else if (OB_FAIL(coordinator_ctx_->task_scheduler_->add_task(i, task))) {
+      LOG_WARN("fail to add task", KR(ret), KPC(task));
+    }
+    if (OB_FAIL(ret)) {
+      if (nullptr != task) {
+        ctx_->free_task(task);
+      }
+    }
+  }
+  return ret;
+}
+
+class ObTableLoadCoordinator::InitEmptyTabletTaskProcessor : public ObITableLoadTaskProcessor
+{
+public:
+  InitEmptyTabletTaskProcessor(ObTableLoadTask &task,
+                               ObTableLoadTableCtx *ctx)
+    : ObITableLoadTaskProcessor(task),
+      ctx_(ctx),
+      empty_tablet_manager_(ctx->coordinator_ctx_->empty_insert_tablet_ctx_manager_)
+  {
+    ctx_->inc_ref_count();
+  }
+  virtual ~InitEmptyTabletTaskProcessor()
+  {
+    ObTableLoadService::put_ctx(ctx_);
+  }
+  int process() override {
+    int ret = OB_SUCCESS;
+    bool is_finish = false;
+    if (OB_ISNULL(ctx_) || OB_ISNULL(empty_tablet_manager_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("ctx or empty_tablet_manager is nullptr", KR(ret));
+    }
+    while (OB_SUCC(ret)) {
+      ObDirectLoadControlInitEmptyTabletsArg arg;
+      arg.table_id_ = ctx_->param_.table_id_;
+      arg.ddl_param_ = ctx_->ddl_param_;
+      ObAddr addr;
+      if (OB_FAIL(ctx_->coordinator_ctx_->check_status(ObTableLoadStatusType::INITED))) {
+        LOG_WARN("fail to check status", KR(ret));
+      } else if (OB_FAIL(empty_tablet_manager_->get_next_task(addr,
+                                                       arg.partition_id_array_,
+                                                       arg.target_partition_id_array_))) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          break;
+        } else {
+          LOG_WARN("fail to get next init empty partition task", KR(ret));
+        }
+      } else {
+        TABLE_LOAD_CONTROL_RPC_CALL(init_empty_tablets, addr, arg);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(empty_tablet_manager_->handle_thread_finish(is_finish))) {
+        LOG_WARN("fail to handle thread finish", KR(ret));
+      } else if (is_finish) {
+        ObTableLoadCoordinator coordinator(ctx_);
+        if (OB_FAIL(coordinator.init())) {
+          LOG_WARN("fail to init coordinator", KR(ret));
+        } else if (OB_FAIL(coordinator.add_check_begin_result_task())) {
+          LOG_WARN("fail to add check begin result task", KR(ret));
+        }
+      }
+    }
+    return ret;
+  }
+private:
+  ObTableLoadTableCtx * const ctx_;
+  ObTableLoadEmptyInsertTabletCtxManager * const empty_tablet_manager_;
+};
+
+class ObTableLoadCoordinator::InitEmptyTabletTaskCallback : public ObITableLoadTaskCallback
+{
+public:
+  InitEmptyTabletTaskCallback(ObTableLoadTableCtx *ctx)
+    : ctx_(ctx)
+  {
+    ctx_->inc_ref_count();
+  }
+  virtual ~InitEmptyTabletTaskCallback()
+  {
+    ObTableLoadService::put_ctx(ctx_);
+  }
+  void callback(int ret_code, ObTableLoadTask *task) override
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(ret_code)) {
+      ctx_->coordinator_ctx_->set_status_error(ret);
+    }
+    ctx_->free_task(task);
+  }
+private:
+  ObTableLoadTableCtx * const ctx_;
+};
+
 int ObTableLoadCoordinator::confirm_begin_peers()
 {
   int ret = OB_SUCCESS;
@@ -632,8 +752,14 @@ int ObTableLoadCoordinator::begin()
       LOG_WARN("fail to confirm begin peers", KR(ret));
     } else {
       coordinator_ctx_->set_enable_heart_beat(true);
-      if (OB_FAIL(add_check_begin_result_task())) {
-        LOG_WARN("fail to add check begin result task", KR(ret));
+      if (OB_NOT_NULL(coordinator_ctx_->empty_insert_tablet_ctx_manager_)) {
+        if (OB_FAIL(init_empty_tablets())) {
+          LOG_WARN("fail to init empty partition", KR(ret));
+        }
+      } else {
+        if (OB_FAIL(add_check_begin_result_task())) {
+          LOG_WARN("fail to add check begin result task", KR(ret));
+        }
       }
     }
   }

@@ -4907,8 +4907,7 @@ load_data_with_opt_hint opt_load_local INFILE infile_string opt_duplicate INTO T
 relation_factor opt_use_partition opt_compression opt_load_charset field_opt line_opt opt_load_ignore_rows
 opt_field_or_var_spec opt_load_set_spec opt_load_data_extended_option_list
 {
-  (void) $9;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_LOAD_DATA, 13,
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LOAD_DATA, 14,
                            $2,            /* 0. local */
                            $4,            /* 1. filename */
                            $5,            /* 2. duplicate  */
@@ -4921,7 +4920,8 @@ opt_field_or_var_spec opt_load_set_spec opt_load_data_extended_option_list
                            $16,           /* 9. set field  */
                            $1,            /* 10. hint */
                            $17,           /* 11. extended option list */
-                           $10            /* 12. compression format */
+                           $10,           /* 12. compression format */
+                           $9             /* 13. partition */
                            );
 }
 ;

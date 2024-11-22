@@ -71,6 +71,7 @@ ObLoadDataDirectImpl::LoadExecuteParam::LoadExecuteParam()
     dup_action_(ObLoadDupActionType::LOAD_INVALID_MODE),
     method_(ObDirectLoadMethod::INVALID_METHOD),
     insert_mode_(ObDirectLoadInsertMode::INVALID_INSERT_MODE),
+    load_level_(ObDirectLoadLevel::INVALID_LEVEL),
     compressor_type_(ObCompressorType::INVALID_COMPRESSOR),
     online_sample_percent_(100.)
 {
@@ -86,6 +87,7 @@ bool ObLoadDataDirectImpl::LoadExecuteParam::is_valid() const
          ObLoadDupActionType::LOAD_INVALID_MODE != dup_action_ &&
          ObDirectLoadMethod::is_type_valid(method_) &&
          ObDirectLoadInsertMode::is_type_valid(insert_mode_) &&
+         ObDirectLoadLevel::is_type_valid(load_level_) &&
          (storage::ObDirectLoadMethod::is_full(method_)
             ? storage::ObDirectLoadInsertMode::is_valid_for_full_method(insert_mode_)
             : true) &&
@@ -2347,9 +2349,10 @@ int ObLoadDataDirectImpl::init_execute_param()
     } else {
       execute_param_.need_sort_ = optimizer_ctx->need_sort_;
       execute_param_.max_error_rows_ = optimizer_ctx->max_error_row_count_;
+      execute_param_.dup_action_ = optimizer_ctx->dup_action_;
       execute_param_.method_ = optimizer_ctx->load_method_;
       execute_param_.insert_mode_ = optimizer_ctx->insert_mode_;
-      execute_param_.dup_action_ = optimizer_ctx->dup_action_;
+      execute_param_.load_level_ = optimizer_ctx->load_level_;
     }
   }
   // parallel_
@@ -2466,6 +2469,12 @@ int ObLoadDataDirectImpl::init_execute_param()
       LOG_WARN("failed to get sys online sample percent", K(ret));
     }
   }
+  // tablet_ids_
+  if (OB_SUCC(ret) && OB_FAIL(ObTableLoadSchema::get_tablet_ids_by_part_ids(table_schema,
+                                                               load_stmt_->get_part_ids(),
+                                                               execute_param_.tablet_ids_))) {
+    LOG_WARN("fail to get tablet ids", KR(ret));
+  }
   return ret;
 }
 
@@ -2493,9 +2502,11 @@ int ObLoadDataDirectImpl::init_execute_context()
   load_param.load_mode_ = ObDirectLoadMode::LOAD_DATA;
   load_param.compressor_type_ = execute_param_.compressor_type_;
   load_param.online_sample_percent_ = execute_param_.online_sample_percent_;
-  load_param.load_level_ = ObDirectLoadLevel::TABLE;
-  if (OB_FAIL(
-        direct_loader_.init(load_param, execute_param_.column_ids_, &execute_ctx_.exec_ctx_))) {
+  load_param.load_level_ = execute_param_.load_level_;
+  if (OB_FAIL(direct_loader_.init(load_param,
+                                  execute_param_.column_ids_,
+                                  execute_param_.tablet_ids_,
+                                  &execute_ctx_.exec_ctx_))) {
     LOG_WARN("fail to init direct loader", KR(ret));
   } else if (OB_FAIL(init_logger())) {
     LOG_WARN("fail to init logger", KR(ret));

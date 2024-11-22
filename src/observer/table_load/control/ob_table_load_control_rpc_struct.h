@@ -467,5 +467,25 @@ public:
   ObString payload_; //里面包的是ObTableLoadObjArray
 };
 
+class ObDirectLoadControlInitEmptyTabletsArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDirectLoadControlInitEmptyTabletsArg()
+  : table_id_(common::OB_INVALID_ID)
+  {
+  }
+  ~ObDirectLoadControlInitEmptyTabletsArg() {}
+  TO_STRING_KV(K_(table_id),
+               K_(ddl_param),
+               K_(partition_id_array),
+               K_(target_partition_id_array));
+public:
+  uint64_t table_id_;
+  ObTableLoadDDLParam ddl_param_;
+  ObSArray<table::ObTableLoadLSIdAndPartitionId> partition_id_array_; // origin table
+  ObSArray<table::ObTableLoadLSIdAndPartitionId> target_partition_id_array_; // target table
+};
+
 } // namespace observer
 } // namespace oceanbase

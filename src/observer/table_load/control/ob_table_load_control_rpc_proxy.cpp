@@ -47,6 +47,8 @@ int ObTableLoadControlRpcProxy::dispatch(const ObDirectLoadControlRequest &reque
     OB_TABLE_LOAD_CONTROL_RPC_DISPATCH(ObDirectLoadControlCommandType::ABANDON_TRANS);
     OB_TABLE_LOAD_CONTROL_RPC_DISPATCH(ObDirectLoadControlCommandType::GET_TRANS_STATUS);
     OB_TABLE_LOAD_CONTROL_RPC_DISPATCH(ObDirectLoadControlCommandType::INSERT_TRANS);
+    // init empty tablets
+    OB_TABLE_LOAD_CONTROL_RPC_DISPATCH(ObDirectLoadControlCommandType::INIT_EMPTY_TABLETS);
     default:
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "unexpected command type", K(ret), K(request));

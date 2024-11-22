@@ -79,7 +79,14 @@ public:
                                        const share::schema::ObTableSchema *table_schema,
                                        bool &bret);
   static int get_tenant_optimizer_gather_stats_on_load(const uint64_t tenant_id, bool &value);
-
+  static int get_tablet_ids_by_part_ids(const ObTableSchema *table_schema,
+                                        const ObIArray<ObObjectID> &part_ids,
+                                        ObIArray<ObTabletID> &tablet_ids);
+  static int check_has_identity_column(const ObTableSchema *table_schema, bool &has_identity_column);
+  static int check_support_partition_exchange(const ObTableSchema *table_schema, bool &is_support);
+  static int check_has_global_index(ObSchemaGetterGuard &schema_guard,
+                                    const ObTableSchema *table_schema,
+                                    bool &is_have);
 public:
   ObTableLoadSchema();
   ~ObTableLoadSchema();
@@ -124,7 +131,6 @@ public:
   common::ObArray<share::schema::ObColDesc> lob_meta_column_descs_;
   blocksstable::ObStorageDatumUtils lob_meta_datum_utils_;
   blocksstable::ObStoreCmpFuncs cmp_funcs_; // for sql statistics
-  table::ObTableLoadArray<table::ObTableLoadPartitionId> partition_ids_;
   bool is_inited_;
 };
 

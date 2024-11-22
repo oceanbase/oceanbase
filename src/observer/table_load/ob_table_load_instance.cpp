@@ -115,7 +115,7 @@ int ObTableLoadInstance::init(ObTableLoadParam &param,
       LOG_WARN("fail to check support direct load", KR(ret), K(param));
     }
     // start direct load
-    else if (OB_FAIL(start_direct_load(param, column_ids))) {
+    else if (OB_FAIL(start_direct_load(param, column_ids, tablet_ids))) {
       LOG_WARN("fail to start direct load", KR(ret));
     }
     // init succ
@@ -490,7 +490,8 @@ int ObTableLoadInstance::abort_redef_table()
 }
 
 int ObTableLoadInstance::start_direct_load(const ObTableLoadParam &param,
-                                           const ObIArray<uint64_t> &column_ids)
+                                           const ObIArray<uint64_t> &column_ids,
+                                           const ObIArray<ObTabletID> &tablet_ids)
 {
   int ret = OB_SUCCESS;
   ObTableLoadTableCtx *table_ctx = nullptr;
@@ -502,7 +503,7 @@ int ObTableLoadInstance::start_direct_load(const ObTableLoadParam &param,
     LOG_WARN("fail to alloc table ctx", KR(ret), K(param));
   } else if (OB_FAIL(table_ctx->init(param, stmt_ctx_.ddl_param_, session_info, ObString::make_string(""), execute_ctx_->exec_ctx_))) {
     LOG_WARN("fail to init table ctx", KR(ret));
-  } else if (OB_FAIL(ObTableLoadCoordinator::init_ctx(table_ctx, column_ids, execute_ctx_))) {
+  } else if (OB_FAIL(ObTableLoadCoordinator::init_ctx(table_ctx, column_ids, tablet_ids, execute_ctx_))) {
     LOG_WARN("fail to coordinator init ctx", KR(ret));
   } else if (OB_FAIL(ObTableLoadService::add_ctx(table_ctx))) {
     LOG_WARN("fail to add ctx", KR(ret));
