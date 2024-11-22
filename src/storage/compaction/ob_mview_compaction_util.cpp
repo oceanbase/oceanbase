@@ -303,7 +303,7 @@ int ObMviewCompactionHelper::create_inner_session(
      LOG_WARN("Failed to init tenant in session", K(ret), K(tenant_id), K(database_id));
   } else if (OB_FAIL(session->set_default_database(database_schema->get_database_name()))) {
     LOG_WARN("Failed to set default database", K(ret), K(tenant_id), K(database_id));
-  } else if (OB_FAIL(set_params_to_session(session))) {
+  } else if (OB_FAIL(set_params_to_session(is_oracle_mode, session))) {
     LOG_WARN("Failed to set params to session", K(ret));
   } else {
     session->set_inner_session();
@@ -355,7 +355,7 @@ void ObMviewCompactionHelper::release_inner_connection(common::sqlclient::ObISQL
   }
 }
 
-int ObMviewCompactionHelper::set_params_to_session(sql::ObSQLSessionInfo *session)
+int ObMviewCompactionHelper::set_params_to_session(const bool is_oracle_mode, sql::ObSQLSessionInfo *session)
 {
   int ret = OB_SUCCESS;
   ObObj param_val;
@@ -364,6 +364,10 @@ int ObMviewCompactionHelper::set_params_to_session(sql::ObSQLSessionInfo *sessio
   if (OB_SUCC(ret)) {
     param_val.set_int(ObConsistencyLevel::WEAK);
     OZ(session->update_sys_variable(SYS_VAR_OB_READ_CONSISTENCY, param_val));
+  }
+  if (OB_SUCC(ret)) {
+    param_val.set_int(is_oracle_mode ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE);
+    OZ(session->update_sys_variable(SYS_VAR_OB_COMPATIBILITY_MODE, param_val));
   }
   if (OB_SUCC(ret)) {
     ObObj result_val;
