@@ -63,6 +63,7 @@ enum ObTableLockTaskType
   REPLACE_LOCK_SUBPARTITION = 21,
   REPLACE_LOCK_OBJECTS = 22,
   REPLACE_LOCK_ALONE_TABLET = 23,
+  REPLACE_ALL_LOCKS = 24,
   MAX_TASK_TYPE,
 };
 
@@ -111,15 +112,15 @@ public:
   {}
   virtual ~ObLockParam() { reset(); }
   void reset();
-  int set(
-      const ObLockID &lock_id,
-      const ObTableLockMode lock_mode,
-      const ObTableLockOwnerID &owner_id,
-      const ObTableLockOpType op_type,
-      const int64_t schema_version,
-      const bool is_deadlock_avoid_enabled = false,
-      const bool is_try_lock = true,
-      const int64_t expired_time = 0);
+  int set(const ObLockID &lock_id,
+          const ObTableLockMode lock_mode,
+          const ObTableLockOwnerID &owner_id,
+          const ObTableLockOpType op_type,
+          const int64_t schema_version,
+          const bool is_deadlock_avoid_enabled = false,
+          const bool is_try_lock = true,
+          const int64_t expired_time = 0,
+          const bool is_for_replace = false);
   bool is_valid() const;
   TO_STRING_KV(K_(lock_id),
                K_(lock_mode),
@@ -429,7 +430,6 @@ struct ObReplaceLockRequest
 {
   OB_UNIS_VERSION_V(1);
 public:
-  public:
   ObReplaceLockRequest() :
     new_lock_mode_(MAX_LOCK_MODE), new_lock_owner_(), unlock_req_(nullptr)
   {}
@@ -444,6 +444,26 @@ public:
   ObTableLockMode new_lock_mode_;
   ObTableLockOwnerID new_lock_owner_;
   ObLockRequest *unlock_req_;
+};
+
+struct ObReplaceAllLocksRequest
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObReplaceAllLocksRequest(common::ObIAllocator &allocator) :
+    lock_req_(nullptr), unlock_req_list_(), allocator_(allocator)
+  {}
+  ~ObReplaceAllLocksRequest() { reset(); }
+  void reset();
+  bool is_valid() const;
+  int deserialize_and_check_header(DESERIAL_PARAMS);
+  int deserialize_new_lock_mode_and_owner(DESERIAL_PARAMS);
+  VIRTUAL_TO_STRING_KV(K_(lock_req), K_(unlock_req_list));
+
+public:
+  ObLockRequest *lock_req_;
+  ObSArray<ObLockRequest *> unlock_req_list_;
+  common::ObIAllocator &allocator_;
 };
 
 class ObTableLockTaskRequest final

@@ -80,14 +80,16 @@ bool unlock_req_is_equal(const ObLockRequest &req1, const ObLockRequest &req2)
              && req1.op_type_ == req2.op_type_ && req1.timeout_us_ == req2.timeout_us_;
   if (is_equal) {
     switch (req1.type_) {
-    case transaction::tablelock::ObLockRequest::ObLockMsgType::LOCK_TABLE_REQ: {
+    case transaction::tablelock::ObLockRequest::ObLockMsgType::LOCK_TABLE_REQ:
+    case transaction::tablelock::ObLockRequest::ObLockMsgType::UNLOCK_TABLE_REQ: {
       const ObUnLockTableRequest &lock_req1 = static_cast<const ObUnLockTableRequest &>(req1);
       const ObUnLockTableRequest &lock_req2 = static_cast<const ObUnLockTableRequest &>(req2);
       is_equal = lock_req1.table_id_ == lock_req2.table_id_;
       TABLELOCK_LOG(INFO, "compare unlock request", K(lock_req1), K(lock_req2), K(is_equal));
       break;
     }
-    case transaction::tablelock::ObLockRequest::ObLockMsgType::LOCK_TABLET_REQ: {
+    case transaction::tablelock::ObLockRequest::ObLockMsgType::LOCK_TABLET_REQ:
+    case transaction::tablelock::ObLockRequest::ObLockMsgType::UNLOCK_TABLET_REQ: {
       const ObUnLockTabletsRequest &lock_req1 = static_cast<const ObUnLockTabletsRequest &>(req1);
       const ObUnLockTabletsRequest &lock_req2 = static_cast<const ObUnLockTabletsRequest &>(req2);
       is_equal =
@@ -95,21 +97,24 @@ bool unlock_req_is_equal(const ObLockRequest &req1, const ObLockRequest &req2)
       TABLELOCK_LOG(INFO, "compare unlock request", K(lock_req1), K(lock_req2), K(is_equal));
       break;
     }
-    case transaction::tablelock::ObLockRequest::ObLockMsgType::LOCK_PARTITION_REQ: {
+    case transaction::tablelock::ObLockRequest::ObLockMsgType::LOCK_PARTITION_REQ:
+    case transaction::tablelock::ObLockRequest::ObLockMsgType::UNLOCK_PARTITION_REQ: {
       const ObUnLockPartitionRequest &lock_req1 = static_cast<const ObUnLockPartitionRequest &>(req1);
       const ObUnLockPartitionRequest &lock_req2 = static_cast<const ObUnLockPartitionRequest &>(req2);
       is_equal = lock_req1.table_id_ == lock_req2.table_id_ && lock_req1.part_object_id_ == lock_req2.part_object_id_;
       TABLELOCK_LOG(INFO, "compare unlock request", K(lock_req1), K(lock_req2), K(is_equal));
       break;
     }
-    case transaction::tablelock::ObLockRequest::ObLockMsgType::LOCK_OBJ_REQ: {
+    case transaction::tablelock::ObLockRequest::ObLockMsgType::LOCK_OBJ_REQ:
+    case transaction::tablelock::ObLockRequest::ObLockMsgType::UNLOCK_OBJ_REQ: {
       const ObUnLockObjsRequest &lock_req1 = static_cast<const ObUnLockObjsRequest &>(req1);
       const ObUnLockObjsRequest &lock_req2 = static_cast<const ObUnLockObjsRequest &>(req2);
       is_equal = list_is_equal(lock_req1.objs_, lock_req1.objs_);
       TABLELOCK_LOG(INFO, "compare unlock request", K(lock_req1), K(lock_req2), K(is_equal));
       break;
     }
-    case transaction::tablelock::ObLockRequest::ObLockMsgType::LOCK_ALONE_TABLET_REQ: {
+    case transaction::tablelock::ObLockRequest::ObLockMsgType::LOCK_ALONE_TABLET_REQ:
+    case transaction::tablelock::ObLockRequest::ObLockMsgType::UNLOCK_ALONE_TABLET_REQ: {
       const ObUnLockAloneTabletRequest &lock_req1 = static_cast<const ObUnLockAloneTabletRequest &>(req1);
       const ObUnLockAloneTabletRequest &lock_req2 = static_cast<const ObUnLockAloneTabletRequest &>(req2);
       is_equal = lock_req1.table_id_ == lock_req2.table_id_ && lock_req1.ls_id_ == lock_req2.ls_id_
@@ -210,6 +215,81 @@ TEST(ObReplaceLockRequest, test_replace_objs)
   replace_req.new_lock_owner_.convert_from_value(1002);
   replace_req.unlock_req_ = &unlock_req;
   CHECK_SERIALIZE_AND_DESERIALIZE(ObUnLockTableRequest);
+}
+
+TEST(ObReplaceLockRequest, test_replace_all_locks)
+{
+  INIT_SUCC(ret);
+  ObArenaAllocator allocator;
+  ObReplaceAllLocksRequest replace_req(allocator);
+  ObReplaceAllLocksRequest des_replace_req(allocator);
+  ObUnLockTableRequest unlock_req1;
+  ObUnLockTableRequest unlock_req2;
+  ObLockTableRequest lock_req;
+  const int LEN = 100;
+  char buf[LEN];
+  int64_t pos = 0;
+  char tmp_buf[LEN];
+  int64_t tmp_pos = 0;
+  bool is_equal = false;
+
+  unlock_req1.type_ = ObLockRequest::ObLockMsgType::UNLOCK_TABLE_REQ;
+  unlock_req1.owner_id_.convert_from_value(1001);
+  unlock_req1.lock_mode_ = ROW_SHARE;
+  unlock_req1.op_type_ = OUT_TRANS_UNLOCK;
+  unlock_req1.timeout_us_ = 1000;
+  unlock_req1.table_id_ = 998;
+
+  unlock_req2.type_ = ObLockRequest::ObLockMsgType::UNLOCK_TABLE_REQ;
+  unlock_req2.owner_id_.convert_from_value(1002);
+  unlock_req2.lock_mode_ = ROW_EXCLUSIVE;
+  unlock_req2.op_type_ = OUT_TRANS_UNLOCK;
+  unlock_req2.timeout_us_ = 1000;
+  unlock_req2.table_id_ = 998;
+
+  lock_req.owner_id_.convert_from_value(1003);
+  lock_req.lock_mode_ = EXCLUSIVE;
+  lock_req.op_type_ = OUT_TRANS_LOCK;
+  lock_req.timeout_us_ = 1000;
+  lock_req.table_id_ = 998;
+
+  replace_req.unlock_req_list_.push_back(&unlock_req1);
+  replace_req.unlock_req_list_.push_back(&unlock_req2);
+  replace_req.lock_req_ = &lock_req;
+
+  ret = replace_req.serialize(buf, LEN, pos);
+  TABLELOCK_LOG(INFO,
+                "1. serailize replace_req",
+                K(ret),
+                K(replace_req),
+                K(unlock_req1),
+                K(unlock_req2),
+                K(lock_req),
+                K(pos),
+                KPHEX(buf, pos));
+  ASSERT_EQ(ret, OB_SUCCESS);
+
+  pos = 0;
+  ret = des_replace_req.deserialize(buf, LEN, pos);
+
+  TABLELOCK_LOG(INFO,
+                "2. deserailize replace_req",
+                K(ret),
+                K(replace_req),
+                K(des_replace_req),
+                K(unlock_req1),
+                K(unlock_req2),
+                K(lock_req),
+                K(pos),
+                KPHEX(buf, pos));
+  ASSERT_EQ(ret, OB_SUCCESS);
+
+  is_equal = unlock_req_is_equal(*des_replace_req.lock_req_, *replace_req.lock_req_);
+  ASSERT_TRUE(is_equal);
+  for (int64_t i = 0; i < des_replace_req.unlock_req_list_.count() && is_equal; i++) {
+    is_equal = unlock_req_is_equal(*des_replace_req.unlock_req_list_.at(i), *replace_req.unlock_req_list_.at(i));
+  }
+  ASSERT_TRUE(is_equal);
 }
 }  // namespace unittest
 }  // namespace oceanbase

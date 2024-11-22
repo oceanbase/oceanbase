@@ -21,6 +21,14 @@ namespace transaction
 {
 namespace tablelock
 {
+#define GET_REAL_TYPE_LOCK_REQ(T, allocator, lock_req)      \
+  void *ptr = static_cast<T *>(allocator.alloc(sizeof(T))); \
+  if (OB_ISNULL(ptr)) {                                     \
+    ret = OB_ALLOCATE_MEMORY_FAILED;                        \
+    LOG_WARN("failed to allocate lock_req", KR(ret));       \
+  } else {                                                  \
+    lock_req = new (ptr) T();                               \
+  }
 
 OB_SERIALIZE_MEMBER(ObLockParam,
                     lock_id_,
@@ -138,6 +146,150 @@ OB_DEF_DESERIALIZE(ObTableLockTaskRequest)
   return ret;
 }
 
+OB_DEF_SERIALIZE_SIZE(ObReplaceAllLocksRequest)
+{
+  int ret = OB_SUCCESS;
+  int64_t len = 0;
+  int64_t count = 0;
+  if (OB_ISNULL(lock_req_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("lock_req should not be null", K(ret), KP(lock_req_));
+  } else {
+    OB_UNIS_ADD_LEN(*lock_req_);
+    count = unlock_req_list_.count();
+    OB_UNIS_ADD_LEN(count);
+    for (int64_t i = 0; i < count && OB_SUCC(ret); i++) {
+      if (OB_ISNULL(unlock_req_list_.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unlock_req should not be null", K(ret));
+      } else {
+        OB_UNIS_ADD_LEN(*unlock_req_list_.at(i));
+      }
+    }
+  }
+  return len;
+}
+
+OB_DEF_SERIALIZE(ObReplaceAllLocksRequest)
+{
+  int ret = OB_SUCCESS;
+  int64_t count = 0;
+  if (OB_ISNULL(lock_req_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("lock_req should not be null", K(ret), KP(lock_req_));
+  } else {
+    OB_UNIS_ENCODE(*lock_req_);
+    count = unlock_req_list_.count();
+    OB_UNIS_ENCODE(count);
+    for (int64_t i = 0; i < count && OB_SUCC(ret); i++) {
+      if (OB_ISNULL(unlock_req_list_.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unlock_req should not be null", K(ret));
+      } else {
+        OB_UNIS_ENCODE(*unlock_req_list_.at(i));
+      }
+    }
+  }
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObReplaceAllLocksRequest)
+{
+  int ret = OB_SUCCESS;
+  ObLockRequest lock_req;
+  int64_t cnt = 0;
+  int64_t tmp_pos = 0;
+  void *ptr = nullptr;
+  ObUnLockRequest unlock_req;
+
+  if (OB_FAIL(common::serialization::decode(buf, data_len, tmp_pos, lock_req))) {
+    LOG_WARN("deserialize lock_req failed", K(ret), K(data_len), K(tmp_pos), KPHEX(buf, data_len));
+  } else {
+    switch(lock_req.type_) {
+    case ObLockRequest::ObLockMsgType::LOCK_OBJ_REQ: {
+      GET_REAL_TYPE_LOCK_REQ(ObLockObjsRequest, allocator_, lock_req_);
+      break;
+    }
+    case ObLockRequest::ObLockMsgType::LOCK_TABLE_REQ: {
+      GET_REAL_TYPE_LOCK_REQ(ObLockTableRequest, allocator_, lock_req_);
+      break;
+    }
+    case ObLockRequest::ObLockMsgType::LOCK_PARTITION_REQ: {
+      GET_REAL_TYPE_LOCK_REQ(ObLockPartitionRequest, allocator_, lock_req_);
+      break;
+    }
+    case ObLockRequest::ObLockMsgType::LOCK_TABLET_REQ: {
+      GET_REAL_TYPE_LOCK_REQ(ObLockTabletsRequest, allocator_, lock_req_);
+      break;
+    }
+    case ObLockRequest::ObLockMsgType::LOCK_ALONE_TABLET_REQ: {
+      GET_REAL_TYPE_LOCK_REQ(ObLockAloneTabletRequest, allocator_, lock_req_);
+      break;
+    }
+    default: {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("meet unexpected type of lock_req in ObReplaceAllLocksRequest", K(lock_req));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(lock_req_->deserialize(buf, data_len, pos))) {
+    LOG_WARN("deserialize for lock_req failed", K(ret));
+    allocator_.free(lock_req_);
+    lock_req_ = nullptr;
+  } else {
+    OB_UNIS_DECODE(cnt);
+    for (int64_t i = 0; i < cnt && OB_SUCC(ret); i++) {
+      unlock_req.reset();
+      tmp_pos = pos;
+      ObLockRequest *unlock_req_ptr = nullptr;
+      if (OB_FAIL(common::serialization::decode(buf, data_len, tmp_pos, unlock_req))) {
+        LOG_WARN("deserialize lock_req failed", K(ret));
+      } else {
+        switch (unlock_req.type_) {
+        case ObLockRequest::ObLockMsgType::UNLOCK_OBJ_REQ: {
+          GET_REAL_TYPE_LOCK_REQ(ObUnLockObjsRequest, allocator_, unlock_req_ptr);
+          break;
+        }
+        case ObLockRequest::ObLockMsgType::UNLOCK_TABLE_REQ: {
+          GET_REAL_TYPE_LOCK_REQ(ObUnLockTableRequest, allocator_, unlock_req_ptr);
+          break;
+        }
+        case ObLockRequest::ObLockMsgType::UNLOCK_PARTITION_REQ: {
+          GET_REAL_TYPE_LOCK_REQ(ObLockPartitionRequest, allocator_, unlock_req_ptr);
+          break;
+        }
+        case ObLockRequest::ObLockMsgType::UNLOCK_TABLET_REQ: {
+          GET_REAL_TYPE_LOCK_REQ(ObLockTabletsRequest, allocator_, unlock_req_ptr);
+          break;
+        }
+        case ObLockRequest::ObLockMsgType::UNLOCK_ALONE_TABLET_REQ: {
+          GET_REAL_TYPE_LOCK_REQ(ObLockAloneTabletRequest, allocator_, unlock_req_ptr);
+          break;
+        }
+        default: {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("meet unexpected type of unlock_req in ObReplaceAllLocksRequest", K(unlock_req));
+        }
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(unlock_req_ptr->deserialize(buf, data_len, pos))) {
+        LOG_WARN("deserialize for unlock_req failed", K(ret));
+        allocator_.free(unlock_req_ptr);
+      } else if (OB_FAIL(unlock_req_list_.push_back(unlock_req_ptr))) {
+        LOG_WARN("push unlock_req into list failed", K(ret));
+        allocator_.free(unlock_req_ptr);
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+    reset();
+  }
+  return ret;
+}
+
 int TxDescHelper::deserialize_tx_desc(DESERIAL_PARAMS, ObTxDesc *&tx_desc)
 {
   int ret = OB_SUCCESS;
@@ -187,7 +339,8 @@ int ObLockParam::set(
     const int64_t schema_version,
     const bool is_deadlock_avoid_enabled,
     const bool is_try_lock,
-    const int64_t expired_time)
+    const int64_t expired_time,
+    const bool is_for_replace)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!lock_id.is_valid()) ||
@@ -205,6 +358,7 @@ int ObLockParam::set(
     is_try_lock_ = is_try_lock;
     expired_time_ = expired_time;
     schema_version_ = schema_version;
+    is_for_replace_ = is_for_replace;
   }
   return ret;
 }
@@ -617,6 +771,46 @@ int ObReplaceLockRequest::deserialize_new_lock_mode_and_owner(DESERIAL_PARAMS)
   int ret = OB_SUCCESS;
   LST_DO_CODE(OB_UNIS_DECODE, new_lock_mode_, new_lock_owner_);
   return ret;
+}
+
+void ObReplaceAllLocksRequest::reset()
+{
+  if (OB_NOT_NULL(lock_req_)) {
+    allocator_.free(lock_req_);
+    lock_req_ = nullptr;
+  }
+  for (int64_t i = 0; i < unlock_req_list_.count(); i++) {
+    ObLockRequest *unlock_req_ptr = unlock_req_list_.at(i);
+    if (OB_NOT_NULL(unlock_req_ptr)) {
+      allocator_.free(unlock_req_ptr);
+    }
+  }
+}
+
+bool ObReplaceAllLocksRequest::is_valid() const
+{
+  bool is_valid = false;
+  if (OB_NOT_NULL(lock_req_)) {
+    is_valid = lock_req_->is_valid();
+  } else {
+    is_valid = false;
+  }
+
+  if (is_valid) {
+    if (unlock_req_list_.count() == 0) {
+      is_valid = false;
+    } else {
+      for (int64_t i = 0; i < unlock_req_list_.count() && is_valid; i++) {
+        ObLockRequest *unlock_req_ptr = unlock_req_list_.at(i);
+        if (OB_NOT_NULL(unlock_req_ptr)) {
+          is_valid = is_valid && unlock_req_ptr->is_valid();
+        } else {
+          is_valid = false;
+        }
+      }
+    }
+  }
+  return is_valid;
 }
 
 int ObTableLockTaskRequest::set(
