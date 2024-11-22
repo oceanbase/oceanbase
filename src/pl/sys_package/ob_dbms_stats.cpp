@@ -7389,6 +7389,7 @@ int ObDbmsStats::adjust_text_column_basic_stats(ObExecContext &ctx,
   ObSEArray<PrefixColumnPair, 4> pairs;
   ObSEArray<int64_t, 4> text_column_ids;
   ObSEArray<ObColumnStatParam*, 4> auto_columns;
+  ObSEArray<uint64_t, 1> filter_cols;
   for (int64_t i = 0; OB_SUCC(ret) && i < param.column_params_.count(); ++i) {
     if (param.column_params_.at(i).is_text_column()) {
       if (OB_FAIL(auto_columns.push_back(&param.column_params_.at(i)))) {
@@ -7398,6 +7399,7 @@ int ObDbmsStats::adjust_text_column_basic_stats(ObExecContext &ctx,
   }
   if (OB_SUCC(ret) && !auto_columns.empty()) {
     if (OB_FAIL(ObDbmsStatsUtils::get_all_prefix_index_text_pairs(schema,
+                                                                  filter_cols,
                                                                   pairs))) {
       LOG_WARN("failed to get all prefix index text pairs", K(ret));
     } else if (OB_FAIL(ObOptStatMonitorManager::flush_database_monitoring_info(ctx, true, false))) {

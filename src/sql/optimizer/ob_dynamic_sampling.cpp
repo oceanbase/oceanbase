@@ -185,7 +185,8 @@ int ObDynamicSampling::add_ds_stat_items_by_dml_info(const ObDSTableParam &param
     if (!need_add) {
       int64_t origin_modified_count = ds_result_items.at(i).stat_handle_.stat_->get_dml_cnt();
       int64_t inc_modified_cnt = cur_modified_dml_cnt - origin_modified_count;
-      double inc_ratio = origin_modified_count == 0 ? 0 : inc_modified_cnt * 1.0 / origin_modified_count;
+      origin_modified_count = origin_modified_count < 1 ? 1 : origin_modified_count;
+      double inc_ratio = inc_modified_cnt * 1.0 / origin_modified_count;
       bool use_col_stat_cache = false;
       if (inc_ratio <= stale_percent_threshold && need_process_col) {
         use_col_stat_cache = all_ds_col_stats_are_gathered(param,
