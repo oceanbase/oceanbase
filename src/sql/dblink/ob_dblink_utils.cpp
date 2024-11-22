@@ -946,7 +946,7 @@ int ObLinkStmtParam::write(char *buf, int64_t buf_len, int64_t &pos, int64_t par
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "param count not in the range 0 - UINT16_MAX");
   } else {
     buf[pos++] = 0;   // meta flag.
-    buf[pos++] = type_value;   // meta type.
+    buf[pos++] = 0;   // meta type.
     *(uint16_t*)(buf + pos) = param_idx;
     pos += sizeof(uint16_t);
   }

@@ -224,7 +224,8 @@ int ObLogLink::set_link_stmt(const ObDMLStmt* stmt)
   } else if (FALSE_IT(print_param.cs_type_ = spell_coll)) {
   } else if (OB_FAIL(mark_exec_params(const_cast<ObDMLStmt*>(stmt)))) {
     LOG_WARN("failed to mark exec params", K(ret));
-  } else if (OB_FAIL(ObSQLUtils::reconstruct_sql(plan->get_allocator(), stmt, sql, opt_ctx->get_schema_guard(), print_param, NULL, session))) {
+  } else if (OB_FAIL(ObSQLUtils::reconstruct_sql(plan->get_allocator(), stmt, sql,
+                opt_ctx->get_schema_guard(), print_param, opt_ctx->get_params(), session))) {
     LOG_WARN("failed to reconstruct link sql", KP(stmt), KP(plan), K(get_dblink_id()), K(ret));
   } else {
     stmt_fmt_buf_ = sql.ptr();
