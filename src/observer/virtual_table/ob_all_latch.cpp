@@ -15,6 +15,8 @@
 #include "observer/ob_server.h"
 #include "observer/ob_server_utils.h"
 #include "share/ob_tenant_mgr.h"
+#include "share/ash/ob_di_util.h"
+
 
 namespace oceanbase
 {
@@ -56,9 +58,19 @@ int ObAllLatch::get_all_diag_info()
 {
   int ret = OB_SUCCESS;
   if (is_sys_tenant(effective_tenant_id_)) {
-    if (OB_FAIL(common::ObDIGlobalTenantCache::get_instance().get_all_latch_stat(*allocator_, tenant_dis_))) {
-      SERVER_LOG(WARN, "Fail to get tenant latch stat", KR(ret));
+    common::ObVector<uint64_t> ids;
+    GCTX.omt_->get_tenant_ids(ids);
+    for (int64_t i = 0; OB_SUCC(ret) && i < ids.size(); ++i) {
+    uint64_t tenant_id = ids[i];
+    if (!is_virtual_tenant_id(tenant_id)) {
+      MTL_SWITCH(tenant_id)
+      {
+        if (OB_FAIL(get_the_diag_info(tenant_id))) {
+          SERVER_LOG(WARN, "Fail to get tenant latch stat", KR(ret), K(tenant_id));
+        }
+      }
     }
+  }
   } else if (OB_FAIL(get_the_diag_info(effective_tenant_id_))) {
     SERVER_LOG(WARN, "Fail to get tenant latch stat", KR(ret), K_(effective_tenant_id));
   }
@@ -79,7 +91,7 @@ int ObAllLatch::get_the_diag_info(const uint64_t tenant_id)
     std::pair<uint64_t, common::ObDiagnoseTenantInfo*> pair;
     pair.first = tenant_id;
     pair.second = new (buf) common::ObDiagnoseTenantInfo(allocator_);
-    if (OB_FAIL(common::ObDIGlobalTenantCache::get_instance().get_the_diag_info(tenant_id, *(pair.second)))) {
+    if (OB_FAIL(share::ObDiagnosticInfoUtil::get_the_diag_info(tenant_id, *(pair.second)))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
       } else {

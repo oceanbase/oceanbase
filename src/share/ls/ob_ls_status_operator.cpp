@@ -550,6 +550,7 @@ int ObLSStatusOperator::get_all_ls_status_by_order(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("operation is not valid", KR(ret), K(tenant_id));
   } else {
+    ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::LOG_GET_ALL_LS_STATUS_BY_ORDER);
     ObSqlString sql;
     if (OB_FAIL(sql.assign_fmt(
                    "SELECT * FROM %s WHERE tenant_id = %lu ORDER BY tenant_id, ls_id",
@@ -1051,6 +1052,7 @@ int ObLSStatusOperator::get_ls_primary_zone_info(const uint64_t tenant_id, const
   } else {
     common::ObSqlString sql;
     ObSEArray<ObLSPrimaryZoneInfo, 1> ls_primary_zone_array;
+    ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::LOG_GET_LS_PRIMARY_ZONE_INFO);
     if (OB_FAIL(construct_ls_primary_info_sql_(sql))) {
       LOG_WARN("failed to construct sql", KR(ret), K(sql));
     } else if (OB_FAIL(sql.append_fmt(" where a.ls_id = %ld and a.tenant_id = %lu",

@@ -145,6 +145,7 @@
 #include "sql/audit/ob_audit_log_mgr.h"
 #endif
 #include "storage/backup/ob_backup_meta_cache.h"
+#include "lib/stat/ob_diagnostic_info_container.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -160,6 +161,14 @@ extern "C" void ussl_wait();
 
 namespace oceanbase
 {
+namespace common
+{
+uint64_t __attribute__((used)) lib_get_cpu_khz()
+{
+  return OBSERVER.get_cpu_frequency_khz();
+}
+} // namespace common
+
 namespace obrpc
 {
 void keepalive_init_data(ObNetKeepAliveData &ka_data)
@@ -932,6 +941,8 @@ void ObServer::destroy()
     FLOG_INFO("begin to destroy WR service");
     wr_service_.destroy();
     FLOG_INFO("WR service destroyed");
+
+    common::ObDiagnosticInfoContainer::clear_global_di_container();
 
     FLOG_INFO("begin to destroy cgroup service");
     cgroup_ctrl_.destroy();
@@ -1773,6 +1784,7 @@ int ObServer::wait()
 
   FLOG_INFO("begin to wait observer setted to stop");
   while (!stop_) {
+    common::ObBKGDSessInActiveGuard inactive_guard;
     SLEEP(3);
   }
 
@@ -3415,7 +3427,7 @@ void ObServer::check_user_tenant_schema_refreshed(const ObIArray<uint64_t> &tena
           // ignore
         } else if (!tenant_schema_refreshed) {
           // check wait and retry
-          usleep(1000 * 1000);
+          ob_usleep(1000 * 1000);
           if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
             FLOG_INFO("[OBSERVER_NOTICE] Refreshing user tenant schema, need to wait ", K(tenant_id));
           }
@@ -3452,7 +3464,7 @@ void ObServer::check_log_replay_over(const ObIArray<uint64_t> &tenant_ids, const
       weak_read_service_.check_tenant_can_start_service(tenant_id, can_start_service, min_version);
         // check wait and retry
       if (!can_start_service) {
-        usleep(1000 * 1000);
+        ob_usleep(1000 * 1000);
         // check success
       } else if (i == tenant_ids.count() -1) {
         FLOG_INFO("[OBSERVER_NOTICE] all tenant replay log finished, start to service ", K(tenant_ids));

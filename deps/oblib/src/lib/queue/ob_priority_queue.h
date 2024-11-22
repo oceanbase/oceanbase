@@ -15,6 +15,7 @@
 
 #include "lib/queue/ob_link_queue.h"
 #include "lib/lock/ob_scond.h"
+#include "lib/ash/ob_active_session_guard.h"
 
 namespace oceanbase
 {
@@ -84,7 +85,10 @@ public:
       }
       if (OB_FAIL(ret)) {
         auto key = sem_.get_key();
-        sem_.wait(key, timeout_us);
+        {
+          common::ObBKGDSessInActiveGuard inactive_guard;
+          sem_.wait(key, timeout_us);
+        }
         data = NULL;
       } else {
         (void)ATOMIC_FAA(&size_, -1);
@@ -105,6 +109,15 @@ public:
       ;
   }
 
+  ObLinkQueue* get_queue(const int i)
+  {
+    return &queue_[i];
+  }
+
+  int64_t get_prio_cnt() const
+  {
+    return PRIO_CNT;
+  }
 private:
   SimpleCond sem_;
   ObLinkQueue queue_[PRIO_CNT];
@@ -127,6 +140,14 @@ public:
   int64_t queue_size(const int i) const
   {
     return queue_[i].size();
+  }
+  int64_t get_prio_cnt() const
+  {
+    return PRIO_CNT;
+  }
+  ObLinkQueue* get_queue(const int i)
+  {
+    return &queue_[i];
   }
   int64_t to_string(char *buf, const int64_t buf_len) const
   {
@@ -208,6 +229,7 @@ private:
         }
       }
       if (OB_FAIL(ret)) {
+        ObBKGDSessInActiveGuard inactive_guard;
         cond_.wait(timeout_us);
         data = NULL;
       } else {

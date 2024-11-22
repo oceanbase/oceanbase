@@ -647,7 +647,6 @@ public:
       int close_all(sql::ObSQLSessionInfo &session)
       {
         int ret = OB_SUCCESS;
-        ObSessionStatEstGuard guard(session.get_effective_tenant_id(), session.get_sessid());
         while (pl_cursor_map_.size() > 0) { // ignore error, just log, try to close all cursor in this loop.
           int ret = OB_SUCCESS;
           CursorMap::iterator iter = pl_cursor_map_.begin();
@@ -1234,7 +1233,7 @@ public:
   }
 
   int set_client_id(const common::ObString &client_identifier);
-
+  virtual void set_ash_stat_value(ObActiveSessionStat &ash_stat);
   bool has_sess_info_modified() const;
   int set_module_name(const common::ObString &mod);
   int set_action_name(const common::ObString &act);
@@ -1312,6 +1311,7 @@ public:
   bool is_var_assign_use_das_enabled() const;
   bool is_nlj_spf_use_rich_format_enabled() const;
   int is_adj_index_cost_enabled(bool &enabled, int64_t &stats_cost_percent) const;
+  bool is_sqlstat_enabled() const;
   bool is_spf_mlj_group_rescan_enabled() const;
   int is_preserve_order_for_pagination_enabled(bool &enabled) const;
   int get_spm_mode(int64_t &spm_mode);
@@ -1508,6 +1508,10 @@ public:
   int set_service_name(const ObString& service_name);
   int check_service_name_and_failover_mode() const;
   int check_service_name_and_failover_mode(const uint64_t tenant_id) const;
+  int64_t get_tx_id_with_thread_data_lock() {
+    ObSQLSessionInfo::LockGuard guard(get_thread_data_lock());
+    return tx_desc_ != NULL ? tx_desc_->get_tx_id().get_id() : transaction::ObTransID().get_id();
+  }
 public:
   bool has_tx_level_temp_table() const { return tx_desc_ && tx_desc_->with_temporary_table(); }
   void set_affected_rows_is_changed(int64_t affected_rows);
@@ -1743,6 +1747,8 @@ public:
   inline int64_t get_out_bytes() const { return ATOMIC_LOAD(&out_bytes_); }
   inline void inc_out_bytes(int64_t out_bytes) { IGNORE_RETURN ATOMIC_FAA(&out_bytes_, out_bytes); }
   bool is_pl_prepare_stage() const;
+  inline ObExecutingSqlStatRecord& get_executing_sql_stat_record() {return executing_sql_stat_record_; }
+  int sql_sess_record_sql_stat_start_value(ObExecutingSqlStatRecord& executing_sqlstat);
   dbms_scheduler::ObDBMSSchedJobInfo *get_job_info() const { return job_info_; }
   void set_job_info(dbms_scheduler::ObDBMSSchedJobInfo *job_info) { job_info_ = job_info; }
 private:
@@ -1780,6 +1786,7 @@ private:
   bool failover_mode_;
   ObServiceNameString service_name_;
   common::ObString audit_filter_name_;
+  ObExecutingSqlStatRecord executing_sql_stat_record_;
 };
 
 

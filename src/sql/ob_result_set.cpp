@@ -151,8 +151,10 @@ OB_INLINE int ObResultSet::open_plan()
 int ObResultSet::open()
 {
   int ret = OB_SUCCESS;
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_sql_execution);
   my_session_.set_process_query_time(ObClockGenerator::getClock());
   LinkExecCtxGuard link_guard(my_session_, get_exec_context());
+  ObRetryWaitEventInfoGuard retry_info_guard(my_session_);
   FLTSpanGuard(open);
   if (lib::is_oracle_mode() &&
       get_exec_context().get_nested_level() >= OB_MAX_RECURSIVE_SQL_LEVELS) {
@@ -466,7 +468,9 @@ int ObResultSet::end_stmt(const bool is_rollback)
 //see the call reference in LinkExecCtxGuard
 int ObResultSet::get_next_row(const common::ObNewRow *&row)
 {
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_sql_execution);
   LinkExecCtxGuard link_guard(my_session_, get_exec_context());
+  ObRetryWaitEventInfoGuard retry_info_guard(my_session_);
   return inner_get_next_row(row);
 }
 
@@ -928,7 +932,9 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
 int ObResultSet::do_close(int *client_ret)
 {
   int ret = OB_SUCCESS;
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_sql_execution);
   LinkExecCtxGuard link_guard(my_session_, get_exec_context());
+  ObRetryWaitEventInfoGuard retry_info_guard(my_session_);
 
   FLTSpanGuard(close);
   const bool is_tx_active = my_session_.is_in_transaction();

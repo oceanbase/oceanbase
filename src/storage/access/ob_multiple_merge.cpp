@@ -1274,6 +1274,7 @@ int ObMultipleMerge::fill_virtual_columns(ObDatumRow &row)
 
 int ObMultipleMerge::check_filtered(const ObDatumRow &row, bool &filtered)
 {
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_filter_rows);
   int ret = OB_SUCCESS;
   ObSampleFilterExecutor *sample_executor = static_cast<ObSampleFilterExecutor *>(access_ctx_->get_sample_executor());
   if (nullptr != sample_executor && OB_FAIL(sample_executor->check_filtered_after_fuse(filtered))) {

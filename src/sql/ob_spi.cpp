@@ -6501,6 +6501,7 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Argument in pl context is NULL", K(session), K(ret));
     } else {
+      ObPLASHGuard guard(ObPLASHGuard::ObPLASHStatus::IS_SQL_EXECUTION);
       bool old_client_return_rowid = session->is_client_return_rowid();
       bool is_inner_session = session->is_inner();
       ObSQLSessionInfo::SessionType old_session_type = session->get_session_type();
@@ -7291,6 +7292,7 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
   } else if (!for_cursor) { //虽然不需要存储结果，但是也需要把get_next调一遍
     ObResultSet *ob_result_set = static_cast<ObResultSet*>(result_set);
     if (ob_result_set->is_with_rows()) { // SELECT或DML RETURNING
+      ObPLASHGuard guard(ObPLASHGuard::ObPLASHStatus::IS_SQL_EXECUTION);
       if (lib::is_oracle_mode()) { // ORACLE Mode: only iterate to end
         const ObNewRow *row = NULL;
         while (OB_SUCC(ob_result_set->get_next_row(row))) {
@@ -8385,6 +8387,7 @@ int ObSPIService::fetch_row(void *result_set,
                             ObNewRow &cur_row)
 {
   int ret = OB_SUCCESS;
+  ObPLASHGuard guard(ObPLASHGuard::ObPLASHStatus::IS_SQL_EXECUTION);
   if (OB_ISNULL(result_set)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Argument passed in is NULL", K(result_set), K(ret));

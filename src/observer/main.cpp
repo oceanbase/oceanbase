@@ -510,7 +510,8 @@ int inner_main(int argc, char *argv[])
   int64_t pos = 0;
 
   print_args(argc, argv);
-
+  // no diagnostic info attach to main thread.
+  ObDisableDiagnoseGuard disable_guard;
   setlocale(LC_ALL, "");
   // Set character classification type to C to avoid printf large string too
   // slow.

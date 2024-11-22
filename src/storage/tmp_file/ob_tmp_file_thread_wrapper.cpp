@@ -774,7 +774,7 @@ int ObTmpFileSwapTG::init()
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObTmpFileSwapTG init twice");
-  } else if (OB_FAIL(idle_cond_.init(ObWaitEventIds::NULL_EVENT))) {
+  } else if (OB_FAIL(idle_cond_.init(ObWaitEventIds::THREAD_IDLING_COND_WAIT))) {
     STORAGE_LOG(WARN, "failed to init condition variable", KR(ret));
   } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::TmpFileSwap, tg_id_))) {
     STORAGE_LOG(WARN, "fail to create swap thread", KR(ret));

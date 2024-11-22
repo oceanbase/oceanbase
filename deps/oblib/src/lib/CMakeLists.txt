@@ -14,6 +14,7 @@ ob_set_subtarget(oblib_lib ALONE
   geo/ob_geo_func_distance.cpp
   geo/ob_geo_func_crosses.cpp
   geo/ob_geo_func_overlaps.cpp
+  stat/ob_diagnostic_info_util.cpp
 )
 
 ob_set_subtarget(oblib_lib charset
@@ -213,6 +214,10 @@ ob_set_subtarget(oblib_lib common_mixed
   stat/ob_session_stat.cpp
   stat/ob_stat_template.cpp
   statistic_event/ob_stat_event.cpp
+  stat/ob_diagnostic_info.cpp
+  stat/ob_diagnostic_info_summary.cpp
+  stat/ob_diagnostic_info_container.cpp
+  stat/ob_diagnostic_info_guard.cpp
   string/ob_hex_utils_base.cpp
   string/ob_sql_string.cpp
   string/ob_string.cpp
@@ -346,6 +351,7 @@ ob_set_subtarget(oblib_lib utility
 
 ob_set_subtarget(oblib_lib ash
   ash/ob_active_session_guard.cpp
+  ash/ob_ash_bkgd_sess_inactive_guard.cpp
 )
 
 ob_set_subtarget(oblib_lib ssl
@@ -474,3 +480,8 @@ else()
 endif()
 
 endif()
+
+
+# ATTENTION: add this cpp file as library only if compiled target doesn't need diagnose. like unittest or cdc.
+add_library(mock_di stat/mock_diagnostic_info.cpp)
+target_include_directories(mock_di PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/deps/oblib/src)

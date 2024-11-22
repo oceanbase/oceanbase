@@ -1560,5 +1560,9 @@ ObXmlNode* ObXmlUtil::clone_new_node(ObIAllocator* allocator, Args &&... args)
 
 }
 
+template ObXmlNode* ObXmlUtil::clone_new_node<ObXmlText, ObMulModeNodeType, ObMulModeMemCtx*&>(ObIAllocator*, ObMulModeNodeType&&, ObMulModeMemCtx*&);
+template ObXmlNode* ObXmlUtil::clone_new_node<ObXmlAttribute, ObMulModeNodeType, ObMulModeMemCtx*&>(ObIAllocator*, ObMulModeNodeType&&, ObMulModeMemCtx*&);
+template ObXmlNode* ObXmlUtil::clone_new_node<ObXmlElement, ObMulModeNodeType, ObMulModeMemCtx*&>(ObIAllocator*, ObMulModeNodeType&&, ObMulModeMemCtx*&);
+template ObXmlNode* ObXmlUtil::clone_new_node<ObXmlDocument, ObMulModeNodeType, ObMulModeMemCtx*&>(ObIAllocator*, ObMulModeNodeType&&, ObMulModeMemCtx*&);
 } // namespace common
 } // namespace oceanbase

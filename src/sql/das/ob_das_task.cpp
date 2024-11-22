@@ -147,7 +147,6 @@ OB_DEF_DESERIALIZE(ObDASRemoteInfo)
       typedef ObSQLSessionInfo::ExecCtxSessionRegister MyExecCtxSessionRegister;
       des_exec_ctx->get_my_session()->set_is_remote(true);
       MyExecCtxSessionRegister ctx_register(*des_exec_ctx->get_my_session(), *des_exec_ctx);
-      // for remote das, we use thread local ash stat to record ash.
       //   des_exec_ctx->get_my_session()->set_session_type_with_flag();
       // if (OB_FAIL(des_exec_ctx->get_my_session()->set_session_active(
       //     ObString::make_string("REMOTE/DISTRIBUTE DAS PLAN EXECUTING"),
@@ -323,6 +322,7 @@ int ObIDASTaskOp::start_das_task()
   int &ret = errcode_;
   int simulate_error = EVENT_CALL(EventTable::EN_DAS_SIMULATE_OPEN_ERROR);
   int need_dump = EVENT_CALL(EventTable::EN_DAS_SIMULATE_DUMP_WRITE_BUFFER);
+  das_task_start_timestamp_ = common::ObTimeUtility::current_time();
   if (OB_UNLIKELY(!is_in_retry() && OB_SUCCESS != simulate_error)) {
     ret = simulate_error;
   } else {

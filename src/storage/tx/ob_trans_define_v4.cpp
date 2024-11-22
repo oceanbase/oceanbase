@@ -580,6 +580,7 @@ void ObTxDesc::reset()
 
   addr_.reset();
   tx_id_.reset();
+  GET_DIAGNOSTIC_INFO->get_ash_stat().tx_id_ = 0;
   xid_.reset();
   xa_tightly_couple_ = true;
   xa_start_addr_.reset();
@@ -633,6 +634,18 @@ void ObTxDesc::reset()
   tlog_.reset();
   xa_ctx_ = NULL;
   modified_tables_.reset();
+}
+
+void ObTxDesc::set_tx_id(const ObTransID &tx_id)
+{
+  tx_id_ = tx_id;
+  GET_DIAGNOSTIC_INFO->get_ash_stat().tx_id_ = tx_id.get_id();
+}
+
+void ObTxDesc::reset_tx_id()
+{
+  tx_id_.reset();
+  GET_DIAGNOSTIC_INFO->get_ash_stat().tx_id_ = 0;
 }
 
 const ObString &ObTxDesc::get_tx_state_str() const {

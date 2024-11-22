@@ -2160,18 +2160,12 @@ ObPartitionMVRowMergeIter::ObPartitionMVRowMergeIter(common::ObIAllocator &alloc
     free_session_ctx_(),
     session_(nullptr),
     conn_(nullptr),
-    sql_result_(nullptr),
-    sess_stat_guard_(nullptr)
+    sql_result_(nullptr)
 {
 }
 
 ObPartitionMVRowMergeIter::~ObPartitionMVRowMergeIter()
 {
-  if (nullptr != sess_stat_guard_) {
-    sess_stat_guard_->~ObSessionStatEstGuard();
-    allocator_.free(sess_stat_guard_);
-    sess_stat_guard_ = nullptr;
-  }
   read_result_.~ReadResult(); // need decons before session
   ObMviewCompactionHelper::release_inner_connection(conn_);
   ObMviewCompactionHelper::release_inner_session(free_session_ctx_, session_);
@@ -2247,9 +2241,6 @@ int ObPartitionMVRowMergeIter::inner_init(const ObMergeParameter &merge_param)
     LOG_WARN("Failed to create inner session", K(ret), KPC(merge_param.mview_merge_param_));
   } else if (OB_FAIL(ObMviewCompactionHelper::create_inner_connection(session_, conn_))) {
     LOG_WARN("Failed to create inner connection", K(ret), K_(sql_idx));
-  } else if (OB_ISNULL(sess_stat_guard_ = OB_NEWx(ObSessionStatEstGuard, &allocator_, MTL_ID(), session_->get_sessid()))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("Failed to alloc session stat guard", K(ret), K_(sql_idx), K(sql));
   } else if (OB_FAIL(conn_->execute_read(GCONF.cluster_id, MTL_ID(), sql.ptr(), read_result_))) {
     LOG_WARN("Failed to execute", K(ret), K_(sql_idx), K(sql));
   } else if (OB_ISNULL(sql_result_ = static_cast<observer::ObInnerSQLResult *>(read_result_.get_result()))) {

@@ -252,6 +252,7 @@ int ObLSRecoveryStatOperator::update_ls_recovery_stat_in_trans(
     const SCN &readable_scn = ls_recovery.get_readable_scn() > old_ls_recovery.get_readable_scn() ?
         ls_recovery.get_readable_scn() : old_ls_recovery.get_readable_scn();
     common::ObSqlString sql;
+    ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::LOG_UPDATE_LS_RECOVERY_STAT);
     if (OB_FAIL(sql.assign_fmt("UPDATE %s SET sync_scn = %lu, readable_scn = "
                                "%lu where ls_id = %ld and tenant_id = %lu",
                                OB_ALL_LS_RECOVERY_STAT_TNAME, sync_scn.get_val_for_inner_table_field(),
@@ -351,6 +352,7 @@ int ObLSRecoveryStatOperator::get_ls_recovery_stat(
   } else {
     common::ObSqlString sql;
     ObSEArray<ObLSRecoveryStat, 1> ls_recovery_array;
+    ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::LOG_GET_LS_RECOVERY_STAT);
     if (OB_FAIL(sql.assign_fmt("select * from %s where ls_id = %ld and tenant_id = %lu",
                OB_ALL_LS_RECOVERY_STAT_TNAME, ls_id.id(), tenant_id))) {
       LOG_WARN("failed to assign sql", KR(ret), K(sql));
@@ -453,6 +455,7 @@ int ObLSRecoveryStatOperator::get_tenant_recovery_stat(const uint64_t tenant_id,
     common::ObSqlString sql;
     common::ObSqlString status_sql;
     const uint64_t exec_tenant_id = get_exec_tenant_id(tenant_id);
+    ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::LOG_GET_TENANT_RECOVERY_STAT);
     //The sync_scn and readable_scn at the tenant level need to be calculated separately, and the reference LS list is different.
     //The following statement collects sync_scn and readable_scn at the same time in one SQL.
     //

@@ -322,7 +322,7 @@ int ObPxMsgProc::process_sqc_finish_msg_once(ObExecContext &ctx, const ObPxFinis
     LOG_WARN("fail to merge feedback info", K(ret));
   } else if (OB_ISNULL(session->get_tx_desc())) {
   } else if (OB_FAIL(MTL(transaction::ObTransService*)
-                     ->add_tx_exec_result(*session->get_tx_desc(),
+                    ->add_tx_exec_result(*session->get_tx_desc(),
                                           pkt.get_trans_result()))) {
     LOG_WARN("fail merge result", K(ret),
              "packet_trans_result", pkt.get_trans_result(),

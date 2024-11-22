@@ -140,6 +140,7 @@ void ObQueryRetryInfo::reset()
   last_query_retry_err_ = OB_SUCCESS;
   retry_cnt_ = 0;
   query_switch_leader_retry_timeout_ts_ = 0;
+  query_retry_ash_diag_info_.reset();
 }
 
 void ObQueryRetryInfo::clear()
@@ -282,6 +283,7 @@ void ObSqlCtx::clear()
   cur_stmt_ = nullptr;
   is_text_ps_mode_ = false;
   ins_opt_ctx_.clear();
+  cur_plan_ = nullptr;
 }
 
 OB_SERIALIZE_MEMBER(ObSqlCtx, stmt_type_);

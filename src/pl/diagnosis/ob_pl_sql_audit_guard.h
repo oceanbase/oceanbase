@@ -107,6 +107,7 @@ private:
   bool enable_perf_event_;
   bool enable_sql_audit_;
   bool enable_sql_stat_;
+  bool enable_sqlstat_;
   sql::ObExecContext &exec_ctx_;
   sql::ObSQLSessionInfo &session_info_;
 
@@ -124,6 +125,8 @@ private:
   observer::ObQueryRetryCtrl &retry_ctrl_;
   sql::ObPLSPITraceIdGuard &traceid_guard_;
   sql::stmt::StmtType stmt_type_;
+
+  ObExecutingSqlStatRecord sqlstat_record_;
 };
 
 }

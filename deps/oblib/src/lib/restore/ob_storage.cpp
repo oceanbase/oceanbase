@@ -20,6 +20,7 @@
 #include "common/storage/ob_device_common.h"
 #include "common/storage/ob_io_device.h"
 #include "lib/atomic/ob_atomic.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 namespace oceanbase
 {

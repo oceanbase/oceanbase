@@ -27,6 +27,7 @@
 #include "common/object/ob_object.h"
 #include "lib/net/ob_addr.h"
 #include "lib/json/ob_yson.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 namespace oceanbase
 {

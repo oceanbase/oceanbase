@@ -81,6 +81,7 @@ public:
     client_addr_port_ = 0;
     client_create_time_ = 0;
     has_service_name_ = false;
+    di_ = nullptr;
     logined_ = false;
   }
 
@@ -225,6 +226,7 @@ public:
   int64_t client_create_time_;
   bool has_service_name_;
   bool logined_;
+  common::ObDiagnosticInfo *di_;
 };
 } // end of namespace observer
 } // end of namespace oceanbase

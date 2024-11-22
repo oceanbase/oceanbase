@@ -22,6 +22,7 @@
 #include "rpc/obmysql/ob_2_0_protocol_struct.h"
 #include "rpc/obmysql/ob_mysql_packet.h"
 #include "rpc/obmysql/obsm_struct.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 using namespace oceanbase::common;
 

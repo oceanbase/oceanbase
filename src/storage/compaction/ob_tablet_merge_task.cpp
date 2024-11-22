@@ -858,7 +858,6 @@ int ObTabletMergeDag::prepare_merge_ctx(bool &finish_flag)
 int ObTabletMergePrepareTask::process()
 {
   int ret = OB_SUCCESS;
-  ObTenantStatEstGuard stat_est_guard(MTL_ID());
   ObBasicTabletMergeCtx *ctx = NULL;
   ObTaskController::get().switch_task(share::ObTaskType::DATA_MAINTAIN);
   bool finish_flag = false;
@@ -1126,7 +1125,6 @@ int ObTabletMergeTask::generate_next_task(ObITask *&next_task)
 int ObTabletMergeTask::process()
 {
   int ret = OB_SUCCESS;
-  ObTenantStatEstGuard stat_est_guard(MTL_ID());
   ObTaskController::get().switch_task(share::ObTaskType::DATA_MAINTAIN);
 
 #ifdef ERRSIM

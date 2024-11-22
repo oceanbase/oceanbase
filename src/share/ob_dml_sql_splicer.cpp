@@ -1101,6 +1101,23 @@ int ObDMLSqlSplicer::splice_batch_insert_sql(const char *table_name, ObSqlString
   return ret;
 }
 
+int ObDMLSqlSplicer::splice_batch_insert_ignore_sql(const char *table_name, ObSqlString &sql) const
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObString> all_names;
+  ObArray<int64_t> rows_matrix;
+  if (NULL == table_name) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(table_name));
+  } else if (columns_.count() <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column_count is invalid", K(ret), "column_count", columns_.count());
+  } else if (OB_FAIL(splice_batch_insert(table_name, "INSERT IGNORE", sql, all_names, rows_matrix))) {
+    LOG_WARN("splice insert failed", K(ret), K(table_name));
+  }
+  return ret;
+}
+
 int ObDMLSqlSplicer::splice_batch_replace_sql_without_plancache(const char *table_name, ObSqlString &sql) const
 {
   int ret = OB_SUCCESS;

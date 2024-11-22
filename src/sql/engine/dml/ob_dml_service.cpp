@@ -1734,7 +1734,9 @@ int ObDMLService::write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,
   do {
     bool buffer_full = false;
     need_retry = false;
-    //1. find das dml op
+    ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(table_id_, ctdef.table_id_);
+    ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(table_schema_version_, ctdef.schema_version_);
+  //1. find das dml op
     OpType *dml_op = nullptr;
     if (OB_UNLIKELY(!dml_rtctx.das_ref_.has_das_op(tablet_loc, dml_op))) {
       if (OB_FAIL(dml_rtctx.das_ref_.prepare_das_task(tablet_loc, dml_op))) {

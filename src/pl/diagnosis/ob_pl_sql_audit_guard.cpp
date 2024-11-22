@@ -43,17 +43,17 @@ ObPLSqlAuditGuard::ObPLSqlAuditGuard(
 {
   enable_perf_event_ = lib::is_diagnose_info_enabled();
   enable_sql_audit_ = GCONF.enable_sql_audit && session_info_.get_local_ob_enable_sql_audit();
-  // enable_sql_stat_ = session_info.is_sqlstat_enabled();
+  enable_sql_stat_ = session_info.is_sqlstat_enabled();
   max_wait_guard_ = new (memory1) ObMaxWaitGuard(enable_perf_event_ ? &max_wait_desc_ : NULL);
   total_wait_guard_ = new (memory2) ObTotalWaitGuard(enable_perf_event_ ? &total_wait_desc_ : NULL);
   if (enable_perf_event_) {
     record_.exec_record_.record_start();
   }
-  // if (enable_sql_stat_ && OB_NOT_NULL(exec_ctx_.get_sql_ctx())) {
-  //  record_.sqlstat_record_.record_sqlstat_start_value();
-  //  record_.sqlstat_record_.set_is_in_retry(session_info_.get_is_in_retry());
-  //  session_info_.sql_sess_record_sql_stat_start_value(record_.sqlstat_record_);
-  // }
+  if (enable_sql_stat_ && OB_NOT_NULL(exec_ctx_.get_sql_ctx())) {
+   sqlstat_record_.record_sqlstat_start_value();
+   sqlstat_record_.set_is_in_retry(session_info_.get_is_in_retry());
+   session_info_.sql_sess_record_sql_stat_start_value(sqlstat_record_);
+  }
   // 监控项统计开始
   record_.time_record_.set_send_timestamp(ObTimeUtility::current_time());
 }
@@ -65,11 +65,12 @@ ObPLSqlAuditGuard::~ObPLSqlAuditGuard()
   if (enable_perf_event_) {
     record_.exec_record_.record_end();
   }
-  // if (enable_sql_stat_ && OB_NOT_NULL(exec_ctx_.get_sql_ctx()) && OB_NOT_NULL(spi_result_.get_result_set())) {
-  //   record_.sqlstat_record_.record_sqlstat_end_value();
-  //   record_.sqlstat_record_.move_to_sqlstat_cache(
-  //     session_info_, exec_ctx_.get_sql_ctx()->cur_sql_, spi_result_.get_result_set()->get_physical_plan());
-  // }
+  if (enable_sql_stat_ && OB_NOT_NULL(exec_ctx_.get_sql_ctx()) && OB_NOT_NULL(spi_result_.get_result_set())) {
+    sqlstat_record_.record_sqlstat_end_value();
+    sqlstat_record_.set_is_plan_cache_hit(exec_ctx_.get_sql_ctx()->plan_cache_hit_);
+    sqlstat_record_.move_to_sqlstat_cache(
+      session_info_, exec_ctx_.get_sql_ctx()->cur_sql_, spi_result_.get_result_set()->get_physical_plan());
+  }
   max_wait_guard_->~ObMaxWaitGuard();
   total_wait_guard_->~ObTotalWaitGuard();
 

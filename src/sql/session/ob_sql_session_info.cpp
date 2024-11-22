@@ -213,7 +213,8 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       is_session_sync_support_(false),
       job_info_(nullptr),
       failover_mode_(false),
-      service_name_()
+      service_name_(),
+      executing_sql_stat_record_()
 {
   MEMSET(tenant_buff_, 0, sizeof(share::ObTenantSpaceFetcher));
   MEMSET(vip_buf_, 0, sizeof(vip_buf_));
@@ -413,6 +414,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
   job_info_ = nullptr;
   failover_mode_ = false;
   service_name_.reset();
+  executing_sql_stat_record_.reset();
 }
 
 void ObSQLSessionInfo::clean_status()
@@ -666,6 +668,21 @@ bool ObSQLSessionInfo::is_enable_new_query_range() const
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
   if (tenant_config.is_valid()) {
     bret = tenant_config->_enable_new_query_range_extraction;
+  }
+  return bret;
+}
+
+
+bool ObSQLSessionInfo::is_sqlstat_enabled() const
+{
+  bool bret = false;
+  if (lib::is_diagnose_info_enabled()) {
+    int64_t tenant_id = get_effective_tenant_id();
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      bret = tenant_config->_ob_sqlstat_enable;
+      // sqlstat has a dependency on the statistics mechanism, so turning off perf event will turn off sqlstat at the same time.
+    }
   }
   return bret;
 }
@@ -3274,25 +3291,43 @@ bool ObSQLSessionInfo::has_sess_info_modified() const {
 
 int ObSQLSessionInfo::set_module_name(const common::ObString &mod) {
   int ret = OB_SUCCESS;
+  int64_t size = min(common::OB_MAX_MOD_NAME_LENGTH, mod.length());
   MEMSET(module_buf_, 0x00, common::OB_MAX_MOD_NAME_LENGTH);
-  MEMCPY(module_buf_, mod.ptr(), min(common::OB_MAX_MOD_NAME_LENGTH, mod.length()));
-  client_app_info_.module_name_.assign(&module_buf_[0], min(common::OB_MAX_MOD_NAME_LENGTH, mod.length()));
+  MEMCPY(module_buf_, mod.ptr(), size);
+  client_app_info_.module_name_.assign(&module_buf_[0], size);
+  ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+  if (OB_NOT_NULL(di)) {
+    MEMCPY(di->get_ash_stat().module_, mod.ptr(),
+        min(static_cast<int64_t>(sizeof(di->get_ash_stat().module_)), size));
+  }
   return ret;
 }
 
 int ObSQLSessionInfo::set_action_name(const common::ObString &act) {
   int ret = OB_SUCCESS;
+  int64_t size = min(common::OB_MAX_ACT_NAME_LENGTH, act.length());
   MEMSET(action_buf_, 0x00, common::OB_MAX_ACT_NAME_LENGTH);
-  MEMCPY(action_buf_, act.ptr(), min(common::OB_MAX_ACT_NAME_LENGTH, act.length()));
-  client_app_info_.action_name_.assign(&action_buf_[0], min(common::OB_MAX_ACT_NAME_LENGTH, act.length()));
+  MEMCPY(action_buf_, act.ptr(), size);
+  client_app_info_.action_name_.assign(&action_buf_[0], size);
+  ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+  if (OB_NOT_NULL(di)) {
+    MEMCPY(di->get_ash_stat().action_, act.ptr(),
+        min(static_cast<int64_t>(sizeof(di->get_ash_stat().action_)), size));
+  }
   return ret;
 }
 
 int ObSQLSessionInfo::set_client_info(const common::ObString &client_info) {
   int ret = OB_SUCCESS;
+  int64_t size = min(common::OB_MAX_CLIENT_INFO_LENGTH, client_info.length());
   MEMSET(client_info_buf_, 0x00, common::OB_MAX_CLIENT_INFO_LENGTH);
-  MEMCPY(client_info_buf_, client_info.ptr(), min(common::OB_MAX_CLIENT_INFO_LENGTH, client_info.length()));
-  client_app_info_.client_info_.assign(&client_info_buf_[0], min(common::OB_MAX_CLIENT_INFO_LENGTH, client_info.length()));
+  MEMCPY(client_info_buf_, client_info.ptr(), size);
+  client_app_info_.client_info_.assign(&client_info_buf_[0], size);
+  ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+  if (OB_NOT_NULL(di)) {
+    MEMCPY(di->get_ash_stat().client_id_, client_info.ptr(),
+        min(static_cast<int64_t>(sizeof(di->get_ash_stat().client_id_)), size));
+  }
   return ret;
 }
 
@@ -4786,4 +4821,48 @@ int ObSQLSessionInfo::set_audit_filter_name(const common::ObString &filter_name)
     LOG_WARN("failed to write filter_name to string_buf_", K(ret));
   }
   return ret;
+}
+
+int ObSQLSessionInfo::sql_sess_record_sql_stat_start_value(ObExecutingSqlStatRecord& executing_sqlstat)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(executing_sql_stat_record_.assign(executing_sqlstat))) {
+    LOG_WARN("failed to assign executing sql stat record");
+  } else {
+    ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+    if (OB_NOT_NULL(di)) {
+      di->get_ash_stat().record_cur_query_start_ts(get_is_in_retry());
+    }
+  }
+  return ret;
+}
+
+void ObSQLSessionInfo::set_ash_stat_value(ObActiveSessionStat &ash_stat)
+{
+  ObBasicSessionInfo::set_ash_stat_value(ash_stat);
+  if (!get_module_name().empty()) {
+    int64_t size = get_module_name().length() > ASH_MODULE_STR_LEN
+                      ? ASH_MODULE_STR_LEN
+                      : get_module_name().length();
+    MEMCPY(ash_stat.module_, get_module_name().ptr(), size);
+    ash_stat.module_[size] = '\0';
+  }
+
+  // fill action for user session
+  if (!get_action_name().empty()) {
+    int64_t size = get_action_name().length() > ASH_ACTION_STR_LEN
+                      ? ASH_ACTION_STR_LEN
+                      : get_action_name().length();
+    MEMCPY(ash_stat.action_, get_action_name().ptr(), size);
+    ash_stat.action_[size] = '\0';
+  }
+
+  // fill client id for user session
+  if (!get_client_identifier().empty()) {
+    int64_t size = get_client_identifier().length() > ASH_CLIENT_ID_STR_LEN
+                      ? ASH_CLIENT_ID_STR_LEN
+                      : get_client_identifier().length();
+    MEMCPY(ash_stat.client_id_, get_client_identifier().ptr(), size);
+    ash_stat.client_id_[size] = '\0';
+  }
 }

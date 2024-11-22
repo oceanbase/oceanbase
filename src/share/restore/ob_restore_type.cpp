@@ -18,11 +18,6 @@ using namespace share;
 
 static const char *OB_RESTORE_TYPE_STR[] = {"FULL", "QUICK"};
 
-ObRestoreType::ObRestoreType(const Type &type)
-  : type_(type)
-{
-}
-
 ObRestoreType::ObRestoreType(const ObString &str)
 {
   type_ = Type::RESTORE_TYPE_MAX;

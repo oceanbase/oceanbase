@@ -916,7 +916,7 @@ void ObIOTuner::run1()
         LOG_WARN("fail to send detect task", K(ret));
       }
     }
-    ob_usleep(100 * 1000); // 100ms
+    ob_usleep(100 * 1000, true/*is_idle_sleep*/); // 100ms
   }
   LOG_INFO("io tuner thread stopped");
 }
@@ -1336,6 +1336,7 @@ int ObIOSender::dequeue_request(ObIORequest *&req)
       } else if (OB_EAGAIN == ret || OB_ENTRY_NOT_EXIST == ret) {
         const int64_t timeout_us = calc_wait_timeout(queue_deadline_ts);
         int tmp_ret = OB_SUCCESS;
+        ObBKGDSessInActiveGuard inactive_guard;
         if (timeout_us > 0 && OB_SUCCESS != (tmp_ret = queue_cond_.wait_us(timeout_us))) {
           if (OB_TIMEOUT == tmp_ret) {
             // normal case, ignore
@@ -3029,6 +3030,7 @@ int ObIORunner::pop(ObIORequest *&req)
     if (OB_FAIL(guard.get_ret())) {
       LOG_ERROR("fail to guard callback condition", K(ret));
     } else if (queue_.get_total() <= 0) {
+      ObBKGDSessInActiveGuard inactive_guard;
       if (OB_FAIL(cond_.wait_us(CALLBACK_WAIT_PERIOD_US))) {
         if (OB_TIMEOUT != ret) {
           LOG_ERROR("fail to wait callback condition", K(ret));

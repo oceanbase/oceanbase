@@ -66,7 +66,6 @@
 
 int ob_epoll_wait(int __epfd, struct epoll_event *__events,
 		          int __maxevents, int __timeout);
-
 static void
 epoll_modify (EV_P_ int fd, int oev, int nev)
 {

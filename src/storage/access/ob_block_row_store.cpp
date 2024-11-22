@@ -112,6 +112,7 @@ int ObBlockRowStore::apply_blockscan(
     const bool can_pushdown,
     ObTableScanStoreStat &table_store_stat)
 {
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_filter_rows);
   int ret = OB_SUCCESS;
   int64_t access_count = micro_scanner.get_access_cnt();
   if (iter_param_->has_lob_column_out()) {

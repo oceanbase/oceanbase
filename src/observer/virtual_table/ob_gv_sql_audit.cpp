@@ -1069,7 +1069,7 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
           cells[cell_idx].set_int(record.data_.plsql_exec_time_);
         } break;
         case NETWORK_WAIT_TIME: {
-          cells[cell_idx].set_null();
+          cells[cell_idx].set_uint64(record.data_.exec_record_.network_wait_time_);
         } break;
         case STMT_TYPE: {
           ObString stmt_type_name;

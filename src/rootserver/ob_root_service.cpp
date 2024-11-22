@@ -6159,7 +6159,6 @@ int ObRootService::do_restart()
     FLOG_INFO("root_inspection_ started");
     int64_t now = ObTimeUtility::current_time();
     core_meta_table_version_ = now;
-    EVENT_SET(RS_START_SERVICE_TIME, now);
     // reset fail count for self checker and print log.
     reset_fail_count();
   }

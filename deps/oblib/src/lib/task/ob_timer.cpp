@@ -173,6 +173,8 @@ int ObTimer::cancel_task(const ObTimerTask &task)
 int ObTimer::wait_task(const ObTimerTask &task)
 {
   int ret = OB_SUCCESS;
+  ObBKGDSessInActiveGuard inactive_guard;
+
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     OB_LOG(WARN, "timer is not yet initialized", K(ret));

@@ -50,6 +50,7 @@ public:
 
   /* data version related */
   int get_tenant_data_version(const uint64_t tenant_id, uint64_t &data_version);
+  int tenant_need_upgrade(const uint64_t tenant_id, bool &need_upgrade);
   // ATTENTION!!! this interface only work for unittest
   void update_data_version(const uint64_t data_version);
   /*------------------------*/
@@ -85,6 +86,7 @@ private:
 
 // should check returned ret
 #define GET_MIN_DATA_VERSION(tenant_id, data_version) (oceanbase::common::ObClusterVersion::get_instance().get_tenant_data_version((tenant_id), (data_version)))
+#define TENANT_NEED_UPGRADE(tenant_id, need) (oceanbase::common::ObClusterVersion::get_instance().tenant_need_upgrade((tenant_id), (need)))
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 } // end of namespace common

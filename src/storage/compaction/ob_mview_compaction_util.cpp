@@ -402,7 +402,6 @@ int ObMviewCompactionHelper::validate_row_count(const ObMergeParameter &merge_pa
     } else if (OB_FAIL(ObMviewCompactionHelper::create_inner_connection(session, conn))) {
       LOG_WARN("Failed to create inner connection", K(ret));
     } else {
-      ObSessionStatEstGuard sess_stat_guard(MTL_ID(), session->get_sessid());
       if (OB_FAIL(conn->execute_read(GCONF.cluster_id, MTL_ID(), sql.ptr(), read_result))) {
         LOG_WARN("Failed to execute", K(ret), K(sql));
       } else if (OB_ISNULL(sql_result = static_cast<observer::ObInnerSQLResult *>(read_result.get_result()))) {

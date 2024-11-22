@@ -244,19 +244,6 @@ int ObMemoryDump::check_sql_memory_leak()
   return ret;
 }
 
-int ObMemoryDump::load_malloc_sample_map(ObMallocSampleMap &malloc_sample_map)
-{
-  int ret = OB_SUCCESS;
-  if (is_inited_) {
-    ObLatchRGuard guard(iter_lock_, ObLatchIds::MEM_DUMP_ITER_LOCK);
-    auto &map = r_stat_->malloc_sample_map_;
-    for (auto it = map.begin(); OB_SUCC(ret) && it != map.end(); ++it) {
-      ret = malloc_sample_map.set_refactored(it->first, it->second);
-    }
-  }
-  return ret;
-}
-
 void ObMemoryDump::print_malloc_sample_info()
 {
   int ret = OB_SUCCESS;
@@ -324,7 +311,7 @@ void ObMemoryDump::run1()
         generate_mod_stat_task();
         last_dump_ts = current_ts;
       } else {
-        ob_usleep(1000);
+        ob_usleep(1000, true/*is_idle_sleep*/);
       }
     }
   }

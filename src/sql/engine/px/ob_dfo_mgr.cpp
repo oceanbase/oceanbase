@@ -207,6 +207,9 @@ int ObDfoWorkerAssignment::calc_admited_worker_count(const ObIArray<ObDfo*> &dfo
     const int64_t query_admited = task_exec_ctx->get_admited_worker_cnt();
     if (query_expected > 0 && 0 >= query_admited) {
       ret = OB_ERR_INSUFFICIENT_PX_WORKER;
+      ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(dop_, px_expected);
+      ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(required_px_workers_number_, query_expected);
+      ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(admitted_px_workers_number_, query_admited);
       LOG_WARN("not enough thread resource", K(ret), K(px_expected), K(query_admited), K(query_expected));
     } else if (0 == query_expected) {
       // note: 对于单表、dop=1的查询，会走 fast dfo，此时 query_expected = 0

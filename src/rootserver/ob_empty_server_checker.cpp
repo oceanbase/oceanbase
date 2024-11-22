@@ -56,9 +56,7 @@ int ObEmptyServerChecker::init(
   if (inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_FAIL(cond_.init(ObWaitEventIds::EMPTY_SERVER_CHECK_COND_WAIT))) {
-    LOG_WARN("fail to init thread cond, ", K(ret));
-  } else if (OB_FAIL(create(empty_server_checker_thread_cnt, "EmptSvrCheck"))) {
+  } else if (OB_FAIL(create(empty_server_checker_thread_cnt, "EmptSvrCheck", ObWaitEventIds::EMPTY_SERVER_CHECK_COND_WAIT))) {
     LOG_WARN("create empty server checker thread failed", K(ret),
              K(empty_server_checker_thread_cnt));
   } else {
@@ -85,7 +83,7 @@ void ObEmptyServerChecker::run3()
     int64_t wait_time_ms = 0;
     while (!stop_) {
       ret = OB_SUCCESS;
-      ObThreadCondGuard guard(cond_);
+      ObThreadCondGuard guard(get_cond());
       wait_time_ms = 10 * 1000;//10s
       if (OB_FAIL(try_delete_server_())) {
         LOG_WARN("failed to delete server", KR(ret));
@@ -93,7 +91,7 @@ void ObEmptyServerChecker::run3()
       if (OB_SUCC(ret) && !stop_ && !need_check_) {
         wait_time_ms = 100;
       }
-      if (OB_SUCCESS != cond_.wait(wait_time_ms)) {
+      if (OB_SUCCESS != idle_wait(wait_time_ms)) {
           LOG_DEBUG("wait timeout", K(wait_time_ms));
       }
     }
@@ -168,7 +166,7 @@ void ObEmptyServerChecker::wakeup()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
-    cond_.broadcast();
+    get_cond().broadcast();
   }
 }
 
@@ -180,8 +178,8 @@ void ObEmptyServerChecker::stop()
     LOG_WARN("not init", K(ret));
   } else {
     ObRsReentrantThread::stop();
-    ObThreadCondGuard guard(cond_);
-    cond_.broadcast();
+    ObThreadCondGuard guard(get_cond());
+    get_cond().broadcast();
   }
 }
 

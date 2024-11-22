@@ -135,9 +135,7 @@ public:
   uint64_t user_id_;
   uint64_t session_id_;
   uint64_t plan_id_;
-private:
-  uint64_t plan_hash_; // no use!!!
-public:
+  uint64_t plan_hash_;
   ObTSCMonitorInfo *tsc_monitor_info_;
 };
 
@@ -173,7 +171,8 @@ public:
       attach_ctdef_(nullptr),
       attach_rtdef_(nullptr),
       das_gts_opt_info_(op_alloc),
-      plan_line_id_(0)
+      plan_line_id_(0),
+      das_task_start_timestamp_(0)
   {
     das_task_node_.get_data() = this;
   }
@@ -219,6 +218,8 @@ public:
   DasTaskNode &get_node() { return das_task_node_; }
   int get_errcode() const { return errcode_; }
   void set_errcode(int errcode) { errcode_ = errcode; }
+  void set_plan_line_id(int64_t plan_line_id) { plan_line_id_ = plan_line_id; }
+  int64_t get_plan_line_id() const { return plan_line_id_; }
   void set_attach_ctdef(const ObDASBaseCtDef *attach_ctdef) { attach_ctdef_ = attach_ctdef; }
   void set_attach_rtdef(ObDASBaseRtDef *attach_rtdef) { attach_rtdef_ = attach_rtdef; }
   ObDASBaseRtDef *get_attach_rtdef() { return attach_rtdef_; }
@@ -285,7 +286,9 @@ protected:
   uint64_t tenant_id_;
   int64_t task_id_;
   ObDASOpType op_type_; //DAS提供的operation type
+public:
   int errcode_; //don't need serialize it
+protected:
   //事务相关信息
   union
   {
@@ -337,6 +340,9 @@ protected:
   ObDASBaseRtDef *attach_rtdef_;
   ObDASGTSOptInfo das_gts_opt_info_;
   int64_t plan_line_id_; //plan operator id
+public:
+  int64_t das_task_start_timestamp_;
+
 };
 typedef common::ObObjStore<ObIDASTaskOp*, common::ObIAllocator&> DasTaskList;
 typedef DasTaskList::Iterator DASTaskIter;

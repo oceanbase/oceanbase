@@ -678,6 +678,7 @@ public:
   //the DML statement needs to be executed through get_next_row
   bool need_drive_dml_query_;
   ExprFixedArray var_init_exprs_;
+  sql::ObExecutedSqlStatRecord sql_stat_record_value_;
 private:
   bool is_returning_; //是否设置了returning
 

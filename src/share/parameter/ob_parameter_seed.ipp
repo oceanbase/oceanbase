@@ -1689,9 +1689,9 @@ DEF_BOOL(_enable_var_assign_use_das, OB_TENANT_PARAMETER, "False",
          "enable use das if the sql statement has variable assignment",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 // query response time
-DEF_BOOL(query_response_time_stats, OB_TENANT_PARAMETER, "False",
+DEF_BOOL(query_response_time_stats, OB_TENANT_PARAMETER, "True",
     "Enable or disable QUERY_RESPONSE_TIME statistics collecting"
-    "The default value is False. Value: TRUE: turned on FALSE: turned off",
+    "The default value is True. Value: TRUE: turned on FALSE: turned off",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(query_response_time_flush, OB_TENANT_PARAMETER, "False",
     "Flush QUERY_RESPONSE_TIME table and re-read query_response_time_range_base"
@@ -1699,7 +1699,7 @@ DEF_BOOL(query_response_time_flush, OB_TENANT_PARAMETER, "False",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(query_response_time_range_base, OB_TENANT_PARAMETER, "10", "[2,10000]",
     "Select base of log for QUERY_RESPONSE_TIME ranges. WARNING: variable change takes affect only after flush."
-    "The default value is False. Value: TRUE: trigger flush FALSE: do not trigger",
+    "The default value is 10. Range: [2,10000]. ",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(arbitration_timeout, OB_TENANT_PARAMETER, "5s", "[3s,]",
         "The timeout before automatically degrading when arbitration member exists. Range: [3s,+∞]",
@@ -2018,6 +2018,21 @@ DEF_INT(_ha_tablet_info_batch_count, OB_TENANT_PARAMETER, "0", "[0,]",
 DEF_TIME(_ha_rpc_timeout, OB_TENANT_PARAMETER, "0", "[0,120s]",
          "the rpc timeout for storage high availability. Range:[0, 120s]",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(_ob_ash_size, OB_CLUSTER_PARAMETER, "0M", "[0,1G]",
+        "to limit the memory size for ash buffer. Range: [0,1G] 0 means using default ash size"
+        ", 30MB in normal case, 10M in mini mode",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_ob_ash_enable, OB_CLUSTER_PARAMETER, "True",
+         "enable active session history",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_ob_ash_disk_write_enable, OB_CLUSTER_PARAMETER, "True",
+         "enable active session history early flush",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_ob_sqlstat_enable, OB_TENANT_PARAMETER, "True", "enable/disable sql stat",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_inner_session_mgr, OB_TENANT_PARAMETER, "True", "enable/disable inner session mgr",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_trace_tablet_leak, OB_TENANT_PARAMETER, "False",
         "enable t3m tablet leak checker. The default value is False",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));

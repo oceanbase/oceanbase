@@ -29,7 +29,7 @@ int ObTmpFileSwapJob::init(int64_t expect_swap_size, uint32_t timeout_ms)
     STORAGE_LOG(WARN, "ObTmpFileSwapJob init twice", KR(ret));
   } else if (timeout_ms <= 0) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(swap_cond_.init(ObWaitEventIds::NULL_EVENT))) {
+  } else if (OB_FAIL(swap_cond_.init(ObWaitEventIds::THREAD_IDLING_COND_WAIT))) {
     STORAGE_LOG(WARN, "ObTmpFileSwapJob init cond failed", KR(ret));
   } else {
     is_inited_ = true;

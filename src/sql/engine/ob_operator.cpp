@@ -1319,7 +1319,7 @@ int ObOperator::get_next_row()
       }
     }
   }
-  end_ash_line_id_reg();
+  end_ash_line_id_reg(ret);
   end_cpu_time_counting();
   return ret;
 }
@@ -1482,7 +1482,7 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
     brs_.set_all_rows_active(false);
   }
 
-  end_ash_line_id_reg();
+  end_ash_line_id_reg(ret);
   end_cpu_time_counting();
   return ret;
 }

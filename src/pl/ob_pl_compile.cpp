@@ -188,6 +188,7 @@ int ObPLCompiler::compile(
   FLTSpanGuard(pl_compile);
   int64_t compile_start = ObTimeUtility::current_time();
   uint64_t block_hash = OB_INVALID_ID;
+  ObPLASHGuard plash_guard(ObPLASHGuard::ObPLASHStatus::IS_PLSQL_COMPILATION);
 
   //Step 1：构造匿名块的ObPLFunctionAST
   HEAP_VAR(ObPLFunctionAST, func_ast, allocator_) {
@@ -343,6 +344,7 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
 {
   int ret = OB_SUCCESS;
 
+  ObPLASHGuard plash_guard(ObPLASHGuard::ObPLASHStatus::IS_PLSQL_COMPILATION);
   HEAP_VAR(ObPLFunctionAST, func_ast, allocator_) {
     const share::schema::ObRoutineInfo *routine = NULL;
     OZ (schema_guard_.get_routine_info(get_tenant_id_by_object_id(id), id, routine));
@@ -838,7 +840,7 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
   int64_t compile_start = ObTimeUtility::current_time();
 
   ObPLCompilerEnvGuard guard(package_info, session_info_, schema_guard_, ret, parent_ns);
-
+  ObPLASHGuard plash_guard(ObPLASHGuard::ObPLASHStatus::IS_PLSQL_COMPILATION);
   session_info_.set_for_trigger_package(package_info.is_for_trigger());
   if (OB_NOT_NULL(parent_ns)) {
     if (parent_ns->get_compile_flag().compile_with_invoker_right()) {

@@ -320,11 +320,13 @@ int ObDataAccessService::retry_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op
           retry_continue = false;
           LOG_INFO("[DAS RETRY] Retry is interrupted by worker interrupt signal", KR(ret));
         }
+        GET_DIAGNOSTIC_INFO->get_ash_stat().stop_das_retry_wait_event();
       } else {
         ret = task_op.errcode_;
       }
     }
   } while (retry_continue);
+
 
   if (OB_FAIL(ret)) {
     int tmp_ret = OB_SUCCESS;
@@ -429,8 +431,9 @@ int ObDataAccessService::do_async_remote_das_task(
   session->get_cur_sql_id(remote_info.sql_id_, sizeof(remote_info.sql_id_));
   remote_info.user_id_ = session->get_user_id();
   remote_info.session_id_ = session->get_sessid();
-  remote_info.plan_id_ = session->get_current_plan_id();
   if (OB_NOT_NULL(plan_ctx->get_phy_plan())) {
+    remote_info.plan_id_ = plan_ctx->get_phy_plan()->get_plan_id();
+    remote_info.plan_hash_ = plan_ctx->get_phy_plan()->get_plan_hash_value();
     remote_info.need_subschema_ctx_ = plan_ctx->is_subschema_ctx_inited();
   }
   task_arg.set_remote_info(&remote_info);
@@ -527,8 +530,9 @@ int ObDataAccessService::do_sync_remote_das_task(
   session->get_cur_sql_id(remote_info.sql_id_, sizeof(remote_info.sql_id_));
   remote_info.user_id_ = session->get_user_id();
   remote_info.session_id_ = session->get_sessid();
-  remote_info.plan_id_ = session->get_current_plan_id();
   if (OB_NOT_NULL(plan_ctx->get_phy_plan())) {
+    remote_info.plan_id_ = plan_ctx->get_phy_plan()->get_plan_id();
+    remote_info.plan_hash_ = plan_ctx->get_phy_plan()->get_plan_hash_value();
     remote_info.need_subschema_ctx_ = plan_ctx->is_subschema_ctx_inited();
   }
 

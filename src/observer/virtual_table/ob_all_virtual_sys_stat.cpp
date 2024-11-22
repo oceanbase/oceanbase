@@ -19,6 +19,7 @@
 #include "observer/omt/ob_multi_tenant.h"
 #include "share/cache/ob_kv_storecache.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
+#include "share/ash/ob_di_util.h"
 
 namespace oceanbase
 {
@@ -283,7 +284,7 @@ int ObAllVirtualSysStat::get_the_diag_info(
 {
   int ret = OB_SUCCESS;
   diag_info.reset();
-  if (OB_FAIL(common::ObDIGlobalTenantCache::get_instance().get_the_diag_info(tenant_id, diag_info))) {
+  if (OB_FAIL(share::ObDiagnosticInfoUtil::get_the_diag_info(tenant_id, diag_info))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
     } else {
@@ -491,7 +492,7 @@ int ObAllVirtualSysStatI1::get_the_diag_info(
   diag_info.reset();
   if (!is_contain(get_index_ids(), (int64_t)tenant_id)) {
     ret = OB_ITER_END;
-  } else if (OB_FAIL(common::ObDIGlobalTenantCache::get_instance().get_the_diag_info(tenant_id, diag_info))) {
+  } else if (OB_FAIL(share::ObDiagnosticInfoUtil::get_the_diag_info(tenant_id, diag_info))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
     } else {

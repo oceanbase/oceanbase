@@ -452,6 +452,7 @@ void ObRebuildService::run1()
       if (OB_SERVER_IS_INIT == ret || fast_sleep_cnt_ > 0) {
         wait_time_ms = WAIT_SERVER_IN_SERVICE_TIME_MS;
       }
+      ObBKGDSessInActiveGuard inactive_guard;
       thread_cond_.wait(wait_time_ms);
       fast_sleep_cnt_ = 0;
     }

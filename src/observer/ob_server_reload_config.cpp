@@ -33,6 +33,7 @@
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "share/ob_ddl_sim_point.h"
+#include "share/ash/ob_active_sess_hist_list.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/compaction/ob_tenant_ls_merge_scheduler.h"
 #include "share/compaction/ob_shared_storage_compaction_util.h"
@@ -132,6 +133,9 @@ int ObServerReloadConfig::operator()()
     }
     if (OB_TMP_FAIL(ObSrvNetworkFrame::reload_rpc_auth_method())) {
       LOG_WARN("reload config for rpc auth method fail", K(tmp_ret));
+    }
+    if (OB_TMP_FAIL(ObActiveSessHistList::get_instance().resize_ash_size())) {
+      LOG_WARN("failed to change ash size", K(tmp_ret));
     }
   }
   {

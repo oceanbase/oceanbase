@@ -19,6 +19,7 @@
 #include "lib/oblog/ob_log.h"
 #include "lib/signal/ob_signal_struct.h"
 #include "lib/worker.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 using namespace oceanbase;
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -197,6 +198,7 @@ int Threads::start()
 void Threads::run(int64_t idx)
 {
   ObTLTaGuard ta_guard(GET_TENANT_ID() ?:OB_SERVER_TENANT_ID);
+  common::ObBackGroundSessionGuard backgroud_session_guard(GET_TENANT_ID(), THIS_WORKER.get_group_id());
   thread_idx_ = static_cast<uint64_t>(idx);
   Worker worker;
   Worker::set_worker_to_thread_local(&worker);

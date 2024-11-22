@@ -264,7 +264,6 @@ void ObInnerSqlRpcP::cleanup_tmp_session(
     tmp_session = NULL;
     GCTX.session_mgr_->mark_sessid_unused(free_session_ctx.sessid_);
   }
-  ObActiveSessionGuard::setup_default_ash(); // enforce cleanup for future RPC cases
 }
 
 int ObInnerSqlRpcP::process()
@@ -345,6 +344,7 @@ int ObInnerSqlRpcP::process()
         tmp_session->set_current_trace_id(ObCurTraceId::get_trace_id());
         tmp_session->init_use_rich_format();
         tmp_session->switch_tenant_with_name(transmit_arg.get_tenant_id(), tenant_schema->get_tenant_name_str());
+        tmp_session->set_thread_id(GETTID());
         ObString sql_stmt(sql_str.ptr());
         if (OB_FAIL(tmp_session->set_session_active(
             sql_stmt,

@@ -1890,7 +1890,7 @@ int ObIOHandle::wait(const int64_t wait_timeout_ms)
 void ObIOHandle::estimate()
 {
   if (OB_NOT_NULL(result_) && result_->is_finished_ && !ATOMIC_CAS(&result_->has_estimated_, false, true)) {
-    oceanbase::common::ObTenantStatEstGuard guard(result_->get_tenant_id());
+    oceanbase::common::ObTenantDiagnosticInfoSummaryGuard guard(result_->get_tenant_id(), result_->flag_.get_resource_group_id());
     const int64_t result_delay = get_io_interval(result_->time_log_.end_ts_, result_->time_log_.begin_ts_);
     if (result_->flag_.is_read()) {
       EVENT_INC(ObStatEventIds::IO_READ_COUNT);

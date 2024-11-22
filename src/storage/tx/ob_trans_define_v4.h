@@ -708,8 +708,8 @@ private:
 private:
   /* these routine should be called by txn-service only to avoid corrupted state */
   void reset();
-  void set_tx_id(const ObTransID &tx_id) { tx_id_ = tx_id; }
-  void reset_tx_id() { tx_id_.reset(); }
+  void set_tx_id(const ObTransID &tx_id);
+  void reset_tx_id();
   // udpate clean part's unknown field
   int update_clean_part(const share::ObLSID &id,
                         const int64_t epoch,

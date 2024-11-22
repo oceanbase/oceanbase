@@ -56,7 +56,6 @@ void ObDesExecContext::cleanup_session()
       GCTX.session_mgr_->mark_sessid_unused(free_session_ctx_.sessid_);
     }
   }
-  ObActiveSessionGuard::setup_default_ash(); // enforce cleanup for future RPC cases
 }
 
 void ObDesExecContext::show_session()
@@ -123,6 +122,7 @@ int ObDesExecContext::create_my_session(uint64_t tenant_id)
     }
   }
   if (OB_SUCC(ret)) {
+    my_session_->set_thread_id(GETTID());
     //notice: can't unlink exec context and session info here
     typedef ObSQLSessionInfo::ExecCtxSessionRegister MyExecCtxSessionRegister;
     MyExecCtxSessionRegister ctx_register(*my_session_, *this);
@@ -173,7 +173,6 @@ DEFINE_DESERIALIZE(ObDesExecContext)
       // alloc from session manager, increase active session number
       if (OB_SUCC(ret) && free_session_ctx_.sessid_ != ObSQLSessionInfo::INVALID_SESSID) {
         free_session_ctx_.tenant_id_ = my_session_->get_effective_tenant_id();
-        ObTenantStatEstGuard g(free_session_ctx_.tenant_id_);
         EVENT_INC(ACTIVE_SESSIONS);
         free_session_ctx_.has_inc_active_num_ = true;
       }

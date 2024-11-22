@@ -15,7 +15,9 @@
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/worker.h"
-
+#include "lib/stat/ob_diagnostic_info_guard.h"
+#include "lib/stat/ob_diagnostic_info_container.h"
+#include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase
 {
@@ -85,7 +87,8 @@ int ObLatchMutex::try_lock(
 
 int ObLatchMutex::lock(
     const uint32_t latch_id,
-    const int64_t abs_timeout_us)
+    const int64_t abs_timeout_us,
+    const bool is_atomic)
 {
   int ret = OB_SUCCESS;
   uint64_t i = 0;
@@ -125,7 +128,7 @@ int ObLatchMutex::lock(
               reinterpret_cast<uint64_t>(this),
               (uint32_t*)&lock_.val(),
               0,
-              true /*is_atomic*/);
+              is_atomic);
           if (OB_FAIL(wait(abs_timeout_us, uid))) {
             if (OB_TIMEOUT != ret) {
               COMMON_LOG(WARN, "Fail to wait the latch, ", K(ret));
@@ -156,7 +159,7 @@ int ObLatchMutex::wait(const int64_t abs_timeout_us, const uint32_t uid)
 {
   // performance critical, do not double check the parameters
   int ret = OB_SUCCESS;
-  ObDiagnoseSessionInfo *dsi = (!record_stat_ ? NULL : ObDiagnoseSessionInfo::get_local_diagnose_info());
+  ObDiagnosticInfo *dsi = (!record_stat_ ? NULL : ObLocalDiagnosticInfo::get());
   int64_t timeout = 0;
   int lock = 0;
 
@@ -253,7 +256,7 @@ int ObLatchWaitQueue::wait(
     int64_t timeout = 0;
     bool conflict = false;
     struct timespec ts;
-    ObDiagnoseSessionInfo *dsi = ObDiagnoseSessionInfo::get_local_diagnose_info();
+    ObDiagnosticInfo *dsi = ObLocalDiagnosticInfo::get();
 
     //check if need wait
     if (OB_FAIL(try_lock(bucket, proc, latch_id, uid, lock_func))) {
@@ -274,13 +277,14 @@ int ObLatchWaitQueue::wait(
         }
 
         {
-          ObLatchWaitEventGuard wait_guard(
-              ObWaitEventIds::LATCH_WAIT_QUEUE_LOCK_WAIT,
-              abs_timeout_us / 1000,
-              reinterpret_cast<uint64_t>(this),
-              (uint32_t*)&latch.lock_,
-              0,
-              true /*is_atomic*/);
+          // only record physical wait event from caller function
+          // ObLatchWaitEventGuard wait_guard(
+          //     ObWaitEventIds::LATCH_WAIT_QUEUE_LOCK_WAIT,
+          //     abs_timeout_us / 1000,
+          //     reinterpret_cast<uint64_t>(this),
+          //     (uint32_t*)&latch.lock_,
+          //     0,
+          //     true /*is_atomic*/);
           ts.tv_sec = timeout / 1000000;
           ts.tv_nsec = 1000 * (timeout % 1000000);
           // futex_wait is an atomic wait event

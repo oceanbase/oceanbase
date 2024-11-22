@@ -2441,7 +2441,7 @@ int ObTableScanOp::inner_get_next_row_for_tsc()
   }
   return ret;
 }
-
+ERRSIM_POINT_DEF(EN_TABLE_SCAN_RETRY_WAIT_EVENT_ERRSIM);
 int ObTableScanOp::inner_get_next_batch(const int64_t max_row_cnt)
 {
   int ret = OB_SUCCESS;
@@ -2453,7 +2453,9 @@ int ObTableScanOp::inner_get_next_batch(const int64_t max_row_cnt)
   if (enable_random_output && max_row_cnt > 1) {
     gen_rand_size_and_skip_bits(max_row_cnt, rand_row_cnt, rand_append_bits);
   }
-  if (OB_FAIL(inner_get_next_batch_for_tsc(rand_row_cnt))) {
+  if (OB_UNLIKELY(EN_TABLE_SCAN_RETRY_WAIT_EVENT_ERRSIM)) {
+    ret = EN_TABLE_SCAN_RETRY_WAIT_EVENT_ERRSIM;
+  } else if (OB_FAIL(inner_get_next_batch_for_tsc(rand_row_cnt))) {
     LOG_WARN("failed to get next batch", K(ret));
   }
 
@@ -3336,7 +3338,9 @@ int ObTableScanOp::transform_physical_rowid_rowkey(ObIAllocator &allocator,
 int ObTableScanOp::inner_get_next_row()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(MY_SPEC.is_spatial_ddl())) {
+  if (OB_UNLIKELY(EN_TABLE_SCAN_RETRY_WAIT_EVENT_ERRSIM)) {
+    ret = EN_TABLE_SCAN_RETRY_WAIT_EVENT_ERRSIM;
+  } else if (OB_UNLIKELY(MY_SPEC.is_spatial_ddl())) {
     if (OB_FAIL(inner_get_next_spatial_index_row())) {
       if (ret != OB_ITER_END) {
         LOG_WARN("spatial index ddl : get next spatial index row failed", K(ret));

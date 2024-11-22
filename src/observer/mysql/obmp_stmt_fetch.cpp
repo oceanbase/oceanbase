@@ -160,10 +160,12 @@ int ObMPStmtFetch::do_process(ObSQLSessionInfo &session,
 {
   int ret = OB_SUCCESS;
   ObAuditRecordData &audit_record = session.get_raw_audit_record();
+  ObExecutingSqlStatRecord sqlstat_record;
   audit_record.try_cnt_++;
   const bool enable_perf_event = lib::is_diagnose_info_enabled();
   const bool enable_sql_audit = GCONF.enable_sql_audit
                                 && session.get_local_ob_enable_sql_audit();
+  const bool enable_sqlstat = session.is_sqlstat_enabled();
   single_process_timestamp_ = ObTimeUtility::current_time();
   ObPLCursorInfo *cursor = session.get_cursor(cursor_id_);
   if (OB_ISNULL(cursor)) {
@@ -174,14 +176,19 @@ int ObMPStmtFetch::do_process(ObSQLSessionInfo &session,
   } else {
     ObWaitEventStat total_wait_desc;
     int64_t execution_id = 0;
-    ObDiagnoseSessionInfo *di = ObDiagnoseSessionInfo::get_local_diagnose_info();
     ObMaxWaitGuard max_wait_guard(enable_perf_event
-        ? &audit_record.exec_record_.max_wait_event_ : NULL, di);
-    ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL, di);
+        ? &audit_record.exec_record_.max_wait_event_ : nullptr);
+    ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : nullptr);
     int64_t fetch_limit = OB_INVALID_COUNT == fetch_rows_ ? INT64_MAX : fetch_rows_;
     int64_t true_row_num = 0;
     if (enable_perf_event) {
-      audit_record.exec_record_.record_start(di);
+      audit_record.exec_record_.record_start();
+    }
+    if (enable_sqlstat && OB_NOT_NULL(session.get_cur_exec_ctx()) &&
+        OB_NOT_NULL(session.get_cur_exec_ctx()->get_sql_ctx())) {
+      sqlstat_record.record_sqlstat_start_value();
+      sqlstat_record.set_is_in_retry(session.get_is_in_retry());
+      session.sql_sess_record_sql_stat_start_value(sqlstat_record);
     }
     if (OB_ISNULL(gctx_.sql_engine_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -225,13 +232,35 @@ int ObMPStmtFetch::do_process(ObSQLSessionInfo &session,
     audit_record.exec_timestamp_.update_stage_time();
 
     if (enable_perf_event) {
-      audit_record.exec_record_.record_end(di);
+      audit_record.exec_record_.record_end();
       record_stat(stmt::T_EXECUTE, exec_end_timestamp_);
+      audit_record.stmt_type_ = stmt::T_EXECUTE;
       audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
       audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
       audit_record.update_event_stage_state();
     }
 
+    if (enable_sqlstat && OB_NOT_NULL(session.get_cur_exec_ctx()) &&
+        OB_NOT_NULL(session.get_cur_exec_ctx()->get_sql_ctx())) {
+      ObSqlCtx *sql_ctx = session.get_cur_exec_ctx()->get_sql_ctx();
+      sqlstat_record.record_sqlstat_end_value();
+      sqlstat_record.inc_fetch_cnt();
+      ObString sql = ObString::make_empty_string();
+      if (OB_NOT_NULL(cursor)
+          && cursor->is_ps_cursor()) {
+        ObPsStmtInfoGuard guard;
+        ObPsStmtInfo *ps_info = NULL;
+        ObPsStmtId inner_stmt_id = OB_INVALID_ID;
+        if (OB_SUCC(session.get_inner_ps_stmt_id(cursor_id_, inner_stmt_id))
+              && OB_SUCC(session.get_ps_cache()->get_stmt_info_guard(inner_stmt_id, guard))
+              && OB_NOT_NULL(ps_info = guard.get_stmt_info())) {
+          sql = ps_info->get_ps_sql();
+        } else {
+          LOG_WARN("get sql fail in fetch", K(ret), K(cursor_id_), K(cursor->get_id()));
+        }
+      }
+      sqlstat_record.move_to_sqlstat_cache(session, sql);
+    }
     if (enable_sql_audit) {
       audit_record.affected_rows_ = fetch_limit;
       audit_record.return_rows_ = true_row_num;
@@ -616,7 +645,6 @@ int ObMPStmtFetch::process_fetch_stmt(ObSQLSessionInfo &session,
   int ret = OB_SUCCESS;
   // 执行setup_wb后，所有WARNING都会写入到当前session的WARNING BUFFER中
   setup_wb(session);
-  ObSessionStatEstGuard stat_est_guard(get_conn()->tenant_->id(), session.get_sessid());
   //set session log_level.Must use ObThreadLogLevelUtils::clear() in pair
   ObThreadLogLevelUtils::init(session.get_log_id_level_map());
   // obproxy may use 'SET @@last_schema_version = xxxx' to set newest schema,

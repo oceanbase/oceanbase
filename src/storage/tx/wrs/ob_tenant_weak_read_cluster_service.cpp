@@ -194,6 +194,7 @@ int ObTenantWeakReadClusterService::query_cluster_version_range_(SCN &cur_min_ve
   int ret = OB_SUCCESS;
   ObSqlString sql;
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::TX_GET_WEAK_READ_VERSION_RANGE);
     ObMySQLResult *result = NULL;
     uint64_t tenant_id = MTL_ID();
     const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
@@ -297,6 +298,7 @@ int ObTenantWeakReadClusterService::persist_version_if_need_(const SCN last_min_
   // check if need update
   // NOTE：min_version <= max_version
   if (new_min_version > last_min_version && new_min_version >= last_max_version) {
+    ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::TX_UPDATE_WEAK_READ_VERSION);
     if (OB_ISNULL(mysql_proxy_)) {
       ret = OB_NOT_INIT;
     } else if (OB_FAIL(build_update_version_sql_(last_min_version, last_max_version,

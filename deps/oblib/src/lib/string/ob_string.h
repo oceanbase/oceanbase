@@ -508,7 +508,7 @@ public:
     return compare(str) != 0;
   }
 
-  const ObString trim()
+  const ObString trim() const
   {
     ObString ret;
     if (NULL != ptr_) {

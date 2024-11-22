@@ -28,11 +28,13 @@
 #include "lib/mysqlclient/ob_dblink_error_trans.h"
 #endif
 #include "lib/mysqlclient/ob_tenant_oci_envs.h"
+#include "observer/mysql/ob_query_response_time.h"
 namespace oceanbase
 {
 namespace common {
   class ObLDHandle;
   class ObTenantIOManager;
+  class ObDiagnosticInfoContainer;
   template<typename T> class ObServerObjectPool;
   class ObDetectManager;
   class ObOptStatMonitorManager;
@@ -212,6 +214,7 @@ namespace observer
   class ObTableLoadResourceService;
   class ObStartupAccelTaskHandler;
   class ObTabletTableUpdater;
+  class ObTenantQueryRespTimeCollector;
   class ObTableQueryASyncMgr;
 }
 
@@ -244,6 +247,7 @@ class ObSharedMemAllocMgr;
 class ObIndexUsageInfoMgr;
 class ObStorageIOUsageRepoter;
 class ObResourceLimitCalculator;
+class ObWorkloadRepositoryContext;
 class ObPluginVectorIndexService;
 class ObAutoSplitTaskCache;
 namespace schema
@@ -296,6 +300,7 @@ using ObPartTransCtxObjPool = common::ObServerObjectPool<transaction::ObPartTran
 using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage::ObTableScanIterator>;
 #define MTL_MEMBERS                                  \
   MTL_LIST(                                          \
+      common::ObDiagnosticInfoContainer*,            \
       ObTimerService*,                               \
       blocksstable::ObDecodeResourcePool*,           \
       omt::ObSharedTimer*,                           \
@@ -432,6 +437,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       share::ObAutoSplitTaskCache*    ,              \
       sql::ObAuditLogger*,                           \
       sql::ObAuditLogUpdater*,                       \
+      share::ObWorkloadRepositoryContext*,           \
+      observer::ObTenantQueryRespTimeCollector*,     \
       table::ObTableGroupCommitMgr*,                 \
       observer::ObTableQueryASyncMgr*,               \
       table::ObTableClientInfoMgr*,                  \

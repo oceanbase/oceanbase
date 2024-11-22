@@ -55,6 +55,7 @@
 #include "share/resource_manager/ob_cgroup_ctrl.h"
 #include "sql/engine/px/ob_px_worker.h"
 #include "lib/thread/protected_stack_allocator.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -290,6 +291,8 @@ void ObPxPool::run1()
   int ret = OB_SUCCESS;
   set_px_thread_name();
   ObTLTaGuard ta_guard(tenant_id_);
+  common::ObBackGroundSessionGuard backgroud_session_guard(tenant_id_, group_id_);
+  ObLocalDiagnosticInfo::set_thread_name(ob_get_tenant_id(), "PxWorker");
   auto *pm = common::ObPageManager::thread_local_instance();
   if (OB_LIKELY(nullptr != pm)) {
     pm->set_tenant_ctx(tenant_id_, common::ObCtxIds::DEFAULT_CTX_ID);
@@ -1314,7 +1317,6 @@ int ObTenant::get_new_request(
   }
 
   if (OB_SUCC(ret)) {
-    EVENT_INC(REQUEST_DEQUEUE_COUNT);
     if (nullptr == req && nullptr != task) {
       req = static_cast<rpc::ObRequest*>(task);
     }
@@ -1534,7 +1536,6 @@ int ObTenant::recv_request(ObRequest &req)
   }
 
   if (OB_SUCC(ret)) {
-    ObTenantStatEstGuard guard(id_);
     EVENT_INC(REQUEST_ENQUEUE_COUNT);
   }
 
@@ -1561,7 +1562,6 @@ int ObTenant::recv_large_request(rpc::ObRequest &req)
   } else if (OB_FAIL(recv_group_request(req, OBCG_LQ))){
     LOG_ERROR("recv large request failed", "tenant_id", id_);
   } else {
-    ObTenantStatEstGuard guard(id_);
     EVENT_INC(REQUEST_ENQUEUE_COUNT);
   }
   return ret;

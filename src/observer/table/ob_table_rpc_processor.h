@@ -180,7 +180,6 @@ protected:
   table::ObTableTransParam trans_param_;
   transaction::ObTxReadSnapshot tx_snapshot_;
   ObAddr user_client_addr_;
-  ObSessionStatEstGuard sess_stat_guard_;
   table::ObTableAuditCtx audit_ctx_;
 };
 

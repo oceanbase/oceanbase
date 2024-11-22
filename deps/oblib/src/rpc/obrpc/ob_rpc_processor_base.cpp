@@ -31,6 +31,7 @@
 #include "rpc/obrpc/ob_rpc_processor_base.h"
 #include "rpc/obrpc/ob_rpc_net_handler.h"
 #include "rpc/obrpc/ob_poc_rpc_server.h"
+#include "lib/ash/ob_active_session_guard.h"
 
 using namespace oceanbase::common;
 
@@ -167,6 +168,7 @@ int ObRpcProcessorBase::update_data_version()
 int ObRpcProcessorBase::deserialize()
 {
   int ret = OB_SUCCESS;
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_rpc_decode);
   if (OB_ISNULL(rpc_pkt_)) {
     ret = OB_ERR_UNEXPECTED;
     RPC_OBRPC_LOG(ERROR, "rpc_pkt_ should not be NULL", K(ret));
@@ -498,6 +500,7 @@ int ObRpcProcessorBase::part_response(const int retcode, bool is_last)
 
     // serialize
     if (OB_SUCC(ret)) {
+      ACTIVE_SESSION_FLAG_SETTER_GUARD(in_rpc_encode);
       if (OB_ISNULL(using_buffer_)) {
         ret = OB_ERR_UNEXPECTED;
         RPC_OBRPC_LOG(ERROR, "using_buffer_ is NULL", K(ret));

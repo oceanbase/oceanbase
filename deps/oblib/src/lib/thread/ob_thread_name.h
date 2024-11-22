@@ -17,6 +17,7 @@
 #include <sys/prctl.h>
 
 #include "lib/ob_define.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 namespace oceanbase
 {
@@ -39,6 +40,7 @@ inline void set_thread_name(const char* type, uint64_t idx)
   } else {
     snprintf(name, OB_THREAD_NAME_BUF_LEN, "T%ld_%s%ld", tenant_id, type, idx);
   }
+  ObLocalDiagnosticInfo::set_thread_name(tenant_id, type);
   set_thread_name_inner(name);
 }
 
@@ -53,6 +55,7 @@ inline void set_thread_name(const char* type)
   } else {
     snprintf(name, OB_THREAD_NAME_BUF_LEN, "T%ld_%s", tenant_id, type);
   }
+  ObLocalDiagnosticInfo::set_thread_name(tenant_id, type);
   set_thread_name_inner(name);
 }
 

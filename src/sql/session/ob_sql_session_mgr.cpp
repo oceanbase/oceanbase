@@ -32,6 +32,7 @@
 #include "sql/session/ob_user_resource_mgr.h"
 #include "sql/monitor/flt/ob_flt_control_info_mgr.h"
 #include "storage/concurrency_control/ob_multi_version_garbage_collector.h"
+#include "lib/ash/ob_active_session_guard.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -271,7 +272,7 @@ ObSQLSessionInfo *ObSQLSessionMgr::ValueAlloc::alloc_value(uint64_t tenant_id)
       LOG_INFO("alloc_session_count", K(alloc_total_count));
     }
   } else {
-    LOG_ERROR("switch tenant failed", K(ret), K(tenant_id));
+    LOG_WARN("switch tenant failed", K(ret), K(tenant_id));
   }
   return session;
 }
@@ -323,7 +324,6 @@ void ObSQLSessionMgr::ValueAlloc::free_value(ObSQLSessionInfo *session)
     if (free_total_count > 0 && free_total_count % 10000 == 0) {
       LOG_INFO("free_session_count", K(free_total_count));
     }
-    ObActiveSessionGuard::setup_default_ash();
   }
 }
 
@@ -471,6 +471,7 @@ int ObSQLSessionMgr::create_session(const uint64_t tenant_id,
                                     const uint32_t client_sessid,
                                     const int64_t client_create_time)
 {
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_connection_mgr);
   int ret = OB_SUCCESS;
   int err = OB_SUCCESS;
   session_info = NULL;
@@ -574,6 +575,7 @@ int ObSQLSessionMgr::create_session(const uint64_t tenant_id,
 
 int ObSQLSessionMgr::free_session(const ObFreeSessionCtx &ctx)
 {
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_connection_mgr);
   int ret = OB_SUCCESS;
   uint32_t sessid = ctx.sessid_;
   uint64_t proxy_sessid = ctx.proxy_sessid_;
@@ -605,7 +607,6 @@ int ObSQLSessionMgr::free_session(const ObFreeSessionCtx &ctx)
   if (OB_FAIL(sessinfo_map_.del(Key(sessid)))) {
     LOG_WARN("fail to remove session from session map", K(ret), K(sessid), K(proxy_sessid));
   } else if (tenant_id != 0 && sessid != 0 && has_inc) {
-    ObTenantStatEstGuard guard(tenant_id);
     EVENT_DEC(ACTIVE_SESSIONS);
   }
   return ret;

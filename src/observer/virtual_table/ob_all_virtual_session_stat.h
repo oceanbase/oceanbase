@@ -39,8 +39,8 @@ public:
 
 protected:
   virtual int get_all_diag_info();
-  common::ObSEArray<std::pair<uint64_t, common::ObDISessionCollect*>,
-  common::OB_MAX_SERVER_SESSION_CNT+1> session_status_;
+  common::ObSEArray<std::pair<uint64_t, common::ObDISessionCollect>,
+  8> session_status_;
 private:
   enum SESSION_COLUMN
   {

@@ -1853,6 +1853,7 @@ void ObDupTableLoopWorker::run1()
 
       time_used = ObTimeUtility::current_time() - start_time;
       if (time_used < LOOP_INTERVAL) {
+        ObBKGDSessInActiveGuard inactive_guard;
         usleep(LOOP_INTERVAL - time_used);
       }
     }

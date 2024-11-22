@@ -154,6 +154,9 @@ int ObPxAdmission::enter_query_admission(ObSQLSessionInfo &session,
       } else if (admit_worker_count <= 0) {
         plan.inc_delayed_px_querys();
         ret = OB_ERR_INSUFFICIENT_PX_WORKER;
+        ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(dop_, plan.get_px_dop());
+        ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(required_px_workers_number_, req_worker_count);
+        ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(admitted_px_workers_number_, admit_worker_count);
         LOG_INFO("This query is out of px worker resources and needs to be delayed; "
                 "disconnection is unnecessary.",
                 K(admit_worker_count),

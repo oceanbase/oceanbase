@@ -161,6 +161,7 @@ int ObTableQueryAndMutateP::try_process()
   const ObTableQuery &query = arg_.query_and_mutate_.get_query();
   int64_t affected_rows = 0;
   const bool is_hkv = (ObTableEntityType::ET_HKV == arg_.entity_type_);
+  stat_event_type_ = get_process_type(is_hkv, arg_.query_and_mutate_.get_mutations().at(0).type());
   ObHTableLockHandle *lock_handle = nullptr;
   ObLSID ls_id;
   bool exist_global_index = false;

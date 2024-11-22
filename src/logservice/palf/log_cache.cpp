@@ -512,7 +512,6 @@ int LogColdCache::read(const int64_t flashback_version,
   LSN read_lsn = lsn;
   int64_t real_read_size = in_read_size;
   int64_t disk_out_read_size = 0;
-  ObTenantStatEstGuard tenant_stat_guard(tenant_id_);
   LogIteratorInfo *iterator_info = io_ctx.get_iterator_info();
   // read process:
   // 1. read from kv cache

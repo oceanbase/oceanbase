@@ -38,7 +38,7 @@ public:
 private:
   int set_ip(const common::ObAddr &addr);
 protected:
-  int convert_node_to_row(const common::ActiveSessionStat &node, ObNewRow *&row);
+  int convert_node_to_row(const common::ObActiveSessionStatItem &node, ObNewRow *&row);
 protected:
   enum COLUMN_ID
   {

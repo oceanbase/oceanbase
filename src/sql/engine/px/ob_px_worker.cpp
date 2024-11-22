@@ -261,7 +261,6 @@ void PxWorkerFinishFunctor::operator ()()
 {
   // 每个 worker 结束后，都释放一个槽位
   ObPxSubAdmission::release(1);
-  ObActiveSessionGuard::setup_default_ash();
 }
 
 

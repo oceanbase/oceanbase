@@ -14,6 +14,7 @@
 #define OCEANBASE_WR_OB_WR_STAT_GUARD_H_
 #include "lib/statistic_event/ob_stat_event.h"
 #include "lib/time/ob_time_utility.h"
+#include "lib/stat/ob_diagnostic_info.h"
 
 namespace oceanbase
 {
@@ -23,7 +24,7 @@ namespace share
 #define WR_STAT_GUARD(STAT_PREFIX)                                            \
   WrStatGuard<::oceanbase::common::ObStatEventIds::STAT_PREFIX##_ELAPSE_TIME, \
       ::oceanbase::common::ObStatEventIds::STAT_PREFIX##_CPU_TIME>            \
-      guard;
+      wr_stat_guard;
 
 template <ObStatEventIds::ObStatEventIdEnum elapse_time_id,
     ObStatEventIds::ObStatEventIdEnum cpu_time_id>
@@ -39,11 +40,11 @@ public:
   {
     int64_t elapse_time = ::oceanbase::common::ObTimeUtility::current_time() - begin_ts_;
     int64_t cpu_time = get_ru_utime() - begin_ru_cputime_;
-    oceanbase::common::ObDiagnoseTenantInfo *tenant_info =
-        oceanbase::common::ObDiagnoseTenantInfo::get_local_diagnose_info();
+    oceanbase::common::ObDiagnosticInfo *tenant_info =
+        oceanbase::common::ObLocalDiagnosticInfo::get();
     if (NULL != tenant_info) {
-      tenant_info->update_stat(elapse_time_id, elapse_time);
-      tenant_info->update_stat(cpu_time_id, cpu_time);
+      tenant_info->add_stat(elapse_time_id, elapse_time);
+      tenant_info->add_stat(cpu_time_id, cpu_time);
     }
   }
 

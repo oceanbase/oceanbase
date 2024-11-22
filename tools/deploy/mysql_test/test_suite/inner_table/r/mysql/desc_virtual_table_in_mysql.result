@@ -1495,6 +1495,25 @@ IF(count(*) >= 0, 1, 0)
 "oceanbase.__all_virtual_tablet_stat runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_res_mgr_sysstat;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+group_id	bigint(20)	NO	PRI	NULL	
+svr_ip	varchar(46)	NO	PRI	NULL	
+svr_port	bigint(20)	NO	PRI	NULL	
+statistic#	bigint(20)	NO	PRI	NULL	
+value	bigint(20)	NO		NULL	
+value_type	varchar(16)	NO		NULL	
+stat_id	bigint(20)	NO		NULL	
+name	varchar(64)	NO		NULL	
+class	bigint(20)	NO		NULL	
+can_visible	tinyint(4)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_res_mgr_sysstat;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_res_mgr_sysstat runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
 desc information_schema.SESSION_VARIABLES;
 Field	Type	Null	Key	Default	Extra
 VARIABLE_NAME	varchar(128)	NO			
@@ -4860,6 +4879,168 @@ IF(count(*) >= 0, 1, 0)
 "oceanbase.__all_virtual_checkpoint_diagnose_info runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_wr_system_event;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+cluster_id	bigint(20)	NO	PRI	NULL	
+snap_id	bigint(20)	NO	PRI	NULL	
+svr_ip	varchar(46)	NO	PRI	NULL	
+svr_port	bigint(20)	NO	PRI	NULL	
+event_id	bigint(20)	NO	PRI	NULL	
+total_waits	bigint(20)	YES		NULL	
+total_timeouts	bigint(20)	YES		NULL	
+time_waited_micro	bigint(20)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_wr_system_event;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_wr_event_name;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+cluster_id	bigint(20)	NO	PRI	NULL	
+event_id	bigint(20)	NO	PRI	NULL	
+event_name	varchar(64)	YES		NULL	
+parameter1	varchar(64)	YES		NULL	
+parameter2	varchar(64)	YES		NULL	
+parameter3	varchar(64)	YES		NULL	
+wait_class_id	bigint(20)	YES		NULL	
+wait_class	varchar(64)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_wr_event_name;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_sqlstat;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+TENANT_ID	bigint(20)	NO		NULL	
+SQL_ID	varchar(32)	NO		NULL	
+PLAN_ID	bigint(20)	NO		NULL	
+PLAN_HASH	bigint(20) unsigned	NO		NULL	
+PLAN_TYPE	bigint(20)	NO		NULL	
+QUERY_SQL	longtext	NO		NULL	
+SQL_TYPE	bigint(20)	NO		NULL	
+MODULE	varchar(64)	YES		NULL	
+ACTION	varchar(64)	YES		NULL	
+PARSING_DB_ID	bigint(20)	NO		NULL	
+PARSING_DB_NAME	varchar(128)	NO		NULL	
+PARSING_USER_ID	bigint(20)	NO		NULL	
+EXECUTIONS_TOTAL	bigint(20)	NO		0	
+EXECUTIONS_DELTA	bigint(20)	NO		0	
+DISK_READS_TOTAL	bigint(20)	NO		0	
+DISK_READS_DELTA	bigint(20)	NO		0	
+BUFFER_GETS_TOTAL	bigint(20)	NO		0	
+BUFFER_GETS_DELTA	bigint(20)	NO		0	
+ELAPSED_TIME_TOTAL	bigint(20)	NO		0	
+ELAPSED_TIME_DELTA	bigint(20)	NO		0	
+CPU_TIME_TOTAL	bigint(20)	NO		0	
+CPU_TIME_DELTA	bigint(20)	NO		0	
+CCWAIT_TOTAL	bigint(20)	NO		0	
+CCWAIT_DELTA	bigint(20)	NO		0	
+USERIO_WAIT_TOTAL	bigint(20)	NO		0	
+USERIO_WAIT_DELTA	bigint(20)	NO		0	
+APWAIT_TOTAL	bigint(20)	NO		0	
+APWAIT_DELTA	bigint(20)	NO		0	
+PHYSICAL_READ_REQUESTS_TOTAL	bigint(20)	NO		0	
+PHYSICAL_READ_REQUESTS_DELTA	bigint(20)	NO		0	
+PHYSICAL_READ_BYTES_TOTAL	bigint(20)	NO		0	
+PHYSICAL_READ_BYTES_DELTA	bigint(20)	NO		0	
+WRITE_THROTTLE_TOTAL	bigint(20)	NO		0	
+WRITE_THROTTLE_DELTA	bigint(20)	NO		0	
+ROWS_PROCESSED_TOTAL	bigint(20)	NO		0	
+ROWS_PROCESSED_DELTA	bigint(20)	NO		0	
+MEMSTORE_READ_ROWS_TOTAL	bigint(20)	NO		0	
+MEMSTORE_READ_ROWS_DELTA	bigint(20)	NO		0	
+MINOR_SSSTORE_READ_ROWS_TOTAL	bigint(20)	NO		0	
+MINOR_SSSTORE_READ_ROWS_DELTA	bigint(20)	NO		0	
+MAJOR_SSSTORE_READ_ROWS_TOTAL	bigint(20)	NO		0	
+MAJOR_SSSTORE_READ_ROWS_DELTA	bigint(20)	NO		0	
+RPC_TOTAL	bigint(20)	NO		0	
+RPC_DELTA	bigint(20)	NO		0	
+FETCHES_TOTAL	bigint(20)	NO		0	
+FETCHES_DELTA	bigint(20)	NO		0	
+RETRY_TOTAL	bigint(20)	NO		0	
+RETRY_DELTA	bigint(20)	NO		0	
+PARTITION_TOTAL	bigint(20)	NO		0	
+PARTITION_DELTA	bigint(20)	NO		0	
+NESTED_SQL_TOTAL	bigint(20)	NO		0	
+NESTED_SQL_DELTA	bigint(20)	NO		0	
+SOURCE_IP	varchar(46)	NO		NULL	
+SOURCE_PORT	bigint(20)	NO		NULL	
+ROUTE_MISS_TOTAL	bigint(20)	NO		0	
+ROUTE_MISS_DELTA	bigint(20)	NO		0	
+FIRST_LOAD_TIME	timestamp(6)	YES		NULL	
+PLAN_CACHE_HIT_TOTAL	bigint(20)	NO		0	
+PLAN_CACHE_HIT_DELTA	bigint(20)	NO		0	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_sqlstat;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_sqlstat runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_wr_sqlstat;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+cluster_id	bigint(20)	NO	PRI	NULL	
+snap_id	bigint(20)	NO	PRI	NULL	
+svr_ip	varchar(46)	NO	PRI	NULL	
+svr_port	bigint(20)	NO	PRI	NULL	
+sql_id	varchar(32)	NO	PRI	NULL	
+plan_hash	bigint(20) unsigned	NO	PRI	NULL	
+source_ip	varchar(46)	NO	PRI	NULL	
+source_port	bigint(20)	NO	PRI	NULL	
+plan_type	bigint(20)	NO		NULL	
+module	varchar(64)	YES		NULL	
+action	varchar(64)	YES		NULL	
+parsing_db_id	bigint(20)	NO		NULL	
+parsing_db_name	varchar(128)	NO		NULL	
+parsing_user_id	bigint(20)	NO		NULL	
+executions_total	bigint(20)	NO		0	
+executions_delta	bigint(20)	NO		0	
+disk_reads_total	bigint(20)	NO		0	
+disk_reads_delta	bigint(20)	NO		0	
+buffer_gets_total	bigint(20)	NO		0	
+buffer_gets_delta	bigint(20)	NO		0	
+elapsed_time_total	bigint(20)	NO		0	
+elapsed_time_delta	bigint(20)	NO		0	
+cpu_time_total	bigint(20)	NO		0	
+cpu_time_delta	bigint(20)	NO		0	
+ccwait_total	bigint(20)	NO		0	
+ccwait_delta	bigint(20)	NO		0	
+userio_wait_total	bigint(20)	NO		0	
+userio_wait_delta	bigint(20)	NO		0	
+apwait_total	bigint(20)	NO		0	
+apwait_delta	bigint(20)	NO		0	
+physical_read_requests_total	bigint(20)	NO		0	
+physical_read_requests_delta	bigint(20)	NO		0	
+physical_read_bytes_total	bigint(20)	NO		0	
+physical_read_bytes_delta	bigint(20)	NO		0	
+write_throttle_total	bigint(20)	NO		0	
+write_throttle_delta	bigint(20)	NO		0	
+rows_processed_total	bigint(20)	NO		0	
+rows_processed_delta	bigint(20)	NO		0	
+memstore_read_rows_total	bigint(20)	NO		0	
+memstore_read_rows_delta	bigint(20)	NO		0	
+minor_ssstore_read_rows_total	bigint(20)	NO		0	
+minor_ssstore_read_rows_delta	bigint(20)	NO		0	
+major_ssstore_read_rows_total	bigint(20)	NO		0	
+major_ssstore_read_rows_delta	bigint(20)	NO		0	
+rpc_total	bigint(20)	NO		0	
+rpc_delta	bigint(20)	NO		0	
+fetches_total	bigint(20)	NO		0	
+fetches_delta	bigint(20)	NO		0	
+retry_total	bigint(20)	NO		0	
+retry_delta	bigint(20)	NO		0	
+partition_total	bigint(20)	NO		0	
+partition_delta	bigint(20)	NO		0	
+nested_sql_total	bigint(20)	NO		0	
+nested_sql_delta	bigint(20)	NO		0	
+route_miss_total	bigint(20)	NO		0	
+route_miss_delta	bigint(20)	NO		0	
+first_load_time	timestamp(6)	YES		NULL	
+plan_cache_hit_total	bigint(20)	NO		0	
+plan_cache_hit_delta	bigint(20)	NO		0	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_wr_sqlstat;
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_detect_lock_info;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	
@@ -4907,6 +5088,17 @@ job_start_time	timestamp(6)	NO		NULL
 trace_id	varchar(64)	NO		NULL	
 majority_succ_time	timestamp(6)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tenant_snapshot_job;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_wr_sqltext;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+cluster_id	bigint(20)	NO	PRI	NULL	
+snap_id	bigint(20)	NO	PRI	NULL	
+sql_id	varchar(32)	NO	PRI	NULL	
+query_sql	longtext	NO		NULL	
+sql_type	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_wr_sqltext;
 IF(count(*) >= 0, 1, 0)
 1
 desc oceanbase.__all_virtual_ls_snapshot;
@@ -5324,6 +5516,54 @@ select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all
 IF(count(*) >= 0, 1, 0)
 1
 "oceanbase.__all_virtual_kv_client_info runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_wr_sql_plan;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+cluster_id	bigint(20)	NO	PRI	NULL	
+snap_id	bigint(20)	NO	PRI	NULL	
+svr_ip	varchar(46)	NO	PRI	NULL	
+svr_port	bigint(20)	NO	PRI	NULL	
+sql_id	varchar(32)	NO	PRI	NULL	
+plan_hash	bigint(20) unsigned	NO	PRI	NULL	
+plan_id	bigint(20)	NO	PRI	NULL	
+id	bigint(20) unsigned	NO	PRI	0	
+db_id	bigint(20)	NO		NULL	
+gmt_create	timestamp(6)	NO		NULL	
+operator	varchar(255)	NO		NULL	
+options	varchar(255)	NO		NULL	
+object_node	varchar(40)	NO		NULL	
+object_id	bigint(20)	NO		NULL	
+object_owner	varchar(128)	NO		NULL	
+object_name	varchar(128)	NO		NULL	
+object_alias	varchar(261)	NO		NULL	
+object_type	varchar(20)	NO		NULL	
+optimizer	varchar(4000)	NO		NULL	
+parent_id	bigint(20)	NO		NULL	
+depth	bigint(20)	NO		NULL	
+position	bigint(20)	NO		NULL	
+is_last_child	bigint(20)	NO		NULL	
+cost	bigint(20)	NO		NULL	
+real_cost	bigint(20)	NO		NULL	
+cardinality	bigint(20)	NO		NULL	
+real_cardinality	bigint(20)	NO		NULL	
+bytes	bigint(20)	NO		NULL	
+rowset	bigint(20)	NO		NULL	
+other_tag	varchar(4000)	NO		NULL	
+partition_start	varchar(4000)	NO		NULL	
+other	varchar(4000)	NO		NULL	
+cpu_cost	bigint(20)	NO		NULL	
+io_cost	bigint(20)	NO		NULL	
+access_predicates	varchar(4000)	NO		NULL	
+filter_predicates	varchar(4000)	NO		NULL	
+startup_predicates	varchar(4000)	NO		NULL	
+projection	varchar(4000)	NO		NULL	
+special_predicates	varchar(4000)	NO		NULL	
+qblock_name	varchar(128)	NO		NULL	
+remarks	varchar(4000)	NO		NULL	
+other_xml	varchar(4000)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_wr_sql_plan;
 IF(count(*) >= 0, 1, 0)
 1
 desc oceanbase.__all_virtual_function_io_stat;
