@@ -114,10 +114,28 @@ int ObDropMLogResolver::resolve(const ParseNode &parse_tree)
     }
 
     if (OB_SUCC(ret)) {
-      uint64_t mlog_table_id = data_table_schema->get_mlog_tid();
-      if (!data_table_schema->has_mlog_table()) {
+      uint64_t mlog_table_id = OB_INVALID_ID;
+      const ObTableSchema *real_table_schema = nullptr;
+      if (data_table_schema->is_materialized_view()) {
+        const ObTableSchema *container_table_schema = nullptr;
+        if (OB_FAIL(schema_checker_->get_table_schema(
+            tenant_id, data_table_schema->get_data_table_id(), container_table_schema))) {
+          LOG_WARN("failed to get table schema", KR(ret), K(tenant_id));
+        } else if (OB_ISNULL(container_table_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null container table schema", KR(ret), KP(container_table_schema));
+        } else {
+          real_table_schema = container_table_schema;
+        }
+      } else {
+        real_table_schema = data_table_schema;
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (!real_table_schema->has_mlog_table()) {
         ret = OB_ERR_TABLE_NO_MLOG;
         LOG_WARN("table has no materialized view log", KR(ret), K(mlog_table_id));
+      } else if (OB_FALSE_IT(mlog_table_id = real_table_schema->get_mlog_tid())) {
       } else if (OB_FAIL(schema_checker_->get_table_schema(tenant_id,
                                                            mlog_table_id,
                                                            mlog_table_schema,

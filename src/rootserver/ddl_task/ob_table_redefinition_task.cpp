@@ -509,11 +509,17 @@ int ObTableRedefinitionTask::copy_table_indexes()
         LOG_WARN("error unexpected, table schema must not be nullptr", K(ret), K(target_object_id_));
       } else {
         const common::ObIArray<ObAuxTableMetaInfo> &index_infos = table_schema->get_simple_index_infos();
-        if (index_infos.count() > 0) {
+        if ((index_infos.count() > 0) || (table_schema->mv_container_table()
+                                          && table_schema->has_mlog_table())) {
           // if there is indexes in new tables, if so, the indexes is already rebuilt in new table
           for (int64_t i = 0; OB_SUCC(ret) && i < index_infos.count(); ++i) {
             if (OB_FAIL(index_ids.push_back(index_infos.at(i).table_id_))) {
               LOG_WARN("push back index id failed", K(ret));
+            }
+          }
+          if (OB_SUCC(ret) && table_schema->has_mlog_table()) {
+            if (OB_FAIL(index_ids.push_back(table_schema->get_mlog_tid()))) {
+              LOG_WARN("failed to push back mlog tid", KR(ret), K(table_schema->get_mlog_tid()));
             }
           }
           LOG_INFO("indexes schema are already built", K(index_ids));
@@ -566,9 +572,16 @@ int ObTableRedefinitionTask::copy_table_indexes()
             } else if (active_task_cnt >= MAX_ACTIVE_TASK_CNT) {
               ret = OB_EAGAIN;
             } else {
+              ObDDLType ddl_type = ObDDLType::DDL_CREATE_INDEX;
+              if (index_schema->is_mlog_table()) {
+                ddl_type = ObDDLType::DDL_CREATE_MLOG;
+                create_index_arg.index_action_type_ = ObIndexArg::ADD_MLOG;
+              } else {
+                ddl_type = get_create_index_type(data_format_version_, *index_schema);
+              }
               create_index_arg.index_type_ = index_schema->get_index_type();
               ObCreateDDLTaskParam param(dst_tenant_id_,
-                                         get_create_index_type(data_format_version_, *index_schema),
+                                         ddl_type,
                                          table_schema,
                                          index_schema,
                                          0/*object_id*/,

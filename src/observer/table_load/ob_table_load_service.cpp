@@ -552,7 +552,7 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
       FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has roaringbitmap column", tmp_prefix);
     }
     // check if table has mlog
-    else if (table_schema->required_by_mview_refresh()) {
+    else if (table_schema->required_by_mview_refresh() && !table_schema->mv_container_table()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support table required by materialized view refresh", KR(ret));
       FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table required by materialized view refresh", tmp_prefix);

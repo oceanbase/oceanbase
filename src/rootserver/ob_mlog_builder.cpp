@@ -430,6 +430,7 @@ int ObMLogBuilder::create_mlog(
     uint64_t base_table_id = OB_INVALID_ID;
     bool in_tenant_space = true;
     const ObTableSchema *base_table_schema = nullptr;
+    const ObTableSchema *data_table_schema = nullptr;
     schema_guard.set_session_id(create_mlog_arg.session_id_);
     if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
                                               create_mlog_arg.database_name_,
@@ -442,34 +443,50 @@ int ObMLogBuilder::create_mlog(
       LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(create_mlog_arg.database_name_),
           to_cstring(create_mlog_arg.table_name_));
       LOG_WARN("table not exist", KR(ret), K(create_mlog_arg));
-    } else if(!base_table_schema->is_user_table()) {
+    } else if(!base_table_schema->is_user_table() && !base_table_schema->is_materialized_view()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("create materialized view log on a non-user table is not supported",
           KR(ret), K(base_table_schema->get_table_type()));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "create materialized view log on a non-user table is");
-    } else if (base_table_schema->has_mlog_table()) {
+    } else if (base_table_schema->is_materialized_view()) {
+      const ObTableSchema *container_table_schema = nullptr;
+      if (OB_FAIL(schema_guard.get_table_schema(
+          tenant_id, base_table_schema->get_data_table_id(), container_table_schema))) {
+        LOG_WARN("failed to get table schema", KR(ret), K(tenant_id));
+      } else if (OB_ISNULL(container_table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null container table schema", KR(ret), KP(container_table_schema));
+      } else {
+        data_table_schema = container_table_schema;
+      }
+    } else {
+      data_table_schema = base_table_schema;
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (data_table_schema->has_mlog_table()) {
       ret = OB_ERR_MLOG_EXIST;
       LOG_WARN("a materialized view log already exists on table",
-          K(create_mlog_arg.table_name_), K(base_table_schema->get_mlog_tid()));
+          K(create_mlog_arg.table_name_), K(data_table_schema->get_mlog_tid()));
       LOG_USER_ERROR(OB_ERR_MLOG_EXIST, to_cstring(create_mlog_arg.table_name_));
-    } else if (FALSE_IT(base_table_id = base_table_schema->get_table_id())) {
+    } else if (FALSE_IT(base_table_id = data_table_schema->get_table_id())) {
     } else if (OB_FAIL(ObSysTableChecker::is_tenant_space_table_id(base_table_id, in_tenant_space))) {
       LOG_WARN("failed to check table in tenant space", KR(ret), K(base_table_id));
     } else if (is_inner_table(base_table_id)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("create mlog on inner table is not supported", KR(ret), K(base_table_id));
-    } else if (base_table_schema->is_in_splitting()) {
+    } else if (data_table_schema->is_in_splitting()) {
       ret = OB_OP_NOT_ALLOW;
       LOG_WARN("can not create mlog during splitting", KR(ret), K(create_mlog_arg));
     } else if (OB_FAIL(ddl_service_.check_restore_point_allow(
-          tenant_id, *base_table_schema))) {
+          tenant_id, *data_table_schema))) {
       LOG_WARN("failed to check restore point allow", KR(ret), K(tenant_id), K(base_table_id));
     } else if (OB_FAIL(ddl_service_.check_fk_related_table_ddl(
-          *base_table_schema, ObDDLType::DDL_CREATE_INDEX))) {
+          *data_table_schema, ObDDLType::DDL_CREATE_INDEX))) {
       LOG_WARN("check whether the foreign key related table is executing ddl failed", KR(ret));
     } else if (OB_FAIL(do_create_mlog(schema_guard,
                                       create_mlog_arg,
-                                      *base_table_schema,
+                                      *data_table_schema,
                                       compat_version,
                                       create_mlog_res))) {
       LOG_WARN("failed to do create mlog", KR(ret), K(create_mlog_arg));

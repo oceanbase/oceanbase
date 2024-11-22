@@ -1878,13 +1878,13 @@ private:
       const share::schema::ObTableSchema &hidden_table_schema,
       common::ObMySQLTransaction &trans,
       common::ObSArray<uint64_t> &cst_ids);
-  int rebuild_hidden_table_index(
+  int rebuild_hidden_table_index_and_mlog(
       const uint64_t tenant_id,
       share::schema::ObSchemaGetterGuard &schema_guard,
       ObDDLOperator &ddl_operator,
       common::ObMySQLTransaction &trans,
       common::ObSArray<share::schema::ObTableSchema> &new_table_schemas);
-  int add_new_index_schema(
+ int add_new_index_schema(
       obrpc::ObAlterTableArg &alter_table_arg,
       const share::schema::ObTableSchema &orig_table_schema,
       const ObTableSchema &hidden_table_schema,
@@ -1894,6 +1894,16 @@ private:
       common::ObMySQLTransaction &trans,
       ObSArray<ObTableSchema> &new_table_schemas,
       ObSArray<uint64_t> &index_ids);
+  int add_new_mlog_schema(
+      const uint64_t tenant_id,
+      const share::schema::ObTableSchema &orig_table_schema,
+      const share::schema::ObTableSchema &hidden_table_schema,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      share::schema::ObSchemaGetterGuard &dest_schema_guard,
+      common::ObMySQLTransaction &trans,
+      common::ObIAllocator &allocator,
+      common::ObSArray<ObTableSchema> &new_table_schemas,
+      common::ObSArray<uint64_t> &index_ids);
   int check_index_table_need_rebuild(
       const share::schema::ObTableSchema &index_table_schema,
       const common::ObIArray<int64_t> &drop_cols_id_arr,
@@ -3058,6 +3068,15 @@ private:
                                         ObDDLTaskRecord &task_record);
 
   bool need_modify_dep_obj_status(const obrpc::ObAlterTableArg &alter_table_arg) const;
+  int swap_orig_and_hidden_table_mlog_state_(
+      ObSchemaGetterGuard &schema_guard,
+      const uint64_t tenant_id,
+      const uint64_t orig_table_mlog_tid,
+      const uint64_t hidden_table_mlog_tid,
+      ObIArray<ObTableSchema> &table_schemas);
+  int build_hidden_table_index_and_mlog_schema_(
+      const share::schema::ObTableSchema &hidden_table_schema,
+      share::schema::ObTableSchema &index_schema);
 
 private:
   bool inited_;

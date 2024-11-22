@@ -2499,6 +2499,7 @@ int ObLogPartMgr::get_table_info_of_table_schema_(ObLogSchemaGuard &schema_guard
   uint64_t table_id = OB_INVALID_ID;
   const ObSimpleTableSchemaV2 *final_table_schema = NULL;
   bool is_index_table = false;
+  bool is_mlog_table = false;
   // table level recover scenario
   bool is_ddl_ignored_table = false;
   if (OB_ISNULL(table_schema)) {
@@ -2508,6 +2509,9 @@ int ObLogPartMgr::get_table_info_of_table_schema_(ObLogSchemaGuard &schema_guard
   } else if (table_schema->is_index_table()) {
     is_index_table = true;
     LOG_INFO("table is index table, ignore it", K(table_id), KPC(table_schema));
+  } else if (table_schema->is_mlog_table()) {
+    is_mlog_table = true;
+    LOG_INFO("table is mlog table, ignore it", K(table_id), KPC(table_schema));
   } else if (table_schema->is_ddl_table_ignored_to_sync_cdc()) {
     is_ddl_ignored_table = true;
     LOG_INFO("table is ddl ignored table, ignore it", K(table_id), KPC(table_schema));
@@ -2579,7 +2583,7 @@ int ObLogPartMgr::get_table_info_of_table_schema_(ObLogSchemaGuard &schema_guard
   }
 
   if (OB_SUCC(ret)) {
-    if (is_index_table) {
+    if (is_index_table || is_mlog_table) {
       is_user_table = false;
     } else if (is_ddl_ignored_table) {
       is_user_table = false;
@@ -2609,6 +2613,7 @@ int ObLogPartMgr::get_table_info_of_table_meta_(ObDictTenantInfo *tenant_info,
   uint64_t table_id = OB_INVALID_ID;
   const datadict::ObDictTableMeta *final_table_meta = NULL;
   bool is_index_table = false;
+  bool is_mlog_table = false;
   // table level recover scenario
   bool is_ddl_ignored_table = false;
   if (OB_ISNULL(tenant_info)) {
@@ -2621,6 +2626,9 @@ int ObLogPartMgr::get_table_info_of_table_meta_(ObDictTenantInfo *tenant_info,
   } else if (table_meta->is_index_table()) {
     is_index_table = true;
     LOG_INFO("table is index table, ignore it", K(table_id), KPC(table_meta));
+  } else if (table_meta->is_mlog_table()) {
+    is_mlog_table = true;
+    LOG_INFO("table is mlog table, ignore it", K(table_id), KPC(table_meta));
   } else if (table_meta->is_ddl_table_ignored_to_sync_cdc()) {
     is_ddl_ignored_table = true;
     LOG_INFO("table is ddl ignored table, ignore it", K(table_id), KPC(table_meta));
@@ -2681,7 +2689,7 @@ int ObLogPartMgr::get_table_info_of_table_meta_(ObDictTenantInfo *tenant_info,
   }
 
   if (OB_SUCC(ret)) {
-    if (is_index_table) {
+    if (is_index_table || is_mlog_table) {
       is_user_table = false;
     } else if (is_ddl_ignored_table) {
       is_user_table = false;
