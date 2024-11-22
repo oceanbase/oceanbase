@@ -1283,6 +1283,7 @@ int ObLogicalOperator::compute_property()
     LOG_TRACE("compute property finished",
               K(get_op_name(type_)),
               K(get_cost()),
+              K(get_card()),
               K(is_local_order_),
               K(is_range_order_),
               K(op_ordering_),
@@ -5608,6 +5609,7 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
   bool can_join_filter_material = false;
   int64_t valied_join_filter_count = 0;
   int64_t extra_hash_count = 1; // at least one for hash join
+  bool has_shared_join_filter = false;
   bool realistic_runtime_bloom_filter_size = !GCONF._preset_runtime_bloom_filter_size;
   if (realistic_runtime_bloom_filter_size && enable_bloom_filter
       && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0) {
@@ -5675,6 +5677,7 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
           if ((DistAlgo::DIST_BC2HOST_NONE == join_dist_algo) || right_has_exchange) {
             join_filter_create->set_is_shared_join_filter();
             join_filter_use->set_is_shared_join_filter();
+            has_shared_join_filter = true;
             int64_t max_wait_time_ms = 0;
             if (OB_FAIL(calc_rf_max_wait_time(node, info.filter_table_id_, max_wait_time_ms))) {
               LOG_WARN("failed to calc_rf_max_wait_time");
@@ -5767,6 +5770,7 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
     join_filter_create->get_jf_material_control_info().join_filter_count_ = valied_join_filter_count;
     join_filter_create->get_jf_material_control_info().each_sqc_has_full_data_ =
         DIST_BC2HOST_NONE == join_dist_algo;
+    join_filter_create->get_jf_material_control_info().need_sync_row_count_ = has_shared_join_filter;
 
     ObLogJoin *hash_join = static_cast<ObLogJoin *>(this);
     hash_join->get_jf_material_control_info() = join_filter_create->get_jf_material_control_info();

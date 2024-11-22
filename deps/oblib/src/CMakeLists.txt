@@ -24,6 +24,7 @@ target_include_directories(
   ${DEP_DIR}/include/icu/common
   ${DEP_DIR}/include/apache-arrow
   ${DEP_DIR}/include/apache-orc
+  ${DEP_DIR}/include/fast_float
   ${USSL_INCLUDE_DIRS}
 )
 

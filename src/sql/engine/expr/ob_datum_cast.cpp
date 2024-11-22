@@ -180,6 +180,13 @@ static OB_INLINE int get_cast_ret(const ObCastMode &cast_mode, int ret, int &war
   return ret;
 }
 
+// Original static function get_cast_ret() cannot be called from util.ipp
+// A better solution is needed?
+int get_cast_ret_wrap(const ObCastMode &cast_mode, int ret, int &warning)
+{
+  return get_cast_ret(cast_mode, ret, warning);
+}
+
 // 出现错误时,处理如下：
 // 如果只设置了WARN_ON_FAIL，会覆盖错误码
 // 如果设置了WARN_ON_FAIL和ZERO_ON_WARN,会覆盖错误码，且结果被置为0
@@ -1139,6 +1146,15 @@ static OB_INLINE int common_string_float(const ObExpr &expr,
     LOG_WARN("common_double_float failed", K(ret), K(tmp_double));
   }
   return ret;
+}
+
+// Original static function common_string_float() cannot be called from string_float.ipp
+// A better solution is needed?
+int common_string_float_wrap(const ObExpr &expr,
+                             const ObString &in_str,
+                             float &out_val)
+{
+  return common_string_float(expr, in_str, out_val);
 }
 
 static OB_INLINE int common_string_date(const ObExpr &expr,

@@ -28,6 +28,17 @@ OB_SERIALIZE_MEMBER((ObJoinFilterCountRowPieceMsg, ObDatahubPieceMsg), each_sqc_
                     total_rows_, ndv_info_);
 OB_SERIALIZE_MEMBER((ObJoinFilterCountRowWholeMsg, ObDatahubWholeMsg), total_rows_, ndv_info_);
 
+void ObJoinFilterNdv::gather_piece_ndv(const ObJoinFilterNdv &piece_ndv, ObJoinFilterNdv &total_ndv)
+{
+  if (!piece_ndv.valid_) {
+    // if one thread's ndv is not valid, the global ndv info is invalid
+    total_ndv.valid_ = false;
+    total_ndv.count_ = 0;
+  } else if (!total_ndv.valid_) {
+  } else {
+    total_ndv.count_ += piece_ndv.count_;
+  }
+}
 
 int ObJoinFilterCountRowPieceMsgListener::on_message(ObJoinFilterCountRowPieceMsgCtx &piece_ctx,
                                                      common::ObIArray<ObPxSqcMeta *> &sqcs,
@@ -45,12 +56,22 @@ int ObJoinFilterCountRowPieceMsgListener::on_message(ObJoinFilterCountRowPieceMs
   } else if (!pkt.each_sqc_has_full_data_) {
     // if each sqc only has partial data of left, gather all k(k=dop) thread's result
     piece_ctx.total_rows_ += pkt.total_rows_;
-    if (piece_ctx.task_cnt_ == piece_ctx.received_) {
-      LOG_TRACE("send whole msg", K(pkt), K(piece_ctx.total_rows_));
-      if (OB_FAIL(piece_ctx.send_whole_msg(sqcs))) {
-        LOG_WARN("send whole msg failed", K(ret));
+    if (piece_ctx.ndv_info_.empty()) {
+      if (OB_FAIL(piece_ctx.ndv_info_.prepare_allocate(pkt.ndv_info_.count()))) {
+        LOG_WARN("failed to prepare_allocate");
       }
-      IGNORE_RETURN piece_ctx.reset_resource();
+    }
+    if (OB_SUCC(ret)) {
+      for (int64_t i = 0; i < pkt.ndv_info_.count(); ++i) {
+        ObJoinFilterNdv::gather_piece_ndv(pkt.ndv_info_.at(i), piece_ctx.ndv_info_.at(i));
+      }
+      if (piece_ctx.task_cnt_ == piece_ctx.received_) {
+        LOG_TRACE("send whole msg", K(pkt), K(piece_ctx.total_rows_));
+        if (OB_FAIL(piece_ctx.send_whole_msg(sqcs))) {
+          LOG_WARN("send whole msg failed", K(ret));
+        }
+        IGNORE_RETURN piece_ctx.reset_resource();
+      }
     }
   } else {
     // for shared hash join(bc2host none shuffle way), each sqc has full data, gather result for
@@ -60,14 +81,21 @@ int ObJoinFilterCountRowPieceMsgListener::on_message(ObJoinFilterCountRowPieceMs
         JoinFilterSqcRowInfo &sqc_row_info = piece_ctx.sqc_row_infos_.at(i);
         if (sqc_row_info.received_ >= sqc_row_info.expected_) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("receive too much piece msg for one sqc", K(pkt), K(sqc_row_info.received_),
-                   K(sqc_row_info.expected_));
-        } else if (FALSE_IT(sqc_row_info.total_rows_ += pkt.total_rows_)) {
-        } else if (FALSE_IT(sqc_row_info.received_ += pkt.piece_count_)) {
-        } else if (sqc_row_info.expected_ == sqc_row_info.received_) {
-          LOG_TRACE("send whole msg to one sqc", K(pkt), K(sqc_row_info.total_rows_));
-          if (OB_FAIL(piece_ctx.send_whole_msg_to_one_sqc(sqcs.at(i), sqc_row_info.total_rows_))) {
-            LOG_WARN("send whole msg failed", K(ret));
+          LOG_WARN("receive too much piece msg for one sqc", K(pkt), K(sqc_row_info));
+        } else if (sqc_row_info.ndv_info_.empty()
+                   && OB_FAIL(sqc_row_info.ndv_info_.prepare_allocate(pkt.ndv_info_.count()))) {
+          LOG_WARN("failed to prepare_allocate");
+        } else {
+          sqc_row_info.received_ += pkt.piece_count_;
+          sqc_row_info.total_rows_ += pkt.total_rows_;
+          for (int64_t i = 0; i < pkt.ndv_info_.count(); ++i) {
+            ObJoinFilterNdv::gather_piece_ndv(pkt.ndv_info_.at(i), sqc_row_info.ndv_info_.at(i));
+          }
+          if (sqc_row_info.expected_ == sqc_row_info.received_) {
+            LOG_TRACE("send whole msg to one sqc", K(pkt), K(sqc_row_info));
+            if (OB_FAIL(piece_ctx.send_whole_msg_to_one_sqc(sqcs.at(i), sqc_row_info))) {
+              LOG_WARN("send whole msg failed", K(ret));
+            }
           }
         }
         break;
@@ -132,6 +160,9 @@ int ObJoinFilterCountRowPieceMsgCtx::send_whole_msg(ObIArray<ObPxSqcMeta *> &sqc
   ObJoinFilterCountRowWholeMsg whole_msg;
   whole_msg.total_rows_ = total_rows_;
   whole_msg.op_id_ = op_id_;
+  if (OB_FAIL(whole_msg.ndv_info_.assign(ndv_info_))) {
+    LOG_WARN("failed to assign");
+  }
   ARRAY_FOREACH_X(sqcs, idx, cnt, OB_SUCC(ret)) {
     dtl::ObDtlChannel *ch = sqcs.at(idx)->get_qc_channel();
     if (OB_ISNULL(ch)) {
@@ -152,14 +183,16 @@ int ObJoinFilterCountRowPieceMsgCtx::send_whole_msg(ObIArray<ObPxSqcMeta *> &sqc
 }
 
 int ObJoinFilterCountRowPieceMsgCtx::send_whole_msg_to_one_sqc(ObPxSqcMeta *sqc,
-                                                               int64_t total_row_in_sqc)
+                                                               JoinFilterSqcRowInfo &sqc_row_info)
 {
   int ret = OB_SUCCESS;
   ObJoinFilterCountRowWholeMsg whole_msg;
-  whole_msg.total_rows_ = total_row_in_sqc;
+  whole_msg.total_rows_ = sqc_row_info.total_rows_;
   whole_msg.op_id_ = op_id_;
   dtl::ObDtlChannel *ch = sqc->get_qc_channel();
-  if (OB_ISNULL(ch)) {
+  if (OB_FAIL(whole_msg.ndv_info_.assign(sqc_row_info.ndv_info_))) {
+    LOG_WARN("failed to assign");
+  } else if (OB_ISNULL(ch)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null expected", K(ret));
   } else if (OB_FAIL(ch->send(whole_msg, timeout_ts_))) {

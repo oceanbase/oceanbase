@@ -8373,6 +8373,24 @@ int ObRawExprUtils::build_pseudo_random(ObRawExprFactory &factory,
   return ret;
 }
 
+int ObRawExprUtils::build_grouping_id(ObRawExprFactory &factory,
+                                      const ObSQLSessionInfo &session_info, ObOpPseudoColumnRawExpr *&out)
+{
+  int ret = OB_SUCCESS;
+  ObOpPseudoColumnRawExpr *expr = NULL;
+  ObExprResType res_type;
+  res_type.set_int();
+  res_type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].precision_);
+  res_type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
+  OZ(build_op_pseudo_column_expr(factory, T_PSEUDO_ROLLUP_GROUPING_ID, "GROUPING_ID", res_type, expr));
+  OZ(expr->formalize(&session_info));
+  OZ(expr->add_flag(IS_INNER_ADDED_EXPR));
+  if (OB_SUCC(ret)) {
+    out = expr;
+  }
+  return ret;
+}
+
 int ObRawExprUtils::build_remove_const_expr(ObRawExprFactory &factory,
                                             ObSQLSessionInfo &session_info,
                                             ObRawExpr *arg,
@@ -8906,18 +8924,16 @@ int ObRawExprUtils::process_window_complex_agg_expr(ObRawExprFactory &expr_facto
       LOG_WARN("failed to calc expr hash", K(ret));
     } else if (OB_FAIL(win_exprs->push_back(win_func_expr))) {
       LOG_WARN("failed to push back win func epxr.", K(ret));
-    } else {/*do nothing */}
+    } else {/*do nothing */
+    }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < window_agg_expr->get_param_count(); i++) {
       ObRawExpr *&sub_expr = window_agg_expr->get_param_expr(i);
       if (OB_ISNULL(sub_expr)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("error argument.", K(ret));
-      } else if (OB_FAIL(SMART_CALL(process_window_complex_agg_expr(expr_factory,
-                                                         sub_expr->get_expr_type(),
-                                                         win_func,
-                                                         sub_expr,
-                                                         win_exprs)))) {
+      } else if (OB_FAIL(SMART_CALL(process_window_complex_agg_expr(expr_factory, sub_expr->get_expr_type(),
+                                                         win_func, sub_expr, win_exprs)))) {
         LOG_WARN("failed to process window complex agg node.", K(ret));
       } else {/*do nothing*/}
     }
@@ -9809,9 +9825,9 @@ int ObRawExprUtils::check_contain_lock_exprs(const ObRawExpr *raw_expr, bool &co
   if (OB_ISNULL(raw_expr)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("expr passed in is NULL", K(ret));
-  } else if (T_FUN_SYS_GET_LOCK == raw_expr->get_expr_type() ||
-             T_FUN_SYS_RELEASE_LOCK == raw_expr->get_expr_type() ||
-             T_FUN_SYS_RELEASE_ALL_LOCKS == raw_expr->get_expr_type()) {
+  } else if (T_FUN_SYS_GET_LOCK == raw_expr->get_expr_type()
+             || T_FUN_SYS_RELEASE_LOCK == raw_expr->get_expr_type()
+             || T_FUN_SYS_RELEASE_ALL_LOCKS == raw_expr->get_expr_type()) {
     contain = true;
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && !contain && i < raw_expr->get_param_count(); i++) {

@@ -84,10 +84,10 @@ Query Plan
 =====================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(score.subject, cast(cast(T_FUN_SUM(T_FUN_SUM(score.score)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(score.score)),
-       DECIMAL(20, 0)), DECIMAL(15, 4)), T_FUN_MAX(T_FUN_MAX(score.score)), T_FUN_MIN(T_FUN_MIN(score.score)))]), filter(nil), rowset=256
-  1 - output([INTERNAL_FUNCTION(score.subject, cast(cast(T_FUN_SUM(T_FUN_SUM(score.score)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(score.score)),
-       DECIMAL(20, 0)), DECIMAL(15, 4)), T_FUN_MAX(T_FUN_MAX(score.score)), T_FUN_MIN(T_FUN_MIN(score.score)))]), filter(nil), rowset=256
+  0 - output([INTERNAL_FUNCTION(score.subject, cast(cast(T_FUN_SUM(T_FUN_SUM(score.score)), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(score.score)),
+       DECIMAL_INT(20, 0)), DECIMAL(15, 4)), T_FUN_MAX(T_FUN_MAX(score.score)), T_FUN_MIN(T_FUN_MIN(score.score)))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(score.subject, cast(cast(T_FUN_SUM(T_FUN_SUM(score.score)), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(score.score)),
+       DECIMAL_INT(20, 0)), DECIMAL(15, 4)), T_FUN_MAX(T_FUN_MAX(score.score)), T_FUN_MIN(T_FUN_MIN(score.score)))]), filter(nil), rowset=256
       dop=2
   2 - output([score.subject], [T_FUN_MAX(T_FUN_MAX(score.score))], [T_FUN_MIN(T_FUN_MIN(score.score))], [T_FUN_SUM(T_FUN_SUM(score.score))], [T_FUN_COUNT_SUM(T_FUN_COUNT(score.score))]), filter(nil), rowset=256
       group([score.subject]), agg_func([T_FUN_MAX(T_FUN_MAX(score.score))], [T_FUN_MIN(T_FUN_MIN(score.score))], [T_FUN_SUM(T_FUN_SUM(score.score))], [T_FUN_COUNT_SUM(T_FUN_COUNT(score.score))])
@@ -124,10 +124,10 @@ Query Plan
 =====================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(stu.cls, score.subject, cast(cast(T_FUN_SUM(T_FUN_SUM(score.score)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(score.score)),
-       DECIMAL(20, 0)), DECIMAL(15, 4)), T_FUN_MAX(T_FUN_MAX(score.score)), T_FUN_MIN(T_FUN_MIN(score.score)))]), filter(nil), rowset=256
-  1 - output([INTERNAL_FUNCTION(stu.cls, score.subject, cast(cast(T_FUN_SUM(T_FUN_SUM(score.score)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(score.score)),
-       DECIMAL(20, 0)), DECIMAL(15, 4)), T_FUN_MAX(T_FUN_MAX(score.score)), T_FUN_MIN(T_FUN_MIN(score.score)))]), filter(nil), rowset=256
+  0 - output([INTERNAL_FUNCTION(stu.cls, score.subject, cast(cast(T_FUN_SUM(T_FUN_SUM(score.score)), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(score.score)),
+       DECIMAL_INT(20, 0)), DECIMAL(15, 4)), T_FUN_MAX(T_FUN_MAX(score.score)), T_FUN_MIN(T_FUN_MIN(score.score)))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(stu.cls, score.subject, cast(cast(T_FUN_SUM(T_FUN_SUM(score.score)), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(score.score)),
+       DECIMAL_INT(20, 0)), DECIMAL(15, 4)), T_FUN_MAX(T_FUN_MAX(score.score)), T_FUN_MIN(T_FUN_MIN(score.score)))]), filter(nil), rowset=256
       dop=2
   2 - output([stu.cls], [score.subject], [T_FUN_MAX(T_FUN_MAX(score.score))], [T_FUN_MIN(T_FUN_MIN(score.score))], [T_FUN_SUM(T_FUN_SUM(score.score))], 
       [T_FUN_COUNT_SUM(T_FUN_COUNT(score.score))]), filter(nil), rowset=256

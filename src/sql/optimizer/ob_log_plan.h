@@ -87,6 +87,7 @@ struct IndexDMLInfo;
 class ValuesTablePath;
 class ObSelectLogPlan;
 class ObThreeStageAggrInfo;
+class ObHashRollupInfo;
 
 struct TableDependInfo {
   TO_STRING_KV(
@@ -474,7 +475,11 @@ public:
       distinct_params_(),
       rollup_id_expr_(NULL),
       group_ndv_(-1.0),
-      group_distinct_ndv_(-1.0)
+      group_distinct_ndv_(-1.0),
+      rollup_grouping_id_expr_(nullptr),
+      enable_hash_rollup_(true),
+      force_hash_rollup_(false),
+      dup_expr_pairs_()
     {
     }
     virtual ~GroupingOpHelper() {}
@@ -488,6 +493,13 @@ public:
       bool disable_by_rule = !enable_partition_wise_plan && optimizer_features_enable_version_ > COMPAT_VERSION_4_3_2;
       return ignore_hint_ ? !disable_by_rule
                           : (disable_by_rule ? force_partition_wise_ : (!force_basic_ && !force_dist_hash_));
+    }
+
+    inline void reset_three_stage_info()
+    {
+      aggr_code_expr_ = nullptr;
+      distinct_aggr_batch_.reuse();
+      distinct_params_.reuse();
     }
 
     bool can_storage_pushdown_;
@@ -523,6 +535,11 @@ public:
     // distinct of group expr and distinct expr
     double group_distinct_ndv_;
 
+    ObOpPseudoColumnRawExpr *rollup_grouping_id_expr_;
+    bool enable_hash_rollup_;
+    bool force_hash_rollup_;
+    ObSEArray<ObTuple<ObRawExpr *, ObRawExpr *>, 8> dup_expr_pairs_;
+
     TO_STRING_KV(K_(can_storage_pushdown),
                  K_(can_basic_pushdown),
                  K_(can_three_stage_pushdown),
@@ -545,7 +562,9 @@ public:
                  K_(distinct_params),
                  K_(distinct_aggr_batch),
                  K_(distinct_aggr_items),
-                 K_(non_distinct_aggr_items));
+                 K_(non_distinct_aggr_items),
+                 K_(enable_hash_rollup),
+                 K_(force_hash_rollup));
   };
 
   /**
@@ -686,6 +705,12 @@ public:
 
   /** @brief Allcoate a ,aterial operator as parent of a path */
   int allocate_material_as_top(ObLogicalOperator *&old_top);
+
+  /** @brief Allocating a expand operator which is response for duplicate child input as parent of a path */
+  int allocate_expand_as_top(ObLogicalOperator *&old_top, const ObIArray<ObRawExpr *> &expand_exprs,
+                             const ObIArray<ObTuple<ObRawExpr *, ObRawExpr *>> &dup_expr_pairs,
+                             const ObIArray<ObRawExpr *> &gby_exprs,
+                             const ObIArray<ObAggFunRawExpr *> &aggr_items);
 
   /** @brief Create plan tree from an interesting order */
   int create_plan_tree_from_path(Path *path,
@@ -945,7 +970,8 @@ public:
                                const bool is_partition_gi = false,
                                const ObRollupStatus rollup_status = ObRollupStatus::NONE_ROLLUP,
                                bool force_use_scalar = false,
-                               const ObThreeStageAggrInfo *three_stage_info = NULL);
+                               const ObThreeStageAggrInfo *three_stage_info = NULL,
+                               const ObHashRollupInfo *hash_rollup_info = NULL);
 
   int candi_allocate_limit(const ObIArray<OrderItem> &order_items);
 
@@ -1703,6 +1729,9 @@ protected:
                           OrderItem &hash_sortkey);
 
   int init_lateral_table_depend_info(const ObIArray<TableItem*> &table_items);
+
+  int support_hash_rollup_groupby(const common::ObIArray<ObRawExpr *> &group_by_exprs,
+                                  const common::ObIArray<ObRawExpr *> &rollup_exprs, bool &support);
 private: // member functions
   static int distribute_filters_to_baserels(ObIArray<ObJoinOrder*> &base_level,
                                             ObIArray<ObSEArray<ObRawExpr*,4>> &baserel_filters);

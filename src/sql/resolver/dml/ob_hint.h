@@ -189,6 +189,9 @@ struct ObOptParamHint
     DEF(PARTITION_INDEX_DIVE_LIMIT,)                \
     DEF(OB_TABLE_ACCESS_POLICY,)                    \
     DEF(PARTITION_WISE_PLAN_ENABLED,)               \
+    DEF(USE_HASH_ROLLUP,)                           \
+    DEF(ENABLE_PX_ORDERED_COORD,)                   \
+    DEF(LOB_ROWSETS_MAX_ROWS,)                      \
     DEF(ENABLE_ENUM_SET_SUBSCHEMA,)       \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
@@ -207,6 +210,7 @@ struct ObOptParamHint
   int get_integer_opt_param(const OptParamType param_type, int64_t &val, bool &is_exists) const;
   int get_integer_opt_param(const OptParamType param_type, int64_t &val) const;
   int get_opt_param_runtime_filter_type(int64_t &rf_type) const;
+  int get_hash_rollup_param(ObObj &val, bool &has_opt_param) const;
   int get_enum_opt_param(const OptParamType param_type, int64_t &val) const;
   int has_opt_param(const OptParamType param_type, bool &has_hint) const;
 

@@ -254,14 +254,20 @@ int ObExprResultTypeUtil::get_div_result_type(ObObjType &result_type,
   } else {
     result_type = DIV_RESULT_TYPE[type1][type2];
     // FIXME: @zuojiao.hzj : remove this after we can keep high division calc scale
-    // using decimal int
-    bool all_decint_args = (ob_is_decimal_int(type1) && ob_is_decimal_int(type2));
+    // using decimal int as division calc types
+    bool can_use_decint_div = (ob_is_decimal_int(type1) || ob_is_integer_type(type1))
+                           && (ob_is_decimal_int(type2) || ob_is_integer_type(type2))
+                           && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0;
     if (ob_is_decimal_int(result_type)) {
       result_type = ObNumberType;
     }
-    if (ob_is_decimal_int(result_type) && !all_decint_args) {
+    if (ob_is_decimal_int(result_type) && !can_use_decint_div) {
       result_ob1_type = ObNumberType;
       result_ob2_type = ObNumberType;
+    } else if (can_use_decint_div) {
+      // use decimal int as calc type
+      result_ob1_type = ObDecimalIntType;
+      result_ob2_type = ObDecimalIntType;
     } else {
       result_ob1_type = result_type;
       result_ob2_type = result_type;

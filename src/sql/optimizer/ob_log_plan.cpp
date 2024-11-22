@@ -80,6 +80,7 @@
 #endif
 #include "sql/optimizer/ob_log_values_table_access.h"
 #include "share/vector_index/ob_vector_index_util.h"
+#include "sql/optimizer/ob_log_expand.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -4075,6 +4076,38 @@ int ObLogPlan::allocate_material_as_top(ObLogicalOperator *&old_top)
   return ret;
 }
 
+int ObLogPlan::allocate_expand_as_top(ObLogicalOperator *&old_top,
+                                      const ObIArray<ObRawExpr *> &expand_exprs,
+                                      const ObIArray<DupRawExprPair> &dup_expr_pairs,
+                                      const ObIArray<ObRawExpr *> &gby_exprs,
+                                      const ObIArray<ObAggFunRawExpr *> &aggr_items)
+{
+  int ret = OB_SUCCESS;
+  ObLogExpand *expand_op = NULL;
+  ObRawExprFactory &factory = get_optimizer_context().get_expr_factory();
+  if (OB_ISNULL(old_top)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected top op", K(ret));
+  } else if (OB_ISNULL(expand_op = static_cast<ObLogExpand *>(get_log_op_factory().allocate(*this, LOG_EXPAND)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory failed", K(ret));
+  } else {
+    expand_op->set_child(ObLogicalOperator::first_child, old_top);
+    if (OB_FAIL(expand_op->set_expand_exprs(expand_exprs))) {
+      LOG_WARN("allocate duplicate exprs failed", K(ret));
+    } else if (OB_FAIL(expand_op->set_dup_expr_pairs(dup_expr_pairs))) {
+      LOG_WARN("set expand exprs failed", K(ret));
+    } else if (OB_FAIL(expand_op->set_groupby_exprs(gby_exprs))) {
+      LOG_WARN("set group by exprs failed", K(ret));
+    } else if (OB_FAIL(expand_op->compute_property())) {
+      LOG_WARN("failed to compute property", K(ret));
+    } else {
+      old_top = expand_op;
+    }
+  }
+  return ret;
+}
+
 int ObLogPlan::create_plan_tree_from_path(Path *path,
                                           ObLogicalOperator *&out_plan_tree)
 {
@@ -4675,7 +4708,7 @@ int ObLogPlan::prepare_three_stage_info(const ObIArray<ObRawExpr *> &group_by_ex
       LOG_WARN("aggr item is null", K(ret), K(aggr));
     } else if (OB_FAIL(generate_three_stage_aggr_expr(get_optimizer_context().get_expr_factory(),
                                                       *get_optimizer_context().get_session_info(),
-                                                      !rollup_exprs.empty(),
+                                                      !helper.enable_hash_rollup_ && !rollup_exprs.empty(),
                                                       aggr,
                                                       helper.distinct_aggr_batch_,
                                                       helper.distinct_params_))) {
@@ -4846,12 +4879,20 @@ int ObLogPlan::create_three_stage_group_plan(const ObIArray<ObRawExpr*> &group_b
                          helper.distinct_aggr_batch_.count() :
                          helper.distinct_aggr_batch_.count() + 1;
 
+  bool is_hash_rollup = helper.enable_hash_rollup_ && rollup_exprs.count() > 0;
+  ObHashRollupInfo hash_rollup_info;
   // 1. prepare to allocate the first group by
   if (OB_ISNULL(top)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(top));
+  } else if (is_hash_rollup
+             && OB_FAIL(static_cast<ObLogExpand *>(top)->gen_hash_rollup_info(hash_rollup_info))) {
+    LOG_WARN("generate hash rollup info failed", K(ret));
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(append(first_group_by_exprs, group_by_exprs)) ||
              OB_FAIL(append(first_group_by_exprs, rollup_exprs)) ||
+             (is_hash_rollup && OB_FAIL(first_group_by_exprs.push_back(helper.rollup_grouping_id_expr_))) ||
              OB_FAIL(first_group_by_exprs.push_back(helper.aggr_code_expr_)) ||
              OB_FAIL(append(first_group_by_exprs, helper.distinct_params_))) {
     LOG_WARN("failed to construct first group by exprs", K(ret));
@@ -4873,7 +4914,8 @@ int ObLogPlan::create_three_stage_group_plan(const ObIArray<ObRawExpr*> &group_b
                                               false,
                                               ObRollupStatus::NONE_ROLLUP,
                                               false,
-                                              &three_stage_info))) {
+                                              &three_stage_info,
+                                              is_hash_rollup ? &hash_rollup_info : nullptr))) {
     LOG_WARN("failed to allocate group by as top", K(ret));
   } else if (OB_UNLIKELY(LOG_GROUP_BY != top->get_type()) ||
              OB_ISNULL(first_group_by = static_cast<ObLogGroupBy *>(top))) {
@@ -4883,7 +4925,7 @@ int ObLogPlan::create_three_stage_group_plan(const ObIArray<ObRawExpr*> &group_b
 
   // 2. prepare to allocate the second group by
   if (OB_SUCC(ret)) {
-    if (!rollup_exprs.empty()) {
+    if (!rollup_exprs.empty() && !helper.enable_hash_rollup_) {
       second_aggr_algo = MERGE_AGGREGATE;
     } else if (helper.force_use_hash_) {
       second_aggr_algo = HASH_AGGREGATE;
@@ -4892,16 +4934,24 @@ int ObLogPlan::create_three_stage_group_plan(const ObIArray<ObRawExpr*> &group_b
     } else {
       second_aggr_algo = HASH_AGGREGATE;
     }
-    second_rollup_status = !rollup_exprs.empty() ? ROLLUP_DISTRIBUTOR : NONE_ROLLUP;
+    second_rollup_status = !rollup_exprs.empty() && !helper.enable_hash_rollup_ ? ROLLUP_DISTRIBUTOR : NONE_ROLLUP;
 
-    if (OB_FAIL(append(second_group_by_exprs, group_by_exprs)) ||
-        OB_FAIL(second_group_by_exprs.push_back(helper.aggr_code_expr_))) {
+    if (OB_FAIL(append(second_group_by_exprs, group_by_exprs))) {
+      LOG_WARN("append elements failed", K(ret));
+    } else if (is_hash_rollup && (OB_FAIL(append(second_group_by_exprs, rollup_exprs)
+                                  || OB_FAIL(second_group_by_exprs.push_back(helper.rollup_grouping_id_expr_))))) {
+      LOG_WARN("push back elements failed", K(ret));
+    } else if (OB_FAIL(second_group_by_exprs.push_back(helper.aggr_code_expr_))) {
       LOG_WARN("failed to construct second group by exprs", K(ret));
     } else if (OB_FAIL(append(second_aggr_items, helper.distinct_aggr_items_)) ||
                OB_FAIL(append(second_aggr_items, helper.non_distinct_aggr_items_))) {
       LOG_WARN("failed to construct second aggr items", K(ret));
-    } else if (OB_FAIL(append(second_exch_exprs, group_by_exprs)) ||
-                // Ensure that the rows of the same distinct columns are in the same thread
+    } else if (OB_FAIL(append(second_exch_exprs, group_by_exprs))) {
+      LOG_WARN("append elements failed", K(ret));
+    } else if (is_hash_rollup && (OB_FAIL(append(second_exch_exprs, rollup_exprs))
+                                  || OB_FAIL(second_exch_exprs.push_back(helper.rollup_grouping_id_expr_)))) {
+      LOG_WARN("push back elements failed", K(ret));
+    } else if (// Ensure that the rows of the same distinct columns are in the same thread
                OB_FAIL(second_exch_exprs.push_back(helper.aggr_code_expr_)) ||
                OB_FAIL(append(second_exch_exprs, helper.distinct_params_))) {
       LOG_WARN("failed to construct second exchange exprs", K(ret));
@@ -4955,7 +5005,7 @@ int ObLogPlan::create_three_stage_group_plan(const ObIArray<ObRawExpr*> &group_b
     } else if (OB_FAIL(allocate_group_by_as_top(top,
                                                 second_aggr_algo,
                                                 second_group_by_exprs,
-                                                rollup_exprs,
+                                                is_hash_rollup ? dummy_exprs : rollup_exprs,
                                                 second_aggr_items,
                                                 dummy_exprs,
                                                 false,
@@ -4966,12 +5016,14 @@ int ObLogPlan::create_three_stage_group_plan(const ObIArray<ObRawExpr*> &group_b
                                                 false,
                                                 second_rollup_status,
                                                 false,
-                                                &three_stage_info))) {
+                                                &three_stage_info,
+                                                is_hash_rollup ? &hash_rollup_info : nullptr))) {
       LOG_WARN("failed to allocate group by as top", K(ret));
     } else if (OB_UNLIKELY(LOG_GROUP_BY != top->get_type()) ||
                OB_ISNULL(second_group_by = static_cast<ObLogGroupBy *>(top))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("second group by is invalid", K(ret), KP(top));
+    } else if (is_hash_rollup) { // do nothing
     } else if (OB_FAIL(second_group_by->set_rollup_info(second_rollup_status,
                                                         helper.rollup_id_expr_,
                                                         rd_second_sort_keys,
@@ -4985,24 +5037,37 @@ int ObLogPlan::create_three_stage_group_plan(const ObIArray<ObRawExpr*> &group_b
   if (OB_SUCC(ret)) {
     if (helper.is_scalar_group_by_) {
       third_aggr_algo = SCALAR_AGGREGATE;
+    } else if (is_hash_rollup) {
+      third_aggr_algo = HASH_AGGREGATE;
     } else if (group_by_exprs.empty()) {
       third_aggr_algo = MERGE_AGGREGATE;
     } else {
       third_aggr_algo = second_aggr_algo;
     }
-    third_rollup_status = !rollup_exprs.empty() ? ROLLUP_COLLECTOR : NONE_ROLLUP;
-    third_exch_info.is_rollup_hybrid_ = !rollup_exprs.empty();
+    third_rollup_status = (!rollup_exprs.empty() && !helper.enable_hash_rollup_) ? ROLLUP_COLLECTOR : NONE_ROLLUP;
+    third_exch_info.is_rollup_hybrid_ = (!rollup_exprs.empty() && !helper.enable_hash_rollup_);
 
     if (OB_FAIL(append(third_group_by_exprs, group_by_exprs))) {
       LOG_WARN("failed to append third group by expr", K(ret));
+    } else if (is_hash_rollup) {
+      if (OB_FAIL(append(third_group_by_exprs, rollup_exprs))) {
+        LOG_WARN("append elements failed", K(ret));
+      } else if (OB_FAIL(third_group_by_exprs.push_back(helper.rollup_grouping_id_expr_))) {
+        LOG_WARN("push back element failed", K(ret));
+      }
     } else if (!rollup_exprs.empty() && OB_FAIL(third_group_by_exprs.push_back(helper.rollup_id_expr_))) {
       LOG_WARN("failed to append rollup id expr", K(ret));
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(append(third_aggr_items, helper.distinct_aggr_items_))) {
       LOG_WARN("failed to construct third aggregate function exprs", K(ret));
+    } else if (is_hash_rollup) {
     } else if (!rollup_exprs.empty() && OB_FAIL(append(third_aggr_items, helper.non_distinct_aggr_items_))) {
       LOG_WARN("failed to construct third aggregate function exprs", K(ret));
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(append(third_exch_exprs, third_group_by_exprs)) ||
-               OB_FAIL(append(third_exch_exprs, rollup_exprs))) {
+               (!is_hash_rollup && OB_FAIL(append(third_exch_exprs, rollup_exprs)))) {
       LOG_WARN("failed to append to third sort exprs", K(ret));
     } else if (OB_FAIL(get_grouping_style_exchange_info(third_exch_exprs,
                                                         top->get_output_equal_sets(),
@@ -5025,7 +5090,7 @@ int ObLogPlan::create_three_stage_group_plan(const ObIArray<ObRawExpr*> &group_b
     if (OB_FAIL(allocate_sort_and_exchange_as_top(top,
                                                   third_exch_info,
                                                   third_sort_keys,
-                                                  0 < rollup_exprs.count() ? true: false,
+                                                  !helper.enable_hash_rollup_ && 0 < rollup_exprs.count(),
                                                   true,
                                                   false,
                                                   0,
@@ -5037,7 +5102,7 @@ int ObLogPlan::create_three_stage_group_plan(const ObIArray<ObRawExpr*> &group_b
     } else if (OB_FAIL(allocate_group_by_as_top(top,
                                                 third_aggr_algo,
                                                 third_group_by_exprs,
-                                                rollup_exprs,
+                                                is_hash_rollup ? dummy_exprs : rollup_exprs,
                                                 third_aggr_items,
                                                 having_exprs,
                                                 false,
@@ -5048,16 +5113,19 @@ int ObLogPlan::create_three_stage_group_plan(const ObIArray<ObRawExpr*> &group_b
                                                 false,
                                                 third_rollup_status,
                                                 false,
-                                                &three_stage_info))) {
+                                                &three_stage_info,
+                                                is_hash_rollup ? &hash_rollup_info : nullptr))) {
       LOG_WARN("failed to allocate group by as top", K(ret));
     } else if (OB_UNLIKELY(LOG_GROUP_BY != top->get_type()) ||
                OB_ISNULL(third_group_by = static_cast<ObLogGroupBy *>(top))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("second group by is invalid", K(ret), KP(top));
+    } else if (is_hash_rollup) {
     } else if (OB_FAIL(third_group_by->set_rollup_info(third_rollup_status,
                                                        helper.rollup_id_expr_))) {
       LOG_WARN("failed to set rollup parallel info", K(ret));
-    } else {
+    }
+    if (OB_SUCC(ret)) {
       third_group_by->set_group_by_outline_info(false, false, HASH_AGGREGATE == second_aggr_algo, true);
     }
   }
@@ -5473,28 +5541,64 @@ int ObLogPlan::init_groupby_helper(const ObIArray<ObRawExpr*> &group_exprs,
   groupby_helper.is_from_povit_ = is_from_povit;
   groupby_helper.clear_ignore_hint();
   groupby_helper.optimizer_features_enable_version_ = get_log_plan_hint().optimizer_features_enable_version_;
+  bool has_rollup_opt_param = false;
+  bool enable_hash_rollup = false;
+  bool force_hash_rollup = false;
+  ObObj hash_rollup_policy;
+  ObQueryCtx *query_ctx = nullptr;
+  bool rowsets_enabled = true;
   if (OB_FAIL(candidates_.get_best_plan(best_plan))) {
     LOG_WARN("failed to get best plan", K(ret));
   } else if (OB_ISNULL(best_plan) ||
-             OB_ISNULL(stmt = get_stmt())) {
+             OB_ISNULL(stmt = get_stmt()) ||
+             OB_ISNULL(get_optimizer_context().get_session_info()) ||
+             OB_ISNULL(get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (stmt->is_select_stmt() &&
              OB_FALSE_IT(groupby_helper.is_scalar_group_by_ =
                          static_cast<const ObSelectStmt*>(stmt)->is_scala_group_by())) {
-  } else if (OB_FAIL(append(group_rollup_exprs, group_exprs)) ||
-             OB_FAIL(append(group_rollup_exprs, rollup_exprs))) {
+  } else if (FALSE_IT(query_ctx = get_optimizer_context().get_query_ctx())) {
+  } else if (OB_FAIL(query_ctx->query_hint_.global_hint_.opt_params_.get_hash_rollup_param(hash_rollup_policy,
+                                                                                           has_rollup_opt_param))) {
+    LOG_WARN("check and get opt param failed", K(ret));
+  } else {
+    omt::ObTenantConfigGuard tenant_config(
+      TENANT_CONF(get_optimizer_context().get_session_info()->get_effective_tenant_id()));
+    rowsets_enabled = tenant_config.is_valid() && tenant_config->_rowsets_enabled;
+    enable_hash_rollup = has_rollup_opt_param ?
+                           (hash_rollup_policy.get_string().case_compare("auto") == 0
+                           || hash_rollup_policy.get_string().case_compare("forced") == 0) :
+                           (tenant_config->_use_hash_rollup.case_compare("auto") == 0
+                           || tenant_config->_use_hash_rollup.case_compare("forced") == 0);
+    force_hash_rollup =
+      enable_hash_rollup
+      && (has_rollup_opt_param ? hash_rollup_policy.get_string().case_compare("forced") == 0 :
+                                 tenant_config->_use_hash_rollup.case_compare("forced") == 0);
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(query_ctx->query_hint_.global_hint_.opt_params_.get_bool_opt_param(
+               ObOptParamHint::ROWSETS_ENABLED, rowsets_enabled))) {
+    LOG_WARN("check rowsets enabled in opt_param failed", K(ret));
+  } else if (FALSE_IT(
+               groupby_helper.enable_hash_rollup_ =
+                 (rowsets_enabled
+                  && rollup_exprs.count() > 0
+                  && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0
+                  && groupby_helper.optimizer_features_enable_version_ >= COMPAT_VERSION_4_3_5
+                  && enable_hash_rollup
+                  && !get_optimizer_context().is_cost_evaluation()))) { // TODO: adjust expr replacement in ObLogExpand and remove this
+  } else if (FALSE_IT(groupby_helper.force_hash_rollup_ = (groupby_helper.enable_hash_rollup_ && force_hash_rollup))) {
+  } else if (OB_FAIL(append(group_rollup_exprs, group_exprs))
+             || OB_FAIL(append(group_rollup_exprs, rollup_exprs))) {
     LOG_WARN("failed to append group rollup exprs", K(ret));
-  } else if (OB_FAIL(get_log_plan_hint().get_aggregation_info(groupby_helper.force_use_hash_,
-                                                              groupby_helper.force_use_merge_,
-                                                              groupby_helper.force_part_sort_,
-                                                              groupby_helper.force_normal_sort_,
-                                                              groupby_helper.force_basic_,
-                                                              groupby_helper.force_partition_wise_,
-                                                              groupby_helper.force_dist_hash_))) {
+  } else if (OB_FAIL(get_log_plan_hint().get_aggregation_info(
+               groupby_helper.force_use_hash_, groupby_helper.force_use_merge_,
+               groupby_helper.force_part_sort_, groupby_helper.force_normal_sort_,
+               groupby_helper.force_basic_, groupby_helper.force_partition_wise_,
+               groupby_helper.force_dist_hash_))) {
     LOG_WARN("failed to get aggregation info from hint", K(ret));
-  } else if (OB_FAIL(check_storage_groupby_pushdown(aggr_items,
-                                                    group_exprs,
+  } else if (OB_FAIL(check_storage_groupby_pushdown(aggr_items, group_exprs,
                                                     groupby_helper.pushdown_groupby_columns_,
                                                     groupby_helper.can_storage_pushdown_))) {
     LOG_WARN("failed to check scalar group by pushdown", K(ret));
@@ -5507,26 +5611,40 @@ int ObLogPlan::init_groupby_helper(const ObIArray<ObRawExpr*> &group_exprs,
     LOG_WARN("fail to get aggr_pushdown_allowed", K(ret));
   } else if (!push_group && !get_log_plan_hint().pushdown_group_by()) {
     OPT_TRACE("session info disable pushdown group by");
-  } else if (OB_FAIL(check_rollup_pushdown(session_info,
-                                           aggr_items,
+  } else if (OB_FAIL(check_rollup_pushdown(session_info, aggr_items,
                                            groupby_helper.can_rollup_pushdown_))) {
     LOG_WARN("failed to check rollup pushdown", K(ret));
-  } else if (OB_FAIL(check_basic_groupby_pushdown(
-                       aggr_items,
-                       best_plan->get_output_equal_sets(),
-                       groupby_helper.can_basic_pushdown_))) {
+  } else if (OB_FAIL(check_basic_groupby_pushdown(aggr_items, best_plan->get_output_equal_sets(),
+                                                  groupby_helper.can_basic_pushdown_))) {
     LOG_WARN("failed to check whether aggr can be pushed", K(ret));
   } else if (groupby_helper.can_basic_pushdown_ || is_from_povit) {
     // do nothing
   } else if (OB_FAIL(check_three_stage_groupby_pushdown(
-                       rollup_exprs,
-                       aggr_items,
-                       groupby_helper.non_distinct_aggr_items_,
-                       groupby_helper.distinct_aggr_items_,
-                       best_plan->get_output_equal_sets(),
-                       groupby_helper.distinct_exprs_,
-                       groupby_helper.can_three_stage_pushdown_))) {
+               rollup_exprs, aggr_items, groupby_helper.non_distinct_aggr_items_,
+               groupby_helper.distinct_aggr_items_, best_plan->get_output_equal_sets(),
+               groupby_helper.distinct_exprs_, groupby_helper.can_three_stage_pushdown_))) {
     LOG_WARN("failed to check use three stage push down", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (groupby_helper.enable_hash_rollup_ && rollup_exprs.count() > 0) {
+    ObRawExprFactory &factory = get_optimizer_context().get_expr_factory();
+    if (OB_FAIL(ObRawExprUtils::build_grouping_id(factory,
+                                                  *get_optimizer_context().get_session_info(),
+                                                  groupby_helper.rollup_grouping_id_expr_))) {
+      LOG_WARN("build rollup grouping id expr failed", K(ret));
+    } else if (OB_FAIL(ObLogExpand::dup_and_replace_exprs_within_aggrs(factory,
+                                                                       get_optimizer_context().get_session_info(),
+                                                                       rollup_exprs,
+                                                                       aggr_items,
+                                                                       groupby_helper.dup_expr_pairs_))) {
+      LOG_WARN("duplicate and replace exprs failed", K(ret));
+    } else if (OB_FAIL(ObLogExpand::gen_expand_exprs(factory,
+                                                     get_optimizer_context().get_session_info(),
+                                                     const_cast<ObIArray<ObRawExpr *> &>(rollup_exprs),
+                                                     const_cast<ObIArray<ObRawExpr *> &>(group_exprs),
+                                                     groupby_helper.dup_expr_pairs_))) {
+      LOG_WARN("gen expand exprs failed", K(ret));
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -6930,7 +7048,8 @@ int ObLogPlan::allocate_group_by_as_top(ObLogicalOperator *&top,
                                         const bool is_partition_gi,
                                         const ObRollupStatus rollup_status,
                                         bool force_use_scalar /*false*/,
-                                        const ObThreeStageAggrInfo *three_stage_info)
+                                        const ObThreeStageAggrInfo *three_stage_info,
+                                        const ObHashRollupInfo *hash_rollup_info)
 {
   int ret = OB_SUCCESS;
   ObLogGroupBy *group_by = NULL;
@@ -6956,6 +7075,9 @@ int ObLogPlan::allocate_group_by_as_top(ObLogicalOperator *&top,
     group_by->set_is_partition_wise(is_partition_wise);
     group_by->set_force_push_down((FORCE_GPD & get_optimizer_context().get_aggregation_optimization_settings()) ||
                                   (!is_first_stage && has_dbms_stats));
+    if (hash_rollup_info != nullptr) {
+      group_by->set_hash_rollup_info(*hash_rollup_info);
+    }
     if (algo == MERGE_AGGREGATE && force_use_scalar) {
       group_by->set_pushdown_scalar_aggr();
     }
@@ -7010,7 +7132,7 @@ int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
     } else {
       has_allocated_range_shuffle_ = true;
     }
-  } else if (exch_info.is_pq_local() && NULL == topn_expr && GCONF._enable_px_ordered_coord) {
+  } else if (exch_info.is_pq_local() && NULL == topn_expr && get_optimizer_context().is_enable_px_ordered_coord()) {
     if (OB_FAIL(allocate_dist_range_sort_as_top(top, sort_keys, need_sort, is_local_order))) {
       LOG_WARN("failed to allocate dist range sort as top", K(ret));
     } else { /*do nothing*/ }

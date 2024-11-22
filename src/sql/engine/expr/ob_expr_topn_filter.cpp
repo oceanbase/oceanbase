@@ -146,7 +146,7 @@ int ObExprTopNFilterContext::state_machine(const ObExpr &expr, ObEvalCtx &ctx, A
   return ret;
 }
 
-// bypass interface for eval one row, for storege black filter
+// bypass interface for eval one row, for storage black filter
 inline int ObExprTopNFilterContext::bypass(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   UNUSED(expr);
@@ -168,7 +168,7 @@ inline int ObExprTopNFilterContext::bypass(const ObExpr &expr, ObEvalCtx &ctx, O
   return ret;
 }
 
-// bypass interface for eval_batch rows, for storege black filter
+// bypass interface for eval_batch rows, for storage black filter
 inline int ObExprTopNFilterContext::bypass(const ObExpr &expr, ObEvalCtx &ctx,
                                            const ObBitVector &skip, const int64_t batch_size)
 {
@@ -201,7 +201,7 @@ inline int ObExprTopNFilterContext::bypass(const ObExpr &expr, ObEvalCtx &ctx,
   return ret;
 }
 
-// bypass interface for eval_vector rows, for storege black filter
+// bypass interface for eval_vector rows, for storage black filter
 inline int ObExprTopNFilterContext::bypass(const ObExpr &expr, ObEvalCtx &ctx,
                                            const ObBitVector &skip, const EvalBound &bound)
 {
@@ -238,17 +238,17 @@ inline int ObExprTopNFilterContext::bypass(const ObExpr &expr, ObEvalCtx &ctx,
   return ret;
 }
 
-// bypass interface for storege white filter
+// bypass interface for storage white filter
 inline int ObExprTopNFilterContext::bypass(const ObExpr &expr, ObEvalCtx &ctx,
                                            ObDynamicFilterExecutor &dynamic_filter,
                                            ObRuntimeFilterParams &params, bool &is_data_prepared)
 {
-  // for prepare storege white data stage
-  dynamic_filter.set_filter_action(DynamicFilterAction::PASS_ALL);
+  // for prepare storage white data stage
+  // enter this only when filter message not ready, is_data_prepared is false
   return OB_SUCCESS;
 }
 
-// filter interface for eval one row, for storege black filter
+// filter interface for eval one row, for storage black filter
 inline int ObExprTopNFilterContext::do_process(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   int ret = topn_filter_msg_->filter_out_data(expr, ctx, *this, res);
@@ -258,7 +258,7 @@ inline int ObExprTopNFilterContext::do_process(const ObExpr &expr, ObEvalCtx &ct
   return ret;
 }
 
-// filter interface for eval_batch rows, for storege black filter
+// filter interface for eval_batch rows, for storage black filter
 inline int ObExprTopNFilterContext::do_process(const ObExpr &expr, ObEvalCtx &ctx,
                                                const ObBitVector &skip, const int64_t batch_size)
 {
@@ -269,7 +269,7 @@ inline int ObExprTopNFilterContext::do_process(const ObExpr &expr, ObEvalCtx &ct
   return ret;
 }
 
-// filter interface for eval_vector rows, for storege black filter
+// filter interface for eval_vector rows, for storage black filter
 inline int ObExprTopNFilterContext::do_process(const ObExpr &expr, ObEvalCtx &ctx,
                                                const ObBitVector &skip, const EvalBound &bound)
 {
@@ -280,7 +280,7 @@ inline int ObExprTopNFilterContext::do_process(const ObExpr &expr, ObEvalCtx &ct
   return ret;
 }
 
-// get filter date from topn filter msg to enable storege white filter
+// get filter date from topn filter msg to enable storage white filter
 inline int ObExprTopNFilterContext::do_process(const ObExpr &expr, ObEvalCtx &ctx,
                                                ObDynamicFilterExecutor &dynamic_filter,
                                                ObRuntimeFilterParams &params,

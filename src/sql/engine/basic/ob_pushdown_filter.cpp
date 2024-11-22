@@ -2251,6 +2251,29 @@ MarkFilterdDatumsFunc get_mark_filterd_datums_func()
 
 MarkFilterdDatumsFunc mark_filtered_datums_func = get_mark_filterd_datums_func();
 
+/*
+For black runtime filters, they are in the same BlackFilterExecutor,
+after this optimization, in filter and bloom filter will be mutually exclusive, i.e. if in filter
+is active, then bloom filter must be inactive, vice versa. We can skip the inactive one here.
+*/
+static inline bool can_skip_eval_runtime_filter_expr(ObExpr *expr, ObPushdownOperator &op)
+{
+  bool skip = false;
+  bool is_join_runtime_filter =
+      (expr->eval_vector_func_ == ObExprJoinFilter::eval_bloom_filter_vector
+       || expr->eval_vector_func_ == ObExprJoinFilter::eval_in_filter_vector);
+  if (is_join_runtime_filter) {
+    ObEvalCtx &eval_ctx = op.get_eval_ctx();
+    ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx =
+        static_cast<ObExprJoinFilter::ObExprJoinFilterContext *>(
+            eval_ctx.exec_ctx_.get_expr_op_ctx(expr->expr_ctx_id_));
+    if (!join_filter_ctx || !join_filter_ctx->is_active_) {
+      skip = true;
+    }
+  }
+  return skip;
+}
+
 int ObBlackFilterExecutor::eval_exprs_batch(ObBitVector &skip, const int64_t bsize)
 {
   int ret = OB_SUCCESS;
@@ -2262,7 +2285,10 @@ int ObBlackFilterExecutor::eval_exprs_batch(ObBitVector &skip, const int64_t bsi
   }
   FOREACH_CNT_X(e, filter_.filter_exprs_, OB_SUCC(ret) && !skip.is_all_true(bsize)) {
     if (enable_rich_format) {
-      if (OB_FAIL((*e)->eval_vector(eval_ctx, skip, bsize, skip.is_all_false(bsize)))) {
+      if (can_skip_eval_runtime_filter_expr(*e, op_)) {
+        // For black runtime filter, they are in the same BlackFilterExecutor, in filter and bloom
+        // filter is mutually exclusive, so we can skip the inactive one here.
+      } else if (OB_FAIL((*e)->eval_vector(eval_ctx, skip, bsize, skip.is_all_false(bsize)))) {
         LOG_WARN("evaluate batch failed", K(ret));
       } else {
         ObIVector *res = (*e)->get_vector(eval_ctx);

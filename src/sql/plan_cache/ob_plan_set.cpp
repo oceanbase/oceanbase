@@ -2471,7 +2471,7 @@ int ObSqlPlanSet::get_evolving_evolution_task(EvolutionPlanList &evo_task_list)
 bool ObPlanSet::match_decint_precision(const ObParamInfo &param_info, ObPrecision other_prec) const
 {
   bool ret = false;
-  if (ob_is_decimal_int(param_info.type_)) {
+  if (ob_is_decimal_int(param_info.type_) || ob_is_integer_type(param_info.type_)) {
     ret = (param_info.precision_ == other_prec);
   } else if (ob_is_extend(param_info.type_) && ob_is_decimal_int(param_info.ext_real_type_)) {
     ret = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(param_info.precision_)

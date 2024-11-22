@@ -52,6 +52,7 @@ public:
   bool is_valid_uni_;
   ObObjType type_;
   ObSorEncMode enc_mod_;
+  bool is_simdopt_;
 
   ObEncParam()
     : cs_type_(ObCollationType::CS_TYPE_INVALID),
@@ -62,7 +63,8 @@ public:
       is_memcmp_(false),
       is_valid_uni_(true),
       type_(ObObjType::ObNullType),
-      enc_mod_(ObSorEncMode::OB_INVALID_MODE)
+      enc_mod_(ObSorEncMode::OB_INVALID_MODE),
+      is_simdopt_(true)
   {}
 
   TO_STRING_KV(K_(cs_type),
@@ -73,7 +75,8 @@ public:
                K_(is_asc),
                K_(is_nullable),
                K_(is_null_first),
-               K_(enc_mod));
+               K_(enc_mod),
+               K_(is_simdopt));
 };
 
 class ObOrderPerservingEncoder {
@@ -82,18 +85,11 @@ public:
   static int make_order_perserving_encode_from_object(
     ObDatum &data, unsigned char *to, int64_t max_buf_len, int64_t &to_len, ObEncParam &param);
 
-  static int make_order_perserving_encode_from_object(ObObj &obj,
-                                                      unsigned char *to,
-                                                      int64_t max_buf_len,
-                                                      int64_t &to_len);
-
   static int encode_from_string_fixlen(
     ObString val, unsigned char *to, int64_t max_buf_len, int64_t &to_len, ObEncParam &param);
 
   static int encode_from_string_varlen(
     ObString val, unsigned char *to, int64_t max_buf_len, int64_t &to_len, ObEncParam &param);
-  static int encode_from_string_varlen(
-    ObString val, unsigned char *to, int64_t max_buf_len, int64_t &to_len, ObCollationType cs);
   static int encode_from_int8(int8_t val, unsigned char *to, int64_t &to_len);
   static int encode_from_int16(int16_t val, unsigned char *to, int64_t &to_len);
   static int encode_from_int32(int32_t val, unsigned char *to, int64_t &to_len);
@@ -165,10 +161,6 @@ class ObSortkeyConditioner {
 public:
   static int process_key_conditioning(
     ObDatum &data, unsigned char *to, int64_t max_buf_len, int64_t &to_len, ObEncParam &param);
-  static int process_key_conditioning(ObObj &obj,
-                                      unsigned char *to,
-                                      int64_t max_buf_len,
-                                      int64_t &to_len);
   // adds null position flag
   static void process_decrease(unsigned char *to, int64_t to_len);
   // static int process_compare_by_combined_bytes()

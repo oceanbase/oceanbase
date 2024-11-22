@@ -490,8 +490,8 @@ protected:
       if (OB_LIKELY(row_sel.is_empty() && bound.get_all_rows_active())) {
         if (all_not_null) {
           for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
-            if (OB_FAIL(
-                  derived.add_row(agg_ctx, *columns, i, agg_col_id, agg_cell, tmp_res, calc_info))) {
+            if (OB_FAIL(AddRow<Derived>::do_op(derived, agg_ctx, *columns, i, agg_col_id,
+                                                     agg_cell, tmp_res, calc_info))) {
               SQL_LOG(WARN, "add row failed", K(ret));
             }
           } // end for
@@ -501,8 +501,8 @@ protected:
           }
         } else {
           for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
-            if (OB_FAIL(derived.add_nullable_row(agg_ctx, *columns, i, agg_col_id, agg_cell, tmp_res,
-                                                 calc_info))) {
+            if (OB_FAIL(AddNullableRow<Derived>::do_op(
+                  derived, agg_ctx, *columns, i, agg_col_id, agg_cell, tmp_res, calc_info))) {
               SQL_LOG(WARN, "add row failed", K(ret));
             }
           } // end for
@@ -510,8 +510,8 @@ protected:
       } else if (!row_sel.is_empty()) {
         if (all_not_null) {
           for (int i = 0; OB_SUCC(ret) && i < row_sel.size(); i++) {
-            if (OB_FAIL(derived.add_row(agg_ctx, *columns, row_sel.index(i), agg_col_id, agg_cell,
-                                        tmp_res, calc_info))) {
+            if (OB_FAIL(AddRow<Derived>::do_op(derived, agg_ctx, *columns, row_sel.index(i),
+                                                     agg_col_id, agg_cell, tmp_res, calc_info))) {
               SQL_LOG(WARN, "add row failed", K(ret));
             }
           } // end for
@@ -521,8 +521,9 @@ protected:
           }
         } else {
           for (int i = 0; OB_SUCC(ret) && i < row_sel.size(); i++) {
-            if (OB_FAIL(derived.add_nullable_row(agg_ctx, *columns, row_sel.index(i), agg_col_id,
-                                                 agg_cell, tmp_res, calc_info))) {
+            if (OB_FAIL(AddNullableRow<Derived>::do_op(
+                  derived, agg_ctx, *columns, row_sel.index(i), agg_col_id, agg_cell, tmp_res,
+                  calc_info))) {
               SQL_LOG(WARN, "add row failed", K(ret));
             }
           } // end for
@@ -531,8 +532,9 @@ protected:
         if (all_not_null) {
           for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
             if (skip.at(i)) {
-            } else if (OB_FAIL(derived.add_row(agg_ctx, *columns, i, agg_col_id, agg_cell, tmp_res,
-                                               calc_info))) {
+            } else if (OB_FAIL(AddRow<Derived>::do_op(derived, agg_ctx, *columns, i,
+                                                            agg_col_id, agg_cell, tmp_res,
+                                                            calc_info))) {
               SQL_LOG(WARN, "add row failed", K(ret));
             }
           } // end for
@@ -543,8 +545,9 @@ protected:
         } else {
           for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
             if (skip.at(i)) {
-            } else if (OB_FAIL(derived.add_nullable_row(agg_ctx, *columns, i, agg_col_id, agg_cell,
-                                                        tmp_res, calc_info))) {
+            } else if (OB_FAIL(AddNullableRow<Derived>::do_op(
+                         derived, agg_ctx, *columns, i, agg_col_id, agg_cell, tmp_res,
+                         calc_info))) {
               SQL_LOG(WARN, "add row failed", K(ret));
             }
           } // end for
@@ -958,23 +961,6 @@ public:
       SQL_LOG(WARN, "collect group result failed", K(ret));
     }
     return ret;
-  }
-  template <typename ColumnFmt>
-  OB_INLINE int add_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
-                     const int32_t agg_col_id, char *aggr_cell, void *tmp_res, int64_t &calc_info)
-  {
-    UNUSEDx(agg_ctx, columns, row_num, agg_col_id, aggr_cell, tmp_res, calc_info);
-    SQL_LOG(DEBUG, "add_row do nothing");
-    return OB_SUCCESS;
-  }
-  template <typename ColumnFmt>
-  OB_INLINE int add_nullable_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
-                              const int32_t agg_col_id, char *agg_cell, void *tmp_res,
-                              int64_t &calc_info)
-  {
-    UNUSEDx(agg_ctx, columns, row_num, agg_col_id, agg_cell, tmp_res, calc_info);
-    SQL_LOG(DEBUG, "add_nullable_row do nothing");
-    return OB_SUCCESS;
   }
 
   inline int add_one_row(RuntimeContext &agg_ctx, int64_t batch_idx, int64_t batch_size,

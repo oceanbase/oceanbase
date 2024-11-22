@@ -579,6 +579,8 @@ private:
   int setup_op_feedback_info();
   // child can implement this interface, but can't call this directly
   virtual int inner_drain_exch() { return common::OB_SUCCESS; };
+
+  bool enable_get_next_row() const;
 protected:
   const ObOpSpec &spec_;
   ObExecContext &ctx_;

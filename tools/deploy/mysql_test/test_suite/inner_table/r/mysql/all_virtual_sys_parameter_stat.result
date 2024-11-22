@@ -409,6 +409,7 @@ _iut_max_entries
 _iut_stat_collection_type
 _lcl_op_interval
 _load_tde_encrypt_engine
+_lob_rowsets_max_rows
 _log_writer_parallelism
 _ls_gc_wait_readonly_tx_time
 _ls_migration_wait_completing_timeout
@@ -422,6 +423,7 @@ _mds_memory_limit_percentage
 _memstore_limit_percentage
 _migrate_block_verify_level
 _minor_compaction_amplification_factor
+_min_const_integer_precision
 _min_malloc_sample_interval
 _multimodel_memory_trace_level
 _mvcc_gc_using_min_txn_snapshot
@@ -520,6 +522,7 @@ _tx_debug_level
 _tx_result_retention
 _tx_share_memory_limit_percentage
 _upgrade_stage
+_use_hash_rollup
 _wait_interval_after_parallel_ddl
 _with_subquery
 _xa_gc_interval

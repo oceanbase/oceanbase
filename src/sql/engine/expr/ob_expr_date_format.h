@@ -17,6 +17,18 @@
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "sql/session/ob_sql_session_info.h"
 
+#define MAX_FORMAT_LENGTH (128) // maybe enough
+#define COMMON_PART_FORMAT_FUNC_ARG_DECL ArgVec *arg_vec, int idx, int64_t tz_offset,\
+                                         YearType &year, MonthType &month, DateType &date,\
+                                         UsecType &usec, DateType &dt_yday, DateType &dt_mday, DateType &dt_wday
+#define FORMAT_FUNC_ARG_DECL YearType year, MonthType month, DateType date,\
+                             UsecType usec, DateType dt_yday, DateType dt_mday, DateType dt_wday,\
+                             WeekType &week_sunday, WeekType &week_monday,\
+                             int8_t &delta_sunday, int8_t &delta_monday, char *res_buf, int16_t &len,\
+                             bool &res_null, bool no_null,\
+                             const char *const *day_name, const char *const *ab_day_name,\
+                             const char *const *month_name, const char *const *ab_month_name
+
 namespace oceanbase
 {
 namespace sql
@@ -42,6 +54,57 @@ private:
 
   static const int64_t OB_MAX_DATE_FORMAT_BUF_LEN = 1024;
   static void check_reset_status(common::ObExprCtx &expr_ctx, int &ret, common::ObObj &result);
+public:
+  static int calc_date_format_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
+private:
+  template <typename ArgVec, typename ResVec, typename IN_TYPE>
+  static int vector_date_format(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
+  static int get_day_month_names(ObString locale_name, const char *const *&day_name, const char *const *&ab_day_name,
+                                 const char *const *&month_name, const char *const *&ab_month_name);
+  static int analyze_format(const char *format_ptr, const char *end_ptr, int32_t &mode);
+  static int get_from_format_Y(FORMAT_FUNC_ARG_DECL);
+  static int get_from_format_y(FORMAT_FUNC_ARG_DECL);
+  static int get_from_format_M(FORMAT_FUNC_ARG_DECL);
+  static int get_from_format_m(FORMAT_FUNC_ARG_DECL);
+  static int get_from_format_D(FORMAT_FUNC_ARG_DECL);
+  static int get_from_format_d(FORMAT_FUNC_ARG_DECL);
+  static int get_from_format_a(FORMAT_FUNC_ARG_DECL);
+  static int get_from_format_b(FORMAT_FUNC_ARG_DECL);
+  static int get_from_format_c(FORMAT_FUNC_ARG_DECL);
+  static int get_from_format_e(FORMAT_FUNC_ARG_DECL);
+  static int get_from_format_j(FORMAT_FUNC_ARG_DECL);
+  static int get_from_format_W(FORMAT_FUNC_ARG_DECL);
+  static int get_from_format_w(FORMAT_FUNC_ARG_DECL);
+  static int get_from_format_U(FORMAT_FUNC_ARG_DECL);
+  static int get_from_format_u(FORMAT_FUNC_ARG_DECL);
+  static int get_from_format_X(FORMAT_FUNC_ARG_DECL);
+  static int get_from_format_x(FORMAT_FUNC_ARG_DECL);
+  static int get_from_format_V(FORMAT_FUNC_ARG_DECL);
+  static int get_from_format_v(FORMAT_FUNC_ARG_DECL);
+  static int get_from_format_f(FORMAT_FUNC_ARG_DECL);
+  static int get_from_format_H(FORMAT_FUNC_ARG_DECL);
+  static int get_from_format_h_I(FORMAT_FUNC_ARG_DECL);
+  static int get_from_format_i(FORMAT_FUNC_ARG_DECL);
+  static int get_from_format_k(FORMAT_FUNC_ARG_DECL);
+  static int get_from_format_l(FORMAT_FUNC_ARG_DECL);
+  static int get_from_format_p(FORMAT_FUNC_ARG_DECL);
+  static int get_from_format_r(FORMAT_FUNC_ARG_DECL);
+  static int get_from_format_S_s(FORMAT_FUNC_ARG_DECL);
+  static int get_from_format_T(FORMAT_FUNC_ARG_DECL);
+  template <typename ArgVec, typename IN_TYPE>
+  static int calc_usec_only(COMMON_PART_FORMAT_FUNC_ARG_DECL);
+  template <typename ArgVec, typename IN_TYPE>
+  static int calc_year_only(COMMON_PART_FORMAT_FUNC_ARG_DECL);
+  template <typename ArgVec, typename IN_TYPE>
+  static int calc_yday_only(COMMON_PART_FORMAT_FUNC_ARG_DECL);
+  template <typename ArgVec, typename IN_TYPE>
+  static int calc_week_only(COMMON_PART_FORMAT_FUNC_ARG_DECL);
+  template <typename ArgVec, typename IN_TYPE>
+  static int calc_year_month(COMMON_PART_FORMAT_FUNC_ARG_DECL);
+  template <typename ArgVec, typename IN_TYPE>
+  static int calc_year_week(COMMON_PART_FORMAT_FUNC_ARG_DECL);
+  template <typename ArgVec, typename IN_TYPE>
+  static int calc_year_month_week(COMMON_PART_FORMAT_FUNC_ARG_DECL);
 };
 
 inline int ObExprDateFormat::calc_result_type2(ObExprResType &type,

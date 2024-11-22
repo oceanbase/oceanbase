@@ -745,7 +745,11 @@ protected:
 
   OB_INLINE virtual bool has_msg() { return recv_buffer_cnt_ > processed_buffer_cnt_; }
 
-  virtual void reset_px_row_iterator() { datum_iter_.reset(); }
+  virtual void reset_px_row_iterator()
+  {
+    datum_iter_.reset();
+    row_iter_.reset();
+  }
 protected:
   bool is_inited_;
   const uint64_t local_id_;
@@ -782,6 +786,7 @@ protected:
   ObDtlChannelEncoder *msg_writer_;
   // row/datum store iterator for interm result iteration.
   ObChunkDatumStore::Iterator datum_iter_;
+  ObTempRowStore::Iterator row_iter_;
 
   ObDtlBcastService *bc_service_;
 

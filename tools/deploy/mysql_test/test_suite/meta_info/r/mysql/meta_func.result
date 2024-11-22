@@ -10,7 +10,7 @@ drop table if exists tt;
 create table tt(c tinyint);
 select 2*avg(c) from tt;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					2*avg(c)	246	30	0	Y	32896	4	63
+def					2*avg(c)	246	14	0	Y	32896	4	63
 2*avg(c)
 NULL
 drop table if exists tt;
@@ -18,63 +18,63 @@ create table tt(c tinyint);
 insert into tt values(19),(20);
 select 2*avg(c) from tt;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					2*avg(c)	246	30	7	Y	32896	4	63
+def					2*avg(c)	246	14	7	Y	32896	4	63
 2*avg(c)
 39.0000
 select str_to_date('1970-01-02','%Y-%m-%d %H:%i:%s') + 1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					str_to_date('1970-01-02','%Y-%m-%d %H:%i:%s') + 1	246	22	14	Y	32896	0	63
+def					str_to_date('1970-01-02','%Y-%m-%d %H:%i:%s') + 1	246	21	14	Y	32896	0	63
 str_to_date('1970-01-02','%Y-%m-%d %H:%i:%s') + 1
 19700102000001
 select str_to_date('1970-01-02','%Y-%m-%d %H:%i:%s') + 10000;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					str_to_date('1970-01-02','%Y-%m-%d %H:%i:%s') + 10000	246	22	14	Y	32896	0	63
+def					str_to_date('1970-01-02','%Y-%m-%d %H:%i:%s') + 10000	246	21	14	Y	32896	0	63
 str_to_date('1970-01-02','%Y-%m-%d %H:%i:%s') + 10000
 19700102010000
 select str_to_date('1970-01-02',null) + 100;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					str_to_date('1970-01-02',null) + 100	246	29	0	Y	32896	6	63
+def					str_to_date('1970-01-02',null) + 100	246	28	0	Y	32896	6	63
 str_to_date('1970-01-02',null) + 100
 NULL
 select str_to_date('1970-01-02','null') + 100;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					str_to_date('1970-01-02','null') + 100	8	21	0	Y	32896	0	63
+def					str_to_date('1970-01-02','null') + 100	8	11	0	Y	32896	0	63
 str_to_date('1970-01-02','null') + 100
 NULL
 Warnings:
 Warning	1411	Incorrect datetime value: '1970-01-02' for function str_to_date
 select str_to_date('1970-01-02',0)+ 1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					str_to_date('1970-01-02',0)+ 1	246	22	0	Y	32896	0	63
+def					str_to_date('1970-01-02',0)+ 1	246	21	0	Y	32896	0	63
 str_to_date('1970-01-02',0)+ 1
 NULL
 Warnings:
 Warning	1411	Incorrect datetime value: '1970-01-02' for function str_to_date
 select str_to_date('1970-01-02', 23) +10;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					str_to_date('1970-01-02', 23) +10	246	22	0	Y	32896	0	63
+def					str_to_date('1970-01-02', 23) +10	246	21	0	Y	32896	0	63
 str_to_date('1970-01-02', 23) +10
 NULL
 Warnings:
 Warning	1411	Incorrect datetime value: '1970-01-02' for function str_to_date
 select str_to_date('1970-01-02 12:23:32','%Y-%m-%d %H:%i:%s')+ 10000;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					str_to_date('1970-01-02 12:23:32','%Y-%m-%d %H:%i:%s')+ 10000	246	22	14	Y	32896	0	63
+def					str_to_date('1970-01-02 12:23:32','%Y-%m-%d %H:%i:%s')+ 10000	246	21	14	Y	32896	0	63
 str_to_date('1970-01-02 12:23:32','%Y-%m-%d %H:%i:%s')+ 10000
 19700102132332
 select str_to_date('1970-01-02 12:23:32','%Y-%m-%d')+ 10000;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					str_to_date('1970-01-02 12:23:32','%Y-%m-%d')+ 10000	8	21	8	Y	32896	0	63
+def					str_to_date('1970-01-02 12:23:32','%Y-%m-%d')+ 10000	8	11	8	Y	32896	0	63
 str_to_date('1970-01-02 12:23:32','%Y-%m-%d')+ 10000
 19710102
 select str_to_date('12:23:32','%H:%i:%s')+ 10000;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					str_to_date('12:23:32','%H:%i:%s')+ 10000	246	22	6	Y	32896	0	63
+def					str_to_date('12:23:32','%H:%i:%s')+ 10000	246	12	6	Y	32896	0	63
 str_to_date('12:23:32','%H:%i:%s')+ 10000
 132332
 select str_to_date('12:23:32',10)+ 10000;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					str_to_date('12:23:32',10)+ 10000	246	22	0	Y	32896	0	63
+def					str_to_date('12:23:32',10)+ 10000	246	21	0	Y	32896	0	63
 str_to_date('12:23:32',10)+ 10000
 NULL
 Warnings:
@@ -94,7 +94,7 @@ CEMPNUM
 create table t3(a int, b decimal, c varchar(10));
 select ifnull(0, 0.0);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					ifnull(0, 0.0)	246	23	3	Y	32896	1	63
+def					ifnull(0, 0.0)	246	7	3	Y	32896	1	63
 ifnull(0, 0.0)
 0.0
 insert into t3 values(0, 2.4, "123");
@@ -133,7 +133,7 @@ CREATE TABLE t2 (a VARCHAR(32) NOT NULL);
 INSERT INTO t2 VALUES ('a');
 SELECT 1 FROM t2 GROUP BY @a:=UNIX_TIMESTAMP(a);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					1	8	1	1	N	32897	0	63
+def					1	8	4	1	N	32897	0	63
 1
 1
 SELECT a, UNIX_TIMESTAMP(a), UNIX_TIMESTAMP('a') FROM t2;

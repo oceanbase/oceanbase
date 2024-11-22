@@ -460,8 +460,7 @@ int ObRawExprDeduceType::push_back_types(const ObRawExpr *param_expr, ObExprResT
     //  explain stmt does not proceduce questionmark exprs, special processing is needed in order to
     //  print precise sql plan.
     if (is_mysql_mode && ob_is_int_uint_tc(types.at(idx).get_type())
-        && (param_expr->is_column_ref_expr()
-            || param_expr->get_expr_type() == T_QUESTIONMARK || is_explain_stmt)) {
+        && (param_expr->is_column_ref_expr())) {
       ObPrecision max_prec =
         ObAccuracy::MAX_ACCURACY2[0 /*mysql*/][types.at(idx).get_type()].get_precision();
       const ObPrecision prec = MAX(types.at(idx).get_precision(), max_prec);

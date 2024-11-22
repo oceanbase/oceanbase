@@ -178,10 +178,6 @@ public:
   }
   int add_batch(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &ctx,
                 const ObBatchRows &brs, int64_t &stored_rows_count);
-
-  inline int64_t get_row_cnt() const { return block_id_cnt_; }
-  inline int64_t get_row_cnt_on_disk() const { return dumped_block_id_cnt_; }
-  inline int64_t get_row_cnt_in_memory() const { return get_row_cnt() - get_row_cnt_on_disk(); }
   inline int64_t get_col_cnt() const { return col_cnt_; }
 
 private:

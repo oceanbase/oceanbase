@@ -46,6 +46,7 @@ int ObExprFromDays::cg_expr(ObExprCGCtx &op_cg_ctx,
   } else {
     CK(ObInt32Type == rt_expr.args_[0]->datum_meta_.type_);
     rt_expr.eval_func_ = ObExprFromDays::calc_fromdays;
+    rt_expr.eval_vector_func_ = ObExprFromDays::calc_fromdays_vector;
   }
   return ret;
 }
@@ -70,6 +71,86 @@ int ObExprFromDays::calc_fromdays(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &e
   }
   return ret;
 }
+
+template <typename ArgVec, typename ResVec>
+int vector_fromdays(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  ArgVec *arg_vec = static_cast<ArgVec *>(expr.args_[0]->get_vector(ctx));
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  bool no_skip_no_null =
+    bound.get_all_rows_active() && eval_flags.accumulate_bit_cnt(bound) == 0 && !arg_vec->has_null();
+
+  if (no_skip_no_null) {
+    for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+      int32_t value = arg_vec->get_int32(idx);
+      if (value >= MIN_DAYS_OF_DATE && value <= MAX_DAYS_OF_DATE) {
+        res_vec->set_date(idx, value - DAYS_FROM_ZERO_TO_BASE);
+      } else {
+        res_vec->set_date(idx, ObTimeConverter::ZERO_DATE);
+      }
+    }
+    eval_flags.set_all(bound.start(), bound.end());
+  } else {
+    for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+      if (skip.at(idx) || eval_flags.at(idx)) {
+        continue;
+      } else if (arg_vec->is_null(idx)) {
+        res_vec->set_null(idx);
+        eval_flags.set(idx);
+        continue;
+      }
+      int32_t value = arg_vec->get_int32(idx);
+      if (value >= MIN_DAYS_OF_DATE && value <= MAX_DAYS_OF_DATE) {
+        res_vec->set_date(idx, value - DAYS_FROM_ZERO_TO_BASE);
+      } else {
+        res_vec->set_date(idx, ObTimeConverter::ZERO_DATE);
+      }
+      eval_flags.set(idx);
+    }
+  }
+  return ret;
+}
+int ObExprFromDays::calc_fromdays_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("fail to eval date_format param", K(ret));
+  } else {
+    VectorFormat arg_format = expr.args_[0]->get_format(ctx);
+    VectorFormat res_format = expr.get_format(ctx);
+    if (VEC_UNIFORM_CONST == arg_format && VEC_UNIFORM_CONST == res_format) {
+      ret = vector_fromdays<IntegerUniCVec, DateUniCVec>(expr, ctx, skip, bound);
+    } else if (VEC_UNIFORM_CONST == arg_format && VEC_FIXED == res_format) {
+      ret = vector_fromdays<IntegerUniCVec, DateFixedVec>(expr, ctx, skip, bound);
+    } else if (VEC_UNIFORM_CONST == arg_format && VEC_UNIFORM == res_format) {
+      ret = vector_fromdays<IntegerUniCVec, DateUniVec>(expr, ctx, skip, bound);
+    } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM_CONST == res_format) {
+      ret = vector_fromdays<IntegerUniVec, DateUniCVec>(expr, ctx, skip, bound);
+    } else if (VEC_UNIFORM == arg_format && VEC_FIXED == res_format) {
+      ret = vector_fromdays<IntegerUniVec, DateFixedVec>(expr, ctx, skip, bound);
+    } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {
+      ret = vector_fromdays<IntegerUniVec, DateUniVec>(expr, ctx, skip, bound);
+    } else if (VEC_FIXED == arg_format && VEC_FIXED == res_format) {
+      ret = vector_fromdays<IntegerFixedVec, DateFixedVec>(expr, ctx, skip, bound);
+    } else if (VEC_FIXED == arg_format && VEC_UNIFORM_CONST == res_format) {
+      ret = vector_fromdays<IntegerFixedVec, DateUniCVec>(expr, ctx, skip, bound);
+    } else if (VEC_FIXED == arg_format && VEC_UNIFORM == res_format) {
+      ret = vector_fromdays<IntegerFixedVec, DateUniVec>(expr, ctx, skip, bound);
+    } else {
+      ret = vector_fromdays<ObVectorBase, ObVectorBase>(expr, ctx, skip, bound);
+    }
+
+    if (OB_FAIL(ret)) {
+      LOG_WARN("expr calculation failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+#undef CHECK_SKIP_NULL
+#undef BATCH_CALC
 
 } //namespace sql
 } //namespace oceanbase

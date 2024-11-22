@@ -176,6 +176,7 @@ int ObPxFifoCoordOp::fetch_rows(const int64_t row_cnt)
               : row_reader_.get_next_batch(MY_SPEC.child_exprs_, MY_SPEC.dynamic_const_exprs_,
                                          eval_ctx_,  row_cnt, read_rows, stored_rows_);
         brs_.size_ = read_rows;
+        brs_.all_rows_active_ = true;
       }
       metric_.mark_interval_end(&time_recorder_);
       if (OB_FAIL(ret)) {

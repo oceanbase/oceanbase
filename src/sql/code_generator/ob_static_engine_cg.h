@@ -139,6 +139,14 @@ class ObHashDistinctVecSpec;
 class ObSortVecSpec;
 class ObLogValuesTableAccess;
 class ObValuesTableAccessSpec;
+class ObMergeSetVecSpec;
+class ObMergeUnionVecSpec;
+class ObMergeIntersectVecSpec;
+class ObMergeExceptVecSpec;
+class ObLogExpand;
+class ObExpandVecSpec;
+class ObHashRollupInfo;
+class HashRollupRTInfo;
 
 class ObMergeGroupByVecSpec;
 class ObNestedLoopJoinVecSpec;
@@ -303,6 +311,10 @@ private:
   int generate_cte_pseudo_column_row_desc(ObLogSet &op, ObRecursiveUnionAllSpec &phy_set_op);
   int generate_spec(ObLogSet &op, ObRecursiveUnionAllSpec &spec, const bool in_root_job);
   int generate_merge_set_spec(ObLogSet &op, ObMergeSetSpec &spec);
+  int generate_spec(ObLogSet &op, ObMergeUnionVecSpec &spec, const bool in_root_job);
+  int generate_spec(ObLogSet &op, ObMergeIntersectVecSpec &spec, const bool in_root_job);
+  int generate_spec(ObLogSet &op, ObMergeExceptVecSpec &spec, const bool in_root_job);
+  int generate_merge_set_spec(ObLogSet &op, ObMergeSetVecSpec &spec);
   int generate_recursive_union_all_spec(ObLogSet &op, ObRecursiveUnionAllSpec &spec);
 
   int generate_spec(ObLogMaterial &op, ObMaterialSpec &spec, const bool in_root_job);
@@ -459,6 +471,7 @@ private:
   int generate_spec(ObLogTempTableInsert &op, ObTempTableInsertVecOpSpec &spec, const bool in_root_job);
   int generate_spec(ObLogTempTableAccess &op, ObTempTableAccessVecOpSpec &spec, const bool in_root_job);
   int generate_spec(ObLogTempTableTransformation &op, ObTempTableTransformationVecOpSpec &spec, const bool in_root_job);
+  int generate_spec(ObLogExpand &op, ObExpandVecSpec &spec, const bool in_root_job);
   template<typename MergeDistinctSpecType>
   int generate_merge_distinct_spec(ObLogDistinct &op, MergeDistinctSpecType &spec, const bool in_root_job);
 private:
@@ -495,7 +508,9 @@ private:
                       common::ObIArray<ObExpr *> *distinct_exprs = NULL);
   int fill_aggr_info(ObAggFunRawExpr &raw_expr, ObExpr &expr, ObAggrInfo &aggr_info,
                     common::ObIArray<ObExpr *> *group_exprs/*NULL*/,
-                    common::ObIArray<ObExpr *> *rollup_exprs/*NULL*/);
+                    common::ObIArray<ObExpr *> *rollup_exprs/*NULL*/,
+                    const ObHashRollupInfo *hash_rollup_info = nullptr);
+  int generate_hash_rollup_info(const ObHashRollupInfo &rollup_info, HashRollupRTInfo *&rt_info);
   int extract_non_aggr_expr(ObExpr *input,
                             const ObRawExpr *raw_input,
                             common::ObIArray<ObExpr *> &exist_in_child,

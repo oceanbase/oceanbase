@@ -367,8 +367,13 @@ public:
   bool is_query_range_ready_;             // not need to serialize
   common::ObArenaAllocator query_range_allocator_;
   // ---end---
-  ObSmallHashSet<false> sm_hash_set_;
+  ObSmallHashSet<true> sm_hash_set_;
   bool use_hash_join_seed_ {false};
+
+  // if enable
+  // 1. only insert hash value if can't extract query range
+  // 2. insert hash value and data if can extract query range
+  bool build_send_opt_{false};
 };
 
 

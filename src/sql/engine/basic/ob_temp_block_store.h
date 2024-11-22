@@ -409,6 +409,9 @@ public:
   inline int64_t get_block_cnt_on_disk() const { return block_cnt_on_disk_; }
   inline int64_t get_block_cnt_in_mem() const { return block_cnt_ - block_cnt_on_disk_; }
   inline int64_t get_block_list_cnt() { return blk_mem_list_.get_size(); }
+  inline int64_t get_row_cnt() const { return block_id_cnt_; }
+  inline int64_t get_row_cnt_on_disk() const { return dumped_block_id_cnt_; }
+  inline int64_t get_row_cnt_in_memory() const { return get_row_cnt() - get_row_cnt_on_disk(); }
   inline int64_t get_mem_hold() const { return mem_hold_; }
   inline int64_t get_mem_used() const { return mem_used_; }
   inline int64_t get_alloced_mem_size() const { return alloced_mem_size_; }

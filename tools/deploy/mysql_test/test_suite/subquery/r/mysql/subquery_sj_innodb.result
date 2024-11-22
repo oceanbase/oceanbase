@@ -167,8 +167,8 @@ a	b
 select * from t1 where a in (select b from t2);
 a	b
 1	1
-1	1
 2	2
+1	1
 drop table t0, t1, t2, t3;
 create table t1 (a int);
 insert into t1 values (0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
@@ -220,7 +220,7 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
   2 - output([t2.c1]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
-  3 - output([t2.c1]), filter([cast(t2.c2, DECIMAL(-1, -1)) = cast(1, DECIMAL(1, 0))]), rowset=16
+  3 - output([t2.c1]), filter([cast(t2.c2, DECIMAL(-1, -1)) = cast(1, DECIMAL(4, 0))]), rowset=16
       access([t2.c2], [t2.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true

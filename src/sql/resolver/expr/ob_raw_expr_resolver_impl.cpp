@@ -3091,8 +3091,7 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
 
   if (OB_FAIL(ret)) { // do nothing
   } else if (OB_FAIL(ObResolverUtils::resolve_const(&node,
-                        // stmt_type is only used in oracle mode
-                        lib::is_oracle_mode() ? session_info->get_stmt_type() : stmt::T_NONE,
+                                             session_info->get_stmt_type(),
                                              ctx_.expr_factory_.get_allocator(),
                                              ctx_.dest_collation_, nation_collation, ctx_.tz_info_,
                                              val, is_paramlize,

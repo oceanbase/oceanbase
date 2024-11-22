@@ -2918,13 +2918,31 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
           val.set_uint64(static_cast<uint64_t>(node->value_));
         }
         val.set_scale(0);
-        val.set_precision(static_cast<int16_t>(node->str_len_));
+        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+        int16_t min_int_precision = tenant_config.is_valid() ? tenant_config->_min_const_integer_precision : 1;
+        int16_t formalized_prec = static_cast<int16_t>(node->str_len_);
+        // for constant integers, reset precision to 4/8/16/20
+        if (!is_from_pl && lib::is_mysql_mode() && enable_decimal_int_type
+            && !(ObStmt::is_ddl_stmt(stmt_type, true) || ObStmt::is_show_stmt(stmt_type))) {
+          int16_t node_prec = static_cast<int16_t>(node->str_len_);
+          if (node_prec <= 4) {
+            formalized_prec = 4;
+          } else if (node_prec <= 8) {
+            formalized_prec = 8;
+          } else if (node_prec <= 16) {
+            formalized_prec = 16;
+          } else {
+            formalized_prec = 20;
+          }
+          formalized_prec = MAX(min_int_precision, formalized_prec);
+        }
+        val.set_precision(formalized_prec);
         val.set_length(static_cast<int16_t>(node->str_len_));
         val.set_param_meta(val.get_meta());
         if (true == node->is_date_unit_) {
           literal_prefix.assign_ptr(node->str_value_, static_cast<int32_t>(node->str_len_));
         }
-
+        LOG_DEBUG("resolve integer constant", K(val), K(val.get_meta()), K(formalized_prec), K(stmt_type), K(lbt()));
         break;
       }
     }

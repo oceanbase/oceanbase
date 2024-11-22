@@ -98,3 +98,84 @@ select cast(c1 as signed) from t1;
 select c1, cast(c1 as binary(30)), hex(cast(c1 as binary(30))) from t1;
 
 drop table t1;
+
+--echo # cast from string to float/double -> scalar
+--echo # Illegal character
+--disable_warnings
+select cast('d' as float);
+--enable_warnings
+--echo # Upward overbounds
+select cast('3.4e39' as float);
+select cast('3.4e308' as float);
+select cast('3.4e39' as double);
+select cast('3.4e308' as double);
+select cast('-3.4e39' as float);
+select cast('-3.4e308' as float);
+select cast('-3.4e39' as double);
+select cast('-3.4e308' as double);
+--echo # Downward overbounds
+select cast('1e-40' as float);
+select cast('1e-46' as float);
+select cast('1e-323' as float);
+select cast('1e-324' as float);
+select cast('1e-324' as double);
+select cast('-1e-40' as float);
+select cast('-1e-46' as float);
+select cast('-1e-323' as float);
+select cast('-1e-324' as float);
+select cast('-1e-324' as double);
+--echo # Precision
+select cast('1.2345678' as float);
+select cast('1.234567901234567890' as double);
+--echo # Front blanks
+--disable_warnings
+select cast('  3' as float);
+select cast('\t3' as float);
+select cast('\n3' as float);
+select cast('\v3' as float);
+select cast('\f3' as float);
+select cast('\r3' as float);
+select cast('\n\r3' as float);
+--echo # Middle blanks
+select cast('7   8' as float);
+--enable_warnings
+--echo # Zero and negative zero
+select cast('0' as float);
+select cast('-0' as float);
+
+--echo # cast from string to float/double -> vec
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(a varchar(500) COLLATE utf8mb4_bin DEFAULT NULL) with column group (each column);
+insert into t1 values('d');
+insert into t1 values('3.4e39');
+insert into t1 values('3.4e308');
+insert into t1 values('-3.4e39');
+insert into t1 values('-3.4e308');
+insert into t1 values('1e-40');
+insert into t1 values('1e-46');
+insert into t1 values('1e-323');
+insert into t1 values('1e-324');
+insert into t1 values('-1e-40');
+insert into t1 values('-1e-46');
+insert into t1 values('-1e-323');
+insert into t1 values('-1e-324');
+insert into t1 values('1.2345678');
+insert into t1 values('1.234567901234567890');
+insert into t1 values('  3');
+insert into t1 values('\t3');
+insert into t1 values('\n3');
+insert into t1 values('\v3');
+insert into t1 values('\f3');
+insert into t1 values('\r3');
+insert into t1 values('\n\r3');
+insert into t1 values('7   8');
+insert into t1 values('0');
+insert into t1 values('-0');
+--disable_warnings
+select cast(a as float) from t1;
+select cast(a as double) from t1;
+--enable_warnings
+
+drop table t1;

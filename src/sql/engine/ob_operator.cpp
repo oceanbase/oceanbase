@@ -1215,6 +1215,15 @@ int ObOperator::get_next_row()
   begin_ash_line_id_reg();
   if (OB_FAIL(check_stack_once())) {
     LOG_WARN("too deep recursive", K(ret));
+  }
+#ifndef OB_BUILD_PACKAGE
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(!enable_get_next_row())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get next row is disabled", K(ret), K(spec_));
+  }
+#endif
+  if (OB_FAIL(ret)) {
   } else {
     if (ctx_.get_my_session()->is_user_session() || spec_.plan_->get_phy_plan_hint().monitor_) {
       IGNORE_RETURN try_register_rt_monitor_node(1);
@@ -1813,6 +1822,55 @@ inline int ObOperator::init_dummy_mem_context(uint64_t tenant_id)
   return ret;
 }
 #endif
+
+bool ObOperator::enable_get_next_row() const
+{
+  int ret = false;
+  if (OB_ISNULL(spec_.plan_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid null plan", K(ret));
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_3_0
+             || !spec_.plan_->is_vectorized()
+             || !ObOperatorFactory::is_vectorized(spec_.type_)
+             || (spec_.get_parent() != NULL && !ObOperatorFactory::is_vectorized(spec_.get_parent()->type_))) { // parent is not vectorized, get_next_row is used
+    ret = true;
+  } else if (spec_.get_parent() != NULL && spec_.get_parent()->type_ == PHY_SUBPLAN_FILTER) {
+    // subquery uses get_next_row for iteration
+    ret = true;
+  } else if ((spec_.type_ == PHY_VEC_SORT
+              || spec_.type_ == PHY_SORT
+              || spec_.type_ == PHY_PX_MERGE_SORT_COORD
+              || spec_.type_ == PHY_VEC_PX_MERGE_SORT_COORD
+              || spec_.type_ == PHY_VEC_PX_MERGE_SORT_RECEIVE
+              || spec_.type_ == PHY_PX_MERGE_SORT_RECEIVE)
+             && spec_.get_parent() != NULL
+             && (spec_.get_parent()->type_ == PHY_MERGE_GROUP_BY
+                 || spec_.get_parent()->type_ == PHY_VEC_MERGE_GROUP_BY)
+             && !spec_.get_parent()->is_vectorized()) { // if merge group by with listagg/group_concat, sort is called with `get_next_row`
+    ret = true;
+  } else {
+    // if new operator is registered, please update this check and phy operator lists below
+    static_assert(PHY_END == PHY_VEC_SUBPLAN_FILTER + 1, "");
+    switch (spec_.type_) {
+    case PHY_TABLE_SCAN: // table scan with multi value index/geometry type
+    case PHY_BLOCK_SAMPLE_SCAN: // sample scan with geometry type
+    case PHY_ROW_SAMPLE_SCAN:
+    case PHY_SUBPLAN_FILTER: // subplan filter with update set
+    case PHY_COUNT: // count with rownum expr
+    case PHY_NESTED_LOOP_CONNECT_BY_WITH_INDEX:
+    case PHY_MERGE_GROUP_BY: // groupby with listagg/group_concat & rollup
+    case PHY_VEC_MERGE_GROUP_BY:
+    {
+      ret = true;
+      break;
+    };
+    default: {
+      break;
+    }
+    }
+  }
+  return ret;
+}
 
 int ObBatchRowIter::get_next_row()
 {

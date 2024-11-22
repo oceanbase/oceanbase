@@ -663,6 +663,9 @@ int Processor::single_row_agg_batch(AggrRowPtr *agg_rows, const int64_t batch_si
       }
     } // end for
     for (int i = 0; OB_SUCC(ret) && i < batch_size; i++) {
+      if (skip.at(i)) {
+        continue;
+      }
       int32_t output_size = 0;
       for (int agg_col_id = 0; OB_SUCC(ret) && agg_col_id < aggregates_.count(); agg_col_id++) {
         if (OB_FAIL(aggregates_.at(agg_col_id)->collect_batch_group_results(
@@ -1088,6 +1091,28 @@ int Processor::llc_init_empty(ObExpr &expr, ObEvalCtx &eval_ctx) const
     MEMSET(llc_bitmap_buf, 0, llc_bitmap_size);
     expr.get_vector(eval_ctx)->set_payload_shallow(eval_ctx.get_batch_idx(), llc_bitmap_buf,
                                                    llc_bitmap_size);
+  }
+  return ret;
+}
+
+int Processor::add_batch_aggregate_rows(AggrRowPtr *ptrs, uint16_t *selector,
+                                        int64_t selector_cnt, bool push_agg_row)
+{
+  int ret = OB_SUCCESS;
+  if (!push_agg_row) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < selector_cnt; ++i) {
+      if (OB_FAIL(setup_rt_info(ptrs[selector[i]], agg_ctx_))) {
+        SQL_LOG(WARN, "setup runtime info failed", K(ret));
+      }
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < selector_cnt; ++i) {
+      if (OB_FAIL(setup_rt_info(ptrs[selector[i]], agg_ctx_))) {
+        SQL_LOG(WARN, "setup runtime info failed", K(ret));
+      } else if (push_agg_row && OB_FAIL(agg_ctx_.agg_rows_.push_back(ptrs[selector[i]]))) {
+        SQL_LOG(WARN, "push back element failed", K(ret));
+      }
+    }
   }
   return ret;
 }

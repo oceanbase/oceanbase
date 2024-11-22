@@ -254,7 +254,7 @@ using VectorCastIniter = VectorCastFuncInit<N, M,
 
 template<int N, int M>
 using EvalArgVecCasterIniter = EvalArgVecCasterFuncInit<N, M,
-                                                        ValueRangeChecker<static_cast<VecValueTypeClass>(M),
+                                                        BatchValueRangeChecker<static_cast<VecValueTypeClass>(M),
                                                                           ObVectorBase>::defined_>;
 
 } // end sql

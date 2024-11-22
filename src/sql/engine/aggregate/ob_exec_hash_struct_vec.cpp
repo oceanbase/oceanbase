@@ -56,7 +56,7 @@ int ObExtendHashTableVec<GroupRowBucket>::set_unique_batch(const common::ObIArra
                                                            char **batch_new_rows)
 {
   int ret = OB_SUCCESS;
-  while (OB_SUCC(ret) && auto_extend_ && OB_UNLIKELY((size_ + child_brs.size_)
+  while (OB_SUCC(ret) && OB_UNLIKELY((size_ + child_brs.size_)
                                                       * SIZE_BUCKET_SCALE >= get_bucket_num())) {
     int64_t pre_bkt_num = get_bucket_num();
     if (OB_FAIL(extend())) {
@@ -150,9 +150,15 @@ int ObExtendHashTableVec<GroupRowBucket>::process_batch(const common::ObIArray<O
                                                         int64_t &agg_row_cnt,
                                                         int64_t &agg_group_cnt,
                                                         BatchAggrRowsTable *batch_aggr_rows,
-                                                        bool need_reinit_vectors)
+                                                        bool need_reinit_vectors,
+                                                        uint16_t *new_row_pos,
+                                                        uint16_t *old_row_pos,
+                                                        int64_t &new_row_cnt,
+                                                        int64_t &old_row_cnt)
 {
   int ret = OB_SUCCESS;
+  new_row_cnt = 0;
+  old_row_cnt = 0;
   if (sstr_aggr_.is_valid()
       && OB_FAIL(sstr_aggr_.check_batch_length(gby_exprs, child_brs, is_dumped,
                                                const_cast<uint64_t *> (hash_values), *eval_ctx_))) {
@@ -160,7 +166,7 @@ int ObExtendHashTableVec<GroupRowBucket>::process_batch(const common::ObIArray<O
   } else if (!sstr_aggr_.is_valid()) {
     new_row_selector_cnt_ = 0;
     // extend bucket to hold whole batch
-    while (OB_SUCC(ret) && auto_extend_ && OB_UNLIKELY((size_ + child_brs.size_)
+    while (OB_SUCC(ret) && OB_UNLIKELY((size_ + child_brs.size_)
                                                         * SIZE_BUCKET_SCALE >= get_bucket_num())) {
       int64_t pre_bkt_num = get_bucket_num();
       if (OB_FAIL(extend())) {
@@ -185,18 +191,35 @@ int ObExtendHashTableVec<GroupRowBucket>::process_batch(const common::ObIArray<O
     if (OB_SUCC(ret)) {
       const int64_t start_idx = 0;
       int64_t processed_idx = 0;
-      if (OB_FAIL(inner_process_batch(gby_exprs, child_brs, is_dumped,
+      bool all_rows_active = child_brs.all_rows_active_ && can_append_batch && nullptr == bloom_filter;
+      #ifdef ENABLE_DEBUG_LOG
+      if (all_rows_active && 0 != child_brs.skip_->accumulate_bit_cnt(child_brs.size_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to check all rows active", K(op_id_), K(ret), K(lbt()),
+                  K(child_brs.skip_->accumulate_bit_cnt(child_brs.size_)));
+        return ret;
+      }
+      #endif
+      if (all_rows_active ? OB_FAIL(inner_process_batch<true>(gby_exprs, child_brs, is_dumped,
                                       hash_values, lengths, can_append_batch,
                                       bloom_filter, batch_old_rows, batch_new_rows,
                                       agg_row_cnt, agg_group_cnt, batch_aggr_rows,
-                                      need_reinit_vectors, true, start_idx, processed_idx))) {
+                                      need_reinit_vectors, true, start_idx, processed_idx,
+                                      new_row_pos, old_row_pos, new_row_cnt, old_row_cnt))
+                          : OB_FAIL(inner_process_batch<false>(gby_exprs, child_brs, is_dumped,
+                                      hash_values, lengths, can_append_batch,
+                                      bloom_filter, batch_old_rows, batch_new_rows,
+                                      agg_row_cnt, agg_group_cnt, batch_aggr_rows,
+                                      need_reinit_vectors, true, start_idx, processed_idx,
+                                      new_row_pos, old_row_pos, new_row_cnt, old_row_cnt))) {
         LOG_WARN("failed to process batch", K(ret));
       } else if (processed_idx < child_brs.size_
-                 && OB_FAIL(inner_process_batch(gby_exprs, child_brs, is_dumped,
+                 && OB_FAIL(inner_process_batch<false>(gby_exprs, child_brs, is_dumped,
                                                 hash_values, lengths, can_append_batch,
                                                 bloom_filter, batch_old_rows, batch_new_rows,
                                                 agg_row_cnt, agg_group_cnt, batch_aggr_rows,
-                                                need_reinit_vectors, false, processed_idx, processed_idx))) {
+                                                need_reinit_vectors, false, processed_idx, processed_idx,
+                                                new_row_pos, old_row_pos, new_row_cnt, old_row_cnt))) {
         LOG_WARN("failed to process batch fallback", K(ret));
       }
     }
@@ -205,7 +228,8 @@ int ObExtendHashTableVec<GroupRowBucket>::process_batch(const common::ObIArray<O
     if (OB_FAIL(sstr_aggr_.process_batch(gby_exprs, child_brs, item_alloc_,
                                    *eval_ctx_, batch_old_rows, batch_new_rows,
                                    agg_row_cnt, agg_group_cnt, batch_aggr_rows,
-                                   has_new_row))) {
+                                   has_new_row, new_row_pos, old_row_pos,
+                                   new_row_cnt, old_row_cnt))) {
       LOG_WARN("failed to process batch", K(ret));
     } else if (has_new_row) {
       if (OB_FAIL(ShortStringAggregator::fallback_calc_hash_value_batch(gby_exprs, child_brs, *eval_ctx_,
@@ -255,7 +279,7 @@ int ObExtendHashTableVec<GroupRowBucket>::process_popular_value_batch(ObBatchRow
     LOG_WARN("unexpected check_valid_threshold value", K(check_valid_threshold));
   }
   // extend bucket to hold whole batch
-  while (OB_SUCC(ret) && auto_extend_ && OB_UNLIKELY((size_ + result_brs->size_)
+  while (OB_SUCC(ret) && OB_UNLIKELY((size_ + result_brs->size_)
                                                       * SIZE_BUCKET_SCALE >= get_bucket_num())) {
     int64_t pre_bkt_num = get_bucket_num();
     if (OB_FAIL(extend())) {
@@ -386,6 +410,7 @@ int ObExtendHashTableVec<GroupRowBucket>::check_popular_values_validity(uint64_t
 }
 
 template <typename GroupRowBucket>
+template <bool ALL_ROWS_ACTIVE>
 int ObExtendHashTableVec<GroupRowBucket>::inner_process_batch(const common::ObIArray<ObExpr *> &gby_exprs,
                                                               const ObBatchRows &child_brs,
                                                               const bool *is_dumped,
@@ -401,31 +426,45 @@ int ObExtendHashTableVec<GroupRowBucket>::inner_process_batch(const common::ObIA
                                                               bool need_reinit_vectors,
                                                               const bool probe_by_col,
                                                               const int64_t start_idx,
-                                                              int64_t &processed_idx)
+                                                              int64_t &processed_idx,
+                                                              uint16_t *new_row_pos,
+                                                              uint16_t *old_row_pos,
+                                                              int64_t &new_row_cnt,
+                                                              int64_t &old_row_cnt)
 {
   int ret = OB_SUCCESS;
   int64_t curr_idx = start_idx;
   bool need_fallback = false;
+  const int64_t cnt = buckets_->count();
+  if (ALL_ROWS_ACTIVE) {
+    locate_batch_buckets(*buckets_, hash_values, child_brs.size_);
+  }
   while (OB_SUCC(ret) && !need_fallback && curr_idx < child_brs.size_) {
     bool batch_duplicate = false;
     new_row_selector_cnt_ = 0;
     old_row_selector_cnt_ = 0;
     for (; OB_SUCC(ret) && curr_idx < child_brs.size_; ++curr_idx) {
-      if (child_brs.skip_->at(curr_idx)
-          || is_dumped[curr_idx]
-          || (nullptr != bloom_filter
-              && !bloom_filter->exist(ObGroupRowBucketBase::HASH_VAL_MASK & hash_values[curr_idx]))) {
+      if (!ALL_ROWS_ACTIVE
+          && (child_brs.skip_->at(curr_idx)
+              || is_dumped[curr_idx]
+              || (nullptr != bloom_filter
+                  && !bloom_filter->exist(ObGroupRowBucketBase::HASH_VAL_MASK & hash_values[curr_idx])))) {
         continue;
       }
       int64_t curr_pos = -1;
       bool find_bkt = false;
       while (OB_SUCC(ret) && !find_bkt) {
-        locate_buckets_[curr_idx] = const_cast<GroupRowBucket *> (&locate_next_bucket(*buckets_, hash_values[curr_idx], curr_pos));
+        if (!ALL_ROWS_ACTIVE) {
+          if (curr_idx + 8 < child_brs.size_) {
+            __builtin_prefetch((&buckets_->at((ObGroupRowBucketBase::HASH_VAL_MASK & hash_values[curr_idx + 8]) & (cnt - 1))),
+                          0/* read */, 2 /*high temp locality*/);
+          }
+          locate_buckets_[curr_idx] = const_cast<GroupRowBucket *> (&locate_next_bucket(*buckets_, hash_values[curr_idx], curr_pos));
+        }
         if (locate_buckets_[curr_idx]->is_valid()) {
-          if (probe_by_col) {
+          if (ALL_ROWS_ACTIVE || probe_by_col) {
             old_row_selector_.at(old_row_selector_cnt_++) = curr_idx;
-            __builtin_prefetch(&locate_buckets_[curr_idx]->get_item(),
-                          0, 2);
+            __builtin_prefetch(&locate_buckets_[curr_idx]->get_item(), 0, 2);
             find_bkt = true;
           } else {
             bool result = true;
@@ -466,6 +505,7 @@ int ObExtendHashTableVec<GroupRowBucket>::inner_process_batch(const common::ObIA
               ++agg_row_cnt;
               it->inc_hit_cnt();
               batch_old_rows[curr_idx] = it->get_aggr_row(group_store_.get_row_meta());
+              old_row_pos[old_row_cnt++] = curr_idx;
               if (batch_aggr_rows && batch_aggr_rows->is_valid()) {
                 if (size_ > BatchAggrRowsTable::MAX_REORDER_GROUPS) {
                   batch_aggr_rows->set_invalid();
@@ -481,7 +521,7 @@ int ObExtendHashTableVec<GroupRowBucket>::inner_process_batch(const common::ObIA
         } else if (locate_buckets_[curr_idx]->is_occupyed()) {
           batch_duplicate = true;
           find_bkt = true;
-        } else if (can_append_batch) {
+        } else if (ALL_ROWS_ACTIVE || can_append_batch) {
           //occupy empty bucket
           locate_buckets_[curr_idx]->set_occupyed();
           new_row_selector_.at(new_row_selector_cnt_++) = curr_idx;
@@ -497,7 +537,7 @@ int ObExtendHashTableVec<GroupRowBucket>::inner_process_batch(const common::ObIA
       }
     }
     if (OB_SUCC(ret)
-        && probe_by_col
+        && (ALL_ROWS_ACTIVE || probe_by_col)
         && old_row_selector_cnt_ > 0) {
       for (int64_t i = 0; OB_SUCC(ret) && !need_fallback && i < gby_exprs.count(); ++i) {
         if (nullptr == gby_exprs.at(i)) {
@@ -518,14 +558,20 @@ int ObExtendHashTableVec<GroupRowBucket>::inner_process_batch(const common::ObIA
           if (batch_aggr_rows && batch_aggr_rows->is_valid() && size_ > BatchAggrRowsTable::MAX_REORDER_GROUPS) {
             batch_aggr_rows->set_invalid();
           }
-          for (int64_t i = 0; i < old_row_selector_cnt_; ++i) {
-            const int64_t idx = old_row_selector_.at(i);
-            (static_cast<GroupRowBucket *> (locate_buckets_[idx]))->get_item().inc_hit_cnt();
-            batch_old_rows[idx] = (static_cast<GroupRowBucket *> (locate_buckets_[idx]))->get_item().get_aggr_row(group_store_.get_row_meta());
-            if (batch_aggr_rows && batch_aggr_rows->is_valid()) {
+          if (batch_aggr_rows && batch_aggr_rows->is_valid()) {
+            for (int64_t i = 0; i < old_row_selector_cnt_; ++i) {
+              const int64_t idx = old_row_selector_.at(i);
+              batch_old_rows[idx] = (static_cast<GroupRowBucket *> (locate_buckets_[idx]))->get_item().get_aggr_row(group_store_.get_row_meta());
+              old_row_pos[old_row_cnt++] = idx;
               int64_t ser_num = locate_buckets_[idx]->get_bkt_seq();
               batch_aggr_rows->aggr_rows_[ser_num] = batch_old_rows[idx];
               batch_aggr_rows->selectors_[ser_num][batch_aggr_rows->selectors_item_cnt_[ser_num]++] = idx;
+            }
+          } else {
+            for (int64_t i = 0; i < old_row_selector_cnt_; ++i) {
+              const int64_t idx = old_row_selector_.at(i);
+              batch_old_rows[idx] = (static_cast<GroupRowBucket *> (locate_buckets_[idx]))->get_item().get_aggr_row(group_store_.get_row_meta());
+              old_row_pos[old_row_cnt++] = idx;
             }
           }
         } else {
@@ -540,13 +586,16 @@ int ObExtendHashTableVec<GroupRowBucket>::inner_process_batch(const common::ObIA
       }
     }
     if (OB_SUCC(ret)) {
-      if (can_append_batch
+      if ((ALL_ROWS_ACTIVE || can_append_batch)
           && new_row_selector_cnt_ > 0
           && OB_FAIL(append_batch(gby_exprs, child_brs, is_dumped, hash_values,
                               lengths, batch_new_rows, agg_group_cnt,
                               need_reinit_vectors))) {
         LOG_WARN("failed to append batch", K(ret));
       } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < new_row_selector_cnt_; ++i) {
+          new_row_pos[new_row_cnt++] = new_row_selector_.at(i);
+        }
         for (int64_t i = 0; OB_SUCC(ret) && i < gby_exprs.count(); ++i) {
           if (nullptr == gby_exprs.at(i)) {
             //3 stage null equal
@@ -800,8 +849,7 @@ int ObExtendHashTableVec<GroupRowBucket>::init(ObIAllocator *allocator,
                                                int64_t op_id,
                                                bool use_sstr_aggr,
                                                int64_t aggr_row_size,
-                                               int64_t initial_size,
-                                               bool auto_extend)
+                                               int64_t initial_size)
 {
   int ret = OB_SUCCESS;
   if (initial_size < 2) {
@@ -809,7 +857,6 @@ int ObExtendHashTableVec<GroupRowBucket>::init(ObIAllocator *allocator,
     SQL_ENG_LOG(WARN, "invalid argument", K(ret), K(initial_size));
   } else {
     mem_attr_ = mem_attr;
-    auto_extend_ = auto_extend;
     hash_expr_cnt_ = hash_expr_cnt;
     allocator_.set_allocator(allocator);
     allocator_.set_label(mem_attr.label_);
@@ -868,8 +915,7 @@ int ObExtendHashTableVec<GroupRowBucket>::set_distinct_batch(const RowMeta &row_
   new_row_selector_cnt_ = 0;
   int64_t real_batch_size =
     (nullptr != child_skip) ? batch_size - child_skip->accumulate_bit_cnt(batch_size) : batch_size;
-  if (auto_extend_
-      && OB_UNLIKELY((size_ + real_batch_size) * SIZE_BUCKET_SCALE > get_bucket_num())) {
+  if (OB_UNLIKELY((size_ + real_batch_size) * SIZE_BUCKET_SCALE > get_bucket_num())) {
     int64_t new_bucket_num = common::next_pow2((size_ + real_batch_size) * SIZE_BUCKET_SCALE);
     int64_t pre_bkt_num = get_bucket_num();
     if (OB_FAIL(extend(new_bucket_num))) {

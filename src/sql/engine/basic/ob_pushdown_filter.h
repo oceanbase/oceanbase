@@ -988,7 +988,7 @@ public:
     return ret;
   }
 private:
-  ObSmallHashSet<false> set_;
+  ObSmallHashSet<true> set_; // Filter more data if template _Accurate is true;
   ObExprHashFuncType hash_func_;
   // TODO: add batch hash and batch insert
 };

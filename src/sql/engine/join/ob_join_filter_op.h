@@ -31,7 +31,7 @@
 #include "sql/engine/join/ob_join_filter_partition_splitter.h"
 #include "sql/engine/join/ob_join_filter_store_row.h"
 #include "sql/engine/join/ob_join_filter_material_control_info.h"
-
+#include "sql/engine/px/datahub/components/ob_dh_join_filter_count_row.h"
 
 namespace oceanbase
 {
@@ -245,6 +245,12 @@ public:
     return jf_material_control_info_.hash_id_ == 0;
   }
 
+  inline bool need_sync_row_count() const {
+    return is_material_controller() && jf_material_control_info_.need_sync_row_count_;
+  }
+
+  int update_sync_row_count_flag();
+
   JoinFilterMode mode_;
   int64_t filter_id_;
   int64_t filter_len_;
@@ -389,24 +395,25 @@ private:
                                                const RowMeta &row_meta,
                                                uint64_t *join_filter_hash_values);
 
-  int get_exec_row_count(int64_t &worker_row_count, int64_t &total_row_count);
-  int send_datahub_count_row_msg(int64_t &total_row_count, bool need_wait_whole_msg);
+  int get_exec_row_count(const int64_t worker_row_count, int64_t &total_row_count, bool is_in_drain);
+  bool can_sync_row_count_locally();
+  int send_datahub_count_row_msg(int64_t &total_row_count, ObTMArray<ObJoinFilterNdv *> &ndv_info,
+                                 bool need_wait_whole_msg);
 
   int fill_range_filter(const ObBatchRows &brs);
   int fill_in_filter(const ObBatchRows &brs, uint64_t *hash_join_hash_values);
-  inline int check_need_sync_row_count(bool &need_sync)
-  {
-    if (need_sync) {
-      // do nothing
-    } else {
-      // for shared join filter, we need to calc the total row count from different threads
-      need_sync = MY_SPEC.is_shared_join_filter();
-    }
-    return OB_SUCCESS;
-  }
-  int init_bloom_filter(bool &need_fill, int64_t &worker_row_count,
-                        int64_t &total_row_count);
+  int collect_worker_ndv(ObTMArray<ObJoinFilterNdv *> &ndv_info);
+  void check_in_filter_active(int64_t &ndv);
+  int init_bloom_filter(const int64_t worker_row_count, const int64_t total_row_count);
   int fill_bloom_filter();
+
+  inline bool build_send_opt() {
+    return MY_INPUT.config_.build_send_opt_;
+  }
+
+  inline bool skip_fill_bloom_filter() {
+    return build_send_opt() && in_filter_active_;
+  }
 
   static inline int group_fill_range_filter(ObJoinFilterOp *join_filter_op, const ObBatchRows &brs)
   {
@@ -424,12 +431,14 @@ private:
     return join_filter_op->fill_in_filter(brs, hash_join_hash_values);
   }
 
-  static inline int group_check_need_sync_row_count(ObJoinFilterOp *join_filter_op, bool &need_sync) {
-    return join_filter_op->check_need_sync_row_count(need_sync);
+  static inline int group_collect_worker_ndv(ObJoinFilterOp *join_filter_op,
+                                            ObTMArray<ObJoinFilterNdv *> &ndv_info)
+  {
+    return join_filter_op->collect_worker_ndv(ndv_info);
   }
 
-  static int group_init_bloom_filter(ObJoinFilterOp *join_filter_op, bool &need_fill,
-                              int64_t &worker_row_count, int64_t &total_row_count);
+  static int group_init_bloom_filter(ObJoinFilterOp *join_filter_op, int64_t worker_row_count,
+                                     int64_t total_row_count);
   static int group_fill_bloom_filter(ObJoinFilterOp *join_filter_op,
                                      const ObBatchRows &brs_from_controller,
                                      const ObJoinFilterStoreRow **part_stored_rows,
@@ -463,7 +472,14 @@ public:
 
   ObJoinFilterMaterialGroupController *group_controller_{nullptr};
   bool force_dump_{false};
-  bool has_send_count_row_piece_msg_{false};
+  bool has_sync_row_count_{false};
+  const ExprFixedArray *build_rows_output_{nullptr};
+  ExprFixedArray build_rows_output_for_compat_;
+
+  // for build count opt
+  bool in_filter_active_{false};
+  ObJoinFilterNdv dh_ndv_;
+  // build count opt end
 };
 
 }

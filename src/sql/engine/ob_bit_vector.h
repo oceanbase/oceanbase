@@ -142,6 +142,7 @@ public:
   inline void deep_copy(const ObBitVectorImpl<WordType> &src, const int64_t start_idx, const int64_t end_idx);
 
   inline void bit_or(const ObBitVectorImpl<WordType> &src, const int64_t start_idx, const int64_t end_idx);
+  inline void bit_or(const ObBitVectorImpl<WordType> &src, const EvalBound &bound);
 
 
   // You should known how ObBitVectorImpl<WordType> implemented, when reinterpret data.
@@ -317,14 +318,15 @@ OB_INLINE bool ObBitVectorImpl<WordType>::bit_op_zero(const ObBitVectorImpl<Word
 
   if (start_cnt == end_cnt) {
     WordType only_mask = start_mask & end_mask;
-    passed = 0 == (op(l.data_[start_cnt], r.data_[start_cnt]) & only_mask);
+    passed = 0 == (op(l.data_[start_cnt] & only_mask, r.data_[start_cnt] & only_mask) & only_mask);
   } else {
-    passed = 0 == (op(l.data_[start_cnt], r.data_[start_cnt]) & start_mask);
+    passed =
+      0 == (op(l.data_[start_cnt] & start_mask, r.data_[start_cnt] & start_mask) & start_mask);
     for (int64_t i = start_cnt + 1; passed && i < end_cnt; i++) {
       passed = 0 == (op(l.data_[i], r.data_[i]));
     }
     if (passed && end_mask > 0) {
-      passed = 0 == (op(l.data_[end_cnt], r.data_[end_cnt]) & end_mask);
+      passed = 0 == (op(l.data_[end_cnt] & end_mask, r.data_[end_cnt] & end_mask) & end_mask);
     }
   }
   return passed;
@@ -658,6 +660,12 @@ inline void ObBitVectorImpl<WordType>::bit_or(const ObBitVectorImpl<WordType> &s
       data_[end_cnt] |= src_data[end_cnt] & end_mask;
     }
   }
+}
+
+template<typename WordType>
+inline void ObBitVectorImpl<WordType>::bit_or(const ObBitVectorImpl<WordType> &src, const EvalBound &bound)
+{
+  bit_or(src, bound.start(), bound.end());
 }
 
 template <typename WordType>

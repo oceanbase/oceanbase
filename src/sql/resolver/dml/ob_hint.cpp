@@ -821,7 +821,8 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
     case OPTIMIZER_BETTER_INLIST_COSTING:
     case OPTIMIZER_GROUP_BY_PLACEMENT:
     case ENABLE_SPF_BATCH_RESCAN:
-    case NLJ_BATCHING_ENABLED: {
+    case NLJ_BATCHING_ENABLED:
+    case ENABLE_PX_ORDERED_COORD: {
       is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
                                       || 0 == val.get_varchar().case_compare("false"));
       break;
@@ -928,6 +929,17 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
     case PARTITION_WISE_PLAN_ENABLED: {
       is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
                                       || 0 == val.get_varchar().case_compare("false"));
+      break;
+    }
+    case USE_HASH_ROLLUP: {
+      is_valid = val.is_varchar()
+                 && (0 == val.get_varchar().case_compare("auto")
+                     || 0 == val.get_varchar().case_compare("forced")
+                     || 0 == val.get_varchar().case_compare("disabled"));
+      break;
+    }
+    case LOB_ROWSETS_MAX_ROWS: {
+      is_valid = val.is_int() && val.get_int() >= 1 && val.get_int() <= 65535;
       break;
     }
     case ENABLE_ENUM_SET_SUBSCHEMA: {
@@ -1042,6 +1054,21 @@ int ObOptParamHint::get_opt_param_runtime_filter_type(int64_t &rf_type) const
     ObString str_val = obj.get_varchar();
     rf_type = ObConfigRuntimeFilterChecker::get_runtime_filter_type(str_val.ptr(),
                                                                     str_val.length());
+  }
+  return ret;
+}
+
+int ObOptParamHint::get_hash_rollup_param(ObObj &val, bool &has_param) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(has_opt_param(USE_HASH_ROLLUP, has_param))) {
+    LOG_WARN("failed to check param", K(ret));
+  } else if (has_param) {
+    if (OB_FAIL(get_opt_param(USE_HASH_ROLLUP, val))) {
+      LOG_WARN("get opt param failed", K(ret));
+    } else {
+      has_param = is_param_val_valid(USE_HASH_ROLLUP, val);
+    }
   }
   return ret;
 }

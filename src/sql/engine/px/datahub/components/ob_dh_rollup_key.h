@@ -77,7 +77,7 @@ class ObRollupKeyWholeMsg
 {
   OB_UNIS_VERSION_V(1);
 public:
-  using WholeMsgProvider = ObWholeMsgProvider<ObRollupKeyWholeMsg>;
+  using WholeMsgProvider = ObWholeMsgProvider<ObRollupKeyPieceMsg, ObRollupKeyWholeMsg>;
 public:
   ObRollupKeyWholeMsg() : rollup_ndv_() {}
   ~ObRollupKeyWholeMsg() = default;

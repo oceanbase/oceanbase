@@ -760,6 +760,32 @@ class ObOptimizerStatsGatheringOp;
 REGISTER_OPERATOR(ObLogOptimizerStatsGathering, PHY_OPTIMIZER_STATS_GATHERING,
                   ObOptimizerStatsGatheringSpec, ObOptimizerStatsGatheringOp, NOINPUT, VECTORIZED_OP);
 
+
+class ObLogSet;
+class ObMergeUnionVecSpec;
+class ObMergeUnionVecOp;
+REGISTER_OPERATOR(ObLogSet, PHY_VEC_MERGE_UNION, ObMergeUnionVecSpec, ObMergeUnionVecOp,
+                  NOINPUT, VECTORIZED_OP, 0, SUPPORT_RICH_FORMAT);
+
+class ObLogSet;
+class ObMergeIntersectVecSpec;
+class ObMergeIntersectVecOp;
+REGISTER_OPERATOR(ObLogSet, PHY_VEC_MERGE_INTERSECT, ObMergeIntersectVecSpec,
+                  ObMergeIntersectVecOp, NOINPUT, VECTORIZED_OP, 0,
+                  SUPPORT_RICH_FORMAT);
+
+class ObLogSet;
+class ObMergeExceptVecSpec;
+class ObMergeExceptVecOp;
+REGISTER_OPERATOR(ObLogSet, PHY_VEC_MERGE_EXCEPT, ObMergeExceptVecSpec, ObMergeExceptVecOp,
+                  NOINPUT, VECTORIZED_OP, 0, SUPPORT_RICH_FORMAT);
+class ObLogExpand;
+class ObExpandVecSpec;
+class ObExpandVecOp;
+REGISTER_OPERATOR(ObLogExpand, PHY_EXPAND, ObExpandVecSpec, ObExpandVecOp, NOINPUT, VECTORIZED_OP,
+                  0, /*version*/
+                  SUPPORT_RICH_FORMAT, "PHY_VEC_EXPAND");
+
 #undef REGISTER_OPERATOR
 #undef REGISTER_OPERATOR_FULL
 #undef CHECK_IS_CHAR

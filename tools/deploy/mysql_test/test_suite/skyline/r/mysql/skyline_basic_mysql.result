@@ -3294,7 +3294,7 @@ Query Plan
 ============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c2]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED FOLLOWING)
@@ -3314,7 +3314,7 @@ Query Plan
 ===============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c2], [t9.c3]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED FOLLOWING)
@@ -3335,7 +3335,7 @@ Query Plan
 =================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c3]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED FOLLOWING)
@@ -3357,7 +3357,7 @@ Query Plan
 ================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c3]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED FOLLOWING)
@@ -3378,7 +3378,7 @@ Query Plan
 ===============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by(nil), order_by([t9.c2, ASC], [t9.c3, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT 
@@ -3401,7 +3401,7 @@ Query Plan
 =================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by(nil), order_by([t9.c2, ASC], [t9.c3, DESC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT 
@@ -3425,7 +3425,7 @@ Query Plan
 =======================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by(nil), order_by([t9.c2, DESC], [t9.c3, DESC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT 
@@ -3447,7 +3447,7 @@ Query Plan
 ================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by(nil), order_by([t9.c3, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
@@ -3468,7 +3468,7 @@ Query Plan
 ===============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c2]), order_by([t9.c3, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
@@ -3488,7 +3488,7 @@ Query Plan
 ===============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c2]), order_by([t9.c3, ASC], [t9.c5, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT 
@@ -3511,7 +3511,7 @@ Query Plan
 =================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c2]), order_by([t9.c3, ASC], [t9.c5, DESC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT 
@@ -3535,7 +3535,7 @@ Query Plan
 ================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c3]), order_by([t9.c5, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
@@ -3557,7 +3557,7 @@ Query Plan
 =================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c3], [t9.c5]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED FOLLOWING)
@@ -3580,7 +3580,7 @@ Query Plan
 =================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c4, ASC])
   1 - output([t9.c4], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c3], [t9.c5]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED FOLLOWING)
@@ -3603,7 +3603,7 @@ Query Plan
 =================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by(nil), order_by([t9.c3, ASC], [t9.c5, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT 
@@ -3628,7 +3628,7 @@ Query Plan
 =================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c4, ASC])
   1 - output([t9.c4], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by(nil), order_by([t9.c3, ASC], [t9.c5, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT 
@@ -3655,7 +3655,7 @@ Query Plan
 ===============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))], [T_FUN_MAX(t9.c1)]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))], [T_FUN_MAX(t9.c1)]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_MAX(t9.c1)], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_MAX(t9.c1)), partition_by([t9.c2], [t9.c3], [t9.c5]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED 
@@ -3681,7 +3681,7 @@ Query Plan
 ===================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))], [T_FUN_MAX(t9.c1)]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))], [T_FUN_MAX(t9.c1)]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_MAX(t9.c1)], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_MAX(t9.c1)), partition_by([t9.c3]), order_by([t9.c2, ASC], [t9.c5, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT 
@@ -3710,7 +3710,7 @@ Query Plan
 ===================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))], [T_FUN_MAX(t9.c1)]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))], [T_FUN_MAX(t9.c1)]), filter(nil), rowset=16
       sort_keys([t9.c3, ASC], [t9.c2, ASC], [t9.c5, ASC]), prefix_pos(1)
   1 - output([t9.c3], [t9.c2], [t9.c5], [T_FUN_MAX(t9.c1)], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c3]), order_by([t9.c5, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)

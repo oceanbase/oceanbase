@@ -180,13 +180,18 @@ int ObReceiveRowReader::add_buffer(dtl::ObDtlLinkedBuffer &buf, bool &transferre
       } else {
         datum_iter_ = reinterpret_cast<ObChunkDatumStore::Iterator *>(buf.buf());
       }
-    } else {
-      if (NULL != row_iter_ && row_iter_->is_valid() && row_iter_->has_next()) {
+    } else if (dtl::PX_VECTOR_ROW == msg_type) {
+      if (NULL != vec_row_iter_ && vec_row_iter_->is_valid() && vec_row_iter_->has_next()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("rows must be all iterated before new iterate added", K(ret));
+      } else if (OB_FAIL(row_meta_.assign(buf.get_row_meta()))) {
+        LOG_WARN("row_meta assign failed", K(ret));
       } else {
-        row_iter_ = reinterpret_cast<ObChunkRowStore::Iterator *>(buf.buf());
+        vec_row_iter_ = reinterpret_cast<ObTempRowStore::Iterator *>(buf.buf());
       }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected msg_type", K(ret), K(msg_type));
     }
   } else {
     // add buffer to receive list.
@@ -387,25 +392,6 @@ int ObReceiveRowReader::get_next_compact_rows(ObTempRowStore::RowBlock *blk,
   return ret;
 }
 
-
-int ObReceiveRowReader::get_next_row(common::ObNewRow &row)
-{
-  int ret = OB_SUCCESS;
-  if (NULL != row_iter_) {
-    ret = row_iter_->get_next_row(row);
-  } else {
-    free_iterated_buffers();
-    const ObChunkRowStore::StoredRow *srow
-        = next_store_row<ObChunkRowStore::Block, ObChunkRowStore::StoredRow>();
-    if (NULL == srow) {
-      ret = OB_ITER_END;
-    } else {
-      ret = ObChunkRowStore::RowIterator::store_row2new_row(row, *srow);
-    }
-  }
-  return ret;
-}
-
 int ObReceiveRowReader::to_expr(const ObChunkDatumStore::StoredRow *srow,
                                 const ObIArray<ObExpr*> &dynamic_const_exprs,
                                 const ObIArray<ObExpr*> &exprs,
@@ -449,7 +435,10 @@ int ObReceiveRowReader::get_next_row(const ObIArray<ObExpr*> &exprs,
   int ret = OB_SUCCESS;
   if (NULL != datum_iter_) {
     const ObChunkDatumStore::StoredRow *srow = NULL;
-    if (OB_FAIL(datum_iter_->get_next_row(srow))) {
+    if (!datum_iter_->is_valid()) {
+      // If invalid , it is a mocked empty buffer.
+      ret = OB_ITER_END;
+    } else if (OB_FAIL(datum_iter_->get_next_row(srow))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("get next stored row failed", K(ret));
       }
@@ -671,6 +660,9 @@ int ObReceiveRowReader::get_next_batch(const ObIArray<ObExpr*> &exprs,
     if (max_rows > eval_ctx.max_batch_size_) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(max_rows), K(eval_ctx.max_batch_size_));
+    } else if (!datum_iter_->is_valid()) {
+      // If invalid , it is a mocked empty buffer.
+      ret = OB_ITER_END;
     } else if (OB_FAIL(datum_iter_->get_next_batch(srows, max_rows, read_rows))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("get next batch failed", K(ret), K(max_rows));
@@ -711,8 +703,42 @@ int ObReceiveRowReader::get_next_batch_vec(const ObIArray<ObExpr*> &exprs,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("NULL store rows", K(ret));
   } else if (NULL != datum_iter_) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("do not support internal result", K(ret));
+    // The vec mode does not support this format,
+    // unless it is a mocked empty buffer.
+    if (!datum_iter_->is_valid()) {
+      ret = OB_ITER_END;
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("do not support internal result", K(ret));
+    }
+  } else if (NULL != vec_row_iter_) {
+    if (max_rows > eval_ctx.max_batch_size_) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(max_rows), K(eval_ctx.max_batch_size_));
+    } else if (!vec_row_iter_->is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid vec_row_iter_", K(ret));
+    } else if (OB_FAIL(vec_row_iter_->get_next_batch(max_rows, read_rows, srows))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("get next batch failed", K(ret), K(max_rows));
+      } else {
+        read_rows = 0;
+      }
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
+        if (OB_FAIL(exprs.at(i)->init_vector_default(
+              eval_ctx,
+              max_rows))) {
+          LOG_WARN("failed to init vector", K(ret));
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < dynamic_const_exprs.count(); ++i) {
+        if (OB_FAIL(dynamic_const_exprs.at(i)->init_vector_default(eval_ctx, max_rows))) {
+          LOG_WARN("failed to init vector", K(ret));
+        }
+      }
+      OZ(attach_vectors(exprs, dynamic_const_exprs, row_meta_, eval_ctx, srows, read_rows));
+    }
   } else {
     free_iterated_buffers();
     read_rows = 0;
@@ -790,7 +816,8 @@ void ObReceiveRowReader::reset()
   recv_list_rows_ = 0;
 
   datum_iter_ = NULL;
-  row_iter_ = NULL;
+  vec_row_iter_ = NULL;
+  row_meta_.reset();
 }
 
 

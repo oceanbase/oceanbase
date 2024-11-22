@@ -81,7 +81,19 @@ private:
                                      const ObIArray<ObAggFunRawExpr*> &agg_items,
                                      const bool is_from_povit);
 
+  int candi_allocate_normal_group_by(const ObIArray<ObRawExpr*> &reduce_exprs,
+                                     const ObIArray<ObRawExpr*> &group_by_exprs,
+                                     const ObIArray<ObOrderDirection> &group_directions,
+                                     const ObIArray<ObRawExpr*> &rollup_exprs,
+                                     const ObIArray<ObOrderDirection> &rollup_directions,
+                                     const ObIArray<ObRawExpr*> &having_exprs,
+                                     const ObIArray<ObAggFunRawExpr*> &agg_items,
+                                     const bool enable_hash_rollup,
+                                     GroupingOpHelper &groupby_helper,
+                                     ObIArray<CandidatePlan> &group_plans);
+
   int get_valid_aggr_algo(const ObIArray<ObRawExpr*> &group_by_exprs,
+                          const ObIArray<ObRawExpr *> &rollup_exprs,
                           const GroupingOpHelper &groupby_helper,
                           bool &use_hash_valid,
                           bool &use_merge_valid,

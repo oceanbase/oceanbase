@@ -767,10 +767,10 @@ Outputs & filters:
   4 - output([UNION([1])]), filter(nil), rowset=16
       limit(1), offset(nil)
   5 - output([UNION([1])]), filter(nil), rowset=16
-  6 - output([cast(cast(T_FUN_SUM(t2.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t2.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  6 - output([cast(cast(T_FUN_SUM(t2.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t2.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       limit(1), offset(nil)
-  7 - output([cast(cast(T_FUN_SUM(t2.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t2.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter([cast(cast(T_FUN_SUM(t2.c1),
-       DECIMAL(33, 0)) / cast(T_FUN_COUNT(t2.c1), DECIMAL(20, 0)), DECIMAL(15, 4)) = :1]), rowset=16
+  7 - output([cast(cast(T_FUN_SUM(t2.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t2.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter([cast(cast(T_FUN_SUM(t2.c1),
+       DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t2.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4)) = :1]), rowset=16
       group(nil), agg_func([T_FUN_SUM(t2.c1)], [T_FUN_COUNT(t2.c1)])
   8 - output([t2.c1]), filter(nil), rowset=16
       access([t2.c1]), partitions(p0)

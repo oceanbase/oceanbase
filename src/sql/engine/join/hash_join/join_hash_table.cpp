@@ -62,14 +62,27 @@ int JoinHashTable::init(JoinTableCtx &hjt_ctx, ObIAllocator &allocator)
   } else {
     if (use_normalized ) {
       if (1 == hjt_ctx.build_keys_->count()) {
-        hash_table_ = OB_NEWx(NormalizedInt64Table, (&allocator));
+        hash_table_ = OB_NEWx(NormalizedInt64RobinTable, (&allocator));
       } else if (2 == hjt_ctx.build_keys_->count()) {
-        hash_table_ = OB_NEWx(NormalizedInt128Table, (&allocator));
+        hash_table_ = OB_NEWx(NormalizedInt128RobinTable, (&allocator));
       }
     } else {
-      hash_table_ = OB_NEWx(GenericTable, (&allocator));
+      hash_table_ = OB_NEWx(GenericRobinTable, (&allocator));
     }
   }
+  if (NULL == hash_table_) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to new hash table", K(ret));
+  } else if (OB_FAIL(hash_table_->init(allocator, hjt_ctx.max_batch_size_))) {
+    LOG_WARN("alloc bucket array failed", K(ret));
+  }
+  return ret;
+}
+
+int JoinHashTable::init_generic_ht(JoinTableCtx &hjt_ctx, ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  hash_table_ = OB_NEWx(GenericTable, (&allocator));
   if (NULL == hash_table_) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to new hash table", K(ret));

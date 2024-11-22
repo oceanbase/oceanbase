@@ -429,6 +429,22 @@ DEF_BOOL(_enable_enum_set_subschema, OB_TENANT_PARAMETER, "True",
          "and to activate the related new type cast logic behavior.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_INT(_min_const_integer_precision, OB_TENANT_PARAMETER, "1", "[1, 20]",
+        "the minimum precision of integer constant",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(_lob_rowsets_max_rows, OB_TENANT_PARAMETER, "65535", "[1, 65535]",
+        "max batch size of physical plan with lob data",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_STR_WITH_CHECKER(_use_hash_rollup, OB_TENANT_PARAMETER, "AUTO",
+        common::ObConfigEnableHashRollupChecker,
+        "policy of hash based rollup plan:"\
+        "AUTO: hash rollup plan is up to optimizer;"\
+        "FORCED: hash rollup plan is used by default;"\
+        "DISABLED: hash rollup plan is disabled;",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 // tenant memtable consumption related
 DEF_INT(memstore_limit_percentage, OB_CLUSTER_PARAMETER, "0", "[0, 100)",
         "used in calculating the value of MEMSTORE_LIMIT parameter: "

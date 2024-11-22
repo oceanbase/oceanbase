@@ -66,6 +66,16 @@ int ObRollupAdaptiveInfo::assign(const ObRollupAdaptiveInfo &info)
   return ret;
 }
 
+int ObHashRollupInfo::assign(const ObHashRollupInfo &info)
+{
+  int ret = OB_SUCCESS;
+  rollup_grouping_id_ = info.rollup_grouping_id_;
+  expand_exprs_ = info.expand_exprs_;
+  gby_exprs_ = info.gby_exprs_;
+  dup_expr_pairs_ = info.dup_expr_pairs_;
+  return ret;
+}
+
 int ObLogGroupBy::get_explain_name_internal(char *buf,
                                             const int64_t buf_len,
                                             int64_t &pos)
@@ -529,10 +539,33 @@ int ObLogGroupBy::print_outline_data(PlanText &plan_text)
         LOG_WARN("failed to print hint", K(ret), K(hint));
       }
     }
+    /*
+      if hash rollup with partition wise, we need hash shuffle after partition wise grouping,
+      =======================================================================                                                                                                                                         |
+      |ID|OPERATOR                           |NAME    |EST.ROWS|EST.TIME(us)|                                                                                                                                         |
+      -----------------------------------------------------------------------                                                                                                                                         |
+      |0 |PX COORDINATOR MERGE SORT          |        |11      |50          |                                                                                                                                         |
+      |1 |└─EXCHANGE OUT DISTR               |:EX10001|11      |40          |                                                                                                                                         |
+      |2 |  └─SORT                           |        |11      |33          |                                                                                                                                         |
+      |3 |    └─HASH GROUP BY                |        |11      |33          |                                                                                                                                         |
+      |4 |      └─EXCHANGE IN DISTR          |        |18      |31          |                                                                                                                                         |
+      |5 |        └─EXCHANGE OUT DISTR (HASH)|:EX10000|18      |26          |                                                                                                                                         |
+      |6 |          └─PX PARTITION ITERATOR  |        |18      |14          |                                                                                                                                         |
+      |7 |            └─HASH GROUP BY        |        |18      |14          |                                                                                                                                         |
+      |8 |              └─EXPANSION          |        |21      |11          |                                                                                                                                         |
+      |9 |                └─TABLE FULL SCAN  |LYQ_TEST|11      |11          |                                                                                                                                         |
+      =======================================================================
+
+      dist method can't set to HASH, otherwise, we can't reproduce partition wise plan out of outline data
+    */
     if (OB_SUCC(ret) && T_DISTRIBUTE_BASIC != dist_method_) {
       ObPQHint hint(T_PQ_GBY_HINT);
       hint.set_qb_name(qb_name);
-      hint.set_dist_method(dist_method_);
+      if (hash_rollup_info_.valid() && is_partition_wise() && dist_method_ == T_DISTRIBUTE_HASH) {
+        hint.set_dist_method(T_DISTRIBUTE_NONE);
+      } else {
+        hint.set_dist_method(dist_method_);
+      }
       if (OB_FAIL(hint.print_hint(plan_text))) {
         LOG_WARN("failed to print hint", K(ret), K(hint));
       }

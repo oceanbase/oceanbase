@@ -159,6 +159,7 @@ ob_set_subtarget(ob_sql engine
   engine/window_function/row_store.cpp
   engine/window_function/win_expr.cpp
   engine/window_function/row_store.cpp
+  engine/expand/ob_expand_vec_op.cpp
   engine/subquery/ob_subplan_filter_vec_op.cpp
 )
 
@@ -963,6 +964,10 @@ ob_set_subtarget(ob_sql engine_set
   engine/set/ob_hash_except_vec_op.cpp
   engine/set/ob_hash_intersect_vec_op.cpp
   engine/set/ob_set_op.cpp
+  engine/set/ob_merge_set_vec_op.cpp
+  engine/set/ob_merge_union_vec_op.cpp
+  engine/set/ob_merge_intersect_vec_op.cpp
+  engine/set/ob_merge_except_vec_op.cpp
 )
 
 ob_set_subtarget(ob_sql engine_table
@@ -1122,6 +1127,7 @@ ob_set_subtarget(ob_sql optimizer
   optimizer/ob_dynamic_sampling.cpp
   optimizer/ob_log_values_table_access.cpp
   optimizer/ob_direct_load_optimizer.cpp
+  optimizer/ob_log_expand.cpp
 )
 
 ob_set_subtarget(ob_sql plan_cache

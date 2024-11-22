@@ -58,8 +58,7 @@ struct InitVisitor : public boost::static_visitor<int>
               int64_t op_id,
               bool use_sstr_aggr,
               int64_t aggr_row_size,
-              int64_t initial_size,
-              bool auto_extend) : allocator_(allocator),
+              int64_t initial_size) : allocator_(allocator),
                                   mem_attr_(mem_attr),
                                   gby_exprs_(gby_exprs),
                                   hash_expr_cnt_(hash_expr_cnt),
@@ -70,8 +69,7 @@ struct InitVisitor : public boost::static_visitor<int>
                                   op_id_(op_id),
                                   aggr_row_size_(aggr_row_size),
                                   use_sstr_aggr_(use_sstr_aggr),
-                                  initial_size_(initial_size),
-                                  auto_extend_(auto_extend) {}
+                                  initial_size_(initial_size) {}
   template <typename T>
   int operator() (T &t)
   {
@@ -86,8 +84,7 @@ struct InitVisitor : public boost::static_visitor<int>
                    op_id_,
                    use_sstr_aggr_,
                    aggr_row_size_,
-                   initial_size_,
-                   auto_extend_);
+                   initial_size_);
   }
   ObIAllocator *allocator_;
   lib::ObMemAttr &mem_attr_;
@@ -324,19 +321,27 @@ struct ProcessBatchVisitor : public boost::static_visitor<int>
                       int64_t &agg_row_cnt,
                       int64_t &agg_group_cnt,
                       BatchAggrRowsTable *batch_aggr_rows,
-                      bool need_reinit_vectors) : gby_exprs_(gby_exprs),
-                                                  child_brs_(child_brs),
-                                                  is_dumped_(is_dumped),
-                                                  hash_values_(hash_values),
-                                                  lengths_(lengths),
-                                                  can_append_batch_(can_append_batch),
-                                                  bloom_filter_(bloom_filter),
-                                                  batch_old_rows_(batch_old_rows),
-                                                  batch_new_rows_(batch_new_rows),
-                                                  agg_row_cnt_(agg_row_cnt),
-                                                  agg_group_cnt_(agg_group_cnt),
-                                                  batch_aggr_rows_(batch_aggr_rows),
-                                                  need_reinit_vectors_(need_reinit_vectors) {}
+                      bool need_reinit_vectors,
+                      uint16_t *new_row_pos,
+                      uint16_t *old_row_pos,
+                      int64_t &new_row_cnt,
+                      int64_t &old_row_cnt) : gby_exprs_(gby_exprs),
+                                              child_brs_(child_brs),
+                                              is_dumped_(is_dumped),
+                                              hash_values_(hash_values),
+                                              lengths_(lengths),
+                                              can_append_batch_(can_append_batch),
+                                              bloom_filter_(bloom_filter),
+                                              batch_old_rows_(batch_old_rows),
+                                              batch_new_rows_(batch_new_rows),
+                                              agg_row_cnt_(agg_row_cnt),
+                                              agg_group_cnt_(agg_group_cnt),
+                                              batch_aggr_rows_(batch_aggr_rows),
+                                              need_reinit_vectors_(need_reinit_vectors),
+                                              new_row_pos_(new_row_pos),
+                                              old_row_pos_(old_row_pos),
+                                              new_row_cnt_(new_row_cnt),
+                                              old_row_cnt_(old_row_cnt) {}
   template <typename T>
   int operator() (T &t)
   {
@@ -344,7 +349,8 @@ struct ProcessBatchVisitor : public boost::static_visitor<int>
                             hash_values_, lengths_, can_append_batch_,
                             bloom_filter_, batch_old_rows_, batch_new_rows_,
                             agg_row_cnt_, agg_group_cnt_, batch_aggr_rows_,
-                            need_reinit_vectors_);
+                            need_reinit_vectors_, new_row_pos_, old_row_pos_,
+                            new_row_cnt_, old_row_cnt_);
   }
   const common::ObIArray<ObExpr *> &gby_exprs_;
   const ObBatchRows &child_brs_;
@@ -359,6 +365,10 @@ struct ProcessBatchVisitor : public boost::static_visitor<int>
   int64_t &agg_group_cnt_;
   BatchAggrRowsTable *batch_aggr_rows_;
   bool need_reinit_vectors_;
+  uint16_t *new_row_pos_;
+  uint16_t *old_row_pos_;
+  int64_t &new_row_cnt_;
+  int64_t &old_row_cnt_;
 };
 
 struct GetProbeCntVisitor : public boost::static_visitor<int64_t>
@@ -442,14 +452,12 @@ public:
            int64_t op_id,
            bool use_sstr_aggr,
            int64_t aggr_row_size,
-           int64_t initial_size,
-           bool auto_extend)
+           int64_t initial_size)
   {
     InitVisitor visitor(allocator, mem_attr, gby_exprs,
                         hash_expr_cnt, eval_ctx, max_batch_size,
                         nullable, all_int64, op_id,
-                        use_sstr_aggr, aggr_row_size, initial_size,
-                        auto_extend);
+                        use_sstr_aggr, aggr_row_size, initial_size);
     return boost::apply_visitor(visitor, hash_table_ptr_);
   }
 
@@ -532,13 +540,18 @@ public:
                     int64_t &agg_row_cnt,
                     int64_t &agg_group_cnt,
                     BatchAggrRowsTable *batch_aggr_rows,
-                    bool need_reinit_vectors = false)
+                    bool need_reinit_vectors,
+                    uint16_t *new_row_pos,
+                    uint16_t *old_row_pos,
+                    int64_t &new_row_cnt,
+                    int64_t &old_row_cnt)
   {
     ProcessBatchVisitor visitor(gby_exprs, child_brs, is_dumped,
                                 hash_values, lengths, can_append_batch,
                                 bloom_filter, batch_old_rows, batch_new_rows,
                                 agg_row_cnt, agg_group_cnt, batch_aggr_rows,
-                                need_reinit_vectors);
+                                need_reinit_vectors, new_row_pos, old_row_pos,
+                                new_row_cnt, old_row_cnt);
     return boost::apply_visitor(visitor, hash_table_ptr_);
   }
   void prefetch(const ObBatchRows &brs, uint64_t *hash_vals) const

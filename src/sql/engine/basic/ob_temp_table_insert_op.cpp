@@ -268,7 +268,8 @@ int ObTempTableInsertOp::init_chunk_row_store(ObDTLIntermResultInfo *&chunk_row_
                                             MY_INPUT.qc_id_,
                                             MY_INPUT.dfo_id_,
                                             MY_INPUT.sqc_id_
-                                          )))) {
+                                          ),
+                                          ObDTLIntermResultInfo::StoreType::DATUM))) {
       LOG_WARN("failed to create row store.", K(ret));
     } else if (FALSE_IT(chunk_row_store = result_info_guard.result_info_)) {
     } else if (OB_FAIL(chunk_row_store->datum_store_->init(UINT64_MAX,

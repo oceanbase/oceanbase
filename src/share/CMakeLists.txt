@@ -54,6 +54,10 @@ ob_set_subtarget(ob_share SCHEMA_CPPS
   ${SCHEMA_CPPS}
 )
 
+ob_set_subtarget(ob_share aggregates
+  aggregate/grouping.cpp
+)
+
 ob_set_subtarget(ob_share allocator
   allocator/ob_fifo_arena.cpp
   allocator/ob_memstore_allocator.cpp

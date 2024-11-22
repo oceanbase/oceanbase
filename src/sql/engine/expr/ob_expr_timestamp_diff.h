@@ -32,6 +32,7 @@ public:
   virtual common::ObCastMode get_cast_mode() const { return CM_NULL_ON_WARN;}
 
   static int eval_timestamp_diff(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
+  static int eval_timestamp_diff_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
   virtual int cg_expr(ObExprCGCtx &ctx, const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   DECLARE_SET_LOCAL_SESSION_VARS;
@@ -43,6 +44,8 @@ private:
                              const common::ObTimeZoneInfo *tz_info,
                              int64_t &diff);
   static int adjust_sub_one(const common::ObTime *p_min, const common::ObTime *p_max, int64_t &bias);
+  template <typename LeftArgVec, typename RightArgVec, typename ResVec, typename UnitType>
+  static int vector_timestamp_diff(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprTimeStampDiff);
 };

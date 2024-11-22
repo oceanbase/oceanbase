@@ -1582,5 +1582,14 @@ bool ObConfigS3URLEncodeTypeChecker::check(const ObConfigItem &t) const
   return bret;
 }
 
+bool ObConfigEnableHashRollupChecker::check(const ObConfigItem &t) const
+{
+  int bret = false;
+  common::ObString tmp_str(t.str());
+  bret = (0 == tmp_str.case_compare("auto")
+          || 0 == tmp_str.case_compare("forced")
+          || 0 == tmp_str.case_compare("disabled"));
+  return bret;
+}
 } // end of namepace common
 } // end of namespace oceanbase

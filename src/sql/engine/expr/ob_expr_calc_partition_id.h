@@ -38,6 +38,51 @@ enum CalcPartIdType {
   CALC_PARTITION_TABLET_ID,
 };
 
+struct RangePartition {
+public:
+  RangePartition() : datum_(), is_max_range_(false) {}
+  RangePartition(const ObDatum &datum) : datum_(datum), is_max_range_(false) {}
+  ~RangePartition() {}
+
+  void set_max_range_part() { is_max_range_ = true; }
+  bool is_max_range_part() const { return is_max_range_; }
+
+  ObDatum datum_;
+  bool is_max_range_;
+
+  TO_STRING_KV(K_(datum), K_(is_max_range));
+};
+
+struct RangePartCmp {
+public:
+  RangePartCmp() : row_cmp_func_(nullptr), ret_(OB_SUCCESS),
+      part_expr_obj_meta_(), part_array_obj_meta_(), is_oracle_mode_(false) {}
+  ~RangePartCmp() = default;
+  bool operator()(const ObDatum &l, const RangePartition &r);
+
+  sql::RowCmpFunc row_cmp_func_;
+  int ret_;
+  common::ObObjMeta part_expr_obj_meta_;
+  common::ObObjMeta part_array_obj_meta_;
+  bool is_oracle_mode_;
+};
+
+struct PartValKey
+{
+public:
+  PartValKey() : datum_(), hash_func_(nullptr), cmp_func_(nullptr)  {}
+  PartValKey(const ObDatum &datum, ObExprHashFuncType hash_func, ObExprCmpFuncType cmp_func) :
+        datum_(datum), hash_func_(hash_func), cmp_func_(cmp_func)  {}
+  ~PartValKey() {}
+  bool operator==(const PartValKey &other) const;
+  int hash(uint64_t &hash_val, uint64_t seed = 0) const;
+  TO_STRING_KV(K_(datum), K_(hash_func), K_(cmp_func));
+
+  ObDatum datum_;
+  ObExprHashFuncType hash_func_;
+  ObExprCmpFuncType cmp_func_;
+};
+
 struct CalcPartitionBaseInfo : public ObIExprExtraInfo
 {
   OB_UNIS_VERSION(1);
@@ -56,7 +101,9 @@ public:
       calc_id_type_(CALC_TABLET_ID),
       first_part_id_(OB_INVALID_ID)
   {}
-  virtual ~CalcPartitionBaseInfo() { }
+  virtual ~CalcPartitionBaseInfo() {
+    related_table_ids_.reset();
+  }
 
   virtual int deep_copy(common::ObIAllocator &allocator,
                         const ObExprOperatorType type,
@@ -96,6 +143,38 @@ public:
     RANGE,
     LIST
   };
+
+  class ObExprCalcPartCtx : public ObExprOperatorCtx
+  {
+  public:
+    ObExprCalcPartCtx()
+        : ObExprOperatorCtx(),
+          range_partitions_(),
+          part_cmp_(),
+          default_list_part_idx_(OB_INVALID_INDEX),
+          list_part_map_()
+    {}
+    virtual ~ObExprCalcPartCtx() {
+      range_partitions_.reset();
+      list_part_map_.destroy();
+    }
+
+    int init_calc_range_partition_base_info(const share::schema::ObTableSchema &table_schema,
+                                            const ObExpr &part_expr,
+                                            common::ObIAllocator &allocator);
+    int init_calc_list_partition_base_info(const share::schema::ObTableSchema &table_schema,
+                                          const ObExpr &part_expr,
+                                          common::ObIAllocator &allocator);
+
+    TO_STRING_KV(K_(range_partitions), K_(default_list_part_idx));
+
+    ObFixedArray<RangePartition, common::ObIAllocator> range_partitions_; // Used to calc range part
+    RangePartCmp part_cmp_; // Used to calc range part
+    int64_t default_list_part_idx_; // Used to calc list part
+    common::hash::ObHashMap<PartValKey, int64_t,
+                            common::hash::NoPthreadDefendMode> list_part_map_; // Used to calc list part
+  };
+
   explicit ObExprCalcPartitionBase(common::ObIAllocator &alloc, ObExprOperatorType type,
                                    const char *name, int32_t param_num, int32_t dimension)
     : ObFuncExprOperator(alloc, type, name, param_num, NOT_VALID_FOR_GENERATED_COL, dimension)
@@ -136,6 +215,7 @@ public:
                                      ObEvalCtx &eval_ctx,
                                      common::ObObjectID &partition_id,
                                      common::ObTabletID &tablet_id);
+  virtual bool need_rt_ctx() const override { return true; }
 private:
  int init_calc_part_info(common::ObIAllocator *allocator,
                          const share::schema::ObTableSchema &table_schema,

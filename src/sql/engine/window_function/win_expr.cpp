@@ -1128,6 +1128,12 @@ int AggrExpr::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int6
       }
     }
   } // end while
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(aggr_processor_->advance_collect_result(eval_ctx.get_batch_idx(),
+                                                        ctx.win_col_.wf_res_row_meta_, agg_row))) {
+      LOG_WARN("advance collect failed", K(ret));
+    }
+  }
   if (OB_FAIL(ret)) {
   } else if (aggregate::agg_res_not_null(ctx.win_col_.wf_info_.func_type_)) {
     ctx.win_col_.agg_ctx_->row_meta().locate_notnulls_bitmap(agg_row).set(0);

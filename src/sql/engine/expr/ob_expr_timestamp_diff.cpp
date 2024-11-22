@@ -224,6 +224,7 @@ int ObExprTimeStampDiff::cg_expr(ObExprCGCtx &ctx, const ObRawExpr &raw_expr,
      ObDateTimeType == rt_expr.args_[1]->datum_meta_.type_ &&
      ObDateTimeType == rt_expr.args_[2]->datum_meta_.type_);
   OX(rt_expr.eval_func_ = eval_timestamp_diff);
+  OX(rt_expr.eval_vector_func_ = eval_timestamp_diff_vector);
   return ret;
 }
 
@@ -235,6 +236,135 @@ DEF_SET_LOCAL_SESSION_VARS(ObExprTimeStampDiff, raw_expr) {
   }
   return ret;
 }
+
+
+template <typename LeftArgVec, typename RightArgVec, typename ResVec, typename UnitVec>
+int ObExprTimeStampDiff::vector_timestamp_diff(const ObExpr &expr,
+                                               ObEvalCtx &ctx,
+                                               const ObBitVector &skip,
+                                               const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  LeftArgVec *left_arg_vec = static_cast<LeftArgVec *>(expr.args_[1]->get_vector(ctx));
+  RightArgVec *right_arg_vec = static_cast<RightArgVec *>(expr.args_[2]->get_vector(ctx));
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+  UnitVec *unit_vec = static_cast<UnitVec *>(expr.args_[0]->get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  bool no_skip_no_null = bound.get_all_rows_active() && !left_arg_vec->has_null() && !right_arg_vec->has_null()
+                         && eval_flags.accumulate_bit_cnt(bound) == 0;
+  ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
+  const common::ObTimeZoneInfo *tz_info = NULL;
+  if (OB_FAIL(helper.get_time_zone_info(tz_info))) {
+    LOG_WARN("get tz info failed", K(ret));
+  } else {
+    for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+      if (skip.at(idx) || eval_flags.at(idx)) {
+        continue;
+      } else if (left_arg_vec->is_null(idx) || right_arg_vec->is_null(idx)
+                 || unit_vec->is_null(idx)) {
+        res_vec->set_null(idx);
+        eval_flags.set(idx);
+        continue;
+      }
+      int64_t res_int = 0;
+      bool is_null = false;
+      if (OB_FAIL(calc(res_int, is_null, unit_vec->get_int(idx),
+                       left_arg_vec->get_datetime(idx),
+                       right_arg_vec->get_datetime(idx), tz_info))) {
+        LOG_WARN("calc failed", K(ret));
+      } else if (is_null) {
+        res_vec->set_null(idx);
+      } else {
+        res_vec->set_int(idx, res_int);
+      }
+      eval_flags.set(idx);
+    }
+  }
+  return ret;
+}
+
+int ObExprTimeStampDiff::eval_timestamp_diff_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("fail to eval l param", K(ret));
+  } else if (OB_FAIL(expr.args_[1]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("fail to eval l param", K(ret));
+  } else if (OB_FAIL(expr.args_[2]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("fail to eval r param", K(ret));
+  } else {
+    VectorFormat unit_format = expr.args_[0]->get_format(ctx);
+    VectorFormat left_arg_format = expr.args_[1]->get_format(ctx);
+    VectorFormat right_arg_format = expr.args_[2]->get_format(ctx);
+    VectorFormat res_format = expr.get_format(ctx);
+
+#define DEF_TIMESTAMP_DIFF_VECTOR(res_vec, unit_vec)\
+  if (left_arg_format == VEC_UNIFORM && right_arg_format == VEC_UNIFORM) {\
+    ret = vector_timestamp_diff<DateTimeUniVec, DateTimeUniVec,\
+                                res_vec, unit_vec>(expr, ctx, skip, bound);\
+  } else if (left_arg_format == VEC_UNIFORM && right_arg_format == VEC_UNIFORM_CONST) {\
+    ret = vector_timestamp_diff<DateTimeUniVec, DateTimeUniCVec,\
+                                res_vec, unit_vec>(expr, ctx, skip, bound);\
+  } else if (left_arg_format == VEC_UNIFORM && right_arg_format == VEC_FIXED) {\
+    ret = vector_timestamp_diff<DateTimeUniVec, DateTimeFixedVec,\
+                                res_vec, unit_vec>(expr, ctx, skip, bound);\
+  } else if (left_arg_format == VEC_UNIFORM_CONST && right_arg_format == VEC_UNIFORM) {\
+    ret = vector_timestamp_diff<DateTimeUniCVec, DateTimeUniVec,\
+                                res_vec, unit_vec>(expr, ctx, skip, bound);\
+  } else if (left_arg_format == VEC_UNIFORM_CONST && right_arg_format == VEC_UNIFORM_CONST) {\
+    ret = vector_timestamp_diff<DateTimeUniCVec, DateTimeUniCVec,\
+                                res_vec, unit_vec>(expr, ctx, skip, bound);\
+  } else if (left_arg_format == VEC_UNIFORM_CONST && right_arg_format == VEC_FIXED) {\
+    ret = vector_timestamp_diff<DateTimeUniCVec, DateTimeFixedVec,\
+                                res_vec, unit_vec>(expr, ctx, skip, bound);\
+  } else if (left_arg_format == VEC_FIXED && right_arg_format == VEC_UNIFORM) {\
+    ret = vector_timestamp_diff<DateTimeFixedVec, DateTimeUniVec,\
+                                res_vec, unit_vec>(expr, ctx, skip, bound);\
+  } else if (left_arg_format == VEC_FIXED && right_arg_format == VEC_UNIFORM_CONST) {\
+    ret = vector_timestamp_diff<DateTimeFixedVec, DateTimeUniCVec,\
+                                res_vec, unit_vec>(expr, ctx, skip, bound);\
+  } else if (left_arg_format == VEC_FIXED && right_arg_format == VEC_FIXED) {\
+    ret = vector_timestamp_diff<DateTimeFixedVec, DateTimeFixedVec,\
+                                res_vec, unit_vec>(expr, ctx, skip, bound);\
+  } else {\
+    ret = vector_timestamp_diff<ObVectorBase, ObVectorBase,\
+                                res_vec, unit_vec>(expr, ctx, skip, bound);\
+  }
+
+    if (VEC_FIXED == res_format && VEC_UNIFORM == unit_format) {
+      DEF_TIMESTAMP_DIFF_VECTOR(IntegerFixedVec, IntegerFixedVec);
+    } else if (VEC_FIXED == res_format && VEC_UNIFORM_CONST == unit_format) {
+      DEF_TIMESTAMP_DIFF_VECTOR(IntegerFixedVec, IntegerUniCVec);
+    } else if (VEC_FIXED == res_format && VEC_FIXED == unit_format) {
+      DEF_TIMESTAMP_DIFF_VECTOR(IntegerFixedVec, IntegerUniVec);
+    } else if (VEC_UNIFORM == res_format && VEC_UNIFORM == unit_format) {
+      DEF_TIMESTAMP_DIFF_VECTOR(IntegerUniVec, IntegerFixedVec);
+    } else if (VEC_UNIFORM == res_format && VEC_UNIFORM_CONST == unit_format) {
+      DEF_TIMESTAMP_DIFF_VECTOR(IntegerUniVec, IntegerUniCVec);
+    } else if (VEC_UNIFORM == res_format && VEC_FIXED == unit_format) {
+      DEF_TIMESTAMP_DIFF_VECTOR(IntegerUniVec, IntegerUniVec);
+    } else if (VEC_UNIFORM_CONST == res_format && VEC_UNIFORM == unit_format) {
+      DEF_TIMESTAMP_DIFF_VECTOR(IntegerUniCVec, IntegerFixedVec);
+    } else if (VEC_UNIFORM_CONST == res_format && VEC_UNIFORM_CONST == unit_format) {
+      DEF_TIMESTAMP_DIFF_VECTOR(IntegerUniCVec, IntegerUniCVec);
+    } else if (VEC_UNIFORM_CONST == res_format && VEC_FIXED == unit_format) {
+      DEF_TIMESTAMP_DIFF_VECTOR(IntegerUniCVec, IntegerUniVec);
+    } else {
+      ret = vector_timestamp_diff<ObVectorBase, ObVectorBase, ObVectorBase, ObVectorBase>(expr, ctx, skip, bound);
+    }
+#undef DEF_TIMESTAMP_DIFF_VECTOR
+
+    if (OB_FAIL(ret)) {
+      LOG_WARN("expr calculation failed", K(ret));
+    }
+  }
+
+  return ret;
+}
+
+#undef CHECK_SKIP_NULL
+#undef BATCH_CALC
+
 
 } //namespace sql
 } //namespace oceanbase

@@ -162,6 +162,7 @@
 #include "ob_expr_get_package_var.h"
 #include "ob_expr_sys_context.h"
 #include "ob_expr_timestamp_diff.h"
+#include "ob_expr_timestamp_add.h"
 #include "ob_expr_from_tz.h"
 #include "ob_expr_tz_offset.h"
 #include "ob_expr_orahash.h"
@@ -1603,52 +1604,52 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   ObExprArrayContains::eval_array_contains_vector_ObString,     /* 120 */
   ObExprArrayContains::eval_array_contains_array_vector,        /* 121 */
   ObExprCalcPartitionBase::fast_calc_partition_level_one_vector,/* 122 */
-  NULL, // ObExprTrim::eval_trim_vector                         /* 123 */
+  ObExprTrim::eval_trim_vector,                                 /* 123 */
   NULL, // ObExprEncodeSortkey::eval_encode_sortkey_vector      /* 124 */
   ObExprArrayOverlaps::eval_array_overlaps_vector,              /* 125 */
   ObExprArrayContainsAll::eval_array_contains_all_vector,       /* 126 */
-  NULL, // ObBitwiseExprOperator::calc_bitwise_result2_mysql_vector,     /* 127 */
-  NULL, // ObBitwiseExprOperator::calc_bitwise_result2_oracle_vector,    /* 128 */
-  NULL, // ObExprDiv::decint_div_mysql_vec_fn<int32_t, int32_t>,         /* 129 */
-  NULL, // ObExprDiv::decint_div_mysql_vec_fn<int64_t, int32_t>,         /* 130 */
-  NULL, // ObExprDiv::decint_div_mysql_vec_fn<int64_t, int64_t>,         /* 131 */
-  NULL, // ObExprDiv::decint_div_mysql_vec_fn<int128_t, int32_t>,        /* 132 */
-  NULL, // ObExprDiv::decint_div_mysql_vec_fn<int128_t, int64_t>,        /* 133 */
-  NULL, // ObExprDiv::decint_div_mysql_vec_fn<int128_t, int128_t>,       /* 134 */
-  NULL, // ObExprDiv::decint_div_mysql_vec_fn<int256_t, int32_t>,        /* 135 */
-  NULL, // ObExprDiv::decint_div_mysql_vec_fn<int256_t, int64_t>,        /* 136 */
-  NULL, // ObExprDiv::decint_div_mysql_vec_fn<int256_t, int128_t>,       /* 137 */
-  NULL, // ObExprDiv::decint_div_mysql_vec_fn<int256_t, int256_t>,       /* 138 */
-  NULL, // ObExprDiv::decint_div_mysql_vec_fn<int512_t, int32_t>,        /* 139 */
-  NULL, // ObExprDiv::decint_div_mysql_vec_fn<int512_t, int64_t>,        /* 140 */
-  NULL, // ObExprDiv::decint_div_mysql_vec_fn<int512_t, int128_t>,       /* 141 */
-  NULL, // ObExprDiv::decint_div_mysql_vec_fn<int512_t, int256_t>,       /* 142 */
-  NULL, // ObExprDiv::decint_div_mysql_vec_fn<int512_t, int512_t>,       /* 143 */
- ObExprArrayRemove::eval_array_remove_vector_int64_t,          /* 144 */
- ObExprArrayRemove::eval_array_remove_vector_float,            /* 145 */
- ObExprArrayRemove::eval_array_remove_vector_double,           /* 146 */
- ObExprArrayRemove::eval_array_remove_vector_ObString,         /* 147 */
- ObExprArrayRemove::eval_array_remove_array_vector,            /* 148 */
- ObExprArrayDistinct::eval_array_distinct_vector,              /* 149 */
-  NULL, // ObExprDateFormat::calc_date_format_vector,                    /* 150 */
-  NULL, // ObExprYear::calc_year_vector,                                 /* 151 */
-  NULL, // ObExprMonth::calc_month_vector,                               /* 152 */
-  NULL, // ObExprMonthName::calc_month_name_vector,                      /* 153 */
-  NULL, // ObExprHour::calc_hour_vector,                                 /* 154 */
-  NULL, // ObExprMinute::calc_minute_vector,                             /* 155 */
-  NULL, // ObExprDayOfYear::calc_dayofyear_vector,                       /* 156 */
-  NULL, // ObExprDayOfMonth::calc_dayofmonth_vector,                     /* 157 */
-  NULL, // ObExprDayOfWeek::calc_dayofweek_vector,                       /* 158 */
-  NULL, // ObExprDayName::calc_dayname_vector,                           /* 159 */
-  NULL, // ObExprWeek::calc_week_vector,                                 /* 160 */
-  NULL, // ObExprWeekOfYear::calc_weekofyear_vector,                     /* 161 */
-  NULL, // ObExprDate::eval_date_vector,                                 /* 162 */
-  NULL, // ObExprDateDiff::eval_date_diff_vector,                        /* 163 */
-  NULL, // ObExprDateAdd::calc_date_add_vector,                          /* 164 */
-  NULL, // ObExprDateSub::calc_date_sub_vector,                          /* 165 */
-  NULL, // ObExprFromDays::calc_fromdays_vector,                         /* 166 */
-  NULL, // ObExprTimeStampDiff::eval_timestamp_diff_vector,              /* 167 */
-  NULL, // ObExprTimeStampAdd::calc_timestamp_add_vector,                /* 168 */
+  ObBitwiseExprOperator::calc_bitwise_result2_mysql_vector,     /* 127 */
+  ObBitwiseExprOperator::calc_bitwise_result2_oracle_vector,    /* 128 */
+  ObExprDiv::decint_div_mysql_vec_fn<int32_t, int32_t>,         /* 129 */
+  ObExprDiv::decint_div_mysql_vec_fn<int64_t, int32_t>,         /* 130 */
+  ObExprDiv::decint_div_mysql_vec_fn<int64_t, int64_t>,         /* 131 */
+  ObExprDiv::decint_div_mysql_vec_fn<int128_t, int32_t>,        /* 132 */
+  ObExprDiv::decint_div_mysql_vec_fn<int128_t, int64_t>,        /* 133 */
+  ObExprDiv::decint_div_mysql_vec_fn<int128_t, int128_t>,       /* 134 */
+  ObExprDiv::decint_div_mysql_vec_fn<int256_t, int32_t>,        /* 135 */
+  ObExprDiv::decint_div_mysql_vec_fn<int256_t, int64_t>,        /* 136 */
+  ObExprDiv::decint_div_mysql_vec_fn<int256_t, int128_t>,       /* 137 */
+  ObExprDiv::decint_div_mysql_vec_fn<int256_t, int256_t>,       /* 138 */
+  ObExprDiv::decint_div_mysql_vec_fn<int512_t, int32_t>,        /* 139 */
+  ObExprDiv::decint_div_mysql_vec_fn<int512_t, int64_t>,        /* 140 */
+  ObExprDiv::decint_div_mysql_vec_fn<int512_t, int128_t>,       /* 141 */
+  ObExprDiv::decint_div_mysql_vec_fn<int512_t, int256_t>,       /* 142 */
+  ObExprDiv::decint_div_mysql_vec_fn<int512_t, int512_t>,       /* 143 */
+  ObExprArrayRemove::eval_array_remove_vector_int64_t,          /* 144 */
+  ObExprArrayRemove::eval_array_remove_vector_float,            /* 145 */
+  ObExprArrayRemove::eval_array_remove_vector_double,           /* 146 */
+  ObExprArrayRemove::eval_array_remove_vector_ObString,         /* 147 */
+  ObExprArrayRemove::eval_array_remove_array_vector,            /* 148 */
+  ObExprArrayDistinct::eval_array_distinct_vector,              /* 149 */
+  ObExprDateFormat::calc_date_format_vector,                    /* 150 */
+  ObExprYear::calc_year_vector,                                 /* 151 */
+  ObExprMonth::calc_month_vector,                               /* 152 */
+  ObExprMonthName::calc_month_name_vector,                      /* 153 */
+  ObExprHour::calc_hour_vector,                                 /* 154 */
+  ObExprMinute::calc_minute_vector,                             /* 155 */
+  ObExprDayOfYear::calc_dayofyear_vector,                       /* 156 */
+  ObExprDayOfMonth::calc_dayofmonth_vector,                     /* 157 */
+  ObExprDayOfWeek::calc_dayofweek_vector,                       /* 158 */
+  ObExprDayName::calc_dayname_vector,                           /* 159 */
+  ObExprWeek::calc_week_vector,                                 /* 160 */
+  ObExprWeekOfYear::calc_weekofyear_vector,                     /* 161 */
+  ObExprDate::eval_date_vector,                                 /* 162 */
+  ObExprDateDiff::eval_date_diff_vector,                        /* 163 */
+  ObExprDateAdd::calc_date_add_vector,                          /* 164 */
+  ObExprDateSub::calc_date_sub_vector,                          /* 165 */
+  ObExprFromDays::calc_fromdays_vector,                         /* 166 */
+  ObExprTimeStampDiff::eval_timestamp_diff_vector,              /* 167 */
+  ObExprTimeStampAdd::calc_timestamp_add_vector,                /* 168 */
   ObExprArrayToString::eval_array_to_string_vector,             /* 169 */
   ObExprStringToArray::eval_string_to_array_vector,             /* 170 */
   ObExprArrayAppend::eval_array_append_vector,                  /* 171 */
@@ -1763,21 +1764,21 @@ static ObExpr::EvalFunc g_decimal_int_eval_functions[] = {
   ObExprMul::mul_decimalint128_int128_int64_oracle,
   ObExprMul::mul_decimalint128_int128_int128_oracle,
   // div functions of decimal int types in mysql mode
-  NULL, // ObExprDiv::decint_div_mysql_fn<int32_t, int32_t>,
-  NULL, // ObExprDiv::decint_div_mysql_fn<int64_t, int32_t>,
-  NULL, // ObExprDiv::decint_div_mysql_fn<int64_t, int64_t>,
-  NULL, // ObExprDiv::decint_div_mysql_fn<int128_t, int32_t>,
-  NULL, // ObExprDiv::decint_div_mysql_fn<int128_t, int64_t>,
-  NULL, // ObExprDiv::decint_div_mysql_fn<int128_t, int128_t>,
-  NULL, // ObExprDiv::decint_div_mysql_fn<int256_t, int32_t>,
-  NULL, // ObExprDiv::decint_div_mysql_fn<int256_t, int64_t>,
-  NULL, // ObExprDiv::decint_div_mysql_fn<int256_t, int128_t>,
-  NULL, // ObExprDiv::decint_div_mysql_fn<int256_t, int256_t>,
-  NULL, // ObExprDiv::decint_div_mysql_fn<int512_t, int32_t>,
-  NULL, // ObExprDiv::decint_div_mysql_fn<int512_t, int64_t>,
-  NULL, // ObExprDiv::decint_div_mysql_fn<int512_t, int128_t>,
-  NULL, // ObExprDiv::decint_div_mysql_fn<int512_t, int256_t>,
-  NULL, // ObExprDiv::decint_div_mysql_fn<int512_t, int512_t>,
+  ObExprDiv::decint_div_mysql_fn<int32_t, int32_t>,
+  ObExprDiv::decint_div_mysql_fn<int64_t, int32_t>,
+  ObExprDiv::decint_div_mysql_fn<int64_t, int64_t>,
+  ObExprDiv::decint_div_mysql_fn<int128_t, int32_t>,
+  ObExprDiv::decint_div_mysql_fn<int128_t, int64_t>,
+  ObExprDiv::decint_div_mysql_fn<int128_t, int128_t>,
+  ObExprDiv::decint_div_mysql_fn<int256_t, int32_t>,
+  ObExprDiv::decint_div_mysql_fn<int256_t, int64_t>,
+  ObExprDiv::decint_div_mysql_fn<int256_t, int128_t>,
+  ObExprDiv::decint_div_mysql_fn<int256_t, int256_t>,
+  ObExprDiv::decint_div_mysql_fn<int512_t, int32_t>,
+  ObExprDiv::decint_div_mysql_fn<int512_t, int64_t>,
+  ObExprDiv::decint_div_mysql_fn<int512_t, int128_t>,
+  ObExprDiv::decint_div_mysql_fn<int512_t, int256_t>,
+  ObExprDiv::decint_div_mysql_fn<int512_t, int512_t>,
 };
 
 static ObExpr::EvalBatchFunc g_decimal_int_eval_batch_functions[] = {
@@ -1873,21 +1874,21 @@ static ObExpr::EvalBatchFunc g_decimal_int_eval_batch_functions[] = {
   ObExprMul::mul_decimalint128_int128_int64_oracle_batch,
   ObExprMul::mul_decimalint128_int128_int128_oracle_batch,
   // div functions of decimal int types in mysql mode
-  NULL, // ObExprDiv::decint_div_mysql_batch_fn<int32_t, int32_t>,
-  NULL, // ObExprDiv::decint_div_mysql_batch_fn<int64_t, int32_t>,
-  NULL, // ObExprDiv::decint_div_mysql_batch_fn<int64_t, int64_t>,
-  NULL, // ObExprDiv::decint_div_mysql_batch_fn<int128_t, int32_t>,
-  NULL, // ObExprDiv::decint_div_mysql_batch_fn<int128_t, int64_t>,
-  NULL, // ObExprDiv::decint_div_mysql_batch_fn<int128_t, int128_t>,
-  NULL, // ObExprDiv::decint_div_mysql_batch_fn<int256_t, int32_t>,
-  NULL, // ObExprDiv::decint_div_mysql_batch_fn<int256_t, int64_t>,
-  NULL, // ObExprDiv::decint_div_mysql_batch_fn<int256_t, int128_t>,
-  NULL, // ObExprDiv::decint_div_mysql_batch_fn<int256_t, int256_t>,
-  NULL, // ObExprDiv::decint_div_mysql_batch_fn<int512_t, int32_t>,
-  NULL, // ObExprDiv::decint_div_mysql_batch_fn<int512_t, int64_t>,
-  NULL, // ObExprDiv::decint_div_mysql_batch_fn<int512_t, int128_t>,
-  NULL, // ObExprDiv::decint_div_mysql_batch_fn<int512_t, int256_t>,
-  NULL, // ObExprDiv::decint_div_mysql_batch_fn<int512_t, int512_t>,
+  ObExprDiv::decint_div_mysql_batch_fn<int32_t, int32_t>,
+  ObExprDiv::decint_div_mysql_batch_fn<int64_t, int32_t>,
+  ObExprDiv::decint_div_mysql_batch_fn<int64_t, int64_t>,
+  ObExprDiv::decint_div_mysql_batch_fn<int128_t, int32_t>,
+  ObExprDiv::decint_div_mysql_batch_fn<int128_t, int64_t>,
+  ObExprDiv::decint_div_mysql_batch_fn<int128_t, int128_t>,
+  ObExprDiv::decint_div_mysql_batch_fn<int256_t, int32_t>,
+  ObExprDiv::decint_div_mysql_batch_fn<int256_t, int64_t>,
+  ObExprDiv::decint_div_mysql_batch_fn<int256_t, int128_t>,
+  ObExprDiv::decint_div_mysql_batch_fn<int256_t, int256_t>,
+  ObExprDiv::decint_div_mysql_batch_fn<int512_t, int32_t>,
+  ObExprDiv::decint_div_mysql_batch_fn<int512_t, int64_t>,
+  ObExprDiv::decint_div_mysql_batch_fn<int512_t, int128_t>,
+  ObExprDiv::decint_div_mysql_batch_fn<int512_t, int256_t>,
+  ObExprDiv::decint_div_mysql_batch_fn<int512_t, int512_t>,
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_DECIMAL_INT_EXPR_EVAL,

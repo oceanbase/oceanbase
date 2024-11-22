@@ -92,7 +92,7 @@ class ObRDWFWholeMsg : public ObRDWFWholeMsgBase
 {
   OB_UNIS_VERSION_V(1);
 public:
-  using WholeMsgProvider = ObWholeMsgProvider<ObRDWFWholeMsg>;
+  using WholeMsgProvider = ObWholeMsgProvider<ObRDWFPieceMsg, ObRDWFWholeMsg>;
 
   ObRDWFWholeMsg() : infos_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(arena_alloc_))
   {
@@ -260,7 +260,7 @@ class RDWinFuncPXWholeMsg: public ObDatahubWholeMsg<dtl::ObDtlMsgType::DH_RD_WIN
 {
   OB_UNIS_VERSION_V(1);
 public:
-  using WholeMsgProvider = ObWholeMsgProvider<RDWinFuncPXWholeMsg>;
+  using WholeMsgProvider = ObWholeMsgProvider<RDWinFuncPXPieceMsg, RDWinFuncPXWholeMsg>;
   RDWinFuncPXWholeMsg(): infos_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(arena_alloc_)) {}
 
   RDWinFuncPXWholeMsg(const common::ObMemAttr &attr) :

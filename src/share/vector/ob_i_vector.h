@@ -52,6 +52,13 @@ namespace common
                                 const ObLength r_len,       \
                                 int &cmp_ret
 
+#define VECTOR_COMPARE_BATCH_ROWS_ARGS const sql::ObExpr &expr,    \
+                                const uint16_t *sel,               \
+                                const uint16_t sel_cnt,            \
+                                sql::ObCompactRow **rows,          \
+                                const int64_t row_col_idx,         \
+                                const sql::RowMeta &row_meta,      \
+                                int *cmp_ret
 #define VECTOR_NOT_NULL_COMPARE_ARGS const sql::ObExpr &expr,    \
                                 const int64_t row_idx1,      \
                                 const int64_t row_idx2,      \
@@ -511,6 +518,8 @@ public:
   // compare the values ​​in the given interval with EvalBound and return the first unequal row idx
   virtual int null_first_mul_cmp(VECTOR_MUL_COMPARE_ARGS) const = 0;
   virtual int null_last_mul_cmp(VECTOR_MUL_COMPARE_ARGS) const = 0;
+  virtual int null_first_cmp_batch_rows(VECTOR_COMPARE_BATCH_ROWS_ARGS) const = 0;
+  virtual int no_null_cmp_batch_rows(VECTOR_COMPARE_BATCH_ROWS_ARGS) const = 0;
 
   // append values to this vector from idx-th column of rows
   virtual int from_rows(const sql::RowMeta &row_meta,

@@ -60,7 +60,7 @@ class ObBarrierWholeMsg
 {
   OB_UNIS_VERSION_V(1);
 public:
-  using WholeMsgProvider = ObWholeMsgProvider<ObBarrierWholeMsg>;
+  using WholeMsgProvider = ObWholeMsgProvider<ObBarrierPieceMsg, ObBarrierWholeMsg>;
 public:
   ObBarrierWholeMsg() : ready_state_(0) {}
   ~ObBarrierWholeMsg() = default;

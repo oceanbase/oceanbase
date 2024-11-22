@@ -666,7 +666,16 @@ int ObTempBlockStore::switch_block(const int64_t min_size, const bool strict_mem
 int ObTempBlockStore::add_block_idx(const BlockIndex &bi)
 {
   int ret = OB_SUCCESS;
-  if (NULL == idx_blk_) {
+  if (NULL == idx_blk_ && index_block_cnt_ > 0) {
+    // This store has been dumped all, in which the index block is linked to block list and the
+    // index block has been dumped to the disk. In this case, a new index block needs to be
+    // allocated to ensure the structure of the store.
+    if (OB_FAIL(alloc_idx_block(idx_blk_))) {
+      LOG_WARN("fail to alloc index block", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (NULL == idx_blk_) {
     if (OB_FAIL(blocks_.push_back(bi))) {
       LOG_WARN("add block index to array failed", K(ret));
     } else {
@@ -1263,9 +1272,12 @@ int ObTempBlockStore::dump(const bool all_dump, const int64_t target_dump_size /
         node = next_node;
       }
     }
-    if (OB_SUCC(ret) && OB_UNLIKELY(all_dump && !blk_mem_list_.is_empty())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("all_dump mode blk_mem_list_ is non-empty", K(ret), K(blk_mem_list_.get_size()));
+    if (OB_SUCC(ret) && all_dump) {
+      if (OB_UNLIKELY(!blk_mem_list_.is_empty())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("all_dump mode blk_mem_list_ is non-empty", K(ret), K(blk_mem_list_.get_size()));
+      }
+      inner_reader_.reset_cursor(0);
     }
   }
   LOG_TRACE("after dump", K(ret), KP(this), K(*this), K(blk_mem_list_.get_size()),

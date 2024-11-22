@@ -118,6 +118,84 @@ int ObFixedLengthVector<ValueType, BasicOp>::null_last_mul_cmp(VECTOR_MUL_COMPAR
   return ret;
 }
 
+template <typename ValueType, typename BasicOp>
+int ObFixedLengthVector<ValueType, BasicOp>::null_first_cmp_batch_rows(
+    VECTOR_COMPARE_BATCH_ROWS_ARGS) const
+{
+  int ret = OB_SUCCESS;
+  ObLength r_len = 0;
+  const char *r_v = NULL;
+  int32_t fixed_offset = 0;
+  const bool is_fixed_length = row_meta.is_reordered_fixed_expr(row_col_idx);
+  if (is_fixed_length) {
+    fixed_offset = row_meta.get_fixed_cell_offset(row_col_idx);
+    r_len = row_meta.fixed_length(row_col_idx);
+    for (int64_t i = 0; OB_SUCC(ret) && i < sel_cnt; i++) {
+      uint16_t batch_idx = sel[i];
+      r_v = rows[i]->payload() + fixed_offset;
+      if (OB_FAIL(null_first_cmp(
+              expr, batch_idx, rows[i]->is_null(row_col_idx), r_v, r_len, cmp_ret[i]))) {
+        LOG_WARN("failed to compare", K(ret));
+      }
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < sel_cnt; i++) {
+      uint16_t batch_idx = sel[i];
+      rows[i]->get_cell_payload(row_meta, row_col_idx, r_v, r_len);
+      if (OB_FAIL(null_first_cmp(
+              expr, batch_idx, rows[i]->is_null(row_col_idx), r_v, r_len, cmp_ret[i]))) {
+        LOG_WARN("failed to compare", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+template <typename ValueType, typename BasicOp>
+int ObFixedLengthVector<ValueType, BasicOp>::no_null_cmp_batch_rows(
+    VECTOR_COMPARE_BATCH_ROWS_ARGS) const
+{
+  int ret = OB_SUCCESS;
+  ObLength r_len = 0;
+  const char *r_v = NULL;
+  int32_t fixed_offset = 0;
+  const bool is_fixed_length = row_meta.is_reordered_fixed_expr(row_col_idx);
+  if (is_fixed_length) {
+    fixed_offset = row_meta.get_fixed_cell_offset(row_col_idx);
+    r_len = row_meta.fixed_length(row_col_idx);
+    for (int64_t i = 0; OB_SUCC(ret) && i < sel_cnt; i++) {
+      uint16_t batch_idx = sel[i];
+      r_v = rows[i]->payload() + fixed_offset;
+      const ValueType *l_value =
+          reinterpret_cast<const ValueType *>(this->get_data() + r_len * batch_idx);
+      const ValueType *r_value = reinterpret_cast<const ValueType *>(r_v);
+      if (*l_value == *r_value) {
+        cmp_ret[i] = 0;
+      } else if (*l_value < *r_value) {
+        cmp_ret[i] = -1;
+      } else {
+        cmp_ret[i] = 1;
+      }
+    }
+  } else {
+    for (int64_t i = 0; i < sel_cnt; i++) {
+      uint16_t batch_idx = sel[i];
+      rows[i]->get_cell_payload(row_meta, row_col_idx, r_v, r_len);
+      const ValueType *l_value =
+          reinterpret_cast<const ValueType *>(this->get_data() + r_len * batch_idx);
+      const ValueType *r_value = reinterpret_cast<const ValueType *>(r_v);
+      if (*l_value == *r_value) {
+        cmp_ret[i] = 0;
+      } else if (*l_value < *r_value) {
+        cmp_ret[i] = -1;
+      } else {
+        cmp_ret[i] = 1;
+      }
+    }
+  }
+  return ret;
+}
+
 template class ObFixedLengthVector<int64_t, VectorBasicOp<VEC_TC_INTEGER>>;
 template class ObFixedLengthVector<uint64_t, VectorBasicOp<VEC_TC_UINTEGER>>;
 template class ObFixedLengthVector<float, VectorBasicOp<VEC_TC_FLOAT>>;

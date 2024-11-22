@@ -1995,7 +1995,14 @@ public:
                                  ObDatum &res_datum);
   static int calc_result2_mysql(const ObExpr &expr, ObEvalCtx &ctx,
                                 ObDatum &res_datum);
+
+  static int calc_bitwise_result2_mysql_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  static int calc_bitwise_result2_oracle_vector(VECTOR_EVAL_FUNC_ARG_DECL);
   DECLARE_SET_LOCAL_SESSION_VARS;
+
+private:
+  static void convert_tc_size(VecValueTypeClass vec_tc, int &len);
+
 protected:
   enum BitOperator
   {
@@ -2008,6 +2015,18 @@ protected:
     BIT_COUNT,
     BIT_MAX,
   };
+
+  static int dispatch_calc_vector(VECTOR_EVAL_FUNC_ARG_DECL, ObCastMode cast_mode);
+  template <typename RES_VEC, typename L_VEC, typename R_VEC>
+  static int inner_calc_vector(VECTOR_EVAL_FUNC_ARG_DECL, ObCastMode cast_mode);
+
+  // 从datum中获取int64/uint64, 针对number需要有round/trunc操作，针对int tc会直接获取
+  // int值
+  typedef int (*GetIntFunc)(const ObDatumMeta &, const common::ObDatum &, bool, int64_t &,
+                            common::ObCastMode &);
+  typedef int (*GetUIntFunc)(const ObDatumMeta &, const common::ObDatum &, bool, uint64_t &,
+                             common::ObCastMode &);
+
   int calc_(common::ObObj &res,
             const common::ObObj &obj1,
             const common::ObObj &obj2,
@@ -2026,12 +2045,7 @@ protected:
                             ObExpr &rt_expr, const BitOperator op);
   // 根据参数类型，从4个get_int/get_uint方法中选择合适的get_int64/get_uint64方法
   static int choose_get_int_func(const ObDatumMeta datum_meta, void *&out_func);
-  // 从datum中获取int64/uint64, 针对number需要有round/trunc操作，针对int tc会直接获取
-  // int值
-  typedef int (*GetIntFunc)(const ObDatumMeta &, const common::ObDatum &, bool,
-                            int64_t&, common::ObCastMode&);
-  typedef int (*GetUIntFunc)(const ObDatumMeta &, const common::ObDatum &, bool,
-                             uint64_t&, common::ObCastMode&);
+
   static int get_int64_from_int_tc(
       const ObDatumMeta &datum_meta, const common::ObDatum &datum, bool is_round,
       int64_t &out, const common::ObCastMode &cast_mode);

@@ -448,12 +448,15 @@ int ObPxOrderedCoordOp::next_rows(ObReceiveRowReader &reader, int64_t max_row_cn
   LOG_TRACE("Begin next_rows", K(max_row_cnt));
   metric_.mark_interval_start();
   read_rows = 0;
-  // TODO: shanting2.0 use get_next_batch_vec
-  ret = reader.get_next_row(MY_SPEC.child_exprs_, MY_SPEC.dynamic_const_exprs_, eval_ctx_);
+  if (MY_SPEC.use_rich_format_) {
+    ret = reader.get_next_batch_vec(MY_SPEC.child_exprs_, MY_SPEC.dynamic_const_exprs_, eval_ctx_,
+                                    max_row_cnt, read_rows, vector_rows_);
+  } else {
+    ret = reader.get_next_batch(MY_SPEC.child_exprs_, MY_SPEC.dynamic_const_exprs_, eval_ctx_,
+                                max_row_cnt, read_rows, stored_rows_);
+  }
   metric_.mark_interval_end(&time_recorder_);
-  if (OB_SUCC(ret)) {
-    read_rows = 1;
-  } else if (OB_ITER_END == ret) {
+  if (OB_ITER_END == ret) {
     finish_ch_cnt_++;
     channel_idx_++;
     if (OB_LIKELY(finish_ch_cnt_ < task_channels_.count())) {

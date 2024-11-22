@@ -283,6 +283,11 @@ public:
     return jf_material_control_info_.enable_material_;
   }
 
+  inline const ExprFixedArray *get_build_rows_output_() const
+  {
+    return &build_rows_output_;
+  }
+
   // all_exprs组成:(all_left_exprs keys, all_right_exprs keys)
   // 前面的all_xxx_exprs keys没有去重
   // 同理hash_funcs也保存了left和right的join key对应hash function
@@ -649,6 +654,10 @@ private:
   int64_t *part_idxes_;
 
   ObJoinFilterPartitionSplitter *join_filter_partition_splitter_{nullptr};
+
+  // for compat
+  common::ObFixedArray<int64_t, common::ObIAllocator> build_key_proj_;
+  ExprFixedArray build_rows_output_;
 };
 
 } // end namespace sql
