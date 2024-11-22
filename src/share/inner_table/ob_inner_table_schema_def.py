@@ -37918,7 +37918,7 @@ def_table_schema(
       sum(avtps.required_size) as REQUIRED_SIZE
     from
     oceanbase.__all_virtual_tablet_pointer_status avtps
-    INNER JOIN oceanbase.DBA_OB_TABLE_LOCATIONS attl
+    INNER JOIN oceanbase.__all_tablet_to_ls attl
       ON      attl.tablet_id = avtps.tablet_id
     INNER JOIN oceanbase.__all_table at
       ON      at.table_id = attl.table_id

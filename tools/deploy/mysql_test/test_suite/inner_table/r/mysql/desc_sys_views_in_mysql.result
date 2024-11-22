@@ -7011,7 +7011,7 @@ cnt
 1
 desc oceanbase.DBA_OB_TABLE_SPACE_USAGE;
 Field	Type	Null	Key	Default	Extra
-TABLE_ID	bigint(20)	NO			
+TABLE_ID	bigint(20)	NO		NULL	
 DATABASE_NAME	varchar(128)	NO			
 TABLE_NAME	varchar(256)	NO			
 OCCUPY_SIZE	decimal(42,0)	NO			
