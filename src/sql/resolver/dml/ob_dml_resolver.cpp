@@ -8689,11 +8689,20 @@ int ObDMLResolver::resolve_external_table_generated_column(
                                             table_schema->get_external_file_format();
     if (OB_FAIL(format.load_from_string(table_format_or_properties, *params_.allocator_))) {
       LOG_WARN("load from string failed", K(ret));
-    } else if (format.format_type_ == ObExternalFileFormat::ORC_FORMAT && lib::is_oracle_mode()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not support orc in oracle mode", K(ret));
-      LOG_USER_WARN(OB_NOT_SUPPORTED, "orc in oracle mode");
-    } else if (format.format_type_ != ObResolverUtils::resolve_external_file_column_type(col.col_name_)) {
+    }
+    // delete later
+    if (OB_SUCC(ret) && format.format_type_ == ObExternalFileFormat::ORC_FORMAT && lib::is_oracle_mode()) {
+      ret = OB_E(EventTable::EN_EXTERNAL_TABLE_ORACLE) OB_SUCCESS;
+      bool enable_oracle_orc = OB_SUCCESS != ret;
+      if (enable_oracle_orc) {
+        ret = OB_SUCCESS;
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support orc in oracle mode", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "orc in oracle mode");
+      }
+    }
+    if (OB_SUCC(ret) && format.format_type_ != ObResolverUtils::resolve_external_file_column_type(col.col_name_)) {
       if (format.format_type_ == ObExternalFileFormat::ORC_FORMAT &&
           ObExternalFileFormat::PARQUET_FORMAT != ObResolverUtils::resolve_external_file_column_type(col.col_name_)) {
         ret = OB_WRONG_COLUMN_NAME;

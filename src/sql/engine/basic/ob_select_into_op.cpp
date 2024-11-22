@@ -2221,22 +2221,29 @@ int ObSelectIntoOp::orc_type_mapping_of_ob_type(ObDatumMeta& meta, int max_lengt
             || ObUSmallIntType == obj_type
             || ObUMediumIntType == obj_type
             || ObUInt32Type == obj_type
-            || ObUInt64Type == obj_type) {
+            || ObUInt64Type == obj_type
+            || ObUFloatType == obj_type
+            || ObUDoubleType == obj_type
+            || ObUNumberType == obj_type) {
     ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "this type for orc");
+    LOG_WARN("unsupport type for orc", K(obj_type));
   } else if (ObFloatType == obj_type) {
     orc_type = orc::createPrimitiveType(orc::TypeKind::FLOAT);
   } else if (ObDoubleType == obj_type) {
     orc_type = orc::createPrimitiveType(orc::TypeKind::DOUBLE);
-  } else if (ob_is_number_tc(obj_type)
-            || ob_is_decimal_int_tc(obj_type)) {
-    precision = static_cast<int>(meta.precision_);
-    scale = static_cast<int>(meta.scale_);
-    int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(meta.precision_);
-    if (int_bytes <= sizeof(int128_t)) {
-      orc_type = orc::createDecimalType(precision, scale);
+  } else if (ob_is_number_or_decimal_int_tc(obj_type)) {
+    if (OB_FAIL(check_oracle_number(obj_type, meta.precision_, meta.scale_))) {
+      LOG_WARN("not support number type", K(ret));
     } else {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("unsupport type for orc", K(obj_type), K(precision), K(scale));
+      int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(meta.precision_);
+      if (int_bytes <= sizeof(int128_t)) {
+        orc_type = orc::createDecimalType(meta.precision_, meta.scale_);
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "this type for orc");
+        LOG_WARN("unsupport type for orc", K(obj_type), K(int_bytes));
+      }
     }
   } else if (ObTimestampType == obj_type || ob_is_otimestamp_type(obj_type)) {
     orc_type = orc::createPrimitiveType(orc::TypeKind::TIMESTAMP_INSTANT);
@@ -2275,13 +2282,13 @@ int ObSelectIntoOp::create_orc_schema(std::unique_ptr<orc::Type> &schema)
     LOG_WARN("schema is not null", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs.count(); i++) {
-    ObDatumMeta meta = select_exprs.at(i)->datum_meta_;
-    int max_length = select_exprs.at(i)->max_length_;
     ObString alias_name = MY_SPEC.alias_names_.strs_.at(i);
     std::string column_name(alias_name.ptr(), alias_name.length());
     std::unique_ptr<orc::Type> column_type;
-    if (OB_FAIL(orc_type_mapping_of_ob_type(meta, max_length, column_type))) {
-      LOG_WARN("unsupported type ob the column", K(ret), K(meta), K(max_length));
+    if (OB_FAIL(orc_type_mapping_of_ob_type(select_exprs.at(i)->datum_meta_,
+                                            select_exprs.at(i)->max_length_,
+                                            column_type))) {
+      LOG_WARN("unsupported type ob the column", K(ret));
     } else {
       try {
         schema->addStructField(column_name, std::move(column_type));
@@ -2328,19 +2335,21 @@ int ObSelectIntoOp::setup_parquet_schema()
       ObObjType obj_type = meta.get_type();
       ObString alias_name = MY_SPEC.alias_names_.strs_.at(i);
       std::string column_name(alias_name.ptr(), alias_name.length());
-      bool is_number_or_decimal = ob_is_number_or_decimal_int_tc(obj_type);
-      int precision = is_number_or_decimal ? static_cast<int>(meta.precision_) : -1;
-      int scale = is_number_or_decimal ? static_cast<int>(meta.scale_) : -1;
       int primitive_length = -1;
-      if (is_oracle_mode() && ob_is_number_tc(obj_type) && scale == 0 && precision == -1) {
-        precision = 38; // oracle int
-      }
-      if (OB_FAIL(get_parquet_logical_type(logical_type, obj_type, precision, scale))) {
+      if (OB_FAIL(check_oracle_number(obj_type,
+                                      select_exprs.at(i)->datum_meta_.precision_,
+                                      select_exprs.at(i)->datum_meta_.scale_))) {
+        LOG_WARN("not support number type", K(ret));
+      } else if (OB_FAIL(get_parquet_logical_type(logical_type,
+                                                  obj_type,
+                                                  select_exprs.at(i)->datum_meta_.precision_,
+                                                  select_exprs.at(i)->datum_meta_.scale_))) {
         LOG_WARN("failed to get related logical type", K(ret));
       } else if (OB_FAIL(get_parquet_physical_type(physical_type, obj_type))) {
         LOG_WARN("failed to get related physical type", K(ret));
-      } else if (is_number_or_decimal
-                && OB_FALSE_IT(primitive_length = calc_parquet_decimal_length(precision))) {
+      } else if (ob_is_number_or_decimal_int_tc(obj_type)
+                && OB_FALSE_IT(primitive_length = calc_parquet_decimal_length(
+                                                      select_exprs.at(i)->datum_meta_.precision_))) {
       } else {
         //todo@linyi repetition level
         node = parquet::schema::PrimitiveNode::Make(column_name, parquet::Repetition::OPTIONAL,
@@ -2611,7 +2620,6 @@ int ObSelectIntoOp::build_orc_cell(const ObDatumMeta &datum_meta,
       }
     }
   } else if (ob_is_number_or_decimal_int_tc(datum_meta.type_)) {
-    int precision = static_cast<int>(datum_meta.precision_);
     int int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(datum_meta.precision_);
     const ObDecimalInt* value;
     ObDecimalIntBuilder tmp_dec_alloc;
@@ -2635,7 +2643,7 @@ int ObSelectIntoOp::build_orc_cell(const ObDatumMeta &datum_meta,
       if (OB_FAIL(ret)) {
       } else if (int_bytes <= sizeof(int64_t)) {
         orc::Decimal64VectorBatch *decimal64vectorbatch = dynamic_cast<orc::Decimal64VectorBatch *>(col_vector_batch);
-        decimal64vectorbatch->precision = precision;
+        decimal64vectorbatch->precision = datum_meta.precision_;
         decimal64vectorbatch->scale = datum_meta.scale_;
         if (OB_ISNULL(decimal64vectorbatch)) {
           ret = OB_ERR_UNEXPECTED;
@@ -2647,6 +2655,8 @@ int ObSelectIntoOp::build_orc_cell(const ObDatumMeta &datum_meta,
         }
       } else if (int_bytes <= sizeof(int128_t)) {
         orc::Decimal128VectorBatch *decimal128vectorbatch = dynamic_cast<orc::Decimal128VectorBatch *>(col_vector_batch);
+        decimal128vectorbatch->precision = datum_meta.precision_;
+        decimal128vectorbatch->scale = datum_meta.scale_;
         if (OB_ISNULL(decimal128vectorbatch)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected error", K(ret), K(col_idx));
@@ -2656,7 +2666,7 @@ int ObSelectIntoOp::build_orc_cell(const ObDatumMeta &datum_meta,
       } else {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "this decimal type for orc");
-        LOG_WARN("unsupport type for orc", K(datum_meta.type_), K(precision), K(int_bytes));
+        LOG_WARN("unsupport type for orc", K(datum_meta.type_), K(datum_meta.precision_), K(int_bytes));
       }
     }
   } else if (ObDoubleType == datum_meta.type_ || ObFloatType == datum_meta.type_) {
@@ -2764,6 +2774,21 @@ bool ObSelectIntoOp::file_need_split(int64_t file_size)
                 || (MY_SPEC.is_single_ && file_size > MAX_OSS_FILE_SIZE)));
 }
 
+int ObSelectIntoOp::check_oracle_number(ObObjType obj_type, int16_t &precision, int8_t scale)
+{
+  int ret = OB_SUCCESS;
+  if (is_oracle_mode() && ob_is_number_tc(obj_type)) {
+    if (scale == 0 && precision == -1) {
+      precision = 38; // oracle int
+    } else if (precision < 0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "number without specified precision and scale");
+      LOG_WARN("not support number without specified precision and scale", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObSelectIntoOp::calc_parquet_decimal_array(const common::ObIVector* expr_vector,
                                                int row_idx,
                                                const ObDatumMeta &datum_meta,
@@ -2780,9 +2805,6 @@ int ObSelectIntoOp::calc_parquet_decimal_array(const common::ObIVector* expr_vec
     ob_decimal = expr_vector->get_decimal_int(row_idx);
   } else if (ob_is_number_tc(datum_meta.get_type())) {
     number::ObNumber number(expr_vector->get_number(row_idx));
-    if (is_oracle_mode() && datum_meta.scale_ == 0 && datum_meta.precision_ == -1) { // oracle int
-      ob_decimal_length = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(38);
-    }
     if (OB_FAIL(wide::from_number_to_decimal_fixed_length(number, tmp_dec_alloc, datum_meta.scale_,
                                                           ob_decimal_length, tmp_decimal))){
       LOG_WARN("failed to case number to decimal int", K(ret));
