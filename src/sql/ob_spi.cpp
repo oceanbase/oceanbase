@@ -5462,7 +5462,7 @@ int ObSPIService::spi_set_collection(int64_t tenant_id,
           }
         }
         if (OB_FAIL(ret) && OB_NOT_NULL(data)) {
-          for (int j = 0; j < i; ++j) {
+          for (int j = 0; j < i - 1; ++j) {
             ObObj* row = &(reinterpret_cast<ObObj*>(data)[(coll.get_count() + j)]);
             ObUserDefinedType::destruct_objparam(*coll.get_allocator(), *row, nullptr);
           }

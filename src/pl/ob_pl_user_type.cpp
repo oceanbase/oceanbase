@@ -4291,6 +4291,9 @@ int ObPLCollection::deep_copy(ObPLCollection *src, ObIAllocator *allocator, bool
       }
       CK (OB_NOT_NULL(new_objs = reinterpret_cast<ObObj*>(data)));
       CK (OB_NOT_NULL(old_objs = reinterpret_cast<ObObj*>(src->get_data())));
+      for (int64_t i = 0; OB_SUCC(ret) && i < src->get_inner_capacity(); ++i) {
+        new (new_objs + i) ObObj();
+      }
       int64_t i = 0;
       for (; OB_SUCC(ret) && i < src->get_count(); ++i) {
         ObObj old_obj = old_objs[i];
