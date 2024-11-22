@@ -152,6 +152,12 @@
 #include "sql/resolver/cmd/ob_alter_event_stmt.h"
 #include "sql/resolver/cmd/ob_drop_event_stmt.h"
 #include "sql/engine/cmd/ob_event_executor.h"
+#include "sql/resolver/cmd/ob_alter_ls_stmt.h"
+#include "sql/engine/cmd/ob_alter_ls_executor.h"
+#include "sql/resolver/cmd/ob_service_name_stmt.h"
+#include "sql/engine/cmd/ob_service_name_executor.h"
+#include "sql/resolver/cmd/ob_transfer_partition_stmt.h"
+#include "sql/engine/cmd/ob_transfer_partition_executor.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "sql/resolver/ddl/ob_create_keystore_stmt.h"
 #include "sql/resolver/ddl/ob_alter_keystore_stmt.h"

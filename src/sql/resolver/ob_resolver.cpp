@@ -137,6 +137,9 @@
 #include "sql/resolver/ddl/ob_create_context_resolver.h"
 #include "sql/resolver/ddl/ob_drop_context_resolver.h"
 #include "sql/resolver/cmd/ob_module_data_resolver.h"
+#include "sql/resolver/cmd/ob_alter_ls_resolver.h"
+#include "sql/resolver/cmd/ob_service_name_resolver.h"
+#include "sql/resolver/cmd/ob_transfer_partition_resolver.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "sql/resolver/ddl/ob_create_tablespace_resolver.h"
 #include "sql/resolver/ddl/ob_alter_tablespace_resolver.h"

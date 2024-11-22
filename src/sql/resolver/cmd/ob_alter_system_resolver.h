@@ -28,7 +28,6 @@ namespace sql
 {
 class ObSystemCmdStmt;
 class ObFreezeStmt;
-class ObAlterLSStmt;
 class ObAlterSystemResolverUtil
 {
 public:
@@ -70,6 +69,12 @@ public:
   static int get_and_verify_tenant_name(const ParseNode* tenant_name_node,
                                         const uint64_t exec_tenant_id,
                                         uint64_t &target_tenant_id);
+  static int get_and_verify_tenant_name(
+      const ParseNode *parse_node,
+      const bool allow_sys_meta_tenant,
+      const uint64_t exec_tenant_id,
+      uint64_t &target_tenant_id,
+      const char * const op_str);
   static int check_and_get_data_source(const ParseNode* data_source_node,
                                        common::ObAddr& data_source);
   static int check_and_get_server_addr(const ParseNode* server_addr_node,
@@ -186,7 +191,6 @@ DEF_SIMPLE_CMD_RESOLVER(ObBackupSetDecryptionResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObAddRestoreSourceResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObClearRestoreSourceResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObCheckpointSlogResolver);
-DEF_SIMPLE_CMD_RESOLVER(ObServiceNameResolver);
 int resolve_restore_until(const ParseNode &time_node,
                           const ObSQLSessionInfo *session_info,
                           share::SCN &recovery_until_scn,
@@ -250,31 +254,7 @@ private:
       const common::ObString &name_node, const common::ObString &value_node);
   int convert_param_value(ObAdminSetConfigItem &item);
 };
-class ObTransferPartitionResolver : public ObSystemCmdResolver
-{
-public:
-  ObTransferPartitionResolver(ObResolverParams &params) : ObSystemCmdResolver(params) {}
-  virtual ~ObTransferPartitionResolver() {}
-  virtual int resolve(const ParseNode &parse_tree);
-private:
-  int resolve_transfer_partition_(const ParseNode &parse_tree);
-  int resolve_cancel_transfer_partition_(const ParseNode &parse_tree);
-  int resolve_cancel_balance_job_(const ParseNode &parse_tree);
-};
-class ObAlterLSResolver : public ObSystemCmdResolver
-{
-public:
-  ObAlterLSResolver(ObResolverParams &params) :  ObSystemCmdResolver(params) {}
-  virtual ~ObAlterLSResolver() {}
-  virtual int resolve(const ParseNode &parse_tree);
-private:
-  int resolve_create_ls_(const ParseNode &parse_tree, ObAlterLSStmt *stmt);
-  int resolve_modify_ls_(const ParseNode &parse_tree, ObAlterLSStmt *stmt);
-  int resolve_drop_ls_(const ParseNode &parse_tree, ObAlterLSStmt *stmt);
-  int resolve_ls_attr_(const ParseNode &parse_tree,
-                       uint64_t &unit_group_id, ObZone &primary_zone);
 
-};
 class ObFreezeResolver : public ObSystemCmdResolver {
 public:
   ObFreezeResolver(ObResolverParams &params) : ObSystemCmdResolver(params) {}

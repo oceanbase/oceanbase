@@ -29,115 +29,6 @@ using namespace share;
 using namespace transaction::tablelock;
 namespace rootserver
 {
-OB_SERIALIZE_MEMBER(ObAlterLSArg, op_, tenant_id_, ls_id_, unit_group_id_, ls_primary_zone_);
-OB_SERIALIZE_MEMBER(ObAlterLSRes, ret_, ls_id_);
-static const char *ALTER_LS_OP_STR[] = {
-    "INVALID ALTER LS OP",
-    "CREATE LS",
-    "MODIFY LS",
-    "DROP LS",
-};
-const char *ObAlterLSArg::alter_ls_op_to_str(const ObAlterLSArg::ObAlterLSOp &op)
-{
-  STATIC_ASSERT(ARRAYSIZEOF(ALTER_LS_OP_STR) == MAX_ALTER_LS_OP, "array size mismatch");
-  ObAlterLSOp returned_alter_ls_op = INVALID_ALTER_LS_OP;
-  if (OB_UNLIKELY(op >= MAX_ALTER_LS_OP
-                  || op < INVALID_ALTER_LS_OP)) {
-    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "fatal error, unknown alter ls op", K(op));
-  } else {
-    returned_alter_ls_op = op;
-  }
-  return ALTER_LS_OP_STR[returned_alter_ls_op];
-}
-int ObAlterLSArg::init_create_ls(
-    const uint64_t tenant_id,
-    const uint64_t unit_group_id,
-    const common::ObZone &ls_primary_zone)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
-      || !is_user_tenant(tenant_id)
-      || OB_INVALID_ID == unit_group_id)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant_id or unit_group_id", KR(ret), K(tenant_id), K(unit_group_id));
-  } else if (!ls_primary_zone.is_empty() && OB_FAIL(ls_primary_zone_.assign(ls_primary_zone))) {
-    LOG_WARN("fail to assign ls_primary_zone", KR(ret), K(ls_primary_zone));
-  } else {
-    tenant_id_ = tenant_id;
-    unit_group_id_ = unit_group_id;
-    op_ = CREATE_LS;
-  }
-  return ret;
-}
-
-int ObAlterLSArg::init_modify_ls(
-    const uint64_t tenant_id,
-    const int64_t ls_id,
-    const uint64_t unit_group_id,
-    const common::ObZone &ls_primary_zone)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
-      || !is_user_tenant(tenant_id)
-      || ObLSID::INVALID_LS_ID == ls_id)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant_id or ls_id", KR(ret), K(tenant_id), K(ls_id));
-  } else if (!ls_primary_zone.is_empty() && OB_FAIL(ls_primary_zone_.assign(ls_primary_zone))) {
-    LOG_WARN("fail to assign ls_primary_zone", KR(ret), K(ls_primary_zone));
-  } else {
-    tenant_id_ = tenant_id;
-    ls_id_ = ls_id;
-    unit_group_id_ = unit_group_id;
-    op_ = MODIFY_LS;
-  }
-  return ret;
-}
-int ObAlterLSArg::init_drop_ls(const uint64_t tenant_id, const int64_t ls_id)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
-      || !is_user_tenant(tenant_id)
-      || ObLSID::INVALID_LS_ID == ls_id)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant_id or ls_id", KR(ret), K(tenant_id), K(ls_id));
-  } else {
-    tenant_id_ = tenant_id;
-    ls_id_ = ls_id;
-    op_ = DROP_LS;
-  }
-  return ret;
-}
-
-bool ObAlterLSArg::is_valid() const
-{
-  bool bret = false;
-  if (CREATE_LS == op_) {
-    bret = (OB_INVALID_ID != unit_group_id_);
-  } else if (MODIFY_LS == op_) {
-    // either unit_group_id or ls_primary_zone can be invalid
-    // they cannot be invalid at the same time
-    bret = ls_id_.is_valid() && !(OB_INVALID_ID == unit_group_id_ && ls_primary_zone_.is_empty());
-  } else if (DROP_LS == op_) {
-    bret = ls_id_.is_valid();
-  }
-  return bret && is_valid_tenant_id(tenant_id_) && is_user_tenant(tenant_id_);
-}
-
-int ObAlterLSArg::assign(const ObAlterLSArg &other)
-{
-  int ret = OB_SUCCESS;
-  if (this != &other) {
-    if (OB_FAIL(ls_primary_zone_.assign(other.ls_primary_zone_))) {
-      LOG_WARN("fail to assign ls_primary_zone", KR(ret), K(other));
-    } else {
-      op_ = other.op_;
-      tenant_id_ = other.tenant_id_;
-      ls_id_ = other.ls_id_;
-      unit_group_id_ = other.unit_group_id_;
-    }
-  }
-  return ret;
-}
 int ObAlterLSCommand::process(const ObAlterLSArg &arg, ObAlterLSRes &res)
 {
   int ret = OB_SUCCESS;
@@ -157,6 +48,7 @@ int ObAlterLSCommand::process(const ObAlterLSArg &arg, ObAlterLSRes &res)
   res.ret_ = ret;
   res.ls_id_ = ls_id;
   FLOG_INFO("[ALTER LS] process", KR(ret), K(arg));
+  // TODO(linqiuce.lqc): add tenant event
   return ret;
 }
 
@@ -170,7 +62,10 @@ int ObAlterLSCommand::modify_ls_(const ObAlterLSArg &arg)
   const ObLSID ls_id = arg.get_ls_id();
   ObLSStatusInfo ls_status_info;
 
-  if (OB_ISNULL(GCTX.sql_proxy_)) {
+  if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(ObTenantThreadHelper::get_tenant_schema(tenant_id, tenant_schema))) {
@@ -208,17 +103,21 @@ int ObAlterLSCommand::check_modify_ls_(
 {
   int ret = OB_SUCCESS;
   int64_t info_index = 0;
-  const uint64_t tenant_id = tenant_ls_info.get_tenant_id();
-  ObTenantStatus tenant_status = TENANT_STATUS_MAX;
-  if (OB_ISNULL(tenant_ls_info.get_tenant_schema())) {
+  if (OB_UNLIKELY(!tenant_ls_info.is_valid()
+      || !ls_id.is_valid_with_tenant(tenant_ls_info.get_tenant_id())
+      || (OB_INVALID_ID == unit_group_id && ls_primary_zone.is_empty()))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_ls_info),
+        K(ls_id), K(unit_group_id), K(ls_primary_zone));
+  } else if (OB_ISNULL(tenant_ls_info.get_tenant_schema())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tenant schema is null", KR(ret), KP(tenant_ls_info.get_tenant_schema()));
   } else if (OB_UNLIKELY(tenant_ls_info.get_tenant_schema()->is_creating() || tenant_ls_info.get_tenant_schema()->is_dropping())) {
     ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("the tenant's status is CREATING or DROPPING", KR(ret), K(tenant_status));
+    LOG_WARN("the tenant's status is CREATING or DROPPING", KR(ret));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "The tenant status is CREATING or DROPPING. MODIFY LS is");
   } else if (OB_FAIL(tenant_ls_info.get_ls_status_info(ls_id, ls_status_info, info_index))) {
-    LOG_WARN("fail to execute get_ls_status_info", KR(ret), K(tenant_id), K(ls_id));
+    LOG_WARN("fail to execute get_ls_status_info", KR(ret), K(ls_id));
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_OP_NOT_ALLOW;
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, "The specified LS does not exist, MODIFY LS is");
@@ -230,11 +129,11 @@ int ObAlterLSCommand::check_modify_ls_(
   } else if (!ls_primary_zone.is_empty() && !is_ls_primary_zone_ok_(tenant_ls_info.get_primary_zone(), ls_primary_zone)) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("ls_primary_zone is not in the tenant's first priority primary zone", KR(ret), K(tenant_ls_info), K(ls_primary_zone));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "The ls_primary_zone is not in the tenant's first priority primary zone, MODIFY LS is");
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "The specified primary_zone is not in the tenant's first priority primary zone, MODIFY LS is");
   } else if (OB_INVALID_ID != unit_group_id && !is_unit_group_ok_(tenant_ls_info.get_unit_group_array(), unit_group_id, ls_status_info)) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("unit_group does not exists or not active", KR(ret), K(tenant_ls_info), K(unit_group_id), K(ls_status_info));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "The specified unit_group is either not active or does not exist, MODIFY LS is");
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "The specified unit_group is not active or does not exist, MODIFY LS is");
   }
   return ret;
 }
@@ -256,7 +155,8 @@ bool ObAlterLSCommand::is_unit_group_ok_(
     const ObLSStatusInfo &ls_status_info)
 {
   bool bret = false;
-  if (0 == unit_group_id && ls_status_info.get_flag().is_duplicate_ls()) {
+  if (0 == unit_group_id
+      && (ls_status_info.get_flag().is_duplicate_ls() || ls_status_info.get_ls_id().is_sys_ls())) {
     bret = true;
   }
   for (int64_t i = 0; i < tenant_unit_group_arr.count() && !bret; ++i) {
@@ -267,6 +167,7 @@ bool ObAlterLSCommand::is_unit_group_ok_(
   }
   return bret;
 }
+ERRSIM_POINT_DEF(ERRSIM_GEN_LS_GROUP_ID);
 int ObAlterLSCommand::gen_ls_group_id_(
     const uint64_t tenant_id,
     const uint64_t unit_group_id,
@@ -276,20 +177,28 @@ int ObAlterLSCommand::gen_ls_group_id_(
   int ret = OB_SUCCESS;
   ls_group_id = OB_INVALID_ID;
   bool has_fetched_new_ls_group_id = false;
-  if (0 == unit_group_id) {
-    ls_group_id = 0; // duplicate LS
-  }
-  for (int64_t i = 0; i < ls_group_info_arr.count() && OB_INVALID_ID == ls_group_id; ++i) {
-    if (ls_group_info_arr.at(i).unit_group_id_ == unit_group_id) {
-      ls_group_id = ls_group_info_arr.at(i).ls_group_id_;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || OB_INVALID_ID == unit_group_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(unit_group_id));
+  } else if (OB_UNLIKELY(ERRSIM_GEN_LS_GROUP_ID)) {
+    ls_group_id = -ERRSIM_GEN_LS_GROUP_ID;
+    FLOG_INFO("ERRSIM_GEN_LS_GROUP_ID opened", K(tenant_id), K(unit_group_id), K(ls_group_id));
+  } else {
+    if (0 == unit_group_id) {
+      ls_group_id = 0; // duplicate LS
     }
-  }
-  if (OB_INVALID_ID == ls_group_id) {
-    if (OB_FAIL(ObLSServiceHelper::fetch_new_ls_group_id(GCTX.sql_proxy_, tenant_id, ls_group_id))) {
-      // GCTX.sql_proxy_ has been checked whether it's null in the function
-      LOG_WARN("failed to fetch new LS group id", KR(ret), K(tenant_id));
+    for (int64_t i = 0; i < ls_group_info_arr.count() && OB_INVALID_ID == ls_group_id; ++i) {
+      if (ls_group_info_arr.at(i).unit_group_id_ == unit_group_id) {
+        ls_group_id = ls_group_info_arr.at(i).ls_group_id_;
+      }
     }
-    has_fetched_new_ls_group_id = true;
+    if (OB_INVALID_ID == ls_group_id) {
+      if (OB_FAIL(ObLSServiceHelper::fetch_new_ls_group_id(GCTX.sql_proxy_, tenant_id, ls_group_id))) {
+        // GCTX.sql_proxy_ has been checked whether it's null in the function
+        LOG_WARN("failed to fetch new LS group id", KR(ret), K(tenant_id));
+      }
+      has_fetched_new_ls_group_id = true;
+    }
   }
   FLOG_INFO("[ALTER LS] generate ls group id", KR(ret), K(tenant_id), K(unit_group_id),
       K(ls_group_id), K(has_fetched_new_ls_group_id));
@@ -308,7 +217,13 @@ int ObAlterLSCommand::modify_unit_group_id_(
   uint64_t new_ls_group_id = old_ls_group_id; // no need to get new ls_group_id if the tenant is non-primary
   bool is_primary = true;
   share::ObLSStatusOperator status_op;
-  if (OB_ISNULL(GCTX.sql_proxy_)) {
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !ls_id.is_valid_with_tenant(tenant_id)
+      || OB_INVALID_ID == old_unit_group_id || OB_INVALID_ID == new_unit_group_id
+      || OB_INVALID_ID == old_ls_group_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(old_unit_group_id),
+        K(new_unit_group_id), K(old_ls_group_id));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(ObShareUtil::mtl_check_if_tenant_role_is_primary(tenant_id, is_primary))) {
@@ -316,7 +231,7 @@ int ObAlterLSCommand::modify_unit_group_id_(
   } else if (is_primary) {
     if (OB_FAIL(gen_ls_group_id_(tenant_id, new_unit_group_id, ls_group_info_arr, new_ls_group_id))) {
       LOG_WARN("fail to execute gen_ls_group_id_", KR(ret), K(tenant_id), K(new_unit_group_id), K(ls_group_info_arr));
-    } else if (OB_FAIL(update_ls_group_id_in_all_ls_(tenant_id, ls_id, new_ls_group_id))) {
+    } else if (OB_FAIL(update_ls_group_id_in_all_ls_(tenant_id, ls_id, old_ls_group_id, new_ls_group_id))) {
       LOG_WARN("fail to execute update_ls_group_id_in_all_ls_", KR(ret), K(ls_id), K(new_ls_group_id));
     }
   }
@@ -333,10 +248,15 @@ int ObAlterLSCommand::modify_unit_group_id_(
 int ObAlterLSCommand::update_ls_group_id_in_all_ls_(
     const uint64_t &tenant_id,
     const share::ObLSID &ls_id,
+    const uint64_t old_ls_group_id,
     const uint64_t new_ls_group_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(GCTX.sql_proxy_)) {
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !ls_id.is_valid_with_tenant(tenant_id))
+      || OB_INVALID_ID == new_ls_group_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(new_ls_group_id));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
   } else {
@@ -356,8 +276,11 @@ int ObAlterLSCommand::update_ls_group_id_in_all_ls_(
       ret = OB_OP_NOT_ALLOW;
       LOG_WARN("the specified LS has balance task", KR(ret), K(tenant_id), K(ls_id), K(task_cnt));
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, "The specified LS has balance tasks, MODIFY LS is");
-    } else if (OB_FAIL(ls_op.get_ls_attr(ls_id, false, trans, ls_attr))) {
+    } else if (OB_FAIL(ls_op.get_ls_attr(ls_id, true, trans, ls_attr))) {
       LOG_WARN("fail to get ls attr", KR(ret), K(ls_id));
+    } else if (OB_UNLIKELY(ls_attr.get_ls_group_id() != old_ls_group_id)) {
+      ret = OB_NEED_RETRY;
+      LOG_WARN("concurrent modification occured", KR(ret), K(ls_attr), K(old_ls_group_id));
     } else if (OB_FAIL(ls_op.alter_ls_group_in_trans(ls_attr, new_ls_group_id, trans))) {
       LOG_WARN("fail to alter ls group in trans", KR(ret), K(ls_attr), K(new_ls_group_id));
     }
@@ -374,7 +297,12 @@ int ObAlterLSCommand::modify_ls_primary_zone_(
     share::schema::ObTenantSchema *tenant_schema)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(tenant_schema) || OB_ISNULL(GCTX.sql_proxy_)) {
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !ls_id.is_valid_with_tenant(tenant_id)
+      || old_ls_primary_zone.is_empty() || new_ls_primary_zone.is_empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(old_ls_primary_zone),
+        K(new_ls_primary_zone));
+  } else if (OB_ISNULL(tenant_schema) || OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tenant_schema or GCTX.sql_proxy_ is null", KR(ret), KP(tenant_schema), KP(GCTX.sql_proxy_));
   } else {
