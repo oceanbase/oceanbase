@@ -566,6 +566,7 @@ ob_set_subtarget(ob_share external_table
 ob_set_subtarget(ob_share io
   io/ob_io_define.cpp
   io/io_schedule/ob_io_mclock.cpp
+  io/io_schedule/ob_io_schedule_v2.cpp
   io/ob_io_struct.cpp
   io/ob_io_calibration.cpp
   io/ob_io_manager.cpp

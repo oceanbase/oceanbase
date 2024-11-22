@@ -193,7 +193,10 @@ OB_INLINE bool is_resource_manager_group(const uint64_t group_id)
 {
   return group_id >= USER_RESOURCE_GROUP_START_ID && group_id != OB_INVALID_GROUP_ID;
 }
-
+OB_INLINE bool is_sys_group(const uint64_t group_id)
+{
+  return group_id >= 0 && group_id < USER_RESOURCE_GROUP_START_ID;
+}
 OB_INLINE bool is_valid_resource_group(const uint64_t group_id)
 {
   //other group or user group

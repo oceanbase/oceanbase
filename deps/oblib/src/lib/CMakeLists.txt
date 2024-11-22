@@ -41,6 +41,11 @@ ob_set_subtarget(oblib_lib charset
   charset/ob_ctype_extra.cc
 )
 
+ob_set_subtarget(oblib_lib sched
+  tc/ob_tc_wrapper.cpp
+)
+
+
 ob_set_subtarget(oblib_lib common
   ob_abort.cpp
   ob_date_unit_type.cpp

@@ -1846,7 +1846,7 @@ int ObIOHandle::wait(const int64_t wait_timeout_ms)
     if (real_wait_timeout > 0) {
       int64_t wait_ms = real_wait_timeout;
       if (OB_FAIL(result_->wait(wait_ms))) {
-        if (OB_TIMEOUT == ret) {  // rarely happen
+        if (OB_TIMEOUT == ret) {
           LOG_WARN("fail to wait result condition due to spurious wakeup", K(ret), K(wait_ms), K(*result_));
         }
       }

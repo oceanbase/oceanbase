@@ -381,6 +381,7 @@ _enable_tenant_sql_net_thread
 _enable_trace_session_leak
 _enable_trace_tablet_leak
 _enable_transaction_internal_routing
+_enable_tree_based_io_scheduler
 _enable_unit_gc_wait
 _enable_values_table_folding
 _enable_var_assign_use_das

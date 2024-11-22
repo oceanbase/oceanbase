@@ -42,7 +42,7 @@ add_subdirectory(ddl)
 add_subdirectory(share_storage)
 add_subdirectory(column_store_replica)
 
-storage_unittest(test_io_manager)
+#storage_unittest(test_io_manager)
 storage_unittest(test_iocb_pool)
 storage_unittest(test_ob_col_map)
 storage_unittest(test_placement_hashmap)

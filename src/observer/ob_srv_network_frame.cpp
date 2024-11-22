@@ -963,7 +963,11 @@ int ObSrvNetworkFrame::shared_storage_net_throt_predict(
 int ObSrvNetworkFrame::shared_storage_net_throt_set(const ObSharedDeviceResourceArray &assigned_resource)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(OB_IO_MANAGER.get_tc().set_limit(assigned_resource))) {
+  if (GCONF._enable_tree_based_io_scheduler == false) {
+    if (OB_FAIL(OB_IO_MANAGER.get_tc().set_limit(assigned_resource))) {
+      LOG_WARN("set failed", K(assigned_resource));
+    }
+  } else if (OB_FAIL(OB_IO_MANAGER.get_tc().set_limit_v2(assigned_resource))) {
     LOG_WARN("set failed", K(assigned_resource));
   }
   return ret;
