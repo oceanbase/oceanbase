@@ -352,6 +352,7 @@ _enable_kv_feature
 _enable_log_cache
 _enable_memleak_light_backtrace
 _enable_newsort
+_enable_new_query_range_extraction
 _enable_new_sql_nio
 _enable_nlj_spf_use_rich_format
 _enable_optimizer_qualify_filter

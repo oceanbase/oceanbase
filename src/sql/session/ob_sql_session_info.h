@@ -1315,6 +1315,7 @@ public:
   bool is_spf_mlj_group_rescan_enabled() const;
   int is_preserve_order_for_pagination_enabled(bool &enabled) const;
   int get_spm_mode(int64_t &spm_mode);
+  bool is_enable_new_query_range() const;
 
   ObSessionDDLInfo &get_ddl_info() { return ddl_info_; }
   const ObSessionDDLInfo &get_ddl_info() const { return ddl_info_; }

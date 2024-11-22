@@ -2875,7 +2875,7 @@ bool check_stack_overflow_c()
   return is_overflow;
 }
 
-int ObSQLUtils::extract_pre_query_range(const ObQueryRange &pre_query_range,
+int ObSQLUtils::extract_pre_query_range(const ObQueryRangeProvider &query_range_provider,
                                         ObIAllocator &allocator,
                                         ObExecContext &exec_ctx,
                                         ObQueryRangeArray &key_ranges,
@@ -2883,55 +2883,65 @@ int ObSQLUtils::extract_pre_query_range(const ObQueryRange &pre_query_range,
 {
   int ret = OB_SUCCESS;
   bool dummy_all_single_value_ranges = false;
-  if (OB_FAIL(pre_query_range.get_tablet_ranges(allocator, exec_ctx, key_ranges,
-                                                dummy_all_single_value_ranges,
-                                                dtc_params))) {
+  if (OB_FAIL(query_range_provider.get_tablet_ranges(allocator, exec_ctx, key_ranges,
+                                                     dummy_all_single_value_ranges,
+                                                     dtc_params))) {
     LOG_WARN("failed to get tablet ranges", K(ret));
   }
   return ret;
 }
 
-int ObSQLUtils::extract_geo_query_range(const ObQueryRange &pre_query_range,
-                                          ObIAllocator &allocator,
-                                          ObExecContext &exec_ctx,
-                                          ObQueryRangeArray &key_ranges,
-                                          ObMbrFilterArray &mbr_filters,
-                                          const ObDataTypeCastParams &dtc_params)
+int ObSQLUtils::extract_geo_query_range(const ObQueryRangeProvider &query_range_provider,
+                                        ObIAllocator &allocator,
+                                        ObExecContext &exec_ctx,
+                                        ObQueryRangeArray &key_ranges,
+                                        ObMbrFilterArray &mbr_filters,
+                                        const ObDataTypeCastParams &dtc_params)
 {
   int ret = OB_SUCCESS;
   bool dummy_all_single_value_ranges = false;
-  if (OB_LIKELY(!pre_query_range.need_deep_copy())) {
-    //对于大多数查询来说，query条件是非常规范和工整的，这种条件我们不需要拷贝进行graph的变化，可以直接提取
-    if (OB_FAIL(pre_query_range.direct_get_tablet_ranges(allocator,
-                                                        exec_ctx,
-                                                        key_ranges,
-                                                        dummy_all_single_value_ranges,
-                                                        dtc_params))) {
-      LOG_WARN("fail to get tablet ranges", K(ret));
-    } else {
-      const MbrFilterArray &pre_filters = pre_query_range.get_mbr_filter();
-      FOREACH_X(it, pre_filters, OB_SUCC(ret) && it != pre_filters.end()) {
-        if (OB_FAIL(mbr_filters.push_back(*it))) {
-          LOG_WARN("store mbr_filters_ failed", K(ret));
-        }
-      }
+  if (query_range_provider.is_new_query_range()) {
+    if (OB_FAIL(query_range_provider.get_tablet_ranges(allocator, exec_ctx, key_ranges,
+                                                      dummy_all_single_value_ranges,
+                                                      dtc_params,
+                                                      mbr_filters))) {
+      LOG_WARN("failed to get tablet ranges", K(ret));
     }
   } else {
-    ObQueryRange final_query_range(allocator);
-    if (OB_FAIL(final_query_range.deep_copy(pre_query_range))) {
-      // MUST deep copy to make it thread safe
-      LOG_WARN("fail to create final query range", K(ret), K(pre_query_range));
-    } else if (OB_FAIL(final_query_range.final_extract_query_range(exec_ctx, dtc_params))) {
-      LOG_WARN("fail to final extract query range", K(ret), K(final_query_range));
-    } else if (OB_FAIL(final_query_range.get_tablet_ranges(key_ranges,
-                                                           dummy_all_single_value_ranges,
-                                                           dtc_params))) {
-      LOG_WARN("fail to get tablet ranges from query range", K(ret), K(final_query_range));
+    const ObQueryRange &pre_query_range = static_cast<const ObQueryRange&>(query_range_provider);
+    if (OB_LIKELY(!pre_query_range.need_deep_copy())) {
+      //对于大多数查询来说，query条件是非常规范和工整的，这种条件我们不需要拷贝进行graph的变化，可以直接提取
+      if (OB_FAIL(pre_query_range.direct_get_tablet_ranges(allocator,
+                                                          exec_ctx,
+                                                          key_ranges,
+                                                          dummy_all_single_value_ranges,
+                                                          dtc_params))) {
+        LOG_WARN("fail to get tablet ranges", K(ret));
+      } else {
+        const MbrFilterArray &pre_filters = pre_query_range.get_mbr_filter();
+        FOREACH_X(it, pre_filters, OB_SUCC(ret) && it != pre_filters.end()) {
+          if (OB_FAIL(mbr_filters.push_back(*it))) {
+            LOG_WARN("store mbr_filters_ failed", K(ret));
+          }
+        }
+      }
     } else {
-      const MbrFilterArray &pre_filters = final_query_range.get_mbr_filter();
-      FOREACH_X(it, pre_filters, OB_SUCC(ret) && it != pre_filters.end()) {
-        if (OB_FAIL(mbr_filters.push_back(*it))) {
-          LOG_WARN("store mbr_filters_ failed", K(ret));
+      ObQueryRange final_query_range(allocator);
+      if (OB_FAIL(final_query_range.deep_copy(pre_query_range))) {
+        // MUST deep copy to make it thread safe
+        LOG_WARN("fail to create final query range", K(ret), K(pre_query_range));
+      } else if (OB_FAIL(final_query_range.final_extract_query_range(exec_ctx, dtc_params))) {
+        LOG_WARN("fail to final extract query range", K(ret), K(final_query_range));
+      } else if (OB_FAIL(final_query_range.get_tablet_ranges(key_ranges,
+                                                            dummy_all_single_value_ranges,
+                                                            dtc_params))) {
+        LOG_WARN("fail to get tablet ranges from query range", K(ret), K(final_query_range));
+      } else {
+        const MbrFilterArray &pre_filters = final_query_range.get_mbr_filter();
+        FOREACH_X(it, pre_filters, OB_SUCC(ret) && it != pre_filters.end()) {
+          if (OB_FAIL(mbr_filters.push_back(*it))) {
+            LOG_WARN("store mbr_filters_ failed", K(ret));
+          }
         }
       }
     }
@@ -6417,6 +6427,17 @@ bool ObSQLUtils::is_data_version_ge_423_or_432(uint64_t data_version)
 bool ObSQLUtils::is_data_version_ge_424_or_433(uint64_t data_version)
 {
   return ((MOCK_DATA_VERSION_4_2_4_0 <= data_version && data_version < DATA_VERSION_4_3_0_0) || data_version >= DATA_VERSION_4_3_3_0);
+}
+
+bool ObSQLUtils::is_min_cluster_version_ge_425_or_435()
+{
+  uint64_t version = GET_MIN_CLUSTER_VERSION();
+  return ((MOCK_CLUSTER_VERSION_4_2_5_0 <= version && version < CLUSTER_VERSION_4_3_0_0) || version >= CLUSTER_VERSION_4_3_5_0);
+}
+
+bool ObSQLUtils::is_opt_feature_version_ge_425_or_435(uint64_t opt_feature_version)
+{
+  return ((COMPAT_VERSION_4_2_5 <= opt_feature_version && opt_feature_version < COMPAT_VERSION_4_3_0) || opt_feature_version >= COMPAT_VERSION_4_3_5);
 }
 
 int ObSQLUtils::get_strong_partition_replica_addr(const ObCandiTabletLoc &phy_part_loc_info,

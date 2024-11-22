@@ -1646,6 +1646,7 @@ int64_t ObConstRawExpr::to_string(char* buf, const int64_t buf_len) const
       N_EXPR_INFO, info_,
       N_REL_ID, rel_ids_,
       N_VALUE, value_,
+      "is_dynamic_questionmark", is_dynamic_eval_questionmark_,
       K_(expr_hash));
   if (!literal_prefix_.empty()) {
     J_COMMA();

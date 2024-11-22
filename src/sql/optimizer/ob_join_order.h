@@ -24,6 +24,7 @@
 #include "sql/optimizer/ob_fd_item.h"
 #include "sql/optimizer/ob_logical_operator.h"
 #include "sql/optimizer/ob_log_plan.h"
+#include "sql/rewrite/ob_query_range_define.h"
 
 using oceanbase::common::ObString;
 namespace test
@@ -538,6 +539,7 @@ struct EstimateCostInfo {
         table_partition_info_(NULL),
         index_keys_(),
         pre_query_range_(NULL),
+        pre_range_graph_(NULL),
         is_get_(false),
         order_direction_(direction),
         is_hash_index_(false),
@@ -551,6 +553,7 @@ struct EstimateCostInfo {
         use_skip_scan_(OptSkipScanState::SS_UNSET),
         use_column_store_(false),
         is_valid_inner_path_(false),
+        index_prefix_(-1),
         can_batch_rescan_(false),
         can_das_dynamic_part_pruning_(-1),
         is_index_merge_(false),
@@ -635,6 +638,16 @@ struct EstimateCostInfo {
     {
       return 1 == est_cost_info_.ranges_.count() && est_cost_info_.ranges_.at(0).is_false_range();
     }
+    ObQueryRangeProvider *get_query_range_provider()
+    {
+      return pre_range_graph_ != nullptr ? static_cast<ObQueryRangeProvider *>(pre_range_graph_)
+                                        : static_cast<ObQueryRangeProvider *>(pre_query_range_);
+    }
+    const ObQueryRangeProvider *get_query_range_provider() const
+    {
+      return pre_range_graph_ != nullptr ? static_cast<const ObQueryRangeProvider *>(pre_range_graph_)
+                                        : static_cast<const ObQueryRangeProvider *>(pre_query_range_);
+    }
 
     int compute_access_path_batch_rescan();
     bool is_rescan_path() const { return est_cost_info_.is_rescan_; }
@@ -678,6 +691,7 @@ struct EstimateCostInfo {
     ObTablePartitionInfo *table_partition_info_;
     common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> index_keys_; // index keys
     ObQueryRange* pre_query_range_; // pre_query_range for each access path
+    ObPreRangeGraph* pre_range_graph_; // pre_query_graph for each access path
     bool is_get_;
     ObOrderDirection order_direction_;//序的方向（升序or倒序）
     bool is_hash_index_;  // is hash index (virtual table and is index)
@@ -692,6 +706,7 @@ struct EstimateCostInfo {
     bool use_column_store_;
     // mark this access path is inner path and contribute query range
     bool is_valid_inner_path_;
+    int64_t index_prefix_;
     bool can_batch_rescan_;
     int64_t can_das_dynamic_part_pruning_;
     bool is_index_merge_; // whether used for index merge
@@ -1766,10 +1781,13 @@ struct NullAwareAntiJoinInfo {
                                         const common::ObIArray<ObRawExpr*> &predicates,
                                         ObIArray<ObExprConstraint> &expr_constraints,
                                         int64_t table_id,
-                                        ObQueryRange* &range,
-                                        int64_t index_id);
+                                        ObQueryRangeProvider* &range,
+                                        int64_t index_id,
+                                        int64_t &out_index_prefix);
 
-    int check_enable_better_inlist(int64_t table_id, bool &enable);
+    int check_enable_better_inlist(int64_t table_id,
+                                   bool &enable_better_inlist,
+                                   bool &enable_index_prefix_cost);
 
     int get_candi_range_expr(const ObIArray<ColumnItem> &range_columns,
                             const ObIArray<ObRawExpr*> &predicates,
@@ -1780,6 +1798,17 @@ struct NullAwareAntiJoinInfo {
                                   int64_t range_column_count,
                                   int64_t range_count,
                                   double &cost);
+
+    int calculate_range_and_filter_expr_cost(ObIArray<ObRawExpr*> &range_exprs,
+                                             ObIArray<ObRawExpr*> &filter_exprs,
+                                             int64_t range_column_count,
+                                             int64_t range_count,
+                                             double &cost);
+
+    int get_better_index_prefix(const ObIArray<ObRawExpr*> &range_exprs,
+                                const ObIArray<int64_t> &range_expr_max_offsets,
+                                const ObIArray<uint64_t> &total_range_counts,
+                                int64_t &better_index_prefix);
 
     int sort_predicate_by_index_column(const ObIArray<ColumnItem> &range_columns,
                                        const ObIArray<ObRawExpr*> &predicates,
@@ -1798,11 +1827,11 @@ struct NullAwareAntiJoinInfo {
     int extract_geo_preliminary_query_range(const ObIArray<ColumnItem> &range_columns,
                                               const ObIArray<ObRawExpr*> &predicates,
                                               const ColumnIdInfoMap &column_schema_info,
-                                              ObQueryRange *&query_range);
+                                              ObQueryRangeProvider *&query_range);
 
     int extract_multivalue_preliminary_query_range(const ObIArray<ColumnItem> &range_columns,
                                                   const ObIArray<ObRawExpr*> &predicates,
-                                                  ObQueryRange *&query_range);
+                                                  ObQueryRangeProvider *&query_range);
 
     int extract_geo_schema_info(const uint64_t table_id,
                                 const uint64_t index_id,
@@ -2360,7 +2389,7 @@ struct NullAwareAntiJoinInfo {
   private:
     int add_access_filters(AccessPath *path,
                            const common::ObIArray<ObRawExpr*> &index_keys,
-                           const common::ObIArray<ObRawExpr*> &range_exprs,
+                           const common::ObIArray<ObRawExpr*> *range_exprs,
                            PathHelper &helper);
 
     int set_nl_filters(JoinPath *join_path,
@@ -2384,15 +2413,10 @@ struct NullAwareAntiJoinInfo {
                              QueryRangeInfo &range_info,
                              PathHelper &helper);
 
-    int check_has_exec_param(const ObQueryRange &query_range,
+    int check_has_exec_param(const ObQueryRangeProvider &query_range,
                              bool &has_exec_param);
 
-    int get_preliminary_prefix_info(ObQueryRange &query_range,QueryRangeInfo &range_info);
-
-    void get_prefix_info(const ObKeyPart *key_part,
-                         int64_t &equal_prefix_count,
-                         int64_t &range_prefix_count,
-                         bool &contain_always_false);
+    int get_preliminary_prefix_info(ObQueryRangeProvider &query_range,QueryRangeInfo &range_info);
 
     // @brief  check if an index is relevant to the conditions
     int is_relevant_index(const uint64_t table_id,
@@ -2532,7 +2556,7 @@ struct NullAwareAntiJoinInfo {
     int revise_output_rows_after_creating_path(PathHelper &helper,
                                                ObIArray<AccessPath *> &access_paths);
     int fill_filters(const common::ObIArray<ObRawExpr *> &all_filters,
-                     const ObQueryRange* query_range,
+                     const ObQueryRangeProvider* query_range,
                      ObCostTableScanInfo &est_scan_cost_info,
                      bool &is_nl_with_extended_range,
                      bool is_link = false,
@@ -2541,6 +2565,7 @@ struct NullAwareAntiJoinInfo {
     int can_extract_unprecise_range(const uint64_t table_id,
                                     const ObRawExpr *filter,
                                     const ObBitSet<> &ex_prefix_column_bs,
+                                    const ObIArray<ObRawExpr*> &unprecise_exprs,
                                     bool &can_extract);
 
     int estimate_rowcount_for_access_path(ObIArray<AccessPath*> &all_paths,

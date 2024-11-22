@@ -44,6 +44,9 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
   } else {
     query_flag.scan_order_ = ObQueryFlag::Forward;
   }
+  if (op.is_new_query_range()) {
+    query_flag.set_is_new_query_range();
+  }
   OZ(generate_mr_mv_scan_flag(op, query_flag));
   tsc_ctdef.scan_flags_ = query_flag;
   if (op.use_index_merge()) {

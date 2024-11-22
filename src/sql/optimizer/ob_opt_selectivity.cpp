@@ -19,6 +19,7 @@
 #include "share/schema/ob_part_mgr_util.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/rewrite/ob_query_range.h"
+#include "sql/rewrite/ob_query_range_define.h"
 #include "sql/optimizer/ob_opt_est_utils.h"
 #include "sql/optimizer/ob_optimizer.h"
 #include "sql/optimizer/ob_optimizer_util.h"
@@ -1609,7 +1610,7 @@ int ObOptSelectivity::get_column_range_sel(const OptTableMetas &table_metas,
   const ObDMLStmt *stmt = ctx.get_stmt();
   uint64_t tid = col_expr.get_table_id();
   uint64_t cid = col_expr.get_column_id();
-  ObQueryRange query_range;
+  ObArenaAllocator allocator("ObSelRange", OB_MALLOC_NORMAL_BLOCK_SIZE, ctx.get_session_info()->get_effective_tenant_id());
   ObQueryRangeArray ranges;
   ObSEArray<ColumnItem, 1> column_items;
   bool use_hist = false;
@@ -1620,7 +1621,7 @@ int ObOptSelectivity::get_column_range_sel(const OptTableMetas &table_metas,
   } else if (OB_FAIL(check_column_in_current_level_stmt(stmt, col_expr))) {
     LOG_WARN("failed to check if column is in current level stmt", K(col_expr), K(ret));
   } else if (OB_FAIL(get_column_query_range(ctx, tid, cid, quals,
-                                            column_items, query_range, ranges))) {
+                                            column_items, allocator, ranges))) {
     LOG_WARN("failed to get column query range", K(ret));
   } else {
     selectivity = 0.0;
@@ -1706,7 +1707,7 @@ int ObOptSelectivity::get_column_range_min_max(const OptSelectivityCtx &ctx,
   const ObDMLStmt *stmt = ctx.get_stmt();
   uint64_t tid = 0;
   uint64_t cid = 0;
-  ObQueryRange query_range;
+  ObArenaAllocator allocator("ObSelRange", OB_MALLOC_NORMAL_BLOCK_SIZE, ctx.get_session_info()->get_effective_tenant_id());
   ObQueryRangeArray ranges;
   ObSEArray<ColumnItem, 1> column_items;
   if (OB_ISNULL(stmt) || OB_ISNULL(col_expr) ||
@@ -1717,7 +1718,7 @@ int ObOptSelectivity::get_column_range_min_max(const OptSelectivityCtx &ctx,
   } else if (OB_FAIL(check_column_in_current_level_stmt(stmt, *col_expr))) {
     LOG_WARN("failed to check if column is in current level stmt", KPC(col_expr), K(ret));
   } else if (OB_FAIL(get_column_query_range(ctx, tid, cid, quals,
-                                            column_items, query_range, ranges))) {
+                                            column_items, allocator, ranges))) {
     LOG_WARN("failed to get column query range", K(ret));
   } else if (OB_ISNULL(column_items.at(0).expr_) ||
              OB_UNLIKELY(ranges.empty())) {
@@ -2756,50 +2757,63 @@ int ObOptSelectivity::get_column_query_range(const OptSelectivityCtx &ctx,
                                              const uint64_t column_id,
                                              const ObIArray<ObRawExpr *> &quals,
                                              ObIArray<ColumnItem> &column_items,
-                                             ObQueryRange &query_range,
+                                             ObIAllocator &alloc,
                                              ObQueryRangeArray &ranges)
 {
   int ret = OB_SUCCESS;
   const ObLogPlan *log_plan = ctx.get_plan();
   const ParamStore *params = ctx.get_params();
   ObExecContext *exec_ctx = ctx.get_opt_ctx().get_exec_ctx();
-  ObIAllocator &allocator = ctx.get_allocator();
+  ObSQLSessionInfo *session_info = ctx.get_session_info();
   ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(ctx.get_session_info());
   const ColumnItem* column_item = NULL;
   bool dummy_all_single_value_ranges = true;
-  bool is_in_range_optimization_enabled = false;
-  if (OB_ISNULL(log_plan) || OB_ISNULL(exec_ctx) ||
+  if (OB_ISNULL(log_plan) || OB_ISNULL(exec_ctx) || OB_ISNULL(session_info) ||
       OB_ISNULL(column_item = log_plan->get_column_item_by_id(table_id, column_id)) ||
       OB_ISNULL(ctx.get_stmt()) || OB_ISNULL(ctx.get_stmt()->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(log_plan), K(exec_ctx), K(column_item));
+    LOG_WARN("get unexpected null", K(ret), K(log_plan), K(exec_ctx), K(session_info), K(column_item));
   } else if (OB_FAIL(column_items.push_back(*column_item))) {
     LOG_WARN("failed to push back column item", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::is_in_range_optimization_enabled(ctx.get_stmt()->get_query_ctx()->get_global_hint(),
-                                                                       ctx.get_session_info(),
-                                                                       is_in_range_optimization_enabled))) {
-    LOG_WARN("failed to check in range optimization enabled", K(ret));
-  } else if (OB_FAIL(query_range.preliminary_extract_query_range(column_items,
-                                                                 quals,
-                                                                 dtc_params,
-                                                                 ctx.get_opt_ctx().get_exec_ctx(),
-                                                                 ctx.get_opt_ctx().get_query_ctx(),
-                                                                 NULL,
-                                                                 params,
-                                                                 false,
-                                                                 true,
-                                                                 is_in_range_optimization_enabled))) {
-    LOG_WARN("failed to preliminary extract query range", K(ret));
-  } else if (!query_range.need_deep_copy()) {
-    if (OB_FAIL(query_range.direct_get_tablet_ranges(allocator, *exec_ctx, ranges,
-                                                     dummy_all_single_value_ranges, dtc_params))) {
-      LOG_WARN("failed to get tablet ranges", K(ret));
+  } else if (ctx.get_opt_ctx().enable_new_query_range()) {
+    ObPreRangeGraph pre_range_graph(alloc);
+    if (OB_FAIL(pre_range_graph.preliminary_extract_query_range(column_items, quals, exec_ctx,
+                                                                NULL, params, false, true))) {
+      LOG_WARN("failed to preliminary extract query range", K(column_items), K(quals));
+    } else if (OB_FAIL(pre_range_graph.get_tablet_ranges(alloc, *exec_ctx, ranges,
+                                                         dummy_all_single_value_ranges,
+                                                         dtc_params))) {
+      LOG_WARN("failed to get tablet ranges");
     }
-  } else if (OB_FAIL(query_range.final_extract_query_range(*exec_ctx, dtc_params))) {
-    LOG_WARN("failed to final extract query range", K(ret));
-  } else if (OB_FAIL(query_range.get_tablet_ranges(ranges, dummy_all_single_value_ranges, dtc_params))) {
-    LOG_WARN("failed to get tablet ranges", K(ret));
-  } else { /*do nothing*/ }
+  } else {
+    ObQueryRange query_range(alloc);
+    bool is_in_range_optimization_enabled = false;
+    if (OB_FAIL(ObOptimizerUtil::is_in_range_optimization_enabled(ctx.get_stmt()->get_query_ctx()->get_global_hint(),
+                                                                  ctx.get_session_info(),
+                                                                  is_in_range_optimization_enabled))) {
+      LOG_WARN("failed to check in range optimization enabled", K(ret));
+    } else if (OB_FAIL(query_range.preliminary_extract_query_range(column_items,
+                                                                  quals,
+                                                                  dtc_params,
+                                                                  ctx.get_opt_ctx().get_exec_ctx(),
+                                                                  ctx.get_opt_ctx().get_query_ctx(),
+                                                                  NULL,
+                                                                  params,
+                                                                  false,
+                                                                  true,
+                                                                  is_in_range_optimization_enabled))) {
+      LOG_WARN("failed to preliminary extract query range", K(ret));
+    } else if (!query_range.need_deep_copy()) {
+      if (OB_FAIL(query_range.direct_get_tablet_ranges(alloc, *exec_ctx, ranges,
+                                                      dummy_all_single_value_ranges, dtc_params))) {
+        LOG_WARN("failed to get tablet ranges", K(ret));
+      }
+    } else if (OB_FAIL(query_range.final_extract_query_range(*exec_ctx, dtc_params))) {
+      LOG_WARN("failed to final extract query range", K(ret));
+    } else if (OB_FAIL(query_range.get_tablet_ranges(ranges, dummy_all_single_value_ranges, dtc_params))) {
+      LOG_WARN("failed to get tablet ranges", K(ret));
+    } else { /*do nothing*/ }
+  }
   return ret;
 }
 

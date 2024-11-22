@@ -107,7 +107,8 @@ public:
       rt_question_mark_eval_(false),
       need_flatten_gen_col_(true),
       cur_cluster_version_(cur_cluster_version),
-      gen_questionmarks_(allocator, param_cnt)
+      gen_questionmarks_(allocator, param_cnt),
+      contain_dynamic_eval_rt_qm_(false)
   {
   }
   virtual ~ObStaticEngineExprCG() {}
@@ -156,6 +157,7 @@ public:
   void set_batch_size(const int64_t v) { batch_size_ = v; }
 
   void set_rt_question_mark_eval(const bool v) { rt_question_mark_eval_ = v; }
+  void set_contain_dynamic_eval_rt_qm(const bool v) { contain_dynamic_eval_rt_qm_ = v; }
 
   static int generate_partial_expr_frame(const ObPhysicalPlan &plan,
                                          ObExprFrameInfo &partial_expr_frame_info,
@@ -169,7 +171,8 @@ public:
                                     ObIAllocator &alloctor,
                                     ObSQLSessionInfo *session,
                                     share::schema::ObSchemaGetterGuard *schema_guard,
-                                    ObTempExpr *&temp_expr);
+                                    ObTempExpr *&temp_expr,
+                                    bool contain_dynamic_eval_rt_qm_ = false);
 
   static int init_temp_expr_mem_size(ObTempExpr &temp_expr);
 
@@ -499,6 +502,7 @@ private:
   bool need_flatten_gen_col_;
   uint64_t cur_cluster_version_;
   common::ObFixedArray<ObRawExpr *, common::ObIAllocator> gen_questionmarks_;
+  bool contain_dynamic_eval_rt_qm_;
 };
 
 } // end namespace sql

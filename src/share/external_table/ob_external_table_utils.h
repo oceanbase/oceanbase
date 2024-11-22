@@ -34,7 +34,6 @@ namespace sql
 class ObDASTabletLoc;
 class ObExecContext;
 class ObExternalTableAccessService;
-class ObQueryRange;
 class ObExprRegexContext;
 class ObExprRegexpSessionVariables;
 }

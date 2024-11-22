@@ -264,6 +264,8 @@ struct ObQueryFlag
     set_not_use_block_cache();
     set_not_use_bloomfilter_cache();
   }
+  inline void set_is_new_query_range() { is_new_query_range_ = true; }
+  inline bool is_new_query_range() const { return is_new_query_range_; }
   inline bool is_mr_mview_refresh_base_scan() const { return RefreshMode == mr_mv_scan_;  }
   inline bool is_mr_rt_mview_base_scan() const { return RealTimeMode == mr_mv_scan_;  }
   inline bool is_mr_mview_query() const { return is_mr_mview_refresh_base_scan() || is_mr_rt_mview_base_scan(); }

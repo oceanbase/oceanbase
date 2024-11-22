@@ -517,7 +517,8 @@ int ObStaticEngineExprCG::cg_expr_by_operator(const ObIArray<ObRawExpr *> &raw_e
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("arg is null", K(raw_expr), K(rt_expr), K(ret));
     } else if (T_QUESTIONMARK == rt_expr->type_ &&
-              (raw_expr->has_flag(IS_TABLE_ASSIGN) || rt_question_mark_eval_)) {
+              (raw_expr->has_flag(IS_TABLE_ASSIGN) ||
+               (rt_question_mark_eval_ && (!is_dynamic_eval_qm(*raw_expr) || !contain_dynamic_eval_rt_qm_)))) {
       // generate question mark expr for get param from param store directly
       // if the questionmark is from TABLE_ASSIGN, use eval_assign_question_mark_func
       ObConstRawExpr *c_expr = static_cast<ObConstRawExpr*>(raw_expr);
@@ -1818,7 +1819,8 @@ int ObStaticEngineExprCG::gen_expr_with_row_desc(const ObRawExpr *expr,
                                                  ObIAllocator &allocator,
                                                  ObSQLSessionInfo *session,
                                                  ObSchemaGetterGuard *schema_guard,
-                                                 ObTempExpr *&temp_expr)
+                                                 ObTempExpr *&temp_expr,
+                                                 bool contain_dynamic_eval_rt_qm_/* = false */)
 {
   int ret = OB_SUCCESS;
   temp_expr = NULL;
@@ -1849,6 +1851,7 @@ int ObStaticEngineExprCG::gen_expr_with_row_desc(const ObRawExpr *expr,
                                  GET_MIN_CLUSTER_VERSION()); // ?
     expr_cg.set_rt_question_mark_eval(true);
     expr_cg.set_need_flatten_gen_col(false);
+    expr_cg.set_contain_dynamic_eval_rt_qm(contain_dynamic_eval_rt_qm_);
     OZ(expr_cg.generate(const_cast<ObRawExpr *>(expr), flattened_raw_exprs, *temp_expr));
   }
   // generate row_idx to column expr pair;

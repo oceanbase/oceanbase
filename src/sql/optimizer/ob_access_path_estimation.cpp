@@ -316,8 +316,8 @@ int ObAccessPathEstimation::choose_best_est_method(ObOptimizerContext &ctx,
     if (OB_ISNULL(paths.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(paths.at(i)));
-    } else if (paths.at(i)->pre_query_range_ != NULL &&
-               OB_FAIL(paths.at(i)->pre_query_range_->is_get(is_table_get))) {
+    } else if (paths.at(i)->get_query_range_provider() != NULL &&
+               OB_FAIL(paths.at(i)->get_query_range_provider()->is_get(is_table_get))) {
       LOG_WARN("check query range is table get", K(ret));
     }
   }
@@ -1076,9 +1076,13 @@ int ObAccessPathEstimation::process_storage_estimation_result(ObIArray<ObBatchEs
   if (is_reliable) {
     for (int64_t i = 0; OB_SUCC(ret) && i < result_helpers.count(); ++i) {
       AccessPath *path = result_helpers.at(i).path_;
+      bool new_range_with_exec_param = (path->get_query_range_provider() != NULL &&
+                                        path->get_query_range_provider()->is_new_query_range() &&
+                                        path->get_query_range_provider()->has_exec_param());
       if (result_helpers.at(i).result_.logical_row_count_ >= 0 &&
           OB_FAIL(estimate_prefix_range_rowcount(result_helpers.at(i).result_.logical_row_count_,
                                                  result_helpers.at(i).result_.physical_row_count_,
+                                                 new_range_with_exec_param,
                                                  path->est_cost_info_))) {
         LOG_WARN("failed to estimate prefix range rowcount", K(ret));
       } else if (OB_FAIL(fill_cost_table_scan_info(path->est_cost_info_))) {
@@ -1166,6 +1170,7 @@ int ObAccessPathEstimation::do_storage_estimation(ObOptimizerContext &ctx,
 int ObAccessPathEstimation::estimate_prefix_range_rowcount(
     const double res_logical_row_count,
     const double res_physical_row_count,
+    bool new_range_with_exec_param,
     ObCostTableScanInfo &est_cost_info)
 {
   int ret = OB_SUCCESS;
@@ -1179,6 +1184,17 @@ int ObAccessPathEstimation::estimate_prefix_range_rowcount(
   physical_row_count += get_range_count;
 
   // NLJ or SPF push down prefix filters
+  if (new_range_with_exec_param) {
+    /**
+     * new query range extraction always get (min; max) for range graph with exec param.
+     * for NLJ push down path with expr (c1 = 1 and c2 = ?). old query range generate
+     * (1, min; 1, max), New query range generate (min, min; max, max). This behavior will
+     * cause row estimate with new query range get a larger result.Hence, we need multiple
+     * prefix_filter_sel for push down path with exec param to get a more accurate row count.
+    */
+    logical_row_count  *= est_cost_info.prefix_filter_sel_;
+    physical_row_count *= est_cost_info.prefix_filter_sel_;
+  }
   logical_row_count  *= est_cost_info.pushdown_prefix_filter_sel_;
   physical_row_count *= est_cost_info.pushdown_prefix_filter_sel_;
 
@@ -1491,7 +1507,8 @@ int ObAccessPathEstimation::calc_skip_scan_prefix_ndv(AccessPath &ap, double &pr
   ObJoinOrder *join_order = NULL;
   ObLogPlan *log_plan = NULL;
   const ObTableMetaInfo *table_meta_info = NULL;
-  if (OB_ISNULL(ap.pre_query_range_) || !ap.pre_query_range_->is_ss_range()
+  ObQueryRangeProvider *query_range_provider = ap.get_query_range_provider();
+  if (OB_ISNULL(query_range_provider) || !query_range_provider->is_ss_range()
       || OptSkipScanState::SS_DISABLE == ap.use_skip_scan_) {
     /* do nothing */
   } else if (OB_ISNULL(join_order = ap.parent_) || OB_ISNULL(log_plan = join_order->get_plan())
@@ -1509,7 +1526,7 @@ int ObAccessPathEstimation::calc_skip_scan_prefix_ndv(AccessPath &ap, double &pr
       const double temp_rows = log_plan->get_selectivity_ctx().get_current_rows();
       log_plan->get_selectivity_ctx().init_op_ctx(&join_order->get_output_equal_sets(), prefix_range_row_count);
       if (OB_FAIL(get_skip_scan_prefix_exprs(ap.est_cost_info_.range_columns_,
-                                            ap.pre_query_range_->get_skip_scan_offset(),
+                                            query_range_provider->get_skip_scan_offset(),
                                             prefix_exprs))) {
         LOG_WARN("failed to get skip scan prefix expers", K(ret));
       } else if (OB_FAIL(ObOptSelectivity::update_table_meta_info(log_plan->get_basic_table_metas(),
@@ -1517,7 +1534,7 @@ int ObAccessPathEstimation::calc_skip_scan_prefix_ndv(AccessPath &ap, double &pr
                                                                   log_plan->get_selectivity_ctx(),
                                                                   ap.get_table_id(),
                                                                   prefix_range_row_count,
-                                                                  ap.pre_query_range_->get_range_exprs(),
+                                                                  query_range_provider->get_range_exprs(),
                                                                   log_plan->get_predicate_selectivities()))) {
         LOG_WARN("failed to update table meta info", K(ret));
       } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(tmp_metas,

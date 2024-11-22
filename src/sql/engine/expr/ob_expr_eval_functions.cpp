@@ -415,6 +415,9 @@
 #include "ob_expr_audit_log_func.h"
 #include "ob_expr_can_access_trigger.h"
 #include "ob_expr_split_part.h"
+#include "ob_expr_inner_decode_like.h"
+#include "ob_expr_inner_double_to_int.h"
+#include "ob_expr_inner_decimal_to_year.h"
 #include "ob_expr_array_overlaps.h"
 #include "ob_expr_array_contains_all.h"
 #include "ob_expr_array_distinct.h"
@@ -1140,15 +1143,15 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprIs::decimal_int_is_false,                                     /* 612 */
   ObExprIsNot::decimal_int_is_not_true,                               /* 613 */
   ObExprIsNot::decimal_int_is_not_false,                              /* 614 */
-  NULL, //ObExprInnerIsTrue::int_is_true_start,                       /* 615 */
-  NULL, //ObExprInnerIsTrue::int_is_true_end,                         /* 616 */
-  NULL, //ObExprInnerIsTrue::float_is_true_start,                     /* 617 */
-  NULL, //ObExprInnerIsTrue::float_is_true_end,                       /* 618 */
-  NULL, //ObExprInnerIsTrue::double_is_true_start,                    /* 619 */
-  NULL, //ObExprInnerIsTrue::double_is_true_end,                      /* 620 */
-  NULL, //ObExprInnerIsTrue::number_is_true_start,                    /* 621 */
-  NULL, //ObExprInnerIsTrue::number_is_true_end,                      /* 622 */
-  NULL, //ObExprInnerDecodeLike::eval_inner_decode_like               /* 623 */
+  ObExprInnerIsTrue::int_is_true_start,                               /* 615 */
+  ObExprInnerIsTrue::int_is_true_end,                                 /* 616 */
+  ObExprInnerIsTrue::float_is_true_start,                             /* 617 */
+  ObExprInnerIsTrue::float_is_true_end,                               /* 618 */
+  ObExprInnerIsTrue::double_is_true_start,                            /* 619 */
+  ObExprInnerIsTrue::double_is_true_end,                              /* 620 */
+  ObExprInnerIsTrue::number_is_true_start,                            /* 621 */
+  ObExprInnerIsTrue::number_is_true_end,                              /* 622 */
+  ObExprInnerDecodeLike::eval_inner_decode_like,                      /* 623 */
   ObExprJsonSchemaValid::eval_json_schema_valid,                      /* 624 */
   ObExprJsonSchemaValidationReport::eval_json_schema_validation_report, /* 625 */
   ObExprInsertChildXml::eval_insert_child_xml,                        /* 626 */
@@ -1253,8 +1256,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprVectorDims::calc_dims,                                        /* 725 */
   ObExprVectorNorm::calc_norm,                                        /* 726 */
   ObExprVectorDistance::calc_distance,                                /* 727 */
-  NULL, // ObExprInnerDoubleToInt::eval_inner_double_to_int           /* 728 */
-  NULL, // ObExprInnerDecimalToYear::eval_inner_decimal_to_year       /* 729 */
+  ObExprInnerDoubleToInt::eval_inner_double_to_int,                   /* 728 */
+  ObExprInnerDecimalToYear::eval_inner_decimal_to_year,               /* 729 */
   ObExprSm3::eval_sm3,                                                /* 730 */
   ObExprSm4Encrypt::eval_sm4_encrypt,                                 /* 731 */
   ObExprSm4Decrypt::eval_sm4_decrypt,                                 /* 732 */
@@ -1289,10 +1292,10 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprMysqlProcInfo::eval_mysql_proc_info                       /* 761 */
   ObExprArrayOverlaps::eval_array_overlaps,                           /* 762 */
   ObExprArrayContainsAll::eval_array_contains_all,                    /* 763 */
-  NULL, // ObExprInnerIsTrue::decimal_int_is_true_start,              /* 764 */
-  NULL, // ObExprInnerIsTrue::decimal_int_is_true_end,                /* 765 */
-  NULL, // ObExprInnerIsTrue::json_is_true_start,                     /* 766 */
-  NULL, // ObExprInnerIsTrue::json_is_true_end,                       /* 767 */
+  ObExprInnerIsTrue::decimal_int_is_true_start,                       /* 764 */
+  ObExprInnerIsTrue::decimal_int_is_true_end,                         /* 765 */
+  ObExprInnerIsTrue::json_is_true_start,                              /* 766 */
+  ObExprInnerIsTrue::json_is_true_end,                                /* 767 */
   ObExprGetMySQLRoutineParameterTypeStr::get_mysql_routine_parameter_type_str, /* 768 */
   ObExprArrayDistinct::eval_array_distinct,                           /* 769 */
   ObExprArrayRemove::eval_array_remove_int64_t,                       /* 770 */

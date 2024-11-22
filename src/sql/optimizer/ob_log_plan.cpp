@@ -2899,8 +2899,10 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
       scan->set_session_id(table_schema->get_session_id());
     }
     scan->set_pre_query_range(ap->pre_query_range_);
+    scan->set_pre_range_graph(ap->pre_range_graph_);
     scan->set_skip_scan(OptSkipScanState::SS_DISABLE != ap->use_skip_scan_);
     scan->set_table_type(table_schema->get_table_type());
+    scan->set_index_prefix(ap->index_prefix_);
     if (!ap->is_inner_path_ &&
         OB_FAIL(scan->set_query_ranges(ap->get_cost_table_scan_info().ranges_,
                                        ap->get_cost_table_scan_info().ss_ranges_))) {
@@ -8920,8 +8922,8 @@ int ObLogPlan::get_subplan_filter_correlated_equal_keys(const ObLogicalOperator 
     LOG_WARN("failed to append filter exprs", K(ret));
   } else if (log_op_def::LOG_TABLE_SCAN == top->get_type()) {
     const ObLogTableScan *table_scan = static_cast<const ObLogTableScan *>(top);
-    if (NULL != table_scan->get_pre_query_range() &&
-        OB_FAIL(append(filters, table_scan->get_pre_query_range()->get_range_exprs()))) {
+    if (NULL != table_scan->get_pre_graph() &&
+        OB_FAIL(append(filters, table_scan->get_pre_graph()->get_range_exprs()))) {
       LOG_WARN("failed to append conditions", K(ret));
     }
   }

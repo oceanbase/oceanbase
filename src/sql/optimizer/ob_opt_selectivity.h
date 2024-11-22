@@ -944,7 +944,7 @@ public:
                                     const uint64_t column_id,
                                     const ObIArray<ObRawExpr *> &quals,
                                     ObIArray<ColumnItem> &column_items,
-                                    ObQueryRange &query_range,
+                                    ObIAllocator &alloc,
                                     ObQueryRangeArray &ranges);
 
   // @brief 检测OR中 expr 对于第 index 个子表达式的互斥性, 只检测 c1 = v 的情况,

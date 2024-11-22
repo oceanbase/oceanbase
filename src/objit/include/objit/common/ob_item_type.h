@@ -2740,7 +2740,8 @@ typedef enum ObOutlineType
     || ((op) == T_OP_OUTPUT_PACK) \
     || ((op) == T_FUN_SYS_JSON_OBJECT) \
     || ((op) == T_FUN_SYS_JSON_ARRAY) \
-    || ((op) == T_OP_TO_OUTFILE_ROW)) \
+    || ((op) == T_OP_TO_OUTFILE_ROW) \
+    || ((op) == T_FUNC_SYS_INNER_IS_TRUE)) \
 
 
 

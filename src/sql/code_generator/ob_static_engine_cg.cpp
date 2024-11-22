@@ -5267,51 +5267,59 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
       ? NULL
       : op.get_plan()->get_optimizer_context().get_sql_schema_guard();
   CK(OB_NOT_NULL(schema_guard));
-  if (OB_SUCC(ret) && NULL != op.get_pre_query_range()) {
-    OZ(spec.tsc_ctdef_.pre_query_range_.deep_copy(*op.get_pre_query_range()));
+  if (OB_SUCC(ret) && NULL != op.get_pre_graph()) {
+    if (op.is_new_query_range()) {
+      OZ(spec.tsc_ctdef_.pre_range_graph_.deep_copy(*op.get_pre_range_graph()));
+      if (!op.is_skip_scan()) {
+        OZ(spec.tsc_ctdef_.pre_range_graph_.reset_skip_scan_range());
+      }
+    } else {
+      OZ(spec.tsc_ctdef_.pre_query_range_.deep_copy(*op.get_pre_query_range()));
+      if (!op.is_skip_scan()) {
+        OZ(spec.tsc_ctdef_.pre_query_range_.reset_skip_scan_range());
+      }
+    }
     if (OB_FAIL(ret)) {
-    } else if (!op.is_skip_scan() && OB_FAIL(spec.tsc_ctdef_.pre_query_range_.reset_skip_scan_range())) {
-      LOG_WARN("reset skip scan range failed", K(ret));
-    } else if (OB_FAIL(spec.tsc_ctdef_.pre_query_range_.is_get(spec.tsc_ctdef_.scan_ctdef_.is_get_))) {
+    } else if (OB_FAIL(op.get_pre_graph()->is_get(spec.tsc_ctdef_.scan_ctdef_.is_get_))) {
       LOG_WARN("extract the query range whether get failed", K(ret));
     }
   }
   OZ(generate_tsc_flags(op, spec));
   OX(spec.set_est_cost_simple_info(op.get_est_cost_simple_info()));
 
-  bool is_equal_and = true;
-  ObKeyPart* root = spec.tsc_ctdef_.pre_query_range_.get_table_grapth().key_part_head_;
-  ObSEArray<ObQueryRange::ObEqualOff, 1> equal_offs;
-  while (OB_SUCC(ret) && NULL != root && is_equal_and) {
-    is_equal_and = is_equal_and & root->is_equal_condition();
-    if (NULL != root->item_next_ || NULL != root->or_next_) {
-      is_equal_and = false;
-    } else if (root->is_normal_key()) {
-      int64_t param_idx = OB_INVALID_ID;
-      ObObj& cur = root->normal_keypart_->start_;
-      ObQueryRange::ObEqualOff equal_off;
-      if (cur.is_ext() || root->null_safe_) {
-        is_equal_and = false; //rollback old version
-      } else if (root->is_rowid_key_part()) {
-        is_equal_and = false; //not deal with rowid
-      } else if (cur.is_unknown()) {
-        if (OB_FAIL(cur.get_unknown(param_idx))) {
-          LOG_WARN("get question mark value failed", K(ret), K(cur));
-        } else {
-          equal_off.param_idx_ = param_idx;
-          equal_off.pos_off_ = root->pos_.offset_;
-          equal_off.pos_type_ = root->pos_.column_type_.get_type();
-          equal_offs.push_back(equal_off);
-        }
-      } else {
-        equal_off.only_pos_ = true;
-        equal_off.pos_off_ = root->pos_.offset_;
-        equal_off.pos_value_ = root->normal_keypart_->start_;
-        equal_offs.push_back(equal_off);
-      }
-    }
-    root = root->and_next_;
-  }
+  // bool is_equal_and = true;
+  // ObKeyPart* root = spec.tsc_ctdef_.pre_query_range_.get_table_grapth().key_part_head_;
+  // ObSEArray<ObQueryRange::ObEqualOff, 1> equal_offs;
+  // while (OB_SUCC(ret) && NULL != root && is_equal_and) {
+  //   is_equal_and = is_equal_and & root->is_equal_condition();
+  //   if (NULL != root->item_next_ || NULL != root->or_next_) {
+  //     is_equal_and = false;
+  //   } else if (root->is_normal_key()) {
+  //     int64_t param_idx = OB_INVALID_ID;
+  //     ObObj& cur = root->normal_keypart_->start_;
+  //     ObQueryRange::ObEqualOff equal_off;
+  //     if (cur.is_ext() || root->null_safe_) {
+  //       is_equal_and = false; //rollback old version
+  //     } else if (root->is_rowid_key_part()) {
+  //       is_equal_and = false; //not deal with rowid
+  //     } else if (cur.is_unknown()) {
+  //       if (OB_FAIL(cur.get_unknown(param_idx))) {
+  //         LOG_WARN("get question mark value failed", K(ret), K(cur));
+  //       } else {
+  //         equal_off.param_idx_ = param_idx;
+  //         equal_off.pos_off_ = root->pos_.offset_;
+  //         equal_off.pos_type_ = root->pos_.column_type_.get_type();
+  //         equal_offs.push_back(equal_off);
+  //       }
+  //     } else {
+  //       equal_off.only_pos_ = true;
+  //       equal_off.pos_off_ = root->pos_.offset_;
+  //       equal_off.pos_value_ = root->normal_keypart_->start_;
+  //       equal_offs.push_back(equal_off);
+  //     }
+  //   }
+  //   root = root->and_next_;
+  // }
   // TODO the above optimization is overrode by ObTscCgService::generate_tsc_ctdef before this commit
   // but after the deep copy of pre_query_range_ is removed in ObTscCgService::generate_tsc_ctdef,
   // error is returned in such sql 'set global x=y', should fix this;

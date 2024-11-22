@@ -286,6 +286,7 @@ private:
   static int estimate_prefix_range_rowcount(
       const double res_logical_row_count,
       const double res_physical_row_count,
+      bool new_range_with_exec_param,
       ObCostTableScanInfo &est_cost_info);
 
   static int fill_cost_table_scan_info(ObCostTableScanInfo &est_cost_info);

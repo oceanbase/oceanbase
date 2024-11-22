@@ -92,13 +92,13 @@ int ObAdaptiveAutoDop::calculate_tsc_auto_dop(const ObOpSpec &spec, int64_t &tab
   bool is_oracle_agent_table =
     share::is_oracle_mapping_real_virtual_table(tsc_spec.get_ref_table_id());
   ObQueryRangeArray key_ranges;
-  const ObQueryRange &query_range = tsc_spec.get_query_range();
+  const ObQueryRangeProvider &query_range_provider = tsc_spec.get_query_range_provider();
 
   if (is_oracle_agent_table || cost_tsc_info.get_is_spatial_index()) {
     // step1: calculate query range.
-  } else if (query_range.has_range()
+  } else if (query_range_provider.has_range()
              && OB_FAIL(ObSQLUtils::extract_pre_query_range(
-                  query_range, ctx_.get_allocator(), ctx_, key_ranges,
+                  query_range_provider, ctx_.get_allocator(), ctx_, key_ranges,
                   ObBasicSessionInfo::create_dtc_params(ctx_.get_my_session())))) {
     LOG_WARN("failed to extract pre query ranges", K(ret));
     // step2: build est tasks.

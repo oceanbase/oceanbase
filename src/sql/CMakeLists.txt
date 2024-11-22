@@ -427,6 +427,9 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_ifnull.cpp
   engine/expr/ob_expr_inet.cpp
   engine/expr/ob_expr_initcap.cpp
+  engine/expr/ob_expr_inner_decode_like.cpp
+  engine/expr/ob_expr_inner_double_to_int.cpp
+  engine/expr/ob_expr_inner_decimal_to_year.cpp
   engine/expr/ob_expr_inner_trim.cpp
   engine/expr/ob_expr_insert.cpp
   engine/expr/ob_expr_instr.cpp
@@ -1410,6 +1413,10 @@ ob_set_subtarget(ob_sql rewrite
   rewrite/ob_key_part.cpp
   rewrite/ob_predicate_deduce.cpp
   rewrite/ob_query_range.cpp
+  rewrite/ob_expr_range_converter.cpp
+  rewrite/ob_query_range_define.cpp
+  rewrite/ob_range_generator.cpp
+  rewrite/ob_range_graph_generator.cpp
   rewrite/ob_stmt_comparer.cpp
   rewrite/ob_transform_count_to_exists.cpp
   rewrite/ob_transform_aggr_subquery.cpp

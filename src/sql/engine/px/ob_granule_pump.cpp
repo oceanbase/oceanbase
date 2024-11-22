@@ -797,7 +797,7 @@ int ObGranuleSplitter::split_gi_task(ObGranulePumpArgs &args,
              && OB_FAIL(ranges.assign(args.query_range_by_runtime_filter_))) {
     LOG_WARN("failed to assign query range", K(ret), K(tablets));
   } else if (args.query_range_by_runtime_filter_.empty()
-             && OB_FAIL(get_query_range(*args.ctx_, tsc->get_query_range(), ranges, ss_ranges,
+             && OB_FAIL(get_query_range(*args.ctx_, tsc->get_query_range_provider(), ranges, ss_ranges,
                                         table_id, op_id, partition_granule,
                                         ObGranuleUtil::with_param_down(args.gi_attri_flag_)))) {
     LOG_WARN("get query range failed", K(ret));
@@ -850,7 +850,7 @@ int ObGranuleSplitter::split_gi_task(ObGranulePumpArgs &args,
 }
 
 int ObGranuleSplitter::get_query_range(ObExecContext &ctx,
-                                       const ObQueryRange &tsc_pre_query_range,
+                                       const ObQueryRangeProvider &tsc_pre_query_range,
                                        ObIArray<ObNewRange> &ranges,
                                        ObIArray<ObNewRange> &ss_ranges,
                                        int64_t table_id,

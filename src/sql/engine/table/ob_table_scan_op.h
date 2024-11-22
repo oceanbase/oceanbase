@@ -168,6 +168,7 @@ public:
       allocator_(allocator),
       calc_part_id_expr_(NULL),
       global_index_rowkey_exprs_(allocator),
+      pre_range_graph_(allocator),
       attach_spec_(allocator_, &scan_ctdef_),
       flags_(0)
   { }
@@ -182,6 +183,11 @@ public:
     return lookup_ctdef_ != nullptr ?
         lookup_ctdef_->access_column_ids_ :
         scan_ctdef_.access_column_ids_;
+  }
+  const ObQueryRangeProvider& get_query_range_provider() const
+  {
+    return scan_flags_.is_new_query_range() ? static_cast<const ObQueryRangeProvider&>(pre_range_graph_)
+                                            : static_cast<const ObQueryRangeProvider&>(pre_query_range_);
   }
   int allocate_dppr_table_loc();
   ObDASScanCtDef *get_lookup_ctdef();
@@ -227,6 +233,7 @@ public:
   ObExpr *calc_part_id_expr_;
   ExprFixedArray global_index_rowkey_exprs_;
   // end for Global Index Lookup
+  ObPreRangeGraph pre_range_graph_;
   ObDASAttachSpec attach_spec_;
   union {
     uint64_t flags_;
@@ -246,6 +253,7 @@ struct ObTableScanRtDef
       lookup_rtdef_(nullptr),
       range_buffers_(nullptr),
       range_buffer_idx_(0),
+      fast_final_nlj_range_ctx_(),
       group_size_(0),
       max_group_size_(0),
       attach_rtinfo_(nullptr),
@@ -266,6 +274,7 @@ struct ObTableScanRtDef
   // for equal_query_range opt
   void *range_buffers_;
   int64_t range_buffer_idx_;
+  ObFastFinalNLJRangeCtx fast_final_nlj_range_ctx_;
   // for equal_query_range opt end
   int64_t group_size_;
   int64_t max_group_size_;
@@ -346,7 +355,7 @@ public:
   int explain_index_selection_info(char *buf, int64_t buf_len, int64_t &pos) const;
 
   virtual bool is_table_scan() const override { return true; }
-  inline const ObQueryRange &get_query_range() const { return tsc_ctdef_.pre_query_range_; }
+  inline const ObQueryRangeProvider &get_query_range_provider() const { return tsc_ctdef_.get_query_range_provider(); }
   inline uint64_t get_table_loc_id() const { return table_loc_id_; }
   bool use_dist_das() const { return use_dist_das_; }
   int64_t get_rowkey_cnt() const {
@@ -524,7 +533,7 @@ protected:
   int prepare_batch_scan_range();
   int build_bnlj_params();
   int single_equal_scan_check_type(const ParamStore &param_store, bool& is_same_type);
-  bool need_extract_range() const { return MY_SPEC.tsc_ctdef_.pre_query_range_.has_range(); }
+  bool need_extract_range() const { return MY_SPEC.tsc_ctdef_.get_query_range_provider().has_range(); }
   int prepare_single_scan_range(int64_t group_idx = 0);
   int prepare_index_merge_scan_range(int64_t group_idx = 0);
   int prepare_range_for_each_index(int64_t group_idx, ObIAllocator &allocator, ObDASBaseRtDef *rtdef);
@@ -682,6 +691,13 @@ protected:
     int64_t range_buffer_idx_;
   };
 
+  OB_INLINE void* locate_range_buffer()
+  {
+    int64_t column_count = MY_SPEC.tsc_ctdef_.get_query_range_provider().get_column_count();
+    size_t range_size = sizeof(ObNewRange) + sizeof(ObObj) * column_count * 2;
+    void *range_buffers = static_cast<char*>(tsc_rtdef_.range_buffers_) + tsc_rtdef_.range_buffer_idx_ * range_size;
+    return range_buffers;
+  }
 private:
   const ObTableScanSpec& get_tsc_spec() {return MY_SPEC;}
   const ObTableScanCtDef& get_tsc_ctdef() {return MY_SPEC.tsc_ctdef_;}

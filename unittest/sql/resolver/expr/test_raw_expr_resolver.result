@@ -55,6 +55,7 @@
       "value": {
         "BIGINT":1
       },
+      "is_dynamic_questionmark":false,
       "expr_hash":0
     },
      {
@@ -86,6 +87,7 @@
       "value": {
         "DECIMAL":"1"
       },
+      "is_dynamic_questionmark":false,
       "expr_hash":0
     },
      {
@@ -119,6 +121,7 @@
         "collation":"utf8mb4_general_ci",
         "coercibility":"COERCIBLE"
       },
+      "is_dynamic_questionmark":false,
       "expr_hash":0
     }
   ],
@@ -183,6 +186,7 @@
         "collation":"utf8mb4_general_ci",
         "coercibility":"COERCIBLE"
       },
+      "is_dynamic_questionmark":false,
       "expr_hash":0
     },
      {
@@ -216,6 +220,7 @@
         "collation":"utf8mb4_general_ci",
         "coercibility":"COERCIBLE"
       },
+      "is_dynamic_questionmark":false,
       "expr_hash":0
     },
      {
@@ -249,6 +254,7 @@
         "collation":"utf8mb4_general_ci",
         "coercibility":"COERCIBLE"
       },
+      "is_dynamic_questionmark":false,
       "expr_hash":0
     }
   ],
@@ -313,6 +319,7 @@
       "value": {
         "BIGINT":2
       },
+      "is_dynamic_questionmark":false,
       "expr_hash":0
     },
      {
@@ -371,6 +378,7 @@
           "value": {
             "BIGINT":1
           },
+          "is_dynamic_questionmark":false,
           "expr_hash":0
         },
          {
@@ -402,6 +410,7 @@
           "value": {
             "BIGINT":2
           },
+          "is_dynamic_questionmark":false,
           "expr_hash":0
         },
          {
@@ -433,6 +442,7 @@
           "value": {
             "BIGINT":3
           },
+          "is_dynamic_questionmark":false,
           "expr_hash":0
         }
       ],
@@ -500,6 +510,7 @@
       "value": {
         "BIGINT":2
       },
+      "is_dynamic_questionmark":false,
       "expr_hash":0
     },
      {
@@ -558,6 +569,7 @@
           "value": {
             "BIGINT":1
           },
+          "is_dynamic_questionmark":false,
           "expr_hash":0
         },
          {
@@ -589,6 +601,7 @@
           "value": {
             "BIGINT":2
           },
+          "is_dynamic_questionmark":false,
           "expr_hash":0
         },
          {
@@ -620,6 +633,7 @@
           "value": {
             "BIGINT":3
           },
+          "is_dynamic_questionmark":false,
           "expr_hash":0
         }
       ],
@@ -715,6 +729,7 @@
           "value": {
             "BIGINT":1
           },
+          "is_dynamic_questionmark":false,
           "expr_hash":0
         }
       ],
@@ -777,6 +792,7 @@
           "value": {
             "BIGINT":1
           },
+          "is_dynamic_questionmark":false,
           "expr_hash":0
         }
       ],
@@ -870,6 +886,7 @@
           "value": {
             "BIGINT":100
           },
+          "is_dynamic_questionmark":false,
           "expr_hash":0
         }
       ],
@@ -932,6 +949,7 @@
           "value": {
             "BIGINT":0
           },
+          "is_dynamic_questionmark":false,
           "expr_hash":0
         }
       ],
@@ -1027,6 +1045,7 @@
           "value": {
             "BIGINT":100
           },
+          "is_dynamic_questionmark":false,
           "expr_hash":0
         }
       ],
@@ -1116,6 +1135,7 @@
               "value": {
                 "BIGINT":0
               },
+              "is_dynamic_questionmark":false,
               "expr_hash":0
             }
           ],
@@ -1178,6 +1198,7 @@
               "value": {
                 "BIGINT":100
               },
+              "is_dynamic_questionmark":false,
               "expr_hash":0
             }
           ],
@@ -1296,6 +1317,7 @@
       "collation":"utf8mb4_general_ci",
       "coercibility":"COERCIBLE"
     },
+    "is_dynamic_questionmark":false,
     "expr_hash":0
   },
   "when": [
@@ -1330,6 +1352,7 @@
         "collation":"utf8mb4_general_ci",
         "coercibility":"COERCIBLE"
       },
+      "is_dynamic_questionmark":false,
       "expr_hash":0
     },
      {
@@ -1363,6 +1386,7 @@
         "collation":"utf8mb4_general_ci",
         "coercibility":"COERCIBLE"
       },
+      "is_dynamic_questionmark":false,
       "expr_hash":0
     }
   ],
@@ -1398,6 +1422,7 @@
         "collation":"utf8mb4_general_ci",
         "coercibility":"COERCIBLE"
       },
+      "is_dynamic_questionmark":false,
       "expr_hash":0
     },
      {
@@ -1431,6 +1456,7 @@
         "collation":"utf8mb4_general_ci",
         "coercibility":"COERCIBLE"
       },
+      "is_dynamic_questionmark":false,
       "expr_hash":0
     }
   ],
@@ -1496,6 +1522,7 @@
       "collation":"utf8mb4_general_ci",
       "coercibility":"COERCIBLE"
     },
+    "is_dynamic_questionmark":false,
     "expr_hash":0
   },
   "when": [
@@ -1555,6 +1582,7 @@
           "value": {
             "BIGINT":1
           },
+          "is_dynamic_questionmark":false,
           "expr_hash":0
         },
          {
@@ -1586,6 +1614,7 @@
           "value": {
             "BIGINT":0
           },
+          "is_dynamic_questionmark":false,
           "expr_hash":0
         }
       ],
@@ -1624,6 +1653,7 @@
         "collation":"utf8mb4_general_ci",
         "coercibility":"COERCIBLE"
       },
+      "is_dynamic_questionmark":false,
       "expr_hash":0
     }
   ],
@@ -1774,6 +1804,7 @@
       "value": {
         "DECIMAL":"3.14"
       },
+      "is_dynamic_questionmark":false,
       "expr_hash":0
     }
   ],
@@ -2104,6 +2135,7 @@
       "value": {
         "BIGINT":1
       },
+      "is_dynamic_questionmark":false,
       "expr_hash":0
     },
      {
@@ -2376,6 +2408,7 @@
   "value": {
     "BIGINT":10
   },
+  "is_dynamic_questionmark":false,
   "expr_hash":0
 }
 [18] @@auto_increment_increment
@@ -2440,6 +2473,7 @@
         "collation":"utf8mb4_general_ci",
         "coercibility":"SYSCONST"
       },
+      "is_dynamic_questionmark":false,
       "expr_hash":0
     },
      {
@@ -2471,6 +2505,7 @@
       "value": {
         "BIGINT":0
       },
+      "is_dynamic_questionmark":false,
       "expr_hash":0
     }
   ],
@@ -2666,6 +2701,7 @@
       "value": {
         "BIGINT":10
       },
+      "is_dynamic_questionmark":false,
       "expr_hash":0
     },
      {
@@ -2697,6 +2733,7 @@
       "value": {
         "BIGINT":10
       },
+      "is_dynamic_questionmark":false,
       "expr_hash":0
     }
   ],
@@ -2789,6 +2826,7 @@
           "value": {
             "BIGINT":10
           },
+          "is_dynamic_questionmark":false,
           "expr_hash":0
         }
       ],
@@ -3189,6 +3227,7 @@
       "value": {
         "BIGINT":3
       },
+      "is_dynamic_questionmark":false,
       "expr_hash":0
     }
   ],
@@ -3301,6 +3340,7 @@
       "value": {
         "BIGINT":1
       },
+      "is_dynamic_questionmark":false,
       "expr_hash":0
     }
   ],
@@ -3570,6 +3610,7 @@
           "value": {
             "BIGINT":1
           },
+          "is_dynamic_questionmark":false,
           "expr_hash":0
         },
          {
@@ -3601,6 +3642,7 @@
           "value": {
             "BIGINT":2
           },
+          "is_dynamic_questionmark":false,
           "expr_hash":0
         },
          {
@@ -3632,6 +3674,7 @@
           "value": {
             "BIGINT":3
           },
+          "is_dynamic_questionmark":false,
           "expr_hash":0
         },
          {
@@ -3663,6 +3706,7 @@
           "value": {
             "BIGINT":4
           },
+          "is_dynamic_questionmark":false,
           "expr_hash":0
         }
       ],
@@ -3805,6 +3849,7 @@
           "value": {
             "BIGINT":2
           },
+          "is_dynamic_questionmark":false,
           "expr_hash":0
         }
       ],
@@ -3916,6 +3961,7 @@
           "value": {
             "BIGINT":10
           },
+          "is_dynamic_questionmark":false,
           "expr_hash":0
         }
       ],
@@ -4009,6 +4055,7 @@
           "value": {
             "BIGINT":10
           },
+          "is_dynamic_questionmark":false,
           "expr_hash":0
         },
          {
@@ -4040,6 +4087,7 @@
           "value": {
             "BIGINT":10
           },
+          "is_dynamic_questionmark":false,
           "expr_hash":0
         }
       ],
@@ -4232,6 +4280,7 @@
           "value": {
             "BIGINT":1
           },
+          "is_dynamic_questionmark":false,
           "expr_hash":0
         },
          {
@@ -4263,6 +4312,7 @@
           "value": {
             "BIGINT":2
           },
+          "is_dynamic_questionmark":false,
           "expr_hash":0
         }
       ],
@@ -4434,6 +4484,7 @@
               "value": {
                 "BIGINT":10
               },
+              "is_dynamic_questionmark":false,
               "expr_hash":0
             },
              {
@@ -4465,6 +4516,7 @@
               "value": {
                 "BIGINT":10
               },
+              "is_dynamic_questionmark":false,
               "expr_hash":0
             }
           ],
@@ -4579,6 +4631,7 @@
           "value": {
             "BIGINT":30
           },
+          "is_dynamic_questionmark":false,
           "expr_hash":0
         }
       ],
@@ -4732,6 +4785,7 @@
                   "value": {
                     "BIGINT":1
                   },
+                  "is_dynamic_questionmark":false,
                   "expr_hash":0
                 },
                  {
@@ -4817,6 +4871,7 @@
               "value": {
                 "UNKNOWN":0
               },
+              "is_dynamic_questionmark":false,
               "expr_hash":0
             }
           ],
@@ -4881,6 +4936,7 @@
                 "collation":"utf8mb4_general_ci",
                 "coercibility":"COERCIBLE"
               },
+              "is_dynamic_questionmark":false,
               "expr_hash":0
             }
           ],
@@ -4997,6 +5053,7 @@
             "collation":"utf8mb4_general_ci",
             "coercibility":"COERCIBLE"
           },
+          "is_dynamic_questionmark":false,
           "expr_hash":0
         }
       ],
@@ -5157,6 +5214,7 @@
                     "collation":"utf8mb4_general_ci",
                     "coercibility":"COERCIBLE"
                   },
+                  "is_dynamic_questionmark":false,
                   "expr_hash":0
                 },
                  {
@@ -5188,6 +5246,7 @@
                   "value": {
                     "BIGINT":45
                   },
+                  "is_dynamic_questionmark":false,
                   "expr_hash":0
                 }
               ],
@@ -5229,6 +5288,7 @@
               "value": {
                 "BIGINT":46
               },
+              "is_dynamic_questionmark":false,
               "expr_hash":0
             }
           ],
@@ -5270,6 +5330,7 @@
           "value": {
             "BIGINT":-4290838506
           },
+          "is_dynamic_questionmark":false,
           "expr_hash":0
         }
       ],
@@ -5311,6 +5372,7 @@
       "value": {
         "BIGINT":-4290838506
       },
+      "is_dynamic_questionmark":false,
       "expr_hash":0
     }
   ],
@@ -5509,6 +5571,7 @@
             "collation":"utf8mb4_general_ci",
             "coercibility":"COERCIBLE"
           },
+          "is_dynamic_questionmark":false,
           "expr_hash":0
         }
       ],

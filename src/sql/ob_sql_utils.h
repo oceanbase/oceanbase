@@ -14,6 +14,7 @@
 #define _OCEANBASE_SQL_OB_SQL_UTILS_H
 
 #include "common/ob_range.h"
+#include "sql/rewrite/ob_query_range_provider.h"
 #include "common/object/ob_object.h"
 #include "lib/container/ob_vector.h"
 #include "lib/container/ob_2d_array.h"
@@ -456,7 +457,7 @@ public:
                            common::ObExprCtx &expr_ctx);
 
   // use get_tablet_ranges instead.
-  static int extract_pre_query_range(const ObQueryRange &pre_query_range,
+  static int extract_pre_query_range(const ObQueryRangeProvider &query_range_provider,
                                      common::ObIAllocator &allocator,
                                      ObExecContext &exec_ctx,
                                      ObQueryRangeArray &key_ranges,
@@ -466,7 +467,7 @@ public:
                                            void *range_buffer,
                                            const ParamStore &param_store,
                                            ObQueryRangeArray &key_ranges);
-  static int extract_geo_query_range(const ObQueryRange &pre_query_range,
+  static int extract_geo_query_range(const ObQueryRangeProvider &query_range_provider,
                                        ObIAllocator &allocator,
                                        ObExecContext &exec_ctx,
                                        ObQueryRangeArray &key_ranges,
@@ -776,6 +777,8 @@ public:
   static bool is_data_version_ge_423_or_431(uint64_t data_version);
   static bool is_data_version_ge_423_or_432(uint64_t data_version);
   static bool is_data_version_ge_424_or_433(uint64_t data_version);
+  static bool is_min_cluster_version_ge_425_or_435();
+  static bool is_opt_feature_version_ge_425_or_435(uint64_t opt_feature_version);
 
   static int get_proxy_can_activate_role(const ObIArray<uint64_t> &role_id_array,
                                             const ObIArray<uint64_t> &role_id_option_array,

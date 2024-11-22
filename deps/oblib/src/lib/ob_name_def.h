@@ -1138,6 +1138,8 @@
 
 #define N_INEER_IS_TRUE                     "inner_is_true"
 #define N_INNER_DECODE_LIKE                 "inner_decode_like"
+#define N_INNER_DOUBLE_TO_INT               "inner_double_to_int"
+#define N_INNER_DECIMAL_TO_YEAR             "inner_decimal_to_year"
 #define N_BM25                              "bm25"
 #define N_EXTRACT_CERT_EXPIRED_TIME         "extract_cert_expired_time"
 #define N_INNER_ROW_CMP_VALUE               "inner_row_cmp_value"

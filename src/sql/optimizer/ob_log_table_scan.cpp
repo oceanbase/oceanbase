@@ -42,8 +42,9 @@ const char *ObLogTableScan::get_name() const
   const char *name = NULL;
   int ret = OB_SUCCESS;
   SampleInfo::SampleMethod sample_method = get_sample_info().method_;
-  if (NULL != pre_query_range_) {
-    if (OB_FAIL(get_pre_query_range()->is_get(is_get))) {
+  const ObQueryRangeProvider *pre_range = get_pre_graph();
+  if (NULL != pre_range) {
+    if (OB_FAIL(pre_range->is_get(is_get))) {
       // is_get always return true
       LOG_WARN("failed to get is_get", K(ret));
     } else if (range_conds_.count() > 0) {
@@ -1382,6 +1383,7 @@ int ObLogTableScan::pick_out_query_range_exprs()
   ObOptimizerContext *opt_ctx = NULL;
   ObSqlSchemaGuard *schema_guard = NULL;
   const share::schema::ObTableSchema *index_schema = NULL;
+  const ObQueryRangeProvider *pre_range = get_pre_graph();
   /*
   * virtual table may have hash index,
   * for hash index, if it is a get, we should still extract the range condition
@@ -1400,8 +1402,8 @@ int ObLogTableScan::pick_out_query_range_exprs()
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(is_table_get(is_get))) {
     LOG_WARN("failed to check is table get", K(ret));
-  } else if ((index_schema->is_ordered() || is_get) && NULL != pre_query_range_) {
-    const ObIArray<ObRawExpr *> &range_exprs = pre_query_range_->get_range_exprs();
+  } else if ((index_schema->is_ordered() || is_get) && NULL != pre_range) {
+    const ObIArray<ObRawExpr *> &range_exprs = pre_range->get_range_exprs();
     ObArray<ObRawExpr *> filter_exprs;
     if (OB_FAIL(filter_exprs.assign(filter_exprs_))) {
       LOG_WARN("assign filter exprs failed", K(ret));
@@ -2217,7 +2219,7 @@ int ObLogTableScan::print_range_annotation(char *buf,
     }
 
     if (OB_SUCC(ret) && is_skip_scan()) {
-      int64_t skip_scan_offset = get_pre_query_range()->get_skip_scan_offset();
+      int64_t skip_scan_offset = get_pre_graph()->get_skip_scan_offset();
       if (OB_FAIL(BUF_PRINTF("\n      prefix_columns_cnt = %ld , skip_scan_range", skip_scan_offset))) {
         LOG_WARN("BUF_PRINTF fails", K(ret));
       } else if (ss_ranges_.empty() && OB_FAIL(BUF_PRINTF("(MIN ; MAX)"))) {
@@ -2237,6 +2239,16 @@ int ObLogTableScan::print_range_annotation(char *buf,
           LOG_WARN("BUF_PRINTF fails", K(ret));
         }
         EXPLAIN_PRINT_EXPRS(range_cond, type);
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && EXPLAIN_EXTENDED == type) {
+    if (pre_range_graph_ != nullptr && pre_range_graph_->is_fast_nlj_range()) {
+      if (OB_FAIL(BUF_PRINTF(", "))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      } else if (OB_FAIL(BUF_PRINTF(" is_fast_range = true"))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
       }
     }
   }
@@ -2295,7 +2307,7 @@ int ObLogTableScan::print_outline_data(PlanText &plan_text)
   TableItem *table_item = NULL;
   ObString qb_name;
   const ObString *index_name = NULL;
-  int64_t index_prefix = -1;
+  int64_t index_prefix = index_prefix_;
   ObItemType index_type = T_INDEX_HINT;
   const ObDMLStmt *stmt = NULL;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
@@ -2323,10 +2335,6 @@ int ObLogTableScan::print_outline_data(PlanText &plan_text)
     } else {
       index_name = &get_index_name();
     }
-  } else if (OB_FAIL(get_plan()->get_log_plan_hint().get_index_prefix(table_id_,
-                                                  index_table_id_,
-                                                  index_prefix))) {
-    LOG_WARN("failed to get index prefix", K(table_id_), K(index_table_id_), K(index_prefix), K(ret));
   } else if (ref_table_id_ == index_table_id_ && index_prefix < 0) {
     index_type = T_FULL_HINT;
     index_name = &ObIndexHint::PRIMARY_KEY;
@@ -2568,8 +2576,9 @@ int ObLogTableScan::allocate_granule_post(AllocGIContext &ctx)
 int ObLogTableScan::is_table_get(bool &is_get) const
 {
   int ret = OB_SUCCESS;
-  if (pre_query_range_ != NULL) {
-    if (OB_FAIL(pre_query_range_->is_get(is_get))) {
+  const ObQueryRangeProvider *pre_range = get_pre_graph();
+  if (pre_range != NULL) {
+    if (OB_FAIL(pre_range->is_get(is_get))) {
       LOG_WARN("check query range is table get", K(ret));
     }
   }

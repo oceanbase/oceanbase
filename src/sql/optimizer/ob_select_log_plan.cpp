@@ -7826,38 +7826,60 @@ int ObSelectLogPlan::adjust_late_materialization_plan_structure(ObLogicalOperato
     if (OB_SUCC(ret)) {
       const ObDataTypeCastParams dtc_params =
             ObBasicSessionInfo::create_dtc_params(optimizer_context_.get_session_info());
-      ObQueryRange *query_range = static_cast<ObQueryRange*>(get_allocator().alloc(sizeof(ObQueryRange)));
       const ParamStore *params = get_optimizer_context().get_params();
-      if (OB_ISNULL(query_range)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate memory for query range", K(ret));
-      } else if (OB_ISNULL(params)) {
+      if (OB_ISNULL(params)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
-      } else {
-        query_range = new(query_range)ObQueryRange(get_allocator());
-        bool is_in_range_optimization_enabled = false;
-        if (OB_FAIL(ObOptimizerUtil::is_in_range_optimization_enabled(optimizer_context_.get_global_hint(),
-                                                                      optimizer_context_.get_session_info(),
-                                                                      is_in_range_optimization_enabled))) {
-          LOG_WARN("failed to check in range optimization enabled", K(ret));
-        } else if (OB_FAIL(query_range->preliminary_extract_query_range(range_columns,
-                                                                        join_conditions,
-                                                                        dtc_params,
-                                                                        optimizer_context_.get_exec_ctx(),
-                                                                        optimizer_context_.get_query_ctx(),
-                                                                        NULL,
-                                                                        params,
-                                                                        false,
-                                                                        true,
-                                                                        is_in_range_optimization_enabled))) {
-          LOG_WARN("failed to preliminary extract query range", K(ret));
-        } else if (OB_FAIL(table_scan->set_range_columns(range_columns))) {
-          LOG_WARN("failed to set range columns", K(ret));
+      } else if (OB_FAIL(table_scan->set_range_columns(range_columns))) {
+        LOG_WARN("failed to set range columns", K(ret));
+      } else if (optimizer_context_.enable_new_query_range()) {
+        ObPreRangeGraph *pre_range_graph = static_cast<ObPreRangeGraph*>(get_allocator().alloc(sizeof(ObPreRangeGraph)));
+        if (OB_ISNULL(pre_range_graph)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memory for pre range graph", K(ret));
         } else {
-          table_scan->set_pre_query_range(query_range);
+          pre_range_graph = new(pre_range_graph)ObPreRangeGraph(get_allocator());
+          if (OB_FAIL(pre_range_graph->preliminary_extract_query_range(range_columns,
+                                                                       join_conditions,
+                                                                       optimizer_context_.get_exec_ctx(),
+                                                                       NULL,
+                                                                       params,
+                                                                       false,
+                                                                       true))) {
+            LOG_WARN("failed to preliminary extract query range", K(ret));
+          } else {
+            table_scan->set_pre_range_graph(pre_range_graph);
+          }
+        }
+      } else {
+        ObQueryRange *query_range = static_cast<ObQueryRange*>(get_allocator().alloc(sizeof(ObQueryRange)));
+        if (OB_ISNULL(query_range)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memory for query range", K(ret));
+        } else {
+          query_range = new(query_range)ObQueryRange(get_allocator());
+          bool is_in_range_optimization_enabled = false;
+          if (OB_FAIL(ObOptimizerUtil::is_in_range_optimization_enabled(optimizer_context_.get_global_hint(),
+                                                                        optimizer_context_.get_session_info(),
+                                                                        is_in_range_optimization_enabled))) {
+            LOG_WARN("failed to check in range optimization enabled", K(ret));
+          } else if (OB_FAIL(query_range->preliminary_extract_query_range(range_columns,
+                                                                  join_conditions,
+                                                                  dtc_params,
+                                                                  optimizer_context_.get_exec_ctx(),
+                                                                  optimizer_context_.get_query_ctx(),
+                                                                  NULL,
+                                                                  params,
+                                                                  false,
+                                                                  true,
+                                                                  is_in_range_optimization_enabled))) {
+            LOG_WARN("failed to preliminary extract query range", K(ret));
+          } else {
+            table_scan->set_pre_query_range(query_range);
+          }
         }
       }
+
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(table_scan->set_table_scan_filters(join_conditions))) {
@@ -8202,8 +8224,8 @@ int ObSelectLogPlan::if_index_back_plan_need_late_materialization(ObLogSort *chi
   } else if (OB_FAIL(append(temp_exprs, table_scan->get_filter_exprs())) ||
               OB_FAIL(append(temp_exprs, table_keys))) {
     LOG_WARN("failed to append exprs", K(ret));
-  } else if (NULL != table_scan->get_pre_query_range() &&
-              OB_FAIL(append(temp_exprs, table_scan->get_pre_query_range()->get_range_exprs()))) {
+  } else if (NULL != table_scan->get_pre_graph() &&
+              OB_FAIL(append(temp_exprs, table_scan->get_pre_graph()->get_range_exprs()))) {
     LOG_WARN("failed to append exprs", K(ret));
   } else if (OB_ISNULL(schema_guard = get_optimizer_context().get_sql_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
@@ -8267,8 +8289,8 @@ int ObSelectLogPlan::if_column_store_plan_need_late_materialization(ObLogSort *c
     LOG_WARN("failed to append exprs", K(ret));
   } else if (OB_FAIL(append(temp_exprs, table_scan->get_filter_exprs()))) {
     LOG_WARN("failed to append exprs", K(ret));
-  } else if (NULL != table_scan->get_pre_query_range() &&
-              OB_FAIL(append(temp_exprs, table_scan->get_pre_query_range()->get_range_exprs()))) {
+  } else if (NULL != table_scan->get_pre_graph() &&
+              OB_FAIL(append(temp_exprs, table_scan->get_pre_graph()->get_range_exprs()))) {
     LOG_WARN("failed to append exprs", K(ret));
   } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(temp_exprs, temp_col_exprs))) {
     LOG_WARN("extract column exprs failed", K(ret));

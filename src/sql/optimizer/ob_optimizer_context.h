@@ -260,6 +260,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     use_column_store_replica_(false),
     push_join_pred_into_view_enabled_(true),
     table_access_policy_(ObTableAccessPolicy::AUTO),
+    enable_new_query_range_(false),
     partition_wise_plan_enabled_(true),
     enable_px_ordered_coord_(false)
   { }
@@ -684,6 +685,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_push_join_pred_into_view_enabled(bool enabled) { push_join_pred_into_view_enabled_ = enabled; }
   inline void set_table_access_policy(ObTableAccessPolicy policy) { table_access_policy_ = policy; }
   inline ObTableAccessPolicy get_table_acces_policy() const { return table_access_policy_; }
+  inline void set_enable_new_query_range(bool v) { enable_new_query_range_ = v; }
+  inline bool enable_new_query_range() const { return enable_new_query_range_; }
 private:
   ObSQLSessionInfo *session_info_;
   ObExecContext *exec_ctx_;
@@ -786,6 +789,7 @@ private:
   bool use_column_store_replica_;
   bool push_join_pred_into_view_enabled_;
   ObTableAccessPolicy table_access_policy_;
+  bool enable_new_query_range_;
   bool partition_wise_plan_enabled_;
   bool enable_px_ordered_coord_;
 };

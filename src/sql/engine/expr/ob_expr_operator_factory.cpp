@@ -479,6 +479,9 @@
 #include "sql/engine/expr/ob_expr_audit_log_func.h"
 #include "sql/engine/expr/ob_expr_can_access_trigger.h"
 #include "sql/engine/expr/ob_expr_split_part.h"
+#include "sql/engine/expr/ob_expr_inner_decode_like.h"
+#include "sql/engine/expr/ob_expr_inner_double_to_int.h"
+#include "sql/engine/expr/ob_expr_inner_decimal_to_year.h"
 #include "sql/engine/expr/ob_expr_array_overlaps.h"
 #include "sql/engine/expr/ob_expr_array_contains_all.h"
 #include "sql/engine/expr/ob_expr_array_distinct.h"
@@ -488,6 +491,7 @@
 #include "sql/engine/expr/ob_expr_get_mysql_routine_parameter_type_str.h"
 #include "sql/engine/expr/ob_expr_priv_st_geohash.h"
 #include "sql/engine/expr/ob_expr_priv_st_makepoint.h"
+
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -1191,6 +1195,10 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprSm4Encrypt);
     REG_OP(ObExprSm4Decrypt);
     REG_OP(ObExprSplitPart);
+    REG_OP(ObExprInnerIsTrue);
+    REG_OP(ObExprInnerDecodeLike);
+    REG_OP(ObExprInnerDoubleToInt);
+    REG_OP(ObExprInnerDecimalToYear);
     REG_OP(ObExprTokenize);
     REG_OP(ObExprArrayOverlaps);
     REG_OP(ObExprArrayContainsAll);
@@ -1531,6 +1539,9 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprGetPath);
   REG_OP_ORCL(ObExprDecodeTraceId);
   REG_OP_ORCL(ObExprSplitPart);
+  REG_OP_ORCL(ObExprInnerIsTrue);
+  REG_OP_ORCL(ObExprInnerDecodeLike);
+  REG_OP_ORCL(ObExprInnerDoubleToInt);
   REG_OP_ORCL(ObExprCalcOdpsSize);
 }
 

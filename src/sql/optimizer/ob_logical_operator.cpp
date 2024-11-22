@@ -5051,11 +5051,11 @@ int ObLogicalOperator::check_can_extract_query_range_by_rf(
     // maybe temp table access op, can not extract query range
     can_extract_query_range = false;
   } else if (FALSE_IT(scan_op = static_cast<ObLogTableScan*>(scan_node))) {
-  } else if (OB_ISNULL(scan_op->get_pre_query_range()) ) {
+  } else if (OB_ISNULL(scan_op->get_pre_graph()) ) {
     // for virtual table, the pre_query_range may be null,
     // can not extract query range by runtime filter
     can_extract_query_range = false;
-  } else if (!scan_op->get_pre_query_range()->is_precise_whole_range()) {
+  } else if (!scan_op->get_pre_graph()->is_precise_whole_range()) {
     // already has query range which is not whole range,
     // do not extract query range by runtime filter
     can_extract_query_range = false;
