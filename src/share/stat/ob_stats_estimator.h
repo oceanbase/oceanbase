@@ -41,7 +41,7 @@ protected:
 
   int add_result(ObObj &obj)  { return results_.push_back(obj); }
 
-  int do_estimate(uint64_t tenant_id,
+  int do_estimate(const ObOptStatGatherParam &gather_param,
                   const ObString &raw_sql,
                   bool need_copy_basic_stat,
                   ObOptStat &src_opt_stat,

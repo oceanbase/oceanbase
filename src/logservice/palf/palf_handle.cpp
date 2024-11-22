@@ -822,7 +822,7 @@ int PalfHandle::raw_read(const palf::LSN &lsn,
                          void *buffer,
                          const int64_t nbytes,
                          int64_t &read_size,
-                         palf::LogIOContext &io_ctx)
+                         LogIOContext &io_ctx)
 {
   CHECK_VALID;
   return palf_handle_impl_->raw_read(lsn, reinterpret_cast<char*>(buffer), nbytes, read_size, io_ctx);

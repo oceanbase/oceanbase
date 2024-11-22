@@ -79,7 +79,9 @@ public:
                  ObIODevice *&device_handle);
   // get ObLocalDevice or ObLocalCacheDevice.
   // @storage_type_prefix only allows OB_LOCAL_PREFIX and OB_LOCAL_CACHE_PREFIX.
-  static int get_local_device(const ObString &storage_type_prefix, ObIODevice *&device_handle);
+  static int get_local_device(const ObString &storage_type_prefix,
+                              const ObStorageIdMod &storage_id_mod,
+                              ObIODevice *&device_handle);
   int release_device(common::ObIODevice*& device_handle);
   //for test
   int64_t get_device_cnt() {return device_count_;}

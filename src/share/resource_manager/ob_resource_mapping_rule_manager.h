@@ -213,7 +213,7 @@ public:
     int ret = function_rule_map_.set_refactored(share::ObTenantFunctionKey(tenant_id, func), 0, 1/*overwrite*/);
     return ret;
   }
-
+  int64_t to_string(char *buf, const int64_t len) const;
 private:
   int refresh_resource_function_mapping_rule(
       ObResourceManagerProxy &proxy,

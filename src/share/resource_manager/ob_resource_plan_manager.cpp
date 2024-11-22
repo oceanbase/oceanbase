@@ -175,9 +175,7 @@ int ObResourcePlanManager::refresh_resource_plan(const uint64_t tenant_id, ObStr
     (void) clear_deleted_directives(tenant_id, directives);
   }
   if (OB_SUCC(ret)) {
-    if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) { // 10s
-      LOG_INFO("refresh resource plan success", K(tenant_id), K(plan_name), K(directives));
-    }
+    LOG_INFO("refresh resource plan success", K(tenant_id), K(plan_name), K(directives));
   }
   return ret;
 }
@@ -199,6 +197,21 @@ int ObResourcePlanManager::get_cur_plan(const uint64_t tenant_id, ObResMgrVarcha
     }
   }
   return ret;
+}
+
+int64_t ObResourcePlanManager::to_string(char *buf, const int64_t len) const
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  if (OB_SUCC(databuff_printf(buf, len, pos, "background_quota:%d, tenant_plan_map:", background_quota_))) {
+    if (OB_SUCC(databuff_printf(buf, len, pos, "{"))) {
+      common::hash::ObHashMap<uint64_t, ObResMgrVarcharValue>::PrintFunctor fn(buf, len, pos);
+      if (OB_SUCC(tenant_plan_map_.foreach_refactored(fn))) {
+        ret = databuff_printf(buf, len, pos, "}");
+      }
+    }
+  }
+  return pos;
 }
 
 int ObResourcePlanManager::normalize_iops_directives(const uint64_t tenant_id,

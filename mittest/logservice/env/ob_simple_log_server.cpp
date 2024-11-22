@@ -33,6 +33,7 @@
 #include "logservice/arbserver/arb_tg_helper.h"
 #include "mittest/logservice/env/ob_simple_log_cluster_testbase.h"
 #include "share/rpc/ob_batch_processor.h"
+#include "share/ob_device_manager.h"                                // ObDeviceManager
 #undef protected
 #undef private
 
@@ -422,6 +423,7 @@ int ObSimpleLogServer::init_io_(const std::string &cluster_name)
     iod_opt_array_[3].set("datafile_disk_percentage", storage_env.data_disk_percentage_);
     iod_opt_array_[4].set("datafile_size", storage_env.data_disk_size_);
     iod_opts_.opt_cnt_ = MAX_IOD_OPT_CNT;
+
     if (OB_FAIL(io_device_->init(iod_opts_))) {
       SERVER_LOG(ERROR, "init io device fail", K(ret));
     } else if (OB_FAIL(log_block_pool_.init(storage_env.clog_dir_))) {
@@ -485,6 +487,8 @@ int ObSimpleLogServer::init_log_service_(const bool is_bootstrap)
     SERVER_LOG(ERROR, "mock_election_map_ init fail", K(ret));
   } else if (is_bootstrap && OB_FAIL(ckpt_map_.init("CKPTMap", OB_SERVER_TENANT_ID))) {
     SERVER_LOG(ERROR, "ckpt_map_ init fail", K(ret));
+  } else if (OB_FAIL(log_service_.get_palf_env()->start())) {
+    SERVER_LOG(ERROR, "palf_env start fail", K(ret));
   } else {
     palf_env_ = log_service_.get_palf_env();
     palf_env_->palf_env_impl_.log_rpc_.tenant_id_ = tenant_id_;

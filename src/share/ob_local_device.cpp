@@ -170,6 +170,7 @@ int ObLocalDevice::init(const common::ObIODOpts &opts)
       }
     }
   }
+  SHARE_LOG(INFO, "init local device", K(ret), KP(this), K(lbt()));
 
   if (OB_SUCC(ret)) {
     is_inited_ = true;
@@ -803,11 +804,11 @@ int ObLocalDevice::pwrite(
     if (fd.is_block_file()) {
       const int64_t block_file_offset = get_block_file_offset(fd, offset);
       if (OB_FAIL(ObIODeviceLocalFileOp::pwrite_impl(block_fd_, buf, size, block_file_offset, write_size))) {
-        SHARE_LOG(WARN, "failed to pwrite", K(ret), K(block_fd_), K(size), K(block_file_offset));
+        SHARE_LOG(WARN, "failed to pwrite", K(ret), K(block_fd_), KP(buf), K(size), K(block_file_offset));
       }
     } else if (fd.is_normal_file()) {
       if (OB_FAIL(ObIODeviceLocalFileOp::pwrite_impl(fd.second_id_, buf, size, offset, write_size))) {
-        SHARE_LOG(WARN, "failed to pwrite", K(ret), K(fd), K(size), K(offset));
+        SHARE_LOG(WARN, "failed to pwrite", K(ret), K(fd), KP(buf), K(size), K(offset));
       }
     }
 

@@ -153,7 +153,8 @@ int ObSNIODeviceWrapper::get_local_device_from_mgr(share::ObLocalDevice *&local_
 
   common::ObIODevice* device = nullptr;
   common::ObString storage_type_prefix(OB_LOCAL_PREFIX);
-  if(OB_FAIL(common::ObDeviceManager::get_local_device(storage_type_prefix, device))) {
+  const ObStorageIdMod storage_id_mod(0, ObStorageUsedMod::STORAGE_USED_DATA);
+  if(OB_FAIL(common::ObDeviceManager::get_local_device(storage_type_prefix, storage_id_mod, device))) {
     LOG_WARN("fail to get local device", K(ret));
   } else if (OB_ISNULL(local_device = static_cast<share::ObLocalDevice*>(device))) {
     ret = OB_ERR_UNEXPECTED;
@@ -788,7 +789,7 @@ int ObIODeviceLocalFileOp::pwrite_impl(
         SHARE_LOG(INFO, "pwrite is interrupted before any data is written, just retry", K(errno), KERRMSG);
       } else {
         ret = ObIODeviceLocalFileOp::convert_sys_errno();
-        SHARE_LOG(WARN, "failed to pwrite", K(ret), K(fd), K(write_sz), K(write_offset), K(errno), KERRMSG);
+        SHARE_LOG(WARN, "failed to pwrite", K(ret), K(fd), KP(buffer), K(write_sz), K(write_offset), K(errno), KERRMSG);
       }
     } else {
       buffer += sz;

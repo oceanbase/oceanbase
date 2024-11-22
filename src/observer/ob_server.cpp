@@ -935,6 +935,10 @@ void ObServer::destroy()
 
     deinit_zlib_lite_compressor();
 
+    FLOG_INFO("begin to destroy log io device wrapper");
+    LOG_IO_DEVICE_WRAPPER.destroy();
+    FLOG_INFO("log io device wrapper destroyed");
+
     has_destroy_ = true;
     FLOG_INFO("[OBSERVER_NOTICE] destroy observer end");
   }
@@ -2569,6 +2573,12 @@ int ObServer::init_io()
                                                   data_disk_percentage,
                                                   log_disk_percentage))) {
           LOG_ERROR("cal_all_part_disk_size failed", KR(ret));
+        } else if (OB_FAIL(LOG_IO_DEVICE_WRAPPER.init(storage_env_.clog_dir_,
+                                                      io_config.disk_io_thread_count_,
+                                                      max_io_depth,
+                                                      &OB_IO_MANAGER,
+                                                      &ObDeviceManager::get_instance()))) {
+          LOG_ERROR("log_io_device_wrapper init failed", KR(ret));
         } else {
           if (log_block_mgr_.is_reserved()) {
             int64_t clog_pool_in_use = 0;
@@ -4153,10 +4163,23 @@ int ObServer::init_server_in_arb_mode()
   LOG_INFO("io thread connection negotiation enabled!");
   arb_opts.negotiation_enable_ = 1;          // enable negotiation
   arb_opts.rpc_port_ = rpc_port;
-
+  const int64_t max_io_depth = 256;
+  ObIOConfig io_config;
+  io_config.disk_io_thread_count_ = GCONF.disk_io_thread_count;
+  const double io_memory_ratio = 0.2;
   if (OB_FAIL(net_work_farme.init(arb_opts, &palf_env_mgr))) {
     LOG_ERROR("init ObArbSrvNetworkFrame failed", K(ret), K(arb_opts));
-  } else if (OB_FAIL(palf_env_mgr.init(GCONF.data_dir, self_addr_, net_work_farme.get_req_transport()))) {
+  } else if (OB_FAIL(ObIOManager::get_instance().init(GMEMCONF.get_server_memory_limit() * io_memory_ratio))) {
+    LOG_ERROR("init io manager fail", K(ret));
+  } else if (OB_FAIL(ObIOManager::get_instance().set_io_config(io_config))) {
+    LOG_ERROR("config io manager fail, ", K(ret));
+  } else if (OB_FAIL(ObIOManager::get_instance().start())) {
+    LOG_ERROR("start ObIOManager failed", K(ret));
+  } else if (OB_FAIL(ObDeviceManager::get_instance().init_devices_env())) {
+    LOG_ERROR("init device manager failed", K(ret));
+  } else if (OB_FAIL(LOG_IO_DEVICE_WRAPPER.init(GCONF.data_dir, io_config.disk_io_thread_count_, max_io_depth, &OB_IO_MANAGER, &ObDeviceManager::get_instance()))) {
+    LOG_ERROR("log_io_adapter init failed", K(ret));
+  } else if (OB_FAIL(palf_env_mgr.init(GCONF.data_dir, self_addr_, net_work_farme.get_req_transport(), LOG_IO_DEVICE_WRAPPER.get_local_device(), &G_RES_MGR, &OB_IO_MANAGER))) {
     LOG_ERROR("init PalfEnvLiteMgr failed", K(ret), K(arb_opts));
   } else if (OB_FAIL(arb_timer_.init(lib::TGDefIDs::ArbServerTimer, &palf_env_mgr))) {
     LOG_ERROR("init ArbServerTimer failed", K(ret));
@@ -4304,6 +4327,8 @@ int ObServer::destroy_server_in_arb_mode()
   ObMemoryDump::get_instance().destroy();
   ASCONF.destroy();
   palf::election::GLOBAL_REPORT_TIMER.destroy();
+  LOG_IO_DEVICE_WRAPPER.destroy();
+  ObIOManager::get_instance().destroy();
   LOG_WARN("destroy_server_in_arb_mode success", K(ret));
   return ret;
 }

@@ -193,6 +193,10 @@ int ObTableStatParam::assign(const ObTableStatParam &other)
   is_auto_sample_size_ = other.is_auto_sample_size_;
   need_refine_min_max_ = other.need_refine_min_max_;
   auto_sample_row_cnt_ = other.auto_sample_row_cnt_;
+  consumer_group_id_ = other.consumer_group_id_;
+  min_iops_ = other.min_iops_;
+  max_iops_ = other.max_iops_;
+  weight_iops_ = other.weight_iops_;
   if (OB_FAIL(part_infos_.assign(other.part_infos_))) {
     LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(subpart_infos_.assign(other.subpart_infos_))) {
@@ -246,6 +250,10 @@ int ObTableStatParam::assign_common_property(const ObTableStatParam &other)
   is_auto_sample_size_ = other.is_auto_sample_size_;
   need_refine_min_max_ = other.need_refine_min_max_;
   auto_sample_row_cnt_ = other.auto_sample_row_cnt_;
+  consumer_group_id_ = other.consumer_group_id_;
+  min_iops_ = other.min_iops_;
+  max_iops_ = other.max_iops_;
+  weight_iops_ = other.weight_iops_;
   return ret;
 }
 
@@ -284,6 +292,7 @@ int ObOptStatGatherParam::assign(const ObOptStatGatherParam &other)
   data_table_id_ = other.data_table_id_;
   is_global_index_ = other.is_global_index_;
   part_level_ = other.part_level_;
+  consumer_group_id_ = other.consumer_group_id_;
   if (OB_FAIL(partition_infos_.assign(other.partition_infos_))) {
     LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(column_params_.assign(other.column_params_))) {

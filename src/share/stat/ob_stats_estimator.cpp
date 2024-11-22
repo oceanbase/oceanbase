@@ -369,7 +369,7 @@ int ObStatsEstimator::fill_group_by_info(ObIAllocator &allocator,
   return ret;
 }
 
-int ObStatsEstimator::do_estimate(uint64_t tenant_id,
+int ObStatsEstimator::do_estimate(const ObOptStatGatherParam &gather_param,
                                   const ObString &raw_sql,
                                   bool need_copy_basic_stat,
                                   ObOptStat &src_opt_stat,
@@ -378,7 +378,7 @@ int ObStatsEstimator::do_estimate(uint64_t tenant_id,
   int ret = OB_SUCCESS;
   common::ObOracleSqlProxy oracle_proxy; // TODO, check the usage, is there any postprocess
   ObCommonSqlProxy *sql_proxy = ctx_.get_sql_proxy();
-  ObArenaAllocator tmp_alloc("OptStatGather", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
+  ObArenaAllocator tmp_alloc("OptStatGather", OB_MALLOC_NORMAL_BLOCK_SIZE, gather_param.tenant_id_);
   sql::ObSQLSessionInfo::StmtSavedValue *session_value = NULL;
   void *ptr = NULL;
   ObSQLSessionInfo *session = ctx_.get_my_session();
@@ -416,7 +416,8 @@ int ObStatsEstimator::do_estimate(uint64_t tenant_id,
       } else if (OB_ISNULL(conn)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("conn is null", K(ret), K(conn));
-      } else if (OB_FAIL(conn->execute_read(tenant_id, raw_sql.ptr(), proxy_result))) {
+      } else if (OB_FALSE_IT(conn->set_group_id(static_cast<int64_t>(gather_param.consumer_group_id_)))) {
+      } else if (OB_FAIL(conn->execute_read(gather_param.tenant_id_, raw_sql.ptr(), proxy_result))) {
         LOG_WARN("failed to execute sql", K(ret), K(raw_sql));
       } else if (OB_ISNULL(client_result = proxy_result.get_result())) {
         ret = OB_ERR_UNEXPECTED;

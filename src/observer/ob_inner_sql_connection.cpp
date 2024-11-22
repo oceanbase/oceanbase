@@ -1746,7 +1746,7 @@ int ObInnerSQLConnection::execute_read_inner(const int64_t cluster_id,
           sql, ObInnerSQLTransmitArg::OPERATION_TYPE_EXECUTE_READ,
           lib::Worker::CompatMode::ORACLE == get_compat_mode(), GCONF.cluster_id,
           THIS_WORKER.get_timeout_ts(), query_timeout, trx_timeout, sql_mode,
-          ddl_info, is_load_data_exec, use_external_session_);
+          ddl_info, is_load_data_exec, use_external_session_, consumer_group_id_);
       arg.set_nls_formats(get_session().get_local_nls_date_format(),
                           get_session().get_local_nls_timestamp_format(),
                           get_session().get_local_nls_timestamp_tz_format());

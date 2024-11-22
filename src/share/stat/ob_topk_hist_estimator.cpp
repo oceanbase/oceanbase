@@ -671,7 +671,7 @@ int ObTopkHistEstimator::estimate(const ObOptStatGatherParam &param,
     LOG_WARN("failed to pack raw sql", K(ret));
   } else if (OB_FAIL(tmp_opt_stats.push_back(opt_stat))) {
     LOG_WARN("failed to push back", K(ret));
-  } else if (OB_FAIL(do_estimate(param.tenant_id_, raw_sql.string(), false,
+  } else if (OB_FAIL(do_estimate(param, raw_sql.string(), false,
                                  opt_stat, tmp_opt_stats))) {
     LOG_WARN("failed to evaluate basic stats", K(ret));
   } else {

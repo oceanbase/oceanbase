@@ -115,7 +115,8 @@ int PalfHandleImpl::init(const int64_t palf_id,
                          IPalfEnvImpl *palf_env_impl,
                          const common::ObAddr &self,
                          common::ObOccamTimer *election_timer,
-                         const int64_t palf_epoch)
+                         const int64_t palf_epoch,
+                         LogIOAdapter *io_adapter)
 {
   int ret = OB_SUCCESS;
   int pret = 0;
@@ -149,7 +150,7 @@ int PalfHandleImpl::init(const int64_t palf_id,
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "error unexpected", K(ret), K(palf_id));
   } else if (OB_FAIL(log_engine_.init(palf_id, log_dir, log_meta, alloc_mgr, log_block_pool, &log_cache_, \
-          log_rpc, log_io_worker, log_shared_queue_th, &plugins_, palf_epoch, PALF_BLOCK_SIZE, PALF_META_BLOCK_SIZE))) {
+          log_rpc, log_io_worker, log_shared_queue_th, &plugins_, palf_epoch, PALF_BLOCK_SIZE, PALF_META_BLOCK_SIZE, io_adapter))) {
     PALF_LOG(WARN, "LogEngine init failed", K(ret), K(palf_id), K(log_dir), K(alloc_mgr),
         K(log_rpc), K(log_io_worker), K(log_shared_queue_th));
   } else if (OB_FAIL(do_init_mem_(palf_id, palf_base_info, log_meta, log_dir, self, fetch_log_engine,
@@ -184,6 +185,7 @@ int PalfHandleImpl::load(const int64_t palf_id,
                          const common::ObAddr &self,
                          common::ObOccamTimer *election_timer,
                          const int64_t palf_epoch,
+                         LogIOAdapter *io_adapter,
                          bool &is_integrity)
 {
   int ret = OB_SUCCESS;
@@ -205,8 +207,8 @@ int PalfHandleImpl::load(const int64_t palf_id,
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(log_dir), K(alloc_mgr),
         K(log_rpc), K(log_io_worker), K(log_shared_queue_th));
   } else if (OB_FAIL(log_engine_.load(palf_id, log_dir, alloc_mgr, log_block_pool, &log_cache_, log_rpc,
-        log_io_worker, log_shared_queue_th, &plugins_, entry_header, palf_epoch, is_integrity,
-        PALF_BLOCK_SIZE, PALF_META_BLOCK_SIZE))) {
+        log_io_worker, log_shared_queue_th, &plugins_, entry_header, palf_epoch, PALF_BLOCK_SIZE,
+        PALF_META_BLOCK_SIZE, io_adapter, is_integrity))) {
     PALF_LOG(WARN, "LogEngine load failed", K(ret), K(palf_id));
     // NB: when 'entry_header' is invalid, means that there is no data on disk, and set max_committed_end_lsn
     //     to 'base_lsn_', we will generate default PalfBaseInfo or get it from LogSnapshotMeta(rebuild).
@@ -5662,7 +5664,7 @@ int PalfHandleImpl::raw_read(const LSN &lsn,
                              char *buffer,
                              const int64_t nbytes,
                              int64_t &read_size,
-                             palf::LogIOContext &io_ctx)
+                             LogIOContext &io_ctx)
 {
   int ret = OB_SUCCESS;
   const LSN readable_end_lsn = get_end_lsn();

@@ -120,7 +120,7 @@ public:
                void *buffer,
                const int64_t nbytes,
                int64_t &read_size,
-               palf::LogIOContext &io_ctx);
+               LogIOContext &io_ctx);
 
   // iter->next返回的是append调用写入的值，不会在返回的buf中携带Palf增加的header信息
   //           返回的值不包含未确认日志

@@ -366,6 +366,7 @@ int ObPxTransmitOp::init_channel(ObPxTransmitOpInput &trans_input)
   } else if (is_vectorized() && OB_FAIL(init_channels_cur_block(task_channels_))) {
     LOG_WARN("fail to init channels block info", K(ret));
   } else {
+    uint64_t min_cluster_version = ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version();
     bool enable_audit = GCONF.enable_sql_audit && ctx_.get_my_session()->get_local_ob_enable_sql_audit();
     metric_.init(enable_audit);
     common::ObIArray<dtl::ObDtlChannel*> &channels = task_channels_;
@@ -411,6 +412,7 @@ int ObPxTransmitOp::init_channel(ObPxTransmitOpInput &trans_input)
           ch->set_register_dm_info(register_dm_info);
         }
         ch->set_enable_channel_sync(true);
+        ch->set_send_by_tenant(min_cluster_version >= CLUSTER_VERSION_4_3_5_0);
         ch->set_batch_id(px_batch_id);
         ch->set_compression_type(dfc_.get_compressor_type());
         ch->set_operator_owner();

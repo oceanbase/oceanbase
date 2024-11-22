@@ -87,17 +87,6 @@ ObAdminExecutor::~ObAdminExecutor()
   LOG_INFO("destruct ObAdminExecutor");
 }
 
-ObIODevice* ObAdminExecutor::get_device_inner()
-{
-  int ret = OB_SUCCESS;
-  common::ObIODevice* device = NULL;
-  common::ObString storage_type_prefix(OB_LOCAL_PREFIX);
-  if(OB_FAIL(common::ObDeviceManager::get_local_device(storage_type_prefix, device))) {
-    LOG_WARN("fail to get local device", K(ret));
-  }
-  return device;
-}
-
 int ObAdminExecutor::prepare_io()
 {
   int ret = OB_SUCCESS;

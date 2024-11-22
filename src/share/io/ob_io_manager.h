@@ -327,6 +327,7 @@ public:
   int alloc_io_clock(ObIAllocator &allocator, ObTenantIOClock *&io_clock);
   int init_group_index_map(const int64_t tenant_id, const ObTenantIOConfig &io_config);
   int get_group_index(const ObIOGroupKey &key, uint64_t &index);
+  int get_group_config(const ObIOGroupKey &key, ObTenantIOConfig::GroupConfig &index) const;
   int calc_io_memory(const int64_t memory);
   int init_memory_pool(const uint64_t tenant_id, const int64_t memory);
   int update_memory_pool(const int64_t memory);

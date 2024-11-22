@@ -222,6 +222,12 @@ int ObOptStatRunningMonitor::add_table_info(const common::ObTableStatParam &tabl
                                               stale_percent,
                                               table_param.hist_sample_info_.is_sample_ ? table_param.hist_sample_info_.sample_value_ : 100.0))) {
       LOG_WARN("failed to append fmt", K(ret));
+    } else if (table_param.consumer_group_id_ > 0 &&
+               OB_FAIL(properties_sql_str.append_fmt(";MIN_IOPS:%ld;MAX_IOPS:%ld;WEIGHT_IOPS:%ld",
+                                                     table_param.min_iops_,
+                                                     table_param.max_iops_,
+                                                     table_param.weight_iops_))) {
+      LOG_WARN("failed to append fmt", K(ret));
     } else if (OB_ISNULL(buf = static_cast<char*>(allocator_.alloc(properties_sql_str.length())))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("memory is not enough", K(ret), K(properties_sql_str));

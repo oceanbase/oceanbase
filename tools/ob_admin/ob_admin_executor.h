@@ -40,7 +40,6 @@ public:
   virtual int execute(int argc, char *argv[]) = 0;
 
 protected:
-  ObIODevice *get_device_inner();
   int prepare_io();
   int prepare_decoder();
   int load_config();

@@ -423,7 +423,7 @@ int ObIOManager::init(const int64_t memory_limit,
                       const int32_t schedule_thread_count)
 {
   int ret = OB_SUCCESS;
-  int64_t schedule_queue_count = 0 != schedule_thread_count ? schedule_thread_count : (lib::is_mini_mode() ? 2 : 16);
+  int64_t schedule_queue_count = 0 != schedule_thread_count ? schedule_thread_count : (lib::is_mini_mode() ? 2 : 8);
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret), K(is_inited_));
@@ -619,13 +619,13 @@ int ObIOManager::pread(ObIOInfo &info, int64_t &read_size)
   } else {
     info.flag_.set_read();
     info.flag_.set_sync();
-    info.timeout_us_ = MAX_IO_WAIT_TIME_MS;
+    info.timeout_us_ = MAX_IO_WAIT_TIME_MS * 1000;
     ObIOHandle handle;
     if (OB_FAIL(tenant_aio(info, handle))) {
       LOG_WARN("do inner aio failed", K(ret), K(info));
     } else {
-      while (OB_SUCC(ret) || OB_TIMEOUT == ret) { // wait to die
-        if (OB_FAIL(handle.wait())) {
+      while (OB_SUCC(ret) || OB_TIMEOUT == ret || OB_IO_TIMEOUT == ret) { // wait to die
+        if (OB_FAIL(handle.wait(MAX_IO_WAIT_TIME_MS))) {
           if (OB_DATA_OUT_OF_RANGE != ret) {
             LOG_WARN("sync read failed", K(ret), K(info));
           }
@@ -658,13 +658,13 @@ int ObIOManager::pwrite(ObIOInfo &info, int64_t &write_size)
   } else {
     info.flag_.set_write();
     info.flag_.set_sync();
-    info.timeout_us_ = MAX_IO_WAIT_TIME_MS;
+    info.timeout_us_ = MAX_IO_WAIT_TIME_MS * 1000;
     ObIOHandle handle;
     if (OB_FAIL(tenant_aio(info, handle))) {
       LOG_WARN("do inner aio failed", K(ret), K(info));
     } else {
-      while (OB_SUCC(ret) || OB_TIMEOUT == ret) { // wait to die
-        if (OB_FAIL(handle.wait())) {
+      while (OB_SUCC(ret) || OB_TIMEOUT == ret || OB_IO_TIMEOUT == ret) { // wait to die
+        if (OB_FAIL(handle.wait(MAX_IO_WAIT_TIME_MS))) {
           if (OB_DATA_OUT_OF_RANGE != ret) {
             LOG_WARN("sync write failed", K(ret), K(info));
           }
@@ -1146,9 +1146,9 @@ int ObTenantIOManager::init(const uint64_t tenant_id,
     LOG_WARN("init tenant io memory pool failed", K(ret), K(io_config), K(io_memory_limit_), K(request_count_), K(request_count_));
   } else if (OB_FAIL(io_tracer_.init(tenant_id))) {
     LOG_WARN("init io tracer failed", K(ret));
-  } else if (OB_FAIL(io_usage_.init(io_config.group_configs_.count() / IO_MODE_CNT))) {
+  } else if (OB_FAIL(io_usage_.init(tenant_id, io_config.group_configs_.count() / IO_MODE_CNT))) {
     LOG_WARN("init io usage failed", K(ret), K(io_usage_), K(io_config.group_configs_.count()));
-  } else if (OB_FAIL(io_sys_usage_.init(SYS_MODULE_CNT))) { // local and remote
+  } else if (OB_FAIL(io_sys_usage_.init(tenant_id, SYS_MODULE_CNT))) { // local and remote
     LOG_WARN("init io usage failed", K(ret), K(io_sys_usage_), K(SYS_MODULE_CNT), K(SYS_MODULE_CNT * 2));
   } else if (OB_FAIL(io_mem_stats_.init(SYS_MODULE_CNT , io_config.group_configs_.count() / IO_MODE_CNT))) {
     LOG_WARN("init io usage failed", K(ret), K(io_mem_stats_), K(SYS_MODULE_CNT), K(io_config.group_configs_.count()));
@@ -1434,7 +1434,9 @@ int ObTenantIOManager::inner_aio(const ObIOInfo &info, ObIOHandle &handle)
   } else if (OB_UNLIKELY(!is_working())) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("tenant not working", K(ret), K(tenant_id_));
-  } else if (SLOG_IO != info.flag_.get_sys_module_id() && NULL != detector && detector->is_data_disk_has_fatal_error()) {
+  } else if ((SLOG_IO != info.flag_.get_sys_module_id() &&
+              CLOG_READ_IO != info.flag_.get_sys_module_id() && CLOG_WRITE_IO != info.flag_.get_sys_module_id()) &&
+              NULL != detector && detector->is_data_disk_has_fatal_error()) {
     ret = OB_DISK_HUNG;
     // for temporary positioning issue, get lbt of log replay
     LOG_DBA_ERROR(OB_DISK_HUNG, "msg", "disk has fatal error");
@@ -1728,6 +1730,26 @@ int ObTenantIOManager::get_group_index(const ObIOGroupKey &key, uint64_t &index)
   } else if (OB_UNLIKELY(index == INT64_MAX)) {
     //index == INT64_MAX means group has been deleted
     ret = OB_STATE_NOT_MATCH;
+  }
+  return ret;
+}
+
+int ObTenantIOManager::get_group_config(const ObIOGroupKey &key, ObTenantIOConfig::GroupConfig &group_config) const
+{
+  int ret = OB_SUCCESS;
+  uint64_t index = INT64_MAX;
+  if (OB_UNLIKELY(!is_resource_manager_group(key.group_id_))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid group id", K(ret), K(key));
+  } else if (OB_FAIL(group_id_index_map_.get_refactored(key, index))) {
+    if(OB_HASH_NOT_EXIST != ret) {
+      LOG_WARN("get index from map failed", K(ret), K(key), K(index));
+    }
+  } else if (OB_UNLIKELY(index < 0 || index >= io_config_.group_configs_.count())) {
+    ret = OB_INVALID_CONFIG;
+    LOG_WARN("invalid group config", K(index));
+  } else {
+    group_config = io_config_.group_configs_.at(index);
   }
   return ret;
 }

@@ -237,6 +237,11 @@ void ObIOFlag::set_func_type(const uint8_t func_type)
   func_type_ = func_type;
 }
 
+uint8_t ObIOFlag::get_func_type() const
+{
+  return func_type_;
+}
+
 void ObIOFlag::set_wait_event(int64_t wait_event_id)
 {
   wait_event_id_ = wait_event_id;
@@ -262,11 +267,6 @@ bool ObIOFlag::is_sys_module() const
   return USER_RESOURCE_OTHER_GROUP_ID == group_id_
           && sys_module_id_ >= SYS_MODULE_START_ID
           && sys_module_id_ < SYS_MODULE_END_ID;
-}
-
-uint8_t ObIOFlag::get_func_type() const
-{
-  return func_type_;
 }
 
 int64_t ObIOFlag::get_wait_event() const
@@ -628,6 +628,7 @@ ObIOResult::ObIOResult()
     offset_(0),
     size_(0),
     timeout_us_(DEFAULT_IO_WAIT_TIME_US),
+    aligned_size_(DIO_ALIGN_SIZE),
     tenant_io_mgr_(),
     buf_(nullptr),
     user_data_buf_(nullptr),
@@ -677,6 +678,15 @@ int ObIOResult::init(const ObIOInfo &info)
   } else if (OB_ISNULL(info.fd_.device_handle_)) {
     ret = OB_INVALID_ARGUMENT;
   } else {
+    if (info.flag_.is_sync()) {
+      if (OB_FAIL(info.fd_.device_handle_->get_io_aligned_size(aligned_size_))) {
+        LOG_WARN("get io aligned size failed", K(ret));
+      }
+    } else {
+      aligned_size_ = DIO_ALIGN_SIZE;
+    }
+  }
+  if (OB_SUCC(ret)) {
     //init info and check valid
     tenant_id_ = info.tenant_id_;
     offset_ = info.offset_;
@@ -754,12 +764,8 @@ void ObIOResult::destroy()
 int64_t ObIOResult::get_data_size() const
 {
   int64_t data_size = 0;
-  if (flag_.is_sync()) {
-    data_size = complete_size_;
-  } else {
-    const int64_t aligned_offset = lower_align(offset_, DIO_READ_ALIGN_SIZE);
-    data_size = min(size_, max(0, complete_size_ - (offset_ - aligned_offset)));
-  }
+  const int64_t aligned_offset = lower_align(offset_, aligned_size_);
+  data_size = min(size_, max(0, complete_size_ - (offset_ - aligned_offset)));
   return data_size;
 }
 
@@ -1210,16 +1216,7 @@ char *ObIORequest::calc_io_buf()
   int ret = OB_SUCCESS;
   char *ret_buf = nullptr;
   if (OB_NOT_NULL(io_result_)) {
-    if (io_result_->flag_.is_sync()) {
-      ret_buf = reinterpret_cast<char *>(raw_buf_);
-    } else if (OB_NOT_NULL(raw_buf_) && OB_NOT_NULL(fd_.device_handle_)) {
-      int64_t aligned_size = 0;
-      if (OB_FAIL(fd_.device_handle_->get_io_aligned_size(aligned_size))) {
-        LOG_WARN("fail to get io aligned size", K(ret));
-      } else {
-        ret_buf = reinterpret_cast<char *>(upper_align(reinterpret_cast<int64_t>(raw_buf_), aligned_size));
-      }
-    }
+    ret_buf = reinterpret_cast<char *>(upper_align(reinterpret_cast<int64_t>(raw_buf_), io_result_->aligned_size_));
   }
   return ret_buf;
 }
@@ -1227,17 +1224,14 @@ char *ObIORequest::calc_io_buf()
 int ObIORequest::calc_io_offset_and_size_()
 {
   int ret = OB_SUCCESS;
-  int64_t alignment_size = 0;
   if (OB_ISNULL(io_result_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("io result is null", K(ret));
   } else if (OB_ISNULL(fd_.device_handle_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("device handle is null", K(ret));
-  } else if (OB_FAIL(fd_.device_handle_->get_io_aligned_size(alignment_size))) {
-    LOG_WARN("fail to get io aligned size", K(ret));
   } else {
-    align_offset_size(io_result_->offset_, io_result_->size_, alignment_size, align_offset_, align_size_);
+    align_offset_size(io_result_->offset_, io_result_->size_, io_result_->aligned_size_, align_offset_, align_size_);
   }
   return ret;
 }
@@ -1246,22 +1240,16 @@ const char *ObIORequest::get_io_data_buf()
 {
   const char *buf = nullptr;
   int ret = OB_SUCCESS;
-  int64_t aligned_size = 0;
   if (OB_UNLIKELY(nullptr == raw_buf_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("raw buf is null, maybe has been recycle", K(ret));
   } else if (OB_ISNULL(io_result_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("io result is null", K(ret));
-  } else if (OB_ISNULL(fd_.device_handle_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("device handle is null", K(ret));
-  } else if (OB_FAIL(fd_.device_handle_->get_io_aligned_size(aligned_size))) {
-    LOG_WARN("fail to get io aligned size", K(ret));
   } else {
     // re-calculate with const parameters, in case of partial return change aligned_buf and so on.
-    const int64_t aligned_offset = lower_align(io_result_->offset_, aligned_size);
-    char *aligned_buf = reinterpret_cast<char *>(upper_align(reinterpret_cast<int64_t>(raw_buf_), aligned_size));
+    const int64_t aligned_offset = lower_align(io_result_->offset_, io_result_->aligned_size_);
+    char *aligned_buf = reinterpret_cast<char *>(upper_align(reinterpret_cast<int64_t>(raw_buf_), io_result_->aligned_size_));
     buf = aligned_buf + io_result_->offset_ - aligned_offset;
   }
   return buf;
@@ -1346,8 +1334,7 @@ int ObIORequest::alloc_aligned_io_buf(char *&io_buf)
   } else if (OB_ISNULL(fd_.device_handle_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("device handle is null", K(ret));
-  } else if (OB_FAIL(fd_.device_handle_->get_io_aligned_size(aligned_size))) {
-    LOG_WARN("fail to get io aligned size", K(ret));
+  } else if (FALSE_IT(aligned_size = io_result_->aligned_size_)) {
   } else if (io_result_->flag_.is_write() // write io must aligned
       && OB_UNLIKELY(!is_io_aligned(io_result_->offset_, aligned_size)
                      || !is_io_aligned(io_result_->size_, aligned_size))) {
@@ -1887,8 +1874,8 @@ int ObIOHandle::wait(const int64_t wait_timeout_ms)
     if (OB_FAIL(ATOMIC_LOAD(&result_->ret_code_.io_ret_))) {
       LOG_WARN("IO error, ", K(ret), K(*result_));
     }
-  } else if (OB_TIMEOUT == ret) {
-    LOG_WARN("IO wait timeout, ", K(ret), K(*result_));
+  } else if (OB_TIMEOUT == ret || OB_IO_TIMEOUT == ret) {
+    LOG_WARN("IO wait timeout", K(ret));
   }
   estimate();
 
@@ -2560,8 +2547,8 @@ int ObMClockQueue::pop_with_ready_queue(const int64_t current_ts, ObIORequest *&
               LOG_WARN("calc phyqueue clock failed", K(ret));
             } else if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
               LOG_WARN("adjust reservation clock failed", K(tmp_ret), KPC(next_req));
+            }
           }
-        }
         }
       }
       int tmp_ret = push_phyqueue(tmp_phy_queue);

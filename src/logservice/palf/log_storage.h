@@ -56,7 +56,8 @@ public:
            const UpdateManifestCallback &update_manifest_cb,
            ILogBlockPool *log_block_pool,
            LogPlugins *plugins,
-           LogCache *log_cache);
+           LogCache *log_cache,
+           LogIOAdapter *io_adapter);
 
   template <class EntryHeaderType>
   int load(const char *log_dir,
@@ -70,6 +71,7 @@ public:
            ILogBlockPool *log_block_pool,
            LogPlugins *plugins,
            LogCache *log_cache,
+           LogIOAdapter *io_adapter,
            EntryHeaderType &entry_header,
            LSN &lsn);
 
@@ -144,7 +146,8 @@ private:
                const UpdateManifestCallback &update_manifest_cb,
                ILogBlockPool *log_block_pool,
                LogPlugins *plugins,
-               LogCache *log_cache);
+               LogCache *log_cache,
+               LogIOAdapter *io_adapter);
   // @ret val:
   //   OB_SUCCESS
   //   OB_ERR_OUT_OF_LOWER_BOUND
@@ -237,6 +240,7 @@ int LogStorage::load(const char *base_dir,
                      ILogBlockPool *log_block_pool,
                      LogPlugins *plugins,
                      LogCache *log_cache,
+                     LogIOAdapter *io_adapter,
                      EntryHeaderType &entry_header,
                      LSN &lsn)
 {
@@ -257,7 +261,8 @@ int LogStorage::load(const char *base_dir,
                               update_manifest_cb,
                               log_block_pool,
                               plugins,
-                              log_cache))) {
+                              log_cache,
+                              io_adapter))) {
     PALF_LOG(WARN, "LogStorage do_init_ failed", K(ret), K(base_dir), K(sub_dir), K(palf_id));
     // NB: if there is no valid data on disk, no need to load last block
   } else if (OB_FAIL(block_mgr_.get_block_id_range(min_block_id, max_block_id))

@@ -210,8 +210,8 @@ int ObPxFifoCoordOp::fetch_rows(const int64_t row_cnt)
         break;
       }
     }
-
-    if (OB_FAIL(ctx_.fast_check_status())) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ctx_.fast_check_status())) {
       LOG_WARN("fail check status, maybe px query timeout", K(ret));
     } else if (OB_FAIL(msg_loop_.process_any())) {
       LOG_DEBUG("process one failed error", K(ret));

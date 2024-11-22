@@ -497,6 +497,7 @@ int ObDeviceManager::get_device(
 
 int ObDeviceManager::get_local_device(
     const ObString &storage_type_prefix,
+    const ObStorageIdMod &storage_id_mod,
     ObIODevice *&device_handle)
 {
   int ret = OB_SUCCESS;
@@ -509,9 +510,8 @@ int ObDeviceManager::get_local_device(
   } else {
      // local device does not need storage_info and storage_id_mod
     ObObjectStorageInfo default_storage_info;
-    ObStorageIdMod default_storage_id_mod;
     if (OB_FAIL(ObDeviceManager::get_instance().get_device(storage_type_prefix, default_storage_info,
-                                                           default_storage_id_mod, device_handle))) {
+                                                           storage_id_mod, device_handle))) {
       OB_LOG(WARN, "fail to get local device", K(ret));
     }
   }
@@ -574,19 +574,31 @@ int ObDeviceManager::get_device_key_(
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "device key is already not null", K(ret));
   } else if (storage_type_prefix.prefix_match(OB_LOCAL_PREFIX)) {
-    const int64_t alloc_size = STRLEN(OB_LOCAL_PREFIX) + 1;
+    // uint64_t occupies up to 20 characters.
+    // 20(storage_used_mod_) + 20(storage_id_) + 2(two '&') + 1(one '\0') = 43.
+    // reserve some free space, increase 43 to 50.
+    const int64_t alloc_size = STRLEN(OB_LOCAL_PREFIX) + 50;
     if (OB_ISNULL(device_key = static_cast<char *>(allcator.alloc(alloc_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       OB_LOG(WARN, "fail to alloc mem for device key", K(ret), K(alloc_size));
-    } else if (OB_FAIL(databuff_printf(device_key, alloc_size, "%s", OB_LOCAL_PREFIX))) {
+    } else if (OB_FAIL(databuff_printf(device_key, alloc_size, "%s&%lu&%lu",
+                                       OB_LOCAL_PREFIX,
+                                       (uint64_t)storage_id_mod.storage_used_mod_,
+                                       storage_id_mod.storage_id_))) {
       OB_LOG(WARN, "fail to construct device key", K(ret));
     }
   } else if (storage_type_prefix.prefix_match(OB_LOCAL_CACHE_PREFIX)) {
-    const int64_t alloc_size = STRLEN(OB_LOCAL_CACHE_PREFIX) + 1;
+    // uint64_t occupies up to 20 characters.
+    // 20(storage_used_mod_) + 20(storage_id_) + 2(two '&') + 1(one '\0') = 43.
+    // reserve some free space, increase 43 to 50.
+    const int64_t alloc_size = STRLEN(OB_LOCAL_CACHE_PREFIX) + 50;
     if (OB_ISNULL(device_key = static_cast<char *>(allcator.alloc(alloc_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       OB_LOG(WARN, "fail to alloc mem for device key", K(ret), K(alloc_size));
-    } else if (OB_FAIL(databuff_printf(device_key, alloc_size, "%s", OB_LOCAL_CACHE_PREFIX))) {
+    } else if (OB_FAIL(databuff_printf(device_key, alloc_size, "%s&%lu&%lu",
+                                       OB_LOCAL_CACHE_PREFIX,
+                                       (uint64_t)storage_id_mod.storage_used_mod_,
+                                       storage_id_mod.storage_id_))) {
       OB_LOG(WARN, "fail to construct device key", K(ret));
     }
   } else if (storage_type_prefix.prefix_match(OB_FILE_PREFIX)) {

@@ -22,6 +22,7 @@
 #include "share/rc/ob_tenant_base.h"                    // mtl_malloc
 #include "log_writer_utils.h"                           // LogWriteBuf
 #include "log_io_utils.h"                               // close_with_ret
+#include "log_io_adapter.h"                             // LogIOAdapter
 namespace oceanbase
 {
 using namespace common;
@@ -149,8 +150,13 @@ LogBlockHandler::LogBlockHandler()
     ob_pwrite_used_ts_(0),
     count_(0),
     trace_time_(OB_INVALID_TIMESTAMP),
-    dir_fd_(-1),
-    io_fd_(-1),
+    io_fd_(),
+    io_adapter_(NULL),
+    last_pwrite_start_time_us_(OB_INVALID_TIMESTAMP),
+    last_pwrite_size_(-1),
+    accum_write_size_(0),
+    accum_write_rt_(0),
+    accum_write_count_(0),
     is_inited_(false)
 {
 }
@@ -160,24 +166,23 @@ LogBlockHandler::~LogBlockHandler()
   destroy();
 }
 
-int LogBlockHandler::init(const int dir_fd,
-                          const int64_t log_block_size,
+int LogBlockHandler::init(const int64_t log_block_size,
                           const int64_t align_size,
-                          const int64_t align_buf_size)
+                          const int64_t align_buf_size,
+                          LogIOAdapter *io_adapter)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
 		ret = OB_INIT_TWICE;
-	} else if (-1 == dir_fd
-      || (0 != (log_block_size & (align_size - 1)))) {
+	} else if ((0 != (log_block_size & (align_size - 1))) || OB_ISNULL(io_adapter)) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(ERROR, "invalid argument", K(ret), K(log_block_size));
+    PALF_LOG(ERROR, "invalid argument", K(ret), K(log_block_size), KP(io_adapter));
   } else if (OB_FAIL(dio_aligned_buf_.init(align_size,
           align_buf_size))) {
     PALF_LOG(ERROR, "init dio_aligned_buf_ failed", K(ret));
   } else {
-    dir_fd_ = dir_fd;
     log_block_size_ = log_block_size;
+    io_adapter_ = io_adapter;
     is_inited_ = true;
     PALF_LOG(INFO, "LogBlockHandler init success", K(ret), K(log_block_size_), K(align_size), K(align_buf_size));
   }
@@ -188,11 +193,11 @@ void LogBlockHandler::destroy()
 {
   if (IS_INIT) {
     is_inited_ = false;
-    dir_fd_ = -1;
-    if (-1 != io_fd_) {
-      close_with_ret(io_fd_);
-      io_fd_ = -1;
+    if (io_fd_.is_valid()) {
+      io_adapter_->close(io_fd_);
+      io_fd_.reset();
     }
+    io_adapter_ = NULL;
     log_block_size_ = 0;
     dio_aligned_buf_.destroy();
     PALF_LOG(INFO, "LogFileHandler destroy success");
@@ -288,16 +293,13 @@ int LogBlockHandler::inner_close_()
 {
   int ret = OB_SUCCESS;
   do {
-    if (-1 == io_fd_) {
+    if (!io_fd_.is_valid()) {
       PALF_LOG(INFO, "block has been closed or not eixst", K(ret));
-    } else if (-1 == (::close(io_fd_))){
-      ret = convert_sys_errno();
+    } else if (OB_FAIL(io_adapter_->close(io_fd_))){
       PALF_LOG(ERROR, "close block failed", K(ret), K(errno), KPC(this));
       ob_usleep(RETRY_INTERVAL);
     } else {
-      io_fd_ = -1;
-      ret = OB_SUCCESS;
-      break;
+      io_fd_.reset();
     }
   } while (OB_FAIL(ret));
   return ret;
@@ -307,14 +309,11 @@ int LogBlockHandler::inner_open_(const char *block_path)
 {
   int ret = OB_SUCCESS;
   do {
-    if (-1 == (io_fd_ = ::openat(dir_fd_, block_path, LOG_WRITE_FLAG, FILE_OPEN_MODE))) {
-      ret = convert_sys_errno();
-      PALF_LOG(ERROR, "open block failed", K(ret), K(errno), K(block_path), K(dir_fd_));
+    if (OB_FAIL(io_adapter_->open(block_path, LOG_WRITE_FLAG, FILE_OPEN_MODE, io_fd_))) {
+      PALF_LOG(WARN, "io_adapter open failed", K(ret), K(block_path), K_(io_fd));
       ob_usleep(RETRY_INTERVAL);
     } else {
       dio_aligned_buf_.reset_buf();
-      ret = OB_SUCCESS;
-      break;
     }
   } while (OB_FAIL(ret));
   return ret;
@@ -333,13 +332,11 @@ int LogBlockHandler::inner_truncate_(const offset_t offset)
   //
   // TODO by runlin, keep follow steps atomic, can use rename?
   do {
-    if (0 != ftruncate(io_fd_, offset)) {
-      ret = convert_sys_errno();
-      PALF_LOG(ERROR, "ftruncate first phase failed", K(ret), K(errno), KPC(this), K(offset));
+    if (OB_FAIL(io_adapter_->truncate(io_fd_, offset))) {
+      PALF_LOG(ERROR, "ftruncate first phase failed", K(ret), KPC(this), K(offset));
       ob_usleep(RETRY_INTERVAL);
-    } else if (0 != ftruncate(io_fd_, log_block_size_)) {
-      ret = convert_sys_errno();
-      PALF_LOG(ERROR, "ftruncate second phase failed", K(ret), K(errno), KPC(this), K(log_block_size_));
+    } else if (OB_FAIL(io_adapter_->truncate(io_fd_, log_block_size_))) {
+      PALF_LOG(ERROR, "ftruncate second phase failed", K(ret), KPC(this), K(log_block_size_));
       ob_usleep(RETRY_INTERVAL);
     } else {
       dio_aligned_buf_.reset_buf();
@@ -362,20 +359,21 @@ int LogBlockHandler::inner_load_data_(const offset_t offset)
   // tail minus offset must be greater than LOG_DIO_ALIGN_SIZE
   offset_t read_count = offset - aligned_offset;
   offset_t aligned_read_count = upper_align(offset - aligned_offset, LOG_DIO_ALIGN_SIZE);
+  int64_t aligned_out_read_count = 0;
   if (OB_ISNULL(input = reinterpret_cast<char *>(
       mtl_malloc_align(LOG_DIO_ALIGN_SIZE, aligned_read_count, "LogDIOAligned")))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
     PALF_LOG(WARN, "allocate memory failed", K(ret));
-  } else if ((aligned_read_count != ob_pread(io_fd_, input, aligned_read_count, aligned_offset))) {
-    ret = convert_sys_errno();
-    PALF_LOG(WARN, "ob_pread failed", K(ret), K(errno), K(offset), K(read_count), K(aligned_read_count),
-        K(aligned_offset), K(dio_aligned_buf_), K(io_fd_), KPC(this));
-  } else if (0 != aligned_read_count && OB_FAIL(dio_aligned_buf_.align_buf(
+  } else if (OB_FAIL(io_adapter_->pread(io_fd_, aligned_read_count, aligned_offset, input, aligned_out_read_count))) {
+    PALF_LOG(WARN, "ob_pread failed", K(ret), K(offset), K(read_count), K(aligned_read_count),
+             K(aligned_offset), K(dio_aligned_buf_), K(io_fd_), KPC(this));
+  } else if (0 != aligned_out_read_count && OB_FAIL(dio_aligned_buf_.align_buf(
           input, read_count, output, output_len, out_offset))) {
     PALF_LOG(WARN, "align_buf failed", K(ret), K(dio_aligned_buf_));
   } else {
     dio_aligned_buf_.truncate_buf();
     PALF_LOG(INFO, "inner_load_data_ success", K(ret), K(offset), K(read_count), K(dio_aligned_buf_),
-        K(aligned_read_count));
+        K(aligned_out_read_count));
   }
   if (NULL != input) {
     mtl_free_align(input);
@@ -441,23 +439,23 @@ int LogBlockHandler::inner_writev_once_(const offset_t offset,
   return ret;
 }
 
-int LogBlockHandler::inner_write_impl_(const int fd, const char *buf, const int64_t count, const int64_t offset)
+int LogBlockHandler::inner_write_impl_(const ObIOFd &io_fd, const char *buf, const int64_t count, const int64_t offset)
 {
   int ret = OB_SUCCESS;
   int64_t start_ts = ObTimeUtility::fast_current_time();
   int64_t write_size = 0;
   int64_t time_interval = OB_INVALID_TIMESTAMP;
+  ObWaitEventGuard wait_event(ObWaitEventIds::PALF_WRITE,
+    PALF_IO_WAIT_EVENT_TIMEOUT_MS, io_fd.second_id_, offset, count);
   do {
-    if (count != (write_size = ob_pwrite(fd, buf, count, offset))) {
+    if (OB_FAIL(io_adapter_->pwrite(io_fd, buf, count, offset, write_size))) {
       if (palf_reach_time_interval(1000 * 1000, time_interval)) {
-        ret = convert_sys_errno();
-        PALF_LOG(ERROR, "ob_pwrite failed", K(ret), K(fd), K(offset), K(count), K(errno));
-        LOG_DBA_ERROR_V2(OB_LOG_PWRITE_FAIL, ret, "ob_pwrite failed, please check the output of dmesg");
+        PALF_LOG(ERROR, "io_adapter pwrite failed", K(ret), K(io_fd), K(offset), K(count), K(write_size));
+        LOG_DBA_ERROR_V2(OB_LOG_PWRITE_FAIL, ret, "io_adapter pwrite failed, please check the output of dmesg");
       }
       ob_usleep(RETRY_INTERVAL);
     } else {
-      ret = OB_SUCCESS;
-      break;
+      PALF_LOG(TRACE, "pwrite successfully", K(io_fd), K(offset), K(count), K(write_size));
     }
   } while (OB_FAIL(ret));
   int64_t cost_ts = ObTimeUtility::fast_current_time() - start_ts;

@@ -35,6 +35,8 @@
 #include "sql/ob_result_set.h"
 #include "share/stat/ob_dbms_stats_maintenance_window.h"
 #include "sql/optimizer/ob_optimizer_util.h"
+#include "share/resource_manager/ob_resource_manager.h"
+#include "share/resource_manager/ob_resource_manager_proxy.h"
 
 namespace oceanbase
 {
@@ -114,6 +116,8 @@ int ObDbmsStats::gather_table_stats(ObExecContext &ctx, ParamStore &params, ObOb
                                                 params.count() > 16 ? &params.at(16) : NULL,
                                                 stat_param))) {
       LOG_WARN("failed to parse stat optitions", K(ret));
+    } else if (OB_FAIL(get_stats_consumer_group_id(stat_param))) {
+      LOG_WARN("failed to get stats consumer gourp id");
     } else if (OB_FAIL(running_monitor.add_table_info(stat_param))) {
       LOG_WARN("failed to add table info", K(ret));
     } else if (stat_param.force_ &&
@@ -240,6 +244,8 @@ int ObDbmsStats::gather_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
                                                    NULL/*hist_block_sample*/,
                                                    stat_param))) {
         LOG_WARN("failed to parse stat optitions", K(ret));
+      } else if (OB_FAIL(get_stats_consumer_group_id(stat_param))) {
+        LOG_WARN("failed to get stats consumer gourp id");
       } else if (OB_FAIL(running_monitor.add_table_info(stat_param))) {
         LOG_WARN("failed to add table info", K(ret));
       } else if (stat_param.force_ &&
@@ -6022,6 +6028,8 @@ int ObDbmsStats::gather_table_stats_with_default_param(ObExecContext &ctx,
     LOG_WARN("failed to use default gather stat optitions", K(ret));
   } else if (!stat_param.need_gather_stats()) {
     //do nothing
+  } else if (OB_FAIL(get_stats_consumer_group_id(stat_param))) {
+    LOG_WARN("failed to get stats consumer gourp id");
   } else if (OB_FAIL(running_monitor.add_table_info(stat_param, stat_table.stale_percent_))) {
     LOG_WARN("failed to add table info", K(ret));
   } else if (OB_FAIL(ObDbmsStatsExecutor::gather_table_stats(ctx, stat_param, running_monitor))) {
@@ -7447,6 +7455,38 @@ int ObDbmsStats::adjust_text_column_basic_stats(ObExecContext &ctx,
       } else if (col_stat->column_usage_flag_ > 0) {
         col_stat->unset_text_column();
       }
+    }
+  }
+  return ret;
+}
+
+int ObDbmsStats::get_stats_consumer_group_id(ObTableStatParam &param)
+{
+  int ret = OB_SUCCESS;
+  uint64_t consumer_group_id = 0;
+  if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_function_type(param.tenant_id_,
+                                                                             ObFunctionType::PRIO_OPT_STATS,
+                                                                             consumer_group_id))) {
+    LOG_WARN("fail to get group id by function", K(param.tenant_id_));
+  } else if (FALSE_IT(SET_FUNCTION_TYPE(ObFunctionType::PRIO_OPT_STATS))) {
+  } else if (is_resource_manager_group(consumer_group_id)) {
+    param.consumer_group_id_ = consumer_group_id;
+    ObRefHolder<ObTenantIOManager> tenant_holder;
+    ObTenantIOConfig::GroupConfig group_config;
+    if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(param.tenant_id_, tenant_holder))) {
+      LOG_WARN("failed to get tenant io manager", K(ret), K(param.tenant_id_));
+    // ObIOMode::MAX_MODE mean local io
+    } else if (OB_FAIL(tenant_holder.get_ptr()->get_group_config(ObIOGroupKey(consumer_group_id, ObIOMode::MAX_MODE), group_config))) {
+      if (OB_LIKELY(OB_HASH_NOT_EXIST == ret)) {
+        // tenant_io_manager may experience a delay of 10 seconds
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to get group config", K(ret), K(consumer_group_id));
+      }
+    } else {
+      param.min_iops_ = group_config.min_percent_;
+      param.max_iops_ = group_config.max_percent_;
+      param.weight_iops_ = group_config.weight_percent_;
     }
   }
   return ret;

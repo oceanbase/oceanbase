@@ -317,7 +317,8 @@ common::ObIODevice* get_device_inner(const common::ObString &storage_type_prefix
 {
   int ret = OB_SUCCESS;
   common::ObIODevice* device = NULL;
-  if(OB_FAIL(common::ObDeviceManager::get_local_device(storage_type_prefix, device))) {
+  const ObStorageIdMod storage_id_mod(0, ObStorageUsedMod::STORAGE_USED_DATA);
+  if(OB_FAIL(common::ObDeviceManager::get_local_device(storage_type_prefix, storage_id_mod, device))) {
     STORAGE_LOG(WARN, "get_device_inner", K(ret));
   }
   return device;
@@ -804,6 +805,8 @@ int MockTenantModuleEnv::init_before_start_mtl()
     STORAGE_LOG(ERROR, "init timer fail", KR(ret));
   } else if (OB_FAIL(ObMdsSchemaHelper::get_instance().init())) {
     STORAGE_LOG(ERROR, "fail to init mds schema helper", K(ret));
+  } else if (OB_FAIL(LOG_IO_DEVICE_WRAPPER.init(clog_dir_.c_str(), 8, 128, &OB_IO_MANAGER, &ObDeviceManager::get_instance()))) {
+    STORAGE_LOG(ERROR, "init log_io_device_wrapper fail", KR(ret));
   } else {
     obrpc::ObRpcNetHandler::CLUSTER_ID = 1;
     oceanbase::palf::election::INIT_TS = 1;

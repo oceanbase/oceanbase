@@ -1117,7 +1117,9 @@ int ObDbmsStatsUtils::prepare_gather_stat_param(const ObTableStatParam &param,
   gather_param.is_global_index_ = param.is_global_index_;
   gather_param.data_table_id_ = param.data_table_id_;
   gather_param.part_level_ = param.part_level_;
-  return gather_param.column_group_params_.assign(param.column_group_params_);
+  gather_param.consumer_group_id_ = param.consumer_group_id_;
+  ret = gather_param.column_group_params_.assign(param.column_group_params_);
+  return ret;
 }
 
 int ObDbmsStatsUtils::get_current_opt_stats(ObIAllocator &allocator,

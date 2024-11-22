@@ -332,7 +332,6 @@ TEST_F(TestIOStruct, IORequest)
   read_info.user_data_buf_ = user_buf;
 
   ASSERT_TRUE(read_info.is_valid());
-  ASSERT_SUCC(req.tenant_io_mgr_.get_ptr()->io_usage_.init(1));
   ASSERT_FAIL(result.init(read_info)); //not init cond yet
   ASSERT_FALSE(result.is_inited_);
 
@@ -567,8 +566,6 @@ TEST_F(TestIOStruct, IOGroupUsage)
   ASSERT_NEAR(avg_total_delay, 1000, 100);
 }
 
-
-
 TEST_F(TestIOStruct, IOScheduler)
 {
   ObIOCalibration::get_instance().init();
@@ -594,7 +591,7 @@ TEST_F(TestIOStruct, IOScheduler)
   ObIOUsage io_usage;
   ASSERT_SUCC(io_clock.init(1002, tenant_config, &io_usage));
   io_clock.destroy();
-  ASSERT_SUCC(io_usage.init(1));
+  ASSERT_SUCC(io_usage.init(1002, 1));
   ASSERT_SUCC(io_clock.init(1002, tenant_config, &io_usage));
   //ASSERT_SUCC(scheduler.schedule_request(io_clock, req));
 
@@ -636,7 +633,7 @@ TEST_F(TestIOStruct, MClockQueue)
   ASSERT_TRUE(io_config.is_valid());
   ObTenantIOClock tenant_clock;
   ObIOUsage io_usage;
-  ASSERT_SUCC(io_usage.init(io_config.group_configs_.count()));
+  ASSERT_SUCC(io_usage.init(500, io_config.group_configs_.count()));
   ASSERT_SUCC(io_usage.refresh_group_num(io_config.group_configs_.count()));
   ASSERT_SUCC(tenant_clock.init(1002, io_config, &io_usage));
   ObMClockQueue mqueue1;
@@ -725,7 +722,6 @@ TEST_F(TestIOStruct, IOResult)
   read_info.user_data_buf_ = user_buf;
 
   ASSERT_TRUE(read_info.is_valid());
-  ASSERT_SUCC(req->tenant_io_mgr_.get_ptr()->io_usage_.init(1));
 
   ASSERT_FAIL(result->init(read_info));
   ASSERT_FALSE(result->is_inited_);

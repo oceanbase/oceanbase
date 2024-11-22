@@ -109,7 +109,6 @@ enum ObIOModule {
   SSTABLE_MACRO_BLOCK_WRITE_IO,
   CLOG_WRITE_IO,
   CLOG_READ_IO,
-
   // end
   SYS_MODULE_END_ID
 };
@@ -126,6 +125,7 @@ public:
   ObIOFlag &operator=(const ObIOFlag &other)
   {
     this->flag_ = other.flag_;
+    this->func_type_ = other.func_type_;
     this->group_id_ = other.group_id_;
     this->sys_module_id_ = other.sys_module_id_;
     return *this;
@@ -506,6 +506,7 @@ private:
   int64_t size_;
   int64_t timeout_us_;
   uint64_t tenant_id_;
+  int64_t aligned_size_;
   ObRefHolder<ObTenantIOManager> tenant_io_mgr_;
   const char *buf_;
   char *user_data_buf_; //actual data buf without cb, allocated by thpe calling layer

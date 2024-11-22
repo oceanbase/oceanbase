@@ -553,7 +553,11 @@ struct ObTableStatParam {
     is_auto_gather_(false),
     is_auto_sample_size_(false),
     need_refine_min_max_(false),
-    auto_sample_row_cnt_(DEFAULT_AUTO_SAMPLE_ROW_COUNT)
+    auto_sample_row_cnt_(DEFAULT_AUTO_SAMPLE_ROW_COUNT),
+    consumer_group_id_(0),
+    min_iops_(-1),
+    max_iops_(-1),
+    weight_iops_(-1)
   {}
 
   int assign(const ObTableStatParam &other);
@@ -645,6 +649,10 @@ struct ObTableStatParam {
   bool need_refine_min_max_;
   int64_t auto_sample_row_cnt_;
   ObSEArray<PrefixColumnPair, 4> prefix_column_pairs_;
+  uint64_t consumer_group_id_;
+  int64_t min_iops_;
+  int64_t max_iops_;
+  int64_t weight_iops_;
 
   TO_STRING_KV(K(tenant_id_),
                K(db_name_),
@@ -697,7 +705,11 @@ struct ObTableStatParam {
                K(is_auto_gather_),
                K(need_refine_min_max_),
                K(is_auto_sample_size_),
-               K(prefix_column_pairs_));
+               K(prefix_column_pairs_),
+               K(consumer_group_id_),
+               K(min_iops_),
+               K(max_iops_),
+               K(weight_iops_));
 };
 
 struct ObOptStatGatherParam {
@@ -734,7 +746,8 @@ struct ObOptStatGatherParam {
     auto_sample_row_cnt_(DEFAULT_AUTO_SAMPLE_ROW_COUNT),
     data_table_id_(OB_INVALID_ID),
     is_global_index_(false),
-    part_level_(share::schema::ObPartitionLevel::PARTITION_LEVEL_ZERO)
+    part_level_(share::schema::ObPartitionLevel::PARTITION_LEVEL_ZERO),
+    consumer_group_id_(0)
   {}
   int assign(const ObOptStatGatherParam &other);
   int64_t get_need_gather_column() const;
@@ -771,6 +784,7 @@ struct ObOptStatGatherParam {
   uint64_t data_table_id_;
   bool is_global_index_;
   share::schema::ObPartitionLevel part_level_;
+  int64_t consumer_group_id_;
 
   TO_STRING_KV(K(tenant_id_),
                K(db_name_),
@@ -801,7 +815,8 @@ struct ObOptStatGatherParam {
                K(need_refine_min_max_),
                K(auto_sample_row_cnt_),
                K(data_table_id_),
-               K(is_global_index_));
+               K(is_global_index_),
+               K(consumer_group_id_));
 };
 
 struct ObOptStat

@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#define USING_LOG_PREFIX PALF
 #include "palf_env.h"
 #include "lib/ob_errno.h"
 #include "lib/file/file_directory_utils.h"
@@ -21,6 +22,9 @@
 #include "palf_handle.h"
 #include "palf_options.h"
 #include "election/interface/election.h"
+#include "log_io_adapter.h"
+#include "share/ob_local_device.h"                            // ObLocalDevice
+#include "share/io/ob_io_manager.h"                           // ObIOManager
 
 namespace oceanbase
 {
@@ -47,6 +51,9 @@ int PalfEnv::create_palf_env(
     common::ObILogAllocator *log_alloc_mgr,
     ILogBlockPool *log_block_pool,
     PalfMonitorCb *monitor,
+    share::ObLocalDevice *log_local_device,
+    share::ObResourceManager *resource_manager,
+    common::ObIOManager *io_manager,
     PalfEnv *&palf_env)
 {
   int ret = OB_SUCCESS;
@@ -57,10 +64,9 @@ int PalfEnv::create_palf_env(
     CLOG_LOG(WARN, "delete_tmp_file_or_directory_at failed", K(ret), K(base_dir));
   } else if (OB_FAIL(palf_env->palf_env_impl_.init(options, base_dir, self, obrpc::ObRpcNetHandler::CLUSTER_ID,
                                                    MTL_ID(), transport, batch_rpc,
-                                                   log_alloc_mgr, log_block_pool, monitor))) {
+                                                   log_alloc_mgr, log_block_pool, monitor,
+                                                   log_local_device, resource_manager, io_manager))) {
     PALF_LOG(WARN, "PalfEnvImpl init failed", K(ret), K(base_dir));
-  } else if (OB_FAIL(palf_env->start_())) {
-    PALF_LOG(WARN, "start palf env failed", K(ret), K(base_dir));
   } else {
     PALF_LOG(INFO, "create_palf_handle_impl success", K(base_dir));
   }
@@ -77,7 +83,7 @@ void PalfEnv::destroy_palf_env(PalfEnv *&palf_env)
   PALF_LOG_RET(WARN, OB_SUCCESS, "destroy_palf_env success", K(palf_env));
 }
 
-int PalfEnv::start_()
+int PalfEnv::start()
 {
   int ret = OB_SUCCESS;
   ret = palf_env_impl_.start();

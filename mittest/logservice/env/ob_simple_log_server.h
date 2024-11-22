@@ -342,9 +342,9 @@ class ObSimpleLogServer : public ObISimpleLogServer
 {
 public:
   ObSimpleLogServer()
-    :  cluster_id_(1),
-       tenant_id_(ObISimpleLogServer::DEFAULT_TENANT_ID), // the tenant in mittest must be 1002, otherwise, arb server can not start service.
-       handler_(deliver_),
+    : cluster_id_(1),
+      tenant_id_(ObISimpleLogServer::DEFAULT_TENANT_ID), // the tenant in mittest must be 1002, otherwise, arb server can not start service.
+      handler_(deliver_),
       transport_(NULL),
       batch_rpc_transport_(NULL),
       high_prio_rpc_transport_(NULL)
