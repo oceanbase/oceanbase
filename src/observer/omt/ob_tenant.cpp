@@ -66,6 +66,10 @@ using namespace oceanbase::storage;
 using namespace oceanbase::sql::dtl;
 using namespace oceanbase::obrpc;
 
+#define GET_OTHER_TSI_ADDR(var_name, addr) \
+const int64_t var_name##_offset = ((int64_t)addr - (int64_t)pthread_self()); \
+decltype(*addr) var_name = *(decltype(addr))(thread_base + var_name##_offset);
+
 #define EXPAND_INTERVAL (1 * 1000 * 1000)
 #define SHRINK_INTERVAL (1 * 1000 * 1000)
 #define SLEEP_INTERVAL (60 * 1000 * 1000)
@@ -1667,6 +1671,45 @@ void ObTenant::print_throttled_time()
   LOG_INFO("dump throttled time info", K(id_), K(throttled_time_log));
 }
 
+void ObTenant::regist_threads_to_cgroup()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+
+  // set cgroup configs
+  if (OB_TMP_FAIL(cgroup_ctrl_.set_cpu_shares(id_, unit_min_cpu_, OB_INVALID_GROUP_ID))) {
+    LOG_WARN_RET(tmp_ret, "set tenant cpu shares failed", K(tmp_ret), K_(id), K_(unit_min_cpu));
+  } else if (is_meta_tenant(id_)) {
+    // do nothing
+  } else if (OB_TMP_FAIL(
+                 cgroup_ctrl_.set_cpu_cfs_quota(id_, is_sys_tenant(id_) ? -1 : unit_max_cpu_, OB_INVALID_GROUP_ID))) {
+    LOG_WARN_RET(tmp_ret, "set tenant cpu cfs quota failed", K(tmp_ret), K_(id), K_(unit_max_cpu));
+  }
+
+  if (OB_SUCC(thread_list_lock_.trylock())) {
+    DLIST_FOREACH_REMOVESAFE(thread_list_node_, thread_list_)
+    {
+      Thread *thread = thread_list_node_->get_data();
+      char *thread_base = (char *)thread->get_pthread();
+      Worker *worker = nullptr;
+      if (OB_NOT_NULL(thread_base)) {
+        GET_OTHER_TSI_ADDR(worker, &Worker::self_);
+        if (OB_NOT_NULL(worker) && OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid() &&
+            OB_FAIL(GCTX.cgroup_ctrl_->add_thread_to_cgroup_(thread->get_tid(), id_, worker->get_group_id()))) {
+          LOG_WARN("regist thread to cgroup failed",
+              K(ret),
+              K(thread->get_tid()),
+              K(id_),
+              KP(worker),
+              K(worker->get_group_id()));
+        }
+      }
+    }
+    LOG_INFO("regist threads to cgroup from thread list", K(ret), K(id_), K(thread_list_.get_size()));
+    thread_list_lock_.unlock();
+  }
+}
+
 void ObTenant::handle_retry_req(bool need_clear)
 {
   int ret = OB_SUCCESS;
@@ -1879,7 +1922,7 @@ int ObTenant::lq_yield(ObThWorker &w)
 {
   int ret = OB_SUCCESS;
   ATOMIC_INC(&tt_large_quries_);
-  if (!cgroup_ctrl_.is_valid()) {
+  if (!cgroup_ctrl_.is_valid() && w.is_group_worker()) {
     if (w.get_group_id() == share::OBCG_LQ) {
       lq_wait(w);
     }

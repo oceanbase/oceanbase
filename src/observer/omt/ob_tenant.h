@@ -443,6 +443,7 @@ public:
 
   int timeup();
   void print_throttled_time();
+  void regist_threads_to_cgroup();
 
   TO_STRING_KV(K_(id),
                K_(tenant_meta),

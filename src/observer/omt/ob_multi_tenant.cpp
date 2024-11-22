@@ -2541,12 +2541,19 @@ void ObMultiTenant::run1()
   while (!has_set_stop()) {
     {
       SpinRLockGuard guard(lock_);
+      bool need_regist_cgroup = false;
+      if (OB_NOT_NULL(GCTX.cgroup_ctrl_)) {
+        need_regist_cgroup = GCTX.cgroup_ctrl_->check_cgroup_status();
+      }
       for (TenantList::iterator it = tenants_.begin(); it != tenants_.end(); it++) {
         if (OB_ISNULL(*it)) {
           LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected condition");
         } else if ((*it)->has_stopped()) {
           // skip stopped tenant
         } else {
+          if (need_regist_cgroup) {
+            (*it)->regist_threads_to_cgroup();
+          }
           (*it)->timeup();
         }
       }

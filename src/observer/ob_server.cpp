@@ -933,6 +933,10 @@ void ObServer::destroy()
     wr_service_.destroy();
     FLOG_INFO("WR service destroyed");
 
+    FLOG_INFO("begin to destroy cgroup service");
+    cgroup_ctrl_.destroy();
+    FLOG_INFO("cgroup service destroyed");
+
     deinit_zlib_lite_compressor();
 
     FLOG_INFO("begin to destroy log io device wrapper");
