@@ -1171,7 +1171,7 @@ int ObTabletBackfillTXTask::wait_memtable_frozen_()
     const int64_t current_ts = 0;
     while (OB_SUCC(ret)) {
       memtables.reset();
-      bool is_memtable_ready = true;
+      bool is_all_memtable_ready = true;
       if (OB_FAIL(tablet->get_all_memtables(memtables))) {
         LOG_WARN("failed to get all memtables", K(ret), KPC(tablet));
       } else if (memtables.empty()) {
@@ -1181,6 +1181,7 @@ int ObTabletBackfillTXTask::wait_memtable_frozen_()
         for (int64_t i = 0; OB_SUCC(ret) && i < memtables.count(); ++i) {
           ObITable *table = memtables.at(i).get_table();
           memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(table);
+          bool is_memtable_ready = true;
           if (OB_ISNULL(table) || !table->is_memtable()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("table should not be NULL or table type is unexpected", K(ret), KP(table));
@@ -1217,28 +1218,32 @@ int ObTabletBackfillTXTask::wait_memtable_frozen_()
             is_memtable_ready = false;
           }
 
-          if (OB_SUCC(ret)) {
-            if (is_memtable_ready) {
-              break;
+          if (OB_SUCC(ret) && !is_memtable_ready) {
+            is_all_memtable_ready = false;
+          }
+        }
+
+        if (OB_SUCC(ret)) {
+          if (is_all_memtable_ready) {
+            break;
+          } else {
+            const int64_t current_ts = ObTimeUtility::current_time();
+            if (REACH_TENANT_TIME_INTERVAL(60 * 1000 * 1000)) {
+              LOG_INFO("tablet not ready, retry next loop", "tablet_id", tablet_info_,
+                  "wait_tablet_start_ts", wait_memtable_start_ts,
+                  "current_ts", current_ts);
+            }
+
+            if (current_ts - wait_memtable_start_ts < OB_WAIT_MEMTABLE_READY_TIMEOUT) {
             } else {
-              const int64_t current_ts = ObTimeUtility::current_time();
-              if (REACH_TENANT_TIME_INTERVAL(60 * 1000 * 1000)) {
-                LOG_INFO("tablet not ready, retry next loop", "tablet_id", tablet_info_,
-                    "wait_tablet_start_ts", wait_memtable_start_ts,
-                    "current_ts", current_ts);
-              }
+              ret = OB_TIMEOUT;
+              STORAGE_LOG(WARN, "failed to check tablet memtable ready, timeout, stop backfill",
+                  K(ret), KPC(tablet), K(current_ts),
+                  K(wait_memtable_start_ts));
+            }
 
-              if (current_ts - wait_memtable_start_ts < OB_WAIT_MEMTABLE_READY_TIMEOUT) {
-              } else {
-                ret = OB_TIMEOUT;
-                STORAGE_LOG(WARN, "failed to check tablet memtable ready, timeout, stop backfill",
-                    K(ret), KPC(tablet), K(current_ts),
-                    K(wait_memtable_start_ts));
-              }
-
-              if (OB_SUCC(ret)) {
-                ob_usleep(OB_CHECK_MEMTABLE_INTERVAL);
-              }
+            if (OB_SUCC(ret)) {
+              ob_usleep(OB_CHECK_MEMTABLE_INTERVAL);
             }
           }
         }
