@@ -502,6 +502,7 @@ void TestIndexBlockDataPrepare::prepare_data()
   param.contain_uncommitted_row_ = false;
   param.encrypt_id_ = res.encrypt_id_;
   param.master_key_id_ = res.master_key_id_;
+  param.filled_tx_scn_ = table_key.get_end_scn();
   MEMCPY(param.encrypt_key_, res.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
   if (merge_type_ == MAJOR_MERGE) {
     ASSERT_EQ(OB_SUCCESS, param.column_checksums_.assign(res.data_column_checksums_));

@@ -1035,6 +1035,38 @@ TEST_F(TestLSTabletService, test_update_empty_shell)
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
+TEST_F(TestLSTabletService, test_serialize_sstable_with_min_filled_tx_scn)
+{
+  ObTabletID tablet_id(99999);
+  blocksstable::ObSSTable sstable;
+
+  share::schema::ObTableSchema schema;
+  TestSchemaUtils::prepare_data_schema(schema);
+
+  ObTabletCreateSSTableParam param;
+  TestTabletHelper::prepare_sstable_param(tablet_id, schema, param);
+  //update sstable param table key
+  param.table_key_.table_type_ = ObITable::MINOR_SSTABLE;
+  param.filled_tx_scn_ = param.table_key_.get_end_scn();
+
+  ASSERT_EQ(OB_SUCCESS, sstable.init(param, &allocator_));
+
+  //modified sstable filled tx scn as min
+  sstable.meta_->basic_meta_.filled_tx_scn_.set_min();
+  sstable.filled_tx_scn_.set_min();
+
+  const int64_t size = sstable.get_serialize_size();
+  char *full_buf = static_cast<char *>(allocator_.alloc(size));
+  int64_t pos = 0;
+  int ret = sstable.serialize(full_buf, size, pos);
+  ASSERT_EQ(common::OB_SUCCESS, ret);
+  pos = 0;
+  ret = sstable.deserialize(allocator_, full_buf, size, pos);
+  ASSERT_EQ(common::OB_SUCCESS, ret);
+  ASSERT_EQ(sstable.meta_->basic_meta_.filled_tx_scn_, sstable.get_key().get_end_scn());
+}
+
+
 } // end storage
 } // end oceanbase
 

@@ -639,7 +639,7 @@ TEST_F(TestMigrationSSTableParam, test_empty_sstable_serialize_and_deserialize)
   ASSERT_EQ(tmp_param.column_checksums_.count(), mig_param.column_checksums_.count());
 }
 
-TEST_F(TestMigrationSSTableParam, test_migrate_sstable)
+TEST_F(TestMigrationSSTableParam, test_migrate_major_sstable)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator;
@@ -692,6 +692,112 @@ TEST_F(TestMigrationSSTableParam, test_migrate_sstable)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ASSERT_TRUE(dest_sstable_param.encrypt_id_ == src_sstable_param.encrypt_id_);
+}
+
+TEST_F(TestMigrationSSTableParam, test_migrate_minor_sstable)
+{
+  int ret = OB_SUCCESS;
+  SCN start_scn;
+  SCN end_scn;
+  ret = start_scn.convert_for_tx(1);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = end_scn.convert_for_tx(500);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObArenaAllocator allocator;
+  ObTabletCreateSSTableParam src_sstable_param;
+  src_sstable_param.table_key_.table_type_ = ObITable::TableType::MINOR_SSTABLE;
+  src_sstable_param.table_key_.tablet_id_ = tablet_id_;
+  src_sstable_param.table_key_.scn_range_.start_scn_ = start_scn;
+  src_sstable_param.table_key_.scn_range_.end_scn_ = end_scn;
+  src_sstable_param.schema_version_ = 3;
+  src_sstable_param.create_snapshot_version_ = 1;
+  src_sstable_param.progressive_merge_round_ = 1;
+  src_sstable_param.progressive_merge_step_ = 1;
+  src_sstable_param.table_mode_ = table_schema_.get_table_mode_struct();
+  src_sstable_param.index_type_ = table_schema_.get_index_type();
+  src_sstable_param.rowkey_column_cnt_ = 1;
+  src_sstable_param.root_block_addr_.set_none_addr();
+  src_sstable_param.data_block_macro_meta_addr_.set_none_addr();
+  src_sstable_param.root_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
+  src_sstable_param.latest_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
+  src_sstable_param.data_index_tree_height_ = 0;
+  src_sstable_param.index_blocks_cnt_ = 1;
+  src_sstable_param.data_blocks_cnt_ = 1;
+  src_sstable_param.micro_block_cnt_ = 1;
+  src_sstable_param.use_old_macro_block_count_ = 1;
+  src_sstable_param.row_count_ = 1;
+  src_sstable_param.column_cnt_ = 1;
+  src_sstable_param.data_checksum_ = 1;
+  src_sstable_param.occupy_size_ = 1;
+  src_sstable_param.ddl_scn_.set_min();
+  src_sstable_param.filled_tx_scn_ = src_sstable_param.table_key_.scn_range_.end_scn_;
+  src_sstable_param.original_size_ = 1;
+  src_sstable_param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
+  src_sstable_param.encrypt_id_ = 1234;
+  src_sstable_param.master_key_id_ = 5678;
+  ret = src_sstable_param.column_checksums_.push_back(2022);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  void *buf = nullptr;
+  ObSSTable *sstable1 = nullptr;
+  ASSERT_TRUE(nullptr != (buf = allocator.alloc(sizeof(ObSSTable))));
+  sstable1 = new (buf)ObSSTable();
+  ret = sstable1->init(src_sstable_param, &allocator);
+
+  ObMigrationSSTableParam mig_param;
+  mig_param.basic_meta_ = sstable1->meta_->basic_meta_;
+  mig_param.table_key_ = src_sstable_param.table_key_;
+  for (int64_t i = 0; i < sstable_meta_.get_col_checksum_cnt(); ++i) {
+    ASSERT_EQ(OB_SUCCESS, mig_param.column_checksums_.push_back(sstable1->meta_->get_col_checksum()[i]));
+  }
+
+  //empty sstable
+  ObTabletCreateSSTableParam dest_sstable_param;
+  ret = dest_sstable_param.init_for_ha(mig_param);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  buf = nullptr;
+  ObSSTable *sstable2 = nullptr;
+  ASSERT_TRUE(nullptr != (buf = allocator.alloc(sizeof(ObSSTable))));
+  sstable2 = new (buf)ObSSTable();
+  ret = sstable2->init(dest_sstable_param, &allocator);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  LOG_INFO("sstable meta", "dest_meta", sstable2->meta_->basic_meta_, "src_meta", sstable1->meta_->basic_meta_);
+  ASSERT_TRUE(sstable1->meta_->basic_meta_ == sstable2->meta_->basic_meta_);
+
+  //sstable with data
+  ObTabletCreateSSTableParam new_sstable_param;
+  blocksstable::ObSSTableMergeRes res;
+  res.data_column_cnt_ = src_sstable_param.column_cnt_;
+  res.nested_size_ = src_sstable_param.nested_size_;
+  res.nested_offset_ = src_sstable_param.nested_offset_;
+  res.root_desc_.addr_.set_none_addr();
+  res.data_root_desc_.addr_.set_none_addr();
+  res.root_row_store_type_ = src_sstable_param.root_row_store_type_;
+  res.root_desc_.height_ = src_sstable_param.data_index_tree_height_;
+  res.index_blocks_cnt_ = src_sstable_param.index_blocks_cnt_;
+  res.data_blocks_cnt_ = src_sstable_param.data_blocks_cnt_;
+  res.micro_block_cnt_ = src_sstable_param.micro_block_cnt_;
+  res.use_old_macro_block_count_ = src_sstable_param.use_old_macro_block_count_;
+  res.row_count_ = src_sstable_param.row_count_;
+  res.data_checksum_ = src_sstable_param.data_checksum_;
+  res.occupy_size_ = src_sstable_param.occupy_size_;
+  res.original_size_ = src_sstable_param.original_size_;
+  res.contain_uncommitted_row_ = src_sstable_param.contain_uncommitted_row_;
+  res.compressor_type_ = src_sstable_param.compressor_type_;
+  res.encrypt_id_ = src_sstable_param.encrypt_id_;
+  res.master_key_id_ = src_sstable_param.master_key_id_;
+  res.data_root_desc_.is_meta_root_ = src_sstable_param.is_meta_root_;
+  ret = new_sstable_param.init_for_ha(mig_param, res);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  buf = nullptr;
+  ObSSTable *sstable3 = nullptr;
+  ASSERT_TRUE(nullptr != (buf = allocator.alloc(sizeof(ObSSTable))));
+  sstable3 = new (buf)ObSSTable();
+  ret = sstable3->init(new_sstable_param, &allocator);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  LOG_INFO("sstable meta", "dest_meta", sstable3->meta_->basic_meta_, "src_meta", sstable1->meta_->basic_meta_);
+  ASSERT_TRUE(sstable1->meta_->basic_meta_ == sstable3->meta_->basic_meta_);
+
 }
 
 } // end namespace unittest
