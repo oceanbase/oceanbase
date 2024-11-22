@@ -119,7 +119,6 @@ static int init_lob_access_param(storage::ObLobAccessParam &param,
                                  ObIAllocator *allocator = nullptr)
 {
   int ret = OB_SUCCESS;
-  int64_t query_timeout = 0;
   int64_t timeout_ts = 0;
   storage::ObLobManager* lob_mngr = MTL(storage::ObLobManager*);
 
@@ -135,16 +134,12 @@ static int init_lob_access_param(storage::ObLobAccessParam &param,
   } else if (lob_iter_ctx->locator_.is_delta_temp_lob()) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "Lob: is delta lob", K(ret), K(lob_iter_ctx->locator_));
+  // worker timeout_ts is not guaranteed to be always valid
+  // so take the greater value of both
   } else if (OB_ISNULL(lob_iter_ctx->session_)) {
-    query_timeout = ObTimeUtility::current_time() + 60 * USECS_PER_SEC;
-  } else if (OB_FAIL(lob_iter_ctx->session_->get_query_timeout(query_timeout))) {
-    COMMON_LOG(WARN, "Lob: get_query_timeout failed.", K(ret), K(*lob_iter_ctx));
-  }
-
-  if (OB_SUCC(ret)) {
-    timeout_ts = (lob_iter_ctx->session_ == NULL)
-                    ? query_timeout
-                    : (lob_iter_ctx->session_->get_query_start_time() + query_timeout);
+    timeout_ts = OB_MAX(ObTimeUtility::current_time() + 60 * USECS_PER_SEC, THIS_WORKER.get_timeout_ts());
+  } else {
+    timeout_ts = OB_MAX(lob_iter_ctx->session_->get_query_timeout_ts(), THIS_WORKER.get_timeout_ts());
   }
 
   if (OB_FAIL(ret)) {
