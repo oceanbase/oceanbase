@@ -104,7 +104,8 @@ int ObIMicroBlockRowScanner::init(
     LOG_WARN("null columns info", K(ret), K(param), K(context.use_fuse_row_cache_), KPC_(read_info));
   } else if (OB_FAIL(row_.init(allocator_, param.get_buffered_out_col_cnt()))) {
     STORAGE_LOG(WARN, "Failed to init datum row", K(ret));
-  } else {
+  }
+  if (OB_SUCC(ret)) {
     param_ = &param;
     context_ = &context;
     sstable_ = sstable;
@@ -311,24 +312,6 @@ int ObIMicroBlockRowScanner::inner_get_next_row(const ObDatumRow *&row)
     ++context_->table_store_stat_.physical_read_cnt_;
   }
   LOG_DEBUG("get next row", K(ret), KPC(row), K_(macro_id));
-  return ret;
-}
-
-int ObIMicroBlockRowScanner::inner_get_row_header(const ObRowHeader *&row_header)
-{
-  int ret = OB_SUCCESS;
-  row_header = nullptr;
-  if (OB_FAIL(end_of_block())) {
-    if (OB_UNLIKELY(OB_ITER_END != ret)) {
-      LOG_WARN("fail to judge end of block or not", K(ret));
-    }
-  } else {
-    if (OB_FAIL(reader_->get_row_header(current_, row_header))) {
-      LOG_WARN("micro block reader fail to get row.", K(ret), K_(macro_id));
-    } else {
-      current_ += step_;
-    }
-  }
   return ret;
 }
 
@@ -856,6 +839,7 @@ int ObIMicroBlockRowScanner::filter_micro_block_in_blockscan(sql::PushdownFilter
     pd_filter_info.is_pd_to_cg_ = false;
     pd_filter_info.param_ = param_;
     pd_filter_info.context_ = context_;
+    pd_filter_info.disable_bypass_ = block_row_store_->get_where_optimizer() != nullptr ? block_row_store_->get_where_optimizer()->is_disable_bypass() : false;
     if (pd_filter_info.filter_->is_filter_constant()) {
       common::ObBitmap *result = nullptr;
       if (OB_FAIL(pd_filter_info.filter_->init_bitmap(pd_filter_info.count_, result))) {
@@ -1168,16 +1152,11 @@ int ObMicroBlockRowScanner::estimate_row_count(
       }
       est.logical_row_count_ = est.physical_row_count_;
 
-      if (est.physical_row_count_ > 0 && consider_multi_version) {
-        const ObRowHeader *row_header;
+      ObMicroBlockReader *reader = static_cast<ObMicroBlockReader *>(reader_);
+      if (est.physical_row_count_ > 0 && consider_multi_version && !reader->committed_single_version_rows()) {
         est.logical_row_count_ = 0;
-        while (OB_SUCC(inner_get_row_header(row_header))) {
-          if (row_header->get_row_multi_version_flag().is_first_multi_version_row()) {
-            est.logical_row_count_ += row_header->get_row_flag().get_delta();
-          }
-        }
-        if (OB_ITER_END == ret || OB_BEYOND_THE_RANGE == ret) {
-          ret = OB_SUCCESS;
+        if (OB_FAIL(reader->get_logical_row_cnt(last_, current_, est.logical_row_count_))) {
+          LOG_WARN("failed to get logical row count", K(ret));
         }
       }
     }

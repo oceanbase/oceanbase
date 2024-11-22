@@ -96,7 +96,8 @@ TEST_F(TestCGBitmap, set_batch)
   ASSERT_EQ(true, bitmap.is_all_true());
 
   ObCSRange cs_range(0, 200);
-  bitmap.set_bitmap_batch(cs_range.start_row_id_, cs_range.end_row_id_, 0);
+  int64_t count;
+  bitmap.set_bitmap_batch(cs_range.start_row_id_, cs_range.end_row_id_, 0, count);
   ASSERT_EQ(false, bitmap.is_all_true());
   ASSERT_EQ(true, bitmap.get_filter_constant_type().is_uncertain());
   ASSERT_EQ(true, bitmap.is_all_false(cs_range));

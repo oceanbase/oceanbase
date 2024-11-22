@@ -107,6 +107,7 @@ private:
       const blocksstable::ObDatumRange &datum_range,
       ObEstimatedResult &result);
   int estimate_excluded_border_result(const bool is_multi_version_minor,
+      const bool is_major,
       const blocksstable::ObDatumRange &datum_range,
       const bool is_left,
       ObEstimatedResult &result);
@@ -132,6 +133,7 @@ private:
     return micro_handles_[level_++ % DEFAULT_GET_MICRO_DATA_HANDLE_CNT];
   }
   static const int64_t DEFAULT_GET_MICRO_DATA_HANDLE_CNT = 2;
+  static const int64_t RANGE_ROWS_IN_AND_BORDER_RATIO_THRESHOLD = 1000;
   uint64_t tenant_id_;
   blocksstable::ObMicroBlockData root_index_block_;
   blocksstable::ObIndexBlockRowScanner index_block_row_scanner_;

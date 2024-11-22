@@ -5520,6 +5520,7 @@ int ObStaticEngineCG::generate_tsc_flags(ObLogTableScan &op, ObTableScanSpec &sp
   bool enable_skip_index = false;
   bool enable_prefetch_limit = false;
   bool enable_column_store = false;
+  bool enable_filter_reordering = false;
   ObBasicSessionInfo *session_info = NULL;
   ObLogPlan *log_plan = op.get_plan();
   if (OB_ISNULL(log_plan)) {
@@ -5574,14 +5575,15 @@ int ObStaticEngineCG::generate_tsc_flags(ObLogTableScan &op, ObTableScanSpec &sp
       enable_column_store = op.use_column_store();
       ObDASScanCtDef &scan_ctdef = spec.tsc_ctdef_.scan_ctdef_;
       ObDASScanCtDef *lookup_ctdef = spec.tsc_ctdef_.lookup_ctdef_;
+      enable_filter_reordering = tenant_config->_enable_filter_reordering;
       scan_ctdef.pd_expr_spec_.pd_storage_flag_.set_flags(pd_blockscan, pd_filter, enable_skip_index,
-                                                          enable_column_store, enable_prefetch_limit);
+                                                          enable_column_store, enable_prefetch_limit, enable_filter_reordering);
       scan_ctdef.table_scan_opt_.io_read_batch_size_ = io_read_batch_size;
       scan_ctdef.table_scan_opt_.io_read_gap_size_ = io_read_gap_size;
       scan_ctdef.table_scan_opt_.storage_rowsets_size_ = tenant_config->storage_rowsets_size;
       if (nullptr != lookup_ctdef) {
         lookup_ctdef->pd_expr_spec_.pd_storage_flag_.set_flags(pd_blockscan, pd_filter, enable_skip_index,
-                                                              enable_column_store, enable_prefetch_limit);
+                                                              enable_column_store, enable_prefetch_limit, enable_filter_reordering);
         lookup_ctdef->table_scan_opt_.io_read_batch_size_ = io_read_batch_size;
         lookup_ctdef->table_scan_opt_.io_read_gap_size_ = io_read_gap_size;
         lookup_ctdef->table_scan_opt_.storage_rowsets_size_ = tenant_config->storage_rowsets_size;

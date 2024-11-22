@@ -16,6 +16,7 @@
 #include "common/object/ob_object.h"
 #include "lib/container/ob_bitmap.h"
 #include "sql/engine/basic/ob_pushdown_filter.h"
+#include "storage/access/ob_where_optimizer.h"
 
 namespace oceanbase
 {
@@ -77,6 +78,8 @@ public:
   int get_filter_result(ObFilterResult &res);
   OB_INLINE sql::ObPushdownFilterExecutor *get_pd_filter()
   { return pd_filter_info_.filter_; }
+  OB_INLINE ObWhereOptimizer *get_where_optimizer()
+  { return where_optimizer_; }
   virtual bool is_end() const { return false; }
   virtual bool is_empty() const { return true; }
   OB_INLINE bool is_vec2() const { return is_vec2_; } // need to remove after statistical info pushdown support vec 2.0
@@ -98,6 +101,7 @@ private:
   bool filter_applied_;
   bool disabled_;
   bool is_aggregated_in_prefetch_;
+  ObWhereOptimizer *where_optimizer_;
 };
 
 }

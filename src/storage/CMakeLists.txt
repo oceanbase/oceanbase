@@ -550,7 +550,6 @@ ob_set_subtarget(ob_storage column_store
   column_store/ob_co_sstable_row_scanner.cpp
   column_store/ob_co_sstable_row_multi_scanner.cpp
   column_store/ob_co_sstable_rows_filter.cpp
-  column_store/ob_co_where_optimizer.cpp
   column_store/ob_cg_bitmap.cpp
   column_store/ob_cg_iter_param_pool.cpp
   column_store/ob_cg_sstable_row_getter.cpp
@@ -614,6 +613,7 @@ ob_set_subtarget(ob_storage access
   access/ob_pushdown_aggregate_vec.cpp
   access/ob_empty_read_bucket.cpp
   access/ob_global_iterator_pool.cpp
+  access/ob_where_optimizer.cpp
 )
 
 ob_set_subtarget(ob_storage ddl

@@ -604,7 +604,7 @@ int ObCOSSTableRowScanner::filter_rows(BlockScanState &blockscan_state)
 {
   int ret = OB_SUCCESS;
   LOG_TRACE("[COLUMNSTORE] COScanner filter_rows [start]", K(ret), K_(state), K_(blockscan_state),
-            K_(current), K_(group_size), K_(end));
+            K_(current), K_(group_size), K_(end), K(this), K(access_ctx_->limit_param_));
   if (iter_param_->has_lob_column_out()) {
     access_ctx_->reuse_lob_locator_helper();
   }
@@ -630,7 +630,7 @@ int ObCOSSTableRowScanner::filter_rows_with_limit(BlockScanState &blockscan_stat
 {
   int ret = OB_SUCCESS;
   LOG_DEBUG("COScanner filter_rows_with_limit begin", K(ret), K_(state), K_(blockscan_state),
-            K_(current), K_(group_size), K_(end));
+            K_(current), K_(group_size), K_(end), K(this));
   while (OB_SUCC(ret) && !is_limit_end_) {
     ObCSRowId begin = current_;
     const ObCGBitmap* result_bitmap = nullptr;
@@ -670,8 +670,8 @@ int ObCOSSTableRowScanner::filter_rows_without_limit(BlockScanState &blockscan_s
   ObCSRowId current_start_row_id = current_;
   ObCSRowId continuous_end_row_id = OB_INVALID_CS_ROW_ID;
   const ObCGBitmap* result_bitmap = nullptr;
-  LOG_DEBUG("COScanner filter_rows_with_limit begin", K(ret), K_(state), K_(blockscan_state),
-            K_(current), K_(group_size), K_(end));
+  LOG_DEBUG("COScanner filter_rows_without_limit begin", K(ret), K_(state), K_(blockscan_state),
+            K_(current), K_(group_size), K_(end), K(this));
   while (OB_SUCC(ret) && need_do_filter) {
     int64_t current_group_size = 0;
     if (OB_INVALID_CS_ROW_ID != pending_end_row_id_) {
