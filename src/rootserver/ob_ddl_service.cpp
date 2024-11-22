@@ -6174,6 +6174,7 @@ int ObDDLService::switch_index_name_and_status_for_vec_index_table(obrpc::ObAlte
       ObString new_domain_index_name = new_table_schema->get_table_name_str();
       ObArray<ObString> new_table_names;
       ObArray<ObString> old_table_names;
+      const int64_t unused_id = 1;    // not set OB_INVALID_ID for sava check
 
       SMART_VAR(ObSArray<ObTableSchema>, table_schemas) {
       // ObSArray<ObTableSchema> table_schemas;
@@ -6823,7 +6824,7 @@ int ObDDLService::create_aux_index(
       }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ObDDLTaskRecordOperator::update_parent_task_message(tenant_id,
-          arg.task_id_, *idx_schema, result.aux_table_id_, result.ddl_task_id_, ObDDLUpateParentTaskIDType::UPDATE_CREATE_INDEX_ID, allocator, trans))) {
+          arg.task_id_, *idx_schema, result.aux_table_id_, result.ddl_task_id_, ObDDLUpdateParentTaskIDType::UPDATE_CREATE_INDEX_ID, allocator, trans))) {
         LOG_WARN("fail to update parent task message", K(ret), K(arg.task_id_), K(idx_schema));
       }
     } else { // 3. index scheme not exist, generate schema && create ddl task
@@ -6851,7 +6852,7 @@ int ObDDLService::create_aux_index(
         LOG_WARN("failed to create aux index ddl task", K(ret), K(create_index_arg));
       } else if (FALSE_IT(result.ddl_task_id_ = task_record.task_id_)) {
       } else if (OB_FAIL(ObDDLTaskRecordOperator::update_parent_task_message(tenant_id,
-          arg.task_id_, index_schema, result.aux_table_id_, result.ddl_task_id_, ObDDLUpateParentTaskIDType::UPDATE_CREATE_INDEX_ID, allocator, trans))) {
+          arg.task_id_, index_schema, result.aux_table_id_, result.ddl_task_id_, ObDDLUpdateParentTaskIDType::UPDATE_CREATE_INDEX_ID, allocator, trans))) {
         LOG_WARN("fail to update parent task message", K(ret), K(arg.task_id_), K(index_schema));
       }
     }

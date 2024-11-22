@@ -3051,8 +3051,8 @@ int ObDDLTaskRecordOperator::update_parent_task_message(
     const int64_t parent_task_id,
     const ObTableSchema &index_schema,
     const uint64_t target_table_id,
-    const uint64_t target_task_id,
-    ObDDLUpateParentTaskIDType update_type,
+    const uint64_t target_task_id,  // task id maybe is OB_INVALID_ID
+    ObDDLUpdateParentTaskIDType update_type,
     ObIAllocator &allocator,
     common::ObISQLClient &proxy)
 {
@@ -3124,6 +3124,21 @@ int ObDDLTaskRecordOperator::update_parent_task_message(
         } else if (UPDATE_DROP_INDEX_TASK_ID == update_type) {
           task.set_drop_index_task_id(target_task_id);
           task.set_drop_index_task_submitted(true);
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(task.update_task_message(proxy))) {
+        LOG_WARN("fail to update task message", K(ret), K(parent_task_id));
+      }
+    } else if (task_record.ddl_type_ == DDL_REBUILD_INDEX) { // rebuild vec index
+      SMART_VAR(ObRebuildIndexTask, task) {
+        if (OB_FAIL(task.init(task_record))) {
+          LOG_WARN("fail to init ObRebuildIndexTask", K(ret), K(task_record));
+        } else if (UPDATE_VEC_REBUILD_CREATE_INDEX_TASK_ID == update_type) {
+          task.set_new_index_id(target_table_id);
+          task.set_index_build_task_id(target_task_id);
+        } else if (UPDATE_VEC_REBUILD_DROP_INDEX_TASK_ID == update_type) {
+          task.set_index_drop_task_id(target_task_id);
         }
       }
       if (OB_FAIL(ret)) {

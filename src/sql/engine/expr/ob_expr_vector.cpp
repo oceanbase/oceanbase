@@ -265,7 +265,7 @@ int ObExprVectorNegativeIPDistance::calc_negative_inner_product(const ObExpr &ex
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObExprVectorDistance::calc_distance(expr, ctx, res_datum, ObVecDisType::DOT))) {
     LOG_WARN("fail to calc distance", K(ret), K(ObVecDisType::DOT));
-  } else if (!res_datum.is_null()) {
+  } else if (!res_datum.is_null() && res_datum.get_double() != 0) {
     double value = -1 * res_datum.get_double();
     res_datum.set_double(value);
   }

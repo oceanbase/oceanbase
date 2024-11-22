@@ -506,6 +506,10 @@ int ObDDLResolver::check_add_column_as_pk_allowed(const ObColumnSchemaV2 &column
     ret = OB_ERR_WRONG_KEY_COLUMN;
     LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_schema.get_column_name_str().length(), column_schema.get_column_name_str().ptr());
     SQL_RESV_LOG(WARN, "TIMESTAMP WITH TIME ZONE column can't be primary key", K(ret), K(column_schema));
+  } else if (ob_is_collection_sql_type(column_schema.get_data_type())) {
+    ret = OB_ERR_WRONG_KEY_COLUMN;
+    LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_schema.get_column_name_str().length(), column_schema.get_column_name_str().ptr());
+    SQL_RESV_LOG(WARN, "Vector/Array column can't be primary key", K(ret), K(column_schema));
   } else if (column_schema.is_generated_column()) {
     ret = OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN;
     LOG_USER_ERROR(OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN,
@@ -1316,6 +1320,9 @@ int ObDDLResolver::add_storing_column(const ObString &column_name,
         } else if (ob_is_json_tc(column_schema->get_data_type())) {
           ret = OB_ERR_JSON_USED_AS_KEY;
           LOG_USER_ERROR(OB_ERR_JSON_USED_AS_KEY, column_name.length(), column_name.ptr());
+        } else if (ob_is_collection_sql_type(column_schema->get_data_type())) {
+          ret = OB_ERR_WRONG_KEY_COLUMN;
+          LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_name.length(), column_name.ptr());
         } else if (ObTimestampTZType == column_schema->get_data_type()) {
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_name.length(), column_name.ptr());
@@ -7639,7 +7646,7 @@ int ObDDLResolver::resolve_vec_index_constraint(
     uint64_t tenant_id = column_schema.get_tenant_id();
     bool is_collection_column = ob_is_collection_sql_type(column_schema.get_data_type());
     uint64_t tenant_data_version = 0;
-    const int64_t MAX_DIM_LIMITED = 2000;
+    const int64_t MAX_DIM_LIMITED = 4096;
     bool is_vector_memory_valid = false;
     int64_t dim = 0;
     if (!is_vec_index) {
@@ -7664,8 +7671,8 @@ int ObDDLResolver::resolve_vec_index_constraint(
       LOG_WARN("fail to get vector dim", K(ret), K(column_schema));
     } else if (dim > MAX_DIM_LIMITED) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("vector index dim larger than 2000 is not supported", K(ret), K(tenant_data_version));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "vec index dim larger than 2000 is");
+      LOG_WARN("vector index dim larger than 4096 is not supported", K(ret), K(tenant_data_version));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "vec index dim larger than 4096 is");
     } else if (OB_FAIL(ObPluginVectorIndexHelper::is_ob_vector_memory_valid(session_info_->get_effective_tenant_id(), is_vector_memory_valid))) {
       LOG_WARN("fail to check is_ob_vector_memory_valid", K(ret));
     } else if (!is_vector_memory_valid) {
@@ -13550,7 +13557,8 @@ int ObDDLResolver::check_index_param(const ParseNode *option_node, ObString &ind
         if (OB_FAIL(ret)) {
         } else if (last_variable == "DISTANCE") {
           if (new_parser_name == "INNER_PRODUCT" ||
-              new_parser_name == "L2") {
+              new_parser_name == "L2" ||
+              new_parser_name == "COSINE") {
             distance_is_set = true;
           } else {
             ret = OB_NOT_SUPPORTED;

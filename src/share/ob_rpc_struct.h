@@ -1410,6 +1410,7 @@ public:
     table_id_ = common::OB_INVALID_ID;
   }
   virtual ~ObDropIndexArg() {}
+  int assign(const ObDropIndexArg &other);
   void reset()
   {
     ObIndexArg::reset();

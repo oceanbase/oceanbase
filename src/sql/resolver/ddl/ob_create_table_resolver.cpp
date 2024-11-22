@@ -1361,19 +1361,6 @@ int ObCreateTableResolver::resolve_primary_key_node(const ParseNode &pk_node,
               SQL_RESV_LOG(WARN, "add primary key part failed", K(ret), K(key_name));
             }
           }
-          if (OB_SUCC(ret)) {
-            ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
-            ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
-            const ObColumnSchemaV2 *column_schema = NULL;
-            if (is_oracle_mode()) { // oracle mode is not support vector column yet
-            } else if (OB_NOT_NULL(column_schema = table_schema.get_column_schema(key_name))) {
-              if (ob_is_collection_sql_type(column_schema->get_data_type())) {
-                ret = OB_NOT_SUPPORTED;
-                LOG_WARN("not support primary key is vector column yet", K(ret));
-                LOG_USER_ERROR(OB_NOT_SUPPORTED, "create primary key on vector column is");
-              }
-            }
-          }
         }
       }
     }

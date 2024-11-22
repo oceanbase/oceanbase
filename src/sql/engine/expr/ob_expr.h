@@ -656,7 +656,8 @@ public:
   inline bool is_vector_sort_expr() const {
     return type_ == T_FUN_SYS_L2_DISTANCE ||
            type_ == T_FUN_SYS_INNER_PRODUCT ||
-           type_ == T_FUN_SYS_NEGATIVE_INNER_PRODUCT;
+           type_ == T_FUN_SYS_NEGATIVE_INNER_PRODUCT ||
+           type_ == T_FUN_SYS_COSINE_DISTANCE;
   }
 
   // Evaluate all parameters, assign the first sizeof...(args) parameters to %args.

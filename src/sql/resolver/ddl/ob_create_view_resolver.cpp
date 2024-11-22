@@ -575,10 +575,6 @@ int ObCreateViewResolver::resolve_primary_key_node(ParseNode &pk_node,
                                                                          table_schema, i,
                                                                          pk_data_length, col))) {
         LOG_WARN("failed to add primary key part", K(ret), K(i));
-      } else if (!is_oracle_mode() && ob_is_collection_sql_type(col->get_data_type())) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not support primary key is vector column yet", K(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create primary key on vector column is");
       }
     }
     if (OB_FAIL(ret) || is_oracle_mode()) {

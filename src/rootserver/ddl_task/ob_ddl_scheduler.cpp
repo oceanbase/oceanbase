@@ -2846,6 +2846,7 @@ int ObDDLScheduler::create_rebuild_index_task(
                                 sub_task_trace_id,
                                 parallelism,
                                 tenant_data_version,
+                                *index_schema,
                                 *rebuild_index_arg))) {
       LOG_WARN("init drop index task failed", KR(ret), K(data_table_id), K(index_table_id));
     } else if (OB_FAIL(index_task.set_trace_id(*ObCurTraceId::get_trace_id()))) {

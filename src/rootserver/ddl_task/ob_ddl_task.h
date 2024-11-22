@@ -162,10 +162,12 @@ public:
   int64_t task_id_;
 };
 
-enum ObDDLUpateParentTaskIDType
+enum ObDDLUpdateParentTaskIDType
 {
   UPDATE_CREATE_INDEX_ID = 0,
   UPDATE_DROP_INDEX_TASK_ID,
+  UPDATE_VEC_REBUILD_CREATE_INDEX_TASK_ID,
+  UPDATE_VEC_REBUILD_DROP_INDEX_TASK_ID,
 };
 
 struct ObVecIndexDDLChildTaskInfo final
@@ -340,7 +342,7 @@ public:
       const ObTableSchema &index_schema,
       const uint64_t target_table_id,
       const uint64_t target_task_id,
-      ObDDLUpateParentTaskIDType update_type,
+      ObDDLUpdateParentTaskIDType update_type,
       ObIAllocator &allocator,
       common::ObISQLClient &proxy);
 

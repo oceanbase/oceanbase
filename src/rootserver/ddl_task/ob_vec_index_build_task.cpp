@@ -1786,7 +1786,7 @@ int ObVecIndexBuildTask::submit_drop_vec_index_task()
     LOG_WARN("fail to push back index_snapshot_data_table_id_", K(ret));
   } else if (drop_index_arg.index_ids_.count() <= 0) {
     LOG_INFO("no table need to be drop, skip", K(ret)); // no table exist, skip drop
-  } else if (schema_guard.get_table_schema(tenant_id_, object_id_, data_table_schema)) {
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, data_table_schema))) {
     LOG_WARN("fail to get table schema", K(ret), K(object_id_));
   } else if (OB_ISNULL(data_table_schema)) {
     ret = OB_ERR_UNEXPECTED;

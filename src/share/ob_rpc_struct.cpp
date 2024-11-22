@@ -3570,6 +3570,28 @@ OB_SERIALIZE_MEMBER((ObDropIndexArg, ObIndexArg),
 
 OB_SERIALIZE_MEMBER(ObDropIndexRes, tenant_id_, index_table_id_, schema_version_, task_id_);
 
+int ObDropIndexArg::assign(const ObDropIndexArg &other)
+{
+  int ret = common::OB_SUCCESS;
+  if (OB_FAIL(ObIndexArg::assign(other))) {
+    LOG_WARN("fail to assign base", K(ret));
+  } else if (OB_FAIL(index_ids_.assign(other.index_ids_))) {
+    LOG_WARN("fail to assign index columns", K(ret));
+  } else {
+    index_table_id_ = other.index_table_id_;
+    is_add_to_scheduler_ = other.is_add_to_scheduler_;
+    is_hidden_ = other.is_hidden_;
+    is_in_recyclebin_ = other.is_in_recyclebin_;
+    is_inner_ = other.is_inner_;
+    is_vec_inner_drop_ = other.is_vec_inner_drop_;
+    is_parent_task_dropping_fts_index_ = other.is_parent_task_dropping_fts_index_;
+    is_parent_task_dropping_multivalue_index_ = other.is_parent_task_dropping_multivalue_index_;
+    only_set_status_ = other.only_set_status_;
+    table_id_ = other.table_id_;
+  }
+  return ret;
+}
+
 int ObDropIndexRes::assign(const ObDropIndexRes &other)
 {
   int ret = OB_SUCCESS;
