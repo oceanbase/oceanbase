@@ -1041,12 +1041,14 @@ int ObTenantTabletScheduler::schedule_merge_dag(
     const ObMergeType merge_type,
     const int64_t &merge_snapshot_version,
     const ObExecMode exec_mode,
-    const ObDagId *dag_net_id /*= nullptr*/)
+    const ObDagId *dag_net_id /*= nullptr*/,
+    const ObCOMajorMergePolicy::ObCOMajorMergeType co_major_merge_type /*= ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE*/)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_ready_for_major_merge(ls_id, tablet, merge_type))) {
     LOG_WARN("failed to check ready for major merge", K(ret), K(ls_id), K(tablet), K(merge_type));
-  } else if (is_major_merge_type(merge_type) && (!tablet.is_row_store() || is_convert_co_major_merge(merge_type))) {
+  } else if (is_major_merge_type(merge_type)
+             && (!tablet.is_row_store() || is_convert_co_major_merge(merge_type) || ObCOMajorMergePolicy::is_use_rs_build_schema_match_merge(co_major_merge_type))) {
     ObCOMergeDagParam param;
     if (OB_FAIL(ObDagParamFunc::fill_param(ls_id, tablet, merge_type, merge_snapshot_version, exec_mode, dag_net_id, param))) {
       LOG_WARN("failed to fill param", KR(ret));

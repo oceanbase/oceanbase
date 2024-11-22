@@ -6940,6 +6940,7 @@ int ObAlterTableResolver::resolve_alter_column_groups(const ParseNode &node)
     SQL_RESV_LOG(WARN, "get alter table stmt failed", K(ret), K(node.type_), KP(node.children_));
   } else {
     const ParseNode *column_group_node = node.children_[0];
+    const ParseNode *delayed_node = nullptr;
     uint64_t compat_version = 0;
 
     ObAlterTableArg &alter_table_arg = alter_table_stmt->get_alter_table_arg();
@@ -6973,8 +6974,38 @@ int ObAlterTableResolver::resolve_alter_column_groups(const ParseNode &node)
         ret = OB_ERR_UNEXPECTED;
         SQL_RESV_LOG(WARN, "invalid parse tree ", K(ret), K(column_group_node->type_));
       }
+
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(parse_column_group(column_group_node, *table_schema_, alter_table_schema))) {
+      } else if (node.num_child_ > 1) {
+        if (compat_version < DATA_VERSION_4_3_5_0) {
+          ret = OB_NOT_SUPPORTED;
+          SQL_RESV_LOG(WARN, "alter column group delayed gets unsupported data_version", K(ret), K(compat_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.5, alter column group delayed");
+        } else if (GCTX.is_shared_storage_mode()) {
+          ret = OB_NOT_SUPPORTED;
+          SQL_RESV_LOG(WARN, "alter column group delayed does not support shared storage mode", K(ret));
+        } else if (FALSE_IT(delayed_node = node.children_[1])) {
+        } else if (OB_ISNULL(delayed_node)) {
+          alter_table_stmt->get_alter_table_arg().is_alter_column_group_delayed_ = false;
+        } else if (T_ALTER_COLUMN_GROUP_DELAYED == delayed_node->type_) {
+          if (T_COLUMN_GROUP_DROP == column_group_node->type_) {
+            ret = OB_NOT_SUPPORTED;
+            SQL_RESV_LOG(WARN, "drop column group in delayed mode is not supported", K(ret));
+          } else {
+            alter_table_stmt->get_alter_table_arg().is_alter_column_group_delayed_ = true;
+            SQL_RESV_LOG(INFO, "set is_alter_column_group_delayed_ to true");
+          }
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "invalid alter column group delayed type", K(ret), "type", delayed_node->type_);
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(parse_column_group(column_group_node,
+                                            *table_schema_,
+                                            alter_table_schema,
+                                            alter_table_stmt->get_alter_table_arg().is_alter_column_group_delayed_))) {
         LOG_WARN("fail to parse column gorup list", K(ret));
       }
     }

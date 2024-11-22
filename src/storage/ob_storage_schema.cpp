@@ -526,11 +526,15 @@ int ObStorageSchema::init(
     STORAGE_LOG(WARN, "Failed to generate column group array", K(ret));
   }
 
+  bool is_column_table_schema = false;
   if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(!ObStorageSchema::is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "storage schema is invalid", K(ret));
+  } else if (OB_FAIL(input_schema.get_is_column_store(is_column_table_schema))) {
+    STORAGE_LOG(WARN, "fail to check is column store", K(ret));
   } else {
+    is_column_table_schema_ = is_column_table_schema;
     is_cs_replica_compat_ = is_cg_array_generated_in_cs_replica();
     is_inited_ = true;
   }
@@ -538,7 +542,6 @@ int ObStorageSchema::init(
   if (OB_UNLIKELY(!is_inited_)) {
     reset();
   }
-
   return ret;
 }
 
@@ -611,6 +614,7 @@ int ObStorageSchema::init(
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR, "storage schema is invalid", K(ret));
     } else {
+      is_column_table_schema_ = old_schema.is_column_table_schema_;
       is_cs_replica_compat_ = is_cg_array_generated_in_cs_replica();
       is_inited_ = true;
     }
@@ -1407,10 +1411,10 @@ int ObStorageSchema::get_column_group_index(
 bool ObStorageSchema::is_cg_array_generated_in_cs_replica() const
 {
   bool bret = false;
-  if (column_group_array_.count() <= 1) {
-    // row store
+  if (column_group_array_.count() <= 1 || is_column_table_schema_) {
+    // row store or column store table schema after v435 (all/rowkey cg is placed in the front of cg array)
   } else {
-    bret = column_group_array_.at(0).is_rowkey_column_group(); // only cs replica set rowkey cg in the front of cg array
+    bret = column_group_array_.at(0).is_rowkey_column_group(); // cs replica will set rowkey cg in the front of cg array
   }
   return bret;
 }

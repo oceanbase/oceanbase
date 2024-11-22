@@ -1785,18 +1785,27 @@ int ObSchemaServiceSQLImpl::fetch_all_column_group_mapping(
         }
       }
 
+      bool non_default_cg_exist = false;
       // get all column_group ids of this table
       ObArray<uint64_t> cg_ids;
       ObTableSchema::const_column_group_iterator it_begin = table_schema->column_group_begin();
       ObTableSchema::const_column_group_iterator it_end = table_schema->column_group_end();
       const ObColumnGroupSchema *column_group = NULL;
-      for (; OB_SUCC(ret) && (it_begin != it_end); ++it_begin) {
-        column_group = *it_begin;
-        if (OB_ISNULL(column_group)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("column_group schema should not be null", KR(ret));
-        } else if (OB_FAIL(cg_ids.push_back(column_group->get_column_group_id()))) {
-          LOG_WARN("fail to push back column_group id", KR(ret), KPC(column_group));
+      if (FAILEDx(table_schema->has_non_default_column_group(non_default_cg_exist))) {
+        LOG_WARN("fail to check table schema has non default column group", K(ret), K(table_schema));
+      } else {
+        for (; OB_SUCC(ret) && (it_begin != it_end); ++it_begin) {
+          column_group = *it_begin;
+          if (OB_ISNULL(column_group)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("column_group schema should not be null", KR(ret));
+          } else if (ObColumnGroupType::DEFAULT_COLUMN_GROUP == column_group->get_column_group_type() && non_default_cg_exist) {
+            LOG_INFO("filter old version default column group", K(non_default_cg_exist), KPC(column_group));
+            // support multi-version column group read for alter column group delayed, filter old version default_cg
+            continue;
+          } else if (OB_FAIL(cg_ids.push_back(column_group->get_column_group_id()))) {
+            LOG_WARN("fail to push back column_group id", KR(ret), KPC(column_group));
+          }
         }
       }
 
@@ -1814,7 +1823,7 @@ int ObSchemaServiceSQLImpl::fetch_all_column_group_mapping(
           LOG_WARN("fail to append sql", KR(ret), K(schema_version));
         } else if (OB_FAIL(sql.append_fmt(" ORDER BY TENANT_ID DESC, TABLE_ID DESC, COLUMN_GROUP_ID ASC, COLUMN_ID ASC"))) {
           LOG_WARN("fail to append sql", KR(ret));
-        } else if (is_history && OB_FAIL(sql.append_fmt(", SCHEMA_VERSION DESC"))) {
+        } else if (is_history && OB_FAIL(sql.append_fmt(", SCHEMA_VERSION ASC"))) {
           LOG_WARN("fail to append sql", KR(ret));
         } else {
           const bool check_deleted = is_history;

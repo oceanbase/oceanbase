@@ -4897,6 +4897,28 @@ int ObDDLService::alter_column_group(obrpc::ObAlterTableArg &alter_table_arg,
                  K(alter_table_arg.alter_table_schema_.alter_type_));
       }
     }
+    LOG_DEBUG("ddl service alter column group finish", K(ret), K(orig_table_schema), K(new_table_schema));
+  }
+  return ret;
+}
+
+int ObDDLService::update_column_group_table_inplace(const share::schema::ObTableSchema &origin_table_schema,
+                                                    const share::schema::ObTableSchema &new_table_schema,
+                                                    ObDDLOperator &ddl_operator,
+                                                    common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!origin_table_schema.is_valid()
+                  || !new_table_schema.is_valid()
+                  || !new_table_schema.is_column_store_supported())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(new_table_schema));
+  } else if (OB_FAIL(ddl_operator.update_origin_column_group_with_new_schema(trans,
+                                                                             origin_table_schema,
+                                                                             new_table_schema))) {
+    LOG_WARN("fail to clear origin table schema and insert new schema", K(ret),
+                                                                        K(origin_table_schema),
+                                                                        K(new_table_schema));
   }
   return ret;
 }
@@ -14160,6 +14182,35 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
           }
         }
 
+        // alter column group delayed
+        if (OB_SUCC(ret) && (ObDDLType::DDL_ALTER_COLUMN_GROUP_DELAYED == ddl_type)) {
+          if (tenant_data_version < DATA_VERSION_4_3_5_0) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("compat version not support", K(ret), K(tenant_data_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.5, alter column group delayed");
+          } else if (GCTX.is_shared_storage_mode()) {
+            ret = OB_NOT_SUPPORTED;
+            SQL_RESV_LOG(WARN, "alter column group delayed does not support shared storage mode", K(ret));
+          } else if (OB_FAIL(ObSchemaUtils::mock_default_cg(orig_table_schema->get_tenant_id(), new_table_schema))) {
+            LOG_WARN("fail to mock default cg", K(ret), K(orig_table_schema), K(new_table_schema));
+          } else if (OB_FAIL(alter_column_group(alter_table_arg,
+                                                *orig_table_schema,
+                                                new_table_schema,
+                                                schema_guard,
+                                                ddl_operator,
+                                                trans))) {
+            LOG_WARN("failed to alter table column group", K(ret));
+          } else if (OB_FAIL(update_column_group_table_inplace(*orig_table_schema,
+                                                      new_table_schema,
+                                                      ddl_operator,
+                                                      trans))) {
+            LOG_WARN("failed to alter table column group table", K(ret));
+          } else {
+            // only change schemas here, leave data reshaping in daily merge
+            LOG_DEBUG("alter column group in trans", K(ret), K(new_table_schema));
+          }
+        }
+
         if (OB_SUCC(ret)) {
           ObSchemaOperationType operation_type = OB_DDL_ALTER_TABLE;
           if (obrpc::ObAlterTableArg::PARTITIONED_TABLE == alter_table_arg.alter_part_type_) {
@@ -14670,7 +14721,11 @@ int ObDDLService::check_alter_column_group(const obrpc::ObAlterTableArg &alter_t
   int ret = OB_SUCCESS;
   if (OB_DDL_ADD_COLUMN_GROUP == alter_table_arg.alter_table_schema_.alter_type_ ||
       OB_DDL_DROP_COLUMN_GROUP == alter_table_arg.alter_table_schema_.alter_type_) {
-    ddl_type = ObDDLType::DDL_ALTER_COLUMN_GROUP;
+    if (true == alter_table_arg.is_alter_column_group_delayed_) {
+      ddl_type = ObDDLType::DDL_ALTER_COLUMN_GROUP_DELAYED;
+    } else  {
+      ddl_type = ObDDLType::DDL_ALTER_COLUMN_GROUP;
+    }
     if (alter_table_arg.alter_table_schema_.get_column_group_count() <= 0) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument, alter table arg don't have any column group when alter column group",
@@ -15342,7 +15397,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
                                                     trans,
                                                     alter_table_arg.allocator_,
                                                     tenant_data_version))) {
-          LOG_WARN("fail to create user_hidden table", K(ret));
+          LOG_WARN("fail to create user_hidden table", K(ret), KPC(orig_table_schema), K(new_table_schema));
         }
       }
 
@@ -17804,7 +17859,7 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg &alter_table_arg,
           LOG_INFO("refresh session active time of temp tables succeed!", K(ret));
         }
       } else if (OB_FAIL(check_is_offline_ddl(alter_table_arg, data_version, ddl_type, ddl_need_retry_at_executor))) {
-        LOG_WARN("failed to check is offline ddl", K(ret));
+        LOG_WARN("failed to check is offline ddl", K(ret), K(alter_table_arg));
       } else if (((MOCK_DATA_VERSION_4_2_1_3 <= data_version && DATA_VERSION_4_3_0_0 > data_version)
                || (DATA_VERSION_4_3_2_0 <= data_version)) // [4213, 430) & [4320, )
                  && OB_FAIL(check_is_oracle_mode_add_column_not_null_ddl(alter_table_arg,

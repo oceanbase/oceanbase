@@ -3182,6 +3182,39 @@ int ObDDLOperator::insert_column_ids_into_column_group(ObMySQLTransaction &trans
   return ret;
 }
 
+int ObDDLOperator::update_origin_column_group_with_new_schema(ObMySQLTransaction &trans,
+                                                              const ObTableSchema &origin_table_schema,
+                                                              const ObTableSchema &new_table_schema)
+{
+  int ret = OB_SUCCESS;
+  int64_t new_delete_version = OB_INVALID_VERSION;
+  int64_t new_insert_version = OB_INVALID_VERSION;
+  uint64_t origin_tenant_id = origin_table_schema.get_tenant_id();
+  uint64_t new_tenant_id = new_table_schema.get_tenant_id();
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service is NULL", K(ret));
+  } else if (OB_UNLIKELY(origin_tenant_id != new_tenant_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("origin tenant id does not equal to new tenant id", K(ret), K(origin_tenant_id), K(new_tenant_id));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(origin_tenant_id, new_delete_version))) {
+    LOG_WARN("fail to generate new schema version for delete operation", K(ret), K(new_delete_version));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(new_tenant_id, new_insert_version))) {
+    LOG_WARN("fail to generate new schema version for create operation", K(ret), K(new_insert_version));
+  } else if (OB_FAIL(schema_service->get_table_sql_service().update_origin_column_group_with_new_schema(trans,
+                                                                                                        new_delete_version,
+                                                                                                        new_insert_version,
+                                                                                                        origin_table_schema,
+                                                                                                        new_table_schema))) {
+    LOG_WARN("fail to update origin column group with new schema", K(ret),
+                                                                   K(new_delete_version),
+                                                                   K(new_insert_version),
+                                                                   K(origin_table_schema),
+                                                                   K(new_table_schema));
+  }
+  return ret;
+}
 
 int ObDDLOperator::insert_single_column(ObMySQLTransaction &trans,
                                         const ObTableSchema &new_table_schema,

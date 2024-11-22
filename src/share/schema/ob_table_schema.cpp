@@ -9499,6 +9499,28 @@ int ObTableSchema::has_all_column_group(bool &has_all_column_group) const
   return ret;
 }
 
+int ObTableSchema::has_non_default_column_group(bool &has_non_default_column_group) const
+{
+  int ret = OB_SUCCESS;
+  has_non_default_column_group = false;
+  ObSEArray<const ObColumnGroupSchema *, 8> column_group_metas;
+  if (OB_FAIL(get_store_column_groups(column_group_metas, false/*filter_empty_cg*/))) {
+    LOG_WARN("Failed to get column group metas", K(ret), KPC(this));
+  } else {
+    const ObColumnGroupSchema *cg_schema = nullptr;
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < column_group_metas.count(); ++idx) {
+      if (OB_ISNULL(cg_schema = column_group_metas.at(idx))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected null cg_schema", K(ret));
+      } else if (DEFAULT_COLUMN_GROUP != cg_schema->get_column_group_type()) {
+        has_non_default_column_group = true;
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTableSchema::get_column_group_by_id(
     const uint64_t column_group_id,
     ObColumnGroupSchema *&column_group) const
@@ -9680,7 +9702,16 @@ int ObTableSchema::add_column_group_to_array(ObColumnGroupSchema *column_group)
     }
 
     if (OB_SUCC(ret)) {
-      column_group_arr_[column_group_cnt_++] = column_group;
+      if (ROWKEY_COLUMN_GROUP == column_group->get_column_group_type()
+         || ALL_COLUMN_GROUP == column_group->get_column_group_type()) {
+        for (int64_t idx = column_group_cnt_ - 1; idx >= 0; --idx) {
+          column_group_arr_[idx + 1] = column_group_arr_[idx];
+        }
+        column_group_arr_[0] = column_group;
+        ++column_group_cnt_;
+      } else {
+        column_group_arr_[column_group_cnt_++] = column_group;
+      }
     }
   }
 

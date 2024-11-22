@@ -1678,6 +1678,7 @@ public:
                               const bool filter_empty_cg = true) const;
   int remove_column_group(const uint64_t column_group_id);
   int has_all_column_group(bool &has_all_column_group) const;
+  int has_non_default_column_group(bool &has_non_default_column_group) const;
   // materialized view log related
   template <typename Allocator>
   static int build_mlog_table_name(Allocator &allocator,

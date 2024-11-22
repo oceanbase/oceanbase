@@ -125,7 +125,9 @@ enum ObCOMajorSSTableStatus: uint8_t {
   +-----------------------+---------------+---------------+-------+
   |   COL_REPLICA_MAJOR   |    ROW STORE  |   ROW STORE   |  YES  |
   +-----------------------+---------------+---------------+-------+
-  |DELAYED_TRANSFORM_MAJOR| ALL+EACH/EACH |   ROW STORE   |  NO   |
+  |DELAYED_TRANSFORM_MAJOR| ALL+EACH/EACH |   ROW STORE   |   NO  |
+  +-----------------------+---------------+---------------+-------+
+  |   PURE_COL_WITH_ALL   |    ALL+EACH   |      EACH     |   NO  |
   +-----------------------+---------------+---------------+-------+
 */
 inline bool is_valid_co_major_sstable_status(const ObCOMajorSSTableStatus& major_sstable_status)
@@ -143,6 +145,10 @@ inline bool is_redundant_row_store_major_sstable(const ObCOMajorSSTableStatus& m
 inline bool is_major_sstable_match_schema(const ObCOMajorSSTableStatus& major_sstable_status)
 {
   return major_sstable_status == COL_WITH_ALL || major_sstable_status == PURE_COL;
+}
+inline bool is_build_redundent_row_store(const ObCOMajorSSTableStatus& major_sstable_status)
+{
+  return PURE_COL_WITH_ALL == major_sstable_status;
 }
 
 const char* co_major_sstable_status_to_str(const ObCOMajorSSTableStatus& major_sstable_status);

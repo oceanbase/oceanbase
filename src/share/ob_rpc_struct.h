@@ -2363,7 +2363,8 @@ public:
       client_session_id_(0),
       client_session_create_ts_(0),
       lock_priority_(transaction::tablelock::ObTableLockPriority::NORMAL),
-      is_direct_load_partition_(false)
+      is_direct_load_partition_(false),
+      is_alter_column_group_delayed_(false)
   {
   }
   virtual ~ObAlterTableArg()
@@ -2451,7 +2452,8 @@ public:
                K_(client_session_id),
                K_(client_session_create_ts),
                K_(lock_priority),
-               K_(is_direct_load_partition));
+               K_(is_direct_load_partition),
+               K_(is_alter_column_group_delayed));
 private:
   int alloc_index_arg(const ObIndexArg::IndexActionType index_action_type, ObIndexArg *&index_arg);
 public:
@@ -2492,6 +2494,7 @@ public:
   int64_t client_session_create_ts_;
   transaction::tablelock::ObTableLockPriority lock_priority_;
   bool is_direct_load_partition_;
+  bool is_alter_column_group_delayed_;
   int serialize_index_args(char *buf, const int64_t data_len, int64_t &pos) const;
   int deserialize_index_args(const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_index_args_serialize_size() const;

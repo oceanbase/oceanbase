@@ -6128,6 +6128,38 @@ int ObTableSqlService::update_single_column_group(ObISQLClient &sql_client,
   return ret;
 }
 
+int ObTableSqlService::update_origin_column_group_with_new_schema(ObISQLClient &sql_client,
+                                                                  const int64_t delete_schema_version,
+                                                                  const int64_t insert_schema_version,
+                                                                  const ObTableSchema &origin_table_schema,
+                                                                  const ObTableSchema &new_table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = OB_INVALID_VERSION;
+  uint64_t origin_tenant_id = origin_table_schema.get_tenant_id();
+  uint64_t new_tenant_id = new_table_schema.get_tenant_id();
+  if (OB_UNLIKELY(!sql_client.is_active()
+                  || !origin_table_schema.is_valid()
+                  || !new_table_schema.is_valid()
+                  || origin_tenant_id != new_tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(origin_table_schema), K(new_table_schema));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(origin_tenant_id, data_version))) {
+    LOG_WARN("fail to get min data version", KR(ret), K(origin_table_schema));
+  } else if (OB_FAIL(check_column_store_valid(origin_table_schema, data_version))) {
+    LOG_WARN("fail to check column store valid for origin table schema", KR(ret), K(origin_table_schema));
+  } else if (OB_FAIL(check_column_store_valid(new_table_schema, data_version))) {
+    LOG_WARN("fail to check column store valid for new table schema", KR(ret), K(new_table_schema));
+  } else if (OB_FAIL(delete_from_column_group(sql_client, origin_table_schema, delete_schema_version, false /*history table*/))) {
+    LOG_WARN("fail to delete __all_column_group for origin table schema", KR(ret), K(origin_table_schema));
+  } else if (OB_FAIL(delete_from_column_group_mapping(sql_client, origin_table_schema, delete_schema_version, false /*history table*/))) {
+    LOG_WARN("fail to delete __all_column_group_mapping for origin table schema", KR(ret), K(origin_table_schema));
+  } else if (OB_FAIL(add_column_groups(sql_client, new_table_schema, insert_schema_version, false/*only_history*/))) {
+    LOG_WARN("fail to add column groups from new table schema", KR(ret), K(new_table_schema), K(insert_schema_version));
+  }
+  return ret;
+}
+
 // Three scenes :
 // 1. drop fk parent table
 // 2. create child table with a fk references a mock fk parent table not exist

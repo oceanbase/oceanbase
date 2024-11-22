@@ -13171,7 +13171,8 @@ int ObDDLResolver::deep_copy_column_expr_name(common::ObIAllocator &allocator,
 
 int ObDDLResolver::parse_column_group(const ParseNode *column_group_node,
                                       const ObTableSchema &table_schema,
-                                      ObTableSchema &dst_table_schema)
+                                      ObTableSchema &dst_table_schema,
+                                      const bool is_alter_column_group_delayed)
 {
   int ret = OB_SUCCESS;
   bool sql_exist_all_column_group = false;
@@ -13216,6 +13217,13 @@ int ObDDLResolver::parse_column_group(const ParseNode *column_group_node,
       SQL_RESV_LOG(WARN, "Resovle unsupported column group type",
                    K(ret), K(column_group_node->children_[i]->type_));
     }
+  }
+
+  if (OB_SUCC(ret)
+     && OB_UNLIKELY(sql_exist_all_column_group && !sql_exist_single_column_group && is_alter_column_group_delayed)) {
+     ret = OB_NOT_SUPPORTED;
+     SQL_RESV_LOG(WARN, "alter table add all column groups not supprt",
+                  K(ret), K(sql_exist_all_column_group), K(sql_exist_single_column_group), K(is_alter_column_group_delayed));
   }
 
   /* all column group */

@@ -311,6 +311,7 @@ public:
   1) ALL+EACH
   ALL+EACH --(BUILD_ROW_STORE_MERGE)--> ALL --(USE_RS_BUILD_SCHEMA_MATCH_MERGE)--> ALL+EACH
   ALL+EACH --(BUILD_COLUMN_STORE_MERGE)--> ALL+EACH
+  EACH --(BUILD_REDUNDANT_ROW_STORE_MERGE)--> ALL+EACH
   2) EACH
   EACH --(BUILD_ROW_STORE_MERGE)--> ALL --(USE_RS_BUILD_SCHEMA_MATCH_MERGE)--> EACH
   EACH --(BUILD_COLUMN_STORE_MERGE)--> EACH
@@ -348,6 +349,10 @@ public:
   static inline bool is_use_rs_build_schema_match_merge(const ObCOMajorMergeType &major_merge_type)
   {
     return USE_RS_BUILD_SCHEMA_MATCH_MERGE == major_merge_type;
+  }
+  static inline bool is_build_redundent_row_store_merge(const ObCOMajorMergeType &major_merge_type)
+  {
+    return BUILD_REDUNDANT_ROW_STORE_MERGE == major_merge_type;
   }
   static int decide_co_major_sstable_status(
       const ObCOSSTableV2 &co_sstable,

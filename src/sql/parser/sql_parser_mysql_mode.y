@@ -466,7 +466,7 @@ END_P SET_VAR DELIMITER
 %type <ival> opt_with_consistent_snapshot opt_config_scope opt_index_keyname opt_full opt_mode_flag opt_extended opt_extended_or_full
 %type <node> opt_priority opt_low_priority delete_option delete_option_list opt_delete_option_list
 %type <node> opt_work begin_stmt commit_stmt rollback_stmt opt_ignore opt_ignore_or_replace ignore_or_replace xa_begin_stmt xa_end_stmt xa_prepare_stmt xa_commit_stmt xa_rollback_stmt xa_recover_stmt xa_xid opt_join_or_resume opt_suspend opt_one_phase opt_convert_xid
-%type <node> alter_table_stmt alter_table_actions alter_table_action_list alter_table_action alter_column_option alter_index_option alter_constraint_option standalone_alter_action alter_partition_option opt_to alter_tablegroup_option opt_table opt_tablegroup_option_list alter_tg_partition_option alter_column_group_option
+%type <node> alter_table_stmt alter_table_actions alter_table_action_list alter_table_action alter_column_option alter_index_option alter_constraint_option standalone_alter_action alter_partition_option opt_to alter_tablegroup_option opt_table opt_tablegroup_option_list alter_tg_partition_option alter_column_group_delayed_desc alter_column_group_option
 %type <node> tablegroup_option_list tablegroup_option alter_tablegroup_actions alter_tablegroup_action tablegroup_option_list_space_seperated
 %type <node> opt_tg_partition_option tg_hash_partition_option tg_key_partition_option tg_range_partition_option tg_subpartition_option tg_list_partition_option
 %type <node> alter_column_behavior opt_set opt_position_column
@@ -18437,18 +18437,29 @@ VISIBLE
 }
 ;
 
+alter_column_group_delayed_desc:
+/* EMPTY */
+{
+  $$ = NULL;
+}
+| DELAYED
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_ALTER_COLUMN_GROUP_DELAYED);
+}
+;
+
 alter_column_group_option:
-ADD COLUMN GROUP '(' column_group_list ')'
+ADD COLUMN GROUP '(' column_group_list ')' alter_column_group_delayed_desc
 {
   ParseNode *column_group_list = NULL;
   merge_nodes(column_group_list, result, T_COLUMN_GROUP_ADD, $5);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_COLUMN_GROUP_OPTION, 1, column_group_list);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_COLUMN_GROUP_OPTION, 2, column_group_list, $7);
 }
-| DROP COLUMN GROUP '(' column_group_list ')'
+| DROP COLUMN GROUP '(' column_group_list ')' alter_column_group_delayed_desc
 {
   ParseNode *column_group_list = NULL;
   merge_nodes(column_group_list, result, T_COLUMN_GROUP_DROP,$5);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_COLUMN_GROUP_OPTION, 1, column_group_list);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_COLUMN_GROUP_OPTION, 2, column_group_list, $7);
 }
 ;
 

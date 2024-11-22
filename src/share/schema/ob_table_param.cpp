@@ -629,6 +629,7 @@ ObTableParam::ObTableParam(ObIAllocator &allocator)
     is_fts_index_(false),
     is_multivalue_index_(false),
     is_column_replica_table_(false),
+    is_normal_cgs_at_the_end_(false),
     is_vec_index_(false),
     is_partition_table_(false)
 {
@@ -660,6 +661,7 @@ void ObTableParam::reset()
   is_fts_index_ = false;
   is_multivalue_index_ = false;
   is_column_replica_table_ = false;
+  is_normal_cgs_at_the_end_ = false;
   is_vec_index_ = false;
   is_partition_table_ = false;
 }
@@ -702,6 +704,9 @@ OB_DEF_SERIALIZE(ObTableParam)
   }
   if (OB_SUCC(ret)) {
     OB_UNIS_ENCODE(is_column_replica_table_);
+  }
+  if (OB_SUCC(ret)) {
+    OB_UNIS_ENCODE(is_normal_cgs_at_the_end_);
   }
   if (OB_SUCC(ret)) {
     OB_UNIS_ENCODE(is_vec_index_);
@@ -799,6 +804,10 @@ OB_DEF_DESERIALIZE(ObTableParam)
   }
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_DECODE,
+                is_normal_cgs_at_the_end_);
+  }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE,
                 is_vec_index_);
   }
   if (OB_SUCC(ret)) {
@@ -848,6 +857,10 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_ADD_LEN,
               is_column_replica_table_);
+  }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ADD_LEN,
+              is_normal_cgs_at_the_end_);
   }
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_ADD_LEN,
@@ -1216,6 +1229,14 @@ int ObTableParam::construct_columns_and_projector(
       }
     }
   }
+
+  if (OB_SUCC(ret) && 0 < table_schema.get_column_group_count()) {
+    const ObColumnGroupType column_group_type = (*table_schema.column_group_begin())->get_column_group_type();
+    if (ROWKEY_COLUMN_GROUP == column_group_type || ALL_COLUMN_GROUP == column_group_type) {
+      // delayed column transform already has the column group information that meets the cs replica requirements before the storage schema update
+      is_normal_cgs_at_the_end_ = true;
+    }
+  }
   return ret;
 }
 
@@ -1581,7 +1602,8 @@ int64_t ObTableParam::to_string(char *buf, const int64_t buf_len) const
        K_(is_fts_index),
        K_(parser_name),
        K_(is_vec_index),
-       K_(is_column_replica_table));
+       K_(is_column_replica_table),
+       K_(is_normal_cgs_at_the_end));
   J_OBJ_END();
 
   return pos;

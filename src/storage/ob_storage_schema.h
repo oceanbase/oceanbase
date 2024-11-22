@@ -383,7 +383,7 @@ public:
   static const int32_t SS_ONE_BIT = 1;
   static const int32_t SS_HALF_BYTE = 4;
   static const int32_t SS_ONE_BYTE = 8;
-  static const int32_t SS_RESERVED_BITS = 17;
+  static const int32_t SS_RESERVED_BITS = 16;
 
   // STORAGE_SCHEMA_VERSION is for serde compatibility.
   // Currently we do not use "standard" serde function macro,
@@ -408,6 +408,7 @@ public:
       uint32_t is_use_bloomfilter_  :SS_ONE_BIT;
       uint32_t column_info_simplified_ :SS_ONE_BIT;
       uint32_t is_cs_replica_compat_ :SS_ONE_BIT; // for storage schema on tablet
+      uint32_t is_column_table_schema_ :SS_ONE_BIT;
       uint32_t reserved_            :SS_RESERVED_BITS;
     };
   };

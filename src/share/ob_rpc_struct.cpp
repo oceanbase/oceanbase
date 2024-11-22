@@ -2789,7 +2789,8 @@ OB_DEF_SERIALIZE(ObAlterTableArg)
               client_session_id_,
               client_session_create_ts_,
               lock_priority_,
-              is_direct_load_partition_);
+              is_direct_load_partition_,
+              is_alter_column_group_delayed_);
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(rebuild_index_arg_list_.serialize(buf, buf_len, pos))) {
@@ -2893,7 +2894,8 @@ OB_DEF_DESERIALIZE(ObAlterTableArg)
               client_session_id_,
               client_session_create_ts_,
               lock_priority_,
-              is_direct_load_partition_);
+              is_direct_load_partition_,
+              is_alter_column_group_delayed_);
   return ret;
 }
 
@@ -2945,7 +2947,8 @@ OB_DEF_SERIALIZE_SIZE(ObAlterTableArg)
                 client_session_id_,
                 client_session_create_ts_,
                 lock_priority_,
-                is_direct_load_partition_);
+                is_direct_load_partition_,
+                is_alter_column_group_delayed_);
   }
 
   if (OB_FAIL(ret)) {

@@ -93,7 +93,7 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   const ObITableReadInfo *get_full_read_info() const
   {
     const ObITableReadInfo *ret_info = NULL;
-    if (is_build_row_store_from_rowkey_cg()) {
+    if (is_build_row_store_from_rowkey_cg() || is_build_redundant_row_store_from_rowkey_cg()) {
       ret_info = &mocked_row_store_table_read_info_;
     } else {
       ret_info = &read_info_;
@@ -147,8 +147,10 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   int prepare_mocked_row_store_cg_schema();
   bool should_mock_row_store_cg_schema();
   int prepare_cs_replica_param();
+  int check_and_set_build_redundant_row_merge();
   int check_convert_co_checksum(const ObSSTable *new_sstable);
   OB_INLINE bool is_build_row_store_from_rowkey_cg() const { return static_param_.is_build_row_store_from_rowkey_cg(); }
+  OB_INLINE bool is_build_redundant_row_store_from_rowkey_cg() const { return static_param_.is_build_redundent_row_store_from_rowkey_cg(); }
   OB_INLINE bool is_build_row_store() const { return static_param_.is_build_row_store(); }
   int get_cg_schema_for_merge(const int64_t idx, const ObStorageColumnGroupSchema *&cg_schema_ptr);
   const ObSSTableMergeHistory &get_merge_history() { return dag_net_merge_history_; }

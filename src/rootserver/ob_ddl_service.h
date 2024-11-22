@@ -1812,6 +1812,10 @@ private:
                          common::ObMySQLTransaction &trans);
 
 
+  int update_column_group_table_inplace(const share::schema::ObTableSchema &origin_table_schema,
+                                        const share::schema::ObTableSchema &new_table_schema,
+                                        ObDDLOperator &ddl_operator,
+                                        common::ObMySQLTransaction &trans);
   int check_alter_table_constraint(
       const obrpc::ObAlterTableArg &alter_table_arg,
       const ObTableSchema &orig_table_schema,

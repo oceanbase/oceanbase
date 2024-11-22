@@ -442,6 +442,11 @@ public:
                                  const ObTableSchema &new_table_schema,
                                  const ObColumnGroupSchema &ori_cg_schema,
                                  const ObColumnGroupSchema &new_cg_schema);
+  int update_origin_column_group_with_new_schema(ObISQLClient &sql_client,
+                                                 const int64_t delete_schema_version,
+                                                 const int64_t insert_schema_version,
+                                                 const ObTableSchema &orig_table_schema,
+                                                 const ObTableSchema &new_table_schema);
 private:
   int log_operation_wrapper(
       ObSchemaOperation &opt,
