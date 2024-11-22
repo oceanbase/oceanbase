@@ -198,16 +198,15 @@ void ObLogRestoreService::do_thread_task_()
     bool source_exist = false;
     const int64_t current_ts = ObTimeUtility::current_time();
     if (reach_time_interval_(current_ts, UPDATE_UPSTREAM_INTERVAL, query_restore_source_ts_)) {
+      reset_restore_source_();
       if (OB_FAIL(update_upstream_(source, source_exist))) {
         // don't schedule if failed to update upstream
-        reset_restore_source_();
         LOG_WARN("update_upstream_ failed");
       } else if (source_exist) {
         restore_source_.deep_copy(source);
       } else {
         // tenant_role not match or log_restore_source not exist
         clean_resource_();
-        reset_restore_source_();
       }
     }
 
