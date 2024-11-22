@@ -50,6 +50,11 @@ if ($table_name == 'DBA_TAB_COL_STATISTICS')
 {
 let $query_type = 2;
 }
+# 先不对ROUTINES视图进行select操作
+if ($table_name == 'ROUTINES')
+{
+let $query_type = 3;
+}
 
 if ($query_type == 1)
 {
