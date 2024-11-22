@@ -136,7 +136,7 @@ int ObExprEnhancedAesEncrypt::eval_aes_encrypt(const ObExpr &expr, ObEvalCtx &ct
   } else {
     const ObString &src_str = expr.locate_param_datum(ctx, 0).get_string();
     char *buf = NULL;
-    const int64_t buf_len = ObBlockCipher::get_ciphertext_length(op_mode, src_str.length());
+    const int64_t buf_len = MAX(1, ObBlockCipher::get_ciphertext_length(op_mode, src_str.length()));
     int64_t enc_len = 0;
     ObEvalCtx::TempAllocGuard alloc_guard(ctx);
     if (OB_ISNULL(buf = static_cast<char *>(alloc_guard.get_allocator().alloc(buf_len)))) {
@@ -188,7 +188,8 @@ int ObExprEnhancedAesEncrypt::calc_result_typeN(ObExprResType &type,
     LOG_WARN("failed to calc aes encryption result type", K(ret));
   } else {
     // need extra KEY_ID_LENGTH space to store master key id
-    type.set_length(ObBlockCipher::get_ciphertext_length(mode, types[0].get_length()) + KEY_ID_LENGTH);
+    type.set_length(MAX(1, ObBlockCipher::get_ciphertext_length(mode, types[0].get_length()))
+                    + KEY_ID_LENGTH);
   }
   return ret;
 }
