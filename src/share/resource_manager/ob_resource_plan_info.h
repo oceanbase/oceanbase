@@ -28,21 +28,21 @@ namespace share
 {
 enum ObFunctionType : uint8_t
 {
-  DEFAULT_FUNCTION = 0,
-  PRIO_COMPACTION_HIGH = 1,
-  PRIO_HA_HIGH = 2,
-  PRIO_COMPACTION_MID = 3,
-  PRIO_HA_MID = 4,
-  PRIO_COMPACTION_LOW = 5,
-  PRIO_HA_LOW = 6,
-  PRIO_DDL = 7,
-  PRIO_DDL_HIGH = 8,
-  PRIO_GC_MACRO_BLOCK = 9, // block manager scans for bad blocks in the background
-  PRIO_CLOG_LOW = 10,
-  PRIO_CLOG_MID = 11,
-  PRIO_CLOG_HIGH = 12,
+  DEFAULT_FUNCTION = 0, // FARM COMPAT WHITELIST: refine ObFuncType interface
+  PRIO_COMPACTION_HIGH = 1, // FARM COMPAT WHITELIST: refine ObFuncType interface
+  PRIO_HA_HIGH = 2, // FARM COMPAT WHITELIST: refine ObFuncType interface
+  PRIO_COMPACTION_MID = 3, // FARM COMPAT WHITELIST: refine ObFuncType interface
+  PRIO_HA_MID = 4, // FARM COMPAT WHITELIST: refine ObFuncType interface
+  PRIO_COMPACTION_LOW = 5, // FARM COMPAT WHITELIST: refine ObFuncType interface
+  PRIO_HA_LOW = 6, // FARM COMPAT WHITELIST: refine ObFuncType interface
+  PRIO_DDL = 7, // FARM COMPAT WHITELIST: refine ObFuncType interface
+  PRIO_DDL_HIGH = 8, // FARM COMPAT WHITELIST: refine ObFuncType interface
+  PRIO_GC_MACRO_BLOCK = 9, // FARM COMPAT WHITELIST: refine ObFuncType interface
+  PRIO_CLOG_LOW = 10, // FARM COMPAT WHITELIST: refine ObFuncType interface
+  PRIO_CLOG_MID = 11, // FARM COMPAT WHITELIST: refine ObFuncType interface
+  PRIO_CLOG_HIGH = 12, // FARM COMPAT WHITELIST: refine ObFuncType interface
   /* add new function type below, or you will have compatibility issues. */
-  PRIO_OPT_STATS = 13,
+  PRIO_OPT_STATS = 13, // FARM COMPAT WHITELIST: refine ObFuncType interface
 
   /* add new function type above */
   MAX_FUNCTION_NUM
