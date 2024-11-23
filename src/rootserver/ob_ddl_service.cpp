@@ -5744,9 +5744,11 @@ int ObDDLService::check_is_drop_partition_key(
   ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
   const uint64_t tenant_id = orig_table_schema.get_tenant_id();
   const uint64_t to_drop_column_id = to_drop_column.get_column_id();
+  const ObPartitionOption &part_option = orig_table_schema.get_part_option();
+  const ObString &part_func_str = part_option.get_part_func_expr_str();
   if (OB_FAIL(orig_table_schema.get_simple_index_infos(simple_index_infos))) {
     LOG_WARN("get index infos failed", K(ret));
-  } else if (OB_FAIL(orig_table_schema.is_tbl_partition_key(to_drop_column_id, is_tbl_partition_key,
+  } else if (!part_func_str.empty()/*nonempty means user-defined part key*/ && OB_FAIL(orig_table_schema.is_tbl_partition_key(to_drop_column_id, is_tbl_partition_key,
                                                            false /* ignore_presetting_key */))) {
     LOG_WARN("fail to check tbl partition key", K(ret), K(to_drop_column), K(orig_table_schema));
   } else {
@@ -5759,10 +5761,13 @@ int ObDDLService::check_is_drop_partition_key(
       } else if (OB_ISNULL(index_schema)) {
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("index not exist", K(ret), K(tenant_id), K(index_tid));
-      } else if (index_schema->is_global_index_table()
-          && OB_FAIL(index_schema->is_tbl_partition_key(to_drop_column_id, is_tbl_partition_key,
-                                                        false /* ignore_presetting_key */))) {
-        LOG_WARN("check column in part key failed", K(ret), K(index_tid));
+      } else if (index_schema->is_global_index_table()) {
+        const ObPartitionOption &part_option = index_schema->get_part_option();
+        const ObString &part_func_str = part_option.get_part_func_expr_str();
+        if (!part_func_str.empty()/*nonempty means user-defined part key*/
+            && OB_FAIL(index_schema->is_tbl_partition_key(to_drop_column_id, is_tbl_partition_key, false /* ignore_presetting_key */))) {
+          LOG_WARN("check column in part key failed", K(ret), K(index_tid));
+        }
       }
     }
   }
