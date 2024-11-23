@@ -721,7 +721,7 @@ int ObCDCMissLogHandler::fetch_miss_log_direct_(
         if (get_timestamp() > time_upper_limit) {
           is_timeout = true;
         } else if (OB_FAIL(entry_iter.init(tenant_id, ls_id, cur_scn, missing_lsn,
-            LSN(palf::LOG_MAX_LSN_VAL), buffer_pool, log_ext_handler))) {
+            LSN(palf::LOG_MAX_LSN_VAL), buffer_pool, log_ext_handler, archive::ARCHIVE_FILE_DATA_BUF_SIZE))) {
           LOG_WARN("remote entry iter init failed", KR(ret));
         } else if (OB_FAIL(entry_iter.next(log_entry, lsn, buf, buf_size))) {
           retry_on_err =true;
