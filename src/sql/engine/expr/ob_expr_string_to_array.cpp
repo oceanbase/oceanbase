@@ -18,6 +18,7 @@
 #include "sql/engine/expr/ob_array_expr_utils.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
+#include "lib/charset/ob_ctype.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -51,6 +52,8 @@ int ObExprStringToArray::calc_result_typeN(ObExprResType &type,
     if (!ob_is_string_tc(types[i].get_type()) && !ob_is_null(types[i].get_type())) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "VARCHAR", ob_obj_type_str(types[i].get_type()));
+    } else {
+      types[i].set_calc_collation_type(ObCharset::get_system_collation());
     }
   }
 
@@ -73,10 +76,11 @@ int ObExprStringToArray::eval_string_to_array(const ObExpr &expr, ObEvalCtx &ctx
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
   uint16_t subschema_id = expr.obj_meta_.get_subschema_id();
-  ObDatum *arr_datum = NULL;
+  ObCollationType cs_type = expr.args_[0]->datum_meta_.cs_type_;;
+  ObDatum *arr_str_datum = NULL;
   ObDatum *delimiter_datum = NULL;
   ObDatum *null_str_datum = NULL;
-  if (OB_FAIL(expr.args_[0]->eval(ctx, arr_datum))) {
+  if (OB_FAIL(expr.args_[0]->eval(ctx, arr_str_datum))) {
     LOG_WARN("eval source array failed", K(ret));
   } else if (OB_FAIL(expr.args_[1]->eval(ctx, delimiter_datum))) {
     LOG_WARN("eval delimiter string failed", K(ret));
@@ -91,9 +95,9 @@ int ObExprStringToArray::eval_string_to_array(const ObExpr &expr, ObEvalCtx &ctx
     bool has_null_str = false;
     ObIArrayType *arr_obj = NULL;
     ObArrayBinary *binary_array = NULL;
-    if (!arr_datum->is_null()) {
+    if (!arr_str_datum->is_null()) {
       has_arr_str = true;
-      arr_str.assign(arr_datum->get_string().ptr(), arr_datum->get_string().length());
+      arr_str.assign(arr_str_datum->get_string().ptr(), arr_str_datum->get_string().length());
     }
     if (!delimiter_datum->is_null()) {
       has_delimiter = true;
@@ -108,7 +112,7 @@ int ObExprStringToArray::eval_string_to_array(const ObExpr &expr, ObEvalCtx &ctx
     } else if (OB_ISNULL(binary_array = static_cast<ObArrayBinary *>(arr_obj))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("binary array is null", K(ret), K(subschema_id));
-    } else if (OB_FAIL(string_to_array(binary_array, arr_str, delimiter, null_str, has_arr_str, has_delimiter, has_null_str))) {
+    } else if (OB_FAIL(string_to_array(binary_array, arr_str, delimiter, null_str, cs_type, has_arr_str, has_delimiter, has_null_str))) {
       LOG_WARN("failed to convert string to array", K(ret));
     } else if (!has_arr_str) {
       res.set_null();
@@ -133,6 +137,7 @@ int ObExprStringToArray::eval_string_to_array_batch(const ObExpr &expr, ObEvalCt
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
   const uint16_t subschema_id = expr.obj_meta_.get_subschema_id();
+  ObCollationType cs_type = expr.args_[0]->datum_meta_.cs_type_;;
   ObIArrayType *arr_obj = NULL;
 
   if (OB_FAIL(expr.args_[0]->eval_batch(ctx, skip, batch_size))) {
@@ -176,7 +181,7 @@ int ObExprStringToArray::eval_string_to_array_batch(const ObExpr &expr, ObEvalCt
       } else if (OB_ISNULL(binary_array = static_cast<ObArrayBinary *>(arr_obj))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("binary array is null", K(ret), K(subschema_id));
-      } else if (OB_FAIL(string_to_array(binary_array, arr_str, delimiter, null_str, has_arr_str, has_delimiter, has_null_str))) {
+      } else if (OB_FAIL(string_to_array(binary_array, arr_str, delimiter, null_str, cs_type, has_arr_str, has_delimiter, has_null_str))) {
         LOG_WARN("failed to convert string to array", K(ret));
       } else if (!has_arr_str) {
         res_datum.at(j)->set_null();
@@ -212,6 +217,7 @@ int ObExprStringToArray::eval_string_to_array_vector(const ObExpr &expr, ObEvalC
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
   const uint16_t subschema_id = expr.obj_meta_.get_subschema_id();
+  ObCollationType cs_type = expr.args_[0]->datum_meta_.cs_type_;;
   ObIArrayType *arr_obj = NULL;
 
   if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
@@ -260,7 +266,7 @@ int ObExprStringToArray::eval_string_to_array_vector(const ObExpr &expr, ObEvalC
       } else if (OB_ISNULL(binary_array = static_cast<ObArrayBinary *>(arr_obj))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("binary array is null", K(ret), K(subschema_id));
-      } else if (OB_FAIL(string_to_array(binary_array, arr_str, delimiter, null_str, has_arr_str, has_delimiter, has_null_str))) {
+      } else if (OB_FAIL(string_to_array(binary_array, arr_str, delimiter, null_str, cs_type, has_arr_str, has_delimiter, has_null_str))) {
         LOG_WARN("failed to convert string to array", K(ret));
       } else if (!has_arr_str) {
         res_vec->set_null(idx);
@@ -284,18 +290,30 @@ int ObExprStringToArray::eval_string_to_array_vector(const ObExpr &expr, ObEvalC
 
 int ObExprStringToArray::string_to_array(ObArrayBinary *binary_array,
                                          std::string arr_str, std::string delimiter, std::string null_str,
-                                         bool has_arr_str, bool has_delimiter, bool has_null_str)
+                                         ObCollationType cs_type, bool has_arr_str, bool has_delimiter, bool has_null_str)
 {
   int ret = OB_SUCCESS;
-  if (!has_arr_str) {
+  int32_t str_len_char = 0;
+  if (!has_arr_str || arr_str.empty()) {
     // do nothing
   } else if (!has_delimiter) {
     // add value to array character by character
-    for (int i = 0; OB_SUCC(ret) && i < arr_str.length(); ++i) {
-      if (OB_FAIL(add_value_str_to_array(binary_array, std::string(1, arr_str[i]), has_null_str, null_str))) {
-        LOG_WARN("failed to add character to array", K(ret), K(arr_str[i]));
+    size_t offset = 0;
+    const ObCharsetInfo *cs = ObCharset::get_charset(cs_type);
+    while (offset < arr_str.length() && OB_SUCC(ret)) {
+      int mb_len = use_mb(cs) ? ob_ismbchar(cs, arr_str.data() + offset, arr_str.data() + arr_str.length()) : 0;
+      size_t char_len = mb_len ? mb_len : 1;
+      std::string value_str;
+      if (offset + char_len > arr_str.length()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected string end", K(arr_str.length()), K(offset), K(char_len));
+      } else if (OB_FALSE_IT(value_str = arr_str.substr(offset, char_len))) {
+      } else if (OB_FAIL(add_value_str_to_array(binary_array, value_str, has_null_str, null_str))) {
+        LOG_WARN("failed to add character to array", K(ret), K(ObString(value_str.length(), value_str.data())));
+      } else {
+        offset += char_len;
       }
-    }
+    } // end while
   } else {
     size_t value_start = 0;
     size_t value_end = 0;

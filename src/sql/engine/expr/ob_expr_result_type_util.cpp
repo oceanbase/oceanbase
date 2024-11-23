@@ -918,8 +918,12 @@ int ObExprResultTypeUtil::get_array_calc_type(ObExecContext *exec_ctx,
   ObObjType coll_calc_type = ARITH_RESULT_TYPE[type1][type2];
   if (ob_is_int_uint(ob_obj_type_class(type1), ob_obj_type_class(type2))) {
     coll_calc_type = ObIntType;
-  } else if (type1 == ObFloatType && type2 == ObFloatType) {
-    coll_calc_type = ObFloatType;
+  } else if (ob_is_float_tc(type1) &&  ob_is_float_tc(type2)) {
+    if (type1 == ObFloatType || type2 == ObFloatType) {
+      coll_calc_type = ObFloatType;
+    } else {
+      coll_calc_type = ObUFloatType;
+    }
   } else if (ob_is_null(type1)) {
     coll_calc_type = type2;
   } else if (ob_is_null(type2)) {

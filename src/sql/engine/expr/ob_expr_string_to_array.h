@@ -39,7 +39,7 @@ public:
   static int add_value_str_to_array(ObArrayBinary *binary_array, std::string value_str, bool has_null_str, std::string null_str);
   static int string_to_array(ObArrayBinary *binary_array,
                              std::string arr_str, std::string delimiter, std::string null_str,
-                             bool has_arr_str, bool has_delimiter, bool has_null_str);
+                             ObCollationType cs_type, bool has_arr_str, bool has_delimiter, bool has_null_str);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;

@@ -265,6 +265,12 @@ int ObSqlCollectionInfo::set_element_meta_unsigned(ObCollectionBasicType *meta_i
       case ObIntType:
         meta_info->basic_meta_.meta_.set_uint64();
         break;
+      case ObFloatType:
+        meta_info->basic_meta_.meta_.set_ufloat();
+        break;
+      case ObDoubleType:
+        meta_info->basic_meta_.meta_.set_udouble();
+        break;
       default:
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid meta info", K(ret), K(meta_info));

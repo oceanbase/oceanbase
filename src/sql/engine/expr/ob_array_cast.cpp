@@ -154,11 +154,13 @@ int ObArrayCastUtils::cast_get_element(ObIArrayType *src, const ObCollectionBasi
       src_elem.set_varchar((*arr)[idx]);
       break;
     }
+    case ObUDoubleType:
     case ObDoubleType: {
       ObArrayFixedSize<double> *arr = static_cast<ObArrayFixedSize<double> *>(src);
       src_elem.set_double((*arr)[idx]);
       break;
     }
+    case ObUFloatType:
     case ObFloatType: {
       ObArrayFixedSize<float> *arr = static_cast<ObArrayFixedSize<float> *>(src);
       src_elem.set_float((*arr)[idx]);
@@ -251,6 +253,7 @@ int ObArrayCastUtils::cast_add_element(common::ObIAllocator &alloc, ObObj &src_e
         // to do
         break;
       }
+      case ObUFloatType:
       case ObFloatType: {
         ObArrayFixedSize<float> *dst_arr = static_cast<ObArrayFixedSize<float> *>(dst);
         if (OB_FAIL(dst_arr->push_back(res.get_float()))) {
@@ -258,6 +261,7 @@ int ObArrayCastUtils::cast_add_element(common::ObIAllocator &alloc, ObObj &src_e
         }
         break;
       }
+      case ObUDoubleType:
       case ObDoubleType: {
         ObArrayFixedSize<double> *dst_arr = static_cast<ObArrayFixedSize<double> *>(dst);
         if (OB_FAIL(dst_arr->push_back(res.get_double()))) {

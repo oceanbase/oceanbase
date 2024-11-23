@@ -423,6 +423,7 @@ inline bool ObResolverUtils::is_collection_support_type(const ObObjType type)
           type == ObUTinyIntType || type == ObUSmallIntType ||
           type == ObUInt32Type || type == ObUInt64Type ||
           type == ObFloatType || type == ObDoubleType ||
+          type == ObUFloatType || type == ObUDoubleType ||
           type == ObVarcharType || type == ObCollectionSQLType);
 }
 

@@ -358,14 +358,16 @@ public :
               break;
             }
             case ObFloatType:
-            case ObDoubleType: {
-              int buf_size = obj_type == ObFloatType ? FLOAT_TO_STRING_CONVERSION_BUFFER_SIZE : DOUBLE_TO_STRING_CONVERSION_BUFFER_SIZE;
+            case ObUFloatType:
+            case ObDoubleType:
+            case ObUDoubleType: {
+              int buf_size = ob_is_float_tc(obj_type) ? FLOAT_TO_STRING_CONVERSION_BUFFER_SIZE : DOUBLE_TO_STRING_CONVERSION_BUFFER_SIZE;
               if (OB_FAIL(format_str.reserve(buf_size + 1))) {
                 OB_LOG(WARN, "fail to reserve memory for format_str", K(ret));
               } else {
                 char *start = format_str.ptr() + format_str.length();
                 uint64_t len = ob_gcvt(data_[i],
-                                       obj_type == ObFloatType ? ob_gcvt_arg_type::OB_GCVT_ARG_FLOAT : ob_gcvt_arg_type::OB_GCVT_ARG_DOUBLE,
+                                       ob_is_float_tc(obj_type) ? ob_gcvt_arg_type::OB_GCVT_ARG_FLOAT : ob_gcvt_arg_type::OB_GCVT_ARG_DOUBLE,
                                        buf_size, start, NULL);
                 if (OB_FAIL(format_str.set_length(format_str.length() + len))) {
                   OB_LOG(WARN, "fail to set format_str len", K(ret), K(format_str.length()), K(len));

@@ -231,10 +231,12 @@ int ObArrayUtil::append(ObIArrayType &array, const ObObjType elem_type, const Ob
         FIXED_SIZE_ARRAY_APPEND(uint64_t, get_uint64);
         break;
       }
+      case ObUFloatType:
       case ObFloatType: {
         FIXED_SIZE_ARRAY_APPEND(float, get_float);
         break;
       }
+      case ObUDoubleType:
       case ObDoubleType: {
         FIXED_SIZE_ARRAY_APPEND(double, get_double);
         break;

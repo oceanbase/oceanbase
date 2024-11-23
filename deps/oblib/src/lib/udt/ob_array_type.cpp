@@ -102,10 +102,12 @@ int ObArrayTypeObjFactory::construct(common::ObIAllocator &alloc, const ObCollec
           CONSTRUCT_FIXED_ARRAY_OBJ(uint64_t);
           break;
         }
+        case ObUFloatType:
         case ObFloatType: {
           CONSTRUCT_FIXED_ARRAY_OBJ(float);
           break;
         }
+        case ObUDoubleType:
         case ObDoubleType: {
           CONSTRUCT_FIXED_ARRAY_OBJ(double);
           break;
@@ -1275,7 +1277,7 @@ int ObArrayNested::print_element(const ObCollectionTypeBase *elem_type, ObString
         is_first_elem = false;
         uint32_t start = offset_at(i, offsets_);
         uint32_t elem_cnt = offsets_[i] - start;
-        if (OB_FAIL(data_->print_element(array_type->element_type_, format_str, start, elem_cnt, delimiter, null_str))) {
+        if (OB_FAIL(data_->print_element(array_type->element_type_, format_str, start, elem_cnt, delimiter, has_null_str, null_str))) {
           OB_LOG(WARN, "fail to append string to format_str", K(ret));
         }
       }
