@@ -79,6 +79,10 @@ public:
   static int get_doc_id_col(
       const ObTableSchema &data_schema,
       const ObColumnSchemaV2 *&doc_id_col);
+  static int get_index_column_ids_for_fts(
+      const share::schema::ObTableSchema &data_schema,
+      const share::schema::ObColumnSchemaV2 &column_schema,
+      common::ObIArray<uint64_t> &index_column_ids);
   static int generate_fts_parser_name(
       obrpc::ObCreateIndexArg &arg,
       ObIAllocator *allocator);
@@ -163,10 +167,11 @@ private:
   static int get_index_column_ids(
       const ObTableSchema &data_schema,
       const obrpc::ObCreateIndexArg &arg,
-      schema::ColumnReferenceSet &index_column_ids);
+      common::ObIArray<uint64_t> &index_column_ids);
   static int check_index_match(
+      const ObTableSchema &data_schema,
       const schema::ObColumnSchemaV2 &column,
-      const schema::ColumnReferenceSet &index_column_ids,
+      const common::ObIArray<uint64_t> &index_column_ids,
       bool &is_match);
   static int check_fulltext_index_allowed(
       const ObTableSchema &data_schema,

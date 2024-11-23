@@ -38,6 +38,7 @@
 #include "sql/ob_sql_utils.h"
 #include "share/ob_get_compat_mode.h"
 #include "share/schema/ob_mview_info.h"
+#include "share/ob_fts_index_builder_util.h"
 
 
 namespace oceanbase
@@ -1018,7 +1019,7 @@ int ObSchemaPrinter::print_fulltext_index_column(const ObTableSchema &table_sche
   } else if (OB_ISNULL(table_column)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "The column schema is NULL, ", K(ret));
-  } else if (OB_FAIL(table_column->get_cascaded_column_ids(ctxcat_ids))) {
+  } else if (OB_FAIL(ObFtsIndexBuilderUtil::get_index_column_ids_for_fts(table_schema, *table_column, ctxcat_ids))) {
     STORAGE_LOG(WARN, "Failed to get cascaded column ids", K(ret));
   } else {
     for (int64_t j = 0; OB_SUCC(ret) && j < ctxcat_ids.count(); ++j) {
