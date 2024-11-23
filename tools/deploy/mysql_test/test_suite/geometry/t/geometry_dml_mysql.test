@@ -387,6 +387,18 @@ select /*+index(t3 spidx3)*/ st_astext(g1) from t3 where st_contains(g1, ST_Geom
 select /*+index(t3 spidx3)*/ st_astext(g1) from t3 where _st_dwithin(ST_GeomFromText('GEOMETRYCOLLECTION EMPTY', 2284), g1, 0.1);
 drop table t3;
 
+create table t3(id int, g1 geometry not null srid 4326);
+create index idx_g on t3(g1);
+insert into t3 values(13, ST_GeomFromText('GEOMETRYCOLLECTION EMPTY', 4326));
+select st_astext(g1) from t3 where st_intersects(ST_GeomFromText('GEOMETRYCOLLECTION EMPTY', 4326), g1);
+select st_astext(g1) from t3 where g1=ST_GeomFromText('GEOMETRYCOLLECTION EMPTY', 4326);
+
+drop index idx_g on t3;
+create index idx_g on t3(g1);
+select st_astext(g1) from t3 where st_intersects(ST_GeomFromText('GEOMETRYCOLLECTION EMPTY', 4326), g1);
+select st_astext(g1) from t3 where g1=ST_GeomFromText('GEOMETRYCOLLECTION EMPTY', 4326);
+drop table t3;
+
 --disable_warnings
 DROP TABLE IF EXISTS t_geo, cities;
 --enable_warnings
