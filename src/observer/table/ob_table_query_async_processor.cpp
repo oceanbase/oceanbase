@@ -44,8 +44,6 @@ void ObTableQueryAsyncSession::set_result_iterator(ObTableQueryResultIterator *q
   }
 }
 
-
-
 int ObTableQueryAsyncSession::init()
 {
   int ret = OB_SUCCESS;
@@ -503,7 +501,9 @@ int ObTableQueryAsyncP::get_query_session(uint64_t sessid, ObTableQueryAsyncSess
       LOG_WARN("fail to insert session to query map", K(ret), K(sessid));
       MTL(ObTableQueryASyncMgr*)->free_query_session(query_session);
     } else {}
-  } else if (ObQueryOperationType::QUERY_NEXT == arg_.query_type_ || ObQueryOperationType::QUERY_END == arg_.query_type_) {
+  } else if (ObQueryOperationType::QUERY_NEXT == arg_.query_type_ ||
+             ObQueryOperationType::QUERY_END == arg_.query_type_ ||
+             ObQueryOperationType::QUERY_RENEW == arg_.query_type_) {
     if (OB_FAIL(MTL(ObTableQueryASyncMgr*)->get_query_session(sessid, query_session))) {
       LOG_WARN("fail to get query session from query sync mgr", K(ret), K(sessid));
     } else if (OB_ISNULL(query_session)) {
@@ -1399,6 +1399,8 @@ int ObTableQueryAsyncP::try_process()
         } else {
           ret = process_query_next();
         }
+      } else if (ObQueryOperationType::QUERY_RENEW == arg_.query_type_) {
+        result_.query_session_id_ = query_session_id_;
       } else if (ObQueryOperationType::QUERY_END == arg_.query_type_) {
         ret = process_query_end();
       }

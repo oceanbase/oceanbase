@@ -45,7 +45,15 @@ public:
 
   virtual int get_next_result(ObTableQueryResult *&one_result) override;
 
-  virtual bool has_more_result() const override { return binary_heap_.count() == 0; }
+  virtual bool has_more_result() const override {
+    bool has_more_result = true;
+    if (binary_heap_.count() == 0) {
+      has_more_result = false;
+    } else if (query_->get_limit() > 0 && row_count_ > query_->get_limit()) {
+      has_more_result = false;
+    }
+    return has_more_result;
+  }
 
   virtual void set_query(const ObTableQuery *query) override { query_ = query; };
 
@@ -112,6 +120,7 @@ private:
   common::ObSEArray<ObTableQueryResultIterator *, 8> inner_result_iters_;
 
   bool is_inited_;
+  int64_t row_count_;
 };
 
 template <typename Row, typename Compare>
@@ -122,7 +131,8 @@ ObMergeTableQueryResultIterator<Row, Compare>::ObMergeTableQueryResultIterator(c
     allocator_(allocator),
     one_result_(&one_result),
     binary_heap_(compare_),
-    is_inited_(false)
+    is_inited_(false),
+    row_count_(0)
 {
   inner_result_iters_.set_attr(ObMemAttr(MTL_ID(), "MergeInnerIters"));
 }
@@ -207,12 +217,24 @@ int ObMergeTableQueryResultIterator<Row, Compare>::get_next_result(ObTableQueryR
     ret = OB_ITER_END;
   } else {
     one_result = one_result_;
-    int limit = query_->get_batch() <= 0 ?
-                static_cast<int64_t>(ObTableQueryResult::get_max_packet_buffer_length() - 1024)
-                : query_->get_batch();
-    while (!binary_heap_.empty() && one_result_->get_row_count() < limit) {
-      ObRowCacheIterator* cache_iterator = binary_heap_.top();
-      if (OB_FAIL(binary_heap_.pop())) {
+    int batch = query_->get_batch() <= 0
+                    ? static_cast<int64_t>(ObTableQueryResult::get_max_packet_buffer_length() - 1024)
+                    : query_->get_batch();
+    int32_t caching = query_->get_ob_params().ob_params_->get_caching() > 0
+                          ? query_->get_ob_params().ob_params_->get_caching()
+                          : INT32_MAX;
+    ObString curr_key;
+    int curr_row_count = 0;
+    while (OB_SUCC(ret) && has_more_result() && one_result_->get_row_count() < batch && curr_row_count <= caching) {
+      ObRowCacheIterator *cache_iterator = binary_heap_.top();
+      ObString curr_iter_key = cache_iterator->row_.get_cell(ObHTableConstants::COL_IDX_K).get_string();
+      if (curr_key.compare(curr_iter_key) != 0) {
+        curr_row_count++;
+        row_count_++;
+        if (OB_FAIL(ob_write_string(allocator_, curr_iter_key, curr_key))) {
+          SERVER_LOG(WARN, "allocate memory for row_key failed", K(ret));
+        }
+      } else if (OB_FAIL(binary_heap_.pop())) {
         SERVER_LOG(WARN, "fail to pop items", K(ret));
       } else if (OB_FAIL(compare_.get_error_code())) {
         SERVER_LOG(WARN, "fail to compare items", K(ret));
@@ -226,14 +248,17 @@ int ObMergeTableQueryResultIterator<Row, Compare>::get_next_result(ObTableQueryR
         if (OB_FAIL(cache_iterator->get_next_row(row))) {
           if (ret != OB_ITER_END) {
             SERVER_LOG(WARN, "fail to get next row from ObRowCacheIterator");
-          } else if (row.is_valid()) {
-            if (OB_FAIL(ob_write_row(cache_iterator->allocator_, row, cache_iterator->row_))) {
-              SERVER_LOG(WARN, "fail to copy row", K(ret));
-            } else if (OB_FAIL(binary_heap_.push(cache_iterator))) {
-              SERVER_LOG(WARN, "fail to push items", K(ret));
-            } else if (FALSE_IT(is_iter_valid = true)) {
-            } else if (OB_FAIL(compare_.get_error_code())) {
-              SERVER_LOG(WARN, "fail to compare items", K(ret));
+          } else {
+            ret = OB_SUCCESS;
+            if (row.is_valid()) {
+              if (OB_FAIL(ob_write_row(cache_iterator->allocator_, row, cache_iterator->row_))) {
+                SERVER_LOG(WARN, "fail to copy row", K(ret));
+              } else if (OB_FAIL(binary_heap_.push(cache_iterator))) {
+                SERVER_LOG(WARN, "fail to push items", K(ret));
+              } else if (FALSE_IT(is_iter_valid = true)) {
+              } else if (OB_FAIL(compare_.get_error_code())) {
+                SERVER_LOG(WARN, "fail to compare items", K(ret));
+              }
             }
           }
         } else {

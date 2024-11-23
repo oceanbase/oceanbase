@@ -21,6 +21,7 @@
 #include "lib/container/ob_se_array.h"
 #include "lib/hash/ob_hashmap.h"
 #include "lib/list/ob_dlist.h"
+#include "lib/list/ob_dlink_node.h"
 #include "lib/net/ob_addr.h"
 #include "common/ob_common_types.h"
 #include "common/ob_range.h"
@@ -62,6 +63,7 @@ enum class ObTableEntityType
   ET_HKV = 2,
   ET_REDIS = 3
 };
+class ObHTableCellEntity;
 
 class ObTableBitMap {
 public:
@@ -325,6 +327,7 @@ enum class ObQueryOperationType : int {
   QUERY_START = 0,
   QUERY_NEXT = 1,
   QUERY_END = 2,
+  QUERY_RENEW = 3,
   QUERY_MAX
 };
 
@@ -870,6 +873,7 @@ public:
   ObKVParamsBase(): param_type_(ParamType::HBase) {}
   virtual ~ObKVParamsBase() = default;
   OB_INLINE ParamType get_param_type() { return param_type_; }
+  virtual int32_t get_caching() const = 0;
   virtual int serialize(char *buf, const int64_t buf_len, int64_t &pos) const = 0;
   virtual int deserialize(const char *buf, const int64_t data_len, int64_t &pos) = 0;
   virtual int64_t get_serialize_size() const = 0;
@@ -896,7 +900,8 @@ public:
   ~ObHBaseParams() {};
 
   OB_INLINE ParamType get_param_type() { return param_type_; }
-  OB_INLINE void set_caching(const int32_t caching ) { caching_ = caching; }
+  OB_INLINE int32_t get_caching() const { return caching_; }
+  OB_INLINE void set_caching(const int32_t caching) { caching_ = caching; }
   OB_INLINE void set_call_timeout_(const int32_t call_timeout) { call_timeout_ = call_timeout; }
   OB_INLINE void set_allow_partial_results(const bool allow_partial_results) { allow_partial_results_ = allow_partial_results; }
   OB_INLINE void set_is_cache_block(const bool is_cache_block) { is_cache_block_ = is_cache_block; }
@@ -1190,6 +1195,38 @@ inline void ObTableQueryAndMutate::set_entity_factory(ObITableEntityFactory *ent
   mutations_.set_entity_factory(entity_factory);
 }
 
+class ObTableQueryIterableResultBase
+{
+public:
+  ObTableQueryIterableResultBase()
+    : allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+      row_count_(0)
+  {};
+  virtual ~ObTableQueryIterableResultBase() {}
+  virtual int add_row(const common::ObNewRow &row, ObString family_name) { UNUSED(row); UNUSED(family_name); return OB_SUCCESS; }
+  virtual int add_row(const common::ObIArray<ObObj> &row) { UNUSED(row); return OB_SUCCESS; }
+  virtual int add_all_row(ObTableQueryIterableResultBase &other) { UNUSED(other); return OB_SUCCESS; };
+  virtual bool reach_batch_size_or_result_size(const int32_t batch_count, const int64_t max_result_size) { UNUSED(batch_count); UNUSED(max_result_size); return true; }
+  virtual int get_row(ObNewRow &row) { UNUSED(row); return OB_SUCCESS; }
+  int64_t get_row_count() const { return row_count_; };
+  int64_t &get_row_count() { return row_count_; }
+protected:
+  int append_family(ObNewRow &row, ObString family_name);
+  int transform_lob_cell(ObNewRow &row, const int64_t lob_storage_count);
+  OB_INLINE int64_t get_lob_storage_count(const common::ObNewRow &row) const
+  {
+    int64_t count = 0;
+    for (int64_t i = 0; i < row.get_count(); ++i) {
+      if (is_lob_storage(row.get_cell(i).get_type())) {
+        count++;
+      }
+    }
+    return count;
+  }
+protected:
+  common::ObArenaAllocator allocator_;
+  int64_t row_count_;
+};
 
 class ObTableQueryResult: public ObTableEntityIterator
 {
@@ -1210,6 +1247,7 @@ public:
   virtual int add_row(const common::ObIArray<ObObj> &row);
   int add_all_property(const ObTableQueryResult &other);
   int add_all_row(const ObTableQueryResult &other);
+  int add_all_row(ObTableQueryIterableResultBase &other);
   void save_row_count_only(const int row_count) { reset(); row_count_ += row_count; }
   int64_t get_row_count() const { return row_count_; }
   int64_t get_property_count() const { return properties_names_.count(); }
@@ -1248,37 +1286,39 @@ private:
   ObTableEntity curr_entity_;
 };
 
-class ObTableQueryIterableResult final
+class ObTableQueryDListResult: public ObTableQueryIterableResultBase
+{
+  using ObCellNode = common::ObDLinkNode<ObHTableCellEntity*>;
+  using ObCellDLinkedList = common::ObDList<ObCellNode>;
+public:
+  ObTableQueryDListResult();
+  ~ObTableQueryDListResult();
+  virtual int add_row(const common::ObNewRow &row, ObString family_name) override;
+  virtual int add_all_row(ObTableQueryIterableResultBase &other) override;
+  virtual bool reach_batch_size_or_result_size(const int32_t batch_count, const int64_t max_result_size) override;
+  virtual int get_row(ObNewRow &row) override;
+  int get_row(ObHTableCellEntity *&row);
+  ObCellDLinkedList &get_cell_list() { return cell_list_; }
+  void reset();
+private:
+  ObCellDLinkedList cell_list_;
+};
+
+class ObTableQueryIterableResult: public ObTableQueryIterableResultBase
 {
   OB_UNIS_VERSION(1);
 public:
   ObTableQueryIterableResult();
-  int add_row(const common::ObNewRow &row, ObString family_name);
-  int add_all_row(ObTableQueryIterableResult &other);
-  int64_t get_row_count() const { return row_count_; }
-  int add_row(const common::ObIArray<ObObj> &row);
-  bool reach_batch_size_or_result_size(const int32_t batch_count, const int64_t max_result_size);
+  virtual int add_row(const common::ObNewRow &row, ObString family_name) override;
+  int add_all_row(ObTableQueryDListResult &other);
+  virtual int add_row(const common::ObIArray<ObObj> &row) override;
+  virtual bool reach_batch_size_or_result_size(const int32_t batch_count, const int64_t max_result_size) override;
   void save_row_count_only(const int row_count) { reset_except_property(); row_count_ += row_count; }
-  int get_row(ObNewRow &row);
+  virtual int get_row(ObNewRow &row) override;
   void reset_except_property();
 
 private:
-  int append_family(const ObNewRow &row, ObString family_name);
-  OB_INLINE int64_t get_lob_storage_count(const common::ObNewRow &row) const
-  {
-    int64_t count = 0;
-    for (int64_t i = 0; i < row.get_count(); ++i) {
-      if (is_lob_storage(row.get_cell(i).get_type())) {
-        count++;
-      }
-    }
-    return count;
-  }
-
-private:
-  common::ObArenaAllocator allocator_;
   int64_t current_ = 0;
-  int64_t row_count_;
 
 public:
   common::ObArray<ObNewRow> rows_;
@@ -1671,6 +1711,15 @@ public:
   OB_INLINE void set_deserialize_allocator(common::ObIAllocator *allocator) { deserialize_alloc_ = allocator; }
   OB_INLINE const ObTableSingleOp &at(int64_t idx) const { return single_ops_.at(idx); }
   OB_INLINE ObTableSingleOp &at(int64_t idx) { return single_ops_.at(idx); }
+  OB_INLINE void operator()(const ObTableTabletOp &other){
+    reset();
+    this->tablet_id_ = other.get_tablet_id();
+    this->option_flag_ = other.get_option_flag();
+    this->single_ops_ = other.single_ops_;
+  }
+  OB_INLINE void reset() {
+    single_ops_.reset();
+  }
   OB_INLINE const ObTabletID &get_tablet_id() const { return tablet_id_; }
   OB_INLINE const uint64_t &get_option_flag() const { return option_flag_; }
   OB_INLINE bool is_same_type() const { return is_same_type_; }
@@ -1691,7 +1740,8 @@ public:
 
   OB_INLINE void set_is_ls_same_prop_name(bool is_same) { is_ls_same_properties_names_ = is_same; }
 
-  OB_INLINE void set_tablet_id(uint64_t tablet_id) { tablet_id_ = ObTabletID(tablet_id); }
+  OB_INLINE void set_tablet_id(ObTabletID tablet_id) { tablet_id_ = tablet_id; }
+  OB_INLINE void set_option_flag(uint64_t option_flag) { option_flag_ = option_flag; }
 
   OB_INLINE int add_single_op(ObTableSingleOp single_op) { return single_ops_.push_back(single_op); }
 

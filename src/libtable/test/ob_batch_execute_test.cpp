@@ -5540,7 +5540,7 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
   htable_filter.set_valid(true);
   {
     fprintf(stderr, "case: = binary comparator\n");
-    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1', 'cq1', =, 'binary:xy_string2', true, false)"));
+    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1_filter', 'cq1', =, 'binary:xy_string2', true, false)"));
     ObTableEntityIterator *iter = nullptr;
     ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
 
@@ -5582,7 +5582,7 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
   fprintf(stderr, "case: > binary comparator\n");
   // check
   {
-    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1', 'cq1', >, 'binary:w', true, false)"));
+    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1_filter', 'cq1', >, 'binary:w', true, false)"));
     ObTableEntityIterator *iter = nullptr;
     ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
 
@@ -5627,7 +5627,7 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
   fprintf(stderr, "case: < binary comparator\n");
   // check
   {
-    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1', 'cq1', <, 'binary:w', true, false)"));
+    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1_filter', 'cq1', <, 'binary:w', true, false)"));
     ObTableEntityIterator *iter = nullptr;
     ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
 
@@ -5672,7 +5672,7 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
   fprintf(stderr, "case: >= binary comparator\n");
   // check
   {
-    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1', 'cq1', >=, 'binary:xx_string1', true, false)"));
+    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1_filter', 'cq1', >=, 'binary:xx_string1', true, false)"));
     ObTableEntityIterator *iter = nullptr;
     ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
 
@@ -5717,7 +5717,7 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
   fprintf(stderr, "case: <= binary comparator\n");
   // check
   {
-    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1', 'cq1', <=, 'binary:ab_string2', true, false)"));
+    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1_filter', 'cq1', <=, 'binary:ab_string2', true, false)"));
     ObTableEntityIterator *iter = nullptr;
     ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
 
@@ -5762,7 +5762,7 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
   fprintf(stderr, "case: = prefix comparator\n");
   // check
   {
-    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1', 'cq1', =, 'binaryprefix:a', true, false)"));
+    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1_filter', 'cq1', =, 'binaryprefix:a', true, false)"));
     ObTableEntityIterator *iter = nullptr;
     ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
 
@@ -5807,7 +5807,7 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
   fprintf(stderr, "case: != prefix comparator\n");
   // check
   {
-    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1', 'cq1', !=, 'binaryprefix:x', true, false)"));
+    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1_filter', 'cq1', !=, 'binaryprefix:x', true, false)"));
     ObTableEntityIterator *iter = nullptr;
     ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
 
@@ -5852,7 +5852,7 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
   fprintf(stderr, "case: = substring comparator\n");
   // check
   {
-    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1', 'cq1', =, 'substring:string1', true, false)"));
+    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1_filter', 'cq1', =, 'substring:string1', true, false)"));
     ObTableEntityIterator *iter = nullptr;
     ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
 
@@ -5896,7 +5896,7 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
   fprintf(stderr, "case: != substring comparator\n");
   // check
   {
-    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1', 'cq1', !=, 'substring:string1', true, false)"));
+    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1_filter', 'cq1', !=, 'substring:string1', true, false)"));
     ObTableEntityIterator *iter = nullptr;
     ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
 
@@ -6065,7 +6065,7 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
   fprintf(stderr, "case: WhileMatchFilter\n");
   // check
   {
-    htable_filter.set_filter(ObString::make_string("While SingleColumnValueFilter('cf1', 'cq1', !=, 'substring:string1', true, false)"));
+    htable_filter.set_filter(ObString::make_string("While SingleColumnValueFilter('cf1_filter', 'cq1', !=, 'substring:string1', true, false)"));
     ObTableEntityIterator *iter = nullptr;
     ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
 

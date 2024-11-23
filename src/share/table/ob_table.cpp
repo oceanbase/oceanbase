@@ -17,6 +17,7 @@
 #include "rpc/obrpc/ob_rpc_packet.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "ob_table_object.h"
+#include "observer/table/ob_htable_utils.h"
 
 using namespace oceanbase::table;
 using namespace oceanbase::common;
@@ -1157,9 +1158,13 @@ void ObTableQuery::reset()
 
 bool ObTableQuery::is_valid() const
 {
-  return (limit_ == -1 || limit_ > 0)
-      && (offset_ >= 0)
-      && key_ranges_.count() > 0;
+  bool valid = false;
+  if (OB_NOT_NULL(ob_params_.ob_params_) && ob_params_.ob_params_->get_param_type() == ParamType::HBase) {
+    valid = key_ranges_.count() > 0;
+  } else {
+    valid = (limit_ == -1 || limit_ > 0) && (offset_ >= 0) && key_ranges_.count() > 0;
+  }
+  return valid;
 }
 
 int ObTableQuery::add_scan_range(common::ObNewRange &scan_range)
@@ -1853,6 +1858,63 @@ OB_SERIALIZE_MEMBER_IF(ObHTableFilter,
                        limit_per_row_per_cf_,
                        offset_per_row_per_cf_,
                        filter_string_);
+
+////////////////////////////////////////////////////////////////
+int ObTableQueryIterableResultBase::append_family(ObNewRow &row, ObString family_name)
+{
+  int ret = OB_SUCCESS;
+  // qualifier obj
+  ObObj &qualifier = row.get_cell(ObHTableConstants::COL_IDX_Q);
+  // get length and create buffer
+  int64_t sep_pos = family_name.length() + 1;
+  int64_t buf_size = sep_pos + qualifier.get_data_length();
+  char *buf = nullptr;
+  if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(buf_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc family and qualifier buffer", K(ret));
+  } else {
+    MEMCPY(buf, family_name.ptr(), family_name.length());
+    buf[family_name.length()] = '\0';
+    MEMCPY(buf + sep_pos, qualifier.get_data_ptr(), qualifier.get_data_length());
+    ObString family_qualifier(buf_size, buf);
+    qualifier.set_varbinary(family_qualifier);
+  }
+  return ret;
+}
+
+int ObTableQueryIterableResultBase::transform_lob_cell(ObNewRow &row, const int64_t lob_storage_count)
+{
+  int ret = OB_SUCCESS;
+  // check properties count and row count
+  const int64_t N = row.get_count();
+  ObObj *lob_cells = nullptr;
+  if (OB_ISNULL(lob_cells = static_cast<ObObj*>(allocator_.alloc(sizeof(ObObj) * lob_storage_count)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc cells buffer", K(ret), K(lob_storage_count));
+  }
+  for (int i = 0, lob_cell_idx = 0; OB_SUCC(ret) && i < N; ++i) {
+    const ObObj &cell = row.get_cell(i);
+    ObObjType type = cell.get_type();
+    if (is_lob_storage(type)) {
+      ObString real_data;
+      if (cell.has_lob_header()) {
+        if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(&allocator_, cell, real_data))) {
+          LOG_WARN("fail to read real string date", K(ret), K(cell));
+        } else if (lob_cell_idx >= lob_storage_count) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected index count", K(ret), K(lob_cell_idx), K(lob_storage_count));
+        } else {
+          lob_cells[lob_cell_idx].set_lob_value(type, real_data.ptr(), real_data.length());
+          lob_cells[lob_cell_idx].set_collation_type(cell.get_collation_type());
+          row.get_cell(i) = lob_cells[lob_cell_idx]; // switch lob cell
+          lob_cell_idx++;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////////
 ObTableQueryResult::ObTableQueryResult()
     :row_count_(0),
@@ -2108,6 +2170,23 @@ int ObTableQueryResult::add_all_row(const ObTableQueryResult &other)
   return ret;
 }
 
+int ObTableQueryResult::add_all_row(ObTableQueryIterableResultBase &other)
+{
+  int ret = OB_SUCCESS;
+  ObNewRow row;
+  while (OB_SUCC(ret) && OB_SUCC(other.get_row(row))) {
+    if (OB_FAIL(add_row(row))) {
+      LOG_WARN("fail to add row from ObTableQueryIterableResultBase", K(ret));
+    }
+  }
+  if (ret == OB_ARRAY_OUT_OF_RANGE || ret == OB_ITER_END) {
+    ret = OB_SUCCESS;
+  } else {
+    LOG_WARN("add_all_row get error", K(ret));
+  }
+  return ret;
+}
+
 int64_t ObTableQueryResult::get_result_size()
 {
   if (0 >= fixed_result_size_) {
@@ -2229,10 +2308,10 @@ OB_DEF_DESERIALIZE(ObTableQueryResult)
   return ret;
 }
 
+////////////////////////////////////////////////////////////////
 ObTableQueryIterableResult::ObTableQueryIterableResult()
-  : allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-    current_(0),
-    row_count_(0)
+  : ObTableQueryIterableResultBase(),
+    current_(0)
   {
   }
 
@@ -2244,29 +2323,34 @@ void ObTableQueryIterableResult::reset_except_property()
   current_ = 0;
   rows_.reset();
 }
-
-int ObTableQueryIterableResult::add_all_row(ObTableQueryIterableResult &other) {
+int ObTableQueryIterableResult::add_all_row(ObTableQueryDListResult &other)
+{
   int ret = OB_SUCCESS;
-  ObNewRow row;
+  ObHTableCellEntity *row = nullptr;
   while (OB_SUCC(ret) && OB_SUCC(other.get_row(row))) {
     ObNewRow copy_row;
-    if (OB_FAIL(ob_write_row(allocator_, row, copy_row))) {
+    if (OB_FAIL(ob_write_row(allocator_, *row->get_ob_row(), copy_row))) {
       LOG_WARN("fail to copy_row ", K(ret), K(row));
-    } else if (OB_FAIL(rows_.push_back(copy_row))) {
-      LOG_WARN("fail to push_back to rows", K(ret));
     } else {
-      row_count_++;
+      ObString family_name = row->get_family();
+      if (OB_FAIL(append_family(copy_row, family_name))) {
+        LOG_WARN("fail to append family to row", K(ret), K(copy_row));
+      } else if (OB_FAIL(rows_.push_back(copy_row))) {
+        LOG_WARN("fail to push_back to rows", K(ret));
+      } else {
+        row_count_++;
+      }
     }
   }
-  if (ret == OB_ARRAY_OUT_OF_RANGE) {
+  if (ret == OB_ITER_END) {
     ret = OB_SUCCESS;
-  } else {
-    LOG_WARN("add_all_row get error", K(ret));
   }
+
   return ret;
 }
 
-int ObTableQueryIterableResult::get_row(ObNewRow& row) {
+int ObTableQueryIterableResult::get_row(ObNewRow& row)
+{
   int ret = 0;
   if (OB_FAIL(rows_.at(current_, row))) {
     if (ret == OB_ARRAY_OUT_OF_RANGE) {
@@ -2282,62 +2366,16 @@ int ObTableQueryIterableResult::get_row(ObNewRow& row) {
   return ret;
 }
 
-int ObTableQueryIterableResult::append_family(const ObNewRow &row, ObString family_name)
+int ObTableQueryIterableResult::add_row(const common::ObNewRow &row, ObString family_name)
 {
   int ret = OB_SUCCESS;
-  // qualifier obj
-  ObNewRow &row_op = const_cast<ObNewRow &>(row);
-  ObObj &qualifier = row_op.get_cell(ObHTableConstants::COL_IDX_Q);
-  // get length and create buffer
-  int64_t sep_pos = family_name.length() + 1;
-  int64_t buf_size = sep_pos + qualifier.get_data_length();
-  char *buf = nullptr;
-  if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(buf_size)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to alloc family and qualifier buffer", K(ret));
-  } else {
-    MEMCPY(buf, family_name.ptr(), family_name.length());
-    buf[family_name.length()] = '\0';
-    MEMCPY(buf + sep_pos, qualifier.get_data_ptr(), qualifier.get_data_length());
-    ObString family_qualifier(buf_size, buf);
-    qualifier.set_varbinary(family_qualifier);
-  }
-  return ret;
-}
 
-int ObTableQueryIterableResult::add_row(const common::ObNewRow &row, ObString family_name) {
-  int ret = OB_SUCCESS;
-
-  // 1. check properties count and row count
-  const int64_t N = row.get_count();
-  // 2. construct new row
+  // construct new row
   ObNewRow new_row = row;
-  ObObj *lob_cells = nullptr;
   const int64_t lob_storage_count = get_lob_storage_count(new_row);
   if (lob_storage_count != 0) {
-    if (OB_ISNULL(lob_cells = static_cast<ObObj*>(allocator_.alloc(sizeof(ObObj) * lob_storage_count)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc cells buffer", K(ret), K(lob_storage_count));
-    }
-    for (int i = 0, lob_cell_idx = 0; OB_SUCC(ret) && i < N; ++i) {
-      const ObObj &cell = new_row.get_cell(i);
-      ObObjType type = cell.get_type();
-      if (is_lob_storage(type)) {
-        ObString real_data;
-        if (cell.has_lob_header()) {
-          if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(&allocator_, cell, real_data))) {
-            LOG_WARN("fail to read real string date", K(ret), K(cell));
-          } else if (lob_cell_idx >= lob_storage_count) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected index count", K(ret), K(lob_cell_idx), K(lob_storage_count));
-          } else {
-            lob_cells[lob_cell_idx].set_lob_value(type, real_data.ptr(), real_data.length());
-            lob_cells[lob_cell_idx].set_collation_type(cell.get_collation_type());
-            new_row.get_cell(i) = lob_cells[lob_cell_idx]; // switch lob cell
-            lob_cell_idx++;
-          }
-        }
-      }
+    if (OB_FAIL(transform_lob_cell(new_row, lob_storage_count))) {
+      LOG_WARN("fail to switch lob cell", K(ret));
     }
   }
   if (OB_SUCC(ret)) {
@@ -2379,7 +2417,154 @@ bool ObTableQueryIterableResult::reach_batch_size_or_result_size(const int32_t b
   return reach_size;
 }
 
+////////////////////////////////////////////////////////////////
+ObTableQueryDListResult::ObTableQueryDListResult()
+  : ObTableQueryIterableResultBase(),
+    cell_list_()
+{
+}
 
+ObTableQueryDListResult:: ~ObTableQueryDListResult()
+{
+}
+
+int ObTableQueryDListResult::add_row(const common::ObNewRow &row, ObString family_name) {
+  int ret = OB_SUCCESS;
+
+  // construct new row
+  ObNewRow new_row = row;
+  const int64_t lob_storage_count = get_lob_storage_count(new_row);
+  if (lob_storage_count != 0) {
+    if (OB_FAIL(transform_lob_cell(new_row, lob_storage_count))) {
+      LOG_WARN("fail to swtich lob cell", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObNewRow *copy_row = nullptr;
+    if (OB_ISNULL(copy_row = OB_NEWx(ObNewRow, (&allocator_)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc ObNewRow buffer", K(ret));
+    } else if (OB_FAIL(ob_write_row(allocator_, new_row, *copy_row))) {
+      LOG_WARN("fail to copy row", K(ret), K(new_row));
+    } else {
+      ObHTableCellEntity *cell_entity = nullptr;
+      if (OB_ISNULL(cell_entity = OB_NEWx(ObHTableCellEntity, (&allocator_), copy_row))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc ObHTableCellEntity buffer", K(ret));
+      } else {
+        cell_entity->set_family(family_name);
+        ObCellNode *new_node = nullptr;
+        if (OB_ISNULL(new_node = OB_NEWx(ObCellNode, (&allocator_), cell_entity))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to alloc ObHTableCellEntity buffer", K(ret));
+        } else {
+          if (cell_list_.add_first(new_node)) {
+            ++row_count_;
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fail to add new_node to cell_list", K(ret));
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObTableQueryDListResult::add_all_row(ObTableQueryIterableResultBase &other)
+{
+  int ret = OB_SUCCESS;
+  ObNewRow row;
+  while (OB_SUCC(ret) && OB_SUCC(other.get_row(row))) {
+    ObNewRow *new_row = nullptr;
+    // need to deep copy row, because other will free its row when it's empty
+    if (OB_ISNULL(new_row = OB_NEWx(ObNewRow, (&allocator_)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory for ObNewRow", K(ret));
+    } else if (OB_FAIL(ob_write_row(allocator_, row, *new_row))) {
+      LOG_WARN("fail to copy row", K(ret), K(row));
+    } else {
+      ObHTableCellEntity *cell_entity = nullptr;
+      if (OB_ISNULL(cell_entity = OB_NEWx(ObHTableCellEntity, (&allocator_), new_row))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate memory for ObHTableCellEntity", K(ret));
+      } else {
+        ObCellNode *node = nullptr;
+        if (OB_ISNULL(node = OB_NEWx(ObCellNode, (&allocator_), cell_entity))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to allocate memory for ObCellNode", K(ret));
+        } else if (OB_FAIL(cell_list_.add_first(node))) {
+          LOG_WARN("fail to add to cell_list", K(ret));
+        } else {
+          ++row_count_;
+        }
+      }
+    }
+  }
+  if (ret == OB_ITER_END || ret == OB_ARRAY_OUT_OF_RANGE) {
+    ret = OB_SUCCESS;
+  } else {
+    LOG_WARN("add_all_row get error", K(ret));
+  }
+  return ret;
+}
+
+int ObTableQueryDListResult::get_row(ObNewRow &row)
+{
+  int ret = OB_SUCCESS;
+  ObCellNode *node = cell_list_.remove_last();
+  if (OB_ISNULL(node)) {
+    if (0 != row_count_) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("fail to get row", K(ret), K(cell_list_));
+    } else {
+      ret = OB_ITER_END;
+      cell_list_.reset();
+      allocator_.reset();
+    }
+  } else {
+    --row_count_;
+    row = *node->get_data()->get_ob_row();
+  }
+  return ret;
+}
+
+int ObTableQueryDListResult::get_row(ObHTableCellEntity *&row) {
+  int ret = OB_SUCCESS;
+  ObCellNode *node = cell_list_.remove_last();
+  if (OB_ISNULL(node)) {
+    if (0 != row_count_) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("fail to get row from DListResult", K(ret), K(cell_list_));
+    } else {
+      ret = OB_ITER_END;
+      cell_list_.reset();
+      allocator_.reset();
+    }
+  } else {
+    --row_count_;
+    row = node->get_data();
+  }
+  return ret;
+}
+
+bool ObTableQueryDListResult::reach_batch_size_or_result_size(const int32_t batch_count, const int64_t max_result_size)
+{
+  bool reach_size = false;
+  if (batch_count > 0 && this->get_row_count() >= batch_count) {
+    LOG_DEBUG("reach batch limit", K(batch_count));
+    reach_size = true;
+  }
+  return reach_size;
+}
+
+void ObTableQueryDListResult::reset()
+{
+  cell_list_.reset();
+  allocator_.reset();
+  row_count_ = 0;
+}
 ////////////////////////////////////////////////////////////////
 uint64_t ObTableQueryAndMutate::get_checksum()
 {

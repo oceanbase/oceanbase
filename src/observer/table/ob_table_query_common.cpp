@@ -190,6 +190,7 @@ void ObTableQueryUtils::destroy_result_iterator(ObTableQueryResultIterator *resu
 {
   if (OB_NOT_NULL(result_iter)) {
     result_iter->~ObTableQueryResultIterator();
+    result_iter = nullptr;
   }
 }
 

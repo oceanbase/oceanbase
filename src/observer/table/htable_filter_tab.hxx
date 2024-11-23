@@ -1,14 +1,3 @@
-/**
- * Copyright (c) 2023 OceanBase
- * OceanBase CE is licensed under Mulan PubL v2.
- * You can use this software according to the terms and conditions of the Mulan PubL v2.
- * You may obtain a copy of Mulan PubL v2 at:
- *          http://license.coscl.org.cn/MulanPubL-2.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
- * See the Mulan PubL v2 for more details.
- */
 
 /* A Bison parser, made by GNU Bison 2.4.1.  */
 
@@ -43,6 +32,27 @@
    This special exception was added by the Free Software Foundation in
    version 2.2 of Bison.  */
 
+/* "%code requires" blocks.  */
+
+/* Line 1676 of yacc.c  */
+#line 1 "../../../src/observer/table/htable_filter_tab.yxx"
+
+/**
+ * Copyright (c) 2023 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
+
+
+
+/* Line 1676 of yacc.c  */
+#line 56 "../../../src/observer/table/htable_filter_tab.hxx"
 
 /* Tokens.  */
 #ifndef YYTOKENTYPE
@@ -59,32 +69,42 @@
      ColumnCountGetFilter = 263,
      ColumnPrefixFilter = 264,
      ColumnPaginationFilter = 265,
-     CheckAndMutateFilter = 266,
-     PrefixFilter = 267,
-     FirstKeyOnlyFilter = 268,
-     KeyOnlyFilter = 269,
-     TimestampsFilter = 270,
-     TableCompareFilter = 271,
-     RandomRowFilter = 272,
-     LESS = 273,
-     LESS_OR_EQUAL = 274,
-     EQUAL = 275,
-     NOT_EQUAL = 276,
-     GREATER = 277,
-     GREATER_OR_EQUAL = 278,
-     NO_OP = 279,
-     IS = 280,
-     IS_NOT = 281,
-     BOOL_VALUE = 282,
-     STRING_VALUE = 283,
-     INT_VALUE = 284,
-     OR = 285,
-     AND = 286,
-     T_OR = 287,
-     T_AND = 288,
-     WHILE = 289,
-     SKIP = 290,
-     ERROR = 291
+     FirstKeyValueMatchingQualifiersFilter = 266,
+     CheckAndMutateFilter = 267,
+     PrefixFilter = 268,
+     FirstKeyOnlyFilter = 269,
+     KeyOnlyFilter = 270,
+     TimestampsFilter = 271,
+     MultiRowRangeFilter = 272,
+     InclusiveStopFilter = 273,
+     FuzzyRowFilter = 274,
+     ColumnValueFilter = 275,
+     TableCompareFilter = 276,
+     RandomRowFilter = 277,
+     DependentColumnFilter = 278,
+     SingleColumnValueExcludeFilter = 279,
+     ColumnRangeFilter = 280,
+     MultipleColumnPrefixFilter = 281,
+     FamilyFilter = 282,
+     LESS = 283,
+     LESS_OR_EQUAL = 284,
+     EQUAL = 285,
+     NOT_EQUAL = 286,
+     GREATER = 287,
+     GREATER_OR_EQUAL = 288,
+     NO_OP = 289,
+     IS = 290,
+     IS_NOT = 291,
+     BOOL_VALUE = 292,
+     STRING_VALUE = 293,
+     INT_VALUE = 294,
+     OR = 295,
+     AND = 296,
+     T_OR = 297,
+     T_AND = 298,
+     WHILE = 299,
+     SKIP = 300,
+     ERROR = 301
    };
 #endif
 
@@ -95,19 +115,23 @@ typedef union YYSTYPE
 {
 
 /* Line 1676 of yacc.c  */
-#line 24 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 50 "../../../src/observer/table/htable_filter_tab.yxx"
 
     int32_t ival;
     int64_t lval;
     oceanbase::table::hfilter::CompareOperator cmp_op;
     oceanbase::table::ObHTableFilterParser::SimpleString sval;
     oceanbase::table::hfilter::Filter *fval;
+    oceanbase::table::KeyRange *rval;
+    oceanbase::common::ObSEArray<oceanbase::ObString, 8> *sarray;
     oceanbase::common::ObSEArray<int64_t, 8> *array;
+    oceanbase::common::ObSEArray<oceanbase::table::KeyRange*, 8> *range_array;
+    oceanbase::common::ObSEArray<oceanbase::table::hfilter::ObPair<oceanbase::ObString, oceanbase::ObString>*, 8> *fuzzy_array;
 
 
 
 /* Line 1676 of yacc.c  */
-#line 100 "../../../src/observer/table/htable_filter_tab.hxx"
+#line 135 "../../../src/observer/table/htable_filter_tab.hxx"
 } YYSTYPE;
 # define YYSTYPE_IS_TRIVIAL 1
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */

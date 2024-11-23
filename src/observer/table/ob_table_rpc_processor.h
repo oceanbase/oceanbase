@@ -238,6 +238,7 @@ struct ObTableInfoBase {
               K(schema_cache_guard_),
               K(schema_version_));
   int64_t table_id_;
+  ObString real_table_name_;
   const share::schema::ObSimpleTableSchemaV2* simple_schema_;
   table::ObKvSchemaCacheGuard schema_cache_guard_;
   int64_t schema_version_;

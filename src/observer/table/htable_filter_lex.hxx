@@ -1,4 +1,10 @@
-/**
+#ifndef ob_hfilter_HEADER_H
+#define ob_hfilter_HEADER_H 1
+#define ob_hfilter_IN_HEADER 1
+
+#line 6 "../../../src/observer/table/htable_filter_lex.hxx"
+#line 7 "../../../src/observer/table/htable_filter_lex.lxx"
+  /**
  * Copyright (c) 2023 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
@@ -9,13 +15,6 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
-#ifndef ob_hfilter_HEADER_H
-#define ob_hfilter_HEADER_H 1
-#define ob_hfilter_IN_HEADER 1
-
-#line 6 "../../../src/observer/table/htable_filter_lex.hxx"
-#line 7 "../../../src/observer/table/htable_filter_lex.lxx"
 #define USING_LOG_PREFIX SERVER
 #include "observer/table/ob_htable_filter_parser.h"
 #include "observer/table/ob_htable_filters.h"
@@ -26,7 +25,7 @@ using namespace oceanbase::common;
 
 
 
-#line 18 "../../../src/observer/table/htable_filter_lex.hxx"
+#line 29 "../../../src/observer/table/htable_filter_lex.hxx"
 
 #define  YY_INT_ALIGNED short int
 
@@ -358,9 +357,9 @@ extern int ob_hfilter_lex \
 #undef YY_DECL
 #endif
 
-#line 117 "../../../src/observer/table/htable_filter_lex.lxx"
+#line 138 "../../../src/observer/table/htable_filter_lex.lxx"
 
 
-#line 353 "../../../src/observer/table/htable_filter_lex.hxx"
+#line 364 "../../../src/observer/table/htable_filter_lex.hxx"
 #undef ob_hfilter_IN_HEADER
 #endif /* ob_hfilter_HEADER_H */

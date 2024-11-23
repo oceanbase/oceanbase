@@ -1767,10 +1767,10 @@ int ObTableCtx::init_das_context(ObDASCtx &das_ctx)
   }
 
   if (OB_SUCC(ret)) {
-   if (OB_ISNULL(local_table_loc)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("local_table_loc is NULL", K(ret));
-   } else if (OB_FAIL(exec_ctx_.get_das_ctx().extended_tablet_loc(*local_table_loc,
+    if (OB_ISNULL(local_table_loc)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("local_table_loc is NULL", K(ret));
+    } else if (OB_FAIL(exec_ctx_.get_das_ctx().extended_tablet_loc(*local_table_loc,
                                                                   index_tablet_id_,
                                                                   tablet_loc))) {
       LOG_WARN("fail to extend tablet loc", K(ret), K(index_tablet_id_));
@@ -1809,10 +1809,10 @@ int ObTableCtx::init_related_tablet_map(ObDASCtx &das_ctx)
         ret = OB_SCHEMA_EAGAIN;
         LOG_WARN("fail to get table schema", KR(ret), K(related_table_id));
       } else if (OB_FAIL(relative_table_schema->get_part_id_and_tablet_id_by_idx(part_idx,
-                                                                                  subpart_idx,
-                                                                                  related_part_id,
-                                                                                  related_first_level_part_id,
-                                                                                  related_tablet_id))) {
+                                                                                subpart_idx,
+                                                                                related_part_id,
+                                                                                related_first_level_part_id,
+                                                                                related_tablet_id))) {
         LOG_WARN("get part by idx failed", K(ret), K(part_idx), K(subpart_idx), K(related_table_id));
       } else if (OB_FAIL(related_tablet_map.add_related_tablet_id(tablet_id_,
                                                                   related_table_id,

@@ -35,6 +35,7 @@ public:
   virtual common::ObString get_qualifier() const = 0;
   virtual int64_t get_timestamp() const = 0;
   virtual common::ObString get_value() const = 0;
+  virtual common::ObString get_family() const = 0;
   enum class Type
   {
     FIRST_ON_ROW = 0 /*virtual cell which present the first cell on row*/,
@@ -76,12 +77,15 @@ public:
   virtual common::ObString get_qualifier() const override;
   virtual int64_t get_timestamp() const override;
   virtual common::ObString get_value() const override;
+  virtual common::ObString get_family() const override;
 
   void set_value(ObString value) const;
+  void set_family(const ObString family);
   virtual Type get_type() const { return type_; }
 private:
   common::ObNewRow *ob_row_;
   Type type_;
+  ObString family_;
   DISALLOW_COPY_AND_ASSIGN(ObHTableCellEntity);
 };
 
@@ -109,6 +113,7 @@ public:
   virtual common::ObString get_rowkey() const override { return common::ObString(); }
   virtual common::ObString get_qualifier() const override { return common::ObString(); }
   virtual common::ObString get_value() const override { return common::ObString(); }
+  virtual common::ObString get_family() const override { return common::ObString(); }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObHTableEmptyCell);
 };
@@ -189,6 +194,7 @@ public:
   virtual common::ObString get_qualifier() const override;
   virtual int64_t get_timestamp() const override;
   virtual common::ObString get_value() const override;
+  virtual common::ObString get_family() const override { return common::ObString(); }
   virtual Type get_type() const { return Type::NORMAL; }
   int get_value(ObString &str) const;
 private:
@@ -209,6 +215,7 @@ public:
   virtual common::ObString get_qualifier() const override;
   virtual int64_t get_timestamp() const override;
   virtual common::ObString get_value() const override;
+  virtual common::ObString get_family() const override { return common::ObString(); }
   bool last_get_is_null() const { return last_get_is_null_; }
   virtual Type get_type() const { return Type::NORMAL; }
 private:
@@ -316,19 +323,110 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObNegativeTimeRange);
 };
 
+class KeyRange
+{
+public:
+  KeyRange()
+      : min_(),
+        min_inclusive_(false),
+        max_(),
+        max_inclusive_(false)
+  {}
+  KeyRange(ObString min, bool min_inclusive, ObString max, bool max_inclusive)
+      : min_(min),
+        min_inclusive_(min_inclusive),
+        max_(max),
+        max_inclusive_(max_inclusive)
+  {}
+  ~KeyRange() {}
+
+  ObString min() const { return min_; }
+  bool min_inclusive() const { return min_inclusive_; }
+
+  ObString max() const { return max_; }
+  bool max_inclusive() const { return max_inclusive_; }
+  void set_min(ObString value) { min_ = value; }
+  void set_min_inclusive(bool value) { min_inclusive_ = value; }
+  void set_max(ObString value) { max_ = value; }
+  void set_max_inclusive(bool value) { max_inclusive_ = value; }
+  bool valid()
+  {
+    return min_.empty()
+    | max_.empty()
+    | (min_.compare(max_) < 0)
+    | (min_.compare(max_) == 0 && max_inclusive_);
+  }
+  bool contain(ObString row_key)
+  {
+    int l_cmp = min_.compare(row_key);
+    int r_cmp = max_.empty()? 1 : max_.compare(row_key);
+    bool l_contain = l_cmp < 0 || (l_cmp == 0 && min_inclusive_);
+    bool r_contain = r_cmp > 0 || (r_cmp == 0 && max_inclusive_);
+    return l_contain & r_contain;
+  }
+
+  int compare(const KeyRange* other) const
+  {
+    int ret = 0;
+    if (nullptr == other) {
+    } else if (min() == other->min()) {
+      ret = static_cast<int>(other->min_inclusive() - (int)min_inclusive());
+    } else {
+      ret = min().compare(other->min());
+    }
+    return ret;
+  }
+  TO_STRING_KV(K_(min), K_(min_inclusive), K_(max), K_(max_inclusive));
+private:
+  ObString min_;
+  bool min_inclusive_;
+  ObString max_;
+  bool max_inclusive_;
+};
+
+class ObKeyRangeNode {
+public:
+  ObKeyRangeNode(): value_(nullptr) {};
+  ObKeyRangeNode(KeyRange* value): value_(value) {};
+  ~ObKeyRangeNode() {};
+  RBNODE(ObKeyRangeNode, rblink);
+  KeyRange* get_value() const { return value_; }
+  int compare(const ObKeyRangeNode *node) const
+  {
+    int ret = 0;
+    if (nullptr != value_ && nullptr != node) {
+      KeyRange* other_range = node->get_value();
+      ret = value_->compare(other_range);
+    }
+    return ret;
+  }
+  TO_STRING_KV(K_(value));
+private:
+  KeyRange* value_;
+};
+
+typedef container::ObRbTree<ObKeyRangeNode, container::ObDummyCompHelper<ObKeyRangeNode>> ObKeyRangeTree;
+
 class ObHTableUtils
 {
 public:
   /// Create a Cell that is larger than all other possible Cells for the given Cell's rk:cf:q
   static int create_last_cell_on_row_col(common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell);
   /// Create a Cell that is smaller than all other possible Cells for the given Cell's rk:cf and passed qualifier.
-  static int create_first_cell_on_row_col(common::ObIAllocator &allocator, const ObHTableCell &cell, const common::ObString &qualifier, ObHTableCell *&new_cell);
+  static int create_first_cell_on_row_col(common::ObIAllocator &allocator,
+                                          const ObHTableCell &cell,
+                                          const common::ObString &qualifier,
+                                          ObHTableCell *&new_cell);
   /// Create a Cell that is smaller than all other possible Cells for the given Cell's rk:ts and passed timestamp.
-  static int create_first_cell_on_row_col_ts(common::ObIAllocator &allocator, const ObHTableCell &cell, const int64_t timestamp, ObHTableCell *&new_cell);
+  static int create_first_cell_on_row_col_ts(common::ObIAllocator &allocator,
+                                             const ObHTableCell &cell,
+                                             const int64_t timestamp,
+                                             ObHTableCell *&new_cell);
   /// Create a Cell that is larger than all other possible Cells for the given Cell's row.
   static int create_last_cell_on_row(common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell);
   /// Create a Cell that is smaller than all other possible Cells for the given Cell's row.
   static int create_first_cell_on_row(common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell);
+  static int create_first_cell_on_row(common::ObIAllocator &allocator, const ObString &row_key, ObHTableCell *&new_cell);
 
   static int compare_qualifier(const common::ObString &cq1, const common::ObString &cq2);
   static int compare_rowkey(const common::ObString &rk1, const common::ObString &rk2);
@@ -356,6 +454,8 @@ public:
   static int get_kv_hbase_client_scanner_timeout_period(uint64_t tenant_id);
   static int get_hbase_scanner_timeout(uint64_t tenant_id);
   static int generate_hbase_bytes(ObIAllocator& allocator, int32_t len, char*& val);
+  static int get_prefix_key_range(common::ObIAllocator &allocator, ObString prefix, KeyRange *range);
+  static int merge_key_range(ObKeyRangeTree& tree);
 private:
   ObHTableUtils() = delete;
   ~ObHTableUtils() = delete;
