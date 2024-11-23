@@ -1394,7 +1394,8 @@ int ObDDLUtil::obtain_snapshot(
     const uint64_t target_table_id,
     int64_t &snapshot_version,
     bool &snapshot_held,
-    rootserver::ObDDLTask* task)
+    rootserver::ObDDLTask* task,
+    const common::ObIArray<common::ObTabletID> *extra_mv_tablet_ids)
 {
   int ret = OB_SUCCESS;
   rootserver::ObDDLWaitTransEndCtx* wait_trans_ctx = nullptr;
@@ -1443,7 +1444,7 @@ int ObDDLUtil::obtain_snapshot(
                                                                     task->get_task_id(),
                                                                     snapshot_version))) {
           LOG_WARN("update snapshot version failed", K(ret), K(task->get_task_id()), K(tenant_id));
-        } else if (OB_FAIL(hold_snapshot(trans, task, table_id, target_table_id, root_service, snapshot_version))) {
+        } else if (OB_FAIL(hold_snapshot(trans, task, table_id, target_table_id, root_service, snapshot_version, extra_mv_tablet_ids))) {
           if (OB_SNAPSHOT_DISCARDED == ret) {
             snapshot_version = 0;
             snapshot_held = false;
@@ -1491,7 +1492,8 @@ int ObDDLUtil::hold_snapshot(
     const uint64_t table_id,
     const uint64_t target_table_id,
     rootserver::ObRootService *root_service,
-    const int64_t snapshot_version)
+    const int64_t snapshot_version,
+    const common::ObIArray<common::ObTabletID> *extra_mv_tablet_ids)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(task) || OB_ISNULL(root_service)) {
@@ -1546,6 +1548,12 @@ int ObDDLUtil::hold_snapshot(
       if (OB_FAIL(ddl_service.get_snapshot_mgr().batch_acquire_snapshot(
           trans, SNAPSHOT_FOR_DDL, tenant_id, schema_version, snapshot_scn, nullptr, tablet_ids))) {
         LOG_WARN("batch acquire snapshot failed", K(ret), K(tablet_ids));
+      } else if (OB_NOT_NULL(extra_mv_tablet_ids) &&
+                 !extra_mv_tablet_ids->empty() &&
+                 OB_FAIL(ddl_service.get_snapshot_mgr().batch_acquire_snapshot(
+                     trans, SNAPSHOT_FOR_MAJOR_REFRESH_MV, tenant_id, schema_version, snapshot_scn,
+                     nullptr, *extra_mv_tablet_ids))) {
+        LOG_WARN("batch acquire mv snapshot failed", K(ret), K(extra_mv_tablet_ids));
       }
     }
     task->add_event_info("hold snapshot finish");
