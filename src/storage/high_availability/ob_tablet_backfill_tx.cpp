@@ -211,10 +211,13 @@ int ObTabletBackfillTXDag::fill_info_param(compaction::ObIBasicInfoParam *&out_p
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet backfill tx dag do not init", K(ret));
-  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
+  } else {
+    ObCStringHelper helper;
+    if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
                                   ls_id_.id(), static_cast<int64_t>(tablet_info_.tablet_id_.id()),
-                                  "dag_net_id", to_cstring(dag_net_id_)))){
-    LOG_WARN("failed to fill info param", K(ret));
+                                  "dag_net_id", helper.convert(dag_net_id_)))){
+      LOG_WARN("failed to fill info param", K(ret));
+    }
   }
   return ret;
 }
@@ -225,10 +228,15 @@ int ObTabletBackfillTXDag::fill_dag_key(char *buf, const int64_t buf_len) const
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet backfill tx dag do not init", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObTabletBackfillTXDag: ls_id = %s, tablet_id = %s",
-       to_cstring(ls_id_), to_cstring(tablet_info_.tablet_id_)))) {
-    LOG_WARN("failed to fill comment", K(ret), KPC(backfill_tx_ctx_), KPC(ha_dag_net_ctx_));
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos, "ObTabletBackfillTXDag: ls_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", tablet_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, tablet_info_.tablet_id_);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), KPC(backfill_tx_ctx_), KPC(ha_dag_net_ctx_));
+    }
   }
   return ret;
 }
@@ -1647,10 +1655,13 @@ int ObFinishBackfillTXDag::fill_info_param(compaction::ObIBasicInfoParam *&out_p
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet backfill tx dag do not init", K(ret));
-  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
+  } else {
+    ObCStringHelper helper;
+    if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
                                   backfill_tx_ctx_.ls_id_.id(),
-                                  "dag_net_id", to_cstring(backfill_tx_ctx_.task_id_)))) {
-    LOG_WARN("failed to fill info param", K(ret));
+                                  "dag_net_id", helper.convert(backfill_tx_ctx_.task_id_)))) {
+      LOG_WARN("failed to fill info param", K(ret));
+    }
   }
   return ret;
 }
@@ -1661,9 +1672,14 @@ int ObFinishBackfillTXDag::fill_dag_key(char *buf, const int64_t buf_len) const
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("finish backfill tx dag do not init", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObFinishBackfillTXDag: ls_id = %s ", to_cstring(backfill_tx_ctx_.ls_id_)))) {
-    LOG_WARN("failed to fill comment", K(ret), K(backfill_tx_ctx_));
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos, "ObFinishBackfillTXDag: ls_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, backfill_tx_ctx_.ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, " ");
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), K(backfill_tx_ctx_));
+    }
   }
   return ret;
 }

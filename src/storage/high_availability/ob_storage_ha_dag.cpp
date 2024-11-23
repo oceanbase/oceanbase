@@ -54,12 +54,13 @@ int ObStorageHAResultMgr::set_result(
     if (NULL != ObCurTraceId::get_trace_id() && OB_FAIL(failed_task_id_list_.push_back(*ObCurTraceId::get_trace_id()))) {
       LOG_WARN("failed to push trace id into array", K(ret));
     } else {
+      ObCStringHelper helper;
       SERVER_EVENT_ADD("storage_ha", "set_first_result",
         "tenant_id", tenant_id,
         "result", result,
         "allow_retry", allow_retry,
         "retry_count", retry_count_,
-        "failed_task_id", to_cstring(failed_task_id_list_),
+        "failed_task_id", helper.convert(failed_task_id_list_),
         "dag_type", OB_DAG_TYPES[type].dag_type_str_);
       FLOG_INFO("set first result", K(result), K(allow_retry), K(retry_count_), K(failed_task_id_list_));
     }

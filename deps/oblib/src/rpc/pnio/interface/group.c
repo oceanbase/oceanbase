@@ -499,7 +499,8 @@ void pn_release(pn_comm_t* pn_comm)
     // destroy pktc socket
     dlink_for(&pktc->sk_list, p) {
       pktc_sk_t* s = structof(p, pktc_sk_t, list_link);
-      rk_info("sock destroy: sock=%p, connection=%s", s, T2S(sock_fd, s->fd));
+      char sock_fd_buf[PNIO_NIO_FD_ADDR_LEN] = {'\0'};
+      rk_info("sock destroy: sock=%p, connection=%s", s, sock_fd_str(s->fd, sock_fd_buf, sizeof(sock_fd_buf)));
       sock_destroy((sock_t*)s);
     }
   }
@@ -715,8 +716,12 @@ void pn_print_diag_info(pn_comm_t* pn_comm) {
   // print socket diag info
   dlink_for(&pn->pktc.sk_list, p) {
     pktc_sk_t* s = structof(p, pktc_sk_t, list_link);
+    char local_addr_buf[PNIO_NIO_ADDR_LEN] = {'\0'};
+    char dest_addr_buf[PNIO_NIO_ADDR_LEN] = {'\0'};
     rk_info("client:%p_%s_%s_%d_%ld_%d, write_queue=%lu/%lu, write=%lu/%lu, read=%lu/%lu, doing=%lu, done=%lu, write_time=%lu, read_time=%lu, process_time=%lu",
-              s, T2S(addr, s->sk_diag_info.local_addr), T2S(addr, s->dest), s->fd, s->sk_diag_info.establish_time, s->conn_ok,
+              s, addr_str(s->sk_diag_info.local_addr, local_addr_buf, sizeof(local_addr_buf)),
+              addr_str(s->dest, dest_addr_buf, sizeof(dest_addr_buf)),
+              s->fd, s->sk_diag_info.establish_time, s->conn_ok,
               s->wq.cnt, s->wq.sz,
               s->sk_diag_info.write_cnt, s->sk_diag_info.write_size,
               s->sk_diag_info.read_cnt, s->sk_diag_info.read_size,
@@ -727,8 +732,9 @@ void pn_print_diag_info(pn_comm_t* pn_comm) {
   if (pn->pkts.sk_list.next != NULL) {
     dlink_for(&pn->pkts.sk_list, p) {
       pkts_sk_t* s = structof(p, pkts_sk_t, list_link);
+      char peer_addr_buf[PNIO_NIO_ADDR_LEN] = {'\0'};
       rk_info("server:%p_%s_%d_%ld, write_queue=%lu/%lu, write=%lu/%lu, read=%lu/%lu, doing=%lu, done=%lu, write_time=%lu, read_time=%lu, process_time=%lu",
-                s, T2S(addr, s->peer), s->fd, s->sk_diag_info.establish_time,
+                s, addr_str(s->peer, peer_addr_buf, sizeof(peer_addr_buf)), s->fd, s->sk_diag_info.establish_time,
                 s->wq.cnt, s->wq.sz,
                 s->sk_diag_info.write_cnt, s->sk_diag_info.write_size,
                 s->sk_diag_info.read_cnt, s->sk_diag_info.read_size,

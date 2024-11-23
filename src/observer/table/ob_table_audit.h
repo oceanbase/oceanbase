@@ -50,7 +50,8 @@ public:
   {
     int ret = OB_SUCCESS;
     if (need_audit_) {
-      const char *request_str = to_cstring(request);
+      ObCStringHelper helper;
+      const char *request_str = helper.convert(request);
       if (OB_ISNULL(request_str)) {
         ret = OB_ERR_UNEXPECTED;
         COMMON_LOG(WARN, "fail to alloc request to string", K(ret), K(request));

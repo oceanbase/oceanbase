@@ -726,21 +726,25 @@ int ObTxRedoLog::ob_admin_dump(memtable::ObMemtableMutatorIterator *iter_ptr,
       arg.writer_ptr_->dump_key("###<TxRedoLog>");
       arg.writer_ptr_->start_object();
       arg.writer_ptr_->dump_key("txctxinfo");
-      arg.writer_ptr_->dump_string(to_cstring(*this));
+      ObCStringHelper helper;
+      arg.writer_ptr_->dump_string(helper.convert(*this));
       arg.writer_ptr_->dump_key("MutatorMeta");
-      arg.writer_ptr_->dump_string(to_cstring(iter_ptr->get_meta()));
+      arg.writer_ptr_->dump_string(helper.convert(iter_ptr->get_meta()));
 
       arg.writer_ptr_->dump_key("MutatorRows");
       arg.writer_ptr_->start_object();
       has_output = true;
     } else {
       if (!has_dumped_tx_id) {
-        databuff_printf(arg.buf_, arg.buf_len_, arg.pos_, "{BlockID: %s; LSN:%ld, TxID:%ld; SCN:%s",
-                        block_name, lsn.val_, tx_id, to_cstring(scn));
+        databuff_printf(arg.buf_, arg.buf_len_, arg.pos_, "{BlockID: %s; LSN:%ld, TxID:%ld; SCN:",
+                        block_name, lsn.val_, tx_id);
+        databuff_printf(arg.buf_, arg.buf_len_, arg.pos_, scn);
       }
-      databuff_printf(arg.buf_, arg.buf_len_, arg.pos_,
-                      "<TxRedoLog>: {TxCtxInfo: {%s}; MutatorMeta: {%s}; MutatorRows: {",
-                      to_cstring(*this), to_cstring(iter_ptr->get_meta()));
+      databuff_printf(arg.buf_, arg.buf_len_, arg.pos_, "<TxRedoLog>: {TxCtxInfo: {");
+      databuff_printf(arg.buf_, arg.buf_len_, arg.pos_, *this);
+      databuff_printf(arg.buf_, arg.buf_len_, arg.pos_, "}; MutatorMeta: {");
+      databuff_printf(arg.buf_, arg.buf_len_, arg.pos_, iter_ptr->get_meta());
+      databuff_printf(arg.buf_, arg.buf_len_, arg.pos_, "}; MutatorRows: {");
       //fill info in buf
     }
     bool has_dumped_meta_info = false;
@@ -760,7 +764,8 @@ int ObTxRedoLog::ob_admin_dump(memtable::ObMemtableMutatorIterator *iter_ptr,
       }
       has_output = true;
       arg.writer_ptr_->dump_key("RowHeader");
-      arg.writer_ptr_->dump_string(to_cstring(iter_ptr->get_row_head()));
+      ObCStringHelper helper;
+      arg.writer_ptr_->dump_string(helper.convert(iter_ptr->get_row_head()));
 
       switch (iter_ptr->get_row_head().mutator_type_) {
         case memtable::MutatorType::MUTATOR_ROW: {
@@ -776,7 +781,8 @@ int ObTxRedoLog::ob_admin_dump(memtable::ObMemtableMutatorIterator *iter_ptr,
         case memtable::MutatorType::MUTATOR_TABLE_LOCK: {
           arg.log_stat_->table_lock_count_++;
           arg.writer_ptr_->dump_key("TableLock");
-          arg.writer_ptr_->dump_string(to_cstring(iter_ptr->get_table_lock_row()));
+          helper.reset();
+          arg.writer_ptr_->dump_string(helper.convert(iter_ptr->get_table_lock_row()));
           break;
         }
         case memtable::MutatorType::MUTATOR_ROW_EXT_INFO: {
@@ -831,6 +837,7 @@ int ObTxRedoLog::format_mutator_row_(const memtable::ObMemtableMutatorRow &row,
   ObStoreRowkey rowkey;
   memtable::ObRowData new_row;
   memtable::ObRowData old_row;
+  ObCStringHelper helper;
   blocksstable::ObDmlFlag dml_flag = blocksstable::ObDmlFlag::DF_NOT_EXIST;
 
   if (OB_FAIL(row.copy(table_id, rowkey, table_version, new_row, old_row, dml_flag,
@@ -872,7 +879,7 @@ int ObTxRedoLog::format_mutator_row_(const memtable::ObMemtableMutatorRow &row,
     arg.writer_ptr_->dump_key("Flag");
     arg.writer_ptr_->dump_int64(flag);
     arg.writer_ptr_->dump_key("SeqNo");
-    arg.writer_ptr_->dump_string(to_cstring(seq_no));
+    arg.writer_ptr_->dump_string(helper.convert(seq_no));
     arg.writer_ptr_->dump_key("NewRowSize");
     arg.writer_ptr_->dump_int64(new_row.size_);
     arg.writer_ptr_->dump_key("OldRowSize");
@@ -1025,7 +1032,8 @@ int ObTxActiveInfoLog::ob_admin_dump(ObAdminMutatorStringArg &arg)
     arg.writer_ptr_->dump_key("###<TxActiveInfoLog>");
     arg.writer_ptr_->start_object();
     arg.writer_ptr_->dump_key("Members");
-    arg.writer_ptr_->dump_string(to_cstring(*this));
+    ObCStringHelper helper;
+    arg.writer_ptr_->dump_string(helper.convert(*this));
     arg.writer_ptr_->end_object();
   }
   return ret;
@@ -1043,7 +1051,8 @@ int ObTxCommitInfoLog::ob_admin_dump(ObAdminMutatorStringArg &arg)
     arg.writer_ptr_->dump_key("Size");
     arg.writer_ptr_->dump_int64(get_serialize_size());
     arg.writer_ptr_->dump_key("Members");
-    arg.writer_ptr_->dump_string(to_cstring(*this));
+    ObCStringHelper helper;
+    arg.writer_ptr_->dump_string(helper.convert(*this));
     arg.writer_ptr_->end_object();
   }
   return ret;
@@ -1059,7 +1068,8 @@ int ObTxPrepareLog::ob_admin_dump(ObAdminMutatorStringArg &arg)
     arg.writer_ptr_->dump_key("###<TxPrepareLog>");
     arg.writer_ptr_->start_object();
     arg.writer_ptr_->dump_key("Members");
-    arg.writer_ptr_->dump_string(to_cstring(*this));
+    ObCStringHelper helper;
+    arg.writer_ptr_->dump_string(helper.convert(*this));
     arg.writer_ptr_->end_object();
   }
   return ret;
@@ -1077,7 +1087,8 @@ int ObTxCommitLog::ob_admin_dump(ObAdminMutatorStringArg &arg)
     arg.writer_ptr_->dump_key("Size");
     arg.writer_ptr_->dump_int64(get_serialize_size());
     arg.writer_ptr_->dump_key("Members");
-    arg.writer_ptr_->dump_string(to_cstring(*this));
+    ObCStringHelper helper;
+    arg.writer_ptr_->dump_string(helper.convert(*this));
     arg.writer_ptr_->end_object();
   }
   return ret;
@@ -1093,7 +1104,8 @@ int ObTxClearLog::ob_admin_dump(ObAdminMutatorStringArg &arg)
     arg.writer_ptr_->dump_key("###<TxClearLog>");
     arg.writer_ptr_->start_object();
     arg.writer_ptr_->dump_key("Members");
-    arg.writer_ptr_->dump_string(to_cstring(*this));
+    ObCStringHelper helper;
+    arg.writer_ptr_->dump_string(helper.convert(*this));
     arg.writer_ptr_->end_object();
   }
   return ret;
@@ -1109,7 +1121,8 @@ int ObTxAbortLog::ob_admin_dump(ObAdminMutatorStringArg &arg)
     arg.writer_ptr_->dump_key("###<TxAbortLog>");
     arg.writer_ptr_->start_object();
     arg.writer_ptr_->dump_key("Members");
-    arg.writer_ptr_->dump_string(to_cstring(*this));
+    ObCStringHelper helper;
+    arg.writer_ptr_->dump_string(helper.convert(*this));
     arg.writer_ptr_->end_object();
   }
   return ret;
@@ -1125,7 +1138,8 @@ int ObTxRecordLog::ob_admin_dump(ObAdminMutatorStringArg &arg)
     arg.writer_ptr_->dump_key("###<TxRecordLog>");
     arg.writer_ptr_->start_object();
     arg.writer_ptr_->dump_key("Members");
-    arg.writer_ptr_->dump_string(to_cstring(*this));
+    ObCStringHelper helper;
+    arg.writer_ptr_->dump_string(helper.convert(*this));
     arg.writer_ptr_->end_object();
   }
   return ret;
@@ -1141,7 +1155,8 @@ int ObTxStartWorkingLog::ob_admin_dump(ObAdminMutatorStringArg &arg)
     arg.writer_ptr_->dump_key("###<TxStartWorkingLog>");
     arg.writer_ptr_->start_object();
     arg.writer_ptr_->dump_key("Members");
-    arg.writer_ptr_->dump_string(to_cstring(*this));
+    ObCStringHelper helper;
+    arg.writer_ptr_->dump_string(helper.convert(*this));
     arg.writer_ptr_->end_object();
   }
   return ret;
@@ -1157,7 +1172,8 @@ int ObTxRollbackToLog::ob_admin_dump(ObAdminMutatorStringArg &arg)
     arg.writer_ptr_->dump_key("<TxRollbackToLog>");
     arg.writer_ptr_->start_object();
     arg.writer_ptr_->dump_key("Members");
-    arg.writer_ptr_->dump_string(to_cstring(*this));
+    ObCStringHelper helper;
+    arg.writer_ptr_->dump_string(helper.convert(*this));
     arg.writer_ptr_->end_object();
   }
   return ret;
@@ -1189,17 +1205,24 @@ int ObTxMultiDataSourceLog::ob_admin_dump(ObAdminMutatorStringArg &arg)
     arg.writer_ptr_->dump_key("<TxMultiDataSourceLog>");
     arg.writer_ptr_->start_object();
     arg.writer_ptr_->dump_key("mds_count");
-    arg.writer_ptr_->dump_string(to_cstring(data_.count()));
+    ObCStringHelper helper;
+    arg.writer_ptr_->dump_string(helper.convert(data_.count()));
 
     arg.writer_ptr_->dump_key("mds_array");
     arg.writer_ptr_->start_object();
     for (int64_t i = 0; i < data_.count(); i++) {
       arg.writer_ptr_->dump_key("type");
+        helper.reset();
         arg.writer_ptr_->dump_string(ObMultiDataSourcePrinter::to_str_mds_type(data_[i].get_data_source_type()));
         arg.writer_ptr_->dump_key("buf_len");
-        arg.writer_ptr_->dump_string(to_cstring(data_[i].get_data_size()));
+        arg.writer_ptr_->dump_string(helper.convert(data_[i].get_data_size()));
         arg.writer_ptr_->dump_key("content");
-        arg.writer_ptr_->dump_string(ObMulSourceTxDataDump::dump_buf(data_[i].get_data_source_type(),static_cast<char *>(data_[i].get_ptr()),data_[i].get_data_size()));
+        helper.reset();
+        arg.writer_ptr_->dump_string(
+            ObMulSourceTxDataDump::dump_buf(data_[i].get_data_source_type(),
+                                            static_cast<char *>(data_[i].get_ptr()),
+                                            data_[i].get_data_size(),
+                                            helper));
     }
     arg.writer_ptr_->end_object();
 

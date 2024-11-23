@@ -1527,8 +1527,9 @@ int ObBasicSessionInfo::cast_sys_variable(ObIAllocator &calc_buf,
                                        cast_ctx,
                                        value,
                                        casted_cell))) {
+        ObCStringHelper helper;
         _LOG_WARN("failed to cast object, cell=%s from_type=%s to_type=%s ret=%d ",
-                  to_cstring(value), inner_obj_type_str(value.get_type()),
+                  helper.convert(value), inner_obj_type_str(value.get_type()),
                   inner_obj_type_str(type.get_type()), ret);
       } else if (OB_FAIL(base_sys_var_alloc_.write_obj(casted_cell, &out_value))) {
         LOG_WARN("fail to store variable value", K(casted_cell), K(value), K(ret));
@@ -6201,9 +6202,12 @@ int ObBasicSessionInfo::is_timeout(bool &is_timeout)
                                                     OB_IP_PORT_STR_BUFF))) {
         LOG_WARN("failed to get peer addr string", K(ret), K(get_peer_addr()), K(addr_buf));
       } else {
+        char time_buf_1[OB_MAX_TIME_STR_LENGTH] = {'\0'};
+        char time_buf_2[OB_MAX_TIME_STR_LENGTH] = {'\0'};
         _LOG_INFO("sessionkey %u, proxy_sessid %lu: %.*s from %s timeout: last active time=%s, cur=%s, timeout=%lds",
                   sessid_, proxy_sessid_, user_name.length(), user_name.ptr(), addr_buf,
-                  time2str(thread_data_.last_active_time_), time2str(cur_time), timeout);
+                  time2str(thread_data_.last_active_time_, time_buf_1, sizeof(time_buf_1)),
+                  time2str(cur_time, time_buf_2, sizeof(time_buf_2)), timeout);
       }
       is_timeout = true;
     }

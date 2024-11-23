@@ -710,7 +710,8 @@ int ObStorageHASrcProvider::get_policy_detailed_info_str(char *buf, const int64_
     detailed_info.use_c_replica_policy_ = use_c_replica_policy_;
     detailed_info.is_first_c_replica_ = is_first_c_replica_;
 
-    if (OB_FAIL(databuff_printf(buf, buf_len, "%s", to_cstring(detailed_info)))) {
+    ObCStringHelper helper;
+    if (OB_FAIL(databuff_printf(buf, buf_len, "%s", helper.convert(detailed_info)))) {
       LOG_WARN("failed to print policy type", K(ret), K(detailed_info));
     }
   }

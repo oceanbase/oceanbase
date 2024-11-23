@@ -21,6 +21,7 @@
 #include "lib/utility/ob_print_utils.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "lib/utility/utility.h"
+#include "lib/utility/ob_sort.h"
 
 namespace oceanbase
 {

@@ -91,7 +91,8 @@ int ObDropMLogResolver::resolve(const ParseNode &parse_tree)
         new_tbl_name,
         data_table_schema))) {
       if (OB_TABLE_NOT_EXIST == ret) {
-        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(database_name), to_cstring(data_table_name));
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(database_name), helper.convert(data_table_name));
         LOG_WARN("table not exist", KR(ret), K(database_name), K(data_table_name));
       } else {
         LOG_WARN("failed to get table schema", KR(ret));

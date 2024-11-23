@@ -251,6 +251,7 @@ int LsElectionReferenceInfoRow::set_or_replace_server_in_blacklist(
   } else if (CLICK_FAIL(write_and_commit_())) {
     COORDINATOR_LOG_(WARN, "failed when convert info, write row, end trans");
   } else {
+    ObCStringHelper helper;
     COORDINATOR_LOG_(INFO, "set_or_replace_server_in_blacklist", K(server), "reason", to_cstring(reason));
   }
   if (trans_.is_started()) {
@@ -484,10 +485,23 @@ int LsElectionReferenceInfoRow::update_row_to_table_()
   int ret = OB_SUCCESS;
   ObSqlString sql;
   int64_t affected_rows = 0;
-  if (CLICK_FAIL(sql.append_fmt(
+  ObCStringHelper helper;
+  const char *table_str = nullptr;
+  const char *priority_str = nullptr;
+  const char *server_str = nullptr;
+  if (nullptr == (table_str = helper.convert(row_for_table_.element<2>()))) {
+    ret = OB_ERR_NULL_VALUE;
+    COORDINATOR_LOG_(WARN, "fail to convert table name");
+  } else if (nullptr == (priority_str = helper.convert(row_for_table_.element<3>()))) {
+    ret = OB_ERR_NULL_VALUE;
+    COORDINATOR_LOG_(WARN, "fail to convert zone_priority");
+  } else if (nullptr == (server_str = helper.convert(row_for_table_.element<4>()))) {
+    ret = OB_ERR_NULL_VALUE;
+    COORDINATOR_LOG_(WARN, "fail to convert manual_leader_server");
+  } else if (CLICK_FAIL(sql.append_fmt(
     "UPDATE %s SET zone_priority='%s', manual_leader_server='%s', blacklist='%s' WHERE tenant_id=%ld and ls_id=%ld",
     share::OB_ALL_LS_ELECTION_REFERENCE_INFO_TNAME,
-    to_cstring(row_for_table_.element<2>()), to_cstring(row_for_table_.element<3>()), to_cstring(row_for_table_.element<4>()),
+    table_str, priority_str, server_str,
     row_for_table_.element<0>(), row_for_table_.element<1>()))) {
     COORDINATOR_LOG_(WARN, "format insert or update sql failed");
   } else if (!trans_.is_started()) {
@@ -647,7 +661,10 @@ int TableAccessor::get_self_zone_region(const ObStringHolder &zone_name_holder,
   int64_t pos = 0;
   const char *columns[1] = {"info"};
   char where_condition[STACK_BUFFER_SIZE] = {0};
-  if (CLICK_FAIL(databuff_printf(where_condition, STACK_BUFFER_SIZE, pos, "where zone = '%s' and name = 'region'", to_cstring(zone_name_holder)))) {
+  if (CLICK_FAIL({ret = databuff_printf(where_condition, STACK_BUFFER_SIZE, pos, "where zone = '");
+                  OB_SUCCESS != ret ? : ret = databuff_printf(where_condition, STACK_BUFFER_SIZE, pos, zone_name_holder);
+                  OB_SUCCESS != ret ? : ret = databuff_printf(where_condition, STACK_BUFFER_SIZE, pos, "' and name = 'region'");
+                  ret;})) {
     COORDINATOR_LOG_(WARN, "where condition to string failed");
   } else if (CLICK_FAIL(ObTableAccessHelper::read_single_row(OB_SYS_TENANT_ID, columns, share::OB_ALL_ZONE_TNAME, where_condition, region_name_holder))) {
     COORDINATOR_LOG_(WARN, "get zone region from __all_zone failed");
@@ -693,7 +710,10 @@ int TableAccessor::is_primary_region(const ObStringHolder &region_name_holder, b
       ObStringHolder primary_region;
       ObStringHolder &one_primary_zone = primary_zone_list_split_by_semicolon_comma[0];
       pos = 0;
-      if (CLICK_FAIL(databuff_printf(where_condition, STACK_BUFFER_SIZE, pos, "where zone = '%s' and name = 'region'", to_cstring(one_primary_zone)))) {
+      if (CLICK_FAIL({ret = databuff_printf(where_condition, STACK_BUFFER_SIZE, pos, "where zone = '");
+                      OB_SUCCESS != ret ? : ret = databuff_printf(where_condition, STACK_BUFFER_SIZE, pos, one_primary_zone);
+                      OB_SUCCESS != ret ? : ret = databuff_printf(where_condition, STACK_BUFFER_SIZE, pos, "' and name = 'region'");
+                      ret;})) {
         COORDINATOR_LOG_(WARN, "where condition to string failed");
       } else if (CLICK_FAIL(ObTableAccessHelper::read_single_row(OB_SYS_TENANT_ID, columns, share::OB_ALL_ZONE_TNAME, where_condition, primary_region))) {
         COORDINATOR_LOG_(WARN, "get primary_region from __all_zone failed");
@@ -791,7 +811,10 @@ int TableAccessor::get_zone_stop_status(ObStringHolder &zone_name, bool &is_zone
   const char *columns[1] = {"value"};
   char where_condition[STACK_BUFFER_SIZE] = {0};
   int64_t value;
-  if (CLICK_FAIL(databuff_printf(where_condition, STACK_BUFFER_SIZE, pos, "where zone='%s' and name='status'", to_cstring(zone_name)))) {
+  if (CLICK_FAIL({ret = databuff_printf(where_condition, STACK_BUFFER_SIZE, pos, "where zone='");
+                  OB_SUCCESS != ret ? : ret = databuff_printf(where_condition, STACK_BUFFER_SIZE, pos, zone_name);
+                  OB_SUCCESS != ret ? : ret = databuff_printf(where_condition, STACK_BUFFER_SIZE, pos, "' and name='status'");
+                  ret;})) {
     COORDINATOR_LOG_(WARN, "create where condition failed");
   } else if (CLICK_FAIL(ObTableAccessHelper::read_single_row(OB_SYS_TENANT_ID, columns, share::OB_ALL_ZONE_TNAME, where_condition, value))) {
     COORDINATOR_LOG_(WARN, "read row failed");

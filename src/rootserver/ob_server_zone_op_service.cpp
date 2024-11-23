@@ -143,8 +143,9 @@ int ObServerZoneOpService::check_storage_infos_not_changed_(common::ObISQLClient
       int tmp_ret = OB_SUCCESS; \
       const int64_t ERR_MSG_BUF_LEN = OB_MAX_SERVER_ADDR_SIZE + 100; \
       char non_empty_server_err_msg[ERR_MSG_BUF_LEN] = ""; \
-      if (OB_TMP_FAIL(databuff_printf(non_empty_server_err_msg, ERR_MSG_BUF_LEN, \
-          "add non-empty server %s", to_cstring(addr)))) { \
+      int64_t pos = 0; \
+      if (OB_TMP_FAIL(databuff_print_multi_objs(non_empty_server_err_msg, ERR_MSG_BUF_LEN, pos, \
+          "add non-empty server ", addr))) { \
         LOG_WARN("fail to execute databuff_printf", KR(tmp_ret), K(addr)); \
         LOG_USER_ERROR(OB_OP_NOT_ALLOW, "add non-empty server"); \
       } else { \
@@ -297,7 +298,8 @@ int ObServerZoneOpService::prepare_server_for_adding_server_(const ObAddr &serve
     // the retry may increase max_used_server_id which is meaningless
     ret = OB_SERVER_CONNECTION_ERROR;
     LOG_WARN("fail to connect to server and set server_id", KR(ret), K(server));
-    LOG_USER_ERROR(OB_SERVER_CONNECTION_ERROR, to_cstring(server));
+    ObCStringHelper helper;
+    LOG_USER_ERROR(OB_SERVER_CONNECTION_ERROR, helper.convert(server));
     // in bootstrap mode, server_id is set in prepare_bootstrap, the server is not empty here
   } else if (!is_bootstrap && !rpc_result.get_is_server_empty()) {
     ret = OB_OP_NOT_ALLOW;
@@ -528,12 +530,12 @@ int ObServerZoneOpService::start_servers(
         if (OB_UNLIKELY(timeout <= 0)) {
           ret = OB_TIMEOUT;
           LOG_WARN("ctx time out", KR(ret), K(timeout));
-        } else if (OB_FAIL(databuff_printf(
+        } else if (OB_FAIL(databuff_print_multi_objs(
             disk_error_server_err_msg,
             ERR_MSG_BUF_LEN,
             pos,
-            "The target server %s may encounter device failures. Please check GV$OB_SERVERS for more information. START SERVER is",
-            to_cstring(server)))) {
+            "The target server ",
+            server, " may encounter device failures. Please check GV$OB_SERVERS for more information. START SERVER is"))) {
           LOG_WARN("fail to execute databuff_printf", KR(ret), K(server));
         } else if (OB_FAIL(rpc_arg.init(GCONF.self_addr_, server))) {
           LOG_WARN("fail to init rpc arg", KR(ret), K(GCONF.self_addr_), K(server));

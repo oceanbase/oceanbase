@@ -2548,7 +2548,8 @@ struct ObNumberDesc
   if (OB_SUCCESS == ret  \
       && OB_SUCCESS != (ret = row.set_cell(table_id, ++column_id, obj))) \
   {\
-    _OB_LOG(WARN, "failed to set cell=%s, ret=%d", to_cstring(obj), ret); \
+    ObCStringHelper helper; \
+    _OB_LOG(WARN, "failed to set cell=%s, ret=%d", helper.convert(obj), ret); \
   }
 
 OB_INLINE int64_t &get_tid_cache()

@@ -66,7 +66,8 @@ void BtreeNode<BtreeKey, BtreeVal>::print(FILE *file, const int depth) const
       fprintf(file, " %lx->%lx", (uint64_t)kvs_[i].key_.get_ptr(), (uint64_t)kvs_[i].val_);
     }
     for (int i = 0; i < count; i++) {
-      fprintf(file, "\n%*s %s%s->%lx", depth * 2 + 2, "|-", "+", get_key(i, &index).repr(), (uint64_t)get_val(i, &index));
+      ObCStringHelper helper;
+      fprintf(file, "\n%*s %s%s->%lx", depth * 2 + 2, "|-", "+", helper.convert(get_key(i, &index)), (uint64_t)get_val(i, &index));
     }
   } else {
     int count = size();
@@ -75,7 +76,8 @@ void BtreeNode<BtreeKey, BtreeVal>::print(FILE *file, const int depth) const
       fprintf(file, " %lx->%lx", (uint64_t)kvs_[i].key_.get_ptr(), (uint64_t)kvs_[i].val_);
     }
     for (int i = 0; i < count; i++) {
-      fprintf(file, "\n%*s %s%s->%lx", depth * 2 + 2, "|-", "+", get_key(i).repr(), (uint64_t)get_val(i));
+      ObCStringHelper helper;
+      fprintf(file, "\n%*s %s%s->%lx", depth * 2 + 2, "|-", "+", helper.convert(get_key(i)), (uint64_t)get_val(i));
       BtreeNode *child = (BtreeNode *)get_val(i);
       child->print(file, depth + 1);
     }

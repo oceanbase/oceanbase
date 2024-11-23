@@ -343,9 +343,7 @@ public:
     int64_t pos = 0;
     while (NULL != (iter = const_cast<GroupMap*>(this)->GroupHash::quick_next(iter))) {
       group = static_cast<ObResourceGroup*>(iter);
-      common::databuff_printf(buf, buf_len, pos,
-       "%s",
-       to_cstring(group));
+      common::databuff_printf(buf, buf_len, pos, group);
     }
     return pos;
   }

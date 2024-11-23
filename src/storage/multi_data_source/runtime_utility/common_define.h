@@ -175,16 +175,18 @@ static inline const char *obj_to_string(WriterType type) {
   return ret;
 }
 
-static inline const char *obj_to_string(share::SCN scn) {
-  const char *ret = nullptr;
-  if (scn == share::SCN::max_scn()) {
-    ret = "MAX";
-  } else if (scn == share::SCN::min_scn()) {
-    ret = "MIN";
-  } else {
-    ret = to_cstring(scn);
+static inline const char *obj_to_string(share::SCN scn, char *buf, int64_t buf_len) {
+  if (nullptr != buf && buf_len > 0) {
+    int64_t pos = 0;
+    if (scn == share::SCN::max_scn()) {
+      (void) databuff_printf(buf, buf_len, pos, "%s", "MAX");
+    } else if (scn == share::SCN::min_scn()) {
+      (void) databuff_printf(buf, buf_len, pos, "%s", "MIN");
+    } else {
+      (void) databuff_printf(buf, buf_len, pos, scn);
+    }
   }
-  return ret;
+  return buf;
 }
 
 enum class MdsNodeType : uint8_t

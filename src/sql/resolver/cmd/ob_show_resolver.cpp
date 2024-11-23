@@ -2386,7 +2386,9 @@ int ObShowResolver::resolve_show_from_table(const ParseNode *from_table_node,
                   LOG_WARN("table not exists", K(ret), K(show_table_name));
                 }
               } else {
-                LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(show_database_name), to_cstring(show_table_name));
+                ObCStringHelper helper;
+                LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(show_database_name),
+                    helper.convert(show_table_name));
               }
             }
           } else {
@@ -2472,7 +2474,8 @@ int ObShowResolver::resolve_show_from_table(const ParseNode *from_table_node,
     } else if (T_SHOW_CREATE_VIEW == node_type &&
                !table_schema->is_view_table()) {
       ret = OB_ERR_WRONG_OBJECT;
-      LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, to_cstring(show_database_name), to_cstring(show_table_name), "VIEW");
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, helper.convert(show_database_name), helper.convert(show_table_name), "VIEW");
     } else if ((T_SHOW_COLUMNS == node_type) && table_schema->is_materialized_view()) {
       show_table_id = table_schema->get_data_table_id();
     } else {

@@ -11,6 +11,8 @@
  */
 
 #include <netinet/tcp.h>
+#define PNIO_NIO_ADDR_LEN (INET6_ADDRSTRLEN + 6)
+#define PNIO_NIO_FD_ADDR_LEN 140
 extern int async_connect(addr_t dest, uint64_t dispatch_id);
 extern int listen_create(addr_t src);
 extern int tcp_accept(int fd);
@@ -23,4 +25,4 @@ extern int set_tcpopt(int fd, int option, int value);
 extern void update_socket_keepalive_params(int fd, int64_t user_timeout);
 extern int set_tcp_recv_buf(int fd, int size);
 extern int set_tcp_send_buf(int fd, int size);
-extern const char* sock_fd_str(format_t* f, int fd);
+extern const char* sock_fd_str(int fd, char *buf, int buf_len);

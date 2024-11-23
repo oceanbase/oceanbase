@@ -20214,7 +20214,7 @@ SELECT
      svr_ip AS SVR_IP,
      svr_port AS SVR_PORT,
      hold AS HOLD,
-     `limit` - hold AS FREE
+     CASE WHEN `limit` - hold > 0 THEN `limit` - hold ELSE 0 END AS FREE
 FROM
     oceanbase.__all_virtual_tenant_memory_info
 ORDER BY tenant_id, svr_ip, svr_port
@@ -64593,7 +64593,7 @@ def_table_schema(
         SVR_IP AS SVR_IP,
         SVR_PORT AS SVR_PORT,
         HOLD AS HOLD,
-        "LIMIT" - HOLD AS FREE
+        CASE WHEN "LIMIT" - HOLD > 0 THEN "LIMIT" - HOLD ELSE 0 END AS FREE
     FROM SYS.ALL_VIRTUAL_TENANT_MEMORY_INFO
     ORDER BY TENANT_ID, SVR_IP, SVR_PORT
 """.replace("\n", " ")

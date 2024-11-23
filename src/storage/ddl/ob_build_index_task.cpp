@@ -829,8 +829,13 @@ int ObUniqueCheckingDag::fill_dag_key(char *buf, const int64_t buf_len) const
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, "tablet_id=%s index_id=%ld", to_cstring(tablet_id_), index_id))) {
-    STORAGE_LOG(WARN, "failed to fill dag key", K(ret), K(tablet_id_), K(index_id));
+  }
+  else {
+    int64_t pos = 0;
+    if (OB_FAIL(databuff_print_multi_objs(buf, buf_len, pos,
+        "tablet_id=", tablet_id_, " index_id=", index_id))) {
+      STORAGE_LOG(WARN, "failed to fill dag key", K(ret), K(tablet_id_), K(index_id), K(pos));
+    }
   }
   return ret;
 }

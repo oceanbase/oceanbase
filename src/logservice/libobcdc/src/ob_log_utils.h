@@ -524,8 +524,6 @@ int get_tenant_compat_mode(const uint64_t tenant_id,
     lib::Worker::CompatMode &compat_mode,
     const int64_t timeout);
 
-char *lbt_oblog();
-
 bool is_backup_mode();
 
 struct BRColElem

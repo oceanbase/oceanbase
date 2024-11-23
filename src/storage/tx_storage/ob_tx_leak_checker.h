@@ -191,8 +191,8 @@ struct DiagnoseFunctor
         }
         if (OB_SUCC(ret) && v.extra_->type_ >= ObReadExInfo::WITH_TRACE) {
           ObReadExInfoTrace *info = static_cast<ObReadExInfoTrace *>(v.extra_);
-          if (OB_FAIL(databuff_printf(buf_, len_, pos_, ", trace:%s",
-                                      to_cstring(info->trace_id_)))){
+          if (OB_FAIL(databuff_print_multi_objs(buf_, len_, pos_, ", trace:",
+                                      info->trace_id_))){
             // break the print
             bool_ret = false;
           }

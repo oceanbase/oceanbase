@@ -6216,11 +6216,13 @@ int ObRecoverTableResolver::resolve_remap_tablespaces_(
           if (src_name.length() > OB_MAX_TABLESPACE_NAME_LENGTH || src_name.length() <= 0) {
             ret = OB_ERR_WRONG_VALUE;
             LOG_WARN("invalid src name or dst name", K(ret), K(src_name));
-            LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "REMAP TABLESPACE", to_cstring(src_name));
+            ObCStringHelper helper;
+            LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "REMAP TABLESPACE", helper.convert(src_name));
           } else if (dst_name.length() > OB_MAX_TABLESPACE_NAME_LENGTH || dst_name.length() <= 0) {
             ret = OB_ERR_WRONG_VALUE;
             LOG_WARN("invalid src name or dst name", K(ret), K(dst_name));
-            LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "REMAP TABLESPACE", to_cstring(dst_name));
+            ObCStringHelper helper;
+            LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "REMAP TABLESPACE", helper.convert(dst_name));
           } else if (OB_FALSE_IT(item.src_.mode_ = case_mode)) {
           } else if (OB_FALSE_IT(item.target_.mode_ = case_mode)) {
           } else if (OB_FALSE_IT(item.src_.name_.assign_ptr(src_name.ptr(), src_name.length()))) {
@@ -6270,11 +6272,13 @@ int ObRecoverTableResolver::resolve_remap_tablegroups_(
           if (src_name.length() > OB_MAX_TABLEGROUP_NAME_LENGTH || src_name.length() <= 0) {
             ret = OB_ERR_WRONG_VALUE;
             LOG_WARN("invalid src name", K(ret), K(src_name));
-            LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "REMAP TABLEGROUP", to_cstring(src_name));
+            ObCStringHelper helper;
+            LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "REMAP TABLEGROUP", helper.convert(src_name));
           } else if (dst_name.length() > OB_MAX_TABLEGROUP_NAME_LENGTH || dst_name.length() <= 0) {
             ret = OB_ERR_WRONG_VALUE;
             LOG_WARN("invalid dst name", K(ret), K(dst_name));
-            LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "REMAP TABLEGROUP", to_cstring(dst_name));
+            ObCStringHelper helper;
+            LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "REMAP TABLEGROUP", helper.convert(dst_name));
           } else if (OB_FALSE_IT(item.src_.mode_ = case_mode)) {
           } else if (OB_FALSE_IT(item.target_.mode_ = case_mode)) {
           } else if (OB_FALSE_IT(item.src_.name_.assign_ptr(src_name.ptr(), src_name.length()))) {
@@ -6351,7 +6355,8 @@ int ObRecoverTableResolver::resolve_remap_tables_(
         } else if (!src_pt_name.empty() && src_pt_name.length() > OB_MAX_PARTITION_NAME_LENGTH) {
           ret = OB_ERR_WRONG_VALUE;
           LOG_WARN("invalid partition name", K(ret));
-          LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "INVALID PARTITION NAME", to_cstring(src_pt_name));
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "INVALID PARTITION NAME", helper.convert(src_pt_name));
         }
 
         if (OB_FAIL(ret)) {
@@ -6795,7 +6800,8 @@ int resolve_restore_until(const ParseNode &time_node,
                                                          true/*oracle mode*/,
                                                          time_val))) {
       ret = OB_ERR_WRONG_VALUE;
-      LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "TIMESTAMP", to_cstring(time_str));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "TIMESTAMP", helper.convert(time_str));
     } else if (OB_FAIL(recovery_until_scn.convert_for_sql(time_val))) {
       LOG_WARN("fail to set scn", K(ret));
     } else {

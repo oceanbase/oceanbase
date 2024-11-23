@@ -230,7 +230,7 @@ int ObDDLTableMergeDag::fill_info_param(compaction::ObIBasicInfoParam *&out_para
                                   ddl_param_.ls_id_.id(),
                                   static_cast<int64_t>(ddl_param_.tablet_id_.id()),
                                   static_cast<int64_t>(ddl_param_.rec_scn_.get_val_for_inner_table_field()),
-                                  "is_commit", to_cstring(ddl_param_.is_commit_)))) {
+                                  "is_commit", ddl_param_.is_commit_))) {
     LOG_WARN("failed to fill info param", K(ret));
   }
   return ret;
@@ -861,7 +861,7 @@ int ObTabletDDLUtil::create_ddl_sstable(ObTablet &tablet,
       LOG_WARN("prepare data store desc failed", K(ret), K(ddl_param));
     } else if (FALSE_IT(macro_block_column_count = meta_array.empty() ? 0 : meta_array.at(0).block_meta_->get_meta_val().column_count_)) {
     } else if (meta_array.count() > 0 && OB_FAIL(data_desc.get_col_desc().mock_valid_col_default_checksum_array(macro_block_column_count))) {
-      LOG_WARN("mock valid column default checksum failed", K(ret), "firt_macro_block_meta", to_cstring(meta_array.at(0)), K(ddl_param));
+      LOG_WARN("mock valid column default checksum failed", K(ret), "firt_macro_block_meta", meta_array.at(0), K(ddl_param));
     } else if (OB_FAIL(sstable_index_builder.init(data_desc.get_desc(),
                                                    ddl_param.table_key_.is_major_sstable() ? ObSSTableIndexBuilder::ENABLE : ObSSTableIndexBuilder::DISABLE))) {
       LOG_WARN("init sstable index builder failed", K(ret), K(data_desc));
@@ -1243,7 +1243,7 @@ int get_sorted_meta_array(
             } else if (is_exist) {
               // skip
               FLOG_INFO("append meta tree skip", K(ret), "table_key", cur_sstable->get_key(), "macro_block_id", data_macro_meta.get_macro_id(),
-                  "data_checksum", data_macro_meta.val_.data_checksum_, K(meta_tree.get_macro_block_cnt()), "macro_block_end_key", to_cstring(data_macro_meta.end_key_));
+                  "data_checksum", data_macro_meta.val_.data_checksum_, K(meta_tree.get_macro_block_cnt()), "macro_block_end_key", data_macro_meta.end_key_);
             } else if (OB_FAIL(macro_handle.set_block_id(data_macro_meta.get_macro_id()))) {
               LOG_WARN("hold macro block failed", K(ret));
             } else if (OB_FAIL(data_macro_meta.deep_copy(copied_meta, allocator))) {
@@ -1253,13 +1253,14 @@ int get_sorted_meta_array(
               copied_meta->~ObDataMacroBlockMeta();
             } else {
               FLOG_INFO("append meta tree success", K(ret), "table_key", cur_sstable->get_key(), "macro_block_id", data_macro_meta.get_macro_id(),
-                  "data_checksum", copied_meta->val_.data_checksum_, K(meta_tree.get_macro_block_cnt()), "macro_block_end_key", to_cstring(copied_meta->end_key_),
+                  "data_checksum", copied_meta->val_.data_checksum_, K(meta_tree.get_macro_block_cnt()), "macro_block_end_key", copied_meta->end_key_,
                   "end_row_offset", end_row_offset);
             }
           }
         }
+        ObCStringHelper helper;
         LOG_INFO("append meta tree finished", K(ret), "table_key", cur_sstable->get_key(), "data_macro_block_cnt_in_sstable", cur_sstable->get_data_macro_block_count(),
-            K(meta_tree.get_macro_block_cnt()), "sstable_end_key", OB_ISNULL(copied_meta) ? "NOT_EXIST": to_cstring(copied_meta->end_key_), "end_row_offset", end_row_offset);
+            K(meta_tree.get_macro_block_cnt()), "sstable_end_key", OB_ISNULL(copied_meta) ? "NOT_EXIST": helper.convert(copied_meta->end_key_), "end_row_offset", end_row_offset);
       }
     }
   }

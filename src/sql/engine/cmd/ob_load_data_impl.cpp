@@ -2921,7 +2921,8 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
         bool is_valid = false;
         hint_batch_buffer_size_str = hint_batch_buffer_size_str.trim();
         if (!hint_batch_buffer_size_str.empty()) {
-          hint_max_batch_buffer_size = ObConfigCapacityParser::get(to_cstring(hint_batch_buffer_size_str), is_valid);
+          ObCStringHelper helper;
+          hint_max_batch_buffer_size = ObConfigCapacityParser::get(helper.convert(hint_batch_buffer_size_str), is_valid);
         }
         if (!is_valid) {
           hint_max_batch_buffer_size = 1L << 30; // 1G
@@ -3128,6 +3129,7 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
       LOG_WARN("no memory", K(ret), K(buf_len));
     } else {
       const ObString &cur_query_str = ctx.get_my_session()->get_current_query_string();
+      char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
       OZ (databuff_printf(buf, buf_len, pos,
                           "Tenant name:\t%.*s\n"
                           "File name:\t%.*s\n"
@@ -3140,7 +3142,7 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
                           load_args.combined_name_.length(), load_args.combined_name_.ptr(),
                           parallel,
                           batch_row_count,
-                          ObCurTraceId::get_trace_id_str()
+                          ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf))
                           ));
       OZ (databuff_printf(buf, buf_len, pos, "Start time:\t"));
       OZ (ObTimeConverter::datetime_to_str(cur_ts,

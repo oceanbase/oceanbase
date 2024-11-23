@@ -2472,7 +2472,7 @@ int ObTableSqlService::create_table(ObTableSchema &table,
              && table.get_column_count() > 0
              && FALSE_IT(table.set_view_column_filled_flag(ObViewColumnFilledFlag::FILLED))) {
   } else if (OB_FAIL(add_table(sql_client, table, update_object_status_ignore_version, only_history))) {
-    LOG_WARN("insert table schema failed, ", K(ret), "table", to_cstring(table));
+    LOG_WARN("insert table schema failed, ", K(ret), K(table));
   }
   if (OB_FAIL(ret)) {
     //do nothing
@@ -2482,9 +2482,9 @@ int ObTableSqlService::create_table(ObTableSchema &table,
     start_usec = end_usec;
     LOG_INFO("add_table cost: ", K(cost_usec));
     if (OB_FAIL(add_columns(sql_client, table))) {
-      LOG_WARN("insert column schema failed, ", K(ret), "table", to_cstring(table));
+      LOG_WARN("insert column schema failed, ", K(ret), K(table));
     } else if (OB_FAIL(add_constraints(sql_client, table))) {
-      LOG_WARN("insert constraint schema failed, ", K(ret), "table", to_cstring(table));
+      LOG_WARN("insert constraint schema failed, ", K(ret), K(table));
     }
     end_usec = ObTimeUtility::current_time();
     cost_usec = end_usec - start_usec;
@@ -2507,11 +2507,11 @@ int ObTableSqlService::create_table(ObTableSchema &table,
     }
   } else if (table.view_column_filled() //view table
              && OB_FAIL(add_columns(sql_client, table))) {
-    LOG_WARN("insert column schema failed, ", K(ret), "table", to_cstring(table));
+    LOG_WARN("insert column schema failed, ", K(ret), K(table));
   }
 
   if (FAILEDx(add_column_groups(sql_client, table, table.get_schema_version()))) {
-    LOG_WARN("fail to add column groups", KR(ret), "table", to_cstring(table));
+    LOG_WARN("fail to add column groups", KR(ret), K(table));
   }
 
   ObSchemaOperation opt;

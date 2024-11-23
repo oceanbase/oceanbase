@@ -4357,7 +4357,6 @@ bool ObServer::is_arbitration_mode() const
 #else
   return false;
 #endif
-
 }
 
 

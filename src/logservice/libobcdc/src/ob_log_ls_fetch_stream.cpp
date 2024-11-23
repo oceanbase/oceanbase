@@ -299,11 +299,14 @@ void FetchStream::do_stat(int64_t &traffic)
     logfetcher::FetchStatInfoPrinter fsi_printer(cur_stat_info_, last_stat_info_, delta_second);
 
     if (nullptr != ls_fetch_ctx_) {
-      _LOG_INFO("[STAT] [FETCH_STREAM] stream=%s(%p:%s)(%s)(FETCHED_LOG:%s) %s", to_cstring(svr_), this,
+      ObCStringHelper helper;
+      _LOG_INFO("[STAT] [FETCH_STREAM] stream=%s(%p:%s)(%s)(FETCHED_LOG:%s) %s",
+          helper.convert(svr_),
+          this,
           print_fetch_stream_type(stype_),
-          to_cstring(ls_fetch_ctx_->get_tls_id()),
+          helper.convert(ls_fetch_ctx_->get_tls_id()),
           SIZE_TO_STR(ls_fetch_ctx_->get_fetched_log_size()),
-          to_cstring(fsi_printer));
+          helper.convert(fsi_printer));
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("ls_fetch_ctx_ is NULL", KR(ret), "fs", *this);

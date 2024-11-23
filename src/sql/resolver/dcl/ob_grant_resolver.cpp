@@ -863,7 +863,8 @@ int ObGrantResolver::resolve_col_names(
               for (int64_t j = 0; j < col_ids.count() && OB_SUCC(ret); j++) {
                 if (col_ids.at(j) == column_schema->get_column_id()) {
                   ret = OB_ERR_FIELD_SPECIFIED_TWICE;
-                  LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE, to_cstring(column_name));
+                  ObCStringHelper helper;
+                  LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE, helper.convert(column_name));
                 }
               }
               OZ (col_ids.push_back(column_schema->get_column_id()));
@@ -1454,7 +1455,8 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
                   && !params_.is_ddl_from_primary_) {
                 ret = OB_TABLE_NOT_EXIST;
                 LOG_WARN("table not exist", K(ret), K(table), K(db));
-                LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(db),to_cstring(table));
+                ObCStringHelper helper;
+                LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(db),helper.convert(table));
               }
             } else {
               //do nothing

@@ -410,31 +410,38 @@ int ObBalanceGroupLSStatOperator::generate_inc_sql_(
   } else if (OB_UNLIKELY(!bg_ls_stat.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(bg_ls_stat));
-  } else if (OB_FAIL(sql_string.append_fmt(
-             "INSERT INTO %s ("
-             "tenant_id, "
-             "balance_group_id_high, "
-             "balance_group_id_low, "
-             "ls_id, "
-             "tablet_group_count, "
-             "balance_group_name)"
-             " VALUES ("
-             "%ld, %ld, %ld, %ld, %ld, '%s') "
-             "ON DUPLICATE KEY UPDATE "
-             "tablet_group_count = tablet_group_count + %ld, "
-             "balance_group_name = '%s'",
-             OB_ALL_BALANCE_GROUP_LS_STAT_TNAME,
-             bg_ls_stat.get_tenant_id(),
-             bg_ls_stat.get_balance_group_id().id_high_,
-             bg_ls_stat.get_balance_group_id().id_low_,
-             bg_ls_stat.get_ls_id().id(),
-             bg_ls_stat.get_tablet_group_count(),
-             to_cstring(ObHexEscapeSqlStr(bg_ls_stat.get_balance_group_name().str())),
-             bg_ls_stat.get_tablet_group_count(),
-             to_cstring(ObHexEscapeSqlStr(bg_ls_stat.get_balance_group_name().str()))))) {
-    LOG_WARN("fail to append fmt", KR(ret), K(bg_ls_stat));
   } else {
-    LOG_INFO("balance group ls inc sql", K(sql_string));
+    ObCStringHelper helper;
+    const char *group_name_str = nullptr;
+    if (OB_FAIL(helper.convert(
+        ObHexEscapeSqlStr(bg_ls_stat.get_balance_group_name().str()), group_name_str))) {
+      LOG_WARN("fail to convert balance_group_name", K(ret));
+    } else if (OB_FAIL(sql_string.append_fmt(
+                "INSERT INTO %s ("
+                "tenant_id, "
+                "balance_group_id_high, "
+                "balance_group_id_low, "
+                "ls_id, "
+                "tablet_group_count, "
+                "balance_group_name)"
+                " VALUES ("
+                "%ld, %ld, %ld, %ld, %ld, '%s') "
+                "ON DUPLICATE KEY UPDATE "
+                "tablet_group_count = tablet_group_count + %ld, "
+                "balance_group_name = '%s'",
+                OB_ALL_BALANCE_GROUP_LS_STAT_TNAME,
+                bg_ls_stat.get_tenant_id(),
+                bg_ls_stat.get_balance_group_id().id_high_,
+                bg_ls_stat.get_balance_group_id().id_low_,
+                bg_ls_stat.get_ls_id().id(),
+                bg_ls_stat.get_tablet_group_count(),
+                group_name_str,
+                bg_ls_stat.get_tablet_group_count(),
+                group_name_str))) {
+      LOG_WARN("fail to append fmt", KR(ret), K(bg_ls_stat));
+    } else {
+      LOG_INFO("balance group ls inc sql", K(sql_string));
+    }
   }
   return ret;
 }
@@ -451,7 +458,12 @@ int ObBalanceGroupLSStatOperator::generate_insert_update_sql(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(bg_ls_stat));
   } else {
-    if (OB_FAIL(sql_string.append_fmt(
+    ObCStringHelper helper;
+    const char *group_name_str = nullptr;
+    if (OB_FAIL(helper.convert(
+        ObHexEscapeSqlStr(bg_ls_stat.get_balance_group_name().str()), group_name_str))) {
+      LOG_WARN("fail to convert balance_group_name", K(ret));
+    } else if (OB_FAIL(sql_string.append_fmt(
             "INSERT INTO %s ("
             "tenant_id, "
             "balance_group_id_high, "
@@ -470,9 +482,9 @@ int ObBalanceGroupLSStatOperator::generate_insert_update_sql(
             bg_ls_stat.get_balance_group_id().id_low_,
             bg_ls_stat.get_ls_id().id(),
             bg_ls_stat.get_tablet_group_count(),
-            to_cstring(ObHexEscapeSqlStr(bg_ls_stat.get_balance_group_name().str())),
+            group_name_str,
             bg_ls_stat.get_tablet_group_count(),
-            to_cstring(ObHexEscapeSqlStr(bg_ls_stat.get_balance_group_name().str()))))) {
+            group_name_str))) {
       LOG_WARN("fail to append fmt", KR(ret), K(bg_ls_stat));
     } else {
       LOG_INFO("balance group ls update sql", K(sql_string));

@@ -521,12 +521,16 @@ int ObTenantTransferService::construct_ls_member_list_(
   int ret = OB_SUCCESS;
   ls_member_list.reset();
   ObString ls_member_list_str;
+  const char *ls_member_list_ptr = NULL;
+  ObCStringHelper helper;
   if (OB_FAIL(res.next())) {
     LOG_WARN("next failed", KR(ret));
   } else if (OB_FAIL(res.get_varchar("PAXOS_MEMBER_LIST", ls_member_list_str))) {
     LOG_WARN("fail to get PAXOS_MEMBER_LIST", KR(ret));
+  } else if (OB_FAIL(helper.convert(ls_member_list_str, ls_member_list_ptr))) {
+    LOG_WARN("convert ls_member_list", KR(ret), K(ls_member_list_str));
   } else if (OB_FAIL(ObLSReplica::text2member_list(
-      to_cstring(ls_member_list_str),
+      ls_member_list_ptr,
       ls_member_list))) {
     LOG_WARN("text2member_list failed", KR(ret), K(ls_member_list_str));
   }

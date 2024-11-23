@@ -166,7 +166,8 @@ void TestInMemorySpecificColumnsSortTest::serialize_test(int expect_ret)
     pos = 0;
     if (OB_FAIL(sort_columns_2.deserialize(buf, data_len, pos))){}
     else {
-      ASSERT_EQ(0, strcmp(to_cstring(sort_columns_1), to_cstring(sort_columns_2)));
+      ObCStringHelper helper;
+      ASSERT_EQ(0, strcmp(helper.convert(sort_columns_1), helper.convert(sort_columns_2)));
     }
   }
   if (OB_FAIL(ret)) {

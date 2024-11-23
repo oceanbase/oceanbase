@@ -349,7 +349,8 @@ TEST_F(TestScalarAggregateTest, test_serialize_and_deserialize)
   data_len = pos;
   pos = 0;
   ASSERT_EQ(OB_SUCCESS, deserialize_op.deserialize(bin_buf, data_len, pos));
-  ASSERT_EQ(0, strcmp(to_cstring(scalar_aggr_op), to_cstring(deserialize_op)));
+  ObCStringHelper helper;
+  ASSERT_EQ(0, strcmp(helper.convert(scalar_aggr_op), helper.convert(deserialize_op)));
 }
 
 int main(int argc, char **argv)

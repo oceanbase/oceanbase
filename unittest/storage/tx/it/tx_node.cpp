@@ -78,7 +78,7 @@ int ObTxDescGuard::release() {
   return ret;
 }
 
-ObString ObTxNode::get_identifer_str() const
+ObString ObTxNode::get_identifer_str()
 {
   struct ID {
     ObAddr addr;
@@ -95,7 +95,8 @@ ObString ObTxNode::get_identifer_str() const
     .addr = addr_,
     .ls_id = ls_id_.id()
   };
-  return ObString(to_cstring(&identifer));
+  int64_t pos = identifer.to_string(buf_, sizeof(buf_));
+  return ObString(pos, buf_);
 }
 ObTxNode::ObTxNode(const int64_t ls_id,
                    const ObAddr &addr,

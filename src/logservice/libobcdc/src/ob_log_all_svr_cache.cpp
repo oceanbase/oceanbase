@@ -446,8 +446,9 @@ int ObLogAllSvrCache::update_zone_cache_()
       common::ObRegion &region = record.region_;
       ZoneStorageType &storage_type = record.storage_type_;
 
+      ObCStringHelper helper;
       _LOG_INFO("[STAT] [ALL_ZONE] INDEX=%ld/%ld ZONE=%s REGION=%s STORAGE_TYPE=%s VERSION=%lu",
-          index, record_array.count(), to_cstring(zone), to_cstring(region),
+          index, record_array.count(), helper.convert(zone), helper.convert(region),
           ObZoneInfo::get_storage_type_str(storage_type), next_version);
       ZoneItem item;
       item.reset(next_version, region, storage_type);
@@ -471,8 +472,10 @@ int ObLogAllSvrCache::update_zone_cache_()
           LOG_ERROR("zone_map_ insert_or_update set zone_type fail", KR(ret), K(zone), K(item), K(zone_type));
         }
       }
+      ObCStringHelper helper;
       _LOG_INFO("[STAT] [ALL_ZONE] INDEX=%ld/%ld ZONE=%s ZONE_TYPE=%s VERSION=%lu",
-          idx, zone_type_record_array.count(), to_cstring(zone), zone_type_to_str(item.get_zone_type()), next_version);
+          idx, zone_type_record_array.count(), helper.convert(zone),
+          zone_type_to_str(item.get_zone_type()), next_version);
     }
 
     ATOMIC_INC(&cur_zone_version_);
@@ -537,11 +540,12 @@ int ObLogAllSvrCache::update_server_cache_()
         }
       }
 
+      ObCStringHelper helper;
       _LOG_INFO("[STAT] [ALL_SERVER_LIST] INDEX=%ld/%ld SERVER_ID=%lu SERVER=%s STATUS=%d(%s) "
           "ZONE=%s REGION=%s(%s) VERSION=%lu",
-          index, record_array.count(), record.svr_id_, to_cstring(svr), record.status_, status_str,
-          to_cstring(record.zone_), to_cstring(zone_item.region_),
-          print_region_priority(region_priority), next_version);
+          index, record_array.count(), record.svr_id_, helper.convert(svr),
+          record.status_, status_str, helper.convert(record.zone_),
+          helper.convert(zone_item.region_), print_region_priority(region_priority), next_version);
     }
 
     ATOMIC_INC(&cur_version_);
@@ -641,8 +645,10 @@ int ObLogAllSvrCache::update_agent_cache_()
       } else if (OB_FAIL(agent_map_.insert_or_update(principal_addr_seq, item))) {
         LOG_ERROR("agent_map_ insert_or_update fail", KR(ret), K(item));
       }
+      ObCStringHelper helper;
       _LOG_INFO("[STAT] [ALL_AGENT] INDEX=%ld/%ld PRINCIPAL_SVR=%s AGENT_SVR=%s VERSION=%lu",
-          index, record_array.count(), to_cstring(principal_addr_seq), to_cstring(agent_svr), next_version);
+          index, record_array.count(), helper.convert(principal_addr_seq),
+          helper.convert(agent_svr), next_version);
     }
     ATOMIC_INC(&cur_agent_version_);
     _LOG_INFO("[STAT] [ALL_AGENT] COUNT=%ld VERSION=%lu", record_array.count(), cur_agent_version_);
@@ -701,8 +707,9 @@ bool ObLogAllSvrCache::StaleRecPurger::operator()(const common::ObAddr &svr,
 
   if (need_purge) {
 		purge_count_++;
+    ObCStringHelper helper;
     _LOG_INFO("[STAT] [ALL_SERVER_LIST] [PURGE] SERVER=%s VERSION=%lu/%lu",
-        to_cstring(svr), svr_item.version_, cur_ver_);
+        helper.convert(svr), svr_item.version_, cur_ver_);
   }
   return need_purge;
 }
@@ -727,8 +734,9 @@ bool ObLogAllSvrCache::StaleAgentRecPurger::operator()(const common::ObAddrWithS
 
   if (need_purge) {
 		purge_count_++;
+    ObCStringHelper helper;
     _LOG_INFO("[STAT] [ALL_AGENT] [PURGE] PRINCIPAL_SVR=%s VERSION=%lu/%lu",
-        to_cstring(principal_addr_seq), agent_item.version_, cur_ver_);
+        helper.convert(principal_addr_seq), agent_item.version_, cur_ver_);
   }
   return need_purge;
 }

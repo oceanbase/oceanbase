@@ -107,7 +107,12 @@ public:
   int64_t get_serialize_objs_size(void) const;
   int deserialize_objs(const char *buf, const int64_t buf_len, int64_t &pos);
 
-  TO_YSON_KV(OB_ID(rowkey), to_cstring(*this));
+  int to_yson(char *buf, const int64_t buf_len, int64_t &pos) const
+  {
+    ObCStringHelper helper;
+    return oceanbase::yson::databuff_encode_elements(buf, buf_len, pos,
+        ::oceanbase::name::rowkey, helper.convert(*this));
+  }
   int64_t to_string(char *buffer, const int64_t length) const;
   //to_smart_string and to_format_string are for log_tool use
   int64_t to_smart_string(char *buffer, const int64_t length) const;

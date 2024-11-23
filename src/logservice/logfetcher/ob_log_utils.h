@@ -265,8 +265,6 @@ int top_k(const common::ObArray<T> &in_array,
   return ret;
 }
 
-char *lbt_oblog();
-
 class ObLogTimeMonitor
 {
 public:

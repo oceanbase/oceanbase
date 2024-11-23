@@ -836,9 +836,10 @@ int ObLogRouteService::get_ls_svr_list_(const ObLSRouterKey &router_key,
 
       // print if has svr filtered
       if (svr_count_before_filter > svr_count_after_filter) {
+        ObCStringHelper helper;
         _LOG_INFO("[SERVER_BLACKLIST] [FILTER] [KEY=%s] [FILTER_SVR_CNT=%ld(%ld/%ld)] [REMOVE_SVR=%s]",
-            to_cstring(router_key), svr_count_before_filter - svr_count_after_filter,
-            svr_count_before_filter, svr_count_after_filter, to_cstring(remove_svrs));
+            helper.convert(router_key), svr_count_before_filter - svr_count_after_filter,
+            svr_count_before_filter, svr_count_after_filter, helper.convert(remove_svrs));
       }
     }
   }

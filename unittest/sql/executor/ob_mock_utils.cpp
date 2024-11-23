@@ -127,7 +127,8 @@ int ObMockSqlExecutorRpc::task_submit(
       if (OB_SUCCESS != (ret = ObMockPacketQueueThread::get_instance()->packet_queue_.push(task_event))) {
         SQL_EXE_LOG(WARN, "fail to push packet into queue", K(ret));
       } else {
-        SQL_EXE_LOG(INFO, "succeed to push packet into queue", "task_event", to_cstring(*task_event));
+        ObCStringHelper helper;
+        SQL_EXE_LOG(INFO, "succeed to push packet into queue", "task_event", helper.convert(*task_event));
       }
     }
   }
@@ -215,8 +216,9 @@ int ObMockSqlExecutorRpc::task_fetch_result(
   ObIntermResultInfo ir_info;
   ir_info.init(ob_slice_id);
   if (OB_SUCCESS != (ret = ir_mgr->get_result(ir_info, iter))) {
+    ObCStringHelper helper;
     SQL_EXE_LOG(WARN, "fail to get interm result iterator", K(ret),
-                "ob_slice_id", to_cstring(ob_slice_id));
+                "ob_slice_id", helper.convert(ob_slice_id));
   } else if (task_location_exist(task_loc)) {
     //FIXME 暂时做成这样，第二次访问同一个location时返回OB_ITER_END
     ret = OB_ITER_END;
@@ -312,8 +314,9 @@ int ObMockFetchResultStreamHandle::get_more(ObScanner &scanner)
   ObIntermResultInfo ir_info;
   ir_info.init(ob_slice_id_);
   if (OB_SUCCESS != (ret = ir_mgr->get_result(ir_info, iter))) {
+    ObCStringHelper helper;
     SQL_EXE_LOG(WARN, "fail to get interm result iterator", K(ret),
-                "ob_slice_id", to_cstring(ob_slice_id_));
+                "ob_slice_id", helper.convert(ob_slice_id_));
   } else if (task_location_exist(task_loc)) {
     //FIXME 暂时做成这样，第二次访问同一个location时返回OB_ITER_END
     ret = OB_ITER_END;

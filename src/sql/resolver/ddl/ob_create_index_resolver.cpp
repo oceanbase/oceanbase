@@ -599,8 +599,9 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
                                                        new_tbl_name,
                                                        tbl_schema))) {
     if (OB_TABLE_NOT_EXIST == ret) {
-      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(crt_idx_stmt->get_create_index_arg().database_name_),
-          to_cstring(crt_idx_stmt->get_create_index_arg().table_name_));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(crt_idx_stmt->get_create_index_arg().database_name_),
+          helper.convert(crt_idx_stmt->get_create_index_arg().table_name_));
       LOG_WARN("table not exist", K(ret),
           "database_name", crt_idx_stmt->get_create_index_arg().database_name_,
           "table_name", crt_idx_stmt->get_create_index_arg().table_name_);

@@ -178,11 +178,17 @@ int64_t MdsDumpNode::to_string(char *buf, const int64_t buf_len) const
   databuff_printf(buf, buf_len, pos, "crc_check_number:0x%lx, ", (int64_t)crc_check_number_);
   databuff_printf(buf, buf_len, pos, "allocator:%p, ", (void*)allocator_);
   databuff_printf(buf, buf_len, pos, "writer_id:%ld, ", writer_id_);
-  databuff_printf(buf, buf_len, pos, "seq_no:%s, ", to_cstring(seq_no_));
-  databuff_printf(buf, buf_len, pos, "redo_scn:%s, ", obj_to_string(redo_scn_));
-  databuff_printf(buf, buf_len, pos, "end_scn:%s, ", obj_to_string(end_scn_));
-  databuff_printf(buf, buf_len, pos, "trans_version:%s, ", obj_to_string(trans_version_));
-  databuff_printf(buf, buf_len, pos, "status:%s, ", to_cstring(status_));
+  databuff_print_multi_objs(buf, buf_len, pos, "seq_no:", seq_no_, ", ");
+  char scn_buf[64] = {'\0'};
+  databuff_printf(buf, buf_len, pos, "redo_scn:%s, ",
+      obj_to_string(redo_scn_, scn_buf, sizeof(scn_buf)));
+  databuff_printf(buf, buf_len, pos, "end_scn:%s, ",
+      obj_to_string(end_scn_, scn_buf, sizeof(scn_buf)));
+  databuff_printf(buf, buf_len, pos, "trans_version:%s, ",
+      obj_to_string(trans_version_, scn_buf, sizeof(scn_buf)));
+  databuff_printf(buf, buf_len, pos, "status:");
+  databuff_printf(buf, buf_len, pos, status_);
+  databuff_printf(buf, buf_len, pos, ", ");
   MdsDumpObjPrinter print_helper;
   if (user_data_.empty()) {
     databuff_printf(buf, buf_len, pos, "user_data:null");
@@ -195,7 +201,9 @@ int64_t MdsDumpNode::to_string(char *buf, const int64_t buf_len) const
 
 int64_t MdsDumpNode::simple_to_string(char *buf, const int64_t buf_len, int64_t &pos) const
 {
-  databuff_printf(buf, buf_len, pos, "{status:%s, ", to_cstring(status_));
+  databuff_printf(buf, buf_len, pos, "{status:");
+  databuff_printf(buf, buf_len, pos, status_);
+  databuff_printf(buf, buf_len, pos, ", ");
   MdsDumpObjPrinter print_helper;
   if (user_data_.empty()) {
     databuff_printf(buf, buf_len, pos, "user_data:null");
@@ -363,9 +371,11 @@ void MdsDumpKV::reset()
 int64_t MdsDumpKV::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
-  databuff_printf(buf, buf_len, pos, "{");
-  databuff_printf(buf, buf_len, pos, "k:%s, ", to_cstring(k_));
-  databuff_printf(buf, buf_len, pos, "v:%s", to_cstring(v_));
+  databuff_printf(buf, buf_len, pos, "{k:");
+  databuff_printf(buf, buf_len, pos, k_);
+  databuff_printf(buf, buf_len, pos, ", ");
+  databuff_printf(buf, buf_len, pos, "v:");
+  databuff_printf(buf, buf_len, pos, v_);
   databuff_printf(buf, buf_len, pos, "}");
   return pos;
 }

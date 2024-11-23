@@ -55,9 +55,10 @@ TEST_F(TestLSReplica, test_text2learnerlist)
   // test learner with flag
   ObString string_to_parse = "127.0.0.1:1000:0:1,127.0.0.1:1001:0:1,127.0.0.2:1000:1:0";
   ObString string_to_parse2 = "127.0.0.1:1000:0:1";
-  ret = ls_replica_.text2learner_list(to_cstring(string_to_parse), learner_list);
+  ObCStringHelper helper;
+  ret = ls_replica_.text2learner_list(helper.convert(string_to_parse), learner_list);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = ls_replica_.text2learner_list(to_cstring(string_to_parse2), learner_list2);
+  ret = ls_replica_.text2learner_list(helper.convert(string_to_parse2), learner_list2);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObMember member1(addr1, 0);
@@ -111,9 +112,9 @@ TEST_F(TestLSReplica, test_text2learnerlist)
   ObString string_to_parse3 = "127.0.0.1:1000:0,127.0.0.1:1001:0,127.0.0.2:1000:0";
   ObString string_to_parse4 = "127.0.0.1:1000:0";
 
-  ret = ls_replica_.text2learner_list(to_cstring(string_to_parse3), learner_list3);
+  ret = ls_replica_.text2learner_list(helper.convert(string_to_parse3), learner_list3);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = ls_replica_.text2learner_list(to_cstring(string_to_parse4), learner_list4);
+  ret = ls_replica_.text2learner_list(helper.convert(string_to_parse4), learner_list4);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObMember member6(addr1, 0);
@@ -152,19 +153,19 @@ TEST_F(TestLSReplica, test_text2learnerlist)
   ObString string_to_parse9 = "[ABCD:EF01:2345:6789:ABCD:::6789]:100:-1:0";
   ObString string_to_parse10 = "127.0.0.1:100::";
 
-  ret = ls_replica_.text2learner_list(to_cstring(string_to_parse5), learner_list5);
+  ret = ls_replica_.text2learner_list(helper.convert(string_to_parse5), learner_list5);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = ls_replica_.text2learner_list(to_cstring(string_to_parse6), learner_list6);
+  ret = ls_replica_.text2learner_list(helper.convert(string_to_parse6), learner_list6);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = ls_replica_.text2learner_list(to_cstring(string_to_parse7), learner_list7);
+  ret = ls_replica_.text2learner_list(helper.convert(string_to_parse7), learner_list7);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = ls_replica_.text2learner_list(to_cstring(string_to_parse8), learner_list8);
+  ret = ls_replica_.text2learner_list(helper.convert(string_to_parse8), learner_list8);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ret = ls_replica_.text2learner_list(to_cstring(string_to_parse9), learner_list9);
+  ret = ls_replica_.text2learner_list(helper.convert(string_to_parse9), learner_list9);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
 
-  ret = ls_replica_.text2learner_list(to_cstring(string_to_parse10), learner_list10);
+  ret = ls_replica_.text2learner_list(helper.convert(string_to_parse10), learner_list10);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
 
   ObMember member8(addr7, -1);

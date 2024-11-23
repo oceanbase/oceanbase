@@ -500,15 +500,16 @@ public:
 
   bool operator()(ObTxData *tx_data) {
     // printf basic info
+    ObCStringHelper helper;
     fprintf(fd_,
             "ObTxData : tx_id=%-19ld state=%-8s start_scn=%-19s "
             "end_scn=%-19s "
             "commit_version=%-19s ",
             tx_data->tx_id_.get_id(),
             ObTxData::get_state_string(tx_data->state_),
-            to_cstring(tx_data->start_scn_),
-            to_cstring(tx_data->end_scn_),
-            to_cstring(tx_data->commit_version_));
+            helper.convert(tx_data->start_scn_),
+            helper.convert(tx_data->end_scn_),
+            helper.convert(tx_data->commit_version_));
 
     // printf undo status list
     fprintf(fd_, "Undo Actions [from, to): {");

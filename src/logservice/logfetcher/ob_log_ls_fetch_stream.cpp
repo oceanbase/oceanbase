@@ -344,24 +344,27 @@ void FetchStream::do_stat(int64_t &traffic)
     FetchStatInfoPrinter fsi_printer(cur_stat_info_, last_stat_info_, delta_second);
     RawLogFetchStatInfoPrinter raw_log_fsi_printer(raw_cur_stat_info_, raw_last_stat_info_, delta_second);
 
+    ObCStringHelper helper;
     if (nullptr != ls_fetch_ctx_) {
       if (cur_stat_info_.last_update_ts_ != last_stat_info_.last_update_ts_ ||
           raw_cur_stat_info_.last_update_ts_ == raw_last_stat_info_.last_update_ts_) {
-        _LOG_INFO("[STAT] [FETCH_STREAM] stream=%s(%p:%s)(%s)(proto_type:%s)(FETCHED_LOG:%s) %s", to_cstring(svr_), this,
+        _LOG_INFO("[STAT] [FETCH_STREAM] stream=%s(%p:%s)(%s)(proto_type:%s)(FETCHED_LOG:%s) %s",
+            helper.convert(svr_), this,
             print_fetch_stream_type(stype_),
-            to_cstring(ls_fetch_ctx_->get_tls_id()),
+            helper.convert(ls_fetch_ctx_->get_tls_id()),
             fetch_log_protocol_type_str(fetch_log_arpc_.get_fetch_log_proto()),
             SIZE_TO_STR(ls_fetch_ctx_->get_fetched_log_size()),
-            to_cstring(fsi_printer));
+            helper.convert(fsi_printer));
       }
       if (raw_cur_stat_info_.last_update_ts_ != raw_last_stat_info_.last_update_ts_ ||
           cur_stat_info_.last_update_ts_ == last_stat_info_.last_update_ts_) {
-        _LOG_INFO("[STAT] [FETCH_STREAM] stream=%s(%p:%s)(%s)(proto_type:%s)(FETCHED_LOG:%s) %s", to_cstring(svr_), this,
+        _LOG_INFO("[STAT] [FETCH_STREAM] stream=%s(%p:%s)(%s)(proto_type:%s)(FETCHED_LOG:%s) %s",
+            helper.convert(svr_), this,
             print_fetch_stream_type(stype_),
-            to_cstring(ls_fetch_ctx_->get_tls_id()),
+            helper.convert(ls_fetch_ctx_->get_tls_id()),
             fetch_log_protocol_type_str(fetch_log_arpc_.get_fetch_log_proto()),
             SIZE_TO_STR(ls_fetch_ctx_->get_fetched_log_size()),
-            to_cstring(raw_log_fsi_printer));
+            helper.convert(raw_log_fsi_printer));
       }
 
     } else {

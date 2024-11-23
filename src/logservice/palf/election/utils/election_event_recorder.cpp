@@ -42,7 +42,9 @@ int64_t EventRecorder::to_string(char *buf, const int64_t len) const
 {
   int64_t pos = 0;
   databuff_printf(buf, len, pos, "{ls_id:{id:%ld}, ", ls_id_);
-  databuff_printf(buf, len, pos, "self_addr:%s}", to_cstring(self_addr_));
+  databuff_printf(buf, len, pos, "elf_addr:");
+  databuff_printf(buf, len, pos, self_addr_);
+  databuff_printf(buf, len, pos, "}");
   return pos;
 }
 
@@ -83,7 +85,7 @@ int EventRecorder::report_event_(ElectionEventType type, const common::ObString 
                                                 "LS_ID",
                                                 ls_id,
                                                  "INFO",
-                                                to_cstring(uniq_holder->get_ob_string()),
+                                                uniq_holder->get_ob_string(),
                                                 "HAPPENED_TIME",
                                                 ObTime2Str::ob_timestamp_str_range<YEAR, USECOND>(report_ts)))) {
       LOG_EVENT(WARN, "fail to insert row");
@@ -110,7 +112,11 @@ int EventRecorder::report_vote_event(const ObAddr &dest_svr, const ObStringHolde
   int ret = OB_SUCCESS;
   char info[INFO_MAX_LEN] = {0};
   int64_t pos = 0;
-  if (CLICK_FAIL(databuff_printf(info, INFO_MAX_LEN, pos, "vote for %s, reason:%s", to_cstring(dest_svr), to_cstring(reason)))) {
+  if (CLICK_FAIL({ret = databuff_printf(info, INFO_MAX_LEN, pos, "vote for ");
+                  OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, dest_svr);
+                  OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, ", reason:");
+                  OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, reason);
+                  ret;})) {
     LOG_EVENT(WARN, "fail to format string");
   } else if (CLICK_FAIL(report_event_(ElectionEventType::VOTE, info))) {
     LOG_EVENT(WARN, "report vote event failed");
@@ -131,14 +137,21 @@ int EventRecorder::report_decentralized_to_be_leader_event(const MemberListWithS
     if (member_list_with_states.p_impl_->accept_ok_promise_not_vote_before_local_ts_[idx] > 0) {
       int64_t lease_end_time = TimeSpanWrapper(member_list_with_states.p_impl_->accept_ok_promise_not_vote_before_local_ts_[idx]).get_current_ts_likely();
       if (!last_print_flag) {
-        DO_IF_SUCC(databuff_printf(info, INFO_MAX_LEN, pos, "%s|%s",
-                                    to_cstring(member_list_with_states.p_impl_->member_list_.get_addr_list()[idx]),
-                                    ObTime2Str::ob_timestamp_str_range<YEAR, MSECOND>(lease_end_time)));
+        DO_IF_SUCC({ret = databuff_printf(info, INFO_MAX_LEN, pos,
+                        member_list_with_states.p_impl_->member_list_.get_addr_list()[idx]);
+                    OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, "|");
+                    OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, "%s",
+                        ObTime2Str::ob_timestamp_str_range<YEAR, MSECOND>(lease_end_time));
+                    ret;});
         last_print_flag = true;
       } else {
-        DO_IF_SUCC(databuff_printf(info, INFO_MAX_LEN, pos, ",%s|%s",
-                                    to_cstring(member_list_with_states.p_impl_->member_list_.get_addr_list()[idx]),
-                                    ObTime2Str::ob_timestamp_str_range<YEAR, MSECOND>(lease_end_time)));
+        DO_IF_SUCC({ret = databuff_printf(info, INFO_MAX_LEN, pos, ",");
+                    OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos,
+                        member_list_with_states.p_impl_->member_list_.get_addr_list()[idx]);
+                    OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, "|");
+                    OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, "%s",
+                        ObTime2Str::ob_timestamp_str_range<YEAR, MSECOND>(lease_end_time));
+                    ret;});
       }
     }
   }
@@ -157,7 +170,13 @@ int EventRecorder::report_directly_change_leader_event(const ObAddr &dest_svr, c
   int ret = OB_SUCCESS;
   char info[INFO_MAX_LEN] = {0};
   int64_t pos = 0;
-  DO_IF_SUCC(databuff_printf(info, INFO_MAX_LEN, pos, "directly change leader : %s -> %s, reason : %s", to_cstring(self_addr_), to_cstring(dest_svr), to_cstring(reason)));
+  DO_IF_SUCC({ret = databuff_printf(info, INFO_MAX_LEN, pos, "directly change leader : ");
+              OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, self_addr_);
+              OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, " -> ");
+              OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, dest_svr);
+              OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, ", reason : ");
+              OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, reason);
+              ret;});
   DO_IF_SUCC(report_event_(ElectionEventType::DIRECTLY_CHANGE_LEADER, info));
   if (CLICK_FAIL(ret)) {
     LOG_EVENT(WARN, "report DIRECTLY_CHANGE_LEADER event failed");
@@ -172,7 +191,13 @@ int EventRecorder::report_prepare_change_leader_event(const ObAddr &dest_svr, co
   int ret = OB_SUCCESS;
   char info[INFO_MAX_LEN] = {0};
   int64_t pos = 0;
-  DO_IF_SUCC(databuff_printf(info, INFO_MAX_LEN, pos, "leader prepare to change leader : %s -> %s, reason : %s", to_cstring(self_addr_), to_cstring(dest_svr), to_cstring(reason)));
+  DO_IF_SUCC({ret = databuff_printf(info, INFO_MAX_LEN, pos, "leader prepare to change leader : ");
+              OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, self_addr_);
+              OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, " -> ");
+              OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, dest_svr);
+              OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, ", reason : ");
+              OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, reason);
+              ret;});
   DO_IF_SUCC(report_event_(ElectionEventType::PREPARE_CHANGE_LEADER, info));
   if (CLICK_FAIL(ret)) {
     LOG_EVENT(WARN, "report PREPARE_CHANGE_LEADER event failed");
@@ -187,7 +212,11 @@ int EventRecorder::report_change_leader_to_revoke_event(const ObAddr &dest_svr) 
   int ret = OB_SUCCESS;
   char info[INFO_MAX_LEN] = {0};
   int64_t pos = 0;
-  DO_IF_SUCC(databuff_printf(info, INFO_MAX_LEN, pos, "old leader revoke : %s -> %s", to_cstring(self_addr_), to_cstring(dest_svr)));
+  DO_IF_SUCC({ret = databuff_printf(info, INFO_MAX_LEN, pos, "old leader revoke : ");
+              OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, self_addr_);
+              OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, " -> ");
+              OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, dest_svr);
+              ret;});
   DO_IF_SUCC(report_event_(ElectionEventType::CHANGE_LEADER_TO_REVOKE, info));
   if (CLICK_FAIL(ret)) {
     LOG_EVENT(WARN, "report CHANGE_LEADER_TO_REVOKE event failed");
@@ -202,7 +231,11 @@ int EventRecorder::report_change_leader_to_takeover_event(const ObAddr &addr) {
   int ret = OB_SUCCESS;
   char info[INFO_MAX_LEN] = {0};
   int64_t pos = 0;
-  DO_IF_SUCC(databuff_printf(info, INFO_MAX_LEN, pos, "new leader takeover : %s -> %s", to_cstring(addr), to_cstring(self_addr_)));
+  DO_IF_SUCC({ret = databuff_printf(info, INFO_MAX_LEN, pos, "new leader takeover : ");
+              OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, addr);
+              OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, " -> ");
+              OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, self_addr_);
+              ret;});
   DO_IF_SUCC(report_event_(ElectionEventType::CHANGE_LEADER_TO_TAKEOVER, info));
   if (CLICK_FAIL(ret)) {
     LOG_EVENT(WARN, "report CHANGE_LEADER_TO_TAKEOVER event failed", KR(ret), K(*this), K(info));
@@ -255,13 +288,19 @@ int EventRecorder::report_member_list_changed_event(const MemberList &old_list, 
     last_print_flag = false;
     for (int64_t idx = 0; idx < new_list.get_addr_list().count(); ++idx) {
       if (!last_print_flag) {
-        DO_IF_SUCC(databuff_printf(info, INFO_MAX_LEN, pos, "%s", to_cstring(new_list.get_addr_list()[idx])));
+        DO_IF_SUCC(databuff_printf(info, INFO_MAX_LEN, pos, new_list.get_addr_list()[idx]));
         last_print_flag = true;
       } else {
-        DO_IF_SUCC(databuff_printf(info, INFO_MAX_LEN, pos, ", %s", to_cstring(new_list.get_addr_list()[idx])));
+        DO_IF_SUCC({ret = databuff_printf(info, INFO_MAX_LEN, pos, ", ");
+                    OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos,
+                        new_list.get_addr_list()[idx]);
+                    ret;});
       }
     }
-    DO_IF_SUCC(databuff_printf(info, INFO_MAX_LEN, pos, ", %s", to_cstring(new_list.get_membership_version())));
+    DO_IF_SUCC({ret = databuff_printf(info, INFO_MAX_LEN, pos, ", ");
+                OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos,
+                    new_list.get_membership_version());
+                ret;});
     DO_IF_SUCC(report_event_(ElectionEventType::CHANGE_MEMBERLIST, info));
     if (CLICK_FAIL(ret)) {
       LOG_EVENT(WARN, "report CHANGE_MEMBERLIST event failed");
@@ -279,10 +318,13 @@ int EventRecorder::report_acceptor_lease_expired_event(const Lease &lease)
   char info[INFO_MAX_LEN] = {0};
   int64_t pos = 0;
   bool last_print_flag = false;
-  DO_IF_SUCC(databuff_printf(info, INFO_MAX_LEN, pos, "owner:%s, expired time:%s, ballot number:%ld",
-                             to_cstring(lease.get_owner()),
-                             common::ObTime2Str::ob_timestamp_str_range<HOUR, USECOND>(TimeSpanWrapper(lease.get_lease_end_ts()).get_current_ts_likely()),
-                             lease.get_ballot_number()));
+  DO_IF_SUCC({ret = databuff_printf(info, INFO_MAX_LEN, pos, "owner:");
+              OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, lease.get_owner());
+              OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos,
+                  ", expired time:%s, ballot number:%ld",
+                  common::ObTime2Str::ob_timestamp_str_range<HOUR, USECOND>(TimeSpanWrapper(lease.get_lease_end_ts()).get_current_ts_likely()),
+                  lease.get_ballot_number());
+              ret;});
   DO_IF_SUCC(report_event_(ElectionEventType::LEASE_EXPIRED, info));
   if (CLICK_FAIL(ret)) {
     LOG_EVENT(WARN, "report LEASE_EXPIRED event failed");
@@ -299,7 +341,11 @@ int EventRecorder::report_acceptor_witness_change_leader_event(const ObAddr &old
   char info[INFO_MAX_LEN] = {0};
   int64_t pos = 0;
   bool last_print_flag = false;
-  DO_IF_SUCC(databuff_printf(info, INFO_MAX_LEN, pos, "witness change leader : %s -> %s", to_cstring(old_leader), to_cstring(new_leader)));
+  DO_IF_SUCC({ret = databuff_printf(info, INFO_MAX_LEN, pos, "witness change leader : ");
+              OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, old_leader);
+              OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, " -> ");
+              OB_SUCCESS != ret ? : ret = databuff_printf(info, INFO_MAX_LEN, pos, new_leader);
+              ret;});
   DO_IF_SUCC(report_event_(ElectionEventType::WITNESS_CHANGE_LEADER, info));
   if (CLICK_FAIL(ret)) {
     LOG_EVENT(WARN, "report WITNESS_CHANGE_LEADER event failed");

@@ -14,10 +14,13 @@ extern void sockaddr_to_addr_c(struct sockaddr_storage *sock_addr, bool *is_ipv6
 extern char *sockaddr_to_str_c(struct sockaddr_storage *sock_addr, char *buf, int len);
 extern struct sockaddr_storage* make_unix_sockaddr_c(bool is_ipv6, void *ip, int port, struct sockaddr_storage *sock_addr);
 
-const char* addr_str(format_t* f, addr_t addr) {
-  char buf[INET6_ADDRSTRLEN + 6];
-  struct sockaddr_storage sock_addr;
-  return format_sf(f, "%s", sockaddr_to_str_c(make_sockaddr(&sock_addr, addr), buf, sizeof(buf)));
+const char* addr_str(addr_t addr, char *buf, int buf_len)
+{
+  if (NULL != buf && buf_len > 0) {
+    struct sockaddr_storage sock_addr;
+    (void) sockaddr_to_str_c(make_sockaddr(&sock_addr, addr), buf, buf_len);
+  }
+  return buf;
 }
 
 addr_t* addr_init(addr_t* addr, const char* ip, int port) {

@@ -2017,7 +2017,8 @@ int ObCancelTaskExecutor::parse_task_id(
 	} else {
 
 	  // double check
-	  n = snprintf(task_id_buf, sizeof(task_id_buf), "%s", to_cstring(task_id));
+    ObCStringHelper helper;
+	  n = snprintf(task_id_buf, sizeof(task_id_buf), "%s", helper.convert(task_id));
 		if (n < 0 || n >= sizeof(task_id_buf)) {
 		  ret = OB_BUF_NOT_ENOUGH;
 		  LOG_WARN("invalid task id", K(ret), K(n), K(task_id), K(task_id_buf));

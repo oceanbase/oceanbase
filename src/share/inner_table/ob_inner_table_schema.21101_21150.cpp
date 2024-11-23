@@ -774,7 +774,7 @@ int ObInnerTableSchema::gv_ob_tenant_memory_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT      TENANT_ID,      svr_ip AS SVR_IP,      svr_port AS SVR_PORT,      hold AS HOLD,      `limit` - hold AS FREE FROM     oceanbase.__all_virtual_tenant_memory_info ORDER BY tenant_id, svr_ip, svr_port )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT      TENANT_ID,      svr_ip AS SVR_IP,      svr_port AS SVR_PORT,      hold AS HOLD,      CASE WHEN `limit` - hold > 0 THEN `limit` - hold ELSE 0 END AS FREE FROM     oceanbase.__all_virtual_tenant_memory_info ORDER BY tenant_id, svr_ip, svr_port )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

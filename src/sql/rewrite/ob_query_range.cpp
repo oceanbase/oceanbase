@@ -6023,7 +6023,8 @@ int ObQueryRange::link_or_graphs(ObKeyPartList &storage, ObKeyPart  *&out_key_pa
   ObKeyPart *last_gt_tail = NULL;
   if (OB_UNLIKELY(storage.get_size() <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Or storage is empty", K(ret), "query range", to_cstring(*this));
+    ObCStringHelper helper;
+    LOG_WARN("Or storage is empty", K(ret), "query range", helper.convert(*this));
   } else {
     ObKeyPart *first_key_part = storage.get_first();
     bool b_flag  = false;

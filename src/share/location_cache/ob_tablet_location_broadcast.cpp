@@ -72,11 +72,12 @@ void TabletLocationStatistics::dump_statistics(
   // print statistics if reach interval
   int64_t tablet_total_cnt = get_total_cnt_();
   if (TC_REACH_TIME_INTERVAL(CHECK_INTERVAL_US) && tablet_total_cnt > 0) {
+    ObCStringHelper helper;
     FLOG_INFO("[LOCATION_STATISTIC] tablet location statistics",
               K_(task_cnt), K(tablet_total_cnt), K_(tablet_suc_cnt), K_(tablet_fail_cnt),
               K_(total_exec_us), K_(total_wait_us),
               "avg_rate", total_exec_us_ <= 0 ? -1 : (tablet_total_cnt * ONE_SECOND_US / total_exec_us_),
-              "rate_limit", rate_limit < 0 ? "no_limit" : to_cstring(rate_limit),
+              "rate_limit", rate_limit < 0 ? "no_limit" : helper.convert(rate_limit),
               "avg_exec_us", total_exec_us_ / tablet_total_cnt,
               "avg_wait_us", total_wait_us_ / tablet_total_cnt);
     (void) reset_();

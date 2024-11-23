@@ -394,6 +394,7 @@ ob_set_subtarget(ob_malloc_object_list common_alloc
   alloc/ob_latch_v2.cpp
   resource/achunk_mgr.cpp
   resource/ob_resource_mgr.cpp
+  resource/ob_resource_limiter.cpp
   allocator/ob_allocator_v2.cpp
   allocator/ob_block_alloc_mgr.cpp
   allocator/ob_concurrent_fifo_allocator.cpp

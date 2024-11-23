@@ -205,7 +205,8 @@ int ObMPQuery::process()
         LOG_WARN("fail to generate configuration strings that can influence execution plan", K(ret));
       } else {
         FLTSpanGuard(com_query_process);
-        FLT_SET_TAG(log_trace_id, ObCurTraceId::get_trace_id_str(),
+        char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
+        FLT_SET_TAG(log_trace_id, ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)),
                     receive_ts, get_receive_timestamp(),
                     client_info, session.get_client_info(),
                     module_name, session.get_module_name(),

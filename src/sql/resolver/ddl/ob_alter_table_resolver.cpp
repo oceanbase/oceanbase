@@ -136,8 +136,9 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
                       false/*not index table*/,
                       table_schema_))) {
           if (OB_TABLE_NOT_EXIST == ret) {
-            LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(database_name),
-                to_cstring(table_name));
+            ObCStringHelper helper;
+            LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(database_name),
+                helper.convert(table_name));
           }
           LOG_WARN("fail to get table schema", K(ret));
         } else if (1 == parse_tree.value_) {
@@ -1701,8 +1702,9 @@ int ObAlterTableResolver::get_table_schema_for_check(ObTableSchema &table_schema
                                                 false/*not index table*/,
                                                 tbl_schema))) {
     if (OB_TABLE_NOT_EXIST == ret) {
-      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(alter_table_stmt->get_org_database_name()),
-                     to_cstring(alter_table_stmt->get_org_table_name()));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(alter_table_stmt->get_org_database_name()),
+                     helper.convert(alter_table_stmt->get_org_table_name()));
     }
     LOG_WARN("fail to get table schema", K(ret));
   } else if (OB_ISNULL(tbl_schema)) {
@@ -2642,8 +2644,9 @@ int ObAlterTableResolver::resolve_drop_index(const ParseNode &node)
                 LOG_WARN("index does not exist", K(ret), K(drop_index_name));
                 LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, drop_index_name.length(), drop_index_name.ptr());
               } else {
-                LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(alter_table_stmt->get_org_database_name()),
-                              to_cstring(alter_table_stmt->get_org_table_name()));
+                ObCStringHelper helper;
+                LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(alter_table_stmt->get_org_database_name()),
+                              helper.convert(alter_table_stmt->get_org_table_name()));
               }
             }
             LOG_WARN("fail to get index table schema", K(ret));
@@ -2984,6 +2987,7 @@ int ObAlterTableResolver::resolve_exchange_partition(const ParseNode &node,
     ObString exchange_db_name;
     ParseNode *second_node = node.children_[1];
     ObString origin_partition_name(static_cast<int32_t>(node.children_[0]->str_len_), node.children_[0]->str_value_);
+    ObCStringHelper helper;
     if (OB_FAIL(resolve_table_relation_node(second_node,
                                             exchange_table_name,
                                             exchange_db_name))){
@@ -3004,7 +3008,7 @@ int ObAlterTableResolver::resolve_exchange_partition(const ParseNode &node,
                                                          false,
                                                          exchange_table_schema))) {
       if (OB_TABLE_NOT_EXIST == ret) {
-        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(exchange_db_name), to_cstring(exchange_table_name));
+        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(exchange_db_name), helper.convert(exchange_table_name));
       }
       LOG_WARN("fail to get table schema", K(ret), KPC(exchange_table_schema), K(exchange_db_name), K(exchange_table_name));
     } else if (OB_ISNULL(exchange_table_schema)) {
@@ -3305,8 +3309,9 @@ int ObAlterTableResolver::resolve_alter_index(const ParseNode &node)
                                                                true /* index table */,
                                                                index_table_schema))) {
             if (OB_TABLE_NOT_EXIST == ret) {
-              LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(alter_table_stmt->get_org_database_name()),
-                              to_cstring(alter_table_stmt->get_org_table_name()));
+              ObCStringHelper helper;
+              LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(alter_table_stmt->get_org_database_name()),
+                              helper.convert(alter_table_stmt->get_org_table_name()));
             }
             LOG_WARN("fail to get index table schema", K(ret), K(index_table_name));
           } else if (OB_ISNULL(index_table_schema)) {
@@ -6824,7 +6829,8 @@ int ObAlterTableResolver::resolve_rename_column(const ParseNode &node)
                && ObCharset::case_sensitive_equal(origin_column_name, new_column_name)) {
       //先拿原schema再判断node中colname重名的这一顺序是兼容oracle的.
       ret = OB_ERR_FIELD_SPECIFIED_TWICE;
-      LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE, to_cstring(origin_column_name));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE, helper.convert(origin_column_name));
     } else if (OB_FAIL(alter_column_schema.assign(*origin_col_schema))) {
       SQL_RESV_LOG(WARN, "fail to copy column schema", K(ret));
     } else if (OB_FAIL(alter_column_schema.set_origin_column_name(origin_column_name))) {

@@ -715,13 +715,14 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
         ObString time_str(static_cast<int32_t>(def_val->str_len_), def_val->str_value_);
         int32_t time_val = 0;
         ObDateSqlMode date_sql_mode;
+        ObCStringHelper helper;
         if (OB_ISNULL(session_info_)) {
           ret = OB_ERR_UNEXPECTED;
           SQL_RESV_LOG(WARN, "session_info_ is null", K(ret));
         } else if (FALSE_IT(date_sql_mode.init(session_info_->get_sql_mode()))) {
         } else if (OB_FAIL(ObTimeConverter::str_to_date(time_str, time_val, date_sql_mode))) {
           ret = OB_ERR_WRONG_VALUE;
-          LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "DATE", to_cstring(time_str));
+          LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "DATE", helper.convert(time_str));
         } else {
           default_value.set_date(time_val);
           default_value.set_scale(0);
@@ -734,7 +735,8 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
         int64_t time_val = 0;
         if (OB_FAIL(ObTimeConverter::str_to_time(time_str, time_val, &scale))) {
           ret = OB_ERR_WRONG_VALUE;
-          LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "TIME", to_cstring(time_str));
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "TIME", helper.convert(time_str));
         } else {
           default_value.set_time(time_val);
           default_value.set_scale(scale);
@@ -754,7 +756,8 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
         } else if (FALSE_IT(date_sql_mode.allow_invalid_dates_ = false)) {
         } else if (OB_FAIL(ObTimeConverter::str_to_datetime(time_str, cvrt_ctx, time_val, &scale, date_sql_mode))) {
           ret = OB_ERR_WRONG_VALUE;
-          LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "TIMESTAMP", to_cstring(time_str));
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "TIMESTAMP", helper.convert(time_str));
         } else {
           default_value.set_datetime(time_val);
           default_value.set_scale(scale);
@@ -770,7 +773,8 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
         //if (OB_FAIL(ObTimeConverter::str_to_otimestamp(time_str, cvrt_ctx, tmp_type, ot_data))) {
         if (OB_FAIL(ObTimeConverter::literal_timestamp_validate_oracle(time_str, cvrt_ctx, value_type, tz_value))) {
           ret = OB_INVALID_DATE_VALUE;
-          LOG_USER_ERROR(OB_INVALID_DATE_VALUE, 9, "TIMESTAMP", to_cstring(time_str));
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_INVALID_DATE_VALUE, 9, "TIMESTAMP", helper.convert(time_str));
         } else {
           /* use max scale bug:#18093350 */
           default_value.set_otimestamp_value(value_type, tz_value);
@@ -785,7 +789,8 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
         ObTimeConvertCtx cvrt_ctx(TZ_INFO(session_info_), false);
         if (OB_FAIL(ObTimeConverter::literal_date_validate_oracle(time_str, cvrt_ctx, time_val))) {
           ret = OB_ERR_WRONG_VALUE;
-          LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "DATE", to_cstring(time_str));
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "DATE", helper.convert(time_str));
         } else {
           default_value.set_datetime(time_val);
           default_value.set_scale(OB_MAX_DATE_PRECISION);
@@ -1056,7 +1061,8 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
     default_value.set_param_meta();
   }
   if (OB_SUCC(ret)) {
-    _OB_LOG(DEBUG, "resolve default value: %s", to_cstring(default_value));
+    ObCStringHelper helper;
+    _OB_LOG(DEBUG, "resolve default value: %s", helper.convert(default_value));
   }
   return ret;
 }
@@ -1641,7 +1647,8 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
             //do nothing
           } else if (OB_ISNULL(find_compress_name)) {
             ret = OB_INVALID_ARGUMENT;
-            LOG_USER_ERROR(OB_INVALID_ARGUMENT, to_cstring(compress_method_));
+            ObCStringHelper helper;
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, helper.convert(compress_method_));
           } else if (OB_FAIL(ob_write_string(*allocator_, find_compress_name, compress_method_))) {
             ret = OB_ERR_UNEXPECTED;
             SQL_RESV_LOG(WARN, "write string failed", K(ret));
@@ -8600,8 +8607,9 @@ int ObDDLResolver::generate_global_index_schema(
           false/* is index table*/,
           table_schema))) {
     if (OB_TABLE_NOT_EXIST == ret) {
-      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(crt_idx_stmt->get_create_index_arg().database_name_),
-                     to_cstring(crt_idx_stmt->get_create_index_arg().table_name_));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(crt_idx_stmt->get_create_index_arg().database_name_),
+                     helper.convert(crt_idx_stmt->get_create_index_arg().table_name_));
       LOG_WARN("table not exist", K(ret),
                "database_name", crt_idx_stmt->get_create_index_arg().database_name_,
                "table_name", crt_idx_stmt->get_create_index_arg().table_name_);
@@ -8610,15 +8618,17 @@ int ObDDLResolver::generate_global_index_schema(
     }
   } else if (OB_UNLIKELY(NULL == table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
-    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(crt_idx_stmt->get_create_index_arg().database_name_),
-                   to_cstring(crt_idx_stmt->get_create_index_arg().table_name_));
+    ObCStringHelper helper;
+    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(crt_idx_stmt->get_create_index_arg().database_name_),
+                   helper.convert(crt_idx_stmt->get_create_index_arg().table_name_));
     LOG_WARN("table not exist", K(ret),
              "database_name", crt_idx_stmt->get_create_index_arg().database_name_,
              "table_name", crt_idx_stmt->get_create_index_arg().table_name_);
   } else if (!GCONF.enable_sys_table_ddl && !table_schema->is_user_table() && !table_schema->is_tmp_table()) {
     ret = OB_ERR_WRONG_OBJECT;
-    LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, to_cstring(crt_idx_stmt->get_create_index_arg().database_name_),
-                   to_cstring(crt_idx_stmt->get_create_index_arg().table_name_), "BASE_TABLE");
+    ObCStringHelper helper;
+    LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, helper.convert(crt_idx_stmt->get_create_index_arg().database_name_),
+                   helper.convert(crt_idx_stmt->get_create_index_arg().table_name_), "BASE_TABLE");
     ObTableType table_type = table_schema->get_table_type();
     LOG_WARN("Not support to create index on non-normal table", K(ret), K(table_type),
              "arg", crt_idx_stmt->get_create_index_arg());

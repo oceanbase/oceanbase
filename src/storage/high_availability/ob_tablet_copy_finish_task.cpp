@@ -140,12 +140,14 @@ int ObTabletCopyFinishTask::process()
 
   int tmp_ret = OB_SUCCESS;
   char extra_info_str[MAX_ROOTSERVICE_EVENT_EXTRA_INFO_LENGTH] = {0};
+  int64_t pos = 0;
   if (OB_SUCCESS != (tmp_ret = copy_tablet_ctx_->get_copy_tablet_record_extra_info(extra_info))) {
     LOG_WARN("failed to get copy tablet record extra info", K(tmp_ret), KP(extra_info));
   } else if (OB_ISNULL(extra_info)) {
     LOG_WARN("copy tablet record extra info is NULL", K(extra_info));
   } else if (FALSE_IT(extra_info->set_restore_action(restore_action_))) {
-  } else if (OB_SUCCESS != (tmp_ret = common::databuff_printf(extra_info_str, MAX_ROOTSERVICE_EVENT_EXTRA_INFO_LENGTH, "%s", to_cstring(*extra_info)))) {
+  } else if (OB_SUCCESS != (tmp_ret = common::databuff_print_multi_objs(extra_info_str,
+      MAX_ROOTSERVICE_EVENT_EXTRA_INFO_LENGTH, pos, *extra_info))) {
     LOG_WARN("failed to print extra info", K(tmp_ret), K(extra_info));
   }
 

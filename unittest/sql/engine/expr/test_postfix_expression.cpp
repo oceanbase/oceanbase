@@ -103,7 +103,8 @@ TEST_F(TestPostfixExpression, item_serialization)
   ASSERT_EQ(OB_SUCCESS, item.assign(op_cnn));
   ASSERT_EQ(OB_SUCCESS, expr.add_expr_item(item));
   COMMON_LOG(INFO, "expr1", K(expr));
-  const char* expr_str = S(expr);
+  ObCStringHelper helper;
+  const char* expr_str = helper.convert(expr);
   // test
   char buf[1024];
   int64_t buf_len = 1024;
@@ -117,7 +118,7 @@ TEST_F(TestPostfixExpression, item_serialization)
   ASSERT_EQ(OB_SUCCESS, expr2.deserialize(buf, data_len, pos));
   ASSERT_EQ(data_len, pos);
   COMMON_LOG(INFO, "expr2", K(expr));
-  const char* expr2_str = S(expr2);
+  const char* expr2_str = helper.convert(expr2);
   ASSERT_STREQ(expr_str, expr2_str);
   // teardown
 }

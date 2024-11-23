@@ -36,7 +36,9 @@ void on_accept(int fd, sf_t* sf, eloop_t* ep)
     ns->peer = get_remote_addr(fd);
     if (eloop_regist(ep, ns, EPOLLIN | EPOLLOUT) == 0) {
       add_succ = true;
-      rk_info("accept new connection, ns=%p, fd=%s", ns, T2S(sock_fd, ns->fd));
+      char sock_fd_buf[PNIO_NIO_FD_ADDR_LEN] = {'\0'};
+      rk_info("accept new connection, ns=%p, fd=%s",
+          ns, sock_fd_str(ns->fd, sock_fd_buf, sizeof(sock_fd_buf)));
     } else {
       err = -EIO;
     }

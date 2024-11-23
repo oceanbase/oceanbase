@@ -33,6 +33,7 @@ void ObGVTxStat::reset()
   all_tenants_.reset();
   xid_.reset();
   init_ = false;
+  cstring_helper_.reset();
 }
 
 void ObGVTxStat::destroy()
@@ -46,6 +47,7 @@ void ObGVTxStat::destroy()
   all_tenants_.reset();
   xid_.reset();
   init_ = false;
+  cstring_helper_.reset();
 }
 
 int ObGVTxStat::prepare_start_to_read_()
@@ -158,6 +160,7 @@ int ObGVTxStat::inner_get_next_row(ObNewRow *&row)
   } else {
     const int64_t col_count = output_column_ids_.count();
     xid_ = tx_stat.xid_;
+    cstring_helper_.reset();
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
       uint64_t col_id = output_column_ids_.at(i);
       switch (col_id) {
@@ -310,10 +313,14 @@ int ObGVTxStat::inner_get_next_row(ObNewRow *&row)
           break;
         case CALLBACK_LIST_STATS:
           {
-            const char *buf = to_cstring(tx_stat.get_callback_list_stats_displayer());
-            const int32_t buf_len = static_cast<int32_t>(strlen(buf));
-            cur_row_.cells_[i].set_lob_value(ObLongTextType, buf, buf_len);
-            cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            const char *buf = NULL;
+            if (OB_FAIL(cstring_helper_.convert(tx_stat.get_callback_list_stats_displayer(), buf))) {
+              SERVER_LOG(WARN, "convert failed", K(ret));
+            } else {
+              const int32_t buf_len = static_cast<int32_t>(strlen(buf));
+              cur_row_.cells_[i].set_lob_value(ObLongTextType, buf, buf_len);
+              cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            }
           }
           break;
         default:

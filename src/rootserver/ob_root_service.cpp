@@ -3422,9 +3422,10 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
                 LOG_WARN("db schema is null", K(ret));
               } else {
                 ret = OB_ERR_WRONG_OBJECT;
+                ObCStringHelper helper;
                 LOG_USER_ERROR(OB_ERR_WRONG_OBJECT,
-                    to_cstring(db_schema->get_database_name_str()),
-                    to_cstring(table_schema.get_table_name_str()), "VIEW");
+                    helper.convert(db_schema->get_database_name_str()),
+                    helper.convert(table_schema.get_table_name_str()), "VIEW");
                 LOG_WARN("table exist", K(ret), K(table_schema));
               }
             }
@@ -3455,9 +3456,10 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
           LOG_WARN("db schema is null", K(ret));
         } else {
           ret = OB_TABLE_NOT_EXIST;
+          ObCStringHelper helper;
           LOG_USER_ERROR(OB_TABLE_NOT_EXIST,
-                         to_cstring(simple_db_schema->get_database_name_str()),
-                         to_cstring(table_schema.get_table_name_str()));
+                         helper.convert(simple_db_schema->get_database_name_str()),
+                         helper.convert(table_schema.get_table_name_str()));
           LOG_WARN("table not exist", K(ret), K(table_schema));
         }
       }
@@ -3671,7 +3673,9 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
                            && 0 != parent_schema->get_session_id()
                            && OB_INVALID_ID != schema_guard.get_session_id()) {
               ret = OB_TABLE_NOT_EXIST;
-              LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(foreign_key_arg.parent_database_), to_cstring(foreign_key_arg.parent_table_));
+              ObCStringHelper helper;
+              LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(foreign_key_arg.parent_database_),
+                  helper.convert(foreign_key_arg.parent_table_));
             } else if (!arg.is_inner_ && parent_schema->is_in_recyclebin()) {
               ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
               LOG_WARN("parent table is in recyclebin", K(ret), K(foreign_key_arg));
@@ -5686,6 +5690,7 @@ int ObRootService::clone_tenant(const obrpc::ObCloneTenantArg &arg,
   ObTenantSnapItem tenant_snapshot_item;
   bool is_unit_config_exist = false;
   bool is_resource_pool_exist = false;
+  ObCStringHelper helper;
 
   if (!inited_) {
     ret = OB_NOT_INIT;
@@ -5716,7 +5721,7 @@ int ObRootService::clone_tenant(const obrpc::ObCloneTenantArg &arg,
     } else if (OB_NOT_NULL(clone_tenant_schema)) {
       ret = OB_TENANT_EXIST;
       LOG_WARN("clone tenant already exists", KR(ret), K(clone_tenant_name));
-      LOG_USER_ERROR(OB_TENANT_EXIST, to_cstring(clone_tenant_name));
+      LOG_USER_ERROR(OB_TENANT_EXIST, helper.convert(clone_tenant_name));
     } else if (OB_FAIL(schema_guard.get_tenant_info(source_tenant_name, source_tenant_schema))) {
       LOG_WARN("fail to get source tenant info", KR(ret), K(source_tenant_name));
     } else if (OB_ISNULL(source_tenant_schema)) {
@@ -5735,13 +5740,13 @@ int ObRootService::clone_tenant(const obrpc::ObCloneTenantArg &arg,
     LOG_WARN("fail to check unit config exist", KR(ret), K(arg));
   } else if (!is_unit_config_exist) {
     ret = OB_RESOURCE_UNIT_NOT_EXIST;
-    LOG_USER_ERROR(OB_RESOURCE_UNIT_NOT_EXIST, to_cstring(arg.get_unit_config_name()));
+    LOG_USER_ERROR(OB_RESOURCE_UNIT_NOT_EXIST, helper.convert(arg.get_unit_config_name()));
     LOG_WARN("config not exist", KR(ret), K(arg));
   } else if (OB_FAIL(unit_manager_.check_resource_pool_exist(arg.get_resource_pool_name(), is_resource_pool_exist))) {
     LOG_WARN("fail to check resource pool exist", KR(ret), K(arg));
   } else if (is_resource_pool_exist) {
     ret = OB_RESOURCE_POOL_EXIST;
-    LOG_USER_ERROR(OB_RESOURCE_POOL_EXIST, to_cstring(arg.get_resource_pool_name()));
+    LOG_USER_ERROR(OB_RESOURCE_POOL_EXIST, helper.convert(arg.get_resource_pool_name()));
     LOG_WARN("resource_pool already exist", "name", arg.get_resource_pool_name(), K(ret));
   } else if (is_fork_tenant) { // fork tenant (clone tenant without snapshot)
     // precheck
@@ -10717,7 +10722,8 @@ int ObRootService::table_allow_ddl_operation(const obrpc::ObAlterTableArg &arg)
   } else if (OB_ISNULL(schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("invalid schema", K(ret));
-    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(origin_database_name), to_cstring(origin_table_name));
+    ObCStringHelper helper;
+    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(origin_database_name), helper.convert(origin_table_name));
   } else if (schema->is_ctas_tmp_table()) {
     if (!alter_table_schema.alter_option_bitset_.has_member(ObAlterTableArg::SESSION_ID)) {
       //to prevet alter table after failed to create table, the table is invisible.

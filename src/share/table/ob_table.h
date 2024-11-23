@@ -459,7 +459,7 @@ public:
   void set_type(ObTableOperationType::Type op_type) { operation_type_ = op_type; }
   int get_entity(ObITableEntity *&entity);
   uint64_t get_checksum();
-  TO_STRING_KV(K_(operation_type), "entity", to_cstring(entity_));
+  TO_STRING_KV(K_(operation_type), "entity", entity_);
 public:
   static const char *get_op_name(ObTableOperationType::Type op_type);
 private:

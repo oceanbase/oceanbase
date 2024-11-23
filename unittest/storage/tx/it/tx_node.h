@@ -142,7 +142,7 @@ public:
 
 public:
   TO_STRING_KV(KP(this), K(addr_), K_(ls_id), K(msg_queue_.size()));
-  ObString get_identifer_str() const;
+  ObString get_identifer_str();
   ObTxDescGuard get_tx_guard();
   // the simple r/w interface
   int read(ObTxDesc &tx, const int64_t key, int64_t &value, const ObTxIsolationLevel iso = ObTxIsolationLevel::RC);
@@ -317,6 +317,7 @@ public:
   common::hash::ObHashSet<int16_t> drop_msg_type_set_;
   ObLSMap fake_ls_map_;
   std::function<int(int,void *)> extra_msg_handler_;
+  char buf_[256];
 };
 
 } // transaction

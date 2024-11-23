@@ -1330,8 +1330,7 @@ int ObAllVirtualFunctionIOStat::inner_get_next_row(common::ObNewRow *&row)
           break;
         }
         case FUNCTION_NAME: {
-          const char *str = to_cstring(get_io_function_name(item.function_type_));
-          cells[i].set_varchar(str);
+          cells[i].set_varchar(get_io_function_name(item.function_type_));
           cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         }
@@ -1381,4 +1380,3 @@ int ObAllVirtualFunctionIOStat::inner_get_next_row(common::ObNewRow *&row)
 }
 }// namespace observer
 }// namespace oceanbase
-

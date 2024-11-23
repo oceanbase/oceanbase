@@ -273,7 +273,6 @@ int __attribute__ ((weak)) get_tenant_base_with_lock(
 }
 } // end of namespace share
 } // end of namespace oceanbase
-
 bool compare_tenant(const ObTenant *lhs,
                     const ObTenant *rhs)
 {
@@ -322,7 +321,10 @@ ObMultiTenant::ObMultiTenant()
       balancer_(nullptr),
       myaddr_(),
       cpu_dump_(false),
-      has_synced_(false)
+      has_synced_(false),
+      tenant_limiter_head_(NULL),
+      limiter_mutex_()
+
 {
 }
 
@@ -885,6 +887,7 @@ int ObMultiTenant::create_virtual_tenants()
     ObMallocAllocator *allocator = ObMallocAllocator::get_instance();
     if (!OB_ISNULL(allocator)) {
       allocator->set_tenant_limit(OB_SERVER_TENANT_ID, INT64_MAX);
+      allocator->set_tenant_max_min(OB_SERVER_TENANT_ID, INT64_MAX, 0);
     }
 
     // set tenant mem limits
@@ -1037,6 +1040,23 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
       LOG_ERROR("create and add tenant allocator failed", K(ret), K(tenant_id));
     } else {
       tenant_allocator_created = true;
+    }
+    if (OB_SUCC(ret)) {
+      ObMutexGuard guard(limiter_mutex_);
+      ObShareTenantLimiter *share_limiter = get_share_tenant_limiter_unsafe(tenant_id);
+      if (NULL == share_limiter && OB_FAIL(create_share_tenant_limiter_unsafe(tenant_id, share_limiter))) {
+        LOG_ERROR("create share tenant limiter failed", K(ret), K(tenant_id));
+      } else if (NULL != share_limiter) {
+        ObResourceLimiter *parent = malloc_allocator->get_tenant_parent_limiter(tenant_id);
+        if (OB_LIKELY(NULL == parent)) {
+          malloc_allocator->set_tenant_parent_limiter(tenant_id, share_limiter->limiter_);
+        } else if (&share_limiter->limiter_ == parent) {
+          //do-nothing
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("tenant parent limiter is unexpected", K(ret), K(tenant_id), KP(parent), KP(&share_limiter->limiter_));
+        }
+      }
     }
     if (OB_SUCC(ret)) {
       int64_t memory_size = meta.unit_.config_.memory_size();
@@ -1402,7 +1422,6 @@ int ObMultiTenant::update_tenant_unit(const ObUnitInfoGetter::ObTenantConfig &un
 int ObMultiTenant::update_tenant_memory(const uint64_t tenant_id, const int64_t mem_limit, int64_t &allowed_mem_limit)
 {
   int ret = OB_SUCCESS;
-
   ObMallocAllocator *malloc_allocator = ObMallocAllocator::get_instance();
 
   allowed_mem_limit = mem_limit;
@@ -1428,7 +1447,22 @@ int ObMultiTenant::update_tenant_memory(const uint64_t tenant_id, const int64_t 
     }
 
     if (allowed_mem_limit != pre_mem_limit) {
+      int64_t max_memory = INT64_MAX;
+      int64_t min_memory = 0;
+      if (is_meta_tenant(tenant_id)) {
+        const int64_t min_memory_upper = 4LL<<30;
+        const int64_t min_memory_lower = 512LL<<20;
+        min_memory = 0.5 * mem_limit;
+        min_memory = MIN(min_memory_upper, min_memory);
+        min_memory = MAX(min_memory_lower, min_memory);
+      } else if (is_user_tenant(tenant_id)) {
+        // do-nothing
+      } else {
+        max_memory = allowed_mem_limit;
+      }
       malloc_allocator->set_tenant_limit(tenant_id, allowed_mem_limit);
+      malloc_allocator->set_tenant_max_min(tenant_id, max_memory, min_memory);
+      update_share_tenant_limiter(tenant_id);
     }
   }
 
@@ -2673,6 +2707,78 @@ int ObMultiTenant::check_if_unit_id_exist(const uint64_t unit_id, bool &exist)
     }
   }
   return ret;
+}
+ObShareTenantLimiter* ObMultiTenant::get_share_tenant_limiter_unsafe(int64_t tenant_id)
+{
+  int64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
+  ObShareTenantLimiter *limiter = tenant_limiter_head_;
+  while (NULL != limiter && limiter->tenant_id_ != meta_tenant_id) {
+    limiter = limiter->next_;
+  }
+  return limiter;
+}
+ObShareTenantLimiter* ObMultiTenant::get_share_tenant_limiter(int64_t tenant_id)
+{
+  ObMutexGuard guard(limiter_mutex_);
+  return get_share_tenant_limiter_unsafe(tenant_id);
+}
+
+int ObMultiTenant::create_share_tenant_limiter_unsafe(int64_t tenant_id, ObShareTenantLimiter*& limiter)
+{
+  int ret = OB_SUCCESS;
+  limiter = NULL;
+  int64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
+  if (is_meta_tenant(meta_tenant_id)) {
+    limiter = OB_NEW(ObShareTenantLimiter, "Tenantlimiter", meta_tenant_id);
+    if (NULL == limiter) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else {
+      limiter->next_ = tenant_limiter_head_;
+      tenant_limiter_head_ = limiter;
+    }
+  }
+  return ret;
+}
+
+void ObMultiTenant::del_share_tenant_limiter(ObShareTenantLimiter* limiter)
+{
+  ObMutexGuard guard(limiter_mutex_);
+  ObShareTenantLimiter **cur = &tenant_limiter_head_;
+  while (*cur != limiter && *cur != NULL) {
+    cur = &(*cur)->next_;
+  }
+  if (*cur != NULL) {
+    *cur = (*cur)->next_;
+  }
+  OB_DELETE(ObShareTenantLimiter, "Tenantlimiter", limiter);
+}
+
+void ObMultiTenant::update_share_tenant_limiter(int64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObShareTenantLimiter *limiter = get_share_tenant_limiter(tenant_id);
+  if (NULL != limiter) {
+    int64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
+    int64_t user_tenant_id = gen_user_tenant_id(tenant_id);
+    ObMallocAllocator *ma = ObMallocAllocator::get_instance();
+    int64_t max = 0;
+    if (ma->is_tenant_allocator_exist(meta_tenant_id)) {
+      max += ma->get_tenant_limit(meta_tenant_id);
+    }
+    if (ma->is_tenant_allocator_exist(user_tenant_id)) {
+      max += ma->get_tenant_limit(user_tenant_id);
+    }
+    limiter->set_max(max);
+  }
+}
+
+void ObMultiTenant::recycle_tenant_allocator(int64_t tenant_id)
+{
+  ObMallocAllocator::get_instance()->recycle_tenant_allocator(tenant_id);
+  ObShareTenantLimiter *share_limiter = get_share_tenant_limiter(tenant_id);
+  if (NULL != share_limiter && !share_limiter->has_child()) {
+    del_share_tenant_limiter(share_limiter);
+  }
 }
 
 int ObSrvNetworkFrame::reload_tenant_sql_thread_config(const uint64_t tenant_id)

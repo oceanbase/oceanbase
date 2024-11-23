@@ -636,7 +636,7 @@ int ObITabletMdsInterface::obj_to_string_holder_(const T &obj, ObStringHolder &h
   constexpr int64_t buffer_size = 1_KB;
   char stack_buffer[buffer_size] = { 0 };
   int64_t pos = 0;
-  if (FALSE_IT(databuff_printf(stack_buffer, buffer_size, pos, "%s", to_cstring(obj)))) {// try hard to fill buffer, it's ok if buffer not enough
+  if (FALSE_IT(databuff_printf(stack_buffer, buffer_size, pos, obj))) {// try hard to fill buffer, it's ok if buffer not enough
   } else if (OB_FAIL(holder.assign(ObString(pos, stack_buffer)))) {
     MDS_LOG(WARN, "fail to assign to holder");
   }

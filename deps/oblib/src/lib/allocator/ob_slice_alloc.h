@@ -438,8 +438,9 @@ public:
   }
   int64_t to_string(char *buf, const int64_t limit) const
   {
+    ObCStringHelper helper;
     return snprintf(buf, limit, "SliceAlloc: nway=%d bsize/isize=%d/%d limit=%d attr=%s",
-                    nway_, bsize_, isize_, slice_limit_, to_cstring(attr_));
+                    nway_, bsize_, isize_, slice_limit_, helper.convert(attr_));
   }
   int32_t get_bsize() { return bsize_; }
   int32_t get_isize() { return isize_; }

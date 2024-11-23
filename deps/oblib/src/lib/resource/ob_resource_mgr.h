@@ -21,6 +21,7 @@
 #include "lib/allocator/ob_mod_define.h"
 #include "lib/resource/ob_cache_washer.h"
 #include "lib/resource/achunk_mgr.h"
+#include "lib/resource/ob_resource_limiter.h"
 
 namespace oceanbase
 {
@@ -31,13 +32,11 @@ class ObTenantMemoryMgr
 public:
   static const int64_t LARGE_REQUEST_EXTRA_MB_COUNT = 2;
   static const int64_t ALIGN_SIZE = static_cast<int64_t>(INTACT_ACHUNK_SIZE);
-  ObTenantMemoryMgr();
-  ObTenantMemoryMgr(const uint64_t tenant_id);
+  ObTenantMemoryMgr(const uint64_t tenant_id = common::OB_INVALID_ID);
 
   virtual ~ObTenantMemoryMgr() {}
 
   void set_cache_washer(ObICacheWasher &cache_washer);
-
   AChunk *alloc_chunk(const int64_t size, const ObMemAttr &attr);
   void free_chunk(AChunk *chunk, const ObMemAttr &attr);
 
@@ -46,14 +45,13 @@ public:
   void free_cache_mb(void *ptr);
 
   uint64_t get_tenant_id() const { return tenant_id_; }
+  void set_max(const int64_t max) { limiter_.set_max(max); }
+  void set_min(const int64_t min) { limiter_.set_min(min); }
   void set_limit(const int64_t limit) { limit_ = limit; }
   int64_t get_limit() const { return limit_; }
-  int64_t get_sum_hold() const { return sum_hold_; }
+  int64_t get_sum_hold() const { return limiter_.get_used(); }
   int64_t get_cache_hold() const { return cache_hold_; }
   int64_t get_cache_item_count() const { return cache_item_count_; }
-  int64_t get_rpc_hold() const { return rpc_hold_; }
-
-  void update_rpc_hold(const int64_t size) { ATOMIC_AAF(&rpc_hold_, size); }
   const volatile int64_t *get_ctx_hold_bytes() const { return hold_bytes_; }
   inline static int64_t align(const int64_t size)
   {
@@ -64,6 +62,14 @@ public:
   int get_ctx_hold(const uint64_t ctx_id, int64_t &hold) const;
   bool update_hold(const int64_t size, const uint64_t ctx_id, const lib::ObLabel &label,
       bool &reach_ctx_limit);
+  void set_parent_limiter(ObResourceLimiter &parent_limiter)
+  {
+    parent_limiter.add_child(&limiter_);
+  }
+  ObResourceLimiter* get_parent_limiter()
+  {
+    return limiter_.get_parent();
+  }
 private:
   void update_cache_hold(const int64_t size);
   bool update_ctx_hold(const uint64_t ctx_id, const int64_t size);
@@ -73,8 +79,7 @@ private:
   ObICacheWasher *cache_washer_;
   uint64_t tenant_id_;
   int64_t limit_;
-  int64_t sum_hold_;
-  int64_t rpc_hold_;
+  ObResourceLimiter limiter_;
   int64_t cache_hold_;
   int64_t cache_item_count_;
   volatile int64_t hold_bytes_[common::ObCtxIds::MAX_CTX_ID];

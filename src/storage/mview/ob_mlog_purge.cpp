@@ -214,11 +214,12 @@ int ObMLogPurger::do_purge()
   if (OB_SUCC(ret)) {
     WITH_MVIEW_TRANS_INNER_MYSQL_GUARD(trans_)
     {
+      char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
       mlog_info_.set_last_purge_scn(purge_scn_.get_val_for_inner_table_field());
       mlog_info_.set_last_purge_date(start_time);
       mlog_info_.set_last_purge_time((end_time - start_time) / 1000 / 1000);
       mlog_info_.set_last_purge_rows(affected_rows);
-      if (OB_FAIL(mlog_info_.set_last_purge_trace_id(ObCurTraceId::get_trace_id_str()))) {
+      if (OB_FAIL(mlog_info_.set_last_purge_trace_id(ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf))))) {
         LOG_WARN("fail to set last purge trace id", KR(ret));
       } else if (OB_FAIL(ObMLogInfo::update_mlog_last_purge_info(trans_, mlog_info_))) {
         LOG_WARN("fail to update mlog last purge info", KR(ret), K(mlog_info_));

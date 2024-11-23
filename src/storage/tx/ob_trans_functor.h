@@ -713,14 +713,12 @@ public:
         uint64_t mgr_state;
         bool is_master = false;
         bool is_stopped = true;
-        const char *state_str =
         ls_tx_ctx_mgr->tx_ls_state_mgr_.iter_ctx_mgr_stat_info(mgr_state, is_master, is_stopped);
         tmp_ret = ls_tx_ctx_mgr_stat.init(addr_,
                                           ls_tx_ctx_mgr->ls_id_,
                                           is_master,
                                           is_stopped,
                                           mgr_state,
-                                          state_str,
                                           ls_tx_ctx_mgr->total_tx_ctx_count_,
                                           (int64_t)(&(*ls_tx_ctx_mgr)));
         if (OB_SUCCESS != tmp_ret) {

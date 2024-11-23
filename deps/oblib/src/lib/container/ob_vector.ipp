@@ -11,6 +11,7 @@
  */
 
 #include <algorithm>
+#include "lib/utility/ob_sort.h"
 
 namespace oceanbase
 {

@@ -5726,7 +5726,14 @@ int ObSQLUtils::check_location_access_priv(const ObString &location, ObSQLSessio
       ObArrayWrap<char> buffer;
       OZ (buffer.allocate_array(allocator, PATH_MAX));
       if (OB_SUCC(ret)) {
-        real_location = ObString(realpath(to_cstring(real_location), buffer.get_data()));
+        ObCStringHelper helper;
+        const char *real_location_str = helper.convert(real_location);
+        if (OB_ISNULL(real_location_str)) {
+          ret = OB_ERR_NULL_VALUE;
+          LOG_WARN("convert real_location failed", K(ret), K(real_location));
+        } else {
+          real_location = ObString(realpath(real_location_str, buffer.get_data()));
+        }
       }
     }
 

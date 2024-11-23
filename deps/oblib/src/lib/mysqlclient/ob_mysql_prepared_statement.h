@@ -489,7 +489,7 @@ private:
   ObIArray<ObCompositeData> &get_com_datas() { return com_datas_; }
 private:
   common::ObSEArray<bool, 8> in_out_map_;
-  const char * proc_;
+  ObString proc_;
   int64_t out_param_start_pos_; // composite type out param_start position
   int64_t out_param_cur_pos_;  // composite type out param current position
   int64_t basic_param_start_pos_;

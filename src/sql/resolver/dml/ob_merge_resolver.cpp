@@ -776,8 +776,9 @@ int ObMergeResolver::add_assignment(ObIArray<ObTableAssignment> &assigns,
         // skip
       } else if (other.column_expr_ == assign.column_expr_) {
         ret = OB_ERR_FIELD_SPECIFIED_TWICE;
+        ObCStringHelper helper;
         LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE,
-                       to_cstring(assign.column_expr_->get_column_name()));
+                       helper.convert(assign.column_expr_->get_column_name()));
       }
     }
   }

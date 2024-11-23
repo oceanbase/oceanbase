@@ -165,8 +165,9 @@ int ObCreateMLogResolver::resolve(const ParseNode &parse_tree)
                                               accessible));
       if (OB_SUCC(ret) && !accessible) {
         ret = OB_TABLE_NOT_EXIST;
-        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(create_mlog_stmt->get_database_name()),
-                                          to_cstring(create_mlog_stmt->get_table_name()));
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(create_mlog_stmt->get_database_name()),
+                                          helper.convert(create_mlog_stmt->get_table_name()));
       }
     }
   }
@@ -234,6 +235,7 @@ int ObCreateMLogResolver::resolve_table_name_node(
   uint64_t compat_version = 0;
   ObNameCaseMode mode = OB_NAME_CASE_INVALID;
   ObCollationType cs_type = CS_TYPE_INVALID;
+  ObCStringHelper helper;
   if (OB_ISNULL(table_name_node)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid table option node", KR(ret), KP(table_name_node));
@@ -252,7 +254,7 @@ int ObCreateMLogResolver::resolve_table_name_node(
       new_tbl_name,
       data_table_schema))) {
     if (OB_TABLE_NOT_EXIST == ret) {
-      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(database_name), to_cstring(data_table_name));
+      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(database_name), helper.convert(data_table_name));
       LOG_WARN("table not exist", KR(ret), K(database_name), K(data_table_name));
     } else {
       LOG_WARN("failed to get table schema", KR(ret));
@@ -276,7 +278,7 @@ int ObCreateMLogResolver::resolve_table_name_node(
     ret = OB_ERR_MLOG_EXIST;
     LOG_WARN("a materialized view log already exists on table",
         K(data_table_name), K(data_table_schema->get_mlog_tid()));
-    LOG_USER_ERROR(OB_ERR_MLOG_EXIST, to_cstring(data_table_name));
+    LOG_USER_ERROR(OB_ERR_MLOG_EXIST, helper.convert(data_table_name));
   } else if (OB_FAIL(ObTableSchema::build_mlog_table_name(
       *allocator_, data_table_name, mlog_table_name, lib::is_oracle_mode()))) {
     LOG_WARN("failed to build mlog table name", KR(ret), K(data_table_name));

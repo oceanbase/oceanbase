@@ -91,8 +91,9 @@ bool FetchCtxMapHBFunc::operator()(const logservice::TenantLSID &tls_id, LSFetch
     ls_count_++;
 
     if (print_ls_heartbeat_info_) {
+      ObCStringHelper helper;
       _LOG_INFO("[STAT] [FETCHER] [HEARTBEAT] TLS=%s PROGRESS=%ld DISPATCH_LOG_LSN=%lu "
-          "DATA_PROGRESS=%ld DDL_PROGRESS=%ld DDL_DISPATCH_LOG_LSN=%lu", to_cstring(tls_id),
+          "DATA_PROGRESS=%ld DDL_PROGRESS=%ld DDL_DISPATCH_LOG_LSN=%lu", helper.convert(tls_id),
           progress, last_dispatch_log_lsn.val_, data_progress_, ddl_progress_, ddl_last_dispatch_log_lsn_.val_);
     }
   }

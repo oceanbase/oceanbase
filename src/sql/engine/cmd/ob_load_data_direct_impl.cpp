@@ -2547,6 +2547,7 @@ int ObLoadDataDirectImpl::init_logger()
     const ObString &cur_query_str = session->get_current_query_string();
     const ObLoadArgument &load_args = load_stmt_->get_load_arguments();
     int64_t current_time = ObTimeUtil::current_time();
+    char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
     OZ(databuff_printf(buf, buf_len, pos,
                        "Tenant name:\t%.*s\n"
                        "File name:\t%.*s\n"
@@ -2558,7 +2559,7 @@ int ObLoadDataDirectImpl::init_logger()
                        load_args.file_name_.length(), load_args.file_name_.ptr(),
                        load_args.combined_name_.length(), load_args.combined_name_.ptr(),
                        execute_param_.parallel_, execute_param_.batch_row_count_,
-                       ObCurTraceId::get_trace_id_str()));
+                       ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf))));
     OZ(databuff_printf(buf, buf_len, pos, "Start time:\t"));
     OZ(ObTimeConverter::datetime_to_str(current_time, TZ_INFO(session), ObString(),
                                         MAX_SCALE_FOR_TEMPORAL, buf, buf_len, pos, true));

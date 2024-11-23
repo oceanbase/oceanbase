@@ -64,7 +64,7 @@ struct ObStorageDatum : public common::ObDatum
   OB_INLINE ObStorageDatum& operator=(const ObStorageDatum &other);
   OB_INLINE int64_t storage_to_string(char *buf, int64_t buf_len, const bool for_dump = false) const;
   OB_INLINE bool need_copy_for_encoding_column_with_flat_format(const ObObjDatumMapType map_type) const;
-  OB_INLINE const char *to_cstring(const bool for_dump = false) const;
+  OB_INLINE const char *to_cstring2(const bool for_dump = false) const;
   //only for unittest
   OB_INLINE bool operator==(const ObStorageDatum &other) const;
   OB_INLINE bool operator==(const ObObj &other) const;
@@ -395,26 +395,9 @@ OB_INLINE int64_t ObStorageDatum::storage_to_string(char *buf, int64_t buf_len, 
   return pos;
 }
 
-OB_INLINE const char *ObStorageDatum::to_cstring(const bool for_dump) const
+OB_INLINE const char *ObStorageDatum::to_cstring2(const bool for_dump) const
 {
   char *buffer = NULL;
-  int64_t str_len = 0;
-  CStringBufMgr &mgr = CStringBufMgr::get_thread_local_instance();
-  mgr.inc_level();
-  const int64_t buf_len = mgr.acquire(buffer);
-  if (OB_ISNULL(buffer)) {
-    LIB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "buffer is NULL");
-  } else {
-    str_len = storage_to_string(buffer, buf_len -1, for_dump);
-    if (str_len >= 0 && str_len < buf_len) {
-      buffer[str_len] = '\0';
-    } else {
-      buffer[0] = '\0';
-    }
-    mgr.update_position(str_len + 1);
-  }
-  mgr.try_clear_list();
-  mgr.dec_level();
   return buffer;
 }
 
@@ -422,6 +405,21 @@ OB_INLINE bool ObStorageDatum::need_copy_for_encoding_column_with_flat_format(co
 {
   return OBJ_DATUM_STRING == map_type && sizeof(uint64_t) == len_ && is_local_buf();
 }
+
+class ObStorageDatumWrapper final
+{
+public:
+  ObStorageDatumWrapper(const ObStorageDatum& datum, bool for_dump)
+    : datum_(datum), for_dump_(for_dump)
+    {}
+  ~ObStorageDatumWrapper() = default;
+  OB_INLINE int64_t to_string(char *buf, const int64_t buf_len) const;
+private:
+  DISABLE_COPY_ASSIGN(ObStorageDatumWrapper);
+private:
+  const ObStorageDatum& datum_;
+  const bool for_dump_;
+};
 } // namespace blocksstable
 } // namespace oceanbase
 #endif

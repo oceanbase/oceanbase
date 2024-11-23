@@ -91,8 +91,10 @@ int ObRemoteTaskExecutor::execute(ObExecContext &query_ctx, ObJob *job, ObTaskIn
           task_info->set_state(OB_TASK_STATE_SKIPPED);
           LOG_WARN("fail to do task on the remote server, log user warning and skip it",
                    K(ret), K(task_info->get_task_location().get_server()), K(*job));
+          ObCStringHelper helper;
           LOG_USER_WARN(OB_ERR_TASK_SKIPPED,
-                        to_cstring(task_info->get_task_location().get_server()), common::ob_errpkt_errno(ret, lib::is_oracle_mode()));
+                        helper.convert(task_info->get_task_location().get_server()),
+                        common::ob_errpkt_errno(ret, lib::is_oracle_mode()));
           handler->set_result_code(OB_ERR_TASK_SKIPPED);
           ret = OB_SUCCESS;
         } else {

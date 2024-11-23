@@ -344,17 +344,21 @@ int64_t ElectionAcceptor::to_string(char *buf, const int64_t buf_len) const
     common::databuff_printf(buf, buf_len, pos, "{p_election:NULL");
   } else {
     common::databuff_printf(buf, buf_len, pos, "{ls_id:{id:%ld}", p_election_->id_);
-    common::databuff_printf(buf, buf_len, pos, ", addr:%s", to_cstring(p_election_->get_self_addr()));
+    common::databuff_printf(buf, buf_len, pos, ", addr:");
+    common::databuff_printf(buf, buf_len, pos, p_election_->get_self_addr());
   }
   common::databuff_printf(buf, buf_len, pos, ", ballot_number:%ld", ballot_number_);
   common::databuff_printf(buf, buf_len, pos, ", ballot_of_time_window:%ld", ballot_of_time_window_);
-  common::databuff_printf(buf, buf_len, pos, ", lease:%s", to_cstring(lease_));
-  common::databuff_printf(buf, buf_len, pos, ", is_time_window_opened:%s", to_cstring(is_time_window_opened_));
-  common::databuff_printf(buf, buf_len, pos, ", vote_reason:%s", to_cstring(vote_reason_));
+  common::databuff_printf(buf, buf_len, pos, ", lease:");
+  common::databuff_printf(buf, buf_len, pos, lease_);
+  common::databuff_printf(buf, buf_len, pos, ", is_time_window_opened:");
+  common::databuff_printf(buf, buf_len, pos, is_time_window_opened_);
+  common::databuff_printf(buf, buf_len, pos, ", vote_reason:");
+  common::databuff_printf(buf, buf_len, pos, vote_reason_);
   common::databuff_printf(buf, buf_len, pos, ", last_time_window_open_ts:%s", ObTime2Str::ob_timestamp_str_range<YEAR, USECOND>(last_time_window_open_ts_));
   if (highest_priority_prepare_req_.is_valid()) {
-    common::databuff_printf(buf, buf_len, pos, ", highest_priority_prepare_req:%s",
-                                                  to_cstring(highest_priority_prepare_req_));
+    common::databuff_printf(buf, buf_len, pos, ", highest_priority_prepare_req:");
+    common::databuff_printf(buf, buf_len, pos, highest_priority_prepare_req_);
   }
   common::databuff_printf(buf, buf_len, pos, ", p_election:0x%lx}", (unsigned long)p_election_);
   return pos;

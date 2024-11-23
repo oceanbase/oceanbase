@@ -676,11 +676,17 @@ int ObExprFuncDump::eval_dump(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_
       switch (expr.args_[0]->datum_meta_.type_) {
         case ObNumberType: {
           number::ObNumber nmb(input->get_number());
-          const char *nmb_str = to_cstring(nmb);
-          ObString src_str(0, (int32_t)strlen(nmb_str), const_cast<char *>(nmb_str));
-          if (OB_FAIL(ObExprUtil::set_expr_ascii_result(
-                      expr, ctx, expr_datum, src_str))) {
-            LOG_WARN("set ASCII result failed", K(ret));
+          ObCStringHelper helper;
+          const char *nmb_str = helper.convert(nmb);
+          if (OB_ISNULL(nmb_str)) {
+            ret = OB_ERR_NULL_VALUE;
+            LOG_WARN("nmb_str is NULL, maybe convert nmb failed", K(ret), K(nmb));
+          } else {
+            ObString src_str(0, (int32_t)strlen(nmb_str), const_cast<char *>(nmb_str));
+            if (OB_FAIL(ObExprUtil::set_expr_ascii_result(
+                        expr, ctx, expr_datum, src_str))) {
+              LOG_WARN("set ASCII result failed", K(ret));
+            }
           }
           break;
         }

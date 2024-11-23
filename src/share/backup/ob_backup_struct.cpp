@@ -4411,9 +4411,15 @@ int ObRestoreBackupSetBriefInfo::get_restore_backup_set_brief_info_str(
     if (OB_FALSE_IT(pos = 0)) {
     } else if (OB_FAIL(backup_scn_to_time_tag(backup_set_desc_.min_restore_scn_, scn_display_buf, OB_MAX_TIME_STR_LENGTH, pos))) {
       LOG_WARN("failed to backup scn to time tag", K(ret));
-    } else if (OB_FAIL(databuff_printf(str_buf, str_buf_len, pos, "type: %s, min_restore_scn_display: %s, size: %s.",
-        type_str, scn_display_buf, to_cstring(ObSizeLiteralPrettyPrinter(backup_set_desc_.total_bytes_))))) {
-      LOG_WARN("failed to databuff print", K(ret), KPC(this));
+    } else {
+      ret = databuff_printf(str_buf, str_buf_len, pos,
+          "type: %s, min_restore_scn_display: %s, size: ", type_str, scn_display_buf);
+      OB_SUCCESS != ret ? : ret = databuff_printf(str_buf, str_buf_len, pos,
+          ObSizeLiteralPrettyPrinter(backup_set_desc_.total_bytes_));
+      OB_SUCCESS != ret ? : ret = databuff_printf(str_buf, str_buf_len, pos, ".");
+      if (OB_FAIL(ret)) {
+        LOG_WARN("failed to databuff print", K(ret), KPC(this));
+      }
     }
   }
   if (OB_FAIL(ret)) {

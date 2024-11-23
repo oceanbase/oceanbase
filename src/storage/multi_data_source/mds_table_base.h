@@ -243,16 +243,16 @@ protected:
     constexpr int64_t buffer_size = 1_KB;
     char stack_buffer[buffer_size] = { 0 };
     int64_t pos = 0;
-    if (FALSE_IT(databuff_printf(stack_buffer, buffer_size, pos, "%s -> %s", to_cstring(old_scn), to_cstring(new_scn)))) {
-    } else {
-      event.record_thread_info_();
-      event.info_str_.assign(stack_buffer, pos);
-      event.event_ = event_str;
-      observer::MdsEventKey key(MTL_ID(),
-                                ls_id_,
-                                tablet_id_);
-      observer::ObMdsEventBuffer::append(key, event, this, file, line, function_name);
-    }
+    databuff_printf(stack_buffer, buffer_size, pos, old_scn);
+    databuff_printf(stack_buffer, buffer_size, pos, " -> ");
+    databuff_printf(stack_buffer, buffer_size, pos, new_scn);
+    event.record_thread_info_();
+    event.info_str_.assign(stack_buffer, pos);
+    event.event_ = event_str;
+    observer::MdsEventKey key(MTL_ID(),
+                              ls_id_,
+                              tablet_id_);
+    observer::ObMdsEventBuffer::append(key, event, this, file, line, function_name);
   }
   template <int N>
   void report_flush_event_(const char (&event_str)[N],
@@ -265,17 +265,15 @@ protected:
     constexpr int64_t buffer_size = 1_KB;
     char stack_buffer[buffer_size] = { 0 };
     int64_t pos = 0;
-    if (FALSE_IT(databuff_printf(stack_buffer, buffer_size, pos,
-                                "flush_scn:%s", to_cstring(flush_scn)))) {
-    } else {
-      event.record_thread_info_();
-      event.info_str_.assign(stack_buffer, pos);
-      event.event_ = event_str;
-      observer::MdsEventKey key(MTL_ID(),
-                                ls_id_,
-                                tablet_id_);
-      observer::ObMdsEventBuffer::append(key, event, this, file, line, function_name);
-    }
+    databuff_printf(stack_buffer, buffer_size, pos, "flush_scn:");
+    databuff_printf(stack_buffer, buffer_size, pos, flush_scn);
+    event.record_thread_info_();
+    event.info_str_.assign(stack_buffer, pos);
+    event.event_ = event_str;
+    observer::MdsEventKey key(MTL_ID(),
+                              ls_id_,
+                              tablet_id_);
+    observer::ObMdsEventBuffer::append(key, event, this, file, line, function_name);
 
     REPORT_CHECKPOINT_DIAGNOSE_INFO(update_schedule_dag_info, this, rec_scn_, rec_scn_, flushing_scn_);
 
@@ -291,17 +289,16 @@ protected:
     constexpr int64_t buffer_size = 1_KB;
     char stack_buffer[buffer_size] = { 0 };
     int64_t pos = 0;
-    if (FALSE_IT(databuff_printf(stack_buffer, buffer_size, pos,
-                                "flush_scn:%s", to_cstring(flush_scn)))) {
-    } else {
-      event.record_thread_info_();
-      event.info_str_.assign(stack_buffer, pos);
-      event.event_ = event_str;
-      observer::MdsEventKey key(MTL_ID(),
-                                ls_id_,
-                                tablet_id_);
-      observer::ObMdsEventBuffer::append(key, event, this, file, line, function_name);
-    }
+    databuff_printf(stack_buffer, buffer_size, pos, "flush_scn:");
+    databuff_printf(stack_buffer, buffer_size, pos, flush_scn);
+    event.record_thread_info_();
+    event.info_str_.assign(stack_buffer, pos);
+    event.event_ = event_str;
+    observer::MdsEventKey key(MTL_ID(),
+                              ls_id_,
+                              tablet_id_);
+    observer::ObMdsEventBuffer::append(key, event, this, file, line, function_name);
+    observer::ObMdsEventBuffer::append(key, event, this, file, line, function_name);
 
     REPORT_CHECKPOINT_DIAGNOSE_INFO(update_merge_info_for_checkpoint_unit, this);
   }
@@ -314,16 +311,15 @@ protected:
     constexpr int64_t buffer_size = 1_KB;
     char stack_buffer[buffer_size] = { 0 };
     int64_t pos = 0;
-    if (FALSE_IT(databuff_printf(stack_buffer, buffer_size, pos, "recycle_scn:%s", to_cstring(recycle_scn)))) {
-    } else {
-      event.record_thread_info_();
-      event.info_str_.assign(stack_buffer, pos);
-      event.event_ = "RECYCLE";
-      observer::MdsEventKey key(MTL_ID(),
-                                ls_id_,
-                                tablet_id_);
-      observer::ObMdsEventBuffer::append(key, event, this, file, line, function_name);
-    }
+    databuff_printf(stack_buffer, buffer_size, pos, "recycle_scn:");
+    databuff_printf(stack_buffer, buffer_size, pos, recycle_scn);
+    event.record_thread_info_();
+    event.info_str_.assign(stack_buffer, pos);
+    event.event_ = "RECYCLE";
+    observer::MdsEventKey key(MTL_ID(),
+                              ls_id_,
+                              tablet_id_);
+    observer::ObMdsEventBuffer::append(key, event, this, file, line, function_name);
   }
 public:
   struct DebugInfo {

@@ -1095,7 +1095,8 @@ int ObCreateTableResolver::check_external_table_generated_partition_column_sanit
           OZ (tmp.append(col_exprs.at(i)->get_expr_name()));
           OZ (tmp.append(" redefinition"));
           ret = OB_NOT_SUPPORTED;
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, to_cstring(tmp.string()));
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, helper.convert(tmp.string()));
           LOG_WARN("redefine the metadata$external_partition[i] column", K(ret));
         } else {
           OZ (external_part_idx.push_back(col_exprs.at(i)->get_extra()));
@@ -1243,7 +1244,8 @@ int ObCreateTableResolver::check_generated_partition_column(ObTableSchema &table
               OZ (tmp.append(col_exprs.at(j)->get_expr_name()));
               OZ (tmp.append(" defined in not partition column"));
               ret = OB_NOT_SUPPORTED;
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, to_cstring(tmp.string()));
+              ObCStringHelper helper;
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, helper.convert(tmp.string()));
               LOG_WARN("metadata$external_partition[i] column defined in normal column", K(ret));
             }
           }

@@ -5957,8 +5957,9 @@ int ObDDLOperator::purge_table_of_database(const ObDatabaseSchema &db_schema,
         } else if (OB_ISNULL(table_schema)) {
           ret = OB_TABLE_NOT_EXIST;
           LOG_WARN("table is not exist", K(ret), K(recycle_obj));
-          LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(db_schema.get_database_name_str()),
-                         to_cstring(recycle_obj.get_object_name()));
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(db_schema.get_database_name_str()),
+                         helper.convert(recycle_obj.get_object_name()));
         } else if (OB_FAIL(purge_table_with_aux_table(*table_schema,
                                                       schema_guard,
                                                       trans,

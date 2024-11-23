@@ -939,7 +939,8 @@ int ObLoadDataResolver::resolve_field_node(const ParseNode &node, const ObNameCa
     tmp_struct.column_type_ = col_schema->get_data_type();
     if (is_dup_field(field_or_var_list, tmp_struct)) {
       ret = OB_ERR_FIELD_SPECIFIED_TWICE;
-      LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE, to_cstring(tmp_struct.field_or_var_name_));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE, helper.convert(tmp_struct.field_or_var_name_));
     } else if (OB_FAIL(field_or_var_list.push_back(tmp_struct))) {
       LOG_WARN("failed to push back item", K(ret));
     }

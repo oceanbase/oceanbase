@@ -273,15 +273,14 @@ void ObTxLSStateMgr::replay_SWL_succ(const share::SCN &swl_scn)
   max_applied_start_working_ts_.inc_update(swl_scn);
 }
 
-const char *ObTxLSStateMgr::iter_ctx_mgr_stat_info(uint64_t &state_container,
-                                                   bool &is_master,
-                                                   bool &is_stopped) const
+void ObTxLSStateMgr::iter_ctx_mgr_stat_info(uint64_t &state_container,
+                                            bool &is_master,
+                                            bool &is_stopped) const
 {
   LOAD_CUR_STATE_CONTAINER
   is_master = (ls_state_container.state_val_.state_ == TxLSState::L_WORKING);
   is_stopped = (ls_state_container.state_val_.state_ == TxLSState::STOPPED);
   state_container = ls_state_container.state_container_;
-  return to_cstring(ls_state_container.state_val_);
 }
 
 bool ObTxLSStateMgr::is_master() const

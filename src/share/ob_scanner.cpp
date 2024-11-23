@@ -301,7 +301,8 @@ int ObScanner::set_session_var_map(const sql::ObSQLSessionInfo *p_session_info)
 
 void ObScanner::dump() const
 {
-  LOG_DEBUG("[SCANNER]", "meta", S(*this));
+  ObCStringHelper helper;
+  LOG_DEBUG("[SCANNER]", "meta", helper.convert(*this));
   row_store_.dump();
 }
 

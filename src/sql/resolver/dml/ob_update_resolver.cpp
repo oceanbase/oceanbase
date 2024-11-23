@@ -265,7 +265,9 @@ int ObUpdateResolver::check_update_assign_duplicated(const ObUpdateStmt *update_
         const ObAssignment &assign_item = table_info->assignments_.at(j);
         if (assign_item.is_duplicated_) {
           ret = OB_ERR_FIELD_SPECIFIED_TWICE;
-          LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE, to_cstring(assign_item.column_expr_->get_column_name()));
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE,
+              helper.convert(assign_item.column_expr_->get_column_name()));
         }
       }
     }

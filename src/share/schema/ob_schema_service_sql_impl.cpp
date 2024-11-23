@@ -10101,7 +10101,8 @@ int ObSchemaServiceSQLImpl::get_tablegroup_id(
   const bool skip_escape = false;
   const bool use_oracle_mode = false;
   tablegroup_id = OB_INVALID_ID;
-  const char *tg_name = to_cstring(ObHexEscapeSqlStr(tablegroup_name, skip_escape, use_oracle_mode));
+  ObCStringHelper helper;
+  const char *tg_name = helper.convert(ObHexEscapeSqlStr(tablegroup_name, skip_escape, use_oracle_mode));
   if (OB_UNLIKELY(!check_inner_stat())) {
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail", KR(ret));
@@ -10145,7 +10146,8 @@ int ObSchemaServiceSQLImpl::get_database_id(
   ObNameCaseMode name_case_mode = OB_NAME_CASE_INVALID;
   const bool skip_escape = false;
   const bool use_oracle_mode = false;
-  const char* db_name = to_cstring(ObHexEscapeSqlStr(database_name, skip_escape, use_oracle_mode));
+  ObCStringHelper helper;
+  const char* db_name = helper.convert(ObHexEscapeSqlStr(database_name, skip_escape, use_oracle_mode));
   if (OB_UNLIKELY(!check_inner_stat())) {
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail", KR(ret));
@@ -10215,7 +10217,8 @@ int ObSchemaServiceSQLImpl::get_table_id(
   table_id = OB_INVALID_ID;
   table_type = ObTableType::MAX_TABLE_TYPE;
   schema_version = OB_INVALID_VERSION;
-  const char* tb_name = to_cstring(ObHexEscapeSqlStr(table_name, skip_escape, use_oracle_mode));
+  ObCStringHelper helper;
+  const char* tb_name = helper.convert(ObHexEscapeSqlStr(table_name, skip_escape, use_oracle_mode));
   if (OB_UNLIKELY(!check_inner_stat())) {
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail", KR(ret));
@@ -10359,7 +10362,8 @@ int ObSchemaServiceSQLImpl::get_index_id(
   ObSqlString sql;
   const bool skip_escape = false;
   const bool use_oracle_mode = false;
-  const char* idx_name = to_cstring(ObHexEscapeSqlStr(index_name, skip_escape, use_oracle_mode));
+  ObCStringHelper helper;
+  const char* idx_name = helper.convert(ObHexEscapeSqlStr(index_name, skip_escape, use_oracle_mode));
   bool is_oracle_mode = false;
   bool case_compare = false;
   const bool compare_with_collation = true;
@@ -10437,7 +10441,8 @@ int ObSchemaServiceSQLImpl::get_mock_fk_parent_table_id(
   const bool skip_escape = false;
   const bool use_oracle_mode = false;
   mock_fk_parent_table_id = OB_INVALID_ID;
-  const char* tb_name = to_cstring(ObHexEscapeSqlStr(table_name, skip_escape, use_oracle_mode));
+  ObCStringHelper helper;
+  const char* tb_name = helper.convert(ObHexEscapeSqlStr(table_name, skip_escape, use_oracle_mode));
   if (OB_UNLIKELY(!check_inner_stat())) {
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail", KR(ret));
@@ -10485,7 +10490,8 @@ int ObSchemaServiceSQLImpl::get_synonym_id(
   const bool skip_escape = false;
   const bool use_oracle_mode = false;
   synonym_id = OB_INVALID_ID;
-  const char* syn_name = to_cstring(ObHexEscapeSqlStr(synonym_name, skip_escape, use_oracle_mode));
+  ObCStringHelper helper;
+  const char* syn_name = helper.convert(ObHexEscapeSqlStr(synonym_name, skip_escape, use_oracle_mode));
   if (OB_UNLIKELY(!check_inner_stat())) {
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail", KR(ret));
@@ -10530,7 +10536,8 @@ int ObSchemaServiceSQLImpl::get_constraint_id(
   const bool skip_escape = false;
   const bool use_oracle_mode = false;
   constraint_id = OB_INVALID_ID;
-  const char* cst_name = to_cstring(ObHexEscapeSqlStr(constraint_name, skip_escape, use_oracle_mode));
+  ObCStringHelper helper;
+  const char* cst_name = helper.convert(ObHexEscapeSqlStr(constraint_name, skip_escape, use_oracle_mode));
   if (OB_UNLIKELY(!check_inner_stat())) {
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail", KR(ret));
@@ -10622,7 +10629,8 @@ int ObSchemaServiceSQLImpl::get_foreign_key_id(
   const bool skip_escape = false;
   const bool use_oracle_mode = false;
   foreign_key_id = OB_INVALID_ID;
-  const char* fk_name = to_cstring(ObHexEscapeSqlStr(foreign_key_name, skip_escape, use_oracle_mode));
+  ObCStringHelper helper;
+  const char* fk_name = helper.convert(ObHexEscapeSqlStr(foreign_key_name, skip_escape, use_oracle_mode));
   if (OB_UNLIKELY(!check_inner_stat())) {
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail", KR(ret));
@@ -10712,7 +10720,8 @@ int ObSchemaServiceSQLImpl::get_sequence_id(
   const bool use_oracle_mode = false;
   sequence_id = OB_INVALID_ID;
   is_system_generated = false;
-  const char* seq_name = to_cstring(ObHexEscapeSqlStr(sequence_name, skip_escape, use_oracle_mode));
+  ObCStringHelper helper;
+  const char* seq_name = helper.convert(ObHexEscapeSqlStr(sequence_name, skip_escape, use_oracle_mode));
   if (OB_UNLIKELY(!check_inner_stat())) {
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail", KR(ret));
@@ -10794,7 +10803,8 @@ int ObSchemaServiceSQLImpl::get_package_id(
   const bool skip_escape = false;
   const bool use_oracle_mode = false;
   package_id = OB_INVALID_ID;
-  const char* pkg_name = to_cstring(ObHexEscapeSqlStr(package_name, skip_escape, use_oracle_mode));
+  ObCStringHelper helper;
+  const char* pkg_name = helper.convert(ObHexEscapeSqlStr(package_name, skip_escape, use_oracle_mode));
   if (OB_UNLIKELY(!check_inner_stat())) {
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail", KR(ret));
@@ -10851,7 +10861,8 @@ int ObSchemaServiceSQLImpl::get_routine_id(
   bool is_oracle_mode = false;
   const bool skip_escape = false;
   const bool use_oracle_mode = false;
-  const char* rt_name = to_cstring(ObHexEscapeSqlStr(routine_name, skip_escape, use_oracle_mode));
+  ObCStringHelper helper;
+  const char* rt_name = helper.convert(ObHexEscapeSqlStr(routine_name, skip_escape, use_oracle_mode));
   routine_pairs.reset();
   if (OB_UNLIKELY(!check_inner_stat())) {
     ret = OB_NOT_INIT;
@@ -10943,7 +10954,8 @@ int ObSchemaServiceSQLImpl::get_udt_id(
   const bool skip_escape = false;
   const bool use_oracle_mode = false;
   udt_id = OB_INVALID_ID;
-  const char* tmp_udt_name = to_cstring(ObHexEscapeSqlStr(udt_name, skip_escape, use_oracle_mode));
+  ObCStringHelper helper;
+  const char* tmp_udt_name = helper.convert(ObHexEscapeSqlStr(udt_name, skip_escape, use_oracle_mode));
   if (OB_UNLIKELY(!check_inner_stat())) {
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail", KR(ret));

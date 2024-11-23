@@ -111,7 +111,7 @@ int ObInnerTableSchema::gv_ob_tenant_memory_ora_schema(ObTableSchema &table_sche
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT         TENANT_ID,         SVR_IP AS SVR_IP,         SVR_PORT AS SVR_PORT,         HOLD AS HOLD,         "LIMIT" - HOLD AS FREE     FROM SYS.ALL_VIRTUAL_TENANT_MEMORY_INFO     ORDER BY TENANT_ID, SVR_IP, SVR_PORT )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT         TENANT_ID,         SVR_IP AS SVR_IP,         SVR_PORT AS SVR_PORT,         HOLD AS HOLD,         CASE WHEN "LIMIT" - HOLD > 0 THEN "LIMIT" - HOLD ELSE 0 END AS FREE     FROM SYS.ALL_VIRTUAL_TENANT_MEMORY_INFO     ORDER BY TENANT_ID, SVR_IP, SVR_PORT )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

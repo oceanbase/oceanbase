@@ -1027,8 +1027,9 @@ int ObCreateViewResolver::check_privilege_needed(ObCreateTableStmt &stmt,
             stmt.get_database_name());
         if (OB_SUCC(ret) && !accessible) {
           ret = OB_TABLE_NOT_EXIST;
-          LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(table_item->database_name_),
-                                             to_cstring(table_item->table_name_));
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(table_item->database_name_),
+                                             helper.convert(table_item->table_name_));
         }
       }
       if (OB_SUCC(ret)) {

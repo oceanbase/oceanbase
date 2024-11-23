@@ -614,6 +614,7 @@ int ObDataTabletsCheckCOConvertDag::fill_dag_key(char *buf, const int64_t buf_le
 {
   int ret = OB_SUCCESS;
   ObMigrationCtx *ctx = nullptr;
+  ObCStringHelper helper;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet check convert dag not init", K(ret));
@@ -622,7 +623,7 @@ int ObDataTabletsCheckCOConvertDag::fill_dag_key(char *buf, const int64_t buf_le
     LOG_ERROR("migration ctx should not be NULL", K(ret), KP(ctx));
   } else if (OB_FAIL(databuff_printf(buf, buf_len,
        "ObDataTabletsCheckCOConvertDag: ls_id = %s, migration_type = %s, dag_prio = %s",
-       to_cstring(ctx->arg_.ls_id_), ObMigrationOpType::get_str(ctx->arg_.type_),
+       helper.convert(ctx->arg_.ls_id_), ObMigrationOpType::get_str(ctx->arg_.type_),
        ObIDag::get_dag_prio_str(this->get_priority())))) {
     LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
   }

@@ -322,8 +322,9 @@ void ObHashJoinTest::serialize_test()
   pos = 0;
   ASSERT_EQ(OB_SUCCESS, hash_join_2.deserialize(buf, data_len, pos));
   ASSERT_EQ(pos, data_len);
-  const char *str_1 = to_cstring(hash_join_1);
-  const char *str_2 = to_cstring(hash_join_2);
+  ObCStringHelper helper;
+  const char *str_1 = helper.convert(hash_join_1);
+  const char *str_2 = helper.convert(hash_join_2);
   ASSERT_EQ(0, strcmp(str_1, str_2));
 
   ObHashJoinPlan::reuse();

@@ -1998,7 +1998,8 @@ int ObIndexBuildTask::update_mlog_last_purge_scn()
       mlog_info.set_last_purge_date(ObTimeUtility::current_time());
       mlog_info.set_last_purge_time(0);
       mlog_info.set_last_purge_rows(0);
-      if (OB_FAIL(mlog_info.set_last_purge_trace_id(ObCurTraceId::get_trace_id_str()))) {
+      char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
+      if (OB_FAIL(mlog_info.set_last_purge_trace_id(ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf))))) {
         LOG_WARN("failed to set last purge trace id", KR(ret));
       } else if (OB_FAIL(ObMLogInfo::update_mlog_last_purge_info(trans, mlog_info))) {
         LOG_WARN("failed to update mlog last purge info", KR(ret), K(mlog_info));

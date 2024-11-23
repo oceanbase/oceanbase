@@ -276,7 +276,10 @@ TEST_F(TestTrans, basic)
   memtable::ObMemtable *mt;
   ASSERT_EQ(OB_SUCCESS, mt_handle.get_data_memtable(mt));
 
-  printf("mt size=%ld occ_size=%ld bree_item_count=%ld rec_scn=%s end_scn=%s\n", mt->get_size(), mt->get_occupied_size(), mt->get_btree_item_count(), to_cstring(mt->get_rec_scn()),to_cstring(mt->get_max_end_scn()));
+  ObCStringHelper helper;
+  printf("mt size=%ld occ_size=%ld bree_item_count=%ld rec_scn=%s end_scn=%s\n",
+      mt->get_size(), mt->get_occupied_size(), mt->get_btree_item_count(),
+      helper.convert(mt->get_rec_scn()),helper.convert(mt->get_max_end_scn()));
 
   /*
   ObStoreRow store_row;

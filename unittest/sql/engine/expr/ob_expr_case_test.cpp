@@ -81,7 +81,8 @@ void ObExprCaseTest::TearDown()
   EXPECT_TRUE(OB_SUCCESS == err); \
   obj.set_result_type(type); \
   err = obj.calc_resultN(r,objs, N, &buf); \
-  _OB_LOG(INFO, "r=%s ref=%s", to_cstring(r), to_cstring(ref)); \
+  ObCStringHelper helper; \
+  _OB_LOG(INFO, "r=%s ref=%s", helper.convert(r), helper.convert(ref)); \
   EXPECT_TRUE(OB_SUCCESS == err); \
   EXPECT_TRUE(ref.get_type() == r.get_type());  \
   if (ref.get_type() != ObNullType){\
@@ -96,7 +97,8 @@ void ObExprCaseTest::TearDown()
   ObExprTypeCtx ctx; \
   int err = obj.calc_result_typeN(type, types, N, ctx); \
   err = obj.calc_resultN(r, objs, N, &buf); \
-  _OB_LOG(INFO, "r=%s ref=%s", to_cstring(r), to_cstring(ref)); \
+  ObCStringHelper helper; \
+  _OB_LOG(INFO, "r=%s ref=%s", helper.convert(r), helper.convert(ref)); \
   EXPECT_TRUE(OB_SUCCESS != err);
 
 

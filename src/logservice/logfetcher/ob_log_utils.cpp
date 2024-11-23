@@ -254,34 +254,6 @@ int64_t ObLogTimeMonitor::mark_and_get_cost(const char *log_msg_suffix, bool nee
   return cost;
 }
 
-char *lbt_oblog()
-{
-  int ret = OB_SUCCESS;
-  //As lbt used when print error log, can not print error log
-  //in this function and functions called.
-  static __thread void *addrs[100];
-  static __thread char buf[LBT_BUFFER_LENGTH];
-  int size = backtrace(addrs, 100);
-  char **res = backtrace_symbols(addrs, 100);
-  int64_t pos = 0;
-
-  for (int idx = 0; OB_SUCC(ret) && idx < size; ++idx) {
-    char *res_idx = res[idx];
-
-    if (NULL != res_idx) {
-      if (OB_FAIL(databuff_printf(buf, LBT_BUFFER_LENGTH, pos, "%s", res_idx))) {
-        LOG_ERROR("databuff_printf fail", KR(ret), K(buf), K(pos), K(LBT_BUFFER_LENGTH));
-      }
-    }
-  }
-
-  if (NULL != res) {
-    free(res);
-  }
-
-  return buf;
-}
-
 //////////////////////////////////////////////////////////////////
 
 } // namespace libocdc

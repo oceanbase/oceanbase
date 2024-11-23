@@ -2088,7 +2088,7 @@ TENANT_ID	bigint(20)	NO		NULL
 SVR_IP	varchar(46)	NO		NULL	
 SVR_PORT	bigint(20)	NO		NULL	
 HOLD	bigint(20)	NO		NULL	
-FREE	bigint(21)	NO		NULL	
+FREE	bigint(20)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_TENANT_MEMORY limit 1);
 cnt
 1
@@ -2098,7 +2098,7 @@ TENANT_ID	bigint(20)	NO
 SVR_IP	varchar(46)	NO			
 SVR_PORT	bigint(20)	NO			
 HOLD	bigint(20)	NO			
-FREE	bigint(21)	NO			
+FREE	bigint(20)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_TENANT_MEMORY limit 1);
 cnt
 1

@@ -1790,7 +1790,7 @@ int ObLogFormatter::format_dml_delete_(IBinlogRecord *br_data, const RowValue *r
         if (OB_SUCC(ret)) {
           LOG_DEBUG("put_old_column_value for delete operation",
               K(i), K(need_populate_old_value_to_null_or_empty),
-              "value", str == nullptr ? "NULL": to_cstring(*str),
+              "value", str,
               "default_val", row_value->orig_default_value_[i]);
         }
       }

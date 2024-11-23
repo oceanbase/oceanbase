@@ -86,7 +86,8 @@ char *rtrim(char *str);
 const char *inet_ntoa_s(char *buffer, size_t n, const uint64_t ipport);
 const char *inet_ntoa_s(char *buffer, size_t n, const uint32_t ip);
 
-const char *time2str(const int64_t time_s, const char *format = DEFAULT_TIME_FORMAT);
+const char *time2str(const int64_t time_s, char *buf, const int64_t buf_len,
+                     const char *format = DEFAULT_TIME_FORMAT);
 int escape_range_string(char *buffer, const int64_t length, int64_t &pos, const ObString &in);
 int escape_enter_symbol(char *buffer, const int64_t length, int64_t &pos, const char *src);
 

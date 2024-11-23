@@ -560,7 +560,8 @@ int ObMViewRefresher::fast_refresh()
       mview_info.set_last_refresh_type(ObMVRefreshType::FAST);
       mview_info.set_last_refresh_date(start_time);
       mview_info.set_last_refresh_time((end_time - start_time) / 1000 / 1000);
-      if (OB_FAIL(mview_info.set_last_refresh_trace_id(ObCurTraceId::get_trace_id_str()))) {
+      char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
+      if (OB_FAIL(mview_info.set_last_refresh_trace_id(ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf))))) {
         LOG_WARN("fail to set last refresh trace id", KR(ret));
       } else if (OB_FAIL(ObMViewInfo::update_mview_last_refresh_info(trans, mview_info))) {
         LOG_WARN("fail to update mview last refresh info", KR(ret), K(mview_info));
