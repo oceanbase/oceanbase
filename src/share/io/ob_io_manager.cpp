@@ -1641,7 +1641,7 @@ int ObTenantIOManager::alloc_and_init_result(const ObIOInfo &info, ObIOResult *&
           LOG_WARN("alloc io result failed, retry until timeout", K(ret));
           //blocking foreground thread
           ret = OB_SUCCESS;
-          if (OB_FAIL(try_alloc_result_until_timeout(info.timeout_us_, io_result))) {
+          if (OB_FAIL(try_alloc_result_until_timeout(ObTimeUtility::current_time() + info.timeout_us_, io_result))) {
             LOG_WARN("retry alloc io result failed", K(ret));
           }
         } else {
@@ -1704,7 +1704,7 @@ int ObTenantIOManager::alloc_req_and_result(const ObIOInfo &info, ObIOHandle &ha
           LOG_WARN("alloc io request failed, retry until timeout", K(ret));
           //blocking foreground thread
           ret = OB_SUCCESS;
-          if (OB_FAIL(try_alloc_req_until_timeout(info.timeout_us_, io_request))) {
+          if (OB_FAIL(try_alloc_req_until_timeout(ObTimeUtility::current_time() + info.timeout_us_, io_request))) {
             LOG_WARN("retry alloc io request failed", K(ret));
           }
         } else {
