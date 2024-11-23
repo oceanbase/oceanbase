@@ -37,9 +37,12 @@ int ObVectorIndexSchedJobUtils::add_scheduler_job(
     const common::ObString &job_action, const common::ObObj &start_date,
     const int64_t repeat_interval_ts, const common::ObString &exec_env) {
   int ret = OB_SUCCESS;
+  ObSqlString interval_str;
   if (OB_INVALID_TENANT_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant id", K(ret), K(tenant_id));
+  } else if (OB_FAIL(interval_str.append_fmt("FREQ=SECONDLY; INTERVAL=%ld", repeat_interval_ts / 1000000L))) {
+    LOG_WARN("fail to append interval string", K(ret));
   } else {
     int64_t start_date_us = start_date.is_null() ? ObTimeUtility::current_time() + repeat_interval_ts
                                                  : start_date.get_timestamp();
@@ -59,8 +62,8 @@ int ObVectorIndexSchedJobUtils::add_scheduler_job(
       job_info.what_ = job_action;
       job_info.start_date_ = start_date_us;
       job_info.end_date_ = end_date_us;
-      job_info.interval_ = ObString();
-      job_info.repeat_interval_ = ObString();
+      job_info.interval_ = interval_str.string();
+      job_info.repeat_interval_ = interval_str.string();
       job_info.enabled_ = 1;
       job_info.auto_drop_ = 0;
       job_info.max_run_duration_ = 24 * 60 * 60; // set to 1 day
