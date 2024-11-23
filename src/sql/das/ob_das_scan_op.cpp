@@ -45,6 +45,8 @@ using namespace storage;
 using namespace transaction;
 namespace sql
 {
+
+OB_SERIALIZE_MEMBER(ObDASTCBMemProfileKey, fake_unique_id_, timestamp_);
 OB_SERIALIZE_MEMBER(ObDASScanCtDef, // FARM COMPAT WHITELIST
                     ref_table_id_,
                     access_column_ids_,
@@ -94,8 +96,9 @@ OB_DEF_SERIALIZE(ObDASScanRtDef)
     ss_key_ranges_,
     task_count_,
     scan_op_id_,
-    scan_rows_,
-    row_width_);
+    scan_rows_size_,
+    row_width_,
+    das_tasks_key_);
   return ret;
 }
 
@@ -121,8 +124,9 @@ OB_DEF_DESERIALIZE(ObDASScanRtDef)
     ss_key_ranges_,
     task_count_,
     scan_op_id_,
-    scan_rows_,
-    row_width_);
+    scan_rows_size_,
+    row_width_,
+    das_tasks_key_);
   if (OB_SUCC(ret)) {
     (void)ObSQLUtils::adjust_time_by_ntp_offset(timeout_ts_);
   }
@@ -151,8 +155,9 @@ OB_DEF_SERIALIZE_SIZE(ObDASScanRtDef)
     ss_key_ranges_,
     task_count_,
     scan_op_id_,
-    scan_rows_,
-    row_width_);
+    scan_rows_size_,
+    row_width_,
+    das_tasks_key_);
   return len;
 }
 
