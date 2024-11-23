@@ -137,6 +137,9 @@ int ObDeviceManager::init_devices_env()
       OB_LOG(WARN, "fail to init cos storage", K(ret));
     } else if (OB_FAIL(init_s3_env())) {
       OB_LOG(WARN, "fail to init s3 storage", K(ret));
+    } else if (OB_FAIL(ObObjectStorageInfo::register_cluster_version_mgr(
+        &ObClusterVersionMgr::get_instance()))) {
+      OB_LOG(WARN, "fail to register cluster version mgr", K(ret));
     } else if (OB_FAIL(ObStsCredential::register_sts_credential_mgr(
         &ObTenantStsCredentialMgr::get_instance()))) {
       OB_LOG(WARN, "fail to register sts crendential", K(ret));

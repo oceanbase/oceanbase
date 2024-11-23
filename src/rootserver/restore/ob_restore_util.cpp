@@ -610,9 +610,13 @@ int ObRestoreUtil::fill_sts_credential_(
   int ret = OB_SUCCESS;
   bool is_valid = false;
   if (arg.sts_credential_.empty()) {
-    //TODO(mingqiao): add format check function from shifangdan
-  } else if (OB_FAIL(job.set_sts_credential(arg.sts_credential_))) {
-    LOG_WARN("fail to set sts crendential");
+  } else {
+    ObStsCredential tmp_credential;
+    if (OB_FAIL(check_sts_credential_format(arg.sts_credential_.ptr(), tmp_credential))) {
+      LOG_WARN("fail to check sts credential format", K(ret), K(arg.sts_credential_));
+    } else if (OB_FAIL(job.set_sts_credential(arg.sts_credential_))) {
+      LOG_WARN("fail to set sts crendential", K(ret), K(arg.sts_credential_));
+    }
   }
   return ret;
 }

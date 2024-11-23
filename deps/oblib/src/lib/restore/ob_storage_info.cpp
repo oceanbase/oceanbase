@@ -502,8 +502,7 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("cluster version mgr is null", K(ret), KP(cluster_version_mgr_));
         } else if (OB_FAIL(cluster_version_mgr_->is_supported_assume_version())) {
-          LOG_WARN("assume role is not supported in when the mininum version is below 4.2.5",
-              K(ret), KPC(this));
+          LOG_WARN("The current version does not support the assume role", K(ret), KPC(this));
         } else {
           is_assume_role_mode_ = true;
           ObObjectStorageCredential credential;
