@@ -166,7 +166,7 @@ BEGIN_OUTLINE_DATA END_OUTLINE_DATA OPTIMIZER_FEATURES_ENABLE QB_NAME
 // global hint
 FROZEN_VERSION TOPK QUERY_TIMEOUT READ_CONSISTENCY LOG_LEVEL USE_PLAN_CACHE
 TRACE_LOG LOAD_BATCH_SIZE TRANS_PARAM OPT_PARAM OB_DDL_SCHEMA_VERSION FORCE_REFRESH_LOCATION_CACHE
-DISABLE_PARALLEL_DML ENABLE_PARALLEL_DML MONITOR NO_PARALLEL CURSOR_SHARING_EXACT
+ENABLE_PARALLEL_DAS_DML DISABLE_PARALLEL_DAS_DML DISABLE_PARALLEL_DML ENABLE_PARALLEL_DML MONITOR NO_PARALLEL CURSOR_SHARING_EXACT
 MAX_CONCURRENT DOP TRACING NO_QUERY_TRANSFORMATION NO_COST_BASED_QUERY_TRANSFORMATION BLOCKING RESOURCE_GROUP
 // transform hint
 NO_REWRITE MERGE_HINT NO_MERGE_HINT NO_EXPAND USE_CONCAT NO_UNNEST
@@ -253,7 +253,7 @@ END_P SET_VAR DELIMITER
         RESIGNAL RESTRICT RETURN REVOKE RIGHT RLIKE
         SCHEMA SCHEMAS SECOND_MICROSECOND SELECT SENSITIVE SEPARATOR SET SHOW SIGNAL SMALLINT SPATIAL
         SPECIFIC SQL SQLEXCEPTION SQLSTATE SQLWARNING SQL_BIG_RESULT SQL_CALC_FOUND_ROWS
-        SQL_SMALL_RESULT SSL STARTING STORED STRAIGHT_JOIN
+        SQL_SMALL_RESULT SSL SKIP STARTING STORED STRAIGHT_JOIN
         TABLE TERMINATED THEN TINYBLOB TINYINT TINYTEXT TO TRAILING TRIGGER /*TRUE*/
         UNDO UNION UNIQUE UNLOCK UNSIGNED UPDATE USAGE USE USING UTC_DATE UTC_TIME UTC_TIMESTAMP
         VALUES VARBINARY VARCHAR VARCHARACTER VARYING VIRTUAL
@@ -3932,40 +3932,42 @@ delete_basic_stmt
 ;
 
 delete_basic_stmt:
-delete_with_opt_hint opt_delete_option_list FROM tbl_name opt_where opt_order_by opt_limit_clause
+delete_with_opt_hint opt_ignore opt_delete_option_list FROM tbl_name opt_where opt_order_by opt_limit_clause
 {
-  (void)($2);
+  (void)($3);
   ParseNode *from_list = NULL;
   ParseNode *delete_table_node = NULL;
-  merge_nodes(from_list, result, T_TABLE_REFERENCES, $4);
+  merge_nodes(from_list, result, T_TABLE_REFERENCES, $5);
   malloc_non_terminal_node(delete_table_node, result->malloc_pool_, T_DELETE_TABLE_NODE, 2,
                            NULL, /*0. delete list*/
                            from_list);    /*1. from list*/
-  malloc_non_terminal_node($$, result->malloc_pool_, T_DELETE, 9,
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DELETE, 10,
                            NULL,                /* 0. with clause*/
                            delete_table_node,   /* 1. table_node */
-                           $5,      /* 2. where      */
-                           $6,      /* 3. order by   */
-                           $7,      /* 4. limit      */
+                           $6,      /* 2. where      */
+                           $7,      /* 3. order by   */
+                           $8,      /* 4. limit      */
                            NULL,    /* 5. when       */
                            $1,      /* 6. hint       */
                            NULL,    /* 7. returning, unused in mysql  */
-                           NULL);   /* 8. error logging, unused in mysql  */
+                           NULL,    /* 8. error logging, unused in mysql  */
+                           $2);     /* 9. ignore */
 
 }
-| delete_with_opt_hint opt_delete_option_list multi_delete_table opt_where
+| delete_with_opt_hint opt_ignore opt_delete_option_list multi_delete_table opt_where
 {
-  (void)($2);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_DELETE, 9,
+  (void)($3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DELETE, 10,
                            NULL, /* 0. with clause */
-                           $3,   /* 1. table_node */
-                           $4,        /* 2. where      */
+                           $4,   /* 1. table_node */
+                           $5,        /* 2. where      */
                            NULL,      /* 3. order by   */
                            NULL,      /* 4. limit      */
                            NULL,      /* 5. when       */
                            $1,        /* 6. hint       */
                            NULL,      /* 7. returning, unused in mysql  */
-                           NULL);     /* 8. error logging, unused in mysql  */
+                           NULL,      /* 8. error logging, unused in mysql  */
+                           $2);       /* 9. ignore */
 }
 ;
 
@@ -11397,6 +11399,14 @@ READ_CONSISTENCY '(' consistency_level ')'
 {
   malloc_terminal_node($$, result->malloc_pool_, T_DISABLE_PARALLEL_DML);
 }
+| ENABLE_PARALLEL_DAS_DML
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_PARALLEL_DAS_DML);
+}
+| DISABLE_PARALLEL_DAS_DML
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_DISABLE_PARALLEL_DAS_DML);
+}
 | NO_QUERY_TRANSFORMATION
 {
   malloc_terminal_node($$, result->malloc_pool_, T_NO_QUERY_TRANSFORMATION);
@@ -12371,6 +12381,10 @@ opt_for_update_wait:
   $$->value_ = 0;
   $$->sql_str_off_ = @1.first_column;
   $$->is_hidden_const_ = 1;
+}
+| SKIP LOCKED
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_SKIP_LOCKED);
 };
 
 parameterized_trim:
@@ -24999,6 +25013,7 @@ ACCESSIBLE
 //| SQL_CALC_FOUND_ROWS
 | SQL_SMALL_RESULT
 | SSL
+| SKIP
 | STARTING
 | STORED
 //| STRAIGHT_JOIN

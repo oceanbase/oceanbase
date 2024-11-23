@@ -37,7 +37,11 @@ SQL_MONITOR_STATNAME_DEF(JOIN_FILTER_BIT_SET, sql_monitor_statname::INT, "filter
 
 // PDML
 SQL_MONITOR_STATNAME_DEF(PDML_PARTITION_FLUSH_TIME, sql_monitor_statname::INT, "clock time cost write storage", "total time cost writing data to storage by pdml op")
-SQL_MONITOR_STATNAME_DEF(PDML_PARTITION_FLUSH_COUNT, sql_monitor_statname::INT, "times write to storage", "total times writing data to storage by pdml op")
+SQL_MONITOR_STATNAME_DEF(PDML_GET_ROW_COUNT_FROM_CHILD_OP, sql_monitor_statname::INT, "clock time cost write storage", "total time cost writing data to storage by pdml op")
+SQL_MONITOR_STATNAME_DEF(PDML_WRITE_DAS_BUFF_ROW_COUNT, sql_monitor_statname::INT, "row_count write to das buff", "total row count writing data to das buff by pdml op")
+SQL_MONITOR_STATNAME_DEF(PDML_SKIP_ROW_COUNT, sql_monitor_statname::INT, "the count of skip write", "total row count which is not needed to write to storage by pdml op")
+SQL_MONITOR_STATNAME_DEF(PDML_STORAGE_RETURN_ROW_COUNT, sql_monitor_statname::INT, "row_count storage return", "total write row count storage return to pdml op")
+
 // reshuffle
 SQL_MONITOR_STATNAME_DEF(EXCHANGE_DROP_ROW_COUNT, sql_monitor_statname::INT, "drop row count", "total row dropped by exchange out op for unmatched partition")
 // MONITORING DUMP

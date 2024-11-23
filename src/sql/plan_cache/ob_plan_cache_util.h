@@ -1047,6 +1047,7 @@ public:
     bloom_filter_ratio_(0),
     enable_hyperscan_regexp_engine_(false),
     realistic_runtime_bloom_filter_size_(false),
+    enable_parallel_das_dml_(false),
     direct_load_allow_fallback_(false),
     default_load_mode_(0),
     hash_rollup_policy_(0),
@@ -1098,6 +1099,7 @@ public:
   int bloom_filter_ratio_;
   bool enable_hyperscan_regexp_engine_;
   bool realistic_runtime_bloom_filter_size_;
+  bool enable_parallel_das_dml_;
   bool direct_load_allow_fallback_;
   int default_load_mode_;
   int hash_rollup_policy_;

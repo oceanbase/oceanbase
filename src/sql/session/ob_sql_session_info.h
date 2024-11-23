@@ -718,6 +718,7 @@ public:
                                  data_version_(0),
                                  enable_query_response_time_stats_(false),
                                  enable_user_defined_rewrite_rules_(false),
+                                 enable_insertup_replace_gts_opt_(false),
                                  range_optimizer_max_mem_size_(128*1024*1024),
                                  _query_record_size_limit_(65536),
                                  enable_column_store_(false),
@@ -744,6 +745,7 @@ public:
     uint64_t get_data_version() const { return ATOMIC_LOAD(&data_version_); }
     bool enable_query_response_time_stats() const { return enable_query_response_time_stats_; }
     bool enable_udr() const { return ATOMIC_LOAD(&enable_user_defined_rewrite_rules_); }
+    bool enable_insertup_replace_gts_opt() const { return ATOMIC_LOAD(&enable_insertup_replace_gts_opt_); }
     int64_t get_print_sample_ppm() const { return ATOMIC_LOAD(&print_sample_ppm_); }
     bool get_px_join_skew_handling() const { return px_join_skew_handling_; }
     int64_t get_px_join_skew_minfreq() const { return px_join_skew_minfreq_; }
@@ -771,6 +773,7 @@ public:
     uint64_t data_version_;
     bool enable_query_response_time_stats_;
     bool enable_user_defined_rewrite_rules_;
+    bool enable_insertup_replace_gts_opt_;
     int64_t range_optimizer_max_mem_size_;
     int64_t _query_record_size_limit_;
     bool enable_column_store_;
@@ -1313,6 +1316,7 @@ public:
   int is_adj_index_cost_enabled(bool &enabled, int64_t &stats_cost_percent) const;
   bool is_sqlstat_enabled() const;
   bool is_spf_mlj_group_rescan_enabled() const;
+  bool enable_parallel_das_dml() const;
   int is_preserve_order_for_pagination_enabled(bool &enabled) const;
   int get_spm_mode(int64_t &spm_mode);
   bool is_enable_new_query_range() const;
@@ -1405,6 +1409,11 @@ public:
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.enable_udr();
+  }
+  bool enable_insertup_replace_gts_opt()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.enable_insertup_replace_gts_opt();
   }
   int64_t get_range_optimizer_max_mem_size()
   {

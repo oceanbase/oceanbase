@@ -122,6 +122,7 @@ int ObPxMultiPartInsertOp::read_row(ObExecContext &ctx,
       LOG_WARN("fail get next row from child", K(ret));
     }
   } else {
+    op_monitor_info_.otherstat_2_value_++;
     // 每一次从child节点获得新的数据都需要进行清除计算标记
     clear_evaluated_flag();
     if (OB_FAIL(ObDMLService::process_insert_row(MY_SPEC.ins_ctdef_, ins_rtdef_, *this, is_skipped))) {
@@ -145,6 +146,8 @@ int ObPxMultiPartInsertOp::read_row(ObExecContext &ctx,
         tablet_id = expr_datum.get_int();
         LOG_DEBUG("get the part id", K(ret), K(expr_datum));
       }
+    } else {
+      op_monitor_info_.otherstat_4_value_++;
     }
   }
   if (OB_SUCC(ret)) {
@@ -180,12 +183,16 @@ int ObPxMultiPartInsertOp::write_rows(ObExecContext &ctx,
         LOG_WARN("insert row to das failed", K(ret));
       } else if (OB_FAIL(discharge_das_write_buffer())) {
         LOG_WARN("failed to submit all dml task when the buffer of das op is full", K(ret));
+      } else {
+        op_monitor_info_.otherstat_3_value_++;
       }
     }
 
     if (OB_ITER_END == ret) {
       if (OB_FAIL(submit_all_dml_task())) {
         LOG_WARN("do insert rows post process failed", K(ret));
+      } else {
+        op_monitor_info_.otherstat_6_value_ += ins_rtdef_.das_rtdef_.affected_rows_;
       }
     }
     if (!(MY_SPEC.is_pdml_index_maintain_)) {
@@ -193,7 +200,9 @@ int ObPxMultiPartInsertOp::write_rows(ObExecContext &ctx,
       plan_ctx->add_affected_rows(ins_rtdef_.das_rtdef_.affected_rows_);
     }
     LOG_TRACE("pdml insert ok", K(MY_SPEC.is_pdml_index_maintain_),
-              K(ins_rtdef_.das_rtdef_.affected_rows_));
+              K(ins_rtdef_.das_rtdef_.affected_rows_), K(op_monitor_info_.otherstat_1_value_),
+              K(op_monitor_info_.otherstat_2_value_), K(op_monitor_info_.otherstat_3_value_),
+              K(op_monitor_info_.otherstat_4_value_), K(op_monitor_info_.otherstat_6_value_));
     ins_rtdef_.das_rtdef_.affected_rows_ = 0;
   }
   return ret;

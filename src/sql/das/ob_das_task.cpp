@@ -36,6 +36,7 @@ struct EnumEncoder<false, sql::ObDASBaseRtDef*> : sql::DASRtEncoder<sql::ObDASBa
 } // end namespace common
 
 using namespace common;
+using namespace transaction;
 namespace sql
 {
 OB_DEF_SERIALIZE(ObDASRemoteInfo)
@@ -317,6 +318,23 @@ OB_DEF_SERIALIZE_SIZE(ObDASRemoteInfo)
   return len;
 }
 
+int ObIDASTaskOp::swizzling_remote_task(ObDASRemoteInfo *remote_info)
+{
+  int ret = OB_SUCCESS;
+  if (remote_info != nullptr) {
+    snapshot_ = &remote_info->snapshot_;
+    if (das_gts_opt_info_.use_specify_snapshot_) {
+      if (OB_ISNULL(das_gts_opt_info_.get_specify_snapshot())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected nullptr of specify_snapshot", K(ret));
+      } else {
+        snapshot_ = das_gts_opt_info_.get_specify_snapshot();
+      }
+    }
+  }
+  return ret;
+}
+
 int ObIDASTaskOp::start_das_task()
 {
   int &ret = errcode_;
@@ -365,6 +383,17 @@ int ObIDASTaskOp::end_das_task()
   task_started_ = false;
   ret = COVER_SUCC(tmp_ret);
   errcode_ = OB_SUCCESS;
+  return ret;
+}
+
+int ObIDASTaskOp::init_das_gts_opt_info(transaction::ObTxIsolationLevel isolation_level)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_das_gts_opt_info().init(isolation_level))) {
+    LOG_WARN("fail to init das gts opt", K(ret), K(isolation_level));
+  } else {
+    snapshot_ = get_das_gts_opt_info().get_specify_snapshot();
+  }
   return ret;
 }
 
@@ -433,17 +462,18 @@ int ObDASGTSOptInfo::init(transaction::ObTxIsolationLevel isolation_level)
   int ret = OB_SUCCESS;
   void *buf = nullptr;
   void *buf2 = nullptr;
-  if (OB_ISNULL(buf = alloc_.alloc(sizeof(ObTxReadSnapshot)))) {
+  int64_t mem_size = sizeof(transaction::ObTxReadSnapshot);
+  if (OB_ISNULL(buf = alloc_.alloc(mem_size))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate memory for ObTxReadSnapshot", K(ret), K(sizeof(ObTxReadSnapshot)));
-  } else if (OB_ISNULL(buf2 = alloc_.alloc(sizeof(ObTxReadSnapshot)))) {
+    LOG_WARN("failed to allocate memory for ObTxReadSnapshot", K(ret), K(mem_size));
+  } else if (OB_ISNULL(buf2 = alloc_.alloc(mem_size))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate memory for ObTxReadSnapshot", K(ret), K(sizeof(ObTxReadSnapshot)));
+    LOG_WARN("failed to allocate memory for ObTxReadSnapshot", K(ret), K(mem_size));
   } else {
     use_specify_snapshot_ = true;
     isolation_level_ = isolation_level;
-    specify_snapshot_ = new(buf) ObTxReadSnapshot();
-    response_snapshot_ = new(buf2) ObTxReadSnapshot();
+    specify_snapshot_ = new(buf) transaction::ObTxReadSnapshot();
+    response_snapshot_ = new(buf2) transaction::ObTxReadSnapshot();
   }
   return ret;
 }
@@ -549,11 +579,11 @@ int ObIDASTaskOp::state_advance()
   OB_ASSERT(cur_agg_list_ != nullptr);
   OB_ASSERT(task_status_ != ObDasTaskStatus::UNSTART);
   if (task_status_ == ObDasTaskStatus::FINISHED) {
-    if (OB_FAIL(get_agg_tasks()->move_to_success_tasks(this))) {
+    if (OB_FAIL(get_agg_task()->move_to_success_tasks(this))) {
       LOG_WARN("failed to move task to success tasks", KR(ret));
     }
   } else if (task_status_ == ObDasTaskStatus::FAILED) {
-    if (OB_FAIL(get_agg_tasks()->move_to_failed_tasks(this))) {
+    if (OB_FAIL(get_agg_task()->move_to_failed_tasks(this))) {
       LOG_WARN("failed to move task to success tasks", KR(ret));
     }
   } else {
@@ -827,5 +857,6 @@ int DASOpResultIter::reset_wild_datums_ptr()
   }
   return ret;
 }
+
 }  // namespace sql
 }  // namespace oceanbase

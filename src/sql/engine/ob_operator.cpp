@@ -461,10 +461,11 @@ int ObOpSpec::create_exec_feedback_node_recursive(ObExecContext &exec_ctx) const
 {
   int ret = OB_SUCCESS;
   ObOperatorKit *kit = exec_ctx.get_operator_kit(id_);
-  if (OB_ISNULL(plan_)) {
+  ObPhysicalPlanCtx *physical_ctx = exec_ctx.get_physical_plan_ctx();
+  if (OB_ISNULL(plan_) || OB_ISNULL(physical_ctx)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("phy plan is null", K(ret));
-  } else if (!plan_->need_record_plan_info()) {
+    LOG_WARN("phy plan or ctx is null", K(ret), K(plan_), K(physical_ctx));
+  } else if (!physical_ctx->get_check_pdml_affected_rows() && !plan_->need_record_plan_info()) {
   } else if (OB_ISNULL(kit)) {
     LOG_TRACE("operator kit is NULL", K(ret));
   } else {
@@ -1155,10 +1156,11 @@ int ObOperator::close()
 int ObOperator::setup_op_feedback_info()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(spec_.plan_)) {
+  ObPhysicalPlanCtx *phy_ctx = ctx_.get_physical_plan_ctx();
+  if (OB_ISNULL(spec_.plan_) || OB_ISNULL(phy_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("phy plan is null", K(ret));
-  } else if (!spec_.plan_->need_record_plan_info() ||
+  } else if ((!spec_.plan_->need_record_plan_info() && !phy_ctx->get_check_pdml_affected_rows()) ||
              OB_INVALID_INDEX == fb_node_idx_) {
   } else {
     ObExecFeedbackInfo &fb_info = ctx_.get_feedback_info();
@@ -1178,6 +1180,9 @@ int ObOperator::setup_op_feedback_info()
       node.op_open_time_ = op_monitor_info_.open_time_;
       node.output_row_count_ = op_monitor_info_.output_row_count_;
       node.worker_count_ = 1;
+      if (spec_.is_pdml_operator()) {
+        node.pdml_op_write_rows_ = op_monitor_info_.otherstat_6_value_;
+      }
     }
   }
   return ret;

@@ -835,8 +835,10 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       tmp_ret = OB_E(EventTable::EN_PRINT_QUERY_SQL) OB_SUCCESS;
       if (OB_SUCCESS != tmp_ret) {
         LOG_INFO("query info:", K(sql_),
-                 "sess_id", result.get_session().get_sessid(),
-                 "trans_id", result.get_session().get_tx_id());
+              "sess_id", result.get_session().get_sessid(),
+              "database_id", result.get_session().get_database_id(),
+              "database_name", result.get_session().get_database_name(),
+              "trans_id", audit_record.trans_id_);
       }
 
       //监控项统计结束

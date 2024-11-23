@@ -26,7 +26,8 @@ public:
   ObDelUpdLogPlan(ObOptimizerContext &ctx, const ObDelUpdStmt *del_upd_stmt)
       : ObLogPlan(ctx, del_upd_stmt),
         max_dml_parallel_(ObGlobalHint::UNSET_PARALLEL),
-        use_pdml_(false)
+        use_pdml_(false),
+        use_parallel_das_dml_(false)
     {}
   virtual ~ObDelUpdLogPlan() {}
 
@@ -241,8 +242,9 @@ public:
   int check_is_direct_load(const ObInsertStmt &insert_stmt, const int64_t dml_parallel);
   int get_parallel_info_from_candidate_plans(int64_t &dop) const;
   int get_pdml_parallel_degree(const int64_t target_part_cnt, int64_t &dop) const;
+  bool get_can_use_parallel_das_dml() const { return use_parallel_das_dml_; }
+  int64_t get_max_dml_parallel() { return max_dml_parallel_; }
   virtual int perform_vector_assign_expr_replacement(ObDelUpdStmt *stmt);
-
 protected:
   virtual int generate_normal_raw_plan() override;
   virtual int generate_dblink_raw_plan() override;
@@ -263,6 +265,7 @@ protected:
   ObSEArray<share::schema::ObSchemaObjVersion, 4, common::ModulePageAllocator, true> extra_dependency_tables_;
   int64_t max_dml_parallel_;
   int64_t use_pdml_;
+  bool use_parallel_das_dml_;
 };
 
 } /* namespace sql */

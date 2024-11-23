@@ -59,6 +59,8 @@ public:
 
   virtual int open_op() override;
   virtual int release_op() override;
+  virtual int record_task_result_to_rtdef() override;
+  virtual int assign_task_result(ObIDASTaskOp *other) override;
   virtual int decode_task_result(ObIDASTaskResult *task_result) override;
   virtual int fill_task_result(ObIDASTaskResult &task_result, bool &has_more, int64_t &memory_limit) override;
   virtual int init_task_info(uint32_t row_extend_size) override;
@@ -67,8 +69,7 @@ public:
   virtual ObDASBaseRtDef *get_rtdef() override { return ins_rtdef_; }
   int write_row(const ExprFixedArray &row,
                 ObEvalCtx &eval_ctx,
-                ObChunkDatumStore::StoredRow *&stored_row,
-                bool &buffer_full);
+                ObChunkDatumStore::StoredRow *&stored_row);
   int64_t get_row_cnt() const { return insert_buffer_.get_row_cnt(); }
   void set_das_ctdef(const ObDASInsCtDef *ins_ctdef) { ins_ctdef_ = ins_ctdef; }
   void set_das_rtdef(ObDASInsRtDef *ins_rtdef) { ins_rtdef_ = ins_rtdef; }
@@ -79,6 +80,9 @@ public:
 
   blocksstable::ObDatumRowIterator *get_duplicated_result()
   { return result_; }
+
+  int64_t get_affected_rows() { return affected_rows_; }
+  bool get_is_duplicated() { return is_duplicated_; }
 
   INHERIT_TO_STRING_KV("parent", ObIDASTaskOp,
                        KPC_(ins_ctdef),
@@ -98,7 +102,8 @@ private:
                               ObDASInsRtDef *ins_rtdef,
                               storage::ObStoreCtxGuard &store_ctx_guard,
                               const UIntFixedArray *duplicated_column_ids,
-                              common::ObTabletID tablet_id);
+                              common::ObTabletID tablet_id,
+                              transaction::ObTxReadSnapshot *snapshot);
 
 private:
   const ObDASInsCtDef *ins_ctdef_;
@@ -130,7 +135,9 @@ public:
   transaction::ObTxReadSnapshot &get_response_snapshot() { return response_snapshot_; }
 
   INHERIT_TO_STRING_KV("ObIDASTaskResult", ObIDASTaskResult,
-                        K_(affected_rows));
+                       K_(affected_rows),
+                       K_(is_duplicated),
+                       K_(response_snapshot));
 private:
   int64_t affected_rows_;
   ObDASWriteBuffer result_buffer_;

@@ -1078,6 +1078,7 @@ public:
     last_insert_id_(0) {}
 
   int merge_cursor(const ObImplicitCursorInfo &other);
+  int replace_cursor(const ObImplicitCursorInfo &other);
   TO_STRING_KV(K_(stmt_id),
                K_(affected_rows),
                K_(found_rows),

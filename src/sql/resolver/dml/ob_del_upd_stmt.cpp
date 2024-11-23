@@ -408,6 +408,9 @@ int ObDelUpdStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
   } else if (OB_FAIL(expr_copier.copy(other.returning_agg_items_,
                                       returning_agg_items_))) {
     LOG_WARN("failed to deep copy returning aggregation exprs", K(ret));
+  } else if (OB_FAIL(expr_copier.copy(other.group_param_exprs_,
+                                      group_param_exprs_))) {
+    LOG_WARN("failed to deep copy group param fileds", K(ret));
   } else if (OB_FAIL(deep_copy_stmt_objects<OrderItem>(expr_copier,
                                                        other.order_items_,
                                                        order_items_))) {
@@ -445,6 +448,8 @@ int ObDelUpdStmt::assign(const ObDelUpdStmt &other)
     LOG_WARN("failed to assign error log info", K(ret));
   } else if (OB_FAIL(sharding_conditions_.assign(other.sharding_conditions_))) {
     LOG_WARN("failed to assign sharding conditions", K(ret));
+  } else if (OB_FAIL(group_param_exprs_.assign(other.group_param_exprs_))) {
+    LOG_WARN("failed to assign group params exprs", K(ret));
   } else {
     ignore_ = other.ignore_;
     has_global_index_ = other.has_global_index_;
@@ -488,6 +493,8 @@ int ObDelUpdStmt::iterate_stmt_expr(ObStmtExprVisitor &visitor)
     LOG_WARN("failed to visit errlog exprs", K(ret));
   } else if (OB_FAIL(visitor.visit(sharding_conditions_, SCOPE_DMLINFOS))) {
     LOG_WARN("failed to visit sharding conditions", K(ret));
+  } else if (OB_FAIL(visitor.visit(group_param_exprs_, SCOPE_DMLINFOS))) {
+    LOG_WARN("failed to visit group params exprs", K(ret));
   } else if (OB_FAIL(get_dml_table_infos(dml_table_infos))) {
     LOG_WARN("failed to get dml table infos", K(ret));
   }

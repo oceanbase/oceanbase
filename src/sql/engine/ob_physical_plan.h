@@ -396,7 +396,8 @@ public:
   }
   inline double get_online_sample_percent() const { return online_sample_percent_; }
   inline void set_online_sample_percent(double v) { online_sample_percent_ = v; }
-
+  int64_t get_das_dop() { return das_dop_; }
+  void set_das_dop(int64_t v) { das_dop_ = v; }
 public:
   int inc_concurrent_num();
   void dec_concurrent_num();
@@ -535,7 +536,9 @@ public:
   inline ObLogicalPlanRawData& get_logical_plan() { return logical_plan_; }
   inline const ObLogicalPlanRawData& get_logical_plan()const { return logical_plan_; }
   int set_feedback_info(ObExecContext &ctx);
-
+  int check_pdml_affected_rows(ObExecContext &ctx);
+  int print_this_plan_info(ObExecContext &ctx);
+  int get_all_spec_op(ObIArray<const ObOpSpec *> &simple_op_infos, const ObOpSpec &root_op_spec);
   void set_enable_px_fast_reclaim(bool value) { is_enable_px_fast_reclaim_ = value; }
   bool is_enable_px_fast_reclaim() const { return is_enable_px_fast_reclaim_; }
   ObSubSchemaCtx &get_subschema_ctx_for_update() { return subschema_ctx_; }
@@ -551,6 +554,8 @@ public:
     direct_load_need_sort_ = direct_load_need_sort;
   }
   bool get_direct_load_need_sort() const { return direct_load_need_sort_; }
+  inline bool get_insertup_can_do_gts_opt() const {return insertup_can_do_gts_opt_; }
+  inline void set_insertup_can_do_gts_opt(bool v) { insertup_can_do_gts_opt_ = v; }
   void set_is_use_auto_dop(bool use_auto_dop)  { stat_.is_use_auto_dop_ = use_auto_dop; }
   bool get_is_use_auto_dop() const { return stat_.is_use_auto_dop_; }
 public:
@@ -733,6 +738,7 @@ public:
   bool is_enable_px_fast_reclaim_;
   bool use_rich_format_;
   ObSubSchemaCtx subschema_ctx_;
+  int64_t das_dop_;
   bool disable_auto_memory_mgr_;
   bool is_inner_sql_;
   bool is_batch_params_execute_;
@@ -755,6 +761,7 @@ private:
   // to decide whether it read uncommitted data
   common::ObFixedArray<uint64_t, common::ObIAllocator> dml_table_ids_;
   bool direct_load_need_sort_;
+  bool insertup_can_do_gts_opt_;
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)

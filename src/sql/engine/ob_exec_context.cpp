@@ -755,6 +755,8 @@ int ObExecContext::init_physical_plan_ctx(const ObPhysicalPlan &plan)
 {
   int ret = OB_SUCCESS;
   int64_t foreign_key_checks = 0;
+  uint64_t tenant_data_version = 0;
+  bool supprt_check_pdml_affected_row = false;
   if (OB_ISNULL(phy_plan_ctx_) || OB_ISNULL(my_session_) || OB_ISNULL(sql_ctx_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K_(phy_plan_ctx), K_(my_session), K(ret));
@@ -805,6 +807,15 @@ int ObExecContext::init_physical_plan_ctx(const ObPhysicalPlan &plan)
       phy_plan_ctx_->set_ignore_stmt(plan.is_ignore());
       phy_plan_ctx_->set_foreign_key_checks(0 != foreign_key_checks);
       phy_plan_ctx_->set_table_row_count_list_capacity(plan.get_access_table_num());
+      if (plan.is_use_pdml() && GCONF.enable_defensive_check()) {
+        if (OB_FAIL(GET_MIN_DATA_VERSION(my_session_->get_effective_tenant_id(), tenant_data_version))) {
+          LOG_WARN("get tenant data version failed", K(ret));
+        } else if ((DATA_VERSION_4_3_5_0 <= tenant_data_version)) {
+          // ([4.3.5, ...)) support check pdml affected_rows
+          supprt_check_pdml_affected_row = true;
+        }
+      }
+      phy_plan_ctx_->set_check_pdml_affected_rows(supprt_check_pdml_affected_row);
       THIS_WORKER.set_timeout_ts(phy_plan_ctx_->get_timeout_timestamp());
 #ifdef OB_BUILD_SPM
       if (sql_ctx_ != NULL && sql_ctx_->spm_ctx_.need_spm_timeout_) {

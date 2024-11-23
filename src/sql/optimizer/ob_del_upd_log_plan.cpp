@@ -49,6 +49,7 @@ int ObDelUpdLogPlan::compute_dml_parallel()
   int ret = OB_SUCCESS;
   use_pdml_ = false;
   max_dml_parallel_ = ObGlobalHint::UNSET_PARALLEL;
+  int64_t dml_parallel = ObGlobalHint::UNSET_PARALLEL;
   const ObOptimizerContext &opt_ctx = get_optimizer_context();
   const ObSQLSessionInfo *session_info = NULL;
   const ObDelUpdStmt *del_upd_stmt = NULL;
@@ -56,7 +57,7 @@ int ObDelUpdLogPlan::compute_dml_parallel()
       OB_ISNULL(del_upd_stmt = get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(get_optimizer_context().get_session_info()));
-  } else if (!opt_ctx.can_use_pdml()) {
+  } else if (!opt_ctx.can_use_pdml() && !opt_ctx.get_can_use_parallel_das_dml()) {
     max_dml_parallel_ = ObGlobalHint::DEFAULT_PARALLEL;
     use_pdml_ = false;
     if (opt_ctx.is_online_ddl()) {
@@ -64,52 +65,54 @@ int ObDelUpdLogPlan::compute_dml_parallel()
       LOG_WARN("a online ddl expect PDML enabled. but it does not!", K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "online ddl without pdml");
     }
-  } else {
-    int64_t dml_parallel = ObGlobalHint::UNSET_PARALLEL;
-    if (OB_FAIL(get_parallel_info_from_candidate_plans(dml_parallel))) {
-      LOG_WARN("failed to get parallel info from candidate plans", K(ret));
-    } else if (OB_UNLIKELY(ObGlobalHint::DEFAULT_PARALLEL > dml_parallel)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected parallel", K(ret), K(dml_parallel), K(opt_ctx.get_parallel_rule()));
-    } else {
-      if (del_upd_stmt->is_insert_stmt()) {
-        const ObInsertStmt *insert_stmt = static_cast<const ObInsertStmt*>(del_upd_stmt);
-        if (insert_stmt->is_normal_table_overwrite()) {
-          const int64_t default_insert_overwrite_parallel = 2;
-          if (dml_parallel <= ObGlobalHint::DEFAULT_PARALLEL) {
-            dml_parallel = default_insert_overwrite_parallel;
-          }
-        }
-        if (dml_parallel <= ObGlobalHint::DEFAULT_PARALLEL && opt_ctx.get_parallel_rule() == PXParallelRule::MANUAL_HINT) {
-          // do nothing
-        } else if (OB_FAIL(check_is_direct_load(*insert_stmt, dml_parallel))) {
-          LOG_WARN("failed to check is direct load", K(ret));
-        } else if (opt_ctx.get_direct_load_optimizer_ctx().can_use_direct_load()) {
-          const int64_t default_direct_insert_parallel = 2;
-          if (dml_parallel <= ObGlobalHint::DEFAULT_PARALLEL) {
-            dml_parallel = default_direct_insert_parallel;
-          }
+  } else if (OB_FAIL(get_parallel_info_from_candidate_plans(dml_parallel))) {
+    LOG_WARN("failed to get parallel info from candidate plans", K(ret));
+  } else if (OB_UNLIKELY(ObGlobalHint::DEFAULT_PARALLEL > dml_parallel)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected parallel", K(ret), K(dml_parallel), K(opt_ctx.get_parallel_rule()));
+  } else if (opt_ctx.can_use_pdml()) {
+    if (del_upd_stmt->is_insert_stmt()) {
+      const ObInsertStmt *insert_stmt = static_cast<const ObInsertStmt*>(del_upd_stmt);
+      if (insert_stmt->is_normal_table_overwrite()) {
+        const int64_t default_insert_overwrite_parallel = 2;
+        if (dml_parallel <= ObGlobalHint::DEFAULT_PARALLEL) {
+          dml_parallel = default_insert_overwrite_parallel;
         }
       }
-      if (OB_SUCC(ret)) {
-        max_dml_parallel_ = dml_parallel;
-        use_pdml_ = (opt_ctx.is_online_ddl() ||
-                    (ObGlobalHint::DEFAULT_PARALLEL < dml_parallel &&
-                    is_strict_mode(session_info->get_sql_mode())));
-        if (opt_ctx.get_direct_load_optimizer_ctx().can_use_direct_load() && use_pdml_) {
-          get_optimizer_context().get_direct_load_optimizer_ctx().set_use_direct_load();
-          ObExecContext *exec_ctx = get_optimizer_context().get_exec_ctx();
-          if (OB_ISNULL(exec_ctx)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("exec_ctx is null", K(ret));
-          } else {
-            exec_ctx->get_table_direct_insert_ctx().set_is_direct(true);
-          }
+      if (dml_parallel <= ObGlobalHint::DEFAULT_PARALLEL && opt_ctx.get_parallel_rule() == PXParallelRule::MANUAL_HINT) {
+        // do nothing
+      } else if (OB_FAIL(check_is_direct_load(*insert_stmt, dml_parallel))) {
+        LOG_WARN("failed to check is direct load", K(ret));
+      } else if (opt_ctx.get_direct_load_optimizer_ctx().can_use_direct_load()) {
+        const int64_t default_direct_insert_parallel = 2;
+        if (dml_parallel <= ObGlobalHint::DEFAULT_PARALLEL) {
+          dml_parallel = default_direct_insert_parallel;
         }
       }
     }
+    if (OB_SUCC(ret)) {
+      max_dml_parallel_ = dml_parallel;
+      use_pdml_ = (opt_ctx.is_online_ddl() ||
+                  (ObGlobalHint::DEFAULT_PARALLEL < dml_parallel &&
+                  is_strict_mode(session_info->get_sql_mode())));
+      if (opt_ctx.get_direct_load_optimizer_ctx().can_use_direct_load() && use_pdml_) {
+        get_optimizer_context().get_direct_load_optimizer_ctx().set_use_direct_load();
+        ObExecContext *exec_ctx = get_optimizer_context().get_exec_ctx();
+        if (OB_ISNULL(exec_ctx)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("exec_ctx is null", K(ret));
+        } else {
+          exec_ctx->get_table_direct_insert_ctx().set_is_direct(true);
+        }
+      }
+    }
+  } else if (opt_ctx.get_can_use_parallel_das_dml()) {
+    max_dml_parallel_ = dml_parallel;
+    use_parallel_das_dml_ = (!opt_ctx.is_online_ddl() &&
+                                (ObGlobalHint::DEFAULT_PARALLEL < dml_parallel &&
+                                is_strict_mode(session_info->get_sql_mode())));
   }
-  LOG_TRACE("finish compute dml parallel", K(use_pdml_), K(max_dml_parallel_),
+  LOG_TRACE("finish compute dml parallel", K(use_pdml_), K(max_dml_parallel_), K(use_parallel_das_dml_),
                               K(opt_ctx.can_use_pdml()), K(opt_ctx.is_online_ddl()),
                               K(opt_ctx.get_parallel_rule()), K(opt_ctx.get_parallel()));
   return ret;
@@ -572,7 +575,11 @@ int ObDelUpdLogPlan::compute_hash_dist_exprs_for_pdml_del_upd(ObExchangeInfo &ex
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 8> rowkey_exprs;
-  if (OB_UNLIKELY(dml_info.get_real_uk_cnt() > dml_info.column_exprs_.count())) {
+  const ObDelUpdStmt *stmt = get_stmt();
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_UNLIKELY(dml_info.get_real_uk_cnt() > dml_info.column_exprs_.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected count", K(dml_info.get_real_uk_cnt()), K(dml_info.column_exprs_), K(ret));
   } else {
@@ -582,7 +589,8 @@ int ObDelUpdLogPlan::compute_hash_dist_exprs_for_pdml_del_upd(ObExchangeInfo &ex
       // 那么就选择更新后的值，否则选择更新前的值。
       // 对于 delete，因为 assignment 为空，所以会直接 push rowkey
       ObRawExpr *target_expr = dml_info.column_exprs_.at(i);
-      if (OB_FAIL(replace_assignment_expr_from_dml_info(dml_info, target_expr))) {
+      if (!(stmt->is_merge_stmt()) &&
+          OB_FAIL(replace_assignment_expr_from_dml_info(dml_info, target_expr))) {
         LOG_WARN("failed to replace assignment expr", K(ret));
       } else if (OB_FAIL(rowkey_exprs.push_back(target_expr))) {
         LOG_WARN("failed to push back expr", K(ret));
@@ -921,7 +929,8 @@ int ObDelUpdLogPlan::build_merge_stmt_hash_dist_exprs(const IndexDMLInfo &dml_in
   } else if (OB_ISNULL(when_expr)) {
     for (int64_t i = 0; OB_SUCC(ret) && i < dml_info.get_real_uk_cnt(); i++) {
       ObRawExpr *target_expr = dml_info.column_exprs_.at(i);
-      if (OB_FAIL(replace_assignment_expr_from_dml_info(dml_info, target_expr))) {
+      if (!(stmt->is_merge_stmt()) &&
+          OB_FAIL(replace_assignment_expr_from_dml_info(dml_info, target_expr))) {
         LOG_WARN("failed to replace assignment expr", K(ret));
       } else if (OB_FAIL(rowkey_exprs.push_back(target_expr))) {
         LOG_WARN("failed to push back expr", K(ret));
@@ -938,7 +947,8 @@ int ObDelUpdLogPlan::build_merge_stmt_hash_dist_exprs(const IndexDMLInfo &dml_in
     for (int64_t i = 0; OB_SUCC(ret) && i < dml_info.get_real_uk_cnt(); i++) {
       ObRawExpr *raw_expr = NULL;
       ObRawExpr *target_expr = dml_info.column_exprs_.at(i);
-      if (OB_FAIL(replace_assignment_expr_from_dml_info(dml_info, target_expr))) {
+      if (!(stmt->is_merge_stmt()) &&
+          OB_FAIL(replace_assignment_expr_from_dml_info(dml_info, target_expr))) {
         LOG_WARN("failed to replace assignment expr", K(ret));
       } else if (OB_FAIL(ObRawExprUtils::build_case_when_expr(get_optimizer_context().get_expr_factory(),
                                                               when_expr,

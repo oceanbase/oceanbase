@@ -238,6 +238,19 @@ void ObGlobalHint::merge_parallel_dml_hint(ObPDMLOption pdml_option)
   }
 }
 
+void ObGlobalHint::merge_parallel_das_dml_hint(ObParallelDASOption parallel_das_option)
+{
+  if (ObParallelDASOption::DISABLE != parallel_das_dml_option_ && ObParallelDASOption::ENABLE != parallel_das_dml_option_) {
+    if (ObParallelDASOption::DISABLE == parallel_das_option || ObParallelDASOption::ENABLE == parallel_das_option) {
+      parallel_das_dml_option_ = parallel_das_option;
+    }
+  } else if (ObParallelDASOption::ENABLE == parallel_das_dml_option_ || ObParallelDASOption::ENABLE == parallel_das_option) {
+    parallel_das_dml_option_ = ObParallelDASOption::ENABLE;
+  } else {
+    parallel_das_dml_option_ = ObParallelDASOption::DISABLE;
+  }
+}
+
 void ObGlobalHint::merge_param_option_hint(ObParamOption opt)
 {
   if (ObParamOption::FORCE != param_option_ && ObParamOption::EXACT != param_option_) {
@@ -356,7 +369,8 @@ bool ObGlobalHint::has_hint_exclude_concurrent() const
          || -1 != dynamic_sampling_
          || flashback_read_tx_uncommitted_
          || has_direct_load()
-         || !resource_group_.empty();
+         || !resource_group_.empty()
+         || ObParallelDASOption::NOT_SPECIFIED != parallel_das_dml_option_;
 }
 
 void ObGlobalHint::reset()
@@ -390,6 +404,7 @@ void ObGlobalHint::reset()
   direct_load_hint_.reset();
   dblink_hints_.reset();
   resource_group_.reset();
+  parallel_das_dml_option_ = ObParallelDASOption::NOT_SPECIFIED;
 }
 
 int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
@@ -416,6 +431,7 @@ int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
   has_dbms_stats_hint_ |= other.has_dbms_stats_hint_;
   flashback_read_tx_uncommitted_ |= other.flashback_read_tx_uncommitted_;
   dblink_hints_ = other.dblink_hints_;
+  merge_parallel_das_dml_hint(other.parallel_das_dml_option_);
   merge_dynamic_sampling_hint(other.dynamic_sampling_);
   merge_direct_load_hint(other.direct_load_hint_);
   merge_resource_group_hint(other.resource_group_);
@@ -550,6 +566,18 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected pdml hint value", K(ret), K_(pdml_option));
     }
+  }
+  if (OB_SUCC(ret) && ObParallelDASOption::NOT_SPECIFIED != parallel_das_dml_option_) { //PDML
+   if (ObParallelDASOption::ENABLE == parallel_das_dml_option_) {
+     if (!ignore_parallel_for_dblink) {
+       PRINT_GLOBAL_HINT_STR("ENABLE_PARALLEL_DAS_DML");
+     }
+   } else if (ObParallelDASOption::DISABLE == parallel_das_dml_option_) {
+     PRINT_GLOBAL_HINT_STR("DISABLE_PARALLEL_DAS_DML");
+   } else {
+     ret = OB_ERR_UNEXPECTED;
+     LOG_WARN("unexpected pdml hint value", K(ret), K_(pdml_option));
+   }
   }
   if (OB_SUCC(ret) && ObParamOption::NOT_SPECIFIED != param_option_) { // PARAM
     if (OB_UNLIKELY(ObParamOption::EXACT != param_option_)) {

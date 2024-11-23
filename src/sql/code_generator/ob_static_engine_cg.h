@@ -480,6 +480,7 @@ private:
   // direct load
   int generate_spec(ObLogInsert &op, ObTableDirectInsertSpec &spec, const bool in_root_job);
 private:
+  int check_has_update_part_key(const ObIArray<IndexDMLInfo *> &update_index_dml_infos, bool &update_part_key);
   int disable_use_rich_format(const ObLogicalOperator &op, ObOpSpec &spec);
   int add_update_set(ObSubPlanFilterSpec &spec);
   int generate_basic_transmit_spec(
@@ -582,7 +583,8 @@ private:
   int add_output_datum_check_flag(ObOpSpec &spec);
   int generate_calc_part_id_expr(const ObRawExpr &src, const ObDASTableLocMeta *loc_meta, ObExpr *&dst);
   int check_only_one_unique_key(const ObLogPlan &log_plan, const ObTableSchema* table_schema, bool& only_one_unique_key);
-
+  int check_has_global_unique_index(ObLogPlan *log_plan, const uint64_t table_id, bool &has_unique_index);
+  int check_has_global_partiton_index(ObLogPlan *log_plan, const uint64_t table_id, bool &has_global_partition_index);
   bool is_simple_aggr_expr(const ObItemType &expr_type,
                            const bool enable_rich_format) { return T_FUN_COUNT == expr_type
                                                                    || T_FUN_SUM == expr_type

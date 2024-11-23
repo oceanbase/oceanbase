@@ -96,7 +96,8 @@ int ObTableApiReplaceExecutor::open()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table location is invalid", K(ret));
   } else if (OB_FAIL(conflict_checker_.init_conflict_checker(replace_spec_.get_expr_frame_info(),
-                                                             table_loc))) {
+                                                             table_loc,
+                                                             false))) {
     LOG_WARN("fail to init conflict_checker", K(ret));
   } else if (OB_FAIL(calc_local_tablet_loc(tablet_loc))) {
     LOG_WARN("fail to calc tablet location", K(ret));

@@ -3949,6 +3949,25 @@ int ObImplicitCursorInfo::merge_cursor(const ObImplicitCursorInfo &other)
   return ret;
 }
 
+int ObImplicitCursorInfo::replace_cursor(const ObImplicitCursorInfo &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_INVALID_INDEX == stmt_id_) {
+    //not init, init it with first cursor info
+    *this = other;
+  } else if (stmt_id_ != other.stmt_id_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt_id is different", K(stmt_id_), K(other.stmt_id_));
+  } else {
+    affected_rows_ = other.affected_rows_;
+    found_rows_ = other.found_rows_;
+    matched_rows_ = other.matched_rows_;
+    duplicated_rows_ = other.duplicated_rows_;
+    deleted_rows_ = other.deleted_rows_;
+  }
+  return ret;
+}
+
 bool ObSQLUtils::is_same_type_for_compare(const ObObjMeta &meta1, const ObObjMeta &meta2)
 {
   bool is_same = false;

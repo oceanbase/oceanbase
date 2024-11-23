@@ -2952,6 +2952,9 @@ int ObStaticEngineCG::generate_merge_with_das(ObLogMerge &op,
     spec.use_dist_das_ = op.is_multi_part_dml();
     spec.gi_above_ = op.is_gi_above() && !spec.use_dist_das_;
     spec.table_location_uncertain_ = op.is_table_location_uncertain();
+    spec.is_pdml_ = op.is_pdml();
+    spec.plan_->set_das_dop(op.get_das_dop());
+    spec.das_dop_ = op.get_das_dop();
 
     spec.merge_ctdefs_.set_capacity(modified_index_ids.count());
     // TODO those 2 line must fixed after remove old engine
@@ -3070,6 +3073,7 @@ int ObStaticEngineCG::check_is_insert_overwrite_stmt(const ObLogPlan *plan, bool
 int ObStaticEngineCG::generate_insert_with_das(ObLogInsert &op, ObTableInsertSpec &spec)
 {
   int ret = OB_SUCCESS;
+  bool is_plain_insert = false;
   spec.check_fk_batch_ = true;
   const ObLogPlan *log_plan = op.get_plan();
   const ObIArray<IndexDMLInfo *> &index_dml_infos = op.get_index_dml_infos();
@@ -3090,12 +3094,18 @@ int ObStaticEngineCG::generate_insert_with_das(ObLogInsert &op, ObTableInsertSpe
     } else if (OB_FAIL(spec.ins_ctdefs_.at(0).allocate_array(phy_plan_->get_allocator(),
                                                              index_dml_infos.count()))) {
       LOG_WARN("allocate insert ctdef array failed", K(ret), K(index_dml_infos.count()));
+    } else if (OB_FAIL(op.is_plain_insert(is_plain_insert))) {
+      LOG_WARN("fail to check is plain insert", K(ret));
     } else {
       spec.plan_->set_ignore(op.is_ignore());
       spec.plan_->need_drive_dml_query_ = true;
       spec.use_dist_das_ = op.is_multi_part_dml();
       spec.gi_above_ = op.is_gi_above() && !spec.use_dist_das_;
       spec.is_returning_ = op.is_returning();
+      spec.is_pdml_ = op.is_pdml();
+      spec.das_dop_ = op.get_das_dop();
+      spec.plan_->set_das_dop(op.get_das_dop());
+      spec.plan_->set_is_plain_insert(is_plain_insert);
     }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_infos.count(); ++i) {
@@ -3177,6 +3187,9 @@ int ObStaticEngineCG::generate_delete_with_das(ObLogDelete &op, ObTableDeleteSpe
     spec.use_dist_das_ = op.is_multi_part_dml();
     spec.gi_above_ = op.is_gi_above() && !spec.use_dist_das_;
     spec.is_returning_ = op.is_returning();
+    spec.is_pdml_ = op.is_pdml();
+    spec.plan_->set_das_dop(op.get_das_dop());
+    spec.das_dop_ = op.get_das_dop();
     if (OB_FAIL(spec.del_ctdefs_.allocate_array(phy_plan_->get_allocator(),
                                                 delete_table_list.count()))) {
       LOG_WARN("allocate delete ctdef array failed", K(ret));
@@ -3246,16 +3259,65 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableReplaceSpec &spec, c
 {
   int ret = OB_SUCCESS;
   UNUSED(in_root_job);
+  bool can_do_gts_opt = false;
+  bool has_unique_index = false;
+  bool has_partition_index = false;
   const ObIArray<IndexDMLInfo *> &insert_dml_infos = op.get_index_dml_infos();;
   const ObIArray<IndexDMLInfo *> &del_dml_infos = op.get_replace_index_dml_infos();
   const IndexDMLInfo *primary_dml_info = insert_dml_infos.at(0);
-  CK (NULL != primary_dml_info);
+  if (NULL == primary_dml_info) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(op.is_insertup_or_replace_values(can_do_gts_opt))) {
+    LOG_WARN("fail to check is plain insert", K(ret));
+  } else if (!can_do_gts_opt) {
+    // do nothing
+    LOG_TRACE("can't do insert_up gts opt", K(op.get_insert_up_index_dml_infos()));
+  } else if (OB_FAIL(check_has_global_partiton_index(op.get_plan(),
+                                                     primary_dml_info->ref_table_id_,
+                                                     has_partition_index))) {
+    LOG_WARN("check has global partition index failed", K(ret), K(primary_dml_info->ref_table_id_));
+  } else if (has_partition_index) {
+    LOG_TRACE("has partition index, can't support gts opt");
+  } else {
+    spec.plan_->set_insertup_can_do_gts_opt(can_do_gts_opt);
+    if (OB_FAIL(check_has_global_unique_index(op.get_plan(), primary_dml_info->ref_table_id_, has_unique_index))) {
+      LOG_WARN("check has global unique index", K(ret), K(primary_dml_info->ref_table_id_));
+    } else {
+      spec.has_global_unique_index_ = has_unique_index;
+    }
+  }
+
+  // for replace_into multi_query batch_dml_optimization
+  if (OB_SUCC(ret) && op.get_stmt_id_expr() != nullptr) {
+    if (OB_FAIL(generate_rt_expr(*op.get_stmt_id_expr(), spec.ab_stmt_id_))) {
+      LOG_WARN("generate ab stmt id expr failed", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ObSEArray<ObRawExpr *, 32> all_need_save_exprs;
+    ObRawExpr *stmt_id_expr = const_cast<ObRawExpr *>(op.get_stmt_id_expr());
+    if (OB_FAIL(append(all_need_save_exprs, primary_dml_info->column_convert_exprs_))) {
+      LOG_WARN("fail to append expr to array", K(ret));
+    } else if (stmt_id_expr != nullptr && OB_FAIL(all_need_save_exprs.push_back(stmt_id_expr))) {
+      LOG_WARN("fail to append stmt_id_expr to array", K(ret));
+    } else if (OB_FAIL(generate_rt_exprs(all_need_save_exprs, spec.all_saved_exprs_))) {
+      LOG_WARN("fail to generate all_saved_expr", K(ret), K(all_need_save_exprs));
+    } else {
+      LOG_TRACE("print all_need_save_exprs", K(all_need_save_exprs));
+    }
+  }
+
   if (OB_SUCC(ret)) {
     spec.is_ignore_ = op.is_ignore();
     spec.plan_->need_drive_dml_query_ = true;
     spec.use_dist_das_ = op.is_multi_part_dml();
     spec.gi_above_ = op.is_gi_above() && !spec.use_dist_das_;
     phy_plan_->set_ignore(op.is_ignore());
+    spec.is_pdml_ = op.is_pdml();
+    spec.plan_->set_das_dop(op.get_das_dop());
+    spec.das_dop_ = op.get_das_dop();
 
     // todo @wenber.wb delete it after support trigger
     ObLogPlan *log_plan = op.get_plan();
@@ -3354,6 +3416,9 @@ int ObStaticEngineCG::generate_update_with_das(ObLogUpdate &op, ObTableUpdateSpe
     spec.use_dist_das_ = op.is_multi_part_dml();
     spec.gi_above_ = op.is_gi_above() && !spec.use_dist_das_;
     spec.is_returning_ = op.is_returning();
+    spec.is_pdml_ = op.is_pdml();
+    spec.plan_->set_das_dop(op.get_das_dop());
+    spec.das_dop_ = op.get_das_dop();
     if (OB_FAIL(spec.upd_ctdefs_.allocate_array(phy_plan_->get_allocator(),
                                                 table_list.count()))) {
       LOG_WARN("allocate update ctdef array failed", K(ret), K(table_list));
@@ -3461,6 +3526,13 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableInsertUpSpec &spec, 
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("update dml info is empty", K(ret));
   }
+  // for insertup multi_query batch_dml_optimization
+  if (OB_SUCC(ret) && op.get_stmt_id_expr() != nullptr) {
+    if (OB_FAIL(generate_rt_expr(*op.get_stmt_id_expr(), spec.ab_stmt_id_))) {
+      LOG_WARN("generate ab stmt id expr failed", K(ret));
+    }
+  }
+
   if (OB_SUCC(ret)) {
     const ObIArray<IndexDMLInfo *> &insert_dml_infos = op.get_index_dml_infos();
     const ObIArray<IndexDMLInfo *> &upd_dml_infos = op.get_insert_up_index_dml_infos();
@@ -3470,6 +3542,9 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableInsertUpSpec &spec, 
     spec.use_dist_das_ = op.is_multi_part_dml();
     spec.gi_above_ = op.is_gi_above() && !spec.use_dist_das_;
     phy_plan_->set_ignore(op.is_ignore());
+    spec.is_pdml_ = op.is_pdml();
+    spec.plan_->set_das_dop(op.get_das_dop());
+    spec.das_dop_ = op.get_das_dop();
 
     ObLogPlan *log_plan = op.get_plan();
     ObSchemaGetterGuard *schema_guard = NULL;
@@ -3528,15 +3603,50 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableInsertUpSpec &spec, 
         }
       }
       if (OB_SUCC(ret)) {
+        ObRawExpr *stmt_id_expr = const_cast<ObRawExpr *>(op.get_stmt_id_expr());
         if (OB_FAIL(append(all_need_save_exprs, ins_pri_dml_info->column_convert_exprs_))) {
           LOG_WARN("fail to append expr to array", K(ret));
         } else if (OB_FAIL(append(all_need_save_exprs, contain_exprs))) {
           LOG_WARN("fail to append expr to array", K(ret));
+        } else if (stmt_id_expr != nullptr && OB_FAIL(all_need_save_exprs.push_back(stmt_id_expr))) {
+          LOG_WARN("fail to append stmt_id_expr to array", K(ret));
         } else if (OB_FAIL(generate_rt_exprs(all_need_save_exprs, spec.all_saved_exprs_))) {
           LOG_WARN("fail to generate all_saved_expr", K(ret), K(all_need_save_exprs));
         } else {
           LOG_DEBUG("print all_need_save_exprs", K(all_need_save_exprs));
         }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    bool can_do_gts_opt = false;
+    bool has_unique_index = false;
+    bool update_part_key = false;
+    bool has_partition_index = false;
+    const IndexDMLInfo *ins_pri_dml_info = op.get_index_dml_infos().at(0);
+    if (OB_FAIL(op.is_insertup_or_replace_values(can_do_gts_opt))) {
+      LOG_WARN("fail to check is plain insert", K(ret));
+    } else if (!can_do_gts_opt) {
+      // do nothing
+      LOG_TRACE("can't do insert_up gts opt", K(op.get_insert_up_index_dml_infos()));
+    } else if (OB_FAIL(check_has_update_part_key(op.get_insert_up_index_dml_infos(), update_part_key))) {
+      LOG_WARN("fail to check has update part key", K(ret), K(op.get_insert_up_index_dml_infos()));
+    } else if (update_part_key) {
+      // global index orprimary table update part key
+      LOG_TRACE("global index or primary table update part_key", K(op.get_insert_up_index_dml_infos()));
+    } else if (OB_FAIL(check_has_global_partiton_index(op.get_plan(),
+                                                       ins_pri_dml_info->ref_table_id_,
+                                                       has_partition_index))) {
+      LOG_WARN("check has global partition index failed", K(ins_pri_dml_info->ref_table_id_));
+    } else if (has_partition_index) {
+      LOG_TRACE("has partition index, can't support gts opt");
+    } else {
+      spec.plan_->set_insertup_can_do_gts_opt(can_do_gts_opt);
+      if (OB_FAIL(check_has_global_unique_index(op.get_plan(), ins_pri_dml_info->ref_table_id_, has_unique_index))) {
+        LOG_WARN("check has global unique index", K(ret), K(ins_pri_dml_info->ref_table_id_));
+      } else {
+        spec.has_global_unique_index_ = has_unique_index;
       }
     }
   }
@@ -3562,6 +3672,19 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableInsertUpSpec &spec, 
           }
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObStaticEngineCG::check_has_update_part_key(const ObIArray<IndexDMLInfo *> &index_dml_infos, bool &update_part_key)
+{
+  int ret = OB_SUCCESS;
+  update_part_key = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !update_part_key && i < index_dml_infos.count(); i++) {
+    const IndexDMLInfo *upd_pri_dml_info = index_dml_infos.at(i);
+    if (upd_pri_dml_info->is_update_part_key_) {
+      update_part_key = true;
     }
   }
   return ret;
@@ -10153,6 +10276,71 @@ int ObStaticEngineCG::check_only_one_unique_key(const ObLogPlan& log_plan,
   }
   if (OB_SUCC(ret)) {
     only_one_unique_key = (1 == unique_index_cnt);
+  }
+  return ret;
+}
+
+int ObStaticEngineCG::check_has_global_partiton_index(ObLogPlan *log_plan,
+                                                      const uint64_t table_id,
+                                                      bool &has_global_partition_index)
+{
+  int ret = OB_SUCCESS;
+  has_global_partition_index = false;
+  uint64_t index_tid[OB_MAX_INDEX_PER_TABLE];
+  int64_t index_cnt = OB_MAX_INDEX_PER_TABLE;
+  ObSchemaGetterGuard *schema_guard = nullptr;
+  if (OB_ISNULL(log_plan)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
+  } else if (OB_ISNULL(schema_guard = log_plan->get_optimizer_context().get_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
+  } else if (OB_FAIL(schema_guard->get_can_write_index_array(MTL_ID(), table_id, index_tid, index_cnt, true))) {
+    LOG_WARN("failed to get can read index array", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !has_global_partition_index && i < index_cnt; ++i) {
+    const ObTableSchema* index_schema = NULL;
+    if (OB_FAIL(schema_guard->get_table_schema(MTL_ID(), index_tid[i], index_schema))) {
+      LOG_WARN("failed to get table schema", K(ret));
+    } else if (OB_ISNULL(index_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get table schema", K(index_tid[i]), K(ret));
+    } else if (index_schema->is_partitioned_table()) {
+      has_global_partition_index = true;
+      index_schema->is_partitioned_table();
+      LOG_TRACE("is partition global index", K(index_schema->get_table_name_str()),
+          K(index_schema->get_table_id()));
+    }
+  }
+  return ret;
+}
+
+int ObStaticEngineCG::check_has_global_unique_index(ObLogPlan *log_plan, const uint64_t table_id, bool &has_unique_index)
+{
+  int ret = OB_SUCCESS;
+  has_unique_index = false;
+  uint64_t index_tid[OB_MAX_INDEX_PER_TABLE];
+  int64_t index_cnt = OB_MAX_INDEX_PER_TABLE;
+  ObSchemaGetterGuard *schema_guard = nullptr;
+  if (OB_ISNULL(log_plan)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
+  } else if (OB_ISNULL(schema_guard = log_plan->get_optimizer_context().get_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
+  } else if (OB_FAIL(schema_guard->get_can_write_index_array(MTL_ID(), table_id, index_tid, index_cnt, true))) {
+    LOG_WARN("failed to get can read index array", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !has_unique_index && i < index_cnt; ++i) {
+    const ObTableSchema* index_schema = NULL;
+    if (OB_FAIL(schema_guard->get_table_schema(MTL_ID(), index_tid[i], index_schema))) {
+      LOG_WARN("failed to get table schema", K(ret));
+    } else if (OB_ISNULL(index_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get table schema", K(index_tid[i]), K(ret));
+    } else if (index_schema->is_global_unique_index_table()) {
+      has_unique_index = true;
+    }
   }
   return ret;
 }

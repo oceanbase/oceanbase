@@ -75,6 +75,9 @@ int ObLogUpdate::get_plan_item_info(PlanText &plan_text,
       pos = pos - 2;
     }
     OZ(BUF_PRINTF(")"));
+    if (OB_SUCC(ret) && get_das_dop() > 0) {
+      ret = BUF_PRINTF(", das_dop=%ld", this->get_das_dop());
+    }
     END_BUF_PRINT(plan_item.special_predicates_,
                   plan_item. special_predicates_len_);
   }

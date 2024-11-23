@@ -661,6 +661,17 @@ int ObSQLSessionInfo::get_spm_mode(int64_t &spm_mode)
   return ret;
 }
 
+bool ObSQLSessionInfo::enable_parallel_das_dml() const
+{
+  bool bret = false;
+  int64_t tenant_id = get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    bret = tenant_config->_enable_parallel_das_dml;
+  }
+  return bret;
+}
+
 bool ObSQLSessionInfo::is_enable_new_query_range() const
 {
   bool bret = false;
@@ -3031,6 +3042,7 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       ATOMIC_STORE(&hash_area_size_, tenant_config->_hash_area_size);
       ATOMIC_STORE(&enable_query_response_time_stats_, tenant_config->query_response_time_stats);
       ATOMIC_STORE(&enable_user_defined_rewrite_rules_, tenant_config->enable_user_defined_rewrite_rules);
+      ATOMIC_STORE(&enable_insertup_replace_gts_opt_, tenant_config->_enable_insertup_replace_gts_opt);
       ATOMIC_STORE(&range_optimizer_max_mem_size_, tenant_config->range_optimizer_max_mem_size);
       ATOMIC_STORE(&_query_record_size_limit_, tenant_config->_query_record_size_limit);
       // 5.allow security audit

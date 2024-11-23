@@ -381,6 +381,23 @@ int ObPhysicalPlanCtx::merge_implicit_cursor_info(const ObImplicitCursorInfo &im
   return ret;
 }
 
+int ObPhysicalPlanCtx::replace_implicit_cursor_info(const ObImplicitCursorInfo &implicit_cursor)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(implicit_cursor.stmt_id_ < 0)
+      || OB_UNLIKELY(implicit_cursor.stmt_id_ >= implicit_cursor_infos_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("implicit cursor is invalid", K(ret),
+             K(implicit_cursor), K(implicit_cursor_infos_.count()));
+  } else if (OB_FAIL(implicit_cursor_infos_.at(implicit_cursor.stmt_id_).
+      replace_cursor(implicit_cursor))) {
+    LOG_WARN("merge implicit cursor info failed", K(ret),
+             K(implicit_cursor), K(implicit_cursor_infos_.count()), K(implicit_cursor));
+  }
+  LOG_DEBUG("merge implicit cursor info", K(ret), K(implicit_cursor), K(lbt()));
+  return ret;
+}
+
 const ObIArray<int64_t> *ObPhysicalPlanCtx::get_part_param_idxs(int64_t part_id) const
 {
   const ObIArray<int64_t> *part_param_idxs = nullptr;
@@ -997,7 +1014,6 @@ OB_DEF_DESERIALIZE(ObPhysicalPlanCtx)
       OB_UNIS_DECODE(*local_vars);
     }
   }
-
   // following is not deserialize, please add deserialize ahead.
   if (OB_SUCC(ret) && array_group_count > 0 &&
       datum_param_store_.count() == 0 &&
