@@ -743,9 +743,13 @@ int ObSelectStmt::check_and_get_same_aggr_item(ObRawExpr *expr,
   } else {
     bool is_existed = false;
     for (int64_t i = 0; OB_SUCC(ret) && !is_existed && i < agg_items_.count(); ++i) {
+      bool need_check_status = (i + 1) % 1000 == 0;
       if (OB_ISNULL(agg_items_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is null", K(ret));
+      } else if (need_check_status &&
+                 OB_FAIL(THIS_WORKER.check_status())) {
+        LOG_WARN("failed to check status", K(ret));
       } else if (agg_items_.at(i)->same_as(*expr)) {
         is_existed = true;
         same_aggr = agg_items_.at(i);
