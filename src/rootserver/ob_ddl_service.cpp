@@ -4127,26 +4127,73 @@ int ObDDLService::check_exist_stored_gen_col(
   return ret;
 }
 
-int ObDDLService::check_is_add_column_online(const ObTableSchema &table_schema,
-                                             const AlterColumnSchema &alter_column_schema,
-                                             ObDDLType &tmp_ddl_type)
+int ObDDLService::check_can_add_column_use_instant_(const bool is_oracle_mode,
+                                                    const uint64_t tenant_data_version,
+                                                    bool &can_add_column_instant)
+{
+  int ret = OB_SUCCESS;
+  can_add_column_instant = false;
+  if (is_oracle_mode) {
+    // oracle mode can not do add column instant
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("in oracle mode not supported to add column instant", KR(ret), K(tenant_data_version));
+  } else {
+    if (OB_UNLIKELY(tenant_data_version < MOCK_DATA_VERSION_4_2_5_0)) {
+      // mysql mode less than 4.2.5 not support add column instant
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("in mysql mode not supported instant algorithm under this version", KR(ret), K(tenant_data_version));
+    } else if (OB_UNLIKELY(tenant_data_version >= DATA_VERSION_4_3_0_0
+                            && tenant_data_version < DATA_VERSION_4_3_5_0)) {
+      // [4.3.0, 4.3.5) mysql mode not support instant algorithm
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("in mysql mode not supported instant algorithm under this version", KR(ret), K(tenant_data_version));
+    } else {
+      can_add_column_instant = true;
+    }
+  }
+
+  return ret;
+}
+
+int ObDDLService::check_is_add_column_online_(const ObTableSchema &table_schema,
+                                              const AlterColumnSchema &alter_column_schema,
+                                              const obrpc::ObAlterTableArg::AlterAlgorithm &algorithm,
+                                              const bool is_oracle_mode,
+                                              const uint64_t tenant_data_version,
+                                              ObDDLType &tmp_ddl_type)
 {
   int ret = OB_SUCCESS;
   tmp_ddl_type = ObDDLType::DDL_INVALID;
+  bool can_add_column_instant = false;
   bool is_change_column_order = false;
   if (OB_DDL_ADD_COLUMN != alter_column_schema.alter_type_) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error", K(ret), K(alter_column_schema));
-  } else if (alter_column_schema.is_autoincrement_ || alter_column_schema.is_primary_key_ || alter_column_schema.has_not_null_constraint()) {
-    tmp_ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
-  } else if (nullptr != table_schema.get_column_schema(alter_column_schema.get_column_name())) {
-    tmp_ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
-  } else if (OB_FAIL(check_is_change_column_order(table_schema, alter_column_schema, is_change_column_order))) {
-    LOG_WARN("fail to check is change column order", K(ret));
-  } else if (is_change_column_order || alter_column_schema.is_stored_generated_column()) {
-    tmp_ddl_type = ObDDLType::DDL_ADD_COLUMN_OFFLINE;
-  } else {
-    tmp_ddl_type = ObDDLType::DDL_ADD_COLUMN_ONLINE;
+    LOG_WARN("alter_type is not add column", KR(ret), K(alter_column_schema.alter_type_));
+  } else if (algorithm == obrpc::ObAlterTableArg::AlterAlgorithm::INSTANT) {
+    if (OB_FAIL(check_can_add_column_use_instant_(is_oracle_mode,
+                                                  tenant_data_version,
+                                                  can_add_column_instant))) {
+      LOG_WARN("fail to check can add column use instant algorithm", KR(ret), K(is_oracle_mode), K(table_schema));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (alter_column_schema.is_autoincrement_ || alter_column_schema.is_primary_key_ || alter_column_schema.has_not_null_constraint()) {
+      tmp_ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
+    } else if (nullptr != table_schema.get_column_schema(alter_column_schema.get_column_name())) {
+      tmp_ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
+    } else if (alter_column_schema.is_stored_generated_column()) {
+      tmp_ddl_type = ObDDLType::DDL_ADD_COLUMN_OFFLINE;
+    } else if (OB_FAIL(check_is_change_column_order(table_schema, alter_column_schema, is_change_column_order))) {
+      LOG_WARN("fail to check is change column order", KR(ret));
+    } else if (!can_add_column_instant) {
+      // before update to 435, we use DDL_ADD_COLUMN_OFFLINE when change column order
+      tmp_ddl_type = is_change_column_order ? ObDDLType::DDL_ADD_COLUMN_OFFLINE : ObDDLType::DDL_ADD_COLUMN_ONLINE;
+    } else {
+      // After update to 435
+      //We still use DDL_ADD_COLUMN_ONLINE to represent add column online when not change column order
+      //To distinguish, we use DDL_ADD_COLUMN_INSTANT to represent add column online when change column order
+      tmp_ddl_type = is_change_column_order ? ObDDLType::DDL_ADD_COLUMN_INSTANT : ObDDLType::DDL_ADD_COLUMN_ONLINE;
+    }
   }
   return ret;
 }
@@ -4228,6 +4275,65 @@ int ObDDLService::check_is_alter_decimal_int_offline(const share::ObDDLType &ddl
   return ret;
 }
 
+int ObDDLService::check_can_add_column_instant_(const ObTableSchema &orig_table_schema,
+                                                const AlterTableSchema &alter_table_schema,
+                                                const obrpc::ObAlterTableArg::AlterAlgorithm &algorithm,
+                                                const uint64_t tenant_data_version,
+                                                const bool is_oracle_mode,
+                                                ObSchemaGetterGuard &schema_guard,
+                                                ObDDLType &ddl_type)
+{
+  int ret = OB_SUCCESS;
+  bool add_column_instant = false;
+  ddl_type = ObDDLType::DDL_INVALID;
+  bool has_other_ddl_type = false;
+  AlterColumnSchema *alter_column_schema = NULL;
+  ObTableSchema::const_column_iterator it_begin = alter_table_schema.column_begin();
+  ObTableSchema::const_column_iterator it_end = alter_table_schema.column_end();
+  // 1.add column instant only under mysql
+  // 2.add column instant except modify column, with other ddl should be offline
+  for (; OB_SUCC(ret) && !is_oracle_mode && !(add_column_instant && has_other_ddl_type) && it_begin != it_end; it_begin++) {
+    if (OB_ISNULL(alter_column_schema = static_cast<AlterColumnSchema *>(*it_begin))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("alter_column_schema is NULL", KR(ret), K(alter_table_schema));
+    } else {
+      const ObSchemaOperationType op_type = alter_column_schema->alter_type_;
+      switch (op_type) {
+        case OB_DDL_ADD_COLUMN: {
+          ObDDLType tmp_ddl_type = ObDDLType::DDL_INVALID;
+          if (!add_column_instant && OB_FAIL(check_is_add_column_online_(orig_table_schema, *alter_column_schema, algorithm,
+                                                                         is_oracle_mode, tenant_data_version, tmp_ddl_type))) {
+            LOG_WARN("fail to check is add column online", KR(ret));
+          } else if (ObDDLType::DDL_ADD_COLUMN_INSTANT == tmp_ddl_type) {
+            add_column_instant = true;
+          }
+          break;
+        }
+        case OB_DDL_MODIFY_COLUMN: {
+          // do nothing
+          break;
+        }
+        case OB_DDL_DROP_COLUMN:
+        case OB_DDL_CHANGE_COLUMN:
+        case OB_DDL_ALTER_COLUMN: {
+          has_other_ddl_type = true;
+          break;
+        }
+        default: {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("unhandled operator type!", KR(ret), K(op_type));
+          break;
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && add_column_instant && has_other_ddl_type) {
+    ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
+    LOG_INFO("add column instant with other ddl except modify column, set ddl type to DDL_TABLE_REDEFINITION", K(ddl_type));
+  }
+  return ret;
+}
+
 int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_arg,
                                            const ObTableSchema &orig_table_schema,
                                            ObSchemaGetterGuard &schema_guard,
@@ -4245,6 +4351,12 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
   ObTableSchema::const_column_iterator it_begin = alter_table_schema.column_begin();
   ObTableSchema::const_column_iterator it_end = alter_table_schema.column_end();
   ddl_need_retry_at_executor = false;
+  const obrpc::ObAlterTableArg::AlterAlgorithm &algorithm = alter_table_arg.alter_algorithm_;
+
+  if (OB_FAIL(check_can_add_column_instant_(orig_table_schema, alter_table_schema, algorithm,
+                                            is_oracle_mode, tenant_data_version, schema_guard, ddl_type))) {
+    LOG_WARN("fail to check can add column instant", KR(ret), K(orig_table_schema), K(alter_table_schema));
+  }
   for (; OB_SUCC(ret) && it_begin != it_end; it_begin++) {
     if (OB_ISNULL(alter_column_schema = static_cast<AlterColumnSchema *>(*it_begin))) {
       ret = OB_ERR_UNEXPECTED;
@@ -4256,14 +4368,38 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
       switch (op_type) {
         case OB_DDL_ADD_COLUMN: {
           ObDDLType tmp_ddl_type = ObDDLType::DDL_INVALID;
-          if (OB_FAIL(check_is_add_column_online(orig_table_schema, *alter_column_schema, tmp_ddl_type))) {
+          if (OB_FAIL(check_is_add_column_online_(orig_table_schema, *alter_column_schema, algorithm,
+                                                  is_oracle_mode, tenant_data_version, tmp_ddl_type))) {
             LOG_WARN("fail to check is add column online", K(ret));
           } else if (tmp_ddl_type == ObDDLType::DDL_ADD_COLUMN_ONLINE) {
             if (ObDDLType::DDL_INVALID == ddl_type
                 || ObDDLType::DDL_ADD_COLUMN_ONLINE == ddl_type) {
               ddl_type = ObDDLType::DDL_ADD_COLUMN_ONLINE;
+            } else if (ObDDLType::DDL_ADD_COLUMN_INSTANT == ddl_type) {
+              // ddl_type = ObDDLType::DDL_ADD_COLUMN_INSTANT;
+            } else if (ObDDLType::DDL_COMPOUND_INSTANT == ddl_type) {
+              // ddl_type = ObDDLType::DDL_COMPOUND_INSTANT;
             } else if (ObDDLType::DDL_NORMAL_TYPE == ddl_type) {
               // ddl_type = ObDDLType::DDL_NORMAL_TYPE;
+            } else if (ObDDLType::DDL_ADD_COLUMN_OFFLINE == ddl_type) {
+              // ddl_type = ObDDLType::DDL_ADD_COLUMN_OFFLINE;
+            } else if (ObDDLType::DDL_DROP_COLUMN == ddl_type
+                    || ObDDLType::DDL_COLUMN_REDEFINITION == ddl_type) {
+              ddl_type = ObDDLType::DDL_COLUMN_REDEFINITION;
+            } else {
+              ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
+            }
+          } else if (tmp_ddl_type == ObDDLType::DDL_ADD_COLUMN_INSTANT) {
+            if (ObDDLType::DDL_INVALID == ddl_type
+                || ObDDLType::DDL_ADD_COLUMN_ONLINE == ddl_type
+                || ObDDLType::DDL_ADD_COLUMN_INSTANT == ddl_type) {
+              ddl_type = ObDDLType::DDL_ADD_COLUMN_INSTANT;
+            // 1.there is no new type to represent modify column online, we use DDL_NORMAL_TYPE to represent it
+            // 2. after check_can_add_column_instant_, add column instant except modify column compund with other ddl will be DDL_TABLE_REDEFINITION,
+            // so only modify column online can be DDL_NORMAL_TYPE here
+            } else if (ObDDLType::DDL_NORMAL_TYPE == ddl_type
+                    || ObDDLType::DDL_COMPOUND_INSTANT == ddl_type) {
+              ddl_type = ObDDLType::DDL_COMPOUND_INSTANT;
             } else if (ObDDLType::DDL_ADD_COLUMN_OFFLINE == ddl_type) {
               // ddl_type = ObDDLType::DDL_ADD_COLUMN_OFFLINE;
             } else if (ObDDLType::DDL_DROP_COLUMN == ddl_type
@@ -4371,12 +4507,25 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
                 ret = OB_ERR_WRONG_AUTO_KEY;
                 LOG_USER_ERROR(OB_ERR_WRONG_AUTO_KEY);
               }
-            } else if (ObDDLType::DDL_INVALID == ddl_type
-                    || ObDDLType::DDL_ADD_COLUMN_ONLINE == ddl_type
-                    || ObDDLType::DDL_NORMAL_TYPE == ddl_type) {
-              ddl_type = ObDDLType::DDL_NORMAL_TYPE;
-            } else {
-              ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
+            } else if (OB_DDL_CHANGE_COLUMN == op_type) {
+              if (ObDDLType::DDL_INVALID == ddl_type
+                || ObDDLType::DDL_ADD_COLUMN_ONLINE == ddl_type
+                || ObDDLType::DDL_NORMAL_TYPE == ddl_type) {
+                ddl_type = ObDDLType::DDL_NORMAL_TYPE;
+              } else {
+                ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
+              }
+            } else if (OB_DDL_MODIFY_COLUMN == op_type) {
+              if (ObDDLType::DDL_INVALID == ddl_type
+                || ObDDLType::DDL_ADD_COLUMN_ONLINE == ddl_type
+                || ObDDLType::DDL_NORMAL_TYPE == ddl_type) {
+                ddl_type = ObDDLType::DDL_NORMAL_TYPE;
+              } else if (ObDDLType::DDL_ADD_COLUMN_INSTANT == ddl_type
+                      || ObDDLType::DDL_COMPOUND_INSTANT == ddl_type) {
+                ddl_type = ObDDLType::DDL_COMPOUND_INSTANT;
+              } else {
+                ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
+              }
             }
           }
           break;
@@ -4548,7 +4697,8 @@ int ObDDLService::check_alter_table_index(const obrpc::ObAlterTableArg &alter_ta
         case ObIndexArg::ALTER_INDEX_TABLESPACE: {
           // offline ddl cannot appear at the same time with other ddl
           if ((DDL_MODIFY_COLUMN == ddl_type || DDL_ADD_COLUMN_OFFLINE == ddl_type
-              || DDL_ADD_COLUMN_ONLINE == ddl_type || DDL_TABLE_REDEFINITION == ddl_type)
+              || DDL_ADD_COLUMN_ONLINE == ddl_type || DDL_TABLE_REDEFINITION == ddl_type
+              || DDL_ADD_COLUMN_INSTANT == ddl_type)
               && ObIndexArg::ADD_INDEX == type) {
             // TODO(shuangcan): distinguish simple table and double table ddl
             ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
@@ -4777,13 +4927,8 @@ int ObDDLService::add_column_group(const obrpc::ObAlterTableArg &alter_table_arg
         }
       }
     }
-    if (OB_SUCC(ret)) {
-      /* note must alter rowkey cg first, else will affect default cg*/
-      if (OB_FAIL(ObSchemaUtils::alter_rowkey_column_group(new_table_schema))) {
-        LOG_WARN("fail to adjust rowkey column group when add column group", K(ret));
-      } else if (OB_FAIL(ObSchemaUtils::alter_default_column_group(new_table_schema))) {
-        LOG_WARN("fail to alter default column group", K(ret));
-      }
+    if (FAILEDx(adjust_cg_for_offline(new_table_schema))) {
+      LOG_WARN("fail to adjust cg for offline", KR(ret));
     }
   }
   return ret;
@@ -4838,13 +4983,8 @@ int ObDDLService::drop_column_group(const obrpc::ObAlterTableArg &alter_table_ar
         LOG_WARN("fail to remove column group from new table schema", K(ret));
       }
     }
-
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObSchemaUtils::alter_rowkey_column_group(new_table_schema))) {
-        LOG_WARN("fail to alter rowkey column group", K(ret));
-      } else if (OB_FAIL(ObSchemaUtils::alter_default_column_group(new_table_schema))) {
-        LOG_WARN("fail to alter default column group", K(ret));
-      }
+    if (FAILEDx(adjust_cg_for_offline(new_table_schema))) {
+      LOG_WARN("fail to adjust cg for offline", KR(ret));
     }
   }
   return ret;
@@ -5217,7 +5357,6 @@ int ObDDLService::convert_to_character(
         LOG_WARN("convert collation type for partition failed", K(ret));
       }
     }
-
     OZ (create_user_hidden_table(orig_table_schema,
                                 new_table_schema,
                                 &alter_table_arg.sequence_ddl_arg_,
@@ -10231,8 +10370,10 @@ int ObDDLService::redistribute_column_ids(
     LOG_WARN("failed to generate new column id map", K(ret));
   } else if (OB_FAIL(new_table_schema.convert_column_ids_for_ddl(column_id_map))) {
     LOG_WARN("failed to convert new table schema column id", K(ret));
-  } else {
-    // do nothing
+  } else if (OB_FAIL(new_table_schema.sort_column_array_by_column_id())) {
+    LOG_WARN("failed to sort column", KR(ret), K(new_table_schema));
+  } else if (OB_FAIL(adjust_cg_for_offline(new_table_schema))) {
+    LOG_WARN("failed to adjust cg after redistribute_column_ids", KR(ret));
   }
   return ret;
 }
@@ -10891,11 +11032,9 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
                              new_table_schema, *alter_column_schema, is_change_column_order))) {
                   LOG_WARN("failed to check is change column order", K(ret));
                 } else if (is_change_column_order) {
-                  if (alter_column_schema->get_column_id() != orig_column_schema->get_column_id()) {
-                    ret = OB_ERR_UNEXPECTED;
-                    LOG_WARN("invalid alter column schema column id", K(ret), K(*alter_column_schema),
-                             K(*orig_column_schema));
-                  } else if (OB_FAIL(new_table_schema.reorder_column(
+                  //in add column instant, same column name's column id is not the same
+                  //no need to check column schema's column id
+                  if (OB_FAIL(new_table_schema.reorder_column(
                                new_column_schema.get_column_name_str(),
                                alter_column_schema->is_first_,
                                alter_column_schema->get_prev_column_name(),
@@ -12529,6 +12668,10 @@ const char* ObDDLService::ddl_type_str(const ObDDLType ddl_type)
     str = "add column offline";
   } else if (DDL_ADD_COLUMN_ONLINE == ddl_type) {
     str = "add column online";
+  } else if (DDL_ADD_COLUMN_INSTANT == ddl_type) {
+    str = "add column instant";
+  } else if (DDL_COMPOUND_INSTANT == ddl_type) {
+    str = "ddl compound instant";
   } else if (DDL_COLUMN_REDEFINITION == ddl_type) {
     str = "column redefinition";
   } else if (DDL_TABLE_REDEFINITION == ddl_type) {
@@ -13686,14 +13829,11 @@ int ObDDLService::alter_table_sess_active_time_in_trans(obrpc::ObAlterTableArg &
             } else if (database_schema->is_in_recyclebin() || table_schema->is_in_recyclebin()) {
               LOG_INFO("skip table schema in recyclebin", K(*table_schema));
             } else {
-              uint64_t tenant_data_version = 0;
               const uint64_t tenant_id = table_schema->get_tenant_id();
               alter_table_schema.set_origin_database_name(database_schema->get_database_name());
               alter_table_schema.set_origin_table_name(table_schema->get_table_name());
               alter_table_schema.set_tenant_id(tenant_id);
-              if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
-                LOG_WARN("get min data version failed", K(ret), K(tenant_id));
-              } else if (OB_FAIL(check_is_offline_ddl(alter_table_arg, tenant_data_version, res.ddl_type_, res.ddl_need_retry_at_executor_))) {
+              if (OB_FAIL(check_is_offline_ddl(alter_table_arg, tenant_data_version, res.ddl_type_, res.ddl_need_retry_at_executor_))) {
                 LOG_WARN("failed to to check is offline ddl", K(ret));
               } else {
                 // offline ddl cannot appear at the same time with other ddl types
@@ -14775,6 +14915,7 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
                                             ddl_need_retry_at_executor))) {
       LOG_WARN("fail to check alter table column", K(ret));
     }
+    const ObDDLType alter_table_ddl_type = ddl_type;
     if (OB_SUCC(ret) && alter_table_arg.is_alter_indexs_
         && OB_FAIL(check_alter_table_index(alter_table_arg, ddl_type))) {
       LOG_WARN("fail to check alter table index", K(ret));
@@ -14818,6 +14959,20 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
           alter_table_arg, alter_table_schema, orig_table_schema,
           is_dec_lob_inrow_threshold, ddl_type))) {
       LOG_WARN("fail to check alter lob_inrow_threshold", K(ret));
+    }
+
+    if (OB_SUCC(ret)) {
+      // add column instant except modify column with other ddl will get in offline
+      if (ObDDLType::DDL_ADD_COLUMN_INSTANT == alter_table_ddl_type
+            || ObDDLType::DDL_COMPOUND_INSTANT == alter_table_ddl_type) {
+        if (alter_table_ddl_type != ddl_type
+            // add foreign key with add column instant should be offline
+            || alter_table_arg.foreign_key_arg_list_.count() > 0) {
+          ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
+          FLOG_INFO("add column instant with other ddl, rewrite ddl_type to DDL_TABLE_REDEFINITION",
+                    K(alter_table_ddl_type), K(ddl_type));
+        }
+      }
     }
 
     if (OB_SUCC(ret)
@@ -15176,6 +15331,24 @@ int ObDDLService::check_ddl_with_primary_key_operation(
   return ret;
 }
 
+int ObDDLService::reorder_column_after_add_column_instant_(const ObTableSchema &orig_table_schema,
+                                                           ObTableSchema &new_table_schema)
+{
+  int ret = OB_SUCCESS;
+  ObArray<uint64_t> add_instant_column_ids;
+  bool add_column_instant = false;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("variable is not init", KR(ret));
+  } else if (OB_FAIL(orig_table_schema.has_add_column_instant(add_column_instant))) {
+    LOG_WARN("failed to get add instant column ids", KR(ret), K(orig_table_schema));
+  } else if (add_column_instant) {
+    if (OB_FAIL(redistribute_column_ids(new_table_schema))) {
+      LOG_WARN("redistribute column id failed", KR(ret));
+    }
+  }
+  return ret;
+}
+
 int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                           const uint64_t tenant_data_version,
                                           obrpc::ObAlterTableRes &res)
@@ -15213,6 +15386,8 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
       LOG_WARN("fail to assign schema", K(ret));
     } else if (OB_FAIL(ObSchemaUtils::mock_default_cg(orig_table_schema->get_tenant_id(), new_table_schema))) {
       LOG_WARN("fail to mock default cg", K(ret), K(orig_table_schema), K(new_table_schema));
+    } else if (OB_FAIL(reorder_column_after_add_column_instant_(*orig_table_schema, new_table_schema))) {
+      LOG_WARN("fail to reorder column id after add column instant", KR(ret));
     } else {
       ObDDLSQLTransaction trans(schema_service_);
       ObDDLTaskRecord task_record;
@@ -43383,12 +43558,9 @@ int ObDDLService::pre_rename_mysql_columns_offline(
     if (OB_FAIL(check_is_change_column_order(new_table_schema, *alter_column_schemas.at(i), is_change_column_order))) {
       LOG_WARN("failed to check is change column order", K(ret));
     } else if (is_change_column_order) {
-      if (alter_column_schemas.at(i)->get_column_id()
-          != orig_column_schemas.at(i)->get_column_id()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid alter column schema column id", K(ret), K(*alter_column_schemas.at(i)),
-                 K(*orig_column_schemas.at(i)));
-      } else if (OB_FAIL(new_table_schema.reorder_column(
+      //in add column instant, same column name's column id is not the same
+      //no need to check column schema's column id
+      if (OB_FAIL(new_table_schema.reorder_column(
                    alter_column_schemas.at(i)->get_column_name_str(),
                    alter_column_schemas.at(i)->is_first_,
                    alter_column_schemas.at(i)->get_prev_column_name(),

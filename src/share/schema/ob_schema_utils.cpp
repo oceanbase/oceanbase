@@ -956,7 +956,8 @@ int ObSchemaUtils::alter_default_column_group(share::schema::ObTableSchema &new_
         /*default cg check, used when only support all/each column group*/
         if (OB_SUCC(ret) && default_cg->get_column_id_count() != 0 && default_cg->get_column_id_count() != col_ids.count()) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("default column group have invalid column id count", K(ret), KPC(default_cg));
+          LOG_WARN("default column group have invalid column id count", KR(ret), K(col_ids),
+                   K(default_cg->get_column_ids()), KPC(default_cg));
         }
       }
     }

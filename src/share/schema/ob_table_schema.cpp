@@ -5752,6 +5752,40 @@ int ObTableSchema::has_lob_column(bool &has_lob, const bool check_large /*= fals
   return ret;
 }
 
+int ObTableSchema::has_add_column_instant(bool &add_column_instant) const
+{
+  int ret = OB_SUCCESS;
+  add_column_instant = false;
+  int64_t max_column_id = 0;
+  const ObColumnSchemaV2 *col = NULL;
+  bool is_oracle_mode = false;
+  ObColumnIterByPrevNextID iter(*this);
+  if (OB_FAIL(check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("fail to if oracle mode", KR(ret));
+  }
+  while (!is_oracle_mode && OB_SUCC(ret)) {
+    if (OB_FAIL(iter.next(col))) {
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+        break;
+      } else {
+        LOG_WARN("iterate failed", KR(ret));
+      }
+    } else if (OB_ISNULL(col)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("col is NULL, ", KR(ret));
+    } else if (col->get_column_id() < OB_APP_MIN_COLUMN_ID) {
+      // ignore hidden column
+    } else if (col->get_column_id() < max_column_id) {
+      add_column_instant = true;
+      break;
+    } else {
+      max_column_id = col->get_column_id();
+    }
+  }
+  return ret;
+}
+
 // For the main VP table, it returns the primary key column and the VP column, get_column_ids() is different,
 // it will return all columns including other VP columns
 // For the secondary VP table, it returns the same as get_column_ids(), that is, the primary key column and the VP column
