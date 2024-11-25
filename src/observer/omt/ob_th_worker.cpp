@@ -428,6 +428,7 @@ void ObThWorker::run(int64_t idx)
   int64_t tenant_id = -1;
   int64_t req_recv_timestamp = -1;
   int32_t worker_level = -1;
+  SET_GROUP_ID(get_group_id());
   this->worker(tenant_id, req_recv_timestamp, worker_level);
 }
 
