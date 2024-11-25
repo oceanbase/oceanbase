@@ -8257,7 +8257,7 @@ int ObDDLBuildSingleReplicaResponseArg::assign(const ObDDLBuildSingleReplicaResp
 
 // === Functions for tablet split start. ===
 OB_SERIALIZE_MEMBER(ObPrepareSplitRangesArg, ls_id_, tablet_id_,
-    user_parallelism_, schema_tablet_size_);
+    user_parallelism_, schema_tablet_size_, ddl_type_);
 OB_DEF_SERIALIZE(ObPrepareSplitRangesRes)
 {
   int ret = OB_SUCCESS;

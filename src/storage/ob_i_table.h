@@ -167,6 +167,7 @@ public:
   void set_scn_range(share::ObScnRange scn_range) { key_.scn_range_ = scn_range; }
   void set_table_type(ObITable::TableType table_type) { key_.table_type_ = table_type; }
   void set_snapshot_version(int64_t version) { key_.version_range_.snapshot_version_ = version; }
+  ObITable::TableType get_table_type() { return key_.table_type_; }
 
   virtual int exist(
       ObStoreCtx &ctx,

@@ -25,6 +25,7 @@ namespace storage
 int ObTabletSplitUtil::get_participants(
     const share::ObSplitSSTableType &split_sstable_type,
     const ObTableStoreIterator &const_table_store_iter,
+    const bool is_table_restore,
     ObIArray<ObITable *> &participants)
 {
   int ret = OB_SUCCESS;
@@ -44,24 +45,38 @@ int ObTabletSplitUtil::get_participants(
         } else {
           LOG_WARN("get next table failed", K(ret), K(table_store_iter));
         }
-      } else if (OB_UNLIKELY(nullptr == table || !table->is_sstable())) {
+      } else if (OB_UNLIKELY(nullptr == table)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected err", K(ret), KPC(table));
-      } else if (table->is_minor_sstable()) {
-        if (share::ObSplitSSTableType::SPLIT_MAJOR == split_sstable_type) {
-          // Split with major only.
-        } else if (OB_FAIL(participants.push_back(table))) {
-          LOG_WARN("push back failed", K(ret));
-        }
-      } else if (table->is_major_sstable()) {
-        if (share::ObSplitSSTableType::SPLIT_MINOR == split_sstable_type) {
-          // Split with minor only.
-        } else if (OB_FAIL(participants.push_back(table))) {
-          LOG_WARN("push back major failed", K(ret));
+      } else if (is_table_restore) {
+        if (table->is_minor_sstable() || table->is_major_sstable()
+            || ObITable::TableType::DDL_DUMP_SSTABLE == table->get_table_type()) {
+          if (OB_FAIL(participants.push_back(table))) {
+            LOG_WARN("push back major failed", K(ret));
+          }
+        } else {
+          LOG_INFO("skip table", K(ret), KPC(table));
         }
       } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected err", K(ret), KPC(table));
+        if (!table->is_sstable()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected err", K(ret), KPC(table));
+        } else if (table->is_minor_sstable()) {
+          if (share::ObSplitSSTableType::SPLIT_MAJOR == split_sstable_type) {
+            // Split with major only.
+          } else if (OB_FAIL(participants.push_back(table))) {
+            LOG_WARN("push back failed", K(ret));
+          }
+        } else if (table->is_major_sstable()) {
+          if (share::ObSplitSSTableType::SPLIT_MINOR == split_sstable_type) {
+            // Split with minor only.
+          } else if (OB_FAIL(participants.push_back(table))) {
+            LOG_WARN("push back major failed", K(ret));
+          }
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected err", K(ret), KPC(table));
+        }
       }
     }
   }
@@ -70,6 +85,7 @@ int ObTabletSplitUtil::get_participants(
 
 int ObTabletSplitUtil::split_task_ranges(
     ObIAllocator &allocator,
+    const share::ObDDLType ddl_type,
     const share::ObLSID &ls_id,
     const ObTabletID &tablet_id,
     const int64_t user_parallelism,
@@ -83,6 +99,7 @@ int ObTabletSplitUtil::split_task_ranges(
   ObTableStoreIterator table_store_iterator;
   ObSEArray<ObStoreRange, 32> store_ranges;
   ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> tables;
+  const bool is_table_restore = ObDDLType::DDL_TABLE_RESTORE == ddl_type;
   common::ObArenaAllocator tmp_arena("SplitRange", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -95,8 +112,20 @@ int ObTabletSplitUtil::split_task_ranges(
   } else if (OB_FAIL(tablet_handle.get_obj()->get_all_sstables(table_store_iterator))) {
     LOG_WARN("fail to fetch table store", K(ret));
   } else if (OB_FAIL(ObTabletSplitUtil::get_participants(
-      share::ObSplitSSTableType::SPLIT_BOTH, table_store_iterator, tables))) {
+      share::ObSplitSSTableType::SPLIT_BOTH, table_store_iterator, is_table_restore, tables))) {
     LOG_WARN("get participants failed", K(ret));
+  } else if (is_table_restore && tables.empty()) {
+    ObDatumRowkey tmp_min_key;
+    ObDatumRowkey tmp_max_key;
+    tmp_min_key.set_min_rowkey();
+    tmp_max_key.set_max_rowkey();
+    if (OB_FAIL(parallel_datum_rowkey_list.prepare_allocate(2))) { // min key and max key.
+      LOG_WARN("reserve failed", K(ret), K(ls_id), K(tablet_id));
+    } else if (OB_FAIL(tmp_min_key.deep_copy(parallel_datum_rowkey_list.at(0), allocator))) {
+      LOG_WARN("failed to push min rowkey", K(ret));
+    } else if (OB_FAIL(tmp_max_key.deep_copy(parallel_datum_rowkey_list.at(1), allocator))) {
+      LOG_WARN("failed to push min rowkey", K(ret));
+    }
   } else {
     const ObITableReadInfo &rowkey_read_info = tablet_handle.get_obj()->get_rowkey_read_info();
     const int64_t tablet_size = RECOVER_TABLE_PARALLEL_MIN_TASK_SIZE; /*2M*/
@@ -165,5 +194,6 @@ int ObTabletSplitUtil::convert_datum_rowkey_to_range(
   LOG_INFO("change to datum range array finished", K(ret), K(parallel_datum_rowkey_list), K(datum_ranges_array));
   return ret;
 }
+
 } //end namespace stroage
 } //end namespace oceanbase

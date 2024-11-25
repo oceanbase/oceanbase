@@ -9693,19 +9693,21 @@ public:
     : ls_id_(),
       tablet_id_(),
       user_parallelism_(0),
-      schema_tablet_size_(0)
+      schema_tablet_size_(0),
+      ddl_type_(share::ObDDLType::DDL_INVALID)
   {}
   ~ObPrepareSplitRangesArg() {}
   bool is_valid() const
   {
-    return ls_id_.is_valid() && tablet_id_.is_valid();
+    return ls_id_.is_valid() && tablet_id_.is_valid() && share::ObDDLType::DDL_INVALID != ddl_type_;
   }
-  TO_STRING_KV(K(ls_id_), K(tablet_id_), K_(user_parallelism), K_(schema_tablet_size));
+  TO_STRING_KV(K(ls_id_), K(tablet_id_), K_(user_parallelism), K_(schema_tablet_size), K_(ddl_type));
 public:
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
   int64_t user_parallelism_;
   int64_t schema_tablet_size_;
+  share::ObDDLType ddl_type_;
 DISALLOW_COPY_AND_ASSIGN(ObPrepareSplitRangesArg);
 };
 

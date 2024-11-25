@@ -127,6 +127,7 @@ public:
 private:
   common::ObArenaAllocator allocator_;
   static constexpr int64_t MAX_RPC_STREAM_WAIT_THREAD_COUNT = 100;
+  static constexpr int64_t RECOVER_TABLE_PARALLEL_MIN_TASK_SIZE = 2 * 1024 * 1024L; /*2MB*/
 };
 
 void add_ddl_event(const ObComplementDataParam *param, const ObString &stmt);
