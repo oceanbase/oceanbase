@@ -602,21 +602,18 @@ int ObArchivePersistHelper::start_new_round(common::ObISQLClient &proxy, const O
   return ret;
 }
 
-int ObArchivePersistHelper::stop_round(common::ObISQLClient &proxy, const ObTenantArchiveRoundAttr &round) const
+int ObArchivePersistHelper::stop_round(common::ObISQLClient &proxy, const ObTenantArchiveRoundAttr &old_round,
+    const ObTenantArchiveRoundAttr &new_round) const
 {
   int ret = OB_SUCCESS;
-  int64_t affected_rows = 0;
-  ObInnerTableOperator round_table_operator;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObArchivePersistHelper not init", K(ret));
-  } else if (!round.state_.is_stop()) {
+  } else if (!new_round.state_.is_stop()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid round state", K(ret), K(round));
-  } else if (OB_FAIL(round_table_operator.init(OB_ALL_LOG_ARCHIVE_PROGRESS_TNAME, *this))) {
-    LOG_WARN("failed to init round progress table", K(ret));
-  } else if (OB_FAIL(round_table_operator.update_row(proxy, round, affected_rows))) {
-    LOG_WARN("failed to stop round", K(ret), K(round));
+    LOG_WARN("invalid round state", K(ret), K(new_round));
+  } else if (OB_FAIL(switch_round_state_to(proxy, old_round, new_round))) {
+    LOG_WARN("failed to stop round", K(ret), K(old_round), K(new_round));
   }
 
   return ret;
@@ -635,7 +632,13 @@ int ObArchivePersistHelper::switch_round_state_to(common::ObISQLClient &proxy, c
     LOG_WARN("ObArchivePersistHelper not init", K(ret));
   } else if (OB_FAIL(round_table_operator.init(OB_ALL_LOG_ARCHIVE_PROGRESS_TNAME, *this))) {
     LOG_WARN("failed to init round progress table", K(ret));
-  } else if (OB_FAIL(predicates.assign_fmt("%s='%s'", OB_STR_STATUS, round.state_.to_status_str()))) {
+  } else if (OB_FAIL(predicates.assign_fmt("%s = '%s' and %s = %ld and %s = %lu",
+                                           OB_STR_STATUS,
+                                           round.state_.to_status_str(),
+                                           OB_STR_ROUND_ID,
+                                           round.round_id_,
+                                           OB_STR_CHECKPOINT_SCN,
+                                           round.checkpoint_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to assign predicates", K(ret), K(round));
   } else if (OB_FAIL(assignments.assign_fmt("%s='%s'", OB_STR_STATUS, new_state.to_status_str()))) {
     LOG_WARN("failed to assign assignments", K(ret), K(new_state));
@@ -659,7 +662,13 @@ int ObArchivePersistHelper::switch_round_state_to(common::ObISQLClient &proxy, c
     LOG_WARN("ObArchivePersistHelper not init", K(ret));
   } else if (OB_FAIL(round_table_operator.init(OB_ALL_LOG_ARCHIVE_PROGRESS_TNAME, *this))) {
     LOG_WARN("failed to init round progress table", K(ret));
-  } else if (OB_FAIL(condition.assign_fmt("%s='%s'", OB_STR_STATUS, old_round.state_.to_status_str()))) {
+  } else if (OB_FAIL(condition.assign_fmt("%s = '%s' and %s = %ld and %s = %lu",
+                                          OB_STR_STATUS,
+                                          old_round.state_.to_status_str(),
+                                          OB_STR_ROUND_ID,
+                                          old_round.round_id_,
+                                          OB_STR_CHECKPOINT_SCN,
+                                          old_round.checkpoint_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to assign condition", K(ret), K(old_round));
   } else if (OB_FAIL(new_round.build_assignments(assignments))) {
     LOG_WARN("failed to build assignments", K(ret), K(new_round));

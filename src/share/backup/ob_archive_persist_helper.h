@@ -122,8 +122,8 @@ public:
   int switch_round_state_to(common::ObISQLClient &proxy, const ObTenantArchiveRoundAttr &old_round, 
       const ObTenantArchiveRoundAttr &new_round) const;
   int get_all_active_rounds(common::ObISQLClient &proxy, common::ObIArray<ObTenantArchiveRoundAttr> &rounds) const;
-  int stop_round(common::ObISQLClient &proxy, const ObTenantArchiveRoundAttr &round) const;
-
+  int stop_round(common::ObISQLClient &proxy, const ObTenantArchiveRoundAttr &old_round,
+    const ObTenantArchiveRoundAttr &new_round) const;
 
   // his round operation
   int get_his_round(common::ObISQLClient &proxy, const int64_t dest_no,
