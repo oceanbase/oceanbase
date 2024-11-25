@@ -1428,8 +1428,6 @@ int ObDbmsStatsUtils::get_prefix_index_text_pairs(share::schema::ObSchemaGetterG
   if (OB_ISNULL(schema_guard)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::remove_item(func_idxs, ignore_cols))) {
-    LOG_WARN("failed to remove item", K(ret));
   } else if (func_idxs.empty()) {
     // do nothing
   } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id,
@@ -1440,6 +1438,7 @@ int ObDbmsStatsUtils::get_prefix_index_text_pairs(share::schema::ObSchemaGetterG
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(get_all_prefix_index_text_pairs(*table_schema,
+                                                     ignore_cols,
                                                      all_text_pairs))) {
     LOG_WARN("failed to get all prefix index text pairs", K(ret));
   } else if (all_text_pairs.empty()) {
@@ -1462,6 +1461,7 @@ int ObDbmsStatsUtils::get_prefix_index_text_pairs(share::schema::ObSchemaGetterG
 }
 
 int ObDbmsStatsUtils::get_all_prefix_index_text_pairs(const share::schema::ObTableSchema &table_schema,
+                                                      ObIArray<uint64_t> &filter_cols,
                                                       ObIArray<PrefixColumnPair> &pairs)
 {
   int ret = OB_SUCCESS;
@@ -1483,6 +1483,8 @@ int ObDbmsStatsUtils::get_all_prefix_index_text_pairs(const share::schema::ObTab
       if (OB_FAIL(col->get_cascaded_column_ids(ref_column_ids))) {
         LOG_WARN("failed to get cascaded column ids", K(ret));
       } else if (ref_column_ids.count() != 1) {
+        // do nothing
+      } else if (ObOptimizerUtil::find_item(filter_cols, ref_column_ids.at(0))) {
         // do nothing
       } else if (OB_ISNULL(ref_col = table_schema.get_column_schema(ref_column_ids.at(0)))) {
         ret = OB_ERR_UNEXPECTED;
