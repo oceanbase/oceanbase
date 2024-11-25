@@ -319,7 +319,6 @@ int ObTempColumnStore::ColumnBlock::get_nested_batch(ObExpr &expr, ObEvalCtx &ct
 
 int ObTempColumnStore::ColumnBlock::get_next_batch(const ObExprPtrIArray &exprs,
                                                    ObEvalCtx &ctx,const IVectorPtrs &vectors,
-                                                   const ObArray<ObLength> &lengths,
                                                    const int32_t start_read_pos,
                                                    int32_t &batch_rows,
                                                    int32_t &batch_pos) const
@@ -351,7 +350,6 @@ int ObTempColumnStore::ColumnBlock::get_next_batch(const ObExprPtrIArray &exprs,
 }
 
 int ObTempColumnStore::ColumnBlock::get_next_batch(const IVectorPtrs &vectors,
-                                                   const ObArray<ObLength> &lengths,
                                                    const int32_t start_read_pos,
                                                    int32_t &batch_rows,
                                                    int32_t &batch_pos) const
@@ -403,7 +401,7 @@ int ObTempColumnStore::Iterator::get_next_batch(const ObExprPtrIArray &exprs,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ensure_read_vectors(exprs, ctx, max_rows))) {
     LOG_WARN("fail to ensure read vectors", K(ret));
-  } else if (OB_FAIL(cur_blk_->get_next_batch(exprs, ctx, *vectors_, column_store_->batch_ctx_->lengths_,
+  } else if (OB_FAIL(cur_blk_->get_next_batch(exprs, ctx, *vectors_,
                                               read_pos_, batch_rows, batch_pos))) {
     LOG_WARN("fail to get next batch from column block", K(ret));
   } else if (OB_UNLIKELY(has_rest_row_in_batch())) {
@@ -468,11 +466,7 @@ int ObTempColumnStore::Iterator::get_next_batch(const IVectorPtrs &vectors,
   int32_t batch_rows = 0;
   int32_t batch_pos = 0;
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(cur_blk_->get_next_batch(vectors,
-                                              column_store_->batch_ctx_->lengths_,
-                                              read_pos_,
-                                              batch_rows,
-                                              batch_pos))) {
+  } else if (OB_FAIL(cur_blk_->get_next_batch(vectors, read_pos_, batch_rows, batch_pos))) {
     LOG_WARN("fail to get next batch from column block", K(ret));
   } else {
     cur_blk_id_ += batch_rows;
@@ -548,13 +542,18 @@ ObTempColumnStore::~ObTempColumnStore()
 
 void ObTempColumnStore::reset()
 {
+  reset_batch_ctx();
+  cur_blk_ = NULL;
+  ObTempBlockStore::reset();
+}
+
+void ObTempColumnStore::reset_batch_ctx()
+{
   if (NULL != batch_ctx_) {
     batch_ctx_->~BatchCtx();
     allocator_->free(batch_ctx_);
     batch_ctx_ = NULL;
-    cur_blk_ = NULL;
   }
-  ObTempBlockStore::reset();
 }
 
 int ObTempColumnStore::init(const ObExprPtrIArray &exprs,

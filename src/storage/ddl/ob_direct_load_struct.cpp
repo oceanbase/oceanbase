@@ -715,7 +715,9 @@ int ObChunkSliceStore::close()
   }
   if (OB_SUCC(ret)) {
     for (int64_t i = 0; OB_SUCC(ret) && i < datum_stores_.count(); ++i) {
-      if (OB_FAIL(datum_stores_.at(i)->finish_add_row(true/*need_dump*/))) {
+      if (OB_FAIL(datum_stores_.at(i)->dump(true/*all_dump*/))) {
+        LOG_WARN("dump failed", K(ret));
+      } else if (OB_FAIL(datum_stores_.at(i)->finish_add_row(true/*need_dump*/))) {
         LOG_WARN("finish add row failed", K(ret));
       }
     }
@@ -993,9 +995,12 @@ int ObChunkBatchSliceStore::close()
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < cg_ctxs_.count(); ++i) {
       ColumnGroupCtx *cg_ctx = cg_ctxs_.at(i);
-      if (OB_FAIL(cg_ctx->store_.finish_add_row(true/*need_dump*/))) {
+      if (OB_FAIL(cg_ctx->store_.dump(true/*all_dump*/))) {
+        LOG_WARN("fail to dump", KR(ret));
+      } else if (OB_FAIL(cg_ctx->store_.finish_add_row(true/*need_dump*/))) {
         LOG_WARN("fail to finish add row", KR(ret));
       } else {
+        cg_ctx->store_.reset_batch_ctx();
         cg_ctx->append_vectors_.reset();
       }
     }

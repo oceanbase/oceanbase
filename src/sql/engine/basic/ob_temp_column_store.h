@@ -112,12 +112,10 @@ public:
     int get_next_batch(const ObExprPtrIArray &exprs,
                        ObEvalCtx &ctx,
                        const IVectorPtrs &vectors,
-                       const ObArray<ObLength> &lengths,
                        const int32_t start_read_pos,
                        int32_t &batch_rows,
                        int32_t &batch_pos) const;
     int get_next_batch(const IVectorPtrs &vectors,
-                       const ObArray<ObLength> &lengths,
                        const int32_t start_read_pos,
                        int32_t &batch_rows,
                        int32_t &batch_pos) const;
@@ -200,6 +198,7 @@ public:
   virtual ~ObTempColumnStore();
 
   void reset();
+  void reset_batch_ctx();
 
   int init(const ObExprPtrIArray &exprs,
            const int64_t max_batch_size,
