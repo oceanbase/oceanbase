@@ -32,6 +32,8 @@ class ObExecContext;
 }
 namespace transaction
 {
+using namespace share::detector;
+
 class SessionGuard
 {
 public:
@@ -176,7 +178,8 @@ private:
                                             const ObIArray<storage::ObRowConflictInfo> &conflict_array,
                                             SessionGuard &session_guard,
                                             const uint32_t count_down_allow_detect,
-                                            const uint64_t start_delay);
+                                            const uint64_t start_delay,
+                                            const ObDeadlockKeyType &detector_key_type);
   static int replace_conflict_trans_ids_(const SessionIDPair sess_id_pair,
                                          const ObTransID self_tx_id,
                                          const ObIArray<storage::ObRowConflictInfo> &conflict_array,
@@ -185,9 +188,27 @@ private:
                                                             const FillVirtualInfoCallBack &on_fill_op,
                                                             const ObTransID &self_trans_id,
                                                             const SessionIDPair sess_id_pair);
-  static int create_detector_node_without_session(CollectCallBack &on_collect_op,
+  template<typename KeyType>
+  static int create_detector_node_without_session_and_block_row_(CollectCallBack &on_collect_op,
+                                                             const FillVirtualInfoCallBack &on_fill_op,
+                                                             const KeyType &self_trans_key,
+                                                             const uint32_t sess_id,
+                                                             const int64_t trans_begin_ts,
+                                                             const int64_t query_timeout_us,
+                                                             const BlockCallBack &func);
+  template<typename KeyType>
+  static int create_detector_node_without_session_and_block_trans_(CollectCallBack &on_collect_op,
+                                                             const FillVirtualInfoCallBack &on_fill_op,
+                                                             const KeyType &self_trans_key,
+                                                             const KeyType &conflict_trans_key,
+                                                             const uint32_t sess_id,
+                                                             const int64_t trans_begin_ts,
+                                                             const int64_t query_timeout_us,
+                                                             const ObAddr &conflict_scheduler);
+  template<typename KeyType>
+  static int create_detector_node_without_session_(CollectCallBack &on_collect_op,
                                                   const FillVirtualInfoCallBack &on_fill_op,
-                                                  const ObTransID &self_trans_id,
+                                                  const KeyType &self_trans_key,
                                                   const uint32_t sess_id,
                                                   const int64_t trans_begin_ts,
                                                   const int64_t query_timeout_us);
@@ -196,13 +217,123 @@ private:
                                                 const ObTransID &trans_id,
                                                 UnregisterPath path);
   static int gen_dependency_resource_array_(const ObIArray<storage::ObRowConflictInfo> &blocked_trans_info_array,
-                                            ObIArray<share::detector::ObDependencyHolder> &dependency_resources);
+                                            ObIArray<share::detector::ObDependencyHolder> &dependency_resources,
+                                            const ObDeadlockKeyType &detector_key_type);
   static void check_if_needed_register_detector_when_end_stmt_(const bool is_rollback,
                                                                const int ret_code,
                                                                sql::ObSQLSessionInfo &session,
                                                                ObTxDesc &desc,
                                                                ObArray<storage::ObRowConflictInfo> &conflict_info_array);
 };
+
+template<typename KeyType>
+class ObTransDummyOnDetectOperation
+{
+ public:
+  ObTransDummyOnDetectOperation(const uint32_t sess_id, const KeyType &trans_key) :
+    sess_id_(sess_id), trans_key_(trans_key) {}
+  ~ObTransDummyOnDetectOperation() {}
+  int operator()(const common::ObIArray<share::detector::ObDetectorInnerReportInfo> &info,
+                 const int64_t self_idx)
+  {
+    // do nothing
+    int ret = OB_SUCCESS;
+    return ret;
+  }
+   TO_STRING_KV(KP(this), K_(sess_id), K_(trans_key));
+ private:
+   uint32_t sess_id_;
+   KeyType trans_key_;
+};
+
+template<typename KeyType>
+int ObTransDeadlockDetectorAdapter::create_detector_node_without_session_(CollectCallBack &on_collect_op,
+                                                                         const FillVirtualInfoCallBack &on_fill_op,
+                                                                         const KeyType &self_trans_key,
+                                                                         const uint32_t sess_id,
+                                                                         const int64_t trans_begin_ts,
+                                                                         const int64_t query_timeout_us)
+{
+  #define PRINT_WRAPPER KR(ret), K(self_trans_key), K(sess_id), K(query_timeout_us), K(trans_begin_ts)
+  int ret = OB_SUCCESS;
+  // priority highest
+  ObDetectorPriority priority(PRIORITY_RANGE::EXTREMELY_HIGH, 0);
+  ObTransDummyOnDetectOperation<KeyType> on_detect_op(sess_id, self_trans_key);
+  if (OB_ISNULL(MTL(ObDeadLockDetectorMgr*))) {
+    ret = OB_ERR_UNEXPECTED;
+    DETECT_LOG(ERROR, "deadlock detector mgr shuould not be null", PRINT_WRAPPER);
+  } else if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->register_key(self_trans_key,
+                                                               on_detect_op,
+                                                               on_collect_op,
+                                                               on_fill_op,
+                                                               trans_begin_ts,
+                                                               priority))) {
+    DETECT_LOG(WARN, "fail to register key", PRINT_WRAPPER);
+  } else {
+    MTL(ObDeadLockDetectorMgr*)->set_timeout(self_trans_key, query_timeout_us);
+  }
+  DETECT_LOG(TRACE, "create fake node detector node without session", PRINT_WRAPPER);
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
+template<typename KeyType>
+int ObTransDeadlockDetectorAdapter::create_detector_node_without_session_and_block_row_(CollectCallBack &on_collect_op,
+                                                                         const FillVirtualInfoCallBack &on_fill_op,
+                                                                         const KeyType &self_trans_key,
+                                                                         const uint32_t sess_id,
+                                                                         const int64_t trans_begin_ts,
+                                                                         const int64_t query_timeout_us,
+                                                                         const BlockCallBack &func)
+{
+  #define PRINT_WRAPPER KR(ret), K(self_trans_key), K(sess_id), K(query_timeout_us), K(trans_begin_ts)
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(create_detector_node_without_session_(on_collect_op,
+                                                    on_fill_op,
+                                                    self_trans_key,
+                                                    sess_id,
+                                                    trans_begin_ts,
+                                                    query_timeout_us))) {
+    DETECT_LOG(WARN, "fail to create detector node", PRINT_WRAPPER);
+  } else if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->block(self_trans_key, func))) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(MTL(ObDeadLockDetectorMgr*)->unregister_key(self_trans_key))) {
+      DETECT_LOG(WARN, "fail to unregister key", PRINT_WRAPPER, K(tmp_ret));
+    }
+    DETECT_LOG(WARN, "fail to block on call back function", PRINT_WRAPPER);
+  } else {
+    DETECT_LOG(INFO, "local execution register to deadlock detector waiting for row success", PRINT_WRAPPER);
+  }
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
+template<typename KeyType>
+int ObTransDeadlockDetectorAdapter::create_detector_node_without_session_and_block_trans_(CollectCallBack &on_collect_op,
+                                                                                          const FillVirtualInfoCallBack &on_fill_op,
+                                                                                          const KeyType &self_trans_key,
+                                                                                          const KeyType &conflict_trans_key,
+                                                                                          const uint32_t sess_id,
+                                                                                          const int64_t trans_begin_ts,
+                                                                                          const int64_t query_timeout_us,
+                                                                                          const ObAddr &conflict_scheduler)
+{
+  #define PRINT_WRAPPER KR(ret), K(self_trans_key), K(sess_id), K(query_timeout_us), K(trans_begin_ts), K(conflict_scheduler)
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(create_detector_node_without_session_(on_collect_op, on_fill_op, self_trans_key, sess_id, trans_begin_ts, query_timeout_us))) {
+    DETECT_LOG(WARN, "fail to create detector node", PRINT_WRAPPER);
+  } else if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->block(self_trans_key, conflict_scheduler, conflict_trans_key))) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(MTL(ObDeadLockDetectorMgr*)->unregister_key(self_trans_key))) {
+      DETECT_LOG(WARN, "fail to unregister key", PRINT_WRAPPER, K(tmp_ret));
+    }
+    DETECT_LOG(WARN, "fail to block on conflict trans", PRINT_WRAPPER);
+  } else {
+    DETECT_LOG(TRACE, "local execution register to deadlock detector waiting for trans success", PRINT_WRAPPER);
+  }
+  return ret;
+  #undef PRINT_WRAPPER
+}
 
 } // namespace transaction
 } // namespace oceanbase

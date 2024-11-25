@@ -33,6 +33,7 @@
 #include "storage/memtable/ob_row_conflict_info.h"
 #include "lib/profile/ob_trace_id.h"
 #include "storage/tx/deadlock_adapter/ob_remote_execution_deadlock_callback.h"
+#include "storage/tx/deadlock_adapter/ob_trans_detector_key.h"
 
 namespace oceanbase
 {
@@ -189,7 +190,8 @@ int ObTransDeadlockDetectorAdapter::kill_stmt(const SessionIDPair sess_id_pair)
 }
 
 int ObTransDeadlockDetectorAdapter::gen_dependency_resource_array_(const ObIArray<storage::ObRowConflictInfo> &block_conflict_info_array,
-                                                                   ObIArray<ObDependencyHolder> &dependency_resources)
+                                                                   ObIArray<ObDependencyHolder> &dependency_resources,
+                                                                   const ObDeadlockKeyType &detector_key_type)
 {
   int ret = OB_SUCCESS;
   UserBinaryKey binary_key;
@@ -197,8 +199,17 @@ int ObTransDeadlockDetectorAdapter::gen_dependency_resource_array_(const ObIArra
   for (int64_t idx = 0; idx < block_conflict_info_array.count() && OB_SUCC(ret); idx++) {
     if (!block_conflict_info_array.at(idx).is_valid()) {
       DETECT_LOG(WARN, "invalid conflict info", K(block_conflict_info_array.at(idx)));
-    } else if (OB_FAIL(binary_key.set_user_key(block_conflict_info_array.at(idx).conflict_tx_id_))) {
-      DETECT_LOG(ERROR, "fail to create key");
+    } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_5_1) {
+      if (OB_FAIL(binary_key.set_user_key(block_conflict_info_array.at(idx).conflict_tx_id_))) {
+        DETECT_LOG(ERROR, "fail to create key");
+      }
+    } else {
+      ObTransDeadlockDetectorKey detector_key(detector_key_type, block_conflict_info_array.at(idx).conflict_tx_id_);
+      if (OB_FAIL(binary_key.set_user_key(detector_key))) {
+        DETECT_LOG(ERROR, "fail to create key");
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(resource.set_args(block_conflict_info_array.at(idx).conflict_tx_scheduler_, binary_key))) {
       DETECT_LOG(ERROR, "fail to create resource");
     } else if (OB_FAIL(dependency_resources.push_back(resource))) {
@@ -213,7 +224,8 @@ int ObTransDeadlockDetectorAdapter::register_to_deadlock_detector_(const Session
                                                                    const ObIArray<storage::ObRowConflictInfo> &conflict_array,
                                                                    SessionGuard &session_guard,
                                                                    const uint32_t count_down_allow_detect,
-                                                                   const uint64_t start_delay)
+                                                                   const uint64_t start_delay,
+                                                                   const ObDeadlockKeyType &detector_key_type)
 {
   #define PRINT_WRAPPER KR(ret), K(self_tx_id), K(sess_id_pair), K(conflict_array), K(query_timeout), K(self_tx_scheduler)
   int ret = OB_SUCCESS;
@@ -250,7 +262,7 @@ int ObTransDeadlockDetectorAdapter::register_to_deadlock_detector_(const Session
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(gen_dependency_resource_array_(conflict_array, blocked_resources))) {
+  } else if (OB_FAIL(gen_dependency_resource_array_(conflict_array, blocked_resources, detector_key_type))) {
     DETECT_LOG(WARN, "fail to generate block resource", PRINT_WRAPPER);
   } else if (OB_ISNULL(MTL(ObDeadLockDetectorMgr*))) {
     ret = OB_ERR_UNEXPECTED;
@@ -314,7 +326,7 @@ int ObTransDeadlockDetectorAdapter::replace_conflict_trans_ids_(const SessionIDP
     if (OB_ISNULL(MTL(ObDeadLockDetectorMgr*))) {
       ret = OB_ERR_UNEXPECTED;
       DETECT_LOG(ERROR, "mtl deadlock detector mgr is null", PRINT_WRAPPER);
-    } else if (OB_FAIL(gen_dependency_resource_array_(conflict_array, blocked_resources))) {
+    } else if (OB_FAIL(gen_dependency_resource_array_(conflict_array, blocked_resources, ObDeadlockKeyType::DEFAULT))) {
       DETECT_LOG(ERROR, "generate dependency array failed", PRINT_WRAPPER);
     } else if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->get_block_list(self_tx_id, current_blocked_resources))) {
       DETECT_LOG(WARN, "generate dependency array failed", PRINT_WRAPPER);
@@ -410,7 +422,7 @@ int ObTransDeadlockDetectorAdapter::register_or_replace_conflict_trans_ids(const
   } else if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->check_detector_exist(self_tx_id, is_detector_exist))) {
     DETECT_LOG(WARN, "fail to get detector exist status", PRINT_WRAPPER);
   } else if (!is_detector_exist) {
-    if (OB_FAIL(register_to_deadlock_detector_(sess_id_pair, self_tx_id, conflict_array, session_guard, count_down_allow_detect, 3_s))) {
+    if (OB_FAIL(register_to_deadlock_detector_(sess_id_pair, self_tx_id, conflict_array, session_guard, count_down_allow_detect, 3_s, ObDeadlockKeyType::DEFAULT))) {
       DETECT_LOG(WARN, "register new detector in remote execution failed", PRINT_WRAPPER);
     } else {
       DETECT_LOG(INFO, "register new detector in remote execution", PRINT_WRAPPER);
@@ -456,7 +468,7 @@ int ObTransDeadlockDetectorAdapter::lock_wait_mgr_reconstruct_conflict_trans_ids
                                       UnregisterPath::REPLACE_MEET_TOTAL_DIFFERENT_LIST);
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(register_to_deadlock_detector_(sess_id_pair, self_tx_id, conflict_array, session_guard, count_down_allow_detect, 0))) {
+  } else if (OB_FAIL(register_to_deadlock_detector_(sess_id_pair, self_tx_id, conflict_array, session_guard, count_down_allow_detect, 0, ObDeadlockKeyType::REMOTE_EXEC_SIDE))) {
     DETECT_LOG(WARN, "register new detector in remote execution failed", PRINT_WRAPPER);
   } else {
     DETECT_LOG(INFO, "register new detector in remote execution", PRINT_WRAPPER);
@@ -614,36 +626,6 @@ int ObTransDeadlockDetectorAdapter::create_detector_node_and_set_parent_if_neede
       }
     }
   }
-  return ret;
-  #undef PRINT_WRAPPER
-}
-
-int ObTransDeadlockDetectorAdapter::create_detector_node_without_session(CollectCallBack &on_collect_op,
-                                                                         const FillVirtualInfoCallBack &on_fill_op,
-                                                                         const ObTransID &self_trans_id,
-                                                                         const uint32_t sess_id,
-                                                                         const int64_t trans_active_ts,
-                                                                         const int64_t query_timeout_us)
-{
-  #define PRINT_WRAPPER KR(ret), K(self_trans_id), K(sess_id), K(query_timeout_us), K(trans_active_ts)
-  int ret = OB_SUCCESS;
-  // priority highest
-  ObDetectorPriority priority(PRIORITY_RANGE::EXTREMELY_HIGH, 0);
-  ObTransDummyOnDetectOperation on_detect_op(sess_id, self_trans_id);
-  if (OB_ISNULL(MTL(ObDeadLockDetectorMgr*))) {
-    ret = OB_ERR_UNEXPECTED;
-    DETECT_LOG(ERROR, "deadlock detector mgr shuould not be null", PRINT_WRAPPER);
-  } else if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->register_key(self_trans_id,
-                                                               on_detect_op,
-                                                               on_collect_op,
-                                                               on_fill_op,
-                                                               trans_active_ts,
-                                                               priority))) {
-    DETECT_LOG(WARN, "fail to register key", PRINT_WRAPPER);
-  } else {
-    MTL(ObDeadLockDetectorMgr*)->set_timeout(self_trans_id, query_timeout_us);
-  }
-  DETECT_LOG(TRACE, "create fake node detector node without session", PRINT_WRAPPER);
   return ret;
   #undef PRINT_WRAPPER
 }
@@ -916,31 +898,45 @@ int ObTransDeadlockDetectorAdapter::lock_wait_mgr_reconstruct_detector_waiting_f
   if (nullptr == (MTL(ObDeadLockDetectorMgr*))) {
     ret = OB_ERR_UNEXPECTED;
     DETECT_LOG(WARN, "fail to get ObDeadLockDetectorMgr", PRINT_WRAPPER);
-  } else if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->check_detector_exist(self_trans_id, exist))) {
-    DETECT_LOG(WARN, "fail to check detector exist", PRINT_WRAPPER);
-  } else if (exist) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(MTL(ObDeadLockDetectorMgr*)->unregister_key(self_trans_id))) {
-      DETECT_LOG(WARN, "fail to unregister key", PRINT_WRAPPER, K(tmp_ret));
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_5_1) {
+    if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->check_detector_exist(self_trans_id, exist))) {
+      DETECT_LOG(WARN, "fail to check detector exist", PRINT_WRAPPER);
+    } else if (exist) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(MTL(ObDeadLockDetectorMgr*)->unregister_key(self_trans_id))) {
+        DETECT_LOG(WARN, "fail to unregister key", PRINT_WRAPPER, K(tmp_ret));
+      }
     }
-  }
-  if (OB_FAIL(ret)) {
-    DETECT_LOG(WARN, "local execution register to deadlock detector waiting for row failed", PRINT_WRAPPER);
-  } else if (OB_FAIL(create_detector_node_without_session(on_collect_op,
-                                                          on_fill_op,
-                                                          self_trans_id,
-                                                          sess_id,
-                                                          trans_begin_ts,
-                                                          query_timeout_us))) {
-    DETECT_LOG(WARN, "fail to create detector node", PRINT_WRAPPER);
-  } else if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->block(self_trans_id, func))) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(MTL(ObDeadLockDetectorMgr*)->unregister_key(self_trans_id))) {
-      DETECT_LOG(WARN, "fail to unregister key", PRINT_WRAPPER, K(tmp_ret));
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(create_detector_node_without_session_and_block_row_(on_collect_op,
+                                                                on_fill_op,
+                                                                self_trans_id,
+                                                                sess_id,
+                                                                trans_begin_ts,
+                                                                query_timeout_us,
+                                                                func))) {
+      DETECT_LOG(WARN, "fail to create detector node and block row", PRINT_WRAPPER);
     }
-    DETECT_LOG(WARN, "fail to block on call back function", PRINT_WRAPPER);
   } else {
-    DETECT_LOG(INFO, "local execution register to deadlock detector waiting for row success", PRINT_WRAPPER);
+    ObTransDeadlockDetectorKey detector_key(ObDeadlockKeyType::REMOTE_EXEC_SIDE, self_trans_id);
+    if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->check_detector_exist(detector_key, exist))) {
+      DETECT_LOG(WARN, "fail to check detector exist", PRINT_WRAPPER);
+    } else if (exist) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(MTL(ObDeadLockDetectorMgr*)->unregister_key(detector_key))) {
+        DETECT_LOG(WARN, "fail to unregister key", PRINT_WRAPPER, K(tmp_ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(create_detector_node_without_session_and_block_row_(on_collect_op,
+                                                                on_fill_op,
+                                                                detector_key,
+                                                                sess_id,
+                                                                trans_begin_ts,
+                                                                query_timeout_us,
+                                                                func))) {
+      DETECT_LOG(WARN, "fail to create detector node and block row", PRINT_WRAPPER);
+    }
   }
   return ret;
   #undef PRINT_WRAPPER
@@ -969,28 +965,50 @@ int ObTransDeadlockDetectorAdapter::lock_wait_mgr_reconstruct_detector_waiting_f
   if (nullptr == (MTL(ObDeadLockDetectorMgr*))) {
     ret = OB_ERR_UNEXPECTED;
     DETECT_LOG(WARN, "fail to get ObDeadLockDetectorMgr", PRINT_WRAPPER);
-  } else if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->check_detector_exist(self_trans_id, exist))) {
-    DETECT_LOG(WARN, "fail to check detector exist", PRINT_WRAPPER);
-  } else if (exist) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(MTL(ObDeadLockDetectorMgr*)->unregister_key(self_trans_id))) {
-      DETECT_LOG(WARN, "fail to unregister key", PRINT_WRAPPER, K(tmp_ret));
-    }
-  }
-  if (OB_FAIL(ret)) {
-    DETECT_LOG(WARN, "local execution register to deadlock detector waiting for row failed", PRINT_WRAPPER);
-  }  else if (OB_FAIL(get_conflict_trans_scheduler(conflict_trans_id, scheduler_addr))) {
+  } else if (OB_FAIL(get_conflict_trans_scheduler(conflict_trans_id, scheduler_addr))) {
     DETECT_LOG(WARN, "fail to get conflict trans scheduler addr", PRINT_WRAPPER);
-  } else if (OB_FAIL(create_detector_node_without_session(on_collect_op, on_fill_op, self_trans_id, sess_id, trans_begin_ts, query_timeout_us))) {
-    DETECT_LOG(WARN, "fail to create detector node", PRINT_WRAPPER);
-  } else if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->block(self_trans_id, scheduler_addr, conflict_trans_id))) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(MTL(ObDeadLockDetectorMgr*)->unregister_key(self_trans_id))) {
-      DETECT_LOG(WARN, "fail to unregister key", PRINT_WRAPPER, K(tmp_ret));
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_5_1) {
+    if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->check_detector_exist(self_trans_id, exist))) {
+      DETECT_LOG(WARN, "fail to check detector exist", PRINT_WRAPPER);
+    } else if (exist) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(MTL(ObDeadLockDetectorMgr*)->unregister_key(self_trans_id))) {
+        DETECT_LOG(WARN, "fail to unregister key", PRINT_WRAPPER, K(tmp_ret));
+      }
     }
-    DETECT_LOG(WARN, "fail to block on conflict trans", PRINT_WRAPPER);
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(create_detector_node_without_session_and_block_trans_(on_collect_op,
+                                                                      on_fill_op,
+                                                                      self_trans_id,
+                                                                      conflict_trans_id,
+                                                                      sess_id,
+                                                                      trans_begin_ts,
+                                                                      query_timeout_us,
+                                                                      scheduler_addr))) {
+      DETECT_LOG(WARN, "fail to create detector node and block trans", PRINT_WRAPPER);
+    }
   } else {
-    DETECT_LOG(TRACE, "local execution register to deadlock detector waiting for trans success", PRINT_WRAPPER);
+    ObTransDeadlockDetectorKey self_detector_key(ObDeadlockKeyType::REMOTE_EXEC_SIDE, self_trans_id);
+    ObTransDeadlockDetectorKey conflict_detector_key(ObDeadlockKeyType::REMOTE_EXEC_SIDE, conflict_trans_id);
+    if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->check_detector_exist(self_detector_key, exist))) {
+      DETECT_LOG(WARN, "fail to check detector exist", PRINT_WRAPPER);
+    } else if (exist) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(MTL(ObDeadLockDetectorMgr*)->unregister_key(self_detector_key))) {
+        DETECT_LOG(WARN, "fail to unregister key", PRINT_WRAPPER, K(tmp_ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(create_detector_node_without_session_and_block_trans_(on_collect_op,
+                                                                      on_fill_op,
+                                                                      self_detector_key,
+                                                                      conflict_detector_key,
+                                                                      sess_id,
+                                                                      trans_begin_ts,
+                                                                      query_timeout_us,
+                                                                      scheduler_addr))) {
+      DETECT_LOG(WARN, "fail to create detector node and block trans", PRINT_WRAPPER);
+    }
   }
   return ret;
   #undef PRINT_WRAPPER

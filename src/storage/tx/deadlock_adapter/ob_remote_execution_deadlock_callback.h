@@ -37,26 +37,6 @@ private:
   ObTransID trans_id_;
 };
 
-
-class ObTransDummyOnDetectOperation
-{
- public:
-  ObTransDummyOnDetectOperation(const uint32_t sess_id, const ObTransID &trans_id) :
-    sess_id_(sess_id), trans_id_(trans_id) {}
-  ~ObTransDummyOnDetectOperation() {}
-  int operator()(const common::ObIArray<share::detector::ObDetectorInnerReportInfo> &info,
-                 const int64_t self_idx)
-  {
-    // do nothing
-    int ret = OB_SUCCESS;
-    return ret;
-  }
-   TO_STRING_KV(KP(this), K_(sess_id), K_(trans_id));
- private:
-   uint32_t sess_id_;
-   ObTransID trans_id_;
-};
-
 class RemoteDeadLockCollectCallBack {
 public:
   RemoteDeadLockCollectCallBack() : sess_id_pair_(), trace_id_(), row_conflict_info_array_() {}

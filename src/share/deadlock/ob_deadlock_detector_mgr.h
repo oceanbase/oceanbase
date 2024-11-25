@@ -20,6 +20,7 @@
 #include "storage/tx/ob_time_wheel.h"
 #include "lib/utility/utility.h"
 #include "lib/allocator/ob_malloc.h"
+#include "lib/random/ob_random.h"
 #include "ob_deadlock_arg_checker.h"
 #include "ob_deadlock_message.h"
 #include "lib/function/ob_function.h"
@@ -317,6 +318,7 @@ int ObDeadLockDetectorMgr::register_key(const KeyType &key,
       (void)detector_map_.del(binary_key);
       detector_map_.revert(p_detector);
     } else {
+      MTL(ObDeadLockDetectorMgr*)->set_timeout(key, 10_min);
       detector_map_.revert(p_detector);
       DETECT_LOG(TRACE, "register key success", PRINT_WRAPPER);
     }
@@ -706,6 +708,7 @@ int ObDeadLockDetectorMgr::set_timeout(const KeyType &key, const int64_t timeout
   CHECK_ARGS(key, timeout);
   #define PRINT_WRAPPER KR(ret), K(user_key), K(timeout)
   int ret = common::OB_SUCCESS;
+  int64_t timeout_us = timeout;
   DetectorRefGuard ref_guard;
   UserBinaryKey user_key;
 
@@ -717,7 +720,14 @@ int ObDeadLockDetectorMgr::set_timeout(const KeyType &key, const int64_t timeout
     if (timeout > 1_hour && REACH_TIME_INTERVAL(1_s)) {
       DETECT_LOG(INFO, "timeout value more than 1 hour", PRINT_WRAPPER);
     }
-    ref_guard.get_detector()->set_timeout(timeout);
+    if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_5_1
+     && CLUSTER_CURRENT_VERSION >= CLUSTER_VERSION_4_2_5_1)
+    {
+      // 0-5s random wait
+      int64_t rand_wait_ts = ObRandom::rand(0, 50) * 100 * 1000;
+      timeout_us = timeout < (10_s + rand_wait_ts) ? timeout : (10_s + rand_wait_ts);
+    }
+    ref_guard.get_detector()->set_timeout(timeout_us);
   }
 
   return ret;

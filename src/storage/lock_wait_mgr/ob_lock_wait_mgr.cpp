@@ -1340,7 +1340,7 @@ void ObLockWaitMgr::check_wait_node_session_stat_(Node *iter,
       node2del = iter;
       // SET_NODE_TO_DELETE("wait time too long");
       iter->on_retry_lock(iter->hash());
-      TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "LOCK_MGR: req wait lock cost too much time", K(*iter));
+      TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "LOCK_MGR: req wait lock cost too much time", K(*iter), K(wait_timeout_ts));
     } else {
       transaction::ObTxDesc *&tx_desc = session_info->get_tx_desc();
       bool ac = false, has_explicit_start_tx = session_info->has_explicit_start_trans();
@@ -1383,8 +1383,8 @@ ObLink* ObLockWaitMgr::check_timeout()
     CriticalGuard(get_qs());
     while(NULL != (iter = hash_->quick_next(iter))) {
       TRANS_LOG(TRACE, "LOCK_MGR: check", K(*iter));
-      // 0 - 3s rand wait time for wait timeout
-      int64_t rand_wait_ts = ObRandom::rand(0, 30) * 100 * 1000;
+      // 0 - 5s rand wait time for wait timeout
+      int64_t rand_wait_ts = ObRandom::rand(0, 50) * 100 * 1000;
       uint64_t hash = iter->hash();
       uint64_t last_lock_seq = iter->get_lock_seq();
       uint64_t curr_lock_seq = ATOMIC_LOAD(&sequence_[(hash >> 1)% LOCK_BUCKET_COUNT]);
