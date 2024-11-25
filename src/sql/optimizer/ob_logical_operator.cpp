@@ -5631,3 +5631,30 @@ bool ObLogicalOperator::is_parallel_more_than_part_cnt() const
     return get_parallel() > strong_sharding_->get_part_cnt();
   }
 }
+
+int ObLogicalOperator::check_contain_dist_das(const ObIArray<ObAddr> &exec_server_list,
+                                              bool &contain_dist_das) const
+{
+  int ret = OB_SUCCESS;
+  contain_dist_das = false;
+  if (!get_contains_das_op()) {
+    contain_dist_das = false;
+  } else if (LOG_TABLE_SCAN == get_type() && static_cast<const ObLogTableScan*>(this)->use_das()) {
+    if (1 != exec_server_list.count()
+        || 1 != get_server_list().count()
+        || exec_server_list.at(0) != get_server_list().at(0)) {
+      contain_dist_das = true;
+    }
+  } else {
+    ObLogicalOperator *child = NULL;
+    for (int64_t i = 0; !contain_dist_das && OB_SUCC(ret) && i < get_num_of_child(); ++i) {
+      if (OB_ISNULL(child = get_child(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("child is null", K(ret), K(i));
+      } else if (OB_FAIL(SMART_CALL(child->check_contain_dist_das(exec_server_list, contain_dist_das)))) {
+        LOG_WARN("failed to smart call check contain dist das", K(ret));
+      }
+    }
+  }
+  return ret;
+}

@@ -901,19 +901,36 @@ int ObLogSubPlanFilter::get_sub_qb_names(ObIArray<ObString> &sub_qb_names)
   return ret;
 }
 
-int ObLogSubPlanFilter::check_right_is_local_scan(bool &is_local_scan) const
+int ObLogSubPlanFilter::check_right_is_local_scan(int64_t &local_scan_type) const
 {
   int ret = OB_SUCCESS;
-  is_local_scan = true;
+  local_scan_type = 2;  // 0: dist scan, 1: local das scan, 2: local scan
+  const ObLogicalOperator *first_child = NULL;
   const ObLogicalOperator *child = NULL;
-  for (int64_t i = 1; is_local_scan && OB_SUCC(ret) && i < get_num_of_child(); i++) {
+  bool contain_dist_das = false;
+  if (OB_ISNULL(first_child = get_child(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(first_child));
+  }
+  for (int64_t i = 1; 0 < local_scan_type && OB_SUCC(ret) && i < get_num_of_child(); i++) {
     if (init_plan_idxs_.has_member(i) || one_time_idxs_.has_member(i)) {
       /* do nothing */
     } else if (OB_ISNULL(child = get_child(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(i));
-    } else if (child->is_exchange_allocated() || child->get_contains_das_op()) {
-      is_local_scan = false;
+    } else if (child->is_exchange_allocated()) {
+      local_scan_type = 0;
+    } else if (!child->get_contains_das_op()) {
+      /* do nothing */
+    } else if (1 != first_child->get_server_list().count()
+               || ObShardingInfo::is_shuffled_server_list(first_child->get_server_list())) {
+      local_scan_type = 0;
+    } else if (OB_FAIL(child->check_contain_dist_das(first_child->get_server_list(), contain_dist_das))) {
+      LOG_WARN("failed to check contain dist das", K(ret));
+    } else if (contain_dist_das) {
+      local_scan_type = 0;
+    } else {
+      local_scan_type = 1;
     }
   }
   return ret;

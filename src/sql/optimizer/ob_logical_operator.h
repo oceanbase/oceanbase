@@ -1689,6 +1689,8 @@ public:
   int pre_check_can_px_batch_rescan(bool &find_nested_rescan,
                                     bool &find_rescan_px,
                                     bool nested) const;
+  int check_contain_dist_das(const ObIArray<ObAddr> &exec_server_list,
+                             bool &contain_dist_das) const;
 public:
   ObSEArray<ObLogicalOperator *, 16, common::ModulePageAllocator, true> child_;
   ObSEArray<ObPCParamEqualInfo, 4, common::ModulePageAllocator, true> equal_param_constraints_;
