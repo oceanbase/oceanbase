@@ -501,6 +501,7 @@ public:
   bool is_online_stats_gathering() const { return is_online_stats_gathering_; }
 
   int get_lob_access_ctx(ObLobAccessCtx *&lob_access_ctx);
+  void set_retry_info(const ObQueryRetryInfo *retry_info) { das_ctx_.get_location_router().set_retry_info(retry_info); }
 
 private:
   int build_temp_expr_ctx(const ObTempExpr &temp_expr, ObTempExprCtx *&temp_expr_ctx);

@@ -205,7 +205,9 @@ int ObTabletToLSCache::check_and_get_ls_info(const common::ObTabletID &tablet_id
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", KR(ret), K(tablet_id));
   } else if (OB_FAIL(map_.get(tablet_id, ls_cache))) {
-    if (OB_ENTRY_NOT_EXIST != ret) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
       TRANS_LOG(WARN, "get ls cache fail", KR(ret), K(tablet_id));
     }
   } else {
