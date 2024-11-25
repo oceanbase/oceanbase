@@ -16,6 +16,7 @@
 #include "lib/ob_define.h"
 #include "lib/worker.h"
 #include "common/ob_common_utility.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 
 namespace oceanbase
 {
@@ -376,6 +377,8 @@ ObCharsetInfo *ObCharset::charset_arr[CS_TYPE_MAX] = {
   NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,                 // 264
   NULL                                                            // 272
 };
+
+static ObCharsetInfo *utf8mb4_bin_full_unicode_ = NULL;
 
 double ObCharset::strntodv2(const char *str,
                           size_t str_len,
@@ -944,7 +947,8 @@ int ObCharset::like_range(ObCollationType collation_type,
                           char *min_str,
                           size_t *min_str_len,
                           char *max_str,
-                          size_t *max_str_len)
+                          size_t *max_str_len,
+                          bool is_like_range_support_non_bmp_chars)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(collation_type <= CS_TYPE_INVALID ||
@@ -962,6 +966,9 @@ int ObCharset::like_range(ObCollationType collation_type,
               KP(min_str), K(min_str_len));
   } else {
     ObCharsetInfo *cs = static_cast<ObCharsetInfo *>(ObCharset::charset_arr[collation_type]);
+    if (is_like_range_support_non_bmp_chars && OB_NOT_NULL(utf8mb4_bin_full_unicode_)) {
+      cs = utf8mb4_bin_full_unicode_;
+    }
     static char w_one = '_';
     static char w_many = '%';
    // const char *tmp_str = like_str.ptr();
@@ -3323,6 +3330,16 @@ int ObCharset::init_charset()
   int ret = OB_SUCCESS;
   if (OB_FAIL(init_gb18030_2022())) {
     LOG_WARN("failed to init gb18030 2022", K(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(utf8mb4_bin_full_unicode_ = static_cast<ObCharsetInfo*>(charset_malloc(sizeof(ObCharsetInfo))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc charset", K(ret));
+    } else {
+      *utf8mb4_bin_full_unicode_ = ob_charset_utf8mb4_bin;
+      utf8mb4_bin_full_unicode_->max_sort_char = 0x10FFFF;
+    }
   }
 
   auto add_coll = [&ret](ObCollationType coll_type, ObCharsetInfo *cs)->void {

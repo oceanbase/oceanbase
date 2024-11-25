@@ -7459,6 +7459,15 @@ int ObQueryRange::replace_unknown_value(ObKeyPart *root, ObExecContext &exec_ctx
   return ret;
 }
 
+static bool is_like_range_support_non_bmp_chars() {
+  bool bret = false;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    bret = tenant_config->_like_range_support_non_bmp_chars;
+  }
+  return bret;
+}
+
 int ObQueryRange::get_like_range(const ObObj &pattern,
                                  const ObObj &escape,
                                  ObKeyPart &out_key_part,
@@ -7553,7 +7562,8 @@ int ObQueryRange::get_like_range(const ObObj &pattern,
                                                static_cast<char*>(min_str_buf),
                                                &min_str_len,
                                                static_cast<char*>(max_str_buf),
-                                               &max_str_len))) {
+                                               &max_str_len,
+                                               is_like_range_support_non_bmp_chars()))) {
         //set whole range
         out_key_part.normal_keypart_->start_.set_min_value();
         out_key_part.normal_keypart_->end_.set_max_value();
@@ -8682,7 +8692,8 @@ int ObQueryRange::is_precise_like_range(const ObObjParam &pattern, char escape, 
         LOG_WARN("no enough memory", K(ret));
       } else if (OB_FAIL(ObCharset::like_range(cs_type, pattern_str, escape,
                                        min_str_buf, &min_str_len,
-                                       max_str_buf, &max_str_len))) {
+                                       max_str_buf, &max_str_len,
+                                       is_like_range_support_non_bmp_chars()))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to retrive like range", K(ret));
       } else {

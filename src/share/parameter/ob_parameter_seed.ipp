@@ -1845,3 +1845,7 @@ DEF_BOOL(_enable_drop_and_add_index, OB_TENANT_PARAMETER, "False",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 ERRSIM_DEF_STR(palf_inject_receive_log_error_zone, OB_CLUSTER_PARAMETER, "", "specifies the zone name that palf module want to inject error when receive log",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_like_range_support_non_bmp_chars, OB_TENANT_PARAMETER, "False",
+        "like range support non-bmp chars for utf8mb4_bin",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
