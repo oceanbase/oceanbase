@@ -144,7 +144,7 @@ int ObExprSet::eval_coll(const ObObj &obj, ObExecContext &ctx, pl::ObPLNestedTab
       coll->set_type(c1->get_type());
       coll->set_id(c1->get_id());
       coll->set_is_null(c1->is_null());
-      coll->set_element_type(c1->get_element_type());
+      coll->set_element_desc(c1->get_element_desc());
       coll->set_column_count(c1->get_column_count());
       coll->set_not_null(c1->is_not_null());
       coll->set_count(elem_count);
