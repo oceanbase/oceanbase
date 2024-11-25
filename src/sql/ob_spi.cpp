@@ -7081,7 +7081,18 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
                     PL_REF_CURSOR_TYPE == obj.get_meta().get_extend_type()) {
                   alloc = &ctx->exec_ctx_->get_allocator();
                 }
-                OZ (check_and_deep_copy_result(*alloc, obj, *out_using_params->at(i)));
+                if (out_using_params->at(i)->is_null()) {
+                  if (out_using_params->at(i)->get_param_meta().is_pl_extend_type()) {
+                    OZ (pl::ObUserDefinedType::deep_copy_obj(*alloc, obj, *out_using_params->at(i)));
+                  } else if (obj.is_pl_extend()) {
+                    ret =OB_ERR_EXPRESSION_WRONG_TYPE;
+                    LOG_WARN("expr is wrong type", K(ret), K(obj), KPC(out_using_params->at(i)));
+                  } else {
+                    OZ (deep_copy_obj(*alloc, obj, *out_using_params->at(i)));
+                  }
+                } else {
+                  OZ (check_and_deep_copy_result(*alloc, obj, *out_using_params->at(i)));
+                }
               } else {
                 ObSEArray<ObObj, 1> cur_result;
                 ObSEArray<ObObj, 1> conv_result;

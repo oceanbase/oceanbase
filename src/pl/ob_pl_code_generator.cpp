@@ -8497,6 +8497,11 @@ int ObPLCodeGenerator::generate_out_param(
           ObLLVMValue allocator;
           ObLLVMValue src_datum;
           ObLLVMValue dest_datum;
+          ObLLVMValue p_type_value, type_value, is_null;
+          ObLLVMBasicBlock normal_block;
+          ObLLVMBasicBlock after_copy_block;
+          OZ (get_helper().create_block(ObString("normal_block"), get_func(), normal_block));
+          OZ (get_helper().create_block(ObString("after_copy_block"), get_func(), after_copy_block));
           OZ (extract_objparam_from_context(
             get_vars().at(CTX_IDX), param_desc.at(i).out_idx_, into_address));
           //if (pl_type.is_collection_type()) {
@@ -8506,6 +8511,27 @@ int ObPLCodeGenerator::generate_out_param(
           //} else {
             OZ (generate_null(ObIntType, allocator));
           //}
+          if (OB_SUCC(ret) && pl_type.is_cursor_type()) {
+            OZ (get_helper().create_br(normal_block));
+          } else {
+            ObLLVMBasicBlock null_block;
+            OZ (get_helper().create_block(ObString("null_block"), get_func(), null_block));
+            OZ (extract_type_ptr_from_objparam(p_arg, p_type_value));
+            OZ (get_helper().create_load(ObString("load_type"), p_type_value, type_value));
+            OZ (get_helper().create_icmp_eq(type_value, ObNullType, is_null));
+            OZ (get_helper().create_cond_br(is_null, null_block, normal_block));
+            //null branch
+            OZ (set_current(null_block));
+            OZ (extract_extend_from_objparam(into_address,
+                                              pl_type,
+                                              dest_datum));
+            OZ (pl_type.generate_assign_with_null(*this,
+                                                  *(s.get_namespace()),
+                                                  allocator,
+                                                  dest_datum));
+            OZ (get_helper().create_br(after_copy_block));
+          }
+          OZ (set_current(normal_block));
           OZ (extract_obobj_ptr_from_objparam(into_address, dest_datum));
           OZ (extract_obobj_ptr_from_objparam(p_arg, src_datum));
           OZ (pl_type.generate_copy(*this,
@@ -8518,6 +8544,8 @@ int ObPLCodeGenerator::generate_out_param(
                                     s.get_block()->in_warning(),
                                     OB_INVALID_ID));
           OZ (generate_destruct_obj(s, src_datum));
+          OZ (get_helper().create_br(after_copy_block));
+          OZ (set_current(after_copy_block));
         }
       }
     } else { //处理基础类型的出参
@@ -8593,6 +8621,32 @@ int ObPLCodeGenerator::generate_out_param(
                                      s.get_block()->in_warning(),
                                      package_id));
       } else {
+        ObLLVMValue p_type_value, type_value, is_null;
+        ObLLVMBasicBlock normal_block;
+        ObLLVMBasicBlock after_copy_block;
+        OZ (get_helper().create_block(ObString("complex_normal_block"), get_func(), normal_block));
+        OZ (get_helper().create_block(ObString("complex_after_copy_block"), get_func(), after_copy_block));
+        if (OB_SUCC(ret) && final_type.is_cursor_type()) {
+          OZ (get_helper().create_br(normal_block));
+        } else {
+          ObLLVMBasicBlock null_block;
+          OZ (get_helper().create_block(ObString("complex_null_block"), get_func(), null_block));
+          OZ (extract_type_ptr_from_objparam(p_arg, p_type_value));
+          OZ (get_helper().create_load(ObString("load_type"), p_type_value, type_value));
+          OZ (get_helper().create_icmp_eq(type_value, ObNullType, is_null));
+          OZ (get_helper().create_cond_br(is_null, null_block, normal_block));
+          //null branch
+          OZ (set_current(null_block));
+          OZ (extract_extend_from_objparam(address,
+                                            final_type,
+                                            dest_datum));
+          OZ (final_type.generate_assign_with_null(*this,
+                                                *(s.get_namespace()),
+                                                allocator,
+                                                dest_datum));
+          OZ (get_helper().create_br(after_copy_block));
+        }
+        OZ (set_current(normal_block));
         OZ (extract_obobj_ptr_from_objparam(p_arg, src_datum));
         OZ (extract_obobj_ptr_from_objparam(address, dest_datum));
         OZ (final_type.generate_copy(*this,
@@ -8617,6 +8671,8 @@ int ObPLCodeGenerator::generate_out_param(
         } else if (PL_EXECUTE == s.get_type()) {
           OZ (generate_destruct_obj(s, src_datum));
         }
+        OZ (get_helper().create_br(after_copy_block));
+        OZ (set_current(after_copy_block));
       }
       if (OB_SUCC(ret) && package_id != OB_INVALID_ID && var_idx != OB_INVALID_ID) {
         OZ (generate_update_package_changed_info(s, package_id, var_idx));

@@ -446,6 +446,11 @@ public:
   OB_INLINE ObScale get_scale() const { return static_cast<ObScale>(scale_); }
   OB_INLINE void set_extend_type(uint8_t type) { extend_type_ = type; }
   OB_INLINE uint8_t get_extend_type() const { return is_ext() ? extend_type_ : -1; }
+  OB_INLINE bool is_pl_extend_type() const
+  {
+    return is_ext() && extend_type_ > 0
+                    && extend_type_ < T_EXT_SQL_ARRAY;
+  }
 
   TO_STRING_KV(N_TYPE, ob_obj_type_str(static_cast<ObObjType>(type_)),
                N_COLLATION, ObCharset::collation_name(get_collation_type()),
