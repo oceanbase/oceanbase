@@ -4526,7 +4526,7 @@ int ObTablet::update_row(
       } else if (OB_FAIL(write_memtable->set(param,
                                              context,
                                              col_descs,
-                                             update_idx,
+                                             store_ctx.update_full_column_ ? nullptr : &update_idx,
                                              old_row,
                                              new_row,
                                              encrypt_meta))) {

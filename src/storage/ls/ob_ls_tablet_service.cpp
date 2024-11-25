@@ -3492,6 +3492,13 @@ int ObLSTabletService::update_rows(
       lob_update = is_lob_update(run_ctx, update_idx);
     }
 
+    if (OB_SUCC(ret)) {
+      // for major mv base table need update full column
+      if (dml_param.table_param_->get_data_table().get_mv_mode().table_referenced_by_fast_lsm_mv_flag_) {
+        ctx.update_full_column_ =  true;
+      }
+    }
+
     int64_t cur_time = 0;
     ObTabletHandle tmp_handle;
     while (OB_SUCC(ret)
