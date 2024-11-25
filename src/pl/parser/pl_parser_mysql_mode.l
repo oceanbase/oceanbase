@@ -45,7 +45,7 @@ GB_3 [\x30-\x39]
 UTF8_GB_CHAR ({U_2}{U}|{U_3}{U}{U}|{U_4}{U}{U}{U}|{GB_1}{GB_2}|{GB_1}{GB_3}{GB_1}{GB_3})
 space            [ \t\n\r\f]
 non_newline      [^\n\r]
-comment      ("--"{space}+{non_newline}*)|(#{non_newline}*)
+comment      ("--"[ \t]+{non_newline}*)|(#{non_newline}*|"--"[\n\r])
 whitespace       ({space}+|{comment})
 c_cmt_begin      \/\*
 c_cmt_end        \*+\/
