@@ -15,6 +15,8 @@
 #include "storage/access/ob_multiple_multi_scan_merge.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 
+#define USING_LOG_PREFIX STORAGE
+
 namespace oceanbase {
 namespace storage {
 
@@ -125,7 +127,9 @@ int ObGetSampleIterHelper::get_memtable_sample_ranges_(const ObIArray<memtable::
   sample_ranges.reuse();
 
   // get split ranges from all memtables
+  ObSEArray<ObDatumRange, 16> single_memtable_sample_ranges;
   for (int64_t i = 0; OB_SUCC(ret) && i < memtables.count(); i++) {
+    single_memtable_sample_ranges.reuse();
     memtable::ObMemtable *memtable = memtables.at(i);
     int tmp_ret = OB_SUCCESS;
     if (OB_ISNULL(memtable)) {
@@ -133,26 +137,38 @@ int ObGetSampleIterHelper::get_memtable_sample_ranges_(const ObIArray<memtable::
     } else if (OB_TMP_FAIL(memtable->split_ranges_for_sample(table_scan_range_.get_ranges().at(0),
                                                              scan_param_.sample_info_.percent_,
                                                              *(scan_param_.allocator_),
-                                                             sample_ranges))) {
+                                                             single_memtable_sample_ranges))) {
       STORAGE_LOG(WARN, "split range failed", KR(tmp_ret));
       split_failed_count++;
     } else {
-      // split succeed
+      // split succeed. try to record all these ranges into smpale_ranges array
+      for (int64_t range_idx = 0; range_idx < single_memtable_sample_ranges.count(); range_idx++) {
+        if (OB_TMP_FAIL(sample_ranges.push_back(single_memtable_sample_ranges.at(range_idx)))) {
+          STORAGE_LOG(WARN, "push back sample ranges failed", KR(tmp_ret), K(range_idx), K(sample_ranges));
+          if (0 == range_idx) {
+            // if the first range is pushed back failed, inc split_failed_count because we do not record any ranges for
+            // this memtable
+            split_failed_count++;
+          }
+        }
+      }
     }
   }
 
-  // if we can not split ranges from all memtables, just push a whole range into sample ranges array
+  // if we can not split ranges from all memtables, just push the input_range into sample ranges array
   if (split_failed_count == memtables.count()) {
     if (sample_ranges.count() != 0) {
       STORAGE_LOG(WARN, "unexpected sample memtable ranges", K(sample_ranges));
       sample_ranges.reuse();
     }
 
-    blocksstable::ObDatumRange datum_range;
-    datum_range.set_whole_range();
-    if (OB_FAIL(sample_ranges.push_back(datum_range))) {
+    if (OB_FAIL(sample_ranges.push_back(table_scan_range_.get_ranges().at(0)))) {
       STORAGE_LOG(WARN, "push back datum range to sample memtable ranges failed", KR(ret), K(memtables));
     }
+    FLOG_INFO("split memtables failed",
+              KR(ret),
+              "Table Scan Range", table_scan_range_.get_ranges().at(0),
+              K(sample_ranges));
   }
   return ret;
 }
