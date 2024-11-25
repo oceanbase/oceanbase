@@ -558,6 +558,7 @@ public:
   void set_force_gen_local_plan() { force_local_plan_ = true; }
   bool is_force_gen_local_plan() const { return force_local_plan_; }
   void set_retry_info(const ObQueryRetryInfo *retry_info) { das_ctx_.get_location_router().set_retry_info(retry_info); }
+  bool is_use_adaptive_px_dop() const { return auto_dop_map_.size() > 0; }
 
 private:
   int build_temp_expr_ctx(const ObTempExpr &temp_expr, ObTempExprCtx *&temp_expr_ctx);

@@ -40,7 +40,13 @@ int ObAdaptiveAutoDop::calculate_table_auto_dop(const ObPhysicalPlan &plan, Auto
   } else if (OB_FAIL(map.create(common::hash::cal_next_prime(256), attr, attr))) {
     LOG_WARN("create hash map failed", K(ret));
   }
-  OZ(inner_calculate_table_auto_dop(*root_spec, map, table_dop, is_single_part));
+  if (OB_SUCC(ret)
+      && OB_FAIL(inner_calculate_table_auto_dop(*root_spec, map, table_dop, is_single_part))) {
+    LOG_WARN("failed to inner calculate table auto dop", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+    map.clear();
+  }
   return ret;
 }
 
