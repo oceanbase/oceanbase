@@ -3037,6 +3037,51 @@ int ObDDLService::check_index_table_exist(const uint64_t tenant_id,
   return ret;
 }
 
+int ObDDLService::check_hidden_index_exist(
+    const uint64 tenant_id,
+    const uint64_t database_id,
+    const ObTableSchema &hidden_table_schema,
+    const ObString &index_name,
+    ObSchemaGetterGuard &schema_guard,
+    bool &is_exist)
+{
+  int ret = OB_SUCCESS;
+  bool is_oracle_mode = false;
+  is_exist = false;
+  ObArray<const ObSimpleTableSchemaV2 *> table_schemas;
+  if (OB_FAIL(hidden_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("check if oracle mode failed", K(ret), K(hidden_table_schema));
+  } else if (is_oracle_mode) {
+    // in oracle mode, we need iterate hidden table map within database
+    if (OB_FAIL(schema_guard.get_table_schemas_in_database(tenant_id, database_id, table_schemas))) {
+      LOG_WARN("get table schemas in database", K(ret));
+    }
+  } else {
+    // is mysql mode, just check index_name exists in hidden_table_schema
+    if (OB_FAIL(schema_guard.get_index_schemas_with_data_table_id(tenant_id, hidden_table_schema.get_table_id(), table_schemas))) {
+      LOG_WARN("get index schemas failed", K(ret));
+    }
+  }
+
+  // check if the index name exist in index_schemas array
+  if (OB_SUCC(ret)) {
+    ObString tmp_index_name;
+    ObCompareNameWithTenantID column_name_cmp(hidden_table_schema.get_tenant_id());
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count() && !is_exist; ++i) {
+      const ObSimpleTableSchemaV2 *table_schema = table_schemas.at(i);
+      if (OB_ISNULL(table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected, index schema must not be nullptr", K(ret));
+      } else if (table_schema->is_index_table() && OB_FAIL(table_schema->get_index_name(tmp_index_name))) {
+        LOG_WARN("get index name failed", K(ret));
+      } else {
+        is_exist = 0 == column_name_cmp.compare(tmp_index_name, index_name);
+      }
+    }
+  }
+  return ret;
+}
+
 // Used for alter table xxx drop primary key.
 // reset origin rowkey info and add heap table hidden pk column.
 int ObDDLService::drop_primary_key(
@@ -16042,6 +16087,7 @@ int ObDDLService::add_new_index_schema(obrpc::ObAlterTableArg &alter_table_arg,
                   } else if (OB_FAIL(generate_tablet_id(index_schema))) {
                     LOG_WARN("fail to generate tablet id for hidden table", K(ret), K(index_schema));
                   } else {
+                    ObString final_index_name;
                     bool is_exist = false;
                     index_schema.set_table_id(new_idx_tid);
                     index_schema.set_data_table_id(new_table_schema.get_table_id());
@@ -16051,15 +16097,18 @@ int ObDDLService::add_new_index_schema(obrpc::ObAlterTableArg &alter_table_arg,
                     // set the hidden attributes of the table
                     index_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_HIDDEN_OFFLINE_DDL);
                     if (OB_FAIL(ret)) {
-                    } else if (OB_FAIL(dest_schema_guard.check_table_exist(index_schema.get_tenant_id(),
-                                                                      index_schema.get_database_id(),
-                                                                      index_schema.get_table_name_str(),
-                                                                      true/*is_index*/,
-                                                                      ObSchemaGetterGuard::USER_HIDDEN_TABLE_TYPE/*check_type*/,
-                                                                      is_exist))) {
+                    } else if (OB_FAIL(index_schema.get_index_name(final_index_name))) {
+                      LOG_WARN("get index name failed", K(ret));
+                    } else if (OB_FAIL(check_hidden_index_exist(index_schema.get_tenant_id(),
+                        index_schema.get_database_id(),
+                        orig_table_schema,
+                        final_index_name,
+                        dest_schema_guard,
+                        is_exist))) {
                       LOG_WARN("failed to check table exist", K(ret));
                     } else if (is_exist) {
-                      LOG_INFO("index already rebuilt, skip", K(index_schema.get_table_id()), K(index_schema.get_table_name_str()));
+                      ret = OB_EAGAIN;
+                      LOG_WARN("index name conflict, need retry", K(index_schema.get_table_id()), K(index_schema.get_table_name_str()));
                     } else if (OB_FAIL(new_table_schemas.push_back(index_schema))) {
                       LOG_WARN("failed to add table schema!", K(ret));
                     } else if (OB_FAIL(index_ids.push_back(index_schema.get_table_id()))) {

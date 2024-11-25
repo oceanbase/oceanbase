@@ -2300,6 +2300,13 @@ private:
                               const common::ObString &index_name,
                               share::schema::ObSchemaGetterGuard &schema_guard,
                               bool &is_exist);
+  int check_hidden_index_exist(
+      const uint64 tenant_id,
+      const uint64_t database_id,
+      const share::schema::ObTableSchema &orig_table_schema,
+      const common::ObString &index_name,
+      ObSchemaGetterGuard &schema_guard,
+      bool &is_exist);
   int drop_table_in_trans(
       share::schema::ObSchemaGetterGuard &schema_guard,
       const share::schema::ObTableSchema &table_schema,
