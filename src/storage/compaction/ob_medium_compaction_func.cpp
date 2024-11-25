@@ -618,7 +618,7 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(bool &medium_clog_sub
     }
 #ifdef ERRSIM
     if (OB_SUCC(ret) || OB_NO_NEED_MERGE == ret) {
-      ret = errsim_choose_medium_snapshot(max_sync_medium_scn, medium_info, result);
+      ret = errsim_choose_medium_snapshot(max_sync_medium_scn, schema_version, medium_info, result);
     }
     if (OB_SUCC(ret)) {
       ret = OB_E(EventTable::EN_SCHEDULE_MEDIUM_FAILED) ret;
@@ -665,6 +665,7 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(bool &medium_clog_sub
 #ifdef ERRSIM
 int ObMediumCompactionScheduleFunc::errsim_choose_medium_snapshot(
   const int64_t max_sync_medium_scn,
+  int64_t &schema_version,
   ObMediumCompactionInfo &medium_info,
   ObGetMergeTablesResult &result)
 {
@@ -681,7 +682,9 @@ int ObMediumCompactionScheduleFunc::errsim_choose_medium_snapshot(
     medium_info.compaction_type_ = ObMediumCompactionInfo::MEDIUM_COMPACTION;
     int64_t max_reserved_snapshot = 0;
     (void) result.reset();
-    if (OB_FAIL(get_max_reserved_snapshot(max_reserved_snapshot))) {
+    if (OB_FAIL(tablet.get_schema_version_from_storage_schema(schema_version))) {
+      LOG_WARN("failed to get schema version", KR(ret), K(schema_version));
+    } else if (OB_FAIL(get_max_reserved_snapshot(max_reserved_snapshot))) {
       LOG_WARN("failed to get reserved snapshot", K(ret), KPC(this));
     } else if (medium_info.medium_snapshot_ <= max_sync_medium_scn
         || medium_info.medium_snapshot_ < max_reserved_snapshot) {

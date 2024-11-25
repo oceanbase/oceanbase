@@ -19,6 +19,7 @@ using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 namespace compaction
 {
+ERRSIM_POINT_DEF(EN_FAILED_TO_CHECK_FTS);
 int ObSortColumnIdArray::build(
   const uint64_t tenant_id,
   const ObTableSchema &table_schema)
@@ -245,6 +246,14 @@ int ObTableCkmItems::build(
     table_id_ = table_id;
     is_inited_ = true;
   }
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    if (EN_FAILED_TO_CHECK_FTS && table_schema_->is_fts_or_multivalue_index()) {
+      ret = OB_ITEM_NOT_MATCH;
+      FLOG_INFO("ERRSIM EN_FAILED_TO_CHECK_FTS", KR(ret), K(table_id));
+    }
+  }
+#endif
   if (OB_FAIL(ret)) {
     reset();
   }
