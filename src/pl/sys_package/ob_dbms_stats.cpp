@@ -3353,6 +3353,11 @@ int ObDbmsStats::update_stat_cache(const uint64_t rpc_tenant_id,
       LOG_WARN("failed to push back partition id", K(ret));
     }
   }
+  for (int64_t i = 0; OB_SUCC(ret) && i < param.approx_part_infos_.count(); ++i) {
+    if (OB_FAIL(stat_arg.partition_ids_.push_back(param.approx_part_infos_.at(i).part_id_))) {
+      LOG_WARN("failed to push back partition id", K(ret));
+    }
+  }
   if (OB_SUCC(ret) && param.global_stat_param_.need_modify_) {
     int64_t part_id = param.global_part_id_;
     if (OB_FAIL(stat_arg.partition_ids_.push_back(part_id))) {
