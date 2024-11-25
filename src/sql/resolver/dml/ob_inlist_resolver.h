@@ -58,6 +58,7 @@ private:
                                        const int64_t column_cnt,
                                        const int64_t row_cnt,
                                        const bool is_question_mark,
+                                       const bool is_prepare_stmt,
                                        const ParamStore *param_store,
                                        ObSQLSessionInfo *session_info,
                                        ObIAllocator *allocator,
@@ -91,6 +92,7 @@ private:
                                       const int64_t row_cnt,
                                       ObSQLSessionInfo *session_info,
                                       ObIAllocator *allocator,
+                                      const bool is_prepare_stage,
                                       ObValuesTableDef &table_def);
 private:
   ObDMLResolver *cur_resolver_;
