@@ -330,7 +330,7 @@ int ObBaseDiagnosticInfoSummary::get_di_collector(
 }
 
 int ObBaseDiagnosticInfoSummary::for_each_group(
-    std::function<void(int64_t, const ObDiagnoseTenantInfo &)> fn)
+    int64_t tenant_id, std::function<void(int64_t, const ObDiagnoseTenantInfo &)> fn)
 {
   int ret = OB_SUCCESS;
   ObDiagnosticInfoCollector *cur = nullptr;
@@ -340,18 +340,21 @@ int ObBaseDiagnosticInfoSummary::for_each_group(
   HEAP_VAR(ObDiagnoseTenantInfo, tmp, alloc)
   {
     while (OB_SUCC(ret) && OB_NOT_NULL(iter.next(cur))) {
-      cur->get_all_events(tmp.get_event_stats());
-      cur->get_all_add_stats(tmp.get_add_stat_stats());
-      fn(cur->get_group_id(), tmp);
-      tmp.get_event_stats().reset();
-      tmp.get_add_stat_stats().reset();
-      iter.revert(cur);
+      if (cur->get_tenant_id() == tenant_id) {
+        cur->get_all_events(tmp.get_event_stats());
+        cur->get_all_add_stats(tmp.get_add_stat_stats());
+        fn(cur->get_group_id(), tmp);
+        tmp.get_event_stats().reset();
+        tmp.get_add_stat_stats().reset();
+        iter.revert(cur);
+      }
     }
   }
   return ret;
 }
 
-int ObBaseDiagnosticInfoSummary::remove_if(std::function<bool(const ObDiagnosticKey&, ObDiagnosticInfoCollector*)> fn)
+int ObBaseDiagnosticInfoSummary::remove_if(
+    std::function<bool(const ObDiagnosticKey &, ObDiagnosticInfoCollector *)> fn)
 {
   return collectors_.remove_if(fn);
 }

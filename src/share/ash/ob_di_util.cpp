@@ -26,7 +26,7 @@ namespace share
 
 int ObDiagnosticInfoUtil::get_the_diag_info(int64_t session_id, ObDISessionCollect &diag_info)
 {
-  int ret = OB_SUCCESS;
+  int ret = OB_ENTRY_NOT_EXIST;
   common::ObVector<uint64_t> ids;
   if (MTL_ID() == OB_SYS_TENANT_ID) {
     GCTX.omt_->get_tenant_ids(ids);
@@ -41,6 +41,7 @@ int ObDiagnosticInfoUtil::get_the_diag_info(int64_t session_id, ObDISessionColle
         if (OB_FAIL(
                 MTL(ObDiagnosticInfoContainer *)->get_session_diag_info(session_id, diag_info))) {
           if (OB_ENTRY_NOT_EXIST != ret) {
+            LOG_WARN("failed to get diagnostic session info", K(ret), K(session_id));
             break;
           } else {
             // iter next possible tenant
@@ -49,6 +50,14 @@ int ObDiagnosticInfoUtil::get_the_diag_info(int64_t session_id, ObDISessionColle
           // until success.
           break;
         }
+      }
+    }
+  }
+  if (ret == OB_ENTRY_NOT_EXIST) {
+    ObDiagnosticInfoContainer *c = ObDiagnosticInfoContainer::get_global_di_container();
+    if (OB_FAIL(c->get_session_diag_info(session_id, diag_info))) {
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        LOG_WARN("failed to get diagnostic info from global container", K(ret), K(session_id));
       }
     }
   }
@@ -61,26 +70,29 @@ int ObDiagnosticInfoUtil::get_all_diag_info(
   int ret = OB_SUCCESS;
   common::ObVector<uint64_t> ids;
   GCTX.omt_->get_tenant_ids(ids);
-  std::function<bool(const SessionID&, ObDiagnosticInfo *)> fn = [&diag_infos](const SessionID &session_id,
-                                                              ObDiagnosticInfo *di) {
-    int ret = OB_SUCCESS;
-    typedef std::pair<uint64_t, common::ObDISessionCollect> DiPair;
-    HEAP_VAR(DiPair, pair)
-    {
-      pair.first = di->get_session_id();
-      pair.second.session_id_ = di->get_session_id();
-      pair.second.base_value_.set_tenant_id(di->get_tenant_id());
-      pair.second.base_value_.set_curr_wait(di->get_curr_wait());
-      pair.second.base_value_.get_add_stat_stats().add(di->get_add_stat_stats());
-      di->get_event_stats().accumulate_to(pair.second.base_value_.get_event_stats());
-      if (OB_FAIL(diag_infos.push_back(pair))) {
-        LOG_WARN("failed to insert into diagnostic infos", K(ret));
-      }
-    }
-    return OB_SUCCESS == ret;
-  };
+  std::function<bool(const SessionID &, ObDiagnosticInfo *)> fn =
+      [&diag_infos, tenant_id](const SessionID &session_id, ObDiagnosticInfo *di) {
+        int ret = OB_SUCCESS;
+        typedef std::pair<uint64_t, common::ObDISessionCollect> DiPair;
+        HEAP_VAR(DiPair, pair)
+        {
+          const uint64_t cur_tenant_id = di->get_tenant_id();
+          if (tenant_id == OB_SYS_TENANT_ID || cur_tenant_id == tenant_id) {
+            pair.first = di->get_session_id();
+            pair.second.session_id_ = di->get_session_id();
+            pair.second.base_value_.set_tenant_id(di->get_tenant_id());
+            pair.second.base_value_.set_curr_wait(di->get_curr_wait());
+            pair.second.base_value_.get_add_stat_stats().add(di->get_add_stat_stats());
+            di->get_event_stats().accumulate_to(pair.second.base_value_.get_event_stats());
+            if (OB_FAIL(diag_infos.push_back(pair))) {
+              LOG_WARN("failed to insert into diagnostic infos", K(ret));
+            }
+          }
+        }
+        return OB_SUCCESS == ret;
+      };
   for (int64_t i = 0; OB_SUCC(ret) && i < ids.size(); ++i) {
-    uint64_t cur_tenant_id = ids[i];
+    const uint64_t cur_tenant_id = ids[i];
     if (tenant_id == OB_SYS_TENANT_ID || cur_tenant_id == tenant_id) {
       if (!is_virtual_tenant_id(cur_tenant_id)) {
         MTL_SWITCH(cur_tenant_id)
@@ -92,19 +104,28 @@ int ObDiagnosticInfoUtil::get_all_diag_info(
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    ObDiagnosticInfoContainer *c = ObDiagnosticInfoContainer::get_global_di_container();
+    if (OB_FAIL(c->for_each_running_di(fn))) {
+      LOG_WARN("failed to get all diag info from global di", K(ret), K(tenant_id));
+    }
+  }
   return ret;
 }
 
 int ObDiagnosticInfoUtil::get_the_diag_info(uint64_t tenant_id, ObDiagnoseTenantInfo &diag_info)
 {
   int ret = OB_SUCCESS;
-  std::function<bool(const SessionID&, ObDiagnosticInfo *)> fn = [&diag_info](const SessionID &session_id,
-                                                              ObDiagnosticInfo *di) {
-    diag_info.get_add_stat_stats().add(di->get_add_stat_stats());
-    const_cast<ObDiagnosticInfo *>(di)->get_event_stats().accumulate_to(
-        diag_info.get_event_stats());
-    return true;
-  };
+  std::function<bool(const SessionID &, ObDiagnosticInfo *)> fn =
+      [&diag_info, tenant_id](const SessionID &session_id, ObDiagnosticInfo *di) {
+        const uint64_t cur_tenant_id = di->get_tenant_id();
+        if (cur_tenant_id == tenant_id) {
+          diag_info.get_add_stat_stats().add(di->get_add_stat_stats());
+          const_cast<ObDiagnosticInfo *>(di)->get_event_stats().accumulate_to(
+              diag_info.get_event_stats());
+        }
+        return true;
+      };
   MTL_SWITCH(tenant_id)
   {
     ObDiagnosticInfoContainer *c = MTL(ObDiagnosticInfoContainer *);
@@ -124,7 +145,7 @@ int ObDiagnosticInfoUtil::get_the_diag_info(uint64_t tenant_id, ObDiagnoseTenant
       }
     }
   }
-  if (OB_SUCC(ret) && tenant_id == OB_SYS_TENANT_ID) {
+  if (OB_SUCC(ret)) {
     ObDiagnosticInfoContainer *c = ObDiagnosticInfoContainer::get_global_di_container();
     if (OB_FAIL(c->for_each_running_di(fn))) {
       LOG_WARN("failed to get tenant diagnostic info", K(ret), KPC(c));
@@ -177,17 +198,20 @@ int ObDiagnosticInfoUtil::get_group_diag_info(uint64_t tenant_id,
     common::ObIAllocator *alloc)
 {
   int ret = OB_SUCCESS;
-  std::function<bool(const SessionID&, ObDiagnosticInfo *)> fn = [&diag_infos, &alloc](
-                                                              const SessionID &session_id,
-                                                              ObDiagnosticInfo *di) {
+  std::function<bool(const SessionID &, ObDiagnosticInfo *)> fn = [&diag_infos, &alloc, tenant_id](
+                                                                      const SessionID &session_id,
+                                                                      ObDiagnosticInfo *di) {
     ObDiagnoseTenantInfo *tdi = nullptr;
     int ret = OB_SUCCESS;
-    if (OB_FAIL(get_group_di(di->get_group_id(), diag_infos, alloc, tdi))) {
-      LOG_WARN("failed to acquire di", K(ret), K(di));
-    } else {
-      OB_ASSERT(tdi != nullptr);
-      tdi->get_add_stat_stats().add(di->get_add_stat_stats());
-      const_cast<ObDiagnosticInfo *>(di)->get_event_stats().accumulate_to(tdi->get_event_stats());
+    const uint64_t cur_tenant_id = di->get_tenant_id();
+    if (cur_tenant_id == tenant_id) {
+      if (OB_FAIL(get_group_di(di->get_group_id(), diag_infos, alloc, tdi))) {
+        LOG_WARN("failed to acquire di", K(ret), K(di));
+      } else {
+        OB_ASSERT(tdi != nullptr);
+        tdi->get_add_stat_stats().add(di->get_add_stat_stats());
+        const_cast<ObDiagnosticInfo *>(di)->get_event_stats().accumulate_to(tdi->get_event_stats());
+      }
     }
     return OB_SUCCESS == ret;
   };
@@ -212,18 +236,18 @@ int ObDiagnosticInfoUtil::get_group_diag_info(uint64_t tenant_id,
       LOG_WARN("failed to get tenant diagnostic info", K(ret), KPC(c));
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(c->get_base_summary().for_each_group(summary_fn))) {
+      if (OB_FAIL(c->get_base_summary().for_each_group(tenant_id, summary_fn))) {
         LOG_WARN("failed to get base summary", K(ret));
       }
     }
   }
-  if (OB_SUCC(ret) && tenant_id == OB_SYS_TENANT_ID) {
+  if (OB_SUCC(ret)) {
     ObDiagnosticInfoContainer *c = ObDiagnosticInfoContainer::get_global_di_container();
     if (OB_FAIL(c->for_each_running_di(fn))) {
       LOG_WARN("failed to get tenant diagnostic info", K(ret), KPC(c));
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(c->get_base_summary().for_each_group(summary_fn))) {
+      if (OB_FAIL(c->get_base_summary().for_each_group(tenant_id, summary_fn))) {
         LOG_WARN("failed to get base summary", K(ret));
       }
     }

@@ -219,25 +219,23 @@ int ObAllVirtualSessionStatI1::get_all_diag_info()
 {
   int ret = OB_SUCCESS;
   int64_t index_id = -1;
-  uint64_t key = 0;
+  int64_t key = 0;
   typedef std::pair<uint64_t, common::ObDISessionCollect> DiPair;
   HEAP_VAR(DiPair, pair)
   {
     for (int64_t i = 0; OB_SUCC(ret) && i < get_index_ids().count(); ++i) {
       index_id = get_index_ids().at(i);
-      if (0 < index_id) {
-        key = static_cast<uint64_t>(index_id);
-        pair.first = key;
-        if (OB_SUCCESS != (ret = share::ObDiagnosticInfoUtil::get_the_diag_info(key, pair.second))) {
-          if (OB_ENTRY_NOT_EXIST == ret) {
-            ret = OB_SUCCESS;
-          } else {
-            SERVER_LOG(WARN, "Fail to get session status, ", K(ret));
-          }
+      key = index_id;
+      pair.first = key;
+      if (OB_SUCCESS != (ret = share::ObDiagnosticInfoUtil::get_the_diag_info(key, pair.second))) {
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
         } else {
-          if (OB_SUCCESS != (ret = session_status_.push_back(pair))) {
-            SERVER_LOG(WARN, "Fail to push diag info value to array, ", K(ret));
-          }
+          SERVER_LOG(WARN, "Fail to get session status, ", K(ret));
+        }
+      } else {
+        if (OB_SUCCESS != (ret = session_status_.push_back(pair))) {
+          SERVER_LOG(WARN, "Fail to push diag info value to array, ", K(ret));
         }
       }
     }
