@@ -916,7 +916,10 @@ int ObPartitionMergePolicy::refine_minor_merge_result(
 
   if (result.handle_.get_count() <= MAX(minor_compact_trigger, 1)) {
     // merge table cnt not enough, check whether filled tx scn needs to be updated
-    if (OB_FAIL(check_need_gc_tx_data(tablet, table_store, result, ls))) {
+    if (!result.handle_.empty() &&
+        result.scn_range_.end_scn_ < table_store->get_minor_sstables().get_boundary_table(true/*last*/)->get_end_scn())  {
+      ret = OB_NO_NEED_MERGE; // no need to gc tx data
+    } else if (OB_FAIL(check_need_gc_tx_data(tablet, table_store, result, ls))) {
       LOG_WARN("failed to check need update filled tx scn", K(ret));
     } else if (!result.need_gc_tx_data_) {
       ret = OB_NO_NEED_MERGE;

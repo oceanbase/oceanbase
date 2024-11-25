@@ -1788,7 +1788,7 @@ int ObTabletTableStore::check_minor_tx_scn() const
       LOG_INFO("filled tx scn equals to end scn, skip to check cur sstable", KPC(sstable)); // change to debug log later
       continue;
     } else if (sstable->get_filled_tx_scn() < prev) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_MINOR_SSTABLE_RANGE_CROSS;
       LOG_WARN("get unexepcted filled tx scn", K(ret), KPC(sstable), K(prev));
     } else {
       prev = sstable->get_filled_tx_scn();
