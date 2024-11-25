@@ -10,14 +10,48 @@ unix_socket="$prefix/run/obshell.sock"
 obshell="$prefix/bin/obshell"
 etc_folder="$prefix/etc"
 current_user=`whoami`
+json_pre_file="$prefix/profile/oceanbase-pre.json"
+json_file="$prefix/profile/oceanbase.json"
 report=3
 
+function get_json_body_by_key {
+    local key=$1
+
+    json=$(cat "$json_file" | tr -d '[:space:]')
+
+    start_index=$(echo "$json" | awk -v a="$key" '{print index($0, a)}')
+    if [ $start_index -eq 0 ]; then
+        echo "'$key' not found in json string."
+        exit 1
+    fi
+
+    length=${#key}
+    substring="${json:start_index+$length+1}"
+    result=""
+    brace_count=0
+    brace_flag=0
+
+    for (( i=0; i<${#substring}; i++ )); do
+        char="${substring:i:1}"
+        if [[ $char == "{" ]]; then
+            brace_count=$((brace_count + 1))
+        elif [[ $char == "}" ]]; then
+            brace_count=$((brace_count - 1))
+        fi
+        result="$result$char"
+        if [[ $brace_count -eq 0 ]]; then
+            break
+        fi
+    done
+
+    echo "$result"
+}
+
 function prepare_config_json {
-  json_pre_file="$prefix/profile/oceanbase-pre.json"
-  json_file="$prefix/profile/oceanbase.json"
   rm -rf $json_file
   cp $json_pre_file $json_file
   local temp_file=$(mktemp)
+  first_observer_configration=true
 
   while IFS='=' read -r key value; do
     # delete empty and comment line
@@ -34,10 +68,17 @@ function prepare_config_json {
         port=$value
       elif [[ $key == *"root_pwd"* ]]; then
         key="rootPwd"
-        jq --arg parent "oceanbase_ce" --arg child "cluster" --arg key "$key" --arg value "$value" '.[$parent][$child][$key] = $value' "$json_file" > "$temp_file"
+        cluster_config_line=$(grep -n "cluster" $json_file | head -n 1 | cut -d: -f1)
+        sed "$((cluster_config_line+1))i\\        \"$key\": \"$value\"," "$json_file" > "$temp_file"
         mv "$temp_file" "$json_file"
       else
-        jq --arg parent "oceanbase_ce" --arg child "server" --arg grandchild "observerConfig" --arg key "$key" --arg value "$value" '.[$parent][$child][$grandchild][$key] = $value' "$json_file" > "$temp_file"
+        if $first_observer_configration; then
+          first_observer_configration=false
+          sed "s/\"observerConfig\": {}/\"observerConfig\": {\n                \"$key\": \"$value\"\n            }/" "$json_file" > "$temp_file"
+        else
+          observer_config_line=$(grep -n "observerConfig" $json_file | head -n 1 | cut -d: -f1)
+          sed "$((observer_config_line+1))i\\        \"$key\": \"$value\"," "$json_file" > "$temp_file"
+        fi
         mv "$temp_file" "$json_file"
       fi
     fi
@@ -92,7 +133,7 @@ function check_obagent_process {
 
 function check_response {
   local response=$1
-  successful=$(echo "$response" | jq -r '.successful')
+  successful=$(echo "$response" | grep -o '"successful":[^,]*' | sed 's/"successful"://')
   if [ "x$successful" = "xfalse" ]; then
       echo "send request failed"
       exit 1
@@ -108,7 +149,7 @@ function check_trace {
   echo "the $content trace id is $dag_trace"
   while true; do
     response=$(curl --silent -XGET --unix-socket $unix_socket $url/api/v1/task/dag/$dag_trace)
-    state=$(echo "$response" | jq -r '.data.state')
+    state=$(echo "$response" | grep -o '"state":[^,]*' | head -1 | sed 's/"state"://' | tr -d '"')
     echo "the response state is $state"
     if [ "x$state" = "xSUCCEED" ]; then
       echo "$content request successfully"
@@ -138,49 +179,49 @@ function start_obshell {
 
 function do_config_observer {
   # join agent
-  obagent_configuration=`jq '.obshell' $json_file`
+  obagent_configuration=$(get_json_body_by_key "obshell")
   obagent_cmd="curl --silent -H \"Content-Type: application/json\" -X POST -d '${obagent_configuration}' --unix-socket $unix_socket $url/api/v1/agent/join"
   response=$(eval "$obagent_cmd")
   echo $response
-  successful=$(echo "$response" | jq -r '.successful')
+  successful=$(echo "$response" | grep -o '"successful":[^,]*' | sed 's/"successful"://')
   if [ "x$successful" = "xfalse" ]; then
       echo "send request failed"
       exit 1
   fi
-  trace=$(echo "$response" | jq -r '.data.id')
+  trace=$(echo "$response" | grep -o '"id":[^,]*' | sed 's/"id"://' | tr -d '"')
   check_trace $trace "join agent" 3 3
 
   # config cluster
-  cluster_configuration=`jq '.oceanbase_ce.cluster' $json_file`
+  cluster_configuration=$(get_json_body_by_key "cluster")
   cluster_cmd="curl --silent -H \"Content-Type: application/json\" -X PUT -d '${cluster_configuration}' --unix-socket $unix_socket $url/api/v1/obcluster/config"
   response=$(eval "$cluster_cmd")
   echo $response
-  successful=$(echo "$response" | jq -r '.successful')
+  successful=$(echo "$response" | grep -o '"successful":[^,]*' | sed 's/"successful"://')
   if [ "x$successful" = "xfalse" ]; then
       echo "send request failed"
       exit 1
   fi
-  trace=$(echo "$response" | jq -r '.data.id')
+  trace=$(echo "$response" | grep -o '"id":[^,]*' | sed 's/"id"://' | tr -d '"')
   check_trace $trace "config cluster" 3 3
 
   # config observer
-  observer_configuration=`jq '.oceanbase_ce.server' $json_file`
+  observer_configuration=$(get_json_body_by_key "server")
   observer_cmd="curl --silent -H \"Content-Type: application/json\" -X PUT -d '${observer_configuration}' --unix-socket $unix_socket $url/api/v1/observer/config"
   response=$(eval "$observer_cmd")
   echo $response
-  successful=$(echo "$response" | jq -r '.successful')
+  successful=$(echo "$response" | grep -o '"successful":[^,]*' | sed 's/"successful"://')
   if [ "x$successful" = "xfalse" ]; then
       echo "send request failed"
       exit 1
   fi
-  trace=$(echo "$response" | jq -r '.data.id')
+  trace=$(echo "$response" | grep -o '"id":[^,]*' | sed 's/"id"://' | tr -d '"')
   check_trace $trace "config observer" 3 3
 }
 
 function do_start_observer {
   # check observer status
   response=$(curl --silent -H "Content-Type: application/json" -X GET --unix-socket $unix_socket $url/api/v1/status)
-  identity=$(echo "$response" | jq -r '.data.agent.identity')
+  identity=$(echo "$response" | grep -o '"identity":[^,]*' | sed 's/"identity"://' | tr -d '"' | tr -d '}')
   if [ "x$identity" = "xCLUSTER AGENT" ]; then
     echo "The observer is already bootstrap, please start it immediately"
     response=$(curl --silent -H "Content-Type: application/json" -X POST -d '{
@@ -191,12 +232,12 @@ function do_start_observer {
         },
       "force": true
     }' --unix-socket $unix_socket $url/api/v1/ob/start)
-    successful=$(echo "$response" | jq -r '.successful')
+    successful=$(echo "$response" | grep -o '"successful":[^,]*' | sed 's/"successful"://')
     if [ "x$successful" = "xfalse" ]; then
         echo "send request failed"
         exit 1
     fi
-    trace=$(echo "$response" | jq -r '.data.id')
+    trace=$(echo "$response" | grep -o '"id":[^,]*' | sed 's/"id"://' | tr -d '"')
     check_trace $trace "start observer" 20 6
     if [ $? -eq 0 ]; then
       /bin/bash $prefix/profile/telemetry.sh $report "12" >/dev/null 2>&1
@@ -206,12 +247,12 @@ function do_start_observer {
     do_config_observer
     echo "The observer has not bootstrap, please init it firstly"
     response=$(curl --silent -X POST --unix-socket $unix_socket $url/api/v1/ob/init)
-    successful=$(echo "$response" | jq -r '.successful')
+    successful=$(echo "$response" | grep -o '"successful":[^,]*' | sed 's/"successful"://')
     if [ "x$successful" = "xfalse" ]; then
         echo "send request failed"
         exit 1
     fi
-    trace=$(echo "$response" | jq -r '.data.id')
+    trace=$(echo "$response" | grep -o '"id":[^,]*' | sed 's/"id"://' | tr -d '"')
     check_trace $trace "start observer" 40 6
     if [ $? -eq 0 ]; then
       /bin/bash $prefix/profile/telemetry.sh $report "11" >/dev/null 2>&1
@@ -230,7 +271,7 @@ function do_start_observer {
 
     # check observer state
     response=$(curl --silent -H "Content-Type: application/json" -X GET --unix-socket $unix_socket $url/api/v1/status)
-    ob_state=$(echo "$response" | jq -r '.data.obState')
+    ob_state=$(echo "$response" | grep -o '"obState":[^,]*' | sed 's/"obState"://')
     if [ "x$ob_state" = "x1" ]; then
         echo "The agent dose not know the observer password"
         echo "1. Please set environment: export OB_ROOT_PASSWORD={root_passowrd}"
@@ -265,12 +306,12 @@ function stop_observer {
          },
       "force": true
     }' --unix-socket $unix_socket $url/api/v1/ob/stop)
-  successful=$(echo "$response" | jq -r '.successful')
+  successful=$(echo "$response" | grep -o '"successful":[^,]*' | sed 's/"successful"://')
   if [ "x$successful" = "xfalse" ]; then
       echo "send request failed"
       exit 1
   fi
-  trace=$(echo "$response" | jq -r '.data.id')
+  trace=$(echo "$response" | grep -o '"id":[^,]*' | sed 's/"id"://' | tr -d '"')
   check_trace $trace "stop observer" 20 6
 }
 
@@ -297,6 +338,10 @@ elif [ "x$1" = "xdestroy" ]; then
     echo "stop obshell failed"
     exit 1
   fi
+elif [ "x$1" = "xtest" ]; then
+  echo "test at ${DATE}"
+  result=$(get_json_body_by_key "obshell:")
+  echo $result
 fi
 
 exit 0
