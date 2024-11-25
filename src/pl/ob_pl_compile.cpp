@@ -102,6 +102,13 @@ int ObPLCompiler::init_anonymous_ast(
   for (int64_t i = 0; OB_SUCC(ret) && OB_NOT_NULL(params) && i < params->count(); ++i) {
     const ObObjParam param = params->at(i);
     if (param.is_pl_extend()) {
+#ifdef OB_BUILD_ORACLE_PL
+      if (PL_REF_CURSOR_TYPE == param.get_meta().get_extend_type()) {
+        pl_type.reset();
+        pl_type.set_type(pl::PL_REF_CURSOR_TYPE);
+        pl_type.set_type_from(pl::PL_TYPE_SYS_REFCURSOR);
+      } else
+#endif
       if (param.get_udt_id() != OB_INVALID_ID) {
         const ObUserDefinedType *user_type = NULL;
         OZ (ObResolverUtils::get_user_type(&allocator,
@@ -115,10 +122,6 @@ int ObPLCompiler::init_anonymous_ast(
         OX (pl_type.reset());
         OX (pl_type = *user_type);
 #ifdef OB_BUILD_ORACLE_PL
-      } else if (PL_REF_CURSOR_TYPE == param.get_meta().get_extend_type()) {
-        pl_type.reset();
-        pl_type.set_type(pl::PL_REF_CURSOR_TYPE);
-        pl_type.set_type_from(pl::PL_TYPE_SYS_REFCURSOR);
       } else if (PL_NESTED_TABLE_TYPE == param.get_meta().get_extend_type()) {
         ObPLCollection *coll = reinterpret_cast<ObPLCollection *>(param.get_ext());
         ObNestedTableType *nested_type = NULL;
