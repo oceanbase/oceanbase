@@ -5237,6 +5237,7 @@ int ObSPIService::spi_sub_nestedtable(ObPLExecCtx *ctx, int64_t src_idx, int64_t
     if (OB_SUCC(ret)) {
       ObPLCollection *dst_coll = NULL;
       ObObj *data_ptr = src_coll->get_data();
+      ObPLAllocator1 *coll_alloc = nullptr;
       if (lower <= 0 // 检查是否越界, lower,upper从1开始
           || lower > src_coll->get_count()) {
         ret = OB_ELEMENT_AT_GIVEN_INDEX_NOT_EXIST;
@@ -5258,28 +5259,33 @@ int ObSPIService::spi_sub_nestedtable(ObPLExecCtx *ctx, int64_t src_idx, int64_t
       } else if (OB_FAIL(dst_coll->init_allocator(*ctx->allocator_, true))) {
         LOG_WARN("failed to init allocator", K(ret));
         ctx->allocator_->free(dst_coll);
+      } else if (OB_ISNULL(coll_alloc = dynamic_cast<ObPLAllocator1 *>(dst_coll->get_allocator()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected collection allocator", K(ret));
       } else {
         ObObj *dst_data = nullptr;
         int64_t count = upper - lower + 1;
         data_ptr = data_ptr + (lower - 1);
-        if (OB_ISNULL(dst_data = reinterpret_cast<ObObj *>(dst_coll->get_allocator()->alloc(count * sizeof(ObObj))))) {
+        if (OB_ISNULL(dst_data = reinterpret_cast<ObObj *>(coll_alloc->alloc(count * sizeof(ObObj))))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to allocate memory for collection", K(ret), K(count));
         }
         int64_t i = 0;
         for (; OB_SUCC(ret) && i < count; ++i) {
           OX (dst_data[i].reset());
-          OZ (deep_copy_obj(*dst_coll->get_allocator(), data_ptr[i], dst_data[i]));
+          OZ (deep_copy_obj(*coll_alloc, data_ptr[i], dst_data[i]));
         }
         if (OB_FAIL(ret)) {
           if (OB_NOT_NULL(dst_data)) {
-            for (int j = 0; j < i; ++j) {
-              ObUserDefinedType::destruct_objparam(*dst_coll->get_allocator(),
+            for (int j = 0; j < i - 1; ++j) {
+              ObUserDefinedType::destruct_objparam(*coll_alloc,
                                                   dst_data[j],
                                                   ctx->exec_ctx_->get_my_session());
             }
-            dst_coll->get_allocator()->free(dst_data);
+            coll_alloc->free(dst_data);
           }
+          coll_alloc->~ObPLAllocator1();
+          ctx->allocator_->free(coll_alloc);
           ctx->allocator_->free(dst_coll);
         } else {
           dst_coll->set_data(dst_data, count);
