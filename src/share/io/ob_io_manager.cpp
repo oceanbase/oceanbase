@@ -197,15 +197,15 @@ int ObTrafficControl::ObSharedDeviceControlV2::ObSDGroupList::add_group(const Ob
     LOG_WARN("grp list push back failed", K(ret), K(grp_key));
   } else if (ObIOMode::READ == grp_key.get_mode()) {
     if (OB_FAIL(qdisc_add_limit(qid, limit_ids[static_cast<int>(ResourceType::ips)]))) {
-      LOG_ERROR("qdiscadd_limit fail" , K(ret), K(qid), K(ResourceType::ips));
+      LOG_ERROR("qdisc add limit fail" , K(ret), K(grp_key), K(qid), K(ResourceType::ips), K(limit_ids[static_cast<int>(ResourceType::ips)]));
     } else if (OB_FAIL(qdisc_add_limit(qid, limit_ids[static_cast<int>(ResourceType::ibw)]))) {
-      LOG_ERROR("qdiscadd_limit fail" , K(ret), K(qid), K(ResourceType::ibw));
+      LOG_ERROR("qdisc add limit fail" , K(ret), K(grp_key), K(qid), K(ResourceType::ibw), K(limit_ids[static_cast<int>(ResourceType::ibw)]));
     }
   } else if (ObIOMode::WRITE == grp_key.get_mode()) {
     if (OB_FAIL(qdisc_add_limit(qid, limit_ids[static_cast<int>(ResourceType::ops)]))) {
-      LOG_ERROR("qdiscadd_limit fail" , K(ret), K(qid), K(ResourceType::ops), K(grp_key));
+      LOG_ERROR("qdisc add limit fail" , K(ret), K(grp_key), K(qid), K(ResourceType::ops), K(limit_ids[static_cast<int>(ResourceType::ops)]));
     } else if (OB_FAIL(qdisc_add_limit(qid, limit_ids[static_cast<int>(ResourceType::obw)]))) {
-      LOG_ERROR("qdiscadd_limit fail" , K(ret), K(qid), K(ResourceType::obw), K(grp_key));
+      LOG_ERROR("qdisc add limit fail" , K(ret),K(grp_key), K(qid), K(ResourceType::obw), K(limit_ids[static_cast<int>(ResourceType::obw)]));
     }
   }
   LOG_INFO("add group limit of shared device success", K(grp_key), K(qid), K(ret));

@@ -116,6 +116,7 @@ int qdisc_create(int type, int parent_id, const char* name)
     if (NULL == q) {
       id = -1;
     }
+    TC_INFO("qdisc create: type: %d, parent_id: %d, name: %s", type, parent_id, name);
   }
   return id;
 }
@@ -171,8 +172,12 @@ int qdisc_add_limit(int qid, int limiter_id)
   QWGuard("add_limit");
   QDesc* q = (typeof(q))imap_fetch(qid);
   ITCLimiter* L = (typeof(L))imap_fetch(limiter_id);
-  if (NULL == q || NULL == L) {
+  if (NULL == q) {
     err = -ENOENT;
+    TC_INFO("qdisc add limit fail, get qdesc fail: qid: %d, limiter_id: %d, q: %p, L: %p", qid, limiter_id, q, L);
+  } else if (NULL == L) {
+    err = -ENOENT;
+    TC_INFO("qdisc add limit fail, get limiter fail: qid: %d, limiter_id: %d, q: %p, L: %p", qid, limiter_id, q, L);
   } else {
     q->add_limit(L);
   }
@@ -185,8 +190,12 @@ int qdisc_del_limit(int qid, int limiter_id)
   QWGuard("del_limit");
   QDesc* q = (typeof(q))imap_fetch(qid);
   ITCLimiter* L = (typeof(L))imap_fetch(limiter_id);
-  if (NULL == q || NULL == L) {
+  if (NULL == q) {
     err = -ENOENT;
+    TC_INFO("qdisc del limit fail, get qdesc fail: qid: %d, limiter_id: %d, q: %p, L: %p", qid, limiter_id, q, L);
+  } else if (NULL == L) {
+    err = -ENOENT;
+    TC_INFO("qdisc del limit fail, get limiter fail: qid: %d, limiter_id: %d, q: %p, L: %p", qid, limiter_id, q, L);
   } else {
     q->del_limit(L);
   }
@@ -199,8 +208,12 @@ int qdisc_add_reserve(int qid, int limiter_id)
   QWGuard("add_reserve");
   QDesc* q = (typeof(q))imap_fetch(qid);
   ITCLimiter* L = (typeof(L))imap_fetch(limiter_id);
-  if (NULL == q || NULL == L) {
+  if (NULL == q) {
     err = -ENOENT;
+    TC_INFO("qdisc add reserve fail, get qdesc fail: qid: %d, limiter_id: %d, q: %p, L: %p", qid, limiter_id, q, L);
+  } else if (NULL == L) {
+    err = -ENOENT;
+    TC_INFO("qdisc add reserve fail, get limiter fail: qid: %d, limiter_id: %d, q: %p, L: %p", qid, limiter_id, q, L);
   } else {
     q->add_reserve(L);
   }
@@ -213,8 +226,12 @@ int qdisc_del_reserve(int qid, int limiter_id)
   QWGuard("del_reserve");
   QDesc* q = (typeof(q))imap_fetch(qid);
   ITCLimiter* L = (typeof(L))imap_fetch(limiter_id);
-  if (NULL == q || NULL == L) {
+  if (NULL == q) {
     err = -ENOENT;
+    TC_INFO("qdisc del reserve fail, get qdesc fail: qid: %d, limiter_id: %d, q: %p, L: %p", qid, limiter_id, q, L);
+  } else if (NULL == L) {
+    err = -ENOENT;
+    TC_INFO("qdisc del reserve fail, get limiter fail: qid: %d, limiter_id: %d, q: %p, L: %p", qid, limiter_id, q, L);
   } else {
     q->del_reserve(L);
   }
@@ -228,6 +245,7 @@ int qsched_set_handler(int qid, ITCHandler* handler)
   QDescRoot* root = (typeof(root))imap_fetch(qid);
   if (NULL == root) {
     err = -ENOENT;
+    TC_INFO("qdisc set handler fail: qid: %d, handler: %p, root: %p", qid, handler, root);
   } else {
     root->set_handler(handler);
   }
@@ -244,6 +262,7 @@ int qsched_start(int qid, int n_thread)
   QDescRoot* root = (typeof(root))imap_fetch(qid);
   if (NULL == root) {
     err = -ENOENT;
+    TC_INFO("qdisc start fail: qid: %d, n_thread: %d, root: %p", qid, n_thread, root);
   } else {
     root->qsched_start(n_thread);
   }
@@ -257,6 +276,7 @@ int qsched_stop(int qid)
   QDescRoot* root = (typeof(root))imap_fetch(qid);
   if (NULL == root) {
     err = -ENOENT;
+    TC_INFO("qdisc stop fail: qid: %d, root: %p", qid, root);
   } else {
     root->qsched_stop();
   }
@@ -270,6 +290,7 @@ int qsched_wait(int qid)
   QDescRoot* root = (typeof(root))imap_fetch(qid);
   if (NULL == root) {
     err = -ENOENT;
+    TC_INFO("qdisc wait fail: qid: %d, root: %p", qid, root);
   } else {
     root->qsched_wait();
   }
@@ -283,6 +304,7 @@ int qsched_submit(int qid, TCRequest* req, uint32_t chan_id)
   QDescRoot* root = (typeof(root))imap_fetch(qid);
   if (NULL == root) {
     err = -ENOENT;
+    TC_INFO("qdisc submit fail: qid: %d, req: %p, chan_id: %d", qid, req, chan_id);
   } else {
     err = root->qsched_submit(req, chan_id);
   }
