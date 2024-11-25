@@ -28,6 +28,9 @@
 #define powerof2(x) ((((x) - 1) & (x)) == 0)
 #define LIBC_ALIAS(fn)	__attribute__((alias (#fn), used))
 
+typedef void* (*MemsetPtr)(void*, int, size_t);
+extern MemsetPtr memset_ptr;
+
 static size_t get_page_size()
 {
   static size_t ps = getpagesize();
@@ -70,7 +73,14 @@ calloc(size_t nmemb, size_t size)
   }
   void *ptr = malloc(real_size);
   if (LIKELY(nullptr != ptr && real_size > 0)) {
-    memset(ptr, 0, real_size);
+    if (nullptr != memset_ptr) {
+      memset_ptr(ptr, 0, real_size);
+    } else {
+      char *tmp_ptr = (char *)ptr;
+      for (size_t i = 0; i < real_size; ++i) {
+        tmp_ptr[i] = 0;
+      }
+    }
   }
   return ptr;
 }

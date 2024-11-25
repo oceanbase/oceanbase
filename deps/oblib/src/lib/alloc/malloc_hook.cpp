@@ -26,10 +26,13 @@ using namespace oceanbase::common;
 using namespace oceanbase::lib;
 
 static bool g_malloc_hook_inited = false;
+typedef void* (*MemsetPtr)(void*, int, size_t);
+MemsetPtr memset_ptr = nullptr;
 
 void init_malloc_hook()
 {
   g_malloc_hook_inited = true;
+  memset_ptr = memset;
 }
 
 uint64_t up_align(uint64_t x, uint64_t align)
