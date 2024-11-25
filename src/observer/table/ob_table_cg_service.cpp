@@ -1477,7 +1477,9 @@ int ObTableExprCgService::refresh_properties_exprs_frame(ObTableCtx &ctx,
   ObEvalCtx eval_ctx(ctx.get_exec_ctx());
   ObSEArray<const ObObj*, 16> refresh_values;
 
-  if (col_info_array.count() < exprs.count()) {
+  if (OB_ISNULL(ctx.get_exec_ctx().get_expr_op_ctx_store()) && OB_NOT_NULL(ctx.get_expr_frame_info()) && OB_FAIL(ctx.get_exec_ctx().init_expr_op(ctx.get_expr_frame_info()->need_ctx_cnt_))) {
+    LOG_WARN("fail to initialize expression operation", K(ret), K(ctx));
+  } else if (col_info_array.count() < exprs.count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid column info count", K(ret), K(col_info_array.count()), K(exprs.count()));
   } else if (OB_FAIL(refresh_values.prepare_allocate(col_info_array.count()))) {
