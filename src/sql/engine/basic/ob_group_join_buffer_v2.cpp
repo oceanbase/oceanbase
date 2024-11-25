@@ -387,6 +387,8 @@ int ObDriverRowBuffer::get_next_left_batch(int64_t max_rows, const ObBatchRows *
 int ObDriverRowBuffer::get_next_batch_from_store(int64_t max_rows, int64_t &read_rows)
 {
   int ret = OB_SUCCESS;
+  // when disable vectorization, at least read one row
+  max_rows = max_rows > 0 ? max_rows : 1;
   if (left_store_iter_.is_valid() && left_store_iter_.has_next()) {
     if (OB_FAIL(left_store_iter_.get_next_batch(left_->get_spec().output_, *eval_ctx_, max_rows, read_rows))) {
       if (OB_ITER_END != ret) {
