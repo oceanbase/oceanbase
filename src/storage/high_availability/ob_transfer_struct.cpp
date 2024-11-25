@@ -21,6 +21,7 @@
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "storage/tx/ob_ts_mgr.h"
 #include "storage/high_availability/ob_storage_ha_diagnose_mgr.h"
+#include "storage/compaction/ob_medium_compaction_func.h"
 
 using namespace oceanbase;
 using namespace share;
@@ -1189,6 +1190,208 @@ int ObTransferRelatedInfo::get_related_info_task_id(share::ObTransferTaskID &tas
   } else {
     common::SpinRLockGuard guard(lock_);
     task_id = get_task_id_();
+  }
+  return ret;
+}
+
+/******************ObTransferStorageSchemaMgr*********************/
+ObTransferStorageSchemaMgr::ObTransferStorageSchemaMgr()
+  : is_inited_(false),
+    allocator_(),
+    storage_schema_map_()
+{
+  ObMemAttr attr(MTL_ID(), "TransferSchema");
+  allocator_.set_attr(attr);
+}
+
+ObTransferStorageSchemaMgr::~ObTransferStorageSchemaMgr()
+{
+  reset();
+}
+
+void ObTransferStorageSchemaMgr::reset()
+{
+  FOREACH(iter, storage_schema_map_) {
+    ObStorageSchema *storage_schema = iter->second;
+    storage_schema->~ObStorageSchema();
+  }
+  storage_schema_map_.destroy();
+  allocator_.reset();
+  is_inited_ = false;
+}
+
+int ObTransferStorageSchemaMgr::init(const int64_t bucket_num)
+{
+  int ret = OB_SUCCESS;
+  ObMemAttr attr(MTL_ID(), "TransferSchema");
+  if (is_inited_) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("transfer storage schema mgr is already init", K(ret));
+  } else if (bucket_num <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("transfer storage schema mgr init get invalid argument", K(ret), K(bucket_num));
+  } else if (OB_FAIL(storage_schema_map_.create(bucket_num, attr))) {
+    LOG_WARN("failed to create storage schema map", K(ret), K(bucket_num));
+  } else {
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObTransferStorageSchemaMgr::build_storage_schema(
+    const share::ObTransferTaskInfo &task_info,
+    ObTimeoutCtx &timeout_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("transfer storage schema mgr do not init", K(ret));
+  } else if (!task_info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("build storage schema get invalid argument", K(ret), K(task_info));
+  } else if (OB_FAIL(build_latest_storage_schema_(task_info, timeout_ctx))) {
+    LOG_WARN("failed to build latest storage schema", K(ret));
+  }
+  return ret;
+}
+
+int ObTransferStorageSchemaMgr::get_storage_schema(
+    const ObTabletID &tablet_id,
+    ObStorageSchema *&storage_schema)
+{
+  int ret = OB_SUCCESS;
+  storage_schema = nullptr;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("transfer storage schema mgr do not init", K(ret));
+  } else if (!tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get storage schema get invalid argument", K(ret), K(tablet_id));
+  } else if (OB_FAIL(storage_schema_map_.get_refactored(tablet_id, storage_schema))) {
+    LOG_WARN("failed to get storage schema", K(ret), K(tablet_id));
+  }
+  return ret;
+}
+
+int ObTransferStorageSchemaMgr::build_latest_storage_schema_(
+    const share::ObTransferTaskInfo &task_info,
+    ObTimeoutCtx &timeout_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaService *server_schema_service = nullptr;
+  ObMultiVersionSchemaService *schema_service = nullptr;
+  const int64_t start_ts = ObTimeUtil::current_time();
+  ObLSService *ls_service = nullptr;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("transfer storage schema mgr do not init", K(ret));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service is null", KR(ret));
+  } else if (OB_ISNULL(server_schema_service = GCTX.schema_service_->get_schema_service())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("server_schema_service is null", KR(ret));
+  } else if (OB_ISNULL(schema_service = MTL(ObTenantSchemaService *)->get_schema_service())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get schema service from MTL", K(ret));
+  } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
+  } else if (OB_FAIL(ls_service->get_ls(task_info.src_ls_id_, ls_handle, ObLSGetMod::HA_MOD))) {
+    LOG_WARN("failed to get ls", K(ret), K(task_info));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(task_info));
+  } else {
+    ObRefreshSchemaStatus status;
+    status.tenant_id_ = task_info.tenant_id_;
+    int64_t schema_version = 0;
+
+    if (OB_FAIL(server_schema_service->fetch_schema_version(status, *GCTX.sql_proxy_, schema_version))) {
+      LOG_WARN("fail to fetch schema version", KR(ret), K(status));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < task_info.tablet_list_.count(); ++i) {
+        const ObTabletID &tablet_id = task_info.tablet_list_.at(i).tablet_id_;
+        if (timeout_ctx.is_timeouted()) {
+          ret = OB_TIMEOUT;
+          LOG_WARN("transfer prepare storage schema timeout", K(ret));
+        } else if (OB_FAIL(build_tablet_storage_schema_(task_info, tablet_id, schema_version, ls, *schema_service))) {
+          LOG_WARN("failed to build tablet storage schema", K(ret), K(tablet_id));
+        }
+      }
+    }
+  }
+
+  LOG_INFO("finish build storage schema", "cost_ts", ObTimeUtil::current_time() - start_ts);
+  return ret;
+}
+
+int ObTransferStorageSchemaMgr::build_tablet_storage_schema_(
+    const share::ObTransferTaskInfo &task_info,
+    const ObTabletID &tablet_id,
+    const int64_t schema_version,
+    ObLS *ls,
+    ObMultiVersionSchemaService &schema_service)
+{
+  int ret = OB_SUCCESS;
+  ObTabletHandle tablet_handle;
+  ObTablet *tablet = nullptr;
+  ObStorageSchema *storage_schema = nullptr;
+  void *buffer = nullptr;
+  uint64_t data_version = 0;
+  int64_t medium_compat_version = 0;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("transfer storage schema mgr do not init", K(ret));
+  } else if (schema_version < 0 || !tablet_id.is_valid() || OB_ISNULL(ls)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get table storage schema get invalid argument", K(ret), K(schema_version));
+  } else if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle, 0,
+      ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+    LOG_WARN("failed to get tablet", K(ret), K(task_info));
+  } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet should not be NULL", K(ret), KP(tablet));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(task_info.tenant_id_, data_version))) {
+    LOG_WARN("failed to get data version", K(ret), K(task_info));
+  } else {
+    //TODO(lixia) using same code from ObMediumCompactionInfo::init_data_version()
+    if (data_version < DATA_VERSION_4_2_0_0) {
+      medium_compat_version = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION;
+    } else if (data_version < DATA_VERSION_4_2_1_0) {
+      medium_compat_version = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V2;
+    } else if (data_version < DATA_VERSION_4_2_1_2) {
+      medium_compat_version = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V3;
+    } else {
+      medium_compat_version = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V4;
+    }
+
+    buffer = allocator_.alloc(sizeof(ObStorageSchema));
+    if (OB_ISNULL(buffer)) {
+      ret = common::OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "fail to allocate mem for storage schema", K(ret));
+    } else {
+      storage_schema = new (buffer) ObStorageSchema();
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(compaction::ObMediumCompactionScheduleFunc::get_table_schema_to_merge(
+        schema_service, *tablet, schema_version, medium_compat_version, allocator_, *storage_schema))) {
+      LOG_WARN("failed to get table schema to merge", K(ret), KPC(tablet), K(task_info));
+    } else if (OB_FAIL(storage_schema_map_.set_refactored(tablet_id, storage_schema))) {
+      LOG_WARN("failed to push storage schema into map", K(ret), K(tablet_id), KPC(storage_schema));
+    } else {
+      storage_schema = nullptr;
+    }
+  }
+
+  if (OB_NOT_NULL(storage_schema)) {
+    storage_schema->~ObStorageSchema();
   }
   return ret;
 }

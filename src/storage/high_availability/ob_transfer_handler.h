@@ -410,6 +410,7 @@ private:
   share::ObStorageHACostItemName diagnose_result_msg_;
   common::SpinRWLock transfer_handler_lock_;
   bool transfer_handler_enabled_;
+  ObTransferStorageSchemaMgr storage_schema_mgr_;
   DISALLOW_COPY_AND_ASSIGN(ObTransferHandler);
 };
 

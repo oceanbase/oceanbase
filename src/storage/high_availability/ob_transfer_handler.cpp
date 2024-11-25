@@ -77,7 +77,8 @@ ObTransferHandler::ObTransferHandler()
     task_info_(),
     diagnose_result_msg_(share::ObStorageHACostItemName::MAX_NAME),
     transfer_handler_lock_(),
-    transfer_handler_enabled_(true)
+    transfer_handler_enabled_(true),
+    storage_schema_mgr_()
 {
 }
 
@@ -468,6 +469,7 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
   if (tenant_config.is_valid()) {
     enable_kill_trx = tenant_config->_enable_balance_kill_transaction;
   }
+  storage_schema_mgr_.reset();
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -479,6 +481,8 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
     LOG_WARN("do with start status get invalid argument", K(ret), K(task_info));
   } else if (!new_transfer && !enable_kill_trx && OB_FAIL(precheck_active_trans_before_lock_member_list_(task_info))) {
     LOG_WARN("failed to prepare active trans before lock member list", K(ret), K(task_info));
+  } else if (OB_FAIL(storage_schema_mgr_.init(task_info.tablet_list_.count()))) {
+    LOG_WARN("failed to init storage schema mgr", K(ret), K(task_info));
   } else if (OB_FAIL(ObTransferUtils::get_gts(task_info.tenant_id_, gts_seq_))) {
     LOG_WARN("failed to get gts seq", K(ret), K(task_info));
   } else if (OB_FAIL(get_start_trans_timeout_(stmt_timeout))) {
@@ -527,6 +531,8 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
       LOG_WARN("failed to get dest ls max desided scn", K(ret), K(task_info));
     } else if (!new_transfer && !enable_kill_trx && OB_FAIL(check_src_ls_has_active_trans_(task_info.src_ls_id_))) {
       LOG_WARN("failed to check src ls active trans", K(ret), K(task_info));
+    } else if (OB_FAIL(storage_schema_mgr_.build_storage_schema(task_info, timeout_ctx))) {
+      LOG_WARN("failed to build latest storage schema", K(ret), K(task_info));
     } else if (OB_FAIL(update_all_tablet_to_ls_(task_info, trans))) {
       LOG_WARN("failed to update all tablet to ls", K(ret), K(task_info));
     } else if (OB_FAIL(lock_tablet_on_dest_ls_for_table_lock_(task_info, trans))) {
@@ -581,7 +587,6 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
 
     clear_prohibit_(task_info, tablet_ids, succ_block_tx, succ_stop_medium);
   }
-
 
   if (OB_FAIL(ret)) {
     if (!is_leader) {
@@ -1380,9 +1385,9 @@ int ObTransferHandler::get_start_trans_timeout_(
   stmt_timeout = 10_s;
   const uint64_t tenant_id = MTL_ID();
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-  const int64_t LOCK_MEMBER_LIST_TIMEOUT = 10_s;
+  const int64_t BASELINE_TIMEOUT = 20_s;
   if (tenant_config.is_valid()) {
-    stmt_timeout = tenant_config->_transfer_start_trans_timeout + LOCK_MEMBER_LIST_TIMEOUT;
+    stmt_timeout = tenant_config->_transfer_start_trans_timeout + BASELINE_TIMEOUT;
     if (tenant_config->_enable_balance_kill_transaction) {
       stmt_timeout += tenant_config->_balance_kill_transaction_threshold;
       stmt_timeout += tenant_config->_balance_wait_killing_transaction_end_threshold;
@@ -1901,6 +1906,7 @@ int ObTransferHandler::get_next_tablet_info_(
   mds::MdsWriter writer;// will be removed later
   mds::TwoPhaseCommitState trans_stat;// will be removed later
   share::SCN trans_version;// will be removed later
+  ObStorageSchema *storage_schema = nullptr;
 
   if (!dest_ls_id.is_valid() || !transfer_tablet_info.is_valid() || !tablet_handle.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -1924,13 +1930,21 @@ int ObTransferHandler::get_next_tablet_info_(
     LOG_WARN("failed to build transfer tablet param", K(ret), K(transfer_tablet_info));
   } else if (OB_FAIL(tablet->get_ha_sstable_size(tablet_info.data_size_))) {
     LOG_WARN("failed to get sstable size", K(ret), K(transfer_tablet_info));
+  } else if (OB_FAIL(storage_schema_mgr_.get_storage_schema(transfer_tablet_info.tablet_id_, storage_schema))) {
+    LOG_WARN("failed to get storage schema", K(ret), K(transfer_tablet_info));
   } else {
     tablet_info.tablet_id_ = transfer_tablet_info.tablet_id_;
     tablet_info.status_ = ObCopyTabletStatus::TABLET_EXIST;
+    if (storage_schema->column_cnt_ > tablet_info.param_.storage_schema_.column_cnt_) {
+      LOG_INFO("modified storage schema", "new_storage_schema", *storage_schema,
+          "old_storage_schema", tablet_info.param_.storage_schema_);
+      if (OB_FAIL(tablet_info.param_.storage_schema_.assign(tablet_info.param_.allocator_, *storage_schema))) {
+        LOG_WARN("failed to assign storage schema", K(ret), K(tablet_info), KPC(storage_schema));
+      }
+    }
   }
   return ret;
 }
-
 
 int ObTransferHandler::do_tx_start_transfer_in_(
     const share::ObTransferTaskInfo &task_info,

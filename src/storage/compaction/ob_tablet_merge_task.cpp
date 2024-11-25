@@ -55,6 +55,7 @@ using namespace memtable;
 using namespace blocksstable;
 namespace compaction
 {
+ERRSIM_POINT_DEF(SPECIFIED_SERVER_STOP_COMPACTION);
 
 bool is_merge_dag(ObDagType::ObDagTypeEnum dag_type)
 {
@@ -1716,6 +1717,16 @@ int ObTabletMergeTask::process()
   if (OB_FAIL(ret)) {
     STORAGE_LOG(INFO, "ERRSIM EN_COMPACTION_MERGE_TASK");
     return ret;
+  }
+
+  ret = SPECIFIED_SERVER_STOP_COMPACTION;
+  if (OB_FAIL(ret)) {
+    if (-ret == GCTX.server_id_) {
+      STORAGE_LOG(INFO, "ERRSIM SPECIFIED_SERVER_STOP_COMPACTION", K(ret));
+      return OB_EAGAIN;
+    } else {
+      ret = OB_SUCCESS;
+    }
   }
 #endif
 

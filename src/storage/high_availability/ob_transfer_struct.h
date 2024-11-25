@@ -22,6 +22,7 @@
 #include "storage/tablet/ob_tablet_meta.h"
 #include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
 #include "share/ob_storage_ha_diagnose_struct.h"
+#include "share/schema/ob_tenant_schema_service.h"
 
 namespace oceanbase
 {
@@ -327,6 +328,36 @@ private:
   SpinRWLock lock_;
 
   DISALLOW_COPY_AND_ASSIGN(ObTransferRelatedInfo);
+};
+
+class ObTransferStorageSchemaMgr final
+{
+public:
+  ObTransferStorageSchemaMgr();
+  ~ObTransferStorageSchemaMgr();
+  int init(const int64_t bucket_num);
+  int build_storage_schema(
+      const share::ObTransferTaskInfo &task_info,
+      ObTimeoutCtx &timeout_ctx);
+  int get_storage_schema(
+      const ObTabletID &tablet_id,
+      ObStorageSchema *&storage_schema);
+  void reset();
+private:
+  int build_latest_storage_schema_(
+      const share::ObTransferTaskInfo &task_info,
+      ObTimeoutCtx &timeout_ctx);
+  int build_tablet_storage_schema_(
+      const share::ObTransferTaskInfo &task_info,
+      const ObTabletID &tablet_id,
+      const int64_t schema_version,
+      ObLS *ls,
+      ObMultiVersionSchemaService &schema_service);
+private:
+  bool is_inited_;
+  common::ObArenaAllocator allocator_;
+  hash::ObHashMap<ObTabletID, ObStorageSchema *> storage_schema_map_;
+  DISALLOW_COPY_AND_ASSIGN(ObTransferStorageSchemaMgr);
 };
 
 }
