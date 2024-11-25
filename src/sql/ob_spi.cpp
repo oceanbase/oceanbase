@@ -3718,6 +3718,7 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-select stmt in cursor");
   } else {
     ParamStore current_params(ObWrapperAllocator(ctx->allocator_));
+    bool need_restore_params = false;
     ObPLSubPLSqlTimeGuard guard(ctx);
     if (cursor_param_count > 0 && (NULL == formal_param_idxs || NULL == actual_param_exprs)) {
       ret = OB_ERR_UNEXPECTED;
@@ -3735,6 +3736,7 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
       OZ (ObPLContext::get_param_store_from_local(*session_info, package_id, routine_id, subprog_params));
       CK (OB_NOT_NULL(subprog_params));
       OZ (ctx->params_->assign(*subprog_params));
+      OX (need_restore_params = true);
     }
 
     bool is_server_cursor = false;
@@ -3777,12 +3779,12 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
                                   for_update,
                                   has_hidden_rowid));
     }
-    if (OB_SUCC(ret)) {
-      if (DECL_SUBPROG == loc) {
-        OZ (ctx->params_->assign(current_params));
-      } else if (DECL_PKG == loc) {
-        OZ (spi_update_package_change_info(ctx, package_id, cursor_index));
-      }
+    if (need_restore_params) {
+      int ret = OB_SUCCESS;
+      OZ (ctx->params_->assign(current_params));
+    }
+    if (OB_SUCC(ret) && DECL_PKG == loc) {
+      OZ (spi_update_package_change_info(ctx, package_id, cursor_index));
     }
   }
   if (OB_FAIL(ret) && lib::is_mysql_mode()) {
