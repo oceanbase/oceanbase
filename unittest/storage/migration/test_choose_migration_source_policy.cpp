@@ -435,7 +435,7 @@ TEST_F(TestChooseMigrationSourcePolicy, get_available_src_with_checkpoint_policy
   EXPECT_CALL(member_helper_, get_ls_leader(_, _, _))
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_leader_succ));
   EXPECT_CALL(member_helper_, get_ls(_, _))
-      .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_succ));
+      .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_succ_with_palf));
   const uint64_t tenant_id = 1001;
   const share::ObLSID ls_id(1);
   share::SCN local_ls_checkpoint_scn;
@@ -978,7 +978,7 @@ TEST_F(TestChooseMigrationSourcePolicy, get_available_src_condition_fail)
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_leader_succ));
   EXPECT_CALL(member_helper_, get_ls(_, _))
       .WillOnce(Invoke(&member_list, &MockMemberList::get_ls_fail))
-      .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_succ));
+      .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_succ_with_palf));
   EXPECT_CALL(member_helper_, check_tenant_primary())
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::check_tenant_primary_true));
   const uint64_t tenant_id = 1001;
@@ -1024,7 +1024,7 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_check_replica_fail)
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_leader_succ));
   EXPECT_CALL(member_helper_, get_ls(_, _))
       .WillOnce(Invoke(&member_list, &MockMemberList::get_ls_fail))
-      .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_succ));
+      .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_succ_with_palf));
   EXPECT_CALL(member_helper_, check_tenant_primary())
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::check_tenant_primary_true));
   const uint64_t tenant_id = 1001;
