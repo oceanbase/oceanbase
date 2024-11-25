@@ -9654,7 +9654,7 @@ static struct VarsInit{
       ObSysVars[704].info_ = "mock for mysql5.7" ;
       ObSysVars[704].name_ = "log_slave_updates" ;
       ObSysVars[704].data_type_ = ObIntType ;
-      ObSysVars[704].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[704].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
       ObSysVars[704].id_ = SYS_VAR_LOG_SLAVE_UPDATES ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LOG_SLAVE_UPDATES)) ;
       ObSysVarsIdToArrayIdx[SYS_VAR_LOG_SLAVE_UPDATES] = 704 ;
