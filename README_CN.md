@@ -113,7 +113,9 @@ OceanBase 已服务超过 1000 家来自不同行业的客户，包括金融服�
 
 # 系统架构
 
-[系统架构介绍](https://www.oceanbase.com/docs/common-oceanbase-database-cn-10000000001687855)
+![系统架构图](https://obbusiness-private.oss-cn-shanghai.aliyuncs.com/doc/img/observer-enterprise/V4.3.1/oceanbase-cluster-system-architecture.png)
+
+参考 [系统架构](https://www.oceanbase.com/docs/common-oceanbase-database-cn-1000000001573483) 查看更详细的信息。
 
 # 社区贡献
 

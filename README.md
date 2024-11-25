@@ -112,7 +112,9 @@ See also [success stories](https://en.oceanbase.com/customer/home) and [Who is u
 
 # System architecture
 
-[Introduction to system architecture](https://en.oceanbase.com/docs/community-observer-en-10000000000829641)
+![System Architecture Diagram](https://obportal.s3.ap-southeast-1.amazonaws.com/doc/img/OceanBase-Database-EN/ob-cluster-arch.png)
+
+Please refer to [System architecture](https://en.oceanbase.com/docs/common-oceanbase-database-10000000001714483) for more information.
 
 # Contributing
 
