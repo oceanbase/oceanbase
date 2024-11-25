@@ -65,7 +65,7 @@ endfunction()
 ob_offline_observer(test_simple_ob test_ob_simple_cluster.cpp)
 ob_offline_observer(test_transfer_tx test_transfer_tx.cpp)
 ob_offline_observer(test_tx_data test_tx_data.cpp)
-ob_offline_observer(test_collect_mv test_collect_mv.cpp)
+ob_offline_observer(test_collect_mv mv/test_collect_mv.cpp)
 
 ob_unittest_observer(test_transfer_no_kill_tx test_transfer_tx.cpp)
 ob_unittest_observer(test_standby_balance test_standby_balance_ls_group.cpp)
@@ -151,4 +151,4 @@ ob_ha_unittest_observer(test_transfer_with_empty_shell storage_ha/test_transfer_
 ob_ha_unittest_observer(test_mds_transaction test_mds_transaction.cpp)
 errsim_ha_unittest_observer(errsim_test_transfer_handler errsim/storage_ha/errsim_test_transfer_handler.cpp)
 
-ob_farm_observer(test_collect_mv_farm test_collect_mv.cpp)
+ob_farm_observer(test_collect_mv_farm mv/test_collect_mv.cpp)
