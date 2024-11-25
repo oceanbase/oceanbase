@@ -304,8 +304,9 @@ int ObTenantBase::pre_run()
   ObTenantEnv::set_tenant(this);
   // register in tenant cgroup without modifying group_id
   ObCgroupCtrl *cgroup_ctrl = get_cgroup();
-  if (OB_NOT_NULL(cgroup_ctrl)) {
-    ret = cgroup_ctrl->add_self_to_cgroup_(id_, GET_GROUP_ID());
+  if (OB_NOT_NULL(cgroup_ctrl) && cgroup_ctrl->is_valid()) {
+    // add thread to tenant OBCG_DEFAULT cgroup
+    ret = cgroup_ctrl->add_self_to_cgroup_(id_);
   }
   {
     ThreadListNode *node = lib::Thread::current().get_thread_list_node();
