@@ -1179,7 +1179,7 @@ int ObTabletBackfillTXTask::wait_memtable_frozen_()
     const int64_t current_ts = 0;
     while (OB_SUCC(ret)) {
       memtables.reset();
-      bool is_all_memtable_ready = true;
+      bool is_memtable_ready = true;
       if (OB_FAIL(tablet->get_all_memtables(memtables))) {
         LOG_WARN("failed to get all memtables", K(ret), KPC(tablet));
       } else if (memtables.empty()) {
@@ -1189,7 +1189,6 @@ int ObTabletBackfillTXTask::wait_memtable_frozen_()
         for (int64_t i = 0; OB_SUCC(ret) && i < memtables.count(); ++i) {
           ObITable *table = memtables.at(i).get_table();
           memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(table);
-          bool is_memtable_ready = true;
           if (OB_ISNULL(table) || !table->is_memtable()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("table should not be NULL or table type is unexpected", K(ret), KP(table));
@@ -1225,14 +1224,10 @@ int ObTabletBackfillTXTask::wait_memtable_frozen_()
           } else if (!memtable->is_can_flush()) {
             is_memtable_ready = false;
           }
-
-          if (OB_SUCC(ret) && !is_memtable_ready) {
-            is_all_memtable_ready = false;
-          }
         }
 
         if (OB_SUCC(ret)) {
-          if (is_all_memtable_ready) {
+          if (is_memtable_ready) {
             break;
           } else {
             const int64_t current_ts = ObTimeUtility::current_time();
