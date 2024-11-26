@@ -169,9 +169,19 @@ int ObTableLoadEmptyInsertTabletCtxManager::execute(
     LOG_WARN("fail to init tmp insert table ctx", KR(ret));
   }
   FOREACH_X(it, tmp_insert_table_ctx.get_tablet_ctx_map(), OB_SUCC(ret)) {
-    if (OB_FAIL(it->second->open())) {
+    int64_t slice_id = 0;
+    ObMacroDataSeq block_start_seq;
+    ObDirectLoadInsertTabletContext *insert_tablet_ctx = it->second;
+    if (OB_ISNULL(insert_tablet_ctx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("insert tablet ctx is nullptr", KR(ret));
+    } else if (OB_FAIL(insert_tablet_ctx->open())) {
       LOG_WARN("fail to open tablet ctx", KR(ret));
-    } else if (OB_FAIL(it->second->close())) {
+    } else if (OB_FAIL(insert_tablet_ctx->open_sstable_slice(block_start_seq, slice_id))) {
+      LOG_WARN("fail to open sstable slice", KR(ret), K(block_start_seq), K(slice_id));
+    } else if (OB_FAIL(insert_tablet_ctx->close_sstable_slice(slice_id))) {
+      LOG_WARN("fail to close sstable slice", KR(ret), K(slice_id));
+    } else if (OB_FAIL(insert_tablet_ctx->close())) {
       LOG_WARN("fail to close tablet ctx", KR(ret));
     }
   }
