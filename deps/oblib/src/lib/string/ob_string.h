@@ -510,6 +510,20 @@ public:
     return ret;
   }
 
+  const ObString trim_end_space_only()
+  {
+    ObString ret;
+    if (NULL != ptr_) {
+      char *start = ptr_;
+      char *end = ptr_ + data_length_;
+      while (start < end && ' ' == *(end - 1)) {
+        end--;
+      }
+      ret.assign_ptr(start, static_cast<obstr_size_t>(end - start));
+    }
+    return ret;
+  }
+
   static ObString make_string(const char *cstr)
   {
     return NULL == cstr

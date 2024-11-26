@@ -395,7 +395,9 @@ int ObInfoSchemaColumnsTable::check_database_table_filter()
       // 包含过滤条件为db_name + table_name
       // 则无需获取租户下所有的database_schema
       is_filter_db_ = true;
-      ObString database_name = start_key_obj_ptr[0].get_varchar();
+      ObString database_name = CS_TYPE_BINARY == start_key_obj_ptr[0].get_collation_type()
+                                                 ? start_key_obj_ptr[0].get_varchar()
+                                                   : start_key_obj_ptr[0].get_varchar().trim_end_space_only();
       const ObDatabaseSchema *filter_database_schema = NULL;
       if (database_name.empty()) {
       } else if (OB_FAIL(schema_guard_->get_database_schema(tenant_id_,
@@ -407,7 +409,9 @@ int ObInfoSchemaColumnsTable::check_database_table_filter()
            && start_key_obj_ptr[1] == end_key_obj_ptr[1]) {
         // 指定db_name，同时指定了tbl_name
         const ObTableSchema *filter_table_schema = NULL;
-        ObString table_name = start_key_obj_ptr[1].get_varchar();
+        ObString table_name = CS_TYPE_BINARY == start_key_obj_ptr[1].get_collation_type()
+                                                ? start_key_obj_ptr[1].get_varchar()
+                                                  : start_key_obj_ptr[1].get_varchar().trim_end_space_only();
         if (table_name.empty()) {
         } else if (OB_FAIL(schema_guard_->get_table_schema(tenant_id_,
             filter_database_schema->get_database_id(),
