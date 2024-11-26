@@ -1294,12 +1294,12 @@ static const _error _error_OB_ROWKEY_ORDER_ERROR = {
       .mysql_errno           = -1,
       .sqlstate              = "HY000",
       .str_error             = "Rowkey order error",
-      .str_user_error        = "Rowkey order error",
+      .str_user_error        = "%s",
       .oracle_errno          = 600,
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -4105, Rowkey order error",
-      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -4105, Rowkey order error",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -4105, %s",
       .ob_str_error          = "OBE-00600: internal error code, arguments: -4105, Rowkey order error",
-      .ob_str_user_error     = "OBE-00600: internal error code, arguments: -4105, Rowkey order error"
+      .ob_str_user_error     = "OBE-00600: internal error code, arguments: -4105, %s"
 };
 static const _error _error_OB_NOT_ENOUGH_STORE = {
       .error_name            = "OB_NOT_ENOUGH_STORE",

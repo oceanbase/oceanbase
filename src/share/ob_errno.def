@@ -196,7 +196,7 @@ DEFINE_ORACLE_ERROR_DEP(OB_DEAD_LOCK, -4101, ER_LOCK_DEADLOCK, "HY000", "Deadloc
 DEFINE_ERROR(OB_PARTIAL_LOG, -4102, -1, "HY000", "Incomplete log entry");
 DEFINE_ERROR_DEP(OB_CHECKSUM_ERROR, -4103, -1, "42000", "Data checksum error");
 DEFINE_ERROR_DEP(OB_INIT_FAIL, -4104, -1, "HY000", "Initialize error");
-DEFINE_ERROR_DEP(OB_ROWKEY_ORDER_ERROR, -4105, -1, "HY000", "Rowkey order error");
+DEFINE_ERROR_EXT_DEP(OB_ROWKEY_ORDER_ERROR, -4105, -1, "HY000", "Rowkey order error", "%s");
 DEFINE_ERROR(OB_NOT_ENOUGH_STORE, -4106, -1, "HY000", "not enough commitlog store");
 DEFINE_ERROR(OB_BLOCK_SWITCHED, -4107, -1, "HY000", "block switched when fill commitlog");
 DEFINE_ERROR_DEP(OB_PHYSIC_CHECKSUM_ERROR, -4108, -1, "42000", "Physic data checksum error");
