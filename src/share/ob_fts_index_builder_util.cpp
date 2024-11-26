@@ -1587,8 +1587,9 @@ int ObFtsIndexBuilderUtil::get_word_segment_col(
     const ObColumnSchemaV2 *&word_segment_col)
 {
   int ret = OB_SUCCESS;
+  const uint64_t tenant_id = OB_INVALID_TENANT_ID == MTL_ID() ? common::OB_SERVER_TENANT_ID : MTL_ID();
   ObSEArray<uint64_t, 8> index_cols;
-  index_cols.set_attr(ObMemAttr(MTL_ID(), "FtsUWSC"));
+  index_cols.set_attr(ObMemAttr(tenant_id, "FtsUWSC"));
   word_segment_col = nullptr;
   if (!data_schema.is_valid() ||
       OB_ISNULL(index_arg) ||
@@ -1625,7 +1626,8 @@ int ObFtsIndexBuilderUtil::get_word_cnt_col(
 {
   int ret = OB_SUCCESS;
   ObSEArray<uint64_t, 8> index_cols;
-  index_cols.set_attr(ObMemAttr(MTL_ID(), "FtsUWCC"));
+  const uint64_t tenant_id = OB_INVALID_TENANT_ID == MTL_ID() ? common::OB_SERVER_TENANT_ID : MTL_ID();
+  index_cols.set_attr(ObMemAttr(tenant_id, "FtsUWCC"));
   word_cnt_col = nullptr;
   if (!data_schema.is_valid() ||
       OB_ISNULL(index_arg) ||
@@ -1662,7 +1664,8 @@ int ObFtsIndexBuilderUtil::get_doc_length_col(
 {
   int ret = OB_SUCCESS;
   ObSEArray<uint64_t, 8> index_cols;
-  index_cols.set_attr(ObMemAttr(MTL_ID(), "FtsUDLC"));
+  const uint64_t tenant_id = OB_INVALID_TENANT_ID == MTL_ID() ? common::OB_SERVER_TENANT_ID : MTL_ID();
+  index_cols.set_attr(ObMemAttr(tenant_id, "FtsUDLC"));
   doc_len_col = nullptr;
   if (OB_UNLIKELY(!data_schema.is_valid())
       || OB_ISNULL(index_arg)
@@ -1827,10 +1830,11 @@ int ObFtsIndexBuilderUtil::get_index_column_ids_for_fts(
   } else if (OB_FAIL(data_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("fail to check if oracle mode", K(ret));
   } else {
-    common::ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "FtsIdxColIds"));
+    const uint64_t tenant_id = OB_INVALID_TENANT_ID == MTL_ID() ? common::OB_SERVER_TENANT_ID : MTL_ID();
+    common::ObArenaAllocator allocator(common::ObMemAttr(tenant_id, "FtsIdxColIds"));
     ObItemType root_expr_type = T_INVALID;
     ObSEArray<ObString, 8> col_names;
-    col_names.set_attr(ObMemAttr(MTL_ID(), "FtsIdxColNa"));
+    col_names.set_attr(ObMemAttr(tenant_id, "FtsIdxColNa"));
     lib::Worker::CompatMode compat_mode = is_oracle_mode ? lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL;
     lib::CompatModeGuard guard(compat_mode);
     if (OB_FAIL(ObResolverUtils::resolve_generated_column_info(col_def, allocator, root_expr_type, col_names))) {
