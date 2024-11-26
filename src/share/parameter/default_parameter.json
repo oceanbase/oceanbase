@@ -39,7 +39,7 @@
         {
           "name": "_enable_filter_reordering",
           "value": false,
-          "comment": "enable filter reordering in storage engine"
+          "comment": "disable filter reordering for simple OLTP workloads"
         }
       ]
     }
@@ -89,7 +89,7 @@
         {
           "name": "_enable_filter_reordering",
           "value": false,
-          "comment": "enable filter reordering in storage engine"
+          "comment": "disable filter reordering for complex OLTP workloads"
         }
       ]
     }
@@ -189,7 +189,7 @@
         {
           "name": "_enable_filter_reordering",
           "value": false,
-          "comment": "enable filter reordering in storage engine"
+          "comment": "disable filter reordering for KV mode"
         }
       ]
     }
@@ -285,6 +285,11 @@
           "name": "_enable_adaptive_compaction",
           "value": false,
           "comment": "close adaptive compaction to reduce cpu costs of tablet major compaction"
+        },
+        {
+          "name": "_enable_filter_reordering",
+          "value": false,
+          "comment": "disable filter reordering for simple OLTP_PERF workloads"
         }
       ]
     }
