@@ -1184,7 +1184,8 @@ int ObMicroBlockDecoder::init_decoders()
     */
     if (OB_ISNULL(read_info_) || typeid(ObRowkeyReadInfo) == typeid(*read_info_)) {
       ObObjMeta col_type;
-      if (OB_UNLIKELY(header_->column_count_ < request_cnt_ && nullptr == read_info_)) {
+      if (OB_UNLIKELY((header_->column_count_ < request_cnt_ && nullptr == read_info_) ||
+                      (header_->column_count_ > request_cnt_))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("for empty read info, request cnt is invalid", KR(ret), KP(read_info_), KPC(header_), K(request_cnt_));
       }

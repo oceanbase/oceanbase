@@ -34,6 +34,7 @@
 #include "storage/tx/wrs/ob_weak_read_util.h"
 #include "rootserver/mview/ob_collect_mv_merge_info_task.h"
 #include "storage/high_availability/ob_transfer_parallel_build_tablet_info.h"
+#include "share/schema/ob_tenant_schema_service.h"
 
 using namespace oceanbase::transaction;
 using namespace oceanbase::share;
@@ -537,6 +538,8 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
       LOG_WARN("failed to get dest ls max desided scn", K(ret), K(task_info));
     } else if (!new_transfer && !enable_kill_trx && OB_FAIL(check_src_ls_has_active_trans_(task_info.src_ls_id_))) {
       LOG_WARN("failed to check src ls active trans", K(ret), K(task_info));
+    } else if (OB_FAIL(ctx_.build_storage_schema_info(task_info, timeout_ctx))) {
+      LOG_WARN("failed to build latest storage schema", K(ret), K(task_info));
     } else if (OB_FAIL(update_all_tablet_to_ls_(task_info, trans))) {
       LOG_WARN("failed to update all tablet to ls", K(ret), K(task_info));
     } else if (OB_FAIL(lock_tablet_on_dest_ls_for_table_lock_(task_info, trans))) {
@@ -1424,9 +1427,9 @@ int ObTransferHandler::get_start_trans_timeout_(
   stmt_timeout = 10_s;
   const uint64_t tenant_id = MTL_ID();
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-  const int64_t LOCK_MEMBER_LIST_TIMEOUT = 10_s;
+  const int64_t BASELINE_TIMEOUT = 20_s;
   if (tenant_config.is_valid()) {
-    stmt_timeout = tenant_config->_transfer_start_trans_timeout + LOCK_MEMBER_LIST_TIMEOUT;
+    stmt_timeout = tenant_config->_transfer_start_trans_timeout + BASELINE_TIMEOUT;
     if (tenant_config->_enable_balance_kill_transaction) {
       stmt_timeout += tenant_config->_balance_kill_transaction_threshold;
       stmt_timeout += tenant_config->_balance_wait_killing_transaction_end_threshold;
