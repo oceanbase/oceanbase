@@ -277,7 +277,7 @@ namespace detector
 #define TenantDiskSpaceManager storage::ObTenantDiskSpaceManager*,
 #define TenantFileManager storage::ObTenantFileManager*,
 #define SSMicroCachePrewarmService storage::ObSSMicroCachePrewarmService*,
-#define S2MicroCache storage::ObSSMicroCache*,
+#define SSMicroCache storage::ObSSMicroCache*,
 #define TenantCompactionObjMgr compaction::ObTenantCompactionObjMgr*,
 #define TenantLSMergeScheduler compaction::ObTenantLSMergeScheduler*,
 #define TenantLSMergeChecker compaction::ObTenantLSMergeChecker*,
@@ -286,7 +286,7 @@ namespace detector
 #define TenantDiskSpaceManager
 #define TenantFileManager
 #define SSMicroCachePrewarmService
-#define S2MicroCache
+#define SSMicroCache
 #define TenantCompactionObjMgr
 #define TenantLSMergeScheduler
 #define TenantLSMergeChecker
@@ -320,7 +320,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       logservice::ObGarbageCollector*,               \
       TenantDiskSpaceManager                         \
       TenantFileManager                              \
-      S2MicroCache                                   \
+      SSMicroCache                                   \
       SSMicroCachePrewarmService                     \
       storage::ObLSService*,                         \
       storage::ObTenantStorageMetaService*,          \
