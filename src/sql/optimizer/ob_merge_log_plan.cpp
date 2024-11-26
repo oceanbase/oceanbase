@@ -279,6 +279,7 @@ int ObMergeLogPlan::candi_allocate_pdml_merge()
                                                             *target_table_partition,
                                                             *index_dml_info,
                                                             false,
+                                                            true, /* need_duplicate_date */
                                                             exch_info))) {
     LOG_WARN("fail to compute exchange info for pdml merge", K(ret));
   } else {

@@ -263,6 +263,7 @@ int ObUpdateLogPlan::generate_normal_raw_plan()
 int ObUpdateLogPlan::candi_allocate_update()
 {
   int ret = OB_SUCCESS;
+  bool need_duplicate_date = false;
   ObConstRawExpr *lock_row_flag_expr = NULL;
   ObSEArray<CandidatePlan, 8> candi_plans;
   ObSEArray<CandidatePlan, 8> update_plans;
@@ -271,7 +272,7 @@ int ObUpdateLogPlan::candi_allocate_update()
   OPT_TRACE("start generate normal update plan");
   OPT_TRACE("force no multi part:", force_no_multi_part);
   OPT_TRACE("force multi part:", force_multi_part);
-  if (OB_FAIL(check_table_rowkey_distinct(index_dml_infos_))) {
+  if (OB_FAIL(check_table_rowkey_distinct(index_dml_infos_, need_duplicate_date))) {
     LOG_WARN("failed to check table rowkey distinct", K(ret));
   } else if (OB_FAIL(get_minimal_cost_candidates(candidates_.candidate_plans_,
                                                  candi_plans))) {
