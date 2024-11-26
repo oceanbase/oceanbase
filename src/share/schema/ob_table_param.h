@@ -413,9 +413,10 @@ private:
   bool is_fts_index_;
   bool is_multivalue_index_;
   bool is_column_replica_table_;
-  bool is_normal_cgs_at_the_end_;
   bool is_vec_index_;
   bool is_partition_table_;
+  // column storage tables created after v435 will place the rowkey/all cg at the start of the table schema column group array
+  bool is_normal_cgs_at_the_end_;
 };
 } //namespace schema
 } //namespace share

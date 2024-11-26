@@ -629,9 +629,9 @@ ObTableParam::ObTableParam(ObIAllocator &allocator)
     is_fts_index_(false),
     is_multivalue_index_(false),
     is_column_replica_table_(false),
-    is_normal_cgs_at_the_end_(false),
     is_vec_index_(false),
-    is_partition_table_(false)
+    is_partition_table_(false),
+    is_normal_cgs_at_the_end_(false)
 {
   reset();
 }
@@ -661,9 +661,9 @@ void ObTableParam::reset()
   is_fts_index_ = false;
   is_multivalue_index_ = false;
   is_column_replica_table_ = false;
-  is_normal_cgs_at_the_end_ = false;
   is_vec_index_ = false;
   is_partition_table_ = false;
+  is_normal_cgs_at_the_end_ = false;
 }
 
 OB_DEF_SERIALIZE(ObTableParam)
@@ -706,13 +706,13 @@ OB_DEF_SERIALIZE(ObTableParam)
     OB_UNIS_ENCODE(is_column_replica_table_);
   }
   if (OB_SUCC(ret)) {
-    OB_UNIS_ENCODE(is_normal_cgs_at_the_end_);
-  }
-  if (OB_SUCC(ret)) {
     OB_UNIS_ENCODE(is_vec_index_);
   }
   if (OB_SUCC(ret)) {
     OB_UNIS_ENCODE(is_partition_table_);
+  }
+  if (OB_SUCC(ret)) {
+    OB_UNIS_ENCODE(is_normal_cgs_at_the_end_);
   }
   return ret;
 }
@@ -804,15 +804,15 @@ OB_DEF_DESERIALIZE(ObTableParam)
   }
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_DECODE,
-                is_normal_cgs_at_the_end_);
-  }
-  if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_DECODE,
                 is_vec_index_);
   }
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_DECODE,
                 is_partition_table_);
+  }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE,
+                is_normal_cgs_at_the_end_);
   }
   return ret;
 }
@@ -860,16 +860,16 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
   }
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_ADD_LEN,
-              is_normal_cgs_at_the_end_);
-  }
-  if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_ADD_LEN,
               is_vec_index_);
   }
 
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_ADD_LEN,
                 is_partition_table_);
+  }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ADD_LEN,
+                is_normal_cgs_at_the_end_);
   }
   return len;
 }
