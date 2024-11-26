@@ -186,7 +186,7 @@ private:
   ObArray<ScheduleInfo> schedule_infos_;
 };
 
-const int64_t GroupIoStatusStringLength = 256;
+const int64_t GroupIoStatusStringLength = 128;
 const int64_t KBYTES = 1024;
 const int64_t MBYTES = 1024 * KBYTES;
 const int64_t GBYTES = 1024 * MBYTES;
