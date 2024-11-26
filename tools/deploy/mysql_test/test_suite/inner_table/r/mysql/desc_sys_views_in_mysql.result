@@ -3793,6 +3793,9 @@ AUTHORIZATION	varchar(1024)	NO		NULL
 EXTENSION	varchar(512)	NO		NULL	
 CHECK_FILE_NAME	varchar(256)	YES			
 LAST_CHECK_TIMESTAMP	timestamp(6)	YES			
+MAX_IOPS	bigint(20)	NO			
+MAX_BANDWIDTH	bigint(20)	NO			
+MAX_BANDWIDTH_DISPLAY	varchar(29)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_BACKUP_STORAGE_INFO limit 1);
 cnt
 1
@@ -3807,6 +3810,9 @@ AUTHORIZATION	varchar(1024)	NO		NULL
 EXTENSION	varchar(512)	NO		NULL	
 CHECK_FILE_NAME	varchar(256)	YES			
 LAST_CHECK_TIMESTAMP	timestamp(6)	YES			
+MAX_IOPS	bigint(20)	NO			
+MAX_BANDWIDTH	bigint(20)	NO			
+MAX_BANDWIDTH_DISPLAY	varchar(29)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_BACKUP_STORAGE_INFO_HISTORY limit 1);
 cnt
 1
