@@ -138,6 +138,7 @@ class ObLobMetaWriteIter;
 class ObInsertLobColumnHelper final
 {
 public:
+  static const uint64_t LOB_TX_TIMEOUT = 86400000000; // 1 day
   static const uint64_t LOB_ACCESS_TX_TIMEOUT = 60000000; // 60s
   static const uint64_t LOB_ALLOCATOR_RESET_CYCLE = 128;
 public:

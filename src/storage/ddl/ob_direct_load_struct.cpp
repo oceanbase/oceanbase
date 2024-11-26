@@ -2534,6 +2534,7 @@ int ObDirectLoadSliceWriter::fill_vector_index_data(
   ObTxDesc *tx_desc = nullptr;
   ObMacroBlockSliceStore *macro_block_slice_store = nullptr;
   ObVectorIndexSliceStore *vec_idx_slice_store = static_cast<ObVectorIndexSliceStore *>(slice_store_);
+  const uint64_t timeout_us = ObTimeUtility::current_time() + ObInsertLobColumnHelper::LOB_TX_TIMEOUT;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -2543,7 +2544,7 @@ int ObDirectLoadSliceWriter::fill_vector_index_data(
   } else if (OB_ISNULL(vec_idx_slice_store)) {
     // do nothing
     LOG_INFO("[vec index debug] maybe no data for this tablet", K(tablet_direct_load_mgr_->get_tablet_id()));
-  } else if (OB_FAIL(ObInsertLobColumnHelper::start_trans(tablet_direct_load_mgr_->get_ls_id(), false/*is_for_read*/, INT64_MAX - ObInsertLobColumnHelper::LOB_ACCESS_TX_TIMEOUT, tx_desc))) {
+  } else if (OB_FAIL(ObInsertLobColumnHelper::start_trans(tablet_direct_load_mgr_->get_ls_id(), false/*is_for_read*/, timeout_us, tx_desc))) {
     LOG_WARN("fail to get tx_desc", K(ret));
   } else if (OB_FAIL(vec_idx_slice_store->serialize_vector_index(&allocator_, tx_desc, lob_inrow_threshold))) {
     LOG_WARN("fail to do vector index snapshot data serialize", K(ret));
