@@ -322,6 +322,7 @@ int ObTabletCreateSSTableParam::init_for_ddl(blocksstable::ObSSTableIndexBuilder
       max_merged_trans_version_ = ddl_param.snapshot_version_;
       nested_size_ = res.nested_size_;
       nested_offset_ = res.nested_offset_;
+      filled_tx_scn_ = table_key_.get_end_scn();
 
       if (OB_FAIL(inner_init_with_merge_res(res))) {
         LOG_WARN("fail to inner init with merge res", K(ret), K(res));
@@ -366,6 +367,8 @@ int ObTabletCreateSSTableParam::init_for_ha(
     LOG_WARN("fail to inner init with merge res", K(ret), K(res));
   } else if (OB_FAIL(column_checksums_.assign(sstable_param.column_checksums_))) {
     LOG_WARN("fail to fill column checksum", K(ret), K(sstable_param));
+  } else if (OB_FAIL(blocksstable::ObSSTableMetaCompactUtil::fix_filled_tx_scn_value_for_compact(table_key_, filled_tx_scn_))) {
+    LOG_WARN("failed to fix filled tx scn value for compact", K(ret), K(table_key_), K(sstable_param));
   } else if (!is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("init for ha sstable get invalid argument", K(ret), K(sstable_param), KPC(this));
@@ -409,6 +412,8 @@ int ObTabletCreateSSTableParam::init_for_ha(const blocksstable::ObMigrationSSTab
   MEMCPY(encrypt_key_, sstable_param.basic_meta_.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
   if (OB_FAIL(column_checksums_.assign(sstable_param.column_checksums_))) {
     LOG_WARN("fail to assign column checksums", K(ret), K(sstable_param));
+  } else if (OB_FAIL(blocksstable::ObSSTableMetaCompactUtil::fix_filled_tx_scn_value_for_compact(table_key_, filled_tx_scn_))) {
+    LOG_WARN("failed to fix filled tx scn value for compact", K(ret), K(table_key_), K(sstable_param));
   } else if (!is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("init for ha sstable get invalid argument", K(ret), K(sstable_param), KPC(this));
