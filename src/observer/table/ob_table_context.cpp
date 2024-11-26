@@ -732,6 +732,10 @@ int ObTableCtx::adjust_rowkey()
           need_check = false;
         }
       }
+      if (entity_type_ == ObTableEntityType::ET_HKV &&
+          (operation_type_ == ObTableOperationType::Type::DEL || is_scan_)) {
+        need_check = false;
+      }
 
       if (OB_SUCC(ret) && need_check) {
         if (!is_full_filled && need_full_rowkey_op()) {
@@ -820,7 +824,7 @@ int ObTableCtx::adjust_entity()
   if (OB_ISNULL(entity_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("entity is null", K(ret));
-  } else if (!is_htable() && OB_FAIL(adjust_rowkey())) {
+  } else if (OB_FAIL(adjust_rowkey())) {
     LOG_WARN("fail to adjust rowkey", K(ret));
   } else if (OB_FAIL(adjust_properties())) {
     LOG_WARN("fail to check properties", K(ret));
