@@ -272,6 +272,9 @@ DEFINER	varchar(93)	NO
 CHARACTER_SET_CLIENT	varchar(32)	NO		NULL	
 COLLATION_CONNECTION	varchar(32)	NO		NULL	
 DATABASE_COLLATION	varchar(32)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.ROUTINES limit 1);
+cnt
+1
 desc information_schema.PROFILING;
 Field	Type	Null	Key	Default	Extra
 QUERY_ID	bigint(20)	NO			
