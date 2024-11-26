@@ -261,8 +261,8 @@ int ObDataCheckpoint::flush(SCN recycle_scn, int64_t trace_id, bool need_freeze)
 {
   int ret = OB_SUCCESS;
   if (is_tenant_freeze()) {
-    const bool is_sync = true;
-    const bool abs_timeout_ts = ObClockGenerator::getClock() + 10LL * 1000LL * 1000LL; // retry at most 10 seconds
+    const bool is_sync = false;
+    const bool abs_timeout_ts = 0;
     if (OB_FAIL(ls_->logstream_freeze(trace_id,
                                       is_sync,
                                       abs_timeout_ts,
