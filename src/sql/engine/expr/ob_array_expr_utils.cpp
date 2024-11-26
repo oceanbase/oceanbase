@@ -1157,7 +1157,11 @@ int ObArrayExprUtils::add_elem_to_nested_array(ObIAllocator &tmp_allocator, ObEv
 {
   int ret = OB_SUCCESS;
   ObSubSchemaValue value;
-  if (OB_FAIL(ctx.exec_ctx_.get_sqludt_meta_by_subschema_id(subschema_id, value))) {
+  if (datum.is_null()) {
+    if (OB_FAIL(nest_array->push_null())) {
+      LOG_WARN("failed to push back null value", K(ret));
+    }
+  } else if (OB_FAIL(ctx.exec_ctx_.get_sqludt_meta_by_subschema_id(subschema_id, value))) {
     LOG_WARN("failed to get subschema ctx", K(ret));
   } else if (value.type_ >= OB_SUBSCHEMA_MAX_TYPE) {
     ret = OB_ERR_UNEXPECTED;

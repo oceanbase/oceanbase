@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX LIB
 #include <regex>
 #include "ob_collection_type.h"
+#include "share/ob_errno.h"
 
 namespace oceanbase {
 namespace common {
@@ -285,7 +286,7 @@ int ObSqlCollectionInfo::set_element_meta_info(const std::string &name, uint8_t 
      meta_attr_idx = 1 value is scale
   */
   int ret = OB_SUCCESS;
-  int32_t val = std::stoi(name);
+  int val = std::stoi(name);
   if (OB_ISNULL(meta_info) || meta_info->type_id_ != ObNestedType::OB_BASIC_TYPE) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid meta info", K(ret), K(meta_info));
@@ -307,7 +308,12 @@ int ObSqlCollectionInfo::set_element_meta_info(const std::string &name, uint8_t 
         meta_info->basic_meta_.set_scale(default_accuracy.get_scale());
         break;
       case ObStringTC:
-        meta_info->basic_meta_.set_length(val);
+        if (val <= -1 || val > OB_MAX_ORACLE_VARCHAR_LENGTH) {
+          ret = OB_ERR_TOO_LONG_COLUMN_LENGTH;
+          LOG_WARN("data length is invalid", K(ret), K(val));
+        } else {
+          meta_info->basic_meta_.set_length(val);
+        }
         break;
       case ObDecimalIntTC :
         if (meta_attr_idx == 0) {

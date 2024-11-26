@@ -469,7 +469,11 @@ int ObResolverUtils::resolve_collection_type_info(const ParseNode &type_node, Ob
     int32_t length = is_bit ? type_node.int16_values_[0]
                               : (is_char ? type_node.int32_values_[0] : type_node.int16_values_[1]);
     int64_t pos = 0;
-    if (OB_FAIL(databuff_printf(tmp, MAX_LEN, pos, "(%d)",length))) {
+    if (is_char && (length <= -1 || length > OB_MAX_ORACLE_VARCHAR_LENGTH)) {
+      ret = OB_ERR_TOO_LONG_COLUMN_LENGTH;
+      LOG_WARN("data length is invalid", K(ret), K(length));
+      LOG_USER_ERROR(OB_ERR_TOO_LONG_COLUMN_LENGTH, "varchar", static_cast<int>(OB_MAX_ORACLE_VARCHAR_LENGTH));
+    } else if (OB_FAIL(databuff_printf(tmp, MAX_LEN, pos, "(%d)",length))) {
       LOG_WARN("failed to convert len to string", K(ret), K(length));
     } else if (OB_FAIL(buf.append(tmp, pos))) {
       LOG_WARN("failed to append string length", K(ret), K(type_node.type_));

@@ -1168,8 +1168,12 @@ int ObArrayNested::init(ObString &raw_data)
         } else {
           // init offset
           offsets_ = reinterpret_cast<uint32_t *>(raw_str + pos);
-          // caution : length_ - 1 means : last offset is length of data_
-          pos += sizeof(uint32_t) * (length_ - 1);
+          if (data_->get_format() == ArrayFormat::Vector) {
+            pos += sizeof(uint32_t) * length_;
+          } else {
+            // caution : length_ - 1 means : last offset is length of data_(child array)
+            pos += sizeof(uint32_t) * (length_ - 1);
+          }
           // init data
           ObString data_str(raw_data.length() - pos, raw_str + pos);
           if (OB_FAIL(data_->init(data_str))) {

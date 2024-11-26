@@ -313,7 +313,7 @@ int ObExprArrayMap::eval_array_map(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
         if (OB_FAIL(ObArrayUtil::append(*arr_res, elem_type->basic_meta_.get_obj_type(), datum_val))) {
           LOG_WARN("failed to append array value", K(ret), K(i));
         }
-      } else if (elem_type->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
+      } else if (elem_type->type_id_ == ObNestedType::OB_ARRAY_TYPE || elem_type->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
         uint16_t elem_subid = expr.args_[0]->obj_meta_.get_subschema_id();
         ObArrayNested *nest_array = static_cast<ObArrayNested *>(arr_res);
         if (OB_FAIL(ObArrayExprUtils::add_elem_to_nested_array(tmp_allocator, ctx, elem_subid, *datum_val, nest_array))) {

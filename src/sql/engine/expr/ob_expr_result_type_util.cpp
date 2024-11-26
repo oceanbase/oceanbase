@@ -994,7 +994,8 @@ int ObExprResultTypeUtil::get_deduce_element_type(ObExprResType &input_type, ObD
     if (ob_is_string_tc(input_type.get_type())) {
       ObLength len = elem_type.get_length();
       elem_type.set_accuracy(acc);
-      elem_type.set_length(MAX(len, input_type.get_length()));
+      // set max len to fix plan cache issue
+      elem_type.set_length(OB_MAX_ORACLE_VARCHAR_LENGTH);
     } else {
       elem_type.set_accuracy(acc);
     }

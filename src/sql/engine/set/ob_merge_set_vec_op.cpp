@@ -216,6 +216,9 @@ int ObMergeSetVecOp::convert_batch(const common::ObIArray<ObExpr*> &src_exprs,
           OZ(to->init_vector(eval_ctx_, VEC_UNIFORM, brs_.size_));
         } else {
           to_vec_header = from_vec_header;
+          if (from->is_nested_expr()) {
+            OZ(to->assign_nested_vector(*from, eval_ctx_));
+          }
         }
         // init eval info
         if (OB_SUCC(ret)) {

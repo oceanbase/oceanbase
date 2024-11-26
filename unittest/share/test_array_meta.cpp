@@ -243,6 +243,63 @@ TEST_F(TestArrayMeta, fixsize_array_construct)
 
 }
 
+TEST_F(TestArrayMeta, nested_vector_construct)
+{
+  ObArenaAllocator allocator(ObModIds::TEST);
+  ObSqlCollectionInfo type1_info_parse(allocator);
+  ObString type1_name(strlen("VECTOR(3)"), "VECTOR(3)");
+  type1_info_parse.set_name(type1_name);
+  ASSERT_EQ(OB_SUCCESS, type1_info_parse.parse_type_info());
+  ObIArrayType *arr_var1 = nullptr;
+  ObCollectionArrayType *arr_type1 = static_cast<ObCollectionArrayType *>(type1_info_parse.collection_meta_);
+  ASSERT_EQ(OB_SUCCESS, ObArrayTypeObjFactory::construct(allocator, *arr_type1, arr_var1));
+  // construct array from string [3.14, 1.414, 2.718]
+  ObString arr1_text("[3.14, 1.414, 2.718]");
+  ObCollectionBasicType *dst_elem_type = static_cast<ObCollectionBasicType *>(arr_type1->element_type_);
+  ASSERT_EQ(OB_SUCCESS, sql::ObArrayCastUtils::string_cast(allocator, arr1_text, arr_var1, dst_elem_type));
+  ObStringBuffer format_str(&allocator);
+  ASSERT_EQ(OB_SUCCESS, arr_var1->init());
+  ASSERT_EQ(OB_SUCCESS, arr_var1->print(dst_elem_type, format_str));
+  std::cout << "vector(3): " << format_str.ptr() << std::endl;
+
+  // construct array(vector(3))
+  ObSqlCollectionInfo type2_info_parse(allocator);
+  ObString type2_name(strlen("ARRAY(VECTOR(3))"), "ARRAY(VECTOR(3))");
+  type2_info_parse.set_name(type2_name);
+  ASSERT_EQ(OB_SUCCESS, type2_info_parse.parse_type_info());
+  ObIArrayType *arr_var2 = nullptr;
+  ObCollectionArrayType *arr_type2 = static_cast<ObCollectionArrayType *>(type2_info_parse.collection_meta_);
+  ASSERT_EQ(OB_SUCCESS, ObArrayTypeObjFactory::construct(allocator, *arr_type2, arr_var2));
+  // push [3.14, 1.414, 2.718] to array(arrray(float))
+  ASSERT_EQ(OB_SUCCESS, static_cast<ObArrayNested*>(arr_var2)->push_back(*arr_var1));
+
+  // construct array from string [5, 6.88, null, 8.01]
+  ObString arr2_text("[5, 6.88, 8.01]");
+  ASSERT_EQ(OB_SUCCESS, ObArrayTypeObjFactory::construct(allocator, *arr_type1, arr_var1));
+  ASSERT_EQ(OB_SUCCESS, sql::ObArrayCastUtils::string_cast(allocator, arr2_text, arr_var1, dst_elem_type));
+  format_str.reset();
+  ASSERT_EQ(OB_SUCCESS, arr_var1->init());
+  ASSERT_EQ(OB_SUCCESS, arr_var1->print(dst_elem_type, format_str));
+  std::cout << "vector(3): " << format_str.ptr() << std::endl;
+  // push [5, 6.88, null, 8.01] to array(arrray(float))
+  ASSERT_EQ(OB_SUCCESS, static_cast<ObArrayNested*>(arr_var2)->push_back(*arr_var1));
+  ASSERT_EQ(OB_SUCCESS, arr_var2->init());
+  format_str.reset();
+  ASSERT_EQ(OB_SUCCESS, arr_var2->print(arr_type2->element_type_, format_str));
+  std::cout << "ARRAY(VECTOR(3)): " << format_str.ptr() << std::endl;
+
+  char raw_binary[1024] = {0};
+  ASSERT_EQ(OB_SUCCESS, arr_var2->get_raw_binary(raw_binary, 1024));
+  int32_t raw_len = arr_var2->get_raw_binary_len();
+  ObIArrayType *arr_var3 = nullptr;
+  ASSERT_EQ(OB_SUCCESS, ObArrayTypeObjFactory::construct(allocator, *arr_type2, arr_var3));
+  ObString raw_str(raw_len, raw_binary);
+  ASSERT_EQ(OB_SUCCESS, arr_var3->init(raw_str));
+  format_str.reset();
+  ASSERT_EQ(OB_SUCCESS, arr_var3->print(arr_type2->element_type_, format_str));
+  std::cout << "ARRAY(VECTOR(3)): " << format_str.ptr() << std::endl;
+}
+
 TEST_F(TestArrayMeta, type_deduce)
 {
   ObArenaAllocator allocator(ObModIds::TEST);

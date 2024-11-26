@@ -307,6 +307,15 @@ int ObTempColumnStore::ColumnBlock::add_batch(ShrinkBuffer &buf,
 int ObTempColumnStore::ColumnBlock::get_nested_batch(ObExpr &expr, ObEvalCtx &ctx, char *buf, int64_t &pos, const int64_t size) const
 {
   int ret = OB_SUCCESS;
+  ObIVector *root_vec = expr.get_vector(ctx);
+  int64_t pos_save = pos;
+  // get null/flag for root vector
+  if (root_vec->get_format() == VEC_CONTINUOUS &&
+      OB_FAIL(from_buf(buf, pos, size, static_cast<ObBitmapNullVectorBase*>(root_vec)))) {
+    LOG_WARN("failed to get null value", K(ret), K(expr));
+  } else {
+    pos = pos_save;
+  }
   for (uint32_t i = 0; i < expr.attrs_cnt_ && OB_SUCC(ret); ++i) {
     ObIVector *vec = expr.attrs_[i]->get_vector(ctx);
     if (OB_FAIL(vector_from_buf(buf, pos ,size, vec))) {
