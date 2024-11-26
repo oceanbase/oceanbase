@@ -1925,7 +1925,7 @@ int ObDirectLoadSliceWriter::fill_lob_sstable_slice(
           ObLength *lens = nullptr;
           VecValueTypeClass value_tc = get_vec_value_tc(col_type.get_type(),
                                                         col_type.get_scale(),
-                                                        col_type.get_stored_precision());
+                                                        PRECISION_UNKNOWN_YET);
           if (OB_FAIL(new_discrete_vector(value_tc, datum_rows.row_count_, allocator, discrete_vec))) {
             LOG_WARN("fail to new discrete vector", KR(ret));
           } else {

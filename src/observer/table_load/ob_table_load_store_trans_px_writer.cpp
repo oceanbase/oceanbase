@@ -263,9 +263,12 @@ int ObTableLoadStoreTransPXWriter::init_batch_ctx(const bool is_vectorized,
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < column_count_; ++i) {
         const ObColDesc &col_desc = col_descs.at(i);
+        const int16_t precision = col_desc.col_type_.is_decimal_int()
+                                    ? col_desc.col_type_.get_stored_precision()
+                                    : PRECISION_UNKNOWN_YET;
         VecValueTypeClass value_tc = get_vec_value_tc(col_desc.col_type_.get_type(),
                                                       col_desc.col_type_.get_scale(),
-                                                      col_desc.col_type_.get_stored_precision());
+                                                      precision);
         const bool is_fixed = is_fixed_length_vec(value_tc);
         ObIVector *batch_vector = nullptr;
         ObIVector *const_vector = nullptr;

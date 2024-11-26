@@ -688,6 +688,8 @@ private:
         brs_()
     {
       allocator_.set_tenant_id(MTL_ID());
+      vectors_.set_block_allocator(ModulePageAllocator(allocator_));
+      append_vectors_.set_block_allocator(ModulePageAllocator(allocator_));
     }
     TO_STRING_KV(K_(cg_schema),
                 //  K_(store),

@@ -100,9 +100,12 @@ int ObDirectLoadBatchRowBuffer::init_vectors(const ObIArray<ObColDesc> &col_desc
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < col_descs.count(); ++i) {
     const ObColDesc &col_desc = col_descs.at(i);
-    VecValueTypeClass value_tc =
-      get_vec_value_tc(col_desc.col_type_.get_type(), col_desc.col_type_.get_scale(),
-                       col_desc.col_type_.get_stored_precision());
+    const int16_t precision = col_desc.col_type_.is_decimal_int()
+                                ? col_desc.col_type_.get_stored_precision()
+                                : PRECISION_UNKNOWN_YET;
+    VecValueTypeClass value_tc = get_vec_value_tc(col_desc.col_type_.get_type(),
+                                                  col_desc.col_type_.get_scale(),
+                                                  precision);
     const bool is_fixed = is_fixed_length_vec(value_tc);
     ObIVector *vector = nullptr;
     ObArenaAllocator *allocator = nullptr;
