@@ -70,7 +70,6 @@ struct ObTmpFileGlobal final
 #ifdef OB_BUILD_SHARED_STORAGE
   // SS_TMP_FILE
   static const int64_t SHARE_STORAGE_DIR_ID = 1;
-  static const int64_t SS_TMP_FILE_FLUSH_RETRY_TIMEOUT_US = 180 * 1000 * 1000;   // 180s
   // Attention:
   // SS_TMP_FILE_FLUSH_WAIT_TIMEOUT_MS is just a hint value.
   // the real wait timeout period is also depend on GCONF._data_storage_io_timeout and tenant_config->_object_storage_io_timeout
