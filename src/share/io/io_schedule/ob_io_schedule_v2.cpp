@@ -333,8 +333,11 @@ int ObTenantIOSchedulerV2::schedule_request(ObIORequest &req)
   } else if (FALSE_IT(req.io_result_->time_log_.enqueue_ts_ = ObTimeUtility::fast_current_time())) {
   } else if (0 != qsched_submit(root, &req.qsched_req_, assign_chan_id())) {
     ret = OB_ERR_UNEXPECTED;
-    req.dec_ref("phyqueue_dec"); //ref for phy_queue
     LOG_WARN("qsched_submit fail", K(ret), K(req));
+  }
+
+  if (OB_FAIL(ret)) {
+    req.dec_ref("phyqueue_dec"); //ref for phy_queue
     io_req_finish(req, ObIORetCode(ret));
   }
   return ret;
